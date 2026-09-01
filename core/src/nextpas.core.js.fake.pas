@@ -90,11 +90,9 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.fs,
-  nextpas.core.fs.path,
-  nextpas.core.format.limits,
   nextpas.core.text,
   nextpas.core.platform.thread;
+
 constructor TJsFakeValueRef.Create(const AValue: TJsValue);
 begin
   inherited Create;
@@ -224,7 +222,7 @@ begin
 end;
 
 function TJsFakeContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; try C:=ReadFileText(AFileName); except Exit(False) end; Result:=TryEval(C, AValue); end;
+var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; if not JsPureTryReadFileText(AFileName, C) then Exit(False); Result:=TryEval(C, AValue); end; // 复用 pure.base 单源 (bytes.ops Move零拷贝, inline, try/finally)
 
 function TJsFakeContext.Global: TJsValue;
 begin
@@ -259,13 +257,15 @@ end;
 function TJsFakeContext.NewObject: TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsObjectValue);
+  // 复用 pure.base 单源 JsPureHeapNewObject (与 js888/v8/chakra 同源, 入堆可压测 O(n) 真实开销, Bind 零拷贝绑定 ContextId, inline)
+  Result := Bind(JsPureHeapNewObject(FHeap));
 end;
 
 function TJsFakeContext.NewArray: TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsArrayValue);
+  // 复用 pure.base 单源 JsPureHeapNewArray (与 js888/v8/chakra 单源一致, 入堆, Bind inline 零拷贝)
+  Result := Bind(JsPureHeapNewArray(FHeap));
 end;
 
 function TJsFakeContext.NewJson(const AJson: TJsonValue): TJsValue;
@@ -279,9 +279,9 @@ begin
   EnsureNotClosed;
   Result := JsPureToJson(AValue);
 end;
-function TJsFakeContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;
-function TJsFakeContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := False; end;
-function TJsFakeContext.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result := nil; end;
+function TJsFakeContext.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := JsPureHeapHasProp(FHeap, AObj, AName); end; // 复用 pure.base 单源, O(n) 线性查找, inline 零拷贝
+function TJsFakeContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result := JsPureHeapDeleteProp(FHeap, AObj, AName); end; // 复用 pure.base 单源
+function TJsFakeContext.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result := JsPureHeapGetKeys(FHeap, AObj); end; // 复用 pure.base 单源
 function TJsFakeContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result := Bind(JsErrorValue(AMessage)); end;
 function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName, AHandler); Result := Bind(JsFunctionValue(AName)); end;
 function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName, AHandler); Result := Bind(JsFunctionValue(AName)); end;
@@ -290,12 +290,15 @@ function TJsFakeContext.NewFunction(const AName: string; AHandler: TJsHostProc):
 function TJsFakeContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsUndefinedValue);
+  // 复用 pure.base 单源 JsPureHeapGetProp, Bind inline 零拷贝绑定 ContextId
+  Result := Bind(JsPureHeapGetProp(FHeap, AObj, AName));
 end;
 
 procedure TJsFakeContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
 begin
   EnsureNotClosed;
+  // 复用 pure.base 单源 JsPureHeapSetProp (O(n) 查找, 零额外分配)
+  JsPureHeapSetProp(FHeap, AObj, AName, AVal);
 end;
 
 function TJsFakeContext.Call(const AFunc: TJsValue; const AThis: TJsValue;
@@ -303,7 +306,8 @@ function TJsFakeContext.Call(const AFunc: TJsValue; const AThis: TJsValue;
 begin
   EnsureNotClosed;
   EnsureThreadAffinity;
-  Result := Bind(JsUndefinedValue);
+  // 复用 pure.base 单源 JsPureCall (宿主三形态分发, Bind inline 零拷贝)
+  Result := Bind(JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkFake));
 end;
 
 procedure TJsFakeContext.DoSetHost(const AName: string);

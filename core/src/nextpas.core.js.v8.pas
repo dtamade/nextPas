@@ -1,111 +1,29 @@
 unit nextpas.core.js.v8;
-{** @desc 纯 Pascal 后端占位（零 FFI/零 platform.dl，恒可用，与 fake 同约束，S3 可演进为真解析器）。 *}
+{** @desc 纯 Pascal 后端占位（零 FFI/零 platform.dl，恒可用，复用 pure.impl 单源模板）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.pure.base, nextpas.core.json;
+uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.pure.impl, nextpas.core.json;
 type
-  TJsV8Runtime = class(TInterfacedObject, IJsRuntime)
-  private FOptions: TJsRuntimeOptions;
-  public constructor Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions); overload;
-  constructor Create(const AOptions: TJsRuntimeOptions); overload;
-  function Kind: TJsBackendKind; function Options: TJsRuntimeOptions;
-  function NewContext: IJsContext; procedure SetMemoryLimit(ALimit: SizeUInt);
-  procedure SetTimeout(ATimeoutMs: Integer); procedure CollectGarbage;
+  TJsV8Runtime = class(TJsPureRuntime)
+  public
+    constructor Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions); overload;
+    constructor Create(const AOptions: TJsRuntimeOptions); overload;
   end;
-  TJsV8Context = class(TInterfacedObject, IJsContext)
-  private FRuntime: IJsRuntime; FOptions: TJsRuntimeOptions; FClosed: Boolean; FThreadId: UInt64; FContextId: UInt64;
-    FHostFuncs: TJsPureHostArray; FHeap: TJsPureHeap; FGlobal: TJsValue;
-    function FindHost(const AName: string): Integer; inline; function IsOnCreationThread: Boolean; inline;
-    procedure EnsureNotClosed; inline; procedure EnsureThreadAffinity; inline; function ValidateHostName(const AName: string): Boolean; inline;
-    function DoEval(const ACode: string): TJsValue; procedure DoSetHost(const AName: string);
-    function Bind(const V: TJsValue): TJsValue; inline;
-  public constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
-  function Runtime: IJsRuntime; function Eval(const ACode: string; const AFileName: string = ''): TJsValue;
-  function TryEval(const ACode: string; out AValue: TJsValue): Boolean;
-  function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-  function Global: TJsValue; function NewString(const AStr: string): TJsValue;
-  function NewInt(AValue: Int64): TJsValue; function NewDouble(AValue: Double): TJsValue;
-  function NewBool(AValue: Boolean): TJsValue; function NewObject: TJsValue; function NewArray: TJsValue;
-  function NewJson(const AJson: TJsonValue): TJsValue; function ToJson(const AValue: TJsValue): IJsonDocument;
-  function HasProp(const AObj: TJsValue; const AName: string): Boolean;
-  function DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
-  function GetKeys(const AObj: TJsValue): TJsStringArray;
-  function NewError(const AMessage: string; ACategory: TJsErrorCategory = jecUnknown): TJsValue;
-  function NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; overload;
-  function NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; overload;
-  function NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; overload;
-  function GetProp(const AObj: TJsValue; const AName: string): TJsValue;
-  procedure SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
-  function Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
-  procedure SetHostFunction(const AName: string; AHandler: TJsHostFunction); overload;
-  procedure SetHostFunction(const AName: string; AHandler: TJsHostMethod); overload;
-  procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
-  procedure RemoveHostFunction(const AName: string); procedure Tick; procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
+  TJsV8Context = class(TJsPureContext)
+  public
+    constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions); overload;
   end;
 implementation
-uses nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.format.limits, nextpas.core.text, nextpas.core.platform.thread;
 constructor TJsV8Runtime.Create(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions);
-begin inherited Create; FOptions := AOptions; CheckJsRuntimeOptions(FOptions); end;
-constructor TJsV8Runtime.Create(const AOptions: TJsRuntimeOptions);
-begin inherited Create; FOptions := AOptions; CheckJsRuntimeOptions(FOptions); end;
-function TJsV8Runtime.Kind: TJsBackendKind; begin Result := jsbkV8; end;
-function TJsV8Runtime.Options: TJsRuntimeOptions; begin Result := FOptions; end;
-function TJsV8Runtime.NewContext: IJsContext; begin Result := TJsV8Context.Create(Self, FOptions); end;
-procedure TJsV8Runtime.SetMemoryLimit(ALimit: SizeUInt); begin FOptions.MemoryLimit := ALimit; end;
-procedure TJsV8Runtime.SetTimeout(ATimeoutMs: Integer);
-begin if ATimeoutMs < 0 then raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', jsbkV8); FOptions.TimeoutMs := ATimeoutMs; end;
-procedure TJsV8Runtime.CollectGarbage; begin end;
-constructor TJsV8Context.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
-begin inherited Create; FRuntime := ARuntime; FOptions := AOptions; FClosed := False; FThreadId := UInt64(platform_thread_self); FContextId := JsContextRegister; FGlobal := Bind(JsPureHeapNewObject(FHeap)); end;
-function TJsV8Context.FindHost(const AName: string): Integer; inline; begin Result := JsPureFindHost(FHostFuncs, AName); end;
-function TJsV8Context.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self)=FThreadId; end;
-procedure TJsV8Context.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkV8); end;
-procedure TJsV8Context.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkV8); end;
-function TJsV8Context.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
-function TJsV8Context.Bind(const V: TJsValue): TJsValue; inline; begin Result := JsValueBindContext(V, FContextId); end;
-function TJsV8Context.DoEval(const ACode: string): TJsValue; begin Result := Bind(JsPureDoEval(Self, ACode, FOptions, jsbkV8, FHostFuncs, Global)); end;
-function TJsV8Context.Runtime: IJsRuntime; begin EnsureNotClosed; Result:=FRuntime; end;
-function TJsV8Context.Eval(const ACode: string; const AFileName: string): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=DoEval(ACode); end;
-function TJsV8Context.TryEval(const ACode: string; out AValue: TJsValue): Boolean; begin EnsureNotClosed; try AValue:=Eval(ACode); Result:=True; except AValue:=JsUndefinedValue; Result:=False; end; end;
-function TJsV8Context.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
-var C: string; begin EnsureNotClosed; AValue:=JsUndefinedValue; try C:=ReadFileText(AFileName); except Exit(False) end; Result:=TryEval(C, AValue); end;
-function TJsV8Context.Global: TJsValue; begin EnsureNotClosed; Result:=FGlobal; end;
-function TJsV8Context.NewString(const AStr: string): TJsValue; begin EnsureNotClosed; Result:=JsPureNewString(AStr, FContextId); end;
-function TJsV8Context.NewInt(AValue: Int64): TJsValue; begin EnsureNotClosed; Result:=JsPureNewInt(AValue, FContextId); end;
-function TJsV8Context.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
-function TJsV8Context.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
-function TJsV8Context.NewObject: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewObject(FHeap)); end;
-function TJsV8Context.NewArray: TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapNewArray(FHeap)); end;
-function TJsV8Context.NewJson(const AJson: TJsonValue): TJsValue;
-begin EnsureNotClosed; Result:=JsPureNewJson(AJson, FHeap, FContextId); end;
-function TJsV8Context.ToJson(const AValue: TJsValue): IJsonDocument;
-begin EnsureNotClosed; Result:=JsPureToJson(AValue); end;
-function TJsV8Context.HasProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=JsPureHeapHasProp(FHeap, AObj, AName); end;
-function TJsV8Context.DeleteProp(const AObj: TJsValue; const AName: string): Boolean; begin EnsureNotClosed; Result:=JsPureHeapDeleteProp(FHeap, AObj, AName); end;
-function TJsV8Context.GetKeys(const AObj: TJsValue): TJsStringArray; begin EnsureNotClosed; Result:=JsPureHeapGetKeys(FHeap, AObj); end;
-function TJsV8Context.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
-function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
-function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
-function TJsV8Context.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
-function TJsV8Context.GetProp(const AObj: TJsValue; const AName: string): TJsValue; begin EnsureNotClosed; Result:=Bind(JsPureHeapGetProp(FHeap, AObj, AName)); end;
-procedure TJsV8Context.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue); begin EnsureNotClosed; JsPureHeapSetProp(FHeap, AObj, AName, AVal); end;
-function TJsV8Context.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue; begin EnsureNotClosed; EnsureThreadAffinity; Result:=Bind(JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, jsbkV8)); end;
-procedure TJsV8Context.DoSetHost(const AName: string); begin EnsureNotClosed; JsPureCheckHostName(AName, jsbkV8); end;
-procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
-begin EnsureNotClosed; JsPureHostSetFunc(FHostFuncs, AName, AHandler, jsbkV8); end;
-procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
-begin EnsureNotClosed; JsPureHostSetMethod(FHostFuncs, AName, AHandler, jsbkV8); end;
-procedure TJsV8Context.SetHostFunction(const AName: string; AHandler: TJsHostProc);
-begin EnsureNotClosed; JsPureHostSetProc(FHostFuncs, AName, AHandler, jsbkV8); end;
-procedure TJsV8Context.RemoveHostFunction(const AName: string);
-begin if FClosed then Exit; EnsureThreadAffinity; JsPureHostRemove(FHostFuncs, AName); end;
-procedure TJsV8Context.Tick; begin if FClosed then Exit; EnsureThreadAffinity; end;
-procedure TJsV8Context.CollectGarbage; begin if FClosed then Exit; EnsureThreadAffinity; end;
-procedure TJsV8Context.Close;
 begin
-  if FClosed then Exit;
-  FClosed := True;
-  JsPureClose(FHostFuncs, FHeap, FGlobal, FContextId);
+  inherited Create(AKind, AOptions);
 end;
-function TJsV8Context.IsClosed: Boolean; begin Result:=FClosed; end;
+constructor TJsV8Runtime.Create(const AOptions: TJsRuntimeOptions);
+begin
+  inherited Create(jsbkV8, AOptions);
+end;
+constructor TJsV8Context.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
+begin
+  inherited Create(ARuntime, AOptions, jsbkV8);
+end;
 end.
