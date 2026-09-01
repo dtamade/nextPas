@@ -139,7 +139,6 @@ end;
 procedure RequireImageData(const aImg: TImage; const aName: string); inline;
 begin
   if aImg.IsEmpty then raise EArgumentError.CreateFmt('%s empty', [aName]);
-  if aImg.PixelLength=0 then raise EArgumentError.CreateFmt('%s.Pixels must not be nil', [aName]);
 end;
 
 procedure BuildBlendLuts(aAlpha: Single; out aLutSrc1,aLutSrc2: TByteLut); inline;
@@ -226,12 +225,13 @@ begin
   if False then begin RasterFillSolid(nil,0,0,0,0,0); RasterBlendSrcOver(nil,0,0,0,0,0); ArrayClampF32(nil,nil,0,0.0,0.0); end;
   RequireImageData(aSrc,'src'); EnsureImage(aDest,aSrc.Width,aSrc.Height,aSrc.Format);
   W:=aSrc.Width; H:=aSrc.Height;
-  if (W<3)or(H<3) then begin for Y:=0 to H-1 do Move(aSrc.RowPtr(Y)^,aDest.RowPtr(Y)^,W*LegacyBytesPerPixel(aSrc.Format)); Exit; end;
+  aDest.EnsureUnique;
+  if (W<3)or(H<3) then begin for Y:=0 to H-1 do Move(aSrc.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,W*LegacyBytesPerPixel(aSrc.Format)); Exit; end;
   C:=LegacyBytesPerPixel(aSrc.Format); LTemp:=TImage.Empty; LTemp:=CreateImage(W,H,aSrc.Format);
   try
-    for Y:=0 to H-1 do Move(aSrc.RowPtr(Y)^,LTemp.RowPtr(Y)^,W*C);
-    for Y:=0 to H-1 do Move(aSrc.RowPtr(Y)^,aDest.RowPtr(Y)^,W*C);
-    for Y:=0 to H-1 do begin SrcRow:=aSrc.RowPtr(Y); TempRow:=LTemp.RowPtr(Y);
+    for Y:=0 to H-1 do Move(aSrc.ConstRowPtr(Y)^,LTemp.RowPtr(Y)^,W*C);
+    for Y:=0 to H-1 do Move(aSrc.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,W*C);
+    for Y:=0 to H-1 do begin SrcRow:=aSrc.ConstRowPtr(Y); TempRow:=LTemp.RowPtr(Y);
       for X:=1 to W-2 do begin LB:=X*C;
         for LC:=0 to C-1 do if not ((aSrc.Format=bfRGBA) and (LC=3)) then
         begin LR:=LB+LC; s:=SrcRow[LR-C]+(2.0*SrcRow[LR])+SrcRow[LR+C]; TempRow[LR]:=nextpas.core.math.scalar.ClampByte(s*0.25); end;
@@ -239,7 +239,7 @@ begin
     end;
     for Y:=1 to H-2 do
     begin
-      RowM1:=LTemp.RowPtr(Y-1); Row0:=LTemp.RowPtr(Y); RowP1:=LTemp.RowPtr(Y+1); DstRow:=aDest.RowPtr(Y);
+      RowM1:=LTemp.ConstRowPtr(Y-1); Row0:=LTemp.ConstRowPtr(Y); RowP1:=LTemp.ConstRowPtr(Y+1); DstRow:=aDest.RowPtr(Y);
       for X:=1 to W-2 do begin LB:=X*C;
         for LC:=0 to C-1 do if not ((aSrc.Format=bfRGBA) and (LC=3)) then
         begin LR:=LB+LC; s:=RowM1[LR]+(2.0*Row0[LR])+RowP1[LR]; DstRow[LR]:=nextpas.core.math.scalar.ClampByte(s*0.25); end;
@@ -290,7 +290,8 @@ var Y,RB,LI,SE: Integer; s1,s2,d: PByte; v: TVecU8x16;
 begin
   ValidateSameShape(aSrc1,aSrc2); EnsureImage(aDest,aSrc1.Width,aSrc1.Height,aSrc1.Format);
   RB:=aSrc1.Width*LegacyBytesPerPixel(aSrc1.Format);
-  for Y:=0 to aSrc1.Height-1 do begin s1:=aSrc1.GetPixelPtr(0,Y); s2:=aSrc2.GetPixelPtr(0,Y); d:=aDest.GetPixelPtr(0,Y);
+  aDest.EnsureUnique;
+  for Y:=0 to aSrc1.Height-1 do begin s1:=aSrc1.ConstRowPtr(Y); s2:=aSrc2.ConstRowPtr(Y); d:=aDest.RowPtr(Y);
     SE:=RB and (not 15); LI:=0;
     while LI<SE do begin v:=VecU8x16SatAdd(LoadVecU8x16(@s1[LI]),LoadVecU8x16(@s2[LI])); Move(v,d[LI],SizeOf(v)); Inc(LI,SizeOf(v)); end;
     while LI<RB do begin d[LI]:=nextpas.core.math.scalar.ClampByte(Integer(s1[LI])+Integer(s2[LI])); Inc(LI); end;
@@ -302,7 +303,8 @@ var Y,RB,LI,SE: Integer; s1,s2,d: PByte; v: TVecU8x16;
 begin
   ValidateSameShape(aSrc1,aSrc2); EnsureImage(aDest,aSrc1.Width,aSrc1.Height,aSrc1.Format);
   RB:=aSrc1.Width*LegacyBytesPerPixel(aSrc1.Format);
-  for Y:=0 to aSrc1.Height-1 do begin s1:=aSrc1.GetPixelPtr(0,Y); s2:=aSrc2.GetPixelPtr(0,Y); d:=aDest.GetPixelPtr(0,Y);
+  aDest.EnsureUnique;
+  for Y:=0 to aSrc1.Height-1 do begin s1:=aSrc1.ConstRowPtr(Y); s2:=aSrc2.ConstRowPtr(Y); d:=aDest.RowPtr(Y);
     SE:=RB and (not 15); LI:=0;
     while LI<SE do begin v:=VecU8x16SatSub(LoadVecU8x16(@s1[LI]),LoadVecU8x16(@s2[LI])); Move(v,d[LI],SizeOf(v)); Inc(LI,SizeOf(v)); end;
     while LI<RB do begin d[LI]:=nextpas.core.math.scalar.ClampByte(Integer(s1[LI])-Integer(s2[LI])); Inc(LI); end;
@@ -314,9 +316,10 @@ var Y,RB: Integer; lut: TByteLut; s,d: PByte;
 begin
   RequireImageData(aSrc,'src'); EnsureImage(aDest,aSrc.Width,aSrc.Height,aSrc.Format);
   RB:=aSrc.Width*LegacyBytesPerPixel(aSrc.Format);
-  if IsNearlyEqual(aFactor,1.0) then begin for Y:=0 to aSrc.Height-1 do Move(aSrc.GetPixelPtr(0,Y)^,aDest.GetPixelPtr(0,Y)^,RB); Exit; end;
+  aDest.EnsureUnique;
+  if IsNearlyEqual(aFactor,1.0) then begin for Y:=0 to aSrc.Height-1 do Move(aSrc.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,RB); Exit; end;
   BuildLinearLut(aFactor,0.0,lut);
-  for Y:=0 to aSrc.Height-1 do begin s:=aSrc.GetPixelPtr(0,Y); d:=aDest.GetPixelPtr(0,Y);
+  for Y:=0 to aSrc.Height-1 do begin s:=aSrc.ConstRowPtr(Y); d:=aDest.RowPtr(Y);
     case aSrc.Format of bfRGBA: MapLutToRgbaRgbChannels(s,d,aSrc.Width,lut); bfBGRA,bfGray8: MapLutToAllBytes(s,d,RB,lut); end;
   end;
 end;
@@ -329,21 +332,22 @@ begin
   LMode:=GImageBlendAlphaMode;
   if aAlpha<0 then aAlpha:=0 else if aAlpha>1 then aAlpha:=1;
   RB:=aSrc1.Width*LegacyBytesPerPixel(aSrc1.Format);
-  if IsNearlyEqual(aAlpha,0.0) then begin for Y:=0 to aSrc1.Height-1 do Move(aSrc1.GetPixelPtr(0,Y)^,aDest.GetPixelPtr(0,Y)^,RB); Exit; end;
-  if IsNearlyEqual(aAlpha,1.0) then begin for Y:=0 to aSrc2.Height-1 do Move(aSrc2.GetPixelPtr(0,Y)^,aDest.GetPixelPtr(0,Y)^,RB); Exit; end;
+  aDest.EnsureUnique;
+  if IsNearlyEqual(aAlpha,0.0) then begin for Y:=0 to aSrc1.Height-1 do Move(aSrc1.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,RB); Exit; end;
+  if IsNearlyEqual(aAlpha,1.0) then begin for Y:=0 to aSrc2.Height-1 do Move(aSrc2.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,RB); Exit; end;
   if IsNearlyEqual(aAlpha,0.5) then begin
-    if aSrc1.Format=bfRGBA then begin for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.GetPixelPtr(0,Y); s2r:=aSrc2.GetPixelPtr(0,Y); dr:=aDest.GetPixelPtr(0,Y);
+    if aSrc1.Format=bfRGBA then begin for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.ConstRowPtr(Y); s2r:=aSrc2.ConstRowPtr(Y); dr:=aDest.RowPtr(Y);
       for LI:=0 to aSrc1.Width-1 do begin s1p:=@s1r[LI*4]; s2p:=@s2r[LI*4]; dp:=@dr[LI*4];
         case LMode of ibamStraight: if (s1p[3]=255)and(s2p[3]=255) then begin dp[0]:=BlendBytesHalfBankers(s1p[0],s2p[0]); dp[1]:=BlendBytesHalfBankers(s1p[1],s2p[1]); dp[2]:=BlendBytesHalfBankers(s1p[2],s2p[2]); dp[3]:=255; end else BlendRgbaStraight(s1p,s2p,aAlpha,dp);
           ibamPremultiplied: begin dp[0]:=BlendBytesHalfBankers(s1p[0],s2p[0]); dp[1]:=BlendBytesHalfBankers(s1p[1],s2p[1]); dp[2]:=BlendBytesHalfBankers(s1p[2],s2p[2]); dp[3]:=BlendBytesHalfBankers(s1p[3],s2p[3]); end; end; end; end; Exit; end;
-    for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.GetPixelPtr(0,Y); s2r:=aSrc2.GetPixelPtr(0,Y); dr:=aDest.GetPixelPtr(0,Y);
+    for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.ConstRowPtr(Y); s2r:=aSrc2.ConstRowPtr(Y); dr:=aDest.RowPtr(Y);
       LI:=0; while LI+3<RB do begin dr[LI]:=BlendBytesHalfBankers(s1r[LI],s2r[LI]); dr[LI+1]:=BlendBytesHalfBankers(s1r[LI+1],s2r[LI+1]); dr[LI+2]:=BlendBytesHalfBankers(s1r[LI+2],s2r[LI+2]); dr[LI+3]:=BlendBytesHalfBankers(s1r[LI+3],s2r[LI+3]); Inc(LI,4); end; while LI<RB do begin dr[LI]:=BlendBytesHalfBankers(s1r[LI],s2r[LI]); Inc(LI); end; end; Exit; end;
   BuildBlendLuts(aAlpha,LLutSrc1,LLutSrc2);
-  if aSrc1.Format=bfRGBA then begin for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.GetPixelPtr(0,Y); s2r:=aSrc2.GetPixelPtr(0,Y); dr:=aDest.GetPixelPtr(0,Y);
+  if aSrc1.Format=bfRGBA then begin for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.ConstRowPtr(Y); s2r:=aSrc2.ConstRowPtr(Y); dr:=aDest.RowPtr(Y);
     for LI:=0 to aSrc1.Width-1 do begin s1p:=@s1r[LI*4]; s2p:=@s2r[LI*4]; dp:=@dr[LI*4];
       case LMode of ibamStraight: if (s1p[3]=255)and(s2p[3]=255) then begin dp[0]:=BlendBytesFromLut(s1p[0],s2p[0],LLutSrc1,LLutSrc2); dp[1]:=BlendBytesFromLut(s1p[1],s2p[1],LLutSrc1,LLutSrc2); dp[2]:=BlendBytesFromLut(s1p[2],s2p[2],LLutSrc1,LLutSrc2); dp[3]:=255; end else BlendRgbaStraight(s1p,s2p,aAlpha,dp);
         ibamPremultiplied: begin dp[0]:=BlendBytesFromLut(s1p[0],s2p[0],LLutSrc1,LLutSrc2); dp[1]:=BlendBytesFromLut(s1p[1],s2p[1],LLutSrc1,LLutSrc2); dp[2]:=BlendBytesFromLut(s1p[2],s2p[2],LLutSrc1,LLutSrc2); dp[3]:=BlendBytesFromLut(s1p[3],s2p[3],LLutSrc1,LLutSrc2); end; end; end; end; Exit; end;
-  for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.GetPixelPtr(0,Y); s2r:=aSrc2.GetPixelPtr(0,Y); dr:=aDest.GetPixelPtr(0,Y);
+  for Y:=0 to aSrc1.Height-1 do begin s1r:=aSrc1.ConstRowPtr(Y); s2r:=aSrc2.ConstRowPtr(Y); dr:=aDest.RowPtr(Y);
     LI:=0; while LI+3<RB do begin dr[LI]:=BlendBytesFromLut(s1r[LI],s2r[LI],LLutSrc1,LLutSrc2); dr[LI+1]:=BlendBytesFromLut(s1r[LI+1],s2r[LI+1],LLutSrc1,LLutSrc2); dr[LI+2]:=BlendBytesFromLut(s1r[LI+2],s2r[LI+2],LLutSrc1,LLutSrc2); dr[LI+3]:=BlendBytesFromLut(s1r[LI+3],s2r[LI+3],LLutSrc1,LLutSrc2); Inc(LI,4); end; while LI<RB do begin dr[LI]:=BlendBytesFromLut(s1r[LI],s2r[LI],LLutSrc1,LLutSrc2); Inc(LI); end; end;
 end;
 
@@ -358,19 +362,40 @@ begin
 end;
 
 procedure RGBToGrayscale(var aDest: TImage; const aSrc: TImage);
-var X,Y: Integer; s,d: PByte;
+var X,Y: Integer; sRow,dRow: PByte; sOff: Integer;
 begin
   if (aSrc.Format<>bfRGBA)and(aSrc.Format<>bfBGRA) then raise EArgumentError.Create('Source image must be RGB24 or RGBA32');
   RequireImageData(aSrc,'src'); EnsureImage(aDest,aSrc.Width,aSrc.Height,bfGray8);
-  for Y:=0 to aSrc.Height-1 do for X:=0 to aSrc.Width-1 do begin s:=aSrc.GetPixelPtr(X,Y); d:=aDest.GetPixelPtr(X,Y); d[0]:=nextpas.core.math.scalar.ClampByte((s[0]*RGB_TO_GRAY_R)+(s[1]*RGB_TO_GRAY_G)+(s[2]*RGB_TO_GRAY_B)); end;
+  aDest.EnsureUnique;
+  for Y:=0 to aSrc.Height-1 do
+  begin
+    sRow:=aSrc.ConstRowPtr(Y);
+    dRow:=aDest.RowPtr(Y);
+    for X:=0 to aSrc.Width-1 do
+    begin
+      sOff:=X*4;
+      dRow[X]:=nextpas.core.math.scalar.ClampByte((sRow[sOff]*RGB_TO_GRAY_R)+(sRow[sOff+1]*RGB_TO_GRAY_G)+(sRow[sOff+2]*RGB_TO_GRAY_B));
+    end;
+  end;
 end;
 
 procedure GrayscaleToRGB(var aDest: TImage; const aSrc: TImage);
-var X,Y: Integer; g: Byte; d: PByte;
+var X,Y: Integer; sRow,dRow: PByte; dOff: Integer; g: Byte;
 begin
   if aSrc.Format<>bfGray8 then raise EArgumentError.Create('Source image must be Grayscale');
   RequireImageData(aSrc,'src'); EnsureImage(aDest,aSrc.Width,aSrc.Height,bfBGRA);
-  for Y:=0 to aSrc.Height-1 do for X:=0 to aSrc.Width-1 do begin g:=aSrc.GetPixelPtr(X,Y)[0]; d:=aDest.GetPixelPtr(X,Y); d[0]:=g; d[1]:=g; d[2]:=g; end;
+  aDest.EnsureUnique;
+  for Y:=0 to aSrc.Height-1 do
+  begin
+    sRow:=aSrc.ConstRowPtr(Y);
+    dRow:=aDest.RowPtr(Y);
+    for X:=0 to aSrc.Width-1 do
+    begin
+      g:=sRow[X];
+      dOff:=X*4;
+      dRow[dOff]:=g; dRow[dOff+1]:=g; dRow[dOff+2]:=g;
+    end;
+  end;
 end;
 
 procedure ApplyBrightness(var aImg: TImage; aBrightness: Single);
@@ -407,15 +432,18 @@ begin
   // RowPtr batch: 3 RowPtr per row, avoid 9 GetPixelPtr per pixel; keep batch clamp via ArrayClamp path
   if False then begin RasterFillSolid(nil,0,0,0,0,0); RasterBlendSrcOver(nil,0,0,0,0,0); ArrayClampF32(nil,nil,0,0.0,0.0); end;
   RequireImageData(aSrc,'src'); EnsureImage(aDest,aSrc.Width,aSrc.Height,aSrc.Format);
-  copy:=TImage.Empty; need:=aDest.IsSharedWith(aSrc);
-  if need then begin copy:=CreateImage(aSrc.Width,aSrc.Height,aSrc.Format); for Y:=0 to aSrc.Height-1 do Move(aSrc.RowPtr(Y)^,copy.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format)); end;
-  for Y:=0 to aSrc.Height-1 do if need then Move(copy.RowPtr(Y)^,aDest.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format)) else Move(aSrc.RowPtr(Y)^,aDest.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format));
+  copy:=TImage.Empty; need:=False;
+  if (not aSrc.IsEmpty) and (not aDest.IsEmpty) then
+    if aSrc.ConstRowPtr(0)=aDest.ConstRowPtr(0) then need:=True;
+  aDest.EnsureUnique;
+  if need then begin copy:=CreateImage(aSrc.Width,aSrc.Height,aSrc.Format); for Y:=0 to aSrc.Height-1 do Move(aSrc.ConstRowPtr(Y)^,copy.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format)); end;
+  for Y:=0 to aSrc.Height-1 do if need then Move(copy.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format)) else Move(aSrc.ConstRowPtr(Y)^,aDest.RowPtr(Y)^,aSrc.Width*LegacyBytesPerPixel(aSrc.Format));
   if (aSrc.Width<3)or(aSrc.Height<3) then begin if need then FreeImage(copy); Exit; end;
   Bpp:=LegacyBytesPerPixel(aSrc.Format); W:=aSrc.Width; H:=aSrc.Height;
   for Y:=1 to H-2 do
   begin
-    if need then begin SrcRow0:=copy.RowPtr(Y-1); SrcRow1:=copy.RowPtr(Y); SrcRow2:=copy.RowPtr(Y+1); end
-    else begin SrcRow0:=aSrc.RowPtr(Y-1); SrcRow1:=aSrc.RowPtr(Y); SrcRow2:=aSrc.RowPtr(Y+1); end;
+    if need then begin SrcRow0:=copy.ConstRowPtr(Y-1); SrcRow1:=copy.ConstRowPtr(Y); SrcRow2:=copy.ConstRowPtr(Y+1); end
+    else begin SrcRow0:=aSrc.ConstRowPtr(Y-1); SrcRow1:=aSrc.ConstRowPtr(Y); SrcRow2:=aSrc.ConstRowPtr(Y+1); end;
     DstRow:=aDest.RowPtr(Y);
     for X:=1 to W-2 do
       for C:=0 to Bpp-1 do if not ((aSrc.Format=bfRGBA) and (C=3)) then

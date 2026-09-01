@@ -1,5 +1,13 @@
 {**
  * nextpas.core.image.base - TBitmap 容器（COW，TBytes 持有，Stride 64B 对齐）+ 图像格式
+ * L1 graphics.base 零依赖（仅 base/errors + mem.base.AlignUp）；AlignUp 复用 mem.base。
+ * 封装：FWidth/FHeight/FStride/FPixels 私有，Stride 64B 对齐；ToCompact 去 pad 紧凑拷贝。
+ * COW：Clone 浅拷贝共享 TBytes，EnsureUnique 写前 SetLength 深拷贝；GetPixelPtr/RowPtr
+ *   为可写路径（内部触发 EnsureUnique），ConstPixelPtr/ConstRowPtr 为只读路径（不触发 COW）。
+ * 指针生命周期：RowPtr/GetPixelPtr/Const* 返回裸 PByte 仅在下一次可写调用前有效
+ *   （Clear/EnsureUnique/重分配即悬垂）；禁止跨调用缓存，需即用即弃；写循环应外提
+ *   EnsureUnique 一次后复用 ConstRowPtr + Stride 偏移，避免每行 SetLength 校验。
+ * 只读约束：Const* 返回指针禁止写入；需紧凑数据用 ToCompact，勿绕过 Const 视图野指针写。
  * L2，仅 L0-L1，零 RTL。
  *}
 unit nextpas.core.image.base;
@@ -36,17 +44,24 @@ type
     procedure Clear;
     function IsEmpty: Boolean; inline;
     function BytePerPixel: Integer; inline;
+    // 可写路径：触发 EnsureUnique COW，返回指针仅至下一次写操作前有效，禁止跨调用缓存
     function GetPixelPtr(X, Y: Integer): PByte;
+    // 只读路径：不触发 COW，禁止通过返回指针写入；批量读建议 ConstRowPtr 视图
     function ConstPixelPtr(X, Y: Integer): PByte; inline;
+    // 可写行指针：触发 EnsureUnique；扫描行循环应外提 EnsureUnique 后改用 ConstRowPtr
     function RowPtr(Y: Integer): PByte;
+    // 只读行指针：不触发 COW，禁止写入；配合 Stride 偏移批量访问，生命周期即用即弃
     function ConstRowPtr(Y: Integer): PByte; inline;
+    // 去 pad 紧凑拷贝（Width*Bpp 紧凑），避免绕过 ToCompact 直接野指针写
     function ToCompact: TBytes;
     procedure Premultiply;
     procedure Unpremultiply;
     function Clone: TBitmap;
+    // 写前去重：共享时 SetLength 深拷贝；扫描行批量写应外提一次避免每行校验
     procedure EnsureUnique; inline;
     property Width: Integer read FWidth;
     property Height: Integer read FHeight;
+    property Stride: Integer read FStride;
     property Format: TBitmapFormat read FFormat;
     property IsEmptyProp: Boolean read GetIsEmpty;
   end;
@@ -115,8 +130,20 @@ begin
 end;
 
 procedure TBitmap.EnsureUnique;
+var
+  P: PByte;
+  RC: SizeInt;
+  PRC: ^SizeInt;
 begin
-  if Length(FPixels) > 0 then SetLength(FPixels, Length(FPixels));
+  if Length(FPixels) = 0 then Exit;
+  // FPC TBytes (dynarray) header = tdynarray {refcount: SizeInt; high: SizeInt} before data.
+  // High-performance COW: only SetLength when shared (RC<>1); unique RC=1 avoids copy.
+  // Literal/const arrays have RC<0, also triggers copy; declocked read not needed for correctness (over-copy safe).
+  P := @FPixels[0];
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  RC := PRC^;
+  if RC <> 1 then
+    SetLength(FPixels, Length(FPixels));
 end;
 
 function TBitmap.IsEmpty: Boolean;
