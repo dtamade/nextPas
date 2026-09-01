@@ -227,7 +227,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.platform.dl,
-  nextpas.core.os.env;
+  nextpas.core.platform.env;
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
@@ -694,27 +694,12 @@ var
   dyn_git_worktree_prune_options_init: TLibGit2_git_worktree_prune_options_init = nil;
   dyn_git_worktree_free: TLibGit2_git_worktree_free = nil;
 
-{$IFDEF NEXTPAS_UNIX}
-function c_getenv(name: PAnsiChar): PAnsiChar; cdecl; external 'c' name 'getenv';
-{$ENDIF}
-
-function ReadProcessEnv(const AName: string): string;
-var
-  LName: string;
-  {$IFDEF NEXTPAS_UNIX}
-  LValue: PAnsiChar;
-  {$ENDIF}
+function ReadProcessEnv(const AName: string): string; inline;
 begin
-  LName := AName;
-  {$IFDEF NEXTPAS_UNIX}
-  LValue := c_getenv(PAnsiChar(LName));
-  if LValue <> nil then
-    Result := string(LValue)
-  else
-    Result := '';
-  {$ELSE}
-  Result := nextpas.core.os.env.GetEnvironmentVariable(LName);
-  {$ENDIF}
+  // L0 owner: platform.env owns raw OS truth; L2 git must not touch os.env (L2)
+  // per registry same-layer one-way whitelist (git: L0-L1 + fs/compress/hash/zlib/checksum).
+  // perf: inline + zero-copy via platform_env_get_str (4096 stack buf + single Move, no heap for missing)
+  Result := string(platform_env_get_str(AnsiString(AName)));
 end;
 
 procedure ClearLibGit2Symbols;

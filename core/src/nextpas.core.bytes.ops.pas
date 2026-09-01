@@ -206,9 +206,9 @@ begin
   Result := nil;
   SetLength(Result, A.Len + B.Len);
   if A.Len > 0 then
-    Move(A.Data^, Result[0], A.Len);
+    Move(A.Data^, PByte(Pointer(Result))^, A.Len);
   if B.Len > 0 then
-    Move(B.Data^, Result[A.Len], B.Len);
+    Move(B.Data^, (PByte(Pointer(Result)) + A.Len)^, B.Len);
 end;
 
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -291,12 +291,12 @@ procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
   LOldLen: SizeUInt;
 begin
-  // perf: inline + single SetLength + single Move (zero-copy via Move); no header poke
+  // perf: inline + single SetLength + single Move via PByte^ (zero-copy, inline-safe: no indexed var for Move untyped param)
   if Length(ASrc) = 0 then
     Exit;
   LOldLen := SizeUInt(Length(ADest));
   SetLength(ADest, LOldLen + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+  Move(PByte(Pointer(ASrc))^, (PByte(Pointer(ADest)) + LOldLen)^, Length(ASrc));
 end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
@@ -307,7 +307,7 @@ begin
     Exit;
   LOldLen := SizeUInt(Length(ADest));
   SetLength(ADest, LOldLen + ASrcLen);
-  Move(ASrc^, ADest[LOldLen], ASrcLen);
+  Move(ASrc^, (PByte(Pointer(ADest)) + LOldLen)^, ASrcLen);
 end;
 
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
@@ -391,10 +391,10 @@ begin
     Result := AData;
     Exit;
   end;
-  // trimmed: single allocation + Move, no extra SpanClone allocation
+  // trimmed: single allocation + Move via PByte^ (inline-safe), no extra SpanClone allocation
   SetLength(Result, L - LOff);
   if L - LOff > 0 then
-    Move(P[LOff], Result[0], L - LOff);
+    Move((P + LOff)^, PByte(Pointer(Result))^, L - LOff);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
@@ -486,10 +486,14 @@ begin
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;
+var
+  LLen: SizeUInt;
 begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  // perf: inline + single SetLength + single Move via PByte/PChar^ (zero-copy, inline-safe: indexed var would trigger FPC constant-prop garbage)
+  LLen := SizeUInt(Length(ABytes));
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(PByte(Pointer(ABytes))^, PAnsiChar(Result)^, LLen);
 end;
 
 function BytesToUTF8(const ABytes: TBytes): string; inline;
@@ -498,10 +502,14 @@ begin
 end;
 
 function StringToBytes(const AText: string): TBytes; inline;
+var
+  LLen: SizeUInt;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PAnsiChar(AText)^, Result[0], Length(AText));
+  // perf: inline + single Move via PByte^ (zero-copy, inline-safe); single source for git bytes.ops chain
+  LLen := SizeUInt(Length(AText));
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(PAnsiChar(AText)^, PByte(Pointer(Result))^, LLen);
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
@@ -515,7 +523,7 @@ begin
   LSpan := TByteSpan.FromBytes(ABytes).Slice(AOffset, ALength);
   SetLength(Result, LSpan.Len);
   if LSpan.Len > 0 then
-    Move(LSpan.Data^, Result[1], LSpan.Len);
+    Move(LSpan.Data^, PAnsiChar(Result)^, LSpan.Len);
 end;
 
 end.

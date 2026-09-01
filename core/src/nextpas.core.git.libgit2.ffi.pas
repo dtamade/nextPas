@@ -485,35 +485,11 @@ type
   // ── Vocabulary bridge: unified aliases (base/ffi reuse, zero libgit2 closure) ──
   // ffi remains canonical FFI seam; base owns shared handles/OID; T-prefix aliases
   // expose Pascal-style vocabulary for consumers that previously used bindings' TGitOid.
+  // FFI is pure cdecl seam — no inline business logic; OID ops live in base/ops
+  // via bytes.ops single source (inline zero-copy helpers: Equals/IsZero/Copy).
   TGitRepositoryHandle = git_repository;
   TGitOid20 = git_oid;
 
-// Inline zero-copy helpers (perf: inline + zero-copy CompareMem/Move single source via base/bytes.ops, no heap, no SysUtils, 20 bytes -> 3×QWord)
-function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
-function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
-procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
-
 implementation
-
-function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
-begin
-  // single source: base git_oid 20 bytes via bytes.ops CompareMem
-  Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
-end;
-
-function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
-var
-  I: Integer;
-begin
-  for I := 0 to High(A.id) do
-    if A.id[I] <> 0 then Exit(False);
-  Result := True;
-end;
-
-procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
-begin
-  // single source: bytes.ops Move zero-copy
-  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
-end;
 
 end.

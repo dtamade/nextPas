@@ -103,11 +103,14 @@ type
     FHidden: TGitOidSet;      { owned, hide set }
     FParseCache: TCommitParseCache; { owned, exactly-once }
     FBoundary: TGitRevEntryArray;
+    FBoundaryCap: SizeInt;
+    FBoundaryLen: SizeInt;
     FBoundaryPos: Integer;
     FFirstParent: Boolean;
     FSince: Int64;
     FUntilTime: Int64;
     FShowBoundary: Boolean;
+    procedure AppendBoundary(const AOid: TGitOid); inline;
     procedure InitGraph;
     function TryGraphCommit(const AOid: TGitOid; out AWhen: Int64;
       out AParents: TGitOidArray): Boolean;
@@ -536,7 +539,7 @@ begin
   Result := TryGraphParents(FGraph, AOid, AWhen, AParents);
 end;
 
-procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
+procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry); inline;
 var
   I, Parent: Integer;
 begin
@@ -548,41 +551,35 @@ begin
   end;
   I := FHeapLen;
   Inc(FHeapLen);
-  // max-heap on When: newest commit at the root; raw Move avoids Parents AddRef/Release churn
+  // max-heap on When: newest at root; managed assignment preserves ref-counts
   while I > 0 do
   begin
     Parent := (I - 1) div 2;
     if FHeap[Parent].When >= AEntry.When then
       Break;
-    Finalize(FHeap[I]);
-    Move(FHeap[Parent], FHeap[I], SizeOf(TWalkEntry));
-    PPointer(@FHeap[Parent].Parents)^ := nil;
+    FHeap[I] := FHeap[Parent];
     I := Parent;
   end;
-  Finalize(FHeap[I]);
   FHeap[I] := AEntry;
 end;
 
-function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
+function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean; inline;
 var
-  Last, I, L, R, Best: Integer;
+  I, L, R, Best: Integer;
   LastEntry: TWalkEntry;
 begin
   Result := FHeapLen > 0;
   if not Result then
     Exit;
-  // transfer root to caller without AddRef/Release churn; finalize out param first
-  Finalize(AEntry);
-  Move(FHeap[0], AEntry, SizeOf(TWalkEntry));
-  PPointer(@FHeap[0].Parents)^ := nil;
+  AEntry := FHeap[0];
   Dec(FHeapLen);
-  Last := FHeapLen;
-  if Last = 0 then
+  if FHeapLen = 0 then
+  begin
+    FHeap[0] := Default(TWalkEntry);
     Exit;
-  // move last aside (transfer ownership), hole at 0
-  Move(FHeap[Last], LastEntry, SizeOf(TWalkEntry));
-  PPointer(@FHeap[Last].Parents)^ := nil;
-  // restore max-heap by moving best child up via raw Move
+  end;
+  LastEntry := FHeap[FHeapLen];
+  FHeap[FHeapLen] := Default(TWalkEntry);
   I := 0;
   while True do
   begin
@@ -595,12 +592,24 @@ begin
       Best := R;
     if Best = I then
       Break;
-    Move(FHeap[Best], FHeap[I], SizeOf(TWalkEntry));
-    PPointer(@FHeap[Best].Parents)^ := nil;
+    FHeap[I] := FHeap[Best];
     I := Best;
   end;
-  Move(LastEntry, FHeap[I], SizeOf(TWalkEntry));
-  PPointer(@LastEntry.Parents)^ := nil;
+  FHeap[I] := LastEntry;
+end;
+
+procedure TGitRevWalker.AppendBoundary(const AOid: TGitOid); inline;
+begin
+  if FBoundaryLen >= FBoundaryCap then
+  begin
+    if FBoundaryCap = 0 then FBoundaryCap := 32
+    else if FBoundaryCap < 4096 then FBoundaryCap := FBoundaryCap * 2
+    else Inc(FBoundaryCap, 4096);
+    SetLength(FBoundary, FBoundaryCap);
+  end;
+  FBoundary[FBoundaryLen].Oid := AOid;
+  FBoundary[FBoundaryLen].IsBoundary := True;
+  Inc(FBoundaryLen);
 end;
 
 procedure TGitRevWalker.EnqueueCommit(const AOid: TGitOid);
@@ -620,12 +629,10 @@ begin
   begin
     if FShowBoundary then
     begin
-      for I := 0 to High(FBoundary) do
+      for I := 0 to FBoundaryLen - 1 do
         if GitOidSame(FBoundary[I].Oid, AOid) then
           Exit;
-      SetLength(FBoundary, Length(FBoundary) + 1);
-      FBoundary[High(FBoundary)].Oid := AOid;
-      FBoundary[High(FBoundary)].IsBoundary := True;
+      AppendBoundary(AOid);
     end;
     Exit;
   end;
@@ -729,6 +736,8 @@ begin
   FHidden := nil;
   FParseCache := nil;
   FBoundary := nil;
+  FBoundaryCap := 0;
+  FBoundaryLen := 0;
   FBoundaryPos := 0;
   FFirstParent := AOptions.FirstParent;
   FSince := AOptions.Since;
@@ -745,6 +754,12 @@ begin
     FParseCache.Free;
   if FGraph <> nil then
     FGraph.Free;
+  SetLength(FHeap, 0);
+  FHeapCap := 0;
+  FHeapLen := 0;
+  SetLength(FBoundary, 0);
+  FBoundaryCap := 0;
+  FBoundaryLen := 0;
   inherited Destroy;
 end;
 
@@ -789,7 +804,7 @@ begin
   begin
     if not HeapPop(Entry) then
     begin
-      if FShowBoundary and (FBoundaryPos < Length(FBoundary)) then
+      if FShowBoundary and (FBoundaryPos < FBoundaryLen) then
       begin
         AOid := FBoundary[FBoundaryPos].Oid;
         Inc(FBoundaryPos);
@@ -807,18 +822,14 @@ begin
       if IsHidden and FShowBoundary then
       begin
         IsHidden := False;
-        for K := 0 to High(FBoundary) do
+        for K := 0 to FBoundaryLen - 1 do
           if GitOidSame(FBoundary[K].Oid, Entry.Parents[I]) then
           begin
             IsHidden := True;
             Break;
           end;
         if not IsHidden then
-        begin
-          SetLength(FBoundary, Length(FBoundary) + 1);
-          FBoundary[High(FBoundary)].Oid := Entry.Parents[I];
-          FBoundary[High(FBoundary)].IsBoundary := True;
-        end;
+          AppendBoundary(Entry.Parents[I]);
         Continue;
       end;
       if IsHidden then
@@ -839,7 +850,7 @@ var
   WasBoundary: Boolean;
 begin
   // drain heap first, then boundary
-  WasBoundary := FShowBoundary and (FHeapLen = 0) and (FBoundaryPos < Length(FBoundary));
+  WasBoundary := FShowBoundary and (FHeapLen = 0) and (FBoundaryPos < FBoundaryLen);
   if WasBoundary then
   begin
     AEntry.Oid := FBoundary[FBoundaryPos].Oid;
@@ -851,7 +862,7 @@ begin
     Exit(False);
   // Next may have returned a boundary entry via its own drain; detect by checking if Oid is in boundary list and heap was empty
   WasBoundary := False;
-  for I := 0 to High(FBoundary) do
+  for I := 0 to FBoundaryLen - 1 do
     if GitOidSame(FBoundary[I].Oid, Oid) then
     begin
       // if Oid was boundary, it would have been appended to FBoundary and returned after heap empty
@@ -954,32 +965,29 @@ var
       Parent := (I - 1) div 2;
       if Heap[Parent].When >= AEntry.When then
         Break;
-      Finalize(Heap[I]);
-      Move(Heap[Parent], Heap[I], SizeOf(TWalkEntry));
-      PPointer(@Heap[Parent].Parents)^ := nil;
+      Heap[I] := Heap[Parent];
       I := Parent;
     end;
-    Finalize(Heap[I]);
     Heap[I] := AEntry;
   end;
 
   function HeapPopLocal(out AEntry: TWalkEntry): Boolean; inline;
   var
-    Last, I, L, R, Best: Integer;
+    I, L, R, Best: Integer;
     LastEntry: TWalkEntry;
   begin
     Result := HeapLen > 0;
     if not Result then
       Exit;
-    Finalize(AEntry);
-    Move(Heap[0], AEntry, SizeOf(TWalkEntry));
-    PPointer(@Heap[0].Parents)^ := nil;
+    AEntry := Heap[0];
     Dec(HeapLen);
-    Last := HeapLen;
-    if Last = 0 then
+    if HeapLen = 0 then
+    begin
+      Heap[0] := Default(TWalkEntry);
       Exit;
-    Move(Heap[Last], LastEntry, SizeOf(TWalkEntry));
-    PPointer(@Heap[Last].Parents)^ := nil;
+    end;
+    LastEntry := Heap[HeapLen];
+    Heap[HeapLen] := Default(TWalkEntry);
     I := 0;
     while True do
     begin
@@ -992,12 +1000,10 @@ var
         Best := R;
       if Best = I then
         Break;
-      Move(Heap[Best], Heap[I], SizeOf(TWalkEntry));
-      PPointer(@Heap[Best].Parents)^ := nil;
+      Heap[I] := Heap[Best];
       I := Best;
     end;
-    Move(LastEntry, Heap[I], SizeOf(TWalkEntry));
-    PPointer(@LastEntry.Parents)^ := nil;
+    Heap[I] := LastEntry;
   end;
 
   procedure EnqueueIfNeeded(const AOid: TGitOid);

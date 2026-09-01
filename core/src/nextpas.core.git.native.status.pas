@@ -472,12 +472,14 @@ end;
 
 procedure CollectUntracked(const AWorkTree, ADirRel: string;
   const ATrackedSorted: TStringArray; AIgnore: TGitIgnoreMatcher;
-  var AOut: TStringArray);
+  var AOut: TStringArray); inline;
 var
   DirAbs, Rel, IgnoreFile: string;
   Items: TDirEntryArray;
   HaveIgnore: Boolean;
   I: SizeInt;
+  LCount, LCap: SizeInt;
+  LDirLen, LNameLen: SizeInt;
 begin
   if ADirRel = '' then
     DirAbs := AWorkTree
@@ -489,6 +491,9 @@ begin
   HaveIgnore := Exists(IgnoreFile);
   if HaveIgnore then
     AIgnore.PushSource(ADirRel, ReadFileText(IgnoreFile));
+  // amortized growth for untracked list (bytes.ops single-source doubling)
+  LCount := Length(AOut);
+  LCap := LCount;
   try
     Items := ReadDir(DirAbs);
     for I := 0 to High(Items) do
@@ -498,23 +503,53 @@ begin
       if ADirRel = '' then
         Rel := Items[I].Name
       else
-        Rel := ADirRel + '/' + Items[I].Name;
+      begin
+        // single alloc + Move (zero-copy) avoids ADirRel+'/'+Name temp storm; inline for hot fan-out
+        LDirLen := Length(ADirRel);
+        LNameLen := Length(Items[I].Name);
+        SetLength(Rel, LDirLen + 1 + LNameLen);
+        if LDirLen > 0 then
+          Move(ADirRel[1], Rel[1], LDirLen);
+        Rel[LDirLen + 1] := '/';
+        if LNameLen > 0 then
+          Move(Items[I].Name[1], Rel[LDirLen + 2], LNameLen);
+      end;
       if Items[I].IsDir then
       begin
         // pruning an ignored subtree is what keeps "!x/y" under an
         // ignored "x/" from resurrecting, matching git's traversal
         if AIgnore.IsIgnored(Rel, True) then
           Continue;
-        CollectUntracked(AWorkTree, Rel, ATrackedSorted, AIgnore, AOut)
+        // commit logical count before recursion (capacity slack is trimmed by callee)
+        if Length(AOut) <> LCount then
+          SetLength(AOut, LCount);
+        CollectUntracked(AWorkTree, Rel, ATrackedSorted, AIgnore, AOut);
+        LCount := Length(AOut);
+        LCap := LCount;
       end
       else if (not SortedHasString(ATrackedSorted, Rel))
         and (not AIgnore.IsIgnored(Rel, False)) then
       begin
-        SetLength(AOut, Length(AOut) + 1);
-        AOut[High(AOut)] := Rel;
+        if LCount = LCap then
+        begin
+          if LCap = 0 then
+            LCap := 16
+          else if LCap <= High(SizeInt) div 2 then
+            LCap := LCap * 2
+          else
+            LCap := LCount + 1;
+          SetLength(AOut, LCap);
+        end;
+        AOut[LCount] := Rel;
+        Inc(LCount);
       end;
     end;
+    if LCap <> LCount then
+      SetLength(AOut, LCount);
   finally
+    // ensure logical length is committed even if exception; ignore file pop is stability-critical
+    if Length(AOut) <> LCount then
+      SetLength(AOut, LCount);
     if HaveIgnore then
       AIgnore.PopSource;
   end;
@@ -555,6 +590,62 @@ begin
   AOut[High(AOut)].Similarity := ASimilarity;
   AOut[High(AOut)].HeadCode := gscCopied;
   AOut[High(AOut)].WorkCode := AWorkCode;
+end;
+
+// amortized fast variants (bytes.ops single-source doubling, inline + zero-copy Move for string fields)
+procedure AppendStatusFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const APath: string; AHeadCode, AWorkCode: TGitStatusCode); inline;
+begin
+  if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then Exit;
+  if ACount = ACap then
+  begin
+    if ACap = 0 then ACap := 16
+    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
+    else ACap := ACount + 1;
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := APath;
+  AOut[ACount].OldPath := '';
+  AOut[ACount].Similarity := 0;
+  AOut[ACount].HeadCode := AHeadCode;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
+end;
+
+procedure AppendRenamedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const AOldPath, ANewPath: string; ASimilarity: Byte; AWorkCode: TGitStatusCode); inline;
+begin
+  if ACount = ACap then
+  begin
+    if ACap = 0 then ACap := 16
+    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
+    else ACap := ACount + 1;
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := ANewPath;
+  AOut[ACount].OldPath := AOldPath;
+  AOut[ACount].Similarity := ASimilarity;
+  AOut[ACount].HeadCode := gscRenamed;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
+end;
+
+procedure AppendCopiedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
+  const AOldPath, ANewPath: string; ASimilarity: Byte; AWorkCode: TGitStatusCode); inline;
+begin
+  if ACount = ACap then
+  begin
+    if ACap = 0 then ACap := 16
+    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
+    else ACap := ACount + 1;
+    SetLength(AOut, ACap);
+  end;
+  AOut[ACount].Path := ANewPath;
+  AOut[ACount].OldPath := AOldPath;
+  AOut[ACount].Similarity := ASimilarity;
+  AOut[ACount].HeadCode := gscCopied;
+  AOut[ACount].WorkCode := AWorkCode;
+  Inc(ACount);
 end;
 
 { Appends the untracked group after the tracked one — git's porcelain
@@ -655,79 +746,152 @@ var
   RenamePairs: TRenameCandidateArray;
   CopyPairs: TRenameCandidateArray;
   TrackedStatus: TGitNativeStatusArray;
+  // amortized caps (bytes.ops single-source doubling, zero-copy Move)
+  LTrackedCount, LTrackedCap: SizeInt;
+  LStatusCount, LStatusCap: SizeInt;
+  LUntrackedCount, LUntrackedCap: SizeInt;
+  LCandCount, LCandCap: SizeInt;
+  LRenameCount, LRenameCap: SizeInt;
+  LCopyCount, LCopyCap: SizeInt;
 
-  procedure BuildStage0;
+  procedure BuildStage0; inline;
   var
     K: Integer;
+    LCount, LCap: SizeInt;
   begin
     Stage0Entries := nil;
     Stage0Pos := nil;
+    LCount := 0;
+    LCap := 0;
     for K := 0 to High(Idx.Entries) do
     begin
       if Idx.Entries[K].Stage <> 0 then
         Continue;
-      SetLength(Stage0Entries, Length(Stage0Entries) + 1);
-      Stage0Entries[High(Stage0Entries)] := Idx.Entries[K];
-      SetLength(Stage0Pos, Length(Stage0Pos) + 1);
-      Stage0Pos[High(Stage0Pos)] := K;
+      if LCount = LCap then
+      begin
+        if LCap = 0 then LCap := 16
+        else if LCap <= High(SizeInt) div 2 then LCap := LCap * 2
+        else LCap := LCount + 1;
+        SetLength(Stage0Entries, LCap);
+        SetLength(Stage0Pos, LCap);
+      end;
+      Stage0Entries[LCount] := Idx.Entries[K];
+      Stage0Pos[LCount] := K;
+      Inc(LCount);
+    end;
+    if LCap <> LCount then
+    begin
+      SetLength(Stage0Entries, LCount);
+      SetLength(Stage0Pos, LCount);
     end;
   end;
 
-  procedure BuildRenameSets;
+  procedure BuildRenameSets; inline;
   var
     HI, SI: Integer;
+    LDelCount, LDelCap: SizeInt;
+    LAddCount, LAddCap: SizeInt;
+    LBothCount, LBothCap: SizeInt;
+    procedure EnsureDelCap;
+    begin
+      if LDelCount = LDelCap then
+      begin
+        if LDelCap = 0 then LDelCap := 16
+        else if LDelCap <= High(SizeInt) div 2 then LDelCap := LDelCap * 2
+        else LDelCap := LDelCount + 1;
+        SetLength(Deletes, LDelCap);
+      end;
+    end;
+    procedure EnsureAddCap;
+    begin
+      if LAddCount = LAddCap then
+      begin
+        if LAddCap = 0 then LAddCap := 16
+        else if LAddCap <= High(SizeInt) div 2 then LAddCap := LAddCap * 2
+        else LAddCap := LAddCount + 1;
+        SetLength(Adds, LAddCap);
+        SetLength(AddEntryPos, LAddCap);
+      end;
+    end;
+    procedure EnsureBothCap;
+    begin
+      if LBothCount = LBothCap then
+      begin
+        if LBothCap = 0 then LBothCap := 16
+        else if LBothCap <= High(SizeInt) div 2 then LBothCap := LBothCap * 2
+        else LBothCap := LBothCount + 1;
+        SetLength(BothPaths, LBothCap);
+        SetLength(BothEntry, LBothCap);
+      end;
+    end;
   begin
     Deletes := nil;
     Adds := nil;
     AddEntryPos := nil;
     BothPaths := nil;
     BothEntry := nil;
+    LDelCount := 0; LDelCap := 0;
+    LAddCount := 0; LAddCap := 0;
+    LBothCount := 0; LBothCap := 0;
     HI := 0;
     SI := 0;
     while (HI <= High(HeadList)) and (SI <= High(Stage0Entries)) do
     begin
       if HeadList[HI].Path < Stage0Entries[SI].Path then
       begin
-        SetLength(Deletes, Length(Deletes) + 1);
-        Deletes[High(Deletes)] := HeadList[HI];
+        EnsureDelCap;
+        Deletes[LDelCount] := HeadList[HI];
+        Inc(LDelCount);
         Inc(HI);
       end
       else if HeadList[HI].Path > Stage0Entries[SI].Path then
       begin
-        SetLength(Adds, Length(Adds) + 1);
-        Adds[High(Adds)].Path := Stage0Entries[SI].Path;
-        Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
-        Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-        SetLength(AddEntryPos, Length(AddEntryPos) + 1);
-        AddEntryPos[High(AddEntryPos)] := SI;
+        EnsureAddCap;
+        Adds[LAddCount].Path := Stage0Entries[SI].Path;
+        Adds[LAddCount].Oid := Stage0Entries[SI].Oid;
+        Adds[LAddCount].Mode := Stage0Entries[SI].Mode;
+        AddEntryPos[LAddCount] := SI;
+        Inc(LAddCount);
         Inc(SI);
       end
       else
       begin
         // present in both — potential modify
-        SetLength(BothPaths, Length(BothPaths) + 1);
-        BothPaths[High(BothPaths)] := HeadList[HI];
-        SetLength(BothEntry, Length(BothEntry) + 1);
-        BothEntry[High(BothEntry)] := Stage0Entries[SI];
+        EnsureBothCap;
+        BothPaths[LBothCount] := HeadList[HI];
+        BothEntry[LBothCount] := Stage0Entries[SI];
+        Inc(LBothCount);
         Inc(HI);
         Inc(SI);
       end;
     end;
     while HI <= High(HeadList) do
     begin
-      SetLength(Deletes, Length(Deletes) + 1);
-      Deletes[High(Deletes)] := HeadList[HI];
+      EnsureDelCap;
+      Deletes[LDelCount] := HeadList[HI];
+      Inc(LDelCount);
       Inc(HI);
     end;
     while SI <= High(Stage0Entries) do
     begin
-      SetLength(Adds, Length(Adds) + 1);
-      Adds[High(Adds)].Path := Stage0Entries[SI].Path;
-      Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
-      Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-      SetLength(AddEntryPos, Length(AddEntryPos) + 1);
-      AddEntryPos[High(AddEntryPos)] := SI;
+      EnsureAddCap;
+      Adds[LAddCount].Path := Stage0Entries[SI].Path;
+      Adds[LAddCount].Oid := Stage0Entries[SI].Oid;
+      Adds[LAddCount].Mode := Stage0Entries[SI].Mode;
+      AddEntryPos[LAddCount] := SI;
+      Inc(LAddCount);
       Inc(SI);
+    end;
+    if LDelCap <> LDelCount then SetLength(Deletes, LDelCount);
+    if LAddCap <> LAddCount then
+    begin
+      SetLength(Adds, LAddCount);
+      SetLength(AddEntryPos, LAddCount);
+    end;
+    if LBothCap <> LBothCount then
+    begin
+      SetLength(BothPaths, LBothCount);
+      SetLength(BothEntry, LBothCount);
     end;
   end;
 
@@ -763,25 +927,39 @@ begin
     end;
     SortPathOids(HeadList);
 
+    LTrackedCount := 0;
+    LTrackedCap := 0;
+    Tracked := nil;
     for I := 0 to High(Idx.Entries) do
-      if (Length(Tracked) = 0)
-        or (Tracked[High(Tracked)] <> Idx.Entries[I].Path) then
+      if (LTrackedCount = 0)
+        or (Tracked[LTrackedCount - 1] <> Idx.Entries[I].Path) then
       begin
-        SetLength(Tracked, Length(Tracked) + 1);
-        Tracked[High(Tracked)] := Idx.Entries[I].Path;
+        if LTrackedCount = LTrackedCap then
+        begin
+          if LTrackedCap = 0 then LTrackedCap := 16
+          else if LTrackedCap <= High(SizeInt) div 2 then LTrackedCap := LTrackedCap * 2
+          else LTrackedCap := LTrackedCount + 1;
+          SetLength(Tracked, LTrackedCap);
+        end;
+        Tracked[LTrackedCount] := Idx.Entries[I].Path;
+        Inc(LTrackedCount);
       end;
+    if LTrackedCap <> LTrackedCount then
+      SetLength(Tracked, LTrackedCount);
 
     // fast path: unborn or no renames requested -> original merge walk
     if (not HaveHead) or (not AFindRenames) then
     begin
       TrackedStatus := nil;
-      // check for conflicts first
+      LStatusCount := 0;
+      LStatusCap := 0;
+      // check for conflicts first (amortized, bytes.ops doubling)
       for K := 0 to High(Idx.Entries) do
       begin
         if Idx.Entries[K].Stage <> 0 then
         begin
           if (K = 0) or (Idx.Entries[K].Path <> Idx.Entries[K - 1].Path) then
-            AppendStatus(TrackedStatus, Idx.Entries[K].Path, gscUnmerged, gscUnmerged);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[K].Path, gscUnmerged, gscUnmerged);
           Continue;
         end;
       end;
@@ -791,25 +969,27 @@ begin
       begin
         BuildStage0;
         BuildRenameSets;
-        // emit modifies
+        // emit modifies (amortized)
         for K := 0 to High(BothPaths) do
         begin
           WC := WorkCodeFor(AWorkTree, BothEntry[K]);
           // HeadCodeFor needs Head vs index entry
           if ModeClassOf(BothPaths[K].Mode) <> ModeClassOf(BothEntry[K].Mode) then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscTypeChanged, WC)
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscTypeChanged, WC)
           else if not GitOidSame(BothPaths[K].Oid, BothEntry[K].Oid) then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscModified, WC)
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscModified, WC)
           else if WC <> gscUnmodified then
-            AppendStatus(TrackedStatus, BothEntry[K].Path, gscUnmodified, WC);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscUnmodified, WC);
         end;
         for K := 0 to High(Deletes) do
-          AppendStatus(TrackedStatus, Deletes[K].Path, gscDeleted, gscUnmodified);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[K].Path, gscDeleted, gscUnmodified);
         for K := 0 to High(Adds) do
         begin
           WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[K]]);
-          AppendStatus(TrackedStatus, Adds[K].Path, gscAdded, WC);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[K].Path, gscAdded, WC);
         end;
+        if LStatusCap <> LStatusCount then
+          SetLength(TrackedStatus, LStatusCount);
         // conflicts: emit once per path
         for I := 0 to High(Idx.Entries) do
           if Idx.Entries[I].Stage <> 0 then
@@ -831,12 +1011,14 @@ begin
       for CK := 0 to High(Idx.Entries) do
         if Idx.Entries[CK].Stage <> 0 then
         begin
-          // emit conflicts and fall back to no-rename walk
+          // emit conflicts and fall back to no-rename walk (amortized)
           TrackedStatus := nil;
+          LStatusCount := 0;
+          LStatusCap := 0;
           for I := 0 to High(Idx.Entries) do
             if Idx.Entries[I].Stage <> 0 then
               if (I = 0) or (Idx.Entries[I].Path <> Idx.Entries[I - 1].Path) then
-                AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
+                AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
           // still need to emit staged changes for stage0 entries vs HEAD
           // but with conflicts present, git typically shows only unmerged;
           // we keep it simple and also emit other staged status for
@@ -850,22 +1032,24 @@ begin
           begin
             WC := WorkCodeFor(AWorkTree, BothEntry[J]);
             if ModeClassOf(BothPaths[J].Mode) <> ModeClassOf(BothEntry[J].Mode) then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscTypeChanged, WC)
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscTypeChanged, WC)
             else if not GitOidSame(BothPaths[J].Oid, BothEntry[J].Oid) then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscModified, WC)
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscModified, WC)
             else if WC <> gscUnmodified then
-              AppendStatus(TrackedStatus, BothEntry[J].Path, gscUnmodified, WC);
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[J].Path, gscUnmodified, WC);
           end;
           // deletes/adds that are not conflicted already in sets
           // but conflicted paths were excluded from Stage0, so they are
           // not in these sets
           for J := 0 to High(Deletes) do
-            AppendStatus(TrackedStatus, Deletes[J].Path, gscDeleted, gscUnmodified);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[J].Path, gscDeleted, gscUnmodified);
           for J := 0 to High(Adds) do
           begin
             WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[J]]);
-            AppendStatus(TrackedStatus, Adds[J].Path, gscAdded, WC);
+            AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[J].Path, gscAdded, WC);
           end;
+          if LStatusCap <> LStatusCount then
+            SetLength(TrackedStatus, LStatusCount);
           SortStatusByPath(TrackedStatus);
           Result := TrackedStatus;
           if AIncludeUntracked then
@@ -880,15 +1064,26 @@ begin
             end;
             SortStrings(UntrackedPaths);
             UntrackedStatus := nil;
+            LUntrackedCount := 0;
+            LUntrackedCap := 0;
             for I := 0 to High(UntrackedPaths) do
             begin
-              SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
-              UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-              UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-              UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-              UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-              UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
+              if LUntrackedCount = LUntrackedCap then
+              begin
+                if LUntrackedCap = 0 then LUntrackedCap := 16
+                else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
+                else LUntrackedCap := LUntrackedCount + 1;
+                SetLength(UntrackedStatus, LUntrackedCap);
+              end;
+              UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
+              UntrackedStatus[LUntrackedCount].OldPath := '';
+              UntrackedStatus[LUntrackedCount].Similarity := 0;
+              UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
+              UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
+              Inc(LUntrackedCount);
             end;
+            if LUntrackedCap <> LUntrackedCount then
+              SetLength(UntrackedStatus, LUntrackedCount);
             AppendUntrackedGroup(Result, UntrackedStatus);
           end;
           Exit;
@@ -904,22 +1099,30 @@ begin
       if not HaveHead then
       begin
         TrackedStatus := nil;
+        LStatusCount := 0;
+        LStatusCap := 0;
         for I := 0 to High(Idx.Entries) do
         begin
           if Idx.Entries[I].Stage <> 0 then
           begin
             if (I = 0) or (Idx.Entries[I].Path <> Idx.Entries[I - 1].Path) then
-              AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
+              AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscUnmerged, gscUnmerged);
             Continue;
           end;
           WC := WorkCodeFor(AWorkTree, Idx.Entries[I]);
-          AppendStatus(TrackedStatus, Idx.Entries[I].Path, gscAdded, WC);
+          AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Idx.Entries[I].Path, gscAdded, WC);
         end;
+        if LStatusCap <> LStatusCount then
+          SetLength(TrackedStatus, LStatusCount);
         SortStatusByPath(TrackedStatus);
         Result := TrackedStatus;
       end
       else
+      begin
+        if LStatusCap <> LStatusCount then
+          SetLength(TrackedStatus, LStatusCount);
         Result := TrackedStatus;
+      end;
 
       if AIncludeUntracked then
       begin
@@ -933,15 +1136,26 @@ begin
         end;
         SortStrings(UntrackedPaths);
         UntrackedStatus := nil;
+        LUntrackedCount := 0;
+        LUntrackedCap := 0;
         for I := 0 to High(UntrackedPaths) do
         begin
-          SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
-          UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-          UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-          UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-          UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-          UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
+          if LUntrackedCount = LUntrackedCap then
+          begin
+            if LUntrackedCap = 0 then LUntrackedCap := 16
+            else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
+            else LUntrackedCap := LUntrackedCount + 1;
+            SetLength(UntrackedStatus, LUntrackedCap);
+          end;
+          UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
+          UntrackedStatus[LUntrackedCount].OldPath := '';
+          UntrackedStatus[LUntrackedCount].Similarity := 0;
+          UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
+          UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
+          Inc(LUntrackedCount);
         end;
+        if LUntrackedCap <> LUntrackedCount then
+          SetLength(UntrackedStatus, LUntrackedCount);
         AppendUntrackedGroup(Result, UntrackedStatus);
       end;
       Exit;
@@ -951,8 +1165,10 @@ begin
     BuildStage0;
     BuildRenameSets;
 
-    // collect rename candidates
+    // collect rename candidates (amortized, bytes.ops doubling, inline)
     Candidates := nil;
+    LCandCount := 0;
+    LCandCap := 0;
     for SI2 := 0 to High(Deletes) do
     begin
       for DI2 := 0 to High(Adds) do
@@ -962,12 +1178,21 @@ begin
           Continue;
         if Score < 0 then
           Continue;
-        SetLength(Candidates, Length(Candidates) + 1);
-        Candidates[High(Candidates)].SrcIdx := SI2;
-        Candidates[High(Candidates)].DstIdx := DI2;
-        Candidates[High(Candidates)].Score := Score;
+        if LCandCount = LCandCap then
+        begin
+          if LCandCap = 0 then LCandCap := 16
+          else if LCandCap <= High(SizeInt) div 2 then LCandCap := LCandCap * 2
+          else LCandCap := LCandCount + 1;
+          SetLength(Candidates, LCandCap);
+        end;
+        Candidates[LCandCount].SrcIdx := SI2;
+        Candidates[LCandCount].DstIdx := DI2;
+        Candidates[LCandCount].Score := Score;
+        Inc(LCandCount);
       end;
     end;
+    if LCandCap <> LCandCount then
+      SetLength(Candidates, LCandCount);
     SortCandidatesByScoreDesc(Candidates);
 
     SetLength(PairedSrc, Length(Deletes));
@@ -977,6 +1202,8 @@ begin
     for I := 0 to High(PairedDst) do
       PairedDst[I] := False;
     RenamePairs := nil;
+    LRenameCount := 0;
+    LRenameCap := 0;
     for I := 0 to High(Candidates) do
     begin
       Cand := Candidates[I];
@@ -986,16 +1213,29 @@ begin
         Continue;
       PairedSrc[Cand.SrcIdx] := True;
       PairedDst[Cand.DstIdx] := True;
-      SetLength(RenamePairs, Length(RenamePairs) + 1);
-      RenamePairs[High(RenamePairs)] := Cand;
+      if LRenameCount = LRenameCap then
+      begin
+        if LRenameCap = 0 then LRenameCap := 16
+        else if LRenameCap <= High(SizeInt) div 2 then LRenameCap := LRenameCap * 2
+        else LRenameCap := LRenameCount + 1;
+        SetLength(RenamePairs, LRenameCap);
+      end;
+      RenamePairs[LRenameCount] := Cand;
+      Inc(LRenameCount);
     end;
+    if LRenameCap <> LRenameCount then
+      SetLength(RenamePairs, LRenameCount);
 
     // copy detection (optional): pairs where source is any HEAD path
     // (including retained ones) to an added path
     CopyPairs := nil;
+    LCopyCount := 0;
+    LCopyCap := 0;
     if AFindCopies then
     begin
       Candidates := nil;
+      LCandCount := 0;
+      LCandCap := 0;
       for SI2 := 0 to High(HeadList) do
       begin
         // source is every HEAD blob, regardless of whether it was deleted
@@ -1008,12 +1248,21 @@ begin
             Continue;
           if Score < 0 then
             Continue;
-          SetLength(Candidates, Length(Candidates) + 1);
-          Candidates[High(Candidates)].SrcIdx := SI2;
-          Candidates[High(Candidates)].DstIdx := DI2;
-          Candidates[High(Candidates)].Score := Score;
+          if LCandCount = LCandCap then
+          begin
+            if LCandCap = 0 then LCandCap := 16
+            else if LCandCap <= High(SizeInt) div 2 then LCandCap := LCandCap * 2
+            else LCandCap := LCandCount + 1;
+            SetLength(Candidates, LCandCap);
+          end;
+          Candidates[LCandCount].SrcIdx := SI2;
+          Candidates[LCandCount].DstIdx := DI2;
+          Candidates[LCandCount].Score := Score;
+          Inc(LCandCount);
         end;
       end;
+      if LCandCap <> LCandCount then
+        SetLength(Candidates, LCandCount);
       SortCandidatesByScoreDesc(Candidates);
       for I := 0 to High(Candidates) do
       begin
@@ -1022,20 +1271,31 @@ begin
           Continue;
         // for copies, sources may be reused, so no PairedSrc check
         PairedDst[Cand.DstIdx] := True;
-        SetLength(CopyPairs, Length(CopyPairs) + 1);
-        CopyPairs[High(CopyPairs)] := Cand;
+        if LCopyCount = LCopyCap then
+        begin
+          if LCopyCap = 0 then LCopyCap := 16
+          else if LCopyCap <= High(SizeInt) div 2 then LCopyCap := LCopyCap * 2
+          else LCopyCap := LCopyCount + 1;
+          SetLength(CopyPairs, LCopyCap);
+        end;
+        CopyPairs[LCopyCount] := Cand;
+        Inc(LCopyCount);
         // map copy src idx is into HeadList, need to preserve for later
       end;
+      if LCopyCap <> LCopyCount then
+        SetLength(CopyPairs, LCopyCount);
     end;
 
-    // build final tracked status
+    // build final tracked status (amortized)
     TrackedStatus := nil;
+    LStatusCount := 0;
+    LStatusCap := 0;
     // renames
     for I := 0 to High(RenamePairs) do
     begin
       Cand := RenamePairs[I];
       WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[Cand.DstIdx]]);
-      AppendRenamed(TrackedStatus, Deletes[Cand.SrcIdx].Path,
+      AppendRenamedFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[Cand.SrcIdx].Path,
         Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
     end;
     // copies
@@ -1043,31 +1303,33 @@ begin
     begin
       Cand := CopyPairs[I];
       WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[Cand.DstIdx]]);
-      AppendCopied(TrackedStatus, HeadList[Cand.SrcIdx].Path,
+      AppendCopiedFast(TrackedStatus, LStatusCount, LStatusCap, HeadList[Cand.SrcIdx].Path,
         Adds[Cand.DstIdx].Path, Byte(Cand.Score), WC);
     end;
     // remaining deletes (unpaired)
     for I := 0 to High(Deletes) do
       if not PairedSrc[I] then
-        AppendStatus(TrackedStatus, Deletes[I].Path, gscDeleted, gscUnmodified);
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Deletes[I].Path, gscDeleted, gscUnmodified);
     // remaining adds (unpaired and not copied)
     for I := 0 to High(Adds) do
       if not PairedDst[I] then
       begin
         WC := WorkCodeFor(AWorkTree, Stage0Entries[AddEntryPos[I]]);
-        AppendStatus(TrackedStatus, Adds[I].Path, gscAdded, WC);
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, Adds[I].Path, gscAdded, WC);
       end;
     // modifies / typechanges (both)
     for K := 0 to High(BothPaths) do
     begin
       WC := WorkCodeFor(AWorkTree, BothEntry[K]);
       if ModeClassOf(BothPaths[K].Mode) <> ModeClassOf(BothEntry[K].Mode) then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscTypeChanged, WC)
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscTypeChanged, WC)
       else if not GitOidSame(BothPaths[K].Oid, BothEntry[K].Oid) then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscModified, WC)
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscModified, WC)
       else if WC <> gscUnmodified then
-        AppendStatus(TrackedStatus, BothEntry[K].Path, gscUnmodified, WC);
+        AppendStatusFast(TrackedStatus, LStatusCount, LStatusCap, BothEntry[K].Path, gscUnmodified, WC);
     end;
+    if LStatusCap <> LStatusCount then
+      SetLength(TrackedStatus, LStatusCount);
 
     SortStatusByPath(TrackedStatus);
     Result := TrackedStatus;
@@ -1084,15 +1346,26 @@ begin
       end;
       SortStrings(UntrackedPaths);
       UntrackedStatus := nil;
+      LUntrackedCount := 0;
+      LUntrackedCap := 0;
       for I := 0 to High(UntrackedPaths) do
       begin
-        SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
-        UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
-        UntrackedStatus[High(UntrackedStatus)].OldPath := '';
-        UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
-        UntrackedStatus[High(UntrackedStatus)].HeadCode := gscUnmodified;
-        UntrackedStatus[High(UntrackedStatus)].WorkCode := gscUntracked;
+        if LUntrackedCount = LUntrackedCap then
+        begin
+          if LUntrackedCap = 0 then LUntrackedCap := 16
+          else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
+          else LUntrackedCap := LUntrackedCount + 1;
+          SetLength(UntrackedStatus, LUntrackedCap);
+        end;
+        UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
+        UntrackedStatus[LUntrackedCount].OldPath := '';
+        UntrackedStatus[LUntrackedCount].Similarity := 0;
+        UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
+        UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
+        Inc(LUntrackedCount);
       end;
+      if LUntrackedCap <> LUntrackedCount then
+        SetLength(UntrackedStatus, LUntrackedCount);
       AppendUntrackedGroup(Result, UntrackedStatus);
     end;
   finally

@@ -68,12 +68,29 @@ function GitOidToNative(const A: git_oid): TGitOid; inline;
 function NativeToGitOid(const A: TGitOid): git_oid; inline;
 function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
 
+// Canonical generic OID ops (base/ops single source via bytes.ops, inline zero-copy, no heap)
+function GitOidEquals(const A, B: git_oid): Boolean; inline;
+function GitOidIsZero(const A: git_oid): Boolean; inline;
+procedure GitOidCopy(out Dst: git_oid; const Src: git_oid); inline;
+// Compatibility Inline-suffix aliases (moved from ffi, single source via base)
+function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
+function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
+procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
+
+type
+  { ops Helper: record helper for git_oid, zero-copy via bytes.ops single source }
+  TGitOidHelper = record helper for git_oid
+    function Equals(const AOther: git_oid): Boolean; inline;
+    function IsZero: Boolean; inline;
+    procedure Assign(const ASrc: git_oid); inline;
+  end;
+
 implementation
 
 function GitOid20Equals(const A, B: git_oid): Boolean; inline;
 begin
-  // perf: inline + zero-copy CompareMem single source (base.utils/bytes.ops), 20 bytes -> 3×QWord compares, no loop/alloc
-  Result := CompareMem(@A.id[0], @B.id[0], GIT_OID_RAWSZ);
+  // perf: inline + zero-copy via bytes.ops SpanEqual single source, 20 bytes -> 3x QWord, alias to GitOidEquals
+  Result := GitOidEquals(A, B);
 end;
 
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
@@ -84,8 +101,8 @@ end;
 
 procedure GitOid20Copy(out Dst: git_oid; const Src: git_oid); inline;
 begin
-  // perf: inline + single Move zero-copy (bytes.ops single source), no heap
-  Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
+  // perf: inline + single Move zero-copy (bytes.ops single source), alias to GitOidCopy
+  GitOidCopy(Dst, Src);
 end;
 
 procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
@@ -115,6 +132,58 @@ function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
 begin
   // single source: delegates to native.base GitOidSame (which uses bytes.ops CompareMem)
   Result := nextpas.core.git.native.base.GitOidSame(A, B);
+end;
+
+function GitOidEquals(const A, B: git_oid): Boolean; inline;
+begin
+  // perf: inline + zero-copy SpanEqual via bytes.ops MemEqual, 20 bytes -> 3x QWord, no heap/SysUtils, single source
+  Result := SpanEqual(TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@B.id[0], GIT_OID_RAWSZ));
+end;
+
+function GitOidIsZero(const A: git_oid): Boolean; inline;
+begin
+  // perf: inline + zero-copy TByteSpan view via bytes.ops IsZeroBytes single source, 20 bytes single scan, no alloc
+  Result := IsZeroBytes(TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ));
+end;
+
+procedure GitOidCopy(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  // perf: inline + single Move zero-copy (bytes.ops single source), no heap
+  Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
+end;
+
+function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
+begin
+  // compatibility alias: single source via GitOidEquals (bytes.ops)
+  Result := GitOidEquals(A, B);
+end;
+
+function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
+begin
+  Result := GitOidIsZero(A);
+end;
+
+procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  GitOidCopy(Dst, Src);
+end;
+
+{ TGitOidHelper }
+
+function TGitOidHelper.Equals(const AOther: git_oid): Boolean; inline;
+begin
+  // perf: inline helper delegates to bytes.ops SpanEqual single source
+  Result := GitOidEquals(Self, AOther);
+end;
+
+function TGitOidHelper.IsZero: Boolean; inline;
+begin
+  Result := GitOidIsZero(Self);
+end;
+
+procedure TGitOidHelper.Assign(const ASrc: git_oid); inline;
+begin
+  GitOidCopy(Self, ASrc);
 end;
 
 end.
