@@ -8,15 +8,13 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.audio.base,
-  nextpas.core.audio.intf;
+  nextpas.core.audio.intf,
+  nextpas.core.bytes.cursor,
+  nextpas.core.bytes.ops;
 
+{ single source via bytes.cursor: FLAC cursor is bytes.cursor IByteCursor (thin shim). }
 type
-  IByteCursor = interface
-    ['{A1B2C3D4-E5F6-7890-1234-B00000000001}']
-    function Remaining: Integer;
-    function ReadByte(out AByte: Byte): Boolean;
-    function PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
-  end;
+  IByteCursor = nextpas.core.bytes.cursor.IByteCursor;
 
 function NewByteCursor(const AData: TBytes): IByteCursor;
 function FlacProbeBytes(const APrefix: TBytes): TAudioProbeResult;
@@ -25,66 +23,26 @@ function FlacDecodeWholeViaCursor(const ACursor: IByteCursor; const AStream: ISt
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.audio.errors,
   nextpas.core.audio.codec.flac.sse;
 
-type
-  TByteCursor = class(TInterfacedObject, IByteCursor)
-  private
-    FData: TBytes;
-    FPos: Integer;
-  public
-    constructor Create(const AData: TBytes);
-    function Remaining: Integer;
-    function ReadByte(out AByte: Byte): Boolean;
-    function PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
-  end;
-
-constructor TByteCursor.Create(const AData: TBytes);
-begin
-  inherited Create;
-  FData := Copy(AData, 0, Length(AData));
-  FPos := 0;
-end;
-
-function TByteCursor.Remaining: Integer;
-begin
-  Result := Length(FData) - FPos;
-end;
-
-function TByteCursor.ReadByte(out AByte: Byte): Boolean;
-begin
-  if FPos >= Length(FData) then Exit(False);
-  AByte := FData[FPos];
-  Inc(FPos);
-  Result := True;
-end;
-
-function TByteCursor.PeekBytes(AOffset, ACount: Integer; out ABytes: TBytes): Boolean;
-var I: Integer;
-begin
-  Result := False;
-  ABytes := nil;
-  if (ACount <= 0) or (AOffset < 0) then Exit;
-  if AOffset + ACount > Length(FData) then Exit;
-  SetLength(ABytes, ACount);
-  for I := 0 to ACount - 1 do
-    ABytes[I] := FData[AOffset + I];
-  Result := True;
-end;
-
 function NewByteCursor(const AData: TBytes): IByteCursor;
 begin
-  Result := TByteCursor.Create(AData);
+  // single source: delegate to bytes.cursor
+  Result := nextpas.core.bytes.cursor.NewByteCursor(AData);
 end;
 
 function FlacProbeBytes(const APrefix: TBytes): TAudioProbeResult;
+var LLen: Integer;
 begin
   Result := prUnknown;
-  if Length(APrefix) < 4 then Exit;
+  LLen := Length(APrefix);
+  if LLen > 4096 then LLen := 4096;
+  if LLen < 4 then Exit;
   if (APrefix[0] = $66) and (APrefix[1] = $4C) and (APrefix[2] = $61) and (APrefix[3] = $43) then
     Result := prFlac
-  else if (Length(APrefix) >= 4) and (APrefix[0] = Ord('f')) and (APrefix[1] = Ord('L')) and (APrefix[2] = Ord('a')) and (APrefix[3] = Ord('C')) then
+  else if (LLen >= 4) and (APrefix[0] = Ord('f')) and (APrefix[1] = Ord('L')) and (APrefix[2] = Ord('a')) and (APrefix[3] = Ord('C')) then
     Result := prFlac;
 end;
 

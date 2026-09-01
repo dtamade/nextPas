@@ -6,19 +6,13 @@ interface
 
 uses
   nextpas.core.audio.base,
+  nextpas.core.audio.bank.base,
   nextpas.core.audio.intf;
 
 type
-  TAudioBankId = Integer;
-  TBankVoiceId = Integer;
-
-  TBankPlayParams = record
-    Gain: Single;
-    Pan: Single;
-    Pitch: Single;
-    Loop: Boolean;
-    class function Default: TBankPlayParams; static;
-  end;
+  TAudioBankId = nextpas.core.audio.bank.base.TAudioBankId;
+  TBankVoiceId = nextpas.core.audio.bank.base.TBankVoiceId;
+  TBankPlayParams = nextpas.core.audio.bank.base.TBankPlayParams;
 
   { IAudioBank - SoundBank 预加载容器，预加载多个 TAudioBuffer（deep copy），
     引用计数管理，支持按名称/Id 查询，与 sfx/event 共享 FillRealtime discipline，
@@ -44,13 +38,5 @@ type
   end;
 
 implementation
-
-class function TBankPlayParams.Default: TBankPlayParams;
-begin
-  Result.Gain := 1.0;
-  Result.Pan := 0.0;
-  Result.Pitch := 1.0;
-  Result.Loop := False;
-end;
 
 end.

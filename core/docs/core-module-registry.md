@@ -23,7 +23,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `async` | L1 | event loop/runtime | yes | L0 plus approved L1 | source-contract + focused-runtime |
 | `auth` | L3 | JWT/session/authentication token primitives (`nextpas.core.auth.*`, `nextpas.core.jwt`) | yes | L0-L2 plus crypto/hash/encoding owners | focused-runtime |
 | `atomic` | L0 | atomic primitives | yes | L0 only | focused-runtime |
-| `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
+| `audio` | L2 | audio subsystem (decode-first): container codecs WAV/AIFF/FLAC/MP3/Vorbis (+ Ogg probe) + PCM/DSP/device/graph/game/timeline/studio — 78 files (core 26 + ext 52: codec.flac/mp3/vorbis 12 incl. sse/decoder + spatial/bus/bank/resource/playlist/event/studio/simd/pcm.simd), facade thin `type`+`inline` forwarding, `bytes.ops` single-source zero-copy | yes | L0-L2 (io/fs owner) plus `bytes.ops` single-source (`Move`/`BytesEnsureCapacity` reuse, no per-codec duplication), `inline`/`EnsureScratch` zero-copy, `try..finally`/`SetLength(Data,0)` release | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
@@ -82,7 +82,6 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
-| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity, v1 line format writer/reader/dirsource/embed, `nextpas.core.respack.*`, FORMAT v1 40/LE) | yes | L0-L1; dirsource single fs IO seam; embed adds fs.glob match-only via source-contract exception | focused-runtime |
 | `sevenz` | L2 | 7z archive read/write (single or multi-folder; LZMA2/BZip2/Deflate write with optional BCJ full-family/Delta prefilter chains and AES-256 password encryption incl. encrypted headers, reader executes Delta/BCJ family/BCJ2 chains and decrypts AES-256 folders/headers; pure Pascal LZMA1/LZMA2 codec with optional liblzma FFI backend) | yes | L0-L1 plus same-layer one-way `crypto`/`hash`/`compress`/`checksum`/`io`/`fs` (fs/io via `platform.lstat` exempt, federation via `sevenz.fs`) | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
@@ -110,7 +109,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `qt` | L2 | Qt toolkit binding via self-wrap C shim (nextpas.core.qt family; ffi/loader/base; dlopen `libnextpas-qt.so`, Qt5/6 agnostic, deferred) | yes | L0-L1 plus platform.dl plus vendors/libnextpas-qt | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
-| `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum/crypto/hash owners) | source-contract + focused-runtime |
+| `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | source-contract + focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —
 currently `sqlite`, `pg`, `mysql`, `odbc` and `redis`, physically under

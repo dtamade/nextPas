@@ -19,9 +19,9 @@
 | **S4 resample/mix/dsp** | `resample/sinc/mix/filters/dynamics/fft` | `16MB` 上限 | `Frame*BlockAlign Int64` + `Round` 溢出守卫；`MixInto` 重叠别名；`Biquad TDF-II/FFT` 精度 | F-05/06/36 |
 | **S5 device** | `device.intf/null` | Null 后端 | `SyncObjs→sync` 迁移；MPSC `64` 有界环形；`FScratch` 零增长；`dsClosed`；`FormatMismatch` | F-17/26/27/33/34/37/42 |
 | **S6 graph/player** | `graph.intf/graph/player` | 快照混音 | 固定容量快照；单 scratch 双缓冲；`tombstone compact`；`Clear` 真删除 | F-25/28 |
-| **S7 game** | `game.intf/game` | SFX 池 | `Unload` 不杀 Voice；`PcmConvert AV` 防御；`MaxVoices` 窃取；`SyncObjs` 迁移 | F-22/35 |
+| **S7 game** | `game`（无独立 intf，按需存在；deprecated 别名在 `sfx.intf`） | SFX 池 | `Unload` 不杀 Voice；`PcmConvert AV` 防御；`MaxVoices` 窃取；`SyncObjs` 迁移 | F-22/35 |
 | **S8 timeline** | `timeline.intf/timeline` | 排序混音 | `Loop` 二次混音；双时钟；`solo/mute`；声像 -3dB；`Device` 联动；深拷贝快照 | F-24/38 |
-| **S9 门面+bench+文档** | `audio.pas` + bench + docs | 聚合 | `type` 别名 + `inline` 全量；`bench_pcm_wav` 扩至 `Graph/Timeline/Device Drive` `ns/op+MB/s -O2`；`README` 8 示例对齐；`contract 26文件` 接入 CI | F-15/16/43/44 |
+| **S9 门面+bench+文档** | `audio.pas` + bench + docs | 聚合 | `type` 别名 + `inline` 全量；`bench_pcm_wav` 扩至 `Graph/Timeline/Device Drive` `ns/op+MB/s -O2`；`README` 8 示例对齐；`contract 78文件(26+52)+23GUID` 接入 CI（codec.flac/mp3/vorbis 四件套 1.5） | F-15/16/43/44 |
 
 ## 依赖
 
@@ -36,11 +36,17 @@
 ## 门禁清单（每域打勾）
 
 - [ ] `make -C core/tests/nextpas.core.audio/test_<domain> clean test` 绿 + `HEAPTRC OK`
-- [ ] `bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 绿（26 文件无 ffi/vendor + 11 GUID + 实时纪律）
+- [ ] `bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 绿（78 文件无 ffi/vendor + 23 GUID(11+12 B前缀bus异形) + 实时纪律 + test_automation）
 - [ ] `make hygiene && git diff --check` 绿
 - [ ] `FINDINGS` 对应行号回归用例绿
 
 ## 当前基线
 
-`180/180 绿` 已具备 `S0` 起点条件；`bench` 仅 `pcm_wav`，`S9` 补 `Graph/Timeline/Device` 基准即收敛。
+`260/260 绿`（23 门：核心 13 + 扩展 10 含 bus+automation）已具备 `S0` 起点条件；`bench` 仅 `pcm_wav`，`S9` 补 `Graph/Timeline/Device` 基准即收敛。
+
+## 里程碑 S9 验收（1.5 实盘对齐）
+
+- **文件**：78 文件 = 核心 26 + 扩展 52（含 `audio.bank/resource/event/spatial/playlist/bus` 各四件套 `base/intf/impl/pas` + `codec.flac/mp3/vorbis` 各 `base/intf/impl` 四件套 9 文件 + `codec.*.decoder/.sse` 6 文件 + `studio.*(4)/simd/pcm.simd` + `studio.base/studio.pas`，unique 76+2 bus facade）
+- **GUID**：23 枚 = 11 核心（0001/0002/0010/0011/0020/0021/0030/0040/0041/0042/0043/0050/0060）+ 12 扩展（0051/0052/0053/0054/0070/0071/0072/0080/C00001/C00002 + 2 预留），B 前缀 bus 异形在 gate 单独校验
+- **测试**：260 tests / 23 门，含 `test_automation`（8）+ `test_bus`（8），全量 `HEAPTRC OK` + `hygiene` 绿为晋升 `focused-runtime` 必要条件
 
