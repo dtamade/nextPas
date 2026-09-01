@@ -156,6 +156,9 @@
 ### S74 — 完整性收口（1.0.1 巡检）· 完整性/稳定性 — 已落地
 - `test_zip_fs` 10→12 门：新增 `Atomic permission restore` 与 `Atomic symlink policy`，原子路径 `RestoreMode/SkipSymlinks/MaxTotal` 透传与非原子对等，`HEAPTRC OK`
 
+### S75 — 复用收敛（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `zip.fs` 父目录解析单点化：`ParentDirOf(APath)` 单源，`ZipExtractToDirWithOptions` 与 `Atomic` 双路径复用，消除 `LSep while` 重复，`LSep` 局部变量归零
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |

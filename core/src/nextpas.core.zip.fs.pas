@@ -149,6 +149,19 @@ begin
     Result := Result * 2;
 end;
 
+function ParentDirOf(const APath: string): string; inline;
+var
+  LSep: Integer;
+begin
+  LSep := Length(APath);
+  while (LSep > 0) and (APath[LSep] <> '/') do
+    Dec(LSep);
+  if LSep > 0 then
+    Result := Copy(APath, 1, LSep - 1)
+  else
+    Result := '';
+end;
+
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
 var
   LCap: Integer;
@@ -337,7 +350,7 @@ procedure ZipExtractToDirWithOptions(const AData: TBytes;
 var
   LOpts: TZipReadOptions;
   LR: IZipReader;
-  LI, LSep, LDirsCount: Integer;
+  LI, LDirsCount: Integer;
   LE: TZipEntryInfo;
   LFull, LParent, LTarget: string;
   LNs: Int64;
@@ -372,12 +385,9 @@ begin
     { 目录条目名可能不带尾随 '/'（依赖外部属性判定的归档） }
     while (LFull <> '') and (LFull[Length(LFull)] = '/') do
       Delete(LFull, Length(LFull), 1);
-    LSep := Length(LFull);
-    while (LSep > 0) and (LFull[LSep] <> '/') do
-      Dec(LSep);
-    if LSep > 0 then
+    LParent := ParentDirOf(LFull);
+    if LParent <> '' then
     begin
-      LParent := Copy(LFull, 1, LSep - 1);
       EnsureNoSymlinkInPath(LParent);
       MkdirAll(LParent, PermDirDefault);
       EnsureNoSymlinkInPath(LParent);
@@ -473,7 +483,6 @@ procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
   const ADestDir: string; const AOptions: TZipExtractOptions);
 var
   LDestTrim, LParent, LTemp: string;
-  LSep: Integer;
 begin
   if ADestDir = '' then
     raise EArgumentError.Create('zip extract atomic: empty dest dir');
@@ -482,13 +491,7 @@ begin
     Delete(LDestTrim, Length(LDestTrim), 1);
   if LDestTrim = '' then
     raise EArgumentError.Create('zip extract atomic: empty dest dir');
-  LSep := Length(LDestTrim);
-  while (LSep > 0) and (LDestTrim[LSep] <> '/') do
-    Dec(LSep);
-  if LSep > 0 then
-    LParent := Copy(LDestTrim, 1, LSep - 1)
-  else
-    LParent := '.';
+  LParent := ParentDirOf(LDestTrim);
   if LParent = '' then
     LParent := '.';
   EnsureNoSymlinkInPath(LParent);
