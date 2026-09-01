@@ -613,9 +613,14 @@ begin
     raise EGitError.Create('revwalk requires a repository');
   FRepo := ARepo;
   FGraph := nil;
+  FHeap := nil;
+  FHeapLen := 0;
+  FHeapCap := 0;
   FSeen := TGitOidSet.Create;
   FHidden := nil;
   FBoundary := nil;
+  FBoundaryLen := 0;
+  FBoundaryCap := 0;
   FBoundaryPos := 0;
   FFirstParent := AOptions.FirstParent;
   FSince := AOptions.Since;
