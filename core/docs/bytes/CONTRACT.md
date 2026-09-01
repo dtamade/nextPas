@@ -158,3 +158,4 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2 | 匠心修复：`bytes.ops` 单源几何 `BytesGrowCapacityWithMin` 抽取（`BYTES_BUILDER_MIN_GROW=64` 与 `Webview` `0→4→2×` 同源 `*2` 复用，`WebviewGrowCapacityForReuse` inline 薄转发零额外调用，`factory.GrowCapacity` 私有冗余→`base.WebviewGrowCapacity`→`bytes.ops` 三级收敛）；`Move`/`FillChar` 单源 `BytesCopy`/`BytesZero` 门禁冻结（`L1+` 复用，`L0 platform` 例外文档化，`tls.websocket:115` 等 `BytesCopy` 迁移，`inline red-line 1/2` 门禁脚本冻结，零拷贝证据）；`L3→L1` 反哺合规 | Claude |
