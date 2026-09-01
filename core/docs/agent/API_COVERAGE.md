@@ -68,12 +68,25 @@ bench_loop_overhead 与全部示例消费（离线纪律的合法替代面）。
 |------|------|------|
 | `AgentValidateWireHeaders` 单遍 O(totalHeaderBytes) 内联 CR/LF 扫描；单头 8 KiB / 总头 64 KiB、空名/CR-LF 注入 fail-closed `aecProtocol` 协议无关报文（`wire header: ...` 前缀）| `provider.common` 唯一实现+常量 `CAgentMaxWireHeaderValueBytes`/`CAgentMaxWireTotalHeaderBytes`（单一真源：nextpas.core.agent.base，`provider.common` 为兼容 alias）；`transport.http` 复用不自立；三提供者编码期前置早失败（`AgentWireAddOpenAIHeaders`/`AgentWireAddAnthropicHeaders`/`AgentWireAppendExtraHeaders` 末尾各调一次），transport `RoundTrip`/`OpenStream` 为兜底防线；`nextpas.core.agent` 门面 `agent` 一站式透出（`CAgentMaxWireHeaderValueBytes` 8 KiB / `CAgentMaxWireTotalHeaderBytes` 64 KiB / `CAgentMaxSuccessBodyBytes` 8 MiB / `CAgentMaxRawBodySnippetBytes` 8 KiB / `CAgentMaxExtraKeys` 64 / `CAgentMaxSlotMap` 256，单一真源：nextpas.core.agent.base） | `test_transport_stream` 头部守卫矩阵 5 用例（空名 / CRLF-名 / CRLF-值 / 单头 8 KiB / 总头 64 KiB）× 3 路径（`RoundTrip` / `OpenStream` / 直调 `AgentValidateWireHeaders`）=15 守卫断言，套件 8 passed HEAPTRC OK；`bench_wire_headers` 锚定 p50 ~203 ns（5 头）/ 754 ns（10 头），空头 17.1 ns（BENCHMARKS §2.2 2026-08-29 冻结） |
 
+## §10 有界快照 → `nextpas.core.agent.snapshot` — 落地
+
+| 契约 | 落地 | 证据 |
+|------|------|------|
+| `BuildBoundedSnapshot(ASystem, AMessages, ABudget=6000)` 合并去重+簇安全截断（`AgentBuildSystemText` 单一真源 → `AgentUtf8SafeCutLen` 后向回退 + `GraphemeNext` 前向簇对齐，零 FPC RTL 直连）+ `BoundedSnapshotTokens/Cost` 成本联动 | `nextpas.core.agent.snapshot`（6000 B 预算，`CBoundedSnapshotBudget` 单一真源，门面 `BuildBoundedSnapshot`/`BoundedSnapshotCost` inline 透出） | `test_compile_skeleton` 门面透出（`BuildBoundedSnapshot('sys',nil,6000)='sys'` + `CBoundedSnapshotBudget=6000`）+ `example_bounded_snapshot` 簇安全 `👨‍👩‍👧` 不半切演示 |
+
+## §11 流式盒 → `nextpas.core.agent.streambox` — 落地
+
+| 契约 | 落地 | 证据 |
+|------|------|------|
+| `TAgentStreamBox` Lock+Done+id 迟到丢弃（`TPlatformMutex` 经 `platform.sync`，零 SyncObjs）+ `Push(AId)` 失配丢弃 + `TryPop` 顺序消费 + `MarkDone/IsDone` 终态 | `nextpas.core.agent.streambox`（98 行，门面 `TAgentStreamBox` 透出） | `test_compile_skeleton` 门面透出（`SizeOf(TAgentStreamBox)>0`）+ `example_stream_box_lifecycle` `Push(41)` 失配丢弃 + `sdkThinkingDelta→sdkTextDelta` 态切演示 |
+
 ## 门面 `nextpas.core.agent` — 落地
 
 | 透出 | 真源 | 证据 |
 |------|------|------|
 | DoS 六常量 `CAgentMaxSlotMap` / `CAgentMaxWireHeaderValueBytes` / `CAgentMaxWireTotalHeaderBytes` / `CAgentMaxSuccessBodyBytes` / `CAgentMaxRawBodySnippetBytes` / `CAgentMaxExtraKeys` | 单一真源 `base`（`provider.common` 为兼容 alias） | `test_compile_skeleton` 编译期常量透出（`Check(CAgentMax* = base.CAgentMax*)`） |
 | 词表 helpers 一站式 `MessageText` / `WireHeaderValue` / `MergeExtraJson` / `AgentUtf8SafeTruncate` / `AgentTruncateLines` / `AgentTruncateEnvelope` / `AgentInitUsageUnknown` / `AgentJoinWireUrl` / `AgentBuildSystemText` / `AgentValidateWireHeaders` | `base` 单入口（`AgentValidateWireHeaders` 唯一实现在 `provider.common`，门面 inline 指向真源，免破层 `uses`） | `test_compile_skeleton` 9 passed（`TestFacadeForwarding` 含 `AgentValidateWireHeaders` / `CAgentMaxRawBodySnippetBytes` 等新增透出，编译即通过，不触网）；与 `API.md` §1/§10 及 `base` 单一真源 1:1 |
+| 有界快照/流式盒一站式 `CBoundedSnapshotBudget/BuildBoundedSnapshot/BoundedSnapshotTokens/BoundedSnapshotCost/TAgentStreamBox` | `snapshot/streambox` 单一真源，门面 inline 透出（`PROMPT-BUDGET.md §2/§5` + `PERFORMANCE.md §7.2`） | `test_compile_skeleton` 上述 4 项透出 + 双示例离线可跑（`example_bounded_snapshot` / `example_stream_box_lifecycle`） |
 | 工厂/装饰器/工具转发/TAgentLoop 可用性 | 分层透出 | test_assembly 经门面装配点跑通完整链（scripted transport 注入 → retry 叠加 → loop 工具两轮） |
 
 > W16.1 闭环判定：门面与 `API_COVERAGE` 行数 1:1，`test_compile_skeleton` 覆盖全部新增透出，`make hygiene` pass。
