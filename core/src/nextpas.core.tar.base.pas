@@ -71,9 +71,49 @@ const
   C_TAR_MAGIC_USTAR = 'ustar';
   C_TAR_VERSION_00 = '00';
 
+  { ustar 头部布局（单点复用，读写一致） }
+  C_TAR_OFF_NAME = 0;
+  C_TAR_LEN_NAME = 100;
+  C_TAR_OFF_MODE = 100;
+  C_TAR_LEN_MODE = 8;
+  C_TAR_OFF_UID = 108;
+  C_TAR_LEN_UID = 8;
+  C_TAR_OFF_GID = 116;
+  C_TAR_LEN_GID = 8;
+  C_TAR_OFF_SIZE = 124;
+  C_TAR_LEN_SIZE = 12;
+  C_TAR_OFF_MTIME = 136;
+  C_TAR_LEN_MTIME = 12;
+  C_TAR_OFF_CHKSUM = 148;
+  C_TAR_LEN_CHKSUM = 8;
+  C_TAR_OFF_TYPEFLAG = 156;
+  C_TAR_OFF_LINKNAME = 157;
+  C_TAR_LEN_LINKNAME = 100;
+  C_TAR_OFF_MAGIC = 257;
+  C_TAR_LEN_MAGIC = 6;
+  C_TAR_OFF_VERSION = 263;
+  C_TAR_LEN_VERSION = 2;
+  C_TAR_OFF_UNAME = 265;
+  C_TAR_LEN_UNAME = 32;
+  C_TAR_OFF_GNAME = 297;
+  C_TAR_LEN_GNAME = 32;
+  C_TAR_OFF_PREFIX = 345;
+  C_TAR_LEN_PREFIX = 155;
+
+  { base-256 哨兵与默认权限（0644/0755） }
+  C_TAR_BASE256_SENTINEL = $80;
+  C_TAR_DEFAULT_FILE_MODE = $1A4;
+  C_TAR_DEFAULT_DIR_MODE = $1ED;
+
   { 默认 bomb 上限（复用 compress GZIP_MAX 1GiB 级别，保持 zip 对齐） }
   C_TAR_DEFAULT_MAX_ENTRY = SizeUInt(1) shl 30;
   C_TAR_DEFAULT_MAX_TOTAL: UInt64 = 0;
+
+  { unix 模式位语义常量（S_IFMT 子集，与 zip.base 命名手感对齐） }
+  C_TAR_UNIX_IFREG    = $8000; // S_IFREG
+  C_TAR_UNIX_IFDIR    = $4000; // S_IFDIR
+  C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK（保留，对齐 C_ZIP_UNIX_MODE_SYMLINK）
+  C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
 procedure ValidateTarEntryName(const AName: string);
@@ -88,17 +128,15 @@ function TarDirectoryMode(APermissionBits: Word): Word; inline;
 
 implementation
 
-uses
-  nextpas.core.text.conv;
-
-function IsSafeTarEntryName(const AName: string): Boolean; inline;
+{ 单源归档名安全谓词（抽参 AMaxBytes，消除 tar/zip 35 行重复；零拷贝 inline） }
+function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
 var
   LI, LSegStart: Integer;
 begin
   Result := False;
   if AName = '' then
     Exit;
-  if Length(AName) > C_TAR_MAX_NAME_BYTES then
+  if Length(AName) > AMaxBytes then
     Exit;
   if AName[1] = '/' then
     Exit;
@@ -117,7 +155,7 @@ begin
     if LI - LSegStart = 0 then
     begin
       if LI <= Length(AName) then
-        Exit; { // 空段，尾随 '/' 的终段空合法 }
+        Exit;
     end
     else if LI - LSegStart = 1 then
     begin
@@ -132,13 +170,13 @@ begin
   Result := True;
 end;
 
+function IsSafeTarEntryName(const AName: string): Boolean; inline;
+begin
+  Result := IsSafeArchiveEntryName(AName, C_TAR_MAX_NAME_BYTES);
+end;
+
 procedure ValidateTarEntryName(const AName: string);
 begin
-  if AName = '' then
-    raise EArgumentError.Create('tar entry name must not be empty');
-  if Length(AName) > C_TAR_MAX_NAME_BYTES then
-    raise EArgumentError.Create('tar entry name exceeds ' +
-      IntToStr(C_TAR_MAX_NAME_BYTES) + ' bytes');
   if not IsSafeTarEntryName(AName) then
     raise EArgumentError.Create('tar entry name is not safe: ' + AName);
 end;
@@ -169,12 +207,12 @@ end;
 
 function TarRegularMode(APermissionBits: Word): Word; inline;
 begin
-  Result := $8000 or (APermissionBits and $0FFF);
+  Result := C_TAR_UNIX_IFREG or (APermissionBits and C_TAR_UNIX_PERM_MASK);
 end;
 
 function TarDirectoryMode(APermissionBits: Word): Word; inline;
 begin
-  Result := $4000 or (APermissionBits and $0FFF);
+  Result := C_TAR_UNIX_IFDIR or (APermissionBits and C_TAR_UNIX_PERM_MASK);
 end;
 
 end.

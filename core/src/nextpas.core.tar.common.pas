@@ -1,8 +1,9 @@
 unit nextpas.core.tar.common;
 {**
- * @desc Tar 共享内核：reader/writer 单点复用。
+ * @desc Tar 共享内核：reader/writer 单点复用（@internal）。
  * 负责 PadToBlock / 校验和 / 八进制与 base-256 双路径 / pax 守卫 / bomb 守卫 / 名安全。
  * 仅依赖 nextpas.*，无 FPC RTL 直引，消除两端重复，保证 fail-closed 单点一致。
+ * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -46,9 +47,9 @@ begin
   if AMaxTotal = 0 then
     Exit;
   if ANext > AMaxTotal then
-    raise EIOError.Create('tar: total uncompressed size exceeds limit');
+    raise EIOError.CreateFmt('tar: total uncompressed size exceeds limit (%d > %d, cum=%d)', [ANext, AMaxTotal, ACum]);
   if ACum > AMaxTotal - ANext then
-    raise EIOError.Create('tar: total uncompressed size exceeds limit');
+    raise EIOError.CreateFmt('tar: total uncompressed size exceeds limit (%d + %d > %d)', [ACum, ANext, AMaxTotal]);
 end;
 
 procedure GuardTarNameForRead(const AName: string);

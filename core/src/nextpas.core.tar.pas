@@ -1,8 +1,9 @@
 unit nextpas.core.tar;
 {**
- * @desc Tar 归档容器门面：re-export 全量公共面（L2）。
+ * @desc Tar 归档容器门面：re-export 全量公共面（L2），唯一公共入口。
  * 结构为 512 字节头 + pad 载荷 + 两零块收尾，标准 tar 可直接读写。
  * 条目名严格 IsSafeTarEntryName，pax/GNU 长名与 base-256 双路径兼容。
+ * 内部共享内核 nextpas.core.tar.common 不在此 re-export，禁止门面外直引。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -13,6 +14,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.tar.base,
+  nextpas.core.tar.intf,
   nextpas.core.tar.reader,
   nextpas.core.tar.writer,
   nextpas.core.tar.fs,
@@ -26,7 +28,7 @@ type
   TTarExtractOptions = nextpas.core.tar.base.TTarExtractOptions;
   TTarReader = nextpas.core.tar.reader.TTarReader;
   TTarWriter = nextpas.core.tar.writer.TTarWriter;
-  ITarBuilder = nextpas.core.tar.builder.ITarBuilder;
+  ITarBuilder = nextpas.core.tar.intf.ITarBuilder;
 
 const
   C_TAR_BLOCK_SIZE = nextpas.core.tar.base.C_TAR_BLOCK_SIZE;
@@ -45,7 +47,6 @@ function TarPackDir(const ADir: string): TBytes; inline;
 procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions); inline;
 procedure TarExtractToDir(const AData: TBytes; const ADestDir: string); inline;
 function TarBuilder: ITarBuilder; inline;
-function NewTarBuilder: ITarBuilder; inline;
 
 implementation
 
@@ -107,11 +108,6 @@ end;
 function TarBuilder: ITarBuilder;
 begin
   Result := nextpas.core.tar.builder.TarBuilder;
-end;
-
-function NewTarBuilder: ITarBuilder;
-begin
-  Result := nextpas.core.tar.builder.NewTarBuilder;
 end;
 
 end.

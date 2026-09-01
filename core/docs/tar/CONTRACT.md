@@ -14,7 +14,7 @@
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
 | `TTarReader` | `Next(out H):Boolean` / `EntryData:TBytes` / `EntryDataSlice(out PByte,Count):Boolean` / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions` / `Finish`（两零块，析构兜底） |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions` / `Finish`（两零块，需显式 Finish，析构不再兜底） |
 
 ### 1.2 常量与谓词
 
@@ -26,7 +26,7 @@
 
 ### 1.4 链式构造器
 
-`ITarBuilder`（`nextpas.core.tar.builder`）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish` 链式，薄门面委托 `TTarWriter` + `CreateBytesStream`，`Finish` 快照 `IStream.Size/Seek/Read` 并校验 short read；门面导出 `TarBuilder/NewTarBuilder` inline 工厂，零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
+`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish` 链式，遵循 `base←intf←实现←门面`；薄门面委托 `TTarWriter` + `CreateBytesStream`，`Finish` 快照 `IStream.Size/Seek/Read` 并校验 short read；门面导出单一 `TarBuilder` inline 工厂（`NewTarBuilder` 已移除），需显式 `Finish`（析构不再隐式补两零块），零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
 
 ## 2. 不变量
 
@@ -48,12 +48,12 @@
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
 | 目标 writer 为 nil / 已 Finish 后再写入 | `EArgumentError` / `EInvalidOperationError('tar: writer already finished')` |
-| 单条目/总量超限 | `EIOError('tar: entry size exceeds limit' / 'total ... exceeds limit')` |
+| 单条目/总量超限 | `EIOError('tar: entry size exceeds limit for "%s" (%d > %d)' / 'total ... exceeds limit (%d + %d > %d)')` — 总量分支携带 `ACum/ANext/AMaxTotal` 上下文便于定位 |
 | Short write | `EIOError('tar: short write')` |
 
 ## 4. 源契约
 
-生产单元（`src/nextpas.core.tar*.pas`）不得 uses 任何非 `nextpas.*` 单元，经 `test_tar_contract` 门机械执行。门面仅 re-export + inline 委托，无控制流。
+生产单元（`src/nextpas.core.tar*.pas`）不得 uses 任何非 `nextpas.*` 单元，经 `test_tar_contract` 门机械执行。门面仅 re-export + inline 委托，无控制流。`nextpas.core.tar.common` 为内部共享内核（`TarPadToBlock`/`GuardTarEntrySize`/`GuardTarTotalSize`/`GuardTarNameForRead`），仅供 `tar.reader/writer/fs` 实现内复用，禁止门面（`nextpas.core.tar`）外直接 `uses`；绕过门面直引视为违契，`test_tar_contract` 覆盖该边界。
 
 ## 5. 测试入口
 
