@@ -152,3 +152,42 @@ begin
     1: begin P[0]:=Lut[P[0]*3]; P[1]:=Lut[P[1]*3+1]; P[2]:=Lut[P[2]*3+2]; end;
   end;
 end;
+
+procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
+begin
+  if (PixelCount <= 0) or (Dst = nil) or (Src = nil) then Exit;
+  Move(Src^, Dst^, NativeUInt(PixelCount) * 4);
+end;
+
+procedure RasterBlendVaried(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
+var
+  P: PByte;
+  S: PLongWord;
+  N: Integer;
+  col: LongWord;
+  R, G, B, A: Byte;
+  invA, Tv: Integer;
+begin
+  if (PixelCount <= 0) or (Dst = nil) or (Src = nil) then Exit;
+  P := Dst; S := Src;
+  for N := 0 to PixelCount - 1 do
+  begin
+    col := S[N];
+    R := Byte((col shr 16) and $FF);
+    G := Byte((col shr 8) and $FF);
+    B := Byte(col and $FF);
+    A := Byte((col shr 24) and $FF);
+    if A = 0 then Continue;
+    if A = 255 then
+      PLongWord(P)^ := col
+    else
+    begin
+      invA := 255 - A;
+      Tv := Integer(R) * Integer(A) + Integer(P[0]) * invA; P[0] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+      Tv := Integer(G) * Integer(A) + Integer(P[1]) * invA; P[1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+      Tv := Integer(B) * Integer(A) + Integer(P[2]) * invA; P[2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+      Tv := Integer(P[3]) * invA; P[3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+    end;
+    Inc(P, 4);
+  end;
+end;

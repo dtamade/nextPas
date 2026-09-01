@@ -29,6 +29,12 @@ procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
 // 批式原地 LUT（256*3 字节，通道独立映射），行级批量
 procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte); inline;
 
+// 变长源批量拷贝（梯度 LUT Chunk 等逐块定长拷贝，复用 SimdMemCopy 64B 对齐路径）
+procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
+
+// 变长源 src-over 混合（每像素独立颜色，梯度/纹理逐块混合，封装手写 blend 细节）
+procedure RasterBlendVaried(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
+
 implementation
 
 uses
