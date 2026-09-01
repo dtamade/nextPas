@@ -13,8 +13,10 @@ unit nextpas.core.zip.fs;
  * 位。目录的权限与 mtime 延迟到全部内容写完后再还原（否则子条目写入会刷新
  * 目录 mtime，收紧的目录权限也可能阻断后续落盘）。解包非原子：已落盘文件不
  * 回滚；异常时已收集的 LDirs 仍在 finally 中逆序定稿（权限/mtime），需外层
- * 整体清理或改用原子变体（临时目录+rename，待提供）。TOCTOU 已加固为
- * 落盘前/后双重 EnsureNoSymlinkInPath + 落盘结果非 symlink 校验。
+ * 整体清理或改用原子变体 `ZipExtractToDirAtomic*`（临时目录+rename，见下）。
+ * TOCTOU 已加固为落盘前/后双重 EnsureNoSymlinkInPath + 落盘结果非 symlink
+ * 校验；原子变体在同文件系统内 `TempDir`+`Rename` 原子提交，异常时自动清理
+ * 临时目录，已存在目标则拒绝覆盖以保原子语义。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -56,6 +58,19 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt = 0); overload;
 {** 同上，按完整选项（保留 MaxTotalOutputSize/SkipSymlinks 语义）。 *}
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
+  const AOptions: TZipExtractOptions); overload;
+
+{** 原子解包：先解到同文件系统临时目录，成功后 Rename 原子提交；
+    ADestDir 已存在则拒绝覆盖（抛 EArgumentError），异常时自动清理临时目录。
+    其余语义同 ZipExtractToDirWithOptions（含 TOCTOU 双校验与 MaxTotal 守卫）。 *}
+procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
+  const ADestDir: string; const AOptions: TZipExtractOptions);
+
+{** 同上，按默认选项。AMaxOutputSize=0 取读端默认上限。 *}
+procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
+  const AMaxOutputSize: SizeUInt = 0); overload;
+{** 同上，按完整选项。 *}
+procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
   const AOptions: TZipExtractOptions); overload;
 
 implementation
@@ -436,6 +451,66 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AOptions: TZipExtractOptions);
 begin
   ZipExtractToDirWithOptions(AData, ADestDir, AOptions);
+end;
+
+procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
+  const ADestDir: string; const AOptions: TZipExtractOptions);
+var
+  LDestTrim, LParent, LTemp: string;
+  LSep: Integer;
+begin
+  if ADestDir = '' then
+    raise EArgumentError.Create('zip extract atomic: empty dest dir');
+  LDestTrim := ADestDir;
+  while (LDestTrim <> '') and (LDestTrim[Length(LDestTrim)] = '/') do
+    Delete(LDestTrim, Length(LDestTrim), 1);
+  if LDestTrim = '' then
+    raise EArgumentError.Create('zip extract atomic: empty dest dir');
+  LSep := Length(LDestTrim);
+  while (LSep > 0) and (LDestTrim[LSep] <> '/') do
+    Dec(LSep);
+  if LSep > 0 then
+    LParent := Copy(LDestTrim, 1, LSep - 1)
+  else
+    LParent := '.';
+  if LParent = '' then
+    LParent := '.';
+  EnsureNoSymlinkInPath(LParent);
+  if Exists(LDestTrim) then
+    raise EArgumentError.Create('zip extract atomic: destination already exists: ' + LDestTrim);
+  { 同文件系统临时目录：sibling + 16hex 随机，FsTempDir 保证唯一与 32 次重试 }
+  LTemp := TempDir(LParent, '.zip-atomic-');
+  try
+    ZipExtractToDirWithOptions(AData, LTemp, AOptions);
+    EnsureNoSymlinkInPath(LParent);
+    if Exists(LDestTrim) then
+      raise EArgumentError.Create('zip extract atomic: destination appeared during extract: ' + LDestTrim);
+    Rename(LTemp, LDestTrim);
+    LTemp := '';
+  finally
+    if (LTemp <> '') and Exists(LTemp) then
+      try
+        RemoveAll(LTemp);
+      except
+        on E: Exception do ;
+      end;
+  end;
+end;
+
+procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
+  const AMaxOutputSize: SizeUInt);
+var
+  LOpts: TZipExtractOptions;
+begin
+  LOpts := DefaultZipExtractOptions;
+  LOpts.MaxOutputSize := AMaxOutputSize;
+  ZipExtractToDirAtomicWithOptions(AData, ADestDir, LOpts);
+end;
+
+procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
+  const AOptions: TZipExtractOptions);
+begin
+  ZipExtractToDirAtomicWithOptions(AData, ADestDir, AOptions);
 end;
 
 end.

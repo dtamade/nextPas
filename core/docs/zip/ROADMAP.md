@@ -132,6 +132,9 @@
 ### S66 — TOCTOU 双重校验（1.0.1 巡检）· 稳定性 — 已落地
 - `zip.fs` `TOCTOU` 加固：`ADestDir` 入口与 `MkdirAll` 后双 `EnsureNoSymlinkInPath`，每条目父目录 `MkdirAll` 后二次校验，落盘后对父路径与 `LFull` `IsSymlink` 非穿透校验，`MkdirAll` 目录落地后校验，`Symlink` 后校验，收口 `ZipExtractToDirWithOptions` 窗口
 
+### S67 — 原子落盘（1.0.1 巡检）· 完整性/稳定性 — 已落地
+- `zip.fs` `ZipExtractToDirAtomic*`：同文件系统 `TempDir(LParent,'.zip-atomic-')` + `ZipExtractToDirWithOptions` + `Rename` 原子提交，`ADestDir` 已存在则 `EArgumentError` 拒绝覆盖，异常时 `RemoveAll` 自动清理临时目录，`EnsureNoSymlinkInPath(LParent)` 前后双校验，`bomb/hostile` 触发时无残留，12 门全绿 `HEAPTRC OK`
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
