@@ -31,6 +31,8 @@ function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
 procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 
+procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
+
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
@@ -105,6 +107,22 @@ procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 begin
   if (APos < 0) or (ALen < 0) or (APos + ALen > ASize) then
     raise EParseError.Create('zip: truncated ' + AWhat);
+end;
+
+procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
+begin
+  if AC.ReadU32LE <> C_ZIP_LOCAL_SIG then
+    raise EParseError.Create('zip: bad local header signature');
+  AC.ReadU16LE;                    { version needed }
+  AC.ReadU16LE;                    { flags }
+  AC.ReadU16LE;                    { method }
+  AC.ReadU16LE;                    { DOS time }
+  AC.ReadU16LE;                    { DOS date }
+  AC.ReadU32LE;                    { local crc }
+  AC.ReadU32LE;                    { local compressed size }
+  AC.ReadU32LE;                    { local uncompressed size }
+  ANameLen := AC.ReadU16LE;
+  AExtraLen := AC.ReadU16LE;
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);

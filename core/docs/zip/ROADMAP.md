@@ -192,6 +192,10 @@
 - `aes.ResolveZipMethodWithAes` 单源化 `reader.ParseCentralEntry` / `sequential.ParseCurrentLocal` 的 AES 校验与方法改写重复（`99 → realMethod` + 版本 1/2 + 强度 1..3 强校验 + `TryMethod`），2×25 行 → 2×1 行调用，`EParseError/ENotSupportedError` 语义守恒
 - `aes` 接口层显式依赖 `zip.base`（`base ← aes` 有向无环），`reader/sequential` 薄委托单源，12 门 + `bench_zip` 可编译回归
 
+### S86 — Local Header 走查单源（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.ParseLocalHeader` 单源化 `TZipReaderImpl.LocatePayload` / `TZipSourceReader.LocatePayload` 的本地头走查重复（签名+`version/flags/method/time/date/crc/size/nameLen/extraLen` 10 读 + 载荷偏移 `LLho+30+NameLen+ExtraLen`），2×12 行 → 2×1 行，`EParseError('bad local header signature')` 与 `NeedRange` 语义守恒
+- `common` 为 `reader` 双读器共享校验内核（`GuardEntryReadable/GuardCursorRange/ParseLocalHeader`），冷路径零分配，12 门 + `bench_zip 221746` 可编译回归
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -224,4 +228,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S85 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 8e82171` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes` 三单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S86 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 40daf18` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader` 四单源 + AES 零堆栈。

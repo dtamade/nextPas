@@ -585,18 +585,7 @@ begin
   LLho := Int64(LE.LocalHeaderOffset);
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   FC.Seek(SizeUInt(LLho));
-  if FC.ReadU32LE <> C_ZIP_LOCAL_SIG then
-    raise EParseError.Create('zip: bad local header signature');
-  FC.ReadU16LE;                    { version needed }
-  FC.ReadU16LE;                    { flags }
-  FC.ReadU16LE;                    { method }
-  FC.ReadU16LE;                    { DOS time }
-  FC.ReadU16LE;                    { DOS date }
-  FC.ReadU32LE;                    { local crc }
-  FC.ReadU32LE;                    { local compressed size（描述符时为占位） }
-  FC.ReadU32LE;                    { local uncompressed size（同上） }
-  LNameLen := FC.ReadU16LE;
-  LExtraLen := FC.ReadU16LE;
+  ParseLocalHeader(FC, LNameLen, LExtraLen);
   Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
   NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
 end;
@@ -941,18 +930,7 @@ begin
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   Fetch(LLho, C_LOCAL_HEADER_LEN, LHeader, 'local header');
   LC := NewByteCursor(LHeader);
-  if LC.ReadU32LE <> C_ZIP_LOCAL_SIG then
-    raise EParseError.Create('zip: bad local header signature');
-  LC.ReadU16LE;                    { version needed }
-  LC.ReadU16LE;                    { flags }
-  LC.ReadU16LE;                    { method }
-  LC.ReadU16LE;                    { DOS time }
-  LC.ReadU16LE;                    { DOS date }
-  LC.ReadU32LE;                    { local crc }
-  LC.ReadU32LE;                    { local compressed size（描述符时为占位） }
-  LC.ReadU32LE;                    { local uncompressed size（同上） }
-  LNameLen := LC.ReadU16LE;
-  LExtraLen := LC.ReadU16LE;
+  ParseLocalHeader(LC, LNameLen, LExtraLen);
   Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
   NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
 end;
