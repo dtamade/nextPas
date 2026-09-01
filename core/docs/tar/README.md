@@ -100,9 +100,9 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿。
-- `bench_tar` 另起 `nextpas.core.bench` 基准（非首版阻塞）。
+- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`HeaderIsZeroOrValid` 单遍 512 融合、`ParsePaxRecordsSlice` 零拷贝。
+- 基准：`core/benchmarks/nextpas.core.tar/bench_tar`（`tar/pack/200x512B ~670µs 145MB/s`、`builder-pack ~611µs`、`open/parse ~201µs`、`extract-slice ~204µs`、`write 1MB 3.5ms`、`read 1MB 1.6ms`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。
-Benchmark: `bench_tar` 另起 `nextpas.core.bench`（非首版阻塞）；与 `gzip` 组合演示待 `compress` 协作。
-Roadmap: `CONTRACT.md` S0 已落地，`builder` 流式已交付。
+Benchmark: 已落地 `bench_tar`（见上），与 `gzip` 组合待 `compress` 协作。
+Roadmap: `CONTRACT.md` S0 已落地，`builder` 流式与基准已交付。
