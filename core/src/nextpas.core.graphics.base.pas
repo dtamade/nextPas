@@ -54,13 +54,6 @@ type
     function TransformPoint(const P: TVec2): TVec2; inline;
   end;
 
-  TGlyphRun = record
-    Glyphs: array of LongWord;
-    Positions: array of TVec2;
-    Scale: Single;
-    function IsEmpty: Boolean; inline;
-  end;
-
 const
   EPSILON = 1e-6;
 
@@ -78,6 +71,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.graphics.errors,
   nextpas.core.math;
 
 class function TVec2.Create(AX, AY: Single): TVec2;
@@ -184,7 +178,7 @@ begin
     raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.Inverse: matrix contains NaN/Inf');
   Det := A * D - B * C;
   if IsNaN(Det) or IsInfinite(Det) or (Abs(Det) < EPSILON) then
-    raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D not invertible');
+    raise EVectorError.Create('nextpas.core.graphics.base.pas: TMat2D not invertible');
   InvDet := 1 / Det;
   Result.A := D * InvDet;
   Result.B := -B * InvDet;
@@ -203,11 +197,6 @@ begin
     raise EArgumentError.Create('nextpas.core.graphics.base.pas: TMat2D.TransformPoint: matrix/point contains NaN/Inf');
   Result.X := A * P.X + C * P.Y + Tx;
   Result.Y := B * P.X + D * P.Y + Ty;
-end;
-
-function TGlyphRun.IsEmpty: Boolean;
-begin
-  Result := Length(Glyphs) = 0;
 end;
 
 function Color32(R, G, B: Byte; A: Byte): TColor32;
