@@ -186,11 +186,15 @@ begin
   Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl fwd');
   Check(nextpas.core.agent.AgentJoinWireUrl('https://api.example.com/v1', 'https://fallback', '/chat') = 'https://api.example.com/v1/chat', 'facade JoinWireUrl keeps existing /v1');
   Check(nextpas.core.agent.AgentBuildSystemText('sys', nil) = 'sys', 'facade BuildSystemText fwd');
+  Check(nextpas.core.agent.BuildBoundedSnapshot('sys', nil, 6000) = 'sys', 'facade BuildBoundedSnapshot fwd');
+  Check(nextpas.core.agent.CBoundedSnapshotBudget = 6000, 'facade CBoundedSnapshotBudget fwd');
+  Check(nextpas.core.agent.BoundedSnapshotCost('hi', 0) >= 0, 'facade BoundedSnapshotCost fwd');
   SetLength(H, 1);
   H[0].Name := 'Authorization';
   H[0].Value := 'Bearer tok';
   nextpas.core.agent.AgentValidateWireHeaders(H);
   Check(True, 'facade ValidateWireHeaders fwd');
+  Check(SizeOf(nextpas.core.agent.TAgentStreamBox) > 0, 'facade TAgentStreamBox fwd');
 end;
 
 var

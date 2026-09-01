@@ -69,7 +69,7 @@
 |------|------|---------|
 | `84876646c` | fix | Phase1 纯策略吸收 — pricing/quota/estimate/sink/idempotency（`token888::billing/PlatformQuota` 复刻，`AgentEstimateTokens`/`EstimateCost`/`PlatformQuota*`/`AgentWireApplyIdempotency` 单一真源） |
 | `53ab417e8` | refactor | 模块化 openai + responses — 抽 encode/decode/decoder 三子域（4/4，完成 openai 326/348/232/359 + responses 256/307/245/441 全 <800） |
-| `c9bc0f520` | docs | Phase4 有界预算与高级感收口 — `PROMPT-BUDGET.md` + `PERFORMANCE.md §7` + `LIFECYCLE.md §8` + 双示例（`examples/07_bounded_snapshot` / `examples/08_stream_box_lifecycle`） |
+| `c9bc0f520` | docs | Phase4 有界预算与高级感收口 — `PROMPT-BUDGET.md` + `PERFORMANCE.md §7` + `LIFECYCLE.md §8` + 双示例（`examples/gtd-grok-retry` / `examples/zen-gateway-codec`；CHANGELOG 旧称 07/08 为占位名，已对齐真实路径） |
 | `1a831086d` | refactor | 模块化 provider.common — 抽 wire/extra/slots 三子域（3/3，完成 common 291+565+109+519 全 <800） |
 
 ### Gates (21/21 HEAPTRC, 5 bench)
@@ -87,7 +87,7 @@
 ### Docs & Examples (W18 completeness)
 
 - 新增 `PROMPT-BUDGET.md`（6000 B 有界快照：`AgentBuildSystemText` 合并去重 + `AgentEstimateTokens` 加权粗估 + `AgentUtf8SafeTruncate`/`GraphemeNext` 簇安全截断 + `pricing.EstimateCost` 联动 + `IAgentTokenCounter` 探测）。
-- 新增 `examples/07_bounded_snapshot` + `examples/08_stream_box_lifecycle`（Phase4 高级感双示例）。
+- 新增 `examples/gtd-grok-retry` + `examples/zen-gateway-codec`（Phase4 高级感双示例；旧称 07/08 已更名为真实用例名，对应 `PROMPT-BUDGET.md §5` 有界快照与 `WIRE-MAPPINGS §3` 编解码器直通）。
 - `PERFORMANCE.md §7` cookbook（Grapheme/EAW、StreamBox Lock+Done+id、SetLength+Move/PByte/InsertSort）与 `LIFECYCLE.md §8` 生命周期样板已对齐。
 
 ### External Alignment (C2-C4 + T3.1)
