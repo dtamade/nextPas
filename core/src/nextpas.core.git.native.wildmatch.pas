@@ -250,47 +250,94 @@ function GitSegmentsMatch(const APattern, APath: string): Boolean;
     Dec(Result);
   end;
 
-  function Rec(PPat, PStr: Integer): Boolean;
-  var
-    PatEnd, StrEnd: Integer;
-    J: Integer;
-  begin
-    PPat := SkipSlashes(APattern, PPat);
-    PStr := SkipSlashes(APath, PStr);
-    if PPat > Length(APattern) then
-      Exit(PStr > Length(APath));
-    PatEnd := NextSegEnd(APattern, PPat);
-    if (PatEnd - PPat = 1) and (APattern[PPat] = '*') and (APattern[PPat + 1] = '*') then
-    begin
-      if Rec(PatEnd + 2, PStr) then
-        Exit(True);
-      J := PStr;
-      while J <= Length(APath) do
-      begin
-        StrEnd := NextSegEnd(APath, J);
-        J := StrEnd + 2;
-        J := SkipSlashes(APath, J);
-        if Rec(PatEnd + 2, J) then
-          Exit(True);
-        if J > Length(APath) then
-          Break;
-      end;
-      Exit(False);
-    end;
-    if PStr > Length(APath) then
-      Exit(False);
-    StrEnd := NextSegEnd(APath, PStr);
-    if not GitWildSegmentRange(APattern, PPat, PatEnd - PPat + 1, APath, PStr, StrEnd - PStr + 1) then
-      Exit(False);
-    Result := Rec(PatEnd + 2, StrEnd + 2);
-  end;
-
+var
+  PatStarts, PatLens: array of Integer;
+  PatIsStar: array of Boolean;
+  PathStarts, PathLens: array of Integer;
+  P, Q, PLen: Integer;
+  PatCnt, PathCnt: Integer;
+  I, J, StarIdx, MatchIdx, Iter: Integer;
+  Guard: Int64;
 begin
   if (APattern = '') and (APath = '') then
     Exit(True);
   if APattern = '' then
     Exit(False);
-  Result := Rec(1, 1);
+  // zero-copy segment scan: build start/len views, inline helpers, no segment string alloc
+  SetLength(PatStarts, 0);
+  SetLength(PatLens, 0);
+  SetLength(PatIsStar, 0);
+  SetLength(PathStarts, 0);
+  SetLength(PathLens, 0);
+  P := 1;
+  while True do
+  begin
+    P := SkipSlashes(APattern, P);
+    if P > Length(APattern) then
+      Break;
+    Q := NextSegEnd(APattern, P);
+    PLen := Q - P + 1;
+    SetLength(PatStarts, Length(PatStarts) + 1);
+    PatStarts[High(PatStarts)] := P;
+    SetLength(PatLens, Length(PatLens) + 1);
+    PatLens[High(PatLens)] := PLen;
+    SetLength(PatIsStar, Length(PatIsStar) + 1);
+    PatIsStar[High(PatIsStar)] := (PLen = 2) and (APattern[P] = '*') and (APattern[P + 1] = '*');
+    P := Q + 1;
+  end;
+  P := 1;
+  while True do
+  begin
+    P := SkipSlashes(APath, P);
+    if P > Length(APath) then
+      Break;
+    Q := NextSegEnd(APath, P);
+    PLen := Q - P + 1;
+    SetLength(PathStarts, Length(PathStarts) + 1);
+    PathStarts[High(PathStarts)] := P;
+    SetLength(PathLens, Length(PathLens) + 1);
+    PathLens[High(PathLens)] := PLen;
+    P := Q + 1;
+  end;
+  PatCnt := Length(PatStarts);
+  PathCnt := Length(PathStarts);
+  // linear star backtracking: ** matches zero or more whole segments, O(n*m) bounded, no recursion
+  I := 0;
+  J := 0;
+  StarIdx := -1;
+  MatchIdx := 0;
+  Guard := Int64(PatCnt + 1) * Int64(PathCnt + 1) * 4 + 16;
+  Iter := 0;
+  while J < PathCnt do
+  begin
+    Inc(Iter);
+    if Iter > Guard then
+      Exit(False);
+    if (I < PatCnt) and PatIsStar[I] then
+    begin
+      StarIdx := I;
+      MatchIdx := J;
+      Inc(I);
+    end
+    else if (I < PatCnt) and GitWildSegmentRange(APattern, PatStarts[I], PatLens[I], APath, PathStarts[J], PathLens[J]) then
+    begin
+      Inc(I);
+      Inc(J);
+    end
+    else if StarIdx <> -1 then
+    begin
+      Inc(MatchIdx);
+      if MatchIdx > PathCnt then
+        Exit(False);
+      J := MatchIdx;
+      I := StarIdx + 1;
+    end
+    else
+      Exit(False);
+  end;
+  while (I < PatCnt) and PatIsStar[I] do
+    Inc(I);
+  Result := I = PatCnt;
 end;
 
 end.

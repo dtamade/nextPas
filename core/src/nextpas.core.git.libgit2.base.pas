@@ -38,30 +38,30 @@ type
   git_config_iterator = Pointer;
   git_signature = Pointer;
 
-  // Single source: canonical SHA1 OID (20 bytes) via native.base.TGitOid.
-  // Variant exposes both C `id` and Pascal `Bytes` zero-cost overlay; binary-identical, no branch.
-  git_oid = record
-    case Integer of
-      0: (id: array[0..19] of Byte;);
-      1: (Bytes: array[0..19] of Byte;);
-  end;
-  Pgit_oid = ^git_oid;
+  // Single source alias: TGitOid is native 20-byte (not 33-byte); TGitOid33 retained for compat
+  TGitOid = nextpas.core.git.native.base.TGitOid;
+  PGitOid = ^TGitOid;
   // Legacy static-track OID (type prefix + 32 bytes) - SHA256-ready padded, not default TGitOid
   TGitOid33 = record
     &type: Byte;
     id: array[0..31] of Byte;
   end;
   PGitOid33 = ^TGitOid33;
-  // Single source alias: TGitOid is native 20-byte (not 33-byte); TGitOid33 retained for compat
-  TGitOid = nextpas.core.git.native.base.TGitOid;
-  PGitOid = ^TGitOid;
+  // Single source: canonical SHA1 OID (20 bytes) via native.base.TGitOid.
+  // Variant exposes both C `id` and Pascal `Bytes` zero-cost overlay; binary-identical, no branch.
+  // Binary guarantee: AsNative overlay ensures SizeOf(git_oid)=SizeOf(TGitOid)=GitOidRawLen (20), zero-copy via bytes.ops
+  git_oid = record
+    case Integer of
+      0: (id: array[0..GIT_OID_RAWSZ-1] of Byte;);
+      1: (Bytes: array[0..GIT_OID_RAWSZ-1] of Byte;);
+      2: (AsNative: TGitOid;);
+  end;
+  Pgit_oid = ^git_oid;
   // Compat alias for libgit2 consumers expecting 20-byte via Pascal name
   TGitOid20 = git_oid;
   PGitOid20 = ^TGitOid20;
 
-function GitOid20Equals(const A, B: git_oid): Boolean; inline;
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
-procedure GitOid20Copy(out Dst: git_oid; const Src: git_oid); inline;
 procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
 procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
 function GitOidToNative(const A: git_oid): TGitOid; inline;
@@ -72,10 +72,6 @@ function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
 function GitOidEquals(const A, B: git_oid): Boolean; inline;
 function GitOidIsZero(const A: git_oid): Boolean; inline;
 procedure GitOidCopy(out Dst: git_oid; const Src: git_oid); inline;
-// Compatibility Inline-suffix aliases (moved from ffi, single source via base)
-function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
-function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
-procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
 
 type
   { ops Helper: record helper for git_oid, zero-copy via bytes.ops single source }
@@ -87,45 +83,36 @@ type
 
 implementation
 
-function GitOid20Equals(const A, B: git_oid): Boolean; inline;
-begin
-  // perf: inline + zero-copy via bytes.ops SpanEqual single source, 20 bytes -> 3x QWord, alias to GitOidEquals
-  Result := GitOidEquals(A, B);
-end;
-
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
 begin
   // perf: inline + single CompareMem after type byte, zero-copy
   Result := (A.&type = B.&type) and CompareMem(@A.id[0], @B.id[0], GIT_OID_MAX_SIZE);
 end;
 
-procedure GitOid20Copy(out Dst: git_oid; const Src: git_oid); inline;
-begin
-  // perf: inline + single Move zero-copy (bytes.ops single source), alias to GitOidCopy
-  GitOidCopy(Dst, Src);
-end;
-
 procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
 begin
   Dst.&type := 1; // GIT_OID_SHA1
-  Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
+  // perf: inline + zero-copy SpanCopy via bytes.ops single source, then FillChar tail zero
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
   FillChar(Dst.id[GIT_OID_RAWSZ], GIT_OID_MAX_SIZE - GIT_OID_RAWSZ, 0);
 end;
 
 procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
 begin
-  Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
+  // perf: inline + zero-copy SpanCopy via bytes.ops single source
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
 end;
 
 function GitOidToNative(const A: git_oid): TGitOid; inline;
 begin
-  // zero-copy: same 20 bytes, single Move single source (native.base Bytes == git_oid.id overlay)
-  Move(A.id[0], Result.Bytes[0], GIT_OID_RAWSZ);
+  // perf: inline + zero-copy variant overlay AsNative (single source TGitOid, no Move, 20 bytes)
+  Result := A.AsNative;
 end;
 
 function NativeToGitOid(const A: TGitOid): git_oid; inline;
 begin
-  Move(A.Bytes[0], Result.id[0], GIT_OID_RAWSZ);
+  // perf: inline + zero-copy variant overlay AsNative (single source TGitOid, no Move)
+  Result.AsNative := A;
 end;
 
 function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
@@ -148,24 +135,8 @@ end;
 
 procedure GitOidCopy(out Dst: git_oid; const Src: git_oid); inline;
 begin
-  // perf: inline + single Move zero-copy (bytes.ops single source), no heap
-  Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
-end;
-
-function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
-begin
-  // compatibility alias: single source via GitOidEquals (bytes.ops)
-  Result := GitOidEquals(A, B);
-end;
-
-function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
-begin
-  Result := GitOidIsZero(A);
-end;
-
-procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
-begin
-  GitOidCopy(Dst, Src);
+  // perf: inline + zero-copy SpanCopy via bytes.ops single source, 20 bytes -> single Move, no heap
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
 end;
 
 { TGitOidHelper }
@@ -185,5 +156,13 @@ procedure TGitOidHelper.Assign(const ASrc: git_oid); inline;
 begin
   GitOidCopy(Self, ASrc);
 end;
+
+initialization
+  // stability: binary guarantee fails fast if PACKRECORDS or TGitOid drift (20 bytes single source)
+  Assert(SizeOf(git_oid) = GIT_OID_RAWSZ);
+  Assert(SizeOf(git_oid) = SizeOf(TGitOid));
+  Assert(SizeOf(TGitOid20) = GIT_OID_RAWSZ);
+  // perf: variant overlay ensures id/Bytes/AsNative at offset 0, no branch, zero-copy bytes.ops
+  Assert(SizeOf(git_oid) = 20);
 
 end.

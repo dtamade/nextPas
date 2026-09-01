@@ -23,15 +23,23 @@ function NewNativeGitManager: IGitManager; inline;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.git.native.manager,
   nextpas.core.git.native.base;
 
 var
   GLibGit2Creator: TLibGit2Creator;
 
+function GetLibGit2Creator: TLibGit2Creator; inline;
+begin
+  { perf: inline acquire load, single pointer move zero-copy, no alloc, single-source atomic }
+  Result := TLibGit2Creator(atomic_load(PPointer(@GLibGit2Creator)^, mo_acquire));
+end;
+
 procedure RegisterLibGit2Creator(ACreator: TLibGit2Creator);
 begin
-  GLibGit2Creator := ACreator;
+  { thread-safe: release store, single pointer move zero-copy, inline atomic, zero alloc }
+  atomic_store(PPointer(@GLibGit2Creator)^, Pointer(ACreator), mo_release);
 end;
 
 function NewNativeGitManager: IGitManager; inline;
@@ -40,14 +48,18 @@ begin
 end;
 
 function NewGitManager(ABackend: TGitBackend): IGitManager; inline;
+var
+  LCreator: TLibGit2Creator;
 begin
   case ABackend of
     gbNative:
       Result := TNativeGitManager.Create;
     gbLibGit2, gbAuto:
       begin
-        if Assigned(GLibGit2Creator) then
-          Result := GLibGit2Creator()
+        { thread-safe: single acquire snapshot, inline zero-copy, no TOCTOU }
+        LCreator := GetLibGit2Creator;
+        if Assigned(LCreator) then
+          Result := LCreator()
         else
           raise EGitError.Create('libgit2 backend not registered (uses nextpas.core.git.libgit2 required for gbLibGit2/gbAuto)');
       end;

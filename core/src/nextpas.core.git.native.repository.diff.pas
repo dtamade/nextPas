@@ -1,0 +1,1013 @@
+unit nextpas.core.git.native.repository.diff;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.exception,
+  nextpas.core.git.base,
+  nextpas.core.git.native.base,
+  nextpas.core.git.native.repo,
+  nextpas.core.git.native.refs,
+  nextpas.core.git.native.objmodel,
+  nextpas.core.git.native.revparse,
+  nextpas.core.git.native.common,
+  nextpas.core.git.native.diff;
+
+{ Diff subdomain: pure helpers + repository diff operations.
+  Single-source via bytes.ops (SpanEqual), inline zero-copy for IsBinaryBytes/PathIncluded,
+  TBytes->string via bytes.ops.BytesToString single source, no SysUtils. }
+
+function RepositoryDiffEx(const AGitDir, AOldRef, ANewRef: string; const AOptions: TGitDiffOptions): TGitDiff;
+function RepositoryDiff(const AGitDir, AOldRef, ANewRef: string): TGitDiff; inline;
+function RepositoryDiffWorkingTreeEx(const AGitDir, AWorkTree, ARef: string; const AOptions: TGitDiffOptions): TGitDiff;
+function RepositoryDiffWorkingTree(const AGitDir, AWorkTree, ARef: string): TGitDiff; inline;
+function RepositoryWorkdirPatchText(const AGitDir, AWorkTree, ARevspec: string; const APaths: nextpas.core.base.TStringArray; AShowBinary: Boolean): string;
+procedure RepositoryApplyPatch(const AGitDir, AWorkTree, APatchText: string);
+procedure RepositoryCheckoutPaths(const AGitDir, AWorkTree, ARevspec: string; const APaths: nextpas.core.base.TStringArray);
+
+implementation
+
+uses
+  nextpas.core.fs,
+  nextpas.core.git.native.blame,
+  nextpas.core.git.native.util,
+  nextpas.core.git.native.index,
+  nextpas.core.git.native.write,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
+  nextpas.core.text.utils,
+  nextpas.core.os.env,
+  SysUtils;
+
+type
+  THunkArray = array of TGitDiffHunk;
+
+function TrimInline(const S: string): string; inline;
+begin
+  Result := GitTrimSpaces(S);
+end;
+
+function WorkDirOf(const AGitDir, AWorkTree: string): string; inline;
+begin
+  if AWorkTree <> '' then
+    Result := AWorkTree
+  else
+    Result := PathDir(AGitDir);
+end;
+
+function IsBinaryBytes(const AData: TBytes): Boolean; inline;
+var
+  I: Integer;
+begin
+  for I := 0 to High(AData) do
+    if AData[I]=0 then
+      Exit(True);
+  Result:=False;
+end;
+
+function BlobLinesOf(const AGitDir: string; const AOid: TGitOid): nextpas.core.base.TStringArray; inline;
+var
+  R: TNativeRepository;
+  K: TGitObjectKind;
+  D: TBytes;
+  S: string;
+begin
+  Result:=nil;
+  if GitOidIsZero(AOid) then
+    Exit;
+  R:=TNativeRepository.Create(AGitDir);
+  try
+    D:=R.ReadObject(AOid,K);
+    if IsBinaryBytes(D) then
+      Exit(nil);
+    S:=GitBytesToString(D);
+    Result:=GitSplitLines(S);
+    if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then
+      SetLength(Result,0);
+    if (Length(Result)>0) and (Result[High(Result)]='') and (Length(S)>0) and (S[Length(S)]=#10) then
+      SetLength(Result,Length(Result)-1);
+  finally
+    R.Free;
+  end;
+end;
+
+function PathIncluded(const APath: string; const APaths: nextpas.core.base.TStringArray): Boolean; inline;
+var
+  I: Integer;
+begin
+  if Length(APaths)=0 then
+    Exit(True);
+  for I:=0 to High(APaths) do
+    if (APath=APaths[I]) or ((Length(APath)>Length(APaths[I])) and (Copy(APath,1,Length(APaths[I])+1)=APaths[I]+'/')) then
+      Exit(True);
+  Result:=False;
+end;
+
+function WorkTreeLinesOf(const AWorkTree, ARel: string): nextpas.core.base.TStringArray; inline;
+var
+  P: string;
+  D: TBytes;
+  S: string;
+begin
+  Result:=nil;
+  P:=PathJoin([AWorkTree,ARel]);
+  if not FileExists(P) then
+    Exit(nil);
+  try
+    D:=ReadFile(P);
+  except
+    Exit(nil);
+  end;
+  if IsBinaryBytes(D) then
+    Exit(nil);
+  S:=GitBytesToString(D);
+  Result:=GitSplitLines(S);
+  if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then
+    SetLength(Result,0);
+  if (Length(Result)>0) and (Result[High(Result)]='') and (Length(S)>0) and (S[Length(S)]=#10) then
+    SetLength(Result,Length(Result)-1);
+end;
+
+procedure BuildLCSOps(const AOld, ANew: nextpas.core.base.TStringArray; out AOpcodes: nextpas.core.base.TStringArray; out AOldTexts: nextpas.core.base.TStringArray; out ANewTexts: nextpas.core.base.TStringArray);
+var
+  N,M,I,J,K: Integer;
+  LCS: array of Integer;
+  Ops: nextpas.core.base.TStringArray;
+  OT, NT: nextpas.core.base.TStringArray;
+begin
+  N:=Length(AOld);
+  M:=Length(ANew);
+  SetLength(LCS,(N+1)*(M+1));
+  for I:=1 to N do
+    for J:=1 to M do
+      if AOld[I-1]=ANew[J-1] then
+        LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+(J-1)]+1
+      else if LCS[(I-1)*(M+1)+J] >= LCS[I*(M+1)+(J-1)] then
+        LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+J]
+      else
+        LCS[I*(M+1)+J]:=LCS[I*(M+1)+(J-1)];
+  SetLength(Ops,0);
+  SetLength(OT,0);
+  SetLength(NT,0);
+  I:=N;
+  J:=M;
+  while (I>0) or (J>0) do
+  begin
+    if (I>0) and (J>0) and (AOld[I-1]=ANew[J-1]) then
+    begin
+      SetLength(Ops,Length(Ops)+1);
+      Ops[High(Ops)]:=' ';
+      SetLength(OT,Length(OT)+1);
+      OT[High(OT)]:=AOld[I-1];
+      SetLength(NT,Length(NT)+1);
+      NT[High(NT)]:=ANew[J-1];
+      Dec(I);
+      Dec(J);
+    end
+    else if (J>0) and ((I=0) or (LCS[I*(M+1)+(J-1)] >= LCS[(I-1)*(M+1)+J])) then
+    begin
+      SetLength(Ops,Length(Ops)+1);
+      Ops[High(Ops)]:='+';
+      SetLength(OT,Length(OT)+1);
+      OT[High(OT)]:='';
+      SetLength(NT,Length(NT)+1);
+      NT[High(NT)]:=ANew[J-1];
+      Dec(J);
+    end
+    else
+    begin
+      SetLength(Ops,Length(Ops)+1);
+      Ops[High(Ops)]:='-';
+      SetLength(OT,Length(OT)+1);
+      OT[High(OT)]:=AOld[I-1];
+      SetLength(NT,Length(NT)+1);
+      NT[High(NT)]:='';
+      Dec(I);
+    end;
+  end;
+  SetLength(AOpcodes,Length(Ops));
+  SetLength(AOldTexts,Length(OT));
+  SetLength(ANewTexts,Length(NT));
+  for K:=0 to High(Ops) do
+  begin
+    AOpcodes[K]:=Ops[High(Ops)-K];
+    AOldTexts[K]:=OT[High(OT)-K];
+    ANewTexts[K]:=NT[High(NT)-K];
+  end;
+end;
+
+function UnifiedHunksFromOps(const AOpcodes: nextpas.core.base.TStringArray; const AOldTexts, ANewTexts: nextpas.core.base.TStringArray; AContext: Integer): THunkArray;
+var
+  N,I, OldNo, NewNo, SPos, EPos, HS, HE, OC, NC, K: Integer;
+  H: TGitDiffHunk;
+  ChangedBlocks: array of record SPos,EPos: Integer; end;
+  CB: Integer;
+begin
+  Result:=nil;
+  N:=Length(AOpcodes);
+  if N=0 then
+    Exit;
+  SetLength(ChangedBlocks,0);
+  I:=0;
+  while I<N do
+  begin
+    if AOpcodes[I]<>' ' then
+    begin
+      SPos:=I;
+      while (I<N) and (AOpcodes[I]<>' ') do
+        Inc(I);
+      EPos:=I-1;
+      CB:=Length(ChangedBlocks);
+      SetLength(ChangedBlocks,CB+1);
+      ChangedBlocks[CB].SPos:=SPos;
+      ChangedBlocks[CB].EPos:=EPos;
+    end
+    else
+      Inc(I);
+  end;
+  if Length(ChangedBlocks)=0 then
+    Exit;
+  OldNo:=1;
+  NewNo:=1;
+  for I:=0 to High(AOpcodes) do
+  begin
+    if I=0 then
+    begin
+    end;
+  end;
+  for CB:=0 to High(ChangedBlocks) do
+  begin
+    SPos:=ChangedBlocks[CB].SPos - AContext;
+    if SPos<0 then
+      SPos:=0;
+    EPos:=ChangedBlocks[CB].EPos + AContext;
+    if EPos>=N then
+      EPos:=N-1;
+    if (CB>0) and (SPos <= ChangedBlocks[CB-1].EPos + AContext*2 +1) then
+    begin
+      if SPos <= ChangedBlocks[CB-1].EPos + AContext then
+        Continue;
+    end;
+    HS:=SPos;
+    HE:=EPos;
+    H.OldStart:=1;
+    H.NewStart:=1;
+    OC:=0;
+    NC:=0;
+    OldNo:=1;
+    NewNo:=1;
+    for K:=0 to HS-1 do
+    begin
+      if AOpcodes[K]=' ' then
+      begin
+        Inc(OldNo);
+        Inc(NewNo);
+      end
+      else if AOpcodes[K]='-' then
+        Inc(OldNo)
+      else
+        Inc(NewNo);
+    end;
+    H.OldStart:=OldNo;
+    H.NewStart:=NewNo;
+    for K:=HS to HE do
+    begin
+      if AOpcodes[K]=' ' then
+      begin
+        Inc(OC);
+        Inc(NC);
+      end
+      else if AOpcodes[K]='-' then
+        Inc(OC)
+      else
+        Inc(NC);
+    end;
+    H.OldCount:=OC;
+    H.NewCount:=NC;
+    H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@';
+    SetLength(H.Lines,0);
+    for K:=HS to HE do
+    begin
+      SetLength(H.Lines,Length(H.Lines)+1);
+      if AOpcodes[K]=' ' then
+        H.Lines[High(H.Lines)]:=' '+AOldTexts[K]
+      else if AOpcodes[K]='-' then
+        H.Lines[High(H.Lines)]:='-'+AOldTexts[K]
+      else
+        H.Lines[High(H.Lines)]:='+'+ANewTexts[K];
+    end;
+    SetLength(Result,Length(Result)+1);
+    Result[High(Result)]:=H;
+  end;
+  if Length(Result)>1 then
+  begin
+    I:=0;
+    while I<Length(Result)-1 do
+    begin
+      if Result[I].NewStart+Result[I].NewCount + AContext >= Result[I+1].NewStart then
+      begin
+        for K:=0 to High(Result[I+1].Lines) do
+        begin
+          SetLength(Result[I].Lines,Length(Result[I].Lines)+1);
+          Result[I].Lines[High(Result[I].Lines)]:=Result[I+1].Lines[K];
+        end;
+        Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount;
+        Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount;
+        Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@';
+        for K:=I+1 to High(Result)-1 do
+          Result[K]:=Result[K+1];
+        SetLength(Result,Length(Result)-1);
+      end
+      else
+        Inc(I);
+    end;
+  end;
+end;
+
+function BuildPureFileHunks(const AOldLines, ANewLines: nextpas.core.base.TStringArray; AContext: Integer): THunkArray;
+var
+  Opcs: nextpas.core.base.TStringArray;
+  OT, NT: nextpas.core.base.TStringArray;
+begin
+  Result:=nil;
+  if (AOldLines=nil) and (ANewLines=nil) then
+    Exit(nil);
+  if (AOldLines=nil) then
+  begin
+    if (ANewLines=nil) or (Length(ANewLines)=0) then
+      Exit(nil);
+  end;
+  BuildLCSOps(AOldLines,ANewLines,Opcs,OT,NT);
+  Result:=UnifiedHunksFromOps(Opcs,OT,NT,AContext);
+end;
+
+function ResolveTreeOid(const AGitDir, ARef: string): TGitOid; inline;
+var
+  Oid: TGitOid;
+  Repo: TNativeRepository;
+  Kind: TGitObjectKind;
+  Data: TBytes;
+  Info: TGitCommitInfo;
+  Tag: TGitTagInfo;
+begin
+  try
+    Oid:=GitRevParse(AGitDir,ARef);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+  end;
+  Repo:=TNativeRepository.Create(AGitDir);
+  try
+    Data:=Repo.ReadObject(Oid,Kind);
+    if Kind=gokCommit then
+    begin
+      Info:=GitParseCommit(Data);
+      Result:=Info.Tree;
+    end
+    else if Kind=gokTree then
+      Result:=Oid
+    else if Kind=gokTag then
+    begin
+      Tag:=GitParseTag(Data);
+      Result:=GitPeelToTree(Repo,Tag.Target);
+    end
+    else raise EGitError.CreateFmt('object %s is not tree/commit/tag',[GitOidToHex(Oid)]);
+  finally
+    Repo.Free;
+  end;
+end;
+
+function RepositoryDiffEx(const AGitDir, AOldRef, ANewRef: string; const AOptions: TGitDiffOptions): TGitDiff;
+var
+  OldTree, NewTree: TGitOid;
+  DiffArr: TGitDiffArray;
+  I, J, K, Add, Del: Integer;
+  Entry: TGitDiffEntry;
+  OldLines, NewLines: nextpas.core.base.TStringArray;
+  Hunks: THunkArray;
+  F: TGitDiffFile;
+  Ctx: Integer;
+begin
+  Result.Files:=nil;
+  if TrimInline(AOldRef)='' then
+    raise EGitError.Create('diff: empty old ref');
+  if TrimInline(ANewRef)='' then
+    raise EGitError.Create('diff: empty new ref');
+  try
+    GitRevParse(AGitDir,AOldRef);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+  end;
+  try
+    GitRevParse(AGitDir,ANewRef);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+  end;
+  OldTree:=ResolveTreeOid(AGitDir,AOldRef);
+  NewTree:=ResolveTreeOid(AGitDir,ANewRef);
+  Ctx:=AOptions.UnifiedLines;
+  if Ctx<=0 then
+    Ctx:=3;
+  DiffArr:=GitDiffTrees(AGitDir,OldTree,NewTree);
+  for I:=0 to High(DiffArr) do
+  begin
+    Entry:=DiffArr[I];
+    if not PathIncluded(Entry.Path, AOptions.Paths) then
+      Continue;
+    OldLines:=nil;
+    NewLines:=nil;
+    try
+      OldLines:=BlobLinesOf(AGitDir,Entry.OldOid);
+    except
+      on EGitError do raise;
+      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    end;
+    try
+      NewLines:=BlobLinesOf(AGitDir,Entry.NewOid);
+    except
+      on EGitError do raise;
+      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    end;
+    if (OldLines=nil) and (NewLines=nil) and (not GitOidIsZero(Entry.OldOid)) and (not GitOidIsZero(Entry.NewOid)) then
+    begin
+      F.OldPath:=Entry.Path;
+      F.NewPath:=Entry.Path;
+      case Entry.Status of
+        gdsAdded: F.Status:=nextpas.core.git.base.gdsAdded;
+        gdsDeleted: F.Status:=nextpas.core.git.base.gdsDeleted;
+        gdsTypeChanged: F.Status:=nextpas.core.git.base.gdsTypeChange;
+        else F.Status:=nextpas.core.git.base.gdsModified;
+      end;
+      F.Additions:=0;
+      F.Deletions:=0;
+      F.Hunks:=nil;
+      SetLength(F.Hunks,1);
+      F.Hunks[0].Header:='@@ -1,0 +1,0 @@';
+      F.Hunks[0].OldStart:=1;
+      F.Hunks[0].OldCount:=0;
+      F.Hunks[0].NewStart:=1;
+      F.Hunks[0].NewCount:=0;
+      F.Hunks[0].Lines:=nil;
+      SetLength(Result.Files,Length(Result.Files)+1);
+      Result.Files[High(Result.Files)]:=F;
+      Continue;
+    end;
+    if (OldLines=nil) then
+      SetLength(OldLines,0);
+    if (NewLines=nil) then
+      SetLength(NewLines,0);
+    Hunks:=BuildPureFileHunks(OldLines,NewLines,Ctx);
+    if (Length(Hunks)=0) and (Length(OldLines)<>Length(NewLines)) then
+    begin
+      SetLength(Hunks,1);
+      Hunks[0].Header:='@@ -1,'+IntToStr(Length(OldLines))+' +1,'+IntToStr(Length(NewLines))+' @@';
+      Hunks[0].OldStart:=1;
+      Hunks[0].OldCount:=Length(OldLines);
+      Hunks[0].NewStart:=1;
+      Hunks[0].NewCount:=Length(NewLines);
+      Hunks[0].Lines:=nil;
+    end;
+    if (Length(Hunks)=0) and (Length(OldLines)=Length(NewLines)) then
+      Continue;
+    F.OldPath:=Entry.Path;
+    F.NewPath:=Entry.Path;
+    case Entry.Status of
+      gdsAdded: F.Status:=nextpas.core.git.base.gdsAdded;
+      gdsDeleted: F.Status:=nextpas.core.git.base.gdsDeleted;
+      gdsTypeChanged: F.Status:=nextpas.core.git.base.gdsTypeChange;
+      else F.Status:=nextpas.core.git.base.gdsModified;
+    end;
+    Add:=0;
+    Del:=0;
+    for J:=0 to High(Hunks) do
+      for K:=0 to High(Hunks[J].Lines) do
+        if Length(Hunks[J].Lines[K])>0 then
+          if Hunks[J].Lines[K][1]='+' then
+            Inc(Add)
+          else if Hunks[J].Lines[K][1]='-' then
+            Inc(Del);
+    F.Additions:=Add;
+    F.Deletions:=Del;
+    F.Hunks:=Hunks;
+    SetLength(Result.Files,Length(Result.Files)+1);
+    Result.Files[High(Result.Files)]:=F;
+  end;
+end;
+
+function RepositoryDiff(const AGitDir, AOldRef, ANewRef: string): TGitDiff; inline;
+begin
+  Result := RepositoryDiffEx(AGitDir, AOldRef, ANewRef, DefaultGitDiffOptions);
+end;
+
+function RepositoryDiffWorkingTreeEx(const AGitDir, AWorkTree, ARef: string; const AOptions: TGitDiffOptions): TGitDiff;
+var
+  Work: string;
+  TreeOid: TGitOid;
+  OldFlat: TGitDiffArray;
+  Entry: TGitDiffEntry;
+  OldLines, NewLines: nextpas.core.base.TStringArray;
+  Hunks: THunkArray;
+  F: TGitDiffFile;
+  Ctx, I, J, K, Add, Del: Integer;
+  LPath: string;
+  Repo: TNativeRepository;
+begin
+  Result.Files:=nil;
+  if TrimInline(ARef)='' then
+    raise EGitError.Create('diffWorkingTree: empty ref');
+  try
+    GitRevParse(AGitDir,ARef);
+  except
+    on EGitError do raise;
+    on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+  end;
+  Work:=WorkDirOf(AGitDir,AWorkTree);
+  if Work='' then
+    raise EGitError.Create('DiffWorkingTreeEx: bare repository has no workdir');
+  TreeOid:=ResolveTreeOid(AGitDir,ARef);
+  Ctx:=AOptions.UnifiedLines;
+  if Ctx<=0 then
+    Ctx:=3;
+  Repo:=TNativeRepository.Create(AGitDir);
+  try
+    OldFlat:=GitDiffTrees(AGitDir, Default(TGitOid), TreeOid);
+    for I:=0 to High(OldFlat) do
+    begin
+      Entry.Path:=OldFlat[I].Path;
+      Entry.OldOid:=OldFlat[I].NewOid;
+      Entry.NewOid:=Default(TGitOid);
+      Entry.Status:=gdsAdded;
+      OldFlat[I]:=Entry;
+    end;
+  finally
+    Repo.Free;
+  end;
+  for I:=0 to High(OldFlat) do
+  begin
+    LPath:=OldFlat[I].Path;
+    if not PathIncluded(LPath, AOptions.Paths) then
+      Continue;
+    try
+      OldLines:=BlobLinesOf(AGitDir, OldFlat[I].OldOid);
+    except
+      on EGitError do raise;
+      on Exception do raise EGitError.Create(Exception(SysUtils.ExceptObject).Message);
+    end;
+    NewLines:=WorkTreeLinesOf(Work, LPath);
+    if (OldLines=nil) and (NewLines=nil) then
+    begin
+      if not FileExists(PathJoin([Work,LPath])) then
+      begin
+        F.OldPath:=LPath;
+        F.NewPath:=LPath;
+        F.Status:=nextpas.core.git.base.gdsDeleted;
+        F.Additions:=0;
+        F.Deletions:=0;
+        SetLength(F.Hunks,1);
+        F.Hunks[0].Header:='@@ -1,0 +1,0 @@';
+        F.Hunks[0].OldStart:=1;
+        F.Hunks[0].OldCount:=0;
+        F.Hunks[0].NewStart:=1;
+        F.Hunks[0].NewCount:=0;
+        F.Hunks[0].Lines:=nil;
+        SetLength(Result.Files,Length(Result.Files)+1);
+        Result.Files[High(Result.Files)]:=F;
+        Continue;
+      end
+      else
+        Continue;
+    end;
+    if OldLines=nil then
+      SetLength(OldLines,0);
+    if NewLines=nil then
+    begin
+      if FileExists(PathJoin([Work,LPath])) then
+        Continue
+      else
+      begin
+        Hunks:=BuildPureFileHunks(OldLines,NewLines,Ctx);
+        if Length(Hunks)=0 then
+        begin
+          SetLength(Hunks,1);
+          Hunks[0].Header:='@@ -1,'+IntToStr(Length(OldLines))+' +1,0 @@';
+          Hunks[0].OldStart:=1;
+          Hunks[0].OldCount:=Length(OldLines);
+          Hunks[0].NewStart:=1;
+          Hunks[0].NewCount:=0;
+          Hunks[0].Lines:=nil;
+          for J:=0 to High(OldLines) do
+          begin
+            SetLength(Hunks[0].Lines,Length(Hunks[0].Lines)+1);
+            Hunks[0].Lines[High(Hunks[0].Lines)]:='-'+OldLines[J];
+          end;
+        end;
+        F.OldPath:=LPath;
+        F.NewPath:=LPath;
+        F.Status:=nextpas.core.git.base.gdsDeleted;
+        Add:=0;
+        Del:=0;
+        for J:=0 to High(Hunks) do
+          for K:=0 to High(Hunks[J].Lines) do
+            if Length(Hunks[J].Lines[K])>0 then
+              if Hunks[J].Lines[K][1]='-' then
+                Inc(Del);
+        F.Additions:=Add;
+        F.Deletions:=Del;
+        F.Hunks:=Hunks;
+        SetLength(Result.Files,Length(Result.Files)+1);
+        Result.Files[High(Result.Files)]:=F;
+        Continue;
+      end;
+    end;
+    Hunks:=BuildPureFileHunks(OldLines,NewLines,Ctx);
+    if Length(Hunks)=0 then
+      Continue;
+    F.OldPath:=LPath;
+    F.NewPath:=LPath;
+    F.Status:=nextpas.core.git.base.gdsModified;
+    Add:=0;
+    Del:=0;
+    for J:=0 to High(Hunks) do
+      for K:=0 to High(Hunks[J].Lines) do
+        if Length(Hunks[J].Lines[K])>0 then
+          if Hunks[J].Lines[K][1]='+' then
+            Inc(Add)
+          else if Hunks[J].Lines[K][1]='-' then
+            Inc(Del);
+    F.Additions:=Add;
+    F.Deletions:=Del;
+    F.Hunks:=Hunks;
+    SetLength(Result.Files,Length(Result.Files)+1);
+    Result.Files[High(Result.Files)]:=F;
+  end;
+end;
+
+function RepositoryDiffWorkingTree(const AGitDir, AWorkTree, ARef: string): TGitDiff; inline;
+begin
+  Result := RepositoryDiffWorkingTreeEx(AGitDir, AWorkTree, ARef, DefaultGitDiffOptions);
+end;
+
+function RepositoryWorkdirPatchText(const AGitDir, AWorkTree, ARevspec: string; const APaths: nextpas.core.base.TStringArray; AShowBinary: Boolean): string;
+var
+  Work: string;
+  D: TGitDiff;
+  Opts: TGitDiffOptions;
+  I, J: Integer;
+  S: string;
+  HasBinary: Boolean;
+  function IsBin(const AHunks: array of TGitDiffHunk): Boolean; inline;
+  var
+    K: Integer;
+  begin
+    Result:=False;
+    for K:=0 to High(AHunks) do
+      if Length(AHunks[K].Lines)=0 then
+      begin
+        Result:=True;
+        Exit;
+      end;
+  end;
+begin
+  Result:='';
+  Work:=WorkDirOf(AGitDir,AWorkTree);
+  if Work='' then
+    raise EGitError.Create('WorkdirPatchText: bare repository has no workdir');
+  Opts:=DefaultGitDiffOptions;
+  Opts.Paths:=APaths;
+  if TrimInline(ARevspec)='' then
+    D:=RepositoryDiffWorkingTreeEx(AGitDir, AWorkTree, 'HEAD',Opts)
+  else
+    D:=RepositoryDiffWorkingTreeEx(AGitDir, AWorkTree, ARevspec,Opts);
+  for I:=0 to High(D.Files) do
+  begin
+    HasBinary:=IsBin(D.Files[I].Hunks);
+    if HasBinary and not AShowBinary then
+      Continue;
+    S:='diff --git a/'+D.Files[I].OldPath+' b/'+D.Files[I].NewPath+#10+
+       '--- a/'+D.Files[I].OldPath+#10+
+       '+++ b/'+D.Files[I].NewPath+#10;
+    Result:=Result+S;
+    if HasBinary then
+    begin
+      Result:=Result+'Binary files differ'#10;
+      Continue;
+    end;
+    for J:=0 to High(D.Files[I].Hunks) do
+    begin
+      Result:=Result+D.Files[I].Hunks[J].Header+#10;
+      for S in D.Files[I].Hunks[J].Lines do
+        Result:=Result+S+#10;
+    end;
+  end;
+end;
+
+procedure RepositoryApplyPatch(const AGitDir, AWorkTree, APatchText: string);
+var
+  Work: string;
+  Lines: nextpas.core.base.TStringArray;
+  I, SPos: Integer;
+  Line, APath, BPath, CurPath: string;
+  OldLines, NewLines: nextpas.core.base.TStringArray;
+  Hunks: THunkArray;
+  CurHunk: TGitDiffHunk;
+  InHunk: Boolean;
+  FullPath: string;
+  NewContent: string;
+  J, K, OldIdx: Integer;
+  LBuilder: IBytesBuilder;
+  LSpan: TByteSpan;
+  function IsBinaryHunk(const AHunk: TGitDiffHunk): Boolean; inline;
+  var
+    Idx: Integer;
+  begin
+    Result:=False;
+    for Idx:=0 to High(AHunk.Lines) do
+      if Pos('Binary',AHunk.Lines[Idx])>0 then
+        Exit(True);
+  end;
+begin
+  if APatchText='' then
+    Exit;
+  Work:=WorkDirOf(AGitDir,AWorkTree);
+  if Work='' then
+    raise EGitError.Create('ApplyPatch: bare repository has no workdir');
+  Lines:=GitSplitLines(APatchText);
+  CurPath:='';
+  CurHunk.Header:='';
+  CurHunk.Lines:=nil;
+  InHunk:=False;
+  Hunks:=nil;
+  for I:=0 to High(Lines) do
+  begin
+    Line:=Lines[I];
+    if Pos('diff --git ',Line)=1 then
+    begin
+      if CurPath<>'' then
+      begin
+        if InHunk then
+        begin
+          SetLength(Hunks,Length(Hunks)+1);
+          Hunks[High(Hunks)]:=CurHunk;
+        end;
+        if Length(Hunks)>0 then
+        begin
+          FullPath:=PathJoin([Work,CurPath]);
+          OldLines:=WorkTreeLinesOf(Work,CurPath);
+          if OldLines=nil then
+            SetLength(OldLines,0);
+          NewLines:=nil;
+          OldIdx:=0;
+          SetLength(NewLines,0);
+          for J:=0 to High(Hunks) do
+          begin
+            for K:=0 to High(Hunks[J].Lines) do
+            begin
+              if Length(Hunks[J].Lines[K])=0 then
+                Continue;
+              case Hunks[J].Lines[K][1] of
+                ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end;
+                '-': Inc(OldIdx);
+                '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end;
+              end;
+            end;
+          end;
+          while OldIdx<Length(OldLines) do
+          begin
+            SetLength(NewLines,Length(NewLines)+1);
+            NewLines[High(NewLines)]:=OldLines[OldIdx];
+            Inc(OldIdx);
+          end;
+          // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
+          LBuilder:=CreateBytesBuilder;
+          for J:=0 to High(NewLines) do
+          begin
+            if Length(NewLines[J])>0 then
+              LBuilder.AppendBytes(PByte(PAnsiChar(NewLines[J])),Length(NewLines[J]));
+            LBuilder.AppendByte(10);
+          end;
+          LSpan:=LBuilder.WrittenSpan;
+          SetLength(NewContent,LSpan.Len);
+          if LSpan.Len>0 then
+            Move(LSpan.Data^,PAnsiChar(NewContent)^,LSpan.Len);
+          try
+            MkdirAll(PathDir(FullPath),PermDirDefault);
+            WriteFileText(FullPath,NewContent);
+          except
+            on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message);
+          end;
+        end;
+        Hunks:=nil;
+        CurHunk.Header:='';
+        CurHunk.Lines:=nil;
+        InHunk:=False;
+      end;
+      SPos:=Pos(' b/',Line);
+      if SPos>0 then
+        BPath:=Copy(Line,SPos+3,MaxInt)
+      else
+        BPath:='';
+      CurPath:=BPath;
+      APath:=BPath;
+    end
+    else if Pos('@@ ',Line)=1 then
+    begin
+      if InHunk then
+      begin
+        SetLength(Hunks,Length(Hunks)+1);
+        Hunks[High(Hunks)]:=CurHunk;
+      end;
+      CurHunk.Header:=Line;
+      CurHunk.Lines:=nil;
+      InHunk:=True;
+    end
+    else if InHunk and (Length(Line)>0) and (Line[1] in [' ','+','-']) then
+    begin
+      if IsBinaryHunk(CurHunk) then
+        Continue;
+      SetLength(CurHunk.Lines,Length(CurHunk.Lines)+1);
+      CurHunk.Lines[High(CurHunk.Lines)]:=Line;
+    end;
+  end;
+  if CurPath<>'' then
+  begin
+    if InHunk then
+    begin
+      SetLength(Hunks,Length(Hunks)+1);
+      Hunks[High(Hunks)]:=CurHunk;
+    end;
+    if Length(Hunks)>0 then
+    begin
+      FullPath:=PathJoin([Work,CurPath]);
+      OldLines:=WorkTreeLinesOf(Work,CurPath);
+      if OldLines=nil then
+        SetLength(OldLines,0);
+      NewLines:=nil;
+      OldIdx:=0;
+      SetLength(NewLines,0);
+      for J:=0 to High(Hunks) do
+        for K:=0 to High(Hunks[J].Lines) do
+        begin
+          if Length(Hunks[J].Lines[K])=0 then
+            Continue;
+          case Hunks[J].Lines[K][1] of
+            ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end;
+            '-': Inc(OldIdx);
+            '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end;
+          end;
+        end;
+      while OldIdx<Length(OldLines) do
+      begin
+        SetLength(NewLines,Length(NewLines)+1);
+        NewLines[High(NewLines)]:=OldLines[OldIdx];
+        Inc(OldIdx);
+      end;
+      // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
+      LBuilder:=CreateBytesBuilder;
+      for J:=0 to High(NewLines) do
+      begin
+        if Length(NewLines[J])>0 then
+          LBuilder.AppendBytes(PByte(PAnsiChar(NewLines[J])),Length(NewLines[J]));
+        LBuilder.AppendByte(10);
+      end;
+      LSpan:=LBuilder.WrittenSpan;
+      SetLength(NewContent,LSpan.Len);
+      if LSpan.Len>0 then
+        Move(LSpan.Data^,PAnsiChar(NewContent)^,LSpan.Len);
+      try
+        MkdirAll(PathDir(FullPath),PermDirDefault);
+        WriteFileText(FullPath,NewContent);
+      except
+        on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message);
+      end;
+    end;
+  end;
+end;
+
+procedure RepositoryCheckoutPaths(const AGitDir, AWorkTree, ARevspec: string; const APaths: nextpas.core.base.TStringArray);
+var
+  Work: string;
+  TreeOid: TGitOid;
+  Repo: TNativeRepository;
+  I, J, K: Integer;
+  LPath: string;
+  Parts: nextpas.core.base.TStringArray;
+  CurOid: TGitOid;
+  Kind: TGitObjectKind;
+  Data: TBytes;
+  Entries: TGitTreeEntryArray;
+  Found: Boolean;
+  BlobOid: TGitOid;
+  BlobData: TBytes;
+  BlobKind: TGitObjectKind;
+  Full: string;
+  IdxFile: TGitIndexFile;
+  function SplitPath(const AValue: string): nextpas.core.base.TStringArray; inline;
+  var
+    S, P, Cnt: Integer;
+  begin
+    Result:=nil;
+    Cnt:=1;
+    for S:=1 to Length(AValue) do
+      if AValue[S]='/' then
+        Inc(Cnt);
+    SetLength(Result,Cnt);
+    S:=1;
+    P:=0;
+    for Cnt:=1 to Length(AValue)+1 do
+      if (Cnt>Length(AValue)) or (AValue[Cnt]='/') then
+      begin
+        Result[P]:=Copy(AValue,S,Cnt-S);
+        Inc(P);
+        S:=Cnt+1;
+      end;
+  end;
+begin
+  if TrimInline(ARevspec)='' then
+    raise EGitError.Create('CheckoutPaths: revspec required');
+  if Length(APaths)=0 then
+    Exit;
+  Work:=WorkDirOf(AGitDir,AWorkTree);
+  if Work='' then
+    raise EGitError.Create('CheckoutPaths: bare repository has no workdir');
+  TreeOid:=ResolveTreeOid(AGitDir,ARevspec);
+  Repo:=TNativeRepository.Create(AGitDir);
+  try
+    try
+      IdxFile:=GitReadIndex(AGitDir);
+    except
+      IdxFile.Entries:=nil;
+    end;
+    for I:=0 to High(APaths) do
+    begin
+      LPath:=APaths[I];
+      if LPath='' then
+        Continue;
+      Parts:=SplitPath(LPath);
+      CurOid:=TreeOid;
+      Found:=False;
+      BlobOid:=Default(TGitOid);
+      for J:=0 to High(Parts) do
+      begin
+        Data:=Repo.ReadObject(CurOid,Kind);
+        if Kind<>gokTree then
+          raise EGitError.CreateFmt('CheckoutPaths: not a tree at %s',[LPath]);
+        Entries:=GitParseTree(Data);
+        Found:=False;
+        for K:=0 to High(Entries) do
+          if Entries[K].Name=Parts[J] then
+          begin
+            if J=High(Parts) then
+            begin
+              BlobOid:=Entries[K].Oid;
+              Found:=True;
+              Break;
+            end
+            else
+            begin
+              if Entries[K].Mode<>$4000 then
+                raise EGitError.CreateFmt('CheckoutPaths: not a directory %s',[LPath]);
+              CurOid:=Entries[K].Oid;
+              Found:=True;
+              Break;
+            end;
+          end;
+        if not Found then
+          Break;
+      end;
+      if not Found then
+        raise EGitError.CreateFmt('CheckoutPaths: path not in tree "%s"',[LPath]);
+      BlobData:=Repo.ReadObject(BlobOid,BlobKind);
+      Full:=PathJoin([Work,LPath]);
+      MkdirAll(PathDir(Full),PermDirDefault);
+      WriteFile(Full,BlobData);
+      Found:=False;
+      for J:=0 to High(IdxFile.Entries) do
+        if IdxFile.Entries[J].Path=LPath then
+        begin
+          IdxFile.Entries[J].Oid:=BlobOid;
+          IdxFile.Entries[J].Size:=Length(BlobData);
+          Found:=True;
+          Break;
+        end;
+      if not Found then
+      begin
+        SetLength(IdxFile.Entries,Length(IdxFile.Entries)+1);
+        IdxFile.Entries[High(IdxFile.Entries)].Path:=LPath;
+        IdxFile.Entries[High(IdxFile.Entries)].Oid:=BlobOid;
+        IdxFile.Entries[High(IdxFile.Entries)].Mode:=$81A4;
+        IdxFile.Entries[High(IdxFile.Entries)].Size:=Length(BlobData);
+        IdxFile.Entries[High(IdxFile.Entries)].Stage:=0;
+      end;
+    end;
+    GitWriteIndex(AGitDir,IdxFile.Entries,2);
+  finally
+    Repo.Free;
+  end;
+end;
+
+end.

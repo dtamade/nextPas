@@ -166,6 +166,9 @@ function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function OidLess(const AA, AB: TGitOid): Boolean;
 var
   I: Integer;
@@ -1318,7 +1321,7 @@ var
   GWhen: Int64;
   GParents: TGitOidArray;
   StackCap, StackLen, NodesLen: SizeInt;
-  ResCap, ResCount, ReadyCap: SizeInt;
+  ResCap, ResCount, ReadyCap, ReadyLen: SizeInt;
 begin
   Result := nil;
   Seen := TGitOidSet.Create;
@@ -1329,7 +1332,7 @@ begin
   try
     try if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then Graph := nil; except Graph := nil; end;
     { phase 1: discover the full reachable set, parsing each commit once }
-    Stack := nil; StackCap := 0; StackLen := 0; ResCount := 0; ResCap := 0; ReadyCap := 0;
+    Stack := nil; StackCap := 0; StackLen := 0; ResCount := 0; ResCap := 0; ReadyCap := 0; ReadyLen := 0; Ready := nil;
     for I := 0 to High(AStarts) do
     begin
       if StackLen >= StackCap then
@@ -1384,19 +1387,34 @@ begin
       (REV_SORT_IN_GRAPH_ORDER). Initial tips are stacked oldest-first so
       the newest pops first; afterwards the last-listed newly-ready parent
       pops before its siblings. }
+    // perf: Ready LIFO geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, amortized O(1) push, zero-copy Integer Move, avoids O(n²) SetLength(Length+1) churn
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
-        SetLength(Ready, Length(Ready) + 1);
-        Ready[High(Ready)] := I;
+        if ReadyLen >= ReadyCap then
+        begin
+          ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
+          SetLength(Ready, ReadyCap);
+        end;
+        Ready[ReadyLen] := I;
+        Inc(ReadyLen);
       end;
+    SetLength(Ready, ReadyLen);
     TopoSortTips(Ready, Nodes);
+    ReadyCap := Length(Ready);
     Result := nil; ResCount:=0; ResCap:=0;
     while True do
     begin
       if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
         Break;
-      NodeIdx := TopoStackPop(Ready);
+      // perf: inline LIFO pop over ReadyLen/ReadyCap (no SetLength shrink, amortized O(1), zero-copy)
+      if ReadyLen = 0 then
+        NodeIdx := -1
+      else
+      begin
+        Dec(ReadyLen);
+        NodeIdx := Ready[ReadyLen];
+      end;
       if NodeIdx < 0 then
         Break;
       if ResCount >= ResCap then
@@ -1409,12 +1427,19 @@ begin
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          SetLength(Ready, Length(Ready) + 1);
-          Ready[High(Ready)] := ParentIdx;
+          // perf: geometric Ready growth via bytes.ops GrowArrayCapacity single source
+          if ReadyLen >= ReadyCap then
+          begin
+            ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
+            SetLength(Ready, ReadyCap);
+          end;
+          Ready[ReadyLen] := ParentIdx;
+          Inc(ReadyLen);
         end;
       end;
     end;
     SetLength(Result, ResCount);
+    SetLength(Ready, ReadyLen);
   finally
     Seen.Free;
     ParseCache.Free;
@@ -1464,7 +1489,7 @@ var
   GParents: TGitOidArray;
   ParseCache: TCommitParseCache;
   StackCap, StackLen: SizeInt;
-  BndCount, BndCap, ResCount, ResCap: SizeInt;
+  BndCount, BndCap, ResCount, ResCap, ReadyCap, ReadyLen: SizeInt;
   procedure PushStack(const AOid: TGitOid);
   begin
     if StackLen >= StackCap then
@@ -1486,7 +1511,7 @@ var
     Result[ResCount].Oid := AOid; Result[ResCount].IsBoundary := AIsBoundary; Inc(ResCount);
   end;
 begin
-  Result := nil; ResCount:=0; ResCap:=0; BndCount:=0; BndCap:=0; BoundaryList:=nil; StackCap:=0; StackLen:=0;
+  Result := nil; ResCount:=0; ResCap:=0; BndCount:=0; BndCap:=0; BoundaryList:=nil; StackCap:=0; StackLen:=0; ReadyCap:=0; ReadyLen:=0; Ready:=nil;
   Graph := nil;
   ParseCache := TCommitParseCache.Create;
   try
@@ -1604,19 +1629,34 @@ begin
     for I := 0 to High(Nodes) do
       DateFiltered[I] := not PassesDateFilter(Nodes[I].When, AOptions.Since, AOptions.UntilTime);
     // phase 3: LIFO ready stack
+    // perf: Ready LIFO geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, amortized O(1) push, zero-copy Integer Move, avoids O(n²) SetLength(Length+1) churn
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
-        SetLength(Ready, Length(Ready) + 1);
-        Ready[High(Ready)] := I;
+        if ReadyLen >= ReadyCap then
+        begin
+          ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
+          SetLength(Ready, ReadyCap);
+        end;
+        Ready[ReadyLen] := I;
+        Inc(ReadyLen);
       end;
+    SetLength(Ready, ReadyLen);
     TopoSortTips(Ready, Nodes);
+    ReadyCap := Length(Ready);
     Emitted := 0;
     while True do
     begin
       if (AMaxCount >= 0) and (ResCount >= AMaxCount) and (Emitted >= AMaxCount) then
         Break;
-      NodeIdx := TopoStackPop(Ready);
+      // perf: inline LIFO pop over ReadyLen/ReadyCap (no SetLength shrink, amortized O(1), zero-copy)
+      if ReadyLen = 0 then
+        NodeIdx := -1
+      else
+      begin
+        Dec(ReadyLen);
+        NodeIdx := Ready[ReadyLen];
+      end;
       if NodeIdx < 0 then
         Break;
       if not DateFiltered[NodeIdx] then
@@ -1635,11 +1675,18 @@ begin
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          SetLength(Ready, Length(Ready) + 1);
-          Ready[High(Ready)] := ParentIdx;
+          // perf: geometric Ready growth via bytes.ops GrowArrayCapacity single source
+          if ReadyLen >= ReadyCap then
+          begin
+            ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
+            SetLength(Ready, ReadyCap);
+          end;
+          Ready[ReadyLen] := ParentIdx;
+          Inc(ReadyLen);
         end;
       end;
     end;
+    SetLength(Ready, ReadyLen);
     if AOptions.ShowBoundary then
     begin
       for I := 0 to High(BoundaryList) do

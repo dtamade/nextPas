@@ -181,8 +181,8 @@ L0: 内核 (base, errors, platform, mem, log.intf; current governance set also l
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
      ↑ 只依赖 L0
 
-L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1
+L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation; 另有 git/hash/zip/sevenz 等同层豁免见注册表)
+     ↑ 只依赖 L0-L1，同层单向豁免以 `core/docs/core-module-registry.md` 登记为准（例：`L2 git.native.zlib → L2 compress + L1 checksum`）
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -191,7 +191,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层内默认禁止依赖；仅当 `core/docs/core-module-registry.md` 显式登记豁免时允许同层单向依赖，禁止循环依赖（例：`L2 git.native.zlib → L2 compress (Deflate*) + L1 checksum.adler32` 复用 `bytes.ops` 单源、`inline`/零拷贝 `PByte+Len`、`try..finally` 资源不丢；其他已登记同层如 `zip → compress/fs/checksum`、`sevenz → crypto/hash/compress`、`redis → net/time/sync`、`git → fs/compress/hash/zlib/checksum` 以注册表为准）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
 
 ### 特殊依赖关系：encoding / bytes / text
@@ -207,7 +207,7 @@ text  (implementation 部分 uses encoding，提供便利方法)
 
 ### 层级归属管理
 
-- 每个模块的层级归属在 `docs/module-registry.md` 中声明
+- 每个模块的层级归属在 `core/docs/core-module-registry.md`（镜像 `core/docs/module-registry.md`）中声明，以注册表为真源；`design-conventions.md` 仅作分层摘要
 - 后期通过构建脚本自动校验依赖合规性
 
 ---
@@ -857,7 +857,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（只依赖 L0-L1）
+### L2: 系统能力（只依赖 L0-L1；同层单向豁免以注册表为准）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |
@@ -868,9 +868,11 @@ build/
 | `deliverability` | SPF/DKIM/DMARC 邮件认证        |
 | `crypto`     | 哈希、加密、签名                   |
 | `compress`   | gzip/zlib/zstd                     |
+| `hash`       | 哈希/摘要（SHA-1 等，L2）          |
 | `json`       | JSON                               |
 | `yaml`       | YAML                               |
 | `toml`       | TOML                               |
+| `cbor`       | CBOR                               |
 | `xml`        | XML（低优先级）                    |
 | `regex`      | 正则表达式                         |
 | `sqlite`     | SQLite                             |
@@ -881,6 +883,9 @@ build/
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
+| `git`        | Git/libgit2 后端（同层单向 `fs/compress/hash/zlib/checksum` 豁免，`native.zlib → compress + checksum.adler32` 复用 `bytes.ops` 单源、`inline`/零拷贝 `PByte+Len`） |
+| `zip`        | ZIP 归档（同层单向 `compress/fs/checksum`） |
+| `sevenz`     | 7z 归档（同层单向 `crypto/hash/compress`） |
 
 ### L3: 框架（只依赖 L0-L2）
 
