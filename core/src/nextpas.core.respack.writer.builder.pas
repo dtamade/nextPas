@@ -2,7 +2,7 @@ unit nextpas.core.respack.writer.builder;
 
 {** @desc respack writer 头/index/string 单源 builder：消除 writer/stream 30 行重复（WrU*LE/Move）。
   由 writer（纯内存 GetMem）与 writer.stream（分段 Head）共用；布局单源于 writer.layout。
-  零拷贝与性能：路径/内容搬运经 bytes.ops.BytesCopy inline 单 Move，零填经 SpanZero inline MemSet，无额外分配；
+  零拷贝与性能：路径/内容搬运经 bytes.ops.BytesCopy inline 单 Move，零填经 BytesZero inline FillChar 单源，无额外分配；
   循环体外联守设计红线2，热点 Move/LE 编解码保持 inline。 }
 
 {$I nextpas.core.settings.inc}
@@ -14,7 +14,7 @@ uses
   nextpas.core.respack.writer.layout;
 
 { 单源填充 Head 区域：header(40) + index(N*40) + string table + 对齐填充 = DataStart。
-  调用方保证 AHead 指向至少 DataStart 字节可写；本过程先零化整段 Head（SpanZero 单源），
+  调用方保证 AHead 指向至少 DataStart 字节可写；本过程先零化整段 Head（BytesZero 单源 FillChar），
   再写入确定性头/index/string，间隙保持零，无条件分支避免 64MiB 双路径漂移。 }
 procedure ResPackWriterFillHead(const AHead: PByte;
   const AEntries: array of TResPackInputEntry;
@@ -38,7 +38,7 @@ var
   EntFlags: Word;
 begin
   if ALayout.DataStart > 0 then
-    SpanZero(TByteSpan.Create(AHead, SizeUInt(ALayout.DataStart)));
+    BytesZero(AHead, SizeUInt(ALayout.DataStart));
   AHead[0] := Ord('N'); AHead[1] := Ord('P');
   AHead[2] := Ord('R'); AHead[3] := Ord('S');
   WrU32LE(AHead + 4, RESPACK_VERSION);

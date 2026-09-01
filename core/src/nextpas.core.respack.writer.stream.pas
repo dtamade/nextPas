@@ -70,7 +70,7 @@ begin
     N := L.N;
     HeadSize := L.DataStart;
     { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，SpanZero 零化）。 }
+      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。 }
     GetMem(Head, HeadSize);
     try
       ResPackWriterFillHead(Head, AEntries, AOpts, L);
