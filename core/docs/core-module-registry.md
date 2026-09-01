@@ -107,6 +107,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `qt` | L2 | Qt toolkit binding via self-wrap C shim (nextpas.core.qt family; ffi/loader/base; dlopen `libnextpas-qt.so`, Qt5/6 agnostic, deferred) | yes | L0-L1 plus platform.dl plus vendors/libnextpas-qt | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
+| `tar` | L2 | tar container (ustar/pax/GNU, block-aligned, sandboxed, dir pack/extract + fluent builder) | yes | L0-L1; `tar.fs` is the single `fs` seam | focused-runtime |
 | `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | source-contract + focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —
