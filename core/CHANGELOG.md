@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
+
+`1.0.0` 后 12 期巡检收敛（S64—S75），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用` 多维打磨，`12 门+bench+hygiene` 全绿。
+
+### Highlights (S64—S76)
+- **S64 复用收敛 II**：`TryDescriptor` 单点 `VerifyParsedValues` 与 `GuardRange` 单点 `GuardCursorRange/GuardRange` 收口
+- **S65 性能攻坚**：`checksum.crc32` slice-by-8（8 表并行，`1MiB` 5× 提升）
+- **S66 TOCTOU 双校验**：`ADestDir/LParent/MkdirAll/WriteFile` 前后双 `EnsureNoSymlinkInPath` + `IsSymlink` 后验
+- **S67 原子落盘**：`ZipExtractToDirAtomic*` 同文件系统 `TempDir+Rename` 原子提交，`Exists` 拒绝覆盖，`RemoveAll` 清理
+- **S68 文档一致性**：`CONTRACT 1.38→1.39`/`README`/`SECURITY` 四文档同步原子与双校验，门面透出 `Atomic*` 三 API
+- **S69 原子硬化**：`Rename EXDEV` 回退 `CopyTree+RemoveAll`，`test_zip_fs` 10 门
+- **S70 性能收敛**：`LDirs` 几何预留 `O(n²)→O(n)`，`LDirsCount` 分离容量与计数
+- **S71 示例完整性**：`README` Cookbook 第7式原子，`zip_roundtrip` 增 `ok/refuse/bomb clean` 三演示
+- **S72 复用收敛**：`CalcGrowCapacity` 单源，双 `Ensure*Capacity` 薄委托
+- **S73 稳定性纵深**：原子落盘后 `IsSymlink+EnsureNoSymlinkInPath` 二次校验
+- **S74 完整性**：`test_zip_fs` 10→12 门，`Atomic permission/symlink` 透传验证
+- **S75 复用收敛**：`ParentDirOf` 单源，双路径复用，`LSep` 清零
+- **S76 版本封版**：`VERSION 1.0.0→1.0.1`，`ROADMAP` 当前状态同步 `1.0.1`
+
 ## 1.0.0 (2026-08-29) — nextpas.core.zip 1.0.0 领头羊 Final
 
 基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 五模型就绪，`VERSION` 冻结为 `1.0.0`。

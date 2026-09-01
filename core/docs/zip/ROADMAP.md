@@ -159,6 +159,9 @@
 ### S75 — 复用收敛（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `zip.fs` 父目录解析单点化：`ParentDirOf(APath)` 单源，`ZipExtractToDirWithOptions` 与 `Atomic` 双路径复用，消除 `LSep while` 重复，`LSep` 局部变量归零
 
+### S76 — 版本封版（1.0.1 巡检）· 完整性 — 已落地
+- `VERSION 1.0.0→1.0.1`，`CHANGELOG 1.0.1` 11 期巡检收敛（S64—S75），`ROADMAP` 当前状态同步 `1.0.1` 与 `12 门 10→12`
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -191,4 +194,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.0 Final @ 7c19495d0`，`VERSION 1.0.0`，后续为 `1.0.1+` 巡检。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S76 收敛，11 期巡检），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip` 原子三演示 `all demos ok`。
