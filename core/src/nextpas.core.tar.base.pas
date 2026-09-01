@@ -70,6 +70,7 @@ const
   { ustar 固定 }
   C_TAR_MAGIC_USTAR = 'ustar';
   C_TAR_VERSION_00 = '00';
+  C_TAR_PAX_HEADER_NAME = 'pax_header';
 
   { ustar 头部布局（单点复用，读写一致） }
   C_TAR_OFF_NAME = 0;
@@ -112,7 +113,7 @@ const
   { unix 模式位语义常量（S_IFMT 子集，与 zip.base 命名手感对齐） }
   C_TAR_UNIX_IFREG    = $8000; // S_IFREG
   C_TAR_UNIX_IFDIR    = $4000; // S_IFDIR
-  C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK（保留，对齐 C_ZIP_UNIX_MODE_SYMLINK）
+  C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;

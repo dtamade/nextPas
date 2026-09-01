@@ -36,6 +36,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.text.conv,
   nextpas.core.tar.common;
 
@@ -56,11 +57,13 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，单次拼接，bytes.ops 单源 StringToBytes 零拷贝 Move；含循环/分配不 inline — }
+{ — pax record：长度前缀十进制自洽，构建复用 bytes.builder 几何扩容与 bytes.ops 单源 Move，零拷贝 ToBytes→BytesToString 单次分配；含循环/分配不 inline — }
 function MakePaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits: Integer;
   SLen: string;
+  LBuilder: IBytesBuilder;
+  LBytes: TBytes;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
@@ -72,7 +75,19 @@ begin
     LLen := LBase + LDigits;
     SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  Result := SLen + ' ' + AKey + '=' + AValue + #10;
+  // perf: builder 几何扩容 (Grow 2x) + 单源 Move (bytes.ops/builder 零拷贝)，避免多段 string 拼接 O(n²) 中间分配；ToBytes 单次分配 + BytesToString 单次 Move
+  LBuilder := CreateBytesBuilder(SizeUInt(LLen));
+  if Length(SLen) > 0 then
+    LBuilder.AppendBytes(PByte(PAnsiChar(SLen)), SizeUInt(Length(SLen)));
+  LBuilder.AppendByte(Ord(' '));
+  if Length(AKey) > 0 then
+    LBuilder.AppendBytes(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)));
+  LBuilder.AppendByte(Ord('='));
+  if Length(AValue) > 0 then
+    LBuilder.AppendBytes(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+  LBuilder.AppendByte(10);
+  LBytes := LBuilder.ToBytes;
+  Result := BytesToString(LBytes);
 end;
 
 { TTarWriter }
@@ -91,8 +106,9 @@ var
   Len: SizeInt;
 begin
   Len := Length(ABlock);
+  // stability: 超 512 抛错而非静默截断，暴露上游头构造越界；资源释放由调用方/caller 兜底，无泄漏
   if Len > CBlockSize then
-    Len := CBlockSize;
+    raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, CBlockSize]);
   if Len > 0 then
   begin
     if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
@@ -113,7 +129,7 @@ var
   PadLen: Int64;
 begin
   FillChar(Block[0], SizeOf(Block), 0);
-  TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, 'pax_header');
+  TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, C_TAR_PAX_HEADER_NAME);
   TarFormatNumericField(@Block[0], C_TAR_OFF_MODE, C_TAR_LEN_MODE, 0);
   TarFormatNumericField(@Block[0], C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
   TarFormatNumericField(@Block[0], C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
@@ -121,14 +137,7 @@ begin
   TarFormatNumericField(@Block[0], C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
   FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
   Block[C_TAR_OFF_TYPEFLAG] := Ord('x');
-  Block[C_TAR_OFF_MAGIC] := Ord('u');
-  Block[C_TAR_OFF_MAGIC + 1] := Ord('s');
-  Block[C_TAR_OFF_MAGIC + 2] := Ord('t');
-  Block[C_TAR_OFF_MAGIC + 3] := Ord('a');
-  Block[C_TAR_OFF_MAGIC + 4] := Ord('r');
-  Block[C_TAR_OFF_MAGIC + 5] := 0;
-  Block[C_TAR_OFF_VERSION] := Ord('0');
-  Block[C_TAR_OFF_VERSION + 1] := Ord('0');
+  TarWriteUStarMagic(@Block[0]);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
   if Length(APayload) > 0 then
@@ -210,14 +219,7 @@ begin
     TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, Copy(LinkName, 1, C_TAR_LEN_LINKNAME))
   else
     TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
-  Block[C_TAR_OFF_MAGIC] := Ord('u');
-  Block[C_TAR_OFF_MAGIC + 1] := Ord('s');
-  Block[C_TAR_OFF_MAGIC + 2] := Ord('t');
-  Block[C_TAR_OFF_MAGIC + 3] := Ord('a');
-  Block[C_TAR_OFF_MAGIC + 4] := Ord('r');
-  Block[C_TAR_OFF_MAGIC + 5] := 0;
-  Block[C_TAR_OFF_VERSION] := Ord('0');
-  Block[C_TAR_OFF_VERSION + 1] := Ord('0');
+  TarWriteUStarMagic(@Block[0]);
   TarPutHeaderString(@Block[0], C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
   TarPutHeaderString(@Block[0], C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
   TarFinalizeHeaderChecksum(@Block[0]);

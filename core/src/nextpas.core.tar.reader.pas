@@ -30,10 +30,9 @@ type
     FCumTotal: UInt64;
     { — 热路径：循环/SIMD 体外联禁 inline，薄转发与小访问器可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
-    function BlockIsZero(APos: SizeUInt): Boolean;
     { — 零拷贝视图：字段切片不分配，按需 SpanToString 单次 Move（bytes.ops 单源）— }
-    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
-    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
+    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
     function StringField(AOfs, ALen: SizeUInt): string; inline;
     function NumericField(AOfs, ALen: SizeUInt): Int64;
     function MagicHasUStar: Boolean; inline;
@@ -45,8 +44,8 @@ type
     { — 扩展载荷：去重 GNU L/K 与 pax 三分支的单源拷贝 — }
     function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
     function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
-    { — 合并：prefix/name 单次分配，单次 Move — }
-    function CombinePrefixName(const APrefix, AName: TByteSpan): string; inline;
+    { — 合并：prefix/name 经 bytes.ops 单源（SpanConcatMany+BytesToString），禁 inline 避免 Result[1] 双喂 untyped 膨胀 — }
+    function CombinePrefixName(const APrefix, AName: TByteSpan): string;
   public
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
@@ -140,19 +139,7 @@ begin
   Result := FData[AOfs];
 end;
 
-function TTarReader.BlockIsZero(APos: SizeUInt): Boolean;
-var
-  I: SizeUInt;
-begin
-  if APos + CBlockSize > FCount then
-    Exit(False);
-  Result := True;
-  for I := 0 to CBlockSize - 1 do
-    if FData[APos + I] <> 0 then
-      Exit(False);
-end;
-
-function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
+function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
 var
   EndOfs: SizeUInt;
   J: SizeInt;
@@ -171,7 +158,7 @@ begin
   Result := TByteSpan.Create(@FData[AOfs], LLen);
 end;
 
-function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
 var
   Trim: SizeUInt;
 begin
@@ -180,7 +167,7 @@ begin
     Dec(Trim);
   if Trim = 0 then
     Exit(TByteSpan.Empty);
-  // 零拷贝视图：去尾零后视图
+  // 零拷贝视图：去尾零后视图（循环体外联，禁 inline 避免 I-Cache 复制膨胀）
   Result := TByteSpan.Create(ABase, Trim);
 end;
 
@@ -241,9 +228,11 @@ begin
   Result := SpanToString(LSpan);
 end;
 
-function TTarReader.CombinePrefixName(const APrefix, AName: TByteSpan): string; inline;
+function TTarReader.CombinePrefixName(const APrefix, AName: TByteSpan): string;
 var
-  LTotal: SizeUInt;
+  LSlash: Byte;
+  LSlashSpan: TByteSpan;
+  LBytes: TBytes;
 begin
   if APrefix.Len = 0 then
   begin
@@ -252,12 +241,11 @@ begin
   end;
   if AName.Len = 0 then
     Exit(SpanToString(APrefix));
-  // 单次分配：prefix '/' name，三段一次 Move；复用 bytes.ops Move 语义（零拷贝视图后单次分配）
-  LTotal := APrefix.Len + 1 + AName.Len;
-  SetLength(Result, LTotal);
-  Move(APrefix.Data^, Result[1], APrefix.Len);
-  Result[APrefix.Len + 1] := '/';
-  Move(AName.Data^, Result[APrefix.Len + 2], AName.Len);
+  // 单源：复用 bytes.ops SpanConcatMany+BytesToString 单源 Move（零拷贝视图后分配；外联避免 Result[1] 双喂 untyped 的 inline 复制膨胀）
+  LSlash := Ord('/');
+  LSlashSpan := TByteSpan.Create(PByte(@LSlash), 1);
+  LBytes := SpanConcatMany([APrefix, LSlashSpan, AName]);
+  Result := BytesToString(LBytes);
 end;
 
 function TTarReader.GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;

@@ -51,62 +51,62 @@ function TarBuilder: ITarBuilder; inline;
 
 implementation
 
-function IsSafeTarEntryName(const AName: string): Boolean;
+function IsSafeTarEntryName(const AName: string): Boolean; inline;
 begin
   Result := nextpas.core.tar.base.IsSafeTarEntryName(AName);
 end;
 
-procedure ValidateTarEntryName(const AName: string);
+procedure ValidateTarEntryName(const AName: string); inline;
 begin
   nextpas.core.tar.base.ValidateTarEntryName(AName);
 end;
 
-function DefaultTarAddOptions: TTarAddOptions;
+function DefaultTarAddOptions: TTarAddOptions; inline;
 begin
   Result := nextpas.core.tar.base.DefaultTarAddOptions;
 end;
 
-function DefaultTarReadOptions: TTarReadOptions;
+function DefaultTarReadOptions: TTarReadOptions; inline;
 begin
   Result := nextpas.core.tar.base.DefaultTarReadOptions;
 end;
 
-function DefaultTarExtractOptions: TTarExtractOptions;
+function DefaultTarExtractOptions: TTarExtractOptions; inline;
 begin
   Result := nextpas.core.tar.base.DefaultTarExtractOptions;
 end;
 
-function TarRegularMode(APermissionBits: Word): Word;
+function TarRegularMode(APermissionBits: Word): Word; inline;
 begin
   Result := nextpas.core.tar.base.TarRegularMode(APermissionBits);
 end;
 
-function TarDirectoryMode(APermissionBits: Word): Word;
+function TarDirectoryMode(APermissionBits: Word): Word; inline;
 begin
   Result := nextpas.core.tar.base.TarDirectoryMode(APermissionBits);
 end;
 
-procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
+procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter); inline;
 begin
   nextpas.core.tar.fs.TarPackDirInto(ADir, AWriter);
 end;
 
-function TarPackDir(const ADir: string): TBytes;
+function TarPackDir(const ADir: string): TBytes; inline;
 begin
   Result := nextpas.core.tar.fs.TarPackDir(ADir);
 end;
 
-procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions);
+procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions); inline;
 begin
   nextpas.core.tar.fs.TarExtractToDirWithOptions(AData, ADestDir, AOptions);
 end;
 
-procedure TarExtractToDir(const AData: TBytes; const ADestDir: string);
+procedure TarExtractToDir(const AData: TBytes; const ADestDir: string); inline;
 begin
   nextpas.core.tar.fs.TarExtractToDir(AData, ADestDir);
 end;
 
-function TarBuilder: ITarBuilder;
+function TarBuilder: ITarBuilder; inline;
 begin
   Result := nextpas.core.tar.builder.TarBuilder;
 end;

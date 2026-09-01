@@ -1,9 +1,11 @@
 unit nextpas.core.tar.fs;
 {**
  * @desc Tar 与文件系统之间的便捷层：递归打包目录、解包归档到目录。
- * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、快照、零拷贝落盘、
- * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalk 单源），消除与 zip.fs 的 150+ 行拷贝，
- * 保持确定性与 fail-closed；L2 单 seam：fs 仅经 archive 联邦，注册层级见 module-registry archive/tar。
+ * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、零拷贝落盘、
+ * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalk 单源），打包经 bytes.builder
+ * IBytesBuilder 直写切片单次 ToBytes 交付（消除 CreateBytesStream+ArchiveSnapshotStream 二次
+ * SetLength+Seek+Read 大块 Move），消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed；
+ * L2 单 seam：fs 仅经 archive 联邦，注册层级见 module-registry archive/tar。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -30,7 +32,7 @@ uses
   nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.base,
-  nextpas.core.io.memory,
+  nextpas.core.bytes.builder,
   nextpas.core.archive.fs;
 
 type
@@ -39,33 +41,31 @@ type
   TDeferredDir = TArchiveDeferredDir;
   TDeferredDirArray = TArchiveDeferredArray;
 
-{ 兼容原内部调用名，委托 archive 几何扩容/排序/防劫持 }
-procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
+{ IBytesBuilder 最小 IWriter 适配：直写切片至 builder，复用 bytes.builder 几何扩容单源，inline 单次 Move 零额外拷贝 }
+type
+  TBuilderSink = class(TInterfacedObject, IWriter)
+  private
+    FBuilder: IBytesBuilder;
+  public
+    constructor Create(const ABuilder: IBytesBuilder);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
+  end;
+
+constructor TBuilderSink.Create(const ABuilder: IBytesBuilder);
 begin
-  ArchiveEnsureWalkCapacity(A, AMin);
+  inherited Create;
+  FBuilder := ABuilder;
 end;
 
-procedure WalkAppend(var A: TWalkArray; var ACount: Integer; const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
+function TBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
 begin
-  ArchiveWalkAppend(A, ACount, ARel, AFull, AIsDir, AMtime, AMode);
+  // perf: inline + AppendBytes 单次 Move（bytes.builder 几何扩容单源，4K 页对齐），零拷贝切片直写
+  if ACount > 0 then
+    FBuilder.AppendBytes(PByte(@ABuf), ACount);
+  Result := ACount;
 end;
 
-procedure SortDirEntries(var A: TDirEntryArray); inline;
-begin
-  ArchiveSortDirEntries(A);
-end;
-
-procedure EnsureNoSymlinkInPath(const APath: string); inline;
-begin
-  ArchiveEnsureNoSymlinkInPath(APath);
-end;
-
-procedure EnsureDeferredCapacity(var A: TDeferredDirArray; AMin: Integer); inline;
-begin
-  ArchiveEnsureDeferredCapacity(A, AMin);
-end;
-
-{ CollectLevel 已完全下沉至 archive.fs: ArchiveCollectWalk 单源复用，tar 仅薄委托，避免重复递归实现 }
+{ Walk 递归已完全下沉至 archive.fs: ArchiveCollectWalk 单源，tar 仅薄委托，无重复实现 }
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
@@ -123,16 +123,20 @@ end;
 
 function TarPackDir(const ADir: string): TBytes;
 var
-  S: IStream;
+  LBuilder: IBytesBuilder;
+  LSink: IWriter;
   W: TTarWriter;
 begin
   Result := nil;
-  S := CreateBytesStream;
-  W := TTarWriter.Create(S as IWriter);
+  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
+  LBuilder := CreateBytesBuilder(4096);
+  LSink := TBuilderSink.Create(LBuilder);
+  W := TTarWriter.Create(LSink);
   try
     TarPackDirInto(ADir, W);
     W.Finish;
-    Result := ArchiveSnapshotStream(S, 'tar pack');
+    // perf: 单次 ToBytes 分配+Move，零额外拷贝（builder 已内联 AppendBytes），接口自动释资源，不丢句柄
+    Result := LBuilder.ToBytes;
   finally
     W.Free;
   end;
