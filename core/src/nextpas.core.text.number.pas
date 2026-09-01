@@ -12,6 +12,8 @@ function IntToBuffer(const AValue: Int64; const ADst: PAnsiChar): Int32;
 function UIntToBuffer(const AValue: UInt64; const ADst: PAnsiChar): Int32;
 function IntToHexBuffer(const AValue: UInt64; const ADst: PAnsiChar;
   const AMinDigits: Int32 = 1): Int32;
+function IntToHexBufferUpper(const AValue: UInt64; const ADst: PAnsiChar;
+  const AMinDigits: Int32 = 1): Int32; inline;
 function ParseInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Int64): Boolean;
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -45,6 +47,7 @@ const
   );
 
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
+  HEX_CHARS_UPPER: array[0..15] of AnsiChar = '0123456789ABCDEF';
 
 function UIntToBuffer(const AValue: UInt64; const ADst: PAnsiChar): Int32;
 var
@@ -124,6 +127,42 @@ begin
   begin
     Dec(LIdx);
     LBuf[LIdx] := HEX_CHARS[LVal and $F];
+    LVal := LVal shr 4;
+  end;
+  Result := 16 - LIdx;
+  while Result < LMin do
+  begin
+    Dec(LIdx);
+    LBuf[LIdx] := '0';
+    Inc(Result);
+  end;
+  Move(LBuf[LIdx], ADst^, Result);
+end;
+
+{ perf: direct uppercase HEX_CHARS_UPPER write, single Move, zero-copy, no per-char branch — owner single source for IntToHex uppercase }
+function IntToHexBufferUpper(const AValue: UInt64; const ADst: PAnsiChar;
+  const AMinDigits: Int32): Int32; inline;
+var
+  LBuf: array[0..15] of AnsiChar;
+  LIdx: Int32;
+  LVal: UInt64;
+  LMin: Int32;
+begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LMin := AMinDigits;
+  if LMin > 16 then LMin := 16;
+  if (AValue = 0) and (LMin <= 1) then
+  begin
+    ADst[0] := '0';
+    Result := 1;
+    Exit;
+  end;
+  LIdx := 16;
+  LVal := AValue;
+  while LVal > 0 do
+  begin
+    Dec(LIdx);
+    LBuf[LIdx] := HEX_CHARS_UPPER[LVal and $F];
     LVal := LVal shr 4;
   end;
   Result := 16 - LIdx;

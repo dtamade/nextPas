@@ -68,7 +68,7 @@ The pressure clusters into a few narrow capability families:
 
 ### Current S4 stance (2026-08-31 alignment: live 40+ sysutils, 10-type classes)
 
-- A minimal live `nextpas.core.system.sysutils` unit exists — **40+ functions** (see § Current live minimum; `core/src/nextpas.core.system.sysutils.pas` 583 lines, `Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` etc., all delegating to `text.conv`/`path`/`fs`/`platform`).
+- A minimal live `nextpas.core.system.sysutils` unit exists — **40+ functions** (see § Current live minimum; `core/src/nextpas.core.system.sysutils.pas` 583 lines, `Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` + `BytesOf`/`StringOf` via `text.conv` -> `bytes.ops` single source (INV-5, inline thin-forward zero-copy), all delegating to `text.conv`/`path`/`fs`/`platform`).
 - A minimal live `nextpas.core.system.classes` unit exists — **10 types** (`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread`; plus `fmCreate`/`fmOpen*`/`fmShare*` and `IStream` re-exports) as narrow bootstrap shim; `TComponent`/`TPersistent` remain deferred.
 - Do not create a mirror of FPC `SysUtils`/`Classes`.
 - Do not move filesystem, environment, time, or text ownership into `system`; classes does not own container/thread ownership beyond the 10-type shim.

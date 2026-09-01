@@ -46,8 +46,8 @@ function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 function JsonEscape(const AValue: string): string;
 function EscapeLlvmStr(const AValue: string): string;
 
-{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
-{ UTF8 pair is the encoding-intent facade; ASCII pair is subset alias — deprecated. }
+{== Encoding — byte<->string conversions == single source is bytes.ops (INV-5, zero-copy Move); UTF8 pair is encoding-intent facade inline thin-forward, no duplicate Move/SetLength ==}
+{ UTF8 pair is the encoding-intent facade (L1 text owns encoding intent); ASCII pair is subset alias — deprecated. All 4-layer aliases (bytes.ops/bytes facade/text.conv/system.sysutils) converge to bytes.ops single source via inline thin-forward. }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString — ASCII is UTF8 subset, single source bytes.ops.BytesToString';
@@ -327,16 +327,14 @@ begin
   Result := StringOfChar(ACh, ACount);
 end;
 
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-var LBuf: array[0..31] of AnsiChar; LLen, I: Int32;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+var LBuf: array[0..31] of AnsiChar; LLen: Int32;
 begin
-  LLen := nextpas.core.text.number.IntToHexBuffer(AValue, @LBuf[0], ADigits);
+  { perf: direct uppercase HEX_CHARS_UPPER via IntToHexBufferUpper, single Move, O(n) without second branch scan }
+  LLen := nextpas.core.text.number.IntToHexBufferUpper(AValue, @LBuf[0], ADigits);
   SetLength(Result, LLen);
-  for I := 0 to LLen - 1 do
-    if (LBuf[I] >= 'a') and (LBuf[I] <= 'f') then
-      Result[I + 1] := Chr(Ord(LBuf[I]) - 32)
-    else
-      Result[I + 1] := LBuf[I];
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
@@ -407,11 +405,13 @@ end;
 
 function UTF8BytesToString(const AData: TBytes): string; inline;
 begin
+  { perf: inline thin forward to bytes.ops.BytesToString single source (zero-copy TByteSpan view, single Move in owner); facades no duplicate Move }
   Result := nextpas.core.bytes.ops.BytesToString(AData);
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 begin
+  { perf: inline thin forward to bytes.ops.StringToBytes single source (zero-copy PAnsiChar(AText)^ Move, single SetLength+Move in owner); alloc not inline in owner per red-line 1 }
   Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 

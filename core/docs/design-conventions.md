@@ -184,7 +184,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁（例 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image），禁止循环
+     ↑ 默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁（例 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls），禁止循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -193,9 +193,9 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image，未列入者视为违规
+- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls（+ adapter→net；time/sync 为 L1 下沉非 L2 缝），未列入者视为违规
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝且 `canvas.raster` 唯一 vector/image 缝均为单向 allowlist 并经门禁防循环）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
+- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝且 `canvas.raster` 唯一 vector/image 缝且 `db.redis.transport` 唯一 net/tls 缝（+ `db.redis.adapter` 轻量 net 缝；time/sync 为 L1 下沉，base/resp 纯 L0/L1）均为单向 allowlist 并经门禁防循环，reverse `net/tls→db.redis` 禁止，bytes.ops 单源 inline/零拷贝，资源 FreeAndNil/try-finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 

@@ -1,6 +1,6 @@
 # nextpas.core.tui 代码契约
 
-**模块路径**：`core/src/nextpas.core.tui*.pas`（84 个源文件：81 + terminal.base/intf + canvas.intf 3 增量；六域四件套已兑现）
+**模块路径**：`core/src/nextpas.core.tui*.pas` 及独立子家族 `core/src/nextpas.core.tui.terminal*.pas` / `core/src/nextpas.core.tui.canvas*.pas`（`terminal.{base,intf,pas}` + `canvas.{base,intf,pas}` 已按需兑现为独立子家族，不寄居 `nextpas.core.tui` 主包；子模块可递归 `tui.<sub>.{base,intf,pas}` 范式，四件套按需存在不机械创建，详 §1.4）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-02

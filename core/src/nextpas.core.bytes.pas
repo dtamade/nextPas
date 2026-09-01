@@ -57,7 +57,7 @@ function BytesConcat(const A, B: TBytes): TBytes; inline;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
-{ String <-> bytes — single source via bytes.ops, inline zero-copy TByteSpan view }
+{ String <-> bytes — single source via bytes.ops (INV-5), inline thin-forward, zero-copy TByteSpan view; no duplicate Move/SetLength — owner bytes.ops only }
 function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;

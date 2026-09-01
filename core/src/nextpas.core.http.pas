@@ -3,30 +3,21 @@ unit nextpas.core.http;
  * @desc HTTP module umbrella facade. Re-exports HTTP types, interfaces,
  *       headers, URL utilities, router, middleware, and message factories.
  *
- *       Facade aggregation (13 interface aliases + 40+ inline forwards) intentionally
- *       exceeds the soft 800-line guidance (`core/docs/design-conventions.md:163`);
- *       it is a pure re-export umbrella (no loops/SIMD/routing logic, `bytes.ops`
- *       single source stays in owners, see `nextpas.core.bytes.ops:25/89`), so the
- *       single-source + performance inline/zero-copy + resource-release guarantees
- *       remain (CONTRACT is truth, missing capability → back-feed owner).
+ *       Facade aggregation (13 interface aliases + 40+ inline forwards) exceeds
+ *       the soft 800-line guidance (`core/docs/design-conventions.md:163`) but
+ *       is pure re-export: no loops/SIMD/routing, `bytes.ops` single source in
+ *       owners (`nextpas.core.bytes.ops:25/89`), inline thin forwarding and
+ *       zero-copy views only, resource release via owner `try/finally`/`Close`/
+ *       `PoolClear`/`HttpReleaseResponseBody`. CONTRACT is truth.
  *
- *       Slimming rhythm (800-line soft guide, pure-aggregation umbrella exempt):
- *       `nextpas.core.http.minimal` (~201 行: types+router+server/client+chain) and
- *       `nextpas.core.http.middlewares` (~500 行: middleware family) already carry
- *       subfacades; **this change adds** `nextpas.core.http.messages` (~420 行: request/response
- *       builders + writers + redirects + RFC7807 errors + bounded body readers),
- *       `nextpas.core.http.transports` (~520 行: server/client factories + Get/Post/
- *       ensureSuccess/decode helpers + TCP backend + `PoolClear`/`Close` release),
- *       `nextpas.core.http.extensions` (~520 行: static/websocket/sse/stream/cookie/form
- *       + headers/url + ETag helpers) — three product subfacades covering the remaining
- *       `message`/`static`/`websocket`/`sse`/`cookie`/`stream`/`form` helpers with
- *       inline thin forwarding, zero-copy views and owner-local `try/finally`/`Close`
- *       release (bytes.ops single source in owners, no duplicate loops). Together with
- *       `http.minimal`/`http.middlewares` they form a five-facade rhythm; thin
- *       consumers should `uses nextpas.core.http.minimal` / `messages` / `transports` /
- *       `extensions` / `middlewares` directly, `uses nextpas.core.http` stays stable umbrella
- *       (still >800 but cognitive load now distributed per `core/docs/http/CONTRACT.md:§1.1`
- *       pool/retry/defense/tail/timeout/messaging/transport/extension extraction).
+ *       Five-facade rhythm (umbrella >800 exempt, cognitive load distributed):
+ *       `http.minimal` (~201 types+router+server/client+chain),
+ *       `http.messages` (~420 request/response+writers+redirects+RFC7807+body readers),
+ *       `http.transports` (~520 server/client factories+Get/Post+ensure+decode+TCP backend),
+ *       `http.extensions` (~520 static/websocket/sse/stream/cookie/form+headers/url+ETag),
+ *       `http.middlewares` (~500 middleware family). Thin consumers `uses`
+ *       the target subfacade directly; `uses nextpas.core.http` remains stable
+ *       umbrella for full surface. Missing capability → back-feed owner.
  *}
 
 {$I nextpas.core.settings.inc}

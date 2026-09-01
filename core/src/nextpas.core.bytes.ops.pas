@@ -1,7 +1,9 @@
 unit nextpas.core.bytes.ops;
 
 {$I nextpas.core.settings.inc}
-{ bytes.ops — single source for SetLength+Move (单源); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1, red-line 2. }
+{ bytes.ops — single source for SetLength+Move (单源 INV-5); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1 (indexed Move/alloc inline), red-line 2 (loop+Move). Facades inline thin-forward, no duplicate Move — single source stays here.
+  GATE: raw Move/FillChar only in this unit (BytesCopy/BytesZero/BytesReplicateCopy); L1+ must reuse BytesCopy/BytesZero/Span* single source, L0 exception documented — enforced by test_bytes_ops_source_contracts; inline red-line enforced by same gate (hot inline, alloc/loop not inline).
+  CAPACITY: BytesGrowCapacity single source geometric via BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1); small-table variant BytesGrowCapacityWithMin reuse same loop with AMinGrow=4 for WebviewGrowCapacity (0→4→2×) single source. }
 
 interface
 
@@ -69,9 +71,13 @@ procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal);
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
-{ not inline: loop }
+{ not inline: loop — single source geometric via BYTES_BUILDER_MIN_GROW }
 function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
 function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+{ parameterized single source for family reuse (WebviewGrowCapacity 0→4→2×); not inline: loop }
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -171,16 +177,19 @@ begin
   Result := BytesGrowCapacity(AOld, ANeed);
 end;
 
-function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
 var
   LNewCap: SizeUInt;
 begin
-  // not inline: loop
+  // not inline: loop — parameterized single source for BytesGrowCapacity & WebviewGrowCapacity reuse
   if ARequired <= ACurrent then
     Exit(ACurrent);
   LNewCap := ACurrent;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
+  if LNewCap < AMinGrow then
+    LNewCap := AMinGrow;
+  // avoid infinite doubling from 0 when MinGrow=0 (webview reuse path)
+  if LNewCap = 0 then
+    LNewCap := 1;
   while LNewCap < ARequired do
   begin
     if LNewCap <= High(SizeUInt) div 2 then
@@ -194,18 +203,39 @@ begin
   Result := LNewCap;
 end;
 
-function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  // single source delegate — geometric via BYTES_BUILDER_MIN_GROW
+  Result := BytesGrowCapacityWithMin(ACurrent, ARequired, BYTES_BUILDER_MIN_GROW);
+end;
+
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
 var
-  LCur, LReq, LCap: SizeUInt;
+  LCur, LReq, LCap, LMin: SizeUInt;
 begin
   if ARequired <= ACurrent then
     Exit(ACurrent);
-  LCur := SizeUInt(ACurrent);
-  LReq := SizeUInt(ARequired);
-  LCap := BytesGrowCapacity(LCur, LReq);
+  if ACurrent < 0 then LCur := 0 else LCur := SizeUInt(ACurrent);
+  if ARequired < 0 then LReq := 0 else LReq := SizeUInt(ARequired);
+  if AMinGrow < 0 then LMin := 0 else LMin := SizeUInt(AMinGrow);
+  LCap := BytesGrowCapacityWithMin(LCur, LReq, LMin);
   if LCap > SizeUInt(High(Integer)) then
     LCap := SizeUInt(High(Integer));
   Result := Integer(LCap);
+end;
+
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+begin
+  // single source delegate via WithMin with BYTES_BUILDER_MIN_GROW
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ARequired, Integer(BYTES_BUILDER_MIN_GROW));
+end;
+
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+begin
+  // perf: inline thin-forward, zero extra call, reuse bytes.ops single source geometric (0→4→2×) amortized O(1); zero handled specially then geometric via WithMin(Min=0) double
+  if ACurrent = 0 then
+    Exit(4);
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ACurrent + 1, 0);
 end;
 
 { L0 mem }

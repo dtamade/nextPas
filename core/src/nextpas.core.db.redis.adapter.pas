@@ -2,6 +2,7 @@ unit nextpas.core.db.redis.adapter;
 
 {** @desc IDbConnection/IDbQuery 的 Redis 原生适配器（V3-A5）。
 
+       缝位：L2 同层单向 allowlist 轻量缝 `db.redis.adapter → net`（transport 侧承载 `net.tcp`/`tls.dialer` 主缝，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image 范式），bytes.ops 单源 inline/零拷贝（StringToBytes 薄转发，视图零分配），资源 FreeAndNil/try-finally 不丢。
        定位：RESP2 协议原生客户端（无 C 库依赖），键值面映射到统
        一层。命令文本 = 空白分词的命令行（GET key / SET key val），
        ?/?N 占位符替换为独立 bulk 参数——RESP 长度前缀天然二进制

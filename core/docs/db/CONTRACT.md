@@ -472,7 +472,7 @@ opts 超时路径）+ mysql/odbc live 探针（各自 env 门控）。
 
 `nextpas.core.db.redis` 家族：RESP2 协议原生客户端（无 C 库依赖，
 传输经 `nextpas.core.net` 阻塞 TCP，接口化可注入）。分层 L2→L2
-同层单向依赖（design-conventions 允许）。
+同层单向 allowlist 单缝 `db.redis.transport → net.tcp`（+ `tls.dialer` 可选 TLS 变体）与 `db.redis.adapter → net` 轻量缝（time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 白名单 + source-contract 门禁（`core/tests/nextpas.core.db/test_db_redis_source_contract`，cycle-gated 无 reverse `net/tls → db.redis`），bytes.ops 单源 inline/零拷贝，资源 FreeAndNil/try-finally 不丢（design-conventions 单向缝范式，类 canvas.raster→vector/image）。
 
 - **命令面**：命令文本 = 空白分词命令行；? 顺序槽 / ?N 显式槽替换
   为独立 bulk 参数——RESP 长度前缀二进制安全，注入安全由协议构造

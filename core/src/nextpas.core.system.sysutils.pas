@@ -51,7 +51,7 @@ function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
 
-{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops }
+{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops through text.conv (encoding-intent owner); inline thin-forward, zero-copy TByteSpan view, no duplicate Move }
 function BytesOf(const AStr: string): TBytes; inline;
 function StringOf(const ABytes: TBytes): string; inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -134,7 +134,6 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.path,
   nextpas.core.fs,
@@ -254,14 +253,14 @@ end;
 
 function BytesOf(const AStr: string): TBytes; inline;
 begin
-  { perf: inline thin forward to bytes.ops single source (zero-copy Move, single SetLength+Move in owner); no inline kept in owner per red-line 1/2 }
-  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
+  { perf: inline thin forward to text.conv.StringToUTF8Bytes -> bytes.ops.StringToBytes (single source, zero-copy PAnsiChar(AText)^ Move, single SetLength+Move in owner); no duplicate Move, owner alloc not inline per red-line 1/2 }
+  Result := nextpas.core.text.conv.StringToUTF8Bytes(AStr);
 end;
 
 function StringOf(const ABytes: TBytes): string; inline;
 begin
-  { perf: inline thin forward to bytes.ops single source (zero-copy Move, single SetLength+Move in owner) }
-  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+  { perf: inline thin forward to text.conv.UTF8BytesToString -> bytes.ops.BytesToString (single source, zero-copy TByteSpan view, single Move in owner) }
+  Result := nextpas.core.text.conv.UTF8BytesToString(ABytes);
 end;
 
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
