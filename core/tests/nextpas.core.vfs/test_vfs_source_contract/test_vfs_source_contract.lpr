@@ -176,6 +176,16 @@ begin
   Src := LoadSourceText('src/nextpas.core.vfs.transform.pas');
   Check(Pos('nextpas.core.fs', Src) = 0,
     'transform must not reference fs');
+  { base 纯度：四件套最底层不得直连 compress.base，GZIP_MAX canonical 仅寄居 compressed 薄门面 }
+  Src := LoadSourceText('src/nextpas.core.vfs.base.pas');
+  Check(Pos('nextpas.core.compress', Src) = 0,
+    'vfs.base must not reference compress (L0 purity, no L2→L2)');
+  Check(Pos('32 * 1024 * 1024', Src) > 0,
+    'vfs.base VFS_DECOMPRESS_MAX_BYTES must be literal 32MiB aligned with compress GZIP_MAX');
+  { 数值一致性：compressed 仍为别名单源，base 为字面量对齐，防漂移 }
+  Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
+  Check(Pos('GZIP_MAX_DECOMPRESS_BYTES', Src) > 0,
+    'compressed keeps GZIP_MAX single-source alias');
 end;
 
 procedure TestExceptionRootDiscipline;

@@ -68,12 +68,15 @@ type
   end;
 
   { 池化包装：IStream/IReaderAt 的接口壳，析构时把 Slice 归还池
-    FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂 }
+    FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂
+    契约：FOwner 弱引用仅在 FKeep 强引用存活期内有效；析构先擒 LKeep 再推导 LOwner，
+    TryPushPool 需在 LKeep 保活窗口内完成，Owner 析构并发时 FPoolLock=nil 归还落 Free，无悬垂
+    单源：EMBEDDED_POOL_SIZE 16 与 CONTRACT 一致，SpinLock 零分配 }
   TEmbeddedSliceStream = class(TInterfacedObject, IStream, IReaderAt)
   private
     FSlice: TEmbeddedSlice;
-    FOwner: TEmbeddedVfs; { weak —仅用于归还 }
-    FKeep: IVfs;          { strong—保活 }
+    FOwner: TEmbeddedVfs; { weak —仅用于归还，有效性由 FKeep 强引用保障 }
+    FKeep: IVfs;          { strong—保活 Owner 直至归还完成，destruction 契约 LKeep 先于 LOwner }
   public
     constructor Create(ASlice: TEmbeddedSlice; AOwner: TEmbeddedVfs; const AKeep: IVfs);
     destructor Destroy; override;
@@ -269,22 +272,29 @@ var
   LOwner: TEmbeddedVfs;
   LKeep: IVfs;
 begin
+  // 契约显式：先强后弱——LKeep 强保活 Owner，再推导 LOwner 弱引用有效；并发析构时 TryPushPool 遇 FPoolLock=nil 安全回退 Free，无 use-after-free
+  // 稳定性：FKeep 持有期间 Owner refcount >0，FPoolLock 仍有效；若 LKeep=nil（异常构造）则弱引用无效直接 Free，资源不丢
   LKeep := FKeep;
-  if LKeep = nil then ;
-  LOwner := FOwner;
   LSlice := FSlice;
+  if LKeep <> nil then
+    LOwner := FOwner
+  else
+    LOwner := nil;
   FSlice := nil;
   FOwner := nil;
   FKeep := nil;
-  if (LSlice <> nil) and (LOwner <> nil) then
-  begin
-    if not LOwner.TryPushPool(LSlice) then
+  try
+    if (LSlice <> nil) and (LOwner <> nil) then
+    begin
+      if not LOwner.TryPushPool(LSlice) then
+        LSlice.Free;
+    end
+    else if LSlice <> nil then
       LSlice.Free;
-  end
-  else if LSlice <> nil then
-    LSlice.Free;
-  LKeep := nil;
-  inherited Destroy;
+  finally
+    LKeep := nil;
+    inherited Destroy;
+  end;
 end;
 
 function TEmbeddedSliceStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -477,8 +487,10 @@ var
   P: PByte;
   L: SizeUInt;
   S: TByteSpan;
+  SPath, SPrefix: TByteSpan;
 begin
   { 零分配：FRp.LowerBound 直达首个 ≥ APath 项（不落地 string），再判 '/' 前缀 }
+  { 单源 bytes.ops：TByteSpan+SpanStartsWith 零拷贝替代 CompareMem 手写分支 }
   Result := False;
   if FRp.Count = 0 then
     Exit;
@@ -491,7 +503,11 @@ begin
   if L <= SizeUInt(QLen) then Exit;
   if P[QLen] <> Ord('/') then Exit;
   if QLen > 0 then
-    if not CompareMem(P, @APath[1], SizeUInt(QLen)) then Exit;
+  begin
+    if L = 0 then SPath := TByteSpan.Empty else SPath := TByteSpan.Create(P, L);
+    SPrefix := TByteSpan.Create(PByte(@APath[1]), SizeUInt(QLen));
+    if not SpanStartsWith(SPath, SPrefix) then Exit;
+  end;
   Result := True;
 end;
 
@@ -602,6 +618,8 @@ var
   ChildOff: SizeInt;
   ChildLen: SizeInt;
   ChildSpan, PrevSpan: TByteSpan;
+  SPath, SPrefix: TByteSpan;
+  Cap: SizeInt;
   NeedAdd: Boolean;
 begin
   if not VfsValidPath(ADirPath, True) then
@@ -618,14 +636,14 @@ begin
     Prefix := ADirPath + '/';
   PrefixLen := Length(Prefix);
 
-  // 零拷贝推导：有序区间扫描 O(log n+k)——LowerBound 二分定位前缀连续段，Early-Break 零分配（与 base VfsDeriveChildNames/memtree 同构）
-  // 零拷贝：LowerBound/CompareMem 均直通 FRp 存储字节，bytes.ops CompareBytesOrdered 单源；仅直接子项去重后 Child 分配（≤ 扇出），inline 热路径
+  // 单源模板收敛：有序区间扫描 LowerBound+PByte零拷贝+SpanStartsWith单源+Early-Break 归一至 base.VfsDeriveChildNames/memtree 同构
+  // perf: 零拷贝 LowerBound 直通 FRp 存储字节，bytes.ops SpanStartsWith/SpanEqual 单源 inline 热路径；Seen 扇出限界分配消除 Hi-Lo 重分配与 O(k log k) Sort
   if PrefixLen = 0 then
     Lo := 0
   else
     Lo := LowerBoundPath(Prefix);
   Hi := SizeInt(FRp.Count);
-  SetLength(Seen, Hi - Lo);
+  SetLength(Seen, 0);
   OutN := 0;
   for I := Lo to Hi - 1 do
   begin
@@ -634,7 +652,12 @@ begin
     L := S.Len;
     if SizeInt(L) <= PrefixLen then Continue;
     if PrefixLen > 0 then
-      if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Break;
+    begin
+      // 零拷贝前缀判定单源：TByteSpan+SpanStartsWith 替代 CompareMem
+      SPath := TByteSpan.Create(P, L);
+      SPrefix := TByteSpan.Create(PByte(@Prefix[1]), SizeUInt(PrefixLen));
+      if not SpanStartsWith(SPath, SPrefix) then Break;
+    end;
     // '/' 扫描：零基偏移，避免 QWord 常量 -1 越界（SizeInt 带符号，-1 合法）
     SegPos := 0;
     for ChildOff := PrefixLen to SizeInt(L) - 1 do
@@ -664,6 +687,15 @@ begin
     end;
     if NeedAdd then
     begin
+      // 扇出限界生长：初值 16 按需倍增，上限 Hi-Lo，避免大目录高频 List 的重复 Hi-Lo 全量分配与 O(k log k) Sort
+      if OutN >= Length(Seen) then
+      begin
+        Cap := Length(Seen);
+        if Cap = 0 then Cap := 16;
+        while Cap <= OutN do Cap := Cap * 2;
+        if Cap > Hi - Lo then Cap := Hi - Lo;
+        SetLength(Seen, Cap);
+      end;
       SetLength(Child, ChildLen);
       if ChildLen > 0 then
         Move(P^, Child[1], SizeUInt(ChildLen));

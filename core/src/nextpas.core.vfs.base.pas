@@ -3,11 +3,11 @@ unit nextpas.core.vfs.base;
 {** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
   权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
   nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。L2 仅依赖
-  L0-L1（bytes.ops/base.utils 零拷贝单源）与 compress.base GZIP_MAX 单源
-  直连（vfs.compressed/vfs.transform 同源 32MiB，常量漂移由编译期别名保障，
-  L2→L2 单源白名单与 compressed 一致）；前缀/名称比较统一经 bytes.ops
-  SpanStartsWith/SpanCompare 零拷贝 TByteSpan 单源，DeriveChild 区间扫描 +
-  视图去重零分配。 }
+  L0-L1（bytes.ops/base.utils 零拷贝单源，base.pathvalid 单源）；前缀/
+  名称比较统一经 bytes.ops SpanStartsWith/SpanCompare 零拷贝 TByteSpan
+  单源，DeriveChild 区间扫描 + 视图去重零分配。GZIP_MAX canonical 单源
+  寄居 vfs.compressed 薄门面直连 compress.base（32MiB），base 仅保留数值
+  对齐的字面量常量以守 L0 纯度与四件套 base 无 L2→L2 原则。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -17,8 +17,7 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.pathvalid,
   nextpas.core.bytes.ops,
-  nextpas.core.base.utils,
-  nextpas.core.compress.base;
+  nextpas.core.base.utils;
 
 type
   TEntryInfo = record
@@ -38,10 +37,11 @@ type
   TVfsNameArray = array of string;
 
 const
-  { 单源直连：canonical 为 nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES
-    (32MiB)，与 vfs.compressed 薄门面同源，编译期别名防漂移；L2→L2 白名单
-    与 vfs.compressed 一致（Registry 豁免，transform/compressed 同源）。 }
-  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES
+    (32MiB) 同值，canonical 单源寄居 vfs.compressed 薄门面；base 以字面量
+    守 L0 纯度与 base 无 L2→L2 原则（四件套最底层仅 L0-L1），漂移由
+    source-contract 数值一致性断言锁定。 }
+  VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
@@ -191,6 +191,7 @@ var
   N, OutN, PrefixLen, PathLen, SegPos, J: SizeInt;
   Lo, Hi, Mid: SizeInt;
   I: SizeInt;
+  Cap: SizeInt;
   ChildSpan, PrevSpan: TByteSpan;
   NeedAdd: Boolean;
 begin
@@ -198,8 +199,9 @@ begin
   N := Length(ASortedPaths);
   if N = 0 then Exit;
   PrefixLen := Length(ADirPrefix);
-  { 有序区间定位：LowerBound 将全量 O(n) 收敛至 O(log n + k)，大目录亦 Early-Break
-    前缀判定零分配：SpanStartsWith 直比首段，规避 Pos/CompareMem 分配；失配即 Break（有序连续段）。 }
+  { 单源扫描模板：LowerBound+SpanStartsWith+Early-Break 零拷贝，有序区间 O(log n+k)
+    扇出限界分配（初值 16 倍增，Cap≤N-Lo）消除大目录 Hi-Lo 重分配；SpanEqual 去重零分配
+    inline 热路径由 memtree/embedded 复用，此为单一事实源 }
   Lo := 0;
   Hi := N;
   if PrefixLen > 0 then
@@ -213,7 +215,7 @@ begin
         Hi := Mid;
     end;
   end;
-  SetLength(Result, N - Lo);
+  SetLength(Result, 0);
   OutN := 0;
   for I := Lo to N - 1 do
   begin
@@ -248,6 +250,14 @@ begin
     end;
     if NeedAdd then
     begin
+      if OutN >= Length(Result) then
+      begin
+        Cap := Length(Result);
+        if Cap = 0 then Cap := 16;
+        while Cap <= OutN do Cap := Cap * 2;
+        if Cap > N - Lo then Cap := N - Lo;
+        SetLength(Result, Cap);
+      end;
       // 零拷贝物化：SetLength+Move 直落 ChildSpan 视图，消除 Copy 的每项堆分配与隐式字符拷贝
       SetLength(Result[OutN], ChildSpan.Len);
       if ChildSpan.Len > 0 then
