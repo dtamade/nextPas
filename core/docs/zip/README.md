@@ -393,6 +393,17 @@ Data2 := R.ExtractToBytesByName('secret.txt'); // 缺口令 EInvalidOperation，
 
 AES 描述符对偶（INV-19）：顺序读先集密文再 `UnsealWinZipAesPayload` 解帧校验，`MaxOutput` 对明文预筛。
 
+### 7. 原子落盘（S67）
+
+```pascal
+ZipExtractToDirAtomic(Bytes, '/out/dir'); // atomic: sibling TempDir+Rename, refuse if exists, auto cleanup
+var Opts: TZipExtractOptions; Opts := DefaultZipExtractOptions; Opts.MaxTotalOutputSize := 9;
+ZipExtractToDirAtomicWithOptions(Bytes, '/out/dir', Opts); // 透传总量/口令等，与 WithOptions 同语义
+// Exist 已存在 → EArgumentError；Rename EXDEV → CopyTree 回退，Copy 异常则清理半残留，无残留
+```
+
+非原子 `ZipExtractToDir*` 仍在 `try..finally` 逆序定稿目录；原子变体在同文件系统 `TempDir(LParent,'.zip-atomic-')` 内完成全部落盘与 `EnsureNoSymlinkInPath` 双校验后一次性 `Rename`，失败无落地（见 `SECURITY §5` 与 `CONTRACT §6`）。
+
 ## Migration（FPC System/SysUtils → nextpas.core）
 
 | FPC 写法 | nextpas.core 写法 | 说明 |

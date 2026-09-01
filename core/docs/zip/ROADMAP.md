@@ -144,6 +144,9 @@
 ### S70 — 性能收敛（1.0.1 巡检）· 性能 — 已落地
 - `zip.fs` `LDirs` 几何预留：`EnsureDeferredCapacity` 16 起步倍增，`LDirsCount` 分离容量与计数，`O(n²)` 逐条 `SetLength` 消除，70k 目录场景与 `Walk` 同构，`finally` 以 `LDirsCount` 逆序定稿
 
+### S71 — 示例与文档完整性（1.0.1 巡检）· 完整性/高级感 — 已落地
+- `README` Cookbook 补第 7 式原子落盘（`Atomic/WithOptions/EXDEV`），`zip_roundtrip` 增原子 `ok/refuse/bomb clean` 三演示 `all demos ok`，`ROADMAP` 文档门同步
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
