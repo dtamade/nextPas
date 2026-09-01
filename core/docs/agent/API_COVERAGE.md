@@ -72,7 +72,7 @@ bench_loop_overhead 与全部示例消费（离线纪律的合法替代面）。
 
 | 契约 | 落地 | 证据 |
 |------|------|------|
-| `BuildBoundedSnapshot(ASystem, AMessages, ABudget=6000)` 合并去重+簇安全截断（`AgentBuildSystemText` 单一真源 → `AgentUtf8SafeCutLen` 后向回退 + `GraphemeNext` 前向簇对齐，零 FPC RTL 直连）+ `BoundedSnapshotTokens/Cost` 成本联动 | `nextpas.core.agent.snapshot`（6000 B 预算，`CBoundedSnapshotBudget` 单一真源，门面 `BuildBoundedSnapshot`/`BoundedSnapshotCost` inline 透出） | `test_compile_skeleton` 门面透出（`BuildBoundedSnapshot('sys',nil,6000)='sys'` + `CBoundedSnapshotBudget=6000`）+ `example_bounded_snapshot` 簇安全 `👨‍👩‍👧` 不半切演示 |
+| `BuildBoundedSnapshot(ASystem, AMessages, ABudget=6000)` 合并去重+簇安全截断（`AgentBuildSystemText` 单一真源 → `AgentUtf8SafeCutLen` 后向回退 + `GraphemeNext` 前向簇对齐，ASCII 前 6000 字节全 < $80 时快路径零扫描，零 FPC RTL 直连）+ `BoundedSnapshotTokens/Cost` 成本联动 | `nextpas.core.agent.snapshot`（6000 B 预算，`CBoundedSnapshotBudget` 单一真源，门面 `BuildBoundedSnapshot`/`BoundedSnapshotCost` inline 透出） | `test_snapshot` 5 测（预算边界/utf8/簇/ASCII 快路径/tokens） + `test_compile_skeleton` 门面透出（`BuildBoundedSnapshot('sys',nil,6000)='sys'` + `CBoundedSnapshotBudget=6000`）+ `example_bounded_snapshot` 簇安全 `👨‍👩‍👧` 不半切演示 |
 
 ## §11 流式盒 → `nextpas.core.agent.streambox` — 落地
 

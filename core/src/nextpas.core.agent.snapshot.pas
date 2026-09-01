@@ -45,6 +45,11 @@ begin
   if Length(LFull) <= ABudget then
     Exit(LFull);
   LCut := AgentUtf8SafeCutLen(LFull, ABudget);
+  // ASCII 快路径：前 LCut 字节全 < $80 时簇边界即 LCut，免 GraphemeNext 扫描
+  LPos := 1;
+  while (LPos <= LCut) and (Ord(LFull[LPos]) < $80) do Inc(LPos);
+  if LPos > LCut then
+    Exit(AgentUtf8SafeTruncate(LFull, LCut));
   // 簇安全对齐：从首字节前向遍历 GraphemeNext，找到 ≤ LCut 的最大簇边界
   // 避免 👨‍👩‍👧 / 🇨🇳 / 1️⃣ 等序列被半切导致 EAW 列宽错位（PERFORMANCE §7.1）
   LPos := 1;
