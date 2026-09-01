@@ -213,3 +213,65 @@ begin
       Inc(I);
   end;
 end;
+
+function FindUsesUnit(const ASource, AUnitName: string): Boolean;
+var
+  LClean, LTarget: string;
+  I, N, Start: Integer;
+  UnitName: string;
+begin
+  Result := False;
+  LTarget := FpcRtlScan_LowerStr(AUnitName);
+  LClean := FpcRtlScan_StripNoise(ASource);
+  N := Length(LClean);
+  I := 1;
+  while I <= N do
+  begin
+    if FpcRtlScan_IsWordAt(LClean, I, 'uses') then
+    begin
+      I := I + 4;
+      while (I <= N) and (LClean[I] <> ';') do
+      begin
+        while (I <= N) and (LClean[I] <= ' ') do
+          Inc(I);
+        if (I > N) or (LClean[I] = ';') then
+          Break;
+        if not FpcRtlScan_IsIdentStart(LClean[I]) then
+        begin
+          Inc(I);
+          Continue;
+        end;
+        Start := I;
+        while (I <= N) and (FpcRtlScan_IsIdentChar(LClean[I]) or (LClean[I] = '.')) do
+          Inc(I);
+        UnitName := FpcRtlScan_LowerStr(Copy(LClean, Start, I - Start));
+        if UnitName = LTarget then
+          Exit(True);
+        while (I <= N) and (LClean[I] <> ',') and (LClean[I] <> ';') do
+          Inc(I);
+        if (I <= N) and (LClean[I] = ',') then
+          Inc(I);
+      end;
+      if (I <= N) and (LClean[I] = ';') then
+        Inc(I);
+    end
+    else
+      Inc(I);
+  end;
+end;
+
+function FindSeamInUses(const ASource: string; out AHit: string): Boolean;
+begin
+  if FindUsesUnit(ASource, 'nextpas.core.fs') then
+  begin
+    AHit := 'nextpas.core.fs';
+    Exit(True);
+  end;
+  if FindUsesUnit(ASource, 'nextpas.core.io.mapped') then
+  begin
+    AHit := 'nextpas.core.io.mapped';
+    Exit(True);
+  end;
+  AHit := '';
+  Result := False;
+end;

@@ -46,26 +46,34 @@ function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 function JsonEscape(const AValue: string): string;
 function EscapeLlvmStr(const AValue: string): string;
 
-{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
-{ UTF8 pair is the encoding-intent facade; ASCII pair is subset alias — deprecated. }
+{== Encoding — byte<->string conversions == single source is bytes.ops (INV-5, zero-copy Move); UTF8 pair is encoding-intent facade inline thin-forward, no duplicate Move/SetLength ==}
+{ UTF8 pair is the encoding-intent facade (L1 text owns encoding intent); ASCII pair is subset alias — deprecated. All 4-layer aliases (bytes.ops/bytes facade/text.conv/system.sysutils) converge to bytes.ops single source via inline thin-forward. }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString — ASCII is UTF8 subset, single source bytes.ops.BytesToString';
 function StringToASCIIBytes(const AStr: string): TBytes; inline; deprecated 'Use StringToUTF8Bytes — ASCII is UTF8 subset, single source bytes.ops.StringToBytes';
-function BigEndianUnicodeBytesToString(const AData: TBytes): string;
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
 
-function SameText(const A, B: string): Boolean; inline;
+function SameText(const A, B: string): Boolean;
 
 {** Returns the position of the last occurrence of any character from ADelimiters in S.
     Returns 0 if none of the characters are found. }
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
 
+{== Variant helpers — text/convert normalization point, single source via bytes.ops (INV-5)
+    perf: inline thin forward to bytes.ops (zero-copy TVarData view, masked varTypeMask), no alloc }
+function VarType(const V: Variant): Word; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
+
 {== Pointer-based conversion ==}
 {** NUL-terminated PAnsiChar → string；nil 安全（返回空串）。
     C ABI 字符串读回的统一入口：本工具链上 string(AnsiString(ptr))
     强转在返回托管记录数组的函数内会损坏临时管理（db 家族实证的
-    工具链硬边界），消费方一律经本函数而非直接强转。 }
-function AnsiPtrToStr(const AStr: PAnsiChar): string;
+    工具链硬边界），消费方一律经本函数而非直接强转。
+    perf: inline thin forward to bytes.ops.AnsiPtrToString (single source zero-copy Move) }
+function AnsiPtrToStr(const AStr: PAnsiChar): string; inline;
 
 implementation
 
@@ -94,55 +102,37 @@ begin
 end;
 
 {== Float/String conversion ==}
+{ perf: inline thin forward to text.number zero-alloc buffer; single SetLength+Move, O(n), locale-independent '.' }
 
-function FloatToStr(const AValue: Double): string;
-var LI, LDot: Integer;
-  C: Char;
+function FloatToStr(const AValue: Double): string; inline;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  Str(AValue:0:15, Result);
-  { Find the decimal separator (could be '.' or ',' depending on locale) }
-  LDot := 0;
-  for LI := 1 to Length(Result) do
-    if Result[LI] in ['.', ','] then
-    begin
-      LDot := LI;
-      Break;
-    end;
-  if LDot > 0 then
-  begin
-    C := Result[LDot];
-    LI := Length(Result);
-    while (LI > LDot) and (Result[LI] = '0') do
-      Dec(LI);
-    if LI = LDot then
-      SetLength(Result, LDot - 1)
-    else
-      SetLength(Result, LI);
-    { Normalize to '.' for locale-independent output }
-    if C <> '.' then
-    begin
-      LDot := Pos(C, Result);
-      if LDot > 0 then
-        Result[LDot] := '.';
-    end;
-  end;
+  LLen := nextpas.core.text.number.FloatToBuffer(AValue, @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
-var I: Integer;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  Str(AValue:0:ADecimals, Result);
-  { Normalize decimal separator to '.' }
-  for I := 1 to Length(Result) do
-    if Result[I] = ',' then
-    begin
-      Result[I] := '.';
-      Break;
-    end;
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no locale scan }
+  if ADecimals < 0 then ADecimals := 0 else if ADecimals > 18 then ADecimals := 18;
+  LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(ADecimals), @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function FormatFloat(const AFmt: string; const AValue: Double): string;
-var LDecimals, LI: Integer;
+var
+  LDecimals, LI: Integer;
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
   LDecimals := 0;
   LI := Pos('.', AFmt);
@@ -150,19 +140,14 @@ begin
     while (LI + LDecimals + 1 <= Length(AFmt)) and
           (AFmt[LI + LDecimals + 1] in ['0', '#']) do
       Inc(LDecimals);
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no Delete O(n²), no locale ',' scan }
   if LDecimals > 0 then
-    Str(AValue:0:LDecimals, Result)
+    LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(LDecimals), @LBuf[0])
   else
-    Str(AValue:0:2, Result);
-  while (Length(Result) > 0) and (Result[1] = ' ') do
-    Delete(Result, 1, 1);
-  { Normalize decimal separator to '.' }
-  for LI := 1 to Length(Result) do
-    if Result[LI] = ',' then
-    begin
-      Result[LI] := '.';
-      Break;
-    end;
+    LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, 2, @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function BoolToStr(const AValue: Boolean): string;
@@ -342,16 +327,14 @@ begin
   Result := StringOfChar(ACh, ACount);
 end;
 
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-var LBuf: array[0..31] of AnsiChar; LLen, I: Int32;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+var LBuf: array[0..31] of AnsiChar; LLen: Int32;
 begin
-  LLen := nextpas.core.text.number.IntToHexBuffer(AValue, @LBuf[0], ADigits);
+  { perf: direct uppercase HEX_CHARS_UPPER via IntToHexBufferUpper, single Move, O(n) without second branch scan }
+  LLen := nextpas.core.text.number.IntToHexBufferUpper(AValue, @LBuf[0], ADigits);
   SetLength(Result, LLen);
-  for I := 0 to LLen - 1 do
-    if (LBuf[I] >= 'a') and (LBuf[I] <= 'f') then
-      Result[I + 1] := Chr(Ord(LBuf[I]) - 32)
-    else
-      Result[I + 1] := LBuf[I];
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
@@ -422,11 +405,13 @@ end;
 
 function UTF8BytesToString(const AData: TBytes): string; inline;
 begin
+  { perf: inline thin forward to bytes.ops.BytesToString single source (zero-copy TByteSpan view, single Move in owner); facades no duplicate Move }
   Result := nextpas.core.bytes.ops.BytesToString(AData);
 end;
 
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 begin
+  { perf: inline thin forward to bytes.ops.StringToBytes single source (zero-copy PAnsiChar(AText)^ Move, single SetLength+Move in owner); alloc not inline in owner per red-line 1 }
   Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
@@ -440,34 +425,28 @@ begin
   Result := StringToUTF8Bytes(AStr);
 end;
 
-function BigEndianUnicodeBytesToString(const AData: TBytes): string;
-var
-  I, LCount: SizeInt;
-  LWChars: array of WideChar;
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  LCount := Length(AData) div 2;
-  if LCount = 0 then Exit;
-  SetLength(LWChars, LCount);
-  for I := 0 to LCount - 1 do
-    LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
-  SetString(Result, PWideChar(LWChars), LCount);
+  { perf: inline thin forward to bytes.ops single source (zero-copy WideChar view); not inline red-line 2 kept in owner }
+  Result := nextpas.core.bytes.ops.BigEndianUnicodeBytesToString(AData);
 end;
 
 {** @note ASCII case-fold only (matches LowerCase/UpperCase stance on this unit).
-    Unicode-aware equality lives in text.compare (UTF8CaseFoldSimple path). *}
+    Unicode-aware equality lives in text.compare (UTF8CaseFoldSimple path).
+    perf: not inline per red-line 2; single source bytes.ops SpanEqualIgnoreCase zero-copy TByteSpan view }
 function SameText(const A, B: string): Boolean;
 var
-  I, LenA, LenB: SizeInt;
+  LA, LB: TByteSpan;
 begin
-  LenA := Length(A);
-  LenB := Length(B);
-  if LenA <> LenB then
-    Exit(False);
-  for I := 1 to LenA do
-    if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
-      Exit(False);
-  Result := True;
+  if Length(A) = 0 then
+    LA := TByteSpan.Empty
+  else
+    LA := TByteSpan.Create(PByte(PAnsiChar(A)), SizeUInt(Length(A)));
+  if Length(B) = 0 then
+    LB := TByteSpan.Empty
+  else
+    LB := TByteSpan.Create(PByte(PAnsiChar(B)), SizeUInt(Length(B)));
+  Result := nextpas.core.bytes.ops.SpanEqualIgnoreCase(LA, LB);
 end;
 
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
@@ -481,22 +460,31 @@ begin
         Exit(I);
 end;
 
-function AnsiPtrToStr(const AStr: PAnsiChar): string;
-var
-  LP: PAnsiChar;
-  LLen: Integer;
+function VarType(const V: Variant): Word; inline;
 begin
-  Result := '';
-  if AStr = nil then
-    Exit;
-  LP := AStr;
-  while LP^ <> #0 do
-    Inc(LP);
-  LLen := Integer(LP - AStr);
-  if LLen = 0 then
-    Exit;
-  SetLength(Result, LLen);
-  Move(AStr^, Result[1], SizeUInt(LLen));
+  { perf: inline thin forward to bytes.ops single source (zero-copy TVarData view, masked), no alloc }
+  Result := nextpas.core.bytes.ops.VarType(V);
+end;
+
+function VarIsNull(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsNull(V);
+end;
+
+function VarIsEmpty(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsEmpty(V);
+end;
+
+function VarIsClear(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsClear(V);
+end;
+
+function AnsiPtrToStr(const AStr: PAnsiChar): string; inline;
+begin
+  { perf: inline thin forward to bytes.ops.AnsiPtrToString (single source zero-copy Move Pointer(Result)^); not inline kept in owner }
+  Result := nextpas.core.bytes.ops.AnsiPtrToString(AStr);
 end;
 
 end.

@@ -49,7 +49,7 @@ begin
       次遍分段 AWrite（头/index/string 合批 → 槽间隙零填 → data 零拷贝 BytesCopy 分段 → digest），
       峰值 ~1×+头，零双驻留；本单元保留纯内存路径以保零依赖与 golden 确定性。
       头/index/string 单源于 writer.builder.ResPackWriterFillHead（零拷贝 bytes.ops 单源）；
-      零化统一：Head 段由 builder 内 SpanZero 全量零化 + 槽/ digest 间隙定向 BytesZero，
+      零化统一：Head 段由 builder 内 BytesZero 单源全量零化 + 槽/ digest 间隙定向 BytesZero 单入口，
       去除 64MiB 双路径分支，杜绝漂移残留未清零字节。 }
     GetMem(Buf, L.Total);
     Result.Data := Buf;
@@ -65,8 +65,10 @@ begin
             BytesZero(Buf + Cur, SizeUInt(L.Slots[K].Offset - Cur));
           J := L.Slots[K].SrcIdx;
           if AEntries[J].DataSize > 0 then
+          begin
             BytesCopy(Buf + L.Slots[K].Offset, AEntries[J].Data,
               AEntries[J].DataSize);
+          end;
           Cur := L.Slots[K].Offset + UInt64(AEntries[J].DataSize);
         end;
       if (AOpts.DigestFunc <> nil) and (L.DigOff > Cur) then

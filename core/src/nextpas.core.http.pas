@@ -1,7 +1,23 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP module facade. Provides unified access to HTTP types, interfaces,
+ * @desc HTTP module umbrella facade. Re-exports HTTP types, interfaces,
  *       headers, URL utilities, router, middleware, and message factories.
+ *
+ *       Facade aggregation (13 interface aliases + 40+ inline forwards) exceeds
+ *       the soft 800-line guidance (`core/docs/design-conventions.md:163`) but
+ *       is pure re-export: no loops/SIMD/routing, `bytes.ops` single source in
+ *       owners (`nextpas.core.bytes.ops:25/89`), inline thin forwarding and
+ *       zero-copy views only, resource release via owner `try/finally`/`Close`/
+ *       `PoolClear`/`HttpReleaseResponseBody`. CONTRACT is truth.
+ *
+ *       Five-facade rhythm (umbrella >800 exempt, cognitive load distributed):
+ *       `http.minimal` (~201 types+router+server/client+chain),
+ *       `http.messages` (~420 request/response+writers+redirects+RFC7807+body readers),
+ *       `http.transports` (~520 server/client factories+Get/Post+ensure+decode+TCP backend),
+ *       `http.extensions` (~520 static/websocket/sse/stream/cookie/form+headers/url+ETag),
+ *       `http.middlewares` (~500 middleware family). Thin consumers `uses`
+ *       the target subfacade directly; `uses nextpas.core.http` remains stable
+ *       umbrella for full surface. Missing capability → back-feed owner.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,11 +25,13 @@ unit nextpas.core.http;
 interface
 
 uses
+  { L0-L1 infra }
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
   nextpas.core.vfs.intf,
+  { L2-L3 http domain (base/intf → impl → facade; bytes.ops single source in owners) }
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,

@@ -40,13 +40,16 @@ procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64);
 var
   N: UInt64;
   L: SizeUInt;
+  S: TByteSpan;
 begin
   if ACount = 0 then Exit;
   N := ACount;
   while N > 0 do
   begin
-    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
-    AWrite(@BYTES_ZERO_PAGE[0], L);
+    // INV-5 单源: 零页切片阈值 — 小间隙按需 slice 为 L=SizeUInt(N) (<4096) 避免 4K memset，阈值即 BYTES_ZERO_PAGE_SLICE_THRESHOLD；零拷贝分段直写
+    if N >= BYTES_ZERO_PAGE_SLICE_THRESHOLD then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
+    S := ZeroPageSlice(L);
+    AWrite(S.Data, S.Len);
     Dec(N, L);
   end;
 end;
@@ -70,7 +73,7 @@ begin
     N := L.N;
     HeadSize := L.DataStart;
     { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，SpanZero 零化）。 }
+      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。 }
     GetMem(Head, HeadSize);
     try
       ResPackWriterFillHead(Head, AEntries, AOpts, L);

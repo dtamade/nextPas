@@ -83,6 +83,8 @@ function MatchPathPattern(const APattern, APath: string): Boolean;
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.encoding,
   nextpas.core.http.message,
   nextpas.core.http.middleware;
@@ -92,7 +94,7 @@ const
 
 { Helpers }
 
-function CommonPrefixLen(const A, B: string): SizeInt;
+function CommonPrefixLen(const A, B: string): SizeInt; inline;
 var
   LMax: SizeInt;
   I: SizeInt;
@@ -109,13 +111,33 @@ begin
   end;
 end;
 
+{ perf: offset-aware common prefix without allocation — zero-copy view, inline hot path }
+function CommonPrefixLenAt(const APrefix: string; const APath: string; APos: SizeInt): SizeInt; inline;
+var
+  LMax, I: SizeInt;
+begin
+  Result := 0;
+  if (APrefix = '') or (APos > Length(APath)) then
+    Exit;
+  LMax := Length(APrefix);
+  if Length(APath) - APos + 1 < LMax then
+    LMax := Length(APath) - APos + 1;
+  for I := 1 to LMax do
+  begin
+    if APrefix[I] <> APath[APos + I - 1] then
+      Exit;
+    Inc(Result);
+  end;
+end;
+
 { MatchPathPattern: 单趟双指针扫描，语义与 token888 侧使用方对齐
   （连续 '/' 折叠 → 段必然非空；'*' 段即返回 True → nkWildcard consumes rest
-  可空；无 '*' 时段数须相等）。零分配（仅静态段比较时 Copy 单段）。 }
-function MatchPathPattern(const APattern, APath: string): Boolean;
+  可空；无 '*' 时段数须相等）。perf: 零拷贝 TByteSpan 视图（bytes.ops 单源 SpanEqual，no Copy），inline 热路径。 }
+function MatchPathPattern(const APattern, APath: string): Boolean; inline;
 var
   LP, LE: SizeInt; { pattern 当前段起止（LE 指向段后 '/' 或串尾） }
   LQ, LF: SizeInt; { path 当前段起止 }
+  LSegLenP, LSegLenQ: SizeInt;
 begin
   Result := False;
   if (APattern = '') or (APath = '') then
@@ -147,10 +169,19 @@ begin
     while (LF <= Length(APath)) and (APath[LF] <> '/') do
       Inc(LF);
 
-    { ':xxx' 单段通配；静态段逐字相等 }
-    if (APattern[LP] <> ':') and
-       (Copy(APattern, LP, LE - LP) <> Copy(APath, LQ, LF - LQ)) then
-      Exit;
+    { ':xxx' 单段通配；静态段逐字相等 — perf: zero-copy TByteSpan via bytes.ops SpanEqual (single source, no Copy/Move) }
+    if (APattern[LP] <> ':') then
+    begin
+      LSegLenP := LE - LP;
+      LSegLenQ := LF - LQ;
+      if LSegLenP <> LSegLenQ then
+        Exit;
+      if LSegLenP > 0 then
+        if not SpanEqual(
+          TByteSpan.Create(PByte(@APattern[LP]), SizeUInt(LSegLenP)),
+          TByteSpan.Create(PByte(@APath[LQ]), SizeUInt(LSegLenQ))) then
+          Exit;
+    end;
 
     { 推进到下一段 }
     LP := LE;
@@ -429,20 +460,20 @@ function THttpRouter.MatchNode(ANode: PRouteNode; const APath: string; var APara
 const
   MAX_MATCH_DEPTH = 128;
 
-  function DoMatch(ANode: PRouteNode; const APath: string; ADepth: Int32): THttpHandlerFunc;
+  { perf: zero-copy offset recursion — no Copy per hop, no per-request allocation抖动; inline hot path, single source TByteSpan view 原则 }
+  function DoMatch(ANode: PRouteNode; APos: SizeInt; ADepth: Int32): THttpHandlerFunc; inline;
   var
     LPos, LEnd: SizeInt;
     LSeg: string;
     LI: SizeInt;
     LCommon: SizeInt;
-    LRest: string;
     LResult: THttpHandlerFunc;
   begin
     Result := nil;
     if (ANode = nil) or (ADepth > MAX_MATCH_DEPTH) then
       Exit;
 
-    if APath = '' then
+    if APos > Length(APath) then
     begin
       if ANode^.HasHandler then
         Result := ANode^.Handler;
@@ -453,11 +484,10 @@ const
     begin
       if ANode^.Children[LI]^.Kind <> nkStatic then
         Continue;
-      LCommon := CommonPrefixLen(ANode^.Children[LI]^.Prefix, APath);
+      LCommon := CommonPrefixLenAt(ANode^.Children[LI]^.Prefix, APath, APos);
       if LCommon = Length(ANode^.Children[LI]^.Prefix) then
       begin
-        LRest := Copy(APath, LCommon + 1, Length(APath) - LCommon);
-        LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
+        LResult := DoMatch(ANode^.Children[LI], APos + LCommon, ADepth + 1);
         if LResult <> nil then
           Exit(LResult);
       end;
@@ -467,23 +497,22 @@ const
     begin
       if ANode^.Children[LI]^.Kind <> nkParam then
         Continue;
-      if (Length(APath) >= 1) and (APath[1] = '/') then
+      if (APos <= Length(APath)) and (APath[APos] = '/') then
       begin
-        LPos := 2;
+        LPos := APos + 1;
         LEnd := LPos;
         while (LEnd <= Length(APath)) and (APath[LEnd] <> '/') do
           Inc(LEnd);
-        LSeg := Copy(APath, LPos, LEnd - LPos);
-        if LSeg <> '' then
+        if LEnd > LPos then
         begin
+          LSeg := Copy(APath, LPos, LEnd - LPos);
           SetLength(AParams, Length(AParams) + 1);
           AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
           { 路径参数按 RFC 3986 percent-decode（%xx → 原字符；如邮箱地址
             客户端 encodeURIComponent 后 %40）。段内解码不改 '/' 拆分语义，
             '+' 保持字面（PercentDecode 为 path 语义，非 form 语义）。 }
           AParams[High(AParams)].Value := PercentDecode(LSeg);
-          LRest := Copy(APath, LEnd, Length(APath) - LEnd + 1);
-          LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
+          LResult := DoMatch(ANode^.Children[LI], LEnd, ADepth + 1);
           if LResult <> nil then
             Exit(LResult);
           SetLength(AParams, Length(AParams) - 1);
@@ -495,12 +524,12 @@ const
     begin
       if ANode^.Children[LI]^.Kind <> nkWildcard then
         Continue;
-      if (Length(APath) >= 1) and (APath[1] = '/') then
+      if (APos <= Length(APath)) and (APath[APos] = '/') then
       begin
         SetLength(AParams, Length(AParams) + 1);
         AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
         AParams[High(AParams)].Value := PercentDecode(
-          Copy(APath, 2, Length(APath) - 1));
+          Copy(APath, APos + 1, Length(APath) - APos));
         if ANode^.Children[LI]^.HasHandler then
           Exit(ANode^.Children[LI]^.Handler);
         SetLength(AParams, Length(AParams) - 1);
@@ -509,7 +538,13 @@ const
   end;
 
 begin
-  Result := DoMatch(ANode, APath, 0);
+  if APath = '' then
+  begin
+    if (ANode <> nil) and ANode^.HasHandler then
+      Exit(ANode^.Handler);
+    Exit(nil);
+  end;
+  Result := DoMatch(ANode, 1, 0);
 end;
 
 procedure THttpRouter.Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);

@@ -76,9 +76,13 @@ type
     FRepo: TNativeRepository; { borrowed, not owned }
     FGraph: TCommitGraph;     { owned, nil when no commit-graph }
     FHeap: array of TWalkEntry;
+    FHeapLen: SizeInt;
+    FHeapCap: SizeInt;
     FSeen: TGitOidSet;        { owned }
     FHidden: TGitOidSet;      { owned, hide set }
     FBoundary: TGitRevEntryArray;
+    FBoundaryLen: SizeInt;
+    FBoundaryCap: SizeInt;
     FBoundaryPos: Integer;
     FFirstParent: Boolean;
     FSince: Int64;
@@ -137,6 +141,9 @@ function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
   const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitRevEntryArray;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 function OidLess(const AA, AB: TGitOid): Boolean;
 var
@@ -278,6 +285,7 @@ procedure BuildHiddenSet(ARepo: TNativeRepository;
   out AHidden: TGitOidSet);
 var
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Oid: TGitOid;
   Data: TBytes;
   Kind: TGitObjectKind;
@@ -297,11 +305,14 @@ begin
     Graph := nil;
   end;
   try
+    // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
     Stack := Copy(AHides);
-    while Length(Stack) > 0 do
+    StackLen := Length(Stack);
+    StackCap := StackLen;
+    while StackLen > 0 do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
+      Dec(StackLen);
+      Oid := Stack[StackLen];
       if AHidden.Contains(Oid) then
         Continue;
       UsedGraph := TryGraphParents(Graph, Oid, GWhen, GParents);
@@ -323,16 +334,26 @@ begin
       begin
         if Length(GParents) > 0 then
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[0];
+          Inc(StackLen);
         end;
       end
       else
       begin
         for I := 0 to High(GParents) do
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[I];
+          Inc(StackLen);
         end;
       end;
     end;
@@ -364,8 +385,14 @@ procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
 var
   I, Parent: Integer;
 begin
-  SetLength(FHeap, Length(FHeap) + 1);
-  I := High(FHeap);
+  // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+  if FHeapLen + 1 > FHeapCap then
+  begin
+    FHeapCap := BytesGrowCapacityInt(FHeapCap, FHeapLen + 1);
+    SetLength(FHeap, FHeapCap);
+  end;
+  I := FHeapLen;
+  Inc(FHeapLen);
   // max-heap on When: newest commit at the root
   while I > 0 do
   begin
@@ -380,17 +407,16 @@ end;
 
 function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
 var
-  Last, I, L, R, Best: Integer;
+  I, L, R, Best: Integer;
   Tmp: TWalkEntry;
 begin
-  Result := Length(FHeap) > 0;
+  Result := FHeapLen > 0;
   if not Result then
     Exit;
   AEntry := FHeap[0];
-  Last := High(FHeap);
-  FHeap[0] := FHeap[Last];
-  SetLength(FHeap, Last);
-  if Last = 0 then
+  Dec(FHeapLen);
+  FHeap[0] := FHeap[FHeapLen];
+  if FHeapLen = 0 then
     Exit;
   // restore the max-heap property from the root
   I := 0;
@@ -399,9 +425,9 @@ begin
     L := 2 * I + 1;
     R := L + 1;
     Best := I;
-    if (L <= High(FHeap)) and (FHeap[L].When > FHeap[Best].When) then
+    if (L < FHeapLen) and (FHeap[L].When > FHeap[Best].When) then
       Best := L;
-    if (R <= High(FHeap)) and (FHeap[R].When > FHeap[Best].When) then
+    if (R < FHeapLen) and (FHeap[R].When > FHeap[Best].When) then
       Best := R;
     if Best = I then
       Break;
@@ -428,12 +454,18 @@ begin
   begin
     if FShowBoundary then
     begin
-      for I := 0 to High(FBoundary) do
+      for I := 0 to FBoundaryLen - 1 do
         if GitOidSame(FBoundary[I].Oid, AOid) then
           Exit;
-      SetLength(FBoundary, Length(FBoundary) + 1);
-      FBoundary[High(FBoundary)].Oid := AOid;
-      FBoundary[High(FBoundary)].IsBoundary := True;
+      // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+      if FBoundaryLen + 1 > FBoundaryCap then
+      begin
+        FBoundaryCap := BytesGrowCapacityInt(FBoundaryCap, FBoundaryLen + 1);
+        SetLength(FBoundary, FBoundaryCap);
+      end;
+      FBoundary[FBoundaryLen].Oid := AOid;
+      FBoundary[FBoundaryLen].IsBoundary := True;
+      Inc(FBoundaryLen);
     end;
     Exit;
   end;
@@ -473,6 +505,7 @@ end;
 procedure TGitRevWalker.EnqueueHidden(const AOid: TGitOid);
 var
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Cur: TGitOid;
   Data: TBytes;
   Kind: TGitObjectKind;
@@ -484,13 +517,18 @@ begin
   if FHidden = nil then
     FHidden := TGitOidSet.Create;
   InitGraph;
+  // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
   Stack := nil;
-  SetLength(Stack, 1);
+  StackLen := 0;
+  StackCap := 0;
+  StackCap := BytesGrowCapacityInt(StackCap, 1);
+  SetLength(Stack, StackCap);
   Stack[0] := AOid;
-  while Length(Stack) > 0 do
+  StackLen := 1;
+  while StackLen > 0 do
   begin
-    Cur := Stack[High(Stack)];
-    SetLength(Stack, Length(Stack) - 1);
+    Dec(StackLen);
+    Cur := Stack[StackLen];
     if FHidden.Contains(Cur) then
       Continue;
     if TryGraphCommit(Cur, GWhen, GParents) then
@@ -500,16 +538,26 @@ begin
       begin
         if Length(GParents) > 0 then
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[0];
+          Inc(StackLen);
         end;
       end
       else
       begin
         for I := 0 to High(GParents) do
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[I];
+          Inc(StackLen);
         end;
       end;
       Continue;
@@ -528,16 +576,26 @@ begin
     begin
       if Length(Info.Parents) > 0 then
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[0];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Info.Parents[0];
+        Inc(StackLen);
       end;
     end
     else
     begin
       for I := 0 to High(Info.Parents) do
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[I];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Info.Parents[I];
+        Inc(StackLen);
       end;
     end;
   end;
@@ -555,9 +613,14 @@ begin
     raise EGitError.Create('revwalk requires a repository');
   FRepo := ARepo;
   FGraph := nil;
+  FHeap := nil;
+  FHeapLen := 0;
+  FHeapCap := 0;
   FSeen := TGitOidSet.Create;
   FHidden := nil;
   FBoundary := nil;
+  FBoundaryLen := 0;
+  FBoundaryCap := 0;
   FBoundaryPos := 0;
   FFirstParent := AOptions.FirstParent;
   FSince := AOptions.Since;
@@ -616,7 +679,7 @@ begin
   begin
     if not HeapPop(Entry) then
     begin
-      if FShowBoundary and (FBoundaryPos < Length(FBoundary)) then
+      if FShowBoundary and (FBoundaryPos < FBoundaryLen) then
       begin
         AOid := FBoundary[FBoundaryPos].Oid;
         Inc(FBoundaryPos);
@@ -634,7 +697,7 @@ begin
       if IsHidden and FShowBoundary then
       begin
         IsHidden := False;
-        for K := 0 to High(FBoundary) do
+        for K := 0 to FBoundaryLen - 1 do
           if GitOidSame(FBoundary[K].Oid, Entry.Parents[I]) then
           begin
             IsHidden := True;
@@ -642,9 +705,15 @@ begin
           end;
         if not IsHidden then
         begin
-          SetLength(FBoundary, Length(FBoundary) + 1);
-          FBoundary[High(FBoundary)].Oid := Entry.Parents[I];
-          FBoundary[High(FBoundary)].IsBoundary := True;
+          // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+          if FBoundaryLen + 1 > FBoundaryCap then
+          begin
+            FBoundaryCap := BytesGrowCapacityInt(FBoundaryCap, FBoundaryLen + 1);
+            SetLength(FBoundary, FBoundaryCap);
+          end;
+          FBoundary[FBoundaryLen].Oid := Entry.Parents[I];
+          FBoundary[FBoundaryLen].IsBoundary := True;
+          Inc(FBoundaryLen);
         end;
         Continue;
       end;
@@ -666,7 +735,7 @@ var
   WasBoundary: Boolean;
 begin
   // drain heap first, then boundary
-  WasBoundary := FShowBoundary and (Length(FHeap) = 0) and (FBoundaryPos < Length(FBoundary));
+  WasBoundary := FShowBoundary and (FHeapLen = 0) and (FBoundaryPos < FBoundaryLen);
   if WasBoundary then
   begin
     AEntry.Oid := FBoundary[FBoundaryPos].Oid;
@@ -678,7 +747,7 @@ begin
     Exit(False);
   // Next may have returned a boundary entry via its own drain; detect by checking if Oid is in boundary list and heap was empty
   WasBoundary := False;
-  for I := 0 to High(FBoundary) do
+  for I := 0 to FBoundaryLen - 1 do
     if GitOidSame(FBoundary[I].Oid, Oid) then
     begin
       // if Oid was boundary, it would have been appended to FBoundary and returned after heap empty
@@ -699,18 +768,29 @@ var
   Walker: TGitRevWalker;
   I: SizeInt;
   Oid: TGitOid;
+  LLen, LCap: SizeInt;
 begin
   Result := nil;
+  LLen := 0;
+  LCap := 0;
   Walker := TGitRevWalker.Create(ARepo);
   try
     for I := 0 to High(AStarts) do
       Walker.Push(AStarts[I]);
-    while ((AMaxCount < 0) or (Length(Result) < AMaxCount))
+    while ((AMaxCount < 0) or (LLen < AMaxCount))
       and Walker.Next(Oid) do
     begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Oid;
+      // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+      if LLen + 1 > LCap then
+      begin
+        LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+        SetLength(Result, LCap);
+      end;
+      Result[LLen] := Oid;
+      Inc(LLen);
     end;
+    if LLen <> Length(Result) then
+      SetLength(Result, LLen);
   finally
     Walker.Free;
   end;
@@ -721,24 +801,26 @@ function GitCollectCommits(ARepo: TNativeRepository;
   const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray;
 var
   E: TGitRevEntryArray;
-  I: Integer;
+  I, LLen, LCap: Integer;
 begin
   Result := nil;
   E := GitCollectCommitsWithBoundary(ARepo, AStarts, AHides, AOptions, AMaxCount);
-  SetLength(Result, Length(E));
+  LLen := 0;
+  LCap := 0;
   for I := 0 to High(E) do
     if not E[I].IsBoundary then
     begin
-      // compact out boundary entries for the non-boundary overload
+      // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+      if LLen + 1 > LCap then
+      begin
+        LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+        SetLength(Result, LCap);
+      end;
+      Result[LLen] := E[I].Oid;
+      Inc(LLen);
     end;
-  // second pass without boundary: just filter
-  Result := nil;
-  for I := 0 to High(E) do
-    if not E[I].IsBoundary then
-    begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := E[I].Oid;
-    end;
+  if LLen <> Length(Result) then
+    SetLength(Result, LLen);
 end;
 
 function GitCollectCommitsWithBoundary(ARepo: TNativeRepository;
@@ -748,16 +830,24 @@ var
   Hidden: TGitOidSet;
   Seen: TGitOidSet;
   Heap: array of TWalkEntry;
+  HeapLen, HeapCap: SizeInt;
   BoundarySet: TGitOidSet;
   BoundaryList: TGitOidArray;
+  BoundaryLen, BoundaryCap: SizeInt;
   Graph: TCommitGraph;
 
+  // perf: heap local collect exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
   procedure HeapPushLocal(const AEntry: TWalkEntry);
   var
     I, Parent: Integer;
   begin
-    SetLength(Heap, Length(Heap) + 1);
-    I := High(Heap);
+    if HeapLen + 1 > HeapCap then
+    begin
+      HeapCap := BytesGrowCapacityInt(HeapCap, HeapLen + 1);
+      SetLength(Heap, HeapCap);
+    end;
+    I := HeapLen;
+    Inc(HeapLen);
     while I > 0 do
     begin
       Parent := (I - 1) div 2;
@@ -771,17 +861,16 @@ var
 
   function HeapPopLocal(out AEntry: TWalkEntry): Boolean;
   var
-    Last, I, L, R, Best: Integer;
+    I, L, R, Best: Integer;
     Tmp: TWalkEntry;
   begin
-    Result := Length(Heap) > 0;
+    Result := HeapLen > 0;
     if not Result then
       Exit;
     AEntry := Heap[0];
-    Last := High(Heap);
-    Heap[0] := Heap[Last];
-    SetLength(Heap, Last);
-    if Last = 0 then
+    Dec(HeapLen);
+    Heap[0] := Heap[HeapLen];
+    if HeapLen = 0 then
       Exit;
     I := 0;
     while True do
@@ -789,9 +878,9 @@ var
       L := 2 * I + 1;
       R := L + 1;
       Best := I;
-      if (L <= High(Heap)) and (Heap[L].When > Heap[Best].When) then
+      if (L < HeapLen) and (Heap[L].When > Heap[Best].When) then
         Best := L;
-      if (R <= High(Heap)) and (Heap[R].When > Heap[Best].When) then
+      if (R < HeapLen) and (Heap[R].When > Heap[Best].When) then
         Best := R;
       if Best = I then
         Break;
@@ -844,8 +933,16 @@ var
   Entry: TWalkEntry;
   Emitted: Integer;
   ParentOid: TGitOid;
+  RLen, RCap: SizeInt;
 begin
   Result := nil;
+  RLen := 0;
+  RCap := 0;
+  HeapLen := 0;
+  HeapCap := 0;
+  BoundaryLen := 0;
+  BoundaryCap := 0;
+  BoundaryList := nil;
   Graph := nil;
   try
     if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then
@@ -868,8 +965,14 @@ begin
         if AOptions.ShowBoundary and not BoundarySet.Contains(AStarts[I]) then
         begin
           BoundarySet.Add(AStarts[I]);
-          SetLength(BoundaryList, Length(BoundaryList) + 1);
-          BoundaryList[High(BoundaryList)] := AStarts[I];
+          // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+          if BoundaryLen + 1 > BoundaryCap then
+          begin
+            BoundaryCap := BytesGrowCapacityInt(BoundaryCap, BoundaryLen + 1);
+            SetLength(BoundaryList, BoundaryCap);
+          end;
+          BoundaryList[BoundaryLen] := AStarts[I];
+          Inc(BoundaryLen);
         end;
         Continue;
       end;
@@ -891,8 +994,13 @@ begin
           if AOptions.ShowBoundary and not BoundarySet.Contains(ParentOid) then
           begin
             BoundarySet.Add(ParentOid);
-            SetLength(BoundaryList, Length(BoundaryList) + 1);
-            BoundaryList[High(BoundaryList)] := ParentOid;
+            if BoundaryLen + 1 > BoundaryCap then
+            begin
+              BoundaryCap := BytesGrowCapacityInt(BoundaryCap, BoundaryLen + 1);
+              SetLength(BoundaryList, BoundaryCap);
+            end;
+            BoundaryList[BoundaryLen] := ParentOid;
+            Inc(BoundaryLen);
           end;
           Continue;
         end;
@@ -902,23 +1010,37 @@ begin
         Continue;
       if (AMaxCount >= 0) and (Emitted >= AMaxCount) then
         Break;
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)].Oid := Entry.Oid;
-      Result[High(Result)].IsBoundary := False;
+      if RLen + 1 > RCap then
+      begin
+        RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+        SetLength(Result, RCap);
+      end;
+      Result[RLen].Oid := Entry.Oid;
+      Result[RLen].IsBoundary := False;
+      Inc(RLen);
       Inc(Emitted);
     end;
+    if BoundaryLen <> Length(BoundaryList) then
+      SetLength(BoundaryList, BoundaryLen);
     // append boundary entries after main list, preserving discovery order
     if AOptions.ShowBoundary then
     begin
-      for I := 0 to High(BoundaryList) do
+      for I := 0 to BoundaryLen - 1 do
       begin
-        if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+        if (AMaxCount >= 0) and (RLen >= AMaxCount) then
           Break;
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)].Oid := BoundaryList[I];
-        Result[High(Result)].IsBoundary := True;
+        if RLen + 1 > RCap then
+        begin
+          RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+          SetLength(Result, RCap);
+        end;
+        Result[RLen].Oid := BoundaryList[I];
+        Result[RLen].IsBoundary := True;
+        Inc(RLen);
       end;
     end;
+    if RLen <> Length(Result) then
+      SetLength(Result, RLen);
   finally
     Seen.Free;
     BoundarySet.Free;
@@ -1041,24 +1163,36 @@ function GitTopoOrderCommits(ARepo: TNativeRepository;
   const AStarts: TGitOidArray; AMaxCount: SizeInt): TGitOidArray;
 var
   Nodes: TTopoNodes;
+  NodesLen, NodesCap: SizeInt;
   Order, Scratch, Ready: TNodeIndexArray;
+  ReadyLen, ReadyCap: SizeInt;
   Seen: TGitOidSet;
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Data: TBytes;
   Kind: TGitObjectKind;
   Info: TGitCommitInfo;
   Oid: TGitOid;
   I, J, NodeIdx, ParentIdx: Integer;
+  RLen, RCap: SizeInt;
 begin
   Result := nil;
+  RLen := 0;
+  RCap := 0;
   Seen := TGitOidSet.Create;
   try
     { phase 1: discover the full reachable set, parsing each commit once }
+    // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
     Stack := Copy(AStarts);
-    while Length(Stack) > 0 do
+    StackLen := Length(Stack);
+    StackCap := StackLen;
+    Nodes := nil;
+    NodesLen := 0;
+    NodesCap := 0;
+    while StackLen > 0 do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
+      Dec(StackLen);
+      Oid := Stack[StackLen];
       if Seen.Contains(Oid) then
         Continue;
       Data := ARepo.ReadObject(Oid, Kind);
@@ -1066,18 +1200,32 @@ begin
         raise EGitError.Create('topo walk start points at a non-commit object');
       Info := GitParseCommit(Data);
       Seen.Add(Oid);
-      NodeIdx := Length(Nodes);
-      SetLength(Nodes, NodeIdx + 1);
+      if NodesLen + 1 > NodesCap then
+      begin
+        NodesCap := BytesGrowCapacityInt(NodesCap, NodesLen + 1);
+        SetLength(Nodes, NodesCap);
+      end;
+      NodeIdx := NodesLen;
+      Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
       Nodes[NodeIdx].When := Info.Committer.UnixTime;
       Nodes[NodeIdx].Parents := Copy(Info.Parents);
       Nodes[NodeIdx].ChildCount := 0;
       for J := 0 to High(Info.Parents) do
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[J];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Info.Parents[J];
+        Inc(StackLen);
       end;
     end;
+    if NodesLen <> Length(Nodes) then
+      SetLength(Nodes, NodesLen);
+    if StackLen <> Length(Stack) then
+      SetLength(Stack, StackLen);
 
     { phase 2: count each node's children within the set }
     SetLength(Order, Length(Nodes));
@@ -1101,33 +1249,58 @@ begin
       (REV_SORT_IN_GRAPH_ORDER). Initial tips are stacked oldest-first so
       the newest pops first; afterwards the last-listed newly-ready parent
       pops before its siblings. }
+    Ready := nil;
+    ReadyLen := 0;
+    ReadyCap := 0;
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
-        SetLength(Ready, Length(Ready) + 1);
-        Ready[High(Ready)] := I;
+        if ReadyLen + 1 > ReadyCap then
+        begin
+          ReadyCap := BytesGrowCapacityInt(ReadyCap, ReadyLen + 1);
+          SetLength(Ready, ReadyCap);
+        end;
+        Ready[ReadyLen] := I;
+        Inc(ReadyLen);
       end;
+    if ReadyLen <> Length(Ready) then
+      SetLength(Ready, ReadyLen);
     TopoSortTips(Ready, Nodes);
+    ReadyLen := Length(Ready);
+    ReadyCap := ReadyLen;
     while True do
     begin
-      if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+      if (AMaxCount >= 0) and (RLen >= AMaxCount) then
         Break;
-      NodeIdx := TopoStackPop(Ready);
-      if NodeIdx < 0 then
+      if ReadyLen = 0 then
         Break;
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Nodes[NodeIdx].Oid;
+      Dec(ReadyLen);
+      NodeIdx := Ready[ReadyLen];
+      if RLen + 1 > RCap then
+      begin
+        RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+        SetLength(Result, RCap);
+      end;
+      Result[RLen] := Nodes[NodeIdx].Oid;
+      Inc(RLen);
       for J := 0 to High(Nodes[NodeIdx].Parents) do
       begin
         ParentIdx := TopoNodeIndexOf(Nodes[NodeIdx].Parents[J], Order, Nodes);
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          SetLength(Ready, Length(Ready) + 1);
-          Ready[High(Ready)] := ParentIdx;
+          if ReadyLen + 1 > ReadyCap then
+          begin
+            ReadyCap := BytesGrowCapacityInt(ReadyCap, ReadyLen + 1);
+            SetLength(Ready, ReadyCap);
+          end;
+          Ready[ReadyLen] := ParentIdx;
+          Inc(ReadyLen);
         end;
       end;
     end;
+    if RLen <> Length(Result) then
+      SetLength(Result, RLen);
   finally
     Seen.Free;
   end;
@@ -1138,16 +1311,26 @@ function GitTopoOrderCommits(ARepo: TNativeRepository;
   const AOptions: TGitRevOptions; AMaxCount: SizeInt): TGitOidArray;
 var
   E: TGitRevEntryArray;
-  I: Integer;
+  I, LLen, LCap: Integer;
 begin
   Result := nil;
+  LLen := 0;
+  LCap := 0;
   E := GitTopoOrderCommitsWithBoundary(ARepo, AStarts, AHides, AOptions, AMaxCount);
   for I := 0 to High(E) do
     if not E[I].IsBoundary then
     begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := E[I].Oid;
+      // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+      if LLen + 1 > LCap then
+      begin
+        LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+        SetLength(Result, LCap);
+      end;
+      Result[LLen] := E[I].Oid;
+      Inc(LLen);
     end;
+  if LLen <> Length(Result) then
+    SetLength(Result, LLen);
 end;
 
 function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
@@ -1156,9 +1339,12 @@ function GitTopoOrderCommitsWithBoundary(ARepo: TNativeRepository;
 var
   Hidden: TGitOidSet;
   Nodes: TTopoNodes;
+  NodesLen, NodesCap: SizeInt;
   Order, Scratch, Ready: TNodeIndexArray;
+  ReadyLen, ReadyCap: SizeInt;
   Seen: TGitOidSet;
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Data: TBytes;
   Kind: TGitObjectKind;
   Info: TGitCommitInfo;
@@ -1166,14 +1352,18 @@ var
   I, J, NodeIdx, ParentIdx: Integer;
   BoundarySet: TGitOidSet;
   BoundaryList: TGitOidArray;
+  BoundaryLen, BoundaryCap: SizeInt;
   Emitted: Integer;
   DateFiltered: array of Boolean;
   Graph: TCommitGraph;
   GWhen: Int64;
   GParents: TGitOidArray;
   UseGraph: Boolean;
+  RLen, RCap: SizeInt;
 begin
   Result := nil;
+  RLen := 0;
+  RCap := 0;
   Graph := nil;
   try
     if not GitTryLoadCommitGraph(ARepo.GitDir, Graph) then
@@ -1188,11 +1378,20 @@ begin
   BoundarySet := TGitOidSet.Create;
   try
     // phase 1: discover reachable from starts, stopping at hidden boundary
+    // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
     Stack := Copy(AStarts);
-    while Length(Stack) > 0 do
+    StackLen := Length(Stack);
+    StackCap := StackLen;
+    Nodes := nil;
+    NodesLen := 0;
+    NodesCap := 0;
+    BoundaryList := nil;
+    BoundaryLen := 0;
+    BoundaryCap := 0;
+    while StackLen > 0 do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
+      Dec(StackLen);
+      Oid := Stack[StackLen];
       if Seen.Contains(Oid) then
         Continue;
       if (Hidden <> nil) and Hidden.Contains(Oid) then
@@ -1200,8 +1399,13 @@ begin
         if AOptions.ShowBoundary and not BoundarySet.Contains(Oid) then
         begin
           BoundarySet.Add(Oid);
-          SetLength(BoundaryList, Length(BoundaryList) + 1);
-          BoundaryList[High(BoundaryList)] := Oid;
+          if BoundaryLen + 1 > BoundaryCap then
+          begin
+            BoundaryCap := BytesGrowCapacityInt(BoundaryCap, BoundaryLen + 1);
+            SetLength(BoundaryList, BoundaryCap);
+          end;
+          BoundaryList[BoundaryLen] := Oid;
+          Inc(BoundaryLen);
         end;
         Continue;
       end;
@@ -1220,8 +1424,13 @@ begin
         GParents := Copy(Info.Parents);
       end;
       Seen.Add(Oid);
-      NodeIdx := Length(Nodes);
-      SetLength(Nodes, NodeIdx + 1);
+      if NodesLen + 1 > NodesCap then
+      begin
+        NodesCap := BytesGrowCapacityInt(NodesCap, NodesLen + 1);
+        SetLength(Nodes, NodesCap);
+      end;
+      NodeIdx := NodesLen;
+      Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
       Nodes[NodeIdx].When := GWhen;
       // store parents respecting first-parent flag for graph edges
@@ -1246,28 +1455,51 @@ begin
           if AOptions.ShowBoundary and not BoundarySet.Contains(Nodes[NodeIdx].Parents[J]) then
           begin
             BoundarySet.Add(Nodes[NodeIdx].Parents[J]);
-            SetLength(BoundaryList, Length(BoundaryList) + 1);
-            BoundaryList[High(BoundaryList)] := Nodes[NodeIdx].Parents[J];
+            if BoundaryLen + 1 > BoundaryCap then
+            begin
+              BoundaryCap := BytesGrowCapacityInt(BoundaryCap, BoundaryLen + 1);
+              SetLength(BoundaryList, BoundaryCap);
+            end;
+            BoundaryList[BoundaryLen] := Nodes[NodeIdx].Parents[J];
+            Inc(BoundaryLen);
           end;
           Continue;
         end;
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Nodes[NodeIdx].Parents[J];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Nodes[NodeIdx].Parents[J];
+        Inc(StackLen);
       end;
     end;
+    if NodesLen <> Length(Nodes) then
+      SetLength(Nodes, NodesLen);
+    if StackLen <> Length(Stack) then
+      SetLength(Stack, StackLen);
+    if BoundaryLen <> Length(BoundaryList) then
+      SetLength(BoundaryList, BoundaryLen);
     if Length(Nodes) = 0 then
     begin
       // only boundaries
       if AOptions.ShowBoundary then
       begin
-        for I := 0 to High(BoundaryList) do
+        for I := 0 to BoundaryLen - 1 do
         begin
-          if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+          if (AMaxCount >= 0) and (RLen >= AMaxCount) then
             Break;
-          SetLength(Result, Length(Result) + 1);
-          Result[High(Result)].Oid := BoundaryList[I];
-          Result[High(Result)].IsBoundary := True;
+          if RLen + 1 > RCap then
+          begin
+            RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+            SetLength(Result, RCap);
+          end;
+          Result[RLen].Oid := BoundaryList[I];
+          Result[RLen].IsBoundary := True;
+          Inc(RLen);
         end;
+        if RLen <> Length(Result) then
+          SetLength(Result, RLen);
       end;
       Exit;
     end;
@@ -1294,21 +1526,34 @@ begin
     for I := 0 to High(Nodes) do
       DateFiltered[I] := not PassesDateFilter(Nodes[I].When, AOptions.Since, AOptions.UntilTime);
     // phase 3: LIFO ready stack
+    Ready := nil;
+    ReadyLen := 0;
+    ReadyCap := 0;
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
-        SetLength(Ready, Length(Ready) + 1);
-        Ready[High(Ready)] := I;
+        if ReadyLen + 1 > ReadyCap then
+        begin
+          ReadyCap := BytesGrowCapacityInt(ReadyCap, ReadyLen + 1);
+          SetLength(Ready, ReadyCap);
+        end;
+        Ready[ReadyLen] := I;
+        Inc(ReadyLen);
       end;
+    if ReadyLen <> Length(Ready) then
+      SetLength(Ready, ReadyLen);
     TopoSortTips(Ready, Nodes);
+    ReadyLen := Length(Ready);
+    ReadyCap := ReadyLen;
     Emitted := 0;
     while True do
     begin
-      if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) and (Emitted >= AMaxCount) then
+      if (AMaxCount >= 0) and (RLen >= AMaxCount) and (Emitted >= AMaxCount) then
         Break;
-      NodeIdx := TopoStackPop(Ready);
-      if NodeIdx < 0 then
+      if ReadyLen = 0 then
         Break;
+      Dec(ReadyLen);
+      NodeIdx := Ready[ReadyLen];
       // still need to decrement children of parents even if filtered?
       // but we have to make parents ready when all children processed
       // If node is date-filtered, we skip emission but still process parents
@@ -1316,9 +1561,14 @@ begin
       begin
         if (AMaxCount < 0) or (Emitted < AMaxCount) then
         begin
-          SetLength(Result, Length(Result) + 1);
-          Result[High(Result)].Oid := Nodes[NodeIdx].Oid;
-          Result[High(Result)].IsBoundary := False;
+          if RLen + 1 > RCap then
+          begin
+            RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+            SetLength(Result, RCap);
+          end;
+          Result[RLen].Oid := Nodes[NodeIdx].Oid;
+          Result[RLen].IsBoundary := False;
+          Inc(RLen);
           Inc(Emitted);
         end;
       end
@@ -1334,16 +1584,21 @@ begin
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          SetLength(Ready, Length(Ready) + 1);
-          Ready[High(Ready)] := ParentIdx;
+          if ReadyLen + 1 > ReadyCap then
+          begin
+            ReadyCap := BytesGrowCapacityInt(ReadyCap, ReadyLen + 1);
+            SetLength(Ready, ReadyCap);
+          end;
+          Ready[ReadyLen] := ParentIdx;
+          Inc(ReadyLen);
         end;
       end;
     end;
     if AOptions.ShowBoundary then
     begin
-      for I := 0 to High(BoundaryList) do
+      for I := 0 to BoundaryLen - 1 do
       begin
-        if (AMaxCount >= 0) and (Length(Result) >= AMaxCount) then
+        if (AMaxCount >= 0) and (RLen >= AMaxCount) then
           Break;
         // boundary respects date filter? Apply same filter
         // need to fetch boundary commit date to filter - read it
@@ -1361,11 +1616,18 @@ begin
           except
           end;
         end;
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)].Oid := BoundaryList[I];
-        Result[High(Result)].IsBoundary := True;
+        if RLen + 1 > RCap then
+        begin
+          RCap := BytesGrowCapacityInt(RCap, RLen + 1);
+          SetLength(Result, RCap);
+        end;
+        Result[RLen].Oid := BoundaryList[I];
+        Result[RLen].IsBoundary := True;
+        Inc(RLen);
       end;
     end;
+    if RLen <> Length(Result) then
+      SetLength(Result, RLen);
   finally
     Seen.Free;
     BoundarySet.Free;

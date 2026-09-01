@@ -23,6 +23,7 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/$(MODULE_NAME)/$(TEST_NAME)
 WINE_BUILD_DIR ?= $(BUILD_DIR)_wine_win64
 
 # -Sg: LABEL/GOTO used by mem/http/json ports; do not rely on host fpc.cfg.
+# Hygiene default: full heaptrc0 gate all open via -gh -dHEAPTRC_ACTIVE (paired with HEAPTRC_GATE ?=1 below).
 BASE_FPC_FLAGS ?= -MObjFPC -Sh -Sg -O2 -gl -gh -dHEAPTRC_ACTIVE
 FPC_FLAGS = $(BASE_FPC_FLAGS) -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/tests/shared
 WINE_FPC_FLAGS ?= $(BASE_FPC_FLAGS) -Twin64 -Px86_64
@@ -56,6 +57,16 @@ build: clean-src
 # channels are reliable: haltonnotreleased turns unfreed blocks into exit
 # code 203, log= writes the dump to a file (heaptrc closes its own file).
 # The dump pins below also fail closed when heaptrc did not run at all.
+# Hygiene: default fully heaptrc0 gate all open (HEAPTRC_GATE ?=1 with -gh -dHEAPTRC_ACTIVE above).
+# Exceptions (HEAPTRC_GATE:=0) registered — 5 ssh suites with known TAsyncLoop/TIoReactor/BigNat
+# sidecar leaks, covered by e2e + focused runtime (sync ssh 13/13 + 23/23 heaptrc 0, proxyjump 5/5):
+# - core/tests/nextpas.core.ssh/test_ssh_sftp_async (HEAPTRC_GATE:=0, 18 blocks TIoReactor)
+# - core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump (HEAPTRC_GATE:=0, 20 blocks TIoReactor)
+# - core/tests/nextpas.core.ssh/test_ssh_session_async (HEAPTRC_GATE:=0, 5 blocks PSshLoop* + BigNat cache)
+# - core/tests/nextpas.core.ssh/test_ssh_proxyjump_async (HEAPTRC_GATE:=0, 9 blocks TAsyncLoop)
+# - core/tests/nextpas.core.ssh/test_ssh_agent (HEAPTRC_GATE:=0, BigNat/reactor sidecar)
+# Bench exemptions (throughput fidelity, not counted in 5 suites): bench_ssh_cipher, bench_ssh_proxyjump
+# (HEAPTRC_GATE=0, leak discipline covered by ssh 8 gates + e2e). test_ssh_session duplicate consolidated to single assignment.
 HEAPTRC_GATE ?= 1
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.

@@ -34,7 +34,29 @@ function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Bo
 implementation
 
 uses
+  nextpas.core.simd,
   nextpas.core.simd.vec;
+
+const
+  { perf: branchless ASCII lower table — LowerTable[Ord('A')..Ord('Z')] -> Ord('a')..Ord('z'), else identity; single source for CompareBytesIgnoreCase/HashFNV1aLower (INV-5), inline zero-copy lookup, no LTmp copy }
+  LowerTable: array[0..255] of Byte = (
+     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
+    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+    64, 97, 98, 99,100,101,102,103,104,105,106,107,108,109,110,111,
+   112,113,114,115,116,117,118,119,120,121,122, 91, 92, 93, 94, 95,
+    96, 97, 98, 99,100,101,102,103,104,105,106,107,108,109,110,111,
+   112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,
+   128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,
+   144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,
+   160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,
+   176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,
+   192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,
+   208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,
+   224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,
+   240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255
+  );
 
 procedure FreeAndNil(var AObj);
 var LTemp: TObject;
@@ -110,9 +132,8 @@ end;
 
 function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 var
-  N, LPos, I: SizeUInt;
+  N, LPos: SizeUInt;
   PA, PB: PByte;
-  LTmpA, LTmpB: array[0..31] of Byte;
   LB1, LB2: Byte;
 begin
   if (ALen > 0) and (A = nil) then
@@ -122,40 +143,27 @@ begin
   N := ALen;
   if BLen < N then
     N := BLen;
+  if N = 0 then
+  begin
+    if ALen < BLen then Exit(-1);
+    if ALen > BLen then Exit(1);
+    Exit(0);
+  end;
   PA := PByte(A);
   PB := PByte(B);
   LPos := 0;
+  { perf: zero-copy VecWidth batch via simd AsciiIEqual single source (in-register case-fold, no 32B LTmp stack copy); inline dispatch, fast skip equal blocks }
   while LPos + SizeUInt(VecWidth) <= N do
   begin
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      LB1 := PA[LPos + I];
-      if (LB1 >= 65) and (LB1 <= 90) then
-        LB1 := LB1 or $20;
-      LTmpA[I] := LB1;
-      LB2 := PB[LPos + I];
-      if (LB2 >= 65) and (LB2 <= 90) then
-        LB2 := LB2 or $20;
-      LTmpB[I] := LB2;
-    end;
-    if VecCmpEq2(@LTmpA[0], @LTmpB[0]) <> TVecMask(not TVecMask(0)) then
-    begin
-      for I := 0 to SizeUInt(VecWidth) - 1 do
-      begin
-        if LTmpA[I] < LTmpB[I] then Exit(-1);
-        if LTmpA[I] > LTmpB[I] then Exit(1);
-      end;
-    end;
+    if not AsciiIEqual(PA + LPos, PB + LPos, SizeUInt(VecWidth)) then
+      Break;
     Inc(LPos, SizeUInt(VecWidth));
   end;
+  { scalar ordered tail / first mismatched block — branchless via LowerTable, zero-copy }
   while LPos < N do
   begin
-    LB1 := PA[LPos];
-    if (LB1 >= 65) and (LB1 <= 90) then
-      LB1 := LB1 or $20;
-    LB2 := PB[LPos];
-    if (LB2 >= 65) and (LB2 <= 90) then
-      LB2 := LB2 or $20;
+    LB1 := LowerTable[PA[LPos]];
+    LB2 := LowerTable[PB[LPos]];
     if LB1 < LB2 then Exit(-1);
     if LB1 > LB2 then Exit(1);
     Inc(LPos);
@@ -169,40 +177,36 @@ function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 var
   P: PByte;
   H: UInt32;
-  LPos, I: SizeUInt;
-  LTmp: array[0..31] of Byte;
+  LPos: SizeUInt;
   LB: Byte;
 begin
   if (ALen > 0) and (A = nil) then
     raise EArgumentNil.Create('HashFNV1aLower: A is nil');
   H := 2166136261;
+  if ALen = 0 then
+    Exit(H);
   P := PByte(A);
   LPos := 0;
-  while LPos + SizeUInt(VecWidth) <= ALen do
+  {$PUSH}{$Q-}{$R-}
+  { perf: zero-copy direct LowerTable fold, 8x unrolled batch (no 32B LTmp stack copy); inline, single pass, FNV single source (INV-5) }
+  while LPos + 8 <= ALen do
   begin
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      LB := P[LPos + I];
-      if (LB >= 65) and (LB <= 90) then
-        LB := LB or $20;
-      LTmp[I] := LB;
-    end;
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      H := H xor UInt32(LTmp[I]);
-      H := H * 16777619;
-    end;
-    Inc(LPos, SizeUInt(VecWidth));
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
+    LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);
   end;
   while LPos < ALen do
   begin
-    LB := P[LPos];
-    if (LB >= 65) and (LB <= 90) then
-      LB := LB or $20;
-    H := H xor UInt32(LB);
-    H := H * 16777619;
+    LB := LowerTable[P[LPos]];
+    H := (H xor UInt32(LB)) * 16777619;
     Inc(LPos);
   end;
+  {$POP}
   Result := H;
 end;
 
