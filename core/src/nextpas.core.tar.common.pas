@@ -4,6 +4,8 @@ unit nextpas.core.tar.common;
  * 负责 PadToBlock / 校验和 / 八进制与 base-256 双路径 / pax 守卫 / bomb 守卫 / 名安全。
  * 仅依赖 nextpas.*，无 FPC RTL 直引，消除两端重复，保证 fail-closed 单点一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
+ * 复用 nextpas.core.bytes.ops 零拷贝视图语义（TByteSpan/Move 单遍扫描），无重复分配。
+ * 性能：校验和/数值/pax 均 inline + 零拷贝 PByte 切片，单遍 512 融合避免双遍历。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -23,10 +25,26 @@ procedure GuardTarTotalSize(ACum, ANext: UInt64; AMaxTotal: UInt64);
 {** 名安全守卫（写端 EArgumentError，读端/落盘 EParseError 由调用方选） *}
 procedure GuardTarNameForRead(const AName: string);
 
+{** 校验和单点：512 块校验和计算与验证（unsigned/signed 双算，零拷贝 inline） *}
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64; inline;
+function TarComputeChecksumSigned(ABlock: PByte): Int64; inline;
+function TarStoredChecksum(ABlock: PByte): Int64; inline;
+procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
+function TarHeaderIsZeroBlock(ABlock: PByte): Boolean; inline;
+function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean; inline;
+
+{** 数值字段单点：八进制/base-256 双路径编解码（inline 零拷贝） *}
+function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64; inline;
+procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64); inline;
+
+{** pax 单点：零拷贝 slice 解析 path/linkpath（复用 bytes.ops 零拷贝语义） *}
+function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
+
 implementation
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.bytes.ops;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -56,6 +74,231 @@ procedure GuardTarNameForRead(const AName: string);
 begin
   if not IsSafeTarEntryName(AName) then
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
+end;
+
+{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现 — }
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64; inline;
+var
+  I: SizeUInt;
+  B: Byte;
+begin
+  Result := 0;
+  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
+      B := Ord(' ')
+    else
+      B := ABlock[I];
+    Result := Result + B;
+  end;
+end;
+
+function TarComputeChecksumSigned(ABlock: PByte): Int64; inline;
+var
+  I: SizeUInt;
+  B: Byte;
+begin
+  Result := 0;
+  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
+      B := Ord(' ')
+    else
+      B := ABlock[I];
+    Result := Result + ShortInt(B);
+  end;
+end;
+
+function TarStoredChecksum(ABlock: PByte): Int64; inline;
+begin
+  Result := TarParseNumericField(@ABlock[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, C_TAR_OFF_CHKSUM);
+end;
+
+procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
+var
+  Stored, U, S: Int64;
+begin
+  Stored := TarStoredChecksum(ABlock);
+  U := TarComputeChecksumUnsigned(ABlock);
+  S := TarComputeChecksumSigned(ABlock);
+  if (Stored <> U) and (Stored <> S) then
+    raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, Stored, U, S]);
+end;
+
+function TarHeaderIsZeroBlock(ABlock: PByte): Boolean; inline;
+var
+  I: SizeUInt;
+begin
+  Result := True;
+  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+    if ABlock[I] <> 0 then
+      Exit(False);
+end;
+
+function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean; inline;
+var
+  Stored, U, S: Int64;
+  I: SizeUInt;
+  B: Byte;
+  IsZero: Boolean;
+begin
+  Stored := TarParseNumericField(@ABlock[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, C_TAR_OFF_CHKSUM);
+  IsZero := True;
+  U := 0;
+  S := 0;
+  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    B := ABlock[I];
+    if B <> 0 then
+      IsZero := False;
+    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
+      B := Ord(' ');
+    U := U + B;
+    S := S + ShortInt(B);
+  end;
+  if IsZero then
+    Exit(True);
+  if (Stored <> U) and (Stored <> S) then
+    raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, Stored, U, S]);
+  Result := False;
+end;
+
+{ — 数值字段单点：读端 octal/base-256 解码，写端编码 — }
+function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64; inline;
+var
+  I: SizeUInt;
+  B: Byte;
+begin
+  if (ABase[0] and C_TAR_BASE256_SENTINEL) <> 0 then
+  begin
+    if ABase[0] = $FF then
+      Result := -1
+    else
+      Result := Int64(ABase[0] and $7F);
+    for I := 1 to ALen - 1 do
+    begin
+      if (Result > High(Int64) div 256) or (Result < Low(Int64) div 256) then
+        raise EIOError.CreateFmt('tar: base-256 overflow at offset %d', [APos]);
+      Result := (Result shl 8) or Int64(ABase[I]);
+    end;
+    Exit;
+  end;
+  Result := 0;
+  for I := 0 to ALen - 1 do
+  begin
+    B := ABase[I];
+    if B = 0 then
+      Break;
+    if B = Ord(' ') then
+      Continue;
+    if (B < Ord('0')) or (B > Ord('7')) then
+      raise EIOError.CreateFmt('tar: corrupt octal field at offset %d (byte %d)', [APos + I, B]);
+    Result := (Result shl 3) or Int64(B - Ord('0'));
+  end;
+end;
+
+procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64); inline;
+var
+  I: SizeInt;
+  MaxBase256: Int64;
+begin
+  if AValue < 0 then
+    raise EIOError.CreateFmt('tar: negative numeric field %d at offset %d', [AValue, AOff]);
+  if AValue >= (Int64(1) shl ((ALen - 1) * 3)) then
+  begin
+    if ALen <= 1 then
+      raise EIOError.Create('tar: numeric field too small for base-256');
+    if ((ALen - 1) * 8 + 7) >= 63 then
+      MaxBase256 := High(Int64)
+    else
+      MaxBase256 := (Int64(1) shl ((ALen - 1) * 8 + 7)) - 1;
+    if AValue > MaxBase256 then
+      raise EIOError.CreateFmt('tar: numeric field %d exceeds base-256 capacity %d at offset %d', [AValue, MaxBase256, AOff]);
+    ABlock[AOff] := C_TAR_BASE256_SENTINEL;
+    for I := ALen - 1 downto 1 do
+    begin
+      ABlock[AOff + I] := Byte(AValue and $FF);
+      AValue := AValue shr 8;
+    end;
+    Exit;
+  end;
+  ABlock[AOff + ALen - 1] := 0;
+  for I := ALen - 2 downto 0 do
+  begin
+    ABlock[AOff + I] := Byte(Ord('0') + (AValue and 7));
+    AValue := AValue shr 3;
+  end;
+end;
+
+{ — pax 单点：零拷贝 PByte 切片解析，复用 bytes.ops TByteSpan 零拷贝思想，无 Copy 分配 — }
+function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
+var
+  P, Sp, Eq, RecEnd: SizeInt;
+  LenVal: SizeInt;
+  I: SizeInt;
+  B: Byte;
+  Key, Value: string;
+begin
+  APath := '';
+  ALinkPath := '';
+  Result := False;
+  if (ABase = nil) or (ALen = 0) then
+    Exit(False);
+  P := 0;
+  while P < SizeInt(ALen) do
+  begin
+    Sp := P;
+    while (Sp < SizeInt(ALen)) and (ABase[Sp] <> Ord(' ')) do
+      Inc(Sp);
+    if Sp >= SizeInt(ALen) then
+      Exit;
+    LenVal := 0;
+    for I := P to Sp - 1 do
+    begin
+      B := ABase[I];
+      if (B < Ord('0')) or (B > Ord('9')) then
+      begin
+        LenVal := 0;
+        Break;
+      end;
+      LenVal := LenVal * 10 + (B - Ord('0'));
+      if LenVal > SizeInt(ALen) then
+        Break;
+    end;
+    if LenVal <= 0 then
+      Exit;
+    RecEnd := P + LenVal;
+    if (RecEnd <= P) or (RecEnd > SizeInt(ALen)) then
+      Exit;
+    Eq := Sp + 1;
+    while (Eq < RecEnd) and (ABase[Eq] <> Ord('=')) do
+      Inc(Eq);
+    if Eq >= RecEnd then
+    begin
+      P := RecEnd;
+      Continue;
+    end;
+    // 单源：bytes.ops SpanToString 单次分配+拷贝，纳入零拷贝统一审计；@ABase[off] 避免裸指针算术无 POINTERMATH
+    if Eq - Sp - 1 > 0 then
+      Key := SpanToString(TByteSpan.Create(@ABase[Sp + 1], SizeUInt(Eq - Sp - 1)))
+    else
+      Key := '';
+    if RecEnd - 1 - (Eq + 1) > 0 then
+      Value := SpanToString(TByteSpan.Create(@ABase[Eq + 1], SizeUInt(RecEnd - 1 - (Eq + 1))))
+    else
+      Value := '';
+    if Key = 'path' then
+    begin
+      APath := Value;
+      Result := True;
+    end
+    else if Key = 'linkpath' then
+    begin
+      ALinkPath := Value;
+      Result := True;
+    end;
+    P := RecEnd;
+  end;
 end;
 
 end.

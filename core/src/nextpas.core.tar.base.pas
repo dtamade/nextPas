@@ -128,51 +128,12 @@ function TarDirectoryMode(APermissionBits: Word): Word; inline;
 
 implementation
 
-{ 单源归档名安全谓词（抽参 AMaxBytes，消除 tar/zip 35 行重复；零拷贝 inline） }
-function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
-var
-  LI, LSegStart: Integer;
-begin
-  Result := False;
-  if AName = '' then
-    Exit;
-  if Length(AName) > AMaxBytes then
-    Exit;
-  if AName[1] = '/' then
-    Exit;
-  if (Length(AName) >= 2) and (AName[2] = ':') and
-     (UpCase(AName[1]) in ['A'..'Z']) then
-    Exit;
-  LSegStart := 1;
-  for LI := 1 to Length(AName) + 1 do
-  begin
-    if (LI <= Length(AName)) and (AName[LI] <> '/') then
-    begin
-      if AName[LI] = '\' then
-        Exit;
-      Continue;
-    end;
-    if LI - LSegStart = 0 then
-    begin
-      if LI <= Length(AName) then
-        Exit;
-    end
-    else if LI - LSegStart = 1 then
-    begin
-      if AName[LSegStart] = '.' then
-        Exit;
-    end
-    else if (LI - LSegStart = 2) and (AName[LSegStart] = '.') and
-       (AName[LSegStart + 1] = '.') then
-      Exit;
-    LSegStart := LI + 1;
-  end;
-  Result := True;
-end;
+uses
+  nextpas.core.bytes.pathvalid;
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
 begin
-  Result := IsSafeArchiveEntryName(AName, C_TAR_MAX_NAME_BYTES);
+  Result := nextpas.core.bytes.pathvalid.IsSafeArchiveEntryName(AName, C_TAR_MAX_NAME_BYTES);
 end;
 
 procedure ValidateTarEntryName(const AName: string);

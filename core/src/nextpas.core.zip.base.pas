@@ -147,6 +147,7 @@ function DefaultZipReadOptions: TZipReadOptions; inline;
 implementation
 
 uses
+  nextpas.core.bytes.pathvalid,
   nextpas.core.time.date;
 
 class function EZipLimitError.DefaultCategory: TErrorCategory;
@@ -167,45 +168,8 @@ begin
 end;
 
 function IsSafeZipEntryName(const AName: string): Boolean; inline;
-var
-  LI, LSegStart: Integer;
 begin
-  Result := False;
-  if AName = '' then
-    Exit;
-  if Length(AName) > C_ZIP_MAX_NAME_BYTES then
-    Exit;
-  if AName[1] = '/' then
-    Exit;
-  if (Length(AName) >= 2) and (AName[2] = ':') and
-     (UpCase(AName[1]) in ['A'..'Z']) then
-    Exit;
-  LSegStart := 1;
-  for LI := 1 to Length(AName) + 1 do
-  begin
-    if (LI <= Length(AName)) and (AName[LI] <> '/') then
-    begin
-      if AName[LI] = '\' then
-        Exit;
-      Continue;
-    end;
-    { 段边界：[LSegStart, LI-1]；尾随 '/' 的终段空合法，其余空段与 '.' 段拒绝 }
-    if LI - LSegStart = 0 then
-    begin
-      if LI <= Length(AName) then
-        Exit;
-    end
-    else if LI - LSegStart = 1 then
-    begin
-      if AName[LSegStart] = '.' then
-        Exit;
-    end
-    else if (LI - LSegStart = 2) and (AName[LSegStart] = '.') and
-       (AName[LSegStart + 1] = '.') then
-      Exit;
-    LSegStart := LI + 1;
-  end;
-  Result := True;
+  Result := nextpas.core.bytes.pathvalid.IsSafeArchiveEntryName(AName, C_ZIP_MAX_NAME_BYTES);
 end;
 
 procedure ValidateZipEntryName(const AName: string);

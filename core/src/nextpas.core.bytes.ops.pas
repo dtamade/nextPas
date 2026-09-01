@@ -73,6 +73,7 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+function SpanToString(const ASpan: TByteSpan): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 
 implementation
@@ -609,6 +610,14 @@ begin
   SetLength(Result, LSpan.Len);
   if LSpan.Len > 0 then
     Move(LSpan.Data^, Result[1], LSpan.Len);
+end;
+
+function SpanToString(const ASpan: TByteSpan): string; inline;
+begin
+  // 单源审计：TByteSpan -> string 唯一 Move 入口，零拷贝视图后单次分配+拷贝；禁止手写 Move 分散
+  SetLength(Result, ASpan.Len);
+  if ASpan.Len > 0 then
+    Move(ASpan.Data^, Result[1], ASpan.Len);
 end;
 
 function StringLowerAsciiAware(const S: string): string; inline;
