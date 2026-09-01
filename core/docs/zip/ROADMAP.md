@@ -183,6 +183,11 @@
 ### S83 — 文档与复用收口（1.0.1 巡检）· 完整性/复用度 — 已落地
 - `CHANGELOG 1.0.1` 补 `S80—S82` 18 期收敛与 `Normalize`/`bench` 亮点；`CONTRACT` §1.2 增 `NormalizeZipReadOptions`；`README` 路标 `S0—S82` 同步；`base.TryZipMethodFromCode` 单源化 `reader/sequential` 的 `zmStore/zmDeflate` 映射，消除 `if LMethodCode=0/8` 重复
 
+### S84 — 文档一致性与零堆栈验证（1.0.1 巡检）· 完整性/性能/复用度 — 已落地
+- `CONTRACT` §1.2 补 `TryZipMethodFromCode`（S83 滞后 `Normalize/TryMethod` 双单源入约）；`README` 历代收敛补 `S81 Normalize / S83 TryMethod`、路标 `S0—S82 → S0—S83` 同步，`Normalize/TryMethod` 双单源闭环
+- `writer` AES extra 零堆栈路径确认：`extra.EncodeWinZipAesExtraBody` 栈上 7 字节直写对偶 `Build*` 堆 wrapper，写端 `TWinZipAesSealer + Encode*` 走 `FScratch 64B` 几何复用零分配，`grep EncodeWinZip|BuildWinZip 7 hits / writer 6 hits` 验证
+- `ROADMAP` S84 入档与 `CHANGELOG` S83—S84 亮点同步，12 门 + `bench 16 项` + `hygiene` 全绿回归
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -215,4 +220,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S83 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c80fe29` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod` 单源。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S84 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c91aa00` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod` 双单源 + AES 零堆栈。

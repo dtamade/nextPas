@@ -28,6 +28,7 @@
 | `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize/MaxTotal/MaxDescriptorBuffer 与口令语义与读端一致 |
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `NormalizeZipReadOptions` | 读选项归一（`0→默认`，`MaxOutput/MaxDescriptor` 单源，S81） |
+| `TryZipMethodFromCode` | 方法码→`TZipMethod` 归一（`0/8` 映射，`reader/sequential` 单源，S83） |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录（非原子，见 §6） |
 | `ZipExtractToDirAtomicWithOptions` / `ZipExtractToDirAtomic` | 原子解包到目录：同文件系统 `TempDir`+`Rename` 原子提交，`Exists`拒绝覆盖，异常自动清理（S67） |
