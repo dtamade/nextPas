@@ -285,6 +285,7 @@ procedure BuildHiddenSet(ARepo: TNativeRepository;
   out AHidden: TGitOidSet);
 var
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Oid: TGitOid;
   Data: TBytes;
   Kind: TGitObjectKind;
@@ -304,11 +305,14 @@ begin
     Graph := nil;
   end;
   try
+    // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
     Stack := Copy(AHides);
-    while Length(Stack) > 0 do
+    StackLen := Length(Stack);
+    StackCap := StackLen;
+    while StackLen > 0 do
     begin
-      Oid := Stack[High(Stack)];
-      SetLength(Stack, Length(Stack) - 1);
+      Dec(StackLen);
+      Oid := Stack[StackLen];
       if AHidden.Contains(Oid) then
         Continue;
       UsedGraph := TryGraphParents(Graph, Oid, GWhen, GParents);
@@ -330,16 +334,26 @@ begin
       begin
         if Length(GParents) > 0 then
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[0];
+          Inc(StackLen);
         end;
       end
       else
       begin
         for I := 0 to High(GParents) do
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[I];
+          Inc(StackLen);
         end;
       end;
     end;
@@ -491,6 +505,7 @@ end;
 procedure TGitRevWalker.EnqueueHidden(const AOid: TGitOid);
 var
   Stack: TGitOidArray;
+  StackLen, StackCap: SizeInt;
   Cur: TGitOid;
   Data: TBytes;
   Kind: TGitObjectKind;
@@ -502,13 +517,18 @@ begin
   if FHidden = nil then
     FHidden := TGitOidSet.Create;
   InitGraph;
+  // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
   Stack := nil;
-  SetLength(Stack, 1);
+  StackLen := 0;
+  StackCap := 0;
+  StackCap := BytesGrowCapacityInt(StackCap, 1);
+  SetLength(Stack, StackCap);
   Stack[0] := AOid;
-  while Length(Stack) > 0 do
+  StackLen := 1;
+  while StackLen > 0 do
   begin
-    Cur := Stack[High(Stack)];
-    SetLength(Stack, Length(Stack) - 1);
+    Dec(StackLen);
+    Cur := Stack[StackLen];
     if FHidden.Contains(Cur) then
       Continue;
     if TryGraphCommit(Cur, GWhen, GParents) then
@@ -518,16 +538,26 @@ begin
       begin
         if Length(GParents) > 0 then
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[0];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[0];
+          Inc(StackLen);
         end;
       end
       else
       begin
         for I := 0 to High(GParents) do
         begin
-          SetLength(Stack, Length(Stack) + 1);
-          Stack[High(Stack)] := GParents[I];
+          if StackLen + 1 > StackCap then
+          begin
+            StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+            SetLength(Stack, StackCap);
+          end;
+          Stack[StackLen] := GParents[I];
+          Inc(StackLen);
         end;
       end;
       Continue;
@@ -546,16 +576,26 @@ begin
     begin
       if Length(Info.Parents) > 0 then
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[0];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Info.Parents[0];
+        Inc(StackLen);
       end;
     end
     else
     begin
       for I := 0 to High(Info.Parents) do
       begin
-        SetLength(Stack, Length(Stack) + 1);
-        Stack[High(Stack)] := Info.Parents[I];
+        if StackLen + 1 > StackCap then
+        begin
+          StackCap := BytesGrowCapacityInt(StackCap, StackLen + 1);
+          SetLength(Stack, StackCap);
+        end;
+        Stack[StackLen] := Info.Parents[I];
+        Inc(StackLen);
       end;
     end;
   end;
