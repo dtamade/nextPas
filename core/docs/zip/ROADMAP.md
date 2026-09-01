@@ -150,6 +150,9 @@
 ### S72 — 复用收敛（1.0.1 巡检）· 复用度 — 已落地
 - `zip.fs` 容量几何单点化：`CalcGrowCapacity(ACap,AMin)` 单源，双 `Ensure*Capacity` 薄委托 `CalcGrow`，消除 `Walk/LDirs` 双生 `while Result<AMin do Result*=2` 循环
 
+### S73 — 稳定性纵深（1.0.1 巡检）· 稳定性 — 已落地
+- `zip.fs` 原子落盘后二次校验：`Rename/CopyTree` 成功后 `IsSymlink(LDestTrim)` 非穿透 + `EnsureNoSymlinkInPath(LDestTrim)`，收口 `Rename→IsSymlink` 竞态窗口
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |

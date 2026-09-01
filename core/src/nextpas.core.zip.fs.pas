@@ -527,6 +527,9 @@ begin
         LTemp := '';
       end;
     end;
+    if IsSymlink(LDestTrim) then
+      raise EParseError.Create('zip extract atomic: symlink in dest after commit: ' + LDestTrim);
+    EnsureNoSymlinkInPath(LDestTrim);
   finally
     if (LTemp <> '') and Exists(LTemp) then
       try
