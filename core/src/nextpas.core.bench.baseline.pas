@@ -7,6 +7,7 @@
 unit nextpas.core.bench.baseline;
 
 {$mode objfpc}{$H+}
+{$modeswitch typehelpers}
 {$modeswitch advancedrecords}
 
 interface

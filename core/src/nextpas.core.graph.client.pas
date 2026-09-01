@@ -9,6 +9,7 @@ unit nextpas.core.graph.client;
  *}
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 

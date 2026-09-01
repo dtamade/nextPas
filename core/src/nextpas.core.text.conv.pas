@@ -46,12 +46,12 @@ function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
 function JsonEscape(const AValue: string): string;
 function EscapeLlvmStr(const AValue: string): string;
 
-{== Encoding — byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
-{ UTF8 pair is the encoding-intent facade; ASCII pair is subset alias — deprecated. }
+{== Encoding - byte<->string conversions == single source is bytes.ops (zero-copy Move) ==}
+{ UTF8 pair is the encoding-intent facade; ASCII pair is subset alias - deprecated. }
 function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
-function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString — ASCII is UTF8 subset, single source bytes.ops.BytesToString';
-function StringToASCIIBytes(const AStr: string): TBytes; inline; deprecated 'Use StringToUTF8Bytes — ASCII is UTF8 subset, single source bytes.ops.StringToBytes';
+function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString - ASCII is UTF8 subset, single source bytes.ops.BytesToString';
+function StringToASCIIBytes(const AStr: string): TBytes; inline; deprecated 'Use StringToUTF8Bytes - ASCII is UTF8 subset, single source bytes.ops.StringToBytes';
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
 function SameText(const A, B: string): Boolean; inline;
@@ -72,7 +72,7 @@ implementation
 uses
   nextpas.core.bytes.ops,
   nextpas.core.errors,
-  { ASCII SameText only — do not pull text.compare (unicode.casefold/normalize). }
+  { ASCII SameText only - do not pull text.compare (unicode.casefold/normalize). }
   nextpas.core.text.builder,
   nextpas.core.text.char,
   nextpas.core.text.escape,
@@ -81,7 +81,7 @@ uses
   nextpas.core.text.utils,
   nextpas.core.text.view;
 
-{== Integer/String conversion — uses System.Str/Val ==}
+{== Integer/String conversion - uses System.Str/Val ==}
 
 function IntToStr(const AValue: Int64): string;
 begin
@@ -418,7 +418,7 @@ begin
   end;
 end;
 
-{== Encoding — byte<->string conversions ==}
+{== Encoding - byte<->string conversions ==}
 
 function UTF8BytesToString(const AData: TBytes): string; inline;
 begin

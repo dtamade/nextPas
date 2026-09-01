@@ -11,6 +11,7 @@
 unit nextpas.core.agent.tools;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 
