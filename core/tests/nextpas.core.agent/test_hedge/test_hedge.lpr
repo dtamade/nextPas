@@ -3,8 +3,8 @@ program test_hedge;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.base,
   nextpas.core.thread.init,
+  nextpas.core.base,
   Classes,
   nextpas.core.sync.intf,
   nextpas.core.sync.event,

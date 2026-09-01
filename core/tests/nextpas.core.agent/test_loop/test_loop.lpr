@@ -3,10 +3,10 @@ program test_loop;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.async.cancellation,
-  nextpas.core.thread.init,
   nextpas.core.platform.thread,
   nextpas.core.thread.intf,
   nextpas.core.thread.pool,

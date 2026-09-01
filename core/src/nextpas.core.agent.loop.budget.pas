@@ -98,6 +98,8 @@ begin
     Sum2(ATotal.CacheReadInputTokens, AInc.CacheReadInputTokens);
   ATotal.CacheWriteInputTokens :=
     Sum2(ATotal.CacheWriteInputTokens, AInc.CacheWriteInputTokens);
+  ATotal.ReasoningTokens :=
+    Sum2(ATotal.ReasoningTokens, AInc.ReasoningTokens);
 end;
 
 function LoopAddOutUsed(AOutUsed: Int64; const AMsg: TMessage;

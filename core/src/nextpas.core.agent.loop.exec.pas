@@ -159,22 +159,27 @@ begin
   Result := 0;
   for I := 0 to High(ASlots) do
   begin
-    if (ASlots[I].Kind <> skExec) or (ASlotJob[I] < 0) then
+    if ASlots[I].Kind = skBlocked then
       Continue;
-    Env := EnvelopeTruncation(AJobs[ASlotJob[I]].Res,
-      ATruncateLines, ATruncateBytes);
-    if Assigned(APostHook) then
+    // 预算口径：allowance 内所有非 Blocked 槽（skExec/skInvalid/skUnknown）均消耗 MaxToolCalls
+    // skInvalid/skUnknown 无 Job，跳过截断/hook 但仍计预算，防止异常参数绕过预算
+    if (ASlots[I].Kind = skExec) and (ASlotJob[I] >= 0) and (ASlotJob[I] < Length(AJobs)) then
     begin
-      Verdict := APostHook(ASlots[I].Spec, Env.ContentJson);
-      if Verdict = hvBlock then
+      Env := EnvelopeTruncation(AJobs[ASlotJob[I]].Res,
+        ATruncateLines, ATruncateBytes);
+      if Assigned(APostHook) then
       begin
-        LoopSynthErr(ASlots[I], 'blocked by post-tool-result hook');
-        Env := ASlots[I].Res;
-      end
-      else if Verdict = hvStop then
-        AStopped := True;
+        Verdict := APostHook(ASlots[I].Spec, Env.ContentJson);
+        if Verdict = hvBlock then
+        begin
+          LoopSynthErr(ASlots[I], 'blocked by post-tool-result hook');
+          Env := ASlots[I].Res;
+        end
+        else if Verdict = hvStop then
+          AStopped := True;
+      end;
+      ASlots[I].Res := Env;
     end;
-    ASlots[I].Res := Env;
     Inc(Result);
   end;
 end;

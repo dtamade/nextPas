@@ -2,6 +2,25 @@
 
 > 仅收录 `nextpas.core.agent` family 的面向 registry 的落地版本；通用 `core/CHANGELOG.md` 保留跨模块治理记录。
 
+## agent-stage-review-fix-2026-09-01 — Stage Review P0/P1/P2 收口 (1 commit)
+
+**Scope**: Stage Review 阻断与逻辑/文档契约收口——`CloneArray` 编译修复 + 预算/排水缺陷 + 传输拆分/门面白名单/会话4方法对齐。
+
+### Commits (1, 本 lane)
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `TBD` | fix | `fold.pas:276 CloneArray` → `Copy` 编译修复，恢复 19 门编译 |
+| `TBD` | fix | `loop.budget:LoopAccumulateUsage` 补 `ReasoningTokens` 累加 |
+| `TBD` | fix | `loop.impl:GuidedFinish` 补 `AccumulateUsage` + `LoopAddOutUsed` + `UsageSink` 透传 |
+| `TBD` | fix | `loop.exec:LoopFinalizeSlots` 预算涵盖 `skInvalid/skUnknown` 防绕过 |
+| `TBD` | fix | `tools.pas` 排水加取消感知退出，防 `Timeout=0` 无限自旋 |
+| `TBD` | docs | `ARCHITECTURE §2/§7` 传输三子域 + 韧性四件 + 定价/会话白名单补齐；`API.md` 4方法+`ReadIdleTimeoutMs`+`SESSION.md`对齐；`lane-focused` 新增 `agent` |
+
+### Gates
+
+- `test_assembly` 编译绿（`CloneArray` 修复）；`test_loop`/`test_tools` 预算/排水语义回归；`make hygiene` 绿。
+
 ## agent-sse-perf-2026-08-31 — sse Feed SIMD 跳扫 (1 commit)
 
 **Scope**: sse 解析热路径性能优化——逐字节扫描 → simd 跳扫。

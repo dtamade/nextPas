@@ -390,6 +390,14 @@ var
     Req2.Tools := nil;
     if not CompleteRound(Req2, M2) then
       Exit(False);
+    R.AccumulateUsage(M2.Usage);
+    if Assigned(LOpt.UsageSink) then
+    try
+      LCost := LoopCostForMessage(M2);
+      LOpt.UsageSink.RecordUsage(FProvider.GetName, Req2, M2.Usage, LCost);
+    except
+    end;
+    OutUsed := LoopAddOutUsed(OutUsed, M2, FProvider);
     N2 := Length(Transcript);
     SetLength(Transcript, N2 + 1);
     Transcript[N2] := M2;

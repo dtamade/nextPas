@@ -64,8 +64,10 @@
 | `nextpas.core.agent.fallback.pas` | 策略 | `NewFallbackProvider(chain, policy)` 容灾链装饰器（白名单内逐家切换、流式首 delta 门、全链耗尽透传最后原始错误、取消即止；OnSwitch 观测） | intf, base, errors |
 | `nextpas.core.agent.throttle.pas` | 策略 | IAgentRateGate 细接口 + `NewThrottledProvider(inner, gate, clock, policy)` 客户端限流（拒绝→clock 取消感知等待重取，超窗本地 aecRateLimited）；`NewTokenBucketGate` 适配 core.lockfree.ratelimit 标准库 | intf, base, errors, clock, lockfree.ratelimit |
 | `nextpas.core.agent.hedge.pas` | 策略 | `NewHedgedProvider(inner, clock, policy)` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路取消令牌合并必 Cancel、流式首 delta 先达者胜投递不重复、双倍 token 成本工厂级 opt-in；OnHedged 观测） | intf, base, errors, async.cancellation, sync.event, clock |
-| `nextpas.core.agent.resilience.pas` | 韧性 | 消费方侧纯函数三件（自 code888 韧弧 K69-K75 提炼反哺）：`StreamHasError` 断流指纹判定、`WaitCancelMs` 取消感知毫秒退避（ms→ns 溢出守卫+nil 吸收）、`ClampHintMs` 重试提示同帽钳制（负哨兵透传） | base, thread, agent.base |
-| `nextpas.core.agent.transport.http.pas` | 传输 | 生产 IAgentTransport：http client 发请求；非流式读全响应体；流式经 IReader 逐块喂 agent.sse | intf, http.client, sse, errors |
+| `nextpas.core.agent.resilience.pas` | 韧性 | 消费方侧纯函数四件（自 code888 韧弧 K69-K75 提炼反哺）：`StreamHasError` 断流指纹判定、`WaitCancelMs`/`WaitCancelSlice` 取消感知毫秒退避（ms→ns 溢出守卫+nil 吸收、Slice 版 200µs 切片轮询）、`ClampHintMs` 重试提示同帽钳制（负哨兵透传） | base, thread, agent.base |
+| `nextpas.core.agent.transport.http.pas` | 传输 | 薄门面：组装 `http.core` + `http.stream` 为 `IAgentTransport`（73 行门面，消费方零改动） | transport.http.core/stream, http.client, intf |
+| `nextpas.core.agent.transport.http.core.pas` | 传输子域 | HTTP wire core：非流式 `RoundTrip`/头部/体辅助与 POST 构造（197 行） | base, io.intf, http.intf/client, intf |
+| `nextpas.core.agent.transport.http.stream.pas` | 传输子域 | HTTP wire streaming：`TWireStream` + `IReader` 逐块喂 `agent.sse` + 通道状态（464 行） | base, sync.mutex, stopwatch, thread.channel, http.intf/client, intf |
 | `nextpas.core.agent.provider.common.pas` | 适配支撑（薄壳 291 行） | 适配器门面，inline 转发至三子域；**T1.5** `AgentWireApplyIdempotency` 单一真源透传 `Idempotency-Key` | common.wire/extra/slots, base, errors, intf |
 | `nextpas.core.agent.provider.common.wire.pas` | 适配支撑子域 | wire JSON 组装/读取、SSE data 帧→delta 公共骨架、帧序 FSM 骨架（565 行） | base, errors, json, intf |
 | `nextpas.core.agent.provider.common.extra.pas` | 适配支撑子域 | Extra 无损捕获与 64 键上限（109 行） | base, json |
@@ -90,7 +92,7 @@
 | `nextpas.core.agent.pricing.pas` | 策略 | **Phase1 T1.1（2026-08-30）**：纯策略计费：`TModelPricing`/`EstimateCost`（`(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 整数μUSD，四舍五入同源 `tk888.billing.pas:22,212`）+ `TPassthroughPricing`/`ImageTierOf`（max-edge ≤1024→1000 ≤2048→2000 else 4000，含 `2048x2048→2000` 特判 `billing:470`）零IO纯函数，无堆分配 | agent.base |
 
 体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
-现状（2026-08-31 反哺收口）：`provider.common` 291+565+109+519（common/wire/extra/slots 薄壳+三子域）/ `provider.openai` 326/348/232/359（门面/encode/decode/decoder）/ `provider.openai.responses` 256/307/245/441（门面/encode/decode/decoder）/ `provider.anthropic` 397+449+196+332（门面/encode/decode/decoder）—— provider 域 14/14 <800 全达标（含 fake 386）；`base` 248+36+586+414 + `slotmap` 145 + `deltabuilder` 128（门面/constants/types/helpers 纯函数 + 槽位注册表/增量构建器独立单元，均 <800）/ `loop` 57+97+120+183+744（门面/types/budget/exec/impl，impl 744 为循环稳定聚合点暂不拆）/ `transport.http` 701 / `hedge` 465 / `session` 551（700 上下为受控聚合点，行数监控不回落即零增量承诺，详表见上）。
+现状（2026-09-01 传输拆分收口）：`provider.common` 291+565+109+519（common/wire/extra/slots 薄壳+三子域）/ `provider.openai` 326/348/232/359（门面/encode/decode/decoder）/ `provider.openai.responses` 256/307/245/441（门面/encode/decode/decoder）/ `provider.anthropic` 397+449+196+332（门面/encode/decode/decoder）—— provider 域 14/14 <800 全达标（含 fake 386）；`base` 248+36+586+414 + `slotmap` 145 + `deltabuilder` 128（门面/constants/types/helpers 纯函数 + 槽位注册表/增量构建器独立单元，均 <800）/ `loop` 57+97+120+183+744（门面/types/budget/exec/impl，impl 744 为循环稳定聚合点暂不拆）/ `transport.http` 73+197+464=734（门面/core/stream 三子域，原 701 单文件已拆分，700 上下为受控聚合点，行数监控不回落即零增量承诺，详 §2 清单）/ `hedge` 465 / `session` 551。
 
 ## 3. 数据流
 
@@ -202,10 +204,10 @@ TAgentLoop.Run(userText)
 | **时钟** | `NewSystemClock/TFakeClock/IAgentClock` | `clock` 域 |
 | **工具** | `ValidateToolSpec/ValidateToolArguments/EnvelopeTruncation/NewToolContext`；自由函数 `WithTools(array of IAgentTool): TToolSpecArray`（`tools` 单元，门面转发，F-M13） | `API.md §1.5/§6` |
 | **循环** | `TAgentLoop/TAgentLoopOptions/TLoopEvent/TLoopOutcome` + `SetEventHook/SetPreToolCall/SetPostToolResult` 三形态；`WithRetry/TRetryPolicy` | `loop/retry` 域 |
-| **会话（W5 已落地）** | `NewJsonlTranscriptStore/TJsonlTranscriptStore/ETranscriptCorrupt/IAgentTranscriptStore`（含 `Fork`） | `session` 域，`SESSION.md` |
-| **韧性与可靠性装饰器（W8-W11）** | `WithRetry`；`NewFallbackProvider/TFallbackPolicy/TFallbackSwitchHook`；`NewThrottledProvider/NewTokenBucketGate/IAgentRateGate/TThrottlePolicy`；`NewHedgedProvider/THedgePolicy/THedgeFireHook`；纯函数 `StreamHasError/WaitCancelMs/ClampHintMs`；追踪 `NewTracedTransport/IAgentTraceSink`；能力 `IAgentTokenCounter` | 策略域与 `resilience` 提炼 |
+| **会话（W5 已落地）** | `NewJsonlTranscriptStore/TJsonlTranscriptStore/ETranscriptCorrupt/IAgentTranscriptStore`（含 `Fork`）+ `IAgentTranscriptFork` 独立能力接口 | `session` 域，`SESSION.md` |
+| **韧性与可靠性装饰器（W8-W11）** | `WithRetry`；`NewFallbackProvider/TFallbackPolicy/TFallbackSwitchHook`；`NewThrottledProvider/NewTokenBucketGate/IAgentRateGate/TThrottlePolicy`；`NewHedgedProvider/THedgePolicy/THedgeFireHook`；纯函数 `StreamHasError/WaitCancelMs/WaitCancelSlice/ClampHintMs`；追踪 `NewTracedTransport/IAgentTraceSink`；能力 `IAgentTokenCounter` | 策略域与 `resilience` 提炼 |
 | **配额标量滚动（Phase1 T1.2）** | `TPlatformQuotaWindowKind/TPlatformQuotaItem/TPlatformQuotaArray`；`PlatformQuotaWindowSeconds/PlatformQuotaWindowExpired/PlatformQuotaExpired/PlatformQuotaUsage/PlatformQuotaExceeded/SerializePlatformQuotaItem/PlatformQuotaSerialize` 纯标量滚动（86400/604800/2592000，无 TConcurrentHashMap，O(1) 可单测） | `quota` 域，零IO纯函数 |
-| **定价（Phase1 T1.1）** | `TModelPricing/TPassthroughPricing/EstimateCost/ImageTierOf` 纯策略（`EstimateCost` 整数μUSD `(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 四舍五入同源 `billing:22,212`；`ImageTierOf` max-edge ≤1024→1000 ≤2048→2000 else 4000 含 `2048x2048→2000` 特判） | `pricing` 域，零IO纯函数 |
+| **定价（Phase1 T1.1）** | `TModelPricing/TPassthroughPricing/EstimateCost/ImageTierOf/AgentEstimateTokens/AgentEstimateTokensFromMessage` 纯策略（`EstimateCost` 整数μUSD `(prompt*per1k+500) div 1000 + (completion*per1k*rate+5000) div 10000` 四舍五入同源 `billing:22,212`；`ImageTierOf` max-edge ≤1024→1000 ≤2048→2000 else 4000 含 `2048x2048→2000` 特判；`AgentEstimateTokens` 单一真源粗估） | `pricing` 域 + `textutil` 转发，零IO纯函数 |
 | **不进门面** | `TWireRequest/TWireResponse/TWireSSEEvent/IAgentTransport/IAgentWireStream/TSSEParser` 等 wire/传输细节 | 自定义 transport 需显式 `uses nextpas.core.agent.intf`，保持门面最小化 |
 
 体积与分层校验：`make hygiene` 拦截未登记导出；`test_compile_skeleton` 断言白名单与实现一致。

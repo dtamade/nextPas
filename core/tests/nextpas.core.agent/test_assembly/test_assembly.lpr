@@ -3,10 +3,10 @@ program test_assembly;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.async.cancellation,
-  nextpas.core.thread.init,
   nextpas.core.thread.pool,
   nextpas.core.json,
   nextpas.core.agent.base,
