@@ -761,3 +761,177 @@ begin
     Inc(P, 4);
   end;
 end;
+
+procedure RasterPremultiply(Dst: PByte; PixelCount: Integer); inline;
+var
+  P: PByte;
+  N4, Tail: Integer;
+  A: Byte;
+begin
+  if (PixelCount <= 0) or (Dst = nil) then Exit;
+  P := Dst;
+  N4 := PixelCount shr 2;
+  Tail := PixelCount and 3;
+  while N4 > 0 do
+  begin
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+    Dec(N4);
+  end;
+  case Tail of
+    3: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+    2: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+    1: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+  end;
+end;
+
+procedure RasterUnpremultiply(Dst: PByte; PixelCount: Integer); inline;
+var
+  P: PByte;
+  N4, Tail: Integer;
+  A: Byte;
+begin
+  if (PixelCount <= 0) or (Dst = nil) then Exit;
+  P := Dst;
+  N4 := PixelCount shr 2;
+  Tail := PixelCount and 3;
+  while N4 > 0 do
+  begin
+    A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+    A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+    A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+    A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+    Dec(N4);
+  end;
+  case Tail of
+    3: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+    2: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+    1: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+  end;
+end;
+
+procedure RasterBlurNormalizeRow(DstRow: PByte; VSumR, VSumG, VSumB, VSumA: PInteger; CntH: PInteger; CntInv: PCardinal; VC: Integer; VCInv: Cardinal; Width: Integer); inline;
+var
+  X, Total, N8, N4, Tail: Integer;
+  InvTotal: Cardinal;
+  qR, qG, qB, qA: Cardinal;
+  D: PByte;
+  UseAVX2: Boolean;
+begin
+  if (Width <= 0) or (DstRow = nil) or (VSumR = nil) or (VSumG = nil) or (VSumB = nil) or (VSumA = nil) then Exit;
+  if (CntH = nil) or (CntInv = nil) then Exit;
+  if VC <= 0 then
+  begin
+    FillChar(DstRow^, Width * 4, 0);
+    Exit;
+  end;
+  D := DstRow;
+  UseAVX2 := RasterHasAVX2;
+  if UseAVX2 then
+  begin
+    N8 := Width shr 3;
+    Tail := Width and 7;
+    X := 0;
+    while N8 > 0 do
+    begin
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+      Dec(N8);
+    end;
+    for Tail := Tail downto 1 do
+    begin
+      Total := CntH[X] * VC;
+      if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else
+      begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
+        qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
+        qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
+        qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
+        qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
+        if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+    end;
+    Exit;
+  end;
+  N4 := Width shr 2;
+  Tail := Width and 3;
+  X := 0;
+  while N4 > 0 do
+  begin
+    Total := CntH[X] * VC; if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total))); qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR); qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG); qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB); qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA); if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+    Total := CntH[X] * VC; if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total))); qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR); qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG); qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB); qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA); if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+    Total := CntH[X] * VC; if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total))); qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR); qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG); qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB); qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA); if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+    Total := CntH[X] * VC; if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total))); qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR); qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG); qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB); qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA); if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X);
+    Dec(N4);
+  end;
+  for Tail := Tail downto 1 do
+  begin Total := CntH[X] * VC; if Total = 0 then begin D[0]:=0; D[1]:=0; D[2]:=0; D[3]:=0; end else begin InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32); if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total))); qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32); if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR) else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR); qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32); if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG) else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG); qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32); if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB) else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB); qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32); if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA) else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA); if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255; D[0]:=Byte(qR); D[1]:=Byte(qG); D[2]:=Byte(qB); D[3]:=Byte(qA); end; Inc(D,4); Inc(X); end;
+end;

@@ -35,6 +35,14 @@ procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inlin
 // 变长源 src-over 混合（每像素独立颜色，梯度/纹理逐块混合，封装手写 blend 细节）
 procedure RasterBlendVaried(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
 
+// 批量预乘/反预乘（RGBA，A 驱动 RGB 缩放，行级批量，供 image.base Premultiply 复用）
+procedure RasterPremultiply(Dst: PByte; PixelCount: Integer); inline;
+procedure RasterUnpremultiply(Dst: PByte; PixelCount: Integer); inline;
+
+// BoxBlur 垂直归一化批量（复用 simd.raster AVX2 批处理，消除 graph 侧 64b 标量热点）
+// 将 VSum(R/G/B/A) 按 (CntH*VC) 归一写回 DstRow，语义等价于 VSum div (CntH*VC) 的 fixed-point 近似 + 校正
+procedure RasterBlurNormalizeRow(DstRow: PByte; VSumR, VSumG, VSumB, VSumA: PInteger; CntH: PInteger; CntInv: PCardinal; VC: Integer; VCInv: Cardinal; Width: Integer); inline;
+
 implementation
 
 uses
