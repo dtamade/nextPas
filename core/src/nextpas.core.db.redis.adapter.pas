@@ -37,6 +37,7 @@ unit nextpas.core.db.redis.adapter;
 interface
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.base.utils,
   nextpas.core.exception,
@@ -80,12 +81,10 @@ implementation
 const
   C_READ_CHUNK = 4096;
 
-function BytesFromText(const AStr: string): TBytes;
+function BytesFromText(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  // INV-5 single source: delegate to bytes.ops.StringToBytes (zero-copy PAnsiChar(AText)^ deref + single SetLength+Move, inline thin forward — Move stays in owner)
+  Result := StringToBytes(AStr);
 end;
 
 function RedisCategory(const AErrType: string): TDbErrorCategory;

@@ -12,6 +12,14 @@ uses
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
 function SwapUInt32(const AValue: UInt32): UInt32; inline;
 function SwapUInt64(const AValue: UInt64): UInt64; inline;
+{ FPC Swap semantics word swap for DWord (HTonN/NToHs LongWord single source) }
+function SwapUInt32Words(const AValue: UInt32): UInt32; inline;
+
+{ Network order single source helpers for bytes.ops HTonN/NToHs (FPC Swap semantics, zero-copy inline) }
+function HostToNetwork16(const AValue: UInt16): UInt16; inline;
+function NetworkToHost16(const AValue: UInt16): UInt16; inline;
+function HostToNetwork32Words(const AValue: UInt32): UInt32; inline;
+function NetworkToHost32Words(const AValue: UInt32): UInt32; inline;
 
 { Conditional swap to/from native endian }
 function ToEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16; inline;
@@ -61,27 +69,51 @@ implementation
 
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
 begin
-  Result := ((AValue shr 8) and $FF) or ((AValue and $FF) shl 8);
+  { perf: BSWAP/REV hardware via System.SwapEndian — single HW instruction, inline zero-copy register shuffle }
+  Result := System.SwapEndian(AValue);
 end;
 
 function SwapUInt32(const AValue: UInt32): UInt32; inline;
 begin
-  Result := ((AValue shr 24) and $000000FF) or
-            ((AValue shr 8)  and $0000FF00) or
-            ((AValue shl 8)  and $00FF0000) or
-            ((AValue shl 24) and $FF000000);
+  { perf: BSWAP hardware via System.SwapEndian — single bswap/rev instruction, inline zero-copy }
+  Result := System.SwapEndian(AValue);
 end;
 
 function SwapUInt64(const AValue: UInt64): UInt64; inline;
 begin
-  Result := ((AValue shr 56) and $00000000000000FF) or
-            ((AValue shr 40) and $000000000000FF00) or
-            ((AValue shr 24) and $0000000000FF0000) or
-            ((AValue shr 8)  and $00000000FF000000) or
-            ((AValue shl 8)  and $000000FF00000000) or
-            ((AValue shl 24) and $0000FF0000000000) or
-            ((AValue shl 40) and $00FF000000000000) or
-            ((AValue shl 56) and $FF00000000000000);
+  { perf: BSWAP hardware via System.SwapEndian — single bswapq/rev instruction, inline zero-copy }
+  Result := System.SwapEndian(QWord(AValue));
+end;
+
+function SwapUInt32Words(const AValue: UInt32): UInt32; inline;
+begin
+  Result := ((AValue shr 16) and $FFFF) or ((AValue shl 16) and $FFFF0000);
+end;
+
+function HostToNetwork16(const AValue: UInt16): UInt16; inline;
+begin
+  if NATIVE_ENDIAN = endBig then
+    Result := AValue
+  else
+    Result := SwapUInt16(AValue);
+end;
+
+function NetworkToHost16(const AValue: UInt16): UInt16; inline;
+begin
+  Result := HostToNetwork16(AValue);
+end;
+
+function HostToNetwork32Words(const AValue: UInt32): UInt32; inline;
+begin
+  if NATIVE_ENDIAN = endBig then
+    Result := AValue
+  else
+    Result := SwapUInt32Words(AValue);
+end;
+
+function NetworkToHost32Words(const AValue: UInt32): UInt32; inline;
+begin
+  Result := HostToNetwork32Words(AValue);
 end;
 
 { Conditional swap }

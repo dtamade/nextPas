@@ -2,9 +2,8 @@ unit nextpas.core.bytes.ops;
 
 {$I nextpas.core.settings.inc}
 { R9-02 hermetic }
-{ INV-5 单源: bytes.ops 为 SetLength+Move 唯一实现源，门面仅 inline 薄转发 }
-{ perf: 零拷贝 TByteSpan 视图, Compare/MemEqual/FindByte 热路径 inline; 单次 SetLength+Move 零拷贝 Pointer(Result)^ / PAnsiChar(AText)^; BytesGrowCapacity 非 inline (while 循环禁 inline red-line 2) }
-{ Move/SetLength 一律 Not inline red-line 1/2; BytesAppend 系列复用 BytesGrowCapacity 指数扩容 amortized O(1) + EnsureAppendCapacity封装mem统一能力高级感; Strip家族QWord快跳单源LeadingZeroOffset优雅去重; stability: SetLength异常安全, sized FreeMemOf; portability: DynArray probe已收敛至L0 mem.dynarray via system.heap NpSystemMemSize (FPC bootstrap单探针，stub优雅，自举债务收敛) }
+{ INV-5 单源: bytes.ops is single source for SetLength+Move; facade inline thin-forward only. }
+{ perf: zero-copy TByteSpan views; hot paths inline, alloc paths single SetLength+Move not inline (red-line 1, red-line 2). }
 
 interface
 
@@ -83,9 +82,13 @@ function BytesToUTF8(const ABytes: TBytes): string;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset;
   ALength: SizeUInt): string;
+{ single source for PAnsiChar -> string (nil-safe, zero-copy Move); not inline per red-line 1/2 - loop/SetLength+Move }
+function AnsiPtrToString(const P: PAnsiChar): string;
+{ single source for BE UTF-16 bytes -> string (zero-copy WideChar view + SetString); not inline per red-line 2 - loop }
+function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 
-{ Network byte order — single source for HTonN/NToHs (FPC Swap semantics, owner bytes.ops)
-  perf: inline zero-copy register shuffle, no alloc; endian-conditional swap; system facade delegates here (INV-5) }
+{ Network byte order — single source via nextpas.core.bytes.binary endian helpers (FPC Swap semantics, owner bytes.ops thin-forward)
+  perf: inline zero-copy register shuffle via bytes.binary.HostToNetwork*/SwapUInt* single source, no alloc/diverge; endian-conditional in binary; system facade delegates here (INV-5) }
 function HTonN(AValue: Word): Word; overload; inline;
 function HTonN(AValue: LongWord): LongWord; overload; inline;
 function NToHs(AValue: Word): Word; overload; inline;
@@ -100,7 +103,8 @@ implementation
 
 uses
   nextpas.core.simd,
-  nextpas.core.mem.dynarray;
+  nextpas.core.mem.dynarray,
+  nextpas.core.bytes.binary;
 
 { safe SetLength growth; BytesEnsureCapacity: capacity==Length no header poke (capacity exposed as Length); BytesAppend 系列: exponential via BytesGrowCapacity + EnsureAppendCapacity封装mem.dynarray定长(capacity retained, amortized O(1) zero-copy Move)高级感; perf: single Move per append not inline red-line 1/2; stability: exception-safe; portability: DynArray via L0 mem.dynarray unified (system.heap MemSize单探针，stub优雅) }
 
@@ -729,6 +733,42 @@ begin
     Move(LSpan.Data^, Pointer(Result)^, LSpan.Len);
 end;
 
+function AnsiPtrToString(const P: PAnsiChar): string;
+var
+  LP: PAnsiChar;
+  LLen: SizeUInt;
+begin
+  { perf: single SetLength + single zero-copy Move (Pointer(Result)^); not inline per red-line 1/2 (loop+Move) single source }
+  Result := '';
+  if P = nil then
+    Exit;
+  LP := P;
+  while LP^ <> #0 do
+    Inc(LP);
+  LLen := SizeUInt(LP - P);
+  if LLen = 0 then
+    Exit;
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(P^, Pointer(Result)^, LLen);
+end;
+
+function BigEndianUnicodeBytesToString(const AData: TBytes): string;
+var
+  I, LCount: SizeInt;
+  LWChars: array of WideChar;
+begin
+  { perf: single SetLength(LWChars)+SetString; not inline per red-line 2 (loop I-Cache) single source }
+  Result := '';
+  LCount := Length(AData) div 2;
+  if LCount = 0 then
+    Exit;
+  SetLength(LWChars, LCount);
+  for I := 0 to LCount - 1 do
+    LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or UInt16(AData[I * 2 + 1]));
+  SetString(Result, PWideChar(LWChars), LCount);
+end;
+
 function FNV1a32(const AData: PByte; const ALen: SizeUInt): UInt32; inline;
 begin
   Result := HashBytes(AData, ALen);
@@ -742,46 +782,26 @@ begin
     Result := HashBytes(@AData[0], SizeUInt(Length(AData)));
 end;
 
-{ Network byte order — single source (owner bytes.ops); inline zero-copy register shuffle, no alloc }
+{ Network byte order — single source via nextpas.core.bytes.binary endian helpers (owner bytes.ops thin-forward); inline zero-copy register shuffle, no alloc }
 
 function HTonN(AValue: Word): Word; inline;
 begin
-  {$IFDEF ENDIAN_BIG}
-  Result := AValue;
-  {$ELSE}
-  { inline zero-copy byte swap (register shuffle, no alloc) }
-  Result := Word((AValue shr 8) or (AValue shl 8));
-  {$ENDIF}
+  Result := Word(nextpas.core.bytes.binary.HostToNetwork16(UInt16(AValue)));
 end;
 
 function HTonN(AValue: LongWord): LongWord; inline;
 begin
-  {$IFDEF ENDIAN_BIG}
-  Result := AValue;
-  {$ELSE}
-  { inline zero-copy word swap (FPC Swap semantics, register shuffle, no alloc) }
-  Result := ((AValue shr 16) and $FFFF) or ((AValue shl 16) and $FFFF0000);
-  {$ENDIF}
+  Result := LongWord(nextpas.core.bytes.binary.HostToNetwork32Words(UInt32(AValue)));
 end;
 
 function NToHs(AValue: Word): Word; inline;
 begin
-  {$IFDEF ENDIAN_BIG}
-  Result := AValue;
-  {$ELSE}
-  { inline zero-copy byte swap (register shuffle, no alloc) }
-  Result := Word((AValue shr 8) or (AValue shl 8));
-  {$ENDIF}
+  Result := Word(nextpas.core.bytes.binary.NetworkToHost16(UInt16(AValue)));
 end;
 
 function NToHs(AValue: LongWord): LongWord; inline;
 begin
-  {$IFDEF ENDIAN_BIG}
-  Result := AValue;
-  {$ELSE}
-  { inline zero-copy word swap (FPC Swap semantics, register shuffle, no alloc) }
-  Result := ((AValue shr 16) and $FFFF) or ((AValue shl 16) and $FFFF0000);
-  {$ENDIF}
+  Result := LongWord(nextpas.core.bytes.binary.NetworkToHost32Words(UInt32(AValue)));
 end;
 
 end.

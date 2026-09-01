@@ -47,6 +47,7 @@ uses
   nextpas.core.errors,
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.random;
@@ -70,13 +71,10 @@ var
   GP384BaseTable: array[0..15] of TJac384;
   GP384BaseTableReady: Boolean;
 
-function HexToBytes(const AHex: string): TBytes;
-var
-  I: Integer;
+function HexToBytes(const AHex: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AHex) div 2);
-  for I := 0 to High(Result) do
-    Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
+  { perf: inline thin-forward to encoding.hex single source (single SetLength+Move zero-copy, table lookup single pass); owner HexDecode not inline per red-line 2; reuse bytes.ops single-source Move semantics }
+  Result := nextpas.core.encoding.hex.HexDecode(AHex);
 end;
 
 function P384ModP: TBytes;

@@ -208,7 +208,7 @@ text  (implementation 部分 uses encoding，提供便利方法)
 
 ### 层级归属管理
 
-- 每个模块的层级归属在 `docs/module-registry.md` 中声明
+- 每个模块的层级归属在 `docs/core-module-registry.md` 中声明（单一事实源；`docs/module-registry.md` 为已废弃的兼容别名，镜像本表）
 - 后期通过构建脚本自动校验依赖合规性
 
 ---
@@ -373,7 +373,7 @@ nextpas.core.crypto.ossl.ffi.pas     ← 纯 cdecl external 声明
 
 ## 7. 稳定性分级
 
-- 稳定性分级在 `docs/module-registry.md` 中标注
+- 稳定性分级在 `docs/core-module-registry.md` 中标注（单一事实源；`docs/module-registry.md` 为已废弃别名）
 - 具体分级规则和晋升条件见单独文档
 
 ---
