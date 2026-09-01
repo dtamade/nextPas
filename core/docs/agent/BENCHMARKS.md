@@ -58,6 +58,10 @@ decode 体 = reasoning/function_call/message 14 输出项混合。出体字节�
 
 > 校验：`python3 core/benchmarks/nextpas.core.agent/bench_regression/check_regression.py` 以 FROZEN 为基线，全部 `OK within 10%`；`BENCHMARKS.md §2` 表与 FROZEN 6 项一一对应（`responses-decode 171.2 µs / ccm-auto 34.6 µs` 同源）。
 
+### 2.4 快照/流式盒微基准（非冻结，占位）
+
+> `snapshot` 6000B 预算下 ASCII 快路径免扫描，非 ASCII 全扫 <1µs（`test_snapshot` 9–10ms 为套件时间含编译，非单 op）；`streambox` 环形压缩后 `TryPop` 摊销 O(1)，200 轮 push/pop 1ms 内，HEAPTRC 零泄漏（`test_streambox` 6 测）。两者未入 FROZEN，属占位观测，劣化不触发门禁但需在 `PERFORMANCE §7.2` 叙事。
+
 ## 3. 读数口径说明
 
 - **loop**：单 op 含 provider 构造（脚本 JSON 解析）与 loop 实例构造

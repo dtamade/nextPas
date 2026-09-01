@@ -101,19 +101,30 @@ LTrunc := AgentUtf8SafeTruncate(S, LCut); // 单一真源落地
 
 | 字段 | 语义 |
 |------|------|
-| `Lock: TCriticalSection` | 保护 `Data/Done/id` 三字段的互斥；所有读写经 `Lock.Enter/Leave`，UI 线程与工作线程不跨线程释放资源（`ARCHITECTURE.md §4` 线程契约） |
+| `Lock: TPlatformMutex` | 经 `nextpas.core.platform.sync` 单一真源保护 `Data/Done/id/FHead` 四字段；所有读写经 `platform_mutex_lock/unlock`，UI 线程与工作线程不跨线程释放资源（`ARCHITECTURE.md §4` 线程契约，零 `SyncObjs` 直连） |
 | `Done: Boolean` | 流终止标志；`NextDelta=False` 时置位，`GetMessage/GetUsage` 仅在 `Done=True` 时有效（`LIFECYCLE.md §1` Active→Terminal 状态机） |
 | `id: UInt64` | 流实例代际；每次 `Stream()` 自增，下游回调携带 `id`，`id` 失配即丢弃（迟到 `ToolDelta` / `TextDelta` 不回读已合成载荷）——与 `ARCHITECTURE.md §4`「取消后资源由拥有线程独占收尾」正交 |
+| `FHead/FPending` | 环形游标：`Push` 尾追加，`TryPop` 取 `FPending[FHead]` 并 `Inc(FHead)`；`FHead>64` 且过半时 `Move` 前移摊销 `O(1)`，消费完 `SetLength 0` 释压——替代 `O(n)` 逐项前移 |
 
 ```pascal
-// 伪码：工作线程投递增量 → UI 线程消费
-procedure TAiStreamBox.Push(const ADelta: TStreamDelta; AId: UInt64);
+// 伪码：工作线程投递增量 → UI 线程消费（环形版）
+procedure TAgentStreamBox.Push(const ADelta: TStreamDelta; AId: UInt64);
 begin
-  Lock.Enter;
+  platform_mutex_lock(FLock);
   try
     if (AId <> FId) or FDone then Exit; // 失配/已终态丢弃
-    FPending.Add(ADelta);
-  finally Lock.Leave; end;
+    SetLength(FPending, Length(FPending)+1); FPending[High(FPending)] := ADelta;
+  finally platform_mutex_unlock(FLock); end;
+end;
+function TAgentStreamBox.TryPop(out ADelta: TStreamDelta): Boolean;
+begin
+  platform_mutex_lock(FLock);
+  try
+    Result := FHead < Length(FPending);
+    if not Result then Exit;
+    ADelta := FPending[FHead]; Inc(FHead);
+    if (FHead>64) and (FHead>Length(FPending) div 2) then begin Move(...); SetLength(...); FHead:=0; end;
+  finally platform_mutex_unlock(FLock); end;
 end;
 ```
 
