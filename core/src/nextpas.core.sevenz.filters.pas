@@ -128,7 +128,7 @@ begin
 end;
 
 procedure DeltaApply(const ASrc: PByte; ADst: PByte; ALen: SizeUInt;
-  LDist: SizeInt; AEncode: Boolean); inline;
+  LDist: SizeInt; AEncode: Boolean);
 var
   LHist: array[0..255] of Byte;
   LI: SizeUInt;
