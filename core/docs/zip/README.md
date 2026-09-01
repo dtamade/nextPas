@@ -419,4 +419,4 @@ ZipExtractToDirAtomicWithOptions(Bytes, '/out/dir', Opts); // 透传总量/口�
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip) (`zip_roundtrip` 7 式 `all demos ok`).
 
-Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S76 已落地，1.0.1 巡检（`VERSION 1.0.1`，`SECURITY.md` 五模型，12门+16项全绿，`test_zip_fs` 12 项）。
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S82 已落地，1.0.1 巡检（`VERSION 1.0.1`，`SECURITY.md` 五模型，12门+16项全绿，`test_zip_fs` 12 项，`bench 16项` 可编译，`Normalize` 单源）。

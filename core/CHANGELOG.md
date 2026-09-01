@@ -2,6 +2,15 @@
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 
+`1.0.0` 后 18 期巡检收敛（S64—S82），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench` 多维打磨，`12 门+bench+hygiene` 全绿。
+
+### Highlights (S80—S82)
+- **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
+- **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
+- **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
+
+## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
+
 `1.0.0` 后 12 期巡检收敛（S64—S75），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用` 多维打磨，`12 门+bench+hygiene` 全绿。
 
 ### Highlights (S64—S76)

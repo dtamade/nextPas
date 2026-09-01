@@ -367,11 +367,7 @@ begin
     FCurrent.AesStrengthCode := LAesStrength;
     LMethod := LAesRealMethod;
   end;
-  if LMethod = C_ZIP_METHOD_DEFLATE then
-    FCurrent.Method := zmDeflate
-  else if LMethod = C_ZIP_METHOD_STORE then
-    FCurrent.Method := zmStore
-  else
+  if not TryZipMethodFromCode(LMethod, FCurrent.Method) then
     raise ENotSupportedError.CreateFmt(
       'zip: unsupported compression method %d: %s',
       [LMethod, LName]);

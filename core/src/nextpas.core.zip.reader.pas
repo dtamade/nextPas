@@ -395,11 +395,7 @@ begin
     LMethodCode := LAesRealMethod;
   end;
 
-  if LMethodCode = C_ZIP_METHOD_DEFLATE then
-    AE.Method := zmDeflate
-  else if LMethodCode = C_ZIP_METHOD_STORE then
-    AE.Method := zmStore
-  else
+  if not TryZipMethodFromCode(LMethodCode, AE.Method) then
     raise ENotSupportedError.CreateFmt(
       'zip: unsupported compression method %d: %s',
       [LMethodCode, AE.Name]);

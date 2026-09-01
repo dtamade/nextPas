@@ -180,6 +180,9 @@
 ### S82 — 治理收口（1.0.1 巡检）· 模块化/性能 — 已落地
 - `bench` 可编译性：`core/src/nextpas.core.bench.baseline.pas` 补 `nextpas.core.json.value` 显式依赖，适配 `TJsonValueHelper.IsReal/IsInt/AsFloat` 新门面，`bench_zip` 16 项 `300ms/7/25` 全编译通过，`BASELINE.json` 2026-09-02T05:34:39 实跑刷新（`pack 810`/`reserve 805`/`read 10` 稳定）
 
+### S83 — 文档与复用收口（1.0.1 巡检）· 完整性/复用度 — 已落地
+- `CHANGELOG 1.0.1` 补 `S80—S82` 18 期收敛与 `Normalize`/`bench` 亮点；`CONTRACT` §1.2 增 `NormalizeZipReadOptions`；`README` 路标 `S0—S82` 同步；`base.TryZipMethodFromCode` 单源化 `reader/sequential` 的 `zmStore/zmDeflate` 映射，消除 `if LMethodCode=0/8` 重复
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -212,4 +215,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S82 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 2bc2d55 → 6c2修复` 已落地，`bench 16 项` 可编译。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S83 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c80fe29` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod` 单源。
