@@ -4,8 +4,8 @@
 
 - 层级：L2，依赖 L0-L1（`base`/`text`/`bytes`/`fs`/`io`）；`native` 子家族另用同层单向 `compress`/`hash`/`zlib`/`checksum` owner 能力（mmap、Deflate、SHA-1、Adler-32 等，`core/docs/core-module-registry.md` 显式豁免 `L0-L1 plus same-layer one-way compress/hash/zlib/checksum`），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，存量零改动）。
-- 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)`，首版 `gbAuto = gbLibGit2`）。
-- 纯路径：`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D` 产物零命中；`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义；三零证据 `fpc -va`/`nm` 双零，直连 `native.manager` 方为全维度零依赖，`factory(gbNative)` 运行时零 `dlopen` 但编译图仍含 `libgit2`）。
+- 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)` + `RegisterLibGit2Creator` 注册注入 + `NewNativeGitManager` 纯别名，首版 `gbAuto = gbLibGit2`）。
+- 纯路径：`native.manager`/`factory(gbNative)`/`NewNativeGitManager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D` 产物零命中；`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义；三零证据 `fpc -va`/`nm` 双零，未拉入 `libgit2` 注册单元时 factory 纯路径与直连双重三零，`inline` 值类型枚举零拷贝分发，`bytes.ops` 单源，`try..finally` 资源不丢）。
 - 文档真源：契约见 [CONTRACT.md](CONTRACT.md)（总索引，88 源/40+ 能力按不变量域 6 shard 拆分）+ 6 shard 独立契约；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md).
 
 ## 文档地图
@@ -32,7 +32,7 @@
 core/src/nextpas.core.git.pas                 ← 聚合门面（re-export base/intf + inline NewGitManager）
 core/src/nextpas.core.git.base.pas            ← TGitStatusEntry / TGitStatusFilter 基础类型
 core/src/nextpas.core.git.intf.pas            ← IGitManager / IGitRepository / IGitCommit 接口
-core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager（唯一跨轨汇聚点）
+core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator（静态仅 native.manager，注册注入 libgit2）
 core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，TGitOid33 legacy）
 core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 类型层（回调 typedef 等）
 core/src/nextpas.core.git.libgit2.binding.pas ← libgit2 运行时绑定（dlopen/dlsym）
@@ -80,7 +80,7 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
 
 ```pascal
 uses
-  nextpas.core.git,            // 存量：默认 gbAuto (= gbLibGit2 首版)
+  nextpas.core.git,            // 存量：默认 gbAuto (= gbLibGit2 首版, 门面 impl 注入 libgit2)
   nextpas.core.git.factory;    // 显式选择
 
 var
@@ -92,8 +92,8 @@ begin
   if Mgr.IsRepository('/path/to/repo') then
     Repo := Mgr.OpenRepository('/path/to/repo');
 
-  // 纯路径（零 libgit2）
-  Mgr := factory.NewGitManager(gbNative);
+  // 纯路径（零 libgit2, 未拉入 libgit2 注册单元时三零）
+  Mgr := factory.NewGitManager(gbNative); // 或 factory.NewNativeGitManager / native.manager.TNativeGitManager.Create
 end;
 ```
 

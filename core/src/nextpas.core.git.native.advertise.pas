@@ -7,6 +7,8 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.base,
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.util;
@@ -38,12 +40,17 @@ function GitHasCapability(const AAdv: TGitAdvertised; const ACap: string): Boole
 
 implementation
 
-function SplitBySpace(const S: string): TStringArray;
+function SplitBySpace(const S: string): TStringArray; inline;
 var
   I, Start: Integer;
   Tok: string;
+  LCount, LCap: SizeUInt;
 begin
+  // perf: inline + amortized doubling via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), single SetLength per growth, avoids O(n²) SetLength(...+1) churn; final shrink once
+  // stability: SetLength is exception-safe; managed strings refcounted, no manual free, no leak on exception
   Result := nil;
+  LCount := 0;
+  LCap := 0;
   Start := 1;
   for I := 1 to Length(S) + 1 do
   begin
@@ -54,13 +61,20 @@ begin
         Tok := Copy(S, Start, I - Start);
         if Tok <> '' then
         begin
-          SetLength(Result, Length(Result) + 1);
-          Result[High(Result)] := Tok;
+          if LCount >= LCap then
+          begin
+            LCap := GrowArrayCapacity(LCap, LCount + 1);
+            SetLength(Result, LCap);
+          end;
+          Result[LCount] := Tok;
+          Inc(LCount);
         end;
       end;
       Start := I + 1;
     end;
   end;
+  if SizeUInt(Length(Result)) <> LCount then
+    SetLength(Result, LCount);
 end;
 
 function GitParseAdvertise(const AStream: TBytes): TGitAdvertised;
@@ -71,13 +85,18 @@ var
   SpPos, NulPos: Integer;
   Ref: TGitAdvertisedRef;
   First: Boolean;
+  LCount, LCap: SizeUInt;
 begin
+  // perf: Refs doubling via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1) per append, final single shrink; SplitBySpace already doubling
+  // stability: SetLength exception-safe, managed array releases on exception, no manual header poke, no leak
   Result.Refs := nil;
   Result.Capabilities := nil;
   if Length(AStream) = 0 then
     Exit;
   Pkts := GitPktScan(AStream);
   First := True;
+  LCount := 0;
+  LCap := 0;
   for I := 0 to High(Pkts) do
   begin
     if Pkts[I].Kind = gpkFlush then
@@ -115,9 +134,16 @@ begin
     if Ref.Name = '' then
       raise EGitError.Create('advertise empty ref name');
     Ref.Oid := GitOidFromHex(OidHex);
-    SetLength(Result.Refs, Length(Result.Refs) + 1);
-    Result.Refs[High(Result.Refs)] := Ref;
+    if LCount >= LCap then
+    begin
+      LCap := GrowArrayCapacity(LCap, LCount + 1);
+      SetLength(Result.Refs, LCap);
+    end;
+    Result.Refs[LCount] := Ref;
+    Inc(LCount);
   end;
+  if SizeUInt(Length(Result.Refs)) <> LCount then
+    SetLength(Result.Refs, LCount);
 end;
 
 function GitParseAdvertisedRefs(const AStream: TBytes): TGitAdvertisedRefArray;

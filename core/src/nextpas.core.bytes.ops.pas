@@ -45,6 +45,8 @@ procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+{ perf: GrowArrayCapacity single source for amortized doubling (bytes.ops owns growth, inline, zero-copy Move in callers), reused by SplitBySpace/Refs/Capabilities to avoid O(n²) SetLength(...+1) churn }
+function GrowArrayCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -86,6 +88,24 @@ uses
   O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
   writes that could corrupt heap on exception. }
 
+function GrowArrayCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; inline;
+begin
+  // single source doubling (BYTES_BUILDER_MIN_GROW + *2 + overflow clamp), reused by generic array growth (Refs/Caps/Tokens) to guarantee amortized O(1) append
+  Result := ACurrent;
+  if Result < BYTES_BUILDER_MIN_GROW then
+    Result := BYTES_BUILDER_MIN_GROW;
+  while Result < ARequired do
+  begin
+    if Result <= High(SizeUInt) div 2 then
+      Result := Result * 2
+    else
+    begin
+      Result := ARequired;
+      Break;
+    end;
+  end;
+end;
+
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
   LOld, LNewCap: SizeUInt;
@@ -96,19 +116,7 @@ begin
   // single doubling growth to amortize when called directly; callers that need
   // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
   // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < ARequired do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ARequired;
-      Break;
-    end;
-  end;
+  LNewCap := GrowArrayCapacity(LOld, ARequired);
   SetLength(ADest, LNewCap);
 end;
 

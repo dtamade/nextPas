@@ -92,7 +92,7 @@
 | git.native.common | 共享对象助手（tree 查找/tag 剥离单源，GitFindBlobInTree/GitPeelToTree，零重复，EGitError 语义） |
 | git.native.util | 通用工具单源（Trim/SplitLines/WorktreeDir/FindBlobInTree/PeelToTree，inline/零拷贝，去重 common） |
 | git.native.wildmatch | 单源通配引擎（`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils，ignore/attributes 委托 GitWildSegment*/GitSegmentsMatch） |
-| git.factory | TGitBackend + NewGitManager 选择层（唯一跨轨汇聚点，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
+| git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
 | git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝，<400 行） |
@@ -202,21 +202,24 @@ IGitCommit = interface
 end;
 ```
 
-选择层（`nextpas.core.git.factory`，唯一跨轨汇聚点）：
+选择层（`nextpas.core.git.factory`，静态仅 native.manager，注册注入 libgit2）：
 
 ```pascal
 type
   TGitBackend = (gbNative, gbLibGit2, gbAuto);
-function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager;
+  TLibGit2Creator = function: IGitManager;
+procedure RegisterLibGit2Creator(ACreator: TLibGit2Creator);
+function NewGitManager(ABackend: TGitBackend = gbAuto): IGitManager; inline;
+function NewNativeGitManager: IGitManager; inline;
 ```
 
 | 枚举 | 语义 | 首版行为 |
 |------|------|----------|
-| `gbNative` | 创建 `TNativeGitManager`，仅依赖 `native.*`，零 libgit2；未实现方法抛 `EGitError('not implemented for native backend: <Method>')` | 纯路径 |
-| `gbLibGit2` | 创建 `TLibGit2Manager`，经 `platform.dl` 的 `dlopen/dlsym` 运行时加载 `libgit2` | 兼容路径 |
+| `gbNative` | 创建 `TNativeGitManager`，仅依赖 `native.*`，零 libgit2；`inline` 值类型枚举零拷贝分发，`bytes.ops` 单源，`try..finally` 资源不丢；未拉入 `libgit2` 时编译图/产物双零 | 纯路径（三零经 factory 或直连达成） |
+| `gbLibGit2` | 创建 `TLibGit2Manager`，经 `platform.dl` 的 `dlopen/dlsym` 运行时加载 `libgit2`，需已注册（`uses nextpas.core.git.libgit2` 触发 `RegisterLibGit2Creator`），未注册时 fail-closed 抛 `EGitError` | 兼容路径 |
 | `gbAuto` | 策略别名，首版恒等于 `gbLibGit2`，下版本切 `gbNative` 前发迁移公告 | 默认兼容，详见 `PURE-BACKEND.md` §3 |
 
-门面保留无参重载以兼容存量：`nextpas.core.git.NewGitManager` inline 转发 `factory.NewGitManager(gbAuto)`，语义与重构前一致；纯消费显式传 `gbNative` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`。
+门面保留无参重载以兼容存量：`nextpas.core.git.NewGitManager` inline 转发 `factory.NewGitManager(gbAuto)`，语义与重构前一致（门面 impl 注入 `libgit2` 以兼容存量）；纯消费显式传 `gbNative`/`NewNativeGitManager` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（未拉入 `libgit2` 时三零）。
 
 ### 1.3 核心类型
 

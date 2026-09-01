@@ -17,9 +17,12 @@ uses
   The compress module's Deflate* functions already emit/accept full zlib
   streams (header + deflate + adler32), so this unit only adds git-flavored
   error mapping and stream-boundary reporting over them.
-  Layer note: L2 git.native.zlib → L2 compress is same-layer one-way
-  (Deflate*) explicitly allowed via core/docs/core-module-registry.md
-  (git: L0-L1 plus same-layer one-way fs/compress/hash/zlib/checksum). }
+  Layer note: L2 git.native.zlib → L2 compress (Deflate*) + L1 checksum.adler32
+  (Adler32Update) single-source passthrough, same-layer one-way explicitly
+  allowed via core/docs/core-module-registry.md (git: L0-L1 plus same-layer
+  one-way fs/compress/hash/zlib/checksum). Zero handwritten deflate/adler loop.
+  Perf: inline thin forwards (Adler32/Compress), zero-copy PByte+Len view
+  via bytes.ops single source (TBytes ref, no Move duplication), resource-free. }
 
 function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
 function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;
