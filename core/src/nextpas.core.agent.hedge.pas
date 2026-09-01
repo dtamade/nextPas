@@ -256,7 +256,12 @@ begin
     end);
 
   try
-    LRemainNs := HedgeDelayToNs(FPolicy.DelayMs);
+    { 分片等待 DelayMs：每片 CArbitrationSliceNs 检查 Outer 取消，
+      与 throttle/retry 的 WaitForCancel 分片统一（G3 协同）。 }
+    if FPolicy.DelayMs > High(Int64) div 1000000 then
+      LRemainNs := High(Int64)
+    else
+      LRemainNs := FPolicy.DelayMs * 1000000;
     while LRemainNs > 0 do
     begin
       if OuterGone then
@@ -406,7 +411,11 @@ begin
     end);
 
   try
-    LRemainNs := HedgeDelayToNs(FPolicy.DelayMs);
+    { 分片等待 DelayMs：与 Complete 路同分片，G3 统一取消粒度 }
+    if FPolicy.DelayMs > High(Int64) div 1000000 then
+      LRemainNs := High(Int64)
+    else
+      LRemainNs := FPolicy.DelayMs * 1000000;
     while LRemainNs > 0 do
     begin
       if OuterGone then
