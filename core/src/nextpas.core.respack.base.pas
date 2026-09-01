@@ -41,6 +41,8 @@ const
 
   { writer 输入上限（CONTRACT INV-R10）：超出显式 raise，绝不静默产出坏包 }
   RESPACK_MAX_INPUT_BYTES = SizeUInt(512) * 1024 * 1024;
+  { reader 熔断：entryCount 上界（INV-R10 防御深度，512M/40≈12.8M），SetLength 前硬熔断防恶意包 OOM }
+  RESPACK_MAX_ENTRY_COUNT = RESPACK_MAX_INPUT_BYTES div RESPACK_ENTRY_SIZE;
 
 type
   { host-order API record；线上布局一律经 LE helper 编解码（BE 平台安全） }
@@ -228,7 +230,7 @@ end;
 
 { 十进制整数转字符串 — 单源于 L1 text.number.UIntToBuffer (DIGIT_PAIRS 批量),
   仅 EResPackCorrupted.CreateStep 报错路径使用；冷路径外联避免 I-Cache 膨胀，
-  遵守 inline 红线1（不以索引元素喂 Move 无类型参数，FPC 常量传播下栈污染风险）。 }
+  零拷贝单源 bytes.ops.BytesCopy inline 单 Move，禁止直调 Move 破坏单源纪律。 }
 function ResPackUIntToStr(AValue: UInt32): string;
 var
   LBuf: array[0..15] of AnsiChar;
@@ -237,7 +239,7 @@ begin
   LLen := UIntToBuffer(UInt64(AValue), @LBuf[0]);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf, PAnsiChar(Result)^, LLen);
+    BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
 end;
 
 constructor EResPackError.Create(const AMsg: string);

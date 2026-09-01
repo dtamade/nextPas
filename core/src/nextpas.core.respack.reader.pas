@@ -54,9 +54,9 @@ type
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
     { 零拷贝路径视图单源：TByteSpan 唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare/SpanToString 单源；
-      二分缓存查询视图与索引/串表基址，单次 LE 解码+视图构造，inline 零调用开销；供 embedded 零分配二分/前缀复用 }
+      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用 }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
-    function LowerBound(const APath: string): SizeUInt;
+    function LowerBound(const APath: string): SizeUInt; inline;
     function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
   end;
 
@@ -216,6 +216,9 @@ begin
       + UInt64(Result.FHdr.EntryCount) * RESPACK_ENTRY_SIZE
       > Result.FHdr.BlobTotal) then
     raise EResPackCorrupted.CreateStep(3, 'index out of range');
+  { INV-R10 熔断：entryCount 硬上界，防恶意包 SetLength OOM（复用 RESPACK_MAX_ENTRY_COUNT 单源，对齐防御深度） }
+  if UInt64(Result.FHdr.EntryCount) > RESPACK_MAX_ENTRY_COUNT then
+    raise EResPackCorrupted.CreateStep(3, 'entry count exceeds limit');
 
   { 步骤 4：缓冲覆盖 blobTotal（允许尾部多余字节） }
   if ASize < Result.FHdr.BlobTotal then
@@ -236,10 +239,13 @@ begin
   MaxDataEnd := 0;
   StrLen := 0;
   Cached := nil;
-  if Result.Count > 0 then
+  SortedIdx := nil;
+  try
+    if Result.Count > 0 then
   begin
-    // 缓存条目避免第二遍二次 DecodeWire
-    // Count 受 BlobTotal/40 限制，10k 级分配 < 400KB，可控
+    // 熔断已在 Step3 硬上界（RESPACK_MAX_ENTRY_COUNT, INV-R10），此处仍显式校验防 bypass；缓存零二次 DecodeWire，10k 级 <400KB 可控
+    if UInt64(Result.Count) > RESPACK_MAX_ENTRY_COUNT then
+      raise EResPackCorrupted.CreateStep(3, 'entry count exceeds limit');
     SetLength(Cached, Result.Count);
     for I := 0 to Result.Count - 1 do
     begin
@@ -374,7 +380,10 @@ begin
       raise EResPackCorrupted.CreateStep(8, 'digest overlaps data');
     Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset);
   end;
-  SetLength(Cached, 0);
+  finally
+    SetLength(Cached, 0);
+    SetLength(SortedIdx, 0);
+  end;
 
   Result.FOpen := True;
 end;
@@ -439,15 +448,11 @@ begin
   Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
-function TResPack.LowerBound(const APath: string): SizeUInt;
+function TResPack.LowerBound(const APath: string): SizeUInt; inline;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
   Query: TByteSpan;
-  IdxBase, StrTab: PByte;
-  Base: PByte;
-  L: SizeUInt;
-  S: TByteSpan;
 begin
   Lo := 0;
   Hi := Count;
@@ -456,20 +461,12 @@ begin
     Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
   else
     Query := TByteSpan.Empty;
-  { 缓存索引/串表基址与查询视图：二分 14 次比较约 14 次视图构造（原 28 次 LE 解码经 StoredPathSpan+CompareStoredToBuf 双重），
-    循环内仅一次 RdU32LE/RdU16LE+SpanCompare，inline 零拷贝，bytes.ops 单源 }
-  IdxBase := FData + SizeUInt(FHdr.IndexOffset);
-  StrTab := FData + SizeUInt(FStrTabBase);
+  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造，inline 零调用开销），
+    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造（原手工 RdU*LE 重复解码已消除），零分配 }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    Base := IdxBase + Mid * RESPACK_ENTRY_SIZE;
-    L := SizeUInt(RdU16LE(Base + 4));
-    if L = 0 then
-      S := TByteSpan.Empty
-    else
-      S := TByteSpan.Create(StrTab + SizeUInt(RdU32LE(Base)), L);
-    C := SpanCompare(S, Query);
+    C := SpanCompare(StoredPathSpan(Mid), Query);
     if C < 0 then
       Lo := Mid + 1
     else
