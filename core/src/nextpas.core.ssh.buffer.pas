@@ -30,7 +30,7 @@ type
   private
     FBuf: TBytes;
     FLen: SizeUInt;
-    procedure Ensure(ACount: SizeUInt); inline;
+    procedure Ensure(ACount: SizeUInt);
   public
     constructor Create(ACapacityHint: SizeUInt = 256);
 
@@ -109,38 +109,25 @@ begin
   FLen := 0;
 end;
 
-procedure TSshWriter.Ensure(ACount: SizeUInt); inline;
+procedure TSshWriter.Ensure(ACount: SizeUInt);
 var
   LNeed: SizeUInt;
-  LNewCap: SizeUInt;
 begin
   if FLen > High(SizeUInt) - ACount then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: writer overflow');
   LNeed := FLen + ACount;
   if LNeed <= SizeUInt(Length(FBuf)) then
     Exit;
-  { perf: 2x geometric doubling single source via bytes.ops.BytesEnsureCapacity /
-    bytes.builder.Grow (BYTES_BUILDER_MIN_GROW=64 floor, doubling loop, overflow clamped);
-    single SetLength+Move zero-copy, amortized O(1) per Put*, avoids O(n²) churn;
-    stability: overflow/packet-limit guarded, exception-safe SetLength. }
-  LNewCap := SizeUInt(Length(FBuf));
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < LNeed do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := LNeed;
-      Break;
-    end;
-  end;
-  if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
-    LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
-  if LNeed > LNewCap then
+  { perf: single source via nextpas.core.bytes.ops.BytesEnsureCapacity (BYTES_BUILDER_MIN_GROW=64 floor,
+    2x geometric doubling loop, overflow clamped); amortized O(1) per Put*, single SetLength+Move
+    zero-copy via Move, avoids O(n²) churn; non-inline: real loop body stays out-of-line to avoid
+    I-Cache bloat (design-conventions §2 red line), thin caller remains inline candidate.
+    single source aligns with sftp.wire.TSshChannelWire.EnsureCapacity (same BytesEnsureCapacity),
+    threshold unified to SSH_MAX_RECEIVE_PACKET+1024.
+    stability: overflow/packet-limit guarded, exception-safe SetLength, no manual header poke. }
+  if LNeed > SSH_MAX_RECEIVE_PACKET + 1024 then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
-  SetLength(FBuf, LNewCap);
+  BytesEnsureCapacity(FBuf, LNeed);
 end;
 
 procedure TSshWriter.Clear;

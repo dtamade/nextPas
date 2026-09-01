@@ -342,7 +342,7 @@ end;
 
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 var
-  LTcp: ITcpStream;
+  LTcp: IReadWriteCloser;
   LSession: TSshSession;
   LDeadline: TDeadline;
   LDialer: ISshDialer;

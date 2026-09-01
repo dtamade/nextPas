@@ -1,7 +1,7 @@
 unit nextpas.core.ssh.proxyjump.async;
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.net.ffi, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.net.async.tcp, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
 type PWriteCtx = ^TWriteCtx; TWriteCtx = record Cb: TIoCompletion; Ctx: Pointer; Len: UInt32; end;
 type TAsyncChannelStream = class(TInterfacedObject, IAsyncTcpStream)
 private

@@ -10,9 +10,9 @@ program test_ssh_proxyjump;
   mirrors test_ssh_session zero-leak pattern (owner boundary: io.intf/bytes). }
 
 uses
-  nextpas.core.bytes.ops,
   cthreads,
   Classes, SysUtils,
+  nextpas.core.bytes.ops,
   nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,

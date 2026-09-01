@@ -10,7 +10,6 @@ interface
 
 uses
   nextpas.core.io.intf,
-  nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.dial,
@@ -28,19 +27,6 @@ type
   IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
   TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
   TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
-  // 同步类型单缝隙 re-export：供 proxyjump.async 等经 ffi 间接使用，避免直连 net.base/intf
-  ITcpStream = nextpas.core.net.intf.ITcpStream;
-  ITcpListener = nextpas.core.net.intf.ITcpListener;
-  IUdpSocket = nextpas.core.net.intf.IUdpSocket;
-  TNetAddress = nextpas.core.net.base.TNetAddress;
-  TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
-  INetCancelToken = nextpas.core.net.intf.INetCancelToken;
-
-const
-  tsiorOk = nextpas.core.net.intf.tsiorOk;
-  tsiorWouldBlock = nextpas.core.net.intf.tsiorWouldBlock;
-  tsiorClosed = nextpas.core.net.intf.tsiorClosed;
-  tsiorTimeout = nextpas.core.net.intf.tsiorTimeout;
 
 function SshDefaultDialer: ISshDialer; inline;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;

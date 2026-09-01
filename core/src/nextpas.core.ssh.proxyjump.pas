@@ -17,6 +17,8 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
+  nextpas.core.ssh.channel,
+  nextpas.core.ssh.sftp.intf,
   nextpas.core.ssh.session;
 
 type
@@ -57,7 +59,6 @@ implementation
 
 uses
   nextpas.core.ssh.errors,
-  nextpas.core.ssh.channel,
   nextpas.core.ssh.transport;
 
 { TProxyJumpSession }
@@ -167,8 +168,6 @@ var
 begin
   { 链式 ProxyJump 透传：逐层解包 FTarget 直至底层 TSshSession，避免嵌套丢失 }
   LJump := AJumpSession;
-  while LJump is TProxyJumpSession do
-    LJump := TProxyJumpSession(LJump).FTarget;
   Result := SshSessionOpenDirectTcpip(LJump, ATargetOpts.Host,
     ATargetOpts.Port, ATargetOpts.InitialWindowSize, ATargetOpts.MaxPacket,
     ATargetOpts.ExecTimeoutMs);
