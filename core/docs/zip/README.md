@@ -293,7 +293,21 @@ allocate beyond the configured output cap — `store` 与 `deflate` 同受 `MaxO
 
 ## Performance
 
-`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 规矩承载（`SetMinDuration 300ms`/`MinSamples 7`/`MaxIterations 25` 四十九期方差治理后 `aes-*` CV `<5%`，`ACtx.SetBytes` 换算吞吐，`PrintToConsole`+`ToBenchstat`+`SaveToJSON` 归档），覆盖 `200×512B` 小容器（bench 轻量化；`2000×512B` 全量 parity 另作预检）与 `1MiB` 吞吐两面（含 `pack-reserve`/`builder-pack`/`stream-out`/`descriptor`/`staged`/`seq-*`/`aes-*`/`pbyte`/`copy-to` 16项），Go `archive/zip` 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（十九期领头羊双锚点：Python zipfile + Go archive/zip，各自独立验证 store/deflate、unicode、1MiB、20×混合、30 fuzz 的字节级一致，四十七期扩至 7门含 no-sig 100+ fuzz）。Reader 解析用 `nextpas.core.bytes.cursor` 边界检查 + 单次分配条目数组（四十六期 `ReadSpan+DecodeCentralExtraBuf` 零分配，`open/parse-CD 4004→2004 allocs`）；CRC32 为 `nextpas.core.checksum.crc32` slice-by-8；`nextpas.core.zip.extra` 逐条目经 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B` `810→805 allocs`），`Reserve` 预分配消除 2k+ 几何重分配，`StreamOutputTo` 后 `DrainStaged` 以内板指针分块直写（零拷贝排空）；`test_zip_perf` 以 `CountingMemoryManager`（heaptrc 兼容）锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs` 预算，回归即红（二十期阈值门）；`test_zip_stress` 以 `70k Zip64`（1.07s）/`1k 混合双路径`/`Bomb 单值与总量`/`并发提取` 验证极限压力下的规模与 fail-closed（二十一期）；`BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` CI 硬门（`make baseline` 需人工审查，二十二期）；三十四期补 `store` bomb `MaxOutput` 入口守卫与 `fs` 几何预分配（70k 目录 `O(n²)→O(n)`），三十五期顺序读 `IsKnownZipSig` 先验再试解防 `O(n·m)` CPU bomb，三十六期 `aes.EncodeWinZipAesExtraBody` 栈上零堆与 `FScratch` 几何预留，三十七期 `LCumTotal` 去复用与 store bomb 回归，三十八期 `INV-8/11/16` 入约，三十九期 `GuardTotalOutputSize` 单点化消除两读端重复，四十期示例与契约定版——`zip_roundtrip` 补 `MaxOutput/MaxTotal` 守卫全链演示（内存/顺序/fs 三路径 fail-closed）与 Builder WithTime 对称收口，四十一期顺序读零拷贝——`TSeqSliceReader` 去 `Copy` 双重拷贝与 `PushBack` 去 `Copy`，`seq-extract-all` 循 `DecompressEntryVerified` 单点复用直达切片，四十二期描述符无签名兼容——`CollectDescriptorPayload` 支持 `12/20` 无签名与 `16/24` 有签名四形态，四十三期 PByte 零拷贝直写 `ExtractToBuffer` 共享内核、四十四期 AES 描述符对偶、四十五期阈值可配、四十六期中央零分配、四十八期 Cookbook 定版、四十九期方差治理。
+`core/benchmarks/nextpas.core.zip/bench_zip` 以 `nextpas.core.bench` `TBenchSuite` 为唯一口径（`SetMinDuration 300ms` / `MinSamples 7` / `MaxIterations 25`，49 期后 `aes-*` CV `<5%`；`ACtx.SetBytes` 换算吞吐，`PrintToConsole` + `ToBenchstat` + `SaveToJSON` 归档）。
+
+**覆盖**：`200×512B` 小容器（轻量化；`2000×512B` 全量 parity 另作预检）与 `1MiB` 吞吐两面，16 项（`pack` / `reserve` / `builder-pack` / `stream-out` / `descriptor` / `staged` / `seq-*` / `aes-*` / `pbyte` / `copy-to`）；Go 对比在 `compare_go/` 与 `test_zip_go_parity` 双向对等门（S19 领头羊双锚点：Python `zipfile` + Go `archive/zip`，47 期扩至 7 门含无签名）。
+
+**实现要点**
+- Reader：`bytes.cursor` 边界检查 + 单次分配条目数组（S46 `ReadSpan+DecodeCentralExtraBuf` 零分配，`open/parse-CD 4004→2004 allocs`）
+- 校验：`checksum.crc32` slice-by-8；`zip.extra` 逐条目 64 字节栈缓冲 `Encode*` 零分配（`pack 200×512B 810→805 allocs`）
+- 预分配：`Reserve` 消除 2k+ 几何重分配；`StreamOutputTo` 后 `DrainStaged` 指针分块直写零拷贝排空
+- 防护：S34 `store` bomb `MaxOutput` 单点守卫 + `fs` 几何预分配（70k `O(n²)→O(n)`）；S35 顺序读 `IsKnownZipSig` 先验再试解防 `O(n·m)` CPU bomb
+
+**门禁**
+- `test_zip_perf` 以 `CountingMemoryManager` 锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs`，回归即红（S20）；`test_zip_stress` 以 `70k Zip64 1.07s` / `1k 混合双路径` / `Bomb` / `并发` 验证极限（S21）
+- `BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` 硬门（`make baseline` 需人工审查，S22）
+
+**历代收敛**：S36 栈上 AES + `FScratch` 几何；S37 `LCumTotal` 去复用；S38 `INV-8/11/16` 入约；S39 `GuardTotalOutputSize` 单点化；S40 `zip_roundtrip` 三路径 `MaxOutput/MaxTotal` 演示；S41 顺序零拷贝；S42 无签名四形态；S43 PByte 直写；S44 AES 描述符对偶；S45 阈值可配；S46 中央零分配；详见 `ROADMAP` 与 `CHANGELOG`。
 
 Sequential read reuses the same `DecompressEntryVerified` kernel via
 `nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），

@@ -42,6 +42,8 @@
 | S58 | 委托对称：`zip.common` 时间委托四子 `inline` 零成本 |
 | S59 | 984合流验证：三门全绿再验证 + 113/r9 基线对齐 |
 | S60 | 文档一致性收敛（1.0.1 巡检）：`SECURITY 4→5` 同步、`CONTRACT §6` 增非原子/TOCTOU 已知局限、`registry zip` 补 `crypto/hash` 依赖 |
+| S61 | 错误归一（1.0.1 巡检）：未知压缩方法 parse 阶段即 `ENotSupportedError`，消除回落 `zmStore` 指纹混淆 |
+| S62 | 复用与性能微抛光（1.0.1 巡检）：`extra.WriteLE*` PByte 单源、`base.IsSafe` 去 `inline` 减膨胀、`README` 性能段拆表留白 |
 
 **Truth level**：`ci-matrix`（`1.0.0 Final`，`VERSION 1.0.0`）。
 
@@ -105,6 +107,15 @@
 
 ### S59 — 984合流验证平台期（1.0.1 巡检）· 稳定性/完整性 — 已落地
 - `984e2df` 113/r9 合流后基线对齐验证：`zip` `27/32/30` 三门全绿 + `math` 轸断再修复，`ROADMAP` `S58` 回补，完美 plateau 证据化
+
+### S60 — 文档一致性收敛（1.0.1 巡检）· 完整性 — 已落地
+- `SECURITY 4→5` 同步、`CONTRACT §6` 增非原子/TOCTOU 与阈值正交局限、`registry zip` 补 `crypto/hash` 依赖，`test_zip_contract` 全绿
+
+### S61 — 错误归一（1.0.1 巡检）· 稳定性 — 已落地
+- 未知压缩方法在 `ParseCentralEntry`/`ParseCurrentLocal` 即 `ENotSupportedError`，消除回落 `zmStore` 后的 `EIOError` 指纹混淆
+
+### S62 — 复用与性能微抛光（1.0.1 巡检）· 复用度/性能/高级感 — 已落地
+- `extra.WriteLE*` PByte 单源收敛（`TBytes` 版薄委托 `WriteLE*Buf`）；`base.IsSafeZipEntryName` 去 `inline` 减长循环膨胀；`README` 性能段拆为覆盖/实现要点/门禁/历代收敛四段留白
 
 ## 4. 度量与硬门（1.0.0 冻结）
 
