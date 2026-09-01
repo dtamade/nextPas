@@ -311,8 +311,7 @@ end;
 procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
   const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardCursorRange(AC, APos, ALen, AWhat);
 end;
 
 { 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
@@ -477,8 +476,7 @@ end;
 { 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
 procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(FC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardCursorRange(FC, APos, ALen, AWhat);
 end;
 
 procedure TZipReaderImpl.ParseCentralDirectory;
@@ -820,8 +818,7 @@ end;
 { 区间 [APos, APos+ALen) 必须落在源长度内，否则结构视为截断损坏 }
 procedure TZipSourceReader.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > FSize) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardRange(FSize, APos, ALen, AWhat);
 end;
 
 procedure TZipSourceReader.ParseCentralDirectory;
