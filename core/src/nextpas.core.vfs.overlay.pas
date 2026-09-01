@@ -21,7 +21,8 @@ function CreateOverlayVfs(const AList: array of IVfs): IVfs;
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.collections.algorithms;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -132,43 +133,20 @@ type
     Prio: Integer;
   end;
 
+{ 单源排序比较：Name 字节序 + Prio 优先级；复用 bytes.ops 零拷贝 VfsNameCompare }
+function CompareOverlayTemp(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
+begin
+  Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
+  if Result = 0 then
+    Result := SizeInt(A.Prio) - SizeInt(B.Prio);
+end;
+
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J, OutN, TempN, Cap: Integer;
+  I, J, OutN, TempN: Integer;
   Cur: TEntryArray;
   LStat: TStatInfo;
   Temp: array of TOverlayTemp;
-  procedure EnsureTemp(const Need: Integer);
-  begin
-    if Length(Temp) < Need then SetLength(Temp, Need);
-  end;
-  procedure SortTemp(var A: array of TOverlayTemp; L, R: Integer);
-  var
-    Ii, Jj: Integer;
-    Pivot: TOverlayTemp;
-    Tmp: TOverlayTemp;
-    Cmp: Integer;
-  begin
-    repeat
-      Ii := L; Jj := R;
-      Pivot := A[(L + R) shr 1];
-      repeat
-        Cmp := VfsNameCompare(A[Ii].Entry.Name, Pivot.Entry.Name);
-        if Cmp = 0 then Cmp := A[Ii].Prio - Pivot.Prio;
-        while Cmp < 0 do begin Inc(Ii); Cmp := VfsNameCompare(A[Ii].Entry.Name, Pivot.Entry.Name); if Cmp = 0 then Cmp := A[Ii].Prio - Pivot.Prio; end;
-        Cmp := VfsNameCompare(A[Jj].Entry.Name, Pivot.Entry.Name);
-        if Cmp = 0 then Cmp := A[Jj].Prio - Pivot.Prio;
-        while Cmp > 0 do begin Dec(Jj); Cmp := VfsNameCompare(A[Jj].Entry.Name, Pivot.Entry.Name); if Cmp = 0 then Cmp := A[Jj].Prio - Pivot.Prio; end;
-        if Ii <= Jj then
-        begin
-          Tmp := A[Ii]; A[Ii] := A[Jj]; A[Jj] := Tmp;
-          Inc(Ii); Dec(Jj);
-        end;
-      until Ii > Jj;
-      if L < Jj then SortTemp(A, L, Jj);
-      L := Ii;
-    until Ii >= R;
-  end;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -179,17 +157,14 @@ begin
     if not LStat.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
-  TempN := 0; Cap := 0;
+  TempN := 0;
   for I := 0 to High(FList) do
   begin
     try Cur := FList[I].List(ADirPath);
     except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
     if Length(Cur) = 0 then Continue;
-    if TempN + Length(Cur) > Cap then
-    begin
-      Cap := TempN + Length(Cur);
-      EnsureTemp(Cap);
-    end;
+    if TempN + Length(Cur) > Length(Temp) then
+      SetLength(Temp, TempN + Length(Cur));
     for J := 0 to High(Cur) do
     begin
       Temp[TempN].Entry := Cur[J];
@@ -199,7 +174,7 @@ begin
   end;
   if TempN = 0 then Exit(nil);
   SetLength(Temp, TempN);
-  SortTemp(Temp, 0, TempN - 1);
+  specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
   SetLength(Result, TempN);
   OutN := 0;
   for I := 0 to TempN - 1 do

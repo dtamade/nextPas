@@ -182,9 +182,8 @@ end;
 function TOsVfs.FullPath(const APath: string): string;
 begin
   if VfsIsRoot(APath) then
-    Result := FRoot
-  else
-    Result := FRoot + '/' + APath;
+    Exit(FRoot);
+  Result := nextpas.core.fs.PathJoin2(FRoot, APath);
 end;
 
 function TOsVfs.MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo;
@@ -267,7 +266,7 @@ begin
     if Entries[I].FileType = ftSymlink then
       Continue;
     try
-      FI := nextpas.core.fs.Stat(FullPath(ADirPath) + '/' + Entries[I].Name);
+      FI := nextpas.core.fs.Stat(nextpas.core.fs.PathJoin2(FullPath(ADirPath), Entries[I].Name));
     except
       on E: Exception do
         raise EVfsError.CreateCtx('list', ADirPath,

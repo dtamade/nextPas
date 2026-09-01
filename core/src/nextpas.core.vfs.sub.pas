@@ -11,6 +11,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
@@ -32,6 +33,7 @@ type
   private
     FBase: IVfs;
     FSubRoot: string;
+    FSubPrefix: string;   { FSubRoot + '/' 缓存，identity 时为空，零重复分配 }
     FIdentity: Boolean;   { SubRoot='.' 时直通 }
     function ToBase(const APath: string): string;
     function ToSubView(const APath: string): string;
@@ -78,6 +80,10 @@ begin
   FBase := ABase;
   FSubRoot := StripTrailingSlash(ASubRoot);
   FIdentity := VfsIsRoot(FSubRoot);
+  if FIdentity then
+    FSubPrefix := ''
+  else
+    FSubPrefix := FSubRoot + '/';
 end;
 
 function TSubVfs.ToBase(const APath: string): string;
@@ -85,24 +91,21 @@ begin
   if FIdentity then
     Exit(APath);
   if VfsIsRoot(APath) then
-    Result := FSubRoot
-  else
-    Result := FSubRoot + '/' + APath;
+    Exit(FSubRoot);
+  Result := FSubPrefix + APath;
 end;
 
 function TSubVfs.ToSubView(const APath: string): string;
-var
-  Prefix: string;
 begin
   Result := APath;
   if FIdentity then
     Exit;
-  Prefix := FSubRoot + '/';
   if APath = FSubRoot then
     Exit('.');
-  if (Length(APath) > Length(Prefix))
-    and (Pos(Prefix, APath) = 1) then
-    Result := Copy(APath, Length(Prefix) + 1, MaxInt);
+  if Length(APath) <= Length(FSubPrefix) then
+    Exit;
+  if CompareMem(@APath[1], @FSubPrefix[1], SizeUInt(Length(FSubPrefix))) then
+    Result := Copy(APath, Length(FSubPrefix) + 1, MaxInt);
 end;
 
 procedure TSubVfs.ReraiseSub(E: EVfsError);

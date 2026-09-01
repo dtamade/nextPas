@@ -32,7 +32,8 @@ function CreateMountedVfs(const AMounts: array of TVfsMountEntry): IVfs;
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.collections.algorithms;
 
 type
   TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -76,6 +77,13 @@ begin
   if L <> Length(Result) then SetLength(Result, L);
 end;
 
+function CompareMountEntry(const A, B: TVfsMountEntry; Data: Pointer): SizeInt; inline;
+begin
+  if Length(A.Prefix) > Length(B.Prefix) then Exit(-1);
+  if Length(A.Prefix) < Length(B.Prefix) then Exit(1);
+  Result := VfsNameCompare(A.Prefix, B.Prefix);
+end;
+
 constructor TMountedVfs.Create(const AMounts: array of TVfsMountEntry);
 var
   I, J: Integer;
@@ -106,19 +114,9 @@ begin
       FRootFs := AMounts[I].Fs;
     end;
   end;
-  // 最长匹配优先：按长度降序
-  for I := 0 to High(FMounts) - 1 do
-    for J := I + 1 to High(FMounts) do
-      if Length(FMounts[J].Prefix) > Length(FMounts[I].Prefix) then
-      begin
-        P := FMounts[I].Prefix;
-        FMounts[I].Prefix := FMounts[J].Prefix;
-        FMounts[J].Prefix := P;
-        // swap Fs: 用临时 FRootFs 承载
-        FRootFs := FMounts[I].Fs;
-        FMounts[I].Fs := FMounts[J].Fs;
-        FMounts[J].Fs := FRootFs;
-      end;
+  // 最长匹配优先：按长度降序（复用 collections 单源 Sort，O(n log n)）
+  if Length(FMounts) > 1 then
+    specialize Sort<TVfsMountEntry>(FMounts, @CompareMountEntry, nil);
   // re-evaluate root after sort
   FHasRoot := False;
   FRootFs := nil;
@@ -162,8 +160,8 @@ begin
       AFs := FMounts[I].Fs;
       Exit(True);
     end;
-    if (Length(APath) > Length(Pre)) and (APath[Length(Pre) + 1] = '/')
-      and (Copy(APath, 1, Length(Pre)) = Pre) then
+    // 零拷贝前缀判定：复用 vfs.base 单源 VfsIsParentPath（CompareMem 零分配）
+    if VfsIsParentPath(Pre, APath) then
     begin
       ARemain := Copy(APath, Length(Pre) + 2, MaxInt);
       AFs := FMounts[I].Fs;
@@ -234,58 +232,64 @@ var
   Rem: string;
   Fs: IVfs;
   I, OutN: Integer;
-  Seen: array of string;
   Child: string;
   SL: SizeInt;
   BaseList: TEntryArray;
-  J: Integer;
-  Already: Boolean;
+  J, K: Integer;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
   if VfsIsRoot(ADirPath) then
   begin
-    // 根：合并所有挂载点的顶层 List
+    // 根：合并所有挂载点的顶层 List（O(n log n) Sort+线性去重，零拷贝前缀扫描）
     if FHasRoot and (Length(FMounts) = 1) then
       Exit(FRootFs.List('.'));
-    // 收集挂载点名作为直接子
     SetLength(Result, Length(FMounts));
     OutN := 0;
     for I := 0 to High(FMounts) do
       if not VfsIsRoot(FMounts[I].Prefix) then
       begin
-        // 顶层名 = Prefix 的首段
-        SL := Pos('/', FMounts[I].Prefix);
+        // 顶层名 = Prefix 的首段；零分配扫描替代 Pos/Copy 双分配
+        SL := 0;
+        for K := 1 to Length(FMounts[I].Prefix) do
+          if FMounts[I].Prefix[K] = '/' then begin SL := K; Break; end;
         if SL > 0 then Child := Copy(FMounts[I].Prefix, 1, SL - 1)
         else Child := FMounts[I].Prefix;
-        // 去重
-        Already := False;
-        for J := 0 to OutN - 1 do
-          if Result[J].Name = Child then begin Already := True; Break; end;
-        if Already then Continue;
         Result[OutN].Name := Child;
         Result[OutN].Size := 0;
         Result[OutN].ModTime := 0;
         Result[OutN].IsDir := True;
         Inc(OutN);
       end;
-    // 若有根挂载，合并其根 List 去重
+    // 若有根挂载，合并其根 List（延迟去重，单次 Sort）
     if FHasRoot then
     begin
       BaseList := FRootFs.List('.');
-      for I := 0 to High(BaseList) do
+      if Length(BaseList) > 0 then
       begin
-        Already := False;
-        for J := 0 to OutN - 1 do
-          if Result[J].Name = BaseList[I].Name then begin Already := True; Break; end;
-        if Already then Continue;
-        if OutN >= Length(Result) then SetLength(Result, OutN + 1);
-        Result[OutN] := BaseList[I];
-        Inc(OutN);
+        if OutN + Length(BaseList) > Length(Result) then
+          SetLength(Result, OutN + Length(BaseList));
+        for I := 0 to High(BaseList) do
+        begin
+          Result[OutN] := BaseList[I];
+          Inc(OutN);
+        end;
       end;
     end;
     SetLength(Result, OutN);
-    VfsSortEntries(Result);
+    if OutN > 1 then
+    begin
+      VfsSortEntries(Result);
+      J := 1;
+      for I := 1 to High(Result) do
+        if VfsNameCompare(Result[I].Name, Result[J - 1].Name) <> 0 then
+        begin
+          if J <> I then Result[J] := Result[I];
+          Inc(J);
+        end;
+      SetLength(Result, J);
+    end else if OutN = 1 then
+      VfsSortEntries(Result);
     Exit;
   end;
   if IsMountPoint(ADirPath) then
@@ -296,35 +300,43 @@ begin
   end;
   if FindMount(ADirPath, Rem, Fs) then
     Exit(Fs.List(Rem));
-  // 若是前缀的父目录，需聚合子挂载点
+  // 若是前缀的父目录，需聚合子挂载点（复用 VfsIsParentPath 单源，单次 Copy）
   // 例如 mounts: a/b, a/c  => List('a') 应返回 b,c
   OutN := 0;
   SetLength(Result, Length(FMounts));
   for I := 0 to High(FMounts) do
   begin
     if VfsIsRoot(FMounts[I].Prefix) then Continue;
-    if (Length(FMounts[I].Prefix) > Length(ADirPath))
-      and (FMounts[I].Prefix[Length(ADirPath) + 1] = '/')
-      and (Copy(FMounts[I].Prefix, 1, Length(ADirPath)) = ADirPath) then
-    begin
+    if not VfsIsParentPath(ADirPath, FMounts[I].Prefix) then Continue;
+    // 单次 Copy 提取直接子段：扫描 '/' 零分配
+    SL := 0;
+    for K := Length(ADirPath) + 2 to Length(FMounts[I].Prefix) do
+      if FMounts[I].Prefix[K] = '/' then begin SL := K; Break; end;
+    if SL > 0 then
+      Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, SL - (Length(ADirPath) + 2))
+    else
       Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, MaxInt);
-      SL := Pos('/', Child);
-      if SL > 0 then Child := Copy(Child, 1, SL - 1);
-      Already := False;
-      for J := 0 to OutN - 1 do
-        if Result[J].Name = Child then begin Already := True; Break; end;
-      if Already then Continue;
-      Result[OutN].Name := Child;
-      Result[OutN].Size := 0;
-      Result[OutN].ModTime := 0;
-      Result[OutN].IsDir := True;
-      Inc(OutN);
-    end;
+    Result[OutN].Name := Child;
+    Result[OutN].Size := 0;
+    Result[OutN].ModTime := 0;
+    Result[OutN].IsDir := True;
+    Inc(OutN);
   end;
   if OutN > 0 then
   begin
     SetLength(Result, OutN);
-    VfsSortEntries(Result);
+    if OutN > 1 then
+    begin
+      VfsSortEntries(Result);
+      J := 1;
+      for I := 1 to High(Result) do
+        if VfsNameCompare(Result[I].Name, Result[J - 1].Name) <> 0 then
+        begin
+          if J <> I then Result[J] := Result[I];
+          Inc(J);
+        end;
+      SetLength(Result, J);
+    end;
     Exit;
   end;
   raise EVfsNotFound.CreateCtx('list', ADirPath, 'not found');
