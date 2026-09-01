@@ -33,10 +33,6 @@ type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
-    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；SpinLock守并发，inline热路径，零拷贝 SpanCompare 单源 }
-    FIndexLock: ISpinLock;
-    function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
-    procedure CacheResult(const APath: string; const AIdx: Integer); inline;
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
   public
@@ -75,32 +71,11 @@ begin
   FIndexLock := SpinLock;
 end;
 
-destructor TOverlayVfs.Destroy;
-begin
-  if FIndex <> nil then
-  begin
-    TOverlayIndex(FIndex).Free;
-    FIndex := nil;
-  end;
-  FIndexLock := nil;
-  SetLength(FList, 0);
-  inherited Destroy;
-end;
-
-function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
-begin
-  AIdx := -2;
-  Result := False;
-  if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.Acquire;
-  try
-    Result := TOverlayIndex(FIndex).TryGetValue(APath, AIdx);
-  finally
-    FIndexLock.Release;
-  end;
-end;
-
-procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer); inline;
+{ 单次探测首命中：按优先级依次 Stat，首成功即胜出；EVfsNotFound 继续下层，
+  EVfsInvalidPath 透传；零二次 Exists 二分，inline 热路径 }
+function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+var
+  I: Integer;
 begin
   if (FIndex = nil) or (FIndexLock = nil) then Exit;
   FIndexLock.Acquire;
@@ -142,14 +117,12 @@ begin
     try
       AInfo := FList[I].Stat(APath);
       AFs := FList[I];
-      CacheResult(APath, I);
       Exit(True);
     except
       on E: EVfsNotFound do Continue;
       on E: EVfsInvalidPath do raise;
     end;
   end;
-  CacheResult(APath, -1);
   AFs := nil;
   Result := False;
 end;

@@ -272,10 +272,10 @@ var
   Prefix: string;
   DirIdx: SizeUInt;
   I: SizeUInt;
+  K: SizeUInt;
   Seen: TVfsNameArray;
   Info: TStatInfo;
-  Spans: array of TByteSpan;
-  J: SizeInt;
+  Paths: array of string;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -291,21 +291,21 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  // 单源收敛：委托 base.VfsDeriveChildNamesFromSpans 零拷贝模板（LowerBound+SpanStartsWith+Early-Break+Move 单源，无并行维护），与 embedded 同路径
-  // perf: TByteSpan 直指 FFiles Name 存储零拷贝，bytes.ops SpanStartsWith/SpanEqual 单源 inline 热路径；扇出限界由基座统一（16 倍增 Cap≤N-Lo）
+  { 单源模板收敛：委托 base.VfsDeriveChildNames 的 LowerBound+SpanStartsWith+Early-Break 零拷贝模板
+    扇出限界分配消除 Hi-Lo 全量预分配与重复 LowerBound 手写分支，与 embedded 同构单源 }
   Result := nil;
   if Length(FFiles) = 0 then
-    Seen := nil
+  begin
+    Seen := nil;
+  end
   else
   begin
-    SetLength(Spans, Length(FFiles));
-    for J := 0 to High(FFiles) do
-      if Length(FFiles[J].Name) = 0 then
-        Spans[J] := TByteSpan.Empty
-      else
-        Spans[J] := TByteSpan.Create(PByte(@FFiles[J].Name[1]), SizeUInt(Length(FFiles[J].Name)));
-    Seen := VfsDeriveChildNamesFromSpans(Spans, Prefix);
-    SetLength(Spans, 0);
+    // 零拷贝单源路径数组：利用有序 FFiles 名称视图委托基座扫描模板，避免三处同构重复
+    SetLength(Paths, Length(FFiles));
+    for K := 0 to SizeUInt(Length(FFiles)) - 1 do
+      Paths[K] := FFiles[K].Name;
+    Seen := VfsDeriveChildNames(Paths, Prefix);
+    SetLength(Paths, 0);
   end;
 
   SetLength(Result, SizeUInt(Length(Seen)));

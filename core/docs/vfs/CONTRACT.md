@@ -1,7 +1,7 @@
 # nextpas.core.vfs 代码契约
 
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3单缝装饰器 + 门面）
-**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期聚合为独立 L3 族 nextpas.core.vfs.decorator 到期移除白名单固化跨层依赖，现阶段以单缝+文档正名守层级高级感统一性）
+**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期随 L3 族聚合拆分，现阶段以单缝+文档正名守层级高级感统一性）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
 **版本**：1.5（匠心修复：transform 单流复用+单源决策器+ L3 单缝正名，13门闭环保）
@@ -128,7 +128,7 @@ end;
 |------|------|------|
 | Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire，HasSubtreePath SpanStartsWith bytes.ops单源 inline 零拷贝 |
 | OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0，FKeep强保活+FOwner弱归还契约显式（LKeep先于LOwner，FPoolLock=nil 安全回退Free） |
-| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 O(k) | LowerBound(O(log n))+SpanStartsWith/SpanEqual 单源 bytes.ops 零拷贝 inline，FEntries 并行缓存 O(k) 直取 Size/ModTime 无 IndexOfPath 二分（Spans O(n) 分配已移除），扇出限界初值16 Cap≤N-Lo，天然有序免 Sort/Dedup |
+| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 | LowerBound+SpanStartsWith单源base模板扇出限界倍增（初值16 Cap≤Hi-Lo，消除 Hi-Lo 全量预分配与 O(k log k) Sort/Dedup），SpanEqual去重零拷贝 inline 热路径；memtree 委托 base.VfsDeriveChildNames 同构单源，base扇出限界同源 |
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
 | VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |
