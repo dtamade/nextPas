@@ -485,8 +485,32 @@ begin
     EnsureNoSymlinkInPath(LParent);
     if Exists(LDestTrim) then
       raise EArgumentError.Create('zip extract atomic: destination appeared during extract: ' + LDestTrim);
-    Rename(LTemp, LDestTrim);
-    LTemp := '';
+    try
+      Rename(LTemp, LDestTrim);
+      LTemp := '';
+    except
+      on E: Exception do
+      begin
+        if Exists(LDestTrim) then
+          raise;
+        try
+          CopyTree(LTemp, LDestTrim);
+        except
+          on E2: Exception do
+          begin
+            if Exists(LDestTrim) then
+              try
+                RemoveAll(LDestTrim);
+              except
+                on E3: Exception do ;
+              end;
+            raise;
+          end;
+        end;
+        RemoveAll(LTemp);
+        LTemp := '';
+      end;
+    end;
   finally
     if (LTemp <> '') and Exists(LTemp) then
       try

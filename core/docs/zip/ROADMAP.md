@@ -138,6 +138,9 @@
 ### S68 — 文档一致性收敛（1.0.1 巡检）· 完整性 — 已落地
 - `CONTRACT` §1/§6 同步 `Atomic*` API 与非原子/TOCTOU 已知局限（S66 双校验/S67 原子已提供），`README` 文件系统段补 `Atomic` 用法与双校验说明，`SECURITY` §5 同步双校验+原子防线与验证项，`ROADMAP` 文档门同步
 
+### S69 — 原子硬化与官门固化（1.0.1 巡检）· 稳定性/完整性 — 已落地
+- `zip.fs` `Atomic` 增 `Rename EXDEV` 回退：`Rename` 失败且 `!Exists(dest)` 时 `CopyTree(LTemp,dest)`+`RemoveAll(LTemp)`，`CopyTree` 异常则 `RemoveAll(dest)` 清理；`test_zip_fs` 10 门（新增 `Atomic roundtrip/refuses/bomb`），`HEAPTRC OK`
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
