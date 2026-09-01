@@ -138,3 +138,16 @@
 | `46ef5526c` | fix | `streambox` 托管修复：`Move` 绕过托管 → 逐项赋值+清零保引用计数；`PERFORMANCE §7.2` 同步 `TPlatformMutex`+`FHead`；`BENCHMARKS §2.4` 占位；`API_COVERAGE §11` 同步 `test_streambox` 6 测 |
 
 **Gates**: `test_streambox` 6 passed + `test_snapshot` 5 passed + `test_compile_skeleton` 9 passed + `make hygiene` pass。
+
+## agent-perfection-2026-09-03b — 六维匠心·hedge/定价/体积收口 (1 commit)
+
+**Scope**: Stage Review 后 perfection 深打磨——溢出守卫/负值钳制/体积同步/inline 热点。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `TBD` | fix | `hedge` DelayMs→ns 溢出钳制 `High div 1e6` + `pricing` 负 token 钳制 ` <0→0` + `snapshot` 首簇溢出空串分支 |
+| `TBD` | perf | `pricing` 三重载加 `inline`（`EstimateCost` 标量/Usage 两重载 inline 化，热点零分配） |
+| `TBD` | test | `test_pricing` 负值钳制回归 + `test_hedge` `High(Int64)` 溢出守卫回归 |
+| `TBD` | docs | `ARCHITECTURE §2` 体积 13665→13687 同步（`provider.openai` 326/`responses` 256 精确化） |
+
+**Gates**: `test_pricing` 6 passed + `test_hedge` 10 passed + `test_snapshot` 5 passed + `make hygiene` pass。
