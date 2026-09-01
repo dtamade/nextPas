@@ -1,15 +1,11 @@
 unit nextpas.core.respack.embed;
 
-{** @desc 嵌入工具链库（S4）：目录 → 过滤/映射 → 打包 blob；blob → .inc typed const
-  源文本。格式逻辑全部收口 core 侧，CLI（core/tools/respack）只是薄壳。选项面对标
-  rust-embed derive 属性与 asar unpack-dir；真实文件系统接触点只有 dirsource
-  （输入枚举 + 输出解包 ResPackExtractToDir），本单元仅依赖 L1 text.strings/
-  text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、零文件系统
-  依赖，PChar 零拷贝视图 + inline 热路径，bytes.ops 单源、薄转发同源）。
-
-  处理管线（相对路径 = dirsource 枚举出的 '/' 分隔包内相对路径）：
-    rel → StripPrefix 剥离（不匹配该前缀的条目剔除）→ 逻辑路径上做 glob 过滤
-        → AddPrefix 拼接 → 最终包内路径（ValidPath 校验）。 }
+{** @desc 嵌入工具链库（S4）：blob → .inc typed const 源文本。格式逻辑全部收口 core 侧，
+  CLI（core/tools/respack）只是薄壳。本单元仅依赖 L1 text.strings/text.char/
+  text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、零文件系统依赖，PChar 零拷贝
+  视图 + inline 热路径，bytes.ops 单源、薄转发同源），纯内存可复用（零 FS/零 writer/
+  零 dirsource 依赖，目录 → 过滤/映射 → 打包 blob 的 IO 管线收口于
+  respack.dirsource（L2 FS 缝），唯一 L2→L2 FS seam）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -37,17 +33,13 @@ type
 
 const
   RESPACK_INC_DEFAULT_BYTES_PER_LINE = 16;
+  RESPACK_INC_MAX_BLOB_BYTES = 4 * 1024 * 1024; { 经验阈值：typed const 载体 <4MiB，大包走 .pack；提前拒绝避免超大临时分配 }
 
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions; inline;
 function ResPackDefaultIncOptions: TResPackIncOptions;
 
 { ASCII Pascal 标识符判定：首字符字母/下划线，其余字母/数字/下划线 }
 function ResPackValidIdent(const AName: string): Boolean;
-
-{ 目录 → blob。过滤后 0 条目 raise EResPackError（空包几乎总是 glob 写错，
-  绝不静默产出）；选项非法（前缀不以 '/' 结尾、空 glob 模式等）同样显式报错。 }
-function ResPackEmbedBuild(const ASourceDir: string;
-  const AOpts: TResPackEmbedOptions): TResPackBlob;
 
 {** blob → Pascal typed const 源文本（纯 ASCII、LF 行尾）。确定性输出：
     同 blob 同参数逐字节一致（test_respack_embed golden 门禁锁定）。
@@ -74,8 +66,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.encoding.hex,
   nextpas.core.exception,
-  nextpas.core.respack.dirsource,
-  nextpas.core.respack.writer,
   nextpas.core.text.char,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -96,7 +86,7 @@ begin
   Result.BytesPerLine := RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 end;
 
-function ResPackValidIdent(const AName: string): Boolean; inline;
+function ResPackValidIdent(const AName: string): Boolean;
 var
   I, N: Integer;
   C: Byte;
@@ -115,118 +105,6 @@ begin
       Exit;
   end;
   Result := True;
-end;
-
-function StartsSlash(const S: string): Boolean; inline;
-begin
-  Result := (Length(S) > 0) and (S[Length(S)] = '/');
-end;
-
-procedure CheckGlobList(const AList: TStringArray; const AWhat: string);
-var
-  I: SizeUInt;
-begin
-  if SizeUInt(Length(AList)) = 0 then
-    Exit;
-  for I := 0 to SizeUInt(Length(AList)) - 1 do
-    if Length(AList[I]) = 0 then
-      raise EResPackError.Create('respack.embed: empty ' + AWhat
-        + ' glob pattern');
-end;
-
-{ 管线中段：返回 False 表示该条目被过滤/映射规则剔除；
-  ARel 入、AOut 出最终包内路径 }
-function MapAndFilter(const AOpts: TResPackEmbedOptions;
-  const ARel: string; out AOut: string): Boolean;
-var
-  Logical: string;
-  I: SizeUInt;
-begin
-  Result := False;
-  { StripPrefix：不匹配即剔除（语义见单元头注释管线说明） }
-  if AOpts.StripPrefix <> '' then
-  begin
-    if (Length(ARel) <= Length(AOpts.StripPrefix))
-      or (Copy(ARel, 1, Length(AOpts.StripPrefix)) <> AOpts.StripPrefix) then
-      Exit;
-    Logical := Copy(ARel, Length(AOpts.StripPrefix) + 1, MaxInt);
-  end
-  else
-    Logical := ARel;
-  if not ResPackValidPath(Logical, True) then
-    Exit;
-
-  { glob 过滤在逻辑路径上进行（用户面对的即最终包内相对名，减去 AddPrefix）。
-    循环前必须守卫零长度：SizeUInt 无符号下界回绕（README FPC trunk 注意事项） }
-  if SizeUInt(Length(AOpts.ExcludeGlobs)) > 0 then
-    for I := 0 to SizeUInt(Length(AOpts.ExcludeGlobs)) - 1 do
-      if GlobMatch(AOpts.ExcludeGlobs[I], Logical) then
-        Exit;
-  if SizeUInt(Length(AOpts.IncludeGlobs)) > 0 then
-  begin
-    for I := 0 to SizeUInt(Length(AOpts.IncludeGlobs)) - 1 do
-      if GlobMatch(AOpts.IncludeGlobs[I], Logical) then
-      begin
-        Result := True;
-        Break;
-      end;
-    if not Result then
-      Exit;
-  end;
-
-  AOut := AOpts.AddPrefix + Logical;
-  if not ResPackValidPath(AOut, True) then
-    raise EResPackInvalidPath.Create('respack.embed: mapped path invalid "'
-      + AOut + '"');
-  Result := True;
-end;
-
-function ResPackEmbedBuild(const ASourceDir: string;
-  const AOpts: TResPackEmbedOptions): TResPackBlob;
-var
-  Src: TResPackDirEntries;
-  Kept: TResPackInputArray;
-  I, N, KeptLen, KeptCap, NewCap: SizeUInt;
-  Mapped: string;
-begin
-  if (AOpts.StripPrefix <> '') and (not StartsSlash(AOpts.StripPrefix)) then
-    raise EResPackError.Create('respack.embed: StripPrefix must be empty or ' +
-      'end with "/" ("' + AOpts.StripPrefix + '")');
-  if (AOpts.AddPrefix <> '') and (not StartsSlash(AOpts.AddPrefix)) then
-    raise EResPackError.Create('respack.embed: AddPrefix must be empty or ' +
-      'end with "/" ("' + AOpts.AddPrefix + '")');
-  CheckGlobList(AOpts.IncludeGlobs, 'include');
-  CheckGlobList(AOpts.ExcludeGlobs, 'exclude');
-
-  { 不经回调过滤：dirsource 的 Include 形态要求把选项捕获进匿名函数，
-    FPC trunk 对跨帧闭包捕获的支持不可靠。改为全枚举 + 单趟过滤映射；
-    Src.Contents 是内容锚点（S4 修复），存活至本函数尾，覆盖 Build 读窗 }
-  Src := ResPackEntriesFromDir(ASourceDir);
-  N := SizeUInt(Length(Src.Entries));
-  Kept := nil;
-  KeptLen := 0;
-  KeptCap := 0;
-  if N > 0 then
-    for I := 0 to N - 1 do
-      if MapAndFilter(AOpts, Src.Entries[I].Path, Mapped) then
-      begin
-        if KeptLen >= KeptCap then
-        begin
-          NewCap := KeptCap * 2;
-          if NewCap < 8 then NewCap := 8;
-          if NewCap < KeptLen + 1 then NewCap := KeptLen + 1;
-          SetLength(Kept, NewCap);
-          KeptCap := NewCap;
-        end;
-        Kept[KeptLen] := Src.Entries[I];
-        Kept[KeptLen].Path := Mapped;
-        Inc(KeptLen);
-      end;
-  SetLength(Kept, KeptLen);
-  if SizeUInt(Length(Kept)) = 0 then
-    raise EResPackError.Create('respack.embed: no entries matched after ' +
-      'filter/mapping (source "' + ASourceDir + '")');
-  Result := ResPackBuild(Kept, AOpts.Build);
 end;
 
 procedure CheckedAdd(var AAcc: SizeUInt; const ADelta: SizeUInt; const AMsg: string); inline;
@@ -261,8 +139,8 @@ var
     L := Length(S);
     if L = 0 then
       Exit;
-    // zero-copy via PAnsiChar^ — bytes.ops StringToBytes single source；规避 S[1] 喂 Move 的 inline 红线
-    Move(PAnsiChar(S)^, W^, L);
+    // bytes.ops.BytesCopy 单源零拷贝（inline 单 Move），禁止直调 Move 破坏单源纪律
+    BytesCopy(W, PAnsiChar(S), SizeUInt(L));
     Inc(W, L);
   end;
 
@@ -281,6 +159,10 @@ begin
 
   { 容量上界：头注释 + 声明行 + 每字节至多 ", $XX" 5 列 + 行尾换行；SizeUInt 溢出保护 — 单源 Checked* helper（inline 零拷贝，owner base.utils） }
   N := ABlob.Size;
+  // 阈值前置拒绝：typed const 载体 <4MiB 经验值，大包提前 EResPackTooLarge 避免超大临时分配（1 MiB 仅一次分配，5×膨胀在阈值内可控）
+  if N > RESPACK_INC_MAX_BLOB_BYTES then
+    raise EResPackTooLarge.Create('respack.embed: blob too large for .inc ('
+      + nextpas.core.text.conv.IntToStr(SizeInt(N)) + ' > 4MiB, use .pack)');
   Cap := 256;
   CheckedMul(SizeUInt(Length(Name)), 4, LTmp, 'respack.embed: ConstName too long');
   CheckedAdd(Cap, LTmp, 'respack.embed: capacity overflow');
@@ -363,6 +245,10 @@ begin
   if IdentEqualCI(AUnitName, AOpts.ConstName) then
     raise EResPackError.Create('respack.embed: UnitName must differ from ' +
       'ConstName ("' + AUnitName + '")');
+  // 阈值前置：与 IncSource 同阈值，避免 Head/Body/Tail 三段分配 + BytesConcatMany 再拷贝的超大临时分配
+  if ABlob.Size > RESPACK_INC_MAX_BLOB_BYTES then
+    raise EResPackTooLarge.Create('respack.embed: blob too large for .inc ('
+      + nextpas.core.text.conv.IntToStr(SizeInt(ABlob.Size)) + ' > 4MiB, use .pack)');
   Body := ResPackEmbedIncSource(ABlob, AOpts);
   Head := StringToBytes('unit ' + AUnitName + ';' + #10 +
     '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);

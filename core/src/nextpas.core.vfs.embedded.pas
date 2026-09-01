@@ -472,6 +472,7 @@ var
   QLen: Integer;
   P: PByte;
   L: SizeUInt;
+  S: TByteSpan;
 begin
   { 零分配：FRp.LowerBound 直达首个 ≥ APath 项（不落地 string），再判 '/' 前缀 }
   Result := False;
@@ -480,7 +481,9 @@ begin
   QLen := Length(APath);
   Lo := FRp.LowerBound(APath);
   if Lo >= FRp.Count then Exit;
-  L := FRp.StoredPathRange(Lo, P);
+  S := FRp.StoredPathSpan(Lo);
+  P := S.Data;
+  L := S.Len;
   if L <= SizeUInt(QLen) then Exit;
   if P[QLen] <> Ord('/') then Exit;
   if QLen > 0 then
@@ -590,6 +593,7 @@ var
   Lo, Hi: SizeInt;
   P: PByte;
   L: SizeUInt;
+  S: TByteSpan;
   Child: string;
   ChildOff: SizeInt;
   ChildLen: SizeInt;
@@ -619,7 +623,9 @@ begin
   OutN := 0;
   for I := Lo to Hi - 1 do
   begin
-    L := FRp.StoredPathRange(SizeUInt(I), P);
+    S := FRp.StoredPathSpan(SizeUInt(I));
+    P := S.Data;
+    L := S.Len;
     if SizeInt(L) <= PrefixLen then Continue;
     if PrefixLen > 0 then
       if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Break;

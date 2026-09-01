@@ -173,7 +173,7 @@ end;
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 begin
-  Result := nextpas.core.respack.embed.ResPackEmbedBuild(ASourceDir, AOpts);
+  Result := nextpas.core.respack.dirsource.ResPackEmbedBuild(ASourceDir, AOpts);
 end;
 
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;

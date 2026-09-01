@@ -30,22 +30,23 @@ uses
   nextpas.core.respack.writer.builder,
   nextpas.core.respack.writer.layout;
 
-{ 零填充分段写入：复用常量零页单源，避免重复 GetMem；inline 零拷贝路径 }
-procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
-const
-  CHUNK = 4096;
+{ 零填充分段写入：复用 bytes.ops 全局零页单源，无栈分配/无重复 FillChar，零拷贝分段直写；外联守 design-conventions §2 红线2 }
+function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
+begin
+  Result := Assigned(AOpts.DigestFunc);
+end;
+
+procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64);
 var
-  Z: array[0..CHUNK-1] of Byte;
   N: UInt64;
   L: SizeUInt;
 begin
   if ACount = 0 then Exit;
-  BytesZero(@Z[0], CHUNK);
   N := ACount;
   while N > 0 do
   begin
-    if N >= CHUNK then L := CHUNK else L := SizeUInt(N);
-    AWrite(@Z[0], L);
+    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
+    AWrite(@BYTES_ZERO_PAGE[0], L);
     Dec(N, L);
   end;
 end;

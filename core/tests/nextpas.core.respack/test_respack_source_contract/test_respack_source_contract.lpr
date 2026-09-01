@@ -5,13 +5,15 @@ uses
   nextpas.core.exception,
   nextpas.core.fs;
 
-{ 源契约门禁：respack(6 单元) uses 白名单锁定。
+{ 源契约门禁：respack(8 源 + writer.builder 内部单源共 9 文件) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
   2) L2→L2 seam 唯一性：除 respack.dirsource 外，
-     任何 respack 单元不得引用 nextpas.core.fs
+     任何 respack 单元不得引用 nextpas.core.fs / nextpas.core.io.mapped（dirsource 唯一 L2→L2 IO seam：fs+io.mapped）
   3) 异常根纪律：错误族挂在 nextpas.core.exception
-  4) 单源收敛：bytes.ops/bytes.binary 等零拷贝单源 }
+  4) 单源收敛：bytes.ops/bytes.binary 等零拷贝单源；writer.layout 布局单源
+     (bytes.ops inline 零拷贝 + collections.algorithms Sort + mem.base AlignUp64)，
+     writer.stream 流式两遍分段零双驻留复用 layout 单源，try..finally 不丢资源 }
 
 {$I ../../fpc_rtl_uses_scan.inc}
 
@@ -44,18 +46,22 @@ begin
     AssertSourceNoBareFpcRtlUses(ALabelPrefix + ' ' + AFiles[I], LoadSourceText(AFiles[I]));
 end;
 
-{ seam 唯一性：白名单外不得出现 nextpas.core.fs 引用 }
+{ seam 唯一性：白名单外不得出现 nextpas.core.fs / io.mapped 引用 }
 procedure AssertNoFsSeam(const ALabel, ASource: string); inline;
 begin
   Check(Pos('nextpas.core.fs', ASource) = 0, ALabel + ' — must not reference nextpas.core.fs');
+  Check(Pos('nextpas.core.io.mapped', ASource) = 0, ALabel + ' — must not reference nextpas.core.io.mapped');
 end;
 
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..5] of string = (
+  FILES: array[0..8] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
+    'src/nextpas.core.respack.writer.layout.pas',
+    'src/nextpas.core.respack.writer.builder.pas',
+    'src/nextpas.core.respack.writer.stream.pas',
     'src/nextpas.core.respack.reader.pas',
     'src/nextpas.core.respack.dirsource.pas',
     'src/nextpas.core.respack.embed.pas');
@@ -78,17 +84,20 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..4] of string = (
+  NO_SEAM: array[0..7] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
+    'src/nextpas.core.respack.writer.layout.pas',
+    'src/nextpas.core.respack.writer.builder.pas',
+    'src/nextpas.core.respack.writer.stream.pas',
     'src/nextpas.core.respack.reader.pas',
     'src/nextpas.core.respack.embed.pas');
 var
   I: Integer;
   Src: string;
 begin
-  { 白名单外的单元一律禁 fs 引用；dirsource 是唯一的 L2→L2 IO seam（registry 明示 + source-contract 门禁，同 vfs.os 范式） }
+  { 白名单外的单元一律禁 fs/io.mapped 引用；dirsource 是唯一的 L2→L2 IO seam（fs+io.mapped mmap via mem.memory_map，registry 明示 + source-contract 门禁，同 vfs.os 范式） }
   for I := Low(NO_SEAM) to High(NO_SEAM) do
     AssertNoFsSeam(NO_SEAM[I], LoadSourceText(NO_SEAM[I]));
   { embed 已收敛至 L1 text.strings/text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、PChar 零拷贝 + inline，fs.glob 薄转发同源），不再构成 L2→L2 }
@@ -100,10 +109,39 @@ begin
     'embed declares text.conv IntToStr single source');
   Check(Pos('nextpas.core.fs', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
     'embed must not reference fs (L1 single source)');
+  Check(Pos('nextpas.core.respack.dirsource', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed must not reference dirsource (L1→L2 up-dependency fix, pure memory)');
+  Check(Pos('nextpas.core.respack.writer', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed must not reference writer (pure memory)');
+  Check(Pos('BytesCopy', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed reuses bytes.ops BytesCopy single source (WriteStr via BytesCopy, not Move)');
+  Check(Pos('Move(PAnsiChar', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed must not use bare Move(PAnsiChar) (use BytesCopy)');
+  Check(Pos('RESPACK_INC_MAX_BLOB_BYTES', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed has threshold constant RESPACK_INC_MAX_BLOB_BYTES (4MiB early reject)');
+  Check(Pos('ResPackValidIdent', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares ResPackValidIdent');
+  // design-conventions §2 inline redline 2: loop body must not be inline — ValidIdent contains for loop, must NOT be inline
+  Check(Pos('function ResPackValidIdent(const AName: string): Boolean; inline', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed ResPackValidIdent must NOT be inline (loop body, I-Cache)');
+  Check(Pos('nextpas.core.bytes.ops', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares bytes.ops single source');
 
-  { 正向断言：seam 单元确实声明了 fs 依赖（防白名单失效漂移） }
+  { 正向断言：seam 单元确实声明了 fs+io.mapped 依赖（防白名单失效漂移） }
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.pas');
   Check(Pos('nextpas.core.fs', Src) > 0, 'dirsource declares fs dependency');
+  Check(Pos('nextpas.core.io.mapped', Src) > 0, 'dirsource declares io.mapped mmap dependency');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'dirsource declares bytes.ops BytesCopy single source');
+  Check(Pos('BytesCopy', Src) > 0, 'dirsource reuses BytesCopy single source (no bare Move)');
+  Check(Pos('ResPackEmbedBuild', Src) > 0, 'dirsource hosts ResPackEmbedBuild (IO seam, embed is pure)');
+  Check(Pos('nextpas.core.text.strings', Src) > 0, 'dirsource declares text.strings GlobMatch single source (embed pipeline)');
+  Check(Pos('GlobMatch', Src) > 0, 'dirsource reuses GlobMatch single source');
+  Check(Pos('RelativizePath', Src) > 0, 'dirsource single RelativizePath via PathStripPrefix');
+  Check(Pos('FilterRelPath', Src) > 0, 'dirsource DRY FilterRelPath pipeline');
+  Check(Pos('TryReserveTotal', Src) > 0, 'dirsource DRY TryReserveTotal/TryAddSizeUInt single source');
+  Check(Pos('EnsureDirCapacity', Src) > 0, 'dirsource DRY EnsureDirCapacity');
+  Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
+  Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
   { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定 }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
   Check(Pos('nextpas.core.fs', Src) = 0, 'base must not reference fs');
@@ -111,6 +149,23 @@ begin
   Check(Pos('nextpas.core.fs', Src) = 0, 'reader must not reference fs');
   Src := LoadSourceText('src/nextpas.core.respack.writer.pas');
   Check(Pos('nextpas.core.fs', Src) = 0, 'writer must not reference fs');
+  Src := LoadSourceText('src/nextpas.core.respack.writer.layout.pas');
+  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.layout must not reference fs');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.layout declares bytes.ops single source');
+  Check(Pos('nextpas.core.collections.algorithms', Src) > 0, 'writer.layout declares collections.algorithms Sort single source');
+  Check(Pos('nextpas.core.mem.base', Src) > 0, 'writer.layout declares mem.base AlignUp64 single source');
+  Check(Pos('ResPackCmpPath', Src) > 0, 'writer.layout reuses bytes.ops ResPackCmpPath inline zero-copy');
+  Src := LoadSourceText('src/nextpas.core.respack.writer.builder.pas');
+  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.builder must not reference fs');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.builder declares bytes.ops single source');
+  Src := LoadSourceText('src/nextpas.core.respack.writer.stream.pas');
+  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.stream must not reference fs');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.stream declares bytes.ops single source');
+  Check(Pos('nextpas.core.respack.writer.layout', Src) > 0, 'writer.stream reuses writer.layout single source');
+  Check(Pos('ResPackLayoutClear', Src) > 0, 'writer.stream try..finally ResPackLayoutClear not leak');
+  Check(Pos('FreeMem', Src) > 0, 'writer.stream FreeMem in try..finally');
+  Check(Pos('try', Src) > 0, 'writer.stream has try..finally stability');
+  Check(Pos('inline', Src) > 0, 'writer.stream inline zero-copy evidence');
 end;
 
 procedure TestExceptionRootDiscipline;

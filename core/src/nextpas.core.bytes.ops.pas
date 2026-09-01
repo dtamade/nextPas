@@ -29,6 +29,12 @@ procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
 procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
 procedure SpanZero(const ASpan: TByteSpan); inline;
 
+{ 全局零页单源（.bss 零初值，4K 对齐页）：writer.stream 万槽零填共享，无栈分配/无重复 FillChar，零拷贝分段直写；按需切片避免小间隙 4K memset }
+const
+  BYTES_ZERO_PAGE_SIZE = 4096;
+var
+  BYTES_ZERO_PAGE: array[0..BYTES_ZERO_PAGE_SIZE - 1] of Byte;
+
 function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;

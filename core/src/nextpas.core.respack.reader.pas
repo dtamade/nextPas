@@ -44,9 +44,7 @@ type
     function Stat(const APath: string): TResPackEntry;
 
     function EntryAt(const AIdx: SizeUInt): TResPackEntry;
-    function PathOf(const AEntry: TResPackEntry): string; inline; { 薄转发 StoredPathSpanOf → bytes.ops.SpanToString 零拷贝单源, inline }
-    function StoredPathRangeOf(const AEntry: TResPackEntry;
-      out AP: PByte): SizeUInt; inline;
+    function PathOf(const AEntry: TResPackEntry): string; inline;
     function StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
 
     property Count: SizeUInt read GetCount;
@@ -55,10 +53,9 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
-    { 零拷贝路径视图单源：TByteSpan 为唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare；
-      StoredPathRange/RangeOf 为 Span 薄转发兼容层，inline 消调用；供 embedded 零分配二分/前缀复用 }
+    { 零拷贝路径视图单源：TByteSpan 唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare/SpanToString 单源；
+      二分缓存查询视图与索引/串表基址，单次 LE 解码+视图构造，inline 零调用开销；供 embedded 零分配二分/前缀复用 }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
-    function StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
     function LowerBound(const APath: string): SizeUInt;
     function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
   end;
@@ -139,15 +136,6 @@ begin
   Result := TByteSpan.Create(FData + SizeUInt(FStrTabBase) + SizeUInt(RdU32LE(Base)), L);
 end;
 
-function TResPack.StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
-var
-  S: TByteSpan;
-begin
-  S := StoredPathSpan(AIdx);
-  AP := S.Data;
-  Result := S.Len;
-end;
-
 function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
 begin
   if AEntry.PathLen = 0 then
@@ -161,7 +149,7 @@ var
   S: TByteSpan;
 begin
   S := StoredPathSpan(AIdx);
-  Result := ResPackCmpPath(S.Data, S.Len, ABuf, ALen);
+  Result := SpanCompare(S, TByteSpan.Create(ABuf, ALen));
 end;
 
 function TResPack.CompareStoredToStored(const AA, AB: SizeUInt): Integer; inline;
@@ -170,7 +158,7 @@ var
 begin
   SA := StoredPathSpan(AA);
   SB := StoredPathSpan(AB);
-  Result := ResPackCmpPath(SA.Data, SA.Len, SB.Data, SB.Len);
+  Result := SpanCompare(SA, SB);
 end;
 
 function TResPack.CompareCachedEntries(const AA, AB: TResPackEntry): Integer; inline;
@@ -179,7 +167,7 @@ var
 begin
   SA := StoredPathSpanOf(AA);
   SB := StoredPathSpanOf(AB);
-  Result := ResPackCmpPath(SA.Data, SA.Len, SB.Data, SB.Len);
+  Result := SpanCompare(SA, SB);
 end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
@@ -233,7 +221,7 @@ begin
   if ASize < Result.FHdr.BlobTotal then
     raise EResPackCorrupted.CreateStep(4, 'buffer truncated versus blobTotal');
 
-  { FData 必须在步骤 5 前就位：后续 DecodeWire/StoredPathRange 全部经由 Self.FData 寻址 }
+  { FData 必须在步骤 5 前就位：后续 DecodeWire/StoredPathSpan 全部经由 Self.FData 寻址 }
   Result.FData := AData;
   Result.FSize := ASize;
 
@@ -451,29 +439,37 @@ begin
   Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
-function TResPack.StoredPathRangeOf(const AEntry: TResPackEntry;
-  out AP: PByte): SizeUInt; inline;
-var
-  S: TByteSpan;
-begin
-  S := StoredPathSpanOf(AEntry);
-  AP := S.Data;
-  Result := S.Len;
-end;
-
 function TResPack.LowerBound(const APath: string): SizeUInt;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
-  LPtr: Pointer;
+  Query: TByteSpan;
+  IdxBase, StrTab: PByte;
+  Base: PByte;
+  L: SizeUInt;
+  S: TByteSpan;
 begin
   Lo := 0;
   Hi := Count;
-  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
+  if Hi = 0 then Exit(0);
+  if Length(APath) > 0 then
+    Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
+  else
+    Query := TByteSpan.Empty;
+  { 缓存索引/串表基址与查询视图：二分 14 次比较约 14 次视图构造（原 28 次 LE 解码经 StoredPathSpan+CompareStoredToBuf 双重），
+    循环内仅一次 RdU32LE/RdU16LE+SpanCompare，inline 零拷贝，bytes.ops 单源 }
+  IdxBase := FData + SizeUInt(FHdr.IndexOffset);
+  StrTab := FData + SizeUInt(FStrTabBase);
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    C := CompareStoredToBuf(Mid, PByte(LPtr), SizeUInt(Length(APath)));
+    Base := IdxBase + Mid * RESPACK_ENTRY_SIZE;
+    L := SizeUInt(RdU16LE(Base + 4));
+    if L = 0 then
+      S := TByteSpan.Empty
+    else
+      S := TByteSpan.Create(StrTab + SizeUInt(RdU32LE(Base)), L);
+    C := SpanCompare(S, Query);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -484,10 +480,15 @@ end;
 
 function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
 var
-  LPtr: Pointer;
+  Query: TByteSpan;
+  S: TByteSpan;
 begin
-  if Length(APath) > 0 then LPtr := Pointer(@APath[1]) else LPtr := nil;
-  Result := CompareStoredToBuf(AIdx, PByte(LPtr), SizeUInt(Length(APath)));
+  if Length(APath) > 0 then
+    Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
+  else
+    Query := TByteSpan.Empty;
+  S := StoredPathSpan(AIdx);
+  Result := SpanCompare(S, Query);
 end;
 
 end.
