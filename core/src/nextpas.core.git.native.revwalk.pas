@@ -730,7 +730,7 @@ var
   WasBoundary: Boolean;
 begin
   // drain heap first, then boundary
-  WasBoundary := FShowBoundary and (Length(FHeap) = 0) and (FBoundaryPos < Length(FBoundary));
+  WasBoundary := FShowBoundary and (FHeapLen = 0) and (FBoundaryPos < FBoundaryLen);
   if WasBoundary then
   begin
     AEntry.Oid := FBoundary[FBoundaryPos].Oid;
@@ -742,7 +742,7 @@ begin
     Exit(False);
   // Next may have returned a boundary entry via its own drain; detect by checking if Oid is in boundary list and heap was empty
   WasBoundary := False;
-  for I := 0 to High(FBoundary) do
+  for I := 0 to FBoundaryLen - 1 do
     if GitOidSame(FBoundary[I].Oid, Oid) then
     begin
       // if Oid was boundary, it would have been appended to FBoundary and returned after heap empty
