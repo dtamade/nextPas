@@ -57,6 +57,8 @@ function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
 { String <-> bytes (single source via bytes.ops) }
+function SpanToString(const ASpan: TByteSpan): string; inline;
+function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
@@ -222,6 +224,16 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := nextpas.core.bytes.ops.BytesEndsWith(AData, ASuffix);
+end;
+
+function SpanToString(const ASpan: TByteSpan): string;
+begin
+  Result := nextpas.core.bytes.ops.SpanToString(ASpan);
+end;
+
+function SpanToUTF8(const ASpan: TByteSpan): string;
+begin
+  Result := nextpas.core.bytes.ops.SpanToUTF8(ASpan);
 end;
 
 function BytesToString(const ABytes: TBytes): string;

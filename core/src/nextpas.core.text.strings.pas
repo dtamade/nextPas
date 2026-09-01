@@ -462,40 +462,103 @@ begin
   SetLength(Result, LCount);
 end;
 
-{ Pattern matching — glob style: * matches any, ? matches one char }
+{ Pattern matching — glob style: * matches any non-sep, ? single non-sep, ** cross-sep, [class] 。
+  单源实现：fs.glob 薄转发至此（L1 single source），respack.embed 亦经此（L1），零拷贝 PChar 视图 + inline 热路径 + O(pat×name) 双追踪器（无指数回溯）。 }
+function IsPathSep(C: AnsiChar): Boolean; inline;
+begin
+  Result := (C = '/') or (C = '\');
+end;
+
+function MatchOne(var AP: PChar; AN: PChar): Boolean; inline;
+var
+  LNegate, LMatched: Boolean;
+  P: PChar;
+begin
+  case AP^ of
+    '?':
+    begin
+      if (AN^ = #0) or IsPathSep(AnsiChar(AN^)) then Exit(False);
+      Inc(AP);
+      Exit(True);
+    end;
+    '[':
+    begin
+      if AN^ = #0 then Exit(False);
+      P := AP + 1;
+      LNegate := False;
+      if (P^ = '^') or (P^ = '!') then begin LNegate := True; Inc(P); end;
+      if P^ = ']' then
+      begin
+        Inc(P);
+        while (P^ <> #0) and (P^ <> ']') do Inc(P);
+        if P^ = ']' then Inc(P);
+        AP := P;
+        Exit(LNegate);
+      end;
+      LMatched := False;
+      while (P^ <> #0) and (P^ <> ']') do
+      begin
+        if ((P+1)^ = '-') and ((P+2)^ <> ']') and ((P+2)^ <> #0) then
+        begin
+          if (AnsiChar(AN^) >= AnsiChar(P^)) and (AnsiChar(AN^) <= AnsiChar((P+2)^)) then LMatched := True;
+          Inc(P,3);
+        end else
+        begin
+          if AN^ = P^ then LMatched := True;
+          Inc(P);
+        end;
+      end;
+      if P^ = ']' then Inc(P);
+      AP := P;
+      if LNegate then Exit(not LMatched) else Exit(LMatched);
+    end;
+  else
+    Result := (AP^ <> #0) and (AN^ = AP^);
+    if Result then Inc(AP);
+  end;
+end;
+
+function GlobMatchInternal(AP, AN: PChar): Boolean; inline;
+var
+  LSStarP, LSStarN, LDStarP, LDStarN: PChar;
+  LIsDouble: Boolean;
+begin
+  if AP^ = #0 then Exit(AN^ = #0);
+  LSStarP := nil; LSStarN := nil; LDStarP := nil; LDStarN := nil;
+  while AN^ <> #0 do
+  begin
+    if AP^ = '*' then
+    begin
+      LIsDouble := False;
+      while AP^ = '*' do begin if (AP+1)^ = '*' then LIsDouble := True; Inc(AP); end;
+      if LIsDouble then
+      begin
+        if (AP^ = '/') or (AP^ = '\') then Inc(AP);
+        LDStarP := AP; LDStarN := AN; LSStarP := nil; LSStarN := nil;
+      end else begin LSStarP := AP; LSStarN := AN; end;
+      Continue;
+    end;
+    if MatchOne(AP, AN) then begin Inc(AN); Continue; end;
+    if (LSStarP <> nil) and (not IsPathSep(AnsiChar(LSStarN^))) then
+    begin Inc(LSStarN); AN := LSStarN; AP := LSStarP; Continue; end;
+    if LDStarP <> nil then
+    begin Inc(LDStarN); AN := LDStarN; AP := LDStarP; LSStarP:=nil; LSStarN:=nil; Continue; end;
+    Exit(False);
+  end;
+  while AP^ = '*' do
+  begin while AP^ = '*' do Inc(AP); if (AP^ = '/') or (AP^ = '\') then Inc(AP); end;
+  Result := AP^ = #0;
+end;
 
 function GlobMatch(const APattern, AStr: string): Boolean;
 var
-  LP, LS, LStarP, LStarS: SizeInt;
+  LP, LN: PChar;
+  LBuf: AnsiChar;
 begin
-  LP := 1; LS := 1;
-  LStarP := 0; LStarS := 0;
-
-  while LS <= Length(AStr) do
-  begin
-    if (LP <= Length(APattern)) and ((APattern[LP] = '?') or (APattern[LP] = AStr[LS])) then
-    begin
-      Inc(LP); Inc(LS);
-    end
-    else if (LP <= Length(APattern)) and (APattern[LP] = '*') then
-    begin
-      LStarP := LP;
-      LStarS := LS;
-      Inc(LP);
-    end
-    else if LStarP > 0 then
-    begin
-      LP := LStarP + 1;
-      Inc(LStarS);
-      LS := LStarS;
-    end
-    else
-      Exit(False);
-  end;
-
-  while (LP <= Length(APattern)) and (APattern[LP] = '*') do
-    Inc(LP);
-  Result := LP > Length(APattern);
+  if Length(APattern)=0 then Exit(AStr='');
+  LP := @APattern[1];
+  if Length(AStr)>0 then LN := @AStr[1] else begin LBuf:=#0; LN:=@LBuf; end;
+  Result := GlobMatchInternal(LP, LN);
 end;
 
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;

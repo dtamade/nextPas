@@ -24,6 +24,10 @@ procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
 { perf: LZ-dict overlapping replicate — inline + block Move via doubling, single source for CopyMatch, zero-copy, O(log n) Moves, overlap-safe }
 procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
+{ respack/writer 单源：路径/内容零拷贝搬运与零填，inline 单 Move/Fill，无额外分配，显式标注 bytes.ops 单源防漂移 }
+procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
+procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
+procedure SpanZero(const ASpan: TByteSpan); inline;
 
 function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -71,6 +75,8 @@ function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
+function SpanToString(const ASpan: TByteSpan): string; inline;
+function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
@@ -254,6 +260,24 @@ begin
     Dec(LRem, LChunk);
     Inc(LDone, LChunk);
   end;
+end;
+
+procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
+begin
+  if ALen = 0 then Exit;
+  Move(ASrc^, ADst^, ALen);
+end;
+
+procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
+begin
+  if ALen = 0 then Exit;
+  FillChar(ADst^, ALen, 0);
+end;
+
+procedure SpanZero(const ASpan: TByteSpan); inline;
+begin
+  if ASpan.Len > 0 then
+    MemSet(ASpan.Data, ASpan.Len, 0);
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
@@ -606,11 +630,21 @@ begin
   Result := BytesIsGzip(AHeader);
 end;
 
+function SpanToString(const ASpan: TByteSpan): string; inline;
+begin
+  if ASpan.Len = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(ASpan.Data), ASpan.Len);
+end;
+
+function SpanToUTF8(const ASpan: TByteSpan): string; inline;
+begin
+  Result := SpanToString(ASpan);
+end;
+
 function BytesToString(const ABytes: TBytes): string; inline;
 begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  Result := SpanToString(TByteSpan.FromBytes(ABytes));
 end;
 
 function BytesToUTF8(const ABytes: TBytes): string; inline;
@@ -634,9 +668,7 @@ begin
     Exit('');
   { 零拷贝借用：Slice 仅建视图不分配，生命周期绑 ABytes }
   LSpan := TByteSpan.FromBytes(ABytes).Slice(AOffset, ALength);
-  SetLength(Result, LSpan.Len);
-  if LSpan.Len > 0 then
-    Move(LSpan.Data^, Result[1], LSpan.Len);
+  Result := SpanToString(LSpan);
 end;
 
 function StringLowerAsciiAware(const S: string): string; inline;

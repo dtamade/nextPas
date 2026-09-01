@@ -124,11 +124,12 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..15] of string = (
+  NO_SEAM: array[0..16] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.reader.pas',
+    'src/nextpas.core.respack.embed.pas',
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -145,14 +146,21 @@ var
   I: Integer;
   Src: string;
 begin
-  { 白名单外的单元一律禁 fs 引用；os/dirsource 是仅有的两个 IO seam，
-    embed 允许 fs.glob（纯匹配无 IO），用变体断言 }
+  { 白名单外的单元一律禁 fs 引用；os/dirsource 是仅有的两个 IO seam（L2→L2 registry 明示 + source-contract 门禁），
+    embed 已收敛至 L1 text.strings/text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、PChar 零拷贝 + inline，fs.glob 薄转发同源），不再构成 L2→L2 }
   for I := Low(NO_SEAM) to High(NO_SEAM) do
     AssertNoFsSeam(NO_SEAM[I], LoadSourceText(NO_SEAM[I]));
-  AssertNoFsSeamExceptGlob('embed', LoadSourceText('src/nextpas.core.respack.embed.pas'));
-  Check(Pos('nextpas.core.fs.glob',
+  Check(Pos('nextpas.core.text.strings',
     LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
-    'embed declares fs.glob dependency');
+    'embed declares text.strings GlobMatch single source');
+  Check(Pos('nextpas.core.text.char',
+    LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares text.char IsAlpha single source');
+  Check(Pos('nextpas.core.text.conv',
+    LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares text.conv IntToStr single source');
+  Check(Pos('nextpas.core.fs', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed must not reference fs (L1 single source)');
 
   { 正向断言：两个 seam 单元确实声明了 fs 依赖（防白名单失效漂移） }
   Src := LoadSourceText('src/nextpas.core.vfs.os.pas');

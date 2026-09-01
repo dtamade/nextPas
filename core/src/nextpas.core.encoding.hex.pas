@@ -13,6 +13,9 @@ function HexEncode(const AData: TBytes; const ACase: THexCase = hcLower): string
 function HexDecode(const AHex: string): TBytes;
 function HexVal(C: Char): Integer; inline;
 function UuidHexToBytes(const AUUIDHex: string): TBytes;
+{ respack.embed 单源复用：上层 $XX 发射 inline 零拷贝直通此表，不再手写 HEX 常量 }
+function HexNibbleUpper(const ANibble: Byte): Char; inline;
+procedure HexEncodeByteUpper(const AByte: Byte; const ADst: PChar); inline;
 
 implementation
 
@@ -159,6 +162,17 @@ begin
   else
     Result := -1;
   end;
+end;
+
+function HexNibbleUpper(const ANibble: Byte): Char; inline;
+begin
+  Result := HEX_UPPER[ANibble and $0F];
+end;
+
+procedure HexEncodeByteUpper(const AByte: Byte; const ADst: PChar); inline;
+begin
+  ADst[0] := HEX_UPPER[AByte shr 4];
+  ADst[1] := HEX_UPPER[AByte and $0F];
 end;
 
 function UuidHexToBytes(const AUUIDHex: string): TBytes;
