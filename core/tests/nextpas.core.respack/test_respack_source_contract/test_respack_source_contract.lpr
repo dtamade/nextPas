@@ -5,7 +5,7 @@ uses
   nextpas.core.exception,
   nextpas.core.fs;
 
-{ 源契约门禁：respack(8 源 + writer.builder 内部单源共 9 文件) uses 白名单锁定。
+{ 源契约门禁：respack(9 源 + writer.builder 内部单源共 10 文件，含 limits 阈值策略单源) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
   2) L2→L2 seam 唯一性：除 respack.dirsource 外，
@@ -46,18 +46,19 @@ begin
     AssertSourceNoBareFpcRtlUses(ALabelPrefix + ' ' + AFiles[I], LoadSourceText(AFiles[I]));
 end;
 
-{ seam 唯一性：白名单外不得出现 nextpas.core.fs / io.mapped 引用 }
+{ seam 唯一性：白名单外不得出现 nextpas.core.fs / io.mapped 引用 — 构建期依赖图校验（uses 子句 strip 注释/字符串后精确解析，防 Pos 文本 grep 被注释/字符串绕过），复用 fpc_rtl_uses_scan.inc FindUsesUnit 单源，inline 零额外拷贝于调用方 }
 procedure AssertNoFsSeam(const ALabel, ASource: string); inline;
 begin
-  Check(Pos('nextpas.core.fs', ASource) = 0, ALabel + ' — must not reference nextpas.core.fs');
-  Check(Pos('nextpas.core.io.mapped', ASource) = 0, ALabel + ' — must not reference nextpas.core.io.mapped');
+  Check(not FindUsesUnit(ASource, 'nextpas.core.fs'), ALabel + ' — must not reference nextpas.core.fs (uses graph)');
+  Check(not FindUsesUnit(ASource, 'nextpas.core.io.mapped'), ALabel + ' — must not reference nextpas.core.io.mapped (uses graph)');
 end;
 
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..8] of string = (
+  FILES: array[0..9] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.respack.limits.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.writer.layout.pas',
     'src/nextpas.core.respack.writer.builder.pas',
@@ -84,9 +85,10 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..7] of string = (
+  NO_SEAM: array[0..8] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.respack.limits.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.writer.layout.pas',
     'src/nextpas.core.respack.writer.builder.pas',
@@ -107,8 +109,8 @@ begin
     'embed declares text.char IsAlpha single source');
   Check(Pos('nextpas.core.text.conv', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed declares text.conv IntToStr single source');
-  Check(Pos('nextpas.core.fs', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
-    'embed must not reference fs (L1 single source)');
+  Check(not FindUsesUnit(LoadSourceText('src/nextpas.core.respack.embed.pas'), 'nextpas.core.fs'),
+    'embed must not reference fs (L1 single source, uses graph)');
   Check(Pos('nextpas.core.respack.dirsource', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
     'embed must not reference dirsource (L1→L2 up-dependency fix, pure memory)');
   Check(Pos('nextpas.core.respack.writer', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
@@ -126,11 +128,21 @@ begin
     'embed ResPackValidIdent must NOT be inline (loop body, I-Cache)');
   Check(Pos('nextpas.core.bytes.ops', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed declares bytes.ops single source');
+  Check(Pos('nextpas.core.respack.limits', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares respack.limits threshold single source');
+  Check(Pos('ResPackRequireIncSize', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed reuses ResPackRequireIncSize threshold single source');
+  Check(Pos('ResPackEffectiveIncLimit', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed reuses ResPackEffectiveIncLimit configurable limit');
+  Check(Pos('BytesConcatMany', LoadSourceText('src/nextpas.core.respack.embed.pas')) = 0,
+    'embed must not use BytesConcatMany (unify to BytesCopy single source)');
+  Check(Pos('MaxBlobBytes', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed exposes MaxBlobBytes configurable limit');
 
-  { 正向断言：seam 单元确实声明了 fs+io.mapped 依赖（防白名单失效漂移） }
+  { 正向断言：seam 单元确实声明了 fs+io.mapped 依赖（防白名单失效漂移，uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.pas');
-  Check(Pos('nextpas.core.fs', Src) > 0, 'dirsource declares fs dependency');
-  Check(Pos('nextpas.core.io.mapped', Src) > 0, 'dirsource declares io.mapped mmap dependency');
+  Check(FindUsesUnit(Src, 'nextpas.core.fs'), 'dirsource declares fs dependency (uses graph)');
+  Check(FindUsesUnit(Src, 'nextpas.core.io.mapped'), 'dirsource declares io.mapped mmap dependency (uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'dirsource declares bytes.ops BytesCopy single source');
   Check(Pos('BytesCopy', Src) > 0, 'dirsource reuses BytesCopy single source (no bare Move)');
   Check(Pos('ResPackEmbedBuild', Src) > 0, 'dirsource hosts ResPackEmbedBuild (IO seam, embed is pure)');
@@ -142,24 +154,24 @@ begin
   Check(Pos('EnsureDirCapacity', Src) > 0, 'dirsource DRY EnsureDirCapacity');
   Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
-  { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定 }
+  { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定（uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'base must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'base must not reference fs (uses graph)');
   Src := LoadSourceText('src/nextpas.core.respack.reader.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'reader must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'reader must not reference fs (uses graph)');
   Src := LoadSourceText('src/nextpas.core.respack.writer.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'writer must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer must not reference fs (uses graph)');
   Src := LoadSourceText('src/nextpas.core.respack.writer.layout.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.layout must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer.layout must not reference fs (uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.layout declares bytes.ops single source');
   Check(Pos('nextpas.core.collections.algorithms', Src) > 0, 'writer.layout declares collections.algorithms Sort single source');
   Check(Pos('nextpas.core.mem.base', Src) > 0, 'writer.layout declares mem.base AlignUp64 single source');
   Check(Pos('ResPackCmpPath', Src) > 0, 'writer.layout reuses bytes.ops ResPackCmpPath inline zero-copy');
   Src := LoadSourceText('src/nextpas.core.respack.writer.builder.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.builder must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer.builder must not reference fs (uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.builder declares bytes.ops single source');
   Src := LoadSourceText('src/nextpas.core.respack.writer.stream.pas');
-  Check(Pos('nextpas.core.fs', Src) = 0, 'writer.stream must not reference fs');
+  Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'writer.stream must not reference fs (uses graph)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.stream declares bytes.ops single source');
   Check(Pos('nextpas.core.respack.writer.layout', Src) > 0, 'writer.stream reuses writer.layout single source');
   Check(Pos('ResPackLayoutClear', Src) > 0, 'writer.stream try..finally ResPackLayoutClear not leak');

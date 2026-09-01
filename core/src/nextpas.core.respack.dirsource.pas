@@ -35,11 +35,12 @@ type
 
 { 枚举目录树为打包条目。超过 RESPACK_MAX_INPUT_BYTES raise EResPackTooLarge；
   遍历错误 raise EResPackDirSourceFailed。
-  兼容保留：小包便捷（< few MB / <1k 文件）可用；大包/万文件/512MB 场景请优先
-  ResPackBuildStreamFromDir / ResPackBuildFromDir 流式mmap 管线（MmapOpen 零拷贝，
-  峰值 ~1×+头 vs 本函数 TBytes 全量锚点 2×+头），详见热路径注释与 CONTRACT INV-R10。 }
+  @deprecated 小包便捷（< few MB / <1k 文件）兼容保留；大包/万文件/512MB 场景
+  请优先 ResPackBuildStreamFromDir / ResPackBuildFromDir 流式mmap 管线
+  （MmapOpen 零拷贝，峰值 ~1×+头 vs 本函数 TBytes 全量锚点 2×+头）— Stream 为
+  统一抽象，本函数为薄转发兼容，详见热路径注释与 CONTRACT INV-R10。 }
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries;
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap 1x+head); this 2x peak path kept for < few MB convenience';
 
 { 流式mmap：目录 → 流式两遍分段零双驻留打包，峰值 ~1×+头。
   遍历期以 nextpas.core.io.mapped MmapOpen 零拷贝视图供给 Entries[].Data，
@@ -149,14 +150,19 @@ begin
   Result := True;
 end;
 
-{ 指数扩容管线：单源复用 bytes.ops 零拷贝语义，O(n²) → O(n) }
+{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝 }
+function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
+begin
+  Result := ACap * 2;
+  if Result < 8 then Result := 8;
+  if Result < ANeeded then Result := ANeeded;
+end;
+
 procedure EnsureDirCapacity(var Ctx: TDirContext; const ANeeded: SizeUInt); inline;
 var NewCap: SizeUInt;
 begin
   if Ctx.Count < Ctx.Cap then Exit;
-  NewCap := Ctx.Cap * 2;
-  if NewCap < 8 then NewCap := 8;
-  if NewCap < ANeeded then NewCap := ANeeded;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
   SetLength(Ctx.Entries, NewCap);
   SetLength(Ctx.Bytes, NewCap);
   Ctx.Cap := NewCap;
@@ -166,12 +172,51 @@ procedure EnsureStreamCapacity(var Ctx: TStreamContext; const ANeeded: SizeUInt)
 var NewCap: SizeUInt;
 begin
   if Ctx.Count < Ctx.Cap then Exit;
-  NewCap := Ctx.Cap * 2;
-  if NewCap < 8 then NewCap := 8;
-  if NewCap < ANeeded then NewCap := ANeeded;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
   SetLength(Ctx.Entries, NewCap);
   SetLength(Ctx.Maps, NewCap);
   Ctx.Cap := NewCap;
+end;
+
+{ Walk 热路径泛型上下文：Stat/FilterRelPath/TryReserveTotal/Ensure*Capacity/失败归一单源，inline 零拷贝 }
+procedure WalkFail(var AFailed: Boolean; var AFailMsg: string; const AMsg: string); inline;
+begin
+  AFailed := True;
+  AFailMsg := AMsg;
+end;
+
+function WalkHandleErr(const AErr: Exception; var AFailed: Boolean; var AFailMsg: string): Boolean; inline;
+begin
+  if AErr <> nil then
+  begin
+    WalkFail(AFailed, AFailMsg, AErr.Message);
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+function WalkTryStat(const APath: string; out ASt: TFileInfo; var AFailed: Boolean; var AFailMsg: string): Boolean;
+begin
+  try
+    ASt := Stat(APath);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      WalkFail(AFailed, AFailMsg, 'stat failed: ' + E.Message + ' (path=' + APath + ')');
+      Result := False;
+    end;
+  end;
+end;
+
+function WalkTryReserve(const ATotal: SizeUInt; const AFileSize: Int64; out ANewTotal: SizeUInt; var AFailed: Boolean; var AFailMsg: string): Boolean; inline;
+begin
+  if not TryReserveTotal(ATotal, AFileSize, ANewTotal) then
+  begin
+    WalkFail(AFailed, AFailMsg, 'total input exceeds limit');
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 function WalkProc(const APath: string; const AInfo: TFileInfo;
@@ -185,14 +230,9 @@ var
 begin
   Result := True;
   Ctx := PDirContext(AUserData);
-  if AErr <> nil then
-  begin
-    Ctx^.Failed := True;
-    Ctx^.FailMsg := AErr.Message;
-    Exit(False);
-  end;
+  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   if AInfo.FileType <> ftRegular then
-    Exit(True);   { symlink/目录/特殊文件不入包 }
+    Exit(True);   { symlink/目录/特殊文件不入包 — 单源 WalkHandleErr/FilterRelPath/Stat/Reserve }
   if not FilterRelPath(Ctx^.Root, APath, Ctx^.Include, Rel) then
     Exit(True);
   { 热路径说明（万文件场景）：当前回调内同步 Stat+ReadFile 并以 TBytes 锚点驻留至
@@ -201,25 +241,13 @@ begin
     nextpas.core.respack.writer.stream 可降至 ~1×+头；CONTRACT 业务为准，缺能力先反哺 owner
     nextpas.core.mem.memory_map/nextpas.core.io.mapped，已落地 ResPackBuildStreamFromDir 流式mmap
     管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
-    大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷。
-    已做指数扩容单源 EnsureDirCapacity 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
-    Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。 }
-  try
-    St := Stat(APath);
-  except
-    on E: Exception do
-    begin
-      Ctx^.Failed := True;
-      Ctx^.FailMsg := 'stat failed: ' + E.Message + ' (path=' + APath + ')';
-      Exit(False);
-    end;
-  end;
-  if not TryReserveTotal(Ctx^.Total, St.Size, LSum) then
-  begin
-    Ctx^.Failed := True;
-    Ctx^.FailMsg := 'total input exceeds limit';
-    Exit(False);
-  end;
+    大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
+    （deprecated 兼容，Stream 为统一抽象）。
+    已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
+    Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
+    单源证据：RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发。 }
+  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   Idx := Ctx^.Count;
   EnsureDirCapacity(Ctx^, Idx + 1);
   try
@@ -252,35 +280,17 @@ var
 begin
   Result := True;
   Ctx := PStreamContext(AUserData);
-  if AErr <> nil then
-  begin
-    Ctx^.Failed := True;
-    Ctx^.FailMsg := AErr.Message;
-    Exit(False);
-  end;
+  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   if AInfo.FileType <> ftRegular then
     Exit(True);
   if not FilterRelPath(Ctx^.Root, APath, Ctx^.Include, Rel) then
     Exit(True);
   { 流式mmap 热路径：Stat 取 ModTime/Size，上限校验复用 TryReserveTotal/TryAddSizeUInt 单源（inline 零开销），
     随后 MmapOpen 零拷贝视图（owner: mem.memory_map/io.mapped，接口托管，零 heap 拷贝，inline 零开销）；
-    空文件 Size=0 时 Mmap Size 0 合法；mmap 失败按受控 EResPackDirSourceFailed 上抛且不丢已映射资源。指数扩容单源 EnsureStreamCapacity。 }
-  try
-    St := Stat(APath);
-  except
-    on E: Exception do
-    begin
-      Ctx^.Failed := True;
-      Ctx^.FailMsg := 'stat failed: ' + E.Message + ' (path=' + APath + ')';
-      Exit(False);
-    end;
-  end;
-  if not TryReserveTotal(Ctx^.Total, St.Size, LSum) then
-  begin
-    Ctx^.Failed := True;
-    Ctx^.FailMsg := 'total input exceeds limit';
-    Exit(False);
-  end;
+    空文件 Size=0 时 Mmap Size 0 合法；mmap 失败按受控 EResPackDirSourceFailed 上抛且不丢已映射资源。
+    指数扩容单源 EnsureStreamCapacity→WalkGrowCap。泛型上下文单源：与 WalkProc 共用 WalkHandleErr/WalkTryStat/WalkTryReserve/WalkGrowCap/WalkFail，锚点分叉仅在 Data 加载 (MmapOpen) 处。 }
+  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   Idx := Ctx^.Count;
   EnsureStreamCapacity(Ctx^, Idx + 1);
   try
@@ -522,7 +532,6 @@ procedure ResPackExtractToDir(const ABlob: TResPackBlob;
 var
   RP: TResPack;
   Idx: SizeUInt;
-  LPos: SizeInt;
   Entry: TResPackEntry;
   DestPath, ParentDir: string;
   Content: TBytes;
@@ -537,15 +546,9 @@ begin
       begin
         Entry := RP.EntryAt(Idx);
         DestPath := ADestDir + '/' + RP.PathOf(Entry);
-        { 条目可带子目录层级，先确保父目录存在：单遍扫描定位末 '/' 后单次 Copy(BytesCopy) 取父目录，替代逐字符 Delete O(n²)；inline 零拷贝。 }
-        ParentDir := '';
-        for LPos := Length(DestPath) downto 1 do
-          if DestPath[LPos] = '/' then
-          begin
-            ParentDir := Copy(DestPath, 1, LPos - 1);
-            Break;
-          end;
-        if ParentDir <> '' then
+        { 父目录：复用 nextpas.core.path.PathDir 单源（FsPathDir→platform_path_dirname 零拷贝视图，inline），替代手写 downto 逐字符扫 '/' + Copy 分叉。 }
+        ParentDir := PathDir(DestPath);
+        if (ParentDir <> '') and (ParentDir <> '.') then
           MkdirAll(ParentDir);
         SetLength(Content, SizeInt(Entry.Size));
         if Entry.Size > 0 then
@@ -583,12 +586,13 @@ var
   I: SizeUInt;
 begin
   Result := False;
+  { StripPrefix：复用同文件 RelativizePath→PathStripPrefix 单源（PathToSlash 归一 + 零拷贝 Copy 单次，inline），替代手写 Copy 比较/截取双套前缀实现。 }
   if AOpts.StripPrefix <> '' then
   begin
-    if (Length(ARel) <= Length(AOpts.StripPrefix))
-      or (Copy(ARel, 1, Length(AOpts.StripPrefix)) <> AOpts.StripPrefix) then
-      Exit;
-    Logical := Copy(ARel, Length(AOpts.StripPrefix) + 1, MaxInt);
+    Logical := PathStripPrefix(ARel, AOpts.StripPrefix);
+    if Logical = '' then Exit;        { 非前缀 }
+    if Logical = '.' then Exit;       { ARel == StripPrefix（无剩余逻辑路径）}
+    { PathStripPrefix 已去前缀及单分隔符，Logical 即剥离后相对路径 }
   end
   else
     Logical := ARel;

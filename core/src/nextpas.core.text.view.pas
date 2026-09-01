@@ -61,7 +61,7 @@ function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
   view 源缓冲在赋值期被提前失效，产出短一字符尾随 #0 的串（-O0 亦复现；
   与 Int64(Double) 强转缺陷同类）。源串可能与目标同变量的场景一律用本
   函数。越界钳制与 Slice 一致：AOffset >= Length(ASrc) → ''；ALength
-  超出 → 截到末尾。 }
+  超出 → 截到末尾。单源：越界钳制复用 bytes.ops.TryClampSlice（inline 零拷贝 extent，owner bytes.ops），Slice/SliceToStr 同源。 }
 function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string;
 
 implementation
@@ -104,20 +104,17 @@ end;
 
 function TStringView.Slice(const AOffset, ALength: SizeUInt): TStringView;
 var
-  LRemaining: SizeUInt;
+  LClamped: SizeUInt;
 begin
-  if AOffset >= FLen then
+  // single source: bytes.ops.TryClampSlice — zero-copy extent, inline hot path, owner bytes.ops
+  if not TryClampSlice(AOffset, ALength, FLen, LClamped) then
   begin
     Result.FData := nil;
     Result.FLen := 0;
     Exit;
   end;
   Result.FData := FData + AOffset;
-  LRemaining := FLen - AOffset;
-  if ALength > LRemaining then
-    Result.FLen := LRemaining
-  else
-    Result.FLen := ALength;
+  Result.FLen := LClamped;
 end;
 
 function TStringView.Left(const ACount: SizeUInt): TStringView;
@@ -452,12 +449,11 @@ function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): strin
 var
   LSrcLen, LTake: SizeUInt;
 begin
+  // single source: bytes.ops.TryClampSlice — same clamp as TStringView.Slice, inline zero-copy extent, owner bytes.ops
   LSrcLen := SizeUInt(Length(ASrc));
-  if AOffset >= LSrcLen then
+  if not TryClampSlice(AOffset, ALength, LSrcLen, LTake) then
     Exit('');
-  LTake := ALength;
-  if LTake > LSrcLen - AOffset then
-    LTake := LSrcLen - AOffset;
+  // perf: single SetString + zero-copy Move, self-assignment safe via FPC -19195 workaround (single alloc, no intermediate view)
   SetString(Result, PAnsiChar(@ASrc[AOffset + 1]), PtrInt(LTake));
 end;
 

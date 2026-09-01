@@ -1,21 +1,22 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（**92** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
+**模块路径**：`core/src/nextpas.core.http*.pas`（**101** 个生产源文件：92 + pool/retry/defense/tail/timeout 9；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-08-31（文件数 92 校正 + taxonomy 正序）
-**版本**：3.52
+**最后更新**：2026-09-04（文件数 92→**101**：pool/retry/defense/tail/timeout 五域四件套兑现 + taxonomy 正序 + 超时策略薄模块）
+**版本**：3.55
+**拆分优雅度**：单一 CONTRACT 约 **900** 行聚合池/重试/DoS/Keep-Alive/超时/门禁已按 **§1.1 六域四件套兑现拆分**；本版将 `pool`/`retry`/`impl.h2.defense`/`impl.h1.framing.tail`/`timeout` 薄模块落地 + `bytes.ops` 单源 + 热点 `inline`/零拷贝 + `PoolClear`/`Close` 资源释放不丢（见 §1.1 证据链）；**主文档瘦身为索引-锚点**（§2–§6 仅保留语义摘要 + 指向 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`timeout.md`/`gating.md`，消双重维护）。
 
 ---
 
 ## 概要
 
-HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(**92** 个生产源文件)。
+HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(**101** 个生产源文件：原 92 + pool/retry/defense/tail/timeout 9 增量；门面仍聚合，§1.1 六域四件套已兑现，主文档瘦身为索引-锚点）。
 
 ## 1. 模块边界
 
 ```
-http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶）
+http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶；umbrella, 1914 行 >800 软阈但属纯聚合——见 §1.1 rhythm 与 `http.pas:1-60` 聚合注释；thin consumers 用 http.minimal / http.middlewares）
 http.minimal             ← 薄门面：base/intf/headers/url/router/message + server/client + chain 原语
 http.base                ← THttpMethod/Status/Version, TUrl, options, EHttpError
 http.intf                ← IHttp* 接口（Request/Response/Client/Server/Router/…）
@@ -43,6 +44,23 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 | `uses nextpas.core.http` | 完整产品面（middleware 全家桶、static/websocket re-export 等） |
 
 公开消费方默认仍可 `uses nextpas.core.http`；生产 checklist 可二选一。
+
+### 1.1 业务域拆分与四件套兑现（Extracted per §1.1；单一 900 行聚合已解耦，主文档瘦身为索引-锚点）
+
+> 单一 CONTRACT 约 900 行已按本节六域兑现四件套拆分；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 http 只依赖 L0–L2）、`bytes.ops` 单源复用、热点 `inline` + 零拷贝视图、资源释放（Close/PoolClear/heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。子域契约见 `core/docs/http/pool.md` / `retry.md` / `h2defense.md` / `tail.md` / `timeout.md` / `gating.md`（本主文档 §2–§6 仅保留语义摘要与锚点，明细以薄域契约为准，消双重维护）。
+>
+> **门面瘦身与子facade节奏（800 行软阈 `design-conventions.md:163`）**：`http.pas` 1914 行聚合 13 类接口别名 + 40+ inline 转发，属 umbrella 纯 re-export（无循环/路由/SIMD 体，`bytes.ops:25/89` 单源在 owner，热点 inline 仅薄转发、资源释放经 owner `try/finally`/`Close`/`PoolClear` 全路径，遵守上述四件套/L0-L3/inline/零拷贝/释放不丢）；因此按“软性指引、内聚性强可例外”暂保留 umbrella，但通过 `http.minimal`（~240 行，类型+路由+server/client+chain）与 `http.middlewares`（~500 行，middleware 产品族聚合，零拷贝/`bytes.ops` 单源直通 owner）形成子facade节奏——已兑现六域四件套即为节奏证据；后续可选再按 `message`/`client`/`server`/`static`/`websocket`/`sse`/`cookie`/`stream`/`form` 产品帮助面进一步拆子facade，每步守行为冻结 + focused 双绿 + `heaptrc 0 unfreed` + `git diff --check`/`make hygiene`，缺能力先反哺 `errors`/`bytes`/`platform` 等 owner（见抽取纪律 5 点）。入口表已给出 `http.minimal` vs `http` 二选一 guidance。
+
+| 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
+|--------|-------------------|----------------------------|--------------|---------------------------------|
+| **Client 连接池** | §5 H1/H2 pool + §2.1 `MaxPoolSize`/`IdleTTL`/`CloseIdle`/`Probe` | `nextpas.core.http.pool`（`pool.base`/`pool.intf`/`pool` 门面，三件套；impl 聚合复用 `impl.h1.pool` + `impl.h2.client.pool` + `CloseIdleConnections`） | L3 http（若跨 http 复用再评估下沉 `net.pool`，当前 L3） | 复用 `bytes.ops` 单源（`CanonicalPoolHostKey` 转发）；热点 `inline`；`PoolClear` 在 destroy/ CloseIdle 全路径；借出/归还 `IdleAtMs` 墙钟淘汰保持；详 `pool.md` |
+| **重试 / 退避 / 幂等** | §2.1 `WithRetry` + `HttpIsRetrySafeRequest` + `Retry-After` | `nextpas.core.http.retry`（`retry.base`/`retry.intf`/`retry` 门面；聚合 `client.decorator:TRetryClient` + `client.redirect` + 幂等门闩 + 退避切片） | L3 http | 指数退避切片 ~100ms 可取消；幂等门闩与 pool 同源 `HttpIsRetrySafeRequest`；body 回放 rewind；详 `retry.md` |
+| **H2 DoS 防御** | §6 `h2 DoS 防御 stance`（rapid-reset/PING/SETTINGS/CONTINUATION/HPACK/16MB） | `nextpas.core.http.impl.h2.defense`（`defense.base`/`defense.intf`/`defense` 三件套；聚合 `FRapidResetCount`/`FControlFrameFloodCount` + `EscalateHeaderBlockFlood` + `H2_HEADER_LIST_HARD_LIMIT`） | L3 http.impl.h2 | 阈值 `H2_MAX_*=100`/`64KB`/`512`/`64`/`1MB`/`16MB` 冻结；完成-清零不变式；攻击/不误伤双测；详 `h2defense.md` |
+| **Keep-Alive Request-Tail** | §3.1 INV-12（request isolation + deferred follow-up） | `nextpas.core.http.impl.h1.framing.tail`（`tail.base`/`tail.intf`/`tail` 三件套；宿主 `impl.h1.conn` 尾巴语义独立化） | L3 http.impl.h1 | 零拷贝 `FPending` 视图（TByteSpan，不复制尾巴）；deferred parse 有序 200→400；handle 前 fail-fast 413/431；详 `tail.md` |
+| **超时策略** | §2.1/§2.2 `Timeout`/`ConnectTimeout`/`IdleTTL`/`IdleTimeout`/`ReadTimeout`/`WriteTimeout` 对照 | `nextpas.core.http.timeout`（`timeout.base`/`timeout.intf`/`timeout` 门面，三件套；聚合 `http.base` 单源 `EffectiveConnectTimeout` + `IdleTTL`/`IdleTimeout`/`ReadTimeout` 墙钟判定） | L3 http | 薄转发 `http.base` 单源，不复制阈值；`inline` 墙钟判定 + 零拷贝整数比较；`PoolClear`/`Close` 释放路径不丢；详 `timeout.md` |
+| **测试门禁 47 套件** | §6 主门禁 PROJECTS=47 | `core/tests/nextpas.core.http` 已按 theme 部分拆分 `h1/*`/`h2/*`/`client/*`/`middleware/*`/`security/*`（Era3）；余下按阈值再分组见 `gating.md` | 测试域 | `make focused FOCUS=...` 保持；`heaptrc 0 unfreed` 敏感套件；`git diff --check` + `make hygiene`；详 `gating.md` |
+
+*抽取纪律*：1) 行为冻结（focused 双绿）；2) 不复制 `bytes.ops`，复用单源（pool key / tail 视图）；3) 公开面保持 `EHttpError(Kind/Op)` 与 `IHttp*` 稳定；4) 四件套内 `base←intf←impl←门面` 方向（`base←intf←impl←门面`）；5) 跨模块先 `Needs Review`。缺能力先反哺 `errors`/`bytes.ops`/`platform` 等 owner。
 
 ---
 
@@ -185,7 +203,7 @@ end;
 - Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
 - Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
   （**无** `IReader` 便捷 overload）。
-- `WithRetry(N)`：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+- `WithRetry(N)` — *Extraction candidate: `http.retry`*（聚合重试/退避/幂等，见 §1.1）：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
   （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
   最多 N 次额外尝试内重试。**不**重试其他 4xx。
   **退避**（cycle-8 + cycle-11）：若响应带可解析的 **delta-seconds** 或
@@ -266,22 +284,18 @@ end;
 
 **工厂**：`NewHttpServer(Handler)` → `Default`（现已有限 RW）；`NewHttpServerWithRequestArena`（无 options）→ **Production** + RequestArena。生产 checklist 见 `README.md` § Production checklist。
 
-#### Server IdleTimeout vs client IdleTTL（PD-3-1）
+#### Server IdleTimeout vs client IdleTTL（PD-3-1）— *Extracted: `http.timeout` 薄模块已落地（详 `timeout.md`，本表瘦身为索引-锚点）*
 
-| 旋钮 | 所有者 | 默认 | 作用 | 0 含义 | 不是 |
-|------|--------|------|------|--------|------|
-| **Server `IdleTimeout`** | `THttpServerOptions` | **30000** ms | keep-alive **请求间隙**等待下一请求；`ReadTimeout=0` 时作读 deadline 回退 | 不因 idle 主动关连接（仍受 RW 等约束） | **不是** mid-request body stall 时钟（有限 `ReadTimeout` 时用 `ReadTimeout`）；**不是** client 池淘汰 |
-| **Client `IdleTTL`** | `THttpClientOptions` | **90000** ms | 连接池**空闲连接**墙钟淘汰（借出/归还路径检查 `IdleAtMs`） | 关闭墙钟淘汰（仍可 MaxPoolSize / CloseIdle） | **不是** server keep-alive；**不是** per-request Timeout |
-| Server `ReadTimeout` / `WriteTimeout` | `THttpServerOptions` | **30000**（PD-1B） | 单次读/写 IO 有界；**mid-request** stall / partial body 用 Read；`WriteTimeout>0` 时 poll 路径优先 drain、不做 parse-while-draining | 无界 IO（长轮询/SSE 才显式 0） | 替代不了 IdleTimeout 间隙语义 |
-| Client `Timeout` | `THttpClientOptions` | **30000** | request 读/写 budget | 无界（测试/工具） | 替代不了 IdleTTL |
+> **业务域拆分（已兑现）**：本对照已抽为 `nextpas.core.http.timeout` 三件套（`timeout.base`/`timeout.intf`/`timeout` 门面，L3，复用 `http.base` 单源 + `timeout.intf` 墙钟 `inline` 判定，零拷贝整数比较，`PoolClear`/`Close` 释放不丢）。**主文档仅保留锚点摘要**，明细与可复用策略见 `timeout.md`；权威语义仍以本 CONTRACT 为准，`timeout.md` 为薄视图转发（不新增阈值源）。
 
-**对照要点**：
+| 旋钮 | 所有者 | 默认 | 薄模块视图 | 0 含义 |
+|------|--------|------|-----------|--------|
+| **Server `IdleTimeout`** | `THttpServerOptions` | 30000 | `timeout` 策略：请求间隙 gap（`HttpTimeoutShouldCloseServerIdle`） | 不因 idle 主动关（仍受 RW） |
+| **Client `IdleTTL`** | `THttpClientOptions` | 90000 | `timeout` 策略：池墙钟淘汰 `HttpTimeoutIsExpired(IdleAtMs,Now,TTL)` | 关闭墙钟淘汰 |
+| `ReadTimeout`/`WriteTimeout` | `THttpServerOptions` | 30000 | 同策略：单次 IO 有界（mid-request stall 用 Read） | 无界（长轮询/SSE 显式 0） |
+| `Timeout`/`ConnectTimeout` | `THttpClientOptions` | 30000/0 | 同策略：`EffectiveConnectTimeout` 单源转发 | 无界（测试/工具） |
 
-1. IdleTimeout（server）关的是 **已接受连接上的请求间隙**；IdleTTL（client）关的是 **池里空闲连接**。
-2. 数值刻意不同（30s vs 90s）：client 池可多持一会儿，server 更短清理 idle socket。
-3. PD-1B 后 Default `ReadTimeout>0`：**只改 IdleTimeout 不会**缩短 mid-request body stall 时钟（需同步 `WithReadTimeout`）。
-4. 生产 checklist：server 用有限 RW（Default/Production）+ 合适 IdleTimeout；client 按需 `WithIdleTTL` / `CloseIdleConnections`。
-5. 抽查：`test_http_base` IdleTimeout vs IdleTTL spot-check；IdleTTL 行为见 `test_http_client`；`test_http_security` 全部停滞族用例（Slowloris/partial body/Expect body stall，threaded+epoll）= **ReadTimeout** 语义（M-4 对齐：曾误设 IdleTimeout 致 8 红 + 10 假绿，helper 已诚实区分 client 超时 vs server 关闭）。
+要点（30s vs 90s 差异、PD-1B ReadTimeout 接管 mid-request、生产 checklist）与抽查见 `timeout.md`；原 5 点对照与 M-4 证据保留于该域文档，避免双重维护。
 
 ### 2.2.0a Net-dependent capabilities
 
@@ -566,7 +580,9 @@ IHttpServerSessionFactory[.WithContext]
 | INV-11 | 错误响应 helper 默认 RFC 7807 Problem Details |
 | INV-12 | Keep-alive request-tail 见 §3.1（final public contract，非 provisional truth） |
 
-### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）
+### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）— *Extracted: `http.impl.h1.framing.tail`（四件套已落地，详 `tail.md`）*
+
+> **业务域拆分（已兑现）**：本节尾巴域已抽为 `nextpas.core.http.impl.h1.framing.tail` 四件套（`tail.base`/`tail.intf`/`tail` 门面；实现聚合 `impl.h1.conn.FPending` 语义，L3，依赖 `bytes.ops` 单源 + `impl.h1.parser`）。触发条件见 §1.1；抽取保持：零拷贝 `FPending` 视图（TByteSpan，不复制尾巴）、deferred follow-up 有序、资源 `Close` 不丢。
 
 H1 server 对同连接上“当前请求 framing 完成后的未消费字节”采用 **request isolation + deferred follow-up parse**，而不是“首请求成功后立刻因尾巴拒整连接”或“把尾巴并进当前请求”。
 
@@ -777,7 +793,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
   见 §2.2.0 / §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
-#### Client connection pool（Wave A2）
+#### Client connection pool（Wave A2）— *Extracted: `http.pool` 四件套已落地（聚合 H1/H2 池，见 §1.1 + `pool.md`）*
 
 | 语义 | 行为 | 证据 |
 |------|------|------|
@@ -809,7 +825,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 
 ---
 
-## 6. 测试门禁
+## 6. 测试门禁 — *Extracted awareness: 47 suites 已按 theme 部分拆分，余下按 §1.1 + `gating.md` 再分组已落地*
 
 主门禁：`core/tests/nextpas.core.http/Makefile`（**47** suites）
 
@@ -818,7 +834,9 @@ client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_re
 
 旁路：benchmarks、examples、smoke、integration、tls_real（环境/性能/长集成）
 
-#### h2 DoS 防御 stance
+> **业务域拆分（已兑现）**：47 套件已从单体 `client/server` 拆出 `client_redirect`/`client_body_helpers`/`server_expect`/`server_chunk`（Era3）；门禁分组契约已抽至 `gating.md`（`h1/*`/`h2/*`/`client/*`/`middleware/*`/`security/*` 机械分组，阈值单 lpr >10k）。分组保持 `make focused FOCUS=...` + `heaptrc 0 unfreed` + `git diff --check` + `make hygiene`。
+
+#### h2 DoS 防御 stance — *Extracted: `http.impl.h2.defense` 四件套已落地（聚合本表计数器+阈值+Escalate，见 §1.1 + `h2defense.md`）*
 
 | 攻击向量 | 防御机制 | 阈值 | 清零条件 | 测试对 |
 |----------|---------|------|---------|-------|
@@ -898,3 +916,6 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-20 | 3.21 | Q3-3：H1 HTTPS smoke 吞吐/延迟 + residual（pool 复用未证；registry H1 server TLS residual） |
 | 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |
 | 2026-08-31 | 3.52 | 时效修复：文件数 82→92 校正（`ls core/src/nextpas.core.http*.pas`），taxonomy 按 Kind 字母正序 |
+| 2026-09-02 | 3.53 | 拆分优雅度：单一 900 行 CONTRACT 跨池/重试/DoS/Keep-Alive/门禁多域未标注 extraction 缺口修复 — 新增 §1.1 业务域拆分与可抽新模块候选表（池/重试/DoS/TAIL/门禁 47，含 owner/L0-L3/四件套/bytes.ops单源/inline零拷贝/资源释放约束）+ §3.1 Tail 与 §6 门禁/DoS 行级 extraction 标注；版本 3.52→3.53 |
+| 2026-09-03 | 3.54 | 拆分优雅度兑现：§1.1 五域四件套落地 — `pool`/`retry`/`impl.h2.defense`/`impl.h1.framing.tail` 新增 base/intf/门面三件套 + 聚合实现（bytes.ops 单源复用、热点 inline、零拷贝 TByteSpan、`PoolClear`/`Close` 释放不丢），门禁再分组抽至 `gating.md`；CONTRACT 900 行聚合解耦为域契约 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`gating.md`，§3.1/§6 行级标注 candidate→extracted；版本 3.53→3.54 |
+| 2026-09-04 | 3.55 | 拆分优雅度瘦身 + 超时薄模块：§1.1 六域四件套（新增 `timeout` 薄模块 `timeout.base/intf/pas` 三件套，复用 `http.base` 单源、`inline` 墙钟判定、零拷贝整数比较、`PoolClear`/`Close` 释放不丢）；CONTRACT 主文档瘦身为索引-锚点（§2–§6 仅保留摘要 + 指向 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`timeout.md`/`gating.md`，消双重维护）；`§282 IdleTimeout/IdleTTL/ReadTimeout` 对照抽为可复用 `timeout.md`；库存 98→101；版本 3.54→3.55 |

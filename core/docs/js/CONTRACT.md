@@ -2,6 +2,7 @@
 
 **模块路径**：`core/src/nextpas.core.js*.pas`（已落地 11 单元：base/intf/fake/ffi/loader/quickjs/pure.base/js888/v8/chakra/门面）
 **层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环；`webview` 等 L3 可依赖本模块）
+**层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 core-module-registry:50（`module-registry` deprecated alias），禁止循环；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-31
 **版本**：1.1（11 单元 pure.base 单源 517 行 + V8/Chakra Close 幂等 + 5 gate 全绿 + L2→L0 platform.fs 直读 + JsTrimEquals 去 inline，M3b 均值同步，与 BENCHMARKS 1.5/ROADMAP 1.1 对齐，18 份对齐）

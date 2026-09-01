@@ -12,7 +12,7 @@ not convert bootstrap RTL pressure into a broad public compatibility API.
 - `nextpas.core.system.typinfo` has a minimal live unit for the seven-symbol
   pressure set.
 - `nextpas.core.system.sysutils` has a minimal live **compatibility facade** ( **40+ functions**: `Format`, `SameText`, `IntToStr`, `Trim`, `StrToInt`, `FloatToStr`, `FileExists`, `ExtractFilePath`, `Now`, `Sleep`, `SysErrorMessage` …). **Text implementation owner is `nextpas.core.text.conv`** (and `path`/`fs`/`platform` for non-text slices); exception aliases own in `nextpas.core.exception`. Sysutils does not implement text APIs — it is a thin delegating facade.
-- `nextpas.core.system.classes` is a **live facade** with **10 types**: `TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` (plus `fm*` constants and `IStream`/`IReader`/`IWriter` re-exports). Narrow, stream/container-owned subset, not full `Classes` sprawl.
+- `nextpas.core.system.classes` is a **live facade** with **10 types**: `TSeekOrigin` (single source `nextpas.core.io.base`), `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` (plus `fm*` constants and `IStream`/`IReader`/`IWriter` re-exports) — **stub-converged** via `nextpas.core.system.classes.impl` (no `uses Classes`, `bytes.ops` single source, `inline`/zero-copy, `Destroy`/`Close` resource release). Narrow, stream/container-owned subset, not full `Classes` sprawl.
 - Deferred does not mean "undefined"; it means the broad public unit surface is
   not live yet and is guarded by docs plus source-contract.
 - Any future broad compatibility facade still requires named consumer pressure,

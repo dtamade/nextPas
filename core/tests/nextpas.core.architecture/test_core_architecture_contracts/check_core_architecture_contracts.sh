@@ -77,6 +77,7 @@ list_pascal_uses_units() {
   ' "$1"
 }
 
+require_file "docs/core-module-registry.md"
 require_file "docs/module-registry.md"
 require_file "docs/l1-goal-tree.md"
 require_file "docs/platform/README.md"
@@ -87,18 +88,23 @@ require_file "docs/platform/runtime-truth-matrix.md"
 require_file "docs/mem/README.md"
 
 for tier in source-contract forced-compile focused-runtime; do
+  require_token "docs/core-module-registry.md" "$tier"
   require_token "docs/module-registry.md" "$tier"
   require_token "docs/l1-goal-tree.md" "$tier"
   require_token "docs/platform/master-spec.md" "$tier"
 done
 
+require_token "docs/core-module-registry.md" "ci-matrix"
 require_token "docs/module-registry.md" "ci-runtime-matrix"
 require_token "docs/l1-goal-tree.md" "ci-matrix"
 require_token "docs/platform/master-spec.md" "ci-matrix"
 
 for module_name in base errors platform mem system atomic math simd; do
+  require_token "docs/core-module-registry.md" "| \`$module_name\` |"
   require_token "docs/module-registry.md" "| \`$module_name\` |"
 done
+require_token "docs/module-registry.md" "Deprecated"
+require_token "docs/module-registry.md" "core-module-registry.md"
 
 reject_token "docs/l1-goal-tree.md" "✅ 完成"
 reject_token "docs/l1-goal-tree.md" "All tests passed"
@@ -107,6 +113,7 @@ reject_token "docs/platform-goal-tree.md" "✅"
 reject_token "docs/platform-goal-tree.md" "100% 接口测试覆盖"
 reject_token "docs/platform/goal-tree.md" "runtime ready"
 
+require_token "docs/design-conventions.md" "docs/core-module-registry.md"
 require_token "docs/design-conventions.md" "docs/module-registry.md"
 require_token "docs/platform/master-spec.md" "Readiness and completion stay split"
 require_token "docs/platform/master-spec.md" "not runtime ready"
@@ -144,6 +151,9 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"
   "src/nextpas.core.simd.linalg.gemm.parallel.pas|nextpas.core.thread.init"
   "src/nextpas.core.system.classes.pas|nextpas.core.io.intf"
+  "src/nextpas.core.system.classes.pas|nextpas.core.io.base"
+  "src/nextpas.core.system.classes.impl.pas|nextpas.core.bytes.ops"
+  "src/nextpas.core.system.classes.impl.pas|nextpas.core.io.base"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.compare"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.conv"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.format"
@@ -151,6 +161,17 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.system.sysutils.pas|nextpas.core.path"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.time"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.fs"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.bytes.ops"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.fs.util"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.os.env"
+  "src/nextpas.core.system.pas|nextpas.core.bytes.ops"
+  "src/nextpas.core.system.pas|nextpas.core.base.utils"
+  "src/nextpas.core.system.pas|nextpas.core.text.conv"
+  "src/nextpas.core.system.typinfo.pas|nextpas.core.text.conv"
+  "src/nextpas.core.math.base.pas|nextpas.core.text.conv"
+  "src/nextpas.core.simd.imageproc.base.pas|nextpas.core.image.base"
+  "src/nextpas.core.simd.imageproc.impl.pas|nextpas.core.bytes.binary"
+  "src/nextpas.core.simd.imageproc.impl.pas|nextpas.core.image.base"
 )
 
 RAW_HOST_UNITS=(
@@ -163,13 +184,10 @@ RAW_HOST_UNITS=(
 
 RAW_HOST_ALLOWLIST=(
   "src/nextpas.core.fs.util.pas|BaseUnix"
-  "src/nextpas.core.numa.linux.pas|BaseUnix"
-  "src/nextpas.core.numa.windows.pas|Windows"
   "src/nextpas.core.git.libgit2.backend.pas|ctypes"
   "src/nextpas.core.git.libgit2.binding.pas|ctypes"
   "src/nextpas.core.git.libgit2.binding.pas|Dynlibs"
   "src/nextpas.core.git.libgit2.ffi.pas|ctypes"
-  "src/nextpas.core.io.uring.pas|BaseUnix"
   "src/nextpas.core.mem.allocator.mimalloc.pas|dynlibs"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|BaseUnix"
   "src/nextpas.core.simd.cpuinfo.darwin.pas|ctypes"

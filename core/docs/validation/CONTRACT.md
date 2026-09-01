@@ -146,4 +146,4 @@ make focused FOCUS=core/tests/nextpas.core.validation/test_validation
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始实现：fluent `TValidator` + `TValidationResult` | validation lane |
-| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/validation/`（README+CONTRACT），对齐 `module-registry` L2 `validation`，零 SysUtils 证据 | core-docs |
+| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/validation/`（README+CONTRACT），对齐 `core-module-registry` L2 `validation`（`module-registry` deprecated alias），零 SysUtils 证据 | core-docs |

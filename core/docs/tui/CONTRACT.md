@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tui*.pas`（81 个源文件）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.31
+**最后更新**：2026-09-02
+**版本**：1.32（新增 §1.4 六域四件套候选表，对齐 http CONTRACT.md:51-60）
 
 ---
 
@@ -106,6 +106,21 @@ end;
 | `nextpas.core.tui` | 8 | 终端正确性最小闭包 |
 | `nextpas.core.tui.ext` | 1 | 稳定 app/runtime 编排 |
 | `nextpas.core.tui.full` | 30+ | 完整 widget 目录 |
+
+### 1.4 业务域拆分与可抽新模块候选表（对齐 http 六域四件套）
+
+> 单一 CONTRACT 已按本节六域兑现/候选四件套拆分指引；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 tui 只依赖 L0–L2，不依赖 tls/net/http）、`bytes.ops` 单源复用（cell/width/ANSI 单源）、热点 `inline` + 零拷贝视图、资源释放（Buffer/Terminal/Allocator Destroy + heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。明细以薄域契约为准，主文档聚焦索引-锚点，消双重维护。
+
+| 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套候选/已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
+|--------|-------------------|-------------------------------|--------------|--------------------------------|
+| **渲染模型 / 缓冲** | §1.1 Text/layout/render model + §5 内存管理 + §5.1–5.6 Capability | `nextpas.core.tui.buffer`（`buffer.base`/`buffer.intf`/`buffer` 门面，已落地；`cell`/`style`/`text` 聚合） | L3 tui（依赖 `text.width` + `bytes.ops` 单源） | 零拷贝 `TByteSpan` cell 视图；热点 `inline` dirty row bitmask/width 计算；`Destroy`/`Resize` 配对 `FreeMem` + `IAllocator` 生命周期不丢；详 `buffer.md` |
+| **布局引擎** | §1.1 layout + §6.1 Scorecard SC18/SC22 | `nextpas.core.tui.layout`（`layout.base`/`layout.intf`/`layout` 门面，已落地；聚合 `layout` + `layout.grid` + `frame_budget`） | L3 tui | 复用 `bytes.ops` 单源（约束计算不复制）；`inline` Flex/Grid 约束求解；布局无资源悬垂；详 `layout.md` |
+| **基础 Widget** | §1.2 IWidget/Stateful + §1.3 core 8 控件 | `nextpas.core.tui.widget`（`widget.base`/`widget.intf`/`widget` 门面，已落地；`block/paragraph/list/table/tabs/...`） | L3 tui | 零拷贝 `TRect` 视图裁剪；`inline` RenderStateful 分发；接口 refcount 自动释放；详 `widget.md` |
+| **扩展 Widget / App 编排** | §1.3 ext/full 分层 + §4 线程安全 | `nextpas.core.tui.ext`（`ext.base`/`ext.intf`/`ext` 门面，已落地；聚合 `panel/scrollview/modal/dialog/split/select` + `app`/`screen`/`task`） | L3 tui（依赖 `sync` + `thread.pool`） | 复用 `bytes.ops` 单源；`inline` focus/keybind 判定；`TApp.Destroy` + `TTaskManager` 同步收尾不留线程；详 `ext.md` |
+| **终端 / 后端 / 输入** | §1.1 Terminal/runtime truth + §5.1–5.6 DECSET + §4 线程安全 | `nextpas.core.tui.terminal`（`terminal.base`/`terminal.intf`/`terminal` 门面；聚合 `terminal` + `backend.ansi` + `input` + `ansi.parse`） | L3 tui（`platform.console/signal/time` owner 反哺） | 复用 `bytes.ops` 单源（ANSI 转义 `Encode` 零分配）；`inline` capability 协商判定；`EnterTui`/`LeaveTui` 配对 DECSET 释放 + `heaptrc 0`；详 `terminal.md` |
+| **画布 / 图像协议** | §1.1 canvas + image_cap + clipboard | `nextpas.core.tui.canvas`（`canvas.base`/`canvas.intf`/`canvas` 门面，已落地；聚合 `canvas.raster/view/edit/export/docstore` + `image_cap` + `clipboard`） | L3 tui.experimental（opt-in 波动面） | 零拷贝 `TByteSpan` 像素视图；`inline` raster 命中判定；`IAllocator` 下传 buffer 不丢；详 `canvas.md` |
+
+*抽取纪律*：1) 行为冻结（focused 双绿 + scorecard SC1–SC30 + heaptrc 0 unfreed）；2) 不复制 `bytes.ops`/`text.width`，复用单源；3) 公开面保持 `IWidget`/`TTerminal`/`TApp` 稳定；4) 四件套内 `base←intf←impl←门面` 方向；5) 跨模块先 `Needs Review`。缺能力先反哺 `text.width`/`bytes.ops`/`platform.console`/`sync` 等 owner。
 
 ---
 
@@ -275,3 +290,4 @@ end;
 | 2026-07-11 | 1.1 | 全面重写：对齐实际实现，修正接口签名、控件列表、不变量 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-08-31 | 1.31 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
+| 2026-09-02 | 1.32 | 拆分优雅度：补 §1.4 六域可抽新模块候选表（buffer/layout/widget/ext/terminal/canvas），四件套 base/intf/门面+L3+bytes.ops单源+inline/零拷贝+资源释放不丢，缺能力先反哺 text.width/bytes.ops/platform/sync，对齐 http 六域抽取表 | Grok |

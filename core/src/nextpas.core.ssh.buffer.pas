@@ -36,11 +36,11 @@ type
     function Count: SizeUInt;
     function ToBytes: TBytes;
 
-    procedure PutByte(AValue: Byte);
-    procedure PutBoolean(AValue: Boolean);
-    procedure PutUInt32(AValue: UInt32);
-    procedure PutUInt64(AValue: UInt64);
-    procedure PutStringBytes(const AValue: TBytes);
+    procedure PutByte(AValue: Byte); inline;
+    procedure PutBoolean(AValue: Boolean); inline;
+    procedure PutUInt32(AValue: UInt32); inline;
+    procedure PutUInt64(AValue: UInt64); inline;
+    procedure PutStringBytes(const AValue: TBytes); inline;
     procedure PutStringText(const AText: string);
     { 无符号大端 magnitude → RFC 4251 mpint（补符号位前导零；0 编码为空串）}
     procedure PutMPInt(const AMagnitude: TBytes);
@@ -75,31 +75,21 @@ type
     function ReadNameList: TStringArray;
   end;
 
-function SshTextFromBytes(const ABytes: TBytes): string;
-function SshBytesFromText(const AText: string): TBytes;
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
+function SshBytesFromText(const AText: string): TBytes; inline;
 
 implementation
 
-uses
-  nextpas.core.mem.utils;
-
-function SshTextFromBytes(const ABytes: TBytes): string;
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], PByte(PChar(Result))^, Length(ABytes));
+  // single source bytes.ops — zero-copy single SetLength+Move via BytesToString
+  Result := BytesToString(ABytes);
 end;
 
-function SshBytesFromText(const AText: string): TBytes;
-var
-  LLen: SizeUInt;
+function SshBytesFromText(const AText: string): TBytes; inline;
 begin
-  Result := nil;
-  LLen := SizeUInt(Length(AText));
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(PByte(PChar(AText))^, Result[0], LLen);
+  // single source bytes.ops — zero-copy single SetLength+Move via StringToBytes
+  Result := StringToBytes(AText);
 end;
 
 { TsshWriter }
@@ -152,19 +142,19 @@ begin
     Move(FBuf[0], Result[0], FLen);
 end;
 
-procedure TsshWriter.PutByte(AValue: Byte);
+procedure TsshWriter.PutByte(AValue: Byte); inline;
 begin
   Ensure(1);
   FBuf[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TsshWriter.PutBoolean(AValue: Boolean);
+procedure TsshWriter.PutBoolean(AValue: Boolean); inline;
 begin
   PutByte(Ord(AValue));
 end;
 
-procedure TsshWriter.PutUInt32(AValue: UInt32);
+procedure TsshWriter.PutUInt32(AValue: UInt32); inline;
 begin
   Ensure(4);
   FBuf[FLen] := Byte(AValue shr 24);
@@ -174,7 +164,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TsshWriter.PutStringBytes(const AValue: TBytes);
+procedure TsshWriter.PutStringBytes(const AValue: TBytes); inline;
 begin
   PutUInt32(UInt32(Length(AValue)));
   PutRaw(AValue);
@@ -215,8 +205,7 @@ end;
 procedure TsshWriter.PutNameList(const ANames: array of string);
 var
   I: SizeInt;
-  LTotal, LPos: SizeInt;
-  LJoined: string;
+  LTotal: SizeUInt;
 begin
   if Length(ANames) = 0 then
   begin
@@ -228,28 +217,35 @@ begin
     PutStringText(ANames[0]);
     Exit;
   end;
+  // perf: single-pass LTotal + UTF-8 guard, then single Ensure + direct zero-copy Move into FBuf (no LJoined temp, no double Move)
+  // single source bytes.ops style Move (PAnsiChar deref) — unified with SshTextFromBytes/SshBytesFromText via BytesToString/StringToBytes
   LTotal := 0;
   for I := 0 to High(ANames) do
-    Inc(LTotal, Length(ANames[I]));
-  Inc(LTotal, High(ANames));
-  SetLength(LJoined, LTotal);
-  LPos := 1;
+  begin
+    if (Length(ANames[I]) > 0) and (not UTF8IsValid(PByte(PChar(ANames[I])), SizeUInt(Length(ANames[I])))) then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: PutNameList requires UTF-8');
+    Inc(LTotal, SizeUInt(Length(ANames[I])));
+  end;
+  Inc(LTotal, SizeUInt(High(ANames))); // commas
+  PutUInt32(UInt32(LTotal));
+  if LTotal = 0 then
+    Exit;
+  Ensure(LTotal);
   if Length(ANames[0]) > 0 then
   begin
-    CopyNonOverlap(@ANames[0][1], @LJoined[LPos], SizeUInt(Length(ANames[0])));
-    Inc(LPos, Length(ANames[0]));
+    Move(PByte(PChar(ANames[0]))^, FBuf[FLen], Length(ANames[0]));
+    Inc(FLen, SizeUInt(Length(ANames[0])));
   end;
   for I := 1 to High(ANames) do
   begin
-    LJoined[LPos] := ',';
-    Inc(LPos);
+    FBuf[FLen] := Byte(',');
+    Inc(FLen);
     if Length(ANames[I]) > 0 then
     begin
-      CopyNonOverlap(@ANames[I][1], @LJoined[LPos], SizeUInt(Length(ANames[I])));
-      Inc(LPos, Length(ANames[I]));
+      Move(PByte(PChar(ANames[I]))^, FBuf[FLen], Length(ANames[I]));
+      Inc(FLen, SizeUInt(Length(ANames[I])));
     end;
   end;
-  PutStringText(LJoined);
 end;
 
 procedure TsshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
@@ -333,7 +329,7 @@ begin
   Inc(FPos, 4);
 end;
 
-procedure TsshWriter.PutUInt64(AValue: UInt64);
+procedure TsshWriter.PutUInt64(AValue: UInt64); inline;
 begin
   PutUInt32(UInt32(AValue shr 32));
   PutUInt32(UInt32(AValue and $FFFFFFFF));
