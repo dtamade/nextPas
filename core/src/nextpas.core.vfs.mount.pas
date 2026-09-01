@@ -33,18 +33,22 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.collections.algorithms;
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
+  TStrVfsMap = specialize TSwissTableStr<IVfs>;
   TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FMounts: TVfsMountArray;
+    FMountMap: TStrVfsMap; { O(1) exact-hit 索引：IsMountPoint/FindMount 热路径单源哈希，零线性扫描 }
     FHasRoot: Boolean;
     FRootFs: IVfs;
     function FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
     function IsMountPoint(const APath: string): Boolean; inline;
   public
     constructor Create(const AMounts: array of TVfsMountEntry);
+    destructor Destroy; override;
     function Exists(const APath: string): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
@@ -127,21 +131,29 @@ begin
       FRootFs := FMounts[I].Fs;
       Break;
     end;
-end;
-
-function TMountedVfs.IsMountPoint(const APath: string): Boolean;
-var
-  I: Integer;
-begin
+  // 构建哈希索引 O(n)：FindMount/IsMountPoint 热路径 O(1)/O(depth) 单源 SwissTable，零线性扫描
+  FMountMap := TStrVfsMap.Create(Length(FMounts));
   for I := 0 to High(FMounts) do
-    if FMounts[I].Prefix = APath then Exit(True);
-  Result := False;
+    FMountMap.Put(FMounts[I].Prefix, FMounts[I].Fs);
 end;
 
-function TMountedVfs.FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean;
+destructor TMountedVfs.Destroy;
+begin
+  if Assigned(FMountMap) then FMountMap.Free;
+  inherited Destroy;
+end;
+
+function TMountedVfs.IsMountPoint(const APath: string): Boolean; inline;
+begin
+  // O(1) 哈希命中：SwissTable 单源哈希，inline 热路径零线性扫描
+  Result := FMountMap.ContainsKey(APath);
+end;
+
+function TMountedVfs.FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
 var
-  I: Integer;
-  Pre: string;
+  FoundFs: IVfs;
+  LPos: Integer;
+  Candidate: string;
 begin
   if VfsIsRoot(APath) then
   begin
@@ -150,23 +162,39 @@ begin
     AFs := nil;
     Exit(False);
   end;
-  for I := 0 to High(FMounts) do
+  // O(1) exact-hit 哈希
+  if FMountMap.TryGetValue(APath, FoundFs) then
   begin
-    Pre := FMounts[I].Prefix;
-    if VfsIsRoot(Pre) then Continue;
-    if APath = Pre then
+    if VfsIsRoot(APath) then
     begin
       ARemain := '.';
-      AFs := FMounts[I].Fs;
-      Exit(True);
+      AFs := nil;
+      Exit(False);
     end;
-    // 零拷贝前缀判定：复用 vfs.base 单源 VfsIsParentPath（CompareMem 零分配）
-    if VfsIsParentPath(Pre, APath) then
+    ARemain := '.';
+    AFs := FoundFs;
+    Exit(True);
+  end;
+  // O(depth) 前缀剥离哈希：按 '/' 边界逐段回退，深 ≤ 路径段数 << 挂载数，零 VfsIsParentPath 线性扫描
+  // 单源 VfsIsParentPath 语义由剥离保证（仅段边界候选），Copy 仅在命中时一次零拷贝搬运尾段
+  LPos := Length(APath);
+  while LPos > 0 do
+  begin
+    while (LPos > 0) and (APath[LPos] <> '/') do Dec(LPos);
+    if LPos <= 0 then Break;
+    Candidate := Copy(APath, 1, LPos - 1);
+    if FMountMap.TryGetValue(Candidate, FoundFs) then
     begin
-      ARemain := Copy(APath, Length(Pre) + 2, MaxInt);
-      AFs := FMounts[I].Fs;
+      if VfsIsRoot(Candidate) then
+      begin
+        Dec(LPos);
+        Continue;
+      end;
+      ARemain := Copy(APath, LPos + 1, MaxInt); { LPos='/', 等价 Copy(APath, Length(Candidate)+2) 零拷贝 Move }
+      AFs := FoundFs;
       Exit(True);
     end;
+    Dec(LPos);
   end;
   // 尝试根挂载兜底
   if FHasRoot then
@@ -283,9 +311,8 @@ begin
   end;
   if IsMountPoint(ADirPath) then
   begin
-    for I := 0 to High(FMounts) do
-      if FMounts[I].Prefix = ADirPath then
-        Exit(FMounts[I].Fs.List('.'));
+    if FMountMap.TryGetValue(ADirPath, Fs) then
+      Exit(Fs.List('.'));
   end;
   if FindMount(ADirPath, Rem, Fs) then
     Exit(Fs.List(Rem));

@@ -99,7 +99,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `toml` | L2 | TOML parser/writer | yes | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L3 | validation helpers | yes | L0-L2 | draft |
-| `vfs` | L2 | read-only virtual filesystem (`nextpas.core.vfs.*`, memtree/embedded/os/sub/mount/overlay + transform/compressed L3 单缝装饰器寄居，13 units + facade) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite; transform/compressed: L3 单缝装饰器寄居 L2 家族（Registry 单缝白名单过渡，长期待 L3 族聚合拆分，单源决策器单流 4K HeaderPred + GZIP_MAX 32MiB via compress.base + bytes.ops 零拷贝单源） | focused-runtime |
+| `vfs` | L2 | read-only virtual filesystem (`nextpas.core.vfs.*`, memtree/embedded/os/sub/mount/overlay + transform/compressed L3 单缝装饰器寄居，13 units + facade) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite; transform/compressed: L3 单缝装饰器寄居 L2 家族（Registry 单缝白名单过渡，长期聚合为 nextpas.core.vfs.decorator 独立 L3 族到期移除白名单，单源决策器单流 4K HeaderPred + GZIP_MAX 32MiB via compress.base + bytes.ops 零拷贝单源） | focused-runtime |
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |
 | `window` | L2 | window shell + surface (nextpas.core.window family; first consumer webview/gpu/directui/game888; 1.0 单源收口含 gtk3 Raw) | yes | L0-L1 plus platform.dl seam, plus one-way L2 `gtk2/gtk3/gtk4/qt5pas/qt` | ci-matrix (Linux 13门 runtime + Win/mac compile-only，残差诚实，见 window/FINAL_ROADMAP F3) |

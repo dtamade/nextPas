@@ -79,6 +79,10 @@ procedure VfsDedupSortedEntries(var AItems: TEntryArray);
   零小堆分配（embedded 零拷贝已收敛，base 基础实现同构 Early-Break）。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
+{ 零拷贝 Span 版本：ASpans 已为有序 TByteSpan（直指 FRp/字符串存储），ADirPrefix 同上；
+  与 string 版同模板单源，embedded 零拷贝路径直接复用，无额外 string 落地与并行 Move 维护 }
+function VfsDeriveChildNamesFromSpans(const ASpans: array of TByteSpan;
+  const ADirPrefix: string): TVfsNameArray;
 
 implementation
 
@@ -185,23 +189,26 @@ begin
   SetLength(AItems, L);
 end;
 
-function VfsDeriveChildNames(const ASortedPaths: array of string;
+function VfsDeriveChildNamesFromSpans(const ASpans: array of TByteSpan;
   const ADirPrefix: string): TVfsNameArray;
 var
-  N, OutN, PrefixLen, PathLen, SegPos, J: SizeInt;
+  N, OutN, PrefixLen, SegPos, J: SizeInt;
   Lo, Hi, Mid: SizeInt;
   I: SizeInt;
   Cap: SizeInt;
   ChildSpan, PrevSpan: TByteSpan;
   NeedAdd: Boolean;
+  PrefixSpan: TByteSpan;
 begin
   Result := nil;
-  N := Length(ASortedPaths);
+  N := Length(ASpans);
   if N = 0 then Exit;
   PrefixLen := Length(ADirPrefix);
-  { 单源扫描模板：LowerBound+SpanStartsWith+Early-Break 零拷贝，有序区间 O(log n+k)
-    扇出限界分配（初值 16 倍增，Cap≤N-Lo）消除大目录 Hi-Lo 重分配；SpanEqual 去重零分配
-    inline 热路径由 memtree/embedded 复用，此为单一事实源 }
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
+  else
+    PrefixSpan := TByteSpan.Empty;
+  // 单源模板：LowerBound+SpanStartsWith+Early-Break 零拷贝，扇出限界 16 倍增，Cap≤N-Lo；bytes.ops 单源 inline 热路径
   Lo := 0;
   Hi := N;
   if PrefixLen > 0 then
@@ -209,7 +216,7 @@ begin
     while Lo < Hi do
     begin
       Mid := Lo + (Hi - Lo) div 2;
-      if VfsNameCompare(ASortedPaths[Mid], ADirPrefix) < 0 then
+      if SpanCompare(ASpans[Mid], PrefixSpan) < 0 then
         Lo := Mid + 1
       else
         Hi := Mid;
@@ -219,28 +226,23 @@ begin
   OutN := 0;
   for I := Lo to N - 1 do
   begin
-    PathLen := Length(ASortedPaths[I]);
-    if PathLen <= PrefixLen then Continue;
+    if SizeInt(ASpans[I].Len) <= PrefixLen then Continue;
     if PrefixLen > 0 then
     begin
-      if not VfsPathHasPrefix(ASortedPaths[I], ADirPrefix) then
+      if not SpanStartsWith(ASpans[I], PrefixSpan) then
         Break;
     end;
-    { 尾段 '/' 扫描零分配：直接在原串后缀区间线性扫描，省去 Tail:=Copy 的每项堆分配 }
     SegPos := 0;
-    for J := PrefixLen + 1 to PathLen do
-      if ASortedPaths[I][J] = '/' then
+    for J := PrefixLen to SizeInt(ASpans[I].Len) - 1 do
+      if ASpans[I].Data[J] = Ord('/') then
       begin
-        SegPos := J;
+        SegPos := J + 1;
         Break;
       end;
-    // 零拷贝 Child 视图：TByteSpan 直指原串存储，去重经 SpanEqual 零分配，仅唯一子项时 Move 物化（零 Copy 分配）
     if SegPos > 0 then
-      ChildSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(SegPos - 1))
+      ChildSpan := TByteSpan.Create(ASpans[I].Data, SizeUInt(SegPos - 1))
     else
-    begin
-      if PathLen = 0 then ChildSpan := TByteSpan.Empty else ChildSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(PathLen));
-    end;
+      ChildSpan := ASpans[I];
     if OutN = 0 then
       NeedAdd := True
     else
@@ -258,7 +260,6 @@ begin
         if Cap > N - Lo then Cap := N - Lo;
         SetLength(Result, Cap);
       end;
-      // 零拷贝物化：SetLength+Move 直落 ChildSpan 视图，消除 Copy 的每项堆分配与隐式字符拷贝
       SetLength(Result[OutN], ChildSpan.Len);
       if ChildSpan.Len > 0 then
         Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
@@ -266,6 +267,21 @@ begin
     end;
   end;
   SetLength(Result, OutN);
+end;
+
+function VfsDeriveChildNames(const ASortedPaths: array of string;
+  const ADirPrefix: string): TVfsNameArray;
+var
+  Spans: array of TByteSpan;
+  I: SizeInt;
+begin
+  // 单源收敛：string 版薄封装转 Span 版，Move/Span 逻辑仅一处维护（FromSpans）
+  if Length(ASortedPaths) = 0 then Exit(nil);
+  SetLength(Spans, Length(ASortedPaths));
+  for I := 0 to High(ASortedPaths) do
+    if Length(ASortedPaths[I]) = 0 then Spans[I] := TByteSpan.Empty
+    else Spans[I] := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(Length(ASortedPaths[I])));
+  Result := VfsDeriveChildNamesFromSpans(Spans, ADirPrefix);
 end;
 
 end.

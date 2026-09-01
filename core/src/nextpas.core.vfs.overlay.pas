@@ -22,16 +22,26 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.collections.algorithms;
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.hashmap,
+  nextpas.core.sync;
+
+type
+  TOverlayIndex = specialize THashMap<string, Integer>;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
+    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；SpinLock守并发，inline热路径，零拷贝 SpanCompare 单源 }
+    FIndexLock: ISpinLock;
+    function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
+    procedure CacheResult(const APath: string; const AIdx: Integer); inline;
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
+    destructor Destroy; override;
     function Exists(const APath: string): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
@@ -61,25 +71,85 @@ begin
       raise EVfsError.CreateCtx('overlay', '', 'overlay fs must not be nil');
     FList[I] := AList[I];
   end;
+  FIndex := TOverlayIndex.Create(16);
+  FIndexLock := SpinLock;
 end;
 
-{ 单次探测首命中：按优先级依次 Stat，首成功即胜出；EVfsNotFound 继续下层，
-  EVfsInvalidPath 透传；零二次 Exists 二分，inline 热路径 }
+destructor TOverlayVfs.Destroy;
+begin
+  if FIndex <> nil then
+  begin
+    TOverlayIndex(FIndex).Free;
+    FIndex := nil;
+  end;
+  FIndexLock := nil;
+  SetLength(FList, 0);
+  inherited Destroy;
+end;
+
+function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
+begin
+  AIdx := -2;
+  Result := False;
+  if (FIndex = nil) or (FIndexLock = nil) then Exit;
+  FIndexLock.Acquire;
+  try
+    Result := TOverlayIndex(FIndex).TryGetValue(APath, AIdx);
+  finally
+    FIndexLock.Release;
+  end;
+end;
+
+procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer); inline;
+begin
+  if (FIndex = nil) or (FIndexLock = nil) then Exit;
+  FIndexLock.Acquire;
+  try
+    TOverlayIndex(FIndex).AddOrAssign(APath, AIdx);
+  finally
+    FIndexLock.Release;
+  end;
+end;
+
+{ 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
+  命中层单次 Stat 直达（零二次二分），SpinLock零分配，inline热路径，bytes.ops零拷贝单源 }
 function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
 var
-  I: Integer;
+  I, LCached: Integer;
 begin
+  if TryGetCached(APath, LCached) then
+  begin
+    if LCached = -1 then begin AFs := nil; Exit(False); end;
+    if (LCached >= 0) and (LCached <= High(FList)) then
+    begin
+      try
+        AInfo := FList[LCached].Stat(APath);
+        AFs := FList[LCached];
+        Exit(True);
+      except
+        on E: EVfsNotFound do
+        begin
+          CacheResult(APath, -1);
+          AFs := nil;
+          Exit(False);
+        end;
+        on E: EVfsInvalidPath do raise;
+      end;
+    end;
+  end;
   for I := 0 to High(FList) do
   begin
     try
       AInfo := FList[I].Stat(APath);
       AFs := FList[I];
+      CacheResult(APath, I);
       Exit(True);
     except
       on E: EVfsNotFound do Continue;
       on E: EVfsInvalidPath do raise;
     end;
   end;
+  CacheResult(APath, -1);
   AFs := nil;
   Result := False;
 end;

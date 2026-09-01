@@ -1,7 +1,7 @@
 # nextpas.core.vfs 代码契约
 
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3单缝装饰器 + 门面）
-**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期随 L3 族聚合拆分，现阶段以单缝+文档正名守层级高级感统一性）
+**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期聚合为独立 L3 族 nextpas.core.vfs.decorator 到期移除白名单固化跨层依赖，现阶段以单缝+文档正名守层级高级感统一性）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
 **版本**：1.5（匠心修复：transform 单流复用+单源决策器+ L3 单缝正名，13门闭环保）
