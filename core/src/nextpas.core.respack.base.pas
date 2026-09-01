@@ -12,6 +12,7 @@ unit nextpas.core.respack.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception;
 
 const
@@ -143,6 +144,10 @@ function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inli
   ResPackFnv1a32 单源转发，零拷贝视图经 bytes.pathvalid。 }
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
+{ 零拷贝视图版：10k 条目校验零堆分配，单源复用 bytes.pathvalid.BytesValidSpan，
+  inline 薄转发零额外拷贝；与 ResPackValidPath 同语义，AFileEntry=True 拒绝 '.' }
+function ResPackValidSpan(const ASpan: TByteSpan;
+  const AFileEntry: Boolean): Boolean; inline;
 
 { 路径字节比较单源：writer/reader 共用，零拷贝 SpanCompare 转发，inline 零开销，owner bytes.ops }
 function ResPackCmpPath(const PA: PByte; const LA: SizeUInt; const PB: PByte; const LB: SizeUInt): Integer; inline;
@@ -155,7 +160,6 @@ procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;
 implementation
 
 uses
-  nextpas.core.base,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
@@ -208,6 +212,12 @@ function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
 begin
   Result := BytesValidPath(APath, not AFileEntry);
+end;
+
+function ResPackValidSpan(const ASpan: TByteSpan;
+  const AFileEntry: Boolean): Boolean; inline;
+begin
+  Result := BytesValidSpan(ASpan, not AFileEntry);
 end;
 
 function ResPackDefaultOptions: TResPackBuildOptions;

@@ -1,13 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。本单元是 respack 唯一允许的 L2→L2 IO seam
-  （registry 明示：fs + io.mapped/mmap 零拷贝 via mem.memory_map owner，
-  source-contract 门禁同 vfs.os 范式）；另复用 L1 nextpas.core.path.PathStripPrefix/
-  PathToSlash/ExcludeTrailingPathDelimiter 单源做 Windows 分隔符归一与前缀剥离/尾斜杠归一、
-  nextpas.core.bytes.ops BytesCopy/BytesZero 单源做零拷贝（Move/Fill 单源，inline 直达）。策略：
-  仅收 ftRegular 文件；symlink 一律跳过；相对路径 '/' 分隔（Windows 宿主归一
-  经 PathStripPrefix 单源，消除手写 Copy/while/StringReplace/$IFDEF 分叉；流式mmap
-  已反哺至本单元 via nextpas.core.io.mapped/MemoryMap owner，见 ResPackBuildStreamFromDir）。 }
+{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped/mmap via mem.memory_map）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -35,25 +28,17 @@ type
 
 { 枚举目录树为打包条目。超过 RESPACK_MAX_INPUT_BYTES raise EResPackTooLarge；
   遍历错误 raise EResPackDirSourceFailed。
-  @deprecated 小包便捷（< few MB / <1k 文件）兼容保留；大包/万文件/512MB 场景
-  请优先 ResPackBuildStreamFromDir / ResPackBuildFromDir 流式mmap 管线
-  （MmapOpen 零拷贝，峰值 ~1×+头 vs 本函数 TBytes 全量锚点 2×+头）— Stream 为
-  统一抽象，本函数为薄转发兼容，详见热路径注释与 CONTRACT INV-R10。 }
+  @deprecated 小包便捷保留；大包请优先 ResPackBuildStreamFromDir 流式mmap 管线。 }
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap 1x+head); this 2x peak path kept for < few MB convenience';
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap)';
 
-{ 流式mmap：目录 → 流式两遍分段零双驻留打包，峰值 ~1×+头。
-  遍历期以 nextpas.core.io.mapped MmapOpen 零拷贝视图供给 Entries[].Data，
-  映射生命期由本函数持有至 AWrite 回调完成（接口引用托管，try..finally 释放不丢），
-  零 TBytes 全量锚点驻留；writer.stream 复用同布局以达 ~1×+头，零额外 Total 缓冲。
-  万文件/512MB 场景堆压力由 ~2×+14MB 降至 ~1×+头（parity: FPC ~1050MiB → ~520MiB）。
-  成功后 AWrite 按序收到确定性 blob 流；失败按受控 EResPackDirSourceFailed。 }
+{ 流式mmap：目录 → 流式两遍分段零双驻留打包。MmapOpen 零拷贝，映射生命期至
+  AWrite 完成，try..finally 释放不丢。 }
 procedure ResPackBuildStreamFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
   const AInclude: TResPackIncludeFunc = nil);
 
-{ 目录 → 内存 blob 便捷：流式mmap 版 ResPackBuildFromDir，复用 ResPackBuildStreamFromDir
-  的 1×+头管线，仅最终 GetMem(Total) 一次成块；与 ResPackBuild 同确定性。 }
+{ 目录 → 内存 blob 便捷：流式mmap 版，复用 ResPackBuildStreamFromDir 管线。 }
 function ResPackBuildFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions;
   const AInclude: TResPackIncludeFunc = nil): TResPackBlob;
@@ -150,10 +135,13 @@ begin
   Result := True;
 end;
 
-{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝 }
+{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝，回绕防护 TryMulSizeUInt }
 function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
+var LDoubled: SizeUInt;
 begin
-  Result := ACap * 2;
+  if not TryMulSizeUInt(ACap, 2, LDoubled) then
+    LDoubled := High(SizeUInt);
+  Result := LDoubled;
   if Result < 8 then Result := 8;
   if Result < ANeeded then Result := ANeeded;
 end;
@@ -169,6 +157,30 @@ begin
 end;
 
 procedure EnsureStreamCapacity(var Ctx: TStreamContext; const ANeeded: SizeUInt); inline;
+var NewCap: SizeUInt;
+begin
+  if Ctx.Count < Ctx.Cap then Exit;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
+  SetLength(Ctx.Entries, NewCap);
+  SetLength(Ctx.Maps, NewCap);
+  Ctx.Cap := NewCap;
+end;
+
+type
+  PEmbedStreamContext = ^TEmbedStreamContext;
+  TEmbedStreamContext = record
+    Root: string;
+    EmbedOpts: TResPackEmbedOptions;
+    Entries: TResPackInputArray;
+    Maps: array of IMappedFile;
+    Count: SizeUInt;
+    Cap: SizeUInt;
+    Total: SizeUInt;
+    Failed: Boolean;
+    FailMsg: string;
+  end;
+
+procedure EnsureEmbedCapacity(var Ctx: TEmbedStreamContext; const ANeeded: SizeUInt); inline;
 var NewCap: SizeUInt;
 begin
   if Ctx.Count < Ctx.Cap then Exit;
@@ -620,13 +632,88 @@ begin
   Result := True;
 end;
 
+{ 嵌入专用 mmap Walk：复用 MapAndFilter/GlobMatch 单源，零 TBytes 锚点，峰值 ~1×+头 }
+function WalkProcEmbedStream(const APath: string; const AInfo: TFileInfo;
+  const AErr: Exception; AUserData: Pointer): Boolean;
+var
+  Ctx: PEmbedStreamContext;
+  Rel, Mapped: string;
+  Idx: SizeUInt;
+  St: TFileInfo;
+  LSum: SizeUInt;
+  LMap: IMappedFile;
+begin
+  Result := True;
+  Ctx := PEmbedStreamContext(AUserData);
+  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  if AInfo.FileType <> ftRegular then Exit(True);
+  Rel := RelativizePath(Ctx^.Root, APath);
+  try
+    if not MapAndFilter(Ctx^.EmbedOpts, Rel, Mapped) then Exit(True);
+  except
+    on E: Exception do
+    begin
+      WalkFail(Ctx^.Failed, Ctx^.FailMsg, E.Message);
+      Exit(False);
+    end;
+  end;
+  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  Idx := Ctx^.Count;
+  EnsureEmbedCapacity(Ctx^, Idx + 1);
+  try
+    if St.Size = 0 then
+      LMap := nil
+    else
+    begin
+      LMap := MmapOpen(APath);
+      if (LMap = nil) or (LMap.Size = 0) or (LMap.Data = nil) then
+      begin
+        if St.Size <> 0 then
+        begin
+          Ctx^.Failed := True;
+          Ctx^.FailMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
+          Exit(False);
+        end;
+        LMap := nil;
+      end
+      else if SizeUInt(LMap.Size) <> SizeUInt(St.Size) then
+      begin
+        Ctx^.Failed := True;
+        Ctx^.FailMsg := 'mmap size mismatch: stat=' + IntToStr(St.Size) + ' cmap=' + IntToStr(LMap.Size) + ' (path=' + APath + ')';
+        Exit(False);
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      Ctx^.Failed := True;
+      Ctx^.FailMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
+      Exit(False);
+    end;
+  end;
+  Ctx^.Maps[Idx] := LMap;
+  Ctx^.Entries[Idx].Path := Mapped;
+  if LMap <> nil then
+  begin
+    Ctx^.Entries[Idx].Data := LMap.Data;
+    Ctx^.Entries[Idx].DataSize := SizeUInt(LMap.Size);
+  end
+  else
+  begin
+    Ctx^.Entries[Idx].Data := nil;
+    Ctx^.Entries[Idx].DataSize := 0;
+  end;
+  Ctx^.Entries[Idx].ModTime := St.ModTime div 1000000000;
+  Inc(Ctx^.Count);
+  Ctx^.Total := LSum;
+end;
+
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 var
-  Src: TResPackDirEntries;
-  Kept: TResPackInputArray;
-  I, N, KeptLen, KeptCap, NewCap: SizeUInt;
-  Mapped: string;
+  Ctx: TEmbedStreamContext;
+  RootClean: string;
 begin
   if (AOpts.StripPrefix <> '') and (not StartsSlash(AOpts.StripPrefix)) then
     raise EResPackError.Create('respack.embed: StripPrefix must be empty or ' +
@@ -636,32 +723,37 @@ begin
       'end with "/" ("' + AOpts.AddPrefix + '")');
   CheckGlobList(AOpts.IncludeGlobs, 'include');
   CheckGlobList(AOpts.ExcludeGlobs, 'exclude');
-  Src := ResPackEntriesFromDir(ASourceDir);
-  N := SizeUInt(Length(Src.Entries));
-  Kept := nil;
-  KeptLen := 0;
-  KeptCap := 0;
-  if N > 0 then
-    for I := 0 to N - 1 do
-      if MapAndFilter(AOpts, Src.Entries[I].Path, Mapped) then
-      begin
-        if KeptLen >= KeptCap then
-        begin
-          NewCap := KeptCap * 2;
-          if NewCap < 8 then NewCap := 8;
-          if NewCap < KeptLen + 1 then NewCap := KeptLen + 1;
-          SetLength(Kept, NewCap);
-          KeptCap := NewCap;
-        end;
-        Kept[KeptLen] := Src.Entries[I];
-        Kept[KeptLen].Path := Mapped;
-        Inc(KeptLen);
-      end;
-  SetLength(Kept, KeptLen);
-  if SizeUInt(Length(Kept)) = 0 then
-    raise EResPackError.Create('respack.embed: no entries matched after ' +
-      'filter/mapping (source "' + ASourceDir + '")');
-  Result := ResPackBuild(Kept, AOpts.Build);
+  RootClean := ExcludeTrailingPathDelimiter(ASourceDir);
+  if (not Exists(RootClean)) or (not IsDir(RootClean)) then
+    raise EResPackDirSourceFailed.CreateCtx('opendir', ASourceDir, 'respack.dirsource: not a directory "'
+      + ASourceDir + '"');
+  Ctx.Root := RootClean;
+  Ctx.EmbedOpts := AOpts;
+  Ctx.Entries := nil;
+  Ctx.Maps := nil;
+  Ctx.Count := 0;
+  Ctx.Cap := 0;
+  Ctx.Total := 0;
+  Ctx.Failed := False;
+  Ctx.FailMsg := '';
+  try
+    WalkEx(RootClean, @WalkProcEmbedStream, @Ctx);
+    if Ctx.Failed then
+      raise EResPackDirSourceFailed.CreateCtx('walk', ASourceDir, 'respack.dirsource: ' + Ctx.FailMsg);
+    if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
+    begin
+      SetLength(Ctx.Entries, Ctx.Count);
+      SetLength(Ctx.Maps, Ctx.Count);
+    end;
+    if Ctx.Count = 0 then
+      raise EResPackError.Create('respack.embed: no entries matched after ' +
+        'filter/mapping (source "' + ASourceDir + '")');
+    { 流式mmap 零拷贝：maps 持有视图至 Build 完成，堆峰值 ~1×+头（mmap 虚存零堆拷贝） }
+    Result := ResPackBuild(Ctx.Entries, AOpts.Build);
+  finally
+    SetLength(Ctx.Maps, 0);
+    SetLength(Ctx.Entries, 0);
+  end;
 end;
 
 end.
