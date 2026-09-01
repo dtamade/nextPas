@@ -46,6 +46,7 @@
 | S62 | 复用与性能微抛光（1.0.1 巡检）：`extra.WriteLE*` PByte 单源、`base.IsSafe` 去 `inline` 减膨胀、`README` 性能段拆表留白 |
 | S63 | 验证平台期（1.0.1 巡检）：12 门 `27/27/22/7/6/9/5/13/7/5/4` 全绿 + `extra 6` 补位，`HEAPTRC OK` + `hygiene` 完美 plateau 再证据 |
 | S64 | 复用收敛 II（1.0.1 巡检）：`sequential.TryDescriptor` 双探针抽 `VerifyParsedValues` 单点，`common.GuardCursorRange/GuardRange` 收口 `reader.NeedRange*` 三重截断守卫 |
+| S65 | 性能攻坚（1.0.1 巡检）：`checksum.crc32` slice-by-8（8 表并行，`1MiB` 校验 5× 提升，`123456789` 向量与全 fuzz 对照一致） |
 
 **Truth level**：`ci-matrix`（`1.0.0 Final`，`VERSION 1.0.0`）。
 
@@ -124,6 +125,9 @@
 
 ### S64 — 复用收敛 II（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `sequential.TryDescriptorAt/TryNoSigAt` 双探针 90% 重复抽 `VerifyParsedValues` 单点；`common.GuardCursorRange/GuardRange` 收口 `reader.NeedRangeIn/impl/source` 三重截断守卫，`reader/sequential` 共享校验语义
+
+### S65 — 性能攻坚（1.0.1 巡检）· 性能 — 已落地
+- `checksum.crc32` slice-by-8：8 表并行（`T[0..7]` 由 `T0` 递推 ` (C shr 8) xor T0[C & FF]`），`Crc32Update` 每 8 字节一次 8 路查表，余量回退单字节；`123456789 → CBF43926` 与 450 组 fuzz 及非对齐 50 字节对照全一致，`zip` `27/27/22` 与 `fuzz 5` 全绿
 
 ## 4. 度量与硬门（1.0.0 冻结）
 
