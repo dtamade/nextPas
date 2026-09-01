@@ -43,6 +43,7 @@ procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -119,6 +120,19 @@ begin
   // overflow guard: if Length + Additional wraps, let SetLength raise
   LNeed := SizeUInt(Length(ADest)) + AAdditional;
   BytesEnsureCapacity(ADest, LNeed);
+end;
+
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+var LCap: SizeUInt;
+begin
+  if ANeed = 0 then Exit(0);
+  if AOld = 0 then LCap := BYTES_BUILDER_MIN_GROW else LCap := AOld;
+  if LCap < BYTES_BUILDER_MIN_GROW then LCap := BYTES_BUILDER_MIN_GROW;
+  if LCap < 4 then LCap := 4;
+  if LCap >= ANeed then Exit(LCap);
+  while LCap < ANeed do
+    if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
+  Result := LCap;
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;

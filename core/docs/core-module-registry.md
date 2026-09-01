@@ -62,6 +62,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `json` | L2 | JSON parser/writer | yes | L0-L1 | focused-runtime |
 | `cbor` | L2 | CBOR RFC 8949 deterministic subset (definite lengths only, Int64 domain) | yes | L0-L1 | focused-runtime |
 | `jwt` | L2 | JWT RFC 7519 HS256 sign/verify (`nextpas.core.jwt`; `auth` family standalone unit) | yes | L0-L1 plus crypto/json owners | focused-runtime |
+| `js` | L2 | JS execution engine (QuickJS FFI plus pure Pascal backends `nextpas.core.js.*`) | yes | L0-L1 plus json/text/mem owners; platform.dl (loader only) | source-contract + focused-runtime |
 | `lockfree` | L1 | lock-free structures | yes | L0 plus approved L1 | focused-runtime |
 | `log` | L3 | logging runtime | yes | L0-L2; `log.intf` is L0 seam | focused-runtime |
 | `mail` | L3 | mail/SMTP domain | yes | L0-L2 | focused-runtime |

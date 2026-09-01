@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：1.0（S0 定版，随实现滚动，M3b 均值与纯族 481 行阈值550内体量同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.1（S0 定版，随实现滚动，M3b 均值与纯族 517 行阈值550内体量同步，与 CONTRACT 1.1/BENCHMARKS 1.5 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -48,7 +48,7 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 fs/thread 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 481 行阈值550内 + `js.js888/v8/chakra` 各 ~119 行（单单元 <550，阈值内，M3b/r9 均值 684ns） |
+| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 platform.thread/platform.fs 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 517 行阈值550内 + `js.js888/v8/chakra` 各 ~29 行（单单元 <550，阈值内，M3b/r9 均值 684ns） |
 | 测试 | `test_js_base`（选项/枚举/错误族）、`test_js_fake`（契约全量 40+ 用例，见 TESTING §3） |
 | 示例 | `demo_js`（`1+2`/`echo`/`JSON` 三段） |
 | 基准 | `bench_eval` 骨架（可编译，未落基线，M3b/r9 均值已刷新 684/684/684/684/SKIP 快路径） |

@@ -428,14 +428,31 @@ begin
 end;
 
 procedure TestGetSetPropNoop;
-var Ctx: IJsContext; O, V: TJsValue;
+var Ctx: IJsContext; O, O2, V: TJsValue; Keys: TJsStringArray;
 begin
   Ctx := MakeCtx;
   O := Ctx.NewObject;
   V := JsStringValue('v');
   Ctx.SetProp(O, 'k', V);
   V := Ctx.GetProp(O, 'k');
-  Check(V.IsUndefined, 'fake getprop undef');
+  Check(V.IsString and (V.AsString='v'), 'getprop v');
+  Check(Ctx.HasProp(O, 'k'), 'hasprop true');
+  Keys := Ctx.GetKeys(O);
+  Check(Length(Keys)=1, 'keys 1');
+  Check(Keys[0]='k', 'key k');
+  Check(not Ctx.HasProp(O, 'missing'), 'has false missing');
+  Ctx.SetProp(O, 'k', JsStringValue('v2'));
+  Check(Ctx.GetProp(O, 'k').AsString='v2', 'overwrite');
+  Check(Ctx.DeleteProp(O, 'k'), 'delete true');
+  Check(not Ctx.HasProp(O, 'k'), 'has after delete');
+  Check(Ctx.GetProp(O, 'k').IsUndefined, 'undef after delete');
+  Keys := Ctx.GetKeys(O);
+  Check(Length(Keys)=0, 'keys empty after delete');
+  // cross-object isolation
+  O2 := Ctx.NewObject;
+  Ctx.SetProp(O2, 'x', JsStringValue('y'));
+  Check(Ctx.GetProp(O2, 'x').AsString='y', 'o2 prop');
+  Check(not Ctx.HasProp(O, 'x'), 'o1 not polluted');
 end;
 
 procedure TestCallNoop;
