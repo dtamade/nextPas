@@ -198,6 +198,16 @@ def collect_top_level_modules(a_source_root: Path) -> set[str]:
     return l_modules
 
 
+def collect_all_module_names(a_source_root: Path) -> set[str]:
+    l_modules: set[str] = set()
+    for l_path in iter_pascal_source_files(a_source_root):
+        l_stem = l_path.stem.lower()
+        if l_stem == "nextpas.core" or not l_stem.startswith("nextpas.core."):
+            continue
+        l_modules.add(l_stem.removeprefix("nextpas.core."))
+    return l_modules
+
+
 def parse_markdown_table_rows(a_text: str, a_header_prefix: str) -> list[list[str]]:
     l_rows: list[list[str]] = []
     l_in_table = False
@@ -446,6 +456,7 @@ def check_module_registry(
     l_rows = parse_module_registry(a_core_root)
     l_row_by_module = {l_row.module: l_row for l_row in l_rows}
     l_live_modules = collect_top_level_modules(a_source_root)
+    l_all_modules = collect_all_module_names(a_source_root)
     l_truth_levels = set(a_registry["truth_levels"])
     l_l0_modules = {normalize_unit(l_module) for l_module in a_registry["l0_modules"]}
 
@@ -453,6 +464,12 @@ def check_module_registry(
         l_issues.append(f"module-registry: live module `{l_module}` is missing")
 
     for l_module in sorted(set(l_row_by_module) - l_live_modules):
+        # dotted sub-family (e.g. gpu.canvas) is satisfied if any file lives under that dotted prefix
+        if "." in l_module:
+            if l_module in l_all_modules or any(
+                m == l_module or m.startswith(l_module + ".") for m in l_all_modules
+            ):
+                continue
         l_issues.append(f"module-registry: registered module `{l_module}` has no source family")
 
     for l_row in l_rows:
