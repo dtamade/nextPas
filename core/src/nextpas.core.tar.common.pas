@@ -5,7 +5,8 @@ unit nextpas.core.tar.common;
  * 仅依赖 nextpas.*，无 FPC RTL 直引，消除两端重复，保证 fail-closed 单点一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  * 复用 nextpas.core.bytes.ops 零拷贝视图语义（TByteSpan/Move 单遍扫描），无重复分配。
- * 性能：校验和/数值/pax 均 inline + 零拷贝 PByte 切片，单遍 512 融合避免双遍历。
+ * 性能：薄守卫 inline + 零拷贝 PByte 切片；校验和/零块/数值等含循环体保持外联
+ *       （design-conventions 真实循环体禁 inline），单遍 512 融合避免双遍历与 I-Cache 复制膨胀。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -25,19 +26,21 @@ procedure GuardTarTotalSize(ACum, ANext: UInt64; AMaxTotal: UInt64);
 {** 名安全守卫（写端 EArgumentError，读端/落盘 EParseError 由调用方选） *}
 procedure GuardTarNameForRead(const AName: string);
 
-{** 校验和单点：512 块校验和计算与验证（unsigned/signed 双算，零拷贝 inline） *}
-function TarComputeChecksumUnsigned(ABlock: PByte): Int64; inline;
-function TarComputeChecksumSigned(ABlock: PByte): Int64; inline;
+{** 校验和单点：512 块校验和计算与验证（unsigned/signed 双算，零拷贝 PByte 切片；循环体外联） *}
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
+function TarComputeChecksumSigned(ABlock: PByte): Int64;
 function TarStoredChecksum(ABlock: PByte): Int64; inline;
 procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
-function TarHeaderIsZeroBlock(ABlock: PByte): Boolean; inline;
-function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean; inline;
+function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
+function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 
-{** 数值字段单点：八进制/base-256 双路径编解码（inline 零拷贝） *}
-function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64; inline;
-procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64); inline;
+{** 数值字段单点：八进制/base-256 双路径编解码（零拷贝 PByte 切片；循环体外联） *}
+function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
+procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 
-{** pax 单点：零拷贝 slice 解析 path/linkpath（复用 bytes.ops 零拷贝语义） *}
+{** 头字段单点：文本/校验和构造收敛至 common，复用 bytes.ops 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline） *}
+procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
+procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 
 implementation
@@ -76,8 +79,8 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现 — }
-function TarComputeChecksumUnsigned(ABlock: PByte): Int64; inline;
+{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现（循环体外联） — }
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
 var
   I: SizeUInt;
   B: Byte;
@@ -93,7 +96,7 @@ begin
   end;
 end;
 
-function TarComputeChecksumSigned(ABlock: PByte): Int64; inline;
+function TarComputeChecksumSigned(ABlock: PByte): Int64;
 var
   I: SizeUInt;
   B: Byte;
@@ -125,7 +128,7 @@ begin
     raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, Stored, U, S]);
 end;
 
-function TarHeaderIsZeroBlock(ABlock: PByte): Boolean; inline;
+function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 var
   I: SizeUInt;
 begin
@@ -135,7 +138,7 @@ begin
       Exit(False);
 end;
 
-function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean; inline;
+function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 var
   Stored, U, S: Int64;
   I: SizeUInt;
@@ -163,8 +166,8 @@ begin
   Result := False;
 end;
 
-{ — 数值字段单点：读端 octal/base-256 解码，写端编码 — }
-function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64; inline;
+{ — 数值字段单点：读端 octal/base-256 解码，写端编码（循环体外联） — }
+function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 var
   I: SizeUInt;
   B: Byte;
@@ -197,7 +200,7 @@ begin
   end;
 end;
 
-procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64); inline;
+procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 var
   I: SizeInt;
   MaxBase256: Int64;
@@ -228,6 +231,32 @@ begin
     ABlock[AOff + I] := Byte(Ord('0') + (AValue and 7));
     AValue := AValue shr 3;
   end;
+end;
+
+{ — 头字段单点：文本与校验和构造收敛至 common，消除 writer 双嵌 PutText/PutOctal/校验和分散（Move[AValue[1]] 禁 inline） — }
+procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
+var
+  CopyLen: SizeUInt;
+begin
+  // 单源：复用 bytes.ops SpanToString/StringToBytes 单源 Move 语义，inline 零拷贝单次 Move
+  CopyLen := SizeUInt(Length(AValue));
+  if CopyLen > ALen then
+    CopyLen := ALen;
+  if CopyLen > 0 then
+    Move(AValue[1], ABlock[AOff], CopyLen);
+end;
+
+procedure TarFinalizeHeaderChecksum(ABlock: PByte);
+var
+  Sum: Int64;
+  I: SizeUInt;
+begin
+  // 单点：校验和计算与八进制格式化收敛至 common，零拷贝 PByte 切片；循环体外联避免 inline 膨胀
+  Sum := TarComputeChecksumUnsigned(ABlock);
+  for I := 0 to 5 do
+    ABlock[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
+  ABlock[C_TAR_OFF_CHKSUM + 6] := 0;
+  ABlock[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
 end;
 
 { — pax 单点：零拷贝 PByte 切片解析，复用 bytes.ops TByteSpan 零拷贝思想，无 Copy 分配 — }
