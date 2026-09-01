@@ -85,7 +85,6 @@ type
     procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
     procedure FireReadyOnce;
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
-    procedure SettlePendingOnClose; inline;
     procedure HandleNativeDestroy;
     function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
     procedure TryCreateEnvironment;
@@ -164,7 +163,6 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-  nextpas.core.sync.mutex,
   nextpas.core.webview.webview2.loader,
   nextpas.core.window.factory;
 
@@ -533,69 +531,12 @@ type
     Proc: TWebviewProc;
   end;
 
-var
-  GPostRefPool: array of PPostRefRec;
-  GPostRefPoolCount: Integer = 0;
-  GPostMethodPool: array of PPostMethodRec;
-  GPostMethodPoolCount: Integer = 0;
-  GPostProcPool: array of PPostProcRec;
-  GPostProcPoolCount: Integer = 0;
-  GPostPoolLock: Pointer = nil;
-
-function PostPoolLock: TMutex; inline;
-begin
-  if GPostPoolLock = nil then
-    GPostPoolLock := TMutex.Create;
-  Result := TMutex(GPostPoolLock);
-end;
-
-function AcquirePostRefRec: PPostRefRec; inline;
-begin
-  PostPoolLock.Acquire;
-  try
-    if GPostRefPoolCount > 0 then
-    begin Dec(GPostRefPoolCount); Result := GPostRefPool[GPostRefPoolCount]; GPostRefPool[GPostRefPoolCount]:=nil; end else New(Result);
-  finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostRefRec(A: PPostRefRec); inline;
-begin
-  if A=nil then Exit; A^.Ref:=nil;
-  PostPoolLock.Acquire;
-  try if GPostRefPoolCount=Length(GPostRefPool) then SetLength(GPostRefPool, WebviewGrowCapacity(Length(GPostRefPool)));
-    GPostRefPool[GPostRefPoolCount]:=A; Inc(GPostRefPoolCount); finally PostPoolLock.Release; end;
-end;
-
-function AcquirePostMethodRec: PPostMethodRec; inline;
-begin PostPoolLock.Acquire;
-  try if GPostMethodPoolCount>0 then begin Dec(GPostMethodPoolCount); Result:=GPostMethodPool[GPostMethodPoolCount]; GPostMethodPool[GPostMethodPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostMethodRec(A: PPostMethodRec); inline;
-begin if A=nil then Exit; A^.Method:=nil;
-  PostPoolLock.Acquire;
-  try if GPostMethodPoolCount=Length(GPostMethodPool) then SetLength(GPostMethodPool, WebviewGrowCapacity(Length(GPostMethodPool)));
-    GPostMethodPool[GPostMethodPoolCount]:=A; Inc(GPostMethodPoolCount); finally PostPoolLock.Release; end;
-end;
-
-function AcquirePostProcRec: PPostProcRec; inline;
-begin PostPoolLock.Acquire;
-  try if GPostProcPoolCount>0 then begin Dec(GPostProcPoolCount); Result:=GPostProcPool[GPostProcPoolCount]; GPostProcPool[GPostProcPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostProcRec(A: PPostProcRec); inline;
-begin if A=nil then Exit; A^.Proc:=nil;
-  PostPoolLock.Acquire;
-  try if GPostProcPoolCount=Length(GPostProcPool) then SetLength(GPostProcPool, WebviewGrowCapacity(Length(GPostProcPool)));
-    GPostProcPool[GPostProcPoolCount]:=A; Inc(GPostProcPoolCount); finally PostPoolLock.Release; end;
-end;
-
 procedure PostRefTrampoline(AData: Pointer); stdcall;
 var R: PPostRefRec;
 begin
   R := PPostRefRec(AData);
   try if Assigned(R^.Ref) then R^.Ref(); except end;
-  ReleasePostRefRec(R);
+  Dispose(R);
 end;
 
 procedure PostMethodTrampoline(AData: Pointer); stdcall;
@@ -603,7 +544,7 @@ var R: PPostMethodRec;
 begin
   R := PPostMethodRec(AData);
   try if Assigned(R^.Method) then R^.Method(); except end;
-  ReleasePostMethodRec(R);
+  Dispose(R);
 end;
 
 procedure PostProcTrampoline(AData: Pointer); stdcall;
@@ -611,7 +552,7 @@ var R: PPostProcRec;
 begin
   R := PPostProcRec(AData);
   try if Assigned(R^.Proc) then R^.Proc(); except end;
-  ReleasePostProcRec(R);
+  Dispose(R);
 end;
 
 class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
@@ -686,36 +627,7 @@ procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotify
 var I: Integer;
 begin
   for I := 0 to High(AList) do
-    if Assigned(AList[I]) then
-      AList[I]();
-end;
-
-procedure TWebView2Webview.SettlePendingOnClose; inline;
-var
-  I: Integer;
-  LRec: PEvalRec;
-  LErr: EWebviewEvalFailed;
-begin
-  for I := 0 to FPendingCount - 1 do
-  begin
-    LRec := FPendingEvals[I];
-    if not LRec^.Done then
-    begin
-      LRec^.Done := True;
-      if Assigned(LRec^.OnError) then
-      begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
-        try
-          try
-            LRec^.OnError(LErr);
-          except
-          end;
-        finally
-          LErr.Free;
-        end;
-      end;
-    end;
-  end;
+    AList[I]();
 end;
 
 procedure TWebView2Webview.FireReadyOnce;
@@ -829,13 +741,8 @@ begin
     LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
     LJs := BuildResolveScript(AFrameId, AResultJson);
-  // fire-and-forget：跳 pending，直接底层 ExecuteScript（零 pending）
-{$IFDEF MSWINDOWS}
-  if FWebView <> nil then
-    FWebView.ExecuteScript(PWideChar(WideString(LJs)), nil);
-{$ELSE}
-  // 非 Windows 桩：无 controller，丢弃（与 gtk fire-and-forget 对称）
-{$ENDIF}
+  // fire-and-forget eval (no callback)
+  Eval(LJs, nil, nil);
 end;
 
 {$IFDEF MSWINDOWS}
@@ -1001,7 +908,6 @@ procedure TWebView2Webview.HandleNativeDestroy;
 begin
   if FClosed then Exit;
   FClosed := True;
-  SettlePendingOnClose;
   FireNotifyHandlers(FOnWindowClosed);
   FSelfKeepAlive := nil;
 end;
@@ -1024,16 +930,37 @@ begin
   RequireOpen;
   FWindow.Dispatcher.Post(AProc);
 end;
-function TWebView2Webview.IsOnMainThread: Boolean; inline;
+function TWebView2Webview.IsOnMainThread: Boolean;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
 
 procedure TWebView2Webview.Close;
+var
+  I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
   if FClosed then Exit;
   FClosed := True;
-  SettlePendingOnClose;
+  for I := 0 to FPendingCount - 1 do
+  begin
+    LRec := FPendingEvals[I];
+    if not LRec^.Done then
+    begin
+      LRec^.Done := True;
+      if Assigned(LRec^.OnError) then
+      begin
+        LErr := EWebviewEvalFailed.Create('webview window is closed');
+        try
+          LRec^.OnError(LErr);
+        finally
+          LErr.Free;
+        end;
+      end;
+      // keep record alive for ExecuteScript handler to Dispose and RemovePending (exactly-once, no double free)
+    end;
+  end;
   // array kept for handler cleanup; Close does not clear to avoid dangling handler pointer
   FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
@@ -1459,16 +1386,5 @@ function TWebView2Webview.GetAssets: IWebviewAssets;
 begin
   Result := FAssetsIntf;
 end;
-
-initialization
-
-finalization
-  while GPostRefPoolCount > 0 do begin Dec(GPostRefPoolCount); Dispose(GPostRefPool[GPostRefPoolCount]); end;
-  SetLength(GPostRefPool, 0);
-  while GPostMethodPoolCount > 0 do begin Dec(GPostMethodPoolCount); Dispose(GPostMethodPool[GPostMethodPoolCount]); end;
-  SetLength(GPostMethodPool, 0);
-  while GPostProcPoolCount > 0 do begin Dec(GPostProcPoolCount); Dispose(GPostProcPool[GPostProcPoolCount]); end;
-  SetLength(GPostProcPool, 0);
-  if GPostPoolLock <> nil then begin TObject(GPostPoolLock).Free; GPostPoolLock := nil; end;
 
 end.

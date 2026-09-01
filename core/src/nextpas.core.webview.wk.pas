@@ -133,8 +133,6 @@ var
   GLive: Integer = 0;
   GLiveList: array of TWkWebview;
   GLiveListCount: Integer = 0;
-  GWkEmptyInvokes: IWebviewInvokeRegistry = nil;
-  GWkEmptyAssets: IWebviewAssets = nil;
 
 procedure GrowLiveList; inline;
 begin

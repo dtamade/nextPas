@@ -14,8 +14,7 @@ S9 DevServerUrl/构造期导航与导航失败接线、S10 Builder 补齐与 res
 
 `nextpas.core.webview` 为桌面 GUI 应用提供"宿主窗口内嵌浏览器引擎"的最小完整抽象：
 
-- **窗口壳**：标题、尺寸、min/max、最大化/最小化/还原、focus 等原生窗口操作
-  （模块自己拥有窗口）。
+- **窗口壳（M6 has-a）**：`IWebviewWindow.Window: IWindow` 组合 `nextpas.core.window`（L2）——标题、尺寸、min/max、最大化/最小化/还原、focus 等原生窗口操作统一经 `Window` 属性（`View.Window.Show` / `View.Window.SetTitle` 等），`webview` 不再自持窗口壳。
 - **内容承载**：导航到 URL / HTML 字符串；zoom 与 UA 控制；通过自定义 URL scheme
   提供内嵌资源；开发模式可直连 dev server。
 - **双向 IPC**：前端 `invoke(cmd, payload) → Promise`，Pascal 侧注册命名 handler；
@@ -123,8 +122,8 @@ begin
       .OnReady(@LDemo.OnReady)
       .Build;
     LWin.Assets.MountEmbedded('', TMyRespackProvider.Create);
-    LWin.Show;
-    WebviewRunLoop;
+    LWin.Window.Show;
+    WindowRunLoop; // WebviewRunLoop 为 deprecated shim（M6 单泵统一）
     LWin := nil;
   finally
     LDemo.Free;
@@ -142,7 +141,8 @@ end.
 | `InitialUrl/InitialHtml` | 构造期导航（Url 优先） |
 | `DevServerUrl` | 开发模式：资产惰性、scheme 惰注册 |
 | `RegisterInvoke/RegisterAsyncInvoke/OnReady/Kind` | IPC 与后端选型 |
-| `Build` | 创建窗口（多窗共享同一主循环） |
+| `Parent(IWindow)` | 嵌入已有 `IWindow`（has-a 组合；`CreateWebviewOn(AParent, ...)` 同源） |
+| `Build` | 创建窗口（多窗共享同一主循环，`Window` 属性暴露 `IWindow`） |
 | `Run(url)/RunHtml(html)` | 单窗便捷封装（Build+Navigate+RunLoop） |
 
 respack 集成形态见 `demo_webview_respack` 与 `nextpas.core.webview.vfs`
