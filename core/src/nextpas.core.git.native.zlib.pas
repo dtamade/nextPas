@@ -19,7 +19,7 @@ uses
   error mapping and stream-boundary reporting over them.
   Layer note: L2 git.native.zlib → L2 compress is same-layer one-way
   (Deflate*) explicitly allowed via core/docs/core-module-registry.md
-  (git: L0-L1 plus same-layer one-way compress/hash/zlib/checksum). }
+  (git: L0-L1 plus same-layer one-way fs/compress/hash/zlib/checksum). }
 
 function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
 function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;
@@ -34,6 +34,10 @@ function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
   compress DeflateDecompressPtrWithEndPos). }
 function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
+{ Zero-alloc reuse variant: inflate into pre-sized ADst (bytes.ops single source).
+  Caller ensures ADstLen = AExpectSize; returns actual size, no per-chunk Move. }
+function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
 
 implementation
 
@@ -83,6 +87,19 @@ function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
 begin
   try
     Result := DeflateDecompressPtrWithEndPos(AData, ACount, AStart, AEndPos);
+  except
+    on E: EIOError do
+      raise MapDeflateError(E);
+    on E: Exception do
+      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+  end;
+end;
+
+function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
+begin
+  try
+    Result := DeflateDecompressPtrWithEndPosToBuffer(AData, ACount, AStart, AEndPos, ADst, ADstLen);
   except
     on E: EIOError do
       raise MapDeflateError(E);

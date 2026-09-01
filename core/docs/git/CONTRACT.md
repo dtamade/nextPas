@@ -1,7 +1,7 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（87 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片）
-**层级**：L2（依赖 L0-L1: base, text, bytes, fs, io；native 子家族另用同层单向 compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免）
+**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片）
+**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
 **版本**: 2.0
@@ -32,7 +32,7 @@
 | git.libgit2.bindings.repo | repository 域 |
 | git.libgit2.bindings.diff | tree/diff/patch 域 |
 | git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
-| git.libgit2.base | libgit2 基础类型/句柄/oid 前向声明（20/33 双轨零拷贝，git_oid/TGitOid33） |
+| git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，TGitOid33 仅 legacy，复用 bytes.ops） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |

@@ -21,15 +21,8 @@ uses
   nextpas.core.text.format;
 
 type
-  EGitError = class(Exception)
-  private
-    FErrorCode: Integer;
-    FErrorClass: Integer;
-  public
-    constructor Create(AErrorCode: Integer; const AOperation: string = '');
-    property ErrorCode: Integer read FErrorCode;
-    property ErrorClass: Integer read FErrorClass;
-  end;
+  { Single-source re-export: git family error is owned by nextpas.core.git.base (L2) }
+  EGitError = nextpas.core.git.base.EGitError;
 
   TGitOID = record
     Data: git_oid;
@@ -406,9 +399,21 @@ begin
 end;
 
 procedure CheckGitResult(AResult: Integer; const AOperation: string);
+var
+  LDetail, LMsg: string;
 begin
   if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
+  begin
+    LDetail := GetGitErrorMessage;
+    if AOperation <> '' then
+      if LDetail <> '' then
+        LMsg := AOperation + ': ' + LDetail
+      else
+        LMsg := AOperation
+    else
+      LMsg := LDetail;
+    raise EGitError.Create(AResult, LMsg);
+  end;
 end;
 
 function GetGitErrorMessage: string;
@@ -422,16 +427,15 @@ begin
     Result := 'Unknown error';
 end;
 
-constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+function ComposeGitError(const AOp: string): string; inline;
 var
-  ErrorMsg: string;
+  LDetail: string;
 begin
-  FErrorCode := AErrorCode;
-  FErrorClass := 0;
-  ErrorMsg := GetGitErrorMessage;
-  if AOperation <> '' then
-    ErrorMsg := AOperation + ': ' + ErrorMsg;
-  inherited Create(ErrorMsg);
+  LDetail := GetGitErrorMessage;
+  if LDetail <> '' then
+    Result := AOp + ': ' + LDetail
+  else
+    Result := AOp;
 end;
 
 constructor TGitSignature.Create(const AName, AEmail: string; const AWhen: TGitTime);
@@ -617,9 +621,21 @@ begin
 end;
 
 procedure TGitRepository.CheckResult(AResult: Integer; const AOperation: string);
+var
+  LDetail, LMsg: string;
 begin
   if AResult <> GIT_OK then
-    raise EGitError.Create(AResult, AOperation);
+  begin
+    LDetail := GetGitErrorMessage;
+    if AOperation <> '' then
+      if LDetail <> '' then
+        LMsg := AOperation + ': ' + LDetail
+      else
+        LMsg := AOperation
+    else
+      LMsg := LDetail;
+    raise EGitError.Create(AResult, LMsg);
+  end;
 end;
 
 function TGitRepository.GetPath: string;
@@ -648,7 +664,7 @@ var
 begin
   rc := git_repository_head(RefHandle, FHandle);
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, ComposeGitError('Get HEAD reference'));
   Result := TGitReference.Create(Self, RefHandle);
 end;
 
@@ -685,7 +701,7 @@ begin
 
   // For other errors, raise exception
   if rc <> GIT_OK then
-    raise EGitError.Create(rc, 'Get HEAD reference');
+    raise EGitError.Create(rc, ComposeGitError('Get HEAD reference'));
 
   // Get branch name from reference
   HeadRef := TGitReference.Create(Self, RefHandle);
@@ -714,7 +730,7 @@ begin
         rc := git_branch_next(RefHandle, BranchType, Iterator);
         if rc = GIT_ITEROVER then Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate branches');
+          raise EGitError.Create(rc, ComposeGitError('Iterate branches'));
         BranchName := string(git_reference_name(RefHandle));
         List.Add(BranchName);
         git_reference_free(RefHandle);
@@ -1675,7 +1691,7 @@ begin
         if rc = GIT_ITEROVER then
           Break;
         if rc <> GIT_OK then
-          raise EGitError.Create(rc, 'Iterate config entries');
+          raise EGitError.Create(rc, ComposeGitError('Iterate config entries'));
         if LEntry <> nil then
         begin
           SetLength(Result, N + 1);
@@ -1724,7 +1740,7 @@ begin
       rc := git_revwalk_next(LOID, LWalk);
       if rc = GIT_ITEROVER then Break;
       if rc <> GIT_OK then
-        raise EGitError.Create(rc, 'Iterate revwalk');
+        raise EGitError.Create(rc, ComposeGitError('Iterate revwalk'));
       LCommitOID.Data := LOID;
       SetLength(LCommits, Length(LCommits) + 1);
       LCommits[High(LCommits)] := GetCommit(LCommitOID);

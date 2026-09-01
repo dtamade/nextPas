@@ -39,6 +39,11 @@ function DeflateDecompressWithEndPos(const AData: TBytes; AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
 function DeflateDecompressPtrWithEndPos(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
+{ Zero-alloc variant: inflate directly into caller's buffer (bytes.ops reuse).
+  ADst must hold ADstLen bytes (AExpectSize); returns actual output size.
+  Single inflate, no per-chunk SetLength/Move jitter; I-Cache: not inline. }
+function DeflateDecompressPtrWithEndPosToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
 
 { RFC 7692 permessage-deflate wire helpers: raw DEFLATE (windowBits=-15),
   no zlib header; empty DEFLATE block trailer stripped on compress and
@@ -835,6 +840,67 @@ begin
       if (Ret = Z_BUF_ERROR) and (Strm.avail_in = 0) then
         raise EIOError.Create('deflate: truncated stream');
     until False;
+    AEndPos := AStart + SizeUInt(Strm.total_in);
+  finally
+    inflateEnd(Strm);
+  end;
+end;
+
+function DeflateDecompressPtrWithEndPosToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt;
+var
+  Strm: z_stream;
+  Ret: Integer;
+  InSize: LongWord;
+begin
+  // zero-alloc buffer reuse: caller pre-sized ADst to AExpectSize, single inflate, no Move jitter
+  if AData = nil then
+    raise EIOError.Create('deflate: nil input');
+  if (ADst = nil) and (ADstLen <> 0) then
+    raise EArgumentError.Create('deflate: nil dest buffer');
+  ValidateZlibHeaderAtPtr(AData, ACount, AStart);
+  if (ACount - AStart) > High(LongWord) then
+    raise EIOError.Create('deflate: zlib stream too large');
+  FillChar(Strm, SizeOf(Strm), 0);
+  Strm.next_in := pBytef(AData + AStart);
+  InSize := LongWord(ACount - AStart);
+  Strm.avail_in := InSize;
+  if ADstLen > 0 then
+    Strm.next_out := pBytef(ADst)
+  else
+    Strm.next_out := pBytef(ADst);
+  Strm.avail_out := ZlibAvailChunk(ADstLen);
+  if inflateInit(Strm) <> Z_OK then
+    raise EIOError.Create('inflateInit failed');
+  try
+    Ret := inflate(Strm, Z_FINISH);
+    if (Ret <> Z_OK) and (Ret <> Z_STREAM_END) and (Ret <> Z_BUF_ERROR) then
+    begin
+      if Ret = Z_DATA_ERROR then
+        raise EIOError.Create('deflate: corrupt stream');
+      if Ret = Z_NEED_DICT then
+        raise EIOError.Create('deflate: preset dictionary not supported');
+      raise EIOError.CreateFmt('deflate: inflate %d', [Ret]);
+    end;
+    if Ret = Z_BUF_ERROR then
+    begin
+      if Strm.avail_out = 0 then
+        raise EIOError.Create('deflate: dest buffer too small')
+      else if Strm.avail_in = 0 then
+        raise EIOError.Create('deflate: truncated stream')
+      else
+        raise EIOError.CreateFmt('deflate: inflate %d', [Ret]);
+    end;
+    if (Ret <> Z_STREAM_END) and (Strm.avail_in <> 0) then
+    begin
+      // need more output buffer if stream not ended
+      if Strm.avail_out = 0 then
+        raise EIOError.Create('deflate: dest buffer too small')
+      else
+        raise EIOError.Create('deflate: truncated stream');
+    end;
+    // allow Z_OK with all input consumed if stream ended implicitly (should be STREAM_END)
+    Result := ADstLen - SizeUInt(Strm.avail_out);
     AEndPos := AStart + SizeUInt(Strm.total_in);
   finally
     inflateEnd(Strm);

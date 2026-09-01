@@ -52,11 +52,9 @@ type
   git_revwalk = Pointer;
   git_worktree = Pointer;
 
-  // Git OID (Object ID)
-  git_oid = record
-    id: array[0..19] of Byte;
-  end;
-  Pgit_oid = ^git_oid;
+  // Git OID (Object ID) - single source via libgit2.base (overlay id/Bytes, 20 bytes, PACKRECORDS C)
+  git_oid = nextpas.core.git.libgit2.base.git_oid;
+  Pgit_oid = nextpas.core.git.libgit2.base.Pgit_oid;
 
   git_buf = record
     ptr: PChar;
@@ -490,7 +488,7 @@ type
   TGitRepositoryHandle = git_repository;
   TGitOid20 = git_oid;
 
-// Inline zero-copy helpers (performance: no heap, no SysUtils)
+// Inline zero-copy helpers (perf: inline + zero-copy CompareMem/Move single source via base/bytes.ops, no heap, no SysUtils, 20 bytes -> 3×QWord)
 function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
 function GitOidIsZeroInline(const A: git_oid): Boolean; inline;
 procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
@@ -499,6 +497,7 @@ implementation
 
 function GitOidEqualsInline(const A, B: git_oid): Boolean; inline;
 begin
+  // single source: base git_oid 20 bytes via bytes.ops CompareMem
   Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
 end;
 
@@ -513,6 +512,7 @@ end;
 
 procedure GitOidCopyInline(out Dst: git_oid; const Src: git_oid); inline;
 begin
+  // single source: bytes.ops Move zero-copy
   Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
 end;
 

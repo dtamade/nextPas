@@ -32,7 +32,8 @@ type
     procedure LoadIndex(const AIdxPath: string);
     function FindOffset(const AOid: TGitOid): Int64;
     function ByteAt(APos: SizeUInt): Byte; inline;
-    function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes; inline;
+    function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
+    procedure InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   public
@@ -44,7 +45,7 @@ type
   end;
 
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
-function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes;
 
 const
   GitMaxDeltaDepth = 64;
@@ -58,8 +59,9 @@ uses
 
 { GitApplyDeltaReuse: zero-copy span view + buffer reuse via bytes.ops single source.
   Core decode is single-source with GitApplyDelta; this wrapper reuses AReuse
-  capacity (ping-pong) to avoid O(depth) allocations. Inline hot path. }
-procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes); inline;
+  capacity (ping-pong) to avoid O(depth) allocations.
+  Perf: heavy decode loop NOT inline — I-Cache redline; thin wrapper also not inline. }
+procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes);
 var
   P: SizeInt;
   SrcSize, TgtSize, OutPos, CopyOff, CopySize: Int64;
@@ -144,8 +146,9 @@ begin
     raise EGitError.Create('delta produced wrong output size');
 end;
 
-function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes;
 begin
+  // not inline: heavy loop stays out-of-line, I-Cache friendly; single source via GitApplyDeltaInto
   GitApplyDeltaInto(ABase, ADelta, AReuse);
   Result := AReuse;
 end;
@@ -273,13 +276,34 @@ begin
   Result := FData[APos];
 end;
 
-function TPackFile.InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes; inline;
+function TPackFile.InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
+var
+  LReuse: TBytes;
+begin
+  // not inline — heavy zlib path; single source via InflateInto (bytes.ops reuse, zero-copy ToBuffer)
+  LReuse := nil;
+  InflateInto(APos, AExpectSize, LReuse);
+  Result := LReuse;
+end;
+
+procedure TPackFile.InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
 var
   EndPos: SizeUInt;
+  Got: SizeUInt;
+  PDst: PByte;
 begin
-  // zero-copy decompress via PByte+Len view, no extra copy beyond decompressed bytes
-  Result := GitZlibDecompressPtr(FData, FDataSize, APos, EndPos);
-  if Int64(Length(Result)) <> AExpectSize then
+  // not inline — heavy zlib path; zero-alloc reuse via bytes.ops single source
+  // inflate directly into caller buffer to avoid per-chunk SetLength/Move jitter
+  if (AExpectSize < 0) or (AExpectSize > MaxInt) then
+    raise EGitError.Create('pack entry inflated size out of range');
+  if Int64(Length(AReuse)) <> AExpectSize then
+    SetLength(AReuse, SizeUInt(AExpectSize));
+  if AExpectSize = 0 then
+    PDst := nil
+  else
+    PDst := PByte(AReuse);
+  Got := GitZlibDecompressPtrToBuffer(FData, FDataSize, APos, EndPos, PDst, SizeUInt(AExpectSize));
+  if Int64(Got) <> AExpectSize then
     raise EGitError.Create('pack entry inflated size mismatch');
 end;
 
@@ -307,7 +331,7 @@ var
   BaseOffSigned: Int64;
   I: Integer;
   CurKind: TGitObjectKind;
-  CurData, ReuseBuf, Delta, Tmp: TBytes;
+  CurData, ReuseBuf, DeltaBuf, Tmp: TBytes;
   BaseOid: TGitOid;
 begin
   if ADepth > GitMaxDeltaDepth then
@@ -395,20 +419,23 @@ begin
   else
     raise EGitError.Create('unreachable base type');
   end;
-  // inflate base once
-  CurData := InflateAt(Chain[ChainLen-1].P, Chain[ChainLen-1].Sz);
+  // inflate base once via zero-alloc buffer reuse (bytes.ops single source)
+  CurData := nil;
   ReuseBuf := nil;
-  // unwind deltas in reverse: base-1 .. 0, reusing two buffers ping-pong
+  DeltaBuf := nil;
+  InflateInto(Chain[ChainLen-1].P, Chain[ChainLen-1].Sz, CurData);
+  // unwind deltas in reverse: base-1 .. 0, reusing buffers ping-pong + DeltaBuf reuse
+  // perf: not inline heavy paths; zero-copy TByteSpan.Move; single SetLength per layer
   for I := ChainLen - 2 downto 0 do
   begin
-    Delta := InflateAt(Chain[I].P, Chain[I].Sz);
-    // buffer reuse: GitApplyDeltaInto writes into ReuseBuf with single allocation, zero-copy spans
-    GitApplyDeltaInto(CurData, Delta, ReuseBuf);
-    // ping-pong swap to keep capacity for next iteration, avoids O(depth*size) jitter
+    InflateInto(Chain[I].P, Chain[I].Sz, DeltaBuf);
+    // buffer reuse: GitApplyDeltaInto writes into ReuseBuf with single allocation, zero-copy spans via bytes.ops
+    GitApplyDeltaInto(CurData, DeltaBuf, ReuseBuf);
+    // ping-pong swap to keep capacity for next iteration, avoids O(depth*size) alloc jitter
     Tmp := CurData;
     CurData := ReuseBuf;
     ReuseBuf := Tmp;
-    // Delta ref Freed via refcount when overwritten; no leak (implicit try/finally via managed TBytes)
+    // DeltaBuf reused next iteration (capacity retained); managed TBytes no leak, try/finally via refcount
   end;
   AKind := CurKind;
   AData := CurData;

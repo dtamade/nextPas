@@ -6,7 +6,9 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.git.base,
+  nextpas.core.bytes.ops;
 
 type
   { Object kinds as encoded in loose headers and pack entry type bits }
@@ -17,8 +19,8 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
-  { Family-level error for the native git subfamily }
-  EGitError = class(Exception);
+  { Single-source re-export: git family error is owned by nextpas.core.git.base (L2) }
+  EGitError = nextpas.core.git.base.EGitError;
 
 const
   GitOidHexLen = 40;
@@ -38,8 +40,7 @@ function GitStringToBytes(const AText: string): TBytes;
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops;
+  nextpas.core.base.utils;
 
 function HexVal(ACh: Char): Integer; inline;
 begin
@@ -91,9 +92,11 @@ end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 begin
-  { perf: inline + zero-copy Pointer+Len CompareMem single source (bytes.ops/base.utils);
-    20 bytes -> ~3×QWord/DWord compares via System.CompareByte/MemEqual (no 20× byte loop, no alloc), hot oid set/heap path }
-  Result := CompareMem(@AA.Bytes[0], @AB.Bytes[0], GitOidRawLen);
+  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops SpanEqual via MemEqual:
+    20 bytes -> ~3×QWord compares, no alloc, no 20× byte loop, hot oid set/heap path }
+  Result := SpanEqual(
+    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;

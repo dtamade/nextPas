@@ -7,12 +7,14 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.git.native.base,
+  nextpas.core.bytes.ops;
 
 const
-  // Canonical OID sizes: runtime track (SHA1 20) vs static track (type+32 SHA256-ready 33)
-  GIT_OID_RAWSZ = 20;
-  GIT_OID_SHA1_SIZE = 20;
+  // Single source: OID sizes reuse native.base (GitOidRawLen = 20)
+  GIT_OID_RAWSZ = nextpas.core.git.native.base.GitOidRawLen;
+  GIT_OID_SHA1_SIZE = nextpas.core.git.native.base.GitOidRawLen;
   GIT_OID_MAX_SIZE = 32;
 
 type
@@ -36,41 +38,53 @@ type
   git_config_iterator = Pointer;
   git_signature = Pointer;
 
-  // Canonical SHA1 OID (runtime/tracked, 20 bytes) - ffi owner
+  // Single source: canonical SHA1 OID (20 bytes) via native.base.TGitOid.
+  // Variant exposes both C `id` and Pascal `Bytes` zero-cost overlay; binary-identical, no branch.
   git_oid = record
-    id: array[0..19] of Byte;
+    case Integer of
+      0: (id: array[0..19] of Byte;);
+      1: (Bytes: array[0..19] of Byte;);
   end;
   Pgit_oid = ^git_oid;
-  // Static-track OID (type prefix + 32 bytes) - bindings owner, 33 bytes padded
+  // Legacy static-track OID (type prefix + 32 bytes) - SHA256-ready padded, not default TGitOid
   TGitOid33 = record
     &type: Byte;
     id: array[0..31] of Byte;
   end;
   PGitOid33 = ^TGitOid33;
-  // Unified alias: bindings' TGitOid maps to 33-byte, ffi's git_oid maps to 20-byte;
-  // base exposes both with zero-copy converters.
-  TGitOid = TGitOid33;
+  // Single source alias: TGitOid is native 20-byte (not 33-byte); TGitOid33 retained for compat
+  TGitOid = nextpas.core.git.native.base.TGitOid;
+  PGitOid = ^TGitOid;
+  // Compat alias for libgit2 consumers expecting 20-byte via Pascal name
+  TGitOid20 = git_oid;
+  PGitOid20 = ^TGitOid20;
 
 function GitOid20Equals(const A, B: git_oid): Boolean; inline;
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
 procedure GitOid20Copy(out Dst: git_oid; const Src: git_oid); inline;
 procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
 procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
+function GitOidToNative(const A: git_oid): TGitOid; inline;
+function NativeToGitOid(const A: TGitOid): git_oid; inline;
+function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
 
 implementation
 
 function GitOid20Equals(const A, B: git_oid): Boolean; inline;
 begin
+  // perf: inline + zero-copy CompareMem single source (base.utils/bytes.ops), 20 bytes -> 3×QWord compares, no loop/alloc
   Result := CompareMem(@A.id[0], @B.id[0], GIT_OID_RAWSZ);
 end;
 
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
 begin
+  // perf: inline + single CompareMem after type byte, zero-copy
   Result := (A.&type = B.&type) and CompareMem(@A.id[0], @B.id[0], GIT_OID_MAX_SIZE);
 end;
 
 procedure GitOid20Copy(out Dst: git_oid; const Src: git_oid); inline;
 begin
+  // perf: inline + single Move zero-copy (bytes.ops single source), no heap
   Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
 end;
 
@@ -84,6 +98,23 @@ end;
 procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
 begin
   Move(Src.id[0], Dst.id[0], GIT_OID_RAWSZ);
+end;
+
+function GitOidToNative(const A: git_oid): TGitOid; inline;
+begin
+  // zero-copy: same 20 bytes, single Move single source (native.base Bytes == git_oid.id overlay)
+  Move(A.id[0], Result.Bytes[0], GIT_OID_RAWSZ);
+end;
+
+function NativeToGitOid(const A: TGitOid): git_oid; inline;
+begin
+  Move(A.Bytes[0], Result.id[0], GIT_OID_RAWSZ);
+end;
+
+function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
+begin
+  // single source: delegates to native.base GitOidSame (which uses bytes.ops CompareMem)
+  Result := nextpas.core.git.native.base.GitOidSame(A, B);
 end;
 
 end.

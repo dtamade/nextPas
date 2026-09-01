@@ -18,9 +18,10 @@ uses
 
 { Content-addressed object layer: "<kind> <size>\0<payload>" hashed with SHA-1,
   zlib-wrapped, stored at objects/<xx>/<38 hex>.
-  Layer note: L2 git.native.loose → L2 hash is same-layer one-way (SHA-1
-  for oid) explicitly allowed via core/docs/core-module-registry.md
-  (git: L0-L1 plus same-layer one-way compress/hash/zlib/checksum).
+  Layer note: L2 git.native.loose → L2 fs/hash is same-layer one-way (fs
+  for objects/<xx>/<38 hex> layout, SHA-1 for oid) explicitly allowed via
+  core/docs/core-module-registry.md (git: L0-L1 plus same-layer one-way
+  fs/compress/hash/zlib/checksum).
   Bytes ops are single-source via nextpas.core.bytes.ops; zero-copy via
   PByte+Len views and inline forwards. }
 

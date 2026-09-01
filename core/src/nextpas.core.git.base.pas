@@ -9,7 +9,15 @@ uses
   nextpas.core.text.base;
 
 type
-  EGitError = class(Exception);
+  EGitError = class(Exception)
+  private
+    FErrorCode: Integer;
+    FErrorClass: Integer;
+  public
+    constructor Create(AErrorCode: Integer; const AOperation: string = ''); overload;
+    property ErrorCode: Integer read FErrorCode;
+    property ErrorClass: Integer read FErrorClass;
+  end;
 
   // High-level abstraction of branch types, avoiding direct exposure of libgit2 enums
   TGitBranchKind = (
@@ -138,6 +146,16 @@ type
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
+
+constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+begin
+  FErrorCode := AErrorCode;
+  FErrorClass := 0;
+  if AOperation <> '' then
+    inherited Create(AOperation)
+  else
+    inherited CreateFmt('git error %d', [AErrorCode]);
+end;
 
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 begin

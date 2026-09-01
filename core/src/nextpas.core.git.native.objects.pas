@@ -2,17 +2,32 @@ unit nextpas.core.git.native.objects;
 
 {$I nextpas.core.settings.inc}
 
+{**
+ * @desc Object-layer shard facade (oid/zlib/loose/pack/refs/objmodel/write)
+ * Thin gateway: pure inline forwards, no logic duplication, <400 lines.
+ * Fan-in control: interface imports only type-bearing shards
+ *   (base/pack/repo/objmodel/write) for re-exported types/constants;
+ *   func-only shards (zlib/loose/refs) are imported in implementation,
+ *   reducing interface-visible fan-in from 9 to 6 while preserving
+ *   base←impl←facade depth and L0-L3 layering (L2 git may use same-layer
+ *   compress/hash per registry). Legacy `uses nextpas.core.git.native` stays
+ *   compatible via this facade.
+ * Perf: all forwards are `inline` thin wrappers; zero-copy via Move/PByte+Len/
+ *   TByteSpan single source nextpas.core.bytes.ops (oid hex 20B Move,
+ *   zlib PByte+Len Deflate*, loose/pack/objmodel/write via TByteSpan).
+ * Stability: TNativeRepository/TPackFile are classes; TPackFile owns
+ *   IMappedFile (refcounted, auto released on Free/destructor); TBytes
+ *   results are refcounted and exception-safe (no manual free leak).
+ * Bytes single source: no scattered Move/Copy; all byte moves via bytes.ops.
+ *}
 interface
 
 uses
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.zlib,
-  nextpas.core.git.native.loose,
   nextpas.core.git.native.pack,
-  nextpas.core.git.native.refs,
-  nextpas.core.git.native.objmodel,
   nextpas.core.git.native.repo,
+  nextpas.core.git.native.objmodel,
   nextpas.core.git.native.write;
 
 type
@@ -34,6 +49,7 @@ const
   GitOidRawLen = nextpas.core.git.native.base.GitOidRawLen;
   GitMaxDeltaDepth = nextpas.core.git.native.pack.GitMaxDeltaDepth;
 
+{ Oid helpers — inline + zero-copy 20B Move via base/bytes.ops (CompareMem) }
 function GitOidFromHex(const AHex: string): TGitOid; inline;
 function GitOidToHex(const AOid: TGitOid): string; inline;
 function GitOidIsValidHex(const AHex: string): Boolean; inline;
@@ -42,11 +58,13 @@ function GitKindToString(AKind: TGitObjectKind): string; inline;
 function GitKindFromString(const AName: string): TGitObjectKind; inline;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
+{ Zlib — inline forward to compress.Deflate* via git.native.zlib, PByte+Len zero-copy }
 function GitZlibAdler32(const AData: TBytes): UInt32; inline;
 function GitZlibCompress(const AData: TBytes): TBytes; inline;
 function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes; inline;
 
+{ Loose objects — inline forward to git.native.loose via bytes.ops single source }
 function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 function GitHashObject(AKind: TGitObjectKind;
   const AData: TBytes): TGitOid; inline;
@@ -59,8 +77,10 @@ function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
 function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
   out AKind: TGitObjectKind): TBytes; inline;
 
+{ Pack delta — inline TByteSpan zero-copy via git.native.pack }
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
 
+{ Refs/discovery — inline forward to git.native.refs }
 function IsGitDirShape(const APath: string): Boolean; inline;
 function GitTryDiscoverGitDir(const AStartDir: string;
   out AGitDir: string): Boolean; inline;
@@ -70,11 +90,13 @@ function GitResolveHead(const AGitDir: string): TGitOid; inline;
 function GitResolveRef(const AGitDir: string;
   const ARefName: string): TGitOid; inline;
 
+{ Object model parsers — via git.native.objmodel, TByteSpan zero-copy }
 function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 function GitParseSignature(const ALine: string): TGitSignature; inline;
 function GitParseCommit(const AData: TBytes): TGitCommitInfo; inline;
 function GitParseTag(const AData: TBytes): TGitTagInfo; inline;
 
+{ Write path — via git.native.write, bytes.ops single source }
 procedure GitSortTreeEntries(var AEntries: TGitTreeEntryArray); inline;
 function GitEntryCompare(const AA, AB: TGitTreeEntry): Integer; inline;
 function GitModeToString(AMode: Cardinal): string; inline;
@@ -92,6 +114,11 @@ function GitWriteTag(const AGitDir: string;
   const ABuilder: TGitTagBuilder): TGitOid; inline;
 
 implementation
+
+uses
+  nextpas.core.git.native.zlib,
+  nextpas.core.git.native.loose,
+  nextpas.core.git.native.refs;
 
 function GitOidFromHex(const AHex: string): TGitOid; inline;
 begin
