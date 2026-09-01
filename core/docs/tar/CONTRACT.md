@@ -14,7 +14,7 @@
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
 | `TTarReader` | `Next(out H):Boolean` / `EntryData:TBytes` / `EntryDataSlice(out PByte,Count):Boolean` / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions` / `Finish`（两零块，需显式 Finish，析构不再兜底） |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions` / `Finish`（两零块，需显式 Finish，析构兜底补两零块 best-effort） |
 
 ### 1.2 常量与谓词
 
@@ -26,7 +26,7 @@
 
 ### 1.4 链式构造器
 
-`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish` 链式，遵循 `base←intf←实现←门面`；薄门面委托 `TTarWriter` + `CreateBytesStream`，`Finish` 快照 `IStream.Size/Seek/Read` 并校验 short read；门面导出单一 `TarBuilder` inline 工厂（`NewTarBuilder` 已移除），需显式 `Finish`（析构不再隐式补两零块），零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
+`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish` 链式，遵循 `base←intf←实现←门面`；薄门面委托 `TTarWriter` + `CreateBytesStream`，`Finish` 快照 `ArchiveSnapshotStream` 并校验 short read；门面导出单一 `TarBuilder` inline 工厂（`NewTarBuilder` 已移除），需显式 `Finish`（析构经 `TTarWriter` 兜底补两零块 best-effort），零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
 
 ## 2. 不变量
 

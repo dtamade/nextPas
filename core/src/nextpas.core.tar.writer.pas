@@ -98,9 +98,21 @@ var
   procedure PutOctal(AOfs, ALen: SizeInt; AValue: Int64);
   var
     I: SizeInt;
+    MaxBase256: Int64;
   begin
+    if AValue < 0 then
+      raise EIOError.CreateFmt('tar: negative numeric field %d at offset %d', [AValue, AOfs]);
     if AValue >= (Int64(1) shl ((ALen - 1) * 3)) then
     begin
+      if ALen <= 1 then
+        raise EIOError.Create('tar: numeric field too small for base-256');
+      // base-256 可表示范围：首字节 0x80 保留 1 位 + (ALen-1)*8 位
+      if ALen - 1 >= 8 then
+        MaxBase256 := High(Int64)
+      else
+        MaxBase256 := (Int64(1) shl ((ALen - 1) * 8 + 7)) - 1;
+      if AValue > MaxBase256 then
+        raise EIOError.CreateFmt('tar: numeric field %d exceeds base-256 capacity %d at offset %d', [AValue, MaxBase256, AOfs]);
       Block[AOfs] := C_TAR_BASE256_SENTINEL;
       for I := ALen - 1 downto 1 do
       begin

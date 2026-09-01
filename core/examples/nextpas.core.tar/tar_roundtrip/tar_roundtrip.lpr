@@ -40,7 +40,6 @@ var
   Arc, Arc2: TBytes;
   R: TTarReader;
   H: TTarHeader;
-  B: ITarBuilder;
   S: IStream;
   W: TTarWriter;
   Opts: TTarAddOptions;
