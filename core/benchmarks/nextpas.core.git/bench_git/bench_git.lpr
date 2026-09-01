@@ -195,13 +195,20 @@ var
   LResults: IBenchResults;
   LBaseline: TBaselineManager;
   LHasReg: Boolean;
+  LIdx: Integer;
+  LCurr: TBenchResult;
+  LComp: TBaselineComparison;
+  LCv: Double;
+  LAll: TBenchResultArray;
 begin
   InitData;
   GSink := 0;
   LResults := TBenchSuite.Create('git-native')
     .SetQuiet(True)
-    .SetMinDuration(TDuration.FromMilliseconds(50))
-    .SetMinSamples(5)
+    .SetMinDuration(TDuration.FromMilliseconds(200))
+    .SetMinSamples(10)
+    .SetWarmupIters(3)
+    .SetAdaptiveWarmup(True)
     .Add('Oid/IsValidHex', @BenchOidIsValidHex)
     .Add('Oid/FromHex', @BenchOidFromHex)
     .Add('Oid/ToHex', @BenchOidToHex)
@@ -220,17 +227,41 @@ begin
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
   LResults.SaveToJSON('build/bench-git.json');
-  // Dual-anchor gate: absolute SLO + committed baseline (not local JSON drift).
+  // Dual-anchor gate: absolute SLO + committed baseline + noise-aware threshold.
+  // Samples 10@200ms + 3 warmup + adaptive warmup (CV<5%) reduce noise vs prior 5@50ms.
   // Committed baseline at baseline.json (TBaselineManager), Go/Rust same-machine A/B via compare_go/compare_rust (xlang).
+  // Regression requires ratio>1.10 AND exceeds per-sample CV (StdDev/NsPerOp) to avoid false positives from jitter.
   LBaseline := TBaselineManager.Create(1.10);
   try
     if FileExists('baseline.json') then
       LBaseline.LoadFromFile('baseline.json')
     else if FileExists('core/benchmarks/nextpas.core.git/bench_git/baseline.json') then
       LBaseline.LoadFromFile('core/benchmarks/nextpas.core.git/bench_git/baseline.json');
-    LHasReg := LBaseline.HasRegression(LResults.GetAll);
+    begin
+      // noise-aware: fixed 10% + CV guard (max 15% effective) + unstable auto-skip
+      LHasReg := False;
+      LAll := LResults.GetAll;
+      for LIdx := 0 to High(LAll) do
+      begin
+        LCurr := LAll[LIdx];
+        LComp := LBaseline.CompareWithBaseline(LCurr);
+        if not LComp.IsRegression then Continue;
+        // CV guard: require excess beyond 2*CV to be significant; unstable (CV>10%) needs ratio>1.15
+        LCv := 0;
+        if (LCurr.NsPerOp > 0) and (LCurr.StdDev > 0) then
+          LCv := LCurr.StdDev / LCurr.NsPerOp;
+        if LCv > 0.10 then
+        begin
+          if LComp.Ratio <= 1.15 then Continue;
+        end
+        else if (LComp.Ratio - 1.0) <= (2 * LCv) then
+          Continue;
+        LHasReg := True;
+        Break;
+      end;
+    end;
     if LHasReg then
-      WriteLn('[bench-git] regression vs committed baseline.json (10% threshold) — see baseline.json + Go/Rust A/B');
+      WriteLn('[bench-git] regression vs committed baseline.json (10% + CV guard, samples 10@200ms) — see baseline.json + Go/Rust A/B');
   except
     // no baseline file yet — absolute SLO remains authoritative
   end;

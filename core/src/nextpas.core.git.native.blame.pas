@@ -33,6 +33,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.revwalk,
@@ -170,63 +171,76 @@ begin
   while Result < AValue do Result := Result shl 1;
 end;
 
-// LCS forward row: O(bLen) memory, zero-copy via offsets
-function LcsForward(const AOld: TStringArray; aOff, aLen: Integer;
-  const ANew: TStringArray; bOff, bLen: Integer): TIntArray; inline;
-var
-  Prev, Cur, Tmp: TIntArray;
-  I, J: Integer;
+// perf: EnsureIntCapacity single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2),
+// amortized O(1) ensure, zero-copy Move in callers, inline hot.
+procedure EnsureIntCapacity(var Arr: TIntArray; Need: Integer); inline;
 begin
-  SetLength(Prev, bLen + 1);
-  SetLength(Cur, bLen + 1);
+  if Length(Arr) < Need then
+    SetLength(Arr, Integer(GrowArrayCapacity(SizeUInt(Length(Arr)), SizeUInt(Need))));
+end;
+
+// LCS forward row: O(bLen) memory, zero-copy via offsets, reuse buffers (no per-layer alloc)
+procedure LcsForwardReuse(const AOld: TStringArray; aOff, aLen: Integer;
+  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray); inline;
+var
+  I, J: Integer;
+  Tmp: TIntArray;
+begin
+  EnsureIntCapacity(BufPrev, bLen + 1);
+  EnsureIntCapacity(BufCur, bLen + 1);
+  EnsureIntCapacity(OutRow, bLen + 1);
+  for J := 0 to bLen do BufPrev[J] := 0;
   for I := 1 to aLen do
   begin
-    Cur[0] := 0;
+    BufCur[0] := 0;
     for J := 1 to bLen do
       if AOld[aOff + I - 1] = ANew[bOff + J - 1] then
-        Cur[J] := Prev[J - 1] + 1
-      else if Prev[J] >= Cur[J - 1] then
-        Cur[J] := Prev[J]
+        BufCur[J] := BufPrev[J - 1] + 1
+      else if BufPrev[J] >= BufCur[J - 1] then
+        BufCur[J] := BufPrev[J]
       else
-        Cur[J] := Cur[J - 1];
-    Tmp := Prev; Prev := Cur; Cur := Tmp;
+        BufCur[J] := BufCur[J - 1];
+    Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  Result := Prev;
+  // zero-copy bulk Move, single copy into OutRow
+  if bLen >= 0 then Move(BufPrev[0], OutRow[0], (bLen + 1) * SizeOf(Integer));
 end;
 
-// LCS on reversed slices — same O(bLen) memory, zero-copy
-function LcsForwardRev(const AOld: TStringArray; aOff, aLen: Integer;
-  const ANew: TStringArray; bOff, bLen: Integer): TIntArray; inline;
+// LCS on reversed slices — same O(bLen) memory, zero-copy, reuse buffers
+procedure LcsForwardRevReuse(const AOld: TStringArray; aOff, aLen: Integer;
+  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray); inline;
 var
-  Prev, Cur, Tmp: TIntArray;
   I, J: Integer;
+  Tmp: TIntArray;
 begin
-  SetLength(Prev, bLen + 1);
-  SetLength(Cur, bLen + 1);
+  EnsureIntCapacity(BufPrev, bLen + 1);
+  EnsureIntCapacity(BufCur, bLen + 1);
+  EnsureIntCapacity(OutRow, bLen + 1);
+  for J := 0 to bLen do BufPrev[J] := 0;
   for I := 1 to aLen do
   begin
-    Cur[0] := 0;
+    BufCur[0] := 0;
     for J := 1 to bLen do
       if AOld[aOff + aLen - I] = ANew[bOff + bLen - J] then
-        Cur[J] := Prev[J - 1] + 1
-      else if Prev[J] >= Cur[J - 1] then
-        Cur[J] := Prev[J]
+        BufCur[J] := BufPrev[J - 1] + 1
+      else if BufPrev[J] >= BufCur[J - 1] then
+        BufCur[J] := BufPrev[J]
       else
-        Cur[J] := Cur[J - 1];
-    Tmp := Prev; Prev := Cur; Cur := Tmp;
+        BufCur[J] := BufCur[J - 1];
+    Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  Result := Prev;
+  if bLen >= 0 then Move(BufPrev[0], OutRow[0], (bLen + 1) * SizeOf(Integer));
 end;
 
 procedure HirschbergCollect(const AOld, ANew: TStringArray;
-  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray); forward;
+  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray; var AccCnt, AccCap: SizeUInt;
+  var BufPrev, BufCur, BufL1, BufLRev: TIntArray); forward;
 
 procedure HirschbergCollect(const AOld, ANew: TStringArray;
-  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray);
+  aOff, aLen, bOff, bLen: Integer; var Acc: TMatchArray; var AccCnt, AccCap: SizeUInt;
+  var BufPrev, BufCur, BufL1, BufLRev: TIntArray);
 var
   Mid, BestK, BestVal, J, V: Integer;
-  L1, LRev: TIntArray;
-  Cnt: Integer;
 begin
   if (aLen = 0) or (bLen = 0) then Exit;
   if aLen = 1 then
@@ -234,10 +248,15 @@ begin
     for J := 0 to bLen - 1 do
       if AOld[aOff] = ANew[bOff + J] then
       begin
-        Cnt := Length(Acc);
-        SetLength(Acc, Cnt + 1);
-        Acc[Cnt].OldIdx := aOff;
-        Acc[Cnt].NewIdx := bOff + J;
+        // perf: amortized doubling via bytes.ops GrowArrayCapacity single source, amortized O(1), inline hot
+        if AccCnt >= AccCap then
+        begin
+          AccCap := GrowArrayCapacity(AccCap, AccCnt + 1);
+          SetLength(Acc, AccCap);
+        end;
+        Acc[AccCnt].OldIdx := aOff;
+        Acc[AccCnt].NewIdx := bOff + J;
+        Inc(AccCnt);
         Break;
       end;
     Exit;
@@ -247,29 +266,35 @@ begin
     for J := 0 to aLen - 1 do
       if AOld[aOff + J] = ANew[bOff] then
       begin
-        Cnt := Length(Acc);
-        SetLength(Acc, Cnt + 1);
-        Acc[Cnt].OldIdx := aOff + J;
-        Acc[Cnt].NewIdx := bOff;
+        if AccCnt >= AccCap then
+        begin
+          AccCap := GrowArrayCapacity(AccCap, AccCnt + 1);
+          SetLength(Acc, AccCap);
+        end;
+        Acc[AccCnt].OldIdx := aOff + J;
+        Acc[AccCnt].NewIdx := bOff;
+        Inc(AccCnt);
         Break;
       end;
     Exit;
   end;
   Mid := aLen div 2;
-  L1 := LcsForward(AOld, aOff, Mid, ANew, bOff, bLen);
-  LRev := LcsForwardRev(AOld, aOff + Mid, aLen - Mid, ANew, bOff, bLen);
+  // perf: reuse buffers (zero-copy slice via off,len) — LcsForwardReuse ensures capacity via GrowArrayCapacity,
+  // single Move bulk copy into BufL1/BufLRev, no per-layer double SetLength allocation
+  LcsForwardReuse(AOld, aOff, Mid, ANew, bOff, bLen, BufL1, BufPrev, BufCur);
+  LcsForwardRevReuse(AOld, aOff + Mid, aLen - Mid, ANew, bOff, bLen, BufLRev, BufPrev, BufCur);
   BestK := 0; BestVal := -1;
   for J := 0 to bLen do
   begin
-    V := L1[J] + LRev[bLen - J];
+    V := BufL1[J] + BufLRev[bLen - J];
     if V > BestVal then
     begin
       BestVal := V;
       BestK := J;
     end;
   end;
-  HirschbergCollect(AOld, ANew, aOff, Mid, bOff, BestK, Acc);
-  HirschbergCollect(AOld, ANew, aOff + Mid, aLen - Mid, bOff + BestK, bLen - BestK, Acc);
+  HirschbergCollect(AOld, ANew, aOff, Mid, bOff, BestK, Acc, AccCnt, AccCap, BufPrev, BufCur, BufL1, BufLRev);
+  HirschbergCollect(AOld, ANew, aOff + Mid, aLen - Mid, bOff + BestK, bLen - BestK, Acc, AccCnt, AccCap, BufPrev, BufCur, BufL1, BufLRev);
 end;
 
 function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray; inline;
@@ -280,6 +305,7 @@ var
   Mask, I, J, Pos: Integer;
   H: THashCode;
   N, M: Integer;
+  LCount, LCap: SizeUInt;
 begin
   Result := nil;
   N := Length(AOld); M := Length(ANew);
@@ -303,7 +329,8 @@ begin
       Table[Pos].Line := AOld[I];
     end;
   end;
-  SetLength(Result, 0);
+  // perf: amortized doubling via bytes.ops GrowArrayCapacity single source, amortized O(1), final shrink once
+  LCount := 0; LCap := 0;
   for J := 0 to M - 1 do
   begin
     H := HashString(ANew[J]);
@@ -312,20 +339,29 @@ begin
     begin
       if (Table[Pos].Hash = H) and (Table[Pos].Line = ANew[J]) then
       begin
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)].OldIdx := Table[Pos].Idx;
-        Result[High(Result)].NewIdx := J;
+        if LCount >= LCap then
+        begin
+          LCap := GrowArrayCapacity(LCap, LCount + 1);
+          SetLength(Result, LCap);
+        end;
+        Result[LCount].OldIdx := Table[Pos].Idx;
+        Result[LCount].NewIdx := J;
+        Inc(LCount);
         Break;
       end;
       Pos := (Pos + 1) and Mask;
     end;
   end;
+  if SizeUInt(Length(Result)) <> LCount then
+    SetLength(Result, LCount);
 end;
 
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray;
 var
   n, m: Integer;
   Acc: TMatchArray;
+  AccCnt, AccCap: SizeUInt;
+  BufPrev, BufCur, BufL1, BufLRev: TIntArray;
 begin
   Result := nil;
   n := Length(AOld);
@@ -336,8 +372,13 @@ begin
     Result := ComputeMatchesFallback(AOld, ANew);
     Exit;
   end;
-  Acc := nil;
-  HirschbergCollect(AOld, ANew, 0, n, 0, m, Acc);
+  Acc := nil; AccCnt := 0; AccCap := 0;
+  BufPrev := nil; BufCur := nil; BufL1 := nil; BufLRev := nil;
+  // stability: SetLength is exception-safe; managed arrays auto-released on exception, no leak;
+  // final shrink ensures logical length = count, Buffers released via managed refcount on exit
+  HirschbergCollect(AOld, ANew, 0, n, 0, m, Acc, AccCnt, AccCap, BufPrev, BufCur, BufL1, BufLRev);
+  if SizeUInt(Length(Acc)) <> AccCnt then
+    SetLength(Acc, AccCnt);
   Result := Acc;
 end;
 
