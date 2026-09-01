@@ -129,6 +129,9 @@
 ### S65 — 性能攻坚（1.0.1 巡检）· 性能 — 已落地
 - `checksum.crc32` slice-by-8：8 表并行（`T[0..7]` 由 `T0` 递推 ` (C shr 8) xor T0[C & FF]`），`Crc32Update` 每 8 字节一次 8 路查表，余量回退单字节；`123456789 → CBF43926` 与 450 组 fuzz 及非对齐 50 字节对照全一致，`zip` `27/27/22` 与 `fuzz 5` 全绿
 
+### S66 — TOCTOU 双重校验（1.0.1 巡检）· 稳定性 — 已落地
+- `zip.fs` `TOCTOU` 加固：`ADestDir` 入口与 `MkdirAll` 后双 `EnsureNoSymlinkInPath`，每条目父目录 `MkdirAll` 后二次校验，落盘后对父路径与 `LFull` `IsSymlink` 非穿透校验，`MkdirAll` 目录落地后校验，`Symlink` 后校验，收口 `ZipExtractToDirWithOptions` 窗口
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |

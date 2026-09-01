@@ -13,7 +13,8 @@ unit nextpas.core.zip.fs;
  * 位。目录的权限与 mtime 延迟到全部内容写完后再还原（否则子条目写入会刷新
  * 目录 mtime，收紧的目录权限也可能阻断后续落盘）。解包非原子：已落盘文件不
  * 回滚；异常时已收集的 LDirs 仍在 finally 中逆序定稿（权限/mtime），需外层
- * 整体清理或改用 WithOptions 的原子变体（临时目录+rename，待提供）。
+ * 整体清理或改用原子变体（临时目录+rename，待提供）。TOCTOU 已加固为
+ * 落盘前/后双重 EnsureNoSymlinkInPath + 落盘结果非 symlink 校验。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -319,6 +320,7 @@ begin
   LOpts.MaxOutputSize := AOptions.MaxOutputSize;
   LOpts.MaxTotalOutputSize := AOptions.MaxTotalOutputSize;
   LR := NewZipReaderWithOptions(AData, LOpts);
+  EnsureNoSymlinkInPath(ADestDir);
   MkdirAll(ADestDir, PermDirDefault);
   EnsureNoSymlinkInPath(ADestDir);
   SetLength(LDirs, 0);
@@ -349,12 +351,16 @@ begin
       LParent := Copy(LFull, 1, LSep - 1);
       EnsureNoSymlinkInPath(LParent);
       MkdirAll(LParent, PermDirDefault);
+      EnsureNoSymlinkInPath(LParent);
     end;
     { 仅 unix 归档（高 16 位模式字非零）还原权限；其余保持平台默认。
       权限位 = 模式字低 12 位（含 setuid/sticky）。 }
     LMode := ZipUnixModeOf(LE);
     if LE.IsDirectory then
-      MkdirAll(LFull, PermDirDefault)
+    begin
+      MkdirAll(LFull, PermDirDefault);
+      EnsureNoSymlinkInPath(LFull);
+    end
     else if LE.IsSymlink then
     begin
       { opt-in 保真路径：条目载荷即链接目标文本，二次校验防绝对/..穿越 }
@@ -366,9 +372,16 @@ begin
         raise EParseError.Create('zip extract: refusing unsafe symlink target: ' + LE.Name + ' -> ' + LTarget);
       EnsureNoSymlinkInPath(LParent);
       Symlink(LTarget, LFull);
+      EnsureNoSymlinkInPath(LParent);
     end
     else
+    begin
       WriteFile(LFull, LR.ExtractToBytes(LI), PermDefault);
+      { TOCTOU 加固：落盘后二次校验父路径仍无 symlink 穿透，且落盘结果非 symlink }
+      EnsureNoSymlinkInPath(LParent);
+      if IsSymlink(LFull) then
+        raise EParseError.Create('zip extract: symlink in path after write: ' + LFull);
+    end;
     if not LE.IsSymlink then
     begin
       if LE.IsDirectory then
