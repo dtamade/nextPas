@@ -28,9 +28,12 @@ type
 
 { 枚举目录树为打包条目。超过 RESPACK_MAX_INPUT_BYTES raise EResPackTooLarge；
   遍历错误 raise EResPackDirSourceFailed。
-  @deprecated 小包便捷保留；大包请优先 ResPackBuildStreamFromDir 流式mmap 管线。 }
+  @deprecated 小包便捷（< few MB / <1k 文件）兼容保留；大包/万文件/512MB 场景
+  请优先 ResPackBuildStreamFromDir / ResPackBuildFromDir 流式mmap 管线
+  （MmapOpen 零拷贝，峰值 ~1×+头 vs 本函数 TBytes 全量锚点 2×+头）— Stream 为
+  统一抽象，本函数为薄转发兼容，详见热路径注释与 CONTRACT INV-R10。 }
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap)';
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap 1x+head); this 2x peak path kept for < few MB convenience';
 
 { 流式mmap：目录 → 流式两遍分段零双驻留打包。MmapOpen 零拷贝，映射生命期至
   AWrite 完成，try..finally 释放不丢。 }
@@ -137,56 +140,31 @@ begin
   Result := True;
 end;
 
-{ 指数扩容单源：bytes.ops BytesNextCapacity 单源 O(n²)→O(n)，inline 零拷贝，回绕防护收口 }
+{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝 }
 function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
 begin
-  Result := BytesNextCapacity(ACap, ANeeded);
-end;
-
-{ 公共双数组扩容 helper：EnsureDual 双重载（TBytes / IMappedFile），复用 bytes.ops 单源，inline 零拷贝 }
-procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackBytesArray); overload; inline;
-begin
-  if ACount < ACap then Exit;
-  ACap := BytesNextCapacity(ACap, ANeeded);
-  SetLength(AEntries, ACap);
-  SetLength(ASecond, ACap);
-end;
-
-procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackMapsArray); overload; inline;
-begin
-  if ACount < ACap then Exit;
-  ACap := BytesNextCapacity(ACap, ANeeded);
-  SetLength(AEntries, ACap);
-  SetLength(ASecond, ACap);
+  Result := ACap * 2;
+  if Result < 8 then Result := 8;
+  if Result < ANeeded then Result := ANeeded;
 end;
 
 procedure EnsureDirCapacity(var Ctx: TDirContext; const ANeeded: SizeUInt); inline;
+var NewCap: SizeUInt;
 begin
-  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Bytes);
+  if Ctx.Count < Ctx.Cap then Exit;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
+  SetLength(Ctx.Entries, NewCap);
+  SetLength(Ctx.Bytes, NewCap);
+  Ctx.Cap := NewCap;
 end;
 
 procedure EnsureStreamCapacity(var Ctx: TStreamContext; const ANeeded: SizeUInt); inline;
 begin
-  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
-end;
-
-type
-  PEmbedStreamContext = ^TEmbedStreamContext;
-  TEmbedStreamContext = record
-    Root: string;
-    EmbedOpts: TResPackEmbedOptions;
-    Entries: TResPackInputArray;
-    Maps: TRespackMapsArray;
-    Count: SizeUInt;
-    Cap: SizeUInt;
-    Total: SizeUInt;
-    Failed: Boolean;
-    FailMsg: string;
-  end;
-
-procedure EnsureEmbedCapacity(var Ctx: TEmbedStreamContext; const ANeeded: SizeUInt); inline;
-begin
-  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
+  if Ctx.Count < Ctx.Cap then Exit;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
+  SetLength(Ctx.Entries, NewCap);
+  SetLength(Ctx.Maps, NewCap);
+  Ctx.Cap := NewCap;
 end;
 
 { Walk 热路径泛型上下文：Stat/FilterRelPath/TryReserveTotal/Ensure*Capacity/失败归一单源，inline 零拷贝 }
@@ -230,40 +208,6 @@ begin
   Result := True;
 end;
 
-{ mmap 零拷贝单源：Stat Size → MmapOpen → 空文件/大小校验/异常归一，~45 行重复收口 MmapRequire }
-function TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean;
-begin
-  AMap := nil;
-  AErrMsg := '';
-  if AStatSize = 0 then Exit(True);
-  try
-    AMap := MmapOpen(APath);
-    if (AMap = nil) or (AMap.Size = 0) or (AMap.Data = nil) then
-    begin
-      if AStatSize <> 0 then
-      begin
-        AErrMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
-        AMap := nil;
-        Exit(False);
-      end;
-      AMap := nil;
-    end
-    else if SizeUInt(AMap.Size) <> SizeUInt(AStatSize) then
-    begin
-      AErrMsg := 'mmap size mismatch: stat=' + IntToStr(AStatSize) + ' cmap=' + IntToStr(AMap.Size) + ' (path=' + APath + ')';
-      Exit(False);
-    end;
-    Result := True;
-  except
-    on E: Exception do
-    begin
-      AErrMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
-      AMap := nil;
-      Result := False;
-    end;
-  end;
-end;
-
 function WalkProc(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception; AUserData: Pointer): Boolean;
 var
@@ -287,17 +231,12 @@ begin
     nextpas.core.mem.memory_map/nextpas.core.io.mapped，已落地 ResPackBuildStreamFromDir 流式mmap
     管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
     大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
-    （deprecated 兼容，Stream 为统一抽象，硬性 64MiB 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
+    （deprecated 兼容，Stream 为统一抽象）。
     已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
     Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
     单源证据：RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发。 }
   if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if LSum > SizeUInt(64) * 1024 * 1024 then
-  begin
-    WalkFail(Ctx^.Failed, Ctx^.FailMsg, 'deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
-    Exit(False);
-  end;
   Idx := Ctx^.Count;
   EnsureDirCapacity(Ctx^, Idx + 1);
   try

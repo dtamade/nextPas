@@ -62,10 +62,9 @@ type
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
     { 零拷贝路径视图单源：TByteSpan 唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare/SpanToString 单源；
-      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY via PathSpanRaw），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用
-      LowerBound 含 while 二分循环，守 design-conventions 红线 2 禁 inline，避 I-Cache 复制膨胀 }
+      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用 }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
-    function LowerBound(const APath: string): SizeUInt;
+    function LowerBound(const APath: string): SizeUInt; inline;
     function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
   end;
 
@@ -471,7 +470,7 @@ begin
   Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
-function TResPack.LowerBound(const APath: string): SizeUInt;
+function TResPack.LowerBound(const APath: string): SizeUInt; inline;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
@@ -480,9 +479,12 @@ begin
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
-  Query := TByteSpan.FromStr(APath);
-  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造 via PathSpanRaw，零分配），
-    复用 bytes.ops.SpanCompare 单源与 TByteSpan.FromStr 单源（零拷贝视图工厂 inline 零分配）；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
+  if Length(APath) > 0 then
+    Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
+  else
+    Query := TByteSpan.Empty;
+  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造，inline 零调用开销），
+    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造（原手工 RdU*LE 重复解码已消除），零分配 }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;

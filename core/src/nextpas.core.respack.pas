@@ -65,7 +65,7 @@ function ResPackValidPath(const APath: string;
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline;
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming 1x)';
 procedure ResPackBuildStreamFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
   const AInclude: TResPackIncludeFunc = nil); inline;
