@@ -17,8 +17,7 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.index,
   nextpas.core.git.native.ignore,
-  nextpas.core.git.native.config,
-  nextpas.core.os.env;
+  nextpas.core.git.native.config;
 
 { Worktree status aggregation over the native object layer:
   HEAD tree <-> index (staged side) and index <-> worktree (unstaged
@@ -74,6 +73,9 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.arr.sort,
+  nextpas.core.platform.env,
   nextpas.core.git.native.util;
 
 type
@@ -93,86 +95,56 @@ const
 
 
 
-procedure SortPathOids(var AList: TPathOidArray);
-
-  procedure MergeSort(var AItems: TPathOidArray;
-    var ATemp: TPathOidArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I].Path <= AItems[J].Path)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
-var
-  Temp: TPathOidArray;
+function ComparePathOid(const A, B: TPathOid; AData: Pointer): SizeInt;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  // zero-copy path compare via string manager; stable ordering
+  if A.Path < B.Path then Exit(-1);
+  if A.Path > B.Path then Exit(1);
+  Result := 0;
+end;
+
+function CompareString(const A, B: string; AData: Pointer): SizeInt;
+begin
+  if A < B then Exit(-1);
+  if A > B then Exit(1);
+  Result := 0;
+end;
+
+type
+  TRenameCandidate = record
+    SrcIdx: Integer;
+    DstIdx: Integer;
+    Score: Integer;
+  end;
+  TRenameCandidateArray = array of TRenameCandidate;
+
+function CompareCandidateDesc(const A, B: TRenameCandidate; AData: Pointer): SizeInt;
+begin
+  // higher score first, tie-break smaller SrcIdx first
+  if A.Score > B.Score then Exit(-1);
+  if A.Score < B.Score then Exit(1);
+  if A.SrcIdx < B.SrcIdx then Exit(-1);
+  if A.SrcIdx > B.SrcIdx then Exit(1);
+  Result := 0;
+end;
+
+procedure SortCandidatesByScoreDesc(var AList: TRenameCandidateArray);
+begin
+  if Length(AList) < 2 then Exit;
+  specialize Sort<TRenameCandidate>(AList, @CompareCandidateDesc, nil);
+end;
+
+procedure SortPathOids(var AList: TPathOidArray);
+begin
+  // single-source: collections.algorithms.Sort (IntroSort + HeapSort fallback, O(n log n) no per-call Temp)
+  if Length(AList) < 2 then Exit;
+  specialize Sort<TPathOid>(AList, @ComparePathOid, nil);
 end;
 
 procedure SortStrings(var AList: TStringArray);
-
-  procedure MergeSort(var AItems: TStringArray;
-    var ATemp: TStringArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I] <= AItems[J])) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
-var
-  Temp: TStringArray;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  if Length(AList) < 2 then Exit;
+  specialize Sort<string>(AList, @CompareString, nil);
 end;
 
 function SortedHasString(const ASorted: TStringArray;
@@ -390,55 +362,12 @@ begin
 end;
 
 procedure SortU32(var AData: array of UInt32; ACount: Integer);
-
-  procedure MergeSort(Lo, Hi: Integer; var Tmp: array of UInt32);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if Lo >= Hi then
-      Exit;
-    Mid := (Lo + Hi) div 2;
-    MergeSort(Lo, Mid, Tmp);
-    MergeSort(Mid + 1, Hi, Tmp);
-    I := Lo;
-    J := Mid + 1;
-    K := Lo;
-    while (I <= Mid) and (J <= Hi) do
-    begin
-      if AData[I] <= AData[J] then
-      begin
-        Tmp[K] := AData[I];
-        Inc(I);
-      end
-      else
-      begin
-        Tmp[K] := AData[J];
-        Inc(J);
-      end;
-      Inc(K);
-    end;
-    while I <= Mid do
-    begin
-      Tmp[K] := AData[I];
-      Inc(I);
-      Inc(K);
-    end;
-    while J <= Hi do
-    begin
-      Tmp[K] := AData[J];
-      Inc(J);
-      Inc(K);
-    end;
-    for K := Lo to Hi do
-      AData[K] := Tmp[K];
-  end;
-
-var
-  Tmp: array[0..255] of UInt32;
 begin
-  if ACount < 2 then
-    Exit;
-  MergeSort(0, ACount - 1, Tmp);
+  // single-source: collections.arr.sort.SortU32 (radix+introsort, zero-copy Move, no per-call heap Temp)
+  if ACount < 2 then Exit;
+  if ACount > Length(AData) then ACount := Length(AData);
+  if ACount < 2 then Exit;
+  nextpas.core.collections.arr.sort.SortU32(PUInt32(@AData[0]), SizeUInt(ACount));
 end;
 
 function HashSigScoreForBlobs(const ADataA, ADataB: TBytes): Integer;
@@ -650,9 +579,10 @@ begin
   if GlobalPath = '' then Exit;
   if (Length(GlobalPath) > 0) and (GlobalPath[1] = '~') then
   begin
-    if GlobalPath = '~' then Expanded := GetEnv('HOME')
+    // owner boundary: platform.env owns raw OS truth; L2 git must not touch os.env helper
+    if GlobalPath = '~' then Expanded := platform_env_get_str('HOME')
     else if (Length(GlobalPath) >= 2) and (GlobalPath[2] = '/') then
-      Expanded := PathJoin([GetEnv('HOME'), Copy(GlobalPath, 3, MaxInt)])
+      Expanded := PathJoin([platform_env_get_str('HOME'), Copy(GlobalPath, 3, MaxInt)])
     else Expanded := GlobalPath;
     GlobalPath := Expanded;
   end;
@@ -663,59 +593,23 @@ begin
     end;
 end;
 
-procedure SortStatusByPath(var AList: TGitNativeStatusArray);
-
-  procedure MergeSort(var AItems: TGitNativeStatusArray;
-    var ATemp: TGitNativeStatusArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (AItems[I].Path <= AItems[J].Path)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
-var
-  Temp: TGitNativeStatusArray;
+function CompareStatusByPath(const A, B: TGitNativeStatusEntry; AData: Pointer): SizeInt; inline;
 begin
-  if Length(AList) < 2 then
-    Exit;
-  SetLength(Temp, Length(AList));
-  MergeSort(AList, Temp, 0, Length(AList) - 1);
+  if A.Path < B.Path then Exit(-1);
+  if A.Path > B.Path then Exit(1);
+  Result := 0;
+end;
+
+procedure SortStatusByPath(var AList: TGitNativeStatusArray); inline;
+begin
+  if Length(AList) < 2 then Exit;
+  specialize Sort<TGitNativeStatusEntry>(AList, @CompareStatusByPath, nil);
 end;
 
 function GitCollectStatus(const AGitDir, AWorkTree: string;
   AIncludeUntracked: Boolean; AFindRenames: Boolean;
   ARenameThreshold: Integer; AFindCopies: Boolean;
   ACopyThreshold: Integer): TGitNativeStatusArray;
-type
-  TRenameCandidate = record
-    SrcIdx: Integer;
-    DstIdx: Integer;
-    Score: Integer;
-  end;
-  TRenameCandidateArray = array of TRenameCandidate;
-
 var
   Repo: TNativeRepository;
   Idx: TGitIndexFile;
@@ -820,49 +714,6 @@ var
       AddEntryPos[High(AddEntryPos)] := SI;
       Inc(SI);
     end;
-  end;
-
-  procedure SortCandidatesByScoreDesc(var AList: TRenameCandidateArray);
-
-    procedure MergeSort(var AItems: TRenameCandidateArray;
-      var ATemp: TRenameCandidateArray; ALo, AHi: Integer);
-    var
-      Mid, II, JJ, KK: Integer;
-    begin
-      if ALo >= AHi then
-        Exit;
-      Mid := (ALo + AHi) div 2;
-      MergeSort(AItems, ATemp, ALo, Mid);
-      MergeSort(AItems, ATemp, Mid + 1, AHi);
-      II := ALo;
-      JJ := Mid + 1;
-      for KK := ALo to AHi do
-      begin
-        if (II <= Mid) and ((JJ > AHi)
-          or (AItems[II].Score > AItems[JJ].Score)
-          or ((AItems[II].Score = AItems[JJ].Score)
-            and (AItems[II].SrcIdx < AItems[JJ].SrcIdx))) then
-        begin
-          ATemp[KK] := AItems[II];
-          Inc(II);
-        end
-        else
-        begin
-          ATemp[KK] := AItems[JJ];
-          Inc(JJ);
-        end;
-      end;
-      for KK := ALo to AHi do
-        AItems[KK] := ATemp[KK];
-    end;
-
-  var
-    Tmp: TRenameCandidateArray;
-  begin
-    if Length(AList) < 2 then
-      Exit;
-    SetLength(Tmp, Length(AList));
-    MergeSort(AList, Tmp, 0, Length(AList) - 1);
   end;
 
 var

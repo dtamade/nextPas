@@ -45,11 +45,10 @@ begin
   for I := 0 to GitOidRawLen - 1 do Result.Bytes[I] := 0;
 end;
 
-function GitOidIsZero(const AOid: TGitOid): Boolean;
-var I: Integer;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
-  for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
+  // single source via bytes.ops IsZeroBytes, zero-copy TByteSpan view (no alloc), inline for hot path
+  Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
 end;
 
 function BuildPack(const ALocalGitDir: string; const AUpdates: array of TGitPushUpdate): TBytes;

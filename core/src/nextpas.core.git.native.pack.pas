@@ -25,14 +25,14 @@ type
     FDataSize: SizeUInt;
     FOids: array of TGitOid;
     FOffsets: array of Int64;
-    function GetCount: Integer;
-    function IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte;
-    function IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal;
-    function IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64;
+    function GetCount: Integer; inline;
+    function IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte; inline;
+    function IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal; inline;
+    function IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64; inline;
     procedure LoadIndex(const AIdxPath: string);
     function FindOffset(const AOid: TGitOid): Int64;
-    function ByteAt(APos: SizeUInt): Byte;
-    function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
+    function ByteAt(APos: SizeUInt): Byte; inline;
+    function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes; inline;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   public
@@ -44,6 +44,7 @@ type
   end;
 
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
 
 const
   GitMaxDeltaDepth = 64;
@@ -52,9 +53,13 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.bytes.binary;
 
-function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
+{ GitApplyDeltaReuse: zero-copy span view + buffer reuse via bytes.ops single source.
+  Core decode is single-source with GitApplyDelta; this wrapper reuses AReuse
+  capacity (ping-pong) to avoid O(depth) allocations. Inline hot path. }
+procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes); inline;
 var
   P: SizeInt;
   SrcSize, TgtSize, OutPos, CopyOff, CopySize: Int64;
@@ -62,9 +67,12 @@ var
   I: Integer;
   B: Byte;
   Shift: Integer;
+  LBaseSpan, LDeltaSpan, LOutSpan: TByteSpan;
 begin
+  // zero-copy views (single source via bytes.ops, no allocation)
+  LBaseSpan := TByteSpan.FromBytes(ABase);
+  LDeltaSpan := TByteSpan.FromBytes(ADelta);
   P := 0;
-  // inline LE7 varint decode (single source loop, no separate helper)
   SrcSize := 0; Shift := 0;
   repeat
     if (P < 0) or (P >= Length(ADelta)) then
@@ -73,7 +81,7 @@ begin
     SrcSize := SrcSize or (Int64(B and $7F) shl Shift);
     Inc(Shift, 7);
   until (B and $80) = 0;
-  if SrcSize <> Length(ABase) then
+  if SrcSize <> Int64(LBaseSpan.Len) then
     raise EGitError.Create('delta base size mismatch');
   TgtSize := 0; Shift := 0;
   repeat
@@ -85,8 +93,12 @@ begin
   until (B and $80) = 0;
   if (TgtSize < 0) or (TgtSize > MaxInt) then
     raise EGitError.Create('delta target size out of range');
-  Result := nil;
-  SetLength(Result, TgtSize);
+  // buffer reuse: keep capacity, single SetLength (bytes.ops single source for size checks)
+  if Int64(Length(AOut)) <> TgtSize then
+    SetLength(AOut, TgtSize);
+  if TgtSize = 0 then
+    Exit;
+  LOutSpan := TByteSpan.FromBytes(AOut);
   OutPos := 0;
   while P < Length(ADelta) do
   begin
@@ -110,17 +122,18 @@ begin
         end;
       if CopySize = 0 then
         CopySize := $10000;
-      if (CopyOff + CopySize > Length(ABase))
+      if (CopyOff + CopySize > Int64(LBaseSpan.Len))
         or (OutPos + CopySize > TgtSize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
-      Move(ABase[CopyOff], Result[OutPos], CopySize);
+      // zero-copy Move via base view, single source
+      Move((LBaseSpan.Data + CopyOff)^, (LOutSpan.Data + OutPos)^, SizeUInt(CopySize));
       OutPos := OutPos + CopySize;
     end
     else if Op > 0 then
     begin
       if (P + Op > Length(ADelta)) or (OutPos + Op > TgtSize) then
         raise EGitError.Create('delta insert instruction out of bounds');
-      Move(ADelta[P], Result[OutPos], Op);
+      Move((LDeltaSpan.Data + P)^, (LOutSpan.Data + OutPos)^, SizeUInt(Op));
       OutPos := OutPos + Op;
       Inc(P, Op);
     end
@@ -129,6 +142,21 @@ begin
   end;
   if OutPos <> TgtSize then
     raise EGitError.Create('delta produced wrong output size');
+end;
+
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
+begin
+  GitApplyDeltaInto(ABase, ADelta, AReuse);
+  Result := AReuse;
+end;
+
+function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
+var
+  LReuse: TBytes;
+begin
+  LReuse := nil;
+  GitApplyDeltaInto(ABase, ADelta, LReuse);
+  Result := LReuse;
 end;
 
 { TPackFile }
@@ -143,19 +171,19 @@ begin
   LoadIndex(AIdxPath);
 end;
 
-function TPackFile.GetCount: Integer;
+function TPackFile.GetCount: Integer; inline;
 begin
   Result := Length(FOids);
 end;
 
-function TPackFile.IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte;
+function TPackFile.IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte; inline;
 begin
   if APos >= SizeUInt(Length(AIdx)) then
     raise EGitError.Create('truncated pack index');
   Result := AIdx[APos];
 end;
 
-function TPackFile.IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal;
+function TPackFile.IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal; inline;
 begin
   // single source via bytes.binary (zero-copy, bounds checked)
   if APos + 4 > SizeUInt(Length(AIdx)) then
@@ -163,7 +191,7 @@ begin
   Result := ReadUInt32BE(PByte(@AIdx[APos]));
 end;
 
-function TPackFile.IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64;
+function TPackFile.IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64; inline;
 var
   Hi, Lo: Cardinal;
 begin
@@ -238,17 +266,18 @@ begin
   Result := FindOffset(AOid) >= 0;
 end;
 
-function TPackFile.ByteAt(APos: SizeUInt): Byte;
+function TPackFile.ByteAt(APos: SizeUInt): Byte; inline;
 begin
   if APos >= FDataSize then
     raise EGitError.Create('truncated packfile');
   Result := FData[APos];
 end;
 
-function TPackFile.InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
+function TPackFile.InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes; inline;
 var
   EndPos: SizeUInt;
 begin
+  // zero-copy decompress via PByte+Len view, no extra copy beyond decompressed bytes
   Result := GitZlibDecompressPtr(FData, FDataSize, APos, EndPos);
   if Int64(Length(Result)) <> AExpectSize then
     raise EGitError.Create('pack entry inflated size mismatch');
@@ -256,48 +285,67 @@ end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
   out AData: TBytes; ADepth: Integer);
+type
+  TChainEnt = record
+    Typ: Byte;
+    Sz: Int64;
+    P: SizeUInt;
+    BaseOff: SizeUInt;
+    BaseOid: TGitOid;
+    IsOfs: Boolean;
+    IsRef: Boolean;
+  end;
 var
-  B: Byte;
-  Typ: Byte;
+  Chain: array[0..GitMaxDeltaDepth] of TChainEnt;
+  ChainLen: Integer;
+  CurOff: SizeUInt;
+  B, Typ: Byte;
   Sz: Int64;
   Shift: Integer;
   P: SizeUInt;
   Rel: Int64;
-  BaseOff: SizeUInt;
-  BaseKind: TGitObjectKind;
-  BaseData, Delta: TBytes;
-  BaseOid: TGitOid;
   BaseOffSigned: Int64;
+  I: Integer;
+  CurKind: TGitObjectKind;
+  CurData, ReuseBuf, Delta, Tmp: TBytes;
+  BaseOid: TGitOid;
 begin
   if ADepth > GitMaxDeltaDepth then
     raise EGitError.Create('delta chain too deep');
-  P := AOffset;
-  B := ByteAt(P);
-  Inc(P);
-  Typ := (B shr 4) and $07;
-  Sz := B and $0F;
-  Shift := 4;
-  while (B and $80) <> 0 do
+  // iteratively collect delta chain, avoid recursion and per-level stack allocs
+  ChainLen := 0;
+  CurOff := AOffset;
+  while True do
   begin
+    if ChainLen > GitMaxDeltaDepth - ADepth then
+      raise EGitError.Create('delta chain too deep');
+    if ChainLen > GitMaxDeltaDepth then
+      raise EGitError.Create('delta chain too deep');
+    P := CurOff;
     B := ByteAt(P);
     Inc(P);
-    Sz := Sz or (Int64(B and $7F) shl Shift);
-    Inc(Shift, 7);
-  end;
-  case Typ of
-    1..4:
+    Typ := (B shr 4) and $07;
+    Sz := B and $0F;
+    Shift := 4;
+    while (B and $80) <> 0 do
     begin
-      case Typ of
-        1: AKind := gokCommit;
-        2: AKind := gokTree;
-        3: AKind := gokBlob;
-        4: AKind := gokTag;
-      end;
-      AData := InflateAt(P, Sz);
+      B := ByteAt(P);
+      Inc(P);
+      Sz := Sz or (Int64(B and $7F) shl Shift);
+      Inc(Shift, 7);
     end;
-    6:
+    Chain[ChainLen].Typ := Typ;
+    Chain[ChainLen].Sz := Sz;
+    Chain[ChainLen].IsOfs := False;
+    Chain[ChainLen].IsRef := False;
+    if Typ in [1..4] then
     begin
-      // OFS_DELTA: base located at a negative-encoded relative offset
+      Chain[ChainLen].P := P;
+      Inc(ChainLen);
+      Break;
+    end
+    else if Typ = 6 then
+    begin
       B := ByteAt(P);
       Inc(P);
       Rel := B and $7F;
@@ -307,20 +355,18 @@ begin
         Inc(P);
         Rel := ((Rel + 1) shl 7) or (B and $7F);
       end;
-      BaseOffSigned := Int64(AOffset) - Rel;
-      if (BaseOffSigned < 0) or (BaseOffSigned >= Int64(AOffset)) then
+      BaseOffSigned := Int64(CurOff) - Rel;
+      if (BaseOffSigned < 0) or (BaseOffSigned >= Int64(CurOff)) then
         raise EGitError.Create('corrupt ofs_delta base offset');
-      BaseOff := SizeUInt(BaseOffSigned);
-      ReadEntry(BaseOff, BaseKind, BaseData, ADepth + 1);
-      Delta := InflateAt(P, Sz);
-      AData := GitApplyDelta(BaseData, Delta);
-      if Int64(Length(AData)) <> Sz then
-        raise EGitError.Create('ofs_delta target size mismatch');
-      AKind := BaseKind;
-    end;
-    7:
+      Chain[ChainLen].P := P;
+      Chain[ChainLen].IsOfs := True;
+      Chain[ChainLen].BaseOff := SizeUInt(BaseOffSigned);
+      Inc(ChainLen);
+      CurOff := SizeUInt(BaseOffSigned);
+      Continue;
+    end
+    else if Typ = 7 then
     begin
-      // REF_DELTA: base identified by raw oid stored inline
       if P + GitOidRawLen > FDataSize then
         raise EGitError.Create('truncated ref_delta header');
       Move(FData[P], BaseOid.Bytes[0], GitOidRawLen);
@@ -328,17 +374,44 @@ begin
       if FindOffset(BaseOid) < 0 then
         raise EGitError.CreateFmt('ref_delta base %s not in same pack',
           [GitOidToHex(BaseOid)]);
-      ReadEntry(SizeUInt(FindOffset(BaseOid)), BaseKind, BaseData,
-        ADepth + 1);
-      Delta := InflateAt(P, Sz);
-      AData := GitApplyDelta(BaseData, Delta);
-      if Int64(Length(AData)) <> Sz then
-        raise EGitError.Create('ref_delta target size mismatch');
-      AKind := BaseKind;
+      Chain[ChainLen].P := P;
+      Chain[ChainLen].IsRef := True;
+      Chain[ChainLen].BaseOid := BaseOid;
+      Chain[ChainLen].BaseOff := SizeUInt(FindOffset(BaseOid));
+      Inc(ChainLen);
+      CurOff := Chain[ChainLen-1].BaseOff;
+      Continue;
     end
-  else
-    raise EGitError.CreateFmt('unknown pack entry type %d', [Typ]);
+    else
+      raise EGitError.CreateFmt('unknown pack entry type %d', [Typ]);
   end;
+  // ChainLen >=1, last is base object, earlier are deltas in file order (delta -> ... -> base)
+  // Base kind maps Typ 1..4
+  case Chain[ChainLen-1].Typ of
+    1: CurKind := gokCommit;
+    2: CurKind := gokTree;
+    3: CurKind := gokBlob;
+    4: CurKind := gokTag;
+  else
+    raise EGitError.Create('unreachable base type');
+  end;
+  // inflate base once
+  CurData := InflateAt(Chain[ChainLen-1].P, Chain[ChainLen-1].Sz);
+  ReuseBuf := nil;
+  // unwind deltas in reverse: base-1 .. 0, reusing two buffers ping-pong
+  for I := ChainLen - 2 downto 0 do
+  begin
+    Delta := InflateAt(Chain[I].P, Chain[I].Sz);
+    // buffer reuse: GitApplyDeltaInto writes into ReuseBuf with single allocation, zero-copy spans
+    GitApplyDeltaInto(CurData, Delta, ReuseBuf);
+    // ping-pong swap to keep capacity for next iteration, avoids O(depth*size) jitter
+    Tmp := CurData;
+    CurData := ReuseBuf;
+    ReuseBuf := Tmp;
+    // Delta ref Freed via refcount when overwritten; no leak (implicit try/finally via managed TBytes)
+  end;
+  AKind := CurKind;
+  AData := CurData;
 end;
 
 function TPackFile.ReadObject(const AOid: TGitOid;

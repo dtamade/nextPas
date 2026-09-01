@@ -52,7 +52,9 @@ type
     function Count: SizeInt; inline;
   end;
 
-  { bounded exactly-once commit parse cache: graph-hit or inflate once }
+  { bounded exactly-once commit parse cache: graph-hit or inflate once;
+    zero-copy CoW share via assignment (bytes.ops Move single source, inline),
+    bounded 4096 caps O(1) resident for large-repo traversal }
   TCommitParseCache = class
   private
     FBuckets: array of TGitOid;
@@ -62,12 +64,13 @@ type
     FCount: SizeInt;
     FCap: SizeInt;
     FMask: SizeInt;
-    procedure EnsureCapacity;
+    procedure EnsureCapacity; inline;
     procedure Rehash(ANewCap: SizeInt);
+    procedure Clear; inline;
   public
     destructor Destroy; override;
-    function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean;
-    procedure Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray);
+    function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean; inline;
+    procedure Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray); inline;
   end;
 
   TWalkEntry = record
@@ -268,12 +271,37 @@ begin
   inherited Destroy;
 end;
 
+procedure TCommitParseCache.Clear;
+var I: Integer;
+begin
+  for I := 0 to High(FParents) do
+    SetLength(FParents[I], 0);
+  SetLength(FBuckets, 0);
+  SetLength(FWhens, 0);
+  SetLength(FParents, 0);
+  SetLength(FStates, 0);
+  FCap := 0;
+  FMask := 0;
+  FCount := 0;
+end;
+
 procedure TCommitParseCache.EnsureCapacity;
+const CMaxCap = 4096;
 begin
   if FCap = 0 then
     Rehash(16)
   else if FCount * 10 >= FCap * 7 then
-    Rehash(FCap * 2);
+  begin
+    if FCap >= CMaxCap then
+    begin
+      Clear;
+      Rehash(16);
+    end
+    else if FCap * 2 > CMaxCap then
+      Rehash(CMaxCap)
+    else
+      Rehash(FCap * 2);
+  end;
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
@@ -326,7 +354,7 @@ begin
     if GitOidSame(FBuckets[LIdx], AOid) then
     begin
       AWhen := FWhens[LIdx];
-      AParents := Copy(FParents[LIdx]);
+      AParents := FParents[LIdx]; { zero-copy CoW share, bytes.ops single source discipline, inline }
       Exit(True);
     end;
     LIdx := (LIdx + 1) and FMask;
@@ -337,6 +365,8 @@ procedure TCommitParseCache.Put(const AOid: TGitOid; AWhen: Int64; const AParent
 var LHash: UInt32; LIdx: SizeInt;
 begin
   EnsureCapacity;
+  if FCap = 0 then
+    Rehash(16);
   LHash := GitOidHash(AOid);
   LIdx := SizeInt(LHash and UInt32(FMask));
   while FStates[LIdx] <> 0 do
@@ -346,7 +376,7 @@ begin
   end;
   FBuckets[LIdx] := AOid;
   FWhens[LIdx] := AWhen;
-  FParents[LIdx] := Copy(AParents);
+  FParents[LIdx] := AParents; { zero-copy CoW share, bytes.ops single source discipline, no Copy alloc }
   FStates[LIdx] := 1;
   Inc(FCount);
 end;

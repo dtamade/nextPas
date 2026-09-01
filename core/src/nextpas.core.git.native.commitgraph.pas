@@ -101,8 +101,8 @@ type
     Off: SizeInt;
   end;
 
-var
-  GGraphCache: array of record
+type
+  TGraphCacheEntry = record
     Dir: string;
     Path: string;
     MTime: Int64;
@@ -110,12 +110,30 @@ var
     Data: TBytes;
   end;
 
+const
+  // bounded LRU: caps resident TBytes to prevent multi-repo unbounded growth; MRU at High, LRU at 0
+  GGraphCacheCap = 8;
+
+var
+  GGraphCache: array of TGraphCacheEntry;
+
 function FindGraphCache(const ADir: string): Integer; inline;
 var I: Integer;
 begin
   for I := 0 to High(GGraphCache) do
     if GGraphCache[I].Dir = ADir then Exit(I);
   Result := -1;
+end;
+
+procedure TouchGraphCache(const AIdx: Integer); inline;
+var I: Integer; Tmp: TGraphCacheEntry;
+begin
+  // LRU promotion: move hit entry to MRU (High); O(Cap) with Cap=8, inline, zero-copy TBytes share via refcount
+  if (AIdx < 0) or (AIdx >= Length(GGraphCache)) or (AIdx = High(GGraphCache)) then Exit;
+  Tmp := GGraphCache[AIdx];
+  for I := AIdx to High(GGraphCache)-1 do
+    GGraphCache[I] := GGraphCache[I+1];
+  GGraphCache[High(GGraphCache)] := Tmp;
 end;
 
 procedure InvalidateCommitGraphCache(const AGitDir: string);
@@ -527,7 +545,7 @@ function GitTryLoadCommitGraph(const AGitDir: string; out AGraph: TCommitGraph):
 var
   Path: string;
   Data: TBytes;
-  Idx: Integer;
+  Idx, I: Integer;
   Info: TFileInfo;
   UseCache: Boolean;
 begin
@@ -536,7 +554,7 @@ begin
   Path := GitCommitGraphPath(AGitDir);
   if not FileExists(Path) then
     Exit;
-  // fast path: cached bytes when mtime+size unchanged
+  // fast path: cached bytes when mtime+size unchanged; LRU promotion on hit
   Idx := FindGraphCache(AGitDir);
   UseCache := False;
   if Idx >= 0 then
@@ -544,8 +562,10 @@ begin
       Info := Stat(Path);
       if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) then
       begin
-        Data := GGraphCache[Idx].Data;
+        Data := GGraphCache[Idx].Data; // zero-copy: refcounted share, no Move
         UseCache := True;
+        // inline LRU: hit becomes MRU
+        TouchGraphCache(Idx);
       end;
     except
       UseCache := False;
@@ -561,14 +581,27 @@ begin
     end;
     if Idx < 0 then
     begin
-      SetLength(GGraphCache, Length(GGraphCache)+1);
-      Idx := High(GGraphCache);
+      // bounded insert: evict LRU at 0 if at capacity, else grow; keeps residency O(Cap)
+      if Length(GGraphCache) >= GGraphCacheCap then
+      begin
+        for I := 0 to High(GGraphCache)-1 do
+          GGraphCache[I] := GGraphCache[I+1]; // managed copy releases evicted Data via refcount, stability preserved
+        Idx := High(GGraphCache);
+      end
+      else
+      begin
+        SetLength(GGraphCache, Length(GGraphCache)+1);
+        Idx := High(GGraphCache);
+      end;
       GGraphCache[Idx].Dir := AGitDir;
     end;
     GGraphCache[Idx].Path := Path;
     GGraphCache[Idx].MTime := Info.ModTime;
     GGraphCache[Idx].Size := Info.Size;
-    GGraphCache[Idx].Data := Data; // zero-copy: Data already owns heap block from ReadFile/cache hit
+    GGraphCache[Idx].Data := Data; // zero-copy: Data already owns heap block from ReadFile, share via refcount
+    // stale hit slot updated: promote to MRU if not already tail (LRU age refresh)
+    if Idx <> High(GGraphCache) then
+      TouchGraphCache(Idx);
   end;
   AGraph := TCommitGraph.Create(Data);
   Result := True;

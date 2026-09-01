@@ -32,10 +32,13 @@ function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
-function GitBytesToString(const ABytes: TBytes): string; inline;
-function GitStringToBytes(const AText: string): TBytes; inline;
+function GitBytesToString(const ABytes: TBytes): string;
+function GitStringToBytes(const AText: string): TBytes;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 function HexVal(ACh: Char): Integer; inline;
 begin
@@ -131,18 +134,14 @@ begin
   Result := gokBlob;
 end;
 
-function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitBytesToString(const ABytes: TBytes): string;
 begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  Result := BytesToString(ABytes);
 end;
 
-function GitStringToBytes(const AText: string): TBytes; inline;
+function GitStringToBytes(const AText: string): TBytes;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PAnsiChar(AText)^, Result[0], Length(AText));
+  Result := StringToBytes(AText);
 end;
 
 end.

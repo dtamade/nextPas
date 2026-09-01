@@ -28,11 +28,9 @@ uses
   nextpas.core.git.native.common;
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
-var I: Integer;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
+  // single source via common.GitOidIsZero -> push.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy span, inline)
+  Result := nextpas.core.git.native.common.GitOidIsZero(AOid);
 end;
 
 function GitTrimSpaces(const S: string): string; inline;
