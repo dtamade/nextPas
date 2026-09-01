@@ -44,7 +44,7 @@ W := TTarWriter.Create(S as IWriter);
 W.AddFile('hello.txt', BytesOfString('hello'), $1A4, 1700000000);
 W.AddDir('assets');
 W.AddEntry(Hdr, Data); // Hdr.Name/Kind/Mode/UID/GID/MTime/UName/GName
-W.Finish; // 两零块，需显式调用，析构不自动补
+W.Finish; // 两零块，需显式调用，析构兜底 best-effort
 ```
 
 ### Read
@@ -89,7 +89,7 @@ var Opts: TTarAddOptions;
 Opts := DefaultTarAddOptions; Opts.Mode := $1A4; Opts.MTimeUnix := 1700000000;
 TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddDirectoryWithOptions('assets', Opts)
-          .AddEntry(Hdr, Data).Finish; // 显式 Finish，无隐式析构副作用
+          .AddEntry(Hdr, Data).Finish; // 显式 Finish，析构经 TTarWriter 兜底
 ```
 
 ## Safety Model

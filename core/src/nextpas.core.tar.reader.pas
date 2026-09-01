@@ -166,7 +166,11 @@ begin
   begin
     Result := Int64(FData[AOfs] and $7F);
     for I := AOfs + 1 to AOfs + ALen - 1 do
+    begin
+      if Result > (High(Int64) shr 8) then
+        raise EIOError.CreateFmt('tar: base-256 overflow at offset %d', [AOfs]);
       Result := (Result shl 8) or Int64(FData[I]);
+    end;
     Exit;
   end;
   Result := 0;
