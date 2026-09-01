@@ -151,6 +151,7 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
@@ -742,7 +743,7 @@ begin
   SetLength(FLowerNames, Length(FEntries));
   for LI := 0 to High(FEntries) do
   begin
-    if IsAsciiString(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name) else LLower := LowerCase(FEntries[LI].Name);
+    LLower := StringLowerAsciiAware(FEntries[LI].Name);
     FLowerNames[LI] := LLower;
     if not FNameMapIgnoreCase.ContainsKey(LLower) then
       FNameMapIgnoreCase.Put(LLower, LI);
@@ -782,7 +783,7 @@ function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): In
 var LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  LLower := StringLowerAsciiAware(APrefix);
   Result := LowerBoundGeneric(FSortedIdxIgnoreCase, LLower, True, False);
 end;
 
@@ -790,7 +791,7 @@ function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): In
 var LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  LLower := StringLowerAsciiAware(ASuffix);
   Result := LowerBoundGeneric(FSortedIdxRevIgnoreCase, LLower, True, True);
 end;
 
@@ -847,11 +848,9 @@ begin
      (Crc32OfBytes(Result) <> LongWord(LFolder.Crc)) then
     raise ESevenZError.Create('folder CRC mismatch after decode');
   // 性能：2-entry MRU 带字节阈值，极端 solid 2×大 folder 防翻倍；阈值单源 C_CACHE_MAX_BYTES(64MiB) 来自 limits/base。
-  // 单 folder 超阈值不入缓存；双缓存总量超阈值仅保留新条目，淘汰旧 MRU。
-  // bench 可观测：bench_sevenz container extract warm-cache 吞吐与 64MiB+ 双 folder RSS；ClearCache 后连续 Extract 测收敛。
-  // 稳定性：解码异常在缓存更新前抛出，不污染 MRU；LSlices 为托管 TBytes 自动释放，无 FFI 句柄泄漏。
-  if SizeUInt(Length(Result)) > C_CACHE_MAX_BYTES then
-    Exit(Result);
+  // 单 folder 超阈值仍以单 MRU 入缓存（去重重复大 folder 全量解压）；双总量超阈值仅保留新 MRU，淘汰旧/次 MRU。
+  // bench 可观测：bench_sevenz container extract warm-cache 吞吐与 64MiB+ 大 solid 首/次 Extract 命中、双 64MiB+ RSS；ClearCache 后连续 Extract 测收敛。
+  // 稳定性：解码异常在缓存更新前抛出，不污染 MRU；LSlices 为托管 TBytes 自动释放，无 FFI 句柄泄漏；inline 零拷贝：DecodeFolder 返回后 EntrySlice 仅视图 Move。
   if (FCacheIdx[0] <> -1) and (SizeUInt(Length(FCacheData[0])) + SizeUInt(Length(Result)) > C_CACHE_MAX_BYTES) then
   begin
     FCacheIdx[1] := -1;
@@ -948,7 +947,7 @@ begin
   EnsureIgnoreCaseBuilt;
   if FNameMapIgnoreCase<>nil then
   begin
-    if IsAsciiString(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
+    LLower := StringLowerAsciiAware(AName);
     if FNameMapIgnoreCase.TryGetValue(LLower, LIdx) then
       Exit(LIdx);
   end;
@@ -1251,7 +1250,7 @@ begin
   Result := -1;
   if APrefix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxIgnoreCase)=0 then Exit(-1);
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   if LStart >= Length(FSortedIdxIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxIgnoreCase[LStart];
@@ -1267,7 +1266,7 @@ begin
   Result := -1;
   if ASuffix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit(-1);
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   if LStart >= Length(FSortedIdxRevIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxRevIgnoreCase[LStart];
@@ -1282,8 +1281,8 @@ begin
   // ascii 快道零分配：单源 MatchesGlobCore，避免两份通配循环重复
   if IsAsciiString(AName) and IsAsciiString(APattern) then
     Exit(MatchesGlobCore(AName, APattern, True));
-  if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
-  if IsAsciiString(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
+  LLowerName := StringLowerAsciiAware(AName);
+  LLowerPat := StringLowerAsciiAware(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
 end;
 
@@ -1293,7 +1292,7 @@ begin
   // 预计算 APattern IsAscii，避免每条目重复扫模式串（gkComplex 2k 次）
   if APatIsAscii and IsAsciiString(AName) then
     Exit(MatchesGlobCore(AName, APattern, True));
-  if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
+  LLowerName := StringLowerAsciiAware(AName);
   if APatIsAscii then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
 end;
@@ -1353,8 +1352,8 @@ begin
     gkSuffix: Exit(FindBySuffixIgnoreCase(LSuffix));
     gkPrefixSuffix:
     begin
-      if IsAsciiString(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
-      if IsAsciiString(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+      LLowerPref := StringLowerAsciiAware(LPrefix);
+      LLowerSuff := StringLowerAsciiAware(LSuffix);
       LPos := LowerBoundPrefixIgnoreCase(LPrefix);
       while LPos < Length(FSortedIdxIgnoreCase) do
       begin
@@ -1586,7 +1585,7 @@ begin
     Exit;
   end;
   if Length(FSortedIdxIgnoreCase) = 0 then Exit;
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxIgnoreCase) do
@@ -1629,7 +1628,7 @@ begin
   Result := nil;
   LNeed := Length(APrefix) + Length(ASuffix);
   LIsAsciiSuff := IsAsciiString(ASuffix);
-  if LIsAsciiSuff then LLowerSuff := AsciiLowerStr(ASuffix) else LLowerSuff := LowerCase(ASuffix);
+  LLowerSuff := StringLowerAsciiAware(ASuffix);
   LCnt := 0;
   for LI := 0 to High(AIndices) do
   begin
@@ -1702,7 +1701,7 @@ begin
     Exit;
   end;
   if Length(FSortedIdxRevIgnoreCase) = 0 then Exit;
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxRevIgnoreCase) do

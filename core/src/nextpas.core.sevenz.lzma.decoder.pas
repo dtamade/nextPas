@@ -31,7 +31,8 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.bytes.ops;
 
 const
   C_NUM_STATES = 12;
@@ -155,22 +156,18 @@ begin
     EngineError('distance beyond dictionary window');
 end;
 
-procedure CopyMatch(var AE: TEngineState; ADist: SizeUInt; ALen: SizeUInt);
+procedure CopyMatch(var AE: TEngineState; ADist: SizeUInt; ALen: SizeUInt); inline;
 var
   LSrc: SizeUInt;
-  LI: SizeUInt;
 begin
   CheckWindow(AE, ADist);
   if AE.Pos + ALen > AE.OutSize then
     EngineError('match overruns declared output size');
   {$PUSH}{$Q-}{$R-}
   LSrc := AE.Pos - ADist - 1;
-  for LI := 0 to ALen - 1 do
-  begin
-    AE.OutBuf[AE.Pos] := AE.OutBuf[LSrc];
-    Inc(LSrc);
-    Inc(AE.Pos);
-  end;
+  // perf: inline + block Move via bytes.ops single source, overlap-optimized doubling, zero-copy
+  BytesReplicateCopy(AE.OutBuf + LSrc, AE.OutBuf + AE.Pos, ADist, ALen);
+  Inc(AE.Pos, ALen);
   {$POP}
 end;
 

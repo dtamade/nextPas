@@ -40,6 +40,10 @@ function SevenZDecodeFolder(const AFolder: TSevenZFolder;
   const APackStreams: array of TBytes;
   const APassword: string): TBytes;
 
+{ BZip2 可用性探针：门面 SevenZBZip2Available 的 owner 归属落地，
+  代理 nextpas.core.compress.bzip2 的 FFI 可用性判定，门面仅 inline forward，
+  保持 facade 纯 re-export 职责与 L2→L2 聚合收口 }
+function SevenZBZip2Available: Boolean; inline;
 { Deflate 解码测试钩子：直通内部分支，供回归测试验证 zlib/raw 双路径 }
 function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
 { BZip2 解码测试钩子 }
@@ -236,6 +240,11 @@ end;
 function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
 begin
   Result := BZip2DecodeSevenZ(AInput, AOutSize);
+end;
+
+function SevenZBZip2Available: Boolean;
+begin
+  Result := BZip2FfiIsAvailable;
 end;
 {$POP}
 

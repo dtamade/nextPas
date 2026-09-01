@@ -128,11 +128,11 @@ procedure SevenZParseFilesInfo(AReader: TSevenZHeaderReader; ANumFiles: SizeInt;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
   nextpas.core.errors,
   nextpas.core.exception,
-  nextpas.core.checksum.crc32,
-  nextpas.core.sevenz.limits;
+  nextpas.core.checksum.crc32;
 
 
 
@@ -170,80 +170,61 @@ end;
 
 procedure SevenZWriteNumber(var AOut: TBytes; AValue: UInt64);
 var
-  LBase: SizeInt;
+  LBuf: array[0..8] of Byte;
   LI: Integer;
   LT: Integer;
   LPayloadBits: Integer;
   LFirstPayload: UInt64;
 begin
   { 总长 T 的容量为 2^(7T)；T=9（首字节 FF）覆盖全部 64 位。
-    首字节负载位数为 8-T（T=8 时为 0），低字节一律小端。 }
+    首字节负载位数为 8-T（T=8 时为 0），低字节一律小端。批量：栈缓冲+单次 BytesAppend 单源零拷贝。 }
   LT := 1;
   while (LT < 9) and (AValue >= (UInt64(1) shl (7 * LT))) do
     Inc(LT);
-  LBase := Length(AOut);
   if LT <= 8 then
   begin
     LPayloadBits := 8 - LT;
-    SetLength(AOut, LBase + LT);
-    LFirstPayload := (AValue shr (8 * (LT - 1))) and
-      ((UInt64(1) shl LPayloadBits) - 1);
-    AOut[LBase] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
+    if LPayloadBits = 0 then
+      LFirstPayload := 0
+    else
+      LFirstPayload := (AValue shr (8 * (LT - 1))) and ((UInt64(1) shl LPayloadBits) - 1);
+    LBuf[0] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
     for LI := 0 to LT - 2 do
-      AOut[LBase + 1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+      LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    BytesAppend(AOut, @LBuf[0], SizeUInt(LT));
     Exit;
   end;
-  SetLength(AOut, LBase + 9);
-  AOut[LBase] := $FF;
+  LBuf[0] := $FF;
   for LI := 0 to 7 do
-    AOut[LBase + 1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+  BytesAppend(AOut, @LBuf[0], 9);
 end;
 
 procedure SevenZAppendByte(var AOut: TBytes; AValue: Byte); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 1);
-  AOut[LLen] := AValue;
+  BytesAppendByte(AOut, AValue);
 end;
 
 procedure SevenZAppendUInt32BE(var AOut: TBytes; AValue: UInt32); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 4);
-  WriteUInt32BE(@AOut[LLen], AValue);
+  BytesAppendUInt32BE(AOut, Cardinal(AValue));
 end;
 
 procedure SevenZAppendUInt32LE(var AOut: TBytes; AValue: UInt32); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 4);
-  WriteUInt32LE(@AOut[LLen], AValue);
+  BytesAppendUInt32LE(AOut, Cardinal(AValue));
 end;
 
 procedure SevenZAppendUInt64LE(var AOut: TBytes; AValue: UInt64); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 8);
-  WriteUInt64LE(@AOut[LLen], AValue);
+  BytesAppendUInt64LE(AOut, QWord(AValue));
 end;
 
 procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
-var
-  LLen: SizeUInt;
 begin
   if (ACount <= 0) or (AData = nil) then
     Exit;
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + SizeUInt(ACount));
-  Move(AData^, AOut[LLen], SizeUInt(ACount));
+  BytesAppend(AOut, AData, SizeUInt(ACount));
 end;
 
 { TSevenZHeaderReader }

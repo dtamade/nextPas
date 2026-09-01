@@ -22,6 +22,8 @@ function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
+{ perf: LZ-dict overlapping replicate — inline + block Move via doubling, single source for CopyMatch, zero-copy, O(log n) Moves, overlap-safe }
+procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
 
 function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -39,8 +41,12 @@ procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
@@ -67,11 +73,13 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 
 implementation
 
 uses
-  nextpas.core.simd;
+  nextpas.core.simd,
+  nextpas.core.text.unicode.utils;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
   Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
@@ -199,6 +207,37 @@ procedure SpanReverse(const ASpan: TByteSpan);
 begin
   if ASpan.Len > 1 then
     MemReverse(ASpan.Data, ASpan.Len);
+end;
+
+procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
+var
+  LSrc, LDst: PByte;
+  LPeriod, LDone, LRem, LChunk: SizeUInt;
+begin
+  if ALen = 0 then
+    Exit;
+  LSrc := PByte(ASrc);
+  LDst := PByte(ADst);
+  LPeriod := ADist + 1;
+  if ALen <= LPeriod then
+  begin
+    Move(LSrc^, LDst^, ALen);
+    Exit;
+  end;
+  Move(LSrc^, LDst^, LPeriod);
+  LDone := LPeriod;
+  LRem := ALen - LPeriod;
+  Inc(LDst, LPeriod);
+  while LRem > 0 do
+  begin
+    LChunk := LDone;
+    if LChunk > LRem then
+      LChunk := LRem;
+    Move((LDst - LDone)^, LDst^, LChunk);
+    Inc(LDst, LChunk);
+    Dec(LRem, LChunk);
+    Inc(LDone, LChunk);
+  end;
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
@@ -350,6 +389,60 @@ begin
   ADest[LOldLen + 1] := Byte(AValue shr 16);
   ADest[LOldLen + 2] := Byte(AValue shr 8);
   ADest[LOldLen + 3] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  SetLength(ADest, LOldLen + 2);
+  ADest[LOldLen] := Byte(AValue);
+  ADest[LOldLen + 1] := Byte(AValue shr 8);
+end;
+
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  SetLength(ADest, LOldLen + 4);
+  ADest[LOldLen] := Byte(AValue);
+  ADest[LOldLen + 1] := Byte(AValue shr 8);
+  ADest[LOldLen + 2] := Byte(AValue shr 16);
+  ADest[LOldLen + 3] := Byte(AValue shr 24);
+end;
+
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  SetLength(ADest, LOldLen + 8);
+  ADest[LOldLen] := Byte(AValue shr 56);
+  ADest[LOldLen + 1] := Byte(AValue shr 48);
+  ADest[LOldLen + 2] := Byte(AValue shr 40);
+  ADest[LOldLen + 3] := Byte(AValue shr 32);
+  ADest[LOldLen + 4] := Byte(AValue shr 24);
+  ADest[LOldLen + 5] := Byte(AValue shr 16);
+  ADest[LOldLen + 6] := Byte(AValue shr 8);
+  ADest[LOldLen + 7] := Byte(AValue);
+end;
+
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
+var
+  LOldLen: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  SetLength(ADest, LOldLen + 8);
+  ADest[LOldLen] := Byte(AValue);
+  ADest[LOldLen + 1] := Byte(AValue shr 8);
+  ADest[LOldLen + 2] := Byte(AValue shr 16);
+  ADest[LOldLen + 3] := Byte(AValue shr 24);
+  ADest[LOldLen + 4] := Byte(AValue shr 32);
+  ADest[LOldLen + 5] := Byte(AValue shr 40);
+  ADest[LOldLen + 6] := Byte(AValue shr 48);
+  ADest[LOldLen + 7] := Byte(AValue shr 56);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
@@ -516,6 +609,11 @@ begin
   SetLength(Result, LSpan.Len);
   if LSpan.Len > 0 then
     Move(LSpan.Data^, Result[1], LSpan.Len);
+end;
+
+function StringLowerAsciiAware(const S: string): string; inline;
+begin
+  Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
 end;
 
 end.

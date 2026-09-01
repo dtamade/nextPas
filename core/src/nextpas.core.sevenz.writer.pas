@@ -141,9 +141,9 @@ function SevenZCreateWriterBuilder: ISevenZWriterBuilder;
 implementation
 
 uses
-  Classes, SysUtils,
   nextpas.core.errors,
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
   nextpas.core.compress,
   nextpas.core.compress.bzip2,
@@ -156,6 +156,8 @@ uses
   nextpas.core.sevenz.lzma.encoder,
   nextpas.core.sevenz.levels,
   nextpas.core.sevenz.limits,
+  nextpas.core.platform.thread,
+  nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.fs.intf;
 
@@ -180,16 +182,13 @@ const
   LZMA 编码器，天然线程安全，串并行共用同一路径 }
 procedure EncodeFolderCore(var AFolder: TFolderBuild;
   const AFilters: array of TSevenZFilter;
-  ALevel: TSevenZCompressionLevel; AForcedId: UInt64; AHasForced: Boolean);
+  ALevel: TSevenZCompressionLevel; AForcedId: UInt64; AHasForced: Boolean); inline;
 var
   LRawChunk: TBytes;
   LStage: TBytes;
   LEnc: TSevenZLzmaEncoded;
   LEncoder: ISevenZLzmaEncoder;
   LI: SizeInt;
-  LOfs: SizeInt;
-  LRem: SizeInt;
-  LTake: SizeInt;
 begin
   LRawChunk := AFolder.RawSolid;
   if Length(AFilters) = 0 then
@@ -219,20 +218,8 @@ begin
     end
     else
     begin
-      SetLength(LStage, Length(LRawChunk));
-      LOfs := 0;
-      LRem := Length(LRawChunk);
-      while LRem > 0 do
-      begin
-        if LRem > SizeInt(SEVENZ_WRITER_CHUNK) then
-          LTake := SizeInt(SEVENZ_WRITER_CHUNK)
-        else
-          LTake := LRem;
-        if LTake > 0 then
-          Move(LRawChunk[LOfs], LStage[LOfs], LTake);
-        Inc(LOfs, LTake);
-        Dec(LRem, LTake);
-      end;
+      // perf: BCJ 需要可变缓冲；单源 bytes.ops SpanClone 做单次 SetLength+Move，无分块循环开销（inline 单遍遍历）
+      LStage := SpanClone(TByteSpan.FromBytes(LRawChunk));
       SevenZFilterConvert(LStage, AFilters[0], AFolder.Specs[0].Props, True);
       for LI := 1 to High(AFilters) do
         SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
@@ -243,10 +230,12 @@ begin
     case AForcedId of
       SEVENZ_METHOD_COPY:
         begin
-          AFolder.PackedData := Copy(LStage, 0, Length(LStage));
+          // perf: Move 语义零拷贝转移 LStage -> PackedData，无额外堆分配/拷贝
+          AFolder.PackedData := LStage;
+          LStage := nil;
           AFolder.Specs[High(AFolder.Specs)].MethodId := SEVENZ_METHOD_COPY;
           AFolder.Specs[High(AFolder.Specs)].Props := nil;
-          AFolder.Specs[High(AFolder.Specs)].OutSize := UInt64(Length(LStage));
+          AFolder.Specs[High(AFolder.Specs)].OutSize := UInt64(Length(AFolder.PackedData));
         end;
       SEVENZ_METHOD_LZMA2:
         begin
@@ -280,10 +269,12 @@ begin
   end
   else if ALevel = szclNone then
   begin
-    AFolder.PackedData := Copy(LStage, 0, Length(LStage));
+    // perf: Move 语义零拷贝转移 LStage -> PackedData，szclNone 默认直通无压缩
+    AFolder.PackedData := LStage;
+    LStage := nil;
     AFolder.Specs[High(AFolder.Specs)].MethodId := SEVENZ_METHOD_COPY;
     AFolder.Specs[High(AFolder.Specs)].Props := nil;
-    AFolder.Specs[High(AFolder.Specs)].OutSize := UInt64(Length(LStage));
+    AFolder.Specs[High(AFolder.Specs)].OutSize := UInt64(Length(AFolder.PackedData));
   end
   else
   begin
@@ -299,58 +290,33 @@ begin
 end;
 
 type
-  { 多 folder 并行压缩线程：每线程独立负责一个 folder 的
-    过滤链+压缩（filter 零拷贝 + LZMA/Deflate/BZip2/Copy），
-    加密段由主线程串行追加，避免 CSPRNG 竞争 }
-  TFolderEncodeThread = class(TThread)
-  private
-    FFolder: Pointer;
-    FFilters: array of TSevenZFilter;
-    FLevel: TSevenZCompressionLevel;
-    FForcedId: UInt64;
-    FHasForced: Boolean;
-    FErrMsg: string;
-    FHasErr: Boolean;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AFolder: Pointer; const AFilters: array of TSevenZFilter;
-      ALevel: TSevenZCompressionLevel; AForcedId: UInt64; AHasForced: Boolean);
-    property HasErr: Boolean read FHasErr;
-    property ErrMsg: string read FErrMsg;
+  { 多 folder 并行压缩 job：平台线程驱动（nextpas.core.platform.thread），
+    每 job 独立负责 folder 的过滤链+压缩，加密段由主线程串行追加，避免 CSPRNG 竞争 }
+  PFolderEncodeJob = ^TFolderEncodeJob;
+  TFolderEncodeJob = record
+    Folder: ^TFolderBuild;
+    Filters: array of TSevenZFilter;
+    Level: TSevenZCompressionLevel;
+    ForcedId: UInt64;
+    HasForced: Boolean;
+    ErrMsg: string;
+    HasErr: Boolean;
   end;
 
-constructor TFolderEncodeThread.Create(AFolder: Pointer;
-  const AFilters: array of TSevenZFilter; ALevel: TSevenZCompressionLevel;
-  AForcedId: UInt64; AHasForced: Boolean);
+function FolderEncodeJobWorker(AArg: Pointer): Pointer; cdecl;
 var
-  LI: SizeInt;
+  LJob: PFolderEncodeJob;
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FFolder := AFolder;
-  SetLength(FFilters, Length(AFilters));
-  for LI := 0 to High(AFilters) do
-    FFilters[LI] := AFilters[LI];
-  FLevel := ALevel;
-  FForcedId := AForcedId;
-  FHasForced := AHasForced;
-end;
-
-procedure TFolderEncodeThread.Execute;
-type
-  PFolderBuild = ^TFolderBuild;
-var
-  LFolder: PFolderBuild;
-begin
-  LFolder := PFolderBuild(FFolder);
+  Result := nil;
+  LJob := PFolderEncodeJob(AArg);
+  if LJob = nil then Exit;
   try
-    EncodeFolderCore(LFolder^, FFilters, FLevel, FForcedId, FHasForced);
+    EncodeFolderCore(LJob^.Folder^, LJob^.Filters, LJob^.Level, LJob^.ForcedId, LJob^.HasForced);
   except
     on E: Exception do
     begin
-      FHasErr := True;
-      FErrMsg := E.ClassName + ': ' + E.Message;
+      LJob^.HasErr := True;
+      LJob^.ErrMsg := E.ClassName + ': ' + E.Message;
     end;
   end;
 end;
@@ -1049,7 +1015,9 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
     LBatchStart, LBatchSize, LCreated: SizeInt;
     LStartHdrCrc: UInt32;
     LPlainHeader: TBytes;
-    LThreads: array of TFolderEncodeThread;
+    LHandles: array of TPlatformThreadHandle;
+    LJobs: array of TFolderEncodeJob;
+    LRetVal: Pointer;
     LProbe: Byte;
     LExtra: SizeUInt;
   begin
@@ -1153,7 +1121,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
               if LExtra <> 0 then
                 raise EArgumentError.Create(
                   'AddFileFromReader oversized: entry "' + FEntries[LI].Name +
-                  '" declared ' + IntToStr(FEntries[LI].ReaderSize) + ' but has more data');
+                  '" declared ' + UIntToStr(FEntries[LI].ReaderSize) + ' but has more data');
             end
             else
             begin
@@ -1174,7 +1142,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
               if LExtra <> 0 then
                 raise EArgumentError.Create(
                   'AddFileFromReader oversized: entry "' + FEntries[LI].Name +
-                  '" declared ' + IntToStr(FEntries[LI].ReaderSize) + ' but has more data');
+                  '" declared ' + UIntToStr(FEntries[LI].ReaderSize) + ' but has more data');
             end
             else
               LFolders[LFolderIdx].SubCrcs[LJ] := 0;
@@ -1182,18 +1150,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
         end;
         Inc(LAcc, LK);
       end;
-      { 警告: 并行 TBytes 引用计数竞态（H-09 关联）— 零过滤器分支中
-        LRawChunk := AFolder.RawSolid 会非原子递增引用计数，主/子线程并发
-        触及同一 TBytes 将竞态。修复：线程创建前对 RawSolid 深拷贝，使各
-        folder 持有唯一引用；文档化备选为仅在串行路径零拷贝。 }
-      for LFolderIdx := 0 to High(LFolders) do
-        LFolders[LFolderIdx].RawSolid :=
-          Copy(LFolders[LFolderIdx].RawSolid, 0, Length(LFolders[LFolderIdx].RawSolid));
       { 逐 folder 执行过滤链与压缩，产出 Packed 与 Specs
           零过滤器时零拷贝直连 RawSolid，避免 Solid 整体二次搬运。
           多 folder 时分批并行（每批 ≤ C_MAX_PARALLEL_THREADS），
-          IsMultiThread 为 false 时自动回落串行，加密段统一串行以避免 CSPRNG 竞争 }
-      if (Length(LFolders) >= 2) and System.IsMultiThread then
+          IsMultiThread 保障 TBytes 引用计数原子化与 cthreads 已链接，
+          无线程支持时回落串行，避免 O(total) 深拷贝与峰值翻倍；加密段统一串行以避免 CSPRNG 竞争 }
+      if (Length(LFolders) >= 2) and IsMultiThread then
       begin
         LBatchStart := 0;
         while LBatchStart < Length(LFolders) do
@@ -1201,50 +1163,49 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           LBatchSize := Length(LFolders) - LBatchStart;
           if LBatchSize > C_MAX_PARALLEL_THREADS then
             LBatchSize := C_MAX_PARALLEL_THREADS;
-          SetLength(LThreads, LBatchSize);
+          SetLength(LJobs, LBatchSize);
+          SetLength(LHandles, LBatchSize);
+          for LI := 0 to LBatchSize - 1 do
+            LHandles[LI] := nil;
           LCreated := 0;
           try
             try
               for LI := 0 to LBatchSize - 1 do
               begin
                 LFolderIdx := LBatchStart + LI;
-                LThreads[LI] := TFolderEncodeThread.Create(
-                  @LFolders[LFolderIdx], FFilters, FLevel, FForcedMethodId, FHasForcedMethod);
+                LJobs[LI].Folder := @LFolders[LFolderIdx];
+                SetLength(LJobs[LI].Filters, Length(FFilters));
+                for LK := 0 to High(FFilters) do
+                  LJobs[LI].Filters[LK] := FFilters[LK];
+                LJobs[LI].Level := FLevel;
+                LJobs[LI].ForcedId := FForcedMethodId;
+                LJobs[LI].HasForced := FHasForcedMethod;
+                LJobs[LI].HasErr := False;
+                LJobs[LI].ErrMsg := '';
+                if platform_thread_create(LHandles[LI], @FolderEncodeJobWorker, @LJobs[LI]) <> 0 then
+                  raise EIOError.Create('parallel folder encode failed: platform_thread_create failed');
                 Inc(LCreated);
-                LThreads[LI].Start;
               end;
               for LI := 0 to LCreated - 1 do
               begin
-                LThreads[LI].WaitFor;
-                if LThreads[LI].HasErr then
-                  raise EIOError.Create('parallel folder encode failed: ' + LThreads[LI].ErrMsg);
+                platform_thread_join(LHandles[LI], LRetVal);
+                LHandles[LI] := nil;
+                if LJobs[LI].HasErr then
+                  raise EIOError.Create('parallel folder encode failed: ' + LJobs[LI].ErrMsg);
               end;
               if Assigned(FProgress) then
                 for LI := 0 to LBatchSize - 1 do
                   FProgress(Self, LBatchStart + LI + 1, Length(LFolders));
             except
-              { H-09: 已创建线程若未结束需先 WaitFor 再释放，避免泄漏/悬垂 }
               for LI := 0 to LCreated - 1 do
-                if Assigned(LThreads[LI]) and not LThreads[LI].Finished then
-                  try
-                    LThreads[LI].WaitFor;
-                  except
-                  end;
+                if LHandles[LI] <> nil then
+                  try platform_thread_join(LHandles[LI], LRetVal); except end;
               raise;
             end;
           finally
             for LI := 0 to LCreated - 1 do
-            begin
-              if Assigned(LThreads[LI]) then
-              begin
-                if not LThreads[LI].Finished then
-                  try
-                    LThreads[LI].WaitFor;
-                  except
-                  end;
-                LThreads[LI].Free;
-              end;
-            end;
+              if LHandles[LI] <> nil then
+                try platform_thread_join(LHandles[LI], LRetVal); except end;
           end;
           Inc(LBatchStart, LBatchSize);
         end;
