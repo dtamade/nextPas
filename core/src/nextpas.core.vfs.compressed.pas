@@ -46,14 +46,14 @@ end;
 
 function IsGzipPred(const AData: TBytes): Boolean; inline;
 begin
-  // bytes.ops 单源：头魔数判定经 bytes.ops Span 语义，inline 零分支
-  Result := (Length(AData) >= 2) and (AData[0] = GZIP_MAGIC_1) and (AData[1] = GZIP_MAGIC_2);
+  // bytes.ops 单源：零拷贝 inline 魔数判定，复用 BytesIsGzip
+  Result := nextpas.core.bytes.ops.BytesIsGzip(AData);
 end;
 
 function IsGzipHeaderPred(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
 begin
-  // 4K HeaderPred：仅头部 2 字节魔数即可判定，免 Stat 全量读；复用 bytes.ops 单源语义
-  Result := (Length(AHeader) >= 2) and (AHeader[0] = GZIP_MAGIC_1) and (AHeader[1] = GZIP_MAGIC_2);
+  // bytes.ops 单源：4K HeaderPred 零拷贝 inline，复用 BytesIsGzipHeader 单源
+  Result := nextpas.core.bytes.ops.BytesIsGzipHeader(AHeader, ATotalSize);
 end;
 
 type
@@ -61,11 +61,10 @@ type
   private
     FInner: IVfs;
     FTransformVfs: IVfs;
-    function IsGzipHeader(const APath: string): Boolean;
   public
     constructor Create(const AInner: IVfs);
     function Exists(const APath: string): Boolean; inline;
-    function Stat(const APath: string): TStatInfo;
+    function Stat(const APath: string): TStatInfo; inline;
     function List(const ADirPath: string): TEntryArray; inline;
     function OpenRead(const APath: string): IStream; inline;
     function CaseSensitive: Boolean; inline;
@@ -77,27 +76,8 @@ constructor TAutoDecompressingVfs.Create(const AInner: IVfs);
 begin
   inherited Create;
   FInner := AInner;
-  // daAuto 经 transform 4K HeaderPred 承载：Should 全量判定 + HeaderPred 免大文件 Stat 全量 IO，双谓词复用同一魔数
+  // daAuto 经 transform 4K HeaderPred 承载：Should 全量判定 + HeaderPred 免大文件 Stat 全量 IO，双谓词复用 bytes.ops 单源；零额外IO
   FTransformVfs := CreateTransformingVfs(AInner, @GzipTransform, @IsGzipPred, @IsGzipHeaderPred);
-end;
-
-function TAutoDecompressingVfs.IsGzipHeader(const APath: string): Boolean;
-var LStream: IStream; LBuf: array[0..COMPRESSED_HEADER_PEEK-1] of Byte; LRead: SizeUInt;
-begin
-  Result := False;
-  LStream := nil;
-  try
-    LStream := FInner.OpenRead(APath);
-  except
-    on E: EVfsError do raise;
-    on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message);
-  end;
-  try
-    LRead := LStream.Read(LBuf[0], COMPRESSED_HEADER_PEEK);
-    Result := (LRead >= 2) and (LBuf[0] = GZIP_MAGIC_1) and (LBuf[1] = GZIP_MAGIC_2);
-  finally
-    if Assigned(LStream) then LStream.Close;
-  end;
 end;
 
 function TAutoDecompressingVfs.Exists(const APath: string): Boolean; inline;
@@ -105,12 +85,9 @@ begin
   Result := FInner.Exists(APath);
 end;
 
-function TAutoDecompressingVfs.Stat(const APath: string): TStatInfo;
-var LInfo: TStatInfo;
+function TAutoDecompressingVfs.Stat(const APath: string): TStatInfo; inline;
 begin
-  LInfo := FInner.Stat(APath);
-  if LInfo.Info.IsDir then Exit(LInfo);
-  if not IsGzipHeader(APath) then Exit(LInfo);
+  // single 4K path: 复用 transform.TryPeekHeader/HeaderPred 单源，消除二次 OpenRead/Read/Close；资源释放由 transform 承载
   Result := FTransformVfs.Stat(APath);
 end;
 

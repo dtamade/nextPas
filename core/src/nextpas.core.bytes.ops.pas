@@ -49,6 +49,7 @@ procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -68,6 +69,8 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
+function BytesIsGzip(const AData: TBytes): Boolean; inline;
+function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
@@ -127,6 +130,19 @@ begin
   // overflow guard: if Length + Additional wraps, let SetLength raise
   LNeed := SizeUInt(Length(ADest)) + AAdditional;
   BytesEnsureCapacity(ADest, LNeed);
+end;
+
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+var LCap: SizeUInt;
+begin
+  if ANeed = 0 then Exit(0);
+  if AOld = 0 then LCap := BYTES_BUILDER_MIN_GROW else LCap := AOld;
+  if LCap < BYTES_BUILDER_MIN_GROW then LCap := BYTES_BUILDER_MIN_GROW;
+  if LCap < 4 then LCap := 4;
+  if LCap >= ANeed then Exit(LCap);
+  while LCap < ANeed do
+    if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
+  Result := LCap;
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
@@ -576,6 +592,18 @@ end;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 begin
   Result := IsZeroBytes(AData);
+end;
+
+function BytesIsGzip(const AData: TBytes): Boolean; inline;
+begin
+  // perf: inline + zero-copy single source gzip magic ($1F $8B), compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
+  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+end;
+
+function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
+begin
+  // perf: inline single source forward; ATotalSize kept for transform signature compat, zero-copy reuse
+  Result := BytesIsGzip(AHeader);
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;

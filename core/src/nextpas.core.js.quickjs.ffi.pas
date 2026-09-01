@@ -48,6 +48,7 @@ type
   TJS_RunGC = procedure(RT: PJSRuntime); cdecl;
   TJS_SetInterruptHandler = procedure(RT: PJSRuntime; Handler: TJSInterruptHandler; Opaque: Pointer); cdecl;
   TJS_NewCFunction = function(Ctx: PJSContext; Func: Pointer; Name: PAnsiChar; Length: Integer): TJSQjsValue; cdecl;
+  TJS_Call = function(Ctx: PJSContext; FuncObj: TJSQjsValue; ThisVal: TJSQjsValue; Argc: Integer; Argv: PJSQjsValue): TJSQjsValue; cdecl;
 
 const
   JS_EVAL_TYPE_GLOBAL = 0;
@@ -79,14 +80,8 @@ var
   JS_RunGCPtr: TJS_RunGC = nil;
   JS_SetInterruptHandlerPtr: TJS_SetInterruptHandler = nil;
   JS_NewCFunctionPtr: TJS_NewCFunction = nil;
-
-function JsQjsFfiLoaded: Boolean; inline;
+  JS_CallPtr: TJS_Call = nil;
 
 implementation
-
-function JsQjsFfiLoaded: Boolean;
-begin
-  Result := Assigned(JS_NewRuntimePtr) and Assigned(JS_EvalPtr);
-end;
 
 end.

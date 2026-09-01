@@ -1,10 +1,10 @@
 # nextpas.core.js 代码契约
 
 **模块路径**：`core/src/nextpas.core.js*.pas`（已落地 11 单元：base/intf/fake/ffi/loader/quickjs/pure.base/js888/v8/chakra/门面）
-**层级**：L2（只依赖 L0–L1；`webview` 等 L3 可依赖本模块）
+**层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-08-31
-**版本**：1.0（11 单元 pure.base 单源 481 行 + V8/Chakra Close 幂等 + 5 gate 全绿，M3b 均值同步，与 BENCHMARKS 1.5/ROADMAP 1.0 对齐，18 份对齐）
+**版本**：1.1（11 单元 pure.base 单源 517 行 + V8/Chakra Close 幂等 + 5 gate 全绿 + L2→L0 platform.fs 直读 + JsTrimEquals 去 inline，M3b 均值同步，与 BENCHMARKS 1.5/ROADMAP 1.1 对齐，18 份对齐）
 
 ---
 
@@ -26,7 +26,7 @@
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 dl） | `js.base/intf`、`text.view`、`json` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 dl，**非标准四件套命名显式例外**：`pure.base` 单源复用 `js888/v8/chakra` 三纯后端，`pure` 为纯族聚合前缀、`base` 为共享基座后缀，非独立模块，守 L0–L3，复用 `bytes.ops` 单源与 `text.view` 零拷贝，阈值 550 内） | `js.base/intf`、`text.view`、`json` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
@@ -34,7 +34,7 @@
 
 ```
 base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← 门面
-         ↑ pure.base 单源 481 行，js888/v8/chakra 各 ~119 行零 FFI/零 dl，纯族阈值内（单单元 <550）与 quickjs 平级
+         ↑ pure.base 单源 517 行，js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内（单单元 <550）与 quickjs 平级
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
@@ -45,7 +45,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js88
 - `js.js888/js.v8/js.chakra` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
 - 工厂 `CreateJsRuntime(jsbkJs888/jsbkV8/jsbkChakra)` 走纯分支，`JsBackendAvailable(..)=True` 恒真（零 so 探测）
 
-**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 481 行 + `js.js888/v8/chakra` 各 ~122 行，单单元均 <550，阈值内（`wc -l` 实测 481+122×3≈847，纯族共享后单源 481 行，阈值 550 内）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 382，其余 500，纯族 481 行体量同步 BENCHMARKS 1.4）。
+**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/platform.fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 517 行 + `js.js888/v8/chakra` 各 ~29 行，单单元均 <550，阈值内（`wc -l` 实测 517+29×3≈604，纯族共享后单源 517 行，阈值 550 内）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 550/800（`js.fake` 146，其余 500，纯族 517 行体量同步 BENCHMARKS 1.5）。
 
 ---
 
@@ -134,7 +134,7 @@ IJsContext = interface
   function Runtime: IJsRuntime;
   function Eval(const ACode: string; const AFileName: string = ''): TJsValue; // 同步抛 EJsError
   function TryEval(const ACode: string; out AValue: TJsValue): Boolean;       // 失败 False
-  function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean; // 读文件后 Eval（路径经 fs.path.Abs/EnsureSep 复用，不自拼；`SIXDIM R-3`）
+  function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean; // 读文件后 Eval（经 L0 platform.fs 直读，bytes.ops Move零拷贝，64MiB限流，无 L2 fs.path 依赖；`SIXDIM R-3` L2→L0修复）
   function Global: TJsValue; // 全局对象句柄，始终有效
   function NewString(const AStr: string): TJsValue;
   function NewInt(AValue: Int64): TJsValue;
@@ -142,7 +142,7 @@ IJsContext = interface
   function NewBool(AValue: Boolean): TJsValue;
   function NewObject: TJsValue;
   function NewArray: TJsValue;
-  function NewJson(const AJson: TJsonValue): TJsValue; // TJsonValue → TJsValue（经 json，经 fs.path.Abs 归一化若涉文件）
+  function NewJson(const AJson: TJsonValue): TJsValue; // TJsonValue → TJsValue（经 json owner 单源）
   function ToJson(const AValue: TJsValue): IJsonDocument; // TJsValue → IJsonDocument
   function HasProp(const AObj: TJsValue; const AName: string): Boolean;
   function DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
@@ -244,9 +244,9 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 
 ## 9. 依赖与复用边界（复用度铁律）
 
-- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`fs.path`（`TryEvalFile` 归一化）、`encoding`（`TBytes` base64 若涉二进制）
-- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`fs.path`/`nextpas.core.bench`/`nextpas.core.test` owner）
-- **复用与反哺纪律**（基本要求）：开发中发现 `json/text/mem/platform.dl/fs.path` 缺口或性能瓶颈，**毫不犹豫反哺 owner 模块**（提 `core/docs/...` 变更 + 加回归），禁止在 `js` 内堆 workaround/重复造轮子/抄低质量代码；`AI_GUIDE §5 C7/C9` 同检，`ACCEPTANCE G-M1-3` 的 `source-contract` 禁止 `js` 内出现 `SysUtils` 手写转义/自计时
+- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`platform.fs`（`TryEvalFile` L0直读，bytes.ops Move零拷贝，`FORMAT_BULK_PARSE_MAX_BYTES` 64MiB限流）、`encoding`（`TBytes` base64 若涉二进制）—— **L2 js 禁止依赖同层 `fs`（`nextpas.core.fs`），已由 `platform.fs` L0单源替代，守 module-registry `json/text.view/mem+platform.dl`**
+- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`platform.fs`/`nextpas.core.bench`/`nextpas.core.test` owner，`fs` 已下沉至 `platform.fs` L0）
+- **复用与反哺纪律**（基本要求）：开发中发现 `json/text/mem/platform.dl/platform.fs` 缺口或性能瓶颈，**毫不犹豫反哺 owner 模块**（提 `core/docs/...` 变更 + 加回归），禁止在 `js` 内堆 workaround/重复造轮子/抄低质量代码；`AI_GUIDE §5 C7/C9` 同检，`ACCEPTANCE G-M1-3` 的 `source-contract` 禁止 `js` 内出现 `SysUtils` 手写转义/自计时
 
 **Source-contract 扫描**（`core/tests/architecture/check_source_contracts.py`）：
 
@@ -345,3 +345,4 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-08-31 | 0.9 | M3b 同步：BENCHMARKS Eval/small 5 后端刷新（179/633/1089/962/SKIP）+ Value/ops 零分配同步 + 纯族 338 行体量阈值内标注（CONTRACT/ROADMAP/BENCHMARKS 三份对齐） | codex/core-js |
 | 2026-08-31 | 0.10 | 文档完整性修复：BENCHMARKS 1.4 同步本次实测均值（Eval/small ~660ns / Eval/host ~1.5µs 加权 / B/op 18/176 / Value 零分配）+ pure.base 481 行阈值 550 内统一，18 份对齐 | codex/core-js |
 | 2026-08-31 | 1.0 | 冻结候选：距1.0仅文档版本滞后，CONTRACT/DESIGN 0.10→1.0，BENCHMARKS 1.4 保持，其余引用同步 1.0，18份对齐 | codex/core-js |
+| 2026-09-02 | 1.1 | 六维完美：pure.base 481→517 行（+36 行 L2→L0 platform.fs 直读 + JsTrimEquals 去 inline + bytes.ops 单源），js.js888/v8/chakra 各 122→29 行薄壳化，5 gate 全绿 42×4+12+SKIP，18 份对齐 | codex/core-js |

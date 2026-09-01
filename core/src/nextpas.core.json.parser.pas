@@ -59,6 +59,7 @@ type
     procedure EnsureObjectIndex(AObjectIdx: UInt32);
     function LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
   end;
+  PJsonDocument = ^TJsonDocument;
 
 function JsonParseDoc(const AInput: TStringView;
   const AAllocator: TMemAllocator): TJsonDocument;
