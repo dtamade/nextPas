@@ -41,6 +41,7 @@ var
   LCut, LPos, LNext, LBest: Integer;
   LG: TGraphemeResult;
 begin
+  if ABudget <= 0 then Exit('');
   LFull := AgentBuildSystemText(ASystem, AMessages);
   if Length(LFull) <= ABudget then
     Exit(LFull);
