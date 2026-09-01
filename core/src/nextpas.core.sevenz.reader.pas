@@ -68,7 +68,7 @@ type
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
     function LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
-    function ReverseStr(const S: string): string; inline;
+    function ReverseStr(const S: string): string;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -161,6 +161,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
+  nextpas.core.collections.algorithms,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
   nextpas.core.text.unicode.utils;
@@ -168,6 +169,35 @@ uses
 function CompareNames(const A, B: string): Integer; inline;
 begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
+end;
+
+type
+  TSevenZSortCtx = record
+    Reader: TSevenZReaderImpl;
+    UseLower: Boolean;
+    Rev: Boolean;
+  end;
+  PSevenZSortCtx = ^TSevenZSortCtx;
+
+function SevenZCompareIdx(const A, B: Integer; AData: Pointer): SizeInt;
+var
+  LCtx: PSevenZSortCtx;
+begin
+  LCtx := PSevenZSortCtx(AData);
+  if LCtx^.UseLower then
+  begin
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevLowerNames[A], LCtx^.Reader.FRevLowerNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FLowerNames[A], LCtx^.Reader.FLowerNames[B]);
+  end
+  else
+  begin
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevNames[A], LCtx^.Reader.FRevNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FEntries[A].Name, LCtx^.Reader.FEntries[B].Name);
+  end;
 end;
 
 const
@@ -558,36 +588,20 @@ begin
 end;
 
 procedure TSevenZReaderImpl.BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
-var LI: Integer;
-  procedure QuickSort(AL, AR: Integer);
-  var LI2, LJ, LPivot: Integer; LTmp: Integer;
-    function Cmp(const A, B: Integer): Integer; inline;
-    begin
-      if AUseLower then
-      begin
-        if ARev then Result := CompareNames(FRevLowerNames[A], FRevLowerNames[B])
-        else Result := CompareNames(FLowerNames[A], FLowerNames[B]);
-      end else
-      begin
-        if ARev then Result := CompareNames(FRevNames[A], FRevNames[B])
-        else Result := CompareNames(FEntries[A].Name, FEntries[B].Name);
-      end;
-    end;
-  begin
-    LI2 := AL; LJ := AR; LPivot := ADest[(AL+AR) div 2];
-    repeat
-      while Cmp(ADest[LI2], LPivot) < 0 do Inc(LI2);
-      while Cmp(ADest[LJ], LPivot) > 0 do Dec(LJ);
-      if LI2 <= LJ then
-      begin LTmp := ADest[LI2]; ADest[LI2] := ADest[LJ]; ADest[LJ] := LTmp; Inc(LI2); Dec(LJ); end;
-    until LI2 > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI2 < AR then QuickSort(LI2, AR);
-  end;
+var
+  LI: Integer;
+  LCtx: TSevenZSortCtx;
 begin
   SetLength(ADest, Length(FEntries));
-  for LI:=0 to High(ADest) do ADest[LI] := LI;
-  if Length(ADest) > 1 then QuickSort(0, High(ADest));
+  for LI := 0 to High(ADest) do
+    ADest[LI] := LI;
+  if Length(ADest) > 1 then
+  begin
+    LCtx.Reader := Self;
+    LCtx.UseLower := AUseLower;
+    LCtx.Rev := ARev;
+    specialize Sort<Integer>(ADest, @SevenZCompareIdx, @LCtx);
+  end;
 end;
 
 procedure TSevenZReaderImpl.BuildSortedIdx;
@@ -612,11 +626,15 @@ begin
   BuildSorted(FSortedIdxRevIgnoreCase, True, True);
 end;
 
-function TSevenZReaderImpl.ReverseStr(const S: string): string; inline;
-var LI: Integer;
+function TSevenZReaderImpl.ReverseStr(const S: string): string;
+var
+  LI: Integer;
 begin
+  { not inline: SetLength+loop is real loop body, keep out-of-line to avoid
+    I-Cache copy bloat when expanded into LowerBoundGeneric binary-search hot path }
   SetLength(Result, Length(S));
-  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
+  for LI := 1 to Length(S) do
+    Result[LI] := S[Length(S) - LI + 1];
 end;
 
 procedure TSevenZReaderImpl.EnsureRevNamesBuilt;
