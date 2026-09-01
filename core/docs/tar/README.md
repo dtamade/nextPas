@@ -10,12 +10,12 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.base` | 种类枚举、头记录、选项、常量 `C_TAR_BLOCK_SIZE=512`、名安全谓词、模式助手 |
 | `nextpas.core.tar.intf` | `ITarBuilder` 接口契约（`base←intf←实现←门面`） |
 | `nextpas.core.tar.reader` | `TTarReader`：迭代内存镜像，pax/x/g + GNU L/K + base-256 全兼容 |
-| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + base-256 溢出，需显式 `Finish` |
+| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出，需显式 `Finish` |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
 | `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish`） |
 | `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
 
-> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`GuardTarEntrySize`/`GuardTarTotalSize`/`GuardTarNameForRead`，仅供 `reader/writer/fs` 实现内复用。
+> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（均 inline 零拷贝 PByte 切片、复用 `bytes.ops` 单源），仅供 `reader/writer/fs` 实现内复用。
 
 ## Supported Features
 
@@ -24,10 +24,10 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | Regular files | Yes | Yes | `tekRegular`, `Size` 精确 |
 | Directories | Yes | Yes | 名字补 `/`，`tekDirectory` |
 | Symlink/Hardlink/Devices/FIFO | Yes (emit) | Yes (parse) | 读端全识别，`fs` 默认 `SkipSpecial=True` 跳过 |
-| USTAR prefix splitting | Yes | Yes | >100 字符名自动 `prefix/name` 分割，失败 `EIOError` |
+| USTAR prefix splitting | Yes | Yes | >100 字符名自动 `prefix/name` 分割，无 prefix 切分时写端以 `pax x` 承载 |
 | GNU base-256 numeric | Yes (overflow) | Yes | 超 octal 容量自动 `$80` + big-endian |
-| GNU longname `L/K` | — | Yes | `FPendingLongName/Link` 覆盖 |
-| PAX `x/g` `path/linkpath` | — | Yes | per-entry 优于 global |
+| GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
+| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `EntryDataSlice` + `OpenEntryStream` |
 
@@ -100,7 +100,7 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`HeaderIsZeroOrValid` 单遍 512 融合、`ParsePaxRecordsSlice` 零拷贝。
+- reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `common.TarParsePaxRecords` 零拷贝 PByte 切片均 inline 复用 `bytes.ops` 单源。
 - 基准：`core/benchmarks/nextpas.core.tar/bench_tar`（`tar/pack/200x512B ~526µs 185MB/s`、`builder-pack ~537µs`、`open/parse ~236µs`、`extract-slice ~236µs`、`write 1MB 2.4ms`、`read 1MB 1.6ms`，7 项，`TBenchSuite` 300ms/7样，详见 `build/bench-tar.json`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。

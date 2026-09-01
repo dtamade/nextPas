@@ -46,7 +46,7 @@ end;
 
 procedure TestPrefixSplitAndReject;
 var
-  S: IStream; W: TTarWriter;
+  S: IStream; W: TTarWriter; R: TTarReader; H: TTarHeader; B: TBytes;
   LongOk, LongFail: string; I: Integer;
 begin
   LongOk := '';
@@ -61,8 +61,15 @@ begin
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
   try
-    try W.AddFile(LongFail, BytesOf('x')); CheckTrue(False, 'should raise');
-    except on E: EIOError do CheckTrue(True, 'too long raises'); end;
+    W.AddFile(LongFail, BytesOf('x')); W.Finish;
+    B := Snapshot(S);
+    R := TTarReader.Create(B);
+    try
+      CheckTrue(R.Next(H), 'pax longname found');
+      CheckEqual(LongFail, H.Name, 'pax roundtrip long name');
+      CheckTrue(R.Next(H) = False, 'end after pax');
+    finally R.Free; end;
+    CheckTrue(True, 'pax longname ok');
   finally W.Free; end;
 end;
 

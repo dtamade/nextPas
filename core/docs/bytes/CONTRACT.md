@@ -20,7 +20,7 @@
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
 | bytes.cursor | IByteCursor 边界受查只读游标（顺序/绝对偏移、Try* 变体） |
 | bytes.stream | TByteStreamBuf 可增长缓冲流（append/consume/compact） |
-| bytes.pathvalid | ValidPath 共享校验（复用 bytes.ops 单源 + text.utf8 单源） |
+| bytes.pathvalid | ValidPath + IsSafeArchiveEntryName 共享校验（tar/zip 归档名安全谓词单源，复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
 四件套形态：`base`（类型/常量）→ `ops/binary/builder/cursor/stream/pathvalid`（实现子模块）→ `bytes.pas`（门面聚合）；本模块无独立 `intf/ffi`（按需存在，不机械创建）。
@@ -96,6 +96,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **TByteStreamBuf**：`EnsureCapacity/ReserveAppend/CommitAppend/Append/Consume/Clear/Compact`；容量保留、尾部零分配、头游标延迟压实；Destroy 经 `FreeMemOf(FAllocator, FPtr, FCap)` 释放。
 - **IByteCursor**：`NewByteCursor(TBytes)` 持有 `TBytes` 拷贝保活；`NewByteCursorAt(PByte, Len)` 裸指针由调用方保活；只读无分配（`ReadBytes` 除外）。
 - **ValidPath**：`BytesValidPath/BaseValidPath(APath, AAllowRoot)` — Go `io/fs.ValidPath` 语义，复用 `text.utf8.UTF8IsValid` 单源，段扫描零拷贝。
+- **ArchiveEntry**：`IsSafeArchiveEntryName(AName, AMaxBytes)` — tar/zip 归档名安全谓词单源（非空/≤AMaxBytes/非'/'/无盘符/无'\'/无'//'/'.'/'..'，尾随'/'合法），inline+零拷贝原串索引，无Copy/分配，tar.base/zip.base 薄 inline 转发。
 
 ---
 

@@ -107,7 +107,8 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `qt` | L2 | Qt toolkit binding via self-wrap C shim (nextpas.core.qt family; ffi/loader/base; dlopen `libnextpas-qt.so`, Qt5/6 agnostic, deferred) | yes | L0-L1 plus platform.dl plus vendors/libnextpas-qt | draft |
 | `xml` | L2 | XML parser/writer | yes | L0-L1 | focused-runtime |
 | `yaml` | L2 | YAML parser/writer | yes | L0-L1 | focused-runtime |
-| `tar` | L2 | tar container (ustar/pax/GNU, block-aligned, sandboxed, dir pack/extract + fluent builder) | yes | L0-L2; `tar.fs` is the single `fs` seam, plus `io`/`text` seams | focused-runtime |
+| `archive` | L2 | archive shared helpers (tar/zip walk/sort/symlink/snapshot/zero-copy, federated via archive.fs) | yes | L0-L1 plus fs/io via platform.files (tar/zip owned, single seam) | focused-runtime |
+| `tar` | L2 | tar container (ustar/pax/GNU, block-aligned, sandboxed, dir pack/extract + fluent builder) | yes | L0-L2; `tar.fs` is the single `fs` seam, plus `io`/`text` seams, federation via `archive.fs` (shared walk/sort/snapshot, L2 同层显式 one-way) | focused-runtime |
 | `zip` | L2 | ZIP archive container (store/deflate, Zip64, streaming, WinZip AES, sequential, builder, dir pack/extract) | yes | L0-L2 (compress/fs/checksum owners) | source-contract + focused-runtime |
 
 Database family: backends are L2 implementations inside the `db` family —

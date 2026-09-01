@@ -2,7 +2,8 @@ unit nextpas.core.archive.fs;
 {**
  * @desc Archive 共享文件系统助手：抽取 tar/zip 共同的 walk/排序/防劫持/快照/零拷贝落盘
  * 解决 tar.fs/zip.fs 150+ 行拷贝粘贴重复，提供几何扩容、零 Copy 前缀检测、快照复用。
- * L1 定位，仅依赖 base/fs/io，无 tar/zip 业务逻辑；tar/zip 各自保留 Mode 助手差异。
+ * L2 共享定位，依赖 L0-L1 + fs/io 单 seam（platform.files 经 fs 透出）， federation via archive.fs 显式注册；
+ * tar/zip 各自保留 Mode 助手差异，目录递归 Walk 已完全下沉至此单源。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -56,6 +57,9 @@ procedure ArchiveWriteFileSlice(const APath: string; AData: PByte; ACount: SizeU
 
 { 目录定稿：逆序 Chmod/Chtimes，best-effort 但保留异常上下文（不静默吞） }
 procedure ArchiveRestoreDeferredDirs(const ADirs: TArchiveDeferredArray; ARestoreMode: Boolean);
+
+{ 统一目录递归收集：ReadDir 批量名 + 单次 Stat/Entry 补齐 mtime/mode，几何扩容与排序在 archive 单源 }
+procedure ArchiveCollectWalk(const AAbsDir, ARelPrefix: string; var AOut: TArchiveWalkArray; var ACount: Integer);
 
 implementation
 
@@ -276,6 +280,40 @@ begin
         { best-effort mtime 还原，忽略但保留上下文 }
       end;
     end;
+  end;
+end;
+
+procedure ArchiveCollectWalk(const AAbsDir, ARelPrefix: string; var AOut: TArchiveWalkArray; var ACount: Integer);
+var
+  LEntries: TDirEntryArray;
+  LI: Integer;
+  LName, LChildAbs, LChildRel: string;
+  LInfo: TFileInfo;
+begin
+  { ReadDir 已批量缓存目录项（platform 4K buf + 迭代句柄），仅含 Name/Type；
+    mtime/mode 需 Stat 补齐，每条目一次 Stat 为必要 O(N)，非 N+1 冗余；
+    路径拼接复用 LChildAbs，几何扩容 inline，资源经迭代器 Close 不丢 }
+  LEntries := ReadDir(AAbsDir);
+  ArchiveSortDirEntries(LEntries);
+  for LI := 0 to High(LEntries) do
+  begin
+    LName := LEntries[LI].Name;
+    if (LName = '.') or (LName = '..') then
+      Continue;
+    if ARelPrefix = '' then
+      LChildRel := LName
+    else
+      LChildRel := ARelPrefix + '/' + LName;
+    LChildAbs := AAbsDir + '/' + LName;
+    LInfo := Stat(LChildAbs);
+    if LEntries[LI].IsDir then
+    begin
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+      ArchiveCollectWalk(LChildAbs, LChildRel, AOut, ACount);
+    end
+    else if LEntries[LI].FileType = ftRegular then
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+    { symlink/device/FIFO/socket 跳过，防劫持由外层 EnsureNoSymlinkInPath 保障 }
   end;
 end;
 

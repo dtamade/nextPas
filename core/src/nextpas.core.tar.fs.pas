@@ -1,8 +1,9 @@
 unit nextpas.core.tar.fs;
 {**
  * @desc Tar 与文件系统之间的便捷层：递归打包目录、解包归档到目录。
- * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、快照、零拷贝落盘与
- * deferred-dir 逆序定稿，消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed。
+ * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、快照、零拷贝落盘、
+ * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalk 单源），消除与 zip.fs 的 150+ 行拷贝，
+ * 保持确定性与 fail-closed；L2 单 seam：fs 仅经 archive 联邦，注册层级见 module-registry archive/tar。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -64,36 +65,7 @@ begin
   ArchiveEnsureDeferredCapacity(A, AMin);
 end;
 
-procedure CollectLevel(const AAbsDir, ARelPrefix: string; var AOut: TWalkArray; var ACount: Integer);
-var
-  LEntries: TDirEntryArray;
-  LI: Integer;
-  LName, LChildAbs, LChildRel: string;
-  LInfo: TFileInfo;
-begin
-  LEntries := ReadDir(AAbsDir);
-  ArchiveSortDirEntries(LEntries);
-  for LI := 0 to High(LEntries) do
-  begin
-    LName := LEntries[LI].Name;
-    if (LName = '.') or (LName = '..') then
-      Continue;
-    if ARelPrefix = '' then
-      LChildRel := LName
-    else
-      LChildRel := ARelPrefix + '/' + LName;
-    LChildAbs := AAbsDir + '/' + LName;
-    { ReadDir 仅含 Name/Type，未含 mtime/mode，故需 Stat 补全；单次 Stat/Entry 非 N+1 冗余 }
-    LInfo := Stat(LChildAbs);
-    if LEntries[LI].IsDir then
-    begin
-      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
-      CollectLevel(LChildAbs, LChildRel, AOut, ACount);
-    end
-    else if LEntries[LI].FileType = ftRegular then
-      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
-  end;
-end;
+{ CollectLevel 已完全下沉至 archive.fs: ArchiveCollectWalk 单源复用，tar 仅薄委托，避免重复递归实现 }
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
@@ -110,7 +82,7 @@ begin
     raise EArgumentError.Create('tar pack: not a directory: ' + ADir);
   SetLength(LWalks, 0);
   LWalksCount := 0;
-  CollectLevel(ADir, '', LWalks, LWalksCount);
+  ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
   for LI := 0 to High(LWalks) do
   begin
