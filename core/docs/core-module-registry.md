@@ -34,6 +34,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
+| `canvas` | L2 | CPU raster canvas (ICanvas raster, Tile 16x16 + simd.raster FillSolid/BlendSrcOver inline, tess梯形→整数覆盖, Save/Restore栈) (`nextpas.core.canvas.*`; raster is single L2→L2 seam) | yes | L0-L1 plus same-layer one-way `vector`/`image` (single-point `canvas.raster` → `vector.tess`/`vector.path` + `image.base`, cycle-gated, no reverse; bytes.ops single source inline/zero-copy, resource FreeAndNil/try-finally not lost) | focused-runtime |
 | `embed` | L1 | embedding carrier thresholds (typed const <4MiB, EmbedRequireIncSize/ResPackRequireIncSize/EffectiveLimit inline zero-copy, MaxBlobBytes configurable) — independent strategy module extracted from respack.limits (S6); units live at `nextpas.core.embed.*` plus facade `nextpas.core.embed`; compatible alias `nextpas.core.respack.limits` forwards to `nextpas.core.embed.limits` | yes | L0 only (base/exception) | source-contract |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
@@ -59,6 +60,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
+| `graphics` | L1 | graphics base types (TColor32/TRgba/TBlendMode/ColorSpace/TRect/TVec2/TMat2D/TPath/TGradient/GraphicsError) (`nextpas.core.graphics.*`: `graphics.base` + `graphics.color` + `graphics.path` + `graphics.text` + `graphics.effect.graph`; facade pure re-export) | yes | L0 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
 | `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
@@ -109,6 +111,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `toml` | L2 | TOML parser/writer | yes | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L3 | validation helpers | yes | L0-L2 | draft |
+| `vector` | L2 | vector geometry (path boolean/stroke tess Double内核 Single外观, TPoly/TTrapezoid) (`nextpas.core.vector.*`: `vector.path` + `vector.tess`; facade pure re-export, graphics.base L1 single source, bytes.ops零拷贝 inline) | yes | L0-L1 | focused-runtime |
 | `vfs` | L2 | read-only virtual filesystem (`nextpas.core.vfs.*`, memtree/embedded/os/sub/mount/overlay + transform/compressed L3 单缝装饰器寄居，13 units + facade) | yes | L0-L1; os seam single fs/path L2→L2 (one-way, cycle-gated); embedded adds respack.reader (one-way, cycle-gated); mount/overlay pure composite zero extra deps; transform/compressed: L3 单缝装饰器寄居 L2 家族（Registry 单缝白名单过渡，长期待 L3 族聚合拆分，单源决策器单流 4K HeaderPred + GZIP_MAX 32MiB via compress.base + bytes.ops 零拷贝单源) | focused-runtime |
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |

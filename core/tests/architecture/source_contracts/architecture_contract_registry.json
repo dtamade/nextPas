@@ -209,6 +209,11 @@
       "path": "src/nextpas.core.simd.imageproc.impl.pas",
       "unit": "nextpas.core.image.base",
       "reason": "simd imageproc impl image base debt pending seam extraction"
+    },
+    {
+      "path": "src/nextpas.core.mem.allocator.tracking.pas",
+      "unit": "nextpas.core.text.builder",
+      "reason": "tracking ReportLeaks single allocation via TBufStringBuilder reusing bytes.ops.BytesGrowCapacity single source geometric growth; O(n) vs O(n^2) concat fix"
     }
   ],
   "raw_ffi_tokens": [

@@ -32,6 +32,7 @@ and records evidence; it is not a completion claim.
 | `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime — `base.utils` adds `CompareBytesOrdered` + `CompareBytesIgnoreCase/HashFNV1aLower` (`LowerTable` 去分支, nil 守卫) unified for respack/vfs/http |
 | `bench` | Support | benchmark helpers | `nextpas.core.bench` | explicit test/bench only | source-contract |
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
+| `canvas` | L2 | CPU raster canvas (ICanvas raster, Tile 16x16 + simd inline, tess梯形→整数覆盖) | `nextpas.core.canvas` | L0-L1 plus same-layer one-way `vector`/`image` (single-point `canvas.raster` → `vector.tess`/`vector.path` + `image.base`, cycle-gated, bytes.ops inline/zero-copy) | focused-runtime |
 | `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
 | `collections` | L1 | data structures | `nextpas.core.collections` | L0 | focused-runtime |
 | `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB` 单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES` 已收敛为薄别名/薄门面经 `transform` 承载） |
@@ -48,6 +49,7 @@ and records evidence; it is not a completion claim.
 | `exception` | L0 | exception root | `nextpas.core.exception` | RTL only | focused-runtime |
 | `fs` | L2 | filesystem facade | `nextpas.core.fs` | L0-L1, platform/files/path | focused-runtime |
 | `git` | L2 | git/libgit2 | `nextpas.core.git` | L0-L1, libgit2 FFI allowlist | focused-runtime — `test_git/test_git_bindings/test_git_native` 30+ `heaptrc 0`, `bytes.ops` 零拷贝 patch/diff/blame, inline `TryFind`, 资源 `FreeAndNil/try-finally` 不丢 |
+| `graphics` | L1 | graphics base types (TColor32/TRect/TMat2D/TPath/TGradient) | `nextpas.core.graphics` | L0 | focused-runtime |
 | `hash` | L2 | hash/digest | `nextpas.core.hash` | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | `nextpas.core.http` | L0-L2 | focused-runtime — static pipeline: conditional 304 (weak ETag), single Range 206/416 + `If-Range` (ETag/date) fallback, `HEAD` header-only without stream open, error paths HEAD-aware; `http.mime` O(1) open-address hash (128 槽, FNV-1a, 1-2 探测) + 零分配切片 (`LookupBySlice` 直哈 `PChar` 段, `HttpMimeFromPath` 去 `Copy`) + L0 `HashFNV1aLower/CompareIgnoreCase` 复用 + `HashMimeNorm` 归一 + `PChar→@S[1]` 显式化 + `HttpMimeFromExt/FromPath` inline，ETag 委托 `vfs.base VfsETagStrong/FNV` 单源（`http` 包装保持 API 兼容，`Cache-Control` 单源 `CACHE_REVALIDATE`，`Content-Disposition` 单遍 `EscapeDispositionFilename`，`ParseRangeHeader BYTES_PREFIX+TryParseSlice` 零分配，`IsSafePath/TryExtractRequestPath/ExtractFileNameInline/HttpMakeStrongETag` inline（含声明侧 inline），`ServeVfs` nil 守卫 + `IsHeadReq` 复用） `test_http_*` 47 gate `heaptrc 0` |
 | `id` | L1 | identifiers | `nextpas.core.id` | L0, platform random | focused-runtime |
@@ -86,6 +88,7 @@ and records evidence; it is not a completion claim.
 | `toml` | L2 | TOML format | `nextpas.core.toml` | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI | `nextpas.core.tui` | L0-L2 | focused-runtime — `test_tui_*` 100+ gates `heaptrc 0`, `bytes.ops` 零拷贝 `SpanEqual/Reverse`, inline `Cell/Style`, `platform` 抽象单源 |
 | `validation` | L2 | validation helpers | `nextpas.core.validation` | L0-L1 | focused-runtime |
+| `vector` | L2 | vector geometry (path boolean/stroke tess) | `nextpas.core.vector` | L0-L1 | focused-runtime |
 | `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub/mount/overlay + facade + transform/compressed L3 单缝装饰器) | `nextpas.core.vfs` | L0-L1; os seam single fs/path L2→L2 (one-way, cycle-gated) + embedded adds respack.reader (one-way, cycle-gated) — two L2→L2 allowlist one-way seams beyond default L0-L1, registry+source-contract double-locked; mount/overlay pure composite zero extra deps; transform/compressed: L3 单缝装饰器寄居 L2 家族（Registry 单缝白名单过渡，长期待 L3 族聚合拆分，单源决策器单流 4K HeaderPred + GZIP_MAX 32MiB 单源 via compress.base + bytes.ops 零拷贝） | focused-runtime, source-contract — embedded `FPaths/FEntries/FETags/FLastMods` parallel cache (O(log n) index, O(1) ETag/Last-Modified, zero `DecodeWire`), `TEmbeddedSlice/TEmbeddedSliceStream` 零拷贝+`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽池化 (10k 163ms, `heaptrc 0`)，`List` 零 `Stat` 直填 `FEntries`，`VfsNameCompare` 直通 `base.utils CompareBytesOrdered` + `VfsETagStrong/FNV` 单源消 `embedded/http` 字面量重复，`HasSubtreePath/IndexOfPath` 共用 `LowerBoundPath` + `CompareBytesOrdered` 显式字节序 + `CompareMem` 前缀 + `PChar→@S[1]` 显式化 + `LPtr/Llen` 缓存 + `inline` 热路径，`mount` 前缀最长匹配聚合+`overlay` 同根优先级叠加 patch>dlc>base（游戏热更，List去重合并，ETag优先透传）；`transform` L3 单缝通用变换装饰器（`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 函数注入，单源决策器 TryResolveViaHeaderSingleStream 单流 inline 零拷贝：`Stat` 单流 4K HeaderPred 免大文件全量（非变换回 FInner.Stat，小文件复用 Header 零二次 IO，大文件同流 IReaderAt/Seek 补读免二次 OpenRead）、`OpenRead` HeaderPred 假时零物化直透 `FInner.OpenRead`（零拷贝无 materialize，4K peek ~972ns）、真时单流 Move 4K 头+同流补读、`TryGetETag` 禁用、`TryGetLastModified` 经 `QueryInterface` 透传，`inline` 热路径+`try-finally` Close 不丢；`compressed` 为 `transform` 薄门面（单缝寄居正名）仅保留策略 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` + bytes.ops 单源魔数，`STORE` 零拷贝与 32MiB 防 bomb 由 `transform` 承载，`daAuto` 单流 4K 头预判免 Stat 全量读，`bench_transform` 4 项基准固化，合规 `nextpas.core.exception` + `QueryInterface` 无 `SysUtils` 直引） |
 | `webview` | L3 | desktop app shell over system web engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | `nextpas.core.webview` | L0-L2 plus json owner; platform.dl | focused-runtime, source-contract — S37 容量与 Fail-Fast 完整性（`IsValidWebviewSchemeToken` 复用 + Builder `GrowInvokes/GrowReady` 2× + Scheme/几何早筛 + `CONTRACT 1.31`） |
 | `websocket` | L3 | WebSocket | `nextpas.core.websocket` | L0-L2, HTTP/TLS seams | focused-runtime — `test_websocket` 17/17 + `test_http_websocket*` 3 gates `heaptrc 0`, `bytes.ops/base64/sha1` 单源, inline `TryDecode/Mask`, 零拷贝 `Payload Move` |
@@ -100,6 +103,7 @@ and records evidence; it is not a completion claim.
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
+| `canvas` | L2 | CPU raster canvas (ICanvas raster, Tile 16x16 + simd inline) | yes | L0-L1 plus same-layer one-way `vector`/`image` (single-point `canvas.raster` → `vector.tess`/`vector.path` + `image.base`, cycle-gated) | focused-runtime |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
 | `compress` | L2 | compression formats | yes | L0-L1 | focused-runtime |
@@ -124,6 +128,7 @@ and records evidence; it is not a completion claim.
 | `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
 | `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
+| `graphics` | L1 | graphics base types (TColor32/TRect/TMat2D/TPath/TGradient) | yes | L0 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
 | `html` | L2 | HTML text extraction/entity decode | yes | L0-L1 | focused-runtime |
@@ -173,6 +178,7 @@ and records evidence; it is not a completion claim.
 | `toml` | L2 | TOML parser/writer | yes | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L2 | validation helpers | yes | L0-L1 | focused-runtime |
+| `vector` | L2 | vector geometry (path boolean/stroke tess) | yes | L0-L1 | focused-runtime |
 | `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub/mount/overlay + facade + transform decorator) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite | focused-runtime + source-contract |
 | `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView backends; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |
 | `websocket` | L3 | WebSocket | yes | L0-L2, HTTP/TLS seams | focused-runtime |

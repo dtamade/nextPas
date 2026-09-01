@@ -53,7 +53,6 @@ function ZlibFfiDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeU
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.platform.dl;
@@ -220,7 +219,7 @@ begin
   LDstLen := LBound;
   LRet := GCompress2(@Result[0], LDstLen, @AData[0], LSrcLen, LLevel);
   if LRet <> Z_OK then
-    RaiseFfi(zecInternal, 'zlib ffi: compress2 failed (' + IntToStr(LRet) + ')');
+    RaiseFfi(zecInternal, 'zlib ffi: compress2 failed (' + IntToStr(Int64(LRet)) + ')');
   SetLength(Result, LDstLen);
 end;
 
@@ -281,7 +280,7 @@ begin
       RaiseFfi(zecCorruptStream, 'zlib: corrupt stream');
     if LRet = Z_MEM_ERROR then
       RaiseFfi(zecInternal, 'zlib: mem error');
-    RaiseFfi(zecCorruptStream, 'zlib ffi: uncompress failed (' + IntToStr(LRet) + ')');
+    RaiseFfi(zecCorruptStream, 'zlib ffi: uncompress failed (' + IntToStr(Int64(LRet)) + ')');
   end;
 end;
 
