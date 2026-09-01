@@ -2,7 +2,7 @@
 
 ## 1.0.0 (2026-08-29) — nextpas.core.zip 1.0.0 领头羊 Final
 
-基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 四模型就绪，`VERSION` 冻结为 `1.0.0`。
+基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 五模型就绪，`VERSION` 冻结为 `1.0.0`。
 
 ## 1.0.0-rc.1 (2026-08-29) — nextpas.core.zip 领头羊封版 RC
 
@@ -16,10 +16,10 @@ Pascal AI 时代 ZIP 容器领头羊实现，以 `nextpas.core.bench` 为唯一�
 - **S47 100+ fuzz与no-sig**：`test_zip_fuzz 450组` 与 `Go 7门` 含 `12/16/20/24` 四形态与 unicode 双锚点一致
 - **S48 Cookbook定版**：`README` 6式与 `Migration` 表，`zip_roundtrip` 增 `PByte/AES-desc` 两小节 `all demos ok`
 - **S49 方差治理**：`TBenchSuite 300ms/7/25` 使 `aes-*` CV `<5%`，回归无 `WARN`
-- **S50 安全审计**：`SECURITY.md` 四项威胁模型（`zip-slip/bomb/CPU bomb/AES oracle`），`INV-18/19` 入约，`VERSION` 冻结
+- **S50 安全审计**：`SECURITY.md` 五项威胁模型（`zip-slip/bomb/CPU bomb/AES oracle/symlink traversal`），`INV-18/19` 入约，`VERSION` 冻结
 
 ### Security
-- 见 `core/docs/zip/SECURITY.md` 四项 fail-closed 模型与 `CONTRACT INV-16/17/18/19`
+- 见 `core/docs/zip/SECURITY.md` 五项 fail-closed 模型与 `CONTRACT INV-16/17/18/19`
 
 ### Testing
 - 12门 `nextpas.core.zip.*` 全绿 `[HEAPTRC] OK`（27/27/22/7/5/6/9/3/13/7/5/4），`bench regression allocs+2/bytes` 硬门，`zip_roundtrip all demos ok`，`make hygiene/diff --check` 通过，`ci-matrix` 四靶标复跑通过

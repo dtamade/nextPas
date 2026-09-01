@@ -219,3 +219,5 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 
 - 顺序读目录判定仅认尾随 `/`，随机读另认 `S_IFDIR`/`S_IFLNK`（external attrs 高位）；见 INV-16。
 - `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径（`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆，`BuildWinZipAesExtraBody` 为其堆包装）。
+- `ZipExtractToDir*` 非原子：已落盘文件不回滚，`LDirs` 逆序定稿在 `try..finally` 尽力 `Chmod/Chtimes`，异常需外层整体清理或原子 rename 变体；`EnsureNoSymlinkInPath` 与 `MkdirAll/WriteFile` 间存在 TOCTOU 窗口（需 `openat(O_NOFOLLOW)` 原子变体消除，见 SECURITY §5）。
+- `MaxDescriptorBuffer`（默认 512MiB）与 `MaxTotalOutputSize` 正交，顺序读 `CollectDescriptorPayload` 先缓冲后 `CheckTotalLimit`，极端小 `MaxTotal` 配大缓冲时内存先分配后 fail-closed（已知取舍，见 INV-16/17）。
