@@ -18,6 +18,7 @@ unit nextpas.core.ssh.agent;
 interface
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
@@ -74,6 +75,7 @@ function SshAgentConnectFromEnv: TSshAgentClient;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.ssh.intf,
   nextpas.core.ssh.net.ffi;
 

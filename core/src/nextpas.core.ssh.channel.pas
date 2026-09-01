@@ -22,6 +22,7 @@ uses
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
+  nextpas.core.ssh.window,
   nextpas.core.ssh.transport;
 
 type
@@ -75,10 +76,7 @@ type
     FTransport: TSshClientTransport;
     FLocalId: UInt32;            { 本地通道号：进程级单调递增，永不复用 }
     FRemoteId: UInt32;
-    FOurWindow: SizeUInt;        { 我方授出的接收信用 }
-    FPeerWindow: SizeUInt;       { 对端授给我方的发送信用 }
-    FPeerMaxPacket: UInt32;
-    FInitWindow: UInt32;
+    FWindow: TChannelWindow;     { 单源复用 window.pas，纯值语义 inline，零堆分配/零拷贝分片 }
     FMaxPacket: UInt32;
     FExitStatus: Integer;
     FGotClose: Boolean;
@@ -86,7 +84,9 @@ type
     FDeadlineMs: Integer;
     FWatch: TStopwatch;
     FInbox: array of TSshDataChunk;
-    procedure AccountConsume(ACount: SizeUInt);
+    FInboxHead: SizeUInt;        { 头指针：O(1) 弹出，避免 O(n) 前移 }
+    procedure AccountConsume(ACount: SizeUInt); inline;
+    procedure InboxCompact; inline;
     procedure SendWindowAdjust(ACount: UInt32);
     procedure SendRequest(const AName: string; const APayloadTail: TBytes);
     procedure HandleChannelRequest(const APayload: TBytes);
@@ -184,7 +184,6 @@ begin
 end;
 
 const
-  WINDOW_LOW_WATER_DIVISOR = 2;  { 消费过半即回补 }
   SSH_CHANNEL_INBOX_MAX = 1024;  { 信箱上限：防对端洪泛 DATA 导致无界内存 }
 
 var
@@ -294,6 +293,7 @@ end;
 
 constructor TSshChannel.Create(ATransport: TSshClientTransport;
   AInitialWindow, AMaxPacket: UInt32; ATimeoutMs: Integer);
+var LInit: UInt32;
 begin
   inherited Create;
   FTransport := ATransport;
@@ -301,12 +301,12 @@ begin
   Inc(GNextLocalChannelId);
   FRemoteId := 0;
   FExitStatus := -1;
-  FInitWindow := AInitialWindow;
+  LInit := AInitialWindow;
+  if LInit = 0 then LInit := SSH_DEFAULT_WINDOW_SIZE;
   FMaxPacket := AMaxPacket;
-  if FInitWindow = 0 then
-    FInitWindow := SSH_DEFAULT_WINDOW_SIZE;
   if FMaxPacket = 0 then
     FMaxPacket := SSH_DEFAULT_MAX_PACKET;
+  FWindow.Init(LInit, 0, 0); { 单源 window.pas 纯值语义，inline 零堆分配 }
   FDeadlineMs := ATimeoutMs;
   if FDeadlineMs > 0 then
     FWatch := TStopwatch.StartNew;
@@ -328,7 +328,7 @@ begin
     LW.PutByte(SSH_MSG_CHANNEL_OPEN);
     LW.PutStringText(SSH_CHANNEL_SESSION);
     LW.PutUInt32(FLocalId);
-    LW.PutUInt32(FInitWindow);
+    LW.PutUInt32(FWindow.InitWindow);
     LW.PutUInt32(FMaxPacket);
     TracePkt('tx', LW.ToBytes);
     FTransport.SendPacket(LW.ToBytes);
@@ -350,15 +350,13 @@ begin
             LR.ReadUInt32;   { recipient：PumpFiltered 已保证 = FLocalId }
             FRemoteId := LR.ReadUInt32;
             { 对端授予的发送信用与其 MaxPacket 上限（此前未读，发送分片缺依据）}
-            FPeerWindow := LR.ReadUInt32;
-            FPeerMaxPacket := LR.ReadUInt32;
+            FWindow.SetPeer(LR.ReadUInt32, LR.ReadUInt32);
           finally
             LR.Free;
           end;
-          FOurWindow := FInitWindow;
           TraceStr('open: confirmed remote=' + IntToStr(FRemoteId) +
-            ' peer_window=' + IntToStr(FPeerWindow) +
-            ' peer_max=' + IntToStr(FPeerMaxPacket));
+            ' peer_window=' + IntToStr(FWindow.PeerWindow) +
+            ' peer_max=' + IntToStr(FWindow.PeerMaxPacket));
           Exit;
         end;
       SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -381,7 +379,7 @@ begin
     LW.PutByte(SSH_MSG_CHANNEL_OPEN);
     LW.PutStringText('direct-tcpip');
     LW.PutUInt32(FLocalId);
-    LW.PutUInt32(FInitWindow);
+    LW.PutUInt32(FWindow.InitWindow);
     LW.PutUInt32(FMaxPacket);
     LW.PutStringText(AHost);
     LW.PutUInt32(APort);
@@ -405,12 +403,10 @@ begin
             LR.ReadByte;
             LR.ReadUInt32;
             FRemoteId := LR.ReadUInt32;
-            FPeerWindow := LR.ReadUInt32;
-            FPeerMaxPacket := LR.ReadUInt32;
+            FWindow.SetPeer(LR.ReadUInt32, LR.ReadUInt32);
           finally
             LR.Free;
           end;
-          FOurWindow := FInitWindow;
           TraceStr('direct-tcpip: confirmed remote=' + IntToStr(FRemoteId));
           Exit;
         end;
@@ -555,33 +551,18 @@ begin
 end;
 
 procedure TSshChannel.AccountConsume(ACount: SizeUInt);
-var
-  LGiveBack: SizeUInt;
+var LGive: UInt32;
 begin
-  { 防御：单帧消费超过剩余信用（对端违约）时按全部剩余回补，不取负 }
-  if ACount > FOurWindow then
-  begin
-    LGiveBack := FOurWindow;
-    FOurWindow := 0;
-  end
-  else
-  begin
-    Dec(FOurWindow, ACount);
-    LGiveBack := 0;
-  end;
-  { 消费过半（含耗尽）即整批回补，服务端永不停摆 }
-  if FOurWindow <= SizeUInt(FInitWindow) div WINDOW_LOW_WATER_DIVISOR then
-  begin
-    Inc(LGiveBack, SizeUInt(FInitWindow) - FOurWindow);
-    FOurWindow := FInitWindow;
-  end;
-  while LGiveBack > High(UInt32) do
+  { 单源复用 window.pas：inline 热路径，零堆分配，低水位回补统一收口 }
+  FWindow.Consume(ACount, LGive);
+  if LGive = 0 then Exit;
+  { 防御分片：InitWindow ≤ 2MiB 单次回补不会超 UInt32，但保留分片稳健性 }
+  while LGive > High(UInt32) do
   begin
     SendWindowAdjust(High(UInt32));
-    Dec(LGiveBack, High(UInt32));
+    Dec(LGive, High(UInt32));
   end;
-  if LGiveBack > 0 then
-    SendWindowAdjust(UInt32(LGiveBack));
+  SendWindowAdjust(LGive);
 end;
 
 procedure TSshChannel.HandleChannelRequest(const APayload: TBytes);
@@ -648,15 +629,15 @@ begin
     begin
       { RFC 4254 §5.2：ADJUST 入账我方发送信用。实测 OpenSSH 对客户端
         session 通道确认初始窗口 0 后以此帧补足；任何等待循环绕过这里
-        都会丢信用，表现为首个 SendData 永久挂起。}
+        都会丢信用，表现为首个 SendData 永久挂起。单源 window.Grant inline 零拷贝 }
       LR := TsshReader.Create(Result);
       try
         LR.ReadByte;
         LR.ReadUInt32;
         LAdd := LR.ReadUInt32;
-        if not TryAddSizeUInt(FPeerWindow, SizeUInt(LAdd), LNew) then
+        if not TryAddSizeUInt(FWindow.PeerWindow, SizeUInt(LAdd), LNew) then
           raise ESSHError.Create(sekProtocol, 'ssh channel: peer window overflow');
-        FPeerWindow := LNew;
+        FWindow.Grant(LAdd);
       finally
         LR.Free;
       end;
@@ -703,30 +684,62 @@ begin
     Result := True;
 end;
 
-procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean);
+procedure TSshChannel.InboxCompact; inline;
 var
+  LCount: SizeUInt;
+  I: Integer;
+begin
+  if FInboxHead = 0 then Exit;
+  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  begin
+    SetLength(FInbox, 0);
+    FInboxHead := 0;
+    Exit;
+  end;
+  LCount := SizeUInt(Length(FInbox)) - FInboxHead;
+  for I := 0 to Integer(LCount) - 1 do
+    FInbox[I] := FInbox[Integer(FInboxHead) + I];
+  for I := Integer(LCount) to High(FInbox) do
+    FInbox[I].Data := nil;
+  SetLength(FInbox, LCount);
+  FInboxHead := 0;
+end;
+
+procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean); inline;
+var
+  LActive: SizeUInt;
   LN: Integer;
 begin
-  if Length(FInbox) >= SSH_CHANNEL_INBOX_MAX then
+  LActive := SizeUInt(Length(FInbox)) - FInboxHead;
+  if LActive >= SSH_CHANNEL_INBOX_MAX then
     raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
+  if (FInboxHead > 64) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
+    InboxCompact;
   LN := Length(FInbox);
   SetLength(FInbox, LN + 1);
   FInbox[LN].Data := AChunk;
   FInbox[LN].Extended := AExtended;
 end;
 
-function TSshChannel.InboxPop(out AChunk: TBytes; out AExtended: Boolean): Boolean;
-var
-  I: Integer;
+function TSshChannel.InboxPop(out AChunk: TBytes; out AExtended: Boolean): Boolean; inline;
 begin
-  Result := Length(FInbox) > 0;
-  if not Result then
+  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  begin
+    Result := False;
     Exit;
-  AChunk := FInbox[0].Data;
-  AExtended := FInbox[0].Extended;
-  for I := 1 to High(FInbox) do
-    FInbox[I - 1] := FInbox[I];
-  SetLength(FInbox, Length(FInbox) - 1);
+  end;
+  Result := True;
+  AChunk := FInbox[FInboxHead].Data;
+  AExtended := FInbox[FInboxHead].Extended;
+  FInbox[FInboxHead].Data := nil;
+  Inc(FInboxHead);
+  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  begin
+    SetLength(FInbox, 0);
+    FInboxHead := 0;
+  end
+  else if (FInboxHead > 64) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
+    InboxCompact;
 end;
 
 function TSshChannel.PumpRaw(out AData: TBytes; out AExtended: Boolean): Boolean;
@@ -779,7 +792,6 @@ procedure TSshChannel.SendData(const AData: TBytes);
 var
   LOff, LTake: SizeUInt;
   LW: TsshWriter;
-  LChunk: TBytes;
   LDummyData: TBytes;
   LDummyExt: Boolean;
 begin
@@ -787,36 +799,34 @@ begin
   while LOff < SizeUInt(Length(AData)) do
   begin
     { 发送信用耗尽：泵入站帧等回补；泵到的数据入信箱不丢 }
-    while (FPeerWindow = 0) and not FGotClose do
+    while (FWindow.PeerWindow = 0) and not FGotClose do
     begin
       if TimedOut then
         raise ESSHError.Create(sekTimeout,
           'ssh channel: timeout waiting peer window credit');
-      PumpRaw(LDummyData, LDummyExt);
+      if PumpRaw(LDummyData, LDummyExt) then
+        if Length(LDummyData) > 0 then
+          InboxPush(LDummyData, LDummyExt);
     end;
     if FGotClose then
       raise ESSHError.Create(sekIO, 'ssh channel: closed by peer during send');
-    LTake := SizeUInt(Length(AData)) - LOff;
-    if LTake > SizeUInt(FPeerMaxPacket) then
-      LTake := FPeerMaxPacket;
-    if LTake > SizeUInt(FPeerWindow) then
-      LTake := SizeUInt(FPeerWindow);
-    LChunk := Copy(AData, LOff, LTake);
+    LTake := FWindow.SliceSize(SizeUInt(Length(AData)) - LOff); { inline 零拷贝分片：peerWindow+max 单源 }
+    if LTake = 0 then
+      Continue;
     LW := TsshWriter.Create(16 + Integer(LTake));
     try
       LW.PutByte(SSH_MSG_CHANNEL_DATA);
       LW.PutUInt32(FRemoteId);
-      { RFC 4254 §6.1：data 是 string，必须带 4 字节长度前缀。
-        此前缺失导致对端把我们的首 4 字节当串头吞掉（SFTP 首包即毁）}
       LW.PutUInt32(UInt32(LTake));
-      LW.PutRaw(LChunk);
+      if LTake > 0 then
+        LW.PutRaw(@AData[LOff], LTake); { 零拷贝直写：TByteSpan/PByte，复用 bytes.ops 单源 }
       TracePkt('tx', LW.ToBytes);
       FTransport.SendPacket(LW.ToBytes);
     finally
       LW.Free;
     end;
     Inc(LOff, LTake);
-    Dec(FPeerWindow, LTake);
+    FWindow.DidSend(LTake);
   end;
 end;
 

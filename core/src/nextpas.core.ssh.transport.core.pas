@@ -7,7 +7,9 @@ unit nextpas.core.ssh.transport.core;
  *  - cipher Protect/Unprotect + 压缩 + 序列号递增 + rekey 计数/阈值
  *  - ShouldRekey 按字节/时间/序列号阈值判断
  *
- * 被 nextpas.core.ssh.transport / transport.async 薄包装复用；纯内存，不触 IO。 *}
+ * 被 nextpas.core.ssh.transport / transport.async 薄包装复用；纯内存，不触 IO。
+ * 通道窗口回补不在此核，统一由 nextpas.core.ssh.window 单源（FWindow.Consume/Grant inline
+ * 零堆分配，低水位 div 2），channel / channel.async / sftp.async 100% 复用。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -68,6 +70,7 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.crypto.random;
 
 constructor TSshTransportCore.Create;

@@ -103,6 +103,8 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
+  nextpas.core.base.utils,
   nextpas.core.crypto.random,
   nextpas.core.net.intf,
   nextpas.core.mem.secure;

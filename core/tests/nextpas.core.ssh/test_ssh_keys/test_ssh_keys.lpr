@@ -23,7 +23,6 @@ uses
   nextpas.core.encoding.base64,
   ssh_rsa_kat,
   ssh_bcrypt_kat,
-  nextpas.core.bytes.ops,
   nextpas.core.test;
 
 function PatternBytes(APattern: Byte; ACount: Integer): TBytes;

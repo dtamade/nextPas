@@ -24,6 +24,7 @@ type
     FPeerMaxPacket: UInt32;
   public
     procedure Init(AInitWindow, APeerWindow, APeerMaxPacket: UInt32);
+    procedure SetPeer(APeerWindow, APeerMaxPacket: UInt32); inline;
     function ShouldReplenish: Boolean; inline;
     function ReplenishAmount: UInt32; inline;
     procedure Consume(ACount: SizeUInt; out ANeedAdjust: UInt32); inline;
@@ -76,6 +77,12 @@ begin
     FOurWindow := FInitWindow;
   end;
   if LGiveBack > 0 then ANeedAdjust := UInt32(LGiveBack);
+end;
+
+procedure TChannelWindow.SetPeer(APeerWindow, APeerMaxPacket: UInt32);
+begin
+  FPeerWindow := APeerWindow;
+  FPeerMaxPacket := APeerMaxPacket;
 end;
 
 procedure TChannelWindow.Grant(ACount: UInt32);

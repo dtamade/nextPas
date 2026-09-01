@@ -100,7 +100,7 @@ uses
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.asn1,
   nextpas.core.encoding.base64,
-  nextpas.core.fs,
+  nextpas.core.platform.fs,
   nextpas.core.ssh.rsa;
 
 { 从 AFrom 起查找字符（替代 StrUtils.PosEx，冷路径无需优化）}
@@ -357,13 +357,30 @@ begin
 end;
 
 function TDefaultHostKeyFileReader.ReadAllText(const APath: string; out AContent: string): Boolean;
+var
+  LData: Pointer;
+  LLen: PtrUInt;
+  LRes: Int32;
 begin
+  // L2→L0 合规：经 nextpas.core.platform.fs（L0）直读，不依赖同层 nextpas.core.fs；零拷贝 Move 单次分配
+  // perf: single platform_fs_read_file alloc + single Move (zero-copy via Move), no intermediate TBytes+Copy
+  // stability: platform_fs_free_buf in finally guarantees no leak on SetLength/OOM exception
+  AContent := '';
+  Result := False;
+  if APath = '' then
+    Exit;
+  LData := nil;
+  LLen := 0;
+  LRes := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  if LRes <> 0 then
+    Exit;
   try
-    AContent := nextpas.core.fs.ReadFileText(APath);
+    SetLength(AContent, LLen);
+    if LLen > 0 then
+      Move(LData^, AContent[1], LLen);
     Result := True;
-  except
-    AContent := '';
-    Result := False;
+  finally
+    platform_fs_free_buf(LData);
   end;
 end;
 

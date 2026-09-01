@@ -37,6 +37,7 @@ function SshCompressionIsDelayed(const AName: string): Boolean; inline;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.compress.zlib.ffi,
   nextpas.core.compress.base,
   nextpas.core.text.conv;

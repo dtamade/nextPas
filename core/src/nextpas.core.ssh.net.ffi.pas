@@ -14,8 +14,8 @@ uses
 
 type
   TSshDefaultDialer = class(TInterfacedObject, ISshDialer, ISshAgentDialer)
-    function Dial(const AHost: string; APort: Word; ATimeoutMs: Int64): ITcpStream;
-    function DialAgent(const APath: string): IReadWriteCloser;
+    function Dial(const AHost: string; APort: Word; ATimeoutMs: Int64): ITcpStream; inline;
+    function DialAgent(const APath: string): IReadWriteCloser; inline;
   end;
 
 function SshDefaultDialer: ISshDialer; inline;
@@ -26,22 +26,22 @@ implementation
 uses
   nextpas.core.net;
 
-function TSshDefaultDialer.Dial(const AHost: string; APort: Word; ATimeoutMs: Int64): ITcpStream;
+function TSshDefaultDialer.Dial(const AHost: string; APort: Word; ATimeoutMs: Int64): ITcpStream; inline;
 begin
   Result := TcpConnect(AHost, APort, ATimeoutMs);
 end;
 
-function TSshDefaultDialer.DialAgent(const APath: string): IReadWriteCloser;
+function TSshDefaultDialer.DialAgent(const APath: string): IReadWriteCloser; inline;
 begin
   Result := UnixConnect(APath);
 end;
 
-function SshDefaultDialer: ISshDialer;
+function SshDefaultDialer: ISshDialer; inline;
 begin
   Result := TSshDefaultDialer.Create;
 end;
 
-function SshDefaultAgentDialer: ISshAgentDialer;
+function SshDefaultAgentDialer: ISshAgentDialer; inline;
 begin
   Result := TSshDefaultDialer.Create;
 end;

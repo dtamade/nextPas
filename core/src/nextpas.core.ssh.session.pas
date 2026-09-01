@@ -117,6 +117,7 @@ function SshClient: ISshClientBuilder;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.mem.secure,

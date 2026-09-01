@@ -66,7 +66,8 @@ nextpas.core.ssh.pas                 ← 门面：纯 re-export + 便捷函数�
 nextpas.core.ssh.base.pas            ← 协议常量、消息号、选项记录
 nextpas.core.ssh.errors.pas          ← ESSHError + 错误分类
 nextpas.core.ssh.intf.pas            ← 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`）
-nextpas.core.ssh.net.ffi.pas         ← 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入）
+nextpas.core.ssh.net.ffi.pas         ← 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入，`inline` 零拷贝转发）
+nextpas.core.ssh.ffi.pas             ← 兼容别名（re-export `net.ffi`，不直连 `net`，单源收敛历史遗留）
 nextpas.core.ssh.transport.core.pas  ← 传输核单源（`padding+Protect+Compress+Seq+Rekey` 纯内存，`transport(+.async)` 薄包装复用）
 nextpas.core.ssh.rekey.pas           ← Rekey 策略（`TSshRekeyPolicy`，`TInstant` 单调时钟，同步/异步 transport 复用，零 `SysUtils` 直连）
 nextpas.core.ssh.keepalive.pas       ← KeepAlive 策略（`TKeepAlivePolicy`，`TInstant` 单调时钟，同步预留/异步 `TAsyncLoop.ScheduleMethod`，零 `SysUtils` 直连）
@@ -94,7 +95,7 @@ nextpas.core.ssh.sftp.async.pas      ← SFTP v3 异步（`ISshAsyncFileSystem`�
 
 依赖方向：`base ← errors/buffer ← cipher/kex/hostkey/keys/auth ← transport/channel ← session ← 门面`；`base ← rekey/keepalive ← transport.core ← transport(+.async)` 单源。
 对外依赖：`io.intf`（IReadWriteCloser 缝隙）、`crypto.*`、`hash`、`encoding.base64`、`time`/`text.conv`（替代 `SysUtils`）。
-复用说明：`intf(IDialer) + net.ffi` 为唯一 `nextpas.core.net` 拉取点（同步缝隙注入）；`transport.async/session.async/proxyjump.async` 直连 `net.async.tcp(IAsyncTcpStream/AsyncTcpDial)` 为**允许的 L2 async peer**（`net.ffi` 仅覆盖阻塞 `ITcpStream`，`transport.core` 已单源复用，无逻辑漂移）；`compress → compress.zlib.ffi` 唯一 `zlib` 入口（`grep` 已验证零直连 `zlib/paszlib`）。
+复用说明：`intf(IDialer) + net.ffi` 为唯一 `nextpas.core.net` 拉取点（同步缝隙注入，`ssh.ffi` 仅为 `net.ffi` 的 `inline` 兼容别名，零直连 `net`）；`transport.async/session.async/proxyjump.async` 直连 `net.async.tcp(IAsyncTcpStream/AsyncTcpDial)` 为**允许的 L2 async peer**（`net.ffi` 仅覆盖阻塞 `ITcpStream`，`transport.core` 已单源复用，无逻辑漂移）；`compress → compress.zlib.ffi` 唯一 `zlib` 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 
 ## 测试与验证
 

@@ -57,12 +57,11 @@ function SshAsyncSftpViaJump(const ALoop: TAsyncLoop; const AJumpOpts, ATargetOp
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
-  nextpas.core.crypto.random;
-
-const
-  WINDOW_LOW_WATER_DIVISOR = 2;
+  nextpas.core.crypto.random,
+  nextpas.core.ssh.window;
 
 type
   TAsyncSftpState = (asOpening, asSubsystem, asHandshake, asReady, asClosed, asFailed);
@@ -75,11 +74,8 @@ type
     FSession: ISshAsyncSession;
     FLocalId: UInt32;
     FRemoteId: UInt32;
-    FInitWindow: UInt32;
+    FWindow: TChannelWindow; { 单源复用 window.pas inline，零堆分配 }
     FMaxPacket: UInt32;
-    FOurWindow: SizeUInt;
-    FPeerWindow: SizeUInt;
-    FPeerMaxPacket: UInt32;
     FState: TAsyncSftpState;
     FFailed: Boolean;
     FSentClose: Boolean;
@@ -111,7 +107,7 @@ type
     procedure SendSftpInit;
     procedure OnSftpInitSent(AErr: ESSHError; AContext: Pointer);
     procedure PumpNext;
-    procedure AccountConsume(ACount: SizeUInt);
+    procedure AccountConsume(ACount: SizeUInt); inline;
     procedure SendWindowAdjust(ACount: UInt32);
     function ExtractSftpPacket(out APacket: TBytes): Boolean;
     procedure TryDispatchSftp;
@@ -230,10 +226,8 @@ begin
   FTransport := ATransport;
   FSession := nil;
   FLocalId := UInt32(InterlockedIncrement(GNextSftpChannelId)-1);
-  FInitWindow := 2097152;
+  FWindow.Init(2097152, 0, 0); { 单源 window.pas inline，零堆分配 }
   FMaxPacket := 32768;
-  FOurWindow := FInitWindow;
-  FPeerWindow := 0;
   FState := asOpening;
   FOpenCb := ACallback;
   FOpenCtx := AContext;
@@ -248,10 +242,8 @@ begin
   FSession := ASession;
   if ASession <> nil then FTransport := ASession.Transport else FTransport := nil;
   FLocalId := UInt32(InterlockedIncrement(GNextSftpChannelId)-1);
-  FInitWindow := 2097152;
+  FWindow.Init(2097152, 0, 0);
   FMaxPacket := 32768;
-  FOurWindow := FInitWindow;
-  FPeerWindow := 0;
   FState := asOpening;
   FOpenCb := ACallback;
   FOpenCtx := AContext;
@@ -326,7 +318,7 @@ begin
     LW.PutByte(SSH_MSG_CHANNEL_OPEN);
     LW.PutStringText(SSH_CHANNEL_SESSION);
     LW.PutUInt32(FLocalId);
-    LW.PutUInt32(FInitWindow);
+    LW.PutUInt32(FWindow.InitWindow);
     LW.PutUInt32(FMaxPacket);
     if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnOpenSent, Self) then
     begin
@@ -419,16 +411,15 @@ begin
         LR:=TsshReader.Create(APayload);
         try
           LR.ReadByte; LRid:=LR.ReadUInt32; if LRid<>FLocalId then begin PumpNext; Exit; end;
-          FRemoteId:=LR.ReadUInt32; FPeerWindow:=LR.ReadUInt32; FPeerMaxPacket:=LR.ReadUInt32;
+          FRemoteId:=LR.ReadUInt32; FWindow.SetPeer(LR.ReadUInt32, LR.ReadUInt32);
         finally LR.Free; end;
-        FOurWindow:=FInitWindow;
         FState:=asSubsystem;
         SendSubsystem;
       end;
     SSH_MSG_CHANNEL_OPEN_FAILURE: Fail(ESSHError.Create(sekProtocol,'sftp async: open refused'));
     SSH_MSG_GLOBAL_REQUEST: begin HandleGlobalRequest; PumpNext; end;
     SSH_MSG_CHANNEL_WINDOW_ADJUST:
-      begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LRid:=LR.ReadUInt32; if LRid=FLocalId then FPeerWindow:=FPeerWindow+LR.ReadUInt32(); finally LR.Free; end; PumpNext; end;
+      begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LRid:=LR.ReadUInt32; if LRid=FLocalId then FWindow.Grant(LR.ReadUInt32); finally LR.Free; end; PumpNext; end;
   else PumpNext;
   end;
 end;
@@ -442,7 +433,7 @@ begin
     SSH_MSG_CHANNEL_DATA: PumpNext;
     SSH_MSG_GLOBAL_REQUEST: begin HandleGlobalRequest; PumpNext; end;
     SSH_MSG_CHANNEL_WINDOW_ADJUST:
-      begin with TsshReader.Create(APayload) do try ReadByte; if ReadUInt32=FLocalId then FPeerWindow:=FPeerWindow+ReadUInt32(); finally Free; end; PumpNext; end;
+      begin with TsshReader.Create(APayload) do try ReadByte; if ReadUInt32=FLocalId then FWindow.Grant(ReadUInt32); finally Free; end; PumpNext; end;
   else PumpNext;
   end;
 end;
@@ -477,7 +468,7 @@ begin
       begin HandleChannelRequest(APayload); TryDispatchSftp; PumpNext; end;
     SSH_MSG_GLOBAL_REQUEST: begin HandleGlobalRequest; PumpNext; end;
     SSH_MSG_CHANNEL_WINDOW_ADJUST:
-      begin with TsshReader.Create(APayload) do try ReadByte; if ReadUInt32=FLocalId then FPeerWindow:=FPeerWindow+ReadUInt32(); finally Free; end; PumpNext; end;
+      begin with TsshReader.Create(APayload) do try ReadByte; if ReadUInt32=FLocalId then FWindow.Grant(ReadUInt32); finally Free; end; PumpNext; end;
     SSH_MSG_CHANNEL_SUCCESS, SSH_MSG_CHANNEL_FAILURE: PumpNext;
     SSH_MSG_CHANNEL_EOF: PumpNext;
     SSH_MSG_CHANNEL_CLOSE: begin Fail(ESSHError.Create(sekIO,'sftp async: channel closed')); end;
@@ -501,12 +492,10 @@ begin
 end;
 
 procedure TAsyncSftpChannel.AccountConsume(ACount: SizeUInt);
-var LGive: SizeUInt;
+var LGive: UInt32;
 begin
-  if ACount>FOurWindow then begin LGive:=FOurWindow; FOurWindow:=0; end else begin Dec(FOurWindow, ACount); LGive:=0; end;
-  if FOurWindow <= SizeUInt(FInitWindow) div WINDOW_LOW_WATER_DIVISOR then
-  begin Inc(LGive, SizeUInt(FInitWindow)-FOurWindow); FOurWindow:=FInitWindow; end;
-  if LGive>0 then SendWindowAdjust(UInt32(LGive));
+  FWindow.Consume(ACount, LGive); { 单源 window.pas inline，零堆分配 }
+  if LGive>0 then SendWindowAdjust(LGive);
 end;
 
 procedure TAsyncSftpChannel.SendWindowAdjust(ACount: UInt32);
