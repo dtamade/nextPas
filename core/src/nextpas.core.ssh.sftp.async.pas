@@ -3,9 +3,9 @@ unit nextpas.core.ssh.sftp.async;
 {** nextpas.core.ssh - SFTP v3 异步门面 (TAsyncLoop + TAsyncSshTransport)。
  *
  * 复用 sftp.pas 的包构造与属性编解码，仅 I/O 事件化。
- * 单通道复用：open session → subsystem sftp → INIT/VERSION → 串行 RoundTrip。
+ * 单通道复用：open session → subsystem sftp → INIT/VERSION → 流水线 RoundTrip (SFTP_PIPELINE_WINDOW=16)。
  * 窗口按 exec 同款“消费过半回补”策略，SFTP 流按 4 字节长度前缀重组。
- * 流水线后续 slice；单操作串行，Busy 时回调 sekBusy。 *}
+ * 流水线乱序缓冲；窗口满时回调 sekBusy，几何倍增与 bytes.ops 单源。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -68,6 +68,12 @@ uses
 type
   TAsyncSftpState = (asOpening, asSubsystem, asHandshake, asReady, asClosed, asFailed);
   TProcSftpRaw = procedure(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
+  TPendingSftp = record
+    Id: UInt32;
+    Accept: array of Byte;
+    Cb: TProcSftpRaw;
+    Ctx: Pointer;
+  end;
 
   TAsyncSftpChannel = class
   private
@@ -88,12 +94,8 @@ type
     FOpenCb: TProcSftpOpenAsync;
     FOpenCtx: Pointer;
     FOwnerFs: Pointer;
-    // pending RoundTrip
-    FBusy: Boolean;
-    FPendingId: UInt32;
-    FPendingAccept: array of Byte;
-    FPendingRawCb: TProcSftpRaw;
-    FPendingCtx: Pointer;
+    // pending RoundTrip pipeline SFTP_PIPELINE_WINDOW (bytes.ops single source doubling, inline zero-copy)
+    FPending: array of TPendingSftp;
     FOpTimer: TAsyncTimerHandle;
     FOpDeadline: TDeadline;
     procedure Fail(AErr: ESSHError);
@@ -121,6 +123,9 @@ type
     function SftpRoundTripAsync(AType: Byte; const APayload: TBytes; const AAccept: array of Byte; ACb: TProcSftpRaw; AContext: Pointer): Boolean;
     procedure OnSftpSent(AErr: ESSHError; AContext: Pointer);
     procedure FailPending(AErr: ESSHError);
+    function FindPendingIdx(AId: UInt32): Integer; inline;
+    procedure RemovePendingIdx(AIdx: Integer);
+    procedure FailAllPending(AErr: ESSHError);
   public
     constructor Create(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer); overload;
     constructor Create(const ALoop: TAsyncLoop; const ASession: ISshAsyncSession; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer); overload;
@@ -133,9 +138,11 @@ type
   private
     FChannel: TAsyncSftpChannel;
     FClosed: Boolean;
-    // multi-step temp (single op at a time, guarded by channel Busy)
+    // multi-step temp (ListDir accum geometric doubling, bytes.ops single source 16→2×, inline zero-copy)
     FListDirHandle: TBytes;
     FListDirAccum: TSftpDirEntryArray;
+    FListDirCount: SizeUInt;
+    FListDirCap: SizeUInt;
     FListDirPath: string;
     FListDirCb: TProcSftpDirList;
     FListDirCtx: Pointer;
@@ -244,6 +251,7 @@ destructor TAsyncSftpChannel.Destroy;
 begin
   if FTimer.IsValid then try FLoop.CancelTimer(FTimer); except end;
   if FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); except end;
+  SetLength(FPending,0);
   FSession := nil;
   inherited;
 end;
@@ -255,8 +263,7 @@ begin
   FFailed := True;
   FState := asFailed;
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
-  if FOpTimer.IsValid then begin FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); end;
-  if FBusy then FailPending(ESSHError.Create(sekIO,'sftp async: channel failed'));
+  if Length(FPending)>0 then FailAllPending(ESSHError.Create(sekIO,'sftp async: channel failed'));
   try CloseChannel; except end;
   Cb := FOpenCb; Ctx := FOpenCtx; FOpenCb := nil;
   if Assigned(Cb) then Cb(nil, AErr, Ctx) else if AErr<>nil then AErr.Free;
@@ -264,13 +271,48 @@ begin
 end;
 
 procedure TAsyncSftpChannel.FailPending(AErr: ESSHError);
-var Cb: TProcSftpRaw; Ctx: Pointer;
 begin
-  if not FBusy then begin if AErr<>nil then AErr.Free; Exit; end;
-  FBusy:=False;
-  if FOpTimer.IsValid then begin FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); end;
-  Cb:=FPendingRawCb; Ctx:=FPendingCtx; FPendingRawCb:=nil; FPendingCtx:=nil; SetLength(FPendingAccept,0);
-  if Assigned(Cb) then Cb(nil, AErr, Ctx) else if AErr<>nil then AErr.Free;
+  FailAllPending(AErr);
+end;
+
+function TAsyncSftpChannel.FindPendingIdx(AId: UInt32): Integer; inline;
+var I: Integer;
+begin
+  for I:=0 to High(FPending) do if FPending[I].Id=AId then Exit(I);
+  Result:=-1;
+end;
+
+procedure TAsyncSftpChannel.RemovePendingIdx(AIdx: Integer);
+var I, LLast: Integer;
+begin
+  if (AIdx<0) or (AIdx>High(FPending)) then Exit;
+  LLast:=High(FPending);
+  for I:=AIdx to LLast-1 do FPending[I]:=FPending[I+1];
+  SetLength(FPending, LLast);
+  if (Length(FPending)=0) and FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); except end;
+end;
+
+procedure TAsyncSftpChannel.FailAllPending(AErr: ESSHError);
+var I: Integer; Cb: TProcSftpRaw; Ctx: Pointer; LFirst: Boolean;
+begin
+  if Length(FPending)=0 then begin if AErr<>nil then AErr.Free; Exit; end;
+  if FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); except end;
+  LFirst:=True;
+  for I:=0 to High(FPending) do
+  begin
+    Cb:=FPending[I].Cb; Ctx:=FPending[I].Ctx;
+    if LFirst then
+    begin
+      LFirst:=False;
+      if Assigned(Cb) then Cb(nil, AErr, Ctx) else if AErr<>nil then AErr.Free;
+      AErr:=nil;
+    end else
+    begin
+      if Assigned(Cb) then Cb(nil, ESSHError.Create(sekIO,'sftp async: channel failed'), Ctx);
+    end;
+  end;
+  SetLength(FPending,0);
+  if AErr<>nil then AErr.Free;
 end;
 
 procedure TAsyncSftpChannel.SucceedOpen(AFs: ISshAsyncFileSystem);
@@ -525,59 +567,50 @@ begin
 end;
 
 procedure TAsyncSftpChannel.TryDispatchSftp;
-var LPkt: TBytes; LType: Byte; LRid: UInt32; LR: TsshReader; LCode: UInt32; LAccept: Boolean; Cb: TProcSftpRaw; Ctx: Pointer; LMsg2: string; LReader2: TsshReader;
+var LPkt: TBytes; LType: Byte; LRid: UInt32; LR: TsshReader; LCode: UInt32; LAccept: Boolean; Cb: TProcSftpRaw; Ctx: Pointer; LMsg2: string; LReader2: TsshReader; LIdx: Integer;
 begin
-  if not FBusy then Exit;
+  if Length(FPending)=0 then Exit;
   while ExtractSftpPacket(LPkt) do
   begin
-    if Length(LPkt)<5 then begin FailPending(ESSHError.Create(sekProtocol,'sftp async: truncated')); Exit; end;
+    if Length(LPkt)<5 then begin FailAllPending(ESSHError.Create(sekProtocol,'sftp async: truncated')); Exit; end;
     LType:=LPkt[0];
     LR:=TsshReader.Create(LPkt);
     try LR.ReadByte; LRid:=LR.ReadUInt32; finally LR.Free; end;
-    if LRid<>FPendingId then Continue; // stale
+    LIdx:=FindPendingIdx(LRid);
+    if LIdx<0 then Continue; // stale or not for us (pipeline: other id in flight)
     if LType=SSH_FXP_STATUS then
     begin
       LR:=TsshReader.Create(LPkt);
       try LR.ReadByte; LR.ReadUInt32; LCode:=LR.ReadUInt32; finally LR.Free; end;
       if LCode=SSH_FX_OK then
       begin
-        // ok is acceptable for many ops - check accept list
-        LAccept:=IsAcceptable(LType, FPendingAccept);
-        if not LAccept then begin FailPending(ESSHError.Create(sekProtocol,'sftp async: unexpected STATUS OK')); Exit; end;
+        LAccept:=IsAcceptable(LType, FPending[LIdx].Accept);
+        if not LAccept then begin Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekProtocol,'sftp async: unexpected STATUS OK'), Ctx); Continue; end;
       end
       else if LCode=SSH_FX_EOF then
       begin
-        LAccept:=IsAcceptable(LType, FPendingAccept);
-        if not LAccept then begin FailPending(ESSHError.Create(sekProtocol,'sftp async: unexpected EOF')); Exit; end;
+        LAccept:=IsAcceptable(LType, FPending[LIdx].Accept);
+        if not LAccept then begin Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekProtocol,'sftp async: unexpected EOF'), Ctx); Continue; end;
       end
       else
       begin
-        // failure status - treat as error unless caller accepts STATUS (they handle it)
-        // If caller accepts STATUS, deliver packet as success and let caller map to sekSftp
-        if IsAcceptable(SSH_FXP_STATUS, FPendingAccept) then
+        if IsAcceptable(SSH_FXP_STATUS, FPending[LIdx].Accept) then
         begin
-          // deliver
+          // deliver as success, caller maps to sekSftp
         end else
         begin
-          Cb:=FPendingRawCb; Ctx:=FPendingCtx; FPendingRawCb:=nil; FPendingCtx:=nil; SetLength(FPendingAccept,0);
-          FBusy:=False; if FOpTimer.IsValid then begin FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); end;
-          // parse msg for error text
-          begin
-            LReader2:=TsshReader.Create(LPkt); try LReader2.ReadByte; LReader2.ReadUInt32; LReader2.ReadUInt32; try LMsg2:=LReader2.ReadStringText; except LMsg2:=''; end; finally LReader2.Free; end;
-            if LMsg2<>'' then LMsg2:=' ('+LMsg2+')'; if Assigned(Cb) then Cb(nil, ESSHError.Create(sekSftp, 'sftp: '+SftpStatusName(LCode)+LMsg2), Ctx);
-          end;
-          Exit;
+          Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx);
+          begin LReader2:=TsshReader.Create(LPkt); try LReader2.ReadByte; LReader2.ReadUInt32; LReader2.ReadUInt32; try LMsg2:=LReader2.ReadStringText; except LMsg2:=''; end; finally LReader2.Free; end; if LMsg2<>'' then LMsg2:=' ('+LMsg2+')'; if Assigned(Cb) then Cb(nil, ESSHError.Create(sekSftp, 'sftp: '+SftpStatusName(LCode)+LMsg2), Ctx); end;
+          Continue;
         end;
       end;
     end else
     begin
-      if not IsAcceptable(LType, FPendingAccept) then begin FailPending(ESSHError.Create(sekProtocol,'sftp async: unexpected reply '+IntToStr(LType))); Exit; end;
+      if not IsAcceptable(LType, FPending[LIdx].Accept) then begin Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekProtocol,'sftp async: unexpected reply '+IntToStr(LType)), Ctx); Continue; end;
     end;
-    FBusy:=False;
-    if FOpTimer.IsValid then begin FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); end;
-    Cb:=FPendingRawCb; Ctx:=FPendingCtx; FPendingRawCb:=nil; FPendingCtx:=nil; SetLength(FPendingAccept,0);
+    Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx);
     if Assigned(Cb) then Cb(LPkt, nil, Ctx);
-    Exit;
+    if Length(FPending)=0 then Exit;
   end;
 end;
 
@@ -585,31 +618,26 @@ procedure TAsyncSftpChannel.OnTimeout(AContext: Pointer);
 begin Fail(ESSHError.Create(sekTimeout,'sftp async: timeout')); end;
 
 procedure TAsyncSftpChannel.OnOpTimeout(AContext: Pointer);
-begin FailPending(ESSHError.Create(sekTimeout,'sftp async: op timeout')); end;
+begin FailAllPending(ESSHError.Create(sekTimeout,'sftp async: op timeout')); end;
 
 function TAsyncSftpChannel.SftpRoundTripAsync(AType: Byte; const APayload: TBytes; const AAccept: array of Byte; ACb: TProcSftpRaw; AContext: Pointer): Boolean;
-var LId: UInt32; LInner, LOuter: TBytes; LW: TsshWriter; I: Integer;
+var LId: UInt32; LInner, LOuter: TBytes; LW: TsshWriter; I, LIdx: Integer;
 begin
   if FFailed or (FState<>asReady) then begin if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: not ready'), AContext); Exit(False); end;
-  if FBusy then begin if Assigned(ACb) then ACb(nil, ESSHError.Create(sekProtocol,'sftp async: busy'), AContext); Exit(False); end;
+  if Length(FPending) >= SFTP_PIPELINE_WINDOW then begin if Assigned(ACb) then ACb(nil, ESSHError.Create(sekProtocol,'sftp async: busy'), AContext); Exit(False); end;
   LId:=FNextId; Inc(FNextId);
-  FBusy:=True;
-  FPendingId:=LId;
-  SetLength(FPendingAccept, Length(AAccept));
-  for I:=0 to High(AAccept) do FPendingAccept[I]:=AAccept[I];
-  // also accept STATUS implicitly if not already? no - caller decides
-  FPendingRawCb:=ACb;
-  FPendingCtx:=AContext;
-  // op timeout reuse deadline interval if finite else infinite
+  LIdx:=Length(FPending); SetLength(FPending, LIdx+1);
+  FPending[LIdx].Id:=LId;
+  SetLength(FPending[LIdx].Accept, Length(AAccept));
+  for I:=0 to High(AAccept) do FPending[LIdx].Accept[I]:=AAccept[I];
+  FPending[LIdx].Cb:=ACb;
+  FPending[LIdx].Ctx:=AContext;
   if not FDeadline.IsInfinite then
   try
-    // per-op: reuse original timeout as upper bound
-    FOpDeadline:=FDeadline; // still absolute - may be too short for long ops but ok
-    FOpTimer:=FLoop.ScheduleAt(FOpDeadline, @Runner_SftpOnOpTimeout, Self);
+    if not FOpTimer.IsValid then
+    begin FOpDeadline:=FDeadline; FOpTimer:=FLoop.ScheduleAt(FOpDeadline, @Runner_SftpOnOpTimeout, Self); end;
   except
-    FBusy:=False;
-    SetLength(FPendingAccept,0);
-    FPendingRawCb:=nil; FPendingCtx:=nil;
+    SetLength(FPending, LIdx);
     raise;
   end;
   LW:=TsshWriter.Create(5+Length(APayload));
@@ -623,14 +651,23 @@ begin
     LW.PutUInt32(UInt32(Length(LOuter)));
     LW.PutRaw(LOuter);
     if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_SftpOnSent, Self) then
-    begin FBusy:=False; if FOpTimer.IsValid then begin FLoop.CancelTimer(FOpTimer); FOpTimer:=Default(TAsyncTimerHandle); end; if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: send failed'), AContext); Exit(False); end;
+    begin RemovePendingIdx(LIdx); if Assigned(ACb) then ACb(nil, ESSHError.Create(sekIO,'sftp async: send failed'), AContext); Exit(False); end;
   finally LW.Free; end;
   Result:=True;
 end;
 
 procedure TAsyncSftpChannel.OnSftpSent(AErr: ESSHError; AContext: Pointer);
+var LIdx: Integer; Cb: TProcSftpRaw; Ctx: Pointer;
 begin
-  if AErr<>nil then FailPending(AErr);
+  if AErr<>nil then
+  begin
+    if Length(FPending)>0 then
+    begin
+      // transport send failure corresponds to most recent pending (tail); pipeline: fail that one
+      LIdx:=High(FPending); Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx);
+      if Assigned(Cb) then Cb(nil, AErr, Ctx) else AErr.Free;
+    end else AErr.Free;
+  end;
 end;
 
 procedure TAsyncSftpChannel.CloseChannel;
@@ -758,7 +795,7 @@ var LW: TsshWriter; LTail: TBytes;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(nil, ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  FListDirPath:=APath; FListDirCb:=ACallback; FListDirCtx:=AContext; SetLength(FListDirAccum,0); FListDirHandle:=nil;
+  FListDirPath:=APath; FListDirCb:=ACallback; FListDirCtx:=AContext; SetLength(FListDirAccum,0); FListDirCount:=0; FListDirCap:=0; FListDirHandle:=nil;
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LTail:=LW.ToBytes; finally LW.Free; end;
   Result:=FChannel.SftpRoundTripAsync(SSH_FXP_OPENDIR, LTail, [SSH_FXP_HANDLE], @FsOnListDirOpen, Self);
@@ -938,7 +975,7 @@ begin
 end;
 
 procedure TAsyncSftpFileSystem.OnListDirRead(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LN, I, LBase: Integer; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpDirList; Ctx2: Pointer; Cb2: TProcSftpDirList; Ctx: Pointer;
+var Self: TAsyncSftpFileSystem; LR: TsshReader; LType: Byte; LCode: UInt32; LN, I: Integer; LW: TsshWriter; Tail: TBytes; Cb: TProcSftpDirList; Ctx2: Pointer; Cb2: TProcSftpDirList; Ctx: Pointer; LName, LLong: string; LAttrs: TSftpAttrs;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
   if AErr<>nil then
@@ -954,11 +991,12 @@ begin
     try LR.ReadByte; LR.ReadUInt32; LCode:=LR.ReadUInt32; finally LR.Free; end;
     if LCode=SSH_FX_EOF then
     begin
-      LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FListDirHandle); Tail:=LW.ToBytes; finally LW.Free; end; if not Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self) then begin Cb2:=Self.FListDirCb; Ctx2:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb2) then Cb2(Self.FListDirAccum, nil, Ctx2); end;
+      if Self.FListDirCount <> Self.FListDirCap then SetLength(Self.FListDirAccum, Self.FListDirCount); Self.FListDirCap:=Self.FListDirCount;
+      LW:=TsshWriter.Create(16); try LW.PutStringBytes(Self.FListDirHandle); Tail:=LW.ToBytes; finally LW.Free; end; if not Self.FChannel.SftpRoundTripAsync(SSH_FXP_CLOSE, Tail, [SSH_FXP_STATUS], @FsOnListDirClose, Self) then begin Cb2:=Self.FListDirCb; Ctx2:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb2) then Cb2(Self.FListDirAccum, nil, Ctx2); SetLength(Self.FListDirAccum,0); Self.FListDirCount:=0; Self.FListDirCap:=0; end;
       Exit;
     end else
     begin
-      Cb:=Self.FListDirCb; Ctx:=Self.FListDirCtx; Self.FListDirCb:=nil; if Assigned(Cb) then Cb(nil, ESSHError.Create(sekSftp,'sftp: '+SftpStatusName(LCode)), Ctx); Exit;
+      Cb:=Self.FListDirCb; Ctx:=Self.FListDirCtx; Self.FListDirCb:=nil; SetLength(Self.FListDirAccum,0); Self.FListDirCount:=0; Self.FListDirCap:=0; if Assigned(Cb) then Cb(nil, ESSHError.Create(sekSftp,'sftp: '+SftpStatusName(LCode)), Ctx); Exit;
     end;
   end;
   LR:=TsshReader.Create(APacket);
@@ -966,9 +1004,18 @@ begin
     LR.ReadByte; LR.ReadUInt32; LN:=Integer(LR.ReadUInt32);
     for I:=1 to LN do
     begin
-      LBase:=Length(Self.FListDirAccum); SetLength(Self.FListDirAccum, LBase+1);
-      Self.FListDirAccum[LBase].Name:=LR.ReadStringText; Self.FListDirAccum[LBase].LongName:=LR.ReadStringText; Self.FListDirAccum[LBase].Attrs:=ReadAttrs(LR);
-      if (Self.FListDirAccum[LBase].Name='.') or (Self.FListDirAccum[LBase].Name='..') then SetLength(Self.FListDirAccum, LBase);
+      // perf: read all fields first, filter dot before growing (avoid O(n²) churn), geometric doubling 16→2× single source bytes.ops/builder
+      LName:=LR.ReadStringText; LLong:=LR.ReadStringText; LAttrs:=ReadAttrs(LR);
+      if (LName='.') or (LName='..') then Continue;
+      if Self.FListDirCount >= Self.FListDirCap then
+      begin
+        if Self.FListDirCap=0 then Self.FListDirCap:=16
+        else if Self.FListDirCap <= High(SizeUInt) div 2 then Self.FListDirCap:=Self.FListDirCap*2
+        else Self.FListDirCap:=Self.FListDirCount+1;
+        SetLength(Self.FListDirAccum, Self.FListDirCap);
+      end;
+      Self.FListDirAccum[Self.FListDirCount].Name:=LName; Self.FListDirAccum[Self.FListDirCount].LongName:=LLong; Self.FListDirAccum[Self.FListDirCount].Attrs:=LAttrs;
+      Inc(Self.FListDirCount);
     end;
   finally LR.Free; end;
   Self.DoListDirStep;
@@ -978,7 +1025,9 @@ procedure TAsyncSftpFileSystem.OnListDirClose(const APacket: TBytes; AErr: ESSHE
 var Self: TAsyncSftpFileSystem; Cb: TProcSftpDirList; Ctx: Pointer; Acc: TSftpDirEntryArray;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
-  Cb:=Self.FListDirCb; Ctx:=Self.FListDirCtx; Acc:=Self.FListDirAccum; Self.FListDirCb:=nil; SetLength(Self.FListDirAccum,0); Self.FListDirHandle:=nil;
+  if Self.FListDirCount <> Self.FListDirCap then SetLength(Self.FListDirAccum, Self.FListDirCount);
+  Cb:=Self.FListDirCb; Ctx:=Self.FListDirCtx; Acc:=Self.FListDirAccum; Self.FListDirCb:=nil; SetLength(Self.FListDirAccum,0); Self.FListDirCount:=0; Self.FListDirCap:=0; Self.FListDirHandle:=nil;
+  // bytes.ops compatible trim already done; Acc now exact Count, zero extra alloc
   if Assigned(Cb) then Cb(Acc, nil, Ctx);
 end;
 

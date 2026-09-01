@@ -36,6 +36,12 @@ type
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
 
+const
+  tsiorOk = nextpas.core.net.intf.tsiorOk;
+  tsiorWouldBlock = nextpas.core.net.intf.tsiorWouldBlock;
+  tsiorClosed = nextpas.core.net.intf.tsiorClosed;
+  tsiorTimeout = nextpas.core.net.intf.tsiorTimeout;
+
 function SshDefaultDialer: ISshDialer; inline;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;
 function SshAsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
