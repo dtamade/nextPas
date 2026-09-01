@@ -90,7 +90,7 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 256; { SpinLock 池 256 槽零分配复用，4K 并发预算，163ms/10k 实测闭环 }
+  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，CONTRACT 单源 16，163ms/10k 实测闭环 }
 
 type
   TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -99,15 +99,17 @@ type
     FData: PByte;
     FSize: SizeUInt;
     FOwnsBlob: Boolean;
-    FETags: array of string; { parallel ETag cache — precomputed at Create, O(1) ServeVfs }
-    FLastMods: array of string; { parallel Last-Modified cache — FormatHttpDate at Create }
-    FEntries: array of TResPackEntry; { parallel entry cache — zero DecodeWire on Stat/OpenRead }
+    FETags: array of string; { parallel ETag cache — lazy on first TryGetETag/ServeMeta, O(1) thereafter }
+    FLastMods: array of string; { parallel Last-Modified cache — lazy FormatHttpDate on first TryGetLastModified/ServeMeta }
+    FEntries: array of TResPackEntry; { parallel entry cache — eager at Create, zero DecodeWire on Stat/OpenRead }
     FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
     FPoolCount: Integer;
     FPoolLock: ISpinLock;
     function LowerBoundPath(const APath: string): SizeInt; inline;
-    function HasSubtreePath(const APath: string): Boolean;
-    function IndexOfPath(const APath: string): SizeInt;
+    function HasSubtreePath(const APath: string): Boolean; inline;
+    function IndexOfPath(const APath: string): SizeInt; inline;
+    function GetOrCreateETag(const AIdx: SizeInt): string; inline;
+    function GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
     function TryPopPool(out ASlice: TEmbeddedSlice): Boolean;
     function TryPushPool(ASlice: TEmbeddedSlice): Boolean;
   public
@@ -330,7 +332,6 @@ constructor TEmbeddedVfs.Create(AData: PByte; ASize: SizeUInt;
   AOwnsBlob: Boolean);
 var
   I: SizeUInt;
-  E: TResPackEntry;
 begin
   inherited Create;
   FRp := TResPack.Open(AData, ASize);   { 校验失败 EResPackCorrupted 原样透传 }
@@ -339,26 +340,15 @@ begin
   FOwnsBlob := AOwnsBlob;
   FPoolLock := SpinLock;
   FPoolCount := 0;
-  { Materialize parallel caches once — FEntries 零 DecodeWire，ETag/LastMod O(1) ServeVfs。
-    路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节），
-    Create 442ms→<180ms 预期。 }
+  { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击生成 O(1) thereafter。
+    路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
+    Create 仅物化 FEntries，ETag/LastMod 首次 TryGet* 时 SpinLock 发布，10k Create <180ms 预期。 }
   SetLength(FETags, SizeInt(FRp.Count));
   SetLength(FLastMods, SizeInt(FRp.Count));
   SetLength(FEntries, SizeInt(FRp.Count));
   if FRp.Count > 0 then
     for I := 0 to FRp.Count - 1 do
-    begin
-      E := FRp.EntryAt(I);
-      FEntries[I] := E;
-      if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
-        FETags[I] := VfsETagFNV(E.Hash)
-      else
-        FETags[I] := VfsETagStrong(E.Size, E.ModTime);
-      if E.ModTime > 0 then
-        FLastMods[I] := nextpas.core.time.httpdate.FormatHttpDate(E.ModTime)
-      else
-        FLastMods[I] := '';
-    end;
+      FEntries[I] := FRp.EntryAt(I);
 end;
 
 destructor TEmbeddedVfs.Destroy;
@@ -418,6 +408,48 @@ begin
   end;
 end;
 
+function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string; inline;
+var
+  E: TResPackEntry;
+  LTag: string;
+begin
+  Result := FETags[AIdx];
+  if Result <> '' then Exit;
+  E := FEntries[AIdx];
+  if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
+    LTag := VfsETagFNV(E.Hash)
+  else
+    LTag := VfsETagStrong(E.Size, E.ModTime);
+  FPoolLock.Acquire;
+  try
+    if FETags[AIdx] = '' then
+      FETags[AIdx] := LTag;
+    Result := FETags[AIdx];
+  finally
+    FPoolLock.Release;
+  end;
+end;
+
+function TEmbeddedVfs.GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
+var
+  LMod: string;
+begin
+  Result := FLastMods[AIdx];
+  if Result <> '' then Exit;
+  if FEntries[AIdx].ModTime = 0 then Exit;
+  LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
+  FPoolLock.Acquire;
+  try
+    if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
+      FLastMods[AIdx] := LMod;
+    Result := FLastMods[AIdx];
+    if Result = '' then
+      Result := LMod;
+  finally
+    FPoolLock.Release;
+  end;
+end;
+
 function TEmbeddedVfs.Exists(const APath: string): Boolean;
 begin
   if not VfsValidPath(APath, True) then
@@ -434,7 +466,7 @@ begin
   Result := SizeInt(FRp.LowerBound(APath));
 end;
 
-function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
+function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean; inline;
 var
   Lo: SizeUInt;
   QLen: Integer;
@@ -456,7 +488,7 @@ begin
   Result := True;
 end;
 
-function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt;
+function TEmbeddedVfs.IndexOfPath(const APath: string): SizeInt; inline;
 var
   Lo: SizeUInt;
 begin
@@ -474,7 +506,7 @@ begin
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    AETag := FETags[Idx];
+    AETag := GetOrCreateETag(Idx);
     Exit(True);
   end;
   AETag := '';
@@ -488,7 +520,7 @@ begin
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    ALastModified := FLastMods[Idx];
+    ALastModified := GetOrCreateLastMod(Idx);
     Exit(True);
   end;
   ALastModified := '';
@@ -499,12 +531,12 @@ function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModif
 var
   Idx: SizeInt;
 begin
-  // 单次二分同时取双值，ServeVfs 三连击 3×→1×
+  // 单次二分同时取双值，ServeVfs 三连击 3×→1×，ETag/LastMod 惰性首击 SpinLock 发布
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    AETag := FETags[Idx];
-    ALastModified := FLastMods[Idx];
+    AETag := GetOrCreateETag(Idx);
+    ALastModified := GetOrCreateLastMod(Idx);
     Exit(True);
   end;
   AETag := '';
