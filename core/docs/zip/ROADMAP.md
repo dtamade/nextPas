@@ -141,6 +141,9 @@
 ### S69 — 原子硬化与官门固化（1.0.1 巡检）· 稳定性/完整性 — 已落地
 - `zip.fs` `Atomic` 增 `Rename EXDEV` 回退：`Rename` 失败且 `!Exists(dest)` 时 `CopyTree(LTemp,dest)`+`RemoveAll(LTemp)`，`CopyTree` 异常则 `RemoveAll(dest)` 清理；`test_zip_fs` 10 门（新增 `Atomic roundtrip/refuses/bomb`），`HEAPTRC OK`
 
+### S70 — 性能收敛（1.0.1 巡检）· 性能 — 已落地
+- `zip.fs` `LDirs` 几何预留：`EnsureDeferredCapacity` 16 起步倍增，`LDirsCount` 分离容量与计数，`O(n²)` 逐条 `SetLength` 消除，70k 目录场景与 `Walk` 同构，`finally` 以 `LDirsCount` 逆序定稿
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |

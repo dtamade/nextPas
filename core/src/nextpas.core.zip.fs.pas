@@ -154,6 +154,19 @@ begin
   SetLength(A, LNew);
 end;
 
+procedure EnsureDeferredCapacity(var A: TDeferredDirArray; AMin: Integer); inline;
+var
+  LCap, LNew: Integer;
+begin
+  LCap := Length(A);
+  if LCap >= AMin then Exit;
+  if LCap = 0 then LCap := 16;
+  LNew := LCap;
+  while LNew < AMin do
+    LNew := LNew * 2;
+  SetLength(A, LNew);
+end;
+
 procedure WalkAppend(var A: TWalkArray; var ACount: Integer;
   const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
 begin
@@ -324,7 +337,7 @@ procedure ZipExtractToDirWithOptions(const AData: TBytes;
 var
   LOpts: TZipReadOptions;
   LR: IZipReader;
-  LI, LSep: Integer;
+  LI, LSep, LDirsCount: Integer;
   LE: TZipEntryInfo;
   LFull, LParent, LTarget: string;
   LNs: Int64;
@@ -339,6 +352,7 @@ begin
   MkdirAll(ADestDir, PermDirDefault);
   EnsureNoSymlinkInPath(ADestDir);
   SetLength(LDirs, 0);
+  LDirsCount := 0;
   try
   for LI := 0 to LR.EntryCount - 1 do
   begin
@@ -401,10 +415,11 @@ begin
     begin
       if LE.IsDirectory then
       begin
-        SetLength(LDirs, Length(LDirs) + 1);
-        LDirs[High(LDirs)].FFull := LFull;
-        LDirs[High(LDirs)].FMode := LMode;
-        LDirs[High(LDirs)].FMtimeNs := LE.ModTimeUnixSec * 1000000000;
+        EnsureDeferredCapacity(LDirs, LDirsCount + 1);
+        LDirs[LDirsCount].FFull := LFull;
+        LDirs[LDirsCount].FMode := LMode;
+        LDirs[LDirsCount].FMtimeNs := LE.ModTimeUnixSec * 1000000000;
+        Inc(LDirsCount);
       end
       else
       begin
@@ -418,8 +433,9 @@ begin
   end;
   finally
     { 收尾逆序定稿目录：先深层后浅层，权限收紧不阻断兄弟/祖先处理；
-      置于 finally 保证异常时已收集的目录仍定稿（非原子语义，见单元头）。 }
-    for LI := High(LDirs) downto 0 do
+      置于 finally 保证异常时已收集的目录仍定稿（非原子语义，见单元头）。
+      LDirs 几何预留，迭代以 LDirsCount 为准，避免 O(n²) 重分配。 }
+    for LI := LDirsCount - 1 downto 0 do
     begin
       if AOptions.RestoreMode and (LDirs[LI].FMode <> 0) then
         try
