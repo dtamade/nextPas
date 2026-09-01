@@ -271,6 +271,7 @@ XOpts.RestoreMode := False;
 ZipExtractToDirWithOptions(Bytes, '/out/dir', XOpts);
 
 ZipExtractToDir(Bytes, '/out/dir');        // defaults: restore perms+mtime
+ZipExtractToDirAtomic(Bytes, '/out/dir');  // atomic: sibling TempDir+Rename, refuse if exists, auto cleanup (S67)
 ```
 
 Packing collects regular files and directories only (symlinks/devices skipped),
@@ -280,8 +281,9 @@ Extraction refuses unsafe names before any write, restores file mtimes at DOS
 2-second granularity, and — for unix archives only — restores posix permissions.
 Directory permissions and mtimes are applied after all content is written
 (child writes would otherwise refresh directory mtimes and tightened modes
-could block later files). Symlink entries are skipped by default;
+could block later files). `EnsureNoSymlinkInPath` is double-checked before/after `MkdirAll/WriteFile` plus `IsSymlink(LFull)` post-write (S66). Symlink entries are skipped by default;
 `SkipSymlinks=False` creates real symlinks from entry payloads (opt-in fidelity).
+`ZipExtractToDirAtomic*` wraps the same kernel in a sibling `TempDir`+`Rename` atomic commit (S67).
 
 ## Safety Model
 

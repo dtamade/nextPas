@@ -135,6 +135,9 @@
 ### S67 — 原子落盘（1.0.1 巡检）· 完整性/稳定性 — 已落地
 - `zip.fs` `ZipExtractToDirAtomic*`：同文件系统 `TempDir(LParent,'.zip-atomic-')` + `ZipExtractToDirWithOptions` + `Rename` 原子提交，`ADestDir` 已存在则 `EArgumentError` 拒绝覆盖，异常时 `RemoveAll` 自动清理临时目录，`EnsureNoSymlinkInPath(LParent)` 前后双校验，`bomb/hostile` 触发时无残留，12 门全绿 `HEAPTRC OK`
 
+### S68 — 文档一致性收敛（1.0.1 巡检）· 完整性 — 已落地
+- `CONTRACT` §1/§6 同步 `Atomic*` API 与非原子/TOCTOU 已知局限（S66 双校验/S67 原子已提供），`README` 文件系统段补 `Atomic` 用法与双校验说明，`SECURITY` §5 同步双校验+原子防线与验证项，`ROADMAP` 文档门同步
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -146,7 +149,7 @@
 | `70k Zip64` | 1.07s | ≤1.2s（700k 可选） |
 | 双锚点 | 7门 + `450 fuzz` | 全过 |
 | 安全 | `INV-16/17/18/19` | `Bomb/CPU/AES` 全覆盖 |
-| 文档 | `CONTRACT 1.38` + `SECURITY` | 同步 |
+| 文档 | `CONTRACT 1.39` + `SECURITY` | 同步 |
 
 ## 5. 发布标准（1.0.0 Final）
 
