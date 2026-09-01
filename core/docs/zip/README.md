@@ -417,6 +417,6 @@ ZipExtractToDirAtomicWithOptions(Bytes, '/out/dir', Opts); // 透传总量/口�
 
 `core/src` 禁 `uses` 非 `nextpas.*`，FPC 单元经 `units/<target>/` stub 桥接，逐步以 `nextpas.core.*` 类型替代遗留类型，stub 自然废弃。
 
-Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip).
+Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip) (`zip_roundtrip` 7 式 `all demos ok`).
 
-Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S50 已落地，1.0.0 Final（`VERSION 1.0.0`，`SECURITY.md` 四模型，12门+16项全绿）。
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S76 已落地，1.0.1 巡检（`VERSION 1.0.1`，`SECURITY.md` 五模型，12门+16项全绿，`test_zip_fs` 12 项）。
