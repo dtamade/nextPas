@@ -34,6 +34,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.mem,
   nextpas.core.text.conv,
   nextpas.core.time.httpdate,
@@ -105,6 +106,7 @@ type
     FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
     FPoolCount: Integer;
     FPoolLock: ISpinLock;
+    FMetaLock: ISpinLock;
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean; inline;
     function IndexOfPath(const APath: string): SizeInt; inline;
@@ -339,6 +341,7 @@ begin
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
   FPoolLock := SpinLock;
+  FMetaLock := SpinLock;
   FPoolCount := 0;
   { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击生成 O(1) thereafter。
     路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
@@ -362,6 +365,7 @@ begin
     FPoolCount := 0;
   end;
   FPoolLock := nil;
+  FMetaLock := nil;
   SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
@@ -420,13 +424,13 @@ begin
     LTag := VfsETagFNV(E.Hash)
   else
     LTag := VfsETagStrong(E.Size, E.ModTime);
-  FPoolLock.Acquire;
+  FMetaLock.Acquire; // decoupled from FPoolLock: lazy ETag publish no longer contends with slice pool hotspot
   try
     if FETags[AIdx] = '' then
       FETags[AIdx] := LTag;
     Result := FETags[AIdx];
   finally
-    FPoolLock.Release;
+    FMetaLock.Release;
   end;
 end;
 
@@ -438,7 +442,7 @@ begin
   if Result <> '' then Exit;
   if FEntries[AIdx].ModTime = 0 then Exit;
   LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
-  FPoolLock.Acquire;
+  FMetaLock.Acquire; // decoupled from FPoolLock: lazy LastModified publish no longer contends with slice pool hotspot
   try
     if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
       FLastMods[AIdx] := LMod;
@@ -446,7 +450,7 @@ begin
     if Result = '' then
       Result := LMod;
   finally
-    FPoolLock.Release;
+    FMetaLock.Release;
   end;
 end;
 
@@ -593,6 +597,8 @@ var
   Child: string;
   ChildOff: SizeInt;
   ChildLen: SizeInt;
+  ChildSpan, PrevSpan: TByteSpan;
+  NeedAdd: Boolean;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -635,11 +641,26 @@ begin
       ChildLen := SegPos - 1
     else
       ChildLen := SizeInt(L);
-    SetLength(Child, ChildLen);
-    if ChildLen > 0 then
-      Move(P^, Child[1], SizeUInt(ChildLen));
-    if (OutN = 0) or (Seen[OutN - 1] <> Child) then
+    // 零拷贝视图去重：TByteSpan 直指 FRp 存储字节，经 bytes.ops SpanEqual 单源零分配比较，仅唯一子项时才 SetLength+Move 物化（≤ 扇出），复用 base VfsDeriveChildNames 同构，inline 热路径
+    if ChildLen = 0 then
+      ChildSpan := TByteSpan.Empty
+    else
+      ChildSpan := TByteSpan.Create(P, SizeUInt(ChildLen));
+    if OutN = 0 then
+      NeedAdd := True
+    else
     begin
+      if Length(Seen[OutN - 1]) = 0 then
+        PrevSpan := TByteSpan.Empty
+      else
+        PrevSpan := TByteSpan.Create(PByte(@Seen[OutN - 1][1]), SizeUInt(Length(Seen[OutN - 1])));
+      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
+    end;
+    if NeedAdd then
+    begin
+      SetLength(Child, ChildLen);
+      if ChildLen > 0 then
+        Move(P^, Child[1], SizeUInt(ChildLen));
       Seen[OutN] := Child;
       Inc(OutN);
     end;
