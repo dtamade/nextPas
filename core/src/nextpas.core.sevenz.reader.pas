@@ -63,7 +63,7 @@ type
     procedure EnsureSortedRevIgnoreCase;
     procedure EnsureRevNamesBuilt;
     procedure EnsureRevLowerNamesBuilt;
-    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
+    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
@@ -706,8 +706,10 @@ begin
   BuildSortedIdxRevIgnoreCase;
 end;
 
-function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
-var LLo, LHi, LMid, LCmp: Integer; LRevKey: string;
+function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
+var
+  LLo, LHi, LMid, LCmp: Integer;
+  LRevKey: string;
 begin
   if ARev then
   begin

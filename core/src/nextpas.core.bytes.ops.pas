@@ -69,6 +69,8 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
+function BytesIsGzip(const AData: TBytes): Boolean; inline;
+function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
@@ -590,6 +592,18 @@ end;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 begin
   Result := IsZeroBytes(AData);
+end;
+
+function BytesIsGzip(const AData: TBytes): Boolean; inline;
+begin
+  // perf: inline + zero-copy single source gzip magic ($1F $8B), compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
+  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+end;
+
+function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
+begin
+  // perf: inline single source forward; ATotalSize kept for transform signature compat, zero-copy reuse
+  Result := BytesIsGzip(AHeader);
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;

@@ -82,6 +82,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `reflect` | L2 | reflection helpers | yes | L0-L1 | draft |
 | `regex` | L2 | regular expressions | yes | L0-L1 | focused-runtime |
 | `redis` | L2 backend of `db` | Redis native client (RESP2, no C library; transport over `nextpas.core.net` blocking TCP); units live at `nextpas.core.db.redis.{base,resp,transport,adapter}` plus facade `nextpas.core.db.redis` | yes | L0-L1 plus same-layer one-way `net`/`time`/`sync` | focused-runtime |
+| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity, v1 line format writer/reader/dirsource/embed, `nextpas.core.respack.*`, FORMAT v1 40/LE) | yes | L0-L1; dirsource single fs IO seam; embed adds fs.glob match-only via source-contract exception | focused-runtime |
 | `sevenz` | L2 | 7z archive read/write (single or multi-folder; LZMA2/BZip2/Deflate write with optional BCJ full-family/Delta prefilter chains and AES-256 password encryption incl. encrypted headers, reader executes Delta/BCJ family/BCJ2 chains and decrypts AES-256 folders/headers; pure Pascal LZMA1/LZMA2 codec with optional liblzma FFI backend) | yes | L0-L1 plus same-layer one-way `crypto`/`hash`/`compress`/`checksum`/`io`/`fs` (fs/io via `platform.lstat` exempt, federation via `sevenz.fs`) | focused-runtime |
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
@@ -98,6 +99,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `toml` | L2 | TOML parser/writer | yes | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L3 | validation helpers | yes | L0-L2 | draft |
+| `vfs` | L2 | read-only virtual filesystem (`nextpas.core.vfs.*`, memtree/embedded/os/sub/mount/overlay + transform/compressed L3 decorator hosted, 13 units + facade) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite; transform/compressed white-listed L3→L2 (GZIP_MAX 32MiB single source via compress.base, bytes.ops zero-copy) | focused-runtime |
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |
 | `window` | L2 | window shell + surface (nextpas.core.window family; first consumer webview/gpu/directui/game888; 1.0 单源收口含 gtk3 Raw) | yes | L0-L1 plus platform.dl seam, plus one-way L2 `gtk2/gtk3/gtk4/qt5pas/qt` | ci-matrix (Linux 13门 runtime + Win/mac compile-only，残差诚实，见 window/FINAL_ROADMAP F3) |
