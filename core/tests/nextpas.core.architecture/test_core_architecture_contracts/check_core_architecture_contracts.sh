@@ -172,6 +172,7 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.simd.imageproc.base.pas|nextpas.core.image.base"
   "src/nextpas.core.simd.imageproc.impl.pas|nextpas.core.bytes.binary"
   "src/nextpas.core.simd.imageproc.impl.pas|nextpas.core.image.base"
+  "src/nextpas.core.mem.allocator.tracking.pas|nextpas.core.text.builder"
 )
 
 RAW_HOST_UNITS=(
