@@ -9,7 +9,9 @@ unit nextpas.core.respack.reader;
 interface
 
 uses
-  nextpas.core.respack.base;
+  nextpas.core.base,
+  nextpas.core.respack.base,
+  nextpas.core.bytes.ops;
 
 type
   TResPack = record
@@ -29,7 +31,7 @@ type
       const ABuf: PByte; const ALen: SizeUInt): Integer;
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
     function CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
-    function Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
+    function Search(const APath: string; out AIdx: SizeUInt): Boolean;
 
   public
     { 八步校验后可用；任一失败 raise EResPackCorrupted }
@@ -42,9 +44,10 @@ type
     function Stat(const APath: string): TResPackEntry;
 
     function EntryAt(const AIdx: SizeUInt): TResPackEntry;
-    function PathOf(const AEntry: TResPackEntry): string;
+    function PathOf(const AEntry: TResPackEntry): string; inline; { 薄转发 StoredPathSpanOf → bytes.ops.SpanToString 零拷贝单源, inline }
     function StoredPathRangeOf(const AEntry: TResPackEntry;
-      out AP: PByte): SizeUInt;
+      out AP: PByte): SizeUInt; inline;
+    function StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
 
     property Count: SizeUInt read GetCount;
     property Header: TResPackHeader read FHdr;
@@ -52,17 +55,40 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
-    { P1-2 零拷贝路径视图：索引路径不落地 string，直接暴露 blob 内指针+长度
-      供 embedded 等零分配二分/前缀判定复用，单源于 base.utils.CompareBytesOrdered }
+    { 零拷贝路径视图单源：TByteSpan 为唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare；
+      StoredPathRange/RangeOf 为 Span 薄转发兼容层，inline 消调用；供 embedded 零分配二分/前缀复用 }
+    function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
     function StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
-    function LowerBound(const APath: string): SizeUInt; inline;
-    function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
+    function LowerBound(const APath: string): SizeUInt;
+    function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
   end;
 
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.collections.algorithms;
+
+type
+  TResPackEntryArr = array[0..(High(SizeInt) div SizeOf(TResPackEntry)) - 1] of TResPackEntry;
+  PResPackEntryArr = ^TResPackEntryArr;
+  TOffsetSortData = record Entries: PResPackEntryArr; end;
+  POffsetSortData = ^TOffsetSortData;
+
+{ IntroSort 比较器：按 DataOffset+Size 排序，复用 L1 collections.algorithms 单源 }
+function CompareOffsetByIdx(const A, B: SizeUInt; Data: Pointer): SizeInt;
+var
+  D: POffsetSortData;
+  EA, EB: TResPackEntry;
+begin
+  D := POffsetSortData(Data);
+  EA := D^.Entries^[A];
+  EB := D^.Entries^[B];
+  if EA.DataOffset < EB.DataOffset then Exit(-1);
+  if EA.DataOffset > EB.DataOffset then Exit(1);
+  if EA.Size < EB.Size then Exit(-1);
+  if EA.Size > EB.Size then Exit(1);
+  Result := 0;
+end;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -101,56 +127,72 @@ begin
   ADest.CodecId := P[36];
 end;
 
-function TResPack.StoredPathRange(const AIdx: SizeUInt; out AP: PByte)
-  : SizeUInt;
+function TResPack.StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
 var
   Base: PByte;
+  L: SizeUInt;
 begin
   Base := FData + SizeUInt(FHdr.IndexOffset) + AIdx * RESPACK_ENTRY_SIZE;
-  AP := FData + SizeUInt(FStrTabBase) + SizeUInt(RdU32LE(Base));
-  Result := SizeUInt(RdU16LE(Base + 4));
+  L := SizeUInt(RdU16LE(Base + 4));
+  if L = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(FData + SizeUInt(FStrTabBase) + SizeUInt(RdU32LE(Base)), L);
+end;
+
+function TResPack.StoredPathRange(const AIdx: SizeUInt; out AP: PByte): SizeUInt; inline;
+var
+  S: TByteSpan;
+begin
+  S := StoredPathSpan(AIdx);
+  AP := S.Data;
+  Result := S.Len;
+end;
+
+function TResPack.StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
+begin
+  if AEntry.PathLen = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(FData + SizeUInt(FStrTabBase) + AEntry.PathOffset, SizeUInt(AEntry.PathLen));
 end;
 
 function TResPack.CompareStoredToBuf(const AIdx: SizeUInt;
   const ABuf: PByte; const ALen: SizeUInt): Integer; inline;
 var
-  P: PByte;
-  L: SizeUInt;
+  S: TByteSpan;
 begin
-  L := StoredPathRange(AIdx, P);
-  Result := nextpas.core.base.utils.CompareBytesOrdered(
-    Pointer(P), Pointer(ABuf), L, ALen);
+  S := StoredPathSpan(AIdx);
+  Result := ResPackCmpPath(S.Data, S.Len, ABuf, ALen);
 end;
 
 function TResPack.CompareStoredToStored(const AA, AB: SizeUInt): Integer; inline;
 var
-  PA, PB: PByte;
-  LA, LB: SizeUInt;
+  SA, SB: TByteSpan;
 begin
-  LA := StoredPathRange(AA, PA);
-  LB := StoredPathRange(AB, PB);
-  Result := nextpas.core.base.utils.CompareBytesOrdered(
-    Pointer(PA), Pointer(PB), LA, LB);
+  SA := StoredPathSpan(AA);
+  SB := StoredPathSpan(AB);
+  Result := ResPackCmpPath(SA.Data, SA.Len, SB.Data, SB.Len);
 end;
 
 function TResPack.CompareCachedEntries(const AA, AB: TResPackEntry): Integer; inline;
 var
-  PA, PB: PByte;
+  SA, SB: TByteSpan;
 begin
-  PA := FData + SizeUInt(FStrTabBase) + AA.PathOffset;
-  PB := FData + SizeUInt(FStrTabBase) + AB.PathOffset;
-  Result := nextpas.core.base.utils.CompareBytesOrdered(
-    Pointer(PA), Pointer(PB), SizeUInt(AA.PathLen), SizeUInt(AB.PathLen));
+  SA := StoredPathSpanOf(AA);
+  SB := StoredPathSpanOf(AB);
+  Result := ResPackCmpPath(SA.Data, SA.Len, SB.Data, SB.Len);
 end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
 var
-  I, J: SizeUInt;
+  I: SizeUInt;
   E: TResPackEntry;
   MinData, MaxDataEnd, StrTabEnd, DigEnd, StrLen, AlignedStrEnd, PathEnd: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
   Cached: array of TResPackEntry;
+  SortedIdx: array of SizeUInt;
+  SortData: TOffsetSortData;
+
 begin
   Result.Close;
 
@@ -180,8 +222,8 @@ begin
     <> UInt32(RESPACK_DIGEST_ALGO_SHA256) then
     raise EResPackCorrupted.CreateStep(2, 'unknown digest algorithm');
 
-  { 步骤 3：index 范围（u32×40 在 u64 内无溢出） }
-  if (Result.FHdr.IndexOffset < RESPACK_HEADER_SIZE)
+  { 步骤 3：index 范围（v1 恒 40，无间隙；u32×40 在 u64 内无溢出） }
+  if (Result.FHdr.IndexOffset <> RESPACK_HEADER_SIZE)
     or (Result.FHdr.IndexOffset
       + UInt64(Result.FHdr.EntryCount) * RESPACK_ENTRY_SIZE
       > Result.FHdr.BlobTotal) then
@@ -265,16 +307,26 @@ begin
       if E.DataOffset < StrTabEnd then
         raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
     end;
-    { data 区间互不重叠，至少在 [0,DigestOffset) 内无覆盖；去重共享槽位（相同 offset+size）除外 }
-    for I := 0 to Result.Count - 1 do
-      for J := I + 1 to Result.Count - 1 do
+    { data 区间互不重叠 — O(n log n) IntroSort 后线性相邻检查替代 O(n²) 双重循环
+      复用 L1 nextpas.core.collections.algorithms.Sort 单源（与 writer 收敛），消除 reader 私有双实现
+      CONTRACT 性能：10k 条目由 50M 次比较降为排序+单遍扫描；相邻检查已覆盖全部相交（传递性），零额外分配于校验热点外 }
+    if Result.Count > 1 then
+    begin
+      SetLength(SortedIdx, Result.Count);
+      for I := 0 to Result.Count - 1 do
+        SortedIdx[I] := I;
+      SortData.Entries := PResPackEntryArr(@Cached[0]);
+      specialize Sort<SizeUInt>(SortedIdx, @CompareOffsetByIdx, @SortData);
+      for I := 1 to Result.Count - 1 do
       begin
-        if (Cached[I].Size = 0) or (Cached[J].Size = 0) then Continue;
-        if (Cached[I].DataOffset = Cached[J].DataOffset) and (Cached[I].Size = Cached[J].Size) then Continue;
-        if (Cached[I].DataOffset < Cached[J].DataOffset + Cached[J].Size)
-          and (Cached[J].DataOffset < Cached[I].DataOffset + Cached[I].Size) then
+        if (Cached[SortedIdx[I - 1]].Size = 0) or (Cached[SortedIdx[I]].Size = 0) then Continue;
+        if (Cached[SortedIdx[I - 1]].DataOffset = Cached[SortedIdx[I]].DataOffset)
+          and (Cached[SortedIdx[I - 1]].Size = Cached[SortedIdx[I]].Size) then Continue;
+        if Cached[SortedIdx[I]].DataOffset < Cached[SortedIdx[I - 1]].DataOffset + Cached[SortedIdx[I - 1]].Size then
           raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
       end;
+      SetLength(SortedIdx, 0);
+    end;
   end
   else
   begin
@@ -354,7 +406,7 @@ begin
   FStrTabBase := 0;
 end;
 
-function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean; inline;
+function TResPack.Search(const APath: string; out AIdx: SizeUInt): Boolean;
 var
   Idx: SizeUInt;
 begin
@@ -394,26 +446,22 @@ begin
   DecodeWire(AIdx, Result);
 end;
 
-function TResPack.PathOf(const AEntry: TResPackEntry): string;
-var
-  P: PByte;
-  L: SizeUInt;
+function TResPack.PathOf(const AEntry: TResPackEntry): string; inline;
 begin
-  L := StoredPathRangeOf(AEntry, P);
-  if L = 0 then
-    Exit('');
-  SetLength(Result, L);
-  Move(P^, Result[1], L);
+  Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
 function TResPack.StoredPathRangeOf(const AEntry: TResPackEntry;
-  out AP: PByte): SizeUInt;
+  out AP: PByte): SizeUInt; inline;
+var
+  S: TByteSpan;
 begin
-  AP := FData + SizeUInt(FStrTabBase) + AEntry.PathOffset;
-  Result := AEntry.PathLen;
+  S := StoredPathSpanOf(AEntry);
+  AP := S.Data;
+  Result := S.Len;
 end;
 
-function TResPack.LowerBound(const APath: string): SizeUInt; inline;
+function TResPack.LowerBound(const APath: string): SizeUInt;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
@@ -434,7 +482,7 @@ begin
   Result := Lo;
 end;
 
-function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer; inline;
+function TResPack.ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
 var
   LPtr: Pointer;
 begin

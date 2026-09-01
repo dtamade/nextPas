@@ -11,6 +11,7 @@ uses
   nextpas.core.respack.base,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
+  nextpas.core.respack.writer.stream,
   nextpas.core.respack.dirsource,
   nextpas.core.respack.embed;
 
@@ -29,6 +30,7 @@ type
   TResPackEmbedOptions = nextpas.core.respack.embed.TResPackEmbedOptions;
   TResPackIncOptions = nextpas.core.respack.embed.TResPackIncOptions;
   TResPackDirEntries = nextpas.core.respack.dirsource.TResPackDirEntries;
+  TResPackWriteProc = nextpas.core.respack.writer.stream.TResPackWriteProc;
 
   EResPackError = nextpas.core.respack.base.EResPackError;
   EResPackCorrupted = nextpas.core.respack.base.EResPackCorrupted;
@@ -50,6 +52,10 @@ const
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob; inline;
+procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc); inline;
+function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions): UInt64; inline;
 procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
@@ -57,6 +63,15 @@ function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inli
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
 function ResPackEntriesFromDir(const ARoot: string;
   const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline;
+procedure ResPackBuildStreamFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
+  const AInclude: TResPackIncludeFunc = nil); inline;
+function ResPackBuildFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions;
+  const AInclude: TResPackIncludeFunc = nil): TResPackBlob; inline;
+function ResPackBuildStreamSizeFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions;
+  const AInclude: TResPackIncludeFunc = nil): UInt64; inline;
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions; inline;
 function ResPackDefaultIncOptions: TResPackIncOptions; inline;
 function ResPackValidIdent(const AName: string): Boolean; inline;
@@ -80,6 +95,18 @@ function ResPackBuild(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions): TResPackBlob;
 begin
   Result := nextpas.core.respack.writer.ResPackBuild(AEntries, AOpts);
+end;
+
+procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
+begin
+  nextpas.core.respack.writer.stream.ResPackBuildStream(AEntries, AOpts, AWrite);
+end;
+
+function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
+  const AOpts: TResPackBuildOptions): UInt64;
+begin
+  Result := nextpas.core.respack.writer.stream.ResPackBuildStreamSize(AEntries, AOpts);
 end;
 
 procedure ResPackFreeBlob(var ABlob: TResPackBlob);
@@ -107,6 +134,25 @@ function ResPackEntriesFromDir(const ARoot: string;
   const AInclude: TResPackIncludeFunc): TResPackDirEntries;
 begin
   Result := nextpas.core.respack.dirsource.ResPackEntriesFromDir(ARoot, AInclude);
+end;
+
+procedure ResPackBuildStreamFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
+  const AInclude: TResPackIncludeFunc);
+begin
+  nextpas.core.respack.dirsource.ResPackBuildStreamFromDir(ARoot, AOpts, AWrite, AInclude);
+end;
+
+function ResPackBuildFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): TResPackBlob;
+begin
+  Result := nextpas.core.respack.dirsource.ResPackBuildFromDir(ARoot, AOpts, AInclude);
+end;
+
+function ResPackBuildStreamSizeFromDir(const ARoot: string;
+  const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): UInt64;
+begin
+  Result := nextpas.core.respack.dirsource.ResPackBuildStreamSizeFromDir(ARoot, AOpts, AInclude);
 end;
 
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions;

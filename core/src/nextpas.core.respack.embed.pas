@@ -3,7 +3,9 @@ unit nextpas.core.respack.embed;
 {** @desc 嵌入工具链库（S4）：目录 → 过滤/映射 → 打包 blob；blob → .inc typed const
   源文本。格式逻辑全部收口 core 侧，CLI（core/tools/respack）只是薄壳。选项面对标
   rust-embed derive 属性与 asar unpack-dir；真实文件系统接触点只有 dirsource
-  （输入枚举 + 输出解包 ResPackExtractToDir），本单元零 fs 依赖。
+  （输入枚举 + 输出解包 ResPackExtractToDir），本单元仅依赖 L1 text.strings/
+  text.char/text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、零文件系统
+  依赖，PChar 零拷贝视图 + inline 热路径，bytes.ops 单源、薄转发同源）。
 
   处理管线（相对路径 = dirsource 枚举出的 '/' 分隔包内相对路径）：
     rel → StripPrefix 剥离（不匹配该前缀的条目剔除）→ 逻辑路径上做 glob 过滤
@@ -68,11 +70,16 @@ function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex,
   nextpas.core.exception,
-  nextpas.core.fs.glob,
   nextpas.core.respack.dirsource,
-  nextpas.core.respack.writer;
+  nextpas.core.respack.writer,
+  nextpas.core.text.char,
+  nextpas.core.text.conv,
+  nextpas.core.text.strings,
+  nextpas.core.text.view;
 
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions;
 begin
@@ -89,23 +96,22 @@ begin
   Result.BytesPerLine := RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 end;
 
-function ResPackValidIdent(const AName: string): Boolean;
+function ResPackValidIdent(const AName: string): Boolean; inline;
 var
   I, N: Integer;
-  C: AnsiChar;
+  C: Byte;
 begin
   Result := False;
   N := Length(AName);
   if N = 0 then
     Exit;
-  C := AName[1];
-  if not ((C in ['A'..'Z']) or (C in ['a'..'z']) or (C = '_')) then
+  C := Byte(AName[1]);
+  if not (IsAlpha(C) or (C = Byte('_'))) then
     Exit;
   for I := 2 to N do
   begin
-    C := AName[I];
-    if not ((C in ['A'..'Z']) or (C in ['a'..'z'])
-      or (C in ['0'..'9']) or (C = '_')) then
+    C := Byte(AName[I]);
+    if not (IsAlphaNum(C) or (C = Byte('_'))) then
       Exit;
   end;
   Result := True;
@@ -180,7 +186,7 @@ function ResPackEmbedBuild(const ASourceDir: string;
 var
   Src: TResPackDirEntries;
   Kept: TResPackInputArray;
-  I, N: SizeUInt;
+  I, N, KeptLen, KeptCap, NewCap: SizeUInt;
   Mapped: string;
 begin
   if (AOpts.StripPrefix <> '') and (not StartsSlash(AOpts.StripPrefix)) then
@@ -198,48 +204,66 @@ begin
   Src := ResPackEntriesFromDir(ASourceDir);
   N := SizeUInt(Length(Src.Entries));
   Kept := nil;
+  KeptLen := 0;
+  KeptCap := 0;
   if N > 0 then
     for I := 0 to N - 1 do
       if MapAndFilter(AOpts, Src.Entries[I].Path, Mapped) then
       begin
-        SetLength(Kept, SizeInt(SizeUInt(Length(Kept)) + 1));
-        Kept[SizeUInt(Length(Kept)) - 1] := Src.Entries[I];
-        Kept[SizeUInt(Length(Kept)) - 1].Path := Mapped;
+        if KeptLen >= KeptCap then
+        begin
+          NewCap := KeptCap * 2;
+          if NewCap < 8 then NewCap := 8;
+          if NewCap < KeptLen + 1 then NewCap := KeptLen + 1;
+          SetLength(Kept, NewCap);
+          KeptCap := NewCap;
+        end;
+        Kept[KeptLen] := Src.Entries[I];
+        Kept[KeptLen].Path := Mapped;
+        Inc(KeptLen);
       end;
+  SetLength(Kept, KeptLen);
   if SizeUInt(Length(Kept)) = 0 then
     raise EResPackError.Create('respack.embed: no entries matched after ' +
       'filter/mapping (source "' + ASourceDir + '")');
   Result := ResPackBuild(Kept, AOpts.Build);
 end;
 
+procedure CheckedAdd(var AAcc: SizeUInt; const ADelta: SizeUInt; const AMsg: string); inline;
+begin
+  if not TryAddSizeUInt(AAcc, ADelta, AAcc) then
+    raise EResPackTooLarge.Create(AMsg);
+end;
+
+procedure CheckedMul(const ALeft, ARight: SizeUInt; var ARes: SizeUInt; const AMsg: string); inline;
+begin
+  if not TryMulSizeUInt(ALeft, ARight, ARes) then
+    raise EResPackTooLarge.Create(AMsg);
+end;
+
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions): TBytes;
-const
-  HEX: array[0..15] of AnsiChar = '0123456789ABCDEF';
 var
   Name: string;
-  PerLine, LineCols, I: Integer;
+  PerLine, LineCols: Integer;
+  I: SizeInt;
   N: SizeUInt;
-  Cap: SizeUInt;
+  Cap, LTmp: SizeUInt;
   OutBuf: TBytes;
   W: PByte;
   B: Byte;
+  PData: PByte;
 
-  procedure EmitStr(const S: string);
+  procedure WriteStr(const S: string); inline;
   var
-    J: Integer;
+    L: SizeInt;
   begin
-    for J := 1 to Length(S) do
-    begin
-      W^ := Byte(S[J]);
-      Inc(W);
-    end;
-  end;
-
-  procedure EmitCh(const C: AnsiChar); inline;
-  begin
-    W^ := Byte(C);
-    Inc(W);
+    L := Length(S);
+    if L = 0 then
+      Exit;
+    // zero-copy via PAnsiChar^ — bytes.ops StringToBytes single source；规避 S[1] 喂 Move 的 inline 红线
+    Move(PAnsiChar(S)^, W^, L);
+    Inc(W, L);
   end;
 
 begin
@@ -255,64 +279,77 @@ begin
   if PerLine <= 0 then
     PerLine := RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 
-  { 容量上界：头注释 + 声明行 + 每字节至多 ", $XX" 5 列 + 行尾换行 }
+  { 容量上界：头注释 + 声明行 + 每字节至多 ", $XX" 5 列 + 行尾换行；SizeUInt 溢出保护 — 单源 Checked* helper（inline 零拷贝，owner base.utils） }
   N := ABlob.Size;
-  Cap := 256 + SizeUInt(Length(Name)) * 4 + 40
-    + N * 5 + (N div SizeUInt(PerLine) + 2) * 2;
+  Cap := 256;
+  CheckedMul(SizeUInt(Length(Name)), 4, LTmp, 'respack.embed: ConstName too long');
+  CheckedAdd(Cap, LTmp, 'respack.embed: capacity overflow');
+  CheckedAdd(Cap, 40, 'respack.embed: capacity overflow');
+  CheckedMul(N, 5, LTmp, 'respack.embed: blob too large');
+  CheckedAdd(Cap, LTmp, 'respack.embed: capacity overflow');
+  LTmp := N div SizeUInt(PerLine);
+  CheckedAdd(LTmp, 2, 'respack.embed: capacity overflow');
+  CheckedMul(LTmp, 2, LTmp, 'respack.embed: capacity overflow');
+  CheckedAdd(Cap, LTmp, 'respack.embed: capacity overflow');
   SetLength(OutBuf, Cap);
-  W := @OutBuf[0];
+  if Cap = 0 then
+    W := nil
+  else
+    W := @OutBuf[0];
 
-  EmitStr('{ generated by rp_pack / nextpas.core.respack embed toolchain. }'
+  WriteStr('{ generated by rp_pack / nextpas.core.respack embed toolchain. }'
     + #10 + '{ do not edit; regenerate instead. deterministic output is    }'
     + #10 + '{ locked by the test_respack_embed golden gate.               }'
     + #10);
-  EmitStr('const'#10'  ');
-  EmitStr(Name);
-  EmitStr('_SIZE = ');
-  EmitStr(IntToStr(SizeInt(N)));
-  EmitStr(';'#10'  ');
-  EmitStr(Name);
-  EmitStr(': array[0..');
-  EmitStr(Name);
-  EmitStr('_SIZE - 1] of Byte = ('#10);
+  WriteStr('const'#10'  ');
+  WriteStr(Name);
+  WriteStr('_SIZE = ');
+  WriteStr(nextpas.core.text.conv.IntToStr(SizeInt(N)));
+  WriteStr(';'#10'  ');
+  WriteStr(Name);
+  WriteStr(': array[0..');
+  WriteStr(Name);
+  WriteStr('_SIZE - 1] of Byte = ('#10);
 
   LineCols := 0;
+  PData := ABlob.Data;
+  // 复用 encoding.hex 单源 + direct PByte stores；inline 零拷贝直通 HEX_UPPER 表，1 MiB 仅一次分配，逐字节无小函数调用
   for I := 0 to SizeInt(N) - 1 do
   begin
     if LineCols = 0 then
-      EmitStr('  ');
-    B := ABlob.Data[I];
-    EmitCh('$');
-    EmitCh(HEX[B shr 4]);
-    EmitCh(HEX[B and $0F]);
+    begin
+      W^ := Byte(' ');
+      Inc(W);
+      W^ := Byte(' ');
+      Inc(W);
+    end;
+    B := PData[I];
+    W^ := Byte('$');
+    Inc(W);
+    HexEncodeByteUpper(B, PChar(W));
+    Inc(W, 2);
     if I = SizeInt(N) - 1 then
       Break;
-    EmitCh(',');
+    W^ := Byte(',');
+    Inc(W);
     Inc(LineCols);
     if LineCols >= PerLine then
     begin
-      EmitCh(#10);
+      W^ := Byte(#10);
+      Inc(W);
       LineCols := 0;
     end;
   end;
-  EmitStr(#10'  );'#10);
+  WriteStr(#10'  );'#10);
 
-  SetLength(OutBuf, W - @OutBuf[0]);
+  SetLength(OutBuf, SizeInt(W - PByte(@OutBuf[0])));
   Result := OutBuf;
 end;
 
-function IdentEqualCI(const AA, AB: string): Boolean;
-var
-  I, N: Integer;
+function IdentEqualCI(const AA, AB: string): Boolean; inline;
 begin
-  Result := False;
-  N := Length(AA);
-  if N <> Length(AB) then
-    Exit;
-  for I := 1 to N do
-    if UpCase(AA[I]) <> UpCase(AB[I]) then
-      Exit;
-  Result := True;
+  // 复用 text.view 零拷贝视图 — bytes.ops SpanEqualIgnoreCase 单源，无手写重复
+  Result := TStringView.FromStr(AA).EqualsIgnoreCase(TStringView.FromStr(AB));
 end;
 
 function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
