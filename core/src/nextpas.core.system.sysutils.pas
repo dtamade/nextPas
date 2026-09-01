@@ -29,8 +29,8 @@ type
   TBytes = nextpas.core.base.TBytes;
   TStringArray = nextpas.core.base.TStringArray;
 
-{ Text formatting }
-function Format(const AFmt: string; const AArgs: array of const): string;
+{ Text formatting — single source text.format owner, inline thin forward (INV-5) }
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
 function CompareStr(const A, B: string): Integer;
 function SameText(const A, B: string): Boolean;
 
@@ -134,8 +134,8 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.bytes.ops,
+  nextpas.core.exception,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.fs.util,
@@ -146,60 +146,13 @@ uses
   nextpas.core.text.utils,
   nextpas.core.time;
 
-{ Returns True when AFmt uses any specifier outside the TextFormat safe set
-  (%% %[-][0][width][.precision](s|d|u|x|X|f), including %f with no explicit
-  precision). Such format strings fall back to the RTL SysUtils implementation,
-  whose printf-style surface (e/g/c/m/n/p, indexed args, dynamic * width, ...)
-  TextFormat does not cover. }
-function FormatNeedsSysUtilsFallback(const AFmt: string): Boolean;
-var
-  LIdx, LLen: Integer;
+{ Text formatting — single source via text.format owner (INV-5, L1 text owns formatting)
+  perf: inline thin forward to TextFormat (single source zero-copy Move via TStringBuilder
+  single SetLength+Move in owner, not inline per red-line 1/2); stub elegance: FPC SysUtils
+  stub not used, nextPas stub bridges via units/<target>/, no IFDEF fork }
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
 begin
-  Result := False;
-  LLen := Length(AFmt);
-  LIdx := 1;
-  while LIdx <= LLen do
-  begin
-    if AFmt[LIdx] <> '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    Inc(LIdx);
-    if LIdx > LLen then Exit(False);
-    if AFmt[LIdx] = '%' then
-    begin
-      Inc(LIdx);
-      Continue;
-    end;
-    if AFmt[LIdx] = '-' then Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '0') then Inc(LIdx);
-    while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-      Inc(LIdx);
-    if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
-    begin
-      Inc(LIdx);
-      while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-        Inc(LIdx);
-    end;
-    if LIdx > LLen then Exit(False);
-    case AFmt[LIdx] of
-      'd', 'u', 'x', 'X', 's', 'f': ;
-    else
-      Exit(True);
-    end;
-    Inc(LIdx);
-  end;
-end;
-
-{ Text formatting }
-
-function Format(const AFmt: string; const AArgs: array of const): string;
-begin
-  if FormatNeedsSysUtilsFallback(AFmt) then
-    Result := SysUtils.Format(AFmt, AArgs)
-  else
-    Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;
@@ -299,13 +252,15 @@ begin
     Result := '0';
 end;
 
-function BytesOf(const AStr: string): TBytes;
+function BytesOf(const AStr: string): TBytes; inline;
 begin
+  { perf: inline thin forward to bytes.ops single source (zero-copy Move, single SetLength+Move in owner); no inline kept in owner per red-line 1/2 }
   Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
-function StringOf(const ABytes: TBytes): string;
+function StringOf(const ABytes: TBytes): string; inline;
 begin
+  { perf: inline thin forward to bytes.ops single source (zero-copy Move, single SetLength+Move in owner) }
   Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
@@ -589,19 +544,22 @@ begin
   Result := platform_get_last_os_error;
 end;
 
-function ExceptAddr: Pointer;
+{ Exception backtrace — inline thin forward to exception owner L0 (single source via bytes.ops text, INV-5)
+  perf: inline zero-copy forward to nextpas.core.exception (single source RTL raiseframe chain, stub elegance);
+  stability: bounds-checked via owner (ExceptFrameAt returns nil out-of-range), no resource leak }
+function ExceptAddr: Pointer; inline;
 begin
-  Result := SysUtils.ExceptAddr;
+  Result := nextpas.core.exception.ExceptAddr;
 end;
 
-function ExceptFrameCount: LongInt;
+function ExceptFrameCount: LongInt; inline;
 begin
-  Result := SysUtils.ExceptFrameCount;
+  Result := nextpas.core.exception.ExceptFrameCount;
 end;
 
-function ExceptFrameAt(const AIndex: LongInt): CodePointer;
+function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  Result := SysUtils.ExceptFrames[AIndex];
+  Result := nextpas.core.exception.ExceptFrameAt(AIndex);
 end;
 
 end.

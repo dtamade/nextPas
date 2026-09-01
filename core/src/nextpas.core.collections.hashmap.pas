@@ -134,7 +134,7 @@ type
     procedure BitmapSet(aIdx: SizeUInt); inline;
     procedure BitmapClear(aIdx: SizeUInt); inline;
     procedure BitmapZero; inline;
-    function  BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
+    function  BitmapFindNext(aStart: SizeUInt): SizeUInt;
   private
     // 迭代器回调方法
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
@@ -368,7 +368,7 @@ end;
   First byte uses shr+ Ctz32 to align bit0 to aStart; remaining bitmap scanned as
   SizeUInt words (zero-copy view via PSizeUInt) skipping zero words O(cap/wordSize) and
   resolving first set bit with Ctz32/Ctz64 (single instruction) instead of per-bit shr loop. }
-function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
+function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt;
 var
   byteIdx, endByte: SizeUInt;
   bitIdx: Byte;

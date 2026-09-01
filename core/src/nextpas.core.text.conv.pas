@@ -95,55 +95,37 @@ begin
 end;
 
 {== Float/String conversion ==}
+{ perf: inline thin forward to text.number zero-alloc buffer; single SetLength+Move, O(n), locale-independent '.' }
 
-function FloatToStr(const AValue: Double): string;
-var LI, LDot: Integer;
-  C: Char;
+function FloatToStr(const AValue: Double): string; inline;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  Str(AValue:0:15, Result);
-  { Find the decimal separator (could be '.' or ',' depending on locale) }
-  LDot := 0;
-  for LI := 1 to Length(Result) do
-    if Result[LI] in ['.', ','] then
-    begin
-      LDot := LI;
-      Break;
-    end;
-  if LDot > 0 then
-  begin
-    C := Result[LDot];
-    LI := Length(Result);
-    while (LI > LDot) and (Result[LI] = '0') do
-      Dec(LI);
-    if LI = LDot then
-      SetLength(Result, LDot - 1)
-    else
-      SetLength(Result, LI);
-    { Normalize to '.' for locale-independent output }
-    if C <> '.' then
-    begin
-      LDot := Pos(C, Result);
-      if LDot > 0 then
-        Result[LDot] := '.';
-    end;
-  end;
+  LLen := nextpas.core.text.number.FloatToBuffer(AValue, @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
-var I: Integer;
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  Str(AValue:0:ADecimals, Result);
-  { Normalize decimal separator to '.' }
-  for I := 1 to Length(Result) do
-    if Result[I] = ',' then
-    begin
-      Result[I] := '.';
-      Break;
-    end;
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no locale scan }
+  if ADecimals < 0 then ADecimals := 0 else if ADecimals > 18 then ADecimals := 18;
+  LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(ADecimals), @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function FormatFloat(const AFmt: string; const AValue: Double): string;
-var LDecimals, LI: Integer;
+var
+  LDecimals, LI: Integer;
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
   LDecimals := 0;
   LI := Pos('.', AFmt);
@@ -151,19 +133,14 @@ begin
     while (LI + LDecimals + 1 <= Length(AFmt)) and
           (AFmt[LI + LDecimals + 1] in ['0', '#']) do
       Inc(LDecimals);
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no Delete O(n²), no locale ',' scan }
   if LDecimals > 0 then
-    Str(AValue:0:LDecimals, Result)
+    LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(LDecimals), @LBuf[0])
   else
-    Str(AValue:0:2, Result);
-  while (Length(Result) > 0) and (Result[1] = ' ') do
-    Delete(Result, 1, 1);
-  { Normalize decimal separator to '.' }
-  for LI := 1 to Length(Result) do
-    if Result[LI] = ',' then
-    begin
-      Result[LI] := '.';
-      Break;
-    end;
+    LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, 2, @LBuf[0]);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Pointer(Result)^, LLen);
 end;
 
 function BoolToStr(const AValue: Boolean): string;

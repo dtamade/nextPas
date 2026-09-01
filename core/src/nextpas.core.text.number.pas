@@ -18,6 +18,7 @@ function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: UInt64): Boolean;
 function FloatToBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
+function FloatToFixedBuffer(const AValue: Double; const ADecimals: Int32; const ADst: PAnsiChar): Int32;
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Double): Boolean;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
@@ -232,6 +233,122 @@ begin
     Exit(4);
   end;
   Result := FloatToBuffer(AValue, ADst);
+end;
+
+{ Fixed-decimal buffer: zero-alloc, locale-independent '.'.
+  perf: single Move for integer part via IntToBuffer; direct PAnsiChar writes
+  for fractional digits; O(n) single pass, not Delete O(n²). Single source
+  text.number buffer path. }
+function FloatToFixedBuffer(const AValue: Double; const ADecimals: Int32; const ADst: PAnsiChar): Int32;
+var
+  LBits: UInt64 absolute AValue;
+  LNeg: Boolean;
+  LAbs, LFrac, LRound: Double;
+  LInt: Int64;
+  LI, LDigit, LDec: Int32;
+  LIntLen, LPos: Int32;
+  LBuf: array[0..20] of AnsiChar;
+  LStr: string;
+  LStart, LSrcLen, LCopy: Int32;
+begin
+  if DoubleIsNaN(AValue) then
+  begin
+    Move('NaN', ADst^, 3);
+    Exit(3);
+  end;
+  if DoubleIsInf(AValue) then
+  begin
+    if (LBits and DOUBLE_SIGN_MASK) <> 0 then
+    begin
+      Move('-Infinity', ADst^, 9);
+      Exit(9);
+    end;
+    Move('Infinity', ADst^, 8);
+    Exit(8);
+  end;
+  if DoubleIsZero(AValue) then
+  begin
+    LNeg := (LBits and DOUBLE_SIGN_MASK) <> 0;
+    LDec := ADecimals;
+    if LDec < 0 then LDec := 0;
+    if LDec > 18 then LDec := 18;
+    LPos := 0;
+    if LNeg then
+    begin
+      ADst[0] := '-';
+      Inc(LPos);
+    end;
+    ADst[LPos] := '0';
+    Inc(LPos);
+    if LDec > 0 then
+    begin
+      ADst[LPos] := '.';
+      Inc(LPos);
+      for LI := 1 to LDec do
+      begin
+        ADst[LPos] := '0';
+        Inc(LPos);
+      end;
+    end;
+    Exit(LPos);
+  end;
+  LDec := ADecimals;
+  if LDec < 0 then LDec := 0;
+  if LDec > 18 then LDec := 18;
+  LNeg := AValue < 0;
+  if LNeg then LAbs := -AValue else LAbs := AValue;
+  if LAbs >= 9.22e18 then
+  begin
+    Str(AValue:0:LDec, LStr);
+    LStart := 1;
+    LSrcLen := Length(LStr);
+    while (LStart <= LSrcLen) and (LStr[LStart] = ' ') do Inc(LStart);
+    LCopy := LSrcLen - LStart + 1;
+    if LCopy <= 0 then Exit(0);
+    Result := 0;
+    for LI := LStart to LSrcLen do
+    begin
+      if LStr[LI] = ',' then
+        ADst[Result] := '.'
+      else
+        ADst[Result] := AnsiChar(LStr[LI]);
+      Inc(Result);
+    end;
+    Exit;
+  end;
+  LRound := 0.5;
+  for LI := 1 to LDec do LRound := LRound / 10;
+  LAbs := LAbs + LRound;
+  LInt := Trunc(LAbs);
+  LFrac := LAbs - LInt;
+  if LFrac < 0 then LFrac := 0 else if LFrac >= 1 then LFrac := LFrac - Trunc(LFrac);
+  LIntLen := IntToBuffer(LInt, @LBuf[0]);
+  LPos := 0;
+  if LNeg then
+  begin
+    ADst[0] := '-';
+    LPos := 1;
+  end;
+  if LIntLen > 0 then
+  begin
+    Move(LBuf[0], (ADst + LPos)^, LIntLen);
+    Inc(LPos, LIntLen);
+  end;
+  if LDec > 0 then
+  begin
+    ADst[LPos] := '.';
+    Inc(LPos);
+    for LI := 1 to LDec do
+    begin
+      LFrac := LFrac * 10;
+      LDigit := Trunc(LFrac);
+      if LDigit < 0 then LDigit := 0 else if LDigit > 9 then LDigit := 9;
+      ADst[LPos] := AnsiChar(Ord('0') + LDigit);
+      Inc(LPos);
+      LFrac := LFrac - LDigit;
+    end;
+  end;
+  Result := LPos;
 end;
 
 function EiselLemire(const AMant: UInt64; const AExp10: Int32;

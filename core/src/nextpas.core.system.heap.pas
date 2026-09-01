@@ -34,6 +34,9 @@ function NpSystemReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 {** Move ACount bytes from ASrc to ADst (may overlap per System.Move). }
 procedure NpSystemMove(const ASrc; var ADst; ACount: SizeUInt); inline;
 
+{** Return usable heap block size for APtr (via System.MemSize); nil → 0. }
+function NpSystemMemSize(APtr: Pointer): SizeUInt; inline;
+
 implementation
 
 function NpSystemGetMem(ASize: SizeUInt): Pointer;
@@ -86,6 +89,13 @@ begin
   if ACount = 0 then
     Exit;
   System.Move(ASrc, ADst, SizeInt(ACount));
+end;
+
+function NpSystemMemSize(APtr: Pointer): SizeUInt;
+begin
+  if APtr = nil then
+    Exit(0);
+  Result := SizeUInt(System.MemSize(APtr));
 end;
 
 end.

@@ -32,6 +32,15 @@ function DynArrayRefCount(const A: TBytes): PtrInt; inline;
 {** Bootstrap length poke: set header High := NewLen-1; nil+0 is no-op. }
 procedure DynArraySetLength(var A: TBytes; const ANewLen: SizeUInt); inline;
 
+{** TStringArray capacity probe: (heap block - header) div SizeOf(string); fallback Length. }
+function DynArrayCapacityStr(const A: TStringArray): SizeUInt; inline;
+
+{** TStringArray refcount probe: header RefCnt; nil → 0. }
+function DynArrayRefCountStr(const A: TStringArray): PtrInt; inline;
+
+{** TStringArray length poke: set header High := NewLen-1; nil+0 is no-op. }
+procedure DynArraySetLengthStr(var A: TStringArray; const ANewLen: SizeUInt); inline;
+
 implementation
 
 uses
@@ -77,6 +86,44 @@ begin
   begin
     if ANewLen <> 0 then
       raise EInvalidOperation.Create('DynArraySetLength: nil with non-zero len');
+    Exit;
+  end;
+  PDynArrayHeader(PByte(Pointer(A)) - SizeOf(TDynArrayHeader))^.High := PtrInt(ANewLen) - 1;
+end;
+
+function DynArrayCapacityStr(const A: TStringArray): SizeUInt; inline;
+var
+  LP: Pointer;
+  LBlock: Pointer;
+  LSize: SizeUInt;
+begin
+  Result := 0;
+  LP := Pointer(A);
+  if LP = nil then
+    Exit(0);
+  LBlock := PByte(LP) - SizeOf(TDynArrayHeader);
+  LSize := NpSystemMemSize(LBlock);
+  if LSize < SizeOf(TDynArrayHeader) then
+    Exit(SizeUInt(Length(A)));
+  Result := (LSize - SizeOf(TDynArrayHeader)) div SizeOf(string);
+end;
+
+function DynArrayRefCountStr(const A: TStringArray): PtrInt; inline;
+var
+  LP: Pointer;
+begin
+  LP := Pointer(A);
+  if LP = nil then
+    Exit(0);
+  Result := PDynArrayHeader(PByte(LP) - SizeOf(TDynArrayHeader))^.RefCnt;
+end;
+
+procedure DynArraySetLengthStr(var A: TStringArray; const ANewLen: SizeUInt); inline;
+begin
+  if Pointer(A) = nil then
+  begin
+    if ANewLen <> 0 then
+      raise EInvalidOperation.Create('DynArraySetLengthStr: nil with non-zero len');
     Exit;
   end;
   PDynArrayHeader(PByte(Pointer(A)) - SizeOf(TDynArrayHeader))^.High := PtrInt(ANewLen) - 1;

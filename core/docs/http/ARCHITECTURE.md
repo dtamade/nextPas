@@ -24,7 +24,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。
-- 当前真实生产源码库存约 **98** 个 `nextpas.core.http*` 单元（原 92 + §1.1 五域四件套兑现 6 增量：`http.pool.{base,intf,pas}` + `http.retry.{base,intf,pas}` + `impl.h2.defense.{base,intf,pas}` + `impl.h1.framing.tail.{base,intf,pas}`；fuzz helpers 在 tests support，不计入）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
+- 当前真实生产源码库存约 **101** 个 `nextpas.core.http*` 单元（原 92 + §1.1 六域四件套兑现 9 增量：`http.pool.{base,intf,pas}` + `http.retry.{base,intf,pas}` + `impl.h2.defense.{base,intf,pas}` + `impl.h1.framing.tail.{base,intf,pas}` + `http.timeout.{base,intf,pas}`；fuzz helpers 在 tests support，不计入，主文档已瘦身为索引-锚点）；主 Makefile **PROJECTS = 47** 正确性门禁（含 mem/stream/sse + Era3 theme suites；side：benchmarks/examples/smoke/integration/tls_real 等）。
 - H2 client idle pool 已对称抽出：`impl.h2.client.pool`（锁外 Close/probe，对齐 `impl.h1.pool`）。
 - H2 client response body `IReader` 已抽出：`impl.h2.client.body`（`TH2ClientResponseBodyReader`）。
 - H2 client pure helpers 已抽出：`impl.h2.client.helpers`；active streams 表：`impl.h2.client.streams`；`impl.h2.client` ~1759。
@@ -245,7 +245,7 @@ src/
   nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
   nextpas.core.http.impl.h1.tls.pas           ← H1 TLS wrapper（ALPN http/1.1 + session factory）
 
-  { §1.1 五域四件套兑现（CONTRACT v3.54） }
+  { §1.1 六域四件套兑现（CONTRACT v3.55） }
   nextpas.core.http.pool.base.pas             ← pool 常量/TOptions（L3 单源）
   nextpas.core.http.pool.intf.pas             ← pool IHttpPool（per-authority MaxPoolSize/IdleTTL）
   nextpas.core.http.pool.pas                  ← pool 门面（聚合 impl.h1.pool + impl.h2.client.pool，bytes.ops 单源 inline）
@@ -258,6 +258,9 @@ src/
   nextpas.core.http.impl.h1.framing.tail.base.pas ← tail pending TByteSpan 零拷贝缓冲
   nextpas.core.http.impl.h1.framing.tail.intf.pas ← tail IHttpTailFraming 隔离
   nextpas.core.http.impl.h1.framing.tail.pas  ← tail 门面（FPending 视图 inline，Close 不丢）
+  nextpas.core.http.timeout.base.pas          ← timeout 策略常量（30s/90s/0=无限，单源对齐 http.base）
+  nextpas.core.http.timeout.intf.pas          ← timeout 墙钟判定（IsExpired/ShouldCloseIdle inline）
+  nextpas.core.http.timeout.pas               ← timeout 薄门面（复用 http.base 单源，inline/零拷贝视图）
 
   { TLS 集成 }
   nextpas.core.http.impl.tls.stream.pas       ← TLS TCP stream（ITcpStream + ISSLStream + ALPN）

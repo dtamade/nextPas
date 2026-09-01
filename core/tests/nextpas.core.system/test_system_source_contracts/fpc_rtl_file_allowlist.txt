@@ -22,10 +22,8 @@ SysUtils|nextpas.core.tui.widget.markdown.pas
 SysUtils|nextpas.core.tui.widget.progress_group.pas
 SysUtils|nextpas.core.tui.widget.timeline.pas
 #|
-# Classes: 48 files|
+# Classes: 47 files|
 Classes|nextpas.core.tui.task.pas
-Classes|nextpas.core.system.classes.pas
-SysUtils|nextpas.core.system.classes.pas
 #|
 # TypInfo: 1 files|
 TypInfo|nextpas.core.system.typinfo.pas
@@ -62,7 +60,6 @@ Windows|nextpas.core.tls.winssl.utils.pas
 Classes|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.http.headers.pas
-SysUtils|nextpas.core.system.sysutils.pas
 SysUtils|nextpas.core.bench.parallel.pas
 SysUtils|nextpas.core.http.fuzz.pas
 # 2026-07-13 latest-main baseline debt surfaced by broad RTL gate
