@@ -1,10 +1,11 @@
 {**
  * nextpas.core.graphics.path - TPath 值类型 COW + TGradient 不可变
- * 指数扩容 AlignUp(mem.base) 单源 + Move(bytes.ops 单源)；TGradient 防御性 Copy 冷路径，热路径零分配。
- * 小路径(<64)链式 COW O(N²) 常数小可直接用；大路径用 Reserve 预分配或 TPathBuilder.Append 批量
- * 单次 Reserve+Move O(N) 降级（1K 链式≈500K 元素拷贝，Builder≈1K）。TGradient Colors/Stops
- * 为防御性 Copy（不可变，冷路径一次堆分配），高频循环用 GetColor/GetStop+Count inline 零堆分配。
- * 拒绝 ColorsView/StopsView 零拷贝别名外泄可变引用，维护不可变/COW 约定。
+ * 指数扩容 AlignUp(mem.base 单源 8) + Move(单源 System.Move/bytes.ops 约束)；L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现。
+ * COW 写时 RC<>1 判别（复用 TBitmap.EnsureUnique 模式，Unique 时零拷贝）；TPath 链式 fluent 不可变值语义，
+ * 小路径(<64)链式 O(N²) 常数小可直接用；Reserve 预分配后链式仍 O(N²)（1K 链式≈500K 拷贝，因 Result:=Self 共享 RC=2 需逐次 COW），
+ * 大路径用 TPathBuilder 批量 O(N) 约 1K 拷贝；Builder fluent 链式 (MoveTo/LineTo→TPathBuilder) 与 TPath 风格统一，Append* 为同构别名。
+ * TGradient 防御性 Copy 冷路径，热路径零分配；Colors/Stops 为防御性 Copy（不可变冷路径一次堆分配），
+ * 高频循环用 GetColor/GetStop+Count inline 零堆分配；拒绝 ColorsView/StopsView 零拷贝别名外泄可变引用。
  *}
 unit nextpas.core.graphics.path;
 
@@ -22,7 +23,7 @@ type
   TColor32Array = array of TColor32;
   TSingleArray = array of Single;
 
-  { TPath 不可变链：小路径链式可用；大路径用 Reserve 或 TPathBuilder.Append 批量 O(N) 降级 }
+  { TPath 不可变链 fluent：小路径(<64)链式可用 O(N²) 常数小；大路径用 TPathBuilder 批量 O(N)（Reserve 后链式仍 O(N²)，COW RC=2 逐次拷贝） }
   TPath = record
   private
     FVerbs: array of TPathVerb;
@@ -61,15 +62,15 @@ type
   public
     class function Create: TPathBuilder; static; inline;
     procedure Reserve(ACapVerbs, ACapPoints: Integer); inline;
-    procedure MoveTo(X, Y: Single); inline;
-    procedure LineTo(X, Y: Single); inline;
-    procedure QuadTo(CX, CY, X, Y: Single); inline;
-    procedure CubicTo(C1X, C1Y, C2X, C2Y, X, Y: Single); inline;
-    procedure Close; inline;
-    procedure AppendMove(X, Y: Single); inline;
-    procedure AppendLine(X, Y: Single); inline;
-    procedure AppendClose; inline;
-    procedure AppendPath(const AOther: TPath); inline;
+    function MoveTo(X, Y: Single): TPathBuilder; inline;
+    function LineTo(X, Y: Single): TPathBuilder; inline;
+    function QuadTo(CX, CY, X, Y: Single): TPathBuilder; inline;
+    function CubicTo(C1X, C1Y, C2X, C2Y, X, Y: Single): TPathBuilder; inline;
+    function Close: TPathBuilder; inline;
+    function AppendMove(X, Y: Single): TPathBuilder; inline;
+    function AppendLine(X, Y: Single): TPathBuilder; inline;
+    function AppendClose: TPathBuilder; inline;
+    function AppendPath(const AOther: TPath): TPathBuilder; inline;
     function Build: TPath; inline;
     function IsEmpty: Boolean; inline;
     function VerbCount: Integer; inline;
@@ -138,7 +139,7 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.math;
 
-{ TPath helpers — Ensure* 复用 mem.base AlignUp 单源，保持 L1 零 bytes 依赖 }
+{ TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，Move 单源(bytes.ops 约束)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现 }
 
 procedure TPath.EnsureVerbCap(ANeeded: Integer);
 var
@@ -167,13 +168,31 @@ begin
 end;
 
 procedure TPath.EnsureVerbUnique;
+var
+  P: PByte;
+  RC: SizeInt;
+  PRC: ^SizeInt;
 begin
-  if Length(FVerbs) > 0 then SetLength(FVerbs, Length(FVerbs));
+  if Length(FVerbs) = 0 then Exit;
+  P := PByte(@FVerbs[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  RC := PRC^;
+  if RC <> 1 then
+    SetLength(FVerbs, Length(FVerbs));
 end;
 
 procedure TPath.EnsurePointUnique;
+var
+  P: PByte;
+  RC: SizeInt;
+  PRC: ^SizeInt;
 begin
-  if Length(FPoints) > 0 then SetLength(FPoints, Length(FPoints));
+  if Length(FPoints) = 0 then Exit;
+  P := PByte(@FPoints[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  RC := PRC^;
+  if RC <> 1 then
+    SetLength(FPoints, Length(FPoints));
 end;
 
 class function TPath.New: TPath;
@@ -315,46 +334,50 @@ begin Result.FVerbs := nil; Result.FPoints := nil; Result.FVerbCount := 0; Resul
 procedure TPathBuilder.Reserve(ACapVerbs, ACapPoints: Integer);
 begin if ACapVerbs > 0 then EnsureVerbCap(ACapVerbs); if ACapPoints > 0 then EnsurePointCap(ACapPoints); end;
 
-procedure TPathBuilder.MoveTo(X, Y: Single);
+function TPathBuilder.MoveTo(X, Y: Single): TPathBuilder;
 begin
   if IsNaN(X) or IsInfinite(X) or IsNaN(Y) or IsInfinite(Y) then raise EVectorError.Create('nextpas.core.graphics.path.pas: TPathBuilder.MoveTo: X/Y must be finite');
-  if (FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvMove) then begin FPoints[FPointCount - 1] := TVec2.Create(X, Y); Exit; end;
+  if (FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvMove) then begin FPoints[FPointCount - 1] := TVec2.Create(X, Y); Result := Self; Exit; end;
   EnsureVerbCap(FVerbCount + 1); EnsurePointCap(FPointCount + 1);
   FVerbs[FVerbCount] := pvMove; Inc(FVerbCount); FPoints[FPointCount] := TVec2.Create(X, Y); Inc(FPointCount);
+  Result := Self;
 end;
 
-procedure TPathBuilder.LineTo(X, Y: Single);
+function TPathBuilder.LineTo(X, Y: Single): TPathBuilder;
 begin
   if IsNaN(X) or IsInfinite(X) or IsNaN(Y) or IsInfinite(Y) then raise EVectorError.Create('nextpas.core.graphics.path.pas: TPathBuilder.LineTo: X/Y must be finite');
   EnsureVerbCap(FVerbCount + 1); EnsurePointCap(FPointCount + 1);
   FVerbs[FVerbCount] := pvLine; Inc(FVerbCount); FPoints[FPointCount] := TVec2.Create(X, Y); Inc(FPointCount);
+  Result := Self;
 end;
 
-procedure TPathBuilder.QuadTo(CX, CY, X, Y: Single);
+function TPathBuilder.QuadTo(CX, CY, X, Y: Single): TPathBuilder;
 begin
   if IsNaN(CX) or IsInfinite(CX) or IsNaN(CY) or IsInfinite(CY) or IsNaN(X) or IsInfinite(X) or IsNaN(Y) or IsInfinite(Y) then raise EVectorError.Create('nextpas.core.graphics.path.pas: TPathBuilder.QuadTo: CX/CY/X/Y must be finite');
   EnsureVerbCap(FVerbCount + 1); EnsurePointCap(FPointCount + 2);
   FVerbs[FVerbCount] := pvQuad; Inc(FVerbCount); FPoints[FPointCount] := TVec2.Create(CX, CY); FPoints[FPointCount + 1] := TVec2.Create(X, Y); Inc(FPointCount, 2);
+  Result := Self;
 end;
 
-procedure TPathBuilder.CubicTo(C1X, C1Y, C2X, C2Y, X, Y: Single);
+function TPathBuilder.CubicTo(C1X, C1Y, C2X, C2Y, X, Y: Single): TPathBuilder;
 begin
   if IsNaN(C1X) or IsInfinite(C1X) or IsNaN(C1Y) or IsInfinite(C1Y) or IsNaN(C2X) or IsInfinite(C2X) or IsNaN(C2Y) or IsInfinite(C2Y) or IsNaN(X) or IsInfinite(X) or IsNaN(Y) or IsInfinite(Y) then raise EVectorError.Create('nextpas.core.graphics.path.pas: TPathBuilder.CubicTo: C1X/C1Y/C2X/C2Y/X/Y must be finite');
   EnsureVerbCap(FVerbCount + 1); EnsurePointCap(FPointCount + 3);
   FVerbs[FVerbCount] := pvCubic; Inc(FVerbCount); FPoints[FPointCount] := TVec2.Create(C1X, C1Y); FPoints[FPointCount + 1] := TVec2.Create(C2X, C2Y); FPoints[FPointCount + 2] := TVec2.Create(X, Y); Inc(FPointCount, 3);
+  Result := Self;
 end;
 
-procedure TPathBuilder.Close;
-begin if (FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvClose) then Exit; EnsureVerbCap(FVerbCount + 1); FVerbs[FVerbCount] := pvClose; Inc(FVerbCount); end;
+function TPathBuilder.Close: TPathBuilder;
+begin if (FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvClose) then begin Result := Self; Exit; end; EnsureVerbCap(FVerbCount + 1); FVerbs[FVerbCount] := pvClose; Inc(FVerbCount); Result := Self; end;
 
-procedure TPathBuilder.AppendMove(X, Y: Single); begin MoveTo(X, Y); end;
-procedure TPathBuilder.AppendLine(X, Y: Single); begin LineTo(X, Y); end;
-procedure TPathBuilder.AppendClose; begin Close; end;
+function TPathBuilder.AppendMove(X, Y: Single): TPathBuilder; begin Result := MoveTo(X, Y); end;
+function TPathBuilder.AppendLine(X, Y: Single): TPathBuilder; begin Result := LineTo(X, Y); end;
+function TPathBuilder.AppendClose: TPathBuilder; begin Result := Close; end;
 
-procedure TPathBuilder.AppendPath(const AOther: TPath); inline;
+function TPathBuilder.AppendPath(const AOther: TPath): TPathBuilder;
 var LNeedV, LNeedP: Integer;
 begin
-  if AOther.FVerbCount = 0 then Exit;
+  if AOther.FVerbCount = 0 then begin Result := Self; Exit; end;
   LNeedV := FVerbCount + AOther.FVerbCount; LNeedP := FPointCount + AOther.FPointCount;
   EnsureVerbCap(LNeedV); EnsurePointCap(LNeedP);
   if (FVerbCount > 0) and (AOther.FVerbs[0] = pvMove) and (FVerbs[FVerbCount - 1] = pvMove) then
@@ -362,11 +385,12 @@ begin
     FPoints[FPointCount - 1] := AOther.FPoints[0];
     if AOther.FVerbCount > 1 then Move(AOther.FVerbs[1], FVerbs[FVerbCount], (AOther.FVerbCount - 1) * SizeOf(TPathVerb));
     if AOther.FPointCount > 1 then Move(AOther.FPoints[1], FPoints[FPointCount], (AOther.FPointCount - 1) * SizeOf(TVec2));
-    Inc(FVerbCount, AOther.FVerbCount - 1); Inc(FPointCount, AOther.FPointCount - 1); Exit;
+    Inc(FVerbCount, AOther.FVerbCount - 1); Inc(FPointCount, AOther.FPointCount - 1); Result := Self; Exit;
   end;
   Move(AOther.FVerbs[0], FVerbs[FVerbCount], AOther.FVerbCount * SizeOf(TPathVerb));
   Move(AOther.FPoints[0], FPoints[FPointCount], AOther.FPointCount * SizeOf(TVec2));
   Inc(FVerbCount, AOther.FVerbCount); Inc(FPointCount, AOther.FPointCount);
+  Result := Self;
 end;
 
 function TPathBuilder.Build: TPath;

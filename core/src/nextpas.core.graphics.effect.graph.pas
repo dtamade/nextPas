@@ -206,9 +206,8 @@ begin
 end;
 procedure BlurStripVerticalChunked(const HH_R, HH_G, HH_B, HH_A: PInteger; ChunkY0, ChunkH, AW, AH, AR, AY0, AY1: Integer; var ADst: TBitmap; VSumR, VSumG, VSumB, VSumA: PInteger; CntH: PInteger; CntInv: PCardinal; VCInvTab: PCardinal; VCInvLen: Integer);
 var
-  X, Y, YRem, YAdd, VC, Total: Integer;
-  VCInv, InvTotal: Cardinal;
-  qR, qG, qB, qA: Cardinal;
+  X, Y, YRem, YAdd, VC: Integer;
+  VCInv: Cardinal;
   DstRow: PByte;
   RowPtr: PInteger;
 begin
@@ -230,48 +229,11 @@ begin
   begin
     VC := VertCount(Y, AH, AR);
     DstRow := ADst.RowPtr(Y);
-    if VC <= 0 then
-    begin
-      for X := 0 to AW - 1 do
-      begin
-        DstRow[X * 4] := 0; DstRow[X * 4 + 1] := 0; DstRow[X * 4 + 2] := 0; DstRow[X * 4 + 3] := 0;
-      end;
-    end
-    else
-    begin
-      if (VC >= 0) and (VC < VCInvLen) then VCInv := VCInvTab[VC]
-      else VCInv := Cardinal((QWord(1) shl 32) div QWord(Cardinal(VC)));
-      for X := 0 to AW - 1 do
-      begin
-        Total := CntH[X] * VC;
-        if Total = 0 then
-        begin
-          DstRow[X * 4] := 0; DstRow[X * 4 + 1] := 0; DstRow[X * 4 + 2] := 0; DstRow[X * 4 + 3] := 0;
-        end
-        else
-        begin
-          InvTotal := Cardinal((QWord(CntInv[X]) * QWord(VCInv)) shr 32);
-          if InvTotal = 0 then InvTotal := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Total)));
-          qR := Cardinal((QWord(Cardinal(VSumR[X])) * QWord(InvTotal)) shr 32);
-          if QWord(qR) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumR[X])) then Dec(qR)
-          else if QWord(qR + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumR[X])) then Inc(qR);
-          qG := Cardinal((QWord(Cardinal(VSumG[X])) * QWord(InvTotal)) shr 32);
-          if QWord(qG) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumG[X])) then Dec(qG)
-          else if QWord(qG + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumG[X])) then Inc(qG);
-          qB := Cardinal((QWord(Cardinal(VSumB[X])) * QWord(InvTotal)) shr 32);
-          if QWord(qB) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumB[X])) then Dec(qB)
-          else if QWord(qB + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumB[X])) then Inc(qB);
-          qA := Cardinal((QWord(Cardinal(VSumA[X])) * QWord(InvTotal)) shr 32);
-          if QWord(qA) * QWord(Cardinal(Total)) > QWord(Cardinal(VSumA[X])) then Dec(qA)
-          else if QWord(qA + 1) * QWord(Cardinal(Total)) <= QWord(Cardinal(VSumA[X])) then Inc(qA);
-          if qR > 255 then qR := 255; if qG > 255 then qG := 255; if qB > 255 then qB := 255; if qA > 255 then qA := 255;
-          DstRow[X * 4] := Byte(qR);
-          DstRow[X * 4 + 1] := Byte(qG);
-          DstRow[X * 4 + 2] := Byte(qB);
-          DstRow[X * 4 + 3] := Byte(qA);
-        end;
-      end;
-    end;
+    if VC <= 0 then VCInv := 0
+    else if (VC >= 0) and (VC < VCInvLen) then VCInv := VCInvTab[VC]
+    else VCInv := Cardinal((QWord(1) shl 32) div QWord(Cardinal(VC)));
+    // vertical normalize batch via simd.raster (AVX2 8-wide when available, scalar 4-wide fallback)
+    RasterBlurNormalizeRow(DstRow, VSumR, VSumG, VSumB, VSumA, CntH, CntInv, VC, VCInv, AW);
     if Y = AY1 - 1 then Break;
     YRem := Y - AR;
     YAdd := Y + AR + 1;
