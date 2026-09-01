@@ -156,10 +156,12 @@ begin
   LSep := Length(APath);
   while (LSep > 0) and (APath[LSep] <> '/') do
     Dec(LSep);
-  if LSep > 0 then
-    Result := Copy(APath, 1, LSep - 1)
+  if LSep = 0 then
+    Result := ''
+  else if LSep = 1 then
+    Result := '/' { "/a" → "/" ; "/" → "/" (调用方视空处理) }
   else
-    Result := '';
+    Result := Copy(APath, 1, LSep - 1);
 end;
 
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;

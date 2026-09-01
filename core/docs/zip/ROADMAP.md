@@ -165,6 +165,9 @@
 ### S77 — 文档完整性（1.0.1 巡检）· 完整性/高级感 — 已落地
 - `README` 路标行同步 `S0—S76 1.0.1` 与 `zip_roundtrip 7 式`，`ROADMAP` 状态行收口
 
+### S78 — 稳定性收口（1.0.1 巡检）· 稳定性/复用度 — 已落地
+- `zip.fs` `ParentDirOf` 根路径校正：`"/a"→"/"`（`LSep=1→'/'`），`"/"→"/"`，`LParent=''` 时 `MkdirAll` 免空操作，`Atomic` 同文件系统保证更精确
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -197,4 +200,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S77 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S78 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`。
