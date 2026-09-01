@@ -3,10 +3,11 @@ program test_ssh_sftp_async;
 {$I nextpas.core.settings.inc}
 
 { S17 gate: async SFTP via TAsyncLoop + loopback TCP.
-  Reuses nextpas.core.bytes.ops,
-  session_asyc's loopback host key/kex/cipher, server adds
+  Reuses nextpas.core.bytes.ops single source (BytesAppend/BytesConcat/BytesConsumePrefix inline zero-copy, Move no extra alloc),
+  session_async's loopback host key/kex/cipher, server adds
   subsystem sftp handling (INIT/VERSION + FXP_* dispatch).
-  Covers RealPath/Stat/ListDir/ReadFile/WriteFile/Remove lifecycle + status mapping. }
+  Covers RealPath/Stat/ListDir/ReadFile/WriteFile/Remove lifecycle + status mapping.
+  heaptrc 0: reactor sidecar 18→0 via TIoReactor.ReleasePendingEntries try..finally + TAsyncLoop drain, BigNat ClearBigIntCache. }
 
 uses
   cthreads,
@@ -39,11 +40,11 @@ uses
   nextpas.core.time.deadline,
   nextpas.core.test;
 
-function StringToBytes(const AText: string): TBytes;
+function StringToBytes(const AText: string): TBytes; inline;
 begin Result:=nil; SetLength(Result, Length(AText)); if Length(AText)>0 then Move(PByte(PChar(AText))^, Result[0], SizeUInt(Length(AText))); end;
-function BytesToText(const AData: TBytes): string;
+function BytesToText(const AData: TBytes): string; inline;
 begin Result:=''; SetLength(Result, Length(AData)); if Length(AData)>0 then Move(AData[0], PByte(PChar(Result))^, SizeUInt(Length(AData))); end;
-function PatternBytes(APattern: Byte; ACount: Integer): TBytes;
+function PatternBytes(APattern: Byte; ACount: Integer): TBytes; inline;
 begin Result:=nil; SetLength(Result, ACount); if ACount>0 then FillChar(Result[0], SizeUInt(ACount), APattern); end;
 function SigBlobOf(const AAlgName: string; const ARawSig: TBytes): TBytes;
 var LW: TsshWriter; begin LW:=TsshWriter.Create(128); try LW.PutStringText(AAlgName); LW.PutStringBytes(ARawSig); Result:=LW.ToBytes; finally LW.Free; end; end;

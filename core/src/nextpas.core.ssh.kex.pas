@@ -210,13 +210,10 @@ function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
   const ASessionId: TBytes; ALen: Integer): TBytes;
 var
   LHasher: IHasher;
-  LPrev, LBlock: TBytes;
   LPos, LChunk: Integer;
   LX: Byte;
-  function Min64(A, B: Int64): Int64; inline;
-  begin
-    if A < B then Result := A else Result := B;
-  end;
+const
+  CSHA256 = 32;
 begin
   Result := nil;
   if ALen <= 0 then
@@ -224,9 +221,10 @@ begin
     SetLength(Result, 0);
     Exit;
   end;
-  // perf: single SetLength(ALen) + streaming IHasher.Write (zero-copy, no BytesConcatMany alloc)
-  // + Move per 32B block; BytesAppend O(n) realloc eliminated; first block K||H||X||session_id,
-  // extension K||H||prev. inline Min64 stays hot; hasher Reset reuses instance, ref-counted release.
+  // perf: single SetLength(ALen) + streaming IHasher.Write (zero-copy) + direct
+  // IHasher.Sum into Result[LPos] (zero-copy, no SumBytes alloc, no Move); Result
+  // itself reused as prev source (single buffer, zero extra TBytes per block);
+  // Reset reuses hasher instance, ref-counted release;超长派生零额外分配.
   SetLength(Result, ALen);
   LHasher := NewSHA256;
   if Length(AKMpint) > 0 then
@@ -237,10 +235,11 @@ begin
   LHasher.Write(LX, 1);
   if Length(ASessionId) > 0 then
     LHasher.Write(ASessionId[0], Length(ASessionId));
-  LPrev := LHasher.SumBytes;
-  LChunk := Integer(Min64(ALen, Length(LPrev)));
-  if LChunk > 0 then
-    Move(LPrev[0], Result[0], LChunk);
+  if ALen <= CSHA256 then
+    LChunk := ALen
+  else
+    LChunk := CSHA256;
+  LHasher.Sum(Result[0], SizeUInt(LChunk));
   LPos := LChunk;
   while LPos < ALen do
   begin
@@ -249,15 +248,11 @@ begin
       LHasher.Write(AKMpint[0], Length(AKMpint));
     if Length(AH) > 0 then
       LHasher.Write(AH[0], Length(AH));
-    if Length(LPrev) > 0 then
-      LHasher.Write(LPrev[0], Length(LPrev));
-    LBlock := LHasher.SumBytes;
-    LPrev := LBlock;
-    LChunk := Length(LBlock);
-    if LPos + LChunk > ALen then
-      LChunk := ALen - LPos;
-    if LChunk > 0 then
-      Move(LBlock[0], Result[LPos], LChunk);
+    LHasher.Write(Result[LPos - CSHA256], CSHA256);
+    LChunk := ALen - LPos;
+    if LChunk > CSHA256 then
+      LChunk := CSHA256;
+    LHasher.Sum(Result[LPos], SizeUInt(LChunk));
     Inc(LPos, LChunk);
   end;
 end;

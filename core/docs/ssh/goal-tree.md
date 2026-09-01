@@ -269,7 +269,7 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 
 - [x] `sftp.async`：`ISshAsyncFileSystem`（`RealPath/Stat/Lstat/ListDir/ReadFile/WriteFile/Remove/Mkdir/Rmdir/Rename`），`TAsyncSftpChannel`（`asOpening→Subsystem→Handshake→Ready`，`GNextSftpChannelId atomic`，`SftpRoundTripAsync` 单 `pendingId` 串行 + `Busy→sekProtocol`，`SFTP 4B length prefix` 重组，`WINDOW_LOW_WATER_DIVISOR=2` 回补，`ACCEPT [ATTRS,STATUS]` 状态映射 `sekSftp`，`SshAsyncOpenSftpEx` `PostEx` 线程安全 + `FTimer/FOpTimer` 超时），`TSftpAttrs` 编解码复用 `sftp.pas`
 - [x] `transport.async` 复用：`AsyncSendPacket`（`Protect+Compress+SecureRandom`）、`AsyncReadPacket`（`4B header→Trailer` 重组）
-- [x] `async.loop` 补强：`ScheduleAt/Schedule*` 外线程 `Wake`（`TAsyncSshTransport` 与 SFTP channel 均经 `PostEx` 或 `Wake` 驱动，首包 215ms 内），`HEAPTRC` 已知 19 块（`PSshLoopSftpScenario` + `TIoReactor` 侧线，功能 7/7 全绿）
+- [x] `async.loop` 补强：`ScheduleAt/Schedule*` 外线程 `Wake`（`TAsyncSshTransport` 与 SFTP channel 均经 `PostEx` 或 `Wake` 驱动，首包 215ms 内），`HEAPTRC 0`（`TIoReactor ReleasePendingEntries` 真零 `try..finally` + 吞异常 + `TAsyncLoop.Close` 幂等 `DrainPending/OnDiscard`，`PSshLoopSftpScenario` 栈化+`Finalize` + `ClearBigIntCache`，`18→0` 块，`bytes.ops` 单源 `BytesAppend/BytesConcat/BytesConsumePrefix` `inline` 零拷贝）
 - [x] 测试：`test_ssh_sftp_async` 7/7（`realpath/stat/stat-notfound/listdir/read/write/remove`，每用例 115–216ms，总 1.41s，loopback `Handshake→CHANNEL_OPEN→SUBSYSTEM→INIT/VERSION→FXP_*` 全路径，`STAT→ATTRS/STATUS` 映射 `sekSftp`），`test_ssh_sftp` 12/12 与 `test_ssh_session_async` 5/5 回归全绿
 - [x] 性能：`HasPending` 10ms 轮询 + `Wake` 协同，首 `SFTP` 打开 215ms，`STAT` 115ms，`ReadFile` 216ms（`SFTP_CHUNK_SIZE=32760` 单 `HANDLE`→`READ`→`CLOSE` 链），`WriteFile` 216ms（`OPEN→WRITE chunk→CLOSE`），与同步 `sftp` 同包构造
 
