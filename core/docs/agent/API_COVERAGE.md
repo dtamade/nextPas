@@ -78,7 +78,7 @@ bench_loop_overhead 与全部示例消费（离线纪律的合法替代面）。
 
 | 契约 | 落地 | 证据 |
 |------|------|------|
-| `TAgentStreamBox` Lock+Done+id 迟到丢弃（`TPlatformMutex` 经 `platform.sync`，零 SyncObjs）+ `Push(AId)` 失配丢弃 + `TryPop` 环形 `FHead` 摊销 O(1) 顺序消费 + `MarkDone/IsDone` 终态 | `nextpas.core.agent.streambox`（124 行，门面 `TAgentStreamBox` 透出，`PERFORMANCE §7.2` 环形版） | `test_streambox` 6 测（基础/FIFO/失配/Done/环形压缩） + `test_compile_skeleton` 门面透出（`SizeOf(TAgentStreamBox)>0`）+ `example_stream_box_lifecycle` `Push(41)` 失配丢弃 + `sdkThinkingDelta→sdkTextDelta` 态切演示 |
+| `TAgentStreamBox` Lock+Done+id 迟到丢弃（`TPlatformMutex` 经 `platform.sync`，零 SyncObjs）+ `Push(AId)` 失配丢弃 + `TryPop` 环形 `FHead` 摊销 O(1) 顺序消费 + `MarkDone/IsDone` 终态 | `nextpas.core.agent.streambox`（131 行，门面 `TAgentStreamBox` 透出，`PERFORMANCE §7.2` 环形托管修复版） | `test_streambox` 6 测（基础/FIFO/失配/Done/环形压缩） + `test_compile_skeleton` 门面透出（`SizeOf(TAgentStreamBox)>0`）+ `example_stream_box_lifecycle` `Push(41)` 失配丢弃 + `sdkThinkingDelta→sdkTextDelta` 态切演示 |
 
 ## 门面 `nextpas.core.agent` — 落地
 

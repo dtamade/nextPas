@@ -94,7 +94,7 @@
 | `nextpas.core.agent.streambox.pas` | 复用 | **Phase4 流式盒（2026-09-01）**：`TAgentStreamBox` Lock+Done+id 迟到丢弃封装（`TPlatformMutex` 经 `platform.sync`，零直接依赖 SyncObjs），对应 `PERFORMANCE.md §7.2` TAiStreamBox 的可复用落点 | agent.base, platform.sync |
 
 体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
-现状（2026-09-02 有界快照/流式盒复用收口）：`provider.common` 290+564+109+520 / `provider.openai` 326/350/232/359 / `provider.openai.responses` 256/307/245/441 / `provider.anthropic` 397+450+196+332 —— provider 域 14/14 <800 全达标（含 fake 386）；`base` 250+586+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 58 + `streambox` 98（有界快照/流式盒可复用面，均 <800）/ `loop` 57+97+122+187+680 / `transport.http` 73+197+464=734 / `hedge` 564 / `session` 551。
+现状（2026-09-02 有界快照/流式盒复用收口 + 托管修复）：`provider.common` 290+564+109+520 / `provider.openai` 326/350/232/359 / `provider.openai.responses` 256/307/245/441 / `provider.anthropic` 397+450+196+332 —— provider 域 14/14 <800 全达标（含 fake 386）；`base` 250+586+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 81 + `streambox` 131（有界快照/流式盒可复用面，环形托管修复后 131，均 <800）/ `loop` 57+97+122+187+680 / `transport.http` 73+197+464=734 / `hedge` 564 / `session` 551；总量 13638。
 
 ## 3. 数据流
 
