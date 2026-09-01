@@ -63,6 +63,8 @@ var
   LPromptCost: Int64;
   LCompletionCost: Int64;
 begin
+  if APromptTokens < 0 then APromptTokens := 0;
+  if ACompletionTokens < 0 then ACompletionTokens := 0;
   LRate := ARateMultiplier;
   if LRate <= 0 then
     LRate := 10000;
