@@ -141,6 +141,7 @@ function SevenZCreateWriterBuilder: ISevenZWriterBuilder;
 implementation
 
 uses
+  nextpas.core.bytes.pathvalid,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.bytes.ops,
@@ -327,46 +328,20 @@ const
   { AES 写端缺省档位：与参考写端一致（19 轮 KDF） }
   C_AES_CYCLES_POWER = 19;
 
-{ 条目名安全检查：拒空名 / 绝对路径 / 反斜杠 / 空路径段 / ".." 段 / NUL }
-procedure ValidateEntryName(const AName: string);
-var
-  LSegStart: SizeInt;
-  LI: SizeInt;
-  LSeg: string;
+{ 条目名安全检查：单源复用 bytes.pathvalid.BytesValidPath，附加 NUL/反斜杠禁令（BytesValidPath 视反斜杠为普通字符） }
+procedure ValidateEntryName(const AName: string); inline;
 begin
   if AName = '' then
     raise EArgumentError.Create('entry name must not be empty');
   if Pos(#0, AName) > 0 then
     raise EArgumentError.Create('entry name must not contain NUL');
-  if AName[1] = '/' then
-    raise EArgumentError.CreateFmt(
-      'entry name "%s" must not be absolute', [AName]);
   if Pos('\', AName) > 0 then
     raise EArgumentError.CreateFmt(
       'entry name "%s" must not contain backslash', [AName]);
-  if Pos('../', AName + '/') > 0 then
+  // perf: inline + zero-copy BytesValidPath (text.utf8 UTF8IsValid 单源，段扫描无 Copy)，复用 bytes.ops 语义，bench 可观测
+  if not BytesValidPath(AName, False) then
     raise EArgumentError.CreateFmt(
-      'entry name "%s" must not contain ".." segment', [AName]);
-  LSegStart := 1;
-  for LI := 1 to Length(AName) do
-    if AName[LI] = '/' then
-    begin
-      LSeg := Copy(AName, LSegStart, LI - LSegStart);
-      if LSeg = '..' then
-        raise EArgumentError.CreateFmt(
-          'entry name "%s" must not contain ".." segment', [AName]);
-      if LSeg = '' then
-        raise EArgumentError.CreateFmt(
-          'entry name "%s" must not contain empty segment', [AName]);
-      LSegStart := LI + 1;
-    end;
-  LSeg := Copy(AName, LSegStart, Length(AName) - LSegStart + 1);
-  if LSeg = '..' then
-    raise EArgumentError.CreateFmt(
-      'entry name "%s" must not contain ".." segment', [AName]);
-  if LSeg = '' then
-    raise EArgumentError.CreateFmt(
-      'entry name "%s" must not have trailing slash', [AName]);
+      'entry name "%s" is invalid (must be ValidPath: no leading/trailing slash, no empty segment, no "." or "..")', [AName]);
 end;
 
 { 位向量：每字节 8 位、高位在前、尾部补零；与读端 ReadBoolVector 对称 }
