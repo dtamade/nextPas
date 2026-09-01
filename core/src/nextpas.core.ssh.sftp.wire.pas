@@ -40,9 +40,15 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base,
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer;
+
+const
+  // 奢华命名：零拷贝压实阈值单源，复用 bytes.ops 批量 Move 约定；命名自解释，避免魔法数
+  SFTP_WIRE_COMPACT_OFFSET_ABSOLUTE = 32768; // 32KB absolute, avoid 4B freq Move churn
+  SFTP_WIRE_COMPACT_OFFSET_HALF = 8192;      // 8KB + half-capacity, lazy compact
 
 constructor TSshChannelWire.Create(AChannel: TSshChannel);
 begin
@@ -120,7 +126,8 @@ begin
   // lazy compact: raise threshold to avoid 4B freq Move churn;
   // 32KB absolute or (8KB + half capacity), single CopyMem, non-inline to avoid I-Cache bloat
   // shrink only if hugely over-allocated (>8x + 64KB), keep capacity otherwise
-  if (FOff > 32768) or ((FOff > 8192) and (FOff > LCap div 2)) then
+  // 单源：阈值常量化，复用 bytes.ops 批量 Move 零拷贝约定
+  if (FOff > SFTP_WIRE_COMPACT_OFFSET_ABSOLUTE) or ((FOff > SFTP_WIRE_COMPACT_OFFSET_HALF) and (FOff > LCap div 2)) then
   begin
     CopyMem(@FBuf[0], @FBuf[FOff], LBuffered);
     FOff := 0;
@@ -166,8 +173,8 @@ begin
       raise ESSHError.Create(sekIO, 'sftp: channel closed by peer');
     BufAppend(LChunk);
   end;
-  LLen := (UInt32(FBuf[FOff]) shl 24) or (UInt32(FBuf[FOff + 1]) shl 16) or
-    (UInt32(FBuf[FOff + 2]) shl 8) or UInt32(FBuf[FOff + 3]);
+  // 单源：复用 bytes.binary.ReadUInt32BE，避免手写移位；inline 零拷贝，对比 buffer.pas 170,336
+  LLen := ReadUInt32BE(PByte(@FBuf[FOff]));
   if (LLen < 1) or (LLen > SFTP_MAX_PACKET_SIZE) then
     raise ESSHError.Create(sekProtocol,
       'sftp: unreasonable packet length ' + IntToStr(LLen));

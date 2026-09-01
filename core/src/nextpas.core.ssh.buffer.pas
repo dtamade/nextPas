@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.base,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
@@ -29,7 +30,7 @@ type
   private
     FBuf: TBytes;
     FLen: SizeUInt;
-    procedure Ensure(ACount: SizeUInt);
+    procedure Ensure(ACount: SizeUInt); inline;
   public
     constructor Create(ACapacityHint: SizeUInt = 256);
 
@@ -108,7 +109,7 @@ begin
   FLen := 0;
 end;
 
-procedure TSshWriter.Ensure(ACount: SizeUInt);
+procedure TSshWriter.Ensure(ACount: SizeUInt); inline;
 var
   LNeed: SizeUInt;
   LNewCap: SizeUInt;
@@ -118,16 +119,23 @@ begin
   LNeed := FLen + ACount;
   if LNeed <= SizeUInt(Length(FBuf)) then
     Exit;
-  { perf: 1.5x geometric growth, no forced 256 per small PutByte/PutRaw;
-    single SetLength+Move in callers (zero-copy), avoids per-byte 256 waste
-    and O(n²) churn; stability: overflow/packet-limit guarded, exception-safe SetLength. }
+  { perf: 2x geometric doubling single source via bytes.ops.BytesEnsureCapacity /
+    bytes.builder.Grow (BYTES_BUILDER_MIN_GROW=64 floor, doubling loop, overflow clamped);
+    single SetLength+Move zero-copy, amortized O(1) per Put*, avoids O(n²) churn;
+    stability: overflow/packet-limit guarded, exception-safe SetLength. }
   LNewCap := SizeUInt(Length(FBuf));
-  if LNewCap = 0 then
-    LNewCap := 256
-  else
-    LNewCap := LNewCap + (LNewCap shr 1);
-  if LNewCap < LNeed then
-    LNewCap := LNeed;
+  if LNewCap < BYTES_BUILDER_MIN_GROW then
+    LNewCap := BYTES_BUILDER_MIN_GROW;
+  while LNewCap < LNeed do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := LNeed;
+      Break;
+    end;
+  end;
   if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
     LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
   if LNeed > LNewCap then
@@ -215,6 +223,7 @@ procedure TSshWriter.PutNameList(const ANames: array of string);
 var
   I: Integer;
   LTotal: SizeUInt;
+  LOff: SizeUInt;
 begin
   if Length(ANames) = 0 then
   begin
@@ -222,13 +231,13 @@ begin
     Exit;
   end;
   { perf: zero intermediate TStringArray/StringsJoin heap alloc; single PutUInt32+single Ensure
-    + direct Move per element + ',' separator — O(n) single buffer growth, no temp string churn.
-    High-freq KEXINIT builds 10 name-lists per handshake; eliminating per-call SetLength(LArr)+
-    StringsJoin single alloc cuts 10 heap allocs/handshake → zero heap for PutNameList itself.
-    single source: reuses bytes.ops zero-copy Move semantics (no text.strings indirection),
-    FBuf direct copy via Move (zero-copy string payload without temp), inline candidate.
-    stability: per-element UTF8IsValid mirrors PutStringText, no silent bad encoding; overflow
-    guarded via Ensure/packet-limit; resource release unchanged (no alloc to leak). }
+    (2x doubling single source bytes.builder/bytes.ops BYTES_BUILDER_MIN_GROW, amortized O(1)) +
+    bulk batch single allocation — O(n) single buffer growth, no temp string churn. High-freq
+    KEXINIT 10 name-lists/handshake: 10 heap allocs → zero heap, single FLen bump, inline candidate.
+    single source: reuses bytes.ops.StringToBytes zero-copy Move semantics via PAnsiChar^ (no
+    text.strings indirection), FBuf direct copy zero-copy payload, bytes.builder single batch.
+    stability: per-element UTF8IsValid mirrors PutStringText; overflow guarded via Ensure/packet-limit;
+    resource release unchanged (no alloc to leak). }
   LTotal := 0;
   for I := 0 to High(ANames) do
   begin
@@ -242,19 +251,21 @@ begin
   if LTotal = 0 then
     Exit;
   Ensure(LTotal);
+  LOff := FLen;
   for I := 0 to High(ANames) do
   begin
     if Length(ANames[I]) > 0 then
     begin
-      Move(PChar(ANames[I])^, FBuf[FLen], Length(ANames[I]));
-      Inc(FLen, SizeUInt(Length(ANames[I])));
+      Move(PAnsiChar(ANames[I])^, FBuf[LOff], Length(ANames[I]));
+      Inc(LOff, SizeUInt(Length(ANames[I])));
     end;
     if I < High(ANames) then
     begin
-      FBuf[FLen] := Byte(',');
-      Inc(FLen);
+      FBuf[LOff] := Byte(',');
+      Inc(LOff);
     end;
   end;
+  FLen := LOff;
 end;
 
 procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);

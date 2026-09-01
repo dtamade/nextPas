@@ -67,11 +67,12 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
-function BytesToString(const ABytes: TBytes): string; inline;
+{ not inline: Move with indexed element (Result[1]/ABytes[0], Result[0]) would be mis-compiled if inlined (FPC constant-propagation red line); single Move zero-copy kept in out-of-line body }
+function BytesToString(const ABytes: TBytes): string;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
-  ALength: SizeUInt): string; inline;
+  ALength: SizeUInt): string;
 
 implementation
 
@@ -533,7 +534,7 @@ begin
   Result := IsZeroBytes(AData);
 end;
 
-function BytesToString(const ABytes: TBytes): string; inline;
+function BytesToString(const ABytes: TBytes): string;
 begin
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
@@ -545,7 +546,7 @@ begin
   Result := BytesToString(ABytes);
 end;
 
-function StringToBytes(const AText: string): TBytes; inline;
+function StringToBytes(const AText: string): TBytes;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
@@ -553,7 +554,7 @@ begin
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
-  ALength: SizeUInt): string; inline;
+  ALength: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin

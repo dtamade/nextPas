@@ -55,7 +55,7 @@ type
     procedure ApplyNewKeys(const ANegotiated: TSshNegotiated;
       const AIvCs, AKeyCs, AMacCs, AIvSc, AKeySc, AMacSc: TBytes);
 
-    function EncodePacket(const APayload: TBytes): TBytes; inline;
+    function EncodePacket(const APayload: TBytes): TBytes;
     function DecodePacket(const AWire: TBytes): TBytes;
 
     function BodyLengthFromHeader(const AHeader: TBytes): UInt32;
@@ -147,7 +147,7 @@ begin
   ResetRekeyCounters;
 end;
 
-function TSshTransportCore.EncodePacket(const APayload: TBytes): TBytes; inline;
+function TSshTransportCore.EncodePacket(const APayload: TBytes): TBytes;
 var
   LOut: TBytes;
   LPayloadLen, LPad, LAad: SizeUInt;
@@ -163,7 +163,7 @@ begin
   LPad := SizeUInt(LBlock) - ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
   if LPad < SSH_MIN_PADDING then
     Inc(LPad, SizeUInt(LBlock));
-  // perf: 单次分配零拷贝 via cipher ProtectPayload（单次 SetLength 线上包 + 单次 Move payload + SecureRandom padding 原位），消除 LBody 中间分配/两阶段拷贝；inline 热路径，bytes.ops 单源 MemXor/bulk；稳定性：ProtectPayload 内 SecureRandom 失败抛异常不泄漏，FSendSeq 递增与 FRekey.Account 在成功加密后执行，资源零泄漏
+  // perf: 单次分配零拷贝 via cipher ProtectPayload（单次 SetLength 线上包 + 单次 Move payload + SecureRandom padding 原位），消除 LBody 中间分配/两阶段拷贝；外联（真实路由体/压缩/加解密禁 inline，避免 I-Cache 膨胀），bytes.ops 单源 MemXor/bulk；稳定性：ProtectPayload 内 SecureRandom 失败抛异常不泄漏，FSendSeq 递增与 FRekey.Account 在成功加密后执行，资源零泄漏
   Result := FSender.ProtectPayload(LOut, LPad, FSendSeq);
   Inc(FSendSeq);
   FRekey.Account(UInt64(Length(APayload)));

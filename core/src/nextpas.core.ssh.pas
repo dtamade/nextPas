@@ -40,7 +40,6 @@ uses
   nextpas.core.ssh.keepalive,
   nextpas.core.ssh.keepalive.scheduler,
   nextpas.core.ssh.window,
-  nextpas.core.ssh.flow.window,
   nextpas.core.ssh.knownhosts,
   nextpas.core.ssh.session,
   nextpas.core.ssh.session.builder,
@@ -79,7 +78,6 @@ type
   TSshWriter = nextpas.core.ssh.buffer.TSshWriter;
   TSshReader = nextpas.core.ssh.buffer.TSshReader;
   TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
-  TFlowWindow = nextpas.core.ssh.flow.window.TFlowWindow;
   TKeepAliveScheduler = nextpas.core.ssh.keepalive.scheduler.TKeepAliveScheduler;
 
   { 扩展门面: 补齐9遗漏单元 }
