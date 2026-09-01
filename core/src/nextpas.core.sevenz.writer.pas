@@ -345,32 +345,6 @@ begin
       'entry name "%s" is invalid (must be ValidPath: no leading/trailing slash, no empty segment, no "." or "..")', [AName]);
 end;
 
-{ 位向量：每字节 8 位、高位在前、尾部补零；与读端 ReadBoolVector 对称 }
-procedure AppendBoolVector(var AOut: TBytes; const AVals: array of Boolean);
-var
-  LByteIdx: SizeInt;
-  LBit: Integer;
-  LB: Byte;
-begin
-  { 向上取整：ceil(N/8) = (N+7) div 8 }
-  for LByteIdx := 0 to (Length(AVals) + 7) div 8 - 1 do
-  begin
-    LB := 0;
-    for LBit := 0 to 7 do
-      if (LByteIdx * 8 + LBit < Length(AVals)) and
-         AVals[LByteIdx * 8 + LBit] then
-        LB := LB or Byte(1 shl (7 - LBit));
-    SevenZAppendByte(AOut, LB);
-  end;
-end;
-
-{ 全定义捷径位向量（BoolVector2 首字节非零即全真） }
-procedure AppendBoolVector2AllDefined(var AOut: TBytes; ACount: SizeInt);
-begin
-  if ACount > 0 then
-    SevenZAppendByte(AOut, $01);
-end;
-
 function CountTrue(const AFlags: array of Boolean): SizeInt;
 var
   LI: SizeInt;
@@ -547,22 +521,6 @@ end;
 procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
   ABlock: TBytes);
 
-  procedure AppendVarint(var AOut: TBytes; AValue: UInt64);
-  begin
-    SevenZWriteNumber(AOut, AValue);
-  end;
-
-    procedure AppendUtf16LeName(var AOut: TBytes; const AName: string);
-    var
-      LUnits: TBytes;
-    begin
-      LUnits := SevenZUtf8ToUtf16Le(AName);
-      if Length(LUnits) > 0 then
-        SevenZAppendBytes(AOut, @LUnits[0], Length(LUnits));
-      SevenZAppendByte(AOut, 0);
-      SevenZAppendByte(AOut, 0);
-    end;
-
     procedure AppendVarintBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
     begin
       SevenZWriteNumberToBuilder(ABuilder, AValue);
@@ -733,15 +691,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       LEmptyStreamFlags: array of Boolean;
       LEmptyFileStreamFlags: array of Boolean;
       LPayload: TBytes;
-
-      procedure BuildBoolVectorPayload(const AVals: array of Boolean);
-      begin
-        SetLength(LPayload, 0);
-        AppendBoolVector(LPayload, AVals);
-      end;
-
+      LPayloadBuilder: IBytesBuilder;
     begin
-      LPayload := nil;
       LTotal := Length(FEntries);
       SetLength(LEmptyStreamFlags, LTotal);
       for LSubIdx := 0 to LTotal - 1 do
@@ -756,7 +707,9 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       AppendVarintBuilder(ABuilder, UInt64(LTotal));
       if LEmptyCnt > 0 then
       begin
-        BuildBoolVectorPayload(LEmptyStreamFlags);
+        LPayloadBuilder := CreateBytesBuilder(64);
+        AppendBoolVectorToBuilder(LPayloadBuilder, LEmptyStreamFlags);
+        LPayload := LPayloadBuilder.ToBytes;
         AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_STREAM, LPayload);
       end;
       if LEmptyCnt > 0 then
@@ -771,33 +724,36 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           end;
         if CountTrue(LEmptyFileStreamFlags) > 0 then
         begin
-          SetLength(LPayload, 0);
-          AppendBoolVector(LPayload, LEmptyFileStreamFlags);
+          LPayloadBuilder := CreateBytesBuilder(64);
+          AppendBoolVectorToBuilder(LPayloadBuilder, LEmptyFileStreamFlags);
+          LPayload := LPayloadBuilder.ToBytes;
           AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_FILE, LPayload);
         end;
       end;
-      SetLength(LPayload, 0);
-      SevenZAppendByte(LPayload, 0);
+      LPayloadBuilder := CreateBytesBuilder(1024);
+      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
       for LI := 0 to LTotal - 1 do
-        AppendUtf16LeName(LPayload, FEntries[LI].Name);
+        AppendUtf16LeNameBuilder(LPayloadBuilder, FEntries[LI].Name);
+      LPayload := LPayloadBuilder.ToBytes;
       AppendFilePropBuilder(ABuilder, SZ_ID_NAME, LPayload);
-      SetLength(LPayload, 0);
-      AppendBoolVector2AllDefined(LPayload, LTotal);
-      SevenZAppendByte(LPayload, 0);
+      LPayloadBuilder := CreateBytesBuilder(256);
+      AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
+      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
       for LI := 0 to LTotal - 1 do
-        SevenZAppendUInt64LE(LPayload,
-          SevenZUnixToFILETIME(FEntries[LI].MTimeUnixSec));
+        SevenZAppendUInt64LEToBuilder(LPayloadBuilder, SevenZUnixToFILETIME(FEntries[LI].MTimeUnixSec));
+      LPayload := LPayloadBuilder.ToBytes;
       AppendFilePropBuilder(ABuilder, SZ_ID_MTIME, LPayload);
-      SetLength(LPayload, 0);
-      AppendBoolVector2AllDefined(LPayload, LTotal);
-      SevenZAppendByte(LPayload, 0);
+      LPayloadBuilder := CreateBytesBuilder(256);
+      AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
+      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
       for LI := 0 to LTotal - 1 do
       begin
         if FEntries[LI].IsDir then
-          SevenZAppendUInt32LE(LPayload, SEVENZ_ATTR_DIRECTORY)
+          SevenZAppendUInt32LEToBuilder(LPayloadBuilder, SEVENZ_ATTR_DIRECTORY)
         else
-          SevenZAppendUInt32LE(LPayload, $00000020);
+          SevenZAppendUInt32LEToBuilder(LPayloadBuilder, $00000020);
       end;
+      LPayload := LPayloadBuilder.ToBytes;
       AppendFilePropBuilder(ABuilder, SZ_ID_WIN_ATTRIBUTES, LPayload);
       SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
     end;
