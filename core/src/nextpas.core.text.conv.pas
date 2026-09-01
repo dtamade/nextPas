@@ -52,9 +52,9 @@ function UTF8BytesToString(const AData: TBytes): string; inline;
 function StringToUTF8Bytes(const AStr: string): TBytes; inline;
 function ASCIIBytesToString(const AData: TBytes): string; inline; deprecated 'Use UTF8BytesToString — ASCII is UTF8 subset, single source bytes.ops.BytesToString';
 function StringToASCIIBytes(const AStr: string): TBytes; inline; deprecated 'Use StringToUTF8Bytes — ASCII is UTF8 subset, single source bytes.ops.StringToBytes';
-function BigEndianUnicodeBytesToString(const AData: TBytes): string;
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
 
-function SameText(const A, B: string): Boolean; inline;
+function SameText(const A, B: string): Boolean;
 
 {** Returns the position of the last occurrence of any character from ADelimiters in S.
     Returns 0 if none of the characters are found. }
@@ -64,8 +64,9 @@ function LastDelimiter(const ADelimiters: string; const S: string): Integer;
 {** NUL-terminated PAnsiChar → string；nil 安全（返回空串）。
     C ABI 字符串读回的统一入口：本工具链上 string(AnsiString(ptr))
     强转在返回托管记录数组的函数内会损坏临时管理（db 家族实证的
-    工具链硬边界），消费方一律经本函数而非直接强转。 }
-function AnsiPtrToStr(const AStr: PAnsiChar): string;
+    工具链硬边界），消费方一律经本函数而非直接强转。
+    perf: inline thin forward to bytes.ops.AnsiPtrToString (single source zero-copy Move) }
+function AnsiPtrToStr(const AStr: PAnsiChar): string; inline;
 
 implementation
 
@@ -440,34 +441,28 @@ begin
   Result := StringToUTF8Bytes(AStr);
 end;
 
-function BigEndianUnicodeBytesToString(const AData: TBytes): string;
-var
-  I, LCount: SizeInt;
-  LWChars: array of WideChar;
+function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
 begin
-  Result := '';
-  LCount := Length(AData) div 2;
-  if LCount = 0 then Exit;
-  SetLength(LWChars, LCount);
-  for I := 0 to LCount - 1 do
-    LWChars[I] := WideChar((UInt16(AData[I * 2]) shl 8) or AData[I * 2 + 1]);
-  SetString(Result, PWideChar(LWChars), LCount);
+  { perf: inline thin forward to bytes.ops single source (zero-copy WideChar view); not inline red-line 2 kept in owner }
+  Result := nextpas.core.bytes.ops.BigEndianUnicodeBytesToString(AData);
 end;
 
 {** @note ASCII case-fold only (matches LowerCase/UpperCase stance on this unit).
-    Unicode-aware equality lives in text.compare (UTF8CaseFoldSimple path). *}
+    Unicode-aware equality lives in text.compare (UTF8CaseFoldSimple path).
+    perf: not inline per red-line 2; single source bytes.ops SpanEqualIgnoreCase zero-copy TByteSpan view }
 function SameText(const A, B: string): Boolean;
 var
-  I, LenA, LenB: SizeInt;
+  LA, LB: TByteSpan;
 begin
-  LenA := Length(A);
-  LenB := Length(B);
-  if LenA <> LenB then
-    Exit(False);
-  for I := 1 to LenA do
-    if ToLower(Byte(A[I])) <> ToLower(Byte(B[I])) then
-      Exit(False);
-  Result := True;
+  if Length(A) = 0 then
+    LA := TByteSpan.Empty
+  else
+    LA := TByteSpan.Create(PByte(PAnsiChar(A)), SizeUInt(Length(A)));
+  if Length(B) = 0 then
+    LB := TByteSpan.Empty
+  else
+    LB := TByteSpan.Create(PByte(PAnsiChar(B)), SizeUInt(Length(B)));
+  Result := nextpas.core.bytes.ops.SpanEqualIgnoreCase(LA, LB);
 end;
 
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
@@ -481,22 +476,10 @@ begin
         Exit(I);
 end;
 
-function AnsiPtrToStr(const AStr: PAnsiChar): string;
-var
-  LP: PAnsiChar;
-  LLen: Integer;
+function AnsiPtrToStr(const AStr: PAnsiChar): string; inline;
 begin
-  Result := '';
-  if AStr = nil then
-    Exit;
-  LP := AStr;
-  while LP^ <> #0 do
-    Inc(LP);
-  LLen := Integer(LP - AStr);
-  if LLen = 0 then
-    Exit;
-  SetLength(Result, LLen);
-  Move(AStr^, Result[1], SizeUInt(LLen));
+  { perf: inline thin forward to bytes.ops.AnsiPtrToString (single source zero-copy Move Pointer(Result)^); not inline kept in owner }
+  Result := nextpas.core.bytes.ops.AnsiPtrToString(AStr);
 end;
 
 end.

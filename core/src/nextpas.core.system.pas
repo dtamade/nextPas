@@ -2,9 +2,10 @@ unit nextpas.core.system;
 {**
  * @desc Root RTL facade for the nextPas system module family.
  *
- * This unit provides the compiler kernel contract layer.
- * Under FPC, it re-exports FPC System types via fpc.inc.
- * Under nextPas, it provides the full kernel via kernel.inc.
+ * Compiler kernel contract layer — single source via kernel.inc (INV-5),
+ * no in-unit compiler fork. Both compilers share the same kernel
+ * definition; FPC SysUtils/Classes bridging is via units/<target>/ stubs,
+ * not an in-unit IFDEF (dual-compiler no-fork constraint).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,13 +15,10 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.system.errors;
 
-{$IFDEF FPC}
-{$I nextpas.core.system.fpc.inc}
-{$ELSE}
 {$I nextpas.core.system.kernel.inc}
-{$ENDIF}
 
 const
   NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';
@@ -165,22 +163,26 @@ end;
 
 function HTonN(AValue: Word): Word; inline;
 begin
-  Result := Swap(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.HTonN(AValue);
 end;
 
 function HTonN(AValue: LongWord): LongWord; inline;
 begin
-  Result := SwapEndian(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.HTonN(AValue);
 end;
 
 function NToHs(AValue: Word): Word; inline;
 begin
-  Result := Swap(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.NToHs(AValue);
 end;
 
 function NToHs(AValue: LongWord): LongWord; inline;
 begin
-  Result := SwapEndian(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.NToHs(AValue);
 end;
 
 function VarType(const V: Variant): TVarType;

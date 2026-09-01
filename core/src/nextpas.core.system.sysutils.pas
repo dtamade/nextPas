@@ -138,6 +138,9 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.path,
   nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.os.env,
+  nextpas.core.platform.error,
   nextpas.core.base.utils,
   nextpas.core.text.compare,
   nextpas.core.text.utils,
@@ -357,41 +360,41 @@ begin
   Result := System.Pos(ASubStr, AStr);
 end;
 
-{ Date/Time — delegates to platform }
+{ Date/Time — delegates to time owner (platform/time boundary, inline zero-copy) }
 
-function Now: TDateTime;
+function Now: TDateTime; inline;
 begin
-  Result := SysUtils.Now;
+  Result := nextpas.core.time.DateTimeNow;
 end;
 
-function Date: TDateTime;
+function Date: TDateTime; inline;
 begin
-  Result := SysUtils.Date;
+  Result := Trunc(nextpas.core.time.DateTimeNow);
 end;
 
-function Time: TDateTime;
+function Time: TDateTime; inline;
 begin
-  Result := SysUtils.Time;
+  Result := Frac(nextpas.core.time.DateTimeNow);
 end;
 
-function DateTimeToStr(const AValue: TDateTime): string;
+function DateTimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateTimeToStr(AValue);
+  Result := nextpas.core.time.DateTimeToStr(AValue);
 end;
 
-function DateToStr(const AValue: TDateTime): string;
+function DateToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.DateToStr(AValue);
+  Result := nextpas.core.time.DateToStr(AValue);
 end;
 
-function TimeToStr(const AValue: TDateTime): string;
+function TimeToStr(const AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.TimeToStr(AValue);
+  Result := nextpas.core.time.FormatDateTime('%H:%M:%S', AValue);
 end;
 
-function FormatDateTime(const AFmt: string; AValue: TDateTime): string;
+function FormatDateTime(const AFmt: string; AValue: TDateTime): string; inline;
 begin
-  Result := SysUtils.FormatDateTime(AFmt, AValue);
+  Result := nextpas.core.time.FormatDateTime(AFmt, AValue);
 end;
 
 function EncodeDate(const AYear, AMonth, ADay: Word): TDateTime;
@@ -445,7 +448,12 @@ end;
 
 function RenameFile(const AOldName, ANewName: string): Boolean;
 begin
-  Result := SysUtils.RenameFile(AOldName, ANewName);
+  try
+    nextpas.core.fs.Rename(AOldName, ANewName);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 function CopyFile(const ASrcName, ADestName: string): Boolean;
@@ -517,16 +525,21 @@ begin
   Result := SizeUInt(System.GetProcessID);
 end;
 
-{ Working directory — delegates to platform }
+{ Working directory — delegates to fs owner }
 
-function GetCurrentDir: string;
+function GetCurrentDir: string; inline;
 begin
-  Result := SysUtils.GetCurrentDir;
+  Result := nextpas.core.fs.GetCurrentDir;
 end;
 
 function SetCurrentDir(const ADir: string): Boolean;
 begin
-  Result := SysUtils.SetCurrentDir(ADir);
+  try
+    nextpas.core.fs.util.FsSetCwd(ADir);
+    Result := True;
+  except
+    Result := False;
+  end;
 end;
 
 { Command line — delegates to System }
@@ -541,30 +554,39 @@ begin
   Result := System.ParamStr(AIndex);
 end;
 
-{ Environment — delegates to platform }
+{ Environment — delegates to os.env owner }
 
-function GetEnvironmentVariable(const AName: string): string;
+function GetEnvironmentVariable(const AName: string): string; inline;
 begin
-  Result := SysUtils.GetEnvironmentVariable(AName);
+  Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
 end;
 
-{ Timing — delegates to platform }
+{ Timing — delegates to time owner }
 
-procedure Sleep(AMilliseconds: Cardinal);
+procedure Sleep(AMilliseconds: Cardinal); inline;
 begin
-  SysUtils.Sleep(AMilliseconds);
+  nextpas.core.time.MsSleep(AMilliseconds);
 end;
 
-{ Error handling — delegates to SysUtils }
+{ Error handling — delegates to platform.error owner }
 
 function SysErrorMessage(AErrorCode: Integer): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+  LLen: Int32;
 begin
-  Result := SysUtils.SysErrorMessage(AErrorCode);
+  LLen := platform_error_message(AErrorCode, @LBuf[0], SizeOf(LBuf));
+  if LLen > 0 then
+    SetString(Result, PAnsiChar(@LBuf[0]), LLen)
+  else if LLen = 0 then
+    Result := ''
+  else
+    Result := 'unknown error ' + nextpas.core.text.conv.IntToStr(AErrorCode);
 end;
 
-function GetLastOSError: Integer;
+function GetLastOSError: Integer; inline;
 begin
-  Result := SysUtils.GetLastOSError;
+  Result := platform_get_last_os_error;
 end;
 
 function ExceptAddr: Pointer;
