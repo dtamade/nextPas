@@ -100,8 +100,8 @@ nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转�
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
 nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
 nextpas.core.vfs.overlay.pas    ← CreateOverlayVfs：多 IVfs 同根优先级叠加（游戏 patch>dlc>base 热更，去重合并，ETag优先透传）
-nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc` 函数注入，零拷贝按需变换（L3，压缩/加密共用模板，Stat/OpenRead/ETag/LastModified 完整性门）
-nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
+nextpas.core.vfs.transform.pas  ← 通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K`，零拷贝按需变换（L3，压缩/加密共用模板，HeaderPred假时Stat免全量读+OpenRead零物化直透，inline+try-finally，L3寄居L2豁免未拆分）
+nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，复用 `TRANSFORM_HEADER_PEEK` + `bytes.ops` 魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
 ```
 
 依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
@@ -114,8 +114,8 @@ nextpas.core.vfs.compressed.pas ← 解压薄门面：经 transform 承载 gzip�
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
 | `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
-| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 通用装饰器：任意 `TBytes→TBytes` 变换复用同一模板（压缩/加密共用），零 `SysUtils` 直引（`QueryInterface`） |
-| `compressed` | `transform` + `compress` | 薄门面：仅策略（`daAuto/daGzip`、`IsGzip` 谓词、`GZIP_MAX` 单源），模板复用 `transform` |
+| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 通用装饰器（寄居 L2 家族豁免未拆分，L3→L2 seam 白名单）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 双谓词复用同一模板（压缩/加密共用），`inline`+`try-finally` 零拷贝，零 `SysUtils` 直引（`QueryInterface`） |
+| `compressed` | `transform` + `compress` (`compress.base` + `compress.gzip`) + `bytes.ops` | 薄门面：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` 单源、`GZIP_MAX` 单源），模板复用 `transform` 承载 32MiB 防 bomb |
 | `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
 
 ## 核心契约
@@ -190,8 +190,8 @@ end;
   - 来源为堆缓冲/TBytes → 引用计数自然保活
   - 来源为 const 数据/静态段 → 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖
     IVfs 及其派生的全部 IStream**；构造函数提供 `AOwnsBlob: Boolean` 覆盖堆场景
-- `Create` 期物化 `FEntries/FETags/FLastMods` 三平行缓存 + FRp 索引零拷贝存储：`Stat/OpenRead/Exists` 走 `LowerBoundPath` 二分直通 `FRp` PByte 存储 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走预计算 `ETag/Last-Modified` O(1)（`VfsETagStrong/FNV` 单源）；10k 规模 < 400KB 可控
-- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 256 槽复用，`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`）
+- `Create` 期物化 `FEntries`（eager 零 `DecodeWire`）+ 惰性 `FETags/FLastMods`（首击 `VfsETagStrong/FNV`/`FormatHttpDate` 生成并 `SpinLock` 发布，`ServeVfs` O(1) thereafter，10k Create <180ms）+ FRp 索引零拷贝存储：`Stat/OpenRead/Exists` 走 `LowerBoundPath` 二分直通 `FRp` PByte 存储 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走惰性缓存 O(1)（`VfsETagStrong/FNV` 单源，`bytes.ops` `CompareBytesOrdered` 单源）；10k 规模 < 400KB 可控
+- `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽复用（CONTRACT 单源 16），`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`，`bytes.ops` 单源复用）
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
   锁死零拷贝不被回归破坏
 

@@ -1,7 +1,7 @@
 # nextpas.core.vfs 代码契约
 
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3装饰器 + 门面）
-**层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖；`transform/compressed` L3装饰器例外依赖 compress.base GZIP_MAX单源）
+**层级**：L2（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖；`transform/compressed` L3装饰器寄居 L2 家族，Registry 白名单豁免未拆分，L3→L2 仅依赖 compress.base GZIP_MAX单源）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-08-31
 **版本**：1.4（P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型 + mount/overlay 双视图，13门闭环）
@@ -23,8 +23,8 @@ vfs.sub       ← 重定根视图包装（Go fs.Sub 对等物）
 vfs.mount     ← 挂载复合视图：多IVfs前缀最长匹配聚合（P2完整性，ETag/ServeMeta透传，CaseSensitive一致性）
 vfs.overlay   ← 叠加视图：多IVfs同根优先级叠加（游戏 patch>dlc>base 热更模型，List去重合并，ETag/ServeMeta优先透传）
 vfs.util      ← 便利函数（VfsStat/List/ReadAll/Walk，Go包级辅助同构）
-vfs.transform ← L3通用字节变换装饰器：TVfsTransformFunc/Should注入，零拷贝按需变换（压缩/加密共用模板，ETag禁用，单次读取复用）
-vfs.compressed← L3解压薄门面：经transform承载gzip（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源32MiB防bomb，daAuto 4K头预判HeaderPred，ETag禁用）
+vfs.transform ← L3通用字节变换装饰器：TVfsTransformFunc/Should/HeaderPred 三谓词注入，4K HeaderPred 免大文件全量读 + 零拷贝按需变换（压缩/加密共用模板，ETag禁用，Header假时OpenRead零物化直透，inline+try-finally不丢）
+vfs.compressed← L3解压薄门面：经transform承载gzip（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源32MiB防bomb，daAuto 4K HeaderPred复用 transform.TRANSFORM_HEADER_PEEK，薄门面仅策略）
 vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overlay重导出（IVfsETag/IVfsServeMeta/VFS_DECOMPRESS_MAX_BYTES/daGzip/daAuto + CreateTransformingVfs/CreateMountedVfs/VfsMountEntry/CreateOverlayVfs）
 ```
 
@@ -38,7 +38,7 @@ vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overla
 | 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
 | 视图 | `CreateMountedVfs(AMounts: array of TVfsMountEntry): IVfs` + `VfsMountEntry(APrefix,AFs)` | 挂载复合视图：多IVfs前缀最长匹配（根'.'兜底），List根去重合并，CaseSensitive一致性推导，ETag/ServeMeta透传 |
 | 视图 | `CreateOverlayVfs(AList: array of IVfs): IVfs` | 叠加视图：同根优先级叠加 patch>dlc>base（首命中胜出，List去重合并，ETag优先透传），游戏热更/DLC模型 |
-| 装饰 | `CreateTransformingVfs(AInner: IVfs; ATransform: TVfsTransformFunc; AShould: TVfsShouldTransformFunc): IVfs` | L3通用变换装饰器：泛型字节变换（压缩/加密共用模板），Stat单源Size/ContentHash校正，OpenRead单次VfsReadAllBytes复用零二次IO，ETag禁用，Op/Path完整（'wrap'/'stat'/'open'） |
+| 装饰 | `CreateTransformingVfs(AInner: IVfs; ATransform: TVfsTransformFunc; AShould: TVfsShouldTransformFunc; AHeaderPred: TVfsHeaderPredicateFunc)` | L3通用变换装饰器：泛型字节变换（压缩/加密共用模板，三谓词），`Stat` 4K HeaderPred 免大文件全量读+小文件复用Header零二次IO、`OpenRead` HeaderPred假时零物化直透 `FInner.OpenRead`（零拷贝无 materialize），真时单次 `VfsReadAllBytes` 复用 `Pointer` 去重，ETag禁用，Op/Path完整（'wrap'/'stat'/'open'，`try-finally` Close不丢，`inline` 热路径） |
 | 装饰 | `CreateDecompressingVfs(AInner: IVfs; AAlgo: TDecompressAlgo=daAuto): IVfs` | 解压薄门面（经transform）：`daGzip` 按gzip魔数按需解压，`VFS_DECOMPRESS_MAX_BYTES=32MiB→GZIP_MAX`单源防bomb，`daAuto` 4K头预判HeaderPred免Stat全量读，ETag禁用 |
 | 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
 | 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
@@ -131,9 +131,9 @@ end;
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
 | VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |
-| Stat(large非gzip) | 4K头预判免全量读 | TAutoDecompressingVfs.IsGzipHeader 4096 peek + IsGzipPred 2字节判定，TargetL 1MiB非gzip Stat零解压，bench_transform Stat/large-non-gzip阈值锁定 |
-| OpenRead(非gzip) | 单次VfsReadAllBytes复用零二次IO | TTransformingVfs.OpenRead Should假时复用已读LData，省二次FInner.OpenRead系统调用；bench_transform Open/large-non-gzip阈值锁定 |
-| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb | GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源)，ContentHash=0/ETag禁用 |
+| Stat(large非gzip) | 4K头预判免全量读 | `TTransformingVfs` 4K HeaderPred 快路径（`TryPeekHeader` 4096 + `HeaderShould` inline，非变换直接回 `FInner.Stat`，小文件复用 Header 零二次 IO），`TAuto` 亦 4K 透传；TargetL 1MiB非gzip Stat ~972ns 零解压，bench_transform `Stat/large-non-gzip/header-peek` 阈值锁定 |
+| OpenRead(非gzip) | 零物化直透免 VfsReadAllBytes | `TTransformingVfs.OpenRead` HeaderPred假时零物化直透 `FInner.OpenRead`（零拷贝无 `VfsReadAllBytes` materialize，4K peek ~972ns），省 `VfsReadAllBytes` 全量拷贝+分配；bench_transform `Open/large-non-gzip/passthrough` 阈值锁定 |
+| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb | `GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源)`，`ContentHash=0/ETag` 禁用，HeaderPred真时小文件复用 Header（≤4K）避免二次全量读 |
 
 ---
 
@@ -146,9 +146,9 @@ end;
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
 | test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
 | test_vfs_mount | 10 | 挂载+叠加双视图：basic/longest/duplicate/etag/case/notfound/nested + overlay priority/list dedup/etag priority（P2+游戏热更完整性，最长匹配+优先级叠加双模型） |
-| test_vfs_transform | 6 | 通用变换装饰器：upper变换/谓词选择/透传/错误' transform failed' Op/Path包装/ETag禁用/CaseSensitive透传（L3模板，压缩/加密共用，Op/Path高级感） |
-| test_vfs_compressed | 7 | 解压薄门面：daAuto/gzip自动解压Stat Size/ContentHash校正/ETag禁用/daGzip强制失败/空包/大文件4K头预判HeaderPred（GZIP_MAX单源32MiB） |
-| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含transform/compressed/mount/overlay L2→L2装饰器seam白名单） |
+| test_vfs_transform | 6 | 通用变换装饰器：upper变换/谓词选择/HeaderPred 4K快路径/零物化直透/透传/错误' transform failed' Op/Path包装/ETag禁用/CaseSensitive透传（L3模板，压缩/加密共用，Op/Path高级感，`inline`+`try-finally`不丢） |
+| test_vfs_compressed | 7 | 解压薄门面：daAuto/gzip自动解压Stat Size/ContentHash校正/ETag禁用/daGzip强制失败/空包/大文件4K头预判HeaderPred（GZIP_MAX单源32MiB，复用 transform 4K + bytes.ops 魔数） |
+| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含transform/compressed/mount/overlay L3→L2装饰器豁免未拆分白名单） |
 
 合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform 1基准阈值，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
 
@@ -168,3 +168,4 @@ end;
 | 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
 | 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
 | 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
+| 2026-09-02 | 1.5 | 匠心修复：transform L3寄居L2豁免未拆分分层污染正名（L3→L2白名单）+ 4K HeaderPred 解 Stat 大文件全量阻塞（Header假时回 FInner.Stat，小文件复用 Header）+ OpenRead 零物化直透（Header假时直透 FInner.OpenRead无 VfsReadAllBytes）+ bytes.ops 单源魔数 + inline/try-finally 零拷贝证据 | AI |
