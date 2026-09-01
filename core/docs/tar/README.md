@@ -79,7 +79,7 @@ uses nextpas.core.tar;
 
 var Arc: TBytes;
 Arc := TarBuilder
-  .Add('hello.txt', BytesOfString('hello'), DefaultTarAddOptions)
+  .Add('hello.txt', BytesOfString('hello'))
   .AddDirectory('assets')
   .Add('assets/data.bin', BytesOfString('0123456789'))
   .Finish; // 内部 TTarWriter + CreateBytesStream，Finish 后 bytes 级与 writer 一致
@@ -101,7 +101,7 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 ## Performance
 
 - reader 零拷贝切片与外部 `PByte` 视图（无 `Copy`），writer 单块 `Move` 直写，`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`HeaderIsZeroOrValid` 单遍 512 融合、`ParsePaxRecordsSlice` 零拷贝。
-- 基准：`core/benchmarks/nextpas.core.tar/bench_tar`（`tar/pack/200x512B ~670µs 145MB/s`、`builder-pack ~611µs`、`open/parse ~201µs`、`extract-slice ~204µs`、`write 1MB 3.5ms`、`read 1MB 1.6ms`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
+- 基准：`core/benchmarks/nextpas.core.tar/bench_tar`（`tar/pack/200x512B ~526µs 185MB/s`、`builder-pack ~537µs`、`open/parse ~236µs`、`extract-slice ~236µs`、`write 1MB 2.4ms`、`read 1MB 1.6ms`，7 项，`TBenchSuite` 300ms/7样，详见 `build/bench-tar.json`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。
 Benchmark: 已落地 `bench_tar`（见上），与 `gzip` 组合待 `compress` 协作。
