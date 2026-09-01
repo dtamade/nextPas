@@ -181,8 +181,8 @@ begin
   Check(Pos('RelativizePath', Src) > 0, 'dirsource single RelativizePath via PathStripPrefix');
   Check(Pos('FilterRelPath', Src) > 0, 'dirsource DRY FilterRelPath pipeline');
   Check(Pos('TryReserveTotal', Src) > 0, 'dirsource DRY TryReserveTotal/TryAddSizeUInt single source');
-  Check(Pos('EnsureDirCapacity', Src) > 0, 'dirsource DRY EnsureDirCapacity');
   Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
+  Check(Pos('EnsureEmbedCapacity', Src) > 0, 'dirsource DRY EnsureEmbedCapacity');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
   { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定（uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
