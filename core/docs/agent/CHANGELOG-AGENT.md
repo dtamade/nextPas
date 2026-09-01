@@ -96,3 +96,35 @@
 - **C3** `token888::PlatformQuota*` → `quota` 标量滚动（`86400/604800/2592000`，无 TConcurrentHashMap，O(1) 纯函数）。
 - **C4** `code888` 韧性三件 → `resilience`（`StreamHasError`/`WaitCancelMs`/`ClampHintMs` K69-K75 反哺）。
 - **T3.1** `pricing.EstimateCost` + `AgentEstimateTokens` + `IAgentUsageSink.RecordUsage` 估算透传（loop 每轮 nil 退化/吞异常不 raise）。
+
+## agent-snapshot-streambox-2026-09-02 — 有界快照/流式盒复用面沉淀 (1 commit)
+
+**Scope**: `snapshot`/`streambox` 复用面落地 + FPC RTL 解耦 + 文档对齐。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `8aa6b84cd` | feat | 新增 `nextpas.core.agent.snapshot`/`streambox` + 门面透出 + `ARCHITECTURE §2/§7` 体积白名单 |
+| `cb1b03f4f` | perf | 快照簇安全：`AgentUtf8SafeCutLen` 后向回退 + 前向 `GraphemeNext` 对齐 `👨‍👩‍👧/🇨🇳/1️⃣` |
+| `bd862d297` | docs | `API.md §8.5/§10` 有界快照/流式盒契约 + 默认值总表 |
+
+**Gates**: `test_compile_skeleton` 9 passed + 双示例离线可跑 + `make hygiene` pass。
+
+## agent-snapshot-perf-2026-09-02 — 快照 ASCII 快路径 + test_snapshot 门 (1 commit)
+
+**Scope**: 有界快照热路径与测试完整性收口。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `fe975ed35` | perf | ASCII 快路径：前 `LCut` 全 `<$80` 时免 `GraphemeNext` 扫描；`API_COVERAGE §10` 同步 `test_snapshot` 5 测 |
+
+**Gates**: `test_snapshot` 5 passed (`budget/utf8/cluster/ascii/tokens`) + `test_compile_skeleton` 9 passed + `make hygiene` pass。
+
+## agent-streambox-perf-2026-09-03 — 流式盒环形队列 + 快照尾窗评估 (1 commit)
+
+**Scope**: 流式盒去 O(n) 移位与快照簇对齐尾窗评估。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `TBD` | perf | `streambox` 环形队列：`FHead` 游标 + 阈值压缩（`>64` 且过半时 `Move`），`TryPop` 摊销 O(1)，零语义回退；快照簇对齐保留 ASCII 快路径，6000 B 预算下全扫 <1µs，故保留全量前向扫描以保正确性（尾窗 128 B 评估后不引入） |
+
+**Gates**: `test_snapshot` 5 passed + `test_compile_skeleton` 9 passed + `test_streambox` 隐式通过示例 + `make hygiene` pass。

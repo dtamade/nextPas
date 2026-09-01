@@ -26,6 +26,7 @@ type
     FDone: Boolean;
     FId: UInt64;
     FPending: TStreamDeltaArray;
+    FHead: Integer;
   public
     constructor Create(AId: UInt64);
     destructor Destroy; override;
@@ -72,16 +73,29 @@ end;
 
 function TAgentStreamBox.TryPop(out ADelta: TStreamDelta): Boolean;
 var
-  I: Integer;
+  LLen, LRemaining: Integer;
 begin
   platform_mutex_lock(FLock);
   try
-    Result := Length(FPending) > 0;
+    Result := FHead < Length(FPending);
     if not Result then Exit;
-    ADelta := FPending[0];
-    for I := 1 to High(FPending) do
-      FPending[I - 1] := FPending[I];
-    SetLength(FPending, Length(FPending) - 1);
+    ADelta := FPending[FHead];
+    Inc(FHead);
+    // 环形压缩：头部过半且堆积>64时一次性前移，摊销 O(1)
+    if (FHead > 64) and (FHead > Length(FPending) div 2) then
+    begin
+      LLen := Length(FPending);
+      LRemaining := LLen - FHead;
+      if LRemaining > 0 then
+        Move(FPending[FHead], FPending[0], LRemaining * SizeOf(TStreamDelta));
+      SetLength(FPending, LRemaining);
+      FHead := 0;
+    end else if FHead = Length(FPending) then
+    begin
+      // 刚好消费完，重置以释放内存
+      SetLength(FPending, 0);
+      FHead := 0;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
