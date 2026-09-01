@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：1.0（11 单元 pure.base 单源 481行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.1（11 单元 pure.base 单源 517行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.1/BENCHMARKS 1.5 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---

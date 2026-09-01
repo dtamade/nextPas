@@ -6,7 +6,7 @@
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 六维冻结 P0 清零（18 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
 **最后更新**：2026-08-31
-**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.4 对齐，18 份对齐）
+**版本**：1.1（11 单元 pure.base 单源 517 行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.1/BENCHMARKS 1.5 对齐，18 份对齐）
 
 ## 1. 模块定位
 
@@ -38,7 +38,7 @@
 | `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 481+122×3 阈值550内)} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 517+29×3 阈值550内)} ← 门面
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。

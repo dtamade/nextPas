@@ -53,7 +53,7 @@ type
 function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
+function JsTrimEquals(const S, Lit: string): Boolean;
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
 
 implementation
@@ -132,7 +132,7 @@ begin
   end;
 end;
 
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
+function JsTrimEquals(const S, Lit: string): Boolean;
 begin
   Result := TStringView.FromStr(S).Trim.Equals(TStringView.FromStr(Lit));
 end;
