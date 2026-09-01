@@ -674,7 +674,7 @@ begin
   begin
     if not HeapPop(Entry) then
     begin
-      if FShowBoundary and (FBoundaryPos < Length(FBoundary)) then
+      if FShowBoundary and (FBoundaryPos < FBoundaryLen) then
       begin
         AOid := FBoundary[FBoundaryPos].Oid;
         Inc(FBoundaryPos);
@@ -692,7 +692,7 @@ begin
       if IsHidden and FShowBoundary then
       begin
         IsHidden := False;
-        for K := 0 to High(FBoundary) do
+        for K := 0 to FBoundaryLen - 1 do
           if GitOidSame(FBoundary[K].Oid, Entry.Parents[I]) then
           begin
             IsHidden := True;
@@ -700,9 +700,15 @@ begin
           end;
         if not IsHidden then
         begin
-          SetLength(FBoundary, Length(FBoundary) + 1);
-          FBoundary[High(FBoundary)].Oid := Entry.Parents[I];
-          FBoundary[High(FBoundary)].IsBoundary := True;
+          // perf: exponential via bytes.ops.BytesGrowCapacityInt single source amortized O(1), single SetLength+Move zero-copy
+          if FBoundaryLen + 1 > FBoundaryCap then
+          begin
+            FBoundaryCap := BytesGrowCapacityInt(FBoundaryCap, FBoundaryLen + 1);
+            SetLength(FBoundary, FBoundaryCap);
+          end;
+          FBoundary[FBoundaryLen].Oid := Entry.Parents[I];
+          FBoundary[FBoundaryLen].IsBoundary := True;
+          Inc(FBoundaryLen);
         end;
         Continue;
       end;
