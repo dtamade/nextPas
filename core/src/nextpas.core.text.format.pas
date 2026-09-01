@@ -137,6 +137,8 @@ var
     LI, LDigit: Integer;
     LNeg: Boolean;
     LAbs: Double;
+    LBuf: array[0..20] of AnsiChar;
+    LIntLen, LTotalLen, LPos: Integer;
   begin
     if AVal <> AVal then Exit('NaN');
     if AVal = 1.0/0.0 then Exit('Inf');
@@ -153,17 +155,45 @@ var
     LAbs := LAbs + LRound;
     LInt := Trunc(LAbs);
     LFrac := LAbs - LInt;
-    Result := FormatInt(LInt);
-    if LNeg then Result := '-' + Result;
+    // perf: single SetLength + zero-copy Move(s), O(n) vs O(n²) Result+ concat.
+    // bytes.ops single source: 指数扩容单次拷贝纪律 — 单次分配 + 直接写入小数位，
+    // 零拷贝 PAnsiChar Move / 尾部直写 Char，不 inline 循环体避免 I-Cache 膨胀。
+    LIntLen := IntToBuffer(LInt, @LBuf[0]);
     if ADigits <= 0 then
-      Exit;  { %.0f: no decimal point, matching printf and the Str() big-value branch }
-    Result := Result + '.';
+    begin
+      if LNeg then
+      begin
+        SetLength(Result, LIntLen + 1);
+        Result[1] := '-';
+        if LIntLen > 0 then Move(LBuf[0], Result[2], LIntLen);
+      end
+      else
+        Result := BufferToString(@LBuf[0], LIntLen);
+      Exit;
+    end;
+    LTotalLen := LIntLen + 1 + ADigits;
+    if LNeg then Inc(LTotalLen);
+    SetLength(Result, LTotalLen);
+    LPos := 1;
+    if LNeg then
+    begin
+      Result[1] := '-';
+      Inc(LPos);
+    end;
+    if LIntLen > 0 then
+    begin
+      Move(LBuf[0], Result[LPos], LIntLen);
+      Inc(LPos, LIntLen);
+    end;
+    Result[LPos] := '.';
+    Inc(LPos);
     for LI := 1 to ADigits do
     begin
       LFrac := LFrac * 10;
       LDigit := Trunc(LFrac);
       if LDigit > 9 then LDigit := 9;
-      Result := Result + Char(Ord('0') + LDigit);
+      Result[LPos] := Char(Ord('0') + LDigit);
+      Inc(LPos);
       LFrac := LFrac - LDigit;
     end;
   end;

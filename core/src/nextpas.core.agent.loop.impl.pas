@@ -532,14 +532,15 @@ begin
     begin
       DoGuided := True;
       GuidedReason := roBudgetExhausted;
-    end
-    else if LOpt.MaxToolCalls > 0 then
+    end;
+    if not DoGuided and (LOpt.MaxToolCalls > 0) then
     begin
       Allowance := LOpt.MaxToolCalls - CalledCount;
       if Allowance > Length(Calls) then
         Allowance := Length(Calls);
-    end
-    else if Round >= LOpt.MaxRounds then
+      if Allowance < 0 then Allowance := 0;
+    end;
+    if not DoGuided and (Round >= LOpt.MaxRounds) then
     begin
       DoGuided := True;
       GuidedReason := roRoundsExhausted;

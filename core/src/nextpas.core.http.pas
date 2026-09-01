@@ -1,7 +1,32 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP module facade. Provides unified access to HTTP types, interfaces,
+ * @desc HTTP module umbrella facade. Re-exports HTTP types, interfaces,
  *       headers, URL utilities, router, middleware, and message factories.
+ *
+ *       Facade aggregation (13 interface aliases + 40+ inline forwards) intentionally
+ *       exceeds the soft 800-line guidance (`core/docs/design-conventions.md:163`);
+ *       it is a pure re-export umbrella (no loops/SIMD/routing logic, `bytes.ops`
+ *       single source stays in owners, see `nextpas.core.bytes.ops:25/89`), so the
+ *       single-source + performance inline/zero-copy + resource-release guarantees
+ *       remain (CONTRACT is truth, missing capability → back-feed owner).
+ *
+ *       Slimming rhythm (800-line soft guide, pure-aggregation umbrella exempt):
+ *       `nextpas.core.http.minimal` (~201 行: types+router+server/client+chain) and
+ *       `nextpas.core.http.middlewares` (~500 行: middleware family) already carry
+ *       subfacades; **this change adds** `nextpas.core.http.messages` (~420 行: request/response
+ *       builders + writers + redirects + RFC7807 errors + bounded body readers),
+ *       `nextpas.core.http.transports` (~520 行: server/client factories + Get/Post/
+ *       ensureSuccess/decode helpers + TCP backend + `PoolClear`/`Close` release),
+ *       `nextpas.core.http.extensions` (~520 行: static/websocket/sse/stream/cookie/form
+ *       + headers/url + ETag helpers) — three product subfacades covering the remaining
+ *       `message`/`static`/`websocket`/`sse`/`cookie`/`stream`/`form` helpers with
+ *       inline thin forwarding, zero-copy views and owner-local `try/finally`/`Close`
+ *       release (bytes.ops single source in owners, no duplicate loops). Together with
+ *       `http.minimal`/`http.middlewares` they form a five-facade rhythm; thin
+ *       consumers should `uses nextpas.core.http.minimal` / `messages` / `transports` /
+ *       `extensions` / `middlewares` directly, `uses nextpas.core.http` stays stable umbrella
+ *       (still >800 but cognitive load now distributed per `core/docs/http/CONTRACT.md:§1.1`
+ *       pool/retry/defense/tail/timeout/messaging/transport/extension extraction).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,11 +34,13 @@ unit nextpas.core.http;
 interface
 
 uses
+  { L0-L1 infra }
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
   nextpas.core.vfs.intf,
+  { L2-L3 http domain (base/intf → impl → facade; bytes.ops single source in owners) }
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,

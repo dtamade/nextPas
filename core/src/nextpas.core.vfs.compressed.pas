@@ -1,9 +1,10 @@
 unit nextpas.core.vfs.compressed;
 
-{** @desc L3 解压薄门面：经通用 transform 装饰器承载 gzip 解压（ADR 0003）。
-  本单元仅保留策略（VFS_DECOMPRESS_MAX_BYTES、Gzip 魔数、daAuto/daGzip 语义），
-  模板复用 nextpas.core.vfs.transform，消除 120+ 行样板重复（复用度）。
-  STORE 零拷贝与 32MiB 防 bomb 约束由 transform 承载；daAuto 经 4K HeaderPred（复用 transform TRANSFORM_HEADER_PEEK）免 Stat 全量读取，薄门面仅策略。 }
+{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名）。
+  本单元仅保留策略（VFS_DECOMPRESS_MAX_BYTES→compress.base GZIP_MAX 单源 32MiB、Gzip 魔数 bytes.ops 单源、daAuto/daGzip 语义），
+  模板复用 nextpas.core.vfs.transform 单源决策器（4K HeaderPred 单流复用 inline 零拷贝），消除 120+ 行样板重复。
+  分层：L3→L2 单缝白名单过渡，长期随 L3 族聚合拆分，现阶段以薄门面仅策略+文档正名守层级高级感统一性。
+  STORE 零拷贝与 32MiB 防 bomb 由 transform 承载；daAuto 经 4K HeaderPred（复用 transform TRANSFORM_HEADER_PEEK + bytes.ops BytesIsGzipHeader 单源）免 Stat 全量读取。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -122,10 +123,10 @@ function CreateDecompressingVfs(const AInner: IVfs; const AAlgo: TDecompressAlgo
 begin
   if AInner = nil then raise EVfsError.CreateCtx('wrap', '', 'inner VFS is nil');
   case AAlgo of
-    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
     daAuto: Result := TAutoDecompressingVfs.Create(AInner);
   else
-    Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
   end;
 end;
 

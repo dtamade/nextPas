@@ -270,12 +270,11 @@ function TMemVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
   DirIdx: SizeUInt;
-  I, J: SizeUInt;
+  I: SizeUInt;
+  K: SizeUInt;
   Seen: TVfsNameArray;
   Info: TStatInfo;
-  Lo, Hi, OutN: SizeUInt;
-  PrefixLen, SegPos: SizeInt;
-  Child: string;
+  Paths: array of string;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -291,40 +290,22 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  { 零分配直扫：LowerBound 定位前缀区间，零 Names 中间分配，Seen 仅按扇出分配
-    与 embedded 零拷贝扫描同构，规模化无 O(n) 双分配张力。 }
+  { 单源模板收敛：委托 base.VfsDeriveChildNames 的 LowerBound+SpanStartsWith+Early-Break 零拷贝模板
+    扇出限界分配消除 Hi-Lo 全量预分配与重复 LowerBound 手写分支，与 embedded 同构单源 }
   Result := nil;
-  PrefixLen := Length(Prefix);
-  if PrefixLen = 0 then
-    Lo := 0
-  else
-    Lo := LowerBound(Prefix);
-  Hi := SizeUInt(Length(FFiles));
-  SetLength(Seen, Hi - Lo);
-  OutN := 0;
-  for I := Lo to Hi - 1 do
+  if Length(FFiles) = 0 then
   begin
-    if Length(FFiles[I].Name) <= PrefixLen then Continue;
-    if PrefixLen > 0 then
-      if not VfsPathHasPrefix(FFiles[I].Name, Prefix) then Break;
-    SegPos := 0;
-    for J := SizeUInt(PrefixLen + 1) to SizeUInt(Length(FFiles[I].Name)) do
-      if FFiles[I].Name[J] = '/' then
-      begin
-        SegPos := J;
-        Break;
-      end;
-    if SegPos > 0 then
-      Child := Copy(FFiles[I].Name, 1, SegPos - 1)
-    else
-      Child := FFiles[I].Name;
-    if (OutN = 0) or (Seen[OutN - 1] <> Child) then
-    begin
-      Seen[OutN] := Child;
-      Inc(OutN);
-    end;
+    Seen := nil;
+  end
+  else
+  begin
+    // 零拷贝单源路径数组：利用有序 FFiles 名称视图委托基座扫描模板，避免三处同构重复
+    SetLength(Paths, Length(FFiles));
+    for K := 0 to SizeUInt(Length(FFiles)) - 1 do
+      Paths[K] := FFiles[K].Name;
+    Seen := VfsDeriveChildNames(Paths, Prefix);
+    SetLength(Paths, 0);
   end;
-  SetLength(Seen, OutN);
 
   SetLength(Result, SizeUInt(Length(Seen)));
   for I := 0 to SizeUInt(Length(Seen)) - 1 do

@@ -653,6 +653,22 @@ begin
   end;
 end;
 
+{ hedge DelayMs 溢出守卫：High div 1e6 以上的 Delay 不应溢出为负，保持可用 }
+procedure TestHedgeDelayOverflowGuard;
+var
+  GateM: IEvent;
+  Pm: TGatedProvider;
+  M: TMessage;
+begin
+  ResetObs;
+  GateM := CreateEvent(True); GateM.SetEvent;
+  Pm := TGatedProvider.Create('main').AddCall(GateM);
+  M := NewHedgedProvider(Pm, Clock, BuildPol(High(Int64))).Complete(Req0);
+  Check(MessageText(M) = 'stub-main', 'huge delay still completes without overflow');
+  CheckEqual(0, GHedgeFires, 'no hedge within instant');
+  Check(Pm.Calls = 1, 'no overflow-induced second flight');
+end;
+
 { hedge 取消不泄漏 + 首 delta 门不重复时序硬化：主路刚好在 hedge 延迟后
   落定，赢家流 3 增量(信封+A+B)仅投一次，输路被 Cancel 且 OnHedged 恰一次，
   EOF 后无泄漏 }
@@ -691,6 +707,7 @@ begin
   T.Test('zero delay rejected', @TestZeroDelayRejected);
   T.Test('external cancel preempts', @TestExternalCancelPreempts);
   T.Test('stream primary first wins', @TestStreamPrimaryFirstWins);
+  T.Test('hedge delay overflow guard', @TestHedgeDelayOverflowGuard);
   T.Test('hedge cancel no leak and first delta not duplicated', @TestHedgeCancelNoLeakAndFirstDeltaNotDuplicated);
   T.Test('hedge external cancel within window preempts', @TestHedgeExternalCancelWithinHedgeWindowPreempts);
   if not T.Run then Halt(1);
