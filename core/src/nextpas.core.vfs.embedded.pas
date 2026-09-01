@@ -587,6 +587,7 @@ var
   I: SizeInt;
   OutN: SizeInt;
   SegPos: SizeInt;
+  Lo, Hi: SizeInt;
   P: PByte;
   L: SizeUInt;
   Child: string;
@@ -607,15 +608,21 @@ begin
     Prefix := ADirPath + '/';
   PrefixLen := Length(Prefix);
 
-  // 零拷贝推导：直接扫描 FRp 索引存储字节，仅分配直接子项去重后 Child 字符串（≤ 扇出）
-  SetLength(Seen, SizeInt(FRp.Count));
+  // 零拷贝推导：有序区间扫描 O(log n+k)——LowerBound 二分定位前缀连续段，Early-Break 零分配（与 base VfsDeriveChildNames/memtree 同构）
+  // 零拷贝：LowerBound/CompareMem 均直通 FRp 存储字节，bytes.ops CompareBytesOrdered 单源；仅直接子项去重后 Child 分配（≤ 扇出），inline 热路径
+  if PrefixLen = 0 then
+    Lo := 0
+  else
+    Lo := LowerBoundPath(Prefix);
+  Hi := SizeInt(FRp.Count);
+  SetLength(Seen, Hi - Lo);
   OutN := 0;
-  for I := 0 to SizeInt(FRp.Count) - 1 do
+  for I := Lo to Hi - 1 do
   begin
-    L := FRp.StoredPathRange(I, P);
+    L := FRp.StoredPathRange(SizeUInt(I), P);
     if SizeInt(L) <= PrefixLen then Continue;
     if PrefixLen > 0 then
-      if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Continue;
+      if not CompareMem(P, @Prefix[1], SizeUInt(PrefixLen)) then Break;
     // '/' 扫描：零基偏移，避免 QWord 常量 -1 越界（SizeInt 带符号，-1 合法）
     SegPos := 0;
     for ChildOff := PrefixLen to SizeInt(L) - 1 do

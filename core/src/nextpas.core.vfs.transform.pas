@@ -1,8 +1,9 @@
 unit nextpas.core.vfs.transform;
 
 {** @desc L3 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图
-  L3 decorator seam 寄居 L2 vfs 家族（registry 白名单豁免未拆分，ADR 0003）；
-  复用 L0-L1 + 仅 via 头部谓词复用 compress.base 单源，不新增 L2→L2 闭环。
+  层级：L3（寄居 L2 vfs 家族，registry 白名单豁免未拆分，ADR 0003；成熟后可独立为 vfs.decorator）。
+  复用 L0-L1 + 仅 via 头部谓词复用 compress.base 单源，不新增 L2→L2 闭环；
+  零拷贝直达：小文件 Header 直落 respack 区间复用，无栈上 4K 中转。
   Stat/OpenRead 经 4K HeaderPred 快路径免大文件全量读；32MiB 防 bomb 由 compressed 薄门面承载。 }
 
 {$I nextpas.core.settings.inc}
@@ -106,9 +107,10 @@ end;
 function TTransformingVfs.TryPeekHeader(const APath: string; const AOp: string; out AHeader: TBytes; out ATotalSize: Int64): Boolean;
 var
   LStream: IStream;
-  LBuf: array[0..TRANSFORM_HEADER_PEEK-1] of Byte;
   LRead: SizeUInt;
   LInfo: TStatInfo;
+  LReaderAt: IReaderAt;
+  LPeek: SizeUInt;
 begin
   Result := False;
   AHeader := nil;
@@ -128,13 +130,34 @@ begin
     on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
   end;
   try
-    try
-      LRead := LStream.Read(LBuf[0], TRANSFORM_HEADER_PEEK);
-    except
-      on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+    // 零拷贝直达：按需分配头部缓冲直读入堆，消除栈上 4K 中转 + Move 小文件二次物化
+    // 小文件（<=4K）Header 长度即 TotalSize，Stat/OpenRead 可 CoW 复用 Header 为 LData 零二次 IO
+    // 大文件仅 4K.peek；优先 IReaderAt.ReadAt 零扰动定位读（OS/embedded/memtree 三后端均暴露 IReaderAt），否则 Stream.Read
+    if (ATotalSize >= 0) and (ATotalSize < TRANSFORM_HEADER_PEEK) then
+      LPeek := SizeUInt(ATotalSize)
+    else
+      LPeek := TRANSFORM_HEADER_PEEK;
+    if LPeek = 0 then
+    begin
+      AHeader := nil;
+      LRead := 0;
+    end
+    else
+    begin
+      SetLength(AHeader, LPeek);
+      try
+        if (LStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil) then
+          LRead := LReaderAt.ReadAt(AHeader[0], LPeek, 0)
+        else
+          LRead := LStream.Read(AHeader[0], LPeek);
+      except
+        on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+      end;
+      if LRead < LPeek then
+        SetLength(AHeader, LRead);
+      if LRead = 0 then
+        AHeader := nil;
     end;
-    SetLength(AHeader, LRead);
-    if LRead > 0 then Move(LBuf[0], AHeader[0], LRead);
     Result := True;
   finally
     try
