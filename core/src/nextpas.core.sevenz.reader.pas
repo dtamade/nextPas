@@ -63,6 +63,7 @@ type
     procedure EnsureSortedRevIgnoreCase;
     procedure EnsureRevNamesBuilt;
     procedure EnsureRevLowerNamesBuilt;
+    procedure EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
@@ -658,18 +659,30 @@ begin
     FRevLowerNames[LI] := ReverseStr(FLowerNames[LI]);
 end;
 
+procedure TSevenZReaderImpl.EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+begin
+  if Length(ADest) > 0 then Exit;
+  if Length(FEntries) = 0 then Exit;
+  if AUseLower then
+    EnsureIgnoreCaseBuilt;
+  if ARev then
+  begin
+    if AUseLower then
+      EnsureRevLowerNamesBuilt
+    else
+      EnsureRevNamesBuilt;
+  end;
+  BuildSorted(ADest, AUseLower, ARev);
+end;
+
 procedure TSevenZReaderImpl.EnsureSortedIdx;
 begin
-  if Length(FSortedIdx)>0 then Exit;
-  if Length(FEntries)=0 then Exit;
-  BuildSortedIdx;
+  EnsureSortedGeneric(FSortedIdx, False, False);
 end;
 
 procedure TSevenZReaderImpl.EnsureSortedRev;
 begin
-  if Length(FSortedIdxRev)>0 then Exit;
-  if Length(FEntries)=0 then Exit;
-  BuildSortedIdxRev;
+  EnsureSortedGeneric(FSortedIdxRev, False, True);
 end;
 
 procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
@@ -692,18 +705,12 @@ end;
 
 procedure TSevenZReaderImpl.EnsureSortedIdxIgnoreCase;
 begin
-  EnsureIgnoreCaseBuilt;
-  if Length(FSortedIdxIgnoreCase)>0 then Exit;
-  if Length(FEntries)=0 then Exit;
-  BuildSortedIdxIgnoreCase;
+  EnsureSortedGeneric(FSortedIdxIgnoreCase, True, False);
 end;
 
 procedure TSevenZReaderImpl.EnsureSortedRevIgnoreCase;
 begin
-  EnsureIgnoreCaseBuilt;
-  if Length(FSortedIdxRevIgnoreCase)>0 then Exit;
-  if Length(FEntries)=0 then Exit;
-  BuildSortedIdxRevIgnoreCase;
+  EnsureSortedGeneric(FSortedIdxRevIgnoreCase, True, True);
 end;
 
 function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
