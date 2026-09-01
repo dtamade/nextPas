@@ -273,7 +273,7 @@ begin
   Result := Default(TMessage);
   Result.Id := FMessageId;
   Result.Role := mrAssistant;
-  Result.Parts := specialize CloneArray<TPart>(FParts);
+  Result.Parts := Copy(FParts, 0, Length(FParts));
   Result.Model := FModel;
   Result.FinishReason := FFinishReason;
   Result.Usage := FUsage;

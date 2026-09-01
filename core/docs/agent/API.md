@@ -330,6 +330,7 @@ TWireRequest = record
                                       物理头由 transport/http client 补全 }
   ConnectTimeoutMs: Int64;          { CTimeoutDefault }
   TotalTimeoutMs: Int64;            { CTimeoutDefault }
+  ReadIdleTimeoutMs: Int64;         { CTimeoutDefault=0 禁用；流式块间空闲超时（W7，WIRE-MAPPINGS §0）}
 end;
 
 TWireResponse = record
@@ -409,6 +410,12 @@ IAgentTranscriptStore = interface
   procedure Append(const AThreadId: string; const AMsg: TMessage);
   function Load(const AThreadId: string): TMessageArray;
   procedure Delete(const AThreadId: string);
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
+end;
+
+IAgentTranscriptFork = interface
+  ['{7A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D}']
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
 end;
 ```
 
@@ -468,10 +475,11 @@ function NewJsonlTranscriptStore(const ARootDir: string;
 type
   { JSONL 落地 store：一线程一文件 <RootDir>/<ThreadId>.jsonl；torn-tail
     崩溃恢复、SyncEachAppend fsync 节奏选项（默认每追加落盘）。
-    Fork 为实例方法——接口 Append/Load/Delete 三方法面保持冻结不变。
+    Fork 为接口第四方法（2026-09-01 起纳入 IAgentTranscriptStore），同时以
+    独立能力接口 IAgentTranscriptFork 暴露——存量三方法实现向四方法平滑过渡。
     ETranscriptCorrupt（aecProtocol 固定码，消息含行号）为损坏 fail-closed
     异常；ThreadId 非法抛 EAgentMisuse }
-  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore)
+  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore, IAgentTranscriptFork)
   public
     procedure Fork(const ASrcThreadId, ADstThreadId: string);
     property RootDir: string read FRootDir;
