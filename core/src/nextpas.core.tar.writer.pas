@@ -36,7 +36,6 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.bytes.builder,
   nextpas.core.text.conv,
   nextpas.core.tar.common;
 
@@ -57,13 +56,12 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，构建复用 bytes.builder 几何扩容与 bytes.ops 单源 Move，零拷贝 ToBytes→BytesToString 单次分配；含循环/分配不 inline — }
+{ — pax record：长度前缀十进制自洽，单次 SetLength+Move 复用 bytes.ops 单源语义，零拷贝无 IBytesBuilder/ToBytes 中转；含循环/分配不 inline — }
 function MakePaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits: Integer;
   SLen: string;
-  LBuilder: IBytesBuilder;
-  LBytes: TBytes;
+  LPos: Integer;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
@@ -75,19 +73,29 @@ begin
     LLen := LBase + LDigits;
     SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  // perf: builder 几何扩容 (Grow 2x) + 单源 Move (bytes.ops/builder 零拷贝)，避免多段 string 拼接 O(n²) 中间分配；ToBytes 单次分配 + BytesToString 单次 Move
-  LBuilder := CreateBytesBuilder(SizeUInt(LLen));
+  // perf: 单次 SetLength(LLen) + 单源 Move(bytes.ops 语义) 零拷贝，避免 IBytesBuilder 几何扩容缓冲 + ToBytes 单次分配 + BytesToString 单次 Move 的双分配与额外转码；极小 pax 记录亦零额外 Move（循环体外联禁 inline，稳定性：块零初始化由调用方兜底）
+  SetLength(Result, LLen);
+  LPos := 1;
   if Length(SLen) > 0 then
-    LBuilder.AppendBytes(PByte(PAnsiChar(SLen)), SizeUInt(Length(SLen)));
-  LBuilder.AppendByte(Ord(' '));
+  begin
+    Move(SLen[1], Result[LPos], Length(SLen));
+    Inc(LPos, Length(SLen));
+  end;
+  Result[LPos] := ' ';
+  Inc(LPos);
   if Length(AKey) > 0 then
-    LBuilder.AppendBytes(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)));
-  LBuilder.AppendByte(Ord('='));
+  begin
+    Move(AKey[1], Result[LPos], Length(AKey));
+    Inc(LPos, Length(AKey));
+  end;
+  Result[LPos] := '=';
+  Inc(LPos);
   if Length(AValue) > 0 then
-    LBuilder.AppendBytes(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
-  LBuilder.AppendByte(10);
-  LBytes := LBuilder.ToBytes;
-  Result := BytesToString(LBytes);
+  begin
+    Move(AValue[1], Result[LPos], Length(AValue));
+    Inc(LPos, Length(AValue));
+  end;
+  Result[LPos] := #10;
 end;
 
 { TTarWriter }
@@ -197,11 +205,13 @@ begin
   end;
   FillChar(Block[0], SizeOf(Block), 0);
   if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
-    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, 1, C_TAR_LEN_NAME))
+    // perf: TarPutHeaderSlice 零拷贝 PByte 切片单源 Move(bytes.ops)，消除 Copy(Name,1,N) 临时串二次分配与 Move
+    TarPutHeaderSlice(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, PByte(PAnsiChar(Name)), SizeUInt(C_TAR_LEN_NAME))
   else if CutPos <> 0 then
   begin
-    TarPutHeaderString(@Block[0], C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, Copy(Name, 1, CutPos));
-    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, CutPos + 2, MaxInt));
+    // perf: 前缀/名称分片零拷贝切片，复用 bytes.ops 单源 Move，无临时串分配；PAnsiChar 算术避免 @Name[idx] 越界 RangeCheck
+    TarPutHeaderSlice(@Block[0], C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, PByte(PAnsiChar(Name)), SizeUInt(CutPos));
+    TarPutHeaderSlice(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, PByte(PAnsiChar(Name) + CutPos + 1), SizeUInt(Length(Name) - CutPos - 1));
   end
   else
     TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Name);
@@ -216,7 +226,8 @@ begin
   FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
   Block[C_TAR_OFF_TYPEFLAG] := Byte(KindToTypeFlag(AHdr.Kind));
   if Length(LinkName) > C_TAR_LEN_LINKNAME then
-    TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, Copy(LinkName, 1, C_TAR_LEN_LINKNAME))
+    // perf: 零拷贝切片截断，消除 Copy(LinkName) 临时串；PAnsiChar 零拷贝视图单源 bytes.ops
+    TarPutHeaderSlice(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, PByte(PAnsiChar(LinkName)), SizeUInt(C_TAR_LEN_LINKNAME))
   else
     TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
   TarWriteUStarMagic(@Block[0]);

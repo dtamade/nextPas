@@ -35,42 +35,14 @@ uses
   nextpas.core.bytes.builder,
   nextpas.core.archive.fs;
 
-type
-  TWalkEntry = TArchiveWalkEntry;
-  TWalkArray = TArchiveWalkArray;
-  TDeferredDir = TArchiveDeferredDir;
-  TDeferredDirArray = TArchiveDeferredArray;
-
-{ IBytesBuilder 最小 IWriter 适配：直写切片至 builder，复用 bytes.builder 几何扩容单源，inline 单次 Move 零额外拷贝 }
-type
-  TBuilderSink = class(TInterfacedObject, IWriter)
-  private
-    FBuilder: IBytesBuilder;
-  public
-    constructor Create(const ABuilder: IBytesBuilder);
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
-  end;
-
-constructor TBuilderSink.Create(const ABuilder: IBytesBuilder);
-begin
-  inherited Create;
-  FBuilder := ABuilder;
-end;
-
-function TBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
-begin
-  // perf: inline + AppendBytes 单次 Move（bytes.builder 几何扩容单源，4K 页对齐），零拷贝切片直写
-  if ACount > 0 then
-    FBuilder.AppendBytes(PByte(@ABuf), ACount);
-  Result := ACount;
-end;
+{ 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
 
 { Walk 递归已完全下沉至 archive.fs: ArchiveCollectWalk 单源，tar 仅薄委托，无重复实现 }
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
   LRoot: TFileInfo;
-  LWalks: TWalkArray;
+  LWalks: TArchiveWalkArray;
   LI, LWalksCount: Integer;
   LHdr: TTarHeader;
   LFile: IFile;
@@ -128,9 +100,9 @@ var
   W: TTarWriter;
 begin
   Result := nil;
-  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
+  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源 + archive 单源 CreateArchiveBuilderSink，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
   LBuilder := CreateBytesBuilder(4096);
-  LSink := TBuilderSink.Create(LBuilder);
+  LSink := CreateArchiveBuilderSink(LBuilder);
   W := TTarWriter.Create(LSink);
   try
     TarPackDirInto(ADir, W);
@@ -150,7 +122,7 @@ var
   LFull, LParent: string;
   LSep: Integer;
   LMode: Word;
-  LDirs: TDeferredDirArray;
+  LDirs: TArchiveDeferredArray;
   LDirCount: Integer;
   LMaxEntry: SizeUInt;
   LMaxTotal: UInt64;
@@ -176,12 +148,8 @@ begin
         GuardTarNameForRead(H.Name);
         if (H.Kind <> tekRegular) and (H.Kind <> tekDirectory) and AOptions.SkipSpecial then
           Continue;
-        LFull := ADestDir;
-        while (LFull <> '') and (LFull[Length(LFull)] = '/') do
-          Delete(LFull, Length(LFull), 1);
-        LFull := LFull + '/' + H.Name;
-        while (LFull <> '') and (LFull[Length(LFull)] = '/') do
-          Delete(LFull, Length(LFull), 1);
+        // perf: inline ArchiveJoinPath 单次 SetLength+Move，零 Delete 堆抖动，落盘热路径
+        LFull := ArchiveJoinPath(ADestDir, H.Name);
         LSep := Length(LFull);
         while (LSep > 0) and (LFull[LSep] <> '/') do
           Dec(LSep);
@@ -201,25 +169,8 @@ begin
             ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, PermDefault)
           else
             ArchiveWriteFileSlice(LFull, nil, 0, PermDefault);
-          if AOptions.RestoreMode and (LMode <> 0) then
-          begin
-            try
-              Chmod(LFull, TFilePermission(LMode));
-            except
-              on E: Exception do
-              begin
-                { best-effort 权限还原，保留上下文但不中断解包 }
-              end;
-            end;
-          end;
-          try
-            Chtimes(LFull, H.MTimeUnix * 1000000000, H.MTimeUnix * 1000000000);
-          except
-            on E: Exception do
-            begin
-              { best-effort mtime 还原 }
-            end;
-          end;
+          // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 带 StdErr WARN，不静默吞，fail-closed 高级感
+          ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
         end
         else
           Continue;

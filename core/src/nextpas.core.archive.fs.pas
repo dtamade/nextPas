@@ -14,7 +14,8 @@ uses
   nextpas.core.base,
   nextpas.core.fs.base,
   nextpas.core.io.intf,
-  nextpas.core.io.base;
+  nextpas.core.io.base,
+  nextpas.core.bytes.builder;
 
 { 通用 walk 条目（供 tar/zip 复用，Mode 语义由调用方决定） }
 type
@@ -33,6 +34,24 @@ type
     FMtimeNs: Int64;
   end;
   TArchiveDeferredArray = array of TArchiveDeferredDir;
+
+{ IBytesBuilder→IWriter 薄适配：tar.builder/tar.fs/zip.writer 单源复用，复用 bytes.builder 几何扩容单源，inline 单次 Move 零额外拷贝 }
+type
+  TArchiveBuilderSink = class(TInterfacedObject, IWriter)
+  private
+    FBuilder: IBytesBuilder;
+  public
+    constructor Create(const ABuilder: IBytesBuilder);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
+  end;
+
+function CreateArchiveBuilderSink(const ABuilder: IBytesBuilder): IWriter; inline;
+
+{ 路径拼接：单次 SetLength+Move 去 Delete 抖动，bytes.ops 单源，落盘热路径 inline }
+function ArchiveJoinPath(const ABase, AName: string): string; inline;
+
+{ 单文件元数据定稿：Chmod/Chtimes best-effort 带可观测性（StdErr WARN），与 ArchiveRestoreDeferredDirs 一致 }
+procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean);
 
 { 几何扩容（复用 EnsureWalkCapacity 语义，2倍扩容，初始16） }
 procedure ArchiveEnsureWalkCapacity(var A: TArchiveWalkArray; AMin: Integer); inline;
@@ -55,7 +74,7 @@ function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes
 procedure ArchiveWriteFileSlice(const APath: string; AData: PByte; ACount: SizeUInt;
   const APerm: TFilePermission);
 
-{ 目录定稿：逆序 Chmod/Chtimes，best-effort 但保留异常上下文（不静默吞） }
+{ 目录定稿：逆序 Chmod/Chtimes，best-effort 带可观测性（StdErr WARN），不静默吞 }
 procedure ArchiveRestoreDeferredDirs(const ADirs: TArchiveDeferredArray; ARestoreMode: Boolean);
 
 { 统一目录递归收集：ReadDir 批量名 + 单次 Stat/Entry 补齐 mtime/mode，几何扩容与排序在 archive 单源 }
@@ -255,6 +274,84 @@ begin
   end;
 end;
 
+constructor TArchiveBuilderSink.Create(const ABuilder: IBytesBuilder);
+begin
+  inherited Create;
+  FBuilder := ABuilder;
+end;
+
+function TArchiveBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
+begin
+  // perf: inline + AppendBytes 单次 Move（bytes.builder 几何扩容单源，4K 页对齐复用 MEM_PAGE_SIZE），零拷贝切片直写
+  if ACount > 0 then
+    FBuilder.AppendBytes(PByte(@ABuf), ACount);
+  Result := ACount;
+end;
+
+function CreateArchiveBuilderSink(const ABuilder: IBytesBuilder): IWriter; inline;
+begin
+  Result := TArchiveBuilderSink.Create(ABuilder);
+end;
+
+function ArchiveJoinPath(const ABase, AName: string): string; inline;
+var
+  LBaseLen, LNameLen, LNameOff, LTotal: SizeUInt;
+begin
+  // perf: inline + 单次 SetLength+Move，零 Delete 堆抖动；复用 bytes.ops 单源思想，落盘热路径
+  LBaseLen := Length(ABase);
+  while (LBaseLen > 0) and (ABase[LBaseLen] = '/') do
+    Dec(LBaseLen);
+  LNameLen := Length(AName);
+  LNameOff := 1;
+  // safe names无前导'/'，仅裁尾'/'保持与原Delete循环语义一致
+  while (LNameLen > 0) and (AName[LNameLen] = '/') do
+    Dec(LNameLen);
+  if LBaseLen = 0 then
+  begin
+    if LNameLen = 0 then
+      Exit('');
+    SetLength(Result, LNameLen);
+    Move(AName[LNameOff], Result[1], LNameLen);
+    Exit;
+  end;
+  if LNameLen = 0 then
+  begin
+    SetLength(Result, LBaseLen);
+    Move(ABase[1], Result[1], LBaseLen);
+    Exit;
+  end;
+  LTotal := LBaseLen + 1 + LNameLen;
+  SetLength(Result, LTotal);
+  Move(ABase[1], Result[1], LBaseLen);
+  Result[LBaseLen + 1] := '/';
+  Move(AName[LNameOff], Result[LBaseLen + 2], LNameLen);
+end;
+
+procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean);
+begin
+  if ARestoreMode and (AMode <> 0) then
+  begin
+    try
+      Chmod(APath, TFilePermission(AMode and $0FFF));
+    except
+      on E: Exception do
+      begin
+        System.WriteLn(StdErr, '[WARN] archive: Chmod failed for "', APath, '": ', E.Message);
+        System.Flush(StdErr);
+      end;
+    end;
+  end;
+  try
+    Chtimes(APath, AMtimeNs, AMtimeNs);
+  except
+    on E: Exception do
+    begin
+      System.WriteLn(StdErr, '[WARN] archive: Chtimes failed for "', APath, '": ', E.Message);
+      System.Flush(StdErr);
+    end;
+  end;
+end;
+
 procedure ArchiveRestoreDeferredDirs(const ADirs: TArchiveDeferredArray; ARestoreMode: Boolean);
 var I: Integer;
 begin
@@ -267,8 +364,8 @@ begin
       except
         on E: Exception do
         begin
-          { best-effort 定稿：保留异常上下文但不中断逆序流程 }
-          { 可接入 log 框架；此处保持继续，避免单目录失败阻断祖先定稿 }
+          System.WriteLn(StdErr, '[WARN] archive: Chmod failed for "', ADirs[I].FFull, '": ', E.Message);
+          System.Flush(StdErr);
         end;
       end;
     end;
@@ -277,7 +374,8 @@ begin
     except
       on E: Exception do
       begin
-        { best-effort mtime 还原，忽略但保留上下文 }
+        System.WriteLn(StdErr, '[WARN] archive: Chtimes failed for "', ADirs[I].FFull, '": ', E.Message);
+        System.Flush(StdErr);
       end;
     end;
   end;

@@ -37,6 +37,7 @@ procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int
 
 {** 头字段单点：文本/校验和构造收敛至 common，复用 bytes.ops 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline） *}
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
+procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** ustar 魔数/版本单点：收敛 EmitPaxHeader/WriteHeader 逐字节拼装，复用 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 常量与 TarPutHeaderString 单源 Move，inline 薄转发零拷贝 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
@@ -243,6 +244,18 @@ begin
     CopyLen := ALen;
   if CopyLen > 0 then
     Move(AValue[1], ABlock[AOff], CopyLen);
+end;
+
+procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
+var
+  CopyLen: SizeUInt;
+begin
+  // 单源：复用 bytes.ops 零拷贝 PByte 切片 Move 语义，消除 Copy(Name,1,N) 临时串二次分配与 Move；按需截断 ALen（Move 索引禁 inline，外联避免 I-Cache 膨胀）
+  CopyLen := ACount;
+  if CopyLen > ALen then
+    CopyLen := ALen;
+  if (CopyLen > 0) and (AData <> nil) then
+    Move(AData^, ABlock[AOff], CopyLen);
 end;
 
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);

@@ -25,18 +25,10 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.bytes.builder;
+  nextpas.core.bytes.builder,
+  nextpas.core.archive.fs;
 
 type
-  { IBytesBuilder 的最小 IWriter 适配：直写切片至 builder，切片零拷贝复用 bytes.ops 单源思想 }
-  TBuilderSink = class(TInterfacedObject, IWriter)
-  private
-    FBuilder: IBytesBuilder;
-  public
-    constructor Create(const ABuilder: IBytesBuilder);
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
-  end;
-
   TTarBuilder = class(TInterfacedObject, ITarBuilder)
   private
     FBuilder: IBytesBuilder;
@@ -53,26 +45,12 @@ type
     function Finish: TBytes; inline;
   end;
 
-constructor TBuilderSink.Create(const ABuilder: IBytesBuilder);
-begin
-  inherited Create;
-  FBuilder := ABuilder;
-end;
-
-function TBuilderSink.Write(const ABuf; const ACount: SizeUInt): SizeUInt; inline;
-begin
-  // perf: inline + AppendBytes 单次 Move（bytes.builder 几何扩容单源，4K 页对齐复用 MEM_PAGE_SIZE），零拷贝切片直写
-  if ACount > 0 then
-    FBuilder.AppendBytes(PByte(@ABuf), ACount);
-  Result := ACount;
-end;
-
 constructor TTarBuilder.Create;
 begin
   inherited Create;
-  // bytes.builder 单源：初始 4K，几何扩容避免大写多次重分配，复用 BYTES_BUILDER_* 常量
+  // bytes.builder 单源：初始 4K，几何扩容避免大写多次重分配，复用 BYTES_BUILDER_* 常量；IWriter 适配复用 archive 单源 CreateArchiveBuilderSink
   FBuilder := CreateBytesBuilder(4096);
-  FSink := TBuilderSink.Create(FBuilder);
+  FSink := CreateArchiveBuilderSink(FBuilder);
   FWriter := TTarWriter.Create(FSink);
 end;
 

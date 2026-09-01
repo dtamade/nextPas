@@ -28,6 +28,9 @@ type
     FMaxEntry: SizeUInt;
     FMaxTotal: UInt64;
     FCumTotal: UInt64;
+    FLastUName: string;
+    FLastGName: string;
+    FLastLinkName: string;
     { — 热路径：循环/SIMD 体外联禁 inline，薄转发与小访问器可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
     { — 零拷贝视图：字段切片不分配，按需 SpanToString 单次 Move（bytes.ops 单源）— }
@@ -46,6 +49,10 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
     { — 合并：prefix/name 经 bytes.ops 单源（SpanConcatMany+BytesToString），禁 inline 避免 Result[1] 双喂 untyped 膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
+    { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；inline 薄转发 — }
+    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
+    { — 全局 pax 清理：消费后单次清除，防恶意 g 记录污染后续条目 — }
+    procedure ClearGlobalPax; inline;
   public
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
@@ -67,6 +74,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.exception,
+  nextpas.core.simd,
   nextpas.core.tar.common,
   nextpas.core.text.conv;
 
@@ -142,16 +150,22 @@ end;
 function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
 var
   EndOfs: SizeUInt;
-  J: SizeInt;
   LLen: SizeUInt;
+  LIdx: SizeInt;
+  LSpan: TByteSpan;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
-  J := SizeInt(AOfs);
-  while (J < SizeInt(EndOfs)) and (FData[J] <> 0) do
-    Inc(J);
-  LLen := SizeUInt(J - SizeInt(AOfs));
+  if ALen = 0 then
+    Exit(TByteSpan.Empty);
+  // 单源：复用 bytes.ops SpanIndexOf → simd MemFindByte，零拷贝 NUL 截断，512 热路径单遍 SIMD
+  LSpan := TByteSpan.Create(@FData[AOfs], ALen);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx < 0 then
+    LLen := ALen
+  else
+    LLen := SizeUInt(LIdx);
   if LLen = 0 then
     Exit(TByteSpan.Empty);
   // 零拷贝视图：不分配，生命周期绑 FData
@@ -246,6 +260,27 @@ begin
   LSlashSpan := TByteSpan.Create(PByte(@LSlash), 1);
   LBytes := SpanConcatMany([APrefix, LSlashSpan, AName]);
   Result := BytesToString(LBytes);
+end;
+
+function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
+var
+  LSpan: TByteSpan;
+begin
+  // 零拷贝视图后按需物化：FieldSlice 已用 bytes.ops 单源；空则零分配，重复值经 MemEqual(SIMD 单源)复用缓存串（inline 热路径，万级小文件降 2 次分配/条）
+  LSpan := FieldSlice(AOfs, ALen);
+  if LSpan.Len = 0 then
+    Exit('');
+  if (SizeUInt(Length(ACached)) = LSpan.Len) and MemEqual(@ACached[1], LSpan.Data, LSpan.Len) then
+    Exit(ACached);
+  Result := SpanToString(LSpan);
+  ACached := Result;
+end;
+
+procedure TTarReader.ClearGlobalPax; inline;
+begin
+  // 消费后清理：g 记录为全局但 path/linkpath 若持续继承则恶意档案可污染后续所有正常条目；单次消费后清零，fail-closed；如需多条目全局语义由调用方显式重建
+  FGlobalPaxPath := '';
+  FGlobalPaxLinkPath := '';
 end;
 
 function TTarReader.GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
@@ -403,7 +438,7 @@ begin
         else
           AHeader.Name := StringField(FPos + C_TAR_OFF_NAME, C_TAR_LEN_NAME);
       end;
-      // LinkName 按需物化：长链优先生效时跳过字段分配
+      // LinkName 按需物化：长链优先生效时跳过字段分配；非热点缓存降分配
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
       else if FPaxLinkPath <> '' then
@@ -411,7 +446,7 @@ begin
       else if FGlobalPaxLinkPath <> '' then
         AHeader.LinkName := FGlobalPaxLinkPath
       else
-        AHeader.LinkName := StringField(FPos + C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME);
+        AHeader.LinkName := CachedField(FPos + C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, FLastLinkName);
       AHeader.Kind := TypeFlagToKind(Flag);
       AHeader.Mode := Cardinal(NumericField(FPos + C_TAR_OFF_MODE, C_TAR_LEN_MODE)) and $FFFF;
       AHeader.UID := Cardinal(NumericField(FPos + C_TAR_OFF_UID, C_TAR_LEN_UID));
@@ -421,8 +456,13 @@ begin
       else
         AHeader.Size := Size;
       AHeader.MTimeUnix := NumericField(FPos + C_TAR_OFF_MTIME, C_TAR_LEN_MTIME);
-      AHeader.UName := StringField(FPos + C_TAR_OFF_UNAME, C_TAR_LEN_UNAME);
-      AHeader.GName := StringField(FPos + C_TAR_OFF_GNAME, C_TAR_LEN_GNAME);
+      AHeader.UName := CachedField(FPos + C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, FLastUName);
+      AHeader.GName := CachedField(FPos + C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, FLastGName);
+      // 全局 pax 单次消费清理：防恶意 g 记录污染后续条目（per-entry 优于 global，消费后清零 fail-closed）
+      if (FGlobalPaxPath <> '') and (FPendingLongName = '') and (FPaxPath = '') and (AHeader.Name = FGlobalPaxPath) then
+        FGlobalPaxPath := '';
+      if (FGlobalPaxLinkPath <> '') and (FPendingLongLink = '') and (FPaxLinkPath = '') and (AHeader.LinkName = FGlobalPaxLinkPath) then
+        FGlobalPaxLinkPath := '';
       { bomb 守卫：单条目与总量单点 }
       GuardTarEntrySize(AHeader, FMaxEntry);
       if AHeader.Kind = tekRegular then
