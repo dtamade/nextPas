@@ -3,10 +3,11 @@ unit nextpas.core.respack.embed;
 {** @desc 嵌入工具链库（S4）：blob → .inc typed const 源文本。格式逻辑全部收口 core 侧，
   CLI（core/tools/respack）只是薄壳。本单元仅依赖 L1 text.strings/text.char/
   text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、零文件系统依赖，PChar 零拷贝
-  视图 + inline 热路径）+ respack.limits 阈值策略单源（4MiB 策略集中、可配置 MaxBlobBytes、
-  前置拒绝单源 ResPackRequireIncSize）+ bytes.ops 单源（WriteStr/组装 BytesCopy inline
-  零拷贝，IncUnit 单次 SetLength+分段 BytesCopy 与 writer.builder GetMem(Total)单源收敛，
-  通用文本组装单源，替代二次分配拼接），纯内存可复用（零 FS/零 writer/
+  视图 + inline 热路径）+ embed.limits 阈值策略独立模块单源（4MiB 策略集中、可配置 MaxBlobBytes、
+  前置拒绝单源 EmbedRequireIncSize/ResPackRequireIncSize inline 零拷贝，已从 respack.limits 抽取为
+  L1 独立策略模块 nextpas.core.embed.limits 供其他嵌入载体复用，respack.limits 为兼容转发）
+  + bytes.ops 单源（WriteStr/组装 BytesCopy inline 零拷贝，IncUnit 单次 SetLength+分段 BytesCopy 与
+  writer.builder GetMem(Total)单源收敛，通用文本组装单源，替代二次分配拼接），纯内存可复用（零 FS/零 writer/
   零 dirsource 依赖，目录 → 过滤/映射 → 打包 blob 的 IO 管线收口于
   respack.dirsource（L2 FS 缝），唯一 L2→L2 FS seam）。 }
 
@@ -16,8 +17,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.respack.base,
-  nextpas.core.respack.limits;
+  nextpas.core.embed.limits,
+  nextpas.core.respack.base;
 
 type
   { 嵌入打包选项；Build 字段透传 writer（去重/hash/digest/输入上限） }
@@ -33,12 +34,12 @@ type
   TResPackIncOptions = record
     ConstName: string;     { 必填：ASCII Pascal 标识符（保留字不在此校验） }
     BytesPerLine: Integer; { <=0 取默认 16 }
-    MaxBlobBytes: SizeUInt; { 0=默认 4MiB；显式可覆盖，策略单源于 respack.limits }
+    MaxBlobBytes: SizeUInt; { 0=默认 4MiB；显式可覆盖，策略单源于 embed.limits 独立模块 }
   end;
 
 const
-  RESPACK_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.respack.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
-  RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES; { 兼容别名，单源于 respack.limits；经验阈值 <4MiB 走 .inc }
+  RESPACK_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.embed.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.RESPACK_INC_MAX_BLOB_BYTES; { 兼容别名，单源于 embed.limits 独立模块；经验阈值 <4MiB 走 .inc }
 
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions; inline;
 function ResPackDefaultIncOptions: TResPackIncOptions;
@@ -135,7 +136,6 @@ var
   Cap, LTmp: SizeUInt;
   OutBuf: TBytes;
   W: PByte;
-  B: Byte;
   PData: PByte;
 
   procedure WriteStr(const S: string); inline;
@@ -165,7 +165,7 @@ begin
 
   { 容量上界：头注释 + 声明行 + 每字节至多 ", $XX" 5 列 + 行尾换行；SizeUInt 溢出保护 — 单源 Checked* helper（inline 零拷贝，owner base.utils） }
   N := ABlob.Size;
-  // 阈值前置拒绝单源于 respack.limits（inline 零拷贝，0 零值取默认 4MiB，避免两处硬编码重复与超大临时分配）
+  // 阈值前置拒绝单源于 embed.limits 独立模块（inline 零拷贝，0 零值取默认 4MiB，避免两处硬编码重复与超大临时分配）
   ResPackRequireIncSize(N, ResPackEffectiveIncLimit(AOpts.MaxBlobBytes));
   Cap := 256;
   CheckedMul(SizeUInt(Length(Name)), 4, LTmp, 'respack.embed: ConstName too long');
@@ -199,8 +199,9 @@ begin
 
   LineCols := 0;
   PData := ABlob.Data;
-  // 复用 encoding.hex 单源 + direct PByte stores；inline 零拷贝直通 HEX_UPPER 表，1 MiB 仅一次分配，逐字节无小函数调用
-  for I := 0 to SizeInt(N) - 1 do
+  // 批量向量化：行分块 + 4-wide 向量化 HexEncodeDollarCommaBulkUpper 单源（encoding.hex HEX_UPPER 表 inline 零拷贝），避免逐字节 HexEncodeByteUpper 调用与分支；行首 2 空格前缀批量 $XX, 写入，末行末字节 $XX 无逗号，保持确定性 golden 一致，单次分配零额外拷贝
+  I := 0;
+  while I < SizeInt(N) do
   begin
     if LineCols = 0 then
     begin
@@ -209,18 +210,31 @@ begin
       W^ := Byte(' ');
       Inc(W);
     end;
-    B := PData[I];
-    W^ := Byte('$');
-    Inc(W);
-    HexEncodeByteUpper(B, PChar(W));
-    Inc(W, 2);
-    if I = SizeInt(N) - 1 then
-      Break;
-    W^ := Byte(',');
-    Inc(W);
-    Inc(LineCols);
-    if LineCols >= PerLine then
+    if SizeInt(N) - I <= PerLine - LineCols then
     begin
+      if SizeInt(N) - I = 1 then
+      begin
+        W^ := Byte('$');
+        Inc(W);
+        HexEncodeByteUpper(PData[I], PChar(W));
+        Inc(W, 2);
+      end
+      else
+      begin
+        HexEncodeDollarCommaBulkUpper(@PData[I], SizeUInt(SizeInt(N) - I - 1), W);
+        Inc(W, (SizeInt(N) - I - 1) * 4);
+        W^ := Byte('$');
+        Inc(W);
+        HexEncodeByteUpper(PData[SizeInt(N) - 1], PChar(W));
+        Inc(W, 2);
+      end;
+      Break;
+    end
+    else
+    begin
+      HexEncodeDollarCommaBulkUpper(@PData[I], SizeUInt(PerLine - LineCols), W);
+      Inc(W, (PerLine - LineCols) * 4);
+      Inc(I, PerLine - LineCols);
       W^ := Byte(#10);
       Inc(W);
       LineCols := 0;
@@ -251,7 +265,7 @@ begin
   if IdentEqualCI(AUnitName, AOpts.ConstName) then
     raise EResPackError.Create('respack.embed: UnitName must differ from ' +
       'ConstName ("' + AUnitName + '")');
-  // 阈值前置单源于 respack.limits（同 IncSource，同策略 0 取默认 4MiB，早拒避免三段分配超大临时分配）
+  // 阈值前置单源于 embed.limits 独立模块（同 IncSource，同策略 0 取默认 4MiB，早拒避免三段分配超大临时分配）
   ResPackRequireIncSize(ABlob.Size, ResPackEffectiveIncLimit(AOpts.MaxBlobBytes));
   Body := ResPackEmbedIncSource(ABlob, AOpts);
   Head := StringToBytes('unit ' + AUnitName + ';' + #10 +

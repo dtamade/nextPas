@@ -49,7 +49,7 @@ uses
 
 const
   BUCKET_MIN = 256;
-  BUCKET_MAX = 65536;
+  BUCKET_MAX = 4194304;
 
 function CmpPath(const AEntries: array of TResPackInputEntry;
   const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
