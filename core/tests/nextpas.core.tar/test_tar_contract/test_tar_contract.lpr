@@ -12,9 +12,10 @@ var
   Suite: TTestSuite;
 
 const
-  C_TAR_UNITS: array[0..6] of string = (
+  C_TAR_UNITS: array[0..7] of string = (
     'src/nextpas.core.tar.pas',
     'src/nextpas.core.tar.base.pas',
+    'src/nextpas.core.tar.intf.pas',
     'src/nextpas.core.tar.common.pas',
     'src/nextpas.core.tar.reader.pas',
     'src/nextpas.core.tar.writer.pas',

@@ -21,8 +21,8 @@ type
     constructor Create(const ADst: IWriter);
     procedure AddEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions); overload;
-    procedure AddFile(const AName: string; const AData: TBytes; AMode: Cardinal = $1A4; AMTimeUnix: Int64 = 0);
-    procedure AddDir(const AName: string; AMode: Cardinal = $1ED; AMTimeUnix: Int64 = 0);
+    procedure AddFile(const AName: string; const AData: TBytes; AMode: Cardinal = C_TAR_DEFAULT_FILE_MODE; AMTimeUnix: Int64 = 0);
+    procedure AddDir(const AName: string; AMode: Cardinal = C_TAR_DEFAULT_DIR_MODE; AMTimeUnix: Int64 = 0);
     procedure Finish;
     destructor Destroy; override;
   end;
@@ -35,11 +35,6 @@ uses
 
 const
   CBlockSize = C_TAR_BLOCK_SIZE;
-
-function PadToBlock(ASize: Int64): Int64; inline;
-begin
-  Result := TarPadToBlock(ASize);
-end;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -106,7 +101,7 @@ var
   begin
     if AValue >= (Int64(1) shl ((ALen - 1) * 3)) then
     begin
-      Block[AOfs] := $80;
+      Block[AOfs] := C_TAR_BASE256_SENTINEL;
       for I := ALen - 1 downto 1 do
       begin
         Block[AOfs + I] := Byte(AValue and $FF);
@@ -138,57 +133,57 @@ begin
   ValidateTarEntryName(Name);
   if (LinkName <> '') and (Pos(#0, LinkName) > 0) then
     raise EArgumentError.Create('tar: linkname contains NUL');
-  PutText(0, 100, Name);
-  if Length(Name) > 100 then
+  PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Name);
+  if Length(Name) > C_TAR_LEN_NAME then
   begin
     CutPos := 0;
-    I := 155;
+    I := C_TAR_LEN_PREFIX;
     while (I >= 1) and (CutPos = 0) do
     begin
-      if (I < Length(Name)) and (Name[I + 1] = '/') and (Length(Name) - I - 1 <= 100) then
+      if (I < Length(Name)) and (Name[I + 1] = '/') and (Length(Name) - I - 1 <= C_TAR_LEN_NAME) then
         CutPos := I;
       Dec(I);
     end;
     if CutPos = 0 then
       raise EIOError.Create('tar: entry name too long for ustar');
-    FillChar(Block[0], 100, 0);
-    PutText(345, 155, Copy(Name, 1, CutPos));
-    PutText(0, 100, Copy(Name, CutPos + 2, MaxInt));
+    FillChar(Block[C_TAR_OFF_NAME], C_TAR_LEN_NAME, 0);
+    PutText(C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, Copy(Name, 1, CutPos));
+    PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, CutPos + 2, MaxInt));
   end;
-  PutOctal(100, 8, AHdr.Mode);
-  PutOctal(108, 8, AHdr.UID);
-  PutOctal(116, 8, AHdr.GID);
+  PutOctal(C_TAR_OFF_MODE, C_TAR_LEN_MODE, AHdr.Mode);
+  PutOctal(C_TAR_OFF_UID, C_TAR_LEN_UID, AHdr.UID);
+  PutOctal(C_TAR_OFF_GID, C_TAR_LEN_GID, AHdr.GID);
   if AHdr.Kind = tekRegular then
-    PutOctal(124, 12, Length(AData))
+    PutOctal(C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, Length(AData))
   else
-    PutOctal(124, 12, 0);
-  PutOctal(136, 12, AHdr.MTimeUnix);
-  FillChar(Block[148], 8, Ord(' '));
-  Block[156] := Byte(KindToTypeFlag(AHdr.Kind));
-  PutText(157, 100, LinkName);
-  Block[257] := Ord('u');
-  Block[258] := Ord('s');
-  Block[259] := Ord('t');
-  Block[260] := Ord('a');
-  Block[261] := Ord('r');
-  Block[262] := 0;
-  Block[263] := Ord('0');
-  Block[264] := Ord('0');
-  PutText(265, 32, AHdr.UName);
-  PutText(297, 32, AHdr.GName);
+    PutOctal(C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, 0);
+  PutOctal(C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, AHdr.MTimeUnix);
+  FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
+  Block[C_TAR_OFF_TYPEFLAG] := Byte(KindToTypeFlag(AHdr.Kind));
+  PutText(C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
+  Block[C_TAR_OFF_MAGIC] := Ord('u');
+  Block[C_TAR_OFF_MAGIC + 1] := Ord('s');
+  Block[C_TAR_OFF_MAGIC + 2] := Ord('t');
+  Block[C_TAR_OFF_MAGIC + 3] := Ord('a');
+  Block[C_TAR_OFF_MAGIC + 4] := Ord('r');
+  Block[C_TAR_OFF_MAGIC + 5] := 0;
+  Block[C_TAR_OFF_VERSION] := Ord('0');
+  Block[C_TAR_OFF_VERSION + 1] := Ord('0');
+  PutText(C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
+  PutText(C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
   Sum := 0;
   for I := 0 to CBlockSize - 1 do
     Sum := Sum + Block[I];
   for I := 0 to 5 do
-    Block[148 + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
-  Block[154] := 0;
-  Block[155] := Ord(' ');
+    Block[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
+  Block[C_TAR_OFF_CHKSUM + 6] := 0;
+  Block[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
   WriteBlock(Block);
   if (AHdr.Kind = tekRegular) and (Length(AData) > 0) then
   begin
     if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
       raise EIOError.Create('tar: short write');
-    PadLen := PadToBlock(Length(AData));
+    PadLen := TarPadToBlock(Length(AData));
     if PadLen > 0 then
     begin
       FillChar(PadBlock[0], SizeOf(PadBlock), 0);
@@ -212,7 +207,7 @@ begin
   H.Kind := tekRegular;
   H.Mode := AOpts.Mode;
   if H.Mode = 0 then
-    H.Mode := $1A4;
+    H.Mode := C_TAR_DEFAULT_FILE_MODE;
   H.UID := AOpts.UID;
   H.GID := AOpts.GID;
   H.MTimeUnix := AOpts.MTimeUnix;

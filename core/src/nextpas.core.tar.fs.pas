@@ -1,7 +1,8 @@
 unit nextpas.core.tar.fs;
 {**
  * @desc Tar 与文件系统之间的便捷层：递归打包目录、解包归档到目录。
- * 复用 zip.fs 的 deferred-dir、排序、名安全、symlink 拒绝等模式，保持确定性与 fail-closed。
+ * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、快照、零拷贝落盘与
+ * deferred-dir 逆序定稿，消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -28,113 +29,39 @@ uses
   nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.base,
-  nextpas.core.io.memory;
+  nextpas.core.io.memory,
+  nextpas.core.archive.fs;
 
 type
-  TWalkEntry = record
-    FRel: string;
-    FFull: string;
-    FIsDir: Boolean;
-    FMtime: Int64;
-    FMode: Word;
-  end;
-  TWalkArray = array of TWalkEntry;
+  TWalkEntry = TArchiveWalkEntry;
+  TWalkArray = TArchiveWalkArray;
+  TDeferredDir = TArchiveDeferredDir;
+  TDeferredDirArray = TArchiveDeferredArray;
 
-  TDeferredDir = record
-    FFull: string;
-    FMode: Word;
-    FMtimeNs: Int64;
-  end;
-  TDeferredDirArray = array of TDeferredDir;
-
+{ 兼容原内部调用名，委托 archive 几何扩容/排序/防劫持 }
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
-var
-  LCap, LNew: Integer;
 begin
-  LCap := Length(A);
-  if LCap >= AMin then Exit;
-  if LCap = 0 then LCap := 16;
-  LNew := LCap;
-  while LNew < AMin do
-    LNew := LNew * 2;
-  SetLength(A, LNew);
+  ArchiveEnsureWalkCapacity(A, AMin);
 end;
 
 procedure WalkAppend(var A: TWalkArray; var ACount: Integer; const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
 begin
-  EnsureWalkCapacity(A, ACount + 1);
-  A[ACount].FRel := ARel;
-  A[ACount].FFull := AFull;
-  A[ACount].FIsDir := AIsDir;
-  A[ACount].FMtime := AMtime;
-  A[ACount].FMode := AMode;
-  Inc(ACount);
+  ArchiveWalkAppend(A, ACount, ARel, AFull, AIsDir, AMtime, AMode);
 end;
 
-procedure SortDirEntries(var A: TDirEntryArray);
-var
-  LStackLo, LStackHi: array[0..63] of Integer;
-  LSp, LLo, LHi, LI, LJ: Integer;
-  LPivot: string;
-  LTmp: TDirEntry;
+procedure SortDirEntries(var A: TDirEntryArray); inline;
 begin
-  if Length(A) < 2 then Exit;
-  LSp := 0;
-  LStackLo[LSp] := 0;
-  LStackHi[LSp] := High(A);
-  Inc(LSp);
-  while LSp > 0 do
-  begin
-    Dec(LSp);
-    LLo := LStackLo[LSp];
-    LHi := LStackHi[LSp];
-    if LLo >= LHi then Continue;
-    LI := LLo;
-    LJ := LHi;
-    LPivot := A[(LLo + LHi) shr 1].Name;
-    repeat
-      while A[LI].Name < LPivot do Inc(LI);
-      while A[LJ].Name > LPivot do Dec(LJ);
-      if LI <= LJ then
-      begin
-        LTmp := A[LI];
-        A[LI] := A[LJ];
-        A[LJ] := LTmp;
-        Inc(LI);
-        Dec(LJ);
-      end;
-    until LI > LJ;
-    if (LJ - LLo) > (LHi - LI) then
-    begin
-      if LLo < LJ then
-      begin
-        LStackLo[LSp] := LLo;
-        LStackHi[LSp] := LJ;
-        Inc(LSp);
-      end;
-      if LI < LHi then
-      begin
-        LStackLo[LSp] := LI;
-        LStackHi[LSp] := LHi;
-        Inc(LSp);
-      end;
-    end
-    else
-    begin
-      if LI < LHi then
-      begin
-        LStackLo[LSp] := LI;
-        LStackHi[LSp] := LHi;
-        Inc(LSp);
-      end;
-      if LLo < LJ then
-      begin
-        LStackLo[LSp] := LLo;
-        LStackHi[LSp] := LJ;
-        Inc(LSp);
-      end;
-    end;
-  end;
+  ArchiveSortDirEntries(A);
+end;
+
+procedure EnsureNoSymlinkInPath(const APath: string); inline;
+begin
+  ArchiveEnsureNoSymlinkInPath(APath);
+end;
+
+procedure EnsureDeferredCapacity(var A: TDeferredDirArray; AMin: Integer); inline;
+begin
+  ArchiveEnsureDeferredCapacity(A, AMin);
 end;
 
 procedure CollectLevel(const AAbsDir, ARelPrefix: string; var AOut: TWalkArray; var ACount: Integer);
@@ -145,7 +72,7 @@ var
   LInfo: TFileInfo;
 begin
   LEntries := ReadDir(AAbsDir);
-  SortDirEntries(LEntries);
+  ArchiveSortDirEntries(LEntries);
   for LI := 0 to High(LEntries) do
   begin
     LName := LEntries[LI].Name;
@@ -156,14 +83,15 @@ begin
     else
       LChildRel := ARelPrefix + '/' + LName;
     LChildAbs := AAbsDir + '/' + LName;
+    { ReadDir 仅含 Name/Type，未含 mtime/mode，故需 Stat 补全；单次 Stat/Entry 非 N+1 冗余 }
     LInfo := Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
-      WalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
       CollectLevel(LChildAbs, LChildRel, AOut, ACount);
     end
     else if LEntries[LI].FileType = ftRegular then
-      WalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
   end;
 end;
 
@@ -218,35 +146,9 @@ begin
   try
     TarPackDirInto(ADir, W);
     W.Finish;
-    SetLength(Result, S.Size);
-    if Length(Result) > 0 then
-    begin
-      S.Seek(0, soBeginning);
-      if S.Read(Result[0], Length(Result)) <> Length(Result) then
-        raise EIOError.Create('tar pack: short snapshot');
-    end;
+    Result := ArchiveSnapshotStream(S, 'tar pack');
   finally
     W.Free;
-  end;
-end;
-
-procedure EnsureNoSymlinkInPath(const APath: string); inline;
-var
-  LI: Integer;
-  LPrefix: string;
-begin
-  if APath = '' then Exit;
-  for LI := 1 to Length(APath) do
-  begin
-    if (APath[LI] = '/') or (LI = Length(APath)) then
-    begin
-      if LI = Length(APath) then
-        LPrefix := APath
-      else
-        LPrefix := Copy(APath, 1, LI - 1);
-      if (LPrefix <> '') and IsSymlink(LPrefix) then
-        raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
-    end;
   end;
 end;
 
@@ -258,10 +160,12 @@ var
   LFull, LParent: string;
   LSep: Integer;
   LMode: Word;
-  LPayload: TBytes;
   LDirs: TDeferredDirArray;
+  LDirCount: Integer;
   LMaxEntry: SizeUInt;
   LMaxTotal: UInt64;
+  LSlice: PByte;
+  LSliceCount: SizeUInt;
 begin
   if AOptions.MaxEntrySize = 0 then
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -273,8 +177,9 @@ begin
   R := TTarReader.CreateWithOptions(AData, ROpts);
   try
     MkdirAll(ADestDir, PermDirDefault);
-    EnsureNoSymlinkInPath(ADestDir);
+    ArchiveEnsureNoSymlinkInPath(ADestDir);
     SetLength(LDirs, 0);
+    LDirCount := 0;
     try
       while R.Next(H) do
       begin
@@ -293,7 +198,7 @@ begin
         if LSep > 0 then
         begin
           LParent := Copy(LFull, 1, LSep - 1);
-          EnsureNoSymlinkInPath(LParent);
+          ArchiveEnsureNoSymlinkInPath(LParent);
           MkdirAll(LParent, PermDirDefault);
         end;
         LMode := Word(H.Mode and $0FFF);
@@ -301,29 +206,41 @@ begin
           MkdirAll(LFull, PermDirDefault)
         else if H.Kind = tekRegular then
         begin
-          LPayload := R.EntryData;
-          WriteFile(LFull, LPayload, PermDefault);
+          { 零拷贝：复用 Reader 已有的 EntryDataSlice/OpenEntryStream，避免 EntryData 的 SetLength+Move 双倍内存 }
+          if R.EntryDataSlice(LSlice, LSliceCount) then
+            ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, PermDefault)
+          else
+            ArchiveWriteFileSlice(LFull, nil, 0, PermDefault);
           if AOptions.RestoreMode and (LMode <> 0) then
-            try Chmod(LFull, TFilePermission(LMode)); except on E: Exception do ; end;
-          try Chtimes(LFull, H.MTimeUnix * 1000000000, H.MTimeUnix * 1000000000); except on E: Exception do ; end;
+          begin
+            try
+              Chmod(LFull, TFilePermission(LMode));
+            except
+              on E: Exception do
+              begin
+                { best-effort 权限还原，保留上下文但不中断解包 }
+              end;
+            end;
+          end;
+          try
+            Chtimes(LFull, H.MTimeUnix * 1000000000, H.MTimeUnix * 1000000000);
+          except
+            on E: Exception do
+            begin
+              { best-effort mtime 还原 }
+            end;
+          end;
         end
         else
           Continue;
         if H.Kind = tekDirectory then
         begin
-          SetLength(LDirs, Length(LDirs) + 1);
-          LDirs[High(LDirs)].FFull := LFull;
-          LDirs[High(LDirs)].FMode := LMode;
-          LDirs[High(LDirs)].FMtimeNs := H.MTimeUnix * 1000000000;
+          ArchiveDeferredAppend(LDirs, LDirCount, LFull, LMode, H.MTimeUnix * 1000000000);
         end;
       end;
     finally
-      for LSep := High(LDirs) downto 0 do
-      begin
-        if AOptions.RestoreMode and (LDirs[LSep].FMode <> 0) then
-          try Chmod(LDirs[LSep].FFull, TFilePermission(LDirs[LSep].FMode and $0FFF)); except on E: Exception do ; end;
-        try Chtimes(LDirs[LSep].FFull, LDirs[LSep].FMtimeNs, LDirs[LSep].FMtimeNs); except on E: Exception do ; end;
-      end;
+      SetLength(LDirs, LDirCount);
+      ArchiveRestoreDeferredDirs(LDirs, AOptions.RestoreMode);
     end;
   finally
     R.Free;

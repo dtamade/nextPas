@@ -28,13 +28,20 @@ type
     FMaxEntry: SizeUInt;
     FMaxTotal: UInt64;
     FCumTotal: UInt64;
-    function ByteAt(AOfs: SizeUInt): Byte;
-    function BlockIsZero(APos: SizeUInt): Boolean;
-    function StringField(AOfs, ALen: SizeUInt): string;
-    function NumericField(AOfs, ALen: SizeUInt): Int64;
-    function MagicHasUStar: Boolean;
-    procedure VerifyChecksum;
+    { — 热路径：块/字段/校验，均 inline 以消除 Next 每 entry 多次调用开销 — }
+    function ByteAt(AOfs: SizeUInt): Byte; inline;
+    function BlockIsZero(APos: SizeUInt): Boolean; inline;
+    function StringField(AOfs, ALen: SizeUInt): string; inline;
+    function NumericField(AOfs, ALen: SizeUInt): Int64; inline;
+    function MagicHasUStar: Boolean; inline;
+    procedure VerifyChecksum; inline;
+    function HeaderIsZeroOrValid(APos: SizeUInt): Boolean; inline;
+    { — pax/扩展：零拷贝 slice 解析，消除每记录 Copy+BytesToText 分配 — }
+    function ParsePaxRecordsSlice(ABase: PByte; ALen: SizeUInt): Boolean;
     function ParsePaxRecords(const AData: TBytes): Boolean;
+    { — 扩展载荷：去重 GNU L/K 与 pax 三分支的 SetLength+Move — }
+    function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean; inline;
+    function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
   public
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
@@ -59,11 +66,6 @@ uses
 
 const
   CBlockSize = C_TAR_BLOCK_SIZE;
-
-function PadToBlock(ASize: Int64): Int64; inline;
-begin
-  Result := TarPadToBlock(ASize);
-end;
 
 function TypeFlagToKind(AFlag: Byte): TTarEntryKind;
 begin
@@ -118,14 +120,14 @@ begin
   FCumTotal := 0;
 end;
 
-function TTarReader.ByteAt(AOfs: SizeUInt): Byte;
+function TTarReader.ByteAt(AOfs: SizeUInt): Byte; inline;
 begin
   if AOfs >= FCount then
-    raise EIOError.Create('tar: truncated stream');
+    raise EIOError.CreateFmt('tar: truncated stream at offset %d (need %d, have %d)', [AOfs, AOfs + 1, FCount]);
   Result := FData[AOfs];
 end;
 
-function TTarReader.BlockIsZero(APos: SizeUInt): Boolean;
+function TTarReader.BlockIsZero(APos: SizeUInt): Boolean; inline;
 var
   I: SizeUInt;
 begin
@@ -137,14 +139,14 @@ begin
       Exit(False);
 end;
 
-function TTarReader.StringField(AOfs, ALen: SizeUInt): string;
+function TTarReader.StringField(AOfs, ALen: SizeUInt): string; inline;
 var
   EndOfs: SizeUInt;
   J: SizeInt;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
-    raise EIOError.Create('tar: truncated stream');
+    raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   J := SizeInt(AOfs);
   while (J < SizeInt(EndOfs)) and (FData[J] <> 0) do
     Inc(J);
@@ -153,14 +155,14 @@ begin
     Move(FData[AOfs], Result[1], Length(Result));
 end;
 
-function TTarReader.NumericField(AOfs, ALen: SizeUInt): Int64;
+function TTarReader.NumericField(AOfs, ALen: SizeUInt): Int64; inline;
 var
   I: SizeUInt;
   B: Byte;
 begin
   if AOfs + ALen > FCount then
-    raise EIOError.Create('tar: truncated stream');
-  if (FData[AOfs] and $80) <> 0 then
+    raise EIOError.CreateFmt('tar: truncated stream at offset %d (numeric %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
+  if (FData[AOfs] and C_TAR_BASE256_SENTINEL) <> 0 then
   begin
     Result := Int64(FData[AOfs] and $7F);
     for I := AOfs + 1 to AOfs + ALen - 1 do
@@ -176,22 +178,22 @@ begin
     if B = Ord(' ') then
       Continue;
     if (B < Ord('0')) or (B > Ord('7')) then
-      raise EIOError.Create('tar: corrupt octal field');
+      raise EIOError.CreateFmt('tar: corrupt octal field at offset %d (byte %d)', [I, B]);
     Result := (Result shl 3) or Int64(B - Ord('0'));
   end;
 end;
 
-function TTarReader.MagicHasUStar: Boolean;
+function TTarReader.MagicHasUStar: Boolean; inline;
 begin
-  Result := (FPos + 262 < FCount)
-    and (FData[FPos + 257] = Ord('u'))
-    and (FData[FPos + 258] = Ord('s'))
-    and (FData[FPos + 259] = Ord('t'))
-    and (FData[FPos + 260] = Ord('a'))
-    and (FData[FPos + 261] = Ord('r'));
+  Result := (FPos + C_TAR_OFF_MAGIC + 5 < FCount)
+    and (FData[FPos + C_TAR_OFF_MAGIC] = Ord('u'))
+    and (FData[FPos + C_TAR_OFF_MAGIC + 1] = Ord('s'))
+    and (FData[FPos + C_TAR_OFF_MAGIC + 2] = Ord('t'))
+    and (FData[FPos + C_TAR_OFF_MAGIC + 3] = Ord('a'))
+    and (FData[FPos + C_TAR_OFF_MAGIC + 4] = Ord('r'));
 end;
 
-procedure TTarReader.VerifyChecksum;
+procedure TTarReader.VerifyChecksum; inline;
 var
   StoredSum: Int64;
   UnsignedSum: Int64;
@@ -199,12 +201,12 @@ var
   I: SizeUInt;
   B: Byte;
 begin
-  StoredSum := NumericField(FPos + 148, 8);
+  StoredSum := NumericField(FPos + C_TAR_OFF_CHKSUM, C_TAR_LEN_CHKSUM);
   UnsignedSum := 0;
   SignedSum := 0;
   for I := 0 to CBlockSize - 1 do
   begin
-    if (I >= 148) and (I < 156) then
+    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
       B := Ord(' ')
     else
       B := FData[FPos + I];
@@ -212,7 +214,41 @@ begin
     SignedSum := SignedSum + ShortInt(B);
   end;
   if (StoredSum <> UnsignedSum) and (StoredSum <> SignedSum) then
-    raise EIOError.Create('tar: header checksum mismatch');
+    raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [FPos, StoredSum, UnsignedSum, SignedSum]);
+end;
+
+{ — 融合零块检测与校验和：单遍 512 扫描消除双遍遍历 — }
+function TTarReader.HeaderIsZeroOrValid(APos: SizeUInt): Boolean; inline;
+var
+  StoredSum: Int64;
+  UnsignedSum: Int64;
+  SignedSum: Int64;
+  I: SizeUInt;
+  B: Byte;
+  IsZero: Boolean;
+begin
+  // 先判越界：不足一块按非零处理，由调用方走 trailing partial 分支
+  if APos + CBlockSize > FCount then
+    Exit(False);
+  StoredSum := NumericField(APos + C_TAR_OFF_CHKSUM, C_TAR_LEN_CHKSUM);
+  IsZero := True;
+  UnsignedSum := 0;
+  SignedSum := 0;
+  for I := 0 to CBlockSize - 1 do
+  begin
+    B := FData[APos + I];
+    if B <> 0 then
+      IsZero := False;
+    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
+      B := Ord(' ');
+    UnsignedSum := UnsignedSum + B;
+    SignedSum := SignedSum + ShortInt(B);
+  end;
+  if IsZero then
+    Exit(True);
+  if (StoredSum <> UnsignedSum) and (StoredSum <> SignedSum) then
+    raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, StoredSum, UnsignedSum, SignedSum]);
+  Result := False;
 end;
 
 function BytesToText(const AData: TBytes): string;
@@ -227,25 +263,73 @@ begin
     Move(AData[0], Result[1], EndPos);
 end;
 
-function TTarReader.ParsePaxRecords(const AData: TBytes): Boolean;
+function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
+var
+  Trim: SizeUInt;
+begin
+  Trim := ALen;
+  while (Trim > 0) and (ABase[Trim - 1] = 0) do
+    Dec(Trim);
+  SetLength(Result, Trim);
+  if Trim > 0 then
+    Move(ABase^, Result[1], Trim);
+end;
+
+function TTarReader.GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean; inline;
+begin
+  APtr := nil;
+  ALen := 0;
+  if ASize < 0 then
+    raise EIOError.CreateFmt('tar: negative entry size %d at offset %d', [ASize, FPos]);
+  if ASize = 0 then
+    Exit(True);
+  if UInt64(ASize) > UInt64(FMaxEntry) then
+    raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [ASize, Int64(FMaxEntry), FPos]);
+  if FPos + CBlockSize + SizeUInt(ASize) > FCount then
+    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FPos + CBlockSize, ASize, Int64(FCount) - Int64(FPos + CBlockSize)]);
+  APtr := FData + FPos + CBlockSize;
+  ALen := SizeUInt(ASize);
+  Result := True;
+end;
+
+function TTarReader.ParsePaxRecordsSlice(ABase: PByte; ALen: SizeUInt): Boolean;
 var
   P, Sp, Eq, RecEnd: SizeInt;
+  LenVal: SizeInt;
   Key, Value: string;
+  I: SizeInt;
+  B: Byte;
 begin
   Result := False;
   P := 0;
-  while P < Length(AData) do
+  while P < SizeInt(ALen) do
   begin
     Sp := P;
-    while (Sp < Length(AData)) and (AData[Sp] <> Ord(' ')) do
+    while (Sp < SizeInt(ALen)) and (ABase[Sp] <> Ord(' ')) do
       Inc(Sp);
-    if Sp >= Length(AData) then
+    if Sp >= SizeInt(ALen) then
       Exit;
-    RecEnd := P + StrToIntDef(BytesToText(Copy(AData, P, Sp - P)), 0);
-    if (RecEnd <= P) or (RecEnd > Length(AData)) then
+    // 零拷贝：直接在 slice 上十进制解析长度前缀，无 Copy/BytesToText 分配
+    LenVal := 0;
+    for I := P to Sp - 1 do
+    begin
+      B := ABase[I];
+      if (B < Ord('0')) or (B > Ord('9')) then
+      begin
+        LenVal := 0;
+        Break;
+      end;
+      LenVal := LenVal * 10 + (B - Ord('0'));
+      if LenVal > SizeInt(ALen) then
+        Break;
+    end;
+    if LenVal <= 0 then
+      Exit;
+    RecEnd := P + LenVal;
+    if (RecEnd <= P) or (RecEnd > SizeInt(ALen)) then
       Exit;
     Eq := Sp + 1;
-    while (Eq < RecEnd) and (AData[Eq] <> Ord('=')) do
+    while (Eq < RecEnd) and (ABase[Eq] <> Ord('=')) do
       Inc(Eq);
     if Eq >= RecEnd then
     begin
@@ -253,10 +337,11 @@ begin
       Continue;
     end;
     SetLength(Key, Eq - Sp - 1);
-    Move(AData[Sp + 1], Key[1], Length(Key));
+    if Length(Key) > 0 then
+      Move(ABase[Sp + 1], Key[1], Length(Key));
     SetLength(Value, RecEnd - 1 - (Eq + 1));
     if Length(Value) > 0 then
-      Move(AData[Eq + 1], Value[1], Length(Value));
+      Move(ABase[Eq + 1], Value[1], Length(Value));
     if Key = 'path' then
     begin
       FPaxPath := Value;
@@ -271,12 +356,20 @@ begin
   end;
 end;
 
+function TTarReader.ParsePaxRecords(const AData: TBytes): Boolean;
+begin
+  if Length(AData) = 0 then
+    Exit(False);
+  Result := ParsePaxRecordsSlice(@AData[0], SizeUInt(Length(AData)));
+end;
+
 function TTarReader.Next(out AHeader: TTarHeader): Boolean;
 var
   Flag: Byte;
   Size: Int64;
   Pad: Int64;
-  Data: TBytes;
+  PayloadPtr: PByte;
+  PayloadLen: SizeUInt;
   Prefix, Name: string;
 begin
   Result := False;
@@ -289,62 +382,63 @@ begin
     if FPos >= FCount then
       Exit(False);
     if FCount - FPos < CBlockSize then
-      raise EIOError.Create('tar: trailing partial block');
-    if BlockIsZero(FPos) then
+      raise EIOError.CreateFmt('tar: trailing partial block at offset %d (need %d, have %d)', [FPos, CBlockSize, FCount - FPos]);
+    if HeaderIsZeroOrValid(FPos) then
       Exit(False);
-    VerifyChecksum;
-    Size := NumericField(FPos + 124, 12);
+    Size := NumericField(FPos + C_TAR_OFF_SIZE, C_TAR_LEN_SIZE);
     if Size < 0 then
-      raise EIOError.Create('tar: negative entry size');
-    Flag := ByteAt(FPos + 156);
+      raise EIOError.CreateFmt('tar: negative entry size %d at offset %d', [Size, FPos]);
+    Flag := ByteAt(FPos + C_TAR_OFF_TYPEFLAG);
     if Flag = Ord('L') then
     begin
-      if Size > Int64(FMaxEntry) then
-        raise EIOError.Create('tar: entry size exceeds limit');
-      Data := nil;
-      SetLength(Data, Size);
-      if Size > 0 then
-        Move(FData[FPos + CBlockSize], Data[0], Size);
-      FPendingLongName := BytesToText(Data);
+      GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if PayloadLen > 0 then
+        FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
+      else
+        FPendingLongName := '';
     end
     else if Flag = Ord('K') then
     begin
-      Data := nil;
-      SetLength(Data, Size);
-      if Size > 0 then
-        Move(FData[FPos + CBlockSize], Data[0], Size);
-      FPendingLongLink := BytesToText(Data);
+      GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if PayloadLen > 0 then
+        FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
+      else
+        FPendingLongLink := '';
     end
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
-      Data := nil;
-      SetLength(Data, Size);
-      if Size > 0 then
-        Move(FData[FPos + CBlockSize], Data[0], Size);
-      if ParsePaxRecords(Data) then
+      GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if PayloadLen > 0 then
       begin
-        if Flag = Ord('g') then
+        if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
         begin
-          if FPaxPath <> '' then
+          if Flag = Ord('g') then
           begin
-            FGlobalPaxPath := FPaxPath;
-            FPaxPath := '';
-          end;
-          if FPaxLinkPath <> '' then
-          begin
-            FGlobalPaxLinkPath := FPaxLinkPath;
-            FPaxLinkPath := '';
+            if FPaxPath <> '' then
+            begin
+              FGlobalPaxPath := FPaxPath;
+              FPaxPath := '';
+            end;
+            if FPaxLinkPath <> '' then
+            begin
+              FGlobalPaxLinkPath := FPaxLinkPath;
+              FPaxLinkPath := '';
+            end;
           end;
         end;
+      end
+      else
+      begin
+        // 空 pax 块，无记录
       end;
     end
     else
     begin
       AHeader := Default(TTarHeader);
-      Name := StringField(FPos, 100);
+      Name := StringField(FPos + C_TAR_OFF_NAME, C_TAR_LEN_NAME);
       if MagicHasUStar then
       begin
-        Prefix := StringField(FPos + 345, 155);
+        Prefix := StringField(FPos + C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX);
         if (Prefix <> '') and (Name <> '') then
           Name := Prefix + '/' + Name
         else if Prefix <> '' then
@@ -357,7 +451,7 @@ begin
       else if FGlobalPaxPath <> '' then
         Name := FGlobalPaxPath;
       AHeader.Name := Name;
-      AHeader.LinkName := StringField(FPos + 157, 100);
+      AHeader.LinkName := StringField(FPos + C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME);
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
       else if FPaxLinkPath <> '' then
@@ -365,16 +459,16 @@ begin
       else if FGlobalPaxLinkPath <> '' then
         AHeader.LinkName := FGlobalPaxLinkPath;
       AHeader.Kind := TypeFlagToKind(Flag);
-      AHeader.Mode := Cardinal(NumericField(FPos + 100, 8)) and $FFFF;
-      AHeader.UID := Cardinal(NumericField(FPos + 108, 8));
-      AHeader.GID := Cardinal(NumericField(FPos + 116, 8));
+      AHeader.Mode := Cardinal(NumericField(FPos + C_TAR_OFF_MODE, C_TAR_LEN_MODE)) and $FFFF;
+      AHeader.UID := Cardinal(NumericField(FPos + C_TAR_OFF_UID, C_TAR_LEN_UID));
+      AHeader.GID := Cardinal(NumericField(FPos + C_TAR_OFF_GID, C_TAR_LEN_GID));
       if AHeader.Kind = tekDirectory then
         AHeader.Size := 0
       else
         AHeader.Size := Size;
-      AHeader.MTimeUnix := NumericField(FPos + 136, 12);
-      AHeader.UName := StringField(FPos + 265, 32);
-      AHeader.GName := StringField(FPos + 297, 32);
+      AHeader.MTimeUnix := NumericField(FPos + C_TAR_OFF_MTIME, C_TAR_LEN_MTIME);
+      AHeader.UName := StringField(FPos + C_TAR_OFF_UNAME, C_TAR_LEN_UNAME);
+      AHeader.GName := StringField(FPos + C_TAR_OFF_GNAME, C_TAR_LEN_GNAME);
       { bomb 守卫：单条目与总量单点 }
       GuardTarEntrySize(AHeader, FMaxEntry);
       if AHeader.Kind = tekRegular then
@@ -387,12 +481,12 @@ begin
         FEntrySize := 0;
       FEntryDataOfs := FPos + CBlockSize;
       if FEntryDataOfs + SizeUInt(Size) > FCount then
-        raise EIOError.Create('tar: truncated entry data');
-      FPos := FPos + CBlockSize + SizeUInt(Size) + SizeUInt(PadToBlock(Size));
+        raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, Size, Int64(FCount) - Int64(FEntryDataOfs)]);
+      FPos := FPos + CBlockSize + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
       Result := True;
       Exit;
     end;
-    Pad := PadToBlock(Size);
+    Pad := TarPadToBlock(Size);
     FPos := FPos + CBlockSize + SizeUInt(Size) + SizeUInt(Pad);
   end;
 end;
@@ -405,9 +499,9 @@ begin
   if (FEntryDataOfs = 0) or (FEntrySize <= 0) then
     Exit;
   if FEntryDataOfs + SizeUInt(FEntrySize) > FCount then
-    raise EIOError.Create('tar: truncated entry data');
+    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, FEntrySize, Int64(FCount) - Int64(FEntryDataOfs)]);
   if UInt64(FEntrySize) > UInt64(FMaxEntry) then
-    raise EIOError.Create('tar: entry size exceeds limit');
+    raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [FEntrySize, Int64(FMaxEntry), FEntryDataOfs]);
   N := SizeInt(FEntrySize);
   SetLength(Result, N);
   Move(FData[FEntryDataOfs], Result[0], N);
@@ -427,12 +521,13 @@ begin
     Exit(False);
   end;
   if FEntryDataOfs + SizeUInt(FEntrySize) > FCount then
-    raise EIOError.Create('tar: truncated entry data');
+    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, FEntrySize, Int64(FCount) - Int64(FEntryDataOfs)]);
   AData := FData + FEntryDataOfs;
   ACount := SizeUInt(FEntrySize);
   Result := True;
 end;
 
+{ — TTarSliceReader：零拷贝切片的拉式 IReader（职责解耦：流不与块解析混杂） — }
 type
   TTarSliceReader = class(TInterfacedObject, IReader)
   private
