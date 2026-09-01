@@ -84,18 +84,18 @@ type
   end;
   PIdxSortCtx = ^TIdxSortCtx;
 
-function CompareIdxByOffset(const A, B: SizeUInt; Data: Pointer): SizeInt;
+function CompareIdxByOffset(const A, B: SizeUInt; Data: Pointer): SizeInt; inline;
 var
   Ctx: PIdxSortCtx;
-  EA, EB: TResPackEntry;
+  EA, EB: ^TResPackEntry;
 begin
   Ctx := PIdxSortCtx(Data);
-  EA := Ctx^.Entries^[A];
-  EB := Ctx^.Entries^[B];
-  if EA.DataOffset < EB.DataOffset then Exit(-1);
-  if EA.DataOffset > EB.DataOffset then Exit(1);
-  if EA.Size < EB.Size then Exit(-1);
-  if EA.Size > EB.Size then Exit(1);
+  EA := @Ctx^.Entries^[A];
+  EB := @Ctx^.Entries^[B];
+  if EA^.DataOffset < EB^.DataOffset then Exit(-1);
+  if EA^.DataOffset > EB^.DataOffset then Exit(1);
+  if EA^.Size < EB^.Size then Exit(-1);
+  if EA^.Size > EB^.Size then Exit(1);
   Result := 0;
 end;
 
@@ -480,12 +480,9 @@ begin
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
-  if Length(APath) > 0 then
-    Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
-  else
-    Query := TByteSpan.Empty;
+  Query := TByteSpan.FromStr(APath);
   { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造 via PathSpanRaw，零分配），
-    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
+    复用 bytes.ops.SpanCompare 单源与 TByteSpan.FromStr 单源（零拷贝视图工厂 inline 零分配）；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
