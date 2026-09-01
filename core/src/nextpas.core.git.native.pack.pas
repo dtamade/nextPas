@@ -130,15 +130,18 @@ begin
       if (CopyOff + CopySize > Int64(LBaseSpan.Len))
         or (OutPos + CopySize > TgtSize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
-      // zero-copy Move via base view, single source
-      Move((LBaseSpan.Data + CopyOff)^, (LOutSpan.Data + OutPos)^, SizeUInt(CopySize));
+      // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(CopySize)),
+        TByteSpan.Create(LBaseSpan.Data + SizeUInt(CopyOff), SizeUInt(CopySize)));
       OutPos := OutPos + CopySize;
     end
     else if Op > 0 then
     begin
       if (P + Op > Length(ADelta)) or (OutPos + Op > TgtSize) then
         raise EGitError.Create('delta insert instruction out of bounds');
-      Move((LDeltaSpan.Data + P)^, (LOutSpan.Data + OutPos)^, SizeUInt(Op));
+      // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(Op)),
+        TByteSpan.Create(LDeltaSpan.Data + SizeUInt(P), SizeUInt(Op)));
       OutPos := OutPos + Op;
       Inc(P, Op);
     end
@@ -227,9 +230,9 @@ begin
   SetLength(FOffsets, N);
   for I := 0 to N - 1 do
   begin
-    // bytes.ops single source: TByteSpan view for oid copy (zero-copy, bounds-checked Slice)
-    Move(TByteSpan.FromBytes(Idx).Slice(8 + 256 * 4 + SizeUInt(I) * 20, GitOidRawLen).Data^,
-      FOids[I].Bytes[0], GitOidRawLen);
+    // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+    SpanCopy(TByteSpan.Create(@FOids[I].Bytes[0], GitOidRawLen),
+      TByteSpan.FromBytes(Idx).Slice(8 + 256 * 4 + SizeUInt(I) * 20, GitOidRawLen));
   end;
   for I := 0 to N - 1 do
   begin
@@ -460,8 +463,9 @@ begin
     begin
       if P + GitOidRawLen > FDataSize then
         raise EGitError.Create('truncated ref_delta header');
-      // bytes.ops single source: TByteSpan view for ref_delta oid (zero-copy, single source)
-      Move(TByteSpan.Create(FData + P, GitOidRawLen).Data^, BaseOid.Bytes[0], GitOidRawLen);
+      // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+      SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(FData + P, GitOidRawLen));
       Inc(P, GitOidRawLen);
       if FindOffset(BaseOid) < 0 then
         raise EGitError.CreateFmt('ref_delta base %s not in same pack',
@@ -524,20 +528,17 @@ end;
 function TPackFile.TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
   out ASize: Int64): Boolean;
 var
-  Off: Int64;
-  P: SizeUInt;
-  B, Typ: Byte;
+  Off, BaseOff, CurOff: Int64;
+  P, DeltaStart, CurP: SizeUInt;
+  B, Typ, CurB, CurTyp: Byte;
   Sz: Int64;
   Shift: Integer;
-  DeltaData: TBytes;
-  VarPos: Integer;
   TgtSize: Int64;
-  TmpB: Byte;
-  TmpShift: Integer;
   BaseOid: TGitOid;
-  BaseOff: Int64;
   BaseKind: TGitObjectKind;
   BaseSize: Int64;
+  Rel: Int64;
+  Depth: Integer;
 begin
   Result := False;
   AKind := gokBlob;
@@ -545,8 +546,7 @@ begin
   Off := FindOffset(AOid);
   if Off < 0 then
     Exit;
-  // perf: parse pack entry header without inflating payload; zero-copy PByte view via FMapped, inline ByteAt
-  // single source: bytes ops not needed for header bits, but size is direct from header
+  // perf: single-pass header parse without inflating payload; zero-copy via FMapped + inline ByteAt
   P := SizeUInt(Off);
   B := ByteAt(P);
   Inc(P);
@@ -587,127 +587,153 @@ begin
       end;
     6, 7:
       begin
-        // delta: Sz is delta payload size, not target size; need target size from delta header
-        // also need base kind (inherited). For speed, inflate only outermost delta to read varints
-        // and resolve base kind recursively without full chain inflate where possible.
-        // stability: fallback to full ReadEntry if varint parsing fails
+        // perf: single-pass capture of base id + delta start; no double header re-parse
+        // 32B prefix inflate via TryPeekDeltaTargetSize (zero alloc, hot rename pre-check)
         if Typ = 6 then
         begin
-          // ofs_delta: skip base offset varint (7-bit groups with continuation)
           B := ByteAt(P);
           Inc(P);
+          Rel := B and $7F;
           while (B and $80) <> 0 do
           begin
             B := ByteAt(P);
             Inc(P);
+            Rel := ((Rel + 1) shl 7) or (B and $7F);
           end;
-          // P now at compressed delta start
-          // need base kind: compute base offset and lookup its kind without inflating base fully
-          // compute base offset like in ReadEntry
-          // recompute to get BaseOff for kind lookup
-          // re-parse to get Rel precisely
-          // Instead of recomputing, we can derive BaseOff by replaying same loop but capturing Rel
-          // Quick fallback: resolve kind via recursive header parse
-          // For simplicity, we handle kind via full chain fallback if needed
+          BaseOff := Off - Rel;
+          if (BaseOff < 0) or (BaseOff >= Off) then
+            Exit;
+          DeltaStart := P;
         end
         else
         begin
-          // ref_delta: 20-byte oid
           if P + GitOidRawLen > FDataSize then
             Exit;
-          Move(FData[P], BaseOid.Bytes[0], GitOidRawLen);
+          // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+          SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
+            TByteSpan.Create(FData + P, GitOidRawLen));
           Inc(P, GitOidRawLen);
+          DeltaStart := P;
+          BaseOff := FindOffset(BaseOid);
         end;
-        // perf: prefix inflate 32B only to get target varint (hot rename pre-check)
-        // zero-copy TByteSpan over stack buf, bytes.ops single source, no full Sz inflate
-        // TryPeekDeltaTargetSize handles zlib prefix & varint parse; fallback to Exit on corrupt
-        if not TryPeekDeltaTargetSize(P, TgtSize) then
+        if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then
           Exit;
         ASize := TgtSize;
-        // kind: try to get base kind quickly
+        // kind: header-only walk, no full inflate fallback (preserves 32B prefix optimisation)
         if Typ = 7 then
         begin
-          if TryGetObjectSize(BaseOid, BaseKind, BaseSize) then
+          if (BaseOff >= 0) and TryGetObjectSize(BaseOid, BaseKind, BaseSize) then
             AKind := BaseKind
-          else
+          else if BaseOff >= 0 then
           begin
-            // fallback via full read for kind
-            try
-              DeltaData := ReadObject(AOid, BaseKind);
-              AKind := BaseKind;
-            except
-              AKind := gokBlob;
+            CurOff := BaseOff;
+            Depth := 0;
+            while Depth <= GitMaxDeltaDepth do
+            begin
+              try
+                CurP := SizeUInt(CurOff);
+                CurB := ByteAt(CurP);
+                Inc(CurP);
+                CurTyp := (CurB shr 4) and $07;
+                while (CurB and $80) <> 0 do
+                begin
+                  CurB := ByteAt(CurP);
+                  Inc(CurP);
+                end;
+                case CurTyp of
+                  1: begin AKind := gokCommit; Break; end;
+                  2: begin AKind := gokTree; Break; end;
+                  3: begin AKind := gokBlob; Break; end;
+                  4: begin AKind := gokTag; Break; end;
+                  6:
+                    begin
+                      CurB := ByteAt(CurP);
+                      Inc(CurP);
+                      Rel := CurB and $7F;
+                      while (CurB and $80) <> 0 do
+                      begin
+                        CurB := ByteAt(CurP);
+                        Inc(CurP);
+                        Rel := ((Rel + 1) shl 7) or (CurB and $7F);
+                      end;
+                      CurOff := CurOff - Rel;
+                      if CurOff < 0 then Break;
+                      Inc(Depth);
+                      Continue;
+                    end;
+                  7:
+                    begin
+                      if CurP + GitOidRawLen > FDataSize then Break;
+                      SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
+                        TByteSpan.Create(FData + CurP, GitOidRawLen));
+                      CurOff := FindOffset(BaseOid);
+                      if CurOff < 0 then Break;
+                      Inc(Depth);
+                      Continue;
+                    end;
+                else
+                  Break;
+                end;
+                Break;
+              except
+                Break;
+              end;
             end;
           end;
         end
         else
         begin
-          // ofs_delta: find base offset
-          // recompute Rel
-          P := SizeUInt(Off);
-          B := ByteAt(P);
-          Inc(P);
-          // skip first header varint already consumed above, but need precise P after header
-          // re-parse header to get after-header P
-          P := SizeUInt(Off);
-          B := ByteAt(P);
-          Inc(P);
-          Shift := 4;
-          while (B and $80) <> 0 do
+          CurOff := BaseOff;
+          Depth := 0;
+          while Depth <= GitMaxDeltaDepth do
           begin
-            B := ByteAt(P);
-            Inc(P);
-          end;
-          // now P at base offset varint start
-          B := ByteAt(P);
-          Inc(P);
-          BaseOff := Int64(B and $7F);
-          while (B and $80) <> 0 do
-          begin
-            B := ByteAt(P);
-            Inc(P);
-            BaseOff := ((BaseOff + 1) shl 7) or Int64(B and $7F);
-          end;
-          BaseOff := Off - BaseOff;
-          if (BaseOff < 0) or (BaseOff >= Off) then
-          begin
-            // fallback
             try
-              DeltaData := ReadObject(AOid, BaseKind);
-              AKind := BaseKind;
-            except
-              AKind := gokBlob;
-            end;
-          end
-          else
-          begin
-            // peek base entry header to get its kind without full inflate
-            // read base entry header typ
-            try
-              P := SizeUInt(BaseOff);
-              B := ByteAt(P);
-              Typ := (B shr 4) and $07;
-              case Typ of
-                1: AKind := gokCommit;
-                2: AKind := gokTree;
-                3: AKind := gokBlob;
-                4: AKind := gokTag;
-                6, 7:
+              CurP := SizeUInt(CurOff);
+              CurB := ByteAt(CurP);
+              Inc(CurP);
+              CurTyp := (CurB shr 4) and $07;
+              while (CurB and $80) <> 0 do
+              begin
+                CurB := ByteAt(CurP);
+                Inc(CurP);
+              end;
+              case CurTyp of
+                1: begin AKind := gokCommit; Break; end;
+                2: begin AKind := gokTree; Break; end;
+                3: begin AKind := gokBlob; Break; end;
+                4: begin AKind := gokTag; Break; end;
+                6:
                   begin
-                    // nested delta: need to recurse via offset oid lookup not trivial
-                    // fallback to full read for nested case
-                    try
-                      DeltaData := ReadObject(AOid, BaseKind);
-                      AKind := BaseKind;
-                    except
-                      AKind := gokBlob;
+                    CurB := ByteAt(CurP);
+                    Inc(CurP);
+                    Rel := CurB and $7F;
+                    while (CurB and $80) <> 0 do
+                    begin
+                      CurB := ByteAt(CurP);
+                      Inc(CurP);
+                      Rel := ((Rel + 1) shl 7) or (CurB and $7F);
                     end;
+                    CurOff := CurOff - Rel;
+                    if CurOff < 0 then Break;
+                    Inc(Depth);
+                    Continue;
+                  end;
+                7:
+                  begin
+                    if CurP + GitOidRawLen > FDataSize then Break;
+                    SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
+                      TByteSpan.Create(FData + CurP, GitOidRawLen));
+                    CurOff := FindOffset(BaseOid);
+                    if CurOff < 0 then Break;
+                    Inc(Depth);
+                    Continue;
                   end;
               else
-                AKind := gokBlob;
+                Break;
               end;
+              Break;
             except
-              AKind := gokBlob;
+              Break;
             end;
           end;
         end;

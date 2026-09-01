@@ -72,6 +72,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
@@ -744,6 +745,7 @@ var N, NumExtra, I, J, K, PIdx, ParentIdx: Integer;
     Stack: array of Integer;
     CurIdx, PMax, CntP: Integer;
     HasPending: Boolean;
+    StackLen, StackCap: SizeUInt;
 begin
   Result := nil;
   N := Length(ARaw);
@@ -792,19 +794,24 @@ begin
       else
         GenState[I] := 0;
     end;
-    SetLength(Stack, 0);
+    // perf: geometric growth via bytes.ops GrowArrayCapacity (single source BYTES_BUILDER_MIN_GROW + *2), amortized O(1) push, avoids O(n²) SetLength(Length+1) churn, managed free on exception
+    StackLen := 0; StackCap := 0; SetLength(Stack, 0);
     for I := 0 to N-1 do
     begin
       if GenState[I] = 2 then Continue;
-      // push root of DFS
-      SetLength(Stack, Length(Stack) + 1);
-      Stack[High(Stack)] := I;
-      while Length(Stack) > 0 do
+      // push root of DFS — amortized geometric grow, inline
+      if StackLen >= StackCap then
       begin
-        CurIdx := Stack[High(Stack)];
+        StackCap := GrowArrayCapacity(StackCap, StackLen + 1);
+        SetLength(Stack, StackCap);
+      end;
+      Stack[StackLen] := I; Inc(StackLen);
+      while StackLen > 0 do
+      begin
+        CurIdx := Stack[StackLen - 1];
         if GenState[CurIdx] = 2 then
         begin
-          SetLength(Stack, Length(Stack) - 1);
+          Dec(StackLen);
           Continue;
         end;
         if GenState[CurIdx] = 0 then
@@ -816,8 +823,12 @@ begin
             ParentIdx := ParentCache[CurIdx][K];
             if (ParentIdx >= 0) and (GenState[ParentIdx] = 0) then
             begin
-              SetLength(Stack, Length(Stack) + 1);
-              Stack[High(Stack)] := ParentIdx;
+              if StackLen >= StackCap then
+              begin
+                StackCap := GrowArrayCapacity(StackCap, StackLen + 1);
+                SetLength(Stack, StackCap);
+              end;
+              Stack[StackLen] := ParentIdx; Inc(StackLen);
               HasPending := True;
             end
             else if (ParentIdx >= 0) and (GenState[ParentIdx] = 1) then
@@ -842,10 +853,10 @@ begin
         else
           RawSorted[CurIdx].Generation := 2;
         GenState[CurIdx] := 2;
-        SetLength(Stack, Length(Stack) - 1);
+        Dec(StackLen);
       end;
     end;
-    // ParentCache/GenState/Stack are managed types, freed on exit even if EGitError
+    // ParentCache/GenState/Stack are managed types, freed on exit even if EGitError; Stack capacity retained until scope exit, no leak, zero-copy Move in Push
   end;
   for I := 0 to N-1 do
     if RawSorted[I].Generation = 0 then

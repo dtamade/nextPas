@@ -35,6 +35,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -105,18 +106,25 @@ begin Result:=LowerCase(GitTrimSpaces(S)); end;
 
 function GitParseGitModules(const AText: string): TGitSubmoduleArray;
 var Lines: TStringArray; I: Integer; Line, Key, Val, CurName: string; EqPos: Integer; Cur: TGitSubmodule; HasCur: Boolean;
+  LCount, LCap: SizeUInt;
   procedure FlushCur;
   begin
     if not HasCur then Exit;
     if Cur.Path<>'' then
     begin
-      SetLength(Result, Length(Result)+1);
-      Result[High(Result)]:=Cur;
+      if LCount>=LCap then
+      begin
+        LCap:=GrowArrayCapacity(LCap, LCount+1);
+        SetLength(Result, LCap);
+      end;
+      Result[LCount]:=Cur;
+      Inc(LCount);
     end;
     HasCur:=False; Cur.Name:=''; Cur.Path:=''; Cur.Url:=''; Cur.Branch:='';
   end;
 begin
   Result:=nil;
+  LCount:=0; LCap:=0;
   Lines:=GitSplitLines(AText);
   CurName:=''; HasCur:=False;
   Cur.Name:=''; Cur.Path:=''; Cur.Url:=''; Cur.Branch:='';
@@ -147,15 +155,14 @@ begin
     else if Key='branch' then Cur.Branch:=Val;
   end;
   FlushCur;
+  if SizeUInt(Length(Result))<>LCount then
+    SetLength(Result, LCount);
 end;
 
-function GitParseGitModules(const AData: TBytes): TGitSubmoduleArray;
-var S: string;
+function GitParseGitModules(const AData: TBytes): TGitSubmoduleArray; inline;
 begin
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
-  Result:=GitParseGitModules(S);
+  Result:=GitParseGitModules(BytesToString(AData));
 end;
 
 function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray;
