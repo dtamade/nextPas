@@ -123,19 +123,23 @@ end;
 
 procedure EnsureNoSymlinkInPath(const APath: string); inline;
 var
-  LI: Integer;
+  LI, LLen: Integer;
   LPrefix: string;
 begin
   if APath = '' then Exit;
+  SetLength(LPrefix, Length(APath));
   for LI := 1 to Length(APath) do
   begin
     if (APath[LI] = '/') or (LI = Length(APath)) then
     begin
       if LI = Length(APath) then
-        LPrefix := APath
+        LLen := Length(APath)
       else
-        LPrefix := Copy(APath, 1, LI - 1);
-      if (LPrefix <> '') and IsSymlink(LPrefix) then
+        LLen := LI - 1;
+      if LLen = 0 then Continue;
+      SetLength(LPrefix, LLen);
+      Move(APath[1], LPrefix[1], LLen);
+      if IsSymlink(LPrefix) then
         raise EParseError.Create('zip extract: symlink in path: ' + LPrefix);
     end;
   end;

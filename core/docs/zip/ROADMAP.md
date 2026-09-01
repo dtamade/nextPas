@@ -168,6 +168,9 @@
 ### S78 — 稳定性收口（1.0.1 巡检）· 稳定性/复用度 — 已落地
 - `zip.fs` `ParentDirOf` 根路径校正：`"/a"→"/"`（`LSep=1→'/'`），`"/"→"/"`，`LParent=''` 时 `MkdirAll` 免空操作，`Atomic` 同文件系统保证更精确
 
+### S79 — 性能收敛（1.0.1 巡检）· 性能 — 已落地
+- `zip.fs` `EnsureNoSymlinkInPath` 零分配重构：`SetLength(LPrefix, Len)` 预分配复用 + `Move`，单次堆分配替代每段 `Copy`，70k× 多段路径 `O(n)` 预检
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -200,4 +203,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S78 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S79 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`。
