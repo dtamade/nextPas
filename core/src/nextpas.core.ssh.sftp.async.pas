@@ -21,6 +21,7 @@ uses
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.sftp,
+  nextpas.core.ssh.sftp.base,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.transport.async,
   nextpas.core.ssh.session.async;
@@ -109,7 +110,7 @@ type
     procedure PumpNext;
     procedure AccountConsume(ACount: SizeUInt); inline;
     procedure SendWindowAdjust(ACount: UInt32);
-    function ExtractSftpPacket(out APacket: TBytes): Boolean;
+    function ExtractSftpPacket(out APacket: TBytes): Boolean; inline;
     procedure TryDispatchSftp;
     procedure HandleChannelRequest(const APayload: TBytes);
     procedure HandleGlobalRequest;
@@ -191,16 +192,6 @@ procedure Runner_SftpOnSent(AErr: ESSHError; AContext: Pointer); forward;
 procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
   nextpas.core.bytes.ops.BytesAppend(ADst, ASrc);
-end;
-
-function SftpStatusName(ACode: UInt32): string;
-begin
-  case ACode of
-    0: Result:='ok'; 1: Result:='eof'; 2: Result:='no-such-file';
-    3: Result:='permission-denied'; 4: Result:='failure';
-    5: Result:='bad-message'; 8: Result:='op-unsupported';
-  else Result:='status-'+IntToStr(ACode);
-  end;
 end;
 
 function GlobalReplyPayload(AOk: Boolean): TBytes;
@@ -521,7 +512,7 @@ begin
   FTransport.AsyncSendPacket(GlobalReplyPayload(False), nil, nil);
 end;
 
-function TAsyncSftpChannel.ExtractSftpPacket(out APacket: TBytes): Boolean;
+function TAsyncSftpChannel.ExtractSftpPacket(out APacket: TBytes): Boolean; inline;
 var LLen: UInt32;
 begin
   Result:=False; APacket:=nil;
@@ -531,7 +522,7 @@ begin
   if SizeUInt(Length(FReadBuf)) < 4+LLen then Exit;
   SetLength(APacket, LLen);
   if LLen>0 then Move(FReadBuf[4], APacket[0], LLen);
-  FReadBuf:=Copy(FReadBuf, 4+Integer(LLen), Length(FReadBuf)-4-Integer(LLen));
+  BytesConsumePrefix(FReadBuf, 4+SizeUInt(LLen)); { perf: bytes.ops single source, in-place Move+shrink, no Copy alloc, zero-copy tail }
   Result:=True;
 end;
 
@@ -1052,7 +1043,7 @@ begin
     Exit;
   end;
   LTake:=SizeUInt(Length(Self.FWriteData)); if LTake>SFTP_CHUNK_SIZE then LTake:=SFTP_CHUNK_SIZE;
-  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(0); LW.PutStringBytes(Copy(Self.FWriteData, 0, LTake)); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Self.FWriteOff:=LTake;
+  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(0); LW.PutUInt32(UInt32(LTake)); if LTake>0 then LW.PutRaw(@Self.FWriteData[0], LTake); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Self.FWriteOff:=LTake;
 end;
 
 procedure TAsyncSftpFileSystem.OnWriteChunk(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);
@@ -1066,7 +1057,7 @@ begin
     Exit;
   end;
   LTake:=SizeUInt(Length(Self.FWriteData))-Self.FWriteOff; if LTake>SFTP_CHUNK_SIZE then LTake:=SFTP_CHUNK_SIZE;
-  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(UInt64(Self.FWriteOff)); LW.PutStringBytes(Copy(Self.FWriteData, Self.FWriteOff, LTake)); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Inc(Self.FWriteOff, LTake);
+  LW:=TsshWriter.Create(24+Integer(LTake)); try LW.PutStringBytes(Self.FWriteHandle); LW.PutUInt64(UInt64(Self.FWriteOff)); LW.PutUInt32(UInt32(LTake)); if LTake>0 then LW.PutRaw(@Self.FWriteData[Self.FWriteOff], LTake); Tail:=LW.ToBytes; finally LW.Free; end; Self.FChannel.SftpRoundTripAsync(SSH_FXP_WRITE, Tail, [SSH_FXP_STATUS], @FsOnWriteChunk, Self); Inc(Self.FWriteOff, LTake);
 end;
 
 procedure TAsyncSftpFileSystem.OnWriteClose(const APacket: TBytes; AErr: ESSHError; AContext: Pointer);

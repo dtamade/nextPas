@@ -335,6 +335,8 @@ begin
   GSuite.Test('writefile async', procedure var P:string; A:TSftpAttrs; D:TSftpDirEntryArray; Da:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpScenario(GSeed,'write',P,A,D,Da,K); CheckTrue(Ok,'write ok'); end);
   GSuite.Test('remove async', procedure var P:string; A:TSftpAttrs; D:TSftpDirEntryArray; Da:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpScenario(GSeed,'remove',P,A,D,Da,K); CheckTrue(Ok,'remove ok'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.sftp.async');
-  GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
+  GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary;
+  ClearBigIntCache; // heaptrc 0: BigNat Montgomery 单源收敛，终局清零
+  if not GRunner.AllPassed then Halt(1);
   GState:=Default(TAsyncSftpTestState); SetLength(GSeed,0); GSuite:=Default(TTestSuite); GRunner:=Default(TSuiteRunner);
 end.

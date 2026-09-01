@@ -24,6 +24,7 @@ uses
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.channel,
+  nextpas.core.ssh.sftp.base,
   nextpas.core.ssh.transport;
 
 const
@@ -122,6 +123,7 @@ type
 { 属性编解码（导出供测试与二次开发）}
 procedure PutAttrs(var AW: TsshWriter; const AAttrs: TSftpAttrs);
 function ReadAttrs(var AR: TsshReader): TSftpAttrs;
+function SftpStatusName(ACode: UInt32): string; inline;
 
 { 在已打开并已通过 subsystem 请求的通道上建立 SFTP 连接：
   完成 INIT/VERSION 握手后返回文件系统门面。通道所有权随之移交。}
@@ -221,7 +223,10 @@ type
   private
     FChan: TSshChannel;
     FBuf: TBytes;      { 未消费的流字节 }
-    function TakeFromBuffer(ACount: Integer): TBytes;
+    FOff: SizeUInt;    { 已消费前缀偏移，零拷贝避免 O(n) Copy 搬移 }
+    function BufferedLen: SizeUInt; inline;
+    procedure CompactIfNeeded; inline;
+    function TakeFromBuffer(ACount: Integer): TBytes; inline;
   public
     constructor Create(AChannel: TSshChannel);
     destructor Destroy; override;
@@ -233,6 +238,37 @@ constructor TSshChannelWire.Create(AChannel: TSshChannel);
 begin
   inherited Create;
   FChan := AChannel;
+  FOff := 0;
+end;
+
+function TSshChannelWire.BufferedLen: SizeUInt; inline;
+begin
+  if FBuf = nil then
+    Exit(0);
+  if FOff >= SizeUInt(Length(FBuf)) then
+    Exit(0);
+  Result := SizeUInt(Length(FBuf)) - FOff;
+end;
+
+procedure TSshChannelWire.CompactIfNeeded; inline;
+var
+  LBuffered: SizeUInt;
+begin
+  if FOff = 0 then
+    Exit;
+  LBuffered := BufferedLen;
+  if LBuffered = 0 then
+  begin
+    SetLength(FBuf, 0);
+    FOff := 0;
+    Exit;
+  end;
+  if (FOff > 4096) or (FOff > SizeUInt(Length(FBuf)) div 2) then
+  begin
+    Move(FBuf[FOff], FBuf[0], LBuffered);
+    SetLength(FBuf, LBuffered);
+    FOff := 0;
+  end;
 end;
 
 destructor TSshChannelWire.Destroy;
@@ -255,10 +291,13 @@ begin
   end;
 end;
 
-function TSshChannelWire.TakeFromBuffer(ACount: Integer): TBytes;
+function TSshChannelWire.TakeFromBuffer(ACount: Integer): TBytes; inline;
 begin
-  Result := Copy(FBuf, 0, ACount);
-  FBuf := Copy(FBuf, ACount, Length(FBuf) - ACount);
+  SetLength(Result, ACount);
+  if ACount > 0 then
+    Move(FBuf[FOff], Result[0], ACount);
+  Inc(FOff, SizeUInt(ACount));
+  CompactIfNeeded;
 end;
 
 function TSshChannelWire.Recv(ATimeoutMs: Integer): TBytes;
@@ -267,24 +306,25 @@ var
   LExt: Boolean;
   LLen: UInt32;
 begin
-  while SizeUInt(Length(FBuf)) < 4 do
+  while BufferedLen < 4 do
   begin
     if not FChan.PumpData(LChunk, LExt) then
       raise ESSHError.Create(sekIO, 'sftp: channel closed by peer');
     AppendChunk(FBuf, LChunk);
   end;
-  LLen := (UInt32(FBuf[0]) shl 24) or (UInt32(FBuf[1]) shl 16) or
-    (UInt32(FBuf[2]) shl 8) or UInt32(FBuf[3]);
+  LLen := (UInt32(FBuf[FOff]) shl 24) or (UInt32(FBuf[FOff + 1]) shl 16) or
+    (UInt32(FBuf[FOff + 2]) shl 8) or UInt32(FBuf[FOff + 3]);
   if (LLen < 1) or (LLen > MAX_PACKET_SIZE) then
     raise ESSHError.Create(sekProtocol,
       'sftp: unreasonable packet length ' + IntToStr(LLen));
-  while SizeUInt(Length(FBuf)) < SizeUInt(4 + LLen) do
+  while BufferedLen < SizeUInt(4 + LLen) do
   begin
     if not FChan.PumpData(LChunk, LExt) then
       raise ESSHError.Create(sekIO, 'sftp: channel closed mid-packet');
     AppendChunk(FBuf, LChunk);
   end;
-  FBuf := Copy(FBuf, 4, Length(FBuf) - 4);   { 去掉长度前缀 }
+  Inc(FOff, 4);   { 去掉长度前缀，零拷贝，仅移动偏移 }
+  CompactIfNeeded;
   Result := TakeFromBuffer(Integer(LLen));
 end;
 
@@ -308,21 +348,6 @@ type
       const AAcceptable: array of Byte; out ARespType: Byte;
       const AContext: string): TBytes;
   end;
-
-function SftpStatusName(ACode: UInt32): string;
-begin
-  case ACode of
-    SSH_FX_OK:               Result := 'ok';
-    SSH_FX_EOF:              Result := 'eof';
-    SSH_FX_NO_SUCH_FILE:     Result := 'no-such-file';
-    SSH_FX_PERMISSION_DENIED: Result := 'permission-denied';
-    SSH_FX_FAILURE:          Result := 'failure';
-    SSH_FX_BAD_MESSAGE:      Result := 'bad-message';
-    SSH_FX_OP_UNSUPPORTED:   Result := 'op-unsupported';
-  else
-    Result := 'status-' + IntToStr(ACode);
-  end;
-end;
 
 constructor TSftpConnection.Create(AWire: ISftpWire; ATimeoutMs: Integer);
 begin
@@ -781,7 +806,9 @@ begin
       try
         LTail.PutStringBytes(LHandle);
         LTail.PutUInt64(LOffset);
-        LTail.PutStringBytes(Copy(AData, LOff, LTake));
+        LTail.PutUInt32(UInt32(LTake));
+        if LTake > 0 then
+          LTail.PutRaw(@AData[LOff], LTake);
         FConn.RoundTrip(SSH_FXP_WRITE, LTail.ToBytes, [SSH_FXP_STATUS],
           LRT, APath);
       finally
@@ -852,6 +879,11 @@ begin
   finally
     LTail.Free;
   end;
+end;
+
+function SftpStatusName(ACode: UInt32): string; inline;
+begin
+  Result := nextpas.core.ssh.sftp.base.SftpStatusName(ACode);
 end;
 
 function SftpOpenOnChannel(AChannel: TSshChannel;

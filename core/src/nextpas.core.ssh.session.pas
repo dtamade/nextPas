@@ -9,7 +9,12 @@ unit nextpas.core.ssh.session;
  *    再依次调用 AuthenticateWithXxx。
  *
  * 主机密钥策略：签名必须验证通过；提供 KnownHostsFile 时按条目匹配，
- * StrictHostKeyChecking 开启时未知/不匹配即拒绝。 *}
+ * StrictHostKeyChecking 开启时未知/不匹配即拒绝。
+ *
+ * 薄编排：握手/重协商委托 handshake 单源，认证回退委托 auth 单源；
+ * 本单元仅保留状态与生命周期、Exec/SFTP 转发与拨号入口。
+ * 性能：GetConnected/GetServerVersion inline，Exec/SFTP 零拷贝委托；
+ * 稳定性：try-finally 保证通道/传输释放，SecureZero 敏感材料。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -95,23 +100,12 @@ uses
   nextpas.core.exception,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
-  nextpas.core.mem.secure,
   nextpas.core.ssh.net.ffi,
-  nextpas.core.crypto.random,
-  nextpas.core.crypto.ed25519,
-  nextpas.core.crypto.hash,
-  nextpas.core.ssh.cipher,
-  nextpas.core.ssh.auth,
-  nextpas.core.ssh.keys,
-  nextpas.core.ssh.rsa,
-  nextpas.core.ssh.agent,
-  nextpas.core.ssh.compress,
-  nextpas.core.ssh.kex.curve25519,
-  nextpas.core.ssh.kex.dhgroup14;
+  nextpas.core.ssh.session.handshake,
+  nextpas.core.ssh.session.auth;
 
 const
   DISCONNECT_BY_APPLICATION = 11;
-  SSH_ALG_ED25519 = 'ssh-ed25519';
 
 type
   TSshSession = class(TInterfacedObject, ISshSession)
@@ -130,25 +124,15 @@ type
     FKnownHosts: TSshKnownHosts;
     FKnownHostsLoaded: Boolean;
     FNegotiated: TSshNegotiated;
-
-    procedure EnsureHandshaken;
-    procedure EnsureAuthenticated;
-    procedure DoHandshake;
-    procedure DoRekey;
-    procedure EnsureRekeyIfNeeded;
-    procedure DoServiceRequest;
-    procedure VerifyHostKey(const ASigAlg: string; const AH, ASigBlob: TBytes);
-    procedure LoadKnownHostsIfNeeded;
-    function ExpectOneOf(const AAcceptable: array of Byte): TBytes;
-    procedure DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
-      const AK, AH: TBytes);
-    procedure AuthenticateWithAgentClient(const AAgent: TSshAgentClient);
-    procedure TryEnableDelayedCompression;
+    procedure EnsureHandshaken; inline;
+    procedure EnsureAuthenticated; inline;
+    procedure DoHandshake; inline;
+    procedure DoRekey; inline;
+    procedure EnsureRekeyIfNeeded; inline;
   public
     constructor CreateInternal(const AIO: IReadWriteCloser;
       const AOptions: TSshConnectOptions);
     destructor Destroy; override;
-
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
@@ -165,8 +149,6 @@ type
     function SendKeepAlive: Boolean; overload;
     procedure Close;
   end;
-
-
 
 { TSshSession }
 
@@ -234,7 +216,7 @@ end;
 function TSshSession.SendKeepAlive: Boolean;
 begin Result := SendKeepAlive(nil); end;
 
-procedure TSshSession.EnsureRekeyIfNeeded;
+procedure TSshSession.EnsureRekeyIfNeeded; inline;
 begin
   if ShouldRekey then
     try
@@ -245,20 +227,7 @@ begin
     end;
 end;
 
-function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;
-var I: Integer; LFound: Boolean;
-begin
-  while True do
-  begin
-    Result := PumpMessage(FTransport);
-    LFound := False;
-    for I := 0 to High(AAcceptable) do
-      if Result[0] = AAcceptable[I] then begin LFound := True; Break; end;
-    if LFound then Exit;
-  end;
-end;
-
-procedure TSshSession.EnsureHandshaken;
+procedure TSshSession.EnsureHandshaken; inline;
 begin
   if FClosed then
     raise ESSHError.Create(sekIO, 'ssh session: closed');
@@ -266,394 +235,57 @@ begin
     DoHandshake;
 end;
 
-procedure TSshSession.EnsureAuthenticated;
+procedure TSshSession.EnsureAuthenticated; inline;
 begin
   EnsureHandshaken;
   if not FAuthenticated then
     raise ESSHError.Create(sekAuth, 'ssh session: not authenticated');
 end;
 
-procedure TSshSession.LoadKnownHostsIfNeeded;
+procedure TSshSession.DoHandshake; inline;
 begin
-  if FKnownHostsLoaded then
-    Exit;
-  FKnownHostsLoaded := True;
-  if FOptions.KnownHostsFile <> '' then
-  begin
-    FKnownHosts := TSshKnownHosts.Create;
-    FKnownHosts.LoadFromFile(FOptions.KnownHostsFile);
-  end;
-end;
-
-procedure TSshSession.VerifyHostKey(const ASigAlg: string;
-  const AH, ASigBlob: TBytes);
-var
-  LInFile: Boolean;
-begin
-  { 第一步：密码学签名必须有效 }
-  if not SshVerifyHostSignature(FHostKeyInfo, ASigAlg, AH, ASigBlob) then
-    raise ESSHError.Create(sekHostKey,
-      'ssh session: host key signature invalid (' +
-      SshFingerprintSHA256(FHostKeyBlob) + ')');
-
-  { 第二步：known_hosts 策略（未配置文件则只验签名）}
-  LoadKnownHostsIfNeeded;
-  if FKnownHosts <> nil then
-  begin
-    LInFile := FKnownHosts.ContainsKey(FOptions.Host, FOptions.Port, FHostKeyBlob);
-    if (not LInFile) and FOptions.StrictHostKeyChecking then
-      raise ESSHError.Create(sekHostKey,
-        'ssh session: host key not in known_hosts (' +
-        FOptions.Host + ':' + IntToStr(FOptions.Port) + ', ' +
-        FHostKeyFingerprint + ')');
-  end;
-end;
-
-procedure TSshSession.TryEnableDelayedCompression;
-begin
-  if FAuthenticated and (SshCompressionIsDelayed(FNegotiated.CompCs)
-    or SshCompressionIsDelayed(FNegotiated.CompSc)) then
-    FTransport.EnableCompression;
-end;
-
-procedure TSshSession.DoHandshake;
-var
-  LCookie, LMyInit, LPeerInit, LReply: TBytes;
-  LPeer: TSshPeerKexInit;
-  LNeg: TSshNegotiated;
-  LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKexCurve: TSshKexCurve25519;
-  LKexDH: TSshKexDHGroup14;
-begin
-  FTransport.ExchangeVersions;
-
-  LCookie := GenerateSecureRandomBytes(16);
-  LMyInit := FTransport.SendKexInitEx(LCookie, FOptions.Compress);
-
-  LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
-  LPeer := SshParseKexInit(LPeerInit);
-  LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
-  FNegotiated := LNeg;
-
-  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    LKexDH := TSshKexDHGroup14.Create;
-    try
-      FTransport.SendPacket(LKexDH.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexDH.Free;
-    end;
-  end
-  else
-  begin
-    LKexCurve := TSshKexCurve25519.Create;
-    try
-      FTransport.SendPacket(LKexCurve.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally
-      LKexCurve.Free;
-    end;
-  end;
-
-  FHostKeyBlob := LHostBlob;
-  if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
-    raise ESSHError.Create(sekHostKey, 'ssh session: unsupported host key blob');
-  VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);
-  FHostKeyFingerprint := SshFingerprintSHA256(LHostBlob);
-
-  FSessionId := LH;  { 首次 KEX：session_id = H }
-  DeriveAndApplyNewKeys(LNeg, LK, LH);
-  DoServiceRequest;
+  SshHandshakeDoHandshake(FTransport, FOptions, FSessionId, FNegotiated,
+    FHostKeyInfo, FHostKeyBlob, FHostKeyFingerprint, FKnownHosts, FKnownHostsLoaded);
   FHandshaken := True;
 end;
 
-procedure TSshSession.DoRekey;
-var
-  LCookie, LMyInit, LPeerInit, LReply: TBytes;
-  LPeer: TSshPeerKexInit;
-  LNeg: TSshNegotiated;
-  LK, LH, LHostBlob, LSigBlob: TBytes;
-  LKexCurve: TSshKexCurve25519;
-  LKexDH: TSshKexDHGroup14;
+procedure TSshSession.DoRekey; inline;
 begin
-  if FClosed or not FAuthenticated then
-    raise ESSHError.Create(sekProtocol, 'ssh session: rekey outside authenticated session');
-  if FTransport.State <> tstEncrypted then
-    raise ESSHError.Create(sekProtocol, 'ssh session: rekey without encryption');
-  LCookie := GenerateSecureRandomBytes(16);
-  LMyInit := FTransport.SendKexInitEx(LCookie, FOptions.Compress);
-  LPeerInit := ExpectOneOf([SSH_MSG_KEXINIT]);
-  LPeer := SshParseKexInit(LPeerInit);
-  LNeg := SshNegotiateEx(LPeer, FOptions.Compress);
-  if LNeg.KexAlg = 'diffie-hellman-group14-sha256' then
-  begin
-    LKexDH := TSshKexDHGroup14.Create;
-    try
-      FTransport.SendPacket(LKexDH.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexDH.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally LKexDH.Free; end;
-  end else
-  begin
-    LKexCurve := TSshKexCurve25519.Create;
-    try
-      FTransport.SendPacket(LKexCurve.BuildInitPayload);
-      LReply := ExpectOneOf([SSH_MSG_KEX_ECDH_REPLY]);
-      LKexCurve.ProcessReply(LReply, SSH_PROTOCOL_VERSION, FTransport.ServerIdent,
-        LMyInit, LPeerInit, LK, LH, LHostBlob, LSigBlob);
-    finally LKexCurve.Free; end;
-  end;
-  if not SshParseHostKey(LHostBlob, FHostKeyInfo) then
-    raise ESSHError.Create(sekHostKey, 'ssh session: rekey unsupported host key blob');
-  VerifyHostKey(LNeg.HostKeyAlg, LH, LSigBlob);
-  DeriveAndApplyNewKeys(LNeg, LK, LH);
-  FNegotiated := LNeg;
-end;
-
-procedure TSshSession.DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
-  const AK, AH: TBytes);
-var
-  LW: TsshWriter;
-  LKmpint, LIvCs, LIvSc, LKeyCs, LKeySc, LMacCs, LMacSc, LNewKeys: TBytes;
-begin
-  LW := TsshWriter.Create(80);
-  try
-    LW.PutMPInt(AK);
-    LKmpint := LW.ToBytes;
-  finally
-    LW.Free;
-  end;
-
-  try
-    LIvCs := SshKdfSha256(LKmpint, AH, Ord('A'), FSessionId,
-      SshCipherIvSize(ANegotiated.EncCs));
-    LIvSc := SshKdfSha256(LKmpint, AH, Ord('B'), FSessionId,
-      SshCipherIvSize(ANegotiated.EncSc));
-    LKeyCs := SshKdfSha256(LKmpint, AH, Ord('C'), FSessionId,
-      SshCipherKeySize(ANegotiated.EncCs));
-    LKeySc := SshKdfSha256(LKmpint, AH, Ord('D'), FSessionId,
-      SshCipherKeySize(ANegotiated.EncSc));
-    LMacCs := SshKdfSha256(LKmpint, AH, Ord('E'), FSessionId,
-      SshMacKeySize(ANegotiated.MacCs));
-    LMacSc := SshKdfSha256(LKmpint, AH, Ord('F'), FSessionId,
-      SshMacKeySize(ANegotiated.MacSc));
-    begin
-      SetLength(LNewKeys, 1); LNewKeys[0] := SSH_MSG_NEWKEYS;
-      FTransport.SendPacket(LNewKeys);
-    end;
-    ExpectOneOf([SSH_MSG_NEWKEYS]);
-    FTransport.SetNegotiatedCompression(ANegotiated);
-    FTransport.ApplyNewKeys(ANegotiated,
-      LIvCs, LKeyCs, LMacCs, LIvSc, LKeySc, LMacSc);
-  finally
-    SecureZeroBytes(LKmpint);
-    SecureZeroBytes(LIvCs);
-    SecureZeroBytes(LIvSc);
-    SecureZeroBytes(LKeyCs);
-    SecureZeroBytes(LKeySc);
-    SecureZeroBytes(LMacCs);
-    SecureZeroBytes(LMacSc);
-  end;
-end;
-
-procedure TSshSession.DoServiceRequest;
-var
-  LW: TsshWriter;
-begin
-  LW := TsshWriter.Create(32);
-  try
-    LW.PutByte(SSH_MSG_SERVICE_REQUEST);
-    LW.PutStringText(SSH_SERVICE_USERAUTH);
-    FTransport.SendPacket(LW.ToBytes);
-  finally
-    LW.Free;
-  end;
-  ExpectOneOf([SSH_MSG_SERVICE_ACCEPT]);
+  SshHandshakeDoRekey(FTransport, FOptions, FSessionId, FNegotiated,
+    FHostKeyInfo, FKnownHosts, FKnownHostsLoaded, FAuthenticated, FClosed);
 end;
 
 procedure TSshSession.AuthenticateWithPassword(const AUser, APassword: string);
-var
-  LR: TsshReader;
-  LMsg: TBytes;
 begin
   EnsureHandshaken;
   FActiveUser := AUser;
-
-  FTransport.SendPacket(SshBuildAuthPassword(AUser, APassword));
-
-  LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
-  if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-  begin
-    FAuthenticated := True;
-    TryEnableDelayedCompression;
-  end
-  else
-  begin
-    LR := TsshReader.Create(LMsg);
-    try
-      LR.ReadByte;
-      LR.ReadStringText;
-    finally
-      LR.Free;
-    end;
-    raise ESSHError.Create(sekAuth,
-      'ssh session: password rejected for user "' + AUser + '"');
-  end;
+  SshAuthAuthenticateWithPassword(FTransport, FNegotiated, FAuthenticated, AUser, APassword);
 end;
 
-procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string); overload;
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent: string);
 begin
   AuthenticateWithPrivateKeyData(AContent, FOptions.PrivateKeyPassphrase);
 end;
 
-procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
-var
-  LR: TsshReader;
-  LMsg: TBytes;
-  LKey: TSshPrivateKey;
-  LPubBlob, LSignedData, LSig64, LSigRaw, LSigBlob: TBytes;
-  LAlgName: string;
-
-  { USERAUTH 回复收口：SUCCESS 置位；FAILURE 抛 sekAuth（带可继续方法表）}
-  procedure AwaitSuccessOrRaise(const AWhat: string);
-  begin
-    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
-    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-      FAuthenticated := True
-    else
-    begin
-      LR := TsshReader.Create(LMsg);
-      try
-        LR.ReadByte;
-        LR.ReadStringText;
-      finally
-        LR.Free;
-      end;
-      raise ESSHError.Create(sekAuth, 'ssh session: ' + AWhat + ' rejected');
-    end;
-  end;
-
+procedure TSshSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string);
 begin
   EnsureHandshaken;
-
-  if not SshLoadPrivateKey(AContent, LKey, LPubBlob, APassphrase) then
-    raise ESSHError.Create(sekKeyFormat, 'ssh session: private key parse failed');
-
-  case LKey.Kind of
-    hkEd25519:
-      begin
-        LAlgName := SSH_ALG_ED25519;
-        LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
-        if not Ed25519Sign(LKey.Ed25519Seed, LSignedData, LSig64) then
-          raise ESSHError.Create(sekCrypto, 'ssh session: ed25519 sign failed');
-        LSigBlob := SshBuildEd25519SigBlob(LSig64);
-      end;
-    hkRsa:
-      begin
-        { rsa-sha2-512 与 rsa-sha2-256 同版本引入且被一切接受 RSA 的服务端
-          支持；选最强档，单次尝试不做降级。优先走 CRT（p/q/iqmp 存在时约 4x
-          加速），失败则回退到朴素模幂以兼顾非法 CRT 容器/测试哑数据。}
-        LAlgName := SSH_RSA_SIG_SHA512;
-        LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LPubBlob);
-        if LKey.RsaHasCrt then
-        begin
-          if not RsaSignPkcs1v15Crt(LKey.RsaN, LKey.RsaD, LKey.RsaP, LKey.RsaQ,
-            LKey.RsaIqmp, SHA512(LSignedData), DIGEST_INFO_SHA512, LSigRaw) then
-            if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
-              DIGEST_INFO_SHA512, LSigRaw) then
-              raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
-        end
-        else
-          if not RsaSignPkcs1v15(LKey.RsaN, LKey.RsaD, SHA512(LSignedData),
-            DIGEST_INFO_SHA512, LSigRaw) then
-            raise ESSHError.Create(sekCrypto, 'ssh session: rsa sign failed');
-        LSigBlob := SshBuildRsaSigBlob(LSigRaw, LAlgName);
-      end;
-  else
-    raise ESSHError.Create(sekUnsupported,
-      'ssh session: unsupported private key kind');
-  end;
-
-  FTransport.SendPacket(
-    SshBuildAuthPubKeySigned(FActiveUser, LAlgName, LPubBlob, LSigBlob));
-  AwaitSuccessOrRaise('publickey');
-  TryEnableDelayedCompression;
+  SshAuthAuthenticateWithPrivateKeyData(FTransport, FSessionId, FNegotiated,
+    FAuthenticated, FActiveUser, AContent, APassphrase);
 end;
 
 procedure TSshSession.AuthenticateWithAgent(const APath: string);
-var
-  LAgent: TSshAgentClient;
 begin
   EnsureHandshaken;
-  if APath = '' then
-    raise ESSHError.Create(sekIO, 'ssh session: agent socket path empty');
-  LAgent := SshAgentConnect(APath);
-  try
-    AuthenticateWithAgentClient(LAgent);
-  finally
-    LAgent.Free;
-  end;
+  SshAuthAuthenticateWithAgent(FTransport, FSessionId, FNegotiated,
+    FAuthenticated, FActiveUser, APath);
 end;
 
 procedure TSshSession.AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
-var
-  LAgent: TSshAgentClient;
 begin
   EnsureHandshaken;
-  LAgent := TSshAgentClient.Create(AAgentIO);
-  try
-    AuthenticateWithAgentClient(LAgent);
-  finally
-    LAgent.Free;
-  end;
-end;
-
-procedure TSshSession.AuthenticateWithAgentClient(const AAgent: TSshAgentClient);
-var
-  LIds: TSshAgentIdentityArray;
-  I: Integer;
-  LAlgName: string;
-  LSignedData, LSigBlob: TBytes;
-  LFlags: UInt32;
-  LMsg: TBytes;
-begin
-  if not AAgent.ListIdentities(LIds) then
-    raise ESSHError.Create(sekAuth, 'ssh session: agent list failed');
-  if Length(LIds) = 0 then
-    raise ESSHError.Create(sekAuth, 'ssh session: agent has no identities');
-  for I := 0 to High(LIds) do
-  begin
-    LAlgName := LIds[I].AlgName;
-    if LAlgName = '' then Continue;
-    FTransport.SendPacket(SshBuildAuthPubKeyProbe(FActiveUser, LAlgName, LIds[I].Blob));
-    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE, SSH_MSG_USERAUTH_PK_OK]);
-    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-    begin
-      FAuthenticated := True;
-      TryEnableDelayedCompression;
-      Exit;
-    end;
-    if LMsg[0] = SSH_MSG_USERAUTH_FAILURE then Continue;
-    LFlags := SshAgentKeyBlobToSignFlags(LIds[I].Blob);
-    LSignedData := SshAuthSignedData(FSessionId, FActiveUser, LAlgName, LIds[I].Blob);
-    if not AAgent.Sign(LIds[I].Blob, LSignedData, LFlags, LSigBlob) then Continue;
-    FTransport.SendPacket(SshBuildAuthPubKeySigned(FActiveUser, LAlgName, LIds[I].Blob, LSigBlob));
-    LMsg := ExpectOneOf([SSH_MSG_USERAUTH_SUCCESS, SSH_MSG_USERAUTH_FAILURE]);
-    if LMsg[0] = SSH_MSG_USERAUTH_SUCCESS then
-    begin
-      FAuthenticated := True;
-      TryEnableDelayedCompression;
-      Exit;
-    end;
-    // else try next identity
-  end;
-  raise ESSHError.Create(sekAuth, 'ssh session: agent publickey rejected');
+  SshAuthAuthenticateWithAgentOn(FTransport, FSessionId, FNegotiated,
+    FAuthenticated, FActiveUser, AAgentIO);
 end;
 
 function TSshSession.Exec(const ACommand: string): TSshExecResult;

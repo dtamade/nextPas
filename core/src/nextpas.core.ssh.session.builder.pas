@@ -40,9 +40,6 @@ function SshClient: ISshClientBuilder;
 
 implementation
 
-uses
-  nextpas.core.ssh.session;
-
 type
   TSshClientBuilder = class(TInterfacedObject, ISshClientBuilder)
   private

@@ -38,7 +38,10 @@ uses
   nextpas.core.ssh.compress,
   nextpas.core.ssh.rekey,
   nextpas.core.ssh.keepalive,
+  nextpas.core.ssh.keepalive.scheduler,
   nextpas.core.ssh.window,
+  nextpas.core.ssh.flow.window,
+  nextpas.core.ssh.knownhosts,
   nextpas.core.ssh.session,
   nextpas.core.ssh.session.builder,
   nextpas.core.ssh.proxyjump,
@@ -76,6 +79,9 @@ type
   TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
   TsshReader = nextpas.core.ssh.buffer.TsshReader;
   TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
+  TFlowWindow = nextpas.core.ssh.flow.window.TFlowWindow;
+  TSshKnownHostsFacade = nextpas.core.ssh.knownhosts.TSshKnownHostsFacade;
+  TKeepAliveScheduler = nextpas.core.ssh.keepalive.scheduler.TKeepAliveScheduler;
 
   { 扩展门面: 补齐9遗漏单元 }
   TSshPrivateKey = nextpas.core.ssh.keys.TSshPrivateKey;

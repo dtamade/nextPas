@@ -45,6 +45,9 @@ procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+{ perf: single source for 4B length-prefix frame reassembly; in-place Move+shrink, no Copy alloc, zero-copy tail shift }
+procedure BytesRemovePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
+procedure BytesConsumePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -379,6 +382,22 @@ begin
   ADest[LOldLen + 1] := Byte(AValue shr 16);
   ADest[LOldLen + 2] := Byte(AValue shr 8);
   ADest[LOldLen + 3] := Byte(AValue);
+end;
+
+procedure BytesRemovePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
+var LLen, LRem: SizeUInt;
+begin
+  LLen:=SizeUInt(Length(ABuf));
+  if ACount=0 then Exit;
+  if ACount>=LLen then begin SetLength(ABuf,0); Exit; end;
+  LRem:=LLen-ACount;
+  Move(ABuf[ACount], ABuf[0], LRem);
+  SetLength(ABuf, LRem);
+end;
+
+procedure BytesConsumePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
+begin
+  BytesRemovePrefix(ABuf, ACount);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;

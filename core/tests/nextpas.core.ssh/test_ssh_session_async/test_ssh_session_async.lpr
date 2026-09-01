@@ -413,6 +413,7 @@ begin
   GRunner.Add(GSuite);
   GRunner.RunAll;
   GRunner.Summary;
+  ClearBigIntCache; // heaptrc 0: BigNat/Montgomery 收敛
   if not GRunner.AllPassed then Halt(1);
   GAsyncState:=Default(TAsyncTestState);
   SetLength(GSeed,0);

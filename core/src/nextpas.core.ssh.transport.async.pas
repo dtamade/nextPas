@@ -1,7 +1,7 @@
 unit nextpas.core.ssh.transport.async;
 
-{** nextpas.core.ssh - 异步传输层 (TAsyncLoop + IAsyncTcpStream)。
- * 复用 cipher/compress/kex 的同步加解密逻辑, I/O 事件化。 *}
+{** nextpas.core.ssh - 异步传输层 (TAsyncLoop + IAsyncTcpStream via ssh.net.ffi 单缝隙).
+ * 复用 cipher/compress/kex 的同步加解密逻辑, I/O 事件化；IAsyncTcpStream 经 net.ffi re-export 单缝隙收口。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -14,7 +14,7 @@ uses
   nextpas.core.exception,
   nextpas.core.async.loop,
   nextpas.core.async.base,
-  nextpas.core.net.async.tcp,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
