@@ -114,8 +114,8 @@ if LProvider = nil then
 | [`ERRORS.md`](ERRORS.md) | 错误流转矩阵、重试判定表、取消语义全表 |
 | [`LIFECYCLE.md`](LIFECYCLE.md) | 对象状态机、流式时序、并行工具执行、资源所有权 |
 | [`SECURITY.md`](SECURITY.md) | 密钥流转、脱敏等级、DoS 防线、fail-closed 清单 |
-| [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径 |
-| [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划 |
+| [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径（§7.2 流式盒环形托管） |
+| [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划（`test_snapshot`/`test_streambox` 6+5 测） |
 | [`CHANGELOG-AGENT.md`](CHANGELOG-AGENT.md) | 面向 registry 的落地版本记录（仅 agent family） |
 | [`ROADMAP.md`](ROADMAP.md) | 实施波次与出口证据 |
 
