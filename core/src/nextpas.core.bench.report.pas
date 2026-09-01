@@ -157,7 +157,7 @@ uses
   nextpas.core.text.format,
   nextpas.core.math.scalar,
   nextpas.core.json,
-  nextpas.core.json.value.writer,
+  nextpas.core.json.writer,
   nextpas.core.fs;
 
 const

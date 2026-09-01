@@ -312,7 +312,7 @@ uses
   nextpas.core.time.format,
   nextpas.core.time.offsetdatetime,
   nextpas.core.json,
-  nextpas.core.json.value.writer,
+  nextpas.core.json.writer,
   nextpas.core.bench.baseline,
   nextpas.core.simd.cpuinfo,
   nextpas.core.collections.hashmap.swiss.str,

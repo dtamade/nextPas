@@ -54,7 +54,7 @@ implementation
 
 uses
   nextpas.core.json,
-  nextpas.core.json.value.builder;
+  nextpas.core.json.builder;
 
 function PlatformQuotaWindowSeconds(const AKind: TPlatformQuotaWindowKind): Int64;
 begin

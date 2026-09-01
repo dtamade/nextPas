@@ -61,7 +61,7 @@ implementation
 
 uses
   nextpas.core.json,
-  nextpas.core.json.value.builder;
+  nextpas.core.json.builder;
 
 procedure LoopSynthErr(var ASlot: TSlot; const AMsg: string);
 var

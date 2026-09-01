@@ -44,7 +44,7 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.client.helpers,
   nextpas.core.json,
-  nextpas.core.json.value.builder;
+  nextpas.core.json.builder;
 
 class function EGraphqlError.DefaultCategory: TErrorCategory;
 begin
