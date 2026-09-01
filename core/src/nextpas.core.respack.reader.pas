@@ -62,41 +62,18 @@ type
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
     { 零拷贝路径视图单源：TByteSpan 唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare/SpanToString 单源；
-      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用 }
+      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用
+      LowerBound 含 while 二分循环，守 design-conventions 红线 2 禁 inline，避 I-Cache 复制膨胀 }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
-    function LowerBound(const APath: string): SizeUInt; inline;
+    function LowerBound(const APath: string): SizeUInt;
     function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
   end;
 
 implementation
 
-uses
-  nextpas.core.collections.algorithms;
-
 type
   TResPackEntryArr = array[0..(High(SizeInt) div SizeOf(TResPackEntry)) - 1] of TResPackEntry;
   PResPackEntryArr = ^TResPackEntryArr;
-
-type
-  TIdxSortCtx = record
-    Entries: PResPackEntryArr;
-  end;
-  PIdxSortCtx = ^TIdxSortCtx;
-
-function CompareIdxByOffset(const A, B: SizeUInt; Data: Pointer): SizeInt; inline;
-var
-  Ctx: PIdxSortCtx;
-  EA, EB: ^TResPackEntry;
-begin
-  Ctx := PIdxSortCtx(Data);
-  EA := @Ctx^.Entries^[A];
-  EB := @Ctx^.Entries^[B];
-  if EA^.DataOffset < EB^.DataOffset then Exit(-1);
-  if EA^.DataOffset > EB^.DataOffset then Exit(1);
-  if EA^.Size < EB^.Size then Exit(-1);
-  if EA^.Size > EB^.Size then Exit(1);
-  Result := 0;
-end;
 
 procedure SortIdxByOffset(var AIdx: array of SizeUInt; const AEntries: array of TResPackEntry);
 var
@@ -190,6 +167,60 @@ begin
   SA := StoredPathSpanOf(AA);
   SB := StoredPathSpanOf(AB);
   Result := SpanCompare(SA, SB);
+end;
+
+procedure InsertionSortIdx(var AIdx: array of SizeUInt; const AEntries: array of TResPackEntry; L, R: SizeInt);
+var
+  I, J: SizeInt;
+  Key: SizeUInt;
+begin
+  for I := L + 1 to R do
+  begin
+    Key := AIdx[I];
+    J := I - 1;
+    while (J >= L) and ((AEntries[AIdx[J]].DataOffset > AEntries[Key].DataOffset)
+      or ((AEntries[AIdx[J]].DataOffset = AEntries[Key].DataOffset) and (AEntries[AIdx[J]].Size > AEntries[Key].Size))) do
+    begin
+      AIdx[J + 1] := AIdx[J];
+      Dec(J);
+    end;
+    AIdx[J + 1] := Key;
+  end;
+end;
+
+procedure QuickSortIdx(var AIdx: array of SizeUInt; const AEntries: array of TResPackEntry; L, R: SizeInt);
+var
+  I, J: SizeInt;
+  Pivot: TResPackEntry;
+  Tmp: SizeUInt;
+begin
+  if R - L <= 16 then
+  begin
+    InsertionSortIdx(AIdx, AEntries, L, R);
+    Exit;
+  end;
+  I := L;
+  J := R;
+  Pivot := AEntries[AIdx[(L + R) div 2]];
+  repeat
+    while (AEntries[AIdx[I]].DataOffset < Pivot.DataOffset)
+      or ((AEntries[AIdx[I]].DataOffset = Pivot.DataOffset) and (AEntries[AIdx[I]].Size < Pivot.Size)) do Inc(I);
+    while (AEntries[AIdx[J]].DataOffset > Pivot.DataOffset)
+      or ((AEntries[AIdx[J]].DataOffset = Pivot.DataOffset) and (AEntries[AIdx[J]].Size > Pivot.Size)) do Dec(J);
+    if I <= J then
+    begin
+      Tmp := AIdx[I]; AIdx[I] := AIdx[J]; AIdx[J] := Tmp;
+      Inc(I); Dec(J);
+    end;
+  until I > J;
+  if L < J then QuickSortIdx(AIdx, AEntries, L, J);
+  if I < R then QuickSortIdx(AIdx, AEntries, I, R);
+end;
+
+procedure SortIdxByOffset(var AIdx: array of SizeUInt; const AEntries: array of TResPackEntry);
+begin
+  if Length(AIdx) <= 1 then Exit;
+  QuickSortIdx(AIdx, AEntries, 0, High(AIdx));
 end;
 
 class function TResPack.Open(const AData: PByte; const ASize: SizeUInt): TResPack;
@@ -323,8 +354,10 @@ begin
       if E.DataOffset < StrTabEnd then
         raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
     end;
-    { data 区间互不重叠 — 复用 L1 collections.algorithms.Sort 单源（IntroSort，与 writer.layout 单源收敛）
-      索引排序后线性相邻检查替代 O(n²) 双重循环，10k 条目 O(n log n) 排序+单遍扫描，SortedIdx 单缓冲零双份维护 }
+    { data 区间互不重叠 — 轻量本地索引排序后线性相邻检查替代 O(n²) 双重循环
+      去 L1 collections.algorithms 重型 IntroSort 依赖，零泛型特化、零 SortData 双缓冲感知；
+      10k 条目仍 O(n log n) 排序+单遍扫描，相邻检查覆盖全部相交（传递性），校验热点零小堆分配外仅 SortedIdx 单缓冲
+      单源复用 Cached DataOffset/Size 排序（bytes.ops 单源外单遍值比较），本地 QuickSort+Insertion 阈值 16 }
     if Result.Count > 1 then
     begin
       SetLength(SortedIdx, Result.Count);
@@ -470,7 +503,7 @@ begin
   Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
-function TResPack.LowerBound(const APath: string): SizeUInt; inline;
+function TResPack.LowerBound(const APath: string): SizeUInt;
 var
   Lo, Hi, Mid: SizeUInt;
   C: Integer;
@@ -483,8 +516,8 @@ begin
     Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
   else
     Query := TByteSpan.Empty;
-  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造，inline 零调用开销），
-    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造（原手工 RdU*LE 重复解码已消除），零分配 }
+  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造，零分配），
+    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;

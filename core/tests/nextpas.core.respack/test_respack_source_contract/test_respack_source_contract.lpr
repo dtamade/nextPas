@@ -5,7 +5,7 @@ uses
   nextpas.core.exception,
   nextpas.core.fs;
 
-{ 源契约门禁：respack(9 源 + writer.builder 内部单源共 10 文件，含 limits 阈值策略单源) uses 白名单锁定。
+{ 源契约门禁：respack(9 源 + writer.builder 内部单源 + embed.limits 独立策略模块共 12 文件，含 limits 阈值策略单源已抽取至 L1 embed.limits) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_vfs_source_contract 同机制，不自造）
   2) L2→L2 seam 唯一性：除 respack.dirsource 外，
@@ -56,9 +56,11 @@ end;
 
 procedure TestRespackSourcesNoFpcRtl;
 const
-  FILES: array[0..9] of string = (
+  FILES: array[0..11] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.embed.limits.pas',
+    'src/nextpas.core.embed.pas',
     'src/nextpas.core.respack.limits.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.writer.layout.pas',
@@ -86,9 +88,11 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..8] of string = (
+  NO_SEAM: array[0..10] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
+    'src/nextpas.core.embed.limits.pas',
+    'src/nextpas.core.embed.pas',
     'src/nextpas.core.respack.limits.pas',
     'src/nextpas.core.respack.writer.pas',
     'src/nextpas.core.respack.writer.layout.pas',
@@ -129,8 +133,8 @@ begin
     'embed ResPackValidIdent must NOT be inline (loop body, I-Cache)');
   Check(Pos('nextpas.core.bytes.ops', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed declares bytes.ops single source');
-  Check(Pos('nextpas.core.respack.limits', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
-    'embed declares respack.limits threshold single source');
+  Check(Pos('nextpas.core.embed.limits', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
+    'embed declares embed.limits independent threshold single source (L1, respack.limits is forwarding)');
   Check(Pos('ResPackRequireIncSize', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed reuses ResPackRequireIncSize threshold single source');
   Check(Pos('ResPackEffectiveIncLimit', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
@@ -139,6 +143,31 @@ begin
     'embed must not use BytesConcatMany (unify to BytesCopy single source)');
   Check(Pos('MaxBlobBytes', LoadSourceText('src/nextpas.core.respack.embed.pas')) > 0,
     'embed exposes MaxBlobBytes configurable limit');
+  { 独立策略模块门禁：embed.limits 为 L1 单源，供其他载体复用，respack.limits 仅兼容转发 }
+  Check(Pos('EMBED_INC_MAX_BLOB_BYTES', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits declares EMBED_INC_MAX_BLOB_BYTES independent strategy');
+  Check(Pos('EmbedRequireIncSize', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits declares EmbedRequireIncSize independent strategy');
+  Check(Pos('EmbedEffectiveIncLimit', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits declares EmbedEffectiveIncLimit');
+  Check(not FindUsesUnit(LoadSourceText('src/nextpas.core.embed.limits.pas'), 'nextpas.core.fs'),
+    'embed.limits must not reference fs (L1 pure, uses graph)');
+  Check(not FindUsesUnit(LoadSourceText('src/nextpas.core.embed.limits.pas'), 'nextpas.core.io.mapped'),
+    'embed.limits must not reference io.mapped (L1 pure)');
+  Check(Pos('nextpas.core.base', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits declares base single source');
+  Check(Pos('nextpas.core.exception', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits declares exception root');
+  Check(Pos('inline', LoadSourceText('src/nextpas.core.embed.limits.pas')) > 0,
+    'embed.limits inline zero-copy evidence');
+  Check(Pos('nextpas.core.embed.limits', LoadSourceText('src/nextpas.core.respack.limits.pas')) > 0,
+    'respack.limits forwards to embed.limits independent module');
+  Check(Pos('inline', LoadSourceText('src/nextpas.core.respack.limits.pas')) > 0,
+    'respack.limits inline forwarding evidence');
+  Check(Pos('nextpas.core.embed.limits', LoadSourceText('src/nextpas.core.embed.pas')) > 0,
+    'embed facade declares embed.limits');
+  Check(Pos('inline', LoadSourceText('src/nextpas.core.embed.pas')) > 0,
+    'embed facade inline evidence');
 
   { 正向断言：seam 单元确实声明了 fs+io.mapped 依赖（防白名单失效漂移，uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.dirsource.pas');

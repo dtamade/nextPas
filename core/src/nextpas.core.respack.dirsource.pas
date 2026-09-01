@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。 }
+{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped/mmap via mem.memory_map）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -28,12 +28,9 @@ type
 
 { 枚举目录树为打包条目。超过 RESPACK_MAX_INPUT_BYTES raise EResPackTooLarge；
   遍历错误 raise EResPackDirSourceFailed。
-  @deprecated 小包便捷（< few MB / <1k 文件）兼容保留；大包/万文件/512MB 场景
-  请优先 ResPackBuildStreamFromDir / ResPackBuildFromDir 流式mmap 管线
-  （MmapOpen 零拷贝，峰值 ~1×+头 vs 本函数 TBytes 全量锚点 2×+头）— Stream 为
-  统一抽象，本函数为薄转发兼容，详见热路径注释与 CONTRACT INV-R10。 }
+  @deprecated 小包便捷保留；大包请优先 ResPackBuildStreamFromDir 流式mmap 管线。 }
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap 1x+head); this 2x peak path kept for < few MB convenience';
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming mmap)';
 
 { 流式mmap：目录 → 流式两遍分段零双驻留打包。MmapOpen 零拷贝，映射生命期至
   AWrite 完成，try..finally 释放不丢。 }
@@ -140,10 +137,13 @@ begin
   Result := True;
 end;
 
-{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝 }
+{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝，回绕防护 TryMulSizeUInt }
 function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
+var LDoubled: SizeUInt;
 begin
-  Result := ACap * 2;
+  if not TryMulSizeUInt(ACap, 2, LDoubled) then
+    LDoubled := High(SizeUInt);
+  Result := LDoubled;
   if Result < 8 then Result := 8;
   if Result < ANeeded then Result := ANeeded;
 end;
@@ -159,6 +159,30 @@ begin
 end;
 
 procedure EnsureStreamCapacity(var Ctx: TStreamContext; const ANeeded: SizeUInt); inline;
+begin
+  if Ctx.Count < Ctx.Cap then Exit;
+  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
+  SetLength(Ctx.Entries, NewCap);
+  SetLength(Ctx.Maps, NewCap);
+  Ctx.Cap := NewCap;
+end;
+
+type
+  PEmbedStreamContext = ^TEmbedStreamContext;
+  TEmbedStreamContext = record
+    Root: string;
+    EmbedOpts: TResPackEmbedOptions;
+    Entries: TResPackInputArray;
+    Maps: array of IMappedFile;
+    Count: SizeUInt;
+    Cap: SizeUInt;
+    Total: SizeUInt;
+    Failed: Boolean;
+    FailMsg: string;
+  end;
+
+procedure EnsureEmbedCapacity(var Ctx: TEmbedStreamContext; const ANeeded: SizeUInt); inline;
+var NewCap: SizeUInt;
 begin
   if Ctx.Count < Ctx.Cap then Exit;
   NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
@@ -559,7 +583,6 @@ var
   St: TFileInfo;
   LSum: SizeUInt;
   LMap: IMappedFile;
-  LErr: string;
 begin
   Result := True;
   Ctx := PEmbedStreamContext(AUserData);
@@ -579,10 +602,36 @@ begin
   if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   Idx := Ctx^.Count;
   EnsureEmbedCapacity(Ctx^, Idx + 1);
-  if not TryMmapRequire(APath, St.Size, LMap, LErr) then
-  begin
-    WalkFail(Ctx^.Failed, Ctx^.FailMsg, LErr);
-    Exit(False);
+  try
+    if St.Size = 0 then
+      LMap := nil
+    else
+    begin
+      LMap := MmapOpen(APath);
+      if (LMap = nil) or (LMap.Size = 0) or (LMap.Data = nil) then
+      begin
+        if St.Size <> 0 then
+        begin
+          Ctx^.Failed := True;
+          Ctx^.FailMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
+          Exit(False);
+        end;
+        LMap := nil;
+      end
+      else if SizeUInt(LMap.Size) <> SizeUInt(St.Size) then
+      begin
+        Ctx^.Failed := True;
+        Ctx^.FailMsg := 'mmap size mismatch: stat=' + IntToStr(St.Size) + ' cmap=' + IntToStr(LMap.Size) + ' (path=' + APath + ')';
+        Exit(False);
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      Ctx^.Failed := True;
+      Ctx^.FailMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
+      Exit(False);
+    end;
   end;
   Ctx^.Maps[Idx] := LMap;
   Ctx^.Entries[Idx].Path := Mapped;

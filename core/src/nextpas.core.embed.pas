@@ -15,9 +15,13 @@ uses
 const
   EMBED_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.EMBED_INC_MAX_BLOB_BYTES;
   EMBED_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.embed.limits.EMBED_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.RESPACK_INC_MAX_BLOB_BYTES;
+  RESPACK_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.embed.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
 
 function EmbedEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
+function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
 implementation
 
@@ -26,9 +30,19 @@ begin
   Result := nextpas.core.embed.limits.EmbedEffectiveIncLimit(AConfigured);
 end;
 
+function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.embed.limits.ResPackEffectiveIncLimit(AConfigured);
+end;
+
 procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 begin
   nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
+end;
+
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+begin
+  nextpas.core.embed.limits.ResPackRequireIncSize(ASize, ALimit);
 end;
 
 end.

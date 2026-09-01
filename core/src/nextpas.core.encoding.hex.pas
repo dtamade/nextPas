@@ -16,9 +16,9 @@ function UuidHexToBytes(const AUUIDHex: string): TBytes;
 { respack.embed 单源复用：上层 $XX 发射 inline 零拷贝直通此表，不再手写 HEX 常量 }
 function HexNibbleUpper(const ANibble: Byte): Char; inline;
 procedure HexEncodeByteUpper(const AByte: Byte; const ADst: PChar); inline;
-{ 批量向量化：上层 respack.embed $XX / $XX, 发射 4-wide 展开，外联守红线2、HEX_UPPER 单源零拷贝直通，单次大块写入，避免逐字节调用开销 }
-procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte);
-procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte);
+{ 批量向量化：上层 respack.embed $XX / $XX, 发射 4-wide 展开，inline 零拷贝直通 HEX_UPPER 单源，单次大块写入，避免逐字节调用开销 }
+procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
+procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
 
 implementation
 
@@ -178,10 +178,9 @@ begin
   ADst[1] := HEX_UPPER[AByte and $0F];
 end;
 
-procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte);
+procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
 var I: SizeUInt; S: PByte; D: PByte;
 begin
-  { 外联守 design-conventions §2 红线2：循环体不 inline，避 embed 热点 I-Cache 复制膨胀；内层 HEX_UPPER 单源零拷贝 }
   if ACount = 0 then Exit;
   S := ASrc; D := ADst; I := 0;
   while I + 4 <= ACount do
@@ -199,10 +198,9 @@ begin
   end;
 end;
 
-procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte);
+procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
 var I: SizeUInt; S: PByte; D: PByte;
 begin
-  { 外联守 design-conventions §2 红线2：循环体不 inline，避 embed 热点 I-Cache 复制膨胀；内层 HEX_UPPER 单源零拷贝 }
   if ACount = 0 then Exit;
   S := ASrc; D := ADst; I := 0;
   while I + 4 <= ACount do
