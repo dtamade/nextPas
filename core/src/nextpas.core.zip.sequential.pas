@@ -516,9 +516,7 @@ var
     Result := True;
   end;
 begin
-  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
+  GuardEntryPassword(FCurrent, FPassword);
   LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
@@ -681,9 +679,7 @@ var
   LRaw, LDecompressed: TBytes;
 begin
   GuardEntryReadable(FCurrent, FCurrentFlags);
-  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
+  GuardEntryPassword(FCurrent, FPassword);
   if FCurrentIsDescriptor then
   begin
     if FBufferedReady then

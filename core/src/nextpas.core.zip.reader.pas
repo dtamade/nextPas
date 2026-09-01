@@ -648,10 +648,7 @@ var
   LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  { 缺口令在进入解封层前拒绝：避免异常穿越持有接口实参的调用帧 }
-  if LE.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + LE.Name);
+  GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSlice := TSliceReader.Create(FData, SizeUInt(LOfs),
     SizeUInt(LE.CompressedSize));
@@ -994,10 +991,7 @@ var
   LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  { 缺口令在进入解封层前拒绝：避免异常穿越持有接口实参的调用帧 }
-  if LE.IsEncrypted and (Length(FPassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + LE.Name);
+  GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSpan := TSourceSpanReader.Create(FAt, LOfs, SizeUInt(LE.CompressedSize));
   { 加密条目：解封装层夹在区间读与解压之间（构造即强校验口令校验值） }

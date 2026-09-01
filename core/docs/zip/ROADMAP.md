@@ -196,6 +196,10 @@
 - `common.ParseLocalHeader` 单源化 `TZipReaderImpl.LocatePayload` / `TZipSourceReader.LocatePayload` 的本地头走查重复（签名+`version/flags/method/time/date/crc/size/nameLen/extraLen` 10 读 + 载荷偏移 `LLho+30+NameLen+ExtraLen`），2×12 行 → 2×1 行，`EParseError('bad local header signature')` 与 `NeedRange` 语义守恒
 - `common` 为 `reader` 双读器共享校验内核（`GuardEntryReadable/GuardCursorRange/ParseLocalHeader`），冷路径零分配，12 门 + `bench_zip 221746` 可编译回归
 
+### S87 — 缺口令守卫单源（1.0.1 巡检）· 复用度/稳定性 — 已落地
+- `common.GuardEntryPassword` 单源化 `reader` 双 `OpenEntry` + `sequential` 的 `CollectDescriptorPayload/MakeDecompressedReader` 缺口令守卫重复（`IsEncrypted ∧ Password=∅ → EInvalidOperationError('zip: entry is encrypted, no password configured: '+Name)`），4×3 行 → 4×1 行，错误消息与 fail-closed 时序守恒
+- `common` 为 `reader/sequential` 共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardTotalOutputSize/ParseLocalHeader`），冷路径零分配，12 门 + `bench_zip 221744` 可编译回归
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -228,4 +232,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S86 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 40daf18` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader` 四单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S87 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e63c47b` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword` 五单源 + AES 零堆栈。

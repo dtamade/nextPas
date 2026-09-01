@@ -34,6 +34,7 @@ procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
+procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
@@ -132,6 +133,13 @@ begin
       'zip: legacy ZipCrypto encryption not supported: ' + AE.Name);
   if not IsSafeZipEntryName(AE.Name) then
     raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
+end;
+
+procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
+begin
+  if AE.IsEncrypted and (Length(APassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + AE.Name);
 end;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
