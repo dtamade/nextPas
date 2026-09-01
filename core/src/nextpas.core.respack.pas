@@ -9,6 +9,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.respack.base,
+  nextpas.core.respack.limits,
   nextpas.core.respack.reader,
   nextpas.core.respack.writer,
   nextpas.core.respack.writer.stream,
@@ -47,7 +48,9 @@ const
   RESPACK_FLAG_ALGO_SHIFT = nextpas.core.respack.base.RESPACK_FLAG_ALGO_SHIFT;
   RESPACK_DIGEST_ALGO_SHA256 = nextpas.core.respack.base.RESPACK_DIGEST_ALGO_SHA256;
   RESPACK_INC_DEFAULT_BYTES_PER_LINE =
-    nextpas.core.respack.embed.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+    nextpas.core.respack.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES =
+    nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES;
 
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
@@ -62,7 +65,7 @@ function ResPackValidPath(const APath: string;
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 function ResPackDefaultOptions: TResPackBuildOptions; inline;
 function ResPackEntriesFromDir(const ARoot: string;
-  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline;
+  const AInclude: TResPackIncludeFunc = nil): TResPackDirEntries; inline; deprecated 'use ResPackBuildStreamFromDir / ResPackBuildFromDir (streaming 1x)';
 procedure ResPackBuildStreamFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc;
   const AInclude: TResPackIncludeFunc = nil); inline;
