@@ -188,6 +188,10 @@
 - `writer` AES extra 零堆栈路径确认：`extra.EncodeWinZipAesExtraBody` 栈上 7 字节直写对偶 `Build*` 堆 wrapper，写端 `TWinZipAesSealer + Encode*` 走 `FScratch 64B` 几何复用零分配，`grep EncodeWinZip|BuildWinZip 7 hits / writer 6 hits` 验证
 - `ROADMAP` S84 入档与 `CHANGELOG` S83—S84 亮点同步，12 门 + `bench 16 项` + `hygiene` 全绿回归
 
+### S85 — AES 方法分发单源（1.0.1 巡检）· 复用度/模块化/稳定性 — 已落地
+- `aes.ResolveZipMethodWithAes` 单源化 `reader.ParseCentralEntry` / `sequential.ParseCurrentLocal` 的 AES 校验与方法改写重复（`99 → realMethod` + 版本 1/2 + 强度 1..3 强校验 + `TryMethod`），2×25 行 → 2×1 行调用，`EParseError/ENotSupportedError` 语义守恒
+- `aes` 接口层显式依赖 `zip.base`（`base ← aes` 有向无环），`reader/sequential` 薄委托单源，12 门 + `bench_zip` 可编译回归
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -220,4 +224,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S84 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c91aa00` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod` 双单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S85 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 8e82171` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes` 三单源 + AES 零堆栈。

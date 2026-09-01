@@ -371,35 +371,11 @@ begin
   end;
 
   { 加密条目：wire 方法 99，真实压缩方法与强度取自 0x9901 extra。
-    AE-2 头部 CRC 恒为 0（写端契约）；AE-1 保留真实 CRC 走常规校验 }
+    AE-2 头部 CRC 恒为 0（写端契约）；AE-1 保留真实 CRC 走常规校验 — S85 单源 via aes.Resolve }
   AE.IsEncrypted := (AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  AE.AesVersion := 0;
-  AE.AesStrengthCode := 0;
-  if LMethodCode = C_ZIP_METHOD_WINZIP_AES then
-  begin
-    if not AE.IsEncrypted then
-      raise EParseError.Create(
-        'zip: method 99 without encryption flag: ' + AE.Name);
-    if not LHasAes then
-      raise EParseError.Create(
-        'zip: missing WinZip AES extra field: ' + AE.Name);
-    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
-       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
-      raise ENotSupportedError.CreateFmt(
-        'zip: unsupported WinZip AES version %d: %s',
-        [LAesVersion, AE.Name]);
-    if (LAesStrength < 1) or (LAesStrength > 3) then
-      raise EParseError.Create('zip: invalid WinZip AES strength code');
-    AE.AesVersion := LAesVersion;
-    AE.AesStrengthCode := LAesStrength;
-    LMethodCode := LAesRealMethod;
-  end;
-
-  if not TryZipMethodFromCode(LMethodCode, AE.Method) then
-    raise ENotSupportedError.CreateFmt(
-      'zip: unsupported compression method %d: %s',
-      [LMethodCode, AE.Name]);
-  AE.MethodCode := LMethodCode;
+  ResolveZipMethodWithAes(LMethodCode, AE.IsEncrypted, LHasAes,
+    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength, AE.Name,
+    AE.Method, AE.MethodCode, AE.AesVersion, AE.AesStrengthCode);
   AE.Crc32 := LCrc;
   AE.CompressedSize := LCSize;
   AE.UncompressedSize := LUSize;

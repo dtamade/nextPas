@@ -29,6 +29,7 @@
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
 | `NormalizeZipReadOptions` | 读选项归一（`0→默认`，`MaxOutput/MaxDescriptor` 单源，S81） |
 | `TryZipMethodFromCode` | 方法码→`TZipMethod` 归一（`0/8` 映射，`reader/sequential` 单源，S83） |
+| `ResolveZipMethodWithAes` | AES 感知的方法分发（`99 → realMethod` + 版本/强度强校验，`reader/sequential` 单源，S85） |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录（非原子，见 §6） |
 | `ZipExtractToDirAtomicWithOptions` / `ZipExtractToDirAtomic` | 原子解包到目录：同文件系统 `TempDir`+`Rename` 原子提交，`Exists`拒绝覆盖，异常自动清理（S67） |

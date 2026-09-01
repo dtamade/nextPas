@@ -346,32 +346,10 @@ begin
   FCurrent := Default(TZipEntryInfo);
   FCurrent.Name := LName;
   FCurrent.IsEncrypted := (LFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  FCurrent.AesVersion := 0;
-  FCurrent.AesStrengthCode := 0;
-  if LMethod = C_ZIP_METHOD_WINZIP_AES then
-  begin
-    if not FCurrent.IsEncrypted then
-      raise EParseError.Create(
-        'zip: method 99 without encryption flag: ' + LName);
-    if not LHasAes then
-      raise EParseError.Create(
-        'zip: missing WinZip AES extra field: ' + LName);
-    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
-       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
-      raise ENotSupportedError.CreateFmt(
-        'zip: unsupported WinZip AES version %d: %s',
-        [LAesVersion, LName]);
-    if (LAesStrength < 1) or (LAesStrength > 3) then
-      raise EParseError.Create('zip: invalid WinZip AES strength code');
-    FCurrent.AesVersion := LAesVersion;
-    FCurrent.AesStrengthCode := LAesStrength;
-    LMethod := LAesRealMethod;
-  end;
-  if not TryZipMethodFromCode(LMethod, FCurrent.Method) then
-    raise ENotSupportedError.CreateFmt(
-      'zip: unsupported compression method %d: %s',
-      [LMethod, LName]);
-  FCurrent.MethodCode := LMethod;
+  ResolveZipMethodWithAes(LMethod, FCurrent.IsEncrypted, LHasAes,
+    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength, LName,
+    FCurrent.Method, FCurrent.MethodCode, FCurrent.AesVersion,
+    FCurrent.AesStrengthCode);
   FCurrent.Crc32 := LCrc;
   if FCurrentIsDescriptor then
   begin
