@@ -44,6 +44,7 @@
 | S60 | 文档一致性收敛（1.0.1 巡检）：`SECURITY 4→5` 同步、`CONTRACT §6` 增非原子/TOCTOU 已知局限、`registry zip` 补 `crypto/hash` 依赖 |
 | S61 | 错误归一（1.0.1 巡检）：未知压缩方法 parse 阶段即 `ENotSupportedError`，消除回落 `zmStore` 指纹混淆 |
 | S62 | 复用与性能微抛光（1.0.1 巡检）：`extra.WriteLE*` PByte 单源、`base.IsSafe` 去 `inline` 减膨胀、`README` 性能段拆表留白 |
+| S63 | 验证平台期（1.0.1 巡检）：12 门 `27/27/22/7/6/9/5/13/7/5/4` 全绿 + `extra 6` 补位，`HEAPTRC OK` + `hygiene` 完美 plateau 再证据 |
 
 **Truth level**：`ci-matrix`（`1.0.0 Final`，`VERSION 1.0.0`）。
 
@@ -116,6 +117,9 @@
 
 ### S62 — 复用与性能微抛光（1.0.1 巡检）· 复用度/性能/高级感 — 已落地
 - `extra.WriteLE*` PByte 单源收敛（`TBytes` 版薄委托 `WriteLE*Buf`）；`base.IsSafeZipEntryName` 去 `inline` 减长循环膨胀；`README` 性能段拆为覆盖/实现要点/门禁/历代收敛四段留白
+
+### S63 — 验证平台期（1.0.1 巡检）· 完整性/稳定性 — 已落地
+- 12 门全绿再验证：`test_zip 27` / `reader 27` / `sequential 22` / `fs 7` / `contract 6` / `extra 6` / `builder 9` / `fuzz 5` / `aes 13` / `go_parity 7` / `perf 5` / `stress 4`，`HEAPTRC OK` + `hygiene` 通过，完美 plateau 证据化
 
 ## 4. 度量与硬门（1.0.0 冻结）
 
