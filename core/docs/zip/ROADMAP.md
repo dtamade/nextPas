@@ -147,6 +147,9 @@
 ### S71 — 示例与文档完整性（1.0.1 巡检）· 完整性/高级感 — 已落地
 - `README` Cookbook 补第 7 式原子落盘（`Atomic/WithOptions/EXDEV`），`zip_roundtrip` 增原子 `ok/refuse/bomb clean` 三演示 `all demos ok`，`ROADMAP` 文档门同步
 
+### S72 — 复用收敛（1.0.1 巡检）· 复用度 — 已落地
+- `zip.fs` 容量几何单点化：`CalcGrowCapacity(ACap,AMin)` 单源，双 `Ensure*Capacity` 薄委托 `CalcGrow`，消除 `Walk/LDirs` 双生 `while Result<AMin do Result*=2` 循环
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |

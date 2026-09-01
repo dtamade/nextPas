@@ -141,30 +141,30 @@ begin
   end;
 end;
 
+function CalcGrowCapacity(ACap, AMin: Integer): Integer; inline;
+begin
+  if ACap = 0 then ACap := 16;
+  Result := ACap;
+  while Result < AMin do
+    Result := Result * 2;
+end;
+
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
 var
-  LCap, LNew: Integer;
+  LCap: Integer;
 begin
   LCap := Length(A);
   if LCap >= AMin then Exit;
-  if LCap = 0 then LCap := 16;
-  LNew := LCap;
-  while LNew < AMin do
-    LNew := LNew * 2;
-  SetLength(A, LNew);
+  SetLength(A, CalcGrowCapacity(LCap, AMin));
 end;
 
 procedure EnsureDeferredCapacity(var A: TDeferredDirArray; AMin: Integer); inline;
 var
-  LCap, LNew: Integer;
+  LCap: Integer;
 begin
   LCap := Length(A);
   if LCap >= AMin then Exit;
-  if LCap = 0 then LCap := 16;
-  LNew := LCap;
-  while LNew < AMin do
-    LNew := LNew * 2;
-  SetLength(A, LNew);
+  SetLength(A, CalcGrowCapacity(LCap, AMin));
 end;
 
 procedure WalkAppend(var A: TWalkArray; var ACount: Integer;
