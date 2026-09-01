@@ -68,6 +68,9 @@ function VfsETagFNV(const AHash: UInt32): string;
 { 就地按 Name 字节序升序（INV-V8）；经 collections 单源 Sort（IntroSort+小区间插入） }
 procedure VfsSortEntries(var AItems: TEntryArray);
 
+{ 已排序去重：单源 Unique（Name 字节序），消除 mount/overlay 手写 dedup 重复 }
+procedure VfsDedupSortedEntries(var AItems: TEntryArray);
+
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
   输入只含文件路径（memtree/respack 均不存目录条目）；ADirPrefix 为
   'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描：LowerBound 二分定位 +
@@ -160,10 +163,26 @@ begin
   Result := VfsNameCompare(A.Name, B.Name);
 end;
 
+{ Name-only 比较：供 Unique 去重单源（零拷贝 SpanCompare），与 Sort 同序 }
+function VfsCompareEntryName(const A, B: TEntryInfo; Data: Pointer): SizeInt; inline;
+begin
+  Result := VfsNameCompare(A.Name, B.Name);
+end;
+
 procedure VfsSortEntries(var AItems: TEntryArray);
 begin
   if Length(AItems) > 1 then
     specialize Sort<TEntryInfo>(AItems, @CompareEntryInfo, nil);
+end;
+
+{ 已排序去重：单源 Unique（Name 字节序），消除 mount/overlay 手写 dedup 重复 }
+procedure VfsDedupSortedEntries(var AItems: TEntryArray);
+var
+  L: SizeInt;
+begin
+  if Length(AItems) <= 1 then Exit;
+  L := specialize Unique<TEntryInfo>(AItems, @VfsCompareEntryName, nil);
+  SetLength(AItems, L);
 end;
 
 function VfsDeriveChildNames(const ASortedPaths: array of string;

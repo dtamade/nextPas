@@ -141,9 +141,15 @@ begin
     Result := SizeInt(A.Prio) - SizeInt(B.Prio);
 end;
 
+{ Name-only 去重比较：单源 Unique（VfsNameCompare），保留首层优先级 }
+function CompareOverlayTempNameOnly(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
+begin
+  Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
+end;
+
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J, OutN, TempN: Integer;
+  I, J, TempN: Integer;
   Cur: TEntryArray;
   LStat: TStatInfo;
   Temp: array of TOverlayTemp;
@@ -175,15 +181,11 @@ begin
   if TempN = 0 then Exit(nil);
   SetLength(Temp, TempN);
   specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
+  TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
+  SetLength(Temp, TempN);
   SetLength(Result, TempN);
-  OutN := 0;
   for I := 0 to TempN - 1 do
-  begin
-    if (OutN > 0) and (Result[OutN - 1].Name = Temp[I].Entry.Name) then Continue;
-    Result[OutN] := Temp[I].Entry;
-    Inc(OutN);
-  end;
-  SetLength(Result, OutN);
+    Result[I] := Temp[I].Entry;
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;
