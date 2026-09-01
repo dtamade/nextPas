@@ -34,6 +34,7 @@ function Base64UrlDecode(const AEncoded: string): TBytes; inline;
 
 function HexEncode(const AData: TBytes; const ACase: THexCase = hcLower): string; inline;
 function HexDecode(const AHex: string): TBytes; inline;
+function UuidHexToBytes(const AUUIDHex: string): TBytes; inline;
 
 function VarintEncode(const AValue: UInt64): TBytes; inline;
 function VarintDecode(const AData: TBytes; out ABytesRead: Integer): UInt64; inline;
@@ -167,6 +168,11 @@ end;
 function HexDecode(const AHex: string): TBytes;
 begin
   Result := nextpas.core.encoding.hex.HexDecode(AHex);
+end;
+
+function UuidHexToBytes(const AUUIDHex: string): TBytes;
+begin
+  Result := nextpas.core.encoding.hex.UuidHexToBytes(AUUIDHex);
 end;
 
 function VarintEncode(const AValue: UInt64): TBytes;

@@ -142,6 +142,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
@@ -214,27 +215,16 @@ type
     function IsOpen: Boolean;
   end;
 
-{ Helpers }
+{ Helpers — single-source via bytes.ops (Single Move, CoW share; no duplicate) }
 
-function StringToBytes(const AValue: string): TBytes;
-var
-  LLen: SizeInt;
+function StringToBytes(const AValue: string): TBytes; inline;
 begin
-  LLen := Length(AValue);
-  Result := nil;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[1], Result[0], LLen);
+  Result := nextpas.core.bytes.ops.StringToBytes(AValue);
 end;
 
-function BytesToString(const AValue: TBytes): string;
-var
-  LLen: SizeInt;
+function BytesToString(const AValue: TBytes): string; inline;
 begin
-  LLen := Length(AValue);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(AValue[0], Result[1], LLen);
+  Result := nextpas.core.bytes.ops.BytesToString(AValue);
 end;
 
 class function TWebSocketOptions.Default: TWebSocketOptions;

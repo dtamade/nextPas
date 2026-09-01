@@ -401,10 +401,39 @@ end;
 
 function TIoReactor.AsyncClose(AFd: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
+const
+  IOSQE_IO_LINK = 1;
 var
   LSqe: PIoUringSqe;
   LId: UInt64;
+  LI, LCount, LJ: UInt32;
+  LTargets: array of UInt64;
+  LCancelSqe: PIoUringSqe;
+  LCancelId: UInt64;
 begin
+  { io_uring AsyncClose 同步化：扫描 FEntries 经 TryCancelByContext 语义摘除同 fd 挂起 accept，
+    再以 IOSQE_IO_LINK 链式 prep CLOSE（取消→关闭原子序，防 fd 复用误关 fail-closed）。 }
+  if (AFd >= 0) and IsValid and (FEntryCount > 0) then
+  begin
+    SetLength(LTargets, FEntryCount);
+    LCount := 0;
+    for LI := 0 to FEntryCount - 1 do
+      if FEntries[LI].Active and (FEntries[LI].Fd = AFd) then
+      begin
+        LTargets[LCount] := UInt64(LI);
+        Inc(LCount);
+      end;
+    for LJ := 0 to LCount - 1 do
+    begin
+      LCancelSqe := FRing.GetSqe;
+      if LCancelSqe = nil then
+        Break;
+      LCancelId := AllocEntry(nil, nil);
+      IoUringPrepCancel(LCancelSqe, LTargets[LJ], 0);
+      LCancelSqe^.flags := LCancelSqe^.flags or IOSQE_IO_LINK;
+      IoUringSqeSetData(LCancelSqe, LCancelId);
+    end;
+  end;
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
   LId := AllocEntry(ACallback, AContext, AFd);

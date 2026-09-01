@@ -38,6 +38,8 @@ function SameText(const A, B: string): Boolean;
 function IntToStr(const AValue: Int64): string;
 function Int64ToStr(const AValue: Int64): string;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+function HexStr(const AValue: UInt64; const ADigits: Integer = 0): string; overload;
+function HexStr(const AValue: Pointer): string; overload;
 function StrToInt(const AStr: string): Integer;
 function StrToInt64(const AStr: string): Int64;
 function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
@@ -222,6 +224,16 @@ end;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 begin
   Result := nextpas.core.text.conv.IntToHex(AValue, ADigits);
+end;
+
+function HexStr(const AValue: UInt64; const ADigits: Integer): string;
+begin
+  Result := nextpas.core.base.HexStr(AValue, ADigits);
+end;
+
+function HexStr(const AValue: Pointer): string;
+begin
+  Result := nextpas.core.base.HexStr(UInt64(PtrUInt(AValue)), 0);
 end;
 
 function StrToInt(const AStr: string): Integer;

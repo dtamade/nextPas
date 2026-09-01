@@ -1,6 +1,7 @@
 unit nextpas.core.bytes.ops;
 
 {$I nextpas.core.settings.inc}
+{ R9-02 hermetic：settings.inc 已保障 inline 语义（-O2→INLINE ON），FPC 3.3.1 下无 BEGIN 误报 }
 
 interface
 
@@ -40,8 +41,8 @@ procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -83,7 +84,7 @@ uses
   O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
   writes that could corrupt heap on exception. }
 
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
   LOld, LNewCap: SizeUInt;
 begin
@@ -109,7 +110,7 @@ begin
   SetLength(ADest, LNewCap);
 end;
 
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 var
   LNeed: SizeUInt;
 begin

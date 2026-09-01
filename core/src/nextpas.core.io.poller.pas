@@ -78,6 +78,7 @@ type
     function HasPending: Boolean;
     { Best-effort cancel of a pending op keyed by Context (timeout path). }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    { 扫描 FEntries 经 TryCancelByContext 摘除同 fd 挂起 accept，再 IOSQE_IO_LINK 链式 CLOSE 防 fd 复用误关（fail-closed）。 }
     function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
