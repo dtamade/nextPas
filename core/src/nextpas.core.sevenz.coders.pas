@@ -48,10 +48,9 @@ function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TByte
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.errors,
-  nextpas.core.text.conv,
   nextpas.core.compress,
+  nextpas.core.compress.bzip2,
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
@@ -118,16 +117,22 @@ begin
   Result := GPascalEncoder;
 end;
 
-function CopyOfBytes(const ASrc: TBytes): TBytes; inline;
+function CopyOfBytes(const ASrc: TBytes): TBytes;
 begin
-  // single source via bytes.ops.SpanClone; inline forward avoids duplicate Move
-  Result := SpanClone(TByteSpan.FromBytes(ASrc));
+  Result := nil;
+  SetLength(Result, Length(ASrc));
+  if Length(ASrc) > 0 then
+    Move(ASrc[0], Result[0], Length(ASrc));
 end;
 
-function UIntToDecStr(AVal: UInt64): string; inline;
+{ 无 SysUtils 的 UInt64 十进制转字符串；用于错误消息拼接——
+  本工具链 CreateFmt 对 %d 传 UInt64 实参会渲染为 0 }
+function UIntToDecStr(AVal: UInt64): string;
+var
+  LTmp: string;
 begin
-  // single source via text.conv.UIntToStr; inline keeps call site zero overhead
-  Result := UIntToStr(AVal);
+  Str(AVal, LTmp);
+  Result := LTmp;
 end;
 
 function UInt64ToHex12(AVal: QWord): string;

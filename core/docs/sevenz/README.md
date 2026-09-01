@@ -321,8 +321,8 @@ The encoder side is always pure Pascal today.
   extracting them byte-identically to the source tree.
 - Throughput baseline: `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run`
   measures pure-Pascal LZMA2 encode/decode against a block-mixed corpus
-  (`encode pure ~6 MB/s / decode pure ~17 MB/s / ffi ~42 MB/s` on 1 MiB mixed),
-  BCJ x86 `~200 MB/s` / Delta `~80 MB/s` (zero-alloc in-place), and warm-cache container extraction `~300 MB/s`
-  (`container create multi(st)` ~10 MB/s raw, `extract multi` ~100-130 MB/s; with `cthreads` linked `multi(mt)` shows batched parallel folder speedup capped at 8 threads; `scripts/sevenz-interop.sh` covers BZip2/Deflate/BCJ+Password/Multi)
-  plus `glob IgnoreCase` index bench on 2k entries (`prefix*` ~35k ops/s, `*suffix` ~1.8k, `p*s` ~0.8k, `exact` ~3M via hash, all O(log N) fast paths)
+  (`encode pure ~8.6 MB/s / decode pure ~17.6 MB/s / ffi ~50.8 MB/s` on 1 MiB mixed),
+  BCJ x86 `~325 MB/s` / Delta `~86 MB/s` (zero-alloc in-place), and warm-cache container extraction `~333 MB/s`
+  (`container create multi(st)` ~15.2 MB/s raw, `extract multi` ~132 MB/s; with `cthreads` linked `multi(mt)` shows batched parallel folder speedup capped at 8 threads; `scripts/sevenz-interop.sh` covers BZip2/Deflate/BCJ+Password/Multi + `BZip2+IgnoreCase` 200-entry hybrid)
+  plus `glob IgnoreCase` index bench on 2k entries (`prefix*` ~137k ops/s, `*suffix` ~5.2k, `p*s` ~4k, `exact` ~2.4M via hash) and 10k entries (`prefix*` ~129k, `*suffix` ~625, `p*s` ~649, `exact` ~1.9M, redlines `1000/500/300/100k`固化, all O(log N) fast paths)
   (decode also cross-checked with liblzma when loadable).

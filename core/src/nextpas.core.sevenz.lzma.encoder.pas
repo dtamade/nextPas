@@ -87,8 +87,8 @@ type
     InSize: SizeUInt;
     Pos: SizeUInt;
     Rc: TSevenZRcEncoder;
-    Head: array of Int32;
-    Prev: array of Int32;
+    Head: array of SizeInt;
+    Prev: array of SizeInt;
     Watermark: SizeUInt;           { 已插入链的位置上界；防重插成环 }
   end;
 
@@ -115,10 +115,10 @@ procedure MatcherAlloc(var AE: TEngine);
 begin
   SetLength(AE.Head, C_HASH_SIZE);
   if Length(AE.Head) > 0 then
-    FillChar(AE.Head[0], Length(AE.Head) * SizeOf(Int32), $FF);
+    FillChar(AE.Head[0], SizeInt(Length(AE.Head)) * SizeOf(SizeInt), $FF);
   SetLength(AE.Prev, SizeInt(AE.InSize));
   if Length(AE.Prev) > 0 then
-    FillChar(AE.Prev[0], Length(AE.Prev) * SizeOf(Int32), $FF);
+    FillChar(AE.Prev[0], SizeInt(Length(AE.Prev)) * SizeOf(SizeInt), $FF);
   AE.Watermark := 0;
 end;
 
@@ -156,7 +156,7 @@ begin
   begin
     LH := Hash4(AE, APos);
     AE.Prev[APos] := AE.Head[LH];
-    AE.Head[LH] := Int32(APos);
+    AE.Head[LH] := SizeInt(APos);
     AE.Watermark := APos + 1;
   end;
 end;
@@ -179,12 +179,6 @@ begin
   if LN > AMax then
     LN := AMax;
   {$PUSH}{$Q-}{$R-}
-  while (Result + 8 <= LN) do
-  begin
-    if PUInt64(AE.InBuf + APos + Result)^ <> PUInt64(AE.InBuf + LSrc + Result)^ then
-      Break;
-    Inc(Result, 8);
-  end;
   while (Result < LN) and (AE.InBuf[APos + Result] = AE.InBuf[LSrc + Result]) do
     Inc(Result);
   {$POP}
@@ -192,9 +186,9 @@ end;
 
 { 贪心哈希链查找：返回最佳匹配长度（< C_MIN_MATCH 表示无匹配），ADist 带出距离 }
 function FindBestMatch(var AE: TEngine; APos: SizeUInt; ARoom: SizeUInt;
-  ANiceLen: SizeUInt; AChainLimit: SizeUInt; out ADist: SizeUInt): SizeUInt;
+  ANiceLen: SizeUInt; out ADist: SizeUInt): SizeUInt;
 var
-  LCand: Int32;
+  LCand: SizeInt;
   LLimit: SizeUInt;
   LDist: SizeUInt;
   LLen: SizeUInt;
@@ -210,7 +204,7 @@ begin
   LLimit := ARoom;
   if LLimit > C_MAX_MATCH then
     LLimit := C_MAX_MATCH;
-  LChain := AChainLimit;
+  LChain := 128;
   while (LCand >= 0) and (LChain > 0) do
   begin
     {$PUSH}{$Q-}{$R-}
@@ -424,7 +418,7 @@ end;
 { 主编码循环：从当前 Pos 编码到 AChunkLimit 或码流触及软上限为止。
   每个操作先经 IsMatch/IsRep 概率位声明类型，再编载荷 }
 procedure RunEncodeRange(var AE: TEngine; AChunkLimit: SizeUInt;
-  ARcBuf: TSevenZOutBuffer; ANiceLen: SizeUInt; AChain: SizeUInt);
+  ARcBuf: TSevenZOutBuffer; ANiceLen: SizeUInt);
 var
   LBestLen: SizeUInt;
   LBestDist: SizeUInt;
@@ -446,7 +440,7 @@ begin
       begin
         HashInsert(AE, AE.Pos);
         LBestLen := FindBestMatch(AE, AE.Pos, AChunkLimit - AE.Pos, ANiceLen,
-          AChain, LBestDist);
+          LBestDist);
       end;
     end;
     LPeeked := False;
@@ -461,7 +455,7 @@ begin
       begin
         HashInsert(AE, AE.Pos + 1);
         LNextLen := FindBestMatch(AE, AE.Pos + 1, AChunkLimit - AE.Pos - 1,
-          ANiceLen, AChain, LNextDist);
+          ANiceLen, LNextDist);
         if LNextLen > LBestLen then
         begin
           EncodeLiteral(AE);
@@ -495,25 +489,15 @@ begin
   end;
 end;
 
-procedure LevelParams(ALevel: TSevenZCompressionLevel; out ANice: SizeUInt;
-  out AChain: SizeUInt);
+procedure LevelParams(ALevel: TSevenZCompressionLevel; out ANice: SizeUInt);
 begin
   case ALevel of
     szclFastest:
-      begin
-        ANice := 32;
-        AChain := 32;
-      end;
+      ANice := 32;
     szclBest:
-      begin
-        ANice := C_MAX_MATCH;
-        AChain := 256;
-      end;
+      ANice := C_MAX_MATCH;
   else
-    begin
-      ANice := 128;
-      AChain := 128;
-    end;
+    ANice := 128;
   end;
 end;
 
@@ -558,7 +542,6 @@ var
   LE: TEngine;
   LSize: SizeUInt;
   LNice: SizeUInt;
-  LChain: SizeUInt;
   LChunkStart: SizeUInt;
   LChunkLimit: SizeUInt;
   LConsumed: SizeUInt;
@@ -602,7 +585,7 @@ begin
       LE.Rc := nil;
       ResetState(LE);
       MatcherAlloc(LE);
-      LevelParams(ALevel, LNice, LChain);
+      LevelParams(ALevel, LNice);
       LFirstChunk := True;
       LAfterUncomp := False;
       while LE.Pos < LSize do
@@ -630,7 +613,7 @@ begin
           try
             LE.Rc := LRc;
             LRc.Init;
-            RunEncodeRange(LE, LChunkLimit, LChunkBuf, LNice, LChain);
+            RunEncodeRange(LE, LChunkLimit, LChunkBuf, LNice);
             LRc.Flush;
           finally
             LE.Rc := nil;

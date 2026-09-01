@@ -145,13 +145,11 @@ begin
   {$POP}
 end;
 
-procedure CheckWindow(var AE: TEngineState; ADist: SizeUInt); inline;
+procedure CheckWindow(var AE: TEngineState; ADist: SizeUInt);
 var
   LAvail: SizeUInt;
 begin
   { 距离 1-based：ADist = 0 即回退一字节；窗口下界由 LZMA2 字典重置决定 }
-  if AE.Pos < AE.DictStart then
-    EngineError('window underflow');
   LAvail := AE.Pos - AE.DictStart;
   if (LAvail = 0) or (ADist >= LAvail) then
     EngineError('distance beyond dictionary window');
@@ -464,16 +462,13 @@ begin
       { 压缩载荷区隔离：每个 LZ 块自带完整区间码流段（编码器逐块 flush），
         必须在块边界重新 Init 区间解码器 }
       LE.Rc.ClipTo(LE.Rc.Position + LPackedChunk);
-      try
-        LE.Rc.Init;
-        RunSegment(LE, LUnpacked);
-        if LE.Pos - LChunkStart <> LUnpacked then
-          EngineError('lzma chunk segment size mismatch');
-        if LE.Rc.Position <> LChunkEnd then
-          EngineError('lzma2 packed size mismatch');
-      finally
-        LE.Rc.RestoreLimit;
-      end;
+      LE.Rc.Init;
+      RunSegment(LE, LUnpacked);
+      if LE.Pos - LChunkStart <> LUnpacked then
+        EngineError('lzma chunk segment size mismatch');
+      if LE.Rc.Position <> LChunkEnd then
+        EngineError('lzma2 packed size mismatch');
+      LE.Rc.RestoreLimit;
     end;
     if LE.Pos <> LE.OutSize then
       EngineError('stream ended before declared output size');

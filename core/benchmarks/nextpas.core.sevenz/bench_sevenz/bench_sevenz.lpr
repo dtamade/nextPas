@@ -14,6 +14,7 @@ uses
   nextpas.core.text.format,
   nextpas.core.sevenz,
   nextpas.core.sevenz.coders,
+  nextpas.core.sevenz.filters,
   nextpas.core.sevenz.bcj.x86,
   nextpas.core.sevenz.lzma.ffi;
 
@@ -281,6 +282,62 @@ begin
   WriteLn(TextFormat('glob IgnoreCase exact     %6.0f ops/s  hits=%d', [ITER/LElapsed, Length(LRes)]));
 end;
 
+procedure BenchGlobIgnoreCase10k;
+const N = 10000; ITER = 1000;
+var
+  LW: ISevenZWriter;
+  LR: ISevenZReader;
+  LArchive: TBytes;
+  LJ: Integer;
+  LStart: TInstant;
+  LElapsed: Double;
+  LRes: TSevenZEntryInfoArray;
+  LName: string;
+  Ops: Double;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.SetLevel(szclNone);
+  for LJ := 0 to N - 1 do
+  begin
+    LName := TextFormat('pref_%05d_suf.TXT', [LJ]);
+    if (LJ mod 1000) = 0 then LW.AddDirectory(TextFormat('pref_%05d', [LJ]));
+    LW.AddFile(LName, TBytes.Create(Byte(LJ and $FF)));
+  end;
+  LArchive := LW.Finish;
+  LR := TSevenZReaderImpl.Create(LArchive);
+  // warm + redline: O(log N) paths must stay >1k ops/s at 10k scale
+  LRes := LR.EntriesByGlobIgnoreCase('pref_000*');
+  if Length(LRes) = 0 then raise EInvalidOperationError.Create('bench 10k warm failed');
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('pref_000*');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  Ops := ITER / LElapsed;
+  WriteLn(TextFormat('glob IgnoreCase10k prefix* %6.0f ops/s  hits=%d', [Ops, Length(LRes)]));
+  if Ops < 1000 then
+    WriteLn('WARN: prefix* 10k redline <1000 ops/s');
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('*_suf.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  Ops := ITER / LElapsed;
+  WriteLn(TextFormat('glob IgnoreCase10k *suffix %6.0f ops/s  hits=%d', [Ops, Length(LRes)]));
+  if Ops < 500 then
+    WriteLn('WARN: *suffix 10k redline <500 ops/s');
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('pref_*_suf.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  Ops := ITER / LElapsed;
+  WriteLn(TextFormat('glob IgnoreCase10k p*s    %6.0f ops/s  hits=%d', [Ops, Length(LRes)]));
+  if Ops < 300 then
+    WriteLn('WARN: p*s 10k redline <300 ops/s');
+  LStart := TInstant.Now;
+  for LJ := 1 to ITER do LRes := LR.EntriesByGlobIgnoreCase('PREF_00500_SUF.txt');
+  LElapsed := LStart.Elapsed.AsSecondsF;
+  Ops := ITER / LElapsed;
+  WriteLn(TextFormat('glob IgnoreCase10k exact  %6.0f ops/s  hits=%d', [Ops, Length(LRes)]));
+  if Ops < 100000 then
+    WriteLn('WARN: exact 10k redline <100k ops/s');
+end;
+
 var
   LSaved: TSevenZLzmaBackend;
   LFfiOk: Boolean;
@@ -312,6 +369,7 @@ begin
   BenchContainerParallel;
   WriteLn;
   BenchGlobIgnoreCase;
+  BenchGlobIgnoreCase10k;
   WriteLn;
   WriteLn('done.');
 end.

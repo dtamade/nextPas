@@ -36,7 +36,6 @@ function SevenZIsSupportedMethod(AMethodId: UInt64): Boolean;
 implementation
 
 uses
-  nextpas.core.sevenz.bcj.utils,
   nextpas.core.sevenz.bcj.x86,
   nextpas.core.sevenz.bcj.arm,
   nextpas.core.sevenz.bcj.arm64,
@@ -46,46 +45,46 @@ uses
   nextpas.core.sevenz.bcj.armt,
   nextpas.core.sevenz.bcj.riscv;
 
-{ 单源过滤器表：MethodId / FromMethodId / Convert 三处 case 归一此表
-  （Convert 仍以 case 分发到各 Bcj*Convert，但方法标识源头唯一，
-   避免漂移；七z 规范 MethodId 与 TSevenZFilter 枚举同序一一对应） }
-const
-  CFilterMap: array[TSevenZFilter] of UInt64 = (
-    SEVENZ_METHOD_BCJ_X86,
-    SEVENZ_METHOD_BCJ_ARM,
-    SEVENZ_METHOD_BCJ_ARM64,
-    SEVENZ_METHOD_BCJ_PPC,
-    SEVENZ_METHOD_BCJ_IA64,
-    SEVENZ_METHOD_BCJ_SPARC,
-    SEVENZ_METHOD_BCJ_ARMT,
-    SEVENZ_METHOD_BCJ_RISCV,
-    SEVENZ_METHOD_DELTA
-  );
-
 function BcjStartOffset(const AProps: TBytes; const ATag: string): UInt32;
 begin
   if Length(AProps) = 0 then Exit(0);
   if Length(AProps) < 4 then
     raise ESevenZError.Create('bcj ' + ATag + ' props shorter than 4 bytes');
-  Result := ReadLE32(AProps, 0);
+  Result := UInt32(AProps[0]) or (UInt32(AProps[1]) shl 8) or
+    (UInt32(AProps[2]) shl 16) or (UInt32(AProps[3]) shl 24);
 end;
 
 function SevenZFilterMethodId(AFilter: TSevenZFilter): UInt64;
 begin
-  Result := CFilterMap[AFilter];
+  case AFilter of
+    szfBcjX86:  Result := SEVENZ_METHOD_BCJ_X86;
+    szfBcjArm:  Result := SEVENZ_METHOD_BCJ_ARM;
+    szfBcjArm64:Result := SEVENZ_METHOD_BCJ_ARM64;
+    szfBcjPpc:  Result := SEVENZ_METHOD_BCJ_PPC;
+    szfBcjIa64: Result := SEVENZ_METHOD_BCJ_IA64;
+    szfBcjSparc:Result := SEVENZ_METHOD_BCJ_SPARC;
+    szfBcjArmt: Result := SEVENZ_METHOD_BCJ_ARMT;
+    szfBcjRiscv:Result := SEVENZ_METHOD_BCJ_RISCV;
+    szfDelta:  Result := SEVENZ_METHOD_DELTA;
+  end;
 end;
 
 function SevenZFilterFromMethodId(AMethodId: UInt64; out AFilter: TSevenZFilter): Boolean;
-var
-  LFilter: TSevenZFilter;
 begin
-  for LFilter := Low(TSevenZFilter) to High(TSevenZFilter) do
-    if CFilterMap[LFilter] = AMethodId then
-    begin
-      AFilter := LFilter;
-      Exit(True);
-    end;
-  Result := False;
+  case AMethodId of
+    SEVENZ_METHOD_BCJ_X86:  AFilter := szfBcjX86;
+    SEVENZ_METHOD_BCJ_ARM:  AFilter := szfBcjArm;
+    SEVENZ_METHOD_BCJ_ARM64:AFilter := szfBcjArm64;
+    SEVENZ_METHOD_BCJ_PPC:  AFilter := szfBcjPpc;
+    SEVENZ_METHOD_BCJ_IA64: AFilter := szfBcjIa64;
+    SEVENZ_METHOD_BCJ_SPARC:AFilter := szfBcjSparc;
+    SEVENZ_METHOD_BCJ_ARMT: AFilter := szfBcjArmt;
+    SEVENZ_METHOD_BCJ_RISCV:AFilter := szfBcjRiscv;
+    SEVENZ_METHOD_DELTA:   AFilter := szfDelta;
+  else
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 function SevenZIsSupportedMethod(AMethodId: UInt64): Boolean;
