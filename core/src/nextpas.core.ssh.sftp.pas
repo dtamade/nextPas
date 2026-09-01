@@ -59,6 +59,7 @@ const
   SSH_FILEXFER_ATTR_ACMODTIME = nextpas.core.ssh.sftp.base.SSH_FILEXFER_ATTR_ACMODTIME;
   SSH_FILEXFER_ATTR_EXTENDED = nextpas.core.ssh.sftp.base.SSH_FILEXFER_ATTR_EXTENDED;
   SFTP_CHUNK_SIZE = nextpas.core.ssh.sftp.base.SFTP_CHUNK_SIZE;
+  SFTP_PIPELINE_WINDOW = nextpas.core.ssh.sftp.base.SFTP_PIPELINE_WINDOW;
 
 type
   TSftpAttrs = nextpas.core.ssh.sftp.base.TSftpAttrs;

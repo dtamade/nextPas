@@ -35,6 +35,9 @@ type
     function AadLen: Integer;
     { body=[padlen][payload][padding] → 完整线上包（含长度字段与 tag/mac）}
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
+    { 单分配零拷贝：payload + padLen → 完整线上包；内部生成随机 padding、单次
+      SetLength 线上包后原位加密/MAC，消除 transport 侧 LBody 中间拷贝。 }
+    function ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
   end;
 
   { 接收方向编解码器 }
@@ -71,6 +74,7 @@ implementation
 uses
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
+  nextpas.core.crypto.random,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aesctr,
   nextpas.core.crypto.aesni,
@@ -233,6 +237,7 @@ type
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
+    function ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
   end;
 
   TSshNoneReceiver = class(TInterfacedObject, ISshPacketReceiver)
@@ -260,6 +265,22 @@ begin
   PutU32BE(Result, 0, UInt32(Length(ABodyPlain)));
   if Length(ABodyPlain) > 0 then
     Move(ABodyPlain[0], Result[4], SizeUInt(Length(ABodyPlain)));
+end;
+
+function TSshNoneSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
+var LPayloadLen, LBodyLen: SizeUInt;
+begin
+  LPayloadLen := SizeUInt(Length(APayload));
+  LBodyLen := 1 + LPayloadLen + APadLen;
+  // perf: 单次 SetLength 线上包，零拷贝 Move payload + SecureRandom padding，单源 bytes.ops/bulk
+  SetLength(Result, 4 + LBodyLen);
+  PutU32BE(Result, 0, UInt32(LBodyLen));
+  Result[4] := Byte(APadLen);
+  if LPayloadLen > 0 then
+    Move(APayload[0], Result[5], LPayloadLen);
+  if APadLen > 0 then
+    if not SecureRandomBytes(@Result[5 + LPayloadLen], Integer(APadLen)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
 end;
 
 function TSshNoneReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
@@ -294,6 +315,7 @@ type
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
+    function ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
   end;
 
   TSshChachaReceiver = class(TInterfacedObject, ISshPacketReceiver)
@@ -346,27 +368,65 @@ begin
     - 后 32B（header）：counter=0 掩码长度字段
     - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LBodyLen := SizeUInt(Length(ABodyPlain));
-  // perf: FWriteBuf single alloc reuse — 16KB×8192 基准下首包分配后同尺寸复用容量，零额外 SetLength churn，保持零拷贝宣称
-  if Length(FWriteBuf) < 4 + LBodyLen + CHACHA_TAG then
-    SetLength(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
+  // perf: FWriteBuf single alloc reuse via bytes.ops BytesEnsureCapacity — 16KB×8192 首包后复用容量，零额外 churn；Result 零拷贝复用 FWriteBuf 单次分配，消除双大块分配，bytes.ops/bytes.binary 单源 inline
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
+  SetLength(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
   try
     LEncLenBE := UInt32(LBodyLen) xor U32BEOf(LMask, 0);
-    // perf: wire 单次 SetLength, zero-copy ChaCha20XorTo into Result[4], 1 Move for tag only (vs 3 Moves+2 alloc); bytes.binary 单源
-    SetLength(Result, 4 + LBodyLen + CHACHA_TAG);
-    PutU32BE(Result, 0, LEncLenBE);
+    PutU32BE(FWriteBuf, 0, LEncLenBE);
     if LBodyLen > 0 then
     begin
-      if not ChaCha20XorTo(FMainKey, LNonce, 1, @ABodyPlain[0], Integer(LBodyLen), @Result[4]) then
+      if not ChaCha20XorTo(FMainKey, LNonce, 1, @ABodyPlain[0], Integer(LBodyLen), @FWriteBuf[4]) then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
     end;
     LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
     SetLength(LPolyKey, 32);
     try
-      // zero-copy Poly1305 over encLen||ct spans (no concat alloc), bytes.ops single source
-      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.Create(@Result[0], 4), TByteSpan.Create(@Result[4], LBodyLen)]);
-      Move(LTag[0], Result[4 + LBodyLen], CHACHA_TAG);
+      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)]);
+      Move(LTag[0], FWriteBuf[4 + LBodyLen], CHACHA_TAG);
+      Result := FWriteBuf; // zero-copy share, single alloc; 下次 Protect 共享时 BytesEnsureCapacity/SetLength 自动唯一化，保正确性
+    finally
+      SecureZeroBytes(LPolyKey);
+      SecureZeroBytes(LTag);
+    end;
+  finally
+    SecureZeroBytes(LMask);
+    SecureZeroBytes(LNonce);
+  end;
+end;
+
+function TSshChachaSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
+var
+  LNonce, LMask, LPolyKey, LTag: TBytes;
+  LPayloadLen, LBodyLen: SizeUInt;
+  LEncLenBE: UInt32;
+begin
+  LPayloadLen := SizeUInt(Length(APayload));
+  LBodyLen := 1 + LPayloadLen + APadLen;
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
+  SetLength(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
+  FWriteBuf[4] := Byte(APadLen);
+  if LPayloadLen > 0 then
+    Move(APayload[0], FWriteBuf[5], LPayloadLen);
+  if APadLen > 0 then
+    if not SecureRandomBytes(@FWriteBuf[5 + LPayloadLen], Integer(APadLen)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
+  LNonce := ChachaNonce(ASeq);
+  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  try
+    LEncLenBE := UInt32(LBodyLen) xor U32BEOf(LMask, 0);
+    PutU32BE(FWriteBuf, 0, LEncLenBE);
+    if LBodyLen > 0 then
+      if not ChaCha20XorTo(FMainKey, LNonce, 1, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[4]) then
+        raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
+    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+    SetLength(LPolyKey, 32);
+    try
+      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)]);
+      Move(LTag[0], FWriteBuf[4 + LBodyLen], CHACHA_TAG);
+      Result := FWriteBuf; // zero-copy share, single alloc, bytes.ops 单源
     finally
       SecureZeroBytes(LPolyKey);
       SecureZeroBytes(LTag);
@@ -460,6 +520,7 @@ type
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
+    function ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
   end;
 
   TSshGcmReceiver = class(TInterfacedObject, ISshPacketReceiver)
@@ -523,38 +584,84 @@ begin
   if FCounter >= GCM_SEQ_THRESHOLD then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted, rekey required');
   LBodyLen := SizeUInt(Length(ABodyPlain));
-  // perf: FWriteBuf 单次分配复用 — 16KB×8192 warm 后零 churn，单次 SetLength wire，零拷贝 AES-NI 直写
-  if Length(FWriteBuf) < 4 + LBodyLen + GCM_TAG then
-    SetLength(FWriteBuf, 4 + LBodyLen + GCM_TAG);
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + GCM_TAG);
+  SetLength(FWriteBuf, 4 + LBodyLen + GCM_TAG);
   LNonce := GcmNonce(FBaseIV, FCounter);
   try
-    // perf: single alloc wire buf, zero-copy AES-NI direct into Result[4] (CT||Tag), bytes.binary 单源
-    SetLength(Result, 4 + LBodyLen + GCM_TAG);
-    PutU32BE(Result, 0, UInt32(LBodyLen));
+    PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
     if LBodyLen > 0 then
       LPlainPtr := @ABodyPlain[0]
     else
       LPlainPtr := nil;
-    LDestPtr := @Result[4];
+    LDestPtr := @FWriteBuf[4];
     LOk := False;
     if IsAESNIAvailable then
     begin
       if Length(FKey) = 16 then
-        LOk := AESNIGCMEncryptTo128PtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @Result[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG))
+        LOk := AESNIGCMEncryptTo128PtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @FWriteBuf[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG))
       else if Length(FKey) = 32 then
-        LOk := AESNIGCMEncryptTo256PtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @Result[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG));
+        LOk := AESNIGCMEncryptTo256PtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @FWriteBuf[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG));
       if LOk then
       begin
         Inc(FCounter);
+        Result := FWriteBuf; // zero-copy share, single alloc
         Exit;
       end
       else if Length(FKey) in [16, 32] then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
     end;
-    // fallback pure pascal zero-copy: direct ptr AAD + CT||Tag into Result[4], no Copy/Move alloc (fast path parity, bytes.ops single source via GHASH PByte)
-    if not PurePascalAESGCMEncryptPtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @Result[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG)) then
+    if not PurePascalAESGCMEncryptPtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @FWriteBuf[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG)) then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
     Inc(FCounter);
+    Result := FWriteBuf; // zero-copy share, single alloc
+  finally
+    SecureZeroBytes(LNonce);
+  end;
+end;
+
+function TSshGcmSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
+var
+  LNonce: TBytes;
+  LPayloadLen, LBodyLen: SizeUInt;
+  LOk: Boolean;
+begin
+  if FCounter = High(UInt64) then
+    raise ESSHError.Create(sekProtocol, 'ssh cipher: gcm counter wrap, rekey required');
+  if FCounter >= GCM_SEQ_THRESHOLD then
+    raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted, rekey required');
+  LPayloadLen := SizeUInt(Length(APayload));
+  LBodyLen := 1 + LPayloadLen + APadLen;
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + GCM_TAG);
+  SetLength(FWriteBuf, 4 + LBodyLen + GCM_TAG);
+  PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
+  FWriteBuf[4] := Byte(APadLen);
+  if LPayloadLen > 0 then
+    Move(APayload[0], FWriteBuf[5], LPayloadLen);
+  if APadLen > 0 then
+    if not SecureRandomBytes(@FWriteBuf[5 + LPayloadLen], Integer(APadLen)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
+  LNonce := GcmNonce(FBaseIV, FCounter);
+  try
+    LOk := False;
+    if IsAESNIAvailable then
+    begin
+      if Length(FKey) = 16 then
+        LOk := AESNIGCMEncryptTo128PtrAAD(FKey, @LNonce[0], 12, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[0], 4, @FWriteBuf[4], Integer(LBodyLen + GCM_TAG))
+      else if Length(FKey) = 32 then
+        LOk := AESNIGCMEncryptTo256PtrAAD(FKey, @LNonce[0], 12, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[0], 4, @FWriteBuf[4], Integer(LBodyLen + GCM_TAG));
+      if LOk then
+      begin
+        Inc(FCounter);
+        Result := FWriteBuf; // zero-copy share
+        Exit;
+      end
+      else if Length(FKey) in [16, 32] then
+        raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
+    end;
+    if not PurePascalAESGCMEncryptPtrAAD(FKey, @LNonce[0], 12, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[0], 4, @FWriteBuf[4], Integer(LBodyLen + GCM_TAG)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
+    Inc(FCounter);
+    Result := FWriteBuf; // zero-copy share, single alloc
   finally
     SecureZeroBytes(LNonce);
   end;
@@ -683,6 +790,7 @@ type
     function PaddingBlock: Integer;
     function AadLen: Integer;
     function Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
+    function ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
   end;
 
   TSshCtrEtmReceiver = class(TInterfacedObject, ISshPacketReceiver)
@@ -740,28 +848,56 @@ var
 begin
   LBodyLen := SizeUInt(Length(ABodyPlain));
   LTagLen := SizeUInt(Length(FMacKey));
-  // perf: FWriteBuf 单次分配复用 — 16KB×8192 复用容量，单次 SetLength wire，零拷贝 Move+CTR xor, bytes.binary 单源
-  if Length(FWriteBuf) < 4 + LBodyLen + LTagLen then
-    SetLength(FWriteBuf, 4 + LBodyLen + LTagLen);
-  // perf: single SetLength wire packet, zero-copy Move + in-place CTR xor via bytes.ops MemXor
-  SetLength(Result, 4 + LBodyLen + LTagLen);
-  PutU32BE(Result, 0, UInt32(LBodyLen));
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + LTagLen);
+  SetLength(FWriteBuf, 4 + LBodyLen + LTagLen);
+  PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
   if LBodyLen > 0 then
-    Move(ABodyPlain[0], Result[4], LBodyLen);
-  FCtr.XorInto(Result, 4, LBodyLen); // encrypt ct in place, bulk MemXor single source
-  // EtM: incremental HMAC over seq||len||ct without LMacInput alloc (zero-copy Write), bytes.binary 单源
+    Move(ABodyPlain[0], FWriteBuf[4], LBodyLen);
+  FCtr.XorInto(FWriteBuf, 4, LBodyLen); // encrypt ct in place, bulk MemXor single source via bytes.ops
   WriteUInt32BE(@LSeqBE[0], ASeq);
   LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
   LHasher.Write(LSeqBE[0], 4);
-  LHasher.Write(Result[0], 4);
+  LHasher.Write(FWriteBuf[0], 4);
   if LBodyLen > 0 then
-    LHasher.Write(Result[4], LBodyLen);
+    LHasher.Write(FWriteBuf[4], LBodyLen);
   LTag := LHasher.SumBytes;
-  Move(LTag[0], Result[4 + LBodyLen], LTagLen);
-  // stability: LHasher refcounted interface, auto release; zero sensitive tag
+  Move(LTag[0], FWriteBuf[4 + LBodyLen], LTagLen);
   SecureZeroBytes(LTag);
-  // wipe stack seq buf (secure single source)
   SecureZeroMemory(@LSeqBE[0], SizeOf(LSeqBE));
+  Result := FWriteBuf; // zero-copy share, single alloc; BytesEnsureCapacity 复用容量，消除双大块分配，bytes.ops/bytes.binary 单源 inline
+end;
+
+function TSshCtrEtmSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
+var
+  LTag: TBytes;
+  LPayloadLen, LBodyLen, LTagLen: SizeUInt;
+  LHasher: IHasher;
+  LSeqBE: array[0..3] of Byte;
+begin
+  LPayloadLen := SizeUInt(Length(APayload));
+  LBodyLen := 1 + LPayloadLen + APadLen;
+  LTagLen := SizeUInt(Length(FMacKey));
+  BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + LTagLen);
+  SetLength(FWriteBuf, 4 + LBodyLen + LTagLen);
+  PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
+  FWriteBuf[4] := Byte(APadLen);
+  if LPayloadLen > 0 then
+    Move(APayload[0], FWriteBuf[5], LPayloadLen);
+  if APadLen > 0 then
+    if not SecureRandomBytes(@FWriteBuf[5 + LPayloadLen], Integer(APadLen)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
+  FCtr.XorInto(FWriteBuf, 4, LBodyLen);
+  WriteUInt32BE(@LSeqBE[0], ASeq);
+  LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
+  LHasher.Write(LSeqBE[0], 4);
+  LHasher.Write(FWriteBuf[0], 4);
+  if LBodyLen > 0 then
+    LHasher.Write(FWriteBuf[4], LBodyLen);
+  LTag := LHasher.SumBytes;
+  Move(LTag[0], FWriteBuf[4 + LBodyLen], LTagLen);
+  SecureZeroBytes(LTag);
+  SecureZeroMemory(@LSeqBE[0], SizeOf(LSeqBE));
+  Result := FWriteBuf; // zero-copy share, single alloc, bytes.ops 单源
 end;
 
 constructor TSshCtrEtmReceiver.Create(const ACipher, AMac: string;

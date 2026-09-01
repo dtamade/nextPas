@@ -52,8 +52,8 @@
 | `nextpas.core.ssh.sftp.base.pas` | SFTP 共享基座（协议常量/属性载体/ `SftpStatusName` 单源，`text.conv` 单源） | base |
 | `nextpas.core.ssh.sftp.intf.pas` | SFTP 缝隙接口（`ISftpWire/ISshFileSystem`，隔离通道与文件语义） | intf |
 | `nextpas.core.ssh.sftp.wire.pas` | SFTP 通道线材（`TSshChannelWire` 4B 重组，容量倍增+偏移零拷贝，`inline/bytes.ops` 单源） | impl |
-| `nextpas.core.ssh.sftp.conn.pas` | SFTP 连接状态机（`TSftpConnection` INIT/VERSION+RoundTrip 迟滞跳过，`PutAttrs/ReadAttrs` 单源） | impl |
-| `nextpas.core.ssh.sftp.fs.pas` | SFTP 文件系统实现（`TSshFileSystem` RealPath/Stat/ListDir/ReadFile/WriteFile 等；ReadFile `IBytesBuilder` 倍增、ListDir 容量倍增） | impl |
+| `nextpas.core.ssh.sftp.conn.pas` | SFTP 连接状态机（`TSftpConnection` INIT/VERSION+RoundTrip/流水线 `SendRequest/RecvForId` 乱序缓冲 `SFTP_PIPELINE_WINDOW`，`PutAttrs/ReadAttrs` 单源） | impl |
+| `nextpas.core.ssh.sftp.fs.pas` | SFTP 文件系统实现（`TSshFileSystem` RealPath/Stat/ListDir/ReadFile/WriteFile 等；ReadFile/WriteFile `SFTP_PIPELINE_WINDOW=16` 流水线窗口+ `IBytesBuilder` 倍增、ListDir 容量倍增） | impl |
 | `nextpas.core.ssh.sftp.pas` | SFTP v3 门面（纯 re-export，常量/类型/接口与 `SftpOpen*` 便捷入口，`inline` 转发，无逻辑） | 门面 |
 | `nextpas.core.ssh.sftp.async.pas` | SFTP v3 异步（`ISshAsyncFileSystem`，`SftpRoundTripAsync` + 窗口，复用 `sftp.base` 单源） | impl |
 

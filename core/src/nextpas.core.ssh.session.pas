@@ -23,7 +23,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
-  nextpas.core.net.intf,
   nextpas.core.ssh.intf,
   nextpas.core.base.utils,
   nextpas.core.text.conv,

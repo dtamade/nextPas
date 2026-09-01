@@ -55,7 +55,7 @@ type
     procedure ApplyNewKeys(const ANegotiated: TSshNegotiated;
       const AIvCs, AKeyCs, AMacCs, AIvSc, AKeySc, AMacSc: TBytes);
 
-    function EncodePacket(const APayload: TBytes): TBytes;
+    function EncodePacket(const APayload: TBytes): TBytes; inline;
     function DecodePacket(const AWire: TBytes): TBytes;
 
     function BodyLengthFromHeader(const AHeader: TBytes): UInt32;
@@ -70,8 +70,7 @@ type
 implementation
 
 uses
-  nextpas.core.exception,
-  nextpas.core.crypto.random;
+  nextpas.core.exception;
 
 constructor TSshTransportCore.Create;
 begin
@@ -148,12 +147,11 @@ begin
   ResetRekeyCounters;
 end;
 
-function TSshTransportCore.EncodePacket(const APayload: TBytes): TBytes;
+function TSshTransportCore.EncodePacket(const APayload: TBytes): TBytes; inline;
 var
   LOut: TBytes;
-  LPayloadLen, LPad, LBodyLen, LAad: SizeUInt;
+  LPayloadLen, LPad, LAad: SizeUInt;
   LBlock: Integer;
-  LBody: TBytes;
 begin
   LOut := APayload;
   if FCompressEnabled and (FCompressor <> nil) and (FNegCompCs <> SSH_COMP_NONE) then
@@ -161,18 +159,12 @@ begin
   LPayloadLen := SizeUInt(Length(LOut));
   LBlock := FSender.PaddingBlock;
   LAad := SizeUInt(FSender.AadLen);
-  // 单源公式：OpenSSH packet.c 发送端先 len-=aadlen 再算 padlen
+  // 单源公式：OpenSSH packet.c 发送端先 len-=aadlen 再算 padlen；bytes.ops 单源复用无手写循环
   LPad := SizeUInt(LBlock) - ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
   if LPad < SSH_MIN_PADDING then
     Inc(LPad, SizeUInt(LBlock));
-  LBodyLen := 1 + LPayloadLen + LPad;
-  SetLength(LBody, LBodyLen);
-  LBody[0] := Byte(LPad);
-  if LPayloadLen > 0 then
-    Move(LOut[0], LBody[1], LPayloadLen);
-  if not SecureRandomBytes(@LBody[1 + LPayloadLen], Integer(LPad)) then
-    raise ESSHError.Create(sekCrypto, 'ssh transport: SecureRandom failed');
-  Result := FSender.Protect(LBody, FSendSeq);
+  // perf: 单次分配零拷贝 via cipher ProtectPayload（单次 SetLength 线上包 + 单次 Move payload + SecureRandom padding 原位），消除 LBody 中间分配/两阶段拷贝；inline 热路径，bytes.ops 单源 MemXor/bulk；稳定性：ProtectPayload 内 SecureRandom 失败抛异常不泄漏，FSendSeq 递增与 FRekey.Account 在成功加密后执行，资源零泄漏
+  Result := FSender.ProtectPayload(LOut, LPad, FSendSeq);
   Inc(FSendSeq);
   FRekey.Account(UInt64(Length(APayload)));
 end;

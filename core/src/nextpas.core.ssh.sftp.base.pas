@@ -62,6 +62,8 @@ const
   SFTP_CHUNK_SIZE = 32760;
   SFTP_PROTOCOL_VERSION = 3;
   SFTP_MAX_PACKET_SIZE = 256 * 1024;
+  { 流水线窗口：批量在途 READ/WRITE 数，屏蔽 RTT 线性衰减；16×32760≈512KB 在途 }
+  SFTP_PIPELINE_WINDOW = 16;
 
 type
   { 文件属性（v3 掩码子集）}

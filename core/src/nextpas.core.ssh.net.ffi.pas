@@ -29,6 +29,9 @@ type
   TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
   TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
   // 同步类型单缝隙 re-export：供 proxyjump.async 等经 ffi 间接使用，避免直连 net.base/intf
+  ITcpStream = nextpas.core.net.intf.ITcpStream;
+  ITcpListener = nextpas.core.net.intf.ITcpListener;
+  IUdpSocket = nextpas.core.net.intf.IUdpSocket;
   TNetAddress = nextpas.core.net.base.TNetAddress;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
