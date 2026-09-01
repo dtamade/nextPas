@@ -52,8 +52,8 @@ function git_odb_add_disk_alternate(odb: PGitOdb; path: PAnsiChar): LongInt; cde
 procedure git_odb_free(db: PGitOdb); cdecl; external 'c' name 'git_odb_free';
 function git_odb_read(obj: PPGitOdbObject; db: PGitOdb; id: PGitOid): LongInt; cdecl; external 'c' name 'git_odb_read';
 
-// Bridge inline helpers (performance: inline + zero-copy TByteSpan/SpanEqual/Move, 20B ~3×QWord)
-// Reuses bytes.ops single source (SpanEqual via MemEqual / Move) for byte ops
+// Bridge inline helpers (performance: inline + zero-copy TByteSpan/SpanEqual/SpanCopy, 20B ~3×QWord)
+// Reuses bytes.ops single source (SpanEqual via MemEqual / SpanCopy via Move + SpanClone) for byte ops
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 
@@ -73,7 +73,7 @@ end;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 begin
   Dst.&type := Src.&type;
-  // inline zero-copy: single Move, no heap, no SysUtils
-  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+  // perf: inline zero-copy SpanCopy via bytes.ops single source (no heap, single Move), unifies BytesAppend/SpanClone dual path, replaces raw Move
+  SpanCopy(TByteSpan.Create(@Dst.id[0], SizeOf(Dst.id)), TByteSpan.Create(@Src.id[0], SizeOf(Src.id)));
 end;
 end.

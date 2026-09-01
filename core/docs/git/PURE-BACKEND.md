@@ -2,9 +2,9 @@
 
 **模块**：`nextpas.core.git.*`
 **层级**：L2
-**北极星**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` 时编译期与运行期彻底不依赖 `libgit2`（无 `dlopen`、无 `-lgit2`、无 `libgit2.so`、产物体积不含 libgit2 声明）；`factory.NewGitManager(gbNative)` 运行时零 `libgit2`（无 `dlopen`、`TNativeGitManager` 纯路径），编译图仍含 `libgit2`（`factory` 为唯一跨轨汇聚点，直连 `native.manager` 方为全维度零依赖）。
-**状态**：Phase 0 契约冻结（gbAuto 首版 = gbLibGit2，见 §3 迁移公告）
-**关联**：`CONTRACT.md` §1.1 / `native-reference-map.md` / `scripts/git-contract-check.sh` C4
+**北极星**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` 时编译期/运行期/产物三零（`fpc -va Loading` 与 `nm -D` 双零，无 `dlopen`/`-lgit2`/`libgit2.so`，产物不含 `libgit2` 声明，`bytes.ops` 零拷贝 + `inline` 值类型枚举分发，接口引用计数零泄漏）；`factory.NewGitManager(gbNative)` 运行时零 `libgit2`（`TNativeGitManager` 纯路径，无 `dlopen`，编译图仍含 `libgit2` 因 `factory` 为唯一跨轨汇聚点）；全维度零依赖仅直连 `native.manager` 达成，`gbAuto=gbLibGit2` 阶段厂路径编译图仍含 `libgit2`（见 §3 相位说明）。
+**状态**：Phase 0 契约冻结（gbAuto 首版 = gbLibGit2，见 §3 迁移公告；Phase 0–4 厂路径仍含编译图，全维度北极星以直连 `native.manager` 为准）
+**关联**：`CONTRACT.md` §1.1 / `native-reference-map.md` / `scripts/git-contract-check.sh` C4（`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义）
 
 ---
 
@@ -35,7 +35,7 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 - **纯路径（运行时零 `libgit2`）**：`factory(gbNative)` → `native.manager` → `native.*` → 运行时零 `libgit2`（`TNativeGitManager.Create`，`EGitError` 来自 `native.base`，`inline` 值类型枚举零拷贝分发，接口引用计数零泄漏）；编译图仍含 `libgit2`（`factory` 跨轨）。
   仅 `native.manager` 直连时 `uses intf + native.base/repo/refs/status/objmodel/...` 全维度零 `libgit2`，禁止出现 `nextpas.core.git.libgit2`。
-- **全维度零 `libgit2` 路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading` 与 `nm -D` 双零）。
+- **全维度零 `libgit2` 路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading libgit2` 零命中与 `nm -D <pure_bin> | grep " git_"` 零命中，双零；`bytes.ops` 零拷贝 + `inline`，接口引用计数拥有，资源 `try..finally` 不丢）。
 - **兼容路径**：`factory(gbAuto)` 首版 → `libgit2.manager` → 现有行为不变；
   存量 `uses nextpas.core.git; NewGitManager;` 零改动，仍走 `dlopen`。
 - **归一原则**：依赖隔离在单元级（`uses` 图），FPC 通过编译图决定链接，不用 `{$IFDEF}` 分叉。
@@ -75,9 +75,9 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 ### 3.1 gbAuto 语义版本化
 
-- **首版（Phase 0–4）**：`gbAuto = gbLibGit2`。存量代码 `NewGitManager` / `NewGitManager(gbAuto)` 行为与重构前完全一致，零 breaking change。
-- **下版本（公告）**：`gbAuto` 将切换为 `gbNative`。切换前将在 `CHANGELOG.md` 与本文件顶部以 `BREAKING` 公告，并提供 `gbLibGit2` 显式保留路径。
-- 迁移建议：新代码显式传参 `gbNative` 或 `gbLibGit2`，避免依赖 `gbAuto` 的隐式默认值；`gbAuto` 仅用于“跟随默认后端”的场景。
+- **首版（Phase 0–4）**：`gbAuto = gbLibGit2`。存量代码 `NewGitManager` / `NewGitManager(gbAuto)` 行为与重构前完全一致，零 breaking change；此阶段 `factory` 为唯一跨轨汇聚点，`factory.NewGitManager(gbNative)` 运行时零 `libgit2` 但编译图仍含 `libgit2` 声明，全维度北极星未由厂路径达成，仅直连 `native.manager` 达成。
+- **下版本（公告）**：`gbAuto` 将切换为 `gbNative`。切换前将在 `CHANGELOG.md` 与本文件顶部以 `BREAKING` 公告，并提供 `gbLibGit2` 显式保留路径；届时厂路径编译图可随 `gbAuto` 迁移逐步收敛，但 `factory` 跨轨汇聚点不变，直连 `native.manager` 仍为全维度零依赖唯一路径。
+- 迁移建议：新代码显式传参 `gbNative` 或 `gbLibGit2`，避免依赖 `gbAuto` 的隐式默认值；`gbAuto` 仅用于“跟随默认后端”的场景；需三零证据的纯后端请直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（`fpc -va Loading` / `nm -D` 双零）。
 
 ### 3.2 时间线
 
@@ -122,12 +122,13 @@ end;
 
 ## 5. 门禁
 
-- `scripts/git-contract-check.sh` C4（已闭环，`CONTRACT.md` §6 与本节双重声明）：
+- `scripts/git-contract-check.sh` C4（已闭环，`CONTRACT.md` §6 与本节双重声明；CI 矩阵证据已落地）：
   - `grep -R "nextpas.core.git.libgit2" core/src/nextpas.core.git.native.manager.pas core/src/nextpas.core.git.native.repository.pas` 必须零命中；
   - 全量 `native.*` 闭包 `grep -R "libgit2" core/src/nextpas.core.git.native.*` 零命中；
-  - `fpc -va` 编译 `test_git_pure_manager.lpr` 的 `Loading.*libgit2` 零命中（`fpc -va` 实检，见脚本 C4.3a；`grep` 版为辅助，编译图以 `fpc -va Loading` 为准）；
-  - `nm -D <pure_bin> | grep " git_"` 零命中（产物实检，见脚本 C4.3b；`<pure_bin>` 优先 `core/build/projects/nextpas.core.git/test_git_pure_manager/test_git_pure_manager`，无产物时现场编译后检查）。
+  - `fpc -va` 编译 `test_git_pure_manager.lpr` 的 `Loading.*libgit2` 零命中（`fpc -va` 实检，见脚本 C4.3a；`grep` 版为辅助，编译图以 `fpc -va Loading` 为准；CI 取 `fpc -va 2>&1 | grep -i "Loading.*libgit2"` 零命中为通过证据）；
+  - `nm -D <pure_bin> | grep " git_"` 零命中（产物实检，见脚本 C4.3b；`<pure_bin>` 优先 `core/build/projects/nextpas.core.git/test_git_pure_manager/test_git_pure_manager`，无产物时现场编译后检查；CI 以 `nm -D` 零命中为产物三零证据）。
 - `make hygiene` 与 `git diff --check` 为必要门禁；`make focused FOCUS=core/tests/nextpas.core.git/test_git_pure_manager` 为纯后端门禁（`build/verify_local.sh` 聚合 `git-contract-check`）。
+- `hygiene` 与 `heaptrc` 双 pin 门禁依赖 FPC trunk `FlushFunc` 设备语义：`heaptrc` 退出期 `StdErr` 文本记录仅句柄为设备（`pipe/tty`）时获 `FlushFunc` 逐写刷新，重定向至普通文件则缓冲且退出时不刷新、小 dump 整体丢失、大 dump 截断；故 `core/tests/common.mk:75-78` 采用 `HEAPTRC='haltonnotreleased,log=*.heaptrc'` 双通道（`haltonnotreleased` 泄漏即 `exit 203`，`log=` 落盘 `heaptrc` 关闭自有文件）+ 双 pin（`grep '^Heap dump by heaptrc unit'` 存在性防真空 + `grep '^0 unfreed memory blocks : 0$'` 零泄漏 + `haltonnotreleased` `exit 203`）自动化，`grep` 程序输出的旧路径已废弃；纯后端三零校验的 `fpc -va` 实检已纳入 CI 矩阵证据（`C4.3a` `Loading` 零命中 + `C4.3b` `nm -D` 零命中），以 `fpc -va` 为准、`grep` 为辅。
 
 ---
 

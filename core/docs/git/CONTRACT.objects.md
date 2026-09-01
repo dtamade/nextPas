@@ -1,0 +1,30 @@
+# nextpas.core.git — 对象层契约（objects）
+
+**模块路径**：`core/src/nextpas.core.git.native.{base,zlib,loose,pack,refs,objmodel,repo,write}.pas` + `nextpas.core.git.native.objects.pas` 门面
+**层级**：L2（同层单向 `compress/hash/zlib/checksum` 豁免；L0-L1: base, bytes, text, fs, io）
+**Owner**：git lane
+**不变量域**：对象存储（oid / zlib / loose / pack / refs / objmodel / repo / write）
+
+## 1. 范围与阈值
+- 源聚合：8 单元 + 1 门面 shard（`native.objects` <400 行），单 shard <800 行软阈，满足 `design-conventions.md §2` 必拆阈；跨 shard 仅薄聚合 `native` (<350 行) fan-in。
+- 禁止在对象层手写压缩/哈希：zlib 透传 `compress.Deflate*`，Adler-32 单源 `checksum.adler32`，oid 比对单源 `bytes.ops.SpanEqual`（20-byte 权威 `native.base.TGitOid`）。
+
+## 2. 不变量
+- Oid 20-byte 原子：`GitOidIsValidHex/FromHex/ToHex/Same` 单源 `bytes.ops`，`Same` = `SpanEqual(TByteSpan(20),TByteSpan(20))` 零分配；`TGitOid33` 仅 legacy。
+- Loose 路径 `objects/xx/yyyy` SHA-1 寻址，zlib wrapper 经 `DeflateReaderEmbedded` 流边界即停。
+- Pack：`.idx v2` fanout 二分，OFS/REF delta 链深度 ≤64，CRC 不校验但 SHA-1 尾校验；`TPackFile.FMapped: IMappedFile` 独占 `PByte+Size` 零拷贝，析构释放（接口计数）。
+- Refs：HEAD/loose/packed-refs 去重归并，gitdir 发现经 `EffectiveGitDir` 透 linked worktree。
+
+## 3. 性能契约（inline/零拷贝，复用 bytes.ops 单源）
+- `GitOidIsValidHex/FromHex/ToHex/Same:inline` ≤80 ns/op；`GitKindFromMode:inline` ≤30 ns/op
+- `GitZlibAdler32(PByte,Len):inline` 零拷贝（`Adler32Update(PByte,Len)` 单源，`ADLER32_MOD/NMAX` 单源，不自建循环）
+- `GitZlibCompress/DecompressPtr: PByte+Len` 零拷贝透传 `compress` owner
+- 门禁：`bench_git: Oid/*, Kind/*, Zlib/*, Adler32/*` 详见总 CONTRACT §7 的 Go/Rust 同机 A/B 归一双锚。
+
+## 4. 稳定性
+- `WriteAtomic` 临时句柄 `try..finally` 原子落盘；`TPackFile` 析构释放 `IMappedFile`；`EIOError→EGitError` 映射，`EGitError` 不丢。
+- 基准初始化往返校验 `BytesEqual(GitZlibDecompress(GitZlibCompress(1K)),1K)` 失败 `raise EGitError` 不泄漏（`TBytes` 受控）。
+
+## 5. 与总约关系
+- 本域权威：对象层类型/错误/阈值以本文件为准；跨域不变量仍以 `CONTRACT.md` 总索引为准。
+- 缺能力先反哺 owner：新哈希/压缩能力归 `checksum/compress`，对象层仅薄转发。

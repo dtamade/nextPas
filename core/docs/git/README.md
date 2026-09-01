@@ -5,15 +5,21 @@
 - 层级：L2，依赖 L0-L1（`base`/`text`/`bytes`/`fs`/`io`）；`native` 子家族另用同层单向 `compress`/`hash`/`zlib`/`checksum` owner 能力（mmap、Deflate、SHA-1、Adler-32 等，`core/docs/core-module-registry.md` 显式豁免 `L0-L1 plus same-layer one-way compress/hash/zlib/checksum`），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，存量零改动）。
 - 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)`，首版 `gbAuto = gbLibGit2`）。
-- 纯路径：`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 双重闭环：`grep` + `fpc -va Loading libgit2`）。
-- 文档真源：契约见 [CONTRACT.md](CONTRACT.md)；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md)。
+- 纯路径：`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D` 产物零命中；`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义；三零证据 `fpc -va`/`nm` 双零，直连 `native.manager` 方为全维度零依赖，`factory(gbNative)` 运行时零 `dlopen` 但编译图仍含 `libgit2`）。
+- 文档真源：契约见 [CONTRACT.md](CONTRACT.md)（总索引，88 源/40+ 能力按不变量域 6 shard 拆分）+ 6 shard 独立契约；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md).
 
 ## 文档地图
 
 | 文档 | 职责 |
 |------|------|
 | [README.md](README.md) | 本文件：统一门面与高级感入口 |
-| [CONTRACT.md](CONTRACT.md) | 代码契约（88 源文件清单、接口/不变量/线程安全/内存/测试门禁） |
+| [CONTRACT.md](CONTRACT.md) | 代码契约总索引（88 源/40+ 能力总览，跨域不变量与 800 行阈拆分索引） |
+| [CONTRACT.objects.md](CONTRACT.objects.md) | 对象层契约（oid/zlib/loose/pack/refs/objmodel/repo/write） |
+| [CONTRACT.staging.md](CONTRACT.staging.md) | 暂存区契约（index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch） |
+| [CONTRACT.history.md](CONTRACT.history.md) | 历史契约（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show） |
+| [CONTRACT.branches.md](CONTRACT.branches.md) | 分支契约（branch/tag/stash/notes） |
+| [CONTRACT.transport.md](CONTRACT.transport.md) | 传输契约（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
+| [CONTRACT.extensions.md](CONTRACT.extensions.md) | 扩展契约（archive/submodule/mailmap/trailer/bundle/grep/bisect） |
 | [PURE-BACKEND.md](PURE-BACKEND.md) | 纯 Pascal 后端隔离契约（依赖图、选择矩阵、`gbAuto` 迁移、`uses` 隔离与门禁） |
 | [native-reference-map.md](native-reference-map.md) | `native.*` ↔ `~/projects/libgit2` 只读对照（格式/算法/边界清单，不进源码树） |
 | [bindings-pitfalls.md](bindings-pitfalls.md) | `libgit2.bindings` 再生成管线与 C 绑定坑清单（c2pas888 / shim / 黄金对照） |
@@ -45,7 +51,7 @@ core/src/nextpas.core.git.libgit2.bindings.commit.pas← commit/tree/blob/object
 core/src/nextpas.core.git.libgit2.bindings.repo.pas  ← repository/annotated_commit 域
 core/src/nextpas.core.git.libgit2.bindings.diff.pas  ← tree/diff/patch 域
 core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/config/remote 等剩余域
-core/src/nextpas.core.git.native.pas          ← native 子家族薄聚合门面（<350 行，re-export shard types + objects inline gateway）
+core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base）
 core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝）
 core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
 core/src/nextpas.core.git.native.history.pas  ← 历史门面分片（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show）
@@ -68,7 +74,7 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
 - **Exactly-once 单次交付**：`revwalk`/`zlib`/`status-rename` 均恰一次 `ReadObject+Parse / inflate / 归并`，零重复开销。
 - **单源复用**：`ignore/attributes` 委托 `wildmatch`（`GitWildSegment*`/`GitSegmentsMatch`，inline）；`Adler-32` 委托 `nextpas.core.checksum.adler32`（`ADLER32_INIT/MOD/NMAX` 单源，`PByte+Len` 零拷贝）；`Span/Bytes` 委托 `nextpas.core.bytes.ops`；`zlib` 委托 `nextpas.core.compress`（`CreateDeflateReaderEmbedded`）。禁止手写重复循环。
 - **性能 inline/零拷贝**：`GitOidIsValidHex/GitOidSame/GitKindFromMode/GitZlibAdler32(PByte)` 等 `inline`；`GitZlibDecompressPtr/Adler32Update(PByte,Len)` 为 `Pointer+Len` 零拷贝，复用 `bytes.ops` 零分配路径。
-- **稳定性**：`EIOError → EGitError` 映射保留 `EGitError` 原样 `raise`；`TPackFile/LoadPacks/Index` 异常 `try..finally` 重抛且不泄漏；`HEAPTRC=haltonnotreleased` 双 pin 零泄漏。
+- **稳定性**：`EIOError → EGitError` 映射保留 `EGitError` 原样 `raise`；`TPackFile/LoadPacks/Index` 异常 `try..finally` 重抛且不泄漏；`HEAPTRC=haltonnotreleased,log=*.heaptrc` 双 pin 零泄漏（`FPC trunk FlushFunc` 设备语义：`pipe/tty` 逐写刷新，`file` 缓冲丢失，`common.mk:75-78` 双通道）。
 
 ## 快速开始
 
@@ -101,4 +107,4 @@ scripts/git-contract-check.sh   # C1-C6 契约完备性（含 C4 纯后端零 li
 make hygiene                     # 产物卫生（禁止 .o/.ppu 等散落源码树）
 ```
 
-覆盖见 [CONTRACT.md §6](CONTRACT.md#6-测试覆盖)：`test_git`（libgit2 真库 20+）、`test_git_bindings`（ABI 黄金）、`test_git_native`（118 用例，零 libgit2，覆盖 archive/bundle/grep/bisect/worktree 等 40+ 能力）、`test_git_pure_manager`（C4 闭环，`grep + fpc -va`）。
+覆盖见 [CONTRACT.md §6](CONTRACT.md#6-测试覆盖)：`test_git`（libgit2 真库 20+）、`test_git_bindings`（ABI 黄金）、`test_git_native`（118 用例，零 libgit2，覆盖 archive/bundle/grep/bisect/worktree 等 40+ 能力）、`test_git_pure_manager`（10 用例，C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D`，三零证据）。

@@ -26,6 +26,8 @@ procedure SpanReverse(const ASpan: TByteSpan);
 function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;
+{ perf: SpanCopy single source for fixed-size zero-copy copy (OID 20/32 etc.), inline + single Move, no heap; replaces scattered Move dual paths }
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
 
 function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
@@ -227,6 +229,17 @@ begin
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Result[0], ASpan.Len);
+end;
+
+procedure SpanCopy(const ADst, ASrc: TByteSpan); inline;
+begin
+  if ASrc.Len = 0 then
+    Exit;
+  if (ASrc.Data = nil) or (ADst.Data = nil) then
+    raise EArgumentNil.Create('SpanCopy: nil span');
+  if ASrc.Len > ADst.Len then
+    raise EOutOfRange.Create('SpanCopy: src len > dst len');
+  Move(ASrc.Data^, ADst.Data^, ASrc.Len);
 end;
 
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;

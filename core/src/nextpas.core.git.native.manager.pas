@@ -28,8 +28,8 @@ type
     procedure SetVerifySSL(AEnabled: Boolean);
     procedure SetCredentialAcquireHandler(AHandler: TCredentialAcquireEvent);
     procedure SetCertificateCheckHandler(AHandler: TCertificateCheckEvent);
-    function Initialized: Boolean;
-    function VerifySSL: Boolean;
+    function Initialized: Boolean; inline;
+    function VerifySSL: Boolean; inline;
   end;
 
 implementation
@@ -243,12 +243,12 @@ begin
     raise EGitError.Create('not implemented for native backend: SetCertificateCheckHandler');
 end;
 
-function TNativeGitManager.Initialized: Boolean;
+function TNativeGitManager.Initialized: Boolean; inline;
 begin
   Result := FInitialized;
 end;
 
-function TNativeGitManager.VerifySSL: Boolean;
+function TNativeGitManager.VerifySSL: Boolean; inline;
 begin
   Result := FVerifySSL;
 end;

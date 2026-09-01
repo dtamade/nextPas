@@ -9,6 +9,7 @@ uses
   SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.intf,
+  nextpas.core.bench.baseline,
   nextpas.core.base,
   nextpas.core.time.base,
   nextpas.core.bytes.ops,
@@ -192,6 +193,8 @@ end;
 
 var
   LResults: IBenchResults;
+  LBaseline: TBaselineManager;
+  LHasReg: Boolean;
 begin
   InitData;
   GSink := 0;
@@ -217,4 +220,18 @@ begin
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
   LResults.SaveToJSON('build/bench-git.json');
+  // Dual-anchor gate: absolute SLO + committed baseline (not local JSON drift).
+  // Committed baseline at baseline.json (TBaselineManager), Go/Rust same-machine A/B via compare_go/compare_rust (xlang).
+  LBaseline := TBaselineManager.Create(1.10);
+  try
+    if FileExists('baseline.json') then
+      LBaseline.LoadFromFile('baseline.json')
+    else if FileExists('core/benchmarks/nextpas.core.git/bench_git/baseline.json') then
+      LBaseline.LoadFromFile('core/benchmarks/nextpas.core.git/bench_git/baseline.json');
+    LHasReg := LBaseline.HasRegression(LResults.GetAll);
+    if LHasReg then
+      WriteLn('[bench-git] regression vs committed baseline.json (10% threshold) — see baseline.json + Go/Rust A/B');
+  except
+    // no baseline file yet — absolute SLO remains authoritative
+  end;
 end.

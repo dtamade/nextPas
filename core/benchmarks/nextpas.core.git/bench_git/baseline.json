@@ -1,0 +1,18 @@
+{
+  "baselines": [
+    {"name": "Oid/IsValidHex", "nsPerOp": 70, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "inline, bytes.ops single source"},
+    {"name": "Oid/FromHex", "nsPerOp": 75, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "inline Move zero-copy"},
+    {"name": "Oid/ToHex", "nsPerOp": 70, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "inline"},
+    {"name": "Oid/Same:inline", "nsPerOp": 55, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "SpanEqual 20B three QWord"},
+    {"name": "Kind/FromMode:inline", "nsPerOp": 25, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "inline branch"},
+    {"name": "Zlib/Compress1K", "nsPerOp": 12000, "bytesPerOp": 1024, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "PByte zero-copy via compress"},
+    {"name": "Zlib/Decompress1K", "nsPerOp": 11000, "bytesPerOp": 1024, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "DeflateReaderEmbedded"},
+    {"name": "Adler32/PByte64K:zero-copy", "nsPerOp": 2800, "bytesPerOp": 65536, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "PByte zero-copy single source checksum.adler32, ~23 GB/s, Go/Rust A/B normalized"},
+    {"name": "Adler32/Bytes64K", "nsPerOp": 2900, "bytesPerOp": 65536, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "thin wrapper same threshold"},
+    {"name": "Wild/Segment:inline", "nsPerOp": 85, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "inline wildmatch"},
+    {"name": "Wild/Class", "nsPerOp": 90, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "char class"},
+    {"name": "Wild/SegmentsMatch:**", "nsPerOp": 95, "bytesPerOp": 0, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "** dir glob"},
+    {"name": "Delta/Apply", "nsPerOp": 4500, "bytesPerOp": 261, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "TByteSpan zero-copy"},
+    {"name": "Delta/ApplyReuse:inline", "nsPerOp": 4200, "bytesPerOp": 261, "allocsPerOp": 0, "timestampNs": 1725235200000000000, "gitHash": "baseline-2026-09-02", "compilerVersion": "FPC 3.3.1", "notes": "GReuseBuf inline"}
+  ]
+}
