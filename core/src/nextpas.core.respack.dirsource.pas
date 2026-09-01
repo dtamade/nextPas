@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped/mmap via mem.memory_map）。 }
+{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -74,9 +74,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.respack.reader,
-  nextpas.core.respack.writer,
-  nextpas.core.respack.writer.builder,
-  nextpas.core.respack.writer.layout;
+  nextpas.core.respack.writer;
 
 type
   TRespackBytesArray = array of TBytes;
@@ -289,16 +287,21 @@ begin
     nextpas.core.mem.memory_map/nextpas.core.io.mapped，已落地 ResPackBuildStreamFromDir 流式mmap
     管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
     大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
-    （deprecated 兼容，Stream 为统一抽象）。
+    （deprecated 兼容，Stream 为统一抽象，硬性 64MiB 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
     已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
     Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
     单源证据：RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发。 }
   if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+  if LSum > SizeUInt(64) * 1024 * 1024 then
+  begin
+    WalkFail(Ctx^.Failed, Ctx^.FailMsg, 'deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
+    Exit(False);
+  end;
   Idx := Ctx^.Count;
   EnsureDirCapacity(Ctx^, Idx + 1);
   try
-    Ctx^.Bytes[Idx] := ReadFile(APath); { TBytes 全量锚点：小包便捷，大包请走流式mmap }
+    Ctx^.Bytes[Idx] := ReadFile(APath); { TBytes 全量锚点：小包便捷≤64MiB，大包请走流式mmap }
   except
     on E: Exception do
     begin
@@ -446,16 +449,11 @@ function ResPackBuildFromDir(const ARoot: string;
 var
   Ctx: TStreamContext;
   RootClean: string;
-  L: TResPackLayout;
-  Buf: PByte;
-  Cur: UInt64;
-  K, J, I: SizeUInt;
-  DigestTmp: TResPackDigest;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单遍零双驻留：单次 WalkEx 收集 mmap 视图，单次 ResPackComputeLayout 计算 Total，单次 GetMem 直填，消双遍历与 mmap 翻倍 I/O；复用 bytes.ops 单源 BytesCopy/BytesZero inline 零拷贝 }
+  { 单源复用：WalkEx 收集 mmap 视图后直接复用 writer 门面 ResPackBuild 单源（布局/头/槽间隙/数据/digest 全链路于 writer.builder/layout 单源，零双份维护，bytes.ops BytesCopy/BytesZero inline 零拷贝）；消 writer.pas 约70行 GetMem+FillHead+BytesZero+BytesCopy+digest 回填重复组装，布局后段单源防漂移；峰值 ~1×+头（mmap 零堆拷贝），接口锚点 try..finally 释放不丢 }
   RootClean := ExcludeTrailingPathDelimiter(ARoot);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
     raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
@@ -478,51 +476,7 @@ begin
       SetLength(Ctx.Entries, Ctx.Count);
       SetLength(Ctx.Maps, Ctx.Count);
     end;
-    ResPackComputeLayout(Ctx.Entries, AOpts, L);
-    try
-      if L.Total > High(SizeUInt) then
-        raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
-      if L.Total = 0 then
-        Exit;
-      GetMem(Buf, SizeUInt(L.Total));
-      Result.Data := Buf;
-      Result.Size := SizeUInt(L.Total);
-      Result.Owned := True;
-      try
-        ResPackWriterFillHead(Buf, Ctx.Entries, AOpts, L);
-        Cur := L.DataStart;
-        if L.SlotCount > 0 then
-          for K := 0 to L.SlotCount - 1 do
-          begin
-            if L.Slots[K].Offset > Cur then
-              BytesZero(Buf + Cur, SizeUInt(L.Slots[K].Offset - Cur));
-            J := L.Slots[K].SrcIdx;
-            if Ctx.Entries[J].DataSize > 0 then
-              BytesCopy(Buf + L.Slots[K].Offset, Ctx.Entries[J].Data, Ctx.Entries[J].DataSize);
-            Cur := L.Slots[K].Offset + UInt64(Ctx.Entries[J].DataSize);
-          end;
-        if AOpts.DigestFunc <> nil then
-        begin
-          if L.DigOff > Cur then
-            BytesZero(Buf + Cur, SizeUInt(L.DigOff - Cur));
-          if L.N > 0 then
-            for I := 0 to L.N - 1 do
-            begin
-              BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
-              AOpts.DigestFunc(Ctx.Entries[I].Data, Ctx.Entries[I].DataSize, @DigestTmp[0]);
-              BytesCopy(Buf + L.DigOff + I * RESPACK_DIGEST_SIZE, @DigestTmp[0], RESPACK_DIGEST_SIZE);
-            end;
-        end;
-      except
-        FreeMem(Buf);
-        Result.Data := nil;
-        Result.Size := 0;
-        Result.Owned := False;
-        raise;
-      end;
-    finally
-      ResPackLayoutClear(L);
-    end;
+    Result := ResPackBuild(Ctx.Entries, AOpts);
   finally
     SetLength(Ctx.Maps, 0);
     SetLength(Ctx.Entries, 0);
