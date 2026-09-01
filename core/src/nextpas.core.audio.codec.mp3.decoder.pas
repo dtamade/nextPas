@@ -20,12 +20,14 @@ uses
   nextpas.core.audio.codec.mp3.sse;
 
 function Mp3ProbeBytes(const APrefix: TBytes): TAudioProbeResult;
-var L0, L1: Byte;
+var L0, L1: Byte; LLen: Integer;
 begin
   Result := prUnknown;
-  if Length(APrefix) < 2 then Exit;
+  LLen := Length(APrefix);
+  if LLen > 4096 then LLen := 4096;
+  if LLen < 2 then Exit;
   // ID3 needs 3 bytes
-  if (Length(APrefix) >= 3) and (APrefix[0] = $49) and (APrefix[1] = $44) and (APrefix[2] = $33) then
+  if (LLen >= 3) and (APrefix[0] = $49) and (APrefix[1] = $44) and (APrefix[2] = $33) then
     Exit(prMp3);
   L0 := APrefix[0]; L1 := APrefix[1];
   if (L0 = $FF) and ((L1 and $E0) = $E0) then

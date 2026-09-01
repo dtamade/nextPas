@@ -21,21 +21,23 @@ function IsPowerOfTwo(N: Integer): Boolean; inline;
 
 implementation
 
-uses nextpas.core.simd; // reused dispatch for bulk zero/fill (no new dep)
+uses
+  nextpas.core.simd, // reused dispatch for bulk zero/fill (no new dep)
+  nextpas.core.sync.mutex;
 
 type
   THannCache = record N: Integer; Data: TSingleArray; end;
 
 var
   GHannCache: array[0..7] of THannCache;
-  GHannLock: TRTLCriticalSection;
+  GHannLock: TRecursiveMutex;
   GHannInit: Boolean = False;
 
 procedure EnsureHannInit; inline;
 begin
   if not GHannInit then
   begin
-    InitCriticalSection(GHannLock);
+    GHannLock := TRecursiveMutex.Create;
     GHannInit := True;
   end;
 end;
@@ -47,7 +49,7 @@ var
 begin
   if N <= 1 then Exit(nil);
   EnsureHannInit;
-  EnterCriticalSection(GHannLock);
+  GHannLock.Acquire;
   try
     for I := 0 to High(GHannCache) do
       if GHannCache[I].N = N then Exit(PSingle(@GHannCache[I].Data[0]));
@@ -68,7 +70,7 @@ begin
     GHannCache[Slot].N := N;
     Result := PSingle(@GHannCache[Slot].Data[0]);
   finally
-    LeaveCriticalSection(GHannLock);
+    GHannLock.Release;
   end;
 end;
 
@@ -288,6 +290,6 @@ initialization
   EnsureHannInit;
 
 finalization
-  if GHannInit then DoneCriticalsection(GHannLock);
+  if GHannInit and Assigned(GHannLock) then GHannLock.Free;
 
 end.

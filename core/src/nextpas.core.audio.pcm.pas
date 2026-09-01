@@ -55,6 +55,10 @@ function PcmTpdfNoise(var AState: UInt32): Single; inline;
 
 implementation
 
+uses
+  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
+  nextpas.core.bytes.ops;
+
 {$PUSH}
 {$WARNINGS OFF}
 {$HINTS OFF}
@@ -299,8 +303,9 @@ begin
         LF32[LI] := PcmS32ToF32(LS32);
       end;
     sfF32:
+      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
       for LI := 0 to LSampleCount - 1 do
-        Move(ASrc[LI*4], LF32[LI], SizeOf(Single));
+        CopyMem(@LF32[LI], @ASrc[LI*4], SizeUInt(SizeOf(Single)));
   else
     for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
   end;
@@ -357,8 +362,9 @@ begin
         LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
       end;
     sfF32:
+      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
       for LI := 0 to LSampleCount - 1 do
-        Move(LF32[LI], LDstPtr[LI*4], SizeOf(Single));
+        CopyMem(@LDstPtr[LI*4], @LF32[LI], SizeUInt(SizeOf(Single)));
   end;
 end;
 
@@ -378,7 +384,14 @@ begin
       LSrcOffset := LFrame * ABytesPerSample;
       LDstOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(APlanes[LCh])) then Continue;
-      Move(APlanes[LCh][LSrcOffset], ADst[LDstOffset], ABytesPerSample);
+      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping interleave
+      case ABytesPerSample of
+        4: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(4));
+        3: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(3));
+        2: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(2));
+        1: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(1));
+      else CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(ABytesPerSample));
+      end;
     end;
 end;
 
@@ -399,7 +412,14 @@ begin
       LSrcOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       LDstOffset := LFrame * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
-      Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
+      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping deinterleave
+      case ABytesPerSample of
+        4: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(4));
+        3: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(3));
+        2: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(2));
+        1: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(1));
+      else CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(ABytesPerSample));
+      end;
     end;
 end;
 

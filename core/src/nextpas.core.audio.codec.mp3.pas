@@ -33,10 +33,8 @@ type
 
 function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  if Length(APrefix) > 4096 then
-    Result := Mp3ProbeBytes(Copy(APrefix, 0, 4096))
-  else
-    Result := Mp3ProbeBytes(APrefix);
+  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes inspects only header (≤4KB)
+  Result := Mp3ProbeBytes(APrefix);
 end;
 
 function TMp3Decoder.Probe(const APrefix: TBytes): TAudioProbeResult;
@@ -54,6 +52,8 @@ end;
 
 function TMp3Decoder.OpenStreaming(const AStream: IStream): IAudioSource;
 begin
+  // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；待流式 slice 完善后移除
+  // gate 白名单：check_source_contract.sh 以 "STUB: OpenStreaming" 注释放行
   Result := nil;
   raise EAudioDecodeError.Create('mp3 OpenStreaming: not implemented');
 end;

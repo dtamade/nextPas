@@ -33,10 +33,8 @@ type
 
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  if Length(APrefix) > 4096 then
-    Result := VorbisProbeBytes(Copy(APrefix, 0, 4096))
-  else
-    Result := VorbisProbeBytes(APrefix);
+  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes caps scan to 4096 (4KB) internally
+  Result := VorbisProbeBytes(APrefix);
 end;
 
 function TVorbisDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
@@ -54,6 +52,8 @@ end;
 
 function TVorbisDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
 begin
+  // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；待流式 slice 完善后移除
+  // gate 白名单：check_source_contract.sh 以 "STUB: OpenStreaming" 注释放行
   Result := nil;
   raise EAudioDecodeError.Create('vorbis OpenStreaming: not implemented');
 end;

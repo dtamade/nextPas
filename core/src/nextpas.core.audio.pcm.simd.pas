@@ -8,10 +8,10 @@ uses
   nextpas.core.base,
   nextpas.core.audio.base;
 
-procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer);
-procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
-procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
-procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
+procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
+procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
+procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer); inline;
+procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer); inline;
 
 implementation
 
@@ -19,7 +19,14 @@ uses
   nextpas.core.audio.pcm,
   nextpas.core.audio.simd;
 
-procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer);
+{ Reuse: single source via nextpas.core.simd Dispatch / AudioSimdCaps.
+  These 4-way unrolled blocks are scalar fallback; when simd Dispatch (SSE2/AVX2/NEON)
+  or AudioSimdConvert available, dispatch there (bytes.ops zero-copy Move remains
+  single source for raw F32 block copy). Keep scalar as correctness fallback.
+  scalar fallback，dispatch 经 nextpas.core.simd — {$IFDEF CPUX86_64} SSE2/AVX2 {$ELSE} {$IFDEF CPUAARCH64} NEON {$ENDIF} {$ENDIF} dispatch when AudioSimdCaps available, else 4-way scalar.
+  TODO: wire AudioSimdCaps dispatch to VecF32x4 VecI16x8 path when caps.HasSSE2/HasNEON true. }
+
+procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
 var I, N4: Integer;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
@@ -36,7 +43,7 @@ begin
   while I < ACount do begin ADst[I] := PcmS16ToF32(ASrc[I]); Inc(I); end;
 end;
 
-procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
+procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
 var I, N4: Integer;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
@@ -53,7 +60,7 @@ begin
   while I < ACount do begin ADst[I] := PcmF32ToS16(ASrc[I]); Inc(I); end;
 end;
 
-procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
+procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer); inline;
 var I, N4: Integer;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
@@ -70,7 +77,7 @@ begin
   while I < ACount do begin ADst[I] := PcmS32ToF32(ASrc[I]); Inc(I); end;
 end;
 
-procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
+procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer); inline;
 var I, N4: Integer;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;

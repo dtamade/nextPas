@@ -7,6 +7,10 @@ interface
 uses
   nextpas.core.base;
 
+{ Single source: audio SIMD dispatch via AudioSimdCaps (x86_64 SSE2/AVX2 baseline, aarch64 NEON).
+  pcm.simd 4-way fallback (PcmConvertBlock*) should reuse this dispatch; raw F32 block
+  copy stays single source via bytes.ops/base.utils CopyMem. }
+
 type
   TSimdCaps = record
     HasSSE2: Boolean;

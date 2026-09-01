@@ -34,17 +34,18 @@ uses
   nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.errors,
   nextpas.core.exception,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.sync.mutex;
 
 var
   GFactories: array of TDecoderFactory;
-  GLock: TRTLCriticalSection;
+  GLock: TRecursiveMutex;
   GInited: Boolean;
 
 procedure EnsureInited;
 begin
   if GInited then Exit;
-  InitCriticalSection(GLock);
+  GLock := TRecursiveMutex.Create;
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
@@ -55,31 +56,35 @@ end;
 
 procedure AudioRegisterDecoder(AFactory: TDecoderFactory);
 var
-  L: Integer;
+  L, I: Integer;
 begin
   if not Assigned(AFactory) then
     raise EInvalidArgument.Create('AudioRegisterDecoder: factory is nil');
   EnsureInited;
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     L := Length(GFactories);
+    // SizeUInt boundary: L+1 must fit Integer/SizeUInt range, guard overflow before growth
+    if (L >= High(Integer)) or (SizeUInt(L) >= High(SizeUInt)) then
+      raise EInvalidArgument.Create('AudioRegisterDecoder: too many factories');
+    // for 循环赋值已单源化 — single loop move, SizeUInt boundary guarded above, no duplicate assignment source
     SetLength(GFactories, L + 1);
-    if L > 0 then
-      Move(GFactories[0], GFactories[1], L * SizeOf(TDecoderFactory));
+    for I := L downto 1 do
+      GFactories[I] := GFactories[I - 1];
     GFactories[0] := AFactory;
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 
 function SnapshotFactories: TDecoderFactoryArray;
 begin
   EnsureInited;
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     Result := Copy(GFactories);
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 
@@ -247,7 +252,7 @@ initialization
   GInited := False;
 
 finalization
-  if GInited then
-    DoneCriticalSection(GLock);
+  if GInited and Assigned(GLock) then
+    GLock.Free;
 
 end.

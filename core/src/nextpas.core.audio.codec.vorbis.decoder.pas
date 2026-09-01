@@ -20,19 +20,21 @@ uses
   nextpas.core.audio.codec.vorbis.sse;
 
 function VorbisProbeBytes(const APrefix: TBytes): TAudioProbeResult;
-var I: Integer;
+var I, LLen: Integer;
 begin
   Result := prUnknown;
-  if Length(APrefix) < 4 then Exit;
+  LLen := Length(APrefix);
+  if LLen > 4096 then LLen := 4096;
+  if LLen < 4 then Exit;
   if (APrefix[0] = $4F) and (APrefix[1] = $67) and (APrefix[2] = $67) and (APrefix[3] = $53) then
   begin
-    // OggS - need vorbis header in first 4K
-    for I := 0 to Length(APrefix) - 6 do
+    // OggS - need vorbis header in first 4K, zero-alloc scan capped to 4K
+    for I := 0 to LLen - 6 do
       if (APrefix[I] = $76) and (APrefix[I+1] = $6F) and (APrefix[I+2] = $72) and
          (APrefix[I+3] = $62) and (APrefix[I+4] = $69) and (APrefix[I+5] = $73) then
         Exit(prOggVorbis);
-    // if OggS without vorbis string, still consider Ogg but return prUnknown for passthrough? For this impl, treat pure OggS as vorbis
-    if Length(APrefix) >= 35 then
+    // 30B truncation fix: minimal OggS header is 27B, pure OggS without vorbis string still vorbis if >=27
+    if LLen >= 27 then
       Result := prOggVorbis
     else
       Result := prUnknown;

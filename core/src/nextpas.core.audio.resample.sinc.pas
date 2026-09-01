@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.audio.base,
-  nextpas.core.audio.intf;
+  nextpas.core.audio.intf,
+  nextpas.core.audio.pcm;
 
 type
   TResampleQuality = (rsDraft, rsGood, rsBest);
@@ -17,8 +18,15 @@ type
     FQuality: TResampleQuality;
     FTaps: Integer;
     FBeta: Double;
-    function BesselI0(AX: Double): Double;
-    function KaiserWindow(AIdx: Integer): Double;
+    FKaiserTable: array of Double;
+    FKaiserDen: Double;
+    // geometric scratch, amortized O(1) after warmup; caller-scratch streaming variant for realtime
+    FScratchInF32: array of Single;
+    FScratchPlanesIn: TAudioPlaneArray;
+    FScratchPlanesOut: TAudioPlaneArray;
+    procedure BuildKaiserTable; inline;
+    function BesselI0(AX: Double): Double; inline;
+    function KaiserWindow(AIdx: Integer): Double; inline;
     function Sinc(AX: Double): Double; inline;
   public
     constructor Create(AQuality: TResampleQuality = rsGood);
@@ -34,7 +42,6 @@ uses
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
-  nextpas.core.audio.pcm,
   nextpas.core.audio.errors;
 
 constructor TSincResampler.Create(AQuality: TResampleQuality);
@@ -47,6 +54,7 @@ begin
     rsBest:  begin FTaps := 128; FBeta := 10.0; end;
   end;
   if (FTaps and 1) <> 0 then Inc(FTaps);
+  BuildKaiserTable;
 end;
 
 function TSincResampler.LatencyFrames: Integer;
@@ -54,15 +62,14 @@ begin
   Result := FTaps div 2;
 end;
 
-function TSincResampler.BesselI0(AX: Double): Double;
+function TSincResampler.BesselI0(AX: Double): Double; inline;
 var
-  D, DS, S: Double;
+  DS, S: Double;
   K: Integer;
 begin
   // Abramowitz & Stegun 9.8.1 series: I0(x)= sum (x/2)^{2k}/(k!^2)
   // Converges quickly for x<=10 (our beta<=10). Use 25 terms.
   S := 1.0;
-  D := 1.0;
   DS := 1.0;
   for K := 1 to 25 do
   begin
@@ -73,24 +80,41 @@ begin
   Result := S;
 end;
 
-function TSincResampler.KaiserWindow(AIdx: Integer): Double;
+procedure TSincResampler.BuildKaiserTable; inline;
 var
-  R, Arg, Num, Den: Double;
+  I: Integer;
+  R, Arg, Num: Double;
 begin
-  // w[n] = I0(beta * sqrt(1 - (2n/(N-1)-1)^2)) / I0(beta)
-  if FTaps <= 1 then Exit(1.0);
-  R := (2.0 * AIdx / (FTaps - 1) - 1.0);
-  R := 1.0 - R * R;
-  if R < 0 then R := 0;
-  R := Sqrt(R);
-  Arg := FBeta * R;
-  Num := BesselI0(Arg);
-  Den := BesselI0(FBeta);
-  if Den = 0 then Exit(0);
-  Result := Num / Den;
+  SetLength(FKaiserTable, FTaps);
+  if FTaps <= 0 then Exit;
+  // Den precomputed once, not per tap
+  FKaiserDen := BesselI0(FBeta);
+  if FKaiserDen = 0 then FKaiserDen := 1.0;
+  for I := 0 to FTaps - 1 do
+  begin
+    if FTaps <= 1 then
+      FKaiserTable[I] := 1.0
+    else
+    begin
+      R := (2.0 * I / (FTaps - 1) - 1.0);
+      R := 1.0 - R * R;
+      if R < 0 then R := 0;
+      R := Sqrt(R);
+      Arg := FBeta * R;
+      Num := BesselI0(Arg);
+      FKaiserTable[I] := Num / FKaiserDen;
+    end;
+  end;
 end;
 
-function TSincResampler.Sinc(AX: Double): Double;
+function TSincResampler.KaiserWindow(AIdx: Integer): Double; inline;
+begin
+  // table lookup, no Bessel per call
+  if (AIdx < 0) or (AIdx >= Length(FKaiserTable)) then Exit(0);
+  Result := FKaiserTable[AIdx];
+end;
+
+function TSincResampler.Sinc(AX: Double): Double; inline;
 begin
   if Abs(AX) < 1e-12 then Exit(1.0);
   Result := Sin(PI_VALUE * AX) / (PI_VALUE * AX);
@@ -102,9 +126,10 @@ var
   LOutFrames: Integer;
   LCh, LOutFrame, LTap, LSrcIdx: Integer;
   LSrcPos, LX, LW, LSum, LWsum: Double;
-  LInF32: array of Single;
-  LPlanesIn, LPlanesOut: TAudioPlaneArray;
-  I, LBlock: Integer;
+  I: Integer;
+  LCap: Integer;
+  LNeededIn: Integer;
+  LBytesIn, LBytesOut: Integer;
 begin
   if (ANewRate < MinAudioSampleRate) or (ANewRate > MaxAudioSampleRate) then
     raise EInvalidArgument.CreateFmt('SincResample: rate %d out of range', [ANewRate]);
@@ -133,37 +158,57 @@ begin
   // output buffer guard: 16MiB limit (INV-8 style)
   if Int64(LOutFrames) * Int64(Result.Format.BlockAlign) > 16*1024*1024 then
     raise EInvalidArgument.CreateFmt('SincResample: output %d bytes exceeds 16MiB limit', [Int64(LOutFrames) * Int64(Result.Format.BlockAlign)]);
+  // non-streaming: Result.Data exact alloc; realtime path should use caller scratch / geometric reuse streaming variant
   SetLength(Result.Data, LOutFrames * Result.Format.BlockAlign);
   if LOutFrames = 0 then Exit;
 
-  SetLength(LInF32, AInput.FrameCount * AInput.Format.Channels);
+  // scratch reuse: geometric growth via AudioEnsureCapacity/BytesCapacity, amortized O(1) after warmup
+  // realtime streaming version should be: ResampleStream(const AInput; var AOut: TAudioBuffer; var AScratch: TResampleScratch) with caller-provided scratch, zero alloc steady
+  LNeededIn := AInput.FrameCount * AInput.Format.Channels;
+  if Length(FScratchInF32) < LNeededIn then
+  begin
+    LCap := Length(FScratchInF32);
+    AudioEnsureCapacity(LCap, LNeededIn, 256);
+    SetLength(FScratchInF32, LCap);
+  end;
   if AInput.Format.SampleFormat = sfF32 then
-    Move(AInput.Data[0], LInF32[0], Length(AInput.Data))
+    Move(AInput.Data[0], FScratchInF32[0], Length(AInput.Data))
   else
   begin
-    for I := 0 to AInput.FrameCount * AInput.Format.Channels - 1 do
+    for I := 0 to LNeededIn - 1 do
     begin
       case AInput.Format.SampleFormat of
-        sfS16: PSingle(@LInF32[I])^ := PcmS16ToF32(PSmallInt(@AInput.Data[I * 2])^);
-        sfS32: PSingle(@LInF32[I])^ := PcmS32ToF32(PLongInt(@AInput.Data[I * 4])^);
-        sfU8:  PSingle(@LInF32[I])^ := PcmU8ToF32(AInput.Data[I]);
-        sfS24: PSingle(@LInF32[I])^ := PcmS24ToF32(PcmReadS24LE(AInput.Data, I * 3));
+        sfS16: PSingle(@FScratchInF32[I])^ := PcmS16ToF32(PSmallInt(@AInput.Data[I * 2])^);
+        sfS32: PSingle(@FScratchInF32[I])^ := PcmS32ToF32(PLongInt(@AInput.Data[I * 4])^);
+        sfU8:  PSingle(@FScratchInF32[I])^ := PcmU8ToF32(AInput.Data[I]);
+        sfS24: PSingle(@FScratchInF32[I])^ := PcmS24ToF32(PcmReadS24LE(AInput.Data, I * 3));
       else
-        LInF32[I] := 0;
+        FScratchInF32[I] := 0;
       end;
     end;
   end;
 
-  SetLength(LPlanesIn, AInput.Format.Channels);
-  SetLength(LPlanesOut, AInput.Format.Channels);
+  if Length(FScratchPlanesIn) <> AInput.Format.Channels then
+    SetLength(FScratchPlanesIn, AInput.Format.Channels);
+  if Length(FScratchPlanesOut) <> AInput.Format.Channels then
+    SetLength(FScratchPlanesOut, AInput.Format.Channels);
+  LBytesIn := AInput.FrameCount * SizeOf(Single);
+  LBytesOut := LOutFrames * SizeOf(Single);
   for LCh := 0 to AInput.Format.Channels - 1 do
   begin
-    SetLength(LPlanesIn[LCh], AInput.FrameCount * SizeOf(Single));
+    AudioEnsureBytesCapacity(FScratchPlanesIn[LCh], SizeUInt(LBytesIn));
+    // ensure length covers needed, capacity may be larger
+    if Length(FScratchPlanesIn[LCh]) < LBytesIn then
+      SetLength(FScratchPlanesIn[LCh], LBytesIn);
     for I := 0 to AInput.FrameCount - 1 do
-      PSingle(@LPlanesIn[LCh][I * SizeOf(Single)])^ := LInF32[I * AInput.Format.Channels + LCh];
+      PSingle(@FScratchPlanesIn[LCh][I * SizeOf(Single)])^ := FScratchInF32[I * AInput.Format.Channels + LCh];
   end;
   for LCh := 0 to AInput.Format.Channels - 1 do
-    SetLength(LPlanesOut[LCh], LOutFrames * SizeOf(Single));
+  begin
+    AudioEnsureBytesCapacity(FScratchPlanesOut[LCh], SizeUInt(LBytesOut));
+    if Length(FScratchPlanesOut[LCh]) < LBytesOut then
+      SetLength(FScratchPlanesOut[LCh], LBytesOut);
+  end;
 
   for LCh := 0 to AInput.Format.Channels - 1 do
     for LOutFrame := 0 to LOutFrames - 1 do
@@ -175,19 +220,19 @@ begin
         LSrcIdx := Trunc(LSrcPos) - FTaps div 2 + LTap + 1;
         if (LSrcIdx < 0) or (LSrcIdx >= AInput.FrameCount) then Continue;
         LX := LTap - FTaps / 2 - (LSrcPos - Trunc(LSrcPos)) + 0.5;
-        LW := Sinc(LX) * KaiserWindow(LTap);
-        LSum := LSum + PSingle(@LPlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
+        LW := Sinc(LX) * FKaiserTable[LTap];
+        LSum := LSum + PSingle(@FScratchPlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
         LWsum := LWsum + LW;
       end;
       if LWsum <> 0 then LSum := LSum / LWsum;
       if LSum > 1 then LSum := 1 else if LSum < -1 then LSum := -1;
-      PSingle(@LPlanesOut[LCh][LOutFrame * SizeOf(Single)])^ := Single(LSum);
+      PSingle(@FScratchPlanesOut[LCh][LOutFrame * SizeOf(Single)])^ := Single(LSum);
     end;
 
   for I := 0 to LOutFrames - 1 do
     for LCh := 0 to AInput.Format.Channels - 1 do
       PSingle(@Result.Data[(I * AInput.Format.Channels + LCh) * SizeOf(Single)])^ :=
-        PSingle(@LPlanesOut[LCh][I * SizeOf(Single)])^;
+        PSingle(@FScratchPlanesOut[LCh][I * SizeOf(Single)])^;
 end;
 
 function CreateSincResampler(AQuality: TResampleQuality): IAudioResampler;

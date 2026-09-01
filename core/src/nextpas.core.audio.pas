@@ -26,7 +26,6 @@ uses
   nextpas.core.audio.device.null,
   nextpas.core.audio.timeline.intf,
   nextpas.core.audio.sfx.intf,
-  nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
   nextpas.core.audio.timeline,
   nextpas.core.audio.sfx,

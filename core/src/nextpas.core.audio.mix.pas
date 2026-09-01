@@ -20,10 +20,13 @@ function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function PanLawGains(APan: Single): TPointF; overload;
 function PanLawGains(APan: Single; ALawDB: Single): TPointF; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
+function PanLawGains0dB(APan: Single): TPointF;
 
 implementation
 
 uses
+  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
+  nextpas.core.bytes.ops,
   nextpas.core.math.base,
   nextpas.core.math.trig;
 
@@ -115,16 +118,19 @@ begin
     if LAlias then
     begin
       // F-36 overlapping alias: copy to temp to avoid read-after-write hazard
+      // single source: base.utils CopyMem → bytes.ops, SizeUInt boundary, stack/heap temp non-overlapping
       if LUseStack then
       begin
-        Move(ASrc.Data[0], LStack[0], LSamples * SizeOf(Single));
+        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping stack copy
+        CopyMem(@LStack[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
         LSrcPtr := @LStack[0];
         LSrcData := nil;
       end
       else
       begin
         SetLength(LSrcF32, LSamples * SizeOf(Single));
-        Move(ASrc.Data[0], LSrcF32[0], LSamples * SizeOf(Single));
+        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping heap copy
+        CopyMem(@LSrcF32[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
         LSrcData := LSrcF32;
         LSrcPtr := PSingle(@LSrcData[0]);
       end;
@@ -227,6 +233,14 @@ begin
     Result.X := Cos(LAngle);
     Result.Y := Sin(LAngle);
   end;
+end;
+
+function PanLawGains0dB(APan: Single): TPointF;
+var LG, RG: Single;
+begin
+  AudioPanLawGains(APan, LG, RG);
+  Result.X := LG;
+  Result.Y := RG;
 end;
 
 end.

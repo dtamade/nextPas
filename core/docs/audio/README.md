@@ -1,6 +1,6 @@
 # nextpas.core.audio
 
-L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发），纯 Pascal 可替换，实时路径零分配。
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域（`SFX` 为 canonical，`game` 仅 `game.pas` deprecated 薄转发，无独立 `game.intf` 按需存在），纯 Pascal 可替换，实时路径零分配。
 
 > 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
 > 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源。
@@ -17,7 +17,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
 | **graph/player** | `graph.intf/graph/player` | `IAudioGraph(0042)/IAudioPlayer(0043)`，快照混音 `gain*volume` + clamp，处理器链双缓冲 ping-pong | device |
 | **sfx** | `sfx.intf/sfx` | `ISfxAudio(0050)` canonical，`Load/Play/StopVoice/MasterGain`，音色池 `MaxVoices` 窃取，pitch/pan/loop，`LoadFromFile` 经 `PcmConvert` | graph+device |
-| **game** | `game.intf/game` | `IGameAudio(0050)` deprecated 薄转发（`TGameSfxId=TSfxId` 等）→ `sfx` | sfx wrapper |
+| **game** | `game` | `IGameAudio(0050)` deprecated 薄转发（`TGameSfxId=TSfxId` 等别名在 `sfx.intf`，game 无独立 intf 按需存在）→ `sfx` | sfx wrapper |
 | **timeline** | `timeline.intf/timeline` | `IAudioTimeline(0060)`，`Track/Clip` 排序混音，`solo/mute/loop`，快照化 `FillRealtime` | base+intf |
 | **errors** | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | errors |
 | **门面** | `audio.pas` | 仅 `type` 别名 + `inline` 转发，零逻辑 | 聚合以上 |
@@ -120,14 +120,15 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-14 门合计 **195 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`game` 为 deprecated 兼容）：
+23 门合计 **260 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`game` 为 deprecated 兼容；扩展 10 门含 bus/spatial/bank/resource/playlist/event/studio/automation + flac/mp3/vorbis）：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline; do
+         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline \
+         test_flac test_mp3 test_vorbis test_spatial test_bus test_bank test_resource test_playlist test_event test_studio test_automation; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 28 文件无 ffi/vendor + 11 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 69 文件（核心26+扩展43 四件套完整）无 ffi/vendor + 23 GUID(11+12 B前缀bus异形) + 实时纪律 + test_automation
 make hygiene && git diff --check
 ```
 
@@ -147,6 +148,17 @@ make hygiene && git diff --check
 | test_sfx 15 | SFX 池与窃取（canonical 0050） |
 | test_game 15 | SFX 池与窃取（deprecated 兼容，薄转发） |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
+| test_flac 12 | FLAC Probe≤4KB + 8/16/24-bit 全声道 + 零分配 |
+| test_mp3 10 | MP3 Probe≤4KB + CBR 帧 + 异常不泄漏 |
+| test_vorbis 9 | Vorbis Ogg Probe + VorbisComment 归一 |
+| test_spatial 8 | 衰减/pan/doppler `inline` + 零分配 |
+| test_bank 10 | Bank 深拷贝 + RefCount + 资源释放不丢 |
+| test_resource 9 | AsyncLoad 去重 + ProbeFile≤4KB + Release 释放 |
+| test_playlist 7 | Playlist 队列 + crossfade 占位 |
+| test_event 11 | Event RTPC + MaxVoices 窃取 + 空间化 |
+| test_studio 9 | Automation Hermite + Sequencer 正弦表 2048 |
+| test_bus 8 | Bus/Mixer 零分配 + 快照 + SimdAddF32（B前缀 GUID 异形） |
+| test_automation 8 | Automation Hermite 曲线 + FillRealtimeValues 零分配 |
 
 ## 基准
 
