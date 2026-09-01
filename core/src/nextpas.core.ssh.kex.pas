@@ -83,8 +83,7 @@ function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
-  nextpas.core.crypto.hash,
+  nextpas.core.hash,
   nextpas.core.ssh.cipher;
 
 function SshPickFirstMatch(const AClientOffer: array of string;
@@ -210,16 +209,14 @@ end;
 function SshKdfSha256(const AKMpint, AH: TBytes; AX: Byte;
   const ASessionId: TBytes; ALen: Integer): TBytes;
 var
-  LInput, LBlock, LPrev: TBytes;
-
+  LHasher: IHasher;
+  LPrev, LBlock: TBytes;
+  LPos, LChunk: Integer;
+  LX: Byte;
   function Min64(A, B: Int64): Int64; inline;
   begin
-    if A < B then
-      Result := A
-    else
-      Result := B;
+    if A < B then Result := A else Result := B;
   end;
-
 begin
   Result := nil;
   if ALen <= 0 then
@@ -227,18 +224,42 @@ begin
     SetLength(Result, 0);
     Exit;
   end;
-  SetLength(LInput, 1);
-  LInput[0] := AX;
-  LPrev := SHA256(BytesConcatMany([AKMpint, AH, LInput, ASessionId]));
-  Result := Copy(LPrev, 0, Min64(ALen, Length(LPrev)));
-  while Length(Result) < ALen do
+  // perf: single SetLength(ALen) + streaming IHasher.Write (zero-copy, no BytesConcatMany alloc)
+  // + Move per 32B block; BytesAppend O(n) realloc eliminated; first block K||H||X||session_id,
+  // extension K||H||prev. inline Min64 stays hot; hasher Reset reuses instance, ref-counted release.
+  SetLength(Result, ALen);
+  LHasher := NewSHA256;
+  if Length(AKMpint) > 0 then
+    LHasher.Write(AKMpint[0], Length(AKMpint));
+  if Length(AH) > 0 then
+    LHasher.Write(AH[0], Length(AH));
+  LX := AX;
+  LHasher.Write(LX, 1);
+  if Length(ASessionId) > 0 then
+    LHasher.Write(ASessionId[0], Length(ASessionId));
+  LPrev := LHasher.SumBytes;
+  LChunk := Integer(Min64(ALen, Length(LPrev)));
+  if LChunk > 0 then
+    Move(LPrev[0], Result[0], LChunk);
+  LPos := LChunk;
+  while LPos < ALen do
   begin
-    LBlock := SHA256(BytesConcatMany([AKMpint, AH, LPrev]));
-    BytesAppend(Result, LBlock);
+    LHasher.Reset;
+    if Length(AKMpint) > 0 then
+      LHasher.Write(AKMpint[0], Length(AKMpint));
+    if Length(AH) > 0 then
+      LHasher.Write(AH[0], Length(AH));
+    if Length(LPrev) > 0 then
+      LHasher.Write(LPrev[0], Length(LPrev));
+    LBlock := LHasher.SumBytes;
     LPrev := LBlock;
+    LChunk := Length(LBlock);
+    if LPos + LChunk > ALen then
+      LChunk := ALen - LPos;
+    if LChunk > 0 then
+      Move(LBlock[0], Result[LPos], LChunk);
+    Inc(LPos, LChunk);
   end;
-  if Length(Result) > ALen then
-    SetLength(Result, ALen);
 end;
 
 end.

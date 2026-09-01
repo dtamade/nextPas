@@ -687,7 +687,6 @@ end;
 procedure TSshChannel.InboxCompact; inline;
 var
   LCount: SizeUInt;
-  I: Integer;
 begin
   if FInboxHead = 0 then Exit;
   if FInboxHead >= SizeUInt(Length(FInbox)) then
@@ -697,10 +696,11 @@ begin
     Exit;
   end;
   LCount := SizeUInt(Length(FInbox)) - FInboxHead;
-  for I := 0 to Integer(LCount) - 1 do
-    FInbox[I] := FInbox[Integer(FInboxHead) + I];
-  for I := Integer(LCount) to High(FInbox) do
-    FInbox[I].Data := nil;
+  // bulk Move: single memmove avoids per-element TBytes AddRef/Release (O(n) refcount churn);
+  // zero-copy transfer of ownership, tail zeroed without Release (FillChar), inline hot path
+  if LCount > 0 then
+    Move(FInbox[FInboxHead], FInbox[0], LCount * SizeOf(TSshDataChunk));
+  FillChar(FInbox[LCount], (Length(FInbox) - Integer(LCount)) * SizeOf(TSshDataChunk), 0);
   SetLength(FInbox, LCount);
   FInboxHead := 0;
 end;

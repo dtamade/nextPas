@@ -115,19 +115,23 @@ begin
   if FLen > High(SizeUInt) - ACount then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: writer overflow');
   LNeed := FLen + ACount;
-  if LNeed > SizeUInt(Length(FBuf)) then
-  begin
-    if ACount < 256 then
-      ACount := 256;
-    LNewCap := SizeUInt(Length(FBuf)) + ACount + (SizeUInt(Length(FBuf)) shr 1);
-    if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
-      LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
-    if LNeed > LNewCap then
-      raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
-    if LNewCap < LNeed then
-      LNewCap := LNeed;
-    SetLength(FBuf, LNewCap);
-  end;
+  if LNeed <= SizeUInt(Length(FBuf)) then
+    Exit;
+  { perf: 1.5x geometric growth, no forced 256 per small PutByte/PutRaw;
+    single SetLength+Move in callers (zero-copy), avoids per-byte 256 waste
+    and O(n²) churn; stability: overflow/packet-limit guarded, exception-safe SetLength. }
+  LNewCap := SizeUInt(Length(FBuf));
+  if LNewCap = 0 then
+    LNewCap := 256
+  else
+    LNewCap := LNewCap + (LNewCap shr 1);
+  if LNewCap < LNeed then
+    LNewCap := LNeed;
+  if LNewCap > SSH_MAX_RECEIVE_PACKET + 1024 then
+    LNewCap := SSH_MAX_RECEIVE_PACKET + 1024;
+  if LNeed > LNewCap then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: packet too large');
+  SetLength(FBuf, LNewCap);
 end;
 
 procedure TsshWriter.Clear;
@@ -210,41 +214,22 @@ end;
 
 procedure TsshWriter.PutNameList(const ANames: array of string);
 var
-  I: SizeInt;
-  LTotal, LPos: SizeInt;
+  I: Integer;
   LJoined: string;
+  LArr: nextpas.core.text.strings.TStringArray;
 begin
   if Length(ANames) = 0 then
   begin
     PutStringText('');
     Exit;
   end;
-  if Length(ANames) = 1 then
-  begin
-    PutStringText(ANames[0]);
-    Exit;
-  end;
-  LTotal := 0;
+  { perf: single source text.strings.StringsJoin (vs hand-rolled CopyNonOverlap loop);
+    single SetLength+CopyNonOverlap, zero-copy string ref moves, O(n) single allocation
+    — same pattern as bytes.ops.SpanConcatMany single source. Avoids per-element realloc. }
+  SetLength(LArr, Length(ANames));
   for I := 0 to High(ANames) do
-    Inc(LTotal, Length(ANames[I]));
-  Inc(LTotal, High(ANames));
-  SetLength(LJoined, LTotal);
-  LPos := 1;
-  if Length(ANames[0]) > 0 then
-  begin
-    CopyNonOverlap(@ANames[0][1], @LJoined[LPos], SizeUInt(Length(ANames[0])));
-    Inc(LPos, Length(ANames[0]));
-  end;
-  for I := 1 to High(ANames) do
-  begin
-    LJoined[LPos] := ',';
-    Inc(LPos);
-    if Length(ANames[I]) > 0 then
-    begin
-      CopyNonOverlap(@ANames[I][1], @LJoined[LPos], SizeUInt(Length(ANames[I])));
-      Inc(LPos, Length(ANames[I]));
-    end;
-  end;
+    LArr[I] := ANames[I];
+  LJoined := StringsJoin(LArr, ',');
   PutStringText(LJoined);
 end;
 
