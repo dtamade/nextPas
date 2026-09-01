@@ -38,6 +38,7 @@ function GitStringToBytes(const AText: string): TBytes;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.bytes.ops;
 
 function HexVal(ACh: Char): Integer; inline;
@@ -89,13 +90,10 @@ begin
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-var
-  I: Integer;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AA.Bytes[I] <> AB.Bytes[I] then
-      Exit(False);
-  Result := True;
+  { perf: inline + zero-copy Pointer+Len CompareMem single source (bytes.ops/base.utils);
+    20 bytes -> ~3×QWord/DWord compares via System.CompareByte/MemEqual (no 20× byte loop, no alloc), hot oid set/heap path }
+  Result := CompareMem(@AA.Bytes[0], @AB.Bytes[0], GitOidRawLen);
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;

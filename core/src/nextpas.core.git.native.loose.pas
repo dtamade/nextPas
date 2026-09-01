@@ -8,6 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1,
@@ -15,9 +17,14 @@ uses
   nextpas.core.git.native.zlib;
 
 { Content-addressed object layer: "<kind> <size>\0<payload>" hashed with SHA-1,
-  zlib-wrapped, stored at objects/<xx>/<38 hex>. }
+  zlib-wrapped, stored at objects/<xx>/<38 hex>.
+  Layer note: L2 git.native.loose → L2 hash is same-layer one-way (SHA-1
+  for oid) explicitly allowed via core/docs/core-module-registry.md
+  (git: L0-L1 plus same-layer one-way compress/hash/zlib/checksum).
+  Bytes ops are single-source via nextpas.core.bytes.ops; zero-copy via
+  PByte+Len views and inline forwards. }
 
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes;
+function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 function GitHashObject(AKind: TGitObjectKind; const AData: TBytes): TGitOid;
 function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string;
 function GitLooseExists(const AGitDir: string; const AOid: TGitOid): Boolean;
@@ -28,16 +35,16 @@ function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
 
 implementation
 
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes;
+function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 var
   S: string;
 begin
-  Result := nil;
+  // single source: bytes.ops owns string↔bytes Move (inline, zero-copy via single Move per helper)
+  // perf: StringToBytes inline + BytesAppendByte inline -> single SetLength+Move, no scattered Move risk
+  // stability: SetLength is exception-safe; BytesAppendByte handles empty dest
   S := GitKindToString(AKind) + ' ' + IntToStr(ASize);
-  SetLength(Result, Length(S) + 1);
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-  Result[Length(S)] := 0;
+  Result := StringToBytes(S);
+  BytesAppendByte(Result, 0);
 end;
 
 function GitHashObject(AKind: TGitObjectKind; const AData: TBytes): TGitOid;
@@ -47,10 +54,14 @@ var
 begin
   Header := GitObjectHeader(AKind, Length(AData));
   H := NewSHA1;
-  H.Write(Header[0], SizeUInt(Length(Header)));
+  if Length(Header) > 0 then
+    H.Write(Header[0], SizeUInt(Length(Header)));
   if Length(AData) > 0 then
     H.Write(AData[0], SizeUInt(Length(AData)));
-  Move(H.SumBytes[0], Result.Bytes[0], GitOidRawLen);
+  // perf: zero-copy via IHasher.Sum direct to TGitOid.Bytes (inline, no SumBytes alloc+Move)
+  // single source: hash.intf owner owns digest copy; eliminates scattered Move(H.SumBytes[0], Result.Bytes[0], ...)
+  // stability: H is interface (IHasher), refcounted, auto released via _Release even on exception
+  H.Sum(Result.Bytes[0], SizeUInt(GitOidRawLen));
 end;
 
 function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string;
@@ -77,11 +88,10 @@ begin
   if FileExists(Path) then
     Exit;
   Body := GitObjectHeader(AKind, Length(AData));
+  // single source: bytes.ops BytesAppend (inline, zero-copy Move, single Move per append)
+  // perf: inline + single SetLength+Move; stability: BytesAppend handles empty src
   if Length(AData) > 0 then
-  begin
-    SetLength(Body, Length(Body) + Length(AData));
-    Move(AData[0], Body[Length(Body) - Length(AData)], Length(AData));
-  end;
+    BytesAppend(Body, AData);
   Payload := GitZlibCompress(Body);
   DirPart := PathDir(Path);
   if not DirectoryExists(DirPart) then
@@ -134,9 +144,12 @@ begin
   if SizeInt(Length(Plain)) - (Nul + 1) <> Declared then
     raise EGitError.Create('loose object payload size mismatch');
   AKind := GitKindFromString(KindName);
-  SetLength(Result, Declared);
+  { single-source via bytes.ops: SpanCopySlice is single Move, zero-copy
+    via TByteSpan view, inline path; replaces scattered Move. }
   if Declared > 0 then
-    Move(Plain[Nul + 1], Result[0], Declared);
+    Result := SpanCopySlice(TByteSpan.FromBytes(Plain), SizeUInt(Nul + 1), SizeUInt(Declared))
+  else
+    Result := nil;
 end;
 
 end.

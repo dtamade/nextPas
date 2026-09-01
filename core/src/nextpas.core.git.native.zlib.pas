@@ -16,17 +16,22 @@ uses
 { Git stores loose objects and pack payloads in zlib wrapper format (RFC1950).
   The compress module's Deflate* functions already emit/accept full zlib
   streams (header + deflate + adler32), so this unit only adds git-flavored
-  error mapping and stream-boundary reporting over them. }
+  error mapping and stream-boundary reporting over them.
+  Layer note: L2 git.native.zlib → L2 compress is same-layer one-way
+  (Deflate*) explicitly allowed via core/docs/core-module-registry.md
+  (git: L0-L1 plus same-layer one-way compress/hash/zlib/checksum). }
 
 function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
 function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;
-function GitZlibCompress(const AData: TBytes): TBytes;
+function GitZlibCompress(const AData: TBytes): TBytes; inline;
 { Inflate the zlib stream starting at AStart. AEndPos receives the offset just
   past the Adler-32 trailer, so callers can locate the trailer bytes. }
 function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
 { Pointer-based variant over mmapped or otherwise externally owned memory.
-  AData must stay valid while the returned bytes are used. }
+  AData must stay valid while the returned bytes are used.
+  Zero-copy: PByte+Len view, no extra alloc beyond result (delegates to
+  compress DeflateDecompressPtrWithEndPos). }
 function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes;
 
@@ -46,8 +51,10 @@ begin
   Result := UInt32(Adler32Update(ADLER32_INIT, AData, ACount));
 end;
 
-function GitZlibCompress(const AData: TBytes): TBytes;
+function GitZlibCompress(const AData: TBytes): TBytes; inline;
 begin
+  { inline thin forward: single Move-free delegation to compress owner;
+    no duplicate deflate logic, zero-copy via TBytes ref, resource-free. }
   Result := DeflateCompress(AData);
 end;
 

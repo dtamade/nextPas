@@ -49,7 +49,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `format` | L2 support | shared format parse limits | no | L0-L1 | focused-runtime |
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
 | `geoip` | L2 | IP→country GeoIP lookup | yes | L0-L2 | focused-runtime |
-| `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
+| `git` | L2 | git/libgit2 backend | yes | L0-L1 plus same-layer one-way `compress`/`hash`/`zlib`/`checksum` plus libgit2 FFI owner | draft |
 | `graph` | L3 | Microsoft Graph REST mail client (`nextpas.core.graph.*`; transport via injected IHttpClient) | yes | L0-L2 | focused-runtime |
 | `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |

@@ -97,6 +97,8 @@ type
     FRepo: TNativeRepository; { borrowed, not owned }
     FGraph: TCommitGraph;     { owned, nil when no commit-graph }
     FHeap: array of TWalkEntry;
+    FHeapCap: SizeInt;            { geometric capacity for FHeap }
+    FHeapLen: SizeInt;            { active heap size }
     FSeen: TGitOidSet;        { owned }
     FHidden: TGitOidSet;      { owned, hide set }
     FParseCache: TCommitParseCache; { owned, exactly-once }
@@ -109,8 +111,8 @@ type
     procedure InitGraph;
     function TryGraphCommit(const AOid: TGitOid; out AWhen: Int64;
       out AParents: TGitOidArray): Boolean;
-    procedure HeapPush(const AEntry: TWalkEntry);
-    function HeapPop(out AEntry: TWalkEntry): Boolean;
+    procedure HeapPush(const AEntry: TWalkEntry); inline;
+    function HeapPop(out AEntry: TWalkEntry): Boolean; inline;
     procedure EnqueueCommit(const AOid: TGitOid);
     procedure EnqueueHidden(const AOid: TGitOid);
   public
@@ -544,9 +546,15 @@ procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
 var
   I, Parent: Integer;
 begin
-  SetLength(FHeap, Length(FHeap) + 1);
-  I := High(FHeap);
-  // max-heap on When: newest commit at the root
+  // geometric growth: 64 -> *2 to 4096 -> +4096; amortized O(1) push
+  if FHeapLen >= FHeapCap then
+  begin
+    if FHeapCap = 0 then FHeapCap := 64 else if FHeapCap < 4096 then FHeapCap := FHeapCap * 2 else Inc(FHeapCap, 4096);
+    SetLength(FHeap, FHeapCap);
+  end;
+  I := FHeapLen;
+  Inc(FHeapLen);
+  // max-heap on When: newest commit at the root; zero-copy moves, inline
   while I > 0 do
   begin
     Parent := (I - 1) div 2;
@@ -563,25 +571,29 @@ var
   Last, I, L, R, Best: Integer;
   Tmp: TWalkEntry;
 begin
-  Result := Length(FHeap) > 0;
+  Result := FHeapLen > 0;
   if not Result then
     Exit;
-  AEntry := FHeap[0];
-  Last := High(FHeap);
-  FHeap[0] := FHeap[Last];
-  SetLength(FHeap, Last);
+  AEntry := FHeap[0]; { zero-copy, inline }
+  Dec(FHeapLen);
+  Last := FHeapLen;
   if Last = 0 then
+  begin
+    FHeap[0] := Default(TWalkEntry); { release Parents ref }
     Exit;
-  // restore the max-heap property from the root
+  end;
+  FHeap[0] := FHeap[Last];
+  FHeap[Last] := Default(TWalkEntry); { release stale ref, keep capacity }
+  // restore the max-heap property from the root; bound by FHeapLen
   I := 0;
   while True do
   begin
     L := 2 * I + 1;
     R := L + 1;
     Best := I;
-    if (L <= High(FHeap)) and (FHeap[L].When > FHeap[Best].When) then
+    if (L < FHeapLen) and (FHeap[L].When > FHeap[Best].When) then
       Best := L;
-    if (R <= High(FHeap)) and (FHeap[R].When > FHeap[Best].When) then
+    if (R < FHeapLen) and (FHeap[R].When > FHeap[Best].When) then
       Best := R;
     if Best = I then
       Break;
@@ -711,6 +723,9 @@ begin
     raise EGitError.Create('revwalk requires a repository');
   FRepo := ARepo;
   FGraph := nil;
+  FHeap := nil;
+  FHeapCap := 0;
+  FHeapLen := 0;
   FSeen := TGitOidSet.Create;
   FHidden := nil;
   FParseCache := nil;
@@ -825,7 +840,7 @@ var
   WasBoundary: Boolean;
 begin
   // drain heap first, then boundary
-  WasBoundary := FShowBoundary and (Length(FHeap) = 0) and (FBoundaryPos < Length(FBoundary));
+  WasBoundary := FShowBoundary and (FHeapLen = 0) and (FBoundaryPos < Length(FBoundary));
   if WasBoundary then
   begin
     AEntry.Oid := FBoundary[FBoundaryPos].Oid;
@@ -915,6 +930,8 @@ var
   Hidden: TGitOidSet;
   Seen: TGitOidSet;
   Heap: array of TWalkEntry;
+  HeapCap: SizeInt;
+  HeapLen: SizeInt;
   BoundarySet: TGitOidSet;
   BoundaryList: TGitOidArray;
   Graph: TCommitGraph;
@@ -922,46 +939,55 @@ var
   ResCount, ResCap: SizeInt;
   BndCount, BndCap: SizeInt;
 
-  procedure HeapPushLocal(const AEntry: TWalkEntry);
+  procedure HeapPushLocal(const AEntry: TWalkEntry); inline;
   var
     I, Parent: Integer;
   begin
-    SetLength(Heap, Length(Heap) + 1);
-    I := High(Heap);
+    if HeapLen >= HeapCap then
+    begin
+      if HeapCap = 0 then HeapCap := 64 else if HeapCap < 4096 then HeapCap := HeapCap * 2 else Inc(HeapCap, 4096);
+      SetLength(Heap, HeapCap);
+    end;
+    I := HeapLen;
+    Inc(HeapLen);
     while I > 0 do
     begin
       Parent := (I - 1) div 2;
       if Heap[Parent].When >= AEntry.When then
         Break;
-      Heap[I] := Heap[Parent];
+      Heap[I] := Heap[Parent]; { zero-copy, inline }
       I := Parent;
     end;
     Heap[I] := AEntry;
   end;
 
-  function HeapPopLocal(out AEntry: TWalkEntry): Boolean;
+  function HeapPopLocal(out AEntry: TWalkEntry): Boolean; inline;
   var
     Last, I, L, R, Best: Integer;
     Tmp: TWalkEntry;
   begin
-    Result := Length(Heap) > 0;
+    Result := HeapLen > 0;
     if not Result then
       Exit;
-    AEntry := Heap[0];
-    Last := High(Heap);
-    Heap[0] := Heap[Last];
-    SetLength(Heap, Last);
+    AEntry := Heap[0]; { zero-copy, inline }
+    Dec(HeapLen);
+    Last := HeapLen;
     if Last = 0 then
+    begin
+      Heap[0] := Default(TWalkEntry);
       Exit;
+    end;
+    Heap[0] := Heap[Last];
+    Heap[Last] := Default(TWalkEntry);
     I := 0;
     while True do
     begin
       L := 2 * I + 1;
       R := L + 1;
       Best := I;
-      if (L <= High(Heap)) and (Heap[L].When > Heap[Best].When) then
+      if (L < HeapLen) and (Heap[L].When > Heap[Best].When) then
         Best := L;
-      if (R <= High(Heap)) and (Heap[R].When > Heap[Best].When) then
+      if (R < HeapLen) and (Heap[R].When > Heap[Best].When) then
         Best := R;
       if Best = I then
         Break;
@@ -1029,6 +1055,7 @@ begin
   Result := nil;
   ResCount := 0; ResCap := 0;
   BndCount := 0; BndCap := 0;
+  Heap := nil; HeapCap := 0; HeapLen := 0;
   BoundaryList := nil;
   Graph := nil;
   ParseCache := TCommitParseCache.Create;
@@ -1045,7 +1072,7 @@ begin
     if Length(AHides) > 0 then
       BuildHiddenSet(ARepo, AHides, AOptions.FirstParent, Hidden, ParseCache);
     // seed heap with starts that are not hidden
-    Heap := nil;
+    {Heap already nil/cap 0/len 0}
     for I := 0 to High(AStarts) do
     begin
       if (Hidden <> nil) and Hidden.Contains(AStarts[I]) then

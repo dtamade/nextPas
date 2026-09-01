@@ -2,7 +2,7 @@
 
 `nextpas.core.git` 是 `nextpas.core` 的 L2 Git 集成模块。提供双轨后端（`libgit2` 运行时加载 + `native` 纯 Pascal）与 `factory` 唯一汇聚点，为 `IGitManager / IGitRepository / IGitCommit` 提供统一门面，已覆盖对象层 / refs / index / status / revwalk / 传输基座等 71 个源文件。
 
-- 层级：L2，依赖 L0（`base` / `text` / `fs`）；`native` 子家族另用 L1 `compress` / `hash` / `io` owner 能力（mmap、Deflate、SHA-1 等），不自建重复实现。
+- 层级：L2，依赖 L0-L1（`base`/`text`/`bytes`/`fs`/`io`）；`native` 子家族另用同层单向 `compress`/`hash`/`zlib`/`checksum` owner 能力（mmap、Deflate、SHA-1、Adler-32 等，`core/docs/core-module-registry.md` 显式豁免 `L0-L1 plus same-layer one-way compress/hash/zlib/checksum`），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，存量零改动）。
 - 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)`，首版 `gbAuto = gbLibGit2`）。
 - 纯路径：`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 双重闭环：`grep` + `fpc -va Loading libgit2`）。

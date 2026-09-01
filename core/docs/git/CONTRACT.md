@@ -1,7 +1,7 @@
 # nextpas.core.git 代码契约
 
 **模块路径**：`core/src/nextpas.core.git*.pas`（87 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片）
-**层级**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）
+**层级**：L2（依赖 L0-L1: base, text, bytes, fs, io；native 子家族另用同层单向 compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
 **版本**: 2.0
@@ -253,3 +253,14 @@ end;
 | `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` 双重闭环） |
 
 门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中）；`build/verify_local.sh` 后续聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。
+
+---
+
+## 7. 基准
+
+- **位置**：`core/benchmarks/nextpas.core.git/bench_git`（`TBenchSuite` via `nextpas.core.bench`，禁手搓计时，单次调用不内循环）
+- **构建**：`make -C core/benchmarks/nextpas.core.git/bench_git build` 经 `bench_common.mk` 落盘 `core/build/projects/nextpas.core.git/bench_git/bench_git`，`make hygiene` 零产物闭环（源码树无 `.o/.ppu/link*.res`）
+- **运行**：`make -C core/benchmarks/nextpas.core.git/bench_git run`（默认 `-O3 -Xs` 全量优化，无 heaptrc 计时保真；`SaveToJSON build/bench-git.json` 对齐 `COMPARE-GO-RUST` 基线）
+- **覆盖**：`Oid/IsValidHex|FromHex|ToHex|Same`（`inline` + `Move` 零拷贝，复用 `bytes.ops` 单源）/ `Kind/FromMode`（`inline`）/ `Zlib/Compress1K|Decompress1K`（`native.zlib → compress.Deflate*` 透传，`PByte+Len` 零拷贝）/ `Adler32/PByte64K|Bytes64K`（`PByte` 零拷贝单源 `checksum.adler32`）/ `Wild/*`（`wildmatch` 单源 `inline GitWildSegment* / GitSegmentsMatch`，`**` 目录通配）/ `Delta/Apply|ApplyReuse`（`TByteSpan` 零拷贝 + `GReuseBuf` 复用单源 `GitApplyDeltaInto`）
+- **稳定性**：`IMappedFile` 资源由接口引用计数拥有，`TPackFile` 析构释放；`bench` 初始化往返校验异常 `raise EGitError` 不泄漏（`TBytes` 受控）
+- **层级复核**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）—— 与 §1 首部一致，`bench_git` 仅复用 owner 能力，不自建压缩/哈希实现
