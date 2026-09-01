@@ -398,8 +398,12 @@ begin
 
   if LMethodCode = C_ZIP_METHOD_DEFLATE then
     AE.Method := zmDeflate
+  else if LMethodCode = C_ZIP_METHOD_STORE then
+    AE.Method := zmStore
   else
-    AE.Method := zmStore;
+    raise ENotSupportedError.CreateFmt(
+      'zip: unsupported compression method %d: %s',
+      [LMethodCode, AE.Name]);
   AE.MethodCode := LMethodCode;
   AE.Crc32 := LCrc;
   AE.CompressedSize := LCSize;

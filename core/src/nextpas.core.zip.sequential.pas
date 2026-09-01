@@ -369,8 +369,12 @@ begin
   end;
   if LMethod = C_ZIP_METHOD_DEFLATE then
     FCurrent.Method := zmDeflate
+  else if LMethod = C_ZIP_METHOD_STORE then
+    FCurrent.Method := zmStore
   else
-    FCurrent.Method := zmStore;
+    raise ENotSupportedError.CreateFmt(
+      'zip: unsupported compression method %d: %s',
+      [LMethod, LName]);
   FCurrent.MethodCode := LMethod;
   FCurrent.Crc32 := LCrc;
   if FCurrentIsDescriptor then
