@@ -1,7 +1,7 @@
 unit nextpas.core.bytes.ops;
 
 {$I nextpas.core.settings.inc}
-{ bytes.ops — single source for SetLength+Move (单源); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1/2. }
+{ bytes.ops — single source for SetLength+Move (单源); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1, red-line 2. }
 
 interface
 
@@ -30,7 +30,7 @@ procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt);
 procedure BytesZero(ADst: Pointer; const ALen: SizeUInt);
 procedure SpanZero(const ASpan: TByteSpan);
 
-{ global zero page (.bss, 4K) }
+{ zero page (.bss, 4K) }
 const
   BYTES_ZERO_PAGE_SIZE = 4096;
   BYTES_ZERO_PAGE_SLICE_THRESHOLD = BYTES_ZERO_PAGE_SIZE;
@@ -39,11 +39,11 @@ var
 
 function ZeroPageSlice(const ALen: SizeUInt): TByteSpan; inline;
 
-{ bulk XOR — QWord batched }
+{ XOR — QWord batched }
 procedure XorInplace(ADst, AKey: PByte; ALen: SizeUInt);
 procedure SpanXorInplace(const ADst, AKey: TByteSpan); inline;
 
-{ ASCII case — bulk via simd }
+{ ASCII case }
 procedure AsciiToLowerInplace(AData: PByte; ALen: SizeUInt);
 procedure AsciiToUpperInplace(AData: PByte; ALen: SizeUInt);
 procedure SpanToLowerAscii(const ASpan: TByteSpan); inline;
@@ -141,7 +141,7 @@ type
   end;
   PVarDataView = ^TVarDataView;
 
-{ capacity growth — exponential via BytesGrowCapacity, exception-safe }
+{ capacity growth }
 
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
@@ -208,7 +208,7 @@ begin
   Result := Integer(LCap);
 end;
 
-{ L0 mem — header probe via mem.dynarray }
+{ L0 mem }
 function DynArrayCapacity(const A: TBytes): SizeUInt; inline;
 begin
   Result := nextpas.core.mem.dynarray.DynArrayCapacity(A);
@@ -224,7 +224,7 @@ begin
   nextpas.core.mem.dynarray.DynArraySetLength(A, ANewLen);
 end;
 
-{ ensure append capacity — exponential grow, CoW-aware }
+{ append capacity }
 procedure EnsureAppendCapacity(var ADest: TBytes; const AOldLen, AReqLen: SizeUInt);
 var
   LCap: SizeUInt;
@@ -632,7 +632,7 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-{ LeadingZero helper — QWord scan }
+{ helper }
 function LeadingZeroOffset(AData: PByte; ALen: SizeUInt): SizeUInt;
 var
   LOff: SizeUInt;
