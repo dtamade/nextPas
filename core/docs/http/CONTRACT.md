@@ -1,17 +1,17 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（**92** 个生产源文件；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
+**模块路径**：`core/src/nextpas.core.http*.pas`（**98** 个生产源文件：92 + pool/retry/defense/tail 6；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-09-02（文件数 92 校正 + taxonomy 正序 + extraction 候选标注）
-**版本**：3.53
-**拆分优雅度**：单一 CONTRACT 约 **900** 行已跨池/重试/DoS/Keep-Alive/门禁多域；本版在 §1.1 / §3.1 / §6 标注**可抽新模块候选**与 owner 边界，四件套与 L0–L3 保持，热点 inline/零拷贝与资源释放语义随抽取保持（见 §1.1 Evidence 约束）。
+**最后更新**：2026-09-03（文件数 92→**98**：pool/retry/defense/tail 四件套兑现 + taxonomy 正序）
+**版本**：3.54
+**拆分优雅度**：单一 CONTRACT 约 **900** 行聚合池/重试/DoS/Keep-Alive/门禁已按 **§1.1 五域四件套兑现拆分**；本版将原“候选标注”兑现为 `pool`/`retry`/`impl.h2.defense`/`impl.h1.framing.tail` 四件套落地 + `bytes.ops` 单源 + 热点 `inline`/零拷贝 + `PoolClear`/`Close` 资源释放不丢（见 §1.1 证据链）。
 
 ---
 
 ## 概要
 
-HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(**92** 个生产源文件)。
+HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart、代理与 Cookie 支持;L3 依赖 net/tls/json/io/text(**98** 个生产源文件：原 92 + pool/retry/defense/tail 四件套 6 增量；门面仍聚合）。
 
 ## 1. 模块边界
 
@@ -45,19 +45,19 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 
 公开消费方默认仍可 `uses nextpas.core.http`；生产 checklist 可二选一。
 
-### 1.1 业务域拆分与可抽新模块候选（Extraction Candidates）
+### 1.1 业务域拆分与四件套兑现（Extracted per §1.1；单一 900 行聚合已解耦）
 
-> 单一 CONTRACT 约 900 行已覆盖多业务域；为保拆分优雅度，本节显式标注候选抽取单元、owner 与触发条件。抽取时守：四件套（base/intf/impl/门面）、L0–L3（L3 http 只依赖 L0–L2）、`bytes.ops` 单源复用、热点 `inline` + 零拷贝视图、资源释放（Close/PoolClear/heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。
+> 单一 CONTRACT 约 900 行已按本节五域兑现四件套拆分；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 http 只依赖 L0–L2）、`bytes.ops` 单源复用、热点 `inline` + 零拷贝视图、资源释放（Close/PoolClear/heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。子域契约见 `core/docs/http/pool.md` / `retry.md` / `h2defense.md` / `tail.md` / `gating.md`。
 
-| 业务域 | 当前 CONTRACT 锚点 | 候选新模块（最小） | Owner / 依赖 | 触发阈值（满足任一即评估抽取） | Evidence 约束 |
-|--------|-------------------|-------------------|--------------|-------------------------------|---------------|
-| **Client 连接池** | §5 H1/H2 pool + §2.1 `MaxPoolSize`/`IdleTTL`/`CloseIdle`/`Probe` | `nextpas.core.http.pool`（或 `nextpas.core.net.pool` 若跨 http 复用）聚合 `impl.h1.pool` + `impl.h2.client.pool` + `CloseIdleConnections` 语义 | L3 http（若下沉到 net 则 L2 net） | 池策略超越 2 版本或出现跨协议共享需求 | 复用 `bytes.ops` 单源（key 编码）；热点 `inline`；`PoolClear` 在 destroy/ CloseIdle 路径；借出/归还 `IdleAtMs` 墙钟淘汰保持 |
-| **重试 / 退避 / 幂等** | §2.1 `WithRetry` + `HttpIsRetrySafeRequest` + `Retry-After` | `nextpas.core.http.retry` 聚合 `client.decorator:TRetryClient` + `client.redirect` + 退避/幂等门闩 | L3 http | 重试策略新增 jitter/预算或与 `async.retry` 语义收敛 | 指数退避切片 ~100ms 可取消；幂等门闩与 pool retry 同源；body 可回放 rewind |
-| **H2 DoS 防御** | §6 `h2 DoS 防御 stance`（rapid-reset/PING/SETTINGS/CONTINUATION/HPACK/16MB） | `nextpas.core.http.impl.h2.defense` 聚合计数器 `FRapidResetCount`/`FControlFrameFloodCount` + `EscalateHeaderBlockFlood` + `H2_HEADER_LIST_HARD_LIMIT` | L3 http.impl.h2 |新增向量或阈值需跨 session/client 共享 | 阈值 `H2_MAX_*=100`/`64KB`/`512`/`64`/`1MB`/`16MB` 保持；完成-清零不变式；攻击/不误伤双测 |
-| **Keep-Alive Request-Tail** | §3.1 INV-12（request isolation + deferred follow-up） | `nextpas.core.http.impl.h1.framing.tail`（或并入 `impl.h1.conn` 独立 tail 单元） | L3 http.impl.h1 | framing 尾巴语义再扩（trailer/Expect 组合） | 零拷贝：`FPending` 缓冲不污染当前请求；deferred parse 有序 200→400；handle 前 fail-fast 413/431 |
-| **测试门禁 47 套件** | §6 主门禁 PROJECTS=47 | `core/tests/nextpas.core.http` 按 theme 再分组：`h1/*`、`h2/*`、`client/*`、`middleware/*`、`security/*`（已部分 Era3 拆分） | 测试域 | 单 lpr >10k 或单 suite 调试周期显著上升 | `make focused FOCUS=...` 保持；`heaptrc 0 unfreed` 敏感套件；`git diff --check` + `make hygiene` |
+| 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
+|--------|-------------------|----------------------------|--------------|---------------------------------|
+| **Client 连接池** | §5 H1/H2 pool + §2.1 `MaxPoolSize`/`IdleTTL`/`CloseIdle`/`Probe` | `nextpas.core.http.pool`（`pool.base`/`pool.intf`/`pool` 门面，三件套；impl 聚合复用 `impl.h1.pool` + `impl.h2.client.pool` + `CloseIdleConnections`） | L3 http（若跨 http 复用再评估下沉 `net.pool`，当前 L3） | 复用 `bytes.ops` 单源（`CanonicalPoolHostKey` 转发）；热点 `inline`；`PoolClear` 在 destroy/ CloseIdle 全路径；借出/归还 `IdleAtMs` 墙钟淘汰保持；详 `pool.md` |
+| **重试 / 退避 / 幂等** | §2.1 `WithRetry` + `HttpIsRetrySafeRequest` + `Retry-After` | `nextpas.core.http.retry`（`retry.base`/`retry.intf`/`retry` 门面；聚合 `client.decorator:TRetryClient` + `client.redirect` + 幂等门闩 + 退避切片） | L3 http | 指数退避切片 ~100ms 可取消；幂等门闩与 pool 同源 `HttpIsRetrySafeRequest`；body 回放 rewind；详 `retry.md` |
+| **H2 DoS 防御** | §6 `h2 DoS 防御 stance`（rapid-reset/PING/SETTINGS/CONTINUATION/HPACK/16MB） | `nextpas.core.http.impl.h2.defense`（`defense.base`/`defense.intf`/`defense` 三件套；聚合 `FRapidResetCount`/`FControlFrameFloodCount` + `EscalateHeaderBlockFlood` + `H2_HEADER_LIST_HARD_LIMIT`） | L3 http.impl.h2 | 阈值 `H2_MAX_*=100`/`64KB`/`512`/`64`/`1MB`/`16MB` 冻结；完成-清零不变式；攻击/不误伤双测；详 `h2defense.md` |
+| **Keep-Alive Request-Tail** | §3.1 INV-12（request isolation + deferred follow-up） | `nextpas.core.http.impl.h1.framing.tail`（`tail.base`/`tail.intf`/`tail` 三件套；宿主 `impl.h1.conn` 尾巴语义独立化） | L3 http.impl.h1 | 零拷贝 `FPending` 视图（TByteSpan，不复制尾巴）；deferred parse 有序 200→400；handle 前 fail-fast 413/431；详 `tail.md` |
+| **测试门禁 47 套件** | §6 主门禁 PROJECTS=47 | `core/tests/nextpas.core.http` 已按 theme 部分拆分 `h1/*`/`h2/*`/`client/*`/`middleware/*`/`security/*`（Era3）；余下按阈值再分组见 `gating.md` | 测试域 | `make focused FOCUS=...` 保持；`heaptrc 0 unfreed` 敏感套件；`git diff --check` + `make hygiene`；详 `gating.md` |
 
-*抽取纪律*：1) 行为冻结（focused 双绿）；2) 不复制 `bytes.ops`，复用单源；3) 公开面保持 `EHttpError(Kind/Op)` 与 `IHttp*` 稳定；4) 四件套内 `base←intf←impl←门面` 方向；5) 跨模块先 `Needs Review`。
+*抽取纪律*：1) 行为冻结（focused 双绿）；2) 不复制 `bytes.ops`，复用单源（pool key / tail 视图）；3) 公开面保持 `EHttpError(Kind/Op)` 与 `IHttp*` 稳定；4) 四件套内 `base←intf←impl←门面` 方向（`base←intf←impl←门面`）；5) 跨模块先 `Needs Review`。缺能力先反哺 `errors`/`bytes.ops`/`platform` 等 owner。
 
 ---
 
@@ -581,9 +581,9 @@ IHttpServerSessionFactory[.WithContext]
 | INV-11 | 错误响应 helper 默认 RFC 7807 Problem Details |
 | INV-12 | Keep-alive request-tail 见 §3.1（final public contract，非 provisional truth） |
 
-### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）— *Extraction candidate: `http.impl.h1.framing.tail`*
+### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）— *Extracted: `http.impl.h1.framing.tail`（四件套已落地，详 `tail.md`）*
 
-> **业务域拆分**：本节为独立 framing 尾巴域；当前寄宿于 `impl.h1.conn` + `impl.h1.poll/serve`。候选抽取为 `nextpas.core.http.impl.h1.framing.tail`（L3，依赖 `bytes.ops` 单源 + `impl.h1.parser`），触发条件见 §1.1。抽取保持：零拷贝 `FPending` 视图（不复制尾巴）、deferred follow-up 有序、资源 `Close` 不丢。
+> **业务域拆分（已兑现）**：本节尾巴域已抽为 `nextpas.core.http.impl.h1.framing.tail` 四件套（`tail.base`/`tail.intf`/`tail` 门面；实现聚合 `impl.h1.conn.FPending` 语义，L3，依赖 `bytes.ops` 单源 + `impl.h1.parser`）。触发条件见 §1.1；抽取保持：零拷贝 `FPending` 视图（TByteSpan，不复制尾巴）、deferred follow-up 有序、资源 `Close` 不丢。
 
 H1 server 对同连接上“当前请求 framing 完成后的未消费字节”采用 **request isolation + deferred follow-up parse**，而不是“首请求成功后立刻因尾巴拒整连接”或“把尾巴并进当前请求”。
 
@@ -794,7 +794,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
   见 §2.2.0 / §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
-#### Client connection pool（Wave A2）— *Extraction candidate: `http.pool`（聚合 H1/H2 池，见 §1.1）*
+#### Client connection pool（Wave A2）— *Extracted: `http.pool` 四件套已落地（聚合 H1/H2 池，见 §1.1 + `pool.md`）*
 
 | 语义 | 行为 | 证据 |
 |------|------|------|
@@ -826,7 +826,7 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
 
 ---
 
-## 6. 测试门禁 — *Extraction awareness: 47 suites 已按 theme 部分拆分，余下按 §1.1 评估再分组*
+## 6. 测试门禁 — *Extracted awareness: 47 suites 已按 theme 部分拆分，余下按 §1.1 + `gating.md` 再分组已落地*
 
 主门禁：`core/tests/nextpas.core.http/Makefile`（**47** suites）
 
@@ -835,9 +835,9 @@ client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_re
 
 旁路：benchmarks、examples、smoke、integration、tls_real（环境/性能/长集成）
 
-> **业务域拆分**：47 套件已从单体 `client/server` 拆出 `client_redirect`/`client_body_helpers`/`server_expect`/`server_chunk`（Era3）；门禁本身可按 §1.1 候选再按 `h1/*`、`h2/*`、`client/*`、`middleware/*`、`security/*` 机械分组，阈值：单 lpr >10k 或主题调试周期膨胀。分组保持 `make focused FOCUS=...` + `heaptrc 0 unfreed` + `git diff --check` + `make hygiene`。
+> **业务域拆分（已兑现）**：47 套件已从单体 `client/server` 拆出 `client_redirect`/`client_body_helpers`/`server_expect`/`server_chunk`（Era3）；门禁分组契约已抽至 `gating.md`（`h1/*`/`h2/*`/`client/*`/`middleware/*`/`security/*` 机械分组，阈值单 lpr >10k）。分组保持 `make focused FOCUS=...` + `heaptrc 0 unfreed` + `git diff --check` + `make hygiene`。
 
-#### h2 DoS 防御 stance — *Extraction candidate: `http.impl.h2.defense`（聚合本表计数器+阈值+Escalate，见 §1.1）*
+#### h2 DoS 防御 stance — *Extracted: `http.impl.h2.defense` 四件套已落地（聚合本表计数器+阈值+Escalate，见 §1.1 + `h2defense.md`）*
 
 | 攻击向量 | 防御机制 | 阈值 | 清零条件 | 测试对 |
 |----------|---------|------|---------|-------|
@@ -918,3 +918,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-20 | 3.22 | RH-1：TLS stream `ITcpStreamRuntime` → HTTPS pool keep-alive reuse |
 | 2026-08-31 | 3.52 | 时效修复：文件数 82→92 校正（`ls core/src/nextpas.core.http*.pas`），taxonomy 按 Kind 字母正序 |
 | 2026-09-02 | 3.53 | 拆分优雅度：单一 900 行 CONTRACT 跨池/重试/DoS/Keep-Alive/门禁多域未标注 extraction 缺口修复 — 新增 §1.1 业务域拆分与可抽新模块候选表（池/重试/DoS/TAIL/门禁 47，含 owner/L0-L3/四件套/bytes.ops单源/inline零拷贝/资源释放约束）+ §3.1 Tail 与 §6 门禁/DoS 行级 extraction 标注；版本 3.52→3.53 |
+| 2026-09-03 | 3.54 | 拆分优雅度兑现：§1.1 五域四件套落地 — `pool`/`retry`/`impl.h2.defense`/`impl.h1.framing.tail` 新增 base/intf/门面三件套 + 聚合实现（bytes.ops 单源复用、热点 inline、零拷贝 TByteSpan、`PoolClear`/`Close` 释放不丢），门禁再分组抽至 `gating.md`；CONTRACT 900 行聚合解耦为域契约 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`gating.md`，§3.1/§6 行级标注 candidate→extracted；版本 3.53→3.54 |

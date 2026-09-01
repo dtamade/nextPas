@@ -24,6 +24,7 @@ type
   private
     FMaxKeys: Integer;
     FLock: INativeMutex;
+    FCount: Integer;
     FKeys: array of string;
     FValues: array of Int64;
     { 哈希索引：FHashes 平行于 FKeys；FBuckets 为头指针表（power-of-two, -1=空），
@@ -61,6 +62,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.lockfree.base;
 
@@ -76,7 +78,7 @@ var
   LBucket, LCur: Integer;
 begin
   Result := -1;
-  if Length(FKeys) = 0 then
+  if FCount = 0 then
     Exit;
   { bucket = hash & mask (power-of-two), O(1) 链遍历，负载因子 <=0.5 时均摊 1~2 步 }
   LBucket := Integer(AHash and UInt32(FBucketMask));
@@ -130,6 +132,7 @@ begin
   if AMaxKeys < 1 then
     raise EArgumentError.Create('keyed counter: max keys must be >= 1');
   FMaxKeys := AMaxKeys;
+  FCount := 0;
   FLock := Mutex;
   { 哈希表容量：nextPow2(MaxKeys*2)，保证负载因子 <=0.5，O(1) 平均查找 }
   LCap := LockFreeNextPow2(PtrUInt(FMaxKeys) * 2);
@@ -153,6 +156,7 @@ begin
   FHashes := nil;
   FNext := nil;
   FBuckets := nil;
+  FCount := 0;
   FLock := nil;
   inherited Destroy;
 end;
@@ -163,6 +167,7 @@ var
   LHash: UInt32;
   LIdx: Integer;
   LI: Integer;
+  LCap: Integer;
 begin
   Result := -1;
   LHash := HashKey(AKey);
@@ -170,10 +175,10 @@ begin
   if LIdx >= 0 then
     Exit(LIdx);
   { miss：满表时需驱逐计数为 0 的 key，活跃 key 常驻 }
-  if Length(FKeys) >= FMaxKeys then
+  if FCount >= FMaxKeys then
   begin
     LEvict := -1;
-    for LI := 0 to High(FKeys) do
+    for LI := 0 to FCount - 1 do
       if FValues[LI] = 0 then
       begin
         LEvict := LI;
@@ -191,16 +196,23 @@ begin
   end
   else
   begin
-    SetLength(FKeys, Length(FKeys) + 1);
-    SetLength(FValues, Length(FValues) + 1);
-    SetLength(FHashes, Length(FHashes) + 1);
-    SetLength(FNext, Length(FNext) + 1);
-    Result := High(FKeys);
+    { perf: 指数预分配 via bytes.ops.BytesGrowCapacityInt 单源 amortized O(1),
+      批量 SetLength 至容量（非 +1 线性），热点锁内少重分配；not inline per red-line 2 }
+    if FCount >= Length(FKeys) then
+    begin
+      LCap := BytesGrowCapacityInt(Length(FKeys), FCount + 1);
+      SetLength(FKeys, LCap);
+      SetLength(FValues, LCap);
+      SetLength(FHashes, LCap);
+      SetLength(FNext, LCap);
+    end;
+    Result := FCount;
     FKeys[Result] := AKey;
     FValues[Result] := 0;
     FHashes[Result] := LHash;
     FNext[Result] := -1;
     InsertHash(LHash, Result);
+    Inc(FCount);
   end;
 end;
 
@@ -273,10 +285,12 @@ var
 begin
   FLock.Acquire;
   try
+    { stability: finalize strings via nil, reset count before bucket wipe }
     FKeys := nil;
     FValues := nil;
     FHashes := nil;
     FNext := nil;
+    FCount := 0;
     for LI := 0 to High(FBuckets) do
       FBuckets[LI] := -1;
   finally
@@ -288,7 +302,7 @@ function TKeyedCounter.KeyCount: Integer;
 begin
   FLock.Acquire;
   try
-    Result := Length(FKeys);
+    Result := FCount;
   finally
     FLock.Release;
   end;

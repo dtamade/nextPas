@@ -36,7 +36,6 @@ DateUtils|nextpas.core.git.libgit2.pas
 DateUtils|nextpas.core.tui.widget.calendar.pas
 #|
 # BaseUnix: 11 files|
-BaseUnix|nextpas.core.io.uring.pas
 BaseUnix|nextpas.core.platform.crash.pas
 BaseUnix|nextpas.core.simd.cpuinfo.darwin.pas
 BaseUnix|nextpas.core.tui.clipboard.pas
