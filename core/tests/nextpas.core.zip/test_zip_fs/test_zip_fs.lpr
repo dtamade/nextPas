@@ -484,6 +484,60 @@ begin
   end;
 end;
 
+procedure TestAtomicPermissionRestore;
+var
+  LRoot, LDst: string;
+  LZip: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+begin
+  LRoot := NewCaseDir('aperm');
+  LDst := NewCaseDir('apermdst');
+  RemoveAll(LDst);
+  try
+    MkdirAll(LRoot + '/d', PermDirDefault);
+    WriteFileText(LRoot + '/d/f.txt', 'x');
+    Chmod(LRoot + '/d/f.txt', TFilePermission(&640));
+    Chmod(LRoot + '/d', TFilePermission(&750));
+    LZip := ZipPackDir(LRoot);
+    LR := NewZipReader(LZip);
+    LI := LR.Find('d/f.txt');
+    Check(LI >= 0, 'atomic perm packed file present');
+    ZipExtractToDirAtomic(LZip, LDst);
+    Check(Word(Stat(LDst + '/d/f.txt').Permission) and &777 = &640, 'atomic file perm restored');
+    Check(Word(Stat(LDst + '/d').Permission) and &777 = &750, 'atomic dir perm restored');
+  finally
+    RemoveAll(LRoot);
+    RemoveAll(LDst);
+  end;
+end;
+
+procedure TestAtomicSymlinkPolicy;
+var
+  LDir, LDst: string;
+  LRaw: TBytes;
+  LOpts: TZipExtractOptions;
+begin
+  LDir := NewCaseDir('alnk');
+  LDst := NewCaseDir('alnkdst');
+  RemoveAll(LDst);
+  try
+    RunPy(C_PY_LINK, LDir + '/l.zip', '');
+    LRaw := ReadFile(LDir + '/l.zip');
+    ZipExtractToDirAtomic(LRaw, LDst);
+    Check(not FileExists(LDst + '/lnk'), 'atomic symlink skipped by default');
+    Check(ReadFileText(LDst + '/real.txt') = 'target', 'atomic regular sibling extracted');
+    RemoveAll(LDst);
+    LOpts := DefaultZipExtractOptions;
+    LOpts.SkipSymlinks := False;
+    ZipExtractToDirAtomicWithOptions(LRaw, LDst, LOpts);
+    Check(SameBytes(ReadFile(LDst + '/lnk'), BytesOfStr('target')), 'atomic opt-in creates symlink');
+  finally
+    RemoveAll(LDir);
+    RemoveAll(LDst);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.fs');
   T.Test('Pack extract roundtrip', @TestPackExtractRoundtrip);
@@ -496,5 +550,7 @@ begin
   T.Test('Atomic extract roundtrip', @TestAtomicExtractRoundtrip);
   T.Test('Atomic refuses existing', @TestAtomicRefusesExisting);
   T.Test('Atomic bomb cleanup', @TestAtomicBombCleanup);
+  T.Test('Atomic permission restore', @TestAtomicPermissionRestore);
+  T.Test('Atomic symlink policy', @TestAtomicSymlinkPolicy);
   if not T.Run then Halt(1);
 end.

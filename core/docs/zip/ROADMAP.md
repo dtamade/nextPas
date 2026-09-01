@@ -153,6 +153,9 @@
 ### S73 — 稳定性纵深（1.0.1 巡检）· 稳定性 — 已落地
 - `zip.fs` 原子落盘后二次校验：`Rename/CopyTree` 成功后 `IsSymlink(LDestTrim)` 非穿透 + `EnsureNoSymlinkInPath(LDestTrim)`，收口 `Rename→IsSymlink` 竞态窗口
 
+### S74 — 完整性收口（1.0.1 巡检）· 完整性/稳定性 — 已落地
+- `test_zip_fs` 10→12 门：新增 `Atomic permission restore` 与 `Atomic symlink policy`，原子路径 `RestoreMode/SkipSymlinks/MaxTotal` 透传与非原子对等，`HEAPTRC OK`
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
