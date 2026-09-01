@@ -2,7 +2,10 @@ unit nextpas.core.git.libgit2.binding;
 {** @desc libgit2 运行时加载层：通过 platform.dl 动态绑定 FFI 符号。
        职责：仅做 dlopen/dlsym 与符号转发，不定义类型词汇；类型词汇
        复用 nextpas.core.git.libgit2.base → nextpas.core.git.libgit2.ffi，
-       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi 分工）。 *}
+       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi 分工）。
+       单一 FFI 缝隙：本单元唯一绑定缝隙为 platform.dl 运行时加载，无
+       external LIBGIT2_LIB 静态链路（静态链路由 bindings.* via external 'c' 承担），
+       inline 零拷贝经 bytes.ops 单源，资源释放经 critical section + try..finally 不丢。 *}
 
 {$I nextpas.core.settings.inc}
 // acq:allow-style-file
@@ -227,7 +230,9 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.platform.dl,
-  nextpas.core.platform.env;
+  nextpas.core.platform.env,
+  nextpas.core.bytes.ops,
+  nextpas.core.git.libgit2.base;
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
@@ -249,15 +254,15 @@ begin
     Result := nil;
 end;
 
-// Inline zero-copy OID helpers (performance: Move/CompareMem, no allocation)
+// Inline zero-copy OID helpers (perf: SpanCopy/SpanEqual via bytes.ops single source, 20 bytes -> 3x QWord, no heap)
 procedure BindingCopyOid(out Dst: git_oid; const Src: git_oid); inline;
 begin
-  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
 end;
 
 function BindingOidEquals(const A, B: git_oid): Boolean; inline;
 begin
-  Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
+  Result := SpanEqual(TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@B.id[0], GIT_OID_RAWSZ));
 end;
 
 const
@@ -407,151 +412,6 @@ type
   TLibGit2_git_worktree_prune_options_init = function(
     opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
   TLibGit2_git_worktree_free = procedure(wt: git_worktree); cdecl;
-
-function static_git_repository_discover(out out_buf: git_buf; const start_path: PChar; across_fs: cint; const ceiling_dirs: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_discover';
-function static_git_repository_head(out head_ref: git_reference; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_head';
-function static_git_repository_is_bare(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_is_bare';
-function static_git_repository_is_empty(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_is_empty';
-function static_git_repository_path(repo: git_repository): PChar; cdecl; external LIBGIT2_LIB name 'git_repository_path';
-function static_git_repository_workdir(repo: git_repository): PChar; cdecl; external LIBGIT2_LIB name 'git_repository_workdir';
-function static_git_repository_set_head(repo: git_repository; const refname: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_set_head';
-function static_git_repository_set_head_detached(repo: git_repository; const commitish: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_repository_set_head_detached';
-function static_git_repository_head_unborn(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_head_unborn';
-procedure static_git_repository_free(repo: git_repository); cdecl; external LIBGIT2_LIB name 'git_repository_free';
-function static_git_clone(out repo: git_repository; const url: PChar; const local_path: PChar; const options: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_clone';
-function static_git_remote_lookup(out remote: git_remote; repo: git_repository; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_remote_lookup';
-function static_git_remote_fetch(remote: git_remote; const refspecs: Pointer; const opts: Pointer; const reflog_message: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_remote_fetch';
-function static_git_remote_push(remote: git_remote; const refspecs: Pgit_strarray; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_remote_push';
-function static_git_remote_list(out out_list: git_strarray; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_remote_list';
-function static_git_remote_url(remote: git_remote): PChar; cdecl; external LIBGIT2_LIB name 'git_remote_url';
-function static_git_remote_name(remote: git_remote): PChar; cdecl; external LIBGIT2_LIB name 'git_remote_name';
-procedure static_git_remote_free(remote: git_remote); cdecl; external LIBGIT2_LIB name 'git_remote_free';
-function static_git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_reference_lookup';
-function static_git_reference_name(ref: git_reference): PChar; cdecl; external LIBGIT2_LIB name 'git_reference_name';
-function static_git_reference_target(ref: git_reference): Pgit_oid; cdecl; external LIBGIT2_LIB name 'git_reference_target';
-function static_git_reference_symbolic_target(ref: git_reference): PChar; cdecl; external LIBGIT2_LIB name 'git_reference_symbolic_target';
-function static_git_reference_type(ref: git_reference): git_reference_t; cdecl; external LIBGIT2_LIB name 'git_reference_type';
-function static_git_reference_set_target(out out_ref: git_reference; ref: git_reference; const id: Pgit_oid; const log_message: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_reference_set_target';
-procedure static_git_reference_free(ref: git_reference); cdecl; external LIBGIT2_LIB name 'git_reference_free';
-function static_git_graph_ahead_behind(out ahead: csize_t; out behind: csize_t; repo: git_repository;
-  const local: Pgit_oid; const upstream: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_graph_ahead_behind';
-function static_git_merge_commits(out out_index: git_index; repo: git_repository; our_commit: git_commit; their_commit: git_commit;
-  const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_merge_commits';
-function static_git_branch_create(out ref_out: git_reference; repo: git_repository; const branch_name: PChar; target: git_commit; force: cint): cint; cdecl; external LIBGIT2_LIB name 'git_branch_create';
-function static_git_branch_delete(branch: git_reference): cint; cdecl; external LIBGIT2_LIB name 'git_branch_delete';
-function static_git_branch_iterator_new(out iter: git_branch_iterator; repo: git_repository; list_flags: git_branch_t): cint; cdecl; external LIBGIT2_LIB name 'git_branch_iterator_new';
-function static_git_branch_next(out ref_out: git_reference; out branch_type: git_branch_t; iter: git_branch_iterator): cint; cdecl; external LIBGIT2_LIB name 'git_branch_next';
-procedure static_git_branch_iterator_free(iter: git_branch_iterator); cdecl; external LIBGIT2_LIB name 'git_branch_iterator_free';
-function static_git_object_lookup(out obj: git_object; repo: git_repository; const id: Pgit_oid; obj_type: git_object_t): cint; cdecl; external LIBGIT2_LIB name 'git_object_lookup';
-function static_git_object_id(obj: git_object): Pgit_oid; cdecl; external LIBGIT2_LIB name 'git_object_id';
-function static_git_object_type(obj: git_object): git_object_t; cdecl; external LIBGIT2_LIB name 'git_object_type';
-function static_git_object_peel(out peeled: git_object; obj: git_object; target_type: git_object_t): cint; cdecl; external LIBGIT2_LIB name 'git_object_peel';
-procedure static_git_object_free(obj: git_object); cdecl; external LIBGIT2_LIB name 'git_object_free';
-function static_git_tree_lookup(out tree: git_tree; repo: git_repository; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_tree_lookup';
-procedure static_git_tree_free(tree: git_tree); cdecl; external LIBGIT2_LIB name 'git_tree_free';
-procedure static_git_commit_free(commit: git_commit); cdecl; external LIBGIT2_LIB name 'git_commit_free';
-function static_git_commit_lookup(out commit: git_commit; repo: git_repository; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_commit_lookup';
-function static_git_commit_message(commit: git_commit): PChar; cdecl; external LIBGIT2_LIB name 'git_commit_message';
-function static_git_commit_author(commit: git_commit): Pgit_signature_t; cdecl; external LIBGIT2_LIB name 'git_commit_author';
-function static_git_commit_committer(commit: git_commit): Pgit_signature_t; cdecl; external LIBGIT2_LIB name 'git_commit_committer';
-function static_git_commit_time(commit: git_commit): git_time_t; cdecl; external LIBGIT2_LIB name 'git_commit_time';
-function static_git_commit_parentcount(commit: git_commit): cuint; cdecl; external LIBGIT2_LIB name 'git_commit_parentcount';
-function static_git_commit_tree(out tree: git_tree; commit: git_commit): cint; cdecl; external LIBGIT2_LIB name 'git_commit_tree';
-function static_git_commit_create(out id: git_oid; repo: git_repository; const update_ref: PChar;
-  author: git_signature; committer: git_signature; const message_encoding: PChar; const message: PChar;
-  tree: git_tree; parent_count: csize_t; const parents: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_commit_create';
-function static_git_oid_fromstr(out id: git_oid; const str: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_oid_fromstr';
-function static_git_oid_tostr(out str: PChar; size: csize_t; const id: Pgit_oid): PChar; cdecl; external LIBGIT2_LIB name 'git_oid_tostr';
-function static_git_revparse_single(out obj: git_object; repo: git_repository; const spec: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_revparse_single';
-function static_git_commit_parent(out parent: git_commit; commit: git_commit; n: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_commit_parent';
-function static_git_diff_tree_to_tree(out diff: git_diff; repo: git_repository; old_tree: git_tree; new_tree: git_tree; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_diff_tree_to_tree';
-function static_git_diff_tree_to_workdir_with_index(out diff: git_diff; repo: git_repository; old_tree: git_tree; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_diff_tree_to_workdir_with_index';
-function static_git_diff_num_deltas(diff: git_diff): csize_t; cdecl; external LIBGIT2_LIB name 'git_diff_num_deltas';
-function static_git_diff_get_delta(diff: git_diff; idx: csize_t): Pgit_diff_delta_t; cdecl; external LIBGIT2_LIB name 'git_diff_get_delta';
-procedure static_git_diff_free(diff: git_diff); cdecl; external LIBGIT2_LIB name 'git_diff_free';
-function static_git_patch_from_diff(out patch: git_patch; diff: git_diff; idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_from_diff';
-function static_git_patch_num_hunks(patch: git_patch): csize_t; cdecl; external LIBGIT2_LIB name 'git_patch_num_hunks';
-function static_git_patch_get_hunk(out hunk: Pgit_diff_hunk; out lines_in_hunk: csize_t; patch: git_patch; hunk_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_hunk';
-function static_git_patch_get_line_in_hunk(out line: Pgit_diff_line; patch: git_patch; hunk_idx: csize_t; line_idx: csize_t): cint; cdecl; external LIBGIT2_LIB name 'git_patch_get_line_in_hunk';
-procedure static_git_patch_free(patch: git_patch); cdecl; external LIBGIT2_LIB name 'git_patch_free';
-function static_git_revwalk_new(out walk: git_revwalk; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_new';
-function static_git_revwalk_push_head(walk: git_revwalk): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_push_head';
-function static_git_revwalk_push(walk: git_revwalk; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_push';
-function static_git_revwalk_next(out out_oid: git_oid; walk: git_revwalk): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_next';
-function static_git_revwalk_sorting(walk: git_revwalk; sort_mode: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_revwalk_sorting';
-procedure static_git_revwalk_free(walk: git_revwalk); cdecl; external LIBGIT2_LIB name 'git_revwalk_free';
-function static_git_blame_file(out blame: git_blame; repo: git_repository; const path: PChar; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_blame_file';
-function static_git_blame_get_hunk_count(blame: git_blame): cuint; cdecl; external LIBGIT2_LIB name 'git_blame_get_hunk_count';
-function static_git_blame_get_hunk_byindex(blame: git_blame; index: cuint): Pgit_blame_hunk; cdecl; external LIBGIT2_LIB name 'git_blame_get_hunk_byindex';
-procedure static_git_blame_free(blame: git_blame); cdecl; external LIBGIT2_LIB name 'git_blame_free';
-function static_git_oid_fmt(out str: PChar; const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_fmt';
-function static_git_oid_cmp(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_cmp';
-function static_git_oid_equal(const a: Pgit_oid; const b: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_equal';
-function static_git_oid_iszero(const id: Pgit_oid): cint; cdecl; external LIBGIT2_LIB name 'git_oid_iszero';
-function static_git_error_last: Pgit_error_t; cdecl; external LIBGIT2_LIB name 'git_error_last';
-procedure static_git_error_clear; cdecl; external LIBGIT2_LIB name 'git_error_clear';
-function static_git_error_set_str(error_class: cint; const str: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_error_set_str';
-function static_git_status_list_new(out status_list: git_status_list; repo: git_repository; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_status_list_new';
-function static_git_status_list_entrycount(status_list: git_status_list): csize_t; cdecl; external LIBGIT2_LIB name 'git_status_list_entrycount';
-  function static_git_status_foreach(repo: git_repository; cb: git_status_cb; payload: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_status_foreach';
-procedure static_git_status_list_free(status_list: git_status_list); cdecl; external LIBGIT2_LIB name 'git_status_list_free';
-function static_git_repository_index(out index: git_index; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_index';
-function static_git_index_add_bypath(index: git_index; const path: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_index_add_bypath';
-function static_git_index_add_all(index: git_index; const pathspec: Pgit_strarray; flags: cuint; callback: git_index_matched_path_cb; payload: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_index_add_all';
-function static_git_index_remove_bypath(index: git_index; const path: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_index_remove_bypath';
-function static_git_index_update_all(index: git_index; const pathspec: Pgit_strarray; callback: git_index_matched_path_cb; payload: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_index_update_all';
-function static_git_index_write(index: git_index): cint; cdecl; external LIBGIT2_LIB name 'git_index_write';
-function static_git_index_read_tree(index: git_index; tree: git_tree): cint; cdecl; external LIBGIT2_LIB name 'git_index_read_tree';
-function static_git_index_write_tree(out id: git_oid; index: git_index): cint; cdecl; external LIBGIT2_LIB name 'git_index_write_tree';
-function static_git_index_write_tree_to(out id: git_oid; index: git_index; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_index_write_tree_to';
-function static_git_index_has_conflicts(index: git_index): cint; cdecl; external LIBGIT2_LIB name 'git_index_has_conflicts';
-  function static_git_checkout_head(repo: git_repository; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_checkout_head';
-  function static_git_checkout_tree(repo: git_repository; tree: git_object; const opts: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_checkout_tree';
-procedure static_git_index_free(index: git_index); cdecl; external LIBGIT2_LIB name 'git_index_free';
-function static_git_repository_config(out cfg: git_config; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_config';
-function static_git_config_open_default(out cfg: git_config): cint; cdecl; external LIBGIT2_LIB name 'git_config_open_default';
-function static_git_config_get_string(out out_value: PChar; cfg: git_config; const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_config_get_string';
-function static_git_config_set_string(cfg: git_config; const name: PChar; const value: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_config_set_string';
-procedure static_git_config_free(cfg: git_config); cdecl; external LIBGIT2_LIB name 'git_config_free';
-function static_git_config_iterator_new(out iter: git_config_iterator; cfg: git_config): cint; cdecl; external LIBGIT2_LIB name 'git_config_iterator_new';
-function static_git_config_next(out entry: Pgit_config_entry; iter: git_config_iterator): cint; cdecl; external LIBGIT2_LIB name 'git_config_next';
-procedure static_git_config_entry_free(entry: Pgit_config_entry); cdecl; external LIBGIT2_LIB name 'git_config_entry_free';
-procedure static_git_config_iterator_free(iter: git_config_iterator); cdecl; external LIBGIT2_LIB name 'git_config_iterator_free';
-function static_git_remote_init_callbacks(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_remote_init_callbacks';
-function static_git_fetch_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_fetch_options_init';
-function static_git_push_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_push_options_init';
-function static_git_proxy_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_proxy_options_init';
-function static_git_clone_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_clone_options_init';
-function static_git_checkout_options_init(opts: Pointer; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_checkout_options_init';
-function static_git_credential_default_new(out cred: Pointer): cint; cdecl; external LIBGIT2_LIB name 'git_credential_default_new';
-function static_git_credential_userpass_plaintext_new(out cred: Pointer; const username, password: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_credential_userpass_plaintext_new';
-function static_git_credential_username_new(out cred: Pointer; const username: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_credential_username_new';
-function static_git_credential_ssh_key_from_agent(out cred: Pointer; const username: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_credential_ssh_key_from_agent';
-function static_git_signature_new(out sig: git_signature; const name: PChar; const email: PChar; time: git_time_t; offset: cint): cint; cdecl; external LIBGIT2_LIB name 'git_signature_new';
-function static_git_signature_now(out sig: git_signature; const name: PChar; const email: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_signature_now';
-procedure static_git_signature_free(sig: git_signature); cdecl; external LIBGIT2_LIB name 'git_signature_free';
-procedure static_git_strarray_free(arr: Pgit_strarray); cdecl; external LIBGIT2_LIB name 'git_strarray_free';
-procedure static_git_buf_dispose(buffer: Pgit_buf); cdecl; external LIBGIT2_LIB name 'git_buf_dispose';
-
-function static_git_worktree_add(out wt: git_worktree; repo: git_repository;
-  const name: PChar; const path: PChar;
-  const opts: Pgit_worktree_add_options): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_add';
-function static_git_worktree_lookup(out wt: git_worktree; repo: git_repository;
-  const name: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_lookup';
-function static_git_worktree_list(out list: git_strarray;
-  repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_list';
-function static_git_worktree_name(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_name';
-function static_git_worktree_path(wt: git_worktree): PChar; cdecl; external LIBGIT2_LIB name 'git_worktree_path';
-function static_git_worktree_is_locked(reason: Pgit_buf; wt: git_worktree): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_is_locked';
-function static_git_worktree_prune(wt: git_worktree;
-  const opts: Pgit_worktree_prune_options): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_prune';
-function static_git_worktree_add_options_init(
-  opts: Pgit_worktree_add_options; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_add_options_init';
-function static_git_worktree_prune_options_init(
-  opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_worktree_prune_options_init';
-procedure static_git_worktree_free(wt: git_worktree); cdecl; external LIBGIT2_LIB name 'git_worktree_free';
-
-
 
 var
   GLibGit2Handle: TPlatformLibrary;

@@ -136,8 +136,9 @@ begin
     end;
   if Sp <= 0 then
     raise EGitError.Create('corrupt loose object header');
-  SetLength(HeadText, Nul);
-  Move(Plain[0], HeadText[1], Nul);
+  // single source: bytes.ops.BytesSliceToString (inline, zero-copy slice view + single Move via PByte/PChar, no scattered Move)
+  // perf: inline single SetLength+Move, zero-copy TByteSpan view, no manual Move risk
+  HeadText := BytesSliceToString(Plain, 0, SizeUInt(Nul));
   // Sp is the 0-based index of the space inside the header text
   KindName := Copy(HeadText, 1, Sp);
   SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
@@ -193,8 +194,9 @@ begin
     end;
   if Sp <= 0 then
     raise EGitError.Create('corrupt loose object header');
-  SetLength(HeadText, Nul);
-  Move(Plain[0], HeadText[1], Nul);
+  // single source: bytes.ops.BytesSliceToString (inline, zero-copy slice view + single Move, no scattered Move)
+  // perf: inline single SetLength+Move, zero-copy TByteSpan view, no manual Move risk
+  HeadText := BytesSliceToString(Plain, 0, SizeUInt(Nul));
   KindName := Copy(HeadText, 1, Sp);
   SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
   Declared := StrToInt64Def(SizeText, -1);

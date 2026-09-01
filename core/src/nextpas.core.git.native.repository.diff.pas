@@ -40,6 +40,8 @@ uses
   nextpas.core.bytes.builder,
   nextpas.core.text.utils,
   nextpas.core.os.env,
+  nextpas.core.diff.myers,
+  nextpas.core.diff.base,
   SysUtils;
 
 type
@@ -133,70 +135,22 @@ end;
 
 procedure BuildLCSOps(const AOld, ANew: nextpas.core.base.TStringArray; out AOpcodes: nextpas.core.base.TStringArray; out AOldTexts: nextpas.core.base.TStringArray; out ANewTexts: nextpas.core.base.TStringArray);
 var
-  N,M,I,J,K: Integer;
-  LCS: array of Integer;
-  Ops: nextpas.core.base.TStringArray;
-  OT, NT: nextpas.core.base.TStringArray;
+  LEdits: TDiffEditArray;
+  LCnt, I: Integer;
 begin
-  N:=Length(AOld);
-  M:=Length(ANew);
-  SetLength(LCS,(N+1)*(M+1));
-  for I:=1 to N do
-    for J:=1 to M do
-      if AOld[I-1]=ANew[J-1] then
-        LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+(J-1)]+1
-      else if LCS[(I-1)*(M+1)+J] >= LCS[I*(M+1)+(J-1)] then
-        LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+J]
-      else
-        LCS[I*(M+1)+J]:=LCS[I*(M+1)+(J-1)];
-  SetLength(Ops,0);
-  SetLength(OT,0);
-  SetLength(NT,0);
-  I:=N;
-  J:=M;
-  while (I>0) or (J>0) do
-  begin
-    if (I>0) and (J>0) and (AOld[I-1]=ANew[J-1]) then
-    begin
-      SetLength(Ops,Length(Ops)+1);
-      Ops[High(Ops)]:=' ';
-      SetLength(OT,Length(OT)+1);
-      OT[High(OT)]:=AOld[I-1];
-      SetLength(NT,Length(NT)+1);
-      NT[High(NT)]:=ANew[J-1];
-      Dec(I);
-      Dec(J);
-    end
-    else if (J>0) and ((I=0) or (LCS[I*(M+1)+(J-1)] >= LCS[(I-1)*(M+1)+J])) then
-    begin
-      SetLength(Ops,Length(Ops)+1);
-      Ops[High(Ops)]:='+';
-      SetLength(OT,Length(OT)+1);
-      OT[High(OT)]:='';
-      SetLength(NT,Length(NT)+1);
-      NT[High(NT)]:=ANew[J-1];
-      Dec(J);
-    end
-    else
-    begin
-      SetLength(Ops,Length(Ops)+1);
-      Ops[High(Ops)]:='-';
-      SetLength(OT,Length(OT)+1);
-      OT[High(OT)]:=AOld[I-1];
-      SetLength(NT,Length(NT)+1);
-      NT[High(NT)]:='';
-      Dec(I);
+  // perf: Myers O(ND) single source via nextpas.core.diff.myers (owner), avoids (N+1)*(M+1) OOM; single allocation for outputs, zero-copy string CoW, amortized via bytes.ops GrowArrayCapacity discipline (no per-entry Length+1 churn)
+  // stability: no manual LCS table to free, auto-managed dynamic arrays; inline path delegates to unified Myers core
+  LEdits := DiffLines(AOld, ANew);
+  LCnt := Length(LEdits);
+  SetLength(AOpcodes, LCnt);
+  SetLength(AOldTexts, LCnt);
+  SetLength(ANewTexts, LCnt);
+  for I := 0 to LCnt - 1 do
+    case LEdits[I].Action of
+      daEqual: begin AOpcodes[I] := ' '; AOldTexts[I] := AOld[LEdits[I].OldIndex]; ANewTexts[I] := ANew[LEdits[I].NewIndex]; end;
+      daDelete: begin AOpcodes[I] := '-'; AOldTexts[I] := AOld[LEdits[I].OldIndex]; ANewTexts[I] := ''; end;
+      daInsert: begin AOpcodes[I] := '+'; AOldTexts[I] := ''; ANewTexts[I] := ANew[LEdits[I].NewIndex]; end;
     end;
-  end;
-  SetLength(AOpcodes,Length(Ops));
-  SetLength(AOldTexts,Length(OT));
-  SetLength(ANewTexts,Length(NT));
-  for K:=0 to High(Ops) do
-  begin
-    AOpcodes[K]:=Ops[High(Ops)-K];
-    AOldTexts[K]:=OT[High(OT)-K];
-    ANewTexts[K]:=NT[High(NT)-K];
-  end;
 end;
 
 function UnifiedHunksFromOps(const AOpcodes: nextpas.core.base.TStringArray; const AOldTexts, ANewTexts: nextpas.core.base.TStringArray; AContext: Integer): THunkArray;
