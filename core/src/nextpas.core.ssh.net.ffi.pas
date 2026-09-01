@@ -12,6 +12,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
   nextpas.core.net.async.tcp,
+  nextpas.core.net.async.dial,
   nextpas.core.async.loop,
   nextpas.core.ssh.intf;
 
@@ -21,14 +22,18 @@ type
     function DialAgent(const APath: string): IReadWriteCloser; inline;
   end;
 
-  // async 单缝隙 re-export：net.async.tcp 唯一拉取点收口于此 ffi，零额外抽象
+  // async 单缝隙 re-export：net.async.tcp/dial 唯一拉取点收口于此 ffi，零额外抽象 inline 零拷贝转发
   IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
   IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
+  TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
 
 function SshDefaultDialer: ISshDialer; inline;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;
 function SshAsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
 function SshAsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
+function SshDefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
+function SshAsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16; const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback; AContext: Pointer = nil): Boolean; inline;
 
 implementation
 
@@ -63,6 +68,16 @@ end;
 function SshAsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
 begin
   Result := nextpas.core.net.async.tcp.AsyncTcpConnect(ALoop, AAddr, APort);
+end;
+
+function SshDefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
+begin
+  Result := nextpas.core.net.async.dial.DefaultAsyncTcpDialOptions;
+end;
+
+function SshAsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16; const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback; AContext: Pointer): Boolean; inline;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDial(ALoop, AHost, APort, AOptions, ACallback, AContext);
 end;
 
 end.

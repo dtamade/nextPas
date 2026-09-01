@@ -95,8 +95,12 @@ nextpas.core.ssh.session.builder.pas ← Fluent Builder（`ISshClientBuilder` + 
 nextpas.core.ssh.proxyjump.pas       ← 同步 ProxyJump（`TProxyJumpSession` 委托 + `direct-tcpip` + `SshSessionOpenDirectTcpip` 单源，`inline` 委托，`try-finally` 不泄漏）
 nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义，`transport.async` 已单缝隙，`session.async/proxyjump.async` 待收口）
 nextpas.core.ssh.proxyjump.async.pas ← 异步 ProxyJump（`TAsyncChannelStream` 无轮询 + `Keeper` 保活 + `TryFlushQueued 5ms` 重试）
-nextpas.core.ssh.sftp.base.pas       ← SFTP 共享基座（`SftpStatusName` 单源，`text.conv` 单源，`inline`）
-nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面，同步 `TSshChannelWire` 零拷贝偏移缓冲 + `SftpStatusName` 单源复用，`inline`/`PutRaw` 零分配分片）
+nextpas.core.ssh.sftp.base.pas       ← SFTP 共享基座（协议常量/属性载体/`SftpStatusName` 单源，`text.conv` 单源）
+nextpas.core.ssh.sftp.intf.pas       ← SFTP 缝隙接口（`ISftpWire/ISshFileSystem`，隔离通道与文件语义）
+nextpas.core.ssh.sftp.wire.pas       ← SFTP 通道线材（`TSshChannelWire` 4B 重组，容量倍增+偏移零拷贝，`inline/bytes.ops` 单源）
+nextpas.core.ssh.sftp.conn.pas       ← SFTP 连接状态机（`TSftpConnection` INIT/VERSION+RoundTrip，`PutAttrs/ReadAttrs` 单源）
+nextpas.core.ssh.sftp.fs.pas         ← SFTP 文件系统实现（`TSshFileSystem` RealPath/Stat/ListDir/ReadFile/WriteFile 等；ReadFile `IBytesBuilder` 倍增、ListDir 容量倍增）
+nextpas.core.ssh.sftp.pas            ← SFTP v3 门面（纯 re-export，常量/类型/接口与 `SftpOpen*` 入口，`inline` 转发，无逻辑）
 nextpas.core.ssh.sftp.async.pas      ← SFTP v3 异步（`ISshAsyncFileSystem`，`TAsyncLoop+TAsyncSshTransport`，`PostEx` 投递，`SftpRoundTripAsync` + 窗口 + 4B 重组，复用 `sftp.base` 单源）
 ```
 

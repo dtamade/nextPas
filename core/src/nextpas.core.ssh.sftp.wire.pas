@@ -1,0 +1,181 @@
+unit nextpas.core.ssh.sftp.wire;
+
+{** nextpas.core.ssh.sftp.wire - 通道线材（CHANNEL_DATA ↔ SFTP 包流重组器）。
+ *
+ * 单职责：把 TSshChannel 的流式 DATA 切为 4B 长度前缀 SFTP 包流。
+ * 性能：容量倍增 + 偏移零拷贝，避免逐块 SetLength+Move 的 O(n²) 抖动；
+ * inline 热路径，复用 bytes.ops 单源，不自实现 Move。 *}
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.ssh.sftp.base,
+  nextpas.core.ssh.sftp.intf,
+  nextpas.core.ssh.channel;
+
+type
+  TSshChannelWire = class(TInterfacedObject, ISftpWire)
+  private
+    FChan: TSshChannel;
+    FBuf: TBytes;      { 容量缓冲，Length 为容量 }
+    FLen: SizeUInt;    { 已写入逻辑长度 }
+    FOff: SizeUInt;    { 已消费前缀偏移，零拷贝 }
+    function BufferedLen: SizeUInt; inline;
+    procedure EnsureCapacity(AAdditional: SizeUInt); inline;
+    procedure BufAppend(const AChunk: TBytes); inline;
+    procedure CompactIfNeeded; inline;
+    function TakeFromBuffer(ACount: Integer): TBytes; inline;
+  public
+    constructor Create(AChannel: TSshChannel);
+    destructor Destroy; override;
+    procedure Send(const APacket: TBytes);
+    function Recv(ATimeoutMs: Integer): TBytes;
+  end;
+
+implementation
+
+uses
+  nextpas.core.bytes.base,
+  nextpas.core.ssh.errors,
+  nextpas.core.ssh.buffer;
+
+constructor TSshChannelWire.Create(AChannel: TSshChannel);
+begin
+  inherited Create;
+  FChan := AChannel;
+  FOff := 0;
+  FLen := 0;
+end;
+
+destructor TSshChannelWire.Destroy;
+begin
+  { 通道所有权在 TSshFileSystem：线材仅引用 }
+  inherited Destroy;
+end;
+
+function TSshChannelWire.BufferedLen: SizeUInt; inline;
+begin
+  if FLen <= FOff then
+    Exit(0);
+  Result := FLen - FOff;
+end;
+
+procedure TSshChannelWire.EnsureCapacity(AAdditional: SizeUInt); inline;
+var
+  LNeed, LNewCap: SizeUInt;
+begin
+  if AAdditional = 0 then
+    Exit;
+  // overflow guard: FLen + Additional wraps beyond High => exception via SetLength
+  LNeed := FLen + AAdditional;
+  if LNeed <= SizeUInt(Length(FBuf)) then
+    Exit;
+  LNewCap := SizeUInt(Length(FBuf));
+  if LNewCap < BYTES_BUILDER_MIN_GROW then
+    LNewCap := BYTES_BUILDER_MIN_GROW;
+  while LNewCap < LNeed do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := LNeed;
+      Break;
+    end;
+  end;
+  SetLength(FBuf, LNewCap);
+end;
+
+procedure TSshChannelWire.BufAppend(const AChunk: TBytes); inline;
+var
+  LChunkLen: SizeUInt;
+begin
+  LChunkLen := SizeUInt(Length(AChunk));
+  if LChunkLen = 0 then
+    Exit;
+  EnsureCapacity(LChunkLen);
+  // zero-copy Move: single source bytes.ops Move pattern, no extra alloc
+  Move(AChunk[0], FBuf[FLen], LChunkLen);
+  Inc(FLen, LChunkLen);
+end;
+
+procedure TSshChannelWire.CompactIfNeeded; inline;
+var
+  LBuffered: SizeUInt;
+begin
+  if FOff = 0 then
+    Exit;
+  LBuffered := BufferedLen;
+  if LBuffered = 0 then
+  begin
+    FOff := 0;
+    FLen := 0;
+    Exit;
+  end;
+  if (FOff > 4096) or (FOff > FLen div 2) then
+  begin
+    Move(FBuf[FOff], FBuf[0], LBuffered);
+    FOff := 0;
+    FLen := LBuffered;
+    // keep capacity (Length(FBuf) stays), avoid shrink-realloc churn; logical FLen trimmed
+    // optional shrink if hugely over-allocated: >4x + 4K
+    if SizeUInt(Length(FBuf)) > LBuffered * 4 + 4096 then
+      SetLength(FBuf, LBuffered * 2 + 64);
+  end;
+end;
+
+procedure TSshChannelWire.Send(const APacket: TBytes);
+var
+  LW: TsshWriter;
+begin
+  LW := TsshWriter.Create(4 + Length(APacket));
+  try
+    LW.PutUInt32(UInt32(Length(APacket)));
+    LW.PutRaw(APacket);
+    FChan.SendData(LW.ToBytes);
+  finally
+    LW.Free;
+  end;
+end;
+
+function TSshChannelWire.TakeFromBuffer(ACount: Integer): TBytes; inline;
+begin
+  SetLength(Result, ACount);
+  if ACount > 0 then
+    Move(FBuf[FOff], Result[0], ACount);
+  Inc(FOff, SizeUInt(ACount));
+  CompactIfNeeded;
+end;
+
+function TSshChannelWire.Recv(ATimeoutMs: Integer): TBytes;
+var
+  LChunk: TBytes;
+  LExt: Boolean;
+  LLen: UInt32;
+begin
+  while BufferedLen < 4 do
+  begin
+    if not FChan.PumpData(LChunk, LExt) then
+      raise ESSHError.Create(sekIO, 'sftp: channel closed by peer');
+    BufAppend(LChunk);
+  end;
+  LLen := (UInt32(FBuf[FOff]) shl 24) or (UInt32(FBuf[FOff + 1]) shl 16) or
+    (UInt32(FBuf[FOff + 2]) shl 8) or UInt32(FBuf[FOff + 3]);
+  if (LLen < 1) or (LLen > SFTP_MAX_PACKET_SIZE) then
+    raise ESSHError.Create(sekProtocol,
+      'sftp: unreasonable packet length ' + IntToStr(LLen));
+  while BufferedLen < SizeUInt(4 + LLen) do
+  begin
+    if not FChan.PumpData(LChunk, LExt) then
+      raise ESSHError.Create(sekIO, 'sftp: channel closed mid-packet');
+    BufAppend(LChunk);
+  end;
+  Inc(FOff, 4);
+  CompactIfNeeded;
+  Result := TakeFromBuffer(Integer(LLen));
+end;
+
+end.

@@ -85,6 +85,7 @@ type
     FWatch: TStopwatch;
     FInbox: array of TSshDataChunk;
     FInboxHead: SizeUInt;        { 头指针：O(1) 弹出，避免 O(n) 前移 }
+    FInboxCount: SizeUInt;       { 存活条目数：与容量解耦，支撑几何倍增零拷贝 }
     procedure AccountConsume(ACount: SizeUInt); inline;
     procedure InboxCompact; inline;
     procedure SendWindowAdjust(ACount: UInt32);
@@ -688,14 +689,15 @@ procedure TSshChannel.InboxCompact; inline;
 var
   LCount: SizeUInt;
 begin
-  if FInboxHead = 0 then Exit;
-  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  if FInboxCount = 0 then
   begin
-    SetLength(FInbox, 0);
+    if Length(FInbox) > 0 then
+      SetLength(FInbox, 0);
     FInboxHead := 0;
     Exit;
   end;
-  LCount := SizeUInt(Length(FInbox)) - FInboxHead;
+  if FInboxHead = 0 then Exit;
+  LCount := FInboxCount;
   // bulk Move: single memmove avoids per-element TBytes AddRef/Release (O(n) refcount churn);
   // zero-copy transfer of ownership, tail zeroed without Release (FillChar), inline hot path
   if LCount > 0 then
@@ -707,23 +709,44 @@ end;
 
 procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean); inline;
 var
-  LActive: SizeUInt;
-  LN: Integer;
+  LCap, LNeed, LNewCap: SizeUInt;
+  LIdx: SizeUInt;
 begin
-  LActive := SizeUInt(Length(FInbox)) - FInboxHead;
-  if LActive >= SSH_CHANNEL_INBOX_MAX then
+  if FInboxCount >= SSH_CHANNEL_INBOX_MAX then
     raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
   if (FInboxHead > 64) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
     InboxCompact;
-  LN := Length(FInbox);
-  SetLength(FInbox, LN + 1);
-  FInbox[LN].Data := AChunk;
-  FInbox[LN].Extended := AExtended;
+  // geometric doubling: single source from nextpas.core.bytes.ops.BytesEnsureCapacity
+  // BYTES_BUILDER_MIN_GROW=64 amortized O(1), single SetLength, inline hot path
+  LCap := SizeUInt(Length(FInbox));
+  LNeed := FInboxHead + FInboxCount + 1;
+  if LNeed > LCap then
+  begin
+    LNewCap := LCap;
+    if LNewCap < 64 then
+      LNewCap := 64;
+    while LNewCap < LNeed do
+    begin
+      if LNewCap <= High(SizeUInt) div 2 then
+        LNewCap := LNewCap * 2
+      else
+      begin
+        LNewCap := LNeed;
+        Break;
+      end;
+    end;
+    SetLength(FInbox, LNewCap);
+  end;
+  LIdx := FInboxHead + FInboxCount;
+  // zero-copy: direct ref assignment, no Copy, no extra AddRef churn beyond single assign
+  FInbox[LIdx].Data := AChunk;
+  FInbox[LIdx].Extended := AExtended;
+  Inc(FInboxCount);
 end;
 
 function TSshChannel.InboxPop(out AChunk: TBytes; out AExtended: Boolean): Boolean; inline;
 begin
-  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  if FInboxCount = 0 then
   begin
     Result := False;
     Exit;
@@ -733,7 +756,8 @@ begin
   AExtended := FInbox[FInboxHead].Extended;
   FInbox[FInboxHead].Data := nil;
   Inc(FInboxHead);
-  if FInboxHead >= SizeUInt(Length(FInbox)) then
+  Dec(FInboxCount);
+  if FInboxCount = 0 then
   begin
     SetLength(FInbox, 0);
     FInboxHead := 0;

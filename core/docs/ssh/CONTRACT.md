@@ -1,6 +1,6 @@
 # nextpas.core.ssh 代码契约
 
-**模块路径**: `core/src/nextpas.core.ssh*.pas`（27 个生产源文件；见 §1.1）
+**模块路径**: `core/src/nextpas.core.ssh*.pas`（31 个生产源文件；见 §1.1）
 **层级**: L2（与 `tls` 同层：面向字节流的协议实现；仅依赖 L0–L1 及 `crypto`/`hash`/`net` 已文档化 owner）
 **Owner**: `codex/core-ssh` / ssh lane（`.worktrees/ssh`）
 **最后更新**: 2026-09-02
@@ -49,8 +49,12 @@
 | `nextpas.core.ssh.proxyjump.pas` | 同步 ProxyJump（`TProxyJumpSession` 委托 + `SshSessionOpenDirectTcpip` 单源，`inline` 零拷贝） | impl |
 | `nextpas.core.ssh.session.async.pas` | 异步会话（`AsyncTcpDial(RFC8305)` + 状态机，复用 cipher/kex/hostkey/compress） | impl |
 | `nextpas.core.ssh.proxyjump.async.pas` | 异步 ProxyJump（`TAsyncChannelStream` 无轮询 + `Keeper` 保活） | impl |
-| `nextpas.core.ssh.sftp.base.pas` | SFTP 共享基座（`SftpStatusName` 单源，`text.conv` 单源） | base |
-| `nextpas.core.ssh.sftp.pas` | SFTP v3 客户端（`ISshFileSystem` 门面，同步 `TSshChannelWire` 零拷贝偏移缓冲，`inline`/`bytes.ops` 单源） | impl |
+| `nextpas.core.ssh.sftp.base.pas` | SFTP 共享基座（协议常量/属性载体/ `SftpStatusName` 单源，`text.conv` 单源） | base |
+| `nextpas.core.ssh.sftp.intf.pas` | SFTP 缝隙接口（`ISftpWire/ISshFileSystem`，隔离通道与文件语义） | intf |
+| `nextpas.core.ssh.sftp.wire.pas` | SFTP 通道线材（`TSshChannelWire` 4B 重组，容量倍增+偏移零拷贝，`inline/bytes.ops` 单源） | impl |
+| `nextpas.core.ssh.sftp.conn.pas` | SFTP 连接状态机（`TSftpConnection` INIT/VERSION+RoundTrip 迟滞跳过，`PutAttrs/ReadAttrs` 单源） | impl |
+| `nextpas.core.ssh.sftp.fs.pas` | SFTP 文件系统实现（`TSshFileSystem` RealPath/Stat/ListDir/ReadFile/WriteFile 等；ReadFile `IBytesBuilder` 倍增、ListDir 容量倍增） | impl |
+| `nextpas.core.ssh.sftp.pas` | SFTP v3 门面（纯 re-export，常量/类型/接口与 `SftpOpen*` 便捷入口，`inline` 转发，无逻辑） | 门面 |
 | `nextpas.core.ssh.sftp.async.pas` | SFTP v3 异步（`ISshAsyncFileSystem`，`SftpRoundTripAsync` + 窗口，复用 `sftp.base` 单源） | impl |
 
 依赖方向：`base ← errors/buffer ← cipher/kex/hostkey/keys/auth ← transport.core ← transport(+.async) ← channel/window/rekey/keepalive ← session.handshake/auth ← session/sftp/proxyjump ← 门面`；`base ← rekey/keepalive/window` 单向。

@@ -19,8 +19,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
-  nextpas.core.net.async.tcp,
-  nextpas.core.net.async.dial,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -434,7 +433,7 @@ begin
   FUserCtx := AContext;
 end;
 constructor TAsyncConnector.CreateWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer);
-begin inherited Create; FLoop:=ALoop; FProvidedStream:=AStream; FOptions:=AOptions; FDialOptions:=DefaultAsyncTcpDialOptions; FUserCb:=ACallback; FUserCtx:=AContext; end;
+begin inherited Create; FLoop:=ALoop; FProvidedStream:=AStream; FOptions:=AOptions; FDialOptions:=SshDefaultAsyncTcpDialOptions; FUserCb:=ACallback; FUserCtx:=AContext; end;
 procedure TAsyncConnector.StartWithStream;
 begin
   if FLoop=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil loop')); Exit; end;
@@ -482,7 +481,7 @@ begin
   if FLoop = nil then begin Fail(ESSHError.Create(sekProtocol, 'async connect: nil loop')); Exit; end;
   if FOptions.Host = '' then begin Fail(ESSHError.Create(sekProtocol, 'ssh connect: host is required')); Exit; end;
   if FOptions.User = '' then begin Fail(ESSHError.Create(sekProtocol, 'ssh connect: user is required')); Exit; end;
-  if not AsyncTcpDial(FLoop, FOptions.Host, FOptions.Port, FDialOptions, @SshAsyncDialCb, Self) then
+  if not SshAsyncTcpDial(FLoop, FOptions.Host, FOptions.Port, FDialOptions, @SshAsyncDialCb, Self) then
     Fail(ESSHError.Create(sekIO, 'ssh async dial: submit failed'));
 end;
 
@@ -927,7 +926,7 @@ end;
 function SshAsyncConnect(const ALoop: TAsyncLoop; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
 var Opts: TAsyncTcpDialOptions;
 begin
-  Opts := DefaultAsyncTcpDialOptions;
+  Opts := SshDefaultAsyncTcpDialOptions;
   if AOptions.ConnectTimeoutMs > 0 then
     Opts.OverallDeadline := TDeadline.After(TDuration.FromMilliseconds(AOptions.ConnectTimeoutMs));
   Result := SshAsyncConnect(ALoop, AOptions, Opts, ACallback, AContext);
@@ -1003,7 +1002,7 @@ constructor TAsyncClientBuilder.Create;
 begin
   inherited Create;
   FOptions := DefaultSshConnectOptions('');
-  FDialOptions := DefaultAsyncTcpDialOptions;
+  FDialOptions := SshDefaultAsyncTcpDialOptions;
   FHasDialOptions := False;
 end;
 
