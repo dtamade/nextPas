@@ -71,27 +71,6 @@ type
     property ServerHostKeyFingerprint: string read GetServerHostKeyFingerprint;
   end;
 
-  { Fluent 连接构造器（COM 引用计数自动释放）}
-  ISshClientBuilder = interface
-    ['{9C1E6E10-4A11-4F72-9D30-5A0000000005}']
-    function Host(const AValue: string): ISshClientBuilder;
-    function Port(AValue: Word): ISshClientBuilder;
-    function User(const AValue: string): ISshClientBuilder;
-    function Password(const AValue: string): ISshClientBuilder;
-    function PrivateKeyData(const AValue: string): ISshClientBuilder;
-    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
-    function AgentSocketPath(const AValue: string): ISshClientBuilder;
-    function KnownHostsFile(const AValue: string): ISshClientBuilder;
-    function StrictHostKey(AValue: Boolean): ISshClientBuilder;
-    function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
-    function Compress(AValue: Boolean): ISshClientBuilder;
-    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
-    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
-    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
-    { 建立 TCP、完成握手并按已填选项认证 }
-    function Connect: ISshSession;
-  end;
-
 { 拨号 + 握手 + 认证一步到位 }
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 
@@ -105,14 +84,10 @@ function SshConnectOn(const AIO: IReadWriteCloser;
 function SshCreateSession(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 
-function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
-function SshConnectViaJumpOn(const AJumpSession: ISshSession;
-  const ATargetOpts: TSshConnectOptions): ISshSession;
-
-{ Fluent 构造器入口 }
-
-
-function SshClient: ISshClientBuilder;
+{ 内部缝隙：供 proxyjump 单源复用 direct-tcpip 通道创建，零拷贝 TChannelStream }
+function SshSessionOpenDirectTcpip(const AJumpSession: ISshSession;
+  const AHost: string; APort: Word; AInitialWindow, AMaxPacket: UInt32;
+  ATimeoutMs: Integer): IReadWriteCloser;
 
 implementation
 
@@ -137,23 +112,6 @@ uses
 const
   DISCONNECT_BY_APPLICATION = 11;
   SSH_ALG_ED25519 = 'ssh-ed25519';
-
-function InByteList(AValue: Byte; const AList: array of Byte): Boolean;
-var
-  I: Integer;
-begin
-  for I := 0 to High(AList) do
-    if AList[I] = AValue then
-      Exit(True);
-  Result := False;
-end;
-
-function SingleBytePayload(AMsg: Byte): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, 1);
-  Result[0] := AMsg;
-end;
 
 type
   TSshSession = class(TInterfacedObject, ISshSession)
@@ -208,51 +166,7 @@ type
     procedure Close;
   end;
 
-  TSshClientBuilder = class(TInterfacedObject, ISshClientBuilder)
-  private
-    FOptions: TSshConnectOptions;
-  public
-    constructor Create;
-    function Host(const AValue: string): ISshClientBuilder;
-    function Port(AValue: Word): ISshClientBuilder;
-    function User(const AValue: string): ISshClientBuilder;
-    function Password(const AValue: string): ISshClientBuilder;
-    function PrivateKeyData(const AValue: string): ISshClientBuilder;
-    function PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
-    function AgentSocketPath(const AValue: string): ISshClientBuilder;
-    function KnownHostsFile(const AValue: string): ISshClientBuilder;
-    function StrictHostKey(AValue: Boolean): ISshClientBuilder;
-    function ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
-    function Compress(AValue: Boolean): ISshClientBuilder;
-    function RekeyBytes(AValue: UInt64): ISshClientBuilder;
-    function RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
-    function KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
-    function Connect: ISshSession;
-  end;
 
-  TProxyJumpSession = class(TInterfacedObject, ISshSession)
-  private
-    FJump: ISshSession;
-    FTarget: ISshSession;
-  public
-    constructor Create(const AJump, ATarget: ISshSession);
-    destructor Destroy; override;
-    function GetConnected: Boolean;
-    function GetServerVersion: string;
-    function GetServerHostKeyFingerprint: string;
-    procedure AuthenticateWithPassword(const AUser, APassword: string);
-    procedure AuthenticateWithPrivateKeyData(const AContent: string); overload;
-    procedure AuthenticateWithPrivateKeyData(const AContent, APassphrase: string); overload;
-    procedure AuthenticateWithAgent(const APath: string);
-    procedure AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
-    function Exec(const ACommand: string): TSshExecResult;
-    function OpenFileSystem: ISshFileSystem;
-    function ShouldRekey: Boolean;
-    function Rekey: Boolean;
-    function SendKeepAlive(const AData: TBytes): Boolean; overload;
-    function SendKeepAlive: Boolean; overload;
-    procedure Close;
-  end;
 
 { TSshSession }
 
@@ -276,23 +190,14 @@ begin
   inherited Destroy;
 end;
 
-function TSshSession.GetConnected: Boolean;
-begin
-  Result := (not FClosed) and FAuthenticated;
-end;
+function TSshSession.GetConnected: Boolean; inline;
+begin Result := (not FClosed) and FAuthenticated; end;
 
-function TSshSession.GetServerVersion: string;
-begin
-  if FTransport <> nil then
-    Result := FTransport.ServerIdent
-  else
-    Result := '';
-end;
+function TSshSession.GetServerVersion: string; inline;
+begin if FTransport <> nil then Result := FTransport.ServerIdent else Result := ''; end;
 
-function TSshSession.GetServerHostKeyFingerprint: string;
-begin
-  Result := FHostKeyFingerprint;
-end;
+function TSshSession.GetServerHostKeyFingerprint: string; inline;
+begin Result := FHostKeyFingerprint; end;
 
 procedure TSshSession.Close;
 begin
@@ -341,12 +246,15 @@ begin
 end;
 
 function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;
+var I: Integer; LFound: Boolean;
 begin
   while True do
   begin
     Result := PumpMessage(FTransport);
-    if InByteList(Result[0], AAcceptable) then
-      Exit;
+    LFound := False;
+    for I := 0 to High(AAcceptable) do
+      if Result[0] = AAcceptable[I] then begin LFound := True; Break; end;
+    if LFound then Exit;
   end;
 end;
 
@@ -512,7 +420,7 @@ procedure TSshSession.DeriveAndApplyNewKeys(const ANegotiated: TSshNegotiated;
   const AK, AH: TBytes);
 var
   LW: TsshWriter;
-  LKmpint, LIvCs, LIvSc, LKeyCs, LKeySc, LMacCs, LMacSc: TBytes;
+  LKmpint, LIvCs, LIvSc, LKeyCs, LKeySc, LMacCs, LMacSc, LNewKeys: TBytes;
 begin
   LW := TsshWriter.Create(80);
   try
@@ -535,7 +443,10 @@ begin
       SshMacKeySize(ANegotiated.MacCs));
     LMacSc := SshKdfSha256(LKmpint, AH, Ord('F'), FSessionId,
       SshMacKeySize(ANegotiated.MacSc));
-    FTransport.SendPacket(SingleBytePayload(SSH_MSG_NEWKEYS));
+    begin
+      SetLength(LNewKeys, 1); LNewKeys[0] := SSH_MSG_NEWKEYS;
+      FTransport.SendPacket(LNewKeys);
+    end;
     ExpectOneOf([SSH_MSG_NEWKEYS]);
     FTransport.SetNegotiatedCompression(ANegotiated);
     FTransport.ApplyNewKeys(ANegotiated,
@@ -761,98 +672,6 @@ begin
     FOptions.MaxPacket, FOptions.ExecTimeoutMs);
 end;
 
-{ TSshClientBuilder }
-
-constructor TSshClientBuilder.Create;
-begin
-  inherited Create;
-  FOptions := DefaultSshConnectOptions('');
-end;
-
-function TSshClientBuilder.Host(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.Host := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.Port(AValue: Word): ISshClientBuilder;
-begin
-  FOptions.Port := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.User(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.User := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.Password(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.Password := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.PrivateKeyData(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.PrivateKeyData := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.PrivateKeyPassphrase(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.PrivateKeyPassphrase := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.AgentSocketPath(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.AgentSocketPath := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.KnownHostsFile(const AValue: string): ISshClientBuilder;
-begin
-  FOptions.KnownHostsFile := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.StrictHostKey(AValue: Boolean): ISshClientBuilder;
-begin
-  FOptions.StrictHostKeyChecking := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.ExecTimeoutMs(AValue: Integer): ISshClientBuilder;
-begin
-  FOptions.ExecTimeoutMs := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.Compress(AValue: Boolean): ISshClientBuilder;
-begin
-  FOptions.Compress := AValue;
-  Result := Self;
-end;
-
-function TSshClientBuilder.RekeyBytes(AValue: UInt64): ISshClientBuilder;
-begin FOptions.RekeyBytes := AValue; Result := Self; end;
-
-function TSshClientBuilder.RekeyIntervalMs(AValue: Integer): ISshClientBuilder;
-begin FOptions.RekeyIntervalMs := AValue; Result := Self; end;
-
-function TSshClientBuilder.KeepAliveIntervalMs(AValue: Integer): ISshClientBuilder;
-begin FOptions.KeepAliveIntervalMs := AValue; Result := Self; end;
-
-function TSshClientBuilder.Connect: ISshSession;
-begin
-  if FOptions.Host = '' then
-    raise ESSHError.Create(sekProtocol, 'ssh client: host is required');
-  if FOptions.User = '' then
-    raise ESSHError.Create(sekProtocol, 'ssh client: user is required');
-  Result := SshConnect(FOptions);
-end;
-
 { 入口函数 }
 
 procedure RunAuthentication(const ASession: TSshSession;
@@ -926,11 +745,6 @@ begin
   end;
 end;
 
-function SshClient: ISshClientBuilder;
-begin
-  Result := TSshClientBuilder.Create;
-end;
-
 function SshConnectOn(const AIO: IReadWriteCloser;
   const AOptions: TSshConnectOptions): ISshSession;
 var
@@ -952,139 +766,29 @@ begin
   Result := TSshSession.CreateInternal(AIO, AOptions);
 end;
 
-{ TProxyJumpSession }
-
-constructor TProxyJumpSession.Create(const AJump, ATarget: ISshSession);
-begin
-  inherited Create;
-  FJump := AJump;
-  FTarget := ATarget;
-end;
-
-destructor TProxyJumpSession.Destroy;
-begin
-  try
-    if FTarget <> nil then FTarget.Close;
-  except end;
-  try
-    if FJump <> nil then FJump.Close;
-  except end;
-  inherited;
-end;
-
-function TProxyJumpSession.GetConnected: Boolean;
-begin
-  Result := (FTarget <> nil) and FTarget.GetConnected;
-end;
-
-function TProxyJumpSession.GetServerVersion: string;
-begin
-  if FTarget <> nil then Result := FTarget.GetServerVersion else Result := '';
-end;
-
-function TProxyJumpSession.GetServerHostKeyFingerprint: string;
-begin
-  if FTarget <> nil then Result := FTarget.GetServerHostKeyFingerprint else Result := '';
-end;
-
-procedure TProxyJumpSession.AuthenticateWithPassword(const AUser, APassword: string);
-begin
-  if FTarget <> nil then FTarget.AuthenticateWithPassword(AUser, APassword);
-end;
-
-procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent: string);
-begin
-  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent);
-end;
-
-procedure TProxyJumpSession.AuthenticateWithPrivateKeyData(const AContent, APassphrase: string);
-begin
-  if FTarget <> nil then FTarget.AuthenticateWithPrivateKeyData(AContent, APassphrase);
-end;
-
-procedure TProxyJumpSession.AuthenticateWithAgent(const APath: string);
-begin
-  if FTarget <> nil then FTarget.AuthenticateWithAgent(APath);
-end;
-
-procedure TProxyJumpSession.AuthenticateWithAgentOn(const AAgentIO: IReadWriteCloser);
-begin
-  if FTarget <> nil then FTarget.AuthenticateWithAgentOn(AAgentIO);
-end;
-
-function TProxyJumpSession.Exec(const ACommand: string): TSshExecResult;
-begin
-  if FTarget = nil then
-    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
-  Result := FTarget.Exec(ACommand);
-end;
-
-function TProxyJumpSession.OpenFileSystem: ISshFileSystem;
-begin
-  if FTarget = nil then
-    raise ESSHError.Create(sekIO, 'proxy jump: no target session');
-  Result := FTarget.OpenFileSystem;
-end;
-
-function TProxyJumpSession.ShouldRekey: Boolean;
-begin if FTarget <> nil then Result := FTarget.ShouldRekey else Result := False; end;
-
-function TProxyJumpSession.Rekey: Boolean;
-begin if FTarget <> nil then Result := FTarget.Rekey else Result := False; end;
-
-function TProxyJumpSession.SendKeepAlive(const AData: TBytes): Boolean;
-begin if FTarget <> nil then Result := FTarget.SendKeepAlive(AData) else Result := False; end;
-
-function TProxyJumpSession.SendKeepAlive: Boolean;
-begin Result := SendKeepAlive(nil); end;
-
-procedure TProxyJumpSession.Close;
-begin
-  if FTarget <> nil then try FTarget.Close; except end;
-  if FJump <> nil then try FJump.Close; except end;
-end;
-
-function SshConnectViaJumpOn(const AJumpSession: ISshSession;
-  const ATargetOpts: TSshConnectOptions): ISshSession;
+{ 内部缝隙：供 proxyjump 单源复用 direct-tcpip 通道创建，零拷贝 TChannelStream。
+  稳定性：try-finally 保证 LChan.Free，失败不泄漏。 }
+function SshSessionOpenDirectTcpip(const AJumpSession: ISshSession;
+  const AHost: string; APort: Word; AInitialWindow, AMaxPacket: UInt32;
+  ATimeoutMs: Integer): IReadWriteCloser;
 var
-  LJumpImpl: TSshSession;
+  LImpl: TSshSession;
   LChan: TSshChannel;
-  LStream: IReadWriteCloser;
-  LTarget: ISshSession;
 begin
   if AJumpSession = nil then
     raise ESSHError.Create(sekProtocol, 'proxy jump: nil jump session');
-  if not (AJumpSession is TSshSession) and not (AJumpSession is TProxyJumpSession) then
+  if not (AJumpSession is TSshSession) then
     raise ESSHError.Create(sekUnsupported, 'proxy jump: unsupported jump session type');
-  if AJumpSession is TProxyJumpSession then
-    LJumpImpl := TProxyJumpSession(AJumpSession).FTarget as TSshSession
-  else
-    LJumpImpl := AJumpSession as TSshSession;
-  if LJumpImpl.FTransport = nil then
+  LImpl := AJumpSession as TSshSession;
+  if LImpl.FTransport = nil then
     raise ESSHError.Create(sekIO, 'proxy jump: jump transport nil');
-  LChan := TSshChannel.Create(LJumpImpl.FTransport,
-    ATargetOpts.InitialWindowSize, ATargetOpts.MaxPacket, ATargetOpts.ExecTimeoutMs);
+  LChan := TSshChannel.Create(LImpl.FTransport, AInitialWindow, AMaxPacket, ATimeoutMs);
   try
-    LChan.OpenDirectTcpip(ATargetOpts.Host, ATargetOpts.Port);
-    LStream := TChannelStream.Create(LChan);
+    LChan.OpenDirectTcpip(AHost, APort);
+    Result := TChannelStream.Create(LChan);
     LChan := nil;
-    LTarget := SshConnectOn(LStream, ATargetOpts);
-    Result := TProxyJumpSession.Create(AJumpSession, LTarget);
   except
     LChan.Free;
-    raise;
-  end;
-end;
-
-function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
-var
-  LJump: ISshSession;
-begin
-  LJump := SshConnect(AJumpOpts);
-  try
-    Result := SshConnectViaJumpOn(LJump, ATargetOpts);
-  except
-    LJump.Close;
     raise;
   end;
 end;

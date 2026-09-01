@@ -72,7 +72,7 @@ nextpas.core.ssh.transport.core.pas  ← 传输核单源（`padding+Protect+Comp
 nextpas.core.ssh.rekey.pas           ← Rekey 策略（`TSshRekeyPolicy`，`TInstant` 单调时钟，同步/异步 transport 复用，零 `SysUtils` 直连）
 nextpas.core.ssh.keepalive.pas       ← KeepAlive 策略（`TKeepAlivePolicy`，`TInstant` 单调时钟，同步预留/异步 `TAsyncLoop.ScheduleMethod`，零 `SysUtils` 直连）
 nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器（`Ensure/Need` 边界 + `SSH_MAX_RECEIVE_PACKET` 上限）
-nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM，`TAesCtrStream` 跨包 `keystream` 持久，`SecureZero` 敏感材料）
+nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM，`TAesCtrStream` record值语义跨包 `keystream` 持久，`bytes.ops.MemXor` 批量 + `SecureZero`）
 nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`）
 nextpas.core.ssh.transport.async.pas ← 异步传输层（`TAsyncLoop+IAsyncTcpStream`，版本交换与二进制包事件化，复用 `transport.core`）
 nextpas.core.ssh.kex.pas             ← KEXINIT 协商 + 密钥推导（`SHA256 KDF A-F`）
@@ -86,7 +86,9 @@ nextpas.core.ssh.compress.pas        ← 压缩：有状态 `zlib`/`zlib@openssh
 nextpas.core.ssh.agent.pas           ← ssh-agent 协议客户端（Unix socket 长度前缀帧，List/Sign，经 `intf+net.ffi` 注入）
 nextpas.core.ssh.channel.pas         ← 连接协议：单通道引擎（exec / subsystem / `direct-tcpip` + `TChannelStream` 字节流）
 nextpas.core.ssh.channel.async.pas   ← 异步通道（exec `TAsyncExecRunner` + `TAsyncSftpChannel` 复用窗口/低水位回补）
-nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活，`ProxyJump` 经 `direct-tcpip` 复用 `TChannelStream`）
+nextpas.core.ssh.session.pas         ← 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`Compress` 延迟/即时激活；<800 行，Builder/ProxyJump 已拆至独立子模块，`inline` 薄转发，零拷贝 `TChannelStream`）
+nextpas.core.ssh.session.builder.pas ← Fluent Builder（`ISshClientBuilder` + 参数收集 + `SshClient` 入口，`inline` 转发，复用 `session.SshConnect` 单源）
+nextpas.core.ssh.proxyjump.pas       ← 同步 ProxyJump（`TProxyJumpSession` 委托 + `direct-tcpip` + `SshSessionOpenDirectTcpip` 单源，`inline` 委托，`try-finally` 不泄漏）
 nextpas.core.ssh.session.async.pas   ← 异步会话（`AsyncTcpDial(RFC8305)` + 状态机握手/认证，复用 cipher/kex/hostkey/compress，`Compress` 同语义，`L2 async peer` 直连 `net.async.tcp` 已文档化）
 nextpas.core.ssh.proxyjump.async.pas ← 异步 ProxyJump（`TAsyncChannelStream` 无轮询 + `Keeper` 保活 + `TryFlushQueued 5ms` 重试）
 nextpas.core.ssh.sftp.pas            ← SFTP v3 客户端（ISshFileSystem 门面，同步 `TSshChannelWire`）

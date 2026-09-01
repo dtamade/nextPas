@@ -75,8 +75,8 @@ type
     function ReadNameList: TStringArray;
   end;
 
-function SshTextFromBytes(const ABytes: TBytes): string;
-function SshBytesFromText(const AText: string): TBytes;
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
+function SshBytesFromText(const AText: string): TBytes; inline;
 
 implementation
 
@@ -84,32 +84,18 @@ uses
   nextpas.core.mem.utils;
 
 { SshTextFromBytes/SshBytesFromText — raw bytes ↔ string 透传（UTF-8 由调用方保证，不做转换）。
-  单源：语义等价 bytes.ops.BytesToString/StringToBytes 单源（同为 SetLength+单次 Move 零拷贝），
-  本单元保留独立封装以稳定 ssh CONTRACT 的文本透传入口，避免上游内联语义波动影响 wire 编解码。
-  hygiene: PutNameList 已用 CopyNonOverlap（bytes.ops/mem.utils 单源非重叠拷贝）拼串；
-    此处零拷贝路径用 Move 保持声明/实现一致，显式规避 design-conventions §inline 两条红线(1)：
-    ABytes[0]/Result[0] 索引喂 untyped Move 禁 inline，故两函数均不标记 inline
-    （原 89 行 Move(ABytes[0], PByte(PChar(Result))^, Length(ABytes)) 无 inline 符合红线，
-     现仍外联直操内存，常量串常量传播下无栈临时垃圾，valgrind 实证）。
-  perf: 单次 SetLength + 单次 Move，零拷贝、无二次分配；空串/空 bytes 零开销短路。
-  stability: SetLength 异常安全，无手写堆头；Length=0 时不取 [0]，不野指针。 }
-function SshTextFromBytes(const ABytes: TBytes): string;
+  单源：委托 bytes.ops.BytesToString/StringToBytes 单源（SetLength+单次 Move 零拷贝），
+  本单元仅作 ssh CONTRACT 的 inline 薄转发，避免自实现 Move 导致单源漂移。
+  perf: inline 薄转发消除调用开销，零拷贝单次 Move，无二次分配；空串/空 bytes 在 bytes.ops 内短路。
+  stability: 不手写 Move 取 [0]，无野指针；复用 bytes.ops 异常安全 SetLength。 }
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], PByte(PChar(Result))^, Length(ABytes));
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
-function SshBytesFromText(const AText: string): TBytes;
-var
-  LLen: SizeUInt;
+function SshBytesFromText(const AText: string): TBytes; inline;
 begin
-  Result := nil;
-  LLen := SizeUInt(Length(AText));
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(PByte(PChar(AText))^, Result[0], LLen);
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 { TsshWriter }

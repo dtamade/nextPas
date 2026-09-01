@@ -22,6 +22,8 @@ function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
+{ bulk xor: Dst ^= Src[0..Len-1], zero-copy, QWord batched, single source for CTR keystream }
+procedure MemXor(Dst, Src: Pointer; Len: SizeUInt); inline;
 
 function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -199,6 +201,33 @@ procedure SpanReverse(const ASpan: TByteSpan);
 begin
   if ASpan.Len > 1 then
     MemReverse(ASpan.Data, ASpan.Len);
+end;
+
+procedure MemXor(Dst, Src: Pointer; Len: SizeUInt); inline;
+var
+  LDst, LSrc: PByte;
+  LLen: SizeUInt;
+begin
+  if (Len = 0) or (Dst = nil) or (Src = nil) then Exit;
+  LDst := PByte(Dst);
+  LSrc := PByte(Src);
+  LLen := Len;
+  // QWord batched: 8x fewer branches than per-byte xor, 16KB -> 2K iter
+  while LLen >= SizeUInt(SizeOf(UInt64)) do
+  begin
+    PUInt64(LDst)^ := PUInt64(LDst)^ xor PUInt64(LSrc)^;
+    Inc(LDst, SizeOf(UInt64)); Inc(LSrc, SizeOf(UInt64)); Dec(LLen, SizeOf(UInt64));
+  end;
+  while LLen >= SizeUInt(SizeOf(UInt32)) do
+  begin
+    PUInt32(LDst)^ := PUInt32(LDst)^ xor PUInt32(LSrc)^;
+    Inc(LDst, SizeOf(UInt32)); Inc(LSrc, SizeOf(UInt32)); Dec(LLen, SizeOf(UInt32));
+  end;
+  while LLen > 0 do
+  begin
+    LDst^ := LDst^ xor LSrc^;
+    Inc(LDst); Inc(LSrc); Dec(LLen);
+  end;
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;

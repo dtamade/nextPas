@@ -40,6 +40,8 @@ uses
   nextpas.core.ssh.keepalive,
   nextpas.core.ssh.window,
   nextpas.core.ssh.session,
+  nextpas.core.ssh.session.builder,
+  nextpas.core.ssh.proxyjump,
   nextpas.core.ssh.session.async,
   nextpas.core.ssh.proxyjump.async;
 
@@ -54,7 +56,7 @@ type
 
   { 会话与结果 }
   ISshSession = nextpas.core.ssh.session.ISshSession;
-  ISshClientBuilder = nextpas.core.ssh.session.ISshClientBuilder;
+  ISshClientBuilder = nextpas.core.ssh.session.builder.ISshClientBuilder;
   TSshExecResult = nextpas.core.ssh.channel.TSshExecResult;
 
   { SFTP 文件操作面 }
@@ -106,7 +108,7 @@ end;
 
 function SshClient: ISshClientBuilder;
 begin
-  Result := nextpas.core.ssh.session.SshClient;
+  Result := nextpas.core.ssh.session.builder.SshClient;
 end;
 
 function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
@@ -116,12 +118,12 @@ end;
 
 function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
 begin
-  Result := nextpas.core.ssh.session.SshConnectViaJump(ATargetOpts, AJumpOpts);
+  Result := nextpas.core.ssh.proxyjump.SshConnectViaJump(ATargetOpts, AJumpOpts);
 end;
 
 function SshConnectViaJumpOn(const AJumpSession: ISshSession; const ATargetOpts: TSshConnectOptions): ISshSession;
 begin
-  Result := nextpas.core.ssh.session.SshConnectViaJumpOn(AJumpSession, ATargetOpts);
+  Result := nextpas.core.ssh.proxyjump.SshConnectViaJumpOn(AJumpSession, ATargetOpts);
 end;
 
 function SshExec(const AHost: string; APort: Word;

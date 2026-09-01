@@ -21,7 +21,7 @@
 | `nextpas.core.ssh.intf.pas` | 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`） | intf |
 | `nextpas.core.ssh.net.ffi.pas` + `ssh.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入） | ffi |
 | `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TsshWriter/TsshReader`（`Ensure/Need` 边界） | impl |
-| `nextpas.core.ssh.cipher.pas` | 包加密编解码器 `ISshPacketSender/Receiver`（AEAD / CTR+ETM，`TAesCtrStream` 跨包 `keystream` 持久） | impl |
+| `nextpas.core.ssh.cipher.pas` | 包加密编解码器 `ISshPacketSender/Receiver`（AEAD / CTR+ETM，`TAesCtrStream` record值语义跨包 `keystream` 持久，`bytes.ops.MemXor` 批量） | impl |
 | `nextpas.core.ssh.transport.core.pas` | 传输核单源（`padding+Protect+Compress+Seq+Rekey` 纯内存，`transport(+.async)` 薄包装复用） | impl 核 |
 | `nextpas.core.ssh.transport.pas` | 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`） | impl |
 | `nextpas.core.ssh.transport.async.pas` | 异步传输层（`TAsyncLoop+IAsyncTcpStream`，复用 `transport.core`） | impl |
@@ -39,7 +39,9 @@
 | `nextpas.core.ssh.window.pas` | 通道窗口策略 `TChannelWindow`（可复用 record，见 §8） | impl |
 | `nextpas.core.ssh.rekey.pas` | Rekey 策略 `TSshRekeyPolicy`（`TInstant` 单调时钟） | impl |
 | `nextpas.core.ssh.keepalive.pas` | KeepAlive 策略 `TKeepAlivePolicy`（`TInstant` 单调时钟） | impl |
-| `nextpas.core.ssh.session.pas` | 会话编排（握手→认证→通道，`agent→privatekey→password` 回退，`ProxyJump` 经 `direct-tcpip`） | impl |
+| `nextpas.core.ssh.session.pas` | 会话编排（握手→认证→通道，`agent→privatekey→password` 回退；<800 行，Builder/ProxyJump 已拆子模块） | impl |
+| `nextpas.core.ssh.session.builder.pas` | Fluent Builder（`ISshClientBuilder` + `SshClient`，`inline` 薄转发，复用 `session.SshConnect`） | impl |
+| `nextpas.core.ssh.proxyjump.pas` | 同步 ProxyJump（`TProxyJumpSession` 委托 + `SshSessionOpenDirectTcpip` 单源，`inline` 零拷贝） | impl |
 | `nextpas.core.ssh.session.async.pas` | 异步会话（`AsyncTcpDial(RFC8305)` + 状态机，复用 cipher/kex/hostkey/compress） | impl |
 | `nextpas.core.ssh.proxyjump.async.pas` | 异步 ProxyJump（`TAsyncChannelStream` 无轮询 + `Keeper` 保活） | impl |
 | `nextpas.core.ssh.sftp.pas` | SFTP v3 客户端（`ISshFileSystem` 门面，同步 `TSshChannelWire`） | impl |
@@ -60,7 +62,7 @@ TSshConnectOptions   = nextpas.core.ssh.base.TSshConnectOptions;
 TSshErrorKind        = nextpas.core.ssh.errors.TSshErrorKind;
 ESSHError            = nextpas.core.ssh.errors.ESSHError;
 ISshSession          = nextpas.core.ssh.session.ISshSession;
-ISshClientBuilder    = nextpas.core.ssh.session.ISshClientBuilder;
+ISshClientBuilder    = nextpas.core.ssh.session.builder.ISshClientBuilder;
 TSshExecResult       = nextpas.core.ssh.channel.TSshExecResult;
 ISshFileSystem       = nextpas.core.ssh.sftp.ISshFileSystem;
 TSftpAttrs           = nextpas.core.ssh.sftp.TSftpAttrs;
@@ -155,7 +157,7 @@ function SshExec(const AHost: string; APort: Word; const AUser, APass, ACmd: str
 
 ### 2.7 安全不变量
 
-- **[INV-SEC-1] 敏感清零**：`cipher` 侧 `FMainKey/FHeaderKey/FMacKey/TAesCtrStream.keystream` 等在 `Destroy/Reset/ApplyNewKeys` 路径 `SecureZeroBytes`，`Destroy` 必清零；`buffer` 不缓存敏感明文。
+- **[INV-SEC-1] 敏感清零**：`cipher` 侧 `FMainKey/FHeaderKey/FMacKey/TAesCtrStream.keystream` 等在 `Done/Destroy/Reset/ApplyNewKeys` 路径 `SecureZeroBytes`/`FillChar`，`TAesCtrStream.Done`/`Destroy` 必清零（record零堆分配）；`buffer` 不缓存敏感明文。
 - **[INV-SEC-2] 常量时间**：主机密钥/签名比对走 `TConstantTime.CompareBytes`（`crypto.constant_time`），`IsZeroBytes` 单源，全零共享拒绝。
 - **[INV-SEC-3] 边界守卫**：`TsshWriter.Ensure` 防溢出（`FLen > High(SizeUInt)-ACount` → `sekProtocol`）、`TsshReader.Need` 截断检查、未初始化结果 `Default(TSshExecResult)`、字符串 `PutStringText` 校 `UTF8IsValid`。
 

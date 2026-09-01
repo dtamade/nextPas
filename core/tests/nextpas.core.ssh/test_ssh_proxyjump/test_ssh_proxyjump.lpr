@@ -27,6 +27,8 @@ uses
   nextpas.core.ssh.transport,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.session,
+  nextpas.core.ssh.session.builder,
+  nextpas.core.ssh.proxyjump,
   nextpas.core.ssh.sftp,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,

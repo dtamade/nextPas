@@ -572,9 +572,10 @@ end;
 
 { AES-CTR 连续计数器流（跨包不重置），块级 XOR。
   keystream 单块生成走最快可用后端：AES-NI → ct64 → 朴素实现（aes192 兜底）。
-  FKSOff 跨调用持久：部分消耗的计数器块在下次调用继续使用。}
+  FKSOff 跨调用持久：部分消耗的计数器块在下次调用继续使用。
+  值语义 record：零堆分配，跨包状态随外层宿主生命周期持久，Done 必清零。}
 type
-  TAesCtrStream = class
+  TAesCtrStream = record
   private type
     TKind = (akNi128, akNi256, akCt64, akNaive);
   private
@@ -591,19 +592,25 @@ type
     procedure RefreshKS; inline;
     procedure IncCounter; inline;
   public
-    constructor Create(const AKey, AIV: TBytes);
-    destructor Destroy; override;
+    procedure Init(const AKey, AIV: TBytes);
+    procedure Done; inline;
     procedure XorInto(var AData: TBytes; AOffset, ACount: SizeUInt);
   end;
 
-constructor TAesCtrStream.Create(const AKey, AIV: TBytes);
+procedure TAesCtrStream.Init(const AKey, AIV: TBytes);
 var
   LKey16: TAESNIBlock;
 begin
-  inherited Create;
+  FillChar(FCtr, SizeOf(FCtr), 0);
+  FillChar(FKS, SizeOf(FKS), 0);
+  FillChar(FNiKey128, SizeOf(FNiKey128), 0);
+  FillChar(FNiKey256, SizeOf(FNiKey256), 0);
+  FillChar(FCt64Key, SizeOf(FCt64Key), 0);
+  FillChar(FExpanded, SizeOf(FExpanded), 0);
   RequireLen(AIV, 16, 'ctr iv');
   FKSValid := False;   { 首次 XorInto 直接用 IV 作首块计数器，不先递增 }
   FKSOff := 0;
+  FNr := 0;
   Move(AIV[0], FCtr[0], 16);
   case Length(AKey) of
     16:
@@ -637,7 +644,7 @@ begin
   end;
 end;
 
-destructor TAesCtrStream.Destroy;
+procedure TAesCtrStream.Done;
 begin
   FillChar(FCtr, SizeOf(FCtr), 0);
   FillChar(FKS, SizeOf(FKS), 0);
@@ -645,7 +652,9 @@ begin
   FillChar(FNiKey256, SizeOf(FNiKey256), 0);
   FillChar(FCt64Key, SizeOf(FCt64Key), 0);
   FillChar(FExpanded, SizeOf(FExpanded), 0);
-  inherited;
+  FKSOff := 0;
+  FKSValid := False;
+  FNr := 0;
 end;
 
 procedure TAesCtrStream.RefreshKS;
@@ -679,29 +688,46 @@ end;
 
 procedure TAesCtrStream.XorInto(var AData: TBytes; AOffset, ACount: SizeUInt);
 var
-  LDst, LKs: PByte;
-  LRem: SizeUInt;
+  LDst: PByte;
+  LRem, LChunk: SizeUInt;
 begin
-  if ACount = 0 then
-    Exit;
+  if ACount = 0 then Exit;
   LDst := @AData[AOffset];
-  LKs := @FKS[0];
   LRem := ACount;
+  // residual partial block from previous packet: bulk xor via bytes.ops single source
+  if FKSValid and (FKSOff > 0) and (FKSOff < 16) then
+  begin
+    LChunk := SizeUInt(16 - FKSOff);
+    if LChunk > LRem then LChunk := LRem;
+    MemXor(LDst, @FKS[FKSOff], LChunk);
+    Inc(LDst, LChunk);
+    Inc(FKSOff, Integer(LChunk));
+    Dec(LRem, LChunk);
+    if LRem = 0 then Exit;
+  end;
   while LRem > 0 do
   begin
     if (not FKSValid) or (FKSOff >= 16) then
     begin
-      if FKSOff >= 16 then
-        IncCounter;
+      if FKSOff >= 16 then IncCounter;
       RefreshKS;
       FKSOff := 0;
     end;
-    while (LRem > 0) and (FKSOff < 16) do
+    if (LRem >= 16) and (FKSOff = 0) then
     begin
-      LDst^ := LDst^ xor LKs[FKSOff];
-      Inc(LDst);
-      Inc(FKSOff);
-      Dec(LRem);
+      // bulk 16-byte keystream xor: QWord-batched via bytes.ops MemXor (2x QWord vs 16 branches)
+      MemXor(LDst, @FKS[0], 16);
+      Inc(LDst, 16);
+      Dec(LRem, 16);
+      FKSOff := 16;
+    end else
+    begin
+      LChunk := SizeUInt(16 - FKSOff);
+      if LChunk > LRem then LChunk := LRem;
+      MemXor(LDst, @FKS[FKSOff], LChunk);
+      Inc(LDst, LChunk);
+      Inc(FKSOff, Integer(LChunk));
+      Dec(LRem, LChunk);
     end;
   end;
 end;
@@ -758,15 +784,15 @@ begin
   if not SshMacSupported(AMac) or (AMac = '') then
     raise ESSHError.Create(sekNegotiation,
       'ssh cipher: ctr requires an etm mac, got "' + AMac + '"');
-  FCtr := TAesCtrStream.Create(AKey, AIV);
+  FCtr.Init(AKey, AIV);
   FMacKey := Copy(AMacKey, 0, SshMacKeySize(AMac));
   FMacAlgo := MacAlgoOf(AMac);
 end;
 
 destructor TSshCtrEtmSender.Destroy;
 begin
+  FCtr.Done;
   SecureZeroBytes(FMacKey);
-  FCtr.Free;
   inherited Destroy;
 end;
 
@@ -810,7 +836,7 @@ begin
   if not SshMacSupported(AMac) or (AMac = '') then
     raise ESSHError.Create(sekNegotiation,
       'ssh cipher: ctr requires an etm mac, got "' + AMac + '"');
-  FCtr := TAesCtrStream.Create(AKey, AIV);
+  FCtr.Init(AKey, AIV);
   FMacKey := Copy(AMacKey, 0, SshMacKeySize(AMac));
   FMacAlgo := MacAlgoOf(AMac);
   FMacTagSize := MacTagSizeOf(AMac);
@@ -818,8 +844,8 @@ end;
 
 destructor TSshCtrEtmReceiver.Destroy;
 begin
+  FCtr.Done;
   SecureZeroBytes(FMacKey);
-  FCtr.Free;
   inherited Destroy;
 end;
 
@@ -907,11 +933,11 @@ begin
   if Length(AIV) <> 16 then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: invalid aes iv length');
   Result := Copy(AInput, 0, Length(AInput));
-  LStream := TAesCtrStream.Create(AKey, AIV);
+  LStream.Init(AKey, AIV);
   try
     LStream.XorInto(Result, 0, SizeUInt(Length(Result)));
   finally
-    LStream.Free;
+    LStream.Done;
   end;
 end;
 

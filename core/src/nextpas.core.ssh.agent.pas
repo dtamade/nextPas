@@ -18,8 +18,8 @@ unit nextpas.core.ssh.agent;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.os.env,
   nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.ssh.buffer,
@@ -318,7 +318,7 @@ function SshAgentConnectFromEnv: TSshAgentClient;
 var
   LPath: string;
 begin
-  LPath := GetEnvironmentVariable('SSH_AUTH_SOCK');
+  LPath := GetEnv('SSH_AUTH_SOCK');
   if LPath = '' then
     raise ESSHError.Create(sekIO, 'ssh agent: SSH_AUTH_SOCK not set');
   Result := SshAgentConnect(LPath);
