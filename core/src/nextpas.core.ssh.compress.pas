@@ -59,6 +59,8 @@ type
     FInflate: z_stream;
     FDeflateInited: Boolean;
     FInflateInited: Boolean;
+    procedure EnsureDeflate; inline;
+    procedure EnsureInflate; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -72,14 +74,24 @@ begin
   inherited Create;
   FillChar(FDeflate, SizeOf(FDeflate), 0);
   FillChar(FInflate, SizeOf(FInflate), 0);
+  // lazy: per-direction init on first Compress/Decompress (saves one zlib alloc when CompCs/Sc asymmetric, e.g. CompCs=none)
+end;
+
+procedure TSshZlibCompressor.EnsureDeflate; inline;
+begin
+  if FDeflateInited then Exit;
+  FillChar(FDeflate, SizeOf(FDeflate), 0);
   if deflateInit(FDeflate, LevelToZlib(clDefault)) <> Z_OK then
     raise ESSHError.Create(sekCrypto, 'ssh compress: deflateInit failed');
   FDeflateInited := True;
+end;
+
+procedure TSshZlibCompressor.EnsureInflate; inline;
+begin
+  if FInflateInited then Exit;
+  FillChar(FInflate, SizeOf(FInflate), 0);
   if inflateInit(FInflate) <> Z_OK then
-  begin
-    deflateEnd(FDeflate);
     raise ESSHError.Create(sekCrypto, 'ssh compress: inflateInit failed');
-  end;
   FInflateInited := True;
 end;
 
@@ -118,6 +130,7 @@ var
   LRet: Int32;
   LDummy: Byte;
 begin
+  EnsureDeflate; // inline: hot path single branch, saves one zlib alloc when CompCs=none
   Result := nil;
   LInLen := SizeUInt(Length(AData));
   if LInLen > 0 then
@@ -184,6 +197,7 @@ begin
   LInLen := SizeUInt(Length(AData));
   if LInLen = 0 then
     Exit(nil);
+  EnsureInflate; // inline hot: single branch, saves one zlib alloc when CompSc=none; zero-copy Move still, no extra SetLength
   try
     FInflate.next_in := pBytef(@AData[0]);
     FInflate.avail_in := LongWord(LInLen);

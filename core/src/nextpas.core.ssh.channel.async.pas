@@ -28,7 +28,7 @@ implementation
 
 uses
   nextpas.core.async.base,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.ssh.buffer,
   nextpas.core.ssh.window;
 
@@ -51,6 +51,8 @@ type
     FGotClose: Boolean;
     FSentClose: Boolean;
     FResult: TSshExecResult;
+    FOutBuilder: IBytesBuilder; // perf: geometric doubling amortized O(1), zero-copy Move, single ToBytes
+    FErrBuilder: IBytesBuilder; // perf: same, avoids per-chunk SetLength+Move O(n²)
     FCallback: TProcSshExecResult;
     FCallbackCtx: Pointer;
     FState: TExecState;
@@ -89,11 +91,6 @@ procedure Runner_OnTimeout(AContext: Pointer); forward;
 
 { Helpers }
 
-procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
-begin
-  BytesAppend(ADst, ASrc);
-end;
-
 constructor TAsyncExecRunner.Create(const ATransport: TAsyncSshTransport; const ACommand: string;
   AInitialWindow, AMaxPacket: UInt32; ATimeoutMs: Integer;
   ACallback: TProcSshExecResult; AContext: Pointer);
@@ -115,6 +112,9 @@ begin
   FExitStatus := -1;
   FResult := Default(TSshExecResult);
   FResult.ExitCode := -1;
+  // single source bytes.builder doubling, inline zero-copy, amortized O(1)
+  FOutBuilder := CreateBytesBuilder;
+  FErrBuilder := CreateBytesBuilder;
   FState := esOpening;
   if ATimeoutMs > 0 then
     FDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
@@ -139,6 +139,9 @@ begin
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
   try TryCloseChannel; except end;
   Cb := FCallback; Ctx := FCallbackCtx; Res := FResult;
+  // single source builder flush before callback; stability: builder ToBytes single alloc copy, refcount auto
+  if FOutBuilder <> nil then Res.StdOut := FOutBuilder.ToBytes;
+  if FErrBuilder <> nil then Res.StdErr := FErrBuilder.ToBytes;
   FCallback := nil;
   if Assigned(Cb) then Cb(Res, AErr, Ctx) else if AErr<>nil then AErr.Free;
   Free;
@@ -150,6 +153,9 @@ begin
   if FFailed then Exit;
   FFailed := True;
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
+  // perf: single ToBytes copy, builder geometric doubling already amortized O(1)
+  FResult.StdOut := FOutBuilder.ToBytes;
+  FResult.StdErr := FErrBuilder.ToBytes;
   FResult.ExitCode := FExitStatus;
   Cb := FCallback; Ctx := FCallbackCtx;
   FCallback := nil;
@@ -261,8 +267,9 @@ begin
         IsExt := APayload[0]=SSH_MSG_CHANNEL_EXTENDED_DATA;
         if ExtractData(APayload, IsExt, LChunk) then
         begin
-          if IsExt then AppendChunkAsync(FResult.StdErr, LChunk)
-          else AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then
+            if IsExt then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))) // inline zero-copy
+            else FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         end;
         PumpNext;
       end;
@@ -287,13 +294,13 @@ begin
     SSH_MSG_CHANNEL_DATA:
       begin
         if ExtractData(APayload, False, LChunk) then
-          AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline zero-copy
         PumpNext;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
       begin
         if ExtractData(APayload, True, LChunk) then
-          AppendChunkAsync(FResult.StdErr, LChunk);
+          if Length(LChunk) > 0 then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         PumpNext;
       end;
     SSH_MSG_CHANNEL_REQUEST:
@@ -326,13 +333,13 @@ begin
     SSH_MSG_CHANNEL_DATA:
       begin
         if ExtractData(APayload, False, LChunk) then
-          AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline zero-copy
         PumpNext;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
       begin
         if ExtractData(APayload, True, LChunk) then
-          AppendChunkAsync(FResult.StdErr, LChunk);
+          if Length(LChunk) > 0 then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         PumpNext;
       end;
     SSH_MSG_CHANNEL_REQUEST:

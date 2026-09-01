@@ -53,7 +53,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 | 段 | 目标 | 证据 | 性能/质量锚点 |
 |----|------|------|--------------|
 | **S0** | 模块立项 | lane `.worktrees/core-ssh` + `README/goal-tree` 登记 + 底座盘点（x25519/ed25519/rsa/aes-gcm/chacha/hmac/sha256 可用，AES-CTR/bcrypt 推迟） | — |
-| **S1** | 基础层 | `base/errors/buffer` + `test_ssh_buffer`（RFC4251 mpint 边界 + 越界） | 零分配 `TsshWriter/Reader` |
+| **S1** | 基础层 | `base/errors/buffer` + `test_ssh_buffer`（RFC4251 mpint 边界 + 越界） | 零分配 `TSshWriter/Reader` |
 | **S2** | 包加密层 | `cipher`：`none/chacha20-poly1305/aes-gcm/aes-ctr+etm`（`AES-NI→ct64→朴素`，`keystream` 跨包持久）+ `test_ssh_cipher`（RFC8439 §2.3.2 + 篡改检测） | chacha ~255 MiB/s, gcm ~450, ctr+etm ~135（门禁 50） |
 | **S3** | 握手层 | `kex/kex.curve25519/hostkey/keys/auth/transport` + `test_ssh_kex/hostkey/keys/transport` | `SHA256 KDF A-F 扩展链`，`curve25519` draft 输入序 |
 | **S4** | 会话层 | `channel/session`（`connect→KEX→hostkey→认证→exec`）+ `test_ssh_session` 5/5 全栈回环 + `bench_ssh_cipher` | `GNextLocalChannelId` 单调，`PumpFiltered` 迟滞过滤 |
@@ -111,7 +111,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 
 - [x] **163 级别门**: `buffer / cipher / kex / hostkey / keys / transport / compress / session 19 / sftp 12 / sftp_async 7 / proxyjump 5 / proxyjump_async 3 / sftp_via_jump 4` + `bench_ssh_cipher / bench_proxyjump`
 - [x] **高级感**: `SshClient.Host.Port.User.Password.PrivateKey.Agent.Compress` 同 verb；`SshAsyncClient` 同镜；`Exec` vs `OpenFileSystem` 单 `Channel` 引擎；`ISftpWire / ISshAsyncFileSystem` 可注入
-- [x] **复用度**: `cipher/compress/hostkey/keys/auth` 单点；`TsshWriter/Reader` 贯穿；`TChannelStream ↔ TAsyncChannelStream` 窗口/低水位同构；`bench` 复用 `TMemPipe/LoopServer` 同源
+- [x] **复用度**: `cipher/compress/hostkey/keys/auth` 单点；`TSshWriter/Reader` 贯穿；`TChannelStream ↔ TAsyncChannelStream` 窗口/低水位同构；`bench` 复用 `TMemPipe/LoopServer` 同源
 - [x] **稳定性**: `E*LimitError` 炸弹（SFTP 1MiB 解压防 bomb / SevenZ 同窗）、`WINDOW_LOW_WATER_DIVISOR=2` 回补、`ProbeWatch`、`TryFlushQueued` 单飞、`Keeper` 生命周期闭环、`FWriteBuf` 保活
 - [x] **完整性**: `README + CONTRACT + TEST` 同版，`git diff --check 0`，`build-hygiene pass`
 

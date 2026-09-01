@@ -71,9 +71,11 @@ implementation
 uses
   nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
+  nextpas.core.crypto.aesctr,
   nextpas.core.crypto.aesni,
   nextpas.core.crypto.aes.ct64,
   nextpas.core.crypto.chacha20poly1305,
+  nextpas.core.crypto.errors,
   nextpas.core.crypto.hmac,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
@@ -518,7 +520,6 @@ var
   LBodyLen: SizeUInt;
   LPlainPtr, LDestPtr: PByte;
   LOk: Boolean;
-  LCt, LTag: TBytes;
 begin
   if FCounter = High(UInt64) then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: gcm counter wrap, rekey required');
@@ -550,17 +551,9 @@ begin
       else if Length(FKey) in [16, 32] then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
     end;
-    // fallback pure pascal: header already in Result, only 2 Moves (CT+Tag) vs 3
-    if not PurePascalAESGCMEncrypt(FKey, LNonce, ABodyPlain, Copy(Result, 0, 4), LCt, LTag) then
+    // fallback pure pascal zero-copy: direct ptr AAD + CT||Tag into Result[4], no Copy/Move alloc (fast path parity, bytes.ops single source via GHASH PByte)
+    if not PurePascalAESGCMEncryptPtrAAD(FKey, @LNonce[0], 12, LPlainPtr, Integer(LBodyLen), @Result[0], 4, LDestPtr, Integer(LBodyLen + GCM_TAG)) then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm encrypt failed');
-    try
-      if LBodyLen > 0 then
-        Move(LCt[0], Result[4], LBodyLen);
-      Move(LTag[0], Result[4 + LBodyLen], GCM_TAG);
-    finally
-      SecureZeroBytes(LCt);
-      SecureZeroBytes(LTag);
-    end;
     Inc(FCounter);
   finally
     SecureZeroBytes(LNonce);
@@ -598,7 +591,7 @@ var
   LNonce: TBytes;
   LWireLen, LCtLen: SizeUInt;
   LOk: Boolean;
-  LCt, LTag: TBytes;
+  LCtPtr, LTagPtr, LAadPtr, LDestPtr: PByte;
 begin
   LWireLen := SizeUInt(Length(AWire));
   if LWireLen < 4 + GCM_TAG then
@@ -637,187 +630,28 @@ begin
       else if Length(FKey) in [16, 32] then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
     end;
-    // fallback pure pascal with copies (2 Moves vs 3, AAD already header slice)
-    LCt := Copy(AWire, 4, SizeInt(LCtLen));
-    LTag := Copy(AWire, LWireLen - GCM_TAG, GCM_TAG);
-    try
-      if not PurePascalAESGCMDecrypt(FKey, LNonce, LCt, LTag, Copy(AWire, 0, 4), Result) then
-        raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
-      Inc(FCounter);
-    finally
-      SecureZeroBytes(LTag);
-      SecureZeroBytes(LCt);
-    end;
+    // fallback pure pascal zero-copy: PByte AAD/CT/Tag direct, no Copy alloc (fast path parity)
+    if LCtLen > 0 then
+      LCtPtr := PByte(@AWire[4])
+    else
+      LCtPtr := nil;
+    LTagPtr := PByte(@AWire[LWireLen - GCM_TAG]);
+    LAadPtr := PByte(@AWire[0]);
+    if LCtLen > 0 then
+      LDestPtr := PByte(@Result[0])
+    else
+      LDestPtr := nil;
+    if not PurePascalAESGCMDecryptPtrAAD(FKey, @LNonce[0], 12, LCtPtr, Integer(LCtLen), LTagPtr, LAadPtr, 4, LDestPtr, Integer(LCtLen)) then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
+    Inc(FCounter);
   finally
     SecureZeroBytes(LNonce);
   end;
 end;
 
-{ ---- aes*-ctr + hmac-sha2-*-etm ---- }
-
-{ AES-CTR 连续计数器流（跨包不重置），块级 XOR。
-  keystream 单块生成走最快可用后端：AES-NI → ct64 → 朴素实现（aes192 兜底）。
-  FKSOff 跨调用持久：部分消耗的计数器块在下次调用继续使用。
-  值语义 record：零堆分配，跨包状态随外层宿主生命周期持久，Done 必清零。}
-type
-  TAesCtrStream = record
-  private type
-    TKind = (akNi128, akNi256, akCt64, akNaive);
-  private
-    FKind: TKind;
-    FNiKey128: TAESNIExpandedKey128;
-    FNiKey256: TAESNIExpandedKey256;
-    FCt64Key: TAESCt64Key;
-    FExpanded: TAESExpandedKey;   { 仅 akNaive }
-    FNr: Integer;
-    FCtr: TAESBlock;      { 计数器块，大端递增 }
-    FKS: TAESBlock;       { 当前计数器块的 keystream }
-    FKSOff: Integer;      { 本块内已消耗字节 }
-    FKSValid: Boolean;
-    procedure RefreshKS; inline;
-    procedure IncCounter; inline;
-  public
-    procedure Init(const AKey, AIV: TBytes);
-    procedure Done; inline;
-    procedure XorInto(var AData: TBytes; AOffset, ACount: SizeUInt);
-  end;
-
-procedure TAesCtrStream.Init(const AKey, AIV: TBytes);
-var
-  LKey16: TAESNIBlock;
-begin
-  // single source secure zero via mem.secure (platform_secure_zero_memory), inline
-  SecureZeroMemory(@FCtr[0], SizeOf(FCtr));
-  SecureZeroMemory(@FKS[0], SizeOf(FKS));
-  SecureZeroMemory(@FNiKey128[0], SizeOf(FNiKey128));
-  SecureZeroMemory(@FNiKey256[0], SizeOf(FNiKey256));
-  SecureZeroMemory(@FCt64Key, SizeOf(FCt64Key));
-  SecureZeroMemory(@FExpanded[0], SizeOf(FExpanded));
-  RequireLen(AIV, 16, 'ctr iv');
-  FKSValid := False;   { 首次 XorInto 直接用 IV 作首块计数器，不先递增 }
-  FKSOff := 0;
-  FNr := 0;
-  Move(AIV[0], FCtr[0], 16);
-  case Length(AKey) of
-    16:
-      if IsAESNIAvailable then
-      begin
-        FKind := akNi128;
-        Move(AKey[0], LKey16[0], 16);
-        AESNIExpandKey128(LKey16, FNiKey128);
-      end
-      else
-      begin
-        FKind := akCt64;
-        AESCt64KeyExpand(Copy(AKey, 0, Length(AKey)), FCt64Key);
-      end;
-    32:
-      if IsAESNIAvailable then
-      begin
-        FKind := akNi256;
-        AESNIExpandKey256(AKey, FNiKey256);
-      end
-      else
-      begin
-        FKind := akCt64;
-        AESCt64KeyExpand(Copy(AKey, 0, Length(AKey)), FCt64Key);
-      end;
-  else
-    begin
-      FKind := akNaive;
-      AESKeyExpand(Copy(AKey, 0, Length(AKey)), FExpanded, FNr);
-    end;
-  end;
-end;
-
-procedure TAesCtrStream.Done;
-begin
-  // single source secure zero (same seam as Init), inline, prevents optimizer elision
-  SecureZeroMemory(@FCtr[0], SizeOf(FCtr));
-  SecureZeroMemory(@FKS[0], SizeOf(FKS));
-  SecureZeroMemory(@FNiKey128[0], SizeOf(FNiKey128));
-  SecureZeroMemory(@FNiKey256[0], SizeOf(FNiKey256));
-  SecureZeroMemory(@FCt64Key, SizeOf(FCt64Key));
-  SecureZeroMemory(@FExpanded[0], SizeOf(FExpanded));
-  FKSOff := 0;
-  FKSValid := False;
-  FNr := 0;
-end;
-
-procedure TAesCtrStream.RefreshKS;
-begin
-  case FKind of
-    akNi128:
-      AESNIEncryptBlock128(TAESNIBlock(FCtr), TAESNIBlock(FKS), FNiKey128);
-    akNi256:
-      AESNIEncryptBlock256(TAESNIBlock(FCtr), TAESNIBlock(FKS), FNiKey256);
-    akCt64:
-      AESCt64EncryptBlock(@FCtr[0], @FKS[0], FCt64Key);
-  else
-    AESEncryptBlock(FCtr, FKS, FExpanded, FNr);
-  end;
-  FKSValid := True;
-end;
-
-procedure TAesCtrStream.IncCounter;
-var
-  I: Integer;
-begin
-  I := 15;
-  while I >= 0 do
-  begin
-    Inc(FCtr[I]);
-    if FCtr[I] <> 0 then
-      Break;
-    Dec(I);
-  end;
-end;
-
-procedure TAesCtrStream.XorInto(var AData: TBytes; AOffset, ACount: SizeUInt);
-var
-  LDst: PByte;
-  LRem, LChunk: SizeUInt;
-begin
-  if ACount = 0 then Exit;
-  LDst := @AData[AOffset];
-  LRem := ACount;
-  // residual partial block from previous packet: bulk xor via bytes.ops single source
-  if FKSValid and (FKSOff > 0) and (FKSOff < 16) then
-  begin
-    LChunk := SizeUInt(16 - FKSOff);
-    if LChunk > LRem then LChunk := LRem;
-    MemXor(LDst, @FKS[FKSOff], LChunk);
-    Inc(LDst, LChunk);
-    Inc(FKSOff, Integer(LChunk));
-    Dec(LRem, LChunk);
-    if LRem = 0 then Exit;
-  end;
-  while LRem > 0 do
-  begin
-    if (not FKSValid) or (FKSOff >= 16) then
-    begin
-      if FKSOff >= 16 then IncCounter;
-      RefreshKS;
-      FKSOff := 0;
-    end;
-    if (LRem >= 16) and (FKSOff = 0) then
-    begin
-      // bulk 16-byte keystream xor: QWord-batched via bytes.ops MemXor (2x QWord vs 16 branches)
-      MemXor(LDst, @FKS[0], 16);
-      Inc(LDst, 16);
-      Dec(LRem, 16);
-      FKSOff := 16;
-    end else
-    begin
-      LChunk := SizeUInt(16 - FKSOff);
-      if LChunk > LRem then LChunk := LRem;
-      MemXor(LDst, @FKS[FKSOff], LChunk);
-      Inc(LDst, LChunk);
-      Inc(FKSOff, Integer(LChunk));
-      Dec(LRem, LChunk);
-    end;
-  end;
-end;
+{ ---- aes*-ctr + hmac-sha2-*-etm ----
+  TAesCtrStream single source: nextpas.core.crypto.aesctr (crypto Owner).
+  ssh 仅持有实例与 Done 生命周期，不再散落 keystream 状态；SshAesCtrCrypt 薄转发至 AesCtrCrypt。 }
 
 { EtM MAC 名称 → hash 算法 }
 function MacAlgoOf(const AMac: string): THashAlgorithm;
@@ -1038,21 +872,13 @@ begin
 end;
 
 function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
-var
-  LStream: TAesCtrStream;
 begin
-  if Length(AInput) = 0 then
-    Exit(nil);
-  if (Length(AKey) <> 16) and (Length(AKey) <> 24) and (Length(AKey) <> 32) then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: invalid aes key length');
-  if Length(AIV) <> 16 then
-    raise ESSHError.Create(sekCrypto, 'ssh cipher: invalid aes iv length');
-  Result := Copy(AInput, 0, Length(AInput));
-  LStream.Init(AKey, AIV);
+  // single source forward to crypto.aesctr (zero-copy keystream via TAesCtrStream, bytes.ops single source)
   try
-    LStream.XorInto(Result, 0, SizeUInt(Length(Result)));
-  finally
-    LStream.Done;
+    Result := AesCtrCrypt(AKey, AIV, AInput);
+  except
+    on E: ECryptoError do
+      raise ESSHError.Create(sekCrypto, E.Message);
   end;
 end;
 

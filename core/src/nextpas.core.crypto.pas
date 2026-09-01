@@ -34,6 +34,7 @@ uses
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aescbc,
   nextpas.core.crypto.aes.ct64,
+  nextpas.core.crypto.aesctr,
   nextpas.core.crypto.pkcs8,
   nextpas.core.crypto.argon2,
   nextpas.core.crypto.chacha20poly1305;

@@ -20,7 +20,7 @@
 | `nextpas.core.ssh.errors.pas` | `ESSHError` + `TSshErrorKind`（9 类） | base 侧 |
 | `nextpas.core.ssh.intf.pas` | 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`） | intf |
 | `nextpas.core.ssh.net.ffi.pas` + `ssh.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入） | ffi |
-| `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TsshWriter/TsshReader`（`Ensure/Need` 边界） | impl |
+| `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TSshWriter/TSshReader`（`Ensure/Need` 边界） | impl |
 | `nextpas.core.ssh.cipher.pas` | 包加密编解码器 `ISshPacketSender/Receiver`（AEAD / CTR+ETM，`TAesCtrStream` record值语义跨包 `keystream` 持久，`bytes.ops.MemXor` 批量） | impl |
 | `nextpas.core.ssh.transport.core.pas` | 传输核单源（`padding+Protect+Compress+Seq+Rekey` 纯内存，`transport(+.async)` 薄包装复用） | impl 核 |
 | `nextpas.core.ssh.transport.pas` | 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`） | impl |
@@ -82,8 +82,8 @@ TSshClientTransport  = nextpas.core.ssh.transport.TSshClientTransport;
 TSshKnownHosts       = nextpas.core.ssh.hostkey.TSshKnownHosts;
 TSshAgentClient      = nextpas.core.ssh.agent.TSshAgentClient;
 ISshCompressor       = nextpas.core.ssh.compress.ISshCompressor;
-TsshWriter           = nextpas.core.ssh.buffer.TsshWriter;
-TsshReader           = nextpas.core.ssh.buffer.TsshReader;
+TSshWriter           = nextpas.core.ssh.buffer.TSshWriter;
+TSshReader           = nextpas.core.ssh.buffer.TSshReader;
 TChannelWindow       = nextpas.core.ssh.window.TChannelWindow;
 TSshPrivateKey       = nextpas.core.ssh.keys.TSshPrivateKey;
 TAsyncSshTransport   = nextpas.core.ssh.transport.async.TAsyncSshTransport;
@@ -120,7 +120,7 @@ function SshExec(const AHost: string; APort: Word; const AUser, APass, ACmd: str
   ```
   新增算法必须追加到末位，不得重排现有优先级。
 - **[INV-KEX-3] KDF A-F 扩展链**：`SshKdfSha256(AKMpint,AH,AX,ASessionId,ALen)` 按 RFC 4253 §7.2：首块 `SHA256(K||H||X||session_id)`，后续 `SHA256(K||H||prev)` 串接截断；`K` 为 RFC 4251 `mpint(K)`（含长度前缀，`PutMPInt` 前导零规则），`H` 为交换散列，`X` 为单字节标签（A-F）。`session_id` 为首轮 `H` 且终身不变（重协商不更新）。
-- **[INV-KEX-4] 交换散列输入序**：curve25519 路径 `SshBuildCurve25519HashInput(Vc,Vs,Ic,Is,Ks,e,f,K)` 与 dh-group14 路径 `SshBuildDHGroup14HashInput(...)` 均为 `string(Vc) || string(Vs) || string(Ic) || string(Is) || string(Ks) || string(e) || string(f) || mpint(K)`，`e/f/K` 均为 `mpint`（前导零/符号位规则同 `TsshWriter.PutMPInt`），`Ks` 为主机密钥 `string(blob)`。顺序与类型错位即验签失败。
+- **[INV-KEX-4] 交换散列输入序**：curve25519 路径 `SshBuildCurve25519HashInput(Vc,Vs,Ic,Is,Ks,e,f,K)` 与 dh-group14 路径 `SshBuildDHGroup14HashInput(...)` 均为 `string(Vc) || string(Vs) || string(Ic) || string(Is) || string(Ks) || string(e) || string(f) || mpint(K)`，`e/f/K` 均为 `mpint`（前导零/符号位规则同 `TSshWriter.PutMPInt`），`Ks` 为主机密钥 `string(blob)`。顺序与类型错位即验签失败。
 - **[INV-KEX-5] 随机与拒绝**：`SshBuildKexInitPayloadEx` 要求 16 字节 `cookie`（非 16 即 `sekProtocol`）；`TSshKexCurve25519/DHGroup14` 私钥 32 字节 `SecureRandom`，共享 `K` 全零拒绝（`IsZeroBytes` 单源），DH 侧 `1 < f < p`（RFC 3526 2048-bit 素数 + `g=2`）否则 `sekKeyFormat`。
 
 ### 2.2 主机密钥
@@ -169,7 +169,7 @@ function SshExec(const AHost: string; APort: Word; const AUser, APass, ACmd: str
 
 - **[INV-SEC-1] 敏感清零**：`cipher` 侧 `FMainKey/FHeaderKey/FMacKey/TAesCtrStream.keystream` 等在 `Done/Destroy/Reset/ApplyNewKeys` 路径 `SecureZeroBytes`/`FillChar`，`TAesCtrStream.Done`/`Destroy` 必清零（record零堆分配）；`buffer` 不缓存敏感明文。
 - **[INV-SEC-2] 常量时间**：主机密钥/签名比对走 `TConstantTime.CompareBytes`（`crypto.constant_time`），`IsZeroBytes` 单源，全零共享拒绝。
-- **[INV-SEC-3] 边界守卫**：`TsshWriter.Ensure` 防溢出（`FLen > High(SizeUInt)-ACount` → `sekProtocol`）、`TsshReader.Need` 截断检查、未初始化结果 `Default(TSshExecResult)`、字符串 `PutStringText` 校 `UTF8IsValid`。
+- **[INV-SEC-3] 边界守卫**：`TSshWriter.Ensure` 防溢出（`FLen > High(SizeUInt)-ACount` → `sekProtocol`）、`TSshReader.Need` 截断检查、未初始化结果 `Default(TSshExecResult)`、字符串 `PutStringText` 校 `UTF8IsValid`。
 
 ---
 
@@ -218,7 +218,7 @@ end;
 ## 5. 内存管理与资源释放（稳定性）
 
 - **门面/会话**：`ISshSession/ISshAsyncSession` 为接口（`TInterfacedObject`），引用计数管理；`Close` 幂等，`Destroy` 中 `SecureZeroBytes` 敏感材料并释放 `z_stream`/`TBytes`/`IStream`。
-- **传输**：`TsshWriter/Reader` 内部 `TBytes` 按需 `SetLength` 增长，`Free` 在 `try-finally` 中；`TAsyncSshTransport.FWriteBuf` 保活至 `Protect` 完成；`transport.core` 纯内存，不触 IO，失败不泄漏。
+- **传输**：`TSshWriter/Reader` 内部 `TBytes` 按需 `SetLength` 增长，`Free` 在 `try-finally` 中；`TAsyncSshTransport.FWriteBuf` 保活至 `Protect` 完成；`transport.core` 纯内存，不触 IO，失败不泄漏。
 - **窗口/策略**：`TChannelWindow` 纯 record 零堆分配；`TSshRekeyPolicy/TKeepAlivePolicy` 持有 `TInstant` 值，无堆分配。
 - **压缩**：`ISshCompressor` 每方向单 `z_stream`，`Destroy` 中 `deflateEnd/inflateEnd`，`EnableCompression` 懒创建（`none` 零开销）。
 - **SFTP**：`SftpRoundTripAsync` 单 `pendingId` 串行 + `Busy→sekProtocol`，`4B` 长度前缀重组，`WINDOW_LOW_WATER_DIVISOR` 回补；`FWriteBuf` 保活，`Pending` 回调前清零防重入。
@@ -233,7 +233,7 @@ end;
 - **inline 冻结**：门面 `SshClient/SshConnect*`、策略 `TChannelWindow.ShouldReplenish/ReplenishAmount/Grant/CanSend/SliceSize/DidSend/Consume`、`TKeepAlivePolicy.ShouldSend`/`TKeepAliveScheduler.ShouldSend/Schedule/Cancel`、`TFlowWindow` 全 `inline` 薄转发；真实循环体 / SIMD 体（如 `SshKdfSha256` 扩展链、`X25519`）保持外联，不 inline 膨胀（见 `core/docs/design-conventions.md §2` 红线）。
 - **零拷贝**：
   - `TByteSpan` 非拥有视图：`StripLeadingZeroView/SpanEqual/IsZeroBytes` 经 `bytes.ops` 零分配；`Move/CopyNonOverlap` 直拷，不经编码转换。
-  - `TsshWriter.PutRaw` → `Move(APtr^,FBuf[FLen],ALen)` 零编码透传；`PutNameList` 单次 `SetLength+CopyNonOverlap` 拼接。
+  - `TSshWriter.PutRaw` → `Move(APtr^,FBuf[FLen],ALen)` 零编码透传；`PutNameList` 零临时 `TStringArray`/`StringsJoin`，单次 `PutUInt32+Ensure` + 直接 `Move` 逗号分隔拼接（KEXINIT 10 name-list/握手零堆 churn）。
   - `TChannelWindow/TFlowWindow` 纯 record 值语义，`Consume/Grant` 仅算术，无分配。
   - `TAsyncSshTransport.AsyncSendPacket` 复用 `FWriteBuf` 保活，不复制已加密帧。
   - `KnownHosts/Agent/KeepAliveScheduler/FlowWindow` 四晋升模块均为 facade/inline 转发，零额外堆分配（见 §8.2）。

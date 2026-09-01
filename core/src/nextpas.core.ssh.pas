@@ -76,8 +76,8 @@ type
   TSshAgentClient = nextpas.core.ssh.agent.TSshAgentClient;
   TSshAgentIdentity = nextpas.core.ssh.agent.TSshAgentIdentity;
   ISshCompressor = nextpas.core.ssh.compress.ISshCompressor;
-  TsshWriter = nextpas.core.ssh.buffer.TsshWriter;
-  TsshReader = nextpas.core.ssh.buffer.TsshReader;
+  TSshWriter = nextpas.core.ssh.buffer.TSshWriter;
+  TSshReader = nextpas.core.ssh.buffer.TSshReader;
   TChannelWindow = nextpas.core.ssh.window.TChannelWindow;
   TFlowWindow = nextpas.core.ssh.flow.window.TFlowWindow;
   TSshKnownHostsFacade = nextpas.core.ssh.knownhosts.TSshKnownHostsFacade;

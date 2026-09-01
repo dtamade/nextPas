@@ -65,7 +65,7 @@ end;
 
 procedure TSshChannelWire.EnsureCapacity(AAdditional: SizeUInt); inline;
 var
-  LNeed, LNewCap: SizeUInt;
+  LNeed, LBuffered, LNewCap: SizeUInt;
 begin
   if AAdditional = 0 then
     Exit;
@@ -73,6 +73,17 @@ begin
   LNeed := FLen + AAdditional;
   if LNeed <= SizeUInt(Length(FBuf)) then
     Exit;
+  // lazy reclaim: if buffered+additional fits capacity, compact instead of grow
+  // avoids 4B freq Move churn; single Move reclaims tail, zero extra alloc
+  LBuffered := BufferedLen;
+  if (FOff > 0) and (LBuffered + AAdditional <= SizeUInt(Length(FBuf))) then
+  begin
+    if LBuffered > 0 then
+      Move(FBuf[FOff], FBuf[0], LBuffered);
+    FOff := 0;
+    FLen := LBuffered;
+    Exit;
+  end;
   LNewCap := SizeUInt(Length(FBuf));
   if LNewCap < BYTES_BUILDER_MIN_GROW then
     LNewCap := BYTES_BUILDER_MIN_GROW;
@@ -104,7 +115,7 @@ end;
 
 procedure TSshChannelWire.CompactIfNeeded; inline;
 var
-  LBuffered: SizeUInt;
+  LBuffered, LCap: SizeUInt;
 begin
   if FOff = 0 then
     Exit;
@@ -115,14 +126,17 @@ begin
     FLen := 0;
     Exit;
   end;
-  if (FOff > 4096) or (FOff > FLen div 2) then
+  LCap := SizeUInt(Length(FBuf));
+  // lazy compact: raise threshold to avoid 4B freq Move churn;
+  // 32KB absolute or (8KB + half capacity), single Move, inline hot path
+  // shrink only if hugely over-allocated (>8x + 64KB), keep capacity otherwise
+  if (FOff > 32768) or ((FOff > 8192) and (FOff > LCap div 2)) then
   begin
     Move(FBuf[FOff], FBuf[0], LBuffered);
     FOff := 0;
     FLen := LBuffered;
     // keep capacity (Length(FBuf) stays), avoid shrink-realloc churn; logical FLen trimmed
-    // optional shrink if hugely over-allocated: >4x + 4K
-    if SizeUInt(Length(FBuf)) > LBuffered * 4 + 4096 then
+    if LCap > LBuffered * 8 + 65536 then
       SetLength(FBuf, LBuffered * 2 + 64);
   end;
 end;

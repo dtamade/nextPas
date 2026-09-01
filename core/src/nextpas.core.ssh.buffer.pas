@@ -2,8 +2,8 @@ unit nextpas.core.ssh.buffer;
 
 {** nextpas.core.ssh - RFC 4251 wire 数据类型读写器。
  *
- * TsshWriter 把 byte/boolean/uint32/string/mpint/name-list 打进载荷；
- * TsshReader 做反向解析。所有越界访问抛 ESSHError(sekProtocol)。
+ * TSshWriter 把 byte/boolean/uint32/string/mpint/name-list 打进载荷；
+ * TSshReader 做反向解析。所有越界访问抛 ESSHError(sekProtocol)。
  *
  * 约定：string 与 TBytes 之间按原始字节透传（UTF-8 由调用方保证），
  * 不在本单元做字符集转换。PutStringText 入口显式校验 UTF-8，
@@ -24,7 +24,7 @@ uses
 
 type
   { SSH 载荷写入器 }
-  TsshWriter = class
+  TSshWriter = class
   private
     FBuf: TBytes;
     FLen: SizeUInt;
@@ -50,7 +50,7 @@ type
   end;
 
   { SSH 载荷读取器 }
-  TsshReader = class
+  TSshReader = class
   private
     FData: TBytes;
     FPos: SizeUInt;
@@ -98,16 +98,16 @@ begin
   Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
-{ TsshWriter }
+{ TSshWriter }
 
-constructor TsshWriter.Create(ACapacityHint: SizeUInt);
+constructor TSshWriter.Create(ACapacityHint: SizeUInt);
 begin
   inherited Create;
   SetLength(FBuf, ACapacityHint);
   FLen := 0;
 end;
 
-procedure TsshWriter.Ensure(ACount: SizeUInt);
+procedure TSshWriter.Ensure(ACount: SizeUInt);
 var
   LNeed: SizeUInt;
   LNewCap: SizeUInt;
@@ -134,17 +134,17 @@ begin
   SetLength(FBuf, LNewCap);
 end;
 
-procedure TsshWriter.Clear;
+procedure TSshWriter.Clear;
 begin
   FLen := 0;
 end;
 
-function TsshWriter.Count: SizeUInt;
+function TSshWriter.Count: SizeUInt;
 begin
   Result := FLen;
 end;
 
-function TsshWriter.ToBytes: TBytes;
+function TSshWriter.ToBytes: TBytes;
 begin
   Result := nil;
   SetLength(Result, FLen);
@@ -152,19 +152,19 @@ begin
     Move(FBuf[0], Result[0], FLen);
 end;
 
-procedure TsshWriter.PutByte(AValue: Byte);
+procedure TSshWriter.PutByte(AValue: Byte);
 begin
   Ensure(1);
   FBuf[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TsshWriter.PutBoolean(AValue: Boolean);
+procedure TSshWriter.PutBoolean(AValue: Boolean);
 begin
   PutByte(Ord(AValue));
 end;
 
-procedure TsshWriter.PutUInt32(AValue: UInt32);
+procedure TSshWriter.PutUInt32(AValue: UInt32);
 begin
   Ensure(4);
   FBuf[FLen] := Byte(AValue shr 24);
@@ -174,13 +174,13 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TsshWriter.PutStringBytes(const AValue: TBytes);
+procedure TSshWriter.PutStringBytes(const AValue: TBytes);
 begin
   PutUInt32(UInt32(Length(AValue)));
   PutRaw(AValue);
 end;
 
-procedure TsshWriter.PutStringText(const AText: string);
+procedure TSshWriter.PutStringText(const AText: string);
 begin
   if (Length(AText) > 0) and (not UTF8IsValid(PByte(PChar(AText)), SizeUInt(Length(AText)))) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
@@ -189,7 +189,7 @@ begin
     PutRaw(PByte(PChar(AText)), SizeUInt(Length(AText)));
 end;
 
-procedure TsshWriter.PutMPInt(const AMagnitude: TBytes);
+procedure TSshWriter.PutMPInt(const AMagnitude: TBytes);
 var
   LView: TByteSpan;
 begin
@@ -212,28 +212,53 @@ begin
   end;
 end;
 
-procedure TsshWriter.PutNameList(const ANames: array of string);
+procedure TSshWriter.PutNameList(const ANames: array of string);
 var
   I: Integer;
-  LJoined: string;
-  LArr: nextpas.core.text.strings.TStringArray;
+  LTotal: SizeUInt;
 begin
   if Length(ANames) = 0 then
   begin
     PutStringText('');
     Exit;
   end;
-  { perf: single source text.strings.StringsJoin (vs hand-rolled CopyNonOverlap loop);
-    single SetLength+CopyNonOverlap, zero-copy string ref moves, O(n) single allocation
-    — same pattern as bytes.ops.SpanConcatMany single source. Avoids per-element realloc. }
-  SetLength(LArr, Length(ANames));
+  { perf: zero intermediate TStringArray/StringsJoin heap alloc; single PutUInt32+single Ensure
+    + direct Move per element + ',' separator — O(n) single buffer growth, no temp string churn.
+    High-freq KEXINIT builds 10 name-lists per handshake; eliminating per-call SetLength(LArr)+
+    StringsJoin single alloc cuts 10 heap allocs/handshake → zero heap for PutNameList itself.
+    single source: reuses bytes.ops zero-copy Move semantics (no text.strings indirection),
+    FBuf direct copy via Move (zero-copy string payload without temp), inline candidate.
+    stability: per-element UTF8IsValid mirrors PutStringText, no silent bad encoding; overflow
+    guarded via Ensure/packet-limit; resource release unchanged (no alloc to leak). }
+  LTotal := 0;
   for I := 0 to High(ANames) do
-    LArr[I] := ANames[I];
-  LJoined := StringsJoin(LArr, ',');
-  PutStringText(LJoined);
+  begin
+    if (Length(ANames[I]) > 0) and (not UTF8IsValid(PByte(PChar(ANames[I])), SizeUInt(Length(ANames[I])))) then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: PutNameList requires UTF-8');
+    Inc(LTotal, SizeUInt(Length(ANames[I])));
+  end;
+  if Length(ANames) > 1 then
+    Inc(LTotal, SizeUInt(Length(ANames) - 1));
+  PutUInt32(UInt32(LTotal));
+  if LTotal = 0 then
+    Exit;
+  Ensure(LTotal);
+  for I := 0 to High(ANames) do
+  begin
+    if Length(ANames[I]) > 0 then
+    begin
+      Move(PChar(ANames[I])^, FBuf[FLen], Length(ANames[I]));
+      Inc(FLen, SizeUInt(Length(ANames[I])));
+    end;
+    if I < High(ANames) then
+    begin
+      FBuf[FLen] := Byte(',');
+      Inc(FLen);
+    end;
+  end;
 end;
 
-procedure TsshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
+procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
 begin
   if (ALen = 0) or (APtr = nil) then
     Exit;
@@ -242,22 +267,22 @@ begin
   Inc(FLen, ALen);
 end;
 
-procedure TsshWriter.PutRaw(const AValue: TBytes);
+procedure TSshWriter.PutRaw(const AValue: TBytes);
 begin
   if Length(AValue) > 0 then
     PutRaw(@AValue[0], SizeUInt(Length(AValue)));
 end;
 
-{ TsshReader }
+{ TSshReader }
 
-constructor TsshReader.Create(const AData: TBytes);
+constructor TSshReader.Create(const AData: TBytes);
 begin
   inherited Create;
   FData := AData;
   FPos := 0;
 end;
 
-procedure TsshReader.Need(ACount: SizeUInt);
+procedure TSshReader.Need(ACount: SizeUInt);
 begin
   if Remaining < ACount then
     raise ESSHError.Create(sekProtocol,
@@ -265,46 +290,46 @@ begin
       ', remaining ' + IntToStr(Remaining) + ')');
 end;
 
-function TsshReader.AtEnd: Boolean;
+function TSshReader.AtEnd: Boolean;
 begin
   Result := FPos >= SizeUInt(Length(FData));
 end;
 
-function TsshReader.Remaining: SizeUInt;
+function TSshReader.Remaining: SizeUInt;
 begin
   Result := SizeUInt(Length(FData)) - FPos;
 end;
 
-function TsshReader.Position: SizeUInt;
+function TSshReader.Position: SizeUInt;
 begin
   Result := FPos;
 end;
 
-function TsshReader.PeekByte: Byte;
+function TSshReader.PeekByte: Byte;
 begin
   Need(1);
   Result := FData[FPos];
 end;
 
-function TsshReader.ReadByte: Byte;
+function TSshReader.ReadByte: Byte;
 begin
   Need(1);
   Result := FData[FPos];
   Inc(FPos);
 end;
 
-procedure TsshReader.Skip(ACount: SizeUInt);
+procedure TSshReader.Skip(ACount: SizeUInt);
 begin
   Need(ACount);
   Inc(FPos, ACount);
 end;
 
-function TsshReader.ReadBoolean: Boolean;
+function TSshReader.ReadBoolean: Boolean;
 begin
   Result := ReadByte <> 0;
 end;
 
-function TsshReader.ReadUInt32: UInt32;
+function TSshReader.ReadUInt32: UInt32;
 begin
   Need(4);
   Result := (UInt32(FData[FPos]) shl 24)
@@ -314,18 +339,18 @@ begin
   Inc(FPos, 4);
 end;
 
-procedure TsshWriter.PutUInt64(AValue: UInt64);
+procedure TSshWriter.PutUInt64(AValue: UInt64);
 begin
   PutUInt32(UInt32(AValue shr 32));
   PutUInt32(UInt32(AValue and $FFFFFFFF));
 end;
 
-function TsshReader.ReadUInt64: UInt64;
+function TSshReader.ReadUInt64: UInt64;
 begin
   Result := (UInt64(ReadUInt32) shl 32) or UInt64(ReadUInt32);
 end;
 
-function TsshReader.ReadStringBytes: TBytes;
+function TSshReader.ReadStringBytes: TBytes;
 var
   LLen: UInt32;
 begin
@@ -338,12 +363,12 @@ begin
   Inc(FPos, LLen);
 end;
 
-function TsshReader.ReadStringText: string;
+function TSshReader.ReadStringText: string;
 begin
   Result := SshTextFromBytes(ReadStringBytes);
 end;
 
-function TsshReader.ReadMPInt: TBytes;
+function TSshReader.ReadMPInt: TBytes;
 var
   LBlob: TBytes;
   LView: TByteSpan;
@@ -358,7 +383,7 @@ begin
     Move(LView.Data^, Result[0], LView.Len);
 end;
 
-function TsshReader.ReadNameList: TStringArray;
+function TSshReader.ReadNameList: TStringArray;
 var
   LJoined: string;
   LParts: TStringArray;

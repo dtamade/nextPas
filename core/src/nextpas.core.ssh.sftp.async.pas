@@ -60,6 +60,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.text.conv,
   nextpas.core.crypto.random,
   nextpas.core.ssh.window;
@@ -142,6 +143,7 @@ type
     FReadPath: string;
     FReadOffset: UInt64;
     FReadAccum: TBytes;
+    FReadBuilder: IBytesBuilder; // perf: doubling single source bytes.builder, inline zero-copy
     FReadCb: TProcSftpData;
     FReadCtx: Pointer;
     FWriteHandle: TBytes;
@@ -188,11 +190,7 @@ procedure Runner_SftpOnOpTimeout(AContext: Pointer); forward;
 procedure Runner_SftpOnSent(AErr: ESSHError; AContext: Pointer); forward;
 
 { Helpers }
-
-procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
-begin
-  nextpas.core.bytes.ops.BytesAppend(ADst, ASrc);
-end;
+// AppendChunkAsync removed: single source bytes.ops.BytesAppend inline; large accum via IBytesBuilder
 
 function GlobalReplyPayload(AOk: Boolean): TBytes;
 var LW: TsshWriter;
@@ -435,7 +433,7 @@ begin
   case APayload[0] of
     SSH_MSG_CHANNEL_DATA:
       begin
-        if ExtractData(APayload, False, LChunk) then AppendChunkAsync(FReadBuf, LChunk);
+        if ExtractData(APayload, False, LChunk) then BytesAppend(FReadBuf, LChunk); // single source bytes.ops inline, zero-copy Move
         if FState=asHandshake then
         begin
           if ExtractSftpPacket(LPkt) then
@@ -454,7 +452,7 @@ begin
         end;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
-      begin if ExtractData(APayload, True, LChunk) then AppendChunkAsync(FReadBuf, LChunk); TryDispatchSftp; PumpNext; end;
+      begin if ExtractData(APayload, True, LChunk) then BytesAppend(FReadBuf, LChunk); TryDispatchSftp; PumpNext; end; // bytes.ops single source
     SSH_MSG_CHANNEL_REQUEST:
       begin HandleChannelRequest(APayload); TryDispatchSftp; PumpNext; end;
     SSH_MSG_GLOBAL_REQUEST: begin HandleGlobalRequest; PumpNext; end;
@@ -771,7 +769,8 @@ var LW: TsshWriter; LTail: TBytes;
 begin
   if FClosed then begin if Assigned(ACallback) then ACallback(nil, ESSHError.Create(sekIO,'sftp async: closed'), AContext); Exit(False); end;
   if not Assigned(ACallback) then Exit(False);
-  FReadPath:=APath; FReadCb:=ACallback; FReadCtx:=AContext; SetLength(FReadAccum,0); FReadOffset:=0; FReadHandle:=nil;
+  FReadPath:=APath; FReadCb:=ACallback; FReadCtx:=AContext; SetLength(FReadAccum,0); FReadBuilder := CreateBytesBuilder; // perf: doubling single source
+  FReadOffset:=0; FReadHandle:=nil;
   LW:=TsshWriter.Create(64);
   try LW.PutStringText(APath); LW.PutUInt32(SSH_FXF_READ); PutAttrs(LW, Default(TSftpAttrs)); LTail:=LW.ToBytes; finally LW.Free; end;
   Result:=FChannel.SftpRoundTripAsync(SSH_FXP_OPEN, LTail, [SSH_FXP_HANDLE], @FsOnReadOpen, Self);
@@ -1012,7 +1011,7 @@ begin
   end;
   LR:=TsshReader.Create(APacket);
   try LR.ReadByte; LR.ReadUInt32; LChunk:=LR.ReadStringBytes; finally LR.Free; end;
-  AppendChunkAsync(Self.FReadAccum, LChunk);
+  if Length(LChunk) > 0 then Self.FReadBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline zero-copy, doubling
   Inc(Self.FReadOffset, SizeUInt(Length(LChunk)));
   if Length(LChunk)=0 then
   begin
@@ -1026,7 +1025,9 @@ procedure TAsyncSftpFileSystem.OnReadClose(const APacket: TBytes; AErr: ESSHErro
 var Self: TAsyncSftpFileSystem; Cb: TProcSftpData; Ctx: Pointer; Acc: TBytes;
 begin
   Self:=TAsyncSftpFileSystem(AContext);
-  Cb:=Self.FReadCb; Ctx:=Self.FReadCtx; Acc:=Self.FReadAccum; Self.FReadCb:=nil; Self.FReadHandle:=nil; SetLength(Self.FReadAccum,0);
+  Cb:=Self.FReadCb; Ctx:=Self.FReadCtx;
+  if Self.FReadBuilder <> nil then Acc:=Self.FReadBuilder.ToBytes else Acc:=Self.FReadAccum; // single alloc copy
+  Self.FReadCb:=nil; Self.FReadHandle:=nil; SetLength(Self.FReadAccum,0); Self.FReadBuilder := nil; // stability: release refcount
   if Assigned(Cb) then Cb(Acc, nil, Ctx);
 end;
 

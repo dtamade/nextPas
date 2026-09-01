@@ -48,6 +48,7 @@ implementation
 
 uses
   nextpas.core.bytes.builder,
+  nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -177,6 +178,9 @@ var
   LR: TsshReader;
   LRT: Byte;
   LN, I: Integer;
+  LBuilder: IStringBuilder;
+  LFirst: Boolean;
+  LText: string;
 begin
   Result := '';
   LTail := TsshWriter.Create(64);
@@ -192,13 +196,23 @@ begin
     LR.ReadByte;
     LR.ReadUInt32;
     LN := Integer(LR.ReadUInt32);
-    for I := 1 to LN do
+    if LN > 0 then
     begin
-      if Result <> '' then
-        Result := Result + ', ';
-      Result := Result + LR.ReadStringText;
-      LR.ReadStringText;
-      ReadAttrs(LR);
+      // perf: IStringBuilder 倍增追加 O(n) amortized，避 Result+', '+text O(n²) 重复拷贝与临时串；Move 零拷贝单源 bytes.ops/text.builder，inline 热路径；接口 refcount 保释放
+      LBuilder := MakeStringBuilder(256);
+      LFirst := True;
+      for I := 1 to LN do
+      begin
+        LText := LR.ReadStringText;
+        LR.ReadStringText;
+        ReadAttrs(LR);
+        if LFirst then
+          LFirst := False
+        else
+          LBuilder.AppendStr(', ');
+        LBuilder.AppendStr(LText);
+      end;
+      Result := LBuilder.ToString;
     end;
   finally
     LR.Free;

@@ -146,12 +146,12 @@ function EofPayload(ARemoteId: UInt32): TBytes;
 function ClosePayload(ARemoteId: UInt32): TBytes;
 function ChannelReplyPayload(ARemoteId: UInt32; AOk: Boolean): TBytes;
 function GlobalReplyPayload(AOk: Boolean): TBytes;
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
 
 implementation
 
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.bytes.builder;
 
 procedure TraceStr(const ALine: string);
 begin
@@ -194,11 +194,6 @@ var
   GNextLocalChannelId: UInt32 = 0;
 
 { ---- 载荷构造 ---- }
-
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
-begin
-  BytesAppend(ADst, ASrc);
-end;
 
 function SingleIdPayload(AMsg: Byte; ARemoteId: UInt32): TBytes;
 var
@@ -978,12 +973,17 @@ var
   LChan: TSshChannel;
   LChunk: TBytes;
   LExt: Boolean;
+  LOutBuilder, LErrBuilder: IBytesBuilder;
 begin
   { 函数结果缓冲可能被调用方循环复用并残留上次的托管字段
     （实测：复用目标变量连续 Exec 时 StdOut 残留导致输出成倍累积），
     必须整体清零后再追加 }
   Result := Default(TSshExecResult);
   Result.ExitCode := -1;
+  // perf: IBytesBuilder geometric doubling (BYTES_BUILDER_MIN_GROW=64) amortized O(1) per chunk,
+  // single Move per chunk, single ToBytes copy; avoids per-chunk SetLength+Move O(n²) churn
+  LOutBuilder := CreateBytesBuilder;
+  LErrBuilder := CreateBytesBuilder;
   LChan := TSshChannel.Create(ATransport, AInitialWindow, AMaxPacket, ATimeoutMs);
   try
     try
@@ -991,9 +991,17 @@ begin
       LChan.ExecCommand(ACommand);
       while LChan.PumpData(LChunk, LExt) do
         if LExt then
-          AppendChunk(Result.StdErr, LChunk)
+        begin
+          if Length(LChunk) > 0 then
+            LErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline, zero-copy Move
+        end
         else
-          AppendChunk(Result.StdOut, LChunk);
+        begin
+          if Length(LChunk) > 0 then
+            LOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline, zero-copy Move
+        end;
+      Result.StdOut := LOutBuilder.ToBytes; // single alloc copy for ownership; WrittenSpan zero-copy if needed
+      Result.StdErr := LErrBuilder.ToBytes;
       Result.ExitCode := LChan.ExitStatus;
     except
       { 通道异常时尽力互关，不掩盖原始错误 }

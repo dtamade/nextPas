@@ -67,8 +67,8 @@ type
   ISftpWire = nextpas.core.ssh.sftp.intf.ISftpWire;
   ISshFileSystem = nextpas.core.ssh.sftp.intf.ISshFileSystem;
 
-procedure PutAttrs(var AW: TsshWriter; const AAttrs: TSftpAttrs); inline;
-function ReadAttrs(var AR: TsshReader): TSftpAttrs; inline;
+procedure PutAttrs(var AW: TSshWriter; const AAttrs: TSftpAttrs); inline;
+function ReadAttrs(var AR: TSshReader): TSftpAttrs; inline;
 function SftpStatusName(ACode: UInt32): string; inline;
 
 function SftpOpenOnChannel(AChannel: TSshChannel;
@@ -84,12 +84,12 @@ uses
   nextpas.core.ssh.sftp.conn,
   nextpas.core.ssh.sftp.fs;
 
-procedure PutAttrs(var AW: TsshWriter; const AAttrs: TSftpAttrs); inline;
+procedure PutAttrs(var AW: TSshWriter; const AAttrs: TSftpAttrs); inline;
 begin
   nextpas.core.ssh.sftp.conn.PutAttrs(AW, AAttrs);
 end;
 
-function ReadAttrs(var AR: TsshReader): TSftpAttrs; inline;
+function ReadAttrs(var AR: TSshReader): TSftpAttrs; inline;
 begin
   Result := nextpas.core.ssh.sftp.conn.ReadAttrs(AR);
 end;
