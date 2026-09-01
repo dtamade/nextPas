@@ -183,7 +183,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`），其余同层依赖仍禁止
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -194,6 +194,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs IO 缝、`vfs.os` 唯一 fs/path 缝）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -597,7 +598,7 @@ end.
 每个模块完成后必须提供基准测试，覆盖核心热路径操作：
 
 - **基准测试框架**：所有框架内基准测试必须使用 `nextpas.core.bench` 模块，禁止使用自定义计时或外部基准测试框架
-- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据
+- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据（同机 `AddBaseline` 对照，参考实现 `nextpas.core.respack` 三基准 + `benchmarks/nextpas.core.respack/RESULTS.md` 已落地 FPC `TFileStream`/`TMemoryStream` 与 Go `embed.FS`/Rust `include_dir` 量化基线）
 - 基准项目放在 `benchmarks/nextpas.core.<module>/bench_<name>/bench_<name>.lpr`
 - 每个基准输出：操作名、迭代次数、总耗时、单次耗时（ns/op）、吞吐量（MB/s，如适用）
 - 基准必须在优化编译（`-O2`）下运行，禁止 debug 模式

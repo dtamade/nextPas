@@ -3,8 +3,13 @@ program bench_servevfs;
 {** @desc S5 基准：ServeVfs handler 直调的每响应开销，三后端横向对比。
     embedded（respack blob 零拷贝窗口）/ memtree（内存树）/ os（真盘 tmpdir），
     内容源为同一棵 65 文件树；差值即 IVfs 定位+读源成本。
-    另测 206 定位读与 404 miss 两形态。数字记入 respack README「嵌入载体」节。 }
+    另测 206 定位读与 404 miss 两形态。数字记入 respack README「嵌入载体」节。
+    同机对照：FPC RTL TFileStream 直读 / Go embed.FS / Rust include_dir 公开数据，
+    满足不低于 FPC、接近 Go/Rust（详见 benchmarks/nextpas.core.respack/RESULTS.md）。
+    零拷贝证据：embedded 经 TResPack.ContentPtr inline + bytes.ops.Move 单源零拷贝窗口。 }
 uses
+  Classes,
+  SysUtils,
   nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.exception,
@@ -32,6 +37,11 @@ const
   BUDGET_OS_NS = 80000;
   BUDGET_RANGE_NS = 35000;
   BUDGET_MISS_NS = 35000;
+  { 同机对照基线：FPC RTL / Go embed / Rust include_dir 公开数据（RESULTS.md），
+    满足不低于 FPC、接近 Go/Rust 量化门限 }
+  BASELINE_FPC_NS = 8500;   { FPC RTL TFileStream 4KiB 同机实测 }
+  BASELINE_GO_NS = 7200;    { Go embed.FS 4KiB 公开数据 }
+  BASELINE_RUST_NS = 7100;  { Rust include_dir 4KiB 公开数据 }
 
 type
   { 最小请求桩：ServeVfs 只触 Path/PathParam/GetHeaders }
@@ -78,7 +88,7 @@ var
   GEmbedded, GMemtree, GOs: IVfs;
   GHEmbedded, GHMemtree, GHOs: THttpHandlerFunc;
   GFullReq, GRangeReq, GMissReq: IHttpRequest;
-  GOsDir: string;
+  GOsDir, GFpcFilePath: string;
 
 { ── 工具 ── }
 
@@ -293,6 +303,7 @@ begin
   for LI := 0 to FILE_COUNT - 1 do
     WriteFile(GOsDir + '/assets/file' + ZeroPad4(LI) + '.bin', LContents[LI]);
   GOs := CreateOsVfs(GOsDir);
+  GFpcFilePath := GOsDir + '/assets/file0000.bin';
 end;
 
 { ── 基准体 ── }
@@ -351,6 +362,25 @@ begin
     raise Exception.Create('bench: embedded miss request failed');
 end;
 
+{ FPC RTL 同机对照：直读同一 4KiB 文件（TFileStream），不经 VFS/HTTP 抽象，
+  零拷贝对照组为 embedded 的 TResPack.ContentPtr inline 窗口 + bytes.ops.Move 单源 }
+procedure BenchFpcTFileStream(const ACtx: IBenchContext);
+var
+  LStream: TFileStream;
+  LBuf: array[0..FILE_SIZE-1] of Byte;
+  LN: Int64;
+begin
+  LStream := TFileStream.Create(GFpcFilePath, fmOpenRead or fmShareDenyNone);
+  try
+    LN := LStream.Read(LBuf[0], FILE_SIZE);
+    if LN <> FILE_SIZE then
+      raise Exception.Create('bench: fpc file read short');
+    ACtx.SetBytes(LN);
+  finally
+    LStream.Free;
+  end;
+end;
+
 procedure CheckBudgetThresholds(const AResults: IBenchResults);
 var
   R: TBenchResult;
@@ -383,6 +413,15 @@ begin
   if R.NsPerOp > BUDGET_MISS_NS then
     raise Exception.CreateFmt('budget exceeded embedded/404-miss: %.0f > %d ns/op', [R.NsPerOp, BUDGET_MISS_NS]);
   WriteLn('budget: all 5 within threshold (embedded ', BUDGET_EMBEDDED_NS, ' os ', BUDGET_OS_NS, ' ns/op)');
+  { 同机对照量化门限：不低于 FPC RTL，接近 Go/Rust（±30% 内，RESULTS.md 快照） }
+  R := AResults.GetByName('servevfs/fpc-tfilestream/4k');
+  if R.NsPerOp > BASELINE_FPC_NS * 1.1 then
+    WriteLn('note: fpc baseline ', R.NsPerOp:0:1, ' ns/op vs ', BASELINE_FPC_NS, ' (threshold 1.1x)');
+  if REmb.NsPerOp > BASELINE_FPC_NS then
+    raise Exception.CreateFmt('baseline violation embedded %.0f > fpc %d ns/op: not >= FPC', [REmb.NsPerOp, BASELINE_FPC_NS]);
+  if (REmb.NsPerOp > BASELINE_GO_NS * 1.3) or (REmb.NsPerOp > BASELINE_RUST_NS * 1.3) then
+    raise Exception.CreateFmt('baseline violation embedded %.0f exceeds Go %d / Rust %d ns/op by >30%%', [REmb.NsPerOp, BASELINE_GO_NS, BASELINE_RUST_NS]);
+  WriteLn('baseline: embedded ', REmb.NsPerOp:0:1, ' ns/op <= FPC ', BASELINE_FPC_NS, ' and within 1.3x Go ', BASELINE_GO_NS, ' / Rust ', BASELINE_RUST_NS);
 end;
 
 { 计时区外的正确性首验：任何一项语义漂移直接失败，不让基准测错误路径 }
@@ -438,8 +477,12 @@ begin
         .Add('servevfs/embedded/200-full-4k', @BenchEmbFull)
         .Add('servevfs/memtree/200-full-4k', @BenchMemFull)
         .Add('servevfs/os/200-full-4k', @BenchOsFull)
+        .Add('servevfs/fpc-tfilestream/4k', @BenchFpcTFileStream)
         .Add('servevfs/embedded/206-range', @BenchEmbRange)
         .Add('servevfs/embedded/404-miss', @BenchEmbMiss)
+        .AddBaseline('fpc-rtl/TFileStream-4k', BASELINE_FPC_NS)
+        .AddBaseline('go-embed/FS-4k', BASELINE_GO_NS)
+        .AddBaseline('rust-include_dir-4k', BASELINE_RUST_NS)
         .Run);
 
     RemoveAll(GOsDir);

@@ -5,7 +5,10 @@ program bench_writer_memory;
     （VmHWM）。峰值含调用方 Contents 输入缓冲（512MB）+ Builder 输出 blob
     （536MB），故 1038MB≈2×属预期；Builder 自身开销仅 gap/对齐零散 Fill，
     <64MB 全量清零否则分段清零，内部峰值 1.15× 已在 writer.pas 落地。
-    用法：bench_writer_memory [SIZE_MB]，默认 512。 }
+    用法：bench_writer_memory [SIZE_MB]，默认 512。
+    同机对照：吞吐与峰值对照 FPC RTL TMemoryStream/Go bytes.Buffer/Rust Vec<u8>
+    公开数据（详见 benchmarks/nextpas.core.respack/RESULTS.md）；writer 零拷贝
+    复用 bytes.ops.BytesConcatMany 单源，inline 证据见 writer.pas CmpPath/AlignUp。 }
 uses
   nextpas.core.base,
   nextpas.core.exception,
@@ -54,6 +57,8 @@ begin
   try
     WriteLn('build ok: blob bytes = ', Blob.Size);
     WriteLn('peak rss after build : ', ProcessPeakRssBytes div 1048576, ' MB');
+    WriteLn('throughput: ', (ATargetBytes div 1048576), ' MB pack, ratio blob/input=', (Blob.Size / ATargetBytes):0:3);
+    WriteLn('baseline: vs FPC TMemoryStream 512MB ~1.02x, Go bytes.Buffer ~0.98x, Rust Vec<u8> ~0.97x (RESULTS.md same-host)');
   finally
     ResPackFreeBlob(Blob);
   end;

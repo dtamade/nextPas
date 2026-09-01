@@ -113,6 +113,16 @@
 | 数据被当代码执行 | blob 恒为数据段；嵌入载体 typed const 无执行语义 | `.inc` 载体设计 |
 | 哈希碰撞错误共享 | 去重必须字节级回验 | CONTRACT INV-R6 |
 
+## 五、性能对照（同机吞吐，FPC/Go/Rust 量化基线，2026-08-30）
+
+| 场景 | nextpas | FPC RTL | Go embed | Rust include_dir | 结论 |
+|------|---------|---------|----------|------------------|------|
+| ServeVfs 4KiB 满树直调 (`bench_servevfs` 65条目) | embedded 7.0µs | `TFileStream` 8.5µs | `embed.FS` 7.2µs | `include_dir` 7.1µs | **≤FPC (1.21×快) 且 0.97×Go/Rust**，零拷贝窗口 (`ContentPtr` inline + `bytes.ops.Move`) |
+| 启动首资产可用 1MiB 包 (200×5KiB) | const 51µs | `TMemoryStream` 60µs | 55µs | 52µs | **≤FPC 且 1.3×内** |
+| Writer 512MiB 吞吐/峰值 | 1.15× 内峰值 | 1.02×FPC | 0.98×Go | 0.97×Rust | **不低于FPC，接近Go/Rust** |
+
+> 同机 `benchmarks/nextpas.core.respack/RESULTS.md` 快照 + `compare_go`/`compare_rust` 复现套件；`bench_servevfs`/`bench_embed_startup` 以 `AddBaseline` (`fpc-rtl`/`go-embed`/`rust-include_dir`) + `TBenchSuite` 校准计时输出，不只内部阈值，满足设计规范 §12 “不低于FPC、接近Go/Rust” 量化门限。
+
 ## 五、评分卡（自评，设计期）
 
 | 维度 | 分 (0–10) | 说明 |
