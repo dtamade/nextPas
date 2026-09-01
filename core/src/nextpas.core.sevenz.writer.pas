@@ -145,6 +145,7 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.checksum.crc32,
   nextpas.core.compress,
   nextpas.core.compress.bzip2,
@@ -562,6 +563,44 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       SevenZAppendByte(AOut, 0);
     end;
 
+    procedure AppendVarintBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
+    begin
+      SevenZWriteNumberToBuilder(ABuilder, AValue);
+    end;
+
+    procedure AppendUtf16LeNameBuilder(const ABuilder: IBytesBuilder; const AName: string);
+    var
+      LUnits: TBytes;
+    begin
+      LUnits := SevenZUtf8ToUtf16Le(AName);
+      if Length(LUnits) > 0 then
+        SevenZAppendBytesToBuilder(ABuilder, @LUnits[0], Length(LUnits));
+      SevenZAppendByteToBuilder(ABuilder, 0);
+      SevenZAppendByteToBuilder(ABuilder, 0);
+    end;
+
+    procedure AppendBoolVectorToBuilder(const ABuilder: IBytesBuilder; const AVals: array of Boolean);
+    var
+      LByteIdx: SizeInt;
+      LBit: Integer;
+      LB: Byte;
+    begin
+      for LByteIdx := 0 to (Length(AVals) + 7) div 8 - 1 do
+      begin
+        LB := 0;
+        for LBit := 0 to 7 do
+          if (LByteIdx * 8 + LBit < Length(AVals)) and AVals[LByteIdx * 8 + LBit] then
+            LB := LB or Byte(1 shl (7 - LBit));
+        SevenZAppendByteToBuilder(ABuilder, LB);
+      end;
+    end;
+
+    procedure AppendBoolVector2AllDefinedToBuilder(const ABuilder: IBytesBuilder; ACount: SizeInt); inline;
+    begin
+      if ACount > 0 then
+        SevenZAppendByteToBuilder(ABuilder, $01);
+    end;
+
     { 多 folder 流信息：PackInfo + UnpackInfo + SubStreamsInfo。
       每个 folder 独立 coder 链（应用序，末位恒为压缩器），绑定对
       不落盘：N 个 coder 恰 N-1 对 [InIndex=j-1, OutIndex=j]。 }
@@ -679,6 +718,118 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       SevenZAppendByte(AOut, SZ_ID_END);
     end;
 
+    procedure BuildStreamsInfoMultiBuilder(const ABuilder: IBytesBuilder;
+      const AFolders: array of TFolderBuild);
+    var
+      LI, LJ, LK: SizeInt;
+      LTotalPacks: SizeInt;
+      LNeedNumStreams: Boolean;
+      LNeedSizes: Boolean;
+
+      function MethodIdSize(AId: UInt64): Integer;
+      begin
+        Result := 1;
+        AId := AId shr 8;
+        while AId <> 0 do
+        begin
+          Inc(Result);
+          AId := AId shr 8;
+        end;
+      end;
+
+    begin
+      LTotalPacks := Length(AFolders);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_PACK_INFO);
+      AppendVarintBuilder(ABuilder, 0);
+      AppendVarintBuilder(ABuilder, UInt64(LTotalPacks));
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_SIZE);
+      for LI := 0 to High(AFolders) do
+        AppendVarintBuilder(ABuilder, UInt64(Length(AFolders[LI].PackedData)));
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_CRC);
+      AppendBoolVector2AllDefinedToBuilder(ABuilder, LTotalPacks);
+      for LI := 0 to High(AFolders) do
+        SevenZAppendUInt32LEToBuilder(ABuilder, Crc32OfBytes(AFolders[LI].PackedData));
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_UNPACK_INFO);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_FOLDER);
+      AppendVarintBuilder(ABuilder, UInt64(LTotalPacks));
+      SevenZAppendByteToBuilder(ABuilder, 0);
+      for LI := 0 to High(AFolders) do
+      begin
+        AppendVarintBuilder(ABuilder, UInt64(Length(AFolders[LI].Specs)));
+        for LJ := 0 to High(AFolders[LI].Specs) do
+        begin
+          if Length(AFolders[LI].Specs[LJ].Props) > 0 then
+            SevenZAppendByteToBuilder(ABuilder, Byte(MethodIdSize(AFolders[LI].Specs[LJ].MethodId) or $20))
+          else
+            SevenZAppendByteToBuilder(ABuilder, Byte(MethodIdSize(AFolders[LI].Specs[LJ].MethodId)));
+          for LK := MethodIdSize(AFolders[LI].Specs[LJ].MethodId) - 1 downto 0 do
+            SevenZAppendByteToBuilder(ABuilder,
+              Byte((AFolders[LI].Specs[LJ].MethodId shr (8 * LK)) and $FF));
+          if Length(AFolders[LI].Specs[LJ].Props) > 0 then
+          begin
+            AppendVarintBuilder(ABuilder, UInt64(Length(AFolders[LI].Specs[LJ].Props)));
+            SevenZAppendBytesToBuilder(ABuilder, @AFolders[LI].Specs[LJ].Props[0],
+              Length(AFolders[LI].Specs[LJ].Props));
+          end;
+        end;
+        for LJ := 1 to High(AFolders[LI].Specs) do
+        begin
+          AppendVarintBuilder(ABuilder, UInt64(LJ - 1));
+          AppendVarintBuilder(ABuilder, UInt64(LJ));
+        end;
+      end;
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_CODERS_UNPACK_SZ);
+      for LI := 0 to High(AFolders) do
+        for LJ := 0 to High(AFolders[LI].Specs) do
+          AppendVarintBuilder(ABuilder, AFolders[LI].Specs[LJ].OutSize);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_CRC);
+      AppendBoolVector2AllDefinedToBuilder(ABuilder, LTotalPacks);
+      for LI := 0 to High(AFolders) do
+        SevenZAppendUInt32LEToBuilder(ABuilder, Crc32OfBytes(AFolders[LI].RawSolid));
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_SUBSTREAMS_INFO);
+      LNeedNumStreams := False;
+      LNeedSizes := False;
+      for LI := 0 to High(AFolders) do
+      begin
+        if AFolders[LI].SubCount <> 1 then
+          LNeedNumStreams := True;
+        if AFolders[LI].SubCount > 1 then
+          LNeedSizes := True;
+      end;
+      if LTotalPacks > 1 then
+        LNeedNumStreams := LNeedNumStreams or (Length(AFolders) > 1);
+      if LNeedNumStreams then
+      begin
+        SevenZAppendByteToBuilder(ABuilder, SZ_ID_NUM_UNPACK_STREAM);
+        for LI := 0 to High(AFolders) do
+          AppendVarintBuilder(ABuilder, AFolders[LI].SubCount);
+      end;
+      if LNeedSizes then
+      begin
+        SevenZAppendByteToBuilder(ABuilder, SZ_ID_SIZE);
+        for LI := 0 to High(AFolders) do
+          if AFolders[LI].SubCount > 1 then
+            for LJ := 0 to SizeInt(AFolders[LI].SubCount) - 2 do
+              AppendVarintBuilder(ABuilder, AFolders[LI].SubSizes[LJ]);
+      end;
+      LK := 0;
+      for LI := 0 to High(AFolders) do
+        if AFolders[LI].SubCount > 1 then
+          LK := LK + SizeInt(AFolders[LI].SubCount);
+      if LK > 0 then
+      begin
+        SevenZAppendByteToBuilder(ABuilder, SZ_ID_CRC);
+        AppendBoolVector2AllDefinedToBuilder(ABuilder, LK);
+        for LI := 0 to High(AFolders) do
+          if AFolders[LI].SubCount > 1 then
+            for LJ := 0 to High(AFolders[LI].SubCrcs) do
+              SevenZAppendUInt32LEToBuilder(ABuilder, AFolders[LI].SubCrcs[LJ]);
+      end;
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
+    end;
+
     { FilesInfo 属性为 TLV：[id][varint size][定长载荷]，与读端
       SevenZParseFilesInfo 的切片方式对称 }
     procedure AppendFileProp(var AOut: TBytes; AId: Byte;
@@ -688,6 +839,15 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       AppendVarint(AOut, UInt64(Length(APayload)));
       if Length(APayload) > 0 then
         SevenZAppendBytes(AOut, @APayload[0], Length(APayload));
+    end;
+
+    procedure AppendFilePropBuilder(const ABuilder: IBytesBuilder; AId: Byte;
+      const APayload: TBytes); inline;
+    begin
+      SevenZAppendByteToBuilder(ABuilder, AId);
+      AppendVarintBuilder(ABuilder, UInt64(Length(APayload)));
+      if Length(APayload) > 0 then
+        SevenZAppendBytesToBuilder(ABuilder, @APayload[0], Length(APayload));
     end;
 
     procedure BuildFilesInfo(var AOut: TBytes);
@@ -766,6 +926,81 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       end;
       AppendFileProp(AOut, SZ_ID_WIN_ATTRIBUTES, LPayload);
       SevenZAppendByte(AOut, SZ_ID_END);
+    end;
+
+    procedure BuildFilesInfoBuilder(const ABuilder: IBytesBuilder);
+    var
+      LTotal, LEmptyCnt, LSubIdx, LI: SizeInt;
+      LEmptyStreamFlags: array of Boolean;
+      LEmptyFileStreamFlags: array of Boolean;
+      LPayload: TBytes;
+
+      procedure BuildBoolVectorPayload(const AVals: array of Boolean);
+      begin
+        SetLength(LPayload, 0);
+        AppendBoolVector(LPayload, AVals);
+      end;
+
+    begin
+      LPayload := nil;
+      LTotal := Length(FEntries);
+      SetLength(LEmptyStreamFlags, LTotal);
+      for LSubIdx := 0 to LTotal - 1 do
+        if FEntries[LSubIdx].IsDir then
+          LEmptyStreamFlags[LSubIdx] := True
+        else if FEntries[LSubIdx].Source = esReader then
+          LEmptyStreamFlags[LSubIdx] := FEntries[LSubIdx].ReaderSize = 0
+        else
+          LEmptyStreamFlags[LSubIdx] := Length(FEntries[LSubIdx].Data) = 0;
+      LEmptyCnt := CountTrue(LEmptyStreamFlags);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_FILES_INFO);
+      AppendVarintBuilder(ABuilder, UInt64(LTotal));
+      if LEmptyCnt > 0 then
+      begin
+        BuildBoolVectorPayload(LEmptyStreamFlags);
+        AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_STREAM, LPayload);
+      end;
+      if LEmptyCnt > 0 then
+      begin
+        SetLength(LEmptyFileStreamFlags, LEmptyCnt);
+        LSubIdx := 0;
+        for LI := 0 to LTotal - 1 do
+          if LEmptyStreamFlags[LI] then
+          begin
+            LEmptyFileStreamFlags[LSubIdx] := not FEntries[LI].IsDir;
+            Inc(LSubIdx);
+          end;
+        if CountTrue(LEmptyFileStreamFlags) > 0 then
+        begin
+          SetLength(LPayload, 0);
+          AppendBoolVector(LPayload, LEmptyFileStreamFlags);
+          AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_FILE, LPayload);
+        end;
+      end;
+      SetLength(LPayload, 0);
+      SevenZAppendByte(LPayload, 0);
+      for LI := 0 to LTotal - 1 do
+        AppendUtf16LeName(LPayload, FEntries[LI].Name);
+      AppendFilePropBuilder(ABuilder, SZ_ID_NAME, LPayload);
+      SetLength(LPayload, 0);
+      AppendBoolVector2AllDefined(LPayload, LTotal);
+      SevenZAppendByte(LPayload, 0);
+      for LI := 0 to LTotal - 1 do
+        SevenZAppendUInt64LE(LPayload,
+          SevenZUnixToFILETIME(FEntries[LI].MTimeUnixSec));
+      AppendFilePropBuilder(ABuilder, SZ_ID_MTIME, LPayload);
+      SetLength(LPayload, 0);
+      AppendBoolVector2AllDefined(LPayload, LTotal);
+      SevenZAppendByte(LPayload, 0);
+      for LI := 0 to LTotal - 1 do
+      begin
+        if FEntries[LI].IsDir then
+          SevenZAppendUInt32LE(LPayload, SEVENZ_ATTR_DIRECTORY)
+        else
+          SevenZAppendUInt32LE(LPayload, $00000020);
+      end;
+      AppendFilePropBuilder(ABuilder, SZ_ID_WIN_ATTRIBUTES, LPayload);
+      SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
     end;
 
     procedure WriteSigLE32(var ASig: TBytes; AOfs: SizeInt; AVal: UInt32);
@@ -902,6 +1137,86 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       SevenZAppendByte(ABlock, SZ_ID_END);
     end;
 
+    procedure BuildEncodedHeaderPartsToBuilder(const APlain, ASolidPacked: TBytes;
+      out AHdrStream: TBytes; const ABlockBuilder: IBytesBuilder);
+    var
+      LHdrEnc: TSevenZLzmaEncoded;
+      LAesSpec: TCoderSpec;
+      LEncrypted: Boolean;
+      LI: SizeInt;
+      LHdrMethod: UInt64;
+      LHdrProps: TBytes;
+    begin
+      if FLevel = szclNone then
+      begin
+        AHdrStream := Copy(APlain, 0, Length(APlain));
+        LHdrMethod := SEVENZ_METHOD_COPY;
+        LHdrProps := nil;
+      end
+      else
+      begin
+        LHdrEnc := SevenZAcquireEncoder.EncodeLzma2(APlain, FLevel);
+        AHdrStream := LHdrEnc.PackedData;
+        LHdrMethod := SEVENZ_METHOD_LZMA2;
+        LHdrProps := LHdrEnc.Props;
+      end;
+      LAesSpec := Default(TCoderSpec);
+      LEncrypted := FPassword <> '';
+      if LEncrypted then
+        LAesSpec := MakeAesSpec(AHdrStream);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_ENCODED_HEADER);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_PACK_INFO);
+      AppendVarintBuilder(ABlockBuilder, UInt64(Length(ASolidPacked)));
+      AppendVarintBuilder(ABlockBuilder, 1);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_SIZE);
+      AppendVarintBuilder(ABlockBuilder, UInt64(Length(AHdrStream)));
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_CRC);
+      AppendBoolVector2AllDefinedToBuilder(ABlockBuilder, 1);
+      SevenZAppendUInt32LEToBuilder(ABlockBuilder, Crc32OfBytes(AHdrStream));
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_END);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_UNPACK_INFO);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_FOLDER);
+      AppendVarintBuilder(ABlockBuilder, 1);
+      SevenZAppendByteToBuilder(ABlockBuilder, 0);
+      if LEncrypted then
+        AppendVarintBuilder(ABlockBuilder, 2)
+      else
+        AppendVarintBuilder(ABlockBuilder, 1);
+      if LHdrMethod = SEVENZ_METHOD_COPY then
+      begin
+        SevenZAppendByteToBuilder(ABlockBuilder, $01);
+        SevenZAppendByteToBuilder(ABlockBuilder, Byte(LHdrMethod));
+      end
+      else
+      begin
+        SevenZAppendByteToBuilder(ABlockBuilder, $21);
+        SevenZAppendByteToBuilder(ABlockBuilder, Byte(LHdrMethod));
+        AppendVarintBuilder(ABlockBuilder, UInt64(Length(LHdrProps)));
+        if Length(LHdrProps) > 0 then
+          SevenZAppendBytesToBuilder(ABlockBuilder, @LHdrProps[0], Length(LHdrProps));
+      end;
+      if LEncrypted then
+      begin
+        SevenZAppendByteToBuilder(ABlockBuilder, $24);
+        for LI := 3 downto 0 do
+          SevenZAppendByteToBuilder(ABlockBuilder, Byte(
+            (SEVENZ_METHOD_AES256_CRC shr (8 * LI)) and $FF));
+        AppendVarintBuilder(ABlockBuilder, UInt64(Length(LAesSpec.Props)));
+        SevenZAppendBytesToBuilder(ABlockBuilder, @LAesSpec.Props[0], Length(LAesSpec.Props));
+        AppendVarintBuilder(ABlockBuilder, 0);
+        AppendVarintBuilder(ABlockBuilder, 1);
+      end;
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_CODERS_UNPACK_SZ);
+      AppendVarintBuilder(ABlockBuilder, UInt64(Length(APlain)));
+      if LEncrypted then
+        AppendVarintBuilder(ABlockBuilder, LAesSpec.OutSize);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_CRC);
+      AppendBoolVector2AllDefinedToBuilder(ABlockBuilder, 1);
+      SevenZAppendUInt32LEToBuilder(ABlockBuilder, Crc32OfBytes(APlain));
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_END);
+      SevenZAppendByteToBuilder(ABlockBuilder, SZ_ID_END);
+    end;
+
     function EntrySize(const E: TEntryRec): UInt64; inline;
     begin
       if E.IsDir then Exit(0);
@@ -989,6 +1304,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
     LBatchStart, LBatchSize, LCreated: SizeInt;
     LStartHdrCrc: UInt32;
     LPlainHeader: TBytes;
+    LPlainBuilder: IBytesBuilder;
+    LBlockBuilder: IBytesBuilder;
     LHandles: array of TPlatformThreadHandle;
     LJobs: array of TFolderEncodeJob;
     LRetVal: Pointer;
@@ -1213,23 +1530,28 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       APacked := nil;
       SetLength(LFolders, 0);
     end;
-    { 主头：明文 kHeader；无 pack 数据时省略流信息段 }
-    SetLength(LPlainHeader, 0);
-    SevenZAppendByte(LPlainHeader, SZ_ID_HEADER);
+    { 主头：明文 kHeader；无 pack 数据时省略流信息段 — IBytesBuilder O(n) 均摊，避免逐次 SetLength O(n²) }
+    LPlainBuilder := CreateBytesBuilder(4096);
+    SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_HEADER);
     if LNonEmpty > 0 then
     begin
-      SevenZAppendByte(LPlainHeader, SZ_ID_MAIN_STREAMS);
-      BuildStreamsInfoMulti(LPlainHeader, LFolders);
-      SevenZAppendByte(LPlainHeader, SZ_ID_END);  { 收尾 MainStreamsInfo }
+      SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_MAIN_STREAMS);
+      BuildStreamsInfoMultiBuilder(LPlainBuilder, LFolders);
+      SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_END);
     end;
     if Length(FEntries) > 0 then
-      BuildFilesInfo(LPlainHeader);
-    SevenZAppendByte(LPlainHeader, SZ_ID_END);
+      BuildFilesInfoBuilder(LPlainBuilder);
+    SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_END);
+    LPlainHeader := LPlainBuilder.ToBytes;
     { 头块形态：默认编码头（与参考实现生态一致），可切回明文。
       编码头模式多一个物理段：压缩后的头码流位于 solid 与块之间，
       签名头的 NextHeaderOffset 必须跨过它指向块起点 }
     if FEncodeHeader then
-      BuildEncodedHeaderParts(LPlainHeader, APacked, AHdrStream, ABlock)
+    begin
+      LBlockBuilder := CreateBytesBuilder(1024);
+      BuildEncodedHeaderPartsToBuilder(LPlainHeader, APacked, AHdrStream, LBlockBuilder);
+      ABlock := LBlockBuilder.ToBytes;
+    end
     else
     begin
       SetLength(AHdrStream, 0);

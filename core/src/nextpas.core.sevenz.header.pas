@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.builder,
   nextpas.core.sevenz.base;
 
 type
@@ -84,6 +85,7 @@ function SevenZReadNumber(const ABuf: PByte; ALen: SizeUInt; var APos: SizeUInt)
 
 { varint 编码：最小合法形式；AValue ≥ 2^56 走 FF + 8 字节小端 }
 procedure SevenZWriteNumber(var AOut: TBytes; AValue: UInt64);
+procedure SevenZWriteNumberToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64);
 
 { 追加单字节 / 定长整数到输出缓冲 — 单源复用 bytes 体系，单次扩容 + inline }
 procedure SevenZAppendByte(var AOut: TBytes; AValue: Byte); inline;
@@ -91,6 +93,11 @@ procedure SevenZAppendUInt32BE(var AOut: TBytes; AValue: UInt32); inline;
 procedure SevenZAppendUInt32LE(var AOut: TBytes; AValue: UInt32); inline;
 procedure SevenZAppendUInt64LE(var AOut: TBytes; AValue: UInt64); inline;
 procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
+{ IBytesBuilder 单源：高频 header 追加的 O(n) 预分配路径，避免 TBytes 逐次 SetLength O(n²)；单源复用 bytes.builder Grow 均摊 }
+procedure SevenZAppendByteToBuilder(const ABuilder: IBytesBuilder; AValue: Byte); inline;
+procedure SevenZAppendUInt32LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt32); inline;
+procedure SevenZAppendUInt64LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
+procedure SevenZAppendBytesToBuilder(const ABuilder: IBytesBuilder; const AData: PByte; ACount: SizeInt); inline;
 
 type
   { 头部顺序读取器：越界统一抛 ESevenZError }
@@ -225,6 +232,58 @@ begin
   if (ACount <= 0) or (AData = nil) then
     Exit;
   BytesAppend(AOut, AData, SizeUInt(ACount));
+end;
+
+procedure SevenZWriteNumberToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64);
+var
+  LBuf: array[0..8] of Byte;
+  LI: Integer;
+  LT: Integer;
+  LPayloadBits: Integer;
+  LFirstPayload: UInt64;
+begin
+  LT := 1;
+  while (LT < 9) and (AValue >= (UInt64(1) shl (7 * LT))) do
+    Inc(LT);
+  if LT <= 8 then
+  begin
+    LPayloadBits := 8 - LT;
+    if LPayloadBits = 0 then
+      LFirstPayload := 0
+    else
+      LFirstPayload := (AValue shr (8 * (LT - 1))) and ((UInt64(1) shl LPayloadBits) - 1);
+    LBuf[0] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
+    for LI := 0 to LT - 2 do
+      LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    ABuilder.AppendBytes(@LBuf[0], SizeUInt(LT));
+    Exit;
+  end;
+  LBuf[0] := $FF;
+  for LI := 0 to 7 do
+    LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+  ABuilder.AppendBytes(@LBuf[0], 9);
+end;
+
+procedure SevenZAppendByteToBuilder(const ABuilder: IBytesBuilder; AValue: Byte); inline;
+begin
+  ABuilder.AppendByte(AValue);
+end;
+
+procedure SevenZAppendUInt32LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt32); inline;
+begin
+  ABuilder.AppendUInt32LE(AValue);
+end;
+
+procedure SevenZAppendUInt64LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
+begin
+  ABuilder.AppendUInt64LE(AValue);
+end;
+
+procedure SevenZAppendBytesToBuilder(const ABuilder: IBytesBuilder; const AData: PByte; ACount: SizeInt); inline;
+begin
+  if (ACount <= 0) or (AData = nil) then
+    Exit;
+  ABuilder.AppendBytes(AData, SizeUInt(ACount));
 end;
 
 { TSevenZHeaderReader }
