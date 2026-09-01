@@ -192,7 +192,6 @@ var
   N, OutN, PrefixLen, SegPos, J: SizeInt;
   Lo, Hi, Mid: SizeInt;
   I: SizeInt;
-  Cap: SizeInt;
   ChildSpan, PrevSpan: TByteSpan;
   NeedAdd: Boolean;
   PrefixSpan: TByteSpan;
@@ -236,6 +235,7 @@ begin
         SegPos := J + 1;
         Break;
       end;
+    // 零拷贝 Child 视图：TByteSpan 直指原串存储，去重经 SpanEqual 零分配，仅唯一子项时 Move 物化（零 Copy 分配）
     if SegPos > 0 then
       ChildSpan := TByteSpan.Create(ASpans[I].Data, SizeUInt(SegPos - 1))
     else
@@ -249,14 +249,7 @@ begin
     end;
     if NeedAdd then
     begin
-      if OutN >= Length(Result) then
-      begin
-        Cap := Length(Result);
-        if Cap = 0 then Cap := 16;
-        while Cap <= OutN do Cap := Cap * 2;
-        if Cap > N - Lo then Cap := N - Lo;
-        SetLength(Result, Cap);
-      end;
+      // 零拷贝物化：SetLength+Move 直落 ChildSpan 视图，消除 Copy 的每项堆分配与隐式字符拷贝
       SetLength(Result[OutN], ChildSpan.Len);
       if ChildSpan.Len > 0 then
         Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);

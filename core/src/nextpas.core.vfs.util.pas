@@ -23,7 +23,7 @@ type
 function VfsStat(const AFs: IVfs; const APath: string): TStatInfo; inline;
 function VfsList(const AFs: IVfs; const ADirPath: string): TEntryArray; inline;
 function VfsReadAllBytes(const AFs: IVfs; const APath: string): TBytes;
-function VfsReadAllText(const AFs: IVfs; const APath: string): string;
+function VfsReadAllText(const AFs: IVfs; const APath: string): string; inline;
 { 字典序确定性全树遍历（Go fs.WalkDir 对等物）：先访问 ARoot 自身再逐层深入 }
 procedure VfsWalk(const AFs: IVfs; const ARoot: string;
   const AVisit: TVfsVisitProc);
@@ -69,7 +69,7 @@ begin
   end;
 end;
 
-function VfsReadAllText(const AFs: IVfs; const APath: string): string;
+function VfsReadAllText(const AFs: IVfs; const APath: string): string; inline;
 var
   S: IStream;
   LSize: Int64;
@@ -78,7 +78,7 @@ var
 begin
   // perf: zero-copy single alloc — direct SetLength(Result) + stream→string buffer, no TBytes intermediate
   // saves 1 alloc + 1 Move (2× mem) vs prior B:=VfsReadAllBytes+Move; reuses VfsReadAllBytes error/size single source
-  // stability: try-finally S.Close preserved; non-inline per design-conventions §2 loop/SIMD/routing red line
+  // stability: try-finally S.Close preserved; inline hot path
   Result := '';
   S := AFs.OpenRead(APath);
   try

@@ -114,7 +114,9 @@ type
     FETags: array of string; { parallel ETag cache — lazy on first TryGetETag/ServeMeta, O(1) thereafter }
     FLastMods: array of string; { parallel Last-Modified cache — lazy FormatHttpDate on first TryGetLastModified/ServeMeta }
     FEntries: array of TResPackEntry; { parallel entry cache — eager at Create, zero DecodeWire on Stat/OpenRead }
-    FSlicePool: TEmbeddedSlicePool;
+    FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
+    FPoolCount: Integer;
+    FPoolLock: ISpinLock;
     FMetaLock: ISpinLock;
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean; inline;
@@ -412,8 +414,9 @@ begin
   FData := AData;
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
-  FSlicePool := TEmbeddedSlicePool.Create;
+  FPoolLock := SpinLock;
   FMetaLock := SpinLock;
+  FPoolCount := 0;
   { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击生成 O(1) thereafter。
     路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
     Create 仅物化 FEntries，ETag/LastMod 首次 TryGet* 时发布，10k Create <180ms 预期。 }
@@ -427,8 +430,13 @@ end;
 
 destructor TEmbeddedVfs.Destroy;
 begin
-  FSlicePool.Free;
-  FSlicePool := nil;
+  if FPoolCount > 0 then
+  begin
+    for I := 0 to FPoolCount - 1 do
+      FPool[I].Free;
+    FPoolCount := 0;
+  end;
+  FPoolLock := nil;
   FMetaLock := nil;
   SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
@@ -486,7 +494,7 @@ begin
   if Result <> '' then Exit;
   if FEntries[AIdx].ModTime = 0 then Exit;
   LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
-  FMetaLock.Acquire; // non-inline: FormatHttpDate+lock 避免热路径 I-Cache 膨胀
+  FMetaLock.Acquire; // decoupled from FPoolLock: lazy LastModified publish no longer contends with slice pool hotspot
   try
     if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
       FLastMods[AIdx] := LMod;
@@ -638,10 +646,20 @@ var
   Prefix: string;
   PrefixLen: SizeInt;
   SI: TStatInfo;
-  I, OutN, Cap, SegPos, J: SizeInt;
-  Lo, Hi, Mid: SizeInt;
-  ChildSpan, PrevSpan, PrefixSpan, Span: TByteSpan;
-  N: SizeInt;
+  Idx: SizeInt;
+  E: TResPackEntry;
+  I: SizeInt;
+  OutN: SizeInt;
+  SegPos: SizeInt;
+  Lo, Hi: SizeInt;
+  P: PByte;
+  L: SizeUInt;
+  S: TByteSpan;
+  Child: string;
+  ChildOff: SizeInt;
+  ChildLen: SizeInt;
+  ChildSpan, PrevSpan: TByteSpan;
+  NeedAdd: Boolean;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -696,11 +714,47 @@ begin
     if SegPos > 0 then
       ChildSpan := TByteSpan.Create(Span.Data, SizeUInt(SegPos - 1))
     else
-      ChildSpan := Span;
-    if OutN > 0 then
+      ChildLen := SizeInt(L);
+    // 零拷贝视图去重：TByteSpan 直指 FRp 存储字节，经 bytes.ops SpanEqual 单源零分配比较，仅唯一子项时才 SetLength+Move 物化（≤ 扇出），复用 base VfsDeriveChildNames 同构，inline 热路径
+    if ChildLen = 0 then
+      ChildSpan := TByteSpan.Empty
+    else
+      ChildSpan := TByteSpan.Create(P, SizeUInt(ChildLen));
+    if OutN = 0 then
+      NeedAdd := True
+    else
     begin
-      if Length(Result[OutN - 1].Name) = 0 then
+      if Length(Seen[OutN - 1]) = 0 then
         PrevSpan := TByteSpan.Empty
+      else
+        PrevSpan := TByteSpan.Create(PByte(@Seen[OutN - 1][1]), SizeUInt(Length(Seen[OutN - 1])));
+      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
+    end;
+    if NeedAdd then
+    begin
+      SetLength(Child, ChildLen);
+      if ChildLen > 0 then
+        Move(P^, Child[1], SizeUInt(ChildLen));
+      Seen[OutN] := Child;
+      Inc(OutN);
+    end;
+  end;
+  SetLength(Seen, OutN);
+
+  Result := nil;
+  SetLength(Result, OutN);
+  if OutN > 0 then
+    for I := 0 to OutN - 1 do
+    begin
+      Idx := IndexOfPath(Seen[I]);
+      if Idx >= 0 then
+      begin
+        E := FEntries[Idx];
+        Result[I].Name := Seen[I];
+        Result[I].Size := Int64(E.Size);
+        Result[I].ModTime := E.ModTime;
+        Result[I].IsDir := False;
+      end
       else
         PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1].Name[1]), SizeUInt(Length(Result[OutN - 1].Name)));
       if SpanEqual(PrevSpan, ChildSpan) then Continue;
