@@ -87,7 +87,7 @@ type
     FInboxHead: SizeUInt;        { 头指针：O(1) 弹出，避免 O(n) 前移 }
     FInboxCount: SizeUInt;       { 存活条目数：与容量解耦，支撑几何倍增零拷贝 }
     procedure AccountConsume(ACount: SizeUInt); inline;
-    procedure InboxCompact; inline;
+    procedure InboxCompact;
     procedure SendWindowAdjust(ACount: UInt32);
     procedure SendRequest(const AName: string; const APayloadTail: TBytes);
     procedure HandleChannelRequest(const APayload: TBytes);
@@ -151,6 +151,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.base,
   nextpas.core.bytes.builder;
 
 procedure TraceStr(const ALine: string);
@@ -680,7 +681,7 @@ begin
     Result := True;
 end;
 
-procedure TSshChannel.InboxCompact; inline;
+procedure TSshChannel.InboxCompact;
 var
   LCount: SizeUInt;
 begin
@@ -694,7 +695,7 @@ begin
   if FInboxHead = 0 then Exit;
   LCount := FInboxCount;
   // bulk Move: single memmove avoids per-element TBytes AddRef/Release (O(n) refcount churn);
-  // zero-copy transfer of ownership, tail zeroed without Release (FillChar), inline hot path
+  // zero-copy transfer of ownership, tail zeroed without Release (FillChar), non-inline to avoid I-Cache bloat
   if LCount > 0 then
     Move(FInbox[FInboxHead], FInbox[0], LCount * SizeOf(TSshDataChunk));
   FillChar(FInbox[LCount], (Length(FInbox) - Integer(LCount)) * SizeOf(TSshDataChunk), 0);
@@ -702,24 +703,24 @@ begin
   FInboxHead := 0;
 end;
 
-procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean); inline;
+procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean);
 var
   LCap, LNeed, LNewCap: SizeUInt;
   LIdx: SizeUInt;
 begin
   if FInboxCount >= SSH_CHANNEL_INBOX_MAX then
     raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
-  if (FInboxHead > 64) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
+  if (FInboxHead > BYTES_BUILDER_MIN_GROW) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
     InboxCompact;
   // geometric doubling: single source from nextpas.core.bytes.ops.BytesEnsureCapacity
-  // BYTES_BUILDER_MIN_GROW=64 amortized O(1), single SetLength, inline hot path
+  // BYTES_BUILDER_MIN_GROW amortized O(1), single SetLength, non-inline (real loop body forbids inline)
   LCap := SizeUInt(Length(FInbox));
   LNeed := FInboxHead + FInboxCount + 1;
   if LNeed > LCap then
   begin
     LNewCap := LCap;
-    if LNewCap < 64 then
-      LNewCap := 64;
+    if LNewCap < BYTES_BUILDER_MIN_GROW then
+      LNewCap := BYTES_BUILDER_MIN_GROW;
     while LNewCap < LNeed do
     begin
       if LNewCap <= High(SizeUInt) div 2 then
@@ -757,7 +758,7 @@ begin
     SetLength(FInbox, 0);
     FInboxHead := 0;
   end
-  else if (FInboxHead > 64) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
+  else if (FInboxHead > BYTES_BUILDER_MIN_GROW) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
     InboxCompact;
 end;
 

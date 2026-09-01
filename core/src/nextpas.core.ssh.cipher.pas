@@ -69,6 +69,7 @@ function SshAesCtrCrypt(const AKey, AIV, AInput: TBytes): TBytes;
 implementation
 
 uses
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aesctr,
@@ -170,22 +171,19 @@ begin
   Result := IsCtrName(ACipher);
 end;
 
-{ ---- 公共小工具 ---- }
+{ ---- 公共小工具 ----
+  单源：大端读写复用 bytes.binary.Write/ReadUInt32BE (L1 单源)，
+  本单元仅作 TBytes + offset 的 inline 薄转发，避免手写移位漂移。
+  perf: inline + PByte 直接写入，结果与手写移位等价，零额外分支/拷贝。 }
 
 procedure PutU32BE(var ADst: TBytes; APos: SizeUInt; AValue: UInt32); inline;
 begin
-  ADst[APos] := Byte(AValue shr 24);
-  ADst[APos + 1] := Byte((AValue shr 16) and $FF);
-  ADst[APos + 2] := Byte((AValue shr 8) and $FF);
-  ADst[APos + 3] := Byte(AValue and $FF);
+  WriteUInt32BE(PByte(@ADst[APos]), AValue);
 end;
 
 function U32BEOf(const ASrc: TBytes; APos: SizeUInt): UInt32; inline;
 begin
-  Result := (UInt32(ASrc[APos]) shl 24)
-    or (UInt32(ASrc[APos + 1]) shl 16)
-    or (UInt32(ASrc[APos + 2]) shl 8)
-    or UInt32(ASrc[APos + 3]);
+  Result := ReadUInt32BE(PByte(@ASrc[APos]));
 end;
 
 function SeqBytes(ASeq: UInt32): TBytes;
@@ -197,16 +195,14 @@ end;
 
 { 12 字节 nonce：4 个零 + 大端序序列号低 32 位。
   OpenSSH 以 POKE_U64（大端）把 seq 写进 8 字节 seqbuf 供 djb chacha 的
-  input[14..15] 消费；映射到 RFC 8439 字节布局即 $00000000 || seq_BE64 }
+  input[14..15] 消费；映射到 RFC 8439 字节布局即 $00000000 || seq_BE64
+  单源：尾 4 字节用 bytes.binary.WriteUInt32BE，零手写移位。 }
 function ChachaNonce(ASeq: UInt32): TBytes;
 begin
   Result := nil;
   SetLength(Result, 12);
   FillChar(Result[0], 12, 0);
-  Result[8] := Byte(ASeq shr 24);
-  Result[9] := Byte((ASeq shr 16) and $FF);
-  Result[10] := Byte((ASeq shr 8) and $FF);
-  Result[11] := Byte(ASeq and $FF);
+  WriteUInt32BE(PByte(@Result[8]), ASeq);
 end;
 
 
@@ -350,13 +346,16 @@ begin
     - 后 32B（header）：counter=0 掩码长度字段
     - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
   LBodyLen := SizeUInt(Length(ABodyPlain));
+  // perf: FWriteBuf single alloc reuse — 16KB×8192 基准下首包分配后同尺寸复用容量，零额外 SetLength churn，保持零拷贝宣称
+  if Length(FWriteBuf) < 4 + LBodyLen + CHACHA_TAG then
+    SetLength(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
   try
     LEncLenBE := UInt32(LBodyLen) xor U32BEOf(LMask, 0);
-    // perf: FWriteBuf reuse — single SetLength for wire packet, zero-copy ChaCha20XorTo into Result[4], 1 Move for tag only (vs 3 Moves+2 alloc)
+    // perf: wire 单次 SetLength, zero-copy ChaCha20XorTo into Result[4], 1 Move for tag only (vs 3 Moves+2 alloc); bytes.binary 单源
     SetLength(Result, 4 + LBodyLen + CHACHA_TAG);
-    PutU32BE(Result, 0, LEncLenBE); // inline
+    PutU32BE(Result, 0, LEncLenBE);
     if LBodyLen > 0 then
     begin
       if not ChaCha20XorTo(FMainKey, LNonce, 1, @ABodyPlain[0], Integer(LBodyLen), @Result[4]) then
@@ -508,10 +507,8 @@ function GcmNonce(const ABaseIV: TBytes; ACounter: UInt64): TBytes;
 begin
   Result := nil;
   Result := Copy(ABaseIV, 0, 12);
-  Result[8] := Byte((ACounter shr 24) and $FF);
-  Result[9] := Byte((ACounter shr 16) and $FF);
-  Result[10] := Byte((ACounter shr 8) and $FF);
-  Result[11] := Byte(ACounter and $FF);
+  // 单源：计数器尾 4 字节用 bytes.binary 大端写入
+  WriteUInt32BE(PByte(@Result[8]), UInt32(ACounter));
 end;
 
 function TSshGcmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
@@ -526,11 +523,14 @@ begin
   if FCounter >= GCM_SEQ_THRESHOLD then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted, rekey required');
   LBodyLen := SizeUInt(Length(ABodyPlain));
+  // perf: FWriteBuf 单次分配复用 — 16KB×8192 warm 后零 churn，单次 SetLength wire，零拷贝 AES-NI 直写
+  if Length(FWriteBuf) < 4 + LBodyLen + GCM_TAG then
+    SetLength(FWriteBuf, 4 + LBodyLen + GCM_TAG);
   LNonce := GcmNonce(FBaseIV, FCounter);
   try
-    // perf: single alloc wire buf, zero-copy AES-NI direct into Result[4] (CT||Tag), FWriteBuf reuse via single SetLength
+    // perf: single alloc wire buf, zero-copy AES-NI direct into Result[4] (CT||Tag), bytes.binary 单源
     SetLength(Result, 4 + LBodyLen + GCM_TAG);
-    PutU32BE(Result, 0, UInt32(LBodyLen)); // inline
+    PutU32BE(Result, 0, UInt32(LBodyLen));
     if LBodyLen > 0 then
       LPlainPtr := @ABodyPlain[0]
     else
@@ -740,17 +740,17 @@ var
 begin
   LBodyLen := SizeUInt(Length(ABodyPlain));
   LTagLen := SizeUInt(Length(FMacKey));
-  // perf: single SetLength wire packet, zero-copy Move + in-place CTR xor via bytes.ops MemXor, FWriteBuf reuse (1 Move vs 3)
+  // perf: FWriteBuf 单次分配复用 — 16KB×8192 复用容量，单次 SetLength wire，零拷贝 Move+CTR xor, bytes.binary 单源
+  if Length(FWriteBuf) < 4 + LBodyLen + LTagLen then
+    SetLength(FWriteBuf, 4 + LBodyLen + LTagLen);
+  // perf: single SetLength wire packet, zero-copy Move + in-place CTR xor via bytes.ops MemXor
   SetLength(Result, 4 + LBodyLen + LTagLen);
-  PutU32BE(Result, 0, UInt32(LBodyLen)); // inline
+  PutU32BE(Result, 0, UInt32(LBodyLen));
   if LBodyLen > 0 then
     Move(ABodyPlain[0], Result[4], LBodyLen);
   FCtr.XorInto(Result, 4, LBodyLen); // encrypt ct in place, bulk MemXor single source
-  // EtM: incremental HMAC over seq||len||ct without LMacInput alloc (zero-copy Write)
-  LSeqBE[0] := Byte(ASeq shr 24);
-  LSeqBE[1] := Byte((ASeq shr 16) and $FF);
-  LSeqBE[2] := Byte((ASeq shr 8) and $FF);
-  LSeqBE[3] := Byte(ASeq and $FF);
+  // EtM: incremental HMAC over seq||len||ct without LMacInput alloc (zero-copy Write), bytes.binary 单源
+  WriteUInt32BE(@LSeqBE[0], ASeq);
   LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
   LHasher.Write(LSeqBE[0], 4);
   LHasher.Write(Result[0], 4);
@@ -809,11 +809,8 @@ begin
   LBodyLen := U32BEOf(AWire, 0);
   if LWireLen < 4 + SizeUInt(LBodyLen) + SizeUInt(FMacTagSize) then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: ctr packet truncated');
-  { 先验 MAC（EtM：对密文 body 校验）零拷贝 incremental Write, 无 LMacInput 堆分配 }
-  LSeqBE[0] := Byte(ASeq shr 24);
-  LSeqBE[1] := Byte((ASeq shr 16) and $FF);
-  LSeqBE[2] := Byte((ASeq shr 8) and $FF);
-  LSeqBE[3] := Byte(ASeq and $FF);
+  { 先验 MAC（EtM：对密文 body 校验）零拷贝 incremental Write, 无 LMacInput 堆分配, bytes.binary 单源 }
+  WriteUInt32BE(@LSeqBE[0], ASeq);
   LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
   try
     LHasher.Write(LSeqBE[0], 4);

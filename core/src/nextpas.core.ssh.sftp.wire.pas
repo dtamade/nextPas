@@ -24,9 +24,9 @@ type
     FLen: SizeUInt;    { 已写入逻辑长度 }
     FOff: SizeUInt;    { 已消费前缀偏移，零拷贝 }
     function BufferedLen: SizeUInt; inline;
-    procedure EnsureCapacity(AAdditional: SizeUInt); inline;
+    procedure EnsureCapacity(AAdditional: SizeUInt);
     procedure BufAppend(const AChunk: TBytes); inline;
-    procedure CompactIfNeeded; inline;
+    procedure CompactIfNeeded;
     function TakeFromBuffer(ACount: Integer): TBytes; inline;
   public
     constructor Create(AChannel: TSshChannel);
@@ -38,7 +38,9 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer;
 
@@ -63,9 +65,9 @@ begin
   Result := FLen - FOff;
 end;
 
-procedure TSshChannelWire.EnsureCapacity(AAdditional: SizeUInt); inline;
+procedure TSshChannelWire.EnsureCapacity(AAdditional: SizeUInt);
 var
-  LNeed, LBuffered, LNewCap: SizeUInt;
+  LNeed, LBuffered: SizeUInt;
 begin
   if AAdditional = 0 then
     Exit;
@@ -74,30 +76,18 @@ begin
   if LNeed <= SizeUInt(Length(FBuf)) then
     Exit;
   // lazy reclaim: if buffered+additional fits capacity, compact instead of grow
-  // avoids 4B freq Move churn; single Move reclaims tail, zero extra alloc
+  // avoids 4B freq Move churn; single CopyMem reclaims tail, zero extra alloc
   LBuffered := BufferedLen;
   if (FOff > 0) and (LBuffered + AAdditional <= SizeUInt(Length(FBuf))) then
   begin
     if LBuffered > 0 then
-      Move(FBuf[FOff], FBuf[0], LBuffered);
+      CopyMem(@FBuf[0], @FBuf[FOff], LBuffered);
     FOff := 0;
     FLen := LBuffered;
     Exit;
   end;
-  LNewCap := SizeUInt(Length(FBuf));
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < LNeed do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := LNeed;
-      Break;
-    end;
-  end;
-  SetLength(FBuf, LNewCap);
+  // geometric doubling: single source BytesEnsureCapacity, non-inline to avoid I-Cache bloat
+  BytesEnsureCapacity(FBuf, LNeed);
 end;
 
 procedure TSshChannelWire.BufAppend(const AChunk: TBytes); inline;
@@ -108,12 +98,12 @@ begin
   if LChunkLen = 0 then
     Exit;
   EnsureCapacity(LChunkLen);
-  // zero-copy Move: single source bytes.ops Move pattern, no extra alloc
-  Move(AChunk[0], FBuf[FLen], LChunkLen);
+  // zero-copy CopyMem: single source bytes.ops/base.utils Move pattern, no extra alloc
+  CopyMem(@FBuf[FLen], @AChunk[0], LChunkLen);
   Inc(FLen, LChunkLen);
 end;
 
-procedure TSshChannelWire.CompactIfNeeded; inline;
+procedure TSshChannelWire.CompactIfNeeded;
 var
   LBuffered, LCap: SizeUInt;
 begin
@@ -128,11 +118,11 @@ begin
   end;
   LCap := SizeUInt(Length(FBuf));
   // lazy compact: raise threshold to avoid 4B freq Move churn;
-  // 32KB absolute or (8KB + half capacity), single Move, inline hot path
+  // 32KB absolute or (8KB + half capacity), single CopyMem, non-inline to avoid I-Cache bloat
   // shrink only if hugely over-allocated (>8x + 64KB), keep capacity otherwise
   if (FOff > 32768) or ((FOff > 8192) and (FOff > LCap div 2)) then
   begin
-    Move(FBuf[FOff], FBuf[0], LBuffered);
+    CopyMem(@FBuf[0], @FBuf[FOff], LBuffered);
     FOff := 0;
     FLen := LBuffered;
     // keep capacity (Length(FBuf) stays), avoid shrink-realloc churn; logical FLen trimmed
@@ -159,7 +149,7 @@ function TSshChannelWire.TakeFromBuffer(ACount: Integer): TBytes; inline;
 begin
   SetLength(Result, ACount);
   if ACount > 0 then
-    Move(FBuf[FOff], Result[0], ACount);
+    CopyMem(@Result[0], @FBuf[FOff], SizeUInt(ACount));
   Inc(FOff, SizeUInt(ACount));
   CompactIfNeeded;
 end;

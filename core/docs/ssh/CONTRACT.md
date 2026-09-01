@@ -41,7 +41,7 @@
 | `nextpas.core.ssh.rekey.pas` | Rekey 策略 `TSshRekeyPolicy`（`TInstant` 单调时钟） | impl |
 | `nextpas.core.ssh.keepalive.pas` | KeepAlive 策略 `TKeepAlivePolicy`（`TInstant` 单调时钟） | impl |
 | `nextpas.core.ssh.keepalive.scheduler.pas` | KeepAlive 调度器 `TKeepAliveScheduler`（`TAsyncLoop` 周期，见 §8） | impl（已抽取） |
-| `nextpas.core.ssh.knownhosts.pas` | KnownHosts 独立帧 `TSshKnownHostsFacade`（`hostkey` 单源 facade，见 §8） | impl（已抽取） |
+| `nextpas.core.ssh.knownhosts.pas` | KnownHosts 独立帧 `TSshKnownHosts`（`hostkey` 单源纯 re-export，零额外堆分配，`bytes.ops/TConstantTime` 单源） | impl（已抽取·薄别名） |
 | `nextpas.core.ssh.session.pas` | 会话薄编排（状态与生命周期、Exec/SFTP 转发、拨号入口；<450 行，委托 handshake/auth 单源，`inline`/`zero-copy`） | impl |
 | `nextpas.core.ssh.session.handshake.pas` | 会话握手与重协商单源（KEX/kdf/主机密钥/NEWKEYS/延迟压缩，`transport` 单源，`SecureZero`） | impl |
 | `nextpas.core.ssh.session.auth.pas` | 会话认证单源（`password/privatekey/agent` 回退，`probe→sign` 时序，`Ed25519/RSA-CRT`） | impl |
@@ -261,7 +261,7 @@ end;
   - `text` 单源：`UTF8IsValid/StringsSplit/IntToStr` 经 `nextpas.core.text.*`，零 `SysUtils` 直连。
   - `time` 单源：`TInstant/TDuration` 单调时钟经 `nextpas.core.time.base`，`rekey/keepalive` 均复用，先反哺 `core.time` 再消费（反哺证据：`time.GetTickCount64/TInstant`）。
 - **FFI 边界**：
-  - `nextpas.core.ssh.intf + net.ffi` 为同步/异步路径唯一拉取 `nextpas.core.net` 的单元（`IAsyncTcpStream/AsyncTcpDial(RFC8305)` 经 `net.ffi` re-export + `inline` 零拷贝转发，`session/agent/transport.async` 仅依赖 `intf+io.intf/net.ffi` 缝隙，运行时注入，零直连 `net.async.tcp`）。
+  - `nextpas.core.ssh.intf + net.ffi` 为同步/异步路径唯一拉取 `nextpas.core.net` 的单元（`IAsyncTcpStream/AsyncTcpDial(RFC8305)` 经 `net.ffi` re-export + `inline` 零拷贝转发，`session/agent/transport.async/proxyjump.async` 仅依赖 `intf+io.intf/net.ffi` 缝隙，运行时注入，零直连 `net.async.tcp`）。
   - `compress → compress.zlib.ffi` 唯一 zlib 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 - **零 RTL**：`core/src/nextpas.core.ssh*.pas` 禁止 `uses SysUtils/Classes/Windows/BaseUnix`（`tests` 除外）；缺能力先反哺 owner（如 `time` 单调时钟、`text.conv` 转换），不堆 workaround。
 - **双编译器**：`nextpas.core.ssh` 为唯一实现层，不为 FPC 包装 `TStream/SysUtils` 兼容层；`units/<target>/` stub 仅名称桥接，方向为最终消除对 FPC 单元名的引用。
@@ -294,7 +294,7 @@ end;
 | `TSshRekeyPolicy` | **已抽取** (`rekey.pas`) | `record` + `TInstant` 单调时钟，`Init/Reset/Account/ShouldRekey(bool)` | `transport / transport.async` 单源；可复用于 `TLS/QUIC` 长连接 | S24 `base←rekey←transport(+.async)` 零 `SysUtils` |
 | `TKeepAlivePolicy` | **已抽取** (`keepalive.pas`) | `record` + `TInstant`，`Init/Reset/ShouldSend` | `session(+.async)` 心跳；可复用于 `TLS/QUIC` KeepAlive | S25 `SendKeepAlive/AsyncSendKeepAlive` 为 `SSH_MSG_IGNORE` |
 | `TChannelWindow` | **已抽取** (`window.pas`) | `record` + `SSH_WINDOW_LOW_WATER_DIVISOR=2`，`inline` 热路径，零堆分配 | `channel / channel.async / sftp.async` 窗口/低水位同构；可复用于 `HTTP/2` 流控 | S27 纯值语义，`ShouldReplenish/ReplenishAmount/Consume/Grant/SliceSize/DidSend` 全 `inline` |
-| `KnownHosts` 协议帧 | **已抽取** (`knownhosts.pas` facade) | `TSshKnownHostsFacade` inline 转发 `hostkey.pas` 单源（`SshParse/Verify/Fingerprint/WildMatch` 纯函数，`bytes.ops/TConstantTime`） | 复用于 `core.net` 隧道主机校验 | S27′ 薄 facade 零拷贝，已晋升独立模块，跨协议复用就绪 |
+| `KnownHosts` 协议帧 | **已抽取** (`knownhosts.pas` 纯 re-export) | `TSshKnownHosts = hostkey.TSshKnownHosts` 单别名，解析/验签/指纹/通配单源于 `hostkey`（`bytes.ops/TConstantTime`），零额外函数/堆分配 | 复用于 `core.net` 隧道主机校验 | S27′ 匠心修复：移除 `*Known` 四函数别名与 `*Facade` 双重词表，保留单别名薄导出，零拷贝 Move 单源 |
 | `Agent` 协议帧 | **已抽取** (`agent.pas` 已独立) | `TSshAgentClient` 4B BE 长度帧 + `List(11→12)/Sign(13→14)` + `SshAgentKeyBlobToAlgName/Flags` | 复用于 `core.net` 隧道 agent 转发 | S14→S27′ 已独立，Unix socket 缝隙注入，零直连 `net` |
 | `KeepAliveScheduler` | **已抽取** (`keepalive.scheduler.pas`) | `TKeepAliveScheduler` record + `TKeepAlivePolicy` 单源 + `TAsyncLoop.ScheduleMethod/CancelTimer` | 复用于 `TLS/QUIC` 定时心跳 | S27′ 解耦调度与策略，`ShouldSend/Schedule/Cancel` inline 周期，`Close` 幂等 |
 | `TFlowWindow` 通用 | **已抽取** (`flow.window.pas`) | `TFlowWindow = TChannelWindow` 别名晋升 + `FLOW_WINDOW_LOW_WATER_DIVISOR=2`，全 `inline` 零堆 | 复用于 `HTTP/2` 流控 | S27′ 与 `sftp.async` 低水位同构，值语义跨协议复用 |
@@ -356,7 +356,7 @@ make hygiene && git diff --check
 
 - `grep -R 'SysUtils' core/src/nextpas.core.ssh*`：`uses` 零命中（注释提及除外）。
 - `grep -R 'zlib|paszlib' core/src/nextpas.core.ssh*`：仅 `compress.pas → compress.zlib.ffi`。
-- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：仅 `net.ffi/ffi`（`transport.async` 已 `net.ffi` 单缝隙 `IAsyncTcpStream` re-export 零直连；`session.async/proxyjump.async` 待同缝隙收口，`grep` 已验证 `transport.async` 零 `net.async.tcp` 直连）。
+- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：仅 `net.ffi/ffi`（`transport.async/proxyjump.async` 已 `net.ffi` 单缝隙 `IAsyncTcpStream` re-export 零直连，`session.async` 同缝隙收口；`grep` 已验证零 `net.async.tcp` 直连）。
 - `grep -R 'bytes.ops' core/src/nextpas.core.ssh.buffer`：单源复用。
 - 产物卫生：`scripts/build-hygiene-check.sh` 拦截 `.o/.ppu/.a/.so/dylib/link*.res` 落源码树；`build/` 与 `.nextpas/` 为唯一产物区。
 

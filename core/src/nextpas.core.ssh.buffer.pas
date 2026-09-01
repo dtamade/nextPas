@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -167,10 +168,8 @@ end;
 procedure TSshWriter.PutUInt32(AValue: UInt32);
 begin
   Ensure(4);
-  FBuf[FLen] := Byte(AValue shr 24);
-  FBuf[FLen + 1] := Byte((AValue shr 16) and $FF);
-  FBuf[FLen + 2] := Byte((AValue shr 8) and $FF);
-  FBuf[FLen + 3] := Byte(AValue and $FF);
+  // 单源：复用 bytes.binary.WriteUInt32BE，避免手写移位与 buffer 直写漂移；inline 零拷贝
+  WriteUInt32BE(PByte(@FBuf[FLen]), AValue);
   Inc(FLen, 4);
 end;
 
@@ -332,10 +331,8 @@ end;
 function TSshReader.ReadUInt32: UInt32;
 begin
   Need(4);
-  Result := (UInt32(FData[FPos]) shl 24)
-    or (UInt32(FData[FPos + 1]) shl 16)
-    or (UInt32(FData[FPos + 2]) shl 8)
-    or UInt32(FData[FPos + 3]);
+  // 单源：复用 bytes.binary.ReadUInt32BE，避免手写移位
+  Result := ReadUInt32BE(PByte(@FData[FPos]));
   Inc(FPos, 4);
 end;
 
