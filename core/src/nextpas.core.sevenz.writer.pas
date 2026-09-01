@@ -155,7 +155,6 @@ uses
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.lzma.encoder,
   nextpas.core.sevenz.levels,
-  nextpas.core.sevenz.limits,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.fs,

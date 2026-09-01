@@ -155,7 +155,6 @@ uses
   nextpas.core.checksum.crc32,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
-  nextpas.core.sevenz.limits,
   nextpas.core.text.unicode.utils;
 
 function CompareNames(const A, B: string): Integer; inline;
