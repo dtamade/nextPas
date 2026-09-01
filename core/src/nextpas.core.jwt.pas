@@ -103,6 +103,7 @@ function JwtDecode(const AToken: string): TJwtClaims;
 implementation
 
 uses
+  nextpas.core.json.value,
   nextpas.core.bytes.ops,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.random,

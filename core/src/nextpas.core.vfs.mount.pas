@@ -235,7 +235,7 @@ var
   Child: string;
   SL: SizeInt;
   BaseList: TEntryArray;
-  J, K: Integer;
+  K: Integer;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -277,19 +277,8 @@ begin
       end;
     end;
     SetLength(Result, OutN);
-    if OutN > 1 then
-    begin
-      VfsSortEntries(Result);
-      J := 1;
-      for I := 1 to High(Result) do
-        if VfsNameCompare(Result[I].Name, Result[J - 1].Name) <> 0 then
-        begin
-          if J <> I then Result[J] := Result[I];
-          Inc(J);
-        end;
-      SetLength(Result, J);
-    end else if OutN = 1 then
-      VfsSortEntries(Result);
+    VfsSortEntries(Result);
+    VfsDedupSortedEntries(Result);
     Exit;
   end;
   if IsMountPoint(ADirPath) then
@@ -325,18 +314,8 @@ begin
   if OutN > 0 then
   begin
     SetLength(Result, OutN);
-    if OutN > 1 then
-    begin
-      VfsSortEntries(Result);
-      J := 1;
-      for I := 1 to High(Result) do
-        if VfsNameCompare(Result[I].Name, Result[J - 1].Name) <> 0 then
-        begin
-          if J <> I then Result[J] := Result[I];
-          Inc(J);
-        end;
-      SetLength(Result, J);
-    end;
+    VfsSortEntries(Result);
+    VfsDedupSortedEntries(Result);
     Exit;
   end;
   raise EVfsNotFound.CreateCtx('list', ADirPath, 'not found');

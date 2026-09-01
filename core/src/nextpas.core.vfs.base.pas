@@ -45,7 +45,7 @@ const
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
-function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
+function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 
 function VfsIsRoot(const APath: string): Boolean; inline;
 
@@ -68,11 +68,14 @@ function VfsETagFNV(const AHash: UInt32): string;
 { 就地按 Name 字节序升序（INV-V8）；经 collections 单源 Sort（IntroSort+小区间插入） }
 procedure VfsSortEntries(var AItems: TEntryArray);
 
+{ 已排序去重：单源 Unique（Name 字节序），消除 mount/overlay 手写 dedup 重复 }
+procedure VfsDedupSortedEntries(var AItems: TEntryArray);
+
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
   输入只含文件路径（memtree/respack 均不存目录条目）；ADirPrefix 为
   'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描：LowerBound 二分定位 +
   前缀连续段 Early-Break（k=子树扇出），零分配 SpanStartsWith 前缀判定，
-  Child 去重经 TByteSpan 视图 SpanEqual 零拷贝（仅唯一子项时 Copy 物化），热路径
+  Child 去重经 TByteSpan 视图 SpanEqual 零拷贝（仅唯一子项时 Move 物化零 Copy），热路径
   零小堆分配（embedded 零拷贝已收敛，base 基础实现同构 Early-Break）。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
@@ -82,7 +85,7 @@ implementation
 uses
   nextpas.core.collections.algorithms;
 
-function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
+function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 begin
   Result := BytesValidPath(APath, AAllowRoot);
 end;
@@ -160,10 +163,26 @@ begin
   Result := VfsNameCompare(A.Name, B.Name);
 end;
 
+{ Name-only 比较：供 Unique 去重单源（零拷贝 SpanCompare），与 Sort 同序 }
+function VfsCompareEntryName(const A, B: TEntryInfo; Data: Pointer): SizeInt; inline;
+begin
+  Result := VfsNameCompare(A.Name, B.Name);
+end;
+
 procedure VfsSortEntries(var AItems: TEntryArray);
 begin
   if Length(AItems) > 1 then
     specialize Sort<TEntryInfo>(AItems, @CompareEntryInfo, nil);
+end;
+
+{ 已排序去重：单源 Unique（Name 字节序），消除 mount/overlay 手写 dedup 重复 }
+procedure VfsDedupSortedEntries(var AItems: TEntryArray);
+var
+  L: SizeInt;
+begin
+  if Length(AItems) <= 1 then Exit;
+  L := specialize Unique<TEntryInfo>(AItems, @VfsCompareEntryName, nil);
+  SetLength(AItems, L);
 end;
 
 function VfsDeriveChildNames(const ASortedPaths: array of string;
@@ -172,7 +191,6 @@ var
   N, OutN, PrefixLen, PathLen, SegPos, J: SizeInt;
   Lo, Hi, Mid: SizeInt;
   I: SizeInt;
-  Child: string;
   ChildSpan, PrevSpan: TByteSpan;
   NeedAdd: Boolean;
 begin
@@ -214,7 +232,7 @@ begin
         SegPos := J;
         Break;
       end;
-    // 零拷贝 Child 视图：TByteSpan 直指原串存储，去重经 SpanEqual 零分配，仅唯一子项时 Copy 物化
+    // 零拷贝 Child 视图：TByteSpan 直指原串存储，去重经 SpanEqual 零分配，仅唯一子项时 Move 物化（零 Copy 分配）
     if SegPos > 0 then
       ChildSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(SegPos - 1))
     else
@@ -230,11 +248,10 @@ begin
     end;
     if NeedAdd then
     begin
-      if SegPos > 0 then
-        Child := Copy(ASortedPaths[I], 1, SegPos - 1)
-      else
-        Child := ASortedPaths[I];
-      Result[OutN] := Child;
+      // 零拷贝物化：SetLength+Move 直落 ChildSpan 视图，消除 Copy 的每项堆分配与隐式字符拷贝
+      SetLength(Result[OutN], ChildSpan.Len);
+      if ChildSpan.Len > 0 then
+        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
       Inc(OutN);
     end;
   end;

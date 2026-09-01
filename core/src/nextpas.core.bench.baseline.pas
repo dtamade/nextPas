@@ -12,6 +12,7 @@ unit nextpas.core.bench.baseline;
 interface
 
 uses
+  nextpas.core.json.value,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.text.conv,
@@ -20,6 +21,7 @@ uses
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.writer,
   nextpas.core.text.builder;
 

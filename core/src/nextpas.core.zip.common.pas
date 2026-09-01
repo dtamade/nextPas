@@ -13,6 +13,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.cursor,
   nextpas.core.zip.base;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word; inline;
@@ -26,6 +27,9 @@ procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word); in
 function DosMinUnixSec: Int64; inline;
 function DosMaxUnixSec: Int64; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
+
+procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
+procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 
@@ -81,9 +85,26 @@ begin
   Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
+function DosMaxUnixSec: Int64; inline;
+begin
+  Result := nextpas.core.zip.base.DosMaxUnixSec;
+end;
+
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
   Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
+end;
+
+procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
+begin
+  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
+end;
+
+procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
+begin
+  if (APos < 0) or (ALen < 0) or (APos + ALen > ASize) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);

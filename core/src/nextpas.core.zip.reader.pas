@@ -311,8 +311,7 @@ end;
 procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
   const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardCursorRange(AC, APos, ALen, AWhat);
 end;
 
 { 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
@@ -398,8 +397,12 @@ begin
 
   if LMethodCode = C_ZIP_METHOD_DEFLATE then
     AE.Method := zmDeflate
+  else if LMethodCode = C_ZIP_METHOD_STORE then
+    AE.Method := zmStore
   else
-    AE.Method := zmStore;
+    raise ENotSupportedError.CreateFmt(
+      'zip: unsupported compression method %d: %s',
+      [LMethodCode, AE.Name]);
   AE.MethodCode := LMethodCode;
   AE.Crc32 := LCrc;
   AE.CompressedSize := LCSize;
@@ -427,13 +430,11 @@ end;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LMax: SizeUInt;
+  LOpt: TZipReadOptions;
 begin
-  LMax := AOptions.MaxOutputSize;
-  if LMax = 0 then
-    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipReaderImpl.Create(AData, LMax, AOptions.MaxTotalOutputSize,
-    AOptions.Password);
+  LOpt := NormalizeZipReadOptions(AOptions);
+  Result := TZipReaderImpl.Create(AData, LOpt.MaxOutputSize,
+    LOpt.MaxTotalOutputSize, LOpt.Password);
 end;
 
 constructor TZipReaderImpl.Create(const AData: TBytes; AMaxOutput: SizeUInt;
@@ -473,8 +474,7 @@ end;
 { 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
 procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(FC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardCursorRange(FC, APos, ALen, AWhat);
 end;
 
 procedure TZipReaderImpl.ParseCentralDirectory;
@@ -816,8 +816,7 @@ end;
 { 区间 [APos, APos+ALen) 必须落在源长度内，否则结构视为截断损坏 }
 procedure TZipSourceReader.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > FSize) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
+  nextpas.core.zip.common.GuardRange(FSize, APos, ALen, AWhat);
 end;
 
 procedure TZipSourceReader.ParseCentralDirectory;
@@ -1120,13 +1119,11 @@ end;
 function NewZipReaderFromWithOptions(const ASource: IStream;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LMax: SizeUInt;
+  LOpt: TZipReadOptions;
 begin
-  LMax := AOptions.MaxOutputSize;
-  if LMax = 0 then
-    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
-  Result := TZipSourceReader.Create(ASource, LMax,
-    AOptions.MaxTotalOutputSize, AOptions.Password);
+  LOpt := NormalizeZipReadOptions(AOptions);
+  Result := TZipSourceReader.Create(ASource, LOpt.MaxOutputSize,
+    LOpt.MaxTotalOutputSize, LOpt.Password);
 end;
 
 end.

@@ -122,10 +122,10 @@ function CreateDecompressingVfs(const AInner: IVfs; const AAlgo: TDecompressAlgo
 begin
   if AInner = nil then raise EVfsError.CreateCtx('wrap', '', 'inner VFS is nil');
   case AAlgo of
-    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
     daAuto: Result := TAutoDecompressingVfs.Create(AInner);
   else
-    Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
   end;
 end;
 
