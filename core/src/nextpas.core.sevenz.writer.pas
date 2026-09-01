@@ -157,8 +157,7 @@ uses
   nextpas.core.sevenz.levels,
   nextpas.core.platform.thread,
   nextpas.core.text.conv,
-  nextpas.core.fs,
-  nextpas.core.fs.intf;
+  nextpas.core.sevenz.fs;
 
 type
   TBytes = nextpas.core.base.TBytes;
@@ -178,10 +177,11 @@ const
 { 单 folder 压缩内核：过滤链（零拷贝直连 RawSolid）+ 压缩器
   预过滤与压缩均在此完成，加密由调用方串行追加。PFolder^.RawSolid
   只读，PFolder^.PackedData/Specs 由本过程填充；每调用创建 fresh
-  LZMA 编码器，天然线程安全，串并行共用同一路径 }
+  LZMA 编码器，天然线程安全，串并行共用同一路径
+  性能：外联避免 I-Cache 膨胀（设计规范路由体禁 inline） }
 procedure EncodeFolderCore(var AFolder: TFolderBuild;
   const AFilters: array of TSevenZFilter;
-  ALevel: TSevenZCompressionLevel; AForcedId: UInt64; AHasForced: Boolean); inline;
+  ALevel: TSevenZCompressionLevel; AForcedId: UInt64; AHasForced: Boolean);
 var
   LRawChunk: TBytes;
   LStage: TBytes;
@@ -1019,6 +1019,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
     LRetVal: Pointer;
     LProbe: Byte;
     LExtra: SizeUInt;
+    LSpans: array of TByteSpan;
   begin
     { 统计非空文件并建立索引 }
     LNonEmpty := 0;
@@ -1151,16 +1152,21 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       end;
       { 逐 folder 执行过滤链与压缩，产出 Packed 与 Specs
           零过滤器时零拷贝直连 RawSolid，避免 Solid 整体二次搬运。
-          多 folder 时分批并行（每批 ≤ C_MAX_PARALLEL_THREADS），
-          IsMultiThread 保障 TBytes 引用计数原子化与 cthreads 已链接，
-          无线程支持时回落串行，避免 O(total) 深拷贝与峰值翻倍；加密段统一串行以避免 CSPRNG 竞争 }
+          多 folder 时分批并行（批次上限由 platform_cpu_count 自适应，
+          单源复用，避免硬上限 8 制约吞吐；IsMultiThread 门控 cthreads，
+          无线程支持时回落串行，创建失败亦回落；加密段统一串行以避免 CSPRNG 竞争） }
       if (Length(LFolders) >= 2) and IsMultiThread then
       begin
         LBatchStart := 0;
         while LBatchStart < Length(LFolders) do
         begin
           LBatchSize := Length(LFolders) - LBatchStart;
-          if LBatchSize > C_MAX_PARALLEL_THREADS then
+          // adaptive batch: cpu_count 自适应为主，fallback 硬上限避免极端 oversubscription
+          if platform_cpu_count > 0 then
+          begin
+            if LBatchSize > platform_cpu_count then
+              LBatchSize := platform_cpu_count;
+          end else if LBatchSize > C_MAX_PARALLEL_THREADS then
             LBatchSize := C_MAX_PARALLEL_THREADS;
           SetLength(LJobs, LBatchSize);
           SetLength(LHandles, LBatchSize);
@@ -1221,19 +1227,11 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           SetLength(LFolders[LFolderIdx].Specs, Length(LFolders[LFolderIdx].Specs) + 1);
           LFolders[LFolderIdx].Specs[High(LFolders[LFolderIdx].Specs)] := MakeAesSpec(LFolders[LFolderIdx].PackedData);
         end;
-      { 拼接全部 pack 流为连续载荷 }
-      LAcc := 0;
+      { 拼接全部 pack 流为连续载荷：单次分配 SpanConcatMany 复用 bytes.ops 单源（零额外 Move 循环，单遍分配+拷贝），bench_sevenz 吞吐锚点无回归，I-Cache 友好 }
+      SetLength(LSpans, Length(LFolders));
       for LFolderIdx := 0 to High(LFolders) do
-        Inc(LAcc, Length(LFolders[LFolderIdx].PackedData));
-      SetLength(APacked, LAcc);
-      LCursor := 0;
-      for LFolderIdx := 0 to High(LFolders) do
-        if Length(LFolders[LFolderIdx].PackedData) > 0 then
-        begin
-          Move(LFolders[LFolderIdx].PackedData[0], APacked[LCursor],
-            Length(LFolders[LFolderIdx].PackedData));
-          Inc(LCursor, Length(LFolders[LFolderIdx].PackedData));
-        end;
+        LSpans[LFolderIdx] := TByteSpan.FromBytes(LFolders[LFolderIdx].PackedData);
+      APacked := SpanConcatMany(LSpans);
     end
     else
     begin
@@ -1466,109 +1464,28 @@ begin
     raise ESevenZError.Create('sevenz writer builder already finished');
 end;
 
-{ Builder filesystem helpers (self-contained, no federation dependency).
-  Keeps writer core decoupled from federation layer (fs -> sevenz single direction,
-  writer does not import federation unit). Reuses core.fs primitives
-  directly; limits/levels stay single-sourced via limits/levels units. }
-type
-  TWriterTreeCtx = record
-    Writer: ISevenZWriter;
-    HostDir: string;
-    Prefix: string;
-    IncludePat: string;
-  end;
-  PWriterTreeCtx = ^TWriterTreeCtx;
-
-procedure WriterAddFileFromFs(const AWriter: ISevenZWriter; const AHostPath, AEntryName: string);
-var
-  LFile: IFile;
-  LInfo: TFileInfo;
-  LSize: UInt64;
-  LMTimeSec: Int64;
-begin
-  if AWriter = nil then
-    raise EArgumentError.Create('SevenZAddFileFromFs: AWriter is nil');
-  if AHostPath = '' then
-    raise EArgumentError.Create('SevenZAddFileFromFs: AHostPath is empty');
-  LInfo := Stat(AHostPath);
-  if LInfo.IsDir then
-    raise EArgumentError.CreateFmt('SevenZAddFileFromFs: "%s" is a directory', [AHostPath]);
-  LFile := Open(AHostPath, [fmRead]);
-  if LInfo.Size < 0 then
-    LSize := 0
-  else
-    LSize := UInt64(LInfo.Size);
-  LMTimeSec := LInfo.ModTime div 1000000000;
-  AWriter.AddFileFromReaderWithTime(AEntryName, LFile as IReader, LSize, LMTimeSec);
-end;
-
-function WriterTreeWalkCallback(const APath: string; const AInfo: TFileInfo;
-  const AErr: Exception; AUserData: Pointer): Boolean;
-var
-  Ctx: PWriterTreeCtx;
-  LRel, LName: string;
-begin
-  Ctx := PWriterTreeCtx(AUserData);
-  if AErr <> nil then
-    raise EIOError.CreateFmt('SevenZAddTree walk error at "%s": %s', [APath, AErr.Message]);
-  if SameFile(APath, Ctx^.HostDir) then
-    Exit(True);
-  if Ctx^.IncludePat <> '' then
-    if not PathMatch(Ctx^.IncludePat, PathBase(APath)) then
-      Exit(True);
-  LRel := PathRelative(Ctx^.HostDir, APath);
-  if Ctx^.Prefix <> '' then
-    LName := PathJoin([Ctx^.Prefix, LRel])
-  else
-    LName := LRel;
-  if (LName <> '') and (LName[1] = '.') and (Length(LName) > 1) and (LName[2] = '/') then
-    Delete(LName, 1, 2);
-  if LName = '' then
-    Exit(True);
-  if AInfo.IsDir then
-    Ctx^.Writer.AddDirectory(LName)
-  else if AInfo.FileType = ftRegular then
-    WriterAddFileFromFs(Ctx^.Writer, APath, LName);
-  Result := True;
-end;
-
-procedure WriterAddTreeWithFilter(const AWriter: ISevenZWriter; const AHostDir, AEntryPrefix, AInclude: string);
-var
-  Ctx: TWriterTreeCtx;
-begin
-  if AWriter = nil then
-    raise EArgumentError.Create('SevenZAddTree: AWriter is nil');
-  if AHostDir = '' then
-    raise EArgumentError.Create('SevenZAddTree: AHostDir is empty');
-  if not IsDir(AHostDir) then
-    raise EArgumentError.CreateFmt('SevenZAddTree: "%s" is not a directory', [AHostDir]);
-  Ctx.Writer := AWriter;
-  Ctx.HostDir := AHostDir;
-  Ctx.Prefix := PathClean(AEntryPrefix);
-  if (Ctx.Prefix = '.') or (Ctx.Prefix = '/') then
-    Ctx.Prefix := '';
-  Ctx.IncludePat := AInclude;
-  WalkEx(AHostDir, @WriterTreeWalkCallback, @Ctx);
-end;
+{ Filesystem helpers delegated to sevenz.fs owner (container kernel
+  isolated from core.fs federation; single source via SevenZAddTree/FileFromFs;
+  writer core no longer imports fs/fs.intf). }
 
 function TSevenZWriterBuilderImpl.AddTree(const AHostDir: string;
   const AArchivePrefix: string): ISevenZWriterBuilder;
 begin
-  WriterAddTreeWithFilter(FWriter, AHostDir, AArchivePrefix, '');
+  SevenZAddTree(FWriter, AHostDir, AArchivePrefix);
   Result := Self;
 end;
 
 function TSevenZWriterBuilderImpl.AddTreeWithFilter(const AHostDir: string;
   const AArchivePrefix: string; const AFilter: string): ISevenZWriterBuilder;
 begin
-  WriterAddTreeWithFilter(FWriter, AHostDir, AArchivePrefix, AFilter);
+  SevenZAddTreeWithFilter(FWriter, AHostDir, AArchivePrefix, AFilter);
   Result := Self;
 end;
 
 function TSevenZWriterBuilderImpl.AddFileFromFs(const AHostPath: string;
   const AArchiveName: string): ISevenZWriterBuilder;
 begin
-  WriterAddFileFromFs(FWriter, AHostPath, AArchiveName);
+  SevenZAddFileFromFs(FWriter, AHostPath, AArchiveName);
   Result := Self;
 end;
 

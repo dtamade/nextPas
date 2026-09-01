@@ -16,7 +16,7 @@ uses
   nextpas.core.sevenz.coders,
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.bcj.x86,
-  nextpas.core.sevenz.lzma.ffi;
+  nextpas.core.sevenz.lzma.ffi.decoder;
 
 const
   DATA_SIZE = 1024 * 1024;

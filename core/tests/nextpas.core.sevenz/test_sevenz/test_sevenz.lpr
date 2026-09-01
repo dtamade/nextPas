@@ -32,7 +32,7 @@ uses
   nextpas.core.sevenz.header,
   nextpas.core.sevenz.coders,
   nextpas.core.sevenz.filters,
-  nextpas.core.sevenz.lzma.ffi,
+  nextpas.core.sevenz.lzma.ffi.decoder,
   nextpas.core.compress.deflate,
   nextpas.core.compress.bzip2,
   nextpas.core.sevenz.limits,
