@@ -16,7 +16,8 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
-  nextpas.core.system.errors;
+  nextpas.core.system.errors,
+  nextpas.core.text.conv;
 
 {$I nextpas.core.system.kernel.inc}
 
@@ -185,24 +186,26 @@ begin
   Result := nextpas.core.bytes.ops.NToHs(AValue);
 end;
 
-function VarType(const V: Variant): TVarType;
+function VarType(const V: Variant): TVarType; inline;
 begin
-  Result := TVarData(V).VType;
+  { perf: inline thin forward to text.conv single source (normalized via bytes.ops zero-copy TVarData view, masked varTypeMask), no alloc }
+  Result := nextpas.core.text.conv.VarType(V);
 end;
 
-function VarIsNull(const V: Variant): Boolean;
+function VarIsNull(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType = varNull;
+  { perf: inline thin forward to text.conv single source (zero-copy view, masked), no alloc }
+  Result := nextpas.core.text.conv.VarIsNull(V);
 end;
 
-function VarIsEmpty(const V: Variant): Boolean;
+function VarIsEmpty(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType = varEmpty;
+  Result := nextpas.core.text.conv.VarIsEmpty(V);
 end;
 
-function VarIsClear(const V: Variant): Boolean;
+function VarIsClear(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType in [varEmpty, varNull];
+  Result := nextpas.core.text.conv.VarIsClear(V);
 end;
 
 end.

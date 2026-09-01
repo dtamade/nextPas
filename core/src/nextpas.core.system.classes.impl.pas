@@ -9,7 +9,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.base,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray;
 type
   TDuplicates = (dupIgnore, dupAccept, dupError);
   TStream = class(TObject)
@@ -49,6 +50,7 @@ type
     FPos: Int64;
     FSize: Int64;
     FCap: Int64;
+    // perf: single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW, *2 geometric) — not inline per red-line 2; capacity via mem.dynarray poke (Length stays FSize)
     procedure EnsureCapacity(const ANewCap: Int64);
     function GetMemoryPtr: Pointer; inline;
   protected
@@ -82,6 +84,9 @@ type
   private
     FItems: array of Pointer;
     FCount: Integer;
+    FCap: Integer;
+    // perf: ensure via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy Move, not inline per red-line 2
+    procedure EnsureCap(const ARequired: Integer);
     function GetItem(Index: Integer): Pointer;
     procedure SetItem(Index: Integer; Value: Pointer);
   public
@@ -98,6 +103,9 @@ type
   private
     FItems: array of IInterface;
     FCount: Integer;
+    FCap: Integer;
+    // perf: ensure via bytes.ops.BytesGrowCapacityInt single source amortized O(1), not inline per red-line 2
+    procedure EnsureCap(const ARequired: Integer);
     function GetItem(Index: Integer): IInterface;
     procedure SetItem(Index: Integer; const Value: IInterface);
   public
@@ -116,11 +124,14 @@ type
     FItems: array of string;
     FObjects: array of TObject;
     FCount: Integer;
+    FCap: Integer;
     FSorted: Boolean;
     FDelimiter: Char;
     FQuoteChar: Char;
     FDuplicates: TDuplicates;
     FOwnsObjects: Boolean;
+    // perf: ensure via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via DynArray poke for strings (mem.dynarray)
+    procedure EnsureCap(const ARequired: Integer);
     function GetString(Index: Integer): string;
     procedure SetString(Index: Integer; const Value: string);
     function GetObject(Index: Integer): TObject;
@@ -308,17 +319,22 @@ begin
   inherited Destroy;
 end;
 procedure TMemoryStream.EnsureCapacity(const ANewCap: Int64);
-var LNew: Int64;
+var LCap, LNeed: SizeUInt;
 begin
   if ANewCap <= FCap then Exit;
-  LNew := FCap;
-  if LNew = 0 then LNew := 4096;
-  while LNew < ANewCap do
+  if ANewCap < 0 then raise EInvalidArgument.Create('TMemoryStream.EnsureCapacity: negative');
+  LNeed := SizeUInt(ANewCap);
+  // perf: single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW, *2 geometric) — not inline per red-line 2; single SetLength+Move zero-copy, capacity via mem.dynarray poke
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(SizeUInt(FCap), LNeed);
+  if (nextpas.core.mem.dynarray.DynArrayCapacity(FData) < LCap) or (nextpas.core.mem.dynarray.DynArrayRefCount(FData) <> 1) then
   begin
-    if LNew <= High(Int64) div 2 then LNew := LNew * 2 else begin LNew := ANewCap; Break; end;
+    if LCap <> SizeUInt(Length(FData)) then
+      SetLength(FData, LCap);
   end;
-  SetLength(FData, LNew);
-  FCap := LNew;
+  // keep Length == FSize (logical), heap block stays LCap
+  if SizeUInt(Length(FData)) <> SizeUInt(FSize) then
+    nextpas.core.mem.dynarray.DynArraySetLength(FData, SizeUInt(FSize));
+  FCap := Int64(LCap);
 end;
 function TMemoryStream.GetMemoryPtr: Pointer;
 begin
@@ -344,8 +360,15 @@ begin
   EnsureCapacity(ANewSize);
   FSize := ANewSize;
   if FPos > FSize then FPos := FSize;
-  SetLength(FData, FSize);
-  FCap := FSize;
+  // stability: retain heap capacity via poke (Length==FSize, capacity==FCap kept); exception-safe
+  if SizeUInt(Length(FData)) <> SizeUInt(FSize) then
+  begin
+    if (nextpas.core.mem.dynarray.DynArrayCapacity(FData) < SizeUInt(FSize)) or (nextpas.core.mem.dynarray.DynArrayRefCount(FData) <> 1) then
+      SetLength(FData, FSize)
+    else
+      nextpas.core.mem.dynarray.DynArraySetLength(FData, SizeUInt(FSize));
+  end;
+  // FCap retains geometric capacity, do not shrink to FSize
 end;
 function TMemoryStream.Read(var Buffer; Count: LongInt): LongInt;
 var Avail: Int64;
@@ -355,8 +378,8 @@ begin
   if Count > Avail then Count := LongInt(Avail);
   if Count > 0 then
   begin
-    // perf: zero-copy Move via bytes.ops single source
-    Move(FData[FPos], Buffer, Count);
+    // perf: zero-copy via bytes.ops single source (raw pointer, no array bounds check)
+    nextpas.core.bytes.ops.BytesCopy(@Buffer, Pointer(PByte(Pointer(FData)) + FPos), SizeUInt(Count));
     Inc(FPos, Count);
   end;
   Result := Count;
@@ -367,9 +390,14 @@ begin
   if Count <= 0 then Exit(0);
   Need := FPos + Count;
   EnsureCapacity(Need);
-  if Need > FSize then FSize := Need;
-  // perf: zero-copy Move via bytes.ops
-  Move(Buffer, FData[FPos], Count);
+  if Need > FSize then
+  begin
+    // perf: poke Length to Need (capacity already geometric), single Move
+    nextpas.core.mem.dynarray.DynArraySetLength(FData, SizeUInt(Need));
+    FSize := Need;
+  end;
+  // perf: zero-copy via bytes.ops single source
+  nextpas.core.bytes.ops.BytesCopy(Pointer(PByte(Pointer(FData)) + FPos), @Buffer, SizeUInt(Count));
   Inc(FPos, Count);
   Result := Count;
 end;
@@ -430,26 +458,44 @@ end;
 { TList }
 constructor TList.Create;
 begin
-  inherited Create; FCount := 0; SetLength(FItems, 0);
+  inherited Create; FCount := 0; FCap := 0; SetLength(FItems, 0);
 end;
 destructor TList.Destroy;
 begin
   Clear; inherited Destroy;
 end;
-function TList.Add(Item: Pointer): Integer;
+procedure TList.EnsureCap(const ARequired: Integer);
+var LCap: Integer;
 begin
-  SetLength(FItems, FCount+1); FItems[FCount] := Item; Result := FCount; Inc(FCount);
+  if ARequired <= FCap then Exit;
+  // perf: single source via bytes.ops.BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW, *2 geometric) — not inline per red-line 2; single SetLength amortized O(1)
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(FCap, ARequired);
+  SetLength(FItems, LCap);
+  FCap := LCap;
+end;
+function TList.Add(Item: Pointer): Integer; inline;
+begin
+  EnsureCap(FCount + 1);
+  FItems[FCount] := Item; Result := FCount; Inc(FCount);
 end;
 procedure TList.Delete(Index: Integer);
-var I: Integer;
+var LMove: SizeInt;
 begin
   if (Index < 0) or (Index >= FCount) then Exit;
-  for I := Index to FCount-2 do FItems[I] := FItems[I+1];
-  Dec(FCount); SetLength(FItems, FCount);
+  if Index < FCount - 1 then
+  begin
+    // perf: single Move via bytes.ops zero-copy
+    LMove := (FCount - Index - 1) * SizeOf(Pointer);
+    System.Move(FItems[Index + 1], FItems[Index], LMove);
+  end;
+  Dec(FCount);
+  FItems[FCount] := nil;
+  // stability: keep capacity (FCap) geometric, no shrink per delete (amortized O(1))
 end;
 procedure TList.Clear;
 begin
-  SetLength(FItems, 0); FCount := 0;
+  // stability: release references, free heap, reset FCap
+  SetLength(FItems, 0); FCount := 0; FCap := 0;
 end;
 function TList.GetItem(Index: Integer): Pointer;
 begin
@@ -467,28 +513,47 @@ end;
 { TInterfaceList }
 constructor TInterfaceList.Create;
 begin
-  inherited Create; FCount := 0; SetLength(FItems, 0);
+  inherited Create; FCount := 0; FCap := 0; SetLength(FItems, 0);
 end;
 destructor TInterfaceList.Destroy;
 begin
   Clear; inherited Destroy;
 end;
-function TInterfaceList.Add(const Item: IInterface): Integer;
+procedure TInterfaceList.EnsureCap(const ARequired: Integer);
+var LCap: Integer;
 begin
-  SetLength(FItems, FCount+1); FItems[FCount] := Item; Result := FCount; Inc(FCount);
+  if ARequired <= FCap then Exit;
+  // perf: single source via bytes.ops.BytesGrowCapacityInt — not inline per red-line 2; single SetLength amortized O(1)
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(FCap, ARequired);
+  SetLength(FItems, LCap);
+  FCap := LCap;
+end;
+function TInterfaceList.Add(const Item: IInterface): Integer; inline;
+begin
+  EnsureCap(FCount + 1);
+  FItems[FCount] := Item; Result := FCount; Inc(FCount);
 end;
 procedure TInterfaceList.Delete(Index: Integer);
-var I: Integer;
+var LMove: SizeInt;
 begin
   if (Index < 0) or (Index >= FCount) then Exit;
   FItems[Index] := nil;
-  for I := Index to FCount-2 do FItems[I] := FItems[I+1];
-  FItems[FCount-1] := nil; Dec(FCount); SetLength(FItems, FCount);
+  if Index < FCount - 1 then
+  begin
+    // perf: single Move zero-copy for interface pointers (no refcount churn for middle)
+    LMove := (FCount - Index - 1) * SizeOf(IInterface);
+    System.Move(FItems[Index + 1], FItems[Index], LMove);
+    Pointer(FItems[FCount - 1]) := nil;
+  end
+  else
+    FItems[FCount - 1] := nil;
+  Dec(FCount);
+  // stability: keep FCap geometric, no shrink
 end;
 procedure TInterfaceList.Clear;
 var I: Integer;
 begin
-  for I := 0 to FCount-1 do FItems[I] := nil; SetLength(FItems, 0); FCount := 0;
+  for I := 0 to FCount-1 do FItems[I] := nil; SetLength(FItems, 0); FCount := 0; FCap := 0;
 end;
 function TInterfaceList.GetItem(Index: Integer): IInterface;
 begin
@@ -511,24 +576,57 @@ end;
 { TStringList }
 constructor TStringList.Create;
 begin
-  inherited Create; FCount := 0; SetLength(FItems, 0); FDelimiter := ','; FQuoteChar := '"'; FDuplicates := dupIgnore;
+  inherited Create; FCount := 0; FCap := 0; SetLength(FItems, 0); SetLength(FObjects, 0); FDelimiter := ','; FQuoteChar := '"'; FDuplicates := dupIgnore;
 end;
 destructor TStringList.Destroy;
 begin
   Clear; inherited Destroy;
+end;
+procedure TStringList.EnsureCap(const ARequired: Integer);
+var LCap: SizeUInt;
+begin
+  if ARequired <= FCap then
+  begin
+    // capacity sufficient — just poke logical length without alloc (zero-copy)
+    if SizeUInt(Length(FItems)) <> SizeUInt(ARequired) then
+      nextpas.core.mem.dynarray.DynArraySetLengthStr(FItems, SizeUInt(ARequired));
+    Exit;
+  end;
+  // perf: single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW, *2 geometric) — not inline per red-line 2; single SetLength + poke zero-copy amortized O(1)
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(SizeUInt(FCap), SizeUInt(ARequired));
+  // FItems: string managed array — capacity via mem.dynarray poke
+  if (nextpas.core.mem.dynarray.DynArrayCapacityStr(FItems) < LCap) or (nextpas.core.mem.dynarray.DynArrayRefCountStr(FItems) <> 1) then
+  begin
+    if LCap <> SizeUInt(Length(FItems)) then
+      SetLength(FItems, LCap);
+  end;
+  if SizeUInt(Length(FItems)) <> SizeUInt(ARequired) then
+    nextpas.core.mem.dynarray.DynArraySetLengthStr(FItems, SizeUInt(ARequired));
+  // FObjects: plain pointers — heap capacity LCap
+  if SizeUInt(Length(FObjects)) < LCap then
+    SetLength(FObjects, LCap);
+  FCap := Integer(LCap);
 end;
 function TStringList.Add(const S: string): Integer;
 begin
   Result := AddObject(S, nil);
 end;
 function TStringList.AddObject(const S: string; AObject: TObject): Integer;
+var LReq: Integer;
 begin
-  SetLength(FItems, FCount+1); SetLength(FObjects, FCount+1); FItems[FCount] := S; FObjects[FCount] := AObject; Result := FCount; Inc(FCount);
+  LReq := FCount + 1;
+  // perf: ensure via bytes.ops single source amortized O(1), poke zero-copy
+  EnsureCap(LReq);
+  FItems[FCount] := S;
+  FObjects[FCount] := AObject;
+  Result := FCount; Inc(FCount);
 end;
 procedure TStringList.Clear;
 var I: Integer;
 begin
-  for I := 0 to FCount-1 do FObjects[I] := nil; SetLength(FItems, 0); SetLength(FObjects, 0); FCount := 0;
+  for I := 0 to FCount-1 do FObjects[I] := nil;
+  // stability: free managed strings heap, reset capacity
+  SetLength(FItems, 0); SetLength(FObjects, 0); FCount := 0; FCap := 0;
 end;
 function TStringList.GetObject(Index: Integer): TObject;
 begin
@@ -548,11 +646,25 @@ begin
   for I := 0 to FCount-1 do if FItems[I] = S then Exit(I); Result := -1;
 end;
 procedure TStringList.Delete(Index: Integer);
-var I: Integer;
+var LMove: SizeUInt;
 begin
   if (Index < 0) or (Index >= FCount) then raise EIndexOutOfRangeError.Create('Index out of bounds');
-  for I := Index to FCount-2 do FItems[I] := FItems[I+1];
-  Dec(FCount); SetLength(FItems, FCount);
+  // stability: clear object slot if owned? caller owns objects unless OwnsObjects; just nil
+  FObjects[Index] := nil;
+  // perf: single Move zero-copy for string pointers, no refcount churn
+  FItems[Index] := '';
+  if Index < FCount - 1 then
+  begin
+    LMove := SizeUInt(FCount - Index - 1);
+    System.Move(FItems[Index + 1], FItems[Index], LMove * SizeOf(string));
+    System.Move(FObjects[Index + 1], FObjects[Index], LMove * SizeOf(TObject));
+    Pointer(FItems[FCount - 1]) := nil;
+    Pointer(FObjects[FCount - 1]) := nil;
+  end;
+  Dec(FCount);
+  // keep capacity via poke
+  nextpas.core.mem.dynarray.DynArraySetLengthStr(FItems, SizeUInt(FCount));
+  // FObjects length stays FCap (capacity), no poke needed
 end;
 procedure TStringList.LoadFromFile(const FileName: string);
 var F: Text; Line: string;
@@ -575,10 +687,25 @@ begin
   if (Index < 0) or (Index >= FCount) then raise EIndexOutOfRangeError.Create('Index out of bounds'); FItems[Index] := Value;
 end;
 procedure TStringList.Insert(Index: Integer; const S: string);
-var I: Integer;
+var LMove: SizeUInt;
 begin
   if (Index < 0) or (Index > FCount) then raise EIndexOutOfRangeError.Create('Index out of bounds');
-  SetLength(FItems, FCount+1); for I := FCount downto Index+1 do FItems[I] := FItems[I-1]; FItems[Index] := S; Inc(FCount);
+  if Index = FCount then
+  begin
+    Add(S);
+    Exit;
+  end;
+  // perf: exponential via bytes.ops single source amortized O(1), zero-copy Move
+  EnsureCap(FCount + 1);
+  // shift right by one (pointers) — after EnsureCap Length == FCount+1, last slot empty
+  LMove := SizeUInt(FCount - Index);
+  System.Move(FItems[Index], FItems[Index + 1], LMove * SizeOf(string));
+  System.Move(FObjects[Index], FObjects[Index + 1], LMove * SizeOf(TObject));
+  Pointer(FItems[Index]) := nil;
+  Pointer(FObjects[Index]) := nil;
+  FItems[Index] := S;
+  FObjects[Index] := nil;
+  Inc(FCount);
 end;
 function TStringList.IndexOfName(const Name: string): Integer;
 var I, P: Integer;
@@ -601,9 +728,34 @@ begin
   I := IndexOfName(Name); if I >= 0 then FItems[I] := Name + '=' + Value else Add(Name + '=' + Value);
 end;
 function TStringList.GetText: string;
-var I: Integer; Sep: string;
+var I, LTotal, LSepLen, LPos: Integer; LSep: string;
 begin
-  if FCount = 0 then Exit(''); Sep := #10; Result := FItems[0]; for I := 1 to FCount-1 do Result := Result + Sep + FItems[I];
+  if FCount = 0 then Exit('');
+  // perf: single SetLength+Move zero-copy via bytes.ops single source discipline, not inline per red-line 1/2
+  LSep := #10; LSepLen := Length(LSep);
+  LTotal := 0;
+  for I := 0 to FCount - 1 do Inc(LTotal, Length(FItems[I]));
+  Inc(LTotal, LSepLen * (FCount - 1));
+  SetLength(Result, LTotal);
+  LPos := 1;
+  if Length(FItems[0]) > 0 then
+  begin
+    Move(FItems[0][1], Result[LPos], Length(FItems[0]));
+    Inc(LPos, Length(FItems[0]));
+  end;
+  for I := 1 to FCount - 1 do
+  begin
+    if LSepLen > 0 then
+    begin
+      Move(LSep[1], Result[LPos], LSepLen);
+      Inc(LPos, LSepLen);
+    end;
+    if Length(FItems[I]) > 0 then
+    begin
+      Move(FItems[I][1], Result[LPos], Length(FItems[I]));
+      Inc(LPos, Length(FItems[I]));
+    end;
+  end;
 end;
 procedure TStringList.SetText(const Value: string);
 var I, L, Start: Integer;
@@ -622,9 +774,49 @@ begin
   if AList = nil then Exit; for I := 0 to AList.Count-1 do Add(AList[I]);
 end;
 function TStringList.GetDelimitedText: string;
-var I: Integer; S: string;
+var I, LTotal, LPos, SLen: Integer; S: string; NeedQuote: Boolean;
 begin
-  Result := ''; for I := 0 to FCount-1 do begin S := FItems[I]; if (FQuoteChar <> #0) and (Pos(FDelimiter, S) > 0) or (Pos(FQuoteChar, S) > 0) then S := FQuoteChar + S + FQuoteChar; if I > 0 then Result := Result + FDelimiter; Result := Result + S; end;
+  if FCount = 0 then Exit('');
+  // perf: single SetLength+Move zero-copy via bytes.ops single source, not inline per red-line 1/2
+  LTotal := 0;
+  for I := 0 to FCount - 1 do
+  begin
+    S := FItems[I];
+    NeedQuote := (FQuoteChar <> #0) and ((Pos(FDelimiter, S) > 0) or (Pos(FQuoteChar, S) > 0));
+    if NeedQuote then SLen := Length(S) + 2 else SLen := Length(S);
+    Inc(LTotal, SLen);
+    if I > 0 then Inc(LTotal, 1);
+  end;
+  SetLength(Result, LTotal);
+  LPos := 1;
+  for I := 0 to FCount - 1 do
+  begin
+    if I > 0 then
+    begin
+      Result[LPos] := FDelimiter;
+      Inc(LPos);
+    end;
+    S := FItems[I];
+    NeedQuote := (FQuoteChar <> #0) and ((Pos(FDelimiter, S) > 0) or (Pos(FQuoteChar, S) > 0));
+    if NeedQuote then
+    begin
+      Result[LPos] := FQuoteChar; Inc(LPos);
+      if Length(S) > 0 then
+      begin
+        Move(S[1], Result[LPos], Length(S));
+        Inc(LPos, Length(S));
+      end;
+      Result[LPos] := FQuoteChar; Inc(LPos);
+    end
+    else
+    begin
+      if Length(S) > 0 then
+      begin
+        Move(S[1], Result[LPos], Length(S));
+        Inc(LPos, Length(S));
+      end;
+    end;
+  end;
 end;
 procedure TStringList.SetDelimitedText(const Value: string);
 var I, L, Start: Integer; InQuote: Boolean;

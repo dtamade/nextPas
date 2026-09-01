@@ -60,6 +60,13 @@ function SameText(const A, B: string): Boolean;
     Returns 0 if none of the characters are found. }
 function LastDelimiter(const ADelimiters: string; const S: string): Integer;
 
+{== Variant helpers — text/convert normalization point, single source via bytes.ops (INV-5)
+    perf: inline thin forward to bytes.ops (zero-copy TVarData view, masked varTypeMask), no alloc }
+function VarType(const V: Variant): Word; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
+
 {== Pointer-based conversion ==}
 {** NUL-terminated PAnsiChar → string；nil 安全（返回空串）。
     C ABI 字符串读回的统一入口：本工具链上 string(AnsiString(ptr))
@@ -451,6 +458,27 @@ begin
     for J := 1 to Length(ADelimiters) do
       if S[I] = ADelimiters[J] then
         Exit(I);
+end;
+
+function VarType(const V: Variant): Word; inline;
+begin
+  { perf: inline thin forward to bytes.ops single source (zero-copy TVarData view, masked), no alloc }
+  Result := nextpas.core.bytes.ops.VarType(V);
+end;
+
+function VarIsNull(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsNull(V);
+end;
+
+function VarIsEmpty(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsEmpty(V);
+end;
+
+function VarIsClear(const V: Variant): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.VarIsClear(V);
 end;
 
 function AnsiPtrToStr(const AStr: PAnsiChar): string; inline;

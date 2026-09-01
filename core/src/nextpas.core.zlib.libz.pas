@@ -57,7 +57,7 @@ function ZlibFfiDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeU
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.platform.dl,

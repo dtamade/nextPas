@@ -16,7 +16,7 @@ HTTP 运行时:服务端与客户端,含 WebSocket 客户端、SSE、multipart�
 ## 1. 模块边界
 
 ```
-http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶）
+http.pas                 ← 完整门面（re-export；含产品 middleware 全家桶；umbrella, 1914 行 >800 软阈但属纯聚合——见 §1.1 rhythm 与 `http.pas:1-60` 聚合注释；thin consumers 用 http.minimal / http.middlewares）
 http.minimal             ← 薄门面：base/intf/headers/url/router/message + server/client + chain 原语
 http.base                ← THttpMethod/Status/Version, TUrl, options, EHttpError
 http.intf                ← IHttp* 接口（Request/Response/Client/Server/Router/…）
@@ -48,6 +48,8 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 ### 1.1 业务域拆分与四件套兑现（Extracted per §1.1；单一 900 行聚合已解耦，主文档瘦身为索引-锚点）
 
 > 单一 CONTRACT 约 900 行已按本节六域兑现四件套拆分；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 http 只依赖 L0–L2）、`bytes.ops` 单源复用、热点 `inline` + 零拷贝视图、资源释放（Close/PoolClear/heaptrc 0 unfreed）不丢；缺能力先反哺 owner（不绕过边界）。子域契约见 `core/docs/http/pool.md` / `retry.md` / `h2defense.md` / `tail.md` / `timeout.md` / `gating.md`（本主文档 §2–§6 仅保留语义摘要与锚点，明细以薄域契约为准，消双重维护）。
+>
+> **门面瘦身与子facade节奏（800 行软阈 `design-conventions.md:163`）**：`http.pas` 1914 行聚合 13 类接口别名 + 40+ inline 转发，属 umbrella 纯 re-export（无循环/路由/SIMD 体，`bytes.ops:25/89` 单源在 owner，热点 inline 仅薄转发、资源释放经 owner `try/finally`/`Close`/`PoolClear` 全路径，遵守上述四件套/L0-L3/inline/零拷贝/释放不丢）；因此按“软性指引、内聚性强可例外”暂保留 umbrella，但通过 `http.minimal`（~240 行，类型+路由+server/client+chain）与 `http.middlewares`（~500 行，middleware 产品族聚合，零拷贝/`bytes.ops` 单源直通 owner）形成子facade节奏——已兑现六域四件套即为节奏证据；后续可选再按 `message`/`client`/`server`/`static`/`websocket`/`sse`/`cookie`/`stream`/`form` 产品帮助面进一步拆子facade，每步守行为冻结 + focused 双绿 + `heaptrc 0 unfreed` + `git diff --check`/`make hygiene`，缺能力先反哺 `errors`/`bytes`/`platform` 等 owner（见抽取纪律 5 点）。入口表已给出 `http.minimal` vs `http` 二选一 guidance。
 
 | 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
 |--------|-------------------|----------------------------|--------------|---------------------------------|

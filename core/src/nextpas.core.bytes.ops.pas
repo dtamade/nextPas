@@ -35,8 +35,13 @@ procedure SpanZero(const ASpan: TByteSpan); inline;
 { 全局零页单源（.bss 零初值，4K 对齐页）：writer.stream 万槽零填共享，无栈分配/无重复 FillChar，零拷贝分段直写；按需切片避免小间隙 4K memset }
 const
   BYTES_ZERO_PAGE_SIZE = 4096;
+  // 小间隙切片阈值：按需 slice 为 SizeUInt(N) 而非整页 4K memset；阈值即 BYTES_ZERO_PAGE_SIZE，零拷贝分段直写
+  BYTES_ZERO_PAGE_SLICE_THRESHOLD = BYTES_ZERO_PAGE_SIZE;
 var
   BYTES_ZERO_PAGE: array[0..BYTES_ZERO_PAGE_SIZE - 1] of Byte;
+
+{ 零页切片单源 — writer.stream 复用入口；阈值切片避免小间隙 4K memset 零拷贝视图 }
+function ZeroPageSlice(const ALen: SizeUInt): TByteSpan; inline;
 
 { perf: bulk XOR single source — QWord-batched (8B) + tail, zero-copy in-place; Not inline per red-line 2 (循环/SIMD 体 I-Cache 膨胀); owner bytes.ops }
 procedure XorInplace(ADst, AKey: PByte; ALen: SizeUInt);
@@ -100,10 +105,25 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset;
   ALength: SizeUInt): string;
+{ single source for clamped slice extent — TStringView.Slice + SliceToStr share, zero-copy extent calc, inline hot path, owner bytes.ops }
+function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 { single source for PAnsiChar -> string (nil-safe, zero-copy Move); not inline per red-line 1/2 - loop/SetLength+Move }
 function AnsiPtrToString(const P: PAnsiChar): string;
 { single source for BE UTF-16 bytes -> string (zero-copy WideChar view + SetString); not inline per red-line 2 - loop }
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
+
+{ Variant type helpers — single source via bytes.ops (INV-5), text/convert normalization point
+  perf: inline zero-copy TVarData view, masked varTypeMask for by-ref/array, no alloc; system facade thin-forwards via text.conv -> bytes.ops }
+type
+  TVarType = Word;
+const
+  varEmpty = $0000;
+  varNull = $0001;
+  varTypeMask = $0FFF;
+function VarType(const V: Variant): TVarType; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
 
 { Network byte order — single source via nextpas.core.bytes.binary endian helpers (FPC Swap semantics, owner bytes.ops thin-forward)
   perf: inline zero-copy register shuffle via bytes.binary.HostToNetwork*/SwapUInt* single source, no alloc/diverge; endian-conditional in binary; system facade delegates here (INV-5) }
@@ -123,6 +143,13 @@ uses
   nextpas.core.simd,
   nextpas.core.mem.dynarray,
   nextpas.core.bytes.binary;
+
+type
+  TVarDataView = packed record
+    VType: Word;
+    Reserved: array[0..13] of Byte;
+  end;
+  PVarDataView = ^TVarDataView;
 
 { safe SetLength growth; BytesEnsureCapacity: capacity==Length no header poke (capacity exposed as Length); BytesAppend 系列: exponential via BytesGrowCapacity + EnsureAppendCapacity封装mem.dynarray定长(capacity retained, amortized O(1) zero-copy Move)高级感; perf: single Move per append not inline red-line 1/2; stability: exception-safe; portability: DynArray via L0 mem.dynarray unified (system.heap MemSize单探针，stub优雅) }
 
@@ -362,31 +389,23 @@ begin
 end;
 
 function AsciiLowerString(const S: string): string;
-var
-  LLen: SizeInt;
 begin
-  LLen := Length(S);
-  if LLen = 0 then
+  if S = '' then
     Exit('');
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(PAnsiChar(S)^, Pointer(Result)^, LLen);
-  if LLen > 0 then
-    ToLowerAscii(Pointer(Result), SizeUInt(LLen));
+  // INV-5 单源: SetLength+Move via SpanToString single source (TByteSpan view, single SetString alloc, zero-copy Move); perf inline thin-forward in facade
+  Result := SpanToString(TByteSpan.Create(PByte(PAnsiChar(S)), SizeUInt(Length(S))));
+  if Length(Result) > 0 then
+    ToLowerAscii(Pointer(Result), SizeUInt(Length(Result)));
 end;
 
 function AsciiUpperString(const S: string): string;
-var
-  LLen: SizeInt;
 begin
-  LLen := Length(S);
-  if LLen = 0 then
+  if S = '' then
     Exit('');
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(PAnsiChar(S)^, Pointer(Result)^, LLen);
-  if LLen > 0 then
-    ToUpperAscii(Pointer(Result), SizeUInt(LLen));
+  // INV-5 单源: SetLength+Move via SpanToString single source; zero-copy view
+  Result := SpanToString(TByteSpan.Create(PByte(PAnsiChar(S)), SizeUInt(Length(S))));
+  if Length(Result) > 0 then
+    ToUpperAscii(Pointer(Result), SizeUInt(Length(Result)));
 end;
 
 procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
@@ -405,6 +424,15 @@ procedure SpanZero(const ASpan: TByteSpan); inline;
 begin
   if ASpan.Len > 0 then
     MemSet(ASpan.Data, ASpan.Len, 0);
+end;
+
+function ZeroPageSlice(const ALen: SizeUInt): TByteSpan; inline;
+begin
+  // perf: threshold slice — small gap ALen < BYTES_ZERO_PAGE_SLICE_THRESHOLD avoids full 4K memset; zero-copy view into .bss page, single source for writer.stream 万槽零填
+  if ALen > BYTES_ZERO_PAGE_SIZE then
+    Result := TByteSpan.Create(@BYTES_ZERO_PAGE[0], BYTES_ZERO_PAGE_SIZE)
+  else
+    Result := TByteSpan.Create(@BYTES_ZERO_PAGE[0], ALen);
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
@@ -793,6 +821,22 @@ begin
   Result := SpanToString(LSpan);
 end;
 
+function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
+begin
+  // single source for clamped slice extent — TStringView.Slice + SliceToStr share, zero-copy extent calc, inline hot path, owner bytes.ops
+  // perf: pure arithmetic, zero-copy view extent, inline
+  if AOffset >= ATotal then
+  begin
+    AClampedLen := 0;
+    Exit(False);
+  end;
+  if ALength > ATotal - AOffset then
+    AClampedLen := ATotal - AOffset
+  else
+    AClampedLen := ALength;
+  Result := True;
+end;
+
 function AnsiPtrToString(const P: PAnsiChar): string;
 var
   LP: PAnsiChar;
@@ -862,6 +906,31 @@ end;
 function NToHs(AValue: LongWord): LongWord; inline;
 begin
   Result := LongWord(nextpas.core.bytes.binary.NetworkToHost32Words(UInt32(AValue)));
+end;
+
+function VarType(const V: Variant): TVarType; inline;
+begin
+  { perf: inline zero-copy TVarData view (Word overlay at offset 0), masked varTypeMask for by-ref/array normalization, no alloc }
+  Result := TVarDataView(V).VType and varTypeMask;
+end;
+
+function VarIsNull(const V: Variant): Boolean; inline;
+begin
+  { perf: inline zero-copy view, masked compare, no alloc }
+  Result := (TVarDataView(V).VType and varTypeMask) = varNull;
+end;
+
+function VarIsEmpty(const V: Variant): Boolean; inline;
+begin
+  Result := (TVarDataView(V).VType and varTypeMask) = varEmpty;
+end;
+
+function VarIsClear(const V: Variant): Boolean; inline;
+var
+  LType: Word;
+begin
+  LType := TVarDataView(V).VType and varTypeMask;
+  Result := (LType = varEmpty) or (LType = varNull);
 end;
 
 end.
