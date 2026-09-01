@@ -86,6 +86,9 @@ function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray,
   nextpas.core.text.utils,
   nextpas.core.mem.utils;
 
@@ -274,12 +277,34 @@ begin
     if AArr[i] = AValue then Inc(Result);
 end;
 
-procedure StringsAppend(var AArr: TStringArray; const AValue: string);
-var L: SizeInt;
+{ 单源指数增长: via bytes.ops.BytesGrowCapacity (INV-5) amortized O(1), 零拷贝 poke }
+procedure EnsureStringsCapacity(var AArr: TStringArray; const AOldLen, AReqLen: SizeUInt);
+var
+  LCap: SizeUInt;
 begin
-  L := Length(AArr);
-  SetLength(AArr, L + 1);
-  AArr[L] := AValue;
+  // not inline per red-line 2: BytesGrowCapacity while loop I-Cache bloat; pure capacity math single source
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(AOldLen, AReqLen);
+  if (nextpas.core.mem.dynarray.DynArrayCapacityStr(AArr) < LCap) or (nextpas.core.mem.dynarray.DynArrayRefCountStr(AArr) <> 1) then
+  begin
+    if LCap <> SizeUInt(Length(AArr)) then
+      SetLength(AArr, LCap);
+  end;
+  if SizeUInt(Length(AArr)) <> AReqLen then
+    nextpas.core.mem.dynarray.DynArraySetLengthStr(AArr, AReqLen);
+end;
+
+procedure StringsAppend(var AArr: TStringArray; const AValue: string);
+var
+  LOld, LReq: SizeUInt;
+begin
+  LOld := SizeUInt(Length(AArr));
+  if LOld = High(SizeUInt) then
+    raise EOutOfMemory.Create('StringsAppend: size overflow');
+  LReq := LOld + 1;
+  // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
+  // not inline per red-line 1/2: SetLength+Move would bloat I-Cache; stability: exception-safe, CoW-aware via RefCnt
+  EnsureStringsCapacity(AArr, LOld, LReq);
+  AArr[LOld] := AValue;
 end;
 
 procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt); inline;
@@ -300,14 +325,19 @@ begin
   SetLength(AArr, L - 1);
 end;
 
-procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string); inline;
+procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string);
 var
-  L: SizeUInt;
+  L, LReq: SizeUInt;
   LMoveCount: SizeUInt;
 begin
   L := SizeUInt(Length(AArr));
   if AIndex > L then AIndex := L;
-  SetLength(AArr, L + 1);
+  if L = High(SizeUInt) then
+    raise EOutOfMemory.Create('StringsInsert: size overflow');
+  LReq := L + 1;
+  // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
+  // not inline per red-line 1/2: SetLength+Move I-Cache bloat; stability: exception-safe, CoW-aware
+  EnsureStringsCapacity(AArr, L, LReq);
   if AIndex < L then
   begin
     { 零拷贝: 单次 System.Move 右移指针块(handling overlap), 原槽 Pointer:=nil 转移所有权, 避免 O(n) 引用计数 }

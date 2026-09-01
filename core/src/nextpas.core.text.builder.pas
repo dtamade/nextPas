@@ -74,6 +74,7 @@ uses
   { Avoid nextpas.core.mem facade (arena/pool graph; hangs / false cycles under stage0).
     Default path uses System heap; allocator path uses IAllocator only. }
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.number;
 
 type
@@ -190,21 +191,11 @@ procedure TBufStringBuilder.Grow(const ANeeded: SizeUInt);
 var
   LNewCap, LRequired: SizeUInt;
 begin
+  // single source: reuse bytes.ops.BytesGrowCapacity (INV-2, amortized O(1) geometric, BYTES_BUILDER_MIN_GROW) — not inline per red-line 2 (while loop I-Cache); zero-copy capacity math, sized ReallocMemSized
   if ANeeded > High(SizeUInt) - FLen then
     raise EOverflow.Create('string builder capacity overflow');
   LRequired := FLen + ANeeded;
-  LNewCap := FCap;
-  if LNewCap = 0 then
-    LNewCap := 256;
-  while LNewCap < LRequired do
-  begin
-    if LNewCap > (High(SizeUInt) shr 1) then
-    begin
-      LNewCap := LRequired;
-      Break;
-    end;
-    LNewCap := LNewCap * 2;
-  end;
+  LNewCap := nextpas.core.bytes.ops.BytesGrowCapacity(FCap, LRequired);
   { 接口面 sized 辅助（CA-016，owner decision 2026-08-10）：allocator<>nil
     委托 IAllocator 方法（分配器内部跟踪 size），nil 走 System 堆（RTL
     自跟踪）。与门面 ReallocMemOf 语义分层——不触碰 mem 门面 graph，

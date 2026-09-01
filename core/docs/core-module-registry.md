@@ -1,4 +1,11 @@
-# nextpas.core Module Registry
+# nextpas.core Module Registry — Single Source of Truth (L0-L3)
+
+> **Canonical registry.** This file is the sole authority for L0–L3 layer, owner,
+> public facade, allowed dependencies, and truth level. `core/docs/module-registry.md`
+> is a deprecated alias retained for backward compatibility and mirrors this table;
+> do not treat it as an independent source. Layer rules live in
+> `core/docs/design-conventions.md §3/15` and are enforced by
+> `core/tests/architecture/source_contracts`.
 
 This registry is the source contract for core module ownership. It records the
 top-level module family, not every implementation unit. Sub-unit rules live in
@@ -87,6 +94,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `simd` | L0 accelerator | SIMD and CPU feature seam | yes | L0 only; explicit CPUInfo debt | focused-runtime |
 | `sqlite` | L2 backend of `db` | SQLite database (system libsqlite3 FFI); units live at `nextpas.core.db.sqlite.*` (legacy `nextpas.core.sqlite.*` shims deleted in the G2 sweep) | yes | L0-L1 | focused-runtime |
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
+| `ssh` | L2 | SSH-2 client protocol stack (`nextpas.core.ssh.*`; pure Pascal, no C lib; sync `net` blocking + async `net.async.tcp` evented, crypto via `crypto`/`hash`, compress via `compress.zlib.ffi`) | yes | L0-L1 plus crypto/hash/compress/io/time/text owners; same-layer allowed peer `net` (single-point `ssh.net`) + `net.async.tcp` (allowed L2 async peer `transport.async`/`session.async`/`proxyjump.async` reuse `transport.core` single source); `compress.zlib.ffi` single-point via `compress` owner; bytes.ops single source inline/zero-copy, zero SysUtils | source-contract + focused-runtime |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
 | `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text/io/path/fs debt | source-contract |
@@ -95,11 +103,14 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |
 | `thread` | L1 | threads/tasks/channels | yes | L0 plus approved L1 | focused-runtime |
 | `time` | L1 | date/time APIs | yes | L0 plus approved L1 | focused-runtime |
-| `tls` | L2 | TLS stack/backends | yes | L0-L1 plus explicit backend FFI owners | source-contract + focused-runtime |
+| `tls` | L2 | TLS stack/backends | yes | L0-L1 plus same-layer one-way `crypto`/`hash` plus explicit backend FFI owners | source-contract + focused-runtime |
 | `toml` | L2 | TOML parser/writer | yes | L0-L1 | focused-runtime |
 | `tui` | L3 | terminal UI framework | yes | L0-L2 | focused-runtime |
 | `validation` | L3 | validation helpers | yes | L0-L2 | draft |
 | `vfs` | L2 | read-only virtual filesystem (`nextpas.core.vfs.*`, memtree/embedded/os/sub/mount/overlay + transform/compressed L3 decorator hosted, 13 units + facade) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite; transform/compressed white-listed L3→L2 (GZIP_MAX 32MiB single source via compress.base, bytes.ops zero-copy) | focused-runtime |
+| `validation` | L2 | validation helpers | yes | L0-L1 | focused-runtime |
+| `respack` | L2 | resource pack container + embed toolchain (asar/Tauri parity) | yes | L0; dirsource single fs seam; embed adds fs.glob via source-contract exception | focused-runtime + source-contract |
+| `vfs` | L2 | read-only virtual filesystem (memtree/embedded/os/sub/mount/overlay + facade + transform decorator) | yes | L0-L1; os seam single fs/path L2→L2; embedded adds respack.reader; mount/overlay pure composite | focused-runtime + source-contract |
 | `websocket` | L3 | websocket framework | yes | L0-L2 | draft |
 | `webview` | L3 | desktop app shell over system engines (WebKitGTK/WebView2/WKWebView; unified IPC bridge) | yes | L0-L2 plus json owner; platform.dl | focused-runtime |
 | `window` | L2 | window shell + surface (nextpas.core.window family; first consumer webview/gpu/directui/game888; 1.0 单源收口含 gtk3 Raw) | yes | L0-L1 plus platform.dl seam, plus one-way L2 `gtk2/gtk3/gtk4/qt5pas/qt` | ci-matrix (Linux 13门 runtime + Win/mac compile-only，残差诚实，见 window/FINAL_ROADMAP F3) |

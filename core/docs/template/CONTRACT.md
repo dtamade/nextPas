@@ -133,4 +133,4 @@ make focused FOCUS=core/tests/nextpas.core.template/test_template
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始实现：Go `text/template` 简化版 | template lane |
-| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/template/`（README+CONTRACT），对齐 `module-registry` L3 `template`，`text.conv` 单源/克隆隔离证据 | core-docs |
+| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/template/`（README+CONTRACT），对齐 `core-module-registry` L3 `template`（`module-registry` deprecated alias），`text.conv` 单源/克隆隔离证据 | core-docs |

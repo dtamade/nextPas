@@ -75,6 +75,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers,
@@ -448,13 +449,6 @@ begin
     end;
     LStart := LPos + 1;
   end;
-end;
-
-function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
-begin
-  SetLength(Result, SizeInt(ASize));
-  if ASize > 0 then
-    Move(AData[0], Result[1], ASize);
 end;
 
 { TSharedBytesReader }
@@ -996,7 +990,8 @@ begin
     Exit('');
   if FSkipBodyBuffer then
     Exit('');
-  Result := BytesToString(FBody, FBodySize);
+  // perf: single-source bytes.ops.BytesSliceToString — single SetLength+Move zero-copy via TByteSpan slice view, no duplicate Move branch; thin forward keeps I-Cache/alloc single source (ex L453 private fork removed)
+  Result := BytesSliceToString(FBody, 0, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;
