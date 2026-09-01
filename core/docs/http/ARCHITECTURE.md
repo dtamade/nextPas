@@ -245,22 +245,22 @@ src/
   nextpas.core.http.impl.h2.tls.pas           ← H2 TLS wrapper（ALPN h2 协商 + session factory）
   nextpas.core.http.impl.h1.tls.pas           ← H1 TLS wrapper（ALPN http/1.1 + session factory）
 
-  { §1.1 六域四件套兑现（CONTRACT v3.55） }
+  { §1.1 六域四件套兑现（CONTRACT v3.55；每域独立 heaptrc 0 门禁，不经 umbrella 聚合） }
   nextpas.core.http.pool.base.pas             ← pool 常量/TOptions（L3 单源）
   nextpas.core.http.pool.intf.pas             ← pool IHttpPool（per-authority MaxPoolSize/IdleTTL）
-  nextpas.core.http.pool.pas                  ← pool 门面（聚合 impl.h1.pool + impl.h2.client.pool，bytes.ops 单源 inline）
+  nextpas.core.http.pool.pas                  ← pool 薄门面（不经 umbrella，重聚合已解耦，bytes.ops 单源 inline 零拷贝，每域独立 PoolClear/heaptrc 0）
   nextpas.core.http.retry.base.pas            ← retry 策略常量（100ms base / 5s cap / slice 100ms）
   nextpas.core.http.retry.intf.pas            ← retry IHttpRetryPolicy + 幂等门闩
-  nextpas.core.http.retry.pas                 ← retry 门面（聚合 decorator + redirect，inline/零拷贝）
+  nextpas.core.http.retry.pas                 ← retry 薄门面（inline/零拷贝，每域独立 heaptrc 0）
   nextpas.core.http.impl.h2.defense.base.pas  ← H2 DoS 阈值（100/64KB/512/64/1MB/16MB）
   nextpas.core.http.impl.h2.defense.intf.pas  ← H2 IHttpH2Defense 计数器/GOAWAY
-  nextpas.core.http.impl.h2.defense.pas       ← H2 防御门面（完成-清零，attack/no-harm）
+  nextpas.core.http.impl.h2.defense.pas       ← H2 防御薄门面（完成-清零，attack/no-harm，每域独立 heaptrc 0）
   nextpas.core.http.impl.h1.framing.tail.base.pas ← tail pending TByteSpan 零拷贝缓冲
   nextpas.core.http.impl.h1.framing.tail.intf.pas ← tail IHttpTailFraming 隔离
-  nextpas.core.http.impl.h1.framing.tail.pas  ← tail 门面（FPending 视图 inline，Close 不丢）
+  nextpas.core.http.impl.h1.framing.tail.pas  ← tail 薄门面（FPending 视图 inline，Close 不丢，每域独立 heaptrc 0）
   nextpas.core.http.timeout.base.pas          ← timeout 策略常量（30s/90s/0=无限，单源对齐 http.base）
   nextpas.core.http.timeout.intf.pas          ← timeout 墙钟判定（IsExpired/ShouldCloseIdle inline）
-  nextpas.core.http.timeout.pas               ← timeout 薄门面（复用 http.base 单源，inline/零拷贝视图）
+  nextpas.core.http.timeout.pas               ← timeout 薄门面（复用 http.base 单源，inline/零拷贝视图，每域独立 heaptrc 0）
 
   { TLS 集成 }
   nextpas.core.http.impl.tls.stream.pas       ← TLS TCP stream（ITcpStream + ISSLStream + ALPN）

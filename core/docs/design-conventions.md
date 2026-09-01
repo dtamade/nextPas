@@ -195,7 +195,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader，未列入者视为违规
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
+- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝均为单向 allowlist 并经门禁防循环）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 

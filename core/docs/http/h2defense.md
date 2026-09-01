@@ -1,8 +1,9 @@
 # nextpas.core.http.impl.h2.defense — H2 DoS 防御域契约
 
-**模块**：`nextpas.core.http.impl.h2.defense.{base,intf,pas}`  
-**层级**：L3 http.impl.h2  
-**四件套**：`defense.base` ← `defense.intf` ← `defense` 门面  
+**模块**：`nextpas.core.http.impl.h2.defense.{base,intf,pas}` 薄门面（计数器/阈值 owner-local，不经 umbrella）
+**层级**：L3 http.impl.h2
+**四件套**：`defense.base` ← `defense.intf` ← `defense` 薄门面；实现侧 `session`/`stream` 直连 `defense.base/intf` 不经 umbrella 转口
+**门禁**：本域独立 `heaptrc 0 unfreed`（GOAWAY + 清待续释放不丢），不依赖 umbrella 聚合门禁
 **对应主契约**：`CONTRACT.md` §1.1 DoS 行 + §6 h2 DoS 防御 stance 表
 
 ## 职责
@@ -20,7 +21,7 @@
 ## 稳定性
 
 - 完成-清零不变式；致命 GOAWAY 后关连接并清 FPendingContinuationStreamID，不悬垂
-- heaptrc 0 unfreed；攻击/不误伤双测（198 穿插 1 完成等）
+- 本域独立 `heaptrc 0 unfreed`；攻击/不误伤双测（198 穿插 1 完成等），不经 umbrella 聚合门禁
 
 ## Owner 边界
 

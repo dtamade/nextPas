@@ -1,8 +1,9 @@
 # nextpas.core.http.impl.h1.framing.tail — Keep-Alive Request-Tail 域契约
 
-**模块**：`nextpas.core.http.impl.h1.framing.tail.{base,intf,pas}` 聚合 `impl.h1.conn.FPending` 尾巴  
-**层级**：L3 http.impl.h1（依赖 bytes.ops 单源 + impl.h1.parser）  
-**四件套**：`tail.base` ← `tail.intf` ← `tail` 门面  
+**模块**：`nextpas.core.http.impl.h1.framing.tail.{base,intf,pas}` 薄门面（`impl.h1.conn.FPending` 尾巴语义独立化，不经 umbrella）
+**层级**：L3 http.impl.h1（依赖 bytes.ops 单源 + impl.h1.parser）
+**四件套**：`tail.base` ← `tail.intf` ← `tail` 薄门面；实现侧 `impl.h1.conn` 直连 `tail.base/intf` 不经 umbrella 转口
+**门禁**：本域独立 `heaptrc 0 unfreed`（`TailClearPending`/`TH1TailBuffer.Clear` 释放不丢），不依赖 umbrella 聚合门禁
 **对应主契约**：`CONTRACT.md` §3.1 INV-12 + §1.1 Tail 行
 
 ## 职责
@@ -18,7 +19,7 @@
 
 ## 稳定性
 
-- 连接 Close 时 Clear 释放 pending，无 leak；fail-fast 413/431 在 handle 前
+- 连接 Close 时 `Clear` 释放 pending，无 leak；fail-fast 413/431 在 handle 前；本域独立 `heaptrc 0 unfreed`（不经 umbrella 聚合）
 - parser/server/security 三层证据锁行为
 
 ## Owner 边界

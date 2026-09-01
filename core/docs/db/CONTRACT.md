@@ -1,7 +1,7 @@
 # nextpas.core.db 代码契约（家族）
 
 **模块路径**：`core/src/nextpas.core.db*.pas`
-**层级**：L3 家族（依赖 L0-L2；SQLite/PostgreSQL 后端实现为 L2 子模块）
+**层级**：L3 家族（依赖 L0-L2；6 后端 `nextpas.core.db.{sqlite,pg,mysql,odbc,redis,dm}.*` 为 L2 子实现，6 通用域 `pool/stmtcache/sqlscan/trace/factory/async` 为 L3 家族聚合薄域（各三件套已落地，门面纯 re-export 零逻辑；详 §1.1），家族门面 `nextpas.core.db.pas` 为轻量聚合（纯 re-export，~420 行 inline 薄转发，无循环/状态机体，`bytes.ops` 单源复用，热点 `inline` + 零拷贝视图，资源释放 `PoolClear`/`Close`/`Destroy` 全路径，遵守四件套/L0–L3），层级不重；与 `core/docs/core-module-registry.md:db` L3 家族 + L2 后端白名单一致）
 **Owner**：core-db lane
 **最后更新**：2026-09-03（§1.1 六域四件套已兑现：pool/stmtcache/sqlscan/trace/factory/async 三件套落地 + pool.md 等 6 薄域契约，对齐 http 六域四件套兑现节奏）
 **版本**：1.4（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY、B8 Redis SUBSCRIBE、C6 SQL词法共享引擎 + §1.1 六域四件套兑现）
@@ -14,15 +14,19 @@
 |------|----|------|
 | `nextpas.core.db.base` | L0 依赖根 | TDbKind / TDbColumnType / EDbError / EDbNotSupported |
 | `nextpas.core.db.intf` | 接口 | IDbConnection / IDbQuery / IDbTxControl |
-| `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/pool/tx/migrate + 门面 |
+| `nextpas.core.db.sqlite.*` | L2 后端 | SQLite 实现：base/ffi/conn/tx/migrate + 门面 |
 | `nextpas.core.db.pg.*` | L2 后端 | PostgreSQL 实现：base/ffi/loader/conn/listen + 门面 |
-| `nextpas.core.db.sqlite.adapter` | 适配 | IDbConnection/IDbQuery 的 SQLite 包装（ConnectSqlite） |
-| `nextpas.core.db.pg.adapter` | 适配 | 同上 PG 包装（ConnectPostgres）+ ? → $N 占位符翻译 |
-| `nextpas.core.db.tx` | 泛化助手 | WithTransaction over IDbConnection |
-| `nextpas.core.db.migrate` | 泛化助手 | schema 版本化 over IDbConnection |
-| `nextpas.core.db.pas` | 门面 | 聚合 re-export 全部公共 API |
+| `nextpas.core.db.mysql.*` | L2 后端 | MySQL/MariaDB 实现：base/ffi/loader/conn + 门面 |
+| `nextpas.core.db.odbc.*` | L2 后端 | ODBC 网关实现：base/ffi/loader/conn + 门面 |
+| `nextpas.core.db.redis.*` | L2 后端 | Redis 实现：base/resp/transport/conn + 门面 |
+| `nextpas.core.db.dm.*` | L2 后端 | DM 实现：base/ffi/loader/conn + 门面（国产库 Tier-2） |
+| `nextpas.core.db.sqlite.adapter` | L3 适配（寄居） | IDbConnection/IDbQuery 的 SQLite 包装（ConnectSqlite） |
+| `nextpas.core.db.pg.adapter` | L3 适配（寄居） | 同上 PG 包装（ConnectPostgres）+ ? → $N 占位符翻译 |
+| `nextpas.core.db.tx` | L3 泛化助手 | WithTransaction over IDbConnection（后端无关） |
+| `nextpas.core.db.migrate` | L3 泛化助手 | schema 版本化 over IDbConnection（后端无关） |
+| `nextpas.core.db.pas` | L3 门面（轻量聚合） | 聚合 re-export 全部公共 API（纯转发，零逻辑，~420 行 inline 薄转发，`bytes.ops` 单源，热点 `inline` + 零拷贝视图，`PoolClear`/`Close` 释放不丢） |
 
-依赖方向严格单向：`db.base ← db.intf ← {adapter, tx, migrate, 后端} ← 门面`。
+依赖方向严格单向：`db.base ← db.intf ← {adapter, tx, migrate, 后端} ← 门面`（L3 家族门面仅依赖 L0–L2，L2 后端实现不依赖 L3；6 通用薄域 `pool/stmtcache/trace/factory/async` 虽三件套已兑现但仍寄居 L3 家族聚合层，属轻量寄居（门面纯转发、实现内聚于各薄域，复用 `bytes.ops` 单源，热点 `inline` + 零拷贝视图，`PoolClear`/`Discard`/`Close` 全路径释放不丢），不增家族门面层级重量；与 registry L3 家族 + L2 后端白名单一致）。
 **db.base 与 db.intf 禁止 uses 任何具体后端单元。**
 
 ### 1.1 业务域拆分与四件套兑现（已落地 per §1.1；单一 CONTRACT 聚合已按六域薄模块化，主文档瘦身为索引-锚点）

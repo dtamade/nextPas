@@ -1,10 +1,11 @@
 # nextpas.core.http.pool — Client 连接池域契约
 
-**模块**：`nextpas.core.http.pool.{base,intf,pas}` 聚合 `impl.h1.pool` + `impl.h2.client.pool`  
-**层级**：L3 http（若需跨 http 复用再评估下沉 `nextpas.core.net.pool`，当前 L3）  
-**四件套**：`pool.base` ← `pool.intf` ← `pool` 门面 ← `impl.*.pool` 实现  
-**依赖**：L0–L2 only（`bytes.ops` 单源、`net.intf`、`sync`）  
+**模块**：`nextpas.core.http.pool.{base,intf,pas}` 薄门面（不经 umbrella 重聚合 impl 池）
+**层级**：L3 http（若需跨 http 复用再评估下沉 `nextpas.core.net.pool`，当前 L3）
+**四件套**：`pool.base` ← `pool.intf` ← `pool` 薄门面；实现侧 `impl.h1.pool` / `impl.h2.client.pool` 各自 owner-local，直连 `http.pool.base/intf` 不经 umbrella 转口
+**依赖**：L0–L2 only（`bytes.ops` 单源经 `text.conv`、`net.intf`）
 **对应主契约**：`CONTRACT.md` §1.1 连接池行 + §5 pool 表 + §2.1 MaxPoolSize/IdleTTL
+**门禁**：本域独立 `heaptrc 0 unfreed`（`PoolClear`/`CloseIdle`/`Destroy` 释放不丢），不依赖 umbrella 聚合门禁
 
 ## 职责
 
@@ -15,13 +16,13 @@
 
 ## 性能
 
-- Host key 归一化 `CanonicalPoolHostKey` inline 薄转发，单源 `bytes.ops` / `text.conv` 不重复实现
+- Host key 归一化 `CanonicalPoolHostKey` inline 薄转发，单源 `bytes.ops` / `text.conv` 不重复实现（`pool.pas:32` 直接 `LowerCase`，零拷贝视图，不经 impl 转口）
 - 借出/归还 `IdleAtMs` 墙钟检查在锁外/锁内最小临界区，不阻塞
 - 零拷贝：key 视图不分配多余 string；tail 不拷贝
 
 ## 稳定性
 
-- Destroy / CloseIdle 路径必 `PoolClear`，heaptrc 0 unfreed
+- Destroy / CloseIdle 路径必 `PoolClear`（每域独立 `Clear`：`impl.h1.pool.Clear` / `impl.h2.client.pool.Clear` 各自锁外 `Close`/`Free`），`heaptrc 0 unfreed` 每域独立门禁（不再经 umbrella 聚合门禁，见 `gating.md`）
 - 锁外 Close/Free 避免 dead hang（IdleTTL suite 已验证）
 
 ## Owner 边界

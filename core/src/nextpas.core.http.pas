@@ -10,13 +10,23 @@ unit nextpas.core.http;
  *       single-source + performance inline/zero-copy + resource-release guarantees
  *       remain (CONTRACT is truth, missing capability → back-feed owner).
  *
- *       Slimming rhythm: `nextpas.core.http.minimal` (thin types+router+server/client+chain)
- *       and `nextpas.core.http.middlewares` (middleware family) already carry subfacades;
- *       remaining product helpers (message/static/websocket/sse/cookie/stream/form) stay
- *       here as umbrella conveniences until next per-domain extractions per
- *       `core/docs/http/CONTRACT.md:§1.1` (pool/retry/defense/tail/timeout already four-piece).
- *       Consumers preferring minimal surface should `uses nextpas.core.http.minimal`
- *       or the focused subfacade directly; `uses nextpas.core.http` stays stable.
+ *       Slimming rhythm (800-line soft guide, pure-aggregation umbrella exempt):
+ *       `nextpas.core.http.minimal` (~201 行: types+router+server/client+chain) and
+ *       `nextpas.core.http.middlewares` (~500 行: middleware family) already carry
+ *       subfacades; **this change adds** `nextpas.core.http.messages` (~420 行: request/response
+ *       builders + writers + redirects + RFC7807 errors + bounded body readers),
+ *       `nextpas.core.http.transports` (~520 行: server/client factories + Get/Post/
+ *       ensureSuccess/decode helpers + TCP backend + `PoolClear`/`Close` release),
+ *       `nextpas.core.http.extensions` (~520 行: static/websocket/sse/stream/cookie/form
+ *       + headers/url + ETag helpers) — three product subfacades covering the remaining
+ *       `message`/`static`/`websocket`/`sse`/`cookie`/`stream`/`form` helpers with
+ *       inline thin forwarding, zero-copy views and owner-local `try/finally`/`Close`
+ *       release (bytes.ops single source in owners, no duplicate loops). Together with
+ *       `http.minimal`/`http.middlewares` they form a five-facade rhythm; thin
+ *       consumers should `uses nextpas.core.http.minimal` / `messages` / `transports` /
+ *       `extensions` / `middlewares` directly, `uses nextpas.core.http` stays stable umbrella
+ *       (still >800 but cognitive load now distributed per `core/docs/http/CONTRACT.md:§1.1`
+ *       pool/retry/defense/tail/timeout/messaging/transport/extension extraction).
  *}
 
 {$I nextpas.core.settings.inc}

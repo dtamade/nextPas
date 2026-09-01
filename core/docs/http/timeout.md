@@ -1,8 +1,9 @@
 # nextpas.core.http.timeout — 超时策略薄域契约
 
-**模块**：`nextpas.core.http.timeout.{base,intf,pas}` 薄门面聚合 `http.base` 超时字段  
-**层级**：L3 http（依赖 L0–L2，复用 `http.base` 单源，不复制 `bytes.ops`）  
-**四件套**：`timeout.base` ← `timeout.intf` ← `timeout` 门面  
+**模块**：`nextpas.core.http.timeout.{base,intf,pas}` 薄门面聚合 `http.base` 超时字段（不经 umbrella）
+**层级**：L3 http（依赖 L0–L2，复用 `http.base` 单源，不复制 `bytes.ops`）
+**四件套**：`timeout.base` ← `timeout.intf` ← `timeout` 薄门面；实现侧 `http.base`/`timeout.intf` 墙钟判定直连，不经 umbrella 转口
+**门禁**：本域独立 `heaptrc 0 unfreed`（策略无资源，`PoolClear`/`Close` 不丢），不依赖 umbrella 聚合门禁
 **对应主契约**：`CONTRACT.md` §1.1 超时行 + §2.1/§2.2 Timeout/IdleTTL/IdleTimeout/ReadTimeout/WriteTimeout 对照
 
 ## 职责
@@ -30,7 +31,7 @@
 
 ## 稳定性
 
-- 策略对象不持有资源；`PoolClear`/`CloseIdle`/`Server Close` 释放路径不受策略抽取影响，heaptrc 0 unfreed 保持
+- 策略对象不持有资源；`PoolClear`/`CloseIdle`/`Server Close` 释放路径不受策略抽取影响，本域独立 `heaptrc 0 unfreed` 保持（不经 umbrella 聚合）
 - 0 值语义冻结：`IdleTTL=0` 仅关闭墙钟（仍可 `MaxPoolSize`/`CloseIdle`）；`ReadTimeout=0` 仅显式无界；与既有 `test_http_client` / `test_http_security` 行为一致
 
 ## Owner 边界
