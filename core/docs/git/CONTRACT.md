@@ -1,6 +1,6 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（71 个源文件）
+**模块路径**：`core/src/nextpas.core.git*.pas`（87 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片）
 **层级**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-08-29
@@ -20,7 +20,18 @@
 | git.libgit2.ffi | libgit2 C FFI 类型层（回调 typedef 等，dlsym 系词汇） |
 | git.libgit2.binding | libgit2 函数指针绑定（dlopen/dlsym 运行时加载） |
 | git.libgit2.backend | libgit2 后端实现 |
-| git.libgit2.bindings | libgit2 全量自动声明单元（c2pas888 生成，静态 external 形态） |
+| git.libgit2.bindings | libgit2 门面（<150 行，re-export 10 域分片，零重复） |
+| git.libgit2.bindings.types | 标量别名域（C 类型，<250 行） |
+| git.libgit2.bindings.structs | 记录/句柄/回调域（PACKRECORDS C，<800 行） |
+| git.libgit2.bindings.consts | 常量域（GIT_*，<700 行） |
+| git.libgit2.bindings.c | C 标准库 external 域（memcpy/strtod 等，external 'c'） |
+| git.libgit2.bindings.oid | oid/indexer/odb 基础域（inline Move 零拷贝，复用 bytes.ops） |
+| git.libgit2.bindings.odb | odb 流域 |
+| git.libgit2.bindings.refs | refs/refdb 域 |
+| git.libgit2.bindings.commit | commit/tree/blob 域 |
+| git.libgit2.bindings.repo | repository 域 |
+| git.libgit2.bindings.diff | tree/diff/patch 域 |
+| git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
 | git.libgit2.base | libgit2 基础类型/句柄/oid 前向声明（20/33 双轨零拷贝，git_oid/TGitOid33） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
@@ -83,7 +94,13 @@
 | git.factory | TGitBackend + NewGitManager 选择层（唯一跨轨汇聚点，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
-| git.native | 子家族门面 re-export |
+| git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝，<400 行） |
+| git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
+| git.native.history | 历史门面分片（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show，单次交付） |
+| git.native.branches | 分支门面分片（branch/tag/stash/notes） |
+| git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
+| git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect） |
+| git.native | 子家族薄聚合门面（<350 行，re-export shard types + objects inline gateway，旧 `uses git.native` 仍兼容类型层，函数建议按域直引分片） |
 | git.pas | 门面 re-export（inline NewGitManager → factory.NewGitManager(gbAuto)，存量零改动） |
 
 ### 1.1.1 native 子家族（2026-08-25 起）
@@ -124,7 +141,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 | 轨道 | 单元 | 加载方式 | 覆盖面 | 验证 |
 |---|---|---|---|---|
 | 运行时加载系 | ffi + binding + backend | dlopen/dlsym（platform.dl），零链接依赖 | 手写子集，按需增长 | test_git 20 测全绿（真库跑 commit/diff/blame/revwalk/config） |
-| 静态声明系 | bindings | external 'c'（构建期 -lgit2 / soname 直链） | 全量 876 函数 + 全部类型/宏（c2pas888 自动生成） | test_bindings 5 测全绿（gcc 探针 sizeof/offsetof 黄金对照 + 运行时版本实证） |
+| 静态声明系 | bindings (+10 域分片 types/structs/consts/c/oid/odb/refs/commit/repo/diff/extra) | external 'c'（构建期 -lgit2 / soname 直链），门面 <150 行，每分片 <800 行 | 全量 876 函数 + 全部类型/宏（c2pas888 生成后按域分片） | test_bindings 5 测全绿（gcc 探针 sizeof/offsetof 黄金对照 + 运行时版本实证，uses 显式分片） |
 
 - 默认消费路径是运行时加载系；静态声明系服务需要完整 ABI 面
   （如绑定生成器、ABI 审计、未来静态链接发行形态）的场景。

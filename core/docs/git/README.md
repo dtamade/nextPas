@@ -33,8 +33,25 @@ core/src/nextpas.core.git.libgit2.binding.pas ← libgit2 运行时绑定（dlop
 core/src/nextpas.core.git.libgit2.backend.pas ← libgit2 后端实现
 core/src/nextpas.core.git.libgit2.manager.pas ← libgit2 管理器（TGitManagerImpl，经 backend/binding）
 core/src/nextpas.core.git.libgit2.pas        ← libgit2 集成门面
-core/src/nextpas.core.git.libgit2.bindings.pas← libgit2 全量静态声明（c2pas888 生成，external）
-core/src/nextpas.core.git.native.pas          ← native 子家族门面 re-export
+core/src/nextpas.core.git.libgit2.bindings.pas← libgit2 门面（<150 行，re-export shards，零重复）
+core/src/nextpas.core.git.libgit2.bindings.types.pas  ← 标量别名域（C 类型，<250 行）
+core/src/nextpas.core.git.libgit2.bindings.structs.pas← 记录/句柄/回调域（<800 行，PACKRECORDS C）
+core/src/nextpas.core.git.libgit2.bindings.consts.pas ← 常量域（GIT_*，<700 行）
+core/src/nextpas.core.git.libgit2.bindings.c.pas     ← C 标准库 external 域（memcpy/strtod 等， shim external）
+core/src/nextpas.core.git.libgit2.bindings.oid.pas   ← oid/oidarray/indexer 域（inline Move 零拷贝，复用 bytes.ops）
+core/src/nextpas.core.git.libgit2.bindings.odb.pas   ← odb 流域
+core/src/nextpas.core.git.libgit2.bindings.refs.pas  ← refs/refdb 域
+core/src/nextpas.core.git.libgit2.bindings.commit.pas← commit/tree/blob/object 域
+core/src/nextpas.core.git.libgit2.bindings.repo.pas  ← repository/annotated_commit 域
+core/src/nextpas.core.git.libgit2.bindings.diff.pas  ← tree/diff/patch 域
+core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/config/remote 等剩余域
+core/src/nextpas.core.git.native.pas          ← native 子家族薄聚合门面（<350 行，re-export shard types + objects inline gateway）
+core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝）
+core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
+core/src/nextpas.core.git.native.history.pas  ← 历史门面分片（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show）
+core/src/nextpas.core.git.native.branches.pas ← 分支门面分片（branch/tag/stash/notes）
+core/src/nextpas.core.git.native.transport.pas ← 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset）
+core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect）
 core/src/nextpas.core.git.native.base.pas     ← TGitOid / EGitError 等对象层基座
 core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index,cachetree,
   status,ignore,revwalk,commitgraph,reflog,stash,notes,branch,tag,log,describe,diff,blame,

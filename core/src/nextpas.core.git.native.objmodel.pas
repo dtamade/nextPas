@@ -47,7 +47,7 @@ type
     Message: string;
   end;
 
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray;
+function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 function GitParseSignature(const ALine: string): TGitSignature;
 function GitParseCommit(const AData: TBytes): TGitCommitInfo;
 { Raises EGitError when any of the mandatory object/type/tag headers is
@@ -76,15 +76,16 @@ begin
   end;
 end;
 
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray;
+function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 var
   P, Len: SizeInt;
   ModeStart, NameStart: SizeInt;
-  EntryCount: Integer;
+  EntryCount, Cap: Integer;
 begin
   Len := Length(AData);
   P := 0;
   EntryCount := 0;
+  Cap := 0;
   SetLength(Result, 0);
   while P < Len do
   begin
@@ -102,16 +103,28 @@ begin
     Inc(P);
     if P + GitOidRawLen > Len then
       raise EGitError.Create('corrupt tree entry: truncated oid');
-    Inc(EntryCount);
-    SetLength(Result, EntryCount);
-    // single source via bytes.ops (zero-copy slice, no intermediate TBytes)
-    Result[EntryCount - 1].Mode := ParseOctalText(
+    // perf: amortized O(1) doubling (bytes.ops single-source pattern) avoids O(n²) per-entry SetLength churn
+    if EntryCount >= Cap then
+    begin
+      if Cap = 0 then
+        Cap := 8
+      else if Cap <= High(Integer) div 2 then
+        Cap := Cap * 2
+      else
+        Cap := EntryCount + 1;
+      SetLength(Result, Cap);
+    end;
+    // zero-copy slice via bytes.ops (no intermediate TBytes), inline Slice+Move
+    Result[EntryCount].Mode := ParseOctalText(
       BytesSliceToString(AData, SizeUInt(ModeStart), SizeUInt(NameStart - ModeStart - 1)));
-    Result[EntryCount - 1].Name :=
+    Result[EntryCount].Name :=
       BytesSliceToString(AData, SizeUInt(NameStart), SizeUInt(P - NameStart - 1));
-    Move(AData[P], Result[EntryCount - 1].Oid.Bytes[0], GitOidRawLen);
+    Move(AData[P], Result[EntryCount].Oid.Bytes[0], GitOidRawLen);
     Inc(P, GitOidRawLen);
+    Inc(EntryCount);
   end;
+  if Length(Result) <> EntryCount then
+    SetLength(Result, EntryCount);
 end;
 
 function GitParseSignature(const ALine: string): TGitSignature;

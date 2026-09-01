@@ -47,14 +47,15 @@ function GitSerializeCacheTree(const ATree: TGitCacheTree): TBytes;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 const
   CDigitZero = Ord('0');
 
-function AsciiPart(const AText: string): TBytes;
+function AsciiPart(const AText: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PChar(AText)^, Result[0], Length(AText));
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
 { minimal decimal rendering including negatives (-1 sentinel) }

@@ -42,9 +42,30 @@ libgit2 源码在 `~/projects/libgit2`。
 
    `unit_git2d.h` 仅一行 `#include "git2.h"`。
 
+2b. **按功能域分片**（800 行/单元红线，匠心修复后）：单文件 8240 行违背
+    `single-unit ≤800` 与域内聚原则。按 libgit2 功能域拆为 10 子单元，
+    每单元 <800 行，门面 `nextpas.core.git.libgit2.bindings` 纯 re-export：
+
+    - `bindings.types`：C 标量别名（TGitOidT 等）
+    - `bindings.structs`：全量记录/句柄/回调（TGitOid/ TGitCommit 等）
+    - `bindings.consts`：GIT_* 宏常量
+    - `bindings.c`：C 标准库 external（memcpy/strtod 等， shim 走 external 'c'）
+    - `bindings.oid`：oid/oidarray/indexer/odb 基础
+    - `bindings.odb`：odb 流与对象
+    - `bindings.refs`：refs/refdb
+    - `bindings.commit`：commit/tree/blob/object
+    - `bindings.repo`：repository/annotated_commit
+    - `bindings.diff`：tree/diff/patch
+    - `bindings.extra`：filter/attr/blame/checkout/config/remote/revwalk 等
+    - 门面 `bindings` <150 行，`uses` 聚合 + 少量 type alias（零拷贝 Move inline 复用 bytes.ops 单源）
+
+    再生成后按此清单分片，`grep -c "^function\|^procedure"` 校验 876 函数仍全量，
+    `wc -l` 校验每文件 <800。
+
 3. **整形**：unit 名改回点分形式；头部换成 `{** @desc ... *}` 注释 +
    `{$I nextpas.core.settings.inc}`；保留 `{$PACKRECORDS C}`。
    产物不得引入 uses SysUtils（当前为零依赖纯类型+external）。
+   分片后每个子单元仅 `uses bindings.types/structs` + `base.utils`，保持 L2 依赖向下。
 
 4. **黄金对照**：`gcc -I ~/projects/libgit2/include abi_probe.c` 打印
    关键 struct 的 sizeof/offsetof 作黄金数字，硬编码进

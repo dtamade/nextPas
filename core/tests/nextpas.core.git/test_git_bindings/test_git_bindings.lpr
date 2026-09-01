@@ -5,7 +5,13 @@ program test_git_bindings;
 uses
   nextpas.core.test,
   nextpas.core.base,
-  nextpas.core.git.libgit2.bindings;
+  nextpas.core.git.libgit2.bindings,
+  nextpas.core.git.libgit2.bindings.types,
+  nextpas.core.git.libgit2.bindings.structs,
+  nextpas.core.git.libgit2.bindings.consts,
+  nextpas.core.git.libgit2.bindings.oid,
+  nextpas.core.git.libgit2.bindings.commit,
+  nextpas.core.git.libgit2.bindings.repo;
 
 { Golden numbers come from the C probe (abi_probe.c) compiled with the
   host gcc against the same libgit2 headers the bindings were generated

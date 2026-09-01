@@ -12,6 +12,12 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.git.native.base,
   nextpas.core.git.native,
+  nextpas.core.git.native.objects,
+  nextpas.core.git.native.staging,
+  nextpas.core.git.native.history,
+  nextpas.core.git.native.branches,
+  nextpas.core.git.native.transport,
+  nextpas.core.git.native.extensions,
   nextpas.core.git.native.pktline,
   nextpas.core.git.native.negotiate,
   nextpas.core.git.native.sideband;
