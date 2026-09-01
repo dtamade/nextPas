@@ -692,6 +692,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       LEmptyFileStreamFlags: array of Boolean;
       LPayload: TBytes;
       LPayloadBuilder: IBytesBuilder;
+      LNameEst: SizeUInt;
+      LCapa: SizeUInt;
     begin
       LTotal := Length(FEntries);
       SetLength(LEmptyStreamFlags, LTotal);
@@ -707,7 +709,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       AppendVarintBuilder(ABuilder, UInt64(LTotal));
       if LEmptyCnt > 0 then
       begin
-        LPayloadBuilder := CreateBytesBuilder(64);
+        // 容量预估：位向量 ceil(N/8)，Builder Grow 均摊，避免 64 固定值在大 N 时多次扩容
+        LPayloadBuilder := CreateBytesBuilder(SizeUInt((LTotal + 7) div 8 + 8));
         AppendBoolVectorToBuilder(LPayloadBuilder, LEmptyStreamFlags);
         LPayload := LPayloadBuilder.ToBytes;
         AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_STREAM, LPayload);
@@ -724,37 +727,50 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           end;
         if CountTrue(LEmptyFileStreamFlags) > 0 then
         begin
-          LPayloadBuilder := CreateBytesBuilder(64);
+          LPayloadBuilder := CreateBytesBuilder(SizeUInt((LEmptyCnt + 7) div 8 + 8));
           AppendBoolVectorToBuilder(LPayloadBuilder, LEmptyFileStreamFlags);
           LPayload := LPayloadBuilder.ToBytes;
           AppendFilePropBuilder(ABuilder, SZ_ID_EMPTY_FILE, LPayload);
         end;
       end;
-      LPayloadBuilder := CreateBytesBuilder(1024);
-      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
-      for LI := 0 to LTotal - 1 do
-        AppendUtf16LeNameBuilder(LPayloadBuilder, FEntries[LI].Name);
-      LPayload := LPayloadBuilder.ToBytes;
-      AppendFilePropBuilder(ABuilder, SZ_ID_NAME, LPayload);
-      LPayloadBuilder := CreateBytesBuilder(256);
-      AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
-      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
-      for LI := 0 to LTotal - 1 do
-        SevenZAppendUInt64LEToBuilder(LPayloadBuilder, SevenZUnixToFILETIME(FEntries[LI].MTimeUnixSec));
-      LPayload := LPayloadBuilder.ToBytes;
-      AppendFilePropBuilder(ABuilder, SZ_ID_MTIME, LPayload);
-      LPayloadBuilder := CreateBytesBuilder(256);
-      AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
-      SevenZAppendByteToBuilder(LPayloadBuilder, 0);
-      for LI := 0 to LTotal - 1 do
+      // Name 载荷：精确预估 UTF16LE 总量 + external 1 字节，避免 1k 文件时 1024 固定值触发多轮 Grow
       begin
-        if FEntries[LI].IsDir then
-          SevenZAppendUInt32LEToBuilder(LPayloadBuilder, SEVENZ_ATTR_DIRECTORY)
-        else
-          SevenZAppendUInt32LEToBuilder(LPayloadBuilder, $00000020);
+        LNameEst := 1;
+        for LI := 0 to LTotal - 1 do
+          LNameEst := LNameEst + SizeUInt(Length(FEntries[LI].Name) * 2 + 2);
+        LPayloadBuilder := CreateBytesBuilder(LNameEst);
+        SevenZAppendByteToBuilder(LPayloadBuilder, 0);
+        for LI := 0 to LTotal - 1 do
+          AppendUtf16LeNameBuilder(LPayloadBuilder, FEntries[LI].Name);
+        LPayload := LPayloadBuilder.ToBytes;
+        AppendFilePropBuilder(ABuilder, SZ_ID_NAME, LPayload);
       end;
-      LPayload := LPayloadBuilder.ToBytes;
-      AppendFilePropBuilder(ABuilder, SZ_ID_WIN_ATTRIBUTES, LPayload);
+      // MTime/WinAttr：位向量 + external + 定长数组，预估避免 Grow
+      begin
+        LCapa := SizeUInt((LTotal + 7) div 8 + 1 + LTotal * 8 + 8);
+        LPayloadBuilder := CreateBytesBuilder(LCapa);
+        AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
+        SevenZAppendByteToBuilder(LPayloadBuilder, 0);
+        for LI := 0 to LTotal - 1 do
+          SevenZAppendUInt64LEToBuilder(LPayloadBuilder, SevenZUnixToFILETIME(FEntries[LI].MTimeUnixSec));
+        LPayload := LPayloadBuilder.ToBytes;
+        AppendFilePropBuilder(ABuilder, SZ_ID_MTIME, LPayload);
+      end;
+      begin
+        LCapa := SizeUInt((LTotal + 7) div 8 + 1 + LTotal * 4 + 8);
+        LPayloadBuilder := CreateBytesBuilder(LCapa);
+        AppendBoolVector2AllDefinedToBuilder(LPayloadBuilder, LTotal);
+        SevenZAppendByteToBuilder(LPayloadBuilder, 0);
+        for LI := 0 to LTotal - 1 do
+        begin
+          if FEntries[LI].IsDir then
+            SevenZAppendUInt32LEToBuilder(LPayloadBuilder, SEVENZ_ATTR_DIRECTORY)
+          else
+            SevenZAppendUInt32LEToBuilder(LPayloadBuilder, $00000020);
+        end;
+        LPayload := LPayloadBuilder.ToBytes;
+        AppendFilePropBuilder(ABuilder, SZ_ID_WIN_ATTRIBUTES, LPayload);
+      end;
       SevenZAppendByteToBuilder(ABuilder, SZ_ID_END);
     end;
 
@@ -1203,7 +1219,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       SetLength(LFolders, 0);
     end;
     { 主头：明文 kHeader；无 pack 数据时省略流信息段 — IBytesBuilder O(n) 均摊，避免逐次 SetLength O(n²) }
-    LPlainBuilder := CreateBytesBuilder(4096);
+    // 容量预估：header 外层 StreamsInfo+FilesInfo，Length(FEntries)*64 均摊，避免 4096 在千文件时多轮 Grow
+    LPlainBuilder := CreateBytesBuilder(SizeUInt((Length(FEntries) * 64) + 4096));
     SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_HEADER);
     if LNonEmpty > 0 then
     begin
@@ -1220,7 +1237,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       签名头的 NextHeaderOffset 必须跨过它指向块起点 }
     if FEncodeHeader then
     begin
-      LBlockBuilder := CreateBytesBuilder(1024);
+      // 编码头块：基于明文头长度预估，压缩后+AES 开销，+256 余量
+      LBlockBuilder := CreateBytesBuilder(SizeUInt(Length(LPlainHeader) + 1024));
       BuildEncodedHeaderPartsToBuilder(LPlainHeader, APacked, AHdrStream, LBlockBuilder);
       ABlock := LBlockBuilder.ToBytes;
     end
