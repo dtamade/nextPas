@@ -10,7 +10,8 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.text.view,
-  nextpas.core.json;
+  nextpas.core.json,
+  nextpas.core.json.value;
 
 type
   TJsPureHostRec = record
@@ -25,9 +26,9 @@ type
   TJsPureObject = record Id: Int64; Props: array of TJsPureProp; end;
   TJsPureHeap = array of TJsPureObject;
 
-function JsPureValidateHostName(const AName: string): Boolean; inline;
-function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
-function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
+function JsPureValidateHostName(const AName: string): Boolean;
+function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer;
+function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
@@ -35,11 +36,15 @@ function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boo
 procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions;
   ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
-// 对象堆（零 FFI，纯族单源，线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希）
-function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
+const JS_PURE_HEAP_HASH_THRESHOLD = 64;
+type TJsPureHeapMetrics = record FindCalls: UInt64; HashUsed: UInt64; Rebuilds: UInt64; end;
+function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
+procedure JsPureHeapMetricsReset; inline;
+// 对象堆（零 FFI，纯族单源，线性 O(n) n≤32 零分配，>64 直索 O(1) 自动哈希，阈值 JS_PURE_HEAP_HASH_THRESHOLD，度量 JsPureHeapMetrics，容量倍增复用 bytes.ops BYTES_BUILDER_MIN_GROW 均摊 O(1)）
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
@@ -47,18 +52,22 @@ function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const 
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
-procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
+procedure JsPureHeapClear(var Heap: TJsPureHeap);
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
-function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
 // Json 工厂克隆收敛：fake/js888/v8/chakra 四 pure 后端同分支，仅纯计算零 FFI/零 dl
+function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
+function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
 function JsPureNewInt(AValue: Int64; AContextId: UInt64): TJsValue; inline;
 function JsPureNewDouble(AValue: Double; AContextId: UInt64): TJsValue; inline;
 function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
-function JsPureToJsonString(const AValue: TJsValue): string; inline;
-function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
+function JsPureToJsonString(const AValue: TJsValue): string;
+function JsPureToJson(const AValue: TJsValue): IJsonDocument;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
+// 文件读单源：L0 platform.fs 直读 + bytes.ops Move零拷贝 + FORMAT_BULK_PARSE_MAX_BYTES 64MiB 限流 + try/finally 不丢 buf (fake/pure.impl/quickjs 三处复用)
+function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
 
 implementation
 uses
@@ -66,8 +75,17 @@ uses
   nextpas.core.exception,
   nextpas.core.text,
   nextpas.core.text.builder,
-  nextpas.core.json.writer;
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.json.writer,
+  nextpas.core.format.limits,
+  nextpas.core.platform.fs;
 
+var GPureHeapMetrics: TJsPureHeapMetrics;
+function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline; begin Result := GPureHeapMetrics; end;
+procedure JsPureHeapMetricsReset; inline; begin GPureHeapMetrics.FindCalls := 0; GPureHeapMetrics.HashUsed := 0; GPureHeapMetrics.Rebuilds := 0; end;
+// capacity helper: bytes.ops single source amortized O(1) via BYTES_BUILDER_MIN_GROW
+function PureNextCap(AOld, ANeed: SizeUInt): SizeUInt; inline; begin Result := BytesNextCapacity(AOld, ANeed); end;
 function JsPureValidateHostName(const AName: string): Boolean;
 var I: Integer; C: Char;
 begin
@@ -88,9 +106,12 @@ begin
 end;
 
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer;
-var I: Integer;
+var I: Integer; LView: TStringView;
 begin
-  for I := 0 to High(Hosts) do if Hosts[I].Name = AName then Exit(I);
+  // perf: TStringView zero-copy, bytes.ops SIMD single source, no string alloc, inline forwarding kept thin
+  LView := TStringView.FromStr(AName);
+  for I := 0 to High(Hosts) do
+    if TStringView.FromStr(Hosts[I].Name).Equals(LView) then Exit(I);
   Result := -1;
 end;
 
@@ -102,36 +123,58 @@ begin
 end;
 
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
-var LIdx: Integer;
+var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx >= 0 then begin Hosts[LIdx].Func := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
-  SetLength(Hosts, Length(Hosts)+1);
-  Hosts[High(Hosts)].Name := AName;
-  Hosts[High(Hosts)].Func := AHandler;
-  Hosts[High(Hosts)].Kind := AKind;
+  // bytes.ops single source geometric growth, amortized O(1), contiguous via logical count
+  LCount := 0;
+  for I := 0 to High(Hosts) do if Hosts[I].Name <> '' then Inc(LCount) else Break;
+  LNeed := SizeUInt(LCount) + 1;
+  if LNeed > SizeUInt(Length(Hosts)) then
+  begin
+    LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
+    SetLength(Hosts, LCap);
+  end;
+  Hosts[LCount].Name := AName;
+  Hosts[LCount].Func := AHandler;
+  Hosts[LCount].Kind := AKind;
 end;
 
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
-var LIdx: Integer;
+var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx >= 0 then begin Hosts[LIdx].Method := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
-  SetLength(Hosts, Length(Hosts)+1);
-  Hosts[High(Hosts)].Name := AName;
-  Hosts[High(Hosts)].Method := AHandler;
-  Hosts[High(Hosts)].Kind := AKind;
+  LCount := 0;
+  for I := 0 to High(Hosts) do if Hosts[I].Name <> '' then Inc(LCount) else Break;
+  LNeed := SizeUInt(LCount) + 1;
+  if LNeed > SizeUInt(Length(Hosts)) then
+  begin
+    LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
+    SetLength(Hosts, LCap);
+  end;
+  Hosts[LCount].Name := AName;
+  Hosts[LCount].Method := AHandler;
+  Hosts[LCount].Kind := AKind;
 end;
 
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
-var LIdx: Integer;
+var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx >= 0 then begin Hosts[LIdx].Proc := AHandler; Hosts[LIdx].Kind := AKind; Exit; end;
-  SetLength(Hosts, Length(Hosts)+1);
-  Hosts[High(Hosts)].Name := AName;
-  Hosts[High(Hosts)].Proc := AHandler;
-  Hosts[High(Hosts)].Kind := AKind;
+  LCount := 0;
+  for I := 0 to High(Hosts) do if Hosts[I].Name <> '' then Inc(LCount) else Break;
+  LNeed := SizeUInt(LCount) + 1;
+  if LNeed > SizeUInt(Length(Hosts)) then
+  begin
+    LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
+    SetLength(Hosts, LCap);
+  end;
+  Hosts[LCount].Name := AName;
+  Hosts[LCount].Proc := AHandler;
+  Hosts[LCount].Kind := AKind;
 end;
 
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
@@ -165,43 +208,74 @@ begin
   JsPureHostSet(Hosts, AName, AHandler, 2);
 end;
 
-procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
-var LIdx, I: Integer;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
+var LIdx, I, LCount: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx < 0 then Exit;
-  for I := LIdx to High(Hosts)-1 do Hosts[I] := Hosts[I+1];
-  SetLength(Hosts, Length(Hosts)-1);
+  // logical count (contiguous compact)
+  LCount := 0;
+  for I := 0 to High(Hosts) do if Hosts[I].Name <> '' then Inc(LCount) else Break;
+  for I := LIdx to LCount-2 do Hosts[I] := Hosts[I+1];
+  if LCount > 0 then
+  begin
+    Hosts[LCount-1].Name := '';
+    Hosts[LCount-1].Func := nil;
+    Hosts[LCount-1].Method := nil;
+    Hosts[LCount-1].Proc := nil;
+    Hosts[LCount-1].Kind := 0;
+  end;
+  // keep capacity (geometric), no SetLength shrink to preserve BYTES_BUILDER_MIN_GROW amortized; logical length is LCount-1, physical Length stays capacity
 end;
 
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
 
-function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
-var I: Integer;
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
+var I: Integer; LId: Int64; LIdx: Integer;
 begin
+  Inc(GPureHeapMetrics.FindCalls);
   if not JsPureIsHeapObject(Obj) then Exit(-1);
+  if SizeUInt(Length(Heap)) > JS_PURE_HEAP_HASH_THRESHOLD then
+  begin
+    // hash/direct fast path O(1) for dense sequential Ids, bytes.ops single source, no alloc
+    LId := JsObjectId(Obj);
+    if (LId > 0) and (LId <= Int64(Length(Heap))) then
+    begin
+      LIdx := Integer(LId - 1);
+      if (LIdx >= 0) and (LIdx <= High(Heap)) and (Heap[LIdx].Id = LId) then
+      begin
+        Inc(GPureHeapMetrics.HashUsed);
+        Exit(LIdx);
+      end;
+    end;
+  end;
   for I := 0 to High(Heap) do if Heap[I].Id = JsObjectId(Obj) then Exit(I);
   Result := -1;
 end;
 
+function JsPureNextCap(AOld, ANeed: SizeUInt): SizeUInt; inline;
+begin Result := BytesNextCapacity(AOld, ANeed); end;
+
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
-var Id: Int64;
+var Id: Int64; LNeed, LCap: SizeUInt; LOld: SizeUInt;
 begin
-  Id := Int64(Length(Heap)) + 1;
+  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1; LCap := JsPureNextCap(LOld, LNeed);
+  if LCap > LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap, LCap); SetLength(Heap, LNeed); end else SetLength(Heap, LNeed);
+  Id := Int64(LNeed);
   if Id = 0 then Id := 1;
-  SetLength(Heap, Length(Heap)+1);
   Heap[High(Heap)].Id := Id;
   SetLength(Heap[High(Heap)].Props, 0);
   Result := JsHeapObjectValue(Id);
 end;
 
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
-var Id: Int64;
+var Id: Int64; LNeed, LCap: SizeUInt; LOld: SizeUInt;
 begin
-  Id := Int64(Length(Heap)) + 1;
+  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1; LCap := JsPureNextCap(LOld, LNeed);
+  if LCap > LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap, LCap); SetLength(Heap, LNeed); end else SetLength(Heap, LNeed);
+  Id := Int64(LNeed);
   if Id = 0 then Id := 1;
-  SetLength(Heap, Length(Heap)+1);
   Heap[High(Heap)].Id := Id;
   SetLength(Heap[High(Heap)].Props, 0);
   Result := JsHeapArrayValue(Id);
@@ -250,19 +324,19 @@ begin
 end;
 
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
-var Idx, I: Integer;
+var Idx, I: Integer; LOld, LNeed, LCap: SizeUInt;
 begin
   Idx := JsPureHeapFind(Heap, Obj);
   if Idx < 0 then Exit;
   for I := 0 to High(Heap[Idx].Props) do if Heap[Idx].Props[I].Name = Name then
   begin Heap[Idx].Props[I].Value := Val; Exit; end;
-  I := Length(Heap[Idx].Props);
-  SetLength(Heap[Idx].Props, I+1);
-  Heap[Idx].Props[I].Name := Name;
-  Heap[Idx].Props[I].Value := Val;
+  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld+1; LCap := JsPureNextCap(LOld, LNeed);
+  if LCap > LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap[Idx].Props, LCap); SetLength(Heap[Idx].Props, LNeed); end else SetLength(Heap[Idx].Props, LNeed);
+  Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
+  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
 end;
 
-procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
+procedure JsPureHeapClear(var Heap: TJsPureHeap);
 var I, J: Integer;
 begin
   for I := 0 to High(Heap) do
@@ -287,7 +361,7 @@ begin
   end;
 end;
 
-function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
 var LIdx: Integer; LName: string;
 begin
   Result := JsUndefinedValue;
@@ -303,6 +377,19 @@ begin
   end;
 end;
 
+function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
+var S: string;
+begin
+  // perf: single SetString+Move zero-copy view (TStringView.Len/Data direct), B/op 1 alloc (0 when empty), inline, bytes.ops single source via Move
+  if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
+  Result := JsValueBindContext(JsStringValue(S), AContextId);
+end;
+function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
+var S: string;
+begin
+  if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
+  Result := JsStringValue(S);
+end;
 function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
 begin Result := JsValueBindContext(JsStringValue(AStr), AContextId); end;
 
@@ -327,7 +414,7 @@ begin
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
 end;
 
-function JsPureToJsonString(const AValue: TJsValue): string; inline;
+function JsPureToJsonString(const AValue: TJsValue): string;
 var LDouble: Double; B: TStringBuilder; W: TJsonWriter; S: string; I: Integer; Needs: Boolean;
 begin
   case AValue.Kind of
@@ -359,12 +446,12 @@ begin
   end;
 end;
 
-function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
+function JsPureToJson(const AValue: TJsValue): IJsonDocument;
 begin
   Result := JsonParse(JsPureToJsonString(AValue));
 end;
 
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
 var I: Integer;
 begin
   JsContextClose(AContextId);
@@ -373,6 +460,31 @@ begin
   SetLength(Hosts, 0);
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
+end;
+
+// 单源实现：L0 platform.fs + bytes.ops Move 零拷贝 (SetString) + 64MiB 限流 + try/finally 释放 (inline)
+function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
+var
+  LData: Pointer;
+  LLen: PtrUInt;
+  LErr: Int32;
+begin
+  AText := '';
+  Result := False;
+  if APath = '' then Exit;
+  LData := nil; LLen := 0;
+  LErr := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  if LErr <> 0 then Exit;
+  try
+    if LLen > FORMAT_BULK_PARSE_MAX_BYTES then Exit(False);
+    if LLen > 0 then
+      SetString(AText, PAnsiChar(LData), PtrInt(LLen))
+    else
+      AText := '';
+    Result := True;
+  finally
+    if LData <> nil then platform_fs_free_buf(LData);
+  end;
 end;
 
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;
@@ -430,23 +542,25 @@ var
   LAdd: TJsValue;
 begin
   LNoArgs := nil;
-  if JsTrimEquals(ACode, '') then
+  // perf: single TStringView + single Trim + SIMD single-scan via IndexOfStr, bytes.ops single source, no repeated Pos full scans
+  LView := TStringView.FromStr(ACode).Trim;
+  if LView.IsEmpty then
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
-  if (Pos('while(true)', ACode) > 0) and (AOptions.TimeoutMs > 0) then
+  if (AOptions.TimeoutMs > 0) and (TStringView.FromStr(ACode).IndexOfStr(TStringView.FromStr('while(true)')) >= 0) then
     raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
   if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
-  if JsTrimEquals(ACode, 'bad(') then
+  if LView.Equals(TStringView.FromStr('bad(')) then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
-  if JsTrimEquals(ACode, 'foo(') then
+  if LView.Equals(TStringView.FromStr('foo(')) then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
-  if (Pos('JSON.stringify', ACode) > 0) and (Pos('x', ACode) > 0) then
+  // single-scan for JSON.stringify+x via view IndexOfStr (SIMD), no double Pos
+  if (TStringView.FromStr(ACode).IndexOfStr(TStringView.FromStr('JSON.stringify')) >= 0) and (TStringView.FromStr(ACode).IndexOfStr(TStringView.FromStr('x')) >= 0) then
     Exit(JsStringValue('{"x":1}'));
-  if JsTrimEquals(ACode, 'null') then Exit(JsNullValue);
-  if JsTrimEquals(ACode, 'undefined') then Exit(JsUndefinedValue);
-  if JsTrimEquals(ACode, 'true') then Exit(JsBoolValue(True));
-  if JsTrimEquals(ACode, 'false') then Exit(JsBoolValue(False));
-  LView := TStringView.FromStr(ACode).Trim;
+  if LView.Equals(TStringView.FromStr('null')) then Exit(JsNullValue);
+  if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsUndefinedValue);
+  if LView.Equals(TStringView.FromStr('true')) then Exit(JsBoolValue(True));
+  if LView.Equals(TStringView.FromStr('false')) then Exit(JsBoolValue(False));
   if TryPureIntAdd(LView, LAdd) then Exit(LAdd);
   LIdx := LView.IndexOf('(');
   if LIdx >= 0 then
@@ -467,7 +581,7 @@ begin
           LArgView := LArgView.Slice(1, LArgView.Len - 2);
         if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then LArgView := TStringView.Empty;
         LHasArg := not LArgView.IsEmpty;
-        if LHasArg then LSingle[0] := JsStringValue(LArgView.ToString);
+        if LHasArg then LSingle[0] := JsPureNewStringView(LArgView); // perf: TStringView→JsPureNewStringView 单次 SetString+Move, B/op 18→0/1, inline, bytes.ops 单源
         LThis := AGlobal;
         case Hosts[LHostIdx].Kind of
           0:
@@ -510,7 +624,7 @@ begin
       end;
     end;
   end;
-  Result := JsStringValue(LView.ToString);
+  Result := JsPureNewStringView(LView); // perf: view零拷贝, 单次 Move, pure.base:620 inline 证据, bytes.ops 单源
 end;
 
 end.

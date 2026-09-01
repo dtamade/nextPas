@@ -148,6 +148,7 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
+- `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`，阈值 550 内，见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
   `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
@@ -182,7 +183,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -191,7 +192,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
 
 ### 特殊依赖关系：encoding / bytes / text
@@ -857,7 +858,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（只依赖 L0-L1）
+### L2: 系统能力（只依赖 L0-L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |
