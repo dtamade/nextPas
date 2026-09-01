@@ -8,6 +8,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.compress.base,
   nextpas.core.io.intf,
   nextpas.core.compress,
   nextpas.core.git.native.base,
@@ -70,23 +71,32 @@ begin
   Result := DeflateCompress(AData);
 end;
 
-function MapDeflateError(const E: Exception): EGitError;
+function MapDeflateError(const E: Exception): EGitError; inline;
 begin
-  if Pos('truncated stream', E.Message) > 0 then
-    Result := EGitError.Create('truncated zlib stream')
-  else if Pos('invalid zlib header', E.Message) > 0 then
-    Result := EGitError.Create('zlib stream is not deflate')
-  else if Pos('invalid window bits', E.Message) > 0 then
-    Result := EGitError.Create('corrupt zlib header')
-  else if Pos('corrupt zlib header', E.Message) > 0 then
-    Result := EGitError.Create('corrupt zlib header')
-  else if Pos('preset dictionary', E.Message) > 0 then
-    Result := EGitError.Create('zlib preset dictionary unsupported')
-  else if Pos('zlib stream too large', E.Message) > 0 then
-    Result := EGitError.Create('zlib stream too large')
-  else if Pos('corrupt stream', E.Message) > 0 then
-    Result := EGitError.Create('corrupt zlib payload: data error')
+  // typed high-level mapping: switch on TDeflateErrorCode, zero string Pos
+  // perf: inline case dispatch, zero alloc beyond EGitError message, no Move
+  // stability: original E freed by handler, inflateEnd in try..finally of owner
+  if E is EDeflateError then
+    case EDeflateError(E).Code of
+      decTruncated:
+        Result := EGitError.Create('truncated zlib stream');
+      decInvalidHeader:
+        Result := EGitError.Create('zlib stream is not deflate');
+      decInvalidWindowBits,
+      decCorruptHeader:
+        Result := EGitError.Create('corrupt zlib header');
+      decPresetDictionary:
+        Result := EGitError.Create('zlib preset dictionary unsupported');
+      decStreamTooLarge:
+        Result := EGitError.Create('zlib stream too large');
+      decCorruptStream,
+      decTrailingBytes:
+        Result := EGitError.Create('corrupt zlib payload: data error');
+    else
+      Result := EGitError.Create('corrupt zlib payload: ' + E.Message);
+    end
   else
+    // fallback: non-typed EIOError or future raw path — still no Pos
     Result := EGitError.Create('corrupt zlib payload: ' + E.Message);
 end;
 
@@ -96,6 +106,8 @@ begin
   try
     Result := DeflateDecompressPtrWithEndPos(AData, ACount, AStart, AEndPos);
   except
+    on E: EDeflateError do
+      raise MapDeflateError(E);
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
@@ -109,6 +121,8 @@ begin
   try
     Result := DeflateDecompressPtrWithEndPosToBuffer(AData, ACount, AStart, AEndPos, ADst, ADstLen);
   except
+    on E: EDeflateError do
+      raise MapDeflateError(E);
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
@@ -120,9 +134,12 @@ function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
   ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt;
 begin
   // not inline — heavy inflate prefix stays out-of-line; zero-copy PByte view
+  // stability: inflateEnd in try..finally of owner, no leak on EDeflateError
   try
     Result := DeflateDecompressPtrPrefix(AData, ACount, AStart, ADst, ADstLen, AEndPos);
   except
+    on E: EDeflateError do
+      raise MapDeflateError(E);
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
@@ -139,6 +156,8 @@ begin
     Result := DeflateDecompressWithEndPos(AData, AStart, AEndPos);
   except
     on E: EGitError do raise;
+    on E: EDeflateError do
+      raise MapDeflateError(E);
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do

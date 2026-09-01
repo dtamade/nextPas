@@ -58,7 +58,8 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
-  nextpas.core.bytes.binary;
+  nextpas.core.bytes.binary,
+  nextpas.core.encoding.varint;
 
 { GitApplyDeltaReuse: zero-copy span view + buffer reuse via bytes.ops single source.
   Core decode is single-source with GitApplyDelta; this wrapper reuses AReuse
@@ -70,34 +71,26 @@ var
   SrcSize, TgtSize, OutPos, CopyOff, CopySize: Int64;
   Op: Byte;
   I: Integer;
-  B: Byte;
-  Shift: Integer;
   LBaseSpan, LDeltaSpan, LOutSpan: TByteSpan;
+  USrc, UTgt: UInt64;
 begin
   // zero-copy views (single source via bytes.ops, no allocation)
   LBaseSpan := TByteSpan.FromBytes(ABase);
   LDeltaSpan := TByteSpan.FromBytes(ADelta);
   P := 0;
-  SrcSize := 0; Shift := 0;
-  repeat
-    if (P < 0) or (P >= Length(ADelta)) then
-      raise EGitError.Create('truncated varint in pack data');
-    B := ADelta[P]; Inc(P);
-    SrcSize := SrcSize or (Int64(B and $7F) shl Shift);
-    Inc(Shift, 7);
-  until (B and $80) = 0;
+  // single source varint via encoding.varint (inline zero-copy, no manual shift loop)
+  if not TryVarintDecode(ADelta, P, USrc) then
+    raise EGitError.Create('truncated varint in pack data');
+  if USrc > UInt64(High(Int64)) then
+    raise EGitError.Create('delta base size out of range');
+  SrcSize := Int64(USrc);
   if SrcSize <> Int64(LBaseSpan.Len) then
     raise EGitError.Create('delta base size mismatch');
-  TgtSize := 0; Shift := 0;
-  repeat
-    if (P < 0) or (P >= Length(ADelta)) then
-      raise EGitError.Create('truncated varint in pack data');
-    B := ADelta[P]; Inc(P);
-    TgtSize := TgtSize or (Int64(B and $7F) shl Shift);
-    Inc(Shift, 7);
-  until (B and $80) = 0;
-  if (TgtSize < 0) or (TgtSize > MaxInt) then
+  if not TryVarintDecode(ADelta, P, UTgt) then
+    raise EGitError.Create('truncated varint in pack data');
+  if UTgt > UInt64(MaxInt) then
     raise EGitError.Create('delta target size out of range');
+  TgtSize := Int64(UTgt);
   // buffer reuse: keep capacity, single SetLength (bytes.ops single source for size checks)
   if Int64(Length(AOut)) <> TgtSize then
     SetLength(AOut, TgtSize);
@@ -325,55 +318,34 @@ var
   Buf: array[0..31] of Byte;
   EndPos: SizeUInt;
   Got: SizeUInt;
-  VarPos: Integer;
-  TmpB: Byte;
-  TgtSize: Int64;
-  TmpShift: Integer;
   LSpan: TByteSpan;
+  USrc, UTgt: UInt64;
 begin
   // perf: prefix inflate 32B only (delta varints ≤20B) vs full InflateAt (Sz bytes)
   // hot rename similarity pre-check: per candidate saves full zlib inflate + alloc
   // zero-copy TByteSpan view over stack buf (bytes.ops single source), not inline heavy
+  // single source varint via encoding.varint (inline, zero-copy TByteSpan advance)
   Result := False;
   ATargetSize := 0;
+  if APos >= FDataSize then
+    Exit;
   try
     Got := GitZlibDecompressPrefix(FData, FDataSize, APos, @Buf[0], SizeUInt(Length(Buf)), EndPos);
   except
-    Exit;
+    on E: EGitError do Exit;
+    on E: Exception do Exit;
   end;
   if Got = 0 then
     Exit;
-  // single source via bytes.ops: TByteSpan view over stack buf, no alloc
   LSpan := TByteSpan.Create(@Buf[0], Got);
-  VarPos := 0;
-  TmpShift := 0;
-  // skip src size varint
-  repeat
-    if VarPos >= Integer(LSpan.Len) then
-      Exit;
-    TmpB := LSpan.Data[VarPos];
-    Inc(VarPos);
-    if (TmpB and $80) = 0 then
-      Break;
-    Inc(TmpShift, 7);
-    if TmpShift > 63 then
-      Exit;
-  until False;
-  TgtSize := 0;
-  TmpShift := 0;
-  repeat
-    if VarPos >= Integer(LSpan.Len) then
-      Exit;
-    TmpB := LSpan.Data[VarPos];
-    Inc(VarPos);
-    TgtSize := TgtSize or (Int64(TmpB and $7F) shl TmpShift);
-    if (TmpB and $80) = 0 then
-      Break;
-    Inc(TmpShift, 7);
-    if TmpShift > 63 then
-      Exit;
-  until False;
-  ATargetSize := TgtSize;
+  // single source: two varints (src + target) via encoding.varint TryVarintDecode inline
+  if not TryVarintDecode(LSpan, USrc) then
+    Exit;
+  if not TryVarintDecode(LSpan, UTgt) then
+    Exit;
+  if UTgt > UInt64(High(Int64)) then
+    Exit;
+  ATargetSize := Int64(UTgt);
   Result := True;
 end;
 
@@ -528,9 +500,9 @@ end;
 function TPackFile.TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
   out ASize: Int64): Boolean;
 var
-  Off, BaseOff, CurOff: Int64;
-  P, DeltaStart, CurP: SizeUInt;
-  B, Typ, CurB, CurTyp: Byte;
+  Off, BaseOff: Int64;
+  P, DeltaStart: SizeUInt;
+  B, Typ: Byte;
   Sz: Int64;
   Shift: Integer;
   TgtSize: Int64;
@@ -538,7 +510,69 @@ var
   BaseKind: TGitObjectKind;
   BaseSize: Int64;
   Rel: Int64;
-  Depth: Integer;
+
+  // single source walk via direct FData view, inline zero-copy, no try/except
+  function WalkKind(AStart: Int64; out AFound: TGitObjectKind): Boolean;
+  var
+    LOff: Int64;
+    LPos: SizeUInt;
+    LB, LTyp: Byte;
+    LDepth: Integer;
+    LRel: Int64;
+    LTmpOid: TGitOid;
+  begin
+    Result := False;
+    LOff := AStart;
+    LDepth := 0;
+    while LDepth <= GitMaxDeltaDepth do
+    begin
+      if (LOff < 0) or (LOff >= Int64(FDataSize)) then Exit;
+      LPos := SizeUInt(LOff);
+      if LPos >= FDataSize then Exit;
+      LB := FData[LPos]; Inc(LPos);
+      LTyp := (LB shr 4) and $07;
+      while (LB and $80) <> 0 do
+      begin
+        if LPos >= FDataSize then Exit;
+        LB := FData[LPos]; Inc(LPos);
+      end;
+      case LTyp of
+        1: begin AFound := gokCommit; Exit(True); end;
+        2: begin AFound := gokTree; Exit(True); end;
+        3: begin AFound := gokBlob; Exit(True); end;
+        4: begin AFound := gokTag; Exit(True); end;
+        6:
+          begin
+            if LPos >= FDataSize then Exit;
+            LB := FData[LPos]; Inc(LPos);
+            LRel := LB and $7F;
+            while (LB and $80) <> 0 do
+            begin
+              if LPos >= FDataSize then Exit;
+              LB := FData[LPos]; Inc(LPos);
+              LRel := ((LRel + 1) shl 7) or (LB and $7F);
+            end;
+            LOff := LOff - LRel;
+            if LOff < 0 then Exit;
+            Inc(LDepth);
+            Continue;
+          end;
+        7:
+          begin
+            if LPos + GitOidRawLen > FDataSize then Exit;
+            SpanCopy(TByteSpan.Create(@LTmpOid.Bytes[0], GitOidRawLen),
+              TByteSpan.Create(FData + LPos, GitOidRawLen));
+            LOff := FindOffset(LTmpOid);
+            if LOff < 0 then Exit;
+            Inc(LDepth);
+            Continue;
+          end;
+      else
+        Exit;
+      end;
+    end;
+  end;
+
 begin
   Result := False;
   AKind := gokBlob;
@@ -546,196 +580,68 @@ begin
   Off := FindOffset(AOid);
   if Off < 0 then
     Exit;
-  // perf: single-pass header parse without inflating payload; zero-copy via FMapped + inline ByteAt
+  // perf: header parse without inflate; zero-copy via FData direct view, inline bounds check (no exception)
   P := SizeUInt(Off);
-  B := ByteAt(P);
-  Inc(P);
+  if P >= FDataSize then Exit;
+  B := FData[P]; Inc(P);
   Typ := (B shr 4) and $07;
   Sz := Int64(B and $0F);
   Shift := 4;
   while (B and $80) <> 0 do
   begin
-    B := ByteAt(P);
-    Inc(P);
+    if P >= FDataSize then Exit;
+    B := FData[P]; Inc(P);
     Sz := Sz or (Int64(B and $7F) shl Shift);
     Inc(Shift, 7);
+    if Shift > 64 then Exit;
   end;
   case Typ of
-    1:
-      begin
-        AKind := gokCommit;
-        ASize := Sz;
-        Exit(True);
-      end;
-    2:
-      begin
-        AKind := gokTree;
-        ASize := Sz;
-        Exit(True);
-      end;
-    3:
-      begin
-        AKind := gokBlob;
-        ASize := Sz;
-        Exit(True);
-      end;
-    4:
-      begin
-        AKind := gokTag;
-        ASize := Sz;
-        Exit(True);
-      end;
+    1: begin AKind := gokCommit; ASize := Sz; Exit(True); end;
+    2: begin AKind := gokTree; ASize := Sz; Exit(True); end;
+    3: begin AKind := gokBlob; ASize := Sz; Exit(True); end;
+    4: begin AKind := gokTag; ASize := Sz; Exit(True); end;
     6, 7:
       begin
         // perf: single-pass capture of base id + delta start; no double header re-parse
         // 32B prefix inflate via TryPeekDeltaTargetSize (zero alloc, hot rename pre-check)
         if Typ = 6 then
         begin
-          B := ByteAt(P);
-          Inc(P);
+          if P >= FDataSize then Exit;
+          B := FData[P]; Inc(P);
           Rel := B and $7F;
           while (B and $80) <> 0 do
           begin
-            B := ByteAt(P);
-            Inc(P);
+            if P >= FDataSize then Exit;
+            B := FData[P]; Inc(P);
             Rel := ((Rel + 1) shl 7) or (B and $7F);
           end;
           BaseOff := Off - Rel;
-          if (BaseOff < 0) or (BaseOff >= Off) then
-            Exit;
+          if (BaseOff < 0) or (BaseOff >= Off) then Exit;
           DeltaStart := P;
         end
         else
         begin
-          if P + GitOidRawLen > FDataSize then
-            Exit;
-          // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+          if P + GitOidRawLen > FDataSize then Exit;
           SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
             TByteSpan.Create(FData + P, GitOidRawLen));
           Inc(P, GitOidRawLen);
           DeltaStart := P;
           BaseOff := FindOffset(BaseOid);
         end;
-        if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then
-          Exit;
+        if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then Exit;
         ASize := TgtSize;
-        // kind: header-only walk, no full inflate fallback (preserves 32B prefix optimisation)
+        // kind: header-only walk, no full inflate fallback, no try/except (explicit bounds, WalkKind single source)
         if Typ = 7 then
         begin
           if (BaseOff >= 0) and TryGetObjectSize(BaseOid, BaseKind, BaseSize) then
             AKind := BaseKind
-          else if BaseOff >= 0 then
-          begin
-            CurOff := BaseOff;
-            Depth := 0;
-            while Depth <= GitMaxDeltaDepth do
-            begin
-              try
-                CurP := SizeUInt(CurOff);
-                CurB := ByteAt(CurP);
-                Inc(CurP);
-                CurTyp := (CurB shr 4) and $07;
-                while (CurB and $80) <> 0 do
-                begin
-                  CurB := ByteAt(CurP);
-                  Inc(CurP);
-                end;
-                case CurTyp of
-                  1: begin AKind := gokCommit; Break; end;
-                  2: begin AKind := gokTree; Break; end;
-                  3: begin AKind := gokBlob; Break; end;
-                  4: begin AKind := gokTag; Break; end;
-                  6:
-                    begin
-                      CurB := ByteAt(CurP);
-                      Inc(CurP);
-                      Rel := CurB and $7F;
-                      while (CurB and $80) <> 0 do
-                      begin
-                        CurB := ByteAt(CurP);
-                        Inc(CurP);
-                        Rel := ((Rel + 1) shl 7) or (CurB and $7F);
-                      end;
-                      CurOff := CurOff - Rel;
-                      if CurOff < 0 then Break;
-                      Inc(Depth);
-                      Continue;
-                    end;
-                  7:
-                    begin
-                      if CurP + GitOidRawLen > FDataSize then Break;
-                      SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
-                        TByteSpan.Create(FData + CurP, GitOidRawLen));
-                      CurOff := FindOffset(BaseOid);
-                      if CurOff < 0 then Break;
-                      Inc(Depth);
-                      Continue;
-                    end;
-                else
-                  Break;
-                end;
-                Break;
-              except
-                Break;
-              end;
-            end;
-          end;
+          else if (BaseOff >= 0) and WalkKind(BaseOff, BaseKind) then
+            AKind := BaseKind;
         end
         else
         begin
-          CurOff := BaseOff;
-          Depth := 0;
-          while Depth <= GitMaxDeltaDepth do
-          begin
-            try
-              CurP := SizeUInt(CurOff);
-              CurB := ByteAt(CurP);
-              Inc(CurP);
-              CurTyp := (CurB shr 4) and $07;
-              while (CurB and $80) <> 0 do
-              begin
-                CurB := ByteAt(CurP);
-                Inc(CurP);
-              end;
-              case CurTyp of
-                1: begin AKind := gokCommit; Break; end;
-                2: begin AKind := gokTree; Break; end;
-                3: begin AKind := gokBlob; Break; end;
-                4: begin AKind := gokTag; Break; end;
-                6:
-                  begin
-                    CurB := ByteAt(CurP);
-                    Inc(CurP);
-                    Rel := CurB and $7F;
-                    while (CurB and $80) <> 0 do
-                    begin
-                      CurB := ByteAt(CurP);
-                      Inc(CurP);
-                      Rel := ((Rel + 1) shl 7) or (CurB and $7F);
-                    end;
-                    CurOff := CurOff - Rel;
-                    if CurOff < 0 then Break;
-                    Inc(Depth);
-                    Continue;
-                  end;
-                7:
-                  begin
-                    if CurP + GitOidRawLen > FDataSize then Break;
-                    SpanCopy(TByteSpan.Create(@BaseOid.Bytes[0], GitOidRawLen),
-                      TByteSpan.Create(FData + CurP, GitOidRawLen));
-                    CurOff := FindOffset(BaseOid);
-                    if CurOff < 0 then Break;
-                    Inc(Depth);
-                    Continue;
-                  end;
-              else
-                Break;
-              end;
-              Break;
-            except
-              Break;
-            end;
-          end;
+          if WalkKind(BaseOff, BaseKind) then
+            AKind := BaseKind;
         end;
         Result := True;
       end;

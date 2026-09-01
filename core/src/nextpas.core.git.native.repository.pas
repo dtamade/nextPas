@@ -83,8 +83,9 @@ uses
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder,
   nextpas.core.text.utils,
-  nextpas.core.platform.env;
+  nextpas.core.os.env;
 
 type
   TNativeReference = class(TInterfacedObject, IGitReference)
@@ -797,7 +798,7 @@ begin
     // include.path expansion — pure, single-source via GitParseConfig / bytes.ops, inline zero-copy Home handling
     for I:=0 to High(Cfg.Entries) do if Cfg.Entries[I].Key='include.path' then begin
       IncPath:=Cfg.Entries[I].Value;
-      if (Length(IncPath)>0) and (IncPath[1]='~') then begin Home:=platform_env_get_str('HOME'); if Home<>'' then IncPath:=Home+Copy(IncPath,2,MaxInt); end
+      if (Length(IncPath)>0) and (IncPath[1]='~') then begin Home:=nextpas.core.os.env.GetEnv('HOME'); if Home<>'' then IncPath:=Home+Copy(IncPath,2,MaxInt); end
       else if not PathIsAbsolute(IncPath) then IncPath:=PathJoin([PathDir(FGitDir),IncPath]);
       if FileExists(IncPath) then try IncData:=ReadFile(IncPath); IncCfg:=GitParseConfig(IncData); for J:=0 to High(IncCfg.Entries) do begin SetLength(Result,Length(Result)+1); Result[High(Result)].Name:=IncCfg.Entries[J].Key; Result[High(Result)].Value:=IncCfg.Entries[J].Value; end; except end;
     end;
@@ -805,7 +806,7 @@ begin
 end;
 
 procedure TNativeRepositoryAdapter.ApplyPatch(const APatchText: string);
-var Work: string; Lines: TStringArray; I, SPos: Integer; Line, APath, BPath, CurPath: string; OldLines, NewLines: TStringArray; Hunks: THunkArray; CurHunk: TGitDiffHunk; InHunk: Boolean; FullPath: string; NewContent: string; J, K, OldIdx: Integer; Applied: Boolean;
+var Work: string; Lines: TStringArray; I, SPos: Integer; Line, APath, BPath, CurPath: string; OldLines, NewLines: TStringArray; Hunks: THunkArray; CurHunk: TGitDiffHunk; InHunk: Boolean; FullPath: string; NewContent: string; J, K, OldIdx: Integer; Applied: Boolean; LBuilder: IBytesBuilder; LSpan: TByteSpan;
   function IsBinaryHunk(const AHunk: TGitDiffHunk): Boolean; inline; var Idx: Integer; begin Result:=False; for Idx:=0 to High(AHunk.Lines) do if Pos('Binary',AHunk.Lines[Idx])>0 then Exit(True); end;
 begin
   EnsureOpen; if APatchText='' then Exit; Work:=WorkDirOf(FGitDir,FWorkTree); if Work='' then raise EGitError.Create('ApplyPatch: bare repository has no workdir');
@@ -828,7 +829,8 @@ begin
             end;
           end;
           while OldIdx<Length(OldLines) do begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end;
-          NewContent:=''; for J:=0 to High(NewLines) do NewContent:=NewContent+NewLines[J]+#10;
+          // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
+          LBuilder:=CreateBytesBuilder; for J:=0 to High(NewLines) do begin if Length(NewLines[J])>0 then LBuilder.AppendBytes(PByte(PAnsiChar(NewLines[J])),Length(NewLines[J])); LBuilder.AppendByte(10); end; LSpan:=LBuilder.WrittenSpan; SetLength(NewContent,LSpan.Len); if LSpan.Len>0 then Move(LSpan.Data^,PAnsiChar(NewContent)^,LSpan.Len);
           try MkdirAll(PathDir(FullPath),PermDirDefault); WriteFileText(FullPath,NewContent); except on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message); end;
         end;
         Hunks:=nil; CurHunk.Header:=''; CurHunk.Lines:=nil; InHunk:=False;
@@ -847,7 +849,8 @@ begin
     if Length(Hunks)>0 then begin FullPath:=PathJoin([Work,CurPath]); OldLines:=WorkTreeLinesOf(Work,CurPath); if OldLines=nil then SetLength(OldLines,0); NewLines:=nil; OldIdx:=0; SetLength(NewLines,0);
       for J:=0 to High(Hunks) do for K:=0 to High(Hunks[J].Lines) do begin if Length(Hunks[J].Lines[K])=0 then Continue; case Hunks[J].Lines[K][1] of ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end; '-': Inc(OldIdx); '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end; end; end;
       while OldIdx<Length(OldLines) do begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end;
-      NewContent:=''; for J:=0 to High(NewLines) do NewContent:=NewContent+NewLines[J]+#10;
+      // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
+      LBuilder:=CreateBytesBuilder; for J:=0 to High(NewLines) do begin if Length(NewLines[J])>0 then LBuilder.AppendBytes(PByte(PAnsiChar(NewLines[J])),Length(NewLines[J])); LBuilder.AppendByte(10); end; LSpan:=LBuilder.WrittenSpan; SetLength(NewContent,LSpan.Len); if LSpan.Len>0 then Move(LSpan.Data^,PAnsiChar(NewContent)^,LSpan.Len);
       try MkdirAll(PathDir(FullPath),PermDirDefault); WriteFileText(FullPath,NewContent); except on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+Exception(SysUtils.ExceptObject).Message); end;
     end;
   end;

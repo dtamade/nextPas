@@ -73,6 +73,9 @@ function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
+uses
+  nextpas.core.git.libgit2;
+
 function NewGitManager: IGitManager; inline;
 begin
   Result := nextpas.core.git.factory.NewGitManager(gbAuto);

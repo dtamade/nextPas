@@ -5,20 +5,11 @@ unit nextpas.core.git.native.objects;
 {**
  * @desc Object-layer shard facade (oid/zlib/loose/pack/refs/objmodel/write)
  * Thin gateway: pure inline forwards, no logic duplication, <400 lines.
- * Fan-in control: interface imports only type-bearing shards
- *   (base/pack/repo/objmodel/write) for re-exported types/constants;
- *   func-only shards (zlib/loose/refs) are imported in implementation,
- *   reducing interface-visible fan-in from 9 to 6 while preserving
- *   base←impl←facade depth and L0-L3 layering (L2 git may use same-layer
- *   compress/hash per registry). Legacy `uses nextpas.core.git.native` stays
- *   compatible via this facade.
- * Perf: all forwards are `inline` thin wrappers; zero-copy via Move/PByte+Len/
- *   TByteSpan single source nextpas.core.bytes.ops (oid hex 20B Move,
- *   zlib PByte+Len Deflate*, loose/pack/objmodel/write via TByteSpan).
- * Stability: TNativeRepository/TPackFile are classes; TPackFile owns
- *   IMappedFile (refcounted, auto released on Free/destructor); TBytes
- *   results are refcounted and exception-safe (no manual free leak).
- * Bytes single source: no scattered Move/Copy; all byte moves via bytes.ops.
+ * Fan-in: interface imports type-bearing shards only (base/pack/repo/objmodel/write);
+ *   func-only shards (zlib/loose/refs) in implementation (6 vs 9).
+ * Perf: all forwards `inline`; zero-copy via bytes.ops single source
+ *   (Move/PByte+Len/TByteSpan: oid 20B, zlib Deflate*, others TByteSpan).
+ * Stability: TPackFile owns IMappedFile (refcounted, auto released); TBytes refcounted.
  *}
 interface
 
