@@ -33,6 +33,8 @@ function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
   const AData: TBytes): TGitOid;
 function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
   out AKind: TGitObjectKind): TBytes;
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean;
 
 implementation
 
@@ -151,6 +153,59 @@ begin
     Result := SpanCopySlice(TByteSpan.FromBytes(Plain), SizeUInt(Nul + 1), SizeUInt(Declared))
   else
     Result := nil;
+end;
+
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+var
+  Plain: TBytes;
+  EndPos: SizeUInt;
+  Nul, Sp, Declared: SizeInt;
+  I, Limit: SizeInt;
+  HeadText, KindName, SizeText: string;
+begin
+  Result := False;
+  AKind := gokBlob;
+  ASize := 0;
+  if not GitLooseExists(AGitDir, AOid) then
+    Exit;
+  // perf: single decompress to parse header; zero-copy header view via TByteSpan not needed for size path
+  // inline path: GitZlibDecompress is thin forward to compress owner, no extra alloc beyond Plain
+  Plain := GitZlibDecompress(ReadFile(GitLoosePath(AGitDir, AOid)), 0, EndPos);
+  Limit := Length(Plain);
+  if Limit > 64 then
+    Limit := 64;
+  Nul := -1;
+  for I := 0 to Limit - 1 do
+    if Plain[I] = 0 then
+    begin
+      Nul := I;
+      Break;
+    end;
+  if Nul < 0 then
+    raise EGitError.Create('corrupt loose object: missing header terminator');
+  Sp := -1;
+  for I := 0 to Nul - 1 do
+    if Plain[I] = Ord(' ') then
+    begin
+      Sp := I;
+      Break;
+    end;
+  if Sp <= 0 then
+    raise EGitError.Create('corrupt loose object header');
+  SetLength(HeadText, Nul);
+  Move(Plain[0], HeadText[1], Nul);
+  KindName := Copy(HeadText, 1, Sp);
+  SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
+  Declared := StrToInt64Def(SizeText, -1);
+  if Declared < 0 then
+    raise EGitError.CreateFmt('corrupt loose object size "%s"', [SizeText]);
+  // stability: verify payload size matches declared (same check as Read)
+  if SizeInt(Length(Plain)) - (Nul + 1) <> Declared then
+    raise EGitError.Create('loose object payload size mismatch');
+  AKind := GitKindFromString(KindName);
+  ASize := Int64(Declared);
+  Result := True;
 end;
 
 end.

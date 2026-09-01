@@ -422,7 +422,8 @@ end;
 function SimilarityForPair(ARepo: TNativeRepository;
   const ASource, ATarget: TPathOid): Integer;
 var
-  Kind: TGitObjectKind;
+  KindA, KindB: TGitObjectKind;
+  SizeA, SizeB: Int64;
   DataA, DataB: TBytes;
 begin
   Result := -1;
@@ -432,24 +433,38 @@ begin
     Exit;
   if GitOidSame(ASource.Oid, ATarget.Oid) then
     Exit(100);
-  // size ratio guard like git: if both >127 and one >8x the other, skip
-  // we need blob sizes -> read objects to know sizes, but quick check
-  // via data length after reading is fine
+  // perf: size ratio guard before inflate — avoids O(n·m) extra decompress+hash
+  // git rule: if both >127 and one >8x the other, skip similarity (return -1)
+  // single source: size via TNativeRepository.TryGetObjectSize (loose header / pack header)
+  // zero-copy: header-only parse, no payload alloc; bytes.ops single source for payload path
+  // stability: TryGetObjectSize returns False for missing, raises EGitError for corrupt — treat as -1
   try
-    DataA := ARepo.ReadObject(ASource.Oid, Kind);
-    if Kind <> gokBlob then
+    if not ARepo.TryGetObjectSize(ASource.Oid, KindA, SizeA) then
       Exit(-1);
-    DataB := ARepo.ReadObject(ATarget.Oid, Kind);
-    if Kind <> gokBlob then
+    if KindA <> gokBlob then
       Exit(-1);
+    if not ARepo.TryGetObjectSize(ATarget.Oid, KindB, SizeB) then
+      Exit(-1);
+    if KindB <> gokBlob then
+      Exit(-1);
+    if (SizeA > 127) and (SizeB > 127) then
+      if (SizeA > SizeB * 8) or (SizeB > SizeA * 8) then
+        Exit(-1);
   except
     on E: EGitError do
       Exit(-1);
   end;
-  if (Length(DataA) > 127) and (Length(DataB) > 127) then
-  begin
-    if (Length(DataA) > Length(DataB) * 8) or
-      (Length(DataB) > Length(DataA) * 8) then
+  // only now inflate payloads for hashsig scoring
+  // stability: ReadObject uses managed TBytes, auto freed on exception; no leak
+  try
+    DataA := ARepo.ReadObject(ASource.Oid, KindA);
+    if KindA <> gokBlob then
+      Exit(-1);
+    DataB := ARepo.ReadObject(ATarget.Oid, KindB);
+    if KindB <> gokBlob then
+      Exit(-1);
+  except
+    on E: EGitError do
       Exit(-1);
   end;
   Result := HashSigScoreForBlobs(DataA, DataB);

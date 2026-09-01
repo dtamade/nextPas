@@ -19,7 +19,7 @@ uses
 
 function GitWildSegment(const APattern, AName: string): Boolean; inline;
 function GitWildSegmentRange(const APattern: string; APatPos, APatLen: Integer;
-  const AName: string; ANamePos, ANameLen: Integer): Boolean;
+  const AName: string; ANamePos, ANameLen: Integer): Boolean; inline;
 function GitSegmentsMatch(const APattern, APath: string): Boolean;
 function GitHasUnescapedSlash(const AValue: string): Boolean; inline;
 
@@ -63,7 +63,7 @@ begin
 end;
 
 function GitWildSegmentRange(const APattern: string; APatPos, APatLen: Integer;
-  const AName: string; ANamePos, ANameLen: Integer): Boolean;
+  const AName: string; ANamePos, ANameLen: Integer): Boolean; inline;
 var
   P, S, StarP, StarS: Integer;
   PEnd, SEnd: Integer;

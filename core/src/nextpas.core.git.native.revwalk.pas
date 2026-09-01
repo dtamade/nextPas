@@ -185,12 +185,36 @@ begin
     Result := (Result xor UInt32(AOid.Bytes[I])) * UInt32(16777619);
 end;
 
+{ shared open-addressing helpers: single source for oid Set/Cache (L0 bytes.ops discipline) }
+function OidProbeEmpty(const AStates: array of Byte; AMask: SizeInt; AHash: UInt32): SizeInt; inline;
+begin
+  Result := SizeInt(AHash and UInt32(AMask));
+  while AStates[Result] = 1 do
+    Result := (Result + 1) and AMask;
+end;
+
+function OidLocate(const ABuckets: array of TGitOid; const AStates: array of Byte;
+  AMask: SizeInt; const AOid: TGitOid; AHash: UInt32; out AIdx: SizeInt): Boolean; inline;
+begin
+  AIdx := SizeInt(AHash and UInt32(AMask));
+  while AStates[AIdx] <> 0 do
+  begin
+    if GitOidSame(ABuckets[AIdx], AOid) then
+      Exit(True);
+    AIdx := (AIdx + 1) and AMask;
+  end;
+  Result := False;
+end;
+
+function OidShouldGrow(ACount, ACap: SizeInt): Boolean; inline;
+begin
+  Result := (ACap = 0) or (ACount * 10 >= ACap * 7);
+end;
+
 procedure TGitOidSet.EnsureCapacity; inline;
 begin
-  if FCap = 0 then
-    Rehash(16)
-  else if FCount * 10 >= FCap * 7 then
-    Rehash(FCap * 2);
+  if not OidShouldGrow(FCount, FCap) then Exit;
+  if FCap = 0 then Rehash(16) else Rehash(FCap * 2);
 end;
 
 procedure TGitOidSet.Rehash(ANewCap: SizeInt);
@@ -214,9 +238,7 @@ begin
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
       LHash := GitOidHash(LOldBuckets[I]);
-      LIdx := SizeInt(LHash and UInt32(FMask));
-      while FStates[LIdx] = 1 do
-        LIdx := (LIdx + 1) and FMask;
+      LIdx := OidProbeEmpty(FStates, FMask, LHash);
       FBuckets[LIdx] := LOldBuckets[I];
       FStates[LIdx] := 1;
       Inc(FCount);
@@ -230,13 +252,8 @@ var
 begin
   EnsureCapacity;
   LHash := GitOidHash(AOid);
-  LIdx := SizeInt(LHash and UInt32(FMask));
-  while FStates[LIdx] <> 0 do
-  begin
-    if GitOidSame(FBuckets[LIdx], AOid) then
-      Exit;
-    LIdx := (LIdx + 1) and FMask;
-  end;
+  if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
+    Exit;
   FBuckets[LIdx] := AOid; { zero-copy: 20-byte inline copy }
   FStates[LIdx] := 1;
   Inc(FCount);
@@ -250,14 +267,7 @@ begin
   if FCount = 0 then
     Exit(False);
   LHash := GitOidHash(AOid);
-  LIdx := SizeInt(LHash and UInt32(FMask));
-  while FStates[LIdx] <> 0 do
-  begin
-    if GitOidSame(FBuckets[LIdx], AOid) then
-      Exit(True);
-    LIdx := (LIdx + 1) and FMask;
-  end;
-  Result := False;
+  Result := OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx);
 end;
 
 function TGitOidSet.Count: SizeInt;
@@ -290,20 +300,18 @@ end;
 procedure TCommitParseCache.EnsureCapacity;
 const CMaxCap = 4096;
 begin
+  if not OidShouldGrow(FCount, FCap) then Exit;
   if FCap = 0 then
     Rehash(16)
-  else if FCount * 10 >= FCap * 7 then
+  else if FCap >= CMaxCap then
   begin
-    if FCap >= CMaxCap then
-    begin
-      Clear;
-      Rehash(16);
-    end
-    else if FCap * 2 > CMaxCap then
-      Rehash(CMaxCap)
-    else
-      Rehash(FCap * 2);
-  end;
+    Clear;
+    Rehash(16);
+  end
+  else if FCap * 2 > CMaxCap then
+    Rehash(CMaxCap)
+  else
+    Rehash(FCap * 2);
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
@@ -333,9 +341,7 @@ begin
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
       LHash := GitOidHash(LOldBuckets[I]);
-      LIdx := SizeInt(LHash and UInt32(FMask));
-      while FStates[LIdx] = 1 do
-        LIdx := (LIdx + 1) and FMask;
+      LIdx := OidProbeEmpty(FStates, FMask, LHash);
       FBuckets[LIdx] := LOldBuckets[I];
       FWhens[LIdx] := LOldWhens[I];
       FParents[LIdx] := LOldParents[I];
@@ -350,17 +356,10 @@ begin
   Result := False;
   if FCount = 0 then Exit;
   LHash := GitOidHash(AOid);
-  LIdx := SizeInt(LHash and UInt32(FMask));
-  while FStates[LIdx] <> 0 do
-  begin
-    if GitOidSame(FBuckets[LIdx], AOid) then
-    begin
-      AWhen := FWhens[LIdx];
-      AParents := FParents[LIdx]; { zero-copy CoW share, bytes.ops single source discipline, inline }
-      Exit(True);
-    end;
-    LIdx := (LIdx + 1) and FMask;
-  end;
+  if not OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then Exit;
+  AWhen := FWhens[LIdx];
+  AParents := FParents[LIdx]; { zero-copy CoW share, bytes.ops single source discipline, inline }
+  Result := True;
 end;
 
 procedure TCommitParseCache.Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray);
@@ -370,12 +369,7 @@ begin
   if FCap = 0 then
     Rehash(16);
   LHash := GitOidHash(AOid);
-  LIdx := SizeInt(LHash and UInt32(FMask));
-  while FStates[LIdx] <> 0 do
-  begin
-    if GitOidSame(FBuckets[LIdx], AOid) then Exit;
-    LIdx := (LIdx + 1) and FMask;
-  end;
+  if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then Exit;
   FBuckets[LIdx] := AOid;
   FWhens[LIdx] := AWhen;
   FParents[LIdx] := AParents; { zero-copy CoW share, bytes.ops single source discipline, no Copy alloc }
@@ -554,37 +548,41 @@ begin
   end;
   I := FHeapLen;
   Inc(FHeapLen);
-  // max-heap on When: newest commit at the root; zero-copy moves, inline
+  // max-heap on When: newest commit at the root; raw Move avoids Parents AddRef/Release churn
   while I > 0 do
   begin
     Parent := (I - 1) div 2;
     if FHeap[Parent].When >= AEntry.When then
       Break;
-    FHeap[I] := FHeap[Parent];
+    Finalize(FHeap[I]);
+    Move(FHeap[Parent], FHeap[I], SizeOf(TWalkEntry));
+    PPointer(@FHeap[Parent].Parents)^ := nil;
     I := Parent;
   end;
+  Finalize(FHeap[I]);
   FHeap[I] := AEntry;
 end;
 
 function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
 var
   Last, I, L, R, Best: Integer;
-  Tmp: TWalkEntry;
+  LastEntry: TWalkEntry;
 begin
   Result := FHeapLen > 0;
   if not Result then
     Exit;
-  AEntry := FHeap[0]; { zero-copy, inline }
+  // transfer root to caller without AddRef/Release churn; finalize out param first
+  Finalize(AEntry);
+  Move(FHeap[0], AEntry, SizeOf(TWalkEntry));
+  PPointer(@FHeap[0].Parents)^ := nil;
   Dec(FHeapLen);
   Last := FHeapLen;
   if Last = 0 then
-  begin
-    FHeap[0] := Default(TWalkEntry); { release Parents ref }
     Exit;
-  end;
-  FHeap[0] := FHeap[Last];
-  FHeap[Last] := Default(TWalkEntry); { release stale ref, keep capacity }
-  // restore the max-heap property from the root; bound by FHeapLen
+  // move last aside (transfer ownership), hole at 0
+  Move(FHeap[Last], LastEntry, SizeOf(TWalkEntry));
+  PPointer(@FHeap[Last].Parents)^ := nil;
+  // restore max-heap by moving best child up via raw Move
   I := 0;
   while True do
   begin
@@ -597,11 +595,12 @@ begin
       Best := R;
     if Best = I then
       Break;
-    Tmp := FHeap[I];
-    FHeap[I] := FHeap[Best];
-    FHeap[Best] := Tmp;
+    Move(FHeap[Best], FHeap[I], SizeOf(TWalkEntry));
+    PPointer(@FHeap[Best].Parents)^ := nil;
     I := Best;
   end;
+  Move(LastEntry, FHeap[I], SizeOf(TWalkEntry));
+  PPointer(@LastEntry.Parents)^ := nil;
 end;
 
 procedure TGitRevWalker.EnqueueCommit(const AOid: TGitOid);
@@ -955,30 +954,32 @@ var
       Parent := (I - 1) div 2;
       if Heap[Parent].When >= AEntry.When then
         Break;
-      Heap[I] := Heap[Parent]; { zero-copy, inline }
+      Finalize(Heap[I]);
+      Move(Heap[Parent], Heap[I], SizeOf(TWalkEntry));
+      PPointer(@Heap[Parent].Parents)^ := nil;
       I := Parent;
     end;
+    Finalize(Heap[I]);
     Heap[I] := AEntry;
   end;
 
   function HeapPopLocal(out AEntry: TWalkEntry): Boolean; inline;
   var
     Last, I, L, R, Best: Integer;
-    Tmp: TWalkEntry;
+    LastEntry: TWalkEntry;
   begin
     Result := HeapLen > 0;
     if not Result then
       Exit;
-    AEntry := Heap[0]; { zero-copy, inline }
+    Finalize(AEntry);
+    Move(Heap[0], AEntry, SizeOf(TWalkEntry));
+    PPointer(@Heap[0].Parents)^ := nil;
     Dec(HeapLen);
     Last := HeapLen;
     if Last = 0 then
-    begin
-      Heap[0] := Default(TWalkEntry);
       Exit;
-    end;
-    Heap[0] := Heap[Last];
-    Heap[Last] := Default(TWalkEntry);
+    Move(Heap[Last], LastEntry, SizeOf(TWalkEntry));
+    PPointer(@Heap[Last].Parents)^ := nil;
     I := 0;
     while True do
     begin
@@ -991,11 +992,12 @@ var
         Best := R;
       if Best = I then
         Break;
-      Tmp := Heap[I];
-      Heap[I] := Heap[Best];
-      Heap[Best] := Tmp;
+      Move(Heap[Best], Heap[I], SizeOf(TWalkEntry));
+      PPointer(@Heap[Best].Parents)^ := nil;
       I := Best;
     end;
+    Move(LastEntry, Heap[I], SizeOf(TWalkEntry));
+    PPointer(@LastEntry.Parents)^ := nil;
   end;
 
   procedure EnqueueIfNeeded(const AOid: TGitOid);

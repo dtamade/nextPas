@@ -245,14 +245,14 @@ end;
 
 ## 6. 测试覆盖
 
-| 测试集 | 覆盖 |
-|--------|------|
-| `test_git` | Status/Head/LookupCommit/Init/IsGitRepository（libgit2 真库，20 用例） |
-| `test_git_bindings` | 静态声明系 ABI 黄金对照（5 用例，gcc 探针 sizeof/offsetof + 运行时版本实证） |
-| `test_git_native` | native 子家族 118 用例（零 libgit2，覆盖 loose/pack/refs/objmodel/repo/write/index/cachetree/status/ignore/revwalk/commitgraph/reflog/stash/worktree/config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset/prune/clean/revparse/notes/branch/tag/log/describe/diff/blame/mergebase/show/shortlog/catfile/lsfiles/cherrypick/revert/archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect/common/util/wildmatch，对齐 git 黄金） |
-| `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` 双重闭环） |
+| 测试集 | 覆盖 | HEAPTRC 门禁（`haltonnotreleased` 双 pin 零泄漏） |
+|--------|------|--------------------------|
+| `test_git` | Status/Head/LookupCommit/Init/IsGitRepository（libgit2 真库，20 用例） | `HEAPTRC='haltonnotreleased,log=*.heaptrc'` 双 pin：`grep '^Heap dump by heaptrc unit'` 存在性 + `grep '^0 unfreed memory blocks : 0$'` 零泄漏 + `haltonnotreleased` exit 203 → `0 unfreed` |
+| `test_git_bindings` | 静态声明系 ABI 黄金对照（5 用例，gcc 探针 sizeof/offsetof + 运行时版本实证） | 同上，双 pin 零泄漏（`common.mk HEAPTRC_GATE=1` 自动审） |
+| `test_git_native` | native 子家族 118 用例（零 libgit2，覆盖 loose/pack/refs/objmodel/repo/write/index/cachetree/status/ignore/revwalk/commitgraph/reflog/stash/worktree/config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset/prune/clean/revparse/notes/branch/tag/log/describe/diff/blame/mergebase/show/shortlog/catfile/lsfiles/cherrypick/revert/archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect/common/util/wildmatch，对齐 git 黄金） | 同上，118 用例零 libgit2 + 双 pin 零泄漏（`make -C core/tests/nextpas.core.git/test_git_native clean test` 经 `common.mk HEAPTRC_GATE=1` 审） |
+| `test_git_pure_manager` | 纯门面 5 用例，零 libgit2（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat，经 `factory.NewGitManager(gbNative)`，C4 门禁：grep 零命中 + `fpc -va Loading libgit2` 双重闭环） | 同上，双 pin 零泄漏 + C4 双重闭环 |
 
-门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中）；`build/verify_local.sh` 后续聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。
+门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中）；`core/tests/common.mk HEAPTRC_GATE=1` → `HEAPTRC='haltonnotreleased,log=*.heaptrc'` 双 pin（`grep '^Heap dump by heaptrc unit'` 存在性 + `'^0 unfreed memory blocks : 0$'` 零泄漏 + `haltonnotreleased` exit 203）自动化，全量 `20+5+118+5=148` 用例 `0 unfreed`；`build/verify_local.sh` 后续聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。
 
 ---
 
@@ -260,7 +260,9 @@ end;
 
 - **位置**：`core/benchmarks/nextpas.core.git/bench_git`（`TBenchSuite` via `nextpas.core.bench`，禁手搓计时，单次调用不内循环）
 - **构建**：`make -C core/benchmarks/nextpas.core.git/bench_git build` 经 `bench_common.mk` 落盘 `core/build/projects/nextpas.core.git/bench_git/bench_git`，`make hygiene` 零产物闭环（源码树无 `.o/.ppu/link*.res`）
-- **运行**：`make -C core/benchmarks/nextpas.core.git/bench_git run`（默认 `-O3 -Xs` 全量优化，无 heaptrc 计时保真；`SaveToJSON build/bench-git.json` 对齐 `COMPARE-GO-RUST` 基线）
+- **运行**：`make -C core/benchmarks/nextpas.core.git/bench_git run`（默认 `-O3 -Xs` 全量优化，无 heaptrc 计时保真；`SaveToJSON build/bench-git.json` 对齐 `COMPARE-GO-RUST` 基线，同机 A/B 归一）
 - **覆盖**：`Oid/IsValidHex|FromHex|ToHex|Same`（`inline` + `Move` 零拷贝，复用 `bytes.ops` 单源）/ `Kind/FromMode`（`inline`）/ `Zlib/Compress1K|Decompress1K`（`native.zlib → compress.Deflate*` 透传，`PByte+Len` 零拷贝）/ `Adler32/PByte64K|Bytes64K`（`PByte` 零拷贝单源 `checksum.adler32`）/ `Wild/*`（`wildmatch` 单源 `inline GitWildSegment* / GitSegmentsMatch`，`**` 目录通配）/ `Delta/Apply|ApplyReuse`（`TByteSpan` 零拷贝 + `GReuseBuf` 复用单源 `GitApplyDeltaInto`）
-- **稳定性**：`IMappedFile` 资源由接口引用计数拥有，`TPackFile` 析构释放；`bench` 初始化往返校验异常 `raise EGitError` 不泄漏（`TBytes` 受控）
+- **阈值 SLO（ns/op / ops/sec，同机 `-O3 -Xs` 无 heaptrc 中位数，含 10-15% 抖动余量，`inline/零拷贝` 路径不回退，单源复用 `bytes.ops`/`checksum.adler32`/`compress`/`wildmatch`）**：`Oid/IsValidHex|FromHex|ToHex|Same:inline` ≤ 80 ns/op（≥12.5 Mops/sec）；`Kind/FromMode:inline` ≤ 30 ns/op（≥33 Mops/sec）；`Zlib/Compress1K|Decompress1K` ≤ 15 µs/op（≥66 Kop/sec）；`Adler32/PByte64K:zero-copy|Bytes64K` ≤ 3 µs/op（≥333 Kop/sec, ~21 GB/s）；`Wild/Segment:inline|Class|SegmentsMatch:**` ≤ 100 ns/op（≥10 Mops/sec）；`Delta/Apply|ApplyReuse:inline` ≤ 5 µs/op（≥200 Kop/sec）
+- **门禁不等式（可回归）**：`ns/op_current ≤ ns/op_baseline × 1.10` 且 `ops/sec_current ≥ ops/sec_baseline × 0.90`；基线锚 `build/bench-git.json`（`SaveToJSON` 落盘），`COMPARE-GO-RUST` 同机 A/B 归一，任一分组超出即红，`make -C core/benchmarks/nextpas.core.git/bench_git run` 可复现；绝对阈值 SLO 同为红线，双重收敛
+- **稳定性**：`IMappedFile` 资源由接口引用计数拥有，`TPackFile` 析构释放；`bench` 初始化往返校验异常 `raise EGitError` 不泄漏（`TBytes` 受控，`try..finally` 不丢）
 - **层级复核**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）—— 与 §1 首部一致，`bench_git` 仅复用 owner 能力，不自建压缩/哈希实现

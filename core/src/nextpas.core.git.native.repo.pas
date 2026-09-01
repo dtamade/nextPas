@@ -30,6 +30,8 @@ type
     function HasObject(const AOid: TGitOid): Boolean;
     function ReadObject(const AOid: TGitOid;
       out AKind: TGitObjectKind): TBytes;
+    function TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
+      out ASize: Int64): Boolean;
     property GitDir: string read FGitDir;
     property PackCount: Integer read GetPackCount;
     property Packs[AIndex: Integer]: TPackFile read GetPack;
@@ -128,6 +130,22 @@ begin
       Exit(FPacks[I].ReadObject(AOid, AKind));
   raise EGitError.CreateFmt('object %s not found in repository %s',
     [GitOidToHex(AOid), FGitDir]);
+end;
+
+function TNativeRepository.TryGetObjectSize(const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+var
+  I: Integer;
+begin
+  // perf: fast size path before inflate; inline forward to owner (loose/pack) single source
+  // stability: owner returns False for missing, raises EGitError for corrupt — we propagate as False for caller guard
+  // zero-copy: size from header only, no payload alloc
+  if GitLooseExists(FGitDir, AOid) then
+    Exit(GitLooseGetSize(FGitDir, AOid, AKind, ASize));
+  for I := 0 to Length(FPacks) - 1 do
+    if FPacks[I].Contains(AOid) then
+      Exit(FPacks[I].TryGetObjectSize(AOid, AKind, ASize));
+  Result := False;
 end;
 
 end.

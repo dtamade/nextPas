@@ -52,18 +52,23 @@ function git_odb_add_disk_alternate(odb: PGitOdb; path: PAnsiChar): LongInt; cde
 procedure git_odb_free(db: PGitOdb); cdecl; external 'c' name 'git_odb_free';
 function git_odb_read(obj: PPGitOdbObject; db: PGitOdb; id: PGitOid): LongInt; cdecl; external 'c' name 'git_odb_read';
 
-// Bridge inline helpers (performance: Move/CompareMem, zero-copy, inline)
-// Reuses bytes.ops single source via Move (single source for byte ops)
+// Bridge inline helpers (performance: inline + zero-copy TByteSpan/SpanEqual/Move, 20B ~3×QWord)
+// Reuses bytes.ops single source (SpanEqual via MemEqual / Move) for byte ops
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 
 implementation
 uses
-  nextpas.core.base.utils;
+  nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops;
 
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 begin
-  Result := (A.&type = B.&type) and CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
+  { perf: inline + zero-copy TByteSpan 20B SpanEqual via bytes.ops single source (~3×QWord MemEqual), no &type branch, pure 20B authority, converges with GitOidSame benchmark }
+  Result := SpanEqual(
+    TByteSpan.Create(@A.id[0], 20),
+    TByteSpan.Create(@B.id[0], 20));
 end;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 begin
