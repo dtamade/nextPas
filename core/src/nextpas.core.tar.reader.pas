@@ -104,7 +104,10 @@ begin
     FData := nil;
   FCount := SizeUInt(Length(AData));
   FPos := 0;
-  FMaxEntry := AOptions.MaxEntrySize;
+  if AOptions.MaxEntrySize = 0 then
+    FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
+  else
+    FMaxEntry := AOptions.MaxEntrySize;
   FMaxTotal := AOptions.MaxTotalSize;
   FCumTotal := 0;
 end;
@@ -115,7 +118,10 @@ begin
   FData := AData;
   FCount := ACount;
   FPos := 0;
-  FMaxEntry := AOptions.MaxEntrySize;
+  if AOptions.MaxEntrySize = 0 then
+    FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
+  else
+    FMaxEntry := AOptions.MaxEntrySize;
   FMaxTotal := AOptions.MaxTotalSize;
   FCumTotal := 0;
 end;
@@ -164,10 +170,14 @@ begin
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (numeric %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if (FData[AOfs] and C_TAR_BASE256_SENTINEL) <> 0 then
   begin
-    Result := Int64(FData[AOfs] and $7F);
+    // base-256 为二进制补码：$FF 起始表示负数（符号扩展），$80 起始为正数
+    if FData[AOfs] = $FF then
+      Result := -1
+    else
+      Result := Int64(FData[AOfs] and $7F);
     for I := AOfs + 1 to AOfs + ALen - 1 do
     begin
-      if Result > (High(Int64) shr 8) then
+      if (Result > High(Int64) div 256) or (Result < Low(Int64) div 256) then
         raise EIOError.CreateFmt('tar: base-256 overflow at offset %d', [AOfs]);
       Result := (Result shl 8) or Int64(FData[I]);
     end;
@@ -396,6 +406,11 @@ begin
     if Flag = Ord('L') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if Size > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(Size);
+      end;
       if PayloadLen > 0 then
         FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -404,6 +419,11 @@ begin
     else if Flag = Ord('K') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if Size > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(Size);
+      end;
       if PayloadLen > 0 then
         FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -412,6 +432,11 @@ begin
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
+      if Size > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(Size);
+      end;
       if PayloadLen > 0 then
       begin
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then

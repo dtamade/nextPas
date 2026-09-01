@@ -106,8 +106,8 @@ var
     begin
       if ALen <= 1 then
         raise EIOError.Create('tar: numeric field too small for base-256');
-      // base-256 可表示范围：首字节 0x80 保留 1 位 + (ALen-1)*8 位
-      if ALen - 1 >= 8 then
+      // base-256 可表示范围：首字节 0x80 保留 1 位 + (ALen-1)*8 位，((ALen-1)*8+7)>=63 时 shl 63 未定义
+      if ((ALen - 1) * 8 + 7) >= 63 then
         MaxBase256 := High(Int64)
       else
         MaxBase256 := (Int64(1) shl ((ALen - 1) * 8 + 7)) - 1;
@@ -157,7 +157,7 @@ begin
       Dec(I);
     end;
     if CutPos = 0 then
-      raise EIOError.Create('tar: entry name too long for ustar');
+      raise EIOError.Create('tar: entry name too long for ustar (>100 and no prefix split; pax longname not yet implemented)');
     FillChar(Block[C_TAR_OFF_NAME], C_TAR_LEN_NAME, 0);
     PutText(C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, Copy(Name, 1, CutPos));
     PutText(C_TAR_OFF_NAME, C_TAR_LEN_NAME, Copy(Name, CutPos + 2, MaxInt));

@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0 (2026-09-03) — nextpas.core.tar 1.0.0 独立 L2 晋升
+
+`nextpas.core.compress.tar` 寄生抽离为独立 `nextpas.core.tar`  परिवार，6 维打磨对齐 `zip` 标杆：四件套 `base/intf/reader/writer/fs` + 薄门面 `tar.pas` + 兼容转发 `compress.tar`，`L2` 归一 `IWriter/IReader/IStream`。
+
+### Highlights
+
+- **模块化**：`tar.base → tar.intf → tar.common/reader/writer/fs/builder → tar` 门面，三层 `base←intf←实现←门面` 单向，`common` 单点 `PadToBlock/Guard*` 消除两端重复，`archive.fs` 几何扩容/排序/防劫持复用
+- **性能**：`HeaderIsZeroOrValid` 单遍 512 融合校验，`ParsePaxRecordsSlice` 零拷贝无 `Copy`，`EntryDataSlice/OpenEntryStream` 外部视图 + `ArchiveWriteFileSlice` 零拷贝落盘，`bench_tar` 7 项（`tar/pack/200x512B`、`builder-pack`、`open/parse`、`extract-*`、`write/read 1MB`）
+- **高级感**：`C_TAR_OFF_*` 命名常量统一头布局，`IsSafeArchiveEntryName(AMaxBytes)` 抽参消除 `zip/tar` 35 行重复，`PutOctal` base-256 阈值 `((ALen-1)*8+7)>=63` 防 `shl 63`，`NumericField` 负数 `$FF` 符号扩展
+- **复用度**：`TarBuilder` 链式薄门面 `ITarBuilder`（`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/Finish`），与 `TTarWriter` bytes 级一致，`TarPackDir/TarExtractToDir` 确定性排序 + `deferred dir` 逆序定稿
+- **稳定性**：`MaxEntrySize(0→1GiB)`/`MaxTotalSize` 双守卫计入 `L/K/x/g` 载荷，`IsSafeTarEntryName` 写端 `EArgumentError`/读端 `EParseError`，双校验和 `unsigned/signed` 任一过，`EIOError` 携带 `offset/size` 上下文
+- **完整性**：`docs/tar/{README,CONTRACT}` 8 不变量 + 源契约 `test_tar_contract`，4 门 `reader/writer/fs/contract` + 回归 `compress_tar` 全绿，`tar_roundtrip` 全链路示例，`compress.tar` 保留 thin forward
+
+### Testing
+
+- `test_tar_reader` / `writer` / `fs` / `contract` 聚焦门全绿 `[HEAPTRC] 0 leak`，`test_compress_tar` 回归仍绿，`make hygiene` / `git diff --check` 通过
+
 ## 1.0.0 (2026-08-29) — nextpas.core.zip 1.0.0 领头羊 Final
 
 基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 四模型就绪，`VERSION` 冻结为 `1.0.0`。

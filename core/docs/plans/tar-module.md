@@ -59,7 +59,7 @@ TTarWriter = class
   procedure AddEntry(const AHdr: TTarHeader; const AData: TBytes);
   procedure AddFile(const AName: string; const AData: TBytes; AMode=...; AMTime=0);
   procedure AddDir(const AName: string; AMode=...; AMTime=0);
-  procedure AddEntryWithOptions(const AHdr: TTarHeader; const AData: TBytes; const AOpts: TTarAddOptions);
+  procedure AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions);
   procedure Finish; destructor Destroy; override;
 end;
 
