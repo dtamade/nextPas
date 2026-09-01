@@ -22,18 +22,8 @@ uses
 type
   TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
   TJsonError = nextpas.core.json.types.TJsonError;
-  TJsonValue = nextpas.core.json.value.TJsonValue;
-
-  { Parsed JSON document with automatic lifetime management.
-    All values remain valid as long as the document is alive. }
-  IJsonDocument = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function Root: TJsonValue;
-    function HasError: Boolean;
-    function Error: TJsonError;
-    function Stringify: string;
-    function StringifyPretty(const AIndent: Int32 = 2): string;
-  end;
+  TJsonValue = nextpas.core.json.types.TJsonValue;
+  IJsonDocument = nextpas.core.json.types.IJsonDocument;
 
 { Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
@@ -385,14 +375,14 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
-  if (AValue.FDoc <> nil) and AValue.FDoc^.HasError then
+  if (AValue.FDoc <> nil) and PJsonDocument(AValue.FDoc)^.HasError then
     raise EInvalidOperationError.Create(
       'JsonStringify: diagnostic document cannot be stringified');
 
   LBuilder.Init(256);
   try
     LWriter.Init(LBuilder);
-    StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
+    StringifyNode(PJsonDocument(AValue.FDoc)^, AValue.FIdx, LWriter);
     Result := LBuilder.ToString;
   finally
     LBuilder.Done;
