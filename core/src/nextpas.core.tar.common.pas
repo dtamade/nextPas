@@ -1,12 +1,9 @@
 unit nextpas.core.tar.common;
 {**
  * @desc Tar 共享内核：reader/writer 单点复用（@internal）。
- * 负责 PadToBlock / 校验和 / 八进制与 base-256 双路径 / pax 守卫 / bomb 守卫 / 名安全。
- * 仅依赖 nextpas.*，无 FPC RTL 直引，消除两端重复，保证 fail-closed 单点一致。
+ * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
- * 复用 nextpas.core.bytes.ops 零拷贝视图语义（TByteSpan/Move 单遍扫描），无重复分配。
- * 性能：薄守卫 inline + 零拷贝 PByte 切片；校验和/零块/数值等含循环体保持外联
- *       （design-conventions 真实循环体禁 inline），单遍 512 融合避免双遍历与 I-Cache 复制膨胀。
+ * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -41,6 +38,8 @@ procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int
 {** 头字段单点：文本/校验和构造收敛至 common，复用 bytes.ops 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline） *}
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
+{** ustar 魔数/版本单点：收敛 EmitPaxHeader/WriteHeader 逐字节拼装，复用 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 常量与 TarPutHeaderString 单源 Move，inline 薄转发零拷贝 *}
+procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 
 implementation
@@ -257,6 +256,13 @@ begin
     ABlock[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
   ABlock[C_TAR_OFF_CHKSUM + 6] := 0;
   ABlock[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
+end;
+
+procedure TarWriteUStarMagic(ABlock: PByte); inline;
+begin
+  // perf: inline 薄转发 — 复用 TarPutHeaderString 单源 Move（bytes.ops 零拷贝语义），几何常量 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 单点，块已零填充故尾 NUL 保留无额外 Move
+  TarPutHeaderString(ABlock, C_TAR_OFF_MAGIC, C_TAR_LEN_MAGIC, C_TAR_MAGIC_USTAR);
+  TarPutHeaderString(ABlock, C_TAR_OFF_VERSION, C_TAR_LEN_VERSION, C_TAR_VERSION_00);
 end;
 
 { — pax 单点：零拷贝 PByte 切片解析，复用 bytes.ops TByteSpan 零拷贝思想，无 Copy 分配 — }
