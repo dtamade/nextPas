@@ -74,7 +74,9 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.respack.reader,
-  nextpas.core.respack.writer;
+  nextpas.core.respack.writer,
+  nextpas.core.respack.writer.builder,
+  nextpas.core.respack.writer.layout;
 
 type
   TRespackBytesArray = array of TBytes;
@@ -137,34 +139,37 @@ begin
   Result := True;
 end;
 
-{ 指数扩容单源：bytes.ops 语义 O(n²)→O(n)，inline 零拷贝，回绕防护 TryMulSizeUInt }
+{ 指数扩容单源：bytes.ops BytesNextCapacity 单源 O(n²)→O(n)，inline 零拷贝，回绕防护收口 }
 function WalkGrowCap(const ACap, ANeeded: SizeUInt): SizeUInt; inline;
-var LDoubled: SizeUInt;
 begin
-  if not TryMulSizeUInt(ACap, 2, LDoubled) then
-    LDoubled := High(SizeUInt);
-  Result := LDoubled;
-  if Result < 8 then Result := 8;
-  if Result < ANeeded then Result := ANeeded;
+  Result := BytesNextCapacity(ACap, ANeeded);
+end;
+
+{ 公共双数组扩容 helper：EnsureDual 双重载（TBytes / IMappedFile），复用 bytes.ops 单源，inline 零拷贝 }
+procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackBytesArray); overload; inline;
+begin
+  if ACount < ACap then Exit;
+  ACap := BytesNextCapacity(ACap, ANeeded);
+  SetLength(AEntries, ACap);
+  SetLength(ASecond, ACap);
+end;
+
+procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackMapsArray); overload; inline;
+begin
+  if ACount < ACap then Exit;
+  ACap := BytesNextCapacity(ACap, ANeeded);
+  SetLength(AEntries, ACap);
+  SetLength(ASecond, ACap);
 end;
 
 procedure EnsureDirCapacity(var Ctx: TDirContext; const ANeeded: SizeUInt); inline;
-var NewCap: SizeUInt;
 begin
-  if Ctx.Count < Ctx.Cap then Exit;
-  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
-  SetLength(Ctx.Entries, NewCap);
-  SetLength(Ctx.Bytes, NewCap);
-  Ctx.Cap := NewCap;
+  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Bytes);
 end;
 
 procedure EnsureStreamCapacity(var Ctx: TStreamContext; const ANeeded: SizeUInt); inline;
 begin
-  if Ctx.Count < Ctx.Cap then Exit;
-  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
-  SetLength(Ctx.Entries, NewCap);
-  SetLength(Ctx.Maps, NewCap);
-  Ctx.Cap := NewCap;
+  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
 end;
 
 type
@@ -173,7 +178,7 @@ type
     Root: string;
     EmbedOpts: TResPackEmbedOptions;
     Entries: TResPackInputArray;
-    Maps: array of IMappedFile;
+    Maps: TRespackMapsArray;
     Count: SizeUInt;
     Cap: SizeUInt;
     Total: SizeUInt;
@@ -182,13 +187,8 @@ type
   end;
 
 procedure EnsureEmbedCapacity(var Ctx: TEmbedStreamContext; const ANeeded: SizeUInt); inline;
-var NewCap: SizeUInt;
 begin
-  if Ctx.Count < Ctx.Cap then Exit;
-  NewCap := WalkGrowCap(Ctx.Cap, ANeeded);
-  SetLength(Ctx.Entries, NewCap);
-  SetLength(Ctx.Maps, NewCap);
-  Ctx.Cap := NewCap;
+  EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
 end;
 
 { Walk 热路径泛型上下文：Stat/FilterRelPath/TryReserveTotal/Ensure*Capacity/失败归一单源，inline 零拷贝 }
@@ -230,6 +230,40 @@ begin
     Exit(False);
   end;
   Result := True;
+end;
+
+{ mmap 零拷贝单源：Stat Size → MmapOpen → 空文件/大小校验/异常归一，~45 行重复收口 MmapRequire }
+function TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean;
+begin
+  AMap := nil;
+  AErrMsg := '';
+  if AStatSize = 0 then Exit(True);
+  try
+    AMap := MmapOpen(APath);
+    if (AMap = nil) or (AMap.Size = 0) or (AMap.Data = nil) then
+    begin
+      if AStatSize <> 0 then
+      begin
+        AErrMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
+        AMap := nil;
+        Exit(False);
+      end;
+      AMap := nil;
+    end
+    else if SizeUInt(AMap.Size) <> SizeUInt(AStatSize) then
+    begin
+      AErrMsg := 'mmap size mismatch: stat=' + IntToStr(AStatSize) + ' cmap=' + IntToStr(AMap.Size) + ' (path=' + APath + ')';
+      Exit(False);
+    end;
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AErrMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
+      AMap := nil;
+      Result := False;
+    end;
+  end;
 end;
 
 function WalkProc(const APath: string; const AInfo: TFileInfo;
@@ -412,11 +446,16 @@ function ResPackBuildFromDir(const ARoot: string;
 var
   Ctx: TStreamContext;
   RootClean: string;
+  L: TResPackLayout;
+  Buf: PByte;
+  Cur: UInt64;
+  K, J, I: SizeUInt;
+  DigestTmp: TResPackDigest;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单源复用：WalkEx 收集 mmap 视图后直接复用 writer 门面 ResPackBuild 单源（布局/头/槽间隙/数据/digest 全链路于 writer.builder/layout 单源，零双份维护，bytes.ops BytesCopy/BytesZero inline 零拷贝）；消 writer.pas 约70行 GetMem+FillHead+BytesZero+BytesCopy+digest 回填重复组装，布局后段单源防漂移；峰值 ~1×+头（mmap 零堆拷贝），接口锚点 try..finally 释放不丢 }
+  { 单遍零双驻留：单次 WalkEx 收集 mmap 视图，单次 ResPackComputeLayout 计算 Total，单次 GetMem 直填，消双遍历与 mmap 翻倍 I/O；复用 bytes.ops 单源 BytesCopy/BytesZero inline 零拷贝 }
   RootClean := ExcludeTrailingPathDelimiter(ARoot);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
     raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
@@ -439,7 +478,51 @@ begin
       SetLength(Ctx.Entries, Ctx.Count);
       SetLength(Ctx.Maps, Ctx.Count);
     end;
-    Result := ResPackBuild(Ctx.Entries, AOpts);
+    ResPackComputeLayout(Ctx.Entries, AOpts, L);
+    try
+      if L.Total > High(SizeUInt) then
+        raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+      if L.Total = 0 then
+        Exit;
+      GetMem(Buf, SizeUInt(L.Total));
+      Result.Data := Buf;
+      Result.Size := SizeUInt(L.Total);
+      Result.Owned := True;
+      try
+        ResPackWriterFillHead(Buf, Ctx.Entries, AOpts, L);
+        Cur := L.DataStart;
+        if L.SlotCount > 0 then
+          for K := 0 to L.SlotCount - 1 do
+          begin
+            if L.Slots[K].Offset > Cur then
+              BytesZero(Buf + Cur, SizeUInt(L.Slots[K].Offset - Cur));
+            J := L.Slots[K].SrcIdx;
+            if Ctx.Entries[J].DataSize > 0 then
+              BytesCopy(Buf + L.Slots[K].Offset, Ctx.Entries[J].Data, Ctx.Entries[J].DataSize);
+            Cur := L.Slots[K].Offset + UInt64(Ctx.Entries[J].DataSize);
+          end;
+        if AOpts.DigestFunc <> nil then
+        begin
+          if L.DigOff > Cur then
+            BytesZero(Buf + Cur, SizeUInt(L.DigOff - Cur));
+          if L.N > 0 then
+            for I := 0 to L.N - 1 do
+            begin
+              BytesZero(@DigestTmp[0], RESPACK_DIGEST_SIZE);
+              AOpts.DigestFunc(Ctx.Entries[I].Data, Ctx.Entries[I].DataSize, @DigestTmp[0]);
+              BytesCopy(Buf + L.DigOff + I * RESPACK_DIGEST_SIZE, @DigestTmp[0], RESPACK_DIGEST_SIZE);
+            end;
+        end;
+      except
+        FreeMem(Buf);
+        Result.Data := nil;
+        Result.Size := 0;
+        Result.Owned := False;
+        raise;
+      end;
+    finally
+      ResPackLayoutClear(L);
+    end;
   finally
     SetLength(Ctx.Maps, 0);
     SetLength(Ctx.Entries, 0);
@@ -583,6 +666,7 @@ var
   St: TFileInfo;
   LSum: SizeUInt;
   LMap: IMappedFile;
+  LErr: string;
 begin
   Result := True;
   Ctx := PEmbedStreamContext(AUserData);
@@ -602,36 +686,10 @@ begin
   if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   Idx := Ctx^.Count;
   EnsureEmbedCapacity(Ctx^, Idx + 1);
-  try
-    if St.Size = 0 then
-      LMap := nil
-    else
-    begin
-      LMap := MmapOpen(APath);
-      if (LMap = nil) or (LMap.Size = 0) or (LMap.Data = nil) then
-      begin
-        if St.Size <> 0 then
-        begin
-          Ctx^.Failed := True;
-          Ctx^.FailMsg := 'mmap failed: empty mapping for non-empty file (path=' + APath + ')';
-          Exit(False);
-        end;
-        LMap := nil;
-      end
-      else if SizeUInt(LMap.Size) <> SizeUInt(St.Size) then
-      begin
-        Ctx^.Failed := True;
-        Ctx^.FailMsg := 'mmap size mismatch: stat=' + IntToStr(St.Size) + ' cmap=' + IntToStr(LMap.Size) + ' (path=' + APath + ')';
-        Exit(False);
-      end;
-    end;
-  except
-    on E: Exception do
-    begin
-      Ctx^.Failed := True;
-      Ctx^.FailMsg := 'mmap failed: ' + E.Message + ' (path=' + APath + ')';
-      Exit(False);
-    end;
+  if not TryMmapRequire(APath, St.Size, LMap, LErr) then
+  begin
+    WalkFail(Ctx^.Failed, Ctx^.FailMsg, LErr);
+    Exit(False);
   end;
   Ctx^.Maps[Idx] := LMap;
   Ctx^.Entries[Idx].Path := Mapped;
