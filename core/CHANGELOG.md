@@ -29,6 +29,7 @@
 - **S101 中央边界单源**：`reader.ZipValidateCentralBoundsAndAlloc` 单源化双 `ParseCentralDirectory` 的 `central out of bounds+entry count+SetLength`（2×6→2×1），`S85—S101` 十六单源+一性能平台期
 - **S102 Writer 缓冲守卫**：`writer.TZipEntrySink.PushCompressed` 补 `High(SizeInt) div 2` 溢出守卫，与 `reader.EnsureScratch` 几何增长对称，`FScratch` 双端同构防 `Length*2` 溢出
 - **S103 切片读单源**：`common.ZipSliceRead/ZipBytesRead` 单源化 `reader.TSliceReader.Read` / `sequential.TSeqSliceReader.Read` 有界切片读（2×8→2×1，`Min+Move+Advance inline`），`TSourceSpanReader` 因 `IReaderAt` 边界独立
+- **S104 包装消除**：移除 `reader.TZipReaderImpl/TZipSourceReader.NeedRange` 薄包装（2×8→0，`NeedRange → GuardCursorRange/GuardRange` 6 处直通），`reader` 双形态零包装共享边界内核
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
 

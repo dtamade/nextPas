@@ -121,7 +121,6 @@ type
     procedure EnsureScratch(ANeeded: SizeUInt);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
-    procedure NeedRange(APos, ALen: Int64; const AWhat: string);
     { 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移 }
     function LocatePayload(AIndex: Integer): Int64;
     function ExtractIndex(AIndex: Integer): TBytes;
@@ -208,7 +207,6 @@ type
       const AWhat: string);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
-    procedure NeedRange(APos, ALen: Int64; const AWhat: string);
     { 加密/安全名守卫 + local header 走查（定位读），返回载荷起始偏移 }
     function LocatePayload(AIndex: Integer): Int64;
     function ExtractIndex(AIndex: Integer): TBytes;
@@ -608,12 +606,6 @@ begin
   SetLength(FScratch, LCap);
 end;
 
-{ 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
-procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
-begin
-  nextpas.core.zip.common.GuardCursorRange(FC, APos, ALen, AWhat);
-end;
-
 procedure TZipReaderImpl.ParseCentralDirectory;
 var
   LI: Integer;
@@ -645,10 +637,10 @@ begin
      (LCount16 = $FFFF) then
   begin
     LLocatorPos := LEocdPos - C_ZIP64_LOCATOR_LEN;
-    NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
+    GuardCursorRange(FC, LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     FC.Seek(SizeUInt(LLocatorPos));
     ZipDecodeZip64Locator(FC, LZ64EocdOffset);
-    NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
+    GuardCursorRange(FC, Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     FC.Seek(SizeUInt(LZ64EocdOffset));
     ZipDecodeZip64Eocd(FC, LCount, LCdSize, LCdOffset);
@@ -692,7 +684,7 @@ var
 begin
   LE := FEntries[CheckIndex(AIndex)];
   LLho := Int64(LE.LocalHeaderOffset);
-  NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
+  GuardCursorRange(FC, LLho, C_LOCAL_HEADER_LEN, 'local header');
   FC.Seek(SizeUInt(LLho));
   Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], FC, Int64(FC.Length));
 end;
@@ -833,12 +825,6 @@ begin
   end;
 end;
 
-{ 区间 [APos, APos+ALen) 必须落在源长度内，否则结构视为截断损坏 }
-procedure TZipSourceReader.NeedRange(APos, ALen: Int64; const AWhat: string);
-begin
-  nextpas.core.zip.common.GuardRange(FSize, APos, ALen, AWhat);
-end;
-
 procedure TZipSourceReader.ParseCentralDirectory;
 var
   LI: Integer;
@@ -877,11 +863,11 @@ begin
      (LCount16 = $FFFF) then
   begin
     LLocatorPos := LEocdAbs - C_ZIP64_LOCATOR_LEN;
-    NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
+    GuardRange(FSize, LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     Fetch(LLocatorPos, C_ZIP64_LOCATOR_LEN, LBuf, 'zip64 locator');
     LC := NewByteCursor(LBuf);
     ZipDecodeZip64Locator(LC, LZ64EocdOffset);
-    NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
+    GuardRange(FSize, Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     Fetch(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN, LBuf,
       'zip64 end of central directory');
@@ -930,7 +916,7 @@ var
 begin
   LE := FEntries[CheckIndex(AIndex)];
   LLho := Int64(LE.LocalHeaderOffset);
-  NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
+  GuardRange(FSize, LLho, C_LOCAL_HEADER_LEN, 'local header');
   Fetch(LLho, C_LOCAL_HEADER_LEN, LHeader, 'local header');
   LC := NewByteCursor(LHeader);
   Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], LC, FSize);
