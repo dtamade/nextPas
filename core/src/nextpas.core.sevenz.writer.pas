@@ -462,11 +462,7 @@ begin
   LE.Name := AName;
   LE.IsDir := False;
   LE.Source := esBytes;
-  if Length(AData) > 0 then
-  begin
-    SetLength(LE.Data, Length(AData));
-    Move(AData[0], LE.Data[0], Length(AData));
-  end;
+  LE.Data := SpanClone(TByteSpan.FromBytes(AData));
   LE.HasMTime := True;
   LE.MTimeUnixSec := AMTimeUnixSec;
   EnsureEntriesCapacity;
