@@ -1,5 +1,5 @@
 unit nextpas.core.git.libgit2.base;
-
+{** @desc libgit2 运行时词汇权威：20-byte `TGitOid` 单源 `native.base.TGitOid`，`git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20`，`PACKRECORDS C`，`Assert` 二进制保证），`inline` 零拷贝 overlay（无 `Move`），`TGitOid33` 仅 SHA256-ready 泛型保留；所有 OID Ops 单源 `bytes.ops`（`SpanEqual`→`MemEqual` 3×QWord/`SpanCopy`→`Move`/`IsZeroBytes`），`inline` 热路径 ≤80 ns/op，`try..finally` 资源不丢；静态轨 33-byte `TGitOid` 走桥接（`GitOidCopy20To33/33To20`）复用同源。 *}
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}
 

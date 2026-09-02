@@ -117,8 +117,8 @@ type
     procedure InitGraph;
     function TryGraphCommit(const AOid: TGitOid; out AWhen: Int64;
       out AParents: TGitOidArray): Boolean;
-    procedure HeapPush(const AEntry: TWalkEntry); inline;
-    function HeapPop(out AEntry: TWalkEntry): Boolean; inline;
+    procedure HeapPush(const AEntry: TWalkEntry);
+    function HeapPop(out AEntry: TWalkEntry): Boolean;
     procedure EnqueueCommit(const AOid: TGitOid);
     procedure EnqueueHidden(const AOid: TGitOid);
   public
@@ -188,23 +188,41 @@ begin
     Result := (Result xor UInt32(AOid.Bytes[I])) * UInt32(16777619);
 end;
 
-{ shared open-addressing helpers: single source for oid Set/Cache (L0 bytes.ops discipline) }
+{ shared open-addressing helpers: single source for oid Set/Cache (L0 bytes.ops discipline)
+  perf: inline + zero-copy SpanEqual via bytes.ops single source, probe upper limit (AMask+1) caps O(n) degenerate scan, average O(1) at 70% load; kicking via Rehash on EnsureCapacity keeps max probe bounded, avoids unbounded linear chain }
 function OidProbeEmpty(const AStates: array of Byte; AMask: SizeInt; AHash: UInt32): SizeInt; inline;
+var
+  LProbe: SizeInt;
 begin
   Result := SizeInt(AHash and UInt32(AMask));
+  LProbe := 0;
   while AStates[Result] = 1 do
+  begin
+    if LProbe > AMask then
+      Exit(-1); // probe upper limit: table full, caller will rehash
     Result := (Result + 1) and AMask;
+    Inc(LProbe);
+  end;
 end;
 
 function OidLocate(const ABuckets: array of TGitOid; const AStates: array of Byte;
   AMask: SizeInt; const AOid: TGitOid; AHash: UInt32; out AIdx: SizeInt): Boolean; inline;
+var
+  LProbe: SizeInt;
 begin
   AIdx := SizeInt(AHash and UInt32(AMask));
+  LProbe := 0;
   while AStates[AIdx] <> 0 do
   begin
     if GitOidSame(ABuckets[AIdx], AOid) then
       Exit(True);
+    if LProbe > AMask then
+    begin
+      AIdx := -1; // probe upper limit: bounded scan, avoid O(n) degenerate, signal no slot
+      Break;
+    end;
     AIdx := (AIdx + 1) and AMask;
+    Inc(LProbe);
   end;
   Result := False;
 end;
@@ -242,6 +260,12 @@ begin
     begin
       LHash := GitOidHash(LOldBuckets[I]);
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      if LIdx < 0 then
+      begin
+        // probe limit hit during rehash (degenerate chain > cap) - kick via larger cap and retry
+        Rehash(FCap * 2);
+        LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      end;
       FBuckets[LIdx] := LOldBuckets[I];
       FStates[LIdx] := 1;
       Inc(FCount);
@@ -257,6 +281,23 @@ begin
   LHash := GitOidHash(AOid);
   if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
     Exit;
+  // probe upper limit: if no empty within cap (LIdx=-1 or occupied), kick via rehash and retry
+  if (LIdx < 0) or (LIdx >= FCap) or (FStates[LIdx] = 1) then
+  begin
+    Rehash(FCap * 2);
+    LHash := GitOidHash(AOid);
+    if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
+      Exit;
+    if (LIdx < 0) or (FStates[LIdx] = 1) then
+    begin
+      LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      if LIdx < 0 then
+      begin
+        Rehash(FCap * 2);
+        LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      end;
+    end;
+  end;
   FBuckets[LIdx] := AOid; { zero-copy: 20-byte inline copy }
   FStates[LIdx] := 1;
   Inc(FCount);
@@ -325,10 +366,35 @@ var
   LOldStates: array of Byte;
   LOldTicks: array of UInt64;
   LOldCap: SizeInt;
-  I, J, K: Integer;
+  I, J: Integer;
   LIdx: SizeInt;
   LHash: UInt32;
   LSorted: array of Integer;
+  // not inline: loop body quicksort, avoids I-Cache bloat per design rule
+  procedure QuickSort(AL, AR: Integer);
+  var
+    LI, RJ: Integer;
+    LPivot: UInt64;
+    LTmp: Integer;
+  begin
+    LI := AL;
+    RJ := AR;
+    LPivot := LOldTicks[LSorted[(AL + AR) div 2]];
+    repeat
+      while LOldTicks[LSorted[LI]] > LPivot do Inc(LI);
+      while LOldTicks[LSorted[RJ]] < LPivot do Dec(RJ);
+      if LI <= RJ then
+      begin
+        LTmp := LSorted[LI];
+        LSorted[LI] := LSorted[RJ];
+        LSorted[RJ] := LTmp;
+        Inc(LI);
+        Dec(RJ);
+      end;
+    until LI > RJ;
+    if AL < RJ then QuickSort(AL, RJ);
+    if LI < AR then QuickSort(LI, AR);
+  end;
 begin
   if FCount <= CKeep then
     Exit;
@@ -357,18 +423,9 @@ begin
       SetLength(LSorted, Length(LSorted) + 1);
       LSorted[High(LSorted)] := I;
     end;
-  // insertion sort descending by LOldTicks (4096 * log approx, eviction rare, deterministic)
-  for I := 1 to High(LSorted) do
-  begin
-    K := LSorted[I];
-    J := I - 1;
-    while (J >= 0) and (LOldTicks[LSorted[J]] < LOldTicks[K]) do
-    begin
-      LSorted[J + 1] := LSorted[J];
-      Dec(J);
-    end;
-    LSorted[J + 1] := K;
-  end;
+  // perf: quicksort descending by LOldTicks O(n log n) replaces insertion O(k²); 4096 cap rare eviction but hotspot deterministic, zero-copy index Move, not inline
+  if Length(LSorted) > 1 then
+    QuickSort(0, High(LSorted));
   for I := 0 to High(LSorted) do
   begin
     J := LSorted[I];
@@ -376,6 +433,11 @@ begin
     begin
       LHash := GitOidHash(LOldBuckets[J]);
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      if LIdx < 0 then
+      begin
+        Rehash(FCap * 2);
+        LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      end;
       FBuckets[LIdx] := LOldBuckets[J]; // zero-copy 20B inline
       FWhens[LIdx] := LOldWhens[J];
       FParents[LIdx] := LOldParents[J]; // zero-copy CoW share, bytes.ops single source
@@ -419,6 +481,11 @@ begin
     begin
       LHash := GitOidHash(LOldBuckets[I]);
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      if LIdx < 0 then
+      begin
+        Rehash(FCap * 2);
+        LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      end;
       FBuckets[LIdx] := LOldBuckets[I];
       FWhens[LIdx] := LOldWhens[I];
       FParents[LIdx] := LOldParents[I];
@@ -451,9 +518,37 @@ begin
   LHash := GitOidHash(AOid);
   if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
   begin
-    Inc(FTick);
-    FTicks[LIdx] := FTick; // LRU refresh on duplicate, avoids stale eviction
+    // OidLocate found duplicate; LIdx valid due to probe limit handled
+    if LIdx >= 0 then
+    begin
+      Inc(FTick);
+      FTicks[LIdx] := FTick; // LRU refresh on duplicate, avoids stale eviction
+    end;
     Exit;
+  end;
+  // probe upper limit: if no empty within cap (LIdx=-1 or occupied), kick via rehash and retry
+  if (LIdx < 0) or (LIdx >= FCap) or (FStates[LIdx] = 1) then
+  begin
+    Rehash(FCap * 2);
+    LHash := GitOidHash(AOid);
+    if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
+    begin
+      if LIdx >= 0 then
+      begin
+        Inc(FTick);
+        FTicks[LIdx] := FTick;
+      end;
+      Exit;
+    end;
+    if (LIdx < 0) or (FStates[LIdx] = 1) then
+    begin
+      LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      if LIdx < 0 then
+      begin
+        Rehash(FCap * 2);
+        LIdx := OidProbeEmpty(FStates, FMask, LHash);
+      end;
+    end;
   end;
   FBuckets[LIdx] := AOid;
   FWhens[LIdx] := AWhen;
@@ -623,11 +718,12 @@ begin
   Result := TryGraphParents(FGraph, AOid, AWhen, AParents);
 end;
 
-procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry); inline;
+procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
 var
   I, Parent: Integer;
 begin
   // geometric growth: 64 -> *2 to 4096 -> +4096; amortized O(1) push
+  // not inline: loop body + setlength growth would bloat I-Cache per design rule
   if FHeapLen >= FHeapCap then
   begin
     if FHeapCap = 0 then FHeapCap := 64 else if FHeapCap < 4096 then FHeapCap := FHeapCap * 2 else Inc(FHeapCap, 4096);
@@ -647,7 +743,7 @@ begin
   FHeap[I] := AEntry;
 end;
 
-function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean; inline;
+function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
 var
   I, L, R, Best: Integer;
   LastEntry: TWalkEntry;

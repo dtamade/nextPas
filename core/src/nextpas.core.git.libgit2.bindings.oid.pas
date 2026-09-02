@@ -52,8 +52,8 @@ function git_odb_add_disk_alternate(odb: PGitOdb; path: PAnsiChar): LongInt; cde
 procedure git_odb_free(db: PGitOdb); cdecl; external 'c' name 'git_odb_free';
 function git_odb_read(obj: PPGitOdbObject; db: PGitOdb; id: PGitOid): LongInt; cdecl; external 'c' name 'git_odb_read';
 
-// Bridge inline helpers (performance: inline + zero-copy TByteSpan/SpanEqual/SpanCopy, 20B ~3×QWord)
-// Reuses bytes.ops single source (SpanEqual via MemEqual / SpanCopy via Move + SpanClone) for byte ops
+// Bridge inline helpers (convergence: static 33-byte TGitOid retains &type prefix but 20-byte SHA1 path aliases runtime git_oid via libgit2.base; all Ops single source bytes.ops)
+// perf: inline + zero-copy TByteSpan/SpanEqual/SpanCopy (20B ~3×QWord MemEqual / single Move), no heap, converges with libgit2.base.GitOidEquals / native.base.GitOidSame
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 

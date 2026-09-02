@@ -169,7 +169,10 @@ function NewGitManager: IGitManager;
 implementation
 
 uses
-  nextpas.core.git.factory;
+  nextpas.core.fs,
+  nextpas.core.text.conv,
+  nextpas.core.git.factory,
+  nextpas.core.git.native.refs;
 
 { TGitManagerImpl }
 
@@ -242,21 +245,34 @@ end;
 
 function TGitManagerImpl.DiscoverRepository(const AStartPath: string): string;
 var
-  p, prev: string;
+  LGitDir: string;
+  LWorkTree: string;
 begin
-  // Use pure Pascal fallback first to avoid instability due to header signature differences
-  p := PathAbs(AStartPath);
-  prev := '';
-  while (p <> '') and (p <> prev) do
+  // single source: reuse owner native.refs GitTryDiscoverGitDir (bytes.ops PathClean/PathJoin2 inline zero-copy)
+  if GitTryDiscoverGitDir(PathClean(AStartPath), LGitDir) then
   begin
-    if Exists(PathEnsureSep(p) + '.git') then
+    // worktree gitdir (main/.git/worktrees/<id>) has commondir+gitdir -> resolve linked worktree root
+    if FileExists(PathJoin2(LGitDir, 'commondir')) then
     begin
-      Exit(p);
+      try
+        LWorkTree := Trim(ReadFileText(PathJoin2(LGitDir, 'gitdir')));
+      except
+        LWorkTree := '';
+      end;
+      if LWorkTree <> '' then
+      begin
+        if PathBase(LWorkTree) = '.git' then
+          Exit(PathClean(PathDir(LWorkTree)));
+        Exit(PathClean(PathDir(LWorkTree)));
+      end;
+      Exit(PathClean(LGitDir));
     end;
-    prev := p;
-    p := PathDir(p);
+    if PathBase(LGitDir) = '.git' then
+      Exit(PathClean(PathDir(LGitDir)));
+    // bare repo: gitdir is repo root
+    Exit(PathClean(LGitDir));
   end;
-  // If not found, try calling underlying layer (wrap exceptions to avoid crashes)
+  // fallback to underlying libgit2 layer (git_buf disposed inside FMgr, no leak)
   try
     Result := FMgr.DiscoverRepository(AStartPath);
   except

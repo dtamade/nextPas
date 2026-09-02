@@ -683,6 +683,10 @@ type
     &type: Byte;
     id: array[0..31] of Byte;
   end;
+  // Convergence aliases (20-byte SHA1 authority via native.base/libgit2.base; kept for cross-track port, zero-cost via variant AsNative overlay + inline SpanCopy)
+  // Prefer libgit2.base.git_oid / TGitOid20 for SHA1 path; TGitOid (33-byte) is generic SHA256-ready container, bridged via GitOidCopy20To33/33To20 inline bytes.ops single source
+  TGitOid20Alias = nextpas.core.git.libgit2.base.git_oid;
+  PGitOid20Alias = ^TGitOid20Alias;
   TGitRemoteHead = record
     local: LongInt;
     oid: TGitOid;

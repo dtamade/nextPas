@@ -107,6 +107,6 @@ libgit2 源码在 `~/projects/libgit2`。
 
 因此两套体系是**互补的加载策略**，职责边界已写入 CONTRACT.md §1.1.2：
 运行时加载系是默认消费路径；静态声明系（本产物）服务完整 ABI 面
-场景。两套符号词汇不做统一，各自 gate 各自维护。
-手写 ffi 中的 PChar/cint 词汇属历史遗留，随消费方演进逐步收敛，
-不在本产物范围。
+场景。词汇已收敛：权威 20-byte `native.base.TGitOid` 单源，运行时 `git_oid` variant 叠加（`AsNative` 零拷贝）/静态 33-byte `TGitOid` 通用保留 + 20-byte `git_oid/TGitOid20` 别名桥接（`GitOidCopy20To33` 等 `inline SpanCopy`），Ops 同经 `bytes.ops` 单源（详见 CONTRACT §1.1.2 收敛路线），各自 gate 仍独立但须经单源 Ops。
+手写 ffi 中的 PChar/cint 词汇属历史遗留，Phase 7 随收敛路线统一收敛，
+本产物范围仅保留 `PACKRECORDS C` + `inline` 零拷贝桥接。

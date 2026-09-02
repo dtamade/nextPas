@@ -37,6 +37,7 @@ function GitDiffStatSummary(const AGitDir: string; const AOldTree, ANewTree: TGi
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
@@ -118,9 +119,9 @@ begin
   QuickSortFlat(A, 0, High(A));
 end;
 
-{ CollectFlat: amortized O(n) via geometric capacity 2×.
+{ CollectFlat: amortized O(n) via bytes.ops GrowArrayCapacity single source.
   Previously SetLength(AOut,Length+1) per entry → O(n²) copies.
-  Zero-copy: string assignment is refcounted move. }
+  Zero-copy: string assignment is refcounted move, TGitOid 20B inline copy via direct assignment. }
 procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray; var ACount, ACap: Integer); overload;
 var
   Kind: TGitObjectKind;
@@ -143,7 +144,8 @@ begin
     begin
       if ACount >= ACap then
       begin
-        if ACap = 0 then ACap := 32 else ACap := ACap shl 1;
+        // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per append, zero-copy TGitOid Move via direct assignment, avoids O(n²) SetLength(Length+1) churn
+        ACap := Integer(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
         SetLength(AOut, ACap);
       end;
       AOut[ACount].Path := Full;

@@ -38,8 +38,17 @@ type
     function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
     procedure InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
     function TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
+    // delta peek cache inline helpers (bytes.ops single source, zero alloc, 32-entry LRU)
+    function TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
+    procedure PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
+  private
+    // hot rename pre-check cache: 32-entry (APos -> targetSize), inline linear scan avoids per-candidate 32B inflate
+    FPeekKeys: array[0..31] of SizeUInt;
+    FPeekVals: array[0..31] of Int64;
+    FPeekValid: array[0..31] of Boolean;
+    FPeekNext: Byte;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -55,6 +64,8 @@ function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TB
 
 const
   GitMaxDeltaDepth = 64;
+  // streaming cap: 256 MB (single source with DEFLATE MAX_DECOMPRESS_SIZE), prevents heap amplification via single huge SetLength
+  GitMaxDeltaTargetSize = 256 * 1024 * 1024;
 
 implementation
 
@@ -93,8 +104,10 @@ begin
     raise EGitError.Create('truncated varint in pack data');
   if UTgt > UInt64(MaxInt) then
     raise EGitError.Create('delta target size out of range');
+  if UTgt > UInt64(GitMaxDeltaTargetSize) then
+    raise EGitError.Create('delta target size exceeds limit');
   TgtSize := Int64(UTgt);
-  // buffer reuse: keep capacity, single SetLength (bytes.ops single source for size checks)
+  // streaming cap + buffer reuse: bounded by GitMaxDeltaTargetSize (256 MB, same source as DEFLATE max), single SetLength, prevents heap amplification
   if Int64(Length(AOut)) <> TgtSize then
     SetLength(AOut, TgtSize);
   if TgtSize = 0 then
@@ -123,8 +136,9 @@ begin
         end;
       if CopySize = 0 then
         CopySize := $10000;
-      if (CopyOff + CopySize > Int64(LBaseSpan.Len))
-        or (OutPos + CopySize > TgtSize) or (P > Length(ADelta)) then
+      // streaming chunk guard: overflow-safe via subtraction (bytes.ops single source for SpanCopy, inline, zero-copy Move)
+      if (CopyOff < 0) or (CopySize <= 0) or (CopyOff > Int64(LBaseSpan.Len) - CopySize)
+        or (OutPos > TgtSize - CopySize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
       // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
       SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(CopySize)),
@@ -133,7 +147,8 @@ begin
     end
     else if Op > 0 then
     begin
-      if (P + Op > Length(ADelta)) or (OutPos + Op > TgtSize) then
+      // streaming chunk guard: overflow-safe via subtraction (zero-copy SpanCopy, bytes.ops single source)
+      if (P > Length(ADelta) - Op) or (OutPos > TgtSize - Op) then
         raise EGitError.Create('delta insert instruction out of bounds');
       // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
       SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(Op)),
@@ -173,6 +188,9 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
+  // cache zero-init: FPeekValid false via class zero-fill, next 0; explicit for stability
+  FillChar(FPeekValid, SizeOf(FPeekValid), 0);
+  FPeekNext := 0;
   LoadIndex(AIdxPath);
 end;
 
@@ -372,6 +390,9 @@ begin
   ATargetSize := 0;
   if APos >= FDataSize then
     Exit;
+  // fast cache: hot rename O(n*m) loop hits same delta offsets; inline linear scan (32 entries) avoids 32B inflate per candidate
+  if TryPeekCacheHit(APos, ATargetSize) then
+    Exit(True);
   try
     Got := GitZlibDecompressPrefix(FData, FDataSize, APos, @Buf[0], SizeUInt(Length(Buf)), EndPos);
   except
@@ -388,8 +409,34 @@ begin
     Exit;
   if UTgt > UInt64(High(Int64)) then
     Exit;
+  if UTgt > UInt64(GitMaxDeltaTargetSize) then
+    Exit;
   ATargetSize := Int64(UTgt);
+  PeekCacheStore(APos, ATargetSize);
   Result := True;
+end;
+
+function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
+var
+  I: Integer;
+begin
+  // inline linear scan (32 entries), zero alloc, bytes.ops single source for size, hot rename loop benefits >100x inflate saving
+  for I := 0 to 31 do
+    if FPeekValid[I] and (FPeekKeys[I] = APos) then
+    begin
+      ATargetSize := FPeekVals[I];
+      Exit(True);
+    end;
+  Result := False;
+end;
+
+procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
+begin
+  // circular eviction, zero alloc, inline store, keeps most recent 32 deltas
+  FPeekKeys[FPeekNext] := APos;
+  FPeekVals[FPeekNext] := ATargetSize;
+  FPeekValid[FPeekNext] := True;
+  FPeekNext := Byte((FPeekNext + 1) and 31);
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;

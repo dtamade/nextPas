@@ -8,7 +8,8 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.git.base,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex;
 
 type
   { Object kinds as encoded in loose headers and pack entry type bits }
@@ -44,23 +45,12 @@ implementation
 uses
   nextpas.core.base.utils;
 
-function HexVal(ACh: Char): Integer; inline;
-begin
-  case ACh of
-    '0'..'9': Result := Ord(ACh) - Ord('0');
-    'a'..'f': Result := Ord(ACh) - Ord('a') + 10;
-    'A'..'F': Result := Ord(ACh) - Ord('A') + 10;
-  else
-    Result := -1;
-  end;
-end;
-
 function GitOidIsValidHex(const AHex: string): Boolean; inline;
 var
   I: Integer;
 begin
-  { perf: inline + zero-copy HexVal table scan (40× branch), hot per-commit/refs path;
-    no alloc, single-source validation reused by FromHex }
+  { perf: inline + zero-copy single-source HexVal scan (40× inline table lookup via encoding.hex.HexVal, no alloc);
+    hot per-commit/refs path; single-source validation reused by FromHex }
   if Length(AHex) <> GitOidHexLen then
     Exit(False);
   for I := 1 to GitOidHexLen do
@@ -71,32 +61,25 @@ end;
 
 function GitOidFromHex(const AHex: string): TGitOid; inline;
 var
-  I: Integer;
+  LBytes: TBytes;
 begin
   { perf: inline hot path (refs lookup / commit parse per commit); reuses
-    GitOidIsValidHex single source, then 20× HexVal decode + byte store,
-    no alloc, zero-copy via HexVal inline }
+    GitOidIsValidHex single source, then single-source encoding.hex.HexDecode (table-driven 20× lookup, single alloc+Move, zero-copy PByte scan) }
   if not GitOidIsValidHex(AHex) then
     raise EGitError.CreateFmt('invalid git oid hex "%s"', [AHex]);
-  for I := 0 to GitOidRawLen - 1 do
-    Result.Bytes[I] := Byte((HexVal(AHex[I * 2 + 1]) shl 4)
-      or HexVal(AHex[I * 2 + 2]));
+  LBytes := HexDecode(AHex);
+  Move(LBytes[0], Result.Bytes[0], GitOidRawLen);
 end;
 
 function GitOidToHex(const AOid: TGitOid): string; inline;
-const
-  CHex: array[0..15] of Char = '0123456789abcdef';
 var
-  I: Integer;
+  LBytes: TBytes;
 begin
-  { perf: inline + single SetLength(40) + 20× table lookup store,
-    hot display/log path, zero-copy beyond result alloc }
-  SetLength(Result, GitOidHexLen);
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    Result[I * 2 + 1] := CHex[AOid.Bytes[I] shr 4];
-    Result[I * 2 + 2] := CHex[AOid.Bytes[I] and $0F];
-  end;
+  { perf: inline + single-source encoding.hex.HexEncode (20 bytes -> 40 hex, PByte+Len table lookup, single SetLength, zero-copy beyond result alloc);
+    hot display/log path }
+  SetLength(LBytes, GitOidRawLen);
+  Move(AOid.Bytes[0], LBytes[0], GitOidRawLen);
+  Result := HexEncode(LBytes);
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
