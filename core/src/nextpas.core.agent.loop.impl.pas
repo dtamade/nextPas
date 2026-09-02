@@ -309,13 +309,12 @@ var
   CalledCount: Integer;
   GuidedReason: TLoopOutcome;
   DoGuided, LStopped, PostStopped: Boolean;
-  Allowance, JCount, SCount: Integer;
+  Allowance, JCount: Integer;
   Slots: array of TSlot;
   Jobs: array of TToolJob;
   SlotJob: array of Integer;
   Verdict: THookVerdict;
   ChildTok: IAsyncCancellationToken;
-  Env: TToolResult;
   TM: TMessage;
   LOpt: TAgentLoopOptions;
   LCost: Int64;
