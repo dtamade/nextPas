@@ -27,7 +27,7 @@ implementation
 uses
   nextpas.core.audio.codec.registry;
 
-// Probe≤4KB guard: 4096 — facade inline forwarding to impl (zero-alloc)
+// Probe≤4KB guard: 4096 — facade inline forwarding to impl (zero-alloc, bytes.ops single source via impl)
 
 function OpusProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 begin
