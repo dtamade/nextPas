@@ -507,7 +507,7 @@ begin
   LMsgView := TStringView.FromStr(AMessage);
   LB.Init(256);
   try
-    LB.Reserve(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
+    LB.Reserve(SizeUInt(32 + LCodeView.Len + LMsgView.Len + 64));
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
     LB.AppendBytes(',"', 2);

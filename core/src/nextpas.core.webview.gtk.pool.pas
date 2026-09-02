@@ -286,6 +286,7 @@ end;
 function AcquireGCancellable: Pointer; inline;
 begin
   // 单源经 loader：能力探查经 platform.dl 封装的 GtkCancellableHas* / IsCancelled，禁止直探 ffi 变量，inline 薄转发零拷贝，复用 Slab 单源，hot plain 读零原子
+  // perf: burst zero per-request alloc — when GtkCancellableHasReset false, fallback is nil (no G_cancellable_new), avoids per-Eval GObject alloc, inline zero-copy, single source via loader
   Result := specialize SlabTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
   if Result <> nil then
   begin
@@ -298,16 +299,22 @@ begin
     end;
   end;
   if Result = nil then
-    Result := GtkCancellableNew();
+  begin
+    if GtkCancellableHasReset then
+      Result := GtkCancellableNew()
+    else
+      Result := nil;
+  end;
 end;
 
 procedure ReleaseGCancellable(A: Pointer); inline;
 begin
   // 单源经 loader：能力探查经 platform.dl 封装，禁止直探 ffi 变量，inline 零拷贝，溢出 GtkObjectUnref 单所有权不丢，hot plain 读零原子
+  // stability: when HasReset false, no pooling without reset — single ownership via unref, avoids reuse of cancelled handle without reset, zero leak
   if A = nil then Exit;
   if GtkCancellableHasReset then
     GtkCancellableReset(A)
-  else if GtkCancellableHasIsCancelled and GtkCancellableIsCancelled(A) then
+  else
   begin
     GtkObjectUnref(A);
     Exit;

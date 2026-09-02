@@ -4,23 +4,24 @@ unit nextpas.core.webview.fake.dispatcher;
 
        拆分治理（S105+）：原 1580 行单文件超 800 软指引，已按 design-conventions
        四件套与 L0-L3 单向依赖拆为 dispatcher/live/completion/support 等子模块；
-       本单元仅承载 TFakeDispatcher，复用 L1 bytes.ops VecGrowCapacity/VecRingCopy
+       本单元仅承载 TFakeDispatcher，复用 L1 bytes.ops VecGrowCapacity/VecRingCopy/VecRingGrowCopy
        单源 inline 零拷贝、零 mod/div 热点，短临界 <1µs，资源 Finalize 释放不丢。
 
        性能修复：PostRef 竞争路径 O(n) 持锁搬移 + stale 重试二次线性化消除。
        原乐观重试在锁外线性化后 stale 直接丢弃 LNew，重试分支重复 O(n) 两段式
        VecRingCopy 放大尾延迟；现改为预校验重试：快照后先 O(1) 锁内预校验
        （有空位则直接槽位写入无分配/无拷贝，stale 则无分配/无拷贝直接重取快照），
-       仅快照仍有效时才在锁外 SetLength+VecRingCopy 单源 inline 线性化，
-       二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale 则保留 LNew
-       缓冲复用（SetLength 长度检查避免重复零化 O(Cap)，VecRingCopy 覆盖），
-       零 O(n) 持锁、竞争重试零额外线性化，bytes.ops 单源。
-       突发预分配：新增 Reserve/EnsureCapacity 预扩容接口，单源 VecGrowCapacity
-       0→4→2× 倍增在锁外 SetLength+VecRingCopy 一次性线性化，安装仅 O(1) 检查，
+       仅快照仍有效时才在锁外 VecRingGrowCopy 单源 inline 线性化（Length<>Cap 时
+       SetLength 单次零化，复用时 Length=Cap 跳过零化+VecRingCopy 覆写），0→4→2×
+       摊销 O(1)/push，二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale
+       则保留 LNew 缓冲复用（VecRingGrowCopy Length 判定避免重复零化 O(Cap)，
+       VecRingCopy 覆写），零 O(n) 持锁、突发并发零重复分配不放大尾延迟，bytes.ops 单源。
+       突发预分配：新增 Reserve/EnsureCapacity 预扩容接口，单源 VecRingGrowCopy
+       0→4→2× 倍增在锁外一次性线性化（Length 判定复用），安装仅 O(1) 检查，
        高并发突发前预分配消除 PostRef 临界 O(n) 尾延迟，stale 丢弃零泄漏。
        纪律修复：PostRef/Reserve 含 while 竞争重试与 VecRingCopy O(n) 两段式线
        性化，按 design-conventions §2 红线二外联（禁 inline）避 I-Cache 膨胀；
-       内部 VecGrowCapacity/VecRingCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
+       内部 VecGrowCapacity/VecRingCopy/VecRingGrowCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -151,11 +152,15 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation (SetLength zero-init) outside lock, only after snapshot validated still needs grow, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
-    SetLength(LNew, LNewCap);
-    // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source bytes.ops VecRingCopy, VecGrowCapacity single source; only executed when pre-validate passed, so competitive retry does not repeat linearize
-    if LCount > 0 then
-      specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
+    // perf: heap via VecRingGrowCopy single source bytes.ops inline outside lock — Length<>Cap 时 SetLength 单次零化 O(Cap)，复用时零零化；预校验后仅有效 epoch 分配+两段式免模线性化，0→4→2× 摊销 O(1)/push，突发并发零重复分配不放大尾延迟，尾零 spare 复用兑现，managed 保 refcnt/blittable 单 Move 零拷贝，VecRingCopy 单源内联零额外调用
+    // stability: reuse LNew buffer across retries (Length=Cap 跳过 SetLength 零化 O(Cap) 且 VecRingCopy 覆盖)，VecRingGrowCopy 单源 Length 判定+VecRingCopy 覆写保 refcnt，Finalize 零泄漏
+    if Length(LNew) = LNewCap then
+    begin
+      if LCount > 0 then
+        specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
+    end
+    else
+      specialize VecRingGrowCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew, LNewCap);
     // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
     FLck.Acquire;
     try
@@ -307,10 +312,8 @@ begin
   finally
     FLck.Release;
   end;
-  // perf: heap SetLength zero-init + VecRingCopy single source bytes.ops inline zero-copy outside lock, O(Cap) not held, pow2 amortized; single source VecGrowCapacity, managed ref preserved
-  SetLength(LNew, LNeed);
-  if LCount > 0 then
-    specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
+  // perf: heap via VecRingGrowCopy single source bytes.ops inline zero-copy outside lock, O(Cap) not held, pow2 amortized, Length check inside avoids repeat zero-init if reused; single source VecGrowCapacity/VecRingCopy, managed ref preserved, zero O(n) hold
+  specialize VecRingGrowCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew, LNeed);
   FLck.Acquire;
   try
     if Length(FRing) >= ACapacity then

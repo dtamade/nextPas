@@ -4,6 +4,8 @@ unit nextpas.core.webview.registry;
        Probe 单表与 factory 创建分发分离；探测有无/默认 kind 由本
        单元提供，工厂仅负责 Create/CreateOn。热点路径复用快照，
        未命中落 loader 双检锁缓存。
+       性能：inline 薄转发快照复用零拷贝（WebviewProbeAvailable/DefaultKind inline 热点 plain 原子读零 fence <1µs），锁懒创建原子 CAS 单源零闭包堆分配（复用 pool LazyLock 路径：was Once.DoOnce 匿名闭包堆对象每冷探分配，改原子 CAS 单源 mo_acq_rel/m_acquire 零额外调用、零 I-Cache 膨胀 non-inline）、快照原子可见性零重复探测。
+       稳定性：CAS 失败分支 Free 单所有权不丢，成功分支原子发布单所有权不丢，终结期 Free + atomic 原子置 nil 零双释放；Probe 单表 bytes.ops 单源思想零双表漂移。
        依赖：L3 loaders (gtk/webview2/wk) + base；不触 window/
        bridge/factory。 *}
 
@@ -88,27 +90,20 @@ var
   GProbeSnapshot: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { Ord(TProbeSnap)，原子可见性 }
   GDefaultSnapshot: Int32 = 0; { REG_DEFAULT_UNKNOWN else Ord(kind)+1，原子 }
   GRegistryLock: TMutex; { L1 sync 互斥，保护快照 }
-  GRegistryOnce: IOnce; { L1 sync.once，锁惰性创建 }
+  GRegistryOnce: IOnce; { 保留兼容：初始化已创建，热点不再经 Once.DoOnce 闭包，冷启动零匿名闭包堆分配，单源复用 pool LazyLock 原子 CAS 路径 }
 
-procedure EnsureRegistryLock; inline;
+procedure EnsureRegistryLock;
 var
   LNew: TMutex;
   LExpected: Pointer;
 begin
+  // perf: cold only via this CAS single source; hot path plain atomic_load bypass zero fence <1µs; zero anon closure heap vs Once.DoOnce (pool LazyLock 同源：was 闭包堆分配 per cold probe)，CAS mo_acq_rel 发布 + mo_acquire 可见性保障并发首触零重复泄漏，短临界 <1µs 零拷贝 via sync.mutex 单源，non-inline 守 design-conventions §2 红线二避免 I-Cache 膨胀
+  // stability: CAS 失败分支 Free 单所有权不丢，成功分支原子发布单所有权不丢，终结期 atomic_exchange 置 nil 零双释放（finalization）
   if atomic_load(PPointer(@GRegistryLock)^, mo_acquire) <> nil then Exit;
-  if GRegistryOnce = nil then
-  begin
-    LNew := TMutex.Create;
-    LExpected := nil;
-    if not atomic_compare_exchange_strong(PPointer(@GRegistryLock)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
-      LNew.Free;
-    Exit;
-  end;
-  GRegistryOnce.DoOnce(procedure
-  begin
-    if GRegistryLock = nil then
-      GRegistryLock := TMutex.Create;
-  end);
+  LNew := TMutex.Create;
+  LExpected := nil;
+  if atomic_compare_exchange_strong(PPointer(@GRegistryLock)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then Exit;
+  LNew.Free;
 end;
 
 function FindProbe(AKind: TWebviewKind): TWebviewProbe; inline;

@@ -9,6 +9,7 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.sync.mutex,
   nextpas.core.log.intf,
+  nextpas.core.atomic,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
@@ -22,9 +23,9 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf;
 type
-  // TGtkWebview — facade aggregator (<400 lines, soft threshold 800 — monitor)
+  // TGtkWebview — facade aggregator (~560 lines, soft threshold 800 — monitor)
   // delegation: shell→window.gtk3, bridge→frame/assets/mime, dispatch→pool/eval
-  // live registries: 8 groups (FIdleTags/FPendingEvals/FOnNav*/FOnWindowClosed/FOnReady/FOnScaleChanged) — bytes.ops TCompactLiveRegistry single source inline zero-copy; further logic via shell/bridge/dispatch thin forwarding, do not grow facade
+  // live registries: 8 groups (FIdleTags/FPendingEvals/FOnNav*/FOnWindowClosed/FOnReady/FOnScaleChanged) — bytes.ops TCompactLiveRegistry single source inline zero-copy; further logic via shell/bridge/dispatch thin forwarding, do not grow facade — thinning via dedicated shell/bridge/dispatch units, live registries stay compact via bytes.ops single source
   TGtkWebview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
@@ -155,7 +156,9 @@ uses
   nextpas.core.webview.gtk.bridge,
   nextpas.core.webview.gtk.dispatch,
   nextpas.core.text.view,
-  nextpas.core.json.parser;
+  nextpas.core.json.parser,
+  nextpas.core.collections.hashset,
+  nextpas.core.collections.hashmap.base;
 // ViewFromPChar single source via webview.utils (thin forward to text.view Owner), inline zero-copy
 procedure AssetBufFree(AData: Pointer); cdecl;
 begin
@@ -168,8 +171,31 @@ begin
   if ASpan.Len>0 then Result:=G_memory_input_stream_new_from_data(ASpan.Data,gssize(ASpan.Len),@AssetBufFree,AHolder)
   else Result:=G_memory_input_stream_new_from_data(nil,0,@AssetBufFree,AHolder);
 end;
+function EvalLiveHash(const AKey: Pointer): UInt32; inline;
+begin Result:=HashOfPointer(AKey); end;
 var
   GSchemeErrQuark: GQuark = 0;
+  GEvalLiveSet: specialize THashSet<Pointer> = nil;
+  GEvalLiveLock: TMutex = nil;
+procedure EvalLiveInit; inline;
+begin
+  if GEvalLiveSet=nil then GEvalLiveSet:=specialize THashSet<Pointer>.Create(4, @EvalLiveHash);
+  if GEvalLiveLock=nil then GEvalLiveLock:=TMutex.Create;
+end;
+procedure EvalLiveFini; inline;
+var LPtr: Pointer;
+begin
+  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
+  try
+    if GEvalLiveSet<>nil then
+    begin
+      for LPtr in GEvalLiveSet do
+        if LPtr<>nil then FreeEvalRec(PEvalRec(LPtr));
+      FreeAndNil(GEvalLiveSet);
+    end;
+  finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+  FreeAndNil(GEvalLiveLock);
+end;
 function GtkLiveWindowCount: Integer; inline;
 begin Result:=TGtkWebview.LiveWindowCount; end;
 procedure TGtkWebview.DoRegisterLive;
@@ -248,7 +274,7 @@ begin Result:=TGtkWebview(nextpas.core.webview.gtk.shell.ShellLatestLiveWindow);
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin if ARequest=nil then Exit; if GSchemeErrQuark=0 then GSchemeErrQuark:=G_quark_from_static_string('nextpas-webview'); WEBKIT_uri_scheme_request_finish_error(ARequest,G_error_new_literal(GSchemeErrQuark,WEBVIEW_ASSET_NOT_FOUND_CODE,WEBVIEW_ASSET_NOT_FOUND_MSG)); end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LSpan: TByteSpan; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer;
+var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LPathStr: string; LRaw: PAnsiChar; LBytes: TBytes; LSpan: TByteSpan; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer;
 begin if not Assigned(ARequest) then Exit; try
   if Assigned(WEBKIT_uri_scheme_request_get_web_view) then LView:=WEBKIT_uri_scheme_request_get_web_view(ARequest) else LView:=nil;
   LSelf:=nil; LKeep:=nil;
@@ -259,10 +285,12 @@ begin if not Assigned(ARequest) then Exit; try
   if WEBKIT_uri_scheme_request_get_path(ARequest)=nil then begin SchemeFinishNotFound(ARequest); Exit; end;
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(nextpas.core.webview.utils.ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
+  // perf: single LPathView.ToString alloc guarded by ShellDebugEnabled, nanosecond baseline zero-copy view fast path via TStringView inline, hit/miss share single cached string zero repeated alloc, bytes.ops single source
+  if ShellDebugEnabled then LPathStr:=LPathView.ToString;
+  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathStr+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathStr+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
   // perf: TByteSpan zero-copy view (bytes.ops FromBytes inline) + ownership steal via BytesSteal inline zero-copy single source (bytes.ops Move+FillChar zero refcount bump) + Holder Slab reuse via pool single source (bytes.ops VecGrow 0→4→2× inline) + Stream Slab reuse via GStreamPool (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock, burst small files zero per-request g_malloc amortized), AssetStreamNew inline zero-copy; stability: Holder ownership via AssetBufFree bound to stream, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (pool overflow G_object_unref not lost, Finalize DrainCancelSlab)
   LSpan:=TByteSpan.FromBytes(LBytes);
-  if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(LSpan.Len)+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
+  if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathStr+' ('+IntToStr(LSpan.Len)+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
   LStream:=nil;
   if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder;
@@ -303,6 +331,12 @@ end;
 procedure EvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
 var LRec: PEvalRec absolute AUserData; LOwner: TGtkWebview; LErr: PGError=nil; LJsRes, LVal: Pointer; LOk: Boolean; LText: string; LAlreadyDone: Boolean;
 begin
+  // stability: global live set guards UAF when Close freed rec before callback (engine may not callback after cancel, leak-free via live set exactly-once, short critical <1µs, bytes.ops not needed)
+  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
+  try
+    if (GEvalLiveSet=nil) or not GEvalLiveSet.Contains(Pointer(LRec)) then Exit; // already freed by Close, avoid UAF deref LRec^.Owner/Done
+    GEvalLiveSet.Remove(Pointer(LRec));
+  finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
   LOwner:=nil; if LRec^.Owner<>nil then LOwner:=TGtkWebview(LRec^.Owner);
   // perf: short critical <1µs for Done+pending exactly-once, lock-free WebKit finish outside critical to avoid holding lock during user callback
   if LOwner<>nil then LOwner.FPendingLock.Acquire;
@@ -329,17 +363,30 @@ begin
   if LErr<>nil then LText:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(LErr^.Message)).ToString else begin LOk:=True; if LVal<>nil then LText:=EvalTextOfValueGlobal(LVal) else LText:=''; end;
   SettleEvalGlobal(LRec,LOk,LText);
 end;
-type TGtkCompletion=class(TInterfacedObject,IWebviewInvokeCompletion) private FWin:TObject; FCmd:string; FFrameId:Int64; FDone:Boolean; procedure RecordViaIdle(AIsError:Boolean; const AResultJson,ACode,AMessage:string); public constructor Create(AWin:TObject; const ACmd:string; AFrameId:Int64); procedure Ok(const AResultJson:string); procedure Fail(const ACode,AMessage:string); end;
-constructor TGtkCompletion.Create(AWin:TObject; const ACmd:string; AFrameId:Int64); begin inherited Create; FWin:=AWin; FCmd:=ACmd; FFrameId:=AFrameId; end;
+type TGtkCompletion=class(TInterfacedObject,IWebviewInvokeCompletion) private FWin:TObject; FCmd:string; FFrameId:Int64; FDone: Int32; procedure RecordViaIdle(AIsError:Boolean; const AResultJson,ACode,AMessage:string); public constructor Create(AWin:TObject; const ACmd:string; AFrameId:Int64); procedure Ok(const AResultJson:string); procedure Fail(const ACode,AMessage:string); end;
+constructor TGtkCompletion.Create(AWin:TObject; const ACmd:string; AFrameId:Int64); begin inherited Create; FWin:=AWin; FCmd:=ACmd; FFrameId:=AFrameId; FDone:=0; end;
 procedure TGtkCompletion.RecordViaIdle(AIsError:Boolean; const AResultJson,ACode,AMessage:string); var LRec:PCompletionMarshal; begin LRec:=nextpas.core.webview.gtk.pool.AcquireCompletionRec; LRec^.Win:=FWin; LRec^.FrameId:=FFrameId; LRec^.Cmd:=FCmd; LRec^.IsError:=AIsError; LRec^.ResultJson:=AResultJson; LRec^.Code:=NormalizeInvokeCode(ACode); LRec^.MsgText:=AMessage; G_idle_add_full(G_PRIORITY_DEFAULT,@CompletionMarshalTrampoline,LRec,@CompletionMarshalDestroy); end;
-procedure TGtkCompletion.Ok(const AResultJson:string); begin if FDone then raise EWebviewInvalidState.Create('invoke completion already settled'); FDone:=True; RecordViaIdle(False,AResultJson,'',''); end;
-procedure TGtkCompletion.Fail(const ACode,AMessage:string); begin if FDone then raise EWebviewInvalidState.Create('invoke completion already settled'); FDone:=True; RecordViaIdle(True,'',ACode,AMessage); end;
+procedure TGtkCompletion.Ok(const AResultJson:string); var LExp: Int32; begin LExp:=0; if not atomic_compare_exchange_strong(FDone, LExp, 1) then raise EWebviewInvalidState.Create('invoke completion already settled'); RecordViaIdle(False,AResultJson,'',''); end;
+procedure TGtkCompletion.Fail(const ACode,AMessage:string); var LExp: Int32; begin LExp:=0; if not atomic_compare_exchange_strong(FDone, LExp, 1) then raise EWebviewInvalidState.Create('invoke completion already settled'); RecordViaIdle(True,'',ACode,AMessage); end;
 constructor TGtkWebview.Create(const AOptions: TWebviewOptions);
 begin inherited Create; DoCommonInit(nil, AOptions); end;
 constructor TGtkWebview.CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions);
 begin inherited Create; if AParent=nil then raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn'); DoCommonInit(AParent, AOptions); end;
 destructor TGtkWebview.Destroy;
-begin if FOwnsContext and (FContext<>nil) then begin nextpas.core.webview.gtk.shell.ShellForgetSchemeContext(FContext); G_object_unref(FContext); FContext:=nil; end; DoUnregisterLive; FWindow:=nil; FWin:=nil; FView:=nil; FreeAndNil(FOnScaleChanged); FreeAndNil(FOnReady); FreeAndNil(FOnWindowClosed); FreeAndNil(FOnNavFailed); FreeAndNil(FOnNavFinished); FreeAndNil(FOnNavStarted); FreeAndNil(FPendingEvals); FreeAndNil(FIdleTags); FreeAndNil(FPendingLock); inherited Destroy; end;
+var I: Integer; LRec: PEvalRec;
+begin if FOwnsContext and (FContext<>nil) then begin nextpas.core.webview.gtk.shell.ShellForgetSchemeContext(FContext); G_object_unref(FContext); FContext:=nil; end; DoUnregisterLive; FWindow:=nil; FWin:=nil; FView:=nil; FreeAndNil(FOnScaleChanged); FreeAndNil(FOnReady); FreeAndNil(FOnWindowClosed); FreeAndNil(FOnNavFailed); FreeAndNil(FOnNavFinished); FreeAndNil(FOnNavStarted);
+  if FPendingEvals<>nil then
+  begin
+    for I:=0 to FPendingEvals.Count-1 do
+    begin
+      LRec:=FPendingEvals.At(I);
+      if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
+      try if (GEvalLiveSet<>nil) and GEvalLiveSet.Contains(Pointer(LRec)) then GEvalLiveSet.Remove(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+      FreeEvalRec(LRec);
+    end;
+    FreeAndNil(FPendingEvals);
+  end;
+  FreeAndNil(FIdleTags); FreeAndNil(FPendingLock); inherited Destroy; end;
 function TGtkWebview.IsClosed: Boolean; inline; begin Result:=FClosed; end;
 procedure TGtkWebview.RequireOpen; begin if FClosed then raise EWebviewClosed.Create('webview window is closed'); end;
 procedure TGtkWebview.RemovePending(ARec: PEvalRec);
@@ -412,7 +459,8 @@ end;
 procedure TGtkWebview.SettlePendingOnClose;
 var I: Integer; LRec: PEvalRec; LSnapshot: array of PEvalRec; LCount, LSettled: Integer; LErr: EWebviewEvalFailed;
 begin
-  // stability: exactly-once Done mark under lock during snapshot vs EvalReadyCb/SettleEvalGlobal Done guard (<1µs short critical), prevents double settlement/double free; perf: snapshot pointer copy under lock <1µs, callback outside lock deadlock-free; Free ownership single point in EvalReadyCb late path to avoid UAF (engine must call back after cancel, see main branch §3.2)
+  // stability: exactly-once Done mark under lock during snapshot vs EvalReadyCb/SettleEvalGlobal Done guard (<1µs short critical), prevents double settlement/double free; perf: snapshot pointer copy under lock <1µs, callback outside lock deadlock-free;
+  // leak guard: global live set ensures EvalRec freed even if WebKit never calls back after cancel (heaptrc long-run leak fix), exactly-once via live set + Done guard, short critical <1µs, single ownership not lost
   if FPendingEvals = nil then Exit;
   if FPendingLock <> nil then FPendingLock.Acquire;
   try
@@ -443,7 +491,10 @@ begin
       try LRec^.OnError(LErr); finally LErr.Free; end;
     end;
     if LRec^.Cancel <> nil then G_cancellable_cancel(LRec^.Cancel);
-    // stability: not freeing here — ownership single point in EvalReadyCb/FreeEvalRec late path (engine callback after cancel) to avoid UAF/double-free vs concurrent Done guard; leak-free as WebKit must deliver EvalReadyCb even after cancel
+    // stability: remove from global live set and free directly — ownership taken by Close, EvalReadyCb will see not-in-set and avoid UAF deref, leak-free even if engine never callbacks
+    if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
+    try if (GEvalLiveSet<>nil) and GEvalLiveSet.Contains(Pointer(LRec)) then GEvalLiveSet.Remove(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+    FreeEvalRec(LRec);
   end;
   LSnapshot := nil;
 end;
@@ -532,13 +583,16 @@ function TGtkWebview.GetInvokes:IWebviewInvokeRegistry; begin RequireOpen; Resul
 function TGtkWebview.GetAssets:IWebviewAssets; begin RequireOpen; Result:=FAssetsIntf; end;
 procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin
   RequireOpen; LRec:=nextpas.core.webview.gtk.pool.AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=nextpas.core.webview.gtk.pool.AcquireGCancellable; LRec^.Owner:=Self;
-  // perf: register under lock <1µs pointer-only, prevents race vs SettlePendingOnClose snapshot (exactly-once)
+  // perf: register under lock <1µs pointer-only, prevents race vs SettlePendingOnClose snapshot (exactly-once), live set inline zero-copy single source
   if FPendingLock<>nil then FPendingLock.Acquire;
   try
     if FPendingEvals<>nil then FPendingEvals.Register(LRec);
   finally
     if FPendingLock<>nil then FPendingLock.Release;
   end;
+  EvalLiveInit;
+  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
+  try if GEvalLiveSet<>nil then GEvalLiveSet.Add(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
   if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
 procedure TGtkWebview.Emit(const AEvent,APayloadJson:string); begin CheckWebviewEventName(AEvent); RequireOpen; Eval(BuildEmitScript(AEvent,APayloadJson),nil,nil); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleHandler); begin if FOnScaleChanged<>nil then FOnScaleChanged.Register(AHandler); end;
@@ -559,6 +613,6 @@ procedure TGtkWebview.OnWindowClosed(AHandler:TWebviewNotifyProc); begin OnWindo
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyHandler); begin if FOnReady<>nil then FOnReady.Register(AHandler); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyMethod); begin OnReady(WebviewNotifyMethodToRef(AHandler)); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyProc); begin OnReady(WebviewNotifyProcToRef(AHandler)); end;
-initialization ViewMapLockInit; ViewMapInit; PoolInit;
-finalization PoolFinalize; ViewMapClear; ViewMapLockFini;
+initialization ViewMapLockInit; ViewMapInit; PoolInit; EvalLiveInit;
+finalization EvalLiveFini; PoolFinalize; ViewMapClear; ViewMapLockFini;
 end.

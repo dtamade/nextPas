@@ -92,6 +92,8 @@ generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACoun
 generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: array of T; ACount, ANewCap: Integer); inline;
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
+{ 环形生长拷贝单源：按需 SetLength(LCap)+VecRingCopy 两段式线性化 inline 单源，供 dispatcher 突发预分配/乐观重试复用，复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配放大尾延迟，0→4→2× 倍增摊销 O(1)/push，inline 零额外调用，managed 保 refcnt/blittable 单 Move 零拷贝 }
+generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T; ANewCap: Integer); inline;
 
 { L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：原 webview.live 薄别名已物理删除，现供 window.live/webview 家族直用本单源，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现 }
 type
@@ -889,6 +891,16 @@ begin
         Move(ASrc[0], ADst[LTail], SizeUInt(ACount - LTail) * SizeUInt(SizeOf(T)));
     end;
   end;
+end;
+
+{ 环形生长分配+拷贝单源：按需 SetLength 零化+VecRingCopy 两段式线性化 inline 单源，复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配不放大尾延迟，尾零 spare 经复用逐步兑现，managed 保 refcnt/blittable 单 Move 零拷贝，stale 重试零重复拷贝（复用 LNew 缓冲判定 Length)，bytes.ops 唯一权威；dispatcher/Reserve 单源复用零拷贝零额外调用 }
+generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T; ANewCap: Integer); inline;
+begin
+  // perf: inline single source — Length<>Cap 时 SetLength 零化单次分配 O(Cap)，复用时跳过零化避免 0→4→2× 尾延迟放大，突发并发零重复分配；随后 VecRingCopy 两段式免模 inline 零拷贝，managed 保 refcnt/blittable 单 Move，单源 bytes.ops 零额外调用
+  if Length(ADst) <> ANewCap then
+    SetLength(ADst, ANewCap);
+  if ACount <= 0 then Exit;
+  specialize VecRingCopy<T>(ASrc, AHead, ACount, ADst);
 end;
 
 { TCompactLiveRegistry — L1 single source for webview/window.live compact Vec registry (webview.live alias physically deleted 2026-09-02), inline thin-forward, zero duplicate }

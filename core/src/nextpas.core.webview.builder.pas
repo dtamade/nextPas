@@ -61,7 +61,7 @@ uses
   nextpas.core.webview.factory;
 
 type
-  TFakeInvokeReg = record
+  TBuilderInvokeReg = record
     Cmd: string;
     Sync: TWebviewInvokeSyncHandler;
     Async: TWebviewInvokeAsyncHandler;
@@ -70,7 +70,7 @@ type
 
   {** 三组 LiveRegistry 单记录聚合：样板归一，流畅高级感；直连 L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝，复用 VecGrow 0→4→2×/Snapshot 单源，Clear 逐槽 Default(T) 释放不丢，跨家族 window.live 同源零重复。 *}
   TBuilderLive = record
-    Invokes: specialize TCompactLiveRegistry<TFakeInvokeReg>;
+    Invokes: specialize TCompactLiveRegistry<TBuilderInvokeReg>;
     Ready: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
     InitScripts: specialize TCompactLiveRegistry<string>;
     procedure Init; inline;
@@ -121,7 +121,7 @@ end;
 procedure TBuilderLive.Init; inline;
 begin
   // perf: 三组 Vec 直连 L1 bytes.ops.TCompactLiveRegistry<T> 单源单点成型，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用、Snapshot VecSnapshot 单源 inline 零拷贝，零 HashSet 额外分配，inline 零额外调用
-  Invokes := specialize TCompactLiveRegistry<TFakeInvokeReg>.Create;
+  Invokes := specialize TCompactLiveRegistry<TBuilderInvokeReg>.Create;
   Ready := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
   InitScripts := specialize TCompactLiveRegistry<string>.Create;
 end;
@@ -245,7 +245,7 @@ end;
 function TBuilderImpl.RegisterInvoke(const ACmd: string;
   AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
 var
-  LReg: TFakeInvokeReg;
+  LReg: TBuilderInvokeReg;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
@@ -262,7 +262,7 @@ end;
 function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
   AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
 var
-  LReg: TFakeInvokeReg;
+  LReg: TBuilderInvokeReg;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
@@ -306,7 +306,7 @@ end;
 function TBuilderImpl.ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
 var
   I: Integer;
-  LReg: TFakeInvokeReg;
+  LReg: TBuilderInvokeReg;
 begin
   // perf: FLive 单记录聚合：At inline O(1) 零拷贝 + invoke 单源 Vec 单写；重复校验单源至 bridge hashmap O(1) WyHash+0.75，零 HashSet 分配，单源语义零掩盖，聚合分发流畅
   // stability: 失败早抛 EWebviewInvalidState（bridge 单源），已注册项由窗口析构统一释放不丢
