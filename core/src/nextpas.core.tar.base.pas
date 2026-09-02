@@ -98,7 +98,7 @@ type
   end;
 
 const
-  {** @desc ustar 单源记录表：16 字段 Off/Len 单点收敛，生成器单点派生，零拷贝单源高级感；散列常量已归一消除，读写经 C_TAR_LAYOUT 单源 inline 访问零错位 *}
+  {** @desc ustar 单源记录表：16 字段 Off/Len 单点收敛，生成器单点派生，零拷贝 inline 访问；散列常量已归一消除，读写经 C_TAR_LAYOUT 单源 inline 访问零错位 *}
   C_TAR_LAYOUT: TTarUstarLayout = (
     Name: (Off: 0; Len: 100);
     Mode: (Off: 100; Len: 8);

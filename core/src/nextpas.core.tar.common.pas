@@ -267,7 +267,7 @@ begin
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.Version.Off, C_TAR_LAYOUT.Version.Len, C_TAR_VERSION_00);
 end;
 
-{ — pax 长度前缀单源计算器：LBase/LDigits/Len 自洽 + UInt64DecimalDigits 单源，避免 TarFormat/TarAppend 双复制约15行；循环体外联遵 design-conventions — }
+{ — pax 长度前缀单源：LBase/LDigits/Len 自洽，复用 UInt64DecimalDigits；消除 TarFormat/TarAppend 双复制，循环体外联 — }
 function TarCalcPaxRecordLen(const AKey, AValue: string): Integer;
 var
   LBase, LDigits, LNeed: Integer;
