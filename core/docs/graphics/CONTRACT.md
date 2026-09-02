@@ -56,7 +56,7 @@ TGradient = record Kind: TGradientKind; Colors: array of TColor32; Stops: array 
 ### 1.2 L2 `nextpas.core.image.base`（含 TBitmap）
 
 ```pascal
-TBitmapFormat = (RGBA, BGRA, Gray8);
+TBitmapFormat = (bfRGBA, bfBGRA, bfGray8);
 TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cacheline）
   Width, Height, Stride: Integer; // Stride = AlignUp(Width*4, 64)
   Format: TBitmapFormat;
@@ -65,7 +65,7 @@ TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cachelin
   function IsEmpty: Boolean; inline;
   procedure Premultiply; procedure Unpremultiply;
 end;
-TImageFormat = (Png, Jpeg, WebP, Bmp, Gif);
+TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif); // ifUnknown 为探测/空输入哨兵，Gif 仅保留枚举位暂无编解码
 TImageInfo = record Width,Height: Integer; Format: TImageFormat; HasAlpha: Boolean; end;
 
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBitmap;
