@@ -12,7 +12,13 @@ unit nextpas.core.window.live;
          Dispatcher marshal 回主线程），Count 为无锁 inline 读，零开销适配
          WindowPumpOnceZero 的 16ns 早退路径；若未来需跨线程直接注册，
          再引入 ILock 也不破坏 Count 的 O(1) 语义（本版先保性能）
-       - sdl 变体附带 WindowID 平行数组，供 FindByID 路由 *}
+       - sdl 变体附带 WindowID 平行数组，供 FindByID 路由
+       - 跨家族评估（webview.live 紧凑 Vec 重复）：与 webview.live 已评估，
+         二者同复用 bytes.ops 单源思想（webview 侧 VecGrowCapacity 0→4→2×
+         inline 零拷贝、VecRemoveSwap O(1) 零拷贝 swap；本单元 n≤7 极小紧凑
+         Vec 保持 Length 计数 1-by-1 零额外容量 bookkeeping， swap 语义同源
+         bytes.ops），无跨家族重复实现；若抽通用辅助/池模块需反哺 L1
+         collections/通用池 owner 并经设计评审，当前不自行外溢（L0-L3 守恒）。 *}
 
 {$I nextpas.core.settings.inc}
 

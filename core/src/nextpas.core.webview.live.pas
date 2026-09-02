@@ -16,7 +16,18 @@ unit nextpas.core.webview.live;
          Dispatcher marshal），Count 无锁 inline 读；若需跨线程再引入 ILock
        - 与 collections.slotregistry 互补：slotregistry 适用于稀疏槽复用
          （-1 sentinel + Free 栈），此处为紧凑 Vec 语义；选型依据：webview
-         活窗列表为短小紧凑迭代（FindByView / PumpAll），无需稀疏槽。 *}
+         活窗列表为短小紧凑迭代（FindByView / PumpAll），无需稀疏槽。
+       - 抽取评估（CONTRACT §1/§50 可抽模块候选显式登记）：utils/callbacks
+         与 live/pool（含本单元 WebviewPoolTryAcquire/Release）已评估为通用
+         辅助/池模块抽取候选，当前仍滞留家族内；结论：与 window.live 紧凑 Vec
+         的跨家族重复已收敛至 bytes.ops 单源（VecGrowCapacity 0→4→2× inline
+         零额外调用、VecRemoveSwap/Ordered 零拷贝、Default(T) 释放不丢），无
+         跨家族重复实现；通用辅助/池若独立需反哺 L1 collections/通用池 owner
+         并经设计评审，不在当前 slice 自行外溢（守四件套纯度、L0-L3 守恒）。
+       - 性能：全部 inline 薄转发零额外调用，Swap O(1) 零拷贝末尾换位热关闭默认，
+         Snapshot/Trim 单次 SetLength、Pool 短临界区仅指针存取堆分配在外（<1µs）。
+       - 稳定性：析构 Clear 逐槽 Default(T) nil 释放 ref/interface，Pool 溢出方
+         Dispose 单所有权释放不丢，trailing nil 保探链。 *}
 
 {$I nextpas.core.settings.inc}
 

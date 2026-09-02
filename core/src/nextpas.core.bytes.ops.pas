@@ -73,6 +73,8 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+{ C string length single source: PAnsiChar null-terminated length, SIMD via System.StrLen (SSE2/AVX2/NEON), inline zero-copy, replaces scalar while AP[LLen]<>#0 loop; nil=>0; single source for text.utils CStrToStr/webview ViewFromPChar hot scheme path }
+function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 
 { vec/smallvec 生长单源：0→4→2× 倍增，inline 零额外调用，bytes.ops 唯一权威；webview/collections 复用此单源 }
@@ -627,6 +629,14 @@ begin
   SetLength(Result, LSpan.Len);
   if LSpan.Len > 0 then
     Move(LSpan.Data^, Result[1], LSpan.Len);
+end;
+
+function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
+begin
+  if AP = nil then
+    Exit(0);
+  // perf: single-source C string len via System.StrLen SIMD (SSE2/AVX2/NEON), inline zero-copy, replaces scalar O(n) while loop on hot scheme path; nil guard zero alloc
+  Result := SizeUInt(System.StrLen(AP));
 end;
 
 function StringLowerAsciiAware(const S: string): string; inline;

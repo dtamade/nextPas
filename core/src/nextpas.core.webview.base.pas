@@ -21,8 +21,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.errors,
-  nextpas.core.text.char;
+  nextpas.core.errors;
 
 const
   { 桥协议版本常量：base 持有一份，bridge 为唯一权威实现（S2 落地时
@@ -81,11 +80,6 @@ type
 
 { 默认选项：字段缺省值唯一权威（CONTRACT §2.2） }
 function DefaultWebviewOptions: TWebviewOptions;
-
-{ scheme token 校验：纯谓词无重依赖，保留在 base 供 validation 复用；
-  规则：非空且全小写 [a-z][a-z0-9+.-]*，空串返回 False（由 CheckWebviewOptions 视为用默认）。
-  单源：复用 L1 text.char 表驱动 IsLower/IsDigit inline 零拷贝，零重复分支；剩余 '+','-','.' 为符号单点。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
@@ -164,28 +158,6 @@ begin
   Result.DataDirectory := '';
   Result.EphemeralSession := False;
   Result.InitScripts := nil;
-end;
-
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
-var
-  I: Integer;
-  B: Byte;
-begin
-  // perf: inline + 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），单源 text.char IsLower/IsDigit，无手写区间漂移
-  Result := False;
-  if AScheme = '' then
-    Exit;
-  if not IsLower(Byte(AScheme[1])) then
-    Exit;
-  for I := 1 to Length(AScheme) do
-  begin
-    B := Byte(AScheme[I]);
-    if IsLower(B) or IsDigit(B) or (B = Byte('+')) or (B = Byte('.')) or (B = Byte('-')) then
-      Continue
-    else
-      Exit;
-  end;
-  Result := True;
 end;
 
 { EWebviewError 族 }

@@ -12,6 +12,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.app.base,
   nextpas.core.app.intf;
 
@@ -270,7 +271,7 @@ end;
 
 function TAppImpl.NewWindowBuilder: IWebviewBuilder;
 begin
-  Result := nextpas.core.webview.factory.TWebviewBuilder.New.Kind(FKind);
+  Result := nextpas.core.webview.builder.TWebviewBuilder.New.Kind(FKind);
 end;
 
 function TAppImpl.NewWindow: IWebviewBuilder;
@@ -360,7 +361,7 @@ end;
 constructor TAppBuilderImpl.Create;
 begin
   inherited Create;
-  FBuilder := nextpas.core.webview.factory.TWebviewBuilder.New;
+  FBuilder := nextpas.core.webview.builder.TWebviewBuilder.New;
   FKind := DefaultAppKind;
 end;
 

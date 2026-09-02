@@ -18,6 +18,7 @@ uses
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.window.base;
 
 type

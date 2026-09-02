@@ -22,6 +22,9 @@ function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function NormalizeWebviewAssetPath(const APath: string): string;
 var
   V: TStringView;
@@ -56,15 +59,11 @@ begin
 end;
 
 function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
-var
-  LLen: SizeUInt;
 begin
-  // perf: inline PAnsiChar→TStringView 零拷贝视图，无 SetString+Move 中间串，供 scheme 热点 AnsiPtrToStr 零分配替代
+  // perf: inline PAnsiChar→TStringView 零拷贝视图，无 SetString+Move 中间串，供 scheme 热点 AnsiPtrToStr 零分配替代；单源复用 bytes.ops.CStrLen SIMD (System.StrLen SSE2/AVX2/NEON) 替代标量 while O(n)，零额外循环，inline 零调用开销
   if AP = nil then
     Exit(TStringView.Empty);
-  LLen := 0;
-  while AP[LLen] <> #0 do Inc(LLen);
-  Result := TStringView.Create(AP, LLen);
+  Result := TStringView.Create(AP, CStrLen(AP));
 end;
 
 end.

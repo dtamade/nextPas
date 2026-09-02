@@ -242,12 +242,11 @@ var
   LPtr: Pointer;
   LLogger: ILogger;
 begin
-  LCount := atomic_fetch_add_64(GWebviewOversizedFrames, UInt64(1)) + 1;
-  { stability: Release 亦可观测背压，Warn 告警防连续小帧/拼接攻击隐式堆积；采样避免洪泛日志.
-    atomic FetchAdd 保证跨线程不丢数不撕裂，Logger 指针经 atomic_load + AddRef 保证并发安全 }
+  LCount := atomic_fetch_add_64(GWebviewOversizedFrames, UInt64(1), mo_relaxed) + 1;
+  { stability: backpressure sampling 5 + mod64, FetchAdd mo_relaxed, logger acquire/release pair }
   if (LCount <= 5) or ((LCount mod 64) = 0) then
   begin
-    LPtr := atomic_load(GWebviewBridgeLoggerRaw);
+    LPtr := atomic_load(GWebviewBridgeLoggerRaw, mo_acquire);
     if LPtr <> nil then
     begin
       ILogger(LPtr)._AddRef;
@@ -268,7 +267,7 @@ begin
   LNewPtr := Pointer(ALogger);
   if LNewPtr <> nil then
     ILogger(LNewPtr)._AddRef;
-  LOldPtr := atomic_exchange(GWebviewBridgeLoggerRaw, LNewPtr);
+  LOldPtr := atomic_exchange(GWebviewBridgeLoggerRaw, LNewPtr, mo_acq_rel);
   if LOldPtr <> nil then
     ILogger(LOldPtr)._Release;
 end;
@@ -324,9 +323,7 @@ function BridgeNormalizePayload(const APayload: TJsonValue): string;
 var
   LView: TStringView;
 begin
-  { perf: outline non-inline 避免 I-Cache 膨胀（design-conventions §2 真实循环体禁 inline），
-    热路径 View+Document 零分配：RawSlice 零拷贝借用输入切片单次 ToString Move，无二次 builder；
-    复用 bytes.ops 单源思想，缺省/显式 null 零分配快路径；仅含格式化空白时回退 JsonStringify 单源兜底 }
+  { perf: RawSlice zero-copy single Move, JsonStringify compact fallback }
   if APayload.IsNull then
     Exit('null');
   LView := APayload.RawSlice;
@@ -334,8 +331,7 @@ begin
   begin
     if not BridgeHasWhitespaceOutsideString(LView) then
       Exit(LView.ToString);
-    Result := JsonStringify(APayload);
-    Exit;
+    Exit(JsonStringify(APayload));
   end;
   Result := JsonStringify(APayload);
 end;
@@ -348,68 +344,40 @@ var
   I: SizeUInt;
   LCh: AnsiChar;
 begin
-  { perf: SIMD 文本扫描单源（nextpas.core.simd.vec VecWidth 16/32 自适应，VecCmpLtU/VecCmpEq 批量探测），
-    大帧下按 VecWidth 跳过大段无空白/引号/反斜杠的洁净块，平均 O(n/VecWidth) 向量比较 + 仅脏块单字节回退，
-    复用 text.view/escape 同源 Vec 能力，零额外分配，热点 bench_bridge 零拷贝证据 }
+  { perf: SIMD VecWidth skip clean blocks, bytes.ops single source }
   Result := False;
-  if AView.Len = 0 then
-    Exit;
-  LInStr := False;
-  LEsc := False;
-  LPos := 0;
+  if AView.Len = 0 then Exit;
+  LInStr := False; LEsc := False; LPos := 0;
   while LPos + SizeUInt(VecWidth) <= AView.Len do
   begin
     if LEsc then
     begin
-      { 前一块末尾逃逸跨块：首字节被转义，标量消耗一字节后继续向量块 }
-      LCh := AView.Data[LPos];
-      LEsc := False;
-      if LCh = '"' then
-        { escaped quote not toggle }
-      else if (not LInStr) and (Byte(LCh) <= 32) then
-        Exit(True);
-      Inc(LPos);
-      if LPos + SizeUInt(VecWidth) > AView.Len then
-        Break;
+      LCh := AView.Data[LPos]; LEsc := False;
+      if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
+      Inc(LPos); if LPos + SizeUInt(VecWidth) > AView.Len then Break;
     end;
     LMaskWS := VecCmpLtU(PByte(AView.Data + LPos), 33);
     LMaskQuote := VecCmpEq(PByte(AView.Data + LPos), Byte('"'));
     LMaskBack := VecCmpEq(PByte(AView.Data + LPos), Byte('\'));
     if (LMaskWS = TVecMask(0)) and (LMaskQuote = TVecMask(0)) and (LMaskBack = TVecMask(0)) then
-    begin
-      { 洁净块：无空白、引号、反斜杠，且不在转义中，串状态不变，可整块跳过 }
-      Inc(LPos, SizeUInt(VecWidth));
-      Continue;
-    end;
+    begin Inc(LPos, SizeUInt(VecWidth)); Continue; end;
     for I := 0 to SizeUInt(VecWidth) - 1 do
     begin
       LCh := AView.Data[LPos + I];
-      if LEsc then
-        LEsc := False
-      else if LCh = '\' then
-      begin
-        if LInStr then LEsc := True;
-      end
-      else if LCh = '"' then
-        LInStr := not LInStr
-      else if (not LInStr) and (Byte(LCh) <= 32) then
-        Exit(True);
+      if LEsc then LEsc := False
+      else if LCh = '\' then begin if LInStr then LEsc := True; end
+      else if LCh = '"' then LInStr := not LInStr
+      else if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
     end;
     Inc(LPos, SizeUInt(VecWidth));
   end;
   while LPos < AView.Len do
   begin
     LCh := AView.Data[LPos];
-    if LEsc then
-      LEsc := False
-    else if LCh = '\' then
-    begin
-      if LInStr then LEsc := True;
-    end
-    else if LCh = '"' then
-      LInStr := not LInStr
-    else if (not LInStr) and (Byte(LCh) <= 32) then
-      Exit(True);
+    if LEsc then LEsc := False
+    else if LCh = '\' then begin if LInStr then LEsc := True; end
+    else if LCh = '"' then LInStr := not LInStr
+    else if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
     Inc(LPos);
   end;
 end;
@@ -480,41 +448,24 @@ end;
 
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
-  LB: TStringBuilder;
-  LCode: string;
-  LInner: TStringBuilder;
-  LInnerStr: string;
+  LB, LInner: TStringBuilder;
+  LCode, LInnerStr: string;
   W: TJsonWriter;
 begin
-  { 双层转义复用 json.writer/text.escape 单源：内层 {"code":...,"message":...} 经 TJsonWriter 单源转义，外层经 W.Str 二次转义为 JS 串字面量；零手写 hex/双层分支，转义语义与 BuildResolveScript/BuildEmitScript 同源 }
+  { perf: inner TJsonWriter single source, outer W.Str second escape }
   LCode := NormalizeInvokeCode(ACode);
-  { perf: 内层 worst 6x（\u00xx），bytes.ops 单源预留单次 Init，零二次扩容与 Move；外层基于已求 inner 长度 *2 预留（" / \ 二次 2x，上界覆盖 \u00xx 7 字节总展开），零二次 Grow }
-  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 6 + SizeUInt(Length(AMessage)) * 6));
+  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode))*6 + SizeUInt(Length(AMessage))*6));
   try
-    W.Init(LInner);
-    W.BeginObject;
-    W.Key('code');
-    W.Str(LCode);
-    W.Key('message');
-    W.Str(AMessage);
-    W.EndObject;
+    W.Init(LInner); W.BeginObject; W.Key('code'); W.Str(LCode);
+    W.Key('message'); W.Str(AMessage); W.EndObject;
     LInnerStr := LInner.ToString;
-  finally
-    LInner.Done;
-  end;
-  { stability: 单 outer builder，try/finally Done 不丢，与 BuildResolveScript 同纪律 }
-  LB.Init(SizeUInt(15 + 20 + 1 + SizeUInt(Length(LInnerStr)) * 2 + 4));
+  finally LInner.Done; end;
+  LB.Init(SizeUInt(15+20+1+SizeUInt(Length(LInnerStr))*2+4));
   try
-    LB.AppendBytes('__npw.__reject(', 15);
-    LB.AppendInt(AId);
-    LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LInnerStr);
-    LB.AppendChar(')');
+    LB.AppendBytes('__npw.__reject(',15); LB.AppendInt(AId); LB.AppendChar(',');
+    W.Init(LB); W.Str(LInnerStr); LB.AppendChar(')');
     Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  finally LB.Done; end;
 end;
 
 function BuildEmitScript(const AEvent, APayloadJson: string): string;
@@ -726,37 +677,30 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  // perf: zero-copy view normalize — TStringView 零拷贝直通，无 NormalizeWebviewAssetPath 中间串分配，单次 ToString 供 provider
+  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc)
   LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
   if LNormView.Len = 0 then
     Exit;
-  LPath := LNormView.ToString;
   LView := LNormView;
-  // 单次惰性排序：DistinctCount/LensAt 原有每次 Ensure 已合并为单次 Public Ensure，后续 Unchecked 零重复 Ensure（inline 单读，零额外调用），最坏 O(n log n) IntroSort 单源
   FIndex.EnsureDistinctSortedPublic;
-  { 单挂载根路径快路径：95% demo 单 provider 零扫描（与 MountCount inline 同源） }
   if (FIndex.Count = 1) and (FIndex.DistinctCountUnchecked = 1) and (FIndex.DistinctLensAtUnchecked(0) = 0) then
   begin
     if FIndex.TryGetByView(TStringView.Empty, LProvider) then
-      Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+    begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   end;
-  { 哈希最长前缀探测：distinctLens 降序枚举，TStringView 零拷贝切片 +
-    WyHash 视图哈希 O(1) 探测，单 distinct 零 Copy/GetsMem；多挂载仍
-    O(distinct) 哈希优于全量 n*Pos 扫描，零堆分配证据见 bench_bridge。 }
   for I := 0 to FIndex.DistinctCountUnchecked - 1 do
   begin
     LLen := FIndex.DistinctLensAtUnchecked(I);
-    if SizeUInt(LLen) > LView.Len then
-      Continue;
+    if SizeUInt(LLen) > LView.Len then Continue;
     if LLen = 0 then
     begin
       if FIndex.TryGetByView(TStringView.Empty, LProvider) then
-        Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+      begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
       Continue;
     end;
     LSlice := TStringView.Create(LView.Data, SizeUInt(LLen));
     if FIndex.TryGetByView(LSlice, LProvider) then
-      Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+    begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   end;
   Result := False;
 end;

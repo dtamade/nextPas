@@ -19,6 +19,7 @@ uses
   nextpas.core.webview.validation,
   nextpas.core.webview.mime,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.webview.vfs,
   nextpas.core.window.intf;
 
@@ -83,9 +84,9 @@ type
   IWebviewAssetProvider    = nextpas.core.webview.intf.IWebviewAssetProvider;
   IWebviewAssets           = nextpas.core.webview.intf.IWebviewAssets;
   IWebviewWindow           = nextpas.core.webview.intf.IWebviewWindow;
-  IWebviewBuilder          = nextpas.core.webview.factory.IWebviewBuilder;
+  IWebviewBuilder          = nextpas.core.webview.builder.IWebviewBuilder;
 
-  TWebviewBuilder = nextpas.core.webview.factory.TWebviewBuilder;
+  TWebviewBuilder = nextpas.core.webview.builder.TWebviewBuilder;
 
 { ---- 函数 inline 转发 ---- }
 
