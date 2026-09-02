@@ -40,7 +40,7 @@ end;
 
 generic procedure WebviewLiveRemove<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 begin
-  // perf: single source bytes.ops VecRemoveOrdered inline O(n) 保序，trailing Default(T) 释放 ref 不丢；order-sensitive 保留，热关闭路径请用 Swap
+  // perf: single source bytes.ops VecRemoveOrdered O(n) 保序搬移 single source; not inline per design-conventions §2 红线二 (real loop bans inline, avoids I-Cache bloat), trailing Default(T) 释放 ref 不丢；order-sensitive 保留，热关闭路径请用 Swap
   specialize VecRemoveOrdered<T>(AList, ACount, AInst);
 end;
 

@@ -99,7 +99,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 
 ### 1.6 Vec 单源与通用紧凑注册表（L1 已反哺）
 
-- **Vec 生长/删除/快照单源**：`VecGrowCapacity(0→4→2×)` / `VecGrow` / `VecRemoveSwap(O1零拷贝swap)` / `VecRemoveOrdered` / `VecSnapshot` / `VecTrim` / `VecCopy` / `VecRingCopy` 均为 `bytes.ops` 唯一权威，inline 零额外调用；`webview.live`/`window.live`/`collections` 复用此单源，零重复实现。
+- **Vec 生长/删除/快照单源**：`VecGrowCapacity(0→4→2×)` / `VecGrow` / `VecRemoveSwap(O1零拷贝swap)` / `VecRemoveOrdered` / `VecSnapshot` / `VecTrim` / `VecCopy` / `VecRingCopy` 均为 `bytes.ops` 唯一权威，`VecGrow/Capacity/Snapshot/Trim/Copy/RingCopy` inline 零额外调用、`VecRemoveSwap/Ordered` 含扫描/搬移循环按 design-conventions §2 红线二去 inline 避 I-Cache 膨胀（Swap O(1) 零拷贝末尾换位、Ordered O(n) 保序搬移、尾槽 `Default(T)` 释放不丢，热关闭默认 Swap 避 O(n²)）；`webview.live`/`window.live`/`collections` 复用此单源，零重复实现。
 - **通用紧凑 Vec 注册表**：`TCompactLiveRegistry<T>`（`bytes.ops`）为 L1 通用紧凑注册表，已反哺落地（CONTRACT §1.2/§50 可抽候选）：`webview.live.TWebviewLiveRegistry<T>` 为其薄别名 inline 零额外调用，`window.live` 同构已收敛至同源 Swap 语义；`Register` via `VecGrow` 0→4→2×，`Unregister` via `VecRemoveSwap` O(1) 零拷贝，`Snapshot` via `VecSnapshot` 单 SetLength + managed/blittable 分支零拷贝，`Clear` 逐槽 `Default(T)` 释放不丢，`Trim` 单源 `VecTrim`。
 
 ---

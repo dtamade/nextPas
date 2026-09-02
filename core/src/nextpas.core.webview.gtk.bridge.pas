@@ -5,7 +5,7 @@ unit nextpas.core.webview.gtk.bridge;
        单源：
        - 协议编解码 → nextpas.core.webview.bridge 唯一权威（TryDecodeFrame/BuildResolveScript 等，inline 零拷贝）
        - 资产路径归一 → nextpas.core.webview.utils NormalizeWebviewAssetView / ViewFromPChar 单源零拷贝 view 哈希 + 单次 SetString+Move
-       - MIME → nextpas.core.webview.mime GuessWebviewMime inline 薄转发至 L2 mime.types O(1) 哈希
+       - MIME → nextpas.core.mime.types MimeTypeFromPath L2 单一事实源 O(1) 哈希（bytes.ops HashFNV1aLower 单源，零转发）
        - 视图索引 → nextpas.core.webview.gtk.viewmap THashMap<Pointer,Pointer> 直接复用 L1 单源（HashOfPointer→HashMix32，VecGrowCapacity 单源）
        - 资产 Holder 池化 → nextpas.core.webview.gtk.pool Acquire/ReleaseAssetHolder 单源（bytes.ops VecGrow + sync.pool 单源，热点小文件零双分配）
        性能：热点 SchemeRequest 零拷贝 COW 共享 + Holder Slab 复用（单 Holder+Stream 零 GBytes 中间对象，G_memory_input_stream_new_from_data 零拷贝切片直通），Threshold 已 retire 统一单路径，inline 零堆抖动，short-circuited view 零中间串
@@ -49,7 +49,7 @@ uses
   SysUtils,
   nextpas.core.sync.mutex,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.mime,
+  nextpas.core.mime.types,
   nextpas.core.webview.utils,
   nextpas.core.webview.gtk.ffi,
   nextpas.core.webview.gtk.viewmap,
@@ -164,7 +164,7 @@ begin
       end;
     end;
     if LMime = '' then
-      LMime := GuessWebviewMime(LPath);
+      LMime := MimeTypeFromPath(LPath);
     LStream := nil;
     if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then
     begin

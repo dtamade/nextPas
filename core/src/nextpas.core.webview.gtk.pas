@@ -152,7 +152,7 @@ function GtkLiveWindowCount: Integer;
 implementation
 uses
   nextpas.core.window.gtk3,
-  nextpas.core.webview.mime,
+  nextpas.core.mime.types,
   nextpas.core.webview.utils,
   nextpas.core.webview.gtk.viewmap,
   nextpas.core.webview.gtk.pool,
@@ -256,7 +256,7 @@ begin if not Assigned(ARequest) then Exit; try
   // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView, ToString 延迟至命中后零 404 分配 — bytes.ops.CStrLen SIMD 单源
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin GtkTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin GtkTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  LPath:=LPathView.ToString; GtkTrace('scheme hit '+LPath+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=GuessWebviewMime(LPath);
+  LPath:=LPathView.ToString; GtkTrace('scheme hit '+LPath+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPath(LPath);
   LStream:=nil; LBytesObj:=nil;
   if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;

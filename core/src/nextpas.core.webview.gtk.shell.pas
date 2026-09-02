@@ -245,17 +245,10 @@ end;
 
 function ShellWindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
-  Result.MinWidth := AOptions.MinWidth;
-  Result.MinHeight := AOptions.MinHeight;
-  Result.MaxWidth := AOptions.MaxWidth;
-  Result.MaxHeight := AOptions.MaxHeight;
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
-  Result.ParentHandle := nil;
+  // perf: thin forward to window.base single source WindowOptionsCreate inline zero-copy, eliminates 8-field duplication with fake impl
+  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height,
+    AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight,
+    AOptions.Resizable, AOptions.Maximized);
 end;
 
 procedure ShellInitLocks; inline;

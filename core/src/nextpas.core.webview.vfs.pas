@@ -40,7 +40,7 @@ uses
   nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.utils,
-  nextpas.core.webview.mime,
+  nextpas.core.mime.types,
   nextpas.core.vfs.util;
 
 type
@@ -74,13 +74,14 @@ end;
 
 function TVfsAssetProvider.GuessMime(const APath: string): string; inline;
 begin
-  Result := GuessWebviewMime(APath);
+  { perf: inline 直通 L2 mime.types MimeTypeFromPath O(1) 哈希，无 ToString 物化，热点零分配；复用 bytes.ops HashFNV1aLower 单源 }
+  Result := MimeTypeFromPath(APath);
 end;
 
 function TVfsAssetProvider.GuessMimeView(const AView: TStringView): string; inline;
 begin
-  { perf: inline 零拷贝视图直通 L2 mime.types 128槽 O(1) 哈希，无 ToString 堆分配，热点零分配；复用 webview.mime 单源 GuessWebviewMimeView }
-  Result := GuessWebviewMimeView(AView);
+  { perf: inline 零拷贝视图直通 L2 mime.types MimeTypeFromPathView 128槽 O(1) 哈希，无 ToString 堆分配，热点零分配；复用 bytes.ops 单源 }
+  Result := MimeTypeFromPathView(AView);
 end;
 
 { perf: inline 轻量 Exists 二分先探（O(log n) 零重度 Open）命中再 VfsReadAllBytes 单次重度；

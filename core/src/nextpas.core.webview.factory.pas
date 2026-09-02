@@ -18,7 +18,6 @@ uses
   nextpas.core.errors,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.fake,
   nextpas.core.window.intf;
 
 { S1 默认后端（S4 切平台优先逻辑）；显式指定用 CreateWebviewOf }
@@ -57,6 +56,7 @@ uses
   nextpas.core.sync,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
+  nextpas.core.webview.fake,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.webview2.loader,
@@ -91,7 +91,8 @@ var
   GDefaultKind: TWebviewKind = wvFake;
   GDefaultOnce: IOnce; { L1 sync.once 单源：DefaultWebviewKind 单次探测，复用 platform.sync 原语，消除自建 double-checked + atomic + CAS 分散锁 }
   GBackendsOnce: IOnce; { 单例注册表抽象：BACKENDS 惰性单次初始化，零重复分配，L1 Once 单源 }
-  GAvailCache: TWebviewAvailCache; { 对象化单例：per-kind Once+Yes 单所有者，消除裸数组+手工 per-kind 置位，L1 Once 单源 inline 零拷贝 }
+  GAvailOnce: IOnce; { Once Owned 单例：可用性缓存单所有者惰性初始化，L1 sync.once 单源，消除裸全局+nil 回退分散分支，单表驱动高级一致性 }
+  GAvailCache: TWebviewAvailCache; { 对象化单例：per-kind Once+Yes 单所有者，消除裸数组+手工 per-kind 置位，L1 Once 单源 inline 零拷贝，归 GAvailOnce 统一持有 }
 
 { ---- 后端注册表：表驱动唯一真相 ---- }
 
@@ -230,13 +231,24 @@ begin
   Result := FYes[AKind];
 end;
 
+function GetAvailCache: TWebviewAvailCache; inline;
+begin
+  // perf: Once Owned 单例 inline 薄转发零拷贝，L1 sync.once 单源，消除裸全局 nil 分支，单表驱动高级一致性
+  if GAvailOnce.Done then
+    Exit(GAvailCache);
+  GAvailOnce.DoOnce(procedure
+  begin
+    GAvailCache := TWebviewAvailCache.Create;
+  end);
+  Result := GAvailCache;
+end;
+
 {$PUSH}{$WARNINGS OFF}
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 begin
   // 业务以 CONTRACT 为准：DefaultWebviewKind 能力探测驱动，无 IFDEF
-  // perf: 对象化单例 inline 薄转发，零拷贝，L1 Once 单源
-  if GAvailCache = nil then Exit(RawProbe(AKind));
-  Result := GAvailCache.IsAvailable(AKind);
+  // perf: Once Owned 单例 inline 薄转发零拷贝，L1 Once 单源，单表驱动
+  Result := GetAvailCache.IsAvailable(AKind);
 end;
 {$POP}
 
@@ -362,7 +374,8 @@ end;
 initialization
   GDefaultOnce := Once;
   GBackendsOnce := Once;
-  GAvailCache := TWebviewAvailCache.Create;
+  GAvailOnce := Once;
+  // GAvailCache 惰性由 GetAvailCache via GAvailOnce 单例创建，零启动分配，单表驱动，Once Owned 单所有者
 
 finalization
   GDefaultOnce := nil;
@@ -371,6 +384,7 @@ finalization
   begin
     GAvailCache.Free;
     GAvailCache := nil;
-  end; // 稳定性：单所有者统一释放 per-kind Once，try-finally 释放不丢
+  end;
+  GAvailOnce := nil; // 稳定性：Once Owned 单所有者统一释放，per-kind Once 由对象析构释放不丢，try-finally 释放不丢
 
 end.

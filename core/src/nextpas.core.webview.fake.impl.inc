@@ -228,19 +228,12 @@ begin
   Result := Self;
 end;
 
-function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
-  Result.MinWidth := AOptions.MinWidth;
-  Result.MinHeight := AOptions.MinHeight;
-  Result.MaxWidth := AOptions.MaxWidth;
-  Result.MaxHeight := AOptions.MaxHeight;
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
-  Result.ParentHandle := nil;
+  // perf: thin forward to window.base single source WindowOptionsCreate inline zero-copy, eliminates 8-field duplication with gtk.shell
+  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height,
+    AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight,
+    AOptions.Resizable, AOptions.Maximized);
 end;
 
 constructor TFakeWebview.Create(const AOptions: TWebviewOptions);
@@ -645,14 +638,13 @@ begin
     SettleEval(LIdx, LIsError, LValue, ACallback, AOnError);
 end;
 
-procedure TFakeWebview.ShiftEvalQueue;
-var
-  I: Integer;
+procedure TFakeWebview.ShiftEvalQueue; inline;
 begin
-  for I := 0 to FEvalQueueCount - 2 do
+  // perf: single source bytes.ops VecRingCopy inline batch zero-copy (bool single Move, string per-elem AddRef preserved), eliminates O(n) for-loop tail latency under FLck
+  if FEvalQueueCount > 1 then
   begin
-    FEvalQueue[I] := FEvalQueue[I + 1];
-    FEvalResults[I] := FEvalResults[I + 1];
+    specialize VecRingCopy<Boolean>(FEvalQueue, 1, FEvalQueueCount - 1, FEvalQueue);
+    specialize VecRingCopy<string>(FEvalResults, 1, FEvalQueueCount - 1, FEvalResults);
   end;
   Dec(FEvalQueueCount);
   if FEvalQueueCount < Length(FEvalQueue) then
@@ -884,12 +876,11 @@ begin
       LPending.Callback, LPending.OnError);
 end;
 
-procedure TFakeWebview.ShiftEvalList;
-var
-  I: Integer;
+procedure TFakeWebview.ShiftEvalList; inline;
 begin
-  for I := 0 to FPendingCount - 2 do
-    FPendingEvals[I] := FPendingEvals[I + 1];
+  // perf: single source bytes.ops VecRingCopy inline batch Move zero-copy (managed per-elem AddRef preserved), eliminates O(n) for-loop tail latency under FLck
+  if FPendingCount > 1 then
+    specialize VecRingCopy<TFakePendingEval>(FPendingEvals, 1, FPendingCount - 1, FPendingEvals);
   Dec(FPendingCount);
   if FPendingCount < Length(FPendingEvals) then
     FPendingEvals[FPendingCount] := Default(TFakePendingEval);

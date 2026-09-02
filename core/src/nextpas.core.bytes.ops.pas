@@ -85,9 +85,9 @@ generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
 generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
 { 零拷贝截断：按 ACount 精确 SetLength，inline 单源，消除手写 SetLength 重复 }
 generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
-{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap 含扫描循环按 design-conventions §2 去 inline 避 I-Cache 膨胀、ordered 仍 inline 单源；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
+{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap/ordered 均含扫描循环按 design-conventions §2 红线二去 inline 避 I-Cache 膨胀；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
 generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
-generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 { 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
 generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
@@ -724,11 +724,11 @@ begin
     end;
 end;
 
-generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 var
   I, J: Integer;
 begin
-  // stability: order-preserving shift O(n) inline single source; trailing Default(T) nils ref, per-elem assign keeps managed refcnt correct, kept for order-sensitive callers only (hot close uses Swap)
+  // stability: order-preserving shift O(n) single source; not inline per design-conventions §2 红线二 (real loop body bans inline, avoids I-Cache bloat); trailing Default(T) nils ref, per-elem assign keeps managed refcnt correct, kept for order-sensitive callers only (hot close uses Swap)
   for I := 0 to ACount - 1 do
     if AArr[I] = AValue then
     begin
