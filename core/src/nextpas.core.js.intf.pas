@@ -1,8 +1,10 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~125行 <500 阈值内 (wc -l ~125, 纯族 host/value 已收敛至 pure.host/pure.value 单源 owner, 见 CONTRACT §1/§6), 奢华薄 intf 零可变全局, AsJson inline 薄转发至 pure.value 单源 owner (json.writer/bytes.ops+text.view+text.escape+text.number+text.builder 单缝 via bytes.ops 几何 via pure.value), 零 intf→实现重逻辑, 状态下沉 lifecycle。 *}
+{**
+ * @desc JS 抽象接口与值语义（后端无关，不透明句柄）。
+ *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 via pure.value owner (json.writer/bytes.ops single source), 零重逻辑反向依赖
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 narrow: json.types only
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
@@ -13,8 +15,9 @@ type
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
   public
     function Kind: TJsValueKind; inline;
-    function IsValid: Boolean; inline; // bulk: THREAD-AFFINE zero-barrier (FValid only), hot bulk GetProp/HasProp zero atomic; post-Close may still True → dangling, strong cross-thread/post-Close must explicitly use IsAlive/acquire (JsPureContextIsClosed/JsPureValueIsValid via pure.base→lifecycle acquire single source)
-    function IsAlive: Boolean; inline; // strong: FValid + acquire GPureClosed via pure.base→lifecycle single source (atomic acquire, 64B padded), cross-thread/post-Close safe; bulk hot path keep IsValid for zero cost, luxury thin inline single branch
+    function IsValid: Boolean; inline; // fail-closed: FValid and not closed
+    function IsAlive: Boolean; inline; // strong: alias to IsValid via lifecycle acquire
+    function IsClosed: Boolean; inline; // explicit closed state
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsInteger: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
@@ -65,10 +68,10 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
-// Context 寿命（INV-7）：状态单源下沉至 js.lifecycle (GPureClosed/GPureNextId 4B atomic acquire/release, 自然4B对齐, 64B/4 伪共享, write-once rare, geometric via bytes.ops single source, 零双注册), pure.base thin-forward, intf 零可变全局奢华薄, 不暴露 JsContextRegister/Close/IsClosed 桩 (需强一致时直调 js.lifecycle/pure.base.JsPureContextIsClosed acquire), 生命周期由 IJsContext.IsClosed 显式检查
+// Context 寿命：状态下沉 js.lifecycle，经 pure.base 透出
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-// intf 奢华薄：零可变全局，守四件套 base←intf←pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE bulk IsValid 零原子; 强一致 IsAlive via pure.base→lifecycle acquire 单源)，单源 pure.value owner via bytes.ops 几何/零拷贝 (json.writer+text.escape+text.number+text.builder+text.view via pure.value 单缝)，Kind 掩码复用 IsKind/IsKindIn 表驱动 inline 单字段，零 intf→实现重逻辑反向依赖，资源 try-finally Done 在 owner 不丢
+// intf 薄层：零可变全局，四件套，L0-L3 单向，状态下沉 lifecycle
 uses
   nextpas.core.bytes.ops,
   nextpas.core.js.pure.value,
@@ -86,7 +89,7 @@ function JsDoubleValue(AValue: Double): TJsValue; begin Result:=JsUndefinedValue
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // perf: inline eager materialize via bytes.ops SpanToString single source, single string hosted owner, zero dangling view, lifecycle single-state, B/op=1 alloc
+  // inline via bytes.ops SpanToString single source, zero dangling
   if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
   else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=SpanToString(TByteSpan.Create(PByte(AData), ALen)); end;
 end;
@@ -101,8 +104,7 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7 dual-track: IsValid bulk零屏障 (FValid only, zero atomic zero branch, bulk GetProp/HasProp hot ~1ns, thread-affine) vs IsAlive强一致 (FValid+acquire GPureClosed via pure.base→lifecycle single source, atomic acquire 64B padded, cross-thread/post-Close safe); IsValid Close后旧句柄仍True→悬垂风险, 必须显式切IsAlive/JsPureValueIsValid(acquire)或IJsContext.IsClosed, bulk热点守IsValid零成本, luxury thin inline, bytes.ops单源几何, resource不丢
-// perf: 值语义谓词全 inline 单字段零分支零拷贝, 奢华薄 intf 2-space, Kind掩码复用IsKind/IsKindIn表驱动单源via base, bulk零屏障 vs 强一致acquire单源via lifecycle single branch, inline零拷贝
+// INV-7: IsValid fail-closed via lifecycle acquire, IsAlive alias, IsClosed explicit
 function TJsValue.Kind: TJsValueKind; inline;
 begin
   Result := FKind;
@@ -120,14 +122,20 @@ end;
 
 function TJsValue.IsValid: Boolean; inline;
 begin
-  // perf: bulk zero-barrier single field FValid, zero atomic zero branch, thread-affine hot bulk ~1ns, inline; post-Close仍True→悬垂, 强一致须显式IsAlive/acquire (JsPureContextIsClosed/JsPureValueIsValid via pure.base→lifecycle acquire)
-  Result := FValid;
+  // fail-closed: inline single branch via lifecycle acquire (64B padded)
+  Result := FValid and not JsPureContextIsClosed(FContextId);
 end;
 
 function TJsValue.IsAlive: Boolean; inline;
 begin
-  // perf: inline strong FValid + acquire GPureClosed via pure.base→lifecycle single source (atomic acquire 64B padded, ~1ns), single branch, bulk IsValid zero barrier preserved for hot path, luxury thin inline single source
+  // strong alias to IsValid, inline via lifecycle acquire
   Result := FValid and not JsPureContextIsClosed(FContextId);
+end;
+
+function TJsValue.IsClosed: Boolean; inline;
+begin
+  // explicit closed, inline acquire single source
+  Result := FValid and JsPureContextIsClosed(FContextId);
 end;
 
 function TJsValue.IsUndefined: Boolean; inline;
@@ -147,7 +155,6 @@ end;
 
 function TJsValue.IsNumber: Boolean; inline;
 begin
-  // perf: Kind 掩码复用 IsKindIn 表驱动 via IsKindIn inline 单字段零分支，zero FPU，jskInteger+jskNumber both numbers preserves 2^53
   Result := IsKindIn(jskNumber, jskInteger);
 end;
 
@@ -200,20 +207,19 @@ function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger)
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
-  // single source: FStrVal hosted string, inline zero-copy return, bytes.ops SpanToString single source at creation via JsStringViewValue, lifecycle single-state, resource not丢
+  // inline zero-copy via hosted FStrVal, single source at creation
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   Result:=FStrVal;
 end;
 function TJsValue.AsJson: string; inline;
 begin
-  // perf: inline thin-forward to pure.value owner single source JsPureToJsonString via json.writer TStringBuilder+text.escape SIMD+text.number stack single source, bytes.ops single source via BytesCopy single Move, text.view zero-copy, 单源单缝 via pure.value, 热点 inline 零拷贝, 资源 try-finally Done 在 owner 不丢, 守 L0-L3 单向 base←intf 薄 intf 零重逻辑
+  // inline thin-forward to pure.value single source via BytesCopy
   Result := JsPureToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // single source: hosted FStrVal, inline, bytes.ops single source at creation, zero view caching complexity, resource not丢
   Result:=FKind=jskString;
   if Result then V:=FStrVal else V:='';
 end;

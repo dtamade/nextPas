@@ -66,13 +66,11 @@ const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
     'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
   {$ENDIF}
   );
-function JsQuickJsProbeNames: string; inline;
+function BuildProbeNames: string; inline;
 var B: TBufStringBuilder; I: Integer;
 begin
-  // perf: cached single handle reuse, inline thin-forward refcount inc zero-copy, zero per-call TBufStringBuilder alloc/geom expand (one-time build at initialization via text.builder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, try-finally Done 不丢)
-  // stability: immutable after init, no per-call Done leak, read-only share via string refcount (atomic inc), no heap on error path
-  if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
-  // fallback for early init order (single-thread init, rare): one-time build with same single source, try-finally Done 不丢, cached handle reuse after first call
+  // perf: single source comma-join via TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, inline hot path, try-finally Done 不丢
+  // stability: try-finally Done 不丢, single source for probe names
   B.Init(128);
   try
     for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
@@ -81,10 +79,18 @@ begin
       B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
     end;
     Result := B.ToString;
-    if GProbeNamesCache = '' then GProbeNamesCache := Result;
   finally
     B.Done;
   end;
+end;
+function JsQuickJsProbeNames: string; inline;
+begin
+  // perf: cached single handle reuse, inline thin-forward refcount inc zero-copy, zero per-call TBufStringBuilder alloc/geom expand (one-time build via BuildProbeNames single source via bytes.ops BytesCopy, try-finally Done 不丢)
+  // stability: immutable after init, no per-call Done leak, read-only share via string refcount (atomic inc), no heap on error path
+  if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
+  // fallback for early init order (single-thread init, rare): one-time build with same single source, try-finally Done 不丢, cached handle reuse after first call
+  Result := BuildProbeNames;
+  if GProbeNamesCache = '' then GProbeNamesCache := Result;
 end;
 type TQuickJsBindRec = record Name: AnsiString; Dest: PPointer; Required: Boolean; end;
 function TryLoad(const AName: AnsiString): Boolean;
@@ -240,21 +246,10 @@ begin
   end;
 end;
 procedure InitProbeCache; inline;
-var B: TBufStringBuilder; I: Integer;
 begin
-  // perf: one-time comma-join via TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, try-finally Done 不丢, cached handle reuse avoids per-call alloc/geom expand
-  // stability: try-finally Done 不丢, single source for probe names, immutable after init
-  B.Init(128);
-  try
-    for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
-    begin
-      if I > 0 then B.AppendStr(', ');
-      B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
-    end;
-    GProbeNamesCache := B.ToString;
-  finally
-    B.Done;
-  end;
+  // perf: single source via BuildProbeNames (TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, try-finally Done 不丢, cached handle reuse avoids per-call alloc/geom expand)
+  // stability: try-finally Done 不丢 inside BuildProbeNames, single source for probe names, immutable after init
+  GProbeNamesCache := BuildProbeNames;
 end;
 
 initialization

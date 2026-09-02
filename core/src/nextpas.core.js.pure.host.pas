@@ -273,57 +273,59 @@ begin
   // unified template: view zero-copy, single source hash, bucket O(1)
   Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(AName), AName);
 end;
-function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
-var LIdx, LCount: Integer; LNeed, LCap, LCurCap: SizeUInt; LView: TStringView; LHash: UInt32;
+function HostAllocOne(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer; inline;
+var LCount: Integer; LNeed, LCap, LCurCap: SizeUInt;
 begin
-  // perf: unified hash/view single source, O(1) count via Length, amortized O(1) geometric via bytes.ops + poke
+  // single source Hash+几何扩容+Poke: bytes.ops BytesNextCapacity + mem.dynarray poke, inline零拷贝, amortized O(1), 复用单源防漂移
+  LCount := Length(Hosts);
+  LNeed := SizeUInt(LCount) + 1;
+  LCurCap := HostCapacity(Hosts);
+  if LCurCap >= LNeed then
+  begin
+    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(SizeUInt(LCount), LNeed);
+    SetLength(Hosts, LCap);
+    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
+  end;
+  Hosts[LCount].Name := AName;
+  Hosts[LCount].Hash := AHash;
+  Result := LCount;
+end;
+
+function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
+var LView: TStringView; LHash: UInt32; LIdx: Integer;
+begin
+  // single source via HostAllocOne: Hash+几何扩容+Poke 复用单源, inline零拷贝, amortized O(1)
   LView := TStringView.FromStr(AName);
   LHash := HostHashView(LView);
   LIdx := HostFindCoreLinear(Hosts, LHash, LView);
   if LIdx >= 0 then Exit(LIdx);
-  LCount := Length(Hosts);
-  LNeed := SizeUInt(LCount) + 1;
-  LCurCap := HostCapacity(Hosts);
-  if LCurCap >= LNeed then
-  begin
-    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
-    SetLength(Hosts, LCap);
-    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
-  end;
-  Hosts[LCount].Name := AName;
-  Hosts[LCount].Hash := LHash;
-  Result := LCount;
+  Result := HostAllocOne(Hosts, AName, LHash);
 end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer;
-var LIdx, LCount: Integer; LNeed, LCap, LCurCap: SizeUInt; LView: TStringView; LHash: UInt32;
+var LView: TStringView; LHash: UInt32; LIdx, LCountBefore: Integer; LWasValid: Boolean;
 begin
+  // single source via HostAllocOne + amortized O(1) bucket incremental put, batch千宿主单次rebuild+ O(1) puts vs 千次Invalidate重建
   LView := TStringView.FromStr(AName);
   LHash := HostHashView(LView);
   LIdx := HostFindCoreBucketed(Hosts, Buckets, LHash, LView);
   if LIdx >= 0 then Exit(LIdx);
-  LCount := Length(Hosts);
-  LNeed := SizeUInt(LCount) + 1;
-  LCurCap := HostCapacity(Hosts);
-  if LCurCap >= LNeed then
+  LCountBefore := Length(Hosts);
+  LWasValid := (Length(Buckets.Buckets) > 0) and (Buckets.Count = LCountBefore);
+  Result := HostAllocOne(Hosts, AName, LHash);
+  // amortized O(1): valid+capacity足够→O(1)Put, capacity不足→lazy invalidate单次 rebuild, invalid→keep lazy避免千次失效
+  if LWasValid then
   begin
-    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
-    SetLength(Hosts, LCap);
-    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
-  end;
-  Hosts[LCount].Name := AName;
-  Hosts[LCount].Hash := LHash;
-  // jitter suppress: bucket invalidate only when >64 threshold, else keep linear empty; avoids O(n) rebuild thrash at 64↔65 boundary, amortized O(1) put vs per-insert rebuild, inline zero-copy, bytes.ops single source
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
-    JsPureHostBucketsInvalidate(Buckets)
-  else if Length(Buckets.Buckets) > 0 then
+    if Length(Buckets.Buckets) >= JsPureBucketCapacity(LCountBefore + 1) then
+    begin
+      Buckets.Count := LCountBefore + 1;
+      JsPureBucketPut(Buckets.Buckets, Buckets.Mask, LHash, Result);
+    end else
+      JsPureHostBucketsInvalidate(Buckets);
+  end else if (Length(Hosts) <= JS_PURE_HASH_THRESHOLD) and (Length(Buckets.Buckets) > 0) then
     JsPureHostBucketsInvalidate(Buckets);
-  Result := LCount;
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer);
 var LIdx: Integer;
@@ -352,7 +354,6 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Func := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer);
 var LIdx: Integer;
@@ -360,7 +361,6 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Method := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer);
 var LIdx: Integer;
@@ -368,7 +368,6 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Proc := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin

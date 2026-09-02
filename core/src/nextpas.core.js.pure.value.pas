@@ -10,8 +10,10 @@ uses
   nextpas.core.js.pure.hash;
 type
   TJsPureProp = record Name: string; Value: TJsValue; Hash: UInt32; end;
-  TJsPureObject = record Id: Int64; Props: array of TJsPureProp; PropsBuckets: array of Integer; PropsMask: UInt32; end;
-  TJsPureHeap = array of TJsPureObject;
+  generic TJsArray<T> = array of T;
+  TJsPurePropArray = specialize TJsArray<TJsPureProp>;
+  TJsPureObject = record Id: Int64; Props: TJsPurePropArray; PropsBuckets: array of Integer; PropsMask: UInt32; end;
+  TJsPureHeap = specialize TJsArray<TJsPureObject>;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
@@ -59,7 +61,6 @@ uses
   nextpas.core.json.writer,
   nextpas.core.text.number,
   nextpas.core.text.escape;
-threadvar GJsPureGetBatchCache: TJsValueArray; // batch 1024 capacity reuse cache via mem.dynarray+bytes.ops geometric single source, amortized O(1), zero per-call GetMem after warm
 
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
@@ -77,36 +78,26 @@ begin
   end;
   Result := -1;
 end;
-{ capacity helpers — single source via mem.dynarray generic (DynArrayCapacityGeneric/DynArraySetLengthGeneric), geometric via bytes.ops, inline zero-copy }
-{ heap/props grow — single source inline helper via mem.dynarray+bytes.ops Exactly-Once geometric, amortized O(1) single seam, zero double write barrier }
-procedure EnsurePropsCapacityOne(var Props: array of TJsPureProp); inline;
+{ capacity helpers — single source via mem.dynarray generic (DynArrayCapacityGeneric/DynArraySetLengthGeneric), geometric via bytes.ops BytesNextCapacity single source, not inline per red-line 2 (routing body) }
+{ heap/props grow — single source generic template via mem.dynarray+bytes.ops Exactly-Once geometric, amortized O(1) single seam, zero double write barrier, bytes.ops single source, not inline }
+generic procedure EnsureCapacityOne<T>(var Arr: specialize TJsArray<T>);
 var LOld, LNeed, LCap: SizeUInt;
 begin
-  LOld := SizeUInt(Length(Props)); LNeed := LOld + 1;
-  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Props, SizeOf(TJsPureProp)) >= LNeed then
+  LOld := SizeUInt(Length(Arr)); LNeed := LOld + 1;
+  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Arr, SizeOf(T)) >= LNeed then
   begin
-    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Props, LNeed);
+    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Arr, LNeed);
   end else
   begin
     LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Props, LCap);
-    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Props, LNeed);
+    SetLength(Arr, LCap);
+    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Arr, LNeed);
   end;
 end;
-procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
-var LOld, LNeed, LCap: SizeUInt;
-begin
-  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1;
-  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Heap, SizeOf(TJsPureObject)) >= LNeed then
-  begin
-    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Heap, LCap);
-    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap, LNeed);
-  end;
-end;
+procedure EnsurePropsCapacityOne(var Props: TJsPurePropArray);
+begin specialize EnsureCapacityOne<TJsPureProp>(Props); end;
+procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap);
+begin specialize EnsureCapacityOne<TJsPureObject>(Heap); end;
 { prop hash — single source via pure.hash JsPureHashStr (bytes.ops FNV1a32), inline zero-copy, converged with pure.host HostHashView via pure.hash }
 function PropHashStr(const S: string): UInt32; inline;
 begin
@@ -197,7 +188,7 @@ begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
-  // perf: single source via EnsurePropsCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1) single source
+  // perf: single source via EnsurePropsCapacityOne generic single source — Exactly-Once via mem.dynarray+bytes.ops geometric single seam (not inline per red-line 2), amortized O(1) single source, bytes.ops single source
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
@@ -214,7 +205,7 @@ end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
 var LId: Int64; LNeed: SizeUInt;
 begin
-  // perf: single source via EnsureHeapCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1), zero double write barrier
+  // perf: single source via EnsureHeapCapacityOne generic single source — Exactly-Once via mem.dynarray+bytes.ops geometric single seam (not inline per red-line 2), amortized O(1), zero double write barrier, bytes.ops single source
   LNeed := SizeUInt(Length(Heap)) + 1;
   EnsureHeapCapacityOne(Heap);
   LId := Int64(LNeed); if LId = 0 then LId := 1;
@@ -267,7 +258,7 @@ begin
   P := JsPureHeapFindProp(Heap[Idx], Name);
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LHash := PropHashStr(Name);
-  // perf: single source via EnsurePropsCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1) single source
+  // perf: single source via EnsurePropsCapacityOne generic single source — Exactly-Once via mem.dynarray+bytes.ops geometric single seam (not inline per red-line 2), amortized O(1) single source, bytes.ops single source
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
@@ -408,33 +399,17 @@ function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValu
 begin Result := JsPureHeapGetProp(S.Heap, AObj, AName); end;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
-{ Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 — not inline per red-line (loop) }
+{ Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 — not inline per red-line (loop), no TLS cache }
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
-var I: Integer; LHash: UInt32; LNeed, LCap: SizeUInt;
+var I: Integer; LHash: UInt32; LNeed: SizeUInt;
 begin
-  // perf: single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, capacity reuse cache via mem.dynarray+bytes.ops geometric single source (BytesNextCapacity) amortized O(1) for 1024 bench, zero per-call alloc after warm, inline, not inline per red-line (loop)
+  // perf: single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source — no TLS cache (TLS寻址 + 常驻容量已移除, 直接 Result 单次分配, 生命周期不跨调用, 零常驻), single alloc per call, resource不丢 — not inline per red-line (loop)
   LNeed := SizeUInt(Length(Objs));
   if LNeed = 0 then Exit(nil);
-  LHash := PropHashStr(AName); // single source pre-hash, closed-loop reuse via Hashed path
-  // capacity reuse cache single source via mem.dynarray generic + bytes.ops BytesNextCapacity geometric 0→64→2× amortized O(1), retains heap across 1024 batch calls, zero-copy via bytes.ops single source
-  if DynArrayCapacityGeneric(GJsPureGetBatchCache, SizeOf(TJsValue)) >= LNeed then
-  begin
-    if SizeUInt(Length(GJsPureGetBatchCache)) <> LNeed then
-      DynArraySetLengthGeneric(GJsPureGetBatchCache, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(SizeUInt(Length(GJsPureGetBatchCache)), LNeed);
-    SetLength(GJsPureGetBatchCache, LCap);
-    if LCap <> LNeed then
-      DynArraySetLengthGeneric(GJsPureGetBatchCache, LNeed);
-  end;
-  for I := 0 to High(Objs) do
-    GJsPureGetBatchCache[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
-  // single alloc for Result + zero-copy single Move via bytes.ops.BytesCopy single source, keep cache heap for next call (poke len 0 retains capacity via mem.dynarray single source)
+  LHash := PropHashStr(AName);
   SetLength(Result, LNeed);
-  if LNeed > 0 then
-    BytesCopy(@Result[0], @GJsPureGetBatchCache[0], LNeed * SizeUInt(SizeOf(TJsValue)));
-  DynArraySetLengthGeneric(GJsPureGetBatchCache, 0);
+  for I := 0 to High(Objs) do
+    Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 var I: Integer; LHash: UInt32;
