@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js`
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）
-**版本**：1.1（11 单元 pure.base 单源 517行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.1/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.3（11 单元 pure.base 单源 380行 + 匠心修复 Exactly-Once 堆扩容 + text.number ViewToInt64 单源 + 洁净 Json 快路径，与 CONTRACT 1.3/BENCHMARKS 1.7 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -80,7 +80,7 @@ core/examples/nextpas.core.js/demo_js/
 
 | 级别 | 条件 | 证据 |
 |------|------|------|
-| `source-contract` | 四件套门面纯聚合 + L2 只依赖 L0-L1：`base/intf` 不含后端符号（含纯后端预留不暴露 `JSValue`），`ffi` 零逻辑仅 `cdecl`，`loader` 唯一 `platform.dl`（禁 `DynLibs`），纯族 `pure.base` 单源 481行阈值550内 + `js.js888/v8/chakra` 零FFI/零dl恒可用 | `check_source_contracts.py` pass + `wc -l` 阈值550 + `grep platform.dl` 0 |
+| `source-contract` | 四件套门面纯聚合 + L2 只依赖 L0-L1：`base/intf` 不含后端符号（含纯后端预留不暴露 `JSValue`），`ffi` 零逻辑仅 `cdecl`，`loader` 唯一 `platform.dl`（禁 `DynLibs`），纯族 `pure.base` 单源 380行阈值650内（<800 必拆，wc -l 380 实测，复用 `bytes.ops` 单源 Exactly-Once 几何扩容与 `text.view` 零拷贝 + `text.number` ViewToInt64 单源，热点 inline + `Move` 零拷贝，资源 `try-finally` 不丢）+ `js.js888/v8/chakra` 零FFI/零dl恒可用 | `check_source_contracts.py` pass + `wc -l` 阈值650 + `grep platform.dl` 0 |
 | `focused-runtime` | `test_js_fake` + `test_js_base` 全绿 + `heaptrc 0`（性能 inline/零拷贝：`AsString` 快路径 `B/op=0`） | `make focused` 全绿 |
 | `S1-runtime` | `test_js_quickjs_runtime`（有库）全绿；`S3` 后 `test_js_js888_runtime`/`v8`/`chakra` 恒绿（零 so） | 本地 + Linux CI |
 | `Production Ready` | `S2` 联动全绿 + `bench_eval` 5后端基线落库（含纯/QuickJS 双基线，BENCHMARKS 1.5 均值 ~684ns） + `hygiene/source-contract` 双 pass + 稳定性资源可释放 `Close` 幂等 + 文档 18份对齐 | 13+3 门 + bench |

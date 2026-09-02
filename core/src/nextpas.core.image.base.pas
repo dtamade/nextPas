@@ -265,11 +265,14 @@ begin
   if FHeight > High(Integer) div ByRow then
     raise EArgumentError.Create('nextpas.core.image.base.pas: ToCompact overflow');
   SetLength(Result, ByRow * FHeight);
-  for Y := 0 to FHeight - 1 do
-  begin
-    Src := @FPixels[Y * FStride];
-    Move(Src^, Result[Y * ByRow], ByRow);
-  end;
+  if FStride = ByRow then
+    Move(FPixels[0], Result[0], NativeUInt(ByRow) * NativeUInt(FHeight))
+  else
+    for Y := 0 to FHeight - 1 do
+    begin
+      Src := @FPixels[Y * FStride];
+      Move(Src^, Result[Y * ByRow], ByRow);
+    end;
 end;
 
 class function TBitmap.FromCompact(const AData: TBytes; AWidth, AHeight: Integer; AFormat: TBitmapFormat): TBitmap;
@@ -295,11 +298,14 @@ begin
   if Length(AData) <> RowLen * AHeight then
     raise EArgumentError.Create('nextpas.core.image.base.pas: FromCompact data length mismatch');
   Result := TBitmap.Create(AWidth, AHeight, AFormat);
-  for Y := 0 to AHeight - 1 do
-  begin
-    Dst := @Result.FPixels[Y * Result.FStride];
-    Move(AData[Y * RowLen], Dst^, RowLen);
-  end;
+  if Result.FStride = RowLen then
+    Move(AData[0], Result.FPixels[0], NativeUInt(RowLen) * NativeUInt(AHeight))
+  else
+    for Y := 0 to AHeight - 1 do
+    begin
+      Dst := @Result.FPixels[Y * Result.FStride];
+      Move(AData[Y * RowLen], Dst^, RowLen);
+    end;
 end;
 
 procedure TBitmap.Premultiply;

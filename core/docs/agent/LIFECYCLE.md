@@ -108,7 +108,8 @@ Run()（阻塞直至终态）:
   合成 timeout error result 回喂模型并 Cancel 其子令牌，**工作线程被弃置**——
   继续后台运行直至自然结束或进程退出（文档化代价：不协作工具可泄漏 CPU/IO
   至其自然终点）；其迟到结果经写权仲裁不回读已合成载荷。协作式取消（令牌）
-  始终是首选路径。
+  始终是首选路径。排水看门狗：`AToken=nil` 且剩余任务无 Timeout 时排水期以
+  `AClock.NowMs - LDrainStart >= 5000` 硬截并合成 cancelled（防 `TAgentLoop.Run` 永久阻塞）。
 - **跨线程中断机制**：流读取被另一线程 Cancel 时，transport.Cancel 关闭 socket，
   阻塞中的 IReader.Read 以错误返回，由执行读的线程自身完成清理与连接归还——
   满足"资源不得跨线程释放"。

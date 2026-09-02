@@ -1,7 +1,7 @@
 {**
  * nextpas.core.graphics.text - 文本薄层产 TGlyphRun（Scale 打通 window/gpu.canvas）
- * 四段链：UTF-8→Grapheme(text.unicode.segment)→Glyph(text.layout/font.shaper)→GlyphRun(Positions)
- * 单文件≤800行，L1 薄层靠 text.layout 单源 Grapheme 度量 + bytes.ops Move 零拷贝
+ * 四段链：UTF-8→Grapheme(本地)→Glyph(本地宽度)→GlyphRun(Positions)
+ * 单文件≤800行，L1 薄层本地 UTF-8/簇/度量，无 text.layout/unicode.segment 跨层依赖
  *}
 unit nextpas.core.graphics.text;
 
@@ -35,18 +35,142 @@ function LayoutTextWrapped(const AText: AnsiString; AFontSize, AScale, AMaxWidth
 implementation
 
 uses
-  nextpas.core.base,
-  nextpas.core.text.layout,
-  nextpas.core.text.utf8,
-  nextpas.core.text.unicode.segment,
-  nextpas.core.bytes.ops;
+  nextpas.core.base;
+
+type
+  TLocalDecode = record
+    CodePoint: UInt32;
+    ByteLen: Byte;
+  end;
+
+function LocalUTF8Decode(const AData: PByte; const ALen: SizeUInt): TLocalDecode;
+var
+  B: Byte;
+begin
+  Result.CodePoint := 0;
+  Result.ByteLen := 0;
+  if (ALen = 0) or (AData = nil) then
+    Exit;
+  B := AData[0];
+  if B < $80 then
+  begin
+    Result.CodePoint := B;
+    Result.ByteLen := 1;
+  end
+  else if (B and $E0) = $C0 then
+  begin
+    if ALen < 2 then Exit;
+    if (AData[1] and $C0) <> $80 then Exit;
+    Result.CodePoint := (UInt32(B and $1F) shl 6) or (UInt32(AData[1]) and $3F);
+    if Result.CodePoint < $80 then begin Result.ByteLen := 0; Exit; end;
+    Result.ByteLen := 2;
+  end
+  else if (B and $F0) = $E0 then
+  begin
+    if ALen < 3 then Exit;
+    if ((AData[1] and $C0) <> $80) or ((AData[2] and $C0) <> $80) then Exit;
+    Result.CodePoint := (UInt32(B and $0F) shl 12) or ((UInt32(AData[1]) and $3F) shl 6) or (UInt32(AData[2]) and $3F);
+    if Result.CodePoint < $800 then begin Result.ByteLen := 0; Exit; end;
+    if (Result.CodePoint >= $D800) and (Result.CodePoint <= $DFFF) then begin Result.ByteLen := 0; Exit; end;
+    Result.ByteLen := 3;
+  end
+  else if (B and $F8) = $F0 then
+  begin
+    if ALen < 4 then Exit;
+    if ((AData[1] and $C0) <> $80) or ((AData[2] and $C0) <> $80) or ((AData[3] and $C0) <> $80) then Exit;
+    Result.CodePoint := (UInt32(B and $07) shl 18) or ((UInt32(AData[1]) and $3F) shl 12) or ((UInt32(AData[2]) and $3F) shl 6) or (UInt32(AData[3]) and $3F);
+    if Result.CodePoint < $10000 then begin Result.ByteLen := 0; Exit; end;
+    if Result.CodePoint > $10FFFF then begin Result.ByteLen := 0; Exit; end;
+    Result.ByteLen := 4;
+  end;
+end;
+
+function LocalIsWide(const ACp: UInt32): Boolean; inline;
+begin
+  if ACp < $1100 then Exit(False);
+  if ACp <= $115F then Exit(True);
+  if (ACp >= $2E80) and (ACp <= $A4CF) then Exit(True);
+  if (ACp >= $AC00) and (ACp <= $D7A3) then Exit(True);
+  if (ACp >= $F900) and (ACp <= $FAFF) then Exit(True);
+  if (ACp >= $FE10) and (ACp <= $FE6F) then Exit(True);
+  if (ACp >= $FF00) and (ACp <= $FF60) then Exit(True);
+  if (ACp >= $FFE0) and (ACp <= $FFE6) then Exit(True);
+  if ACp >= $1F000 then Exit(True);
+  Result := False;
+end;
+
+function LocalCodepointWidth(const ACp: UInt32): Byte; inline;
+begin
+  if (ACp < 32) or (ACp = $7F) or ((ACp >= $80) and (ACp < $A0)) then
+    Exit(0);
+  if LocalIsWide(ACp) then
+    Exit(2);
+  Result := 1;
+end;
+
+function LocalGlyphAdvance(const ACp: UInt32; AFontSize, AScale: Single): Single; inline;
+var
+  LW: Byte;
+begin
+  if (AFontSize <= 0) or (AScale <= 0) then
+    Exit(0);
+  LW := LocalCodepointWidth(ACp);
+  case LW of
+    0: Result := 0;
+    2: Result := AFontSize * AScale * 1.2;
+  else
+    Result := AFontSize * AScale * 0.6;
+  end;
+end;
+
+function LocalGraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+var
+  LDec, LNext: TLocalDecode;
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
+  LDec := LocalUTF8Decode(AData, ALen);
+  if LDec.ByteLen = 0 then
+    Exit(1);
+  if LDec.CodePoint = 13 then
+  begin
+    if SizeUInt(LDec.ByteLen) < ALen then
+    begin
+      LNext := LocalUTF8Decode(@AData[LDec.ByteLen], ALen - SizeUInt(LDec.ByteLen));
+      if (LNext.ByteLen > 0) and (LNext.CodePoint = 10) then
+        Exit(SizeUInt(LDec.ByteLen) + SizeUInt(LNext.ByteLen));
+    end;
+  end;
+  Result := SizeUInt(LDec.ByteLen);
+end;
+
+function LocalNextGrapheme(const AData: PByte; ALen: SizeUInt; AFontSize, AScale: Single; out AGlyph: UInt32; out AAdvance: Single): SizeUInt; inline;
+var
+  LBytes: SizeUInt;
+  LDec: TLocalDecode;
+begin
+  AGlyph := $FFFD;
+  AAdvance := 0;
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
+  LBytes := LocalGraphemeClusterByteLen(AData, ALen);
+  if LBytes = 0 then
+    Exit(0);
+  LDec := LocalUTF8Decode(AData, LBytes);
+  if LDec.ByteLen > 0 then
+    AGlyph := LDec.CodePoint
+  else
+    AGlyph := $FFFD;
+  AAdvance := LocalGlyphAdvance(AGlyph, AFontSize, AScale);
+  Result := LBytes;
+end;
 
 function TGlyphRun.IsEmpty: Boolean;
 begin
   Result := Length(Glyphs) = 0;
 end;
 
-{ 内部：根据是否换行构建 Run，复用 text.layout 的 Grapheme→Glyph 单源 }
+{ 内部：根据是否换行构建 Run，L1 本地簇/度量，无跨层依赖 }
 function BuildRun(const AText: AnsiString; AFontSize, AScale, AMaxWidth: Single; AWrapped: Boolean): TTextLayout;
 var
   LLen, LPos: SizeUInt;
@@ -58,7 +182,7 @@ var
   LAdv: Single;
   LBytes: SizeUInt;
   LIsHardBreak: Boolean;
-  LDec: TUTF8DecodeResult;
+  LDec: TLocalDecode;
 begin
   Result.Text := AText;
   Result.FontSize := AFontSize;
@@ -76,14 +200,14 @@ begin
     Result.Bounds := TRect.From(0, 0, 0, 0);
     Exit;
   end;
-  // 预分配：最坏 1B=1 grapheme，零拷贝 Move 单源（bytes.ops 语义，单次 SetLength+Move）
+  // 预分配：最坏 1B=1 grapheme，单次 SetLength+Move 零拷贝
   LCapa := SizeInt(LLen);
   if LCapa < 1 then LCapa := 1;
   SetLength(Result.GlyphRun.Glyphs, LCapa);
   SetLength(Result.GlyphRun.Positions, LCapa);
   LX := 0;
   LY := 0;
-  LLineH := AFontSize * AScale; // 行高=em；Wrapped 时多行可 *1.2 视设计，此处保 bounds 非零
+  LLineH := AFontSize * AScale;
   if AWrapped and (AMaxWidth > 0) and (LLineH > 0) then
     LLineH := AFontSize * AScale * 1.2;
   LMaxW := 0;
@@ -91,13 +215,13 @@ begin
   LPos := 0;
   while LPos < LLen do
   begin
-    // grapheme 簇：边界=UAX#29 真源，非法 UTF-8 按 1B U+FFFD
-    LBytes := LayoutNextGrapheme(@AText[LPos+1], LLen - LPos, AFontSize, AScale, LGlyph, LAdv);
+    // grapheme 簇：本地边界，非法 UTF-8 按 1B U+FFFD
+    LBytes := LocalNextGrapheme(PByte(@AText[LPos+1]), LLen - LPos, AFontSize, AScale, LGlyph, LAdv);
     if LBytes = 0 then
       Break;
-    // 硬换行检测：簇内首码点为 LF/CR（已按 grapheme 合并 CRLF）
+    // 硬换行检测：簇内首码点为 LF/CR（已按本地合并 CRLF）
     LIsHardBreak := False;
-    LDec := UTF8Decode(@AText[LPos+1], LBytes);
+    LDec := LocalUTF8Decode(PByte(@AText[LPos+1]), LBytes);
     if LDec.ByteLen > 0 then
     begin
       if (LDec.CodePoint = 10) or (LDec.CodePoint = 13) then
@@ -105,7 +229,6 @@ begin
     end;
     if LIsHardBreak then
     begin
-      // 硬换行：不产 glyph，换行
       if LX > LMaxW then LMaxW := LX;
       LX := 0;
       LY := LY + LLineH;
@@ -119,7 +242,7 @@ begin
       LX := 0;
       LY := LY + LLineH;
     end;
-    // 扩容：按需倍增，单次 Move（bytes.ops 单源语义：Move 零拷贝）
+    // 扩容：按需倍增
     if LCount >= LCapa then
     begin
       LCapa := LCapa * 2;
@@ -134,7 +257,6 @@ begin
       if LX > LMaxW then LMaxW := LX;
     Inc(LPos, LBytes);
   end;
-  // 尾行收敛
   if LX > LMaxW then LMaxW := LX;
   if LCount = 0 then
   begin
@@ -143,7 +265,6 @@ begin
     Result.Bounds := TRect.From(0, 0, 0, 0);
     Exit;
   end;
-  // 缩容：单次 SetLength 零拷贝（无额外 Move）
   if LCount <> LCapa then
   begin
     SetLength(Result.GlyphRun.Glyphs, LCount);
@@ -152,14 +273,11 @@ begin
   LCurW := LMaxW;
   if AWrapped and (AMaxWidth > 0) and (LCount > 0) then
   begin
-    // 有换行时宽度钳至 MaxWidth（溢出单簇除外）
     if LCurW > AMaxWidth then LCurW := AMaxWidth;
-    // 若存在超宽簇（如超宽 emoji），保持实测宽
     if LCurW < LMaxW then LCurW := LMaxW;
     if LCurW > AMaxWidth then LCurW := LMaxW;
   end;
   if LCurW < 0 then LCurW := 0;
-  // 高度：至少一行，Wrapped 时按行数
   if AWrapped and (AMaxWidth > 0) then
     Result.Bounds := TRect.From(0, 0, LCurW, LY + AFontSize * AScale)
   else
@@ -173,7 +291,6 @@ end;
 
 function LayoutTextWrapped(const AText: AnsiString; AFontSize, AScale, AMaxWidth: Single): TTextLayout;
 begin
-  // AMaxWidth<=0 视为无限，复用同一管线保一致
   Result := BuildRun(AText, AFontSize, AScale, AMaxWidth, True);
 end;
 

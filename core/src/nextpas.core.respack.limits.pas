@@ -16,10 +16,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
   nextpas.core.embed.limits,
-  nextpas.core.respack.base,
-  nextpas.core.text.number;
+  nextpas.core.respack.base;
 
 const
   RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.EMBED_INC_MAX_BLOB_BYTES;
@@ -28,6 +26,8 @@ const
 { 取生效阈值：0 取默认 4MiB，便于 TResPackIncOptions.MaxBlobBytes 未显式配置时零值即默认 }
 function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 
+{ 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；纯转发至 embed.limits 单源，try..except EEmbedTooLarge→EResPackTooLarge owner 边界收敛，CONTRACT 独立命名（外联守 inline+except 符号冲突，FPC trunk bug） }
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt);
 { 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝转发至 embed.limits 单源 }
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
@@ -38,6 +38,14 @@ begin
   Result := nextpas.core.embed.limits.EmbedEffectiveIncLimit(AConfigured);
 end;
 
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt);
+begin
+  try
+    nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
+  except
+    on LRespackWrapEx: EEmbedTooLarge do
+      raise EResPackTooLarge.Create(LRespackWrapEx.Message);
+  end;
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 begin
   nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);

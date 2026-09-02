@@ -47,9 +47,6 @@ type
   ISevenZLzmaEncoder = nextpas.core.sevenz.intf.ISevenZLzmaEncoder;
   ISevenZReader = nextpas.core.sevenz.intf.ISevenZReader;
   ISevenZWriter = nextpas.core.sevenz.intf.ISevenZWriter;
-  TSevenZReaderImpl = nextpas.core.sevenz.reader.TSevenZReaderImpl;
-  TSevenZWriterImpl = nextpas.core.sevenz.writer.TSevenZWriterImpl;
-  TSevenZWriterBuilderImpl = nextpas.core.sevenz.writer.TSevenZWriterBuilderImpl;
   ISevenZWriterBuilder = nextpas.core.sevenz.intf.ISevenZWriterBuilder;
 
 const
@@ -152,7 +149,7 @@ end;
 
 function SevenZCreateWriter: ISevenZWriter;
 begin
-  Result := TSevenZWriterImpl.Create;
+  Result := nextpas.core.sevenz.writer.TSevenZWriterImpl.Create;
 end;
 
 function SevenZCreateWriterBuilder: ISevenZWriterBuilder;
@@ -160,36 +157,34 @@ begin
   Result := nextpas.core.sevenz.writer.SevenZCreateWriterBuilder;
 end;
 
-{ 级别映射：门面单层直连 levels 纯映射（inline 零额外调用，writer/bench/facade 同源），
-  避免 levels→intf→门面两跳冗余；bench_sevenz 复用同阈值可观测 }
 function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
 begin
-  Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
+  Result := nextpas.core.sevenz.levels.SevenZLevelToDeflateLevel(ALevel);
 end;
 
 function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
 begin
-  Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
+  Result := nextpas.core.sevenz.levels.SevenZLevelToBZip2BlockSize(ALevel);
 end;
 
 function SevenZCreateReader(const AArchive: TBytes): ISevenZReader;
 begin
-  Result := TSevenZReaderImpl.Create(AArchive);
+  Result := nextpas.core.sevenz.reader.TSevenZReaderImpl.Create(AArchive);
 end;
 
 function SevenZCreateReaderWithPassword(const AArchive: TBytes; const APassword: string): ISevenZReader;
 begin
-  Result := TSevenZReaderImpl.CreateWithPassword(AArchive, APassword);
+  Result := nextpas.core.sevenz.reader.TSevenZReaderImpl.CreateWithPassword(AArchive, APassword);
 end;
 
 function SevenZCreateReaderFrom(const AReader: IReader): ISevenZReader;
 begin
-  Result := TSevenZReaderImpl.CreateFromReader(AReader);
+  Result := nextpas.core.sevenz.reader.TSevenZReaderImpl.CreateFromReader(AReader);
 end;
 
 function SevenZCreateReaderFromWithPassword(const AReader: IReader; const APassword: string): ISevenZReader;
 begin
-  Result := TSevenZReaderImpl.CreateFromReaderWithPassword(AReader, APassword);
+  Result := nextpas.core.sevenz.reader.TSevenZReaderImpl.CreateFromReaderWithPassword(AReader, APassword);
 end;
 
 end.

@@ -7,6 +7,7 @@ program test_pricing;
   5 cases：边界舍入 + 费率 + 分档（含 2048x2048→2000 特判） }
 
 uses
+  nextpas.core.agent.base,
   nextpas.core.agent.pricing,
   nextpas.core.agent,
   nextpas.core.test;
@@ -105,7 +106,7 @@ begin
   LPricing.RateDenominator := 10000;
   CheckEqual(Int64(0), EstimateCost(LPricing, -5, -10), 'negative prompt/completion clamped to 0');
   CheckEqual(Int64(0), EstimateCost(-5, -10), 'pricing scalar negative clamped');
-  CheckEqual(Int64(0), EstimateCost(-5, 10, 2000, 4000), 'one side negative clamped');
+  CheckEqual(Int64(40), EstimateCost(-5, 10, 2000, 4000), 'one side negative per-side clamped (prompt 0 + 10*4000/1000=40)');
   LU := Default(TTokenUsage);
   LU.InputTokens := -5;
   LU.OutputTokens := -10;

@@ -275,6 +275,7 @@ var
   P: PByte;
   N4, Tail: Integer;
   A: Byte;
+  T: Integer;
 begin
   if (PixelCount <= 0) or (Dst = nil) then Exit;
   P := Dst;
@@ -282,19 +283,19 @@ begin
   Tail := PixelCount and 3;
   while N4 > 0 do
   begin
-    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+    A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
     Dec(N4);
   end;
   case Tail of
-    3: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
-    2: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
-             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
-    1: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+    3: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; end;
+    2: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; end;
+    1: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin T:=Integer(P[0])*Integer(A); P[0]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[1])*Integer(A); P[1]:=Byte((T+1+(T shr 8)) shr 8); T:=Integer(P[2])*Integer(A); P[2]:=Byte((T+1+(T shr 8)) shr 8); end; end;
   end;
 end;
 

@@ -116,8 +116,8 @@ begin
     Inputs[I].ModTime := G_FixMod[I];
   end;
   G_EmbeddedBlob := ResPackBuild(Inputs, ResPackDefaultOptions);
-  { AOwnsBlob=True：VFS 归还 blob，gate 不再 FreeBlob }
-  Result := CreateEmbeddedVfs(G_EmbeddedBlob.Data, G_EmbeddedBlob.Size, True);
+  { Owned：VFS 归还 blob，gate 不再 FreeBlob }
+  Result := CreateEmbeddedVfsOwned(G_EmbeddedBlob.Data, G_EmbeddedBlob.Size);
 end;
 
 { ── 工具 ── }

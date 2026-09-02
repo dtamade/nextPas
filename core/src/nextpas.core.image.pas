@@ -11,6 +11,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.image.base,
+  nextpas.core.image.intf,
   nextpas.core.image.png,
   nextpas.core.image.dispatch;
 
@@ -21,6 +22,9 @@ type
   TImageInfo = nextpas.core.image.base.TImageInfo;
   TImageProbeFunc = nextpas.core.image.dispatch.TImageProbeFunc;
   TImageDecodeFunc = nextpas.core.image.dispatch.TImageDecodeFunc;
+  IImageDecoder = nextpas.core.image.intf.IImageDecoder;
+  IImageEncoder = nextpas.core.image.intf.IImageEncoder;
+  IImageCodec = nextpas.core.image.intf.IImageCodec;
 
 function PngEncodeRgba(const APixels: TBytes; AWidth, AHeight: Integer): TBytes; inline;
 procedure ImageRegisterCodec(AFormat: TImageFormat; AProbe: TImageProbeFunc; ADecode: TImageDecodeFunc; AHasAlpha: Boolean); inline;

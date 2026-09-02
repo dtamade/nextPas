@@ -139,29 +139,32 @@ end;
 
 function TStringView.TrimLeft: TStringView;
 var
-  LPos: SizeUInt;
+  LSpan: TByteSpan;
 begin
-  LPos := 0;
-  while (LPos < FLen) and IsWhitespace(Byte(FData[LPos])) do
-    Inc(LPos);
-  Result.FData := FData + LPos;
-  Result.FLen := FLen - LPos;
+  // single source: bytes.ops.SpanTrimLeft — zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  LSpan := SpanTrimLeft(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
 function TStringView.TrimRight: TStringView;
 var
-  LEnd: SizeUInt;
+  LSpan: TByteSpan;
 begin
-  LEnd := FLen;
-  while (LEnd > 0) and IsWhitespace(Byte(FData[LEnd - 1])) do
-    Dec(LEnd);
-  Result.FData := FData;
-  Result.FLen := LEnd;
+  // single source: bytes.ops.SpanTrimRight — zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  LSpan := SpanTrimRight(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
 function TStringView.Trim: TStringView;
+var
+  LSpan: TByteSpan;
 begin
-  Result := TrimLeft.TrimRight;
+  // single source: bytes.ops.SpanTrim — zero-copy view via SpanTrimLeft+SpanTrimRight, no heap alloc, inline thin-forward, owner bytes.ops
+  LSpan := SpanTrim(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
 function TStringView.Equals(const AOther: TStringView): Boolean; inline;

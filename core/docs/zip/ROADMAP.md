@@ -200,6 +200,35 @@
 - `common.GuardEntryPassword` 单源化 `reader` 双 `OpenEntry` + `sequential` 的 `CollectDescriptorPayload/MakeDecompressedReader` 缺口令守卫重复（`IsEncrypted ∧ Password=∅ → EInvalidOperationError('zip: entry is encrypted, no password configured: '+Name)`），4×3 行 → 4×1 行，错误消息与 fail-closed 时序守恒
 - `common` 为 `reader/sequential` 共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardTotalOutputSize/ParseLocalHeader`），冷路径零分配，12 门 + `bench_zip 221744` 可编译回归
 
+### S88 — 越界守卫单源与平台期（1.0.1 巡检）· 复用度/稳定性 — 已落地
+- `common.GuardZipIndex` 单源化 `TZipReaderImpl.CheckIndex` / `TZipSourceReader.CheckIndex` 越界守卫重复（`0 ≤ Index < Count → EIndexOutOfRangeError('zip: entry index out of range: '+Int)`），2×4 行 → 2×1 行 `inline`，`EIndexOutOfRangeError` 语义守恒
+- `common` 为 `reader` 双形态共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/GuardTotalOutputSize/ParseLocalHeader`），冷路径 `inline` 零成本，12 门 + `bench_zip 221747` 可编译回归，`S85—S88` 四单源平台期证据化
+
+### S89 — Find 单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.FindZipEntry` 单源化 `TZipReaderImpl.Find` / `TZipSourceReader.Find` 线性查找重复（`Name = AName → 首命中 Index / -1`），2×6 行 → 2×1 行 `inline`，首命中语义守恒，`common` 为 `reader` 双形态共享查找内核，12 门 + `bench_zip 221757` 可编译回归，`S85—S89` 五单源平台期
+
+### S90 — 总输出限界单源与平台期（1.0.1 巡检）· 复用度/稳定性 — 已落地
+- `common.GuardTotalOutputAdvance` 单源化 `GuardTotalOutputSize` 批量求和与 `sequential.CheckTotalLimit` 增量累计的总量溢出守卫重复（`ASize>Max ∨ ACum>Max-ASize → EZipLimitError('zip: total uncompressed size exceeds limit')`），2×5 行 → 2×1 行调用，溢出安全语义守恒，批量 `GuardTotalOutputSize` 薄循环委托单源，顺序 `CheckTotalLimit` 直通单源，`EZipLimitError/EIOError` 分叉归一（`EZipLimitError= EIOError` 子类，fail-closed 一致）
+- `common` 为 `reader/sequential` 共享总量守卫内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/FindZipEntry/GuardTotalOutputAdvance/GuardTotalOutputSize`），批量/增量双路径 `EZipLimitError` 统一，12 门 + `bench_zip 221819` 可编译回归，`S85—S90` 六单源平台期
+
+### S91 — 泵送单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipPumpReader` 单源化 `TZipReaderImpl.CopyEntryTo` / `TZipSourceReader.CopyEntryTo` 泵送循环重复（`OpenEntry→65KiB分块Read/Write→Close`），2×16 行 → 2×1 行 `ZipPumpReader(OpenEntry,ADst)`，`EArgumentError/EIOError` 语义守恒，`reader` 双形态共享泵内核，12 门 + `bench_zip 221819` 可编译回归，`S85—S91` 七单源平台期
+
+### S92 — 三路泵单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipPumpReader` 三路收口：`TSequentialZipReader.CopyTo` 去 16 行泵循环薄委托 `ZipPumpReader(Open,ADst)`，与 S91 双复制口 `TZipReaderImpl/TZipSourceReader.CopyEntryTo` 共单源（3×16 行 → 3×1 行），`EArgumentError/EIOError/65KiB` 语义守恒，`reader` 为读/顺序三形态共享泵内核（S91 `reader` 双形态 → S92 三路），`sequential` 仅增 `reader` 依赖无循环，12 门 + `bench_zip 221800` 可编译回归，`S85—S92` 八单源平台期
+
+### S93 — 解压管道单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipWrapEntryReader` 单源化 `TZipReaderImpl.OpenEntry` / `TZipSourceReader.OpenEntry` 解压管道重复（`AES解帧→RawDeflateReaderWithMaxOutputSize→TZipVerifyReader` 2×20 行 → 2×1 行 `ZipWrapEntryReader(切片/区间,LE,Password,MaxOutput)`），`ENotSupportedError` 与 `store/deflate/AES` 语义守恒，`reader` 双形态共享管道内核，`TSliceReader/TSourceSpanReader` 各自仅保留切片构造，12 门 + `bench_zip 221789` 可编译回归，`S85—S93` 九单源平台期
+
+### S94 — EOCD 扫描单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipFindEocd` 单源化 `TZipReaderImpl.ParseCentralDirectory` / `TZipSourceReader.ParseCentralDirectory` EOCD 扫描循环重复（`PeekU32LE 逐字节回扫` 2×12 行 → 2×1 行 `ZipFindEocd(Cursor,LowerBound)`），`end of central directory not found` 语义守恒，`reader` 双形态共享扫描内核（`FC` 全量与 `Tail` 窗口统一），12 门 + `bench_zip 221783` 可编译回归，`S85—S94` 十单源平台期
+
+### S95 — EOCD 字段单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipDecodeEocd` 单源化双 `ParseCentralDirectory` EOCD 字段解析重复（`ReadU32LE sig + 2/2/2/2/4/4/2` 2×8 行 → 2×1 行 `ZipDecodeEocd(Cursor, DiskNum,CdStartDisk,Count16,CommentLen,CdSize,CdOffset)`），`bad end of central directory signature` 与 `multi-disk/truncated comment` 守恒，`reader` 双形态共享字段内核，12 门 + `bench_zip 221783` 可编译回归，`S85—S95` 十一单源平台期
+
+### S96 — 中央条目循环单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipParseCentralEntries` 单源化双 `ParseCentralDirectory` 中央条目循环重复（`NeedRange+sig+ParseCentralEntry` 2×10 行 → 2×1 行 `ZipParseCentralEntries(Cursor,BaseOffset,Entries,Flags,MaxTotal)`，含 `GuardTotalOutputSize` 守恒），`bad central header signature` 与 `entry count out of range` 语义守恒，`reader` 双形态共享条目内核（`FC 0基` vs `Tail LCdOffset基`），12 门 + `bench_zip 221787` 可编译回归，`S85—S96` 十二单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -232,4 +261,8 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S87 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e63c47b` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword` 五单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S96 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 655e573` 已落地（S95→S96 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries` 十三单源（三路泵+双管道+EOCD双+中央循环） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S95 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e76ebe5` 已落地（S94→S95 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd` 十二单源（三路泵+双管道+EOCD双） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S94 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main b0a829a` 已落地（S93→S94 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd` 十一单源（三路泵+双管道+EOCD） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S92 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e006a56` 已落地（S91→S92 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader` 九单源（三路泵） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S89 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 0dfb25e` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry` 七单源 + AES 零堆栈。
