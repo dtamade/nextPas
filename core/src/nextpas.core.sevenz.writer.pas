@@ -1029,10 +1029,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
         LNonEmptyIdx[LAcc] := LI;
         Inc(LAcc);
       end;
-    { 按阈值切分 folder：任一维度超限即起新 folder }
+    { 按阈值切分 folder：任一维度超限即起新 folder — 几何扩容 O(n) 替代逐次 SetLength O(n²)，复用 bytes.ops 单源 }
+    LFolders := nil;
     SetLength(LFolders, 0);
     if LNonEmpty > 0 then
     begin
+      LFolderIdx := 0; // 复用为 folder 计数器，避免新增变量
       LGroupBytes := 0;
       LGroupCount := 0;
       for LI := 0 to LNonEmpty - 1 do
@@ -1053,8 +1055,10 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
            (((FMaxFolderBytes > 0) and (UInt64(LGroupBytes + LK) > FMaxFolderBytes)) or
             ((FMaxFilesPerFolder > 0) and (LGroupCount + 1 > FMaxFilesPerFolder))) then
         begin
-          SetLength(LFolders, Length(LFolders) + 1);
-          LFolders[High(LFolders)].SubCount := UInt64(LGroupCount);
+          if LFolderIdx >= Length(LFolders) then
+            SetLength(LFolders, SizeInt(BytesNextCapacity(SizeUInt(Length(LFolders)), SizeUInt(LFolderIdx+1))));
+          LFolders[LFolderIdx].SubCount := UInt64(LGroupCount);
+          Inc(LFolderIdx);
           LGroupBytes := 0;
           LGroupCount := 0;
         end;
@@ -1063,9 +1067,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       end;
       if LGroupCount > 0 then
       begin
-        SetLength(LFolders, Length(LFolders) + 1);
-        LFolders[High(LFolders)].SubCount := UInt64(LGroupCount);
+        if LFolderIdx >= Length(LFolders) then
+          SetLength(LFolders, SizeInt(BytesNextCapacity(SizeUInt(Length(LFolders)), SizeUInt(LFolderIdx+1))));
+        LFolders[LFolderIdx].SubCount := UInt64(LGroupCount);
+        Inc(LFolderIdx);
       end;
+      SetLength(LFolders, LFolderIdx);
       { 为每 folder 填充 RawSolid / SubSizes / SubCrcs }
       LAcc := 0;
       for LFolderIdx := 0 to High(LFolders) do
