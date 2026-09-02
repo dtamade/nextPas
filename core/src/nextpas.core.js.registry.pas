@@ -53,8 +53,8 @@ procedure EnsureVaultLock; inline;
 var
   LExp: Int32;
 begin
-  // perf: inline double-checked, zero alloc fast path single branch, lazy single source via sync.mutex→platform.sync (platform_mutex_init), Exactly-Once rare via atomic cas
-  // stability: atomic acquire/release 确保 Lock 发布可见，try-finally 不丢
+  // perf: inline double-checked zero alloc single branch, lazy Exactly-Once via atomic CAS, 64B 友好
+  // stability: acquire/release 发布可见，创建异常回滚不误判，try-finally 不丢
   if Assigned(VaultRef^.Lock) then Exit;
   LExp := 0;
   if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
@@ -62,14 +62,18 @@ begin
     try
       if not Assigned(VaultRef^.Lock) then
         VaultRef^.Lock := TMutex.Create;
-    finally
       atomic_store(GVaultInit, Int32(2), mo_release);
+    except
+      atomic_store(GVaultInit, Int32(0), mo_release);
+      raise;
     end;
   end
   else
   begin
     while atomic_load(GVaultInit, mo_acquire) = 1 do
       cpu_pause;
+    if (atomic_load(GVaultInit, mo_acquire) <> 2) and not Assigned(VaultRef^.Lock) then
+      EnsureVaultLock;
   end;
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);
@@ -93,8 +97,10 @@ function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean; inline;
 var
   LRes: Boolean;
 begin
-  // perf: inline O(1) Ord(AKind) index, zero-copy, platform.sync 原子保护快照 via IMutex Acquire/Release, no branch mispredict, single source via VaultRef
-  // stability: owner GVault via VaultRef, try-finally 不丢, acquire 可见性
+  // perf: inline O(1) Ord(AKind) 零拷贝，init后无锁快照零竞争（单次 acquire load，64B 友好），未就绪才加锁
+  // stability: VaultRef 单源，try-finally 不丢
+  if atomic_load(GVaultInit, mo_acquire) = 2 then
+    Exit(VaultRef^.Registered[AKind]);
   if not Assigned(VaultRef^.Lock) then
     Exit(False);
   VaultRef^.Lock.Acquire;
@@ -112,8 +118,7 @@ var
   LAvail: TJsAvailableFunc;
   LAvailRes: Boolean;
 begin
-  // perf: inline hot probe init后无锁读零拷贝 O(1) 索引：GVaultInit=2 时无锁快照零竞争零额外栅栏（单次 acquire load 可见，64B 友好），Avail 调用锁外防重入，bytes.ops 单源 via VaultRef，热点 inline 零拷贝
-  // stability: owner GVault via VaultRef，GVaultInit acquire 发布可见，未就绪才走锁快照 try-finally 不丢，exactly-once
+  // perf: if atomic_load(GVaultInit, mo_acquire) = 2 then LReg/Avail 零锁快照 64B 友好 inline 零拷贝 O(1) 索引，Avail 锁外调用
   if atomic_load(GVaultInit, mo_acquire) = 2 then
   begin
     LReg := VaultRef^.Registered[AKind];

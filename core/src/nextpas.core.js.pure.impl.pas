@@ -433,7 +433,7 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  JsPureClose(FHost.Hosts, FHost.Buckets, FValue.Heap, FValue.Global, FContextId);
+  JsPureClose(FHost, FValue.Heap, FValue.Global, FContextId);
 end;
 
 function TJsPureContext.IsClosed: Boolean;

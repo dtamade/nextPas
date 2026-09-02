@@ -123,26 +123,26 @@ begin
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
         try
-          // perf: single ToCString + bytes.ops single source AnsiPtrToString zero-copy Move single scan, no JsonParse O(n), inline zero-copy, 资源 exactly-once Free不丢
-          Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId));
+          // perf: single ToCString + single scan QjsView (bytes.ops AnsiPtrLen single source via JsValueCStrLen/QjsCStrLen) → zero-copy TStringView + JsPureNewStringView single BytesCopy single alloc (bytes.ops SpanToString/BytesCopy single source), inline, B/op=1, 资源 exactly-once Free不丢 — eliminates AnsiPtrToString+JsPureNewString double alloc, 纯视图 BytesCopy 单源零拷贝单分配
+          Exit(JsPureNewStringView(QjsView(P), ACtxtId));
         finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
       begin
-        // perf: object/array 统一单次ToCString via bytes.ops single source (merged JS_IsArray真假两路重复ToCString+AnsiPtrToString → 单次FFI往返), no JsonParse, inline zero-copy, 资源 exactly-once Free不丢 — 单次 ToCString+AnsiPtrToString 零拷贝单扫, 消除多一次FFI往返
+        // perf: object/array 统一单次ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source (merged JS_IsArray真假两路重复ToCString→单次FFI往返, inline, exactly-once Free不丢) — 纯视图 BytesCopy 单源零拷贝单分配, 消除多一次FFI往返+double alloc
         if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsPureNewString('', ACtxtId));
-        try Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        try Exit(JsPureNewStringView(QjsView(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_EXCEPTION: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   end;
-  // fallback for BIG_INT/SYMBOL etc or NaN-boxing build unknown tag — single ToCString via bytes.ops single source, no JsonParse second pass, exactly-once Free不丢; 保 CONTRACT 单源 json owner 不在此 fallback 扩张
+  // fallback for BIG_INT/SYMBOL etc or NaN-boxing build unknown tag — single ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source, no JsonParse second pass, exactly-once Free不丢; 保 CONTRACT 单源 json owner 不在此 fallback 扩张 — 纯视图 BytesCopy 单源零拷贝单分配
   if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   P := JS_ToCStringPtr(ACtx, V);
   if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   try
-    Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId));
+    Exit(JsPureNewStringView(QjsView(P), ACtxtId));
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
 end;
 
