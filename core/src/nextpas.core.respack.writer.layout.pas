@@ -35,10 +35,10 @@ type
   end;
 
 type
-  TResPackDedupBuckets = nextpas.core.respack.base.TResPackDedupBuckets;
-  PSizeInt = nextpas.core.respack.base.PSizeInt;
-  TResPackDistinct = nextpas.core.respack.base.TResPackDistinct;
-  PResPackDistinct = nextpas.core.respack.base.PResPackDistinct;
+  TResPackDedupBuckets = nextpas.core.respack.base.TResPackDedupBuckets; // 别名：四件套薄转发
+  PSizeInt = nextpas.core.respack.base.PSizeInt; // 别名：四件套薄转发
+  TResPackDistinct = nextpas.core.respack.base.TResPackDistinct; // 别名：四件套薄转发
+  PResPackDistinct = nextpas.core.respack.base.PResPackDistinct; // 别名：四件套薄转发
 
 { Dedup arena 薄转发至 respack.base 共享底座，单源收敛。 }
 procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;

@@ -29,7 +29,6 @@ uses
 
 const
   RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
-  RESPACK_STREAM_HEAD_CHUNK: SizeUInt = RESPACK_WRITER_HEAD_CHUNK; { 兼容别名，单源于 base }
 
 { 零填分段：BYTES_ZERO_PAGE 单源，≤4K 快道 inline，>4K 外联 Loop }
 function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
@@ -116,7 +115,7 @@ var
     CurOff: UInt64;
     Pad: UInt64;
   begin
-    ChunkCap := RESPACK_STREAM_HEAD_CHUNK;
+    ChunkCap := RESPACK_WRITER_HEAD_CHUNK;
     // 64K HeadBuf 单次分配/Build，复用分片
     SetLength(HeadBuf, ChunkCap);
     ChunkPos := 0;
@@ -161,7 +160,7 @@ begin
     if HeadSize = 0 then
     begin
     end
-    else if HeadSize <= UInt64(RESPACK_STREAM_HEAD_CHUNK) then
+    else if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
     begin
       SetLength(HeadBuf, SizeUInt(HeadSize));
       if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
