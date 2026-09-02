@@ -377,6 +377,30 @@ begin
   ACommentLen := AC.ReadU16LE;
 end;
 
+procedure ZipDecodeZip64Locator(const AC: IByteCursor; out AEocdOffset: UInt64);
+begin
+  if AC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
+    raise EParseError.Create('zip: zip64 records missing');
+  AC.ReadU32LE;
+  AEocdOffset := AC.ReadU64LE;
+end;
+
+procedure ZipDecodeZip64Eocd(const AC: IByteCursor; out ACount: Int64;
+  out ACdSize, ACdOffset: UInt64);
+begin
+  if AC.ReadU32LE <> C_ZIP64_EOCD_SIG then
+    raise EParseError.Create('zip: bad zip64 EOCD signature');
+  AC.ReadU64LE;
+  AC.ReadU16LE;
+  AC.ReadU16LE;
+  AC.ReadU32LE;
+  AC.ReadU32LE;
+  AC.ReadU64LE;
+  ACount := Int64(AC.ReadU64LE);
+  ACdSize := AC.ReadU64LE;
+  ACdOffset := AC.ReadU64LE;
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -588,24 +612,11 @@ begin
     LLocatorPos := LEocdPos - C_ZIP64_LOCATOR_LEN;
     NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     FC.Seek(SizeUInt(LLocatorPos));
-    if FC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
-      raise EParseError.Create('zip: zip64 records missing');
-    FC.ReadU32LE;                              { 本盘号 }
-    LZ64EocdOffset := FC.ReadU64LE;
+    ZipDecodeZip64Locator(FC, LZ64EocdOffset);
     NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     FC.Seek(SizeUInt(LZ64EocdOffset));
-    if FC.ReadU32LE <> C_ZIP64_EOCD_SIG then
-      raise EParseError.Create('zip: bad zip64 EOCD signature');
-    FC.ReadU64LE;                              { 记录体尺寸 }
-    FC.ReadU16LE;                              { version made by }
-    FC.ReadU16LE;                              { version needed }
-    FC.ReadU32LE;                              { 本盘号 }
-    FC.ReadU32LE;                              { central 起始盘号 }
-    FC.ReadU64LE;                              { 本盘条目数 }
-    LCount := Int64(FC.ReadU64LE);
-    LCdSize := FC.ReadU64LE;
-    LCdOffset := FC.ReadU64LE;
+    ZipDecodeZip64Eocd(FC, LCount, LCdSize, LCdOffset);
   end
   else
     LCount := LCount16;
@@ -849,26 +860,13 @@ begin
     NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     Fetch(LLocatorPos, C_ZIP64_LOCATOR_LEN, LBuf, 'zip64 locator');
     LC := NewByteCursor(LBuf);
-    if LC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
-      raise EParseError.Create('zip: zip64 records missing');
-    LC.ReadU32LE;                              { 本盘号 }
-    LZ64EocdOffset := LC.ReadU64LE;
+    ZipDecodeZip64Locator(LC, LZ64EocdOffset);
     NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     Fetch(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN, LBuf,
       'zip64 end of central directory');
     LC := NewByteCursor(LBuf);
-    if LC.ReadU32LE <> C_ZIP64_EOCD_SIG then
-      raise EParseError.Create('zip: bad zip64 EOCD signature');
-    LC.ReadU64LE;                              { 记录体尺寸 }
-    LC.ReadU16LE;                              { version made by }
-    LC.ReadU16LE;                              { version needed }
-    LC.ReadU32LE;                              { 本盘号 }
-    LC.ReadU32LE;                              { central 起始盘号 }
-    LC.ReadU64LE;                              { 本盘条目数 }
-    LCount := Int64(LC.ReadU64LE);
-    LCdSize := LC.ReadU64LE;
-    LCdOffset := LC.ReadU64LE;
+    ZipDecodeZip64Eocd(LC, LCount, LCdSize, LCdOffset);
   end
   else
     LCount := LCount16;
