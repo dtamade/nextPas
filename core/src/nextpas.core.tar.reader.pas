@@ -10,6 +10,19 @@ uses
   nextpas.core.io.intf;
 
 type
+  { — 头扫描记录表：8字段NUL截断缓存收敛为记录，单遍512循环表驱动（bytes.ops 单源、零拷贝 SIMD）— }
+  TTarScanCache = record
+    Pos: SizeUInt;
+    Valid: Boolean;
+    NameLen: SizeUInt;
+    PrefixLen: SizeUInt;
+    LinkLen: SizeUInt;
+    UNameLen: SizeUInt;
+    GNameLen: SizeUInt;
+    MagicLen: SizeUInt;
+    VersionLen: SizeUInt;
+  end;
+
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。 *}
   TTarReader = class
   private
@@ -31,16 +44,8 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { — 单遍512头扫描缓存：融合8字段NUL截断，避免每字段SpanIndexOf SIMD（bytes.ops 单源）— }
-    FScanPos: SizeUInt;
-    FScanValid: Boolean;
-    FNameLen: SizeUInt;
-    FPrefixLen: SizeUInt;
-    FLinkLen: SizeUInt;
-    FUNameLen: SizeUInt;
-    FGNameLen: SizeUInt;
-    FMagicLen: SizeUInt;
-    FVersionLen: SizeUInt;
+    { — 记录表收敛：单遍512头扫描8字段缓存，表驱动解耦扁平变量与循环（bytes.ops 单源）— }
+    FScan: TTarScanCache;
     procedure EnsureHeaderScanned;
     { — 热路径外联禁 inline，薄转发可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
@@ -62,7 +67,7 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string;
     { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
-    { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；外联禁 inline（@ACached[1] 喂 CompareMem/MemEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
+    { — 非热点字段缓存：零拷贝 slice + SpanEqual/MemEqual 复用已分配串（bytes.ops 单源 SIMD），万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
   public
     procedure ClearGlobalPax; inline;
@@ -128,8 +133,8 @@ begin
     FData := nil;
   FCount := SizeUInt(Length(AData));
   FPos := 0;
-  FScanValid := False;
-  FScanPos := 0;
+  FScan.Valid := False;
+  FScan.Pos := 0;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -144,8 +149,8 @@ begin
   FData := AData;
   FCount := ACount;
   FPos := 0;
-  FScanValid := False;
-  FScanPos := 0;
+  FScan.Valid := False;
+  FScan.Pos := 0;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -157,67 +162,49 @@ end;
 procedure TTarReader.EnsureHeaderScanned;
 var
   B: PByte;
-  I: SizeUInt;
+  I, J: SizeUInt;
+  // 记录表驱动：Off/Len/缓存指针三元组，解耦7字段扁平if-else与单遍512循环，可维护性+质感
+  LTable: array[0..6] of record Off, Len: SizeUInt; PLen: ^SizeUInt; end;
 begin
-  if FScanValid and (FScanPos = FPos) then
+  if FScan.Valid and (FScan.Pos = FPos) then
     Exit;
-  // 融合：单遍512块扫描求8字段NUL截断（Name/LinkName/Magic/Version/UName/GName/Prefix(+备用)），零拷贝视图，单源 bytes.ops
-  FNameLen := C_TAR_LAYOUT.Name.Len;
-  FPrefixLen := C_TAR_LAYOUT.Prefix.Len;
-  FLinkLen := C_TAR_LAYOUT.LinkName.Len;
-  FUNameLen := C_TAR_LAYOUT.UName.Len;
-  FGNameLen := C_TAR_LAYOUT.GName.Len;
-  FMagicLen := C_TAR_LAYOUT.Magic.Len;
-  FVersionLen := C_TAR_LAYOUT.Version.Len;
+  // 融合：单遍512块扫描求7字段NUL截断（Name/LinkName/Magic/Version/UName/GName/Prefix），零拷贝视图，单源 bytes.ops
+  FScan.NameLen := C_TAR_LAYOUT.Name.Len;
+  FScan.PrefixLen := C_TAR_LAYOUT.Prefix.Len;
+  FScan.LinkLen := C_TAR_LAYOUT.LinkName.Len;
+  FScan.UNameLen := C_TAR_LAYOUT.UName.Len;
+  FScan.GNameLen := C_TAR_LAYOUT.GName.Len;
+  FScan.MagicLen := C_TAR_LAYOUT.Magic.Len;
+  FScan.VersionLen := C_TAR_LAYOUT.Version.Len;
   if FPos + CBlockSize > FCount then
   begin
-    FScanPos := FPos;
-    FScanValid := True;
+    FScan.Pos := FPos;
+    FScan.Valid := True;
     Exit;
   end;
+  // 记录表：字段描述与缓存指针一一映射，表驱动消除扁平if-else耦合
+  LTable[0].Off := C_TAR_LAYOUT.Name.Off;     LTable[0].Len := C_TAR_LAYOUT.Name.Len;     LTable[0].PLen := @FScan.NameLen;
+  LTable[1].Off := C_TAR_LAYOUT.LinkName.Off; LTable[1].Len := C_TAR_LAYOUT.LinkName.Len; LTable[1].PLen := @FScan.LinkLen;
+  LTable[2].Off := C_TAR_LAYOUT.Magic.Off;    LTable[2].Len := C_TAR_LAYOUT.Magic.Len;    LTable[2].PLen := @FScan.MagicLen;
+  LTable[3].Off := C_TAR_LAYOUT.Version.Off;  LTable[3].Len := C_TAR_LAYOUT.Version.Len;  LTable[3].PLen := @FScan.VersionLen;
+  LTable[4].Off := C_TAR_LAYOUT.UName.Off;    LTable[4].Len := C_TAR_LAYOUT.UName.Len;    LTable[4].PLen := @FScan.UNameLen;
+  LTable[5].Off := C_TAR_LAYOUT.GName.Off;    LTable[5].Len := C_TAR_LAYOUT.GName.Len;    LTable[5].PLen := @FScan.GNameLen;
+  LTable[6].Off := C_TAR_LAYOUT.Prefix.Off;   LTable[6].Len := C_TAR_LAYOUT.Prefix.Len;   LTable[6].PLen := @FScan.PrefixLen;
   B := @FData[FPos];
   for I := 0 to CBlockSize - 1 do
   begin
     if B[I] <> 0 then
       Continue;
-    if (I >= C_TAR_LAYOUT.Name.Off) and (I < C_TAR_LAYOUT.Name.Off + C_TAR_LAYOUT.Name.Len) then
-    begin
-      if FNameLen = C_TAR_LAYOUT.Name.Len then
-        FNameLen := I - C_TAR_LAYOUT.Name.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.LinkName.Off) and (I < C_TAR_LAYOUT.LinkName.Off + C_TAR_LAYOUT.LinkName.Len) then
-    begin
-      if FLinkLen = C_TAR_LAYOUT.LinkName.Len then
-        FLinkLen := I - C_TAR_LAYOUT.LinkName.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.Magic.Off) and (I < C_TAR_LAYOUT.Magic.Off + C_TAR_LAYOUT.Magic.Len) then
-    begin
-      if FMagicLen = C_TAR_LAYOUT.Magic.Len then
-        FMagicLen := I - C_TAR_LAYOUT.Magic.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.Version.Off) and (I < C_TAR_LAYOUT.Version.Off + C_TAR_LAYOUT.Version.Len) then
-    begin
-      if FVersionLen = C_TAR_LAYOUT.Version.Len then
-        FVersionLen := I - C_TAR_LAYOUT.Version.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.UName.Off) and (I < C_TAR_LAYOUT.UName.Off + C_TAR_LAYOUT.UName.Len) then
-    begin
-      if FUNameLen = C_TAR_LAYOUT.UName.Len then
-        FUNameLen := I - C_TAR_LAYOUT.UName.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.GName.Off) and (I < C_TAR_LAYOUT.GName.Off + C_TAR_LAYOUT.GName.Len) then
-    begin
-      if FGNameLen = C_TAR_LAYOUT.GName.Len then
-        FGNameLen := I - C_TAR_LAYOUT.GName.Off;
-    end
-    else if (I >= C_TAR_LAYOUT.Prefix.Off) and (I < C_TAR_LAYOUT.Prefix.Off + C_TAR_LAYOUT.Prefix.Len) then
-    begin
-      if FPrefixLen = C_TAR_LAYOUT.Prefix.Len then
-        FPrefixLen := I - C_TAR_LAYOUT.Prefix.Off;
-    end;
+    for J := 0 to High(LTable) do
+      if (I >= LTable[J].Off) and (I < LTable[J].Off + LTable[J].Len) then
+      begin
+        if LTable[J].PLen^ = LTable[J].Len then
+          LTable[J].PLen^ := I - LTable[J].Off;
+        Break;
+      end;
   end;
-  FScanPos := FPos;
-  FScanValid := True;
+  FScan.Pos := FPos;
+  FScan.Valid := True;
 end;
 
 function TTarReader.ByteAt(AOfs: SizeUInt): Byte;
@@ -246,19 +233,19 @@ begin
     EnsureHeaderScanned;
     LCached := False;
     if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-    begin LLen := FNameLen; LCached := True; end
+    begin LLen := FScan.NameLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-    begin LLen := FPrefixLen; LCached := True; end
+    begin LLen := FScan.PrefixLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-    begin LLen := FLinkLen; LCached := True; end
+    begin LLen := FScan.LinkLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-    begin LLen := FUNameLen; LCached := True; end
+    begin LLen := FScan.UNameLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-    begin LLen := FGNameLen; LCached := True; end
+    begin LLen := FScan.GNameLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-    begin LLen := FMagicLen; LCached := True; end
+    begin LLen := FScan.MagicLen; LCached := True; end
     else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-    begin LLen := FVersionLen; LCached := True; end;
+    begin LLen := FScan.VersionLen; LCached := True; end;
     if LCached then
     begin
       if LLen = 0 then
@@ -353,16 +340,31 @@ function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): stri
 var
   LSpan: TByteSpan;
   LCachedLen: SizeUInt;
+  LCachedSpan: TByteSpan;
 begin
+  // 单源收敛：SpanEqual（bytes.ops SIMD MemEqual）替代 System.CompareMem，零拷贝视图单次 Move，inline 热路径
   LCachedLen := SizeUInt(Length(ACached));
-  if (LCachedLen > 0) and (LCachedLen <= ALen) and CompareMem(Pointer(PAnsiChar(ACached)), @FData[AOfs], LCachedLen) then
-    if (LCachedLen = ALen) or (FData[AOfs + LCachedLen] = 0) then
-      Exit(ACached);
+  if (LCachedLen > 0) and (LCachedLen <= ALen) then
+  begin
+    LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
+    if SpanEqual(LCachedSpan, TByteSpan.Create(@FData[AOfs], LCachedLen)) then
+      if (LCachedLen = ALen) or (FData[AOfs + LCachedLen] = 0) then
+        Exit(ACached);
+  end;
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
-  if (LCachedLen = LSpan.Len) and CompareMem(Pointer(PAnsiChar(ACached)), LSpan.Data, LSpan.Len) then
-    Exit(ACached);
+  if LCachedLen = LSpan.Len then
+  begin
+    if LCachedLen > 0 then
+    begin
+      LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
+      if SpanEqual(LCachedSpan, LSpan) then
+        Exit(ACached);
+    end
+    else
+      Exit(ACached);
+  end;
   Result := SpanToString(LSpan);
   ACached := Result;
 end;

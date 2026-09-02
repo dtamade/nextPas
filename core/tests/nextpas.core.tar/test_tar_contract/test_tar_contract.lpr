@@ -198,8 +198,8 @@ begin
   Low := LowerCase(S);
   // 8字段单遍512融合：FieldSlice 不再每字段 SpanIndexOf，需经 EnsureHeaderScanned 单次扫描
   Check(Pos('ensureheaderscanned', Low) > 0, 'reader has EnsureHeaderScanned fusion entry');
-  Check(Pos('fscanvalid', Low) > 0, 'reader has FScanValid cache flag');
-  Check(Pos('fnamelen', Low) > 0, 'reader caches FNameLen via single pass');
+  Check((Pos('fscanvalid', Low) > 0) or (Pos('fscan.valid', Low) > 0) or (Pos('ttarscancache', Low) > 0), 'reader has FScanValid cache flag (flat or record TTarScanCache.Valid)');
+  Check((Pos('fnamelen', Low) > 0) or (Pos('namelen', Low) > 0), 'reader caches FNameLen via single pass');
   Check(Pos('for i := 0 to cblocksize - 1', Low) > 0, 'single 512 loop exists');
   // FieldSlice 必须含缓存分发，避免8次 SIMD；单源 C_TAR_LAYOUT 零错位
   Check(Pos('c_tar_layout', Low) > 0, 'reader references tar layout single source');

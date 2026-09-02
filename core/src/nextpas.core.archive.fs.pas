@@ -651,6 +651,7 @@ var
   LI: Integer;
   LName, LChildAbs, LChildRel: string;
   LInfo: TFileInfo;
+  LRelSpan, LAbsSpan, LNameSpan: TByteSpan;
 begin
   { ReadDir 已批量缓存目录项（platform 4K buf + 迭代句柄），仅含 Name/Type；
     mtime/mode 需 Stat 补齐，每条目一次 Stat 为必要 O(N)，非 N+1 冗余；
@@ -662,11 +663,12 @@ begin
     LName := LEntries[LI].Name;
     if (LName = '.') or (LName = '..') then
       Continue;
-    if ARelPrefix = '' then
-      LChildRel := LName
-    else
-      LChildRel := ARelPrefix + '/' + LName;
-    LChildAbs := AAbsDir + '/' + LName;
+    // perf: 复用 bytes.ops SpanJoinWithSeparator 单源，单次 SetLength+两 CopyMemory 零拷贝 PByte 视图，inline 薄转发消除原生 + 两次分配微缝；ARelPrefix/LName 视图零分配单源
+    if Length(ARelPrefix) = 0 then LRelSpan := TByteSpan.Empty else LRelSpan := TByteSpan.Create(PByte(@ARelPrefix[1]), SizeUInt(Length(ARelPrefix)));
+    if Length(LName) = 0 then LNameSpan := TByteSpan.Empty else LNameSpan := TByteSpan.Create(PByte(@LName[1]), SizeUInt(Length(LName)));
+    LChildRel := SpanJoinWithSeparator(LRelSpan, LNameSpan, '/');
+    if Length(AAbsDir) = 0 then LAbsSpan := TByteSpan.Empty else LAbsSpan := TByteSpan.Create(PByte(@AAbsDir[1]), SizeUInt(Length(AAbsDir)));
+    LChildAbs := SpanJoinWithSeparator(LAbsSpan, LNameSpan, '/');
     LInfo := nextpas.core.fs.Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
