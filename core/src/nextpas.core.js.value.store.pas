@@ -28,6 +28,11 @@ procedure JsValueStoreClear(var S: TJsValueStore); inline;
 function JsValueStoreFind(const S: TJsValueStore; const AObj: TJsValue): Integer; inline;
 function JsValueStoreGlobal(const S: TJsValueStore): TJsValue; inline;
 function JsValueStoreHeapLength(const S: TJsValueStore): Integer; inline;
+function JsValueStoreHasProp(const S: TJsValueStore; const AObj: TJsValue; const AName: string): Boolean; inline;
+function JsValueStoreDeleteProp(var S: TJsValueStore; const AObj: TJsValue; const AName: string): Boolean; inline;
+function JsValueStoreGetKeys(const S: TJsValueStore; const AObj: TJsValue): TJsStringArray; inline;
+function JsValueStoreGetProp(const S: TJsValueStore; const AObj: TJsValue; const AName: string): TJsValue; inline;
+procedure JsValueStoreSetProp(var S: TJsValueStore; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 function JsValueCStrLen(P: PAnsiChar): SizeUInt; inline;
 function JsValueView(P: PAnsiChar): TStringView; inline;
 
@@ -66,6 +71,36 @@ function JsValueStoreHeapLength(const S: TJsValueStore): Integer; inline;
 begin
   // perf: inline zero-copy Length read, no scan, O(1)
   Result := Length(S.Heap);
+end;
+
+function JsValueStoreHasProp(const S: TJsValueStore; const AObj: TJsValue; const AName: string): Boolean; inline;
+begin
+  // perf: inline thin-forward to pure.base single source JsPureHeapHasProp via pure.value bytes.ops+mem.dynarray, hash>64 O1 bucket via FNV1a single source, zero-copy, inline hot path, single Store single source
+  Result := JsPureHeapHasProp(S.Heap, AObj, AName);
+end;
+
+function JsValueStoreDeleteProp(var S: TJsValueStore; const AObj: TJsValue; const AName: string): Boolean; inline;
+begin
+  // perf: inline thin-forward to pure.base single source JsPureHeapDeleteProp, O(1) swap-last single source, bytes.ops geometric single source, zero-copy, single Store single source
+  Result := JsPureHeapDeleteProp(S.Heap, AObj, AName);
+end;
+
+function JsValueStoreGetKeys(const S: TJsValueStore; const AObj: TJsValue): TJsStringArray; inline;
+begin
+  // perf: inline thin-forward to pure.base single source JsPureHeapGetKeys, zero-copy name ref, single Store single source, bytes.ops not needed single scan
+  Result := JsPureHeapGetKeys(S.Heap, AObj);
+end;
+
+function JsValueStoreGetProp(const S: TJsValueStore; const AObj: TJsValue; const AName: string): TJsValue; inline;
+begin
+  // perf: inline thin-forward to pure.base single source JsPureHeapGetProp via bytes.ops FNV1a+bucket O(1), zero-copy hash filter, inline hot path, single Store single source
+  Result := JsPureHeapGetProp(S.Heap, AObj, AName);
+end;
+
+procedure JsValueStoreSetProp(var S: TJsValueStore; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
+begin
+  // perf: inline thin-forward to pure.base single source JsPureHeapSetProp via bytes.ops+mem.dynarray Exactly-Once geometric, FNV1a pre-hash single source, amortized O1, single Store single source
+  JsPureHeapSetProp(S.Heap, AObj, AName, AVal);
 end;
 
 function JsValueCStrLen(P: PAnsiChar): SizeUInt; inline;

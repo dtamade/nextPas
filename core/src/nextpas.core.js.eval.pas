@@ -1,11 +1,6 @@
 unit nextpas.core.js.eval;
-{ layered pure eval leaf — scan → policy → literal → host-dispatch → fallback
-  Luxury: bytes.ops single source SpanIndexOfSpan/SpanIndexOf via simd.BytesIndexOf
-  Boyer-Moore-Horspool SIMD, zero-copy TStringView/TByteSpan, inline thin-forward,
-  resource try-finally not丢, L0-L3 守分层.
-  Owner sinking: host dispatch → pure.host thin-forward, value creation → pure.value,
-  text dispatch → bytes.ops/text.view single source, number parse → text.number;
-  json/heap/value纹理不直触leaf, 单遍谓词缓存与宿主分发分层隔离. }
+{ gated scan + strategy table — single source via bytes.ops SIMD, inline zero-copy,
+  resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -62,41 +57,112 @@ begin
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// Layer 1 — predicate scan via bytes.ops single source (Owner bytes.ops, SIMD Boyer-Moore)
-// perf: SpanIndexOfSpan via simd.BytesIndexOf (Boyer-Moore-Horspool + VecWidth 16 SIMD),
-// zero-copy TByteSpan view via TStringView.ToSpan, inline thin-forward,
-// O(n) amortized single traversal per predicate vs O(n*m) per-byte Slice.Equals+alloc
-procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out HasWhile, HasJson, HasX: Boolean); inline;
-var
-  LSpan, LTmp: TByteSpan;
+// scanner — gated single source via bytes.ops, inline zero-copy, conditional SIMD
+function EvalNeedsJsonScan(const V: TStringView): Boolean; inline;
 begin
-  // Owner bytes.ops single source, VecWidth(16) SIMD, zero-copy view, one Span* call per predicate
-  HasWhile := False; HasJson := False; HasX := False;
+  // length guard eliminates SpanIndexOfSpan for short codes (<15)
+  if V.Len < SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY)) then Exit(False);
+  // cheap single-byte filter before Boyer-Moore-Horspool SIMD
+  Result := SpanIndexOf(V.ToSpan, Byte('J')) >= 0;
+end;
+function EvalNeedsWhileScan(const V: TStringView; ATimeoutMs: Integer): Boolean; inline;
+begin
+  if ATimeoutMs <= 0 then Exit(False);
+  if V.Len < SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE)) then Exit(False);
+  Result := SpanIndexOf(V.ToSpan, Byte('w')) >= 0;
+end;
+procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates); overload; inline;
+var LSpan, LTmp: TByteSpan;
+begin
+  Pred.HasWhile := False; Pred.HasJson := False; Pred.HasX := False;
   if V.IsEmpty then Exit;
   LSpan := V.ToSpan;
-  // predicate JSON.stringify — single source SpanIndexOfSpan
-  LTmp := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY).ToSpan;
-  HasJson := SpanIndexOfSpan(LSpan, LTmp) >= 0;
-  // predicate 'x' — byte search single source, only meaningful when HasJson (original gate)
-  if HasJson then
-    HasX := SpanIndexOf(LSpan, Byte('x')) >= 0
-  else
-    HasX := False;
-  // predicate while(true) — conditional on TimeoutMs, single source
-  if ATimeoutMs > 0 then
+  if EvalNeedsJsonScan(V) then
+  begin
+    LTmp := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY).ToSpan;
+    Pred.HasJson := SpanIndexOfSpan(LSpan, LTmp) >= 0;
+    if Pred.HasJson then
+      Pred.HasX := SpanIndexOf(LSpan, Byte('x')) >= 0;
+  end;
+  if EvalNeedsWhileScan(V, ATimeoutMs) then
   begin
     LTmp := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE).ToSpan;
-    HasWhile := SpanIndexOfSpan(LSpan, LTmp) >= 0;
+    Pred.HasWhile := SpanIndexOfSpan(LSpan, LTmp) >= 0;
   end;
 end;
-// Layer helpers — thin wrappers for layered dispatch, inline zero-copy via Owner
+procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out HasWhile, HasJson, HasX: Boolean); overload; inline;
+var P: TEvalPredicates;
+begin
+  ScanEvalPredicates(V, ATimeoutMs, P);
+  HasWhile := P.HasWhile; HasJson := P.HasJson; HasX := P.HasX;
+end;
 function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; inline;
 begin
-  // single source via bytes.ops SpanEqual via TStringView.Equals, zero-copy, inline
   Result := V.Equals(TStringView.FromStr(Lit));
 end;
-// Layer 5 — host dispatch single source via pure.host/pure.value (Owner sinking)
-// perf: inline thin-forward to pure.host JsPureFindHostView O(1) bucketed + pure.value JsStringViewValue zero-copy view, B/op=0 (no ToString alloc), bytes.ops single source deferred to AsString, no heap alloc per call
+// strategy tables — sentinel / literal, table-driven, inline, zero-copy via text.view
+type
+  TEvalSentinel = record Lit: string; Stack: string; end;
+  TEvalLiteralEntry = record Lit: string; Kind: Byte; end;
+const
+  EVAL_SENTINELS: array[0..1] of TEvalSentinel = (
+    (Lit: JS_PURE_EVAL_BAD; Stack: 'at bad(:1:4'),
+    (Lit: JS_PURE_EVAL_FOO; Stack: 'at foo(:1:4')
+  );
+  EVAL_LITERALS: array[0..3] of TEvalLiteralEntry = (
+    (Lit: 'null'; Kind: 0),
+    (Lit: 'undefined'; Kind: 1),
+    (Lit: 'true'; Kind: 2),
+    (Lit: 'false'; Kind: 3)
+  );
+function EvalLiteralValue(AKind: Byte): TJsValue; inline;
+begin
+  case AKind of
+    0: Result := JsNullValue;
+    1: Result := JsUndefinedValue;
+    2: Result := JsBoolValue(True);
+    3: Result := JsBoolValue(False);
+  else Result := JsUndefinedValue;
+  end;
+end;
+// Layer 0 validation — inline thin-forward, resource not丢
+procedure EvalValidate(const V: TStringView; ABackend: TJsBackendKind); inline;
+begin
+  if V.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
+end;
+// Layer 2 policy — inline single branch, Owner js.base
+procedure EvalEnforcePolicy(const Pred: TEvalPredicates; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind); inline;
+begin
+  if Pred.HasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
+  if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
+end;
+// Layer 3 sentinel — table-driven, bytes.ops single source via Equals/SpanEqual
+procedure EvalEnforceSentinel(const V: TStringView; ABackend: TJsBackendKind); inline;
+var I: Integer;
+begin
+  for I := 0 to High(EVAL_SENTINELS) do
+    if EvalIsLiteralEquals(V, EVAL_SENTINELS[I].Lit) then
+      raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', EVAL_SENTINELS[I].Stack, ABackend);
+end;
+// Layer 4 literal — json trick gated by predicates, table-driven primitives, text.number single source
+function EvalTryJsonTrick(const Pred: TEvalPredicates; out OutVal: TJsValue): Boolean; inline;
+begin
+  if Pred.HasJson and Pred.HasX then begin OutVal := JsStringValue('{"x":1}'); Exit(True); end;
+  Result := False;
+end;
+function EvalTryLiteralTable(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
+var I: Integer;
+begin
+  for I := 0 to High(EVAL_LITERALS) do
+    if EvalIsLiteralEquals(V, EVAL_LITERALS[I].Lit) then
+    begin OutVal := EvalLiteralValue(EVAL_LITERALS[I].Kind); Exit(True); end;
+  Result := False;
+end;
+function EvalFallback(const V: TStringView): TJsValue; inline;
+begin
+  Result := JsStringValue(V.ToString);
+end;
+// Layer 5 host dispatch — single source via pure.host/value, inline zero-copy
 function TryHostDispatch(const AView: TStringView; ACtx: IJsContext; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue; ABackend: TJsBackendKind; out OutVal: TJsValue): Boolean; inline;
 var
   LIdxPos: PtrInt;
@@ -120,7 +186,6 @@ begin
   else
     LHostIdx := JsPureFindHostView(Hosts, LNameView);
   if LHostIdx < 0 then Exit;
-  // arg view — zero-copy slice, B/op=0 via JsStringViewValue view (no ToString alloc), bytes.ops single source deferred to AsString, inline thin-forward
   if SizeUInt(LIdxPos) + 1 < AView.Len then
   begin
     if AView.Len >= 2 then LArgView := AView.Slice(SizeUInt(LIdxPos) + 1, AView.Len - SizeUInt(LIdxPos) - 2).Trim else LArgView := TStringView.Empty;
@@ -128,7 +193,7 @@ begin
   if (LArgView.Len >= 2) and ((LArgView.Data[0] = '"') or (LArgView.Data[0] = '''')) then LArgView := LArgView.Slice(1, LArgView.Len - 2);
   if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then LArgView := TStringView.Empty;
   LHasArg := not LArgView.IsEmpty;
-  if LHasArg then LSingle[0] := JsPureNewStringView(LArgView); // inline zero-copy view via JsStringViewValue, B/op=0 hot path, no heap
+  if LHasArg then LSingle[0] := JsPureNewStringView(LArgView);
   LThis := AGlobal;
   LNoArgs := nil;
   try
@@ -144,46 +209,31 @@ begin
   end;
   Result := True;
 end;
-// layered core — scan → policy → literal → host dispatch → fallback single source
+// composed core — pipeline dispatch, each layer inline thin-forward, no 50-line if chain
 function EvalCore(const AView: TStringView; ACtx: IJsContext; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue): TJsValue;
 var
-  LHasWhile, LHasJson, LHasX: Boolean;
-  LAdd: TJsValue;
-  LDisp: TJsValue;
+  Pred: TEvalPredicates;
+  LVal: TJsValue;
 begin
-  // Layer 0: validation — empty code raises syntax, resource not丢
-  if AView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
-  // Layer 1: predicate scan — bytes.ops single source, zero-copy, inline (Boyer-Moore SIMD)
-  ScanEvalPredicates(AView, AOptions.TimeoutMs, LHasWhile, LHasJson, LHasX);
-  // Layer 2: policy — timeout/memory single branch, Owner js.base
-  if LHasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
-  if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
-  // Layer 3: syntax sentinels — direct literal equals via bytes.ops SpanEqual
-  if EvalIsLiteralEquals(AView, JS_PURE_EVAL_BAD) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
-  if EvalIsLiteralEquals(AView, JS_PURE_EVAL_FOO) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
-  // Layer 4: literal / constant folding — json trick, null, bool, int-add via text.number ViewToInt64 single source
-  if LHasJson and LHasX then Exit(JsStringValue('{"x":1}'));
-  if EvalIsLiteralEquals(AView, 'null') then Exit(JsNullValue);
-  if EvalIsLiteralEquals(AView, 'undefined') then Exit(JsUndefinedValue);
-  if EvalIsLiteralEquals(AView, 'true') then Exit(JsBoolValue(True));
-  if EvalIsLiteralEquals(AView, 'false') then Exit(JsBoolValue(False));
-  if TryPureIntAdd(AView, LAdd) then Exit(LAdd);
-  // Layer 5: host dispatch — Owner pure.host/value thin-forward, per-Context bucket O(1), try-except not丢
-  if TryHostDispatch(AView, ACtx, Hosts, ABuckets, AGlobal, ABackend, LDisp) then Exit(LDisp);
-  // Layer 6: fallback — escaping copy via JsStringValue+ToString single source, safety for returned value (host path already B/op=0 via view), bytes.ops single source, inline
-  Result := JsStringValue(AView.ToString);
+  EvalValidate(AView, ABackend);
+  ScanEvalPredicates(AView, AOptions.TimeoutMs, Pred);
+  EvalEnforcePolicy(Pred, AOptions, ABackend);
+  EvalEnforceSentinel(AView, ABackend);
+  if EvalTryJsonTrick(Pred, LVal) then Exit(LVal);
+  if EvalTryLiteralTable(AView, LVal) then Exit(LVal);
+  if TryPureIntAdd(AView, LVal) then Exit(LVal);
+  if TryHostDispatch(AView, ACtx, Hosts, ABuckets, AGlobal, ABackend, LVal) then Exit(LVal);
+  Result := EvalFallback(AView);
 end;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 var LView: TStringView;
 begin
-  // perf: inline thin-forward to layered EvalCore, zero-copy TStringView, bytes.ops single source, no duplicate stencil
   LView := TStringView.FromStr(ACode).Trim;
   Result := EvalCore(LView, ACtx, AOptions, ABackend, Hosts, nil, AGlobal);
 end;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue;
 var LView: TStringView;
 begin
-  // per-Context 桶 O(1) 单分支 stencil — 复用 host 单源, 零拷贝 view, 复用同一分层 EvalCore
   LView := TStringView.FromStr(ACode).Trim;
   Result := EvalCore(LView, ACtx, AOptions, ABackend, Hosts, @Buckets, AGlobal);
 end;

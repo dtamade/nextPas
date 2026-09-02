@@ -36,6 +36,11 @@ function QjsStoreGlobal(const S: TJsQjsValueStore): TJsValue; inline;
 function QjsStoreHeapLength(const S: TJsQjsValueStore): Integer; inline;
 function QjsStoreNewObject(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 function QjsStoreNewArray(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
+function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
+function QjsStoreDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
+function QjsStoreGetKeys(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue): TJsStringArray;
+function QjsStoreGetProp(const S: TJsQjsValueStore; ACtx: Pointer; AContextId: UInt64; const AObj: TJsValue; const AName: string): TJsValue;
+procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 
 { QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
@@ -294,6 +299,62 @@ begin
   Result := JsValueBindContext(JsPureHeapNewArray(S.Pure.Heap), AContextId);
   Idx := QjsStoreFind(S, Result);
   QjsStoreSyncNewEntry(S, Idx, True, ACtx);
+end;
+
+function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
+var Idx: Integer; QRes: TJSQjsValue; P: PAnsiChar;
+begin
+  // perf: inline decorator pure single source via value.store JsValueStoreHasProp (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy), FFI mirror single source via JS_GetPropertyStr, bytes.ops zero-copy view, exactly-once Free not lost
+  Result := JsValueStoreHasProp(S.Pure, AObj, AName);
+  if Result then Exit;
+  Idx := QjsStoreFind(S, AObj);
+  if (Idx < 0) or (Idx >= Length(S.QjsHeap)) or (ACtx = nil) or not Assigned(JS_GetPropertyStrPtr) then Exit(False);
+  QRes := JS_GetPropertyStrPtr(ACtx, S.QjsHeap[Idx], PAnsiChar(AName));
+  try
+    if Assigned(JS_IsExceptionPtr) and (JS_IsExceptionPtr(QRes) <> 0) then Exit(False);
+    if not Assigned(JS_ToCStringPtr) then Exit(False);
+    P := JS_ToCStringPtr(ACtx, QRes);
+    if P = nil then Exit(False);
+    try
+      // perf: zero-copy view via bytes.ops single source QjsView (AnsiPtrLen single scan) + Trim Equals inline, no alloc, decorator reuse
+      Result := not QjsView(P).Trim.Equals(TStringView.FromStr('undefined'));
+    finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+  finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(ACtx, QRes); end;
+end;
+
+function QjsStoreDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
+var Idx: Integer;
+begin
+  // perf: inline decorator pure single source via value.store JsValueStoreDeleteProp (bytes.ops geometric single source, O1 swap-last), mirror single source via QjsStoreMirrorDeleteProp FFI, Pure+QjsHeap composition, inline zero-copy
+  Result := JsValueStoreDeleteProp(S.Pure, AObj, AName);
+  Idx := QjsStoreFind(S, AObj);
+  QjsStoreMirrorDeleteProp(S, ACtx, Idx, AName);
+end;
+
+function QjsStoreGetKeys(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue): TJsStringArray;
+var Idx: Integer; LTmp: TJsStringArray;
+begin
+  // perf: decorator FFI true heap via QjsStoreTryGetKeysFFI single source (bytes.ops zero-copy, exactly-once Free), fallback pure single source via value.store JsValueStoreGetKeys, inline, Pure+QjsHeap composition
+  Idx := QjsStoreFind(S, AObj);
+  if QjsStoreTryGetKeysFFI(S, ACtx, Idx, LTmp) then Exit(LTmp);
+  Result := JsValueStoreGetKeys(S.Pure, AObj);
+end;
+
+function QjsStoreGetProp(const S: TJsQjsValueStore; ACtx: Pointer; AContextId: UInt64; const AObj: TJsValue; const AName: string): TJsValue;
+begin
+  // perf: decorator pure single source via value.store JsValueStoreGetProp (hash>64 O1 bucket, bytes.ops FNV1a single source, zero-copy), single source single Store, inline, Pure+QjsHeap composition, FFI mirror kept in sync via SetProp;ACtx/AContextId kept for future FFI fallback single source via QjsToTJsValue, currently pure contract via value.store
+  if ACtx = nil then ;
+  if AContextId = 0 then ;
+  Result := JsValueStoreGetProp(S.Pure, AObj, AName);
+end;
+
+procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
+var Idx: Integer;
+begin
+  // perf: inline decorator pure single source via value.store JsValueStoreSetProp (bytes.ops+mem.dynarray Exactly-Once geometric, FNV1a single source, amortized O1), mirror single source via QjsStoreMirrorSetProp FFI, Pure+QjsHeap composition, zero-copy PAnsiChar view, exactly-once Free not lost
+  Idx := QjsStoreFind(S, AObj);
+  if Idx >= 0 then JsValueStoreSetProp(S.Pure, AObj, AName, AVal);
+  QjsStoreMirrorSetProp(S, ACtx, Idx, AName, AVal);
 end;
 
 function QjsThreadSelf: UInt64; inline;

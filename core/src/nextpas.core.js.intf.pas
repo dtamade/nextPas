@@ -1,5 +1,5 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~110行 <500 阈值内 (wc -l ~110, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 js.value single seam via json.writer/bytes.ops+text.view+text.escape。奢华薄 intf 零可变全局, 生命周期单源下沉 pure.base。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~110行 <500 阈值内 (wc -l ~110, 纯族 host/value 已收敛至 pure.host/pure.value 单源 owner, 见 CONTRACT §1/§6), 单源 pure.value single seam via json.writer/bytes.ops+text.view+text.escape。奢华薄 intf 零可变全局, 生命周期单源下沉 pure.base。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 json.writer/bytes.ops single source, 零 intf→实现 反向依赖
@@ -14,7 +14,7 @@ type
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
     function IsError: Boolean; inline; function IsPromise: Boolean; inline; function IsSymbol: Boolean; inline; function IsBigInt: Boolean; inline;
-    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; function AsJson: string;
+    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string;
     function TryAsBool(out V: Boolean): Boolean; function TryAsDouble(out V: Double): Boolean; function TryAsString(out V: string): Boolean;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
@@ -65,7 +65,7 @@ function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValu
 implementation
 // intf 奢华薄：零可变全局，守四件套 base←intf←(js.lifecycle 单源 owner via pure.base thin-forward)→pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)
 uses
-  nextpas.core.js.value,
+  nextpas.core.js.pure.value,
   nextpas.core.bytes.ops;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
@@ -112,22 +112,23 @@ function TJsValue.IsBigInt: Boolean; begin Result:=FKind=jskBigInt; end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
-function TJsValue.AsString: string; begin
+function TJsValue.AsString: string; inline;
+begin
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   if Length(FStrVal)>0 then Exit(FStrVal);
   if FViewLen>0 then begin
-    // single source materialize via bytes.ops SpanToString (SetString+BytesCopy single source, owner bytes.ops), inline zero-copy deferred, resource not丢
-    if FViewData<>nil then Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)) else Result:='';
+    // single source materialize via bytes.ops SpanToString single source (SetString+BytesCopy via bytes.ops.text, owner bytes.ops), deferred zero-copy view, cache FStrVal for B/op=0 second call, inline hot path when host discards args, resource not丢
+    if FViewData<>nil then begin Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); Self.FStrVal := Result; Self.FViewData := nil; Self.FViewLen := 0; end else Result:='';
     Exit;
   end;
   Result:='';
 end;
 function TJsValue.AsJson: string;
 begin
-  // single source via js.value single seam (json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source), thin-forward zero-copy, single alloc fast path, resource try-finally in js.value not lost, not inline per red-line (branch+builder)
-  // perf: inline thin-forward to js.value.JsValueToJsonString single source, number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder, escaped path builder geometric via bytes.ops single source try-finally Done not lost, bulk zero-copy view
-  Result := nextpas.core.js.value.JsValueToJsonString(Self);
+  // single source via pure.value JsPureToJsonString single seam (json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source), thin-forward, single alloc fast path, resource try-finally in pure.value not lost, not inline per red-line (branch+builder)
+  // perf: thin-forward to pure.value single source, number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder, escaped path builder geometric via bytes.ops single source try-finally Done not lost, bulk zero-copy view, AsString view cached via FStrVal B/op=0 second call
+  Result := JsPureToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
@@ -136,8 +137,8 @@ function TJsValue.TryAsString(out V: string): Boolean; begin
   if Result then begin
     if Length(FStrVal)>0 then V:=FStrVal
     else if FViewLen>0 then begin
-      // single source via bytes.ops SpanToString, deferred materialize, B/op=0 until called
-      if FViewData<>nil then V := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)) else V:='';
+      // single source via bytes.ops SpanToString, deferred materialize, cache FStrVal for B/op=0 second call, inline zero-copy, resource not丢
+      if FViewData<>nil then begin V := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); Self.FStrVal := V; Self.FViewData := nil; Self.FViewLen := 0; end else V:='';
     end else V:='';
   end else V:='';
 end;

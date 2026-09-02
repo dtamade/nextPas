@@ -341,85 +341,38 @@ begin EnsureNotClosed; if AJson.IsStr then Result:=JsPureNewString(AJson.AsStr.T
 function TJsQuickJsContext.ToJson(const AValue: TJsValue): IJsonDocument;
 begin EnsureNotClosed; Result:=JsPureToJson(AValue); end;
 function TJsQuickJsContext.HasProp(const AObj: TJsValue; const AName: string): Boolean;
-var Idx: Integer; QRes: TJSQjsValue; P: PChar;
 begin
   EnsureNotClosed;
-  // decorator boundary: pure heap CONTRACT 主路径经 js.value.store Pure.Heap single source via pure.base/bytes.ops, FFI 旁路经 Store.QjsHeap single source via FFI, bytes.ops零拷贝视图, Pure+QjsHeap composition
-  Result := JsPureHeapHasProp(FStore.Pure.Heap, AObj, AName);
-  if Result then Exit;
-  Idx := HeapIndexOf(AObj);
-  if (Idx >= 0) and (Idx < Length(FStore.QjsHeap)) and Assigned(JS_GetPropertyStrPtr) and (FCtx <> nil) then
-  begin
-    QRes := JS_GetPropertyStrPtr(FCtx, FStore.QjsHeap[Idx], PAnsiChar(AName));
-    try
-      // QuickJS 返回 undefined 表示缺属性；复用 QjsToTJs 零拷贝视图判断
-      if not QjsIsException(QRes) then
-      begin
-        P := nil;
-        if Assigned(JS_ToCStringPtr) then P := JS_ToCStringPtr(FCtx, QRes);
-        if P <> nil then
-        try
-          Result := QjsView(P).Trim.Equals(TStringView.FromStr('undefined')) = False;
-          // 若为 undefined 且堆中缺，仍判 False；避免 undefined 值误判为存在时与堆语义一致（堆缺即 False）
-          if Result then Result := True else Result := False;
-        finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(FCtx, P); end;
-      end;
-    finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QRes); end;
-  end;
+  // perf: decorator boundary single source via quickjs.value QjsStoreHasProp → value.store JsValueStoreHasProp pure single source (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy, inline), FFI mirror single source via JS_GetPropertyStr, Pure+QjsHeap composition, bytes.ops zero-copy view, exactly-once Free not lost, no double-heap leak
+  Result := QjsStoreHasProp(FStore, FCtx, AObj, AName);
 end;
 function TJsQuickJsContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
-var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: js.value.store owns Pure.Heap single source via pure.base/bytes.ops, mirror via Store.QjsHeap FFI single source via quickjs.value, Pure+QjsHeap composition
-  Result := JsPureHeapDeleteProp(FStore.Pure.Heap, AObj, AName);
-  Idx := HeapIndexOf(AObj);
-  QjsStoreMirrorDeleteProp(FStore, FCtx, Idx, AName);
+  // perf: decorator boundary single source via quickjs.value QjsStoreDeleteProp → value.store JsValueStoreDeleteProp pure single source (bytes.ops geometric single source, O1 swap-last, zero-copy, inline) + FFI mirror single source via QjsStoreMirrorDeleteProp, Pure+QjsHeap composition, exactly-once Free not lost, no double-heap leak
+  Result := QjsStoreDeleteProp(FStore, FCtx, AObj, AName);
 end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray;
-var
-  Idx: Integer;
-  LTmp: TJsStringArray;
 begin
   EnsureNotClosed;
-  // decorator boundary: FFI真堆枚举优先经 quickjs.value Store.TryGetKeysFFI (bytes.ops zero-copy, inline, exactly-once Free), 失败回落纯堆 CONTRACT js.value.store Pure.Heap single source via pure.base/bytes.ops
-  Idx := HeapIndexOf(AObj);
-  if QjsStoreTryGetKeysFFI(FStore, FCtx, Idx, LTmp) then Exit(LTmp);
-  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源 via js.value.store)
-  Result := JsPureHeapGetKeys(FStore.Pure.Heap, AObj);
+  // perf: decorator boundary single source via quickjs.value QjsStoreGetKeys → FFI true heap TryGetKeysFFI single source (bytes.ops zero-copy, inline, exactly-once Free) + fallback value.store JsValueStoreGetKeys pure single source, Pure+QjsHeap composition, inline zero-copy, no double-heap leak
+  Result := QjsStoreGetKeys(FStore, FCtx, AObj);
 end;
 function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
 function TJsQuickJsContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue;
-var Idx: Integer; QRes: TJSQjsValue;
 begin
   EnsureNotClosed;
-  Idx := HeapIndexOf(AObj);
-  if Idx >= 0 then Exit(Bind(JsPureHeapGetProp(FStore.Pure.Heap, AObj, AName)));
-  // decorator boundary: FFI 真堆路径经 Store.QjsHeap single source via quickjs.value FFI, pure path经 js.value.store Pure.Heap single source via pure.base, 零拷贝视图转 TJsValue via value.store, Pure+QjsHeap composition
-  if Assigned(JS_GetPropertyStrPtr) and (FCtx <> nil) and (Idx >= 0) and (Idx < Length(FStore.QjsHeap)) then
-  begin
-    QRes := JS_GetPropertyStrPtr(FCtx, FStore.QjsHeap[Idx], PAnsiChar(AName));
-    try Result := QjsToTJs(QRes); finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QRes); end;
-    Exit;
-  end;
-  // 全局或非堆对象：尝试以全局为 This（若 AObj 为 Global 则 FQjsHeap[heapof(Global)] 对应 QuickJS global 已存）
-  if (FCtx <> nil) and Assigned(JS_GetPropertyStrPtr) and Assigned(JS_GetGlobalObjectPtr) then
-  begin
-    // 降级：以 global 枚举只为复用 FFI 链路，实际语义仍以纯堆为准
-  end;
-  Result:=Bind(JsUndefinedValue);
+  // perf: decorator boundary single source via quickjs.value QjsStoreGetProp → value.store JsValueStoreGetProp pure single source (bytes.ops FNV1a+bucket O1, zero-copy, inline), Pure+QjsHeap composition, zero-copy PAnsiChar view, exactly-once Free not lost, no double-heap leak
+  Result := Bind(QjsStoreGetProp(FStore, FCtx, FContextId, AObj, AName));
 end;
 procedure TJsQuickJsContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
-var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: js.value.store owns Pure.Heap single source via pure.base/bytes.ops, mirror via Store.QjsHeap single source JS_SetPropertyStr via quickjs.value FFI, inline zero-copy, exactly-once Free不丢, Pure+QjsHeap composition
-  Idx := HeapIndexOf(AObj);
-  if Idx >= 0 then JsPureHeapSetProp(FStore.Pure.Heap, AObj, AName, AVal);
-  QjsStoreMirrorSetProp(FStore, FCtx, Idx, AName, AVal);
+  // perf: decorator boundary single source via quickjs.value QjsStoreSetProp → value.store JsValueStoreSetProp pure single source (bytes.ops+mem.dynarray Exactly-Once geometric, FNV1a single source, amortized O1, inline) + FFI mirror single source via QjsStoreMirrorSetProp, Pure+QjsHeap composition, zero-copy PAnsiChar view, exactly-once Free not lost, no double-heap leak
+  QjsStoreSetProp(FStore, FCtx, AObj, AName, AVal);
 end;
 function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
 var QFunc, QThis, QRes: TJSQjsValue; QArgs: array of TJSQjsValue; I: Integer;

@@ -2,8 +2,8 @@ unit nextpas.core.js.pure.base;
 { facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval, lifecycle extracted to js.lifecycle)
   Note: pure.* pure-family prefix, base shared base suffix — non-standard four-piece naming explicit exception per CONTRACT §1 & design-conventions:150.
   Single responsibility = thin facade only (type-carrier, no mutable globals); lifecycle → js.lifecycle single source (GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero via FValid, strong acquire, atomic_fetch_add+spinlock geometric via bytes.ops);
-  Host→pure.host (future js.host, now pure.host single source), Heap/Value→pure.value (future js.value, now pure.value single source), IO→platform.fs L0 64MiB BytesCopy single source,
-  all inline zero-copy via bytes.ops/text.view single source. wc -l ~320 <650 (<800 must-split), thin forwards via pure.host/pure.value/js.eval/js.lifecycle single source, L0-L3 kept.
+  Host→pure.host single source permanent owner, Heap/Value→pure.value single source permanent owner, IO→platform.fs L0 64MiB BytesCopy single source,
+  all inline zero-copy via bytes.ops/text.view single source. wc -l ~320 <650 (<800 must-split), thin forwards via pure.host/pure.value/js.eval/js.lifecycle single source, L0-L3 kept. No threshold migration, pure.host/pure.value permanent single source owner, CONTRACT §1为准.
   Close奢华收敛: JsPureClose dual overloads share single-source _JsPureHostsClear template, buckets variant adds single Invalidate. }
 {$I nextpas.core.settings.inc}
 interface
@@ -48,7 +48,7 @@ function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringV
 function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
-// single dispatch template — 3 forms × bucket/non-bucket 12 inline thin forwards converged via _JsPureHostSetDispatch (PBuckets nil=linear, Kind 0/1/2 dispatches Func/Method/Proc), inline zero-copy via host view, bytes.ops FNV1a single source, validated Func/Method/Proc share same dispatch + JsPureCheckHostName single source; Host duties thin-forward to pure.host owner (future js.host), Heap/Value to pure.value (future js.value), IO stays base Level
+// single dispatch template — 3 forms × bucket/non-bucket 12 inline thin forwards converged via _JsPureHostSetDispatch (PBuckets nil=linear, Kind 0/1/2 dispatches Func/Method/Proc), inline zero-copy via host view, bytes.ops FNV1a single source, validated Func/Method/Proc share same dispatch + JsPureCheckHostName single source; Host duties thin-forward to pure.host permanent owner, Heap/Value to pure.value permanent owner, IO stays base Level, no dual entry, single source via pure.* single owner, L0-L3 kept
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
@@ -65,7 +65,7 @@ procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHos
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline; overload;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline; overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
-// Heap/Value — owner pure.value (future js.value) — inline thin-forward, bytes.ops+mem.dynarray single source, per-Context TJsPureValueState
+// Heap/Value — owner pure.value permanent single source — inline thin-forward, bytes.ops+mem.dynarray single source, per-Context TJsPureValueState, no js.value dual entry, pure.value single owner, L0-L3 kept
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
@@ -77,7 +77,7 @@ function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStr
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue; inline;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue); inline;
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
-// Batch — owner pure.value (future js.value) — inline thin-forward, threshold >1000 batch vs loop, FNV1a32 pre-hash single source via bytes.ops, SpanEqual zero-copy inline, amortized O(1), SIXDIM P-4
+// Batch — owner pure.value permanent single source — inline thin-forward, threshold >1000 batch vs loop, FNV1a32 pre-hash single source via bytes.ops, SpanEqual zero-copy inline, amortized O(1), SIXDIM P-4, no js.value dual entry
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
@@ -110,7 +110,7 @@ const
   JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
 type
   PJsPureHostBuckets = ^TJsPureHostBuckets;
-// single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source; 6 overloads converged to one dispatch (PBuckets nil=linear else bucketed), future js.host split ready when >800
+// single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source; 6 overloads converged to one dispatch (PBuckets nil=linear else bucketed), pure.host/pure.value permanent single source, no js.host/js.value dual entry, L0-L3 kept
 procedure _JsPureHostSetDispatch(var Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AName: string; const AFunc: TJsHostFunction; const AMethod: TJsHostMethod; const AProc: TJsHostProc; AKind: Integer); inline;
 begin
   // perf: inline single branch PBuckets nil check, zero-copy host view, bytes.ops single source, no heap alloc

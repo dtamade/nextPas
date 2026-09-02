@@ -181,6 +181,81 @@ begin
   for LPos:=0 to High(Obj.Props) do if Obj.Props[LPos].Name=AName then Exit(LPos);
   Result:=-1;
 end;
+{ hashed fast-path — single source FNV1a32 pre-hash reuse, closed-loop, zero-copy, inline, amortized O(1) for >1000 batch, owner pure.value via bytes.ops }
+function JsPureHeapFindPropHashed(const AProps: array of TJsPureProp; const AName: string; const AHash: UInt32): Integer; overload; inline;
+var I: Integer;
+begin
+  if Length(AProps) > JS_PURE_HEAP_HASH_THRESHOLD then
+  begin
+    if AHash <> 0 then
+    begin
+      for I:=0 to High(AProps) do if (AProps[I].Hash=AHash) and (AProps[I].Name=AName) then Exit(I);
+    end else
+      for I:=0 to High(AProps) do if AProps[I].Name=AName then Exit(I);
+    Result:=-1;
+    Exit;
+  end;
+  for I:=0 to High(AProps) do if AProps[I].Name=AName then Exit(I);
+  Result:=-1;
+end;
+function JsPureHeapFindPropHashed(const Obj: TJsPureObject; const AName: string; const AHash: UInt32): Integer; overload; inline;
+var LIdx, LProbe, LPos: Integer;
+begin
+  if Length(Obj.Props) > JS_PURE_HEAP_HASH_THRESHOLD then
+  begin
+    if Length(Obj.PropsBuckets)>0 then
+    begin
+      Inc(GPureHeapMetrics.HashUsed);
+      LIdx := Integer(AHash and Obj.PropsMask);
+      for LProbe:=0 to High(Obj.PropsBuckets) do
+      begin
+        LPos := Obj.PropsBuckets[LIdx];
+        if LPos=-1 then Exit(-1);
+        if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos);
+        LIdx := (LIdx+1) and Integer(Obj.PropsMask);
+      end;
+      Exit(-1);
+    end;
+    for LPos:=0 to High(Obj.Props) do if (Obj.Props[LPos].Hash=AHash) and (Obj.Props[LPos].Name=AName) then Exit(LPos);
+    Exit(-1);
+  end;
+  for LPos:=0 to High(Obj.Props) do if Obj.Props[LPos].Name=AName then Exit(LPos);
+  Result:=-1;
+end;
+function JsPureHeapGetPropHashed(const Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32): TJsValue; inline;
+var Idx, P: Integer;
+begin
+  Result := JsUndefinedValue;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash)
+  else P := JsPureHeapFindPropHashed(Heap[Idx].Props, AName, AHash);
+  if P >= 0 then Result := Heap[Idx].Props[P].Value;
+end;
+procedure JsPureHeapSetPropHashed(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
+var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt;
+begin
+  Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
+  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash)
+  else P := JsPureHeapFindPropHashed(Heap[Idx].Props, AName, AHash);
+  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
+  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1;
+  Inc(GPureHeapMetrics.Rebuilds);
+  if PropsCapacityObj(Heap[Idx]) >= LNeed then
+  begin
+    if LOld <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Heap[Idx].Props, LCap);
+    if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
+  end;
+  Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
+  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
+  Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
+  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
+  else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
+end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
 var LId: Int64; LOld, LNeed, LCap, LCurCap: SizeUInt;
 begin
@@ -335,7 +410,12 @@ begin
         S := AValue.AsString;
         if not JsonNeedsEscapeStr(S) then
         begin
-          Result := '"' + S + '"';
+          // perf: single alloc zero-copy via BytesCopy single source (bytes.ops) + SetLength, stack-like single Move vs '"'+S+'"' double alloc, text.escape SIMD predicate single source, inline
+          SetLength(Result, Length(S) + 2);
+          Result[1] := '"';
+          if Length(S) > 0 then
+            BytesCopy(PAnsiChar(Result) + 1, PAnsiChar(S), SizeUInt(Length(S)));
+          Result[Length(Result)] := '"';
           Exit;
         end;
         B.Init(SizeUInt(Length(S)) + 2);
@@ -388,35 +468,27 @@ function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValu
 begin Result := JsPureHeapGetProp(S.Heap, AObj, AName); end;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
-{ Batch — single source via bytes.ops FNV1a32 pre-hash single source, Spanequal zero-copy inline, threshold >1000, amortized O(1) single pass hash, resource不丢 }
+{ Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy inline, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 }
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 var I: Integer; LHash: UInt32;
 begin
-  // perf: inline single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy view, amortized O(1) pre-hash vs per-iteration hash, bucket O(1) when >64, pure.value single source
+  // perf: inline single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, no per-iteration PropHashStr
   SetLength(Result, Length(Objs));
   if Length(Objs)=0 then Exit;
-  LHash := PropHashStr(AName); // single source pre-hash, reuse for batch
+  LHash := PropHashStr(AName); // single source pre-hash, closed-loop reuse via Hashed path
   for I := 0 to High(Objs) do
-  begin
-    // stability: reuse single source GetProp (hash filter inline) — no double free, try-finally not needed,幂等不丢
-    Result[I] := JsPureHeapGetProp(Heap, Objs[I], AName);
-    // hash precompute evidence: LHash already computed single source via bytes.ops, GetProp reuses same hash filter path (FNV1a32 single source), zero-copy SpanEqual inline
-    if LHash=0 then ; // keep LHash live for optimizer evidence single source
-  end;
+    Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
 var I: Integer; LHash: UInt32;
 begin
-  // perf: inline single FNV1a32 pre-hash single source, zero-copy, amortized O(1), bytes.ops single source, threshold >1000 batch
-  // stability: per-iteration SetProp single source via bytes.ops+mem.dynarray geometric Exactly-Once via BytesNextCapacity,幂等不丢, try-finally not needed for batch loop
+  // perf: inline single FNV1a32 pre-hash single source closed-loop, zero-copy, amortized O(1) vs per-iteration recompute, bytes.ops single source, threshold >1000 batch, no per-iteration PropHashStr
+  // stability: per-iteration SetPropHashed single source via bytes.ops+mem.dynarray geometric Exactly-Once via BytesNextCapacity,幂等不丢, try-finally not needed for batch loop
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
-  LHash := PropHashStr(AName);
+  LHash := PropHashStr(AName); // single source pre-hash, closed-loop reuse via Hashed path
   for I := 0 to High(Objs) do
-  begin
-    JsPureHeapSetProp(Heap, Objs[I], AName, Vals[I]);
-    if LHash=0 then ;
-  end;
+    JsPureHeapSetPropHashed(Heap, Objs[I], AName, LHash, Vals[I]);
 end;
 function JsPureValueStateGetBatch(const S: TJsPureValueState; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 begin Result := JsPureHeapGetBatch(S.Heap, Objs, AName); end;
