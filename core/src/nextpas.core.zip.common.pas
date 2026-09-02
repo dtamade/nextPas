@@ -35,6 +35,7 @@ procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word)
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
@@ -140,6 +141,14 @@ begin
   if AE.IsEncrypted and (Length(APassword) = 0) then
     raise EInvalidOperationError.Create(
       'zip: entry is encrypted, no password configured: ' + AE.Name);
+end;
+
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+begin
+  if (AIndex < 0) or (AIndex >= ACount) then
+    raise EIndexOutOfRangeError.Create(
+      'zip: entry index out of range: ' + IntToStr(AIndex));
+  Result := AIndex;
 end;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;

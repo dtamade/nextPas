@@ -545,10 +545,7 @@ end;
 
 function TZipReaderImpl.CheckIndex(AIndex: Integer): Integer;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FEntries)) then
-    raise EIndexOutOfRangeError.Create(
-      'zip: entry index out of range: ' + IntToStr(AIndex));
-  Result := AIndex;
+  Result := GuardZipIndex(AIndex, Length(FEntries));
 end;
 
 function TZipReaderImpl.EntryCount: Integer;
@@ -884,10 +881,7 @@ end;
 
 function TZipSourceReader.CheckIndex(AIndex: Integer): Integer;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FEntries)) then
-    raise EIndexOutOfRangeError.Create(
-      'zip: entry index out of range: ' + IntToStr(AIndex));
-  Result := AIndex;
+  Result := GuardZipIndex(AIndex, Length(FEntries));
 end;
 
 function TZipSourceReader.EntryCount: Integer;
