@@ -334,9 +334,9 @@ begin
           if Pos + 10 > Len then
             RaiseGif('truncated image descriptor');
           Left := ReadUInt16LE(@AData[Pos + 1]);
-          Top := ReadUInt16LE(@AData[Pos + 2]);
-          IW := ReadUInt16LE(@AData[Pos + 3]);
-          IH := ReadUInt16LE(@AData[Pos + 5]);
+          Top := ReadUInt16LE(@AData[Pos + 3]);
+          IW := ReadUInt16LE(@AData[Pos + 5]);
+          IH := ReadUInt16LE(@AData[Pos + 7]);
           PDesc := AData[Pos + 9];
           HasLCT := (PDesc and $80) <> 0;
           Interlace := (PDesc and $40) <> 0;
@@ -487,8 +487,6 @@ begin
               R := ActivePal[PalOff * 3];
               G := ActivePal[PalOff * 3 + 1];
               B := ActivePal[PalOff * 3 + 2];
-              // dest in canvas
-              DstRow; // already
               Idx := (DstRow * CanvasW + Integer(Left) + X) * 4;
               Canvas[Idx] := R;
               Canvas[Idx + 1] := G;

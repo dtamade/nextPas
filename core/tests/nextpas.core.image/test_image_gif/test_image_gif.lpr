@@ -7,6 +7,7 @@ uses
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.graphics.gif.gif888,
+  nextpas.core.graphics.errors,
   nextpas.core.image.base,
   nextpas.core.image.dispatch,
   nextpas.core.bytes.ops;
