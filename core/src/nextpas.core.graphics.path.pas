@@ -1,6 +1,6 @@
 {**
  * nextpas.core.graphics.path - TPath 值类型 COW + TGradient 不可变
- * 指数扩容 AlignUp(mem.base 单源 8) + Move(单源 System.Move/bytes.ops 约束)；L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现。
+ * 指数扩容 AlignUp(mem.base 单源 8) + BytesCopy(bytes.ops 单源)；L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现。
  * COW 写时 RC<>1 判别（复用 TBitmap.EnsureUnique 模式，Unique 时零拷贝）；TPath 链式 fluent 不可变值语义，
  * 小路径(<64)链式 O(N²) 常数小可直接用；Reserve 预分配后链式仍 O(N²)（1K 链式≈500K 拷贝，因 Result:=Self 共享 RC=2 需逐次 COW），
  * 大路径必须用 TPathBuilder 批量 O(N) 约 1K 拷贝（热点显著，链式禁用）；Builder fluent 链式
@@ -136,11 +136,12 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.math;
 
-{ TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，Move 单源(bytes.ops 约束)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现
+{ TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，BytesCopy 单源(bytes.ops)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现
   EnsureUnique/EnsureCap 共享时仅拷贝已用前缀 (FVerbCount/FPointCount) 非全容量，减少 Reserve 后链式尾部垃圾拷贝；大路径仍 O(N²)，须用 Builder 批量 O(N) }
 
 procedure TPath.EnsureVerbCap(ANeeded: Integer);
@@ -168,7 +169,7 @@ begin
   LOld := FVerbs;
   FVerbs := nil;
   SetLength(FVerbs, Integer(LNewCap));
-  if LCopy > 0 then Move(LOld[0], FVerbs[0], LCopy * SizeOf(TPathVerb));
+  if LCopy > 0 then BytesCopy(@FVerbs[0], @LOld[0], LCopy * SizeOf(TPathVerb));
 end;
 
 procedure TPath.EnsurePointCap(ANeeded: Integer);
@@ -195,7 +196,7 @@ begin
   LOld := FPoints;
   FPoints := nil;
   SetLength(FPoints, Integer(LNewCap));
-  if LCopy > 0 then Move(LOld[0], FPoints[0], LCopy * SizeOf(TVec2));
+  if LCopy > 0 then BytesCopy(@FPoints[0], @LOld[0], LCopy * SizeOf(TVec2));
 end;
 
 procedure TPath.EnsureVerbUnique;
@@ -216,7 +217,7 @@ begin
     LOld := FVerbs;
     FVerbs := nil;
     SetLength(FVerbs, LCap);
-    if FVerbCount > 0 then Move(LOld[0], FVerbs[0], FVerbCount * SizeOf(TPathVerb));
+    if FVerbCount > 0 then BytesCopy(@FVerbs[0], @LOld[0], FVerbCount * SizeOf(TPathVerb));
   end;
 end;
 
@@ -238,7 +239,7 @@ begin
     LOld := FPoints;
     FPoints := nil;
     SetLength(FPoints, LCap);
-    if FPointCount > 0 then Move(LOld[0], FPoints[0], FPointCount * SizeOf(TVec2));
+    if FPointCount > 0 then BytesCopy(@FPoints[0], @LOld[0], FPointCount * SizeOf(TVec2));
   end;
 end;
 
@@ -340,7 +341,7 @@ begin
   Result := Self;
   LNeedV := Result.FVerbCount + AOther.FVerbCount;
   LNeedP := Result.FPointCount + AOther.FPointCount;
-  // Append 批量零拷贝：单次 Reserve(AlignUp 单源) + Move(bytes.ops 单源) O(N) 降级
+  // Append 批量零拷贝：单次 Reserve(AlignUp 单源) + BytesCopy(bytes.ops 单源) O(N) 降级
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(LNeedV) then Result.EnsureVerbCap(LNeedV)
   else if Length(Result.FVerbs) > 0 then Result.EnsureVerbUnique;
   if SizeUInt(Length(Result.FPoints)) < SizeUInt(LNeedP) then Result.EnsurePointCap(LNeedP)
@@ -348,12 +349,12 @@ begin
   if (Result.FVerbCount > 0) and (AOther.FVerbCount > 0) and (Result.FVerbs[Result.FVerbCount - 1] = pvMove) and (AOther.FVerbs[0] = pvMove) then
   begin
     Result.FPoints[Result.FPointCount - 1] := AOther.FPoints[0];
-    if AOther.FVerbCount > 1 then Move(AOther.FVerbs[1], Result.FVerbs[Result.FVerbCount], (AOther.FVerbCount - 1) * SizeOf(TPathVerb));
-    if AOther.FPointCount > 1 then Move(AOther.FPoints[1], Result.FPoints[Result.FPointCount], (AOther.FPointCount - 1) * SizeOf(TVec2));
+    if AOther.FVerbCount > 1 then BytesCopy(@Result.FVerbs[Result.FVerbCount], @AOther.FVerbs[1], (AOther.FVerbCount - 1) * SizeOf(TPathVerb));
+    if AOther.FPointCount > 1 then BytesCopy(@Result.FPoints[Result.FPointCount], @AOther.FPoints[1], (AOther.FPointCount - 1) * SizeOf(TVec2));
     Inc(Result.FVerbCount, AOther.FVerbCount - 1); Inc(Result.FPointCount, AOther.FPointCount - 1); Exit;
   end;
-  Move(AOther.FVerbs[0], Result.FVerbs[Result.FVerbCount], AOther.FVerbCount * SizeOf(TPathVerb));
-  Move(AOther.FPoints[0], Result.FPoints[Result.FPointCount], AOther.FPointCount * SizeOf(TVec2));
+  BytesCopy(@Result.FVerbs[Result.FVerbCount], @AOther.FVerbs[0], AOther.FVerbCount * SizeOf(TPathVerb));
+  BytesCopy(@Result.FPoints[Result.FPointCount], @AOther.FPoints[0], AOther.FPointCount * SizeOf(TVec2));
   Inc(Result.FVerbCount, AOther.FVerbCount); Inc(Result.FPointCount, AOther.FPointCount);
 end;
 
@@ -430,12 +431,12 @@ begin
   if (FVerbCount > 0) and (AOther.FVerbs[0] = pvMove) and (FVerbs[FVerbCount - 1] = pvMove) then
   begin
     FPoints[FPointCount - 1] := AOther.FPoints[0];
-    if AOther.FVerbCount > 1 then Move(AOther.FVerbs[1], FVerbs[FVerbCount], (AOther.FVerbCount - 1) * SizeOf(TPathVerb));
-    if AOther.FPointCount > 1 then Move(AOther.FPoints[1], FPoints[FPointCount], (AOther.FPointCount - 1) * SizeOf(TVec2));
+    if AOther.FVerbCount > 1 then BytesCopy(@FVerbs[FVerbCount], @AOther.FVerbs[1], (AOther.FVerbCount - 1) * SizeOf(TPathVerb));
+    if AOther.FPointCount > 1 then BytesCopy(@FPoints[FPointCount], @AOther.FPoints[1], (AOther.FPointCount - 1) * SizeOf(TVec2));
     Inc(FVerbCount, AOther.FVerbCount - 1); Inc(FPointCount, AOther.FPointCount - 1); Result := Self; Exit;
   end;
-  Move(AOther.FVerbs[0], FVerbs[FVerbCount], AOther.FVerbCount * SizeOf(TPathVerb));
-  Move(AOther.FPoints[0], FPoints[FPointCount], AOther.FPointCount * SizeOf(TVec2));
+  BytesCopy(@FVerbs[FVerbCount], @AOther.FVerbs[0], AOther.FVerbCount * SizeOf(TPathVerb));
+  BytesCopy(@FPoints[FPointCount], @AOther.FPoints[0], AOther.FPointCount * SizeOf(TVec2));
   Inc(FVerbCount, AOther.FVerbCount); Inc(FPointCount, AOther.FPointCount);
   Result := Self;
 end;
