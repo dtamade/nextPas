@@ -101,18 +101,10 @@ begin
 end;
 
 function TWebviewAssetIndex.TryGetByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;
-var
-  LStr: string;
 begin
-  // 性能：热路径最长前缀走 Trie O(m) 零拷贝 view 遍历（单遍，独立于挂载数），此精确 view 查仅单挂载空前缀快路径 O(1)，非热；ToString 分配仅 fallback
+  // 性能：热路径最长前缀走 Trie O(m) 零拷贝 view 遍历（单遍，独立于挂载数），此精确 view 查单次 WyHash 单源 + 零拷贝探测（via THashMap.TryGetValueView 单源，零 ToString 堆分配，inline 薄转发，O(1) 平均）
   if (FMap = nil) or (FMap.GetCount = 0) then Exit(False);
-  if AView.Len = 0 then
-    Result := FMap.TryGetValue('', AProvider)
-  else
-  begin
-    LStr := AView.ToString;
-    Result := FMap.TryGetValue(LStr, AProvider);
-  end;
+  Result := FMap.TryGetValueView(AView.Data, AView.Len, AProvider);
 end;
 
 function TWebviewAssetIndex.TryGetLongestPrefixByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;

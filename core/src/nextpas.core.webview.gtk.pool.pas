@@ -20,9 +20,14 @@ uses
 type
   // 单源：复用 webview.intf.TWebviewProcRef（inline 薄转发零拷贝闭包），零重复定义，L3 内单向依赖 base/intf + L0
   TWebviewProcRef = nextpas.core.webview.intf.TWebviewProcRef;
+  TWebviewProcMethod = nextpas.core.webview.intf.TWebviewProcMethod;
+  TWebviewProc = nextpas.core.webview.intf.TWebviewProc;
   PIdleRec = ^TIdleRec;
   TIdleRec = record
+    Kind: UInt8; // 0=ref,1=method,2=proc — 池化闭包零每 Post 分配，inline 零拷贝
     Proc: TWebviewProcRef;
+    Method: TWebviewProcMethod;
+    Plain: TWebviewProc;
   end;
   PCompletionMarshal = ^TCompletionMarshal;
   TCompletionMarshal = record
@@ -89,15 +94,16 @@ end;
 
 function AcquireIdleRec: PIdleRec; inline;
 begin
-  // inline 薄转发 PoolAcquire 单源零拷贝，短临界指针-only
+  // inline 薄转发 PoolAcquire 单源零拷贝，短临界指针-only，新槽 Kind 零初始化
   Result := specialize PoolAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GPoolLock);
+  Result^.Kind := 0; Result^.Proc := nil; Result^.Method := nil; Result^.Plain := nil;
 end;
 
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 begin
-  // inline 薄转发 PoolRelease 单源，托管 Proc nil 释放 ref，溢出 Dispose 兜底不丢
+  // inline 薄转发 PoolRelease 单源，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底不丢
   if A = nil then Exit;
-  A^.Proc := nil;
+  A^.Proc := nil; A^.Method := nil; A^.Plain := nil; A^.Kind := 0;
   specialize PoolRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GPoolLock, A);
 end;
 
@@ -149,9 +155,9 @@ procedure PoolInit; inline;
 var
   LCap: Integer;
 begin
-  // 批量化：单次 VecGrowCapacity(0) 计算批量预分配四池，零 4 次重复调用，单源 0→4→2×
+  // 批量化：单次 VecGrowCapacity 单源双阶倍增 0→4→8→16 批量预分配四池，零 4 次重复调用，突发高频 Eval/Idle 零锁内 VecGrow 重分配与 SetLength 抖动，单源 inline 零额外调用
   GPoolLock := TMutex.Create;
-  LCap := VecGrowCapacity(0);
+  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0))); // 16: bytes.ops 单源 0→4→8→16，inline 零额外调用
   SetLength(GIdlePool, LCap);
   SetLength(GCompletionPool, LCap);
   SetLength(GAssetHolderPool, LCap);

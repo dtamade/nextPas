@@ -4,7 +4,7 @@ unit nextpas.core.webview.fake.support;
 
        拆分治理（S105+）：原单文件 1580 行已按 design-conventions 四件套与
        L0-L3 单向依赖拆为 dispatcher/support 等子模块；
-       本单元承载 MapInvokeCode 回调适配与 WindowOptions 辅助，
+       本单元承载回调适配与 WindowOptions 辅助（原 MapInvokeCode 薄包装已移除，直接复用 bridge.NormalizeInvokeCode 单源），
        均 inline 薄转发至 L0/L1 单源（webview.callbacks + bridge + window.base），
        零拷贝、零额外调用，bytes.ops 单源复用。 *}
 
@@ -16,12 +16,10 @@ uses
   nextpas.core.base,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.bridge,
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops;
 
-{ handler 异常 → 协议错误码映射：唯一实现移至 bridge（NormalizeInvokeCode），fake 与未来真实后端共用同一映射，避免双处定义漂移。 }
-function MapInvokeCode(const ACode: string): string; inline;
+{ handler 异常 → 协议错误码映射：唯一实现收敛至 bridge.NormalizeInvokeCode 单源，fake与未来真实后端直接复用零间接层（原 MapInvokeCode 薄包装已移除）。 }
 
 { ---- 回调归一化（method/proc → reference）----
   统一存储范式（design-conventions §8）：内部只存 reference 形态。
@@ -43,11 +41,6 @@ implementation
 
 uses
   nextpas.core.window.base;
-
-function MapInvokeCode(const ACode: string): string; inline;
-begin
-  Result := NormalizeInvokeCode(ACode);
-end;
 
 function NotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler; inline;
 begin

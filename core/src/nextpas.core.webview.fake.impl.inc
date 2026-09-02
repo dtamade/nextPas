@@ -10,12 +10,8 @@
        原二次持锁内再次 VecCopy O(n) 搬移放大尾延迟；现改为乐观重试：
        分配 + VecCopy 仅锁外，二次持锁仅 O(1) 指针检查与写入，stale 重试零 O(n) 持锁。 *}
 
-{ handler 异常 → 协议错误码映射：唯一实现移至 bridge（NormalizeInvokeCode），
-  fake 与未来真实后端共用同一映射，避免双处定义漂移。 }
-function MapInvokeCode(const ACode: string): string;
-begin
-  Result := NormalizeInvokeCode(ACode);
-end;
+{ handler 异常 → 协议错误码映射：唯一实现收敛至 bridge.NormalizeInvokeCode 单源，
+  fake 与未来真实后端直接复用零间接层，避免双处定义漂移；原 MapInvokeCode 薄包装已移除。 }
 
 { ---- 回调归一化（method/proc → reference）----
   统一存储范式（design-conventions §8）：内部只存 reference 形态。
@@ -332,9 +328,19 @@ procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
 var
   LNew, LOld: TFakeInvokeOutcomes;
   LCap, LCount, LOldLen, LIdx: Integer;
+  // single source outcome write helper:收敛重复9行赋值块，inline零额外调用
+  procedure WriteAt(AAt: Integer); inline;
+  begin
+    FOutcomes[AAt].Cmd := ACmd;
+    FOutcomes[AAt].IsError := AIsError;
+    FOutcomes[AAt].ResultJson := AResultJson;
+    FOutcomes[AAt].Code := ACode;
+    FOutcomes[AAt].Message := AMessage;
+  end;
 begin
   // stability: managed assignments keep AddRef/Release balanced, heaptrc0 safe, no PPointer steal; perf via bytes.ops VecCopy/VecGrowCapacity single source inline, zero mod, zero leak
-  // perf fix: optimistic retry — allocation + VecCopy outside lock, install under lock only O(1) check+swap, stale => retry, zero O(n) hold, mirrors dispatcher fix
+  // perf fix: optimistic retry — allocation + VecCopy outside lock, install under lock only O(1) check+swap, stale=>reuse LNew 零额外垃圾与VecCopy浪费，mirrors dispatcher fix
+  LNew := nil;
   while True do
   begin
     FLck.Acquire;
@@ -343,11 +349,7 @@ begin
       begin
         LIdx := FOutcomesCount;
         Inc(FOutcomesCount);
-        FOutcomes[LIdx].Cmd := ACmd;
-        FOutcomes[LIdx].IsError := AIsError;
-        FOutcomes[LIdx].ResultJson := AResultJson;
-        FOutcomes[LIdx].Code := ACode;
-        FOutcomes[LIdx].Message := AMessage;
+        WriteAt(LIdx);
         Exit;
       end;
       LCap := VecGrowCapacity(Length(FOutcomes));
@@ -357,9 +359,10 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation outside lock, single source VecGrowCapacity inline zero extra call
-    SetLength(LNew, LCap);
-    // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy
+    // perf: heap allocation outside lock only when capacity changes, reuse LNew buffer on stale contention to avoid extra garbage; single source VecGrowCapacity inline zero extra call
+    if Length(LNew) < LCap then
+      SetLength(LNew, LCap);
+    // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy; reuse avoids extra alloc+copy waste under high Post concurrency
     if LCount > 0 then
       specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
     FLck.Acquire;
@@ -368,27 +371,20 @@ begin
       begin
         LIdx := FOutcomesCount;
         Inc(FOutcomesCount);
-        FOutcomes[LIdx].Cmd := ACmd;
-        FOutcomes[LIdx].IsError := AIsError;
-        FOutcomes[LIdx].ResultJson := AResultJson;
-        FOutcomes[LIdx].Code := ACode;
-        FOutcomes[LIdx].Message := AMessage;
+        WriteAt(LIdx);
         Exit;
       end;
       if (Length(FOutcomes) = LOldLen) and (FOutcomesCount = LCount) then
       begin
-        // stability: FOutcomes:=LNew releases old refs via finalization, retains new, zero leak
+        // stability: FOutcomes:=LNew releases old refs via finalization, retains new, zero leak; transfer ownership then nil LNew to avoid extra DecRef
         FOutcomes := LNew;
+        LNew := nil;
         LIdx := FOutcomesCount;
         Inc(FOutcomesCount);
-        FOutcomes[LIdx].Cmd := ACmd;
-        FOutcomes[LIdx].IsError := AIsError;
-        FOutcomes[LIdx].ResultJson := AResultJson;
-        FOutcomes[LIdx].Code := ACode;
-        FOutcomes[LIdx].Message := AMessage;
+        WriteAt(LIdx);
         Exit;
       end;
-      // contention: stale snapshot — discard LNew and retry, zero O(n) under lock, rare path
+      // contention: stale snapshot — keep LNew for reuse and retry, zero O(n) under lock, rare path, avoids extra garbage and VecCopy waste
     finally
       FLck.Release;
     end;
@@ -991,10 +987,10 @@ begin
         if E is EWebviewInvokeError then
         begin
           RecordOutcome(ACmd, True, '',
-            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+            NormalizeInvokeCode(EWebviewInvokeError(E).Code), E.Message);
           if AFrameId >= 0 then
             EnqueueReceipt(AFrameId, True, '',
-              MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+              NormalizeInvokeCode(EWebviewInvokeError(E).Code), E.Message);
         end
         else
         begin
@@ -1019,10 +1015,10 @@ begin
         if E is EWebviewInvokeError then
         begin
           RecordOutcome(ACmd, True, '',
-            MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+            NormalizeInvokeCode(EWebviewInvokeError(E).Code), E.Message);
           if AFrameId >= 0 then
             EnqueueReceipt(AFrameId, True, '',
-              MapInvokeCode(EWebviewInvokeError(E).Code), E.Message);
+              NormalizeInvokeCode(EWebviewInvokeError(E).Code), E.Message);
         end
         else
         begin

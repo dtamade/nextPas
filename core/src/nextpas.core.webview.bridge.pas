@@ -351,31 +351,66 @@ end;
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
-  LB, LInner: TStringBuilder;
-  W: TJsonWriter;
+  LB: TStringBuilder;
+  // single-builder zero-copy: avoids LInner heap alloc + second JSON escaping pass;
+  // structural chars are single-escaped, payload bytes double-escaped (inner+outer),
+  // matching nested W.Str semantics with one path (text.escape single source logic reused)
+  procedure AppendDoubleEscaped(const AView: TStringView);
+  var
+    I: SizeUInt;
+    B: Byte;
+    NHi, NLo: Byte;
+  begin
+    for I := 0 to AView.Len - 1 do
+    begin
+      B := Byte(AView.Data[I]);
+      case B of
+        34: LB.AppendBytes('\\\"', 4); // " -> \\\" (inner \" then outer \\ \")
+        92: LB.AppendBytes('\\\\', 4); // \ -> \\\\ (inner \\ then outer \\\\ )
+        8:  LB.AppendBytes('\\b', 3);
+        9:  LB.AppendBytes('\\t', 3);
+        10: LB.AppendBytes('\\n', 3);
+        12: LB.AppendBytes('\\f', 3);
+        13: LB.AppendBytes('\\r', 3);
+      else
+        if B < 32 then
+        begin
+          LB.AppendBytes('\\u00', 5);
+          NHi := (B shr 4) and $F;
+          NLo := B and $F;
+          if NHi < 10 then LB.AppendChar(AnsiChar(Ord('0') + NHi))
+          else LB.AppendChar(AnsiChar(Ord('a') + NHi - 10));
+          if NLo < 10 then LB.AppendChar(AnsiChar(Ord('0') + NLo))
+          else LB.AppendChar(AnsiChar(Ord('a') + NLo - 10));
+        end
+        else
+          LB.AppendChar(AnsiChar(B));
+      end;
+    end;
+  end;
 begin
   LCode := NormalizeInvokeCode(ACode);
-  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2 + 16));
+  // worst 6x expansion for \u00XX -> \\u00XX plus structural overhead
+  LB.Init(SizeUInt(64 + SizeUInt(Length(LCode)) * 6 + SizeUInt(Length(AMessage)) * 6 + 32));
   try
-    W.Init(LInner);
-    W.BeginObject;
-    W.Key('code'); W.Str(LCode);
-    W.Key('message'); W.Str(AMessage);
-    W.EndObject;
-    LB.Init(SizeUInt(20 + LInner.Len * 2 + 16));
-    try
-      LB.AppendBytes('__npw.__reject(', 15);
-      LB.AppendInt(AId);
-      LB.AppendChar(',');
-      W.Init(LB);
-      W.Str(LInner.AsView);
-      LB.AppendChar(')');
-      Result := LB.ToString;
-    finally
-      LB.Done;
-    end;
+    LB.AppendBytes('__npw.__reject(', 15);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    LB.AppendChar('"'); // outer JSON string open
+    LB.AppendChar('{');
+    LB.AppendBytes('\"code\":\"', 11);
+    AppendDoubleEscaped(TStringView.FromStr(LCode));
+    LB.AppendBytes('\"', 2);
+    LB.AppendChar(',');
+    LB.AppendBytes('\"message\":\"', 14);
+    AppendDoubleEscaped(TStringView.FromStr(AMessage));
+    LB.AppendBytes('\"', 2);
+    LB.AppendChar('}');
+    LB.AppendChar('"'); // outer JSON string close
+    LB.AppendChar(')');
+    Result := LB.ToString;
   finally
-    LInner.Done;
+    LB.Done;
   end;
 end;
 
@@ -572,24 +607,28 @@ function TWebviewAssetsImpl.TryResolveView(const AView: TStringView;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 var
   LPath: string;
-  LView, LNormView: TStringView;
+  LNormView: TStringView;
   LProvider: IWebviewAssetProvider;
+  LFound: Boolean;
 begin
   Result := False;
   ABytes := nil;
   AMimeType := '';
   if FInert then
     Exit;
-  // view zero-copy; ToString deferred until provider hit
+  // view zero-copy; ToString single-point on provider hit (eliminates duplicated ToString)
   LNormView := NormalizeWebviewAssetView(AView);
   if LNormView.Len = 0 then
     Exit;
-  LView := LNormView;
+  LFound := False;
   if (FIndex.Count = 1) and FIndex.TryGetByStr('', LProvider) then
-  begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
-  if FIndex.TryGetLongestPrefixByView(LView, LProvider) then
-  begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
-  Result := False;
+    LFound := True
+  else if FIndex.TryGetLongestPrefixByView(LNormView, LProvider) then
+    LFound := True;
+  if not LFound then
+    Exit(False);
+  LPath := LNormView.ToString; // single conversion point, zero extra alloc, inline thin-forward
+  Result := LProvider.TryResolve(LPath, ABytes, AMimeType);
 end;
 
 function TWebviewAssetsImpl.MountCount: Integer; inline;
