@@ -10,6 +10,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base;
 
+type
+  TFieldRange = record Off, Len: SizeUInt; end;
+
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
@@ -19,6 +22,8 @@ function SpanLastIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeI
 function BytesLastIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function StringLastIndexOf(const S: string; const ANeedle: Char): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+{ single-source multi-field NUL scan: one 512B pass truncates N fields, reuses SpanIndexOf single source, decl. reusable for tar 7-field cache, zero-alloc PSizeUInt out }
+procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
@@ -83,7 +88,7 @@ procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt
 procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 { 单源路径拼接：prefix/name 单次 SetLength + 两 Move（bytes.ops 单源 CopyMemory），tar/zip 联邦 ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，切片零拷贝视图单源，热路径 inline 薄转发 }
 function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
-{ 单源对齐：power-of-two/div-mul 无掩码截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源避免分散 and not SizeUInt 截断 }
+{ 单源对齐：power-of-two 位掩码零除法，无截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源，常量 4096 位掩码零除法 }
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
 function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
 
@@ -267,6 +272,33 @@ procedure SpanReverse(const ASpan: TByteSpan);
 begin
   if ASpan.Len > 1 then
     MemReverse(ASpan.Data, ASpan.Len);
+end;
+
+procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
+var
+  I, J, N: SizeUInt;
+  Found: SizeUInt;
+begin
+  // single-source: one pass truncates N fields at first NUL, out-of-line, zero-alloc
+  N := SizeUInt(Length(AFields));
+  for J := 0 to N - 1 do
+    ATruncs[J] := AFields[J].Len;
+  if (ABlock.Len = 0) or (ABlock.Data = nil) or (N = 0) then Exit;
+  Found := 0;
+  for I := 0 to ABlock.Len - 1 do
+  begin
+    if ABlock.Data[I] <> 0 then Continue;
+    for J := 0 to N - 1 do
+    begin
+      if (ATruncs[J] <> AFields[J].Len) then Continue;
+      if (I >= AFields[J].Off) and (I < AFields[J].Off + AFields[J].Len) then
+      begin
+        ATruncs[J] := I - AFields[J].Off;
+        Inc(Found);
+        if Found = N then Exit;
+      end;
+    end;
+  end;
 end;
 
 procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
@@ -727,23 +759,30 @@ begin
 end;
 
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
+var
+  LMask: SizeUInt;
 begin
-  // perf: inline 单点对齐，无 and not SizeUInt 掩码截断，溢出安全 div/mod 单源
+  // perf: inline 单点 power-of-two 位掩码零除法，无 SizeUInt 截断，溢出安全；调用方保证 2 的幂
   if AAlignment = 0 then
     Exit(AValue);
   if AValue = 0 then
     Exit(0);
-  if AValue mod AAlignment = 0 then
-    Exit(AValue);
-  if AValue div AAlignment >= High(SizeUInt) div AAlignment then
-    Exit(High(SizeUInt) - High(SizeUInt) mod AAlignment);
-  Result := (AValue div AAlignment + 1) * AAlignment;
+  LMask := AAlignment - 1;
+  if AValue > High(SizeUInt) - LMask then
+    Exit(High(SizeUInt) and not LMask);
+  Result := (AValue + LMask) and not LMask;
 end;
 
 function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+const
+  C4KMask = SizeUInt(4096 - 1);
 begin
-  // perf: 4K 页对齐薄转发复用 AlignUp 单源，inline 零拷贝，避免 tar Builder 重复 and not
-  Result := AlignUp(AValue, 4096);
+  // perf: 4K 常量 4096 位掩码单源，inline 零拷贝，复用 AlignUp 位掩码思想常量折叠零除法，避免 Builder 每次 div/mod 开销；无 and not SizeUInt 截断，32/64 位安全
+  if AValue = 0 then
+    Exit(0);
+  if AValue > High(SizeUInt) - C4KMask then
+    Exit(High(SizeUInt) and not C4KMask);
+  Result := (AValue + C4KMask) and not C4KMask;
 end;
 
 end.

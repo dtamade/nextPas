@@ -1,15 +1,36 @@
 unit nextpas.core.tar.builder;
 {**
- * @desc Tar 链式构造器：ZipBuilder 手感的薄门面，委托 TTarWriter。
- * 仅做流畅 API 封装，不含序列化逻辑，保证 bytes 级一致。
- * @note 显式 Finish fail-closed：未 Finish 析构即硬失败（缺两零块截断），非 unwind 期抛 EInvalidOperationError，unwind 期 IsExceptionUnwinding 抑制次生以保原始异常上下文并经 log.intf ILogger.Warn 可观测（NullLogger 默认零分配，无 System.WriteLn 直触），避免链式漏 Finish 静默丢数据；单工厂 TarBuilder。
- * 性能：IArchiveBuilder 联邦单源直写切片（archive.fs 透出 bytes.builder 几何扩容单源），inline AppendBytes 零拷贝，Finish 单次 ToBytes 拷贝，
- *       消除 CreateBytesStream + ArchiveSnapshotStream 二次 SetLength+Read 大块 Move。
- *       AddDirectory* 薄门面复用 writer 单源 DefaultTarAddOptions/TarDirectoryMode，无重复 H 组装。
- *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops（经 writer 单源透出），委托 writer 单源。
- *       容量：TarBuilderCapacityFor 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 4K 页对齐。
- * 联邦：唯一经 nextpas.core.archive.fs 单缝联邦（与 tar.fs 共用单源 CreateArchiveBuilder/IArchiveBuilder/几何扩容/IWriter 适配，bytes.builder/bytes.ops 单源 inline 零拷贝经 archive.fs 透出），注册表显式登记，消除 L2 同层双引（bytes.builder + archive.fs）稀释克制感。
- * 稳定性：Destroy fail-closed — 未 Finish 非 unwind 期抛 EInvalidOperationError（硬失败防截断），unwind 期抑制次生经 ILogger.Warn 可观测，try..finally 必释 FWriter，复用 TTarWriter 同策略，无 System.WriteLn 直触 RTL 控制台，L2 经 log.intf 平台抽象克制。
+ * @desc Tar 链式构造器：ZipBuilder 手感的薄门面。
+ *
+ * 薄委托 `TTarWriter`，仅做流畅 API 封装，不含序列化逻辑，
+ * 字节形态与写器一致，单工厂 `TarBuilder` / `TarBuilderWithCapacity`。
+ *
+ * 联邦 — 唯一经 `nextpas.core.archive.fs` 单缝联邦。
+ * 与 `tar.fs` 共用单源 `CreateArchiveBuilder` / `IArchiveBuilder` /
+ * 几何扩容 / `IWriter` 适配，`bytes.builder` / `bytes.ops` 单源
+ * inline 零拷贝经 `archive.fs` 透出；注册表显式登记，消除 L2
+ * 同层双引（`bytes.builder` + `archive.fs`）稀释克制感。
+ *
+ * 容量 — `TarBuilderCapacityFor` 按预估总量 4K 对齐预扩容，
+ * 避免大归档多次几何扩容；默认 `C_TAR_BUILDER_INITIAL_CAPACITY`
+ * 4K 页对齐。
+ *
+ * 性能 — `IArchiveBuilder` 联邦单源直写切片（`archive.fs` 透出
+ * `bytes.builder` 几何扩容单源），`inline AppendBytes` 零拷贝，
+ * `Finish` 单次 `ToBytes` 拷贝，消除 `CreateBytesStream` +
+ * `ArchiveSnapshotStream` 二次 `SetLength`+`Read` 大块 `Move`；
+ * `AddDirectory*` 薄门面复用 `writer` 单源 `DefaultTarAddOptions` /
+ * `TarDirectoryMode`，无重复 `H` 组装；`AddEntryFromReader` 流式
+ * 零拷贝 64K pooled 复用缓冲分块 `Move` 单源 `bytes.ops`（经
+ * `writer` 单源透出），委托 `writer` 单源。
+ *
+ * 稳定性 — `Destroy` fail-closed：未 `Finish` 析构即硬失败
+ * （缺两零块截断），非 unwind 期抛 `EInvalidOperationError`，
+ * unwind 期 `IsExceptionUnwinding` 抑制次生以保原始异常上下文
+ * 并经 `log.intf ILogger.Warn` 可观测（`NullLogger` 默认零分配，
+ * 无 `System.WriteLn` 直触），避免链式漏 `Finish` 静默丢数据；
+ * `try..finally` 必释 `FWriter`，复用 `TTarWriter` 同策略，
+ * 无 `System.WriteLn` 直触 RTL 控制台，L2 经 `log.intf` 平台抽象克制。
  *}
 
 {$I nextpas.core.settings.inc}

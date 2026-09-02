@@ -45,7 +45,6 @@ uses
   nextpas.core.tar.common;
 
 const
-  CBlockSize = C_TAR_BLOCK_SIZE;
   C_STREAM_BUF_SIZE = 65536;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
@@ -77,25 +76,29 @@ end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
 var
-  Buf: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  Pad: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Len: SizeInt;
+  PadLen: SizeUInt;
 begin
-  // no inline: 512B stack, single copy, bytes.ops single source
+  // no inline: 512B stack Pad minimal zero, bytes.ops single source zero-copy direct Write tail+pad (was extra 512 copy)
   // >512 raises; caller owns resources
   Len := Length(ABlock);
-  if Len > CBlockSize then
-    raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, CBlockSize]);
-  if Len = CBlockSize then
+  if Len > C_TAR_BLOCK_SIZE then
+    raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, C_TAR_BLOCK_SIZE]);
+  if Len = C_TAR_BLOCK_SIZE then
   begin
     if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
       raise EIOError.Create('tar: short write');
   end
   else
   begin
-    FillChar(Buf[0], SizeOf(Buf), 0);
+    // perf: zero-copy direct Write data slice, FillChar only PadLen minimal zero (was 512), two Writes avoid 512B extra CopyMemory
     if Len > 0 then
-      CopyMemory(PByte(@ABlock[0]), PByte(@Buf[0]), SizeUInt(Len));
-    if FDst.Write(Buf[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+      if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
+        raise EIOError.Create('tar: short write');
+    PadLen := SizeUInt(C_TAR_BLOCK_SIZE - Len);
+    FillChar(Pad[0], PadLen, 0);
+    if FDst.Write(Pad[0], PadLen) <> PadLen then
       raise EIOError.Create('tar: short write');
   end;
 end;
@@ -115,7 +118,7 @@ begin
     if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
       raise EIOError.Create('tar: short write');
   end
-  else if SizeUInt(Length(AData)) <= CBlockSize then
+  else if SizeUInt(Length(AData)) <= C_TAR_BLOCK_SIZE then
   begin
     // perf: zero-copy direct Write tail, FillChar only PadLen (was 512) minimal zero, inline single source bytes.ops avoided copy
     if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
@@ -127,7 +130,7 @@ begin
   else
   begin
     // perf: Bulk zero-copy, Tail zero-copy direct slice, FillChar only PadLen (was 512) minimal zero, bytes.ops single source kept for data path
-    BulkLen := (SizeUInt(Length(AData)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
+    BulkLen := (SizeUInt(Length(AData)) div SizeUInt(C_TAR_BLOCK_SIZE)) * SizeUInt(C_TAR_BLOCK_SIZE);
     TailLen := SizeUInt(Length(AData)) - BulkLen;
     if BulkLen > 0 then
       if FDst.Write(AData[0], BulkLen) <> BulkLen then

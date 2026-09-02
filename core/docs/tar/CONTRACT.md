@@ -13,7 +13,7 @@
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
-| `TTarReader` | `Next(out H):Boolean` / `EntryData:TBytes` (拷贝，`SpanClone` 单源，**deprecated** 批量 200×512B 产生200次分配峰值，热路径优先 `TrySlice`/`EntryDataSlice` 零拷贝视图) / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发 / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离 |
+| `TTarReader` | `Next(out H):Boolean` / `EntryData:TBytes` (拷贝，`SpanClone` 单源，**deprecated** 批量 200×512B 产生200次分配峰值 `bench_tar` `extract-all 401 vs extract-slice 201 allocs` 翻倍，热路径优先 `TrySlice`/`EntryDataSlice` 零拷贝 `inline` 视图) / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发 / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（弱引用不延长 `Reader/FBuf` 大镜像，`Reader.Destroy` 先 `InvalidateGuards` 避免峰值滞留，稳定性不丢） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描，复用 `Span` 单源 |
 | `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，需显式 Finish，`FIOBuf` 于 Finish 即释避免滞留峰值，析构兜底补两零块 best-effort 极简 fail-closed，`IsFinished` 供 builder fail-closed 校验） |
 
 ### 1.2 常量与谓词

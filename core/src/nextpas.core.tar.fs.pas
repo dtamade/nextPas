@@ -34,6 +34,8 @@ uses
   nextpas.core.bytes.builder,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
+  nextpas.core.log.intf,
+  nextpas.core.text.conv,
   nextpas.core.archive.fs;
 
 { 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
@@ -184,7 +186,7 @@ begin
                 ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, ArchivePermDefault)
               else
                 ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
-              // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 带 StdErr WARN，不静默吞，fail-closed
+              // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 经log.intf WARN（NullLogger零分配inline），不静默吞，fail-closed
               ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
             end;
           tekSymlink:
@@ -210,8 +212,8 @@ begin
               except
                 on E: Exception do
                 begin
-                  System.WriteLn(StdErr, '[WARN] tar extract: mkfifo failed for ', H.Name, ': ', E.Message);
-                  System.Flush(StdErr);
+                  // L2经log.intf单缝可观测（NullLogger默认no-op零分配inline薄转发），无System.WriteLn/StdErr直触，平台抽象克制，复用writer/builder单源
+                  NullLogger.Warn('[WARN] tar extract: mkfifo failed for ' + H.Name + ': ' + E.Message);
                   ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
                 end;
               end;
@@ -219,11 +221,10 @@ begin
           tekCharDevice, tekBlockDevice:
             begin
               ArchiveHandleSpecial(LFull);
-              // INV-7 往返完整：经 archive.fs 单缝 ArchiveTryMkDevice 携带 DevMajor/DevMinor 真实 mknod（S_IFCHR/S_IFBLK），特权不足则 fail-closed WARN+占位，可观测不静默降级，复用 bytes.ops 单源思想零拷贝
+              // INV-7 往返完整：经 archive.fs 单缝 ArchiveTryMkDevice 携带 DevMajor/DevMinor 真实 mknod（S_IFCHR/S_IFBLK），特权不足则 fail-closed WARN+占位，经log.intf单缝可观测不静默降级（NullLogger零分配inline），复用 bytes.ops单源零拷贝/Inline思想
               if not ArchiveTryMkDevice(LFull, LMode, H.DevMajor, H.DevMinor, H.Kind = tekCharDevice) then
               begin
-                System.WriteLn(StdErr, '[WARN] tar extract: special device skipped (mknod failed dev=', H.DevMajor, ':', H.DevMinor, '): ', H.Name, ' kind=', Ord(H.Kind));
-                System.Flush(StdErr);
+                NullLogger.Warn('[WARN] tar extract: special device skipped (mknod failed dev=' + IntToStr(H.DevMajor) + ':' + IntToStr(H.DevMinor) + '): ' + H.Name + ' kind=' + IntToStr(Ord(H.Kind)));
                 ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
               end
               else
