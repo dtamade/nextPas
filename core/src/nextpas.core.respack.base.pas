@@ -44,6 +44,8 @@ const
   RESPACK_DIRSOURCE_LEGACY_LIMIT = SizeUInt(64) * 1024 * 1024;
   { reader 熔断：entryCount 上界（INV-R10 防御深度，512M/40≈12.8M），SetLength 前硬熔断防恶意包 OOM }
   RESPACK_MAX_ENTRY_COUNT = RESPACK_MAX_INPUT_BYTES div RESPACK_ENTRY_SIZE;
+  { writer 流式头块分片阈值（INV-R10 家族单源，64K chunk 零双驻留，峰值 ~1×+头） }
+  RESPACK_WRITER_HEAD_CHUNK = SizeUInt(64) * 1024;
 
 type
   { host-order API record；线上布局一律经 LE helper 编解码（BE 平台安全） }

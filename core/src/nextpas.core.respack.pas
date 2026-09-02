@@ -53,6 +53,7 @@ const
     nextpas.core.respack.limits.RESPACK_INC_MAX_BLOB_BYTES;
   RESPACK_MAX_INPUT_BYTES = nextpas.core.respack.base.RESPACK_MAX_INPUT_BYTES;
   RESPACK_DIRSOURCE_LEGACY_LIMIT = nextpas.core.respack.base.RESPACK_DIRSOURCE_LEGACY_LIMIT;
+  RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
 
 function ResPackOpen(const AData: PByte; const ASize: SizeUInt): TResPack; inline;
 function ResPackBuild(const AEntries: array of TResPackInputEntry;
