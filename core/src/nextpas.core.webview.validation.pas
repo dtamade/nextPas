@@ -55,8 +55,6 @@ procedure CheckWebviewDevServerUrl(const AUrl: string);
 implementation
 
 uses
-  nextpas.core.bytes.base,
-  nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.text.view,
   nextpas.core.validation;
@@ -121,15 +119,10 @@ begin
 end;
 
 procedure CheckWebviewInitScript(const AScript: string); inline;
-var
-  LHay: TByteSpan;
-  LNeedle: TByteSpan;
 begin
-  // perf: inline + L1 bytes.ops.TByteSpan single source zero-copy view (PAnsiChar→TByteSpan 无 SetString+Move 分配，常量针 5 字节零拷贝) + L1 bytes.ops.SpanIndexOfSpan 单源 SIMD dispatch (SSE2/AVX2/NEON via nextpas.core.simd.BytesIndexOf, VecWidth 并行, O(n) vs Pos O(n*m) 标量逐字节)，批量 InitScripts 场景零拷贝零分配；stability: 无堆资源，仅抛异常，释放不丢
+  // perf: inline + L1 text.view.TStringView zero-copy view (FromStr 无 SetString+Move 分配，__npw 常量 5 字节视图零拷贝) + L1 text.view.IndexOfStr 单源 SIMD dispatch (VecWidth 并行 via text.view.VecCmpEq, O(n) vs Pos O(n*m) 标量逐字节)，批量 InitScripts 场景零拷贝零分配；stability: 无堆资源，仅抛异常，释放不丢
   if AScript = '' then Exit;
-  LHay := TByteSpan.Create(PByte(PAnsiChar(AScript)), SizeUInt(Length(AScript)));
-  LNeedle := TByteSpan.Create(PByte(PAnsiChar('__npw')), 5);
-  if SpanIndexOfSpan(LHay, LNeedle) >= 0 then
+  if TStringView.FromStr(AScript).IndexOfStr(TStringView.FromStr('__npw')) >= 0 then
     raise EWebviewInvalidState.Create(
       'InitScripts must not touch __npw (bridge owns that namespace)');
 end;

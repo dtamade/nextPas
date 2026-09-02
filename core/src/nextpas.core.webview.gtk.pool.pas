@@ -3,8 +3,8 @@ unit nextpas.core.webview.gtk.pool;
 {** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval / GCancellable 五池私有复用，dispatcher 专用。
 
        契约：容量/操作单源 L1 bytes.ops / sync.pool，类型单源 webview.intf，私于 gtk 不经门面（CONTRACT §1）。
-       性能：inline 薄转发零拷贝（SlabTryAcquire/Release 薄转发 sync.pool 单源 inline 零额外调用），冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化，LazyLock 非 inline 原子 CAS 单源零闭包堆分配零泄漏（was Once+anon closure 每池堆分配、inline 5 路路由膨胀、nil 分支无同步并发重复泄漏），原子发布可见性保障并发首触零重复泄漏，Release finalize 原子门控分支预测零额外调用热路径 <1µs。
-       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，CAS 失败分支 Free 单所有权不丢，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 持 per-pool 锁逐槽释放 + atomic_exchange 原子置 nil 单所有权 Free 零双释放，GPoolFinalized 原子门控幂等 CAS 零重入竞态，LazyLock 终结期双检零重建泄漏，与并发 Acquire/Release UAF/重复释放零竞态。 *}
+       性能：inline 薄转发零拷贝（SlabTryAcquire/Release 薄转发 sync.pool 单源 inline 零额外调用），冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化，LazyLock 非 inline 原子 CAS 单源零闭包堆分配零泄漏（was Once+anon closure 每池堆分配、inline 5 路路由膨胀、nil 分支无同步并发重复泄漏），原子发布可见性保障并发首触零重复泄漏，Release finalize 原子门控分支预测零额外调用热路径 <1µs，热点 Acquire 去原子化 plain 读零 fence（冷仅 LazyLock CAS 单源）。
+       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，CAS 失败分支 Free 单所有权不丢，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 持 per-pool 锁逐槽释放 + atomic_exchange 原子置 nil 单所有权 Free 零双释放，GPoolFinalized 原子门控幂等 CAS 零重入竞态，LazyLock 终结期双检零重建泄漏，与并发 Acquire/Release UAF/重复释放零竞态，排水单源 DrainDisposeSlab/DrainCancelSlab 零重复模板。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -63,6 +63,9 @@ function AcquireEvalRec: PEvalRec; inline;
 procedure ReleaseEvalRec(A: PEvalRec); inline;
 function AcquireGCancellable: Pointer; inline;
 procedure ReleaseGCancellable(A: Pointer); inline;
+// asset stream (GMemoryInputStream) pooled wrapper: burst small files zero per-request g_malloc via Slab reuse (bytes.ops single source)
+function AcquireAssetStream: Pointer; inline;
+procedure ReleaseAssetStream(A: Pointer); inline;
 
 procedure PoolInit; inline;
 procedure PoolFinalize; inline;
@@ -84,16 +87,20 @@ var
   GEvalPoolCount: Integer = 0;
   GCancelPool: array of Pointer;
   GCancelPoolCount: Integer = 0;
+  GStreamPool: array of Pointer;
+  GStreamPoolCount: Integer = 0;
   GIdleLock: TMutex = nil;
   GCompletionLock: TMutex = nil;
   GAssetHolderLock: TMutex = nil;
   GEvalLock: TMutex = nil;
   GCancelLock: TMutex = nil;
+  GStreamLock: TMutex = nil;
   GIdleOnce: IOnce = nil;
   GCompletionOnce: IOnce = nil;
   GAssetHolderOnce: IOnce = nil;
   GEvalOnce: IOnce = nil;
   GCancelOnce: IOnce = nil;
+  GStreamOnce: IOnce = nil;
   GPoolFinalized: Int32 = 0;
 
 function LazyLock(var ALock: TMutex): TMutex;
@@ -105,7 +112,7 @@ begin
   // finalized gate: mo_acquire vis prevents reconstruct after PoolFinalize CAS publish, zero extra alloc after fini
   if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
     Exit(TMutex(atomic_load(PPointer(@ALock)^, mo_acquire)));
-  // perf: atomic acquire fast path <1µs zero heap, not inline per design-conventions §2 red-line 2 (routing/heavy CAS bans inline, avoids I-Cache bloat); zero anon closure heap vs Once DoOnce (was 5 pools × closure heap per cold start), CAS single source via atomic mo_acq_rel ensures zero duplicate leak + mo_acquire visibility, short critical <1µs zero copy via sync.pool
+  // perf: cold only via this CAS path; hot Acquire uses plain read bypass (SlabTryAcquire/Release fast plain check zero atomic <1µs), not inline per design-conventions §2 red-line 2 (routing/heavy CAS bans inline, avoids I-Cache bloat); zero anon closure heap vs Once DoOnce (was 5 pools × closure heap per cold start), CAS single source via atomic mo_acq_rel ensures zero duplicate leak + mo_acquire visibility, short critical <1µs zero copy via sync.pool
   LLoaded := atomic_load(PPointer(@ALock)^, mo_acquire);
   if LLoaded <> nil then
     Exit(TMutex(LLoaded));
@@ -121,20 +128,78 @@ begin
 end;
 
 generic function SlabTryAcquire<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex): T; inline;
+var
+  LLock: TMutex;
 begin
-  // 单源收敛点：五池 Acquire 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolTryAcquire 单源零拷贝，短临界指针-only <1µs，锁懒创建 via LazyLock 零常驻
-  Result := specialize SyncPoolTryAcquire<T>(APool, ACount, LazyLock(ALock));
+  // 单源收敛点：五池 Acquire 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolTryAcquire 单源零拷贝，短临界指针-only <1µs，锁懒创建 hot plain 读零原子 fence + cold LazyLock CAS 单源零常驻
+  if ALock <> nil then
+    LLock := ALock
+  else
+    LLock := LazyLock(ALock);
+  Result := specialize SyncPoolTryAcquire<T>(APool, ACount, LLock);
 end;
 
 generic function SlabRelease<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex; const AItem: T): Boolean; inline;
+var
+  LLock: TMutex;
 begin
-  // 单源收敛点：五池 Release 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolRelease 单源，突发锁内 VecGrow 0→4→2× via bytes.ops 单源零抖动，异常安全溢出 False 由 caller 单所有权 Dispose 不丢
-  Result := specialize SyncPoolRelease<T>(APool, ACount, LazyLock(ALock), AItem);
+  // 单源收敛点：五池 Release 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolRelease 单源，突发锁内 VecGrow 0→4→2× via bytes.ops 单源零抖动，异常安全溢出 False 由 caller 单所有权 Dispose 不丢，hot plain 读零原子
+  if ALock <> nil then
+    LLock := ALock
+  else
+    LLock := LazyLock(ALock);
+  Result := specialize SyncPoolRelease<T>(APool, ACount, LLock, AItem);
+end;
+
+// --- Finalize 单源排水：消除五池复制模板，锁内逐槽释放 + 原子置 nil 单所有权 Free 零双释放 ---
+
+generic procedure DrainDisposeSlab<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex);
+var
+  LLock: TMutex;
+begin
+  // perf: non-inline per design-conventions §2 红线二 (loop body bans inline); stability: per-pool 锁内排水，atomic_exchange 置 nil 单所有权 Free 零双释放; Dispose 单所有权不丢 via caller 已清托管字段
+  LLock := TMutex(atomic_load(PPointer(@ALock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while ACount > 0 do
+    begin
+      Dec(ACount);
+      Dispose(APool[ACount]);
+    end;
+    SetLength(APool, 0);
+    ACount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
+  end;
+  LLock := TMutex(atomic_exchange(PPointer(@ALock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
+end;
+
+procedure DrainCancelSlab(var APool: array of Pointer; var ACount: Integer; var ALock: TMutex);
+var
+  LLock: TMutex;
+begin
+  // 单源 Cancel 排水：G_object_unref 单所有权不丢，其余与 DrainDisposeSlab 同锁语义单源
+  LLock := TMutex(atomic_load(PPointer(@ALock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while ACount > 0 do
+    begin
+      Dec(ACount);
+      GtkObjectUnref(APool[ACount]);
+    end;
+    SetLength(APool, 0);
+    ACount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
+  end;
+  LLock := TMutex(atomic_exchange(PPointer(@ALock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
 end;
 
 function AcquireIdleRec: PIdleRec; inline;
 begin
-  // inline 薄转发单源 SlabTryAcquire 零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点
+  // inline 薄转发单源 SlabTryAcquire 零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点，hot plain 读零原子
   Result := specialize SlabTryAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
   if Result = nil then New(Result);
   Result^.Kind := 0; Result^.Proc := nil; Result^.Method := nil; Result^.Plain := nil;
@@ -142,7 +207,7 @@ end;
 
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 begin
-  // inline 薄转发单源 SlabRelease，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发单源 SlabRelease，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用，hot plain 读零原子
   if A = nil then Exit;
   A^.Proc := nil; A^.Method := nil; A^.Plain := nil; A^.Kind := 0;
   if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
@@ -156,14 +221,14 @@ end;
 
 function AcquireCompletionRec: PCompletionMarshal; inline;
 begin
-  // inline 薄转发单源 SlabTryAcquire，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离
+  // inline 薄转发单源 SlabTryAcquire，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离，hot plain 读零原子
   Result := specialize SlabTryAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
   if Result = nil then New(Result);
 end;
 
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin
-  // inline 薄转发单源 SlabRelease，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
+  // inline 薄转发单源 SlabRelease，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢，hot plain 读零原子
   if A = nil then Exit;
   A^.Win := nil; A^.FrameId := 0; A^.Cmd := ''; A^.IsError := False;
   A^.ResultJson := ''; A^.Code := ''; A^.MsgText := '';
@@ -178,14 +243,14 @@ end;
 
 function AcquireAssetHolder: PAssetHolder; inline;
 begin
-  // inline 薄转发单源 SlabTryAcquire，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点
+  // inline 薄转发单源 SlabTryAcquire，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点，hot plain 读零原子
   Result := specialize SlabTryAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
   if Result = nil then New(Result);
 end;
 
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 begin
-  // inline 薄转发单源 SlabRelease，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发单源 SlabRelease，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用，hot plain 读零原子
   if A = nil then Exit;
   A^.Bytes := nil;
   if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
@@ -199,7 +264,7 @@ end;
 
 function AcquireEvalRec: PEvalRec; inline;
 begin
-  // inline 薄转发单源 SlabTryAcquire，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点
+  // inline 薄转发单源 SlabTryAcquire，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点，hot plain 读零原子
   Result := specialize SlabTryAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
   if Result = nil then New(Result);
   Result^.Callback := nil; Result^.OnError := nil; Result^.Done := False; Result^.Cancel := nil; Result^.Owner := nil;
@@ -220,7 +285,7 @@ end;
 
 function AcquireGCancellable: Pointer; inline;
 begin
-  // 单源经 loader：能力探查经 platform.dl 封装的 GtkCancellableHas* / IsCancelled，禁止直探 ffi 变量，inline 薄转发零拷贝，复用 Slab 单源
+  // 单源经 loader：能力探查经 platform.dl 封装的 GtkCancellableHas* / IsCancelled，禁止直探 ffi 变量，inline 薄转发零拷贝，复用 Slab 单源，hot plain 读零原子
   Result := specialize SlabTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
   if Result <> nil then
   begin
@@ -238,7 +303,7 @@ end;
 
 procedure ReleaseGCancellable(A: Pointer); inline;
 begin
-  // 单源经 loader：能力探查经 platform.dl 封装，禁止直探 ffi 变量，inline 零拷贝，溢出 GtkObjectUnref 单所有权不丢
+  // 单源经 loader：能力探查经 platform.dl 封装，禁止直探 ffi 变量，inline 零拷贝，溢出 GtkObjectUnref 单所有权不丢，hot plain 读零原子
   if A = nil then Exit;
   if GtkCancellableHasReset then
     GtkCancellableReset(A)
@@ -256,98 +321,42 @@ begin
     GtkObjectUnref(A);
 end;
 
+function AcquireAssetStream: Pointer; inline;
+begin
+  // perf: inline thin wrapper over SyncPoolTryAcquire single source (bytes.ops VecGrow 0→4→2× inline), burst small files zero per-request g_malloc via Slab reuse, per-pool GStreamLock isolation, short critical <1µs zero-copy, amortized O(1)
+  Result := specialize SlabTryAcquire<Pointer>(GStreamPool, GStreamPoolCount, GStreamLock);
+end;
+
+procedure ReleaseAssetStream(A: Pointer); inline;
+begin
+  // perf: inline thin wrapper over SyncPoolRelease single source, VecGrow 0→4→2× bursts 2×, per-pool lock zero cross-pool contention, overflow G_object_unref single ownership not lost, hot plain 读 zero atomic
+  if A = nil then Exit;
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    GtkObjectUnref(A);
+    Exit;
+  end;
+  if not specialize SlabRelease<Pointer>(GStreamPool, GStreamPoolCount, GStreamLock, A) then
+    GtkObjectUnref(A);
+end;
+
 procedure PoolInit; inline;
 begin
-  // 冷启动零常驻：锁按需懒创建 via LazyLock 原子 CAS 零闭包堆分配（was Once+anon closure 每池堆分配）、非 inline 零 I-Cache 膨胀、并发 CAS 零重复泄漏原子可见性，低频进程 0 堆分配（was 5×TMutex.Create）；池已懒生长 0→4→2× 零常驻，锁亦零常驻；突发首用时单次 CAS Create，后续短临界 <1µs 零额外调用
+  // 冷启动零常驻：锁按需懒创建 hot plain 读零原子 + cold 原子 CAS 零闭包堆分配（was Once+anon closure 每池堆分配）、非 inline 零 I-Cache 膨胀、并发 CAS 零重复泄漏原子可见性，低频进程 0 堆分配（was 5×TMutex.Create）；池已懒生长 0→4→2× 零常驻，锁亦零常驻；突发首用时单次 CAS Create，后续短临界 <1µs 零额外原子
 end;
 
 procedure PoolFinalize; inline;
-var
-  LLock: TMutex;
 begin
   // idempotent CAS gate mo_acq_rel publish to LazyLock/CAS, ensures single owner Free
   if atomic_load(GPoolFinalized, mo_acquire) <> 0 then Exit;
   if atomic_exchange(GPoolFinalized, 1, mo_acq_rel) <> 0 then Exit;
-  // Idle — hold per-pool lock while draining, lock via atomic_load, exchange to nil single ownership
-  LLock := TMutex(atomic_load(PPointer(@GIdleLock)^, mo_acquire));
-  if LLock <> nil then LLock.Acquire;
-  try
-    while GIdlePoolCount > 0 do
-    begin
-      Dec(GIdlePoolCount);
-      Dispose(GIdlePool[GIdlePoolCount]);
-    end;
-    SetLength(GIdlePool, 0);
-    GIdlePoolCount := 0;
-  finally
-    if LLock <> nil then LLock.Release;
-  end;
-  LLock := TMutex(atomic_exchange(PPointer(@GIdleLock)^, nil, mo_acq_rel));
-  if LLock <> nil then LLock.Free;
-  // Completion
-  LLock := TMutex(atomic_load(PPointer(@GCompletionLock)^, mo_acquire));
-  if LLock <> nil then LLock.Acquire;
-  try
-    while GCompletionPoolCount > 0 do
-    begin
-      Dec(GCompletionPoolCount);
-      Dispose(GCompletionPool[GCompletionPoolCount]);
-    end;
-    SetLength(GCompletionPool, 0);
-    GCompletionPoolCount := 0;
-  finally
-    if LLock <> nil then LLock.Release;
-  end;
-  LLock := TMutex(atomic_exchange(PPointer(@GCompletionLock)^, nil, mo_acq_rel));
-  if LLock <> nil then LLock.Free;
-  // AssetHolder
-  LLock := TMutex(atomic_load(PPointer(@GAssetHolderLock)^, mo_acquire));
-  if LLock <> nil then LLock.Acquire;
-  try
-    while GAssetHolderCount > 0 do
-    begin
-      Dec(GAssetHolderCount);
-      Dispose(GAssetHolder[GAssetHolderCount]);
-    end;
-    SetLength(GAssetHolderPool, 0);
-    GAssetHolderCount := 0;
-  finally
-    if LLock <> nil then LLock.Release;
-  end;
-  LLock := TMutex(atomic_exchange(PPointer(@GAssetHolderLock)^, nil, mo_acq_rel));
-  if LLock <> nil then LLock.Free;
-  // Eval
-  LLock := TMutex(atomic_load(PPointer(@GEvalLock)^, mo_acquire));
-  if LLock <> nil then LLock.Acquire;
-  try
-    while GEvalPoolCount > 0 do
-    begin
-      Dec(GEvalPoolCount);
-      Dispose(GEvalPool[GEvalPoolCount]);
-    end;
-    SetLength(GEvalPool, 0);
-    GEvalPoolCount := 0;
-  finally
-    if LLock <> nil then LLock.Release;
-  end;
-  LLock := TMutex(atomic_exchange(PPointer(@GEvalLock)^, nil, mo_acq_rel));
-  if LLock <> nil then LLock.Free;
-  // Cancel — G_object unref under lock single ownership
-  LLock := TMutex(atomic_load(PPointer(@GCancelLock)^, mo_acquire));
-  if LLock <> nil then LLock.Acquire;
-  try
-    while GCancelPoolCount > 0 do
-    begin
-      Dec(GCancelPoolCount);
-      GtkObjectUnref(GCancelPool[GCancelPoolCount]);
-    end;
-    SetLength(GCancelPool, 0);
-    GCancelPoolCount := 0;
-  finally
-    if LLock <> nil then LLock.Release;
-  end;
-  LLock := TMutex(atomic_exchange(PPointer(@GCancelLock)^, nil, mo_acq_rel));
-  if LLock <> nil then LLock.Free;
+  // 单源排水：五池共用 DrainDisposeSlab/DrainCancelSlab 单源零重复模板，per-pool 锁内排水 + atomic_exchange 置 nil 单所有权 Free
+  specialize DrainDisposeSlab<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
+  specialize DrainDisposeSlab<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
+  specialize DrainDisposeSlab<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
+  specialize DrainDisposeSlab<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
+  DrainCancelSlab(GCancelPool, GCancelPoolCount, GCancelLock);
+  DrainCancelSlab(GStreamPool, GStreamPoolCount, GStreamLock);
 end;
 
 initialization
@@ -356,9 +365,15 @@ initialization
   GAssetHolderOnce := Once;
   GEvalOnce := Once;
   GCancelOnce := Once;
+  GStreamOnce := Once;
 
 finalization
   GIdleOnce := nil;
+  GCompletionOnce := nil;
+  GAssetHolderOnce := nil;
+  GEvalOnce := nil;
+  GCancelOnce := nil;
+  GStreamOnce := nil;
   GCompletionOnce := nil;
   GAssetHolderOnce := nil;
   GEvalOnce := nil;

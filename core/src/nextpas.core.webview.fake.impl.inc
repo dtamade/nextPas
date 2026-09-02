@@ -8,7 +8,7 @@
 
        性能修复：RecordOutcome 竞争路径 O(n) 持锁搬移消除（同 dispatcher）。
        原二次持锁内再次 VecCopy O(n) 搬移放大尾延迟；现改为预校验三阶段乐观重试：
-       快照后 O(1) 预校验（有空位直接写入无分配/无拷贝，stale 无分配/无拷贝重取），仅有效时锁外分配+VecCopy 单源 inline 零拷贝，二次持锁仅 O(1) 指针检查与写入，拷贝窗口竞争 stale 丢弃 LNew 零 O(n) 持锁，mirrors dispatcher 单源。 *}
+       快照后 O(1) 预校验（有空位直接写入无分配/无拷贝，stale 无分配/无拷贝重取），仅有效时锁外按需分配+VecCopy 单源 inline 零拷贝（复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配不放大尾延迟），二次持锁仅 O(1) 指针检查与写入，拷贝窗口竞争 stale 丢弃 LNew 零 O(n) 持锁，mirrors dispatcher 单源。 *}
 
 { handler 异常 → 协议错误码映射：唯一实现收敛至 bridge.NormalizeInvokeCode 单源，
   fake 与未来真实后端直接复用零间接层，避免双处定义漂移；原 MapInvokeCode 薄包装已移除。 }
@@ -365,8 +365,15 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation + VecCopy single source bytes.ops VecGrowCopy inline zero-copy outside lock,复用 LNew 缓冲避免重试重复零化 O(n)；SetLength 零化 O(Cap) 在锁外且经 0→4→2× 摊销 O(1)/push，大 Count 单次 O(n) 不持锁不放大尾延迟，managed 保 refcnt/blittable 单 Move 零拷贝
-    specialize VecGrowCopy<TFakeInvokeOutcome>(LOld, LNew, LCount, LCap);
+    // perf: heap allocation + VecCopy single source bytes.ops VecGrowCopy inline zero-copy outside lock，预校验后按需分配+复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)；0→4→2× 倍增摊销 O(1)/push，突发并发零重复分配不放大尾延迟，stale 重试零 O(n) 持锁，managed 保 refcnt/blittable 单 Move 零拷贝
+    // stability: reuse LNew buffer across retries (Length=LCap avoids repeated SetLength zero-init O(Cap)), VecGrowCopy single source checks Length vs Cap, VecCopy overwrites, zero leak via Finalize
+    if Length(LNew) = LCap then
+    begin
+      if LCount > 0 then
+        specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
+    end
+    else
+      specialize VecGrowCopy<TFakeInvokeOutcome>(LOld, LNew, LCount, LCap);
     // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
     FLck.Acquire;
     try

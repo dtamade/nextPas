@@ -59,15 +59,15 @@
 
 ```
 base ─┬─ validation（校验实现层，仅依赖 base；复用 L1 text.view + L2 validation，inline 零拷贝，释放不丢）
-      └─ intf（仅依赖 base + window.intf）→ utils/callbacks → bridge(←assets) ← fake/gtk → factory → builder → 门面   （L3→L2 has-a IWindow）
+      └─ intf（仅依赖 base + window.intf + text.view 零拷贝视图豁免，L3→L1 合法下向，INV-4 扩展豁免）→ utils/callbacks → bridge(←assets) ← fake/gtk → factory → builder → 门面   （L3→L2 has-a IWindow，L3→L1 text.view 零拷贝 `TStringView` 视图）
 gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool ← gtk
 ```
-> 实测 uses 闭包：`validation`→`base`（`nextpas.core.webview.validation.pas:57` 仅 `uses base`），`intf`→`base,window.intf`（`nextpas.core.webview.intf.pas:19-21` 无 `validation`）；二者为 `base` 并列分支，四件套 `base←intf←impl←facade` 守恒，互不依赖。
+> 实测 uses 闭包：`validation`→`base`（`nextpas.core.webview.validation.pas:57` 仅 `uses base`），`intf`→`base,window.intf,text.view`（`nextpas.core.webview.intf.pas:19-21` 除 `base/window.intf` 外额外 `uses text.view` 暴露 `TStringView` 零拷贝视图，L3→L1 合法下向依赖，INV-4 扩展豁免，`utils` thin-forward `TrimLeftChar/CStrLen` 单源 `inline` 零堆分配，见 §1/INV-4）；二者为 `base` 并列分支，四件套 `base←intf←impl←facade` 守恒，互不依赖。
 - `validation` 为校验实现层（`inline` 零拷贝，失败抛 `EWebviewInvalidState`，无堆资源释放不丢；复用 L1 `text.view` + L2 `validation` 单源）。
 - `utils`/`callbacks` 为家族共享辅助（不经门面；`utils` 复用 `text.view` 单源 `inline` 零拷贝 `TStringView` + `SliceToStr` 单次 `SetString+Move`，`callbacks` 仅依 `intf` `inline` 薄转发，`Default(T)` 释放不丢）。
 - `assets`/`viewmap`/`pool` 为私有索引/池化（不经门面；已反哺 `collections.prefixrouter`/`hashmap`/`sync.pool` 单源，`inline` 零拷贝，`Finalize`/`Dispose`/`FreeAndNil` 释放不丢）。
 - `live` 已移除，收敛至 L1 `bytes.ops.TCompactLiveRegistry<T>` 单源（`VecGrowCapacity 0→4→2×` `inline` 零拷贝，`Default(T)` 释放不丢）。
-- `webview`→`window` 允许 L3→L2 `has-a IWindow`（`fake`/`gtk`/`webview2`/`wk`/`factory`/`builder`）；`base` 禁 `uses window`，`intf` 仅豁免 `window.intf` 暴露 `IWindow`。
+- `webview`→`window` 允许 L3→L2 `has-a IWindow`（`fake`/`gtk`/`webview2`/`wk`/`factory`/`builder`）；`base` 禁 `uses window`，`intf` 仅豁免 `window.intf` 暴露 `IWindow` + `text.view` 暴露 `TStringView` 零拷贝视图（L3→L1 合法下向，`bytes.ops` 单源 `inline` 零堆分配，`utils` thin-forward，见 INV-4）。
 
 ### 1.2 可抽模块候选——Owner 归属（单源薄转发）
 
@@ -518,7 +518,7 @@ procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
   解释、不复用。（eval 回执不经此通道——native 侧回调直接绑定 Eval 调用。）
 - INV-3 `bridge` 对帧的编解码是无处不在的唯一权威；任何后端不得私自解析 payload。`webview`→`window` 为 L3→L2 has-a 允许，`bridge` 仍禁止 `uses window`（协议层保持纯净）。
 - INV-4 `base`/`intf` 的 uses 闭包里不出现 `webview.gtk*`、`webview.fake`、
-  `webview.factory`、`webview.bridge`（source-contract 门禁冻结）；`webview` 生产单元（`fake/gtk/webview2/wk/factory`）允许 `uses window.*`（L3→L2 has-a，M6 收口），`base` 仍禁止 `uses window`，`intf` 仅例外观 `uses window.intf` 以暴露 `IWindow`/`Window` 组合面。
+  `webview.factory`、`webview.bridge`（source-contract 门禁冻结）；`webview` 生产单元（`fake/gtk/webview2/wk/factory`）允许 `uses window.*`（L3→L2 has-a，M6 收口），`base` 仍禁止 `uses window`，`intf` 仅例外允许 `uses window.intf` 以暴露 `IWindow`/`Window` 组合面 + `uses text.view` 以暴露 `TStringView` 零拷贝视图（L3→L1 合法下向，`bytes.ops` 单源 `inline` 零堆分配，`utils` thin-forward `StripLeadingSlashView/ViewFromPChar` 单源，`TryResolveView` 零拷贝热点 `inline` 直通，释放不丢）。
 - INV-5 生产单元（非 loader）不出现 FPC host units（`DynLibs`/`Windows`/
   `BaseUnix`/`ctypes`…）；GTK/Win32/ObjC 真相全部收敛在后端 `ffi`+`loader`。
 - INV-6 每个 public 异步入口都有超时或不超时的明确语义并写入注释；

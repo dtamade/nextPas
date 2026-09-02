@@ -108,18 +108,24 @@ type
   private type
     TInvokeEntry = record
       IsAsync: Boolean;
+      IsView: Boolean;
       SyncHandler: TWebviewInvokeSyncHandler;
       AsyncHandler: TWebviewInvokeAsyncHandler;
+      SyncViewHandler: TWebviewInvokeSyncViewHandler;
+      AsyncViewHandler: TWebviewInvokeAsyncViewHandler;
     end;
   private
     FMap: specialize THashMap<string, TInvokeEntry>;
     procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
       const ASync: TWebviewInvokeSyncHandler;
       const AAsync: TWebviewInvokeAsyncHandler);
+    procedure AddEntryView(const ACmd: string; AIsAsync: Boolean;
+      const ASync: TWebviewInvokeSyncViewHandler;
+      const AAsync: TWebviewInvokeAsyncViewHandler);
   public
     constructor Create;
     destructor Destroy; override;
-    { IWebviewInvokeRegistry }
+    { IWebviewInvokeRegistry — string compat (ToString heap per invoke, prefer view path) }
     procedure Register(const ACmd: string;
       AHandler: TWebviewInvokeSyncHandler); overload;
     procedure Register(const ACmd: string;
@@ -132,11 +138,27 @@ type
       AHandler: TWebviewInvokeAsyncMethod); overload;
     procedure RegisterAsync(const ACmd: string;
       AHandler: TWebviewInvokeAsyncProc); overload;
+    // zero-copy view variants: inline zero-copy via TStringView RawSlice (bytes.ops/text.view single source), zero heap per invoke hot path
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewHandler); overload;
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewMethod); overload;
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewProc); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewHandler); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewMethod); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewProc); overload;
     procedure Unregister(const ACmd: string);
-    { 分发面：False = 未注册；按 IsAsync 选择形态调用 }
+    { 分发面：False = 未注册；按 IsAsync/IsView 选择形态调用 }
     function Find(const ACmd: string; out AIsAsync: Boolean;
       out ASync: TWebviewInvokeSyncHandler;
       out AAsync: TWebviewInvokeAsyncHandler): Boolean;
+    function FindView(const ACmd: string; out AIsAsync: Boolean;
+      out ASync: TWebviewInvokeSyncViewHandler;
+      out AAsync: TWebviewInvokeAsyncViewHandler): Boolean;
     function Count: Integer; inline;
   end;
 
@@ -564,8 +586,29 @@ var
 begin
   CheckInvokeCmd(ACmd);
   LEntry.IsAsync := AIsAsync;
+  LEntry.IsView := False;
   LEntry.SyncHandler := ASync;
   LEntry.AsyncHandler := AAsync;
+  LEntry.SyncViewHandler := nil;
+  LEntry.AsyncViewHandler := nil;
+  if not FMap.Add(ACmd, LEntry) then
+    raise EWebviewInvalidState.CreateFmt(
+      'invoke handler already registered: %s', [ACmd]);
+end;
+
+procedure TWebviewInvokeRegistry.AddEntryView(const ACmd: string;
+  AIsAsync: Boolean; const ASync: TWebviewInvokeSyncViewHandler;
+  const AAsync: TWebviewInvokeAsyncViewHandler);
+var
+  LEntry: TInvokeEntry;
+begin
+  CheckInvokeCmd(ACmd);
+  LEntry.IsAsync := AIsAsync;
+  LEntry.IsView := True;
+  LEntry.SyncHandler := nil;
+  LEntry.AsyncHandler := nil;
+  LEntry.SyncViewHandler := ASync;
+  LEntry.AsyncViewHandler := AAsync;
   if not FMap.Add(ACmd, LEntry) then
     raise EWebviewInvalidState.CreateFmt(
       'invoke handler already registered: %s', [ACmd]);
@@ -625,6 +668,60 @@ begin
     end);
 end;
 
+procedure TWebviewInvokeRegistry.RegisterView(const ACmd: string;
+  AHandler: TWebviewInvokeSyncViewHandler);
+begin
+  AddEntryView(ACmd, False, AHandler, nil);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterView(const ACmd: string;
+  AHandler: TWebviewInvokeSyncViewMethod);
+begin
+  RegisterView(ACmd,
+    function(const APayload: TStringView): string
+    begin
+      Result := AHandler(APayload);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterView(const ACmd: string;
+  AHandler: TWebviewInvokeSyncViewProc);
+begin
+  RegisterView(ACmd,
+    function(const APayload: TStringView): string
+    begin
+      Result := AHandler(APayload);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsyncView(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncViewHandler);
+begin
+  AddEntryView(ACmd, True, nil, AHandler);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsyncView(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncViewMethod);
+begin
+  RegisterAsyncView(ACmd,
+    procedure(const APayload: TStringView;
+      const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayload, ACompletion);
+    end);
+end;
+
+procedure TWebviewInvokeRegistry.RegisterAsyncView(const ACmd: string;
+  AHandler: TWebviewInvokeAsyncViewProc);
+begin
+  RegisterAsyncView(ACmd,
+    procedure(const APayload: TStringView;
+      const ACompletion: IWebviewInvokeCompletion)
+    begin
+      AHandler(APayload, ACompletion);
+    end);
+end;
+
 destructor TWebviewInvokeRegistry.Destroy;
 begin
   if FMap <> nil then
@@ -654,10 +751,27 @@ begin
   if (FMap = nil) or (FMap.GetCount = 0) then Exit(False);
   if not FMap.TryGetValue(ACmd, LEntry) then
     Exit(False);
+  if LEntry.IsView then Exit(False);
   Result := True;
   AIsAsync := LEntry.IsAsync;
   ASync := LEntry.SyncHandler;
   AAsync := LEntry.AsyncHandler;
+end;
+
+function TWebviewInvokeRegistry.FindView(const ACmd: string; out AIsAsync: Boolean;
+  out ASync: TWebviewInvokeSyncViewHandler;
+  out AAsync: TWebviewInvokeAsyncViewHandler): Boolean;
+var
+  LEntry: TInvokeEntry;
+begin
+  if (FMap = nil) or (FMap.GetCount = 0) then Exit(False);
+  if not FMap.TryGetValue(ACmd, LEntry) then
+    Exit(False);
+  if not LEntry.IsView then Exit(False);
+  Result := True;
+  AIsAsync := LEntry.IsAsync;
+  ASync := LEntry.SyncViewHandler;
+  AAsync := LEntry.AsyncViewHandler;
 end;
 
 { ---- TWebviewAssetsImpl：前缀路由 + provider 链 ---- }

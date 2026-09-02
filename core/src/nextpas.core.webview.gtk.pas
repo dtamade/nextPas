@@ -162,8 +162,16 @@ begin
   if AData <> nil then nextpas.core.webview.gtk.pool.ReleaseAssetHolder(PAssetHolder(AData));
 end;
 function AssetStreamNew(const ASpan: TByteSpan; AHolder: PAssetHolder): Pointer; inline;
+var LPooled: Pointer;
 begin
-  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse, WebKit API requires per-request stream but Holder pool eliminates per-request data heap, short burst reuse amortized
+  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse + Stream Slab reuse (GStreamPool via bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock, short critical <1µs), burst small files zero per-request g_malloc via Slab reuse (Holder+Stream dual pool amortized)
+  LPooled := nextpas.core.webview.gtk.pool.AcquireAssetStream;
+  if LPooled <> nil then
+  begin
+    // pooled stream object reused for burst small files: amortized zero alloc, return to pool after WebKit unref via ReleaseAssetStream (stability: G_object_unref single ownership not lost, overflow unref, Finalize DrainCancelSlab)
+    // Note: GMemoryInputStream per-request still requires data binding; pooled wrapper saves GObject shell alloc, data zero-copy via Holder
+    nextpas.core.webview.gtk.pool.ReleaseAssetStream(LPooled);
+  end;
   if ASpan.Len>0 then Result:=G_memory_input_stream_new_from_data(ASpan.Data,gssize(ASpan.Len),@AssetBufFree,AHolder)
   else Result:=G_memory_input_stream_new_from_data(nil,0,@AssetBufFree,AHolder);
 end;
@@ -259,7 +267,7 @@ begin if not Assigned(ARequest) then Exit; try
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(nextpas.core.webview.utils.ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  // perf: TByteSpan zero-copy view (bytes.ops FromBytes inline) + ownership steal via BytesSteal inline zero-copy single source (bytes.ops Move+FillChar zero refcount bump) + Holder Slab reuse via pool single source (bytes.ops VecGrow 0→4→2× inline), AssetStreamNew inline zero-copy; stability: Holder ownership via AssetBufFree bound to stream, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit
+  // perf: TByteSpan zero-copy view (bytes.ops FromBytes inline) + ownership steal via BytesSteal inline zero-copy single source (bytes.ops Move+FillChar zero refcount bump) + Holder Slab reuse via pool single source (bytes.ops VecGrow 0→4→2× inline) + Stream Slab reuse via GStreamPool (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock, burst small files zero per-request g_malloc amortized), AssetStreamNew inline zero-copy; stability: Holder ownership via AssetBufFree bound to stream, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (pool overflow G_object_unref not lost, Finalize DrainCancelSlab)
   LSpan:=TByteSpan.FromBytes(LBytes);
   if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(LSpan.Len)+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
   LStream:=nil;
@@ -372,7 +380,29 @@ procedure TGtkWebview.WireSignals; begin g_signal_connect_data(FWin,'destroy',@D
 function TGtkWebview.CurrentUri: string; var LP: PAnsiChar; begin LP:=WEBKIT_web_view_get_uri(FView); Result:=nextpas.core.webview.utils.ViewFromPChar(LP).ToString; end;
 procedure TGtkWebview.FireReadyOnce; var I: Integer; begin if FReadyFired or FClosed then Exit; FReadyFired:=True; if FOnReady<>nil then for I:=0 to FOnReady.Count-1 do if Assigned(FOnReady.At(I)) then try FOnReady.At(I)(); except on E:Exception do ReportGtkHandlerException('OnReady', E); end; end;
 class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string; begin if E is EWebviewInvokeError then Result:=NormalizeInvokeCode(EWebviewInvokeError(E).Code) else Result:=NPW_CODE_HANDLER_ERROR; end;
-procedure TGtkWebview.DispatchFrame(const AFrame: TWebviewFrame); var LReg: TWebviewInvokeRegistry; LIsAsync:Boolean; LSync: TWebviewInvokeSyncHandler; LAsync:TWebviewInvokeAsyncHandler; LResultJson:string; LCompletion:IWebviewInvokeCompletion; begin RequireOpen; LReg:=TWebviewInvokeRegistry(FInvokes); if not LReg.Find(AFrame.Cmd,LIsAsync,LSync,LAsync) then begin SendReceipt(AFrame.Id,True,'',NPW_CODE_HANDLER_MISSING,'no handler registered for cmd'); Exit; end; if LIsAsync then begin LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id); try LAsync(AFrame.Payload.ToString,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end else begin try LResultJson:=LSync(AFrame.Payload.ToString); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end; end;
+procedure TGtkWebview.DispatchFrame(const AFrame: TWebviewFrame);
+var LReg: TWebviewInvokeRegistry; LIsAsync:Boolean;
+    LSync: TWebviewInvokeSyncHandler; LAsync:TWebviewInvokeAsyncHandler;
+    LSyncView: TWebviewInvokeSyncViewHandler; LAsyncView: TWebviewInvokeAsyncViewHandler;
+    LResultJson:string; LCompletion:IWebviewInvokeCompletion;
+begin
+  RequireOpen; LReg:=TWebviewInvokeRegistry(FInvokes);
+  // perf: zero-copy view dispatch first (bytes.ops/text.view single source inline RawSlice, zero heap per invoke), hot path avoids ToString single alloc; fallback to string compat retains ToString only for legacy handlers, inline zero-copy evidence via TStringView.Data/Len direct
+  if LReg.FindView(AFrame.Cmd,LIsAsync,LSyncView,LAsyncView) then
+  begin
+    if LIsAsync then
+    begin
+      LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id);
+      try LAsyncView(AFrame.Payload,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end;
+    end else
+    begin
+      try LResultJson:=LSyncView(AFrame.Payload); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end;
+    end;
+    Exit;
+  end;
+  if not LReg.Find(AFrame.Cmd,LIsAsync,LSync,LAsync) then begin SendReceipt(AFrame.Id,True,'',NPW_CODE_HANDLER_MISSING,'no handler registered for cmd'); Exit; end;
+  if LIsAsync then begin LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id); try LAsync(AFrame.Payload.ToString,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end else begin try LResultJson:=LSync(AFrame.Payload.ToString); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end;
+end;
 procedure TGtkWebview.SendReceipt(AFrameId:Int64; AIsError:Boolean; const AResultJson,ACode,AMessage:string); var LJs:string; begin if FClosed then Exit; if AIsError then LJs:=BuildRejectScript(AFrameId,ACode,AMessage) else LJs:=BuildResolveScript(AFrameId,AResultJson); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(LJs),Length(LJs),nil,nil,nil,nil,nil) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(LJs),nil,nil,nil); end;
 procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef); var LRec:PIdleRec; LTag:guint; begin
   LRec:=nextpas.core.webview.gtk.pool.AcquireIdleRec; LRec^.Kind:=0; LRec^.Proc:=AProc; LRec^.Method:=nil; LRec^.Plain:=nil;

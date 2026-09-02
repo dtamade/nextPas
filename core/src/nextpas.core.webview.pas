@@ -74,6 +74,13 @@ type
   TWebviewInvokeAsyncHandler = nextpas.core.webview.intf.TWebviewInvokeAsyncHandler;
   TWebviewInvokeAsyncMethod  = nextpas.core.webview.intf.TWebviewInvokeAsyncMethod;
   TWebviewInvokeAsyncProc    = nextpas.core.webview.intf.TWebviewInvokeAsyncProc;
+  // zero-copy view handlers: TStringView RawSlice single source, zero heap per invoke
+  TWebviewInvokeSyncViewHandler  = nextpas.core.webview.intf.TWebviewInvokeSyncViewHandler;
+  TWebviewInvokeSyncViewMethod   = nextpas.core.webview.intf.TWebviewInvokeSyncViewMethod;
+  TWebviewInvokeSyncViewProc     = nextpas.core.webview.intf.TWebviewInvokeSyncViewProc;
+  TWebviewInvokeAsyncViewHandler = nextpas.core.webview.intf.TWebviewInvokeAsyncViewHandler;
+  TWebviewInvokeAsyncViewMethod  = nextpas.core.webview.intf.TWebviewInvokeAsyncViewMethod;
+  TWebviewInvokeAsyncViewProc    = nextpas.core.webview.intf.TWebviewInvokeAsyncViewProc;
 
 { ---- 类型：intf 接口 ---- }
 
