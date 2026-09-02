@@ -38,7 +38,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.text.conv,
+  nextpas.core.bytes.builder,
   nextpas.core.tar.common;
 
 const
@@ -58,48 +58,7 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，复用 bytes.ops Move 单源语义（零拷贝 PAnsiChar 视图），单次 SetLength 分配闭合 common SpanToString 审计；含循环/分配不 inline — }
-function MakePaxRecord(const AKey, AValue: string): string;
-var
-  LBase, LLen, LDigits: Integer;
-  SLen: string;
-  LPos: SizeInt;
-begin
-  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
-  LDigits := 1;
-  LLen := LBase + LDigits;
-  SLen := nextpas.core.text.conv.IntToStr(LLen);
-  while Length(SLen) <> LDigits do
-  begin
-    LDigits := Length(SLen);
-    LLen := LBase + LDigits;
-    SLen := nextpas.core.text.conv.IntToStr(LLen);
-  end;
-  // perf: 单次 SetLength(Result,LLen)+顺序 CopyStringToBuffer（bytes.ops 单源 Move，零拷贝 PAnsiChar 视图，外联单次 Move 规避 FPC 3.3.1 inline+Move 单字节缺陷），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
-  // stability: 空键/值守零长不 Copy，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 bytes.ops CopyStringToBuffer 审计（同 common.pas SpanToString/TarPutHeaderString 单源），资源由托管 string 释放不丢
-  SetLength(Result, LLen);
-  LPos := 1;
-  if Length(SLen) > 0 then
-  begin
-    CopyStringToBuffer(SLen, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(SLen)));
-    Inc(LPos, Length(SLen));
-  end;
-  Result[LPos] := ' ';
-  Inc(LPos);
-  if Length(AKey) > 0 then
-  begin
-    CopyStringToBuffer(AKey, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AKey)));
-    Inc(LPos, Length(AKey));
-  end;
-  Result[LPos] := '=';
-  Inc(LPos);
-  if Length(AValue) > 0 then
-  begin
-    CopyStringToBuffer(AValue, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AValue)));
-    Inc(LPos, Length(AValue));
-  end;
-  Result[LPos] := #10;
-end;
+{ — pax record 单点已收敛至 common.TarFormatPaxRecord（复用 bytes.ops 单源编解码，零拷贝 PAnsiChar 视图，外联禁 inline），writer 仅薄委托，不再手写十进制自洽逻辑 — }
 
 { TTarWriter }
 
@@ -170,8 +129,9 @@ var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Name, LinkName: string;
   CutPos: SizeInt;
-  LPaxText: string;
   LPaxBytes: TBytes;
+  LBuilder: IBytesBuilder;
+  LRec: string;
   I: Integer;
 begin
   if FFinished then
@@ -198,12 +158,22 @@ begin
   end;
   if ((Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0)) or (Length(LinkName) > C_TAR_LEN_LINKNAME) then
   begin
-    LPaxText := '';
+    // perf: bytes.builder 单源几何扩容单次 ToBytes 一次 Move 单源 bytes.ops，消除 LPaxText 字符串拼接累加后 StringToBytes 多次分配，复用 common.TarFormatPaxRecord 单源编解码；零拷贝 PAnsiChar 视图 AppendBytes 单源 Move
+    // stability: builder 接口生命周期局部持有，异常安全不丢，LPaxBytes 由托管 TBytes 释放
+    LBuilder := CreateBytesBuilder(256);
     if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
-      LPaxText := LPaxText + MakePaxRecord('path', Name);
+    begin
+      LRec := TarFormatPaxRecord('path', Name);
+      if Length(LRec) > 0 then
+        LBuilder.AppendBytes(PByte(PAnsiChar(LRec)), SizeUInt(Length(LRec)));
+    end;
     if Length(LinkName) > C_TAR_LEN_LINKNAME then
-      LPaxText := LPaxText + MakePaxRecord('linkpath', LinkName);
-    LPaxBytes := StringToBytes(LPaxText);
+    begin
+      LRec := TarFormatPaxRecord('linkpath', LinkName);
+      if Length(LRec) > 0 then
+        LBuilder.AppendBytes(PByte(PAnsiChar(LRec)), SizeUInt(Length(LRec)));
+    end;
+    LPaxBytes := LBuilder.ToBytes;
     EmitPaxHeader(LPaxBytes);
   end;
   FillChar(Block[0], SizeOf(Block), 0);
@@ -356,12 +326,14 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand, no per-entry SetLength/Free
-  // stability: buffer retains capacity across calls, exception-safe, freed on Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
+  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand + 4x-threshold shrink (avoid 64K peak retention for small-file burst), no per-entry SetLength/Free churn
+  // stability: threshold shrink retains reuse for nearby sizes, 8K floor avoids thrash, exception-safe, freed on Finish/Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
   LNeeded := SizeUInt(AHdr.Size);
   if LNeeded > C_STREAM_BUF then
     LNeeded := C_STREAM_BUF;
   if SizeUInt(Length(FStreamBuf)) < LNeeded then
+    SetLength(FStreamBuf, LNeeded)
+  else if (SizeUInt(Length(FStreamBuf)) > 8192) and (SizeUInt(Length(FStreamBuf)) > LNeeded * 4) then
     SetLength(FStreamBuf, LNeeded);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
@@ -395,6 +367,8 @@ begin
   FillChar(Zero[0], SizeOf(Zero), 0);
   WriteBlock(Zero);
   WriteBlock(Zero);
+  // stability: pooled buffer peak release on Finish, avoid 64K lingering after last large entry; amortized reuse already done, no thrash
+  SetLength(FStreamBuf, 0);
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -404,12 +378,15 @@ end;
 
 destructor TTarWriter.Destroy;
 begin
+  // stability: fail-closed — propagate EIOError/short write from Finish to avoid silent two-zero truncation masking; buffer release guaranteed via finally
+  // perf: threshold-shrink + Finish release already handled, Destroy only ensures final free without extra alloc
   try
-    Finish;
-  except
-    // best-effort: 两零块收尾可抛 EIOError，析构期吞掉避免异常逃逸（builder 层 fail-closed 显式校验）
+    if not FFinished then
+      Finish;
+  finally
+    SetLength(FStreamBuf, 0);
+    inherited Destroy;
   end;
-  inherited Destroy;
 end;
 
 end.

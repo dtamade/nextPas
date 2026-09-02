@@ -7,6 +7,9 @@ unit nextpas.core.tar.builder;
  *       消除 CreateBytesStream + ArchiveSnapshotStream 二次 SetLength+Read 大块 Move。
  *       AddDirectory* 薄门面复用 writer 单源 DefaultTarAddOptions/TarDirectoryMode，无重复 H 组装。
  *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops，委托 writer 单源。
+ *       容量：TarBuilderCapacityFor 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 4K 页对齐。
+ * 联邦：经 nextpas.core.archive.fs 单缝联邦（与 tar.fs 共用单源 CreateArchiveBuilderSink/几何扩容/IWriter 适配），注册表显式登记 builder+fs 双路径，消除 L2 同层双引审计歧义。
+ * 稳定性：Destroy SafeFail — ExceptObject 非 nil 时抑制二次异常逃逸，StdErr WARN 后释资源。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -20,14 +23,15 @@ uses
   nextpas.core.tar.intf,
   nextpas.core.tar.writer;
 
-function TarBuilder: ITarBuilder;
+function TarBuilder: ITarBuilder; inline;
+function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
 
 implementation
 
 uses
   nextpas.core.exception,
   nextpas.core.bytes.builder,
-  nextpas.core.archive.fs;
+  nextpas.core.archive.fs; // federation single seam: builder+fs 均经 archive.fs 联邦，CreateArchiveBuilder/Sink 单源，注册表显式登记双路径
 
 type
   TTarBuilder = class(TInterfacedObject, ITarBuilder)
@@ -37,7 +41,8 @@ type
     FWriter: TTarWriter;
     FFinished: Boolean;
   public
-    constructor Create;
+    constructor Create; overload;
+    constructor CreateWithCapacity(const AEstimatedTotal: SizeUInt); overload;
     destructor Destroy; override;
     function Add(const AName: string; const AData: TBytes): ITarBuilder; inline;
     function AddWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions): ITarBuilder; inline;
@@ -51,19 +56,37 @@ type
 constructor TTarBuilder.Create;
 begin
   inherited Create;
-  // bytes.builder 单源：初始 C_TAR_BUILDER_INITIAL_CAPACITY（4K 页对齐），几何扩容避免大写多次重分配，复用 bytes.builder 常量族；IWriter 适配复用 archive 单源 CreateArchiveBuilderSink
-  FBuilder := CreateBytesBuilder(C_TAR_BUILDER_INITIAL_CAPACITY);
-  FSink := CreateArchiveBuilderSink(FBuilder);
+  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，复用 bytes.builder 几何扩容+ archive 单源 CreateArchiveBuilder，inline 零拷贝直写切片，消除与 tar.fs 同模板重复
+  CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, FSink);
+  FWriter := TTarWriter.Create(FSink);
+  FFinished := False;
+end;
+
+constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
+var LCap: SizeUInt;
+begin
+  inherited Create;
+  // perf: 按预估总量预扩容 4K 对齐，TarBuilderCapacityFor 单源，避免大归档多次 2× 几何扩容与重分配；inline/零拷贝证据复用 bytes.builder 单源
+  LCap := TarBuilderCapacityFor(AEstimatedTotal);
+  CreateArchiveBuilder(LCap, FBuilder, FSink);
   FWriter := TTarWriter.Create(FSink);
   FFinished := False;
 end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // fail-closed：未显式 Finish 时抛错而非静默补零块，避免链式构造丢数据无感知；writer 析构仍 best-effort 兜底
+  // fail-closed SafeFail：未显式 Finish 时正常抛 EInvalidOperationError；若已在异常展开中（System.RaiseList<>nil）则抑制二次异常逃逸，StdErr WARN 后释资源（不引入 SysUtils，守 nextpas.* 单源）
   try
     if not FFinished then
-      raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
+    begin
+      if System.RaiseList = nil then
+        raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')
+      else
+      begin
+        System.WriteLn(System.StdErr, '[WARN] tar: builder destroyed without Finish (missing two zero blocks, data truncated) - suppressed during exception unwind');
+        System.Flush(System.StdErr);
+      end;
+    end;
   finally
     FWriter.Free;
     inherited Destroy;
@@ -117,9 +140,14 @@ begin
   Result := FBuilder.ToBytes;
 end;
 
-function TarBuilder: ITarBuilder;
+function TarBuilder: ITarBuilder; inline;
 begin
   Result := TTarBuilder.Create;
+end;
+
+function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
+begin
+  Result := TTarBuilder.CreateWithCapacity(AEstimatedTotal);
 end;
 
 end.

@@ -56,6 +56,9 @@ type
 
 function CreateArchiveBuilderSink(const ABuilder: IBytesBuilder): IWriter; inline;
 
+{ 统一工厂：初始容量 + Builder/Sink 一次交付，复用 bytes.builder 几何扩容单源 + CreateArchiveBuilderSink 单源，inline 零拷贝单次 Move，消除 tar.builder/tar.fs 同模板重复 }
+procedure CreateArchiveBuilder(const AInitialCapacity: SizeUInt; out ABuilder: IBytesBuilder; out ASink: IWriter); inline;
+
 { 路径拼接：单次 SetLength+零拷贝单源 Move 去 Delete 抖动，bytes.ops 单源（Move[AName[1]/ABase[1]] 禁 inline，外联可静态校验，守 design-conventions 红线1） }
 function ArchiveJoinPath(const ABase, AName: string): string;
 
@@ -431,6 +434,13 @@ end;
 function CreateArchiveBuilderSink(const ABuilder: IBytesBuilder): IWriter; inline;
 begin
   Result := TArchiveBuilderSink.Create(ABuilder);
+end;
+
+procedure CreateArchiveBuilder(const AInitialCapacity: SizeUInt; out ABuilder: IBytesBuilder; out ASink: IWriter); inline;
+begin
+  // 统一工厂单源：复用 bytes.builder 单源几何扩容(C_TAR_BUILDER_INITIAL_CAPACITY 4K 页对齐思想)+ archive 单源 CreateArchiveBuilderSink，inline 直写切片，单次分配
+  ABuilder := CreateBytesBuilder(AInitialCapacity);
+  ASink := CreateArchiveBuilderSink(ABuilder);
 end;
 
 function ArchiveJoinPath(const ABase, AName: string): string;

@@ -53,8 +53,8 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
     { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
-    { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；inline 薄转发 — }
-    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
+    { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；外联禁 inline（@ACached[1] 喂 CompareMem/MemEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
+    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
     { — 全局 pax 清理：消费后单次清除，防恶意 g 记录污染后续条目 — }
     procedure ClearGlobalPax; inline;
   public
@@ -301,21 +301,21 @@ begin
   Result := SpanJoinWithSeparator(APrefix, AName, '/');
 end;
 
-function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
+function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
 var
   LSpan: TByteSpan;
   LCachedLen: SizeUInt;
 begin
-  // 零拷贝快路径：命中则免FieldSlice的SpanIndexOf/SIMD扫描（ALen非512全块）；万级小文件UName/GName/LinkName常重复，降1次扫描+1次SpanToString分配/条（inline薄转发，bytes.ops/MemEqual单源，零拷贝视图）
+  // 零拷贝快路径：命中则免FieldSlice的SpanIndexOf/SIMD扫描（ALen非512全块）；万级小文件UName/GName/LinkName常重复，降1次扫描+1次SpanToString分配/条（外联禁 inline：@ACached[1] 喂 MemEqual 为 design-conventions 红线1，FPC 3.3.1 常量传播下 inline 拷栈垃圾，改 PAnsiChar 单源规避；bytes.ops/MemEqual 单源，零拷贝视图）
   LCachedLen := SizeUInt(Length(ACached));
-  if (LCachedLen > 0) and (LCachedLen <= ALen) and MemEqual(@ACached[1], @FData[AOfs], LCachedLen) then
+  if (LCachedLen > 0) and (LCachedLen <= ALen) and MemEqual(Pointer(PAnsiChar(ACached)), @FData[AOfs], LCachedLen) then
     if (LCachedLen = ALen) or (FData[AOfs + LCachedLen] = 0) then
       Exit(ACached);
-  // 零拷贝视图后按需物化：FieldSlice已用bytes.ops单源（仅扫描ALen非512）；空则零分配，重复值经MemEqual(SIMD单源)复用缓存串（inline热路径）
+  // 零拷贝视图后按需物化：FieldSlice已用bytes.ops单源（仅扫描ALen非512）；空则零分配，重复值经MemEqual(SIMD单源)复用缓存串（外联，零拷贝视图）
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
-  if (LCachedLen = LSpan.Len) and MemEqual(@ACached[1], LSpan.Data, LSpan.Len) then
+  if (LCachedLen = LSpan.Len) and MemEqual(Pointer(PAnsiChar(ACached)), LSpan.Data, LSpan.Len) then
     Exit(ACached);
   Result := SpanToString(LSpan);
   ACached := Result;
