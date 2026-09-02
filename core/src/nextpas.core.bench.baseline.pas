@@ -20,6 +20,7 @@ uses
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.writer,
   nextpas.core.text.builder;
 

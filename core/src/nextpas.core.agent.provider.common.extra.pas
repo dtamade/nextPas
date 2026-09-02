@@ -18,6 +18,7 @@ uses
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder,
   nextpas.core.agent.base;
 

@@ -5,6 +5,8 @@ unit nextpas.core.git.native.common;
 interface
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes,
   nextpas.core.git.native.base,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel;
@@ -20,7 +22,8 @@ function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline
 implementation
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.git.native.push;
 
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
 var

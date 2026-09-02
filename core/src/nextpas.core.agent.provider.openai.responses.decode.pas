@@ -28,6 +28,7 @@ implementation
 
 uses
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;
 

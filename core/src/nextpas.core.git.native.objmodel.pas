@@ -8,8 +8,7 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.base,
-  nextpas.core.git.native.base,
-  nextpas.core.git.native.util;
+  nextpas.core.git.native.base;
 
 { Parsers for the human-readable git object formats: trees, commits and
   annotated tags. Pure functions over already-decompressed payload bytes. }
@@ -55,6 +54,9 @@ function GitParseCommit(const AData: TBytes): TGitCommitInfo;
 function GitParseTag(const AData: TBytes): TGitTagInfo;
 
 implementation
+
+uses
+  nextpas.core.git.native.util;
 
 function ParseOctalText(const AText: string): Cardinal;
 var
