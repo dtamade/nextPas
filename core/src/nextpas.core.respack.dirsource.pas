@@ -194,8 +194,7 @@ begin
   EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
 end;
 
-{ Walk 通用单源：WalkPre 统一 Stat/Filter/TryReserve，inline 零拷贝，替代三回调仅靠 helper 的分散；4 职责枚举/mmap/embed/extract 仍单文件承载 ~730 行，近 800 指引候选拆分已评估（CONTRACT 业务为准，缺能力反哺 owner，当前以通用 Walk 单源收口，超限再抽子模块） }
-{ Walk 热路径泛型上下文：Stat/FilterRelPath/TryReserveTotal/Ensure*Capacity/失败归一单源，inline 零拷贝 }
+{ Walk 单源：WalkPre 统一 Stat/Filter/TryReserve，inline 零拷贝；730 行单文件，近 800 阈再拆子模块 }
 procedure WalkFail(var AFailed: Boolean; var AFailMsg: string; const AMsg: string); inline;
 begin
   AFailed := True;
