@@ -136,16 +136,16 @@ end;
   计数口径 = 未 Close 的窗口（持有引用但已 Close 不计入）。 }
 
 var
-  GLiveWindows: specialize TWebviewLiveRegistry<TFakeWebview> = nil;
+  GLiveWindows: specialize TCompactLiveRegistry<TFakeWebview> = nil;
   GLiveCount: Integer = 0;
   GLiveLck: ILock;
 
-{ GLiveWindows 操作单源收敛到 nextpas.core.webview.live TWebviewLiveRegistry 单封装：
+{ GLiveWindows 操作单源收敛到 L1 bytes.ops.TCompactLiveRegistry<T> 单源：
   统一消除数组+Count 双变量手写样板，Register/Unregister/Snapshot 薄转发
-  bytes.ops Vec 单源 inline 零额外调用，零额外堆分配 }
+  bytes.ops VecGrow/VecRemoveSwap/VecSnapshot 单源 inline 零额外调用，零额外堆分配，零拷贝 }
 procedure RegisterLive(AWin: TFakeWebview); inline;
 begin
-  // perf: single source TCompactLiveRegistry.Register -> VecGrow inline (0→4→2×) zero extra call, zero-copy; via webview.live deprecated alias (new code prefers bytes.ops.TCompactLiveRegistry<T>); cross-thread safety via GLiveLck
+  // perf: single source bytes.ops TCompactLiveRegistry.Register -> VecGrow inline (0→4→2×) single source inline 零额外调用、零拷贝; cross-thread safety via GLiveLck
   GLiveLck.Acquire;
   try
     GLiveWindows.Register(AWin);
@@ -170,7 +170,7 @@ begin
     end;
     if LShouldDec then
       Dec(GLiveCount);
-    // perf: O(1) swap-remove inline via TWebviewLiveRegistry.Unregister single source VecRemoveSwap, nil trailing to release ref
+    // perf: O(1) swap-remove inline via bytes.ops TCompactLiveRegistry.Unregister single source VecRemoveSwap, nil trailing to release ref
     GLiveWindows.Unregister(AWin);
   finally
     GLiveLck.Release;

@@ -11,8 +11,8 @@ unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1 THashMap 已直接�
        已反哺完成：可抽通用指针哈希模块候选已落地 L1 THashMap 指针特化直接复用，家族内私有桶迁移与 VIEW_TOMBSTONE 探链已移除，哈希/容量/负载/容器全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值 / THashMap），遗留 VIEW_TOMBSTONE 仅 compat 常量零逻辑
 
        性能：
-       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）经 THashMap.TryGetValue O(1) 线性探测 + and Mask + Bitmap CTZ 单指令，与 assets FMask 单源一致零除法；ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读
-       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增由 THashMap.Rehash 单源承载，Reserve 单次 NextPow2 零额外循环；ViewMapAdd 非 Locked 路径短临界仅指针拷贝与 THashMap 内部 O(n) 桶迁移（n<=窗口数<=8，无额外堆分配于调用侧，零阻塞读路径）
+       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）经 THashMap.TryGetValue O(1) 线性探测 + and Mask + Bitmap CTZ 单指令，与 assets FMask 单源一致零除法；ViewMapFind 读多写少 RWLock 读并发短临界 <1µs 零单锁热点（突发资产流多窗并发零阻塞，写锁仅 Add/Remove 稀有路径）
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增由 THashMap.Rehash 单源承载，Reserve 单次 NextPow2 零额外循环；ViewMapAdd 写锁短临界仅指针拷贝与 THashMap 内部 O(n) 桶迁移（n<=窗口数<=8，无额外堆分配于调用侧，零阻塞读并发）
        - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容经 THashMap.NextPow2 内容纳 VecGrowCapacity 预判单源
 
        稳定性：析构 Free 清零释放不丢，THashMap bsTombstone 单哨兵保探链完整；锁外 nil 守卫保并发安全 *}
@@ -25,7 +25,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.rwlock;
 
 type
   TGtkWebviewOpaque = Pointer;
@@ -46,7 +46,7 @@ procedure ViewMapRehashLocked(ANewCap: Integer);
 procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
 function ViewMapRemoveLocked(AView: Pointer): Boolean;
 
-// 非 Locked 包装：自持 GViewMapLock，短临界仅 THashMap 原子操作，零阻塞 GLiveLock 读
+// 非 Locked 包装：RWLock 读多写少 — Find 读锁并发零单锁热点，Add/Remove 写锁独占；短临界仅 THashMap 原子操作，零阻塞读并发
 function ViewMapFind(AView: Pointer): Pointer;
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
 procedure ViewMapRemove(AView: Pointer): Boolean;
@@ -62,7 +62,7 @@ implementation
 
 var
   GViewMap: specialize THashMap<Pointer, Pointer> = nil;
-  GViewMapLock: TMutex = nil;
+  GViewMapLock: TRWLock = nil;
 
 function PointerHash(const AKey: Pointer): UInt32; inline;
 begin
@@ -114,37 +114,37 @@ end;
 
 function ViewMapFind(AView: Pointer): Pointer;
 begin
-  // 自持锁短临界：THashMap 指针探查 O(1) 零堆分配，短临界仅指针只读，零阻塞 GLiveLock 读
-  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  // 读多写少：RWLock 读锁并发零单锁热点，多窗 SchemeRequest 并发资产流零串行，短临界仅 THashMap 指针只读 O(1) 零堆分配
+  if GViewMapLock <> nil then GViewMapLock.AcquireRead;
   try
     Result := ViewMapFindLocked(AView);
   finally
-    if GViewMapLock <> nil then GViewMapLock.Release;
+    if GViewMapLock <> nil then GViewMapLock.ReleaseRead;
   end;
 end;
 
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
 begin
-  // 短临界：THashMap 内部按 0.75 自动 Rehash，容量经 VecGrowCapacity 单源初建；锁内单点 AddOrAssign， n<=8 极小单次 NextPow2 零 I-Cache 膨胀，零锁外预分配分叉与桶迁移重复
+  // 写锁独占：THashMap 内部按 0.75 自动 Rehash，容量经 VecGrowCapacity 单源初建；锁内单点 AddOrAssign，n<=8 极小单次 NextPow2 零 I-Cache 膨胀，零锁外预分配分叉与桶迁移重复，稀有路径不阻塞读并发
   if (AView = nil) or (AWin = nil) then Exit;
-  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  if GViewMapLock <> nil then GViewMapLock.AcquireWrite;
   try
     ViewMapAddLocked(AView, AWin);
   finally
-    if GViewMapLock <> nil then GViewMapLock.Release;
+    if GViewMapLock <> nil then GViewMapLock.ReleaseWrite;
   end;
 end;
 
 procedure ViewMapRemove(AView: Pointer): Boolean;
 begin
-  // 单哈希短临界：锁内单次 THashMap.Remove 单 FindIndex O(1)，零 TryGetValue+Remove 双哈希与锁内重复计算，零拷贝返回 Bool
+  // 写锁独占：锁内单次 THashMap.Remove 单 FindIndex O(1)，零 TryGetValue+Remove 双哈希与锁内重复计算，零拷贝返回 Bool
   Result := False;
   if AView = nil then Exit(False);
-  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  if GViewMapLock <> nil then GViewMapLock.AcquireWrite;
   try
     Result := ViewMapRemoveLocked(AView);
   finally
-    if GViewMapLock <> nil then GViewMapLock.Release;
+    if GViewMapLock <> nil then GViewMapLock.ReleaseWrite;
   end;
 end;
 
@@ -186,7 +186,7 @@ end;
 procedure ViewMapLockInit;
 begin
   if GViewMapLock = nil then
-    GViewMapLock := TMutex.Create;
+    GViewMapLock := TRWLock.Create;
 end;
 
 procedure ViewMapLockFini;

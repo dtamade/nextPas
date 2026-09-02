@@ -62,7 +62,6 @@ uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset,
   nextpas.core.platform.env,
-  nextpas.core.webview.live,
   nextpas.core.webview.gtk.viewmap;
 
 function SchemePointerHash(const AKey: Pointer): UInt32; inline;
@@ -73,7 +72,7 @@ end;
 
 var
   GShellSchemeCtxs: specialize THashSet<Pointer> = nil;
-  GShellLiveWindows: specialize TWebviewLiveRegistry<Pointer> = nil;
+  GShellLiveWindows: specialize TCompactLiveRegistry<Pointer> = nil;
   GShellLiveCount: Integer = 0;
   GShellLatestLive: Pointer = nil;
   GShellSchemeLock: TRWLock = nil;
@@ -301,7 +300,7 @@ end;
 
 procedure ShellInitRegistries; inline;
 var
-  LTmpLive: specialize TWebviewLiveRegistry<Pointer>;
+  LTmpLive: specialize TCompactLiveRegistry<Pointer>;
   LTmpScheme: specialize THashSet<Pointer>;
 begin
   // 单源初建：VecGrowCapacity(0)=4 与 bytes.ops 单源一致，inline 零额外调用；THashSet 懒构造经 @SchemePointerHash 专化单源哈希 0.75 负载
@@ -312,7 +311,7 @@ begin
     // perf: inline two-phase create-then-publish, VecGrowCapacity single source, zero leak window
     // stability: temps hold refs until both succeed, except frees partial, FreeAndNil not lost
     if GShellLiveWindows = nil then
-      LTmpLive := specialize TWebviewLiveRegistry<Pointer>.Create;
+      LTmpLive := specialize TCompactLiveRegistry<Pointer>.Create;
     if GShellSchemeCtxs = nil then
       LTmpScheme := specialize THashSet<Pointer>.Create(VecGrowCapacity(0), @SchemePointerHash);
     if LTmpLive <> nil then

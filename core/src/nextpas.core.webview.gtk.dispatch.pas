@@ -4,7 +4,7 @@ unit nextpas.core.webview.gtk.dispatch;
 
        单源：
        - 池化 → nextpas.core.webview.gtk.pool (L1 sync.pool.SyncPoolTryAcquire/Release 单源，bytes.ops VecGrowCapacity/VecGrow 单源 inline 零拷贝)
-       - 注册表 → nextpas.core.webview.live TWebviewLiveRegistry<T> 薄别名（bytes.ops TCompactLiveRegistry 单源）
+       - 注册表 → L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝（VecGrowCapacity 0→4→2× / VecRemoveSwap O(1) 零拷贝）
        性能：Slab 复用零每 Post 堆分配，短临界 <1µs，inline 零额外调用，零拷贝闭包 Move，GIdle/GCompletion 双池分离零抢锁
        稳定性：GCancellable 单拥有 G_object_unref，Pending Done 守卫，Close 时 EWebviewEvalFailed 收尾，destroy-notify 单所有权释放不丢 *}
 

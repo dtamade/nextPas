@@ -12,7 +12,6 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops,
   nextpas.core.webview.gtk.ffi,
@@ -41,14 +40,14 @@ type
     FInvokes: TObject;
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
-    FIdleTags: specialize TWebviewLiveRegistry<guint>;
-    FPendingEvals: specialize TWebviewLiveRegistry<PEvalRec>;
-    FOnNavStarted: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFinished: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFailed: specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>;
-    FOnWindowClosed: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FOnReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FOnScaleChanged: specialize TWebviewLiveRegistry<TWebviewScaleHandler>;
+    FIdleTags: specialize TCompactLiveRegistry<guint>;
+    FPendingEvals: specialize TCompactLiveRegistry<PEvalRec>;
+    FOnNavStarted: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFinished: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFailed: specialize TCompactLiveRegistry<TWebviewNavFailedHandler>;
+    FOnWindowClosed: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FOnReady: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FOnScaleChanged: specialize TCompactLiveRegistry<TWebviewScaleHandler>;
     procedure RequireOpen;
     procedure RemovePending(ARec: PEvalRec);
     procedure SetupSessionContext;
@@ -56,7 +55,7 @@ type
     procedure SetupSchemeAndShell; overload;
     procedure SetupSchemeAndShellForParent(const AParent: IWindow); overload;
     procedure HandleWindowEvent(const AEvent: TWindowEvent);
-    procedure FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>);
+    procedure FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>);
     procedure WireSignals;
     procedure AddUserScript(const ASource: string);
     function CurrentUri: string;
@@ -234,7 +233,7 @@ begin Result:=TGtkWebview(nextpas.core.webview.gtk.shell.ShellLatestLiveWindow);
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin if ARequest=nil then Exit; if GSchemeErrQuark=0 then GSchemeErrQuark:=G_quark_from_static_string('nextpas-webview'); WEBKIT_uri_scheme_request_finish_error(ARequest,G_error_new_literal(GSchemeErrQuark,WEBVIEW_ASSET_NOT_FOUND_CODE,WEBVIEW_ASSET_NOT_FOUND_MSG)); end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer; LData: Pointer; LLen: gssize;
+var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LSpan: TByteSpan; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer; LData: Pointer; LLen: gssize;
 begin if not Assigned(ARequest) then Exit; try
   if Assigned(WEBKIT_uri_scheme_request_get_web_view) then LView:=WEBKIT_uri_scheme_request_get_web_view(ARequest) else LView:=nil;
   LSelf:=nil; LKeep:=nil;
@@ -246,13 +245,17 @@ begin if not Assigned(ARequest) then Exit; try
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
+  // perf: TByteSpan zero-copy view (bytes.ops FromBytes inline) + ownership steal via Move (no refcount bump, no Length copy); LSpan.Data/Len direct for G_memory stream, inline zero-copy
+  LSpan:=TByteSpan.FromBytes(LBytes);
+  if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(LSpan.Len)+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
   LStream:=nil;
   if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;
-  try if Length(LHolder^.Bytes)>0 then begin LData:=@LHolder^.Bytes[0]; LLen:=Length(LHolder^.Bytes); end else begin LData:=nil; LLen:=0; end; LStream:=G_memory_input_stream_new_from_data(LData,LLen,@AssetBufFree,LHolder); if not Assigned(LStream) then begin nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); SchemeFinishNotFound(ARequest); Exit; end; except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
+  LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder;
+  Move(LBytes, LHolder^.Bytes, SizeOf(TBytes));
+  FillChar(LBytes, SizeOf(TBytes), 0);
+  try if LSpan.Len>0 then begin LData:=LSpan.Data; LLen:=gssize(LSpan.Len); end else begin LData:=nil; LLen:=0; end; LStream:=G_memory_input_stream_new_from_data(LData,LLen,@AssetBufFree,LHolder); if not Assigned(LStream) then begin nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); SchemeFinishNotFound(ARequest); Exit; end; except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
   if not Assigned(LStream) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  try WEBKIT_uri_scheme_request_finish(ARequest,LStream,Length(LBytes),PAnsiChar(LMime)); except try SchemeFinishNotFound(ARequest); except end; end;
+  try WEBKIT_uri_scheme_request_finish(ARequest,LStream,gssize(LSpan.Len),PAnsiChar(LMime)); except try SchemeFinishNotFound(ARequest); except end; end;
   except on E:Exception do try if Assigned(ARequest) then SchemeFinishNotFound(ARequest); except end; end;
 end;
 function CompletionMarshalTrampoline(AUserData: Pointer): gboolean; cdecl;
@@ -281,16 +284,16 @@ procedure TGtkCompletion.Ok(const AResultJson:string); begin if FDone then raise
 procedure TGtkCompletion.Fail(const ACode,AMessage:string); begin if FDone then raise EWebviewInvalidState.Create('invoke completion already settled'); FDone:=True; RecordViaIdle(True,'',ACode,AMessage); end;
 constructor TGtkWebview.Create(const AOptions: TWebviewOptions);
 var LInfo: TGtkLoadInfo; LResolved: TWebviewOptions;
-begin inherited Create; LResolved:=AOptions; if LResolved.SchemeName='' then LResolved.SchemeName:=DEFAULT_WEBVIEW_SCHEME; CheckWebviewOptions(LResolved); FOptions:=LResolved; if not TryLoadGtkWebkit(LInfo) then raise EWebviewBackendUnavailable.Create('WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)'); if not WindowGtkRawInit then raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)'); FOwnerThread:=platform_thread_id; FScale:=1.0; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TWebviewLiveRegistry<guint>.Create; FPendingEvals:=specialize TWebviewLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); SetupSessionContext; SetupSchemeAndShell; WireSignals; DoRegisterLive; FSelfKeepAlive:=Self; if FOptions.InitialUrl<>'' then Navigate(FOptions.InitialUrl) else if FOptions.InitialHtml<>'' then NavigateToString(FOptions.InitialHtml); end;
+begin inherited Create; LResolved:=AOptions; if LResolved.SchemeName='' then LResolved.SchemeName:=DEFAULT_WEBVIEW_SCHEME; CheckWebviewOptions(LResolved); FOptions:=LResolved; if not TryLoadGtkWebkit(LInfo) then raise EWebviewBackendUnavailable.Create('WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)'); if not WindowGtkRawInit then raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)'); FOwnerThread:=platform_thread_id; FScale:=1.0; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TCompactLiveRegistry<guint>.Create; FPendingEvals:=specialize TCompactLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); SetupSessionContext; SetupSchemeAndShell; WireSignals; DoRegisterLive; FSelfKeepAlive:=Self; if FOptions.InitialUrl<>'' then Navigate(FOptions.InitialUrl) else if FOptions.InitialHtml<>'' then NavigateToString(FOptions.InitialHtml); end;
 constructor TGtkWebview.CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions);
 var LInfo: TGtkLoadInfo; LResolved: TWebviewOptions;
-begin inherited Create; if AParent=nil then raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn'); LResolved:=AOptions; if LResolved.SchemeName='' then LResolved.SchemeName:=DEFAULT_WEBVIEW_SCHEME; CheckWebviewOptions(LResolved); FOptions:=LResolved; if not TryLoadGtkWebkit(LInfo) then raise EWebviewBackendUnavailable.Create('WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)'); if not WindowGtkRawInit then raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)'); FOwnerThread:=platform_thread_id; FScale:=1.0; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TWebviewLiveRegistry<guint>.Create; FPendingEvals:=specialize TWebviewLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); SetupSessionContext; SetupSchemeAndShellForParent(AParent); WireSignals; DoRegisterLive; FSelfKeepAlive:=Self; if FOptions.InitialUrl<>'' then Navigate(FOptions.InitialUrl) else if FOptions.InitialHtml<>'' then NavigateToString(FOptions.InitialHtml); end;
+begin inherited Create; if AParent=nil then raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn'); LResolved:=AOptions; if LResolved.SchemeName='' then LResolved.SchemeName:=DEFAULT_WEBVIEW_SCHEME; CheckWebviewOptions(LResolved); FOptions:=LResolved; if not TryLoadGtkWebkit(LInfo) then raise EWebviewBackendUnavailable.Create('WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)'); if not WindowGtkRawInit then raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)'); FOwnerThread:=platform_thread_id; FScale:=1.0; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TCompactLiveRegistry<guint>.Create; FPendingEvals:=specialize TCompactLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); SetupSessionContext; SetupSchemeAndShellForParent(AParent); WireSignals; DoRegisterLive; FSelfKeepAlive:=Self; if FOptions.InitialUrl<>'' then Navigate(FOptions.InitialUrl) else if FOptions.InitialHtml<>'' then NavigateToString(FOptions.InitialHtml); end;
 destructor TGtkWebview.Destroy;
 begin if FOwnsContext and (FContext<>nil) then begin nextpas.core.webview.gtk.shell.ShellForgetSchemeContext(FContext); G_object_unref(FContext); FContext:=nil; end; DoUnregisterLive; FWindow:=nil; FWin:=nil; FView:=nil; FreeAndNil(FOnScaleChanged); FreeAndNil(FOnReady); FreeAndNil(FOnWindowClosed); FreeAndNil(FOnNavFailed); FreeAndNil(FOnNavFinished); FreeAndNil(FOnNavStarted); FreeAndNil(FPendingEvals); FreeAndNil(FIdleTags); inherited Destroy; end;
 function TGtkWebview.IsClosed: Boolean; inline; begin Result:=FClosed; end;
 procedure TGtkWebview.RequireOpen; begin if FClosed then raise EWebviewClosed.Create('webview window is closed'); end;
 procedure TGtkWebview.RemovePending(ARec: PEvalRec); begin if FPendingEvals<>nil then FPendingEvals.Unregister(ARec); end;
-procedure TGtkWebview.FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>); var I: Integer; begin if AReg=nil then Exit; for I:=0 to AReg.Count-1 do if Assigned(AReg.At(I)) then try AReg.At(I)(); except on E:Exception do ReportGtkHandlerException('FireNotifyHandlers', E); end; end;
+procedure TGtkWebview.FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>); var I: Integer; begin if AReg=nil then Exit; for I:=0 to AReg.Count-1 do if Assigned(AReg.At(I)) then try AReg.At(I)(); except on E:Exception do ReportGtkHandlerException('FireNotifyHandlers', E); end; end;
 procedure TGtkWebview.SetupSessionContext; begin FOwnsContext:=False; if FOptions.EphemeralSession then FOwnsContext:=True else if FOptions.DataDirectory<>'' then FOwnsContext:=True; end;
 function TGtkWebview.ResolveContext: Pointer; var LManager: Pointer; begin if not FOwnsContext then Exit(WEBKIT_web_context_get_default()); if FOptions.EphemeralSession then Result:=WEBKIT_web_context_new_ephemeral() else begin LManager:=WEBKIT_website_data_manager_new('base-data-directory',PAnsiChar(FOptions.DataDirectory),Pointer(nil)); if LManager=nil then raise EWebviewNotInitialized.Create('webkit_website_data_manager_new failed (data directory rejected)'); Result:=WEBKIT_web_context_new_with_website_data_manager(LManager); G_object_unref(LManager); end; FContext:=Result; end;
 procedure TGtkWebview.HandleWindowEvent(const AEvent: TWindowEvent); begin if FClosed then Exit; case AEvent.Kind of weCloseRequested,weClosed: Close; weScaleChanged,weDpiChanged: begin FScale:=AEvent.NewScale; FireNotifyHandlers(FOnScaleChanged); end; weResized: ; end; end;

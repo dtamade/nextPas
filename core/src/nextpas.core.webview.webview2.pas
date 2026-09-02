@@ -26,7 +26,6 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops,
   nextpas.core.webview.webview2.ffi,
@@ -56,13 +55,13 @@ type
     FInvokes: TObject;
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
-    FPendingEvals: specialize TWebviewLiveRegistry<PEvalRec>;
-    FOnNavStarted: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFinished: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFailed: specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>;
-    FOnWindowClosed: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FOnReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FScaleHandlers: specialize TWebviewLiveRegistry<TWebviewScaleHandler>;
+    FPendingEvals: specialize TCompactLiveRegistry<PEvalRec>;
+    FOnNavStarted: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFinished: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFailed: specialize TCompactLiveRegistry<TWebviewNavFailedHandler>;
+    FOnWindowClosed: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FOnReady: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FScaleHandlers: specialize TCompactLiveRegistry<TWebviewScaleHandler>;
     FEnv: ICoreWebView2Environment;
     FController: ICoreWebView2Controller;
     FWebView: ICoreWebView2;
@@ -76,7 +75,7 @@ type
     procedure DispatchFrame(const AFrame: TWebviewFrame);
     procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
     procedure FireReadyOnce;
-    procedure FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>);
+    procedure FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>);
     procedure HandleNativeDestroy;
     function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
     procedure TryCreateEnvironment;
@@ -555,7 +554,7 @@ procedure TWebView2Webview.DoScaleChanged(ANewScale: Double); inline;
 var
   I: Integer;
 begin
-  // perf: single source TCompactLiveRegistry via webview.live thin alias inline 0→4→2× VecGrowCapacity, snapshot-less scan, n≤32 fast path, zero extra loop
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, snapshot-less scan, n≤32 fast path, zero extra loop
   if FScaleHandlers = nil then Exit;
   for I := 0 to FScaleHandlers.Count - 1 do
     if Assigned(FScaleHandlers.At(I)) then
@@ -565,10 +564,10 @@ begin
       end;
 end;
 
-procedure TWebView2Webview.FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>);
+procedure TWebView2Webview.FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>);
 var I: Integer;
 begin
-  // perf: single source TCompactLiveRegistry inline zero extra call, snapshot-less scan, stability: Assigned + try/except not lost
+  // perf: single source bytes.ops TCompactLiveRegistry inline zero extra call, snapshot-less scan, stability: Assigned + try/except not lost
   if AReg = nil then Exit;
   for I := 0 to AReg.Count - 1 do
     if Assigned(AReg.At(I)) then
@@ -782,14 +781,14 @@ begin
   FInvokes := FInvokesIntf as TObject;
   FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
-  // perf: single source TCompactLiveRegistry via webview.live thin alias inline 0→4→2× VecGrowCapacity, zero duplicate Vec management, gtk同源高级感
-  FPendingEvals := specialize TWebviewLiveRegistry<PEvalRec>.Create;
-  FOnNavStarted := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFinished := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFailed := specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create;
-  FOnWindowClosed := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FOnReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FScaleHandlers := specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create;
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, zero duplicate Vec management, gtk同源高级感
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FScaleHandlers := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
   FWindow := CreateWindowOf(wkWin32, WindowOptionsOf(AOptions));
   FOwnsWindow := True;
   FWindow.OnEvent(@HandleWindowEvent);
@@ -814,14 +813,14 @@ begin
   FInvokes := FInvokesIntf as TObject;
   FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
-  // perf: single source TCompactLiveRegistry via webview.live thin alias inline 0→4→2× VecGrowCapacity, zero duplicate Vec management
-  FPendingEvals := specialize TWebviewLiveRegistry<PEvalRec>.Create;
-  FOnNavStarted := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFinished := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFailed := specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create;
-  FOnWindowClosed := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FOnReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FScaleHandlers := specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create;
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, zero duplicate Vec management
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FScaleHandlers := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
   FWindow := AWindow;
   FOwnsWindow := False;
   FWindow.OnEvent(@HandleWindowEvent);

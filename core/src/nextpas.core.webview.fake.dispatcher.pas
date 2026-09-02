@@ -13,7 +13,10 @@ unit nextpas.core.webview.fake.dispatcher;
        （有空位则直接槽位写入无分配/无拷贝，stale 则无分配/无拷贝直接重取快照），
        仅快照仍有效时才在锁外 SetLength+VecRingCopy 单源 inline 线性化，
        二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale 则 LNew:=nil
-       释放重试，零 O(n) 持锁、竞争重试零额外线性化，inline 零额外调用，bytes.ops 单源。 *}
+       释放重试，零 O(n) 持锁、竞争重试零额外线性化，bytes.ops 单源。
+       纪律修复：PostRef 含 while 竞争重试与 VecRingCopy O(n) 两段式线性化，按
+       design-conventions §2 红线二外联（禁 inline）避 I-Cache 膨胀；内部
+       VecGrowCapacity/VecRingCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -43,7 +46,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    procedure PostRef(AProc: TWebviewProcRef); inline;
+    procedure PostRef(AProc: TWebviewProcRef);
     function IsOnMainThread: Boolean; inline;
     function PumpOnce: Boolean;
     procedure PumpAll;
@@ -94,7 +97,8 @@ begin
   FHead := 0;
 end;
 
-procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef); inline;
+procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef);
+{ not inline per design-conventions §2 red line 2: while True retry + VecRingCopy O(n) two-segment linearize would bloat I-Cache if inlined; inner VecGrowCapacity/VecRingCopy stay inline single source bytes.ops zero-copy }
 var
   LNew: TFakeDispatcherRing;
   LOldRing: TFakeDispatcherRing;

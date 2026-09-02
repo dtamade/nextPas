@@ -6,7 +6,7 @@ unit nextpas.core.window.live;
        对“动态数组 + 末尾换位删除 + Length 计数”样板代码的重复拷贝，
        统一并发假设与零分配语义，保持单点修复能力。
 
-       单源反哺：L1 nextpas.core.bytes.ops 为 Owner 单源（VecGrowCapacity 0→4→2× inline 单源、VecGrow inline 零额外调用、VecRemoveSwap O(1) 零拷贝 swap 单源、VecTrim inline 单源、Default(T) 释放不丢），本单元与 webview.live.TWebviewLiveRegistry<T>（TCompactLiveRegistry<T> 薄别名）已同源薄转发零重复，第二复用触发已满足经设计评审落地（CONTRACT §1.2 live 行 2026-09-02），现 inline 薄转发不自溢。
+       单源反哺：L1 nextpas.core.bytes.ops 为 Owner 单源（VecGrowCapacity 0→4→2× inline 单源、VecGrow inline 零额外调用、VecRemoveSwap O(1) 零拷贝 swap 单源、VecTrim inline 单源、Default(T) 释放不丢），本单元与 webview 家族已同源收敛至 bytes.ops.TCompactLiveRegistry<T> 单源零重复（webview.live 薄别名已物理删除 2026-09-02），第二复用触发已满足经设计评审落地（CONTRACT §1.2 live 行 2026-09-02），现 inline 薄转发不自溢。
 
        设计：
        - 本单元为家族内特权共享（不经门面 re-export），仅被 `window.*` 后端 uses

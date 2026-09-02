@@ -22,7 +22,6 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
-  nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops,
   nextpas.core.window.base,
@@ -46,13 +45,13 @@ type
     FUserAgent: string;
     FZoom: Double;
     FRegistered: Boolean;
-    FOnScaleChanged: specialize TWebviewLiveRegistry<TWebviewScaleHandler>;
-    FOnNavStarted: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFinished: specialize TWebviewLiveRegistry<TWebviewNavEventHandler>;
-    FOnNavFailed: specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>;
-    FOnWindowClosed: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FOnReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FPendingEvals: specialize TWebviewLiveRegistry<PEvalRec>;
+    FOnScaleChanged: specialize TCompactLiveRegistry<TWebviewScaleHandler>;
+    FOnNavStarted: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFinished: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFailed: specialize TCompactLiveRegistry<TWebviewNavFailedHandler>;
+    FOnWindowClosed: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FOnReady: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FPendingEvals: specialize TCompactLiveRegistry<PEvalRec>;
     FInvokesIntf: IWebviewInvokeRegistry;
     FInvokes: TObject;
     FAssetsIntf: IWebviewAssets;
@@ -125,7 +124,7 @@ uses
 
 var
   GLive: Integer = 0;
-  GLiveWindows: specialize TWebviewLiveRegistry<TWkWebview> = nil;
+  GLiveWindows: specialize TCompactLiveRegistry<TWkWebview> = nil;
 
 procedure RegisterLive(AWin: TWkWebview); inline;
 begin
@@ -184,14 +183,14 @@ begin
   FOptions := AOptions;
   FOwnerThread := platform_thread_id;
   FUserAgent := ''; FZoom := 1.0; FClosed := False;
-  // single source: live compact registry 0→4→2× inline via bytes.ops VecGrow, nil zero-alloc, eliminates Grow/Count Vec sample duplication
-  FOnScaleChanged := specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create;
-  FOnNavStarted := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFinished := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFailed := specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create;
-  FOnWindowClosed := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FOnReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FPendingEvals := specialize TWebviewLiveRegistry<PEvalRec>.Create;
+  // single source: live compact registry 0→4→2× inline via bytes.ops TCompactLiveRegistry single source inline zero-copy, nil zero-alloc, eliminates Grow/Count Vec sample duplication
+  FOnScaleChanged := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
   LReg := TWebviewInvokeRegistry.Create;
   LAssets := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FInvokesIntf := LReg;
@@ -216,14 +215,14 @@ begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWk(LInfo) then raise EWebviewBackendUnavailable.Create('WKWebView runtime not available');
   FOptions:=AOptions; FOwnerThread:=platform_thread_id; FUserAgent:=''; FZoom:=1.0; FClosed:=False;
-  // single source: live compact registry 0→4→2× inline via bytes.ops VecGrow, nil zero-alloc
-  FOnScaleChanged := specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create;
-  FOnNavStarted := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFinished := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
-  FOnNavFailed := specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create;
-  FOnWindowClosed := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FOnReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FPendingEvals := specialize TWebviewLiveRegistry<PEvalRec>.Create;
+  // single source: live compact registry 0→4→2× inline via bytes.ops TCompactLiveRegistry single source inline zero-copy, nil zero-alloc
+  FOnScaleChanged := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
   LReg := TWebviewInvokeRegistry.Create;
   LAssets := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FInvokesIntf := LReg;
@@ -495,7 +494,7 @@ procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then 
 function TWkWebview.IsOnMainThread: Boolean; begin if FWindow<>nil then Result:=FWindow.Dispatcher.IsOnMainThread else Result:= platform_thread_id = FOwnerThread; end;
 
 initialization
-  GLiveWindows := specialize TWebviewLiveRegistry<TWkWebview>.Create;
+  GLiveWindows := specialize TCompactLiveRegistry<TWkWebview>.Create;
 
 finalization
   GLiveWindows.Free;

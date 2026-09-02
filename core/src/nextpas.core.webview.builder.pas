@@ -58,7 +58,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.window.factory,
   nextpas.core.webview.validation,
-  nextpas.core.webview.live,
   nextpas.core.webview.factory;
 
 type
@@ -69,11 +68,11 @@ type
     IsAsync: Boolean;
   end;
 
-  {** 三组 LiveRegistry 单记录聚合：样板归一，流畅高级感；复用 bytes.ops VecGrow 0→4→2×/Snapshot 单源 inline 零拷贝，Clear 逐槽 Default(T) 释放不丢。 *}
+  {** 三组 LiveRegistry 单记录聚合：样板归一，流畅高级感；直连 L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝，复用 VecGrow 0→4→2×/Snapshot 单源，Clear 逐槽 Default(T) 释放不丢，跨家族 window.live 同源零重复。 *}
   TBuilderLive = record
-    Invokes: specialize TWebviewLiveRegistry<TFakeInvokeReg>;
-    Ready: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    InitScripts: specialize TWebviewLiveRegistry<string>;
+    Invokes: specialize TCompactLiveRegistry<TFakeInvokeReg>;
+    Ready: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    InitScripts: specialize TCompactLiveRegistry<string>;
     procedure Init; inline;
     procedure Done; inline;
   end;
@@ -121,10 +120,10 @@ end;
 
 procedure TBuilderLive.Init; inline;
 begin
-  // perf: 三组 Vec 单记录聚合单点成型，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用，零 HashSet 额外分配，单源薄转零拷贝
-  Invokes := specialize TWebviewLiveRegistry<TFakeInvokeReg>.Create;
-  Ready := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  InitScripts := specialize TWebviewLiveRegistry<string>.Create;
+  // perf: 三组 Vec 直连 L1 bytes.ops.TCompactLiveRegistry<T> 单源单点成型，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用、Snapshot VecSnapshot 单源 inline 零拷贝，零 HashSet 额外分配，inline 零额外调用
+  Invokes := specialize TCompactLiveRegistry<TFakeInvokeReg>.Create;
+  Ready := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  InitScripts := specialize TCompactLiveRegistry<string>.Create;
 end;
 
 procedure TBuilderLive.Done; inline;
@@ -238,7 +237,7 @@ end;
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
-  // perf: registry Register -> VecGrow single source 0→4→2× inline zero extra call, zero-copy (via TCompactLiveRegistry, deprecated alias webview.live; FLive 单记录聚合单点分发)
+  // perf: registry Register -> L1 bytes.ops.TCompactLiveRegistry<T> 单源 VecGrow 0→4→2× inline 零额外调用、零拷贝（FLive 单记录直连单源聚合单点分发，CONTRACT §1.2）
   FLive.InitScripts.Register(AJavascript);
   Result := Self;
 end;

@@ -82,7 +82,7 @@ generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
 generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
 { 零拷贝截断：按 ACount 精确 SetLength，inline 单源，消除手写 SetLength 重复 }
 generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
-{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap/ordered 均含扫描循环按 design-conventions §2 红线二去 inline 避 I-Cache 膨胀；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
+{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap/ordered 均含扫描循环按 design-conventions §2 红线二去 inline 避 I-Cache 膨胀；原 webview.live 薄转发已物理删除，家族直用本单源，热关闭路径默认 Swap 避免 O(n²) }
 generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 { 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
@@ -90,7 +90,7 @@ generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACoun
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
 
-{ L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：供 webview.live/window.live 家族薄转发，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现 }
+{ L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：原 webview.live 薄别名已物理删除，现供 window.live/webview 家族直用本单源，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现 }
 type
   generic TCompactLiveRegistry<T> = class
   private
@@ -863,7 +863,7 @@ begin
   end;
 end;
 
-{ TCompactLiveRegistry — L1 single source for webview.live/window.live compact Vec registry, inline thin-forward, zero duplicate }
+{ TCompactLiveRegistry — L1 single source for webview/window.live compact Vec registry (webview.live alias physically deleted 2026-09-02), inline thin-forward, zero duplicate }
 
 generic procedure TCompactLiveRegistry.Register(const AInst: T); inline;
 begin

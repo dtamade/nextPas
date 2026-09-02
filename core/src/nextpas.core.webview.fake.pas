@@ -41,7 +41,6 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
   nextpas.core.webview.utils,
   nextpas.core.bytes.ops,
@@ -256,7 +255,7 @@ implementation
 {$I nextpas.core.webview.fake.impl.inc}
 
 initialization
-  GLiveWindows := specialize TWebviewLiveRegistry<TFakeWebview>.Create;
+  GLiveWindows := specialize TCompactLiveRegistry<TFakeWebview>.Create;
   GLiveLck := TMutex.Create as ILock;
 
 finalization
