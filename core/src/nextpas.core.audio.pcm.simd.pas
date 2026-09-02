@@ -18,10 +18,11 @@ implementation
 uses
   nextpas.core.audio.simd;
 
-// Single source Owner is nextpas.core.audio.simd dispatch via AudioSimdCaps/ SimdConvert*.
-// pcm.simd is thin inline forwarding single source, no duplicate 4-way unroll,
-// no secondary caps dispatch, zero extra branch. Raw F32 block copy stays single
-// source via nextpas.core.base.utils CopyMem → bytes.ops (see audio.pcm).
+// Single source Owner is nextpas.core.simd via nextpas.core.simd.cpuinfo → audio.simd dispatch
+// (AudioSimdCaps delegates to simd.cpuinfo, AVX2 8-wide + SSE2 4-wide single source).
+// pcm.simd is thin inline forwarding single source to simd owner via audio.simd SimdConvert*,
+// no duplicate 4-way unroll, no secondary caps dispatch, zero extra branch, inline + zero-copy.
+// Raw F32 block copy stays single source via nextpas.core.base.utils CopyMem → bytes.ops (see audio.pcm).
 
 procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
 begin

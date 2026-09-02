@@ -373,34 +373,28 @@ end;
 procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out ADst: TBytes);
 var
-  LFrame, LCh: Integer;
+  LCh, LFrame: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   ADst := nil;
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
   if Length(APlanes) < AChannels then Exit;
   SetLength(ADst, AFrames * AChannels * ABytesPerSample);
-  for LFrame := 0 to AFrames - 1 do
-    for LCh := 0 to AChannels - 1 do
+  // perf: per-plane batch Move — LCh outer keeps plane contiguous, single Move per sample, branch-free BPS, bytes.ops single source via Move
+  for LCh := 0 to AChannels - 1 do
+    for LFrame := 0 to AFrames - 1 do
     begin
       LSrcOffset := LFrame * ABytesPerSample;
       LDstOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(APlanes[LCh])) then Continue;
-      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping interleave
-      case ABytesPerSample of
-        4: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(4));
-        3: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(3));
-        2: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(2));
-        1: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(1));
-      else CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(ABytesPerSample));
-      end;
+      Move(APlanes[LCh][LSrcOffset], ADst[LDstOffset], ABytesPerSample);
     end;
 end;
 
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 var
-  LFrame, LCh: Integer;
+  LCh, LFrame: Integer;
   LSrcOffset, LDstOffset: Integer;
 begin
   APlanes := nil;
@@ -408,20 +402,14 @@ begin
   SetLength(APlanes, AChannels);
   for LCh := 0 to AChannels - 1 do
     SetLength(APlanes[LCh], AFrames * ABytesPerSample);
-  for LFrame := 0 to AFrames - 1 do
-    for LCh := 0 to AChannels - 1 do
+  // perf: per-plane batch Move — LCh outer keeps plane contiguous, single Move per sample, branch-free BPS, bytes.ops single source via Move
+  for LCh := 0 to AChannels - 1 do
+    for LFrame := 0 to AFrames - 1 do
     begin
       LSrcOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       LDstOffset := LFrame * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
-      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping deinterleave
-      case ABytesPerSample of
-        4: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(4));
-        3: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(3));
-        2: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(2));
-        1: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(1));
-      else CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(ABytesPerSample));
-      end;
+      Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
     end;
 end;
 

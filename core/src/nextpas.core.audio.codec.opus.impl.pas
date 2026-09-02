@@ -39,8 +39,8 @@ var
 begin
   Result := prUnknown;
   LLen := Length(APrefix);
-  // Probe≤4KB guard: 4096 — zero-alloc, capped before scan
-  if LLen > 4096 then LLen := 4096;
+  // Probe≤4KB guard: COpusProbeLimit=4096 — zero-alloc, capped before scan, single source via opus.base (aligned with CWavProbeLimit/CFlacProbeLimit=4096)
+  if LLen > COpusProbeLimit then LLen := COpusProbeLimit;
   if LLen < 4 then Exit;
   if (APrefix[0] = $4F) and (APrefix[1] = $67) and (APrefix[2] = $67) and (APrefix[3] = $53) then
   begin
@@ -61,13 +61,13 @@ end;
 
 function OpusProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes caps scan to 4096 internally
+  // Probe≤4KB guard: COpusProbeLimit=4096 — zero-alloc, ProbeBytes caps to COpusProbeLimit internally (single source, aligned with wav/flac)
   Result := OpusProbeBytes(APrefix);
 end;
 
 function TOpusDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  // Probe≤4KB guard: 4096 — direct prefix reference, OpusProbeBytes caps to 4096
+  // Probe≤4KB guard: COpusProbeLimit=4096 — direct prefix reference, OpusProbeBytes caps to COpusProbeLimit
   Result := OpusProbe(APrefix);
 end;
 
@@ -91,7 +91,7 @@ begin
     on E: EAudioDecodeError do raise;
     else ; // ignore Size not supported
   end;
-  // stub: 1024帧静音桩, bytes.ops single source, L0 only, inline zero-copy via BytesZero, no foreign binding
+  // stub: 1024帧静音占位桩 — bytes.ops single source, L0 only, inline zero-copy via BytesZero, no foreign binding; 流式能力缺失，待独立 slice 补齐后随 codec.opus 独立 L2 迁移（CONTRACT 1.5.2 provisional）
   LFmt := AudioFormatCreate(COpusDefaultSampleRate, COpusDefaultChannels, sfF32);
   LFrames := 1024;
   LBytes := LFrames * LFmt.BlockAlign;
@@ -105,9 +105,9 @@ end;
 
 function TOpusDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
 begin
-  // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；待流式解码 slice 完善后移除桩标记
+  // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；流式能力缺失，待独立 slice 补齐后随 codec.opus 独立 L2 迁移时移除桩标记
   // gate 白名单：check_source_contract.sh 以 "STUB: OpenStreaming" 注释放行此桩
-  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费
+  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费；稳定性：无资源分配故无泄漏，调用方无需释放
   Result := nil;
   raise EAudioDecodeError.Create('opus OpenStreaming: not implemented - use DecodeWhole');
 end;
