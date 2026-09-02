@@ -123,11 +123,15 @@ function TNativeRepository.ReadObject(const AOid: TGitOid;
 var
   I: Integer;
 begin
+  // perf: single binary search per pack (owner TryReadObject owns FindOffset via CompareBytesOrdered bytes.ops single source, inline zero-copy TByteSpan view; ~logN not 2*logN)
+  // stability: owner returns False for missing (continue), raises EGitError for corrupt — propagate; Result is TBytes refcounted, no leak on raise/exit
+  // zero-copy: pack offset from mmap index, payload inflated via owner reuse buffers
+  Result := nil;
   if GitLooseExists(FGitDir, AOid) then
     Exit(GitLooseRead(FGitDir, AOid, AKind));
   for I := 0 to Length(FPacks) - 1 do
-    if FPacks[I].Contains(AOid) then
-      Exit(FPacks[I].ReadObject(AOid, AKind));
+    if FPacks[I].TryReadObject(AOid, AKind, Result) then
+      Exit;
   raise EGitError.CreateFmt('object %s not found in repository %s',
     [GitOidToHex(AOid), FGitDir]);
 end;
@@ -137,14 +141,14 @@ function TNativeRepository.TryGetObjectSize(const AOid: TGitOid;
 var
   I: Integer;
 begin
-  // perf: fast size path before inflate; inline forward to owner (loose/pack) single source
-  // stability: owner returns False for missing, raises EGitError for corrupt — we propagate as False for caller guard
-  // zero-copy: size from header only, no payload alloc
+  // perf: single binary search per pack (owner TryGetObjectSize owns FindOffset via CompareBytesOrdered bytes.ops single source, inline zero-copy TByteSpan view; no Contains pre-scan)
+  // stability: owner returns False for missing, raises EGitError for corrupt — we propagate as False for caller guard except corrupt raises; no TBytes alloc
+  // zero-copy: size from header only (loose prefix inflate / pack header), no payload alloc
   if GitLooseExists(FGitDir, AOid) then
     Exit(GitLooseGetSize(FGitDir, AOid, AKind, ASize));
   for I := 0 to Length(FPacks) - 1 do
-    if FPacks[I].Contains(AOid) then
-      Exit(FPacks[I].TryGetObjectSize(AOid, AKind, ASize));
+    if FPacks[I].TryGetObjectSize(AOid, AKind, ASize) then
+      Exit(True);
   Result := False;
 end;
 

@@ -154,14 +154,33 @@ begin
   SortFlat(Result);
 end;
 
+function BuildFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid): TFlatArray; overload; inline;
+var Cnt, Cap: Integer;
+begin
+  Result := nil;
+  if GitOidIsZero(ATreeOid) then Exit;
+  Cnt := 0; Cap := 0;
+  CollectFlat(ARepo, ATreeOid, '', Result, Cnt, Cap);
+  SetLength(Result, Cnt);
+  SortFlat(Result);
+end;
+
 // PeelToTree reused from nextpas.core.git.native.common (single source)
+
+function PeelCommitOrTree(ARepo: TNativeRepository; const AOid: TGitOid): TGitOid; overload; inline;
+begin
+  // perf: inline forward to common single source GitPeelToTree (zero-copy TGitOid 20B move, L2 thin orchestration, owner common)
+  // stability: propagates EGitError for corrupt/missing, caller try..finally frees repo
+  if GitOidIsZero(AOid) then Exit(AOid);
+  Result := GitPeelToTree(ARepo, AOid);
+end;
 
 function PeelCommitOrTree(const AGitDir: string; const AOid: TGitOid): TGitOid;
 var Repo: TNativeRepository;
 begin
   Repo := TNativeRepository.Create(AGitDir);
   try
-    Result := GitPeelToTree(Repo, AOid);
+    Result := PeelCommitOrTree(Repo, AOid);
   finally
     Repo.Free;
   end;
@@ -234,20 +253,40 @@ end;
 
 function GitDiffTrees(const AGitDir: string; const AOldTree, ANewTree: TGitOid): TGitDiffArray;
 var
+  Repo: TNativeRepository;
   OldFlat, NewFlat: TFlatArray;
 begin
-  OldFlat := BuildFlat(AGitDir, AOldTree);
-  NewFlat := BuildFlat(AGitDir, ANewTree);
-  Result := DiffFlat(OldFlat, NewFlat);
+  // perf: single TNativeRepository shares pack index (Glob *.idx → LoadPacks) + mapped packs; avoids hotspot duplicate I/O (2× Glob+parse → 1×). CollectFlat/SortFlat inline, zero-copy TGitOid Move + string refcount, bytes.ops single source (GrowArrayCapacity/CompareBytesOrdered), L0-L3 single source reuse
+  // stability: try..finally Repo.Free guarantees pack mmap/mapped pack handles freed even if CollectFlat/ReadObject raises EGitError; zero-tree short-circuit before alloc via BuildFlat(ARepo) inline check
+  if GitOidIsZero(AOldTree) and GitOidIsZero(ANewTree) then Exit(nil);
+  Repo := TNativeRepository.Create(AGitDir);
+  try
+    OldFlat := BuildFlat(Repo, AOldTree);
+    NewFlat := BuildFlat(Repo, ANewTree);
+    Result := DiffFlat(OldFlat, NewFlat);
+  finally
+    Repo.Free;
+  end;
 end;
 
 function GitDiffCommits(const AGitDir: string; const AOldCommit, ANewCommit: TGitOid): TGitDiffArray;
 var
+  Repo: TNativeRepository;
   OldTree, NewTree: TGitOid;
+  OldFlat, NewFlat: TFlatArray;
 begin
-  OldTree := PeelCommitOrTree(AGitDir, AOldCommit);
-  NewTree := PeelCommitOrTree(AGitDir, ANewCommit);
-  Result := GitDiffTrees(AGitDir, OldTree, NewTree);
+  // perf: single TNativeRepository for peel (GitPeelToTree 16-layer) + both CollectFlat; reuses BuildFlat(ARepo) inline zero-copy; 3× LoadPacks → 1× (Glob *.idx + mapped packs) shared
+  // stability: try..finally Repo.Free frees packs even if peel/Collect raises EGitError; zero-oid short-circuit before peel
+  Repo := TNativeRepository.Create(AGitDir);
+  try
+    OldTree := PeelCommitOrTree(Repo, AOldCommit);
+    NewTree := PeelCommitOrTree(Repo, ANewCommit);
+    OldFlat := BuildFlat(Repo, OldTree);
+    NewFlat := BuildFlat(Repo, NewTree);
+    Result := DiffFlat(OldFlat, NewFlat);
+  finally
+    Repo.Free;
+  end;
 end;
 
 function ResolveOid(const AGitDir, ARef: string): TGitOid;

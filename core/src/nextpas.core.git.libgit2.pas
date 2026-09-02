@@ -172,7 +172,9 @@ uses
   nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.git.factory,
-  nextpas.core.git.native.refs;
+  nextpas.core.git.native.refs,
+  nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex;
 
 { TGitManagerImpl }
 
@@ -638,14 +640,6 @@ end;
 
 { TGitWorktreeImpl }
 
-function HexChar(N: Byte): Char; inline;
-begin
-  if N < 10 then
-    Result := Chr(Ord('0') + N)
-  else
-    Result := Chr(Ord('a') + N - 10);
-end;
-
 constructor TGitWorktreeImpl.Create(const ARepoOwner: IGitRepository; AHandle: git_worktree);
 begin
   inherited Create;
@@ -780,6 +774,7 @@ var
   Parents: array[0..0] of git_commit;
   Sig: git_signature;
   CommitOID: git_oid;
+  LBytes: TBytes;
   rc: cint;
   ParentCount: csize_t;
   HasHead: Boolean;
@@ -852,13 +847,10 @@ begin
     if rc <> GIT_OK then
       raise EGitError.Create(rc, 'CommitOnHead: git_commit_create failed');
 
-    { 8. Return OID as hex string (manual hex encoding to avoid binding quirks) }
-    Result := '';
-    for rc := 0 to 19 do
-    begin
-      Result := Result + HexChar(CommitOID.id[rc] shr 4) +
-        HexChar(CommitOID.id[rc] and $0F);
-    end;
+    { 8. Return OID as hex string — single source via bytes.ops SpanCopy (inline, single Move, zero-copy TByteSpan) + encoding.hex HexEncode (single SetLength, table lookup, ~1 alloc for 40 chars) }
+    SetLength(LBytes, 20);
+    SpanCopy(TByteSpan.Create(@LBytes[0], 20), TByteSpan.Create(@CommitOID.id[0], 20));
+    Result := HexEncode(LBytes);
 
   finally
     if Sig <> nil then

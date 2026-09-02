@@ -403,18 +403,19 @@ begin
   if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
 end;
 
-function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray;
+function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray; inline;
 var
   n, m: Integer;
   Acc: TMatchArray;
   AccCnt, AccCap: SizeUInt;
   BufPrev, BufCur, BufL1, BufLRev: TIntArray;
 begin
+  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold 1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source
   Result := nil;
   n := Length(AOld);
   m := Length(ANew);
   if (n = 0) or (m = 0) then Exit;
-  if (Int64(n) * Int64(m) > 10000000) then
+  if (Int64(n) * Int64(m) > 1000000) then
   begin
     Result := ComputeMatchesFallback(AOld, ANew);
     Exit;
@@ -501,6 +502,7 @@ begin
     for I := 0 to High(BlameOids) do BlameOids[I] := Oids[0];
 
     // walk older commits: head vs each older (newest->oldest, so first matches -> newer, later overwrites -> oldest)
+    // perf: ComputeMatches threshold 1M (was 10M) + inline + zero-copy slice (off/len, no per-layer alloc) + bytes.ops GrowArrayCapacity single source; Hirschberg O(n*m) -> fallback O(N log N+M log U) avoids C * O(n*m) quadratic amplification for large files × many commits; stability: Repo.Free in finally, managed arrays auto-released
     for I := 1 to High(Oids) do
     begin
       if not ReadFileLines(Repo, Infos[I].Tree, APath, PrevLines) then Continue;

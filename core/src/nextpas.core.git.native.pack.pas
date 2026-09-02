@@ -51,6 +51,8 @@ type
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
     function ReadObject(const AOid: TGitOid; out AKind: TGitObjectKind): TBytes;
+    function TryReadObject(const AOid: TGitOid; out AKind: TGitObjectKind;
+      out AData: TBytes): Boolean;
     function TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
       out ASize: Int64): Boolean;
     property Count: Integer read GetCount;
@@ -578,6 +580,22 @@ begin
     raise EGitError.CreateFmt('object %s not found in pack %s',
       [GitOidToHex(AOid), FPackPath]);
   ReadEntry(SizeUInt(Off), AKind, Result, 0);
+end;
+
+function TPackFile.TryReadObject(const AOid: TGitOid; out AKind: TGitObjectKind;
+  out AData: TBytes): Boolean;
+var
+  Off: Int64;
+begin
+  // perf: single FindOffset per OID; owner owns binary search via CompareBytesOrdered (bytes.ops single source, ~logN)
+  // stability: missing -> False, corrupt -> raise EGitError (caller distinguishes), no resource leak (TBytes refcount)
+  // zero-copy: offset from mmap index, payload inflated via bytes.ops Span paths
+  // not inline: heavy inflate/delta path
+  Off := FindOffset(AOid);
+  if Off < 0 then
+    Exit(False);
+  ReadEntry(SizeUInt(Off), AKind, AData, 0);
+  Result := True;
 end;
 
 function TPackFile.TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
