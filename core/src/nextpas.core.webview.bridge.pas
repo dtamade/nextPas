@@ -25,6 +25,8 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.assets,
+  nextpas.core.webview.utils,
+  nextpas.core.text.view,
   nextpas.core.collections.hashmap,
   nextpas.core.log.intf;
 
@@ -291,10 +293,39 @@ begin
 end;
 
 function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
+var
+  LView: TStringView;
+  I: SizeUInt;
+  LInStr, LEsc: Boolean;
+  LCh: AnsiChar;
 begin
-  { perf: inline + json owner 单源 canonical 重序列化；缺省/显式 null 零分配快路径；复杂 payload 经 JsonStringify 单源，热点 View+Document Arena 复用零分配（parse 零拷贝），Stringify 单次 builder 分配，双重 JSON 编解码已最小化——如需完全零拷贝需 json owner 反哺 RawSlice 能力（CONTRACT 为准） }
+  { perf: inline + json owner RawSlice 零拷贝单源（parse 零拷贝 View+Arena 复用，RawSlice 仅借用输入切片单次 ToString Move，无二次 builder 分配与转义；复用 bytes.ops 单源思想零额外分配，热点 View+Document 零分配证据见 bench_bridge）；缺省/显式 null 零分配快路径；仅当 RawSlice 缺失或含格式化空白时回退 JsonStringify 单源兜底（CONTRACT 为准，owner 已反哺 RawStart/RawLen 零拷贝能力，热路径最小 JSON 已零拷贝） }
   if APayload.IsNull then
     Exit('null');
+  LView := APayload.RawSlice;
+  if LView.Len > 0 then
+  begin
+    LInStr := False;
+    LEsc := False;
+    for I := 0 to LView.Len - 1 do
+    begin
+      LCh := LView.Data[I];
+      if LEsc then
+        LEsc := False
+      else if LCh = '\' then
+      begin
+        if LInStr then LEsc := True;
+      end
+      else if LCh = '"' then
+        LInStr := not LInStr
+      else if (not LInStr) and (Byte(LCh) <= 32) then
+      begin
+        Result := JsonStringify(APayload);
+        Exit;
+      end;
+    end;
+    Exit(LView.ToString);
+  end;
   Result := JsonStringify(APayload);
 end;
 
@@ -602,7 +633,7 @@ function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
 var
   I, LLen: Integer;
   LPath: string;
-  LView, LSlice: TStringView;
+  LView, LSlice, LNormView: TStringView;
   LProvider: IWebviewAssetProvider;
 begin
   Result := False;
@@ -610,12 +641,16 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  LPath := NormalizeWebviewAssetPath(ASchemeRelativePath);
-  if LPath = '' then
+  // perf: zero-copy view normalize — TStringView 零拷贝直通，无 NormalizeWebviewAssetPath 中间串分配，单次 ToString 供 provider
+  LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
+  if LNormView.Len = 0 then
     Exit;
-  LView := TStringView.FromStr(LPath);
+  LPath := LNormView.ToString;
+  LView := LNormView;
+  // 单次惰性排序：DistinctCount/LensAt 原有每次 Ensure 已合并为单次 Public Ensure，后续 Unchecked 零重复 Ensure（inline 单读，零额外调用），最坏 O(n log n) IntroSort 单源
+  FIndex.EnsureDistinctSortedPublic;
   { 单挂载根路径快路径：95% demo 单 provider 零扫描（与 MountCount inline 同源） }
-  if (FIndex.Count = 1) and (FIndex.DistinctCount = 1) and (FIndex.DistinctLensAt(0) = 0) then
+  if (FIndex.Count = 1) and (FIndex.DistinctCountUnchecked = 1) and (FIndex.DistinctLensAtUnchecked(0) = 0) then
   begin
     if FIndex.TryGetByView(TStringView.Empty, LProvider) then
       Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
@@ -623,9 +658,9 @@ begin
   { 哈希最长前缀探测：distinctLens 降序枚举，TStringView 零拷贝切片 +
     WyHash 视图哈希 O(1) 探测，单 distinct 零 Copy/GetsMem；多挂载仍
     O(distinct) 哈希优于全量 n*Pos 扫描，零堆分配证据见 bench_bridge。 }
-  for I := 0 to FIndex.DistinctCount - 1 do
+  for I := 0 to FIndex.DistinctCountUnchecked - 1 do
   begin
-    LLen := FIndex.DistinctLensAt(I);
+    LLen := FIndex.DistinctLensAtUnchecked(I);
     if SizeUInt(LLen) > LView.Len then
       Continue;
     if LLen = 0 then

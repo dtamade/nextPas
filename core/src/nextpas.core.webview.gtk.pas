@@ -189,7 +189,11 @@ uses
   nextpas.core.sync.mutex,
   nextpas.core.sync.rwlock,
   nextpas.core.webview.mime,
-  nextpas.core.webview.utils;
+  nextpas.core.webview.utils,
+  nextpas.core.webview.gtk.viewmap,
+  nextpas.core.webview.gtk.pool,
+  nextpas.core.collections.hashmap.base,
+  nextpas.core.text.view;
 
 const
   WEBVIEW_SCHEME_LARGE_THRESHOLD = 8192;
@@ -582,10 +586,11 @@ end;
 const
   VIEW_TOMBSTONE = Pointer(1);
 
-{ ---- view->window O(1) 索引：开地址 hash，零分配热读 ---- }
-function ViewHash(AKey: Pointer): SizeUInt; inline;
+{ ---- view->window O(1) 索引：开地址 hash 薄封装，单源复用 gtk.viewmap.ViewHash (hashmap.base.HashOfPointer→HashMix32) ---- }
+function ViewHash(AKey: Pointer): UInt32; inline;
 begin
-  Result := (PtrUInt(AKey) shr 4) xor (PtrUInt(AKey) shr 11);
+  // 单源委托：gtk.viewmap 单源哈希，与 assets WyHash/HashMix32 单源一致，零分布分叉，inline 零额外调用
+  Result := nextpas.core.webview.gtk.viewmap.ViewHash(AKey);
 end;
 
 function ViewMapFindLocked(AView: Pointer): TGtkWebview; inline;
@@ -605,7 +610,7 @@ begin
   end;
 end;
 
-procedure ViewMapRehashLocked(ANewCap: Integer); inline;
+procedure ViewMapRehashLocked(ANewCap: Integer);
 var
   LOld: array of TViewMapEntry;
   I, OldCap, Start, J: Integer;
@@ -765,6 +770,8 @@ var
   LSelf: TGtkWebview;
   LKeep: IInterface;
   LPath, LMime: string;
+  LPathView: TStringView;
+  LRaw: PAnsiChar;
   LBytes: TBytes;
   LStream, LBytesObj: Pointer;
   LHolder: PAssetHolder;
@@ -822,7 +829,15 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  LPath := NormalizeWebviewAssetPath(AnsiPtrToStr(PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)))); { 单源复用 webview.utils.NormalizeWebviewAssetPath inline→text.view TStringView zero-copy, fast path zero alloc }
+  // perf: zero-copy view path — ViewFromPChar 零 AnsiPtrToStr 中间串 + NormalizeWebviewAssetView inline 零拷贝视图，供热点零分配
+  LRaw := PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest));
+  LPathView := NormalizeWebviewAssetView(ViewFromPChar(LRaw));
+  if LPathView.Len = 0 then
+  begin
+    SchemeFinishNotFound(ARequest);
+    Exit;
+  end;
+  LPath := LPathView.ToString; // 单次 SetString+Move，零中间 AnsiPtrToStr 分配，比原 1-2 串 减一次
   if not Assigned(LSelf.FAssetsIntf) then
   begin
     SchemeFinishNotFound(ARequest);

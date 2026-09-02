@@ -54,6 +54,8 @@ type
     function ObjectLen: UInt32;             { Number of key-value pairs }
     function ObjectKeyAt(AIndex: UInt32): TStringView;   { Key at position }
     function ObjectValueAt(AIndex: UInt32): TJsonValue;  { Value at position }
+    { RawSlice: zero-copy view into original input (no re-serialize). Empty if missing/invalid. }
+    function RawSlice: TStringView; inline;
   end;
 
 implementation
@@ -339,6 +341,22 @@ begin
   end;
   if LCur <> JSON_NODE_NONE then
     Result.FIdx := FDoc^.Node(LCur)^.Next;
+end;
+
+function TJsonValue.RawSlice: TStringView;
+var
+  LNode: PJsonNode;
+  LInput: TStringView;
+begin
+  if FIdx = JSON_NODE_NONE then
+    Exit(TStringView.Empty);
+  LNode := FDoc^.Node(FIdx);
+  if LNode^.RawLen = 0 then
+    Exit(TStringView.Empty);
+  LInput := FDoc^.Input;
+  if (SizeUInt(LNode^.RawStart) + SizeUInt(LNode^.RawLen) > LInput.Len) then
+    Exit(TStringView.Empty);
+  Result := TStringView.Create(LInput.Data + LNode^.RawStart, LNode^.RawLen);
 end;
 
 end.

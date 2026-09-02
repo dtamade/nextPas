@@ -233,6 +233,8 @@ begin
   Result := FNodeCount;
   FNodes[FNodeCount].Next := JSON_NODE_NONE;
   FNodes[FNodeCount].Flags := 0;
+  FNodes[FNodeCount].RawStart := 0;
+  FNodes[FNodeCount].RawLen := 0;
   Inc(FNodeCount);
 end;
 
@@ -426,6 +428,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := AKind;
+  Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+  Doc^.FNodes[LIdx].RawLen := UInt32(AExpectedLen);
   if AKind = jnkBool then
     Doc^.FNodes[LIdx].BoolVal := ABoolVal;
   LastPos := UInt32((AData - Input) + AExpectedLen - 1);
@@ -523,6 +527,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkString;
+  Doc^.FNodes[LIdx].RawStart := LStartPos;
+  Doc^.FNodes[LIdx].RawLen := LEndPos - LStartPos + 1;
   if LHasEscape then
   begin
     LBuf := Doc^.AllocStrBuf(LRaw.Len);
@@ -588,6 +594,8 @@ begin
     if LIdx = JSON_NODE_NONE then
       Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkReal;
+    Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+    Doc^.FNodes[LIdx].RawLen := UInt32(LNumLen);
     Doc^.FNodes[LIdx].RealVal := LFloat;
   end
   else
@@ -601,6 +609,8 @@ begin
     if LIdx = JSON_NODE_NONE then
       Exit(JSON_NODE_NONE);
     Doc^.FNodes[LIdx].Kind := jnkInt;
+    Doc^.FNodes[LIdx].RawStart := UInt32(AData - Input);
+    Doc^.FNodes[LIdx].RawLen := UInt32(LNumLen);
     Doc^.FNodes[LIdx].IntVal := LInt;
   end;
   LastPos := UInt32((AData - Input) + LNumLen - 1);
@@ -641,6 +651,7 @@ var
   LCh: Byte;
   LGapData: PAnsiChar;
   LGapLen: SizeUInt;
+  LStartPos: UInt32;
 begin
   Inc(Depth);
   if Depth > 512 then
@@ -652,7 +663,8 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkArray;
-  ConsumeStruct;
+  LStartPos := ConsumeStruct;
+  Doc^.FNodes[LIdx].RawStart := LStartPos;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
   LCh := PeekCh;
@@ -661,6 +673,7 @@ begin
     if not GetValueSlice(LGapData, LGapLen) then
     begin
       ConsumeStruct;
+      Doc^.FNodes[LIdx].RawLen := LastPos - LStartPos + 1;
       Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
       Doc^.FNodes[LIdx].Container.Count := 0;
       Dec(Depth);
@@ -697,6 +710,7 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Doc^.FNodes[LIdx].RawLen := LastPos - LStartPos + 1;
   Dec(Depth);
   Result := LIdx;
 end;
@@ -719,7 +733,7 @@ begin
   if LIdx = JSON_NODE_NONE then
     Exit(JSON_NODE_NONE);
   Doc^.FNodes[LIdx].Kind := jnkObject;
-  ConsumeStruct;
+  Doc^.FNodes[LIdx].RawStart := ConsumeStruct;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
   LCh := PeekCh;
@@ -731,6 +745,7 @@ begin
       Exit(JSON_NODE_NONE);
     end;
     ConsumeStruct;
+    Doc^.FNodes[LIdx].RawLen := LastPos - Doc^.FNodes[LIdx].RawStart + 1;
     Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
     Doc^.FNodes[LIdx].Container.Count := 0;
     Dec(Depth);
@@ -790,6 +805,7 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Doc^.FNodes[LIdx].RawLen := LastPos - Doc^.FNodes[LIdx].RawStart + 1;
   Dec(Depth);
   Result := LIdx;
 end;

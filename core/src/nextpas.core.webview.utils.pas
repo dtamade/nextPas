@@ -9,17 +9,18 @@ unit nextpas.core.webview.utils;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.text.view;
 
 { 资产路径归一：剥离前导 '/'，空串保持空（bridge TryResolve 与 gtk scheme 回调同源，零重复 Delete 扫描）。
   perf: out-of-line + TStringView zero-copy view (L1 text.view single source) + SliceToStr single SetString+Move;
   fast path zero alloc (CoW share) when no leading '/', single alloc+Move when trimmed; zero Delete scan; non-inline avoids bloat at 2 hot call sites (bridge/vfs/gtk) }
 function NormalizeWebviewAssetPath(const APath: string): string;
+{ 零拷贝视图版：TStringView 输入→输出，无堆分配，供 scheme/bridge 热点复用 TStringView 零拷贝直通（L1 text.view 单源，inline 零额外调用，PAnsiChar→view 无 AnsiPtrToStr 中间串） }
+function NormalizeWebviewAssetView(const AView: TStringView): TStringView; inline;
+function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
 
 implementation
-
-uses
-  nextpas.core.text.view;
 
 function NormalizeWebviewAssetPath(const APath: string): string;
 var
@@ -38,6 +39,32 @@ begin
   if LPos >= V.Len then
     Exit('');
   Result := SliceToStr(APath, LPos, V.Len - LPos);
+end;
+
+function NormalizeWebviewAssetView(const AView: TStringView): TStringView; inline;
+var
+  LPos: SizeUInt;
+begin
+  // perf: inline zero-copy view trim via TStringView.Slice (L1 text.view single source), 无堆分配，热点 scheme/bridge 直通 ViewFromPChar 零 AnsiPtrToStr 中间串
+  LPos := 0;
+  while (LPos < AView.Len) and (AView.Data[LPos] = '/') do
+    Inc(LPos);
+  if LPos = 0 then Exit(AView);
+  if LPos >= AView.Len then
+    Exit(TStringView.Empty);
+  Result := AView.Slice(LPos, AView.Len - LPos);
+end;
+
+function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
+var
+  LLen: SizeUInt;
+begin
+  // perf: inline PAnsiChar→TStringView 零拷贝视图，无 SetString+Move 中间串，供 scheme 热点 AnsiPtrToStr 零分配替代
+  if AP = nil then
+    Exit(TStringView.Empty);
+  LLen := 0;
+  while AP[LLen] <> #0 do Inc(LLen);
+  Result := TStringView.Create(AP, LLen);
 end;
 
 end.

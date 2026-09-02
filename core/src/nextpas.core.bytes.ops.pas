@@ -86,6 +86,10 @@ generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
 { 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，inline 零额外调用，bytes.ops 唯一权威；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
 generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
 generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+{ 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
+generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
+{ 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
+generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
 
 implementation
 
@@ -701,6 +705,57 @@ begin
         AArr[ACount] := Default(T);
       Break;
     end;
+end;
+
+generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
+var
+  I: Integer;
+begin
+  // perf: inline single source bulk copy — managed per-elem AddRef, blittable single Move zero refcnt churn, single source for linear grow; zero extra call
+  if ACount <= 0 then Exit;
+  if System.IsManagedType(T) then
+  begin
+    for I := 0 to ACount - 1 do
+      ADst[I] := ASrc[I];
+  end
+  else if ACount > 0 then
+    Move(ASrc[0], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+end;
+
+generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
+var
+  LTail, I: Integer;
+begin
+  // perf: two-segment linearize avoids mod/div per element, inline zero extra call, single source VecCopy for each segment (bytes.ops VecGrowCapacity outer); zero extra alloc, managed ref per element preserved
+  if ACount <= 0 then Exit;
+  if AHead + ACount <= Length(ASrc) then
+  begin
+    if System.IsManagedType(T) then
+    begin
+      for I := 0 to ACount - 1 do
+        ADst[I] := ASrc[AHead + I];
+    end
+    else if ACount > 0 then
+      Move(ASrc[AHead], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+  end
+  else
+  begin
+    LTail := Length(ASrc) - AHead;
+    if System.IsManagedType(T) then
+    begin
+      for I := 0 to LTail - 1 do
+        ADst[I] := ASrc[AHead + I];
+      for I := 0 to ACount - LTail - 1 do
+        ADst[LTail + I] := ASrc[I];
+    end
+    else
+    begin
+      if LTail > 0 then
+        Move(ASrc[AHead], ADst[0], SizeUInt(LTail) * SizeUInt(SizeOf(T)));
+      if ACount - LTail > 0 then
+        Move(ASrc[0], ADst[LTail], SizeUInt(ACount - LTail) * SizeUInt(SizeOf(T)));
+    end;
+  end;
 end;
 
 end.

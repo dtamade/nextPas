@@ -307,7 +307,6 @@ type
     FCount: Integer;
     FOwnerThread: UInt64;
     procedure LinearizeCopy(const AOldRing: TFakeDispatcherRing; AHead, ACount: Integer; var ANew: TFakeDispatcherRing); inline;
-    procedure GrowCopy(var LNew: TFakeDispatcherRing); inline;
     procedure Grow; inline;
   public
     constructor Create;
@@ -338,71 +337,34 @@ begin
 end;
 
 procedure TFakeDispatcher.LinearizeCopy(const AOldRing: TFakeDispatcherRing; AHead, ACount: Integer; var ANew: TFakeDispatcherRing); inline;
-var
-  I, LTail, LOldLen: Integer;
 begin
-  // perf: two-segment linearize avoids mod/div per element, inline zero extra call, single source for ring linearization (bytes.ops VecGrowCapacity outer); zero extra alloc, managed ref per element preserved
-  if ACount = 0 then Exit;
-  LOldLen := Length(AOldRing);
-  if AHead + ACount <= LOldLen then
-  begin
-    for I := 0 to ACount - 1 do
-      ANew[I] := AOldRing[AHead + I];
-  end
-  else
-  begin
-    LTail := LOldLen - AHead;
-    for I := 0 to LTail - 1 do
-      ANew[I] := AOldRing[AHead + I];
-    for I := 0 to ACount - LTail - 1 do
-      ANew[LTail + I] := AOldRing[I];
-  end;
-end;
-
-procedure TFakeDispatcher.GrowCopy(var LNew: TFakeDispatcherRing); inline;
-var
-  LOldLen, I, LTail: Integer;
-begin
-  // compat: legacy inline copy under lock kept only for non-contended Grow; Post storm path uses LinearizeCopy outside lock (see PostRef) to avoid O(n) lock amplification
-  LOldLen := Length(FRing);
-  if FCount = 0 then
-  begin
-    FRing := LNew;
-    FHead := 0;
-    Exit;
-  end;
-  if FHead + FCount <= LOldLen then
-  begin
-    for I := 0 to FCount - 1 do
-      LNew[I] := FRing[FHead + I];
-  end
-  else
-  begin
-    LTail := LOldLen - FHead;
-    for I := 0 to LTail - 1 do
-      LNew[I] := FRing[FHead + I];
-    for I := 0 to FCount - LTail - 1 do
-      LNew[LTail + I] := FRing[I];
-  end;
-  // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef already), zero leak
-  FRing := LNew;
-  FHead := 0;
+  // perf: thin forward to bytes.ops VecRingCopy single source — two-segment linearize inline zero mod/div, zero extra call, managed ref preserved, VecGrowCapacity single source outer
+  specialize VecRingCopy<TWebviewProcRef>(AOldRing, AHead, ACount, ANew);
 end;
 
 procedure TFakeDispatcher.Grow; inline;
 var
   LNew: TFakeDispatcherRing;
 begin
-  // perf: single source bytes.ops VecGrowCapacity (0→4→2×) inline; base pure, zero wrapper, zero extra call
+  // perf: single source bytes.ops VecGrowCapacity (0→4→2×) inline + VecRingCopy single source linearize; base pure, zero wrapper, zero extra call
   SetLength(LNew, VecGrowCapacity(Length(FRing)));
-  GrowCopy(LNew);
+  if FCount = 0 then
+  begin
+    FRing := LNew;
+    FHead := 0;
+    Exit;
+  end;
+  specialize VecRingCopy<TWebviewProcRef>(FRing, FHead, FCount, LNew);
+  // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef already), zero leak
+  FRing := LNew;
+  FHead := 0;
 end;
 
 procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef); inline;
 var
   LNew: TFakeDispatcherRing;
   LOldRing: TFakeDispatcherRing;
-  LHead, LCount, LOldLen, LNewCap, I, LTail: Integer;
+  LHead, LCount, LOldLen, LNewCap: Integer;
 begin
   // perf: fast path under lock without alloc
   FLck.Acquire;
@@ -423,8 +385,8 @@ begin
   end;
   // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
   SetLength(LNew, LNewCap);
-  // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source LinearizeCopy, bytes.ops capacity single source
-  LinearizeCopy(LOldRing, LHead, LCount, LNew);
+  // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source bytes.ops VecRingCopy, VecGrowCapacity single source
+  specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
   // perf: short install under lock — only pointer swap + one slot write, O(1), stale check via length/head/count, single attempt no spin
   FLck.Acquire;
   try
@@ -436,24 +398,11 @@ begin
     end;
     if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
     begin
-      // contention: stale snapshot — fallback to single in-lock relinearize without extra alloc/spin
-      // perf: at most one extra SetLength inside lock on contention, no outside retry loop, avoids extra SetLength + spin under storm
+      // contention: stale snapshot — fallback to single in-lock relinearize single source, rare path, still bytes.ops VecRingCopy single source
       if Length(LNew) <> VecGrowCapacity(Length(FRing)) then
         SetLength(LNew, VecGrowCapacity(Length(FRing)));
       if FCount > 0 then
-      begin
-        if FHead + FCount <= Length(FRing) then
-          for I := 0 to FCount - 1 do
-            LNew[I] := FRing[FHead + I]
-        else
-        begin
-          LTail := Length(FRing) - FHead;
-          for I := 0 to LTail - 1 do
-            LNew[I] := FRing[FHead + I];
-          for I := 0 to FCount - LTail - 1 do
-            LNew[LTail + I] := FRing[I];
-        end;
-      end;
+        specialize VecRingCopy<TWebviewProcRef>(FRing, FHead, FCount, LNew);
     end;
     // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef), zero leak
     FRing := LNew;
@@ -786,10 +735,10 @@ end;
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 var
-  LNew: TFakeInvokeOutcomes;
-  LCap, I: Integer;
+  LNew, LOld: TFakeInvokeOutcomes;
+  LCap, LCount, LOldLen: Integer;
 begin
-  // perf: fast path under lock without alloc; contended path alloc outside lock (SetLength zero-init) to avoid lock-amplification jitter
+  // perf: fast path under lock without alloc; contended path snapshot + alloc + O(n) copy outside lock to avoid lock-amplification under invoke storm, single source bytes.ops VecCopy/VecGrowCapacity inline zero extra call
   FLck.Acquire;
   try
     if FOutcomesCount < Length(FOutcomes) then
@@ -803,11 +752,17 @@ begin
       Exit;
     end;
     LCap := VecGrowCapacity(Length(FOutcomes));
+    LOld := FOutcomes;
+    LCount := FOutcomesCount;
+    LOldLen := Length(FOutcomes);
   finally
     FLck.Release;
   end;
-  // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification under invoke storm, single source VecGrowCapacity inline
+  // perf: heap allocation (SetLength zero-init) outside lock, single source VecGrowCapacity inline
   SetLength(LNew, LCap);
+  // perf: O(n) linear bulk copy outside lock — managed per-elem AddRef via bytes.ops VecCopy single source, zero lock hold, inline zero extra call, blittable single Move fast path
+  if LCount > 0 then
+    specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
   FLck.Acquire;
   try
     if FOutcomesCount < Length(FOutcomes) then
@@ -820,12 +775,17 @@ begin
       Inc(FOutcomesCount);
       Exit;
     end;
-    if Length(LNew) <= Length(FOutcomes) then
+    if (Length(FOutcomes) <> LOldLen) or (FOutcomesCount <> LCount) then
+    begin
+      // contention: stale snapshot — single in-lock relinearize single source bytes.ops VecCopy, rare path, at most one extra SetLength + copy
+      if Length(LNew) <= Length(FOutcomes) then
+        SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
+      if FOutcomesCount > 0 then
+        specialize VecCopy<TFakeInvokeOutcome>(FOutcomes, LNew, FOutcomesCount);
+    end
+    else if Length(LNew) <= Length(FOutcomes) then
       SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
-    // perf: copy linearization under lock only, inline zero extra call, bytes.ops single source
-    for I := 0 to FOutcomesCount - 1 do
-      LNew[I] := FOutcomes[I];
-    // stability: FOutcomes:=LNew releases old ring refs via refcount, LNew retains (AddRef), zero leak
+    // stability: FOutcomes:=LNew releases old refs via refcount finalization, LNew retains (AddRef), zero leak
     FOutcomes := LNew;
     FOutcomes[FOutcomesCount].Cmd := ACmd;
     FOutcomes[FOutcomesCount].IsError := AIsError;

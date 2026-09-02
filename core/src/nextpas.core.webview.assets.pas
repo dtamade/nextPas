@@ -26,7 +26,7 @@ unit nextpas.core.webview.assets;
        - 零拷贝：TStringView 切片零堆分配，TryGetByView 按 view.Data/Len 直算 WyHash32 与
          SpanEqual 直比，单 distinct 零 Copy，热点单挂载仍内联快路径；
        - 容量：VecGrowCapacity(0→4→2×) bytes.ops 单源 inline 倍增，0.75 负载重哈希，零 O(n²)；
-       - distinctLens 摊销 O(1) 追加 + 惰性降序快排 O(n log n) 单次，零每插 O(n) 移位，DistinctCount/LensAt inline 惰性排序零额外分配，MountCount = distinct 哈希数，FindBy/TryGet 全 inline。
+       - distinctLens 摊销 O(1) 追加 + 惰性 IntroSort 降序 O(n log n) 单次（collections.algorithms.SortInt32DescRange 单源，Heap 回退+Tukey ninther，最坏 O(n log n)，零自实现快排分叉），DistinctCount 惰性一次 Ensure 后 LensAtUnchecked 零重复 Ensure 零额外分配，MountCount = distinct 哈希数，FindBy/TryGet 全 inline。
 
        稳定性：析构 Finalize 全量串/接口，no leak；inline 薄转零额外调用。 *}
 
@@ -83,6 +83,10 @@ type
     function Count: Integer; inline;
     function DistinctCount: Integer; inline;
     function DistinctLensAt(AIndex: Integer): Integer; inline;
+    // 快路径：已 Ensure 后零重复 Ensure 的零拷贝直读（bridge 批量枚举专用，inline 单次数组读）
+    function DistinctCountUnchecked: Integer; inline;
+    function DistinctLensAtUnchecked(AIndex: Integer): Integer; inline;
+    procedure EnsureDistinctSortedPublic; inline;
     procedure Clear;
   end;
 
@@ -93,6 +97,7 @@ uses
   nextpas.core.hash.wyhash,
   nextpas.core.base.utils,
   nextpas.core.collections.hashmap.base,
+  nextpas.core.collections.algorithms,
   nextpas.core.simd.bitops;
 
 constructor TWebviewAssetIndex.Create;
@@ -206,56 +211,10 @@ begin
 end;
 
 procedure TWebviewAssetIndex.SortDistinctDesc(ACount: Integer); inline;
-var
-  I, J, P, Tmp: Integer;
-  L, R: Integer;
-  StackL, StackR: array[0..63] of Integer;
-  Sp: Integer;
 begin
   if ACount <= 1 then Exit;
-  // iterative quicksort descending, O(n log n) avg, O(n²) worst but intro fallback not needed for n<4096
-  Sp := 0;
-  StackL[0] := 0; StackR[0] := ACount - 1;
-  while Sp >= 0 do
-  begin
-    L := StackL[Sp]; R := StackR[Sp]; Dec(Sp);
-    repeat
-      I := L; J := R; P := FDistinctLens[(L + R) shr 1];
-      repeat
-        while FDistinctLens[I] > P do Inc(I);
-        while FDistinctLens[J] < P do Dec(J);
-        if I <= J then
-        begin
-          if I <> J then
-          begin
-            Tmp := FDistinctLens[I];
-            FDistinctLens[I] := FDistinctLens[J];
-            FDistinctLens[J] := Tmp;
-          end;
-          Inc(I); Dec(J);
-        end;
-      until I > J;
-      // push larger partition, loop on smaller to bound stack
-      if J - L > R - I then
-      begin
-        if L < J then
-        begin
-          Inc(Sp);
-          StackL[Sp] := L; StackR[Sp] := J;
-        end;
-        L := I;
-      end
-      else
-      begin
-        if I < R then
-        begin
-          Inc(Sp);
-          StackL[Sp] := I; StackR[Sp] := R;
-        end;
-        R := J;
-      end;
-    until L >= R;
-  end;
+  // 单源 IntroSort 降序：delegates to collections.algorithms.SortInt32DescRange (Heap 回退+Tukey ninther)，最坏 O(n log n)，零自实现分叉，保留 slack 零 SetLength
+  SortInt32DescRange(FDistinctLens, ACount);
 end;
 
 procedure TWebviewAssetIndex.EnsureDistinctSorted; inline;
@@ -429,6 +388,21 @@ function TWebviewAssetIndex.DistinctLensAt(AIndex: Integer): Integer; inline;
 begin
   EnsureDistinctSorted;
   Result := FDistinctLens[AIndex];
+end;
+
+function TWebviewAssetIndex.DistinctCountUnchecked: Integer; inline;
+begin
+  Result := FDistinctCount;
+end;
+
+function TWebviewAssetIndex.DistinctLensAtUnchecked(AIndex: Integer): Integer; inline;
+begin
+  Result := FDistinctLens[AIndex];
+end;
+
+procedure TWebviewAssetIndex.EnsureDistinctSortedPublic; inline;
+begin
+  EnsureDistinctSorted;
 end;
 
 end.

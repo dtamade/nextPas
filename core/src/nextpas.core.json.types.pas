@@ -25,6 +25,8 @@ type
     Kind: TJsonNodeKind;
     Flags: Byte;
     Next: UInt32;
+    RawStart: UInt32;
+    RawLen: UInt32;
     case Byte of
       0: (BoolVal: Boolean);
       1: (IntVal: Int64);
