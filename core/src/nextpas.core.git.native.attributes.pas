@@ -48,6 +48,7 @@ function GitHasAttribute(const AEntries: TGitAttrEntries; const APath, AName: st
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.text.wildmatch,
   nextpas.core.exception,
@@ -158,13 +159,11 @@ begin
   end;
 end;
 
-function GitParseAttributes(const AData: TBytes): TGitAttrEntries;
-var S: string;
+function GitParseAttributes(const AData: TBytes): TGitAttrEntries; inline;
 begin
+  { single-source bytes.ops.BytesToString: inline + single SetLength + single Move via PByte/PChar^ zero-copy, no duplicate hand Move }
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
-  Result:=GitParseAttributes(S);
+  Result:=GitParseAttributes(BytesToString(AData));
 end;
 
 function GitLoadAttributes(const AGitDir: string): TGitAttrEntries;

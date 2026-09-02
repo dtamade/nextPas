@@ -302,5 +302,5 @@ end;
 
 - **总索引**：1→89 源演进已固化（89 `nextpas.core.git*.pas`，含 6 native 门面 shard + libgit2.types + 10 bindings 域分片 + `native` 薄网关 `<250` 行 + `git.pas` 门面）；`scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检。
 - **分片阈值（硬门禁，`wc -l` 行阈）**：`objects <400` / `staging <500` / `history.traversal|query|ops` 各 `<260` & `history` umbrella `<80` & 总 `<650` / `branches <300` / `transport <600` / `extensions <400` / `bindings` 门面 `<150` & 各分片 `<800`（含 `types/structs/consts/c/oid/odb/refs/commit/repo/diff/extra` 各 `<800`）；单源 `bytes.ops`/`checksum.adler32`/`compress`/`text.wildmatch` 零拷贝 `inline` 约束同步门禁。
-- **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph.pas` 约 1320 行已标记为历史域内聚例外（见 `CONTRACT.history.md §6`），不计入 800 阈但受 region 标记与独立门禁约束。
+- **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph.pas` 约 1523 行已标记为历史域内聚例外并已超 1500 硬阈触发拆分评估（见 `CONTRACT.history.md §6`），不计入 800 阈但受 4 region 标记与独立门禁约束。
 - **资源与性能同门禁**：`IMappedFile`/`TPackFile`/`TBytes` 零泄漏（`try..finally` + 接口计数，`HEAPTRC` 双 pin）、`inline` 零拷贝 `PByte+Len/TByteSpan`（`bytes.ops` 单源）与 SLO 双锚（§7）同 C5 聚合于 `build/verify_local.sh`。

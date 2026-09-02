@@ -14,24 +14,27 @@ uses
   nextpas.core.git.native.base;
 
 { Commit-graph v1 reader+writer+cache (SHA-1) for local revwalk acceleration.
-  Note: history-domain core (~1320 lines) exceeds design-conventions §2
-    800-line soft guide; retained per CONTRACT.history §6 as cohesive
-    exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE
-    invariants + single mmap owner. Thin aggregator is history.traversal;
-    split would dilute ownership + double cache owner + merge conflict risk.
-    Monitored 1320→1500 hard split threshold per CONTRACT.history §6;
-    I-Cache impact bounded via inline red-line discipline (thin O(1) forwards
-    inline, loops/SIMD not inline) + 4 region markers for audit.
+  Note: history-domain core (~1523 lines) exceeds design-conventions §2
+    800-line soft guide and 1500 hard split threshold; retained per
+    CONTRACT.history §6 as cohesive exception — reader+writer+cache+collect
+    share CGPH/OIDF/OIDL/CDAT/EDGE invariants + single mmap owner. Thin
+    aggregator is history.traversal; split would dilute ownership + double
+    cache owner + merge conflict risk. Monitored 1320→1500 hard split
+    threshold per CONTRACT.history §6 — now ~1523 triggers split evaluation
+    (see CONTRACT.history §6); I-Cache impact bounded via inline red-line
+    discipline (thin O(1) forwards inline, loops/SIMD not inline) + 4 region
+    markers for audit.
   L2 exempt: git-native-commitgraph-l2-exempt — L2 git→hash.sha1 single-source
     via bytes.ops SpanCompare/SpanCopy + NewSHA1, no duplicate SHA-1 loop;
     registry core/docs/core-module-registry.md git row (same-layer one-way
     fs/compress/hash/zlib/checksum), traceable via C5 anchor pattern (zlib analog).
 
   Audit: 4 regions via markers — Cache / Reader / Writer / Collect;
-    1320 vs 800 is §2 soft-guide exception with shared invariants, not
+    1523 vs 800 is §2 soft-guide exception with shared invariants, not
     exemption from audit. Volume restraint via region markers + 1500 hard
-    threshold (see CONTRACT.history §1/§6). Hashed Dir index (FNV-1a via
-    bytes.ops) keeps cache O(1) avg without string-scan churn.
+    threshold exceeded — split evaluation triggered (see CONTRACT.history
+    §1/§6). Hashed Dir index (FNV-1a via bytes.ops) keeps cache O(1) avg
+    without string-scan churn.
 
   Perf: mmap zero-copy via io.mapped + bytes.ops single source
     (SpanCopy/SpanCompare, PByte window); inline O(1) touch;
@@ -44,9 +47,10 @@ uses
     shared read for hit + exclusive write for miss/invalidate, O(1) touch,
     Stat outside read lock to avoid blocking, swap-with-last O(1) keeps
     refcount safe); former external-sync model retired (was not locked).
-  Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
-    when shards fan-in or cache ownership dilutes auditability; reuse/test
-    isolation via history.traversal thin shard (<210 lines) + owner single
+  Evolution: 1320→1500 threshold monitor per CONTRACT.history §6 — now
+    ~1523 exceeds hard threshold, split evaluation active (when shards
+    fan-in or cache ownership dilutes auditability); reuse/test isolation
+    via history.traversal thin shard (<210 lines) + owner single
     source (bytes.ops single source + sync.rwlock single source, collections.lrucache
     candidate closed). Hand-rolled 16-cap LRU retained over generic TLruCache
     (O(Cap)<30ns trivial 16×UInt64 vs AllocMem/THashMap overhead, bench-gated,

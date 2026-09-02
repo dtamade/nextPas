@@ -220,8 +220,8 @@ begin
   if P < 0 then
     raise EGitError.Create('bundle: missing header terminator');
   // header bytes [0, P] inclusive first \n, but pack starts at P+2
-  SetLength(HeaderStr, P+1);
-  if P+1 > 0 then Move(AData[0], HeaderStr[1], P+1);
+  // perf: bytes.ops BytesSliceToString single source (inline + single Move via Slice view, zero-copy, replaces hand-written SetLength+Move)
+  HeaderStr := BytesSliceToString(AData, 0, SizeUInt(P+1));
   Lines := LocalSplitLines(HeaderStr);
   Cnt := Length(Lines);
   // SplitString includes last empty after trailing \n? Our header ends with \n before blank, so split yields last '' for the blank? Actually header ends with "ref\n" then we consumed up to P which is first \n of "\n\n", so headerStr ends with "\n", split yields last ''.

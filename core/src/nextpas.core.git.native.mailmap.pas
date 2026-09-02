@@ -162,13 +162,11 @@ begin
     SetLength(Result, LCnt);
 end;
 
-function GitParseMailmap(const AData: TBytes): TGitMailmap;
-var S: string;
+function GitParseMailmap(const AData: TBytes): TGitMailmap; inline;
 begin
+  { single-source bytes.ops.BytesToString: inline + single SetLength + single Move via PByte/PChar^ zero-copy, no duplicate hand Move }
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
-  Result:=GitParseMailmap(S);
+  Result:=GitParseMailmap(BytesToString(AData));
 end;
 
 
