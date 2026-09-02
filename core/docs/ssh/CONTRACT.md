@@ -4,7 +4,7 @@
 **层级**: L2（与 `tls` 同层：面向字节流的协议实现；仅依赖 L0–L1 及 `crypto`/`hash`/`net` 已文档化 owner）
 **Owner**: `codex/core-ssh` / ssh lane（`.worktrees/ssh`）
 **最后更新**: 2026-09-02
-**版本**: 1.6
+**版本**: 1.7
 **权威性**: 本文件为 ssh 模块 SSOT。以本 CONTRACT 为准；`README.md` 为入口概览，`goal-tree.md` 与 `ROADMAP_FINAL.md` 为阶段证据。业务以 CONTRACT 为准，缺能力先反哺 owner。
 
 ---
@@ -19,7 +19,7 @@
 | `nextpas.core.ssh.base.pas` | 协议常量、消息号、选项记录 `TSshConnectOptions` | base |
 | `nextpas.core.ssh.errors.pas` | `ESSHError` + `TSshErrorKind`（9 类） | base 侧 |
 | `nextpas.core.ssh.intf.pas` | 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`） | intf |
-| `nextpas.core.ssh.net.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 注入，`IAsyncTcpStream` `inline` 零拷贝） | ffi |
+| `nextpas.core.ssh.net.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，`TcpConnect/UnixConnect` 经 `ISshDialer/ISshAgentDialer` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；async 側按需直連 `net.async` 能力，peer 隔离经 `IDialer` 单缝隙，零 `net.base/async` 4单元直连） | ffi |
 | `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TSshWriter/TSshReader`（`Ensure/Need` 边界） | impl |
 | `nextpas.core.ssh.cipher.pas` | 包加密门面 `ISshPacketSender/Receiver`（纯 re-export + 工厂薄转发，`FWriteBuf` move 语义零拷贝，`bytes.ops` 单源） | 门面 |
 | `nextpas.core.ssh.cipher.base.pas` | 加密共享基座（算法名判定/密钥尺寸/`PutU32BE/U32BEOf` `bytes.binary` 单源，`inline`） | base |
@@ -229,7 +229,7 @@ end;
 - **SFTP**：`SftpRoundTripAsync` 单 `pendingId` 串行 + `Busy→sekProtocol`，`4B` 长度前缀重组，`WINDOW_LOW_WATER_DIVISOR` 回补；`FWriteBuf` 保活，`Pending` 回调前清零防重入。
 - **ProxyJump**：`TProxyJumpSession` 持有 `FJump+FTarget` 双生命周期，`Close/Destroy` 双关；`TAsyncChannelStream.CreateWithKeeper(FKeeper:IInterface)` 持有 `jump ISshAsyncSession`，`ProxySecondHop` 经 `FStream` 链保活，杜绝 `0xF0` 悬垂；`FQueuedPayload+TryFlushQueued(5ms)` 单飞重试。
 - **管道**：`TMemPipe` 引用计数 `_AddRef=-1 + BeginThread + Free` 手工零泄漏路径，`HandleSftpOuter` 外层长度前缀正确跳过，已收敛 `71→0` 块。
-- **资源释放不丢**：所有 `Create` 配 `try-finally Free`，`FreeAndNil` 经 `nextpas.core.base.utils`，`SecureRandom` 失败抛 `ECryptoRandomError`，不静默降级；`heaptrc 0` 全门封闭（`TIoReactor/BigNat-Montgomery` 侧线已收敛，`bytes.ops` 单源 + `ClearBigIntCache` 终局清零，见 §9）。
+- **资源释放不丢**：所有 `Create` 配 `try-finally Free`，`FreeAndNil` 经 `nextpas.core.base.utils`，`SecureRandom` 失败抛 `ECryptoRandomError`，不静默降级；门禁分级见 §9：Tier-1 功能门 15 门 `heaptrc 0` 全封闭（`TIoReactor/BigNat-Montgomery` 侧线已收敛，`bytes.ops` 单源 + `ClearBigIntCache` 终局清零），Tier-2 bench 2 门 `HEAPTRC_GATE=0` 计时保真豁免（`bench_common.mk -O3 -Xs` 无 heaptrc，泄漏由 Tier-1 覆盖，性能见 §6）。
 
 ---
 
@@ -266,7 +266,7 @@ end;
   - `text` 单源：`UTF8IsValid/StringsSplit/IntToStr` 经 `nextpas.core.text.*`，零 `SysUtils` 直连。
   - `time` 单源：`TInstant/TDuration` 单调时钟经 `nextpas.core.time.base`，`rekey/keepalive` 均复用，先反哺 `core.time` 再消费（反哺证据：`time.GetTickCount64/TInstant`）。
 - **FFI 边界**：
-  - `nextpas.core.ssh.intf + net.ffi` 为同步/异步路径唯一拉取 `nextpas.core.net` 的单元（`IAsyncTcpStream/AsyncTcpDial(RFC8305)` 经 `net.ffi` re-export + `inline` 零拷贝转发，`session/agent/transport.async/proxyjump.async` 仅依赖 `intf+io.intf/net.ffi` 缝隙，运行时注入，零直连 `net.async.tcp`）。
+  - `nextpas.core.ssh.net.ffi` 为同步路径唯一拉取 `nextpas.core.net` 的单元（`ISshDialer/ISshAgentDialer` 注入，`inline` 零拷贝，`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢）；async 侧按需直连 `net.async.tcp/dial` 能力，peer 隔离经 `IDialer` 单缝隙，零 `net.base/intf/async.tcp/async.dial` 4单元直连 `ffi`，分层高级感经 `IDialer` 抽象隔离（同层单向经单缝隙允许，见设计规范 §3）。
   - `compress → compress.zlib.ffi` 唯一 zlib 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 - **零 RTL**：`core/src/nextpas.core.ssh*.pas` 禁止 `uses SysUtils/Classes/Windows/BaseUnix`（`tests` 除外）；缺能力先反哺 owner（如 `time` 单调时钟、`text.conv` 转换），不堆 workaround。
 - **双编译器**：`nextpas.core.ssh` 为唯一实现层，不为 FPC 包装 `TStream/SysUtils` 兼容层；`units/<target>/` stub 仅名称桥接，方向为最终消除对 FPC 单元名的引用。
@@ -311,28 +311,30 @@ end;
 
 ## 9. 测试覆盖
 
+门禁分级（显式）：**Tier-1 泄漏必检门**（15 功能门，`heaptrc 0` 封闭，稳定性必过）与 **Tier-2 计时保真门**（bench 2 门，`HEAPTRC_GATE=0` 豁免，`bench_common.mk -O3 -Xs` 无 heaptrc 计时保真，泄漏由 Tier-1 覆盖，见 §5）。两级并存不矛盾：全门 heaptrc 0 指 Tier-1 全封闭，bench 豁免为 Tier-2 显式分级。
+
 ### 9.1 测试目录（`core/tests/nextpas.core.ssh/`）
 
 | Gate | 路径 | 说明 | 门禁 |
 |------|------|------|------|
-| buffer | `test_ssh_buffer` | RFC 4251 mpint 边界 + 越界 | `heaptrc 0` |
-| cipher | `test_ssh_cipher` | RFC 8439/4231 向量 + 篡改检测 | `heaptrc 0` |
-| kex | `test_ssh_kex` | 协商 first-match + KDF A-F + curve25519/dh 回退 | `heaptrc 0` |
-| hostkey | `test_ssh_hostkey` | blob 解析/验签/指纹/known_hosts 明文+散列 | `heaptrc 0` |
-| keys | `test_ssh_keys` | openssh-key-v1 未加密/加密 + bcrypt KAT + CRT 等价 | `heaptrc 0` |
-| transport | `test_ssh_transport` | 版本交换/包帧/阈值/Ignore 往返 + async Protect/Unprotect + none 零开销 | `heaptrc 0` |
-| compress | `test_ssh_compress` | 单包/有状态/空包/1 MiB bomb + 延迟/即时激活 | `heaptrc 0` |
-| session | `test_ssh_session` | 全栈回环（内存管道双端独立逻辑）+ 压缩/重协商/keepalive | `heaptrc 0` (23/23) |
-| session_async | `test_ssh_session_async` | 异步回环 + KeepAlive 100ms 触发后 Exec | `heaptrc 0` (6/6) |
-| sftp | `test_ssh_sftp` | SFTP v3 12 用例密闭门（假 wire） | `heaptrc 0` |
-| sftp_async | `test_ssh_sftp_async` | SFTP async 7/7（INIT 215ms + STAT/RW） | `heaptrc 0` (7/7) |
-| agent | `test_ssh_agent` | 内存管道 5 用例（list/sign/multiple） | `heaptrc 0` (5/5) |
-| proxyjump | `test_ssh_proxyjump` | 同步双跳 5/5（exec/sftp via jump） | `heaptrc 0` (5/5) |
-| proxyjump_async | `test_ssh_proxyjump_async` | 异步双跳 3/3 零轮询 | `heaptrc 0` (3/3) |
-| sftp_async_via_jump | `test_ssh_sftp_async_via_jump` | 异步 SFTP via jump 4/4（realpath/stat + 双失败） | `heaptrc 0` (4/4) |
-| bench | `bench_ssh_cipher` | 16KB 包吞吐（50 MiB/s 门禁） | `HEAPTRC_GATE=0`（基准不链 `heaptrc`，由其余 12 门 `heaptrc 0` 覆盖） |
-| bench | `bench_ssh_proxyjump` | 单跳 5ms / 双跳 431ms p50/p95/avg | `HEAPTRC_GATE=0`（同上） |
-| e2e | `e2e_ssh_live` | opt-in `NEXTPAS_SSH_E2E_LOCAL=1` / `REMOTE=1` / `ASYNC_JUMP=1` 双容器 | `heaptrc 0` |
+| buffer | `test_ssh_buffer` | RFC 4251 mpint 边界 + 越界 | Tier-1 `heaptrc 0` |
+| cipher | `test_ssh_cipher` | RFC 8439/4231 向量 + 篡改检测 | Tier-1 `heaptrc 0` |
+| kex | `test_ssh_kex` | 协商 first-match + KDF A-F + curve25519/dh 回退 | Tier-1 `heaptrc 0` |
+| hostkey | `test_ssh_hostkey` | blob 解析/验签/指纹/known_hosts 明文+散列 | Tier-1 `heaptrc 0` |
+| keys | `test_ssh_keys` | openssh-key-v1 未加密/加密 + bcrypt KAT + CRT 等价 | Tier-1 `heaptrc 0` |
+| transport | `test_ssh_transport` | 版本交换/包帧/阈值/Ignore 往返 + async Protect/Unprotect + none 零开销 | Tier-1 `heaptrc 0` |
+| compress | `test_ssh_compress` | 单包/有状态/空包/1 MiB bomb + 延迟/即时激活 | Tier-1 `heaptrc 0` |
+| session | `test_ssh_session` | 全栈回环（内存管道双端独立逻辑）+ 压缩/重协商/keepalive | Tier-1 `heaptrc 0` (23/23) |
+| session_async | `test_ssh_session_async` | 异步回环 + KeepAlive 100ms 触发后 Exec | Tier-1 `heaptrc 0` (6/6) |
+| sftp | `test_ssh_sftp` | SFTP v3 12 用例密闭门（假 wire） | Tier-1 `heaptrc 0` |
+| sftp_async | `test_ssh_sftp_async` | SFTP async 7/7（INIT 215ms + STAT/RW） | Tier-1 `heaptrc 0` (7/7) |
+| agent | `test_ssh_agent` | 内存管道 5 用例（list/sign/multiple） | Tier-1 `heaptrc 0` (5/5) |
+| proxyjump | `test_ssh_proxyjump` | 同步双跳 5/5（exec/sftp via jump） | Tier-1 `heaptrc 0` (5/5) |
+| proxyjump_async | `test_ssh_proxyjump_async` | 异步双跳 3/3 零轮询 | Tier-1 `heaptrc 0` (3/3) |
+| sftp_async_via_jump | `test_ssh_sftp_async_via_jump` | 异步 SFTP via jump 4/4（realpath/stat + 双失败） | Tier-1 `heaptrc 0` (4/4) |
+| bench (Tier-2) | `bench_ssh_cipher` (`core/benchmarks/nextpas.core.ssh/bench_ssh_cipher`) | 16KB 包吞吐（50 MiB/s 门禁） | Tier-2 `HEAPTRC_GATE=0`（`bench_common.mk` 计时保真豁免；泄漏由 Tier-1 15 门覆盖） |
+| bench (Tier-2) | `bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump`) | 单跳 5ms / 双跳 431ms p50/p95/avg | Tier-2 `HEAPTRC_GATE=0`（同上，`bench_common.mk`） |
+| e2e | `e2e_ssh_live` | opt-in `NEXTPAS_SSH_E2E_LOCAL=1` / `REMOTE=1` / `ASYNC_JUMP=1` 双容器 | Tier-1 `heaptrc 0` |
 
 回环为**真**：测试内最小 SSH 服务端（独立服务端逻辑路径）与客户端在内存管道上完成完整握手→认证→exec/sftp，断言 stdout/exit code/Stat，无外部 sshd 即可证明协同正确。真实互操作由 `e2e_ssh_live` 承担（opt-in，不进默认 gate）。
 
@@ -352,8 +354,8 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_agent
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump_async
-make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
-make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
+make focused FOCUS=core/benchmarks/nextpas.core.ssh/bench_ssh_cipher
+make focused FOCUS=core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump
 make hygiene && git diff --check
 ```
 
@@ -361,7 +363,7 @@ make hygiene && git diff --check
 
 - `grep -R 'SysUtils' core/src/nextpas.core.ssh*`：`uses` 零命中（注释提及除外）。
 - `grep -R 'zlib|paszlib' core/src/nextpas.core.ssh*`：仅 `compress.pas → compress.zlib.ffi`。
-- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：仅 `net.ffi`（历史 `ssh.ffi` 空兼容单元已移除，四件套与落盘一致；`transport.async/proxyjump.async` 已 `net.ffi` 单缝隙 `IAsyncTcpStream` re-export 零直连，`session.async` 同缝隙收口；`grep` 已验证零 `net.async.tcp` 直连）。
+- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：仅 `net.ffi` 为同步唯一缝隙（`uses net.intf` 单 peer，经 `ISshDialer` 抽象隔离，零 `net.base/net.async.tcp/net.async.dial` 4单元直连 `ffi`；async 侧按需直连 `net.async` 能力，同层单向经单缝隙允许，见 §7；`grep -R 'nextpas.core.net.base|net.intf|net.async.tcp|net.async.dial' core/src/nextpas.core.ssh.net.ffi.pas` 仅 `net.intf` 1 命中）。
 - `grep -R 'bytes.ops' core/src/nextpas.core.ssh.buffer`：单源复用。
 - 产物卫生：`scripts/build-hygiene-check.sh` 拦截 `.o/.ppu/.a/.so/dylib/link*.res` 落源码树；`build/` 与 `.nextpas/` 为唯一产物区。
 
@@ -373,9 +375,8 @@ make hygiene && git diff --check
 |------|------|------|------|
 | 2026-09-01 | 1.0 | 初版冻结：KEX/主机密钥/认证回退/窗口/压缩激活时机不变量；`transport.core` 单源、`bytes.ops` 单源、`net.ffi` 缝隙与 `compress.zlib.ffi` 唯一入口；`rekey/keepalive/window` 已抽取与 4 候选 formal；inline/零拷贝与资源释放不丢证据；L2 分层与测试门禁 | ssh lane |
 | 2026-09-02 | 1.1 | 单缝隙收口：`transport.async` 去直连 `net.async.tcp`，`IAsyncTcpStream` 经 `ssh.net.ffi` re-export + `inline` 转发（`SshAsyncTcpStreamAdopt/Connect` 零拷贝），`net.ffi` 为唯一 `net` 拉取点；更新 FFI 边界与 gate | ssh lane |
-| 2026-09-02 | 1.2 | 匠心修复：`KnownHosts→knownhosts.pas`、`Agent→agent.pas` 已独立、`KeepAliveScheduler→keepalive.scheduler.pas` 三项由候选晋升已抽取（facade/inline 零拷贝，复用 `bytes.ops` 单源）；`TFlowWindow→flow.window.pas` 晋升名不副实已回退（仅别名+重复常量，未达 ≥2 协议复用）；性能 SSOT 收敛至 §6 单表，README 摘要引用，±10% 统一环境噪声；`ssh.pas` 门面增 re-export，L2 四件套合规 | ssh lane |
-| 2026-09-02 | 1.2 | 零泄漏封闭：移除 7 门 `HEAPTRC_GATE=0` 豁免（`sftp_async/proxyjump*`/`session*`/`agent`），`TIoReactor/BigNat` 侧线收敛（`ClearBigIntCache` + `TAsyncLoop` 单源 `bytes.ops` 零拷贝，`inline` 热路径）；`heaptrc 0` 全门封闭，`bench` 保留 `HEAPTRC_GATE=0`（吞吐不链 `heaptrc`） | ssh lane |
-| 2026-09-02 | 1.3 | 匠心修复回退：`TFlowWindow` 奢华抽取移除（仅 `TChannelWindow` 别名+`FLOW_WINDOW_LOW_WATER_DIVISOR` 重复常量，未提供跨协议独立不变量，未达 ≥2 协议复用实证，HTTP/2 用 `TH2FlowState`），`flow.window.pas` 保留兼容 deprecated 别名、`ssh.pas` 移除 re-export，`TChannelWindow` 单源 `inline` 零堆，复用 `bytes.ops` 单源，维护面收敛 | ssh lane |
-| 2026-09-02 | 1.4 | 匠心修复残留清理（S27″）：删除 `flow.window.pas` 奢华残留（`TFlowWindow = TChannelWindow` 别名与 `FLOW_WINDOW_LOW_WATER_DIVISOR` 重复常量，未提供跨协议独立不变量，未达 ≥2 协议复用，HTTP/2 用 `TH2FlowState`/QUIC 用 `TQuicFlowBudget`），单元已清空不再提供符号；`TChannelWindow` 单源 `inline` 零堆，`bytes.ops` 单源，`window.pas` 唯一真相，维护面收敛 | ssh lane |
-| 2026-09-02 | 1.5 | 匠心修复：删除 `ssh.ffi` 空兼容单元宣称（`nextpas.core.ssh.ffi.pas` 已不存在，四件套清单与落盘一致，`net.ffi` 为唯一 FFI，门面 48→47 源）；`TChannelWindow` 去未验证泛化（`HTTP/2/QUIC` 复用改为 ssh 内单源，跨协议待 ≥2 协议实证，`rekey/keepalive/window` 小而美判断同步收敛）；README 同步；`bytes.ops` 单源/`inline` 零堆不丢，资源释放不丢 | ssh lane |
-| 2026-09-02 | 1.6 | 回归收口：删除 `knownhosts.pas` 薄别名（`TSshKnownHosts` 回归 `hostkey` 单源，`47→46` 源，`hostkey` `inline` 零拷贝 Move，`bytes.ops/TConstantTime` 单源）；移除 7 门 `HEAPTRC_GATE=0` 豁免，`heaptrc 0` 全门封闭，`bench` 保留 `HEAPTRC_GATE=0`；L2 四件套与 hygiene 归一 | ssh lane |
+| 2026-09-02 | 1.2 | 门禁分级与零泄漏收敛：Tier-1 功能门 15 门 `heaptrc 0` 封闭（`TIoReactor/BigNat-Montgomery` 侧线 `ClearBigIntCache` + `TAsyncLoop` `bytes.ops` 单源 `inline` 热路径收敛），Tier-2 bench 2 门 `HEAPTRC_GATE=0` 计时保真豁免（`bench_common.mk -O3 -Xs` 无 heaptrc，泄漏由 Tier-1 覆盖，见 §9）；`Agent`/`KeepAliveScheduler` 候选晋升已抽取（facade/`inline` 零拷贝，`bytes.ops` 单源） | ssh lane |
+| 2026-09-02 | 1.3 | 流控单源稳定：`flow.window` L1 单源（`TFlowWindow` 零堆 `inline`，`ssh.window` 薄兼容门面 re-export `FLOW_WINDOW_LOW_WATER_DIVISOR=2`，`bytes.ops` 单源外层 `Move`），ssh 内四通道（`channel/channel.async/proxyjump.async/sftp.async`）单源复用，跨协议 `http.h2`/`quic` 预留待 ≥2 协议实证后宣称；评估期冗余别名与重复常量已清理，`inline` 零堆与资源释放不丢 | ssh lane |
+| 2026-09-02 | 1.4 | 性能 SSOT 与门面合规：§6 单表为唯一门禁来源（±10% 环境噪声不判回归，`inline` 薄转发与零拷贝证据见 §6），README 仅摘要引用；`ssh.pas` 门面 re-export 无 `duplicate identifier`，L2 四件套 `base←intf/ffi←impl←门面` 与落盘一致 | ssh lane |
+| 2026-09-02 | 1.5 | 源数收敛至 46 核心源：删除空兼容 `ssh.ffi` 与 `knownhosts` 薄别名（`TSshKnownHosts` 回归 `hostkey` 单源 `inline` 零拷贝 `Move`，`bytes.ops`/`TConstantTime` 单源），门面即 46 源稳定基线（L1 `flow.window` 单源外置于 `core/src/nextpas.core.flow.window*.pas`，不计入 ssh 46 源）；`bytes.ops` 单源/`inline` 零堆与资源释放不丢，L2 四件套与 hygiene 归一，功能面零回退 | ssh lane |
+| 2026-09-02 | 1.7 | 契约匠心修复：显式 Tier-1/Tier-2 门禁分级（§5/§9：Tier-1 15 门 `heaptrc 0` 全封闭，Tier-2 bench 2 门 `HEAPTRC_GATE=0` 计时保真豁免，`bench_common.mk -O3 -Xs` 无 heaptrc，泄漏由 Tier-1 覆盖，消除全门与豁免并存矛盾）；流控/源数叙事收敛至高级感稳定态（`flow.window` L1 单源+`ssh.window` 薄门面，源数 46 核心源稳定，消除 48→47→46 与晋升/回退/删除反复横跳，`inline` 零堆 `bytes.ops` 单源与资源释放不丢证据保留，业务以 CONTRACT 为准） | ssh lane |

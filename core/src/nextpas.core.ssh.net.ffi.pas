@@ -1,8 +1,12 @@
 unit nextpas.core.ssh.net.ffi;
 
 {** nextpas.core.ssh - 网络 FFI 外壳（唯一拉取 nextpas.core.net 的单元）。
- * 同步经 ISshDialer/ISshAgentDialer，异步经 IAsyncTcpStream re-export + inline 转发；
- * session/agent/transport.async 仅依赖 ssh.intf/net.ffi 缝隙，零直连 net。 *}
+ * 同层单向允许：ssh(L2)→net(L2) 经此单缝隙拉取，与 L0-L1 宪法文字冲突已在
+ * 设计规范 §3 显式豁免（L2 同层单向经 FFI 单缝隙允许，禁止环）。
+ * 同步经 ISshDialer/ISshAgentDialer 抽象隔离，零直连 net.base/async；async
+ * 侧由 transport.async/session.async 按需直连 net.async 能力，peer 隔离经
+ * ISshDialer 缝隙，零多 peer 直连 ffi。inline 零拷贝，bytes.ops 单源由外层
+ * Move 保证；稳定性 try-finally 释放不丢。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -11,9 +15,6 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
-  nextpas.core.net.async.tcp,
-  nextpas.core.net.async.dial,
-  nextpas.core.async.loop,
   nextpas.core.ssh.intf;
 
 type
@@ -22,18 +23,8 @@ type
     function DialAgent(const APath: string): IReadWriteCloser; inline;
   end;
 
-  // async 单缝隙 re-export：net.async.tcp/dial 唯一拉取点收口于此 ffi，零额外抽象 inline 零拷贝转发
-  IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
-  IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
-  TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
-  TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
-
 function SshDefaultDialer: ISshDialer; inline;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;
-function SshAsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
-function SshAsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
-function SshDefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
-function SshAsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16; const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback; AContext: Pointer = nil): Boolean; inline;
 
 implementation
 
@@ -58,26 +49,6 @@ end;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;
 begin
   Result := TSshDefaultDialer.Create;
-end;
-
-function SshAsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
-begin
-  Result := nextpas.core.net.async.tcp.AsyncTcpStreamAdopt(ALoop, AStream);
-end;
-
-function SshAsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
-begin
-  Result := nextpas.core.net.async.tcp.AsyncTcpConnect(ALoop, AAddr, APort);
-end;
-
-function SshDefaultAsyncTcpDialOptions: TAsyncTcpDialOptions; inline;
-begin
-  Result := nextpas.core.net.async.dial.DefaultAsyncTcpDialOptions;
-end;
-
-function SshAsyncTcpDial(const ALoop: TAsyncLoop; const AHost: string; APort: UInt16; const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback; AContext: Pointer): Boolean; inline;
-begin
-  Result := nextpas.core.net.async.dial.AsyncTcpDial(ALoop, AHost, APort, AOptions, ACallback, AContext);
 end;
 
 end.

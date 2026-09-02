@@ -12,16 +12,13 @@ unit nextpas.core.ssh.window;
 interface
 
 uses
-  nextpas.core.flow.window,
-  nextpas.core.flow.window.base;
+  nextpas.core.flow.window;
 
 type
   TChannelWindow = nextpas.core.flow.window.TFlowWindow;
-  TFlowWindow = nextpas.core.flow.window.TFlowWindow;
 
 const
-  SSH_WINDOW_LOW_WATER_DIVISOR = nextpas.core.flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR;
-  FLOW_WINDOW_LOW_WATER_DIVISOR = nextpas.core.flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR;
+  SSH_WINDOW_LOW_WATER_DIVISOR = nextpas.core.flow.window.FLOW_WINDOW_LOW_WATER_DIVISOR;
 
 implementation
 

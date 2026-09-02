@@ -73,7 +73,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 | **S17** | SFTP async | `sftp.async TAsyncSftpChannel PostEx+SftpRoundTripAsync WINDOW_LOW/2 + 4B重组` + `test_ssh_sftp_async 7/7 1.41s` | 首包 215ms，STAT 115ms，`SFTP_CHUNK_SIZE 32760` |
 | **S18** | ProxyJump 同步 | `channel OpenDirectTcpip + TChannelStream + TProxyJumpSession` + `test_ssh_proxyjump 5/5 ~560/580ms` | `MemPipe _AddRef` 71块 |
 | **S19** | SFTP over Jump + 堆收敛 | `TMemPipe` 引用计数 + `ServeApp SFTP` + `5/5 734ms` | 71→41块 |
-| **S20** | 性能基线 | `bench_ssh_proxyjump` 50次：单跳 p50 5ms / 双跳 431ms（额外 426ms=二次KEX+轮询），`test 5/5` 同构 | `TLoopThread` 去竞态 |
+| **S20** | 性能基线 | `bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump` 50次：单跳 p50 5ms / 双跳 431ms（额外 426ms=二次KEX+轮询），`test 5/5` 同构) | `TLoopThread` 去竞态 |
 | **S21** | Async ProxyJump | `proxyjump.async TAsyncChannelStream`（无轮询，PeerWindow/Max + 半窗回补）+ `session.async TAsyncProxyConnector direct-tcpip 90→CONFIRMATION→ChannelStream` + `test_proxyjump_async 3/3 ~550ms` | 轮询 `50ms+5ms` 消除，`9 块` 侧线 |
 | **S22** | SFTP via Async Jump | `proxyjump.async FQueuedPayload 5ms + CreateWithKeeper FKeeper` + `sftp.async SshAsyncSftpViaJump/On (FSession+busy defer)` + `test_sftp_via_jump 4/4 ~2.5s` | `0xF0` 悬垂修复，`20块` 侧线，`sftp_async 7/7` 回归 |
 
@@ -109,7 +109,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 
 ## 4) 架构完整性（L2 封版 checklist，以 `sevenz 163` 为模板）
 
-- [x] **163 级别门**: `buffer / cipher / kex / hostkey / keys / transport / compress / session 19 / sftp 12 / sftp_async 7 / proxyjump 5 / proxyjump_async 3 / sftp_via_jump 4` + `bench_ssh_cipher / bench_proxyjump`
+- [x] **163 级别门**: `buffer / cipher / kex / hostkey / keys / transport / compress / session 19 / sftp 12 / sftp_async 7 / proxyjump 5 / proxyjump_async 3 / sftp_via_jump 4` + `bench_ssh_cipher / bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/*`, `bench_common.mk`)
 - [x] **高级感**: `SshClient.Host.Port.User.Password.PrivateKey.Agent.Compress` 同 verb；`SshAsyncClient` 同镜；`Exec` vs `OpenFileSystem` 单 `Channel` 引擎；`ISftpWire / ISshAsyncFileSystem` 可注入
 - [x] **复用度**: `cipher/compress/hostkey/keys/auth` 单点；`TSshWriter/Reader` 贯穿；`TChannelStream ↔ TAsyncChannelStream` 窗口/低水位同构；`bench` 复用 `TMemPipe/LoopServer` 同源
 - [x] **稳定性**: `E*LimitError` 炸弹（SFTP 1MiB 解压防 bomb / SevenZ 同窗）、`WINDOW_LOW_WATER_DIVISOR=2` 回补、`ProbeWatch`、`TryFlushQueued` 单飞、`Keeper` 生命周期闭环、`FWriteBuf` 保活

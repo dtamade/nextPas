@@ -71,9 +71,11 @@ type
     function ReadUInt32: UInt32;
     function ReadUInt64: UInt64;
     function ReadStringBytes: TBytes;
+    function ReadStringSpan: TByteSpan; inline;
     function ReadStringText: string;
     { 解析 mpint 为无符号大端 magnitude（剥离前导零；负数高位按无符号处理）}
     function ReadMPInt: TBytes;
+    function ReadMPIntSpan: TByteSpan; inline;
     function ReadNameList: TStringArray;
   end;
 
@@ -343,37 +345,52 @@ begin
   Result := (UInt64(ReadUInt32) shl 32) or UInt64(ReadUInt32);
 end;
 
-function TSshReader.ReadStringBytes: TBytes;
+function TSshReader.ReadStringSpan: TByteSpan; inline;
 var
   LLen: UInt32;
 begin
+  { perf: zero-copy view into FData — no SetLength/Move/alloc; lifetime bound to TSshReader.FData; empty → TByteSpan.Empty; single source TByteSpan.Create }
   LLen := ReadUInt32;
   Need(LLen);
-  Result := nil;
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(FData[FPos], Result[0], LLen);
+  if LLen = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(PByte(@FData[FPos]), LLen);
   Inc(FPos, LLen);
 end;
 
-function TSshReader.ReadStringText: string;
+function TSshReader.ReadStringBytes: TBytes;
 begin
-  Result := SshTextFromBytes(ReadStringBytes);
+  { perf: single source via bytes.ops.SpanClone (SetLength+single Move zero-copy); ReadStringSpan is zero-alloc view, clone allocates only when caller needs owned TBytes; large payload callers can call ReadStringSpan to avoid alloc entirely }
+  Result := nextpas.core.bytes.ops.SpanClone(ReadStringSpan);
+end;
+
+function TSshReader.ReadStringText: string;
+var
+  LSpan: TByteSpan;
+begin
+  { perf: direct span→string single Move, no intermediate TBytes alloc; LSpan is zero-copy view }
+  LSpan := ReadStringSpan;
+  if LSpan.Len = 0 then
+    Exit('');
+  SetLength(Result, LSpan.Len);
+  Move(LSpan.Data^, Result[1], LSpan.Len);
+end;
+
+function TSshReader.ReadMPIntSpan: TByteSpan; inline;
+var
+  LSpan: TByteSpan;
+begin
+  { perf: zero-copy mpint magnitude view — ReadStringSpan zero-alloc + StripLeadingZeroSpan pointer bump, no alloc; negative check on view }
+  LSpan := ReadStringSpan;
+  if (LSpan.Len > 0) and ((LSpan.Data^ and $80) <> 0) then
+    raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
+  Result := StripLeadingZeroSpan(LSpan);
 end;
 
 function TSshReader.ReadMPInt: TBytes;
-var
-  LBlob: TBytes;
-  LView: TByteSpan;
 begin
-  LBlob := ReadStringBytes;
-  if (Length(LBlob) > 0) and ((LBlob[0] and $80) <> 0) then
-    raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
-  LView := StripLeadingZeroView(LBlob);
-  Result := nil;
-  SetLength(Result, LView.Len);
-  if LView.Len > 0 then
-    Move(LView.Data^, Result[0], LView.Len);
+  { perf: single source via bytes.ops.SpanClone; ReadMPIntSpan is zero-copy, clone is single Move — halves allocations vs old ReadStringBytes(alloc)+Strip+Move(double alloc) }
+  Result := nextpas.core.bytes.ops.SpanClone(ReadMPIntSpan);
 end;
 
 function TSshReader.ReadNameList: TStringArray;

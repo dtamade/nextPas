@@ -44,7 +44,8 @@ procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); overload;
+procedure BytesEnsureCapacity(var ACap: SizeUInt; const ARequired: SizeUInt); overload;
 { perf: single source for 4B length-prefix frame reassembly; in-place Move+shrink, no Copy alloc, zero-copy tail shift }
 procedure BytesRemovePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
 procedure BytesConsumePrefix(var ABuf: TBytes; const ACount: SizeUInt); inline;
@@ -90,17 +91,15 @@ uses
   O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
   writes that could corrupt heap on exception. }
 
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+procedure BytesEnsureCapacity(var ACap: SizeUInt; const ARequired: SizeUInt); overload;
 var
-  LOld, LNewCap: SizeUInt;
+  LNewCap: SizeUInt;
 begin
-  LOld := SizeUInt(Length(ADest));
-  if ARequired <= LOld then
+  if ARequired <= ACap then
     Exit;
-  // single doubling growth to amortize when called directly; callers that need
-  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
-  // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
+  // single source geometric growth (BYTES_BUILDER_MIN_GROW=64 floor, 2x doubling, overflow clamped);
+  // shared by TBytes and SizeUInt callers (channel inbox, sftp.wire), amortized O(1), non-inline to avoid I-Cache bloat
+  LNewCap := ACap;
   if LNewCap < BYTES_BUILDER_MIN_GROW then
     LNewCap := BYTES_BUILDER_MIN_GROW;
   while LNewCap < ARequired do
@@ -113,7 +112,18 @@ begin
       Break;
     end;
   end;
-  SetLength(ADest, LNewCap);
+  ACap := LNewCap;
+end;
+
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+var
+  LCap: SizeUInt;
+begin
+  LCap := SizeUInt(Length(ADest));
+  if ARequired <= LCap then
+    Exit;
+  BytesEnsureCapacity(LCap, ARequired);
+  SetLength(ADest, LCap);
 end;
 
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);

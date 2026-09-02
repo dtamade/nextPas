@@ -178,11 +178,11 @@ end.
 L0: 内核 (base, errors, platform, mem, log.intf; current governance set also locks system, atomic, math, simd)
      ↑ 只依赖 FPC RTL
 
-L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
+L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing, flow)
      ↑ 只依赖 L0
 
-L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1
+L2: 系统能力 (fs, net, net.maintenance, tls, ssh, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 ssh→net 经 net.ffi 单缝隙见 ssh/CONTRACT.md §7，js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`），其余同层依赖仍禁止
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -191,8 +191,9 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层内允许单向依赖，禁止循环依赖（L2 例：`ssh→net` 经 `net.ffi` 单缝隙为允许的同层单向见 `ssh/CONTRACT.md §7`，`js→json` 见 `module-registry:50`；其余同层如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `ssh→net` 唯一 `net.ffi` 缝、`respack.dirsource` 唯一 `fs+io.mapped` 缝、`vfs.os` 唯一 `fs/path` 缝）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -856,14 +857,17 @@ build/
 | `time`        | DateTime、Duration、Timer、Stopwatch              |
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
+| `flow`        | 通用流控窗口（`TFlowWindow` record 全 inline 零堆，`FLOW_WINDOW_LOW_WATER_DIVISOR=2` 半水位回补，`bytes.ops` 单源外层 `Move`，`ssh.channel/channel.async/proxyjump.async` 单源复用，预留 `http.h2/quic`） |
 
-### L2: 系统能力（只依赖 L0-L1）
+### L2: 系统能力（只依赖 L0-L1；同层允许单向依赖，例 ssh→net 见 ssh/CONTRACT.md §7，js→json 见 module-registry:50，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |
-| `fs`         | 文件系统（同步 + 异步）            |
-| `net`        | TCP/UDP Socket、地址解析           |
-| `tls`        | TLS/SSL                            |
+| `fs`              | 文件系统（同步 + 异步）            |
+| `net`             | TCP/UDP Socket、地址解析           |
+| `net.maintenance` | 连接维护策略（`TRekeyPolicy/TKeepAlivePolicy` L1 策略 + `TKeepAliveScheduler` L2 调度，`TInstant` 单调时钟，`TAsyncLoop` 单缝隙，`record` 全 `inline` 零堆，见 `net/maintenance.md`） |
+| `tls`             | TLS/SSL（L2，与 `ssh` 同层）       |
+| `ssh`             | SSH-2 客户端协议栈（RFC 4251/4253，与 `tls` 同层 L2，仅依赖 L0-L1 及文档化 L2 `crypto/hash/compress/net` owner，经 `net.ffi` 单缝隙拉取 `net` 为同层单向 `ssh→net`，四件套 `base←intf/ffi←impl←门面`，`transport.core` 单源，`bytes.ops` 单源，`inline` 零拷贝，见 `ssh/CONTRACT.md §7`） |
 | `dns`        | DNS 解析                           |
 | `deliverability` | SPF/DKIM/DMARC 邮件认证        |
 | `crypto`     | 哈希、加密、签名                   |

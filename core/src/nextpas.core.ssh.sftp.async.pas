@@ -1007,11 +1007,10 @@ begin
       // perf: read all fields first, filter dot before growing (avoid O(n²) churn), geometric doubling 16→2× single source bytes.ops/builder
       LName:=LR.ReadStringText; LLong:=LR.ReadStringText; LAttrs:=ReadAttrs(LR);
       if (LName='.') or (LName='..') then Continue;
+      // perf: BytesEnsureCapacity 单源几何倍增（BYTES_BUILDER_MIN_GROW=64, 2×），inline 零拷贝，避免三处手写 16→2× 漂移
       if Self.FListDirCount >= Self.FListDirCap then
       begin
-        if Self.FListDirCap=0 then Self.FListDirCap:=16
-        else if Self.FListDirCap <= High(SizeUInt) div 2 then Self.FListDirCap:=Self.FListDirCap*2
-        else Self.FListDirCap:=Self.FListDirCount+1;
+        BytesEnsureCapacity(Self.FListDirCap, Self.FListDirCount + 1);
         SetLength(Self.FListDirAccum, Self.FListDirCap);
       end;
       Self.FListDirAccum[Self.FListDirCount].Name:=LName; Self.FListDirAccum[Self.FListDirCount].LongName:=LLong; Self.FListDirAccum[Self.FListDirCount].Attrs:=LAttrs;

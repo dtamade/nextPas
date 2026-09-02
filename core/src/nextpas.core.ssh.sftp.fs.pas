@@ -3,10 +3,10 @@ unit nextpas.core.ssh.sftp.fs;
 {** nextpas.core.ssh.sftp.fs - SFTP 文件系统门面实现（四件套 impl）。
  *
  * 单职责：ISshFileSystem 语义（RealPath/Stat/ListDir/ReadFile/WriteFile 等）；
- * 委托 TSftpConnection 完成握手与 RoundTrip，经 ISftpWire 解耦通道。
- * 性能：ReadFile 用 IBytesBuilder 倍增追加（O(n) amortized，避 O(n²) SetLength+Move）；
- *        ListDir 数组容量倍增、过滤 "." ".." 不二次缩容；
- *        零拷贝 Move 单源 bytes.ops；热路径 inline。 *}
+ * 委托 TSftpConnection 完成握手与流水线 RoundTrip，经 ISftpWire 解耦通道。
+ * 性能：ReadFile/WriteFile SFTP_PIPELINE_WINDOW=16 流水线（RTT 线性屏蔽，16×32760≈512KB 在途，乱序缓冲）；
+ *        ListDir/ReadFile 用 IBytesBuilder/BytesEnsureCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 单源，O(n) amortized，避 O(n²)）；
+ *        零拷贝 Move/CopyMem 单源 bytes.ops；热路径 inline。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -48,6 +48,7 @@ implementation
 
 uses
   nextpas.core.bytes.builder,
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.ssh.errors,
@@ -290,14 +291,10 @@ begin
             LAttrs := ReadAttrs(LR);
             if (LName = '.') or (LName = '..') then
               Continue;
+            // perf: BytesEnsureCapacity 单源几何倍增（BYTES_BUILDER_MIN_GROW=64, 2×），inline 零拷贝，避免三处手写 16→2× 漂移
             if LCount >= LCap then
             begin
-              if LCap = 0 then
-                LCap := 16
-              else if LCap <= High(SizeUInt) div 2 then
-                LCap := LCap * 2
-              else
-                LCap := LCount + 1;
+              BytesEnsureCapacity(LCap, LCount + 1);
               SetLength(Result, LCap);
             end;
             Result[LCount].Name := LName;
@@ -320,29 +317,103 @@ end;
 function TSshFileSystem.ReadFile(const APath: string): TBytes;
 var
   LHandle: TBytes;
-  LOffset: UInt64;
+  LNextOffset: UInt64;
   LTail: TsshWriter;
   LRaw: TBytes;
   LR: TsshReader;
   LRT: Byte;
   LChunk: TBytes;
   LBuilder: IBytesBuilder;
+  LPendingIds: array of UInt32;
+  LPendingOffs: array of UInt64;
+  LPendingHead: SizeUInt;
+  LPendingCount: SizeUInt;
+  LId: UInt32;
+  LTargetWindow: SizeUInt;
+  // perf: head+count O(1) pop (Move零拷贝仅需compaction时), BytesEnsureCapacity单源几何倍增, inline
+  function PendingFirstId: UInt32; inline;
+  begin
+    Result := LPendingIds[LPendingHead];
+  end;
+  procedure PushPending(AId: UInt32; AOff: UInt64); inline;
+  var LCap: SizeUInt; LIdx: SizeUInt;
+  begin
+    if LPendingHead + LPendingCount >= SizeUInt(Length(LPendingIds)) then
+    begin
+      if LPendingHead > 0 then
+      begin
+        if LPendingCount > 0 then
+        begin
+          Move(LPendingIds[LPendingHead], LPendingIds[0], LPendingCount * SizeOf(UInt32));
+          Move(LPendingOffs[LPendingHead], LPendingOffs[0], LPendingCount * SizeOf(UInt64));
+        end;
+        LPendingHead := 0;
+      end;
+      if LPendingHead + LPendingCount >= SizeUInt(Length(LPendingIds)) then
+      begin
+        LCap := SizeUInt(Length(LPendingIds));
+        BytesEnsureCapacity(LCap, LPendingCount + 1);
+        SetLength(LPendingIds, LCap);
+        SetLength(LPendingOffs, LCap);
+      end;
+    end;
+    LIdx := LPendingHead + LPendingCount;
+    LPendingIds[LIdx] := AId;
+    LPendingOffs[LIdx] := AOff;
+    Inc(LPendingCount);
+  end;
+  procedure PopFrontPending; inline;
+  begin
+    if LPendingCount = 0 then Exit;
+    Inc(LPendingHead);
+    Dec(LPendingCount);
+    if LPendingCount = 0 then
+      LPendingHead := 0;
+  end;
+  procedure PopPendingAt(AIdx: SizeUInt); inline;
+  var LPhys: SizeUInt; LRem: SizeUInt;
+  begin
+    if AIdx >= LPendingCount then Exit;
+    if AIdx = 0 then
+    begin
+      PopFrontPending;
+      Exit;
+    end;
+    LPhys := LPendingHead + AIdx;
+    LRem := LPendingCount - AIdx - 1;
+    if LRem > 0 then
+    begin
+      Move(LPendingIds[LPhys + 1], LPendingIds[LPhys], LRem * SizeOf(UInt32));
+      Move(LPendingOffs[LPhys + 1], LPendingOffs[LPhys], LRem * SizeOf(UInt64));
+    end;
+    Dec(LPendingCount);
+    if LPendingCount = 0 then
+      LPendingHead := 0;
+  end;
 begin
   LBuilder := CreateBytesBuilder;
   LHandle := OpenHandle(APath, SSH_FXF_READ);
   try
-    LOffset := 0;
-    repeat
-      LTail := TsshWriter.Create(24);
-      try
-        LTail.PutStringBytes(LHandle);
-        LTail.PutUInt64(LOffset);
-        LTail.PutUInt32(SFTP_CHUNK_SIZE);
-        LRaw := FConn.RoundTrip(SSH_FXP_READ, LTail.ToBytes,
-          [SSH_FXP_DATA, SSH_FXP_STATUS], LRT, APath);
-      finally
-        LTail.Free;
-      end;
+    LNextOffset := 0;
+    LPendingHead := 0;
+    LPendingCount := 0;
+    SetLength(LPendingIds, 0);
+    SetLength(LPendingOffs, 0);
+    // perf: SFTP_PIPELINE_WINDOW=16 流水线，RTT 线性屏蔽（16×32760≈512KB 在途），乱序缓冲；IBytesBuilder 倍增+inline零拷贝；head+count O(1) 零抖动
+    LTail := TsshWriter.Create(24);
+    try
+      LTail.PutStringBytes(LHandle);
+      LTail.PutUInt64(LNextOffset);
+      LTail.PutUInt32(SFTP_CHUNK_SIZE);
+      LId := FConn.SendRequest(SSH_FXP_READ, LTail.ToBytes);
+    finally LTail.Free; end;
+    PushPending(LId, LNextOffset);
+    Inc(LNextOffset, SFTP_CHUNK_SIZE);
+    while LPendingCount > 0 do
+    begin
+      // recv earliest in-flight (out-of-order buffered internally)
+      LRaw := FConn.RecvForId(PendingFirstId, [SSH_FXP_DATA, SSH_FXP_STATUS], LRT, APath);
+      PopFrontPending;
       if LRT = SSH_FXP_STATUS then
         Break;
       LR := TsshReader.Create(LRaw);
@@ -350,15 +421,49 @@ begin
         LR.ReadByte;
         LR.ReadUInt32;
         LChunk := LR.ReadStringBytes;
-      finally
-        LR.Free;
-      end;
+      finally LR.Free; end;
       if Length(LChunk) = 0 then
         Break;
-      // perf: IBytesBuilder 倍增追加，O(n) amortized，零拷贝 Move 单次/块，避免 O(n²) SetLength+Move
+      // perf: IBytesBuilder 倍增追加，O(n) amortized，零拷贝 Move 单次/块，避免 O(n²) SetLength+Move；inline 热路径
       LBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
-      Inc(LOffset, SizeUInt(Length(LChunk)));
-    until False;
+      if SizeUInt(Length(LChunk)) = SFTP_CHUNK_SIZE then
+        LTargetWindow := SFTP_PIPELINE_WINDOW
+      else
+        LTargetWindow := 1;
+      // fill pipeline to target window
+      while LPendingCount < LTargetWindow do
+      begin
+        LTail := TsshWriter.Create(24);
+        try
+          LTail.PutStringBytes(LHandle);
+          LTail.PutUInt64(LNextOffset);
+          LTail.PutUInt32(SFTP_CHUNK_SIZE);
+          LId := FConn.SendRequest(SSH_FXP_READ, LTail.ToBytes);
+        finally LTail.Free; end;
+        PushPending(LId, LNextOffset);
+        Inc(LNextOffset, SFTP_CHUNK_SIZE);
+        if LTargetWindow = 1 then Break;
+      end;
+    end;
+    // drain over-sent pipeline (EOF probes) to avoid buffered leak
+    while LPendingCount > 0 do
+    begin
+      try
+        LRaw := FConn.RecvForId(PendingFirstId, [SSH_FXP_DATA, SSH_FXP_STATUS], LRT, APath);
+      except
+        Break;
+      end;
+      PopFrontPending;
+      if LRT = SSH_FXP_STATUS then Break;
+      LR := TsshReader.Create(LRaw);
+      try
+        LR.ReadByte; LR.ReadUInt32;
+        LChunk := LR.ReadStringBytes;
+      finally LR.Free; end;
+      if Length(LChunk) > 0 then
+        LBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
+      if SizeUInt(Length(LChunk)) < SFTP_CHUNK_SIZE then Break;
+    end;
   finally
     CloseHandle(LHandle);
   end;
@@ -373,12 +478,55 @@ var
   LTake: SizeUInt;
   LTail: TsshWriter;
   LRT: Byte;
+  LPending: array of UInt32;
+  LPendingHead: SizeUInt;
+  LPendingCount: SizeUInt;
+  LId: UInt32;
+  function PendingFirst: UInt32; inline;
+  begin
+    Result := LPending[LPendingHead];
+  end;
+  procedure Push(AId: UInt32); inline;
+  var LCap: SizeUInt; LIdx: SizeUInt;
+  begin
+    if LPendingHead + LPendingCount >= SizeUInt(Length(LPending)) then
+    begin
+      if LPendingHead > 0 then
+      begin
+        if LPendingCount > 0 then
+          Move(LPending[LPendingHead], LPending[0], LPendingCount * SizeOf(UInt32));
+        LPendingHead := 0;
+      end;
+      if LPendingHead + LPendingCount >= SizeUInt(Length(LPending)) then
+      begin
+        LCap := SizeUInt(Length(LPending));
+        BytesEnsureCapacity(LCap, LPendingCount + 1);
+        SetLength(LPending, LCap);
+      end;
+    end;
+    LIdx := LPendingHead + LPendingCount;
+    LPending[LIdx] := AId;
+    Inc(LPendingCount);
+  end;
+  procedure PopFront; inline;
+  begin
+    if LPendingCount = 0 then Exit;
+    Inc(LPendingHead);
+    Dec(LPendingCount);
+    if LPendingCount = 0 then
+      LPendingHead := 0;
+  end;
 begin
   LHandle := OpenHandle(APath, SSH_FXF_WRITE or SSH_FXF_CREAT or SSH_FXF_TRUNC);
   try
+    // perf: SFTP_PIPELINE_WINDOW=16 流水线，RTT 线性屏蔽（16×32760≈512KB），零拷贝 PutRaw；inline 热路径
     LOff := 0;
     LOffset := 0;
-    while LOff < SizeUInt(Length(AData)) do
+    LPendingHead := 0;
+    LPendingCount := 0;
+    SetLength(LPending, 0);
+    // fill initial window
+    while (LOff < SizeUInt(Length(AData))) and (LPendingCount < SFTP_PIPELINE_WINDOW) do
     begin
       LTake := SizeUInt(Length(AData)) - LOff;
       if LTake > SFTP_CHUNK_SIZE then
@@ -390,13 +538,34 @@ begin
         LTail.PutUInt32(UInt32(LTake));
         if LTake > 0 then
           LTail.PutRaw(@AData[LOff], LTake);
-        FConn.RoundTrip(SSH_FXP_WRITE, LTail.ToBytes, [SSH_FXP_STATUS],
-          LRT, APath);
-      finally
-        LTail.Free;
-      end;
+        LId := FConn.SendRequest(SSH_FXP_WRITE, LTail.ToBytes);
+      finally LTail.Free; end;
+      Push(LId);
       Inc(LOff, LTake);
       Inc(LOffset, LTake);
+    end;
+    while LPendingCount > 0 do
+    begin
+      FConn.RecvForId(PendingFirst, [SSH_FXP_STATUS], LRT, APath);
+      PopFront;
+      while (LOff < SizeUInt(Length(AData))) and (LPendingCount < SFTP_PIPELINE_WINDOW) do
+      begin
+        LTake := SizeUInt(Length(AData)) - LOff;
+        if LTake > SFTP_CHUNK_SIZE then
+          LTake := SFTP_CHUNK_SIZE;
+        LTail := TsshWriter.Create(24 + Integer(LTake));
+        try
+          LTail.PutStringBytes(LHandle);
+          LTail.PutUInt64(LOffset);
+          LTail.PutUInt32(UInt32(LTake));
+          if LTake > 0 then
+            LTail.PutRaw(@AData[LOff], LTake);
+          LId := FConn.SendRequest(SSH_FXP_WRITE, LTail.ToBytes);
+        finally LTail.Free; end;
+        Push(LId);
+        Inc(LOff, LTake);
+        Inc(LOffset, LTake);
+      end;
     end;
   finally
     CloseHandle(LHandle);

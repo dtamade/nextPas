@@ -86,6 +86,7 @@ type
     FInbox: array of TSshDataChunk;
     FInboxHead: SizeUInt;        { 头指针：O(1) 弹出，避免 O(n) 前移 }
     FInboxCount: SizeUInt;       { 存活条目数：与容量解耦，支撑几何倍增零拷贝 }
+    FWriteBuf: TBytes;           { 发送批零拷贝复用：BytesEnsureCapacity 几何单源，避免每分片 TsshWriter 堆抖动 }
     procedure AccountConsume(ACount: SizeUInt); inline;
     procedure InboxCompact;
     procedure SendWindowAdjust(ACount: UInt32);
@@ -152,7 +153,9 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base,
-  nextpas.core.bytes.builder;
+  nextpas.core.bytes.binary,
+  nextpas.core.bytes.builder,
+  nextpas.core.bytes.ops;
 
 procedure TraceStr(const ALine: string);
 begin
@@ -705,33 +708,20 @@ end;
 
 procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean);
 var
-  LCap, LNeed, LNewCap: SizeUInt;
+  LCap, LNeed: SizeUInt;
   LIdx: SizeUInt;
 begin
   if FInboxCount >= SSH_CHANNEL_INBOX_MAX then
     raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
   if (FInboxHead > BYTES_BUILDER_MIN_GROW) and (FInboxHead > SizeUInt(Length(FInbox)) div 2) then
     InboxCompact;
-  // geometric doubling: single source from nextpas.core.bytes.ops.BytesEnsureCapacity
-  // BYTES_BUILDER_MIN_GROW amortized O(1), single SetLength, non-inline (real loop body forbids inline)
+  // single source: reuse bytes.ops.BytesEnsureCapacity (SizeUInt overload) geometric 2x, BYTES_BUILDER_MIN_GROW floor, single SetLength, non-inline to avoid I-Cache bloat, aligns with sftp.wire
   LCap := SizeUInt(Length(FInbox));
   LNeed := FInboxHead + FInboxCount + 1;
   if LNeed > LCap then
   begin
-    LNewCap := LCap;
-    if LNewCap < BYTES_BUILDER_MIN_GROW then
-      LNewCap := BYTES_BUILDER_MIN_GROW;
-    while LNewCap < LNeed do
-    begin
-      if LNewCap <= High(SizeUInt) div 2 then
-        LNewCap := LNewCap * 2
-      else
-      begin
-        LNewCap := LNeed;
-        Break;
-      end;
-    end;
-    SetLength(FInbox, LNewCap);
+    BytesEnsureCapacity(LCap, LNeed);
+    SetLength(FInbox, LCap);
   end;
   LIdx := FInboxHead + FInboxCount;
   // zero-copy: direct ref assignment, no Copy, no extra AddRef churn beyond single assign
@@ -740,8 +730,9 @@ begin
   Inc(FInboxCount);
 end;
 
-function TSshChannel.InboxPop(out AChunk: TBytes; out AExtended: Boolean): Boolean; inline;
+function TSshChannel.InboxPop(out AChunk: TBytes; out AExtended: Boolean): Boolean;
 begin
+  // non-inline: contains SetLength/FillChar/Move branches (InboxCompact), hot path must stay out-of-line to avoid I-Cache bloat (red line 2)
   if FInboxCount = 0 then
   begin
     Result := False;
@@ -811,10 +802,13 @@ end;
 procedure TSshChannel.SendData(const AData: TBytes);
 var
   LOff, LTake: SizeUInt;
-  LW: TsshWriter;
   LDummyData: TBytes;
   LDummyExt: Boolean;
+  LNeed: SizeUInt;
 begin
+  // perf: reuse FWriteBuf zero-copy batch, BytesEnsureCapacity single source geometric 2x, single SetLength+direct WriteUInt32BE+Move per fragment,
+  // avoids per-fragment TsshWriter.Create/Free + ToBytes double copy heap churn (N fragments -> 1 buffer reuse, O(1) amortized)
+  // inline SliceSize peerWindow+max single source, stability: try-finally not needed (no object to leak), exception-safe SetLength
   LOff := 0;
   while LOff < SizeUInt(Length(AData)) do
   begin
@@ -833,18 +827,17 @@ begin
     LTake := FWindow.SliceSize(SizeUInt(Length(AData)) - LOff); { inline 零拷贝分片：peerWindow+max 单源 }
     if LTake = 0 then
       Continue;
-    LW := TsshWriter.Create(16 + Integer(LTake));
-    try
-      LW.PutByte(SSH_MSG_CHANNEL_DATA);
-      LW.PutUInt32(FRemoteId);
-      LW.PutUInt32(UInt32(LTake));
-      if LTake > 0 then
-        LW.PutRaw(@AData[LOff], LTake); { 零拷贝直写：TByteSpan/PByte，复用 bytes.ops 单源 }
-      TracePkt('tx', LW.ToBytes);
-      FTransport.SendPacket(LW.ToBytes);
-    finally
-      LW.Free;
-    end;
+    // zero-copy batched: reuse FWriteBuf, BytesEnsureCapacity single source, direct header WriteUInt32BE + single Move, Trace/Send reuse same buffer
+    LNeed := 9 + LTake; // 1 byte type + 4 remoteId + 4 len + payload
+    BytesEnsureCapacity(FWriteBuf, LNeed);
+    SetLength(FWriteBuf, LNeed);
+    FWriteBuf[0] := SSH_MSG_CHANNEL_DATA;
+    WriteUInt32BE(PByte(@FWriteBuf[1]), FRemoteId);
+    WriteUInt32BE(PByte(@FWriteBuf[5]), UInt32(LTake));
+    if LTake > 0 then
+      Move(AData[LOff], FWriteBuf[9], LTake);
+    TracePkt('tx', FWriteBuf);
+    FTransport.SendPacket(FWriteBuf);
     Inc(LOff, LTake);
     FWindow.DidSend(LTake);
   end;
@@ -884,6 +877,9 @@ end;
 destructor TSshChannel.Destroy;
 begin
   TryClose;
+  if Length(FWriteBuf) > 0 then
+    FillChar(FWriteBuf[0], SizeUInt(Length(FWriteBuf)), 0);
+  SetLength(FWriteBuf, 0);
   inherited Destroy;
 end;
 
