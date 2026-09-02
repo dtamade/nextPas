@@ -1,6 +1,6 @@
 unit nextpas.core.bytes.framing;
 
-{** 4B 长度前缀帧缓冲：BytesEnsureCapacity 几何 + FOff 零拷贝 + 32KB/8KB 懒压实。 *}
+{** 4B 长度前缀帧缓冲：BytesEnsureCapacity 几何 + FOff 零拷贝 + 16KB/4KB 懒压实（长流水线季窗 quarter-cap 回收）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -13,8 +13,8 @@ uses
   nextpas.core.bytes.binary;
 
 const
-  WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE = SizeUInt(32768);
-  WIRE_BUFFER_COMPACT_OFFSET_HALF = SizeUInt(8192);
+  WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE = SizeUInt(16384);
+  WIRE_BUFFER_COMPACT_OFFSET_HALF = SizeUInt(4096);
   WIRE_BUFFER_DEFAULT_MAX = SizeUInt(256 * 1024);
 
 type
@@ -154,7 +154,8 @@ begin
     Exit;
   end;
   LCap := SizeUInt(Length(FBuf));
-  if (FOff > WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE) or ((FOff > WIRE_BUFFER_COMPACT_OFFSET_HALF) and (FOff > LCap div 2)) then
+  // 长流水线残留空洞：16KB 绝对阈值 + 4KB/quarter-cap 季节回补，避免 32KB 阈值长期持洞导致尾部余量假缺与终局大 Move
+  if (FOff > WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE) or (FOff > WIRE_BUFFER_COMPACT_OFFSET_HALF) or (FOff > LCap div 4) then
   begin
     Move(FBuf[FOff], FBuf[0], LBuffered);
     FOff := 0;
@@ -178,13 +179,18 @@ begin
     Exit(False);
   if BufferedLen < SizeUInt(4 + LLen) then
     Exit(False);
-  Inc(FOff, 4);
-  CompactIfNeeded;
+  // 单包单次 Move+单次压实：先零拷贝取载荷再一次性推进 FOff，避免 Inc(4)+Compact 与 Move+Compact 双压实双 Move
   SetLength(AFrame, LLen);
   if LLen > 0 then
-    Move(FBuf[FOff], AFrame[0], LLen);
-  Inc(FOff, SizeUInt(LLen));
-  CompactIfNeeded;
+    Move(FBuf[FOff + 4], AFrame[0], LLen);
+  Inc(FOff, SizeUInt(4 + LLen));
+  if BufferedLen = 0 then
+  begin
+    FOff := 0;
+    FLen := 0;
+  end
+  else
+    CompactIfNeeded;
   Result := True;
 end;
 

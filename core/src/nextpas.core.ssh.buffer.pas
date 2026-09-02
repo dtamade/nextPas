@@ -7,7 +7,10 @@ unit nextpas.core.ssh.buffer;
  *
  * 约定：string 与 TBytes 之间按原始字节透传（UTF-8 由调用方保证），
  * 不在本单元做字符集转换。PutStringText 入口显式校验 UTF-8，
- * 非法即抛 sekProtocol；STATUS 描述等读侧非法 UTF-8 走替换。 *}
+ * 非法即抛 sekProtocol；STATUS 描述等读侧非法 UTF-8 走替换。
+ *
+ * 实现：record 栈上值语义，零堆对象分配；FBuf 按 BytesEnsureCapacity 几何倍增
+ * 单源，Move 零拷贝，inline 热路径；生命周期由编译器托管字段自动终结，Free/Done 幂等。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -25,56 +28,61 @@ uses
   nextpas.core.ssh.errors;
 
 type
-  { SSH 载荷写入器 }
-  TSshWriter = class
+  { SSH 载荷写入器 — record 栈上零堆，FBuf 托管 TBytes 自动终结 }
+  TSshWriter = record
   private
     FBuf: TBytes;
     FLen: SizeUInt;
     procedure Ensure(ACount: SizeUInt);
   public
     constructor Create(ACapacityHint: SizeUInt = 256);
-
-    procedure Clear;
-    function Count: SizeUInt;
+    procedure Init(ACapacityHint: SizeUInt = 256); inline;
+    procedure Done; inline;
+    procedure Free; inline;
+    procedure Clear; inline;
+    function Count: SizeUInt; inline;
     function ToBytes: TBytes; inline;
 
-    procedure PutByte(AValue: Byte);
-    procedure PutBoolean(AValue: Boolean);
-    procedure PutUInt32(AValue: UInt32);
-    procedure PutUInt64(AValue: UInt64);
-    procedure PutStringBytes(const AValue: TBytes);
-    procedure PutStringText(const AText: string);
+    procedure PutByte(AValue: Byte); inline;
+    procedure PutBoolean(AValue: Boolean); inline;
+    procedure PutUInt32(AValue: UInt32); inline;
+    procedure PutUInt64(AValue: UInt64); inline;
+    procedure PutStringBytes(const AValue: TBytes); inline;
+    procedure PutStringText(const AText: string); inline;
     { 无符号大端 magnitude → RFC 4251 mpint（补符号位前导零；0 编码为空串）}
     procedure PutMPInt(const AMagnitude: TBytes);
     procedure PutNameList(const ANames: array of string);
-    procedure PutRaw(const APtr: PByte; ALen: SizeUInt); overload;
-    procedure PutRaw(const AValue: TBytes); overload;
+    procedure PutRaw(const APtr: PByte; ALen: SizeUInt); overload; inline;
+    procedure PutRaw(const AValue: TBytes); overload; inline;
   end;
 
-  { SSH 载荷读取器 }
-  TSshReader = class
+  { SSH 载荷读取器 — record 栈上零堆，FData 引用拷贝+位置游标 }
+  TSshReader = record
   private
     FData: TBytes;
     FPos: SizeUInt;
-    procedure Need(ACount: SizeUInt);
+    procedure Need(ACount: SizeUInt); inline;
   public
     constructor Create(const AData: TBytes);
+    procedure Init(const AData: TBytes); inline;
+    procedure Done; inline;
+    procedure Free; inline;
 
-    function AtEnd: Boolean;
-    function Remaining: SizeUInt;
-    function Position: SizeUInt;
+    function AtEnd: Boolean; inline;
+    function Remaining: SizeUInt; inline;
+    function Position: SizeUInt; inline;
 
-    function PeekByte: Byte;
-    function ReadByte: Byte;
-    procedure Skip(ACount: SizeUInt);
-    function ReadBoolean: Boolean;
-    function ReadUInt32: UInt32;
-    function ReadUInt64: UInt64;
-    function ReadStringBytes: TBytes;
+    function PeekByte: Byte; inline;
+    function ReadByte: Byte; inline;
+    procedure Skip(ACount: SizeUInt); inline;
+    function ReadBoolean: Boolean; inline;
+    function ReadUInt32: UInt32; inline;
+    function ReadUInt64: UInt64; inline;
+    function ReadStringBytes: TBytes; inline;
     function ReadStringSpan: TByteSpan; inline;
     function ReadStringText: string;
     { 解析 mpint 为无符号大端 magnitude（剥离前导零；负数高位按无符号处理）}
-    function ReadMPInt: TBytes;
+    function ReadMPInt: TBytes; inline;
     function ReadMPIntSpan: TByteSpan; inline;
     function ReadNameList: TStringArray;
   end;
@@ -83,9 +91,6 @@ function SshTextFromBytes(const ABytes: TBytes): string; inline;
 function SshBytesFromText(const AText: string): TBytes; inline;
 
 implementation
-
-uses
-  nextpas.core.mem.utils;
 
 { SshTextFromBytes/SshBytesFromText — raw bytes ↔ string 透传（UTF-8 由调用方保证，不做转换）。
   单源：委托 bytes.ops.BytesToString/StringToBytes 单源（SetLength+单次 Move 零拷贝），
@@ -106,9 +111,30 @@ end;
 
 constructor TSshWriter.Create(ACapacityHint: SizeUInt);
 begin
-  inherited Create;
+  // record 栈上：无 inherited，无堆对象头；仅托管 FBuf 一次 SetLength 预分配
+  FBuf := nil;
   SetLength(FBuf, ACapacityHint);
   FLen := 0;
+end;
+
+procedure TSshWriter.Init(ACapacityHint: SizeUInt); inline;
+begin
+  // 复用构造路径：栈上重初始化，避免重复实现；单 SetLength+零 FLen
+  FBuf := nil;
+  SetLength(FBuf, ACapacityHint);
+  FLen := 0;
+end;
+
+procedure TSshWriter.Done; inline;
+begin
+  // 幂等释放：托管字段置 nil 触发 refcount 递减；FLen 清零防复用泄漏；栈上自动终结亦安全
+  FBuf := nil;
+  FLen := 0;
+end;
+
+procedure TSshWriter.Free; inline;
+begin
+  Done;
 end;
 
 procedure TSshWriter.Ensure(ACount: SizeUInt);
@@ -132,12 +158,12 @@ begin
   BytesEnsureCapacity(FBuf, LNeed);
 end;
 
-procedure TSshWriter.Clear;
+procedure TSshWriter.Clear; inline;
 begin
   FLen := 0;
 end;
 
-function TSshWriter.Count: SizeUInt;
+function TSshWriter.Count: SizeUInt; inline;
 begin
   Result := FLen;
 end;
@@ -148,19 +174,19 @@ begin
   Result := nextpas.core.bytes.ops.SpanCopySlice(TByteSpan.FromBytes(FBuf), 0, FLen);
 end;
 
-procedure TSshWriter.PutByte(AValue: Byte);
+procedure TSshWriter.PutByte(AValue: Byte); inline;
 begin
   Ensure(1);
   FBuf[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TSshWriter.PutBoolean(AValue: Boolean);
+procedure TSshWriter.PutBoolean(AValue: Boolean); inline;
 begin
   PutByte(Ord(AValue));
 end;
 
-procedure TSshWriter.PutUInt32(AValue: UInt32);
+procedure TSshWriter.PutUInt32(AValue: UInt32); inline;
 begin
   Ensure(4);
   // 单源：复用 bytes.binary.WriteUInt32BE，避免手写移位与 buffer 直写漂移；inline 零拷贝
@@ -168,13 +194,19 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TSshWriter.PutStringBytes(const AValue: TBytes);
+procedure TSshWriter.PutUInt64(AValue: UInt64); inline;
+begin
+  PutUInt32(UInt32(AValue shr 32));
+  PutUInt32(UInt32(AValue and $FFFFFFFF));
+end;
+
+procedure TSshWriter.PutStringBytes(const AValue: TBytes); inline;
 begin
   PutUInt32(UInt32(Length(AValue)));
   PutRaw(AValue);
 end;
 
-procedure TSshWriter.PutStringText(const AText: string);
+procedure TSshWriter.PutStringText(const AText: string); inline;
 begin
   if (Length(AText) > 0) and (not UTF8IsValid(PByte(PChar(AText)), SizeUInt(Length(AText)))) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
@@ -255,7 +287,7 @@ begin
   FLen := LOff;
 end;
 
-procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
+procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt); inline;
 begin
   if (ALen = 0) or (APtr = nil) then
     Exit;
@@ -264,7 +296,7 @@ begin
   Inc(FLen, ALen);
 end;
 
-procedure TSshWriter.PutRaw(const AValue: TBytes);
+procedure TSshWriter.PutRaw(const AValue: TBytes); inline;
 begin
   if Length(AValue) > 0 then
     PutRaw(@AValue[0], SizeUInt(Length(AValue)));
@@ -274,12 +306,29 @@ end;
 
 constructor TSshReader.Create(const AData: TBytes);
 begin
-  inherited Create;
+  // record 栈上：引用拷贝无堆分配（AddRef），零拷贝视图；不做深拷贝
   FData := AData;
   FPos := 0;
 end;
 
-procedure TSshReader.Need(ACount: SizeUInt);
+procedure TSshReader.Init(const AData: TBytes); inline;
+begin
+  FData := AData;
+  FPos := 0;
+end;
+
+procedure TSshReader.Done; inline;
+begin
+  FData := nil;
+  FPos := 0;
+end;
+
+procedure TSshReader.Free; inline;
+begin
+  Done;
+end;
+
+procedure TSshReader.Need(ACount: SizeUInt); inline;
 begin
   if Remaining < ACount then
     raise ESSHError.Create(sekProtocol,
@@ -287,46 +336,46 @@ begin
       ', remaining ' + nextpas.core.text.conv.IntToStr(Int64(Remaining)) + ')');
 end;
 
-function TSshReader.AtEnd: Boolean;
+function TSshReader.AtEnd: Boolean; inline;
 begin
   Result := FPos >= SizeUInt(Length(FData));
 end;
 
-function TSshReader.Remaining: SizeUInt;
+function TSshReader.Remaining: SizeUInt; inline;
 begin
   Result := SizeUInt(Length(FData)) - FPos;
 end;
 
-function TSshReader.Position: SizeUInt;
+function TSshReader.Position: SizeUInt; inline;
 begin
   Result := FPos;
 end;
 
-function TSshReader.PeekByte: Byte;
+function TSshReader.PeekByte: Byte; inline;
 begin
   Need(1);
   Result := FData[FPos];
 end;
 
-function TSshReader.ReadByte: Byte;
+function TSshReader.ReadByte: Byte; inline;
 begin
   Need(1);
   Result := FData[FPos];
   Inc(FPos);
 end;
 
-procedure TSshReader.Skip(ACount: SizeUInt);
+procedure TSshReader.Skip(ACount: SizeUInt); inline;
 begin
   Need(ACount);
   Inc(FPos, ACount);
 end;
 
-function TSshReader.ReadBoolean: Boolean;
+function TSshReader.ReadBoolean: Boolean; inline;
 begin
   Result := ReadByte <> 0;
 end;
 
-function TSshReader.ReadUInt32: UInt32;
+function TSshReader.ReadUInt32: UInt32; inline;
 begin
   Need(4);
   // 单源：复用 bytes.binary.ReadUInt32BE，避免手写移位
@@ -334,13 +383,7 @@ begin
   Inc(FPos, 4);
 end;
 
-procedure TSshWriter.PutUInt64(AValue: UInt64);
-begin
-  PutUInt32(UInt32(AValue shr 32));
-  PutUInt32(UInt32(AValue and $FFFFFFFF));
-end;
-
-function TSshReader.ReadUInt64: UInt64;
+function TSshReader.ReadUInt64: UInt64; inline;
 begin
   Result := (UInt64(ReadUInt32) shl 32) or UInt64(ReadUInt32);
 end;
@@ -358,7 +401,7 @@ begin
   Inc(FPos, LLen);
 end;
 
-function TSshReader.ReadStringBytes: TBytes;
+function TSshReader.ReadStringBytes: TBytes; inline;
 begin
   { perf: single source via bytes.ops.SpanClone (SetLength+single Move zero-copy); ReadStringSpan is zero-alloc view, clone allocates only when caller needs owned TBytes; large payload callers can call ReadStringSpan to avoid alloc entirely }
   Result := nextpas.core.bytes.ops.SpanClone(ReadStringSpan);
@@ -387,7 +430,7 @@ begin
   Result := StripLeadingZeroSpan(LSpan);
 end;
 
-function TSshReader.ReadMPInt: TBytes;
+function TSshReader.ReadMPInt: TBytes; inline;
 begin
   { perf: single source via bytes.ops.SpanClone; ReadMPIntSpan is zero-copy, clone is single Move — halves allocations vs old ReadStringBytes(alloc)+Strip+Move(double alloc) }
   Result := nextpas.core.bytes.ops.SpanClone(ReadMPIntSpan);

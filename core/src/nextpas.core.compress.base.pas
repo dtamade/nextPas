@@ -31,6 +31,7 @@ function LevelToZlib(const ALevel: TCompressionLevel): Int32; inline;
 function CompressNextCapacity(const ACurrent, AMaxOutputSize: SizeUInt): SizeUInt; inline;
 function CompressInitialDecompressCapacity(const AInputLen, AMaxOutputSize: SizeUInt): SizeUInt; inline;
 function CompressInitialInflateCapacity(const AInputLen, AMaxOutputSize: SizeUInt; const AHint: SizeUInt = 0): SizeUInt; inline;
+function CompressInitialCompressCapacity(const AInputLen: SizeUInt): SizeUInt; inline;
 
 implementation
 
@@ -77,6 +78,16 @@ begin
     Result := 64;
   if Result > AMaxOutputSize then
     Result := AMaxOutputSize;
+end;
+
+function CompressInitialCompressCapacity(const AInputLen: SizeUInt): SizeUInt; inline;
+begin
+  // perf: single source bound for zlib Z_SYNC_FLUSH (compressBound + sync marker): L + L/1000 + 128 covers 1% + 12 + flush empty block, avoids per-packet repeat SetLength growth for large packets/bomb (amortized O(1)); L0 pure, no FFI, overflow clamped
+  Result := AInputLen + (AInputLen div 1000) + 128;
+  if Result < AInputLen then
+    Result := High(SizeUInt);
+  if Result < 128 then
+    Result := 128;
 end;
 
 end.

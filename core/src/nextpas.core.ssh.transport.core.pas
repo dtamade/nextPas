@@ -3,13 +3,14 @@ unit nextpas.core.ssh.transport.core;
 {** nextpas.core.ssh - 传输层纯内存编解码核（RFC 4253 §6）。
  *
  * 单源职责：
- *  - padding 对齐公式（OpenSSH packet.c：AEAD/EtM 时 len-=aadlen，packlen%block==0）
- *  - cipher Protect/Unprotect + 压缩 + 序列号递增 + rekey 计数/阈值
- *  - ShouldRekey 按字节/时间/序列号阈值判断
+ *  - padding 对齐（OpenSSH packet.c：AEAD/EtM len-=aadlen，packlen%block==0；FPadBlock/FAadLen 缓存零虚调用）
+ *  - EncodePacket 职责拆分：CompressIfNeeded / CalcPadLen inline + ProtectPayload 单次分配零拷贝
+ *  - ShouldRekey 按字节/时间/序列号阈值（record inline，TInstant 单源）
  *
  * 被 nextpas.core.ssh.transport / transport.async 薄包装复用；纯内存，不触 IO。
- * 通道窗口回补不在此核，统一由 nextpas.core.ssh.window 单源（FWindow.Consume/Grant inline
- * 零堆分配，低水位 div 2），channel / channel.async / sftp.async 100% 复用。 *}
+ * 通道窗口回补不在此核，统一由 nextpas.core.flow.window 单源（FWindow.Consume/Grant inline
+ * 零堆分配，低水位 div 2），channel / channel.async / sftp.async 100% 复用。
+ * perf: CacheSenderParams/CalcPadLen/CompressIfNeeded inline 零虚调用，ProtectPayload 单次 Move 零拷贝，bytes.ops 单源，外联重路径零 I-Cache 膨胀；稳定性：SecureRandom 异常不泄漏，Seq/Account 仅成功后递增。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -40,6 +41,11 @@ type
     FNegCompCs: string;
     FNegCompSc: string;
     FCompressEnabled: Boolean;
+    FPadBlock: Integer;
+    FAadLen: Integer;
+    procedure CacheSenderParams; inline;
+    function CalcPadLen(APayloadLen: SizeUInt): SizeUInt; inline;
+    function CompressIfNeeded(const APayload: TBytes): TBytes; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -77,6 +83,7 @@ begin
   inherited Create;
   FSender := CreateSshPacketSender('', '', nil, nil, nil);
   FReceiver := CreateSshPacketReceiver('', '', nil, nil, nil);
+  CacheSenderParams;
   FRekey.Init(SSH_REKEY_BYTES, SSH_REKEY_INTERVAL_MS);
   FCompressEnabled := False;
 end;
@@ -144,26 +151,39 @@ begin
     AKeyCs, AIvCs, AMacCs);
   FReceiver := CreateSshPacketReceiver(ANegotiated.EncSc, ANegotiated.MacSc,
     AKeySc, AIvSc, AMacSc);
+  CacheSenderParams;
   ResetRekeyCounters;
+end;
+
+procedure TSshTransportCore.CacheSenderParams; inline;
+begin
+  FPadBlock := FSender.PaddingBlock;
+  FAadLen := FSender.AadLen;
+end;
+
+function TSshTransportCore.CalcPadLen(APayloadLen: SizeUInt): SizeUInt; inline;
+begin
+  // 单源公式：OpenSSH packet.c 先 len-=aadlen 再算 padlen；FPadBlock/FAadLen 缓存零虚调用
+  Result := SizeUInt(FPadBlock) - ((SizeUInt(4 + 1) + APayloadLen - SizeUInt(FAadLen)) mod SizeUInt(FPadBlock));
+  if Result < SSH_MIN_PADDING then
+    Inc(Result, SizeUInt(FPadBlock));
+end;
+
+function TSshTransportCore.CompressIfNeeded(const APayload: TBytes): TBytes; inline;
+begin
+  if FCompressEnabled and (FCompressor <> nil) and (FNegCompCs <> SSH_COMP_NONE) then
+    Result := FCompressor.Compress(APayload)
+  else
+    Result := APayload;
 end;
 
 function TSshTransportCore.EncodePacket(const APayload: TBytes): TBytes;
 var
   LOut: TBytes;
-  LPayloadLen, LPad, LAad: SizeUInt;
-  LBlock: Integer;
+  LPad: SizeUInt;
 begin
-  LOut := APayload;
-  if FCompressEnabled and (FCompressor <> nil) and (FNegCompCs <> SSH_COMP_NONE) then
-    LOut := FCompressor.Compress(APayload);
-  LPayloadLen := SizeUInt(Length(LOut));
-  LBlock := FSender.PaddingBlock;
-  LAad := SizeUInt(FSender.AadLen);
-  // 单源公式：OpenSSH packet.c 发送端先 len-=aadlen 再算 padlen；bytes.ops 单源复用无手写循环
-  LPad := SizeUInt(LBlock) - ((SizeUInt(4 + 1) + LPayloadLen - LAad) mod SizeUInt(LBlock));
-  if LPad < SSH_MIN_PADDING then
-    Inc(LPad, SizeUInt(LBlock));
-  // perf: 单次分配零拷贝 via cipher ProtectPayload（单次 SetLength 线上包 + 单次 Move payload + SecureRandom padding 原位），消除 LBody 中间分配/两阶段拷贝；外联（真实路由体/压缩/加解密禁 inline，避免 I-Cache 膨胀），bytes.ops 单源 MemXor/bulk；稳定性：ProtectPayload 内 SecureRandom 失败抛异常不泄漏，FSendSeq 递增与 FRekey.Account 在成功加密后执行，资源零泄漏
+  LOut := CompressIfNeeded(APayload);
+  LPad := CalcPadLen(SizeUInt(Length(LOut)));
   Result := FSender.ProtectPayload(LOut, LPad, FSendSeq);
   Inc(FSendSeq);
   FRekey.Account(UInt64(Length(APayload)));

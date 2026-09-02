@@ -1,10 +1,13 @@
 unit nextpas.core.ssh.session.async;
 
-{** nextpas.core.ssh - 异步会话 (TAsyncLoop + AsyncTcpDial)。
+{** nextpas.core.ssh - 异步会话 (TAsyncLoop + SshAsyncTcpDial)。
  *
  * 事件化重放同步会话的 DoHandshake/Derive/DoService/Auth 链,
  * 零拷贝复用 cipher/kex/hostkey/compress 逻辑,
  * 仅 I/O 经 TAsyncSshTransport 事件化, 序列号/压缩状态与同步完全一致。
+ * 经 ssh.net.ffi 单缝隙复用 IAsyncTcpStream/SshAsyncTcpDial(RFC8305)
+ * （L2→L2 net 唯一缝隙，inline 零拷贝，外层 Move 单源复用 bytes.ops），
+ * 不再直连 net.async.tcp/dial；try-finally 释放不丢。
  *
  * 对外: SshAsyncConnect + ISshAsyncSession.ExecAsync + SshAsyncClientBuilder.
  * 取消: DialOptions.Token / 握手期 Close 触发 poller TryCancelByContext。
@@ -19,8 +22,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
-  nextpas.core.net.async.tcp,
-  nextpas.core.net.async.dial,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -434,7 +436,7 @@ begin
   FUserCtx := AContext;
 end;
 constructor TAsyncConnector.CreateWithStream(const ALoop: TAsyncLoop; const AStream: IAsyncTcpStream; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer);
-begin inherited Create; FLoop:=ALoop; FProvidedStream:=AStream; FOptions:=AOptions; FDialOptions:=DefaultAsyncTcpDialOptions; FUserCb:=ACallback; FUserCtx:=AContext; end;
+begin inherited Create; FLoop:=ALoop; FProvidedStream:=AStream; FOptions:=AOptions; FDialOptions:=SshDefaultAsyncDialOptions; FUserCb:=ACallback; FUserCtx:=AContext; end;
 procedure TAsyncConnector.StartWithStream;
 begin
   if FLoop=nil then begin Fail(ESSHError.Create(sekProtocol,'async connect: nil loop')); Exit; end;
@@ -482,7 +484,7 @@ begin
   if FLoop = nil then begin Fail(ESSHError.Create(sekProtocol, 'async connect: nil loop')); Exit; end;
   if FOptions.Host = '' then begin Fail(ESSHError.Create(sekProtocol, 'ssh connect: host is required')); Exit; end;
   if FOptions.User = '' then begin Fail(ESSHError.Create(sekProtocol, 'ssh connect: user is required')); Exit; end;
-  if not AsyncTcpDial(FLoop, FOptions.Host, FOptions.Port, FDialOptions, @SshAsyncDialCb, Self) then
+  if not SshAsyncTcpDial(FLoop, FOptions.Host, FOptions.Port, FDialOptions, @SshAsyncDialCb, Self) then
     Fail(ESSHError.Create(sekIO, 'ssh async dial: submit failed'));
 end;
 
@@ -927,7 +929,7 @@ end;
 function SshAsyncConnect(const ALoop: TAsyncLoop; const AOptions: TSshConnectOptions; ACallback: TSshAsyncConnectCb; AContext: Pointer): Boolean;
 var Opts: TAsyncTcpDialOptions;
 begin
-  Opts := DefaultAsyncTcpDialOptions;
+  Opts := SshDefaultAsyncDialOptions;
   if AOptions.ConnectTimeoutMs > 0 then
     Opts.OverallDeadline := TDeadline.After(TDuration.FromMilliseconds(AOptions.ConnectTimeoutMs));
   Result := SshAsyncConnect(ALoop, AOptions, Opts, ACallback, AContext);
@@ -1003,7 +1005,7 @@ constructor TAsyncClientBuilder.Create;
 begin
   inherited Create;
   FOptions := DefaultSshConnectOptions('');
-  FDialOptions := DefaultAsyncTcpDialOptions;
+  FDialOptions := SshDefaultAsyncDialOptions;
   FHasDialOptions := False;
 end;
 

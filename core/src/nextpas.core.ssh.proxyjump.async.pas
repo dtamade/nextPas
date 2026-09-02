@@ -1,7 +1,14 @@
 unit nextpas.core.ssh.proxyjump.async;
+
+{** nextpas.core.ssh.proxyjump.async - 异步 ProxyJump 通道流 (direct-tcpip 隧道)。
+ * 经 ssh.net.ffi 单缝隙复用 IAsyncTcpStream/TNetAddress/TTcpStreamIOResult/
+ * INetCancelToken (L2→L2 唯一缝隙，不再直连 net.base/intf/async.tcp)；
+ * inline 零拷贝(外层 Move 单源复用 bytes.ops；FReadBuf 零拷贝追加/尾移，
+ * window.pas 纯值语义零堆分配)；稳定性 try-finally 释放不丢；非薄转发体禁 inline。 *}
+
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.net.async.tcp, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
+uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.ssh.net.ffi, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
 type PWriteCtx = ^TWriteCtx; TWriteCtx = record Cb: TIoCompletion; Ctx: Pointer; Len: UInt32; end;
 type TAsyncChannelStream = class(TInterfacedObject, IAsyncTcpStream)
 private
@@ -27,7 +34,7 @@ public
   function AsyncReadTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; function AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
 end;
 implementation
-uses nextpas.core.ssh.buffer;
+uses nextpas.core.bytes.ops, nextpas.core.ssh.buffer;
 procedure ChannelStreamRetryWrite(AContext: Pointer); forward;
 procedure Channel_OnPacket(const APayload: TBytes; AErr: ESSHError; AContext: Pointer); forward;
 procedure Channel_WriteDone(AErr: ESSHError; AContext: Pointer); forward;
@@ -76,7 +83,7 @@ begin
   if LGive>0 then begin LW:=TsshWriter.Create(16); try LW.PutByte(SSH_MSG_CHANNEL_WINDOW_ADJUST); LW.PutUInt32(FRemoteId); LW.PutUInt32(LGive); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end; end;
 end;
 
-procedure TAsyncChannelStream.TryFlushQueued; inline;
+procedure TAsyncChannelStream.TryFlushQueued;
 begin if not FQueuedActive then Exit; if FTransport.AsyncSendPacket(FQueuedPayload, @Channel_WriteDone, FQueuedP) then begin FQueuedActive:=False; FQueuedPayload:=nil; FQueuedP:=nil; end else try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @ChannelStreamRetryWrite, Self); except end;
 end;
 procedure TAsyncChannelStream.ArmRead; inline;

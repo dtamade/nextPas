@@ -20,7 +20,7 @@
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
 | bytes.cursor | IByteCursor 边界受查只读游标（顺序/绝对偏移、Try* 变体） |
 | bytes.stream | TByteStreamBuf 可增长缓冲流（append/consume/compact） |
-| bytes.framing | TWireBuffer 4B 长度前缀帧缓冲（BytesEnsureCapacity 几何 + FOff 零拷贝 + 32KB/8KB 懒压实，复用 bytes.ops/bytes.binary 单源） |
+| bytes.framing | TWireBuffer 4B 长度前缀帧缓冲（BytesEnsureCapacity 几何 + FOff 零拷贝 + 16KB/4KB 懒压实 + quarter-cap 回收，复用 bytes.ops/bytes.binary 单源） |
 | bytes.pathvalid | ValidPath 共享校验（复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
@@ -97,7 +97,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **TByteStreamBuf**：`EnsureCapacity/ReserveAppend/CommitAppend/Append/Consume/Clear/Compact`；容量保留、尾部零分配、头游标延迟压实；Destroy 经 `FreeMemOf(FAllocator, FPtr, FCap)` 释放。
 - **IByteCursor**：`NewByteCursor(TBytes)` 持有 `TBytes` 拷贝保活；`NewByteCursorAt(PByte, Len)` 裸指针由调用方保活；只读无分配（`ReadBytes` 除外）。
 - **ValidPath**：`BytesValidPath/BaseValidPath(APath, AAllowRoot)` — Go `io/fs.ValidPath` 语义，复用 `text.utf8.UTF8IsValid` 单源，段扫描零拷贝。
-- **TWireBuffer**：`Clear/Append/HasHeader/HasCompleteFrame/TryPeekFrameLength/TryTakeFrame/TakeFrame/Compact`；4B BE 长度前缀重组，`BytesEnsureCapacity` 几何 + `FOff` 零拷贝 + 32KB/8KB 懒压实，`bytes.ops/bytes.binary` 单源，热路径 `inline` 零拷贝，增长/压实外联避免 I-Cache 膨胀；编码侧 `WireEncodeFrame/WireAppendEncoded` 单次 `Move` 零拷贝。
+- **TWireBuffer**：`Clear/Append/HasHeader/HasCompleteFrame/TryPeekFrameLength/TryTakeFrame/TakeFrame/Compact`；4B BE 长度前缀重组，`BytesEnsureCapacity` 几何 + `FOff` 零拷贝 + 16KB/4KB 懒压实 + quarter-cap 回收（长流水线季窗），`bytes.ops/bytes.binary` 单源，热路径 `inline` 零拷贝，取帧单次 `Move`+单次压实，增长/压实外联避免 I-Cache 膨胀；编码侧 `WireEncodeFrame/WireAppendEncoded` 单次 `Move` 零拷贝。
 
 ---
 
@@ -110,7 +110,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **[INV-5]** 单源复用：比较/查找经 `bytes.ops`（`MemEqual/MemCompare/MemFindByte/BytesIndexOf` + SIMD）；门面全部 `inline` 转发，不分叉实现。
 - **[INV-6]** 资源释放不丢：`TBytesBuilderImpl.Destroy` 与 `TByteStreamBuf.Destroy` 以 sized `FreeMemOf/ReallocMemOf` 经注入 `TMemAllocator/IAllocator` 释放；`Clear/Consume` 不丢块；`try-finally/Free` 语义由调用方持有接口/对象生命周期保证。
 - **[INV-7]** L0-L3 分层：bytes 为 L1，仅依赖 L0（`base/mem/platform/simd`）及文档化 `bytes↔text↔encoding` seam（interface/implementation 分区引用，不形成循环）；门面不含逻辑。
-- **[INV-8]** Framing 幂等与懒压实：`TWireBuffer` `Append` 经 `BytesEnsureCapacity` 几何增长，`FOff` 头游标零拷贝，压实阈值 `WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE=32KB` / `WIRE_BUFFER_COMPACT_OFFSET_HALF=8KB+half-cap`，`CompactIfNeeded` 单次 `Move`，`Clear/HasHeader` `inline` 零开销；在途长度校验 `1 ≤ LLen ≤ AMax`（默认 256KiB），`Try*` 余量不足返回 `False` 不抛异常、不推进。
+- **[INV-8]** Framing 幂等与懒压实：`TWireBuffer` `Append` 经 `BytesEnsureCapacity` 几何增长，`FOff` 头游标零拷贝，压实阈值 `WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE=16KB` / `WIRE_BUFFER_COMPACT_OFFSET_HALF=4KB` + `quarter-cap` 回收（长流水线季窗消除空洞），`CompactIfNeeded` 单次 `Move`，`TryTakeFrame` 单包单次 `Move`+单次压实（`FOff+4` 零拷贝取载荷后一次性推进），`Clear/HasHeader` `inline` 零开销；在途长度校验 `1 ≤ LLen ≤ AMax`（默认 256KiB），`Try*` 余量不足返回 `False` 不抛异常、不推进。
 
 ---
 
@@ -140,7 +140,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - IBytesBuilder：内部块经 `TMemAllocator` 增长，`Grow` 倍增；`ToBytes` 返回拷贝；`WrittenSpan` 为当前写入区的零拷贝视图（随后续 Append 失效）。
 - TByteStreamBuf：块经 `IAllocator`；`EnsureCapacity` 幂等；`ReserveAppend` 先压实后倍增；`Consume/Clear` 保留容量；`Destroy` sized free。
 - 零拷贝：`Move/FillChar` 直操内存；门面与 `Bytes*` 便捷面均为 `inline` 转发，无额外拷贝。
-- TWireBuffer：追加/取帧各单次 `Move` 零拷贝（`FOff` 视图 + 懒压实单次 `Move`），`Clear/HasHeader/TryPeek` `inline` 零开销，`CompactIfNeeded/EnsureCapacity` 外联避免 I-Cache 膨胀；编码 `WireEncodeFrame` 单次 `Move`。
+- TWireBuffer：追加单次 `Move`、取帧单次 `Move`+单次压实（`FOff` 视图 + `FOff+4` 零拷贝 + quarter-cap 懒压实），`Clear/HasHeader/TryPeek` `inline` 零开销，`CompactIfNeeded/EnsureCapacity/TryTakeFrame` 外联避免 I-Cache 膨胀；编码 `WireEncodeFrame` 单次 `Move`。
 
 ---
 
@@ -164,4 +164,5 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
-| 2026-09-02 | 1.2 | 新增 bytes.framing：抽 sftp.wire 4B 前缀流为 TWireBuffer（L1，bytes.ops/bytes.binary 单源，BytesEnsureCapacity 几何 + FOff 零拷贝 + 32KB/8KB 懒压实，inline 热路径），供 sftp.wire/net.quic/db.redis 复用 | ssh lane |
+| 2026-09-02 | 1.2 | 新增 bytes.framing：抽 sftp.wire 4B 前缀流为 TWireBuffer（L1，bytes.ops/bytes.binary 单源，BytesEnsureCapacity 几何 + FOff 零拷贝 + 16KB/4KB 懒压实 + quarter-cap，inline 热路径），供 sftp.wire/net.quic/db.redis 复用 | ssh lane |
+| 2026-09-02 | 1.3 | 修复 framing 长流水线空洞与双压实：TryTakeFrame 单次 Move+单次压实（FOff+4 零拷贝，去 Inc(4)+Compact），阈值 32KB/8KB+half-cap → 16KB/4KB+quarter-cap，消除残留空洞与重复 memmove | ssh lane |

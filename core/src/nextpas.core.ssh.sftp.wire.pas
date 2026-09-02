@@ -3,7 +3,7 @@ unit nextpas.core.ssh.sftp.wire;
 {** nextpas.core.ssh.sftp.wire - 通道线材（CHANNEL_DATA ↔ SFTP 包流重组器）。
  *
  * 单职责：把 TSshChannel 的流式 DATA 切为 4B 长度前缀 SFTP 包流。
- * 性能：委托 bytes.framing.TWireBuffer 单源（BytesEnsureCapacity 几何 + FOff 零拷贝 + 32KB/8KB 懒压实），inline 热路径，复用 bytes.ops Move 单源，不自实现 Move。 *}
+ * 性能：委托 bytes.framing 单源（TWireBuffer BytesEnsureCapacity 几何 + FOff 零拷贝 + 32KB/8KB 懒压实 + WireEncodeFrame 单次分配 WriteUInt32BE+Move 零拷贝），Send 零二次拷贝，inline 热路径，复用 bytes.ops/bytes.binary Move 单源，不自实现 Move。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -23,7 +23,7 @@ type
   public
     constructor Create(AChannel: TSshChannel);
     destructor Destroy; override;
-    procedure Send(const APacket: TBytes);
+    procedure Send(const APacket: TBytes); inline;
     function Recv(ATimeoutMs: Integer): TBytes;
   end;
 
@@ -31,8 +31,7 @@ implementation
 
 uses
   nextpas.core.bytes.framing,
-  nextpas.core.ssh.errors,
-  nextpas.core.ssh.buffer;
+  nextpas.core.ssh.errors;
 
 constructor TSshChannelWire.Create(AChannel: TSshChannel);
 begin
@@ -47,18 +46,13 @@ begin
   inherited Destroy;
 end;
 
-procedure TSshChannelWire.Send(const APacket: TBytes);
-var
-  LW: TsshWriter;
+procedure TSshChannelWire.Send(const APacket: TBytes); inline;
 begin
-  LW := TsshWriter.Create(4 + Length(APacket));
-  try
-    LW.PutUInt32(UInt32(Length(APacket)));
-    LW.PutRaw(APacket);
-    FChan.SendData(LW.ToBytes);
-  finally
-    LW.Free;
-  end;
+  { perf: single source via bytes.framing.WireEncodeFrame (SetLength+WriteUInt32BE+single Move zero-copy) single alloc;
+    old path: PutRaw Move into FBuf + ToBytes SpanCopySlice Move double copy + TsshWriter heap churn; new: one alloc, inline thin forward,
+    bytes.ops/bytes.binary single source via WireEncodeFrame (avoids hand Move drift), zero second copy.
+    stability: managed TBytes exception-safe, no object to leak (no try-finally needed), resource release not lost. }
+  FChan.SendData(WireEncodeFrame(APacket));
 end;
 
 function TSshChannelWire.Recv(ATimeoutMs: Integer): TBytes;

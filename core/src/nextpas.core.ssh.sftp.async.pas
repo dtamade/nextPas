@@ -89,7 +89,7 @@ type
     FSentClose: Boolean;
     FDeadline: TDeadline;
     FTimer: TAsyncTimerHandle;
-    FReadBuf: TBytes;
+    FReadBuf: IBytesBuilder; // perf: doubling single source bytes.builder (BYTES_BUILDER_MIN_GROW=64, 2×), inline zero-copy, amortized O(1), avoid O(n²)
     FNextId: UInt32;
     FOpenCb: TProcSftpOpenAsync;
     FOpenCtx: Pointer;
@@ -229,6 +229,7 @@ begin
   FOpenCtx := AContext;
   if ATimeoutMs>0 then FDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs)) else FDeadline := TDeadline.Infinite;
   FNextId := 1;
+  FReadBuf := CreateBytesBuilder(4096); // perf: doubling single source BYTES_BUILDER_MIN_GROW, amortized O(1)
 end;
 
 constructor TAsyncSftpChannel.Create(const ALoop: TAsyncLoop; const ASession: ISshAsyncSession; ATimeoutMs: Integer; ACallback: TProcSftpOpenAsync; AContext: Pointer);
@@ -245,6 +246,7 @@ begin
   FOpenCtx := AContext;
   if ATimeoutMs>0 then FDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs)) else FDeadline := TDeadline.Infinite;
   FNextId := 1;
+  FReadBuf := CreateBytesBuilder(4096); // perf: doubling single source BYTES_BUILDER_MIN_GROW, amortized O(1)
 end;
 
 destructor TAsyncSftpChannel.Destroy;
@@ -252,6 +254,7 @@ begin
   if FTimer.IsValid then try FLoop.CancelTimer(FTimer); except end;
   if FOpTimer.IsValid then try FLoop.CancelTimer(FOpTimer); except end;
   SetLength(FPending,0);
+  FReadBuf := nil; // stability: release builder refcount, sized FreeMemOf via allocator
   FSession := nil;
   inherited;
 end;
@@ -475,7 +478,7 @@ begin
   case APayload[0] of
     SSH_MSG_CHANNEL_DATA:
       begin
-        if ExtractData(APayload, False, LChunk) then BytesAppend(FReadBuf, LChunk); // single source bytes.ops inline, zero-copy Move
+        if ExtractData(APayload, False, LChunk) and (Length(LChunk)>0) then FReadBuf.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // perf: IBytesBuilder doubling single source BYTES_BUILDER_MIN_GROW=64, inline zero-copy Move, amortized O(1)
         if FState=asHandshake then
         begin
           if ExtractSftpPacket(LPkt) then
@@ -494,7 +497,7 @@ begin
         end;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
-      begin if ExtractData(APayload, True, LChunk) then BytesAppend(FReadBuf, LChunk); TryDispatchSftp; PumpNext; end; // bytes.ops single source
+      begin if ExtractData(APayload, True, LChunk) and (Length(LChunk)>0) then FReadBuf.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); TryDispatchSftp; PumpNext; end; // perf: IBytesBuilder doubling single source, inline zero-copy
     SSH_MSG_CHANNEL_REQUEST:
       begin HandleChannelRequest(APayload); TryDispatchSftp; PumpNext; end;
     SSH_MSG_GLOBAL_REQUEST: begin HandleGlobalRequest; PumpNext; end;
@@ -553,16 +556,21 @@ begin
 end;
 
 function TAsyncSftpChannel.ExtractSftpPacket(out APacket: TBytes): Boolean; inline;
-var LLen: UInt32;
+var LLen: UInt32; LData: PByte; LAvail, LRem: SizeUInt;
 begin
   Result:=False; APacket:=nil;
-  if Length(FReadBuf)<4 then Exit;
-  LLen:=(UInt32(FReadBuf[0]) shl 24) or (UInt32(FReadBuf[1]) shl 16) or (UInt32(FReadBuf[2]) shl 8) or UInt32(FReadBuf[3]);
+  if (FReadBuf=nil) or (FReadBuf.Length<4) then Exit;
+  LData:=FReadBuf.Data;
+  LLen:=(UInt32(LData[0]) shl 24) or (UInt32(LData[1]) shl 16) or (UInt32(LData[2]) shl 8) or UInt32(LData[3]);
   if LLen> 256*1024 then begin Fail(ESSHError.Create(sekProtocol,'sftp async: packet too large')); Exit; end;
-  if SizeUInt(Length(FReadBuf)) < 4+LLen then Exit;
+  LAvail:=FReadBuf.Length;
+  if LAvail < 4+SizeUInt(LLen) then Exit;
   SetLength(APacket, LLen);
-  if LLen>0 then Move(FReadBuf[4], APacket[0], LLen);
-  BytesConsumePrefix(FReadBuf, 4+SizeUInt(LLen)); { perf: bytes.ops single source, in-place Move+shrink, no Copy alloc, zero-copy tail }
+  if LLen>0 then Move(LData[4], APacket[0], LLen);
+  // perf: single source bytes.builder/bytes.ops BYTES_BUILDER_MIN_GROW, amortized O(1) append vs O(n²) BytesAppend, zero-copy Move tail + Truncate
+  LRem:=LAvail - (4+SizeUInt(LLen));
+  if LRem>0 then Move(LData[4+LLen], LData[0], LRem);
+  FReadBuf.Truncate(LRem);
   Result:=True;
 end;
 

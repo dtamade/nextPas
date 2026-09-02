@@ -109,17 +109,16 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.binary,
   nextpas.core.crypto.random,
-  nextpas.core.net.intf,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.mem.secure;
 
-function UInt32Bytes(AValue: UInt32): TBytes;
+// 单源：bytes.binary.WriteUInt32BE inline 零拷贝（单 Move，不手写移位），bytes.ops 单源外层 Move 复用
+function UInt32Bytes(AValue: UInt32): TBytes; inline;
 begin
   SetLength(Result, 4);
-  Result[0] := Byte(AValue shr 24);
-  Result[1] := Byte(AValue shr 16);
-  Result[2] := Byte(AValue shr 8);
-  Result[3] := Byte(AValue);
+  WriteUInt32BE(PByte(@Result[0]), AValue);
 end;
 
 const
@@ -169,16 +168,10 @@ begin
   ApplyDeadlineToStream;
 end;
 
-procedure TSshClientTransport.ApplyDeadlineToStream;
-var LStream: ITcpStream;
+procedure TSshClientTransport.ApplyDeadlineToStream; inline;
 begin
-  if Supports(FIO, ITcpStream, LStream) then
-  begin
-    if not FOverallDeadline.IsInfinite then
-      LStream.SetReadDeadline(FOverallDeadline)
-    else
-      LStream.SetReadDeadline(TDeadline.Infinite);
-  end;
+  // 单缝隙：经 ssh.net.ffi 薄转发，不直连 net.intf；inline 零拷贝，外层 try-finally 释放不丢
+  SshSetReadDeadline(FIO, FOverallDeadline);
 end;
 
 procedure TSshClientTransport.CheckRekeyOrDisconnect;

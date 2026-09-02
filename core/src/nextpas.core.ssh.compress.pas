@@ -145,8 +145,8 @@ begin
     FDeflate.next_in := pBytef(@LDummy);
     FDeflate.avail_in := 0;
   end;
-  LCap := LInLen + 128;
-  if LCap < 128 then LCap := 128;
+  // perf: single source initial via compress.base (compressBound+SYNC_FLUSH, amortized O(1)) avoids repeat SetLength for large packets/bomb; growth reuses bytes.ops doubling (BYTES_BUILDER_MIN_GROW=64, 2x)
+  LCap := CompressInitialCompressCapacity(LInLen);
   SetLength(Result, LCap);
   LOutLen := 0;
   repeat
