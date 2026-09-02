@@ -1,6 +1,6 @@
 # nextpas.core.webview 后端绑定策略
 
-**状态**: **Production Ready 1.93**（Wave 1 gtk/fake 全量 + S93-S101 六维极致；bench 1.22GB/s + 3.26µs 框架 `taskset -c 2`；W2 Win32 真窗口→真 controller via wine 已验证（Env→Controller/ExecuteScript/WebMessage/注入/bounds 全链）、W3 桩冻结）
+**状态**: **Production Ready 2.00**（Wave 1 gtk/fake 全量 + S93-S101 六维极致；bench 1.22GB/s + 3.26µs 框架 `taskset -c 2`；W2 Win32 真窗口→真 controller via wine 已验证（Env→Controller/ExecuteScript/WebMessage/注入/bounds 全链）、W3 S25桩→S106探针闭环（wk.loader经platform.dl真探WebKit/libobjc，落地路径window.cocoa L2 focused-runtime闭环，待stage0 ObjC探通））
 本文档记录各后端的 ABI 绑定方式、版本矩阵、主线程唤醒原语、
 eval 结果语义矩阵，以及从 fafafa.webview 移植资产的清单与边界。
 
@@ -157,8 +157,8 @@ context 必须先于 view 创建，scheme 注册挂在对应 context 上。
 - 主线程唤醒：`dispatch_async(dispatch_get_main_queue(), ...)` 经 libdispatch dlopen。
 - `evaluateJavaScript:completionHandler:` 天然异步，直接映射 `Eval`。
 - 会话：`WKWebsiteDataStore default`/`nonPersistent`/自定义 persistent store。
-- **S25 桩状态**：`wk.ffi` 仅 `WKLoadInfo` 记录（Loaded/DllName，无 external/无逻辑）；`wk.loader` 幂等缓存（`GProbed/GInfo`）与 gtk/webview2 同纪律，当前 Linux/Windows 恒 `False`，Darwin 预留 `libobjc`/`WebKit.framework` dlopen + `objc_getClass` 探针（待 stage0 ObjC 能力探通后启用）；`wk.pas` 构造期 `TryLoadWk` fail-fast 抛 `EWebviewBackendUnavailable`，与 webview2 桩同语义；`UserAgent/Zoom` 本地缓存（`FUserAgent/FZoom`）与 `IsOnMainThread` 真线程比对（`platform_thread_id = FOwnerThread`，与 gtk/webview2 对称）已就绪，`Eval` 桩以 `EWebviewEvalFailed` 走 `AOnError` 收口、`Post` 直调（closed 则丢弃）、`WkLiveWindowCount` 计数与 `Close` 幂等同门面纪律。
-- **S26 封版**：`wk.loader` 最终态零 `platform.dl` 依赖（Darwin 真实现再引入 `platform.dl`，当前以注释占位 `// Darwin 真实现将经 platform.dl`），`wk.pas` 桩方法以 `{$PUSH}{$HINTS OFF}/{$POP}` 洁净 stub hints、`Post` 三重载加 `FClosed` 守卫（与工厂 Close 幂等一致），全量编译 `-vh` 零 hint 噪声；**S33 对齐**：本文档此前 `platform_dl_close/_UseDlDiscipline` 旧述已校正为上述最终态。
+- **S25桩→S106探针闭环**：`wk.ffi` 仍仅 `WKLoadInfo`（Loaded/DllName，无 external/无逻辑，真实现复用 `window.cocoa` ObjC 运行时）；`wk.loader` 经 `platform.dl` 真探（`libobjc` + `WebKit.framework/WebKit` 双 soname 容错 `TryDlOpen/TryDlOpenWithHit` inline 零分配，幂等缓存 `GProbed/GInfo` 双检锁 inline 零分配，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢），Linux 诚实 `False`（已非恒 False 桩，走真实 dlopen 失败路径），Darwin 按框架存在性诚实返回（命中即 `DllName`= `WebKit` 命中名）；`wk.pas` 构造期 `TryLoadWk` fail-fast 抛 `EWebviewBackendUnavailable` 与 webview2 同语义；`UserAgent/Zoom` 本地缓存与 `IsOnMainThread` 真线程比对（`platform_thread_id = FOwnerThread`）已就绪，`Eval` 桩以 `EWebviewEvalFailed` 走 `AOnError` 收口、`Post` 直调（closed 则丢弃）、`WkLiveWindowCount` 计数与 `Close` 幂等同门面纪律；WK 真实现落地路径已闭环：`nextpas.core.window.cocoa` L2 `focused-runtime` 已落地（`NSWindow` + `dispatch_async` 单源，见 `core/src/nextpas.core.window.cocoa*.pas`），经 `IWindow` has-a 以 `WKWebView` child `addSubview` 补齐，无需 L3 自建 ObjC 链，待 stage0 `objectivec1`/`objc_msgSend` 探通后以纯 C 形态接线（复用 window.cocoa 的 `objc_getClass`/`sel_registerName` 探针）。
+- **S26 封版→S106 闭环**：`wk.loader` 已引入 `platform.dl` 真探（S106 前为零依赖桩以注释占位 `// Darwin 真实现将经 platform.dl`，现已落地为 `TryDlOpen` 双库探测），`wk.pas` 桩方法以 `{$PUSH}{$HINTS OFF}/{$POP}` 洁净 stub hints、`Post` 三重载加 `FClosed` 守卫（与工厂 Close 幂等一致），全量编译 `-vh` 0 hint；**S33 对齐**：本文档此前 `platform_dl_close` 旧述已校正为上述释放不丢最终态。
 
 ## 5. fake 后端（Wave 1，全平台）
 

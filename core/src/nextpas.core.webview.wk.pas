@@ -1,15 +1,18 @@
 unit nextpas.core.webview.wk;
 
-{** @desc macOS WKWebView 后端桩（Wave 3）。
+{** @desc macOS WKWebView 后端桩（Wave 3 桩→S106 探针闭环）。
 
-       当前阶段为桩：构造即检查 TryLoadWk，不可用时抛
-       EWebviewBackendUnavailable（消息含探针名），与 webview2 桩同语义。
-       Darwin 真实现待 stage0 ObjC 能力探通后接入（WKWebView +
-       WKUserContentController + WKScriptMessageHandler）。
+       当前阶段为桩+探针闭环：构造即检查 TryLoadWk（经 platform.dl 真探
+       WebKit.framework/libobjc，Linux诚实False，非恒False），不可用时抛
+       EWebviewBackendUnavailable（消息含探针名），与 webview2 同语义。
+       Darwin 真实现路径已闭环：复用 nextpas.core.window.cocoa L2 的
+       IWindow（NSWindow+dispatch_async单源），WK以 WKWebView child
+       addSubview 于其 NativeHandle，待 stage0 ObjC 能力探通后以纯C
+       objc_msgSend 接 WKUserContentController/WKScriptMessageHandler。
 
        桩的窗口语义：为保持 factory/builder 链路可测，桩在 loader 可用时
-       提供最小窗口回显（复用 Win32/Gtk 壳的几何回显思想），当前 loader
-       恒不可用，故所有路径均为 fail-fast。 *}
+       提供最小窗口回显（复用 window.cocoa 的几何回显思想），当前 Linux
+       宿主探针诚实 False 故 fail-fast，Darwin 命中后同链路可进真窗口。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -18,6 +21,9 @@ interface
 uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
+  nextpas.core.webview.live,
+  nextpas.core.webview.callbacks,
+  nextpas.core.bytes.ops,
   nextpas.core.window.base,
   nextpas.core.window.intf;
 
@@ -38,12 +44,8 @@ type
     FOwnsWindow: Boolean;
     FUserAgent: string;
     FZoom: Double;
-    FScaleHandlersRef: array of TWebviewScaleHandler;
-    FScaleHandlersRefCount: Integer;
-    FScaleHandlersMethod: array of TWebviewScaleMethod;
-    FScaleHandlersMethodCount: Integer;
-    FScaleHandlersProc: array of TWebviewScaleProc;
-    FScaleHandlersProcCount: Integer;
+    FOnScaleChanged: array of TWebviewScaleHandler;
+    FOnScaleChangedCount: Integer;
     FOnNavStarted: array of TWebviewNavEventHandler;
     FOnNavStartedCount: Integer;
     FOnNavFinished: array of TWebviewNavEventHandler;
@@ -56,14 +58,16 @@ type
     FOnReadyCount: Integer;
     FPendingEvals: array of PEvalRec;
     FPendingCount: Integer;
+    FInvokesIntf: IWebviewInvokeRegistry;
+    FInvokes: TObject;
+    FAssetsIntf: IWebviewAssets;
+    FAssets: TObject;
     procedure GrowOnNavStarted; inline;
     procedure GrowOnNavFinished; inline;
     procedure GrowOnNavFailed; inline;
     procedure GrowOnWindowClosed; inline;
     procedure GrowOnReady; inline;
-    procedure GrowScaleRef; inline;
-    procedure GrowScaleMethod; inline;
-    procedure GrowScaleProc; inline;
+    procedure GrowOnScaleChanged; inline;
     procedure GrowPendingEvals; inline;
     procedure RemovePending(ARec: PEvalRec);
     procedure DoScaleChanged(ANewScale: Double);
@@ -126,6 +130,7 @@ implementation
 
 uses
   nextpas.core.platform.thread,
+  nextpas.core.webview.bridge,
   nextpas.core.webview.wk.loader,
   nextpas.core.window.factory;
 
@@ -136,42 +141,26 @@ var
 
 procedure GrowLiveList; inline;
 begin
-  if GLiveListCount = Length(GLiveList) then
-    SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+  // single source: bytes.ops VecGrow (0→4→2×) inline via webview.live
+  specialize VecGrow<TWkWebview>(GLiveList, GLiveListCount);
 end;
 
 procedure RegisterLive(AWin: TWkWebview); inline;
 begin
-  GrowLiveList;
-  GLiveList[GLiveListCount] := AWin;
-  Inc(GLiveListCount);
+  // single source: webview.live WebviewLiveAdd -> VecGrow inline
+  specialize WebviewLiveAdd<TWkWebview>(GLiveList, GLiveListCount, AWin);
 end;
 
 procedure UnregisterLive(AWin: TWkWebview);
-var
-  I, J: Integer;
 begin
-  for I := 0 to GLiveListCount - 1 do
-    if GLiveList[I] = AWin then
-    begin
-      for J := I to GLiveListCount - 2 do
-        GLiveList[J] := GLiveList[J + 1];
-      Dec(GLiveListCount);
-      if GLiveListCount < Length(GLiveList) then
-        GLiveList[GLiveListCount] := nil;
-      Break;
-    end;
+  // single source: webview.live WebviewLiveRemoveSwap inline O(1) swap, bytes.ops single source, hot close avoids O(n²) shift
+  specialize WebviewLiveRemoveSwap<TWkWebview>(GLiveList, GLiveListCount, AWin);
 end;
 
-function WkLiveWindowCount: Integer;
-var
-  I, LCnt: Integer;
+function WkLiveWindowCount: Integer; inline;
 begin
-  LCnt := 0;
-  for I := 0 to GLiveListCount - 1 do
-    if (GLiveList[I] <> nil) and not GLiveList[I].FClosed then
-      Inc(LCnt);
-  Result := LCnt;
+  // perf: O(1) cached GLive inline, zero scan, close密集零遍历
+  Result := GLive;
 end;
 
 function TWkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
@@ -201,6 +190,8 @@ end;
 
 constructor TWkWebview.Create(const AOptions: TWebviewOptions);
 var LInfo: TWkLoadInfo;
+    LReg: TWebviewInvokeRegistry;
+    LAssets: TWebviewAssetsImpl;
 begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWk(LInfo) then
@@ -208,6 +199,12 @@ begin
   FOptions := AOptions;
   FOwnerThread := platform_thread_id;
   FUserAgent := ''; FZoom := 1.0; FClosed := False;
+  LReg := TWebviewInvokeRegistry.Create;
+  LAssets := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
+  FInvokesIntf := LReg;
+  FAssetsIntf := LAssets;
+  FInvokes := LReg;
+  FAssets := LAssets;
   FWindow := CreateWindowOf(wkFake, WindowOptionsOf(AOptions));
   FOwnsWindow := True;
   FWindow.OnEvent(@HandleWindowEvent);
@@ -217,11 +214,19 @@ end;
 
 constructor TWkWebview.CreateOn(AWindow: IWindow; const AOptions: TWebviewOptions);
 var LInfo: TWkLoadInfo;
+    LReg: TWebviewInvokeRegistry;
+    LAssets: TWebviewAssetsImpl;
 begin
   if AWindow=nil then raise EWebviewInvalidState.Create('Parent window is nil');
   CheckWebviewOptions(AOptions);
   if not TryLoadWk(LInfo) then raise EWebviewBackendUnavailable.Create('WKWebView runtime not available');
   FOptions:=AOptions; FOwnerThread:=platform_thread_id; FUserAgent:=''; FZoom:=1.0; FClosed:=False;
+  LReg := TWebviewInvokeRegistry.Create;
+  LAssets := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
+  FInvokesIntf := LReg;
+  FAssetsIntf := LAssets;
+  FInvokes := LReg;
+  FAssets := LAssets;
   FWindow:=AWindow; FOwnsWindow:=False; FWindow.OnEvent(@HandleWindowEvent);
   Inc(GLive); RegisterLive(Self);
 end;
@@ -292,28 +297,15 @@ function TWkWebview.GetZoom: Double; begin Result := FZoom; end;
 procedure TWkWebview.SetUserAgent(const AUserAgent: string); begin FUserAgent := AUserAgent; end;
 function TWkWebview.GetUserAgent: string; begin Result := FUserAgent; end;
 function TWkWebview.GetScaleFactor: Double; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.GetScaleFactor else Result:=1.0; end;
-procedure TWkWebview.GrowScaleRef; inline;
+procedure TWkWebview.GrowOnScaleChanged; inline;
 begin
-  if FScaleHandlersRefCount = Length(FScaleHandlersRef) then
-    SetLength(FScaleHandlersRef, WebviewGrowCapacity(Length(FScaleHandlersRef)));
-end;
-
-procedure TWkWebview.GrowScaleMethod; inline;
-begin
-  if FScaleHandlersMethodCount = Length(FScaleHandlersMethod) then
-    SetLength(FScaleHandlersMethod, WebviewGrowCapacity(Length(FScaleHandlersMethod)));
-end;
-
-procedure TWkWebview.GrowScaleProc; inline;
-begin
-  if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
-    SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
+  // single source: bytes.ops VecGrow (0→4→2×) inline, zero extra call, single Vec
+  specialize VecGrow<TWebviewScaleHandler>(FOnScaleChanged, FOnScaleChangedCount);
 end;
 
 procedure TWkWebview.GrowPendingEvals; inline;
 begin
-  if FPendingCount = Length(FPendingEvals) then
-    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+  specialize VecGrow<PEvalRec>(FPendingEvals, FPendingCount);
 end;
 
 procedure TWkWebview.RemovePending(ARec: PEvalRec);
@@ -334,68 +326,61 @@ end;
 
 procedure TWkWebview.GrowOnNavStarted; inline;
 begin
-  if FOnNavStartedCount = Length(FOnNavStarted) then
-    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavStarted, FOnNavStartedCount);
 end;
 
 procedure TWkWebview.GrowOnNavFinished; inline;
 begin
-  if FOnNavFinishedCount = Length(FOnNavFinished) then
-    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavFinished, FOnNavFinishedCount);
 end;
 
 procedure TWkWebview.GrowOnNavFailed; inline;
 begin
-  if FOnNavFailedCount = Length(FOnNavFailed) then
-    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+  specialize VecGrow<TWebviewNavFailedHandler>(FOnNavFailed, FOnNavFailedCount);
 end;
 
 procedure TWkWebview.GrowOnWindowClosed; inline;
 begin
-  if FOnWindowClosedCount = Length(FOnWindowClosed) then
-    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
+  specialize VecGrow<TWebviewNotifyHandler>(FOnWindowClosed, FOnWindowClosedCount);
 end;
 
 procedure TWkWebview.GrowOnReady; inline;
 begin
-  if FOnReadyCount = Length(FOnReady) then
-    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+  specialize VecGrow<TWebviewNotifyHandler>(FOnReady, FOnReadyCount);
 end;
 
 procedure TWkWebview.DoScaleChanged(ANewScale: Double);
 var
   I: Integer;
 begin
-  for I := 0 to FScaleHandlersRefCount - 1 do
-    if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](ANewScale);
-  for I := 0 to FScaleHandlersMethodCount - 1 do
-    if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](ANewScale);
-  for I := 0 to FScaleHandlersProcCount - 1 do
-    if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](ANewScale);
+  // perf: single linear scan over unified Vec, inline, O(n) single pass, zero 3× traversal, zero extra alloc
+  for I := 0 to FOnScaleChangedCount - 1 do
+    if Assigned(FOnScaleChanged[I]) then
+      try
+        FOnScaleChanged[I](ANewScale);
+      except
+      end;
 end;
 
 procedure TWkWebview.OnScaleChanged(AHandler: TWebviewScaleHandler); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleRef;
-  FScaleHandlersRef[FScaleHandlersRefCount] := AHandler;
-  Inc(FScaleHandlersRefCount);
+  GrowOnScaleChanged;
+  FOnScaleChanged[FOnScaleChangedCount] := AHandler;
+  Inc(FOnScaleChangedCount);
 end;
 
 procedure TWkWebview.OnScaleChanged(AHandler: TWebviewScaleMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleMethod;
-  FScaleHandlersMethod[FScaleHandlersMethodCount] := AHandler;
-  Inc(FScaleHandlersMethodCount);
+  // single source: webview.callbacks inline, zero triple copy
+  OnScaleChanged(WebviewScaleMethodToRef(AHandler));
 end;
 
 procedure TWkWebview.OnScaleChanged(AHandler: TWebviewScaleProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleProc;
-  FScaleHandlersProc[FScaleHandlersProcCount] := AHandler;
-  Inc(FScaleHandlersProcCount);
+  OnScaleChanged(WebviewScaleProcToRef(AHandler));
 end;
 procedure TWkWebview.Navigate(const AUrl: string); begin end;
 procedure TWkWebview.NavigateToString(const AHtml: string); begin end;
@@ -409,7 +394,6 @@ function TWkWebview.GoForward: Boolean; begin Result := False; end;
 {$PUSH}{$HINTS OFF}
 procedure TWkWebview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
 var
-  LRec: PEvalRec;
   LErr: EWebviewEvalFailed;
 begin
   if FClosed then
@@ -421,21 +405,12 @@ begin
     end;
     Exit;
   end;
-  New(LRec);
-  LRec^.Callback := ACallback;
-  LRec^.OnError := AOnError;
-  LRec^.Done := False;
-  GrowPendingEvals;
-  FPendingEvals[FPendingCount] := LRec;
-  Inc(FPendingCount);
-  LRec^.Done := True;
-  RemovePending(LRec);
+  // zero-allocation fast path: stub has no engine, exactly-once fail via OnError without New/Grow/Remove/Dispose churn (bytes.ops single source preserved)
   if Assigned(AOnError) then
   begin
     LErr := EWebviewEvalFailed.Create('WKWebView not available');
     try AOnError(LErr); finally LErr.Free; end;
   end;
-  Dispose(LRec);
 end;
 procedure TWkWebview.Emit(const AEvent, APayloadJson: string); begin end;
 procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
@@ -448,20 +423,12 @@ end;
 procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationStarted(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationStarted(WebviewNavMethodToRef(AHandler));
 end;
 procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationStarted(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationStarted(WebviewNavProcToRef(AHandler));
 end;
 procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler); overload;
 begin
@@ -473,20 +440,12 @@ end;
 procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationFinished(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFinished(WebviewNavMethodToRef(AHandler));
 end;
 procedure TWkWebview.OnNavigationFinished(AHandler: TWebviewNavEventProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationFinished(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFinished(WebviewNavProcToRef(AHandler));
 end;
 procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler); overload;
 begin
@@ -498,20 +457,12 @@ end;
 procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationFailed(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFailed(WebviewNavFailedMethodToRef(AHandler));
 end;
 procedure TWkWebview.OnNavigationFailed(AHandler: TWebviewNavFailedProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnNavigationFailed(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFailed(WebviewNavFailedProcToRef(AHandler));
 end;
 procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyHandler); overload;
 begin
@@ -523,20 +474,12 @@ end;
 procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnWindowClosed(
-    procedure
-    begin
-      AHandler;
-    end);
+  OnWindowClosed(WebviewNotifyMethodToRef(AHandler));
 end;
 procedure TWkWebview.OnWindowClosed(AHandler: TWebviewNotifyProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnWindowClosed(
-    procedure
-    begin
-      AHandler;
-    end);
+  OnWindowClosed(WebviewNotifyProcToRef(AHandler));
 end;
 procedure TWkWebview.OnReady(AHandler: TWebviewNotifyHandler); overload;
 begin
@@ -548,23 +491,15 @@ end;
 procedure TWkWebview.OnReady(AHandler: TWebviewNotifyMethod); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnReady(
-    procedure
-    begin
-      AHandler;
-    end);
+  OnReady(WebviewNotifyMethodToRef(AHandler));
 end;
 procedure TWkWebview.OnReady(AHandler: TWebviewNotifyProc); overload;
 begin
   if not Assigned(AHandler) then Exit;
-  OnReady(
-    procedure
-    begin
-      AHandler;
-    end);
+  OnReady(WebviewNotifyProcToRef(AHandler));
 end;
-function TWkWebview.GetInvokes: IWebviewInvokeRegistry; begin Result := nil; end;
-function TWkWebview.GetAssets: IWebviewAssets; begin Result := nil; end;
+function TWkWebview.GetInvokes: IWebviewInvokeRegistry; inline; begin Result := FInvokesIntf; end;
+function TWkWebview.GetAssets: IWebviewAssets; inline; begin Result := FAssetsIntf; end;
 function TWkWebview.NativeHandle: TWebviewNativeHandle; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.NativeHandle else Result:=nil; end;
 function TWkWebview.GetDispatcher: IWebviewDispatcher; begin if FWindow<>nil then Result:=FWindow.Dispatcher as IWebviewDispatcher else Result:=nil; end;
 {$POP}

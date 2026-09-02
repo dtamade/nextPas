@@ -18,14 +18,14 @@ unit nextpas.core.webview.bridge;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.json,
   nextpas.core.json.types,
-  nextpas.core.json.builder,
   nextpas.core.webview.base,
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.webview.assets,
+  nextpas.core.log.intf;
 
 const
   { 错误码稳定词汇表（BRIDGE_PROTOCOL §5） }
@@ -39,6 +39,10 @@ const
   { JS 分配帧 id 的上界：u53 安全整数（Number.MAX_SAFE_INTEGER） }
   NPW_MAX_FRAME_ID = 9007199254740991;
 
+  { 帧长上限：BRIDGE_PROTOCOL §6 业务建议 1 MiB Hard Limit，统一命名常量。
+    复用 bytes.ops 单源思想：常量即契约，避免魔法数字漂移；与文档 §6 一致。 }
+  NPW_MAX_FRAME_BYTES = 1 * 1024 * 1024;
+
 type
   { js→native invoke 帧（§3.1）。payload 以规范化重序列化文本携带；
     缺省或显式 null 统一为 'null'。 }
@@ -48,11 +52,27 @@ type
     PayloadJson: string;
   end;
 
-{ 解码并校验 invoke 帧（§3.1 非法判据全表）。非法返回 False 不抛异常：
-  生产路径由 transport 静默忽略；fake 驱动面据此抛 EWebviewBadFrame。
-  payload 经 json owner 规范化重序列化（值语义不变，文本可能换格式）。 }
+{ 帧长可观测性：调用方可先用此 helper 判断超限；TryDecodeFrame 超限
+  返回 False 但递增背压计数并经 log.intf Warn 告警（Release 亦可观测，防拼接/洪泛隐式堆积，§6）。 }
+function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
+function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
+{ 背压可观测：超限帧计数（单调递增，跨线程可见需外层同步，UI 线程亲和） }
+function WebviewOversizedCount: UInt64; inline;
+procedure WebviewResetOversizedCount; inline;
+procedure WebviewNoteOversized(ASize: SizeUInt); inline;
+procedure SetWebviewBridgeLogger(ALogger: ILogger); inline;
+
+{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise. }
+{ perf: hot path View+Document reuse zero alloc (Arena reuse), TStringView zero-copy. }
+{ note: string overload allocates Document/Arena; hot loops must use View+Document. }
 function TryDecodeFrame(const AFrameJson: string;
-  out AFrame: TWebviewFrame): Boolean;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
+{ View 入口：TStringView 零拷贝借用 }
+function TryDecodeFrame(const AView: TStringView;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
+{ Document 复用：caller Init/Done, Parse reuse Arena, zero alloc per frame }
+function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
+  out AFrame: TWebviewFrame): Boolean; overload;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
   合法 JSON 文本（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，
@@ -73,21 +93,33 @@ type
       非线程安全——只允许 UI 主线程触碰（与窗口壳同线程）。 *}
   TWebviewInvokeRegistry = class(TInterfacedObject, IWebviewInvokeRegistry)
   private type
-    TEntry = record
+    TBucket = record
+      State: Byte; // 0 Empty,1 Occupied,2 Deleted
+      Hash: UInt32;
       Cmd: string;
       IsAsync: Boolean;
       SyncHandler: TWebviewInvokeSyncHandler;
       AsyncHandler: TWebviewInvokeAsyncHandler;
     end;
   private
-    FEntries: array of TEntry;
-    FEntriesCount: Integer;
-    procedure GrowEntries; inline;
+    FBuckets: array of TBucket;
+    FCapacity: SizeUInt;
+    FMask: SizeUInt;
+    FCount: SizeUInt;
+    FUsed: SizeUInt;
+    FMaxLoad: SizeUInt;
+    function HashOf(const S: string): UInt32; inline;
+    function NextPow2(X: SizeUInt): SizeUInt; inline;
+    procedure RecalcMaxLoad; inline;
+    procedure InitCapacity(ACap: SizeUInt);
+    procedure Rehash(ANewCap: SizeUInt);
+    function FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean; inline;
     function IndexOf(const ACmd: string): Integer;
     procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
       const ASync: TWebviewInvokeSyncHandler;
       const AAsync: TWebviewInvokeAsyncHandler);
   public
+    destructor Destroy; override;
     { IWebviewInvokeRegistry }
     procedure Register(const ACmd: string;
       AHandler: TWebviewInvokeSyncHandler); overload;
@@ -115,19 +147,16 @@ type
       ENotSupportedError(ecNotSupported)（CONTRACT §3.4，门禁
       test_webview_bridge 断言异常分类/消息可观测），落位时由 fs owner
       接管实现。契约可观测性：异常类/分类/消息文本为稳定契约。 *}
+  {** 资产路由索引已抽独立模块 TWebviewAssetIndex（L3 单哈希+有序 Lens），
+      桥侧仅持单实例，消除数组+哈希双结构双写耦合；MountCount/最长探测
+      由索引单源承载。 *}
   TWebviewAssetsImpl = class(TInterfacedObject, IWebviewAssets)
-  private type
-    TMount = record
-      Prefix: string;
-      Provider: IWebviewAssetProvider;
-    end;
   private
-    FMounts: array of TMount;
-    FMountsCount: Integer;
     FInert: Boolean;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
-    procedure GrowMounts; inline;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
+    FIndex: TWebviewAssetIndex;
   public
     constructor Create(AInert: Boolean = False);
+    destructor Destroy; override;
     procedure MountEmbedded(const APrefix: string;
       AProvider: IWebviewAssetProvider);
     { CONTRACT §3.4：非惰性下抛 ENotSupportedError(ecNotSupported)，
@@ -145,171 +174,287 @@ const
     WebView2 用 window.chrome.webview，均投递字符串化帧。
     公开面为 window.__npw 的 version/ready/invoke/listen/emit；
     内部面 __resolve/__reject/__emit 由 native 经 Eval 调用；
-    ready promise 于脚本尾部兑现（§4 握手时序）。 }
+    ready promise 于脚本尾部兑现（§4 握手时序）。
+    独立资源：真值在 nextpas.core.webview.bridge.js，Pascal 侧经
+    nextpas.core.webview.bridge.script.inc 生成，单源可维护。 }
   NPW_BRIDGE_SCRIPT: string =
-    '(() => {'#10 +
-    '  '#39'use strict'#39';'#10 +
-    '  if (window.__npw) return;'#10 +
-    '  const send = (() => {'#10 +
-    '    const wk = window.webkit && window.webkit.messageHandlers &&'#10 +
-    '              window.webkit.messageHandlers.npw;'#10 +
-    '    if (wk) return (t) => wk.postMessage(t);'#10 +
-    '    const wv = window.chrome && window.chrome.webview;'#10 +
-    '    if (wv) return (t) => wv.postMessage(t);'#10 +
-    '    return null;'#10 +
-    '  })();'#10 +
-    '  const post = (frame) => {'#10 +
-    '    if (!send) throw new Error('#39'npw: no transport'#39');'#10 +
-    '    send(JSON.stringify(frame));'#10 +
-    '  };'#10 +
-    '  const pending = new Map();'#10 +
-    '  let nextId = 1;'#10 +
-    '  const listeners = new Map();'#10 +
-    '  const invoke = (cmd, payload) => {'#10 +
-    '    if (typeof cmd !== '#39'string'#39' || cmd.length === 0)'#10 +
-    '      return Promise.reject(new Error('#39'npw: cmd required'#39'));'#10 +
-    '    if (nextId > 9007199254740991)'#10 +
-    '      return Promise.reject(new Error('#39'npw: id space exhausted'#39'));'#10 +
-    '    const id = nextId++;'#10 +
-    '    post({ v: 1, id: id,' + #10 +
-    '          cmd: cmd,' + #10 +
-    '          payload: payload === undefined ? null : payload });'#10 +
-    '    return new Promise((resolve, reject) => {'#10 +
-    '      pending.set(id, { resolve: resolve, reject: reject });'#10 +
-    '    });'#10 +
-    '  };'#10 +
-    '  const listen = (event, callback) => {'#10 +
-    '    let set = listeners.get(event);'#10 +
-    '    if (!set) { set = new Set(); listeners.set(event, set); }'#10 +
-    '    set.add(callback);'#10 +
-    '    return () => set.delete(callback);'#10 +
-    '  };'#10 +
-    '  const emitLocal = (event, payload) => {'#10 +
-    '    const set = listeners.get(event);'#10 +
-    '    if (!set) return;'#10 +
-    '    set.forEach((cb) => { cb(payload); });'#10 +
-    '  };'#10 +
-    '  const settle = (id, text, ok) => {'#10 +
-    '    const p = pending.get(id);'#10 +
-    '    if (!p) return;'#10 +
-    '    pending.delete(id);'#10 +
-    '    const value = JSON.parse(text);'#10 +
-    '    if (ok) p.resolve(value); else p.reject(value);'#10 +
-    '  };'#10 +
-    '  let fireReady;'#10 +
-    '  const ready = new Promise((fire) => { fireReady = fire; });'#10 +
-    '  window.__npw = {'#10 +
-    '    version: 1,'#10 +
-    '    ready: ready,'#10 +
-    '    invoke: invoke,'#10 +
-    '    listen: listen,'#10 +
-    '    emit: emitLocal,'#10 +
-    '    __resolve: (id, t) => settle(id, t, true),'#10 +
-    '    __reject: (id, t) => settle(id, t, false),'#10 +
-    '    __emit: (event, t) => emitLocal(event, JSON.parse(t))'#10 +
-    '  };'#10 +
-    '  Object.freeze(window.__npw);'#10 +
-    '  fireReady();'#10 +
-    '})();'#10;
+{$I nextpas.core.webview.bridge.script.inc}
+    ;
 
 implementation
 
-{ json.types/json.builder 已在 interface uses 引入 }
+uses
+  nextpas.core.text.view,
+  nextpas.core.text.builder,
+  nextpas.core.json.parser,
+  nextpas.core.json.writer,
+  nextpas.core.bytes.ops,
+  nextpas.core.hash.wyhash,
+  nextpas.core.collections.hashmap.base,
+  nextpas.core.simd.bitops,
+  nextpas.core.log.intf,
+  nextpas.core.webview.utils;
 
-{ 把任意文本转成 JS 字符串字面量：JSON 字符串转义集是 JS 的子集
-  （引号/反斜杠/控制字符），直接复用 json owner 的 Str 编码。
-  bridge 内不做任何手工转义扫描（BRIDGE_PROTOCOL §6）。 }
-function JsStringLit(const AValue: string): string;
+{ JsStringLit: JSON Str subset, reuse json owner, no manual scan. }
+{ perf: inline, TJsonWriter zero-copy Move, single reserve. }
+function JsStringLit(const AValue: string): string; inline;
 var
-  LB: IJsonBuilder;
+  LB: TStringBuilder;
+  W: TJsonWriter;
 begin
-  LB := JsonBuilder;
-  LB.Str(AValue);
-  Result := LB.ToString;
+  LB.Init(SizeUInt(Length(AValue)) + 8);
+  try
+    W.Init(LB);
+    W.Str(AValue);
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
-function TryDecodeFrame(const AFrameJson: string;
-  out AFrame: TWebviewFrame): Boolean;
+function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
+begin
+  Result := Length(AFrameJson) > NPW_MAX_FRAME_BYTES;
+end;
+
+function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
+begin
+  Result := AView.Len > SizeUInt(NPW_MAX_FRAME_BYTES);
+end;
+
 var
-  LDoc: IJsonDocument;
-  LRoot, LField: TJsonValue;
+  GWebviewOversizedFrames: UInt64 = 0;
+  GWebviewBridgeLogger: ILogger = nil;
+
+function WebviewOversizedCount: UInt64; inline;
+begin
+  Result := GWebviewOversizedFrames;
+end;
+
+procedure WebviewResetOversizedCount; inline;
+begin
+  GWebviewOversizedFrames := 0;
+end;
+
+procedure WebviewNoteOversized(ASize: SizeUInt); inline;
+begin
+  Inc(GWebviewOversizedFrames);
+  { stability: Release 亦可观测背压，Warn 告警防连续小帧/拼接攻击隐式堆积；采样避免洪泛日志 }
+  if (GWebviewBridgeLogger <> nil) and ((GWebviewOversizedFrames <= 5) or (GWebviewOversizedFrames mod 64 = 0)) then
+    GWebviewBridgeLogger.Warn('webview frame oversized');
+end;
+
+procedure SetWebviewBridgeLogger(ALogger: ILogger); inline;
+begin
+  GWebviewBridgeLogger := ALogger;
+end;
+
+{ Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
+
+function BridgeParseFrame(const AView: TStringView; var ADoc: TJsonDocument;
+  out ARoot: TJsonValue): Boolean; inline;
+begin
+  Result := False;
+  if AView.Len = 0 then
+    Exit;
+  if IsWebviewFrameOversizedView(AView) then
+  begin
+    WebviewNoteOversized(AView.Len);
+    Exit;
+  end;
+  if not ADoc.Parse(AView) then
+    Exit;
+  if ADoc.HasError then
+    Exit;
+  ARoot := TJsonValue.Create(ADoc, ADoc.Root);
+  if not ARoot.IsObject then
+    Exit;
+  Result := True;
+end;
+
+function BridgeValidateFrame(const ARoot: TJsonValue; out AId: Int64;
+  out ACmd: string): Boolean; inline;
+var
+  LField: TJsonValue;
+begin
+  Result := False;
+  AId := 0;
+  ACmd := '';
+  LField := ARoot.Get('v');
+  if not LField.IsInt then Exit;
+  if LField.AsInt <> NPW_BRIDGE_VERSION then Exit;
+  LField := ARoot.Get('id');
+  if not LField.IsInt then Exit;
+  AId := LField.AsInt;
+  if (AId <= 0) or (AId > NPW_MAX_FRAME_ID) then Exit;
+  LField := ARoot.Get('cmd');
+  if not LField.IsStr then Exit;
+  ACmd := LField.AsStr.ToString;
+  if ACmd = '' then Exit;
+  Result := True;
+end;
+
+function BridgeNormalizePayload(const APayload: TJsonValue): string;
+begin
+  if APayload.IsNull then
+    Result := 'null'
+  else
+    Result := JsonStringify(APayload);
+end;
+
+function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
+  out AFrame: TWebviewFrame): Boolean; overload;
+var
+  LRoot: TJsonValue;
+  LPayload: TJsonValue;
 begin
   Result := False;
   AFrame := Default(TWebviewFrame);
-  if (AFrameJson = '') or (Length(AFrameJson) > 2 * 1024 * 1024) then
+  if not BridgeParseFrame(AView, ADoc, LRoot) then
     Exit;
-  if not TryJsonParse(AFrameJson, LDoc) then
+  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
     Exit;
-  if LDoc.HasError then
-    Exit;
-  LRoot := LDoc.Root;
-  if not LRoot.IsObject then
-    Exit;
-  { v：必填整数，恒等于协议版本 }
-  LField := LRoot.Get('v');
-  if not LField.IsInt then
-    Exit;
-  if LField.AsInt <> NPW_BRIDGE_VERSION then
-    Exit;
-  { id：必填正整数，u53 上界内（native 不解释、原样回显） }
-  LField := LRoot.Get('id');
-  if not LField.IsInt then
-    Exit;
-  AFrame.Id := LField.AsInt;
-  if (AFrame.Id <= 0) or (AFrame.Id > NPW_MAX_FRAME_ID) then
-    Exit;
-  { cmd：必填非空字符串 }
-  LField := LRoot.Get('cmd');
-  if not LField.IsStr then
-    Exit;
-  AFrame.Cmd := LField.AsStr.ToString;
-  if AFrame.Cmd = '' then
-    Exit;
-  { payload：缺省/显式 null → 'null'；否则规范化重序列化 }
-  LField := LRoot.Get('payload');
-  if LField.IsNull then
-    AFrame.PayloadJson := 'null'
-  else
-    AFrame.PayloadJson := JsonStringify(LField);
+  LPayload := LRoot.Get('payload');
+  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
   Result := True;
+end;
+
+function TryDecodeFrame(const AView: TStringView;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
+var
+  LDoc: TJsonDocument;
+begin
+  LDoc.Init(nil);
+  try
+    Result := TryDecodeFrame(AView, LDoc, AFrame);
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function TryDecodeFrame(const AFrameJson: string;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
+var
+  LView: TStringView;
+begin
+  { cold path single source: string overload zero-copy View forwarding to View overload, no duplicate Init/Done/Oversized; hot loops must use View+Document var ADoc reuse zero alloc per frame (Arena reuse) single source bytes.ops }
+  LView := TStringView.FromStr(AFrameJson);
+  Result := TryDecodeFrame(LView, AFrame);
 end;
 
 function BuildResolveScript(AId: Int64; const AResultJson: string): string;
 var
   LJson: string;
+  LB: TStringBuilder;
+  W: TJsonWriter;
 begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  Result := '__npw.__resolve(' + IntToStr(AId) + ',' +
-    JsStringLit(LJson) + ')';
+  { perf: 单次 TBufStringBuilder 预留+零拷贝 AppendInt/AppendBytes，W.Str 单次转义；无 IJsonBuilder 接口堆分配，无 IntToStr 临时串与 '+' 串拼接二次拷贝 }
+  LB.Init(SizeUInt(16 + 20 + Length(LJson) + 8));
+  try
+    LB.AppendBytes('__npw.__resolve(', 16);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    W.Init(LB);
+    W.Str(LJson);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
-  LB: IJsonBuilder;
+  LB: TStringBuilder;
+  LCode: string;
+  procedure AppendDoubleEscaped(const S: string); inline;
+  var
+    V: TStringView;
+    I: SizeUInt;
+    B: Byte;
+    LHex: array[0..6] of AnsiChar;
+  begin
+    V := TStringView.FromStr(S);
+    for I := 0 to V.Len - 1 do
+    begin
+      if V.Data = nil then Break;
+      B := Byte(V.Data[I]);
+      case B of
+        Ord('"'): LB.AppendBytes('\\\"', 4);
+        Ord('\'): LB.AppendBytes('\\\\', 4);
+        8: LB.AppendBytes('\\b', 3);
+        9: LB.AppendBytes('\\t', 3);
+        10: LB.AppendBytes('\\n', 3);
+        12: LB.AppendBytes('\\f', 3);
+        13: LB.AppendBytes('\\r', 3);
+      else
+        if B < 32 then
+        begin
+          LHex[0] := '\';
+          LHex[1] := '\';
+          LHex[2] := 'u';
+          LHex[3] := '0';
+          LHex[4] := '0';
+          if (B shr 4) < 10 then LHex[5] := AnsiChar(Ord('0') + (B shr 4))
+          else LHex[5] := AnsiChar(Ord('a') + (B shr 4) - 10);
+          if (B and $F) < 10 then LHex[6] := AnsiChar(Ord('0') + (B and $F))
+          else LHex[6] := AnsiChar(Ord('a') + (B and $F) - 10);
+          LB.AppendBytes(@LHex[0], 7);
+        end
+        else
+          LB.AppendChar(AnsiChar(B));
+      end;
+    end;
+  end;
 begin
-  LB := JsonBuilder;
-  LB.BeginObject;
-  LB.Key('code');
-  LB.Str(NormalizeInvokeCode(ACode));
-  LB.Key('message');
-  LB.Str(AMessage);
-  LB.EndObject;
-  Result := '__npw.__reject(' + IntToStr(AId) + ',' +
-    JsStringLit(LB.ToString) + ')';
+  { perf: 单预留单Builder零拷贝：单次 Init 预留 (worst 4x for \" / \\ double escape, 7x for control \\u00xx), AppendBytes/AppendInt/JsonEscape 双层转义单遍零拷贝 inline，bytes.ops 单源思想，无 ToString+Clear 双次分配与二次转义抖动；stability: try/finally Done 不丢 }
+  LCode := NormalizeInvokeCode(ACode);
+  LB.Init(SizeUInt(32 + Length(LCode) * 4 + Length(AMessage) * 4 + 15 + 20 + 32 + 8));
+  try
+    LB.AppendBytes('__npw.__reject(', 15);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    LB.AppendChar('"');
+    LB.AppendBytes('{\"code\":\"', 12);
+    AppendDoubleEscaped(LCode);
+    LB.AppendBytes('\",\"message\":\"', 17);
+    AppendDoubleEscaped(AMessage);
+    LB.AppendBytes('\"}', 3);
+    LB.AppendChar('"');
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
+  LB: TStringBuilder;
+  W: TJsonWriter;
 begin
   CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
-  Result := '__npw.__emit(' + JsStringLit(AEvent) + ',' +
-    JsStringLit(LJson) + ')';
+  { perf: 单 builder 复用，AppendInt/AppendBytes 零拷贝，W.Str 两次各经一次 Init 重置 RootWritten，避免 IJsonBuilder 与 '+' 拼接 }
+  LB.Init(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
+  try
+    LB.AppendBytes('__npw.__emit(', 13);
+    W.Init(LB);
+    W.Str(AEvent);
+    LB.AppendChar(',');
+    W.Init(LB);
+    W.Str(LJson);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function NormalizeInvokeCode(const ACode: string): string; inline;
@@ -320,39 +465,154 @@ begin
     Result := ACode;
 end;
 
-{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 ---- }
+{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 + 单哈希 O(1) ---- }
 
-procedure TWebviewInvokeRegistry.GrowEntries; inline;
+function TWebviewInvokeRegistry.HashOf(const S: string): UInt32; inline;
 begin
-  Assert(FEntriesCount >= 0, 'GrowEntries count');
-  if FEntriesCount = Length(FEntries) then
-    SetLength(FEntries, WebviewGrowCapacity(Length(FEntries)));
+  { perf: inline + WyHash32 单源 nextpas.core.hash.wyhash 零拷贝，空串 2166136261 seed 与 THashMap/asset 单源一致，零分配 }
+  if Length(S) = 0 then
+    Exit(HashMix32(2166136261));
+  Result := WyHash32(@S[1], SizeUInt(Length(S)));
+end;
+
+function TWebviewInvokeRegistry.NextPow2(X: SizeUInt): UInt32; inline;
+begin
+  { perf: inline + NextPow2 单源 nextpas.core.simd.bitops，位运算单指令，零额外调用 }
+  if X <= 1 then Exit(1);
+{$IF SizeOf(SizeUInt)=8}
+  Result := UInt32(NextPow2_64(TU64(X)));
+{$ELSE}
+  Result := UInt32(NextPow2_32(TU32(X)));
+{$ENDIF}
+end;
+
+procedure TWebviewInvokeRegistry.RecalcMaxLoad; inline;
+begin
+  { perf: inline 0.75 负载单源，零额外调用 }
+  FMaxLoad := Trunc(FCapacity * 0.75);
+  if (FCapacity > 0) and (FMaxLoad >= FCapacity) then
+    FMaxLoad := FCapacity - 1;
+end;
+
+procedure TWebviewInvokeRegistry.InitCapacity(ACap: SizeUInt);
+begin
+  if ACap < 4 then ACap := 4;
+  ACap := SizeUInt(NextPow2(ACap));
+  SetLength(FBuckets, ACap);
+  { stability: SetLength 已按 Default(TBucket) 零初始化托管字段（string/interface=nil），
+    禁止 FillChar 全容量覆写托管语义与 O(cap) 置零抖动；inline 单源 }
+  FCapacity := ACap;
+  if ACap > 0 then
+    FMask := ACap - 1
+  else
+    FMask := 0;
+  FCount := 0;
+  FUsed := 0;
+  RecalcMaxLoad;
+end;
+
+procedure TWebviewInvokeRegistry.Rehash(ANewCap: SizeUInt);
+var
+  LOld: array of TBucket;
+  LOldCap: SizeUInt;
+  I: SizeUInt;
+  LIdx: SizeUInt;
+begin
+  { stability: 线性探测重哈希，Finalize 全量串/接口不丢，Move 零拷贝转移所有权，旧桶清零防 double finalize }
+  LOld := FBuckets;
+  LOldCap := FCapacity;
+  FBuckets := nil;
+  FCapacity := 0;
+  InitCapacity(ANewCap);
+  for I := 0 to LOldCap - 1 do
+    if LOld[I].State = 1 then
+    begin
+      LIdx := LOld[I].Hash and FMask;
+      while FBuckets[LIdx].State = 1 do
+        LIdx := (LIdx + 1) and FMask;
+      { stability: 托管赋值转移所有权（string/interface AddRef），旧桶置空释放不丢，零 FillChar 绕过 }
+      FBuckets[LIdx] := LOld[I];
+      LOld[I].Cmd := '';
+      LOld[I].SyncHandler := nil;
+      LOld[I].AsyncHandler := nil;
+      LOld[I].State := 0;
+      LOld[I].Hash := 0;
+      LOld[I].IsAsync := False;
+      Inc(FCount);
+      Inc(FUsed);
+    end;
+  SetLength(LOld, 0);
+end;
+
+function TWebviewInvokeRegistry.FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean; inline;
+var
+  LIdx, LStart: SizeUInt;
+  LFirstDel: SizeInt;
+begin
+  { perf: inline O(1) 平均线性探测，WyHash32 视图哈希直算，SpanEqual 前已 hash 预筛，Deleted 链路保持，首 Deleted 记位作插入点，零堆分配 }
+  Result := False;
+  if FCapacity = 0 then begin AIdx := 0; Exit(False); end;
+  LIdx := AHash and FMask;
+  LStart := LIdx;
+  LFirstDel := -1;
+  while True do
+  begin
+    case FBuckets[LIdx].State of
+      0: begin
+           if LFirstDel >= 0 then AIdx := SizeUInt(LFirstDel) else AIdx := LIdx;
+           Exit(False);
+         end;
+      1: if (FBuckets[LIdx].Hash = AHash) and (FBuckets[LIdx].Cmd = ACmd) then
+         begin AIdx := LIdx; Exit(True); end;
+      2: if LFirstDel < 0 then LFirstDel := SizeInt(LIdx);
+    end;
+    LIdx := (LIdx + 1) and FMask;
+    if LIdx = LStart then begin
+      if LFirstDel >= 0 then AIdx := SizeUInt(LFirstDel) else AIdx := LIdx;
+      Exit(False);
+    end;
+  end;
 end;
 
 function TWebviewInvokeRegistry.IndexOf(const ACmd: string): Integer;
 var
-  I: Integer;
+  H: UInt32;
+  LIdx: SizeUInt;
 begin
-  for I := 0 to FEntriesCount - 1 do
-    if FEntries[I].Cmd = ACmd then
-      Exit(I);
+  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，hash 相等再字符串相等双筛，inline 零额外调用 }
+  if FCount = 0 then Exit(-1);
+  H := HashOf(ACmd);
+  if FindSlot(ACmd, H, LIdx) then
+    Exit(Integer(LIdx));
   Result := -1;
 end;
 
 procedure TWebviewInvokeRegistry.AddEntry(const ACmd: string;
   AIsAsync: Boolean; const ASync: TWebviewInvokeSyncHandler;
   const AAsync: TWebviewInvokeAsyncHandler);
+var
+  H: UInt32;
+  LIdx: SizeUInt;
 begin
   CheckInvokeCmd(ACmd);
-  if IndexOf(ACmd) >= 0 then
+  if FCapacity = 0 then InitCapacity(4);
+  H := HashOf(ACmd);
+  if FindSlot(ACmd, H, LIdx) then
     raise EWebviewInvalidState.CreateFmt(
       'invoke handler already registered: %s', [ACmd]);
-  GrowEntries;
-  FEntries[FEntriesCount].Cmd := ACmd;
-  FEntries[FEntriesCount].IsAsync := AIsAsync;
-  FEntries[FEntriesCount].SyncHandler := ASync;
-  FEntries[FEntriesCount].AsyncHandler := AAsync;
-  Inc(FEntriesCount);
+  if FUsed >= FMaxLoad then
+  begin
+    Rehash(FCapacity shl 1);
+    FindSlot(ACmd, H, LIdx);
+  end;
+  FBuckets[LIdx].State := 1;
+  FBuckets[LIdx].Hash := H;
+  FBuckets[LIdx].Cmd := ACmd;
+  FBuckets[LIdx].IsAsync := AIsAsync;
+  FBuckets[LIdx].SyncHandler := ASync;
+  FBuckets[LIdx].AsyncHandler := AAsync;
+  Inc(FCount);
+  Inc(FUsed);
 end;
 
 procedure TWebviewInvokeRegistry.Register(const ACmd: string;
@@ -409,38 +669,70 @@ begin
     end);
 end;
 
+destructor TWebviewInvokeRegistry.Destroy;
+var
+  I: SizeUInt;
+begin
+  { stability: Finalize 全量串/接口，nil 释放不丢，无 FillChar 绕过托管语义，inline 薄转 }
+  if FCapacity > 0 then
+    for I := 0 to FCapacity - 1 do
+      if FBuckets[I].State = 1 then
+      begin
+        Finalize(FBuckets[I].Cmd);
+        Finalize(FBuckets[I].SyncHandler);
+        Finalize(FBuckets[I].AsyncHandler);
+        FBuckets[I].State := 0;
+        FBuckets[I].Hash := 0;
+        FBuckets[I].IsAsync := False;
+      end;
+  SetLength(FBuckets, 0);
+  FCapacity := 0;
+  FMask := 0;
+  FCount := 0;
+  FUsed := 0;
+  inherited Destroy;
+end;
+
 procedure TWebviewInvokeRegistry.Unregister(const ACmd: string);
 var
-  LIdx, I: Integer;
+  H: UInt32;
+  LIdx: SizeUInt;
 begin
-  LIdx := IndexOf(ACmd);
-  if LIdx < 0 then
-    Exit;   { 未注册是静默 no-op }
-  for I := LIdx to FEntriesCount - 2 do
-    FEntries[I] := FEntries[I + 1];
-  Dec(FEntriesCount);
-  if FEntriesCount < Length(FEntries) then
-    FEntries[FEntriesCount] := Default(TEntry);
+  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，Deleted tombstone 保持链路，Finalize 释放串/接口不丢 }
+  if FCount = 0 then Exit;
+  H := HashOf(ACmd);
+  if not FindSlot(ACmd, H, LIdx) then
+    Exit; { 未注册是静默 no-op }
+  Finalize(FBuckets[LIdx].Cmd);
+  Finalize(FBuckets[LIdx].SyncHandler);
+  Finalize(FBuckets[LIdx].AsyncHandler);
+  FBuckets[LIdx].State := 2; // Deleted
+  FBuckets[LIdx].Hash := 0;
+  Dec(FCount);
 end;
 
 function TWebviewInvokeRegistry.Count: Integer; inline;
 begin
-  Result := FEntriesCount;
+  { perf: inline O(1) 读，零额外调用 }
+  Result := Integer(FCount);
 end;
 
 function TWebviewInvokeRegistry.Find(const ACmd: string; out AIsAsync: Boolean;
   out ASync: TWebviewInvokeSyncHandler;
   out AAsync: TWebviewInvokeAsyncHandler): Boolean;
 var
-  LIdx: Integer;
+  H: UInt32;
+  LIdx: SizeUInt;
 begin
-  LIdx := IndexOf(ACmd);
-  Result := LIdx >= 0;
-  if not Result then
+  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，hash 相等再字符串相等双筛，inline 热分发零额外调用 }
+  if FCount = 0 then Exit(False);
+  H := HashOf(ACmd);
+  if not FindSlot(ACmd, H, LIdx) then
     Exit(False);
-  AIsAsync := FEntries[LIdx].IsAsync;
-  ASync := FEntries[LIdx].SyncHandler;
-  AAsync := FEntries[LIdx].AsyncHandler;
+  Result := True;
+  AIsAsync := FBuckets[LIdx].IsAsync;
+  ASync := FBuckets[LIdx].SyncHandler;
+  AAsync := FBuckets[LIdx].AsyncHandler;
 end;
 
 { ---- TWebviewAssetsImpl：前缀路由 + provider 链 ---- }
@@ -449,19 +741,20 @@ constructor TWebviewAssetsImpl.Create(AInert: Boolean);
 begin
   inherited Create;
   FInert := AInert;
+  FIndex := TWebviewAssetIndex.Create;
 end;
 
-procedure TWebviewAssetsImpl.GrowMounts; inline;
+destructor TWebviewAssetsImpl.Destroy;
 begin
-  Assert(FMountsCount >= 0, 'GrowMounts count');
-  if FMountsCount = Length(FMounts) then
-    SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
+  if FIndex <> nil then
+    FIndex.Free;
+  FIndex := nil;
+  inherited Destroy;
 end;
 
 procedure TWebviewAssetsImpl.MountEmbedded(const APrefix: string;
   AProvider: IWebviewAssetProvider);
 var
-  LPos, I: Integer;
   LNormPrefix: string;
 begin
   if FInert then
@@ -469,23 +762,9 @@ begin
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
   LNormPrefix := NormalizeWebviewAssetPath(APrefix);
-  { 保持按前缀长度降序稳定有序：最长前缀优先，同长保持先挂先得——
-    TryResolve 首命中即最优，平均 O(1)、最坏 O(n) 但 n≤~16 时常数极小；
-    语义与 CONTRACT §3 最长前缀唯一命中/同长先挂一致；前缀归一化复用
-    base.NormalizeWebviewAssetPath（与 TryResolve 同源，前导 '/' 容错） }
-  LPos := FMountsCount;
-  for I := 0 to FMountsCount - 1 do
-    if Length(LNormPrefix) > Length(FMounts[I].Prefix) then
-    begin
-      LPos := I;
-      Break;
-    end;
-  GrowMounts;
-  for I := FMountsCount downto LPos + 1 do
-    FMounts[I] := FMounts[I - 1];
-  FMounts[LPos].Prefix := LNormPrefix;
-  FMounts[LPos].Provider := AProvider;
-  Inc(FMountsCount);
+  { 单哈希+有序 Lens 单源承载：首个同前缀胜（CONTRACT §3.4），
+    零双写；索引内部 WyHash + VecGrowCapacity 单源，O(1) 平均。 }
+  FIndex.Add(LNormPrefix, AProvider);
 end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
@@ -502,8 +781,10 @@ end;
 function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 var
-  I: Integer;
+  I, LLen: Integer;
   LPath: string;
+  LView, LSlice: TStringView;
+  LProvider: IWebviewAssetProvider;
 begin
   Result := False;
   ABytes := nil;
@@ -513,19 +794,37 @@ begin
   LPath := NormalizeWebviewAssetPath(ASchemeRelativePath);
   if LPath = '' then
     Exit;
+  LView := TStringView.FromStr(LPath);
   { 单挂载根路径快路径：95% demo 单 provider 零扫描（与 MountCount inline 同源） }
-  if (FMountsCount = 1) and (FMounts[0].Prefix = '') then
-    Exit(FMounts[0].Provider.TryResolve(LPath, ABytes, AMimeType));
-  { 已按长度降序稳定排序：首个前缀命中即最长命中，同长先挂语义天然保持 }
-  for I := 0 to FMountsCount - 1 do
-    if (FMounts[I].Prefix = '') or (Pos(FMounts[I].Prefix, LPath) = 1) then
-      Exit(FMounts[I].Provider.TryResolve(LPath, ABytes, AMimeType));
+  if (FIndex.Count = 1) and (FIndex.DistinctCount = 1) and (FIndex.DistinctLensAt(0) = 0) then
+  begin
+    if FIndex.TryGetByView(TStringView.Empty, LProvider) then
+      Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+  end;
+  { 哈希最长前缀探测：distinctLens 降序枚举，TStringView 零拷贝切片 +
+    WyHash 视图哈希 O(1) 探测，单 distinct 零 Copy/GetsMem；多挂载仍
+    O(distinct) 哈希优于全量 n*Pos 扫描，零堆分配证据见 bench_bridge。 }
+  for I := 0 to FIndex.DistinctCount - 1 do
+  begin
+    LLen := FIndex.DistinctLensAt(I);
+    if SizeUInt(LLen) > LView.Len then
+      Continue;
+    if LLen = 0 then
+    begin
+      if FIndex.TryGetByView(TStringView.Empty, LProvider) then
+        Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+      Continue;
+    end;
+    LSlice := TStringView.Create(LView.Data, SizeUInt(LLen));
+    if FIndex.TryGetByView(LSlice, LProvider) then
+      Exit(LProvider.TryResolve(LPath, ABytes, AMimeType));
+  end;
   Result := False;
 end;
 
 function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
-  Result := FMountsCount;
+  Result := FIndex.Count;
 end;
 
 end.

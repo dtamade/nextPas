@@ -4,7 +4,7 @@ SCRIPT := check_architecture_source_contracts.py
 REGISTRY := architecture_contract_registry.json
 FIXTURE_ROOT := fixtures/red
 
-.PHONY: build run module-registry-audit dependency-boundary-audit host-raw-ffi-audit governance-docs red-fixtures test clean
+.PHONY: build run module-registry-audit dependency-boundary-audit host-raw-ffi-audit governance-docs webview-audit red-fixtures test clean
 
 build:
 	@true
@@ -23,6 +23,9 @@ host-raw-ffi-audit: build
 
 governance-docs: build
 	$(PYTHON) $(SCRIPT) --core-root $(CORE_ROOT) --registry $(REGISTRY) --check governance-docs --summary-line
+
+webview-audit: build
+	$(PYTHON) $(SCRIPT) --core-root $(CORE_ROOT) --registry $(REGISTRY) --check webview --summary-line
 
 red-fixtures: build
 	@set -e; \

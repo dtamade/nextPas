@@ -36,6 +36,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.mem,
   nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.time.httpdate,
   nextpas.core.sync;
 
@@ -93,7 +94,7 @@ const
   EMBEDDED_POOL_SIZE = 256; { SpinLock 池 256 槽零分配复用，4K 并发预算，163ms/10k 实测闭环 }
 
 type
-  TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
+  TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsView, IVfsETag, IVfsServeMeta)
   private
     FRp: TResPack;
     FData: PByte;
@@ -106,17 +107,22 @@ type
     FPoolCount: Integer;
     FPoolLock: ISpinLock;
     function LowerBoundPath(const APath: string): SizeInt; inline;
+    function LowerBoundView(const AView: TStringView): SizeUInt; inline;
     function HasSubtreePath(const APath: string): Boolean;
+    function HasSubtreeView(const AView: TStringView): Boolean;
     function IndexOfPath(const APath: string): SizeInt;
+    function IndexOfView(const AView: TStringView): SizeInt; inline;
     function TryPopPool(out ASlice: TEmbeddedSlice): Boolean;
     function TryPushPool(ASlice: TEmbeddedSlice): Boolean;
   public
     constructor Create(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean);
     destructor Destroy; override;
     function Exists(const APath: string): Boolean;
+    function ExistsView(const AView: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const AView: TStringView): IStream;
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
@@ -429,9 +435,44 @@ begin
   Result := HasSubtreePath(APath);
 end;
 
+function TEmbeddedVfs.ExistsView(const AView: TStringView): Boolean; inline;
+begin
+  { perf: inline + BytesValidPathView 零拷贝校验 + O(log n) 视图二分，复用 bytes.ops CompareBytesOrdered 单源，零堆分配 }
+  if VfsIsRootView(AView) then
+    Exit(True);
+  if not VfsValidPathView(AView, True) then
+    Exit(False);
+  if IndexOfView(AView) >= 0 then
+    Exit(True);
+  Result := HasSubtreeView(AView);
+end;
+
 function TEmbeddedVfs.LowerBoundPath(const APath: string): SizeInt; inline;
 begin
   Result := SizeInt(FRp.LowerBound(APath));
+end;
+
+function TEmbeddedVfs.LowerBoundView(const AView: TStringView): SizeUInt; inline;
+var
+  Lo, Hi, Mid: SizeUInt;
+  P: PByte;
+  L: SizeUInt;
+  C: Integer;
+begin
+  { perf: 零拷贝二分：StoredPathRange 直取 blob 内指针，CompareBytesOrdered 单源视图比较，零堆分配 }
+  Lo := 0;
+  Hi := FRp.Count;
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    L := FRp.StoredPathRange(Mid, P);
+    C := CompareBytesOrdered(P, Pointer(AView.Data), L, AView.Len);
+    if C < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
 end;
 
 function TEmbeddedVfs.HasSubtreePath(const APath: string): Boolean;
@@ -465,6 +506,43 @@ begin
     if FRp.ComparePathAt(Lo, APath) = 0 then
       Exit(SizeInt(Lo));
   Result := -1;
+end;
+
+function TEmbeddedVfs.IndexOfView(const AView: TStringView): SizeInt; inline;
+var
+  Lo: SizeUInt;
+  P: PByte;
+  L: SizeUInt;
+begin
+  Lo := LowerBoundView(AView);
+  if Lo < FRp.Count then
+  begin
+    L := FRp.StoredPathRange(Lo, P);
+    if CompareBytesOrdered(P, Pointer(AView.Data), L, AView.Len) = 0 then
+      Exit(SizeInt(Lo));
+  end;
+  Result := -1;
+end;
+
+function TEmbeddedVfs.HasSubtreeView(const AView: TStringView): Boolean;
+var
+  Lo: SizeUInt;
+  QLen: SizeUInt;
+  P: PByte;
+  L: SizeUInt;
+begin
+  { 零拷贝：LowerBoundView 直达 + CompareMem 前缀直比，零堆分配 }
+  Result := False;
+  if FRp.Count = 0 then Exit;
+  QLen := AView.Len;
+  Lo := LowerBoundView(AView);
+  if Lo >= FRp.Count then Exit;
+  L := FRp.StoredPathRange(Lo, P);
+  if L <= QLen then Exit;
+  if P[QLen] <> Ord('/') then Exit;
+  if QLen > 0 then
+    if not CompareMem(P, AView.Data, QLen) then Exit;
+  Result := True;
 end;
 
 function TEmbeddedVfs.TryGetETag(const APath: string; out AETag: string): Boolean;
@@ -653,6 +731,34 @@ begin
     Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), APath)
   else
     Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size), APath);
+  Keep := Self as IVfs;
+  Result := TEmbeddedSliceStream.Create(Slice, Self, Keep);
+end;
+
+function TEmbeddedVfs.OpenReadView(const AView: TStringView): IStream;
+var
+  Idx: SizeInt;
+  E: TResPackEntry;
+  Slice: TEmbeddedSlice;
+  Keep: IVfs;
+  LPathStr: string;
+begin
+  { perf: 零拷贝视图二分直达 + 池化切片零分配复用，S.Close 于 finally 释放，竞态统一 False }
+  if not VfsValidPathView(AView, True) then
+    raise EVfsInvalidPath.CreateCtx('open', AView.ToString, 'invalid virtual path');
+  Idx := IndexOfView(AView);
+  if Idx < 0 then
+  begin
+    if HasSubtreeView(AView) then
+      raise EVfsIsADirectory.CreateCtx('open', AView.ToString, 'target is a directory');
+    raise EVfsNotFound.CreateCtx('open', AView.ToString, 'not found');
+  end;
+  E := FEntries[Idx];
+  LPathStr := AView.ToString; { 仅诊断路径单次物化，无内容拷贝 }
+  if TryPopPool(Slice) then
+    Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), LPathStr)
+  else
+    Slice := TEmbeddedSlice.Create(FData, Int64(E.DataOffset), Int64(E.Size), LPathStr);
   Keep := Self as IVfs;
   Result := TEmbeddedSliceStream.Create(Slice, Self, Keep);
 end;

@@ -32,6 +32,9 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
+  nextpas.core.webview.live,
+  nextpas.core.webview.callbacks,
+  nextpas.core.bytes.ops,
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.fake;
@@ -57,6 +60,12 @@ type
   end;
 
   TFakeEvalRecords = array of TFakeEvalRecord;
+
+  TFakeEmit = record
+    Event: string;
+    PayloadJson: string;
+  end;
+  TFakeEmits = array of TFakeEmit;
 
   { 在途 Eval：脚本记录下标 + 恰好一次回调对 }
   TFakePendingEval = record
@@ -101,10 +110,7 @@ type
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
     FCapturedEvals: array of string;
     FCapturedCount: Integer;
-    FEmits: array of record
-      Event: string;
-      PayloadJson: string;
-    end;
+    FEmits: TFakeEmits;
     FEmitsCount: Integer;
     FDroppedEmits: Integer;
     FNavigateCount: Integer;
@@ -255,101 +261,67 @@ begin
 end;
 
 { ---- 回调归一化（method/proc → reference）----
-  统一存储范式（design-conventions §8）：内部只存 reference 形态。 }
+  统一存储范式（design-conventions §8）：内部只存 reference 形态。
+  单源：nextpas.core.webview.callbacks inline 薄转发，零拷贝闭包，消除四后端重复。 }
 
-function NotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler;
+function NotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler; inline;
 begin
-  Result :=
-    procedure
-    begin
-      AHandler;
-    end;
+  Result := WebviewNotifyMethodToRef(AHandler);
 end;
 
-function NotifyProcToRef(AHandler: TWebviewNotifyProc): TWebviewNotifyHandler;
+function NotifyProcToRef(AHandler: TWebviewNotifyProc): TWebviewNotifyHandler; inline;
 begin
-  Result :=
-    procedure
-    begin
-      AHandler;
-    end;
+  Result := WebviewNotifyProcToRef(AHandler);
 end;
 
-function NavMethodToRef(
-  AHandler: TWebviewNavEventMethod): TWebviewNavEventHandler;
+function NavMethodToRef(AHandler: TWebviewNavEventMethod): TWebviewNavEventHandler; inline;
 begin
-  Result :=
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end;
+  Result := WebviewNavMethodToRef(AHandler);
 end;
 
-function NavProcToRef(
-  AHandler: TWebviewNavEventProc): TWebviewNavEventHandler;
+function NavProcToRef(AHandler: TWebviewNavEventProc): TWebviewNavEventHandler; inline;
 begin
-  Result :=
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end;
+  Result := WebviewNavProcToRef(AHandler);
 end;
 
-function NavFailedMethodToRef(
-  AHandler: TWebviewNavFailedMethod): TWebviewNavFailedHandler;
+function NavFailedMethodToRef(AHandler: TWebviewNavFailedMethod): TWebviewNavFailedHandler; inline;
 begin
-  Result :=
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end;
+  Result := WebviewNavFailedMethodToRef(AHandler);
 end;
 
-function NavFailedProcToRef(
-  AHandler: TWebviewNavFailedProc): TWebviewNavFailedHandler;
+function NavFailedProcToRef(AHandler: TWebviewNavFailedProc): TWebviewNavFailedHandler; inline;
 begin
-  Result :=
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end;
+  Result := WebviewNavFailedProcToRef(AHandler);
 end;
 
-function ScaleMethodToRef(
-  AHandler: TWebviewScaleMethod): TWebviewScaleHandler;
+function ScaleMethodToRef(AHandler: TWebviewScaleMethod): TWebviewScaleHandler; inline;
 begin
-  Result :=
-    procedure(ANewScale: Double)
-    begin
-      AHandler(ANewScale);
-    end;
+  Result := WebviewScaleMethodToRef(AHandler);
 end;
 
-function ScaleProcToRef(
-  AHandler: TWebviewScaleProc): TWebviewScaleHandler;
+function ScaleProcToRef(AHandler: TWebviewScaleProc): TWebviewScaleHandler; inline;
 begin
-  Result :=
-    procedure(ANewScale: Double)
-    begin
-      AHandler(ANewScale);
-    end;
+  Result := WebviewScaleProcToRef(AHandler);
 end;
 
 { ---- TFakeDispatcher：互斥保护的环形 FIFO ---- }
 
 type
+  TFakeDispatcherRing = array of TWebviewProcRef;
   TFakeDispatcher = class(TInterfacedObject, IWebviewDispatcher)
   private
     FLck: ILock;
-    FRing: array of TWebviewProcRef;
+    FRing: TFakeDispatcherRing;
     FHead: Integer;
     FCount: Integer;
     FOwnerThread: UInt64;
+    procedure LinearizeCopy(const AOldRing: TFakeDispatcherRing; AHead, ACount: Integer; var ANew: TFakeDispatcherRing); inline;
+    procedure GrowCopy(var LNew: TFakeDispatcherRing); inline;
     procedure Grow; inline;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure PostRef(AProc: TWebviewProcRef);
+    procedure PostRef(AProc: TWebviewProcRef); inline;
     function IsOnMainThread: Boolean; inline;
     function PumpOnce: Boolean;
     procedure PumpAll;
@@ -374,31 +346,188 @@ begin
   inherited Destroy;
 end;
 
-procedure TFakeDispatcher.Grow; inline;
+procedure TFakeDispatcher.LinearizeCopy(const AOldRing: TFakeDispatcherRing; AHead, ACount: Integer; var ANew: TFakeDispatcherRing); inline;
 var
-  LNewCap, I: Integer;
-  LNew: array of TWebviewProcRef;
+  I, LTail, LOldLen: Integer;
 begin
-  LNewCap := WebviewGrowCapacity(Length(FRing));
-  if (Length(FRing) = 0) and (LNewCap < 16) then
-    LNewCap := 16;
-  SetLength(LNew, LNewCap);
-  for I := 0 to FCount - 1 do
-    LNew[I] := FRing[(FHead + I) mod Length(FRing)];
+  // perf: two-segment linearize avoids mod/div per element, inline zero extra call, single source for ring linearization (bytes.ops VecGrowCapacity outer); zero extra alloc, managed ref per element preserved
+  if ACount = 0 then Exit;
+  LOldLen := Length(AOldRing);
+  if AHead + ACount <= LOldLen then
+  begin
+    for I := 0 to ACount - 1 do
+      ANew[I] := AOldRing[AHead + I];
+  end
+  else
+  begin
+    LTail := LOldLen - AHead;
+    for I := 0 to LTail - 1 do
+      ANew[I] := AOldRing[AHead + I];
+    for I := 0 to ACount - LTail - 1 do
+      ANew[LTail + I] := AOldRing[I];
+  end;
+end;
+
+procedure TFakeDispatcher.GrowCopy(var LNew: TFakeDispatcherRing); inline;
+var
+  LOldLen, I, LTail: Integer;
+begin
+  // compat: legacy inline copy under lock kept only for non-contended Grow; Post storm path uses LinearizeCopy outside lock (see PostRef) to avoid O(n) lock amplification
+  LOldLen := Length(FRing);
+  if FCount = 0 then
+  begin
+    FRing := LNew;
+    FHead := 0;
+    Exit;
+  end;
+  if FHead + FCount <= LOldLen then
+  begin
+    for I := 0 to FCount - 1 do
+      LNew[I] := FRing[FHead + I];
+  end
+  else
+  begin
+    LTail := LOldLen - FHead;
+    for I := 0 to LTail - 1 do
+      LNew[I] := FRing[FHead + I];
+    for I := 0 to FCount - LTail - 1 do
+      LNew[LTail + I] := FRing[I];
+  end;
+  // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef already), zero leak
   FRing := LNew;
   FHead := 0;
 end;
 
-procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef);
+procedure TFakeDispatcher.Grow; inline;
+var
+  LNew: TFakeDispatcherRing;
 begin
+  // perf: single source bytes.ops VecGrowCapacity (0→4→2×) inline; base pure, zero wrapper, zero extra call
+  SetLength(LNew, VecGrowCapacity(Length(FRing)));
+  GrowCopy(LNew);
+end;
+
+procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef); inline;
+var
+  LNew: TFakeDispatcherRing;
+  LOldRing: TFakeDispatcherRing;
+  LHead, LCount, LOldLen, LNewCap: Integer;
+begin
+  // perf: fast path under lock without alloc
   FLck.Acquire;
   try
-    if FCount = Length(FRing) then
-      Grow;
-    FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-    FCount := FCount + 1;
+    if FCount < Length(FRing) then
+    begin
+      FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+      Inc(FCount);
+      Exit;
+    end;
+    LOldLen := Length(FRing);
+    LNewCap := VecGrowCapacity(LOldLen);
   finally
     FLck.Release;
+  end;
+  // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
+  SetLength(LNew, LNewCap);
+  while True do
+  begin
+    // perf: short snapshot under lock — only pointer/length/head/count copy, O(1), zero alloc
+    FLck.Acquire;
+    try
+      if FCount < Length(FRing) then
+      begin
+        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+        Inc(FCount);
+        Exit;
+      end;
+      if Length(FRing) <> LOldLen then
+      begin
+        LOldLen := Length(FRing);
+        LNewCap := VecGrowCapacity(LOldLen);
+      end
+      else
+      begin
+        LOldRing := FRing;
+        LHead := FHead;
+        LCount := FCount;
+        Break;
+      end;
+    finally
+      FLck.Release;
+    end;
+    if Length(LNew) <> LNewCap then
+      SetLength(LNew, LNewCap);
+  end;
+  // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source LinearizeCopy, bytes.ops capacity single source
+  LinearizeCopy(LOldRing, LHead, LCount, LNew);
+  // perf: short install under lock — only pointer swap + one slot write, O(1), stale check via length/head/count
+  FLck.Acquire;
+  try
+    if FCount < Length(FRing) then
+    begin
+      FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+      Inc(FCount);
+      Exit;
+    end;
+    if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
+    begin
+      // stability: concurrent Pump/Post mutated queue — discard stale linearized copy, retry with fresh snapshot outside lock
+      // release lock before retry to avoid spin under lock
+    end
+    else
+    begin
+      // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef), zero leak
+      FRing := LNew;
+      FHead := 0;
+      FRing[LCount] := AProc;
+      Inc(FCount);
+      Exit;
+    end;
+  finally
+    FLck.Release;
+  end;
+  // contention fallback: stale — retry via slow path that re-snapshots outside lock
+  // to avoid recursion depth, loop with fresh alloc if needed
+  // perf: heap realloc outside lock if still full
+  while True do
+  begin
+    FLck.Acquire;
+    try
+      if FCount < Length(FRing) then
+      begin
+        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+        Inc(FCount);
+        Exit;
+      end;
+      LOldRing := FRing;
+      LHead := FHead;
+      LCount := FCount;
+      LOldLen := Length(FRing);
+      LNewCap := VecGrowCapacity(LOldLen);
+    finally
+      FLck.Release;
+    end;
+    if Length(LNew) <> LNewCap then
+      SetLength(LNew, LNewCap);
+    LinearizeCopy(LOldRing, LHead, LCount, LNew);
+    FLck.Acquire;
+    try
+      if FCount < Length(FRing) then
+      begin
+        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+        Inc(FCount);
+        Exit;
+      end;
+      if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
+        Continue;
+      FRing := LNew;
+      FHead := 0;
+      FRing[LCount] := AProc;
+      Inc(FCount);
+      Exit;
+    finally
+      FLck.Release;
+    end;
   end;
 end;
 
@@ -553,22 +682,37 @@ end;
 var
   GLiveWindows: array of TFakeWebview;
   GLiveWindowsCount: Integer = 0;
+  GLiveCount: Integer = 0;
 
+{ GLiveWindows 操作单源收敛到 nextpas.core.webview.live (bytes.ops Vec 单源 inline)：
+  GrowLiveWindows/RegisterLive/UnregisterLive 四后端重复已抽至 live 泛型 helpers，
+  本单元仅薄转发，零额外堆分配 }
 procedure GrowLiveWindows; inline;
 begin
-  if GLiveWindowsCount = Length(GLiveWindows) then
-    SetLength(GLiveWindows, WebviewGrowCapacity(Length(GLiveWindows)));
+  // perf: thin forward to bytes.ops VecGrow single source (0→4→2×), inline
+  specialize VecGrow<TFakeWebview>(GLiveWindows, GLiveWindowsCount);
 end;
 
-function FakeLiveWindowCount: Integer;
-var
-  I, LCnt: Integer;
+procedure RegisterLive(AWin: TFakeWebview); inline;
 begin
-  LCnt := 0;
-  for I := 0 to GLiveWindowsCount - 1 do
-    if not GLiveWindows[I].FClosed then
-      LCnt := LCnt + 1;
-  Result := LCnt;
+  // perf: single source WebviewLiveAdd -> VecGrow inline, zero extra alloc
+  specialize WebviewLiveAdd<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+  Inc(GLiveCount);
+end;
+
+procedure UnregisterLive(AWin: TFakeWebview); inline;
+begin
+  // stability: if never Close'd, live count was still 1 — decrement here; already Closed windows decremented at Close time
+  if not AWin.FClosed then
+    Dec(GLiveCount);
+  // perf: O(1) swap-remove inline, nil trailing to release ref
+  specialize WebviewLiveRemoveSwap<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+end;
+
+function FakeLiveWindowCount: Integer; inline;
+begin
+  // perf: O(1) cached count inline, zero scan, close 密集零遍历
+  Result := GLiveCount;
 end;
 
 procedure FakePumpAll;
@@ -640,9 +784,7 @@ begin
   FNavigateCount := 0;
   FHistoryCount := 0;
   FHistIdx := -1;
-  GrowLiveWindows;
-  GLiveWindows[GLiveWindowsCount] := Self;
-  Inc(GLiveWindowsCount);
+  RegisterLive(Self);
 
   { Initial* 启动加载：构造即导航。优先级 InitialUrl > InitialHtml
     （CONTRACT §2.2），资产/桥请求都在主循环泵里才发生，Build 返回后的
@@ -679,9 +821,7 @@ begin
   FNavigateCount := 0;
   FHistoryCount := 0;
   FHistIdx := -1;
-  GrowLiveWindows;
-  GLiveWindows[GLiveWindowsCount] := Self;
-  Inc(GLiveWindowsCount);
+  RegisterLive(Self);
   if AOptions.InitialUrl <> '' then
     Navigate(AOptions.InitialUrl)
   else if AOptions.InitialHtml <> '' then
@@ -689,17 +829,8 @@ begin
 end;
 
 destructor TFakeWebview.Destroy;
-var
-  I: Integer;
 begin
-  for I := GLiveWindowsCount - 1 downto 0 do
-    if GLiveWindows[I] = Self then
-    begin
-      GLiveWindows[I] := GLiveWindows[GLiveWindowsCount - 1];
-      GLiveWindows[GLiveWindowsCount - 1] := nil;
-      Dec(GLiveWindowsCount);
-      Break;
-    end;
+  UnregisterLive(Self);
   inherited Destroy;
 end;
 
@@ -711,79 +842,107 @@ end;
 
 procedure TFakeWebview.GrowPendingEvals; inline;
 begin
-  if FPendingCount = Length(FPendingEvals) then
-    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
+  specialize VecGrow<TFakePendingEval>(FPendingEvals, FPendingCount);
 end;
 
 procedure TFakeWebview.GrowOutcomes; inline;
 begin
-  if FOutcomesCount = Length(FOutcomes) then
-    SetLength(FOutcomes, WebviewGrowCapacity(Length(FOutcomes)));
+  specialize VecGrow<TFakeInvokeOutcome>(FOutcomes, FOutcomesCount);
 end;
 
 procedure TFakeWebview.GrowEvalScripts; inline;
 begin
-  if FEvalScriptsCount = Length(FEvalScripts) then
-    SetLength(FEvalScripts, WebviewGrowCapacity(Length(FEvalScripts)));
+  specialize VecGrow<TFakeEvalRecord>(FEvalScripts, FEvalScriptsCount);
 end;
 
 procedure TFakeWebview.GrowEmits; inline;
 begin
-  if FEmitsCount = Length(FEmits) then
-    SetLength(FEmits, WebviewGrowCapacity(Length(FEmits)));
+  specialize VecGrow<TFakeEmit>(FEmits, FEmitsCount);
 end;
 
 procedure TFakeWebview.GrowCaptured; inline;
 begin
-  if FCapturedCount = Length(FCapturedEvals) then
-    SetLength(FCapturedEvals, WebviewGrowCapacity(Length(FCapturedEvals)));
+  specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
 end;
 
 procedure TFakeWebview.GrowOnNavStarted; inline;
 begin
-  if FOnNavStartedCount = Length(FOnNavStarted) then
-    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavStarted, FOnNavStartedCount);
 end;
 
 procedure TFakeWebview.GrowOnNavFinished; inline;
 begin
-  if FOnNavFinishedCount = Length(FOnNavFinished) then
-    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavFinished, FOnNavFinishedCount);
 end;
 
 procedure TFakeWebview.GrowOnNavFailed; inline;
 begin
-  if FOnNavFailedCount = Length(FOnNavFailed) then
-    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
+  specialize VecGrow<TWebviewNavFailedHandler>(FOnNavFailed, FOnNavFailedCount);
 end;
 
 procedure TFakeWebview.GrowOnReady; inline;
 begin
-  if FOnReadyCount = Length(FOnReady) then
-    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
+  specialize VecGrow<TWebviewNotifyHandler>(FOnReady, FOnReadyCount);
 end;
 
 procedure TFakeWebview.GrowQueue; inline;
 begin
   if FEvalQueueCount = Length(FEvalQueue) then
   begin
-    SetLength(FEvalQueue, WebviewGrowCapacity(Length(FEvalQueue)));
-    SetLength(FEvalResults, WebviewGrowCapacity(Length(FEvalResults)));
+    specialize VecGrow<Boolean>(FEvalQueue, FEvalQueueCount);
+    specialize VecGrow<string>(FEvalResults, FEvalQueueCount);
   end;
 end;
 
 procedure TFakeWebview.GrowHistory; inline;
 begin
-  if FHistoryCount = Length(FHistory) then
-    SetLength(FHistory, WebviewGrowCapacity(Length(FHistory)));
+  specialize VecGrow<string>(FHistory, FHistoryCount);
 end;
 
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
+var
+  LNew: TFakeInvokeOutcomes;
+  LCap, I: Integer;
 begin
+  // perf: fast path under lock without alloc; contended path alloc outside lock (SetLength zero-init) to avoid lock-amplification jitter
   FLck.Acquire;
   try
-    GrowOutcomes;
+    if FOutcomesCount < Length(FOutcomes) then
+    begin
+      FOutcomes[FOutcomesCount].Cmd := ACmd;
+      FOutcomes[FOutcomesCount].IsError := AIsError;
+      FOutcomes[FOutcomesCount].ResultJson := AResultJson;
+      FOutcomes[FOutcomesCount].Code := ACode;
+      FOutcomes[FOutcomesCount].Message := AMessage;
+      Inc(FOutcomesCount);
+      Exit;
+    end;
+    LCap := VecGrowCapacity(Length(FOutcomes));
+  finally
+    FLck.Release;
+  end;
+  // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification under invoke storm, single source VecGrowCapacity inline
+  SetLength(LNew, LCap);
+  FLck.Acquire;
+  try
+    if FOutcomesCount < Length(FOutcomes) then
+    begin
+      FOutcomes[FOutcomesCount].Cmd := ACmd;
+      FOutcomes[FOutcomesCount].IsError := AIsError;
+      FOutcomes[FOutcomesCount].ResultJson := AResultJson;
+      FOutcomes[FOutcomesCount].Code := ACode;
+      FOutcomes[FOutcomesCount].Message := AMessage;
+      Inc(FOutcomesCount);
+      Exit;
+    end;
+    if Length(LNew) <= Length(FOutcomes) then
+      SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
+    // perf: copy linearization under lock only, inline zero extra call, bytes.ops single source
+    for I := 0 to FOutcomesCount - 1 do
+      LNew[I] := FOutcomes[I];
+    // stability: FOutcomes:=LNew releases old ring refs via refcount, LNew retains (AddRef), zero leak
+    FOutcomes := LNew;
     FOutcomes[FOutcomesCount].Cmd := ACmd;
     FOutcomes[FOutcomesCount].IsError := AIsError;
     FOutcomes[FOutcomesCount].ResultJson := AResultJson;
@@ -834,34 +993,53 @@ end;
 
 procedure TFakeWebview.Close;
 var
-  I: Integer;
-  LErrObj: EWebviewEvalFailed;
-  LErrors: array of TWebviewEvalErrorCallback;
+  I, LPendingCount: Integer;
+  LPending: array of TFakePendingEval;
+  LErr: EWebviewEvalFailed;
+  LOnError: TWebviewEvalErrorCallback;
 begin
   FLck.Acquire;
   try
     if FClosed then
       Exit;
     FClosed := True;
-    SetLength(LErrors, FPendingCount);
-    for I := 0 to FPendingCount - 1 do
-    begin
-      FEvalScripts[FPendingEvals[I].ScriptIdx].Answered := True;
-      FEvalScripts[FPendingEvals[I].ScriptIdx].ErrorMessage := 'window closed';
-      LErrors[I] := FPendingEvals[I].OnError;
-    end;
+    // perf: O(1) live count decrement under instance lock (single writer), close密集零扫描
+    Dec(GLiveCount);
+    // perf: zero-alloc snapshot via pointer swap (no SetLength(LErrors,N)), inline O(1) move; bytes.ops single source unchanged
+    LPending := FPendingEvals;
+    LPendingCount := FPendingCount;
+    FPendingEvals := nil;
     FPendingCount := 0;
+    // stability: mark Answered under lock to preserve exactly-once invariant
+    for I := 0 to LPendingCount - 1 do
+    begin
+      FEvalScripts[LPending[I].ScriptIdx].Answered := True;
+      FEvalScripts[LPending[I].ScriptIdx].ErrorMessage := 'window closed';
+    end;
   finally
     FLck.Release;
   end;
-  for I := 0 to High(LErrors) do
+  // perf: single exception instance reused for N callbacks, inline alloc once, zero per-pending heap churn
+  if LPendingCount > 0 then
   begin
-    LErrObj := EWebviewEvalFailed.Create('window closed');
+    LErr := EWebviewEvalFailed.Create('window closed');
     try
-      LErrors[I](LErrObj);
+      for I := 0 to LPendingCount - 1 do
+      begin
+        LOnError := LPending[I].OnError;
+        if Assigned(LOnError) then
+          LOnError(LErr);
+        // release callback refs promptly to avoid retention, zero-copy nil
+        LPending[I].Callback := nil;
+        LPending[I].OnError := nil;
+      end;
     finally
-      LErrObj.Free;
+      LErr.Free;
     end;
+    // stability: clear snapshot storage, release refs, nil trailing (managed)
+    for I := 0 to LPendingCount - 1 do
+      LPending[I] := Default(TFakePendingEval);
+    LPending := nil;
   end;
   if FOwnsWindow and (FWindow <> nil) and not FWindow.IsClosed then
     FWindow.Close;

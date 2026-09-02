@@ -535,6 +535,67 @@ def check_module_registry(
     return l_issues
 
 
+def check_webview_contracts(a_source_root: Path, a_core_root: Path) -> list[str]:
+    # Unified single-source for nextpas.core.webview INV-4/INV-5 + ffi/external + M7 has-a.
+    # Single read per file, comment-stripped, zero-copy views via strip_pascal_comments.
+    l_issues: list[str] = []
+    # --- INV-4: contract layer purity (M7 has-a) ---
+    for l_unit in ("nextpas.core.webview.base.pas", "nextpas.core.webview.intf.pas"):
+        l_path = a_source_root / l_unit
+        if not l_path.is_file():
+            l_issues.append(f"webview-INV-4: missing contract unit {l_unit}")
+            continue
+        l_text = strip_pascal_comments(read_text(l_path))
+        for l_token in ("bridge", "fake", "factory", "gtk", "webview2", "wk", "vfs", "mime"):
+            if re.search(rf"nextpas\.core\.webview\.{re.escape(l_token)}\b", l_text, flags=re.IGNORECASE):
+                l_issues.append(
+                    f"webview-INV-4: {l_unit} references nextpas.core.webview.{l_token} (contract layer must stay pure)"
+                )
+        if l_unit == "nextpas.core.webview.base.pas":
+            if re.search(r"nextpas\.core\.window\.", l_text, flags=re.IGNORECASE):
+                l_issues.append(f"webview-INV-4: {l_unit} references nextpas.core.window.* (base must stay window-free, M7)")
+        else:
+            for l_m in re.finditer(r"nextpas\.core\.window\.([A-Za-z0-9_]+)", l_text, flags=re.IGNORECASE):
+                if l_m.group(1).lower() != "intf":
+                    l_issues.append(
+                        f"webview-INV-4: {l_unit} references non-intf window subunit nextpas.core.window.{l_m.group(1)} (only window.intf allowed, M7)"
+                    )
+                    break
+    # facade
+    if not (a_source_root / "nextpas.core.webview.pas").is_file():
+        l_issues.append("webview-INV-4: missing facade nextpas.core.webview.pas")
+    # bridge purity (BRIDGE_PROTOCOL/CONTRACT §1; M7 has-a)
+    l_bridge = a_source_root / "nextpas.core.webview.bridge.pas"
+    if l_bridge.is_file():
+        l_text = strip_pascal_comments(read_text(l_bridge))
+        for l_token in ("fake", "factory", "gtk", "webview2", "wk", "vfs"):
+            if re.search(rf"nextpas\.core\.webview\.{re.escape(l_token)}\b", l_text, flags=re.IGNORECASE):
+                l_issues.append(f"webview-INV-3: bridge references nextpas.core.webview.{l_token} (bridge must stay pure)")
+        if re.search(r"nextpas\.core\.window\.", l_text, flags=re.IGNORECASE):
+            l_issues.append("webview-INV-3: bridge references nextpas.core.window.* (bridge must stay pure, M7)")
+    # M7 has-a: ffi/loader must not touch window (only backend impl + factory may has-a)
+    for l_pat in ("nextpas.core.webview.*.ffi.pas", "nextpas.core.webview.*.loader.pas"):
+        for l_path in sorted(a_source_root.glob(l_pat)):
+            l_text = strip_pascal_comments(read_text(l_path))
+            if re.search(r"nextpas\.core\.window\.", l_text, flags=re.IGNORECASE):
+                l_issues.append(f"webview-M7: {l_path.name} references nextpas.core.window.* — ffi/loader must stay platform.dl only")
+    # INV-5 family raw host units (strip once per file, zero-copy inline scan)
+    l_webview_files = sorted(a_source_root.glob("nextpas.core.webview*.pas"))
+    l_stripped_cache: dict[Path, str] = {l_p: strip_pascal_comments(read_text(l_p)) for l_p in l_webview_files}
+    for l_token in ("DynLibs", "ctypes", "BaseUnix", "Windows", "Unix"):
+        for l_path, l_text in l_stripped_cache.items():
+            if l_token == "Windows" and l_path.name.endswith(".win.pas"):
+                continue
+            if re.search(rf"\b{re.escape(l_token)}\b", l_text):
+                l_issues.append(f"webview-INV-5: raw host unit token '{l_token}' in {l_path.name} (must via platform.dl)")
+    # *.ffi: no external (loader owns binding)
+    for l_path in sorted(a_source_root.glob("nextpas.core.webview.*.ffi.pas")):
+        l_text = strip_pascal_comments(read_text(l_path))
+        if re.search(r"^[ \t]*external\b", l_text, flags=re.MULTILINE | re.IGNORECASE):
+            l_issues.append(f"webview-ffi: {l_path.name} contains external declaration (loader owns binding)")
+    return l_issues
+
+
 def render_registry_summary(a_registry: dict) -> str:
     return (
         "ARCH_SOURCE_CONTRACT_REGISTRY "
@@ -555,7 +616,7 @@ def main() -> int:
     )
     l_parser.add_argument(
         "--check",
-        choices=("all", "module-registry", "dependency-boundary", "host-raw-ffi", "governance-docs"),
+        choices=("all", "module-registry", "dependency-boundary", "host-raw-ffi", "governance-docs", "webview"),
         default="all",
         help="subset to run",
     )
@@ -596,6 +657,7 @@ def main() -> int:
         "module-registry",
         "dependency-boundary",
         "host-raw-ffi",
+        "webview",
     )
     if l_needs_source_root and not l_source_root.is_dir():
         print(f"[ARCH-SOURCE-CONTRACT] FAIL: source root not found: {l_source_root}", file=sys.stderr)
@@ -611,6 +673,8 @@ def main() -> int:
             l_issues.extend(check_raw_ffi_tokens(l_source_root, l_registry))
         if l_args.check in ("all", "governance-docs"):
             l_issues.extend(check_governance_docs(l_args.core_root, l_registry))
+        if l_args.check in ("all", "webview"):
+            l_issues.extend(check_webview_contracts(l_source_root, l_args.core_root))
     except RegistryError as l_error:
         print(f"[ARCH-SOURCE-CONTRACT] FAIL: {l_error}", file=sys.stderr)
         return 2

@@ -25,6 +25,9 @@ function AppBackendAvailable(AKind: TAppKind): Boolean; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 type
   TMountKind = (amEmbedded, amDirectory);
   TMountRec = record
@@ -167,22 +170,22 @@ end;
 
 procedure TAppImpl.GrowWindows; inline;
 begin
-  SetLength(FWindows, WebviewGrowCapacity(Length(FWindows)));
+  specialize VecGrow<IWebviewWindow>(FWindows, FCount);
 end;
 
 procedure TAppImpl.GrowOnClosed; inline;
 begin
-  SetLength(FOnClosed, WebviewGrowCapacity(Length(FOnClosed)));
+  specialize VecGrow<TAppWindowClosedHandler>(FOnClosed, FOnClosedCount);
 end;
 
 procedure TAppImpl.GrowOnClosedM; inline;
 begin
-  SetLength(FOnClosedM, WebviewGrowCapacity(Length(FOnClosedM)));
+  specialize VecGrow<TAppWindowClosedMethod>(FOnClosedM, FOnClosedMCount);
 end;
 
 procedure TAppImpl.GrowOnClosedP; inline;
 begin
-  SetLength(FOnClosedP, WebviewGrowCapacity(Length(FOnClosedP)));
+  specialize VecGrow<TAppWindowClosedProc>(FOnClosedP, FOnClosedPCount);
 end;
 
 procedure TAppImpl.HookWindowClose(ALockedWin: IWebviewWindow);
@@ -363,7 +366,7 @@ end;
 
 procedure TAppBuilderImpl.GrowMounts; inline;
 begin
-  SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
+  specialize VecGrow<TMountRec>(FMounts, FMountCount);
 end;
 
 procedure TAppBuilderImpl.ApplyMounts(AWin: IWebviewWindow);

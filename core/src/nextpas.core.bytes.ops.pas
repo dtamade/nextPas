@@ -75,6 +75,18 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 
+{ vec/smallvec 生长单源：0→4→2× 倍增，inline 零额外调用，bytes.ops 唯一权威；webview/collections 复用此单源 }
+function VecGrowCapacity(ACurrent: Integer): Integer; inline;
+{ 通用动态数组 Grow：Count 与物理 Length 精确对比，inline 薄转发单源，消除约30个样板重复，零额外调用 }
+generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
+{ 零拷贝快照：按 ACount 精确截断/复制 ADest := copy(ASrc,0,ACount)，nil 零分配，inline 零额外调用，单源治理 Builder 等全量 SetLength 直写漂移；managed 类型逐元素赋值保 refcnt，blittable 单次 Move 批量零拷贝（编译器批量 Move 优化且避免托管类型 refcnt 抖动）}
+generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
+{ 零拷贝截断：按 ACount 精确 SetLength，inline 单源，消除手写 SetLength 重复 }
+generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
+{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，inline 零额外调用，bytes.ops 唯一权威；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
+generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+
 implementation
 
 uses
@@ -614,6 +626,81 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
+end;
+
+function VecGrowCapacity(ACurrent: Integer): Integer; inline;
+begin
+  if ACurrent = 0 then
+    Result := 4
+  else
+    Result := ACurrent * 2;
+end;
+
+generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
+begin
+  if ACount = Length(AArr) then
+    SetLength(AArr, VecGrowCapacity(Length(AArr)));
+end;
+
+generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
+var
+  I: Integer;
+begin
+  // perf: inline + nil zero-alloc fast path + single SetLength + blittable single Move (bulk, zero refcnt churn) vs managed per-elem (refcnt safe), single source; inline zero-copy single source for live registry/webview
+  if ACount <= 0 then
+  begin
+    ADest := nil;
+    Exit;
+  end;
+  SetLength(ADest, ACount);
+  if System.IsManagedType(T) then
+  begin
+    for I := 0 to ACount - 1 do
+      ADest[I] := ASrc[I];
+  end
+  else if ACount > 0 then
+    Move(ASrc[0], ADest[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+end;
+
+generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
+begin
+  // perf: inline single SetLength, single source for trim/snapshot tail, zero extra call
+  if ACount <= 0 then
+    AArr := nil
+  else if Length(AArr) <> ACount then
+    SetLength(AArr, ACount);
+end;
+
+generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+var
+  I: Integer;
+begin
+  // perf: O(1) swap-remove inline, zero extra call, single source bytes.ops; trailing Default(T) nils ref/interface to release, zero leak, zero-copy pointer swap
+  for I := 0 to ACount - 1 do
+    if AArr[I] = AValue then
+    begin
+      AArr[I] := AArr[ACount - 1];
+      AArr[ACount - 1] := Default(T);
+      Dec(ACount);
+      Break;
+    end;
+end;
+
+generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+var
+  I, J: Integer;
+begin
+  // stability: order-preserving shift O(n) inline single source; trailing Default(T) nils ref, per-elem assign keeps managed refcnt correct, kept for order-sensitive callers only (hot close uses Swap)
+  for I := 0 to ACount - 1 do
+    if AArr[I] = AValue then
+    begin
+      for J := I to ACount - 2 do
+        AArr[J] := AArr[J + 1];
+      Dec(ACount);
+      if ACount < Length(AArr) then
+        AArr[ACount] := Default(T);
+      Break;
+    end;
 end;
 
 end.

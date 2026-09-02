@@ -17,10 +17,11 @@ unit nextpas.core.webview.gtk.loader;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.platform.dl,
+  nextpas.core.sync.mutex,
+  nextpas.core.text.utils,
   nextpas.core.webview.base,
   nextpas.core.webview.gtk.ffi;
 
@@ -53,9 +54,18 @@ type
 var
   GLoaded: Boolean = False;
   GLoading: Boolean = False;
+  GProbed: Boolean = False;
   GInfo: TGtkLoadInfo;
   GWebkitLib, GGtkLib, GGobjectLib, GGlibLib, GJscLib: TPlatformLibrary;
   GWebkitSoname, GJscSoname: string;
+  GGtkLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
+
+procedure EnsureGtkLock; inline;
+begin
+  { perf: inline 零额外调用；懒初始化兜底 + initialization 主路径已创建，热点双检锁零分配，零拷贝 Move 语义同 factory }
+  if GGtkLock = nil then
+    GGtkLock := TMutex.Create;
+end;
 
 function TryDlOpen(var ALib: TPlatformLibrary; const ASonames: array of string;
   out AHit: string): Boolean;
@@ -239,89 +249,126 @@ var
   end;
 
 begin
-  if GLoaded then
+  if GProbed then
   begin
     AInfo := GInfo;
-    Exit(True);
+    Exit(GLoaded);
   end;
-  if GLoading then
-    Exit(False);   { 重入保护：并发首装只允许一个赢家走完流程 }
-
-  FillChar(AInfo, SizeOf(AInfo), 0);
-  GLoading := True;
+  EnsureGtkLock;
+  GGtkLock.Acquire;
   try
-    { webkit 主库按 soname 探测序命中其一 }
-    if not TryDlOpen(GWebkitLib,
-        ['libwebkit2gtk-4.1.so.0', 'libwebkit2gtk-4.0.so.0'],
-        GWebkitSoname) then
-      Exit(False);
-    { GTK3 栈并列必需 }
-    if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0'], LHit) and
-        TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0'], LHit) and
-        TryDlOpen(GGlibLib, ['libglib-2.0.so.0'], LHit)) then
+    if GProbed then
     begin
-      ReleaseAll;
-      Exit(False);
+      AInfo := GInfo;
+      Exit(GLoaded);
     end;
-    { JSC 与 webkit 同代：4.1 → jsc-4.1，4.0 → jsc-4.0 }
-    if Pos('4.0', GWebkitSoname) > 0 then
-      GJscSoname := 'libjavascriptcoregtk-4.0.so.0'
-    else
-      GJscSoname := 'libjavascriptcoregtk-4.1.so.0';
-    if not TryDlOpen(GJscLib, [GJscSoname], LHit) then
-    begin
-      ReleaseAll;
+    if GLoading then
       Exit(False);
-    end;
+    FillChar(AInfo, SizeOf(AInfo), 0);
+    GLoading := True;
+    try
+      { webkit 主库按 soname 探测序命中其一 }
+      if not TryDlOpen(GWebkitLib,
+          ['libwebkit2gtk-4.1.so.0', 'libwebkit2gtk-4.0.so.0'],
+          GWebkitSoname) then
+      begin
+        GInfo.Loaded := False;
+        GProbed := True;
+        Exit(False);
+      end;
+      { GTK3 栈并列必需 }
+      if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0'], LHit) and
+          TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0'], LHit) and
+          TryDlOpen(GGlibLib, ['libglib-2.0.so.0'], LHit)) then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        GProbed := True;
+        Exit(False);
+      end;
+      { JSC 与 webkit 同代：4.1 → jsc-4.1，4.0 → jsc-4.0 }
+      if PosEx('4.0', GWebkitSoname) > 0 then
+        GJscSoname := 'libjavascriptcoregtk-4.0.so.0'
+      else
+        GJscSoname := 'libjavascriptcoregtk-4.1.so.0';
+      if not TryDlOpen(GJscLib, [GJscSoname], LHit) then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        GProbed := True;
+        Exit(False);
+      end;
 
-    if not BindAll then
-    begin
-      ReleaseAll;
-      Exit(False);
-    end;
+      if not BindAll then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        GProbed := True;
+        Exit(False);
+      end;
 
-    { 能力分支：eval 双路径按符号存在性（BACKENDS §2.2） }
-    LHasEvalPair :=
-      Sym('webkit_web_view_evaluate_javascript', LTmp) and
-      Sym('webkit_web_view_evaluate_javascript_finish', LTmp);
-    if LHasEvalPair then
-    begin
-      BindReq(@WEBKIT_web_view_evaluate_javascript,
-        'webkit_web_view_evaluate_javascript');
-      BindReq(@WEBKIT_web_view_evaluate_javascript_finish,
-        'webkit_web_view_evaluate_javascript_finish');
-      GInfo.EvalPath := gepEvaluateJavascript;
-    end
-    else
-    begin
-      BindReq(@WEBKIT_web_view_run_javascript, 'webkit_web_view_run_javascript');
-      BindReq(@WEBKIT_web_view_run_javascript_finish,
-        'webkit_web_view_run_javascript_finish');
-      GInfo.EvalPath := gepRunJavascript;
-    end;
+      { 能力分支：eval 双路径按符号存在性（BACKENDS §2.2） }
+      LHasEvalPair :=
+        Sym('webkit_web_view_evaluate_javascript', LTmp) and
+        Sym('webkit_web_view_evaluate_javascript_finish', LTmp);
+      if LHasEvalPair then
+      begin
+        BindReq(@WEBKIT_web_view_evaluate_javascript,
+          'webkit_web_view_evaluate_javascript');
+        BindReq(@WEBKIT_web_view_evaluate_javascript_finish,
+          'webkit_web_view_evaluate_javascript_finish');
+        GInfo.EvalPath := gepEvaluateJavascript;
+      end
+      else
+      begin
+        BindReq(@WEBKIT_web_view_run_javascript, 'webkit_web_view_run_javascript');
+        BindReq(@WEBKIT_web_view_run_javascript_finish,
+          'webkit_web_view_run_javascript_finish');
+        GInfo.EvalPath := gepRunJavascript;
+      end;
 
-    GLoaded := True;
-    GInfo.Loaded := True;
-    GInfo.WebkitSoname := GWebkitSoname;
-    AInfo := GInfo;
-    Result := True;
+      GLoaded := True;
+      GInfo.Loaded := True;
+      GInfo.WebkitSoname := GWebkitSoname;
+      GProbed := True;
+      AInfo := GInfo;
+      Result := True;
+    finally
+      GLoading := False;
+    end;
   finally
-    GLoading := False;
+    GGtkLock.Release;
   end;
 end;
 
 procedure UnloadGtkWebkit;
 begin
-  if not GLoaded then
-    Exit;
-  ReleaseAll;
-  GLoaded := False;
-  GInfo := Default(TGtkLoadInfo);
+  EnsureGtkLock;
+  GGtkLock.Acquire;
+  try
+    if not GProbed then Exit;
+    ReleaseAll;
+    GLoaded := False;
+    GProbed := False;
+    GInfo := Default(TGtkLoadInfo);
+  finally
+    GGtkLock.Release;
+  end;
 end;
 
 function GtkLoadInfo: TGtkLoadInfo; inline;
 begin
   Result := GInfo;
 end;
+
+initialization
+  EnsureGtkLock;
+
+finalization
+  if GGtkLock <> nil then
+  begin
+    GGtkLock.Free;
+    GGtkLock := nil;
+  end;
 
 end.

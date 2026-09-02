@@ -13,11 +13,13 @@ interface
   整串 '.' 仅在 AAllowRoot=True 时合法。 }
 function BytesValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
+function BytesValidPathView(const AView: TStringView; const AAllowRoot: Boolean): Boolean; inline;
 
 implementation
 
 uses
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.text.view;
 
 function BytesValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 var
@@ -61,6 +63,46 @@ end;
 function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
   Result := BytesValidPath(APath, AAllowRoot);
+end;
+
+function BytesValidPathView(const AView: TStringView; const AAllowRoot: Boolean): Boolean; inline;
+var
+  N, Start, I, SegLen: SizeInt;
+  P: PAnsiChar;
+begin
+  Result := False;
+  N := SizeInt(AView.Len);
+  P := AView.Data;
+  if N = 0 then
+    Exit(False);
+  if not UTF8IsValid(PByte(P), SizeUInt(N)) then
+    Exit(False);
+  if (N = 1) and (P[0] = '.') then
+    Exit(AAllowRoot);
+  if (P[0] = '/') or (P[N - 1] = '/') then
+    Exit(False);
+  Start := 0;
+  for I := 0 to N do
+  begin
+    if (I = N) or (P[I] = '/') then
+    begin
+      SegLen := I - Start;
+      if SegLen = 0 then
+        Exit(False);
+      if SegLen = 1 then
+      begin
+        if P[Start] = '.' then
+          Exit(False);
+      end
+      else if SegLen = 2 then
+      begin
+        if (P[Start] = '.') and (P[Start + 1] = '.') then
+          Exit(False);
+      end;
+      Start := I + 1;
+    end;
+  end;
+  Result := True;
 end;
 
 end.

@@ -3,7 +3,7 @@
 **状态**: 1.0 稳定 — S1→S5+M-band→F1-F4 单源收口全完成，13 门禁全绿，`bench_dispatcher` 365/271µs 中位（PostSingle/Zero，O(1)+inline+共享队列+家族化 381/26ns 实测）
 **层级**: L2 系统能力（依赖 L0-L1；被 L3 的 `webview` / `gpu` / `directui` / 外部 `game888` 复用）
 **Owner**: core-window lane
-**最后更新**: 2026-08-28（1.0 收口：window.gtk3 Raw 12项 + webview.gtk.win shim 单源 + 5×方差固化 + Win/mac compile-only 残差诚实）
+**最后更新**: 2026-08-28（1.0 收口：window.gtk3 Raw 12项 + webview.gtk.win 移除单源 + 5×方差固化 + Win/mac compile-only 残差诚实）
 **对标基准**: Rust `winit` + `tao` / `GLFW` / `SDL2 Window` / `Flutter View` / Android `Activity.getWindow()` / iOS `UIWindow`
 
 ---
@@ -21,7 +21,7 @@ platform(L0) ──► window(L2) ──► gpu(L3) ──► directui(L3)
 ```
 
 * **tui 不需要本模块**（终端格网，无窗口概念），但 `gpu` / `webview` / `directui` / `game888` 全部需要窗口 — 这就是把 `window` 独立在 L2 而非藏在某个 L3 内部的根本理由。
-* `nextpas.core.webview.gtk.win` 已在 F4 单源化为 `window.gtk3 Raw` 的 `inline` shim（零逻辑，窗口创建已收敛），`nextpas.core.gpu.gl`（自管 `glXGetProcAddress`）、`game888.graphics.window`（私有 SDL2 窗口）待 `gpu` 波次同理收敛。
+* `nextpas.core.webview.gtk.win` 已在下一主版本删除（F4 空单元兼容期结束，文件已移除；窗口壳唯一事实源为 `window.gtk3` Raw `inline` 零拷贝，窗口创建已单源），`nextpas.core.gpu.gl`（自管 `glXGetProcAddress`）、`game888.graphics.window`（私有 SDL2 窗口）待 `gpu` 波次同理收敛。
 
 **命名说明**：公共模块名定为 `window` 而非 `shell`。`shell` 仅见于 Eclipse SWT 与 Wayland 协议的极小范围，主流跨平台框架清一色叫 `Window`（`winit::Window` / `tao::Window` / `QWindow` / `SDL_Window` / `GLFWwindow`，Android 自身即 `Activity.getWindow()`、iOS 即 `UIWindow`），Flutter 称 `FlutterView` 亦为同一语义。移动端的 `attach 到宿主 Surface（Activity/UIView）` 只是 `WindowKind = Embedded` 的一种实现形态，不是另一个概念；与 `tui` / `webview` 的 `view` 亦不混淆。文档内唯一需要解释的是 `Window = TopLevel on desktop, Embedded Surface on Android/iOS`。
 
@@ -55,7 +55,7 @@ base ← intf ← fake ─┐  │ one-way 消费
 base ← window.gtk3/4/2 ←┘  (薄适配，共享 gtk.impl.inc；window.gtk 为 shim；gtk3 另暴露 Raw 12项供 webview 单源)
               sdl2.ffi ← sdl2.loader ← sdl2 ─┘  （同位）
               win32.* / cocoa.* / android.*  同位
-  webview.gtk.win (L3 shim) ──► window.gtk3 Raw (单源已收口)
+  webview.gtk.win (L3 已移除，空单元) ──► window.gtk3 Raw (单源已收口，F4 彻底)
 ```
 
 * `base` / `intf` 禁止 `uses` 任何后端、`factory`、`bridge`。

@@ -45,23 +45,29 @@ function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 implementation
 
 uses
-  nextpas.core.collections.algorithms;
+  nextpas.core.collections.algorithms,
+  nextpas.core.text.view;
 
 type
-  TMemVfs = class(TInterfacedObject, IVfs)
+  TMemVfs = class(TInterfacedObject, IVfs, IVfsView)
   private
     FFiles: array of TVfsMemEntry;
     function LowerBound(const AName: string): SizeUInt;
+    function LowerBoundView(const AView: TStringView): SizeUInt; inline;
     function FindExact(const AName: string): SizeUInt; { Count 当未命中 }
+    function FindExactView(const AView: TStringView): SizeUInt; inline;
     function HasSubtree(const ADirPrefix: string): Boolean;
+    function HasSubtreeView(const AView: TStringView): Boolean; inline;
     procedure StatInto(const APath: string; out AInfo: TStatInfo);
   public
     constructor Create(AItems: array of TVfsMemEntry);
     destructor Destroy; override;
     function Exists(const APath: string): Boolean;
+    function ExistsView(const APath: TStringView): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
+    function OpenReadView(const APath: TStringView): IStream;
     function CaseSensitive: Boolean;
   end;
 
@@ -200,6 +206,24 @@ begin
   Result := Lo;
 end;
 
+function TMemVfs.LowerBoundView(const AView: TStringView): SizeUInt; inline;
+var
+  Lo, Hi, Mid: SizeUInt;
+begin
+  { perf: inline + VfsNameCompareView 零拷贝视图比较，复用 bytes.ops CompareBytesOrdered 单源，零堆分配，O(log n) }
+  Lo := 0;
+  Hi := SizeUInt(Length(FFiles));
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    if VfsNameCompareView(AView, FFiles[Mid].Name) > 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
+end;
+
 function TMemVfs.FindExact(const AName: string): SizeUInt;
 var
   I: SizeUInt;
@@ -208,6 +232,17 @@ begin
   I := LowerBound(AName);
   if (I < SizeUInt(Length(FFiles)))
     and (VfsNameCompare(FFiles[I].Name, AName) = 0) then
+    Result := I;
+end;
+
+function TMemVfs.FindExactView(const AView: TStringView): SizeUInt; inline;
+var
+  I: SizeUInt;
+begin
+  Result := SizeUInt(Length(FFiles));
+  I := LowerBoundView(AView);
+  if (I < SizeUInt(Length(FFiles)))
+    and (VfsNameCompareView(AView, FFiles[I].Name) = 0) then
     Result := I;
 end;
 
@@ -223,6 +258,21 @@ begin
     Result := True;
 end;
 
+function TMemVfs.HasSubtreeView(const AView: TStringView): Boolean; inline;
+var
+  I: SizeUInt;
+begin
+  { perf: inline 零拷贝前缀判定，单次 LowerBoundView + CompareMem 前缀直比，零堆分配 }
+  Result := False;
+  I := LowerBoundView(AView);
+  if I >= SizeUInt(Length(FFiles)) then Exit(False);
+  if SizeUInt(Length(FFiles[I].Name)) <= AView.Len then Exit(False);
+  if FFiles[I].Name[AView.Len + 1] <> '/' then Exit(False);
+  if AView.Len = 0 then Exit(True);
+  if not CompareMem(@FFiles[I].Name[1], AView.Data, AView.Len) then Exit(False);
+  Result := True;
+end;
+
 function TMemVfs.Exists(const APath: string): Boolean;
 begin
   if VfsIsRoot(APath) then
@@ -232,6 +282,18 @@ begin
   if FindExact(APath) < SizeUInt(Length(FFiles)) then
     Exit(True);
   Result := HasSubtree(APath + '/');
+end;
+
+function TMemVfs.ExistsView(const APath: TStringView): Boolean; inline;
+begin
+  { perf: inline + VfsValidPathView 零拷贝校验 + O(log n) 二分视图比较，复用 bytes.ops 单源，零堆分配；HasSubtreeView 零拷贝前缀直比 }
+  if VfsIsRootView(APath) then
+    Exit(True);
+  if not VfsValidPathView(APath, False) then
+    Exit(False);
+  if FindExactView(APath) < SizeUInt(Length(FFiles)) then
+    Exit(True);
+  Result := HasSubtreeView(APath);
 end;
 
 procedure TMemVfs.StatInto(const APath: string; out AInfo: TStatInfo);
@@ -320,6 +382,24 @@ begin
   if Idx >= SizeUInt(Length(FFiles)) then
     raise EVfsNotFound.CreateCtx('open', APath, 'not found');
   Result := TMemStream.Create(FFiles[Idx].Data, APath);
+end;
+
+function TMemVfs.OpenReadView(const APath: TStringView): IStream;
+var
+  Idx: SizeUInt;
+  LPathStr: string;
+begin
+  { perf: inline 零拷贝视图二分，命中单次 VfsReadAllBytes Move 零拷贝透传，目录/非法路径零重度 I/O }
+  if not VfsValidPathView(APath, True) then
+    raise EVfsInvalidPath.CreateCtx('open', APath.ToString, 'invalid virtual path');
+  Idx := FindExactView(APath);
+  if (Idx >= SizeUInt(Length(FFiles)))
+    and (VfsIsRootView(APath) or HasSubtreeView(APath)) then
+    raise EVfsIsADirectory.CreateCtx('open', APath.ToString, 'target is a directory');
+  if Idx >= SizeUInt(Length(FFiles)) then
+    raise EVfsNotFound.CreateCtx('open', APath.ToString, 'not found');
+  LPathStr := APath.ToString; { 仅为流诊断路径单次物化，无数据拷贝 }
+  Result := TMemStream.Create(FFiles[Idx].Data, LPathStr);
 end;
 
 function TMemVfs.CaseSensitive: Boolean;

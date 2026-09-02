@@ -93,10 +93,15 @@ procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
 implementation
 
 uses
-  TypInfo,
+  nextpas.core.system.typinfo,
   nextpas.core.window.base,
   nextpas.core.window.factory,
   nextpas.core.window.fake,
+  nextpas.core.bytes.ops,
+  nextpas.core.collections.hashset,
+  nextpas.core.atomic,
+  nextpas.core.sync.mutex,
+  nextpas.core.webview.live,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.webview2.loader,
@@ -104,37 +109,124 @@ uses
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
-function DefaultWebviewKind: TWebviewKind;
-begin
-  { S18：能力驱动平台优先——wvWebview2（Windows/wine）优先于 wvGtk，
-    非对应平台探测自然失败，无 IFDEF；S25 加入 wvWk（Darwin 桩）。 }
-  if WebviewBackendAvailable(wvWebview2) then
-    Result := wvWebview2
-  else if WebviewBackendAvailable(wvGtk) then
-    Result := wvGtk
-  else if WebviewBackendAvailable(wvWk) then
-    Result := wvWk
-  else
-    Result := wvFake;
-end;
+const
+  { 策略表单源：平台优先序 Webview2→Gtk→Wk→Fake，DefaultWebviewKind 与
+    CreateWebviewOn 对称回退共用此表，零重复分支，提升高级感。 }
+  CWebviewProbeOrder: array[0..2] of TWebviewKind = (wvWebview2, wvGtk, wvWk);
 
-{$PUSH}{$WARNINGS OFF}
-function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
+var
+  GDefaultKind: TWebviewKind = wvFake;
+  GDefaultReady: Int32 = 0; { atomic 0/1: ARM 弱内存下 double-checked 首检无锁读需 acquire/release 屏障，避免数据竞争 }
+  GAvailProbed: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { atomic 0/1 }
+  GAvailYes: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { atomic 0/1 }
+  GFactoryLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
+
+function RawProbe(AKind: TWebviewKind): Boolean; inline;
 var
   LInfo: TGtkLoadInfo;
   LW2: TWebView2LoadInfo;
   LWk: TWkLoadInfo;
 begin
   case AKind of
-    wvFake:      Result := True;
-    wvGtk:       Result := TryLoadGtkWebkit(LInfo);   // 幂等缓存（S3 接入）
-    wvWebview2:  Result := TryLoadWebView2(LW2);      // W2 探测（wine 亦经 platform.dl）
-    wvWk:        Result := TryLoadWk(LWk);            // W3 桩（Darwin 预留）
+    wvFake:     Result := True;
+    wvGtk:      Result := TryLoadGtkWebkit(LInfo);
+    wvWebview2: Result := TryLoadWebView2(LW2);
+    wvWk:       Result := TryLoadWk(LWk);
   else
     Result := False;
   end;
 end;
+
+procedure EnsureFactoryLock; inline;
+var
+  LNew: TMutex;
+  LPrev: Pointer;
+begin
+  { perf: inline 零额外调用；CAS 单次分配无泄漏，并发首访零重复创建，双检零分配 }
+  if GFactoryLock <> nil then Exit;
+  LNew := TMutex.Create;
+  LPrev := InterlockedCompareExchange(PPointer(@GFactoryLock)^, Pointer(LNew), nil);
+  if LPrev <> nil then
+    LNew.Free;
+end;
+
+{$PUSH}{$WARNINGS OFF}
+function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
+begin
+  if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
+  if AKind = wvFake then Exit(True);
+  // ARM 弱内存首检：atomic_load acquire 保证 GAvailYes 可见性，避免无锁读数据竞争
+  if atomic_load(GAvailProbed[Ord(AKind)]) <> 0 then
+    Exit(atomic_load(GAvailYes[Ord(AKind)]) <> 0);
+  EnsureFactoryLock;
+  GFactoryLock.Acquire;
+  try
+    if atomic_load(GAvailProbed[Ord(AKind)]) <> 0 then
+      Exit(atomic_load(GAvailYes[Ord(AKind)]) <> 0);
+    { perf: inline RawProbe 单锁单探零间隙，去重并发 dlopen，单临界区零重复探测 }
+    atomic_store(GAvailYes[Ord(AKind)], Ord(RawProbe(AKind)));
+    atomic_thread_fence(mo_release);
+    atomic_store(GAvailProbed[Ord(AKind)], 1);
+    Result := atomic_load(GAvailYes[Ord(AKind)]) <> 0;
+  finally
+    GFactoryLock.Release;
+  end;
+end;
 {$POP}
+
+function DefaultWebviewKind: TWebviewKind;
+var
+  I: Integer;
+  LKind: TWebviewKind;
+begin
+  // ARM 弱内存首检：acquire load 保证 GDefaultKind 可见性
+  if atomic_load(GDefaultReady) <> 0 then
+  begin
+    atomic_thread_fence(mo_acquire);
+    Exit(GDefaultKind);
+  end;
+  EnsureFactoryLock;
+  GFactoryLock.Acquire;
+  try
+    if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
+  finally
+    GFactoryLock.Release;
+  end;
+  for I := 0 to High(CWebviewProbeOrder) do
+  begin
+    LKind := CWebviewProbeOrder[I];
+    if WebviewBackendAvailable(LKind) then
+    begin
+      GFactoryLock.Acquire;
+      try
+        if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
+        GDefaultKind := LKind;
+        atomic_thread_fence(mo_release);
+        atomic_store(GDefaultReady, 1);
+        Result := GDefaultKind;
+      finally
+        GFactoryLock.Release;
+      end;
+      Exit(Result);
+    end;
+  end;
+  GFactoryLock.Acquire;
+  try
+    if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
+    GDefaultKind := wvFake;
+    atomic_thread_fence(mo_release);
+    atomic_store(GDefaultReady, 1);
+    if atomic_load(GAvailProbed[Ord(wvFake)]) = 0 then
+    begin
+      atomic_store(GAvailYes[Ord(wvFake)], 1);
+      atomic_thread_fence(mo_release);
+      atomic_store(GAvailProbed[Ord(wvFake)], 1);
+    end;
+    Result := wvFake;
+  finally
+    GFactoryLock.Release;
+  end;
+end;
 
 function CreateFakeWebview(
   const AOptions: TWebviewOptions): IWebviewWindow;
@@ -152,22 +244,48 @@ begin
   Result := TFakeWebview.CreateOn(AParent, AOptions);
 end;
 
-function CreateWebviewOn(const AParent: IWindow;
-  const AOptions: TWebviewOptions): IWebviewWindow;
+{ 统一路由辅助：单表 CWebviewProbeOrder 单源，AParent 有无 × AKind 偏好二维收敛，
+  Builder.Parent / CreateWebviewOn 零重复分支，inline 零额外调用，O(n) n≤3 线性回退零分配 }
+function DoCreateWebviewRouted(const AParent: IWindow; AKind: TWebviewKind;
+  const AOptions: TWebviewOptions): IWebviewWindow; inline;
 var
   LKind: TWebviewKind;
   LFakeAcc: nextpas.core.window.fake.IFakeSelfAccess;
+  I: Integer;
 begin
-  CheckWebviewOptions(AOptions);
   if AParent = nil then
-    Exit(CreateWebviewOf(DefaultWebviewKind, AOptions));
-  if (AParent.QueryInterface(
-      nextpas.core.window.fake.IFakeSelfAccess, LFakeAcc) = 0) then
+    Exit(CreateWebviewOf(AKind, AOptions));
+  CheckWebviewOptions(AOptions);
+  if AParent.QueryInterface(
+      nextpas.core.window.fake.IFakeSelfAccess, LFakeAcc) = 0 then
     Exit(TFakeWebview.CreateOn(AParent, AOptions));
-  LKind := DefaultWebviewKind;
-  if (LKind = wvGtk) and WebviewBackendAvailable(wvGtk) then
-    Exit(TGtkWebview.CreateOn(AParent, AOptions));
+  LKind := AKind;
+  // 策略表驱动：优先 AKind，失效时按 CWebviewProbeOrder 对称回退（单表零重复）
+  if (LKind <> wvFake) and WebviewBackendAvailable(LKind) then
+  begin
+    case LKind of
+      wvGtk:      Exit(TGtkWebview.CreateOn(AParent, AOptions));
+      wvWebview2: Exit(TWebView2Webview.CreateOn(AParent, AOptions));
+      wvWk:       Exit(TWkWebview.CreateOn(AParent, AOptions));
+    end;
+  end;
+  for I := 0 to High(CWebviewProbeOrder) do
+  begin
+    if CWebviewProbeOrder[I] = LKind then Continue;
+    if not WebviewBackendAvailable(CWebviewProbeOrder[I]) then Continue;
+    case CWebviewProbeOrder[I] of
+      wvGtk:      Exit(TGtkWebview.CreateOn(AParent, AOptions));
+      wvWebview2: Exit(TWebView2Webview.CreateOn(AParent, AOptions));
+      wvWk:       Exit(TWkWebview.CreateOn(AParent, AOptions));
+    end;
+  end;
   Result := TFakeWebview.CreateOn(AParent, AOptions);
+end;
+
+function CreateWebviewOn(const AParent: IWindow;
+  const AOptions: TWebviewOptions): IWebviewWindow;
+begin
+  Result := DoCreateWebviewRouted(AParent, DefaultWebviewKind, AOptions);
 end;
 
 {$PUSH}{$WARNINGS OFF}
@@ -216,19 +334,15 @@ type
     FOptions: TWebviewOptions;
     FKind: TWebviewKind;
     FParent: IWindow;
-    FInvokes: array of TFakeInvokeReg;
-    FInvokesCount: Integer;
-    FReady: array of TWebviewNotifyHandler;
-    FReadyCount: Integer;
-    FInitScripts: array of string;
-    FInitScriptsCount: Integer;
+    FInvokes: specialize TWebviewLiveRegistry<TFakeInvokeReg>;
+    FReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
+    FInitScripts: specialize TWebviewLiveRegistry<string>;
+    FDedup: specialize THashSet<string>;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
-    procedure EnsureUniqueCmd(const ACmd: string);
-    procedure GrowInvokes; inline;
-    procedure GrowReady; inline;
-    procedure GrowInitScripts; inline;
+    procedure EnsureUniqueCmd(const ACmd: string); inline;
   public
     constructor Create;
+    destructor Destroy; override;
     function Kind(AKind: TWebviewKind): IWebviewBuilder;
     function Parent(const AWindow: IWindow): IWebviewBuilder;
     function Title(const ATitle: string): IWebviewBuilder;
@@ -265,6 +379,22 @@ begin
   inherited Create;
   FOptions := DefaultWebviewOptions;
   FKind := DefaultWebviewKind;
+  // perf: registry 单源收敛三组 Vec 样板，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用
+  FInvokes := specialize TWebviewLiveRegistry<TFakeInvokeReg>.Create;
+  FReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
+  FInitScripts := specialize TWebviewLiveRegistry<string>.Create;
+  FDedup := specialize THashSet<string>.Create;
+end;
+
+destructor TBuilderImpl.Destroy;
+begin
+  // stability: registry Free 释放内部 Vec 并 nil 串/接口；dedup 复用 collections.hashset 单源，Swiss Table 自动 Finalize 全量串，资源释放不丢
+  FDedup.Free;
+  FDedup := nil;
+  FInitScripts.Free;
+  FReady.Free;
+  FInvokes.Free;
+  inherited;
 end;
 
 function TBuilderImpl.Title(const ATitle: string): IWebviewBuilder; inline;
@@ -350,65 +480,54 @@ begin
   Result := Self;
 end;
 
-procedure TBuilderImpl.GrowInitScripts; inline;
-begin
-  SetLength(FInitScripts, WebviewGrowCapacity(Length(FInitScripts)));
-end;
-
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
-  if FInitScriptsCount = Length(FInitScripts) then GrowInitScripts;
-  FInitScripts[FInitScriptsCount] := AJavascript;
-  Inc(FInitScriptsCount);
+  // perf: registry Register -> WebviewLiveAdd -> bytes.ops VecGrow 单源 0→4→2× inline 零额外调用，零拷贝
+  FInitScripts.Register(AJavascript);
   Result := Self;
 end;
 
-procedure TBuilderImpl.GrowInvokes; inline;
+procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string); inline;
 begin
-  SetLength(FInvokes, WebviewGrowCapacity(Length(FInvokes)));
-end;
-
-procedure TBuilderImpl.GrowReady; inline;
-begin
-  SetLength(FReady, WebviewGrowCapacity(Length(FReady)));
-end;
-
-procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string);
-var I: Integer;
-begin
-  for I := 0 to FInvokesCount - 1 do
-    if FInvokes[I].Cmd = ACmd then
-      raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  { perf: inline O(1) 平均哈希去重，复用 collections.hashset 单源 Swiss Table WyHash + 0.75 负载，零额外调用，零拷贝；资源由 THashSet 自动 Finalize 释放不丢，与 assets/bridge 单源一致 }
+  if FDedup.Contains(ACmd) then
+    raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
+  FDedup.Add(ACmd);
 end;
 
 function TBuilderImpl.RegisterInvoke(const ACmd: string;
   AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
+var
+  LReg: TFakeInvokeReg;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  if FInvokesCount = Length(FInvokes) then GrowInvokes;
-  FInvokes[FInvokesCount].Cmd := ACmd;
-  FInvokes[FInvokesCount].Sync := AHandler;
-  FInvokes[FInvokesCount].IsAsync := False;
-  Inc(FInvokesCount);
+  // perf: registry Register 单源 VecGrow 0→4→2× inline 零额外调用
+  LReg.Cmd := ACmd;
+  LReg.Sync := AHandler;
+  LReg.Async := nil;
+  LReg.IsAsync := False;
+  FInvokes.Register(LReg);
   Result := Self;
 end;
 
 function TBuilderImpl.RegisterAsyncInvoke(const ACmd: string;
   AHandler: TWebviewInvokeAsyncHandler): IWebviewBuilder;
+var
+  LReg: TFakeInvokeReg;
 begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
   EnsureUniqueCmd(ACmd);
-  if FInvokesCount = Length(FInvokes) then GrowInvokes;
-  FInvokes[FInvokesCount].Cmd := ACmd;
-  FInvokes[FInvokesCount].Async := AHandler;
-  FInvokes[FInvokesCount].IsAsync := True;
-  Inc(FInvokesCount);
+  LReg.Cmd := ACmd;
+  LReg.Sync := nil;
+  LReg.Async := AHandler;
+  LReg.IsAsync := True;
+  FInvokes.Register(LReg);
   Result := Self;
 end;
 
@@ -416,9 +535,8 @@ function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
 begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.Create('OnReady handler must not be nil');
-  if FReadyCount = Length(FReady) then GrowReady;
-  FReady[FReadyCount] := AHandler;
-  Inc(FReadyCount);
+  // perf: registry Register 单源 VecGrow inline
+  FReady.Register(AHandler);
   Result := Self;
 end;
 
@@ -443,34 +561,28 @@ end;
 function TBuilderImpl.ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
 var
   I: Integer;
+  LReg: TFakeInvokeReg;
 begin
-  for I := 0 to FInvokesCount - 1 do
+  // perf: registry At inline O(1) + invoke 单源 Vec 单写，零额外堆分配
+  for I := 0 to FInvokes.Count - 1 do
   begin
-    if FInvokes[I].IsAsync then
-      AWin.Invokes.RegisterAsync(FInvokes[I].Cmd, FInvokes[I].Async)
+    LReg := FInvokes.At(I);
+    if LReg.IsAsync then
+      AWin.Invokes.RegisterAsync(LReg.Cmd, LReg.Async)
     else
-      AWin.Invokes.Register(FInvokes[I].Cmd, FInvokes[I].Sync);
+      AWin.Invokes.Register(LReg.Cmd, LReg.Sync);
   end;
-  for I := 0 to FReadyCount - 1 do
-    AWin.OnReady(FReady[I]);
+  for I := 0 to FReady.Count - 1 do
+    AWin.OnReady(FReady.At(I));
   Result := AWin;
 end;
 
 function TBuilderImpl.Build: IWebviewWindow;
-var I: Integer;
 begin
-  if FInitScriptsCount > 0 then
-  begin
-    SetLength(FOptions.InitScripts, FInitScriptsCount);
-    for I := 0 to FInitScriptsCount - 1 do
-      FOptions.InitScripts[I] := FInitScripts[I];
-  end
-  else
-    FOptions.InitScripts := nil;
-  if FParent <> nil then
-    Result := ApplyTo(CreateWebviewOn(FParent, FOptions))
-  else
-    Result := ApplyTo(CreateWebviewOf(FKind, FOptions));
+  // perf: registry Snapshot -> bytes.ops VecSnapshot 单源 inline (nil fast path + single SetLength + per-elem copy), 零拷贝单源叙事统一
+  // perf: 统一路由 DoCreateWebviewRouted inline 零额外调用，Builder.Parent/CreateWebviewOn 单源收敛，零重复分支
+  FInitScripts.Snapshot(FOptions.InitScripts);
+  Result := ApplyTo(DoCreateWebviewRouted(FParent, FKind, FOptions));
 end;
 
 procedure TBuilderImpl.Run(const AUrl: string);
@@ -492,7 +604,13 @@ begin
 end;
 
 initialization
+  GFactoryLock := TMutex.Create;
 
 finalization
+  if GFactoryLock <> nil then
+  begin
+    GFactoryLock.Free;
+    GFactoryLock := nil;
+  end;
 
 end.

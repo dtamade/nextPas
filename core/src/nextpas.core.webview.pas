@@ -17,7 +17,6 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.mime,
-  nextpas.core.webview.fake,
   nextpas.core.webview.factory,
   nextpas.core.webview.vfs,
   nextpas.core.window.intf;
@@ -84,14 +83,6 @@ type
   IWebviewAssets           = nextpas.core.webview.intf.IWebviewAssets;
   IWebviewWindow           = nextpas.core.webview.intf.IWebviewWindow;
   IWebviewBuilder          = nextpas.core.webview.factory.IWebviewBuilder;
-
-{ ---- 类型：fake 测试支撑 ---- }
-
-  TFakeWebview        = nextpas.core.webview.fake.TFakeWebview;
-  TFakeInvokeOutcome  = nextpas.core.webview.fake.TFakeInvokeOutcome;
-  TFakeInvokeOutcomes = nextpas.core.webview.fake.TFakeInvokeOutcomes;
-  TFakeEvalRecord     = nextpas.core.webview.fake.TFakeEvalRecord;
-  TFakeEvalRecords    = nextpas.core.webview.fake.TFakeEvalRecords;
 
   TWebviewBuilder = nextpas.core.webview.factory.TWebviewBuilder;
 

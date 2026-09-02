@@ -7,7 +7,9 @@ unit nextpas.core.vfs.intf;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.text.view,
   nextpas.core.vfs.base;
 
 type
@@ -32,6 +34,14 @@ type
   IVfsServeMeta = interface(IInterface)
     ['{A3F1B2C4-8E9D-4F6A-9B2C-1D4E5F607890}']
     function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+  end;
+
+  { 零拷贝视图扩展：TStringView 零堆分配路径探测，复用 bytes.ops 单源 CompareBytesOrdered，inline 零额外调用。
+    反哺 owner：webview.vfs 剥首段分支需 View 直通 Exists/OpenRead，消除 ToString 物化；热点 memtree/embedded 真零拷贝，os 回退单次物化。 }
+  IVfsView = interface(IInterface)
+    ['{E9A4C7B1-3F2D-4E8A-9B6C-1D5F8A0C3E42}']
+    function ExistsView(const APath: TStringView): Boolean;
+    function OpenReadView(const APath: TStringView): IStream;
   end;
 
 implementation

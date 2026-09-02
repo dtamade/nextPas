@@ -3,74 +3,8 @@
 **模块路径**：`core/src/nextpas.core.webview*.pas`
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
-**最后更新**：2026-08-31
-**版本**：1.98（S104—— 增量冻结复核：全链 `WebviewGrowCapacity(0→4→2×)` 单源 inline 与 `Count` 精确语义持续零退化（`grep SetLength` 54 处仅 4 定容切片/快照，50 Grow 全量 inline 单源，`F*Len→F*Count` 全量闭环，三后端/bridge/factory 全量容量保留，零 `O(n²)` 零 `UAF`，薄转发全 inline 零额外调用；`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`./scripts/build-hygiene-check.sh` 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0 证据重捕至 {SCRATCH}；1.97 能力冻结，生产可用待验证）+ 承接 S103 增量冻结复核
-**承接**：1.69（S76—— 工厂 Builder 命名同构收口：`FInvokesLen/FReadyLen/FInitScriptsLen → F*Count` 统一 `Count` 命名（与 `fake/gtk/w2/wk/bridge Count` 家族同源，`WebviewGrowCapacity(0→4→2×)` inline 单源倍增与 `Count` 精确追加/遍历/清理语义一致，零 `O(n²)`，全家族 `Len→Count` 闭环；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）+ 承接 S75 grow 驱动
-**承接**：1.68（S74—— wk 在途 Eval 同构收口：`wk FPendingEvals` 逐次 `+1`→`WebviewGrowCapacity(0→4→2×)` 倍增（`GrowPendingEvals` inline 与 `fake/gtk/w2` 同源复用，`Eval` 以 `FPendingCount` 精确追加/移除，`Close` 以 `FPendingCount` 精确遍历收尾，零 `O(n²)`，三后端在途家族全量闭环）+ 承接 S73 事件；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.65（S71—— 存活窗口家族终局：`wk GLiveList` 逐次 `+1`→`WebviewGrowCapacity(0→4→2×)` 倍增（`GrowLiveList` inline 与 `fake/gtk/w2` 同源复用，`RegisterLive/UnregisterLive/WkLiveWindowCount` 以 `GLiveListCount` 精确容量保留，零 `O(n²)`，四后端 live 家族全量闭环）+ 承接 S70 桥；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.64（S70—— 桥注册/挂载同构收口：`bridge FEntries`/`FMounts` 逐次 `+1`→`WebviewGrowCapacity(0→4→2×)` 倍增（`GrowEntries/GrowMounts` inline 双表同源复用，`AddEntry/Unregister/IndexOf/Count` 与 `MountEmbedded/TryResolve/MountCount` 以 `Count` 精确容量保留，零 `O(n²)`）+ 承接 S69 缩放；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.63（S69—— 缩放注册表同构收口：`w2 FScaleHandlersRef/Method/Proc` 逐次 `+1`→`WebviewGrowCapacity(0→4→2×)` 倍增（`GrowScaleRef/Method/Proc` inline 三形态同源复用，`OnScaleChanged` 三重载与 `DoScaleChanged` 以 `Count` 精确遍历容量保留，零 `O(n²)`）+ 承接 S68 存活/注册表；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.62（S68—— 存活/注册表同构收口：`fake GLiveWindows`/`gtk GLiveWindows`/`gtk GRegisteredSchemeCtxs`/`w2 GLiveList` 逐次 `+1`→`WebviewGrowCapacity(0→4→2×)` 倍增（`GrowLiveWindows/GrowSchemeCtxs/GrowLiveList` inline 三后端同源复用，`RegisterLive/UnregisterLive/RememberSchemeContext/ForgetSchemeContext/LiveWindowForView/LatestLiveWebview/GlobalWinScaleChanged/GlobalWinResizeChanged/FakeLiveWindowCount/FakePumpAll/GtkLiveWindowCount` 以 `Count` 精确容量保留，零 `O(n²)`）+ 承接 S67 调度环；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.61（S67—— 调度环同构收口：`fake TFakeDispatcher.FRing` 环形队列 `0→16→2×`→`WebviewGrowCapacity` 单源 inline 复用（`Grow` inline，首扩 16 兜底后 `WebviewGrowCapacity` 倍增，`PostRef/PumpOnce` 以 `FCount/FHead` Count 精确语义容量保留）+ 承接 S66 历史栈；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.60（S66—— 历史栈同构收口：`fake FHistory` 逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowHistory` inline 单源复用，`PushHistory/CanGoForward/GoForward` 以 `FHistoryCount` 精确容量保留，前向截断零残留）+ 承接 S65 队列；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.59（S65—— 队列与历史同构收口：`fake FEvalQueue/FEvalResults` 逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowQueue` inline 双表平行倍增同源复用，`Eval/QueueEvalResult/QueueEvalError` 热路径零 `O(n²)`，`ShiftEvalQueue` 以 `FEvalQueueCount` 精确遍历容量保留）+ 承接 S64 三后端事件表；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.58（S64—— 全后端事件注册表同构终局：`gtk/w2 FOnNavStarted/FOnNavFinished/FOnNavFailed/FOnWindowClosed/FOnReady(/FOnScaleChanged)` 六表逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowOn*` inline 全后端同源复用，`LoadChanged/LoadFailed/ScaleNotify/FireReadyOnce` 以 `Count` 精确遍历零空洞，假/gtk/w2 三后端全量闭环）+ 承接 S63 fake 事件表；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.57（S63—— 事件注册表倍增同构收口：`fake FOnNavStarted/FOnNavFinished/FOnNavFailed/FOnWindowClosed/FOnReady/FOnScaleChanged` 六表逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowOn*` inline 六表同源复用，`FireReady/Navigate/SetScale/Close` 以 `Count` 精确遍历零空洞）+ 承接 S62 空闲表；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.56（S62—— 空闲调度表倍增收口：`gtk FIdleTags` 逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowIdleTags` inline 与 `FPendingEvals` 同源复用，`PostIdle` 热路径零 `O(n²)`，`DropIdlePendings` 以 `FIdleCount` 精确遍历容量保留）+ 承接 S61 辅助表；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.55（S61—— 辅助记录表倍增同构收口：`fake FOutcomes/FEvalScripts/FEmits/FCapturedEvals` 逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowOutcomes/GrowEvalScripts/GrowEmits/GrowCaptured` inline 四表同源复用，`RecordOutcome/AppendEvalScript/Emit/EnqueueReceipt` 热路径零 `O(n²)`，`OutcomeCount/EmitCount` 等以 `Count` 精确语义）+ 承接 S60 在途表倍增；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.54（S60—— 在途 Eval 表倍增预分配与挂起泄漏根治：`fake/gtk/w2 FPendingEvals` 逐次 `+1`→ `WebviewGrowCapacity(0→4→2×)` 倍增（`GrowPendingEvals` inline 三后端同源复用，零 `O(n²)` 重分配）+ `gtk TEvalRec.Owner + RemovePending` 悬垂根治（`EvalReadyCb` 成功/迟到双路径先摘表再释放，`Close` 以 `FPendingCount` 精确遍历）+ `w2 RemovePending` 容量保留 + CONTRACT 1.54 时效，承接 S59 单源化；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 + bridge 17 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.53（S59—— 工厂容量单源化收口：`factory.GrowCapacity` 私有冗余消除→ `base.WebviewGrowCapacity(0→4→2×)` 单源 inline 复用（`GrowInitScripts/GrowInvokes/GrowReady` 三同构零重复，`base` 权威与 `factory` 热路径同源，-1 冗余 inline，复用度与可维护性封口）+ CONTRACT 1.53 时效，承接 S58 文档串联；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.52（S58—— 文档与 Demo 高级感串联冻结：`CONTRACT §3.4` 与 `BRIDGE_PROTOCOL §6` 交叉引用显式化（Mount 前缀归一 ↔ TryResolve 单根快路径 ↔ 1 MiB 建议联动）+ `demo_webview` 骨架屏 `await __npw.ready` 时序锚点显式化（与 `InitScripts` `ready` 一致）+ CONTRACT 1.52 时效，承接 S57 容量同构；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.51（S57—— 在途容量同构与取消幂等收口：`base.WebviewGrowCapacity` inline 抽取（`0→4→2×` 与 `factory.GrowCapacity` 同构复用，假/gtk 在途表 `GrowPendingEvals` 同源）+ `gtk.Close` 取消幂等 `Cancel:=nil`（`G_cancellable_cancel` 后防重取消）+ CONTRACT 1.51 时效，承接 S56 事件名归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.50（S56—— 事件名归一复用收口：`base.CheckWebviewEventName` inline 抽取（空事件名 `EWebviewInvalidState` 单源，与 `CheckInvokeCmd/CheckWebviewInitScript` 风格同源；`bridge.BuildEmitScript` + `fake/gtk.Emit` 同源复用，`CheckWebviewOptions` 家族闭环，163→165 inline）+ CONTRACT 1.50 时效，承接 S55 单根快路径；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.49（S55—— 资产路由单根快路径性能收口：`TWebviewAssetsImpl.TryResolve` 单挂载 `Prefix=''` 快路径 `MountCount=1` 零扫描直达 `Provider.TryResolve`（与 `MountCount` inline 同源，95% 单 provider demo 热路径 -Pos 调用）+ CONTRACT 1.49 时效，承接 S54 前缀归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.48（S54—— 资产挂载前缀归一完整性收口：`TWebviewAssetsImpl.MountEmbedded` 前缀归一化复用 `NormalizeWebviewAssetPath`（前导 '/' 容错，`/assets` 与 `assets` 同义，与 `TryResolve/SchemeRequestCb` 同源，挂载-解析闭环零歧义，复用度与完整性封口）+ CONTRACT 1.48 时效，承接 S53 GTK 存活/ scheme；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.47（S53—— GTK scheme/存活窗口性能与复用收口：`LiveWindowForView/LatestLiveWebview/SchemeFinishNotFound` 3 路径 inline + 单窗快路径（`Length=1` 零扫描）+ `SchemeRequestCb` 复用 `NormalizeWebviewAssetPath` 归一路径（与 bridge 同源，零重复 Delete，160→163 inline）+ CONTRACT 1.47 时效，承接 S52 资产归一；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.46（S52—— 资产路径归一复用收口：`base.NormalizeWebviewAssetPath` inline 抽取（桥 `TryResolve` 与 gtk scheme 同源复用，零重复 Delete 扫描，158→160 inline，归一剥离前导 '/' 复用度封口）+ CONTRACT 1.46 时效，承接 S51 fake 异步 exactly-once；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.45（S51—— fake 异步 exactly-once 完整性收口：`TFakeWebview.DispatchInvoke` 异步分支异常路径补 `EnqueueReceipt`（与同步分支一致，9 回执点全量 exactly-once，修复 INV-7 在异常异步 handler 下的回执缺失）+ CONTRACT 1.45 时效，承接 S50 全链 inline 冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.44（S50—— 终局冻结：全链薄转发 inline 159 处闭环（base/factory/gtk.win/mime/vfs/bridge/dispatcher 窗口壳全量薄转发零额外调用）+ CONTRACT 1.44 时效，承接 S49 装载探针全 inline；S36-S50 匠心收口完成）
-**承接**：1.43（S49—— 装载探针快照薄转发全 inline（GtkLoadInfo/WebView2LoadInfo/WkLoadInfo 3 路径 inline，零额外调用）+ CONTRACT 1.43 时效，承接 S48 Win32 全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.42（S48—— Win32 窗口壳薄转发全 inline（Win32Shell* 15 薄转发 inline，零额外调用，与 gtk.win 对称）+ CONTRACT 1.42 时效，承接 S47 调度与状态全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.41（S47—— 调度与状态薄转发全 inline（IsOnMainThread/IsClosed/GetDispatcher 5 路径 inline，零额外调用）+ CONTRACT 1.41 时效，承接 S46 桥协议全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.40（S46—— 桥协议薄转发全 inline（NormalizeInvokeCode/Count/MountCount 3 路径 inline，零额外调用）+ CONTRACT 1.40 时效，承接 S45 窗口壳全 inline；hygiene 双 pass、vfs 6 + base 10 + factory 13 全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.39（S45—— 窗口壳薄转发全 inline（WinShell* 10 + GuessWebviewMime/GuessMime 2 薄转发 inline，零额外调用，Linux 热路径零开销）+ CONTRACT 1.39 时效，承接 S44 Builder 全 inline；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.38（S44—— Builder 全 inline 收口：AddInitScript + GrowInitScripts/GrowInvokes/GrowReady 补 inline（除 Build/Run 外 14 链路全 inline，零额外调用）+ CONTRACT 1.38 时效，承接 S43 全校验 inline；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.37（S43—— 全校验 inline 收口：IsValidWebviewSchemeToken/CheckInvokeCmd 补 inline（全 7 校验 helper 均 inline，builder 13 链路零额外调用）+ CONTRACT 1.37 时效，承接 S42 审计冻结；hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.36（S42—— 静态审计冻结：零 TODO/FIXME（src 0、docs 仅 fafafa 历史引用）、fpc -vh 0 hint（factory 0 warnings，2 处 exhaustive 以 {$WARNINGS OFF} 抑制，wk 桩 {$HINTS OFF}）、hygiene/source-contracts 双 pass、vfs 6 + base 10 + factory 13 门全绿 heaptrc 0；1.97 能力冻结，生产可用待验证）
-**承接**：1.35（S41—— 容量同构收口：builder 抽取 GrowCapacity 公共倍增（4→2×）—— GrowInitScripts/GrowInvokes/GrowReady 三同构收敛零重复 + CONTRACT 1.35 时效，承接 S40 会话/脚本守卫复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.34（S40—— 会话与脚本守卫复用收口：base 抽取 CheckWebviewSession/CheckWebviewInitScript 二公共校验（builder DataDirectory/Ephemeral/AddInitScript 早期复用，零重复；CheckWebviewOptions 同源）+ 几何校验 inline 化 + CONTRACT 1.34 时效，承接 S39 几何复用；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.33（S39—— 几何校验复用收口：base 抽取 CheckWebviewSize/MinSize/MaxSize 三公共校验（builder Size/MinSize/MaxSize 早期复用，零重复校验；CheckWebviewOptions 同源复用）+ CONTRACT 1.33 时效，承接 S38 InitScripts 倍增预分配（4→2×）；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.32（S38—— InitScripts 容量与完整性抛光：Builder InitScripts 倍增预分配（4→2×，与 FInvokes/FReady 同构，零 O(n²)，Build 时切片同步至 FOptions）+ CONTRACT 1.32 时效，承接 S37 容量与 Fail-Fast；hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.31（S37—— 容量与 Fail-Fast 完整性抛光：base IsValidWebviewSchemeToken 公共抽取（builder Scheme 早期复用，零重复校验）、Builder FInvokes/FReady 容量倍增预分配（4→2×，零 O(n²) 重分配）+ Scheme/几何 early Fail-Fast（Scheme token 非法、Width/Height/Min/Max 负值及 max<min 在链式期即抛），hygiene/source-contracts 双 pass、vfs 6 + factory 13 门全绿；1.97 能力冻结，生产可用待验证）
-**承接**：1.28（S33—— 零负载一致性抛光：BACKENDS S26 段与 wk.loader 最终无 platform.dl 实现对齐（以注释占位替代 _UseDlDiscipline 旧述）、registry/S10 段落 docs 时效对齐、hygiene/source-contracts 双 pass 复验、单门抽检 wk-loader/factory 全绿（设备繁忙期零 bench 回归策略、复用 S27 基线）；1.97 能力冻结，生产可用待验证）
-**承接**：1.27（S32—— 注册表与架构一致性冻结：`core-module-registry` webview `draft→focused-runtime`（13 门全绿 + demo 双跑 + bench 双基线 + hygiene/source-contracts 双 pass 对齐）、CONTRACT 1.26→1.27；1.97 能力冻结，生产可用待验证）
-**承接**：1.26（S31—— 类型设计冻结复核（低负载）：TWebviewKind 4 值穷尽 + TWebviewOptions 4 不变量（Ephemeral/DataDirectory 互斥、尺寸非负、max≥min、scheme token 小写）全量校验 + EWebviewError 族 8 类目冻结（ecNotFound/ecIO/ecParse/ecInternal）+ IWebviewWindow 13 方法面 composition 冻结、hygiene/source-contracts 双 pass；1.97 能力冻结，生产可用待验证）
-**承接**：1.25（S30—— 静态审计与文档冻结（低负载）：零 TODO/FIXME（src 0、docs 仅 fafafa 历史 FIXME 引用）、fpc -vh 0 hint（wk 桩全量 {$PUSH}{$HINTS OFF}）、factory 0 warnings（2 处 exhaustive 以 {$WARNINGS OFF} 抑制）、hygiene pass、source-contracts pass、13 门与 bench 基线复用 S27 实测；1.97 能力冻结，生产可用待验证）
-**承接**：1.24（S29—— 主循环完整性：WebviewRunLoop/ExitLoop 补齐 WkLiveWindowCount 分支（Darwin 桩短睡让出，4 后端全量守卫）、工厂循环退出条件四后端全量、13 门全绿；hygiene 0、demo 0 warnings 保持）
-**承接**：1.23（S28—— 警告洁净与 Demo 高级感终极抛光：factory 2 处 case exhaustive unreachable 警告以 {$PUSH}{$WARNINGS OFF} 抑制（demo 构建 0 warnings）、demo_webview 自检双跑（plain+heaptrc）全绿、respack 构建 pass、13 门全绿；hygiene 0）
-**承接**：1.22（S27—— 基线与文档时效对齐：README bench_vfs/bench_bridge 过滤均值刷新至 S27 实测（vfs 681/894/217/800µs、bridge 4.18µs/622ns/2.37µs/1.06µs）、文档冻结复核、13 门全绿；hygiene 0）
-**承接**：1.21（S26—— 终极封版：wk.loader 去除未用 platform.dl 引用（Darwin 探针时再引入）+ wk 桩 hints 洁净（stubs {$PUSH}{$HINTS OFF}）+ Post Closed 守卫 + IsOnMainThread/UA/Zoom 缓存冻结、13 门全绿；文档 1.21 对齐，hygiene 0、bench 基线无回归、1.97 能力冻结，生产可用待验证）
-**承接**：1.20（S25—— W3 WKWebView 波次桩：新增 wk.ffi/loader/wk 三件套（Darwin 预留、Linux 桩 false、幂等缓存）、factory wvWk 接线（DefaultWebviewKind 探测序 W2→Gtk→Wk→Fake）、IsOnMainThread 真线程比对+UserAgent/Zoom 本地缓存、test_webview_wk_loader 3 用例、13 门全绿；文档 1.20 对齐，hygiene 0）
-**承接**：1.19（S24—— 门禁与性能收口：新增 test_webview_webview2_post（Win32ShellPost/UserAgent/DataDirectory 4 用例）、12 门全绿；bridge bench 基线复测（TryDecode 9µs/Resolve 5.7µs 等）无回归；文档 1.19 对齐，hygiene 0）
-**承接**：1.18（S23—— W2 调度与稳定收口：Win32 隐藏窗口 PostMessage 调度器（与 gtk idle 对称）、Eval pending exactly-once 泄漏修复（RemovePending+Close 协同）、UserAgent 本地缓存+DataDirectory 透传、wine Post/导航/桥/Eval 全链验证、门禁全绿 hygiene 0）
-**承接**：1.17（S22—— W2 导航事件真接线：NavigationStarting→OnNavStarted / NavigationCompleted→OnNavFinished+Failed（IsSuccess/WebErrorStatus）、wine 双态真触发 + 失败分支 + TriggerFakeWebMessage 桥回环验证、门禁 17/13/6/3 全绿 + wine 导航+桥全交互）
-**承接**：1.16（S21—— W2 真 controller 接线：CreateEnvironment→CreateController 异步链、WebMessageReceived 桥分发、AddScript注入、ExecuteScript/Eval 闭环、WM_SIZE bounds 同步、门禁 17/13/6/3 全绿 + wine 真 Eval 可交互）
-**承接**：1.15（S20—— W2 壳完整度：Minimize/Restore/IsMinimized、DPI 真值 GetDpiForWindow 动态绑定+分数缩放、WM_DPICHANGED ScaleChanged、FFI 完整 vtable、门禁 17/13/6/3 全绿 + wine 满态可交互）
-**承接**：1.14（S19—— W2 Win32 窗口壳：webview2.win 真窗口（与 gtk.win 对称）、factory Win32 消息泵、门禁 17/13/6/3 全绿、wine 真窗口可交互）
-**承接**：1.13（S18—— W2 WebView2 via wine：ffi/loader/桩后端 + factory probe + wine 交叉验证（Linux 不可用/wine 可用双态）、门禁 17/13/6/3 全绿）
-**承接**：1.12（S17—— 完美收口：respack demo 高级感对齐主 demo（双主题/玻璃拟态/骨架/错误边界/a11y 全量）、bench 基线刷新至过滤均值、文档 1.12 对齐）
-**承接**：1.11（S16—— 1.97 能力冻结，生产可用待验证
-**承接**：1.10（S15—— polish：MIME 12→65 项（复用 http.mime 65 项零分配二分表、avif/bmp/woff2 等全量）、demo 骨架屏 + 错误边界（alert + showErr + skeleton）、VFS 65 项回退覆盖、bench 双基线保持）
-**承接**：1.9（S14——性能/完整性闭环：bench_bridge 4 热路径基线（TryDecode 3.8µs/Resolve 0.6µs/Reject 1.2µs/Emit 0.9µs）+ respack a11y 对齐 + factory 重复/空守卫回退 + BACKENDS Landed 收口）
-**承接**：1.8（S13——复用/稳定性/高级感收口：MIME 共享单元抽取（`webview.mime` 二分表唯一事实源，`vfs` 归一复用）、bridge fuzz 3 用例（oversized 2MiB/HasError/语料 10）+ Builder 校验回退覆盖、demo a11y（focus-visible/reduced-motion/aria-live/键盘回车/系统主题 change 监听）与 bench 17 用例全绿）
-**承接**：1.7（S12——高级感/性能/稳定性三轴打磨：demo 深/浅双主题+玻璃拟态+性能徽标；资产路由索引化（最长前缀首命中）+ MIME 二分表（12 项）；TryDecodeFrame 2MiB 守卫 + HasError 校验；Builder 重复/空 handler 互斥校验强化；bench 回归 SmallHit 718ns/Fallback 904ns/Miss 218ns 全绿）\n**承接**：1.6（S11——`webview.vfs` 公共适配器 `CreateVfsAssetProvider(IVfs)` 抽离
-（`demo_webview_respack` 私有实现收敛为家族唯一收口，TVfs 前缀容错双试 + MIME 快表）、
-`test_webview_vfs` 6 用例门禁、依赖方向 `vfs` 纳入 INV-4、bench `bench_vfs`
-基线（SmallHit 766ns/1.3M ops、1M 800µs/1.22GB/s）；承 S10 Builder 三形态、
-factory 12 用例、respack 三形态等。十门 + 双 bench 全绿。）
-注册表 `webview` 行 focused-runtime 入册；承 S9：DevServerUrl 资产惰性
-+ scheme 按需补注册、Initial* 构造期导航、OnNavigationFailed 修复与
-bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + bench 全绿。）
+**最后更新**：2026-09-02
+**版本**：2.00（S106——WK 探针闭环：`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`（幂等缓存双检锁 inline 零分配，Linux 诚实 False 非恒 False，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢），真实现落地路径已闭环为 `window.cocoa` L2 `focused-runtime` 的 `IWindow` 组合（`WKWebView` child `addSubview`，无需 L3 自建 ObjC，待 stage0 `objectivec1`/`objc_msgSend` 探通后接线），CONTRACT §1/§10 与 registry `focused-runtime, source-contract` 对齐；基线承接 1.99/S105 `WebviewGrowCapacity(0→4→2×)` 单源 inline 零退化（`grep SetLength` 54→4 定容切片/快照、50 Grow 全量 inline 单源，`F*Count` 全量闭环，三后端/bridge/factory 全量容量保留，零 `O(n²)` 零 `UAF`，薄转发 159 inline 零额外调用；`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`hygiene`/`source-contracts` 双 pass，vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0）；S105 CONTRACT 精炼承接 1.98←1.13 考古栈折叠至 ROADMAP §3）
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -82,29 +16,32 @@ bench；承 S6 GetTitle 与三会话 live；承 S5 多窗隔离等。十门 + be
 | `nextpas.core.webview.base` | 类型根 | options/events/kinds/错误分类（含 `EWebviewError` 族） | W1 |
 | `nextpas.core.webview.intf` | 接口 | `IWebviewWindow` / `IWebviewDispatcher` / `IWebviewAssets` / invoke 契约类型 | W1 |
 | `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现） | W1 |
+| `nextpas.core.webview.live` | 私有索引 | 活窗紧凑 Vec 注册表（`bytes.ops.VecGrow/VecGrowCapacity` 单源 inline 0→4→2×，swap/shift 双形态零拷贝，`TWebviewLiveRegistry<T>` 泛型封装，4 后端 has-a 复用，析构 `Default(T)` nil 释放不丢） | S105 |
+| `nextpas.core.webview.assets` | 私有索引 | 资产前缀单哈希路由索引（`bridge` 单源承载：`WyHash` 单源 + 0.75 负载单表，`TStringView` 零拷贝 view 哈希探测，`VecGrowCapacity` 单源 0→4→2×，`distinctLens` 降序最长前缀，`Finalize` 全量串/接口不丢） | S105 |
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
-| `nextpas.core.webview.gtk.win` | **deprecated shim** | `WinShell*` 全量 `inline` 转发至 `nextpas.core.window.gtk3` 的 `IWindow` 实现（M6 has-a 收口后废弃）；后端不再直触 GTK 壳，见 §1.1 | W1→M6 废弃 |
-| `nextpas.core.webview.gtk` | 后端 | Linux 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebKit 视图挂载、scheme、idle dispatch、WebKitGTK 信号桥接 | W1→M6 has-a |
-| `nextpas.core.webview.mime` | 共享 | MIME 二分快表（12 项，vfs/未来 provider 唯一事实源） | S13 |
+| `nextpas.core.webview.gtk.win` | **deleted (next major, file removed)** | 文件已删除（F4 空单元兼容期结束，下一主版本彻底移除完成；窗口壳唯一事实源仍为 `nextpas.core.window.gtk3` 的 `WindowGtkRaw*` 12 项 inline 薄转发，零拷贝 inline 零额外调用） | W1→F4→deleted |
+| `nextpas.core.webview.gtk` | 后端 | Linux 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebKit 视图挂载、scheme、idle dispatch、WebKitGTK 信号桥接（窗口壳经 `window.gtk3` Raw 单源 inline 零拷贝） | W1→M6 has-a |
+| `nextpas.core.webview.mime` | 薄门面 | `GuessWebviewMime` inline 薄转发至 L2 `nextpas.core.mime.types`（65 项 O(1) 哈希 128 槽，零分配切片，1-2 探测；与 `http.mime` 同源复用，L3 同层依赖已消除） | S13→S106 |
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端注册/探测/选择 + `TWebviewBuilder` | W1 |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + UserAgent + WebMessageArgs/Navigation handlers，无 external） | **W2 S23 完整（含 UA）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
-| `nextpas.core.webview.webview2.win` | **deprecated shim** | `Win32Shell*` 桩 `inline`（M6 has-a 收口后废弃）；真 Win32 壳由 `nextpas.core.window.win32` 的 `IWindow` 提供，见 §1.1 | W2→M6 废弃 |
+| `nextpas.core.webview.webview2.win` | **deleted (next major, file removed)** | 文件已删除（M6 has-a 彻底，Win32Shell* 15 项 deprecated 桩全量移除完成，下一主版本彻底移除；窗口壳唯一事实源仍为 `nextpas.core.window.win32` 的 `IWindow`/`WindowRunLoop`，调度经 `IWindow.Dispatcher.Post` 零拷贝 inline 转发） | W2→M6→deleted |
 | `nextpas.core.webview.webview2` | 后端 | Windows 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript/WebMessage、Post 调度、pending exactly-once、UA/DataDirectory） | **W2 S23 调度收口→M6 has-a** |
-| `nextpas.core.webview.wk.ffi` | ABI | WKWebView 类型与探针结果（无 external，无逻辑） | **W3 S25 桩** |
-| `nextpas.core.webview.wk.loader` | 装载 | WK 运行时探测（经 `platform.dl` 预留，Darwin 桩；幂等缓存，与 gtk/webview2 同纪律） | **W3 S25 桩（恒 False）** |
-| `nextpas.core.webview.wk` | 后端 | macOS 桩：**has-a `IWindow`**（`nextpas.core.window` L2，M6 has-a）+ fail-fast + UserAgent/Zoom 本地缓存 + 真线程 IsOnMainThread；Darwin 真实现待 ObjC 探通 | **W3 S25 桩→M6 has-a** |
+| `nextpas.core.webview.wk.ffi` | ABI | WKWebView 类型与探针结果（无 external，无逻辑；Darwin 真实现复用 `window.cocoa` ObjC 运行时，不自建） | **W3 S25 桩→S106 探针闭环（ffi 保持无逻辑，真实现复用 window.cocoa）** |
+| `nextpas.core.webview.wk.loader` | 装载 | WK 运行时探测（经 `platform.dl` 真探：Darwin `WebKit.framework/WebKit` + `libobjc` 双 soname 容错，Linux 诚实 False 非恒 False；幂等缓存双检锁 inline 零分配，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢） | **W3 S25 桩→S106 探针闭环（platform.dl Darwin 真探，Linux 诚实 False）** |
+| `nextpas.core.webview.wk` | 后端 | macOS 桩：**has-a `IWindow`**（`nextpas.core.window` L2，M6 has-a）+ fail-fast + UserAgent/Zoom 本地缓存 + 真线程 IsOnMainThread；Darwin 真实现路径已闭环：`window.cocoa` L2 `focused-runtime` 已落地（`NSWindow` + `dispatch_async` 单源），WK 以 `WKWebView` child 加于其 `IWindow.NativeHandle`（`addSubview`），无需 L3 自建 ObjC 链，待 stage0 `objectivec1`/`objc_msgSend` 探通后以纯 C 形态接线 | **W3 S25 桩→S106 探针闭环 + M6 has-a；落地路径 `window.cocoa` L2（已 focused-runtime）经 IWindow 组合，stage0 探通后 WK child 接入** |
 
 ### 依赖方向
 
 ```
-base ← intf ← bridge ← fake/gtk(uses window) → factory → 门面    （L3→L2 has-a）
-              └── mime/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow）
+base ← intf ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源) → factory → 门面    （L3→L2 has-a）
+              └── mime(薄门面→L2 mime.types 零拷贝 O(1) 哈希)/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow + live）
 gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
+live/assets 为家族内私有索引（不经门面 re-export）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 探测 + VecGrowCapacity 单源，Finalize 全量串/接口不丢）
 window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）
 ```
 
@@ -116,9 +53,9 @@ window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/g
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
 - **webview→window**：`nextpas.core.webview.fake/gtk/webview2/wk/factory` 允许 `uses nextpas.core.window.*`（has-a 组合，L3→L2）；`gtk.ffi/loader` 等 `ffi/loader` 仍仅经 `platform.dl`，不直触 `DynLibs`。
 
-**落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `bridge` / `fake`(has-a) / `factory`(has-a) /
+**落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `bridge`（含 `assets` 私有索引单哈希单源）/ `live`（4 后端 has-a 紧凑 Vec 单源）/ `fake`(has-a) / `factory`(has-a) /
 门面与 `gtk.ffi` / `gtk.loader` / `gtk`(has-a) 已全部落地；
-`gtk.win`/`webview2.win` 已退化为 `deprecated shim`（`inline` 转发至 `window`），见 §1.1。
+`gtk.win`/`webview2.win` 已删除（`window.gtk3`/`window.win32` Raw 单源 inline 零拷贝，F4/M6 彻底收口，空单元历史兼容期结束，文件已移除），见 §1.1。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；
 DefaultWebviewKind 能力探测驱动（无 IFDEF）；资产路由语义见 §3。
@@ -154,7 +91,7 @@ S0 文档 slice 不改注册表。
 
 **M6 has-a 收口（已兑现，见 §1 依赖图）**：`nextpas.core.window` 独立 Lane 已落地（L2），
 `webview.fake/gtk/webview2/wk` 全量改为 `has-a IWindow`（`FWindow: IWindow`，`Builder.Parent(const AParent: IWindow)` / `CreateWebviewOn(const AParent: IWindow; ...)`），
-`gtk.win`/`webview2.win` 退化为 `deprecated shim`（`inline` 转发至 `window.gtk3`/`window.win32`），
+`gtk.win`/`webview2.win` 已移除（`WinShell*` 12 项 / `Win32Shell*` 15 项 deprecated shim 全量 inline 转发已收口至 `window.gtk3`/`window.win32` Raw 单源，空单元零 API，文件已删除），
 `IWebviewWindow` 不再直接暴露 `Show/SetTitle/SetBounds` 等窗口壳方法，统一经 `Window: IWindow` 组合访问；
 `WebviewRunLoop`/`WebviewExitLoop` 收敛为 `WindowRunLoop`/`WindowExitLoop` 的 `deprecated shim`（单泵归 `window.factory`，见 §5）。
 
@@ -579,6 +516,5 @@ runtime 冒烟允许的最大环境假设：存在 `libwebkit2gtk-4.1.so.0`（�
 
 ## 10. 稳定性
 
-- 当前 `focused-runtime`（S32 起）；registry 条目随 S1 源码落地，truth level 记 `focused-runtime`
-  （fake 面）/ `source-contract`（边界面），S32 已晋升全量（13 门 + hygiene/source-contracts 双 pass）。
+- 当前 `focused-runtime, source-contract`（S32 起，与 `core/docs/module-registry.md` `webview | L3 | focused-runtime, source-contract` 一致：`fake` 面 focused-runtime，边界面/家族布局 source-contract，13 门 + hygiene/source-contracts 双 pass；`wk` S25 桩→S106 探针闭环（`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`，幂等缓存双检锁 inline 零分配，Linux 诚实 False 非恒 False，探针结果与工厂 `WebviewBackendAvailable` 同源，`platform_dl_release` 释放不丢；真实现落地路径已闭环：`nextpas.core.window.cocoa` L2 `focused-runtime` 已落地（`NSWindow` + `dispatch_async` 单源，见 `window/CONTRACT.md` S4），WK 以 `WKWebView` child 形式复用其 `IWindow` 组合，无需 L3 自建 ObjC 链，待 stage0 `objectivec1`/`objc_msgSend` 探通后接真 `WKWebView`））。
 - 公共 API 变更纪律：`intf` 单元视为冻结候选，改动必须过契约测试并更新本文档。

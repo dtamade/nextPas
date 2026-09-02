@@ -181,10 +181,10 @@ L0: 内核 (base, errors, platform, mem, log.intf; current governance set also l
 L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, time, id, testing)
      ↑ 只依赖 L0
 
-L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
+L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation, mime, respack, vfs, window)
      ↑ 只依赖 L0-L1
 
-L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
+L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, webview (+ window has-a L2), app)
      ↑ 只依赖 L0-L2
 ```
 
@@ -881,6 +881,7 @@ build/
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
+| `window`     | 窗口外壳 + surface（nextpas.core.window 家族；首个消费者 webview/gpu/directui/game888；11 后端含 fake；1.0 单源收口含 gtk3 Raw `WindowGtkRaw*` 12项，`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢） |
 
 ### L3: 框架（只依赖 L0-L2）
 
@@ -901,6 +902,8 @@ build/
 | `metrics`   | 指标采集、Prometheus、健康检查                             |
 | `event`     | 进程内事件总线（pub/sub）                                  |
 | `job`       | 异步任务队列（重试、死信、优先级）                         |
+| `webview`   | 桌面应用外壳（WebKitGTK/WebView2/WKWebView 三后端 + 统一 IPC 桥，L3→L2 has-a IWindow；`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢，详 `core/docs/webview/CONTRACT.md`） |
+| `window`    | 窗口外壳 L2 家族的 L3 消费面占位（L3 侧仅 has-a；权威层级见 L2 `window` 行与 `core/docs/module-registry.md`；`WindowRunLoop` 单泵归 `window.factory`） |
 | `app`       | 应用启动编排（Bootstrap、Graceful Shutdown）               |
 
 ---
