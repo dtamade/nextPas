@@ -183,7 +183,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf` 单点联邦缝 source-contract gated like respack.dirsource），其余同层依赖仍禁止
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf`、`sevenz.coders→compress` 单点缝 source-contract gated like respack.dirsource/vfs.os），其余同层依赖仍禁止
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -194,7 +194,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝、`sevenz.fs` 唯一 fs 联邦缝 source-contract gated like respack.dirsource/vfs.os — bytes.ops 单源 inline 零拷贝 + try..finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
+- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝、`sevenz.fs` 唯一 fs 联邦缝、`sevenz.coders` 唯一 compress 缝 source-contract gated like respack.dirsource/vfs.os — bytes.ops 单源 inline 零拷贝 + try..finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
