@@ -345,6 +345,9 @@ begin
   if not BytesValidPath(AName, False) then
     raise EArgumentError.CreateFmt(
       'entry name "%s" is invalid (must be ValidPath: no leading/trailing slash, no empty segment, no "." or "..")', [AName]);
+  if Length(AName) > SizeInt(SEVENZ_MAX_NAME_BYTES) then
+    raise ESevenZLimitError.CreateFmt(
+      'entry name exceeds limit %d (got %d)', [SEVENZ_MAX_NAME_BYTES, Length(AName)]);
 end;
 
 function CountTrue(const AFlags: array of Boolean): SizeInt;

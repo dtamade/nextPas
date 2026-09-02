@@ -281,7 +281,7 @@ The encoder side is always pure Pascal today.
 ## Verification
 
 - Focused gate: `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test`
-  (169 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
+  (170 tests: UTF conversion edge cases, FILETIME, LZMA2 round trips incl. stored-fallback
   and chunk-cap boundaries, backend switching, writer→reader container round
   trips, reader/writer error paths, Delta/Deflate/BZip2 vectors (zlib/raw dual path
   and p7zip BZip2 golden, zero-copy view stream, Deflate/BZip2 bomb via `ESevenZLimitError`), BCJ full-family round trips (x86/ARM/ARM64/PPC/IA64/SPARC/ARMT/RISCV),

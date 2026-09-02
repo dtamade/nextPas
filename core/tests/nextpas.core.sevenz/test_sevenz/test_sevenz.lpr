@@ -3593,6 +3593,20 @@ begin
   except on E: ESevenZLimitError do ; end;
 end;
 
+procedure TestWriterNameTooLongReject;
+var LW: ISevenZWriter; LName: string;
+begin
+  LName := StringOfChar('a', SizeInt(SEVENZ_MAX_NAME_BYTES) + 1);
+  LW := TSevenZWriterImpl.Create;
+  try
+    LW.AddFile(LName, BytesOf([$01]));
+    Fail('name >64KiB should raise ESevenZLimitError');
+  except on E: ESevenZLimitError do ; end;
+  LName := StringOfChar('a', SizeInt(SEVENZ_MAX_NAME_BYTES));
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile(LName, BytesOf([$02]));
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3788,6 +3802,7 @@ begin
   T.Test('writer bomb early via reader huge size', @TestWriterBombEarlyViaReader);
   T.Test('backend consistency pure vs ffi', @TestBackendConsistencyPureVsFfi);
   T.Test('writer bomb pack size reject', @TestWriterBombPackSizeReject);
+  T.Test('writer name too long reject', @TestWriterNameTooLongReject);
 
   if not T.Run then Halt(1);
 end.
