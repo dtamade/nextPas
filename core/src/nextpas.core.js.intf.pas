@@ -17,8 +17,8 @@ type
     FDoubleVal: Double;
     FStrVal: string;
     FContextId: UInt64;
-    FViewData: PAnsiChar; // zero-copy view borrow: lifetime bound to FContextId via lifecycle IsAlive acquire; UAF throws EJsError explicit (not silent ''), B/op=0 via bytes.ops
-    FViewLen: SizeUInt; // view len; cache FStrVal after single alloc SpanToString, hot loops prefer TryGetView B/op=0 zero-copy inline
+    FViewData: PAnsiChar; // borrowed view
+    FViewLen: SizeUInt; // view length
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
     function MaterializeViewString: string; // not inline: alloc via bytes.ops single source SpanToString, hot loops prefer TryGetView B/op=0
@@ -378,14 +378,14 @@ end;
 
 function TJsValue.MaterializeViewString: string;
 begin
-  // not inline: single alloc view物化 via bytes.ops SpanToString single source BytesCopy zero-copy inline — AsString cache FStrVal zero alloc (INV-7 IsAlive acquire single source via lifecycle), first call single alloc+single acquire, hot loops prefer TryGetView B/op=0; lifecycle single source not inline to avoid hot-loop inline bloat+alloc; dangling view after Close throws EJsError explicit (UAF not silent ''), cache hit still zero alloc
+  // not inline: single alloc via bytes.ops SpanToString single source BytesCopy zero-copy inline — cache FStrVal zero alloc, first call single alloc+single acquire, hot loops prefer TryGetView B/op=0 inline zero-copy; lifecycle single source via IsAlive acquire, not inline to avoid bloat; UAF throws EJsError explicit
   if FViewLen = 0 then
-    Exit(FStrVal);
+    Exit(FStrVal); // hosted fast path zero alloc zero acquire
   if Length(FStrVal) <> 0 then
-    Exit(FStrVal);
+    Exit(FStrVal); // cached view fast path zero alloc zero acquire
   if not IsAlive then
     raise EJsError.Create('TJsValue view use-after-free: Context is closed', jecUnknown, 'Error', '', jsbkFake);
-  FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
+  FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); // single SetLength+BytesCopy via bytes.ops single source
   Result := FStrVal;
 end;
 

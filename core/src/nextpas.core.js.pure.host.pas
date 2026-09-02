@@ -43,7 +43,7 @@ procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; 
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
-// Bulk batch — single JsPureHostReserve amortized O(1) for thousand hosts, reserved poke without second probe, threshold 16 single source via pure.hash, buckets single rebuild vs per-insert, bytes.ops single source, inline zero-copy, L0-L3 kept
+// Bulk batch — template convergence Func/Method/Proc via HostBulk* single source (JsPureHostReserve amortized O(1) for thousand hosts, reserved poke without second probe, threshold 16 single source via pure.hash, buckets single rebuild vs per-insert, bytes.ops single source, inline zero-copy, L0-L3 kept, HostSet thin-forward)
 procedure JsPureHostBulkSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostFunction; ABackend: TJsBackendKind);
 procedure JsPureHostBulkSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostMethod; ABackend: TJsBackendKind);
 procedure JsPureHostBulkSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostProc; ABackend: TJsBackendKind);
@@ -316,19 +316,69 @@ begin
   Hosts[Result].Method := nil;
   Hosts[Result].Proc := nil;
 end;
-procedure JsPureHostBulkSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostFunction; ABackend: TJsBackendKind);
-var I, LIdx, LProbe, LCountTmp: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets; LTempProbe: Integer;
+// Bulk template — single source convergence for Func/Method/Proc (bytes.ops geometric 0→64→2× via JsPureHostReserve single source, pure.hash threshold 16 + BucketsTryRebuild/Put single source, inline zero-copy view+hash, mem.dynarray Exactly-Once poke amortized O(1) via HostAllocOneReserved, resource Finalize幂等不丢 via HostSet, L0-L3 kept, try-finally not丢)
+procedure HostBulkPrepare(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var LTemp: TJsPureHostBuckets; AAdditional: Integer); inline;
+var LIdx, LCount: Integer;
 begin
-  // bulk reserve single source via JsPureHostReserve (bytes.ops BytesNextCapacity 0→64→2× amortized O(1) single alloc vs 千次 EnsureLength probe+alloc), reserved poke without second probe, threshold 16 single source via pure.hash, buckets single rebuild vs per-insert O(n) thrash, inline zero-copy, bytes.ops single source, L0-L3 kept, try-finally not丢 via HostSet — temp bucket O(1) per-host vs O(k·n) linear
+  // inline single alloc via bytes.ops BytesNextCapacity 0→64→2× amortized O(1) vs 千次 EnsureLength, zero-copy, L0-L3, resource不丢
+  JsPureHostReserve(Hosts, AAdditional);
+  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
+  SetLength(LTemp.Buckets, 0); LTemp.Mask := 0; LTemp.Count := 0;
+  LCount := Length(Hosts);
+  if LCount > JS_PURE_HASH_THRESHOLD then
+    if JsPureBucketsTryRebuild(LTemp.Buckets, LTemp.Mask, LTemp.Count, LCount) then
+      for LIdx := 0 to LCount - 1 do JsPureBucketPut(LTemp.Buckets, LTemp.Mask, Hosts[LIdx].Hash, LIdx);
+end;
+function HostBulkFind(const Hosts: TJsPureHostArray; var LTemp: TJsPureHostBuckets; AHash: UInt32; const AView: TStringView): Integer; inline;
+var LProbe, LTempProbe: Integer;
+begin
+  // inline zero-copy via HostEquals single source (hash filter + SpanEqual SIMD), O(1) bucketed vs O(n) linear, threshold 16 single source via pure.hash, bytes.ops single source, not inline loop per red-line 2 via caller
+  if (Length(LTemp.Buckets) > 0) and (LTemp.Count = Length(Hosts)) then
+  begin
+    LTempProbe := Integer(AHash and LTemp.Mask);
+    for LProbe := 0 to High(LTemp.Buckets) do
+    begin
+      if LTemp.Buckets[LTempProbe] = -1 then Exit(-1);
+      if HostEquals(Hosts[LTemp.Buckets[LTempProbe]], AHash, AView) then Exit(LTemp.Buckets[LTempProbe]);
+      LTempProbe := (LTempProbe + 1) and Integer(LTemp.Mask);
+    end;
+    Exit(-1);
+  end;
+  Result := HostFindCoreLinear(Hosts, AHash, AView);
+end;
+procedure HostBulkInserted(var LTemp: TJsPureHostBuckets; const Hosts: TJsPureHostArray; AHash: UInt32; AIdx: Integer); inline;
+var LCountTmp: Integer;
+begin
+  // inline single source bucket update: capacity>= → O(1) Put, else TryRebuild geometric via bytes.ops BytesNextCapacity, amortized O(1), threshold 16 single source, bytes.ops single source, L0-L3
+  if Length(LTemp.Buckets) > 0 then
+  begin
+    if Length(LTemp.Buckets) >= JsPureBucketCapacity(Length(Hosts)) then
+    begin
+      LTemp.Count := Length(Hosts);
+      JsPureBucketPut(LTemp.Buckets, LTemp.Mask, AHash, AIdx);
+    end else
+    begin
+      if JsPureBucketsTryRebuild(LTemp.Buckets, LTemp.Mask, LTemp.Count, Length(Hosts)) then
+        for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTemp.Buckets, LTemp.Mask, Hosts[LCountTmp].Hash, LCountTmp);
+    end;
+  end else if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
+  begin
+    if JsPureBucketsTryRebuild(LTemp.Buckets, LTemp.Mask, LTemp.Count, Length(Hosts)) then
+      for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTemp.Buckets, LTemp.Mask, Hosts[LCountTmp].Hash, LCountTmp);
+  end;
+end;
+procedure HostBulkFinish(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets); inline;
+begin
+  // inline single rebuild vs per-insert O(n) thrash, threshold 16 single source via pure.hash, bytes.ops single source, zero-copy
+  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+end;
+procedure JsPureHostBulkSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostFunction; ABackend: TJsBackendKind);
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets;
+begin
+  // bulk template thin-forward: Handler Func thin via HostBulk* single source, reserved poke without second probe (halved probes), temp bucket O(1) per-host vs O(k·n) linear, inline zero-copy, bytes.ops single source, L0-L3, resource不丢
   if Length(ANames) = 0 then Exit;
   if Length(ANames) <> Length(AHandlers) then Exit;
-  JsPureHostReserve(Hosts, Length(ANames));
-  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
-  SetLength(LTempBuckets.Buckets, 0); LTempBuckets.Mask := 0; LTempBuckets.Count := 0;
-  LCountTmp := Length(Hosts);
-  if LCountTmp > JS_PURE_HASH_THRESHOLD then
-    if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, LCountTmp) then
-      for LIdx := 0 to LCountTmp - 1 do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LIdx].Hash, LIdx);
+  HostBulkPrepare(Hosts, Buckets, LTempBuckets, Length(ANames));
   for I := 0 to High(ANames) do
   begin
     JsPureCheckHostName(ANames[I], ABackend);
@@ -336,54 +386,23 @@ begin
       raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
     LView := TStringView.FromStr(ANames[I]);
     LHash := HostHashView(LView);
-    if (Length(LTempBuckets.Buckets) > 0) and (LTempBuckets.Count = Length(Hosts)) then
-    begin
-      LIdx := -1;
-      LTempProbe := Integer(LHash and LTempBuckets.Mask);
-      for LProbe := 0 to High(LTempBuckets.Buckets) do
-      begin
-        if LTempBuckets.Buckets[LTempProbe] = -1 then Break;
-        if HostEquals(Hosts[LTempBuckets.Buckets[LTempProbe]], LHash, LView) then begin LIdx := LTempBuckets.Buckets[LTempProbe]; Break; end;
-        LTempProbe := (LTempProbe + 1) and Integer(LTempBuckets.Mask);
-      end;
-    end else
-      LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    LIdx := HostBulkFind(Hosts, LTempBuckets, LHash, LView);
     if LIdx >= 0 then HostSetFuncPtr(Hosts[LIdx], AHandlers[I], 0)
     else
     begin
       LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetFuncPtr(Hosts[LIdx], AHandlers[I], 0);
-      if Length(LTempBuckets.Buckets) > 0 then
-      begin
-        if Length(LTempBuckets.Buckets) >= JsPureBucketCapacity(Length(Hosts)) then
-        begin
-          LTempBuckets.Count := Length(Hosts);
-          JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, LHash, LIdx);
-        end else
-        begin
-          if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-            for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-        end;
-      end else if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
-      begin
-        if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-          for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-      end;
+      HostBulkInserted(LTempBuckets, Hosts, LHash, LIdx);
     end;
   end;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+  HostBulkFinish(Hosts, Buckets);
 end;
 procedure JsPureHostBulkSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostMethod; ABackend: TJsBackendKind);
-var I, LIdx, LProbe, LCountTmp: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets; LTempProbe: Integer;
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets;
 begin
+  // bulk template thin-forward: Handler Method thin via HostBulk* single source, inline zero-copy, bytes.ops single source, L0-L3, resource不丢
   if Length(ANames) = 0 then Exit;
   if Length(ANames) <> Length(AHandlers) then Exit;
-  JsPureHostReserve(Hosts, Length(ANames));
-  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
-  SetLength(LTempBuckets.Buckets, 0); LTempBuckets.Mask := 0; LTempBuckets.Count := 0;
-  LCountTmp := Length(Hosts);
-  if LCountTmp > JS_PURE_HASH_THRESHOLD then
-    if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, LCountTmp) then
-      for LIdx := 0 to LCountTmp - 1 do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LIdx].Hash, LIdx);
+  HostBulkPrepare(Hosts, Buckets, LTempBuckets, Length(ANames));
   for I := 0 to High(ANames) do
   begin
     JsPureCheckHostName(ANames[I], ABackend);
@@ -391,54 +410,23 @@ begin
       raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
     LView := TStringView.FromStr(ANames[I]);
     LHash := HostHashView(LView);
-    if (Length(LTempBuckets.Buckets) > 0) and (LTempBuckets.Count = Length(Hosts)) then
-    begin
-      LIdx := -1;
-      LTempProbe := Integer(LHash and LTempBuckets.Mask);
-      for LProbe := 0 to High(LTempBuckets.Buckets) do
-      begin
-        if LTempBuckets.Buckets[LTempProbe] = -1 then Break;
-        if HostEquals(Hosts[LTempBuckets.Buckets[LTempProbe]], LHash, LView) then begin LIdx := LTempBuckets.Buckets[LTempProbe]; Break; end;
-        LTempProbe := (LTempProbe + 1) and Integer(LTempBuckets.Mask);
-      end;
-    end else
-      LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    LIdx := HostBulkFind(Hosts, LTempBuckets, LHash, LView);
     if LIdx >= 0 then HostSetMethodPtr(Hosts[LIdx], AHandlers[I], 1)
     else
     begin
       LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetMethodPtr(Hosts[LIdx], AHandlers[I], 1);
-      if Length(LTempBuckets.Buckets) > 0 then
-      begin
-        if Length(LTempBuckets.Buckets) >= JsPureBucketCapacity(Length(Hosts)) then
-        begin
-          LTempBuckets.Count := Length(Hosts);
-          JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, LHash, LIdx);
-        end else
-        begin
-          if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-            for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-        end;
-      end else if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
-      begin
-        if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-          for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-      end;
+      HostBulkInserted(LTempBuckets, Hosts, LHash, LIdx);
     end;
   end;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+  HostBulkFinish(Hosts, Buckets);
 end;
 procedure JsPureHostBulkSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostProc; ABackend: TJsBackendKind);
-var I, LIdx, LProbe, LCountTmp: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets; LTempProbe: Integer;
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32; LTempBuckets: TJsPureHostBuckets;
 begin
+  // bulk template thin-forward: Handler Proc thin via HostBulk* single source, inline zero-copy, bytes.ops single source, L0-L3, resource不丢
   if Length(ANames) = 0 then Exit;
   if Length(ANames) <> Length(AHandlers) then Exit;
-  JsPureHostReserve(Hosts, Length(ANames));
-  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
-  SetLength(LTempBuckets.Buckets, 0); LTempBuckets.Mask := 0; LTempBuckets.Count := 0;
-  LCountTmp := Length(Hosts);
-  if LCountTmp > JS_PURE_HASH_THRESHOLD then
-    if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, LCountTmp) then
-      for LIdx := 0 to LCountTmp - 1 do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LIdx].Hash, LIdx);
+  HostBulkPrepare(Hosts, Buckets, LTempBuckets, Length(ANames));
   for I := 0 to High(ANames) do
   begin
     JsPureCheckHostName(ANames[I], ABackend);
@@ -446,41 +434,15 @@ begin
       raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
     LView := TStringView.FromStr(ANames[I]);
     LHash := HostHashView(LView);
-    if (Length(LTempBuckets.Buckets) > 0) and (LTempBuckets.Count = Length(Hosts)) then
-    begin
-      LIdx := -1;
-      LTempProbe := Integer(LHash and LTempBuckets.Mask);
-      for LProbe := 0 to High(LTempBuckets.Buckets) do
-      begin
-        if LTempBuckets.Buckets[LTempProbe] = -1 then Break;
-        if HostEquals(Hosts[LTempBuckets.Buckets[LTempProbe]], LHash, LView) then begin LIdx := LTempBuckets.Buckets[LTempProbe]; Break; end;
-        LTempProbe := (LTempProbe + 1) and Integer(LTempBuckets.Mask);
-      end;
-    end else
-      LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    LIdx := HostBulkFind(Hosts, LTempBuckets, LHash, LView);
     if LIdx >= 0 then HostSetProcPtr(Hosts[LIdx], AHandlers[I], 2)
     else
     begin
       LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetProcPtr(Hosts[LIdx], AHandlers[I], 2);
-      if Length(LTempBuckets.Buckets) > 0 then
-      begin
-        if Length(LTempBuckets.Buckets) >= JsPureBucketCapacity(Length(Hosts)) then
-        begin
-          LTempBuckets.Count := Length(Hosts);
-          JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, LHash, LIdx);
-        end else
-        begin
-          if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-            for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-        end;
-      end else if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
-      begin
-        if JsPureBucketsTryRebuild(LTempBuckets.Buckets, LTempBuckets.Mask, LTempBuckets.Count, Length(Hosts)) then
-          for LCountTmp := 0 to High(Hosts) do JsPureBucketPut(LTempBuckets.Buckets, LTempBuckets.Mask, Hosts[LCountTmp].Hash, LCountTmp);
-      end;
+      HostBulkInserted(LTempBuckets, Hosts, LHash, LIdx);
     end;
   end;
-  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+  HostBulkFinish(Hosts, Buckets);
 end;
 
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;

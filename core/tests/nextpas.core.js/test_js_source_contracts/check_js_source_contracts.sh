@@ -345,11 +345,11 @@ if grep -q "function JsPureJsonDoubleToStr" "$PURE_VALUE" && grep -A6 "function 
 else
   say_fail "pure.value JsPureJsonDoubleToStr must delegate to JsPureJsonBufToStr single source"
 fi
-# GetKeysView hot-path gate: GetKeys deprecated + GetKeysView inline zero-copy
-if grep -q "JsPureHeapGetKeys.*deprecated" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView.*inline;" "$PURE_VALUE"; then
-  say_ok "GetKeys deprecated + GetKeysView inline zero-copy gate (hot loops B/op=0, GetKeys compat O(n) alloc)"
+# GetKeysView hot-path gate: GetKeys deprecated + GetKeysView not inline per red-line 2 (loop+SetLength → I-Cache bloat if inline), zero-copy via TStringView.FromStr borrow
+if grep -q "JsPureHeapGetKeys.*deprecated" "$PURE_VALUE" && ! grep -q "JsPureHeapGetKeysView.*inline;" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView" "$PURE_VALUE"; then
+  say_ok "GetKeys deprecated + GetKeysView not inline per red-line 2 zero-copy gate (hot loops B/op=0 via TStringView.FromStr borrow, GetKeys compat O(n) alloc, avoids I-Cache bloat)"
 else
-  say_fail "pure.value must mark JsPureHeapGetKeys deprecated and keep JsPureHeapGetKeysView inline zero-copy (hot path gate, not doc-only)"
+  say_fail "pure.value must mark JsPureHeapGetKeys deprecated and keep JsPureHeapGetKeysView NOT inline per red-line 2 (loop+SetLength, zero-copy via TStringView.FromStr, avoids I-Cache bloat)"
 fi
 if grep -q "TStringView\.FromStr" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView" "$PURE_VALUE"; then
   say_ok "GetKeysView zero-copy via TStringView.FromStr borrow shared via bytes.ops single source"

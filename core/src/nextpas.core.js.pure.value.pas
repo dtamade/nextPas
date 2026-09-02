@@ -22,7 +22,7 @@ function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
 function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray; deprecated 'Use JsPureHeapGetKeysView zero-copy (B/op=0, TStringView borrow) for hot loops; GetKeys materialized O(n) alloc is compat only';
-function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray; inline;
+function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
@@ -367,10 +367,11 @@ begin
   for I := 0 to LLen - 1 do
     Result[I] := Heap[Idx].Props[I].Name;
 end;
-function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray; inline;
+function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray;
 var Idx, LLen, I: Integer;
 begin
-  // perf: inline zero-copy via TStringView.FromStr borrow (PAnsiChar+Len, B/op=0, no alloc), bytes.ops single source view, amortized O(1), hot path must use this not GetKeys materialized
+  // perf: not inline per design-conventions §2 red-line 2 (loop + SetLength allocation → I-Cache bloat if inline), zero-copy via TStringView.FromStr borrow (PAnsiChar+Len, B/op=0, no per-key alloc, single Result alloc O(n)), bytes.ops single source view, hot path zero-copy (B/op=0) vs GetKeys materialized compat O(n) alloc
+  // stability: Result nil on miss, managed TStringView borrow (PAnsiChar+Len) no alloc, no resource丢, single SetLength, inline not needed
   Result := nil;
   Idx := JsPureHeapFind(Heap, Obj);
   if Idx < 0 then Exit;
@@ -572,23 +573,40 @@ begin
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
-var I, Idx, DPos, DCnt, J: Integer; LHash: UInt32; Distinct: array of Integer; LFound: Boolean;
+var I, Idx, DPos, DCnt, J: Integer; LHash: UInt32; Distinct: array of Integer; LFound: Boolean; DedupBuckets: array of Integer; DedupMask: UInt32; LDummy, LCap: Integer;
 begin
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
   LHash := PropHashStr(AName);
-  // perf: eliminate per-batch LCap bucket (2*batch) + Distinct/DistinctNeed=Length(Objs) heap allocs — zero large temp alloc per batch, distinct dedup via small linear scan O(DCnt) with geometric BytesDynEnsureLength 0→64→2× amortized O(1) via bytes.ops single source, inline zero-copy, only DCnt distinct Props reserve (typically 1), 1024 batch 1024→DCnt probes without LCap bucket, no extra heap for Get/Set batch loop
-  // perf: bytes.ops single source geometric via BytesDynReserve/BytesDynEnsureLength inline zero-copy, single slit via mem.dynarray probe/poke, BYTES_BUILDER_MIN_GROW 64→2× amortized O(1), contiguous capacity poke single source, no generic copy
-  // stability: Distinct freed on exit, TJsValue assignment managed string refcounted not丢, capacity poke via bytes.ops single source resource not leaked
+  // perf: batch dedup O(n) amortized via pure.hash bucket single source (FNV via pure.hash→bytes.ops, open-addressing linear probe O(1) avg vs prior O(n²) linear scan — 1024 batch worst ~500k compares eliminated, single bucket alloc via JsPureBucketCapacity/JsPureBucketsPrepare single source, threshold 16 via pure.hash), Distinct geometric via bytes.ops BytesDynReserve/BytesDynEnsureLength inline zero-copy single slit via mem.dynarray probe/poke BYTES_BUILDER_MIN_GROW 64→2× amortized O(1), only DCnt distinct Props reserve (typically 1), 1024 batch single reserve per distinct Heap, zero large temp alloc per batch beyond single bucket, inline zero-copy small-path
+  // stability: Distinct+DedupBuckets freed on exit (SetLength 0), TJsValue assignment managed string refcounted not丢, capacity poke via bytes.ops single source resource not leaked, bucket init -1 via pure.hash single source
   Distinct := nil;
+  DedupBuckets := nil;
+  DedupMask := 0;
+  LDummy := 0;
   DCnt := 0;
+  // single source bucket prepare via pure.hash (capacity geometric via bytes.ops BytesNextCapacity 0→64→2× amortized O(1), threshold 16 via JS_PURE_HASH_THRESHOLD, inline zero-copy)
+  if Length(Objs) > JS_PURE_HASH_THRESHOLD then
+  begin
+    LCap := JsPureBucketCapacity(Length(Objs));
+    SetLength(DedupBuckets, LCap);
+    JsPureBucketsPrepare(DedupBuckets, DedupMask, LDummy, LCap, Length(Objs));
+  end;
   for I:=0 to High(Objs) do
   begin
     Idx:=JsPureHeapFind(Heap, Objs[I]);
     if (Idx<0) or (JsPureHeapFindPropHashed(Heap[Idx], AName, LHash)>=0) then Continue;
-    LFound := False;
-    for J:=0 to DCnt-1 do if Distinct[J]=Idx then begin LFound:=True; Break; end;
-    if LFound then Continue;
+    // O(1) dedup via pure.hash bucket single source (JsPureBucketFindPos + JsPureBucketPut) when bucket prepared; fallback linear O(n) only for small batch ≤16 threshold inline zero-copy
+    if Length(DedupBuckets)>0 then
+    begin
+      if JsPureBucketFindPos(DedupBuckets, DedupMask, UInt32(Idx), Idx) >= 0 then Continue;
+      JsPureBucketPut(DedupBuckets, DedupMask, UInt32(Idx), Idx);
+    end else
+    begin
+      LFound := False;
+      for J:=0 to DCnt-1 do if Distinct[J]=Idx then begin LFound:=True; Break; end;
+      if LFound then Continue;
+    end;
     if DCnt >= Length(Distinct) then
       nextpas.core.bytes.ops.BytesDynEnsureLength(Distinct, SizeOf(Integer), SizeUInt(DCnt+1));
     Distinct[DCnt] := Idx;
@@ -603,6 +621,7 @@ begin
   for I := 0 to High(Objs) do
     JsPureHeapSetPropHashedReserved(Heap, Objs[I], AName, LHash, Vals[I]);
   SetLength(Distinct, 0);
+  SetLength(DedupBuckets, 0);
 end;
 function JsPureValueStateGetBatch(const S: TJsPureValueState; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 begin Result := JsPureHeapGetBatch(S.Heap, Objs, AName); end;

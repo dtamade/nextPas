@@ -289,11 +289,26 @@ finalization
     BytesZero(@GVault.Lib, SizeUInt(SizeOf(GVault.Lib)));
   end;
   ClearQuickJsPtrs;
-  // Owner: IMutex refcnt release, platform_mutex_destroy via TMutex single source, resource not丢, idempotent
-  if GVaultInit = 2 then
+  // stability: publish not-ready before releasing mutex to close lock-free window; drain holder via TryAcquire to avoid AV with concurrent JsQuickJsLoad
+  if atomic_load(GVaultInit, mo_acquire) = 2 then
   begin
-    VaultRef^.Lock := nil;
     atomic_store(GVaultInit, Int32(0), mo_release);
+    atomic_thread_fence(mo_seq_cst);
+    if Assigned(GVault.Lock) then
+    begin
+      if GVault.Lock.TryAcquire then
+      try
+        GVault.Lock.Release;
+        GVault.Lock := nil;
+      except
+        GVault.Lock := nil;
+      end
+      else
+        GVault.Lock := nil;
+    end;
   end else
+  begin
+    atomic_store(GVaultInit, Int32(0), mo_release);
     GVault.Lock := nil;
+  end;
 end.

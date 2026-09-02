@@ -7,23 +7,17 @@ uses
   nextpas.core.js.intf,
   nextpas.core.text.view,
   nextpas.core.text.scan,
-  nextpas.core.js.pure.host;
+  nextpas.core.js.pure.host,
+  nextpas.core.js.pure.predicates;
 const
   JS_PURE_EVAL_WHILE_TRUE = 'while(true)';
   JS_PURE_EVAL_JSON_STRINGIFY = 'JSON.stringify';
   JS_PURE_EVAL_MAGIC_X = 'x';
   JS_PURE_EVAL_BAD = 'bad(';
   JS_PURE_EVAL_FOO = 'foo(';
+// predicates single source via js.pure.predicates JS_PRED_LITERALS/JS_PRED_SENTINELS (text.scan owner single source, bytes.ops zero-copy inline, L0-L3 keep, no duplicate EVAL_* table)
 type
-  TEvalLiteralEntry = nextpas.core.text.scan.TScanJsLiteralEntry;
-const
-  // single source literals via text.scan SCAN_JS_LITERALS/SCANN_JSON_* (L1 owner, bytes.ops single source via TStringView.Equals, zero-copy inline), EVAL_* merged not self-held (was array[0..3] duplicate)
-  EVAL_LITERALS: array[0..3] of TEvalLiteralEntry = (
-    (Lit: nextpas.core.text.scan.SCAN_JSON_LITERAL_NULL; Kind: 0),
-    (Lit: nextpas.core.text.scan.SCAN_JS_LITERAL_UNDEFINED; Kind: 1),
-    (Lit: nextpas.core.text.scan.SCAN_JSON_LITERAL_TRUE; Kind: 2),
-    (Lit: nextpas.core.text.scan.SCAN_JSON_LITERAL_FALSE; Kind: 3)
-  );
+  TEvalLiteralEntry = nextpas.core.js.pure.predicates.TJsPredLiteralEntry;
 function EvalLiteralValue(AKind: Byte): TJsValue; inline;
 function EvalTryLiteralTable(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
 function EvalTryPureNumber(const V: TStringView; AContextId: UInt64; out OutVal: TJsValue): Boolean; inline;
@@ -31,10 +25,11 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; overload;
 implementation
 uses
-  nextpas.core.text.number,
   nextpas.core.bytes.ops,
   nextpas.core.text.scan,
-  nextpas.core.js.pure.value;
+  nextpas.core.text.number,
+  nextpas.core.js.pure.value,
+  nextpas.core.js.pure.predicates;
 var
   // hoisted constant views — zero-copy via TStringView.FromStr once at unit init, not per Eval (was LJsonView/LWhileView FromStr per ScanEvalPredicates), single source via TStringView inline, bytes.ops single source via view, B/op=0
   EvalJsonView: TStringView;
@@ -98,24 +93,13 @@ function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; 
 begin
   Result := V.Equals(TStringView.FromStr(Lit));
 end;
-// strategy tables — sentinel / literal, table-driven via text.scan single source, inline, zero-copy via bytes.ops/text.view
+// predicates single source via js.pure.predicates JS_PRED_* (text.scan owner single source, bytes.ops zero-copy inline, L0-L3 keep, no duplicate EVAL_* table)
 type
-  TEvalSentinel = nextpas.core.text.scan.TScanJsSentinelEntry;
-const
-  // single source sentinels via text.scan SCAN_JS_SENTINELS (L1 owner, bytes.ops single source, zero-copy inline), merged not self-held
-  EVAL_SENTINELS: array[0..1] of TEvalSentinel = (
-    (Lit: nextpas.core.text.scan.SCAN_JS_EVAL_SENTINEL_BAD; Stack: nextpas.core.text.scan.SCAN_JS_EVAL_SENTINEL_BAD_STACK),
-    (Lit: nextpas.core.text.scan.SCAN_JS_EVAL_SENTINEL_FOO; Stack: nextpas.core.text.scan.SCAN_JS_EVAL_SENTINEL_FOO_STACK)
-  );
+  TEvalSentinel = nextpas.core.js.pure.predicates.TJsPredSentinelEntry;
 function EvalLiteralValue(AKind: Byte): TJsValue; inline;
 begin
-  case AKind of
-    0: Result := JsNullValue;
-    1: Result := JsUndefinedValue;
-    2: Result := JsBoolValue(True);
-    3: Result := JsBoolValue(False);
-  else Result := JsUndefinedValue;
-  end;
+  // perf: inline thin-forward via predicates single source JsPredLiteralValue, bytes.ops zero-copy, B/op=0
+  Result := nextpas.core.js.pure.predicates.JsPredLiteralValue(AKind);
 end;
 // Layer 0 validation — inline thin-forward, resource not丢
 procedure EvalValidate(const V: TStringView; ABackend: TJsBackendKind); inline;
@@ -128,12 +112,12 @@ begin
   if Pred.HasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
   if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
 end;
-// Layer 3 sentinel — table-driven via text.scan single source, bytes.ops single source via Equals/SpanEqual, inline thin-forward zero-copy
+// Layer 3 sentinel — predicates single source via js.pure.predicates, bytes.ops zero-copy inline, B/op=0, L0-L3 keep
 procedure EvalEnforceSentinel(const V: TStringView; ABackend: TJsBackendKind); inline;
 var LStack: TStringView;
 begin
-  // single source via text.scan ScanTryJsSentinel (L1 owner, SCAN_JS_SENTINELS merged, bytes.ops single source, zero-copy inline, B/op=0)
-  if nextpas.core.text.scan.ScanTryJsSentinel(V, LStack) then
+  // single source via js.pure.predicates JsPredTrySentinel (text.scan owner single source, bytes.ops zero-copy inline, B/op=0)
+  if nextpas.core.js.pure.predicates.JsPredTrySentinel(V, LStack) then
     raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', LStack.ToString, ABackend);
 end;
 // Layer 4 literal — json trick gated by predicates, table-driven primitives, text.number single source
@@ -145,25 +129,15 @@ end;
 function EvalTryLiteralTable(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
 var LKind: Byte;
 begin
-  // single source via text.scan ScanTryJsLiteral (L1 owner, SCAN_JS_LITERALS merged, bytes.ops single source via TStringView.Equals, zero-copy inline, B/op=0)
-  if nextpas.core.text.scan.ScanTryJsLiteral(V, LKind) then
+  // single source via js.pure.predicates JsPredTryLiteral (text.scan owner single source, bytes.ops zero-copy inline, B/op=0)
+  if nextpas.core.js.pure.predicates.JsPredTryLiteral(V, LKind) then
   begin OutVal := EvalLiteralValue(LKind); Exit(True); end;
   Result := False;
 end;
 function EvalTryPureNumber(const V: TStringView; AContextId: UInt64; out OutVal: TJsValue): Boolean; inline;
-var LFirst: AnsiChar; LInt: Int64; LDbl: Double;
 begin
-  // single source numeric discriminant via text.number single source (EiselLemire), bytes.ops single source, first-byte O(1) filter, single-pass float marker via text.scan ScanHasFloatMarker/ScanFindByte3 VecWidth SIMD O(n) vs O(3n) triple IndexOf (3× SpanIndexOf) , bytes.ops single source, zero-copy inline, B/op=0, single source for js.quickjs Eval and TryPureIntAdd path, inline thin-forward
-  Result := False;
-  if V.IsEmpty then Exit;
-  LFirst := V.Data[0];
-  if not (LFirst in ['0'..'9','-','+','.']) then Exit;
-  if not nextpas.core.text.scan.ScanHasFloatMarker(V) then
-  begin
-    if ViewToInt64(V, LInt) then begin OutVal := JsPureNewInt(LInt, AContextId); Exit(True); end;
-    if ViewToDouble(V, LDbl) then begin OutVal := JsPureNewDouble(LDbl, AContextId); Exit(True); end;
-  end else
-    if ViewToDouble(V, LDbl) then begin OutVal := JsPureNewDouble(LDbl, AContextId); Exit(True); end;
+  // perf: inline thin-forward via js.pure.predicates JsPredTryNumber single source (text.number EiselLemire + text.scan float marker single-pass VecWidth SIMD, bytes.ops zero-copy), B/op=0, L0-L3 keep, try-finally not丢
+  Result := nextpas.core.js.pure.predicates.JsPredTryNumber(V, AContextId, OutVal);
 end;
 function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
