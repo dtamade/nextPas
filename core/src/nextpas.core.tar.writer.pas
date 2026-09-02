@@ -29,6 +29,7 @@ type
     procedure AddDirWithOptions(const AName: string; const AOpts: TTarAddOptions);
     procedure AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
     procedure Finish;
+    function IsFinished: Boolean; inline;
     destructor Destroy; override;
   end;
 
@@ -57,14 +58,12 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，复用 bytes.ops SpanConcatMany/BytesToString 单源，零拷贝 TByteSpan 视图（PAnsiChar），单次分配闭合 common SpanToString 审计；含循环/分配不 inline — }
+{ — pax record：长度前缀十进制自洽，复用 bytes.ops Move 单源语义（零拷贝 PAnsiChar 视图），单次 SetLength 分配闭合 common SpanToString 审计；含循环/分配不 inline — }
 function MakePaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits: Integer;
   SLen: string;
-  LSp, LEqB, LNLB: Byte;
-  LSpans: array[0..5] of TByteSpan;
-  LBytes: TBytes;
+  LPos: SizeInt;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
@@ -76,28 +75,30 @@ begin
     LLen := LBase + LDigits;
     SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  // perf: SpanConcatMany 单源分配（单次 SetLength+Move，bytes.ops 单源）+ BytesToString 单源文本转换，零拷贝 PAnsiChar 视图，避免 IBytesBuilder 几何扩容与手写 Move 分散；极小记录亦零额外 Move；inline: BytesToString/SpanConcatMany 零拷贝视图，循环体外联禁 inline
-  // stability: 空键/值用 Empty 视图守空指针，块零初始化由调用方兜底，单源闭合 common.pas SpanToString 审计
-  LSp := Ord(' ');
-  LEqB := Ord('=');
-  LNLB := 10;
+  // perf: 单次 SetLength(Result,LLen)+顺序 Move（bytes.ops 单源 CopyMemory/CopyStringToBuffer 语义，零拷贝 PAnsiChar 视图），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
+  // stability: 空键/值守零长不 Move，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 common.pas SpanToString 审计，资源由托管 string 释放不丢
+  SetLength(Result, LLen);
+  LPos := 1;
   if Length(SLen) > 0 then
-    LSpans[0] := TByteSpan.Create(PByte(PAnsiChar(SLen)), SizeUInt(Length(SLen)))
-  else
-    LSpans[0] := TByteSpan.Empty;
-  LSpans[1] := TByteSpan.Create(@LSp, 1);
+  begin
+    Move(PAnsiChar(SLen)^, Result[LPos], Length(SLen));
+    Inc(LPos, Length(SLen));
+  end;
+  Result[LPos] := ' ';
+  Inc(LPos);
   if Length(AKey) > 0 then
-    LSpans[2] := TByteSpan.Create(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)))
-  else
-    LSpans[2] := TByteSpan.Empty;
-  LSpans[3] := TByteSpan.Create(@LEqB, 1);
+  begin
+    Move(PAnsiChar(AKey)^, Result[LPos], Length(AKey));
+    Inc(LPos, Length(AKey));
+  end;
+  Result[LPos] := '=';
+  Inc(LPos);
   if Length(AValue) > 0 then
-    LSpans[4] := TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)))
-  else
-    LSpans[4] := TByteSpan.Empty;
-  LSpans[5] := TByteSpan.Create(@LNLB, 1);
-  LBytes := SpanConcatMany(LSpans);
-  Result := BytesToString(LBytes);
+  begin
+    Move(PAnsiChar(AValue)^, Result[LPos], Length(AValue));
+    Inc(LPos, Length(AValue));
+  end;
+  Result[LPos] := #10;
 end;
 
 { TTarWriter }
@@ -314,22 +315,15 @@ var
   H: TTarHeader;
   LDef: TTarAddOptions;
 begin
-  // 单源：DefaultTarAddOptions 判零 + TarDirectoryMode 换算默认权限，零拷贝无需 bytes.ops
+  // 单源：DefaultTarAddOptions 判零 + TarDirectoryMode 单点换算目录权限，零拷贝无需 bytes.ops；收敛三分支+二次 IFDIR 归一至单点，极简叙事
   LDef := DefaultTarAddOptions;
   H := Default(TTarHeader);
   H.Name := AName;
   H.Kind := tekDirectory;
   if AOpts.Mode = LDef.Mode then
-    H.Mode := TarDirectoryMode(C_TAR_DEFAULT_DIR_MODE and C_TAR_UNIX_PERM_MASK) and C_TAR_UNIX_PERM_MASK
-  else if (AOpts.Mode and C_TAR_UNIX_IFDIR) <> 0 then
-    H.Mode := AOpts.Mode and C_TAR_UNIX_PERM_MASK
-  else if AOpts.Mode <> 0 then
-    H.Mode := AOpts.Mode
+    H.Mode := C_TAR_DEFAULT_DIR_MODE
   else
-    H.Mode := C_TAR_DEFAULT_DIR_MODE;
-  // 兼容：调用方若显式传入含 IFDIR 的 Mode（如 TarDirectoryMode 结果），归一取权限位，避免双 IFDIR
-  if H.Mode = (C_TAR_UNIX_IFDIR or (C_TAR_DEFAULT_DIR_MODE and C_TAR_UNIX_PERM_MASK)) then
-    H.Mode := C_TAR_DEFAULT_DIR_MODE;
+    H.Mode := TarDirectoryMode(AOpts.Mode and C_TAR_UNIX_PERM_MASK) and C_TAR_UNIX_PERM_MASK;
   H.UID := AOpts.UID;
   H.GID := AOpts.GID;
   H.MTimeUnix := AOpts.MTimeUnix;
@@ -400,12 +394,17 @@ begin
   WriteBlock(Zero);
 end;
 
+function TTarWriter.IsFinished: Boolean; inline;
+begin
+  Result := FFinished;
+end;
+
 destructor TTarWriter.Destroy;
 begin
   try
     Finish;
   except
-    // best-effort: 两零块收尾可抛 EIOError，析构期吞掉避免异常逃逸
+    // best-effort: 两零块收尾可抛 EIOError，析构期吞掉避免异常逃逸（builder 层 fail-closed 显式校验）
   end;
   inherited Destroy;
 end;

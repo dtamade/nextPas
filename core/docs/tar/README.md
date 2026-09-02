@@ -12,7 +12,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.reader` | `TTarReader`：迭代内存镜像，pax/x/g + GNU L/K + base-256 全兼容 |
 | `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出，需显式 `Finish` |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
-| `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish`） |
+| `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed，`AddEntryFromReader` 流式零拷贝） |
 | `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
 
 > 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用。
@@ -29,7 +29,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
 | PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
-| Zero-copy slice/stream | — | Yes | `EntryDataSlice` + `OpenEntryStream` |
+| Zero-copy slice/stream | — | Yes | `EntryDataSlice` 零拷贝视图 + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝） |
 
 ## API
 
@@ -55,9 +55,9 @@ R := TTarReader.Create(Bytes); // 或 Create(PByte, Count) + WithOptions(bomb �
 while R.Next(H) do
 begin
   WriteLn(H.Name, ' ', H.Size, ' ', Ord(H.Kind));
-  Data := R.EntryData; // 拷贝
-  if R.EntryDataSlice(P, C) then // 零拷贝视图
-    RS := R.OpenEntryStream; // 拉式流
+  Data := R.EntryData; // 拷贝：峰值 2× 切片视图，热路径优先切片（extract-all 320µs vs extract-slice 236µs）
+  if R.EntryDataSlice(P, C) then // 零拷贝视图（生命周期默认绑定 Reader，inline 薄转发）
+    RS := R.OpenEntryStream; // 持有型拉式流：拥有镜像时引用计数持有，外部 PByte 时固化拷贝，Reader 释放后仍可读（bytes.ops.CopyMemory 单源）
 end;
 ```
 
@@ -82,14 +82,16 @@ Arc := TarBuilder
   .Add('hello.txt', BytesOfString('hello'))
   .AddDirectory('assets')
   .Add('assets/data.bin', BytesOfString('0123456789'))
-  .Finish; // 内部 TTarWriter + CreateBytesBuilder 直写切片（inline 零拷贝），Finish 单次 ToBytes，bytes 级与 writer 一致
+  .Finish; // 内部 TTarWriter + CreateBytesBuilder 直写切片（inline 零拷贝），Finish 单次 ToBytes，bytes 级与 writer 一致；未 Finish 析构 fail-closed 抛错
 
 // 带选项：携带权限/mtime/uname
 var Opts: TTarAddOptions;
 Opts := DefaultTarAddOptions; Opts.Mode := $1A4; Opts.MTimeUnix := 1700000000;
 TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddDirectoryWithOptions('assets', Opts)
-          .AddEntry(Hdr, Data).Finish; // 显式 Finish，析构经 TTarWriter 兜底
+          .AddEntry(Hdr, Data)
+          .AddEntryFromReader(Hdr2, Reader) // 流式零拷贝 64K pooled 复用缓冲，无 TBytes 全量拷贝
+          .Finish; // 显式 Finish 必需，未调即析构抛 EInvalidOperationError
 ```
 
 ## Safety Model
@@ -100,10 +102,9 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片与外部 `PByte` 视图（无 `Copy`，`FEntryDataOfs/Size` 视图与 `EntryData` 拷贝一致），`writer` 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes` 零额外 `Move`，`AddDirectoryWithOptions` 薄门面复用 `writer.AddDirWithOptions` 单源 `DefaultTarAddOptions`/`TarDirectoryMode`），`TarPackDirInto` 同层排序 + 几何扩容与 `deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块（循环体外联）与 `common.TarParsePaxRecords` 零拷贝 `PByte` 切片复用 `bytes.ops` 单源（薄守卫 inline，热循环外联避 I-Cache 膨胀，详见 `CONTRACT.md §6.5`）。
-- **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样（`tar/pack/200x512B 526µs 194.5MB/s 410 allocs`、`builder-pack 537µs 190.6MB/s 411`、`open/parse 236µs 201`、`extract-all 321µs 319MB/s 401`、`extract-slice 236µs 432.9MB/s 201`、`write/1MB 2.37ms 441.9MB/s 5`、`read/1MB 1.59ms 658.3MB/s 3`，详见 `build/bench-tar.json` 与 `CONTRACT.md §6.1`），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000x512B` 档。
-- **回归门限（CONTRACT §6.2-§6.4）**：`allocs` 硬预算 `+2`（`pack ≤412`/`builder ≤413`/`open ≤203`/`extract-all ≤403`/`extract-slice ≤203`/`write ≤7`/`read ≤5`，`bytes` 强一致）；`ns/op` 硬门限 `1.5×`基线（`pack ≤800µs`/`builder ≤810µs`/`open ≤354µs`/`extract-all ≤482µs`/`extract-slice ≤355µs`/`write ≤3.56ms`/`read ≤2.39ms`，超限 WARN，持续回归待人工 `benchstat` 复核）；`MB/s` 底线 `0.65×`基线（`pack ≥126`/`builder ≥124`/`extract-all ≥207`/`extract-slice ≥281`/`write ≥287`/`read ≥428` MB/s）。基线固化 `BASELINE.json`，`check_regression.py` 比对 `allocs/bytes/ns` 三项，`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 一键门。
-- **Go/Rust 对照（CONTRACT §6.3）**：`compare_go`（`archive/tar`）与 `compare_rust`（`tar` crate）同参 `200×512B`/`1MiB`，`benchstat` 以 `ns/op + MB/s` 对比，守卫 **Pascal ns/op ≤1.5× Go/Rust** 且 **MB/s ≥0.70×**，同机 `-O3` vs `go test -bench/-cargo bench`，`GOMAXPROCS=1` 降噪，连续两机复现升硬门。
+- **inline/零拷贝/单源**：`reader` 零拷贝切片与外部 `PByte` 视图（无 `Copy`，`FEntryDataOfs/Size` 与 `EntryData` 一致；`TTarSliceReader.Read`/`CombinePrefixName` 统一收敛至 `bytes.ops.CopyMemory` 单源 `Move`；`EntryData` 拷贝分流峰值 2×，热路径 `EntryDataSlice/OpenEntryStream`；`OpenEntryStream` 持有型 `FHold` 防悬垂），`writer` 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`AddDirectoryWithOptions` 复用 `writer.AddDirWithOptions` 单源），`TarPackDirInto` 同层排序+`deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联，详见 `CONTRACT.md §6`）。
+- **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
+- **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 红），`ns/op` `1.5×` WARN 与 `MB/s` `0.65×` WARN；Go/Rust 对照同口径 `compare_go`/`compare_rust` 守卫 `Pascal ns/op ≤1.5×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续两机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。
 Benchmark: 已落地 `bench_tar`（见上），与 `gzip` 组合待 `compress` 协作。

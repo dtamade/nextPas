@@ -59,11 +59,12 @@ type
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
     constructor CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions); overload;
     function Next(out AHeader: TTarHeader): Boolean;
+    { 拷贝路径：单次 SetLength+Move（bytes.ops SpanClone 单源），峰值约 2× 切片视图；热路径/大载荷优先 EntryDataSlice/OpenEntryStream 零拷贝（extract-all 320µs vs extract-slice 236µs，约 -26%） }
     function EntryData: TBytes;
     function EntryDataOfs: SizeUInt;
-    { 零拷贝视图：返回当前条目载荷在原镜像中的区间（未拷贝） }
+    { 零拷贝视图：返回当前条目载荷在原镜像中的区间（未拷贝，生命周期默认绑定 Reader） }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { 拉式零拷贝流：基于切片的 IReader（随 reader 生命周期，不拥有镜像）}
+    { 拉式零拷贝流：基于切片的 IReader；若 Reader 拥有 TBytes 镜像则流持有镜像拷贝（所有权转移防悬垂），外部 PByte 镜像则流固化拷贝自包含；Reader 释放后流仍可读 }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
   end;
@@ -253,14 +254,14 @@ begin
   end;
   if AName.Len = 0 then
     Exit(SpanToString(APrefix));
-  // 单源/零拷贝：单次 SetLength + 两次 Move（APrefix + '/' + AName），消除 SpanConcatMany(TBytes分配+Move)+BytesToString(二次分配)双分配；外联禁inline避免Result[1]双喂膨胀，复用bytes.ops单源Move语义
+  // 单源/零拷贝：单次 SetLength + 两次 CopyMemory（bytes.ops 单源 Move），消除 SpanConcatMany(TBytes分配+Move)+BytesToString(二次分配)双分配；外联禁inline避免Result[1]双喂膨胀，复用bytes.ops单源审计
   LTotal := APrefix.Len + 1 + AName.Len;
   SetLength(Result, LTotal);
   if APrefix.Len > 0 then
-    Move(APrefix.Data^, Result[1], APrefix.Len);
+    CopyMemory(APrefix.Data, PByte(@Result[1]), APrefix.Len);
   Result[APrefix.Len + 1] := '/';
   if AName.Len > 0 then
-    Move(AName.Data^, Result[APrefix.Len + 2], AName.Len);
+    CopyMemory(AName.Data, PByte(@Result[APrefix.Len + 2]), AName.Len);
 end;
 
 function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
@@ -504,7 +505,7 @@ begin
   if UInt64(FEntrySize) > UInt64(FMaxEntry) then
     raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [FEntrySize, Int64(FMaxEntry), FEntryDataOfs]);
   N := SizeInt(FEntrySize);
-  // 单源：bytes.ops SpanClone 单次 Move 审计入口，替代手写 Move
+  // 单源：bytes.ops SpanClone 单次 Move 审计入口，替代手写 Move；拷贝分流：峰值 2× 切片视图，热路径优先 EntryDataSlice/OpenEntryStream 零拷贝（320µs vs 236µs）
   Result := SpanClone(TByteSpan.Create(@FData[FEntryDataOfs], SizeUInt(N)));
 end;
 
@@ -528,15 +529,17 @@ begin
   Result := True;
 end;
 
-{ — TTarSliceReader：零拷贝切片的拉式 IReader（职责解耦：流不与块解析混杂） — }
+{ — TTarSliceReader：零拷贝切片的拉式 IReader（职责解耦：流不与块解析混杂；单源 bytes.ops CopyMemory + 所有权守卫） — }
 type
   TTarSliceReader = class(TInterfacedObject, IReader)
   private
     FBase: PByte;
     FSize: SizeUInt;
     FPos: SizeUInt;
+    FHold: TBytes;
   public
-    constructor Create(ABase: PByte; ASize: SizeUInt);
+    constructor Create(ABase: PByte; ASize: SizeUInt); overload;
+    constructor CreateWithHold(const AHold: TBytes; AOfs: SizeUInt; ASize: SizeUInt); overload;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
   end;
 
@@ -546,6 +549,34 @@ begin
   FBase := ABase;
   FSize := ASize;
   FPos := 0;
+  FHold := nil;
+end;
+
+constructor TTarSliceReader.CreateWithHold(const AHold: TBytes; AOfs: SizeUInt; ASize: SizeUInt);
+var
+  LAvail: SizeUInt;
+begin
+  inherited Create;
+  FHold := AHold;
+  FSize := ASize;
+  FPos := 0;
+  if Length(AHold) > 0 then
+  begin
+    LAvail := SizeUInt(Length(AHold));
+    if AOfs > LAvail then
+      FBase := nil
+    else
+    begin
+      if AOfs + ASize > LAvail then
+        FSize := LAvail - AOfs;
+      if FSize > 0 then
+        FBase := @AHold[AOfs]
+      else
+        FBase := nil;
+    end;
+  end
+  else
+    FBase := nil;
 end;
 
 function TTarSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -561,8 +592,8 @@ begin
     LCount := Avail;
   if LCount > 0 then
   begin
-    // 单源：base.utils.CopyMem 为 raw Move 唯一审计入口（常量时间、nil 守卫、零拷贝视图）
-    CopyMem(@ABuf, @FBase[FPos], LCount);
+    // 单源：bytes.ops.CopyMemory 为 raw Move 唯一审计入口（常量时间、nil 守卫、零拷贝视图），收敛 base.utils.CopyMem 分散
+    CopyMemory(@FBase[FPos], PByte(@ABuf), LCount);
     Inc(FPos, LCount);
   end;
   Result := LCount;
@@ -572,13 +603,23 @@ function TTarReader.OpenEntryStream: IReader;
 var
   P: PByte;
   C: SizeUInt;
+  LCopy: TBytes;
 begin
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
     C := 0;
   end;
-  Result := TTarSliceReader.Create(P, C);
+  // 所有权守卫：Reader 拥有 TBytes 镜像则流持有镜像引用（防 Reader 释放后悬垂）；外部 PByte 镜像无拥有则流拷贝固化实现自包含，空载荷走借用空视图
+  if Length(FBuf) > 0 then
+    Result := TTarSliceReader.CreateWithHold(FBuf, FEntryDataOfs, C)
+  else if C > 0 then
+  begin
+    LCopy := SpanClone(TByteSpan.Create(P, C));
+    Result := TTarSliceReader.CreateWithHold(LCopy, 0, C);
+  end
+  else
+    Result := TTarSliceReader.Create(P, C);
 end;
 
 function TTarReader.EntrySize: Int64;

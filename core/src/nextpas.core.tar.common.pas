@@ -47,7 +47,8 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.simd;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -79,37 +80,45 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现（循环体外联） — }
-function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
+{ — 校验和单源：单次扫描双累加，分段无分支，chksum 字段视为空格，循环体外联 — }
+procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
   I: SizeUInt;
   B: Byte;
 begin
-  Result := 0;
-  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  AU := 0;
+  ASig := 0;
+  for I := 0 to C_TAR_OFF_CHKSUM - 1 do
   begin
-    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
-      B := Ord(' ')
-    else
-      B := ABlock[I];
-    Result := Result + B;
+    B := ABlock[I];
+    AU := AU + B;
+    ASig := ASig + ShortInt(B);
   end;
+  AU := AU + C_TAR_LEN_CHKSUM * Ord(' ');
+  ASig := ASig + C_TAR_LEN_CHKSUM * Ord(' ');
+  for I := C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    B := ABlock[I];
+    AU := AU + B;
+    ASig := ASig + ShortInt(B);
+  end;
+end;
+
+{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现（循环体外联） — }
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
+var
+  U, S: Int64;
+begin
+  TarComputeChecksumsDual(ABlock, U, S);
+  Result := U;
 end;
 
 function TarComputeChecksumSigned(ABlock: PByte): Int64;
 var
-  I: SizeUInt;
-  B: Byte;
+  U, S: Int64;
 begin
-  Result := 0;
-  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
-  begin
-    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
-      B := Ord(' ')
-    else
-      B := ABlock[I];
-    Result := Result + ShortInt(B);
-  end;
+  TarComputeChecksumsDual(ABlock, U, S);
+  Result := S;
 end;
 
 function TarStoredChecksum(ABlock: PByte): Int64; inline;
@@ -122,20 +131,15 @@ var
   Stored, U, S: Int64;
 begin
   Stored := TarStoredChecksum(ABlock);
-  U := TarComputeChecksumUnsigned(ABlock);
-  S := TarComputeChecksumSigned(ABlock);
+  TarComputeChecksumsDual(ABlock, U, S);
   if (Stored <> U) and (Stored <> S) then
     raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, Stored, U, S]);
 end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
-var
-  I: SizeUInt;
 begin
-  Result := True;
-  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
-    if ABlock[I] <> 0 then
-      Exit(False);
+  // 单源：复用 simd.SumBytes 向量化判零，无逐字节分支，万级小文件单次 SIMD 扫描
+  Result := SumBytes(ABlock, C_TAR_BLOCK_SIZE) = 0;
 end;
 
 function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
@@ -149,13 +153,24 @@ begin
   IsZero := True;
   U := 0;
   S := 0;
-  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  for I := 0 to C_TAR_OFF_CHKSUM - 1 do
   begin
     B := ABlock[I];
     if B <> 0 then
       IsZero := False;
-    if (I >= C_TAR_OFF_CHKSUM) and (I < C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM) then
-      B := Ord(' ');
+    U := U + B;
+    S := S + ShortInt(B);
+  end;
+  for I := C_TAR_OFF_CHKSUM to C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM - 1 do
+    if ABlock[I] <> 0 then
+      IsZero := False;
+  U := U + C_TAR_LEN_CHKSUM * Ord(' ');
+  S := S + C_TAR_LEN_CHKSUM * Ord(' ');
+  for I := C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    B := ABlock[I];
+    if B <> 0 then
+      IsZero := False;
     U := U + B;
     S := S + ShortInt(B);
   end;
@@ -238,7 +253,7 @@ procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: 
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：机械委托 bytes.ops.CopyStringToBuffer 单源 Move 语义，零拷贝 PByte 切片单次 Move（PAnsiChar 解引用规避 inline 单字节缺陷，外联禁 inline 避免 I-Cache 膨胀，可静态校验）
+  // 单源：机械委托 bytes.ops.CopyStringToBuffer 单源 Move 语义
   CopyLen := SizeUInt(Length(AValue));
   if CopyLen > ALen then
     CopyLen := ALen;
@@ -250,7 +265,7 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：机械委托 bytes.ops.CopyMemory 单源 Move 语义，零拷贝 PByte 切片单次 Move，消除 Copy(Name,1,N) 临时串二次分配；按需截断 ALen（外联避免 I-Cache 膨胀，可静态校验）
+  // 单源：机械委托 bytes.ops.CopyMemory 单源 Move 语义
   CopyLen := ACount;
   if CopyLen > ALen then
     CopyLen := ALen;
@@ -263,7 +278,7 @@ var
   Sum: Int64;
   I: SizeUInt;
 begin
-  // 单点：校验和计算与八进制格式化收敛至 common，零拷贝 PByte 切片；循环体外联避免 inline 膨胀
+  // 单点：校验和计算与八进制格式化收敛至 common，零拷贝 PByte 切片；循环体外联
   Sum := TarComputeChecksumUnsigned(ABlock);
   for I := 0 to 5 do
     ABlock[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
@@ -273,7 +288,7 @@ end;
 
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 begin
-  // perf: inline 薄转发 — 复用 TarPutHeaderString 单源 Move（bytes.ops 零拷贝语义），几何常量 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 单点，块已零填充故尾 NUL 保留无额外 Move
+  // 单源：复用 TarPutHeaderString 单源 Move，C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 单点
   TarPutHeaderString(ABlock, C_TAR_OFF_MAGIC, C_TAR_LEN_MAGIC, C_TAR_MAGIC_USTAR);
   TarPutHeaderString(ABlock, C_TAR_OFF_VERSION, C_TAR_LEN_VERSION, C_TAR_VERSION_00);
 end;
@@ -285,7 +300,8 @@ var
   LenVal: SizeInt;
   I: SizeInt;
   B: Byte;
-  Key, Value: string;
+  KeySpan, ValSpan: TByteSpan;
+  KeyLen, ValLen: SizeInt;
 begin
   APath := '';
   ALinkPath := '';
@@ -326,23 +342,31 @@ begin
       P := RecEnd;
       Continue;
     end;
-    // 单源：bytes.ops SpanToString 单次分配+拷贝，纳入零拷贝统一审计；@ABase[off] 避免裸指针算术无 POINTERMATH
-    if Eq - Sp - 1 > 0 then
-      Key := SpanToString(TByteSpan.Create(@ABase[Sp + 1], SizeUInt(Eq - Sp - 1)))
+    KeyLen := Eq - Sp - 1;
+    ValLen := RecEnd - 1 - (Eq + 1);
+    if KeyLen > 0 then
+      KeySpan := TByteSpan.Create(@ABase[Sp + 1], SizeUInt(KeyLen))
     else
-      Key := '';
-    if RecEnd - 1 - (Eq + 1) > 0 then
-      Value := SpanToString(TByteSpan.Create(@ABase[Eq + 1], SizeUInt(RecEnd - 1 - (Eq + 1))))
+      KeySpan := TByteSpan.Empty;
+    if ValLen > 0 then
+      ValSpan := TByteSpan.Create(@ABase[Eq + 1], SizeUInt(ValLen))
     else
-      Value := '';
-    if Key = 'path' then
+      ValSpan := TByteSpan.Empty;
+    // 零拷贝：SpanEqual 比对 key，仅命中时物化 value，降 O(n) 分配峰值
+    if (KeyLen = 4) and SpanEqual(KeySpan, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
     begin
-      APath := Value;
+      if ValLen > 0 then
+        APath := SpanToString(ValSpan)
+      else
+        APath := '';
       Result := True;
     end
-    else if Key = 'linkpath' then
+    else if (KeyLen = 8) and SpanEqual(KeySpan, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
     begin
-      ALinkPath := Value;
+      if ValLen > 0 then
+        ALinkPath := SpanToString(ValSpan)
+      else
+        ALinkPath := '';
       Result := True;
     end;
     P := RecEnd;
