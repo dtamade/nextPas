@@ -98,7 +98,7 @@ type
   end;
 
 const
-  {** @desc ustar 单源记录表：声明噪声归一，由生成器派生散列常量，防手动错位；inline 薄转发零拷贝 *}
+  {** @desc ustar 单源记录表：16 字段 Off/Len 单点收敛，生成器单点派生，零拷贝单源高级感；散列常量已归一消除，读写经 C_TAR_LAYOUT 单源 inline 访问零错位 *}
   C_TAR_LAYOUT: TTarUstarLayout = (
     Name: (Off: 0; Len: 100);
     Mode: (Off: 100; Len: 8);
@@ -117,24 +117,6 @@ const
     DevMinor: (Off: 337; Len: 8);
     Prefix: (Off: 345; Len: 155)
   );
-
-  { 兼容别名（生成器收敛）：散列常量由算术生成器派生，相对 C_TAR_LAYOUT 单源保持数值一致（FPC const 不支持记录字段常量表达式），声明噪声归一，防手动错位 }
-  C_TAR_OFF_NAME = 0; C_TAR_LEN_NAME = 100;
-  C_TAR_OFF_MODE = C_TAR_OFF_NAME + C_TAR_LEN_NAME; C_TAR_LEN_MODE = 8;
-  C_TAR_OFF_UID = C_TAR_OFF_MODE + C_TAR_LEN_MODE; C_TAR_LEN_UID = 8;
-  C_TAR_OFF_GID = C_TAR_OFF_UID + C_TAR_LEN_UID; C_TAR_LEN_GID = 8;
-  C_TAR_OFF_SIZE = C_TAR_OFF_GID + C_TAR_LEN_GID; C_TAR_LEN_SIZE = 12;
-  C_TAR_OFF_MTIME = C_TAR_OFF_SIZE + C_TAR_LEN_SIZE; C_TAR_LEN_MTIME = 12;
-  C_TAR_OFF_CHKSUM = C_TAR_OFF_MTIME + C_TAR_LEN_MTIME; C_TAR_LEN_CHKSUM = 8;
-  C_TAR_OFF_TYPEFLAG = C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM; C_TAR_LEN_TYPEFLAG = 1;
-  C_TAR_OFF_LINKNAME = C_TAR_OFF_TYPEFLAG + C_TAR_LEN_TYPEFLAG; C_TAR_LEN_LINKNAME = 100;
-  C_TAR_OFF_MAGIC = C_TAR_OFF_LINKNAME + C_TAR_LEN_LINKNAME; C_TAR_LEN_MAGIC = 6;
-  C_TAR_OFF_VERSION = C_TAR_OFF_MAGIC + C_TAR_LEN_MAGIC; C_TAR_LEN_VERSION = 2;
-  C_TAR_OFF_UNAME = C_TAR_OFF_VERSION + C_TAR_LEN_VERSION; C_TAR_LEN_UNAME = 32;
-  C_TAR_OFF_GNAME = C_TAR_OFF_UNAME + C_TAR_LEN_UNAME; C_TAR_LEN_GNAME = 32;
-  C_TAR_OFF_DEVMAJOR = C_TAR_OFF_GNAME + C_TAR_LEN_GNAME; C_TAR_LEN_DEVMAJOR = 8;
-  C_TAR_OFF_DEVMINOR = C_TAR_OFF_DEVMAJOR + C_TAR_LEN_DEVMAJOR; C_TAR_LEN_DEVMINOR = 8;
-  C_TAR_OFF_PREFIX = C_TAR_OFF_DEVMINOR + C_TAR_LEN_DEVMINOR; C_TAR_LEN_PREFIX = 155;
 
   { base-256 哨兵与默认权限（0644/0755） }
   C_TAR_BASE256_SENTINEL = $80;
@@ -175,6 +157,7 @@ function TarLayout: TTarUstarLayout; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid;
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
@@ -224,15 +207,15 @@ end;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
-  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY 单源，含两零块尾
+  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY 单源，含两零块尾；复用 bytes.ops AlignUp4K 单源，无 and not SizeUInt 掩码截断，32/64 位安全
   if AEstimatedTotal = 0 then
     Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
   // 预留两零块 + 头开销，按 4K 对齐向上取整，消除大写抖动
   Result := AEstimatedTotal + 2 * C_TAR_BLOCK_SIZE;
   if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
     Result := C_TAR_BUILDER_INITIAL_CAPACITY;
-  // 4K 对齐
-  Result := (Result + 4095) and not SizeUInt(4095);
+  // 4K 对齐：复用 bytes.ops AlignUp4K 单源，div/mul 无截断，32 位 SizeUInt 安全
+  Result := AlignUp4K(Result);
 end;
 
 function TarFieldOff(const AField: TTarField): SizeUInt; inline;

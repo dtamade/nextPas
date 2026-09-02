@@ -190,6 +190,45 @@ begin
   Check(Pos('procedure tarputheaderstring(ablock: pbyte; aoff, alen: sizeuint; const avalue: string); inline', Low) = 0, 'TarPutHeaderString must not be inline (Move[AValue[1]] ban)');
 end;
 
+procedure TestReaderSinglePass;
+var
+  S, Low: string;
+begin
+  S := ReadText('src/nextpas.core.tar.reader.pas');
+  Low := LowerCase(S);
+  // 8字段单遍512融合：FieldSlice 不再每字段 SpanIndexOf，需经 EnsureHeaderScanned 单次扫描
+  Check(Pos('ensureheaderscanned', Low) > 0, 'reader has EnsureHeaderScanned fusion entry');
+  Check(Pos('fscanvalid', Low) > 0, 'reader has FScanValid cache flag');
+  Check(Pos('fnamelen', Low) > 0, 'reader caches FNameLen via single pass');
+  Check(Pos('for i := 0 to cblocksize - 1', Low) > 0, 'single 512 loop exists');
+  // FieldSlice 必须含缓存分发，避免8次 SIMD；单源 C_TAR_LAYOUT 零错位
+  Check(Pos('c_tar_layout', Low) > 0, 'reader references tar layout single source');
+  // 确保 FieldSlice 内仅一次 fallback SpanIndexOf（非头块），而非8次 per entry naive
+  Check(Pos('lcached', Low) > 0, 'FieldSlice uses LCached fusion dispatch');
+end;
+
+procedure TestReaderInlineGate;
+var
+  S, Low: string;
+begin
+  S := ReadText('src/nextpas.core.tar.reader.pas');
+  Low := LowerCase(S);
+  // design-conventions 红线1 机械门禁：含 Move/CompareMem 且喂 [1]/PAnsiChar 的函数禁 inline（FPC 3.3.1 常量传播拷栈垃圾）
+  // StringField / SliceToString 含 SpanToString(Move Result[1])，必须外联
+  Check(Pos('function stringfield(aofs', Low) > 0, 'reader has StringField');
+  Check(Pos('function stringfield(aofs, alen: sizeuint): string; inline', Low) = 0, 'StringField must not be inline (Move Result[1] red line1)');
+  Check(Pos('function slicetostring(abase: pbyte; alen: sizeuint): string; inline', Low) = 0, 'SliceToString must not be inline (Move Result[1] red line1)');
+  Check(Pos('function cachedfield(aofs, alen: sizeuint; var acached: string): string; inline', Low) = 0, 'CachedField must not be inline (CompareMem @ACached[1] red line1)');
+  Check(Pos('function combineprefixname(const aprefix, aname: tbytespan): string; inline', Low) = 0, 'CombinePrefixName must not be inline (Result[1] double feed)');
+  // 薄转发安全者保持 inline
+  Check(Pos('function magichasustar: boolean; inline', Low) > 0, 'MagicHasUStar stays inline (safe thin)');
+  Check(Pos('procedure clearglobalpax; inline', Low) > 0, 'ClearGlobalPax stays inline (safe)');
+  Check(Pos('function tryslice(out aslice: tbytespan): boolean; inline', Low) > 0, 'TrySlice stays inline (safe zero-copy view)');
+  // 实现侧亦禁 inline（含 Move）
+  Check(Pos('function ttarreader.stringfield(aofs, alen: sizeuint): string; inline', Low) = 0, 'impl StringField not inline');
+  Check(Pos('function ttarreader.slicetostring(abase: pbyte; alen: sizeuint): string; inline', Low) = 0, 'impl SliceToString not inline');
+end;
+
 begin
   Suite:=TTestSuite.Create('tar.contract');
   Suite.Test('no fpc rtl', @TestNoFpcRtl);
@@ -198,5 +237,7 @@ begin
   Suite.Test('docs', @TestDocs);
   Suite.Test('common internal boundary', @TestCommonInternalBoundary);
   Suite.Test('common no inline loops', @TestCommonNoInlineLoops);
+  Suite.Test('reader single pass header scan', @TestReaderSinglePass);
+  Suite.Test('reader inline redline gate', @TestReaderInlineGate);
   if not Suite.Run then Halt(1);
 end.

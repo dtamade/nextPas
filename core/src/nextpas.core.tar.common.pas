@@ -94,15 +94,15 @@ var
 begin
   AU := 0;
   ASig := 0;
-  for I := 0 to C_TAR_OFF_CHKSUM - 1 do
+  for I := 0 to C_TAR_LAYOUT.Chksum.Off - 1 do
   begin
     B := ABlock[I];
     AU := AU + B;
     ASig := ASig + ShortInt(B);
   end;
-  AU := AU + C_TAR_LEN_CHKSUM * Ord(' ');
-  ASig := ASig + C_TAR_LEN_CHKSUM * Ord(' ');
-  for I := C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM to C_TAR_BLOCK_SIZE - 1 do
+  AU := AU + C_TAR_LAYOUT.Chksum.Len * Ord(' ');
+  ASig := ASig + C_TAR_LAYOUT.Chksum.Len * Ord(' ');
+  for I := C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len to C_TAR_BLOCK_SIZE - 1 do
   begin
     B := ABlock[I];
     AU := AU + B;
@@ -129,7 +129,7 @@ end;
 
 function TarStoredChecksum(ABlock: PByte): Int64; inline;
 begin
-  Result := TarParseNumericField(@ABlock[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, C_TAR_OFF_CHKSUM);
+  Result := TarParseNumericField(@ABlock[C_TAR_LAYOUT.Chksum.Off], C_TAR_LAYOUT.Chksum.Len, C_TAR_LAYOUT.Chksum.Off);
 end;
 
 procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
@@ -256,37 +256,46 @@ var
 begin
   Sum := TarComputeChecksumUnsigned(ABlock);
   for I := 0 to 5 do
-    ABlock[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
-  ABlock[C_TAR_OFF_CHKSUM + 6] := 0;
-  ABlock[C_TAR_OFF_CHKSUM + 7] := Ord(' ');
+    ABlock[C_TAR_LAYOUT.Chksum.Off + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
+  ABlock[C_TAR_LAYOUT.Chksum.Off + 6] := 0;
+  ABlock[C_TAR_LAYOUT.Chksum.Off + 7] := Ord(' ');
 end;
 
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 begin
-  TarPutHeaderString(ABlock, C_TAR_OFF_MAGIC, C_TAR_LEN_MAGIC, C_TAR_MAGIC_USTAR);
-  TarPutHeaderString(ABlock, C_TAR_OFF_VERSION, C_TAR_LEN_VERSION, C_TAR_VERSION_00);
+  TarPutHeaderString(ABlock, C_TAR_LAYOUT.Magic.Off, C_TAR_LAYOUT.Magic.Len, C_TAR_MAGIC_USTAR);
+  TarPutHeaderString(ABlock, C_TAR_LAYOUT.Version.Off, C_TAR_LAYOUT.Version.Len, C_TAR_VERSION_00);
+end;
+
+{ — pax 长度前缀单源计算器：LBase/LDigits/Len 自洽 + UInt64DecimalDigits 单源，避免 TarFormat/TarAppend 双复制约15行；循环体外联遵 design-conventions — }
+function TarCalcPaxRecordLen(const AKey, AValue: string): Integer;
+var
+  LBase, LDigits, LNeed: Integer;
+begin
+  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
+  LDigits := 1;
+  Result := LBase + LDigits;
+  while True do
+  begin
+    LNeed := UInt64DecimalDigits(UInt64(Result));
+    if LNeed = LDigits then
+      Break;
+    LDigits := LNeed;
+    Result := LBase + LDigits;
+  end;
 end;
 
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 var
-  LBase, LLen, LDigits, LNeed: Integer;
+  LLen: Integer;
   LPos: SizeInt;
   LBuf: array[0..20] of AnsiChar;
   LNumLen: Int32;
 begin
-  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
-  LDigits := 1;
-  LLen := LBase + LDigits;
-  while True do
-  begin
-    LNeed := UInt64DecimalDigits(UInt64(LLen));
-    if LNeed = LDigits then Break;
-    LDigits := LNeed;
-    LLen := LBase + LDigits;
-  end;
+  LLen := TarCalcPaxRecordLen(AKey, AValue);
   SetLength(Result, LLen);
   LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
-  Move(LBuf[0], Result[1], SizeUInt(LNumLen));
+  CopyMemory(PByte(@LBuf[0]), PByte(PAnsiChar(Result)), SizeUInt(LNumLen));
   LPos := LNumLen + 1;
   Result[LPos] := ' ';
   Inc(LPos);
@@ -307,22 +316,13 @@ end;
 
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
 var
-  LBase, LLen, LDigits, LNeed: Integer;
+  LLen: Integer;
   LBuf: array[0..20] of AnsiChar;
   LNumLen: Int32;
 begin
   if ABuilder = nil then
     Exit;
-  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
-  LDigits := 1;
-  LLen := LBase + LDigits;
-  while True do
-  begin
-    LNeed := UInt64DecimalDigits(UInt64(LLen));
-    if LNeed = LDigits then Break;
-    LDigits := LNeed;
-    LLen := LBase + LDigits;
-  end;
+  LLen := TarCalcPaxRecordLen(AKey, AValue);
   LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
   ABuilder.Reserve(SizeUInt(LLen));
   ABuilder.AppendBytes(PByte(@LBuf[0]), SizeUInt(LNumLen));
