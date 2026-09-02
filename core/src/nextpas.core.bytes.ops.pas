@@ -25,6 +25,11 @@ function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
+{ string trim/equals — zero-copy view layer single source for text.view Trim/Equals + js.base JsTrimEquals (owner bytes.ops, inline thin-forward, loop not inline per red-line 2) }
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+function StringTrimEquals(const S, Lit: string): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
@@ -317,6 +322,55 @@ begin
   if ASuffix.Len > AData.Len then
     Exit(False);
   Result := MemEqual(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
+end;
+
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+var
+  LPos: SizeUInt;
+begin
+  // single source: zero-copy view trim left, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LPos := 0;
+  while (LPos < ASpan.Len) and ((ASpan.Data[LPos] = 9) or (ASpan.Data[LPos] = 10) or (ASpan.Data[LPos] = 13) or (ASpan.Data[LPos] = 32)) do
+    Inc(LPos);
+  if LPos >= ASpan.Len then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data + LPos;
+  Result.Len := ASpan.Len - LPos;
+end;
+
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+var
+  LEnd: SizeUInt;
+begin
+  // single source: zero-copy view trim right, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LEnd := ASpan.Len;
+  while (LEnd > 0) and ((ASpan.Data[LEnd - 1] = 9) or (ASpan.Data[LEnd - 1] = 10) or (ASpan.Data[LEnd - 1] = 13) or (ASpan.Data[LEnd - 1] = 32)) do
+    Dec(LEnd);
+  if LEnd = 0 then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data;
+  Result.Len := LEnd;
+end;
+
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  // perf: inline thin-forward via SpanTrimLeft+SpanTrimRight single source, zero-copy view, no heap alloc, owner bytes.ops
+  Result := SpanTrimRight(SpanTrimLeft(ASpan));
+end;
+
+function StringTrimEquals(const S, Lit: string): Boolean;
+var
+  LTrim: TByteSpan;
+  LLit: TByteSpan;
+begin
+  // single source: reuse SpanTrim+SpanEqual zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops (MemEqual SIMD)
+  LTrim := SpanTrim(TByteSpan.FromStr(S));
+  LLit := TByteSpan.FromStr(Lit);
+  Result := SpanEqual(LTrim, LLit);
 end;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);

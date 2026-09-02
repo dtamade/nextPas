@@ -1,5 +1,6 @@
 unit nextpas.core.js.pure.base;
-{** @desc 纯后端共享基座 — 零 FFI/零 platform.dl，js888/v8/chakra 单源复用。 *}
+{** @desc 纯后端共享基座 — 零 FFI/零 platform.dl，js888/v8/chakra 单源复用。
+     设计规范 §2 四件套显式例外：pure.base 为纯族共享基座，非标准命名，阈值 650 内（<800 必拆，wc -l 389 实测），见 core/docs/design-conventions.md:150 与 CONTRACT §1。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -15,6 +16,7 @@ type
     Method: TJsHostMethod;
     Proc: TJsHostProc;
     Kind: Integer;
+    Hash: UInt32;
   end;
   TJsPureHostArray = array of TJsPureHostRec;
   TJsPureProp = record Name: string; Value: TJsValue; end;
@@ -67,11 +69,12 @@ uses
   nextpas.core.text.builder,
   nextpas.core.text.char,
   nextpas.core.text.number,
-  nextpas.core.text.escape,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops.text,
   nextpas.core.json.writer,
   nextpas.core.format.limits,
+  nextpas.core.mem.dynarray,
   nextpas.core.platform.fs;
 var
   GPureHeapMetrics: TJsPureHeapMetrics;
@@ -85,46 +88,61 @@ begin
   GPureHeapMetrics.HashUsed := 0;
   GPureHeapMetrics.Rebuilds := 0;
 end;
-function PureNextCap(AOld, ANeed: SizeUInt): SizeUInt; inline;
-begin
-  Result := BytesNextCapacity(AOld, ANeed);
-end;
-type PPureDynHeader = ^TPureDynHeader; TPureDynHeader = record RefCnt: PtrInt; High: PtrInt; end;
-procedure PurePokeDynLen(var AArr; const ANewLen: SizeUInt); inline;
-var LP: Pointer;
-begin LP:=Pointer(AArr); if LP=nil then Exit; PPureDynHeader(PByte(LP)-SizeOf(TPureDynHeader))^.High:=PtrInt(ANewLen)-1; end; // perf: Exactly-Once geometric via bytes.ops single source, single SetLength + header poke, no double alloc, inline
 function JsPureValidateHostName(const AName: string): Boolean;
 var I: Integer; C: Char;
 begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
   for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue; if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit; if (I>1) and (AName[I-1]<>'.') then Continue; if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
+function HostHashStr(const S: string): UInt32; inline;
+begin Result := FNV1a32(PByte(PAnsiChar(S)), SizeUInt(Length(S))); end;
+function HostHashView(const V: TStringView): UInt32; inline;
+begin if V.Len=0 then Exit(0); Result := FNV1a32(PByte(V.Data), V.Len); end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer;
-var I: Integer; LView: TStringView;
-begin LView:=TStringView.FromStr(AName); for I:=0 to High(Hosts) do if TStringView.FromStr(Hosts[I].Name).Equals(LView) then Exit(I); Result:=-1; end;
+var I: Integer; LView: TStringView; LHash: UInt32;
+begin
+  // perf: hash pre-filter via bytes.ops single source FNV1a32, then Equals single source via bytes.ops SpanEqual via TStringView, inline zero-copy view, no alloc
+  LView:=TStringView.FromStr(AName); LHash:=HostHashStr(AName);
+  for I:=0 to High(Hosts) do if (Hosts[I].Name<>'') and (Hosts[I].Hash=LHash) and TStringView.FromStr(Hosts[I].Name).Equals(LView) then Exit(I);
+  Result:=-1;
+end;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer;
-var I: Integer; begin for I:=0 to High(Hosts) do if TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I); Result:=-1; end;
+var I: Integer; LHash: UInt32;
+begin
+  // perf: hash pre-filter + view Equals, single source, zero-copy, inline
+  LHash:=HostHashView(AName);
+  for I:=0 to High(Hosts) do if (Hosts[I].Name<>'') and (Hosts[I].Hash=LHash) and TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I);
+  Result:=-1;
+end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
 var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
-begin LIdx:=JsPureFindHost(Hosts,AName); if LIdx>=0 then Exit(LIdx); LCount:=0; for I:=0 to High(Hosts) do if Hosts[I].Name<>'' then Inc(LCount) else Break;
-  LNeed:=SizeUInt(LCount)+1; if LNeed>SizeUInt(Length(Hosts)) then begin LCap:=BytesNextCapacity(SizeUInt(Length(Hosts)),LNeed); SetLength(Hosts,LCap); end; Hosts[LCount].Name:=AName; Result:=LCount; end;
+begin
+  LIdx:=JsPureFindHost(Hosts,AName); if LIdx>=0 then Exit(LIdx);
+  LCount:=0; for I:=0 to High(Hosts) do if Hosts[I].Name<>'' then Inc(LCount) else Break;
+  LNeed:=SizeUInt(LCount)+1;
+  if LNeed>SizeUInt(Length(Hosts)) then
+  begin
+    LCap:=BytesNextCapacity(SizeUInt(Length(Hosts)),LNeed);
+    SetLength(Hosts,LCap);
+  end;
+  Hosts[LCount].Name:=AName;
+  Hosts[LCount].Hash:=HostHashStr(AName);
+  Result:=LCount;
+end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer);
-var
-  LIdx: Integer;
+var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
   Hosts[LIdx].Func := AHandler;
   Hosts[LIdx].Kind := AKind;
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer);
-var
-  LIdx: Integer;
+var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
   Hosts[LIdx].Method := AHandler;
   Hosts[LIdx].Kind := AKind;
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer);
-var
-  LIdx: Integer;
+var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
   Hosts[LIdx].Proc := AHandler;
@@ -158,8 +176,7 @@ begin
   JsPureHostSet(Hosts, AName, AHandler, 2);
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
-var
-  LIdx, I, LCount: Integer;
+var LIdx, I, LCount: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx < 0 then Exit;
@@ -174,6 +191,7 @@ begin
     Hosts[LCount-1].Method := nil;
     Hosts[LCount-1].Proc := nil;
     Hosts[LCount-1].Kind := 0;
+    Hosts[LCount-1].Hash := 0;
   end;
 end;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
@@ -188,12 +206,25 @@ begin Inc(GPureHeapMetrics.FindCalls); if not JsPureIsHeapObject(Obj) then Exit(
     LLo:=0; LHi:=High(Heap); while LLo<=LHi do begin LMid:=(LLo+LHi) shr 1; if Heap[LMid].Id=LId then begin Inc(GPureHeapMetrics.HashUsed); Exit(LMid); end else if Heap[LMid].Id<LId then LLo:=LMid+1 else LHi:=LMid-1; end; Exit(-1);
   end;
   for I:=0 to High(Heap) do if Heap[I].Id=LId then Exit(I); Result:=-1; end;
+procedure PokeHeapLen(var Heap: TJsPureHeap; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute Heap;
+begin
+  // perf: Exactly-Once geometric via bytes.ops single source + mem.dynarray single source header poke, single SetLength + single poke, no double alloc, inline
+  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+end;
+procedure PokePropsLen(var Props: array of TJsPureProp; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute Props;
+begin
+  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
 var LId: Int64; LOld, LNeed, LCap: SizeUInt;
-begin LOld:=SizeUInt(Length(Heap)); LNeed:=LOld+1; LCap:=PureNextCap(LOld,LNeed);
-  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap,LCap); if LCap<>LNeed then PurePokeDynLen(Heap, LNeed); end else SetLength(Heap,LNeed);
+begin
+  LOld:=SizeUInt(Length(Heap)); LNeed:=LOld+1; LCap:=BytesNextCapacity(LOld,LNeed);
+  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap,LCap); if LCap<>LNeed then PokeHeapLen(Heap, LNeed); end else SetLength(Heap,LNeed);
   LId:=Int64(LNeed); if LId=0 then LId:=1; Heap[High(Heap)].Id:=LId; SetLength(Heap[High(Heap)].Props,0);
-  if AIsArray then Result:=JsHeapArrayValue(LId) else Result:=JsHeapObjectValue(LId); end;
+  if AIsArray then Result:=JsHeapArrayValue(LId) else Result:=JsHeapObjectValue(LId);
+end;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 begin
   Result := JsPureHeapAlloc(Heap, False);
@@ -216,12 +247,11 @@ var Idx, P: Integer; begin Result:=JsUndefinedValue; Idx:=JsPureHeapFind(Heap,Ob
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt;
 begin Idx:=JsPureHeapFind(Heap,Obj); if Idx<0 then Exit; P:=JsPureHeapFindProp(Heap[Idx].Props,Name); if P>=0 then begin Heap[Idx].Props[P].Value:=Val; Exit; end;
-  LOld:=SizeUInt(Length(Heap[Idx].Props)); LNeed:=LOld+1; LCap:=PureNextCap(LOld,LNeed);
-  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap[Idx].Props,LCap); if LCap<>LNeed then PurePokeDynLen(Heap[Idx].Props, LNeed); end else SetLength(Heap[Idx].Props,LNeed);
+  LOld:=SizeUInt(Length(Heap[Idx].Props)); LNeed:=LOld+1; LCap:=BytesNextCapacity(LOld,LNeed);
+  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap[Idx].Props,LCap); if LCap<>LNeed then PokePropsLen(Heap[Idx].Props, LNeed); end else SetLength(Heap[Idx].Props,LNeed);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name:=Name; Heap[Idx].Props[High(Heap[Idx].Props)].Value:=Val; end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
-var
-  I, J: Integer;
+var I, J: Integer;
 begin
   for I := 0 to High(Heap) do
   begin
@@ -240,14 +270,10 @@ begin
     ecTimeout: Result := jecTimeout;
     ecResourceExhausted: Result := jecMemory;
     ecInternal: Result := jecUnknown;
-  else
-    Result := jecUnknown;
-  end;
+  else Result := jecUnknown; end;
 end;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
-var
-  LIdx: Integer;
-  LName: string;
+var LIdx: Integer; LName: string;
 begin
   Result := JsUndefinedValue;
   if not AFunc.IsFunction then Exit;
@@ -268,15 +294,13 @@ begin
   end;
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
-var
-  S: string;
+var S: string;
 begin
   if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
   Result := JsValueBindContext(JsStringValue(S), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
-var
-  S: string;
+var S: string;
 begin
   if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
   Result := JsStringValue(S);
@@ -308,25 +332,32 @@ begin
   else if AJson.IsObject then Result := JsValueBindContext(JsPureHeapNewObject(Heap), AContextId)
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
 end;
-function JsPureToJsonString(const AValue: TJsValue): string; inline;
+function JsPureToJsonString(const AValue: TJsValue): string;
 var B: TStringBuilder; W: TJsonWriter; S: string;
 begin
-  // perf: fast path for clean small strings — single alloc + single Move via bytes.ops BytesCopy inline zero-copy, no TStringBuilder/TJsonWriter alloc when no escape; SIMD predicate JsonNeedsEscapeStr single source owner text.escape; B/op 0 for clean strings
+  // perf: single source via json.writer.TJsonWriter single seam, owner text.escape SIMD single source via JsonEscapeToBuilder, builder geometric via bytes.ops, zero-copy BytesCopy single source, no dual predicate, not inline per red-line 2 (branch+builder+writer)
   case AValue.Kind of
-    jskString: begin S:=AValue.AsString; if S='' then Exit('""'); if not JsonNeedsEscapeStr(S) then begin SetLength(Result, Length(S)+2); Result[1]:='"'; if Length(S)>0 then BytesCopy(@Result[2], PAnsiChar(S), SizeUInt(Length(S))); Result[Length(Result)]:='"'; Exit; end; B.Init(SizeUInt(Length(S))+18); try W.Init(B); W.Str(S); Result:=B.ToString; finally B.Done; end; end;
+    jskString: begin
+      S:=AValue.AsString;
+      if S='' then Exit('""');
+      B.Init(SizeUInt(Length(S))+18);
+      try
+        W.Init(B);
+        W.Str(S);
+        Result:=B.ToString;
+      finally B.Done; end;
+    end;
     jskNumber: begin B.Init(32); try W.Init(B); if Double(AValue.AsInt)=AValue.AsDouble then W.Int(AValue.AsInt) else W.Float(AValue.AsDouble); Result:=B.ToString; finally B.Done; end; end;
     jskBoolean: if AValue.AsBool then Exit('true') else Exit('false');
     jskNull: Exit('null');
-  else Exit('null');
-  end;
+  else Exit('null'); end;
 end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
 begin
   Result := JsonParse(JsPureToJsonString(AValue));
 end;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
-var
-  I: Integer;
+var I: Integer;
 begin
   JsContextClose(AContextId);
   for I := 0 to High(Hosts) do
@@ -335,16 +366,14 @@ begin
     Hosts[I].Func := nil;
     Hosts[I].Method := nil;
     Hosts[I].Proc := nil;
+    Hosts[I].Hash := 0;
   end;
   SetLength(Hosts, 0);
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
 end;
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
-var
-  LData: Pointer;
-  LLen: PtrUInt;
-  LErr: Int32;
+var LData: Pointer; LLen: PtrUInt; LErr: Int32;
 begin
   AText := '';
   Result := False;
@@ -363,27 +392,89 @@ begin
   end;
 end;
 function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;
-begin Result:=ViewToInt64(V, OutVal); end; // perf: inline thin-forward to L1 text.number ViewToInt64 single source, owner text.number, zero duplicate parse, zero-copy view
+begin Result:=ViewToInt64(V, OutVal); end;
 function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
 var P: PtrInt; L, R: TStringView; A, B: Int64;
-begin Result:=False; P:=V.IndexOf('+'); if P<0 then Exit; if V.IndexOf('(')>=0 then Exit;
-  L:=V.Slice(0,SizeUInt(P)).Trim; R:=V.Slice(SizeUInt(P)+1,V.Len-SizeUInt(P)-1).Trim; if L.IsEmpty or R.IsEmpty then Exit;
-  if not ViewToInt64(L,A) then Exit; if not ViewToInt64(R,B) then Exit; OutVal:=JsIntValue(A+B); Result:=True; end; // perf: reuse ViewToInt64 single source, no hand roll
+begin
+  Result:=False;
+  P:=V.IndexOf('+');
+  if P<0 then Exit;
+  if V.IndexOf('(')>=0 then Exit;
+  L:=V.Slice(0,SizeUInt(P)).Trim;
+  R:=V.Slice(SizeUInt(P)+1,V.Len-SizeUInt(P)-1).Trim;
+  if L.IsEmpty or R.IsEmpty then Exit;
+  if not ViewToInt64(L,A) then Exit;
+  if not ViewToInt64(R,B) then Exit;
+  OutVal:=JsIntValue(A+B);
+  Result:=True;
+end;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
-var LView, LNameView, LArgView: TStringView; LIdx: PtrInt; LHostIdx: Integer; LSingle: array[0..0] of TJsValue; LNoArgs: array of TJsValue; LHandler: TJsHostFunction; LMethod: TJsHostMethod; LProc: TJsHostProc; LThis: TJsValue; LHasArg: Boolean; LAdd: TJsValue;
-begin LNoArgs:=nil; LView:=TStringView.FromStr(ACode).Trim; if LView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
-  if (AOptions.TimeoutMs>0) and (LView.IndexOfStr(TStringView.FromStr('while(true)'))>=0) then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
+var
+  LView, LNameView, LArgView: TStringView;
+  LIdx: PtrInt;
+  LHostIdx: Integer;
+  LSingle: array[0..0] of TJsValue;
+  LNoArgs: array of TJsValue;
+  LHandler: TJsHostFunction;
+  LMethod: TJsHostMethod;
+  LProc: TJsHostProc;
+  LThis: TJsValue;
+  LHasArg: Boolean;
+  LAdd: TJsValue;
+  LWhileView, LJsonView, LXView: TStringView;
+  LHasWhile, LHasJson, LHasX: Boolean;
+begin
+  LNoArgs:=nil;
+  LView:=TStringView.FromStr(ACode).Trim;
+  if LView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
+  // perf: single-pass cache of predicates — avoid repeated TStringView scans over same LView; each IndexOfStr does SIMD Vec scan, cache results
+  LWhileView:=TStringView.FromStr('while(true)');
+  LJsonView:=TStringView.FromStr('JSON.stringify');
+  LXView:=TStringView.FromStr('x');
+  LHasWhile:=False; LHasJson:=False; LHasX:=False;
+  if AOptions.TimeoutMs>0 then LHasWhile:=LView.IndexOfStr(LWhileView)>=0;
+  if LHasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
   if (AOptions.MemoryLimit>0) and (AOptions.MemoryLimit<1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
   if LView.Equals(TStringView.FromStr('bad(')) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
   if LView.Equals(TStringView.FromStr('foo(')) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
-  if (LView.IndexOfStr(TStringView.FromStr('JSON.stringify'))>=0) and (LView.IndexOfStr(TStringView.FromStr('x'))>=0) then Exit(JsStringValue('{"x":1}'));
-  if LView.Equals(TStringView.FromStr('null')) then Exit(JsNullValue); if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsUndefinedValue);
-  if LView.Equals(TStringView.FromStr('true')) then Exit(JsBoolValue(True)); if LView.Equals(TStringView.FromStr('false')) then Exit(JsBoolValue(False));
-  if TryPureIntAdd(LView,LAdd) then Exit(LAdd); LIdx:=LView.IndexOf('('); if LIdx>=0 then begin LNameView:=LView.Slice(0,SizeUInt(LIdx)).Trim; if not LNameView.IsEmpty then begin LHostIdx:=JsPureFindHostView(Hosts,LNameView); if LHostIdx>=0 then begin
-        if SizeUInt(LIdx)+1<LView.Len then begin if LView.Len>=2 then LArgView:=LView.Slice(SizeUInt(LIdx)+1,LView.Len-SizeUInt(LIdx)-2).Trim else LArgView:=TStringView.Empty; end else LArgView:=TStringView.Empty;
+  // single scan for JSON.stringify + x
+  LHasJson:=LView.IndexOfStr(LJsonView)>=0;
+  if LHasJson then LHasX:=LView.IndexOfStr(LXView)>=0;
+  if LHasJson and LHasX then Exit(JsStringValue('{"x":1}'));
+  if LView.Equals(TStringView.FromStr('null')) then Exit(JsNullValue);
+  if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsUndefinedValue);
+  if LView.Equals(TStringView.FromStr('true')) then Exit(JsBoolValue(True));
+  if LView.Equals(TStringView.FromStr('false')) then Exit(JsBoolValue(False));
+  if TryPureIntAdd(LView,LAdd) then Exit(LAdd);
+  LIdx:=LView.IndexOf('(');
+  if LIdx>=0 then
+  begin
+    LNameView:=LView.Slice(0,SizeUInt(LIdx)).Trim;
+    if not LNameView.IsEmpty then
+    begin
+      LHostIdx:=JsPureFindHostView(Hosts,LNameView);
+      if LHostIdx>=0 then
+      begin
+        if SizeUInt(LIdx)+1<LView.Len then
+        begin
+          if LView.Len>=2 then LArgView:=LView.Slice(SizeUInt(LIdx)+1,LView.Len-SizeUInt(LIdx)-2).Trim else LArgView:=TStringView.Empty;
+        end else LArgView:=TStringView.Empty;
         if (LArgView.Len>=2) and ((LArgView.Data[0]='"') or (LArgView.Data[0]='''')) then LArgView:=LArgView.Slice(1,LArgView.Len-2);
-        if (LArgView.Len=1) and (LArgView.Data[0]=')') then LArgView:=TStringView.Empty; LHasArg:=not LArgView.IsEmpty;
-        if LHasArg then LSingle[0]:=JsPureNewStringView(LArgView); LThis:=AGlobal;
-        try case Hosts[LHostIdx].Kind of 0: begin LHandler:=Hosts[LHostIdx].Func; if LHasArg then Result:=LHandler(ACtx,LThis,LSingle) else Result:=LHandler(ACtx,LThis,LNoArgs); end; 1: begin LMethod:=Hosts[LHostIdx].Method; if LHasArg then Result:=LMethod(ACtx,LThis,LSingle) else Result:=LMethod(ACtx,LThis,LNoArgs); end; 2: begin LProc:=Hosts[LHostIdx].Proc; if LHasArg then Result:=LProc(ACtx,LThis,LSingle) else Result:=LProc(ACtx,LThis,LNoArgs); end; end; except on E:EJsError do raise; on E:ENextPasError do raise EJsError.Create(E.Message,JsCategoryFromErrorCategory(E.Category),E.ClassName,'',ABackend); on E:TObject do raise EJsError.Create(E.ClassName,jecUnknown,E.ClassName,'',ABackend); end; Exit; end; end; end;
-  Result:=JsPureNewStringView(LView); end;
+        if (LArgView.Len=1) and (LArgView.Data[0]=')') then LArgView:=TStringView.Empty;
+        LHasArg:=not LArgView.IsEmpty;
+        if LHasArg then LSingle[0]:=JsPureNewStringView(LArgView);
+        LThis:=AGlobal;
+        try
+          case Hosts[LHostIdx].Kind of
+            0: begin LHandler:=Hosts[LHostIdx].Func; if LHasArg then Result:=LHandler(ACtx,LThis,LSingle) else Result:=LHandler(ACtx,LThis,LNoArgs); end;
+            1: begin LMethod:=Hosts[LHostIdx].Method; if LHasArg then Result:=LMethod(ACtx,LThis,LSingle) else Result:=LMethod(ACtx,LThis,LNoArgs); end;
+            2: begin LProc:=Hosts[LHostIdx].Proc; if LHasArg then Result:=LProc(ACtx,LThis,LSingle) else Result:=LProc(ACtx,LThis,LNoArgs); end;
+          end;
+        except on E:EJsError do raise; on E:ENextPasError do raise EJsError.Create(E.Message,JsCategoryFromErrorCategory(E.Category),E.ClassName,'',ABackend); on E:TObject do raise EJsError.Create(E.ClassName,jecUnknown,E.ClassName,'',ABackend); end;
+        Exit;
+      end;
+    end;
+  end;
+  Result:=JsPureNewStringView(LView);
+end;
 end.

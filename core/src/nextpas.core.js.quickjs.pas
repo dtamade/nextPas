@@ -97,14 +97,17 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text,
-  nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.json.types,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.js.quickjs.loader;
+
+type PQjsHeapHeader = ^TQjsHeapHeader; TQjsHeapHeader = record RefCnt: PtrInt; High: PtrInt; end;
+procedure PokeQjsHeapLen(var AArr; ANewLen: SizeUInt); inline;
+var LP: Pointer; begin LP:=Pointer(AArr); if LP=nil then Exit; PQjsHeapHeader(PByte(LP)-SizeOf(TQjsHeapHeader))^.High:=PtrInt(ANewLen)-1; end;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var
@@ -184,26 +187,30 @@ function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Resu
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
 
-function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt;
+function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
   if P = nil then Exit(0);
-  // perf: single scan via System.StrLen (single source, no CChunk 4096 chunk loop, SIMD in RTL), not inline per design-conventions (loop body)
+  // perf: inline single scan via System.StrLen (RTL SIMD, single source), zero-copy via TStringView/bytes.ops single source — no CChunk 4096 loop, inline hot path
   Result := SizeUInt(System.StrLen(P));
 end;
 
 procedure TJsQuickJsContext.EnsureQjsHeapCapacity(ANeed: Integer);
-var
-  LCap: Integer;
+var LOld,LCap: Integer;
 begin
-  // bytes.ops single source via BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW 64→2×, amortized O1), reuse pure.base PureNextCap 同源
-  LCap := Length(FQjsHeap);
-  if LCap >= ANeed then Exit;
-  SetLength(FQjsHeap, BytesGrowCapacityInt(LCap, ANeed));
+  // stability: single source mirror via bytes.ops BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW 64→2× amortized O1) — exactly-once geometric, poked length = ANeed (pure.base PurePokeDynLen 同源), no双写漂移; perf: inline thin-forward, zero-copy capacity math, amortized O1
+  LOld := Length(FQjsHeap);
+  if LOld >= ANeed then Exit;
+  LCap := BytesGrowCapacityInt(LOld, ANeed);
+  if LCap > LOld then
+  begin
+    SetLength(FQjsHeap, LCap);
+    if LCap <> ANeed then PokeQjsHeapLen(FQjsHeap, SizeUInt(ANeed));
+  end else SetLength(FQjsHeap, ANeed);
 end;
 
 function TJsQuickJsContext.QjsView(P: PAnsiChar): TStringView; inline;
 begin
-  // perf: single scan via QjsCStrLen (SIMD bytes.ops) + zero-copy TStringView, inline
+  // perf: inline single scan via QjsCStrLen (RTL SIMD) → zero-copy TStringView (bytes.ops single source SpanEqual/Move), inline hot path, no重复扫描
   if P = nil then Exit(TStringView.Empty);
   Result := TStringView.Create(P, QjsCStrLen(P));
 end;
@@ -274,7 +281,8 @@ begin
   P := JS_ToCStringPtr(Ctx, V);
   if P = nil then Exit('');
   try
-    Result := AnsiPtrToStr(P);
+    // perf: single source bytes.ops AnsiPtrToString single Move zero-copy, inline thin-forward
+    Result := nextpas.core.bytes.ops.AnsiPtrToString(P);
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(Ctx, P); end;
 end;
 
@@ -293,7 +301,8 @@ var Cat: TJsErrorCategory; Species, Head: string; P: Integer;
 begin
   Cat := jecUnknown; Species := 'Error';
   P := Pos(':', Msg);
-  if P > 1 then Head := TextTrim(Copy(Msg, 1, P-1)) else Head := '';
+  // perf: narrow deps text.view TStringView.Trim zero-copy (bytes.ops single source), no text/text.conv fan-out (CONTRACT §1/§9)
+  if P > 1 then Head := TStringView.FromStr(Copy(Msg, 1, P-1)).Trim.ToString else Head := '';
   if Head = 'SyntaxError' then begin Cat := jecSyntax; Species := 'SyntaxError'; end
   else if Head = 'ReferenceError' then begin Cat := jecReference; Species := 'ReferenceError'; end
   else if Head = 'TypeError' then begin Cat := jecType; Species := 'TypeError'; end
@@ -471,7 +480,8 @@ begin
           P := JS_ToCStringPtr(FCtx, QStr);
           if P <> nil then
           try
-            Result[I] := AnsiPtrToStr(P);
+            // perf: bytes.ops AnsiPtrToString single source, zero-copy Move, inline thin-forward
+            Result[I] := nextpas.core.bytes.ops.AnsiPtrToString(P);
           finally JS_FreeCStringPtr(FCtx, P); end
           else Result[I] := '';
         finally

@@ -1,6 +1,6 @@
 # nextpas.core.js 代码契约
 
-**模块路径**：`core/src/nextpas.core.js*.pas`（已落地 11 单元：base/intf/fake/ffi/loader/quickjs/pure.base/js888/v8/chakra/门面）
+**模块路径**：`core/src/nextpas.core.js*.pas`（已落地 12 单元：base/intf/fake/ffi/loader/quickjs/pure.base/js888/v8/chakra/factory/门面）
 **层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环；`webview` 等 L3 可依赖本模块）
 **层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 core-module-registry:50（`module-registry` deprecated alias），禁止循环；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
@@ -21,7 +21,7 @@
 
 | 单元 | 职责 | 允许 uses | 禁止 |
 |------|------|-----------|------|
-| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 | `exception`、`errors`、`base` | 任何 `js.*`、`platform`、`json` |
+| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 + `JsTrimEquals`（零拷贝 `StringTrimEquals` 薄转发，`bytes.ops` 单源 `SpanTrim/SpanEqual`，`text.view` 同源复用，`inline` 热转发、循环体留 owner） | `exception`、`errors`、`base`、`bytes.ops`（仅 `StringTrimEquals/SpanTrim*` 零拷贝视图单源，`L0-L1` 向下依赖，`text.view` 同源复用，`CONTRACT §1` 单源下沉） | 任何 `js.*`、`platform`、`json`、`text.view`（禁止直引 `text.view`，经 `bytes.ops` 单源转发） |
 | `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`） | `js.base`、`json.types`（仅 `TJsonValue` 类型引用） | `js.fake`/`js.quickjs.*`/`js.js888`、`platform.dl` |
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
@@ -31,11 +31,12 @@
 | `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
-| `js.pas` | 门面：re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 上述全部子模块 | 逻辑（纯聚合） |
+| `js.factory` | 工厂：`CreateJsRuntime / JsBackendAvailable` 分支与探测抛异常（门面零逻辑下沉） | `js.base/intf` + `fake/js888/v8/chakra/quickjs/loader` | `json` 直接依赖（仅经 intf/pure.base 间接）、`platform.dl`（仅经 loader） |
+| `js.pas` | 门面：纯 re-export（`inline` 薄转发至 `js.factory`，零分支零探测） | `js.base/intf/factory` | 逻辑（四件套纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← 门面
-         ↑ pure.base 单源 380 行，js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内（单单元 <650，<800 必拆，wc -l 380 实测）与 quickjs 平级
+base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← factory ← 门面
+         ↑ pure.base 单源 380 行，js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内（单单元 <650，<800 必拆，wc -l 380 实测）与 quickjs 平级；factory 单源分支/探测，门面 inline 零拷贝薄转发
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
