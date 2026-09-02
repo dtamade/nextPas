@@ -18,4 +18,4 @@
 
 ## 契约测试
 - `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 166 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断等
-- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点
+- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点，含 Filter+Copy+AES 多形态容器探针（copy+bcj / copy+bcj+pw / copy+bcj+pw multi，bytes.ops 单源）

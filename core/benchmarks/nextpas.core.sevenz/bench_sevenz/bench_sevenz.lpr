@@ -8,6 +8,8 @@ program bench_sevenz;
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.time.base,
@@ -33,10 +35,7 @@ var
 
 function BytesClone(const ASrc: TBytes): TBytes;
 begin
-  Result := nil;
-  SetLength(Result, Length(ASrc));
-  if Length(ASrc) > 0 then
-    Move(ASrc[0], Result[0], Length(ASrc));
+  Result := SpanClone(TByteSpan.FromBytes(ASrc));
 end;
 
 procedure GenerateData;
@@ -240,6 +239,57 @@ begin
   WriteLn(TextFormat('container extract multi     %6.1f MB/s', [(DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed]));
 end;
 
+procedure BenchContainerFilteredCrypto;
+var
+  LStart: TInstant;
+  LElapsed: Double;
+  LW: ISevenZWriter;
+  LR: ISevenZReader;
+  LArchive, LGot: TBytes;
+  LTotal: Int64;
+  procedure BenchOne(const ATag: string; AUsePass, AMulti: Boolean);
+  var LIsMT: string; LL, LM: Integer;
+  begin
+    LW := TSevenZWriterImpl.Create;
+    LW.SetLevel(szclNone);
+    LW.SetFilters([szfBcjX86]);
+    if AUsePass then LW.SetPassword('bench-pw');
+    if AMulti then LW.SetFolderLimits(0, 1);
+    for LM := 0 to ENTRY_COUNT - 1 do
+      LW.AddFile(TextFormat('e%d.bin', [LM]),
+        Copy(GExe, LM * (DATA_SIZE div ENTRY_COUNT), DATA_SIZE div ENTRY_COUNT));
+    LStart := TInstant.Now;
+    LArchive := LW.Finish;
+    LElapsed := LStart.Elapsed.AsSecondsF;
+    if AUsePass and AMulti then
+      if System.IsMultiThread then LIsMT := 'mt' else LIsMT := 'st'
+    else LIsMT := '--';
+    WriteLn(TextFormat('container %s %s %6.1f MB/s  archive=%d bytes',
+      [ATag, LIsMT, (DATA_SIZE / 1048576.0) / LElapsed, Length(LArchive)]));
+    if AUsePass then
+      LR := TSevenZReaderImpl.CreateWithPassword(LArchive, 'bench-pw')
+    else LR := TSevenZReaderImpl.Create(LArchive);
+    LTotal := 0;
+    for LM := 0 to LR.EntryCount - 1 do
+    begin
+      LGot := LR.Extract(LM);
+      Inc(LTotal, Length(LGot));
+    end;
+    if LTotal <> DATA_SIZE then
+      raise EInvalidOperationError.Create(ATag + ': size mismatch');
+    LStart := TInstant.Now;
+    for LL := 1 to CONTAINER_ITER do
+      for LM := 0 to LR.EntryCount - 1 do
+        LR.Extract(LM);
+    LElapsed := LStart.Elapsed.AsSecondsF;
+    WriteLn(TextFormat('  extract %-16s %6.1f MB/s', [ATag, (DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed]));
+  end;
+begin
+  BenchOne('copy+bcj', False, False);
+  BenchOne('copy+bcj+pw', True, False);
+  BenchOne('copy+bcj+pw multi', True, True);
+end;
+
 procedure BenchGlobIgnoreCase;
 const N = 2000; ITER = 5000;
 var
@@ -367,6 +417,7 @@ begin
   SevenZSetLzmaBackend(LSaved);
   BenchContainerRoundtrip;
   BenchContainerParallel;
+  BenchContainerFilteredCrypto;
   WriteLn;
   BenchGlobIgnoreCase;
   BenchGlobIgnoreCase10k;
