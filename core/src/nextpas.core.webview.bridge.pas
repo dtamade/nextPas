@@ -56,13 +56,13 @@ type
   end;
 
 { 帧长可观测性：调用方可先用此 helper 判断超限；TryDecodeFrame 超限
-  返回 False 并递增背压计数（UI 线程亲和，plain UInt64，无 Support 层 atomic 全局，caller 通过 WebviewOversizedCount 轮询可观测，日志由 caller 自持 ILogger 决定）。 }
+  返回 False 并递增背压计数（UI 线程亲和，plain UInt64，无 Support 层 atomic 全局，caller 通过 WebviewOversizedCount 轮询可观测，日志由 caller 自持 ILogger 决定；计数 Owner 已抽离至 nextpas.core.webview.metrics 单源，bridge 仅 inline 薄转发，复用 bench/log 通用可观测 Owner 候选，零重复全局）。 }
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
-{ 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；L3 不再持有 Support 层 atomic/log 全局，owner 边界清晰） }
+{ 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；Owner 为 nextpas.core.webview.metrics 单源，bridge inline 薄转发，L3 独立指标模块候选，bench/log 可观测复用） }
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
-procedure WebviewNoteOversized(ASize: SizeUInt);
+procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 { deprecated no-op：L3 不再持有 log.intf 全局原子指针，caller 自持 ILogger 生命周期，test 隔离零成本；保留签名兼容旧调用。 }
 procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
@@ -97,8 +97,7 @@ type
       非线程安全——只允许 UI 主线程触碰（与窗口壳同线程）。
       容器单源：委托 L1 collections.hashmap 通用开放寻址（WyHash/HashMix32/
       NextPow2/0.75 负载/Bitmap 单源），消除私有桶/Rehash/FindSlot 分叉；
-      资产索引 distinctLens 最长前缀语义与通用 Map 不可映射故豁免（仅哈希/
-      生长/相等仍单源，见 assets.pas）。 *}
+      资产索引最长前缀由 L2 prefixrouter Trie 单源承载（见 assets.pas）。 *}
   TWebviewInvokeRegistry = class(TInterfacedObject, IWebviewInvokeRegistry)
   private type
     TInvokeEntry = record
@@ -141,9 +140,8 @@ type
       ENotSupportedError(ecNotSupported)（CONTRACT §3.4，门禁
       test_webview_bridge 断言异常分类/消息可观测），落位时由 fs owner
       接管实现。契约可观测性：异常类/分类/消息文本为稳定契约。 *}
-  {** 资产路由索引已抽独立模块 TWebviewAssetIndex（L3 单哈希+有序 Lens），
-      桥侧仅持单实例，消除数组+哈希双结构双写耦合；MountCount/最长探测
-      由索引单源承载。 *}
+  {** 资产路由索引已抽独立模块 TWebviewAssetIndex（L3 单哈希+Trie 单源），
+      桥侧仅持单实例，零 DistinctLens 双轨；MountCount/最长前缀 O(m) 由 Trie 单源承载。 *}
   TWebviewAssetsImpl = class(TInterfacedObject, IWebviewAssets)
   private
     FInert: Boolean;   { DevServerUrl 开发模式：挂载 no-op、解析一律 404 }
@@ -191,7 +189,8 @@ uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
-  nextpas.core.webview.utils;
+  nextpas.core.webview.utils,
+  nextpas.core.webview.metrics;
 
 { JsStringLit: JSON Str subset, reuse json owner, no manual scan. }
 { perf: inline, TJsonWriter zero-copy Move, single reserve. }
@@ -220,23 +219,19 @@ begin
   Result := AView.Len > SizeUInt(NPW_MAX_FRAME_BYTES);
 end;
 
-var
-  GWebviewOversizedFrames: UInt64 = 0;
-
 function WebviewOversizedCount: UInt64; inline;
 begin
-  Result := GWebviewOversizedFrames;
+  Result := WebviewMetricsOversizedCount;
 end;
 
 procedure WebviewResetOversizedCount; inline;
 begin
-  GWebviewOversizedFrames := 0;
+  WebviewMetricsResetOversizedCount;
 end;
 
-procedure WebviewNoteOversized(ASize: SizeUInt);
+procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 begin
-  Inc(GWebviewOversizedFrames);
-  if ASize = 0 then ;
+  WebviewMetricsNoteOversized(ASize);
 end;
 
 procedure SetWebviewBridgeLogger(ALogger: ILogger);
@@ -372,24 +367,49 @@ var
   LB: TStringBuilder;
   procedure AppendDoubleEscaped(const S: string); inline;
   var
-    LTmp: TStringBuilder;
     V: TStringView;
+    I: SizeUInt;
+    B: Byte;
+  const
+    Hex: array[0..15] of AnsiChar = '0123456789abcdef';
   begin
-    { perf: batch double-escape via L2 text.escape single source (SIMD bulk Move), inline zero-copy views }
+    { perf: single-pass double-escape inline zero-copy view → LB direct, no LTmp heap; reuse text.escape single source semantics (bytes.ops view), bytes.ops single reserve, inline zero alloc }
     if S = '' then Exit;
     V := TStringView.FromStr(S);
-    LTmp.Init(SizeUInt(Length(S)) * 2 + 16);
-    try
-      JsonEscapeToBuilder(V, LTmp);
-      JsonEscapeToBuilder(LTmp.AsView, LB);
-    finally
-      LTmp.Done;
+    for I := 0 to V.Len - 1 do
+    begin
+      B := Byte(V.Data[I]);
+      case B of
+        Ord('"'):
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('"'); end;
+        Ord('\'):
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); end;
+        8:
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('b'); end;
+        9:
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('t'); end;
+        10:
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('n'); end;
+        12:
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('f'); end;
+        13:
+          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('r'); end;
+      else
+        if B < $20 then
+        begin
+          LB.AppendChar('\'); LB.AppendChar('\');
+          LB.AppendChar('u'); LB.AppendChar('0'); LB.AppendChar('0');
+          LB.AppendChar(Hex[(B shr 4) and $F]); LB.AppendChar(Hex[B and $F]);
+        end
+        else
+          LB.AppendChar(AnsiChar(B));
+      end;
     end;
   end;
 begin
-  { perf: single outer TStringBuilder reserve + zero-copy AppendInt/AppendBytes/Views, two-stage SIMD batch JsonEscapeToBuilder via L2 text.escape single source (bytes.ops view semantics), inline helper, no IJsonBuilder heap }
+  { perf: single outer TStringBuilder reserve + zero-copy AppendInt/AppendChar inline single-pass double-escape (no LTmp heap, bytes.ops view single source, text.escape semantics single source), inline helper, no IJsonBuilder heap; stability LB.Done finally }
   LCode := NormalizeInvokeCode(ACode);
-  LB.Init(SizeUInt(16 + 20 + 4 + (SizeUInt(Length(LCode)) * 4 + SizeUInt(Length(AMessage)) * 6 + 32) * 2 + 8));
+  LB.Init(SizeUInt(40 + SizeUInt(Length(LCode)) * 7 + SizeUInt(Length(AMessage)) * 7));
   try
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
@@ -588,8 +608,8 @@ begin
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
   LNormPrefix := NormalizeWebviewAssetPath(APrefix);
-  { 单哈希+有序 Lens+Trie 单源承载：首个同前缀胜（CONTRACT §3.4），
-    零双写；索引内部 WyHash + VecGrowCapacity 单源 O(1) 平均，Trie O(m) 零哈希最长前缀互备，零线性放大。 }
+  { 单哈希+Trie 单源承载：首个同前缀胜（CONTRACT §3.4），归一时序外层先 Normalize 再入索引单源；
+    零 DistinctLens 双写；索引内部 WyHash + VecGrowCapacity 单源 O(1) 平均，Trie O(m) 零哈希最长前缀，零线性放大。 }
   FIndex.Add(LNormPrefix, AProvider);
 end;
 
@@ -616,17 +636,14 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); Trie O(m) 单遍零拷贝 view 遍历零哈希（m=路径长，单次字符 256 直跳，独立于挂载数 d），distinctLens 降序 O(d) 小常数均摊已保留为 fallback
-  // 单挂载(Count=1, lens=0) inline 快路径严格 O(1) 零枚举；Trie 已内置 O(m) 消除 d 线性放大，挂载数增仍 O(m)（assets.pas 单源 WyHash/SpanEqual/VecGrow/SortInt32Desc + Trie 惰性节点）
+  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); Trie O(m) 单遍零拷贝 view 遍历零哈希（m=路径长，单次字符 256 直跳，独立于挂载数 d），零 distinctLens 双轨
+  // 单挂载根前缀(Count=1 且 '' 存在) inline O(1) 零 Trie 遍历快路径：单源哈希 TryGetByStr('') 探测，零 DistinctLens 去重/排序开销（assets 单源 WyHash + Trie，归一时序外层 Normalize 已完成）
   LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
   if LNormView.Len = 0 then
     Exit;
   LView := LNormView;
-  if (FIndex.Count = 1) and (FIndex.DistinctCountUnchecked = 1) and (FIndex.DistinctLensAtUnchecked(0) = 0) then
-  begin
-    if FIndex.TryGetByView(TStringView.Empty, LProvider) then
-    begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
-  end;
+  if (FIndex.Count = 1) and FIndex.TryGetByStr('', LProvider) then
+  begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   if FIndex.TryGetLongestPrefixByView(LView, LProvider) then
   begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   Result := False;

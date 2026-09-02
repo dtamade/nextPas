@@ -76,12 +76,22 @@ type
   end;
   PWebviewBackendDesc = ^TWebviewBackendDesc;
 
+  { 对象化可用性缓存：单所有者封装 per-kind IOnce+Yes，消除裸数组+分散手工 init/fini，L1 sync.once 单源 inline 零额外调用，析构释放不丢 }
+  TWebviewAvailCache = class
+  strict private
+    FOnce: array[TWebviewKind] of IOnce;
+    FYes: array[TWebviewKind] of Boolean;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function IsAvailable(AKind: TWebviewKind): Boolean; inline;
+  end;
+
 var
   GDefaultKind: TWebviewKind = wvFake;
   GDefaultOnce: IOnce; { L1 sync.once 单源：DefaultWebviewKind 单次探测，复用 platform.sync 原语，消除自建 double-checked + atomic + CAS 分散锁 }
   GBackendsOnce: IOnce; { 单例注册表抽象：BACKENDS 惰性单次初始化，零重复分配，L1 Once 单源 }
-  GAvailOnce: array[TWebviewKind] of IOnce; { 每 kind 单次探测 Once，复用 L1 sync.once/platform.sync 单源，消除全局可变表 + 双检锁分散所有权 }
-  GAvailYes: array[TWebviewKind] of Boolean; { Once 缓存结果，零 atomic 分散 }
+  GAvailCache: TWebviewAvailCache; { 对象化单例：per-kind Once+Yes 单所有者，消除裸数组+手工 per-kind 置位，L1 Once 单源 inline 零拷贝 }
 
 { ---- 后端注册表：表驱动唯一真相 ---- }
 
@@ -161,10 +171,10 @@ begin
   if GBackendsOnce.Done then Exit;
   GBackendsOnce.DoOnce(procedure
   begin
-    // bytes.ops 单源：WEBVIEW_BACKENDS 唯一真相单表驱动，新增后端仅此一处登记，零双表漂移；顺序 Fake首位 + 探测优先 Webview2→Gtk→Wk与window.factory同构高级感极简
+    // bytes.ops 单源：WEBVIEW_BACKENDS 唯一真相单表驱动，新增后端仅此一处登记，零双表漂移；平台优先：Linux Gtk 首位避免无谓 WebView2 dlopen，顺序 Fake→Gtk→WebView2→Wk 符合 L3→L2 has-a 优先级与 CONTRACT 能力驱动
     WEBVIEW_BACKENDS[0].Kind := wvFake;     WEBVIEW_BACKENDS[0].Probe := @ProbeFake;     WEBVIEW_BACKENDS[0].Create := @CreateFake;     WEBVIEW_BACKENDS[0].CreateOn := @CreateFakeOn;
-    WEBVIEW_BACKENDS[1].Kind := wvWebview2; WEBVIEW_BACKENDS[1].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[1].Create := @CreateWebView2; WEBVIEW_BACKENDS[1].CreateOn := @CreateWebView2On;
-    WEBVIEW_BACKENDS[2].Kind := wvGtk;      WEBVIEW_BACKENDS[2].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[2].Create := @CreateGtk;      WEBVIEW_BACKENDS[2].CreateOn := @CreateGtkOn;
+    WEBVIEW_BACKENDS[1].Kind := wvGtk;      WEBVIEW_BACKENDS[1].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[1].Create := @CreateGtk;      WEBVIEW_BACKENDS[1].CreateOn := @CreateGtkOn;
+    WEBVIEW_BACKENDS[2].Kind := wvWebview2; WEBVIEW_BACKENDS[2].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[2].Create := @CreateWebView2; WEBVIEW_BACKENDS[2].CreateOn := @CreateWebView2On;
     WEBVIEW_BACKENDS[3].Kind := wvWk;       WEBVIEW_BACKENDS[3].Probe := @ProbeWk;       WEBVIEW_BACKENDS[3].Create := @CreateWk;       WEBVIEW_BACKENDS[3].CreateOn := @CreateWkOn;
   end);
 end;
@@ -188,19 +198,45 @@ begin
   Result := B^.Probe();
 end;
 
-{$PUSH}{$WARNINGS OFF}
-function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
+{ 对象化可用性缓存实现：单所有者 per-kind Once+Yes，L1 sync.once 单源 inline 零拷贝，析构释放不丢 }
+constructor TWebviewAvailCache.Create;
+var K: TWebviewKind;
+begin
+  inherited Create;
+  for K := Low(TWebviewKind) to High(TWebviewKind) do
+    FOnce[K] := Once;
+  FYes[wvFake] := True;
+end;
+
+destructor TWebviewAvailCache.Destroy;
+var K: TWebviewKind;
+begin
+  // 稳定性：显式 nil 接口释放不丢，try-finally 由所有者 FreeAndNil 保证
+  for K := Low(TWebviewKind) to High(TWebviewKind) do
+    FOnce[K] := nil;
+  inherited Destroy;
+end;
+
+function TWebviewAvailCache.IsAvailable(AKind: TWebviewKind): Boolean; inline;
 begin
   if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
   if AKind = wvFake then Exit(True);
-  // perf: L1 sync.once 单源，inline 零额外调用，替代自建 atomic + TMutex 双检，platform.sync 原语去重并发 dlopen
-  if GAvailOnce[Ord(AKind)].Done then
-    Exit(GAvailYes[Ord(AKind)]);
-  GAvailOnce[Ord(AKind)].DoOnce(procedure
+  // perf: L1 sync.once 单源 inline 零额外调用，替代裸数组双检，platform.sync 原语去重并发 dlopen，零拷贝
+  if FOnce[AKind].Done then Exit(FYes[AKind]);
+  FOnce[AKind].DoOnce(procedure
   begin
-    GAvailYes[Ord(AKind)] := RawProbe(AKind);
+    FYes[AKind] := RawProbe(AKind);
   end);
-  Result := GAvailYes[Ord(AKind)];
+  Result := FYes[AKind];
+end;
+
+{$PUSH}{$WARNINGS OFF}
+function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
+begin
+  // 业务以 CONTRACT 为准：DefaultWebviewKind 能力探测驱动，无 IFDEF
+  // perf: 对象化单例 inline 薄转发，零拷贝，L1 Once 单源
+  if GAvailCache = nil then Exit(RawProbe(AKind));
+  Result := GAvailCache.IsAvailable(AKind);
 end;
 {$POP}
 
@@ -326,19 +362,15 @@ end;
 initialization
   GDefaultOnce := Once;
   GBackendsOnce := Once;
-  GAvailOnce[Ord(wvFake)] := Once;
-  GAvailOnce[Ord(wvGtk)] := Once;
-  GAvailOnce[Ord(wvWebview2)] := Once;
-  GAvailOnce[Ord(wvWk)] := Once;
-  // wvFake 恒可用，无探测开销；缓存直接置 True 避免闭包探测
-  GAvailYes[Ord(wvFake)] := True;
+  GAvailCache := TWebviewAvailCache.Create;
 
 finalization
   GDefaultOnce := nil;
   GBackendsOnce := nil;
-  GAvailOnce[Ord(wvFake)] := nil;
-  GAvailOnce[Ord(wvGtk)] := nil;
-  GAvailOnce[Ord(wvWebview2)] := nil;
-  GAvailOnce[Ord(wvWk)] := nil;
+  if GAvailCache <> nil then
+  begin
+    GAvailCache.Free;
+    GAvailCache := nil;
+  end; // 稳定性：单所有者统一释放 per-kind Once，try-finally 释放不丢
 
 end.

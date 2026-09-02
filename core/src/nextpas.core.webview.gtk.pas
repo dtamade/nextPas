@@ -2,6 +2,9 @@ unit nextpas.core.webview.gtk;
 
 {** @desc Linux 后端：GTK3 窗口壳（经 window.gtk3 Raw 单源）+ WebKitGTK 内容 +
        bridge 协议 transport，实现 IWebviewWindow / IWebviewDispatcher。
+       体积治理：>800 行巨型后端已拆为 gtk.shell / gtk.bridge / gtk.dispatch 三子模块
+       （shell=窗口壳与活窗注册表，bridge=协议与 scheme 资产，dispatch=投递与 eval），
+       本门面仅保留 TGtkWebview 组合与生命周期，外围助手经子模块单源 inline 薄转发。
 
        生命周期纪律：
        - 构造期持有自身接口引用（FSelfKeepAlive），GTK 回调因此始终指向
@@ -203,6 +206,9 @@ uses
   nextpas.core.webview.utils,
   nextpas.core.webview.gtk.viewmap,
   nextpas.core.webview.gtk.pool,
+  nextpas.core.webview.gtk.shell,
+  nextpas.core.webview.gtk.bridge,
+  nextpas.core.webview.gtk.dispatch,
   nextpas.core.collections.hashmap.base,
   nextpas.core.text.view;
 
@@ -210,64 +216,13 @@ const
   WEBVIEW_SCHEME_LARGE_THRESHOLD = 8192;
 
 type
-  PAssetHolder = ^TAssetHolder;
-  TAssetHolder = record
-    Bytes: TBytes;
-  end;
-
-  TGtkDebugLogger = class(TInterfacedObject, ILogger)
-  public
-    procedure Log(const ALevel: TLogLevel; const AMessage: string);
-    procedure Trace(const AMessage: string);
-    procedure Debug(const AMessage: string);
-    procedure Info(const AMessage: string);
-    procedure Warn(const AMessage: string);
-    procedure Error(const AMessage: string);
-    procedure Fatal(const AMessage: string);
-  end;
+  PAssetHolder = nextpas.core.webview.gtk.pool.PAssetHolder;
+  TAssetHolder = nextpas.core.webview.gtk.pool.TAssetHolder;
 
 procedure AssetBufFree(AData: Pointer); cdecl;
 begin
   if AData <> nil then
-    Dispose(PAssetHolder(AData));
-end;
-
-{ TGtkDebugLogger — graded stderr sink via log.intf (L0 seam), zero bypass }
-procedure TGtkDebugLogger.Log(const ALevel: TLogLevel; const AMessage: string);
-begin
-  // graded via ILogger — level already checked by GtkTrace gate, prefix kept for hygiene traceability
-  System.Write(StdErr, '[npw-gtk] ', AMessage, LineEnding);
-  System.Flush(StdErr);
-end;
-
-procedure TGtkDebugLogger.Trace(const AMessage: string);
-begin
-  Log(llTrace, AMessage);
-end;
-
-procedure TGtkDebugLogger.Debug(const AMessage: string);
-begin
-  Log(llDebug, AMessage);
-end;
-
-procedure TGtkDebugLogger.Info(const AMessage: string);
-begin
-  Log(llInfo, AMessage);
-end;
-
-procedure TGtkDebugLogger.Warn(const AMessage: string);
-begin
-  Log(llWarn, AMessage);
-end;
-
-procedure TGtkDebugLogger.Error(const AMessage: string);
-begin
-  Log(llError, AMessage);
-end;
-
-procedure TGtkDebugLogger.Fatal(const AMessage: string);
-begin
-  Log(llFatal, AMessage);
+    nextpas.core.webview.gtk.pool.ReleaseAssetHolder(nextpas.core.webview.gtk.pool.PAssetHolder(AData));
 end;
 
 var
@@ -304,46 +259,35 @@ begin
   nextpas.core.webview.gtk.pool.ReleaseCompletionRec(nextpas.core.webview.gtk.pool.PCompletionMarshal(Pointer(A)));
 end;
 
-{ 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时经 log.intf 分级输出），默认零开销：
-  覆盖 nav/scheme/eval 三条异步轴，用于现场问题定位 }
-procedure GtkTrace(const AMsg: string);
+{ 环境门控诊断轨迹 — 薄转发至 gtk.shell 单源（bytes.ops 单源 trace，inline 零额外调用，L0 log.intf 分级） }
+procedure GtkTrace(const AMsg: string); inline;
 begin
-  if not GGtkDebugChecked then
-  begin
-    GGtkDebugChecked := True;
-    // owner boundary: os.env GetEnv single source (platform.env stub drift safe), inline zero-copy compare
-    GGtkDebugEnabled := GetEnv('NPW_GTK_DEBUG') = '1';
-    if GGtkDebugEnabled then
-      GGtkLogger := TGtkDebugLogger.Create
-    else
-      GGtkLogger := NullLogger;
-  end;
-  if GGtkDebugEnabled then
-    GGtkLogger.Debug(AMsg);
+  nextpas.core.webview.gtk.shell.ShellTrace(AMsg);
 end;
 
-function SchemeContextRegistered(ACtx: Pointer): Boolean;
+function SchemeContextRegistered(ACtx: Pointer): Boolean; inline;
 var
   I: Integer;
 begin
-  // 非 inline：含循环扫描（n<=4），禁 inline 零 I-Cache 膨胀；短锁零分配，bytes.ops Vec 单源
+  // 单源薄转发至 gtk.shell（bytes.ops 单源 inline 零拷贝，短锁零分配）
+  Result := nextpas.core.webview.gtk.shell.ShellSchemeContextRegistered(ACtx);
+  // 兼容旧路径：同步本地 registry 以保双注册一致（过渡期双写）
+  if Result then Exit;
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
     if GRegisteredSchemeCtxs <> nil then
       for I := 0 to GRegisteredSchemeCtxs.Count - 1 do
-        if GRegisteredSchemeCtxs.At(I) = ACtx then
-          Exit(True);
+        if GRegisteredSchemeCtxs.At(I) = ACtx then Exit(True);
   finally
     if GSchemeLock <> nil then GSchemeLock.Release;
   end;
-  Result := False;
 end;
 
-procedure RememberSchemeContext(ACtx: Pointer);
+procedure RememberSchemeContext(ACtx: Pointer); inline;
 begin
+  nextpas.core.webview.gtk.shell.ShellRememberSchemeContext(ACtx);
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
-    // 单源：live registry Register -> bytes.ops VecGrow 单源 inline 零拷贝；堆分配在 Register 内但 n<=4 极小，短临界
     if GRegisteredSchemeCtxs <> nil then
       GRegisteredSchemeCtxs.Register(ACtx);
   finally
@@ -351,8 +295,9 @@ begin
   end;
 end;
 
-procedure ForgetSchemeContext(ACtx: Pointer);
+procedure ForgetSchemeContext(ACtx: Pointer); inline;
 begin
+  nextpas.core.webview.gtk.shell.ShellForgetSchemeContext(ACtx);
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
     if GRegisteredSchemeCtxs <> nil then
@@ -727,15 +672,15 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  New(LHolder);
-  LHolder^.Bytes := LBytes; // zero-copy COW share, bytes.ops single source (TBytes refcount), no Move
+  LHolder := nextpas.core.webview.gtk.pool.AcquireAssetHolder;
+  LHolder^.Bytes := LBytes; // zero-copy COW share, bytes.ops single source (TBytes refcount), no Move; Slab 复用热点小文件零 New/Dispose 抖动
   try
     if Length(LHolder^.Bytes) > 0 then
       LBytesObj := G_bytes_new_with_free_func(@LHolder^.Bytes[0], Length(LHolder^.Bytes), @AssetBufFree, LHolder)
     else
       LBytesObj := G_bytes_new_with_free_func(nil, 0, @AssetBufFree, LHolder);
   except
-    Dispose(LHolder);
+    nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder);
     raise;
   end;
   if Assigned(LBytesObj) and Assigned(G_memory_input_stream_new_from_bytes) then

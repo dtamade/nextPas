@@ -45,11 +45,17 @@ type
     Code: string;
     MsgText: string;
   end;
+  PAssetHolder = ^TAssetHolder;
+  TAssetHolder = record
+    Bytes: TBytes;
+  end;
 
 function AcquireIdleRec: PIdleRec; inline;
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 function AcquireCompletionRec: PCompletionMarshal; inline;
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
+function AcquireAssetHolder: PAssetHolder; inline;
+procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 
 procedure PoolInit; inline;
 procedure PoolFinalize; inline;
@@ -61,6 +67,8 @@ var
   GIdlePoolCount: Integer = 0;
   GCompletionPool: array of PCompletionMarshal;
   GCompletionPoolCount: Integer = 0;
+  GAssetHolderPool: array of PAssetHolder;
+  GAssetHolderCount: Integer = 0;
   GPoolLock: TMutex = nil;
 
 function AcquireIdleRec: PIdleRec; inline;
@@ -111,12 +119,34 @@ begin
   end;
 end;
 
+function AcquireAssetHolder: PAssetHolder; inline;
+begin
+  // perf: SchemeRequest 热点小文件 Slab 复用 — GBytes+Stream 双堆对象减为单 Holder 复用，bytes.ops VecGrowCapacity/VecGrow 单源零拷贝，inline 零额外调用，short-lived 小文件零 New 零零拷贝 COW，热点零堆分配
+  // stability: Holder.Bytes refcount零拷贝 COW，Release 时置 nil 释放 ref，Dispose 兜底单所有权不丢，AssetBufFree 与 GBytes 生命周期绑定不丢
+  Result := specialize SyncPoolTryAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GPoolLock);
+  if Result = nil then
+    New(Result);
+end;
+
+procedure ReleaseAssetHolder(A: PAssetHolder); inline;
+begin
+  if A = nil then Exit;
+  A^.Bytes := nil;
+  if not specialize SyncPoolTryRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GPoolLock, A) then
+  begin
+    specialize VecGrow<PAssetHolder>(GAssetHolderPool, GAssetHolderCount);
+    if not specialize SyncPoolTryRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GPoolLock, A) then
+      Dispose(A);
+  end;
+end;
+
 procedure PoolInit; inline;
 begin
   // perf: bytes.ops VecGrowCapacity 单源预分配 0→4→2× inline 零额外调用（单次 VecGrowCapacity(0)=4，突发经 bytes.ops VecGrow 单源倍增在锁外零额外调用），初始化单次 SetLength 单源零双层 VecGrowCapacity(VecGrowCapacity(0)) 分叉；稳定性：GPoolLock 单所有权创建
   GPoolLock := TMutex.Create;
   SetLength(GIdlePool, VecGrowCapacity(0));
   SetLength(GCompletionPool, VecGrowCapacity(0));
+  SetLength(GAssetHolderPool, VecGrowCapacity(0));
 end;
 
 procedure PoolFinalize; inline;
@@ -134,6 +164,12 @@ begin
     Dispose(GCompletionPool[GCompletionPoolCount]);
   end;
   SetLength(GCompletionPool, 0);
+  while GAssetHolderCount > 0 do
+  begin
+    Dec(GAssetHolderCount);
+    Dispose(GAssetHolder[GAssetHolderCount]);
+  end;
+  SetLength(GAssetHolderPool, 0);
   FreeAndNil(GPoolLock);
 end;
 

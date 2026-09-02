@@ -1,6 +1,6 @@
 unit nextpas.core.webview.assets;
 
-{** @desc webview 资产前缀索引：单哈希 + 有序 distinct 长度 + 前缀 Trie。
+{** @desc webview 资产前缀索引：单哈希 + 前缀 Trie 单源。
        契约：
        - Normalize 已在外层完成，本模块只存归一后前缀；
        - 首个同前缀胜（Add 去重，不覆盖），与 CONTRACT §3.4 同长先挂一致；
@@ -14,9 +14,14 @@ unit nextpas.core.webview.assets;
          （稀疏子节点小表 + bytes.ops VecGrow + TStringView 零拷贝，
          供 http/vfs 复用，已反哺落地）。
 
+       单源收敛：前缀长度去重与最长匹配唯一由 Trie 承载，零 FDistinctLens 双轨
+         （归一时序：外层 NormalizeWebviewAssetPath 先归一 → 本模块仅存归一后串，
+         Add 时 FMap.Add 成功才 FTrie.Add 单源登记，探测统一 TryGetLongestPrefixByView O(m)
+         Trie 单遍，零手工 Distinct 数组/懒排序/双轨维护）。
+
        性能：哈希/探测委托 L1 THashMap 内联单源（WyHash 单源 inline 零额外调用，容量 NextPow2 单源 via hashmap.base/simd.bitops，Bitmap CTZ 单指令）；
-       TStringView 零拷贝 Trie 遍历，VecGrowCapacity 0→4→2× inline，distinctLens 惰性 IntroSort 降序；TryGetLongestPrefixByView
-       inline 薄转发至 L2 前缀路由，零额外调用。
+       TStringView 零拷贝 Trie 遍历，VecGrowCapacity 0→4→2× inline；TryGetLongestPrefixByView
+       inline 薄转发至 L2 前缀路由，零额外调用，零 distinctLens 排序开销。
        稳定性：FMap.Clear 全量串/接口 Finalize + 前缀路由 Clear 递归 Dispose 不丢。 *}
 
 {$I nextpas.core.settings.inc}
@@ -32,14 +37,7 @@ type
   TWebviewAssetIndex = class
   private
     FMap: specialize THashMap<string, IWebviewAssetProvider>;
-    FDistinctLens: array of Integer;
-    FDistinctCount: Integer;
-    FDistinctDirty: Boolean;
     FTrie: specialize TPrefixRouter<IWebviewAssetProvider>;
-    procedure GrowDistinct; inline;
-    procedure UpdateDistinctLens(const APrefix: string); inline;
-    procedure EnsureDistinctSorted; inline;
-    procedure SortDistinctDesc(ACount: Integer); inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -48,11 +46,6 @@ type
     function TryGetByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;
     function TryGetLongestPrefixByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;
     function Count: Integer; inline;
-    function DistinctCount: Integer; inline;
-    function DistinctLensAt(AIndex: Integer): Integer; inline;
-    function DistinctCountUnchecked: Integer; inline;
-    function DistinctLensAtUnchecked(AIndex: Integer): Integer; inline;
-    procedure EnsureDistinctSortedPublic; inline;
     procedure Clear;
   end;
 
@@ -60,9 +53,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
   nextpas.core.collections.hashmap,
-  nextpas.core.collections.algorithms,
   nextpas.core.collections.prefixrouter;
 
 constructor TWebviewAssetIndex.Create;
@@ -81,7 +72,6 @@ begin
     FMap.Free;
     FMap := nil;
   end;
-  SetLength(FDistinctLens, 0);
   inherited Destroy;
 end;
 
@@ -91,49 +81,14 @@ begin
     FTrie.Clear;
   if FMap <> nil then
     FMap.Clear;
-  FDistinctCount := 0;
-  FDistinctDirty := False;
-end;
-
-procedure TWebviewAssetIndex.GrowDistinct; inline;
-begin
-  Assert(FDistinctCount >= 0, 'GrowDistinct count');
-  specialize VecGrow<Integer>(FDistinctLens, FDistinctCount);
-end;
-
-procedure TWebviewAssetIndex.SortDistinctDesc(ACount: Integer); inline;
-begin
-  if ACount <= 1 then Exit;
-  SortInt32DescRange(FDistinctLens, ACount);
-end;
-
-procedure TWebviewAssetIndex.EnsureDistinctSorted; inline;
-begin
-  if not FDistinctDirty then Exit;
-  if FDistinctCount > 1 then
-    SortDistinctDesc(FDistinctCount);
-  FDistinctDirty := False;
-end;
-
-procedure TWebviewAssetIndex.UpdateDistinctLens(const APrefix: string); inline;
-var
-  LLen, I: Integer;
-begin
-  LLen := Length(APrefix);
-  for I := 0 to FDistinctCount - 1 do
-    if FDistinctLens[I] = LLen then Exit;
-  GrowDistinct;
-  FDistinctLens[FDistinctCount] := LLen;
-  Inc(FDistinctCount);
-  FDistinctDirty := True;
 end;
 
 function TWebviewAssetIndex.Add(const APrefix: string; AProvider: IWebviewAssetProvider): Boolean;
 begin
   // 单源 L1 THashMap：哈希 WyHash/HashMix32 + NextPow2 + 0.75 负载 + Bitmap 单源，O(1) 平均探测，零自建 Find/Rehash 分叉
+  // 单源收敛：前缀去重与长度集合唯一由 Trie 承载，零 FDistinctLens 手工去重/懒排序双轨
   if not FMap.Add(APrefix, AProvider) then
     Exit(False);
-  UpdateDistinctLens(APrefix);
   FTrie.Add(APrefix, AProvider);
   Result := True;
 end;
@@ -169,33 +124,6 @@ function TWebviewAssetIndex.Count: Integer; inline;
 begin
   if FMap = nil then Exit(0);
   Result := Integer(FMap.GetCount);
-end;
-
-function TWebviewAssetIndex.DistinctCount: Integer; inline;
-begin
-  EnsureDistinctSorted;
-  Result := FDistinctCount;
-end;
-
-function TWebviewAssetIndex.DistinctLensAt(AIndex: Integer): Integer; inline;
-begin
-  EnsureDistinctSorted;
-  Result := FDistinctLens[AIndex];
-end;
-
-function TWebviewAssetIndex.DistinctCountUnchecked: Integer; inline;
-begin
-  Result := FDistinctCount;
-end;
-
-function TWebviewAssetIndex.DistinctLensAtUnchecked(AIndex: Integer): Integer; inline;
-begin
-  Result := FDistinctLens[AIndex];
-end;
-
-procedure TWebviewAssetIndex.EnsureDistinctSortedPublic; inline;
-begin
-  EnsureDistinctSorted;
 end;
 
 end.
