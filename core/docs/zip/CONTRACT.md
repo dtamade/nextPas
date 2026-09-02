@@ -31,7 +31,7 @@
 | `TryZipMethodFromCode` | 方法码→`TZipMethod` 归一（`0/8` 映射，`reader/sequential` 单源，S83） |
 | `ResolveZipMethodWithAes` | AES 感知的方法分发（`99 → realMethod` + 版本/强度强校验，`reader/sequential` 单源，S85） |
 | `GuardTotalOutputAdvance` | 总量溢出安全推进（`ACum+Size>Max → EZipLimitError`，`common` 单源，S90） |
-| `ZipPumpReader` | 泵送循环单源（`65KiB分块Read/Write→Close`，`reader` 双形态，S91） |
+| `ZipPumpReader` | 泵送循环单源（`65KiB分块Read/Write→Close`，`reader` 双形态+`sequential` 三路泵，S91—S92） |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
 | `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录（非原子，见 §6） |
 | `ZipExtractToDirAtomicWithOptions` / `ZipExtractToDirAtomic` | 原子解包到目录：同文件系统 `TempDir`+`Rename` 原子提交，`Exists`拒绝覆盖，异常自动清理（S67） |
@@ -188,7 +188,7 @@
 生产单元（src/nextpas.core.zip*.pas）不得 uses 任何非 `nextpas.*` 单元——
 FPC RTL（SysUtils/Classes 等）与第三方库一律经 owner 模块间接使用；该规则由
 `test_zip_contract` 门在 CI 中机械执行。门面单元只做 re-export 与 inline
-委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/FindZipEntry/GuardTotalOutputAdvance/GuardTotalOutputSize/DecompressEntryVerified/DecompressEntryToBuffer/IsKnownZipSig/LE*`，39期 `GuardTotalOutputSize` 单点化、43期 `DecompressEntryToBuffer` PByte 零拷贝与 `RawDeflateDecompressToBuffer`、S90 `GuardTotalOutputAdvance` 增量/批量总量守卫单点化），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆），`writer` 逐条目经 64 字节栈缓冲与 `FScratch` 几何预留复用），`nextpas.core.zip.sequential` 去 `Copy` 双重拷贝（41期零拷贝切片与 PushBack 复用）并兼容无签名描述符（42期 12/20/16/24 四形态）与 `AES+descriptor`（44期经 `Unseal` 解帧校验）。示例 `zip_roundtrip` 覆盖内存/顺序/fs 三路径与 `MaxOutput/MaxTotal` 守卫全演示（四十期定版）。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
+委托，不含控制流逻辑。`nextpas.core.zip.common` 为 reader/sequential 共享校验与解压内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/FindZipEntry/GuardTotalOutputAdvance/GuardTotalOutputSize/DecompressEntryVerified/DecompressEntryToBuffer/IsKnownZipSig/LE*`，39期 `GuardTotalOutputSize` 单点化、43期 `DecompressEntryToBuffer` PByte 零拷贝与 `RawDeflateDecompressToBuffer`、S90 `GuardTotalOutputAdvance` 增量/批量总量守卫单点化），`nextpas.core.zip.reader` 的 `ZipPumpReader` 为三路泵共享内核（S91 2×16 行→1 行、S92 +sequential 三路收口，仅 `65KiB` 栈缓冲+`nil/短写` 校验），`nextpas.core.zip.extra` 为 Zip64/AES extra 字段共享编解码链（`Decode*/Build*`/`Encode*` 对称——`Build*` 为堆便捷包装，`Encode*` 为栈上零分配（`PByte+SizeUInt` 直写，`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆），`writer` 逐条目经 64 字节栈缓冲与 `FScratch` 几何预留复用），`nextpas.core.zip.sequential` 去 `Copy` 双重拷贝（41期零拷贝切片与 PushBack 复用）并兼容无签名描述符（42期 12/20/16/24 四形态）与 `AES+descriptor`（44期经 `Unseal` 解帧校验），S92 起 `CopyTo` 直通 `reader.ZipPumpReader`。示例 `zip_roundtrip` 覆盖内存/顺序/fs 三路径与 `MaxOutput/MaxTotal` 守卫全演示（四十期定版）。禁用 C 风格复合赋值运算符与 {$COPERATORS}。
 
 ## 5. 测试入口
 

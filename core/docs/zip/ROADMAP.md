@@ -214,6 +214,9 @@
 ### S91 — 泵送单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `reader.ZipPumpReader` 单源化 `TZipReaderImpl.CopyEntryTo` / `TZipSourceReader.CopyEntryTo` 泵送循环重复（`OpenEntry→65KiB分块Read/Write→Close`），2×16 行 → 2×1 行 `ZipPumpReader(OpenEntry,ADst)`，`EArgumentError/EIOError` 语义守恒，`reader` 双形态共享泵内核，12 门 + `bench_zip 221819` 可编译回归，`S85—S91` 七单源平台期
 
+### S92 — 三路泵单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipPumpReader` 三路收口：`TSequentialZipReader.CopyTo` 去 16 行泵循环薄委托 `ZipPumpReader(Open,ADst)`，与 S91 双复制口 `TZipReaderImpl/TZipSourceReader.CopyEntryTo` 共单源（3×16 行 → 3×1 行），`EArgumentError/EIOError/65KiB` 语义守恒，`reader` 为读/顺序三形态共享泵内核（S91 `reader` 双形态 → S92 三路），`sequential` 仅增 `reader` 依赖无循环，12 门 + `bench_zip 221800` 可编译回归，`S85—S92` 八单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -246,4 +249,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S91 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e006a56` 已落地（S91），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader` 九单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S92 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e006a56` 已落地（S91→S92 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader` 九单源（三路泵） + AES 零堆栈。
