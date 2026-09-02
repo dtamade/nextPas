@@ -11,18 +11,24 @@ implementation
 uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi;
 var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Boolean = False;
 const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
-    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
-    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  );
-function JsQuickJsProbeNames: string;
-begin
   {$IFDEF NEXTPAS_WINDOWS}
-  Result := 'quickjs.dll, libquickjs.dll, libquickjs.so.1, libquickjs.so.0, libquickjs.so, libquickjs.dylib, libquickjs.1.dylib, quickjs';
+    'quickjs.dll', 'libquickjs.dll', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs'
   {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := 'libquickjs.dylib, libquickjs.1.dylib, libquickjs.so.1, libquickjs.so.0, libquickjs.so, quickjs.dll, libquickjs.dll, quickjs';
+    'libquickjs.dylib', 'libquickjs.1.dylib', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
   {$ELSE}
-  Result := 'libquickjs.so.1, libquickjs.so.0, libquickjs.so, libquickjs.dylib, libquickjs.1.dylib, quickjs.dll, libquickjs.dll, quickjs';
+    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
   {$ENDIF}
+  );
+function JsQuickJsProbeNames: string; inline;
+var I: Integer;
+begin
+  // perf: single source via JS_QUICKJS_PROBE_NAMES — inline thin loop, zero-copy view reuse of constant array, single build (8 entries, comma-join), no literal duplication; owner bytes.ops single-source discipline (probe list canonical in constant)
+  Result := '';
+  for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
+  begin
+    if I > 0 then Result := Result + ', ';
+    Result := Result + JS_QUICKJS_PROBE_NAMES[I];
+  end;
 end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer;

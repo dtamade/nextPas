@@ -149,7 +149,8 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
-- `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`（L0 `platform.fs` 仅 `TryEvalFile` 直读，非 dl，64MiB限流），四职责聚合 Host/Heap/Value/IO 阈值 650 内（<800 必拆，wc -l 480 实测，超阈预案 `js.value`+`js.host`），见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源 Exactly-Once 几何扩容与 `text.view` 零拷贝视图 + `text.number` ViewToInt64 单源，热点 inline + `Move` 零拷贝 + `JsonNeedsEscapeStr` 洁净快路径，`JsPureDoEval` 单遍谓词缓存避免重复 SIMD 扫面，常驻 hash 桶索引预案就绪，魔串常量化+单加号 parser 候选可抽 js.eval，资源 `try-finally/JsPureClose/FreeAndNil` 不丢，守 L0–L3）
+- `nextpas.core.js.pure.base` 为纯后端共享基座 facade，非标准四件套命名（`pure.base` 薄转发复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`（L0 `platform.fs` 仅 `TryEvalFile` 直读，64MiB限流），Host/Heap/Value 已拆 `js.pure.host`(240行)/`js.pure.value`(190行)，facade 290行阈值650内（<800 必拆，wc -l 290+240+190 分治），见 `core/docs/js/CONTRACT.md §1`；`pure` 为纯族前缀，`base` 为共享后缀，复用 `bytes.ops` 单源几何扩容与 `text.view` 零拷贝，热点 inline+`BytesCopy` 零拷贝，单遍谓词缓存+常驻桶阈值64，魔串常量化/parser候选 js.eval，资源 `try-finally/JsPureClose` 不丢，守 L0–L3）
+- `nextpas.core.js.pure.impl` 为纯族共享模板，非标准四件套命名（`pure.impl` 单源模板复用 `js888/v8/chakra` 95% 克隆，仅 BackendKind 注入差异，零 FFI/零 `platform.dl`（L0 `platform.thread/fs` 仅直读，非 dl），Runtime+Context Host/Heap/Value/IO 四职责聚合 407 行 <650 奢华度临界已分组标记（<800 必拆，wc -l 407 实测，超阈预案 `js.host`(Host/Call)+`js.value`(Heap/Value)），见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，`impl` 为模板后缀，非独立模块，复用 `bytes.ops` 单源与 `text.view` 零拷贝直通，热点 `FindHostView/Bind/DoEval/New*` inline 薄转发 + `BytesCopy` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
   `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、

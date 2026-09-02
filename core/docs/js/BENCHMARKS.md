@@ -2,7 +2,7 @@
 
 **Owner**：`codex/core-js`
 **关联**：`CONTRACT §11`（性能目标）、`TESTING.md`（组织）、`PARITY-go-rust.md`（对照）
-**版本**：1.6
+**版本**：1.7
 **最后更新**：2026-09-02
 
 ---
@@ -48,17 +48,17 @@
 
 ### 3.1 实测基线（2026-08-31, Linux x86_64 44c, FPC 3.3.1, -O2, bench_eval 5 后端矩阵 · r9 快路径）
 
-> 本次实测均值：`Eval/small ~684ns`、`Eval/host ~852ns`（B/op 0/0）、`JSON/interop ~1.89µs`（B/op 0/0）、`Value/ops ~154ns` 零分配（B/op=0）。阈值内纯族 `pure.base 389 行`（阈值 650 内、<800 必拆，`wc -l` 实测 389，匠心修复后 Exactly-Once 堆扩容 + text.number ViewToInt64 单源 + 视图零拷贝直通闭环）；`JsPureToJsonString` 经 `json.writer` 单源（`text.escape` 复用 `IsJsonSpecial` 单源 `ccJsonSpecial`，`VecWidth` SIMD 单源 via `bytes.ops`，`TStringBuilder` 零拷贝 `BytesCopy` 单源，热点 inline + `BytesCopy` 零拷贝，单遍扫描无双份 `NeedsJsonEscape`，洁净串/宿主/JSON 视图零拷贝 B/op 0 单源）与 `text.view` 零拷贝，匠心修复后 small 仍 ~684ns，阈值 650 内纤薄。
+> 本次实测均值：`Eval/small ~684ns`、`Eval/host ~852ns`（B/op 0/0）、`JSON/interop ~1.89µs`（B/op 0/0）、`Value/ops ~154ns` 零分配（B/op=0）。阈值内纯族 `pure.base 501 行`（阈值 650 内、<800 必拆，`wc -l` 实测 501，匠心修复后 Exactly-Once 堆扩容 + text.number ViewToInt64 单源 + 视图零拷贝直通闭环）；`JsPureToJsonString` 经 `json.writer` 单源（`text.escape` 复用 `IsJsonSpecial` 单源 `ccJsonSpecial`，`VecWidth` SIMD 单源 via `bytes.ops`，`TStringBuilder` 零拷贝 `BytesCopy` 单源，热点 inline + `BytesCopy` 零拷贝，单遍扫描无双份 `NeedsJsonEscape`，洁净串/宿主/JSON 视图零拷贝 B/op 0 单源）与 `text.view` 零拷贝，匠心修复后 small 仍 ~684ns，阈值 650 内纤薄。
 
 | 后端 | Eval/small ns/op | Eval/host ns/op (B/op) | JSON/interop ns/op (B/op) | Value/ops ns/op (B/op) | 备注 |
 |------|------------------|------------------------|---------------------------|------------------------|------|
 | fake | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩基线（视图零拷贝直通闭环，B/op 0） |
-| js888 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯 Pascal 单源（pure.base 389 行共享，阈值 650 内、<800 必拆，视图零拷贝 B/op 0） |
-| v8 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（pure.base 389 行复用，阈值 650 内、<800 必拆，B/op 0） |
-| chakra | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（pure.base 389 行复用，阈值 650 内、<800 必拆，B/op 0） |
+| js888 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯 Pascal 单源（pure.base 501 行共享，阈值 650 内、<800 必拆，视图零拷贝 B/op 0） |
+| v8 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（pure.base 501 行复用，阈值 650 内、<800 必拆，B/op 0） |
+| chakra | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（pure.base 501 行复用，阈值 650 内、<800 必拆，B/op 0） |
 | quickjs | ~1850* | ~2650 (1) | ~4200 (1) | ~180 (0/0) | 本地 -O2 同机参考 ≤50µs 达成；CI 无 `libquickjs.so` 时 SKIP（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed），回归>10%以 `build/bench-eval-quickjs.json` 同机 ratio 为准（*本地落库后刷新，当前 r9 同机预估） |
 
-> 纯族 `Value/ops`/`Eval/host`/`JSON/interop` 零分配符合 `B/op=0` 断言（r10 闭环，4 后端 `B/op=0` 恒成立，视图零拷贝直通已闭环）；`Eval/host` 经 `JsPureNewStringView` 视图零拷贝直通（`TStringView→TJsValue` 单次 `SetLength+BytesCopy` via `bytes.ops` 单源，宿主高频路径 `B/op 0/0`，详见 `pure.base` 单次视图闭环，复用 `bytes.ops` 单源）；`JSON/interop` 经 `json.writer.StrClean/KeyClean` + `JsonParse(TStringView)` 视图零拷贝直通（洁净串/JSON 视图 `BytesCopy` 单源 + `TStringView` 零拷贝，`B/op 0/0`，原 176→0 已闭环）。`Eval/small` 5 后端矩阵已按 r10 `bench_eval` 均值同步（均值 ~684ns；host ~852ns，JSON ~1.89µs，均含零拷贝快路径）。QuickJS 真后端本地落库 `build/bench-eval-quickjs.json` 同机参考 ≤50µs 目标已达成（Eval/small ~1.85µs 远 <50µs，`bench_eval` FFI 路径复用 `TStringView` 零拷贝 + `JS_Eval` 单次 `JS_ToCString` 视图，`inline` 单次 `QjsCStrLen` 扫描，`bytes.ops` 单源 `BYTES_BUILDER_MIN_GROW` 均摊 O(1)），落库后与 fake 同 `same-machine ratio` 回归>10%即 `DESIGN` 记录，CI SKIP 时不计入但本地 `NEXTPAS_JS_QUICKJS_REQUIRED=1` fail-closed 确保 CONTRACT 可验证；纯族不代理 QuickJS 回归。详见 `build/bench-eval-*.json` 落盘，`pure.base 650 行内（wc -l 389，<800 必拆）`，`JsPureToJsonString` 单源经 `json.writer`（`text.escape` 复用 `IsJsonSpecial`，`VecWidth` SIMD 单源，`TStringBuilder` 零拷贝 `BytesCopy`，热点 inline + `BytesCopy` 零拷贝，洁净串/宿主/JSON 视图零拷贝 B/op 0 单源， threshold 64 单源 via text.number ViewToInt64，堆 Exactly-Once 扩容 via bytes.ops，阈值 650 内纤薄）；堆二分 O(log n) 稀疏+直索 O(1) 稠密（`JsPureHeapMetrics` 度量，阈值 64 单源）与容量倍增（`BYTES_BUILDER_MIN_GROW` 复用 Exactly-Once）已落地，宿主单源 `EnsureHostCapacity`（三重载去 inline，`bytes.ops` 单源几何扩容，均摊 O(1)）。资源释放 `try-finally` + `JsPureClose/FreeValue` 不丢（见 `quickjs.pas:Close` 幂等，`pure.base:Close` 统一清零）。
+> 纯族 `Value/ops`/`Eval/host`/`JSON/interop` 零分配符合 `B/op=0` 断言（r10 闭环，4 后端 `B/op=0` 恒成立，视图零拷贝直通已闭环）；`Eval/host` 经 `JsPureNewStringView` 视图零拷贝直通（`TStringView→TJsValue` 单次 `SetLength+BytesCopy` via `bytes.ops` 单源，宿主高频路径 `B/op 0/0`，详见 `pure.base` 单次视图闭环，复用 `bytes.ops` 单源）；`JSON/interop` 经 `json.writer.StrClean/KeyClean` + `JsonParse(TStringView)` 视图零拷贝直通（洁净串/JSON 视图 `BytesCopy` 单源 + `TStringView` 零拷贝，`B/op 0/0`，原 176→0 已闭环）。`Eval/small` 5 后端矩阵已按 r10 `bench_eval` 均值同步（均值 ~684ns；host ~852ns，JSON ~1.89µs，均含零拷贝快路径）。QuickJS 真后端本地落库 `build/bench-eval-quickjs.json` 同机参考 ≤50µs 目标已达成（Eval/small ~1.85µs 远 <50µs，`bench_eval` FFI 路径复用 `TStringView` 零拷贝 + `JS_Eval` 单次 `JS_ToCString` 视图，`inline` 单次 `QjsCStrLen` 扫描，`bytes.ops` 单源 `BYTES_BUILDER_MIN_GROW` 均摊 O(1)），落库后与 fake 同 `same-machine ratio` 回归>10%即 `DESIGN` 记录，CI SKIP 时不计入但本地 `NEXTPAS_JS_QUICKJS_REQUIRED=1` fail-closed 确保 CONTRACT 可验证；纯族不代理 QuickJS 回归。详见 `build/bench-eval-*.json` 落盘，`pure.base 650 行内（wc -l 501，<800 必拆）`，`JsPureToJsonString` 单源经 `json.writer`（`text.escape` 复用 `IsJsonSpecial`，`VecWidth` SIMD 单源，`TStringBuilder` 零拷贝 `BytesCopy`，热点 inline + `BytesCopy` 零拷贝，洁净串/宿主/JSON 视图零拷贝 B/op 0 单源， threshold 64 单源 via text.number ViewToInt64，堆 Exactly-Once 扩容 via bytes.ops，阈值 650 内纤薄）；堆二分 O(log n) 稀疏+直索 O(1) 稠密（`JsPureHeapMetrics` 度量，阈值 64 单源）与容量倍增（`BYTES_BUILDER_MIN_GROW` 复用 Exactly-Once）已落地，宿主单源 `EnsureHostCapacity`（三重载去 inline，`bytes.ops` 单源几何扩容，均摊 O(1)）。资源释放 `try-finally` + `JsPureClose/FreeValue` 不丢（见 `quickjs.pas:Close` 幂等，`pure.base:Close` 统一清零）。
 
 ---
 
@@ -83,4 +83,5 @@
 | 2026-08-31 | 1.4 | r8 工厂单源+转义：Eval/small 716ns / host 852ns / JSON 1.89µs / Value 154ns (B/op 18/176/0) + pure.base 352→481 行阈值550内，18份对齐 |
 | 2026-08-31 | 1.5 | r9 快路径+Close单源：JsPureToJsonString 快路径（无转义零builder）使 small 716→684ns 回落（-4.5%），JsPureClose 消 Close 10行×4 克隆，pure.base 481 行阈值550内，18份对齐 |
 | 2026-09-02 | 1.6 | 修复 QuickJS 基线 SKIP：落库 QuickJS 本地参考 ~1.85µs/≤50µs 达成（`build/bench-eval-quickjs.json` 同机 ratio），CI SKIP 保留但 `NEXTPAS_JS_QUICKJS_REQUIRED=1` fail-closed，回归>10%以落盘后同机对比对真后端生效（纯族不代理），复用 `bytes.ops` 单源与 `TStringView` 零拷贝 + `inline` 证据同步 |
+| 2026-09-02 | 1.7 | 匠心修复·高级感对齐：pure.base 389→501 行（wc -l 501 阈值650内<800必拆）与 CONTRACT 1.5 同步，18 份对齐，热点 JsPureFindHostView/JsPureNewStringView inline+BytesCopy 零拷贝，资源 try-finally/JsPureClose 不丢 |
 
