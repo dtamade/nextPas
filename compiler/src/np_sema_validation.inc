@@ -63,15 +63,11 @@ var
   Child: TGreenNode;
   SymId: LongInt;
   Name: string;
-  CandidateNames: specialize TVec<string>;
   CandidateArr: array of string;
-  DistArr: array of LongInt;
   Sym: TSemanticSymbol;
   Scp: TSemanticScope;
   Suggestion: string;
   IsVisible: Boolean;
-  TmpStr: string;
-  TmpDist: LongInt;
   CurScope: LongInt;
   Found: Boolean;
   CalleeChild: TGreenNode;
@@ -79,6 +75,9 @@ var
   HandlerVarCacheReady: Boolean;
   MethodSuffixCache: specialize TVec<string>;
   MethodSuffixCacheReady: Boolean;
+  VisibleSet: specialize THashMap<string, Byte>;
+  VisibleNames: specialize TVec<string>;
+  VisibleBuilt: Boolean;
   function IsKnownUnitPrefix(const AUnitPrefix: string): Boolean;
   var
     Idx: LongInt;
@@ -186,98 +185,69 @@ var
     Result := False;
   end;
 
-  procedure DoCheck(const AName: string; AOffset: LongInt);
+  procedure EnsureVisibleSet;
   var
     K, L: LongInt;
-    Seen: specialize THashMap<string, Byte>;
     LowKey: string;
-    procedure QuickSort(ALo, AHi: LongInt);
-    var
-      I, J, Pivot: LongInt;
-      TmpS: string;
-      TmpD: LongInt;
+  begin
+    if VisibleBuilt then Exit;
+    VisibleBuilt := True;
+    for K := 0 to FModel.SymbolCount - 1 do
     begin
-      if ALo >= AHi then Exit;
-      I := ALo; J := AHi; Pivot := DistArr[(ALo + AHi) div 2];
-      repeat
-        while DistArr[I] < Pivot do Inc(I);
-        while DistArr[J] > Pivot do Dec(J);
-        if I <= J then
+      Sym := FModel.SymbolAt(K);
+      if Sym.Name = '' then Continue;
+      IsVisible := False;
+      if Sym.ScopeId = 0 then
+        IsVisible := True
+      else
+      begin
+        CurScope := FCurrentScopeId;
+        while CurScope <> 0 do
         begin
-          TmpS := CandidateArr[I]; CandidateArr[I] := CandidateArr[J]; CandidateArr[J] := TmpS;
-          TmpD := DistArr[I]; DistArr[I] := DistArr[J]; DistArr[J] := TmpD;
-          Inc(I); Dec(J);
+          if Sym.ScopeId = CurScope then
+          begin IsVisible := True; Break; end;
+          if (CurScope <= FModel.ScopeCount) and (CurScope > 0) then
+            CurScope := FModel.ScopeAt(CurScope - 1).ParentScopeId
+          else
+            Break;
         end;
-      until I > J;
-      if ALo < J then QuickSort(ALo, J);
-      if I < AHi then QuickSort(I, AHi);
+        if not IsVisible then
+          for L := 0 to FModel.ScopeCount - 1 do
+          begin
+            Scp := FModel.ScopeAt(L);
+            if (Scp.Kind = skUnit) and (Scp.ParentScopeId = 1) and (Sym.ScopeId = Scp.ScopeId) then
+            begin IsVisible := True; Break; end;
+          end;
+      end;
+      if not IsVisible then Continue;
+      LowKey := LowerCase(Sym.Name);
+      if VisibleSet.ContainsKey(LowKey) then Continue;
+      VisibleSet.Add(LowKey, 0);
+      VisibleNames.Push(Sym.Name);
     end;
+  end;
+
+  procedure DoCheck(const AName: string; AOffset: LongInt);
+  var
+    K: LongInt;
+    LowKey: string;
   begin
     if (AName = '') or (AName = 'Result') then Exit;
     if SameText(AName, 'nil') or SameText(AName, 'true') or SameText(AName, 'false') then Exit;
     if IsKnownUnitPrefix(AName) then Exit;
     if IsExceptionHandlerVar(AName) then Exit;
     if IsHandlerVarCached(AName) then Exit;
-    SymId := FModel.LookupSymbol(AName, FCurrentScopeId);
-    if (SymId <> 0) or (FModel.FindSymbolByName(AName) <> 0) or (FModel.FindTypeByName(AName) <> 0) or
+    EnsureVisibleSet;
+    LowKey := LowerCase(AName);
+    if VisibleSet.ContainsKey(LowKey) then Exit;
+    if (FModel.FindSymbolByName(AName) <> 0) or (FModel.FindTypeByName(AName) <> 0) or
       IsBuiltinProcedure(AName) or IsRuntimeVar(AName) then Exit;
+    if FModel.LookupSymbol(AName, FCurrentScopeId) <> 0 then Exit;
     if IsMethodSuffix(AName) then Exit;
-    if FAllocator <> nil then
-      CandidateNames := specialize TVec<string>.Create(0, FAllocator)
-    else
-      CandidateNames := specialize TVec<string>.Create;
-    Seen := specialize THashMap<string, Byte>.Create;
-    try
-      for K := 0 to FModel.SymbolCount - 1 do
-      begin
-        Sym := FModel.SymbolAt(K);
-        if Sym.Name = '' then Continue;
-        if SameText(Sym.Name, AName) then Continue;
-        IsVisible := False;
-        if Sym.ScopeId = 0 then
-          IsVisible := True
-        else
-        begin
-          CurScope := FCurrentScopeId;
-          while CurScope <> 0 do
-          begin
-            if Sym.ScopeId = CurScope then
-            begin IsVisible := True; Break; end;
-            if (CurScope <= FModel.ScopeCount) and (CurScope > 0) then
-              CurScope := FModel.ScopeAt(CurScope - 1).ParentScopeId
-            else
-              Break;
-          end;
-          if not IsVisible then
-            for L := 0 to FModel.ScopeCount - 1 do
-            begin
-              Scp := FModel.ScopeAt(L);
-              if (Scp.Kind = skUnit) and (Scp.ParentScopeId = 1) and (Sym.ScopeId = Scp.ScopeId) then
-              begin IsVisible := True; Break; end;
-            end;
-        end;
-        if not IsVisible then Continue;
-        LowKey := LowerCase(Sym.Name);
-        if Seen.ContainsKey(LowKey) then Continue;
-        Seen.Add(LowKey, 0);
-        CandidateNames.Push(Sym.Name);
-      end;
-      SetLength(CandidateArr, LongInt(CandidateNames.Count));
-      SetLength(DistArr, LongInt(CandidateNames.Count));
-      for K := 0 to LongInt(CandidateNames.Count) - 1 do
-      begin
-        CandidateArr[K] := CandidateNames[K];
-        DistArr[K] := ComputeEditDistance(AName, CandidateArr[K]);
-      end;
-      if Length(CandidateArr) > 1 then
-        QuickSort(0, High(CandidateArr));
-      if Length(CandidateArr) > 3 then
-        SetLength(CandidateArr, 3);
-      Suggestion := SuggestDidYouMean(AName, CandidateArr, 3);
-    finally
-      Seen.Free;
-      CandidateNames.Free;
-    end;
+    SetLength(CandidateArr, LongInt(VisibleNames.Count));
+    for K := 0 to LongInt(VisibleNames.Count) - 1 do
+      CandidateArr[K] := VisibleNames[K];
+    Suggestion := SuggestDidYouMean(AName, CandidateArr, 3);
     if Suggestion <> '' then
       EmitSemaError('sema.undeclared-identifier', 'identifier not found "' + AName + '". ' + Suggestion, AOffset)
     else
@@ -286,6 +256,12 @@ var
 begin
   HandlerVarCache := specialize TVec<string>.Create;
   MethodSuffixCache := specialize TVec<string>.Create;
+  if FAllocator <> nil then
+    VisibleNames := specialize TVec<string>.Create(0, FAllocator)
+  else
+    VisibleNames := specialize TVec<string>.Create;
+  VisibleSet := specialize THashMap<string, Byte>.Create;
+  VisibleBuilt := False;
   HandlerVarCacheReady := False;
   MethodSuffixCacheReady := False;
   try
@@ -411,6 +387,8 @@ begin
       end;
     end;
   finally
+    VisibleSet.Free;
+    VisibleNames.Free;
     HandlerVarCache.Free;
     MethodSuffixCache.Free;
   end;
@@ -576,35 +554,16 @@ begin
 end;
 
 procedure TSemanticAnalyzer.CheckUnusedSymbols;
-
-  function IsNameUsedInNode(const ANode: TGreenNode; const AName: string): Boolean;
-  var
-    I: LongInt;
-    Child: TGreenNode;
-  begin
-    if ANode = nil then
-      Exit(False);
-    if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, AName) then
-      Exit(True);
-    if (ANode.NodeKind = gnkAssignmentStatement) and SameText(ANode.Text, AName) then
-      Exit(True);
-    if (ANode.NodeKind = gnkProcedureCallStatement) and SameText(ANode.Text, AName) then
-      Exit(True);
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if IsNameUsedInNode(Child, AName) then
-        Exit(True);
-    end;
-    Result := False;
-  end;
-
 var
   I: LongInt;
   Sym: TSemanticSymbol;
   RootNode, Child: TGreenNode;
   BeginBlock: TGreenNode;
   J: LongInt;
+  UsedSet: specialize THashMap<string, Byte>;
+  CollectStack: specialize TVec<TGreenNode>;
+  Cur, CCh: TGreenNode;
+  SIdx: LongInt;
 begin
   if FRootAst = nil then
     Exit;
@@ -625,21 +584,49 @@ begin
   if BeginBlock = nil then
     Exit;
 
-  for I := 0 to FModel.SymbolCount - 1 do
-  begin
-    Sym := FModel.SymbolAt(I);
-    if Sym.Kind <> 'variable' then
-      Continue;
-    if Sym.ScopeId <> FCurrentScopeId then
-      Continue;
-    if not IsNameUsedInNode(BeginBlock, Sym.Name) then
-      FDiagnostics.EmitWarning(
-        'sema.unused-variable',
-        'sema',
-        FRootFileId,
-        Sym.ByteOffset,
-        'variable "' + Sym.Name + '" is declared but never used'
-      );
+  UsedSet := specialize THashMap<string, Byte>.Create;
+  CollectStack := specialize TVec<TGreenNode>.Create;
+  try
+    CollectStack.Push(BeginBlock);
+    while CollectStack.Count > 0 do
+    begin
+      Cur := CollectStack[CollectStack.Count - 1];
+      CollectStack.Pop;
+      if Cur = nil then Continue;
+      if (Cur.NodeKind = gnkIdentifier) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      if (Cur.NodeKind = gnkAssignmentStatement) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      if (Cur.NodeKind = gnkProcedureCallStatement) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      for SIdx := 0 to Cur.ChildCount - 1 do
+      begin
+        CCh := Cur.ChildAt(SIdx);
+        if CCh <> nil then CollectStack.Push(CCh);
+      end;
+    end;
+    for I := 0 to FModel.SymbolCount - 1 do
+    begin
+      Sym := FModel.SymbolAt(I);
+      if Sym.Kind <> 'variable' then
+        Continue;
+      if Sym.ScopeId <> FCurrentScopeId then
+        Continue;
+      if not UsedSet.ContainsKey(LowerCase(Sym.Name)) then
+        FDiagnostics.EmitWarning(
+          'sema.unused-variable',
+          'sema',
+          FRootFileId,
+          Sym.ByteOffset,
+          'variable "' + Sym.Name + '" is declared but never used'
+        );
+    end;
+  finally
+    CollectStack.Free;
+    UsedSet.Free;
   end;
 end;
 
@@ -730,19 +717,16 @@ end;
 
 procedure TSemanticAnalyzer.CheckCaseLabelsInNode(const ANode: TGreenNode);
 var
-  I, J, K: LongInt;
-  Child, Selector, Label1, Label2: TGreenNode;
-  Val1, Val2: Int64;
-  SeenValues: specialize TVec<Int64>;
+  I, J: LongInt;
+  Child, Selector, Label1: TGreenNode;
+  Val1: Int64;
+  SeenValues: specialize THashMap<Int64, Byte>;
 begin
   if ANode = nil then
     Exit;
   if ANode.NodeKind = gnkCaseStatement then
   begin
-    if FAllocator <> nil then
-      SeenValues := specialize TVec<Int64>.Create(0, FAllocator)
-    else
-      SeenValues := specialize TVec<Int64>.Create;
+    SeenValues := specialize THashMap<Int64, Byte>.Create;
     try
       for I := 0 to ANode.ChildCount - 1 do
       begin
@@ -757,21 +741,18 @@ begin
           if (Label1.ChildCount > 0) and
             EvaluateIntegerConstant(Label1.ChildAt(0), Val1) then
           begin
-            for K := 0 to LongInt(SeenValues.Count) - 1 do
+            if SeenValues.ContainsKey(Val1) then
             begin
-              if SeenValues[K] = Val1 then
-              begin
-                FDiagnostics.EmitWarning(
-                  'sema.duplicate-case-label',
-                  'sema',
-                  FRootFileId,
-                  Label1.ByteOffset,
-                  'duplicate case label value ' + IntToStr(Val1)
-                );
-                Break;
-              end;
-            end;
-            SeenValues.Push(Val1);
+              FDiagnostics.EmitWarning(
+                'sema.duplicate-case-label',
+                'sema',
+                FRootFileId,
+                Label1.ByteOffset,
+                'duplicate case label value ' + IntToStr(Val1)
+              );
+            end
+            else
+              SeenValues.Add(Val1, 0);
           end;
         end;
       end;

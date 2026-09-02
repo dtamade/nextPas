@@ -50,6 +50,8 @@ function TryReadCoreTextFile(
   out ACanonicalPath: string;
   out ASourceText: string
 ): TCoreResult;
+var
+  LSize: Int64;
 begin
   ACanonicalPath := '';
   ASourceText := '';
@@ -60,6 +62,20 @@ begin
   ACanonicalPath := NormalizeCorePath(APath);
   if not FileExists(ACanonicalPath) then
     Exit(BuildCoreResult(crcNotFound, 'file not found: ' + ACanonicalPath));
+
+  { Size pre-check: reuse FsFileSize (core.fs) with 64MiB bulk limit to avoid OOM
+    on arbitrary large file. Aligns with FORMAT_BULK_PARSE_MAX_BYTES. }
+  try
+    LSize := FsFileSize(ACanonicalPath);
+    if LSize > Int64(64) * 1024 * 1024 then
+      Exit(BuildCoreResult(crcInvalidArgument,
+        'file too large (' + IntToStr(LSize) + ' bytes, limit 67108864): ' + ACanonicalPath));
+  except
+    on E: ENotFoundError do
+      Exit(BuildCoreResult(crcNotFound, 'file not found: ' + ACanonicalPath));
+    on E: ENextPasError do
+      Exit(BuildCoreResult(crcIoError, 'failed to stat file: ' + ACanonicalPath));
+  end;
 
   { Read via nextpas.core.fs.util instead of FPC TFileStream so the compile
     chain stops consuming the Classes stub. FsReadFileText handles BOM /

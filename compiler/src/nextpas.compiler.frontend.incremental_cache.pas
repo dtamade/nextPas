@@ -129,9 +129,31 @@ begin
 end;
 
 procedure TBinaryWriter.Grow(ABytes: LongInt);
+var
+  Needed: SizeUInt;
+  NewCap: SizeUInt;
 begin
-  if FPos + ABytes > Length(FBuf) then
-    SetLength(FBuf, (FPos + ABytes + 255) and not 255);
+  if ABytes < 0 then
+    raise Exception.Create('TBinaryWriter.Grow: negative size');
+  if ABytes = 0 then Exit;
+  if FPos < 0 then
+    raise Exception.Create('TBinaryWriter.Grow: invalid position');
+  Needed := SizeUInt(FPos) + SizeUInt(ABytes);
+  if Needed < SizeUInt(FPos) then
+    raise Exception.Create('TBinaryWriter.Grow: size overflow');
+  if Needed > SizeUInt(NPC_MAX_PAYLOAD_SIZE) then
+    raise Exception.Create('TBinaryWriter.Grow: exceeds max payload size');
+  if Needed > SizeUInt(Length(FBuf)) then
+  begin
+    NewCap := (Needed + 255) and not SizeUInt(255);
+    if NewCap < Needed then
+      raise Exception.Create('TBinaryWriter.Grow: capacity overflow');
+    if NewCap > SizeUInt(NPC_MAX_PAYLOAD_SIZE) then
+      NewCap := Needed;
+    if NewCap > SizeUInt(High(LongInt)) then
+      raise Exception.Create('TBinaryWriter.Grow: capacity too large');
+    SetLength(FBuf, LongInt(NewCap));
+  end;
 end;
 
 procedure TBinaryWriter.WriteByte(AVal: Byte);
@@ -190,6 +212,12 @@ end;
 
 procedure TBinaryWriter.WriteRaw(const AData; ASize: LongInt);
 begin
+  if ASize <= 0 then
+  begin
+    if ASize < 0 then
+      raise Exception.Create('TBinaryWriter.WriteRaw: negative size');
+    Exit;
+  end;
   Grow(ASize);
   Move(AData, FBuf[FPos], ASize);
   Inc(FPos, ASize);
@@ -198,7 +226,8 @@ end;
 function TBinaryWriter.Data: TBytes;
 begin
   SetLength(Result, FPos);
-  Move(FBuf[0], Result[0], FPos);
+  if FPos > 0 then
+    Move(FBuf[0], Result[0], FPos);
 end;
 
 function TBinaryWriter.Size: LongInt;
@@ -645,6 +674,8 @@ begin
 
   { Symbols }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: Symbols count out of range');
   for I := 0 to C - 1 do
   begin
     Sym.SymbolId := R.ReadInt32;
@@ -664,6 +695,8 @@ begin
 
   { Types }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: Types count out of range');
   for I := 0 to C - 1 do
   begin
     Typ.TypeId := R.ReadInt32;
@@ -676,6 +709,8 @@ begin
     Typ.InstantiatedFrom := R.ReadInt32;
     Typ.GenericParent.TemplateTypeId := R.ReadInt32;
     CC := R.ReadInt32;
+    if (CC < 0) or (CC > NPC_MAX_SECTION_COUNT) then
+      raise Exception.Create('ReadSemanticModel: GenericParent ArgIndices count out of range');
     SetLength(Typ.GenericParent.ArgIndices, CC);
     for J := 0 to CC - 1 do
       Typ.GenericParent.ArgIndices[J] := R.ReadInt32;
@@ -684,6 +719,8 @@ begin
 
   { Scopes }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: Scopes count out of range');
   for I := 0 to C - 1 do
   begin
     Scp.ScopeId := R.ReadInt32;
@@ -695,6 +732,8 @@ begin
 
   { Bindings }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: Bindings count out of range');
   for I := 0 to C - 1 do
   begin
     Bnd.BindingId := R.ReadInt32;
@@ -708,6 +747,8 @@ begin
 
   { TypedHirNodes }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: TypedHirNodes count out of range');
   for I := 0 to C - 1 do
   begin
     Hir.HirNodeId := R.ReadInt32;
@@ -724,6 +765,8 @@ begin
 
   { HirExprs }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: HirExprs count out of range');
   for I := 0 to C - 1 do
   begin
     Expr.ExprId := R.ReadInt32;
@@ -731,6 +774,8 @@ begin
     Expr.TypeId := R.ReadInt32;
     Expr.SymbolId := R.ReadInt32;
     CC := R.ReadInt32;
+    if (CC < 0) or (CC > NPC_MAX_SECTION_COUNT) then
+      raise Exception.Create('ReadSemanticModel: HirExpr ChildIds count out of range');
     SetLength(ChildIds, CC);
     for J := 0 to CC - 1 do
       ChildIds[J] := R.ReadInt32;
@@ -747,6 +792,8 @@ begin
 
   { RuntimeContracts }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: RuntimeContracts count out of range');
   for I := 0 to C - 1 do
   begin
     Rc.ContractId := R.ReadInt32;
@@ -756,6 +803,8 @@ begin
 
   { ForeignProcedureBindings }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: ForeignProcedureBindings count out of range');
   for I := 0 to C - 1 do
   begin
     Fpb.BindingId := R.ReadInt32;
@@ -770,6 +819,8 @@ begin
 
   { LibraryRequests }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: LibraryRequests count out of range');
   for I := 0 to C - 1 do
   begin
     Lr.RequestId := R.ReadInt32;
@@ -789,6 +840,8 @@ begin
 
   { UnitInitOrder }
   C := R.ReadInt32;
+  if (C < 0) or (C > NPC_MAX_SECTION_COUNT) then
+    raise Exception.Create('ReadSemanticModel: UnitInitOrder count out of range');
   for I := 0 to C - 1 do
     { SetUnitInitOrder expects array — just read and skip for now };
 end;
@@ -826,9 +879,12 @@ begin
   try
     ActualSize := System.FileSize(F);
     if ActualSize < NPC_HEADER_SIZE then Exit;
-
-    SetLength(Data, ActualSize);
-    BlockRead(F, Data[0], ActualSize);
+    if ActualSize > Int64(NPC_HEADER_SIZE) + Int64(NPC_MAX_PAYLOAD_SIZE) then Exit;
+    if ActualSize > High(LongInt) then Exit;
+    if ActualSize <= 0 then Exit;
+    SetLength(Data, LongInt(ActualSize));
+    if LongInt(ActualSize) > 0 then
+      BlockRead(F, Data[0], LongInt(ActualSize));
   finally
     CloseFile(F);
   end;
@@ -916,6 +972,10 @@ begin
   end;
 
   PayloadSize := Length(Payload);
+  if PayloadSize < 0 then
+    raise Exception.Create('Save: negative payload size');
+  if PayloadSize > NPC_MAX_PAYLOAD_SIZE then
+    raise Exception.Create('Save: payload exceeds max size');
 
   { Fingerprint: source + deps }
   Fp := CombineFingerprint(
@@ -932,10 +992,18 @@ begin
     W.WriteInt32(NPC_VERSION);
     W.WriteInt32(NPC_HEADER_SIZE);
     W.WriteInt32(PayloadSize);
+    if Length(Fp) < NPC_FINGERPRINT_SIZE then
+      raise Exception.Create('Save: fingerprint size invalid');
     W.WriteRaw(Fp[0], NPC_FINGERPRINT_SIZE);       { offset 16, raw 32 bytes }
+    if Length(PayloadDigest) < NPC_DIGEST_SIZE then
+      raise Exception.Create('Save: digest size invalid');
     W.WriteRaw(PayloadDigest[0], NPC_DIGEST_SIZE);  { offset 48, raw 32 bytes }
     if PayloadSize > 0 then
+    begin
+      if Length(Payload) < PayloadSize then
+        raise Exception.Create('Save: payload size mismatch');
       W.WriteRaw(Payload[0], PayloadSize);
+    end;
     Data := W.Data;
   finally
     W.Free;
@@ -945,7 +1013,8 @@ begin
   AssignFile(F, Path);
   Rewrite(F, 1);
   try
-    BlockWrite(F, Data[0], Length(Data));
+    if Length(Data) > 0 then
+      BlockWrite(F, Data[0], Length(Data));
   finally
     CloseFile(F);
   end;

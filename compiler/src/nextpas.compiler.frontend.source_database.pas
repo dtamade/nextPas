@@ -216,6 +216,8 @@ begin
 end;
 
 procedure TSourceDatabase.BuildLineIndexForFile(AIndex: LongInt);
+const
+  MAX_SOURCE_FILE_SIZE = 64 * 1024 * 1024;
 var
   Entry: PSourceFileEntry;
   Src: string;
@@ -226,6 +228,13 @@ begin
     Exit;
   Src := Entry^.SourceText;
   Len := Length(Src);
+  { Guard: Len+1 allocation is 4*(Len+1) bytes; cap at 64MiB source to avoid
+    400MiB+ index OOM (worst case every char is newline). TryReadCoreTextFile
+    already enforces file size; this is defense-in-depth for direct assignment. }
+  if Len > MAX_SOURCE_FILE_SIZE then
+    raise Exception.Create(
+      'source-database.line-index-too-large: file size ' + IntToStr(Len) +
+      ' exceeds limit ' + IntToStr(MAX_SOURCE_FILE_SIZE));
   { Worst case: every char is a newline → Len+1 entries }
   if Entry^.LineOffsets = nil then
     Entry^.LineOffsets := TSourceLineOffsetVec.Create(SizeUInt(Len + 1))
@@ -238,22 +247,19 @@ begin
   I := 1;
   while I <= Len do
   begin
-    if Src[I] = #10 then
+    if Src[I] = #13 then
     begin
-      Entry^.LineOffsets.Push(I);  { next line starts after \n }
-      { Handle \r\n: skip the \r if it's before the \n }
+      if (I < Len) and (Src[I + 1] = #10) then
+      begin
+        Entry^.LineOffsets.Push(I + 1);  { CRLF: next line after \r\n }
+        Inc(I, 2);
+        Continue;
+      end
+      else
+        Entry^.LineOffsets.Push(I);  { bare \r }
     end
-    else if (Src[I] = #13) and (I < Len) and (Src[I + 1] = #10) then
-    begin
-      { \r\n pair: line ends at \n, which is I+1 }
-      Entry^.LineOffsets.Push(I + 1);
-      Inc(I);  { skip the \n }
-    end
-    else if (Src[I] = #13) then
-    begin
-      { Bare \r (old Mac style) }
-      Entry^.LineOffsets.Push(I);
-    end;
+    else if Src[I] = #10 then
+      Entry^.LineOffsets.Push(I);  { bare \n }
     Inc(I);
   end;
   Entry^.LineIndexBuilt := True;
@@ -266,6 +272,8 @@ function TSourceDatabase.ByteOffsetToLineCol(
 var
   FileIdx, Lo, Hi, Mid: LongInt;
   Entry: PSourceFileEntry;
+  ClampedOffset: LongInt;
+  SrcLen: LongInt;
 begin
   Result.Line := 1;
   Result.Column := 1;
@@ -276,25 +284,35 @@ begin
   Entry := FFiles.GetPtr(SizeUInt(FileIdx));
   if (Entry^.LineOffsets = nil) or (Entry^.LineOffsets.Count = 0) then
     Exit;
-  { Binary search: find last line whose offset <= AByteOffset }
+  { Clamp AByteOffset to valid range [0, SrcLen] and ensure non-negative column.
+    Prevents negative column when caller passes <0 or >Length. }
+  SrcLen := Length(Entry^.SourceText);
+  ClampedOffset := AByteOffset;
+  if ClampedOffset < 0 then
+    ClampedOffset := 0
+  else if ClampedOffset > SrcLen then
+    ClampedOffset := SrcLen;
+  { Binary search: find last line whose offset <= ClampedOffset }
   Lo := 0;
   Hi := LongInt(Entry^.LineOffsets.Count) - 1;
   Mid := 0;
   while Lo <= Hi do
   begin
     Mid := (Lo + Hi) div 2;
-    if Entry^.LineOffsets[SizeUInt(Mid)] <= AByteOffset then
+    if Entry^.LineOffsets[SizeUInt(Mid)] <= ClampedOffset then
     begin
       Lo := Mid + 1;
     end
     else
       Hi := Mid - 1;
   end;
-  { Hi is now the index of the line containing AByteOffset }
+  { Hi is now the index of the line containing ClampedOffset }
   if Hi < 0 then
     Hi := 0;
   Result.Line := Hi + 1;  { 1-based line number }
-  Result.Column := AByteOffset - Entry^.LineOffsets[SizeUInt(Hi)] + 1;  { 1-based column }
+  Result.Column := ClampedOffset - Entry^.LineOffsets[SizeUInt(Hi)] + 1;  { 1-based column }
+  if Result.Column < 1 then
+    Result.Column := 1;
 end;
 
 function TSourceDatabase.DisplayPathForFileId(
