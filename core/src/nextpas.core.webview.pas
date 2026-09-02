@@ -85,6 +85,13 @@ type
   IWebviewWindow           = nextpas.core.webview.intf.IWebviewWindow;
   IWebviewBuilder          = nextpas.core.webview.builder.IWebviewBuilder;
 
+{ ---- 类型：window has-a（L3→L2 组合面，IWindow 显式别名） ---- }
+
+  IWindow = nextpas.core.window.intf.IWindow;
+  IWindowDispatcher = nextpas.core.window.intf.IWindowDispatcher;
+  IWindowHost = nextpas.core.window.intf.IWindowHost;
+  IWindowPrivateHandle = nextpas.core.window.intf.IWindowPrivateHandle;
+
   TWebviewBuilder = nextpas.core.webview.builder.TWebviewBuilder;
 
 { ---- 函数 inline 转发 ---- }

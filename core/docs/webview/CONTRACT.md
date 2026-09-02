@@ -27,8 +27,9 @@
 | `nextpas.core.webview.intf` | 接口 | `IWebviewWindow` / `IWebviewDispatcher` / `IWebviewAssets` / invoke 契约类型 | W1 |
 | `nextpas.core.webview.utils` | 共享辅助 | 资产路径归一 `NormalizeWebviewAssetPath`/`NormalizeWebviewAssetView`/`ViewFromPChar` 薄转发 L1 `text.view` Owner 单源 `StripLeadingSlash/StripLeadingSlashView/TrimLeftChar/ViewFromPChar`（`TStringView` 零拷贝 view + `SliceToStr` 单次 `SetString+Move` + `bytes.ops.CStrLen` SIMD 单源，bridge/vfs/gtk 同源 `inline` 零额外调用，loop 体在 Owner 侧非 inline 避膨胀，`Finalize` 不丢） | W1→S52 双轨归一至 Owner 已反哺 |
 | `nextpas.core.webview.callbacks` | 共享辅助 | method/proc→reference 单源适配（4 后端 inline 薄转发，零拷贝闭包，见折叠层 S105；仅依赖 `intf`，释放不丢） | S105 单源收敛 |
-| `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现） | W1 |
-| `nextpas.core.webview.live` | 私有索引（L1 薄别名） | 活窗紧凑 Vec 注册表（L1 `bytes.ops.TCompactLiveRegistry<T>` 薄别名单源，4 后端 has-a 复用，inline 零额外调用/零拷贝，`Default(T)` 释放不丢，见折叠层 S105） | S105→S107 已反哺 |
+| `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现；帧超限判定与计数已反哺 `metrics` Owner thin-forward，见 `metrics` 行） | W1 |
+| `nextpas.core.webview.metrics` | 可观测性（L3 Owner 单源） | 帧超限背压计数 Owner 单源（`WEBVIEW_MAX_FRAME_BYTES` 1 MiB Hard Limit 常量即契约 + `WebviewMetricsOversizedCount/NoteOversized/IsOversized*` 单调递增 `inline` 零拷贝背压计数, `bridge` `TryDecodeFrame/TryBuildOversizedReject` 薄转发零重复阈值/计数定义, `bytes.ops` 零拷贝视图思想 `inline` 零额外调用+`Default` 释放不丢, `bench/log` 通用可观测 Owner 候选可抽 L2 `metrics` 单源见 §1.2, UI 线程亲和 plain `UInt64`） | S106 已反哺 thin-forward (2026-09-02) |
+| `nextpas.core.webview.live` | 私有索引（L1 兼容薄别名 deprecated） | 活窗紧凑 Vec 注册表已收敛至 L1 `bytes.ops.TCompactLiveRegistry<T>` 单源（过程式 `WebviewLiveAdd/Remove` 双形已收敛删除，原薄转发已消除，现 `webview2` 直用 `bytes.ops.VecGrow/VecRemoveSwap` 单源 inline 零额外调用/零拷贝；`TWebviewLiveRegistry<T>` 保留 deprecated 兼容薄别名，新代码直用 `bytes.ops.TCompactLiveRegistry<T>` 提升跨家族复用度，`Default(T)` 释放不丢，见 S107 收敛） | S105→S107 收敛（2026-09-02 procedural 已删，alias deprecated） |
 | `nextpas.core.webview.assets` | 私有索引 | 资产前缀单哈希 + Trie 路由索引（`bridge` 单源承载，`WyHash` + `TStringView` 零拷贝 + L2 `collections.prefixrouter` 稀疏 Trie，见折叠层 S105；`Finalize`/`Dispose` 释放不丢，已反哺 L2） | S105→S108 Trie 单源收敛 |
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
@@ -59,7 +60,7 @@ base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 in
               └── vfs 单桥位（已直连 L2 mime.types 单源 MimeTypeFromPath inline 零拷贝 View 直通，无堆分配，复用 bytes.ops 单源）；mime 薄门面已物理删除（S107，不再参与家族 glob，单源收敛）；webview2/wk 同 gtk 位（均 has-a IWindow + live + callbacks 单源）
 gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool(私有：viewmap 单哈希单源 + pool Slab 单源) ← gtk        （loader 装载 ffi 函数指针；viewmap/pool 仅 gtk 后端 uses，不经门面）
 validation 为家族内校验实现层（四件套纯度 base←validation/intf←utils/callbacks/bridge←impl←facade；utils/callbacks 为家族内共享辅助，不经门面重复实现，仅 bridge/factory/后端 uses；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
-live/assets/viewmap/pool 为家族内索引/池化（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发/直复用不自溢）：live 已反哺 L1 `bytes.ops.TCompactLiveRegistry<T>`（`VecGrow/RemoveSwap/Snapshot/Trim` inline 零额外调用，0→4→2× 单源，`Default(T)` 释放不丢，跨家族 `window.live` 同源薄转发零重复，已反哺落地 2026-09-02 经设计评审）、assets 已反哺 L2 `collections.prefixrouter` 稀疏 Trie（`TryGetLongestPrefixView` inline 零拷贝）、viewmap 已直复用 L1 `collections.hashmap`（`@PointerHash→HashMix32` 已落地 2026-09-02）、pool 已反哺 L1 `sync.pool`（`SyncPoolTryAcquire/Release` 双池 Slab 已落地 2026-09-02）；均 `inline/零拷贝` + `Finalize/Dispose/FreeAndNil` 不丢，跨家族收敛至 `bytes.ops`/`sync.pool`/`hashmap` 单源，业务以 CONTRACT 为准、缺能力先反哺 Owner，经设计评审不自溢
+live/assets/viewmap/pool 为家族内索引/池化（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发/直复用不自溢，live 过程式双形已收敛删除）：live 已收敛至 L1 `bytes.ops.TCompactLiveRegistry<T>` 单源（`VecGrow/RemoveSwap/Snapshot/Trim` inline 零额外调用，0→4→2× 单源，`Default(T)` 释放不丢；`TWebviewLiveRegistry<T>` 保留 deprecated 兼容薄别名，新代码直用 `bytes.ops.TCompactLiveRegistry<T>` 跨家族复用，`webview2` GLive 直用 `VecGrow/VecRemoveSwap` 单源；过程式 `WebviewLiveAdd/Remove` 已删除消除薄转发冗余，跨家族 `window.live` 同源薄转发零重复，已反哺落地 2026-09-02 经设计评审）、assets 已反哺 L2 `collections.prefixrouter` 稀疏 Trie（`TryGetLongestPrefixView` inline 零拷贝）、viewmap 已直复用 L1 `collections.hashmap`（`@PointerHash→HashMix32` 已落地 2026-09-02）、pool 已反哺 L1 `sync.pool`（`SyncPoolTryAcquire/Release` 双池 Slab 已落地 2026-09-02）；均 `inline/零拷贝` + `Finalize/Dispose/FreeAndNil` 不丢，跨家族收敛至 `bytes.ops`/`sync.pool`/`hashmap` 单源，业务以 CONTRACT 为准、缺能力先反哺 Owner，经设计评审不自溢
 utils/callbacks 为家族内共享辅助（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发不自溢）：utils 已反哺 L1 `text.view` Owner 单源（`TrimLeftChar`/`StripLeadingSlashView`/`StripLeadingSlash`/`ViewFromPChar`，`SliceToStr`/`CStrLen` 单源，热点 `TStringView` 零拷贝 `inline` 薄转发、String 版 `SliceToStr` 单次 `SetString+Move` CoW 零分配，`Finalize` 不丢，已落地 2026-09-02 经设计评审）、callbacks 已反哺 L0 `base.callbacks`（`Callback*MethodToRef/ProcToRef` 三形态 `TProc`/`TProc1<T>`/`TCallbackScaleHandler` inline 零拷贝 `Move` 零拷贝，已落地 2026-09-02 经设计评审）；`inline/零拷贝` + `Default(T)` 不丢，守四件套与 L0-L3，跨家族单源审计通过，经设计评审不自溢
 window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
 
@@ -69,14 +70,15 @@ window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/g
 
 | 候选 | Owner 单源 (L层) | 状态 |
 |------|------------------|------|
-| `live` | L1 `bytes.ops.TCompactLiveRegistry<T>` (`VecGrowCapacity` 0→4→2× / `VecRemoveSwap` O(1) / `Snapshot`/`Trim` inline 零拷贝) | 已反哺 thin-forward (2026-09-02) |
+| `live` | L1 `bytes.ops.TCompactLiveRegistry<T>` (`VecGrowCapacity` 0→4→2× / `VecRemoveSwap` O(1) / `Snapshot`/`Trim` inline 零拷贝) | 已收敛：过程式 `WebviewLiveAdd/Remove` 双形已删（冗余薄转发消除），`TWebviewLiveRegistry<T>` 保留 deprecated 兼容薄别名，新代码直用 `bytes.ops.TCompactLiveRegistry<T>` 单源（2026-09-02 procedural 已删，alias deprecated） |
 | `assets` | L2 `collections.prefixrouter` (`TryGetLongestPrefixView` `TStringView` 零拷贝 O(m) 稀疏 Trie) | 已反哺 thin-forward (2026-09-02) |
 | `viewmap` | L1 `collections.hashmap` `THashMap<Pointer,Pointer>` via `@PointerHash→HashMix32` inline | 已直复用 (2026-09-02) |
 | `pool` | L1 `sync.pool` (`SyncPoolTryAcquire/Release` 双池 Slab) | 已反哺 thin-forward (2026-09-02) |
 | `utils` | L1 `text.view` (`StripLeadingSlash`/ `TrimLeftChar`/ `ViewFromPChar` + `SliceToStr`/`CStrLen` 零拷贝) | 已反哺 thin-forward (2026-09-02) |
 | `callbacks` | L0 `base.callbacks` (`Callback*MethodToRef/ProcToRef` `Move` 零拷贝) | 已反哺 thin-forward (2026-09-02) |
+| `metrics` | L3 `nextpas.core.webview.metrics` (`WEBVIEW_MAX_FRAME_BYTES` 1 MiB Hard Limit 常量即契约 + `WebviewMetricsOversizedCount/NoteOversized/IsOversized*` 单调递增 `inline` 零拷贝背压计数, `bridge` `TryDecodeFrame/TryBuildOversizedReject` 薄转发零重复阈值/计数, `bytes.ops` 单源思想零拷贝视图) | 已反哺 thin-forward (2026-09-02) — 对应 BRIDGE_PROTOCOL §6 阈值 + INV-7 exactly-once 背压可观测闭环, 可抽 L2 `metrics` 单源见 Owner 注释 |
 
-> 纪律：6/6 已反哺经设计评审落地，现 thin-forward/直复用不自溢；详见 Owner 单元及单测 inline/零拷贝基线，业务以 CONTRACT 为准、缺能力先反哺 Owner（`inline/零拷贝` + `Default(T)/Dispose/FreeAndNil` 不丢，守四件套与 L0-L3）。
+> 纪律：7/7 已反哺经设计评审落地，现 thin-forward/直复用不自溢（含 `metrics` 帧超限背压计数 Owner 单源 `WEBVIEW_MAX_FRAME_BYTES` 1 MiB + `OversizedCount` `inline` 零拷贝）；详见 Owner 单元及单测 inline/零拷贝基线，业务以 CONTRACT 为准、缺能力先反哺 Owner（`inline/零拷贝` + `Default(T)/Dispose/FreeAndNil` 不丢，守四件套与 L0-L3）。
 ```
 
 - **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs、window 单元**（`intf` 仅在 M6 后例外允许 `uses window.intf` 以暴露 `IWindow` 类型与 `Window` 属性，仍禁止触后端实现）。
@@ -517,7 +519,7 @@ procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
   invoke pending 默认不限时（前端 Promise 天然有调用方语义），可选超时参数留待真实需求。
 - INV-7 用户回调恰好一次触发：Eval 二选一（含 Close 时在途 Eval 统一
   `EWebviewEvalFailed` 收尾）、invoke completion 至多一次、事件每来源每次一条。
-  fake 后端的契约测试逐条冻结此性质。
+  帧超限背压可观测阈值 `WEBVIEW_MAX_FRAME_BYTES` 1 MiB（BRIDGE_PROTOCOL §6）与计数单源收口于 `nextpas.core.webview.metrics` Owner（`bridge` `TryDecodeFrame/TryBuildOversizedReject` `inline` 薄转发零重复阈值/计数, `bytes.ops` 单源思想零拷贝视图+`Default` 释放不丢，可抽独立 `metrics` 可观测模块候选见 §1.2），exactly-once 语义与阈值共同闭环；fake 后端的契约测试逐条冻结此性质。
 
 ## 8. 测试门禁
 

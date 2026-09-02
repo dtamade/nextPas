@@ -192,8 +192,8 @@ uses
   nextpas.core.webview.validation,
   nextpas.core.webview.utils;
 
-{ JsStringLit: JSON Str via json owner, 局部 Builder 零共享，inline 零拷贝。 }
-function JsStringLit(const AValue: string): string; inline;
+{ JsStringLit: JSON Str via json owner，局部 Builder 零共享；含 Builder/Writer 循环体按 design-conventions §2 红线二外联，避 I-Cache 膨胀，零共享+零拷贝视图由调用方保障。 }
+function JsStringLit(const AValue: string): string;
 var
   LB: TStringBuilder;
   W: TJsonWriter;
@@ -234,10 +234,11 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{ Parse→Validate→Normalize: three-layer split, zero-copy View, 局部 Doc/Builder 零共享，bytes.ops 单源。 }
+{ Parse→Validate→Normalize: three-layer split, zero-copy View, 局部 Doc/Builder 零共享，bytes.ops 单源。
+  BridgeParseFrame 外联：含 TJsonDocument.Parse 分配与校验，多调用点展开增高频解码路径 I-Cache 膨胀，按 design-conventions §2 红线二外联，零拷贝 View 入参。 }
 
 function BridgeParseFrame(const AView: TStringView; var ADoc: TJsonDocument;
-  out ARoot: TJsonValue): Boolean; inline;
+  out ARoot: TJsonValue): Boolean;
 begin
   Result := False;
   if AView.Len = 0 then

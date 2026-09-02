@@ -157,20 +157,22 @@ var
 
 procedure GrowLiveList; inline;
 begin
-  // single source: bytes.ops VecGrow (0→4→2×) inline via webview.live
+  // perf: single source bytes.ops VecGrow 0→4→2× inline zero extra call, zero-copy
   specialize VecGrow<TWebView2Webview>(GLiveList, GLiveListCount);
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
 begin
-  // single source: webview.live WebviewLiveAdd -> VecGrow inline
-  specialize WebviewLiveAdd<TWebView2Webview>(GLiveList, GLiveListCount, AInst);
+  // perf: single source bytes.ops VecGrow inline 0→4→2× zero extra call, zero-copy (converged from webview.live WebviewLiveAdd thin-forward)
+  specialize VecGrow<TWebView2Webview>(GLiveList, GLiveListCount);
+  GLiveList[GLiveListCount] := AInst;
+  Inc(GLiveListCount);
 end;
 
 procedure UnregisterLive(AInst: TWebView2Webview);
 begin
-  // single source: webview.live WebviewLiveRemoveSwap inline O(1) swap, bytes.ops VecRemoveSwap single source, hot close avoids O(n²)
-  specialize WebviewLiveRemoveSwap<TWebView2Webview>(GLiveList, GLiveListCount, AInst);
+  // perf: single source bytes.ops VecRemoveSwap inline O(1) swap zero-copy, hot close avoids O(n²), trailing Default(T) releases ref not lost
+  specialize VecRemoveSwap<TWebView2Webview>(GLiveList, GLiveListCount, AInst);
 end;
 
 function WebView2LiveWindowCount: Integer;

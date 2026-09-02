@@ -7,8 +7,8 @@
        零拷贝，短临界 <1µs，资源 Finalize 释放不丢。
 
        性能修复：RecordOutcome 竞争路径 O(n) 持锁搬移消除（同 dispatcher）。
-       原二次持锁内再次 VecCopy O(n) 搬移放大尾延迟；现改为乐观重试：
-       分配 + VecCopy 仅锁外，二次持锁仅 O(1) 指针检查与写入，stale 重试零 O(n) 持锁。 *}
+       原二次持锁内再次 VecCopy O(n) 搬移放大尾延迟；现改为预校验三阶段乐观重试：
+       快照后 O(1) 预校验（有空位直接写入无分配/无拷贝，stale 无分配/无拷贝重取），仅有效时锁外分配+VecCopy 单源 inline 零拷贝，二次持锁仅 O(1) 指针检查与写入，拷贝窗口竞争 stale 丢弃 LNew 零 O(n) 持锁，mirrors dispatcher 单源。 *}
 
 { handler 异常 → 协议错误码映射：唯一实现收敛至 bridge.NormalizeInvokeCode 单源，
   fake 与未来真实后端直接复用零间接层，避免双处定义漂移；原 MapInvokeCode 薄包装已移除。 }
@@ -145,7 +145,7 @@ var
   bytes.ops Vec 单源 inline 零额外调用，零额外堆分配 }
 procedure RegisterLive(AWin: TFakeWebview); inline;
 begin
-  // perf: single source TWebviewLiveRegistry.Register -> WebviewLiveAdd -> VecGrow inline (0→4→2×) zero extra alloc; cross-thread safety via GLiveLck
+  // perf: single source TCompactLiveRegistry.Register -> VecGrow inline (0→4→2×) zero extra call, zero-copy; via webview.live deprecated alias (new code prefers bytes.ops.TCompactLiveRegistry<T>); cross-thread safety via GLiveLck
   GLiveLck.Acquire;
   try
     GLiveWindows.Register(AWin);
@@ -319,7 +319,7 @@ procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 var
   LNew, LOld: TFakeInvokeOutcomes;
-  LCap, LCount, LOldLen, LIdx: Integer;
+  LCap, LCount, LOldLen, LIdx, LLen: Integer;
   // single source outcome write helper:收敛重复9行赋值块，inline零额外调用
   procedure WriteAt(AAt: Integer); inline;
   begin
@@ -331,7 +331,7 @@ var
   end;
 begin
   // stability: managed assignments keep AddRef/Release balanced, heaptrc0 safe, no PPointer steal; perf via bytes.ops VecCopy/VecGrowCapacity single source inline, zero mod, zero leak
-  // perf fix: optimistic retry — allocation + VecCopy outside lock, install under lock only O(1) check+swap, stale=>reuse LNew 零额外垃圾与VecCopy浪费，mirrors dispatcher fix
+  // perf fix: optimistic retry — pre-validate before alloc+VecCopy outside lock, install under lock only O(1) check+swap, stale=>discard LNew zero O(n) hold, mirrors dispatcher single source bytes.ops VecGrowCapacity/VecCopy inline zero extra call
   LNew := nil;
   while True do
   begin
@@ -351,19 +351,38 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation outside lock only when capacity changes, reuse LNew buffer on stale contention to avoid extra garbage; single source VecGrowCapacity inline zero extra call
-    if Length(LNew) < LCap then
-      SetLength(LNew, LCap);
-    // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy; reuse avoids extra alloc+copy waste under high Post concurrency
-    if LCount > 0 then
-      specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
+    // perf: O(1) pre-validate before heap alloc/linearize — avoids wasted O(n) VecCopy on stale competitive retry, zero alloc/copy if stale or space appeared, single source bytes.ops VecGrowCapacity inline
     FLck.Acquire;
     try
-      if FOutcomesCount < Length(FOutcomes) then
+      LLen := Length(FOutcomes);
+      if FOutcomesCount < LLen then
       begin
         LIdx := FOutcomesCount;
         Inc(FOutcomesCount);
         WriteAt(LIdx);
+        Exit;
+      end;
+      if (Length(FOutcomes) <> LOldLen) or (FOutcomesCount <> LCount) then
+        Continue;
+    finally
+      FLck.Release;
+    end;
+    // perf: heap allocation (SetLength zero-init) outside lock, only after snapshot validated still needs grow, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
+    SetLength(LNew, LCap);
+    // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy; only executed when pre-validate passed, so competitive retry does not repeat copy
+    if LCount > 0 then
+      specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
+    // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
+    FLck.Acquire;
+    try
+      LLen := Length(FOutcomes);
+      if FOutcomesCount < LLen then
+      begin
+        LIdx := FOutcomesCount;
+        Inc(FOutcomesCount);
+        WriteAt(LIdx);
+        // stability: release linearized refs held in LNew to avoid leak on competitive copy-window race, Finalize releases AddRef, zero leak
+        LNew := nil;
         Exit;
       end;
       if (Length(FOutcomes) = LOldLen) and (FOutcomesCount = LCount) then
@@ -376,7 +395,8 @@ begin
         WriteAt(LIdx);
         Exit;
       end;
-      // contention: stale snapshot — keep LNew for reuse and retry, zero O(n) under lock, rare path, avoids extra garbage and VecCopy waste
+      // contention during copy window (rare) — discard linearized LNew and retry, zero O(n) under lock, avoids tail latency amplification
+      LNew := nil;
     finally
       FLck.Release;
     end;

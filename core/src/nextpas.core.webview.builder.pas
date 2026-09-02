@@ -238,7 +238,7 @@ end;
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
-  // perf: registry Register -> WebviewLiveAdd -> bytes.ops VecGrow 单源 0→4→2× inline 零额外调用，零拷贝（FLive 单记录聚合单点分发）
+  // perf: registry Register -> VecGrow single source 0→4→2× inline zero extra call, zero-copy (via TCompactLiveRegistry, deprecated alias webview.live; FLive 单记录聚合单点分发)
   FLive.InitScripts.Register(AJavascript);
   Result := Self;
 end;

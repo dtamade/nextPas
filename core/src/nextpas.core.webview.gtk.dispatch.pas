@@ -149,7 +149,11 @@ begin
   try
     LRec^.Proc();
   except
-    on E: Exception do ;
+    on E: Exception do
+    begin
+      System.Write(StdErr, '[npw-gtk] DispatchIdleTrampoline handler exception: ', E.ClassName, ': ', E.Message, LineEnding);
+      System.Flush(StdErr);
+    end;
   end;
   Result := GLIB_SOURCE_REMOVE;
 end;
