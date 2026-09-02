@@ -45,8 +45,6 @@ function NextPowerOfTwo(const AValue: SizeUInt): SizeUInt;
 
 {** Round AValue up to the next multiple of AAlignment (must be power of two). }
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
-{** 64-bit AlignUp — L0 single source for blob offsets beyond SizeUInt (writer/respack). }
-function AlignUp64(const AValue, AAlignment: UInt64): UInt64; inline;
 
 {** Return AAlignment if it is a power of two and >= DEFAULT_ALIGNMENT,
     otherwise return DEFAULT_ALIGNMENT. }
@@ -91,16 +89,6 @@ begin
   LMask := AAlignment - 1;
   if AValue > High(SizeUInt) - LMask then
     Exit(0); // overflow → 0 for caller
-  Result := (AValue + LMask) and not LMask;
-end;
-
-function AlignUp64(const AValue, AAlignment: UInt64): UInt64;
-var
-  LMask: UInt64;
-begin
-  LMask := AAlignment - 1;
-  if AValue > High(UInt64) - LMask then
-    Exit(0);
   Result := (AValue + LMask) and not LMask;
 end;
 

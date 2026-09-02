@@ -65,9 +65,7 @@ begin
     Inc(LPos, LG.ByteLen);
   end;
   if LBest > 0 then
-    LCut := LBest
-  else
-    LCut := 0;
+    LCut := LBest;
   Result := AgentUtf8SafeTruncate(LFull, LCut);
 end;
 

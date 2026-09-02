@@ -13,7 +13,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.cursor,
   nextpas.core.zip.base;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word; inline;
@@ -28,20 +27,8 @@ function DosMinUnixSec: Int64; inline;
 function DosMaxUnixSec: Int64; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 
-procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
-procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
-function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
-function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
-
-procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
-
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
-procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
-function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
-function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
 
-procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
-  AEntrySize, AMaxTotal: UInt64);
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 
@@ -94,78 +81,9 @@ begin
   Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
-function DosMaxUnixSec: Int64; inline;
-begin
-  Result := nextpas.core.zip.base.DosMaxUnixSec;
-end;
-
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
   Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
-end;
-
-procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
-begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
-begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > ASize) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
-var
-  LN: SizeUInt;
-begin
-  LN := ACount;
-  if LN > ARemaining then
-    LN := ARemaining;
-  if LN > 0 then
-  begin
-    Move(ABase^, ABuf, LN);
-    Inc(ABase, LN);
-    Dec(ARemaining, LN);
-  end;
-  Result := LN;
-end;
-
-function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
-var
-  LAvail: SizeUInt;
-begin
-  if ACount = 0 then
-    Exit(0);
-  if APos >= SizeUInt(Length(AData)) then
-    Exit(0);
-  LAvail := SizeUInt(Length(AData)) - APos;
-  if ACount < LAvail then
-    Result := ACount
-  else
-    Result := LAvail;
-  if Result > 0 then
-  begin
-    Move(AData[APos], ABuf, Result);
-    Inc(APos, Result);
-  end;
-end;
-
-procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
-begin
-  if AC.ReadU32LE <> C_ZIP_LOCAL_SIG then
-    raise EParseError.Create('zip: bad local header signature');
-  AC.ReadU16LE;                    { version needed }
-  AC.ReadU16LE;                    { flags }
-  AC.ReadU16LE;                    { method }
-  AC.ReadU16LE;                    { DOS time }
-  AC.ReadU16LE;                    { DOS date }
-  AC.ReadU32LE;                    { local crc }
-  AC.ReadU32LE;                    { local compressed size }
-  AC.ReadU32LE;                    { local uncompressed size }
-  ANameLen := AC.ReadU16LE;
-  AExtraLen := AC.ReadU16LE;
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
@@ -177,46 +95,6 @@ begin
     raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
 end;
 
-procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
-begin
-  if AE.IsEncrypted and (Length(APassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + AE.Name);
-end;
-
-function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
-begin
-  if (AIndex < 0) or (AIndex >= ACount) then
-    raise EIndexOutOfRangeError.Create(
-      'zip: entry index out of range: ' + IntToStr(AIndex));
-  Result := AIndex;
-end;
-
-function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
-var
-  LI: Integer;
-begin
-  for LI := 0 to High(AEntries) do
-    if AEntries[LI].Name = AName then
-      Exit(LI);
-  Result := -1;
-end;
-
-procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
-  AEntrySize, AMaxTotal: UInt64);
-begin
-  if AMaxTotal = 0 then
-  begin
-    Inc(ACumulative, AEntrySize);
-    Exit;
-  end;
-  if AEntrySize > AMaxTotal then
-    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-  if ACumulative > AMaxTotal - AEntrySize then
-    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-  Inc(ACumulative, AEntrySize);
-end;
-
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 var
@@ -226,7 +104,13 @@ begin
   if AMaxTotal = 0 then Exit;
   LCum := 0;
   for LI := 0 to High(AEntries) do
-    GuardTotalOutputAdvance(LCum, AEntries[LI].UncompressedSize, AMaxTotal);
+  begin
+    if AEntries[LI].UncompressedSize > AMaxTotal then
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+    if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
+      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+    Inc(LCum, AEntries[LI].UncompressedSize);
+  end;
 end;
 
 function DecompressEntryVerified(const AE: TZipEntryInfo;

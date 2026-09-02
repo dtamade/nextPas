@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
@@ -44,7 +43,6 @@ type
     procedure SetCtrl(AIndex: SizeUInt; AValue: Byte); inline;
     function FindInsertSlot(AHash: UInt32; out AWasEmpty: Boolean): SizeUInt;
     class function HashStr(const S: string): UInt32; static; inline;
-    class function HashSpan(const S: TByteSpan): UInt32; static; inline;
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
@@ -52,9 +50,7 @@ type
     destructor Destroy; override;
 
     function TryGetValue(const AKey: string; out AValue: V): Boolean;
-    function TryGetValueSpan(const AKey: TByteSpan; out AValue: V): Boolean; inline;
     function ContainsKey(const AKey: string): Boolean;
-    function ContainsKeySpan(const AKey: TByteSpan): Boolean; inline;
     procedure Put(const AKey: string; const AValue: V);
     function Get(const AKey: string): V;
     function Remove(const AKey: string): Boolean;
@@ -73,18 +69,6 @@ begin
   Result := 2166136261;
   for i := 1 to Length(S) do
     Result := (Result xor Ord(S[i])) * 16777619;
-  Result := (Result xor (Result shr 16)) * UInt32($7feb352d);
-  Result := (Result xor (Result shr 15)) * UInt32($846ca68b);
-  Result := Result xor (Result shr 16);
-end;
-
-class function TSwissTableStr.HashSpan(const S: TByteSpan): UInt32; inline;
-var
-  I: SizeUInt;
-begin
-  Result := 2166136261;
-  for I := 0 to S.Len - 1 do
-    Result := (Result xor S.Data[I]) * 16777619;
   Result := (Result xor (Result shr 16)) * UInt32($7feb352d);
   Result := (Result xor (Result shr 15)) * UInt32($846ca68b);
   Result := Result xor (Result shr 16);
@@ -281,47 +265,6 @@ function TSwissTableStr.ContainsKey(const AKey: string): Boolean;
 var LDummy: V;
 begin
   Result := TryGetValue(AKey, LDummy);
-end;
-
-function TSwissTableStr.TryGetValueSpan(const AKey: TByteSpan; out AValue: V): Boolean; inline;
-var
-  Lh: UInt32; Lh2: Byte;
-  LGroupIdx, LProbeOfs, Li, LBase: SizeUInt;
-  LMask, LEmptyMask: TMask16;
-  LKeyLen: SizeUInt;
-begin
-  Result := False;
-  if FCapacity = 0 then Exit(False);
-  Lh := HashSpan(AKey);
-  Lh2 := Lh and $7F;
-  LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
-  LProbeOfs := 0;
-  while True do
-  begin
-    LBase := LGroupIdx * GROUP_SIZE;
-    LMask := Vec16CmpEq(@FCtrl[LBase], Lh2);
-    while LMask <> 0 do
-    begin
-      Li := LBase + SizeUInt(Vec16Ctz(LMask));
-      LKeyLen := SizeUInt(Length(FSlots[Li].Key));
-      if LKeyLen = AKey.Len then
-      begin
-        if (LKeyLen = 0) or (AKey.Data = nil) or CompareMem(@FSlots[Li].Key[1], AKey.Data, LKeyLen) then
-        begin AValue := FSlots[Li].Value; Exit(True); end;
-      end;
-      LMask := LMask and (LMask - 1);
-    end;
-    LEmptyMask := Vec16CmpEq(@FCtrl[LBase], CTRL_EMPTY);
-    if LEmptyMask <> 0 then Exit(False);
-    Inc(LProbeOfs);
-    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
-  end;
-end;
-
-function TSwissTableStr.ContainsKeySpan(const AKey: TByteSpan): Boolean; inline;
-var LDummy: V;
-begin
-  Result := TryGetValueSpan(AKey, LDummy);
 end;
 
 procedure TSwissTableStr.Put(const AKey: string; const AValue: V);

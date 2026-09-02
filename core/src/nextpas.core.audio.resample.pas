@@ -25,7 +25,6 @@ function CreateLinearResampler: IAudioResampler;
 implementation
 
 uses
-  nextpas.core.base.utils,
   nextpas.core.audio.errors;
 
 function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer;
@@ -113,25 +112,23 @@ begin
             sfU8:
               LF := PcmU8ToF32(AInput.Data[LSrcOff]);
             sfS16:
-              LF := PcmS16ToF32(SmallInt(AInput.Data[LSrcOff] or (AInput.Data[LSrcOff + 1] shl 8)));
+              LF := PcmS16ToF32(PcmReadS16LE(AInput.Data, LSrcOff));
             sfS24:
               begin
                 LS24 := PcmReadS24LE(AInput.Data, LSrcOff);
                 LF := PcmS24ToF32(LS24);
               end;
             sfS32:
-              LF := PcmS32ToF32(LongInt(AInput.Data[LSrcOff] or (AInput.Data[LSrcOff + 1] shl 8) or (AInput.Data[LSrcOff + 2] shl 16) or (AInput.Data[LSrcOff + 3] shl 24)));
+              LF := PcmS32ToF32(PcmReadS32LE(AInput.Data, LSrcOff));
             sfF32:
               begin
-                // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-                CopyMem(@LF, @AInput.Data[LSrcOff], SizeUInt(SizeOf(Single)));
+                Move(AInput.Data[LSrcOff], LF, SizeOf(Single));
               end;
           else
             LF := 0;
           end;
         end;
-        // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-        CopyMem(@LPlanes[LCh][LFrame * SizeOf(Single)], @LF, SizeUInt(SizeOf(Single)));
+        Move(LF, LPlanes[LCh][LFrame * SizeOf(Single)], SizeOf(Single));
       end;
   end;
 

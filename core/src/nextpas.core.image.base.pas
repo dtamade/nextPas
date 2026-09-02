@@ -1,17 +1,6 @@
 {**
  * nextpas.core.image.base - TBitmap 容器（COW，TBytes 持有，Stride 64B 对齐）+ 图像格式
- * L1 graphics.base 零依赖（仅 base/errors + mem.base.AlignUp）；AlignUp 复用 mem.base。
- * 封装：FWidth/FHeight/FStride/FPixels 私有，Stride 64B 对齐；ToCompact 去 pad 紧凑拷贝。
- * COW：Clone 浅拷贝共享 TBytes，EnsureUnique 写前 SetLength 深拷贝；GetPixelPtr/RowPtr
- *   为可写路径（内部触发 EnsureUnique），ConstPixelPtr/ConstRowPtr 为只读路径（不触发 COW）。
- * 线程：TBitmap 非线程安全；EnsureUnique 的 RC 读取为非原子 over-copy safe，
- *   并发 Clone+写入需外部同步，image.dispatch 的 mutex 不覆盖位图数据。
- * 指针生命周期：RowPtr/GetPixelPtr/Const* 返回裸 PByte 仅在下一次可写调用前有效
- *   （Clear/EnsureUnique/重分配即悬垂）；禁止跨调用缓存，需即用即弃。
- * 写循环应外提 EnsureUnique 一次后复用 UnsafeMutableRowPtr + Stride 偏移，
- *   禁止通过 Const* 野指针写入（COW 隔离绕过）。
- * 只读约束：Const* 返回只读视图，禁止写入；需紧凑数据用 ToCompact。
- * L2，仅 L0-L1，零 RTL；Premultiply 复用 simd.raster 批量接口。
+ * L2，仅 L0-L1，零 RTL。
  *}
 unit nextpas.core.image.base;
 
@@ -47,26 +36,17 @@ type
     procedure Clear;
     function IsEmpty: Boolean; inline;
     function BytePerPixel: Integer; inline;
-    // 可写路径：触发 EnsureUnique COW，返回指针仅至下一次写操作前有效，禁止跨调用缓存
     function GetPixelPtr(X, Y: Integer): PByte;
-    // 只读路径：不触发 COW，返回只读视图禁止写入；批量读用 ConstRowPtr
     function ConstPixelPtr(X, Y: Integer): PByte; inline;
-    // 可写行指针：触发 EnsureUnique；扫描行批量写应外提 EnsureUnique 后改用 UnsafeMutableRowPtr
     function RowPtr(Y: Integer): PByte;
-    // 只读行指针：不触发 COW，禁止写入；配合 Stride 偏移批量访问，生命周期即用即弃
     function ConstRowPtr(Y: Integer): PByte; inline;
-    // 可写行指针（不触发 COW）：仅在已 EnsureUnique 后调用，供批量写复用，避免 Const* 语义模糊
-    function UnsafeMutableRowPtr(Y: Integer): PByte; inline;
-    // 去 pad 紧凑拷贝（Width*Bpp 紧凑），避免绕过 ToCompact 直接野指针写
     function ToCompact: TBytes;
     procedure Premultiply;
     procedure Unpremultiply;
     function Clone: TBitmap;
-    // 写前去重：共享时 SetLength 深拷贝；扫描行批量写应外提一次避免每行校验；非线程安全需外部同步
     procedure EnsureUnique; inline;
     property Width: Integer read FWidth;
     property Height: Integer read FHeight;
-    property Stride: Integer read FStride;
     property Format: TBitmapFormat read FFormat;
     property IsEmptyProp: Boolean read GetIsEmpty;
   end;
@@ -76,8 +56,7 @@ function AlignUp64(AValue: Integer): Integer; inline;
 implementation
 
 uses
-  nextpas.core.mem.base,
-  nextpas.core.simd.raster;
+  nextpas.core.mem.base;
 
 function AlignUp64(AValue: Integer): Integer;
 begin
@@ -136,21 +115,8 @@ begin
 end;
 
 procedure TBitmap.EnsureUnique;
-var
-  P: PByte;
-  RC: SizeInt;
-  PRC: ^SizeInt;
 begin
-  if Length(FPixels) = 0 then Exit;
-  // FPC TBytes header = refcount+high before data.
-  // Over-copy safe but not thread-safe: RC read is non-atomic; concurrent Clone+EnsureUnique
-  // requires external synchronization. image.dispatch mutex does not cover bitmap data.
-  // Single-thread correctness: RC<>1 triggers SetLength deep copy; literal RC<0 also copies.
-  P := @FPixels[0];
-  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
-  RC := PRC^;
-  if RC <> 1 then
-    SetLength(FPixels, Length(FPixels));
+  if Length(FPixels) > 0 then SetLength(FPixels, Length(FPixels));
 end;
 
 function TBitmap.IsEmpty: Boolean;
@@ -236,23 +202,6 @@ begin
   Result := @FPixels[Off];
 end;
 
-function TBitmap.UnsafeMutableRowPtr(Y: Integer): PByte;
-var
-  Off, RowBytes: Integer;
-begin
-  if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then
-    raise EArgumentError.Create('nextpas.core.image.base.pas: UnsafeMutableRowPtr on empty bitmap');
-  if (Y < 0) or (Y >= FHeight) then
-    raise EArgumentError.Create('nextpas.core.image.base.pas: UnsafeMutableRowPtr out of bounds');
-  if Y > High(Integer) div FStride then
-    raise EArgumentError.Create('nextpas.core.image.base.pas: UnsafeMutableRowPtr Y*Stride overflow');
-  Off := Y * FStride;
-  RowBytes := FWidth * BytePerPixel;
-  if (Off < 0) or (Off + RowBytes > Length(FPixels)) then
-    raise EArgumentError.Create('nextpas.core.image.base.pas: UnsafeMutableRowPtr offset out of bounds');
-  Result := @FPixels[Off];
-end;
-
 function TBitmap.ToCompact: TBytes;
 var
   ByRow, Y: Integer;
@@ -304,16 +253,36 @@ end;
 
 procedure TBitmap.Premultiply;
 var
-  Y: Integer;
-  Row: PByte;
+  Y, N4, Tail: Integer;
+  P: PByte;
+  A: Byte;
+  Base: PByte;
 begin
   if FFormat = bfGray8 then Exit;
   if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then Exit;
   EnsureUnique;
+  Base := @FPixels[0];
   for Y := 0 to FHeight - 1 do
   begin
-    Row := @FPixels[Y * FStride];
-    RasterPremultiply(Row, FWidth);
+    P := Base + Y * FStride;
+    N4 := FWidth shr 2;
+    Tail := FWidth and 3;
+    while N4 > 0 do
+    begin
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      A := P[3]; if A = 0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A <> 255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+      Dec(N4);
+    end;
+    case Tail of
+      3: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+      2: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; Inc(P,4);
+             A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+      1: begin A:=P[3]; if A=0 then begin P[0]:=0; P[1]:=0; P[2]:=0; end else if A<>255 then begin P[0]:=Byte((Integer(P[0])*Integer(A)) div 255); P[1]:=Byte((Integer(P[1])*Integer(A)) div 255); P[2]:=Byte((Integer(P[2])*Integer(A)) div 255); end; end;
+    end;
   end;
 end;
 
@@ -325,16 +294,36 @@ end;
 
 procedure TBitmap.Unpremultiply;
 var
-  Y: Integer;
-  Row: PByte;
+  Y, N4, Tail: Integer;
+  P: PByte;
+  A: Byte;
+  Base: PByte;
 begin
   if FFormat = bfGray8 then Exit;
   if GetIsEmpty or (Length(FPixels) = 0) or (FWidth <= 0) or (FHeight <= 0) then Exit;
   EnsureUnique;
+  Base := @FPixels[0];
   for Y := 0 to FHeight - 1 do
   begin
-    Row := @FPixels[Y * FStride];
-    RasterUnpremultiply(Row, FWidth);
+    P := Base + Y * FStride;
+    N4 := FWidth shr 2;
+    Tail := FWidth and 3;
+    while N4 > 0 do
+    begin
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+      Dec(N4);
+    end;
+    case Tail of
+      3: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+      2: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; Inc(P,4);
+             A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+      1: begin A:=P[3]; if (A<>0) and (A<>255) then begin P[0]:=Byte((Integer(P[0])*255) div Integer(A)); P[1]:=Byte((Integer(P[1])*255) div Integer(A)); P[2]:=Byte((Integer(P[2])*255) div Integer(A)); end; end;
+    end;
   end;
 end;
 

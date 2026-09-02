@@ -1,7 +1,5 @@
 unit nextpas.core.audio.codec.meta;
 {$I nextpas.core.settings.inc}
-{ Single source: bytes.ops (BytesToString/BytesSliceToString) and
-  bytes.cursor for container parsing; this meta parser has zero Move — all bytes->string via bytes.ops single source. }
 interface
 uses nextpas.core.base, nextpas.core.io.intf, nextpas.core.audio.base;
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean;
@@ -9,7 +7,6 @@ function TryParseVorbisComment(const AData: TBytes; out ATags: TAudioTags): Bool
 function TryParseRiffInfo(const AStream: IStream; ALimit: Int64; out ATags: TAudioTags): Boolean;
 function MergeTags(const APrimary, AFallback: TAudioTags): TAudioTags;
 implementation
-uses nextpas.core.bytes.ops;
 function IsSpaceChar(C: Char): Boolean; inline;
 begin Result := (C=' ') or (C=#9) or (C=#10) or (C=#13); end;
 function TrimStr(const S: string): string;
@@ -105,7 +102,7 @@ begin Result:=True; S:=''; if ALen<=0 then Exit; Enc:=B[AOff]; RawOff:=AOff+1; R
     2: begin TermPos:=-1; if RawLen>=2 then begin P:=0; while P+1<RawLen do begin if (B[RawOff+P]=0)and(B[RawOff+P+1]=0) then begin TermPos:=P; Break; end; Inc(P,2); end; end;
          if TermPos>=0 then RawLen:=TermPos; if (RawLen and 1)<>0 then Dec(RawLen); S:=Utf16ToUtf8(B,RawOff,RawLen,True); end;
     3: begin P:=-1; for TermPos:=0 to RawLen-1 do if B[RawOff+TermPos]=0 then begin P:=TermPos; Break; end;
-         if P>=0 then RawLen:=P; S:=nextpas.core.bytes.ops.BytesSliceToString(B, SizeUInt(RawOff), SizeUInt(RawLen)); end;
+         if P>=0 then RawLen:=P; SetLength(S,RawLen); if RawLen>0 then Move(B[RawOff],S[1],RawLen); end;
   else S:=''; end; end;
 function DecodeUSLTOrCOMM(const B: TBytes; AOff,ALen: Integer; out S: string): Boolean;
 var Enc: Byte; RawOff,RawLen,P,DPos: Integer; IsBE: Boolean;
@@ -125,7 +122,7 @@ begin Result:=True; S:=''; if ALen<4 then Exit;
     2: begin P:=-1; if RawLen>=2 then begin DPos:=0; while DPos+1<RawLen do begin if (B[RawOff+DPos]=0)and(B[RawOff+DPos+1]=0) then begin P:=DPos; Break; end; Inc(DPos,2); end; end;
          if P>=0 then RawLen:=P; if (RawLen and 1)<>0 then Dec(RawLen); S:=Utf16ToUtf8(B,RawOff,RawLen,True); end;
     3: begin P:=-1; for DPos:=0 to RawLen-1 do if B[RawOff+DPos]=0 then begin P:=DPos; Break; end; if P>=0 then RawLen:=P;
-         S:=nextpas.core.bytes.ops.BytesSliceToString(B, SizeUInt(RawOff), SizeUInt(RawLen)); end; end; end;
+         SetLength(S,RawLen); if RawLen>0 then Move(B[RawOff],S[1],RawLen); end; end; end;
 function TryParseID3v2(const APrefix: TBytes; out ATags: TAudioTags; out ASkipped: Integer): Boolean;
 var Ver,Flags: Byte; TagSize: UInt32; EndPos,Pos,FrameSize: Integer; ID: string; DataOff,DataLen: Integer; Text: string; Tmp,ExtSize: UInt32;
 begin Result:=False; ATags:=Default(TAudioTags); ASkipped:=0; try
@@ -175,7 +172,7 @@ begin Result:=False; ATags:=Default(TAudioTags); try
     if Pos+4>Length(AData) then Exit; if not ReadLE32(AData,Pos,Count) then Exit; Pos+=4;
     for I:=0 to Integer(Count)-1 do begin if Pos+4>Length(AData) then Exit;
       if not ReadLE32(AData,Pos,Len) then Exit; Pos+=4; if Pos+Integer(Len)>Length(AData) then Exit;
-      S:=nextpas.core.bytes.ops.BytesSliceToString(AData, SizeUInt(Pos), SizeUInt(Len)); Pos+=Integer(Len);
+      SetLength(S,Len); if Len>0 then Move(AData[Pos],S[1],Len); Pos+=Integer(Len);
       Eq:=0; for Eq:=1 to Length(S) do if S[Eq]='=' then Break;
       if (Eq<1) or (Eq>Length(S)) or (S[Eq]<>'=') then Continue;
       Key:=Copy(S,1,Eq-1); Val:=Copy(S,Eq+1,Length(S)-Eq); UKey:=UpperCaseStr(TrimStr(Key)); Val:=TrimStr(Val);
@@ -203,7 +200,7 @@ begin Result:=False; ATags:=Default(TAudioTags); try
       if AStream.Position+Int64(ChunkSize)>ALimit then Exit; if AStream.Position+Int64(ChunkSize)>AStream.Size then Exit;
       SetLength(Data,ChunkSize); if ChunkSize>0 then if AStream.Read(Data[0],SizeUInt(ChunkSize))<>SizeUInt(ChunkSize) then Exit;
       I:=Length(Data); while (I>0) and (Data[I-1]=0) do Dec(I); SetLength(Data,I);
-      if IsValidUtf8Bytes(Data,0,Length(Data)) then S:=nextpas.core.bytes.ops.BytesToString(Data)
+      if IsValidUtf8Bytes(Data,0,Length(Data)) then begin SetLength(S,Length(Data)); if Length(Data)>0 then Move(Data[0],S[1],Length(Data)); end
       else S:=Latin1ToUtf8(Data,0,Length(Data)); S:=TrimStr(S);
       Key:=Chr(IDBytes[0])+Chr(IDBytes[1])+Chr(IDBytes[2])+Chr(IDBytes[3]);
       if Key='INAM' then begin if ATags.Title='' then ATags.Title:=S; end

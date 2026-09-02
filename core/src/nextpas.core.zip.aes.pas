@@ -24,7 +24,6 @@ uses
   nextpas.core.exception,
   nextpas.core.hash.intf,
   nextpas.core.io.intf,
-  nextpas.core.zip.base,
   nextpas.core.crypto.aes.ct64,
   nextpas.core.crypto.aesni;
 
@@ -77,17 +76,6 @@ function BuildWinZipAesExtraBody(AStrengthCode: Byte;
 { 零分配版：向 AOut 写入 7 字节 extra 体，返回 7；AOut 须至少 7 字节 }
 function EncodeWinZipAesExtraBody(AStrengthCode: Byte; ARealMethod: Word;
   AOut: PByte): SizeUInt; inline;
-
-{ 解析期统一分发：ARawMethod 为 central/local 的原始 method 码，
-  结合加密标志与 0x9901 extra 解出真实方法与 AES 强度。99 且加密时
-  强校验版本/强度并改写为 AAesRealMethod，否则透传 ARawMethod；
-  未知方法码 raise ENotSupportedError，AES 状态非法 raise EParseError。
-  单源收敛 reader/sequential 的方法分发重复（S85）。 }
-procedure ResolveZipMethodWithAes(ARawMethod: Word; AIsEncrypted: Boolean;
-  AHasAes: Boolean; AAesVersion, AAesVendor, AAesRealMethod: Word;
-  AAesStrength: Byte; const AName: string;
-  out AMethod: TZipMethod; out AMethodCode: Word;
-  out AAesVersionOut: Word; out AAesStrengthOut: Byte);
 
 { 写端封框：压缩后载荷 → salt+pwVerify+密文+认证码。盐取安全随机，
   随机源故障异常原样传播；空口令 raise EArgumentError }
@@ -157,6 +145,7 @@ function NewWinZipAesSealer(const APassword: TBytes;
 implementation
 
 uses
+  nextpas.core.zip.base,
   nextpas.core.hash.base,
   nextpas.core.crypto.pbkdf2,
   nextpas.core.crypto.hmac,
@@ -265,43 +254,6 @@ begin
   EncodeWinZipAesExtraBody(AStrengthCode, ARealMethod, @LBuf[0]);
   SetLength(Result, C_WINZIP_AES_EXTRA_BODY);
   Move(LBuf[0], Result[0], C_WINZIP_AES_EXTRA_BODY);
-end;
-
-procedure ResolveZipMethodWithAes(ARawMethod: Word; AIsEncrypted: Boolean;
-  AHasAes: Boolean; AAesVersion, AAesVendor, AAesRealMethod: Word;
-  AAesStrength: Byte; const AName: string;
-  out AMethod: TZipMethod; out AMethodCode: Word;
-  out AAesVersionOut: Word; out AAesStrengthOut: Byte);
-var
-  LReal: Word;
-begin
-  AAesVersionOut := 0;
-  AAesStrengthOut := 0;
-  LReal := ARawMethod;
-  if ARawMethod = C_ZIP_METHOD_WINZIP_AES then
-  begin
-    if not AIsEncrypted then
-      raise EParseError.Create(
-        'zip: method 99 without encryption flag: ' + AName);
-    if not AHasAes then
-      raise EParseError.Create(
-        'zip: missing WinZip AES extra field: ' + AName);
-    if (AAesVersion <> C_WINZIP_AES_VERSION_1) and
-       (AAesVersion <> C_WINZIP_AES_VERSION_2) then
-      raise ENotSupportedError.CreateFmt(
-        'zip: unsupported WinZip AES version %d: %s',
-        [AAesVersion, AName]);
-    if (AAesStrength < 1) or (AAesStrength > 3) then
-      raise EParseError.Create('zip: invalid WinZip AES strength code');
-    AAesVersionOut := AAesVersion;
-    AAesStrengthOut := AAesStrength;
-    LReal := AAesRealMethod;
-  end;
-  if not TryZipMethodFromCode(LReal, AMethod) then
-    raise ENotSupportedError.CreateFmt(
-      'zip: unsupported compression method %d: %s',
-      [LReal, AName]);
-  AMethodCode := LReal;
 end;
 
 { ---- AES-CTR 变换器 ---- }

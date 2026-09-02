@@ -5,11 +5,11 @@ unit nextpas.core.audio.graph;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  SysUtils,
+  Classes,
+  SyncObjs,
   nextpas.core.math.scalar,
-  nextpas.core.sync.mutex,
+  nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf,
@@ -33,7 +33,7 @@ type
   private
     FFormat: TAudioFormat;
     FState: TGraphState;
-    FLock: TRecursiveMutex;
+    FLock: TCriticalSection;
     FNodes: array of TGraphNode;
     FProcessors: array of TProcessorSlot;
     FNextId: Integer;
@@ -52,7 +52,6 @@ type
     function FindNode(AId: Integer): Integer;
     function FindProcessor(AId: Integer): Integer;
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
-    procedure EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
     procedure MaybeCompactNodes;
     procedure MaybeCompactProcs;
   public
@@ -91,7 +90,7 @@ begin
     raise EAudioGraphError.Create('Graph: format must be sfF32 (canonical mix format)');
   FFormat := AFormat;
   FState := gsStopped;
-  FLock := TRecursiveMutex.Create;
+  FLock := TCriticalSection.Create;
   SetLength(FNodes, 0);
   SetLength(FProcessors, 0);
   FNextId := 1;
@@ -120,20 +119,20 @@ begin Result := FFormat; end;
 
 function TAudioGraph.GetState: TGraphState;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try Result := FState;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.NodeCount: Integer;
 var I, C: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     C := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(C);
     Result := C;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.FindNode(AId: Integer): Integer;
@@ -150,32 +149,10 @@ begin
   Result := -1;
 end;
 
-procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
-var LCap: Integer;
+procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
 begin
-  // perf: inline + single source via audio.base AudioEnsureCapacity geometric doubling, steady zero heap growth
-  if Length(AScratch) >= ANeeded then Exit;
-  LCap := Length(AScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 64);
-  if Length(AScratch) <> LCap then SetLength(AScratch, LCap);
-end;
-
-procedure TAudioGraph.EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
-var LCap: Integer;
-begin
-  // control-plane growth only (AddSource/AddProcessor), realtime FillRealtime reuses, steady zero alloc per INV-6
-  if ANodes > 0 then
-  begin
-    LCap := Length(FSnapshotNodes);
-    AudioEnsureCapacity(LCap, ANodes, 4);
-    if Length(FSnapshotNodes) <> LCap then SetLength(FSnapshotNodes, LCap);
-  end;
-  if AProcs > 0 then
-  begin
-    LCap := Length(FSnapshotProcs);
-    AudioEnsureCapacity(LCap, AProcs, 4);
-    if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
-  end;
+  if Length(AScratch) < ANeeded then
+    SetLength(AScratch, ANeeded);
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
@@ -221,7 +198,7 @@ begin
   if (ASource.Format.SampleRate <> FFormat.SampleRate) or (ASource.Format.Channels <> FFormat.Channels) then
     raise EAudioGraphError.Create('AddSource: format mismatch');
   if IsNan(AGain) or IsInfinite(AGain) then AGain := 1.0;
-  FLock.Acquire;
+  FLock.Enter;
   try
     Result := FNextId; Inc(FNextId);
     if Length(FNodeFree) > 0 then
@@ -243,15 +220,13 @@ begin
       FNodes[Idx].Alive := True;
     end;
     if FState = gsStopped then FState := gsPlaying;
-    // control-plane snapshot pre-grow: ensure FillRealtime steady zero alloc (INV-6)
-    EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.RemoveSource(AId: Integer): Boolean;
 var Idx: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
@@ -262,20 +237,20 @@ begin
     Inc(FNodeDead);
     MaybeCompactNodes;
     Result := True;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.SetGain(AId: Integer; AGain: Single): Boolean;
 var Idx: Integer;
 begin
   if IsNan(AGain) or IsInfinite(AGain) then Exit(False);
-  FLock.Acquire;
+  FLock.Enter;
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
     FNodes[Idx].Gain := AGain;
     Result := True;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.AddProcessor(const AProcessor: IAudioProcessor): Integer;
@@ -283,7 +258,7 @@ var Idx: Integer;
 begin
   if not Assigned(AProcessor) then
     raise EAudioGraphError.Create('AddProcessor: nil');
-  FLock.Acquire;
+  FLock.Enter;
   try
     Result := FNextId; Inc(FNextId);
     if Length(FProcFree) > 0 then
@@ -302,14 +277,13 @@ begin
       FProcessors[Idx].Processor := AProcessor;
       FProcessors[Idx].Alive := True;
     end;
-    EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.RemoveProcessor(AId: Integer): Boolean;
 var Idx: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     Idx := FindProcessor(AId);
     if Idx < 0 then Exit(False);
@@ -320,13 +294,13 @@ begin
     Inc(FProcDead);
     MaybeCompactProcs;
     Result := True;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 procedure TAudioGraph.Clear;
 var I: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     for I := 0 to High(FNodes) do
     begin FNodes[I].Alive := False; FNodes[I].Source := nil; end;
@@ -340,7 +314,7 @@ begin
     FProcDead := 0;
     FState := gsStopped;
     InterlockedExchange64(FPosition, 0);
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -351,7 +325,7 @@ end;
 function TAudioGraph.SeekTo(AFrame: UInt64): Boolean;
 var I: Integer; OK: Boolean;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     OK := True;
     for I := 0 to High(FNodes) do
@@ -359,7 +333,7 @@ begin
         if not FNodes[I].Source.SeekTo(AFrame) then OK := False;
     if OK then InterlockedExchange64(FPosition, Int64(AFrame));
     Result := OK;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -375,37 +349,31 @@ var
   SrcFmt: TAudioFormat;
 begin
   if AFrames <= 0 then Exit(0);
-  Needed := Integer(AudioBytesForFrames(FFormat, AFrames));
-  if (Needed <= 0) or (Length(ABuffer.Data) < Needed) then
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if Length(ABuffer.Data) < Needed then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
-    Needed := Integer(AudioBytesForFrames(FFormat, AFrames));
-    if Needed <= 0 then Exit(0);
+    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   end;
-  // two-phase snapshot: count under lock -> ensure capacity (control-plane pre-grow) -> copy under lock
-  // 两阶段快照契约：锁内仅计数→锁外按需增长（ violations 计数，AudioEnsureCapacity 单源）→锁内深拷贝，混音无锁
-  // INV-6 稳态零堆增长：控制面 AddSource/AddProcessor 已预增 FSnapshot* 容量，实时路径仅在容量不足时增长（违例计数），稳态复用零分配；统一字节预算经 AudioBytesForFrames 单源
-  FLock.Acquire;
+  // two-phase snapshot: count under lock -> alloc outside -> copy under lock
+  // 两阶段快照契约：锁内仅计数→锁外分配→锁内深拷贝，混音无锁
+  // S4 冻结：分配仍在实时路径（SetLength 保留，文档先冻契约，S6 再零分配），混音阶段无锁
+  FLock.Enter;
   try
     AliveN := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(AliveN);
     AliveP := 0;
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
     SnapVol := FVolume;
-  finally FLock.Release; end;
-  // snapshot scratch reuse: preallocated via control-plane EnsureSnapshotCapacity, steady zero alloc after warmup (INV-6); realtime grow via AudioEnsureCapacity single source, counted as violation
-  if (Length(FSnapshotNodes) < AliveN) or (Length(FSnapshotProcs) < AliveP) then
-  begin
-    InterlockedExchangeAdd64(FViolations, 1);
-    EnsureSnapshotCapacity(AliveN, AliveP);
-    if Length(FSnapshotNodes) < AliveN then AliveN := Length(FSnapshotNodes);
-    if Length(FSnapshotProcs) < AliveP then AliveP := Length(FSnapshotProcs);
-  end;
+  finally FLock.Leave; end;
+  // snapshot scratch reuse: preallocated FSnapshotNodes/Procs reuse, steady zero alloc
+  if Length(FSnapshotNodes) < AliveN then SetLength(FSnapshotNodes, AliveN);
+  if Length(FSnapshotProcs) < AliveP then SetLength(FSnapshotProcs, AliveP);
   if (AliveN > 0) or (AliveP > 0) then
   begin
-    FLock.Acquire;
+    FLock.Enter;
     try
       FillIdx := 0;
       for I := 0 to High(FNodes) do if FNodes[I].Alive then
@@ -420,19 +388,19 @@ begin
         begin FSnapshotProcs[FillIdx] := FProcessors[I]; Inc(FillIdx); end;
       end;
       SnapVol := FVolume;
-    finally FLock.Release; end;
+    finally FLock.Leave; end;
   end;
 
   if AliveN = 0 then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
     Exit(AFrames);
   end;
 
-  FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+  FillChar(ABuffer.Data[0], Needed, 0);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
   EnsureScratch(FScratchTmp, Needed);
@@ -449,8 +417,8 @@ begin
       Continue;
     end;
     Gain := FSnapshotNodes[I].Gain * SnapVol;
-    // zero tmp tail guard before fill — FillMem single source
-    FillMem(@Tmp.Data[0], SizeUInt(Needed), 0);
+    // zero tmp tail guard before fill
+    FillChar(Tmp.Data[0], Needed, 0);
     try
       J := FSnapshotNodes[I].Source.FillRealtime(Tmp, AFrames);
     except
@@ -466,8 +434,8 @@ begin
     if J < AFrames then
     begin
       InterlockedExchangeAdd64(FUnderruns, 1);
-      // source contract: should have zero-filled tail, but ensure — FillMem single source
-      FillMem(PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign, SizeUInt((AFrames - J) * FFormat.BlockAlign), 0);
+      // source contract: should have zero-filled tail, but ensure
+      FillChar((PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign)^, (AFrames - J) * FFormat.BlockAlign, 0);
       J := AFrames;
     end;
     HasData := True;
@@ -482,7 +450,7 @@ begin
 
   if not HasData then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
@@ -500,8 +468,7 @@ begin
   begin
     EnsureScratch(FScratchOut, Needed);
     EnsureScratch(FScratchTmp, Needed);
-    // single source: base.utils CopyMem → bytes.ops (also single source via AudioFillMemoryRealtime/AudioEnsureCapacity), SizeUInt(Needed) boundary, non-overlapping
-    CopyMem(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
+    Move(ABuffer.Data[0], FScratchOut[0], Needed);
     OutBuf.Format := FFormat;
     OutBuf.FrameCount := AFrames;
     OutBuf.Data := FScratchOut;
@@ -520,13 +487,11 @@ begin
       end;
     end;
     if Length(OutBuf.Data) >= Needed then
-      // single source: base.utils CopyMem → bytes.ops (single source AudioFillMemoryRealtime path), SizeUInt(Needed) boundary, non-overlapping final blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Needed))
+      Move(OutBuf.Data[0], ABuffer.Data[0], Needed)
     else if Length(OutBuf.Data) > 0 then
     begin
-      FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(Min(Needed,Length)) variable boundary, non-overlapping partial blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Min(Needed, Length(OutBuf.Data))));
+      FillChar(ABuffer.Data[0], Needed, 0);
+      Move(OutBuf.Data[0], ABuffer.Data[0], Min(Needed, Length(OutBuf.Data)));
     end;
   end;
 

@@ -2,11 +2,6 @@ unit nextpas.core.audio;
 
 {$I nextpas.core.settings.inc}
 
-{ Root facade God Facade 注记：聚合 ~26 core units (base/errors/intf/codec/resample/mix/dsp/device/graph/sfx/timeline)
-  候选拆分路径：codec → L2 codec, dsp/mix/resample → L2 dsp, device/graph/player/timeline/sfx → L2 pipeline
-  52 扩展候选已在 CONTRACT 标注 (check_source_contract.sh 78 files: core 26 + extension 52)，待抽独立 L2 模块
-  当前保持单门面以兼容；bytes.ops 单源收敛，hygiene 无野指针；不新增 GUID/ffi，守单源 }
-
 interface
 
 uses
@@ -31,29 +26,13 @@ uses
   nextpas.core.audio.device.null,
   nextpas.core.audio.timeline.intf,
   nextpas.core.audio.sfx.intf,
+  nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
   nextpas.core.audio.timeline,
   nextpas.core.audio.sfx,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
-  nextpas.core.audio.player,
-  nextpas.core.audio.bank.intf,
-  nextpas.core.audio.bank.impl,
-  nextpas.core.audio.resource.intf,
-  nextpas.core.audio.resource.impl,
-  nextpas.core.audio.event.intf,
-  nextpas.core.audio.event.impl,
-  nextpas.core.audio.playlist.intf,
-  nextpas.core.audio.playlist.impl,
-  nextpas.core.audio.spatial.intf,
-  nextpas.core.audio.spatial.impl,
-  nextpas.core.audio.bus.intf,
-  nextpas.core.audio.bus.impl,
-  nextpas.core.audio.studio.intf,
-  nextpas.core.audio.studio.project,
-  nextpas.core.audio.studio.sequencer,
-  nextpas.core.audio.studio.automation,
-  nextpas.core.audio.simd;
+  nextpas.core.audio.player;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -118,10 +97,6 @@ function AudioFormatCreate(ASampleRate, AChannels: Integer;
 function AudioBytesPerSample(AFormat: TAudioSampleFormat): Integer; inline;
 function AudioChannelMaskForLayout(ALayout: TAudioChannelLayout): UInt32; inline;
 function AudioChannelLayoutForMask(AMask: UInt32; AChannels: Integer): TAudioChannelLayout; inline;
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer; inline;
-function AudioBufferClone(const ABuffer: TAudioBuffer): TAudioBuffer; inline;
-function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64; inline;
-function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat; AFrames: Integer): Integer; inline;
 
 { ---- pcm forwarding ---- }
 
@@ -188,19 +163,6 @@ function CreateSfxAudioForFormat(const AProvider: IAudioDeviceProvider; const AF
 function CreateGameAudio(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32): IGameAudio; inline; deprecated 'use CreateSfxAudio';
 function CreateGameAudioForFormat(const AProvider: IAudioDeviceProvider; const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IGameAudio; inline; deprecated 'use CreateSfxAudioForFormat';
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline; inline;
-
-// ---- extension re-exports (52 ext, thin inline forwarding; spatial/bus keep via their own facades) ----
-type
-  IAudioBank = nextpas.core.audio.bank.intf.IAudioBank;
-  IAudioResourceManager = nextpas.core.audio.resource.intf.IAudioResourceManager;
-  TAudioResourceState = nextpas.core.audio.resource.intf.TAudioResourceState;
-  IAudioEventSystem = nextpas.core.audio.event.intf.IAudioEventSystem;
-  IAudioPlaylist = nextpas.core.audio.playlist.intf.IAudioPlaylist;
-
-function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank; inline;
-function CreateAudioResourceManager: IAudioResourceManager; inline;
-function CreateAudioEventSystem(const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IAudioEventSystem; inline;
-function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist; inline;
 
 implementation
 
@@ -431,29 +393,5 @@ begin Result := CreateSfxAudioForFormat(AProvider, AFormat, AMaxVoices); end;
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
-
-function AudioBufferCreateSilence(const AFormat: TAudioFormat; AFrames: Integer): TAudioBuffer;
-begin Result := nextpas.core.audio.base.AudioBufferCreateSilence(AFormat, AFrames); end;
-
-function AudioBufferClone(const ABuffer: TAudioBuffer): TAudioBuffer;
-begin Result := nextpas.core.audio.base.AudioBufferClone(ABuffer); end;
-
-function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
-begin Result := nextpas.core.audio.base.AudioBytesForFrames(AFormat, AFrames); end;
-
-function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat; AFrames: Integer): Integer;
-begin Result := nextpas.core.audio.base.AudioSilentFill(ABuffer, AFormat, AFrames); end;
-
-function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank;
-begin Result := nextpas.core.audio.bank.impl.CreateAudioBank(AFormat); end;
-
-function CreateAudioResourceManager: IAudioResourceManager;
-begin Result := nextpas.core.audio.resource.impl.CreateAudioResourceManager; end;
-
-function CreateAudioEventSystem(const AFormat: TAudioFormat; AMaxVoices: Integer): IAudioEventSystem;
-begin Result := nextpas.core.audio.event.impl.CreateAudioEventSystem(AFormat, AMaxVoices); end;
-
-function CreateAudioPlaylist(const AFormat: TAudioFormat): IAudioPlaylist;
-begin Result := nextpas.core.audio.playlist.impl.CreateAudioPlaylist(AFormat); end;
 
 end.

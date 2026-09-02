@@ -71,7 +71,6 @@ function IsValidThreadId(const AThreadId: string): Boolean;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.bytes.ops;
 
 const

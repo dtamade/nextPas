@@ -168,7 +168,7 @@ generic procedure _Swap<T>(var A, B: T); inline;
 generic procedure _ReverseRange<T>(var aArr: array of T; aLo, aHi: SizeInt);
 generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
-generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd, aLo: SizeInt;
+generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
@@ -220,8 +220,8 @@ begin
   end;
 end;
 
-{ Heapsort sift-down — segment-aware (aLo anchor, heap 0-based offset) }
-generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd, aLo: SizeInt;
+{ Heapsort sift-down }
+generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 var
   LRoot, LChild, LSwap: SizeInt;
@@ -229,7 +229,7 @@ begin
   LRoot := aStart;
   while True do
   begin
-    LChild := aLo + 2 * (LRoot - aLo) + 1;
+    LChild := 2 * LRoot + 1;
     if LChild > aEnd then Break;
     LSwap := LRoot;
     if aCompare(aArr[LSwap], aArr[LChild], aData) < 0 then
@@ -242,18 +242,18 @@ begin
   end;
 end;
 
-{ Heapsort — guaranteed O(n log n) worst case, segment [aLo..aHi] }
+{ Heapsort — guaranteed O(n log n) worst case }
 generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 var
   I: SizeInt;
 begin
-  for I := aLo + (aHi - aLo) div 2 downto aLo do
-    specialize _SiftDownImpl<T>(aArr, I, aHi, aLo, aCompare, aData);
+  for I := (aLo + aHi) div 2 downto aLo do
+    specialize _SiftDownImpl<T>(aArr, I, aHi, aCompare, aData);
   for I := aHi downto aLo + 1 do
   begin
     specialize _Swap<T>(aArr[aLo], aArr[I]);
-    specialize _SiftDownImpl<T>(aArr, aLo, I - 1, aLo, aCompare, aData);
+    specialize _SiftDownImpl<T>(aArr, aLo, I - 1, aCompare, aData);
   end;
 end;
 
@@ -680,14 +680,14 @@ begin
   end;
 end;
 
-procedure _SiftDownInt32(var aArr: array of Int32; aStart, aEnd, aLo: SizeInt);
+procedure _SiftDownInt32(var aArr: array of Int32; aStart, aEnd: SizeInt);
 var
   LRoot, LChild, LSwap: SizeInt;
 begin
   LRoot := aStart;
   while True do
   begin
-    LChild := aLo + 2 * (LRoot - aLo) + 1;
+    LChild := 2 * LRoot + 1;
     if LChild > aEnd then Break;
     LSwap := LRoot;
     if aArr[LSwap] < aArr[LChild] then
@@ -706,14 +706,14 @@ procedure _HeapSortInt32(var aArr: array of Int32; aLo, aHi: SizeInt);
 var
   I: SizeInt;
 begin
-  for I := aLo + (aHi - aLo) div 2 downto aLo do
-    _SiftDownInt32(aArr, I, aHi, aLo);
+  for I := (aLo + aHi) div 2 downto aLo do
+    _SiftDownInt32(aArr, I, aHi);
   for I := aHi downto aLo + 1 do
   begin
     aArr[aLo] := aArr[aLo] xor aArr[I];
     aArr[I] := aArr[aLo] xor aArr[I];
     aArr[aLo] := aArr[aLo] xor aArr[I];
-    _SiftDownInt32(aArr, aLo, I - 1, aLo);
+    _SiftDownInt32(aArr, aLo, I - 1);
   end;
 end;
 

@@ -71,15 +71,7 @@ function DefaultZipExtractOptions: TZipExtractOptions; inline;
 procedure ZipExtractToDirWithOptions(const AData: TBytes;
   const ADestDir: string; const AOptions: TZipExtractOptions); inline;
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt = 0); inline; overload;
-procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions); inline; overload;
-procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
-  const ADestDir: string; const AOptions: TZipExtractOptions); inline;
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt = 0); inline; overload;
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions); inline; overload;
+  const AMaxOutputSize: SizeUInt = 0); inline;
 
 function ZipBuilder: IZipBuilder; inline;
 function ZipBuilderForceZip64: IZipBuilder; inline;
@@ -188,30 +180,6 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt);
 begin
   nextpas.core.zip.fs.ZipExtractToDir(AData, ADestDir, AMaxOutputSize);
-end;
-
-procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions);
-begin
-  nextpas.core.zip.fs.ZipExtractToDir(AData, ADestDir, AOptions);
-end;
-
-procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
-  const ADestDir: string; const AOptions: TZipExtractOptions);
-begin
-  nextpas.core.zip.fs.ZipExtractToDirAtomicWithOptions(AData, ADestDir, AOptions);
-end;
-
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt);
-begin
-  nextpas.core.zip.fs.ZipExtractToDirAtomic(AData, ADestDir, AMaxOutputSize);
-end;
-
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions);
-begin
-  nextpas.core.zip.fs.ZipExtractToDirAtomic(AData, ADestDir, AOptions);
 end;
 
 function ZipBuilder: IZipBuilder;

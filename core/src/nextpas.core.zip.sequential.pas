@@ -52,8 +52,7 @@ uses
   nextpas.core.compress,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.extra,
-  nextpas.core.zip.reader;
+  nextpas.core.zip.extra;
 
 const
   C_LOCAL_HEADER_LEN = 30;
@@ -135,10 +134,25 @@ begin
 end;
 
 function TSeqSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvail: SizeUInt;
 begin
   if FClosed then
     raise EIOError.Create('zip entry stream: read after close');
-  Result := ZipBytesRead(FData, FPos, ABuf, ACount);
+  if ACount = 0 then
+    Exit(0);
+  if FPos >= SizeUInt(Length(FData)) then
+    Exit(0);
+  LAvail := SizeUInt(Length(FData)) - FPos;
+  if ACount < LAvail then
+    Result := ACount
+  else
+    Result := LAvail;
+  if Result > 0 then
+  begin
+    Move(FData[FPos], ABuf, Result);
+    Inc(FPos, Result);
+  end;
 end;
 
 procedure TSeqSliceReader.Close;
@@ -187,7 +201,13 @@ end;
 
 procedure TSequentialZipReader.CheckTotalLimit;
 begin
-  GuardTotalOutputAdvance(FCumulative, FCurrent.UncompressedSize, FMaxTotalOutput);
+  if FMaxTotalOutput = 0 then
+    Exit;
+  if FCurrent.UncompressedSize > FMaxTotalOutput then
+    raise EIOError.Create('zip: total uncompressed size exceeds limit');
+  if FCumulative > FMaxTotalOutput - FCurrent.UncompressedSize then
+    raise EIOError.Create('zip: total uncompressed size exceeds limit');
+  Inc(FCumulative, FCurrent.UncompressedSize);
 end;
 
 function TSequentialZipReader.HasPushBack: Boolean;
@@ -326,10 +346,32 @@ begin
   FCurrent := Default(TZipEntryInfo);
   FCurrent.Name := LName;
   FCurrent.IsEncrypted := (LFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  ResolveZipMethodWithAes(LMethod, FCurrent.IsEncrypted, LHasAes,
-    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength, LName,
-    FCurrent.Method, FCurrent.MethodCode, FCurrent.AesVersion,
-    FCurrent.AesStrengthCode);
+  FCurrent.AesVersion := 0;
+  FCurrent.AesStrengthCode := 0;
+  if LMethod = C_ZIP_METHOD_WINZIP_AES then
+  begin
+    if not FCurrent.IsEncrypted then
+      raise EParseError.Create(
+        'zip: method 99 without encryption flag: ' + LName);
+    if not LHasAes then
+      raise EParseError.Create(
+        'zip: missing WinZip AES extra field: ' + LName);
+    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
+       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
+      raise ENotSupportedError.CreateFmt(
+        'zip: unsupported WinZip AES version %d: %s',
+        [LAesVersion, LName]);
+    if (LAesStrength < 1) or (LAesStrength > 3) then
+      raise EParseError.Create('zip: invalid WinZip AES strength code');
+    FCurrent.AesVersion := LAesVersion;
+    FCurrent.AesStrengthCode := LAesStrength;
+    LMethod := LAesRealMethod;
+  end;
+  if LMethod = C_ZIP_METHOD_DEFLATE then
+    FCurrent.Method := zmDeflate
+  else
+    FCurrent.Method := zmStore;
+  FCurrent.MethodCode := LMethod;
   FCurrent.Crc32 := LCrc;
   if FCurrentIsDescriptor then
   begin
@@ -381,15 +423,33 @@ var
   begin
     Result := UInt64(LE32Ptr(AOff)) or (UInt64(LE32Ptr(AOff + 4)) shl 32);
   end;
-  function VerifyParsedValues(ALCrc: LongWord; ALCSize, ALUSize: UInt64; APos: SizeUInt): Boolean;
+  function TryDescriptorAt(APos: SizeUInt; ADescSize: SizeUInt; out ACrc: LongWord;
+    out ACSize, AUSize: UInt64): Boolean;
   var
+    LCrcTmp: LongWord;
+    LCSizeTmp, LUSizeTmp: UInt64;
     LPay, LPlain, LDec: TBytes;
     LCalc: LongWord;
   begin
     Result := False;
-    if ALCSize <> APos then Exit;
-    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (ALUSize <> APos) then Exit;
-    if (FMaxOutput > 0) and (ALUSize > UInt64(FMaxOutput)) then Exit;
+    if ADescSize = 16 then
+    begin
+      LCrcTmp := LE32Ptr(APos + 4);
+      LCSizeTmp := LE32Ptr(APos + 8);
+      LUSizeTmp := LE32Ptr(APos + 12);
+    end
+    else
+    begin
+      LCrcTmp := LE32Ptr(APos + 4);
+      LCSizeTmp := LE64Ptr(APos + 8);
+      LUSizeTmp := LE64Ptr(APos + 16);
+    end;
+    if LCSizeTmp <> APos then
+      Exit;
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then
+      Exit;
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then
+      Exit;
     if APos > 0 then
     begin
       SetLength(LPay, APos);
@@ -408,20 +468,20 @@ var
       end;
       if FCurrent.Method = zmStore then
       begin
-        if UInt64(Length(LPlain)) <> ALUSize then Exit;
-        if ALUSize = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
-        if LCalc <> ALCrc then Exit;
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
       end
       else
       begin
         try
-          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(ALUSize), FMaxOutput);
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
         except
           on E: EIOError do raise;
           on E: Exception do Exit;
         end;
-        if SizeUInt(Length(LDec)) <> ALUSize then Exit;
-        if Crc32OfBytes(LDec) <> ALCrc then Exit;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
       end;
     end
     else
@@ -429,42 +489,20 @@ var
       if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
       if FCurrent.Method = zmStore then
       begin
-        if LCalc <> ALCrc then Exit;
+        if LCalc <> LCrcTmp then Exit;
       end
       else
       begin
         try
-          LDec := RawDeflateDecompressSized(LPay, SizeUInt(ALUSize), FMaxOutput);
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
         except
           on E: EIOError do raise;
           on E: Exception do Exit;
         end;
-        if SizeUInt(Length(LDec)) <> ALUSize then Exit;
-        if Crc32OfBytes(LDec) <> ALCrc then Exit;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
       end;
     end;
-    Result := True;
-  end;
-  function TryDescriptorAt(APos: SizeUInt; ADescSize: SizeUInt; out ACrc: LongWord;
-    out ACSize, AUSize: UInt64): Boolean;
-  var
-    LCrcTmp: LongWord;
-    LCSizeTmp, LUSizeTmp: UInt64;
-  begin
-    Result := False;
-    if ADescSize = 16 then
-    begin
-      LCrcTmp := LE32Ptr(APos + 4);
-      LCSizeTmp := LE32Ptr(APos + 8);
-      LUSizeTmp := LE32Ptr(APos + 12);
-    end
-    else
-    begin
-      LCrcTmp := LE32Ptr(APos + 4);
-      LCSizeTmp := LE64Ptr(APos + 8);
-      LUSizeTmp := LE64Ptr(APos + 16);
-    end;
-    if not VerifyParsedValues(LCrcTmp, LCSizeTmp, LUSizeTmp, APos) then Exit;
     ACrc := LCrcTmp;
     ACSize := LCSizeTmp;
     AUSize := LUSizeTmp;
@@ -475,6 +513,8 @@ var
   var
     LCrcTmp: LongWord;
     LCSizeTmp, LUSizeTmp: UInt64;
+    LPay, LPlain, LDec: TBytes;
+    LCalc: LongWord;
   begin
     Result := False;
     if ADescSize = 12 then
@@ -489,14 +529,71 @@ var
       LCSizeTmp := LE64Ptr(APos + 4);
       LUSizeTmp := LE64Ptr(APos + 12);
     end;
-    if not VerifyParsedValues(LCrcTmp, LCSizeTmp, LUSizeTmp, APos) then Exit;
+    if LCSizeTmp <> APos then Exit;
+    if (not FCurrent.IsEncrypted) and (FCurrent.Method = zmStore) and (LUSizeTmp <> APos) then Exit;
+    if (FMaxOutput > 0) and (LUSizeTmp > UInt64(FMaxOutput)) then Exit;
+    if APos > 0 then
+    begin
+      SetLength(LPay, APos);
+      Move(LData^, LPay[0], APos);
+    end
+    else
+      LPay := nil;
+    if FCurrent.IsEncrypted then
+    begin
+      try
+        LPlain := UnsealWinZipAesPayload(FPassword, LPay, FCurrent.AesStrengthCode, FCurrent.Name);
+      except
+        on E: EInvalidOperationError do raise;
+        on E: EIOError do raise;
+        on E: Exception do Exit;
+      end;
+      if FCurrent.Method = zmStore then
+      begin
+        if UInt64(Length(LPlain)) <> LUSizeTmp then Exit;
+        if LUSizeTmp = 0 then LCalc := 0 else LCalc := Crc32OfBytes(LPlain);
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPlain, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end
+    else
+    begin
+      if APos > 0 then LCalc := Crc32OfBytes(LPay) else LCalc := 0;
+      if FCurrent.Method = zmStore then
+      begin
+        if LCalc <> LCrcTmp then Exit;
+      end
+      else
+      begin
+        try
+          LDec := RawDeflateDecompressSized(LPay, SizeUInt(LUSizeTmp), FMaxOutput);
+        except
+          on E: EIOError do raise;
+          on E: Exception do Exit;
+        end;
+        if SizeUInt(Length(LDec)) <> LUSizeTmp then Exit;
+        if Crc32OfBytes(LDec) <> LCrcTmp then Exit;
+      end;
+    end;
     ACrc := LCrcTmp;
     ACSize := LCSizeTmp;
     AUSize := LUSizeTmp;
     Result := True;
   end;
 begin
-  GuardEntryPassword(FCurrent, FPassword);
+  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
   LBuilder := CreateBytesBuilder(8192);
   LFound := False;
   LFoundPos := 0;
@@ -659,7 +756,9 @@ var
   LRaw, LDecompressed: TBytes;
 begin
   GuardEntryReadable(FCurrent, FCurrentFlags);
-  GuardEntryPassword(FCurrent, FPassword);
+  if FCurrent.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + FCurrent.Name);
   if FCurrentIsDescriptor then
   begin
     if FBufferedReady then
@@ -759,8 +858,30 @@ begin
 end;
 
 function TSequentialZipReader.CopyTo(const ADst: IWriter): SizeUInt;
+var
+  LS: IDecompressReader;
+  LBuf: array[0..65535] of Byte;
+  LN: SizeUInt;
+  LHold: IDecompressReader;
 begin
-  Result := ZipPumpReader(Open, ADst);
+  if ADst = nil then
+    raise EArgumentError.Create('zip: destination writer is nil');
+  LHold := Open;
+  LS := LHold;
+  Result := 0;
+  try
+    repeat
+      LN := LS.Read(LBuf[0], SizeOf(LBuf));
+      if LN > 0 then
+      begin
+        if ADst.Write(LBuf[0], LN) <> LN then
+          raise EIOError.Create('zip: short write while pumping entry');
+        Inc(Result, LN);
+      end;
+    until LN = 0;
+  finally
+    LS.Close;
+  end;
 end;
 
 procedure TSequentialZipReader.Skip;
@@ -801,11 +922,16 @@ end;
 function NewZipSequentialReaderWithOptions(const ASource: IReader;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): ISequentialZipReader;
 var
-  LOpt: TZipReadOptions;
+  LMax, LDesc: SizeUInt;
 begin
-  LOpt := NormalizeZipReadOptions(AOptions);
-  Result := TSequentialZipReader.Create(ASource, LOpt.MaxOutputSize,
-    LOpt.MaxTotalOutputSize, LOpt.MaxDescriptorBuffer, LOpt.Password);
+  LMax := AOptions.MaxOutputSize;
+  if LMax = 0 then
+    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
+  LDesc := AOptions.MaxDescriptorBuffer;
+  if LDesc = 0 then
+    LDesc := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
+  Result := TSequentialZipReader.Create(ASource, LMax,
+    AOptions.MaxTotalOutputSize, LDesc, AOptions.Password);
 end;
 
 end.

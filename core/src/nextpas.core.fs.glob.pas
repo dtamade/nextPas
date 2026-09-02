@@ -50,15 +50,218 @@ uses
   nextpas.core.errors,
   nextpas.core.fs.base,
   nextpas.core.fs.dir,
-  nextpas.core.fs.path,
-  nextpas.core.text.strings;
+  nextpas.core.fs.path;
 
-{ GlobMatch — thin forward to L1 single source (text.strings):
-  fs.glob 不再自含匹配算法，仅保留文件系统遍历封装。
-  复用 bytes.ops/CompareOrdered 思想：PChar 零拷贝视图 + inline 判定，O(pat×name) 确界，无指数回溯。 }
-function GlobMatch(const APattern, AName: string): Boolean; inline;
+{ GlobMatch internals — linear chunk matching (O(pat × name), no backtracking) }
+
+type
+  TPathSepSet = set of AnsiChar;
+
+const
+  PATH_SEPARATORS: TPathSepSet = ['/', '\'];
+
+function IsPathSep(C: AnsiChar): Boolean; inline;
 begin
-  Result := nextpas.core.text.strings.GlobMatch(APattern, AName);
+  Result := C in PATH_SEPARATORS;
+end;
+
+{** @desc Check if character at pattern position AP matches character AN.
+  Advances AP past the matched portion (char class, escape, or literal).
+  Does NOT advance AP on failure — caller decides. }
+function MatchOne(var AP: PChar; AN: PChar): Boolean;
+var
+  LNegate: Boolean;
+  LMatched: Boolean;
+  P: PChar;
+begin
+  case AP^ of
+    '?':
+    begin
+      if (AN^ = #0) or IsPathSep(AnsiChar(AN^)) then
+        Exit(False);
+      Inc(AP);
+      Result := True;
+    end;
+    '[':
+    begin
+      if AN^ = #0 then
+        Exit(False);
+      P := AP;
+      Inc(P);
+      LNegate := False;
+      if (P^ = '^') or (P^ = '!') then
+      begin
+        LNegate := True;
+        Inc(P);
+      end;
+      { Empty class: [] or [!] — glob semantics: scan to next ] and invert }
+      if P^ = ']' then
+      begin
+        Inc(P);
+        while (P^ <> #0) and (P^ <> ']') do
+          Inc(P);
+        if P^ = ']' then
+          Inc(P);
+        AP := P;
+        Exit(LNegate);
+      end;
+      LMatched := False;
+      while (P^ <> #0) and (P^ <> ']') do
+      begin
+        if ((P + 1)^ = '-') and ((P + 2)^ <> ']') and ((P + 2)^ <> #0) then
+        begin
+          if (AnsiChar(AN^) >= AnsiChar(P^)) and
+             (AnsiChar(AN^) <= AnsiChar((P + 2)^)) then
+            LMatched := True;
+          Inc(P, 3);
+        end
+        else
+        begin
+          if AN^ = P^ then
+            LMatched := True;
+          Inc(P);
+        end;
+      end;
+      if P^ = ']' then
+        Inc(P);
+      AP := P;
+      if LNegate then
+        Result := not LMatched
+      else
+        Result := LMatched;
+    end;
+  else
+    { Literal character }
+    Result := (AP^ <> #0) and (AN^ = AP^);
+    if Result then
+      Inc(AP);
+  end;
+end;
+
+{** @desc Check if name contains any path separator character. }
+function NameHasSep(AN: PChar): Boolean;
+begin
+  while AN^ <> #0 do
+  begin
+    if IsPathSep(AnsiChar(AN^)) then
+      Exit(True);
+    Inc(AN);
+  end;
+  Result := False;
+end;
+
+{** @desc Core iterative glob match with dual star tracking.
+  Guarantees polynomial O(name × pattern) time — no exponential backtracking.
+
+  Two independent trackers, because '*' and '**' have different reach:
+    LSStar — most recent single '*' (segment-local: cannot eat a separator)
+    LDStar — most recent '**'      (cross-segment: eats any character)
+
+  On mismatch we first try to extend the single '*'; when it hits a separator
+  (exhausted) we fall back to extending '**', which resets the single tracker
+  so matching resumes from the '**' anchor. Each extension advances a name
+  pointer that never rewinds past its anchor, bounding total work. }
+function GlobMatchInternal(AP, AN: PChar): Boolean;
+var
+  LSStarP, LSStarN: PChar;   { single '*' : resume pattern / name anchor }
+  LDStarP, LDStarN: PChar;   { double '**': resume pattern / name anchor }
+  LIsDouble: Boolean;
+begin
+  if AP^ = #0 then
+    Exit(AN^ = #0);
+
+  LSStarP := nil; LSStarN := nil;
+  LDStarP := nil; LDStarN := nil;
+
+  while AN^ <> #0 do
+  begin
+    if AP^ = '*' then
+    begin
+      { Collapse consecutive stars; detect ** }
+      LIsDouble := False;
+      while AP^ = '*' do
+      begin
+        if (AP + 1)^ = '*' then
+          LIsDouble := True;
+        Inc(AP);
+      end;
+      if LIsDouble then
+      begin
+        { '**/' means "zero or more path segments" — the slash is optional }
+        if (AP^ = '/') or (AP^ = '\') then
+          Inc(AP);
+        LDStarP := AP;
+        LDStarN := AN;
+        { A new '**' supersedes any pending single '*' (segment boundary) }
+        LSStarP := nil;
+        LSStarN := nil;
+      end
+      else
+      begin
+        LSStarP := AP;
+        LSStarN := AN;
+      end;
+      Continue;
+    end;
+
+    if MatchOne(AP, AN) then
+    begin
+      Inc(AN);
+      Continue;
+    end;
+
+    { Mismatch — extend single '*' first (segment-local) }
+    if (LSStarP <> nil) and (not IsPathSep(AnsiChar(LSStarN^))) then
+    begin
+      Inc(LSStarN);
+      AN := LSStarN;
+      AP := LSStarP;
+      Continue;
+    end;
+
+    { Single '*' exhausted or absent — fall back to '**' (cross-segment) }
+    if LDStarP <> nil then
+    begin
+      Inc(LDStarN);
+      AN := LDStarN;
+      AP := LDStarP;
+      LSStarP := nil;
+      LSStarN := nil;
+      Continue;
+    end;
+
+    Exit(False);
+  end;
+
+  { Name exhausted: skip any trailing stars (and their optional slash) }
+  while AP^ = '*' do
+  begin
+    while AP^ = '*' do
+      Inc(AP);
+    if (AP^ = '/') or (AP^ = '\') then
+      Inc(AP);
+  end;
+
+  Exit(AP^ = #0);
+end;
+
+function GlobMatch(const APattern, AName: string): Boolean;
+var
+  LP, LN: PChar;
+  LNameBuf: AnsiChar;
+begin
+  if Length(APattern) = 0 then
+    Exit(AName = '');
+  LP := @APattern[1];
+  if Length(AName) > 0 then
+    LN := @AName[1]
+  else
+  begin
+    { Empty name: point to a #0 character so pointer is valid }
+    LNameBuf := #0;
+    LN := @LNameBuf;
+  end;
+  Result := GlobMatchInternal(LP, LN);
 end;
 
 { FsGlob — file system glob }

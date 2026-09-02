@@ -2,7 +2,7 @@
  * nextpas.core.gpu.canvas - GPU 画布桥（TAtlas/TAtlasRegion/ScaleFactor，零 FFI 硬链接）
  * L3 薄桥：仅依 graphics.base 值类型，2048×2048 分页 shelf 打包，Scale 打通
  * window/display。打包状态内聚于 TAtlas 实例（无全局游标），非线程安全
- * 由调用方同步；像素对齐复用 mem.base AlignUp 16px=64B(与 TBitmap AlignUp64 一致)，槽位语义与 font.atlas/
+ * 由调用方同步；像素对齐复用 mem.base AlignUp，槽位语义与 font.atlas/
  * Resin/game888 shelf 复用预期一致，不重复造轮子。
  *}
 unit nextpas.core.gpu.canvas;
@@ -94,8 +94,8 @@ begin
   H := Trunc(FH);
   if (W<=0) or (H<=0) then
     raise EArgumentError.Create('nextpas.core.gpu.canvas.pas: alloc size must be >0 (w=' + IntToStr(AWidth) + ' h=' + IntToStr(AHeight) + ' scale=' + FloatToStr(AScale) + ' scaledW=' + IntToStr(W) + ' scaledH=' + IntToStr(H) + ')');
-  AW := AlignUp(SizeUInt(W), MEM_CACHE_LINE_SIZE div 4);
-  AH := AlignUp(SizeUInt(H), MEM_CACHE_LINE_SIZE div 4);
+  AW := AlignUp(SizeUInt(W), 4);
+  AH := AlignUp(SizeUInt(H), 4);
   if (AW=0) or (AH=0) then
     raise EArgumentError.Create('nextpas.core.gpu.canvas.pas: aligned size overflow (w=' + IntToStr(W) + ' h=' + IntToStr(H) + ' scale=' + FloatToStr(AScale) + ')');
   if (AW>SizeUInt(High(Integer))) or (AH>SizeUInt(High(Integer))) then

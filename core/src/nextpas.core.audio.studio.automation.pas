@@ -5,8 +5,7 @@ unit nextpas.core.audio.studio.automation;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.sync.mutex;
+  nextpas.core.base;
 
 type
   TAutomationPoint = record
@@ -18,7 +17,7 @@ type
   private
     FPoints: array of TAutomationPoint;
     FSnap: array of TAutomationPoint; // realtime scratch: steady-state zero-alloc
-    FLock: TRecursiveMutex;
+    FLock: TRTLCriticalSection;
     function FindSegment(AFrame: UInt64; out AIdx: Integer): Boolean;
   public
     constructor Create;
@@ -47,19 +46,19 @@ end;
 constructor TAutomationCurve.Create;
 begin
   inherited Create;
-  FLock := TRecursiveMutex.Create;
+  InitCriticalSection(FLock);
 end;
 
 destructor TAutomationCurve.Destroy;
 begin
-  FLock.Free;
+  DoneCriticalSection(FLock);
   inherited;
 end;
 
 procedure TAutomationCurve.AddPoint(AFrame: UInt64; AValue: Single);
 var L, I: Integer;
 begin
-  FLock.Acquire;
+  EnterCriticalSection(FLock);
   try
     L := Length(FPoints);
     SetLength(FPoints, L + 1);
@@ -73,7 +72,7 @@ begin
     FPoints[I].Frame := AFrame;
     FPoints[I].Value := AValue;
   finally
-    FLock.Release;
+    LeaveCriticalSection(FLock);
   end;
 end;
 
@@ -89,22 +88,22 @@ end;
 
 procedure TAutomationCurve.Clear;
 begin
-  FLock.Acquire;
+  EnterCriticalSection(FLock);
   try SetLength(FPoints, 0);
-  finally FLock.Release; end;
+  finally LeaveCriticalSection(FLock); end;
 end;
 
 function TAutomationCurve.Count: Integer;
 begin
-  FLock.Acquire;
+  EnterCriticalSection(FLock);
   try Result := Length(FPoints);
-  finally FLock.Release; end;
+  finally LeaveCriticalSection(FLock); end;
 end;
 
 function TAutomationCurve.ValueAt(AFrame: UInt64): Single;
 var I: Integer; LIdx: Integer; T: Single; A0, A1, A2, A3: Single;
 begin
-  FLock.Acquire;
+  EnterCriticalSection(FLock);
   try
     if Length(FPoints) = 0 then Exit(0);
     if AFrame <= FPoints[0].Frame then Exit(FPoints[0].Value);
@@ -121,7 +120,7 @@ begin
     else
       Result := FPoints[High(FPoints)].Value;
   finally
-    FLock.Release;
+    LeaveCriticalSection(FLock);
   end;
 end;
 
@@ -135,15 +134,15 @@ begin
   Result := 0;
   if (ADst = nil) or (ACount <= 0) then Exit;
   // snapshot once: reuse FSnap scratch (steady-state zero-alloc after warm-up)
-  FLock.Acquire;
+  EnterCriticalSection(FLock);
   try
     LSnapLen := Length(FPoints);
     if Length(FSnap) < LSnapLen then
       SetLength(FSnap, LSnapLen);
-    for I := 0 to LSnapLen - 1 do
-      FSnap[I] := FPoints[I];
+    if LSnapLen > 0 then
+      Move(FPoints[0], FSnap[0], LSnapLen * SizeOf(TAutomationPoint));
   finally
-    FLock.Release;
+    LeaveCriticalSection(FLock);
   end;
   if LSnapLen = 0 then
   begin
