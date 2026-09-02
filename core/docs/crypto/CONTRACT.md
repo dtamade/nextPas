@@ -93,6 +93,8 @@ make focused FOCUS=core/tests/nextpas.core.crypto/test_x25519
 make focused FOCUS=core/tests/nextpas.core.crypto/test_ed25519
 make focused FOCUS=core/tests/nextpas.core.crypto/test_argon2
 make focused FOCUS=core/tests/nextpas.core.crypto/test_crypto_random
+# bench 吞吐回归（HEAPTRC_GATE=0 防失真，泄漏由 test_aesgcm/test_tls13_* production gates 覆盖：inline/零拷贝 bytes.ops 单源，O3 -Xs，±5% env noise）
+make focused FOCUS=core/tests/nextpas.core.crypto/bench_tls13_record
 ```
 
 ---

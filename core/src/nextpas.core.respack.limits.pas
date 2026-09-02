@@ -20,7 +20,6 @@ uses
   nextpas.core.embed.limits,
   nextpas.core.respack.base,
   nextpas.core.text.number;
-nextpas.core.embed.limits;
 
 const
   RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.EMBED_INC_MAX_BLOB_BYTES;
@@ -29,7 +28,6 @@ const
 { 取生效阈值：0 取默认 4MiB，便于 TResPackIncOptions.MaxBlobBytes 未显式配置时零值即默认 }
 function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 
-{ 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝，text.number.UIntToBuffer+bytes.ops.BytesCopy 单源，owner 边界 respack.base 独立异常 }
 { 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝转发至 embed.limits 单源 }
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
@@ -41,26 +39,6 @@ begin
 end;
 
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
-var
-  LBufS: array[0..20] of AnsiChar;
-  LBufL: array[0..20] of AnsiChar;
-  LLenS, LLenL: Int32;
-  SStr, LStr: string;
-begin
-  if ASize > ALimit then
-  begin
-    { text.number.UIntToBuffer 单源 + bytes.ops.BytesCopy 单源 inline 零拷贝，与 embed.limits 同源，owner 边界 respack.base EResPackTooLarge，避免 EResPackTooLarge 重复定义越权 }
-    LLenS := UIntToBuffer(UInt64(ASize), @LBufS[0]);
-    LLenL := UIntToBuffer(UInt64(ALimit), @LBufL[0]);
-    SetLength(SStr, LLenS);
-    if LLenS > 0 then
-      BytesCopy(PAnsiChar(SStr), @LBufS[0], SizeUInt(LLenS));
-    SetLength(LStr, LLenL);
-    if LLenL > 0 then
-      BytesCopy(PAnsiChar(LStr), @LBufL[0], SizeUInt(LLenL));
-    raise EResPackTooLarge.Create('respack.embed: blob too large for .inc ('
-      + SStr + ' > ' + LStr + ', use .pack)');
-  end;
 begin
   nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
 end;

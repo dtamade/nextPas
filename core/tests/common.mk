@@ -61,8 +61,8 @@ build: clean-src
 # Zero-leak unified gate: production gates zero HEAPTRC_GATE:=0 exceptions — prior 5 ssh suites fixed
 # (TAsyncLoop/TIoReactor/BigNat sidecar leak closed, verified focused runtime + e2e:
 # sync ssh 13/13 + 23/23 heaptrc 0, proxyjump 5/5). Bench keeps HEAPTRC_GATE=0
-# for throughput fidelity (bench_ssh_cipher, bench_ssh_proxyjump; inline/zero-copy bytes.ops Move/TByteSpan, O3 -Xs):
-# leak escape compensated by ssh 8 production gates + e2e_ssh_live (CONTRACT §5/§6, ±5% env noise).
+# for throughput fidelity (bench_ssh_cipher, bench_ssh_proxyjump, bench_tls13_record; inline/zero-copy bytes.ops Move/TByteSpan, O3 -Xs):
+# leak escape compensated by ssh production gates + crypto/tls production gates (test_aesgcm/test_tls13_aead/test_tls13_recordsealer heaptrc 0) + e2e_ssh_live (CONTRACT §5/§6, ±5% env noise).
 HEAPTRC_GATE ?= 1
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.

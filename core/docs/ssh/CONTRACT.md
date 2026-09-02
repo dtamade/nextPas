@@ -114,7 +114,7 @@ ssh.window                 ← 通道窗口可复用策略（WINDOW_LOW_WATER_DI
 | | `zlib@openssh.com` 延迟 | `USERAUTH_SUCCESS` 后首包起，有状态第2包显著更小 | 1 MiB 防 bomb |
 | **SFTP async** | `INIT` 首包 / `STAT` / `Read/Write` chunk 32 KiB | 215 / 115 / 216 ms | — |
 
-`inline` 小访问器 + `bytes.ops` 单源 `Move` 直拷 + `TByteSpan` 视图已在 `cipher/buffer/compress` 热路径验证；`bench_ssh_cipher` 与 `bench_ssh_proxyjump` 为回归红线（`±5%` 波动视为环境噪声，`bench HEAPTRC_GATE=0` 防吞吐失真由其余门覆盖泄漏）。
+`inline` 小访问器 + `bytes.ops` 单源 `Move` 直拷 + `TByteSpan` 视图已在 `cipher/buffer/compress` 热路径验证；`bench_ssh_cipher` / `bench_ssh_proxyjump` / `bench_tls13_record` 为回归红线（`±5%` 波动视为环境噪声，`bench HEAPTRC_GATE=0` 防吞吐失真由 `common.mk HEAPTRC_GATE=1` 统一门禁下其余 production gates 覆盖泄漏：`ssh` / `crypto/tls` 全量 `heaptrc 0`）。
 
 ---
 

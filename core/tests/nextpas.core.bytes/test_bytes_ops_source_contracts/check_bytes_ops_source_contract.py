@@ -232,8 +232,11 @@ def check_ops(core_root: Path) -> list[str]:
     src_root = core_root / "src"
     allowed_move_files = {
         "src/nextpas.core.bytes.ops.pas",  # single source owner
+        "src/nextpas.core.bytes.ops.capacity.pas",  # capacity leaf — pure arithmetic, no Move (elegance split)
+        "src/nextpas.core.bytes.ops.text.pas",  # text leaf — string helpers, no raw Move
+        "src/nextpas.core.bytes.ops.ascii.pas",  # ascii leaf — xor/ascii, no raw Move
     }
-    # L0 exception: platform.*, mem.*, simd.* raw Move allowed (no bytes dependency)
+    # L0 exception: platform.*, mem.*, simd.* raw Move allowed (no bytes dependency) — documented in platform.fs header (L0 cannot depend on L1 bytes.ops)
     import fnmatch
     l0_patterns = ["nextpas.core.platform.*", "nextpas.core.mem.*", "nextpas.core.simd.*"]
     move_count_l1 = 0
@@ -283,10 +286,10 @@ def main() -> int:
         return 1
     print("[BYTES-OPS-SOURCE-CONTRACT] PASS")
     # Performance / zero-copy evidence line for gate output
-    print("bytes.ops single-source: SetLength+Move zero-copy (Pointer(Result)^ / PAnsiChar(AText)^ single Move, single SetLength); inline hot views (Compare/MemEqual/FindByte) zero-copy TByteSpan")
-    print("bytes.ops capacity: BytesGrowCapacity single source geometric via BYTES_BUILDER_MIN_GROW (WithMin reuse 0→64→2×) + WebviewGrowCapacity 0→4→2× inline reuse (WithMin 0→4) amortized O(1) zero O(n²)")
-    print("bytes.ops gate: raw Move/FillChar only in bytes.ops (BytesCopy/BytesZero single source); L1+ reuse via bytes.ops inline thin-forward, L0 platform exception documented; tls.websocket:115 example migrated to BytesCopy/BytesZero")
-    print("stability: SetLength exception-safe, sized FreeMemOf on Builder/StreamBuf, Clear/Consume not leak; webview capacity inline thin-forward zero extra call")
+    print("bytes.ops single-source: SetLength+Move zero-copy (Pointer(Result)^ / PAnsiChar(AText)^ single Move, single SetLength); inline hot views (Compare/MemEqual/FindByte) zero-copy TByteSpan; leaves bytes.ops.capacity/text/ascii thin-forward zero extra copy")
+    print("bytes.ops capacity: BytesGrowCapacity single source via bytes.ops.capacity leaf geometric via BYTES_BUILDER_MIN_GROW (WithMin reuse 0→64→2×) + WebviewGrowCapacity 0→4→2× inline reuse (WithMin 0→4) amortized O(1) zero O(n²); split elegance ≤800 (ops ~760 + leaves ~120 each)")
+    print("bytes.ops gate: raw Move/FillChar only in bytes.ops (BytesCopy/BytesZero single source); L1+ reuse via bytes.ops inline thin-forward, L0 platform exception documented (platform.fs header + gate); tls.encoding:479 migrated to BytesCopy, tls.websocket:115 example migrated")
+    print("stability: SetLength exception-safe, sized FreeMemOf on Builder/StreamBuf, Clear/Consume not leak; webview capacity inline thin-forward zero extra call; resource FreeAndNil/try-finally not lost")
     return 0
 
 
