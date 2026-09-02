@@ -36,18 +36,24 @@ type
   TBenchProvider = class(TInterfacedObject, IWebviewAssetProvider)
   public
     function TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TBenchProvider.TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
-  if APath = 'index.html' then
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TBenchProvider.TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  if TStringView.FromStr('index.html').Equals(AView) then
   begin
     SetLength(ABytes, 26);
     if Length(ABytes)>0 then Move(PAnsiChar('<html>hello webview</html>')^, ABytes[0], 26);
     AMimeType := 'text/html';
     Exit(True);
   end;
-  if APath = 'app.js' then
+  if TStringView.FromStr('app.js').Equals(AView) then
   begin
     SetLength(ABytes, 18);
     if Length(ABytes)>0 then Move(PAnsiChar('console.log("hi")')^, ABytes[0], 18);

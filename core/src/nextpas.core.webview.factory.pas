@@ -87,9 +87,20 @@ type
     function IsAvailable(AKind: TWebviewKind): Boolean; inline;
   end;
 
+  { 对象化默认后端缓存：单所有者封装 IOnce+Kind，消除裸 GDefaultKind+GDefaultOnce 双检分散，L1 sync.once 单源 inline 零额外调用，析构释放不丢，与可用性缓存单源高级一致性 }
+  TWebviewDefaultCache = class
+  strict private
+    FOnce: IOnce;
+    FKind: TWebviewKind;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function GetKind: TWebviewKind; inline;
+  end;
+
 var
-  GDefaultKind: TWebviewKind = wvFake;
-  GDefaultOnce: IOnce; { L1 sync.once 单源：DefaultWebviewKind 单次探测，复用 platform.sync 原语，消除自建 double-checked + atomic + CAS 分散锁 }
+  GDefaultOnce: IOnce; { Once Owned 单例：默认后端单所有者惰性初始化，L1 sync.once 单源，消除裸 GDefaultKind+GDefaultOnce 双检分散，单表驱动高级一致性 }
+  GDefaultCache: TWebviewDefaultCache; { 对象化单例：IOnce+Kind 单所有者，L1 Once 单源 inline 零拷贝，归 GDefaultOnce 统一持有，与可用性缓存双 OnceOwned 对象化单源一致 }
   GBackendsOnce: IOnce; { 单例注册表抽象：BACKENDS 惰性单次初始化，零重复分配，L1 Once 单源 }
   GAvailOnce: IOnce; { Once Owned 单例：可用性缓存单所有者惰性初始化，L1 sync.once 单源，消除裸全局+nil 回退分散分支，单表驱动高级一致性 }
   GAvailCache: TWebviewAvailCache; { 对象化单例：per-kind Once+Yes 单所有者，消除裸数组+手工 per-kind 置位，L1 Once 单源 inline 零拷贝，归 GAvailOnce 统一持有 }
@@ -243,21 +254,26 @@ begin
   Result := GAvailCache;
 end;
 
-{$PUSH}{$WARNINGS OFF}
-function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
+{ 对象化默认后端缓存实现：单所有者 IOnce+Kind，L1 sync.once 单源 inline 零拷贝，与可用性缓存双 OnceOwned 对象化单源一致，消除裸双检分散 }
+constructor TWebviewDefaultCache.Create;
 begin
-  // 业务以 CONTRACT 为准：DefaultWebviewKind 能力探测驱动，无 IFDEF
-  // perf: Once Owned 单例 inline 薄转发零拷贝，L1 Once 单源，单表驱动
-  Result := GetAvailCache.IsAvailable(AKind);
+  inherited Create;
+  FOnce := Once;
+  FKind := wvFake;
 end;
-{$POP}
 
-function DefaultWebviewKind: TWebviewKind;
+destructor TWebviewDefaultCache.Destroy;
 begin
-  // perf: L1 sync.once 单例顺序探测：dlopen 受全局锁串行无重叠收益，顺序 inline 零线程创建/零堆分配/零 WaitAll/Shutdown 延迟；L1 Once 单源去重，单表驱动 bytes.ops 单源思想
-  if GDefaultOnce.Done then
-    Exit(GDefaultKind);
-  GDefaultOnce.DoOnce(procedure
+  // 稳定性：显式 nil 接口释放不丢，归 GDefaultOnce 单所有者 Free 统一持有
+  FOnce := nil;
+  inherited Destroy;
+end;
+
+function TWebviewDefaultCache.GetKind: TWebviewKind; inline;
+begin
+  // perf: L1 sync.once 单源 inline 零额外调用，单表驱动 bytes.ops 单源思想，零拷贝返回 FKind
+  if FOnce.Done then Exit(FKind);
+  FOnce.DoOnce(procedure
   var
     I: Integer;
     LKind: TWebviewKind;
@@ -270,13 +286,41 @@ begin
       if LKind = wvFake then Continue;
       if GetAvailCache.IsAvailable(LKind) then
       begin
-        GDefaultKind := LKind;
+        FKind := LKind;
         Exit;
       end;
     end;
-    GDefaultKind := wvFake;
+    FKind := wvFake;
   end);
-  Result := GDefaultKind;
+  Result := FKind;
+end;
+
+function GetDefaultCache: TWebviewDefaultCache; inline;
+begin
+  // perf: Once Owned 单例 inline 薄转发零拷贝，L1 sync.once 单源，与可用性缓存高级一致性单源
+  if GDefaultOnce.Done then
+    Exit(GDefaultCache);
+  GDefaultOnce.DoOnce(procedure
+  begin
+    GDefaultCache := TWebviewDefaultCache.Create;
+  end);
+  Result := GDefaultCache;
+end;
+
+{$PUSH}{$WARNINGS OFF}
+function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
+begin
+  // 业务以 CONTRACT 为准：DefaultWebviewKind 能力探测驱动，无 IFDEF
+  // perf: Once Owned 单例 inline 薄转发零拷贝，L1 Once 单源，单表驱动
+  Result := GetAvailCache.IsAvailable(AKind);
+end;
+{$POP}
+
+function DefaultWebviewKind: TWebviewKind; inline;
+begin
+  // perf: Once Owned 对象化薄转发 inline 零拷贝，L1 sync.once 单源，与 WebviewBackendAvailable 双 OnceOwned 单源高级一致性，消除裸 GDefaultKind+GDefaultOnce 双检分散
+  // 业务以 CONTRACT 为准：顺序探测单表驱动，L1 Once 去重
+  Result := GetDefaultCache.GetKind;
 end;
 
 function CreateFakeWebview(
@@ -376,9 +420,14 @@ initialization
   GDefaultOnce := Once;
   GBackendsOnce := Once;
   GAvailOnce := Once;
-  // GAvailCache 惰性由 GetAvailCache via GAvailOnce 单例创建，零启动分配，单表驱动，Once Owned 单所有者
+  // GDefaultCache/GAvailCache 惰性由 GetDefaultCache/GetAvailCache via OnceOwned 单例创建，零启动分配，单表驱动，双 OnceOwned 对象化单源一致
 
 finalization
+  if GDefaultCache <> nil then
+  begin
+    GDefaultCache.Free;
+    GDefaultCache := nil;
+  end;
   GDefaultOnce := nil;
   GBackendsOnce := nil;
   if GAvailCache <> nil then
@@ -386,6 +435,6 @@ finalization
     GAvailCache.Free;
     GAvailCache := nil;
   end;
-  GAvailOnce := nil; // 稳定性：Once Owned 单所有者统一释放，per-kind Once 由对象析构释放不丢，try-finally 释放不丢
+  GAvailOnce := nil; // 稳定性：双 Once Owned 单所有者统一释放，per-kind Once/单 Kind Once 由对象析构释放不丢，try-finally 释放不丢
 
 end.

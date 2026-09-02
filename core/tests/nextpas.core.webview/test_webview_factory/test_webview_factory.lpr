@@ -12,6 +12,7 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
@@ -28,9 +29,17 @@ type
   public
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TAlwaysHitProvider.TryResolve(const APath: string;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TAlwaysHitProvider.TryResolveView(const AView: TStringView;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
   ABytes := TBytes.Create(1);

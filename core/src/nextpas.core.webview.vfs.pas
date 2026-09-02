@@ -57,6 +57,8 @@ type
     constructor Create(const AVfs: IVfs);
     function TryResolve(const APath: string; out ABytes: TBytes;
       out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView; out ABytes: TBytes;
+      out AMimeType: string): Boolean;
   end;
 
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
@@ -125,30 +127,28 @@ end;
 function TVfsAssetProvider.TryResolve(const APath: string; out ABytes: TBytes;
   out AMimeType: string): Boolean;
 var
-  LNorm: string;
-  LView, LLeft, LRight: TStringView;
+  LView: TStringView;
+begin
+  LView := TStringView.FromStr(APath);
+  Result := TryResolveView(LView, ABytes, AMimeType);
+end;
+
+function TVfsAssetProvider.TryResolveView(const AView: TStringView; out ABytes: TBytes;
+  out AMimeType: string): Boolean;
+var
+  LNorm: TStringView;
+  LLeft, LRight: TStringView;
 begin
   ABytes := nil;
   AMimeType := '';
-  LNorm := NormalizeWebviewAssetPath(APath);
-  if LNorm = '' then
+  LNorm := NormalizeWebviewAssetView(AView);
+  if LNorm.Len = 0 then
     Exit(False);
-  { 先试全路径（mount 前缀保留的形态）；TryRead 单次探读合一（O(log n) 单次二分直达，无 Exists 预探双次放大） }
-  if TryRead(LNorm, ABytes, AMimeType) then
+  if TryReadView(LNorm, ABytes, AMimeType) then
     Exit(True);
-  { 回退：剥首段（兼容 mount '' + URL 含 "app/" 前缀的常见形态）。
-    例如 "app/index.html" → "index.html"。TStringView 零拷贝 Slice 直通
-    IVfsView（memtree/embedded 真零拷贝视图二分，os 单次物化兜底，无 Copy 临时串、无 MaxInt 扫描）；
-    单请求至多一次重度 I/O（每试单次探读合一，404 单次轻量二分收敛零额外二分零重度，命中单次重度 VfsReadAllBytesView）；
-    单源复用：路径切片复用 nextpas.core.text.view 零拷贝视图 + bytes.ops CompareBytesOrdered/VfsNameCompareView 单源
-    （与 bytes.ops VecGrowCapacity / Span 单源策略同源，避免跨单元重复切片实现）；
-    TryReadView inline 单次探读合一零额外二分，零拷贝 Move 透传。 }
-  LView := TStringView.FromStr(LNorm);
-  if LView.SplitFirst('/', LLeft, LRight) and (LRight.Len > 0) then
-  begin
+  if LNorm.SplitFirst('/', LLeft, LRight) and (LRight.Len > 0) then
     if TryReadView(LRight, ABytes, AMimeType) then
       Exit(True);
-  end;
   Result := False;
 end;
 

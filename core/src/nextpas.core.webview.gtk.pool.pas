@@ -80,78 +80,71 @@ var
   GAssetHolderLock: TMutex = nil;
   GEvalLock: TMutex = nil;
 
-// 单源收口：四池 Acquire/Release 共用泛型薄转发，inline 零拷贝，New/Dispose 仅一处
-generic function PoolAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
-begin
-  Result := specialize SyncPoolTryAcquire<T>(APool, ACount, ALock);
-  if Result = nil then
-    New(Result);
-end;
-
-generic procedure PoolRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; AItem: T); inline;
-begin
-  if AItem = nil then Exit;
-  if not specialize SyncPoolRelease<T>(APool, ACount, ALock, AItem) then
-    Dispose(AItem);
-end;
-
 function AcquireIdleRec: PIdleRec; inline;
 begin
-  // inline 薄转发 PoolAcquire 单源零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点
-  Result := specialize PoolAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
+  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点
+  Result := specialize SyncPoolTryAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
+  if Result = nil then New(Result);
   Result^.Kind := 0; Result^.Proc := nil; Result^.Method := nil; Result^.Plain := nil;
 end;
 
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 begin
-  // inline 薄转发 PoolRelease 单源，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底不丢，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Proc := nil; A^.Method := nil; A^.Plain := nil; A^.Kind := 0;
-  specialize PoolRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock, A);
+  if not specialize SyncPoolRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock, A) then
+    Dispose(A);
 end;
 
 function AcquireCompletionRec: PCompletionMarshal; inline;
 begin
-  // inline 薄转发单源，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离
-  Result := specialize PoolAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
+  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离
+  Result := specialize SyncPoolTryAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
+  if Result = nil then New(Result);
 end;
 
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin
-  // inline 单源，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
   if A = nil then Exit;
   A^.Win := nil; A^.FrameId := 0; A^.Cmd := ''; A^.IsError := False;
   A^.ResultJson := ''; A^.Code := ''; A^.MsgText := '';
-  specialize PoolRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock, A);
+  if not specialize SyncPoolRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock, A) then
+    Dispose(A);
 end;
 
 function AcquireAssetHolder: PAssetHolder; inline;
 begin
-  // inline 单源，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点
-  Result := specialize PoolAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
+  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点
+  Result := specialize SyncPoolTryAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
+  if Result = nil then New(Result);
 end;
 
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 begin
-  // inline 单源，Bytes nil 释放 ref，溢出 Dispose 兜底不丢，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，Bytes nil 释放 ref，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Bytes := nil;
-  specialize PoolRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A);
+  if not specialize SyncPoolRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
+    Dispose(A);
 end;
 
 function AcquireEvalRec: PEvalRec; inline;
 begin
-  // inline 单源，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点
-  Result := specialize PoolAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
+  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点
+  Result := specialize SyncPoolTryAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
+  if Result = nil then New(Result);
   Result^.Callback := nil; Result^.OnError := nil; Result^.Done := False; Result^.Cancel := nil; Result^.Owner := nil;
 end;
 
 procedure ReleaseEvalRec(A: PEvalRec); inline;
 begin
-  // inline 单源，托管 Callback/OnError nil 释放 ref，Cancel 置 nil 不双重释放，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管 Callback/OnError nil 释放 ref，Cancel 置 nil 不双重释放，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
   if A = nil then Exit;
   A^.Callback := nil; A^.OnError := nil; A^.Done := False; A^.Owner := nil; A^.Cancel := nil;
-  specialize PoolRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A);
+  if not specialize SyncPoolRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A) then
+    Dispose(A);
 end;
 
 procedure PoolInit; inline;

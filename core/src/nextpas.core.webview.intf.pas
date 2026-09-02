@@ -108,10 +108,15 @@ type
     procedure Unregister(const ACmd: string);
   end;
 
-  {** 资产 provider：解析失败返回 False（404 是正常业务路径，不抛异常）。 *}
+  {** 资产 provider：解析失败返回 False（404 是正常业务路径，不抛异常）。
+      TryResolveView 为零拷贝热点（bytes.ops 单源 TStringView 零堆分配，复用 text.view 零拷贝视图）。
+      兼容：历史仅有 TryResolve(string) 实现，新增 view 版后旧实现仍可 delegare ToString 单次分配；
+      新实现应直通 view 零分配，bridge 探测路径 404 零堆分配、命中单次视图二分（VFS）零额外 ToString。 *}
   IWebviewAssetProvider = interface
     ['{7C1E4A20-83B5-4E97-9D42-A6B1C2D3E004}']
     function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
       out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 

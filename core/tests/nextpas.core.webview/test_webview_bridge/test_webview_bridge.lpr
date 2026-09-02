@@ -12,6 +12,7 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.json,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
@@ -342,18 +343,27 @@ type
     Table: array of TProbeEntry;
     function TryResolve(const APath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function TProbeProvider.TryResolve(const APath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+
+function TProbeProvider.TryResolveView(const AView: TStringView;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
 var
   I: Integer;
 begin
-  LastPath := APath;
+  LastPath := AView.ToString;
   AMimeType := 'text/plain';
   Result := False;
+  ABytes := nil;
   for I := 0 to High(Table) do
-    if Table[I].Key = APath then
+    if TStringView.FromStr(Table[I].Key).Equals(AView) then
     begin
       SetLength(ABytes, 1);
       ABytes[0] := Ord('x');

@@ -27,8 +27,7 @@ uses
   nextpas.core.webview.assets,
   nextpas.core.webview.utils,
   nextpas.core.text.view,
-  nextpas.core.collections.hashmap,
-  nextpas.core.log.intf;
+  nextpas.core.collections.hashmap;
 
 const
   { 错误码稳定词汇表（BRIDGE_PROTOCOL §5） }
@@ -62,8 +61,6 @@ function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
 procedure WebviewNoteOversized(ASize: SizeUInt); inline;
-{ deprecated no-op：L3 不再持有 log.intf 全局原子指针，caller 自持 ILogger 生命周期，test 隔离零成本；保留签名兼容旧调用。 }
-procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
 { TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid. }
 function TryDecodeFrame(const AView: TStringView;
@@ -180,6 +177,9 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec,
+  nextpas.core.platform.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils,
@@ -226,27 +226,28 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{$PUSH}{$WARN 5024 OFF}
-procedure SetWebviewBridgeLogger(ALogger: ILogger);
-begin
-  { deprecated no-op: global logger removed, caller owns ILogger; empty body彻底移除空分支噪音，零额外调用 }
-end;
-{$POP}
-
-{ Arena 复用（CONTRACT INV-3 单源编解码）：threadvar 局部 Document/Arena 复用，
-  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；UI 线程亲和、零锁竞争、
-  复用 bytes.ops 单源容量生长，Parse 内部重用节点/Arena/溢出表。 }
-threadvar
+{ Arena 复用（CONTRACT INV-3 单源编解码）：UI 线程亲和单例 Document/Arena 复用，
+  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；零锁竞争、
+  复用 bytes.ops 单源容量生长，Parse 内部重用节点/Arena/溢出表。
+  性能：单全局复用零 threadvar TLS 间接，零锁；稳定性：finalization 定点释放无 threadvar 泄漏。 }
+var
   GDecodeDoc: TJsonDocument;
   GDecodeDocInited: Boolean;
+  GDecodeMainTid: UInt64;
 
 procedure EnsureDecodeDoc; inline;
 begin
-  if not GDecodeDocInited then
-  begin
-    GDecodeDoc.Init(nil);
-    GDecodeDocInited := True;
-  end;
+  if GDecodeDocInited then Exit;
+  GDecodeDoc.Init(nil);
+  GDecodeDocInited := True;
+  if GDecodeMainTid = 0 then
+    GDecodeMainTid := nextpas.core.platform.thread.platform_thread_id;
+end;
+
+procedure AssertBridgeMainThread; inline;
+begin
+  if (GDecodeMainTid <> 0) and (nextpas.core.platform.thread.platform_thread_id <> GDecodeMainTid) then
+    raise EWebviewInvalidState.Create('webview bridge: TryDecodeFrame must be called on UI thread');
 end;
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
@@ -313,11 +314,13 @@ var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { UI 线程亲和 + Arena 复用：threadvar Document 零锁、Parse 内重用节点/Arena；
+  { UI 线程亲和 + Arena 复用：单例 Document 零锁、Parse 内重用节点/Arena；
     消除 per-frame Init(1K+32节点)/Done 重建开销，TStringView 零拷贝(bytes.ops 单源)。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
   EnsureDecodeDoc;
+  if GDecodeMainTid <> 0 then
+    AssertBridgeMainThread;
   if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
     Exit;
   if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
@@ -360,40 +363,97 @@ begin
   end;
 end;
 
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
+function HexNibbleToChar(const ANibble: Byte): AnsiChar; inline;
+const H: array[0..15] of AnsiChar = '0123456789abcdef';
+begin
+  Result := H[ANibble and $F];
+end;
+
+procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder); inline;
+var
+  LPos: SizeUInt;
+  LCombined: TVecMask;
+  LFirst: Int32;
+  LCh: Byte;
+begin
+  if AView.Len = 0 then Exit;
+  ADst.Reserve(AView.Len * 4 + 8);
+  LPos := 0;
+  while LPos + VecWidth <= AView.Len do
+  begin
+    LCombined := VecCmpEq(@AView.Data[LPos], Ord('"')) or VecCmpEq(@AView.Data[LPos], Ord('\')) or VecCmpLtU(@AView.Data[LPos], $20);
+    if LCombined = TVecMask(0) then
+    begin
+      ADst.AppendBytes(@AView.Data[LPos], VecWidth);
+      Inc(LPos, VecWidth);
+    end
+    else
+    begin
+      LFirst := VecCtz(LCombined);
+      if LFirst > 0 then
+      begin
+        ADst.AppendBytes(@AView.Data[LPos], SizeUInt(LFirst));
+        Inc(LPos, SizeUInt(LFirst));
+      end;
+      LCh := Byte(AView.Data[LPos]);
+      case LCh of
+        34: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('"'); end;
+        92: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); end;
+        8: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('b'); end;
+        9: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('t'); end;
+        10: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('n'); end;
+        12: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('f'); end;
+        13: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('r'); end;
+      else
+        ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('u'); ADst.AppendChar('0'); ADst.AppendChar('0');
+        ADst.AppendChar(HexNibbleToChar((LCh shr 4) and $F)); ADst.AppendChar(HexNibbleToChar(LCh and $F));
+      end;
+      Inc(LPos);
+    end;
+  end;
+  while LPos < AView.Len do
+  begin
+    LCh := Byte(AView.Data[LPos]);
+    if (LCh = 34) or (LCh = 92) or (LCh < 32) then
+    begin
+      case LCh of
+        34: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('"'); end;
+        92: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); end;
+        8: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('b'); end;
+        9: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('t'); end;
+        10: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('n'); end;
+        12: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('f'); end;
+        13: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('r'); end;
+      else
+        ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('u'); ADst.AppendChar('0'); ADst.AppendChar('0');
+        ADst.AppendChar(HexNibbleToChar((LCh shr 4) and $F)); ADst.AppendChar(HexNibbleToChar(LCh and $F));
+      end;
+    end
+    else
+      ADst.AppendChar(AnsiChar(LCh));
+    Inc(LPos);
+  end;
+end;
+
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
 var
   LCode: string;
-  LInner: string;
-  LInnerBuilder: TStringBuilder;
-  WInner: TJsonWriter;
   LB: TStringBuilder;
-  WOuter: TJsonWriter;
+  LCodeView, LMsgView: TStringView;
 begin
   LCode := NormalizeInvokeCode(ACode);
-  // single-source double escape via json/text.escape SIMD (L1 Owner):
-  // inner object {"code":..,"message":..} via TJsonWriter/JsonEscapeToBuilder SIMD,
-  // outer string literal via second TJsonWriter/JsonEscapeToBuilder SIMD —
-  // replaces per-byte case 34/92/8..13 scalar loop, large messages use VecWidth SIMD.
-  LInnerBuilder.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2));
-  try
-    WInner.Init(LInnerBuilder);
-    WInner.BeginObject;
-    WInner.Key('code');
-    WInner.Str(LCode);
-    WInner.Key('message');
-    WInner.Str(AMessage);
-    WInner.EndObject;
-    LInner := LInnerBuilder.ToString;
-  finally
-    LInnerBuilder.Done;
-  end;
-  LB.Init(SizeUInt(32 + SizeUInt(Length(LInner)) * 2));
+  LCodeView := TStringView.FromStr(LCode);
+  LMsgView := TStringView.FromStr(AMessage);
+  LB.Init(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
   try
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
-    LB.AppendChar(',');
-    WOuter.Init(LB);
-    WOuter.Str(LInner);
+    LB.AppendBytes(',"', 2);
+    LB.AppendBytes('{\"code\":\"', 12);
+    JsonDoubleEscapeToBuilder(LCodeView, LB);
+    LB.AppendBytes('\",\"message\":\"', 17);
+    JsonDoubleEscapeToBuilder(LMsgView, LB);
+    LB.AppendBytes('\"}"', 4);
     LB.AppendChar(')');
     Result := LB.ToString;
   finally
@@ -593,7 +653,6 @@ end;
 function TWebviewAssetsImpl.TryResolveView(const AView: TStringView;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 var
-  LPath: string;
   LNormView: TStringView;
   LProvider: IWebviewAssetProvider;
 begin
@@ -603,13 +662,13 @@ begin
   if FInert then
     Exit;
   // single Trie source: longest-prefix O(m) zero-copy view covers root '' and multi-mount; fast-path converged
+  // perf: NormalizeWebviewAssetView 零堆分配 TStringView 零拷贝 + Trie O(m) + provider TryResolveView 零 ToString 堆分配，404 零分配，命中单次视图二分；inline 零额外调用，复用 bytes.ops 单源
   LNormView := NormalizeWebviewAssetView(AView);
   if LNormView.Len = 0 then
     Exit;
   if not FIndex.TryGetLongestPrefixByView(LNormView, LProvider) then
     Exit(False);
-  LPath := LNormView.ToString; // single conversion point, zero extra alloc, inline thin-forward
-  Result := LProvider.TryResolve(LPath, ABytes, AMimeType);
+  Result := LProvider.TryResolveView(LNormView, ABytes, AMimeType);
 end;
 
 function TWebviewAssetsImpl.MountCount: Integer; inline;
@@ -617,8 +676,15 @@ begin
   Result := FIndex.Count;
 end;
 
+initialization
+  GDecodeMainTid := 0;
+  GDecodeDocInited := False;
+
 finalization
   if GDecodeDocInited then
+  begin
     GDecodeDoc.Done;
+    GDecodeDocInited := False;
+  end;
 
 end.

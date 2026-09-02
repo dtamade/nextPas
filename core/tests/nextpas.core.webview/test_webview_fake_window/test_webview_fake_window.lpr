@@ -8,6 +8,7 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.base,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
@@ -261,11 +262,18 @@ end;
 
 type
   TFixedProvider = class(TInterfacedObject, IWebviewAssetProvider)
-  public function TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+  public
+    function TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 function TFixedProvider.TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
-  ABytes := nil; AMimeType := ''; Result := APath='hit.txt';
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+function TFixedProvider.TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  ABytes := nil; AMimeType := '';
+  Result := TStringView.FromStr('hit.txt').Equals(AView);
   if Result then begin SetLength(ABytes,2); ABytes[0]:=Ord('o'); ABytes[1]:=Ord('k'); AMimeType:='text/plain'; end;
 end;
 
