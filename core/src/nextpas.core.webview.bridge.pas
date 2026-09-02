@@ -179,7 +179,6 @@ uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
-  nextpas.core.platform.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils,
@@ -226,30 +225,11 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{ Arena 复用（CONTRACT INV-3 单源编解码）：UI 线程亲和单例 Document/Arena 复用，
-  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；单写入者零锁（仅 UI 线程触碰，
-  首帧前由 UI 线程显式 lazy-init 完成），不依赖零初始化时序竞争；复用 bytes.ops
-  单源容量生长，Parse 内部重用节点/Arena/溢出表。性能：单全局复用零 threadvar TLS
-  间接，零锁且零额外调用；稳定性：finalization 定点 Done 释放无 threadvar 泄漏。 }
-var
-  GDecodeDoc: TJsonDocument;
-  GDecodeDocInited: Boolean;
-  GDecodeMainTid: UInt64;
-
-procedure EnsureDecodeDoc;
-begin
-  if GDecodeDocInited then Exit;
-  GDecodeDoc.Init(nil);
-  GDecodeDocInited := True;
-  if GDecodeMainTid = 0 then
-    GDecodeMainTid := nextpas.core.platform.thread.platform_thread_id;
-end;
-
-procedure AssertBridgeMainThread;
-begin
-  if (GDecodeMainTid <> 0) and (nextpas.core.platform.thread.platform_thread_id <> GDecodeMainTid) then
-    raise EWebviewInvalidState.Create('webview bridge: TryDecodeFrame must be called on UI thread');
-end;
+{ Stateless 单源编解码（CONTRACT INV-3）：无进程级全局单例、无线程亲和校验，
+  每帧局部 TJsonDocument Init/Done 成对（bounded by NPW_MAX_FRAME_BYTES 1 MiB，
+  初容 1K+32 节点内按需生长，Parse 内 bytes.ops 单源容量生长，溢出表 sized 析构），
+  避免 Arena 容量无上界单调增长与 Trim 阈值缺失；heaptrc0 纯净（try-finally Done
+  定点释放，无 finalization 泄漏与可变共享状态），无状态高级感；TStringView 零拷贝。 }
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
 
@@ -312,23 +292,27 @@ end;
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
+  LDoc: TJsonDocument;
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { UI 线程亲和 + Arena 复用：单例 Document 零锁、Parse 内重用节点/Arena；
-    消除 per-frame Init(1K+32节点)/Done 重建开销，TStringView 零拷贝(bytes.ops 单源)。 }
+  { stateless per-frame Init/Done：bounded 1 MiB 帧内按需生长，无全局 Arena 单调膨胀与 Trim 缺失；
+    try-finally Done 保证 sized 释放不丢（溢出表/Arena/索引全释放），heaptrc0 纯净，无共享可变状态；
+    TStringView 零拷贝(bytes.ops 单源)，单 builder Move 归一 payload。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  EnsureDecodeDoc;
-  if GDecodeMainTid <> 0 then
-    AssertBridgeMainThread;
-  if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
-    Exit;
-  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-    Exit;
-  LPayload := LRoot.Get('payload');
-  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
-  Result := True;
+  LDoc.Init(nil);
+  try
+    if not BridgeParseFrame(AView, LDoc, LRoot) then
+      Exit;
+    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+      Exit;
+    LPayload := LRoot.Get('payload');
+    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+    Result := True;
+  finally
+    LDoc.Done;
+  end;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -370,6 +354,7 @@ begin
   Result := H[ANibble and $F];
 end;
 
+{ JsonDoubleEscapeToBuilder: VecWidth SIMD 转义循环体禁 inline (design-conventions §2 红线二)，避 I-Cache 膨胀；BuildRejectScript 同禁 inline，外联单源。 }
 procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder);
 var
   LPos: SizeUInt;
@@ -436,7 +421,8 @@ begin
   end;
 end;
 
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
+{ BuildRejectScript 外联：含 SIMD 转义循环禁 inline (design-conventions §2 红线二)，避高频 reject I-Cache 膨胀。 }
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
   LB: TStringBuilder;
@@ -676,16 +662,5 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
-
-initialization
-  GDecodeMainTid := 0;
-  GDecodeDocInited := False;
-
-finalization
-  if GDecodeDocInited then
-  begin
-    GDecodeDoc.Done;
-    GDecodeDocInited := False;
-  end;
 
 end.

@@ -1,10 +1,10 @@
 unit nextpas.core.webview.gtk.pool;
 
-{** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval 四池私有复用，dispatcher 专用。
+{** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval / GCancellable 五池私有复用，dispatcher 专用。
 
        契约：容量/操作单源 L1 bytes.ops / sync.pool，类型单源 webview.intf，私于 gtk 不经门面（CONTRACT §1）。
-       性能：inline 薄转发零拷贝，热路径短临界 <1µs，Slab 零每 Post 堆分配，四池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock）消除跨池 <1µs 临界外热点串行化。
-       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，溢出 Dispose 兜底单所有权不丢，Finalize 逐槽释放。 *}
+       性能：inline 薄转发零拷贝，热路径短临界 <1µs，Slab 零每 Post/Eval 堆分配，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池 <1µs 临界外热点串行化。
+       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 逐槽释放。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -60,11 +60,16 @@ function AcquireAssetHolder: PAssetHolder; inline;
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 function AcquireEvalRec: PEvalRec; inline;
 procedure ReleaseEvalRec(A: PEvalRec); inline;
+function AcquireGCancellable: Pointer; inline;
+procedure ReleaseGCancellable(A: Pointer); inline;
 
 procedure PoolInit; inline;
 procedure PoolFinalize; inline;
 
 implementation
+
+uses
+  nextpas.core.webview.gtk.ffi;
 
 var
   GIdlePool: array of PIdleRec;
@@ -75,10 +80,13 @@ var
   GAssetHolderCount: Integer = 0;
   GEvalPool: array of PEvalRec;
   GEvalPoolCount: Integer = 0;
+  GCancelPool: array of Pointer;
+  GCancelPoolCount: Integer = 0;
   GIdleLock: TMutex = nil;
   GCompletionLock: TMutex = nil;
   GAssetHolderLock: TMutex = nil;
   GEvalLock: TMutex = nil;
+  GCancelLock: TMutex = nil;
 
 function AcquireIdleRec: PIdleRec; inline;
 begin
@@ -140,32 +148,64 @@ end;
 
 procedure ReleaseEvalRec(A: PEvalRec); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管 Callback/OnError nil 释放 ref，Cancel 置 nil 不双重释放，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
   if A = nil then Exit;
   A^.Callback := nil; A^.OnError := nil; A^.Done := False; A^.Owner := nil; A^.Cancel := nil;
   if not specialize SyncPoolRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A) then
     Dispose(A);
 end;
 
+function AcquireGCancellable: Pointer; inline;
+begin
+  Result := specialize SyncPoolTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
+  if Result <> nil then
+  begin
+    if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_reset) then
+      nextpas.core.webview.gtk.ffi.G_cancellable_reset(Result)
+    else if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled) and
+            (nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled(Result) <> 0) then
+    begin
+      nextpas.core.webview.gtk.ffi.G_object_unref(Result);
+      Result := nil;
+    end;
+  end;
+  if Result = nil then
+    Result := nextpas.core.webview.gtk.ffi.G_cancellable_new();
+end;
+
+procedure ReleaseGCancellable(A: Pointer); inline;
+begin
+  if A = nil then Exit;
+  if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_reset) then
+    nextpas.core.webview.gtk.ffi.G_cancellable_reset(A)
+  else if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled) and
+          (nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled(A) <> 0) then
+  begin
+    nextpas.core.webview.gtk.ffi.G_object_unref(A);
+    Exit;
+  end;
+  if not specialize SyncPoolRelease<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock, A) then
+    nextpas.core.webview.gtk.ffi.G_object_unref(A);
+end;
+
 procedure PoolInit; inline;
 var
   LCap: Integer;
 begin
-  // 批量化：单次 VecGrowCapacity 单源五阶倍增 0→4→8→16→32→64 批量预分配四池，零 5 次重复调用，突发高频 Eval/Idle/AssetHolder 热点小文件 scheme 64 并发零锁内 VecGrow 重分配与 SetLength 抖动，单源 inline 零额外调用；四 per-pool 锁分离消除 Post/Eval 跨池争用，突发回落 New/Dispose 抖动消除
   GIdleLock := TMutex.Create;
   GCompletionLock := TMutex.Create;
   GAssetHolderLock := TMutex.Create;
   GEvalLock := TMutex.Create;
-  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0))))); // 64: bytes.ops 单源 0→4→8→16→32→64，inline 零额外调用，Slab 零每 Post 堆分配，热点小文件 burst 零 New 抖动
+  GCancelLock := TMutex.Create;
+  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0)))));
   SetLength(GIdlePool, LCap);
   SetLength(GCompletionPool, LCap);
   SetLength(GAssetHolderPool, LCap);
   SetLength(GEvalPool, LCap);
+  SetLength(GCancelPool, LCap);
 end;
 
 procedure PoolFinalize; inline;
 begin
-  // 稳定性：逐槽 Dispose 单所有权释放不丢，托管字段随 Dispose 终结，SetLength 0 清零，FreeAndNil 逐锁释放不丢
   while GIdlePoolCount > 0 do
   begin
     Dec(GIdlePoolCount);
@@ -190,6 +230,13 @@ begin
     Dispose(GEvalPool[GEvalPoolCount]);
   end;
   SetLength(GEvalPool, 0);
+  while GCancelPoolCount > 0 do
+  begin
+    Dec(GCancelPoolCount);
+    G_object_unref(GCancelPool[GCancelPoolCount]);
+  end;
+  SetLength(GCancelPool, 0);
+  FreeAndNil(GCancelLock);
   FreeAndNil(GIdleLock);
   FreeAndNil(GCompletionLock);
   FreeAndNil(GAssetHolderLock);

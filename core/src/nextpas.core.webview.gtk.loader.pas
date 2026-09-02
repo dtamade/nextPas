@@ -48,23 +48,138 @@ function GtkLoadInfo: TGtkLoadInfo; inline;
 
 implementation
 
+uses
+  nextpas.core.atomic,
+  nextpas.core.sync;
+
 type
   PPlatformLibrary = ^TPlatformLibrary;
+
+  TGtkBindEntry = record
+    VarAddr: Pointer;
+    Name: PAnsiChar;
+  end;
 
 var
   GLoaded: Boolean = False;
   GLoading: Boolean = False;
-  GProbed: Boolean = False;
+  GProbed: Int32 = 0; { atomic 0/1, mo_acquire/mo_release 保证弱内存可见性，零撕裂 }
   GInfo: TGtkLoadInfo;
   GWebkitLib, GGtkLib, GGobjectLib, GGlibLib, GJscLib: TPlatformLibrary;
   GWebkitSoname, GJscSoname: string;
   GGtkLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
+  GGtkLockOnce: IOnce; { L1 sync.once 单源：EnsureGtkLock 惰性创建零双分配零泄漏 }
+  GGtkBindOnce: IOnce; { L1 sync.once 单源：Bind 表单次初始化，热点零分配 }
+  GGtkBindTable: array[0..86] of TGtkBindEntry; { 单源表驱动：87 必需符号单表，I-Cache 单调用点 }
 
 procedure EnsureGtkLock; inline;
 begin
-  { perf: inline 零额外调用；懒初始化兜底 + initialization 主路径已创建，热点双检锁零分配，零拷贝 Move 语义同 factory }
-  if GGtkLock = nil then
+  { perf: inline 零额外调用；Once 单源保护懒创建，双线程并发零重复 New 零泄漏，platform.sync futex 去重 }
+  if GGtkLock <> nil then
+    Exit;
+  if GGtkLockOnce = nil then
+  begin
+    { startup fallback：initialization 主路径已创建 Once，此分支仅兜底单线程启动期 }
     GGtkLock := TMutex.Create;
+    Exit;
+  end;
+  GGtkLockOnce.DoOnce(procedure
+  begin
+    if GGtkLock = nil then
+      GGtkLock := TMutex.Create;
+  end);
+end;
+
+procedure InitGtkBindTable;
+begin
+  { 单源表驱动初始化：87 必需符号单表，新增仅此一处登记，bytes.ops 单源思想，零双表漂移 }
+  GGtkBindTable[0].VarAddr := @G_idle_add_full; GGtkBindTable[0].Name := 'g_idle_add_full';
+  GGtkBindTable[1].VarAddr := @G_source_remove; GGtkBindTable[1].Name := 'g_source_remove';
+  GGtkBindTable[2].VarAddr := @G_signal_connect_data; GGtkBindTable[2].Name := 'g_signal_connect_data';
+  GGtkBindTable[3].VarAddr := @G_memory_input_stream_new_from_data; GGtkBindTable[3].Name := 'g_memory_input_stream_new_from_data';
+  GGtkBindTable[4].VarAddr := @G_memory_input_stream_new_from_bytes; GGtkBindTable[4].Name := 'g_memory_input_stream_new_from_bytes';
+  GGtkBindTable[5].VarAddr := @G_bytes_new_with_free_func; GGtkBindTable[5].Name := 'g_bytes_new_with_free_func';
+  GGtkBindTable[6].VarAddr := @G_bytes_unref; GGtkBindTable[6].Name := 'g_bytes_unref';
+  GGtkBindTable[7].VarAddr := @G_malloc; GGtkBindTable[7].Name := 'g_malloc';
+  GGtkBindTable[8].VarAddr := @G_free; GGtkBindTable[8].Name := 'g_free';
+  GGtkBindTable[9].VarAddr := @G_quark_from_static_string; GGtkBindTable[9].Name := 'g_quark_from_static_string';
+  GGtkBindTable[10].VarAddr := @G_cancellable_new; GGtkBindTable[10].Name := 'g_cancellable_new';
+  GGtkBindTable[11].VarAddr := @G_cancellable_cancel; GGtkBindTable[11].Name := 'g_cancellable_cancel';
+  GGtkBindTable[12].VarAddr := @G_error_new_literal; GGtkBindTable[12].Name := 'g_error_new_literal';
+  GGtkBindTable[13].VarAddr := @G_main_loop_new; GGtkBindTable[13].Name := 'g_main_loop_new';
+  GGtkBindTable[14].VarAddr := @G_main_loop_run; GGtkBindTable[14].Name := 'g_main_loop_run';
+  GGtkBindTable[15].VarAddr := @G_main_loop_quit; GGtkBindTable[15].Name := 'g_main_loop_quit';
+  GGtkBindTable[16].VarAddr := @G_main_loop_unref; GGtkBindTable[16].Name := 'g_main_loop_unref';
+  GGtkBindTable[17].VarAddr := @G_timeout_add; GGtkBindTable[17].Name := 'g_timeout_add';
+  GGtkBindTable[18].VarAddr := @G_main_context_default; GGtkBindTable[18].Name := 'g_main_context_default';
+  GGtkBindTable[19].VarAddr := @G_main_context_find_source_by_id; GGtkBindTable[19].Name := 'g_main_context_find_source_by_id';
+  GGtkBindTable[20].VarAddr := @G_object_unref; GGtkBindTable[20].Name := 'g_object_unref';
+  GGtkBindTable[21].VarAddr := @G_object_set; GGtkBindTable[21].Name := 'g_object_set';
+  GGtkBindTable[22].VarAddr := @G_object_get; GGtkBindTable[22].Name := 'g_object_get';
+  GGtkBindTable[23].VarAddr := @GTK_init_check; GGtkBindTable[23].Name := 'gtk_init_check';
+  GGtkBindTable[24].VarAddr := @GTK_window_new; GGtkBindTable[24].Name := 'gtk_window_new';
+  GGtkBindTable[25].VarAddr := @GTK_window_set_title; GGtkBindTable[25].Name := 'gtk_window_set_title';
+  GGtkBindTable[26].VarAddr := @GTK_window_get_title; GGtkBindTable[26].Name := 'gtk_window_get_title';
+  GGtkBindTable[27].VarAddr := @GTK_window_set_default_size; GGtkBindTable[27].Name := 'gtk_window_set_default_size';
+  GGtkBindTable[28].VarAddr := @GTK_window_set_resizable; GGtkBindTable[28].Name := 'gtk_window_set_resizable';
+  GGtkBindTable[29].VarAddr := @GTK_window_resize; GGtkBindTable[29].Name := 'gtk_window_resize';
+  GGtkBindTable[30].VarAddr := @GTK_window_maximize; GGtkBindTable[30].Name := 'gtk_window_maximize';
+  GGtkBindTable[31].VarAddr := @GTK_window_unmaximize; GGtkBindTable[31].Name := 'gtk_window_unmaximize';
+  GGtkBindTable[32].VarAddr := @GTK_window_iconify; GGtkBindTable[32].Name := 'gtk_window_iconify';
+  GGtkBindTable[33].VarAddr := @GTK_window_deiconify; GGtkBindTable[33].Name := 'gtk_window_deiconify';
+  GGtkBindTable[34].VarAddr := @GTK_window_is_maximized; GGtkBindTable[34].Name := 'gtk_window_is_maximized';
+  GGtkBindTable[35].VarAddr := @GTK_widget_show_all; GGtkBindTable[35].Name := 'gtk_widget_show_all';
+  GGtkBindTable[36].VarAddr := @GTK_widget_hide; GGtkBindTable[36].Name := 'gtk_widget_hide';
+  GGtkBindTable[37].VarAddr := @GTK_widget_get_visible; GGtkBindTable[37].Name := 'gtk_widget_get_visible';
+  GGtkBindTable[38].VarAddr := @GTK_widget_get_scale_factor; GGtkBindTable[38].Name := 'gtk_widget_get_scale_factor';
+  GGtkBindTable[39].VarAddr := @GTK_widget_grab_focus; GGtkBindTable[39].Name := 'gtk_widget_grab_focus';
+  GGtkBindTable[40].VarAddr := @GTK_widget_get_window; GGtkBindTable[40].Name := 'gtk_widget_get_window';
+  GGtkBindTable[41].VarAddr := @GTK_widget_destroy; GGtkBindTable[41].Name := 'gtk_widget_destroy';
+  GGtkBindTable[42].VarAddr := @GTK_widget_get_allocated_width; GGtkBindTable[42].Name := 'gtk_widget_get_allocated_width';
+  GGtkBindTable[43].VarAddr := @GTK_widget_get_allocated_height; GGtkBindTable[43].Name := 'gtk_widget_get_allocated_height';
+  GGtkBindTable[44].VarAddr := @GTK_widget_set_size_request; GGtkBindTable[44].Name := 'gtk_widget_set_size_request';
+  GGtkBindTable[45].VarAddr := @GDK_window_get_state; GGtkBindTable[45].Name := 'gdk_window_get_state';
+  GGtkBindTable[46].VarAddr := @GTK_container_add; GGtkBindTable[46].Name := 'gtk_container_add';
+  GGtkBindTable[47].VarAddr := @GTK_main; GGtkBindTable[47].Name := 'gtk_main';
+  GGtkBindTable[48].VarAddr := @GTK_main_quit; GGtkBindTable[48].Name := 'gtk_main_quit';
+  GGtkBindTable[49].VarAddr := @GTK_main_iteration_do; GGtkBindTable[49].Name := 'gtk_main_iteration_do';
+  GGtkBindTable[50].VarAddr := @WEBKIT_web_context_get_default; GGtkBindTable[50].Name := 'webkit_web_context_get_default';
+  GGtkBindTable[51].VarAddr := @WEBKIT_web_view_new_with_context; GGtkBindTable[51].Name := 'webkit_web_view_new_with_context';
+  GGtkBindTable[52].VarAddr := @WEBKIT_web_view_get_user_content_manager; GGtkBindTable[52].Name := 'webkit_web_view_get_user_content_manager';
+  GGtkBindTable[53].VarAddr := @WEBKIT_web_view_get_uri; GGtkBindTable[53].Name := 'webkit_web_view_get_uri';
+  GGtkBindTable[54].VarAddr := @WEBKIT_web_view_new_with_user_content_manager; GGtkBindTable[54].Name := 'webkit_web_view_new_with_user_content_manager';
+  GGtkBindTable[55].VarAddr := @WEBKIT_web_view_load_uri; GGtkBindTable[55].Name := 'webkit_web_view_load_uri';
+  GGtkBindTable[56].VarAddr := @WEBKIT_web_view_load_html; GGtkBindTable[56].Name := 'webkit_web_view_load_html';
+  GGtkBindTable[57].VarAddr := @WEBKIT_web_view_reload; GGtkBindTable[57].Name := 'webkit_web_view_reload';
+  GGtkBindTable[58].VarAddr := @WEBKIT_web_view_stop_loading; GGtkBindTable[58].Name := 'webkit_web_view_stop_loading';
+  GGtkBindTable[59].VarAddr := @WEBKIT_web_view_go_back; GGtkBindTable[59].Name := 'webkit_web_view_go_back';
+  GGtkBindTable[60].VarAddr := @WEBKIT_web_view_go_forward; GGtkBindTable[60].Name := 'webkit_web_view_go_forward';
+  GGtkBindTable[61].VarAddr := @WEBKIT_web_view_can_go_back; GGtkBindTable[61].Name := 'webkit_web_view_can_go_back';
+  GGtkBindTable[62].VarAddr := @WEBKIT_web_view_can_go_forward; GGtkBindTable[62].Name := 'webkit_web_view_can_go_forward';
+  GGtkBindTable[63].VarAddr := @WEBKIT_web_view_set_zoom_level; GGtkBindTable[63].Name := 'webkit_web_view_set_zoom_level';
+  GGtkBindTable[64].VarAddr := @WEBKIT_web_view_get_zoom_level; GGtkBindTable[64].Name := 'webkit_web_view_get_zoom_level';
+  GGtkBindTable[65].VarAddr := @WEBKIT_web_view_get_inspector; GGtkBindTable[65].Name := 'webkit_web_view_get_inspector';
+  GGtkBindTable[66].VarAddr := @WEBKIT_web_view_get_settings; GGtkBindTable[66].Name := 'webkit_web_view_get_settings';
+  GGtkBindTable[67].VarAddr := @WEBKIT_settings_set_enable_developer_extras; GGtkBindTable[67].Name := 'webkit_settings_set_enable_developer_extras';
+  GGtkBindTable[68].VarAddr := @WEBKIT_web_context_new_ephemeral; GGtkBindTable[68].Name := 'webkit_web_context_new_ephemeral';
+  GGtkBindTable[69].VarAddr := @WEBKIT_web_context_new_with_website_data_manager; GGtkBindTable[69].Name := 'webkit_web_context_new_with_website_data_manager';
+  GGtkBindTable[70].VarAddr := @WEBKIT_website_data_manager_new; GGtkBindTable[70].Name := 'webkit_website_data_manager_new';
+  GGtkBindTable[71].VarAddr := @WEBKIT_web_context_register_uri_scheme; GGtkBindTable[71].Name := 'webkit_web_context_register_uri_scheme';
+  GGtkBindTable[72].VarAddr := @WEBKIT_user_content_manager_new; GGtkBindTable[72].Name := 'webkit_user_content_manager_new';
+  GGtkBindTable[73].VarAddr := @WEBKIT_user_content_manager_add_script; GGtkBindTable[73].Name := 'webkit_user_content_manager_add_script';
+  GGtkBindTable[74].VarAddr := @WEBKIT_user_content_manager_register_script_message_handler; GGtkBindTable[74].Name := 'webkit_user_content_manager_register_script_message_handler';
+  GGtkBindTable[75].VarAddr := @WEBKIT_user_script_new; GGtkBindTable[75].Name := 'webkit_user_script_new';
+  GGtkBindTable[76].VarAddr := @WEBKIT_user_script_unref; GGtkBindTable[76].Name := 'webkit_user_script_unref';
+  GGtkBindTable[77].VarAddr := @WEBKIT_javascript_result_get_js_value; GGtkBindTable[77].Name := 'webkit_javascript_result_get_js_value';
+  GGtkBindTable[78].VarAddr := @WEBKIT_uri_scheme_request_get_uri; GGtkBindTable[78].Name := 'webkit_uri_scheme_request_get_uri';
+  GGtkBindTable[79].VarAddr := @WEBKIT_uri_scheme_request_get_path; GGtkBindTable[79].Name := 'webkit_uri_scheme_request_get_path';
+  GGtkBindTable[80].VarAddr := @WEBKIT_uri_scheme_request_get_web_view; GGtkBindTable[80].Name := 'webkit_uri_scheme_request_get_web_view';
+  GGtkBindTable[81].VarAddr := @WEBKIT_uri_scheme_request_finish; GGtkBindTable[81].Name := 'webkit_uri_scheme_request_finish';
+  GGtkBindTable[82].VarAddr := @WEBKIT_uri_scheme_request_finish_error; GGtkBindTable[82].Name := 'webkit_uri_scheme_request_finish_error';
+  GGtkBindTable[83].VarAddr := @JSC_value_is_null; GGtkBindTable[83].Name := 'jsc_value_is_null';
+  GGtkBindTable[84].VarAddr := @JSC_value_is_undefined; GGtkBindTable[84].Name := 'jsc_value_is_undefined';
+  GGtkBindTable[85].VarAddr := @JSC_value_to_json; GGtkBindTable[85].Name := 'jsc_value_to_json';
+  GGtkBindTable[86].VarAddr := @JSC_value_to_string; GGtkBindTable[86].Name := 'jsc_value_to_string';
 end;
 
 function TryDlOpen(var ALib: TPlatformLibrary; const ASonames: array of string;
@@ -125,131 +240,24 @@ var
   LHasEvalPair: Boolean;
 
   function BindAll: Boolean;
+  var
+    I: Integer;
   begin
-    Result :=
-      { GLib }
-      BindReq(@G_idle_add_full, 'g_idle_add_full') and
-      BindReq(@G_source_remove, 'g_source_remove') and
-      BindReq(@G_signal_connect_data, 'g_signal_connect_data') and
-      BindReq(@G_memory_input_stream_new_from_data,
-        'g_memory_input_stream_new_from_data') and
-      BindReq(@G_memory_input_stream_new_from_bytes,
-        'g_memory_input_stream_new_from_bytes') and
-      BindReq(@G_bytes_new_with_free_func,
-        'g_bytes_new_with_free_func') and
-      BindReq(@G_bytes_unref, 'g_bytes_unref') and
-      BindReq(@G_malloc, 'g_malloc') and
-      BindReq(@G_free, 'g_free') and
-      BindReq(@G_quark_from_static_string, 'g_quark_from_static_string') and
-      BindReq(@G_cancellable_new, 'g_cancellable_new') and
-      BindReq(@G_cancellable_cancel, 'g_cancellable_cancel') and
-      BindReq(@G_error_new_literal, 'g_error_new_literal') and
-      BindReq(@G_main_loop_new, 'g_main_loop_new') and
-      BindReq(@G_main_loop_run, 'g_main_loop_run') and
-      BindReq(@G_main_loop_quit, 'g_main_loop_quit') and
-      BindReq(@G_main_loop_unref, 'g_main_loop_unref') and
-      BindReq(@G_timeout_add, 'g_timeout_add') and
-      BindReq(@G_main_context_default, 'g_main_context_default') and
-      BindReq(@G_main_context_find_source_by_id,
-        'g_main_context_find_source_by_id') and
-      { GObject }
-      BindReq(@G_object_unref, 'g_object_unref') and
-      BindReq(@G_object_set, 'g_object_set') and
-      BindReq(@G_object_get, 'g_object_get') and
-      { GTK3 窗口壳 }
-      BindReq(@GTK_init_check, 'gtk_init_check') and
-      BindReq(@GTK_window_new, 'gtk_window_new') and
-      BindReq(@GTK_window_set_title, 'gtk_window_set_title') and
-      BindReq(@GTK_window_get_title, 'gtk_window_get_title') and
-      BindReq(@GTK_window_set_default_size, 'gtk_window_set_default_size') and
-      BindReq(@GTK_window_set_resizable, 'gtk_window_set_resizable') and
-      BindReq(@GTK_window_resize, 'gtk_window_resize') and
-      BindReq(@GTK_window_maximize, 'gtk_window_maximize') and
-      BindReq(@GTK_window_unmaximize, 'gtk_window_unmaximize') and
-      BindReq(@GTK_window_iconify, 'gtk_window_iconify') and
-      BindReq(@GTK_window_deiconify, 'gtk_window_deiconify') and
-      BindReq(@GTK_window_is_maximized, 'gtk_window_is_maximized') and
-      BindReq(@GTK_widget_show_all, 'gtk_widget_show_all') and
-      BindReq(@GTK_widget_hide, 'gtk_widget_hide') and
-      BindReq(@GTK_widget_get_visible, 'gtk_widget_get_visible') and
-      BindReq(@GTK_widget_get_scale_factor, 'gtk_widget_get_scale_factor') and
-      BindReq(@GTK_widget_grab_focus, 'gtk_widget_grab_focus') and
-      BindReq(@GTK_widget_get_window, 'gtk_widget_get_window') and
-      BindReq(@GTK_widget_destroy, 'gtk_widget_destroy') and
-      BindReq(@GTK_widget_get_allocated_width,
-        'gtk_widget_get_allocated_width') and
-      BindReq(@GTK_widget_get_allocated_height,
-        'gtk_widget_get_allocated_height') and
-      BindReq(@GTK_widget_set_size_request, 'gtk_widget_set_size_request') and
-      BindReq(@GDK_window_get_state, 'gdk_window_get_state') and
-      BindReq(@GTK_container_add, 'gtk_container_add') and
-      BindReq(@GTK_main, 'gtk_main') and
-      BindReq(@GTK_main_quit, 'gtk_main_quit') and
-      BindReq(@GTK_main_iteration_do, 'gtk_main_iteration_do') and
-      { WebKit 视图与加载 }
-      BindReq(@WEBKIT_web_context_get_default, 'webkit_web_context_get_default') and
-      BindReq(@WEBKIT_web_view_new_with_context, 'webkit_web_view_new_with_context') and
-      BindReq(@WEBKIT_web_view_get_user_content_manager,
-        'webkit_web_view_get_user_content_manager') and
-      BindReq(@WEBKIT_web_view_get_uri, 'webkit_web_view_get_uri') and
-      BindReq(@WEBKIT_web_view_new_with_user_content_manager,
-        'webkit_web_view_new_with_user_content_manager') and
-      BindReq(@WEBKIT_web_view_load_uri, 'webkit_web_view_load_uri') and
-      BindReq(@WEBKIT_web_view_load_html, 'webkit_web_view_load_html') and
-      BindReq(@WEBKIT_web_view_reload, 'webkit_web_view_reload') and
-      BindReq(@WEBKIT_web_view_stop_loading, 'webkit_web_view_stop_loading') and
-      BindReq(@WEBKIT_web_view_go_back, 'webkit_web_view_go_back') and
-      BindReq(@WEBKIT_web_view_go_forward, 'webkit_web_view_go_forward') and
-      BindReq(@WEBKIT_web_view_can_go_back, 'webkit_web_view_can_go_back') and
-      BindReq(@WEBKIT_web_view_can_go_forward,
-        'webkit_web_view_can_go_forward') and
-      BindReq(@WEBKIT_web_view_set_zoom_level,
-        'webkit_web_view_set_zoom_level') and
-      BindReq(@WEBKIT_web_view_get_zoom_level,
-        'webkit_web_view_get_zoom_level') and
-      BindReq(@WEBKIT_web_view_get_inspector, 'webkit_web_view_get_inspector') and
-      BindReq(@WEBKIT_web_view_get_settings, 'webkit_web_view_get_settings') and
-      BindReq(@WEBKIT_settings_set_enable_developer_extras,
-        'webkit_settings_set_enable_developer_extras') and
-      { 会话 context 与 scheme }
-      BindReq(@WEBKIT_web_context_new_ephemeral,
-        'webkit_web_context_new_ephemeral') and
-      BindReq(@WEBKIT_web_context_new_with_website_data_manager,
-        'webkit_web_context_new_with_website_data_manager') and
-      BindReq(@WEBKIT_website_data_manager_new,
-        'webkit_website_data_manager_new') and
-      BindReq(@WEBKIT_web_context_register_uri_scheme,
-        'webkit_web_context_register_uri_scheme') and
-      { 用户内容与桥 transport }
-      BindReq(@WEBKIT_user_content_manager_new,
-        'webkit_user_content_manager_new') and
-      BindReq(@WEBKIT_user_content_manager_add_script,
-        'webkit_user_content_manager_add_script') and
-      BindReq(@WEBKIT_user_content_manager_register_script_message_handler,
-        'webkit_user_content_manager_register_script_message_handler') and
-      BindReq(@WEBKIT_user_script_new, 'webkit_user_script_new') and
-      BindReq(@WEBKIT_user_script_unref, 'webkit_user_script_unref') and
-      BindReq(@WEBKIT_javascript_result_get_js_value,
-        'webkit_javascript_result_get_js_value') and
-      BindReq(@WEBKIT_uri_scheme_request_get_uri,
-        'webkit_uri_scheme_request_get_uri') and
-      BindReq(@WEBKIT_uri_scheme_request_get_path,
-        'webkit_uri_scheme_request_get_path') and
-      BindReq(@WEBKIT_uri_scheme_request_get_web_view,
-        'webkit_uri_scheme_request_get_web_view') and
-      BindReq(@WEBKIT_uri_scheme_request_finish,
-        'webkit_uri_scheme_request_finish') and
-      BindReq(@WEBKIT_uri_scheme_request_finish_error,
-        'webkit_uri_scheme_request_finish_error') and
-      { JSC }
-      BindReq(@JSC_value_is_null, 'jsc_value_is_null') and
-      BindReq(@JSC_value_is_undefined, 'jsc_value_is_undefined') and
-      BindReq(@JSC_value_to_json, 'jsc_value_to_json') and
-      BindReq(@JSC_value_to_string, 'jsc_value_to_string');
+    { perf: 表驱动单源，单调用点循环 87 项，零拷贝 PAnsiChar 直通 Sym，单次 Sym 查找 O(1)，I-Cache 单点 vs 60+ and 链膨胀，bytes.ops 单源思想 }
+    if not GGtkBindOnce.Done then
+      GGtkBindOnce.DoOnce(procedure
+      begin
+        InitGtkBindTable;
+      end);
+    for I := Low(GGtkBindTable) to High(GGtkBindTable) do
+      if not Sym(GGtkBindTable[I].Name, PPointer(GGtkBindTable[I].VarAddr)^) then
+        Exit(False);
+    Result := True;
   end;
 
 begin
-  if GProbed then
+  { atomic acquire 零撕裂可见性，弱内存下防重复探测 }
+  if atomic_load(GProbed, mo_acquire) <> 0 then
   begin
     AInfo := GInfo;
     Exit(GLoaded);
@@ -257,7 +265,7 @@ begin
   EnsureGtkLock;
   GGtkLock.Acquire;
   try
-    if GProbed then
+    if atomic_load(GProbed, mo_acquire) <> 0 then
     begin
       AInfo := GInfo;
       Exit(GLoaded);
@@ -273,7 +281,7 @@ begin
           GWebkitSoname) then
       begin
         GInfo.Loaded := False;
-        GProbed := True;
+        atomic_store(GProbed, 1, mo_release);
         Exit(False);
       end;
       { GTK3 栈并列必需 }
@@ -283,7 +291,7 @@ begin
       begin
         ReleaseAll;
         GInfo.Loaded := False;
-        GProbed := True;
+        atomic_store(GProbed, 1, mo_release);
         Exit(False);
       end;
       { JSC 与 webkit 同代：4.1 → jsc-4.1，4.0 → jsc-4.0 }
@@ -295,7 +303,7 @@ begin
       begin
         ReleaseAll;
         GInfo.Loaded := False;
-        GProbed := True;
+        atomic_store(GProbed, 1, mo_release);
         Exit(False);
       end;
 
@@ -303,10 +311,12 @@ begin
       begin
         ReleaseAll;
         GInfo.Loaded := False;
-        GProbed := True;
+        atomic_store(GProbed, 1, mo_release);
         Exit(False);
       end;
 
+      if Sym('g_cancellable_reset', LTmp) then PPointer(@G_cancellable_reset)^ := LTmp;
+      if Sym('g_cancellable_is_cancelled', LTmp) then PPointer(@G_cancellable_is_cancelled)^ := LTmp;
       { 能力分支：eval 双路径按符号存在性（BACKENDS §2.2） }
       LHasEvalPair :=
         Sym('webkit_web_view_evaluate_javascript', LTmp) and
@@ -330,7 +340,7 @@ begin
       GLoaded := True;
       GInfo.Loaded := True;
       GInfo.WebkitSoname := GWebkitSoname;
-      GProbed := True;
+      atomic_store(GProbed, 1, mo_release);
       AInfo := GInfo;
       Result := True;
     finally
@@ -346,10 +356,10 @@ begin
   EnsureGtkLock;
   GGtkLock.Acquire;
   try
-    if not GProbed then Exit;
+    if atomic_load(GProbed, mo_acquire) = 0 then Exit;
     ReleaseAll;
     GLoaded := False;
-    GProbed := False;
+    atomic_store(GProbed, 0, mo_release);
     GInfo := Default(TGtkLoadInfo);
   finally
     GGtkLock.Release;
@@ -362,6 +372,8 @@ begin
 end;
 
 initialization
+  GGtkLockOnce := Once;
+  GGtkBindOnce := Once;
   EnsureGtkLock;
 
 finalization
@@ -370,5 +382,7 @@ finalization
     GGtkLock.Free;
     GGtkLock := nil;
   end;
+  GGtkLockOnce := nil;
+  GGtkBindOnce := nil;
 
 end.

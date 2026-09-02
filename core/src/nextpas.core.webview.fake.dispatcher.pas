@@ -7,10 +7,13 @@ unit nextpas.core.webview.fake.dispatcher;
        本单元仅承载 TFakeDispatcher，复用 L1 bytes.ops VecGrowCapacity/VecRingCopy
        单源 inline 零拷贝、零 mod/div 热点，短临界 <1µs，资源 Finalize 释放不丢。
 
-       性能修复：PostRef 竞争路径 O(n) 持锁搬移消除。
-       原路径在二次持锁内再次 VecRingCopy O(n) 搬移放大尾延迟；
-       现改为乐观重试：分配 + VecRingCopy 仅在锁外执行，二次持锁仅 O(1) 指针检查
-       与槽位写入，stale 则释放重试，零 O(n) 持锁，inline 零额外调用，bytes.ops 单源。 *}
+       性能修复：PostRef 竞争路径 O(n) 持锁搬移 + stale 重试二次线性化消除。
+       原乐观重试在锁外线性化后 stale 直接丢弃 LNew，重试分支重复 O(n) 两段式
+       VecRingCopy 放大尾延迟；现改为预校验重试：快照后先 O(1) 锁内预校验
+       （有空位则直接槽位写入无分配/无拷贝，stale 则无分配/无拷贝直接重取快照），
+       仅快照仍有效时才在锁外 SetLength+VecRingCopy 单源 inline 线性化，
+       二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale 则 LNew:=nil
+       释放重试，零 O(n) 持锁、竞争重试零额外线性化，inline 零额外调用，bytes.ops 单源。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -97,7 +100,7 @@ var
   LOldRing: TFakeDispatcherRing;
   LHead, LCount, LOldLen, LNewCap, LIdx, LLen: Integer;
 begin
-  // perf: fast path under lock without alloc, branch avoids div/mod per op (pow2 ring via VecGrowCapacity single source); contention path zero O(n) hold via optimistic retry
+  // perf: fast path under lock without alloc, branch avoids div/mod per op (pow2 ring via VecGrowCapacity single source); contention path zero O(n) hold + zero wasted linearize via pre-validate retry
   while True do
   begin
     FLck.Acquire;
@@ -120,12 +123,7 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
-    SetLength(LNew, LNewCap);
-    // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source bytes.ops VecRingCopy, VecGrowCapacity single source
-    if LCount > 0 then
-      specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
-    // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => retry outside lock, single source no spin
+    // perf: O(1) pre-validate before heap alloc/linearize — avoids wasted O(n) VecRingCopy on stale competitive retry, zero alloc/copy if stale or space appeared, single source bytes.ops VecGrowCapacity inline
     FLck.Acquire;
     try
       LLen := Length(FRing);
@@ -138,6 +136,31 @@ begin
         Inc(FCount);
         Exit;
       end;
+      if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
+        Continue;
+    finally
+      FLck.Release;
+    end;
+    // perf: heap allocation (SetLength zero-init) outside lock, only after snapshot validated still needs grow, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
+    SetLength(LNew, LNewCap);
+    // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source bytes.ops VecRingCopy, VecGrowCapacity single source; only executed when pre-validate passed, so competitive retry does not repeat linearize
+    if LCount > 0 then
+      specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
+    // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
+    FLck.Acquire;
+    try
+      LLen := Length(FRing);
+      if FCount < LLen then
+      begin
+        LIdx := FHead + FCount;
+        if LIdx >= LLen then
+          Dec(LIdx, LLen);
+        FRing[LIdx] := AProc;
+        Inc(FCount);
+        // stability: release linearized refs held in LNew to avoid leak on competitive copy-window race, Finalize releases AddRef, zero leak
+        LNew := nil;
+        Exit;
+      end;
       if (Length(FRing) = LOldLen) and (FHead = LHead) and (FCount = LCount) then
       begin
         // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef), zero leak
@@ -147,11 +170,12 @@ begin
         Inc(FCount);
         Exit;
       end;
-      // contention: stale snapshot — discard LNew and retry, zero O(n) under lock, rare path, avoids tail latency amplification
+      // contention during copy window (rare) — discard linearized LNew and retry, zero O(n) under lock, avoids tail latency amplification
+      LNew := nil;
     finally
       FLck.Release;
     end;
-    // retry: loop will recapture fresh snapshot and re-linearize outside lock
+    // retry: loop will recapture fresh snapshot; pre-validate before next linearize avoids duplicate O(n) copy
   end;
 end;
 

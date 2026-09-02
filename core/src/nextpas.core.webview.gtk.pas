@@ -22,9 +22,8 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf;
 type
-  // TGtkWebview — facade aggregator (<400 lines, well below 800 cohesion threshold)
-  // delegation: shell→window.gtk3 Raw/live/scheme, bridge→frame/assets/mime, dispatch→pool/eval, viewmap/pool single source
-  // perf: WindowOptionsCreate via shell single source, CStrLen via bytes.ops SIMD, MimeTypeFromPathView zero-copy, ShellDebugEnabled gated trace zero alloc at NPW_GTK_DEBUG=0
+  // TGtkWebview — facade aggregator (<400 lines)
+  // delegation: shell→window.gtk3, bridge→frame/assets/mime, dispatch→pool/eval
   TGtkWebview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
@@ -178,7 +177,6 @@ begin TGtkWebview(AUserData).HandleNativeDestroy; end;
 procedure ScriptMessageCb(AManager, AJsResult, AUserData: Pointer); cdecl;
 var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LView: TStringView; LFrame: TWebviewFrame;
 begin
-  // perf: hot View zero alloc via bridge internal cached Arena reuse (no per-frame Init/Done), TStringView zero-copy via bytes.ops.CStrLen SIMD single source, zero heap alloc
   if LSelf.FClosed then Exit; LVal:=WEBKIT_javascript_result_get_js_value(AJsResult); LRaw:=JSC_value_to_string(LVal); if LRaw=nil then Exit; try
     LView:=TStringView.Create(PAnsiChar(LRaw), CStrLen(PAnsiChar(LRaw)));
     if TryDecodeFrame(LView, LFrame) then LSelf.DispatchFrame(LFrame);
@@ -220,13 +218,11 @@ begin if not Assigned(ARequest) then Exit; try
   if not Assigned(WEBKIT_uri_scheme_request_get_path) then begin SchemeFinishNotFound(ARequest); Exit; end;
   if WEBKIT_uri_scheme_request_get_path(ARequest)=nil then begin SchemeFinishNotFound(ARequest); Exit; end;
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
-  // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView, ToString 延迟至命中后零 404 分配 — bytes.ops.CStrLen SIMD 单源; trace gated via ShellDebugEnabled 零 NPW_GTK_DEBUG=0 堆分配与拼接开销, miss/hit 分支零拷贝 TStringView 直通 TryResolveView 单源
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
   if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
   LStream:=nil;
   if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  // perf: 单 Holder Slab 复用 + G_memory_input_stream_new_from_data 零拷贝直通，零 GBytes 中间对象，COW 共享 bytes.ops 单源零 Move，Threshold 已 retire 统一单路径，inline 零堆抖动 via gtk.pool/bridge 单源
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;
   try if Length(LHolder^.Bytes)>0 then begin LData:=@LHolder^.Bytes[0]; LLen:=Length(LHolder^.Bytes); end else begin LData:=nil; LLen:=0; end; LStream:=G_memory_input_stream_new_from_data(LData,LLen,@AssetBufFree,LHolder); if not Assigned(LStream) then begin nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); SchemeFinishNotFound(ARequest); Exit; end; except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
   if not Assigned(LStream) then begin SchemeFinishNotFound(ARequest); Exit; end;
@@ -243,8 +239,7 @@ var LRaw: PAnsiChar;
 begin if AJscValue=nil then Exit(''); if (JSC_value_is_null(AJscValue)<>0) or (JSC_value_is_undefined(AJscValue)<>0) then Exit('null'); LRaw:=JSC_value_to_json(AJscValue,0); if LRaw<>nil then begin Result:=ViewFromPChar(LRaw).ToString; G_free(LRaw); end else begin LRaw:=JSC_value_to_string(AJscValue); Result:=ViewFromPChar(LRaw).ToString; G_free(LRaw); end; end;
 procedure FreeEvalRec(ARec: PEvalRec);
 begin
-  // stability: Cancel 统一 G_object_unref 释放不丢，Slab 复用与 Idle/Completion 单源一致 via gtk.pool
-  if ARec^.Cancel<>nil then begin G_object_unref(ARec^.Cancel); ARec^.Cancel:=nil; end;
+  if ARec^.Cancel<>nil then begin nextpas.core.webview.gtk.pool.ReleaseGCancellable(ARec^.Cancel); ARec^.Cancel:=nil; end;
   nextpas.core.webview.gtk.pool.ReleaseEvalRec(ARec);
 end;
 procedure SettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
@@ -284,11 +279,17 @@ class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string; begin if E i
 procedure TGtkWebview.DispatchFrame(const AFrame: TWebviewFrame); var LReg: TWebviewInvokeRegistry; LIsAsync:Boolean; LSync: TWebviewInvokeSyncHandler; LAsync:TWebviewInvokeAsyncHandler; LResultJson:string; LCompletion:IWebviewInvokeCompletion; begin RequireOpen; LReg:=TWebviewInvokeRegistry(FInvokes); if not LReg.Find(AFrame.Cmd,LIsAsync,LSync,LAsync) then begin SendReceipt(AFrame.Id,True,'',NPW_CODE_HANDLER_MISSING,'no handler registered for cmd'); Exit; end; if LIsAsync then begin LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id); try LAsync(AFrame.PayloadJson,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end else begin try LResultJson:=LSync(AFrame.PayloadJson); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end; end;
 procedure TGtkWebview.SendReceipt(AFrameId:Int64; AIsError:Boolean; const AResultJson,ACode,AMessage:string); var LJs:string; begin if FClosed then Exit; if AIsError then LJs:=BuildRejectScript(AFrameId,ACode,AMessage) else LJs:=BuildResolveScript(AFrameId,AResultJson); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(LJs),Length(LJs),nil,nil,nil,nil,nil) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(LJs),nil,nil,nil); end;
 procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef); var LRec:PIdleRec; LTag:guint; begin
-  // perf: inline 薄转发池化 idle，Kind=0 直存 Ref 零拷贝，Slab 复用零每 Post 堆分配，短临界 <1µs
   LRec:=nextpas.core.webview.gtk.pool.AcquireIdleRec; LRec^.Kind:=0; LRec^.Proc:=AProc; LRec^.Method:=nil; LRec^.Plain:=nil;
   LTag:=G_idle_add_full(G_PRIORITY_DEFAULT,@IdleTrampoline,LRec,@IdleDestroy); if FIdleTags<>nil then FIdleTags.Register(LTag);
 end;
-procedure TGtkWebview.DropIdlePendings; var I:Integer; LCtx,LSrc:Pointer; begin if FIdleTags=nil then Exit; LCtx:=G_main_context_default(); for I:=0 to FIdleTags.Count-1 do begin if LCtx=nil then Break; LSrc:=G_main_context_find_source_by_id(LCtx,FIdleTags.At(I)); if LSrc<>nil then G_source_remove(FIdleTags.At(I)); end; FIdleTags.Clear; end; // stability: 二次 find判存窄窗口避免已触发 idle 的陈旧 Source ID 双移除竞态，Close↔fire 竞态安全
+procedure TGtkWebview.DropIdlePendings;
+var I: Integer;
+begin
+  if FIdleTags=nil then Exit;
+  for I:=0 to FIdleTags.Count-1 do
+    G_source_remove(FIdleTags.At(I));
+  FIdleTags.Clear;
+end;
 procedure TGtkWebview.SettlePendingOnClose; var I:Integer; LRec:PEvalRec; LErr:EWebviewEvalFailed; begin if FPendingEvals=nil then Exit; for I:=0 to FPendingEvals.Count-1 do begin LRec:=FPendingEvals.At(I); if not LRec^.Done then begin LRec^.Done:=True; if Assigned(LRec^.OnError) then begin LErr:=EWebviewEvalFailed.Create('window closed'); try LRec^.OnError(LErr); finally LErr.Free; end; end; end; if LRec^.Cancel<>nil then G_cancellable_cancel(LRec^.Cancel); FreeEvalRec(LRec); end; FPendingEvals.Clear; end;
 procedure TGtkWebview.HandleNativeDestroy; begin if FClosed then Exit; FClosed:=True; UnregisterLive(Self); SettlePendingOnClose; DropIdlePendings; FireNotifyHandlers(FOnWindowClosed); if GtkLiveWindowCount=0 then WindowGtkRawQuitMainLoop; FView:=nil; FWin:=nil; FWindow:=nil; FSelfKeepAlive:=nil; end;
 procedure TGtkWebview.Close; begin if FClosed then Exit; FClosed:=True; UnregisterLive(Self); SettlePendingOnClose; DropIdlePendings; FireNotifyHandlers(FOnWindowClosed); if FOwnsWindow then begin if FWindow<>nil then try FWindow.Close; except end; if (FView<>nil) and (FWindow=nil) and (FWin<>nil) then GTK_widget_destroy(FWin); end else begin if FView<>nil then GTK_widget_destroy(FView); end; FView:=nil; if FOwnsWindow then begin FWin:=nil; FWindow:=nil; end; if GtkLiveWindowCount=0 then WindowGtkRawQuitMainLoop; FSelfKeepAlive:=nil; end;
@@ -296,14 +297,12 @@ procedure TGtkWebview.Post(AProc: TWebviewProcRef); inline; begin PostIdle(AProc
 procedure TGtkWebview.Post(AProc: TWebviewProcMethod); inline;
 var LRec: PIdleRec; LTag: guint;
 begin
-  // perf: 池化闭包零每 Post 分配，Kind=1 直存 Method 无 reference 包装堆分配，inline 短临界 <1µs，Slab 复用 via gtk.pool
   LRec:=nextpas.core.webview.gtk.pool.AcquireIdleRec; LRec^.Kind:=1; LRec^.Method:=AProc; LRec^.Proc:=nil; LRec^.Plain:=nil;
   LTag:=G_idle_add_full(G_PRIORITY_DEFAULT,@IdleTrampoline,LRec,@IdleDestroy); if FIdleTags<>nil then FIdleTags.Register(LTag);
 end;
 procedure TGtkWebview.Post(AProc: TWebviewProc); inline;
 var LRec: PIdleRec; LTag: guint;
 begin
-  // perf: 池化闭包零每 Post 分配，Kind=2 直存 Plain proc 无匿名闭包分配，inline 零拷贝，Slab 复用
   LRec:=nextpas.core.webview.gtk.pool.AcquireIdleRec; LRec^.Kind:=2; LRec^.Plain:=AProc; LRec^.Proc:=nil; LRec^.Method:=nil;
   LTag:=G_idle_add_full(G_PRIORITY_DEFAULT,@IdleTrampoline,LRec,@IdleDestroy); if FIdleTags<>nil then FIdleTags.Register(LTag);
 end;
@@ -342,8 +341,7 @@ function TGtkWebview.NativeHandle:TWebviewNativeHandle; begin RequireOpen; if FW
 function TGtkWebview.GetInvokes:IWebviewInvokeRegistry; begin RequireOpen; Result:=FInvokesIntf; end;
 function TGtkWebview.GetAssets:IWebviewAssets; begin RequireOpen; Result:=FAssetsIntf; end;
 procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin
-  // perf: Eval 热点 Slab 复用 — nextpas.core.webview.gtk.pool.AcquireEvalRec+G_cancellable_new 双池化与 Idle/Completion 同源 via gtk.pool, 高频 Eval 零每帧堆分配; trace gated via ShellDebugEnabled 零拷贝当 NPW_GTK_DEBUG=0
-  RequireOpen; LRec:=nextpas.core.webview.gtk.pool.AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=G_cancellable_new(); LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
+  RequireOpen; LRec:=nextpas.core.webview.gtk.pool.AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=nextpas.core.webview.gtk.pool.AcquireGCancellable; LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
 procedure TGtkWebview.Emit(const AEvent,APayloadJson:string); begin CheckWebviewEventName(AEvent); RequireOpen; Eval(BuildEmitScript(AEvent,APayloadJson),nil,nil); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleHandler); begin if FOnScaleChanged<>nil then FOnScaleChanged.Register(AHandler); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleMethod); begin OnScaleChanged(WebviewScaleMethodToRef(AHandler)); end;

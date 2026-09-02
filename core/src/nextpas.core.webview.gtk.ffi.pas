@@ -90,6 +90,8 @@ var
   G_quark_from_static_string: function(AString: PAnsiChar): GQuark; cdecl;
   G_cancellable_new: function: Pointer; cdecl;
   G_cancellable_cancel: procedure(ACancellable: Pointer); cdecl;
+  G_cancellable_reset: procedure(ACancellable: Pointer); cdecl;
+  G_cancellable_is_cancelled: function(ACancellable: Pointer): gboolean; cdecl;
   G_error_new_literal: function(ADomain: GQuark; ACode: Int32;
     AMessage: PAnsiChar): PGError; cdecl;
   G_main_loop_new: function(AContext: Pointer; ARunning: gboolean)
