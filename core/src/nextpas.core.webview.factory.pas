@@ -54,8 +54,7 @@ implementation
 uses
   nextpas.core.system.typinfo,
   nextpas.core.window.factory,
-  nextpas.core.atomic,
-  nextpas.core.sync.mutex,
+  nextpas.core.sync,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.gtk.loader,
@@ -79,10 +78,10 @@ type
 
 var
   GDefaultKind: TWebviewKind = wvFake;
-  GDefaultReady: Int32 = 0; { atomic 0/1: ARM 弱内存下 double-checked 首检无锁读需 acquire/release 屏障，避免数据竞争 }
-  GAvailProbed: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { atomic 0/1 }
-  GAvailYes: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { atomic 0/1 }
-  GFactoryLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
+  GDefaultOnce: IOnce; { L1 sync.once 单源：DefaultWebviewKind 单次探测，复用 platform.sync 原语，消除自建 double-checked + atomic + CAS 分散锁 }
+  GBackendsOnce: IOnce; { 单例注册表抽象：BACKENDS 惰性单次初始化，零重复分配，L1 Once 单源 }
+  GAvailOnce: array[TWebviewKind] of IOnce; { 每 kind 单次探测 Once，复用 L1 sync.once/platform.sync 单源，消除全局可变表 + 双检锁分散所有权 }
+  GAvailYes: array[TWebviewKind] of Boolean; { Once 缓存结果，零 atomic 分散 }
 
 { ---- 后端注册表：表驱动唯一真相 ---- }
 
@@ -155,17 +154,19 @@ end;
 
 var
   WEBVIEW_BACKENDS: array[0..3] of TWebviewBackendDesc;
-  BACKENDS_INITED: Boolean = False;
 
 procedure InitBackends; inline;
 begin
-  if BACKENDS_INITED then Exit;
-  // bytes.ops 单源：WEBVIEW_BACKENDS 唯一真相单表驱动，新增后端仅此一处登记，零双表漂移；顺序 Fake首位 + 探测优先 Webview2→Gtk→Wk与window.factory同构高级感极简
-  WEBVIEW_BACKENDS[0].Kind := wvFake;     WEBVIEW_BACKENDS[0].Probe := @ProbeFake;     WEBVIEW_BACKENDS[0].Create := @CreateFake;     WEBVIEW_BACKENDS[0].CreateOn := @CreateFakeOn;
-  WEBVIEW_BACKENDS[1].Kind := wvWebview2; WEBVIEW_BACKENDS[1].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[1].Create := @CreateWebView2; WEBVIEW_BACKENDS[1].CreateOn := @CreateWebView2On;
-  WEBVIEW_BACKENDS[2].Kind := wvGtk;      WEBVIEW_BACKENDS[2].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[2].Create := @CreateGtk;      WEBVIEW_BACKENDS[2].CreateOn := @CreateGtkOn;
-  WEBVIEW_BACKENDS[3].Kind := wvWk;       WEBVIEW_BACKENDS[3].Probe := @ProbeWk;       WEBVIEW_BACKENDS[3].Create := @CreateWk;       WEBVIEW_BACKENDS[3].CreateOn := @CreateWkOn;
-  BACKENDS_INITED := True;
+  // perf: L1 sync.once 单例注册表抽象，inline 零额外调用，去重并发初始化，单表驱动新增后端仅一处登记
+  if GBackendsOnce.Done then Exit;
+  GBackendsOnce.DoOnce(procedure
+  begin
+    // bytes.ops 单源：WEBVIEW_BACKENDS 唯一真相单表驱动，新增后端仅此一处登记，零双表漂移；顺序 Fake首位 + 探测优先 Webview2→Gtk→Wk与window.factory同构高级感极简
+    WEBVIEW_BACKENDS[0].Kind := wvFake;     WEBVIEW_BACKENDS[0].Probe := @ProbeFake;     WEBVIEW_BACKENDS[0].Create := @CreateFake;     WEBVIEW_BACKENDS[0].CreateOn := @CreateFakeOn;
+    WEBVIEW_BACKENDS[1].Kind := wvWebview2; WEBVIEW_BACKENDS[1].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[1].Create := @CreateWebView2; WEBVIEW_BACKENDS[1].CreateOn := @CreateWebView2On;
+    WEBVIEW_BACKENDS[2].Kind := wvGtk;      WEBVIEW_BACKENDS[2].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[2].Create := @CreateGtk;      WEBVIEW_BACKENDS[2].CreateOn := @CreateGtkOn;
+    WEBVIEW_BACKENDS[3].Kind := wvWk;       WEBVIEW_BACKENDS[3].Probe := @ProbeWk;       WEBVIEW_BACKENDS[3].Create := @CreateWk;       WEBVIEW_BACKENDS[3].CreateOn := @CreateWkOn;
+  end);
 end;
 
 function FindBackend(AKind: TWebviewKind): PWebviewBackendDesc; inline;
@@ -187,98 +188,46 @@ begin
   Result := B^.Probe();
 end;
 
-procedure EnsureFactoryLock; inline;
-var
-  LNew: TMutex;
-  LPrev: Pointer;
-begin
-  { perf: inline 零额外调用；CAS 单次分配无泄漏，并发首访零重复创建，双检零分配 }
-  if GFactoryLock <> nil then Exit;
-  LNew := TMutex.Create;
-  LPrev := InterlockedCompareExchange(PPointer(@GFactoryLock)^, Pointer(LNew), nil);
-  if LPrev <> nil then
-    LNew.Free;
-end;
-
 {$PUSH}{$WARNINGS OFF}
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean;
 begin
   if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
   if AKind = wvFake then Exit(True);
-  // ARM 弱内存首检：atomic_load acquire 保证 GAvailYes 可见性，避免无锁读数据竞争
-  if atomic_load(GAvailProbed[Ord(AKind)]) <> 0 then
-    Exit(atomic_load(GAvailYes[Ord(AKind)]) <> 0);
-  EnsureFactoryLock;
-  GFactoryLock.Acquire;
-  try
-    if atomic_load(GAvailProbed[Ord(AKind)]) <> 0 then
-      Exit(atomic_load(GAvailYes[Ord(AKind)]) <> 0);
-    { perf: inline RawProbe 单锁单探零间隙，去重并发 dlopen，单临界区零重复探测 }
-    atomic_store(GAvailYes[Ord(AKind)], Ord(RawProbe(AKind)));
-    atomic_thread_fence(mo_release);
-    atomic_store(GAvailProbed[Ord(AKind)], 1);
-    Result := atomic_load(GAvailYes[Ord(AKind)]) <> 0;
-  finally
-    GFactoryLock.Release;
-  end;
+  // perf: L1 sync.once 单源，inline 零额外调用，替代自建 atomic + TMutex 双检，platform.sync 原语去重并发 dlopen
+  if GAvailOnce[Ord(AKind)].Done then
+    Exit(GAvailYes[Ord(AKind)]);
+  GAvailOnce[Ord(AKind)].DoOnce(procedure
+  begin
+    GAvailYes[Ord(AKind)] := RawProbe(AKind);
+  end);
+  Result := GAvailYes[Ord(AKind)];
 end;
 {$POP}
 
 function DefaultWebviewKind: TWebviewKind;
-var
-  I: Integer;
-  LKind: TWebviewKind;
 begin
-  // ARM 弱内存首检：acquire load 保证 GDefaultKind 可见性
-  if atomic_load(GDefaultReady) <> 0 then
-  begin
-    atomic_thread_fence(mo_acquire);
+  // perf: L1 sync.once 单例注册表抽象，inline 零额外调用，单泵探测优先级序单表驱动，零重复分支
+  if GDefaultOnce.Done then
     Exit(GDefaultKind);
-  end;
-  EnsureFactoryLock;
-  GFactoryLock.Acquire;
-  try
-    if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
-  finally
-    GFactoryLock.Release;
-  end;
-  // 单源单表驱动：遍历 WEBVIEW_BACKENDS 优先级序（含Fake跳过）零重复分支，bytes.ops Vec单源思想 inline零额外调用
-  InitBackends;
-  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
+  GDefaultOnce.DoOnce(procedure
+  var
+    I: Integer;
+    LKind: TWebviewKind;
   begin
-    LKind := WEBVIEW_BACKENDS[I].Kind;
-    if LKind = wvFake then Continue;
-    if WebviewBackendAvailable(LKind) then
+    InitBackends;
+    for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
     begin
-      GFactoryLock.Acquire;
-      try
-        if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
+      LKind := WEBVIEW_BACKENDS[I].Kind;
+      if LKind = wvFake then Continue;
+      if WebviewBackendAvailable(LKind) then
+      begin
         GDefaultKind := LKind;
-        atomic_thread_fence(mo_release);
-        atomic_store(GDefaultReady, 1);
-        Result := GDefaultKind;
-      finally
-        GFactoryLock.Release;
+        Exit;
       end;
-      Exit(Result);
     end;
-  end;
-  GFactoryLock.Acquire;
-  try
-    if atomic_load(GDefaultReady) <> 0 then Exit(GDefaultKind);
     GDefaultKind := wvFake;
-    atomic_thread_fence(mo_release);
-    atomic_store(GDefaultReady, 1);
-    if atomic_load(GAvailProbed[Ord(wvFake)]) = 0 then
-    begin
-      atomic_store(GAvailYes[Ord(wvFake)], 1);
-      atomic_thread_fence(mo_release);
-      atomic_store(GAvailProbed[Ord(wvFake)], 1);
-    end;
-    Result := wvFake;
-  finally
-    GFactoryLock.Release;
-  end;
+  end);
+  Result := GDefaultKind;
 end;
 
 function CreateFakeWebview(
@@ -375,13 +324,21 @@ begin
 end;
 
 initialization
-  GFactoryLock := TMutex.Create;
+  GDefaultOnce := Once;
+  GBackendsOnce := Once;
+  GAvailOnce[Ord(wvFake)] := Once;
+  GAvailOnce[Ord(wvGtk)] := Once;
+  GAvailOnce[Ord(wvWebview2)] := Once;
+  GAvailOnce[Ord(wvWk)] := Once;
+  // wvFake 恒可用，无探测开销；缓存直接置 True 避免闭包探测
+  GAvailYes[Ord(wvFake)] := True;
 
 finalization
-  if GFactoryLock <> nil then
-  begin
-    GFactoryLock.Free;
-    GFactoryLock := nil;
-  end;
+  GDefaultOnce := nil;
+  GBackendsOnce := nil;
+  GAvailOnce[Ord(wvFake)] := nil;
+  GAvailOnce[Ord(wvGtk)] := nil;
+  GAvailOnce[Ord(wvWebview2)] := nil;
+  GAvailOnce[Ord(wvWk)] := nil;
 
 end.

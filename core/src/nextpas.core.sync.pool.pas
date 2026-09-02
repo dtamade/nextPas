@@ -20,7 +20,8 @@ unit nextpas.core.sync.pool;
 interface
 
 uses
-  nextpas.core.sync.intf;
+  nextpas.core.sync.intf,
+  nextpas.core.sync.mutex;
 
 type
   TPoolFactory = function: Pointer;
@@ -79,6 +80,10 @@ type
     function Build: TSyncPool;
   end;
 
+{ L1 通用 Slab 双池单源（CONTRACT §1.2/§50 已反哺）：短临界仅指针存取 inline 零拷贝，供 webview.gtk.pool 等家族薄转发复用 }
+generic function SyncPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
+generic function SyncPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
+
 function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
 
 implementation
@@ -86,6 +91,39 @@ implementation
 uses
   nextpas.core.sync.errors,
   nextpas.core.sync.mutex;
+
+generic function SyncPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
+begin
+  Result := Default(T);
+  if ALock <> nil then ALock.Acquire;
+  try
+    if ACount > 0 then
+    begin
+      Dec(ACount);
+      Result := APool[ACount];
+      APool[ACount] := Default(T);
+    end;
+  finally
+    if ALock <> nil then ALock.Release;
+  end;
+end;
+
+generic function SyncPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
+begin
+  // perf: short critical only pointer push <1µs inline 零拷贝，零 SetLength 持锁；突发满时由 caller 经 bytes.ops VecGrow 单源在锁外扩容后重试，零回退 New 堆分配（caller 两阶段短临界，热路径仍 <1µs）
+  Result := False;
+  if ALock <> nil then ALock.Acquire;
+  try
+    if ACount < Length(APool) then
+    begin
+      APool[ACount] := AItem;
+      Inc(ACount);
+      Result := True;
+    end;
+  finally
+    if ALock <> nil then ALock.Release;
+  end;
+end;
 
 function RequirePoolItem(AItem: Pointer; const AOp: string): TPoolItem;
 begin

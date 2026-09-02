@@ -82,12 +82,12 @@ nextpas.core.<module>.<sub>.ffi.pas
 ### 依赖方向
 
 ```
-base ← intf ← 实现 ← 门面(聚合)
+base ← intf ← 实现 ← 门面(聚合)  // webview.intf 唯一例外可 uses window.intf 暴露 IWindow，见范式例外 + CONTRACT INV-4
 base ← ffi  ← 实现
 ```
 
 - `base` 不依赖同模块任何文件（纯数据类型）
-- `intf` 依赖 `base`（接口签名需要类型）
+- `intf` 依赖 `base`（接口签名需要类型；`nextpas.core.webview.intf` 唯一例外可额外 `uses nextpas.core.window.intf` 以 has-a 暴露 `IWindow`，仍禁后端/bridge，见范式例外 + CONTRACT INV-4）
 - `ffi` 是实现侧 ABI / foreign binding seam；默认只依赖 RTL 与宿主声明，若签名需要模块内公共载体类型，可依赖 `base`
 - 实现依赖 `intf` + `base`，需要 foreign binding 时再依赖 `ffi`
 - 门面 uses 所有子模块，re-export 给外部
@@ -160,6 +160,7 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `nextpas.core.webview.intf` 唯一例外允许 `uses nextpas.core.window.intf` 以暴露 `IWindow`/`Window` has-a 组合面（L3→L2，M6 收口；仅 `window.intf`，仍禁止 `window` 后端/bridge/factory/gtk/webview2/wk/vfs/mime，`base` 保持零 `uses window`），见 `core/docs/webview/CONTRACT.md` INV-4 与 `tests/architecture/source_contracts/check_architecture_source_contracts.py --check webview` 门禁。
 
 ### 单元体积指引
 

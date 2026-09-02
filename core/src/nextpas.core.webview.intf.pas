@@ -1,7 +1,7 @@
 unit nextpas.core.webview.intf;
 
 {** @desc nextpas.core.webview L3 家族：统一接口契约。
-       只依赖 base/errors owner；具体后端（fake/gtk/webview2/wk）在各自
+       只依赖 base/errors/window.intf owner（window.intf 仅为 has-a 暴露 IWindow，INV-4 豁免，见 design-conventions §2）；具体后端（fake/gtk/webview2/wk）在各自
        单元实现这些接口。所有权模型：对外一律 interface（COM 引用计数），
        消费方不手写 Free。
 
@@ -18,7 +18,7 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.webview.base,
-  nextpas.core.window.intf;
+  nextpas.core.window.intf; { INV-4 豁免: L3→L2 has-a 暴露 IWindow/Window 组合面，仅 window.intf，禁后端/bridge/factory，见 design-conventions §2 范式例外 + CONTRACT INV-4 }
 
 type
   {** invoke 异步完成面。Ok/Fail 恰好其一至多一次；可从任意线程调用

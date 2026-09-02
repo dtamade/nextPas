@@ -1,20 +1,21 @@
-unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1候选未提升：私为gtk后端专用，CONTRACT §1.2可抽L1 hashmap指针特化
+unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1 THashMap 已直接复用：指针键哈希容器零自建
 
-{** @desc GTK 指针键 view→window O(1) 索引：开地址 hash 薄封装。私为gtk后端专用，未提升通用 — CONTRACT §1.2登记可抽L1 hashmap指针特化候选（L1: unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses），当前滞留家族内私有。
+{** @desc GTK 指针键 view→window O(1) 索引：L1 THashMap 薄封装。私为gtk后端专用，已直接复用 L1 通用容器 — CONTRACT §1.2 登记指针特化已由 L1 THashMap 承载（L1: nextpas.core.collections.hashmap）。
 
        单源复用（零容器重复）：
-       - 哈希：hashmap.base.HashOfPointer (HashMix32 单源) — 与 THashMap/ webview.assets.WyHash 单源一致，消除 shr4 xor shr11 私有分叉，分布经 HashMix32 avalanche 保证
-       - 容量：bytes.ops.VecGrowCapacity (0→4→2× inline 单源) — 与 webview.live/assetIndex 单源一致
-       - 负载：0.75 (hashmap.base.DEFAULT_MAX_LOAD_FACTOR) — 单源阈值，零阈值漂移
-       - 比较：指针等值直比，零 SpanEqual 额外开销
-       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，容器未直接复用 L1 THashMap generic（avoid allocator/bitmap/VTable 开销，blittable Pointer 数组 inline 零分配热读），抽取需反哺 L1 collections/hashmap.base 通用指针哈希特化 owner 并经设计评审不自行外溢（CONTRACT §1.2 登记，L0-L3 守恒），当前 VIEW_TOMBSTONE 单哨兵保探链完整
+       - 容器：L1 THashMap<Pointer,Pointer> 直接复用 — 与 webview.assets/bridge 同源，桶迁移/墓碑/扩容由 THashMap 单源承载，零自建开地址数组与双层迁移循环分叉
+       - 哈希：hashmap.base.HashOfPointer (HashMix32 单源) — 与 THashMap/ webview.assets.WyHash 单源一致，消除 shr4 xor shr11 私有分叉，分布经 HashMix32 avalanche 保证；THashMap 经 @PointerHash (=HashOfPointer) 专化注入，零二次哈希
+       - 容量：bytes.ops.VecGrowCapacity (0→4→2× inline 单源) — 与 webview.live/assetIndex 单源一致；初建与 Reserve 容量锚点经该单源，零魔法常数
+       - 负载：0.75 (hashmap.base.DEFAULT_MAX_LOAD_FACTOR) — THashMap 内置阈值单源，零阈值漂移与手写 *4>=*3 分叉
+       - 比较：指针等值直比（THashMap 默认 =），零 SpanEqual 额外开销
+       已反哺完成：可抽通用指针哈希模块候选已落地 L1 THashMap 指针特化直接复用，家族内私有桶迁移与 VIEW_TOMBSTONE 探链已移除，哈希/容量/负载/容器全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值 / THashMap），遗留 VIEW_TOMBSTONE 仅 compat 常量零逻辑
 
        性能：
-       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读，探测 and Mask 位掩码与 assets FMask 单源一致热读零除法
-       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环 and Mask 零额外调用零除法；ViewMapAdd 堆分配在锁外预分配（SetLength LNewMap 先于二次加锁），二次临界仅指针拷贝与 O(n) 桶迁移（n<=窗口数<=8，无堆分配，零阻塞读路径）
-       - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容预判在锁外，短临界仅指针拷贝
+       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）经 THashMap.TryGetValue O(1) 线性探测 + and Mask + Bitmap CTZ 单指令，与 assets FMask 单源一致零除法；ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增由 THashMap.Rehash 单源承载，Reserve 单次 NextPow2 零额外循环；ViewMapAdd 非 Locked 路径短临界仅指针拷贝与 THashMap 内部 O(n) 桶迁移（n<=窗口数<=8，无额外堆分配于调用侧，零阻塞读路径）
+       - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容经 THashMap.NextPow2 内容纳 VecGrowCapacity 预判单源
 
-       稳定性：析构清零 nil 释放不丢，VIEW_TOMBSTONE 单哨兵保探链完整 *}
+       稳定性：析构 Free 清零释放不丢，THashMap bsTombstone 单哨兵保探链完整；锁外 nil 守卫保并发安全 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -22,6 +23,7 @@ interface
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.base,
   nextpas.core.sync.mutex;
 
@@ -34,17 +36,17 @@ type
   end;
 
 const
-  VIEW_TOMBSTONE = Pointer(1);
+  VIEW_TOMBSTONE = Pointer(1); // compat: 历史哨兵，现由 THashMap bsTombstone 单源承载，零逻辑使用
 
 function ViewHash(AKey: Pointer): UInt32; inline;
 
-// ViewMapFind/Add/Remove Locked 含循环/重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀
+// ViewMapFind/Add/Remove Locked 含 THashMap 探查/重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀
 function ViewMapFindLocked(AView: Pointer): Pointer;
 procedure ViewMapRehashLocked(ANewCap: Integer);
 procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
 procedure ViewMapRemoveLocked(AView: Pointer);
 
-// 非 Locked 包装：自持 GViewMapLock，堆分配在锁外预判、短临界仅指针拷贝，零阻塞 GLiveLock 读
+// 非 Locked 包装：自持 GViewMapLock，短临界仅 THashMap 原子操作，零阻塞 GLiveLock 读
 function ViewMapFind(AView: Pointer): Pointer;
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
 procedure ViewMapRemove(AView: Pointer): Boolean;
@@ -59,145 +61,64 @@ procedure ViewMapLockFini;
 implementation
 
 var
-  GViewMap: array of TViewMapEntry;
-  GViewMapCount: Integer = 0;
+  GViewMap: specialize THashMap<Pointer, Pointer> = nil;
   GViewMapLock: TMutex = nil;
+
+function PointerHash(const AKey: Pointer): UInt32; inline;
+begin
+  // 单源：hashmap.base.HashOfPointer → HashMix32，与 THashMap/asset WyHash 单源一致
+  Result := HashOfPointer(AKey);
+end;
 
 function ViewHash(AKey: Pointer): UInt32; inline;
 begin
-  // 单源：hashmap.base.HashOfPointer → HashMix32，与 THashMap/asset WyHash 单源一致，消除 shr4 xor shr11 私有分叉
+  // 单源：hashmap.base.HashOfPointer → HashMix32，与 THashMap/asset WyHash 单源一致，inline 零额外调用
   Result := HashOfPointer(AKey);
 end;
 
 function ViewMapFindLocked(AView: Pointer): Pointer;
-var
-  I, Cap, Start, Mask: Integer;
 begin
-  // 非 inline：含探查循环，禁 inline，零 I-Cache 膨胀；短探 O(1) 零分配，and Mask 与 assets 单源一致热读零除法
+  // 非 inline：委托 L1 THashMap.TryGetValue O(1) 线性探测，禁 inline 零 I-Cache 膨胀；短探零分配，and Mask 与 Bitmap CTZ 单源一致热读零除法
   Result := nil;
-  Cap := Length(GViewMap);
-  if (Cap = 0) or (AView = nil) then Exit;
-  Mask := Cap - 1;
-  Start := Integer(ViewHash(AView) and UInt32(Mask));
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) and Mask].Key = AView then
-      Exit(GViewMap[(Start + I) and Mask].Value);
-    if GViewMap[(Start + I) and Mask].Key = nil then
-      Exit(nil);
-  end;
+  if (GViewMap = nil) or (AView = nil) then Exit(nil);
+  if not GViewMap.TryGetValue(AView, Result) then
+    Result := nil;
 end;
 
 procedure ViewMapRehashLocked(ANewCap: Integer);
-var
-  LOld: array of TViewMapEntry;
-  I, OldCap, Start, J, Mask: Integer;
 begin
-  // 非 inline：含双层循环与重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀，and Mask 与 assets 单源一致
-  // 注意：此 Locked 形态仍含 SetLength（持 GViewMapLock 内堆分配），仅供 ViewMapAddLocked 直接持锁路径（n<=8 极小）；
-  // ViewMapAdd 非 Locked 包装已改两阶段：堆分配在锁外 LNewMap 预分配，二次临界仅指针拷贝与迁移，零阻塞读路径
-  LOld := GViewMap;
-  OldCap := Length(LOld);
-  SetLength(GViewMap, ANewCap);
-  for I := 0 to ANewCap - 1 do
+  // 非 inline：委托 L1 THashMap.Reserve 单源重哈希，禁 inline；NextPow2 + 桶迁移由 THashMap 单源承载，零自建双层循环与 VIEW_TOMBSTONE 分叉
+  if GViewMap = nil then
   begin
-    GViewMap[I].Key := nil;
-    GViewMap[I].Value := nil;
+    GViewMap := specialize THashMap<Pointer, Pointer>.Create(ANewCap, @PointerHash);
+    Exit;
   end;
-  GViewMapCount := 0;
-  Mask := ANewCap - 1;
-  for I := 0 to OldCap - 1 do
-    if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
-    begin
-      Start := Integer(ViewHash(LOld[I].Key) and UInt32(Mask));
-      for J := 0 to ANewCap - 1 do
-        if GViewMap[(Start + J) and Mask].Key = nil then
-        begin
-          GViewMap[(Start + J) and Mask].Key := LOld[I].Key;
-          GViewMap[(Start + J) and Mask].Value := LOld[I].Value;
-          Inc(GViewMapCount);
-          Break;
-        end;
-    end;
+  GViewMap.Reserve(ANewCap);
 end;
 
 procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
-var
-  I, Cap, Start, FirstTomb, Mask: Integer;
 begin
-  // 非 inline：含循环+分支+重哈希，禁 inline，零 I-Cache 膨胀；0.75 负载单源阈值，and Mask 与 assets 单源一致零除法
+  // 非 inline：委托 L1 THashMap.AddOrAssign 单源，禁 inline；0.75 负载单源阈值由 THashMap 内置 DEFAULT_MAX_LOAD_FACTOR 承载，零手写阈值漂移
   if (AView = nil) or (AWin = nil) then Exit;
-  Cap := Length(GViewMap);
-  if Cap = 0 then
-  begin
-    SetLength(GViewMap, VecGrowCapacity(0));
-    Cap := Length(GViewMap);
-  end;
-  if (GViewMapCount * 4 >= Cap * 3) then
-  begin
-    Cap := VecGrowCapacity(Cap);
-    ViewMapRehashLocked(Cap);
-    Cap := Length(GViewMap);
-  end;
-  Mask := Cap - 1;
-  Start := Integer(ViewHash(AView) and UInt32(Mask));
-  FirstTomb := -1;
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) and Mask].Key = AView then
-    begin
-      GViewMap[(Start + I) and Mask].Value := AWin;
-      Exit;
-    end;
-    if GViewMap[(Start + I) and Mask].Key = VIEW_TOMBSTONE then
-    begin
-      if FirstTomb = -1 then FirstTomb := (Start + I) and Mask;
-    end
-    else if GViewMap[(Start + I) and Mask].Key = nil then
-    begin
-      if FirstTomb <> -1 then
-      begin
-        GViewMap[FirstTomb].Key := AView;
-        GViewMap[FirstTomb].Value := AWin;
-      end
-      else
-      begin
-        GViewMap[(Start + I) and Mask].Key := AView;
-        GViewMap[(Start + I) and Mask].Value := AWin;
-      end;
-      Inc(GViewMapCount);
-      Exit;
-    end;
-  end;
+  if GViewMap = nil then
+    GViewMap := specialize THashMap<Pointer, Pointer>.Create(VecGrowCapacity(0), @PointerHash);
+  GViewMap.AddOrAssign(AView, AWin);
 end;
 
 procedure ViewMapRemoveLocked(AView: Pointer);
 var
-  I, Cap, Start, Mask: Integer;
+  LDummy: Pointer;
 begin
-  // 非 inline：含探查循环，禁 inline，and Mask 与 assets 单源一致热读零除法
-  Cap := Length(GViewMap);
-  if (Cap = 0) or (AView = nil) then Exit;
-  Mask := Cap - 1;
-  Start := Integer(ViewHash(AView) and UInt32(Mask));
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) and Mask].Key = AView then
-    begin
-      GViewMap[(Start + I) and Mask].Key := VIEW_TOMBSTONE;
-      GViewMap[(Start + I) and Mask].Value := nil;
-      Dec(GViewMapCount);
-      if GViewMapCount < 0 then GViewMapCount := 0;
-      Exit;
-    end;
-    if GViewMap[(Start + I) and Mask].Key = nil then
-      Exit;
-  end;
+  // 非 inline：委托 L1 THashMap.Remove 单源墓碑，禁 inline；bsTombstone 保探链完整，零 VIEW_TOMBSTONE 手写分叉
+  if (GViewMap = nil) or (AView = nil) then Exit;
+  // TryGetValue 探查避免无键 Remove 额外哈希；THashMap 内部已做 FindIndex，此为轻量守卫
+  if GViewMap.TryGetValue(AView, LDummy) then
+    GViewMap.Remove(AView);
 end;
 
 function ViewMapFind(AView: Pointer): Pointer;
 begin
-  // 自持锁短临界：指针探查 O(1) 零堆分配，堆分配在锁外已预分配，短临界仅指针只读，零阻塞 GLiveLock 读
+  // 自持锁短临界：THashMap 指针探查 O(1) 零堆分配，短临界仅指针只读，零阻塞 GLiveLock 读
   if GViewMapLock <> nil then GViewMapLock.Acquire;
   try
     Result := ViewMapFindLocked(AView);
@@ -207,66 +128,11 @@ begin
 end;
 
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
-var
-  LCap, LCount, LNewCap, I, Mask, Start, J, LNewCount: Integer;
-  LNeedGrow: Boolean;
-  LNewMap, LOld: array of TViewMapEntry;
 begin
-  // 性能：堆分配在锁外预分配，短临界仅指针拷贝与 O(n) 迁移，零阻塞读路径（GLiveLock/Find 读不持堆锁）
-  // 两阶段：阶段1短临界窥视是否需扩容并 fast-path 无扩容直插；需扩容则退锁在锁外 SetLength(LNewMap) 预分配，阶段2二次短临界安装并插入
+  // 短临界：THashMap 内部按 0.75 自动 Rehash，容量经 VecGrowCapacity 单源初建；锁内单点 AddOrAssign， n<=8 极小单次 NextPow2 零 I-Cache 膨胀，零锁外预分配分叉与桶迁移重复
   if (AView = nil) or (AWin = nil) then Exit;
   if GViewMapLock <> nil then GViewMapLock.Acquire;
   try
-    LCap := Length(GViewMap);
-    LCount := GViewMapCount;
-    LNeedGrow := (LCap = 0) or (LCount * 4 >= LCap * 3);
-    if not LNeedGrow then
-    begin
-      ViewMapAddLocked(AView, AWin);
-      Exit;
-    end;
-    if LCap = 0 then
-      LNewCap := VecGrowCapacity(0)
-    else
-      LNewCap := VecGrowCapacity(LCap);
-  finally
-    if GViewMapLock <> nil then GViewMapLock.Release;
-  end;
-  // 堆分配在锁外：bytes.ops.VecGrowCapacity 单源 0→4→2× inline 零额外调用，单次 SetLength 零持锁阻塞
-  SetLength(LNewMap, LNewCap);
-  for I := 0 to LNewCap - 1 do
-  begin
-    LNewMap[I].Key := nil;
-    LNewMap[I].Value := nil;
-  end;
-  if GViewMapLock <> nil then GViewMapLock.Acquire;
-  try
-    // 双检：并发已扩容则复用现表，丢弃预分配 LNewMap（自动释放）
-    if (Length(GViewMap) = 0) or (GViewMapCount * 4 >= Length(GViewMap) * 3) then
-    begin
-      if Length(GViewMap) < Length(LNewMap) then
-      begin
-        LOld := GViewMap;
-        Mask := LNewCap - 1;
-        LNewCount := 0;
-        for I := 0 to Length(LOld) - 1 do
-          if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
-          begin
-            Start := Integer(ViewHash(LOld[I].Key) and UInt32(Mask));
-            for J := 0 to LNewCap - 1 do
-              if LNewMap[(Start + J) and Mask].Key = nil then
-              begin
-                LNewMap[(Start + J) and Mask].Key := LOld[I].Key;
-                LNewMap[(Start + J) and Mask].Value := LOld[I].Value;
-                Inc(LNewCount);
-                Break;
-              end;
-          end;
-        GViewMap := LNewMap;
-        GViewMapCount := LNewCount;
-        LNewMap := nil;
-      end;
-    end;
     ViewMapAddLocked(AView, AWin);
   finally
     if GViewMapLock <> nil then GViewMapLock.Release;
@@ -293,24 +159,37 @@ end;
 
 procedure ViewMapInit; inline;
 begin
-  SetLength(GViewMap, VecGrowCapacity(0));
-  GViewMapCount := 0;
+  // 单源初建：VecGrowCapacity(0)=4 与 bytes.ops 单源一致，inline 零额外调用；THashMap 懒构造经 @PointerHash 专化单源哈希
+  if GViewMap = nil then
+    GViewMap := specialize THashMap<Pointer, Pointer>.Create(VecGrowCapacity(0), @PointerHash)
+  else
+    GViewMap.Clear;
 end;
 
 procedure ViewMapClear; inline;
 begin
-  SetLength(GViewMap, 0);
-  GViewMapCount := 0;
+  // 稳定性：Free 释放不丢，零泄漏；Clear 后容量归零与原 SetLength(0) 语义一致，THashMap 析构经 Finalize 全量释放
+  if GViewMap <> nil then
+  begin
+    GViewMap.Free;
+    GViewMap := nil;
+  end;
 end;
 
 function ViewMapCount: Integer; inline;
 begin
-  Result := GViewMapCount;
+  if GViewMap = nil then
+    Result := 0
+  else
+    Result := Integer(GViewMap.GetCount);
 end;
 
 function ViewMapCapacity: Integer; inline;
 begin
-  Result := Length(GViewMap);
+  if GViewMap = nil then
+    Result := 0
+  else
+    Result := Integer(GViewMap.GetCapacity);
 end;
 
 procedure ViewMapLockInit;
@@ -321,7 +200,29 @@ end;
 
 procedure ViewMapLockFini;
 begin
-  FreeAndNil(GViewMapLock);
+  // 稳定性：先清容器再释放锁，零悬垂；Free 释放不丢
+  if GViewMap <> nil then
+  begin
+    GViewMap.Free;
+    GViewMap := nil;
+  end;
+  if GViewMapLock <> nil then
+  begin
+    GViewMapLock.Free;
+    GViewMapLock := nil;
+  end;
 end;
+
+finalization
+  if GViewMap <> nil then
+  begin
+    GViewMap.Free;
+    GViewMap := nil;
+  end;
+  if GViewMapLock <> nil then
+  begin
+    GViewMapLock.Free;
+    GViewMapLock := nil;
+  end;
 
 end.

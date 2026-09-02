@@ -56,18 +56,19 @@ type
   end;
 
 { 帧长可观测性：调用方可先用此 helper 判断超限；TryDecodeFrame 超限
-  返回 False 但递增背压计数并经 log.intf Warn 告警（Release 亦可观测，防拼接/洪泛隐式堆积，§6）。 }
+  返回 False 并递增背压计数（UI 线程亲和，plain UInt64，无 Support 层 atomic 全局，caller 通过 WebviewOversizedCount 轮询可观测，日志由 caller 自持 ILogger 决定）。 }
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
-{ 背压可观测：超限帧计数（单调递增，跨线程可见需外层同步，UI 线程亲和） }
+{ 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；L3 不再持有 Support 层 atomic/log 全局，owner 边界清晰） }
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
 procedure WebviewNoteOversized(ASize: SizeUInt);
-procedure SetWebviewBridgeLogger(ALogger: ILogger);
+{ deprecated no-op：L3 不再持有 log.intf 全局原子指针，caller 自持 ILogger 生命周期，test 隔离零成本；保留签名兼容旧调用。 }
+procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
 { TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise. }
-{ perf: hot path View+Document reuse zero alloc (Arena reuse), TStringView zero-copy. }
-{ note: string overload allocates Document/Arena; hot loops must use View+Document. }
+{ perf: hot path View+var ADoc reuse zero alloc (Arena reuse), TStringView zero-copy via bytes.ops single source, inline thin forward; local overload Init/Done per call via try-finally, no threadvar global pool, test isolation via explicit ADoc lifecycle. }
+{ note: string/View 便利重载 per-call Init/Done；hot loops must use View+var ADoc overload for zero alloc. }
 function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
 { View 入口：TStringView 零拷贝借用 }
@@ -188,8 +189,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.atomic,
-  nextpas.core.log.intf,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils;
@@ -223,56 +222,26 @@ end;
 
 var
   GWebviewOversizedFrames: UInt64 = 0;
-  GWebviewBridgeLoggerRaw: Pointer = nil;
-
-threadvar
-  GWebviewBridgeDecodeDoc: TJsonDocument;
-  GWebviewBridgeDecodeDocInited: Boolean;
 
 function WebviewOversizedCount: UInt64; inline;
 begin
-  Result := atomic_load_64(GWebviewOversizedFrames);
+  Result := GWebviewOversizedFrames;
 end;
 
 procedure WebviewResetOversizedCount; inline;
 begin
-  atomic_store_64(GWebviewOversizedFrames, 0);
+  GWebviewOversizedFrames := 0;
 end;
 
 procedure WebviewNoteOversized(ASize: SizeUInt);
-var
-  LCount: UInt64;
-  LPtr: Pointer;
-  LLogger: ILogger;
 begin
-  LCount := atomic_fetch_add_64(GWebviewOversizedFrames, UInt64(1), mo_relaxed) + 1;
-  { stability: backpressure sampling 5 + mod64, FetchAdd mo_relaxed, logger acquire/release pair }
-  if (LCount <= 5) or ((LCount mod 64) = 0) then
-  begin
-    LPtr := atomic_load(GWebviewBridgeLoggerRaw, mo_acquire);
-    if LPtr <> nil then
-    begin
-      ILogger(LPtr)._AddRef;
-      Pointer(LLogger) := LPtr;
-      try
-        LLogger.Warn('webview frame oversized');
-      finally
-        LLogger := nil;
-      end;
-    end;
-  end;
+  Inc(GWebviewOversizedFrames);
+  if ASize = 0 then ;
 end;
 
 procedure SetWebviewBridgeLogger(ALogger: ILogger);
-var
-  LNewPtr, LOldPtr: Pointer;
 begin
-  LNewPtr := Pointer(ALogger);
-  if LNewPtr <> nil then
-    ILogger(LNewPtr)._AddRef;
-  LOldPtr := atomic_exchange(GWebviewBridgeLoggerRaw, LNewPtr, mo_acq_rel);
-  if LOldPtr <> nil then
-    ILogger(LOldPtr)._Release;
+  if ALogger <> nil then ;
 end;
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
@@ -352,14 +321,15 @@ end;
 
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
+var
+  LDoc: TJsonDocument;
 begin
-  { perf: threadvar Document pool reuse Arena (zero alloc per frame after warmup, single Move via TStringView zero-copy), bytes.ops View semantics single source; inline hot path, no per-frame GetMem/FreeMem }
-  if not GWebviewBridgeDecodeDocInited then
-  begin
-    GWebviewBridgeDecodeDoc.Init(nil);
-    GWebviewBridgeDecodeDocInited := True;
+  LDoc.Init(nil);
+  try
+    Result := TryDecodeFrame(AView, LDoc, AFrame);
+  finally
+    LDoc.Done;
   end;
-  Result := TryDecodeFrame(AView, GWebviewBridgeDecodeDoc, AFrame);
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -668,14 +638,5 @@ begin
 end;
 
 finalization
-  { stability: atomic_exchange nil + _Release to reclaim final logger ref; prevents heaptrc leak for resident process exit }
-  if GWebviewBridgeLoggerRaw <> nil then
-    ILogger(atomic_exchange(GWebviewBridgeLoggerRaw, nil, mo_acq_rel))._Release;
-  { stability: threadvar Document pool Done to reclaim Arena; prevents heaptrc leak, zero extra free on cold path }
-  if GWebviewBridgeDecodeDocInited then
-  begin
-    GWebviewBridgeDecodeDoc.Done;
-    GWebviewBridgeDecodeDocInited := False;
-  end;
 
 end.
