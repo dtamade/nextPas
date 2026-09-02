@@ -1,32 +1,36 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP umbrella facade. Pure re-export, stable entry.
+ * @desc HTTP umbrella facade. Pure re-export, stable entry (thin consumers
+ *       prefer `http.minimal` / `http.messages` / `http.transports` /
+ *       `http.extensions` / `http.middlewares`按需 `uses`; `uses
+ *       nextpas.core.http` 仍稳定聚合入口，不再增长).
  *       1914 lines (`wc -l` verified, :1-65) exceed 800 soft guidance
  *       (`design-conventions.md:163`) but are pure re-export exempt:
  *       no loops/routing/SIMD body, `bytes.ops` single source in owners
  *       (`nextpas.core.bytes.ops:25/89`, `text.conv→bytes.ops`), 40+ inline
- *       thin forwards only (`Result:=Owner.Func(...)` single line, no
+ *       thin forwards only (`Result:=SubFacade.Func(...)` single line, no
  *       Move/FillChar body; real loops/SIMD stay out-of-line per :130),
  *       zero-copy views (TByteSpan tail, Bytes ref, bytes.ops compare),
  *       resource release via owner `try/finally`/`Close`/`PoolClear`/
  *       `HttpReleaseResponseBody` (per-domain `heaptrc 0 unfreed`). CONTRACT
  *       truth. Five-facade rhythm (umbrella >800 exempt, cognitive load
- *       distributed): `http.minimal`~201, `http.messages`~420,
- *       `http.transports`~520, `http.extensions`~520, `http.middlewares`~500.
- *       Implementation delegates via five sub-facades to show aggregation
- *       (not direct leaf fan-out); thin consumers `uses` target subfacade,
- *       `uses nextpas.core.http` stays stable. Missing capability → back-feed
- *       owner (errors/bytes/platform).
- *       I-Cache / inline 红线2 Evidence (`design-conventions.md:125-131`):
- *       umbrella `inline` only thin forward to subfacade
- *       (`Result:=SubFacade.Func(...)`), subfacade again thin forward to
- *       owner; no `Move`/`FillChar`/`CompareMem` body in facade, real loops/
- *       SIMD/routing stay out-of-line in owner (`http.router` radix,
- *       `impl.h1.fast` scan, `compress` SIMD, `bytes.ops:25/89` single
- *       source). Two-layer inline collapses to single owner call, I-Cache
- *       only one jump, zero extra loop body; thin consumer `uses` subfacade
- *       eliminates even that hop (zero-copy `TByteSpan` tail / `Bytes` ref /
- *       `bytes.ops` compare retained).
+ *       distributed via delegation): `http.minimal`~201,
+ *       `http.messages`~420, `http.transports`~520,
+ *       `http.extensions`~520, `http.middlewares`~500. Implementation
+ *       delegates via five sub-facades (not direct leaf fan-out); umbrella
+ *       `uses` trimmed to base/intf + five facades, type aliases re-export
+ *       via facade where possible to reduce fan-out; thin consumers `uses`
+ *       target subfacade eliminates hop. Missing capability → back-feed owner
+ *       (errors/bytes/platform). I-Cache / inline 红线2 Evidence
+ *       (`design-conventions.md:125-131`): umbrella `inline` only thin
+ *       forward to subfacade (`Result:=SubFacade.Func(...)`), subfacade again
+ *       thin forward to owner; no `Move`/`FillChar`/`CompareMem` body in
+ *       facade, real loops/SIMD/routing stay out-of-line in owner
+ *       (`http.router` radix, `impl.h1.fast` scan, `compress` SIMD,
+ *       `bytes.ops:25/89` single source). Two-layer inline collapses to single
+ *       owner call, I-Cache only one jump, zero extra loop body; thin consumer
+ *       `uses` subfacade eliminates even that hop (zero-copy `TByteSpan` tail /
+ *       `Bytes` ref / `bytes.ops` compare retained).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -42,51 +46,15 @@ uses
   nextpas.core.vfs.intf,
   { L2-L3 http domain: five-facade aggregation rhythm
     (minimal/messages/transports/extensions/middlewares) pure re-export;
-    bytes.ops single source in leaf owners, CONTRACT truth. Leaf uses kept
-    for type aliases; implementation delegates via sub-facades to show
-    aggregation (not direct leaf fan-out). }
+    bytes.ops single source in leaf owners, CONTRACT truth. Implementation
+    delegates via sub-facades (not direct leaf fan-out); leaf uses trimmed
+    to base/intf + five facades, type aliases re-export via facade where
+    possible to reduce fan-out. }
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.headers,
-  nextpas.core.http.url,
-  nextpas.core.http.router,
   nextpas.core.http.router.group,
-  nextpas.core.http.middleware,
-  nextpas.core.http.middleware.auth,
-  nextpas.core.http.middleware.cors,
-  nextpas.core.http.middleware.recovery,
-  nextpas.core.http.middleware.responsetime,
-  nextpas.core.http.middleware.bodylimit,
-  nextpas.core.http.middleware.contenttype,
-  nextpas.core.http.middleware.logger,
-  nextpas.core.http.middleware.requestid,
-  nextpas.core.http.middleware.cachecontrol,
-  nextpas.core.http.middleware.ratelimit,
-  nextpas.core.http.middleware.healthcheck,
-  nextpas.core.http.middleware.metrics,
-  nextpas.core.http.middleware.methodguard,
-  nextpas.core.http.middleware.bodycache,
-  nextpas.core.http.middleware.serverheader,
-  nextpas.core.http.middleware.context,
-  nextpas.core.http.middleware.requestarena,
-  nextpas.core.http.middleware.compression,
-  nextpas.core.http.middleware.decompress,
-  nextpas.core.http.middleware.deadline,
-  nextpas.core.http.middleware.hsts,
-  nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log.intf,
-  nextpas.core.http.static,
-  nextpas.core.http.form,
-  nextpas.core.http.websocket,
-  nextpas.core.http.websocket.room,
-  nextpas.core.http.server,
-  nextpas.core.http.client,
-  nextpas.core.http.stream,
-  nextpas.core.http.sse,
-  nextpas.core.http.cookie,
-  nextpas.core.http.mem,
-  nextpas.core.net.server,
   { Five-facade aggregation surface (thin consumers `uses` target facade) }
   nextpas.core.http.minimal,
   nextpas.core.http.messages,
@@ -133,12 +101,12 @@ type
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
   IHttpResponseBodyBytes = nextpas.core.http.intf.IHttpResponseBodyBytes;
   IHttpContext = nextpas.core.http.intf.IHttpContext;
-  IWebSocket = nextpas.core.http.websocket.IWebSocket;
+  IWebSocket = nextpas.core.http.extensions.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
   { Request-scoped mem types (see http.mem / RequestArenaMiddleware) }
-  IArena = nextpas.core.http.mem.IArena;
-  IAllocator = nextpas.core.http.mem.IAllocator;
-  TGrowingAllocator = nextpas.core.http.mem.TGrowingAllocator;
+  IArena = nextpas.core.http.middlewares.IArena;
+  IAllocator = nextpas.core.http.middlewares.IAllocator;
+  TGrowingAllocator = nextpas.core.http.middlewares.TGrowingAllocator;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
@@ -146,46 +114,46 @@ type
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
-  TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
-  TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
-  TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
-  TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
-  TAuthOptions = nextpas.core.http.middleware.auth.TAuthOptions;
-  TAuthValidatorFunc = nextpas.core.http.middleware.auth.TAuthValidatorFunc;
-  TAuthCredentialKind = nextpas.core.http.middleware.auth.TAuthCredentialKind;
-  TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
-  TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
-  THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
-  IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
-  THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
-  THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
-  TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
-  TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
-  TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
-  TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
-  IWebSocketRoom = nextpas.core.http.websocket.room.IWebSocketRoom;
-  TWebSocketRoomManager = nextpas.core.http.websocket.room.TWebSocketRoomManager;
+  TMiddlewareWrapFunc = nextpas.core.http.middlewares.TMiddlewareWrapFunc;
+  TRequestPredicate = nextpas.core.http.middlewares.TRequestPredicate;
+  TRecoveryCallback = nextpas.core.http.middlewares.TRecoveryCallback;
+  TRateLimitOptions = nextpas.core.http.middlewares.TRateLimitOptions;
+  TAuthOptions = nextpas.core.http.middlewares.TAuthOptions;
+  TAuthValidatorFunc = nextpas.core.http.middlewares.TAuthValidatorFunc;
+  TAuthCredentialKind = nextpas.core.http.middlewares.TAuthCredentialKind;
+  TRequestIdGenerator = nextpas.core.http.middlewares.TRequestIdGenerator;
+  TCorsOptions = nextpas.core.http.middlewares.TCorsOptions;
+  THttpMetrics = nextpas.core.http.middlewares.THttpMetrics;
+  IHttpMetricsCollector = nextpas.core.http.middlewares.IHttpMetricsCollector;
+  THttpMetricsCallback = nextpas.core.http.middlewares.THttpMetricsCallback;
+  THttpMetricsFieldsCallback = nextpas.core.http.middlewares.THttpMetricsFieldsCallback;
+  TWebSocketOptions = nextpas.core.http.extensions.TWebSocketOptions;
+  TWebSocketOriginCheck = nextpas.core.http.extensions.TWebSocketOriginCheck;
+  TWebSocketOpcode = nextpas.core.http.extensions.TWebSocketOpcode;
+  TWebSocketFrame = nextpas.core.http.extensions.TWebSocketFrame;
+  IWebSocketRoom = nextpas.core.http.extensions.IWebSocketRoom;
+  TWebSocketRoomManager = nextpas.core.http.extensions.TWebSocketRoomManager;
 
   { Re-export HSTS types }
-  THstsOptions = nextpas.core.http.middleware.hsts.THstsOptions;
+  THstsOptions = nextpas.core.http.middlewares.THstsOptions;
 
   { Re-export SSE types }
-  TSSEvent = nextpas.core.http.sse.TSSEvent;
-  ISSEEventWriter = nextpas.core.http.sse.ISSEEventWriter;
+  TSSEvent = nextpas.core.http.extensions.TSSEvent;
+  ISSEEventWriter = nextpas.core.http.extensions.ISSEEventWriter;
 
   { Re-export cookie types }
-  TSameSite = nextpas.core.http.cookie.TSameSite;
-  TRequestCookies = nextpas.core.http.cookie.TRequestCookies;
-  TSetCookie = nextpas.core.http.cookie.TSetCookie;
+  TSameSite = nextpas.core.http.extensions.TSameSite;
+  TRequestCookies = nextpas.core.http.extensions.TRequestCookies;
+  TSetCookie = nextpas.core.http.extensions.TSetCookie;
   IHttpCookieJar = nextpas.core.http.intf.IHttpCookieJar;
 
   { Re-export server/client types }
-  THttpServer = nextpas.core.http.server.THttpServer;
+  THttpServer = nextpas.core.http.transports.THttpServer;
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
-  THttpClient = nextpas.core.http.client.THttpClient;
+  THttpClient = nextpas.core.http.transports.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpDialFunc = nextpas.core.http.base.THttpDialFunc;
-  THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+  THttpRequestBuilder = nextpas.core.http.messages.THttpRequestBuilder;
   THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 
   { Re-export JSON types }
@@ -197,16 +165,16 @@ type
   TLogLevel = nextpas.core.log.intf.TLogLevel;
 
   { Re-export URL types }
-  TQueryParam = nextpas.core.http.url.TQueryParam;
-  TQueryParams = nextpas.core.http.url.TQueryParams;
+  TQueryParam = nextpas.core.http.extensions.TQueryParam;
+  TQueryParams = nextpas.core.http.extensions.TQueryParams;
 
   { Re-export form types }
-  TFormField = nextpas.core.http.form.TFormField;
-  TFormFieldArray = nextpas.core.http.form.TFormFieldArray;
-  THttpFile = nextpas.core.http.form.THttpFile;
-  THttpFileArray = nextpas.core.http.form.THttpFileArray;
-  TMultipartFormData = nextpas.core.http.form.TMultipartFormData;
-  TMultipartParseOptions = nextpas.core.http.form.TMultipartParseOptions;
+  TFormField = nextpas.core.http.extensions.TFormField;
+  TFormFieldArray = nextpas.core.http.extensions.TFormFieldArray;
+  THttpFile = nextpas.core.http.extensions.THttpFile;
+  THttpFileArray = nextpas.core.http.extensions.THttpFileArray;
+  TMultipartFormData = nextpas.core.http.extensions.TMultipartFormData;
+  TMultipartParseOptions = nextpas.core.http.extensions.TMultipartParseOptions;
 
 { Status constants - re-export }
 const
@@ -260,15 +228,15 @@ const
   HTTP_STATUS_GATEWAY_TIMEOUT = nextpas.core.http.base.HTTP_STATUS_GATEWAY_TIMEOUT;
 
   { WebSocket opcodes }
-  wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
-  wsOpText = nextpas.core.http.websocket.wsOpText;
-  wsOpBinary = nextpas.core.http.websocket.wsOpBinary;
-  wsOpClose = nextpas.core.http.websocket.wsOpClose;
-  wsOpPing = nextpas.core.http.websocket.wsOpPing;
-  wsOpPong = nextpas.core.http.websocket.wsOpPong;
-  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
-  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
-  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.websocket.room.WEBSOCKET_ROOM_DEFAULT_MAX;
+  wsOpContinuation = nextpas.core.http.extensions.wsOpContinuation;
+  wsOpText = nextpas.core.http.extensions.wsOpText;
+  wsOpBinary = nextpas.core.http.extensions.wsOpBinary;
+  wsOpClose = nextpas.core.http.extensions.wsOpClose;
+  wsOpPing = nextpas.core.http.extensions.wsOpPing;
+  wsOpPong = nextpas.core.http.extensions.wsOpPong;
+  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.extensions.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
+  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.extensions.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.extensions.WEBSOCKET_ROOM_DEFAULT_MAX;
 
   { TCP server backends }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
@@ -497,10 +465,10 @@ function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inli
 { --- Request-scoped memory (nextpas.core.mem product wire; see http.mem) --- }
 
 const
-  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
+  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.middlewares.HTTP_DEFAULT_REQUEST_ARENA;
   HTTP_DEFAULT_BODY_READ_MAX = nextpas.core.http.base.HTTP_DEFAULT_BODY_READ_MAX;
   { Context key for AuthMiddleware's authenticated subject. }
-  AUTH_SUBJECT_KEY = nextpas.core.http.middleware.auth.AUTH_SUBJECT_KEY;
+  AUTH_SUBJECT_KEY = nextpas.core.http.middlewares.AUTH_SUBJECT_KEY;
 
 {** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
 function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
@@ -662,7 +630,7 @@ function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
 
 { Streaming request body }
 type
-  TChunkCallback = nextpas.core.http.stream.TChunkCallback;
+  TChunkCallback = nextpas.core.http.extensions.TChunkCallback;
 
 function HttpRequestReadChunks(const ABody: IReader;
   const ABufSize: SizeUInt; const AOnChunk: TChunkCallback): Int64; inline;

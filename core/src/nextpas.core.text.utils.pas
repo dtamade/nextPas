@@ -194,35 +194,21 @@ end;
 
 function RepeatString(const S: string; ACount: Integer): string;
 var
-  LCopied, LChunkLen: SizeInt;
-  LPos: SizeInt;
+  LChunkLen: SizeInt;
 begin
+  // not inline per red-line 2: loop+doubling I-Cache bloat (BytesReplicateCopy) — single SetLength, bytes.ops single source
+  // perf: single SetLength + zero-copy via bytes.ops single source (BytesCopy/BytesReplicateCopy), doubling O(log n) amortized, 1 alloc
+  // stability: SetLength exception-safe (no leak), BytesCopy/Replicate on managed buffer after alloc
   if (ACount <= 0) or (S = '') then
     Exit('');
   if ACount = 1 then
     Exit(S);
   LChunkLen := Length(S);
   SetLength(Result, LChunkLen * ACount);
-  Move(S[1], Result[1], LChunkLen);
-  if ACount = 2 then
-  begin
-    Move(S[1], Result[LChunkLen + 1], LChunkLen);
-    Exit;
-  end;
-  LPos := LChunkLen + 1;
-  LCopied := 1;
-  while LCopied * 2 <= ACount do
-  begin
-    Move(Result[1], Result[LPos], LCopied * LChunkLen);
-    Inc(LPos, LCopied * LChunkLen);
-    LCopied := LCopied * 2;
-  end;
-  while LCopied < ACount do
-  begin
-    Move(S[1], Result[LPos], LChunkLen);
-    Inc(LPos, LChunkLen);
-    Inc(LCopied);
-  end;
+  if LChunkLen > 0 then
+    nextpas.core.bytes.ops.BytesCopy(PAnsiChar(Result), PAnsiChar(S), SizeUInt(LChunkLen));
+  if ACount > 1 then
+    nextpas.core.bytes.ops.BytesReplicateCopy(PAnsiChar(Result), PAnsiChar(Result) + LChunkLen, SizeUInt(LChunkLen) - 1, SizeUInt(LChunkLen) * (SizeUInt(ACount) - 1));
 end;
 
 function StrToIntDef(const S: string; ADefault: Int64): Int64; inline;
@@ -355,6 +341,7 @@ begin
   LCap := 0;
   LCount := 0;
   LStart := 0;
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy TStringView slice, not inline per red-line 2: BytesGrowCapacity loop I-Cache bloat
   for I := 0 to Integer(LView.Len) - 1 do
     if DelimSet[Byte(LView.Data[I])] then
     begin
@@ -362,7 +349,7 @@ begin
       begin
         if LCount >= LCap then
         begin
-          if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+          LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LCount + 1);
           SetLength(Result, LCap);
         end;
         LSeg := LView.Slice(SizeUInt(LStart), SizeUInt(I - LStart));
@@ -375,7 +362,7 @@ begin
   begin
     if LCount >= LCap then
     begin
-      if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+      LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LCount + 1);
       SetLength(Result, LCap);
     end;
     LSeg := LView.Slice(SizeUInt(LStart), LView.Len - SizeUInt(LStart));

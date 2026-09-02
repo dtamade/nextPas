@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（**104** 个生产源文件：92 + pool/retry/defense/tail/timeout 9 + messages/transports/extensions 3；主 gate PROJECTS=**47**，含 mem/stream/sse + Era3 theme suites）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-09-05（文件数 **104**（92+9+3）：`pool/retry/defense/tail/timeout` 五薄域 + `messages/transports/extensions` 三子facade + `gating`；umbrella 1914 行>800软阈但按五facade节奏分流）
-**版本**：3.57
+**最后更新**：2026-09-06（文件数 **104**（92+9+3）：`pool/retry/defense/tail/timeout` 五薄域 + `messages/transports/extensions` 三子facade + `gating`；umbrella 1914 行>800软阈但按五facade节奏分流；Range 静态流式诚实化：`CopyFileRange`→`CopyRange(4K)`/`io.Copy`，补无阈值 Go/Rust 回归 residual）
+**版本**：3.58
 **拆分优雅度**：900 行聚合已按 **§1.1 九域四件套**拆为五薄域+三子facade+门禁（`pool`/`retry`/`defense`/`tail`/`timeout`/`gating` + `messages`/`transports`/`extensions`）；`bytes.ops` 单源、`inline`/零拷贝、`PoolClear`/`Close` 不丢（见 §1.1）；**主文档为索引-锚点**（§2–§6 仅锚点摘要，明细以薄域为准，消双重维护）。
 
 ---
@@ -61,7 +61,7 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 > **I-Cache 与零拷贝证据（聚合 40+ inline 为何不膨胀）**：
 > - inline 仅薄转发：`http.pas:269-1945` 全部 `inline` 函数体为单行 `Result := SubFacade.Func(...)` / `SubFacade.Proc(...)` 薄转发（subfacade再薄转发至 owner），**门面内无 `Move`/`FillChar`/`CompareMem` 体**（`Move` 单源驻留 `bytes.ops:25/89`，`text.conv→bytes.ops` 单源透传），符合 `design-conventions.md:125-131` 薄转发豁免；真实循环/路由/SIMD 体保持 out-of-line 在 owner（`http.router` radix、`http.impl.h1.fast` scan、`compress` SIMD），避免 I-Cache 复制。Umbrella经五子facade二次薄转发仅增一层 inline 跳转，零额外循环体。
 > - 零拷贝视图：`TByteSpan` pending tail 视图（`impl.h1.framing.tail.base:TH1TailBuffer`）、`body Bytes` 引用共享（`http.message` BodyCache 只读视图）、`HttpCookieSiteKey`/`CanonicalPoolHostKey` 经 `bytes.ops` 零分配比较；`SortAsciiNormalization` 等扫描 inline 仅指针/长度比较，不分配。
-> - 性能证据：`core/benchmarks/http` 横向 `bytes.ops` 单源复用后，`HttpIsRetrySafeRequest`/`HttpCookieSiteKey` 纳秒级、`CopyFileRange` 流式 0 拷；`make focused FOCUS=core/tests/nextpas.core.http` 全域 <2s，umbrella inline 不增加热点循环。
+> - 性能证据：`core/benchmarks/http` 横向 `bytes.ops` 单源复用后，`HttpIsRetrySafeRequest`/`HttpCookieSiteKey` 纳秒级；静态路径为 `CopyRange(4K buffer)` / `io.Copy` 流式（**非**内核 `CopyFileRange` 零拷贝；VFS 嵌入切片零拷贝已兑现，文件路径为用户态缓冲拷贝）；`make focused FOCUS=core/tests/nextpas.core.http` 全域 <2s，umbrella inline 不增加热点循环。**诚实**：静态/Range 域当前仅 `test_http_static` 等 focused smoke，**无** Go/Rust 对照固定阈值回归（持续性能不变量由 `bench_server` keepalive harness ≥0.80× Go 承担，见 `BENCHMARKS.md`），禁止跨机排行榜宣称。
 >
 > **稳定性资源释放不丢（不经 umbrella 二次聚合）**：
 > - 每域独立 `try/finally`/`Close`/`PoolClear`：`pool.pas` `PoolClear`/`CloseIdleConnections` 锁外关、`retry` body rewind `try/finally`、`h2defense` `GOAWAY+Close` 原子、`tail` `FPending` 析构清零、`timeout` 墙钟判定无句柄泄漏；`http.messages`/`transports`/`extensions` 仅转发，释放仍在 owner。
@@ -188,11 +188,12 @@ end;
 | 能力 | 行为 |
 |------|------|
 | `Accept-Ranges` | 200/206 成功静态响应发布 `Accept-Ranges: bytes` |
-| 单段 `Range: bytes=start-end` / `start-` / `-suffix` | **206** + `Content-Range` + 精确 `Content-Length`；body 经 `CopyFileRange` 流式写出 |
+| 单段 `Range: bytes=start-end` / `start-` / `-suffix` | **206** + `Content-Range` + 精确 `Content-Length`；body 经 `CopyRange(4K buffer)` 流式写出（Range 段） |
 | 越界 / 非法 / multi-range（含逗号） | **416** + `Content-Range: bytes */size` |
-| 整文件路径 | `IFile` + `io.Copy`；**禁止** `ReadFile`/`ReadAll` 整文件进内存（source-contract 锁定） |
+| 整文件路径 | `IFile` 打开后 `io.Copy` 流式；**禁止** `ReadFile`/`ReadAll` 整文件进内存（source-contract 锁定） |
 | 与条件请求 | 先评估 304；命中则不进入 Range |
 | 非目标 | multipart ranges、`If-Range`、目录列表产品化、CDN 语义 |
+| 性能不变量（诚实） | 静态/Range 当前仅 focused 功能 smoke（`test_http_static` 等，`heaptrc 0 unfreed`），**无** Go/Rust 对照固定阈值回归；持续门槛由 `bench_server` keepalive harness（≥0.80× Go，`BENCHMARKS.md`）承担，静态域不参与跨机排行榜；如需固定回归，需新增 `bench_static` + `compare_go`/`compare_rust` 同 harness 并冻结阈值（待办，见 `ROADMAP.md`） |
 
 ### 2.2 Request / Response
 
@@ -854,15 +855,7 @@ client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_re
 
 #### h2 DoS 防御 stance — *Extracted: `http.impl.h2.defense` 四件套已落地（单源 `defense.base`，见 §1.1 + `h2defense.md`）*
 
-> **单一事实源**：全部阈值以 `nextpas.core.http.impl.h2.defense.base` 单源常量为准（`H2_MAX_RAPID_RESETS` / `H2_MAX_CONTROL_FRAME_FLOOD` / `H2_MAX_HEADER_BLOCK_BYTES` / `H2_MAX_HEADER_FRAGMENTS` / `H2_MAX_EMPTY_FRAGMENTS` / `H2_HEADER_LIST_HARD_LIMIT` / `H2_WIRE_READ_HARD_LIMIT`），主文档不再双写阈值表，明细、清零不变式与攻击/不误伤双测详 `h2defense.md`。
-
-| 攻击向量 | 防御机制（摘要） | 阈值单源 | 清零 / 升级 |
-|----------|----------------|----------|-------------|
-| CVE-2023-44487 rapid-reset | `FRapidResetCount` → GOAWAY(ENHANCE_YOUR_CALM) | `defense.base:H2_MAX_RAPID_RESETS` | 任意请求完成 `MarkRequestHandled` 清零 |
-| CVE-2019-9512/9515 PING/SETTINGS flood | `FControlFrameFloodCount` → GOAWAY | `defense.base:H2_MAX_CONTROL_FRAME_FLOOD` | 同上 |
-| CVE-2024-27316 CONTINUATION flood | stream 三重边界 → RST + `EscalateHeaderBlockFlood` → GOAWAY+关闭+清待续 | `defense.base:H2_MAX_HEADER_BLOCK_BYTES / H2_MAX_HEADER_FRAGMENTS / H2_MAX_EMPTY_FRAGMENTS` | 单次连接级致命 |
-| HPACK 放大（RFC 7541 §10.5） | `FinalizeHeaders` 累计 size 超限 → 431 | `defense.base:H2_HEADER_LIST_HARD_LIMIT`（软限取 min，独立硬 backstop） | 请求级 431 |
-| 内存巨型帧 | wire 硬上限 → GOAWAY | `defense.base:H2_WIRE_READ_HARD_LIMIT` | 单次连接级致命 |
+> **单一事实源**：阈值以 `defense.base:H2_MAX_RAPID_RESETS`/`H2_MAX_CONTROL_FRAME_FLOOD`/`H2_MAX_HEADER_BLOCK_BYTES`/`H2_MAX_HEADER_FRAGMENTS`/`H2_MAX_EMPTY_FRAGMENTS`/`H2_HEADER_LIST_HARD_LIMIT`/`H2_WIRE_READ_HARD_LIMIT` 单源为准；本 stance 仅索引-锚点不双写表——rapid-reset/PING flood/CONTINUATION/HPACK 放大/巨型帧五向量、清零不变式与双测详 `h2defense.md`。
 
 > **不变式**：`H2_MAX_HEADER_BLOCK_BYTES` 对*压缩*字节封顶（详 `h2defense.md` 与 `defense.base` 单源），合法流量不靠压缩红利，硬 backstop 仅放大攻击触发。
 
@@ -937,3 +930,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-09-03 | 3.54 | 拆分优雅度兑现：§1.1 五域四件套落地 — `pool`/`retry`/`impl.h2.defense`/`impl.h1.framing.tail` 新增 base/intf/门面三件套 + 聚合实现（bytes.ops 单源复用、热点 inline、零拷贝 TByteSpan、`PoolClear`/`Close` 释放不丢），门禁再分组抽至 `gating.md`；CONTRACT 900 行聚合解耦为域契约 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`gating.md`，§3.1/§6 行级标注 candidate→extracted；版本 3.53→3.54 |
 | 2026-09-04 | 3.55 | 拆分优雅度瘦身 + 超时薄模块：§1.1 六域四件套（新增 `timeout` 薄模块 `timeout.base/intf/pas` 三件套，复用 `http.base` 单源、`inline` 墙钟判定、零拷贝整数比较、`PoolClear`/`Close` 释放不丢）；CONTRACT 主文档瘦身为索引-锚点（§2–§6 仅保留摘要 + 指向 `pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`timeout.md`/`gating.md`，消双重维护）；`§282 IdleTimeout/IdleTTL/ReadTimeout` 对照抽为可复用 `timeout.md`；库存 98→101；版本 3.54→3.55 |
 | 2026-09-05 | 3.56 | 拆分优雅度产品面子facade：umbrella 纯聚合豁免下续拆节奏 — 新增 `http.messages`/`transports`/`extensions` 三产品子facade（~420/~520/~520 行，各 inline 薄转发至 `http.message`/`server`/`client`/`static`/`websocket`/`sse`/`stream`/`cookie`/`form`/`headers`/`url`，`bytes.ops` 单源、零拷贝视图、`PoolClear`/`Close` 释放经 owner），与 `http.minimal`/`middlewares` 形成五facade节奏，umbrella 1914 行仍>800但认知负荷已分流（`http.pas:1-65` 聚合注释更新，§1 入口表增五选一 guidance，§1.1 九域兑现）；库存 101→104；版本 3.55→3.56 |
+| 2026-09-06 | 3.58 | Range/静态流式诚实化：§2 `ServeFile` Range/`CopyFileRange` 零拷贝宣称校正为 `CopyRange(4K buffer)`/`io.Copy` 用户态流式（`VFS` 嵌入零拷贝保留，文件路径为缓冲拷贝，`static.pas:STATIC_COPY_BUF_SIZE` 4K 页对齐），补§1.1性能证据与Range表“无固定阈值 Go/Rust 对照回归” residual（`bench_server` keepalive ≥0.80× Go 为唯一 scale 持续门槛，静态域仅 smoke，待 `bench_static` 同 harness 冻结阈值）；版本 3.57→3.58 |

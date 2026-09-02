@@ -30,6 +30,7 @@ function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean; in
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.char;
 
 const
@@ -84,7 +85,7 @@ begin
     LBuf[LIdx] := AnsiChar(Ord('0') + LVal);
   end;
   Result := 20 - LIdx;
-  Move(LBuf[LIdx], ADst^, Result);
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
 end;
 
 function IntToBuffer(const AValue: Int64; const ADst: PAnsiChar): Int32;
@@ -112,7 +113,7 @@ var
   LVal: UInt64;
   LMin: Int32;
 begin
-  FillChar(LBuf, SizeOf(LBuf), 0);
+  nextpas.core.bytes.ops.BytesZero(@LBuf[0], SizeOf(LBuf)); // perf: inline FillChar single source via bytes.ops
   LMin := AMinDigits;
   if LMin > 16 then LMin := 16;
   if (AValue = 0) and (LMin <= 1) then
@@ -136,10 +137,10 @@ begin
     LBuf[LIdx] := '0';
     Inc(Result);
   end;
-  Move(LBuf[LIdx], ADst^, Result);
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
 end;
 
-{ perf: direct uppercase HEX_CHARS_UPPER write, single Move, zero-copy, no per-char branch — owner single source for IntToHex uppercase }
+{ perf: direct uppercase HEX_CHARS_UPPER write, single Move via bytes.ops, zero-copy, no per-char branch — owner single source for IntToHex uppercase }
 function IntToHexBufferUpper(const AValue: UInt64; const ADst: PAnsiChar;
   const AMinDigits: Int32): Int32; inline;
 var
@@ -148,7 +149,7 @@ var
   LVal: UInt64;
   LMin: Int32;
 begin
-  FillChar(LBuf, SizeOf(LBuf), 0);
+  nextpas.core.bytes.ops.BytesZero(@LBuf[0], SizeOf(LBuf)); // perf: inline FillChar single source via bytes.ops
   LMin := AMinDigits;
   if LMin > 16 then LMin := 16;
   if (AValue = 0) and (LMin <= 1) then
@@ -172,7 +173,7 @@ begin
     LBuf[LIdx] := '0';
     Inc(Result);
   end;
-  Move(LBuf[LIdx], ADst^, Result);
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
 end;
 
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -268,7 +269,7 @@ function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 begin
   if DoubleIsNaN(AValue) or DoubleIsInf(AValue) then
   begin
-    Move('null', ADst^, 4);
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('null'), 4); // perf: inline single Move via bytes.ops single source, zero-copy
     Exit(4);
   end;
   Result := FloatToBuffer(AValue, ADst);
@@ -292,17 +293,17 @@ var
 begin
   if DoubleIsNaN(AValue) then
   begin
-    Move('NaN', ADst^, 3);
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('NaN'), 3); // perf: inline single Move via bytes.ops single source, zero-copy
     Exit(3);
   end;
   if DoubleIsInf(AValue) then
   begin
     if (LBits and DOUBLE_SIGN_MASK) <> 0 then
     begin
-      Move('-Infinity', ADst^, 9);
+      nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('-Infinity'), 9); // perf: inline single Move via bytes.ops single source, zero-copy
       Exit(9);
     end;
-    Move('Infinity', ADst^, 8);
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('Infinity'), 8); // perf: inline single Move via bytes.ops single source, zero-copy
     Exit(8);
   end;
   if DoubleIsZero(AValue) then
@@ -370,7 +371,7 @@ begin
   end;
   if LIntLen > 0 then
   begin
-    Move(LBuf[0], (ADst + LPos)^, LIntLen);
+    nextpas.core.bytes.ops.BytesCopy(ADst + LPos, @LBuf[0], SizeUInt(LIntLen)); // perf: inline single Move via bytes.ops single source, zero-copy
     Inc(LPos, LIntLen);
   end;
   if LDec > 0 then
@@ -464,7 +465,7 @@ begin
   AValue := 0.0;
   if ALen > 1023 then
     Exit(False);
-  Move(AData^, LBuf[0], ALen);
+  nextpas.core.bytes.ops.BytesCopy(@LBuf[0], AData, ALen); // perf: inline single Move via bytes.ops single source, zero-copy
   LBuf[ALen] := #0;
   try
     Val(PAnsiChar(@LBuf[0]), LValue, LCode);

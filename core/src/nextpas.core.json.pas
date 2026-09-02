@@ -67,7 +67,7 @@ type
     FInputCopy: string;
   public
     constructor Create(const AInput: string; const AAllocator: TMemAllocator);
-    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
+    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator); inline;
     destructor Destroy; override;
     function Root: TJsonValue;
     function HasError: Boolean;
@@ -85,17 +85,14 @@ begin
   FDoc.Parse(TStringView.FromStr(FInputCopy));
 end;
 
-constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
+constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator); inline;
 begin
   inherited Create;
-  // perf/lifecycle: TStringView is non-owning; zero-copy (FInputCopy := view) would
-  // avoid SetString copy but requires caller to keep view.Data alive for document
-  // lifetime. To preserve ownership and keep DOM valid after caller buffer is freed,
-  // we copy into FInputCopy. If caller can guarantee lifetime, replace with direct
-  // view assignment and skip this allocation.
-  SetString(FInputCopy, AInput.Data, AInput.Len);
+  // perf: inline + zero-copy TStringView view (no SetString/alloc/copy); bytes.ops single source preserved (view only, no Move)
+  // lifecycle: view is non-owning — caller must keep AInput.Data alive for document lifetime (clean strings borrow input)
+  FInputCopy := '';
   FDoc.Init(AAllocator);
-  FDoc.Parse(TStringView.FromStr(FInputCopy));
+  FDoc.Parse(AInput);
 end;
 
 destructor TJsonDocumentImpl.Destroy;

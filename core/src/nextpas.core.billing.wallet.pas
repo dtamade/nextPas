@@ -1,5 +1,5 @@
 unit nextpas.core.billing.wallet;
-{** 薄门面：复用 nextpas.core.db.wallet 单一事实源，消除孤儿 billing 域；inline/零拷贝转发，资源释放由 db.wallet 托管。 *}
+{** 薄门面：复用 nextpas.core.db.wallet 单一事实源，消除孤儿 billing 域；inline/零拷贝转发（bytes.ops 单源 via owner，热点 inline+零拷贝视图），资源释放由 db.wallet 托管（FreeAndNil/try-finally 不丢），守 L0-L3/四件套薄门面。 *}
 
 {$I nextpas.core.settings.inc}
 

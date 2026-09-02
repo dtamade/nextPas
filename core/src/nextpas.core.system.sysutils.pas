@@ -65,8 +65,8 @@ function TrimRight(const AStr: string): string;
 function UpperCase(const AStr: string): string;
 function LowerCase(const AStr: string): string;
 
-{ String search }
-function Pos(const ASubStr, AStr: string): Integer;
+{ String search — single source bytes.ops SpanIndexOfSpan SIMD }
+function Pos(const ASubStr, AStr: string): Integer; inline;
 
 { Date/Time }
 function Now: TDateTime;
@@ -134,6 +134,7 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.path,
   nextpas.core.fs,
@@ -307,11 +308,26 @@ begin
   Result := nextpas.core.text.conv.LowerCase(AStr);
 end;
 
-{ String search }
+{ String search — single source bytes.ops SpanIndexOfSpan SIMD (INV-5, L1 text owns search via bytes.ops) }
 
-function Pos(const ASubStr, AStr: string): Integer;
+function Pos(const ASubStr, AStr: string): Integer; inline;
+var
+  LNeedle, LHaystack: TByteSpan;
+  LIdx: SizeInt;
 begin
-  Result := System.Pos(ASubStr, AStr);
+  { perf: inline thin-forward to bytes.ops.SpanIndexOfSpan SIMD single source — zero-copy TByteSpan view (PByte+Len, no alloc/Move), inline, single source stays in bytes.ops/simd, hot path vectorized;
+    stability: empty-needle guard matches FPC 0 (owner returns 0 for Len=0), bounds via owner, no resource leak }
+  if ASubStr = '' then
+    Exit(0);
+  if AStr = '' then
+    Exit(0);
+  LNeedle := TByteSpan.Create(PByte(PAnsiChar(ASubStr)), SizeUInt(Length(ASubStr)));
+  LHaystack := TByteSpan.Create(PByte(PAnsiChar(AStr)), SizeUInt(Length(AStr)));
+  LIdx := nextpas.core.bytes.ops.SpanIndexOfSpan(LHaystack, LNeedle);
+  if LIdx < 0 then
+    Result := 0
+  else
+    Result := Integer(LIdx) + 1;
 end;
 
 { Date/Time — delegates to time owner (platform/time boundary, inline zero-copy) }

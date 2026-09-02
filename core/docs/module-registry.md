@@ -31,6 +31,7 @@ and records evidence; it is not a completion claim.
 | `atomic` | L0 | atomic primitives | `nextpas.core.atomic` | RTL, base/errors/platform sync only | focused-runtime, source-contract |
 | `base` | L0 | root values/contracts | `nextpas.core.base` | RTL, exception root | focused-runtime — `base.utils` adds `CompareBytesOrdered` + `CompareBytesIgnoreCase/HashFNV1aLower` (`LowerTable` 去分支, nil 守卫) unified for respack/vfs/http |
 | `bench` | Support | benchmark helpers | `nextpas.core.bench` | explicit test/bench only | source-contract |
+| `billing` | L3 | wallet/billing domain thin facade over db.wallet single source (`nextpas.core.billing.wallet` → `nextpas.core.db.wallet` single source; wallet_balances/wallet_ledger/redeem_codes over TDbPool; facade pure re-export, `nextpas.core.db.wallet` is owner, bytes.ops single source via owner) | `nextpas.core.billing.wallet` | L0-L2 plus same-layer single-point `billing.wallet` → `db.wallet`/`db.pool` (one-way, cycle-gated, hotspot inline+zero-copy, resource FreeAndNil/try-finally not lost via db.wallet) | draft |
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
 | `canvas` | L2 | CPU raster canvas (ICanvas raster, Tile 16x16 + simd inline, tess梯形→整数覆盖) | `nextpas.core.canvas` | L0-L1 plus same-layer one-way `vector`/`image` (single-point `canvas.raster` → `vector.tess`/`vector.path` + `image.base`, cycle-gated, bytes.ops inline/zero-copy) | focused-runtime |
 | `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
@@ -102,6 +103,7 @@ and records evidence; it is not a completion claim.
 | `audio` | L2 | PCM WAV container codec | yes | L0-L2 (io/fs owner) | focused-runtime |
 | `base` | L0 | root types/contracts | yes | `exception`, bootstrap RTL debt | focused-runtime |
 | `bench` | tooling | benchmark harness | yes | L0 + approved L1 tooling deps | focused-runtime |
+| `billing` | L3 | wallet/billing domain thin facade over db.wallet single source (`nextpas.core.billing.wallet` → `nextpas.core.db.wallet` single source; wallet_balances/wallet_ledger/redeem_codes over TDbPool; facade pure re-export, `nextpas.core.db.wallet` is owner, bytes.ops single source via owner) | yes | L0-L2 plus same-layer single-point `billing.wallet` → `db.wallet`/`db.pool` (one-way, cycle-gated, hotspot inline+zero-copy, resource FreeAndNil/try-finally not lost via db.wallet) | draft |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
 | `canvas` | L2 | CPU raster canvas (ICanvas raster, Tile 16x16 + simd inline) | yes | L0-L1 plus same-layer one-way `vector`/`image` (single-point `canvas.raster` → `vector.tess`/`vector.path` + `image.base`, cycle-gated) | focused-runtime |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
