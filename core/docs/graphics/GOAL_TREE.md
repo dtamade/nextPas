@@ -7,7 +7,7 @@
 - [x] `core/docs/plans/2026-08-30-graphics-framework-v1.md` 定版（含铁律/依赖图）
 - [x] S0-04 六维审阅（模块化/性能/高级感/复用/稳定/完整 14 项 + 4拼图）闭环
 - [x] S0-05 `game888` 4份审计（`procedural/msdf/color_grading/font`）— 7.2K `game888-audit.md` 落盘，`hygiene=pass`
-- [ ] `core-module-registry.md` 变更预案评审（`draft`）
+- [x] `core-module-registry.md` 变更预案评审（`0.2.0-source-contract` 冻结：graphics/canvas/vector/image/effect/gpu.canvas，见 `CONTRACT.md:5`）
 
 ## S1 底座 + 编解码
 

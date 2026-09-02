@@ -61,7 +61,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `vector` | L2 | vector kernel (path boolean/stroke/tess, Double inner, EPSILON 1e-6) | yes | L0-L1 | source-contract |
 | `canvas` | L2 | 2D canvas (ICanvas + CPU raster, tiled 16x16 + simd) | yes | L0-L1 | source-contract |
 | `effect` | L2 | filter graph (Blur/Shadow/Hue/LUT, serializable, tile parallel) | yes | L0-L1 plus same-layer one-way `image` (TBitmap Stride 64B) | source-contract |
-| `image` | L2 | image codec (TBitmap Stride 64B + PNG/JPEG/WebP/BMP, EImageDecodeError, TryImageDecode) | yes | L0-L1 | source-contract |
+| `image` | L2 | image codec (TBitmap Stride 64B + PNG/JPEG/WebP/BMP, EImageDecodeError, TryImageDecode) | yes | L0-L1 plus `platform.dl` (optional FFI `libjpeg-turbo`/`libwebp` via `image.jpeg.ffi`/`image.webp.ffi`) | source-contract |
 | `gpu.canvas` | L3 | bitmap→Texture/Atlas bridge (TAtlas/TAtlasRegion/ScaleFactor, shelf pack, Scale 1..4) | yes | L0-L2 + `gpu.gl`/`platform.dl` | source-contract |
 | `ini` | L2 | INI format | yes | L0-L1 | focused-runtime |
 | `io` | L1 | stream/poller abstractions | yes | L0 plus approved L1 | focused-runtime |
