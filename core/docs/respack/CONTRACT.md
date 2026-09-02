@@ -103,8 +103,9 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open 51µs ≤ FPC `TMemoryStream` 60µs，且 0.93× Go 55µs / 0.98× Rust 52µs（1MiB 包，`bench_embed_startup`） |
 | 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价无惩罚 |
 | Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 1.02× FPC / 0.98× Go / 0.97× Rust 吞吐；峰值 1.15× 内（`bench_writer_memory` + `bytes.ops.BytesConcatMany` 单源） |
+| Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 耗时+8%内，最坏同桶全 miss +15%内 均≤1.3× Go/Rust（`bench_writer_dedup`） |
 
-> 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。
+> 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。`Build(Dedup on)` 零拷贝证据 `ContentPtr inline+bytes.ops.Move`。
 
 ---
 
@@ -132,9 +133,9 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | S3 | 后端（vfs embedded/os/memtree/sub 零拷贝、P8 地址断言） | 已收官 | test_vfs_conformance/embedded/memtree/facade 全绿 |
 | S4 | 工具链（respack.embed + rp_pack CLI + demo_asset_embed，一键链路） | 已收官 | test_respack_embed 全绿；`make -C core/tools/respack build` + `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 自检绿 |
 | S5 | http.static 接入（`ServeVfs(IVfs)` 直通 embedded，ETag 取 fnv32、条件请求/Range/MIME 与 fs 版同语义） | 已收官 | test_http_static + http_static_vfs_demo 304/206/404 自检绿 |
-| S6 | 嵌入载体阈值与流式两遍（`writer.layout` 单源复用 + `writer.stream` 分段零双驻留，峰值 `~1×+头`；`<4MB 走 .inc` 实测线性 vs `.pack` 恒定） | 已收官 | `nextpas.core.respack.writer.stream` 已实现并复用 `writer.layout` 同布局（首遍 `ResPackComputeLayout` 复用 Total/槽位/去重，次遍 `AWrite` 头合批+槽间隙零填+`Move` 零拷贝分段+digest，`try..finally ResPackLayoutClear/FreeMem` 不丢资源；`ResPackBuildStreamSize` 零分配预取）；阈值 `2MB≈2.4s→4MB≈4.4s(1.1s/MB) vs .pack 0.29–0.30s`、`512MB 2×+14MB → 流式 1×+头` 见 README 实测表与 `writer.stream`/`writer.layout` 单源证据；CONTRACT 业务为准，超大包 mmap/分段归 `mem.memory_map`/`io.mapped` owner，见 `dirsource` 峰值注释 |
+| S6 | 嵌入阈值 `<4MB` + 流式两遍 `~1×+头` | 已收官 | `writer.stream` 复用 `writer.layout` 单源同布局；`bench_writer_dedup` 50%重复/最坏碰撞量化见 RESULTS §4 |
 
-> S1-S6 已收官，**9+5 门全绿**（以 S1-S5 口径：respack 4 门 + dirsource/embed 2 门 + vfs 4 门核心 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门全绿；按 S6 含装饰器口径为 12 门闭环 + bench_transform 1 基准，全量无漂移；S6 流式与阈值已实现但此前 CONTRACT 校准表未单列——本版补齐收口）。
+> S1-S6 已收官，**9+5 门全绿**（respack 4 门 + dirsource/embed 2 门 + vfs 4 门 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门；按 S6 含装饰器口径为 12 门闭环 + bench_transform）。流式与阈值已实现，CONTRACT 业务为准。
 
 ---
 
