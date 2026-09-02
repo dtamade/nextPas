@@ -92,7 +92,7 @@ begin
     raise EResPackCorrupted.CreateCtx('open', '', 'respack: not open or blob released (CONTRACT §5)');
 end;
 
-function TResPack.ContentPtr(const AEntry: TResPackEntry): PByte;
+function TResPack.ContentPtr(const AEntry: TResPackEntry): PByte; inline;
 begin
   RequireOpen;
   if AEntry.DataOffset + AEntry.Size > FSize then
@@ -174,9 +174,9 @@ begin
   Result := SpanCompare(SA, SB);
 end;
 
-{ ── Stage guards: Open 八步校验拆为 guard 函数，单函数 <80 行，阅读质感轻量 ── }
+{ ── Stage guards: Open 八步校验拆为 guard 函数，单函数 <80 行，阅读质感轻量；非 inline 守 I-Cache（分支体积） ── }
 
-procedure GuardStep1(const AData: PByte; const ASize: SizeUInt); inline;
+procedure GuardStep1(const AData: PByte; const ASize: SizeUInt);
 begin
   if (AData = nil) or (ASize < RESPACK_HEADER_SIZE) then
     raise EResPackCorrupted.CreateStep(1, 'buffer smaller than header');
@@ -185,7 +185,7 @@ begin
     raise EResPackCorrupted.CreateStep(1, 'bad magic');
 end;
 
-procedure GuardStep2(const AData: PByte; var AFHdr: TResPackHeader; out AHdrFlags: UInt32); inline;
+procedure GuardStep2(const AData: PByte; var AFHdr: TResPackHeader; out AHdrFlags: UInt32);
 begin
   AFHdr.Version := RdU32LE(AData + 4);
   if AFHdr.Version <> RESPACK_VERSION then
@@ -206,7 +206,7 @@ begin
     raise EResPackCorrupted.CreateStep(2, 'unknown digest algorithm');
 end;
 
-procedure GuardStep3(const AFHdr: TResPackHeader); inline;
+procedure GuardStep3(const AFHdr: TResPackHeader);
 begin
   if (AFHdr.IndexOffset <> RESPACK_HEADER_SIZE)
     or (AFHdr.IndexOffset
@@ -217,7 +217,7 @@ begin
     raise EResPackCorrupted.CreateStep(3, 'entry count exceeds limit');
 end;
 
-procedure GuardStep4(const ASize: SizeUInt; const AFHdr: TResPackHeader); inline;
+procedure GuardStep4(const ASize: SizeUInt; const AFHdr: TResPackHeader);
 begin
   if ASize < AFHdr.BlobTotal then
     raise EResPackCorrupted.CreateStep(4, 'buffer truncated versus blobTotal');
