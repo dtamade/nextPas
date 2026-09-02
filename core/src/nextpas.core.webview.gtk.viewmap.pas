@@ -44,7 +44,7 @@ function ViewHash(AKey: Pointer): UInt32; inline;
 function ViewMapFindLocked(AView: Pointer): Pointer;
 procedure ViewMapRehashLocked(ANewCap: Integer);
 procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
-procedure ViewMapRemoveLocked(AView: Pointer);
+function ViewMapRemoveLocked(AView: Pointer): Boolean;
 
 // 非 Locked 包装：自持 GViewMapLock，短临界仅 THashMap 原子操作，零阻塞 GLiveLock 读
 function ViewMapFind(AView: Pointer): Pointer;
@@ -105,15 +105,11 @@ begin
   GViewMap.AddOrAssign(AView, AWin);
 end;
 
-procedure ViewMapRemoveLocked(AView: Pointer);
-var
-  LDummy: Pointer;
+function ViewMapRemoveLocked(AView: Pointer): Boolean;
 begin
-  // 非 inline：委托 L1 THashMap.Remove 单源墓碑，禁 inline；bsTombstone 保探链完整，零 VIEW_TOMBSTONE 手写分叉
-  if (GViewMap = nil) or (AView = nil) then Exit;
-  // TryGetValue 探查避免无键 Remove 额外哈希；THashMap 内部已做 FindIndex，此为轻量守卫
-  if GViewMap.TryGetValue(AView, LDummy) then
-    GViewMap.Remove(AView);
+  // 非 inline：委托 L1 THashMap.Remove 单源墓碑单哈希探查，禁 inline；零重复 TryGetValue/Remove 双哈希，bsTombstone 保探链完整零 VIEW_TOMBSTONE 手写分叉，单次 FindIndex O(1) 零额外哈希
+  if (GViewMap = nil) or (AView = nil) then Exit(False);
+  Result := GViewMap.Remove(AView);
 end;
 
 function ViewMapFind(AView: Pointer): Pointer;
@@ -140,18 +136,13 @@ begin
 end;
 
 procedure ViewMapRemove(AView: Pointer): Boolean;
-var
-  LFound: Pointer;
 begin
+  // 单哈希短临界：锁内单次 THashMap.Remove 单 FindIndex O(1)，零 TryGetValue+Remove 双哈希与锁内重复计算，零拷贝返回 Bool
   Result := False;
+  if AView = nil then Exit(False);
   if GViewMapLock <> nil then GViewMapLock.Acquire;
   try
-    LFound := ViewMapFindLocked(AView);
-    if LFound <> nil then
-    begin
-      ViewMapRemoveLocked(AView);
-      Result := True;
-    end;
+    Result := ViewMapRemoveLocked(AView);
   finally
     if GViewMapLock <> nil then GViewMapLock.Release;
   end;

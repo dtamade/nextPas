@@ -68,11 +68,11 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
-function BytesToString(const ABytes: TBytes): string; inline;
-function BytesToUTF8(const ABytes: TBytes): string; inline;
+function BytesToString(const ABytes: TBytes): string;
+function BytesToUTF8(const ABytes: TBytes): string;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
-  ALength: SizeUInt): string; inline;
+  ALength: SizeUInt): string;
 { C string length single source: PAnsiChar null-terminated length, SIMD via System.StrLen (SSE2/AVX2/NEON), inline zero-copy, replaces scalar while AP[LLen]<>#0 loop; nil=>0; single source for text.utils CStrToStr/webview ViewFromPChar hot scheme path }
 function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
@@ -617,30 +617,33 @@ begin
   Result := IsZeroBytes(AData);
 end;
 
-function BytesToString(const ABytes: TBytes): string; inline;
+function BytesToString(const ABytes: TBytes): string;
 begin
+  // non-inline per design-conventions §2 red-line 1 (Move(ABytes[0],Result[1]) forbids inline, avoids const-fold garbage); single alloc + single Move zero-copy
   SetLength(Result, Length(ABytes));
   if Length(ABytes) > 0 then
     Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
-function BytesToUTF8(const ABytes: TBytes): string; inline;
+function BytesToUTF8(const ABytes: TBytes): string;
 begin
   Result := BytesToString(ABytes);
 end;
 
-function StringToBytes(const AText: string): TBytes; inline;
+function StringToBytes(const AText: string): TBytes;
 begin
+  // non-inline per design-conventions §2 red-line 1 (Move(...,Result[0]) forbids inline, avoids const-fold garbage); single alloc + single Move zero-copy
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
     Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
-  ALength: SizeUInt): string; inline;
+  ALength: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin
+  // non-inline per design-conventions §2 red-line 1 (Move(...,Result[1]) forbids inline); view zero-copy + single Move
   if ALength = 0 then
     Exit('');
   { 零拷贝借用：Slice 仅建视图不分配，生命周期绑 ABytes }

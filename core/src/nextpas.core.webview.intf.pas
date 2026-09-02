@@ -17,6 +17,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.window.intf; { INV-4 豁免: L3→L2 has-a 暴露 IWindow/Window 组合面，仅 window.intf，禁后端/bridge/factory，见 design-conventions §2 范式例外 + CONTRACT INV-4 }
 
@@ -119,6 +120,8 @@ type
   IWebviewAssets = interface
     ['{7C1E4A20-83B5-4E97-9D42-A6B1C2D3E005}']
     function TryResolve(const ASchemeRelativePath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
       out ABytes: TBytes; out AMimeType: string): Boolean;
     procedure MountEmbedded(const APrefix: string;
       AProvider: IWebviewAssetProvider);

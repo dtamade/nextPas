@@ -49,6 +49,14 @@ type
   TAssetHolder = record
     Bytes: TBytes;
   end;
+  PEvalRec = ^TEvalRec;
+  TEvalRec = record
+    Callback: TWebviewEvalCallback;
+    OnError: TWebviewEvalErrorCallback;
+    Done: Boolean;
+    Cancel: Pointer;
+    Owner: Pointer;
+  end;
 
 function AcquireIdleRec: PIdleRec; inline;
 procedure ReleaseIdleRec(A: PIdleRec); inline;
@@ -56,6 +64,8 @@ function AcquireCompletionRec: PCompletionMarshal; inline;
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 function AcquireAssetHolder: PAssetHolder; inline;
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
+function AcquireEvalRec: PEvalRec; inline;
+procedure ReleaseEvalRec(A: PEvalRec); inline;
 
 procedure PoolInit; inline;
 procedure PoolFinalize; inline;
@@ -69,6 +79,8 @@ var
   GCompletionPoolCount: Integer = 0;
   GAssetHolderPool: array of PAssetHolder;
   GAssetHolderCount: Integer = 0;
+  GEvalPool: array of PEvalRec;
+  GEvalPoolCount: Integer = 0;
   GPoolLock: TMutex = nil;
 
 function AcquireIdleRec: PIdleRec; inline;
@@ -129,6 +141,24 @@ begin
     Dispose(A);
 end;
 
+function AcquireEvalRec: PEvalRec; inline;
+begin
+  // perf: Eval 热点 Slab 复用 — G_cancellable_new/PEvalRec 双堆分配纳入 gtk.pool 单源，SyncPool 薄转发零每帧堆分配，bytes.ops VecGrow 单源 inline 短临界零竞态
+  Result := specialize SyncPoolTryAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GPoolLock);
+  if Result = nil then New(Result);
+  Result^.Callback := nil; Result^.OnError := nil; Result^.Done := False; Result^.Cancel := nil; Result^.Owner := nil;
+end;
+
+procedure ReleaseEvalRec(A: PEvalRec); inline;
+begin
+  // perf: inline SyncPool 薄转发单源，托管 Callback/OnError nil 释放 ref，Cancel 由调用方 G_object_unref 后清零不丢，突发锁内 VecGrow 零回退 New
+  if A = nil then Exit;
+  A^.Callback := nil; A^.OnError := nil; A^.Done := False; A^.Owner := nil;
+  // Cancel 已由 gtk 侧 G_object_unref 置 nil，此处不双重释放，仅确保清零
+  A^.Cancel := nil;
+  if not specialize SyncPoolRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GPoolLock, A) then Dispose(A);
+end;
+
 procedure PoolInit; inline;
 begin
   // perf: bytes.ops VecGrowCapacity 单源预分配 0→4→2× inline 零额外调用（单次 VecGrowCapacity(0)=4，突发经 L1 SyncPoolRelease 锁内 VecGrow 单源倍增零额外调用），初始化单次 SetLength 单源零双层 VecGrowCapacity(VecGrowCapacity(0)) 分叉；稳定性：GPoolLock 单所有权创建
@@ -136,6 +166,7 @@ begin
   SetLength(GIdlePool, VecGrowCapacity(0));
   SetLength(GCompletionPool, VecGrowCapacity(0));
   SetLength(GAssetHolderPool, VecGrowCapacity(0));
+  SetLength(GEvalPool, VecGrowCapacity(0));
 end;
 
 procedure PoolFinalize; inline;
@@ -159,6 +190,12 @@ begin
     Dispose(GAssetHolder[GAssetHolderCount]);
   end;
   SetLength(GAssetHolderPool, 0);
+  while GEvalPoolCount > 0 do
+  begin
+    Dec(GEvalPoolCount);
+    Dispose(GEvalPool[GEvalPoolCount]);
+  end;
+  SetLength(GEvalPool, 0);
   FreeAndNil(GPoolLock);
 end;
 

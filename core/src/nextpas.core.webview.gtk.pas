@@ -22,14 +22,8 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf;
 type
-  PEvalRec = ^TEvalRec;
-  TEvalRec = record
-    Callback: TWebviewEvalCallback;
-    OnError: TWebviewEvalErrorCallback;
-    Done: Boolean;
-    Cancel: Pointer;
-    Owner: Pointer;
-  end;
+  PEvalRec = nextpas.core.webview.gtk.pool.PEvalRec;
+  TEvalRec = nextpas.core.webview.gtk.pool.TEvalRec;
   PIdleRec = ^TIdleRec;
   TIdleRec = record
     Proc: TWebviewProcRef;
@@ -165,7 +159,8 @@ uses
   nextpas.core.webview.gtk.shell,
   nextpas.core.webview.gtk.bridge,
   nextpas.core.webview.gtk.dispatch,
-  nextpas.core.text.view;
+  nextpas.core.text.view,
+  nextpas.core.json.parser;
 const
   WEBVIEW_SCHEME_LARGE_THRESHOLD = 8192;
 type
@@ -177,6 +172,8 @@ begin
 end;
 var
   GSchemeErrQuark: GQuark = 0;
+  GFrameDoc: TJsonDocument;
+  GFrameDocInited: Boolean = False;
 function AcquireIdleRec: PIdleRec; inline;
 begin Result:=PIdleRec(Pointer(nextpas.core.webview.gtk.pool.AcquireIdleRec)); end;
 procedure ReleaseIdleRec(A: PIdleRec); inline;
@@ -185,6 +182,10 @@ function AcquireCompletionRec: PCompletionMarshal; inline;
 begin Result:=PCompletionMarshal(Pointer(nextpas.core.webview.gtk.pool.AcquireCompletionRec)); end;
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin nextpas.core.webview.gtk.pool.ReleaseCompletionRec(PCompletionMarshal(Pointer(A))); end;
+function AcquireEvalRec: PEvalRec; inline;
+begin Result:=PEvalRec(Pointer(nextpas.core.webview.gtk.pool.AcquireEvalRec)); end;
+procedure ReleaseEvalRec(A: PEvalRec); inline;
+begin nextpas.core.webview.gtk.pool.ReleaseEvalRec(PEvalRec(Pointer(A))); end;
 procedure GtkTrace(const AMsg: string); inline;
 begin nextpas.core.webview.gtk.shell.ShellTrace(AMsg); end;
 function SchemeContextRegistered(ACtx: Pointer): Boolean; inline;
@@ -207,8 +208,15 @@ begin ReleaseIdleRec(PIdleRec(AUserData)); end;
 procedure DestroyCb(AWidget: Pointer; AUserData: Pointer); cdecl;
 begin TGtkWebview(AUserData).HandleNativeDestroy; end;
 procedure ScriptMessageCb(AManager, AJsResult, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LJson: string; LFrame: TWebviewFrame;
-begin if LSelf.FClosed then Exit; LVal:=WEBKIT_javascript_result_get_js_value(AJsResult); LRaw:=JSC_value_to_string(LVal); if LRaw=nil then Exit; try LJson:=AnsiPtrToStr(PAnsiChar(LRaw)); finally G_free(LRaw); end; if TryDecodeFrame(LJson,LFrame) then LSelf.DispatchFrame(LFrame); end;
+var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LView: TStringView; LFrame: TWebviewFrame;
+begin
+  // perf: hot path View+var Doc 零分配复用 — bridge L71, TStringView 零拷贝 via bytes.ops.CStrLen SIMD, TJsonDocument Arena 复用零每帧 TJsonDocument Init/Done 及堆分配
+  if LSelf.FClosed then Exit; LVal:=WEBKIT_javascript_result_get_js_value(AJsResult); LRaw:=JSC_value_to_string(LVal); if LRaw=nil then Exit; try
+    if not GFrameDocInited then begin GFrameDoc.Init(nil); GFrameDocInited:=True; end;
+    LView:=TStringView.Create(PAnsiChar(LRaw), CStrLen(PAnsiChar(LRaw)));
+    if TryDecodeFrame(LView, GFrameDoc, LFrame) then LSelf.DispatchFrame(LFrame);
+  finally G_free(LRaw); end;
+end;
 procedure LoadChangedCb(AView: Pointer; AEvent: guint; AUserData: Pointer); cdecl;
 const WEBKIT_LOAD_STARTED=0; WEBKIT_LOAD_FINISHED=3; WEBKIT_LOAD_FAILED=4;
 var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer;
@@ -245,9 +253,10 @@ begin if not Assigned(ARequest) then Exit; try
   if not Assigned(WEBKIT_uri_scheme_request_get_path) then begin SchemeFinishNotFound(ARequest); Exit; end;
   if WEBKIT_uri_scheme_request_get_path(ARequest)=nil then begin SchemeFinishNotFound(ARequest); Exit; end;
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
-  LPath:=LPathView.ToString; if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  try if not LSelf.FAssetsIntf.TryResolve(LPath,LBytes,LMime) then begin GtkTrace('scheme miss '+LPath+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin GtkTrace('scheme resolve ex '+LPath+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  GtkTrace('scheme hit '+LPath+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=GuessWebviewMime(LPath);
+  // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView, ToString 延迟至命中后零 404 分配 — bytes.ops.CStrLen SIMD 单源
+  if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
+  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin GtkTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin GtkTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
+  LPath:=LPathView.ToString; GtkTrace('scheme hit '+LPath+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=GuessWebviewMime(LPath);
   LStream:=nil; LBytesObj:=nil;
   if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;
@@ -267,7 +276,11 @@ function EvalTextOfValueGlobal(AJscValue: Pointer): string;
 var LRaw: PAnsiChar;
 begin if AJscValue=nil then Exit(''); if (JSC_value_is_null(AJscValue)<>0) or (JSC_value_is_undefined(AJscValue)<>0) then Exit('null'); LRaw:=JSC_value_to_json(AJscValue,0); if LRaw<>nil then begin Result:=AnsiPtrToStr(LRaw); G_free(LRaw); end else begin LRaw:=JSC_value_to_string(AJscValue); Result:=AnsiPtrToStr(LRaw); G_free(LRaw); end; end;
 procedure FreeEvalRec(ARec: PEvalRec);
-begin if ARec^.Cancel<>nil then G_object_unref(ARec^.Cancel); Dispose(ARec); end;
+begin
+  // stability: Cancel 统一 G_object_unref 释放不丢，Slab 复用与 Idle/Completion 单源一致 via gtk.pool
+  if ARec^.Cancel<>nil then begin G_object_unref(ARec^.Cancel); ARec^.Cancel:=nil; end;
+  ReleaseEvalRec(ARec);
+end;
 procedure SettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
 var LErr: EWebviewEvalFailed;
 begin if ARec^.Done then begin FreeEvalRec(ARec); Exit; end; ARec^.Done:=True; try if AOk then begin if Assigned(ARec^.Callback) then ARec^.Callback(AText); end else if Assigned(ARec^.OnError) then begin LErr:=EWebviewEvalFailed.Create(AText); try ARec^.OnError(LErr); finally LErr.Free; end; end; finally FreeEvalRec(ARec); end; end;
@@ -347,7 +360,9 @@ function TGtkWebview.GoForward:Boolean; begin RequireOpen; Result:=CanGoForward;
 function TGtkWebview.NativeHandle:TWebviewNativeHandle; begin RequireOpen; if FWindow<>nil then Exit(TWebviewNativeHandle(FWindow.NativeHandle)); Result:=WindowGtkRawNativeHandle(FWin); end;
 function TGtkWebview.GetInvokes:IWebviewInvokeRegistry; begin RequireOpen; Result:=FInvokesIntf; end;
 function TGtkWebview.GetAssets:IWebviewAssets; begin RequireOpen; Result:=FAssetsIntf; end;
-procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin RequireOpen; New(LRec); LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=G_cancellable_new(); LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); GtkTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
+procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin
+  // perf: Eval 热点 Slab 复用 — AcquireEvalRec+G_cancellable_new 双池化与 Idle/Completion 同源 via gtk.pool, 高频 Eval 零每帧堆分配
+  RequireOpen; LRec:=AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=G_cancellable_new(); LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); GtkTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
 procedure TGtkWebview.Emit(const AEvent,APayloadJson:string); begin CheckWebviewEventName(AEvent); RequireOpen; Eval(BuildEmitScript(AEvent,APayloadJson),nil,nil); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleHandler); begin if FOnScaleChanged<>nil then FOnScaleChanged.Register(AHandler); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleMethod); begin OnScaleChanged(WebviewScaleMethodToRef(AHandler)); end;
@@ -368,5 +383,5 @@ procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyHandler); begin if FOnReady
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyMethod); begin OnReady(WebviewNotifyMethodToRef(AHandler)); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyProc); begin OnReady(WebviewNotifyProcToRef(AHandler)); end;
 initialization ViewMapLockInit; ViewMapInit; PoolInit;
-finalization PoolFinalize; ViewMapClear; ViewMapLockFini;
+finalization if GFrameDocInited then begin GFrameDoc.Done; GFrameDocInited:=False; end; PoolFinalize; ViewMapClear; ViewMapLockFini;
 end.

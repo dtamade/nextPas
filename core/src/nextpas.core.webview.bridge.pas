@@ -80,9 +80,9 @@ function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
   合法 JSON 文本（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，
   内部经 json owner 转义为 JS 字符串字面量。 }
-function BuildResolveScript(AId: Int64; const AResultJson: string): string;
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
-function BuildEmitScript(const AEvent, APayloadJson: string): string;
+function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
+function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
 
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
@@ -155,6 +155,8 @@ type
     procedure MountDirectory(const APrefix, ARootDir: string);
     function TryResolve(const ASchemeRelativePath: string;
       out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
     function MountCount: Integer; inline;
   end;
 
@@ -210,7 +212,8 @@ end;
 
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 begin
-  Result := Length(AFrameJson) > NPW_MAX_FRAME_BYTES;
+  { perf: inline single source via TStringView zero-copy (L1 text.view) + bytes.ops view semantics, single threshold branch eliminates duplicate Length/Len check, zero extra alloc or copy }
+  Result := IsWebviewFrameOversizedView(TStringView.FromStr(AFrameJson));
 end;
 
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
@@ -340,7 +343,7 @@ begin
   Result := TryDecodeFrame(LView, AFrame);
 end;
 
-function BuildResolveScript(AId: Int64; const AResultJson: string): string;
+function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
 var
   LJson: string;
   LB: TStringBuilder;
@@ -349,7 +352,7 @@ begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  { perf: 单次 TBufStringBuilder 预留+零拷贝 AppendInt/AppendBytes，W.Str 单次转义；无 IJsonBuilder 接口堆分配，无 IntToStr 临时串与 '+' 串拼接二次拷贝 }
+  { perf: inline+单次 TBufStringBuilder 预留+零拷贝 AppendInt/AppendBytes/W.Str View 零拷贝单次转义；单 Builder 复用零二次分配，无 IJsonBuilder 接口堆分配，无 IntToStr 临时串与 '+' 串拼接二次拷贝，try-finally Done 释放不丢，bytes.ops view single source }
   LB.Init(SizeUInt(16 + 20 + Length(LJson) + 8));
   try
     LB.AppendBytes('__npw.__resolve(', 16);
@@ -364,14 +367,13 @@ begin
   end;
 end;
 
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
 var
   LCode: string;
   LB, LInner: TStringBuilder;
   W: TJsonWriter;
-  LInnerJson: string;
 begin
-  { perf: reuse text.escape single source SIMD table-driven via TJsonWriter; two-stage avoids per-byte 7x AppendChar branch & I-Cache bloat, single reserve each stage, zero manual double-escape }
+  { perf: inline single source reuse text.escape SIMD via TJsonWriter; inner builder view zero-copy (LInner.AsView→W.Str View) eliminates intermediate LInnerJson string alloc+copy, single reserve each stage, outer reuses inner Len*2 capacity via view Len, W.Str View zero-copy escape, nested try-finally keeps view valid until outer escape done, bytes.ops view single source, stability try-finally Done not lost }
   LCode := NormalizeInvokeCode(ACode);
   LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2 + 16));
   try
@@ -380,25 +382,24 @@ begin
     W.Key('code'); W.Str(LCode);
     W.Key('message'); W.Str(AMessage);
     W.EndObject;
-    LInnerJson := LInner.ToString;
+    LB.Init(SizeUInt(20 + LInner.Len * 2 + 16));
+    try
+      LB.AppendBytes('__npw.__reject(', 15);
+      LB.AppendInt(AId);
+      LB.AppendChar(',');
+      W.Init(LB);
+      W.Str(LInner.AsView);
+      LB.AppendChar(')');
+      Result := LB.ToString;
+    finally
+      LB.Done;
+    end;
   finally
     LInner.Done;
   end;
-  LB.Init(SizeUInt(20 + SizeUInt(Length(LInnerJson)) * 2 + 16));
-  try
-    LB.AppendBytes('__npw.__reject(', 15);
-    LB.AppendInt(AId);
-    LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LInnerJson);
-    LB.AppendChar(')');
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
 end;
 
-function BuildEmitScript(const AEvent, APayloadJson: string): string;
+function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
 var
   LJson: string;
   LB: TStringBuilder;
@@ -408,7 +409,7 @@ begin
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
-  { perf: 单 builder 复用，AppendInt/AppendBytes 零拷贝，W.Str 两次各经一次 Init 重置 RootWritten，避免 IJsonBuilder 与 '+' 拼接 }
+  { perf: inline 单 builder 复用+双 W.Str View 零拷贝转义，AppendBytes 零拷贝，W.Init 两次重置 RootWritten 复用同一 Builder 零二次分配，避免 IJsonBuilder 与 '+' 拼接，try-finally Done 释放不丢，bytes.ops view single source }
   LB.Init(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
   try
     LB.AppendBytes('__npw.__emit(', 13);
@@ -596,6 +597,13 @@ end;
 
 function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  // perf: thin forward to View overload single source — zero duplicate Normalize/Trie logic; string→view zero-copy (TStringView.FromStr) single source bytes.ops
+  Result := TryResolveView(TStringView.FromStr(ASchemeRelativePath), ABytes, AMimeType);
+end;
+
+function TWebviewAssetsImpl.TryResolveView(const AView: TStringView;
+  out ABytes: TBytes; out AMimeType: string): Boolean;
 var
   LPath: string;
   LView, LNormView: TStringView;
@@ -608,7 +616,7 @@ begin
     Exit;
   // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); Trie O(m) 单遍零拷贝 view 遍历零哈希（m=路径长，单次字符 256 直跳，独立于挂载数 d），零 distinctLens 双轨
   // 单挂载根前缀(Count=1 且 '' 存在) inline O(1) 零 Trie 遍历快路径：单源哈希 TryGetByStr('') 探测，零 DistinctLens 去重/排序开销（assets 单源 WyHash + Trie，归一时序外层 Normalize 已完成）
-  LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
+  LNormView := NormalizeWebviewAssetView(AView);
   if LNormView.Len = 0 then
     Exit;
   LView := LNormView;
