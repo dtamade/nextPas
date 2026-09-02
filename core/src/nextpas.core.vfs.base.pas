@@ -3,11 +3,9 @@ unit nextpas.core.vfs.base;
 {** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
   权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
   nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。L2 仅依赖
-  L0-L1（bytes.ops/base.utils 零拷贝单源，base.pathvalid 单源）；前缀/
-  名称比较统一经 bytes.ops SpanStartsWith/SpanCompare 零拷贝 TByteSpan
-  单源，DeriveChild 区间扫描 + 视图去重零分配。GZIP_MAX canonical 单源
-  寄居 vfs.compressed 薄门面直连 compress.base（32MiB），base 仅保留数值
-  对齐的字面量常量以守 L0 纯度与四件套 base 无 L2→L2 原则。 }
+  L0-L1（bytes.ops/base.utils），解压上限 canonical 寄居
+  vfs.compressed（compress.base GZIP_MAX 32MiB），base 以字面量数值对齐
+  守 L0 纯度与无 L2→L2，漂移由 source-contract 数值一致性断言锁定。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -37,10 +35,9 @@ type
   TVfsNameArray = array of string;
 
 const
-  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES
-    (32MiB) 同值，canonical 单源寄居 vfs.compressed 薄门面；base 以字面量
-    守 L0 纯度与 base 无 L2→L2 原则（四件套最底层仅 L0-L1），漂移由
-    source-contract 数值一致性断言锁定。 }
+  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB) 同值，
+    canonical 单源寄居 vfs.compressed；base 以字面量守 L0 纯度与无 L2→L2
+    （四件套底座仅 L0-L1），漂移由 source-contract 数值一致性断言锁定。 }
   VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；

@@ -20,13 +20,8 @@ uses
   nextpas.core.vfs.intf;
 
 { 打开已校验的 pack 缓冲为只读 VFS。
-  AOwnsBlob=True：接口持所有权，最后一个引用释放时 FreeMem（heaptrc 可证）；
-  AOwnsBlob=False：调用方保活缓冲（const 段/静态数据场景，INV-V6）。
-  风险门禁：布尔转移易致 double-free / const 段误传 True；优先选用
-  Owned/Borrowed 命名工厂以类型化所有权，避免布尔陷阱。 }
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs; deprecated 'Use CreateEmbeddedVfsOwned/Borrowed — Boolean ownership trap: True on const segment would FreeMem static memory or double-free';
-{ 命名工厂：所有权以类型显式 —— Owned 归 VFS、Borrowed 归调用方（零拷贝不变） }
+  命名工厂类型化所有权：Owned 归 VFS（最后一个引用释放时 FreeMem，heaptrc 可证）、
+  Borrowed 归调用方保活（const 段/静态数据场景，INV-V6）；布尔陷阱已移除，防 const 段 FreeMem double-free。 }
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
 
@@ -140,12 +135,6 @@ type
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
     function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
-
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs;
-begin
-  Result := TEmbeddedVfs.Create(AData, ASize, AOwnsBlob);
-end;
 
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
@@ -647,12 +636,12 @@ end;
 function TEmbeddedVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
-  Seen: TVfsNameArray;
+  PrefixLen: SizeInt;
   SI: TStatInfo;
-  Idx: SizeInt;
-  E: TResPackEntry;
-  I: SizeInt;
-  Spans: array of TByteSpan;
+  I, OutN, Cap, SegPos, J: SizeInt;
+  Lo, Hi, Mid: SizeInt;
+  ChildSpan, PrevSpan, PrefixSpan, Span: TByteSpan;
+  N: SizeInt;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -666,42 +655,82 @@ begin
     Prefix := ''
   else
     Prefix := ADirPath + '/';
-  // 单源收敛：委托 base.VfsDeriveChildNamesFromSpans 零拷贝模板（LowerBound+SpanStartsWith+Move 单源，无并行维护）
-  // perf: TByteSpan 直指 FRp 存储字节零拷贝，bytes.ops SpanStartsWith/SpanEqual 单源 inline 热路径；扇出限界由基座统一
-  if FRp.Count = 0 then
-    Seen := nil
+  PrefixLen := Length(Prefix);
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@Prefix[1]), SizeUInt(PrefixLen))
   else
+    PrefixSpan := TByteSpan.Empty;
+  N := SizeInt(FRp.Count);
+  if N = 0 then
+    Exit(nil);
+  Lo := 0;
+  Hi := N;
+  if PrefixLen > 0 then
   begin
-    SetLength(Spans, SizeInt(FRp.Count));
-    for I := 0 to SizeInt(FRp.Count) - 1 do
-      Spans[I] := FRp.StoredPathSpan(SizeUInt(I));
-    Seen := VfsDeriveChildNamesFromSpans(Spans, Prefix);
-    SetLength(Spans, 0);
-  end;
-
-  Result := nil;
-  SetLength(Result, Length(Seen));
-  if Length(Seen) > 0 then
-    for I := 0 to SizeInt(Length(Seen)) - 1 do
+    while Lo < Hi do
     begin
-      Idx := IndexOfPath(Seen[I]);
-      if Idx >= 0 then
-      begin
-        E := FEntries[Idx];
-        Result[I].Name := Seen[I];
-        Result[I].Size := Int64(E.Size);
-        Result[I].ModTime := E.ModTime;
-        Result[I].IsDir := False;
-      end
+      Mid := Lo + (Hi - Lo) div 2;
+      Span := FRp.StoredPathSpan(SizeUInt(Mid));
+      if SpanCompare(Span, PrefixSpan) < 0 then
+        Lo := Mid + 1
       else
-      begin
-        Result[I].Name := Seen[I];
-        Result[I].Size := 0;
-        Result[I].ModTime := 0;
-        Result[I].IsDir := True;
-      end;
+        Hi := Mid;
     end;
-  VfsSortEntries(Result);
+  end;
+  // 零拷贝 O(k) 直取：FRp 存储字节 TByteSpan 零分配，bytes.ops SpanStartsWith/SpanEqual/SpanCompare 单源 inline；FEntries 并行缓存 O(1) 直取无二分，扇出限界初值16 Cap≤N-Lo
+  Result := nil;
+  OutN := 0;
+  for I := Lo to N - 1 do
+  begin
+    Span := FRp.StoredPathSpan(SizeUInt(I));
+    if SizeInt(Span.Len) <= PrefixLen then Continue;
+    if PrefixLen > 0 then
+      if not SpanStartsWith(Span, PrefixSpan) then Break;
+    SegPos := 0;
+    for J := PrefixLen to SizeInt(Span.Len) - 1 do
+      if Span.Data[J] = Ord('/') then
+      begin
+        SegPos := J + 1;
+        Break;
+      end;
+    if SegPos > 0 then
+      ChildSpan := TByteSpan.Create(Span.Data, SizeUInt(SegPos - 1))
+    else
+      ChildSpan := Span;
+    if OutN > 0 then
+    begin
+      if Length(Result[OutN - 1].Name) = 0 then
+        PrevSpan := TByteSpan.Empty
+      else
+        PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1].Name[1]), SizeUInt(Length(Result[OutN - 1].Name)));
+      if SpanEqual(PrevSpan, ChildSpan) then Continue;
+    end;
+    if OutN >= Length(Result) then
+    begin
+      Cap := Length(Result);
+      if Cap = 0 then Cap := 16;
+      while Cap <= OutN do Cap := Cap * 2;
+      if Cap > N - Lo then Cap := N - Lo;
+      SetLength(Result, Cap);
+    end;
+    SetLength(Result[OutN].Name, ChildSpan.Len);
+    if ChildSpan.Len > 0 then
+      Move(ChildSpan.Data^, Result[OutN].Name[1], ChildSpan.Len);
+    if SizeInt(Span.Len) = SizeInt(ChildSpan.Len) then
+    begin
+      Result[OutN].Size := Int64(FEntries[I].Size);
+      Result[OutN].ModTime := FEntries[I].ModTime;
+      Result[OutN].IsDir := False;
+    end
+    else
+    begin
+      Result[OutN].Size := 0;
+      Result[OutN].ModTime := 0;
+      Result[OutN].IsDir := True;
+    end;
+    Inc(OutN);
+  end;
+  SetLength(Result, OutN);
 end;
 
 function TEmbeddedVfs.OpenRead(const APath: string): IStream;

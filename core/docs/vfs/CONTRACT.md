@@ -33,7 +33,7 @@ vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overla
 | 领域 | 签名 | 说明 |
 |------|------|------|
 | 装配 | `CreateMemTreeVfs(ATree): IVfs` | Builder Freeze 产物 |
-| 装配 | `CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt; AOwnsBlob: Boolean): IVfs` | 零拷贝后端；`AOwnsBlob=True` 时 blob 归 VFS 所有 |
+| 装配 | `CreateEmbeddedVfsOwned/Borrowed(AData: PByte; ASize: SizeUInt): IVfs` | 零拷贝后端；Owned 归 VFS 所有（FreeMem）、Borrowed 归调用方（const 段零 Free，防布尔陷阱 double-free） |
 | 装配 | `CreateOsVfs(const ARoot: string): IVfs` | 真实目录后端 |
 | 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
 | 视图 | `CreateMountedVfs(AMounts: array of TVfsMountEntry): IVfs` + `VfsMountEntry(APrefix,AFs)` | 挂载复合视图：多IVfs前缀最长匹配（根'.'兜底），List根去重合并，CaseSensitive一致性推导，ETag/ServeMeta透传 |
@@ -118,7 +118,7 @@ end;
 - List/TEntryArray 每次调用分配返回，调用方持有；List 扇出限界倍增（初值16 Cap≤Hi-Lo）消除大目录 Hi-Lo 预分配与 O(k log k) Sort/Dedup 重分配
 - OpenRead 的 IStream 引用计数持后备存储（堆场景）；const 段场景见 INV-V6 生命期规则；切片池归还 LKeep强→LOwner弱时序契约，资源不丢（归还失败即 Free）
 - VfsReadAllBytes/Text 单次分配结果
-- embedded + `AOwnsBlob=True`：最后一个派生接口释放时释放 blob（引用计数托底）
+- embedded Owned：最后一个派生接口释放时释放 blob（引用计数托底）；Borrowed 常驻调用方（const 段防 Free）
 
 ---
 
@@ -128,7 +128,7 @@ end;
 |------|------|------|
 | Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire，HasSubtreePath SpanStartsWith bytes.ops单源 inline 零拷贝 |
 | OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；16槽SpinLock池化10k 163ms 4.9×预算，heaptrc0，FKeep强保活+FOwner弱归还契约显式（LKeep先于LOwner，FPoolLock=nil 安全回退Free） |
-| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 | LowerBound+SpanStartsWith单源base模板扇出限界倍增（初值16 Cap≤Hi-Lo，消除 Hi-Lo 全量预分配与 O(k log k) Sort/Dedup），SpanEqual去重零拷贝 inline 热路径；memtree 委托 base.VfsDeriveChildNames 同构单源，base扇出限界同源 |
+| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 O(k) | LowerBound(O(log n))+SpanStartsWith/SpanEqual 单源 bytes.ops 零拷贝 inline，FEntries 并行缓存 O(k) 直取 Size/ModTime 无 IndexOfPath 二分（Spans O(n) 分配已移除），扇出限界初值16 Cap≤N-Lo，天然有序免 Sort/Dedup |
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
 | VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |

@@ -33,6 +33,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
   nextpas.core.collections.hashmap.swiss.str;
 
@@ -153,7 +154,7 @@ function TMountedVfs.FindMount(const APath: string; out ARemain: string; out AFs
 var
   FoundFs: IVfs;
   LPos: Integer;
-  Candidate: string;
+  PathSpan, CandSpan, RemSpan: TByteSpan;
 begin
   if VfsIsRoot(APath) then
   begin
@@ -175,22 +176,25 @@ begin
     AFs := FoundFs;
     Exit(True);
   end;
-  // O(depth) 前缀剥离哈希：按 '/' 边界逐段回退，深 ≤ 路径段数 << 挂载数，零 VfsIsParentPath 线性扫描
-  // 单源 VfsIsParentPath 语义由剥离保证（仅段边界候选），Copy 仅在命中时一次零拷贝搬运尾段
+  // O(depth) 前缀剥离哈希：零拷贝 TByteSpan 视图单源 via bytes.ops，inline 热路径，无逐段 Copy 分配
+  // 单源 VfsIsParentPath 语义由 '/' 边界剥离保证，Candidate 零分配 Span 切片，ARemain 仅命中时一次 SpanToString 单 Move
+  if Length(APath) = 0 then PathSpan := TByteSpan.Empty
+  else PathSpan := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)));
   LPos := Length(APath);
   while LPos > 0 do
   begin
     while (LPos > 0) and (APath[LPos] <> '/') do Dec(LPos);
     if LPos <= 0 then Break;
-    Candidate := Copy(APath, 1, LPos - 1);
-    if FMountMap.TryGetValue(Candidate, FoundFs) then
+    CandSpan := PathSpan.Slice(0, SizeUInt(LPos - 1));
+    if FMountMap.TryGetValueSpan(CandSpan, FoundFs) then
     begin
-      if VfsIsRoot(Candidate) then
+      if (CandSpan.Len = 1) and (CandSpan.Data^ = Ord('.')) then
       begin
         Dec(LPos);
         Continue;
       end;
-      ARemain := Copy(APath, LPos + 1, MaxInt); { LPos='/', 等价 Copy(APath, Length(Candidate)+2) 零拷贝 Move }
+      RemSpan := PathSpan.Slice(SizeUInt(LPos), PathSpan.Len - SizeUInt(LPos));
+      ARemain := SpanToString(RemSpan); { 零拷贝视图+单 Move，bytes.ops 单源 }
       AFs := FoundFs;
       Exit(True);
     end;

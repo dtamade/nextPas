@@ -274,10 +274,8 @@ var
   I: SizeUInt;
   Seen: TVfsNameArray;
   Info: TStatInfo;
-  N, PrefixLen, Lo, Hi, OutN, Cap, SegPos: SizeInt;
+  Spans: array of TByteSpan;
   J: SizeInt;
-  ChildSpan, PrevSpan: TByteSpan;
-  NeedAdd: Boolean;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -293,63 +291,21 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  { 零拷贝复用 FFiles 有序视图：单源 bytes.ops SpanStartsWith/SpanEqual，无 Paths 全量 O(n) 复制
-    扇出限界分配（初值16倍增 Cap≤N-Lo）+ TByteSpan 视图去重 Move 物化，与 base.VfsDeriveChildNames 同构 inline 热路径 }
+  // 单源收敛：委托 base.VfsDeriveChildNamesFromSpans 零拷贝模板（LowerBound+SpanStartsWith+Early-Break+Move 单源，无并行维护），与 embedded 同路径
+  // perf: TByteSpan 直指 FFiles Name 存储零拷贝，bytes.ops SpanStartsWith/SpanEqual 单源 inline 热路径；扇出限界由基座统一（16 倍增 Cap≤N-Lo）
   Result := nil;
   if Length(FFiles) = 0 then
     Seen := nil
   else
   begin
-    N := Length(FFiles);
-    PrefixLen := Length(Prefix);
-    if PrefixLen = 0 then
-      Lo := 0
-    else
-      Lo := SizeInt(LowerBound(Prefix));
-    Hi := N;
-    SetLength(Seen, 0);
-    OutN := 0;
-    for J := Lo to Hi - 1 do
-    begin
-      if Length(FFiles[J].Name) <= PrefixLen then Continue;
-      if (PrefixLen > 0) and not VfsPathHasPrefix(FFiles[J].Name, Prefix) then Break;
-      SegPos := 0;
-      for I := SizeUInt(PrefixLen + 1) to SizeUInt(Length(FFiles[J].Name)) do
-        if FFiles[J].Name[I] = '/' then
-        begin
-          SegPos := SizeInt(I);
-          Break;
-        end;
-      if SegPos > 0 then
-        ChildSpan := TByteSpan.Create(PByte(@FFiles[J].Name[1]), SizeUInt(SegPos - 1))
+    SetLength(Spans, Length(FFiles));
+    for J := 0 to High(FFiles) do
+      if Length(FFiles[J].Name) = 0 then
+        Spans[J] := TByteSpan.Empty
       else
-      begin
-        if Length(FFiles[J].Name) = 0 then ChildSpan := TByteSpan.Empty else ChildSpan := TByteSpan.Create(PByte(@FFiles[J].Name[1]), SizeUInt(Length(FFiles[J].Name)));
-      end;
-      if OutN = 0 then
-        NeedAdd := True
-      else
-      begin
-        if Length(Seen[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Seen[OutN - 1][1]), SizeUInt(Length(Seen[OutN - 1])));
-        NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
-      end;
-      if NeedAdd then
-      begin
-        if OutN >= Length(Seen) then
-        begin
-          Cap := Length(Seen);
-          if Cap = 0 then Cap := 16;
-          while Cap <= OutN do Cap := Cap * 2;
-          if Cap > N - Lo then Cap := N - Lo;
-          SetLength(Seen, Cap);
-        end;
-        SetLength(Seen[OutN], ChildSpan.Len);
-        if ChildSpan.Len > 0 then
-          Move(ChildSpan.Data^, Seen[OutN][1], ChildSpan.Len);
-        Inc(OutN);
-      end;
-    end;
-    SetLength(Seen, OutN);
+        Spans[J] := TByteSpan.Create(PByte(@FFiles[J].Name[1]), SizeUInt(Length(FFiles[J].Name)));
+    Seen := VfsDeriveChildNamesFromSpans(Spans, Prefix);
+    SetLength(Spans, 0);
   end;
 
   SetLength(Result, SizeUInt(Length(Seen)));

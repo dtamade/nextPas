@@ -46,8 +46,8 @@ type
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs; inline;
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs; inline;
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs; inline;
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs; inline;
 function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
@@ -85,10 +85,14 @@ begin
   Result := nextpas.core.vfs.os.CreateOsVfs(ARoot);
 end;
 
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs;
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
-  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfs(AData, ASize, AOwnsBlob);
+  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfsOwned(AData, ASize);
+end;
+
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfsBorrowed(AData, ASize);
 end;
 
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;

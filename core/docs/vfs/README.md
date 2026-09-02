@@ -63,7 +63,7 @@ VfsWalk(Fs, '.',
   end);
 
 // 后端装配视角
-FsEmbedded := CreateEmbeddedVfs(@Blob[0], Length(Blob), False); // 嵌入包（或 CreateEmbeddedVfsBorrowed；ResPackOpen 返回 TResPack，非 PByte）
+FsEmbedded := CreateEmbeddedVfsBorrowed(@Blob[0], Length(Blob)); // 嵌入包 Borrowed const 段零 Free，Owned 则归 VFS（布尔陷阱已移除）
 FsDisk     := CreateOsVfs('/srv/app');                                 // 真实目录
 FsMem      := CreateMemTreeVfs(Tree);                                  // 测试替身
 
@@ -187,9 +187,8 @@ end;
 - `OpenRead` 返回的 `IStream` 直接读 blob 切片区间，不做内容复制
   （对标 Go embed.FS 文件直指静态数据、Tauri `Cow::Borrowed` 切片）
 - 接口对象内部持有后备存储引用保活：
-  - 来源为堆缓冲/TBytes → 引用计数自然保活
-  - 来源为 const 数据/静态段 → 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖
-    IVfs 及其派生的全部 IStream**；构造函数提供 `AOwnsBlob: Boolean` 覆盖堆场景
+  - 来源为堆缓冲/TBytes → `CreateEmbeddedVfsOwned` 引用计数自然保活，末接口释放时 FreeMem
+  - 来源为 const 数据/静态段 → `CreateEmbeddedVfsBorrowed` 无引用计数，**文档化规则：调用方保证 blob 生命期覆盖 IVfs 及其派生的全部 IStream**（布尔陷阱已移除）
 - `Create` 期物化 `FEntries`（eager 零 `DecodeWire`）+ 惰性 `FETags/FLastMods`（首击 `VfsETagStrong/FNV`/`FormatHttpDate` 生成并 `SpinLock` 发布，`ServeVfs` O(1) thereafter，10k Create <180ms）+ FRp 索引零拷贝存储：`Stat/OpenRead/Exists` 走 `LowerBoundPath` 二分直通 `FRp` PByte 存储 + `FEntries[Idx]` 零 `DecodeWire`，`ServeVfs` 走惰性缓存 O(1)（`VfsETagStrong/FNV` 单源，`bytes.ops` `CompareBytesOrdered` 单源）；10k 规模 < 400KB 可控
 - `OpenRead` 零分配包装器池：`TEmbeddedSlice`(TObject) + `TEmbeddedSliceStream`(TInterfacedObject) 双层，`SpinLock` `EMBEDDED_POOL_SIZE` 16 槽复用（CONTRACT 单源 16），`FKeep: IVfs` 保活 Owner，`Destroy` 归还时 `LKeep` 局部强引防 `Use-After-Free`（与 `window` 子系统 `TWindow*` 零命名冲突；`performance` 门 10k 规模 163ms，与预算 800ms 余量 4.9×，`heaptrc 0`；`VfsNameCompare` 直通 `base.utils CompareBytesOrdered`，`bytes.ops` 单源复用）
 - conformance 门含地址断言：读取缓冲指针必须落在 `[blob, blob+blobTotal)` 区间内，
