@@ -47,6 +47,8 @@ function FsReadlink(const APath: string): string;
 function FsRealPath(const APath: string): string;
 {** @desc 创建硬链接（对齐 Go os.Link / Rust hard_link） *}
 procedure FsHardLink(const AOldPath, ANewPath: string);
+{** @desc 验证式硬链接（fd 级原子闭环 TOCTOU 防护，经 platform_file_link_verified 单源） *}
+procedure FsHardLinkVerified(const AOldPath, ANewPath: string);
 {** @desc 创建 FIFO 特殊文件（owner 反哺：tar fifo 完整性，对齐 Go/Rust mkfifo） *}
 procedure FsMkFifo(const APath: string; const APerm: TFilePermission = PermDefault);
 {** @desc 创建设备节点（owner 反哺：tar device 往返完整，经平台单缝携带 DevMajor/DevMinor）
@@ -521,6 +523,17 @@ begin
   LResult := platform_file_link(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'hardlink', ANewPath);
+end;
+
+procedure FsHardLinkVerified(const AOldPath, ANewPath: string);
+var
+  LResult: Int32;
+begin
+  if (AOldPath = '') or (ANewPath = '') then
+    raise EArgumentError.Create('HardLink path must not be empty');
+  LResult := platform_file_link_verified(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'hardlink_verified', ANewPath);
 end;
 
 procedure FsMkFifo(const APath: string; const APerm: TFilePermission);

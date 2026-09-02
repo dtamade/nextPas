@@ -120,12 +120,13 @@ begin
   // facade must not re-export common (strip comments to avoid false positive from doc comment)
   Facade := LowerCase(StripComments(ReadText('src/nextpas.core.tar.pas')));
   Check(Pos('tar.common', Facade) = 0, 'facade must not uses tar.common (internal kernel not re-exported)');
-  // common is internal: comment guard
+  // common is internal: minimal @desc, details compensated by docs and gate (conceptual entropy via facade purity docs/gate)
   CommonSrc := ReadText('src/nextpas.core.tar.common.pas');
-  Check(Pos('内部单元', CommonSrc) > 0, 'common marks internal');
-  Check(Pos('禁止门面外直引', CommonSrc) > 0, 'common forbids external direct use');
   LowCommon := LowerCase(CommonSrc);
-  Check(Pos('design-conventions', LowCommon) > 0, 'common notes design-conventions loop ban');
+  Check(Pos('tar 共享内核：reader/writer 单点复用', LowCommon) > 0, 'common has minimal desc (internal kernel)');
+  Check(Pos('内部单元', CommonSrc) = 0, 'common header minimal: no expanded internal line (compensated by docs/gate)');
+  Check(Pos('禁止门面外直引', CommonSrc) = 0, 'common header minimal: forbid note moved to docs/gate');
+  Check(Pos('design-conventions', LowCommon) = 0, 'common header minimal:范式 exception documented in design-conventions/CONTRACT, not header');
   // mechanical: any core/src/*.pas outside allowed set must not uses tar.common
   Allowed := TStringList.Create;
   try

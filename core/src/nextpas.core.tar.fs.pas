@@ -49,59 +49,64 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ TOCTOU硬链接源校验单源谓词：消除 Exists/IsSymlink/IsRegularFile 6行×2重复样板，inline fail-closed，复用 archive.fs 零拷贝单源 ArchiveExists/IsSymlink/IsRegularFile 零分配，消除HandleSpecial前后 Replace→Link TOCTOU窗口重复 }
-procedure ValidateHardlinkSource(const ASourcePath, ALinkName: string); inline;
-begin
-  if not ArchiveExists(ASourcePath) then
-    raise EIOError.Create('tar extract: hardlink source missing: ' + ALinkName);
-  if ArchiveIsSymlink(ASourcePath) then
-    raise EIOError.Create('tar extract: hardlink source is symlink: ' + ALinkName);
-  if not ArchiveIsRegularFile(ASourcePath) then
-    raise EIOError.Create('tar extract: hardlink source not regular file: ' + ALinkName);
-end;
-
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，4K→64K复用缓冲仅O(1)内存，bytes.ops单源，稳定性try..finally不丢句柄 }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，批量小文件单次分配合并缓冲复用 I/O 块（200×512B 仅1次 SetLength，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，跨条目共享 LShared 复用、O(1)内存，inline 零拷贝），bytes.ops单源，稳定性try..finally不丢句柄 }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
 var
   LI: Integer;
   LHdr: TTarHeader;
   LFile: TArchiveFile;
+  LShared: TBytes;
+  LMaxSize: Int64;
+  LNeed: SizeUInt;
 begin
+  LMaxSize := 0;
   for LI := 0 to High(AWalks) do
+    if not AWalks[LI].FIsDir and (AWalks[LI].FSize > LMaxSize) then
+      LMaxSize := AWalks[LI].FSize;
+  if LMaxSize > 0 then
   begin
-    LHdr := Default(TTarHeader);
-    LHdr.Name := AWalks[LI].FRel;
-    LHdr.MTimeUnix := AWalks[LI].FMtime;
-    if AWalks[LI].FIsDir then
+    LNeed := TarIOBufCapacityFor(LMaxSize);
+    SetLength(LShared, LNeed);
+  end;
+  try
+    for LI := 0 to High(AWalks) do
     begin
-      LHdr.Kind := tekDirectory;
-      LHdr.Mode := TarDirectoryMode(AWalks[LI].FMode);
-      AWriter.AddEntry(LHdr, nil);
-    end
-    else
-    begin
-      LHdr.Kind := tekRegular;
-      LHdr.Mode := TarRegularMode(AWalks[LI].FMode);
-      LHdr.Size := AWalks[LI].FSize;
-      if LHdr.Size < 0 then
-        raise EIOError.Create('tar pack: negative size: ' + AWalks[LI].FFull);
-      if LHdr.Size = 0 then
+      LHdr := Default(TTarHeader);
+      LHdr.Name := AWalks[LI].FRel;
+      LHdr.MTimeUnix := AWalks[LI].FMtime;
+      if AWalks[LI].FIsDir then
       begin
+        LHdr.Kind := tekDirectory;
+        LHdr.Mode := TarDirectoryMode(AWalks[LI].FMode);
         AWriter.AddEntry(LHdr, nil);
-        Continue;
-      end;
-      LFile := nil;
-      LFile := ArchiveOpenRead(AWalks[LI].FFull);
-      try
-        AWriter.AddEntryFromReader(LHdr, LFile as IReader);
-      finally
-        try
-          LFile.Close;
-        except
+      end
+      else
+      begin
+        LHdr.Kind := tekRegular;
+        LHdr.Mode := TarRegularMode(AWalks[LI].FMode);
+        LHdr.Size := AWalks[LI].FSize;
+        if LHdr.Size < 0 then
+          raise EIOError.Create('tar pack: negative size: ' + AWalks[LI].FFull);
+        if LHdr.Size = 0 then
+        begin
+          AWriter.AddEntry(LHdr, nil);
+          Continue;
         end;
         LFile := nil;
+        LFile := ArchiveOpenRead(AWalks[LI].FFull);
+        try
+          AWriter.AddEntryFromReaderWithSharedBuf(LHdr, LFile as IReader, LShared);
+        finally
+          try
+            LFile.Close;
+          except
+          end;
+          LFile := nil;
+        end;
       end;
     end;
+  finally
+    SetLength(LShared, 0);
   end;
 end;
 
@@ -192,6 +197,8 @@ var
   LHardSource: string;
   LLastParent: string;
   LParentLen: SizeUInt;
+  LProbe: Integer;
+  LHasSlash: Boolean;
 begin
   if AOptions.MaxEntrySize = 0 then
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -224,24 +231,62 @@ begin
             if not IsSafeTarLinkTarget(H.LinkName) then
               raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
         end;
-        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝
+        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝；预分区快速路径：同父连续条目经前缀‘/’命中+小后缀‘/’扫描（仅basename长度）跳过全路径逆扫，200 同父文件由 200 次 StringLastIndexOf 全扫降至 1 次全扫+199 次前缀命中，复用 bytes.ops 单源零拷贝，inline 热路径
         LFull := ArchiveJoinPath(ADestDir, H.Name);
-        LSep := StringLastIndexOf(LFull, '/');
-        if LSep > 0 then
+        if (LLastParent <> '') and (Length(LFull) > Length(LLastParent)) and (LFull[Length(LLastParent) + 1] = '/') then
         begin
-          LParentLen := SizeUInt(LSep - 1);
-          if LParentLen <> SizeUInt(Length(LLastParent)) then
+          LHasSlash := False;
+          for LProbe := Length(LLastParent) + 2 to Length(LFull) do
+            if LFull[LProbe] = '/' then
+            begin
+              LHasSlash := True;
+              Break;
+            end;
+          if not LHasSlash then
           begin
-            ArchivePrepareParentDir(LFull, LParentLen);
-            SetLength(LLastParent, LParentLen);
-            if LParentLen > 0 then
-              CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+            // fast hit: same parent, skip StringLastIndexOf+CompareMem, zero full scan
           end
-          else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
+          else
           begin
-            ArchivePrepareParentDir(LFull, LParentLen);
-            SetLength(LLastParent, LParentLen);
-            CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+            LSep := StringLastIndexOf(LFull, '/');
+            if LSep > 0 then
+            begin
+              LParentLen := SizeUInt(LSep - 1);
+              if LParentLen <> SizeUInt(Length(LLastParent)) then
+              begin
+                ArchivePrepareParentDir(LFull, LParentLen);
+                SetLength(LLastParent, LParentLen);
+                if LParentLen > 0 then
+                  CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+              end
+              else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
+              begin
+                ArchivePrepareParentDir(LFull, LParentLen);
+                SetLength(LLastParent, LParentLen);
+                CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+              end;
+            end;
+          end;
+        end
+        else
+        begin
+          LSep := StringLastIndexOf(LFull, '/');
+          if LSep > 0 then
+          begin
+            LParentLen := SizeUInt(LSep - 1);
+            if LParentLen <> SizeUInt(Length(LLastParent)) then
+            begin
+              ArchivePrepareParentDir(LFull, LParentLen);
+              SetLength(LLastParent, LParentLen);
+              if LParentLen > 0 then
+                CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+            end
+            else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
+            begin
+              ArchivePrepareParentDir(LFull, LParentLen);
+              SetLength(LLastParent, LParentLen);
+              CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+            end;
           end;
         end;
         LMode := Word(H.Mode and $0FFF);
@@ -270,11 +315,10 @@ begin
           tekHardLink:
             begin
               LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
-              // TOCTOU加固：单源谓词 ValidateHardlinkSource 复用 ArchiveExists/IsSymlink/IsRegularFile 零拷贝 inline fail-closed，消除6行×2重复粘贴样板；HandleSpecial前后二次校验关闭 Replace→Link 窗口
-              ValidateHardlinkSource(LHardSource, H.LinkName);
+              ArchiveValidateHardlinkSource(LHardSource, H.LinkName);
               ArchiveHandleSpecial(LFull);
-              ValidateHardlinkSource(LHardSource, H.LinkName);
-              ArchiveHardLink(LHardSource, LFull);
+              // TOCTOU闭环：ArchiveHardLinkVerified→FsHardLinkVerified→platform_file_link_verified 单源原子落盘，O_NOFOLLOW|O_CLOEXEC fd 校验 ftRegular 后经 /proc/self/fd 或 /dev/fd 链路 link，消除 Validate→HandleSpecial→HardLink 窗口并发替换源为 symlink 的绕过，inline 单源 fd 级 Verified 闭环（前置 ArchiveValidateHardlinkSource fail-fast 诊断 via archive.fs 单源复用 bytes.ops 零拷贝 inline，零额外分配）
+              ArchiveHardLinkVerified(LHardSource, LFull);
             end;
           tekFifo:
             begin

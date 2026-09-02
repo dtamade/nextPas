@@ -1,9 +1,6 @@
 unit nextpas.core.tar.common;
 {**
  * @desc Tar 共享内核：reader/writer 单点复用（@internal，四件套外内部核例外形态）。
- * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
- * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
- * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
  *}
 
 {$I nextpas.core.settings.inc}

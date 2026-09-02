@@ -97,10 +97,12 @@ procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); in
 function ArchiveExists(const APath: string): Boolean; inline;
 function ArchiveIsSymlink(const APath: string): Boolean; inline;
 function ArchiveIsRegularFile(const APath: string): Boolean; inline;
-procedure ArchiveRemove(const APath: string); inline;
+{ 硬链接源校验单源谓词：归档族复用，inline fail-closed，复用 ArchiveExists/IsSymlink/IsRegularFile 零分配零拷贝，消除 tar/zip 6行×2重复样板，bytes.ops 单源思想，TOCTOU 最终由 ArchiveHardLinkVerified fd级原子闭环保障，本谓词提供 fast-fail 诊断（含 ALinkName） }
+procedure ArchiveValidateHardlinkSource(const ASourcePath, ALinkName: string); inline;
 procedure ArchiveRemoveIfExists(const APath: string); inline;
 procedure ArchiveSymlink(const ATarget, ALinkPath: string); inline;
 procedure ArchiveHardLink(const AOldPath, ANewPath: string); inline;
+procedure ArchiveHardLinkVerified(const AOldPath, ANewPath: string); inline;
 procedure ArchiveMkFifo(const APath: string; const APerm: TFilePermission); inline;
 function ArchiveTryMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean): Boolean;
 { 单源：特殊文件预清理（Exists/IsSymlink→Remove best-effort），消除 tar.fs 四分支重复样板，inline 薄转发零额外分配 }
@@ -136,7 +138,7 @@ uses
   nextpas.core.platform.error,
   nextpas.core.log.intf;
 
-var
+threadvar
   GArchiveSortPtrs: array of PByte;
   GArchiveSortLens: array of SizeUInt;
 
@@ -149,7 +151,7 @@ begin
     Result := Result * 2;
 end;
 
-// perf: 复用 ArchiveNextCapacity 单源几何扩容，Walk 千级目录排序零每调用分配，inline 薄转发、零额外拷贝、零资源泄漏（复用缓冲不丢、进程生命周期内几何复用）
+// perf: threadvar 隔离并发，复用 ArchiveNextCapacity 单源几何扩容，Walk 千级目录排序零每调用分配，inline 薄转发、零额外拷贝、零资源泄漏（线程局域复用不丢、零锁零竞争）
 procedure ArchiveEnsureSortCacheCapacity(const ARequired: Integer); inline;
 var LCap: Integer;
 begin
@@ -221,7 +223,7 @@ var
   LTmpLen: SizeUInt;
 begin
   if Length(A) < 2 then Exit;
-  // perf: 复用缓冲 — 几何扩容复用 GArchiveSortPtrs/GArchiveSortLens 缓存（ArchiveNextCapacity 2×/16 单源 via bytes.builder 思想，inline 确保容量），Walk 千级目录排序零每调用 SetLength 分配；零键 PByte+Len 视图预计算后 O(n log n) 零 Length/@Name[1] 重算，复用 bytes.ops 单源 CompareBytesOrdered/SIMD inline 零拷贝，无 TByteSpan 构造
+  // perf: threadvar 零锁并发 — 几何扩容复用 GArchiveSortPtrs/GArchiveSortLens 线程局域缓存（ArchiveNextCapacity 2×/16 单源 via bytes.builder 思想，inline 确保容量），Walk 千级目录排序零每调用 SetLength 分配；零键 PByte+Len 视图预计算后 O(n log n) 零 Length/@Name[1] 重算，复用 bytes.ops 单源 CompareBytesOrdered/SIMD inline 零拷贝，无 TByteSpan 构造，零竞争零错乱
   ArchiveEnsureSortCacheCapacity(Length(A));
   for LI := 0 to High(A) do
   begin
@@ -510,6 +512,21 @@ end;
 procedure ArchiveHardLink(const AOldPath, ANewPath: string); inline;
 begin
   nextpas.core.fs.HardLink(AOldPath, ANewPath);
+end;
+
+procedure ArchiveValidateHardlinkSource(const ASourcePath, ALinkName: string); inline;
+begin
+  if not ArchiveExists(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source missing: ' + ALinkName);
+  if ArchiveIsSymlink(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source is symlink: ' + ALinkName);
+  if not ArchiveIsRegularFile(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source not regular file: ' + ALinkName);
+end;
+
+procedure ArchiveHardLinkVerified(const AOldPath, ANewPath: string); inline;
+begin
+  nextpas.core.fs.util.FsHardLinkVerified(AOldPath, ANewPath);
 end;
 
 procedure ArchiveMkFifo(const APath: string; const APerm: TFilePermission); inline;

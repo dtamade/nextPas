@@ -73,7 +73,7 @@ type
     function ByteAt(AOfs: SizeUInt): Byte;
     function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
     function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
-    function MaterializeSpan(const ASpan: TByteSpan): string; inline; // single source SpanToString, empty guard
+    function MaterializeSpan(const ASpan: TByteSpan): string; // single source SpanToString, empty guard, out-of-line per design-conventions red line 1 (Move Result[1])
     function StringField(AOfs, ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function NumericField(AOfs, ALen: SizeUInt): Int64;
     function MagicHasUStar: Boolean; inline;
@@ -112,6 +112,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.exception,
+  nextpas.core.io.slice,
   nextpas.core.tar.common,
   nextpas.core.text.conv;
 
@@ -239,6 +240,12 @@ var
   LIdx: SizeInt;
   LSpan: TByteSpan;
   IsHeaderField: Boolean;
+  LFallbackArr: array[0..0] of TFieldRange;
+  LFallbackTrunc: SizeUInt;
+  LBlockTmp: TByteSpan;
+  LLayout: array[0..6] of TTarField;
+  LLensArr: array[0..6] of SizeUInt;
+  I: Integer;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
@@ -250,30 +257,38 @@ begin
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
-    // explicit 7-field dispatch, readable, no table loop
-    IsHeaderField := True;
-    if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-      LLen := FScanLens.Name
-    else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-      LLen := FScanLens.LinkName
-    else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-      LLen := FScanLens.Magic
-    else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-      LLen := FScanLens.Version
-    else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-      LLen := FScanLens.UName
-    else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-      LLen := FScanLens.GName
-    else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-      LLen := FScanLens.Prefix
-    else
-      IsHeaderField := False;
+    // table-driven 7-field dispatch: layout table + Lens array loop, single source, zero if-else chain
+    LLayout[0] := C_TAR_LAYOUT.Name;
+    LLayout[1] := C_TAR_LAYOUT.LinkName;
+    LLayout[2] := C_TAR_LAYOUT.Magic;
+    LLayout[3] := C_TAR_LAYOUT.Version;
+    LLayout[4] := C_TAR_LAYOUT.UName;
+    LLayout[5] := C_TAR_LAYOUT.GName;
+    LLayout[6] := C_TAR_LAYOUT.Prefix;
+    LLensArr[0] := FScanLens.Name;
+    LLensArr[1] := FScanLens.LinkName;
+    LLensArr[2] := FScanLens.Magic;
+    LLensArr[3] := FScanLens.Version;
+    LLensArr[4] := FScanLens.UName;
+    LLensArr[5] := FScanLens.GName;
+    LLensArr[6] := FScanLens.Prefix;
+    IsHeaderField := False;
+    for I := 0 to 6 do
+      if (AOfs = FPos + LLayout[I].Off) and (ALen = LLayout[I].Len) then
+      begin
+        LLen := LLensArr[I];
+        IsHeaderField := True;
+        Break;
+      end;
     if not IsHeaderField then
     begin
-      // fallback: non-7 header field reuses 512B cached block via SpanIndexOf single source (bytes.ops, zero-copy, inline)
-      LSpan := TByteSpan.Create(@FData[AOfs], ALen);
-      LIdx := SpanIndexOf(LSpan, 0);
-      if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+      // fallback: non-7 header field reuses single 512B ScanNulFieldTruncations cache (bytes.ops single source, zero-copy, LUT single pass)
+      // avoids per-field SpanIndexOf repeated linear scan overhead; single 512B scan via ScanNulFieldTruncations cached block
+      LFallbackArr[0].Off := AOfs - FPos;
+      LFallbackArr[0].Len := ALen;
+      LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
+      ScanNulFieldTruncations(LBlockTmp, LFallbackArr, @LFallbackTrunc);
+      LLen := LFallbackTrunc;
       if LLen = 0 then Exit(TByteSpan.Empty);
       Result := TByteSpan.Create(@FData[AOfs], LLen);
       Exit;
@@ -302,9 +317,10 @@ begin
   Result := TByteSpan.Create(ABase, Trim);
 end;
 
-function TTarReader.MaterializeSpan(const ASpan: TByteSpan): string; inline;
+function TTarReader.MaterializeSpan(const ASpan: TByteSpan): string;
 begin
   // single source: zero-copy view -> string materialization, empty guard, SpanToString single source (bytes.ops inline)
+  // out-of-line per design-conventions red line 1: Move(Result[1]) inline triggers FPC constant propagation defect, must stay out-of-line
   if ASpan.Len = 0 then
     Exit('');
   Result := SpanToString(ASpan);
@@ -757,95 +773,27 @@ begin
   end;
 end;
 
-{ — TTarSliceReader：零拷贝切片 IReader — }
-type
-  TTarSliceReader = class(TInterfacedObject, IReader)
-  private
-    FBase: PByte;
-    FSize: SizeUInt;
-    FPos: SizeUInt;
-    FHold: TBytes;
-  public
-    constructor Create(ABase: PByte; ASize: SizeUInt); overload;
-    constructor CreateWithHold(const AHold: TBytes; AOfs: SizeUInt; ASize: SizeUInt); overload;
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-  end;
-
-constructor TTarSliceReader.Create(ABase: PByte; ASize: SizeUInt);
-begin
-  inherited Create;
-  FBase := ABase;
-  FSize := ASize;
-  FPos := 0;
-  FHold := nil;
-end;
-
-constructor TTarSliceReader.CreateWithHold(const AHold: TBytes; AOfs: SizeUInt; ASize: SizeUInt);
-var
-  LAvail: SizeUInt;
-begin
-  inherited Create;
-  FHold := AHold;
-  FSize := ASize;
-  FPos := 0;
-  if Length(AHold) > 0 then
-  begin
-    LAvail := SizeUInt(Length(AHold));
-    if AOfs > LAvail then
-      FBase := nil
-    else
-    begin
-      if AOfs + ASize > LAvail then
-        FSize := LAvail - AOfs;
-      if FSize > 0 then
-        FBase := @AHold[AOfs]
-      else
-        FBase := nil;
-    end;
-  end
-  else
-    FBase := nil;
-end;
-
-function TTarSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  Avail: SizeUInt;
-  LCount: SizeUInt;
-begin
-  if FPos >= FSize then
-    Exit(0);
-  Avail := FSize - FPos;
-  LCount := ACount;
-  if LCount > Avail then
-    LCount := Avail;
-  if LCount > 0 then
-  begin
-    CopyMemory(@FBase[FPos], PByte(@ABuf), LCount);
-    Inc(FPos, LCount);
-  end;
-  Result := LCount;
-end;
-
 function TTarReader.OpenEntryStream: IReader;
 var
   P: PByte;
   C: SizeUInt;
   LCopy: TBytes;
 begin
+  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader/CreateSliceReaderWithHold 单源，tar/zip 统一，bytes.ops.CopyMemory 单源零拷贝，FHold 防悬垂
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
     C := 0;
   end;
   if Length(FBuf) > 0 then
-    Result := TTarSliceReader.CreateWithHold(FBuf, FEntryDataOfs, C)
+    Result := CreateSliceReaderWithHold(FBuf, FEntryDataOfs, C)
   else if C > 0 then
   begin
     LCopy := SpanClone(TByteSpan.Create(P, C));
-    Result := TTarSliceReader.CreateWithHold(LCopy, 0, C);
+    Result := CreateSliceReaderWithHold(LCopy, 0, C);
   end
   else
-    Result := TTarSliceReader.Create(P, C);
+    Result := CreateSliceReader(P, C);
 end;
 
 function TTarReader.EntrySize: Int64;

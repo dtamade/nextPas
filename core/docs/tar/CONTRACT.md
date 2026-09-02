@@ -25,8 +25,8 @@
 `TarPackDirInto/TarPackDir/TarExtractToDirWithOptions/TarExtractToDir`（`nextpas.core.tar.fs`，目录递归确定性排序，deferred dir 逆序定稿）。
 
 - **PackWalks 单源**：`TarPackDir`/`TarPackDirInto` 共用 `PackWalks` inline 单源，消除 30+ 行重复粘贴；零拷贝分块搬运复用 `ArchiveCollectWalk` 已 Stat 的 `FSize` 零二次 Stat，`bytes.ops` 单源，`try..finally` 不丢句柄；`TarPackDir` 按预估总量经 `TarBuilderCapacityFor` 4K 对齐预扩容（`bytes.ops.AlignUp4K` 单源，`bytes.builder` 几何扩容 inline 零拷贝），大目录 200×512B 仅1次扩容，小目录 64K 覆盖，零额外拷贝（代码层仅保留克制调用，性能故事沉于此）。
-- **文件系统单缝**：`tar.fs` 仅 `uses nextpas.core.archive.fs` 单缝联邦，Walk/排序/防劫持/零拷贝落盘均经 `archive.fs` 单源，无自有递归样板；`IsSafeTarLinkTarget`/`ValidateHardlinkSource` 复用 `bytes.pathvalid`/`archive.fs` 单源 `inline` 薄转发。
-- **硬链接 TOCTOU 闭环**：`tekHardLink` 经 `ArchiveHardLinkVerified` → `FsHardLinkVerified` → `platform_file_link_verified` 单源原子落盘：`O_NOFOLLOW|O_CLOEXEC` 打开源 fd 校验 `ftRegular` 后经 `/proc/self/fd`（Linux）或 `/dev/fd`（Darwin/BSD）fd 链路 `link`，消除 `Validate→HandleSpecial→HardLink` 窗口并发替换源为 symlink 的绕过。
+- **文件系统单缝**：`tar.fs` 仅 `uses nextpas.core.archive.fs` 单缝联邦，Walk/排序/防劫持/零拷贝落盘均经 `archive.fs` 单源，无自有递归样板；`IsSafeTarLinkTarget`/`ArchiveValidateHardlinkSource` 复用 `bytes.pathvalid`/`archive.fs` 单源 `inline` 薄转发（`ValidateHardlinkSource` 已抽至 `archive.fs` 归档族统一谓词，tar/zip 复用，`tar.fs` 薄委托 `ArchiveValidateHardlinkSource` + `ArchiveHardLinkVerified` fd级闭环，零额外分配）。
+- **硬链接 TOCTOU 闭环**：`tekHardLink` 经 `ArchiveValidateHardlinkSource` fail-fast（`archive.fs` 统一谓词 `inline` 复用 `ArchiveExists/IsSymlink/IsRegularFile` 零分配）+ `ArchiveHardLinkVerified` → `FsHardLinkVerified` → `platform_file_link_verified` 单源原子落盘：`O_NOFOLLOW|O_CLOEXEC` 打开源 fd 校验 `ftRegular` 后经 `/proc/self/fd`（Linux）或 `/dev/fd`（Darwin/BSD）fd 链路 `link`，消除 `Validate→HandleSpecial→HardLink` 窗口并发替换源为 symlink 的绕过，归档族单源 via `archive.fs`。
 
 ### 1.4 链式构造器
 
