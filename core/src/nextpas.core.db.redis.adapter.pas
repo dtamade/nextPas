@@ -197,6 +197,12 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -665,6 +671,36 @@ end;
 function TDbRedisConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := False;   { v1：TimeoutMs 忽略，如实登记 }
+end;
+
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbRedisConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbRedisConnection.CaseSensitiveIdentifiers: Boolean;
