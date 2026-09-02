@@ -36,6 +36,8 @@ procedure SpanZero(const ASpan: TByteSpan); inline;
 { 全局零页单源（.bss 零初值，4K 对齐页）：writer.stream 万槽零填共享，无栈分配/无重复 FillChar，零拷贝分段直写；按需切片避免小间隙 4K memset }
 const
   BYTES_ZERO_PAGE_SIZE = 4096;
+  // bulk parse limit — single source canonical 64MiB (owner L1 bytes.ops, Format/JS single source via this, no L2→L2, bytes.ops BytesCopy zero-copy, L0-L3 kept, resource try-finally not丢)
+  BYTES_BULK_PARSE_MAX_BYTES = SizeUInt(64) * 1024 * 1024;
 var
   BYTES_ZERO_PAGE: array[0..BYTES_ZERO_PAGE_SIZE - 1] of Byte;
 

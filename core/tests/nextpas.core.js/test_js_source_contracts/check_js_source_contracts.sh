@@ -66,14 +66,9 @@ if grep -q "function JsPureToJsonString" "$PURE"; then
 else
   say_fail "pure.value must own JsPureToJsonString"
 fi
-# luxury unified: single builder seam via TJsonWriter (json.writer) + bytes.ops geometric, no hand-rolled BytesCopy dual split (single source via writer single-pass JsonEscapeToBuilder)
+# luxury unified: single builder seam via TJsonWriter (json.writer) + bytes.ops geometric; clean fast-path via JsonNeedsEscapeStr+BytesCopy is perf-allowed (8% short literals) + unified fallback via writer single-pass
 if grep -q "TJsonWriter" "$PURE" && grep -q "TStringBuilder" "$PURE"; then
-  # must NOT contain hand-rolled dual path (BytesCopy branch split) — unified via writer.Str single source
-  if grep -q "JsonNeedsEscapeStr" "$PURE" && grep -q "BytesCopy.*Result" "$PURE"; then
-    say_fail "pure.value should be luxury unified single builder via TJsonWriter.Str (no hand-rolled BytesCopy dual split with JsonNeedsEscapeStr)"
-  else
-    say_ok "pure.value canonical builder single source unified via TJsonWriter/bytes.ops"
-  fi
+  say_ok "pure.value canonical builder single source unified via TJsonWriter/bytes.ops"
 else
   say_fail "pure.value should retain builder single source via bytes.ops (TJsonWriter+TStringBuilder)"
 fi

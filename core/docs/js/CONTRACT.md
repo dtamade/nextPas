@@ -227,7 +227,7 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 - **INV-4** `Eval/TryEval` 同步 exactly-once：`Eval` 成功得 `TJsValue`，失败抛 `EJsError`；无异步变体（`webview.Eval` 的异步是 IPC 特化，不在本模块）。
 - **INV-5** 序列化一律经 `json` owner，不手写字符串扫描。
 - **INV-6** 宿主函数重入：宿主内再 `Eval` 同一 `Context` 允许（可重入），但禁止并发 `Eval`（线程亲和 fail-fast）。
-- **INV-7** `TJsValue` 悬垂安全：`Context` 释放后 `IsValid=False`，`As*` 零值不抛，`TryAs*`→`False`。
+- **INV-7** `TJsValue` 悬垂安全双轨：`IsValid` bulk零屏障 (FValid only, zero atomic, thread-affine hot bulk) vs `IsAlive`强一致 (FValid+acquire `GPureClosed` via `pure.base→lifecycle` atomic acquire 64B padded, cross-thread/post-Close safe)；`Context` 释放后 `IsAlive=False`/`JsPureValueIsValid=False`/`IsClosed=True`，`IsValid`仍可能`True`→悬垂风险需显式切`IsAlive`/`JsPureValueIsValid`/`IsClosed`，`As*`零值不抛，`TryAs*`→`False`；bulk热点守`IsValid`零成本，强一致显式`acquire`单源 via `js.lifecycle` (见 `js.intf` 104/121 vs 127/128 `IsValid`零屏障 vs `IsAlive` acquire)。
 
 ---
 
@@ -244,14 +244,14 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 - `Eval` 不做沙箱 beyond `MemoryLimit / Timeout`；`SetHostFunction` 暴露面即攻击面，默认不暴露 `os/fs/process`。
 - 二进制走 `TBytes` + `AsJson` base64（`encoding` owner），不做裸二进制帧。
 - `MemoryLimit` 超限 fail-closed，不静默回收。
-- `TryEvalFile` 读文件受 `JS_PURE_FILE_MAX_BYTES`（本地 64 MiB，数值对齐 `FORMAT_BULK_PARSE_MAX_BYTES` canonical `nextpas.core.format.limits`，无 L2→L2，`bytes.ops BytesCopy` 零拷贝单源，`platform.fs` 直读 + `try-finally` 释放不丢）约束，超限 `False`（与 `json` bulk 64MiB 同值对齐）。
+- `TryEvalFile` 读文件受 `JS_PURE_FILE_MAX_BYTES`（canonical 64MiB single source via `bytes.ops BYTES_BULK_PARSE_MAX_BYTES` L1 owner, `FORMAT_BULK_PARSE_MAX_BYTES` alias via same `bytes.ops` single source, 无 L2→L2, `bytes.ops BytesCopy` 零拷贝单源 inline, `platform.fs` 直读 + `try-finally` 释放不丢）约束，超限 `False`（与 `json` bulk 64MiB 同值同源）。
 
 ---
 
 ## 9. 依赖与复用边界（复用度铁律）
 
-- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`platform.fs`（`TryEvalFile` L0直读，`bytes.ops BytesCopy` 零拷贝单源 `JS_PURE_FILE_MAX_BYTES` 64MiB 本地限流，数值对齐 `FORMAT_BULK_PARSE_MAX_BYTES` canonical 无 L2→L2，`try-finally` 释放不丢）、`encoding`（`TBytes` base64 若涉二进制）—— **L2 js 禁止依赖同层 `fs`/`format.limits`（`nextpas.core.fs`/`nextpas.core.format.limits`），已由 `platform.fs` L0单源 + 本地 64MiB 常量替代，守 module-registry `json/text.view/mem+platform.dl` 单缝单向，`bytes.ops` 单源 `SpanEqual/BytesCopy` 零拷贝 `inline`**
-- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；同层 `js→format.limits` 未登记即禁（已由本地 `JS_PURE_FILE_MAX_BYTES` 替代，单源 `bytes.ops`）；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`platform.fs`/`nextpas.core.bench`/`nextpas.core.test` owner，`fs` 已下沉至 `platform.fs` L0）
+- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`platform.fs`（`TryEvalFile` L0直读，`bytes.ops BytesCopy` 零拷贝单源 `JS_PURE_FILE_MAX_BYTES` 64MiB canonical via `bytes.ops BYTES_BULK_PARSE_MAX_BYTES` L1 single source, `FORMAT_BULK_PARSE_MAX_BYTES` 同源 alias, 无 L2→L2, `try-finally` 释放不丢）、`encoding`（`TBytes` base64 若涉二进制）—— **L2 js 禁止依赖同层 `fs`/`format.limits`（`nextpas.core.fs`/`nextpas.core.format.limits`），已由 `platform.fs` L0单源 + `bytes.ops BYTES_BULK_PARSE_MAX_BYTES` L1 single source 替代，守 module-registry `json/text.view/mem+platform.dl` 单缝单向，`bytes.ops` 单源 `SpanEqual/BytesCopy` 零拷贝 `inline`**
+- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；同层 `js→format.limits` 未登记即禁（已由 `bytes.ops BYTES_BULK_PARSE_MAX_BYTES` L1 single source 替代，单源 `bytes.ops`）；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`platform.fs`/`nextpas.core.bench`/`nextpas.core.test` owner，`fs` 已下沉至 `platform.fs` L0）
 - **复用与反哺纪律**（基本要求）：开发中发现 `json/text/mem/platform.dl/platform.fs` 缺口或性能瓶颈，**毫不犹豫反哺 owner 模块**（提 `core/docs/...` 变更 + 加回归），禁止在 `js` 内堆 workaround/重复造轮子/抄低质量代码；`AI_GUIDE §5 C7/C9` 同检，`ACCEPTANCE G-M1-3` 的 `source-contract` 禁止 `js` 内出现 `SysUtils` 手写转义/自计时
 
 **Source-contract 扫描**（`core/tests/architecture/check_source_contracts.py`）：

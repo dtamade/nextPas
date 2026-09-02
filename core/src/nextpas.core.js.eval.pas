@@ -44,20 +44,17 @@ begin
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// scanner — single-pass predicate merge via bytes.ops, zero-copy views, not inline per red-line 2 (O(n) linear scan, I-Cache), bytes.ops SpanEqual single source
+// scanner — predicate merge via bytes.ops SIMD SpanIndexOfSpan single source, zero-copy views, not inline per red-line 2 (O(n) SIMD scan, I-Cache), bytes.ops single source via TStringView.IndexOfStr/SpanIndexOfSpan
 procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates);
 var
-  LData: PAnsiChar;
-  LLen, I, LRem: SizeUInt;
+  LLen: SizeUInt;
   LNeedJson, LNeedWhile: Boolean;
   LJsonLen, LWhileLen: SizeUInt;
-  LHasXSeen: Boolean;
   LJsonView, LWhileView: TStringView;
 begin
   Pred.HasWhile := False; Pred.HasJson := False; Pred.HasX := False;
   if V.IsEmpty then Exit;
   LLen := V.Len;
-  LData := V.Data;
   LJsonLen := SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY));
   LWhileLen := SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE));
   LNeedJson := LLen >= LJsonLen;
@@ -65,26 +62,10 @@ begin
   if not LNeedJson and not LNeedWhile then Exit;
   LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
   LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  LHasXSeen := False;
-  for I := 0 to LLen - 1 do
-  begin
-    if not LHasXSeen and (LData[I] = 'x') then LHasXSeen := True;
-    if LNeedJson and not Pred.HasJson then
-    begin
-      LRem := LLen - I;
-      if (LRem >= LJsonLen) and (LData[I] = 'J') then
-        if V.Slice(I, LJsonLen).Equals(LJsonView) then Pred.HasJson := True;
-    end;
-    if LNeedWhile and not Pred.HasWhile then
-    begin
-      LRem := LLen - I;
-      if (LRem >= LWhileLen) and (LData[I] = 'w') then
-        if V.Slice(I, LWhileLen).Equals(LWhileView) then Pred.HasWhile := True;
-    end;
-    if Pred.HasJson and LHasXSeen then
-      if not LNeedWhile or Pred.HasWhile then Break;
-  end;
-  Pred.HasX := Pred.HasJson and LHasXSeen;
+  // perf: single source bytes.ops SpanIndexOfSpan via IndexOfStr SIMD zero-copy, no per-byte Slice+Equals view build, Eval per-call O(n) single SIMD pass per predicate vs O(n*m) double scan loop, TryHostDispatch decoupled
+  if LNeedJson then Pred.HasJson := V.IndexOfStr(LJsonView) >= 0;
+  if LNeedWhile then Pred.HasWhile := V.IndexOfStr(LWhileView) >= 0;
+  if Pred.HasJson then Pred.HasX := V.IndexOf('x') >= 0;
 end;
 function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; inline;
 begin
@@ -157,7 +138,7 @@ function EvalArgValue(const V: TStringView): TJsValue;
 var
   LInner: TStringView;
   LNeedUnescape: Boolean;
-  J, LOut: SizeUInt;
+  J, LOut, LChunkStart: SizeUInt;
   LStr: string;
 begin
   // single source via text.view Slice/Equals zero-copy + JsPureNewStringView BytesCopy single source (bytes.ops), backslash unescape single template, not inline per red-line 2
@@ -169,16 +150,31 @@ begin
     if LNeedUnescape then
     begin
       SetLength(LStr, LInner.Len);
-      LOut := 0; J := 0;
+      LOut := 0; J := 0; LChunkStart := 0;
+      // perf: block BytesCopy single source via bytes.ops zero-copy Move, not per-byte branch-simulated Move, single allocation; inline Move via bytes.ops BytesCopy single source, zero dangling
       while J < LInner.Len do
       begin
-        if (LInner.Data[J] = '\') and (J + 1 < LInner.Len) then
+        if LInner.Data[J] = '\' then
         begin
+          if J > LChunkStart then
+          begin
+            BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[LChunkStart]), J - LChunkStart);
+            Inc(LOut, J - LChunkStart);
+          end;
           Inc(J);
-          LStr[LOut + 1] := LInner.Data[J];
-          Inc(LOut);
-        end else begin LStr[LOut + 1] := LInner.Data[J]; Inc(LOut); end;
-        Inc(J);
+          if J < LInner.Len then
+          begin
+            BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[J]), 1);
+            Inc(LOut);
+            Inc(J);
+          end;
+          LChunkStart := J;
+        end else Inc(J);
+      end;
+      if LChunkStart < LInner.Len then
+      begin
+        BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[LChunkStart]), LInner.Len - LChunkStart);
+        Inc(LOut, LInner.Len - LChunkStart);
       end;
       SetLength(LStr, LOut);
       Result := JsStringValue(LStr);

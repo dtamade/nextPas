@@ -13,8 +13,8 @@ type
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
   public
     function Kind: TJsValueKind; inline;
-    function IsValid: Boolean; inline;
-    function IsAlive: Boolean; inline;
+    function IsValid: Boolean; inline; // bulk: THREAD-AFFINE zero-barrier (FValid only), hot bulk GetProp/HasProp zero atomic; post-Close may still True → dangling, strong cross-thread/post-Close must explicitly use IsAlive/acquire (JsPureContextIsClosed/JsPureValueIsValid via pure.base→lifecycle acquire single source)
+    function IsAlive: Boolean; inline; // strong: FValid + acquire GPureClosed via pure.base→lifecycle single source (atomic acquire, 64B padded), cross-thread/post-Close safe; bulk hot path keep IsValid for zero cost, luxury thin inline single branch
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsInteger: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
@@ -101,8 +101,8 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭后旧句柄仍 IsValid=True，易悬垂误用，跨线程强一致需 IsAlive/JsPureValueIsValid (pure.base→lifecycle acquire)，thread-affine 零成本，IJsContext.IsClosed 显式检查
-// perf: 值语义谓词全 inline 单字段零分支零拷贝，奢华薄 intf 2-space，Kind 掩码复用 IsKind/IsKindIn 表驱动单源 via base，bulk 零屏障，IsAlive 强一致 acquire 单源 via lifecycle
+// INV-7 dual-track: IsValid bulk零屏障 (FValid only, zero atomic zero branch, bulk GetProp/HasProp hot ~1ns, thread-affine) vs IsAlive强一致 (FValid+acquire GPureClosed via pure.base→lifecycle single source, atomic acquire 64B padded, cross-thread/post-Close safe); IsValid Close后旧句柄仍True→悬垂风险, 必须显式切IsAlive/JsPureValueIsValid(acquire)或IJsContext.IsClosed, bulk热点守IsValid零成本, luxury thin inline, bytes.ops单源几何, resource不丢
+// perf: 值语义谓词全 inline 单字段零分支零拷贝, 奢华薄 intf 2-space, Kind掩码复用IsKind/IsKindIn表驱动单源via base, bulk零屏障 vs 强一致acquire单源via lifecycle single branch, inline零拷贝
 function TJsValue.Kind: TJsValueKind; inline;
 begin
   Result := FKind;
@@ -120,12 +120,13 @@ end;
 
 function TJsValue.IsValid: Boolean; inline;
 begin
+  // perf: bulk zero-barrier single field FValid, zero atomic zero branch, thread-affine hot bulk ~1ns, inline; post-Close仍True→悬垂, 强一致须显式IsAlive/acquire (JsPureContextIsClosed/JsPureValueIsValid via pure.base→lifecycle acquire)
   Result := FValid;
 end;
 
 function TJsValue.IsAlive: Boolean; inline;
 begin
-  // perf: inline strong FValid + acquire GPureClosed via pure.base→lifecycle single source, single branch, bulk IsValid zero barrier preserved for hot path
+  // perf: inline strong FValid + acquire GPureClosed via pure.base→lifecycle single source (atomic acquire 64B padded, ~1ns), single branch, bulk IsValid zero barrier preserved for hot path, luxury thin inline single source
   Result := FValid and not JsPureContextIsClosed(FContextId);
 end;
 

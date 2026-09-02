@@ -2,6 +2,8 @@ unit nextpas.core.js.pure.host;
 {$I nextpas.core.settings.inc}
 interface
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.text.view,
@@ -49,7 +51,7 @@ procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 procedure JsPureHostBucketsRebuild(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets);
 // Host dispatch — single source via pure.host, inline zero-copy, bytes.ops single source, L0-L3 kept, resource try-finally via exception wrap
 function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
-const JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
+const JS_PURE_FILE_MAX_BYTES = BYTES_BULK_PARSE_MAX_BYTES; // 64MiB canonical single source via bytes.ops BYTES_BULK_PARSE_MAX_BYTES (L1 owner, Format/JS single source, no L2→L2, bytes.ops BytesCopy zero-copy single source, L0-L3 kept, try-finally not丢)
 procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;
 // HostState — per-Context聚合态收敛 (奢华度收敛, 守bytes.ops单源, inline+零拷贝, 资源幂等不丢, Owner pure.host)
@@ -316,7 +318,11 @@ begin
   end;
   Hosts[LCount].Name := AName;
   Hosts[LCount].Hash := LHash;
-  JsPureHostBucketsInvalidate(Buckets);
+  // jitter suppress: bucket invalidate only when >64 threshold, else keep linear empty; avoids O(n) rebuild thrash at 64↔65 boundary, amortized O(1) put vs per-insert rebuild, inline zero-copy, bytes.ops single source
+  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
+    JsPureHostBucketsInvalidate(Buckets)
+  else if Length(Buckets.Buckets) > 0 then
+    JsPureHostBucketsInvalidate(Buckets);
   Result := LCount;
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer);

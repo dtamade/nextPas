@@ -22,6 +22,7 @@ type
 var
   GVault: TJsQuickJsVault;
   GVaultInit: Int32 = 0; // 0 uninit,1 initializing,2 ready
+  GProbeNamesCache: string = ''; // cached handle reuse: one-time build, zero per-call alloc/geom expand on error path
 function VaultRef: PJsQuickJsVault; inline;
 begin
   // perf: inline single indirection, zero-copy vault ref, single source for all vault access, no duplicate @GVault
@@ -68,7 +69,10 @@ const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
 function JsQuickJsProbeNames: string; inline;
 var B: TBufStringBuilder; I: Integer;
 begin
-  // perf: single source via text.builder geometric growth + bytes.ops.BytesCopy single source (L1 单源), zero-copy via Move, inline thin loop, 8 entries comma-join, no literal duplication
+  // perf: cached single handle reuse, inline thin-forward refcount inc zero-copy, zero per-call TBufStringBuilder alloc/geom expand (one-time build at initialization via text.builder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, try-finally Done 不丢)
+  // stability: immutable after init, no per-call Done leak, read-only share via string refcount (atomic inc), no heap on error path
+  if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
+  // fallback for early init order (single-thread init, rare): one-time build with same single source, try-finally Done 不丢, cached handle reuse after first call
   B.Init(128);
   try
     for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
@@ -77,6 +81,7 @@ begin
       B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
     end;
     Result := B.ToString;
+    if GProbeNamesCache = '' then GProbeNamesCache := Result;
   finally
     B.Done;
   end;
@@ -234,12 +239,32 @@ begin
     VaultRef^.Lock.Release;
   end;
 end;
+procedure InitProbeCache; inline;
+var B: TBufStringBuilder; I: Integer;
+begin
+  // perf: one-time comma-join via TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, try-finally Done 不丢, cached handle reuse avoids per-call alloc/geom expand
+  // stability: try-finally Done 不丢, single source for probe names, immutable after init
+  B.Init(128);
+  try
+    for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
+    begin
+      if I > 0 then B.AppendStr(', ');
+      B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
+    end;
+    GProbeNamesCache := B.ToString;
+  finally
+    B.Done;
+  end;
+end;
+
 initialization
   // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0)
   EnsureVaultLock;
   // perf: inline single source via bytes.ops.BytesZero single source, zero-copy
   BytesZero(@GVault.Lib, SizeUInt(SizeOf(GVault.Lib)));
   GVault.Available := -1; GVault.Loaded := 0; GVault.ProbeIndex := -1;
+  // perf: one-time probe names cache, bytes.ops single source via InitProbeCache, zero per-call heap on error path
+  if GProbeNamesCache = '' then InitProbeCache;
 finalization
   // stability: finalization exactly-once release if still loaded, zero via BytesZero single source, resource not丢
   if GVault.Loaded <> 0 then

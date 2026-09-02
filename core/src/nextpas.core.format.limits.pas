@@ -8,12 +8,13 @@ unit nextpas.core.format.limits;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.bytes.ops;
 
 const
   { Default max bytes for bulk Parse(IReader) / IoReadAll-then-parse entry points.
-    CSV true streaming is not subject to this cap. }
-  FORMAT_BULK_PARSE_MAX_BYTES = SizeUInt(64) * 1024 * 1024;
+    CSV true streaming is not subject to this cap. Single source canonical via bytes.ops BYTES_BULK_PARSE_MAX_BYTES (L1 owner, no L2→L2, bytes.ops single source, inline zero-copy, L0-L3 kept). }
+  FORMAT_BULK_PARSE_MAX_BYTES = BYTES_BULK_PARSE_MAX_BYTES;
 
 procedure RequireFormatBulkByteCount(const ACount: SizeUInt; const AContext: string);
 

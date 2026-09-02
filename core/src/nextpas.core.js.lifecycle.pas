@@ -1,5 +1,5 @@
 unit nextpas.core.js.lifecycle;
-{ lifecycle owner — single source for pure Context registry: GPureClosed 64B padded atomic acquire/release, cache-line isolated (NextId/Len/Lock/Free each 64B VARMIN isolated, false-sharing free), freelist recycling bounded memory via bytes.ops geometric single source + mem.dynarray Exactly-Once, write-once rare, bulk IsValid zero atomic via FValid, strong acquire; spinlock with exponential backoff + deadline 5ms timeout/yield to avoid starvation livelock under bulk NewContext, base remains thin type-carrier per four-piece, lifecycle extracted to js.lifecycle single source, 复用 bytes.ops单源几何 via BytesNextCapacity + mem.dynarray poke Exactly-Once, inline零拷贝, amortized O(1), L0-L3守分层. L0 thread/time single slit via lifecycle (platform.thread + platform.time single source), quickjs.value thin-forwards, no dual entry. }
+{ lifecycle owner — single source for pure Context registry: GPureClosed 64B padded atomic acquire/release, cache-line isolated (NextId/Len/Lock/Free each 64B VARMIN isolated, false-sharing free), freelist recycling bounded memory via bytes.ops geometric single source + mem.dynarray Exactly-Once, write-once rare, bulk IsValid zero atomic via FValid, strong acquire; spinlock single source via sync.spinlock RawSpinAcquire/Release sampled 64-spin amortized 5ms deadline (no per-spin syscall storm), exponential backoff + yield, Close no-skip guarantees bounded GPureNextId/GPureClosed, base remains thin type-carrier per four-piece, lifecycle extracted to js.lifecycle single source, 复用 bytes.ops单源几何 via BytesNextCapacity + mem.dynarray poke Exactly-Once, inline零拷贝, amortized O(1), L0-L3守分层. L0 thread/time single slit via lifecycle (platform.thread + platform.time single source), quickjs.value thin-forwards, no dual entry. }
 {$I nextpas.core.settings.inc}
 interface
 function JsPureContextRegister: UInt64;
@@ -19,12 +19,13 @@ uses
   nextpas.core.mem.dynarray,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.sync.spinlock;
 const
   JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // 64 via mem.base single source, no magic
   JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60 via CACHE_LINE single source
   JS_LIFECYCLE_PAD64 = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int64); // 56 via CACHE_LINE single source
-  JS_LIFECYCLE_SPIN_TIMEOUT_NS = QWord(5 * 1000000); // 5ms deadline via platform.time single source, bounds spinlock to avoid bulk starvation livelock
+  JS_LIFECYCLE_SPIN_TIMEOUT_NS = QWord(5 * 1000000); // 5ms deadline single source now in sync.spinlock RawSpinAcquire sampled (64-spin amortized, no per-spin syscall), lifecycle delegates to owner
 {$PUSH}{$CODEALIGN RECORDMIN=16}{$PACKRECORDS C}
 type
   TPureClosedSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B cache-line padded via CODEALIGN+pad, instance-isolated atomic slot, false-sharing free, write-once rare, 60B pad via MEM_CACHE_LINE_SIZE single source
@@ -56,28 +57,10 @@ begin
   Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
 end;
 function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LExp: Int32; LSpins: Integer; LDeadline: QWord; LBackoff, LB: Integer;
+var LNeed, LCap, LCurCap: SizeUInt; LId: Int64;
 begin
-  // phase A: freelist recycle under spinlock with 5ms deadline + exponential backoff + bounded yield, avoids bulk NewContext livelock
-  LExp := 0; LSpins := 0; LDeadline := QWord(platform_monotonic_ns) + JS_LIFECYCLE_SPIN_TIMEOUT_NS;
-  while not atomic_compare_exchange_strong(GPureClosedLock.Value, LExp, Int32(1), mo_acquire, mo_relaxed) do
-  begin
-    LExp := 0; Inc(LSpins);
-    if QWord(platform_monotonic_ns) > LDeadline then
-    begin
-      platform_thread_yield;
-      LDeadline := QWord(platform_monotonic_ns) + JS_LIFECYCLE_SPIN_TIMEOUT_NS;
-      LSpins := 0;
-      Continue;
-    end;
-    if LSpins < 32 then
-    begin
-      LBackoff := 1 shl (LSpins shr 2); // 1,1,1,1,2,2,2,2,4,4,4,4,8...
-      if LBackoff > 8 then LBackoff := 8;
-      for LB := 1 to LBackoff do cpu_pause;
-    end
-    else begin platform_thread_yield; LSpins := 0; end;
-  end;
+  // phase A: freelist recycle under sampled spinlock single source (sync.spinlock RawSpin* 64-spin amortized, 5ms sampled deadline, inline zero-copy, no per-spin syscall storm), avoids bulk NewContext livelock
+  RawSpinAcquire(GPureClosedLock.Value);
   try
     if Length(GPureFree) > 0 then
     begin
@@ -87,33 +70,15 @@ begin
       Exit;
     end;
   finally
-    atomic_store(GPureClosedLock.Value, Int32(0), mo_release);
+    RawSpinRelease(GPureClosedLock.Value);
   end;
-  // phase B: no free slot — lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock with exponential backoff + deadline (rare), inline zero-copy header, 64B CODEALIGN padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
+  // phase B: no free slot — lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), sampled spinlock single source (rare), inline zero-copy header, 64B CODEALIGN padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
   LId := Int64(atomic_fetch_add_64(GPureNextId.Value, Int64(1), mo_relaxed));
   Result := UInt64(LId);
   if Result >= UInt64(atomic_load(GPureClosedLen.Value, mo_acquire)) then
   begin
-    // spinlock for resize — rare write-once, 5ms deadline + exponential backoff + bounded yield, avoids bulk NewContext contention livelock
-    LExp := 0; LSpins := 0; LDeadline := QWord(platform_monotonic_ns) + JS_LIFECYCLE_SPIN_TIMEOUT_NS;
-    while not atomic_compare_exchange_strong(GPureClosedLock.Value, LExp, Int32(1), mo_acquire, mo_relaxed) do
-    begin
-      LExp := 0; Inc(LSpins);
-      if QWord(platform_monotonic_ns) > LDeadline then
-      begin
-        platform_thread_yield;
-        LDeadline := QWord(platform_monotonic_ns) + JS_LIFECYCLE_SPIN_TIMEOUT_NS;
-        LSpins := 0;
-        Continue;
-      end;
-      if LSpins < 32 then
-      begin
-        LBackoff := 1 shl (LSpins shr 2);
-        if LBackoff > 8 then LBackoff := 8;
-        for LB := 1 to LBackoff do cpu_pause;
-      end
-      else begin platform_thread_yield; LSpins := 0; end;
-    end;
+    // spinlock for resize — rare write-once, sampled 5ms deadline single source via sync.spinlock, avoids bulk NewContext contention livelock, inline
+    RawSpinAcquire(GPureClosedLock.Value);
     try
       if Result >= UInt64(Length(GPureClosed)) then
       begin
@@ -133,31 +98,19 @@ begin
         atomic_store(GPureClosedLen.Value, Int32(Length(GPureClosed)), mo_release);
       end;
     finally
-      atomic_store(GPureClosedLock.Value, Int32(0), mo_release);
+      RawSpinRelease(GPureClosedLock.Value);
     end;
   end;
   atomic_store(GPureClosed[Result].Value, 0, mo_release);
 end;
 procedure JsPureContextClose(AId: UInt64);
-var LExp: Int32; LSpins: Integer; LDeadline: QWord; LCap, LNeed: SizeUInt; LBackoff, LB: Integer;
+var LCap, LNeed: SizeUInt;
 begin
   if (AId = 0) or (AId >= UInt64(atomic_load(GPureClosedLen.Value, mo_acquire))) then Exit;
   // idempotent close: exchange detects duplicate close to avoid double free push
   if atomic_exchange(GPureClosed[AId].Value, 1) <> 0 then Exit;
-  // push to freelist bounded recycling, 5ms deadline + exponential backoff + bounded yield, avoids bulk close livelock
-  LExp := 0; LSpins := 0; LDeadline := QWord(platform_monotonic_ns) + JS_LIFECYCLE_SPIN_TIMEOUT_NS;
-  while not atomic_compare_exchange_strong(GPureClosedLock.Value, LExp, Int32(1), mo_acquire, mo_relaxed) do
-  begin
-    LExp := 0; Inc(LSpins);
-    if QWord(platform_monotonic_ns) > LDeadline then Exit; // timeout: skip recycling, already marked closed, avoids starvation livelock, resource not lost
-    if LSpins < 32 then
-    begin
-      LBackoff := 1 shl (LSpins shr 2);
-      if LBackoff > 8 then LBackoff := 8;
-      for LB := 1 to LBackoff do cpu_pause;
-    end
-    else begin platform_thread_yield; LSpins := 0; end;
-  end;
+  // push to freelist bounded recycling, sampled spinlock single source (sync.spinlock RawSpin* 64-spin amortized, no per-spin syscall storm, no skip), guarantees recycling bounded, avoids unbounded GPureNextId/GPureClosed growth
+  RawSpinAcquire(GPureClosedLock.Value);
   try
     LNeed := SizeUInt(Length(GPureFree)) + 1;
     if GPureFreeCapacity < LNeed then
@@ -169,7 +122,7 @@ begin
     SetLength(GPureFree, Integer(LNeed));
     GPureFree[High(GPureFree)] := AId;
   finally
-    atomic_store(GPureClosedLock.Value, Int32(0), mo_release);
+    RawSpinRelease(GPureClosedLock.Value);
   end;
 end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;

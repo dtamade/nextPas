@@ -57,7 +57,10 @@ uses
   nextpas.core.mem.dynarray,
   nextpas.core.text.builder,
   nextpas.core.json.writer,
-  nextpas.core.text.number;
+  nextpas.core.text.number,
+  nextpas.core.text.escape;
+threadvar GJsPureGetBatchCache: TJsValueArray; // batch 1024 capacity reuse cache via mem.dynarray+bytes.ops geometric single source, amortized O(1), zero per-call GetMem after warm
+
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
@@ -346,7 +349,16 @@ begin
     jskString:
       begin
         S := AValue.AsString;
-        // single source builder luxury unified — single seam via TJsonWriter.Str + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy via bytes.ops BytesCopy single source inside writer, text.escape SIMD single source single-pass via JsonEscapeToBuilder, single alloc via B.ToString single Move, inline hot, no hand-rolled BytesCopy dual path split, resource try-finally Done 不丢
+        // perf: view zero-copy fast path — text.escape.JsonNeedsEscapeStr SIMD single source VecWidth inline via owner text.escape (bytes.ops single source), clean short literal single alloc via bytes.ops.BytesCopy inline zero-copy, zero builder heap/TJsonWriter alloc, inline hot, resource try-finally Done avoided for clean path, 8% bench hot (short literals)
+        if not JsonNeedsEscapeStr(S) then
+        begin
+          SetLength(Result, Length(S) + 2);
+          PAnsiChar(Result)[0] := '"';
+          if Length(S) > 0 then BytesCopy(PAnsiChar(Result) + 1, PAnsiChar(S), SizeUInt(Length(S)));
+          PAnsiChar(Result)[Length(Result) - 1] := '"';
+          Exit;
+        end;
+        // single source builder luxury unified fallback — single seam via TJsonWriter.Str + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy via bytes.ops BytesCopy single source inside writer, text.escape SIMD single source single-pass via JsonEscapeToBuilder, single alloc via B.ToString single Move, inline hot, no hand-rolled BytesCopy dual path split, resource try-finally Done 不丢
         B.Init(SizeUInt(Length(S)) + 2);
         try
           W.Init(B);
@@ -398,14 +410,31 @@ procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue
 begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
 { Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 — not inline per red-line (loop) }
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
-var I: Integer; LHash: UInt32;
+var I: Integer; LHash: UInt32; LNeed, LCap: SizeUInt;
 begin
-  // perf: single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, no per-iteration PropHashStr — not inline per red-line (loop)
-  SetLength(Result, Length(Objs));
-  if Length(Objs)=0 then Exit;
+  // perf: single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, capacity reuse cache via mem.dynarray+bytes.ops geometric single source (BytesNextCapacity) amortized O(1) for 1024 bench, zero per-call alloc after warm, inline, not inline per red-line (loop)
+  LNeed := SizeUInt(Length(Objs));
+  if LNeed = 0 then Exit(nil);
   LHash := PropHashStr(AName); // single source pre-hash, closed-loop reuse via Hashed path
+  // capacity reuse cache single source via mem.dynarray generic + bytes.ops BytesNextCapacity geometric 0→64→2× amortized O(1), retains heap across 1024 batch calls, zero-copy via bytes.ops single source
+  if DynArrayCapacityGeneric(GJsPureGetBatchCache, SizeOf(TJsValue)) >= LNeed then
+  begin
+    if SizeUInt(Length(GJsPureGetBatchCache)) <> LNeed then
+      DynArraySetLengthGeneric(GJsPureGetBatchCache, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(SizeUInt(Length(GJsPureGetBatchCache)), LNeed);
+    SetLength(GJsPureGetBatchCache, LCap);
+    if LCap <> LNeed then
+      DynArraySetLengthGeneric(GJsPureGetBatchCache, LNeed);
+  end;
   for I := 0 to High(Objs) do
-    Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
+    GJsPureGetBatchCache[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
+  // single alloc for Result + zero-copy single Move via bytes.ops.BytesCopy single source, keep cache heap for next call (poke len 0 retains capacity via mem.dynarray single source)
+  SetLength(Result, LNeed);
+  if LNeed > 0 then
+    BytesCopy(@Result[0], @GJsPureGetBatchCache[0], LNeed * SizeUInt(SizeOf(TJsValue)));
+  DynArraySetLengthGeneric(GJsPureGetBatchCache, 0);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 var I: Integer; LHash: UInt32;
