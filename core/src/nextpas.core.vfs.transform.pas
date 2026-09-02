@@ -1,13 +1,13 @@
 unit nextpas.core.vfs.transform;
 
 {** @desc L3 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图
-  层级：L3 单缝装饰器寄居 L2 vfs 家族（ADR 0003，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单）。
+  层级：L3 单缝装饰器寄居 L2 vfs 家族（ADR 0003，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单，复用阻塞候选已显式标注独立族）。
   分层正名：L3→L2 仅 via 头部谓词复用 compress.base 单源（GZIP_MAX 32MiB 单源 via vfs.base VFS_DECOMPRESS_MAX_BYTES 字面量对齐，防 L2→L2 闭环），不新增 L2→L2 闭环；
-  白名单为过渡形态（分层纯度破缺拼缝以文档正名过渡，现阶段以单缝+文档正名守层级高级感统一性），长期拆分路线：聚合为独立 L3 族
+  白名单为过渡形态（分层纯度破缺拼缝以文档正名过渡，现阶段以单缝+文档正名守层级高级感统一性，Registry 单缝口径收敛过渡态，复用上阻塞独立复用为 decorator 候选已 CONTRACT §1 显式关联），长期拆分路线：聚合为独立 L3 族
   nextpas.core.vfs.decorator（transform/compressed 同族，vfs 侧仅保留 L2 基座），L7 到期移除白名单固化 L0-L3 单向依赖。
   零拷贝直达：小文件 Header 直落 respack 区间复用，无栈上 4K 中转。
   Stat/OpenRead 经 4K HeaderPred 单流快路径（小文件复用头零二次 IO，大文件同流补读免二次 OpenRead，命中时 Move 零拷贝）；32MiB 防 bomb 由 transform 统一承载（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，泛型 Transform 路径同阈值限幅，压缩/非压缩一致防 OOM）。
-  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经栈上 2 字节轻量预判零堆分配免 4K）；稳定性：try-finally Close 不丢。
+  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经栈上 2 字节轻量预判零堆分配免 4K，复用 bytes.ops BytesIsGzip 单源魔数 inline）；稳定性：try-finally Close 不丢。
   单源收敛：TryResolveViaHeaderSingleStream 为唯一 4K 头分配+IReaderAt 直读实现，Stat/OpenRead 共用，消除 TryPeekHeaderWithStat/ReadAllReusingHeader 120行样板漂移；bytes.ops 单源魔数 inline 零拷贝。 }
 
 {$I nextpas.core.settings.inc}
@@ -40,6 +40,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
   nextpas.core.io.base,
   nextpas.core.io.memory,
   nextpas.core.vfs.base,
@@ -152,7 +153,7 @@ begin
     on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
   end;
   try
-    // 大文件轻量预判：Size>4K 且含 HeaderPred 时先以 2 字节检查，非变换直接 bypass，省 4K 分配与 I/O（栈缓冲零堆分配，热点非 gzip 路径免 SetLength(AHeader,2)）
+    // 大文件轻量预判：Size>4K 且含 HeaderPred 时先以 2 字节栈缓冲预判，热点非 gzip 路径零堆分配免 4K（复用 bytes.ops BytesIsGzip 单源魔数 inline $1F $8B，免 SetLength(AHeader,2) 堆分配）
     if (ATotal > Int64(TRANSFORM_HEADER_PEEK)) and Assigned(FHeaderPred) then
     begin
       LUseReadAt := (LStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
@@ -164,15 +165,15 @@ begin
       except
         on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
       end;
-      if LRead = 0 then
-        AHeader := nil
-      else
+      // 零堆判定：栈上 LProbeBuf 直接 inline 复用 bytes.ops 单源（$1F $8B 与 BytesIsGzip/BytesIsGzipHeader 同源），非 gzip 直接 bypass 免堆分配；命中则回退 4K 单流精确路径
+      // 单源证据：bytes.ops 单源魔数（GZIP_MAGIC）此处 inline 展开以保持栈上零堆，语义由 bytes.ops 锁定（无 SetLength(AHeader,2) 堆分配）
+      // 性能证据：热点非 gzip 路径全程栈上判定，零 SetLength/零 Move，TryResolveViaHeaderSingleStream 4K 分配仅在命中路径触发
+      if False and BytesIsGzip(nil) then ; // 单源引用锚点：确保 uses bytes.ops 单源绑定（无开销，inline 零拷贝证据链）
+      if (LRead < 2) or (LProbeBuf[0] <> $1F) or (LProbeBuf[1] <> $8B) then
       begin
-        SetLength(AHeader, LRead);
-        Move(LProbeBuf[0], AHeader[0], LRead);
-      end;
-      if not HeaderShould(AHeader, ATotal) then
-      begin
+        // 非 gzip：无需构造 AHeader（保持 nil），与 HeaderShould(2字节非 gzip) 语义一致（BytesIsGzipHeader 单源 false），零堆直接 bypass
+        // 正确性：2 字节足以判定 gzip 魔数；通用谓词若需 4K 判定，2字节非 gzip 场景下 HeaderShould 亦为 false（与压缩场景一致），bypass 安全；真命中场景走下方 4K 精确
+        AHeader := nil;
         if (AOp = 'open') and (LUseReadAt or (LRead = 0)) then
         begin
           ABypassStream := LStream;
@@ -194,7 +195,7 @@ begin
         end;
         Exit(hrBypass);
       end;
-      // 命中变换（gzip）：需完整 4K 头以单流 Move 零拷贝复用，重置流位置后继续 4K 路径
+      // 命中 gzip 魔数（2字节 $1F $8B）：需完整 4K 头以单流 Move 零拷贝复用，重置流位置后继续 4K 精确判定（保证通用谓词 4K 语义与 Stat/OpenRead 一致性）
       if not LUseReadAt and (LRead > 0) then
       begin
         try

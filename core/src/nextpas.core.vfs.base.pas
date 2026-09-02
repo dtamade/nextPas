@@ -3,9 +3,10 @@ unit nextpas.core.vfs.base;
 {** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
   权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
   nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。L2 仅依赖
-  L0-L1（bytes.ops/base.utils），解压上限 canonical 寄居
-  vfs.compressed（compress.base GZIP_MAX 32MiB），base 以字面量数值对齐
-  守 L0 纯度与无 L2→L2，漂移由 source-contract 数值一致性断言锁定。 }
+  L0-L1（bytes.ops/base.utils），解压上限 canonical 单源为
+  compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB)，base/compressed 接口层
+  均以字面量 32*1024*1024 数值对齐守 L0 纯度与无 L2→L2，漂移由 source-contract
+  字面量数值一致性锁定（同值双字面量，非别名转发）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -36,8 +37,9 @@ type
 
 const
   { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB) 同值，
-    canonical 单源寄居 vfs.compressed；base 以字面量守 L0 纯度与无 L2→L2
-    （四件套底座仅 L0-L1），漂移由 source-contract 数值一致性断言锁定。 }
+    canonical 单源为 compress.base；base/compressed 接口层均以字面量
+    32*1024*1024 守 L0 纯度与无 L2→L2（四件套底座仅 L0-L1，无直接 compress 依赖），
+    漂移由 source-contract 字面量数值一致性锁定（双字面量对齐，非别名）。 }
   VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
@@ -58,7 +60,8 @@ function VfsNameCompare(const AA, AB: string): Integer; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
   避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度（仅 L0 依赖）。
-  非 inline：保持与前缀/比较族一致的高级感，避免 untyped 参 inline 风险。 }
+  非 inline 权衡：前缀/比较族为热路径零拷贝（SpanStartsWith/SpanCompare via bytes.ops，O(log n+k) 高频调用，inline 消除调用开销并内联 MemEqual/CompareBytesOrdered）
+  故 inline；而 ETag 含堆分配(SetLength+hex 循环)主导开销，inline 仅膨胀代码无可测吞吐增益，且 FPC 对 untyped/open-array 参的 inline 存在 codegen/内联失败风险，故保持非 inline 以稳尺寸与可维护性。 }
 function VfsETagStrong(const ASize, AModTime: Int64): string;
 function VfsETagFNV(const AHash: UInt32): string;
 
@@ -73,13 +76,24 @@ procedure VfsDedupSortedEntries(var AItems: TEntryArray);
   'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描：LowerBound 二分定位 +
   前缀连续段 Early-Break（k=子树扇出），零分配 SpanStartsWith 前缀判定，
   Child 去重经 TByteSpan 视图 SpanEqual 零拷贝（仅唯一子项时 Move 物化零 Copy），热路径
-  零小堆分配（embedded 零拷贝已收敛，base 基础实现同构 Early-Break）。 }
+  零小堆分配。单源模板寄居 nextpas.core.vfs.base.derive.inc（LowerBound+SpanStartsWith+Early-Break+16倍增限界+Move 单源，数值与分配策略单点收敛），
+  两公开函数仅为 Span 来源适配薄壳（string 零拷贝视图 vs Span 直视），复用 bytes.ops 单源 inline。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 { 零拷贝 Span 版本：ASpans 已为有序 TByteSpan（直指 FRp/字符串存储），ADirPrefix 同上；
-  与 string 版同模板单源，embedded 零拷贝路径直接复用，无额外 string 落地与并行 Move 维护 }
+  与 string 版同模板单源寄居 nextpas.core.vfs.base.derive.inc，embedded 零拷贝路径直接复用，无额外 string 落地；双版本 16 倍增限界 Cap≤N-Lo 单源 }
 function VfsDeriveChildNamesFromSpans(const ASpans: array of TByteSpan;
   const ADirPrefix: string): TVfsNameArray;
+
+{ 有序区间扫描零拷贝通用模板：LowerBound 二分+SpanStartsWith Early-Break+SpanEqual 去重，单源 bytes.ops inline，扇出由调用方限界 16 倍增 Cap≤N。
+  供 memtree/embedded List 复用，零拷贝 TByteSpan 直指存储，无 Spans O(n) 堆分配，O(k) 直取无二次二分；资源释放不丢（调用方持有 Result）。 }
+type
+  TVfsSpanGetter = function(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
+  TVfsChildHandler = procedure(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
+    ASourceIdx: SizeInt; AUserData: Pointer);
+procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
+  AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
+  AHandlerData: Pointer);
 
 implementation
 
@@ -193,9 +207,8 @@ var
   Lo, Hi, Mid: SizeInt;
   I: SizeInt;
   Cap: SizeInt;
-  ChildSpan, PrevSpan: TByteSpan;
+  ChildSpan, PrevSpan, PrefixSpan, CurSpan: TByteSpan;
   NeedAdd: Boolean;
-  PrefixSpan: TByteSpan;
 begin
   Result := nil;
   N := Length(ASpans);
@@ -205,65 +218,9 @@ begin
     PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
   else
     PrefixSpan := TByteSpan.Empty;
-  // 单源模板：LowerBound+SpanStartsWith+Early-Break 零拷贝，扇出限界 16 倍增，Cap≤N-Lo；bytes.ops 单源 inline 热路径
-  Lo := 0;
-  Hi := N;
-  if PrefixLen > 0 then
-  begin
-    while Lo < Hi do
-    begin
-      Mid := Lo + (Hi - Lo) div 2;
-      if SpanCompare(ASpans[Mid], PrefixSpan) < 0 then
-        Lo := Mid + 1
-      else
-        Hi := Mid;
-    end;
-  end;
-  SetLength(Result, 0);
-  OutN := 0;
-  for I := Lo to N - 1 do
-  begin
-    if SizeInt(ASpans[I].Len) <= PrefixLen then Continue;
-    if PrefixLen > 0 then
-    begin
-      if not SpanStartsWith(ASpans[I], PrefixSpan) then
-        Break;
-    end;
-    SegPos := 0;
-    for J := PrefixLen to SizeInt(ASpans[I].Len) - 1 do
-      if ASpans[I].Data[J] = Ord('/') then
-      begin
-        SegPos := J + 1;
-        Break;
-      end;
-    if SegPos > 0 then
-      ChildSpan := TByteSpan.Create(ASpans[I].Data, SizeUInt(SegPos - 1))
-    else
-      ChildSpan := ASpans[I];
-    if OutN = 0 then
-      NeedAdd := True
-    else
-    begin
-      if Length(Result[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1][1]), SizeUInt(Length(Result[OutN - 1])));
-      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
-    end;
-    if NeedAdd then
-    begin
-      if OutN >= Length(Result) then
-      begin
-        Cap := Length(Result);
-        if Cap = 0 then Cap := 16;
-        while Cap <= OutN do Cap := Cap * 2;
-        if Cap > N - Lo then Cap := N - Lo;
-        SetLength(Result, Cap);
-      end;
-      SetLength(Result[OutN], ChildSpan.Len);
-      if ChildSpan.Len > 0 then
-        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
-      Inc(OutN);
-    end;
-  end;
-  SetLength(Result, OutN);
+  {$DEFINE VFS_DERIVE_USE_SPANS}
+  {$I nextpas.core.vfs.base.derive.inc}
+  {$UNDEF VFS_DERIVE_USE_SPANS}
 end;
 
 function VfsDeriveChildNames(const ASortedPaths: array of string;
@@ -283,34 +240,46 @@ begin
     PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
   else
     PrefixSpan := TByteSpan.Empty;
-  // 零分配热点消除：不再分配 Spans 数组（原 O(n) 临时分配），按需零拷贝视图 TByteSpan.Create 复用 bytes.ops 单源 inline（SpanCompare/SpanStartsWith/SpanEqual + MemEqual/CompareBytesOrdered），仅结果 TVfsNameArray 按扇出限界 16 倍增分配
+  {$I nextpas.core.vfs.base.derive.inc}
+end;
+
+procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
+  AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
+  AHandlerData: Pointer);
+var
+  PrefixLen, Lo, Hi, Mid, I, SegPos, J: SizeInt;
+  PrefixSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
+  IsFirst: Boolean;
+begin
+  if ACount <= 0 then Exit;
+  if not Assigned(AGetter) or not Assigned(AHandler) then Exit;
+  PrefixLen := Length(ADirPrefix);
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
+  else
+    PrefixSpan := TByteSpan.Empty;
   Lo := 0;
-  Hi := N;
+  Hi := ACount;
   if PrefixLen > 0 then
   begin
     while Lo < Hi do
     begin
       Mid := Lo + (Hi - Lo) div 2;
-      if Length(ASortedPaths[Mid]) = 0 then CurSpan := TByteSpan.Empty
-      else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[Mid][1]), SizeUInt(Length(ASortedPaths[Mid])));
+      CurSpan := AGetter(Mid, AGetterData);
       if SpanCompare(CurSpan, PrefixSpan) < 0 then
         Lo := Mid + 1
       else
         Hi := Mid;
     end;
   end;
-  SetLength(Result, 0);
-  OutN := 0;
-  for I := Lo to N - 1 do
+  IsFirst := True;
+  PrevSpan := TByteSpan.Empty;
+  for I := Lo to ACount - 1 do
   begin
-    if Length(ASortedPaths[I]) = 0 then CurSpan := TByteSpan.Empty
-    else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(Length(ASortedPaths[I])));
+    CurSpan := AGetter(I, AGetterData);
     if SizeInt(CurSpan.Len) <= PrefixLen then Continue;
     if PrefixLen > 0 then
-    begin
-      if not SpanStartsWith(CurSpan, PrefixSpan) then
-        Break;
-    end;
+      if not SpanStartsWith(CurSpan, PrefixSpan) then Break;
     SegPos := 0;
     for J := PrefixLen to SizeInt(CurSpan.Len) - 1 do
       if CurSpan.Data[J] = Ord('/') then
@@ -322,30 +291,12 @@ begin
       ChildSpan := TByteSpan.Create(CurSpan.Data, SizeUInt(SegPos - 1))
     else
       ChildSpan := CurSpan;
-    if OutN = 0 then
-      NeedAdd := True
-    else
-    begin
-      if Length(Result[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1][1]), SizeUInt(Length(Result[OutN - 1])));
-      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
-    end;
-    if NeedAdd then
-    begin
-      if OutN >= Length(Result) then
-      begin
-        Cap := Length(Result);
-        if Cap = 0 then Cap := 16;
-        while Cap <= OutN do Cap := Cap * 2;
-        if Cap > N - Lo then Cap := N - Lo;
-        SetLength(Result, Cap);
-      end;
-      SetLength(Result[OutN], ChildSpan.Len);
-      if ChildSpan.Len > 0 then
-        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
-      Inc(OutN);
-    end;
+    if not IsFirst then
+      if SpanEqual(PrevSpan, ChildSpan) then Continue;
+    AHandler(ChildSpan, CurSpan, I, AHandlerData);
+    PrevSpan := ChildSpan;
+    IsFirst := False;
   end;
-  SetLength(Result, OutN);
 end;
 
 end.

@@ -88,6 +88,14 @@ type
     property Position: Int64 read GetPosition write SetPosition;
   end;
 
+  TMemListCtx = record
+    Owner: TMemVfs;
+    Result: TEntryArray;
+    OutN: SizeInt;
+    N: SizeInt;
+  end;
+  PMemListCtx = ^TMemListCtx;
+
 { ── 局部工具 ── }
 
 function CompareMemEntry(const A, B: TVfsMemEntry; Data: Pointer): SizeInt;
@@ -267,18 +275,55 @@ begin
   StatInto(APath, Result);
 end;
 
+function MemtreeGetter(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
+var
+  V: TMemVfs;
+begin
+  V := TMemVfs(AUserData);
+  if Length(V.FFiles[AIdx].Name) = 0 then
+    Result := TByteSpan.Empty
+  else
+    Result := TByteSpan.FromStr(V.FFiles[AIdx].Name);
+end;
+
+procedure MemtreeHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
+  ASourceIdx: SizeInt; AUserData: Pointer);
+var
+  Ctx: PMemListCtx;
+  Cap: SizeInt;
+begin
+  Ctx := PMemListCtx(AUserData);
+  if Ctx^.OutN >= Length(Ctx^.Result) then
+  begin
+    Cap := Length(Ctx^.Result);
+    if Cap = 0 then Cap := 16;
+    while Cap <= Ctx^.OutN do Cap := Cap * 2;
+    if Cap > Ctx^.N then Cap := Ctx^.N;
+    SetLength(Ctx^.Result, Cap);
+  end;
+  SetLength(Ctx^.Result[Ctx^.OutN].Name, AChildSpan.Len);
+  if AChildSpan.Len > 0 then
+    Move(AChildSpan.Data^, Ctx^.Result[Ctx^.OutN].Name[1], AChildSpan.Len);
+  if AFullSpan.Len = AChildSpan.Len then
+  begin
+    Ctx^.Result[Ctx^.OutN].Size := Length(Ctx^.Owner.FFiles[ASourceIdx].Data);
+    Ctx^.Result[Ctx^.OutN].ModTime := Ctx^.Owner.FFiles[ASourceIdx].ModTime;
+    Ctx^.Result[Ctx^.OutN].IsDir := False;
+  end
+  else
+  begin
+    Ctx^.Result[Ctx^.OutN].Size := 0;
+    Ctx^.Result[Ctx^.OutN].ModTime := 0;
+    Ctx^.Result[Ctx^.OutN].IsDir := True;
+  end;
+  Inc(Ctx^.OutN);
+end;
+
 function TMemVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
   DirIdx: SizeUInt;
-  I: SizeUInt;
-  Seen: TVfsNameArray;
-  Info: TStatInfo;
-  PrefixLen: SizeInt;
-  N, Lo, Hi, Mid: SizeInt;
-  OutN, Cap, SegPos: SizeInt;
-  J: SizeInt;
-  ChildSpan, PrevSpan, PrefixSpan, Span: TByteSpan;
+  Ctx: TMemListCtx;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -294,89 +339,19 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  // 单源收敛：零拷贝直读 FFiles Name 存储（TByteSpan.FromStr 零分配）+ bytes.ops 单源 inline，与 embedded FRp.StoredPathSpan 同模板（LowerBound+SpanStartsWith+Early-Break+Move 单源，无 Spans O(n) 堆分配）
-  // perf: TByteSpan 零拷贝视图直指 string 存储，热路径 SpanStartsWith/SpanEqual/SpanCompare inline 零拷贝；扇出限界 16 倍增 Cap≤N-Lo，资源释放不丢（Seen 局部管理，Result 归调用方）
+  // 单源收敛：经 VfsEnumerateChildSpans (vfs.base 通用 helper) 零拷贝直读 FFiles+bytes.ops，O(k) 直取无二次二分；与 embedded FRp.StoredPathSpan 同模板收口
+  // perf: TByteSpan.FromStr 零拷贝视图直指 string 存储，热路径 SpanStartsWith/SpanEqual/SpanCompare bytes.ops 单源 inline 零拷贝；扇出限界 16 倍增 Cap≤N，O(k) 直取 FFiles 并行缓存无 FindExact 二分，资源释放不丢（Ctx.Result 局部管理，Result 归调用方）
   Result := nil;
-  N := SizeInt(Length(FFiles));
-  if N = 0 then
-    Seen := nil
-  else
-  begin
-    PrefixLen := Length(Prefix);
-    if PrefixLen > 0 then
-      PrefixSpan := TByteSpan.FromStr(Prefix)
-    else
-      PrefixSpan := TByteSpan.Empty;
-    Lo := 0;
-    Hi := N;
-    if PrefixLen > 0 then
-    begin
-      while Lo < Hi do
-      begin
-        Mid := Lo + (Hi - Lo) div 2;
-        if Length(FFiles[Mid].Name) = 0 then
-          Span := TByteSpan.Empty
-        else
-          Span := TByteSpan.FromStr(FFiles[Mid].Name);
-        if SpanCompare(Span, PrefixSpan) < 0 then
-          Lo := Mid + 1
-        else
-          Hi := Mid;
-      end;
-    end;
-    SetLength(Seen, 0);
-    OutN := 0;
-    for I := SizeUInt(Lo) to SizeUInt(N) - 1 do
-    begin
-      if Length(FFiles[I].Name) = 0 then
-        Span := TByteSpan.Empty
-      else
-        Span := TByteSpan.FromStr(FFiles[I].Name);
-      if SizeInt(Span.Len) <= PrefixLen then Continue;
-      if PrefixLen > 0 then
-        if not SpanStartsWith(Span, PrefixSpan) then Break;
-      SegPos := 0;
-      for J := PrefixLen to SizeInt(Span.Len) - 1 do
-        if Span.Data[J] = Ord('/') then
-        begin
-          SegPos := J + 1;
-          Break;
-        end;
-      if SegPos > 0 then
-        ChildSpan := TByteSpan.Create(Span.Data, SizeUInt(SegPos - 1))
-      else
-        ChildSpan := Span;
-      if OutN > 0 then
-      begin
-        if Length(Seen[OutN - 1]) = 0 then
-          PrevSpan := TByteSpan.Empty
-        else
-          PrevSpan := TByteSpan.FromStr(Seen[OutN - 1]);
-        if SpanEqual(PrevSpan, ChildSpan) then Continue;
-      end;
-      if OutN >= Length(Seen) then
-      begin
-        Cap := Length(Seen);
-        if Cap = 0 then Cap := 16;
-        while Cap <= OutN do Cap := Cap * 2;
-        if Cap > N - Lo then Cap := N - Lo;
-        SetLength(Seen, Cap);
-      end;
-      SetLength(Seen[OutN], ChildSpan.Len);
-      if ChildSpan.Len > 0 then
-        Move(ChildSpan.Data^, Seen[OutN][1], ChildSpan.Len);
-      Inc(OutN);
-    end;
-    SetLength(Seen, OutN);
-  end;
-
-  SetLength(Result, SizeUInt(Length(Seen)));
-  for I := 0 to SizeUInt(Length(Seen)) - 1 do
-  begin
-    StatInto(Seen[I], Info);
-    Result[I] := Info.Info;
-  end;
-  // Seen 已 LowerBound+SpanStartsWith 有序去重（有序区间扫描保证字典序），省去 VfsSortEntries O(k log k) 冗余排序，与 embedded 同模板
+  if Length(FFiles) = 0 then
+    Exit(nil);
+  Ctx.Owner := Self;
+  Ctx.Result := nil;
+  Ctx.OutN := 0;
+  Ctx.N := SizeInt(Length(FFiles));
+  VfsEnumerateChildSpans(Ctx.N, @MemtreeGetter, Self, Prefix, @MemtreeHandler, @Ctx);
+  SetLength(Ctx.Result, Ctx.OutN);
+  Result := Ctx.Result;
+  // Ctx.Result 已 LowerBound+SpanStartsWith 有序去重保证字典序，省去 VfsSortEntries O(k log k)，与 embedded 同源
 end;
 
 function TMemVfs.OpenRead(const APath: string): IStream;

@@ -28,6 +28,7 @@ uses
 
 type
   TOverlayIndex = specialize TSwissTableStr<Integer>;
+  TOverlayListCache = specialize TSwissTableStr<TEntryArray>;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -35,8 +36,12 @@ type
     FList: array of IVfs;
     FIndex: TObject; { hash 索引：path->winning层(-1=miss)；RWLock读并发零争用/TryAcquireWrite非阻塞写防穿透惊群，bytes.ops SpanCompare零拷贝单源 }
     FIndexLock: IRWLock;
+    FListCache: TObject; { dir->List增量缓存：热点目录免重复 Sort+Unique O(k log k)→O(k) Copy，RWLock读并发零争用/TryAcquireWrite非阻塞写，bytes.ops零拷贝单源 }
+    FListLock: IRWLock;
     function TryGetCached(const APath: string; out AIdx: Integer): Boolean;
     procedure CacheResult(const APath: string; const AIdx: Integer);
+    function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean;
+    procedure CacheList(const ADirPath: string; const AEntries: TEntryArray);
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
   public
@@ -73,10 +78,18 @@ begin
   end;
   FIndex := TOverlayIndex.Create(16);
   FIndexLock := RWLock;
+  FListCache := TOverlayListCache.Create(16);
+  FListLock := RWLock;
 end;
 
 destructor TOverlayVfs.Destroy;
 begin
+  if FListCache <> nil then
+  begin
+    TOverlayListCache(FListCache).Free;
+    FListCache := nil;
+  end;
+  FListLock := nil;
   if FIndex <> nil then
   begin
     TOverlayIndex(FIndex).Free;
@@ -111,6 +124,39 @@ begin
     TOverlayIndex(FIndex).Put(APath, AIdx);
   finally
     FIndexLock.ReleaseWrite;
+  end;
+end;
+
+function TOverlayVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean;
+var
+  LCached: TEntryArray;
+begin
+  AEntries := nil;
+  Result := False;
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  FListLock.AcquireRead;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LCached) then
+    begin
+      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，RWLock读并发零争用，防调用方篡改共享缓存 }
+      Result := True;
+    end;
+  finally
+    FListLock.ReleaseRead;
+  end;
+end;
+
+procedure TOverlayVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray);
+var
+  LDummy: TEntryArray;
+begin
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  if not FListLock.TryAcquireWrite then Exit;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
+    TOverlayListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离：热点目录增量缓存 O(k) 零拷贝防脏，TryAcquireWrite非阻塞防惊群 }
+  finally
+    FListLock.ReleaseWrite;
   end;
 end;
 
@@ -225,6 +271,8 @@ var
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
+  { 热点目录增量缓存：高基数目录重复 List O(k log k) Sort+Unique → O(1) hash + O(k) Copy，RWLock读并发零争用 }
+  if TryGetListCached(ADirPath, Result) then Exit;
   if not VfsIsRoot(ADirPath) then
   begin
     if not FindStat(ADirPath, LStat) then
@@ -247,7 +295,11 @@ begin
       Inc(TempN);
     end;
   end;
-  if TempN = 0 then Exit(nil);
+  if TempN = 0 then
+  begin
+    CacheList(ADirPath, nil); { 空目录负缓存：防热点空目录重复聚合 }
+    Exit(nil);
+  end;
   SetLength(Temp, TempN);
   specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
   TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
@@ -255,6 +307,7 @@ begin
   SetLength(Result, TempN);
   for I := 0 to TempN - 1 do
     Result[I] := Temp[I].Entry;
+  CacheList(ADirPath, Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;

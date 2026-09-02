@@ -136,6 +136,15 @@ type
     function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
   end;
 
+type
+  TEmbeddedListCtx = record
+    Owner: TEmbeddedVfs;
+    Result: TEntryArray;
+    OutN: SizeInt;
+    N: SizeInt;
+  end;
+  PEmbeddedListCtx = ^TEmbeddedListCtx;
+
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
   Result := TEmbeddedVfs.Create(AData, ASize, True);
@@ -633,15 +642,49 @@ begin
     raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
+function EmbeddedGetter(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
+begin
+  Result := TEmbeddedVfs(AUserData).FRp.StoredPathSpan(SizeUInt(AIdx));
+end;
+
+procedure EmbeddedHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
+  ASourceIdx: SizeInt; AUserData: Pointer);
+var
+  Ctx: PEmbeddedListCtx;
+  Cap: SizeInt;
+begin
+  Ctx := PEmbeddedListCtx(AUserData);
+  if Ctx^.OutN >= Length(Ctx^.Result) then
+  begin
+    Cap := Length(Ctx^.Result);
+    if Cap = 0 then Cap := 16;
+    while Cap <= Ctx^.OutN do Cap := Cap * 2;
+    if Cap > Ctx^.N then Cap := Ctx^.N;
+    SetLength(Ctx^.Result, Cap);
+  end;
+  SetLength(Ctx^.Result[Ctx^.OutN].Name, AChildSpan.Len);
+  if AChildSpan.Len > 0 then
+    Move(AChildSpan.Data^, Ctx^.Result[Ctx^.OutN].Name[1], AChildSpan.Len);
+  if AFullSpan.Len = AChildSpan.Len then
+  begin
+    Ctx^.Result[Ctx^.OutN].Size := Int64(Ctx^.Owner.FEntries[ASourceIdx].Size);
+    Ctx^.Result[Ctx^.OutN].ModTime := Ctx^.Owner.FEntries[ASourceIdx].ModTime;
+    Ctx^.Result[Ctx^.OutN].IsDir := False;
+  end
+  else
+  begin
+    Ctx^.Result[Ctx^.OutN].Size := 0;
+    Ctx^.Result[Ctx^.OutN].ModTime := 0;
+    Ctx^.Result[Ctx^.OutN].IsDir := True;
+  end;
+  Inc(Ctx^.OutN);
+end;
+
 function TEmbeddedVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
-  PrefixLen: SizeInt;
   SI: TStatInfo;
-  I, OutN, Cap, SegPos, J: SizeInt;
-  Lo, Hi, Mid: SizeInt;
-  ChildSpan, PrevSpan, PrefixSpan, Span: TByteSpan;
-  N: SizeInt;
+  Ctx: TEmbeddedListCtx;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -655,82 +698,18 @@ begin
     Prefix := ''
   else
     Prefix := ADirPath + '/';
-  PrefixLen := Length(Prefix);
-  if PrefixLen > 0 then
-    PrefixSpan := TByteSpan.Create(PByte(@Prefix[1]), SizeUInt(PrefixLen))
-  else
-    PrefixSpan := TByteSpan.Empty;
-  N := SizeInt(FRp.Count);
-  if N = 0 then
-    Exit(nil);
-  Lo := 0;
-  Hi := N;
-  if PrefixLen > 0 then
-  begin
-    while Lo < Hi do
-    begin
-      Mid := Lo + (Hi - Lo) div 2;
-      Span := FRp.StoredPathSpan(SizeUInt(Mid));
-      if SpanCompare(Span, PrefixSpan) < 0 then
-        Lo := Mid + 1
-      else
-        Hi := Mid;
-    end;
-  end;
-  // 零拷贝 O(k) 直取：FRp 存储字节 TByteSpan 零分配，bytes.ops SpanStartsWith/SpanEqual/SpanCompare 单源 inline；FEntries 并行缓存 O(1) 直取无二分，扇出限界初值16 Cap≤N-Lo
+  // 单源收敛：经 VfsEnumerateChildSpans (vfs.base 通用 helper) 零拷贝直取 FRp 存储+bytes.ops，O(k) 直取 FEntries 并行缓存无二分；扇出限界
+  // perf: TByteSpan 零拷贝视图直指 FRp 存储，热路径 SpanStartsWith/SpanEqual/SpanCompare bytes.ops 单源 inline 零拷贝；扇出限界 16 倍增 Cap≤N，资源释放不丢（Ctx.Result 局部管理，Result 归调用方）
   Result := nil;
-  OutN := 0;
-  for I := Lo to N - 1 do
-  begin
-    Span := FRp.StoredPathSpan(SizeUInt(I));
-    if SizeInt(Span.Len) <= PrefixLen then Continue;
-    if PrefixLen > 0 then
-      if not SpanStartsWith(Span, PrefixSpan) then Break;
-    SegPos := 0;
-    for J := PrefixLen to SizeInt(Span.Len) - 1 do
-      if Span.Data[J] = Ord('/') then
-      begin
-        SegPos := J + 1;
-        Break;
-      end;
-    if SegPos > 0 then
-      ChildSpan := TByteSpan.Create(Span.Data, SizeUInt(SegPos - 1))
-    else
-      ChildSpan := Span;
-    if OutN > 0 then
-    begin
-      if Length(Result[OutN - 1].Name) = 0 then
-        PrevSpan := TByteSpan.Empty
-      else
-        PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1].Name[1]), SizeUInt(Length(Result[OutN - 1].Name)));
-      if SpanEqual(PrevSpan, ChildSpan) then Continue;
-    end;
-    if OutN >= Length(Result) then
-    begin
-      Cap := Length(Result);
-      if Cap = 0 then Cap := 16;
-      while Cap <= OutN do Cap := Cap * 2;
-      if Cap > N - Lo then Cap := N - Lo;
-      SetLength(Result, Cap);
-    end;
-    SetLength(Result[OutN].Name, ChildSpan.Len);
-    if ChildSpan.Len > 0 then
-      Move(ChildSpan.Data^, Result[OutN].Name[1], ChildSpan.Len);
-    if SizeInt(Span.Len) = SizeInt(ChildSpan.Len) then
-    begin
-      Result[OutN].Size := Int64(FEntries[I].Size);
-      Result[OutN].ModTime := FEntries[I].ModTime;
-      Result[OutN].IsDir := False;
-    end
-    else
-    begin
-      Result[OutN].Size := 0;
-      Result[OutN].ModTime := 0;
-      Result[OutN].IsDir := True;
-    end;
-    Inc(OutN);
-  end;
-  SetLength(Result, OutN);
+  if FRp.Count = 0 then
+    Exit(nil);
+  Ctx.Owner := Self;
+  Ctx.Result := nil;
+  Ctx.OutN := 0;
+  Ctx.N := SizeInt(FRp.Count);
+  VfsEnumerateChildSpans(Ctx.N, @EmbeddedGetter, Self, Prefix, @EmbeddedHandler, @Ctx);
+  SetLength(Ctx.Result, Ctx.OutN);
+  Result := Ctx.Result;
 end;
 
 function TEmbeddedVfs.OpenRead(const APath: string): IStream;
