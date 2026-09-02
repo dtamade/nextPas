@@ -99,5 +99,9 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许)
 
 ## 10. 验证
 
-`260 tests HEAPTRC OK` + `78文件无ffi/vendor`（核心 26+扩展 52 四件套完整，unique 76+2 bus 门面，codec.flac/mp3/vorbis 各 `base/intf/impl` 四件套 1.5）+ `23 GUID`（11 核心+12 扩展含 B 前缀 bus 异形：0051/0052/0053/0054/0070/0071/0072/0080/C00001/02）+ `实时纪律` + `hygiene` + `test_automation` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6/§8` 与 `README.md` 测试矩阵）。
+`268 tests HEAPTRC OK` + `84文件无ffi/vendor`（核心 29+扩展 55 四件套完整，unique 82+2 bus 门面，codec.flac/mp3/vorbis/opus 各 `base/intf/impl/pas` 四件套 1.5.2，wav四件套L2化）+ `23 GUID`（11 核心+12 扩展含 B 前缀 bus 异形）+ `实时纪律` + `hygiene` + `test_automation` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6/§8` 与 `README.md` 测试矩阵）。
+
+## 11. 独立族演进（S10 预研）
+
+`84 provisional = 26 core 冻结 + 58 ext 待抽`：`codec.flac/mp3/vorbis/opus` → `nextpas.core.audio.codec.*` 独立 L2（各 `base/intf/impl/pas` 四件套，`base` L0 only + `bytes.ops` 单源 + `Probe≤4KB`）；`spatial/bus/bank/resource/playlist/event/studio` → `nextpas.core.audio.*` 独立；`audio.simd/pcm.simd` → `nextpas.core.simd` 统一。抽离后 `audio` 仅保留 26 core，`L2→L2` 禁依赖，受控 seam 经 `module-registry` 登记 + gate，白名单前禁止在 `audio` 内继续堆叠。
 
