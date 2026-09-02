@@ -80,6 +80,9 @@ procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt
 procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 { 单源路径拼接：prefix/name 单次 SetLength + 两 Move（bytes.ops 单源 CopyMemory），tar/zip 联邦 ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，切片零拷贝视图单源，热路径 inline 薄转发 }
 function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
+{ 单源对齐：power-of-two/div-mul 无掩码截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源避免分散 and not SizeUInt 截断 }
+function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
+function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
 
 implementation
 
@@ -665,6 +668,26 @@ begin
   CopyMemory(ALeft.Data, PByte(@Result[1]), ALeft.Len);
   Result[ALeft.Len + 1] := ASeparator;
   CopyMemory(ARight.Data, PByte(@Result[ALeft.Len + 2]), ARight.Len);
+end;
+
+function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
+begin
+  // perf: inline 单点对齐，无 and not SizeUInt 掩码截断，溢出安全 div/mod 单源
+  if AAlignment = 0 then
+    Exit(AValue);
+  if AValue = 0 then
+    Exit(0);
+  if AValue mod AAlignment = 0 then
+    Exit(AValue);
+  if AValue div AAlignment >= High(SizeUInt) div AAlignment then
+    Exit(High(SizeUInt) - High(SizeUInt) mod AAlignment);
+  Result := (AValue div AAlignment + 1) * AAlignment;
+end;
+
+function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+begin
+  // perf: 4K 页对齐薄转发复用 AlignUp 单源，inline 零拷贝，避免 tar Builder 重复 and not
+  Result := AlignUp(AValue, 4096);
 end;
 
 end.

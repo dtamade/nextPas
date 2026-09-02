@@ -79,7 +79,7 @@ begin
   try
     if not FFinished then
     begin
-      if ExceptObject = nil then
+      if nextpas.core.exception.ExceptObject = nil then
         raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')
       else
       begin

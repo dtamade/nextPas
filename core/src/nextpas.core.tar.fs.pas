@@ -5,7 +5,7 @@ unit nextpas.core.tar.fs;
  * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalk 单源），打包经 bytes.builder
  * IBytesBuilder 直写切片单次 ToBytes 交付（消除 CreateBytesStream+ArchiveSnapshotStream 二次
  * SetLength+Seek+Read 大块 Move），消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed；
- * L2 单 seam：fs 仅经 archive 联邦，注册层级见 module-registry archive/tar。
+ * L2 单 seam：fs 仅经 archive.fs 联邦单缝（archive.fs 为 L2 同层唯一显式依赖，tar.fs 禁直引 nextpas.core.fs），复用 bytes.ops 单源零拷贝，注册层级见 module-registry archive/tar 联邦 via archive.fs。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -34,8 +34,7 @@ uses
   nextpas.core.bytes.builder,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
-  nextpas.core.archive.fs,
-  nextpas.core.fs;
+  nextpas.core.archive.fs;
 
 { 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
 
@@ -192,46 +191,45 @@ begin
             end;
           tekSymlink:
             begin
-              // 覆盖语义：已存在文件/链接先移除，fail-closed
-              if Exists(LFull) or IsSymlink(LFull) then
-                try Remove(LFull); except end;
-              Symlink(H.LinkName, LFull);
-              // symlink 自身权限/mtime不落盘（平台语义），仅保证可观测落盘
+              // 单源：ArchiveHandleSpecial 统一预清理（Exists/IsSymlink→Remove），消除四分支样板，archive.fs 联邦单缝零分配
+              ArchiveHandleSpecial(LFull);
+              ArchiveSymlink(H.LinkName, LFull);
             end;
           tekHardLink:
             begin
               LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
-              // 源必须已落盘，否则 fail-closed
-              if not Exists(LHardSource) then
+              if not ArchiveExists(LHardSource) then
                 raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
-              if Exists(LFull) or IsSymlink(LFull) then
-                try Remove(LFull); except end;
-              HardLink(LHardSource, LFull);
+              ArchiveHandleSpecial(LFull);
+              ArchiveHardLink(LHardSource, LFull);
             end;
           tekFifo:
             begin
-              if Exists(LFull) or IsSymlink(LFull) then
-                try Remove(LFull); except end;
+              ArchiveHandleSpecial(LFull);
               try
-                MkFifo(LFull, TFilePermission(LMode and $0FFF));
+                ArchiveMkFifo(LFull, TArchivePermission(LMode and $0FFF));
                 ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
               except
                 on E: Exception do
                 begin
                   System.WriteLn(StdErr, '[WARN] tar extract: mkfifo failed for ', H.Name, ': ', E.Message);
                   System.Flush(StdErr);
-                  ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
-                  ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+                  ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
                 end;
               end;
             end;
           tekCharDevice, tekBlockDevice:
             begin
-              // device：需 mknod 带 dev 号且需特权，当前头未携带 devmajor/minor，best-effort WARN 并占位，保证不静默丢弃且可观测
-              System.WriteLn(StdErr, '[WARN] tar extract: special device skipped (no mknod): ', H.Name, ' kind=', Ord(H.Kind));
-              System.Flush(StdErr);
-              ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
-              ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+              ArchiveHandleSpecial(LFull);
+              // INV-7 往返完整：经 archive.fs 单缝 ArchiveTryMkDevice 携带 DevMajor/DevMinor 真实 mknod（S_IFCHR/S_IFBLK），特权不足则 fail-closed WARN+占位，可观测不静默降级，复用 bytes.ops 单源思想零拷贝
+              if not ArchiveTryMkDevice(LFull, LMode, H.DevMajor, H.DevMinor, H.Kind = tekCharDevice) then
+              begin
+                System.WriteLn(StdErr, '[WARN] tar extract: special device skipped (mknod failed dev=', H.DevMajor, ':', H.DevMinor, '): ', H.Name, ' kind=', Ord(H.Kind));
+                System.Flush(StdErr);
+                ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+              end
+              else
+                ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
             end;
         else
           Continue;

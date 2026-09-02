@@ -15,6 +15,7 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
+    FIOBuf: TBytes; // pooled 64K stream buffer (no shrink, amortized 1 alloc for TarPackDirInto 200 files, avoids per-call SetLength peak)
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes); inline;
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -71,13 +72,14 @@ begin
   FDst := ADst;
 end;
 
-procedure TTarWriter.WriteBlock(const ABlock: array of Byte); inline;
+procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
 var
   Buf: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Len: SizeInt;
 begin
-  Len := Length(ABlock);
+  // perf: no inline — 512 stack zero-pad would inline-expand at every call site (WriteHeader/EmitPaxHeader/Finish ×200), I-Cache replication ~200×512B; out-of-line keeps one copy, ~1 virt disp per block, zero-copy Move via bytes.ops single source
   // stability: 超 512 抛错而非静默截断，暴露上游头构造越界；资源释放由调用方/caller 兜底，无泄漏
+  Len := Length(ABlock);
   if Len > CBlockSize then
     raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, CBlockSize]);
   if Len = CBlockSize then
@@ -87,7 +89,6 @@ begin
   end
   else
   begin
-    // perf: single IWriter.Write 512 via stacked zero-pad + CopyMemory single source, merge header+pad double virtual dispatch (200x512B per-entry 2->1), inline + zero-copy Move via bytes.ops single source
     FillChar(Buf[0], SizeOf(Buf), 0);
     if Len > 0 then
       CopyMemory(PByte(@ABlock[0]), PByte(@Buf[0]), SizeUInt(Len));
@@ -140,14 +141,14 @@ var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
   FillChar(Block[0], SizeOf(Block), 0);
-  TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, C_TAR_PAX_HEADER_NAME);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_MODE, C_TAR_LEN_MODE, 0);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, Length(APayload));
-  TarFormatNumericField(@Block[0], C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
-  FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
-  Block[C_TAR_OFF_TYPEFLAG] := Ord('x');
+  TarPutHeaderString(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, C_TAR_PAX_HEADER_NAME);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, 0);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, 0);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, 0);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, Length(APayload));
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len, 0);
+  FillChar(Block[C_TAR_LAYOUT.Chksum.Off], C_TAR_LAYOUT.Chksum.Len, Ord(' '));
+  Block[C_TAR_LAYOUT.TypeFlag.Off] := Ord('x');
   TarWriteUStarMagic(@Block[0]);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
@@ -176,59 +177,59 @@ begin
   if (LinkName <> '') and (Pos(#0, LinkName) > 0) then
     raise EArgumentError.Create('tar: linkname contains NUL');
   CutPos := 0;
-  if Length(Name) > C_TAR_LEN_NAME then
+  if Length(Name) > C_TAR_LAYOUT.Name.Len then
   begin
-    I := C_TAR_LEN_PREFIX;
+    I := C_TAR_LAYOUT.Prefix.Len;
     while (I >= 1) and (CutPos = 0) do
     begin
-      if (I < Length(Name)) and (Name[I + 1] = '/') and (Length(Name) - I - 1 <= C_TAR_LEN_NAME) then
+      if (I < Length(Name)) and (Name[I + 1] = '/') and (Length(Name) - I - 1 <= C_TAR_LAYOUT.Name.Len) then
         CutPos := I;
       Dec(I);
     end;
   end;
-  if ((Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0)) or (Length(LinkName) > C_TAR_LEN_LINKNAME) then
+  if ((Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0)) or (Length(LinkName) > C_TAR_LAYOUT.LinkName.Len) then
   begin
     LBuilder := CreateBytesBuilder(256);
-    if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
+    if (Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0) then
       TarAppendPaxRecord(LBuilder, 'path', Name);
-    if Length(LinkName) > C_TAR_LEN_LINKNAME then
+    if Length(LinkName) > C_TAR_LAYOUT.LinkName.Len then
       TarAppendPaxRecord(LBuilder, 'linkpath', LinkName);
     LPaxBytes := LBuilder.ToBytes;
     EmitPaxHeader(LPaxBytes);
   end;
   FillChar(Block[0], SizeOf(Block), 0);
-  if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
+  if (Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0) then
     // perf: TarPutHeaderSlice 零拷贝 PByte 切片单源 Move(bytes.ops)，消除 Copy(Name,1,N) 临时串二次分配与 Move
-    TarPutHeaderSlice(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, PByte(PAnsiChar(Name)), SizeUInt(C_TAR_LEN_NAME))
+    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(Name)), SizeUInt(C_TAR_LAYOUT.Name.Len))
   else if CutPos <> 0 then
   begin
     // perf: 前缀/名称分片零拷贝切片，复用 bytes.ops 单源 Move，无临时串分配；PAnsiChar 算术避免 @Name[idx] 越界 RangeCheck
-    TarPutHeaderSlice(@Block[0], C_TAR_OFF_PREFIX, C_TAR_LEN_PREFIX, PByte(PAnsiChar(Name)), SizeUInt(CutPos));
-    TarPutHeaderSlice(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, PByte(PAnsiChar(Name) + CutPos + 1), SizeUInt(Length(Name) - CutPos - 1));
+    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, PByte(PAnsiChar(Name)), SizeUInt(CutPos));
+    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(Name) + CutPos + 1), SizeUInt(Length(Name) - CutPos - 1));
   end
   else
-    TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, Name);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_MODE, C_TAR_LEN_MODE, AHdr.Mode);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_UID, C_TAR_LEN_UID, AHdr.UID);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_GID, C_TAR_LEN_GID, AHdr.GID);
+    TarPutHeaderString(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, Name);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, AHdr.Mode);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, AHdr.UID);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, AHdr.GID);
   if AHdr.Kind = tekRegular then
-    TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, ADataSize)
+    TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, ADataSize)
   else
-    TarFormatNumericField(@Block[0], C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, 0);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, AHdr.MTimeUnix);
-  FillChar(Block[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, Ord(' '));
-  Block[C_TAR_OFF_TYPEFLAG] := Byte(KindToTypeFlag(AHdr.Kind));
-  if Length(LinkName) > C_TAR_LEN_LINKNAME then
+    TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, 0);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len, AHdr.MTimeUnix);
+  FillChar(Block[C_TAR_LAYOUT.Chksum.Off], C_TAR_LAYOUT.Chksum.Len, Ord(' '));
+  Block[C_TAR_LAYOUT.TypeFlag.Off] := Byte(KindToTypeFlag(AHdr.Kind));
+  if Length(LinkName) > C_TAR_LAYOUT.LinkName.Len then
     // perf: 零拷贝切片截断，消除 Copy(LinkName) 临时串；PAnsiChar 零拷贝视图单源 bytes.ops
-    TarPutHeaderSlice(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, PByte(PAnsiChar(LinkName)), SizeUInt(C_TAR_LEN_LINKNAME))
+    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, PByte(PAnsiChar(LinkName)), SizeUInt(C_TAR_LAYOUT.LinkName.Len))
   else
-    TarPutHeaderString(@Block[0], C_TAR_OFF_LINKNAME, C_TAR_LEN_LINKNAME, LinkName);
+    TarPutHeaderString(@Block[0], C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, LinkName);
   TarWriteUStarMagic(@Block[0]);
-  TarPutHeaderString(@Block[0], C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
-  TarPutHeaderString(@Block[0], C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
+  TarPutHeaderString(@Block[0], C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, AHdr.UName);
+  TarPutHeaderString(@Block[0], C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, AHdr.GName);
   // ustar devmajor/devminor：设备类型保留设备号，char/block 设备生效，其余置零兼容；复用 bytes.ops 单源 Move 单点
-  TarFormatNumericField(@Block[0], C_TAR_OFF_DEVMAJOR, C_TAR_LEN_DEVMAJOR, AHdr.DevMajor);
-  TarFormatNumericField(@Block[0], C_TAR_OFF_DEVMINOR, C_TAR_LEN_DEVMINOR, AHdr.DevMinor);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len, AHdr.DevMajor);
+  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len, AHdr.DevMinor);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
 end;
@@ -316,7 +317,6 @@ procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: I
 var
   LRead, LToRead, LBufSize: SizeUInt;
   LRemaining: Int64;
-  LBuf: TBytes;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
 begin
@@ -335,22 +335,23 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // perf: 局部缓冲按需单次分配，无实例级池化状态机；消除大小文件交替时 2×阈值缩容/4K 底反复 SetLength 与清零 Move，开销回归 amortized 单次分配；职责归一至调用栈，L2 容器不背内存池
-  // stability: 局部 TBytes 生命周期托管，异常安全不丢，无 linger 峰值
+  // perf: pooled 64K reuse via FIOBuf (instance-level, no shrink) — eliminates TarPackDirInto 200-file serial repeated SetLength peak; first alloc ≤64K, subsequent 199 reuse via Length check, amortized 1 alloc, zero-copy Move via bytes.ops CopyMemory single source; no 2× thrash/4K churn, L2 writer owns ephemeral buffer, lifecycle bound to writer (no linger beyond writer.Free), still zero per-entry TBytes copy
+  // stability: FIOBuf managed by TBytes lifecycle, exception-safe, no leak; pooled reuse does not retain beyond writer lifetime
   LBufSize := SizeUInt(AHdr.Size);
   if LBufSize > C_STREAM_BUF_SIZE then
     LBufSize := C_STREAM_BUF_SIZE;
-  SetLength(LBuf, LBufSize);
+  if Length(FIOBuf) < SizeInt(LBufSize) then
+    SetLength(FIOBuf, LBufSize);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin
     LToRead := SizeUInt(LRemaining);
-    if LToRead > SizeUInt(Length(LBuf)) then
-      LToRead := SizeUInt(Length(LBuf));
-    LRead := AReader.Read(LBuf[0], LToRead);
+    if LToRead > SizeUInt(Length(FIOBuf)) then
+      LToRead := SizeUInt(Length(FIOBuf));
+    LRead := AReader.Read(FIOBuf[0], LToRead);
     if LRead = 0 then
       raise EIOError.Create('tar: short read');
-    if FDst.Write(LBuf[0], LRead) <> LRead then
+    if FDst.Write(FIOBuf[0], LRead) <> LRead then
       raise EIOError.Create('tar: short write');
     Dec(LRemaining, Int64(LRead));
   end;
@@ -385,7 +386,7 @@ var
   LUnwinding: Boolean;
 begin
   // stability: SafeFail — ExceptObject 非 nil 时抑制二次异常逃逸，StdErr WARN 后释资源；避免析构期 Finish 的 EIOError/short-write 直抛导致进程终止
-  // perf: 无池化状态机，仅 Finish 两零块 best-effort，零额外分配，inline 零拷贝复用
+  // perf: pooled FIOBuf 随 writer 释放无 linger，仅 Finish 两零块 best-effort，零额外分配，out-of-line WriteBlock 单拷贝复用 bytes.ops 零拷贝
   LUnwinding := nextpas.core.exception.ExceptObject <> nil;
   try
     if not FFinished then

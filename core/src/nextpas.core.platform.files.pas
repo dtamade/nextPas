@@ -154,6 +154,14 @@ function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int3
     @return 0 成功，否则返回错误码 *}
 function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32;
 
+{** @desc 创建设备节点（owner 反哺：tar device 往返完整，经平台单缝，携带 DevMajor/DevMinor）
+    @param APath 路径
+    @param AMode 权限+类型（已含 S_IFCHR/S_IFBLK）
+    @param ADevMajor 主设备号
+    @param ADevMinor 次设备号
+    @return 0 成功，否则返回错误码 *}
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32;
+
 {** @desc 创建目录
     @param APath 目录路径
     @param AMode 目录权限
@@ -638,6 +646,36 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
   Result := PosixCheck(mkfifo(APath, AMode));
+end;
+
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32;
+{$IFDEF NEXTPAS_UNIX}
+var
+  LDev: dev_t;
+{$IFDEF NEXTPAS_LINUX}
+  LMajor, LMinor: UInt64;
+{$ENDIF}
+{$ENDIF}
+begin
+{$IFDEF NEXTPAS_UNIX}
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  {$IFDEF NEXTPAS_LINUX}
+  // Linux makedev: ((major & $fffff000) << 32) | ((major & $fff) << 8) | ((minor & $ffffff00) << 12) | (minor & $ff)
+  LMajor := UInt64(ADevMajor);
+  LMinor := UInt64(ADevMinor);
+  LDev := dev_t(((LMajor and $FFFFF000) shl 32) or ((LMajor and $FFF) shl 8) or ((LMinor and $FFFFFF00) shl 12) or (LMinor and $FF));
+  {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_ANDROID)}
+  // BSD/Darwin/Android simplified: (major << 8) | minor 兼容小设备号，满足 tar 往返单源 bytes.ops 零拷贝思想，不引入复杂宏展开
+  LDev := dev_t((UInt64(ADevMajor) shl 8) or UInt64(ADevMinor and $FF));
+  {$ELSE}
+  LDev := dev_t((UInt64(ADevMajor) shl 8) or UInt64(ADevMinor));
+  {$ENDIF}
+  Result := PosixCheck(mknod(APath, mode_t(AMode), LDev));
+{$ELSE}
+  // Windows:无 mknod 语义，返回不支持，调用方 fail-closed WARN+占位
+  Result := PLATFORM_ERR_UNSUPPORTED;
+{$ENDIF}
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -1691,6 +1729,7 @@ function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPla
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

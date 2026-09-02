@@ -40,6 +40,7 @@ type
 type
   TArchiveFileInfo = TFileInfo;
   TArchiveFile = IFile;
+  TArchivePermission = TFilePermission;
 const
   ArchivePermDefault = PermDefault;
   ArchivePermDirDefault = PermDirDefault;
@@ -87,6 +88,18 @@ function ArchiveStat(const APath: string): TFileInfo; inline;
 function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
 function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
 procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
+function ArchiveExists(const APath: string): Boolean; inline;
+function ArchiveIsSymlink(const APath: string): Boolean; inline;
+procedure ArchiveRemove(const APath: string); inline;
+procedure ArchiveRemoveIfExists(const APath: string); inline;
+procedure ArchiveSymlink(const ATarget, ALinkPath: string); inline;
+procedure ArchiveHardLink(const AOldPath, ANewPath: string); inline;
+procedure ArchiveMkFifo(const APath: string; const APerm: TFilePermission); inline;
+function ArchiveTryMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean): Boolean;
+{ 单源：特殊文件预清理（Exists/IsSymlink→Remove best-effort），消除 tar.fs 四分支重复样板，inline 薄转发零额外分配 }
+procedure ArchiveHandleSpecial(const APath: string); inline;
+{ 单源：设备落盘 fallback 空文件占位，复用 ArchiveWriteFileSlice+ArchiveRestoreFileMeta，inline 薄转发 }
+procedure ArchiveWriteEmptyFallback(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean); inline;
 
 { 快照：IStream.Size/Seek/Read + short-snapshot 校验复用，消除 TarPackDir/builder.Finish 重复 }
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;
@@ -108,6 +121,7 @@ uses
   nextpas.core.fs,
   nextpas.core.fs.stream,
   nextpas.core.fs.errors,
+  nextpas.core.fs.util,
   nextpas.core.bytes.ops,
   nextpas.core.platform.fs,
   nextpas.core.platform.files,
@@ -411,6 +425,67 @@ end;
 function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
 begin
   Result := ArchiveOpen(APath, [fmRead]);
+end;
+
+function ArchiveExists(const APath: string): Boolean; inline;
+begin
+  Result := nextpas.core.fs.Exists(APath);
+end;
+
+function ArchiveIsSymlink(const APath: string): Boolean; inline;
+begin
+  Result := nextpas.core.fs.IsSymlink(APath);
+end;
+
+procedure ArchiveRemove(const APath: string); inline;
+begin
+  nextpas.core.fs.Remove(APath);
+end;
+
+procedure ArchiveRemoveIfExists(const APath: string); inline;
+begin
+  // perf: inline 薄转发，复用 fs 单源 Exists/IsSymlink，零拷贝无分配，消除 tar.fs 四处样板
+  if ArchiveExists(APath) or ArchiveIsSymlink(APath) then
+    try ArchiveRemove(APath); except end;
+end;
+
+procedure ArchiveSymlink(const ATarget, ALinkPath: string); inline;
+begin
+  nextpas.core.fs.Symlink(ATarget, ALinkPath);
+end;
+
+procedure ArchiveHardLink(const AOldPath, ANewPath: string); inline;
+begin
+  nextpas.core.fs.HardLink(AOldPath, ANewPath);
+end;
+
+procedure ArchiveMkFifo(const APath: string; const APerm: TFilePermission); inline;
+begin
+  nextpas.core.fs.MkFifo(APath, APerm);
+end;
+
+function ArchiveTryMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean): Boolean;
+begin
+  // owner 反哺：经 fs.util FsMkDevice→platform_file_mknod 单缝，携带 DevMajor/DevMinor 真实落地，INV-7 往返完整；失败返回 False 由调用方 fail-closed WARN+占位
+  try
+    nextpas.core.fs.util.FsMkDevice(APath, AMode, ADevMajor, ADevMinor, AIsChar);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+procedure ArchiveHandleSpecial(const APath: string); inline;
+begin
+  // 单源：特殊文件落盘前预清理，消除 tekSymlink/tekHardLink/tekFifo/tekCharDevice 四分支重复 Exists/Remove 样板，bytes.ops 单源思想零分配
+  ArchiveRemoveIfExists(APath);
+end;
+
+procedure ArchiveWriteEmptyFallback(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean); inline;
+begin
+  // 单源：设备/mkfifo 失败后的空文件占位+定稿，复用 ArchiveWriteFileSlice/ArchiveRestoreFileMeta，避免四处重复
+  ArchiveWriteFileSlice(APath, nil, 0, ArchivePermDefault);
+  ArchiveRestoreFileMeta(APath, AMode, AMtimeNs, ARestoreMode);
 end;
 
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;

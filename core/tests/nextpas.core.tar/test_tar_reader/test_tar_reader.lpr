@@ -196,13 +196,13 @@ var
 begin
   FillChar(Block[0], 512, 0);
   P := @Block[0];
-  TarPutHeaderString(P, C_TAR_OFF_NAME, C_TAR_LEN_NAME, AName);
-  TarFormatNumericField(P, C_TAR_OFF_MODE, C_TAR_LEN_MODE, $1A4);
-  TarFormatNumericField(P, C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
-  TarFormatNumericField(P, C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
-  TarFormatNumericField(P, C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, ASize);
-  TarFormatNumericField(P, C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
-  Block[C_TAR_OFF_TYPEFLAG] := Ord(AType);
+  TarPutHeaderString(P, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, AName);
+  TarFormatNumericField(P, C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, $1A4);
+  TarFormatNumericField(P, C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, 0);
+  TarFormatNumericField(P, C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, 0);
+  TarFormatNumericField(P, C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, ASize);
+  TarFormatNumericField(P, C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len, 0);
+  Block[C_TAR_LAYOUT.TypeFlag.Off] := Ord(AType);
   TarWriteUStarMagic(P);
   TarFinalizeHeaderChecksum(P);
   BytesAppend(ABuf, P, 512);
