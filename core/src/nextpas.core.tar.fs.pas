@@ -2,10 +2,9 @@ unit nextpas.core.tar.fs;
 {**
  * @desc Tar 与文件系统之间的便捷层：递归打包目录、解包归档到目录。
  * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、零拷贝落盘、
- * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalks/ArchiveEstimateTarSize 单源：Walk 收集 SetLength/ArchiveCollectWalk/SetLength 模板与容量预估 header+AlignUp 循环样板均收敛至 archive.fs 联邦单源，复用 bytes.ops AlignUp 单源 inline 零拷贝），打包经 bytes.builder
- * IBytesBuilder 直写切片单次 ToBytes 交付（消除 CreateBytesStream+ArchiveSnapshotStream 二次
+ * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalks/ArchiveEstimateTarSize 单源：Walk 收集 SetLength/ArchiveCollectWalk/SetLength 模板与容量预估 header+AlignUp 循环样板均收敛至 archive.fs 联邦单源，复用 bytes.ops AlignUp 单源 inline 零拷贝），打包经 archive.fs 联邦 IArchiveBuilder（IBytesBuilder 单源 via archive.fs 联邦单缝，直写切片单次 ToBytes 交付，消除 CreateBytesStream+ArchiveSnapshotStream 二次
  * SetLength+Seek+Read 大块 Move），消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed；
- * L2 单 seam：fs 仅经 archive.fs 联邦单缝（archive.fs 为 L2 同层唯一显式依赖，tar.fs 禁直引 nextpas.core.fs），复用 bytes.ops 单源零拷贝，注册层级见 module-registry archive/tar 联邦 via archive.fs。
+ * L2 单 seam：fs/builder 仅经 archive.fs 联邦单缝（archive.fs 为 L2 同层唯一显式依赖，tar.fs 禁直引 nextpas.core.fs/nextpas.core.bytes.builder 双缝），复用 bytes.ops 单源零拷贝 inline，注册层级见 module-registry archive/tar 联邦 via archive.fs。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -33,10 +32,10 @@ uses
   nextpas.core.tar.reader,
   nextpas.core.io.intf,
   nextpas.core.io.base,
-  nextpas.core.bytes.builder,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
   nextpas.core.log.intf,
+  nextpas.core.fs.errors,
   nextpas.core.text.conv,
   nextpas.core.archive.fs;
 
@@ -89,8 +88,8 @@ begin
           LFile.Close;
         except
           on E: Exception do
-            // stability+observability: Close 异常经 log.intf 单缝可观测（NullLogger零分配inline薄转发，无StdErr直触），不静默吞，fail-closed可诊断
-            NullLogger.Warn('tar pack: close failed for ' + AWalks[LI].FFull + ': ' + E.Message);
+            // stability+observability: Close 异常经 fs.errors 联邦单源 FsWarnCloseFailed 可观测（log.intf NullLogger 零分配 inline 薄转发，统一错误归一，不静默吞，fail-closed可诊断）
+            FsWarnCloseFailed('tar pack', AWalks[LI].FFull, E);
         end;
       end;
     end;
@@ -119,7 +118,7 @@ end;
 
 function TarPackDir(const ADir: string): TBytes;
 var
-  LBuilder: IBytesBuilder;
+  LBuilder: IArchiveBuilder;
   LSink: IWriter;
   W: TTarWriter;
   LWalks: TArchiveWalkArray;
@@ -163,7 +162,6 @@ var
   R: TTarReader;
   H: TTarHeader;
   LFull: string;
-  LSep: Integer;
   LMode: Word;
   LDirs: TArchiveDeferredArray;
   LDirCount: Integer;
@@ -174,8 +172,6 @@ var
   LHardSource: string;
   LLastParent: string;
   LParentLen: SizeUInt;
-  LProbe: Integer;
-  LHasSlash: Boolean;
 begin
   if AOptions.MaxEntrySize = 0 then
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -212,14 +208,8 @@ begin
         LFull := ArchiveJoinPath(ADestDir, H.Name);
         if (LLastParent <> '') and (Length(LFull) > Length(LLastParent)) and (LFull[Length(LLastParent) + 1] = '/') then
         begin
-          LHasSlash := False;
-          for LProbe := Length(LLastParent) + 2 to Length(LFull) do
-            if LFull[LProbe] = '/' then
-            begin
-              LHasSlash := True;
-              Break;
-            end;
-          if LHasSlash then
+          // perf: inline 零拷贝 TByteSpan 视图 via bytes.ops StringAsSpan 单源 + SpanContains SIMD 单源，消除手写 for 斜杠扫描 O(n) 稀释，inline 单源零拷贝高级感
+          if SpanContains(StringAsSpan(LFull).Slice(SizeUInt(Length(LLastParent) + 1), SizeUInt(Length(LFull) - Length(LLastParent) - 1)), Byte('/')) then
             SyncTarParentCache(LFull, LLastParent, LParentLen);
           // else fast hit: same parent, skip via helper no-op, zero full scan
         end

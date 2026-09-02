@@ -18,18 +18,18 @@ type
     FIOBuf: TBytes; // I/O buffer
     FLogger: ILogger;
     procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
-    procedure EnsureIOBufForSize(ASize: Int64); inline; // I/O缓冲策略单源：TarIOBufCapacityFor+bytes.ops.BytesEnsureCapacity inline零拷贝单口
+    procedure EnsureIOBufForSize(ASize: Int64); inline;
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
-    function FindPrefixCut(const AName: string): SizeInt;
+    function FindPrefixCut(const AName: string): SizeInt; inline;
     function NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
     procedure ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
     procedure EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
-    procedure FillHeaderStringField(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string); inline; // 单源：StringAsSpan切片截断+TarPutHeaderField落盘样板收敛，bytes.ops零拷贝单源inline单分发
+    procedure FillHeaderStringField(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string); inline;
     procedure FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
     procedure FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
     procedure FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
@@ -99,14 +99,12 @@ end;
 
 procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
 begin
-  // single source via bytes.ops.BytesEnsureCapacity
   BytesEnsureCapacity(FIOBuf, ANeed);
 end;
 
 procedure TTarWriter.EnsureIOBufForSize(ASize: Int64); inline;
 var LNeed: SizeUInt;
 begin
-  // I/O缓冲策略单源已下沉 capacity：TarIOBufCapacityFor(AlignUp4K零拷贝单源)+BytesEnsureCapacity几何2×高水位复用，inline零拷贝单分发
   LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(ASize);
   BytesEnsureCapacity(FIOBuf, LNeed);
 end;
@@ -123,7 +121,6 @@ begin
   if AUsed > 0 then
     WriteChecked(AData, AUsed);
   if ATotal > AUsed then
-    // perf: inline zero-copy single source via bytes.ops ZeroBufPtr (GZeroBuf4K 4K), zero-alloc, eliminates GZero512 duplicate, 511B pad single dispatch
     WriteChecked(ZeroBufPtr, ATotal - AUsed);
 end;
 
@@ -182,19 +179,24 @@ begin
   WritePaddedPayload(APayload);
 end;
 
-function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
+function TTarWriter.FindPrefixCut(const AName: string): SizeInt; inline;
 var
-  I: Integer;
+  LSpan: TByteSpan;
+  LPos: SizeInt;
+  LLimit: SizeUInt;
 begin
-  // backward scan for prefix cut, max 155 iterations
   Result := 0;
   if Length(AName) <= C_TAR_LAYOUT.Name.Len then Exit;
-  I := C_TAR_LAYOUT.Prefix.Len;
-  while (I >= 1) and (Result = 0) do
+  LSpan := StringAsSpan(AName);
+  LLimit := SizeUInt(C_TAR_LAYOUT.Prefix.Len + 1);
+  if LSpan.Len < LLimit then LLimit := LSpan.Len;
+  LPos := SpanLastIndexOf(LSpan.Slice(0, LLimit), Byte('/'));
+  while LPos >= 0 do
   begin
-    if (I < Length(AName)) and (AName[I + 1] = '/') and (Length(AName) - I - 1 <= C_TAR_LAYOUT.Name.Len) then
-      Result := I;
-    Dec(I);
+    if SizeUInt(Length(AName) - LPos - 1) <= C_TAR_LAYOUT.Name.Len then
+      Exit(LPos);
+    if LPos = 0 then Break;
+    LPos := SpanLastIndexOf(LSpan.Slice(0, SizeUInt(LPos)), Byte('/'));
   end;
 end;
 
@@ -230,7 +232,6 @@ end;
 procedure TTarWriter.FillHeaderStringField(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string); inline;
 var LSpan: TByteSpan;
 begin
-  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, trunc via Slice(0,ALen) single dispatch, reuse for name/prefix/linkname
   if Length(AValue) = 0 then Exit;
   if Length(AValue) > Integer(ALen) then
   begin
@@ -244,7 +245,6 @@ end;
 procedure TTarWriter.FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
 var LSpan: TByteSpan;
 begin
-  // perf: inline zero-copy single source via FillHeaderStringField (bytes.ops StringAsSpan+TarPutHeaderField trunc single dispatch), prefix/name slices reuse TarPutHeaderField zero-copy
   if (Length(AName) > Integer(C_TAR_LAYOUT.Name.Len)) and (ACutPos = 0) then
     FillHeaderStringField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, AName)
   else if ACutPos <> 0 then
@@ -259,7 +259,6 @@ end;
 
 procedure TTarWriter.FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
 begin
-  // perf: inline zero-copy single source via FillHeaderStringField reuse, eliminates duplicate StringAsSpan/Length阈值/TarPutHeaderField样板
   FillHeaderStringField(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, ALinkName);
 end;
 
@@ -412,6 +411,9 @@ begin
 end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
+var
+  LBuf: TBytes;
+  LNeed: SizeUInt;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
@@ -426,15 +428,18 @@ begin
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then Exit;
-  // I/O缓冲单源：EnsureIOBufForSize -> TarIOBufCapacityFor(AlignUp4K via bytes.ops) -> BytesEnsureCapacity inline 单口
-  // perf: DoCopyAndPad 零拷贝 PByte 视图直达；high-water 池化 1M 封顶单次分发，无 GetMem 抖动
-  EnsureIOBufForSize(AHdr.Size);
-  DoCopyAndPad(AReader, AHdr.Size, @FIOBuf[0], SizeUInt(Length(FIOBuf)));
+  LBuf := nil;
+  LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(AHdr.Size);
+  BytesEnsureCapacity(LBuf, LNeed);
+  try
+    DoCopyAndPad(AReader, AHdr.Size, @LBuf[0], SizeUInt(Length(LBuf)));
+  finally
+    BytesRelease(LBuf);
+  end;
 end;
 
 procedure TTarWriter.TrimIOBuf; inline;
 begin
-  // perf+stability: explicit reclaim via bytes.ops.BytesRelease single source inline, high-water 1M pooled per writer, explicit Trim frees otherwise resident
   BytesRelease(FIOBuf);
 end;
 
@@ -442,7 +447,6 @@ procedure TTarWriter.TrimIOBufTo(const AHintSize: Int64); inline;
 var
   LNeed: SizeUInt;
 begin
-  // perf: explicit high-water reclaim to hint via bytes.ops single source inline, capacity.TarIOBufCapacityFor AlignUp4K zero-copy, pools 1M clamp without jitter
   if Length(FIOBuf) = 0 then Exit;
   if AHintSize <= 0 then
   begin
@@ -457,9 +461,7 @@ procedure TTarWriter.Finish;
 begin
   if FFinished then Exit;
   FFinished := True;
-  // zero-copy via bytes.ops ZeroBufPtr single source, single dispatch 1024
   WriteChecked(ZeroBufPtr, 2 * C_TAR_BLOCK_SIZE);
-  // stability: explicit high-water release via bytes.ops single source, large packet 1M pooled per instance reclaimed, SetLength nil single source inline
   TrimIOBuf;
 end;
 
@@ -478,7 +480,6 @@ begin
       FLogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH);
     end;
   finally
-    // stability: explicit release via bytes.ops single source, guarantees no 1M resident leak, resource ownership clear, try..finally never leaks
     BytesRelease(FIOBuf);
     FDst := nil;
     inherited Destroy;

@@ -63,7 +63,7 @@ type
     function ByteAt(AOfs: SizeUInt): Byte;
     function SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; inline; // single source NUL truncation, bytes.ops SpanIndexOf, zero-copy, inline
     function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
-    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
+    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline; // trailing zero trim via bytes.ops IsZeroMem SWAR block-level single source, zero-copy, inline
     function MaterializeSpan(const ASpan: TByteSpan): string; // single source SpanToString, empty guard, out-of-line per design-conventions red line 1 (Move Result[1])
     function StringField(AOfs, ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function NumericField(AOfs, ALen: SizeUInt): Int64;
@@ -104,8 +104,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.io.slice,
-  nextpas.core.tar.common,
-  nextpas.core.text.conv;
+  nextpas.core.tar.common;
 
 function TypeFlagToKind(AFlag: Byte): TTarEntryKind;
 begin
@@ -182,37 +181,38 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: literals derived from C_TAR_LAYOUT single source (0,100 / 157,100 / 257,6 / 263,2 / 265,32 / 297,32 / 345,155), bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; FPC const folding 禁 record.field in typed const,故用字面量单源对齐版式，见 CONTRACT §2 INV-7
-const
-  C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
-    (Off: 0; Len: 100),
-    (Off: 157; Len: 100),
-    (Off: 257; Len: 6),
-    (Off: 263; Len: 2),
-    (Off: 265; Len: 32),
-    (Off: 297; Len: 32),
-    (Off: 345; Len: 155)
-  );
-  // batch lens: literals derived from C_TAR_LAYOUT.Len single source (100,100,6,2,32,32,155), bulk record copy avoids 7 repeated stores (I-Cache)
-  C_TAR_SCAN_LENS: array[0..6] of SizeUInt = (100, 100, 6, 2, 32, 32, 155);
-
-// single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS, bytes.ops单源单次扫描
+// single source 7-field cache table: symbolic bind to C_TAR_LAYOUT single source (Off/Len), bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; runtime field-wise bind avoids typed-const folding literal drift, single source CONTRACT §2 INV-7
 procedure CacheHeader(ASelf: TTarReader);
 var
   LLens: array[0..6] of SizeUInt;
   LBlock: TByteSpan;
+  LFields: array[0..6] of TFieldRange;
 begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    // bulk record copy: single array assign via C_TAR_SCAN_LENS, avoids 7 repeated stores
-    ASelf.FScanLens := C_TAR_SCAN_LENS;
+    // bulk lens from C_TAR_LAYOUT.Len single source (no literal drift, zero-copy single source)
+    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
+    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
+    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
+    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
+    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
+    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
+    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
   end;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
-  ScanNulFieldTruncations(LBlock, C_TAR_SCAN_FIELDS, @LLens[0]);
+  // build scan table from C_TAR_LAYOUT single source (runtime symbolic bind, no literal Off/Len copy, zero drift)
+  LFields[0].Off := C_TAR_LAYOUT.Name.Off;     LFields[0].Len := C_TAR_LAYOUT.Name.Len;
+  LFields[1].Off := C_TAR_LAYOUT.LinkName.Off; LFields[1].Len := C_TAR_LAYOUT.LinkName.Len;
+  LFields[2].Off := C_TAR_LAYOUT.Magic.Off;    LFields[2].Len := C_TAR_LAYOUT.Magic.Len;
+  LFields[3].Off := C_TAR_LAYOUT.Version.Off;  LFields[3].Len := C_TAR_LAYOUT.Version.Len;
+  LFields[4].Off := C_TAR_LAYOUT.UName.Off;    LFields[4].Len := C_TAR_LAYOUT.UName.Len;
+  LFields[5].Off := C_TAR_LAYOUT.GName.Off;    LFields[5].Len := C_TAR_LAYOUT.GName.Len;
+  LFields[6].Off := C_TAR_LAYOUT.Prefix.Off;   LFields[6].Len := C_TAR_LAYOUT.Prefix.Len;
+  ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
   ASelf.FScanLens := LLens; // array assign, zero loop
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
@@ -244,26 +244,54 @@ function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
 var
   EndOfs: SizeUInt;
   LFieldOff: SizeUInt;
-  I: SizeInt; // table-driven index
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative table-driven, no magic Off/Len dup, zero-copy
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative symbolic bind to C_TAR_LAYOUT single source, no Off/Len literal dup, zero-copy
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // header cache: table-driven via C_TAR_SCAN_FIELDS single source, bytes.ops cached lens, inline zero-copy
-    for I := Low(C_TAR_SCAN_FIELDS) to High(C_TAR_SCAN_FIELDS) do
-      if (LFieldOff = C_TAR_SCAN_FIELDS[I].Off) and (ALen = C_TAR_SCAN_FIELDS[I].Len) then
-      begin
-        if FScanLens[I] = 0 then Exit(TByteSpan.Empty);
-        Exit(TByteSpan.Create(@FData[AOfs], FScanLens[I]));
-      end;
+    // header cache: symbolic bind to C_TAR_LAYOUT single source (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), bytes.ops cached lens, inline zero-copy
+    if (LFieldOff = C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
+    begin
+      if FScanLens[0] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[0]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
+    begin
+      if FScanLens[1] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[1]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
+    begin
+      if FScanLens[2] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[2]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
+    begin
+      if FScanLens[3] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[3]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
+    begin
+      if FScanLens[4] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[4]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
+    begin
+      if FScanLens[5] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[5]));
+    end;
+    if (LFieldOff = C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
+    begin
+      if FScanLens[6] = 0 then Exit(TByteSpan.Empty);
+      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[6]));
+    end;
     // fallback: non-7 header field — single source SliceUntilNul (bytes.ops SpanIndexOf, inline zero-copy, no scalar loop)
     Exit(SliceUntilNul(@FData[AOfs], ALen));
   end;
@@ -271,11 +299,21 @@ begin
   Result := SliceUntilNul(@FData[AOfs], ALen);
 end;
 
-function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
+function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
 var
   Trim: SizeUInt;
 begin
+  if (ABase = nil) or (ALen = 0) then
+    Exit(TByteSpan.Empty);
   Trim := ALen;
+  // block-level trailing zero trim via bytes.ops IsZeroBytes single source (IsZeroMem/SWAR chunked via GZeroBuf4K/MemEqual, zero-copy TByteSpan view, inline), avoids scalar per-byte for 512B header repeated scan
+  while Trim >= 32 do
+  begin
+    if IsZeroBytes(TByteSpan.Create(ABase + Trim - 32, 32)) then
+      Dec(Trim, 32)
+    else
+      Break;
+  end;
   while (Trim > 0) and (ABase[Trim - 1] = 0) do
     Dec(Trim);
   if Trim = 0 then
