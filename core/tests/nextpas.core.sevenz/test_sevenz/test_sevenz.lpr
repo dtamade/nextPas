@@ -3580,6 +3580,19 @@ begin
   Check(SameBytes(LData, LGot1), 'backend original bytes');
 end;
 
+procedure TestWriterBombPackSizeReject;
+var LW: ISevenZWriter; LData: TBytes;
+begin
+  LData := Randomish(67 * 1024 * 1024, 999);
+  LW := TSevenZWriterImpl.Create;
+  LW.SetLevel(szclNone);
+  LW.AddFile('big.bin', LData);
+  try
+    LW.Finish;
+    Fail('pack >64MiB should raise ESevenZLimitError');
+  except on E: ESevenZLimitError do ; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3774,6 +3787,7 @@ begin
   T.Test('glob ignorecase complex ascii zeroalloc', @TestGlobIgnoreCaseComplexAsciiZeroAlloc);
   T.Test('writer bomb early via reader huge size', @TestWriterBombEarlyViaReader);
   T.Test('backend consistency pure vs ffi', @TestBackendConsistencyPureVsFfi);
+  T.Test('writer bomb pack size reject', @TestWriterBombPackSizeReject);
 
   if not T.Run then Halt(1);
 end.

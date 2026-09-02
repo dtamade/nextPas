@@ -266,6 +266,12 @@ var
     else LIsMT := '--';
     WriteLn(TextFormat('container %s %s %6.1f MB/s  archive=%d bytes',
       [ATag, LIsMT, (DATA_SIZE / 1048576.0) / LElapsed, Length(LArchive)]));
+    if (ATag = 'copy+bcj') and ((DATA_SIZE / 1048576.0) / LElapsed < 50) then
+      WriteLn('WARN: copy+bcj create redline <50 MB/s');
+    if (ATag = 'copy+bcj+pw') and ((DATA_SIZE / 1048576.0) / LElapsed < 1.0) then
+      WriteLn('WARN: copy+bcj+pw create redline <1 MB/s');
+    if (ATag = 'copy+bcj+pw multi') and ((DATA_SIZE / 1048576.0) / LElapsed < 0.5) then
+      WriteLn('WARN: copy+bcj+pw multi create redline <0.5 MB/s');
     if AUsePass then
       LR := TSevenZReaderImpl.CreateWithPassword(LArchive, 'bench-pw')
     else LR := TSevenZReaderImpl.Create(LArchive);
@@ -283,6 +289,10 @@ var
         LR.Extract(LM);
     LElapsed := LStart.Elapsed.AsSecondsF;
     WriteLn(TextFormat('  extract %-16s %6.1f MB/s', [ATag, (DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed]));
+    if (ATag = 'copy+bcj') and ((DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed < 500) then
+      WriteLn('WARN: copy+bcj extract redline <500 MB/s');
+    if (ATag = 'copy+bcj+pw') and ((DATA_SIZE*CONTAINER_ITER/1048576.0)/LElapsed < 500) then
+      WriteLn('WARN: copy+bcj+pw extract redline <500 MB/s');
   end;
 begin
   BenchOne('copy+bcj', False, False);

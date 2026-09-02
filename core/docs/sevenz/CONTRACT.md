@@ -4,7 +4,7 @@
 **层级**：L2，`Allowed L0-L1 plus io/fs/compress/checksum/crypto/hash (L2→L2 exempt via platform lstat)`
 **门面**：`nextpas.core.sevenz.pas` re-export `TSevenZEntryKind/Info/ESevenZError/ESevenZLimitError/TSevenZLzmaBackend/CompressionLevel/Filter/LzmaEncoded/Extracted/Enumerator/ISevenZReader/ISevenZWriter` 等
 **接口**：`ISevenZReader` 50+ 胖门面为容器刻意聚合（查询/提取/大小写三族+Try*+ToFs联邦），不拆小接口以保 `for..in`/`Count` 一致性，详见 README API 表（设计权衡，非小接口违规）
-**真相**：`focused-runtime` 168 用例 + `bench_sevenz` + `README` 单源真相同步（`header IBytesBuilder ToBuilder 单源 + CRC 预计数两遍单分配` + `FEntries/LFolders 几何扩容 + writer SpanClone 单源` / `filters.DeltaApply` 外联 / `reader.Sort` + `EnsureSortedGeneric` / `writer.pathvalid` + `writer 炸弹早期 / 纯↔FFI 一致性双探针`）
+**真相**：`focused-runtime` 169 用例 + `bench_sevenz` + `README` 单源真相同步（`header IBytesBuilder ToBuilder 单源 + CRC 预计数两遍单分配` + `FEntries/LFolders 几何扩容 + writer SpanClone 单源` / `filters.DeltaApply` 外联 / `reader.Sort` + `EnsureSortedGeneric` / `writer.pathvalid` + `writer 炸弹早期/纯↔FFI/pack超限三探针`）
 
 ## 不变量
 - [INV-7Z1] 单源 limits：`base` 13 阈值（`MAX_HEADER 64MiB/PACK 64MiB/UNPACK 8GiB/FILE_COUNT 1M` 等）经 `limits` 薄封装，reader/writer/header 单源引用
@@ -17,5 +17,5 @@
 - header `IBytesBuilder ToBuilder` 单源（`SevenZWriteNumberToBuilder/Append*ToBuilder`，`bytes.builder Grow` 均摊，O(n) 替代 `TBytes SetLength` O(n²)；FilesInfo/外层均按载荷预估 `CreateBytesBuilder(N)` 近零 Grow；`ParseSubStreamsInfo` CRC 收集两遍计数单分配 O(n²)→O(n)，1M 子流规模）+ `FEntries/LFolders` 几何扩容（`FCount/文件夹计数 + BytesNextCapacity` 单源 `BYTES_BUILDER_MIN_GROW×2` 均摊，条目表与文件夹表均 O(n²)→O(n)）+ `AddFile` 单源 `SpanClone`（`TByteSpan.FromBytes` 零拷视图）+ reader `2-entry LRU 64MiB` 缓存（大 solid 单 MRU 保留）+ `Sort` 单源 `collections.algorithms.Sort`（`TSevenZSortCtx`）+ `EnsureSortedGeneric` 懒加载，`ReverseStr/LowerBoundGeneric` 外联避热点膨胀，writer `platform.thread` 并行（`IsMultiThread` 门控，`BytesReplicateCopy` 零拷贝，Move 语义去深拷，header/Block 经 `IBytesBuilder` 均摊），`CopyMatch` 倍增 Move，`ValidateEntryName` 复用 `bytes.pathvalid` 单源
 
 ## 契约测试
-- `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 168 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断/双探针（writer 炸弹早期 viaReader / 纯↔FFI 一致性 BCJ 归档）等
-- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点，含 Filter+Copy+AES 多形态容器探针（copy+bcj / copy+bcj+pw / copy+bcj+pw multi，bytes.ops 单源）
+- `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 169 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断/三探针（writer 炸弹早期 viaReader / 纯↔FFI 一致性 / pack>64MiB 超限）等
+- `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点，含 Filter+Copy+AES 多形态容器探针（copy+bcj / copy+bcj+pw / copy+bcj+pw multi，红线 50/1/0.5 MB/s create、500 MB/s extract，bytes.ops 单源）
