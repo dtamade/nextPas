@@ -1,7 +1,7 @@
 unit nextpas.core.js.pure.base;
-{ base: pure family shared type-carrier + inline thin-forward per four-piece (standard submodule base: nextpas.core.js.pure.base)
-  single source via pure.host/pure.value/js.eval/js.lifecycle (host/heap/value/lifecycle owners), no mutable globals, zero logic
-  single responsibility = type-carrier + inline thin-forward per four-piece base←intf←impl←门面, luxury thin
+{ base: pure family shared type-carrier per four-piece (standard submodule base: nextpas.core.js.pure.base)
+  single source via base canonical types (host/heap/value/lifecycle owners converge via impl), no mutable globals, zero logic
+  single responsibility = type-carrier per four-piece base←intf←impl←门面, luxury thin
   preferred entry = TJsPureHostState unified (JsPureHostStateSet*), no legacy shim, luxury thin
   inline zero-copy via bytes.ops/text.view single source (BytesCopy/SpanEqual), L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
 {$I nextpas.core.settings.inc}
@@ -11,28 +11,42 @@ uses
   nextpas.core.js.intf,
   nextpas.core.text.view,
   nextpas.core.json,
-  nextpas.core.json.value,
-  nextpas.core.js.pure.hash,
-  nextpas.core.js.pure.host,
-  nextpas.core.js.pure.value,
-  nextpas.core.js.eval,
-  nextpas.core.js.lifecycle;
+  nextpas.core.json.value;
 type
-  TJsPureHostRec = nextpas.core.js.pure.host.TJsPureHostRec;
-  TJsPureHostArray = nextpas.core.js.pure.host.TJsPureHostArray;
-  TJsPureHostBuckets = nextpas.core.js.pure.host.TJsPureHostBuckets;
-  TJsPureHostState = nextpas.core.js.pure.host.TJsPureHostState;
-  TJsPureProp = nextpas.core.js.pure.value.TJsPureProp;
-  TJsPureObject = nextpas.core.js.pure.value.TJsPureObject;
-  TJsPureHeap = nextpas.core.js.pure.value.TJsPureHeap;
+  { Host types — canonical single source, owner pure.base (host impl aliases this, no base→host cycle) }
+  TJsPureHostRec = record
+    Name: string;
+    Func: TJsHostFunction;
+    Method: TJsHostMethod;
+    Proc: TJsHostProc;
+    Kind: Integer;
+    Hash: UInt32;
+  end;
+  TJsPureHostArray = array of TJsPureHostRec;
+  TJsPureHostBuckets = record
+    Buckets: array of Integer;
+    Mask: UInt32;
+    Count: Integer;
+  end;
+  TJsPureHostState = record
+    Hosts: TJsPureHostArray;
+    Buckets: TJsPureHostBuckets;
+  end;
+  { Heap/Value types — canonical single source, owner pure.base (value impl aliases this) }
+  TJsPureProp = record Name: string; Value: TJsValue; Hash: UInt32; end;
+  generic TJsArray<T> = array of T;
+  TJsPurePropArray = specialize TJsArray<TJsPureProp>;
+  TJsPureObject = record Id: Int64; Props: TJsPurePropArray; PropsBuckets: array of Integer; PropsMask: UInt32; end;
+  TJsPureHeap = specialize TJsArray<TJsPureObject>;
+  TJsValueArray = array of TJsValue;
 const
-  // single source: hash threshold owned by pure.hash 64 unified, geometric 0→64→2× via bytes.ops BytesNextCapacity single source, inline zero-copy, no alias diffusion via Host/Heap re-export
-  JS_PURE_HASH_THRESHOLD = nextpas.core.js.pure.hash.JS_PURE_HASH_THRESHOLD;
-  JS_PURE_EVAL_WHILE_TRUE = nextpas.core.js.eval.JS_PURE_EVAL_WHILE_TRUE;
-  JS_PURE_EVAL_JSON_STRINGIFY = nextpas.core.js.eval.JS_PURE_EVAL_JSON_STRINGIFY;
-  JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
-  JS_PURE_EVAL_BAD = nextpas.core.js.eval.JS_PURE_EVAL_BAD;
-  JS_PURE_EVAL_FOO = nextpas.core.js.eval.JS_PURE_EVAL_FOO;
+  // single source: hash threshold 64 unified, geometric 0→64→2× via bytes.ops BytesNextCapacity single source, inline zero-copy, canonical via pure.hash 64 (pure.base owns literal, pure.hash remains owner for hash impl, no cycle)
+  JS_PURE_HASH_THRESHOLD = 64;
+  JS_PURE_EVAL_WHILE_TRUE = 'while(true)';
+  JS_PURE_EVAL_JSON_STRINGIFY = 'JSON.stringify';
+  JS_PURE_EVAL_MAGIC_X = 'x';
+  JS_PURE_EVAL_BAD = 'bad(';
+  JS_PURE_EVAL_FOO = 'foo(';
 // lifecycle — owner js.lifecycle single source, thin-forward inline zero-copy
 function JsPureContextRegister: UInt64; inline;
 procedure JsPureContextClose(AId: UInt64); inline;
@@ -98,7 +112,10 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; var AState: TJsPureHostState; const AGlobal: TJsValue): TJsValue; inline; overload;
 implementation
 uses
-  nextpas.core.js.eval;
+  nextpas.core.js.pure.host,
+  nextpas.core.js.pure.value,
+  nextpas.core.js.eval,
+  nextpas.core.js.lifecycle;
 function JsPureContextRegister: UInt64; inline;
 begin Result := nextpas.core.js.lifecycle.JsPureContextRegister; end;
 procedure JsPureContextClose(AId: UInt64); inline;

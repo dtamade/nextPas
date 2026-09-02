@@ -8,7 +8,7 @@ function JsQuickJsProbeNames: string; inline;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
-uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.text.builder, nextpas.core.atomic;
+uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.sync.vault, nextpas.core.text.builder, nextpas.core.atomic;
 type
   // Vault 统一隔离：单 owner 收敛 GLib/GAvailable/GLoaded/GProbeIndex 裸全局，经 VaultRef inline 单源访问，IMutex→platform.sync 原子保护，64B 友好，lazy Exactly-Once
   TJsQuickJsVault = record
@@ -29,44 +29,12 @@ begin
   Result := @GVault;
 end;
 procedure EnsureVaultLock; inline;
-var LExp: Int32;
 begin
-  // perf: inline double-checked lazy Exactly-Once via atomic CAS, 64B 友好，无递归
-  // stability: acquire/release 发布可见，异常回滚幂等，try-finally 不丢
-  if Assigned(VaultRef^.Lock) then Exit;
-  if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
-  while True do
-  begin
-    LExp := 0;
-    if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
-    begin
-      try
-        if not Assigned(VaultRef^.Lock) then
-          VaultRef^.Lock := TMutex.Create;
-        atomic_store(GVaultInit, Int32(2), mo_release);
-      except
-        atomic_store(GVaultInit, Int32(0), mo_release);
-        raise;
-      end;
-      Exit;
-    end;
-    if LExp = 2 then Exit;
-    while atomic_load(GVaultInit, mo_acquire) = 1 do
-      cpu_pause;
-    if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
-    if Assigned(VaultRef^.Lock) then Exit;
-  end;
+  // perf: inline thin-forward to vault single source (sync.vault SyncVaultEnsureLock out-of-line loop per design-conventions §2 red-line 2, avoids I-Cache copy, 64B friendly, zero extra fence on hot path)
+  // stability: acquire/release via helper single source, resource not丢
+  SyncVaultEnsureLock(GVaultInit, GVault.Lock);
 end;
-const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
-  {$IFDEF NEXTPAS_WINDOWS}
-    'quickjs.dll', 'libquickjs.dll', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs'
-  {$ELSEIF defined(NEXTPAS_MACOS)}
-    'libquickjs.dylib', 'libquickjs.1.dylib', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  {$ELSE}
-    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  {$ENDIF}
-  );
-function BuildProbeNames: string; inline;
+function BuildProbeNames: string;
 var B: TBufStringBuilder; I: Integer;
 begin
   // perf: single source comma-join via TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, inline hot path, try-finally Done 不丢

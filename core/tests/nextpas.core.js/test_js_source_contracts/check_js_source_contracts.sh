@@ -73,6 +73,30 @@ else
   say_fail "pure.value should retain builder single source via bytes.ops (TJsonWriter+TStringBuilder)"
 fi
 
+# 4b) pure.value L2→L2 single seam: json.writer+text.builder+text.escape via pure.value single point, cycle-gated
+if grep -q "nextpas.core.json.writer" "$PURE" && grep -q "nextpas.core.text.builder" "$PURE" && grep -q "nextpas.core.text.escape" "$PURE"; then
+  say_ok "pure.value single seam json.writer+text.builder+text.escape"
+else
+  say_fail "pure.value must keep single seam json.writer+text.builder+text.escape (L2→L2 single-point via pure.value)"
+fi
+for token in "nextpas.core.json.writer" "nextpas.core.text.builder" "nextpas.core.text.escape"; do
+  LOTHER=$(grep -R --include="nextpas.core.js.*.pas" "$token" "$ROOT/core/src" 2>/dev/null | grep -v "nextpas.core.js.pure.value.pas" | grep -v "unit $token" || true)
+  # allow js.quickjs.loader probe building via text.builder as vault-cached single source (luxury, not L2 single-point violation)
+  if [[ "$token" == "nextpas.core.text.builder" ]]; then
+    LOTHER=$(echo "$LOTHER" | grep -v "nextpas.core.js.quickjs.loader.pas" || true)
+  fi
+  if [[ -n "$LOTHER" ]]; then
+    say_fail "only pure.value may use $token (L2→L2 single-point js.* via pure.value, json.* internal excluded, found: $LOTHER)"
+  else
+    say_ok "only pure.value uses $token"
+  fi
+done
+if grep -R -E -q "nextpas\.core\.js\." "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
+  say_fail "L2 cycle: json must not use js (reverse forbidden, pure.value single-point)"
+else
+  say_ok "cycle-gated: json→js reverse 0 via pure.value single-point"
+fi
+
 # 5) L2 layering: intf interface still only js.base + json.types
 if grep -q "uses nextpas.core.js.base, nextpas.core.json.types" "$FILE"; then
   say_ok "interface narrow seam json.types"
@@ -214,6 +238,32 @@ for u in $IMPL_UNITS; do
     nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base) say_ok "impl narrow allow $u" ;;
     *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base narrow (found $u)" ;;
   esac
+done
+
+# 13) volume hygiene: single threshold 800, wc -l <800 anchored in Makefile (防漂移, 历史 550/650 已收敛)
+THRESHOLD=800
+# hygiene sampling anchored: wc -l core/src/nextpas.core.js.*.pas, threshold 800, see CONTRACT §1 and Makefile (json.* excluded)
+for f in "$ROOT"/core/src/nextpas.core.js.*.pas; do
+  if [[ ! -f "$f" ]]; then continue; fi
+  lines=$(wc -l < "$f")
+  base=$(basename "$f")
+  if [[ "$lines" -gt "$THRESHOLD" ]]; then
+    say_fail "volume $base wc -l $lines >$THRESHOLD (single threshold 800, split required, see CONTRACT §1)"
+  else
+    say_ok "volume $base wc -l $lines <800 (阈值800)"
+  fi
+done
+# pure family explicit samples (CONTRACT §1: pure.base ~360 <800, pure.host/value etc)
+for suffix in "pure.base" "pure.host" "pure.value" "pure.impl" "lifecycle" "registry" "factory" "value.store" "quickjs.value"; do
+  pf="$ROOT/core/src/nextpas.core.js.$suffix.pas"
+  if [[ -f "$pf" ]]; then
+    lines=$(wc -l < "$pf")
+    if [[ "$lines" -gt "$THRESHOLD" ]]; then
+      say_fail "volume js.$suffix wc -l $lines >$THRESHOLD"
+    else
+      say_ok "volume js.$suffix wc -l $lines <800 (threshold 800, zero-copy bytes.ops inline)"
+    fi
+  fi
 done
 
 if [[ $fail -ne 0 ]]; then

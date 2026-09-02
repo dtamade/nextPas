@@ -7,24 +7,14 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.text.view,
-  nextpas.core.js.pure.hash;
+  nextpas.core.js.pure.hash,
+  nextpas.core.js.pure.base;
 type
-  TJsPureHostRec = record
-    Name: string;
-    Func: TJsHostFunction;
-    Method: TJsHostMethod;
-    Proc: TJsHostProc;
-    Kind: Integer;
-    Hash: UInt32;
-  end;
-  TJsPureHostArray = array of TJsPureHostRec;
-  // per-Context resident bucket index — instance-isolated, no global sharing (Owner nextpas.core.js.pure.host, L2)
-  TJsPureHostBuckets = record
-    Buckets: array of Integer;
-    Mask: UInt32;
-    Count: Integer;
-  end;
-procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer); inline;
+  TJsPureHostRec = nextpas.core.js.pure.base.TJsPureHostRec;
+  TJsPureHostArray = nextpas.core.js.pure.base.TJsPureHostArray;
+  // per-Context resident bucket index — instance-isolated, no global sharing (Owner nextpas.core.js.pure.host, L2, canonical via pure.base)
+  TJsPureHostBuckets = nextpas.core.js.pure.base.TJsPureHostBuckets;
+procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer);
 function JsPureValidateHostName(const AName: string): Boolean;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; overload;
 function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; overload;
@@ -54,12 +44,9 @@ function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const A
 const JS_PURE_FILE_MAX_BYTES = BYTES_BULK_PARSE_MAX_BYTES; // 64MiB canonical single source via bytes.ops BYTES_BULK_PARSE_MAX_BYTES (L1 owner, Format/JS single source, no L2→L2, bytes.ops BytesCopy zero-copy single source, L0-L3 kept, try-finally not丢)
 procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;
-// HostState — per-Context聚合态收敛 (奢华度收敛, 守bytes.ops单源, inline+零拷贝, 资源幂等不丢, Owner pure.host)
+// HostState — per-Context聚合态收敛 (奢华度收敛, 守bytes.ops单源, inline+零拷贝, 资源幂等不丢, Owner pure.host, canonical via pure.base)
 type
-  TJsPureHostState = record
-    Hosts: TJsPureHostArray;
-    Buckets: TJsPureHostBuckets;
-  end;
+  TJsPureHostState = nextpas.core.js.pure.base.TJsPureHostState;
 function JsPureHostStateFind(var S: TJsPureHostState; const AName: string): Integer; inline;
 function JsPureHostStateFindView(var S: TJsPureHostState; const AName: TStringView): Integer; inline;
 function JsPureHostStateFindViewBucketed(var S: TJsPureHostState; const AName: TStringView): Integer; inline;
@@ -79,6 +66,8 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.bytes.ops.text,
   nextpas.core.mem.dynarray,
+  nextpas.core.js.pure.base,
+  nextpas.core.js.pure.value,
   nextpas.core.platform.fs;
 function JsPureCategoryFromErrorCategory(const ACategory: TErrorCategory): TJsErrorCategory; inline;
 begin
@@ -142,7 +131,7 @@ begin
   // single source geometric via bytes.ops + exactly-once poke via mem.dynarray, amortized O(1), no double alloc
   nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
 end;
-procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer); inline;
+procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer);
 var LOld, LNeed, LCap: SizeUInt; LCurCap: SizeUInt;
 begin
   // batch geometric pre扩: single alloc via bytes.ops BytesNextCapacity single source + single poke, amortized O(1), zero per-insert SetLength+Poke thrash for bulk registration
@@ -273,22 +262,14 @@ begin
   // unified template: view zero-copy, single source hash, bucket O(1)
   Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(AName), AName);
 end;
-function HostAllocOne(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer; inline;
-var LCount: Integer; LNeed, LCap, LCurCap: SizeUInt;
+function HostAllocOne(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer;
+var
+  LCount: Integer;
+  LArr: specialize nextpas.core.js.pure.base.TJsArray<TJsPureHostRec> absolute Hosts;
 begin
-  // single source Hash+几何扩容+Poke: bytes.ops BytesNextCapacity + mem.dynarray poke, inline零拷贝, amortized O(1), 复用单源防漂移
+  // single source via pure.value generic EnsureCapacityOne single seam — geometric via bytes.ops BytesNextCapacity + poke via mem.dynarray Exactly-Once, amortized O(1), bytes.ops single source, L0-L3 kept, not inline per red-line 2 (routing body)
   LCount := Length(Hosts);
-  LNeed := SizeUInt(LCount) + 1;
-  LCurCap := HostCapacity(Hosts);
-  if LCurCap >= LNeed then
-  begin
-    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(SizeUInt(LCount), LNeed);
-    SetLength(Hosts, LCap);
-    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
-  end;
+  specialize nextpas.core.js.pure.value.EnsureCapacityOne<TJsPureHostRec>(LArr);
   Hosts[LCount].Name := AName;
   Hosts[LCount].Hash := AHash;
   Result := LCount;

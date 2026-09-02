@@ -20,8 +20,9 @@ function JsRegistryCreate(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptio
 function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean; inline;
 implementation
 uses
-  // L0-L1 single source: vault 同步经 sync.mutex→platform.sync, 原子经 atomic single source, 退避经 platform.thread
+  // L0-L1 single source: vault 同步经 sync.mutex→platform.sync + sync.vault single source EnsureVaultLock (loop out-of-line per red-line 2), 原子经 atomic single source, 退避经 platform.thread (via vault helper)
   nextpas.core.sync.mutex,
+  nextpas.core.sync.vault,
   nextpas.core.atomic,
   nextpas.core.platform.sync,
   nextpas.core.platform.thread,
@@ -51,52 +52,10 @@ begin
   Result := @GVault;
 end;
 procedure EnsureVaultLock; inline;
-var
-  LExp: Int32;
-  LDelay: Int32;
-  LPause: Int32;
-  LIter: Int32;
 begin
-  // perf: inline 单次 acquire 快照零锁快读，指数退避有界 1..64 + yield + futex 阻塞，高并发线程高级感，零额外栅栏
-  // stability: GVaultInit 单原子权威（消除 GLock 可空与原子双重依赖），wake 唤醒串行化零锁竞争窗口，异常回滚 wake-one 限流
-  if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
-  while True do
-  begin
-    LExp := 0;
-    if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
-    begin
-      try
-        if not Assigned(VaultRef^.Lock) then
-          VaultRef^.Lock := TMutex.Create;
-        atomic_store(GVaultInit, Int32(2), mo_release);
-        platform_wake_address_all(@GVaultInit);
-      except
-        atomic_store(GVaultInit, Int32(0), mo_release);
-        platform_wake_address_one(@GVaultInit);
-        raise;
-      end;
-      Exit;
-    end;
-    if LExp = 2 then Exit;
-    // LExp=1: initializing — bounded exponential backoff 1→64, yield after 2 iters, then futex wait
-    LDelay := 1;
-    for LIter := 0 to 7 do
-    begin
-      for LPause := 1 to LDelay do
-        cpu_pause;
-      if atomic_load(GVaultInit, mo_acquire) <> 1 then Break;
-      if LIter >= 2 then
-        platform_thread_yield;
-      if LDelay < 64 then
-        LDelay := LDelay shl 1;
-    end;
-    if atomic_load(GVaultInit, mo_acquire) = 1 then
-      platform_wait_address32(@GVaultInit, 1, 5000000);
-    if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
-    // 零锁窗口收敛：仅以原子权威判定就绪，消除 Assigned 竞争误判；0 状态 yield 限流避免惊群
-    if atomic_load(GVaultInit, mo_acquire) = 0 then
-      platform_thread_yield;
-  end;
+  // perf: inline thin-forward to vault single source (sync.vault SyncVaultEnsureLock out-of-line loop per design-conventions §2 red-line 2, avoids I-Cache copy, 64B friendly)
+  // stability: single atomic authority via helper, resource not丢
+  SyncVaultEnsureLock(GVaultInit, GVault.Lock);
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);
 begin

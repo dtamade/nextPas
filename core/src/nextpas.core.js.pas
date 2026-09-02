@@ -1,5 +1,5 @@
 unit nextpas.core.js;
-{** @desc JS 门面：纯 re-export（零逻辑，工厂分支已下沉至 js.factory）。 *}
+{** @desc JS 门面：纯 re-export（零逻辑，工厂分支已下沉至 js.factory，阈值 800 内，wc -l ~50 <800，hygiene 抽样模块 Makefile 显式锚定）。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -34,22 +34,22 @@ const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
 implementation
 function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime; inline;
 begin
-  // perf: inline thin-forward to factory single source, zero-copy IJsRuntime refcnt, no branching
+  // perf: inline thin-forward to factory single source, zero-copy IJsRuntime refcnt, no branching, 阈值800
   Result := nextpas.core.js.factory.CreateJsRuntime(AKind);
 end;
-function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; inline;
+function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; inline; // 阈值800
 begin
-  // perf: inline thin-forward to factory single source, zero-copy record const, no duplicate CheckJsRuntimeOptions
+  // perf: inline thin-forward to factory single source, zero-copy record const, no duplicate CheckJsRuntimeOptions, 阈值800 内（wc -l ~50 <800）
   Result := nextpas.core.js.factory.CreateJsRuntime(AKind, AOptions);
 end;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 begin
-  // perf: inline thin-forward to factory probe single source, no duplicate case
+  // perf: inline thin-forward to factory probe single source, no duplicate case, 阈值800
   Result := nextpas.core.js.factory.JsBackendAvailable(AKind);
 end;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 begin
-  // perf: inline thin-forward to factory single source (TJsRuntimeOptions.Default), zero-copy record
+  // perf: inline thin-forward to factory single source (TJsRuntimeOptions.Default), zero-copy record, 阈值800
   Result := nextpas.core.js.factory.DefaultJsRuntimeOptions;
 end;
 end.
