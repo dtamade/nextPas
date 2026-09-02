@@ -180,7 +180,7 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values = C_TAR_LAYOUT, bytes.ops ScanNulFieldTruncations single 512B pass — opaque generic array, interface不暴露七字段命名
+// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values = C_TAR_LAYOUT, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名
 const
   C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
     (Off: 0; Len: 100),
@@ -201,26 +201,21 @@ begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
-    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
-    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
-    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
-    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
-    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
-    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
+    // reuse single source C_TAR_SCAN_FIELDS lens directly, zero magic
+    ASelf.FScanLens[0] := C_TAR_SCAN_FIELDS[0].Len;
+    ASelf.FScanLens[1] := C_TAR_SCAN_FIELDS[1].Len;
+    ASelf.FScanLens[2] := C_TAR_SCAN_FIELDS[2].Len;
+    ASelf.FScanLens[3] := C_TAR_SCAN_FIELDS[3].Len;
+    ASelf.FScanLens[4] := C_TAR_SCAN_FIELDS[4].Len;
+    ASelf.FScanLens[5] := C_TAR_SCAN_FIELDS[5].Len;
+    ASelf.FScanLens[6] := C_TAR_SCAN_FIELDS[6].Len;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
   end;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
   ScanNulFieldTruncations(LBlock, C_TAR_SCAN_FIELDS, @LLens[0]);
-  ASelf.FScanLens[0] := LLens[0];
-  ASelf.FScanLens[1] := LLens[1];
-  ASelf.FScanLens[2] := LLens[2];
-  ASelf.FScanLens[3] := LLens[3];
-  ASelf.FScanLens[4] := LLens[4];
-  ASelf.FScanLens[5] := LLens[5];
-  ASelf.FScanLens[6] := LLens[6];
+  ASelf.FScanLens := LLens; // array assign, zero loop
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
 end;
@@ -232,91 +227,43 @@ begin
   Result := FData[AOfs];
 end;
 
-function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
+function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
 var
   EndOfs: SizeUInt;
   LLen: SizeUInt;
   LIdx: SizeInt;
   LSpan: TByteSpan;
-  LFallbackArr: array[0..0] of TFieldRange;
-  LFallbackTrunc: SizeUInt;
-  LBlockTmp: TByteSpan;
   LFieldOff: SizeUInt;
+  I: SizeInt; // table-driven index
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — O(1) case dispatch, zero LLayout/LLensArr rebuild, zero loop
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative table-driven, no magic Off/Len dup, inline zero-copy
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // single source C_TAR_SCAN_FIELDS order, O(1) perfect hash via Off case + Len guard, eliminates 7-branch linear scan — opaque index mapping 0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix
-    case LFieldOff of
-      0:
-        if ALen = 100 then
-        begin
-          LLen := FScanLens[0];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      157:
-        if ALen = 100 then
-        begin
-          LLen := FScanLens[1];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      257:
-        if ALen = 6 then
-        begin
-          LLen := FScanLens[2];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      263:
-        if ALen = 2 then
-        begin
-          LLen := FScanLens[3];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      265:
-        if ALen = 32 then
-        begin
-          LLen := FScanLens[4];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      297:
-        if ALen = 32 then
-        begin
-          LLen := FScanLens[5];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-      345:
-        if ALen = 155 then
-        begin
-          LLen := FScanLens[6];
-          if LLen = 0 then Exit(TByteSpan.Empty);
-          Exit(TByteSpan.Create(@FData[AOfs], LLen));
-        end;
-    end;
-    // fallback: non-7 header field reuses single 512B ScanNulFieldTruncations (bytes.ops single source, zero-copy, LUT single pass)
-    LFallbackArr[0].Off := LFieldOff;
-    LFallbackArr[0].Len := ALen;
-    LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
-    ScanNulFieldTruncations(LBlockTmp, LFallbackArr, @LFallbackTrunc);
-    LLen := LFallbackTrunc;
+    // declarative table-driven: reuse C_TAR_SCAN_FIELDS single source, eliminates case magic 100/32/155, opaque cache
+    for I := 0 to High(C_TAR_SCAN_FIELDS) do
+      if (C_TAR_SCAN_FIELDS[I].Off = LFieldOff) and (C_TAR_SCAN_FIELDS[I].Len = ALen) then
+      begin
+        LLen := FScanLens[I];
+        if LLen = 0 then Exit(TByteSpan.Empty);
+        Exit(TByteSpan.Create(@FData[AOfs], LLen));
+      end;
+    // fallback: non-7 header field — single field SpanIndexOf zero-copy, reuses cached bytes without 512B rescan (cold path, still zero-copy, bytes.ops single source)
+    LSpan := TByteSpan.Create(@FData[AOfs], ALen);
+    LIdx := SpanIndexOf(LSpan, 0);
+    if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
     if LLen = 0 then Exit(TByteSpan.Empty);
     Result := TByteSpan.Create(@FData[AOfs], LLen);
     Exit;
   end;
-  // non-header: single SpanIndexOf
+  // non-header: single SpanIndexOf zero-copy
   LSpan := TByteSpan.Create(@FData[AOfs], ALen);
   LIdx := SpanIndexOf(LSpan, 0);
   if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
@@ -455,38 +402,36 @@ end;
 
 procedure TTarReader.UnregisterGuard(AGuard: TTarGlobalPaxGuard);
 var
-  Prev, Cur: TTarGlobalPaxGuard;
+  LPrev, LCur: TTarGlobalPaxGuard;
 begin
-  Prev := nil;
-  Cur := FGuardHead;
-  while Cur <> nil do
+  LPrev := nil;
+  LCur := FGuardHead;
+  while LCur <> nil do
   begin
-    if Cur = AGuard then
+    if LCur = AGuard then
     begin
-      if Prev = nil then
-        FGuardHead := Cur.FNext
+      if LPrev = nil then
+        FGuardHead := LCur.FNext
       else
-        Prev.FNext := Cur.FNext;
-      Cur.FNext := nil;
-      if FGuardCount > 0 then Dec(FGuardCount);
+        LPrev.FNext := LCur.FNext;
+      Dec(FGuardCount);
       Exit;
     end;
-    Prev := Cur;
-    Cur := Cur.FNext;
+    LPrev := LCur;
+    LCur := LCur.FNext;
   end;
 end;
 
 procedure TTarReader.InvalidateGuards;
 var
-  Cur, LNext: TTarGlobalPaxGuard;
+  LCur, LNext: TTarGlobalPaxGuard;
 begin
-  Cur := FGuardHead;
-  while Cur <> nil do
+  LCur := FGuardHead;
+  while LCur <> nil do
   begin
-    LNext := Cur.FNext;
-    Cur.Invalidate;
-    Cur.FNext := nil;
-    Cur := LNext;
+    LNext := LCur.FNext;
+    LCur.Invalidate;
+    LCur := LNext;
   end;
   FGuardHead := nil;
   FGuardCount := 0;
@@ -683,7 +628,7 @@ begin
       else if FGlobalPaxPath <> '' then
       begin
         AHeader.Name := FGlobalPaxPath;
-        if FGuardCount = 0 then
+        if not HasGuards then
         begin
           LogGlobalPaxAutoClear;
           FGlobalPaxPath := '';
@@ -715,7 +660,7 @@ begin
       else if FGlobalPaxLinkPath <> '' then
       begin
         AHeader.LinkName := FGlobalPaxLinkPath;
-        if FGuardCount = 0 then
+        if not HasGuards then
         begin
           LogGlobalPaxAutoClear;
           FGlobalPaxLinkPath := '';

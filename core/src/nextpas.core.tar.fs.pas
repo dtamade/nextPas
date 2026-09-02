@@ -49,29 +49,20 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；批量小文件单次 GetMem 合并缓冲复用 I/O 块（200×512B 仅1次 GetMem，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，O(1)复用无零填充），bytes.ops 单源，try..finally 不丢 }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；批量小文件惰性按需扩容+bytes.builder几何池化复用 I/O 块（200×512B 仅1次 Reserve，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，几何 2× O(1)复用无预扫max、无零填充，IBytesBuilder 接口自动释资源不丢、零GetMem/FreeMem手管、零拷贝直传），bytes.ops/builder 双单源，try..finally 不丢 }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
 var
   LI: Integer;
   LHdr: TTarHeader;
   LFile: TArchiveFile;
+  LBuilder: IBytesBuilder;
   LShared: PByte;
   LSharedCap: SizeUInt;
-  LMaxSize: Int64;
   LNeed: SizeUInt;
 begin
+  LBuilder := nil;
   LShared := nil;
   LSharedCap := 0;
-  LMaxSize := 0;
-  for LI := 0 to High(AWalks) do
-    if not AWalks[LI].FIsDir and (AWalks[LI].FSize > LMaxSize) then
-      LMaxSize := AWalks[LI].FSize;
-  if LMaxSize > 0 then
-  begin
-    LNeed := TarIOBufCapacityFor(LMaxSize);
-    GetMem(LShared, LNeed);
-    LSharedCap := LNeed;
-  end;
   try
     for LI := 0 to High(AWalks) do
     begin
@@ -96,6 +87,17 @@ begin
           AWriter.AddEntry(LHdr, nil);
           Continue;
         end;
+        // perf: 惰性按需扩容 — 仅当 LHdr.Size>0 且 LCap < TarIOBufCapacityFor 时经 IBytesBuilder 几何池化 Reserve 扩容（bytes.builder 单源 2×，AlignUp4K 单源 4K 对齐，O(1)复用），200×512B 仅1次分配、无预扫 O(N) max、自适应大文件 8192/16K 几何增长，接口自动释资源不丢句柄
+        LNeed := TarIOBufCapacityFor(LHdr.Size);
+        if LSharedCap < LNeed then
+        begin
+          if LBuilder = nil then
+            LBuilder := CreateBytesBuilder(LNeed)
+          else
+            LBuilder.Reserve(LNeed);
+          LSharedCap := LBuilder.Capacity;
+          LShared := LBuilder.Data;
+        end;
         LFile := nil;
         LFile := ArchiveOpenRead(AWalks[LI].FFull);
         try
@@ -113,8 +115,9 @@ begin
       end;
     end;
   finally
-    if LShared <> nil then
-      FreeMem(LShared, LSharedCap);
+    // stability: IBytesBuilder 接口自动释资源（几何池化无 GetMem/FreeMem 手管），不丢句柄、零泄漏
+    LShared := nil;
+    LSharedCap := 0;
   end;
 end;
 

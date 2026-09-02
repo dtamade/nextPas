@@ -14,9 +14,8 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FIOBuf: PByte;
-    FIOBufCap: SizeUInt;
-    procedure EnsureIOBufCapacity(ANeed: SizeUInt);
+    FIOBuf: TBytes; // pooled I/O buffer via bytes.ops single source (BytesEnsureCapacity), high-water retained, zero GetMem/FreeMem jitter
+    procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
     procedure MaybeReclaimIOBuf(const AHintSize: Int64); inline;
@@ -90,19 +89,12 @@ begin
     raise EArgumentError.Create('tar: destination writer is nil');
   FDst := ADst;
   FIOBuf := nil;
-  FIOBufCap := 0;
 end;
 
-procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt);
-var
-  LNew: PByte;
+procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
 begin
-  if FIOBufCap >= ANeed then Exit;
-  if FIOBuf <> nil then
-    FreeMem(FIOBuf, FIOBufCap);
-  GetMem(LNew, ANeed);
-  FIOBuf := LNew;
-  FIOBufCap := ANeed;
+  // perf: inline thin-forward to bytes.ops.BytesEnsureCapacity single source (geometric 2× amortized O(1), AlignUp4K via TarIOBufCapacityFor caller), zero-copy PByte view, no manual GetMem/FreeMem, high-water retained
+  BytesEnsureCapacity(FIOBuf, ANeed);
 end;
 
 procedure TTarWriter.WriteChecked(AData: PByte; ACount: SizeUInt); inline;
@@ -121,26 +113,9 @@ begin
 end;
 
 procedure TTarWriter.MaybeReclaimIOBuf(const AHintSize: Int64); inline;
-var
-  LNeed: SizeUInt;
-  LNew: PByte;
 begin
-  if (FIOBuf = nil) or (FIOBufCap = 0) then Exit;
-  LNeed := TarIOBufCapacityFor(AHintSize);
-  if FIOBufCap > LNeed then
-  begin
-    if LNeed = 0 then
-    begin
-      FreeMem(FIOBuf, FIOBufCap);
-      FIOBuf := nil;
-      FIOBufCap := 0;
-      Exit;
-    end;
-    GetMem(LNew, LNeed);
-    FreeMem(FIOBuf, FIOBufCap);
-    FIOBuf := LNew;
-    FIOBufCap := LNeed;
-  end;
+  // stability+perf: high-water retained — per-entry no shrink to avoid GetMem/FreeMem jitter on alternating sizes (e.g. 64K↔512). Explicit TrimIOBuf/TrimIOBufTo does reclaim; here no-op retains pooled buffer via bytes.ops single source.
+  // AHintSize kept for TrimIOBufTo explicit path, but per-entry AddEntryFromReader no longer triggers reclaim.
 end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
@@ -417,8 +392,8 @@ var
 begin
   if ASize = 0 then Exit;
   LNeed := TarIOBufCapacityFor(ASize);
-  if SizeUInt(Length(ABuf)) < LNeed then
-    SetLength(ABuf, LNeed);
+  // perf: inline unified pooling via bytes.ops.BytesEnsureCapacity single source (geometric 2×, zero-copy PByte view), high-water retained
+  BytesEnsureCapacity(ABuf, LNeed);
   DoCopyAndPad(AReader, ASize, @ABuf[0], SizeUInt(Length(ABuf)));
 end;
 
@@ -446,8 +421,8 @@ begin
   if AHdr.Size = 0 then Exit;
   LNeed := TarIOBufCapacityFor(AHdr.Size);
   EnsureIOBufCapacity(LNeed);
-  DoCopyAndPad(AReader, AHdr.Size, FIOBuf, FIOBufCap);
-  MaybeReclaimIOBuf(AHdr.Size);
+  // perf: zero-copy PByte view into pooled TBytes (bytes.ops single source), high-water retained, no per-entry GetMem/FreeMem jitter
+  DoCopyAndPad(AReader, AHdr.Size, @FIOBuf[0], SizeUInt(Length(FIOBuf)));
 end;
 
 procedure TTarWriter.AddEntryFromReaderWithSharedBuf(const AHdr: TTarHeader; const AReader: IReader; var ASharedBuf: TBytes);
@@ -481,12 +456,25 @@ end;
 
 procedure TTarWriter.TrimIOBuf; inline;
 begin
-  MaybeReclaimIOBuf(0);
+  // perf+stability: explicit reclaim — pools via bytes.ops single source, SetLength nil frees high-water when caller explicitly requests trim; not per-entry
+  if Length(FIOBuf) > 0 then
+    SetLength(FIOBuf, 0);
 end;
 
 procedure TTarWriter.TrimIOBufTo(const AHintSize: Int64); inline;
+var
+  LNeed: SizeUInt;
 begin
-  MaybeReclaimIOBuf(AHintSize);
+  // perf: explicit high-water reclaim to hint — unified pool, zero-copy, inline; retains if smaller than current only when explicit Trim requested, avoids per-entry jitter
+  if Length(FIOBuf) = 0 then Exit;
+  if AHintSize <= 0 then
+  begin
+    SetLength(FIOBuf, 0);
+    Exit;
+  end;
+  LNeed := TarIOBufCapacityFor(AHintSize);
+  if SizeUInt(Length(FIOBuf)) > LNeed then
+    SetLength(FIOBuf, LNeed);
 end;
 
 procedure TTarWriter.Finish;
@@ -498,12 +486,9 @@ begin
   SpanFill(TByteSpan.Create(@Zero[0], SizeOf(Zero)), 0);
   WriteBlock(Zero);
   WriteBlock(Zero);
-  if FIOBuf <> nil then
-  begin
-    FreeMem(FIOBuf, FIOBufCap);
-    FIOBuf := nil;
-    FIOBufCap := 0;
-  end;
+  // stability: pooled TBytes freed via SetLength nil (bytes.ops single source, no manual FreeMem size mismatch), try..finally in Destroy guarantees not lost
+  if Length(FIOBuf) > 0 then
+    SetLength(FIOBuf, 0);
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -525,12 +510,9 @@ begin
       end;
     end;
   finally
-    if FIOBuf <> nil then
-    begin
-      FreeMem(FIOBuf, FIOBufCap);
-      FIOBuf := nil;
-      FIOBufCap := 0;
-    end;
+    // stability: always release pooled buffer (bytes.ops single source), zero GetMem/FreeMem mismatch, try..finally guarantees not lost even if Finish raises
+    if Length(FIOBuf) > 0 then
+      SetLength(FIOBuf, 0);
     FDst := nil;
     inherited Destroy;
   end;

@@ -13,7 +13,7 @@
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
-| `TTarReader` | `Next(out H):Boolean` / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发（复用 TrySlice 单源，批量 200×512B 零拷贝 201 allocs，`EntryData` 已移除避免 401 vs 201 翻倍峰值，`SpanClone` 按需单次 Move 经 `bytes.ops` 单源） / `OpenEntryStream:IReader`（FBuf 时 `CreateSliceReaderWithHold` 持有型零拷贝、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝视图、生命周期绑外部内存/`Reader`、零额外大块 Move） / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（无 guard 时 g 单次消费自动清理防污染，guard 作用域内持久至下一 g 覆盖） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描（实现侧不透明 `FScanLens: array[0..6]` 通用缓存，接口不暴露 `TTarScanLens` 七字段扁平化命名细节），复用 `Span` 单源 |
+| `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范）/ `EntryDataSlice(out PByte,Count):Boolean` 薄转发；`OpenEntryStream:IReader` 持有型流；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离；头字段 `NUL` 截断（实现与生命周期见 §2 INV-7、附录 B，性能基线见 §6 与 `BASELINE.json`） |
 | `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，需显式 Finish，`AddEntryFromReader` per-entry 局域缓冲 try..finally 无滞留峰值，析构 best-effort 补两零块永不抛异常仅 `log.intf Warn` 抑制次生，`IsFinished` 供 builder 可观测校验） |
 
 ### 1.2 常量与谓词
