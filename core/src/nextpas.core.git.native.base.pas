@@ -33,6 +33,7 @@ function GitOidToHex(const AOid: TGitOid): string;
   { not inline: HexEncode + 20B copy alloc, exceeds inline benefit }
 function GitOidIsValidHex(const AHex: string): Boolean;
   { not inline: 40× HexVal loop exceeds inline benefit (red line 2) }
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitOidZero: TGitOid; inline;
@@ -86,10 +87,16 @@ begin
   Result := HexEncode(LBytes);
 end;
 
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
+begin
+  { single source FNV-1a via bytes.ops SpanHashFNV1a (20B zero-copy, inline, batch-8), no per-site loop }
+  Result := SpanHashFNV1a(TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
+end;
+
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 begin
-  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops SpanEqual via MemEqual:
-    20 bytes -> ~3×QWord compares, no alloc, no 20× byte loop, hot oid set/heap path }
+  { inline + zero-copy TByteSpan view single-source bytes.ops SpanEqual via MemEqual:
+    20 bytes -> ~3×QWord compares, no alloc }
   Result := SpanEqual(
     TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
     TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
@@ -97,14 +104,13 @@ end;
 
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
-  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops IsZeroBytes via StripLeadingZeroSpan:
-    20 bytes -> early exit on first non-zero, no alloc, hot push/status path }
+  { inline zero-copy via bytes.ops IsZeroBytes }
   Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
 end;
 
 function GitOidZero: TGitOid; inline;
 begin
-  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops SpanFill via MemSet: 20B zero init, no alloc, single source with Same/IsZeroBytes unified vocabulary }
+  { inline zero-copy via bytes.ops SpanFill }
   SpanFill(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen), 0);
 end;
 

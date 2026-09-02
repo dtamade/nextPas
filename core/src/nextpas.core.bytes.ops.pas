@@ -51,6 +51,7 @@ function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
+function SpanHashFNV1a(const ASpan: TByteSpan): UInt32; inline;
 
 { Unsigned big-endian helpers (canonical single source for crypto/tls) }
 { perf: StripLeadingZero family single source is bytes.ops; View is zero-copy (no alloc), Span is single-pass, Bytes is single alloc or CoW share }
@@ -381,6 +382,11 @@ end;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean;
 begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
+end;
+
+function SpanHashFNV1a(const ASpan: TByteSpan): UInt32; inline;
+begin
+  Result := HashFNV1a(ASpan.Data, ASpan.Len);
 end;
 
 function StripLeadingZero(const AData: TBytes): TBytes; inline;

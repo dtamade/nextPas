@@ -44,12 +44,11 @@ type
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // delta target size cache: 64-entry direct-mapped with eviction jitter gate (bytes.ops single source)
+    // delta target size cache: 64-entry fully associative FIFO (bytes.ops single source, zero-copy, inline)
     FPeekKeys: array[0..63] of SizeUInt;
     FPeekVals: array[0..63] of Int64;
     FPeekValid: array[0..63] of Boolean;
-    FPeekJitter: array[0..63] of Byte;
-    FPeekTick: SizeUInt;
+    FPeekNext: SizeUInt;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -68,8 +67,6 @@ function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TB
 const
   GitMaxDeltaDepth = 64;
   GitMaxDeltaTargetSize = 256 * 1024 * 1024;
-  GitPeekHashKnuth = 2654435761;
-  GitPeekHashMask = 63;
 
 implementation
 
@@ -185,10 +182,9 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
-  // cache zero-init: FPeekValid false via class zero-fill; jitter gate zero-fill; direct-mapped hash
-  FillChar(FPeekValid, SizeOf(FPeekValid), 0);
-  FillChar(FPeekJitter, SizeOf(FPeekJitter), 0);
-  FPeekTick := 0;
+  // cache zero-init: bytes.ops single source SpanFill (zero-copy view, inline MemSet) over FPeekValid; FIFO cursor zero
+  SpanFill(TByteSpan.Create(PByte(@FPeekValid[0]), SizeOf(FPeekValid)), 0);
+  FPeekNext := 0;
   LoadIndex(AIdxPath);
 end;
 
@@ -404,48 +400,38 @@ begin
   Result := True;
 end;
 
-function GitPeekHashIdx(APos: SizeUInt): SizeUInt; inline;
-begin
-  Result := ((APos xor (APos shr 7) xor (APos shr 17)) * SizeUInt(GitPeekHashKnuth) xor (APos shr 11)) and SizeUInt(GitPeekHashMask);
-end;
-
 function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
 var
-  Idx: SizeUInt;
+  I: Integer;
 begin
-  Idx := GitPeekHashIdx(APos);
-  if FPeekValid[Idx] and (FPeekKeys[Idx] = APos) then
-  begin
-    ATargetSize := FPeekVals[Idx];
-    Exit(True);
-  end;
+  // perf: inline + fully associative linear scan (64 entries, no hash) avoids Knuth direct-map collisions; hot path avoids repeated 32B prefix inflate, zero-copy via regs, single source bytes.ops still owns 32B inflate in caller
+  for I := 0 to High(FPeekValid) do
+    if FPeekValid[I] and (FPeekKeys[I] = APos) then
+    begin
+      ATargetSize := FPeekVals[I];
+      Exit(True);
+    end;
   Result := False;
 end;
 
 procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
 var
-  Idx: SizeUInt;
+  I: Integer;
 begin
-  Idx := GitPeekHashIdx(APos);
-  // perf: inline + eviction jitter gate (cheap tick xor, probation 3) dampens direct-mapped thrash; avoids repeated 32B prefix inflate on Revwalk hotspot, zero-copy Move via caller, single source bytes.ops
-  if FPeekValid[Idx] and (FPeekKeys[Idx] <> APos) then
-  begin
-    Inc(FPeekTick);
-    if ((APos xor FPeekTick) and 3) <> 0 then
+  // perf: inline + FIFO fully associative (no jitter thrash), scans for empty slot first then round-robin; avoids repeated 32B prefix inflate on large-pack Revwalk, stable FIFO eviction, single source bytes.ops in caller inflate
+  for I := 0 to High(FPeekValid) do
+    if not FPeekValid[I] then
     begin
-      if FPeekJitter[Idx] < 3 then
-      begin
-        Inc(FPeekJitter[Idx]);
-        Exit;
-      end;
+      FPeekKeys[I] := APos;
+      FPeekVals[I] := ATargetSize;
+      FPeekValid[I] := True;
+      Exit;
     end;
-    FPeekJitter[Idx] := 0;
-  end
-  else
-    FPeekJitter[Idx] := 0;
-  FPeekKeys[Idx] := APos;
-  FPeekVals[Idx] := ATargetSize;
-  FPeekValid[Idx] := True;
+  I := Integer(FPeekNext and 63);
+  FPeekKeys[I] := APos;
+  FPeekVals[I] := ATargetSize;
+  FPeekValid[I] := True;
+  FPeekNext := (FPeekNext + 1) and 63;
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;

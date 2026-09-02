@@ -13,32 +13,21 @@ uses
   nextpas.core.git.native.repo,
   nextpas.core.git.native.commitgraph;
 
-{ Revision walking over the native object layer: commits emerge newest
-  committer-date first, matching `git rev-list` for distinct dates. Each
-  commit is read and parsed exactly once - the queue entry carries the
-  pre-fetched parent list so emission never re-reads objects.
-  Shallow clones and grafts are out of scope stage-1.
-
-  Topological order buffers the reachable subgraph first (children always
-  precede parents), then emits through git's default graph-order ready
-  stack (REV_SORT_IN_GRAPH_ORDER): initial tips oldest-stacked-first so
-  the newest pops first, afterwards newly-ready parents enter in
-  parent-list order, making the last-listed parent pop first.
-
-  Boundary/hide/date semantics mirror `git rev-list`:
-  - first-parent follows only the first parent of each commit
-  - hide/exclude removes Hides and their ancestors; --boundary re-adds
-    direct hidden parents of included commits
-  - since/until filters by committer date (0 means unbounded) }
+{ Revision walk over native objects: newest committer-date first,
+  matching `git rev-list` for distinct dates. Each commit parsed once;
+  queue entry carries pre-fetched parents, emission avoids re-read.
+  Topological order buffers reachable subgraph (children before parents)
+  and emits via graph-order ready stack (oldest tip stacked first).
+  Hide/boundary/date mirrors `git rev-list`; shallow/grafts out of scope. }
 
 type
   TGitOidArray = array of TGitOid;
 
-  { hash-based oid membership; O(1) avg for streaming walk and
-    topological planner — replaces O(n²) sorted+Move }
+  { hash set, O(1) avg }
   TGitOidSet = class
   private
     FBuckets: array of TGitOid;
+    FHashes: array of UInt32; { cached FNV, avoids rehash recompute at 4096 cap }
     FStates: array of Byte; { 0 empty, 1 occupied }
     FCount: SizeInt;
     FCap: SizeInt;
@@ -52,16 +41,15 @@ type
     function Count: SizeInt; inline;
   end;
 
-  { bounded exactly-once commit parse cache: graph-hit or inflate once;
-    zero-copy CoW share via assignment (bytes.ops Move single source, inline),
-    bounded 4096 caps O(1) resident for large-repo traversal }
+  { bounded exactly-once parse cache (4096 cap, CoW share, LRU) }
   TCommitParseCache = class
   private
     FBuckets: array of TGitOid;
+    FHashes: array of UInt32; { cached FNV }
     FWhens: array of Int64;
     FParents: array of TGitOidArray;
     FStates: array of Byte;
-    FTicks: array of UInt64; { LRU recency ticks, monotonic }
+    FTicks: array of UInt64; { LRU ticks }
     FTick: UInt64;
     FCount: SizeInt;
     FCap: SizeInt;
@@ -173,23 +161,13 @@ uses
 
 function OidLess(const AA, AB: TGitOid): Boolean; inline;
 begin
-  { perf: inline + zero-copy TByteSpan view single-source bytes.ops SpanCompare via CompareBytesOrdered (Simd MemEqual fast path, ~3×QWord), replaces 20× byte loop + duplicate branches in heap/topo sort hotspot; bytes.ops single source inline }
+  { ordered by OID bytes via bytes.ops, zero-copy view, inline }
   Result := SpanCompare(
     TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
     TByteSpan.Create(@AB.Bytes[0], GitOidRawLen)) < 0;
 end;
 
-function GitOidHash(const AOid: TGitOid): UInt32; inline;
-var
-  I: Integer;
-begin
-  Result := UInt32(2166136261);
-  for I := 0 to GitOidRawLen - 1 do
-    Result := (Result xor UInt32(AOid.Bytes[I])) * UInt32(16777619);
-end;
-
-{ shared open-addressing helpers: single source for oid Set/Cache (L0 bytes.ops discipline)
-  perf: inline + zero-copy SpanEqual via bytes.ops single source, probe upper limit (AMask+1) caps O(n) degenerate scan, average O(1) at 70% load; kicking via Rehash on EnsureCapacity keeps max probe bounded, avoids unbounded linear chain }
+{ open-addressing helpers; probe capped at cap+1, avg O(1) at 70% load }
 function OidProbeEmpty(const AStates: array of Byte; AMask: SizeInt; AHash: UInt32): SizeInt; inline;
 var
   LProbe: SizeInt;
@@ -241,6 +219,7 @@ end;
 procedure TGitOidSet.Rehash(ANewCap: SizeInt);
 var
   LOldBuckets: array of TGitOid;
+  LOldHashes: array of UInt32;
   LOldStates: array of Byte;
   LOldCap: SizeInt;
   I: Integer;
@@ -248,9 +227,11 @@ var
   LHash: UInt32;
 begin
   LOldBuckets := FBuckets;
+  LOldHashes := FHashes;
   LOldStates := FStates;
   LOldCap := FCap;
   SetLength(FBuckets, ANewCap);
+  SetLength(FHashes, ANewCap);
   SetLength(FStates, ANewCap);
   FCap := ANewCap;
   FMask := ANewCap - 1;
@@ -258,15 +239,15 @@ begin
   for I := 0 to LOldCap - 1 do
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      LHash := GitOidHash(LOldBuckets[I]);
+      LHash := LOldHashes[I]; { reuse cached hash, no recompute }
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
       if LIdx < 0 then
       begin
-        // probe limit hit during rehash (degenerate chain > cap) - kick via larger cap and retry
         Rehash(FCap * 2);
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
       end;
       FBuckets[LIdx] := LOldBuckets[I];
+      FHashes[LIdx] := LHash;
       FStates[LIdx] := 1;
       Inc(FCount);
     end;
@@ -278,14 +259,13 @@ var
   LIdx: SizeInt;
 begin
   EnsureCapacity;
-  LHash := GitOidHash(AOid);
+  LHash := GitOidHash(AOid); { single hash, reused on rehash path }
   if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
     Exit;
-  // probe upper limit: if no empty within cap (LIdx=-1 or occupied), kick via rehash and retry
   if (LIdx < 0) or (LIdx >= FCap) or (FStates[LIdx] = 1) then
   begin
     Rehash(FCap * 2);
-    LHash := GitOidHash(AOid);
+    { reuse LHash, no recompute }
     if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
       Exit;
     if (LIdx < 0) or (FStates[LIdx] = 1) then
@@ -298,7 +278,8 @@ begin
       end;
     end;
   end;
-  FBuckets[LIdx] := AOid; { zero-copy: 20-byte inline copy }
+  FBuckets[LIdx] := AOid;
+  FHashes[LIdx] := LHash;
   FStates[LIdx] := 1;
   Inc(FCount);
 end;
@@ -333,6 +314,7 @@ begin
   for I := 0 to High(FParents) do
     SetLength(FParents[I], 0);
   SetLength(FBuckets, 0);
+  SetLength(FHashes, 0);
   SetLength(FWhens, 0);
   SetLength(FParents, 0);
   SetLength(FStates, 0);
@@ -358,9 +340,10 @@ begin
 end;
 
 procedure TCommitParseCache.CompactEvict;
-const CKeep = 2048; // keep half, stays below 70% grow threshold (2867) -> amortized O(1)
+const CKeep = 2048; // keep half, stays below 70% grow threshold (2867)
 var
   LOldBuckets: array of TGitOid;
+  LOldHashes: array of UInt32;
   LOldWhens: array of Int64;
   LOldParents: array of TGitOidArray;
   LOldStates: array of Byte;
@@ -408,24 +391,26 @@ begin
   if FCount <= CKeep then
     Exit;
   LOldBuckets := FBuckets;
+  LOldHashes := FHashes;
   LOldWhens := FWhens;
   LOldParents := FParents;
   LOldStates := FStates;
   LOldTicks := FTicks;
   LOldCap := FCap;
   SetLength(FBuckets, 0);
+  SetLength(FHashes, 0);
   SetLength(FWhens, 0);
   SetLength(FParents, 0);
   SetLength(FStates, 0);
   SetLength(FTicks, 0);
   SetLength(FBuckets, FCap);
+  SetLength(FHashes, FCap);
   SetLength(FWhens, FCap);
   SetLength(FParents, FCap);
   SetLength(FStates, FCap);
   SetLength(FTicks, FCap);
   FCount := 0;
-  // collect active indices, sort by recency descending (LRU: keep newest)
-  // perf: geometric growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy Integer Move, avoids O(k²) SetLength(Length+1) copy at 4096 cap jitter
+  // collect active indices by recency
   LSorted := nil;
   LSortedLen := 0;
   LSortedCap := 0;
@@ -442,7 +427,6 @@ begin
       Inc(LSortedLen);
     end;
   SetLength(LSorted, LSortedLen);
-  // perf: O(n) avg QuickSelect (nth_element) keeps 2048 largest ticks, replaces O(n log n) QuickSort; hotspot eviction at 4096 cap now linear, jitter eliminated, zero-copy index Move, not inline to avoid I-Cache bloat, bytes.ops single source
   if (LSortedLen > CKeep) and (Length(LSorted) > 1) then
     QuickSelect(0, High(LSorted), CKeep - 1);
   for I := 0 to High(LSorted) do
@@ -450,28 +434,30 @@ begin
     J := LSorted[I];
     if I < CKeep then
     begin
-      LHash := GitOidHash(LOldBuckets[J]);
+      LHash := LOldHashes[J]; { reuse cached hash }
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
       if LIdx < 0 then
       begin
         Rehash(FCap * 2);
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
       end;
-      FBuckets[LIdx] := LOldBuckets[J]; // zero-copy 20B inline
+      FBuckets[LIdx] := LOldBuckets[J];
+      FHashes[LIdx] := LHash;
       FWhens[LIdx] := LOldWhens[J];
-      FParents[LIdx] := LOldParents[J]; // zero-copy CoW share, bytes.ops single source
+      FParents[LIdx] := LOldParents[J]; { CoW share }
       FTicks[LIdx] := LOldTicks[J];
       FStates[LIdx] := 1;
       Inc(FCount);
     end
     else
-      SetLength(LOldParents[J], 0); // release evicted, stable free
+      SetLength(LOldParents[J], 0);
   end;
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
 var
   LOldBuckets: array of TGitOid;
+  LOldHashes: array of UInt32;
   LOldWhens: array of Int64;
   LOldParents: array of TGitOidArray;
   LOldStates: array of Byte;
@@ -482,12 +468,14 @@ var
   LHash: UInt32;
 begin
   LOldBuckets := FBuckets;
+  LOldHashes := FHashes;
   LOldWhens := FWhens;
   LOldParents := FParents;
   LOldStates := FStates;
   LOldTicks := FTicks;
   LOldCap := FCap;
   SetLength(FBuckets, ANewCap);
+  SetLength(FHashes, ANewCap);
   SetLength(FWhens, ANewCap);
   SetLength(FParents, ANewCap);
   SetLength(FStates, ANewCap);
@@ -498,7 +486,7 @@ begin
   for I := 0 to LOldCap - 1 do
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      LHash := GitOidHash(LOldBuckets[I]);
+      LHash := LOldHashes[I]; { reuse cached hash }
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
       if LIdx < 0 then
       begin
@@ -506,6 +494,7 @@ begin
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
       end;
       FBuckets[LIdx] := LOldBuckets[I];
+      FHashes[LIdx] := LHash;
       FWhens[LIdx] := LOldWhens[I];
       FParents[LIdx] := LOldParents[I];
       FTicks[LIdx] := LOldTicks[I];
@@ -519,10 +508,10 @@ var LHash: UInt32; LIdx: SizeInt;
 begin
   Result := False;
   if FCount = 0 then Exit;
-  LHash := GitOidHash(AOid);
+  LHash := GitOidHash(AOid); { single source FNV via bytes.ops, inline zero-copy }
   if not OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then Exit;
   AWhen := FWhens[LIdx];
-  AParents := FParents[LIdx]; { zero-copy CoW share, bytes.ops single source discipline, inline }
+  AParents := FParents[LIdx]; { CoW share }
   Inc(FTick);
   FTicks[LIdx] := FTick; // LRU touch, inline fast path
   Result := True;
@@ -534,22 +523,20 @@ begin
   EnsureCapacity;
   if FCap = 0 then
     Rehash(16);
-  LHash := GitOidHash(AOid);
+  LHash := GitOidHash(AOid); { single hash, reused }
   if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
   begin
-    // OidLocate found duplicate; LIdx valid due to probe limit handled
     if LIdx >= 0 then
     begin
       Inc(FTick);
-      FTicks[LIdx] := FTick; // LRU refresh on duplicate, avoids stale eviction
+      FTicks[LIdx] := FTick;
     end;
     Exit;
   end;
-  // probe upper limit: if no empty within cap (LIdx=-1 or occupied), kick via rehash and retry
   if (LIdx < 0) or (LIdx >= FCap) or (FStates[LIdx] = 1) then
   begin
     Rehash(FCap * 2);
-    LHash := GitOidHash(AOid);
+    { reuse LHash }
     if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
     begin
       if LIdx >= 0 then
@@ -570,8 +557,9 @@ begin
     end;
   end;
   FBuckets[LIdx] := AOid;
+  FHashes[LIdx] := LHash;
   FWhens[LIdx] := AWhen;
-  FParents[LIdx] := AParents; { zero-copy CoW share, bytes.ops single source discipline, no Copy alloc }
+  FParents[LIdx] := AParents; { CoW share }
   FStates[LIdx] := 1;
   Inc(FTick);
   FTicks[LIdx] := FTick;
@@ -1502,7 +1490,7 @@ begin
       Seen.Add(Oid);
       if NodesLen >= Length(Nodes) then
       begin
-        // perf: geometric Nodes growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy record Move, avoids O(n²) SetLength(NodesLen+1) churn
+        // geometric growth via bytes.ops, amortized O(1)
         SetLength(Nodes, SizeInt(GrowArrayCapacity(SizeUInt(Length(Nodes)), SizeUInt(NodesLen + 1))));
       end;
       NodeIdx := NodesLen;
@@ -1543,7 +1531,7 @@ begin
       (REV_SORT_IN_GRAPH_ORDER). Initial tips are stacked oldest-first so
       the newest pops first; afterwards the last-listed newly-ready parent
       pops before its siblings. }
-    // perf: Ready LIFO geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, amortized O(1) push, zero-copy Integer Move, avoids O(n²) SetLength(Length+1) churn
+    // Ready LIFO geometric growth via bytes.ops, amortized O(1)
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
@@ -1563,7 +1551,7 @@ begin
     begin
       if (AMaxCount >= 0) and (ResCount >= AMaxCount) then
         Break;
-      // perf: inline LIFO pop over ReadyLen/ReadyCap (no SetLength shrink, amortized O(1), zero-copy)
+      // inline LIFO pop, amortized O(1)
       if ReadyLen = 0 then
         NodeIdx := -1
       else
@@ -1583,7 +1571,7 @@ begin
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          // perf: geometric Ready growth via bytes.ops GrowArrayCapacity single source
+          // geometric Ready growth via bytes.ops
           if ReadyLen >= ReadyCap then
           begin
             ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));
@@ -1715,14 +1703,13 @@ begin
       Seen.Add(Oid);
       if NodesLen >= Length(Nodes) then
       begin
-        // perf: geometric Nodes growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy record Move, avoids O(n²) SetLength(NodesLen+1) churn
+        // geometric growth via bytes.ops, amortized O(1)
         SetLength(Nodes, SizeInt(GrowArrayCapacity(SizeUInt(Length(Nodes)), SizeUInt(NodesLen + 1))));
       end;
       NodeIdx := NodesLen;
       Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
       Nodes[NodeIdx].When := GWhen;
-      // store parents respecting first-parent flag for graph edges
       if AOptions.FirstParent then
       begin
         if Length(GParents) > 0 then
@@ -1792,7 +1779,7 @@ begin
     for I := 0 to High(Nodes) do
       DateFiltered[I] := not PassesDateFilter(Nodes[I].When, AOptions.Since, AOptions.UntilTime);
     // phase 3: LIFO ready stack
-    // perf: Ready LIFO geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, amortized O(1) push, zero-copy Integer Move, avoids O(n²) SetLength(Length+1) churn
+    // Ready LIFO geometric growth via bytes.ops, amortized O(1)
     for I := 0 to High(Nodes) do
       if Nodes[I].ChildCount = 0 then
       begin
@@ -1812,7 +1799,7 @@ begin
     begin
       if (AMaxCount >= 0) and (ResCount >= AMaxCount) and (Emitted >= AMaxCount) then
         Break;
-      // perf: inline LIFO pop over ReadyLen/ReadyCap (no SetLength shrink, amortized O(1), zero-copy)
+      // inline LIFO pop, amortized O(1)
       if ReadyLen = 0 then
         NodeIdx := -1
       else
@@ -1838,7 +1825,7 @@ begin
         Dec(Nodes[ParentIdx].ChildCount);
         if Nodes[ParentIdx].ChildCount = 0 then
         begin
-          // perf: geometric Ready growth via bytes.ops GrowArrayCapacity single source
+          // geometric Ready growth via bytes.ops
           if ReadyLen >= ReadyCap then
           begin
             ReadyCap := SizeInt(GrowArrayCapacity(SizeUInt(ReadyCap), SizeUInt(ReadyLen + 1)));

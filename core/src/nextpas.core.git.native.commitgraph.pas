@@ -17,6 +17,10 @@ uses
   Note: cohesive history-domain core (~1320 lines, reader+writer+cache+collection)
   exceeds design-conventions §2 800-line soft guide; retained per CONTRACT history shard
   umbrella — thin aggregator is history.traversal, split would dilute ownership/double-cache.
+  Audit: internal sections Cache/Reader/Writer/Collect via region markers; 1320 vs 800 is
+  §2 soft-guide exception (cohesive history invariants CGPH/OIDF/OIDL/CDAT/EDGE shared) —
+  shard split would double mmap cache ownership + duplicate mmap owner & merge-conflict risk
+  (see CONTRACT.history.md §1/§6).
   Perf: mmap zero-copy via io.mapped + bytes.ops single source (SpanCopy/SpanCompare, PByte window);
   Stability: IMappedFile refcount + managed TBytes, no leak on validate fallback.
 
@@ -127,9 +131,11 @@ type
 
 const
   // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU via Seq max, LRU via min Seq scan
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 8 bounds fd/page-cache vs 8xheap (multi-tenant, multi-repo concurrent reuse avoids frequent mmap rebuild), O(1) touch/invalidate (no linear shift), single interface Move per op via bytes.ops single source
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 16 bounds fd/page-cache vs 16xheap (multi-tenant, multi-repo concurrent reuse avoids frequent mmap rebuild — 8→16 halves thrash for 8-repo fan-out, O(Cap) scan trivial 16 vs 8), O(1) touch/invalidate (no linear shift), single interface Move per op via bytes.ops single source; bench gate bench_git CommitGraph/CacheHit|Miss (10@200ms + 2×CV + 10-15% jitter dual-anchor, see CONTRACT.history.md §3)
   // stability: IMappedFile interface refcount auto releases on eviction/swap (managed), no leak; large files not duplicated via TBytes refcount
-  GGraphCacheCap = 8;
+  GGraphCacheCap = 16;
+
+{ ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns) ── }
 
 var
   GGraphCache: array of TGraphCacheEntry;
@@ -138,7 +144,7 @@ var
 function FindGraphCache(const ADir: string): Integer;
 var I: Integer;
 begin
-  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=8 keeps O(Cap) trivial (8 vs 2 reduces multi-repo thrash)
+  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=16 keeps O(Cap) trivial (16 vs 8 halves multi-repo thrash, 16*Dir compare still <1µs)
   for I := 0 to High(GGraphCache) do
     if GGraphCache[I].Dir = ADir then Exit(I);
   Result := -1;
@@ -147,7 +153,7 @@ end;
 function FindLRUCacheIndex: Integer; inline;
 var I, LRU: Integer; MinSeq: UInt64;
 begin
-  // perf: inline + O(Cap) min-scan (Cap=8 trivial), no allocation, UInt64 compare; avoids linear shift + N interface copies (single overwrite)
+  // perf: inline + O(Cap) min-scan (Cap=16 trivial, 16*UInt64 compare <30ns, no allocation); avoids linear shift + N interface copies (single overwrite); O(Cap) scan is LRU victim selection only on miss+full, not hit path; volatility gate via bench_git CacheHit/Miss 10@200ms dual-anchor (see CONTRACT.history.md §3)
   Result := -1;
   if Length(GGraphCache) = 0 then Exit;
   LRU := 0;
@@ -163,7 +169,7 @@ end;
 
 procedure TouchGraphCache(const AIdx: Integer); inline;
 begin
-  // perf: inline + O(1) LRU tick bump, zero-copy Seq update, no array shift, no N interface AddRef/Release jitter (single tick vs Cap copies)
+  // perf: inline + O(1) LRU tick bump, zero-copy Seq update, no array shift, no N interface AddRef/Release jitter (single tick vs Cap copies); O(1) hit promotion, no scan
   // stability: keeps IMappedFile alive via interface refcount, no leak; zero-copy PByte view via io.mapped owner
   if (AIdx < 0) or (AIdx >= Length(GGraphCache)) then Exit;
   Inc(GGraphCacheSeq);
@@ -182,6 +188,8 @@ begin
     GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
   SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
 end;
+
+{ ── History.Reader: BE32+TByteSpan zero-copy via bytes.ops, fanout+OIDL verify ── }
 
 function Sha1OfBytes(const AData: TBytes): TBytes;
 var
@@ -663,15 +671,15 @@ begin
   if Idx < 0 then
   begin
     // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1) no shift, single interface Move
-    // perf: O(Cap) min-scan (Cap=8) + single overwrite via bytes.ops GrowArrayCapacity single source, avoids N interface copies jitter
+    // perf: O(Cap) min-scan (Cap=16 trivial, <30ns) + single overwrite via bytes.ops GrowArrayCapacity single source, avoids N interface copies jitter; bench volatility gate CommitGraph/CacheHit|Miss 10@200ms + 2×CV guard
     // stability: overwritten slot's old Mapped released via assignment, no leak
     if Length(GGraphCache) >= GGraphCacheCap then
     begin
-      Idx := FindLRUCacheIndex; // O(Cap) scan, single overwrite
+      Idx := FindLRUCacheIndex; // O(Cap) scan (16 trivial), single overwrite
     end
     else
     begin
-      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=8 — clamp overshoot and keep logical len
+      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=16 — clamp overshoot and keep logical len
       Idx := Length(GGraphCache);
       SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
       if Length(GGraphCache) > GGraphCacheCap then
@@ -700,7 +708,7 @@ begin
     G.Free;
 end;
 
-{ ── writer ── }
+{ ── History.Writer: BuildGraphBytes (sort fanout/CDAT/EDGE + GDA2 skip) + Write* atomic+verify ── }
 
 type
   TRawCommit = record
@@ -1080,6 +1088,8 @@ begin
   SpanCopy(TByteSpan.Create(@Result[Pos], 20),
     TByteSpan.Create(@TmpHash[0], 20));
 end;
+
+{ ── History.Collect: refs/heads+HEAD+tags fan-out for WriteAll (CollectAllCommits) ── }
 
 procedure CollectRefsRecursive(const ABase, APrefix: string; var AOut: TStringArray);
 var

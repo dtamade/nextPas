@@ -24,9 +24,17 @@ type
     CommitTime: Int64;
   end;
   TGitBlameArray = array of TGitBlameEntry;
+  TBlameMatch = record OldIdx, NewIdx: Integer; end;
+  TBlameMatchArray = array of TBlameMatch;
 
 function GitBlame(const AGitDir, ARef, APath: string): TGitBlameArray; overload;
 function GitBlame(const AGitDir, APath: string): TGitBlameArray; overload;
+
+const
+  // single source threshold: shared between impl and tests, avoids magic 1M drift
+  BLAME_HIRSCHBERG_CELLS_LIMIT = 1000000;
+
+function GitBlameComputeMatches(const AOld, ANew: TStringArray): TBlameMatchArray; inline;
 
 implementation
 
@@ -147,8 +155,8 @@ begin
 end;
 
 type
-  TMatch = record OldIdx, NewIdx: Integer; end;
-  TMatchArray = array of TMatch;
+  TMatch = TBlameMatch;
+  TMatchArray = TBlameMatchArray;
 
 // -- Hirschberg/LCS helpers: zero-copy slice via (off,len), inline hot path --
 // reuse single source HashString (nextpas.core.base, FNV-1a) — no duplicate hash
@@ -396,9 +404,8 @@ begin
   if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
 end;
 
-const
-  // bench baseline threshold: 1M (was 10M limit in main, 10M documented in native-reference-map.md). Tuning via bench_git Blame/* baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused Buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; bench coverage: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + history query blame integration (head-vs-each + blob-cache) validated via core/tests/nextpas.core.git/test_git_native blame golden (threshold edge 1000×1000 vs 1001×1000 fallback).
-  BLAME_HIRSCHBERG_CELLS_LIMIT = 1000000;
+// threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M defined in interface (single source, was 10M in native-reference-map.md).
+// Tuning via bench_git Blame/* + test_git_native regression baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×) and 3000×3000=9M fallback ~6-8ms vs Hirschberg ~27ms (3-4×, O(N log N) sort overhead bounded, see TestBlameLargeFileFallback in test_git_native); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; regression baseline: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + test_git_native blame golden (threshold edge 1000×1000 exact vs 1001×1000 fallback) + large-file 3000×3000 fallback perf guard.
 
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray; inline;
 var
@@ -425,6 +432,12 @@ begin
   if SizeUInt(Length(Acc)) <> AccCnt then
     SetLength(Acc, AccCnt);
   Result := Acc;
+end;
+
+function GitBlameComputeMatches(const AOld, ANew: TStringArray): TBlameMatchArray; inline;
+begin
+  // thin test helper: single source via ComputeMatches, inline, zero-copy forwarding via TStringArray (refcounted)
+  Result := TBlameMatchArray(ComputeMatches(AOld, ANew));
 end;
 
 function PeelToCommit(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;

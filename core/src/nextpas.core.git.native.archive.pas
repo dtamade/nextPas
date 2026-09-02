@@ -162,8 +162,10 @@ begin
       begin
         Data := Repo.ReadObject(AFlat[I].Oid, Kind);
         if Kind <> gokBlob then raise EGitError.Create('symlink not blob');
+        // perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move via PByte^, no indexed var; replaces bare Move(Data[0],LinkTarget[1],Length))
         SetLength(LinkTarget, Length(Data));
-        if Length(Data) > 0 then Move(Data[0], LinkTarget[1], Length(Data));
+        if Length(Data) > 0 then
+          SpanCopy(TByteSpan.Create(PByte(PAnsiChar(LinkTarget)), SizeUInt(Length(Data))), TByteSpan.FromBytes(Data));
         Links[I] := LinkTarget;
         Sizes[I] := 0;
         Datas[I] := nil;

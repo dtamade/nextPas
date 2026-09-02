@@ -17,6 +17,7 @@ procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
 function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
+function HashFNV1a(A: Pointer; ALen: SizeUInt): UInt32; inline;
 function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
 
 {** SizeUInt 边界与溢出 guard *}
@@ -163,6 +164,38 @@ begin
   if ALen < BLen then Exit(-1);
   if ALen > BLen then Exit(1);
   Result := 0;
+end;
+
+function HashFNV1a(A: Pointer; ALen: SizeUInt): UInt32; inline;
+var
+  P: PByte;
+  H: UInt32;
+begin
+  if (ALen > 0) and (A = nil) then
+    raise EArgumentNil.Create('HashFNV1a: A is nil');
+  H := 2166136261;
+  P := PByte(A);
+  {$PUSH}{$Q-}{$R-}
+  while ALen >= 8 do
+  begin
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    H := (H xor UInt32(P^)) * 16777619; Inc(P);
+    Dec(ALen, 8);
+  end;
+  while ALen > 0 do
+  begin
+    H := (H xor UInt32(P^)) * 16777619;
+    Inc(P);
+    Dec(ALen);
+  end;
+  {$POP}
+  Result := H;
 end;
 
 function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
