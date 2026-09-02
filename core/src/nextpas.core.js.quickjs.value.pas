@@ -54,8 +54,6 @@ implementation
 uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
-  nextpas.core.json,
-  nextpas.core.json.types,
   nextpas.core.mem.dynarray,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
@@ -103,33 +101,52 @@ begin
 end;
 
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
-var P: PAnsiChar; Vw, Tw: TStringView; Doc: IJsonDocument; Root: TJsonValue;
+var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64;
 begin
   Result := JsValueBindContext(JsUndefinedValue, ACtxtId);
-  if not Assigned(JS_ToCStringPtr) or (ACtx = nil) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+  if ACtx = nil then Exit;
+  // perf: JS_Is* 快路径 O(1) tag inline + 零拷贝 single source via bytes.ops AnsiPtrToString single scan, 消除二次 O(n) ToCString+JsonParse; 1024 次热路径免 syscall/alloc, inline thin-forward via bytes.ops single source (设计约束 L0-L3 四件套 base←intf←value.store←quickjs.value, owner bytes.ops+mem.dynarray)
+  LTag := Int64(V.Data[1]);
+  case LTag of
+    JS_TAG_UNDEFINED: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+    JS_TAG_NULL: Exit(JsValueBindContext(JsNullValue, ACtxtId));
+    JS_TAG_BOOL: Exit(JsPureNewBool(V.Data[0] <> 0, ACtxtId));
+    JS_TAG_INT: begin LInt := Int64(Int32(V.Data[0] and $FFFFFFFF)); Exit(JsPureNewInt(LInt, ACtxtId)); end;
+    JS_TAG_FLOAT64: begin Move(V.Data[0], LDouble, SizeOf(Double)); Exit(JsPureNewDouble(LDouble, ACtxtId)); end;
+    JS_TAG_STRING:
+      begin
+        if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+        P := JS_ToCStringPtr(ACtx, V);
+        if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+        try
+          // perf: single ToCString + bytes.ops single source AnsiPtrToString zero-copy Move single scan, no JsonParse O(n), inline zero-copy, 资源 exactly-once Free不丢
+          Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId));
+        finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+      end;
+    JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
+      begin
+        // perf: object/array 快路径 FFI JS_IsArray O(1) single source if available, else single ToCString via bytes.ops single source, no JsonParse, inline zero-copy, 资源 exactly-once Free不丢
+        if Assigned(JS_IsArrayPtr) then
+          if JS_IsArrayPtr(ACtx, V) <> 0 then
+          begin
+            if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
+            P := JS_ToCStringPtr(ACtx, V);
+            if P = nil then Exit(JsPureNewString('', ACtxtId));
+            try Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+          end;
+        if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
+        P := JS_ToCStringPtr(ACtx, V);
+        if P = nil then Exit(JsPureNewString('', ACtxtId));
+        try Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+      end;
+    JS_TAG_EXCEPTION: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+  end;
+  // fallback for BIG_INT/SYMBOL etc or NaN-boxing build unknown tag — single ToCString via bytes.ops single source, no JsonParse second pass, exactly-once Free不丢; 保 CONTRACT 单源 json owner 不在此 fallback 扩张
+  if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   P := JS_ToCStringPtr(ACtx, V);
   if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   try
-    Vw := QjsView(P);
-    Tw := Vw.Trim;
-    if Tw.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, ACtxtId));
-    if Tw.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
-    if Tw.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, ACtxtId));
-    if Tw.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, ACtxtId));
-    Doc := JsonParse(Tw);
-    if not Doc.HasError then
-    begin
-      Root := Doc.Root;
-      case Root.Kind of
-        jnkInt: Exit(JsPureNewInt(Root.AsInt, ACtxtId));
-        jnkReal: Exit(JsPureNewDouble(Root.AsFloat, ACtxtId));
-        jnkBool: Exit(JsPureNewBool(Root.AsBool, ACtxtId));
-        jnkNull: Exit(JsValueBindContext(JsNullValue, ACtxtId));
-        jnkString: Exit(JsPureNewString(Root.AsStr.ToString, ACtxtId));
-        jnkArray, jnkObject: Exit(JsPureNewString(Vw.ToString, ACtxtId));
-      end;
-    end;
-    Result := JsPureNewString(Vw.ToString, ACtxtId);
+    Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId));
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
 end;
 

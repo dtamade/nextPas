@@ -1,6 +1,10 @@
 unit nextpas.core.js.pure.base;
-{ lifecycle owner + facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval)
-  Note: pure.* pure-family prefix, base shared base suffix — non-standard four-piece naming explicit exception per CONTRACT §1 & design-conventions:150. Single responsibility = lifecycle registry (GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero atomic via FValid, strong acquire) + thin facade; Host→pure.host (future js.host, now pure.host single source), Heap/Value→pure.value (future js.value, now pure.value single source), IO→platform.fs L0 64MiB BytesCopy single source, all inline zero-copy via bytes.ops/text.view single source. wc -l ~380 <650 (<800 must-split), thin forwards via pure.host/pure.value/js.eval single source, L0-L3 kept. }
+{ facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval, lifecycle extracted to js.lifecycle)
+  Note: pure.* pure-family prefix, base shared base suffix — non-standard four-piece naming explicit exception per CONTRACT §1 & design-conventions:150.
+  Single responsibility = thin facade only (type-carrier, no mutable globals); lifecycle → js.lifecycle single source (GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero via FValid, strong acquire, atomic_fetch_add+spinlock geometric via bytes.ops);
+  Host→pure.host (future js.host, now pure.host single source), Heap/Value→pure.value (future js.value, now pure.value single source), IO→platform.fs L0 64MiB BytesCopy single source,
+  all inline zero-copy via bytes.ops/text.view single source. wc -l ~320 <650 (<800 must-split), thin forwards via pure.host/pure.value/js.eval/js.lifecycle single source, L0-L3 kept.
+  Close奢华收敛: JsPureClose dual overloads share single-source _JsPureHostsClear template, buckets variant adds single Invalidate. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -11,7 +15,8 @@ uses
   nextpas.core.json.value,
   nextpas.core.js.pure.host,
   nextpas.core.js.pure.value,
-  nextpas.core.js.eval;
+  nextpas.core.js.eval,
+  nextpas.core.js.lifecycle;
 type
   TJsPureHostRec = nextpas.core.js.pure.host.TJsPureHostRec;
   TJsPureHostArray = nextpas.core.js.pure.host.TJsPureHostArray;
@@ -28,9 +33,9 @@ const
   JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
   JS_PURE_EVAL_BAD = nextpas.core.js.eval.JS_PURE_EVAL_BAD;
   JS_PURE_EVAL_FOO = nextpas.core.js.eval.JS_PURE_EVAL_FOO;
-// lifecycle owner — pure.base single source: GPureClosed 64B padded atomic (acquire/release, cache-line isolated, write-once rare, atomic_fetch_add id), intf零可变全局, bulk IsValid零原子 via FValid
-function JsPureContextRegister: UInt64;
-procedure JsPureContextClose(AId: UInt64);
+// lifecycle — owner js.lifecycle single source: GPureClosed 64B padded atomic (acquire/release, cache-line isolated, write-once rare, atomic_fetch_add id), intf零可变全局, bulk IsValid零原子 via FValid; pure.base thin-forward inline
+function JsPureContextRegister: UInt64; inline;
+procedure JsPureContextClose(AId: UInt64); inline;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
 // Host — owner pure.host (future js.host) — inline thin-forward, bytes.ops FNV1a single source, per-Context buckets instance-isolated
@@ -70,6 +75,9 @@ function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStr
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue; inline;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue); inline;
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
+// Batch — owner pure.value (future js.value) — inline thin-forward, threshold >1000 batch vs loop, FNV1a32 pre-hash single source via bytes.ops, SpanEqual zero-copy inline, amortized O(1), SIXDIM P-4
+function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
+procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
@@ -80,7 +88,7 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
-// Call/Close — thin compose pure.host+pure.value single source, lifecycle via GPureClosed padded atomic, resource JsPureClose幂等不丢
+// Call/Close — thin compose pure.host+pure.value single source, lifecycle via js.lifecycle padded atomic, resource JsPureClose幂等不丢 (single-source _JsPureHostsClear)
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
@@ -94,18 +102,12 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.bytes.base,
-  nextpas.core.mem.dynarray,
-  nextpas.core.atomic,
   nextpas.core.platform.fs,
   nextpas.core.js.eval;
 const
   JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
 type
   PJsPureHostBuckets = ^TJsPureHostBuckets;
-  TPureClosedSlot = record Value: Int32; _Pad: array[0..59] of Byte; end; // 64B cache-line padded, instance-isolated atomic slot, false-sharing free, write-once rare
-var GPureClosed: array of TPureClosedSlot; GPureNextId: Int64 = 1; GPureClosedLock: Int32 = 0; // owner pure.base: lifecycle single source, GPureNextId atomic fetch_add lock-free, GPureClosed 64B padded 4B atomic acquire/release per slot, spinlock for resize, bulk IsValid zero via FValid, strong acquire
-
 // single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source; 6 overloads converged to one dispatch (PBuckets nil=linear else bucketed), future js.host split ready when >800
 procedure _JsPureHostSetDispatch(var Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AName: string; const AFunc: TJsHostFunction; const AMethod: TJsHostMethod; const AProc: TJsHostProc; AKind: Integer); inline;
 begin
@@ -123,76 +125,33 @@ begin
       2: nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AProc, AKind);
     end;
 end;
-
-function GPureClosedCapacity: SizeUInt; inline;
+// single-source hosts clear template — luxury convergence, inline, single Move-free loop, resource not丢
+procedure _JsPureHostsClear(var Hosts: TJsPureHostArray); inline;
+var I: Integer;
 begin
-  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc, 64B padded slot
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(TPureClosedSlot));
-end;
-
-function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute GPureClosed; LId: Int64; LExp: Int32;
-begin
-  // perf: lock-free id via atomic_fetch_add_64 mo_seq_cst, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock for resize critical section (rare), inline zero-copy header, 64B padded slot
-  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_seq_cst));
-  Result := UInt64(LId);
-  if Result >= UInt64(Length(GPureClosed)) then
+  // perf: inline loop, single source for JsPureClose dual overloads, zero alloc, single branch, string ref release per slot, no duplicate code, bytes.ops not needed (string managed)
+  for I := 0 to High(Hosts) do
   begin
-    // spinlock for resize — rare write-once, protects SetLength+poke, fast path lock-free when capacity sufficient
-    LExp := 0;
-    while not atomic_compare_exchange_strong(GPureClosedLock, LExp, Int32(1), mo_acquire, mo_relaxed) do
-    begin
-      LExp := 0;
-      cpu_pause;
-    end;
-    try
-      if Result >= UInt64(Length(GPureClosed)) then
-      begin
-        LNeed := SizeUInt(Result) + 1;
-        LCurCap := GPureClosedCapacity;
-        if LCurCap >= LNeed then
-        begin
-          if SizeUInt(Length(GPureClosed)) <> LNeed then
-            DynArraySetLength(LBytes, LNeed);
-        end
-        else
-        begin
-          LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
-          SetLength(GPureClosed, Integer(LCap));
-          if LCap <> LNeed then
-            DynArraySetLength(LBytes, LNeed);
-        end;
-      end;
-    finally
-      atomic_store(GPureClosedLock, Int32(0), mo_release);
-    end;
+    Hosts[I].Name := '';
+    Hosts[I].Func := nil;
+    Hosts[I].Method := nil;
+    Hosts[I].Proc := nil;
+    Hosts[I].Hash := 0;
   end;
-  atomic_store(GPureClosed[Result].Value, 0, mo_release);
+  SetLength(Hosts, 0);
 end;
-
-procedure JsPureContextClose(AId: UInt64);
-begin
-  if (AId > 0) and (AId < UInt64(Length(GPureClosed))) then
-    atomic_store(GPureClosed[AId].Value, 1, mo_release);
-end;
-
+function JsPureContextRegister: UInt64; inline;
+begin Result := nextpas.core.js.lifecycle.JsPureContextRegister; end;
+procedure JsPureContextClose(AId: UInt64); inline;
+begin nextpas.core.js.lifecycle.JsPureContextClose(AId); end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
-var LVal: Int32;
-begin
-  // perf: inline acquire single bounds check, 64B padded atomic slot (false-sharing free), write-once rare, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
-  if AId = 0 then Exit(False);
-  if AId >= UInt64(Length(GPureClosed)) then Exit(False);
-  LVal := atomic_load(GPureClosed[AId].Value, mo_acquire);
-  Result := LVal <> 0;
-end;
-
+begin Result := nextpas.core.js.lifecycle.JsPureContextIsClosed(AId); end;
 function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
 begin
-  // perf: inline zero-alloc, thread-affine bulk 零原子 via FValid；跨线程强一致时走 acquire 检查 GPureClosed，单分支
+  // perf: inline zero-alloc, thread-affine bulk 零原子 via FValid；跨线程强一致时走 acquire 检查 js.lifecycle GPureClosed，单分支
   // note: V.IsValid 本体已改为 FValid 零屏障，此为显式强一致封装供需要跨线程可见性的调用方
-  Result := V.IsValid and not JsPureContextIsClosed(V.FContextId);
+  Result := V.IsValid and not nextpas.core.js.lifecycle.JsPureContextIsClosed(V.FContextId);
 end;
-
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureValidateHostName(AName); end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
@@ -261,6 +220,10 @@ procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Na
 begin nextpas.core.js.pure.value.JsPureHeapSetProp(Heap, Obj, Name, Val); end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
 begin nextpas.core.js.pure.value.JsPureHeapClear(Heap); end;
+function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
+begin Result := nextpas.core.js.pure.value.JsPureHeapGetBatch(Heap, Objs, AName); end;
+procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
+begin nextpas.core.js.pure.value.JsPureHeapSetBatch(Heap, Objs, AName, Vals); end;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := nextpas.core.js.pure.value.JsPureIsHeapObject(V); end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
@@ -336,34 +299,16 @@ begin
   end;
 end;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
-var I: Integer;
 begin
   JsPureContextClose(AContextId);
-  for I := 0 to High(Hosts) do
-  begin
-    Hosts[I].Name := '';
-    Hosts[I].Func := nil;
-    Hosts[I].Method := nil;
-    Hosts[I].Proc := nil;
-    Hosts[I].Hash := 0;
-  end;
-  SetLength(Hosts, 0);
+  _JsPureHostsClear(Hosts);
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
 end;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
-var I: Integer;
 begin
   JsPureContextClose(AContextId);
-  for I := 0 to High(Hosts) do
-  begin
-    Hosts[I].Name := '';
-    Hosts[I].Func := nil;
-    Hosts[I].Method := nil;
-    Hosts[I].Proc := nil;
-    Hosts[I].Hash := 0;
-  end;
-  SetLength(Hosts, 0);
+  _JsPureHostsClear(Hosts);
   JsPureHostBucketsInvalidate(Buckets);
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
@@ -400,8 +345,4 @@ begin
   // buckets variant thin-forward reusing same eval single source (host view via buckets)
   Result := nextpas.core.js.eval.JsPureDoEval(ACtx, ACode, AOptions, ABackend, Hosts, Buckets, AGlobal);
 end;
-initialization
-  // no mutex init, atomic only
-finalization
-  SetLength(GPureClosed, 0);
 end.

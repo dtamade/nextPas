@@ -145,7 +145,7 @@ begin
   Result := True;
 end;
 // layered core — scan → policy → literal → host dispatch → fallback single source
-function EvalCore(const AView: TStringView; ACtx: IJsContext; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline;
+function EvalCore(const AView: TStringView; ACtx: IJsContext; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue): TJsValue;
 var
   LHasWhile, LHasJson, LHasX: Boolean;
   LAdd: TJsValue;
