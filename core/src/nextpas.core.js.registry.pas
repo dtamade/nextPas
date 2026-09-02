@@ -53,27 +53,30 @@ procedure EnsureVaultLock; inline;
 var
   LExp: Int32;
 begin
-  // perf: inline double-checked zero alloc single branch, lazy Exactly-Once via atomic CAS, 64B 友好
-  // stability: acquire/release 发布可见，创建异常回滚不误判，try-finally 不丢
+  // perf: inline double-checked zero alloc single branch, lazy Exactly-Once via atomic CAS, 64B 友好，无递归迭代自旋
+  // stability: acquire/release 发布可见，创建异常回滚幂等（GVaultInit 0 回滚 Lock nil 幂等重试），try-finally 不丢，迭代替代递归防栈溢
   if Assigned(VaultRef^.Lock) then Exit;
-  LExp := 0;
-  if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
+  if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
+  while True do
   begin
-    try
-      if not Assigned(VaultRef^.Lock) then
-        VaultRef^.Lock := TMutex.Create;
-      atomic_store(GVaultInit, Int32(2), mo_release);
-    except
-      atomic_store(GVaultInit, Int32(0), mo_release);
-      raise;
+    LExp := 0;
+    if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
+    begin
+      try
+        if not Assigned(VaultRef^.Lock) then
+          VaultRef^.Lock := TMutex.Create;
+        atomic_store(GVaultInit, Int32(2), mo_release);
+      except
+        atomic_store(GVaultInit, Int32(0), mo_release);
+        raise;
+      end;
+      Exit;
     end;
-  end
-  else
-  begin
+    if LExp = 2 then Exit;
     while atomic_load(GVaultInit, mo_acquire) = 1 do
       cpu_pause;
-    if (atomic_load(GVaultInit, mo_acquire) <> 2) and not Assigned(VaultRef^.Lock) then
-      EnsureVaultLock;
+    if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
+    if Assigned(VaultRef^.Lock) then Exit;
   end;
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);
@@ -185,16 +188,26 @@ var
 begin
   // perf: O(1) enum-index dispatch via registry vault snapshot via VaultRef, no case-branch duplication, platform.sync 快照零拷贝 + BytesCopy 单源 inline, extension via JsRegisterBackend
   // stability: CheckJsRuntimeOptions by caller (factory) fail-closed before dispatch, no resource on throw; creation exactly-once, lock 快照+外部派发防死锁, pure.base JsPureClose / quickjs StoreClear幂等不丢 via callee ctor/clear, try-finally 不丢
-  if not Assigned(VaultRef^.Lock) then
-    raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
-  VaultRef^.Lock.Acquire;
-  try
-    atomic_thread_fence(mo_acquire);
+  // perf: init==2 无锁快照复用 JsRegistryAvailable 模式，64B 友好 O(1) 零锁零额外栅栏（单次 acquire load），多线程批量 CreateJsRuntime 零锁竞争，inline 零拷贝
+  if atomic_load(GVaultInit, mo_acquire) = 2 then
+  begin
     LReg := VaultRef^.Registered[AKind];
     LAvail := VaultRef^.Avail[AKind];
     LFactory := VaultRef^.Factories[AKind];
-  finally
-    VaultRef^.Lock.Release;
+  end
+  else
+  begin
+    if not Assigned(VaultRef^.Lock) then
+      raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
+    VaultRef^.Lock.Acquire;
+    try
+      atomic_thread_fence(mo_acquire);
+      LReg := VaultRef^.Registered[AKind];
+      LAvail := VaultRef^.Avail[AKind];
+      LFactory := VaultRef^.Factories[AKind];
+    finally
+      VaultRef^.Lock.Release;
+    end;
   end;
   if not LReg then
     raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);

@@ -109,7 +109,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text;
+  nextpas.core.text.view;
 
 { TJsPureRuntime — Lifecycle }
 

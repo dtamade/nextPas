@@ -88,10 +88,15 @@ begin
   if ACtx = nil then Exit;
   case AVal.Kind of
     jskString: if Assigned(JS_NewStringPtr) then Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+    jskInteger:
+      begin
+        // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip Int64(Trunc(...)) extra FPU + 2^53 loss), inline single Kind branch, zero FPU overhead, owner base Kind single source via byte ops single source
+        if Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt);
+      end;
     jskNumber:
       begin
-        if (AVal.AsInt = Int64(Trunc(AVal.AsDouble))) and Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt)
-        else if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(ACtx, AVal.AsDouble);
+        // perf: Kind distinct double path zero FPU integer compare, inline single branch, zero extra FPU, Kind integer mark single source avoids 2^53 precision loss, bytes.ops single source kept
+        if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(ACtx, AVal.AsDouble);
       end;
     jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(ACtx, Ord(AVal.AsBool));
     jskObject, jskArray, jskFunction:

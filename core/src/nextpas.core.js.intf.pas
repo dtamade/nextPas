@@ -11,7 +11,7 @@ type
   public
     function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
-    function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
+    function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsInteger: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
     function IsError: Boolean; inline; function IsPromise: Boolean; inline; function IsSymbol: Boolean; inline; function IsBigInt: Boolean; inline;
     function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string; inline;
@@ -75,7 +75,7 @@ end;
 function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
-function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
+function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskInteger; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
 function JsDoubleValue(AValue: Double): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FDoubleVal:=AValue; Result.FIntVal:=Int64(Trunc(AValue)); end;
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
@@ -124,7 +124,14 @@ end;
 
 function TJsValue.IsNumber: Boolean; inline;
 begin
-  Result := FKind = jskNumber;
+  // perf: Kind integer mark carries integer path zero FPU compare (jskInteger+jskNumber both numbers), inline single branch, zero FPU, preserves 2^53 exact; integer mark via Kind single source via base, L0-L3 keep, decorator zero-copy
+  Result := (FKind = jskNumber) or (FKind = jskInteger);
+end;
+
+function TJsValue.IsInteger: Boolean; inline;
+begin
+  // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip), inline single compare, zero FPU overhead, avoids 2^53 precision loss, owner intf via base Kind single source
+  Result := FKind = jskInteger;
 end;
 
 function TJsValue.IsString: Boolean; inline;
@@ -167,8 +174,8 @@ begin
   Result := FKind = jskBigInt;
 end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
-function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
-function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
+function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
+function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
   // single source: FStrVal hosted string, inline zero-copy return, bytes.ops SpanToString single source at creation via JsStringViewValue, lifecycle single-state, resource not丢
@@ -182,7 +189,7 @@ begin
   Result := JsPureToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
-function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
+function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
   // single source: hosted FStrVal, inline, bytes.ops single source at creation, zero view caching complexity, resource not丢
   Result:=FKind=jskString;

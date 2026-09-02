@@ -16,7 +16,7 @@ uses
 type
   TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
   TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString,
-    jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt);
+    jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt, jskInteger);
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
     jecTimeout, jecNotSupported, jecUnknown);
 
@@ -130,6 +130,7 @@ begin
     jskPromise: Result := 'jskPromise';
     jskSymbol: Result := 'jskSymbol';
     jskBigInt: Result := 'jskBigInt';
+    jskInteger: Result := 'jskInteger';
   end;
 end;
 

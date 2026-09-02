@@ -8,8 +8,8 @@ function JsQuickJsProbeNames: string; inline;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
-uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops;
-var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Integer = 0; GLock: TRTLCriticalSection;
+uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex;
+var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Integer = 0; GProbeIndex: Integer = -1; GLock: IMutex;
 const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
   {$IFDEF NEXTPAS_WINDOWS}
     'quickjs.dll', 'libquickjs.dll', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs'
@@ -72,13 +72,14 @@ begin
   if Bind('JS_FreePropertyEnum', P) then JS_FreePropertyEnumPtr := TJS_FreePropertyEnum(P);
   if Bind('JS_AtomToString', P) then JS_AtomToStringPtr := TJS_AtomToString(P);
   if Bind('JS_FreeAtom', P) then JS_FreeAtomPtr := TJS_FreeAtom(P);
-  // caller holds GLock, so global assignment is serialized — no duplicate TryLoad leak, handle ownership transferred exactly once
+  // caller holds GLock (IMutex via nextpas.core.sync → platform.sync Owner), so global assignment is serialized — no duplicate TryLoad leak, handle ownership transferred exactly once
   GLib := Lib; GLoaded := 1; Result := True;
 end;
 function DoProbeAvailableLocked: Boolean;
 var I: Integer; Lib: TPlatformLibrary;
 begin
-  // caller holds GLock; probes 8 names, closes handle immediately on probe success, sets GAvailable canonical
+  // caller holds GLock (Owner: nextpas.core.sync.mutex TMutex → platform.sync); probes 8 names, closes handle immediately on probe success, sets GAvailable/GProbeIndex canonical cache
+  // perf: GProbeIndex single source cache reuses first probe, cold start avoids double 8× open/close failure window, zero-copy single build inline
   for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
   begin
     // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse gate
@@ -86,21 +87,22 @@ begin
     if platform_dl_open(PAnsiChar(JS_QUICKJS_PROBE_NAMES[I]), PLATFORM_DL_NOW, Lib) = 0 then
     begin
       // stability: probe handle closed immediately, not cached, resource not丢
-      platform_dl_close(Lib); GAvailable := 1; Exit(True);
+      platform_dl_close(Lib); GAvailable := 1; GProbeIndex := I; Exit(True);
     end;
   end;
-  GAvailable := 0; Result := False;
+  GAvailable := 0; GProbeIndex := -1; Result := False;
 end;
 function JsQuickJsIsAvailable: Boolean;
 begin
   // perf: atomic fast path via InterlockedCompareExchange acquire load, zero syscall when cached, hot path inline compare
   if InterlockedCompareExchange(GAvailable, -1, -1) <> -1 then Exit(GAvailable = 1);
-  EnterCriticalSection(GLock);
+  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0), not TRTLCriticalSection
+  GLock.Acquire;
   try
     if GAvailable <> -1 then Exit(GAvailable = 1);
     Result := DoProbeAvailableLocked;
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 function JsQuickJsLoad: Boolean;
@@ -108,21 +110,31 @@ var I: Integer;
 begin
   // perf: atomic fast path for idempotent load, zero lock when already loaded
   if InterlockedCompareExchange(GLoaded, 0, 0) <> 0 then Exit(True);
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     if GLoaded <> 0 then Exit(True);
     if GAvailable = -1 then DoProbeAvailableLocked;
     if GAvailable = 0 then Exit(False);
+    // perf: reuse cached probe index first, cold start single open (cached) not double 8× scan, zero extra syscall, inline zero-copy via GProbeIndex single source cache
+    if (GProbeIndex >= 0) and (GProbeIndex <= High(JS_QUICKJS_PROBE_NAMES)) then
+      if TryLoad(JS_QUICKJS_PROBE_NAMES[GProbeIndex]) then Exit(True);
     for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
-      if TryLoad(JS_QUICKJS_PROBE_NAMES[I]) then Exit(True);
+    begin
+      if I = GProbeIndex then Continue;
+      if TryLoad(JS_QUICKJS_PROBE_NAMES[I]) then
+      begin
+        GProbeIndex := I;
+        Exit(True);
+      end;
+    end;
     Result := False;
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 procedure JsQuickJsUnload;
 begin
-  EnterCriticalSection(GLock);
+  GLock.Acquire;
   try
     if GLoaded <> 0 then
     begin
@@ -130,15 +142,18 @@ begin
       platform_dl_close(GLib);
       // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse gate
       BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
-      GLoaded := 0; GAvailable := -1;
+      GLoaded := 0; GAvailable := -1; GProbeIndex := -1;
       JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; JS_IsArrayPtr := nil; JS_GetOwnPropertyNamesPtr := nil; JS_FreePropertyEnumPtr := nil; JS_AtomToStringPtr := nil; JS_FreeAtomPtr := nil;
     end;
   finally
-    LeaveCriticalSection(GLock);
+    GLock.Release;
   end;
 end;
 initialization
-  InitCriticalSection(GLock);
+  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0), not System.TRTLCriticalSection
+  GLock := TMutex.Create;
+  // perf: inline single source via bytes.ops.BytesZero single source, zero-copy
+  BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
 finalization
   // stability: finalization exactly-once release if still loaded, zero via BytesZero single source, resource not丢
   if GLoaded <> 0 then
@@ -146,5 +161,6 @@ finalization
     platform_dl_close(GLib);
     BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
   end;
-  DoneCriticalSection(GLock);
+  // Owner: IMutex refcnt release, platform_mutex_destroy via TMutex single source, resource not丢, idempotent
+  GLock := nil;
 end.

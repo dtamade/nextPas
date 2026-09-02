@@ -15,19 +15,23 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.mem.base,
   nextpas.core.mem.dynarray,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.platform.time;
 const
-  JS_LIFECYCLE_CACHE_LINE = 64;
-  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60
+  JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // 64 via mem.base single source, no magic
+  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60 via CACHE_LINE single source
+{$PUSH}{$CODEALIGN RECORDMIN=16}{$PACKRECORDS C}
 type
-  TPureClosedSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B cache-line padded, instance-isolated atomic slot, false-sharing free, write-once rare, Padding 60B via CACHE_LINE single source, no magic 59
+  TPureClosedSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B cache-line padded via CODEALIGN+pad, instance-isolated atomic slot, false-sharing free, write-once rare, 60B pad via MEM_CACHE_LINE_SIZE single source
+{$POP}
 var
   GPureClosed: array of TPureClosedSlot;
   GPureNextId: Int64 = 1;
   GPureClosedLock: Int32 = 0; // owner js.lifecycle: 64B padded 4B atomic acquire/release per slot, atomic_fetch_add id lock-free, spinlock for resize, bulk IsValid zero via FValid, strong acquire
+  GPureClosedLen: Int32 = 0; // atomic publication length: SetLength release / IsClosed acquire, fixes FPC dynarray non-atomic publish race
 function GPureClosedCapacity: SizeUInt; inline;
 begin
   // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc, 64B padded slot
@@ -40,19 +44,21 @@ begin
   nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
 end;
 function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LExp: Int32;
+var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LExp: Int32; LSpins: Integer;
 begin
-  // perf: lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock for resize critical section (rare), inline zero-copy header, 64B padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
+  // perf: lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock with exponential backoff (rare), inline zero-copy header, 64B CODEALIGN padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
   LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
   Result := UInt64(LId);
-  if Result >= UInt64(Length(GPureClosed)) then
+  if Result >= UInt64(atomic_load(GPureClosedLen, mo_acquire)) then
   begin
-    // spinlock for resize — rare write-once, protects SetLength+poke, fast path lock-free when capacity sufficient
-    LExp := 0;
+    // spinlock for resize — rare write-once, protects SetLength+poke, exponential backoff: cpu_pause burst then yield to avoid bulk NewContext contention
+    LExp := 0; LSpins := 0;
     while not atomic_compare_exchange_strong(GPureClosedLock, LExp, Int32(1), mo_acquire, mo_relaxed) do
     begin
-      LExp := 0;
-      cpu_pause;
+      LExp := 0; Inc(LSpins);
+      if LSpins < 16 then cpu_pause
+      else if LSpins < 64 then begin cpu_pause; cpu_pause; end
+      else begin platform_thread_yield; LSpins := 0; end;
     end;
     try
       if Result >= UInt64(Length(GPureClosed)) then
@@ -70,6 +76,7 @@ begin
           SetLength(GPureClosed, Integer(LCap));
           // Exactly-Once: SetLength is capacity reservation (heap alloc) — logical length becomes LCap >= LNeed single header write, no extra DynArraySetLength down-poke, amortized O(1) geometric, preserves capacity, single header poke, bytes.ops single source
         end;
+        atomic_store(GPureClosedLen, Int32(Length(GPureClosed)), mo_release);
       end;
     finally
       atomic_store(GPureClosedLock, Int32(0), mo_release);
@@ -79,15 +86,15 @@ begin
 end;
 procedure JsPureContextClose(AId: UInt64);
 begin
-  if (AId > 0) and (AId < UInt64(Length(GPureClosed))) then
+  if (AId > 0) and (AId < UInt64(atomic_load(GPureClosedLen, mo_acquire))) then
     atomic_store(GPureClosed[AId].Value, 1, mo_release);
 end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 var LVal: Int32;
 begin
-  // perf: inline acquire single bounds check, 64B padded atomic slot (false-sharing free), write-once rare, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
+  // perf: inline acquire single bounds check via atomic publication Len (fixes FPC dynarray non-atomic SetLength race, no phantom), 64B CODEALIGN padded atomic slot (false-sharing free), write-once rare, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
   if AId = 0 then Exit(False);
-  if AId >= UInt64(Length(GPureClosed)) then Exit(False);
+  if AId >= UInt64(atomic_load(GPureClosedLen, mo_acquire)) then Exit(False);
   LVal := atomic_load(GPureClosed[AId].Value, mo_acquire);
   Result := LVal <> 0;
 end;

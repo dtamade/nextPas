@@ -265,8 +265,6 @@ var
   LOrig, LView: TStringView;
   LInt: Int64;
   LDbl: Double;
-  LDoc: IJsonDocument;
-  LRoot: TJsonValue;
   P: PAnsiChar;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
@@ -298,21 +296,15 @@ begin
     // perf: 零拷贝快路径 text.number single source ViewToInt64/ViewToDouble inline (zero-copy TStringView, single scan each, O(n) without JSON tree alloc) bypass JsonParse for hot numeric FFI; inline + bytes.ops single source via text.number ParseDouble(EiselLemire), no extra alloc, FFI path B/op=0 for numbers
     if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
     if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
-    // fallback: 复杂结构走 json owner 单源 JsonParse (arrays/objects/string) — 仅非数值路径 O(n) single pass, 视图零拷贝入参，保持 CONTRACT INV-5
-    LDoc := JsonParse(LView);
-    if not LDoc.HasError then
-    begin
-      LRoot := LDoc.Root;
-      case LRoot.Kind of
-        jnkInt: Exit(JsPureNewInt(LRoot.AsInt, FContextId));
-        jnkReal: Exit(JsPureNewDouble(LRoot.AsFloat, FContextId));
-        jnkBool: Exit(JsPureNewBool(LRoot.AsBool, FContextId));
-        jnkNull: Exit(JsValueBindContext(JsNullValue, FContextId));
-        jnkString: Exit(JsPureNewString(LRoot.AsStr.ToString, FContextId));
-        jnkArray, jnkObject: Exit(JsPureNewString(LOrig.ToString, FContextId));
-      end;
-    end;
-    Result := JsPureNewString(LOrig.ToString, FContextId);
+    // perf: 非数值回退零拷贝判别 text.view single source TStringView.Trim+Slice zero-copy inline O(1) discriminant via bytes.ops single source (TryClampSlice/SpanTrim) + JsPureNewStringView single BytesCopy single source — 消除对已 ToCString 再 JsonParse 的二次 O(n) 解析+树分配 (LDoc:=JsonParse(LView) fallback after QjsView), B/op 0 for array/object via single alloc single Move, FFI path exactly-once Free不丢, CONTRACT INV-5
+    // stability: 资源 exactly-once Free via try-finally (P/JS_FreeCString+JS_FreeValue) 不丢, 双堆幂等, 装饰边界 Pure single source via JsPureNewStringView (bytes.ops SpanToString single source, inline, zero dangling)
+    if (not LView.IsEmpty) and (LView.Len >= 2) and (LView.Data[0] = '"') and (LView.Data[LView.Len - 1] = '"') then
+      // json string literal quoted via QuickJS ToCString JSON-compat: 去外引号零拷贝 Slice (TryClampSlice single source inline via TStringView.Slice) + JsPureNewStringView single BytesCopy single source (bytes.ops single source, inline, B/op=1), 无 JSON 树 second pass, 无转义树分配
+      Exit(JsPureNewStringView(LView.Slice(1, LView.Len - 2), FContextId));
+    if (not LView.IsEmpty) and ((LView.Data[0] = '[') or (LView.Data[0] = '{')) then
+      // array/object: 零拷贝视图直通 JsPureNewStringView(LOrig) single BytesCopy single source via bytes.ops single source, inline, 无 JsonParse 树分配, B/op 0 额外之外 single Result alloc
+      Exit(JsPureNewStringView(LOrig, FContextId));
+    Result := JsPureNewStringView(LOrig, FContextId);
   finally
     if (P <> nil) and Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(FCtx, P);
     if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V);

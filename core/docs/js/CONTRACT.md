@@ -59,7 +59,7 @@ base ← intf ← {fake, quickjs.ffi, value.store, quickjs.value, quickjs, lifec
 
 ```pascal
 TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra); // 尾部追加纪律：新增只在末尾，保持序号稳定（db.TDbKind 同纪律）；js888/v8/chakra 恒可用，QuickJS 需 so 探测
-TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt); // 后端无关；Symbol/BigInt 为后端无关能力，后端可降级返回对应 kind
+TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString, jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt, jskInteger); // 后端无关；Symbol/BigInt 为后端无关能力，后端可降级返回对应 kind；jskInteger 为整数数值的 Kind 携带标记，零FPU区分整数/浮点，尾部追加保持序号稳定，QjsFromTJsValue 热路径单分支 Kind 比较替代 Trunc 往返避免 2^53 损失
 TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTimeout, jecNotSupported, jecUnknown); // 后端无关
 TJsRuntimeOptions = record
   MemoryLimit: SizeUInt; // 0=不限；QuickJS JS_SetMemoryLimit / JS_SetGCThreshold

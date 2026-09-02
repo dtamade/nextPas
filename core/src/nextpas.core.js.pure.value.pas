@@ -330,13 +330,17 @@ begin
     jskUndefined: Exit('undefined');
     jskNull: Exit('null');
     jskBoolean: if AValue.AsBool then Exit('true') else Exit('false');
+    jskInteger:
+      begin
+        // perf: Kind carries integer mark zero FPU (replaces Frac/Trunc roundtrip), inline Kind single branch avoids 2^53 precision loss + extra FPU, bytes.ops single source
+        LLen := IntToBuffer(AValue.AsInt, @LBuf[0]);
+        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+        Exit;
+      end;
     jskNumber:
       begin
-        // fix: Frac check avoids Double(AsInt) 2^53 precision loss, preserves large int exact via AsInt, inline zero-copy, bytes.ops single source
-        if Frac(AValue.AsDouble) = 0.0 then
-          LLen := IntToBuffer(AValue.AsInt, @LBuf[0])
-        else
-          LLen := FloatToBuffer(AValue.AsDouble, @LBuf[0]);
+        // perf: Kind integer mark distinct from jskNumber double, inline zero FPU hot path, double via FloatToBuffer single source, Kind single source via base
+        LLen := FloatToBuffer(AValue.AsDouble, @LBuf[0]);
         SetString(Result, PAnsiChar(@LBuf[0]), LLen);
         Exit;
       end;
@@ -380,10 +384,8 @@ begin
   case AValue.Kind of
     jskNull: Result := JsonCreateNullDocument;
     jskBoolean: Result := JsonCreateBoolDocument(AValue.AsBool);
-    jskNumber:
-      // fix: Frac check avoids Double(AsInt) 2^53 loss, exact int via AsInt preserved
-      if Frac(AValue.AsDouble) = 0.0 then Result := JsonCreateIntDocument(AValue.AsInt)
-      else Result := JsonCreateRealDocument(AValue.AsDouble);
+    jskInteger: Result := JsonCreateIntDocument(AValue.AsInt);
+    jskNumber: Result := JsonCreateRealDocument(AValue.AsDouble);
     jskString: Result := JsonCreateStringDocument(AValue.AsString);
   else
     Result := JsonCreateNullDocument;
