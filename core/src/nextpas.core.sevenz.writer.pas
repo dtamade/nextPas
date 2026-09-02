@@ -47,6 +47,7 @@ type
   TSevenZWriterImpl = class(TInterfacedObject, ISevenZWriter)
   private
     FEntries: array of TEntryRec;
+    FCount: Integer;
     FFinished: Boolean;
     FEncodeHeader: Boolean;
     FFilters: array of TSevenZFilter;
@@ -58,6 +59,7 @@ type
     FMaxFilesPerFolder: Integer;
     FProgress: TSevenZProgressEvent;
     procedure CheckOpen;
+    procedure EnsureEntriesCapacity; inline;
     { 序列化四段：签名头 / solid pack 流（多 folder 时为多段拼接） /
       编码头流 / 头块。明文头模式无第三段；由 Finish 与 FinishTo 共用 }
     procedure BuildArchive(out ASig, APacked, AHdrStream, ABlock: TBytes);
@@ -370,6 +372,16 @@ begin
     raise ESevenZError.Create('writer already finished');
 end;
 
+procedure TSevenZWriterImpl.EnsureEntriesCapacity; inline;
+var
+  LNewCap: Integer;
+begin
+  if FCount < Length(FEntries) then Exit;
+  LNewCap := Length(FEntries);
+  if LNewCap < 8 then LNewCap := 8 else LNewCap := LNewCap * 2;
+  SetLength(FEntries, LNewCap);
+end;
+
 procedure TSevenZWriterImpl.SetEncodeHeader(AEnabled: Boolean);
 begin
   CheckOpen;
@@ -457,8 +469,9 @@ begin
   end;
   LE.HasMTime := True;
   LE.MTimeUnixSec := AMTimeUnixSec;
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)] := LE;
+  EnsureEntriesCapacity;
+  FEntries[FCount] := LE;
+  Inc(FCount);
 end;
 
 procedure TSevenZWriterImpl.AddFileFromReader(const AName: string;
@@ -487,8 +500,9 @@ begin
   LE.ReaderSize := ASize;
   LE.HasMTime := True;
   LE.MTimeUnixSec := AMTimeUnixSec;
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)] := LE;
+  EnsureEntriesCapacity;
+  FEntries[FCount] := LE;
+  Inc(FCount);
 end;
 
 procedure TSevenZWriterImpl.AddDirectory(const AName: string);
@@ -509,13 +523,14 @@ begin
   LE.Source := esBytes;
   LE.HasMTime := True;
   LE.MTimeUnixSec := AMTimeUnixSec;
-  SetLength(FEntries, Length(FEntries) + 1);
-  FEntries[High(FEntries)] := LE;
+  EnsureEntriesCapacity;
+  FEntries[FCount] := LE;
+  Inc(FCount);
 end;
 
 function TSevenZWriterImpl.EntryCount: Integer;
 begin
-  Result := Length(FEntries);
+  Result := FCount;
 end;
 
 procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
@@ -695,7 +710,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       LNameEst: SizeUInt;
       LCapa: SizeUInt;
     begin
-      LTotal := Length(FEntries);
+      LTotal := FCount;
       SetLength(LEmptyStreamFlags, LTotal);
       for LSubIdx := 0 to LTotal - 1 do
         if FEntries[LSubIdx].IsDir then
@@ -1003,12 +1018,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
   begin
     { 统计非空文件并建立索引 }
     LNonEmpty := 0;
-    for LAcc := 0 to High(FEntries) do
+    for LAcc := 0 to FCount - 1 do
       if (not FEntries[LAcc].IsDir) and (EntrySize(FEntries[LAcc]) > 0) then
         Inc(LNonEmpty);
     SetLength(LNonEmptyIdx, LNonEmpty);
     LAcc := 0;
-    for LI := 0 to High(FEntries) do
+    for LI := 0 to FCount - 1 do
       if (not FEntries[LI].IsDir) and (EntrySize(FEntries[LI]) > 0) then
       begin
         LNonEmptyIdx[LAcc] := LI;
@@ -1219,8 +1234,8 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       SetLength(LFolders, 0);
     end;
     { 主头：明文 kHeader；无 pack 数据时省略流信息段 — IBytesBuilder O(n) 均摊，避免逐次 SetLength O(n²) }
-    // 容量预估：header 外层 StreamsInfo+FilesInfo，Length(FEntries)*64 均摊，避免 4096 在千文件时多轮 Grow
-    LPlainBuilder := CreateBytesBuilder(SizeUInt((Length(FEntries) * 64) + 4096));
+    // 容量预估：header 外层 StreamsInfo+FilesInfo，FCount*64 均摊，避免 4096 在千文件时多轮 Grow
+    LPlainBuilder := CreateBytesBuilder(SizeUInt((FCount * 64) + 4096));
     SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_HEADER);
     if LNonEmpty > 0 then
     begin
@@ -1228,7 +1243,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       BuildStreamsInfoMultiBuilder(LPlainBuilder, LFolders);
       SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_END);
     end;
-    if Length(FEntries) > 0 then
+    if FCount > 0 then
       BuildFilesInfoBuilder(LPlainBuilder);
     SevenZAppendByteToBuilder(LPlainBuilder, SZ_ID_END);
     LPlainHeader := LPlainBuilder.ToBytes;
@@ -1293,8 +1308,9 @@ begin
       Move(LBlock[0], Result[LBase], Length(LBlock));
   finally
     { M-06: Finish 后释放 IReader 持有，避免长生命周期 pin 住外部资源 }
-    for LI := 0 to High(FEntries) do
+    for LI := 0 to FCount - 1 do
       FEntries[LI].Reader := nil;
+    FCount := 0;
     SetLength(FEntries, 0);
   end;
 end;
@@ -1332,8 +1348,9 @@ begin
       Length(LHdrStream) + Length(LBlock));
   finally
     { M-06: FinishTo 后释放 IReader 持有，避免长生命周期 pin 住外部资源 }
-    for LI := 0 to High(FEntries) do
+    for LI := 0 to FCount - 1 do
       FEntries[LI].Reader := nil;
+    FCount := 0;
     SetLength(FEntries, 0);
   end;
 end;
