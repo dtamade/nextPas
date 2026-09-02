@@ -214,6 +214,10 @@ begin
   LInterlace := AData[LIhdrPos + 20];
   if (AWidth <= 0) or (AHeight <= 0) then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: width/height must be > 0 (width=' + IntToStr(Int64(AWidth)) + ' height=' + IntToStr(Int64(AHeight)) + ')');
+  if (AWidth > 16384) or (AHeight > 16384) then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: width/height exceeds 16384 cap (width=' + IntToStr(Int64(AWidth)) + ' height=' + IntToStr(Int64(AHeight)) + ')');
+  if Int64(AWidth) * Int64(AHeight) > 16 * 1024 * 1024 then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: image too large (16M cap) (w=' + IntToStr(Int64(AWidth)) + ' h=' + IntToStr(Int64(AHeight)) + ')');
   if LDepth <> 8 then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: unsupported bit depth (need 8) (depth=' + IntToStr(Int64(LDepth)) + ')');
   if not (LColor in [0, 2, 6]) then

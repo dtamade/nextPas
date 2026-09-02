@@ -1,6 +1,6 @@
 {**
  * nextpas.core.canvas.raster.fill.gradient - 渐变梯形填充 LUT+CHUNK
- * L2 实现子模块，零堆/复用 bytes.ops 单源，inline/零拷贝，分块 64 批式 blend。
+ * L2 实现子模块，零堆/复用 bytes.ops 单源，inline/零拷贝，分块 64 批式 blend，64-chunk 栈复用与 RasterCopy/BlendVaried 单源零 dispatch。
  *}
 unit nextpas.core.canvas.raster.fill.gradient;
 
@@ -79,7 +79,7 @@ end;
 procedure FillTrapezoidsGradientImpl(var ABitmap: TBitmap; const ATraps: array of TTrapezoid; const AGrad: TGradient; const ABounds: TRect; ARadial: Boolean; const AClipR: TRect; AHasClip: Boolean);
 const
   LUT_N = 256;
-  CHUNK_SIZE = 64;
+  CHUNK_SIZE = 64; // 批量亲和：64 像素/256B 栈 Chunk 复用，与 simd.raster RasterCopy/BlendVaried 单源 inline 零 dispatch 协同
 var
   I, Y, YStart, YEnd, W, H, X0, X1: Integer;
   Tr: TTrapezoid;
