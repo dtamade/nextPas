@@ -14,6 +14,8 @@ uses
   nextpas.core.json.types,
   nextpas.core.js.value.store,
   nextpas.core.js.pure.base,
+  nextpas.core.js.pure.host,
+  nextpas.core.js.pure.value,
   nextpas.core.js.quickjs.ffi,
   nextpas.core.js.quickjs.value;
 
@@ -152,12 +154,17 @@ begin
   FLastCheckNs := 0;
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS not loaded', jecUnknown, 'Error', '', jsbkQuickJs);
+  // stability: fail-closed nil guard before indirect call — loader now marks core symbols Required, but guard prevents AV if so missing → EJsBackendUnavailable not AV
+  if not Assigned(JS_NewRuntimePtr) or not Assigned(JS_NewContextPtr) or not Assigned(JS_EvalPtr) then
+    raise EJsBackendUnavailable.Create('QuickJS backend not available (missing symbols: JS_NewRuntime/JS_NewContext/JS_Eval)', jecUnknown, 'Error', '', jsbkQuickJs);
+  if not Assigned(JS_FreeRuntimePtr) or not Assigned(JS_FreeContextPtr) then
+    raise EJsBackendUnavailable.Create('QuickJS backend not available (missing symbols: FreeRuntime/FreeContext)', jecUnknown, 'Error', '', jsbkQuickJs);
   FRT := JS_NewRuntimePtr();
   if FRT = nil then raise EJsError.Create('JS_NewRuntime failed', jecUnknown, 'Error', '', jsbkQuickJs);
   if FOptions.MemoryLimit > 0 then
     if Assigned(JS_SetMemoryLimitPtr) then JS_SetMemoryLimitPtr(FRT, FOptions.MemoryLimit);
   FCtx := JS_NewContextPtr(FRT);
-  if FCtx = nil then begin JS_FreeRuntimePtr(FRT); FRT := nil; raise EJsError.Create('JS_NewContext failed', jecUnknown, 'Error', '', jsbkQuickJs); end;
+  if FCtx = nil then begin if Assigned(JS_FreeRuntimePtr) then JS_FreeRuntimePtr(FRT); FRT := nil; raise EJsError.Create('JS_NewContext failed', jecUnknown, 'Error', '', jsbkQuickJs); end;
   // decorator boundary: js.value.store owns Pure Heap/Global single source via bytes.ops, quickjs.value owns QjsHeap mirror via FFI single source, single Store via Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW
   // perf: decorator boundary single Store via value.store+quickjs.value, inline zero-copy, bytes.ops single source; deadline 惰性刷新 via quickjs.value single source QjsDeadlineRefresh (L0 platform.time 单缝, sampling interrupt)
   QjsStoreInit(FStore, FContextId, FRT, FCtx);

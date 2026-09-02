@@ -109,7 +109,8 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.view;
+  nextpas.core.text.view,
+  nextpas.core.js.eval;
 
 { TJsPureRuntime — Lifecycle }
 
@@ -209,8 +210,8 @@ end;
 
 function TJsPureContext.DoEval(const ACode: string): TJsValue; inline;
 begin
-  // per-Context 桶注入，单分支重建零抖动 + TStringView 零拷贝, inline 薄转发 pure.base单源 via HostState+ValueState组合
-  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHost.Hosts, FHost.Buckets, FValue.Global));
+  // per-Context 桶注入，单分支重建零抖动 + TStringView 零拷贝, inline 薄转发 js.eval single source via HostState+ValueState组合 (base zero dependency, owner js.eval)
+  Result := Bind(nextpas.core.js.eval.JsPureDoEval(Self, ACode, FOptions, FBackend, FHost.Hosts, FHost.Buckets, FValue.Global));
 end;
 
 procedure TJsPureContext.DoSetHost(const AName: string);

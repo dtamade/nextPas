@@ -4,7 +4,7 @@ unit nextpas.core.js.quickjs.loader;
 interface
 uses nextpas.core.js.base;
 function JsQuickJsIsAvailable: Boolean;
-function JsQuickJsProbeNames: string; inline;
+function JsQuickJsProbeNames: string;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
@@ -23,6 +23,7 @@ var
   GVault: TJsQuickJsVault;
   GVaultInit: Int32 = 0; // 0 uninit,1 initializing,2 ready
   GProbeNamesCache: string = ''; // cached handle reuse: one-time build, zero per-call alloc/geom expand on error path
+procedure ClearQuickJsPtrs; forward;
 function VaultRef: PJsQuickJsVault; inline;
 begin
   // perf: inline single indirection, zero-copy vault ref, single source for all vault access, no duplicate @GVault
@@ -51,21 +52,27 @@ begin
     B.Done;
   end;
 end;
-function JsQuickJsProbeNames: string; inline;
+function JsQuickJsProbeNames: string;
 begin
-  // perf: cached single handle reuse, inline thin-forward refcount inc zero-copy, zero per-call TBufStringBuilder alloc/geom expand (one-time build via BuildProbeNames single source via bytes.ops BytesCopy, try-finally Done 不丢)
-  // stability: immutable after init, no per-call Done leak, read-only share via string refcount (atomic inc), no heap on error path
+  // perf: fast path single string refcount inc zero-copy (no TBufStringBuilder alloc), hot path lock-free read of immutable after init
+  // stability: double-checked locking via VaultRef^.Lock (IMutex→platform.sync), Exactly-Once via SyncVaultEnsureLock, no race double BuildProbeNames alloc/overwrite
   if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
-  // fallback for early init order (single-thread init, rare): one-time build with same single source, try-finally Done 不丢, cached handle reuse after first call
-  Result := BuildProbeNames;
-  if GProbeNamesCache = '' then GProbeNamesCache := Result;
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
+  try
+    if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
+    Result := BuildProbeNames;
+    GProbeNamesCache := Result;
+  finally
+    VaultRef^.Lock.Release;
+  end;
 end;
-type TQuickJsBindRec = record Name: AnsiString; Dest: PPointer; Required: Boolean; end;
+type TQuickJsBindRec = record Name: PAnsiChar; Dest: PPointer; Required: Boolean; end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer; I: Integer;
   Binds: array[0..31] of TQuickJsBindRec;
-  function Bind(const Sym: AnsiString; out Addr: Pointer): Boolean; inline;
-  begin Result := platform_dl_sym(Lib, PAnsiChar(Sym), Addr) = 0; if not Result then Addr := nil; end;
+  function Bind(const Sym: PAnsiChar; out Addr: Pointer): Boolean; inline;
+  begin Result := platform_dl_sym(Lib, Sym, Addr) = 0; if not Result then Addr := nil; end;
 begin
   Result := False;
   // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse
@@ -73,19 +80,20 @@ begin
   if platform_dl_open(PAnsiChar(AName), PLATFORM_DL_NOW, Lib) <> 0 then Exit;
   // stability: table-driven single loop, single source for Bind, required fail-closed with exactly-once close, optional nil-safe, resource not丢
   // perf: single table loop, inline Bind, zero-copy PPointer dest, no 20+ duplicate Bind pattern, O(1) dispatch, bytes.ops single source
+  // perf: PAnsiChar literals zero-copy (no AnsiString heap 32× alloc), single source table, inline Bind via platform.dl single source, zero per-probe string alloc
   Binds[0].Name := 'JS_NewRuntime'; Binds[0].Dest := PPointer(@JS_NewRuntimePtr); Binds[0].Required := True;
   Binds[1].Name := 'JS_Eval'; Binds[1].Dest := PPointer(@JS_EvalPtr); Binds[1].Required := True;
-  Binds[2].Name := 'JS_FreeRuntime'; Binds[2].Dest := PPointer(@JS_FreeRuntimePtr); Binds[2].Required := False;
-  Binds[3].Name := 'JS_NewContext'; Binds[3].Dest := PPointer(@JS_NewContextPtr); Binds[3].Required := False;
-  Binds[4].Name := 'JS_FreeContext'; Binds[4].Dest := PPointer(@JS_FreeContextPtr); Binds[4].Required := False;
-  Binds[5].Name := 'JS_GetGlobalObject'; Binds[5].Dest := PPointer(@JS_GetGlobalObjectPtr); Binds[5].Required := False;
-  Binds[6].Name := 'JS_FreeValue'; Binds[6].Dest := PPointer(@JS_FreeValuePtr); Binds[6].Required := False;
-  Binds[7].Name := 'JS_DupValue'; Binds[7].Dest := PPointer(@JS_DupValuePtr); Binds[7].Required := False;
+  Binds[2].Name := 'JS_FreeRuntime'; Binds[2].Dest := PPointer(@JS_FreeRuntimePtr); Binds[2].Required := True;
+  Binds[3].Name := 'JS_NewContext'; Binds[3].Dest := PPointer(@JS_NewContextPtr); Binds[3].Required := True;
+  Binds[4].Name := 'JS_FreeContext'; Binds[4].Dest := PPointer(@JS_FreeContextPtr); Binds[4].Required := True;
+  Binds[5].Name := 'JS_GetGlobalObject'; Binds[5].Dest := PPointer(@JS_GetGlobalObjectPtr); Binds[5].Required := True;
+  Binds[6].Name := 'JS_FreeValue'; Binds[6].Dest := PPointer(@JS_FreeValuePtr); Binds[6].Required := True;
+  Binds[7].Name := 'JS_DupValue'; Binds[7].Dest := PPointer(@JS_DupValuePtr); Binds[7].Required := True;
   Binds[8].Name := 'JS_ToCString'; Binds[8].Dest := PPointer(@JS_ToCStringPtr); Binds[8].Required := False;
   Binds[9].Name := 'JS_ToCStringLen'; Binds[9].Dest := PPointer(@JS_ToCStringLenPtr); Binds[9].Required := False;
   Binds[10].Name := 'JS_FreeCString'; Binds[10].Dest := PPointer(@JS_FreeCStringPtr); Binds[10].Required := False;
-  Binds[11].Name := 'JS_IsException'; Binds[11].Dest := PPointer(@JS_IsExceptionPtr); Binds[11].Required := False;
-  Binds[12].Name := 'JS_GetException'; Binds[12].Dest := PPointer(@JS_GetExceptionPtr); Binds[12].Required := False;
+  Binds[11].Name := 'JS_IsException'; Binds[11].Dest := PPointer(@JS_IsExceptionPtr); Binds[11].Required := True;
+  Binds[12].Name := 'JS_GetException'; Binds[12].Dest := PPointer(@JS_GetExceptionPtr); Binds[12].Required := True;
   Binds[13].Name := 'JS_NewString'; Binds[13].Dest := PPointer(@JS_NewStringPtr); Binds[13].Required := False;
   Binds[14].Name := 'JS_NewInt64'; Binds[14].Dest := PPointer(@JS_NewInt64Ptr); Binds[14].Required := False;
   Binds[15].Name := 'JS_NewFloat64'; Binds[15].Dest := PPointer(@JS_NewFloat64Ptr); Binds[15].Required := False;
@@ -105,16 +113,20 @@ begin
   Binds[29].Name := 'JS_FreePropertyEnum'; Binds[29].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[29].Required := False;
   Binds[30].Name := 'JS_AtomToString'; Binds[30].Dest := PPointer(@JS_AtomToStringPtr); Binds[30].Required := False;
   Binds[31].Name := 'JS_FreeAtom'; Binds[31].Dest := PPointer(@JS_FreeAtomPtr); Binds[31].Required := False;
-  for I := 0 to High(Binds) do
+  // stability: two-phase required-first fail-fast — required symbols (10) bound first, optional (22) only if required OK; cold fail up to 10 lookups not 32 (8×10=80 vs 256), success single 32
+  // perf: inline Bind PAnsiChar zero-copy, no AnsiString heap, early exit avoids 22 optional dl_sym on probe miss, bytes.ops single source for zero
+  for I := 0 to High(Binds) do if Binds[I].Required then
   begin
-    if not Bind(Binds[I].Name, P) then
-    begin
-      if Binds[I].Required then begin platform_dl_close(Lib); Exit; end;
-      PPointer(Binds[I].Dest)^ := nil;
-      Continue;
-    end;
+    if not Bind(Binds[I].Name, P) then begin platform_dl_close(Lib); Exit; end;
     PPointer(Binds[I].Dest)^ := P;
   end;
+  for I := 0 to High(Binds) do if not Binds[I].Required then
+  begin
+    if Bind(Binds[I].Name, P) then PPointer(Binds[I].Dest)^ := P else PPointer(Binds[I].Dest)^ := nil;
+  end;
+  // stability: at least one ToCString variant required for Eval string conversion, fail-closed not AV
+  if (JS_ToCStringPtr = nil) and (JS_ToCStringLenPtr = nil) then begin platform_dl_close(Lib); ClearQuickJsPtrs; Exit; end;
+  if ((JS_ToCStringPtr <> nil) or (JS_ToCStringLenPtr <> nil)) and (JS_FreeCStringPtr = nil) then begin platform_dl_close(Lib); ClearQuickJsPtrs; Exit; end;
   // caller holds VaultRef^.Lock, global assignment serialized — no duplicate TryLoad leak, handle ownership transferred exactly once
   VaultRef^.Lib := Lib; VaultRef^.Loaded := 1; Result := True;
 end;
@@ -214,11 +226,21 @@ begin
     VaultRef^.Lock.Release;
   end;
 end;
-procedure InitProbeCache; inline;
+procedure InitProbeCache;
+var LTmp: string;
 begin
-  // perf: single source via BuildProbeNames (TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, try-finally Done 不丢, cached handle reuse avoids per-call alloc/geom expand)
-  // stability: try-finally Done 不丢 inside BuildProbeNames, single source for probe names, immutable after init
-  GProbeNamesCache := BuildProbeNames;
+  // perf: double-checked locking via VaultRef^.Lock Exactly-Once, one-time TBufStringBuilder geometric (BytesGrowCapacity single source via bytes.ops BytesCopy, zero-copy Move, try-finally Done 不丢), cached handle reuse zero per-call alloc
+  // stability: lock protects GProbeNamesCache non-atomic string, no race double BuildProbeNames heap alloc/overwrite, immutable after init, try-finally Done 不丢
+  if GProbeNamesCache <> '' then Exit;
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
+  try
+    if GProbeNamesCache <> '' then Exit;
+    LTmp := BuildProbeNames;
+    GProbeNamesCache := LTmp;
+  finally
+    VaultRef^.Lock.Release;
+  end;
 end;
 
 initialization

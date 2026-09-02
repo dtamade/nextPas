@@ -175,7 +175,7 @@ procedure JsPureHostBucketsRebuild(const Hosts: TJsPureHostArray; var Buckets: T
 var
   LCount, LCap, I: Integer;
 begin
-  // perf: O(1) count via Length, no scan, amortized O(1) rebuild only when >64 and invalid; single source bucket template via pure.hash
+  // perf: O(1) count via Length, no scan, amortized O(1) rebuild only when >16 and invalid; single source bucket template via pure.hash (threshold 16 aligned json.types)
   LCount := Length(Hosts);
   if LCount <= JS_PURE_HASH_THRESHOLD then
   begin
@@ -192,7 +192,7 @@ end;
 function HostFindCoreLinear(const Hosts: TJsPureHostArray; AHash: UInt32; const AView: TStringView): Integer;
 var I: Integer;
 begin
-  // perf: not inline per design-conventions §2 red-line 2 (loop body禁inline, I-Cache不膨胀) — zero-copy view + HostEquals single source (hash filter + SpanEqual), O(n) for <=64, no extra HostCount scan
+  // perf: not inline per design-conventions §2 red-line 2 (loop body禁inline, I-Cache不膨胀) — zero-copy view + HostEquals single source (hash filter + SpanEqual), O(n) for <=16, no extra HostCount scan
   for I := 0 to High(Hosts) do
     if HostEquals(Hosts[I], AHash, AView) then Exit(I);
   Result := -1;
@@ -200,7 +200,7 @@ end;
 function HostFindCoreBucketed(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; AHash: UInt32; const AView: TStringView): Integer;
 var I, LIdx, LProbe, LCount: Integer;
 begin
-  // perf: unified template — O(1) count via Length, single-branch bucket valid check, inline hash via bytes.ops single source
+  // perf: unified template — O(1) count via Length, single-branch bucket valid check, inline hash via bytes.ops single source, threshold 16 O(1) for 50 scopes
   LCount := Length(Hosts);
   if LCount <= JS_PURE_HASH_THRESHOLD then
     Exit(HostFindCoreLinear(Hosts, AHash, AView));
@@ -248,7 +248,7 @@ end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer;
 var LView: TStringView;
 begin
-  // unified template: zero-copy view + single source hash, bucket O(1) when >64 single-branch rebuild
+  // unified template: zero-copy view + single source hash, bucket O(1) when >16 single-branch rebuild
   LView := TStringView.FromStr(AName);
   Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(LView), LView);
 end;

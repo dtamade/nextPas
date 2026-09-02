@@ -15,30 +15,17 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.base,
   nextpas.core.mem.dynarray,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.sync.spinlock;
-const
-  JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // single source via mem.base
-  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60
-  JS_LIFECYCLE_PAD64 = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int64); // 56
-{$PUSH}{$CODEALIGN RECORDMIN=16}{$PACKRECORDS C}
-type
-  TPureNextIdSlot = record Value: Int64; Padding: array[0..JS_LIFECYCLE_PAD64 - 1] of Byte; end; // 64B isolated
-  TPureLenSlot = record Value: PtrUInt; Padding: array[0..JS_LIFECYCLE_CACHE_LINE - SizeOf(PtrUInt) - 1] of Byte; end; // 64B isolated, PtrUInt (SizeUInt) avoids Int32 truncation
-  TPureLockSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B isolated
-{$POP}
-{$PUSH}{$CODEALIGN VARMIN=64}
 var
   GPureClosed: array of UInt32; // compact 4B per Context: epoch*2+closed
-  GPureNextId: TPureNextIdSlot = (Value:1); // 64B isolated
-  GPureClosedLen: TPureLenSlot = (Value:0); // atomic Len, acquire/release, 64B isolated
-  GPureClosedLock: TPureLockSlot = (Value:0); // 64B isolated, sync.spinlock single source
-  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric, 64B isolated
-{$POP}
+  GPureNextId: Int64 = 1; // atomic monotonic, plain, bytes.ops single source for growth not needed
+  GPureClosedLen: PtrUInt = 0; // atomic Len, release/acquire, plain
+  GPureClosedLock: Int32 = 0; // spinlock single source, plain
+  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric
 function GPureClosedCapacity: SizeUInt; inline;
 begin
   // inline zero-copy via mem.dynarray single source
@@ -84,7 +71,7 @@ function JsPureContextRegister: UInt64;
 var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;
 begin
   // freelist recycle bounded, generation-tagged INV-7, sync.spinlock single source
-  RawSpinAcquire(GPureClosedLock.Value);
+  RawSpinAcquire(GPureClosedLock);
   try
     if Length(GPureFree) > 0 then
     begin
@@ -100,16 +87,19 @@ begin
       Exit;
     end;
   finally
-    RawSpinRelease(GPureClosedLock.Value);
+    RawSpinRelease(GPureClosedLock);
   end;
   // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric, inline zero-copy
-  LId := Int64(atomic_fetch_add_64(GPureNextId.Value, Int64(1), mo_relaxed));
+  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
+  // wrap detect: UInt32 low 32 bits is index, >2^32 would reuse and collide with freelist epoch
+  if UInt64(LId) > High(UInt32) then
+    raise EInvalidOperation.Create('JsPureContextRegister: id space exhausted (2^32 wrap)');
   LIdx := UInt32(UInt64(LId));
   Result := GPureMakeId(LIdx, 0);
-  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire) then
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed) then
   begin
     // resize rare, sync.spinlock single source, compact 4B
-    RawSpinAcquire(GPureClosedLock.Value);
+    RawSpinAcquire(GPureClosedLock);
     try
       if LIdx >= UInt32(Length(GPureClosed)) then
       begin
@@ -126,10 +116,10 @@ begin
           SetLength(GPureClosed, Integer(LCap));
           // Exactly-Once capacity reservation, bytes.ops single source, amortized O(1)
         end;
-        atomic_store(GPureClosedLen.Value, PtrUInt(Length(GPureClosed)), mo_release);
+        atomic_store(GPureClosedLen, PtrUInt(Length(GPureClosed)), mo_release);
       end;
     finally
-      RawSpinRelease(GPureClosedLock.Value);
+      RawSpinRelease(GPureClosedLock);
     end;
   end;
   atomic_store(GPureClosed[LIdx], UInt32(0), mo_release); // epoch 0 alive
@@ -139,7 +129,7 @@ var LCap, LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire)) then Exit;
+  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed)) then Exit;
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
   if (LStored shr 1) <> LEpoch then Exit; // stale generation => already closed/reused per INV-7 strong
   if (LStored and 1) <> 0 then Exit;
@@ -148,7 +138,7 @@ begin
   LDesired := (LEpoch shl 1) or 1; // epoch*2+1 closed
   if not atomic_compare_exchange_strong(GPureClosed[LIdx], LExpected, LDesired) then Exit;
   // freelist bounded recycling, sync.spinlock single source
-  RawSpinAcquire(GPureClosedLock.Value);
+  RawSpinAcquire(GPureClosedLock);
   try
     LNeed := SizeUInt(Length(GPureFree)) + 1;
     if GPureFreeCapacity < LNeed then
@@ -160,17 +150,18 @@ begin
     SetLength(GPureFree, Integer(LNeed));
     GPureFree[High(GPureFree)] := UInt64(LIdx);
   finally
-    RawSpinRelease(GPureClosedLock.Value);
+    RawSpinRelease(GPureClosedLock);
   end;
 end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 var LIdx, LEpoch, LStored: UInt32;
 begin
-  // inline acquire via atomic Len, compact 4B + generation mismatch => strong closed INV-7
+  // perf: single acquire (slot) + relaxed Len, compact 4B, generation mismatch => strong closed INV-7, inline zero-copy
+  // bulk hot path must use TJsValue.IsValid (FValid only, zero barrier); IsAlive/IsClosed via this acquire single source for strong consistency, reduces 2*acquire cache coherence
   if AId = 0 then Exit(False);
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire) then Exit(False);
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed) then Exit(False);
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
   if (LStored shr 1) <> LEpoch then Exit(True); // generation mismatch => strong closed INV-7
   Result := (LStored and 1) <> 0;
@@ -206,7 +197,7 @@ begin
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;
 initialization
-  // atomic only, VARMIN 64 isolated, GPureClosed compact 4B
+  // atomic only, GPureClosed compact 4B, plain vars, GPureClosed 4B compact without 64B pad luxury (10k~40KB L2 friendly)
 finalization
   SetLength(GPureClosed, 0);
   SetLength(GPureFree, 0);

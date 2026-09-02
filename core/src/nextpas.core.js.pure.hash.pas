@@ -2,12 +2,12 @@ unit nextpas.core.js.pure.hash;
 {$I nextpas.core.settings.inc}
 { pure.hash — single source for FNV1a32 host/prop hash + shared bucket template (奢华收敛, L2 pure family, Owner pure.hash, 守 bytes.ops 单源, inline 零拷贝)
   收敛 pure.host HostHashView + pure.value PropHashStr 两份克隆 → 单源 JsPureHashView/JsPureHashStr via bytes.ops FNV1a32；
-  阈值 64 单源 JS_PURE_HASH_THRESHOLD；几何桶 0→64→2× via bytes.ops BytesNextCapacity 单源；桶模板 Prepare/Put 单源 via open array, amortized O(1) 已收敛 PropBucketsRebuild + HostBucketsRebuild 同模板, 资源 inline 不丢。 }
+  阈值 16 单源 JS_PURE_HASH_THRESHOLD；几何桶 0→64→2× via bytes.ops BytesNextCapacity 单源；桶模板 Prepare/Put 单源 via open array, amortized O(1) 已收敛 PropBucketsRebuild + HostBucketsRebuild 同模板, 资源 inline 不丢。 }
 interface
 uses
   nextpas.core.text.view;
 const
-  JS_PURE_HASH_THRESHOLD = 64;
+  JS_PURE_HASH_THRESHOLD = 16;
 function JsPureHashView(const V: TStringView): UInt32; inline;
 function JsPureHashStr(const S: string): UInt32; inline;
 function JsPureBucketCapacity(AItemCount: Integer): Integer; inline;

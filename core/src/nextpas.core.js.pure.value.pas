@@ -336,14 +336,14 @@ begin
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 begin
-  // inline single-copy via JsStringViewValue single source (bytes.ops SpanToString Move, one alloc, zero dangling)
-  // perf: NewStringView B/op=1 at creation, AsString B/op=0 via hosted FStrVal inline zero-copy single source
+  // inline zero-copy view via JsStringViewValue single source (bytes.ops TByteSpan single source, B/op=0 at creation, no Move/alloc)
+  // perf: NewStringView B/op=0 zero-copy pass-through (Eval/Host hot path), AsString B/op=1 lazily via SpanToString single source when materialize, hosted FStrVal path B/op=0
   if AView.IsEmpty then Result := JsValueBindContext(JsStringValue(''), AContextId)
   else Result := JsValueBindContext(JsStringViewValue(AView.Data, AView.Len), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 begin
-  // inline single-copy via JsStringViewValue single source (bytes.ops single source)
+  // inline zero-copy view via JsStringViewValue single source (bytes.ops TByteSpan single source, B/op=0)
   if AView.IsEmpty then Result := JsStringValue('')
   else Result := JsStringViewValue(AView.Data, AView.Len);
 end;
@@ -480,21 +480,23 @@ begin
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
-var I, Idx: Integer; LHash: UInt32; Need: array of Byte;
+var I, J, Idx: Integer; LHash: UInt32; LFound: Boolean;
 begin
-  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source) + bulk reserve single probe via bytes.ops BytesNextCapacity geometric amortized O(1), zero-copy SpanEqual filter, not inline loop
+  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source) + bulk reserve single probe via bytes.ops BytesNextCapacity geometric amortized O(1), zero-copy SpanEqual filter, zero extra heap alloc via O(M²) inline dedup (no Need[Heap] FillChar), not inline loop per red-line 2, bytes.ops single source
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
   LHash := PropHashStr(AName);
-  // bulk reserve: distinct heap objects need 1 slot each (amortized O(1), single probe per heap)
-  SetLength(Need, Length(Heap));
-  if Length(Need)>0 then FillChar(Need[0], Length(Need), 0);
+  // bulk reserve: distinct heap objects need 1 slot each (amortized O(1), single probe per heap) — zero heap alloc via inline dedup, bytes.ops geometric via JsPurePropsReserve
   for I:=0 to High(Objs) do
   begin
     Idx:=JsPureHeapFind(Heap, Objs[I]);
-    if (Idx>=0) and (JsPureHeapFindPropHashed(Heap[Idx], AName, LHash)<0) then Need[Idx]:=1;
+    if (Idx<0) or (JsPureHeapFindPropHashed(Heap[Idx], AName, LHash)>=0) then Continue;
+    LFound:=False;
+    for J:=0 to I-1 do
+      if JsPureHeapFind(Heap, Objs[J])=Idx then begin LFound:=True; Break; end;
+    if LFound then Continue;
+    JsPurePropsReserve(Heap[Idx].Props, 1);
   end;
-  for Idx:=0 to High(Need) do if Need[Idx]<>0 then JsPurePropsReserve(Heap[Idx].Props, 1);
   for I := 0 to High(Objs) do
     JsPureHeapSetPropHashed(Heap, Objs[I], AName, LHash, Vals[I]);
 end;

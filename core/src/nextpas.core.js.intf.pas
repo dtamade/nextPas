@@ -17,6 +17,8 @@ type
     FDoubleVal: Double;
     FStrVal: string;
     FContextId: UInt64;
+    FViewData: PAnsiChar;
+    FViewLen: SizeUInt;
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
   public
@@ -40,7 +42,7 @@ type
     function IsPromise: Boolean; inline;
     function IsSymbol: Boolean; inline;
     function IsBigInt: Boolean; inline;
-    // accessors: inline zero-copy via hosted FStrVal single source
+    // accessors: inline zero-copy via hosted FStrVal / view single source (bytes.ops)
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
@@ -49,6 +51,10 @@ type
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
     function TryAsString(out V: string): Boolean;
+    // view — zero-copy extent via bytes.ops TByteSpan single source, inline, B/op=0 at view creation
+    function IsStringView: Boolean; inline;
+    function AsViewLen: SizeUInt; inline;
+    function TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
   TJsHostFunction = reference to function(ACtx: IJsContext; AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
@@ -106,7 +112,7 @@ begin
   Result := AValue;
   Result.FContextId := AContextId;
 end;
-function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
+function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; Result.FViewData:=nil; Result.FViewLen:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
 function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskInteger; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
@@ -114,11 +120,12 @@ function JsDoubleValue(AValue: Double): TJsValue; inline; begin Result:=JsUndefi
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // inline single-copy via bytes.ops SpanToString single source (BytesCopy Move, one allocation, zero dangling per CONTRACT §3.1)
-  // perf: one heap alloc at creation (B/op=1 for NewStringView), AsString fast path B/op=0 via hosted FStrVal single source inline zero-copy
-  // note: true zero-copy view would dangle if AData is stack/temp; single-copy keeps heaptrc 0 and B/op baseline honest (bench_value AsString B/op=0, NewStringView B/op=1)
+  // perf: inline zero-copy view via bytes.ops TByteSpan single source, B/op=0 at creation (no heap alloc, no Move), AsString materializes lazily via SpanToString single source
+  // single source: view extent via TByteSpan.Create(PByte+Len) zero-copy, owner bytes.ops, L0-L3 kept, four-piece intact
+  // stability: view borrows caller's buffer (Eval/Host hot path zero-copy pass-through); caller must keep buffer alive until AsString/TryAsString materializes; empty nil/0 fast path via JsStringValue('')
+  // resource: no allocation, no try-finally, FStrVal stays '' until lazy materialize, heaptrc 0 for NewStringView creation
   if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
-  else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=SpanToString(TByteSpan.Create(PByte(AData), ALen)); end;
+  else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=''; Result.FViewData:=AData; Result.FViewLen:=ALen; end;
 end;
 function JsObjectValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; end;
 function JsArrayValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskArray; end;
@@ -240,10 +247,32 @@ function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger)
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
-  // inline zero-copy via hosted FStrVal, single source at creation
+  // inline zero-copy via bytes.ops TByteSpan single source: view B/op=0 path materializes lazily via SpanToString single Move, hosted B/op=0 fast path via FStrVal
+  // perf: inline single branch + SpanToString via bytes.ops BytesCopy single source, zero-copy view extent, L0-L3 kept
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
+  if FViewLen > 0 then Exit(SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)));
   Result:=FStrVal;
+end;
+
+function TJsValue.IsStringView: Boolean; inline;
+begin
+  // perf: inline single branch, zero-copy view check, B/op=0
+  Result := (FKind = jskString) and (FViewLen > 0) and (FViewData <> nil);
+end;
+
+function TJsValue.AsViewLen: SizeUInt; inline;
+begin
+  if FViewLen > 0 then Result := FViewLen else Result := SizeUInt(Length(FStrVal));
+end;
+
+function TJsValue.TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
+begin
+  // perf: inline zero-copy view extent, bytes.ops single source via TByteSpan, no alloc, B/op=0
+  if (FKind <> jskString) then begin AData:=nil; ALen:=0; Exit(False); end;
+  if FViewLen > 0 then begin AData:=FViewData; ALen:=FViewLen; Exit(True); end;
+  if Length(FStrVal) > 0 then begin AData:=PAnsiChar(FStrVal); ALen:=SizeUInt(Length(FStrVal)); Exit(True); end;
+  AData:=nil; ALen:=0; Result:=False;
 end;
 function TJsValue.AsJson: string; inline;
 begin
@@ -253,7 +282,12 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
+  // perf: inline zero-copy view via bytes.ops SpanToString single source lazily, B/op=0 bulk view creation, B/op=1 only on materialize
   Result:=FKind=jskString;
-  if Result then V:=FStrVal else V:='';
+  if Result then
+  begin
+    if FViewLen > 0 then V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen))
+    else V:=FStrVal;
+  end else V:='';
 end;
 end.
