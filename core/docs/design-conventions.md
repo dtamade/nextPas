@@ -127,11 +127,10 @@ end.
    的函数一旦标记 inline，FPC 会把常量串实参的 `AStr[1]` 经常量传播折叠成单字符值，
    Move 从栈上临时拷出首字节之后的垃圾（valgrind + 反汇编实证，曾致 tls13 门红）。
    `BytesOf`/`StringOf` 即因此去 inline。同类 sink：`FillChar`、`CompareMem`。
-   **门面薄转发豁免**：`nextpas.core.<module>.pas` 门面对单源实现（如 `nextpas.core.bytes` → `nextpas.core.bytes.ops:25/89`）的 `inline` 薄转发仅转发调用、门面内不含 `Move` 体，不触发此禁令；`Move` 零拷贝体仍驻留单源（单次 `Move`/`SetLength`、视图零分配，`bytes.ops` 已注释固化），保持单源与性能证据。
 2. **真实循环体 / SIMD 体 / 路由体禁 inline**。含扫描循环、回退路由、批量编码的函数
    （如 Format 路由、json writer 的 Key/Str SIMD 扫描重载）保持外联，避免 I-Cache 复制膨胀。
 
-薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。门面薄转发即属此类薄转发豁免。
+薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。
 
 ### 消费方引用粒度
 
@@ -149,9 +148,7 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
-- `nextpas.core.js.lifecycle` 为纯上下文生命周期 owner（GPureClosed 64B padded atomic acquire/release cache-line隔离 + atomic_fetch_add lock-free id + spinlock resize 实例隔离线程高级感，`bytes.ops` 几何 + `mem.dynarray` Exactly-Once poke single source，bulk IsValid 零原子 via FValid，强一致 acquire，`base` 仅类型载体解耦，四件套单职责，阈值800内（<800 必拆，wc -l ~95 实测），守 L0-L3，见 `core/docs/js/CONTRACT.md §1`）
-- `nextpas.core.js.pure.base` 为纯后端共享基座薄门面，非标准四件套命名（`pure.base` 薄转发：lifecycle 已抽 `js.lifecycle` 单源，Host/Heap/Value/IO仅inline thin-forward至`pure.host/pure.value/js.eval/js.lifecycle`单源（pure.host/pure.value永久单源，无阈值迁移，`JsPureHostsClear`+`JsPureTryReadFileText`+`JsPureCall` PBuckets nil单模板 已下沉至`pure.host` via `platform.fs/bytes.ops` inline零拷贝 single source，`TJsPureHostState` 统一 `JsPureHostStateSet*` 3+3 inline零拷贝 无 legacy HostSet/JsPureClose shim 奢华薄零逻辑），零 FFI/零 `platform.dl`（L0 `platform.fs` 经`pure.host`直读，64MiB限流，`bytes.ops`零拷贝 via `BytesCopy`单源），阈值800内（<800 必拆，wc -l ~230 实测），见 `core/docs/js/CONTRACT.md §1`；`pure` 为纯族前缀，`base` 为共享后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 inline+`BytesCopy` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3）
-- `nextpas.core.js.pure.impl` 为纯族共享模板组合收敛，非标准四件套命名（`pure.impl` 单源模板复用 `js888/v8/chakra` 95% 克隆，仅 BackendKind 注入差异，零 FFI/零 `platform.dl`（L0 `platform.thread/fs` 仅直读，非 dl），Runtime+Context 四职责已落地组合收敛 ~360 行（阈值800内，<800 必拆，wc -l ~360 实测，Host→pure.host.TJsPureHostState per-Context O(1)桶 inline+bytes.ops单源 + Value→pure.value.TJsPureValueState Heap/Global bytes.ops+mem.dynarray永久单源无js.value双入口），见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，`impl` 为模板后缀，非独立模块，复用 `bytes.ops` 单源与 `text.view` 零拷贝直通，热点 `FindHostView/Bind/DoEval/New*` inline 薄转发 + `BytesCopy` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3）
+- `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`，阈值 550 内，见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
   `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
@@ -166,7 +163,6 @@ end.
 
 - 单个单元文件超过 800 行时应考虑拆分为子模块
 - 软性指引，内聚性强的代码可以例外
-- 显式例外 `nextpas.core.js.pure.base` / `js.pure.impl` / `js.lifecycle` 硬门禁 800 行（`core/docs/js/CONTRACT.md §1` 阈值 800，hygiene 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警，超阈必拆，无 650 反复调整）
 
 ### 子模块依赖规则
 
@@ -187,8 +183,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`），其余同层依赖仍禁止
-     ↑ 默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁（例 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls），禁止循环
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf` 单点联邦缝 source-contract gated like respack.dirsource），其余同层依赖仍禁止
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -197,9 +192,9 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls（+ adapter→net；time/sync 为 L1 下沉非 L2 缝），未列入者视为违规
+- 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝且 `canvas.raster` 唯一 vector/image 缝且 `db.redis.transport` 唯一 net/tls 缝（+ `db.redis.adapter` 轻量 net 缝；time/sync 为 L1 下沉，base/resp 纯 L0/L1）均为单向 allowlist 并经门禁防循环，reverse `net/tls→db.redis` 禁止，bytes.ops 单源 inline/零拷贝，资源 FreeAndNil/try-finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
+- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝、`sevenz.fs` 唯一 fs 联邦缝 source-contract gated like respack.dirsource/vfs.os — bytes.ops 单源 inline 零拷贝 + try..finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -214,7 +209,7 @@ text  (implementation 部分 uses encoding，提供便利方法)
 
 ### 层级归属管理
 
-- 每个模块的层级归属在 `docs/core-module-registry.md` 中声明（单一事实源；`docs/module-registry.md` 为已废弃的兼容别名，镜像本表）
+- 每个模块的层级归属在 `docs/module-registry.md` 中声明
 - 后期通过构建脚本自动校验依赖合规性
 
 ---
@@ -379,7 +374,7 @@ nextpas.core.crypto.ossl.ffi.pas     ← 纯 cdecl external 声明
 
 ## 7. 稳定性分级
 
-- 稳定性分级在 `docs/core-module-registry.md` 中标注（单一事实源；`docs/module-registry.md` 为已废弃别名）
+- 稳定性分级在 `docs/module-registry.md` 中标注
 - 具体分级规则和晋升条件见单独文档
 
 ---
@@ -828,7 +823,7 @@ build/
 ### 分层规则补充
 
 - 只能向下依赖，不能向上依赖
-- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环
+- 同层内允许单向依赖，禁止循环依赖
 
 ### L0: 内核（只依赖 FPC RTL）
 
@@ -864,7 +859,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环）
+### L2: 系统能力（只依赖 L0-L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |

@@ -55,14 +55,12 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.text.conv,
-  nextpas.core.compress,
-  nextpas.core.compress.bzip2,
+  nextpas.core.compress.intf,
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.lzma.decoder,
-  nextpas.core.sevenz.lzma.encoder,
-  nextpas.core.sevenz.lzma.ffi.decoder;
+  nextpas.core.sevenz.lzma.encoder;
 
 var
   GRequestedBackend: TSevenZLzmaBackend = szlbAuto;
@@ -103,7 +101,7 @@ begin
     szlbFfi:
       begin
         if GFfiDecoder = nil then
-          GFfiDecoder := TSevenZLzmaDecoderFfi.Create;
+          GFfiDecoder := SevenZCreateLzmaFfiDecoder;
         Result := GFfiDecoder;
       end;
   else
@@ -154,6 +152,16 @@ end;
   raw 路径的 inflate 实现对精确上限需 +1 探测字节（否则恰好填满时误判越界），
   这里以 LMax+1 探测后回校验真实上界。超限统一抛 ESevenZLimitError 供上层区分炸弹与损坏 }
 {$PUSH}{$WARNINGS OFF}
+
+{ single source helper: compress.intf单源判限，inline避免额外调用，Deflate/BZip2复用统一门面 }
+procedure RethrowDecompress(const APrefix: string; E: Exception); inline;
+begin
+  if E is ESevenZLimitError then raise E;
+  if CompressIsLimitExceeded(E) then
+    raise ESevenZLimitError.Create(E.Message);
+  raise EParseError.Create(APrefix + E.Message);
+end;
+
 function DeflateDecodeSevenZ(const AInput: TBytes; AOutSize: UInt64): TBytes;
 var
   LMax, LRawMax: SizeUInt;
@@ -165,7 +173,7 @@ begin
   if LMax = 0 then
     LMax := 1; { Raw 路径要求 >0，上层已校验空输出直接短路 }
   try
-    Result := DeflateDecompressWithMaxOutputSize(AInput, LMax);
+    Result := CompressDeflateDecompressWithMax(AInput, LMax);
     Exit;
   except
     on E: ESevenZLimitError do raise;
@@ -178,19 +186,11 @@ begin
   else
     LRawMax := LMax;
   try
-    Result := RawDeflateMessageDecompress(AInput, LRawMax);
+    Result := CompressRawDeflateMessageDecompressWithMax(AInput, LRawMax);
   except
     on E: ESevenZLimitError do raise;
-    on E: EIOError do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('deflate decode failed: ' + E.Message);
     on E: Exception do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('deflate decode failed: ' + E.Message);
+      RethrowDecompress('deflate decode failed: ', E);
   end;
   if SizeUInt(Length(Result)) > LMax then
     raise ESevenZLimitError.Create('raw inflate: decompressed size exceeds limit');
@@ -217,19 +217,11 @@ begin
     LMax := 0;
   end;
   try
-    Result := BZip2DecompressWithMaxOutputSize(AInput, LMax);
+    Result := CompressBZip2DecompressWithMax(AInput, LMax);
   except
     on E: ESevenZLimitError do raise;
-    on E: EIOError do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
     on E: Exception do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
+      RethrowDecompress('bzip2 decode failed: ', E);
   end;
 end;
 
@@ -240,7 +232,8 @@ end;
 
 function SevenZBZip2Available: Boolean;
 begin
-  Result := BZip2FfiIsAvailable;
+  // owner经compress.intf聚合，inline forward零开销
+  Result := CompressBZip2IsAvailable;
 end;
 {$POP}
 
@@ -256,8 +249,16 @@ begin
   begin
     if Length(AInputs) <> 1 then
       raise EParseError.Create('filter coder expects one input');
-    AOut := CopyOfBytes(AInputs[0]);
-    SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
+    if LFilter = szfDelta then
+    begin
+      // perf: Delta零拷贝out-of-place单次SetLength+DeltaApply，无CopyOfBytes额外分配；in-place仍复用同DeltaApply核心
+      AOut := SevenZDeltaDecode(ACoder.Props, AInputs[0], AOutSize);
+    end
+    else
+    begin
+      AOut := CopyOfBytes(AInputs[0]);
+      SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
+    end;
   end
   else
   case ACoder.MethodId of
