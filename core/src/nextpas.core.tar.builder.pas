@@ -2,10 +2,11 @@ unit nextpas.core.tar.builder;
 {**
  * @desc Tar 链式构造器：ZipBuilder 手感的薄门面，委托 TTarWriter。
  * 仅做流畅 API 封装，不含序列化逻辑，保证 bytes 级一致。
- * @note 显式 Finish：析构不自动补两零块，需调用方显式 Finish；单工厂 TarBuilder。
+ * @note 显式 Finish fail-closed：析构不静默补两零块，未 Finish 即抛 EInvalidOperationError，避免链式丢数据无感知；单工厂 TarBuilder。
  * 性能：IBytesBuilder 直写切片，inline AppendBytes 零拷贝，Finish 单次 ToBytes 拷贝，
  *       消除 CreateBytesStream + ArchiveSnapshotStream 二次 SetLength+Read 大块 Move。
  *       AddDirectory* 薄门面复用 writer 单源 DefaultTarAddOptions/TarDirectoryMode，无重复 H 组装。
+ *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops，委托 writer 单源。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -34,6 +35,7 @@ type
     FBuilder: IBytesBuilder;
     FSink: IWriter;
     FWriter: TTarWriter;
+    FFinished: Boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -42,6 +44,7 @@ type
     function AddDirectory(const AName: string): ITarBuilder; inline;
     function AddDirectoryWithOptions(const AName: string; const AOpts: TTarAddOptions): ITarBuilder; inline;
     function AddEntry(const AHdr: TTarHeader; const AData: TBytes): ITarBuilder; inline;
+    function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
     function Finish: TBytes; inline;
   end;
 
@@ -52,13 +55,19 @@ begin
   FBuilder := CreateBytesBuilder(C_TAR_BUILDER_INITIAL_CAPACITY);
   FSink := CreateArchiveBuilderSink(FBuilder);
   FWriter := TTarWriter.Create(FSink);
+  FFinished := False;
 end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // 稳定性：FWriter.Free 兜底补两零块（writer 析构 Finish best-effort），FBuilder/FSink 为接口自动释放，不丢资源
-  FWriter.Free;
-  inherited Destroy;
+  // fail-closed：未显式 Finish 时抛错而非静默补零块，避免链式构造丢数据无感知；writer 析构仍 best-effort 兜底
+  try
+    if not FFinished then
+      raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
+  finally
+    FWriter.Free;
+    inherited Destroy;
+  end;
 end;
 
 function TTarBuilder.Add(const AName: string; const AData: TBytes): ITarBuilder; inline;
@@ -93,9 +102,17 @@ begin
   Result := Self;
 end;
 
+function TTarBuilder.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
+begin
+  // 流式零拷贝：64K pooled 复用缓冲分块 Move 单源 bytes.ops，无 TBytes 全量拷贝，委托 writer 单源
+  FWriter.AddEntryFromReader(AHdr, AReader);
+  Result := Self;
+end;
+
 function TTarBuilder.Finish: TBytes; inline;
 begin
   FWriter.Finish;
+  FFinished := True;
   // 零拷贝直写切片：复用 builder.ToBytes 单次分配+Move，消除 ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
   Result := FBuilder.ToBytes;
 end;

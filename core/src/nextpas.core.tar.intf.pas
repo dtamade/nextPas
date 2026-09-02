@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.tar.base;
 
 type
@@ -20,6 +21,7 @@ type
     function AddDirectory(const AName: string): ITarBuilder;
     function AddDirectoryWithOptions(const AName: string; const AOpts: TTarAddOptions): ITarBuilder;
     function AddEntry(const AHdr: TTarHeader; const AData: TBytes): ITarBuilder;
+    function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder;
     function Finish: TBytes;
   end;
 

@@ -106,9 +106,9 @@ const
   C_TAR_DEFAULT_FILE_MODE = $1A4;
   C_TAR_DEFAULT_DIR_MODE = $1ED;
 
-  { 默认 bomb 上限（复用 compress GZIP_MAX 1GiB 级别，保持 zip 对齐） }
+  { 默认 bomb 上限（复用 compress GZIP_MAX 1GiB 级别，保持 zip 对齐；总量 4GiB 防 100k×1MiB 稀疏 bomb，单条仍 1GiB） }
   C_TAR_DEFAULT_MAX_ENTRY = SizeUInt(1) shl 30;
-  C_TAR_DEFAULT_MAX_TOTAL: UInt64 = 0;
+  C_TAR_DEFAULT_MAX_TOTAL: UInt64 = UInt64(4) * 1024 * 1024 * 1024;
 
   { unix 模式位语义常量（S_IFMT 子集，与 zip.base 命名手感对齐） }
   C_TAR_UNIX_IFREG    = $8000; // S_IFREG
@@ -166,8 +166,8 @@ function DefaultTarExtractOptions: TTarExtractOptions; inline;
 begin
   Result.RestoreMode := True;
   Result.SkipSpecial := True;
-  Result.MaxEntrySize := 0;
-  Result.MaxTotalSize := 0;
+  Result.MaxEntrySize := C_TAR_DEFAULT_MAX_ENTRY;
+  Result.MaxTotalSize := C_TAR_DEFAULT_MAX_TOTAL;
 end;
 
 function TarRegularMode(APermissionBits: Word): Word; inline;

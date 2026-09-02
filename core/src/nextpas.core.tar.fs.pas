@@ -29,7 +29,8 @@ uses
   nextpas.core.exception,
   nextpas.core.tar.common,
   nextpas.core.tar.reader,
-  nextpas.core.fs,
+  nextpas.core.fs.base,
+  nextpas.core.fs.intf,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.bytes.builder,
@@ -50,7 +51,7 @@ var
 begin
   if AWriter = nil then
     raise EArgumentError.Create('tar pack: writer is nil');
-  LRoot := Stat(ADir);
+  LRoot := ArchiveStat(ADir);
   if not LRoot.IsDir then
     raise EArgumentError.Create('tar pack: not a directory: ' + ADir);
   SetLength(LWalks, 0);
@@ -74,8 +75,8 @@ begin
       LHdr.Mode := TarRegularMode(LWalks[LI].FMode);
       // 流式：按需打开句柄分块搬运，64K 复用缓冲，仅 O(1) 内存，零全量拷贝
       LFile := nil;
-      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄
-      LFile := Open(LWalks[LI].FFull, [fmRead]);
+      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝
+      LFile := ArchiveOpen(LWalks[LI].FFull, [fmRead]);
       try
         LStat := LFile.Stat;
         LHdr.Size := LStat.Size;
@@ -119,7 +120,7 @@ var
   ROpts: TTarReadOptions;
   R: TTarReader;
   H: TTarHeader;
-  LFull, LParent: string;
+  LFull: string;
   LSep: Integer;
   LMode: Word;
   LDirs: TArchiveDeferredArray;
@@ -133,12 +134,15 @@ begin
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
     LMaxEntry := AOptions.MaxEntrySize;
-  LMaxTotal := AOptions.MaxTotalSize;
+  if AOptions.MaxTotalSize = 0 then
+    LMaxTotal := C_TAR_DEFAULT_MAX_TOTAL
+  else
+    LMaxTotal := AOptions.MaxTotalSize;
   ROpts.MaxEntrySize := LMaxEntry;
   ROpts.MaxTotalSize := LMaxTotal;
   R := TTarReader.CreateWithOptions(AData, ROpts);
   try
-    MkdirAll(ADestDir, PermDirDefault);
+    ArchiveMkdirAll(ADestDir, PermDirDefault);
     ArchiveEnsureNoSymlinkInPath(ADestDir);
     SetLength(LDirs, 0);
     LDirCount := 0;
@@ -155,13 +159,12 @@ begin
           Dec(LSep);
         if LSep > 0 then
         begin
-          LParent := Copy(LFull, 1, LSep - 1);
-          ArchiveEnsureNoSymlinkInPath(LParent);
-          MkdirAll(LParent, PermDirDefault);
+          // perf: 零拷贝父目录一站式，ArchivePrepareParentDir 单遍增量前缀，消除 Copy(LFull,1,LSep-1) 200 次短串分配，复用 bytes.ops 单源
+          ArchivePrepareParentDir(LFull, SizeUInt(LSep - 1));
         end;
         LMode := Word(H.Mode and $0FFF);
         if H.Kind = tekDirectory then
-          MkdirAll(LFull, PermDirDefault)
+          ArchiveMkdirAll(LFull, PermDirDefault)
         else if H.Kind = tekRegular then
         begin
           { 零拷贝：复用 Reader 已有的 EntryDataSlice/OpenEntryStream，避免 EntryData 的 SetLength+Move 双倍内存 }

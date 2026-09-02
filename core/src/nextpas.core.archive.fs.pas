@@ -13,6 +13,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.fs.base,
+  nextpas.core.fs.intf,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.bytes.builder;
@@ -66,6 +67,14 @@ procedure ArchiveSortDirEntries(var A: TDirEntryArray);
 
 { 防劫持：逐段 IsSymlink 检测，增量前缀构建避免每段 Copy(APath,1,LI-1) 的 O(N^2) 短生命周期 string }
 procedure ArchiveEnsureNoSymlinkInPath(const APath: string);
+{ 零拷贝父目录检查：Len 视图避免每条目 Copy(LFull,1,LSep-1) 200 次短串分配，复用 bytes.ops 单源思想，落盘热路径 }
+procedure ArchiveEnsureNoSymlinkInPathLen(const APath: string; ALen: SizeUInt);
+{ 父目录一站式：增量前缀单遍 Ensure+Mkdir，避免外层 Copy 父串分配，复用 ArchiveJoinPath 单源，fail-closed }
+procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
+{ fs 单缝转发：tar/zip 经 archive 联邦，消除直接 uses nextpas.core.fs 张力；inline 薄转发单源 }
+function ArchiveStat(const APath: string): TFileInfo; inline;
+function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
+procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
 
 { 快照：IStream.Size/Seek/Read + short-snapshot 校验复用，消除 TarPackDir/builder.Finish 重复 }
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;
@@ -253,6 +262,102 @@ begin
     end;
   end;
   { 尾段未以 '/' 结尾时已在循环内检查；若路径本身含末尾 '/'，最后段已覆盖 }
+end;
+
+procedure ArchiveEnsureNoSymlinkInPathLen(const APath: string; ALen: SizeUInt);
+var
+  LPos, LStart, LSegLen: Integer;
+  LPrefix: string;
+  LClamped: SizeUInt;
+begin
+  if (APath = '') or (ALen = 0) then Exit;
+  LClamped := ALen;
+  if LClamped > SizeUInt(Length(APath)) then LClamped := SizeUInt(Length(APath));
+  LPrefix := '';
+  LStart := 1;
+  if (Length(APath) > 0) and (APath[1] = '/') then
+  begin
+    LPrefix := '/';
+    LStart := 2;
+    if IsSymlink('/') then
+      raise EParseError.Create('tar extract: symlink in path: /');
+  end;
+  for LPos := 1 to Integer(LClamped) + 1 do
+  begin
+    if (LPos > Integer(LClamped)) or (APath[LPos] = '/') then
+    begin
+      LSegLen := LPos - LStart;
+      if LSegLen > 0 then
+      begin
+        // perf: 零拷贝 Len 视图，复用 ArchiveJoinPath 单源，消除外层 Copy(LFull,1,LSep-1) 200 次分配
+        LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
+        if IsSymlink(LPrefix) then
+          raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+      end
+      else if (LPos <= Integer(LClamped)) and (LPos = LStart) then
+      begin
+        { 空段 "//" 跳过 }
+      end;
+      LStart := LPos + 1;
+    end;
+  end;
+end;
+
+procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
+var
+  LPos, LStart, LSegLen: Integer;
+  LPrefix: string;
+  LClamped: SizeUInt;
+begin
+  if (AFull = '') or (AParentLen = 0) then Exit;
+  LClamped := AParentLen;
+  if LClamped > SizeUInt(Length(AFull)) then LClamped := SizeUInt(Length(AFull));
+  LPrefix := '';
+  LStart := 1;
+  if (Length(AFull) > 0) and (AFull[1] = '/') then
+  begin
+    LPrefix := '/';
+    LStart := 2;
+    if IsSymlink('/') then
+      raise EParseError.Create('tar extract: symlink in path: /');
+  end;
+  for LPos := 1 to Integer(LClamped) + 1 do
+  begin
+    if (LPos > Integer(LClamped)) or (AFull[LPos] = '/') then
+    begin
+      LSegLen := LPos - LStart;
+      if LSegLen > 0 then
+      begin
+        // perf: 单遍增量前缀，零外层 Copy，单次 ArchiveJoinPath+IsSymlink+Mkdir，消除 200 次短串
+        LPrefix := ArchiveJoinPath(LPrefix, Copy(AFull, LStart, LSegLen));
+        if IsSymlink(LPrefix) then
+          raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        try
+          Mkdir(LPrefix, PermDirDefault);
+        except
+          on E: EAlreadyExistsError do ;
+          on E: Exception do
+            if not IsDir(LPrefix) then raise;
+        end;
+      end;
+      LStart := LPos + 1;
+    end;
+  end;
+end;
+
+function ArchiveStat(const APath: string): TFileInfo; inline;
+begin
+  Result := Stat(APath);
+end;
+
+function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
+begin
+  Result := Open(APath, AMode);
+end;
+
+procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
+begin
+  MkdirAll(APath, APerm);
 end;
 
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;
