@@ -128,7 +128,7 @@ constructor TJsQuickJsRuntime.Create(const AOptions: TJsRuntimeOptions);
 begin
   inherited Create;
   FOptions := AOptions;
-  CheckJsRuntimeOptions(FOptions);
+  CheckJsRuntimeOptions(FOptions, jsbkQuickJs);
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS backend not available (probe: '+JsQuickJsProbeNames+')', jecUnknown, 'Error', '', jsbkQuickJs);
 end;
@@ -457,11 +457,11 @@ begin
     finally
       if Assigned(JS_FreeValuePtr) then
       begin
+        // stability: exactly-once Free for QRes/QFunc/QThis + batch tag-filtered free via quickjs.value single source QjsBatchFreeValues (inline, zero-copy tag check <0, B/op=0 for immediates INT/BOOL/NULL/UNDEFINED/FLOAT64 eliminates FFI storm, high-freq >16 B/op=0 after warm via EnsureCallHeap geometric BYTES_BUILDER_MIN_GROW reuse, bytes.ops single source, L0-L3, resource not丢)
         JS_FreeValuePtr(FCtx, QRes);
         JS_FreeValuePtr(FCtx, QFunc);
         JS_FreeValuePtr(FCtx, QThis);
-        if PQ <> nil then
-          for I := 0 to LArgc - 1 do JS_FreeValuePtr(FCtx, PQ[I]);
+        if (PQ <> nil) and (LArgc > 0) then QjsBatchFreeValues(FCtx, PQ, LArgc);
       end;
     end;
   end;

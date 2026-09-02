@@ -62,7 +62,6 @@ function JsPureValueStateGetBatch(const S: TJsPureValueState; const Objs: array 
 procedure JsPureValueStateSetBatch(var S: TJsPureValueState; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
 implementation
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
@@ -106,17 +105,18 @@ procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
 begin
   nextpas.core.bytes.ops.BytesDynEnsureLength(Heap, SizeOf(TJsPureObject), SizeUInt(Length(Heap))+1);
 end;
-// helpers to keep base zero-dep: value stored as Raw+Kind string, owner pure.value converts via TJsValue single source, bytes.ops single source not needed here but inline zero-copy
+// helpers to keep base zero-dep: value stored as Raw+Kind string, owner pure.value converts via TJsValue single source, text.number single source via IntToBuffer/FloatToBuffer zero-copy inline locale-independent (no SysUtils), bytes.ops single source via BytesCopy
 function ValueRawOf(const V: TJsValue): string; inline;
+var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
   case V.Kind of
     jskString, jskSymbol: Result := V.AsString;
-    jskInteger, jskBigInt: Result := IntToStr(V.AsInt);
-    jskNumber: Result := FloatToStr(V.AsDouble);
+    jskInteger, jskBigInt: begin LLen := IntToBuffer(V.AsInt, @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
+    jskNumber: begin LLen := FloatToBuffer(V.AsDouble, @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
     jskBoolean: if V.AsBool then Result := 'true' else Result := 'false';
     jskNull: Result := 'null';
     jskUndefined: Result := 'undefined';
-    jskObject, jskArray: Result := IntToStr(JsObjectId(V));
+    jskObject, jskArray: begin LLen := IntToBuffer(JsObjectId(V), @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
     jskFunction: Result := JsFunctionName(V);
     jskError: Result := V.AsString;
     jskPromise: Result := '';
@@ -128,20 +128,21 @@ begin
   Result := Ord(V.Kind);
 end;
 function RawToValue(const Raw: string; AKind: Integer): TJsValue; inline;
-var K: TJsValueKind;
+var K: TJsValueKind; LView: TStringView; VInt: Int64; VDouble: Double;
 begin
   K := TJsValueKind(AKind);
+  LView := TStringView.FromStr(Raw);
   case K of
     jskString: Result := JsStringValue(Raw);
     jskSymbol: Result := JsSymbolValue(Raw);
-    jskInteger: Result := JsIntValue(StrToInt64Def(Raw,0));
-    jskBigInt: Result := JsBigIntValue(StrToInt64Def(Raw,0));
-    jskNumber: Result := JsDoubleValue(StrToFloatDef(Raw,0));
+    jskInteger: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsIntValue(VInt); end;
+    jskBigInt: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsBigIntValue(VInt); end;
+    jskNumber: begin if not ViewToDouble(LView, VDouble) then VDouble:=0; Result := JsDoubleValue(VDouble); end;
     jskBoolean: Result := JsBoolValue(Raw='true');
     jskNull: Result := JsNullValue;
     jskUndefined: Result := JsUndefinedValue;
-    jskObject: Result := JsHeapObjectValue(StrToInt64Def(Raw,0));
-    jskArray: Result := JsHeapArrayValue(StrToInt64Def(Raw,0));
+    jskObject: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsHeapObjectValue(VInt); end;
+    jskArray: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsHeapArrayValue(VInt); end;
     jskFunction: Result := JsFunctionValue(Raw);
     jskError: Result := JsErrorValue(Raw);
     jskPromise: Result := JsPromiseValue;
@@ -176,6 +177,39 @@ begin
 end;
 procedure PropBucketsInvalidate(var Obj: TJsPureObject); inline;
 begin SetLength(Obj.PropsBuckets,0); Obj.PropsMask:=0; end;
+function PropBucketFindPos(const Obj: TJsPureObject; AHash: UInt32; AIdx: Integer): Integer;
+var LPos, LProbe: Integer;
+begin
+  if Length(Obj.PropsBuckets)=0 then Exit(-1);
+  LPos := Integer(AHash and Obj.PropsMask);
+  for LProbe:=0 to High(Obj.PropsBuckets) do
+  begin
+    if Obj.PropsBuckets[LPos]=AIdx then Exit(LPos);
+    if Obj.PropsBuckets[LPos]=-1 then Exit(-1);
+    LPos := (LPos+1) and Integer(Obj.PropsMask);
+  end;
+  Result:=-1;
+end;
+procedure PropBucketDeletePos(var Obj: TJsPureObject; ADelPos: Integer);
+var LCur, LRe: Integer; LHash: UInt32;
+begin
+  Obj.PropsBuckets[ADelPos]:=-1;
+  LCur := (ADelPos+1) and Integer(Obj.PropsMask);
+  while Obj.PropsBuckets[LCur]<>-1 do
+  begin
+    LRe := Obj.PropsBuckets[LCur];
+    if (LRe<0) or (LRe>=Length(Obj.Props)) then
+    begin
+      Obj.PropsBuckets[LCur]:=-1;
+      LCur := (LCur+1) and Integer(Obj.PropsMask);
+      Continue;
+    end;
+    LHash := Obj.Props[LRe].Hash;
+    Obj.PropsBuckets[LCur]:=-1;
+    JsPureBucketPut(Obj.PropsBuckets, Obj.PropsMask, LHash, LRe);
+    LCur := (LCur+1) and Integer(Obj.PropsMask);
+  end;
+end;
 procedure PropBucketsRebuild(var Obj: TJsPureObject);
 var LCount, I, LDummy: Integer; LHash: UInt32;
 begin
@@ -287,12 +321,16 @@ begin
   Result := JsPureHeapFindProp(Heap[Idx], Name) >=0;
 end;
 function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
-var Idx, I, LLen: Integer;
+var Idx, I, LLen, LNew, LPosMoved, LPosRemoved: Integer; LHashRemoved, LHashMoved: UInt32; LWasValid: Boolean;
 begin
   Result := False; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   I := JsPureHeapFindProp(Heap[Idx], Name);
   if I < 0 then Exit;
   LLen := Length(Heap[Idx].Props);
+  // capture hashes before swap for O(1) incremental patch (pure.host parity, amortized O(1) vs O(n) rebuild)
+  LWasValid := Length(Heap[Idx].PropsBuckets)>0;
+  LHashRemoved := Heap[Idx].Props[I].Hash;
+  if I <> LLen-1 then LHashMoved := Heap[Idx].Props[LLen-1].Hash else LHashMoved:=0;
   // O(1) swap-last, single assign
   if I <> LLen - 1 then
     Heap[Idx].Props[I] := Heap[Idx].Props[LLen - 1];
@@ -302,8 +340,36 @@ begin
   Heap[Idx].Props[LLen - 1].Raw := '';
   Heap[Idx].Props[LLen - 1].Kind := 0;
   SetLength(Heap[Idx].Props, LLen - 1);
-  // invalidate buckets, lazy rebuild
-  PropBucketsInvalidate(Heap[Idx]);
+  LNew := LLen-1;
+  if not LWasValid then
+  begin
+    if (LNew <= JS_PURE_HASH_THRESHOLD) and (Length(Heap[Idx].PropsBuckets)>0) then PropBucketsInvalidate(Heap[Idx]);
+    Result := True; Exit;
+  end;
+  if LNew <= JS_PURE_HASH_THRESHOLD then
+  begin
+    PropBucketsInvalidate(Heap[Idx]); Result:=True; Exit;
+  end;
+  if Length(Heap[Idx].PropsBuckets) < JsPureBucketCapacity(LNew) then
+  begin
+    PropBucketsInvalidate(Heap[Idx]); Result:=True; Exit;
+  end;
+  // amortized O(1) incremental cluster patch vs O(n) full invalidate+rebuild — batch删O(k) not O(k·n), pure.host single source parity
+  if I = LLen-1 then
+  begin
+    LPosRemoved := PropBucketFindPos(Heap[Idx], LHashRemoved, I);
+    if LPosRemoved>=0 then PropBucketDeletePos(Heap[Idx], LPosRemoved)
+    else PropBucketsInvalidate(Heap[Idx]);
+  end else
+  begin
+    LPosMoved := PropBucketFindPos(Heap[Idx], LHashMoved, LLen-1);
+    LPosRemoved := PropBucketFindPos(Heap[Idx], LHashRemoved, I);
+    if (LPosMoved>=0) and (LPosRemoved>=0) then
+    begin
+      Heap[Idx].PropsBuckets[LPosMoved]:=I;
+      PropBucketDeletePos(Heap[Idx], LPosRemoved);
+    end else PropBucketsInvalidate(Heap[Idx]);
+  end;
   Result := True;
 end;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;

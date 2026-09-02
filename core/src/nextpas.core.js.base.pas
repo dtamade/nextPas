@@ -50,18 +50,11 @@ type
   EJsTimeout = class(EJsError);
   EJsMemoryLimit = class(EJsError);
 
-const
-  // QuickJS prob names single source: 8-entry probe table converges loader array + EJsBackendUnavailable message prob table via one constant (bytes.ops StringJoin single source, no ifdef duplication, comma-join via bytes.ops BytesCopy single source zero-copy single alloc, loader BuildProbeNames thin-forward)
-  JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
-    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
-    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  );
-
 function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
 function JsTrimEquals(const S, Lit: string): Boolean;
-procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
+procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind = jsbkFake);
 
 implementation
 
@@ -149,10 +142,11 @@ begin
   Result := StringTrimEquals(S, Lit);
 end;
 
-procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
+procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 begin
+  // perf: thin check, zero alloc, single branch; stability: backend attribution via ABackend (default jsbkFake for back-compat), callers pass real jsbkQuickJs/jsbkV8 to preserve diagnostic ownership, fail-closed without resource
   if AOptions.TimeoutMs < 0 then
-    raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', jsbkFake);
+    raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', ABackend);
 end;
 
 end.

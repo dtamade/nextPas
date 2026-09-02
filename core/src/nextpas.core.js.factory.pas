@@ -31,8 +31,8 @@ begin
 end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
 begin
-  // stability: CheckJsRuntimeOptions 先验负 Timeout fail-closed 无泄漏，registry O(1) 分发 exactly-once 抛 EJsBackendUnavailable（含 probe 名表，bytes.ops 单源）
-  CheckJsRuntimeOptions(AOptions);
+  // stability: CheckJsRuntimeOptions 先验负 Timeout fail-closed 无泄漏 (backend attribution via AKind, jsbkFake default for back-compat, jsbkQuickJs/jsbkV8 诊断归因不失真), registry O(1) 分发 exactly-once 抛 EJsBackendUnavailable（含 probe 名表，bytes.ops 单源）
+  CheckJsRuntimeOptions(AOptions, AKind);
   Result := JsRegistryCreate(AKind, AOptions);
 end;
 end.

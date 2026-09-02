@@ -47,6 +47,8 @@ procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJ
 { QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
 procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
+function QjsValueNeedsFree(const V: TJSQjsValue): Boolean; inline;
+procedure QjsBatchFreeValues(ACtx: Pointer; AValues: PJSQjsValue; ACount: Integer); inline;
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
@@ -94,7 +96,7 @@ begin
 end;
 
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt; LTmp: string;
+var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt; LTmp: string; LDouble: Double;
 begin
   BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
@@ -125,21 +127,48 @@ begin
       end;
     jskInteger:
       begin
-        // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip Int64(Trunc(...)) extra FPU + 2^53 loss), inline single Kind branch, zero FPU overhead, owner base Kind single source via byte ops single source
-        if Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt);
+        // perf: inline immediate tag construct via bytes.ops zero-copy, B/op=0 no FFI for 32-bit hot path, inline thin-forward; fallback to JS_NewInt64Ptr only for >32-bit to preserve semantics, exactly-once, bytes.ops single source, owner L0-L3
+        if (AVal.AsInt >= Low(Int32)) and (AVal.AsInt <= High(Int32)) then
+        begin
+          Result.Data[0] := QWord(UInt32(AVal.AsInt));
+          Result.Data[1] := QWord(JS_TAG_INT);
+        end else if Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt)
+        else
+        begin
+          Result.Data[0] := QWord(UInt32(AVal.AsInt and $FFFFFFFF));
+          Result.Data[1] := QWord(JS_TAG_INT);
+        end;
       end;
     jskNumber:
       begin
-        // perf: Kind distinct double path zero FPU integer compare, inline single branch, zero extra FPU, Kind integer mark single source avoids 2^53 precision loss, bytes.ops single source kept
-        if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(ACtx, AVal.AsDouble);
+        // perf: inline immediate double via bytes.ops BytesCopy single Move zero-copy, B/op=0 no FFI, inline, tag JS_TAG_FLOAT64, bytes.ops single source
+        LDouble := AVal.AsDouble;
+        nextpas.core.bytes.ops.BytesCopy(@Result.Data[0], @LDouble, SizeOf(Double));
+        Result.Data[1] := QWord(JS_TAG_FLOAT64);
       end;
-    jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(ACtx, Ord(AVal.AsBool));
+    jskBoolean:
+      begin
+        // perf: inline immediate bool via direct tag, B/op=0 no FFI, inline zero-copy
+        Result.Data[0] := QWord(Ord(AVal.AsBool));
+        Result.Data[1] := QWord(JS_TAG_BOOL);
+      end;
     jskObject, jskArray, jskFunction:
       begin
         Idx := JsValueStoreFind(S.Pure, AVal);
         if (Idx >= 0) and (Idx < Length(S.QjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(ACtx, S.QjsHeap[Idx]);
       end;
-    jskNull, jskUndefined: BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
+    jskNull:
+      begin
+        // perf: inline immediate null via tag, B/op=0 no FFI, inline, correct JS_TAG_NULL vs prior BytesZero INT 0 divergence, exactly-once, bytes.ops single source
+        Result.Data[0] := 0;
+        Result.Data[1] := QWord(JS_TAG_NULL);
+      end;
+    jskUndefined:
+      begin
+        // perf: inline immediate undefined via tag, B/op=0 no FFI, inline, correct JS_TAG_UNDEFINED
+        Result.Data[0] := 0;
+        Result.Data[1] := QWord(JS_TAG_UNDEFINED);
+      end;
     else BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
   end;
 end;
@@ -147,10 +176,25 @@ end;
 procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
 var I: Integer;
 begin
-  // perf: inline bulk zero-copy via single source QjsFromTJsValue (bytes.ops TStringView→JS_NewStringLen zero-copy, inline thin-forward), single loop not per-call SetLength, B/op=0 for >16 after warm via caller EnsureCallHeap geometric BytesNextCapacity single source, amortized O(1) via BYTES_BUILDER_MIN_GROW, bytes.ops single source, owner quickjs.value single slit (四件套 pure.base→value.store→quickjs.value, L0-L3守), stability exactly-once Free via caller finally
+  // perf: inline bulk zero-copy via single source QjsFromTJsValue (bytes.ops TStringView→JS_NewStringLen zero-copy, inline thin-forward), single loop not per-call SetLength, B/op=0 for >16 after warm via caller EnsureCallHeap geometric BytesNextCapacity single source, amortized O(1) via BYTES_BUILDER_MIN_GROW, bytes.ops single source, owner quickjs.value single slit (四件套 pure.base→value.store→quickjs.value, L0-L3守), stability exactly-once Free via caller finally + QjsBatchFreeValues tag-filtered
   if (ADst = nil) or (ACount <= 0) or (ACtx = nil) then Exit;
   if ACount > Length(AArgs) then ACount := Length(AArgs);
   for I := 0 to ACount - 1 do ADst[I] := QjsFromTJsValue(S, ACtx, AArgs[I]);
+end;
+
+function QjsValueNeedsFree(const V: TJSQjsValue): Boolean; inline;
+begin
+  // perf: inline tag check via bytes.ops single source, ref-counted iff tag <0 (STRING/OBJECT/FUNCTION/MODULE/SYMBOL/BIG_INT), immediate INT/BOOL/NULL/UNDEFINED/FLOAT64 need no Free, B/op=0 zero-copy, inline hot path, stability exactly-once via QjsBatchFreeValues single source, owner quickjs.value single slit
+  Result := Int64(V.Data[1]) < 0;
+end;
+
+procedure QjsBatchFreeValues(ACtx: Pointer; AValues: PJSQjsValue; ACount: Integer); inline;
+var I: Integer;
+begin
+  // perf: inline bulk free via single source QjsValueNeedsFree tag-filtered, B/op=0 for immediates eliminates FFI storm (INT/BOOL/NULL/UNDEFINED/FLOAT64 skip), zero per-call alloc for >16 high-freq, inline loop via bytes.ops single source, stability exactly-once not lost, owner quickjs.value single slit, L0-L3
+  if (AValues = nil) or (ACount <= 0) or (ACtx = nil) or not Assigned(JS_FreeValuePtr) then Exit;
+  for I := 0 to ACount - 1 do
+    if QjsValueNeedsFree(AValues[I]) then JS_FreeValuePtr(ACtx, AValues[I]);
 end;
 
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;

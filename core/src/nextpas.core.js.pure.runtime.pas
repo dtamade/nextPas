@@ -35,7 +35,7 @@ begin
   inherited Create;
   FKind := AKind;
   FOptions := AOptions;
-  CheckJsRuntimeOptions(FOptions);
+  CheckJsRuntimeOptions(FOptions, AKind);
 end;
 
 function TJsPureRuntime.Kind: TJsBackendKind; inline;

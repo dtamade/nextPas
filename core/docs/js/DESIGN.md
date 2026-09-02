@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart TB
-  base["js.base<br/>TJsBackendKind / TJsValueKind / Options / EJsError<br/>后端无关·JS_QUICKJS_PROBE_NAMES[0..7] 单源"]
+  base["js.base<br/>TJsBackendKind / TJsValueKind / Options / EJsError<br/>后端无关·纯类型载体 (CheckJsRuntimeOptions ABackend 透传)"]
   intf["js.intf<br/>IJsRuntime / IJsContext / TJsValue 不透明<br/>SetHostFunction x3·后端无关"]
   lifecycle["js.lifecycle<br/>纯上下文生命周期 owner<br/>GPureClosed 4B epoch*2+closed / freelist"]
   vstore["js.value.store<br/>纯存储 Heap+Global<br/>bytes.ops+mem.dynarray 几何"]
@@ -97,7 +97,7 @@ flowchart TB
 ## 3. FFI 纪律（为何 loader 分离）
 
 - `*.ffi` 只含 `cdecl external` 声明（`design-conventions §6`），不含 `platform.dl`，不含逻辑，编译期可语法检查（`fpc -vh` 0 hint）。
-- `*.loader` 唯一可触 `platform.dl`，幂等缓存 `TryLoadQuickJs`，跨平台探测 `JS_QUICKJS_PROBE_NAMES[0..7]`（`so.1/so.0/.so/dylib/1.dylib/dll/quickjs`，Windows 首探 `quickjs.dll`，macOS 首探 `dylib`），失败时 `JsBackendAvailable=False`，`CreateJsRuntime` 抛 `EJsBackendUnavailable`（含 8 名表），不让编译锁死（同 `webview.gtk.loader`）。
+- `*.loader` 唯一可触 `platform.dl`，幂等缓存 `TryLoadQuickJs`，跨平台探测 `JS_QUICKJS_PROBE_NAMES[0..7]` 单源拥有于 `js.quickjs.loader`（`js.base` 纯类型载体零探针，`bytes.ops StringJoin` 零拷贝单遍单 alloc，INV-1 零 `quickjs/v8`），（`so.1/so.0/.so/dylib/1.dylib/dll/quickjs`，Windows 首探 `quickjs.dll`，macOS 首探 `dylib`），失败时 `JsBackendAvailable=False`，`CreateJsRuntime` 抛 `EJsBackendUnavailable`（含 8 名表），不让编译锁死（同 `webview.gtk.loader`）。
 - 禁止 `DynLibs`（`gate policy: raw host units 仅限 owner path`），统一走 `platform.dl` 的 `DlOpen/DlSym/DlClose`。
 
 **测试**：`test_js_quickjs_runtime` 前置 `JsBackendAvailable` 探测，CI 无库时 SKIP，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 强制 fail 用于本地验证。
@@ -140,7 +140,7 @@ flowchart TB
 ## 7. 依赖与分层
 
 ```
-L2 js:  base(后端无关·JS_QUICKJS_PROBE_NAMES[0..7] 单源) → intf(不透明TJsValue·后端无关) → {fake, quickjs.ffi←loader←quickjs.value+vstore→quickjs, lifecycle, pure.base←pure.impl←{js888,v8,chakra}, pure.host, pure.value, js.eval, pure.hash} → registry(唯一扇出·vault IMutex O(1)) → factory(薄转发至 registry) → 门面(纯 re-export inline·阈值800)
+L2 js:  base(后端无关·纯类型载体·CheckJsRuntimeOptions ABackend 透传) → intf(不透明TJsValue·后端无关) → {fake, quickjs.ffi←loader(JS_QUICKJS_PROBE_NAMES[0..7] 单源)·quickjs.value+vstore→quickjs, lifecycle, pure.base←pure.impl←{js888,v8,chakra}, pure.host, pure.value, js.eval, pure.hash} → registry(唯一扇出·vault IMutex O(1)) → factory(薄转发至 registry) → 门面(纯 re-export inline·阈值800)
          ↳ lifecycle/pure.host/pure.value/js.eval 四者分离单源（CONTRACT §1 20 单元：lifecycle 为上下文生命周期 owner 紧凑 4B epoch*2+closed+freelist / pure.host 为 per-Context HostState O(1)桶 / pure.value 为 ValueState Heap/Props 几何 / js.eval 为 Eval 单源分发，pure.base ~45 行纯类型载体零依赖，pure.hash 为 FNV1a32 单源经 bytes.ops），value.store 为纯存储单源（bytes.ops+mem.dynarray 几何 BYTES_BUILDER_MIN_GROW 均摊O1·text.view 零拷贝 inline），quickjs.value 为 QjsHeap 镜像装饰器（Pure+QjsHeap 组合·bytes.ops 单源）；纯族（js888/v8/chakra）与 quickjs 平级零FFI/零dl复用同 intf；registry 单点扇出 vault 幂等，factory 零直接 uses 守四件套 base←intf←impl←门面 与 L0–L3
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
          ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查

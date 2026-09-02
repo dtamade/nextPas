@@ -1,17 +1,19 @@
 unit nextpas.core.js.pure.base;
-{ base: pure family shared type-carrier per four-piece, zero-dependency, L2 base, pure type carrier without same-module uses, threshold via pure.hash 16, sentinels via js.eval single source, bytes.ops geometric 0→64→2× via owner single source, inline zero-copy via BytesCopy single source where owner forwards }
+{ base: pure family shared type-carrier per four-piece, L2 base, pure type carrier, handler inline via Hosts dynarray pool (bytes.ops geometric 0→64→2× via owner single source, mem.dynarray Exactly-Once poke amortized O(1) inline zero-copy, no per-host New/Dispose heap fragmentation, resource Finalize幂等不丢), threshold via pure.hash 16, sentinels via js.eval single source, bytes.ops single source where owner forwards }
 {$I nextpas.core.settings.inc}
 interface
+uses
+  nextpas.core.js.intf;
 type
-  { Host — canonical via pure.base, handlers owned separately via pure.host to keep base zero-dep, only Name/Kind/Hash here, func storage via owner pure.host parallel arrays, inline zero-copy via bytes.ops BytesCopy single source in owner }
+  { Host — canonical via pure.base, handlers inline via Hosts dynarray pool (bytes.ops geometric + mem.dynarray single source, no per-host New/Dispose, inline zero-copy, resource Finalize幂等不丢) — base now carries typed handlers via js.intf single source,守四件套与 L0-L3,反哺 owner能力(缺 inline 存储池能力先反哺 base) }
   TJsPureHostRec = record
     Name: string;
     Kind: Integer;
     Hash: UInt32;
-    // opaque handler pointers to keep base zero-dep (no js.intf), owner pure.host manages typed handlers via heap alloc, inline zero-copy via bytes.ops single source in owner, resource not lost via try-finally
-    FuncPtr: Pointer;
-    MethodPtr: Pointer;
-    ProcPtr: Pointer;
+    // inline handler storage via Hosts dynarray pool — no heap per-host New/Dispose, thousand hosts geometric via bytes.ops BytesDynEnsureLength single source, mem.dynarray Exactly-Once poke, inline zero-copy, resource Finalize via managed fields (func refcount)幂等不丢
+    Func: TJsHostFunction;
+    Method: TJsHostMethod;
+    Proc: TJsHostProc;
   end;
   TJsPureHostArray = array of TJsPureHostRec;
   TJsPureHostBuckets = record

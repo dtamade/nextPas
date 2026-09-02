@@ -3,6 +3,14 @@ unit nextpas.core.js.quickjs.loader;
 {$I nextpas.core.settings.inc}
 interface
 uses nextpas.core.js.base;
+
+const
+  // owner: loader single source 8-name QuickJS probe table — base 纯类型载体零依赖 (INV-1 零 quickjs/v8)，loader 唯一拥有平台探测名表，经 bytes.ops StringJoin 单源 comma-join (BytesCopy inline 零拷贝 single alloc O(n) 单遍，单源收敛 loader 数组 + EJsBackendUnavailable 消息，无 ifdef 双写，跨平台 8 名)，base 去探针下沉 owner 边界
+  JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
+    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
+    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
+  );
+
 function JsQuickJsIsAvailable: Boolean;
 function JsQuickJsProbeNames: string;
 function JsQuickJsLoad: Boolean;
