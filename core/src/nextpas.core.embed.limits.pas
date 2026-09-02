@@ -54,6 +54,4 @@ begin
     raise EEmbedTooLarge.Create('respack.embed: blob too large for .inc ('
       + SStr + ' > ' + LStr + ', use .pack)');
   end;
-end;
-
 end.

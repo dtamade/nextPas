@@ -32,6 +32,8 @@ type
   private
     FList: array of IVfs; { 不可变快照：构造期冻结只读，发布后零锁并发；无 RWLock/可变缓存 }
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
+    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
+    function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
@@ -75,6 +77,73 @@ end;
 
 { 首命中直达：O(m) 层线性探测，零缓存/零锁，命中层单次 Stat 直达；
   bytes.ops 零拷贝单源由 List 侧 VfsNameCompare 承载；非 inline（循环+try-except禁 inline） }
+function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean;
+begin
+  AIdx := -2;
+  Result := False;
+  if (FIndex = nil) or (FIndexLock = nil) then Exit;
+  FIndexLock.AcquireRead;
+  try
+    Result := TOverlayIndex(FIndex).TryGetValue(APath, AIdx);
+  finally
+    FIndexLock.ReleaseRead;
+  end;
+end;
+
+procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer);
+var
+  LDummy: Integer;
+{ 单次探测首命中：按优先级依次 Stat，首成功即胜出；EVfsNotFound 继续下层，
+  EVfsInvalidPath 透传；零二次 Exists 二分，inline 热路径 }
+function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+var
+  I: Integer;
+begin
+  if (FIndex = nil) or (FIndexLock = nil) then Exit;
+  if not FIndexLock.TryAcquireWrite then Exit;
+  try
+    if TOverlayIndex(FIndex).TryGetValue(APath, LDummy) then Exit;
+    TOverlayIndex(FIndex).Put(APath, AIdx);
+  finally
+    FIndexLock.ReleaseWrite;
+  end;
+end;
+
+function TOverlayVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean;
+var
+  LCached: TEntryArray;
+begin
+  AEntries := nil;
+  Result := False;
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  FListLock.AcquireRead;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LCached) then
+    begin
+      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，RWLock读并发零争用，防调用方篡改共享缓存 }
+      Result := True;
+    end;
+  finally
+    FListLock.ReleaseRead;
+  end;
+end;
+
+procedure TOverlayVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray);
+var
+  LDummy: TEntryArray;
+begin
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  if not FListLock.TryAcquireWrite then Exit;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
+    TOverlayListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离：热点目录增量缓存 O(k) 零拷贝防脏，TryAcquireWrite非阻塞防惊群 }
+  finally
+    FListLock.ReleaseWrite;
+  end;
+end;
+
+{ 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
+  命中层单次 Stat 直达（零二次二分），RWLock读并发零争用/TryAcquireWrite非阻塞写防穿透惊群，bytes.ops零拷贝单源；非inline（循环+RWLock+try-except禁inline） }
 function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
 var
   I: Integer;

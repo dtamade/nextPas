@@ -1369,8 +1369,9 @@ begin
       'x-large: ' + LValue + #13#10 +
       #13#10, LOut,
       'large header block fallback preserves exact wire bytes');
-    CheckEqual(Int64(4), Int64(LW.WriteCalls),
-      'large header block falls back before writing partial compact bytes');
+    // perf: large block now single buffer batch via TBufStringBuilder Reserve+Tail+AdvanceLen zero-copy (bytes.ops BytesCopy) single WriteAllOrRaise; header block not per-header, fallback is batched not per-header SetLength
+    CheckEqual(Int64(2), Int64(LW.WriteCalls),
+      'large header block fallback is batched single write (status + headers+final)');
   finally
     LRW.Free;
   end;

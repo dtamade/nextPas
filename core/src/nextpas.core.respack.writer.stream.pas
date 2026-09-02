@@ -2,7 +2,7 @@ unit nextpas.core.respack.writer.stream;
 
 {** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+头。
   首遍复用 writer.layout 单源计算 Total/槽位/去重（INV-R5 确定性同 ResPackBuild），
-  次遍分段经 AWrite 回调：头/index/string 合批 → 槽间隙零填 → data 零拷贝 Move 分段 → digest，
+  次遍分段经 AWrite 回调：头/index/string 合批(TBytes RAII托管自动释放) → 槽间隙零填(WriteZeros inline小间隙单回调快道/4K零页零拷贝) → data 零拷贝 Move 分段 → digest，
   零额外 Total 缓冲；ResPackBuildStreamSize 仅首遍取 Total 零分配。 }
 
 {$I nextpas.core.settings.inc}
@@ -30,23 +30,32 @@ uses
   nextpas.core.respack.writer.builder,
   nextpas.core.respack.writer.layout;
 
-{ 零填充分段写入：复用 bytes.ops 全局零页单源，无栈分配/无重复 FillChar，零拷贝分段直写；外联守 design-conventions §2 红线2 }
+{ 零填充分段写入：复用 bytes.ops 全局零页单源(.bss 4K)，无栈分配/无重复 FillChar，零拷贝分段直写；inline 热路径 + 小间隙单回调快道(≤4K)，大间隙4K切片控单次syscall尺寸；外联守 design-conventions §2 红线2 }
 function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
 begin
   Result := Assigned(AOpts.DigestFunc);
 end;
 
-procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64);
+procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
 var
   N: UInt64;
   L: SizeUInt;
+  S: TByteSpan;
 begin
   if ACount = 0 then Exit;
+  { perf: inline消除调用开销 + 零拷贝 BYTES_ZERO_PAGE 单源；小间隙(对齐16/4典型≤15)单次AWrite快道避免while开销，大间隙4K切片复用同页零拷贝，碎片化布局小粒度回调不放大为多页切片 }
+  if ACount <= BYTES_ZERO_PAGE_SIZE then
+  begin
+    AWrite(@BYTES_ZERO_PAGE[0], SizeUInt(ACount));
+    Exit;
+  end;
   N := ACount;
   while N > 0 do
   begin
-    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
-    AWrite(@BYTES_ZERO_PAGE[0], L);
+    // INV-5 单源: 零页切片阈值 — 小间隙按需 slice 为 L=SizeUInt(N) (<4096) 避免 4K memset，阈值即 BYTES_ZERO_PAGE_SLICE_THRESHOLD；零拷贝分段直写
+    if N >= BYTES_ZERO_PAGE_SLICE_THRESHOLD then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
+    S := ZeroPageSlice(L);
+    AWrite(S.Data, S.Len);
     Dec(N, L);
   end;
 end;
@@ -57,6 +66,7 @@ var
   L: TResPackLayout;
   N, I, J, K: SizeUInt;
   Cur: UInt64;
+  HeadBuf: TBytes;
   Head: PByte;
   HeadSize: UInt64;
   Gap: UInt64;
@@ -65,20 +75,16 @@ begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
   ResPackComputeLayout(AEntries, AOpts, L);
-  Head := nil;
   try
     N := L.N;
     HeadSize := L.DataStart;
     { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。 }
-    GetMem(Head, HeadSize);
-    try
-      ResPackWriterFillHead(Head, AEntries, AOpts, L);
-      AWrite(Head, SizeUInt(HeadSize));
-    finally
-      FreeMem(Head);
-      Head := nil;
-    end;
+      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。
+      RAII托管：TBytes接口式托管自动释放，异常安全无GetMem/FreeMem手动路径；inline零拷贝证据见bytes.ops/builder。 }
+    SetLength(HeadBuf, SizeUInt(HeadSize));
+    if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
+    ResPackWriterFillHead(Head, AEntries, AOpts, L);
+    if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
 
     { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填；峰值 1×+头，无 Total 双驻留。 }
     Cur := HeadSize;

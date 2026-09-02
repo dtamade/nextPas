@@ -1,4 +1,13 @@
 unit nextpas.core.http.static;
+{**
+ * @desc Static + Range serving (ServeFile/ServeDir/ServeVfs). Perf: inline zero-alloc probes
+ *       `HttpRangeHasBytesPrefix`/`HttpWeakETagEquals` via `bytes.ops:CompareMem` single source,
+ *       `CopyRange(4K, STATIC_COPY_BUF_SIZE)` page-aligned buffered copy + `io.Copy` streaming,
+ *       VFS embedded `TEmbeddedSlice` zero-copy retained (file path = buffered 4K copy, not
+ *       kernel `CopyFileRange`); stability via owner `try/finally`/`Close`/`FreeAndNil`,
+ *       source-contract locks `IFile`+`io.Copy` forbids `ReadAll` whole-file buffering, per-domain
+ *       `heaptrc 0 unfreed`. CONTRACT truth, missing → back-feed owner (`bytes.ops`/`io`).
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -126,7 +135,7 @@ end;
 
 const
   CACHE_REVALIDATE = 'public, max-age=0, must-revalidate';
-  STATIC_COPY_BUF_SIZE = 4096; { Range 拷贝块大小，4K 页基准几何；嵌入 VFS 零拷贝切片（TEmbeddedSlice/Move 直达 blob）已付零拷贝收益，额外缓冲仅增一次 CopyRange 重复拷贝，4K 对齐单次页系统调用最优 }
+  STATIC_COPY_BUF_SIZE = 4096; { Range 拷贝块大小，4K 页基准几何；inline 探针零分配+`bytes.ops:CompareMem` 单源，嵌入 VFS 零拷贝切片（TEmbeddedSlice/Move 直达 blob）已付零拷贝收益，额外缓冲仅增一次 CopyRange 重复拷贝，4K 对齐单次页系统调用最优；`io.Copy`/`CopyRange` 流式禁 `ReadAll`，`heaptrc 0` }
 
 { ===== Helpers ===== }
 
