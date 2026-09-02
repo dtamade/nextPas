@@ -615,7 +615,7 @@ begin
   end;
 end;
 
-function TPoller.HasPending: Boolean;
+function TPoller.HasPending: Boolean; inline;
 begin
   case FBackend of
     {$IFDEF NEXTPAS_LINUX}

@@ -2,6 +2,7 @@ unit nextpas.core.db.redis.adapter;
 
 {** @desc IDbConnection/IDbQuery 的 Redis 原生适配器（V3-A5）。
 
+       缝位：L2 同层单向 allowlist 轻量缝 `db.redis.adapter → net`（transport 侧承载 `net.tcp`/`tls.dialer` 主缝，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image 范式），bytes.ops 单源 inline/零拷贝（StringToBytes 薄转发，视图零分配），资源 FreeAndNil/try-finally 不丢。
        定位：RESP2 协议原生客户端（无 C 库依赖），键值面映射到统
        一层。命令文本 = 空白分词的命令行（GET key / SET key val），
        ?/?N 占位符替换为独立 bulk 参数——RESP 长度前缀天然二进制
@@ -37,6 +38,7 @@ unit nextpas.core.db.redis.adapter;
 interface
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.base.utils,
   nextpas.core.exception,
@@ -80,12 +82,10 @@ implementation
 const
   C_READ_CHUNK = 4096;
 
-function BytesFromText(const AStr: string): TBytes;
+function BytesFromText(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  // INV-5 single source: delegate to bytes.ops.StringToBytes (zero-copy PAnsiChar(AText)^ deref + single SetLength+Move, inline thin forward — Move stays in owner)
+  Result := StringToBytes(AStr);
 end;
 
 function RedisCategory(const AErrType: string): TDbErrorCategory;
@@ -197,6 +197,12 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -665,6 +671,36 @@ end;
 function TDbRedisConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := False;   { v1：TimeoutMs 忽略，如实登记 }
+end;
+
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbRedisConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbRedisConnection.CaseSensitiveIdentifiers: Boolean;

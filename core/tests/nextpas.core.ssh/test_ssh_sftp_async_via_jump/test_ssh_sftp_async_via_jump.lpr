@@ -160,5 +160,5 @@ begin
   GSuite.Test('stat via jump', procedure var P:string; A:TSftpAttrs; D:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpViaJump(PatternBytes($33,32), PatternBytes($44,32), 'u','p', True, 'u','p', True, 'stat', P, A, D, K); CheckTrue(Ok,'stat via jump'); CheckEqual(UInt64(1234), A.Size,'size'); CheckTrue(A.IsRegular,'regular'); end);
   GSuite.Test('target auth fail propagates', procedure var P:string; A:TSftpAttrs; D:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpViaJump(PatternBytes($55,32), PatternBytes($66,32), 'u','p', True, 'u','wrong', False, 'realpath', P, A, D, K); CheckTrue(not Ok,'should fail'); CheckEqual(Ord(sekAuth), Ord(K),'kind'); end);
   GSuite.Test('jump auth fail propagates', procedure var P:string; A:TSftpAttrs; D:TBytes; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunSftpViaJump(PatternBytes($77,32), PatternBytes($88,32), 'u','wrong', False, 'u','p', True, 'realpath', P, A, D, K); CheckTrue(not Ok,'jump fail'); CheckTrue(K in [sekAuth,sekIO],'kind'); end);
-  GRunner:=TSuiteRunner.Create('nextpas.core.ssh.sftp.async.via.jump'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
+  GRunner:=TSuiteRunner.Create('nextpas.core.ssh.sftp.async.via.jump'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; ClearBigIntCache; if not GRunner.AllPassed then Halt(1);
 end.

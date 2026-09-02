@@ -355,13 +355,9 @@ end;
 
 procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer); inline;
 begin
-  // perf: inline geometric growth (amortized doubling), steady zero alloc after warmup; caller keeps SetLength outside
+  // perf: single source via bytes.ops.BytesGrowCapacityIntWithMin (geometric 0→64→2× / Webview 0→4→2× reuse, amortized O(1)), inline thin-forward zero extra call
   if ACap >= ARequired then Exit;
-  if ACap < AMinGrow then ACap := AMinGrow;
-  while ACap < ARequired do
-  begin
-    if ACap <= High(Integer) div 2 then ACap := ACap * 2 else begin ACap := ARequired; Break; end;
-  end;
+  ACap := BytesGrowCapacityIntWithMin(ACap, ARequired, AMinGrow);
 end;
 
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;

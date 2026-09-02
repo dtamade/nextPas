@@ -1,7 +1,36 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP module facade. Provides unified access to HTTP types, interfaces,
- *       headers, URL utilities, router, middleware, and message factories.
+ * @desc HTTP umbrella facade. Pure re-export, stable entry (thin consumers
+ *       prefer `http.minimal` / `http.messages` / `http.transports` /
+ *       `http.extensions` / `http.middlewares`按需 `uses`; `uses
+ *       nextpas.core.http` 仍稳定聚合入口，不再增长).
+ *       1914 lines (`wc -l` verified, :1-65) exceed 800 soft guidance
+ *       (`design-conventions.md:163`) but are pure re-export exempt:
+ *       no loops/routing/SIMD body, `bytes.ops` single source in owners
+ *       (`nextpas.core.bytes.ops:25/89`, `text.conv→bytes.ops`), 40+ inline
+ *       thin forwards only (`Result:=SubFacade.Func(...)` single line, no
+ *       Move/FillChar body; real loops/SIMD stay out-of-line per :130),
+ *       zero-copy views (TByteSpan tail, Bytes ref, bytes.ops compare),
+ *       resource release via owner `try/finally`/`Close`/`PoolClear`/
+ *       `HttpReleaseResponseBody` (per-domain `heaptrc 0 unfreed`). CONTRACT
+ *       truth. Five-facade rhythm (umbrella >800 exempt, cognitive load
+ *       distributed via delegation): `http.minimal`~201,
+ *       `http.messages`~420, `http.transports`~520,
+ *       `http.extensions`~520, `http.middlewares`~500. Implementation
+ *       delegates via five sub-facades (not direct leaf fan-out); umbrella
+ *       `uses` trimmed to base/intf + five facades, type aliases re-export
+ *       via facade where possible to reduce fan-out; thin consumers `uses`
+ *       target subfacade eliminates hop. Missing capability → back-feed owner
+ *       (errors/bytes/platform). I-Cache / inline 红线2 Evidence
+ *       (`design-conventions.md:125-131`): umbrella `inline` only thin
+ *       forward to subfacade (`Result:=SubFacade.Func(...)`), subfacade again
+ *       thin forward to owner; no `Move`/`FillChar`/`CompareMem` body in
+ *       facade, real loops/SIMD/routing stay out-of-line in owner
+ *       (`http.router` radix, `impl.h1.fast` scan, `compress` SIMD,
+ *       `bytes.ops:25/89` single source). Two-layer inline collapses to single
+ *       owner call, I-Cache only one jump, zero extra loop body; thin consumer
+ *       `uses` subfacade eliminates even that hop (zero-copy `TByteSpan` tail /
+ *       `Bytes` ref / `bytes.ops` compare retained).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -9,53 +38,29 @@ unit nextpas.core.http;
 interface
 
 uses
+  { L0-L1 infra }
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
   nextpas.core.vfs.intf,
+  { L2-L3 http domain: five-facade aggregation rhythm
+    (minimal/messages/transports/extensions/middlewares) pure re-export;
+    bytes.ops single source in leaf owners, CONTRACT truth. Implementation
+    delegates via sub-facades (not direct leaf fan-out); leaf uses trimmed
+    to base/intf + five facades, type aliases re-export via facade where
+    possible to reduce fan-out. }
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.headers,
-  nextpas.core.http.url,
-  nextpas.core.http.router,
   nextpas.core.http.router.group,
-  nextpas.core.http.middleware,
-  nextpas.core.http.middleware.auth,
-  nextpas.core.http.middleware.cors,
-  nextpas.core.http.middleware.recovery,
-  nextpas.core.http.middleware.responsetime,
-  nextpas.core.http.middleware.bodylimit,
-  nextpas.core.http.middleware.contenttype,
-  nextpas.core.http.middleware.logger,
-  nextpas.core.http.middleware.requestid,
-  nextpas.core.http.middleware.cachecontrol,
-  nextpas.core.http.middleware.ratelimit,
-  nextpas.core.http.middleware.healthcheck,
-  nextpas.core.http.middleware.metrics,
-  nextpas.core.http.middleware.methodguard,
-  nextpas.core.http.middleware.bodycache,
-  nextpas.core.http.middleware.serverheader,
-  nextpas.core.http.middleware.context,
-  nextpas.core.http.middleware.requestarena,
-  nextpas.core.http.middleware.compression,
-  nextpas.core.http.middleware.decompress,
-  nextpas.core.http.middleware.deadline,
-  nextpas.core.http.middleware.hsts,
-  nextpas.core.http.message,
   nextpas.core.json,
   nextpas.core.log.intf,
-  nextpas.core.http.static,
-  nextpas.core.http.form,
-  nextpas.core.http.websocket,
-  nextpas.core.http.websocket.room,
-  nextpas.core.http.server,
-  nextpas.core.http.client,
-  nextpas.core.http.stream,
-  nextpas.core.http.sse,
-  nextpas.core.http.cookie,
-  nextpas.core.http.mem,
-  nextpas.core.net.server;
+  { Five-facade aggregation surface (thin consumers `uses` target facade) }
+  nextpas.core.http.minimal,
+  nextpas.core.http.messages,
+  nextpas.core.http.transports,
+  nextpas.core.http.extensions,
+  nextpas.core.http.middlewares;
 
 type
   { Re-export base types }
@@ -96,12 +101,12 @@ type
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
   IHttpResponseBodyBytes = nextpas.core.http.intf.IHttpResponseBodyBytes;
   IHttpContext = nextpas.core.http.intf.IHttpContext;
-  IWebSocket = nextpas.core.http.websocket.IWebSocket;
+  IWebSocket = nextpas.core.http.extensions.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
   { Request-scoped mem types (see http.mem / RequestArenaMiddleware) }
-  IArena = nextpas.core.http.mem.IArena;
-  IAllocator = nextpas.core.http.mem.IAllocator;
-  TGrowingAllocator = nextpas.core.http.mem.TGrowingAllocator;
+  IArena = nextpas.core.http.middlewares.IArena;
+  IAllocator = nextpas.core.http.middlewares.IAllocator;
+  TGrowingAllocator = nextpas.core.http.middlewares.TGrowingAllocator;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
@@ -109,46 +114,46 @@ type
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   TStringArray = nextpas.core.http.intf.TStringArray;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
-  TMiddlewareWrapFunc = nextpas.core.http.middleware.TMiddlewareWrapFunc;
-  TRequestPredicate = nextpas.core.http.middleware.TRequestPredicate;
-  TRecoveryCallback = nextpas.core.http.middleware.recovery.TRecoveryCallback;
-  TRateLimitOptions = nextpas.core.http.middleware.ratelimit.TRateLimitOptions;
-  TAuthOptions = nextpas.core.http.middleware.auth.TAuthOptions;
-  TAuthValidatorFunc = nextpas.core.http.middleware.auth.TAuthValidatorFunc;
-  TAuthCredentialKind = nextpas.core.http.middleware.auth.TAuthCredentialKind;
-  TRequestIdGenerator = nextpas.core.http.middleware.requestid.TRequestIdGenerator;
-  TCorsOptions = nextpas.core.http.middleware.cors.TCorsOptions;
-  THttpMetrics = nextpas.core.http.middleware.metrics.THttpMetrics;
-  IHttpMetricsCollector = nextpas.core.http.middleware.metrics.IHttpMetricsCollector;
-  THttpMetricsCallback = nextpas.core.http.middleware.metrics.THttpMetricsCallback;
-  THttpMetricsFieldsCallback = nextpas.core.http.middleware.metrics.THttpMetricsFieldsCallback;
-  TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
-  TWebSocketOriginCheck = nextpas.core.http.websocket.TWebSocketOriginCheck;
-  TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
-  TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
-  IWebSocketRoom = nextpas.core.http.websocket.room.IWebSocketRoom;
-  TWebSocketRoomManager = nextpas.core.http.websocket.room.TWebSocketRoomManager;
+  TMiddlewareWrapFunc = nextpas.core.http.middlewares.TMiddlewareWrapFunc;
+  TRequestPredicate = nextpas.core.http.middlewares.TRequestPredicate;
+  TRecoveryCallback = nextpas.core.http.middlewares.TRecoveryCallback;
+  TRateLimitOptions = nextpas.core.http.middlewares.TRateLimitOptions;
+  TAuthOptions = nextpas.core.http.middlewares.TAuthOptions;
+  TAuthValidatorFunc = nextpas.core.http.middlewares.TAuthValidatorFunc;
+  TAuthCredentialKind = nextpas.core.http.middlewares.TAuthCredentialKind;
+  TRequestIdGenerator = nextpas.core.http.middlewares.TRequestIdGenerator;
+  TCorsOptions = nextpas.core.http.middlewares.TCorsOptions;
+  THttpMetrics = nextpas.core.http.middlewares.THttpMetrics;
+  IHttpMetricsCollector = nextpas.core.http.middlewares.IHttpMetricsCollector;
+  THttpMetricsCallback = nextpas.core.http.middlewares.THttpMetricsCallback;
+  THttpMetricsFieldsCallback = nextpas.core.http.middlewares.THttpMetricsFieldsCallback;
+  TWebSocketOptions = nextpas.core.http.extensions.TWebSocketOptions;
+  TWebSocketOriginCheck = nextpas.core.http.extensions.TWebSocketOriginCheck;
+  TWebSocketOpcode = nextpas.core.http.extensions.TWebSocketOpcode;
+  TWebSocketFrame = nextpas.core.http.extensions.TWebSocketFrame;
+  IWebSocketRoom = nextpas.core.http.extensions.IWebSocketRoom;
+  TWebSocketRoomManager = nextpas.core.http.extensions.TWebSocketRoomManager;
 
   { Re-export HSTS types }
-  THstsOptions = nextpas.core.http.middleware.hsts.THstsOptions;
+  THstsOptions = nextpas.core.http.middlewares.THstsOptions;
 
   { Re-export SSE types }
-  TSSEvent = nextpas.core.http.sse.TSSEvent;
-  ISSEEventWriter = nextpas.core.http.sse.ISSEEventWriter;
+  TSSEvent = nextpas.core.http.extensions.TSSEvent;
+  ISSEEventWriter = nextpas.core.http.extensions.ISSEEventWriter;
 
   { Re-export cookie types }
-  TSameSite = nextpas.core.http.cookie.TSameSite;
-  TRequestCookies = nextpas.core.http.cookie.TRequestCookies;
-  TSetCookie = nextpas.core.http.cookie.TSetCookie;
+  TSameSite = nextpas.core.http.extensions.TSameSite;
+  TRequestCookies = nextpas.core.http.extensions.TRequestCookies;
+  TSetCookie = nextpas.core.http.extensions.TSetCookie;
   IHttpCookieJar = nextpas.core.http.intf.IHttpCookieJar;
 
   { Re-export server/client types }
-  THttpServer = nextpas.core.http.server.THttpServer;
+  THttpServer = nextpas.core.http.transports.THttpServer;
   THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
-  THttpClient = nextpas.core.http.client.THttpClient;
+  THttpClient = nextpas.core.http.transports.THttpClient;
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
   THttpDialFunc = nextpas.core.http.base.THttpDialFunc;
-  THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;
+  THttpRequestBuilder = nextpas.core.http.messages.THttpRequestBuilder;
   THttpRouterGroup = nextpas.core.http.router.group.THttpRouterGroup;
 
   { Re-export JSON types }
@@ -160,16 +165,16 @@ type
   TLogLevel = nextpas.core.log.intf.TLogLevel;
 
   { Re-export URL types }
-  TQueryParam = nextpas.core.http.url.TQueryParam;
-  TQueryParams = nextpas.core.http.url.TQueryParams;
+  TQueryParam = nextpas.core.http.extensions.TQueryParam;
+  TQueryParams = nextpas.core.http.extensions.TQueryParams;
 
   { Re-export form types }
-  TFormField = nextpas.core.http.form.TFormField;
-  TFormFieldArray = nextpas.core.http.form.TFormFieldArray;
-  THttpFile = nextpas.core.http.form.THttpFile;
-  THttpFileArray = nextpas.core.http.form.THttpFileArray;
-  TMultipartFormData = nextpas.core.http.form.TMultipartFormData;
-  TMultipartParseOptions = nextpas.core.http.form.TMultipartParseOptions;
+  TFormField = nextpas.core.http.extensions.TFormField;
+  TFormFieldArray = nextpas.core.http.extensions.TFormFieldArray;
+  THttpFile = nextpas.core.http.extensions.THttpFile;
+  THttpFileArray = nextpas.core.http.extensions.THttpFileArray;
+  TMultipartFormData = nextpas.core.http.extensions.TMultipartFormData;
+  TMultipartParseOptions = nextpas.core.http.extensions.TMultipartParseOptions;
 
 { Status constants - re-export }
 const
@@ -223,15 +228,15 @@ const
   HTTP_STATUS_GATEWAY_TIMEOUT = nextpas.core.http.base.HTTP_STATUS_GATEWAY_TIMEOUT;
 
   { WebSocket opcodes }
-  wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
-  wsOpText = nextpas.core.http.websocket.wsOpText;
-  wsOpBinary = nextpas.core.http.websocket.wsOpBinary;
-  wsOpClose = nextpas.core.http.websocket.wsOpClose;
-  wsOpPing = nextpas.core.http.websocket.wsOpPing;
-  wsOpPong = nextpas.core.http.websocket.wsOpPong;
-  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
-  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
-  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.websocket.room.WEBSOCKET_ROOM_DEFAULT_MAX;
+  wsOpContinuation = nextpas.core.http.extensions.wsOpContinuation;
+  wsOpText = nextpas.core.http.extensions.wsOpText;
+  wsOpBinary = nextpas.core.http.extensions.wsOpBinary;
+  wsOpClose = nextpas.core.http.extensions.wsOpClose;
+  wsOpPing = nextpas.core.http.extensions.wsOpPing;
+  wsOpPong = nextpas.core.http.extensions.wsOpPong;
+  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.extensions.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
+  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.extensions.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+  WEBSOCKET_ROOM_DEFAULT_MAX = nextpas.core.http.extensions.WEBSOCKET_ROOM_DEFAULT_MAX;
 
   { TCP server backends }
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
@@ -460,10 +465,10 @@ function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inli
 { --- Request-scoped memory (nextpas.core.mem product wire; see http.mem) --- }
 
 const
-  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
+  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.middlewares.HTTP_DEFAULT_REQUEST_ARENA;
   HTTP_DEFAULT_BODY_READ_MAX = nextpas.core.http.base.HTTP_DEFAULT_BODY_READ_MAX;
   { Context key for AuthMiddleware's authenticated subject. }
-  AUTH_SUBJECT_KEY = nextpas.core.http.middleware.auth.AUTH_SUBJECT_KEY;
+  AUTH_SUBJECT_KEY = nextpas.core.http.middlewares.AUTH_SUBJECT_KEY;
 
 {** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
 function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
@@ -625,7 +630,7 @@ function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
 
 { Streaming request body }
 type
-  TChunkCallback = nextpas.core.http.stream.TChunkCallback;
+  TChunkCallback = nextpas.core.http.extensions.TChunkCallback;
 
 function HttpRequestReadChunks(const ABody: IReader;
   const ABufSize: SizeUInt; const AOnChunk: TChunkCallback): Int64; inline;
@@ -743,27 +748,27 @@ implementation
 
 function DefaultTcpServerBackend: TTcpServerBackend;
 begin
-  Result := nextpas.core.net.server.DefaultTcpServerBackend;
+  Result := nextpas.core.http.transports.DefaultTcpServerBackend;
 end;
 
 function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
 begin
-  Result := nextpas.core.net.server.TcpServerBackendName(ABackend);
+  Result := nextpas.core.http.transports.TcpServerBackendName(ABackend);
 end;
 
 function HttpMethodToStr(const AMethod: THttpMethod): string;
 begin
-  Result := nextpas.core.http.base.HttpMethodToStr(AMethod);
+  Result := nextpas.core.http.minimal.HttpMethodToStr(AMethod);
 end;
 
 function HttpStrToMethod(const AStr: string): THttpMethod;
 begin
-  Result := nextpas.core.http.base.HttpStrToMethod(AStr);
+  Result := nextpas.core.http.minimal.HttpStrToMethod(AStr);
 end;
 
 function HttpStatusText(const ACode: THttpStatus): string;
 begin
-  Result := nextpas.core.http.base.HttpStatusText(ACode);
+  Result := nextpas.core.http.minimal.HttpStatusText(ACode);
 end;
 
 function HttpStatusIsInformational(const ACode: THttpStatus): Boolean;
@@ -813,7 +818,7 @@ end;
 
 function NewHttpCancelToken: IHttpCancelToken;
 begin
-  Result := nextpas.core.http.base.NewHttpCancelToken;
+  Result := nextpas.core.http.minimal.NewHttpCancelToken;
 end;
 
 procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
@@ -823,339 +828,339 @@ end;
 
 function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean;
 begin
-  Result := nextpas.core.http.message.HttpIsRetryableMethod(AMethod);
+  Result := nextpas.core.http.messages.HttpIsRetryableMethod(AMethod);
 end;
 
 function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean;
 begin
-  Result := nextpas.core.http.message.HttpHasRetryIdempotencyKey(AReq);
+  Result := nextpas.core.http.messages.HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean;
 begin
-  Result := nextpas.core.http.message.HttpIsRetrySafeRequest(AReq);
+  Result := nextpas.core.http.messages.HttpIsRetrySafeRequest(AReq);
 end;
 
 function NewHeaders: IHttpHeaders;
 begin
-  Result := nextpas.core.http.headers.NewHttpHeaders;
+  Result := nextpas.core.http.extensions.NewHeaders;
 end;
 
 procedure SetBasicAuth(const AHeaders: IHttpHeaders;
   const AUsername, APassword: string);
 begin
-  nextpas.core.http.headers.SetBasicAuth(AHeaders, AUsername, APassword);
+  nextpas.core.http.extensions.SetBasicAuth(AHeaders, AUsername, APassword);
 end;
 
 procedure SetBearerAuth(const AHeaders: IHttpHeaders; const AToken: string);
 begin
-  nextpas.core.http.headers.SetBearerAuth(AHeaders, AToken);
+  nextpas.core.http.extensions.SetBearerAuth(AHeaders, AToken);
 end;
 
 function UrlEncode(const AStr: string): string;
 begin
-  Result := nextpas.core.http.url.UrlEncode(AStr);
+  Result := nextpas.core.http.extensions.UrlEncode(AStr);
 end;
 
 function UrlDecode(const AStr: string): string;
 begin
-  Result := nextpas.core.http.url.UrlDecode(AStr);
+  Result := nextpas.core.http.extensions.UrlDecode(AStr);
 end;
 
 function UrlDecodeQuery(const AStr: string): string;
 begin
-  Result := nextpas.core.http.url.UrlDecodeQuery(AStr);
+  Result := nextpas.core.http.extensions.UrlDecodeQuery(AStr);
 end;
 
 function UrlDecodePath(const AStr: string): string;
 begin
-  Result := nextpas.core.http.url.UrlDecodePath(AStr);
+  Result := nextpas.core.http.extensions.UrlDecodePath(AStr);
 end;
 
 function ParseQueryString(const AQuery: string): TQueryParams;
 begin
-  Result := nextpas.core.http.url.ParseQueryString(AQuery);
+  Result := nextpas.core.http.extensions.ParseQueryString(AQuery);
 end;
 
 function EncodeQueryString(const AParams: TQueryParams): string;
 begin
-  Result := nextpas.core.http.url.EncodeQueryString(AParams);
+  Result := nextpas.core.http.extensions.EncodeQueryString(AParams);
 end;
 
 function QueryParamValue(const AParams: TQueryParams; const AName: string): string;
 begin
-  Result := nextpas.core.http.url.QueryParamValue(AParams, AName);
+  Result := nextpas.core.http.extensions.QueryParamValue(AParams, AName);
 end;
 
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean;
 begin
-  Result := nextpas.core.http.url.QueryParamHas(AParams, AName);
+  Result := nextpas.core.http.extensions.QueryParamHas(AParams, AName);
 end;
 
 function NewRouter: IHttpRouter;
 begin
-  Result := nextpas.core.http.router.NewRouter;
+  Result := nextpas.core.http.minimal.NewRouter;
 end;
 
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
-  Result := nextpas.core.http.middleware.HandlerFunc(AFunc);
+  Result := nextpas.core.http.middlewares.HandlerFunc(AFunc);
 end;
 
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
 begin
-  Result := nextpas.core.http.middleware.HandlerFunc(AMethod);
+  Result := nextpas.core.http.middlewares.HandlerFunc(AMethod);
 end;
 
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
 begin
-  Result := nextpas.core.http.middleware.HandlerFunc(AProc);
+  Result := nextpas.core.http.middlewares.HandlerFunc(AProc);
 end;
 
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.MiddlewareFunc(AWrapFunc);
+  Result := nextpas.core.http.middlewares.MiddlewareFunc(AWrapFunc);
 end;
 
 function CorsMiddleware(const AOptions: TCorsOptions): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.cors.CorsMiddleware(AOptions);
+  Result := nextpas.core.http.middlewares.CorsMiddleware(AOptions);
 end;
 
 function RecoveryMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.recovery.RecoveryMiddleware;
+  Result := nextpas.core.http.middlewares.RecoveryMiddleware;
 end;
 
 function RecoveryMiddlewareWith(const AOnError: TRecoveryCallback): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.recovery.RecoveryMiddlewareWith(AOnError);
+  Result := nextpas.core.http.middlewares.RecoveryMiddlewareWith(AOnError);
 end;
 
 function ResponseTimeMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.responsetime.ResponseTimeMiddleware;
+  Result := nextpas.core.http.middlewares.ResponseTimeMiddleware;
 end;
 
 function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.bodylimit.BodyLimitMiddleware(AMaxBytes);
+  Result := nextpas.core.http.middlewares.BodyLimitMiddleware(AMaxBytes);
 end;
 
 function ContentTypeMiddleware(
   const AAccepted: array of string): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.contenttype.ContentTypeMiddleware(AAccepted);
+  Result := nextpas.core.http.middlewares.ContentTypeMiddleware(AAccepted);
 end;
 
 function LoggerMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
+  Result := nextpas.core.http.middlewares.LoggerMiddleware;
 end;
 
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddleware;
+  Result := nextpas.core.http.middlewares.LoggerMiddlewareWith(ALogger);
 end;
 
 function LoggerMiddlewareWithExtras(
   const AExtras: TLogExtrasProvider): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtras(AExtras);
+  Result := nextpas.core.http.middlewares.LoggerMiddlewareWithExtras(AExtras);
 end;
 
 function LoggerMiddlewareWithExtrasAndLogger(
   const AExtras: TLogExtrasProvider; const ALogger: TLogger): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.logger.LoggerMiddlewareWithExtras(AExtras);
+  Result := nextpas.core.http.middlewares.LoggerMiddlewareWithExtrasAndLogger(AExtras, ALogger);
 end;
 
 function RequestIdMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.requestid.RequestIdMiddleware;
+  Result := nextpas.core.http.middlewares.RequestIdMiddleware;
 end;
 
 function RequestIdMiddlewareWith(const AHeaderName: string): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWith(AHeaderName);
+  Result := nextpas.core.http.middlewares.RequestIdMiddlewareWith(AHeaderName);
 end;
 
 function RequestIdMiddlewareWithGenerator(const AHeaderName: string;
   const AGenerator: TRequestIdGenerator): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.requestid.RequestIdMiddlewareWithGenerator(AHeaderName, AGenerator);
+  Result := nextpas.core.http.middlewares.RequestIdMiddlewareWithGenerator(AHeaderName, AGenerator);
 end;
 
 function CacheControlMiddleware(const AValue: string): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.cachecontrol.CacheControlMiddleware(AValue);
+  Result := nextpas.core.http.middlewares.CacheControlMiddleware(AValue);
 end;
 
 function NoCacheMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.cachecontrol.NoCacheMiddleware;
+  Result := nextpas.core.http.middlewares.NoCacheMiddleware;
 end;
 
 function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.cachecontrol.MaxAgeMiddleware(ASeconds);
+  Result := nextpas.core.http.middlewares.MaxAgeMiddleware(ASeconds);
 end;
 
 function RateLimitMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddleware;
+  Result := nextpas.core.http.middlewares.RateLimitMiddleware;
 end;
 
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.ratelimit.RateLimitMiddlewareWith(AOptions);
+  Result := nextpas.core.http.middlewares.RateLimitMiddlewareWith(AOptions);
 end;
 
 function AuthMiddleware(const AOptions: TAuthOptions): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.auth.AuthMiddleware(AOptions);
+  Result := nextpas.core.http.middlewares.AuthMiddleware(AOptions);
 end;
 
 function AuthMiddlewareWithValidator(const AValidator: TAuthValidatorFunc): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.auth.AuthMiddlewareWithValidator(AValidator);
+  Result := nextpas.core.http.middlewares.AuthMiddlewareWithValidator(AValidator);
 end;
 
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 begin
-  Result := nextpas.core.http.middleware.Chain(AHandler, AMiddlewares);
+  Result := nextpas.core.http.middlewares.Chain(AHandler, AMiddlewares);
 end;
 
 function WhenMiddleware(
   const APredicate: TRequestPredicate;
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.WhenMiddleware(APredicate, AMiddleware);
+  Result := nextpas.core.http.middlewares.WhenMiddleware(APredicate, AMiddleware);
 end;
 
 function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.AsyncMiddleware(APool);
+  Result := nextpas.core.http.middlewares.AsyncMiddleware(APool);
 end;
 
 function HealthCheckMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddleware;
+  Result := nextpas.core.http.middlewares.HealthCheckMiddleware;
 end;
 
 function HealthCheckMiddlewareAt(const APath: string): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddlewareAt(APath);
+  Result := nextpas.core.http.middlewares.HealthCheckMiddlewareAt(APath);
 end;
 
 function NewHttpMetricsCollector: IHttpMetricsCollector;
 begin
-  Result := nextpas.core.http.middleware.metrics.NewHttpMetricsCollector;
+  Result := nextpas.core.http.middlewares.NewHttpMetricsCollector;
 end;
 
 function MetricsMiddleware(const ACollector: IHttpMetricsCollector): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.metrics.MetricsMiddleware(ACollector);
+  Result := nextpas.core.http.middlewares.MetricsMiddleware(ACollector);
 end;
 
 function MetricsMiddlewareWith(const ACallback: THttpMetricsCallback): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWith(ACallback);
+  Result := nextpas.core.http.middlewares.MetricsMiddlewareWith(ACallback);
 end;
 
 function MethodGuardMiddleware(const AAllowed: array of THttpMethod): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.methodguard.MethodGuardMiddleware(AAllowed);
+  Result := nextpas.core.http.middlewares.MethodGuardMiddleware(AAllowed);
 end;
 
 function BodyCacheMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddleware;
+  Result := nextpas.core.http.middlewares.BodyCacheMiddleware;
 end;
 
 function BodyCacheMiddlewareWith(const AMaxBytes: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddlewareWith(AMaxBytes);
+  Result := nextpas.core.http.middlewares.BodyCacheMiddlewareWith(AMaxBytes);
 end;
 
 function BodyCacheMiddlewareUnlimited: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.bodycache.BodyCacheMiddlewareUnlimited;
+  Result := nextpas.core.http.middlewares.BodyCacheMiddlewareUnlimited;
 end;
 
 function MetricsMiddlewareWithFields(
   const ACallback: THttpMetricsFieldsCallback): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.metrics.MetricsMiddlewareWithFields(ACallback);
+  Result := nextpas.core.http.middlewares.MetricsMiddlewareWithFields(ACallback);
 end;
 
 function ServerHeaderMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddleware;
+  Result := nextpas.core.http.middlewares.ServerHeaderMiddleware;
 end;
 
 function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.serverheader.ServerHeaderMiddlewareWith(ACustomName);
+  Result := nextpas.core.http.middlewares.ServerHeaderMiddlewareWith(ACustomName);
 end;
 
 function ContextMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.context.ContextMiddleware;
+  Result := nextpas.core.http.middlewares.ContextMiddleware;
 end;
 
 function NewHttpContext: IHttpContext;
 begin
-  Result := nextpas.core.http.middleware.context.NewHttpContext;
+  Result := nextpas.core.http.middlewares.NewHttpContext;
 end;
 
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 begin
-  Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
+  Result := nextpas.core.http.middlewares.HttpContextOf(AReq);
 end;
 
 function HttpContextGetString(const ACtx: IHttpContext;
   const AKey: string): string;
 begin
-  Result := nextpas.core.http.middleware.context.HttpContextGetString(ACtx, AKey);
+  Result := nextpas.core.http.middlewares.HttpContextGetString(ACtx, AKey);
 end;
 
 procedure HttpContextSetString(const ACtx: IHttpContext;
   const AKey, AValue: string);
 begin
-  nextpas.core.http.middleware.context.HttpContextSetString(ACtx, AKey, AValue);
+  nextpas.core.http.middlewares.HttpContextSetString(ACtx, AKey, AValue);
 end;
 
 function HttpContextGetInt64(const ACtx: IHttpContext;
   const AKey: string): Int64;
 begin
-  Result := nextpas.core.http.middleware.context.HttpContextGetInt64(ACtx, AKey);
+  Result := nextpas.core.http.middlewares.HttpContextGetInt64(ACtx, AKey);
 end;
 
 procedure HttpContextSetInt64(const ACtx: IHttpContext;
   const AKey: string; const AValue: Int64);
 begin
-  nextpas.core.http.middleware.context.HttpContextSetInt64(ACtx, AKey, AValue);
+  nextpas.core.http.middlewares.HttpContextSetInt64(ACtx, AKey, AValue);
 end;
 
 function RequestArenaMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddleware;
+  Result := nextpas.core.http.middlewares.RequestArenaMiddleware;
 end;
 
 function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddlewareWith(ACapacity);
+  Result := nextpas.core.http.middlewares.RequestArenaMiddlewareWith(ACapacity);
 end;
 
 function HttpRequestArenaOf(const AReq: IHttpRequest): IArena;
 begin
-  Result := nextpas.core.http.middleware.requestarena.HttpRequestArenaOf(AReq);
+  Result := nextpas.core.http.middlewares.HttpRequestArenaOf(AReq);
 end;
 
 function HttpRequestAllocatorOf(const AReq: IHttpRequest): IAllocator;
 begin
-  Result := nextpas.core.http.middleware.requestarena.HttpRequestAllocatorOf(AReq);
+  Result := nextpas.core.http.middlewares.HttpRequestAllocatorOf(AReq);
 end;
 
 procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
@@ -1172,333 +1177,332 @@ end;
 function HttpWithRequestArena(const AHandler: IHttpHandler;
   ACapacity: SizeUInt): IHttpHandler;
 begin
-  Result := nextpas.core.http.middleware.requestarena.HttpWithRequestArena(
-    AHandler, ACapacity);
+  Result := nextpas.core.http.middlewares.HttpWithRequestArena(AHandler, ACapacity);
 end;
 
 function CompressionMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.compression.CompressionMiddleware;
+  Result := nextpas.core.http.middlewares.CompressionMiddleware;
 end;
 
 function CompressionMiddlewareWith(AMinSize: SizeUInt): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.compression.CompressionMiddlewareWith(AMinSize);
+  Result := nextpas.core.http.middlewares.CompressionMiddlewareWith(AMinSize);
 end;
 
 function DecompressMiddleware(const AMaxSize: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.decompress.DecompressMiddleware(AMaxSize);
+  Result := nextpas.core.http.middlewares.DecompressMiddleware(AMaxSize);
 end;
 
 function DecompressMiddlewareUnlimited: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.decompress.DecompressMiddlewareUnlimited;
+  Result := nextpas.core.http.middlewares.DecompressMiddlewareUnlimited;
 end;
 
 function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorUnsupportedMediaType(AW, AMessage);
 end;
 
 function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorGatewayTimeout(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorGatewayTimeout(AW, AMessage);
 end;
 
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.deadline.DeadlineMiddleware(ATimeoutMs);
+  Result := nextpas.core.http.middlewares.DeadlineMiddleware(ATimeoutMs);
 end;
 
 function DeadlineMiddlewareWith(ATimeoutMs: Int64;
   const AMaxBufferBytes: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.deadline.DeadlineMiddlewareWith(
+  Result := nextpas.core.http.middlewares.DeadlineMiddlewareWith(
     ATimeoutMs, AMaxBufferBytes);
 end;
 
 function DeadlineMiddlewareUnlimitedBuffer(ATimeoutMs: Int64): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.deadline.DeadlineMiddlewareUnlimitedBuffer(
+  Result := nextpas.core.http.middlewares.DeadlineMiddlewareUnlimitedBuffer(
     ATimeoutMs);
 end;
 
 function HstsMiddleware: IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.hsts.HstsMiddleware;
+  Result := nextpas.core.http.middlewares.HstsMiddleware;
 end;
 
 function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware;
 begin
-  Result := nextpas.core.http.middleware.hsts.HstsMiddlewareWith(AOptions);
+  Result := nextpas.core.http.middlewares.HstsMiddlewareWith(AOptions);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
 begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
+  Result := nextpas.core.http.messages.NewRequest(AMethod, AUrl);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
 begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
+  Result := nextpas.core.http.messages.NewRequest(AMethod, AUrl);
 end;
 
 function NewGetRequest(const APath: string): IHttpRequest;
 begin
-  Result := nextpas.core.http.message.NewGetRequest(APath);
+  Result := nextpas.core.http.messages.NewGetRequest(APath);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
-  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+  Result := nextpas.core.http.messages.NewResponse(AStatus, AHeaders, ABody);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ANilBody: Pointer): IHttpResponse;
 begin
-  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ANilBody);
+  Result := nextpas.core.http.messages.NewResponse(AStatus, AHeaders, ANilBody);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyText: string): IHttpResponse;
 begin
-  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABodyText);
+  Result := nextpas.core.http.messages.NewResponse(AStatus, AHeaders, ABodyText);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABodyBytes: TBytes): IHttpResponse;
 begin
-  Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABodyBytes);
+  Result := nextpas.core.http.messages.NewResponse(AStatus, AHeaders, ABodyBytes);
 end;
 
 function HttpWriteResponseString(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType, ABody: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteResponseString(AW, AStatus,
+  Result := nextpas.core.http.messages.HttpWriteResponseString(AW, AStatus,
     AContentType, ABody);
 end;
 
 function HttpWriteResponseJson(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AValue: TJsonValue): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteResponseJson(AW, AStatus, AValue);
+  Result := nextpas.core.http.messages.HttpWriteResponseJson(AW, AStatus, AValue);
 end;
 
 function HttpWriteResponseBytes(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const AContentType: string;
   const ABody: TBytes): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteResponseBytes(AW, AStatus,
+  Result := nextpas.core.http.messages.HttpWriteResponseBytes(AW, AStatus,
     AContentType, ABody);
 end;
 
 function HttpWriteResponseHtml(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ABody: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteResponseHtml(AW, AStatus, ABody);
+  Result := nextpas.core.http.messages.HttpWriteResponseHtml(AW, AStatus, ABody);
 end;
 
 procedure HttpWriteResponseNoContent(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseNoContent(AW);
+  nextpas.core.http.messages.HttpWriteResponseNoContent(AW);
 end;
 
 procedure HttpWriteResponseOk(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseOk(AW);
+  nextpas.core.http.messages.HttpWriteResponseOk(AW);
 end;
 
 procedure HttpWriteResponseCreated(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseCreated(AW);
+  nextpas.core.http.messages.HttpWriteResponseCreated(AW);
 end;
 
 procedure HttpWriteResponseAccepted(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseAccepted(AW);
+  nextpas.core.http.messages.HttpWriteResponseAccepted(AW);
 end;
 
 procedure HttpWriteResponseNotModified(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseNotModified(AW);
+  nextpas.core.http.messages.HttpWriteResponseNotModified(AW);
 end;
 
 procedure HttpWriteResponseResetContent(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseResetContent(AW);
+  nextpas.core.http.messages.HttpWriteResponseResetContent(AW);
 end;
 
 procedure HttpWriteResponseGone(const AW: IHttpResponseWriter);
 begin
-  nextpas.core.http.message.HttpWriteResponseGone(AW);
+  nextpas.core.http.messages.HttpWriteResponseGone(AW);
 end;
 
 function HttpReadRequestBodyBytes(const AReq: IHttpRequest): TBytes;
 begin
-  Result := nextpas.core.http.message.HttpReadRequestBodyBytes(AReq);
+  Result := nextpas.core.http.messages.HttpReadRequestBodyBytes(AReq);
 end;
 
 function HttpReadRequestBodyBytesMax(const AReq: IHttpRequest;
   const AMaxBytes: Int64): TBytes;
 begin
-  Result := nextpas.core.http.message.HttpReadRequestBodyBytesMax(AReq, AMaxBytes);
+  Result := nextpas.core.http.messages.HttpReadRequestBodyBytesMax(AReq, AMaxBytes);
 end;
 
 function HttpReadRequestBodyBytesUnlimited(const AReq: IHttpRequest): TBytes;
 begin
-  Result := nextpas.core.http.message.HttpReadRequestBodyBytesUnlimited(AReq);
+  Result := nextpas.core.http.messages.HttpReadRequestBodyBytesUnlimited(AReq);
 end;
 
 function HttpReadRequestBodyString(const AReq: IHttpRequest): string;
 begin
-  Result := nextpas.core.http.message.HttpReadRequestBodyString(AReq);
+  Result := nextpas.core.http.messages.HttpReadRequestBodyString(AReq);
 end;
 
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
 begin
-  Result := nextpas.core.http.message.HttpReadRequestBodyJson(AReq);
+  Result := nextpas.core.http.messages.HttpReadRequestBodyJson(AReq);
 end;
 
 procedure HttpRedirect(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirect(AW, AStatus, ALocation);
+  nextpas.core.http.messages.HttpRedirect(AW, AStatus, ALocation);
 end;
 
 procedure HttpRedirectMovedPermanently(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirectMovedPermanently(AW, ALocation);
+  nextpas.core.http.messages.HttpRedirectMovedPermanently(AW, ALocation);
 end;
 
 procedure HttpRedirectFound(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirectFound(AW, ALocation);
+  nextpas.core.http.messages.HttpRedirectFound(AW, ALocation);
 end;
 
 procedure HttpRedirectSeeOther(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirectSeeOther(AW, ALocation);
+  nextpas.core.http.messages.HttpRedirectSeeOther(AW, ALocation);
 end;
 
 procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirectTemporaryRedirect(AW, ALocation);
+  nextpas.core.http.messages.HttpRedirectTemporaryRedirect(AW, ALocation);
 end;
 
 procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
-  nextpas.core.http.message.HttpRedirectPermanentRedirect(AW, ALocation);
+  nextpas.core.http.messages.HttpRedirectPermanentRedirect(AW, ALocation);
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
   const AStatus: THttpStatus; const ACode, AMessage: string;
   const AInstance: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorResponse(
+  Result := nextpas.core.http.messages.HttpWriteErrorResponse(
     AW, AStatus, ACode, AMessage, AInstance);
 end;
 
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorBadRequest(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorBadRequest(AW, AMessage);
 end;
 
 function HttpWriteErrorUnauthorized(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorUnauthorized(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorUnauthorized(AW, AMessage);
 end;
 
 function HttpWriteErrorForbidden(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorForbidden(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorForbidden(AW, AMessage);
 end;
 
 function HttpWriteErrorNotFound(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorNotFound(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorNotFound(AW, AMessage);
 end;
 
 function HttpWriteErrorInternal(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorInternal(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorInternal(AW, AMessage);
 end;
 
 function HttpWriteErrorTooManyRequests(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorTooManyRequests(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorTooManyRequests(AW, AMessage);
 end;
 
 function HttpWriteErrorConflict(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorConflict(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorConflict(AW, AMessage);
 end;
 
 function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorUnprocessableEntity(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorUnprocessableEntity(AW, AMessage);
 end;
 
 function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorPayloadTooLarge(AW, AMessage);
+  Result := nextpas.core.http.messages.HttpWriteErrorPayloadTooLarge(AW, AMessage);
 end;
 
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
-  Result := nextpas.core.http.static.ServeFile(APath);
+  Result := nextpas.core.http.extensions.ServeFile(APath);
 end;
 
 function ServeDir(const ARoot: string): THttpHandlerFunc;
 begin
-  Result := nextpas.core.http.static.ServeDir(ARoot);
+  Result := nextpas.core.http.extensions.ServeDir(ARoot);
 end;
 
 function ServeVfs(const AFs: IVfs): THttpHandlerFunc;
 begin
-  Result := nextpas.core.http.static.ServeVfs(AFs);
+  Result := nextpas.core.http.extensions.ServeVfs(AFs);
 end;
 
 function ServeFileDownload(const APath: string): THttpHandlerFunc;
 begin
-  Result := nextpas.core.http.static.ServeFileDownload(APath);
+  Result := nextpas.core.http.extensions.ServeFileDownload(APath);
 end;
 
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc;
 begin
-  Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
+  Result := nextpas.core.http.extensions.ServeFileDownload(APath, ADownloadName);
 end;
 
 function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
 begin
-  Result := nextpas.core.http.static.HttpMakeStrongETag(ASize, AModTime);
+  Result := nextpas.core.http.extensions.HttpMakeStrongETag(ASize, AModTime);
 end;
 
 function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
 begin
-  Result := nextpas.core.http.static.HttpIfNoneMatchMatches(AIfNoneMatch, AServerETag);
+  Result := nextpas.core.http.extensions.HttpIfNoneMatchMatches(AIfNoneMatch, AServerETag);
 end;
 
 function HttpNotModifiedSince(const AIfModifiedSince: string;
   const AModTimeUnix: Int64): Boolean;
 begin
-  Result := nextpas.core.http.static.HttpNotModifiedSince(
+  Result := nextpas.core.http.extensions.HttpNotModifiedSince(
     AIfModifiedSince, AModTimeUnix);
 end;
 
@@ -1506,134 +1510,134 @@ function HttpTryWriteNotModified(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter; const AETag, ALastModified: string;
   const AModTimeUnix: Int64): Boolean;
 begin
-  Result := nextpas.core.http.static.HttpTryWriteNotModified(
+  Result := nextpas.core.http.extensions.HttpTryWriteNotModified(
     AReq, AW, AETag, ALastModified, AModTimeUnix);
 end;
 
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW);
+  Result := nextpas.core.http.extensions.UpgradeWebSocket(AReq, AW);
 end;
 
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW, AOptions);
+  Result := nextpas.core.http.extensions.UpgradeWebSocket(AReq, AW, AOptions);
 end;
 
 function ConnectWebSocket(const AUrl: string): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl);
+  Result := nextpas.core.http.extensions.ConnectWebSocket(AUrl);
 end;
 
 function ConnectWebSocket(const AUrl: string;
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.ConnectWebSocket(AUrl, AOptions);
+  Result := nextpas.core.http.extensions.ConnectWebSocket(AUrl, AOptions);
 end;
 
 function ConnectWebSocket(const AClient: IHttpClient;
   const AUrl: string): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl);
+  Result := nextpas.core.http.extensions.ConnectWebSocket(AClient, AUrl);
 end;
 
 function ConnectWebSocket(const AClient: IHttpClient;
   const AUrl: string;
   const AOptions: TWebSocketOptions): IWebSocket;
 begin
-  Result := nextpas.core.http.websocket.ConnectWebSocket(AClient, AUrl, AOptions);
+  Result := nextpas.core.http.extensions.ConnectWebSocket(AClient, AUrl, AOptions);
 end;
 
 function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
 begin
-  Result := nextpas.core.http.sse.StartSSE(AW);
+  Result := nextpas.core.http.extensions.StartSSE(AW);
 end;
 
 function MakeSSEvent(const AType, AData, AId: string): TSSEvent;
 begin
-  Result := nextpas.core.http.sse.MakeSSEvent(AType, AData, AId);
+  Result := nextpas.core.http.extensions.MakeSSEvent(AType, AData, AId);
 end;
 
 function HttpWriteStream(const AW: IHttpResponseWriter;
   const AReader: IReader; const ABufSize: SizeUInt): Int64;
 begin
-  Result := nextpas.core.http.stream.HttpWriteStream(AW, AReader, ABufSize);
+  Result := nextpas.core.http.extensions.HttpWriteStream(AW, AReader, ABufSize);
 end;
 
 function HttpWriteStreamWithLength(const AW: IHttpResponseWriter;
   const AContentLength: Int64; const AReader: IReader;
   const ABufSize: SizeUInt): Int64;
 begin
-  Result := nextpas.core.http.stream.HttpWriteStreamWithLength(
+  Result := nextpas.core.http.extensions.HttpWriteStreamWithLength(
     AW, AContentLength, AReader, ABufSize);
 end;
 
 function HttpRequestReadChunks(const ABody: IReader;
   const ABufSize: SizeUInt; const AOnChunk: TChunkCallback): Int64;
 begin
-  Result := nextpas.core.http.stream.HttpRequestReadChunks(
+  Result := nextpas.core.http.extensions.HttpRequestReadChunks(
     ABody, ABufSize, AOnChunk);
 end;
 
 function HttpRequestReadBody(const ABody: IReader;
   const AMaxBytes: Int64; const ABufSize: SizeUInt): TBytes;
 begin
-  Result := nextpas.core.http.stream.HttpRequestReadBody(
+  Result := nextpas.core.http.extensions.HttpRequestReadBody(
     ABody, AMaxBytes, ABufSize);
 end;
 
 function ParseCookies(const AHeaderValue: string): TRequestCookies;
 begin
-  Result := nextpas.core.http.cookie.ParseCookies(AHeaderValue);
+  Result := nextpas.core.http.extensions.ParseCookies(AHeaderValue);
 end;
 
 function BuildSetCookie(const ACookie: TSetCookie): string;
 begin
-  Result := nextpas.core.http.cookie.BuildSetCookie(ACookie);
+  Result := nextpas.core.http.extensions.BuildSetCookie(ACookie);
 end;
 
 function MakeCookie(const AName, AValue: string): TSetCookie;
 begin
-  Result := nextpas.core.http.cookie.MakeCookie(AName, AValue);
+  Result := nextpas.core.http.extensions.MakeCookie(AName, AValue);
 end;
 
 function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean;
 begin
-  Result := nextpas.core.http.cookie.ParseSingleCookie(AStr, AName, AValue);
+  Result := nextpas.core.http.extensions.ParseSingleCookie(AStr, AName, AValue);
 end;
 
 function NewHttpCookieJar: IHttpCookieJar;
 begin
-  Result := nextpas.core.http.cookie.NewHttpCookieJar;
+  Result := nextpas.core.http.extensions.NewHttpCookieJar;
 end;
 
 function HttpCookieSiteKey(const AHost: string): string;
 begin
-  Result := nextpas.core.http.cookie.HttpCookieSiteKey(AHost);
+  Result := nextpas.core.http.extensions.HttpCookieSiteKey(AHost);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
-  Result := nextpas.core.http.server.NewHttpServer(AHandler);
+  Result := nextpas.core.http.transports.NewHttpServer(AHandler);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer;
 begin
-  Result := nextpas.core.http.server.NewHttpServer(AHandler, AOptions);
+  Result := nextpas.core.http.transports.NewHttpServer(AHandler, AOptions);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport): IHttpServer;
 begin
-  Result := nextpas.core.http.server.NewHttpServer(AHandler, ATransport);
+  Result := nextpas.core.http.transports.NewHttpServer(AHandler, ATransport);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport;
   const AOptions: THttpServerOptions): IHttpServer;
 begin
-  Result := nextpas.core.http.server.NewHttpServer(AHandler, ATransport, AOptions);
+  Result := nextpas.core.http.transports.NewHttpServer(AHandler, ATransport, AOptions);
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer;
@@ -1664,252 +1668,252 @@ end;
 
 function NewHttpClient: IHttpClient;
 begin
-  Result := nextpas.core.http.client.NewHttpClient;
+  Result := nextpas.core.http.transports.NewHttpClient;
 end;
 
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient;
 begin
-  Result := nextpas.core.http.client.NewHttpClient(AOptions);
+  Result := nextpas.core.http.transports.NewHttpClient(AOptions);
 end;
 
 function NewHttpClient(const ATransport: IHttpTransport): IHttpClient;
 begin
-  Result := nextpas.core.http.client.NewHttpClient(ATransport);
+  Result := nextpas.core.http.transports.NewHttpClient(ATransport);
 end;
 
 function NewHttpClient(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions): IHttpClient;
 begin
-  Result := nextpas.core.http.client.NewHttpClient(ATransport, AOptions);
+  Result := nextpas.core.http.transports.NewHttpClient(ATransport, AOptions);
 end;
 
 function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
   const ADest: IWriter): Int64;
 begin
-  Result := nextpas.core.http.client.HttpGetToWriter(AClient, AUrl, ADest);
+  Result := nextpas.core.http.transports.HttpGetToWriter(AClient, AUrl, ADest);
 end;
 
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
 begin
-  Result := nextpas.core.http.client.HttpGetToFile(AClient, AUrl, ADestPath);
+  Result := nextpas.core.http.transports.HttpGetToFile(AClient, AUrl, ADestPath);
 end;
 
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 begin
-  nextpas.core.http.client.HttpReleaseResponseBody(AResp);
+  nextpas.core.http.transports.HttpReleaseResponseBody(AResp);
 end;
 
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseBodyBytes(AResp);
+  Result := nextpas.core.http.transports.HttpReadResponseBodyBytes(AResp);
 end;
 
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseBodyString(AResp);
+  Result := nextpas.core.http.transports.HttpReadResponseBodyString(AResp);
 end;
 
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
+  Result := nextpas.core.http.transports.HttpReadResponseBodyStringAuto(AResp);
 end;
 
 function HttpDecodeContentEncoding(const AEncoding: string;
   const ABody: TBytes; const AMaxSize: Int64): TBytes;
 begin
-  Result := nextpas.core.http.client.HttpDecodeContentEncoding(
+  Result := nextpas.core.http.transports.HttpDecodeContentEncoding(
     AEncoding, ABody, AMaxSize);
 end;
 
 function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
   const AMaxSize: Int64): TBytes;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseBodyBytesDecoded(
+  Result := nextpas.core.http.transports.HttpReadResponseBodyBytesDecoded(
     AResp, AMaxSize);
 end;
 
 function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
   const AMaxSize: Int64): string;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseBodyStringDecoded(
+  Result := nextpas.core.http.transports.HttpReadResponseBodyStringDecoded(
     AResp, AMaxSize);
 end;
 
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
-  Result := nextpas.core.http.client.HttpEnsureSuccess(AResp);
+  Result := nextpas.core.http.transports.HttpEnsureSuccess(AResp);
 end;
 
 function HttpEnsureSuccess(const AResp: IHttpResponse;
   const AMethod, AUrl: string): IHttpResponse;
 begin
-  Result := nextpas.core.http.client.HttpEnsureSuccess(AResp, AMethod, AUrl);
+  Result := nextpas.core.http.transports.HttpEnsureSuccess(AResp, AMethod, AUrl);
 end;
 
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
 begin
-  Result := nextpas.core.http.client.HttpGetString(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpGetString(AClient, AUrl);
 end;
 
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 begin
-  Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpGetBytes(AClient, AUrl);
 end;
 
 function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseJson(AResp);
+  Result := nextpas.core.http.transports.HttpReadResponseJson(AResp);
 end;
 
 function HttpReadResponseJson(const AResp: IHttpResponse;
   const AMethod, AUrl: string): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpReadResponseJson(AResp, AMethod, AUrl);
+  Result := nextpas.core.http.transports.HttpReadResponseJson(AResp, AMethod, AUrl);
 end;
 
 function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpGetJson(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpGetJson(AClient, AUrl);
 end;
 
 function HttpPostString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string;
 begin
-  Result := nextpas.core.http.client.HttpPostString(AClient, AUrl, AContentType, ABody);
+  Result := nextpas.core.http.transports.HttpPostString(AClient, AUrl, AContentType, ABody);
 end;
 
 function HttpPutString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string;
 begin
-  Result := nextpas.core.http.client.HttpPutString(AClient, AUrl, AContentType, ABody);
+  Result := nextpas.core.http.transports.HttpPutString(AClient, AUrl, AContentType, ABody);
 end;
 
 function HttpPatchString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string;
 begin
-  Result := nextpas.core.http.client.HttpPatchString(AClient, AUrl, AContentType, ABody);
+  Result := nextpas.core.http.transports.HttpPatchString(AClient, AUrl, AContentType, ABody);
 end;
 
 function HttpDeleteString(const AClient: IHttpClient;
   const AUrl: string): string;
 begin
-  Result := nextpas.core.http.client.HttpDeleteString(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpDeleteString(AClient, AUrl);
 end;
 
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
-  Result := nextpas.core.http.client.HttpHead(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpHead(AClient, AUrl);
 end;
 
 function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
-  Result := nextpas.core.http.client.HttpOptions(AClient, AUrl);
+  Result := nextpas.core.http.transports.HttpOptions(AClient, AUrl);
 end;
 
 function HttpPostJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  Result := nextpas.core.http.client.HttpPostJson(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPostJson(AClient, AUrl, ABody);
 end;
 
 function HttpPutJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  Result := nextpas.core.http.client.HttpPutJson(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPutJson(AClient, AUrl, ABody);
 end;
 
 function HttpPatchJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  Result := nextpas.core.http.client.HttpPatchJson(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPatchJson(AClient, AUrl, ABody);
 end;
 
 function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
 begin
-  Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
 function HttpPostJsonDocument(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpPostJsonDocument(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPostJsonDocument(AClient, AUrl, ABody);
 end;
 
 function HttpPutJsonDocument(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpPutJsonDocument(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPutJsonDocument(AClient, AUrl, ABody);
 end;
 
 function HttpPatchJsonDocument(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 begin
-  Result := nextpas.core.http.client.HttpPatchJsonDocument(AClient, AUrl, ABody);
+  Result := nextpas.core.http.transports.HttpPatchJsonDocument(AClient, AUrl, ABody);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;
 begin
-  Result := nextpas.core.http.client.ExtractCharsetFromContentType(AContentType);
+  Result := nextpas.core.http.transports.ExtractCharsetFromContentType(AContentType);
 end;
 
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
 begin
-  Result := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+  Result := nextpas.core.http.extensions.EncodeUrlEncodedForm(AFields);
 end;
 
 function NewMultipartBoundary: string;
 begin
-  Result := nextpas.core.http.form.NewMultipartBoundary;
+  Result := nextpas.core.http.extensions.NewMultipartBoundary;
 end;
 
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string): string;
 begin
-  Result := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles, ABoundary);
+  Result := nextpas.core.http.extensions.EncodeMultipartFormData(AFields, AFiles, ABoundary);
 end;
 
 function MultipartParseOptionsDefault: TMultipartParseOptions;
 begin
-  Result := nextpas.core.http.form.MultipartParseOptionsDefault;
+  Result := nextpas.core.http.extensions.MultipartParseOptionsDefault;
 end;
 
 function ParseMultipartFormData(const ABody, ABoundary: string): TMultipartFormData;
 begin
-  Result := nextpas.core.http.form.ParseMultipartFormData(ABody, ABoundary);
+  Result := nextpas.core.http.extensions.ParseMultipartFormData(ABody, ABoundary);
 end;
 
 function ParseMultipartFormDataFromReader(const ABody: IReader;
   const ABoundary: string;
   const AOptions: TMultipartParseOptions): TMultipartFormData;
 begin
-  Result := nextpas.core.http.form.ParseMultipartFormDataFromReader(ABody,
+  Result := nextpas.core.http.extensions.ParseMultipartFormDataFromReader(ABody,
     ABoundary, AOptions);
 end;
 
 function HttpCreateRequestArena(ACapacity: SizeUInt): IArena;
 begin
-  Result := nextpas.core.http.mem.HttpCreateRequestArena(ACapacity);
+  Result := nextpas.core.http.middlewares.HttpCreateRequestArena(ACapacity);
 end;
 
 function HttpCreateRequestAllocator(ACapacity: SizeUInt): IAllocator;
 begin
-  Result := nextpas.core.http.mem.HttpCreateRequestAllocator(ACapacity);
+  Result := nextpas.core.http.middlewares.HttpCreateRequestAllocator(ACapacity);
 end;
 
 function HttpProcessHeap: TGrowingAllocator;
 begin
-  Result := nextpas.core.http.mem.HttpProcessHeap;
+  Result := nextpas.core.http.middlewares.HttpProcessHeap;
 end;
 
 function HttpProcessAllocator: IAllocator;
 begin
-  Result := nextpas.core.http.mem.HttpProcessAllocator;
+  Result := nextpas.core.http.middlewares.HttpProcessAllocator;
 end;
 
 function HttpFormatProcessMemStats: string;
 begin
-  Result := nextpas.core.http.mem.HttpFormatProcessMemStats;
+  Result := nextpas.core.http.middlewares.HttpFormatProcessMemStats;
 end;
 
 end.

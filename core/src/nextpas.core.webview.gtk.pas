@@ -25,10 +25,11 @@ unit nextpas.core.webview.gtk;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.os.env,
   nextpas.core.platform.thread,
+  nextpas.core.text.conv,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
@@ -459,7 +460,7 @@ begin
   if LRaw = nil then
     Exit;
   try
-    LJson := StrPas(LRaw);
+    LJson := AnsiPtrToStr(LRaw);
   finally
     G_free(LRaw);
   end;
@@ -530,15 +531,15 @@ var
 begin
   if LSelf.FClosed then
     Exit;
-  GtkTrace('nav failed: ' + StrPas(AFailingUri));
+  GtkTrace('nav failed: ' + AnsiPtrToStr(AFailingUri));
   LEv := Default(TWebviewNavigationEvent);
-  LEv.Url := StrPas(AFailingUri);
+  LEv.Url := AnsiPtrToStr(AFailingUri);
   LEv.IsError := True;
   if AErr <> nil then
   begin
     LEv.ErrorCode := PGError(AErr)^.Code;
     if PGError(AErr)^.Message <> nil then
-      LEv.ErrorMessage := StrPas(PGError(AErr)^.Message);
+      LEv.ErrorMessage := AnsiPtrToStr(PGError(AErr)^.Message);
   end;
   for I := 0 to LSelf.FOnNavFailedCount - 1 do
     if Assigned(LSelf.FOnNavFailed[I]) then
@@ -680,7 +681,7 @@ begin
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
-      StrPas(WEBKIT_uri_scheme_request_get_path(ARequest)));
+      AnsiPtrToStr(WEBKIT_uri_scheme_request_get_path(ARequest)));
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
@@ -694,7 +695,7 @@ begin
     SchemeFinishNotFound(ARequest);
     Exit;
   end;
-  LPath := NormalizeWebviewAssetPath(StrPas(WEBKIT_uri_scheme_request_get_path(ARequest))); { 单源复用 base.NormalizeWebviewAssetPath inline }
+  LPath := NormalizeWebviewAssetPath(AnsiPtrToStr(WEBKIT_uri_scheme_request_get_path(ARequest))); { 单源复用 base.NormalizeWebviewAssetPath inline }
   if not Assigned(LSelf.FAssetsIntf) then
   begin
     SchemeFinishNotFound(ARequest);
@@ -841,14 +842,14 @@ begin
   LRaw := JSC_value_to_json(AJscValue, 0);
   if LRaw <> nil then
   begin
-    Result := StrPas(LRaw);
+    Result := AnsiPtrToStr(LRaw);
     G_free(LRaw);
   end
   else
   begin
     { 不可 JSON 化（如 symbol）：诚实降级为 JS toString 文本 }
     LRaw := JSC_value_to_string(AJscValue);
-    Result := StrPas(LRaw);
+    Result := AnsiPtrToStr(LRaw);
     G_free(LRaw);
   end;
 end;
@@ -922,7 +923,7 @@ begin
   end;
   if LErr <> nil then
   begin
-    LText := StrPas(LErr^.Message);
+    LText := AnsiPtrToStr(LErr^.Message);
     GtkTrace('eval failed: ' + LText);
   end
   else
@@ -1261,7 +1262,7 @@ var
 begin
   LP := WEBKIT_web_view_get_uri(FView);
   if LP <> nil then
-    Result := StrPas(LP)
+    Result := AnsiPtrToStr(LP)
   else
     Result := '';
 end;
@@ -1535,7 +1536,7 @@ begin
   { WM 级标题同步读：未显式设置过为空串（诚实表，见 BACKENDS §2） }
   LRaw := GTK_window_get_title(FWin);
   if LRaw <> nil then
-    Result := StrPas(LRaw)
+    Result := AnsiPtrToStr(LRaw)
   else
     Result := '';
 end;
@@ -1634,7 +1635,7 @@ begin
     'user-agent', @LRaw, Pointer(nil));
   if LRaw <> nil then
   begin
-    Result := StrPas(LRaw);
+    Result := AnsiPtrToStr(LRaw);
     G_free(LRaw);
   end
   else
