@@ -580,7 +580,6 @@ begin
       Slots[I].Spec := LoopFindSpec(FSpecs, Asst.Parts[Calls[I]].ToolName);
       LoopSynthErr(Slots[I], 'tool budget exceeded (MaxToolCalls=' + nextpas.core.text.conv.IntToStr(LOpt.MaxToolCalls) + ')');
     end;
-    SCount := Length(Calls);
     JCount := 0;
     LStopped := False;
     try
