@@ -434,6 +434,19 @@ begin
   Result := ZipWrapEntryReader(APayloadReader, LE, APassword, AMaxOutput);
 end;
 
+procedure ZipValidateCentralBoundsAndAlloc(ACdOffset, ACdSize: UInt64;
+  ACount: Int64; ATotalSize: Int64; var AEntries: TZipEntryArray;
+  var AFlags: TZipFlagArray); inline;
+begin
+  if (ACdOffset > UInt64(ATotalSize)) or
+     (Int64(ACdOffset) + Int64(ACdSize) > ATotalSize) then
+    raise EParseError.Create('zip: central directory out of bounds');
+  if ACount > High(Integer) - 1 then
+    raise EParseError.Create('zip: entry count out of range');
+  SetLength(AEntries, ACount);
+  SetLength(AFlags, ACount);
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -654,15 +667,8 @@ begin
   else
     LCount := LCount16;
 
-  if (LCdOffset > FC.Length) or
-     (Int64(LCdOffset) + Int64(LCdSize) > Int64(FC.Length)) then
-    raise EParseError.Create('zip: central directory out of bounds');
-
-  { 条目数已知：一次性分配，避免逐条目扩容 }
-  if LCount > High(Integer) - 1 then
-    raise EParseError.Create('zip: entry count out of range');
-  SetLength(FEntries, LCount);
-  SetLength(FFlags, LCount);
+  ZipValidateCentralBoundsAndAlloc(LCdOffset, LCdSize, LCount,
+    Int64(FC.Length), FEntries, FFlags);
 
   FC.Seek(SizeUInt(LCdOffset));
   ZipParseCentralEntries(FC, 0, FEntries, FFlags, FMaxTotalOutputSize);
@@ -896,15 +902,8 @@ begin
   else
     LCount := LCount16;
 
-  if (LCdOffset > UInt64(FSize)) or
-     (Int64(LCdOffset) + Int64(LCdSize) > FSize) then
-    raise EParseError.Create('zip: central directory out of bounds');
-
-  { 条目数已知：一次性分配，避免逐条目扩容 }
-  if LCount > High(Integer) - 1 then
-    raise EParseError.Create('zip: entry count out of range');
-  SetLength(FEntries, LCount);
-  SetLength(FFlags, LCount);
+  ZipValidateCentralBoundsAndAlloc(LCdOffset, LCdSize, LCount,
+    FSize, FEntries, FFlags);
 
   Fetch(Int64(LCdOffset), SizeUInt(LCdSize), LCDBuf, 'central directory');
   LC := NewByteCursor(LCDBuf);

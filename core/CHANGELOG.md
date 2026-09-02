@@ -2,9 +2,9 @@
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 
-`1.0.0` 后 36 期巡检收敛（S64—S100），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+`1.0.0` 后 37 期巡检收敛（S64—S101），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
 
-### Highlights (S80—S100)
+### Highlights (S80—S101)
 - **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
 - **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
 - **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
@@ -26,6 +26,7 @@
 - **S98 载荷定位单源**：`reader.ZipResolvePayloadOffset` 单源化双 `LocatePayload` 的 `GuardReadable+ParseLocalHeader+payload GuardRange`（2×9→2×1），`S85—S98` 十四单源平台期
 - **S99 解压与口令单源**：`reader.ZipExtractToBytesViaPayload/ZipExtractToBufferViaPayload/ZipOpenViaPayload` 单源化双 `ExtractIndex/ExtractToBuffer/OpenEntry` 的 `Decompress+GuardPassword+Wrap`（3×2→3×1），`S85—S99` 十五单源平台期
 - **S100 FS 路径性能**：`fs.JoinZipPath/TrimTrailingSlash` 单次分配收口 `ZipExtractToDirWithOptions` 路径拼接热点（`5分配→1分配`，`SetLength+Move`），`S85—S100` 十五单源+一性能平台期
+- **S101 中央边界单源**：`reader.ZipValidateCentralBoundsAndAlloc` 单源化双 `ParseCentralDirectory` 的 `central out of bounds+entry count+SetLength`（2×6→2×1），`S85—S101` 十六单源+一性能平台期
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
 
