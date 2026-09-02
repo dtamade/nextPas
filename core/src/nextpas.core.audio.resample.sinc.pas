@@ -27,10 +27,17 @@ type
     FBeta: Double;
     FKaiserTable: array of Double;
     FKaiserDen: Double;
+    // perf: polyphase kernel cache — PhaseCount * FTaps Single, precomputed Sinc*Kaiser, normalized per phase
+    FPhaseCount: Integer;
+    FKernels: array of Single;
     procedure BuildKaiserTable; inline;
+    procedure BuildKernels; inline;
+    function GetKernelPtr(APhase: Integer): PSingle; inline;
     function BesselI0(AX: Double): Double; inline;
     function KaiserWindow(AIdx: Integer): Double; inline;
     function Sinc(AX: Double): Double; inline;
+    // perf: inline dot via SIMD dispatch — zero-copy, 4/8-wide, no trig per sample
+    function DotKernelF32(const AIn: PSingle; const AKernel: PSingle; ACount: Integer): Single; inline;
     procedure EnsureScratch(var AScratch: TResampleScratch; ANeededIn, ABytesIn, ABytesOut, AChannels: Integer); inline;
     procedure EnsureThreadScratch(ANeededIn, ABytesIn, ABytesOut, AChannels: Integer); inline;
   public
@@ -53,7 +60,8 @@ uses
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.simd.arrays;
 
 threadvar
   // per-thread geometric scratch, amortized O(1) after warmup; no global FScratch竞写 per INV-6
@@ -66,12 +74,14 @@ begin
   inherited Create;
   FQuality := AQuality;
   case AQuality of
-    rsDraft: begin FTaps := 16; FBeta := 6.0; end;
-    rsGood:  begin FTaps := 64; FBeta := 8.0; end;
-    rsBest:  begin FTaps := 128; FBeta := 10.0; end;
+    rsDraft: begin FTaps := 16; FBeta := 6.0; FPhaseCount := 32; end;
+    rsGood:  begin FTaps := 64; FBeta := 8.0; FPhaseCount := 64; end;
+    rsBest:  begin FTaps := 128; FBeta := 10.0; FPhaseCount := 64; end;
   end;
   if (FTaps and 1) <> 0 then Inc(FTaps);
+  if FPhaseCount <= 0 then FPhaseCount := 64;
   BuildKaiserTable;
+  BuildKernels;
 end;
 
 function TSincResampler.LatencyFrames: Integer;
@@ -122,6 +132,46 @@ begin
       FKaiserTable[I] := Num / FKaiserDen;
     end;
   end;
+end;
+
+procedure TSincResampler.BuildKernels; inline;
+var
+  P, T: Integer;
+  Frac, X, W, Sum: Double;
+  LBase: Integer;
+begin
+  if (FTaps <= 0) or (FPhaseCount <= 0) then Exit;
+  SetLength(FKernels, FPhaseCount * FTaps);
+  for P := 0 to FPhaseCount - 1 do
+  begin
+    Frac := P / FPhaseCount;
+    Sum := 0;
+    LBase := P * FTaps;
+    for T := 0 to FTaps - 1 do
+    begin
+      X := T - FTaps / 2 - Frac + 0.5;
+      W := Sinc(X) * FKaiserTable[T];
+      FKernels[LBase + T] := Single(W);
+      Sum := Sum + W;
+    end;
+    if Sum <> 0 then
+      for T := 0 to FTaps - 1 do
+        FKernels[LBase + T] := Single(Double(FKernels[LBase + T]) / Sum);
+  end;
+end;
+
+function TSincResampler.GetKernelPtr(APhase: Integer): PSingle; inline;
+begin
+  // perf: inline zero-copy pointer arithmetic, no bounds check in hot path (caller clamps)
+  if (APhase < 0) then APhase := 0
+  else if (APhase >= FPhaseCount) then APhase := FPhaseCount - 1;
+  Result := @FKernels[APhase * FTaps];
+end;
+
+function TSincResampler.DotKernelF32(const AIn: PSingle; const AKernel: PSingle; ACount: Integer): Single; inline;
+begin
+  // perf: inline SIMD dot via single-source simd.arrays dispatch (SSE2/AVX2/NEON or scalar fallback), zero-copy
+  Result := SimdArrayDotProductF32(AIn, AKernel, SizeUInt(ACount));
 end;
 
 function TSincResampler.KaiserWindow(AIdx: Integer): Double; inline;
@@ -195,12 +245,14 @@ function TSincResampler.Resample(const AInput: TAudioBuffer; ANewRate: Integer; 
 var
   LRatio: Double;
   LOutFrames: Integer;
-  LCh, LOutFrame, LTap, LSrcIdx: Integer;
-  LSrcPos, LX, LW, LSum, LWsum: Double;
+  LCh, LOutFrame, LTap, LSrcIdx, LSrcBase, LPhase: Integer;
+  LSrcPos, LFrac, LSum, LWsum, LW: Double;
   I: Integer;
   LNeededIn: Integer;
   LBytesIn, LBytesOut: Integer;
   LOutBytes: Integer;
+  PKernel: PSingle;
+  PIn: PSingle;
 begin
   if (ANewRate < MinAudioSampleRate) or (ANewRate > MaxAudioSampleRate) then
     raise EInvalidArgument.CreateFmt('SincResample: rate %d out of range', [ANewRate]);
@@ -268,17 +320,32 @@ begin
     for LOutFrame := 0 to LOutFrames - 1 do
     begin
       LSrcPos := LOutFrame * LRatio;
-      LSum := 0; LWsum := 0;
-      for LTap := 0 to FTaps - 1 do
+      LSrcBase := Trunc(LSrcPos) - FTaps div 2 + 1;
+      LFrac := LSrcPos - Trunc(LSrcPos);
+      if LFrac < 0 then LFrac := 0 else if LFrac >= 1 then LFrac := 0.999999;
+      LPhase := Trunc(LFrac * FPhaseCount);
+      if LPhase < 0 then LPhase := 0 else if LPhase >= FPhaseCount then LPhase := FPhaseCount - 1;
+      PKernel := GetKernelPtr(LPhase);
+      // fast interior: contiguous window inside buffer → SIMD dot, no per-tap branch/trig, O(Taps) with 4/8-wide
+      if (LSrcBase >= 0) and (LSrcBase + FTaps <= AInput.FrameCount) then
       begin
-        LSrcIdx := Trunc(LSrcPos) - FTaps div 2 + LTap + 1;
-        if (LSrcIdx < 0) or (LSrcIdx >= AInput.FrameCount) then Continue;
-        LX := LTap - FTaps / 2 - (LSrcPos - Trunc(LSrcPos)) + 0.5;
-        LW := Sinc(LX) * FKaiserTable[LTap];
-        LSum := LSum + PSingle(@AScratch.PlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
-        LWsum := LWsum + LW;
+        PIn := PSingle(@AScratch.PlanesIn[LCh][LSrcBase * SizeOf(Single)]);
+        LSum := DotKernelF32(PIn, PKernel, FTaps);
+      end
+      else
+      begin
+        // edge: masked dot with precomputed kernel, no Sinc recomputation, renormalize for truncated window
+        LSum := 0; LWsum := 0;
+        for LTap := 0 to FTaps - 1 do
+        begin
+          LSrcIdx := LSrcBase + LTap;
+          if (LSrcIdx < 0) or (LSrcIdx >= AInput.FrameCount) then Continue;
+          LW := PKernel[LTap];
+          LSum := LSum + PSingle(@AScratch.PlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
+          LWsum := LWsum + LW;
+        end;
+        if LWsum <> 0 then LSum := LSum / LWsum;
       end;
-      if LWsum <> 0 then LSum := LSum / LWsum;
       if LSum > 1 then LSum := 1 else if LSum < -1 then LSum := -1;
       PSingle(@AScratch.PlanesOut[LCh][LOutFrame * SizeOf(Single)])^ := Single(LSum);
     end;
@@ -293,12 +360,14 @@ function TSincResampler.Resample(const AInput: TAudioBuffer; ANewRate: Integer):
 var
   LRatio: Double;
   LOutFrames: Integer;
-  LCh, LOutFrame, LTap, LSrcIdx: Integer;
-  LSrcPos, LX, LW, LSum, LWsum: Double;
+  LCh, LOutFrame, LTap, LSrcIdx, LSrcBase, LPhase: Integer;
+  LSrcPos, LFrac, LSum, LWsum, LW: Double;
   I: Integer;
   LNeededIn: Integer;
   LBytesIn, LBytesOut: Integer;
   LOutBytes: Integer;
+  PKernel: PSingle;
+  PIn: PSingle;
 begin
   if (ANewRate < MinAudioSampleRate) or (ANewRate > MaxAudioSampleRate) then
     raise EInvalidArgument.CreateFmt('SincResample: rate %d out of range', [ANewRate]);
@@ -365,17 +434,30 @@ begin
     for LOutFrame := 0 to LOutFrames - 1 do
     begin
       LSrcPos := LOutFrame * LRatio;
-      LSum := 0; LWsum := 0;
-      for LTap := 0 to FTaps - 1 do
+      LSrcBase := Trunc(LSrcPos) - FTaps div 2 + 1;
+      LFrac := LSrcPos - Trunc(LSrcPos);
+      if LFrac < 0 then LFrac := 0 else if LFrac >= 1 then LFrac := 0.999999;
+      LPhase := Trunc(LFrac * FPhaseCount);
+      if LPhase < 0 then LPhase := 0 else if LPhase >= FPhaseCount then LPhase := FPhaseCount - 1;
+      PKernel := GetKernelPtr(LPhase);
+      if (LSrcBase >= 0) and (LSrcBase + FTaps <= AInput.FrameCount) then
       begin
-        LSrcIdx := Trunc(LSrcPos) - FTaps div 2 + LTap + 1;
-        if (LSrcIdx < 0) or (LSrcIdx >= AInput.FrameCount) then Continue;
-        LX := LTap - FTaps / 2 - (LSrcPos - Trunc(LSrcPos)) + 0.5;
-        LW := Sinc(LX) * FKaiserTable[LTap];
-        LSum := LSum + PSingle(@GScratchPlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
-        LWsum := LWsum + LW;
+        PIn := PSingle(@GScratchPlanesIn[LCh][LSrcBase * SizeOf(Single)]);
+        LSum := DotKernelF32(PIn, PKernel, FTaps);
+      end
+      else
+      begin
+        LSum := 0; LWsum := 0;
+        for LTap := 0 to FTaps - 1 do
+        begin
+          LSrcIdx := LSrcBase + LTap;
+          if (LSrcIdx < 0) or (LSrcIdx >= AInput.FrameCount) then Continue;
+          LW := PKernel[LTap];
+          LSum := LSum + PSingle(@GScratchPlanesIn[LCh][LSrcIdx * SizeOf(Single)])^ * LW;
+          LWsum := LWsum + LW;
+        end;
+        if LWsum <> 0 then LSum := LSum / LWsum;
       end;
-      if LWsum <> 0 then LSum := LSum / LWsum;
       if LSum > 1 then LSum := 1 else if LSum < -1 then LSum := -1;
       PSingle(@GScratchPlanesOut[LCh][LOutFrame * SizeOf(Single)])^ := Single(LSum);
     end;

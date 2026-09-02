@@ -118,14 +118,10 @@ function AudioIsValidBuffer(const ABuffer: TAudioBuffer; ARequireF32: Boolean = 
 function AudioBufferDataBytes(const ABuffer: TAudioBuffer): Integer; inline;
 procedure AudioValidateBuffer(const ABuffer: TAudioBuffer; const AContext: string; ARequireF32: Boolean = False); inline;
 
-{ ---- Capacity helpers (single source via bytes.ops) ---- }
-procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
-procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer = 4); inline;
-
 { ---- Realtime helpers (zero-alloc, lock-free, no IO) ---- }
 // 字节预算：统一溢出守卫，供 FillRealtime 入口复用；非 inline 避免索引元素喂 untyped Var 参常量传播污染（设计规范红线）
 function AudioBytesForFrames(const AFormat: TAudioFormat; AFrames: Integer): Int64;
-// 单一真值：供 wav/aiff/timeline/bus/graph/playlist/game/sequencer 复用；零拷贝单次 Move/Fill，复用 bytes.ops 单源
+// 单一真值：供 wav/aiff/timeline/bus/graph/playlist/game/sequencer 复用；零拷贝单次 BytesCopy/BytesZero，复用 bytes.ops 单源，inline 零拷贝
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 function AudioSilentFill(var ABuffer: TAudioBuffer; const AFormat: TAudioFormat;
@@ -136,8 +132,7 @@ function AudioBufferClone(const ABuffer: TAudioBuffer): TAudioBuffer; inline;
 implementation
 
 uses
-  nextpas.core.base.utils, // CopyMem/FillMem/ZeroMem 单源；bytes.ops SpanFill/MemSet 最终收敛于此，避免 base 层混入 math 依赖
-  nextpas.core.bytes.ops; // BytesEnsureCapacity 单源复用（capacity helpers）
+  nextpas.core.bytes.ops; // single source for BytesCopy/BytesZero/SpanClone — realtime zero-copy, inline, no base.utils dual source
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -347,23 +342,6 @@ begin
   Result := Int64(AFrames) * Int64(AFormat.BlockAlign);
 end;
 
-procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
-begin
-  // perf: inline + single source via bytes.ops.BytesEnsureCapacity (doubling, zero-copy, amortized O(1) steady)
-  BytesEnsureCapacity(ADest, ARequired);
-end;
-
-procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer); inline;
-begin
-  // perf: inline geometric growth (amortized doubling), steady zero alloc after warmup; caller keeps SetLength outside
-  if ACap >= ARequired then Exit;
-  if ACap < AMinGrow then ACap := AMinGrow;
-  while ACap < ARequired do
-  begin
-    if ACap <= High(Integer) div 2 then ACap := ACap * 2 else begin ACap := ARequired; Break; end;
-  end;
-end;
-
 function AudioFillMemoryRealtime(const ASrc: TAudioBuffer; var APos: Integer;
   var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
@@ -382,8 +360,8 @@ begin
   LAvail := ASrc.FrameCount - APos;
   if LAvail <= 0 then
   begin
-    // 零拷贝单源：bytes.ops 单源经 base.utils FillMem，避免索引元素喂 untyped Var 参
-    FillMem(@ABuffer.Data[0], SizeUInt(LBytesNeeded), 0);
+    // perf: zero-copy single source via bytes.ops BytesZero, inline, no base.utils dual source
+    BytesZero(@ABuffer.Data[0], SizeUInt(LBytesNeeded));
     ABuffer.Format := ASrc.Format;
     ABuffer.FrameCount := AFrames;
     Exit(AFrames);
@@ -396,13 +374,13 @@ begin
     PSrc := PByte(@ASrc.Data[0]);
     Inc(PSrc, PtrInt(Int64(APos) * Int64(LBlockAlign)));
     PDst := PByte(@ABuffer.Data[0]);
-    CopyMem(PDst, PSrc, SizeUInt(LBytesToCopy));
+    BytesCopy(PDst, PSrc, SizeUInt(LBytesToCopy));
   end;
   if LToCopy < AFrames then
   begin
     PDst := PByte(@ABuffer.Data[0]);
     Inc(PDst, PtrInt(LBytesToCopy));
-    FillMem(PDst, SizeUInt(LBytesNeeded - LBytesToCopy), 0);
+    BytesZero(PDst, SizeUInt(LBytesNeeded - LBytesToCopy));
   end;
   ABuffer.Format := ASrc.Format;
   ABuffer.FrameCount := AFrames;
@@ -420,7 +398,7 @@ begin
   if not AFormat.IsValid then Exit(0);
   LBytes := Int64(AFrames) * Int64(AFormat.BlockAlign);
   if (LBytes > High(Integer)) or (Length(ABuffer.Data) < LBytes) then Exit(0);
-  FillMem(@ABuffer.Data[0], SizeUInt(LBytes), 0);
+  BytesZero(@ABuffer.Data[0], SizeUInt(LBytes));
   ABuffer.Format := AFormat;
   ABuffer.FrameCount := AFrames;
   Result := AFrames;
@@ -453,7 +431,7 @@ begin
   Result.FrameCount := AFrames;
   SetLength(Result.Data, Integer(LBytes));
   if LBytes > 0 then
-    FillMem(@Result.Data[0], SizeUInt(LBytes), 0);
+    BytesZero(@Result.Data[0], SizeUInt(LBytes));
 end;
 
 function AudioBufferClone(const ABuffer: TAudioBuffer): TAudioBuffer;
