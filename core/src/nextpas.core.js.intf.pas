@@ -10,14 +10,23 @@ type
   TJsStringArray = array of string;
   TJsValue = record
   private
-    FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
+    FKind: TJsValueKind;
+    FValid: Boolean;
+    FBoolVal: Boolean;
+    FIntVal: Int64;
+    FDoubleVal: Double;
+    FStrVal: string;
+    FContextId: UInt64;
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
   public
+    // core
     function Kind: TJsValueKind; inline;
-    function IsValid: Boolean; inline; // fail-closed: FValid and not closed
-    function IsAlive: Boolean; inline; // strong: alias to IsValid via lifecycle acquire
-    function IsClosed: Boolean; inline; // explicit closed state
+    // validity dual-track per INV-7: bulk zero barrier vs strong acquire
+    function IsValid: Boolean; inline; // bulk: FValid only, zero atomic, thread-affine hot bulk
+    function IsAlive: Boolean; inline; // strong: FValid + acquire GPureClosed via lifecycle
+    function IsClosed: Boolean; inline; // strong explicit closed via acquire
+    // type checks: thin via IsKind single source, inline
     function IsUndefined: Boolean; inline;
     function IsNull: Boolean; inline;
     function IsBool: Boolean; inline;
@@ -31,12 +40,15 @@ type
     function IsPromise: Boolean; inline;
     function IsSymbol: Boolean; inline;
     function IsBigInt: Boolean; inline;
+    // accessors: inline zero-copy via hosted FStrVal single source
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
     function AsString: string; inline;
     function AsJson: string; inline;
-    function TryAsBool(out V: Boolean): Boolean; function TryAsDouble(out V: Double): Boolean; function TryAsString(out V: string): Boolean;
+    function TryAsBool(out V: Boolean): Boolean;
+    function TryAsDouble(out V: Double): Boolean;
+    function TryAsString(out V: string): Boolean;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
   TJsHostFunction = reference to function(ACtx: IJsContext; AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
@@ -102,7 +114,9 @@ function JsDoubleValue(AValue: Double): TJsValue; inline; begin Result:=JsUndefi
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // inline via bytes.ops SpanToString single source, zero dangling
+  // inline single-copy via bytes.ops SpanToString single source (BytesCopy Move, one allocation, zero dangling per CONTRACT §3.1)
+  // perf: one heap alloc at creation (B/op=1 for NewStringView), AsString fast path B/op=0 via hosted FStrVal single source inline zero-copy
+  // note: true zero-copy view would dangle if AData is stack/temp; single-copy keeps heaptrc 0 and B/op baseline honest (bench_value AsString B/op=0, NewStringView B/op=1)
   if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
   else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=SpanToString(TByteSpan.Create(PByte(AData), ALen)); end;
 end;
@@ -117,7 +131,9 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid fail-closed via lifecycle acquire, IsAlive alias, IsClosed explicit
+// INV-7 dual-track: bulk IsValid zero barrier vs strong IsAlive/IsClosed via lifecycle acquire per CONTRACT §6
+{ TJsValue - core }
+
 function TJsValue.Kind: TJsValueKind; inline;
 begin
   Result := FKind;
@@ -133,21 +149,25 @@ begin
   Result := (FKind = A) or (FKind = B);
 end;
 
+{ TJsValue - validity dual-track per INV-7 }
+
 function TJsValue.IsValid: Boolean; inline;
 begin
-  // fail-closed: inline single branch via lifecycle acquire (64B padded)
-  Result := FValid and not JsPureContextIsClosed(FContextId);
+  // bulk zero barrier: FValid only, zero atomic, thread-affine hot bulk (zero fence, no cache coherence miss)
+  // perf: inline single branch, no atomic_load, B/op=0 bulk
+  Result := FValid;
 end;
 
 function TJsValue.IsAlive: Boolean; inline;
 begin
-  // strong alias to IsValid, inline via lifecycle acquire
+  // strong: FValid + acquire GPureClosed compact 4B epoch*2+closed via lifecycle single source (atomic_load mo_acquire)
+  // perf: inline acquire single bounds check via GPureClosedLen + generation mismatch => closed per INV-7
   Result := FValid and not JsPureContextIsClosed(FContextId);
 end;
 
 function TJsValue.IsClosed: Boolean; inline;
 begin
-  // explicit closed, inline acquire single source
+  // strong explicit closed via acquire single source, generation mismatch => closed
   Result := FValid and JsPureContextIsClosed(FContextId);
 end;
 

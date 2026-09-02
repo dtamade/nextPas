@@ -124,8 +124,8 @@ function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 begin Result := nextpas.core.js.lifecycle.JsPureContextIsClosed(AId); end;
 function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
 begin
-  // perf: inline zero-alloc, thread-affine bulk 零原子 via FValid；跨线程强一致时走 acquire 检查 js.lifecycle GPureClosed，单分支
-  // note: V.IsValid 本体已改为 FValid 零屏障，此为显式强一致封装供需要跨线程可见性的调用方
+  // INV-7 strong: explicit acquire via lifecycle GPureClosed compact 4B epoch*2+closed (atomic_load mo_acquire)
+  // perf: inline zero-alloc strong, bulk hot path keep V.IsValid zero barrier (FValid only), cross-thread/post-Close safe via generation mismatch
   Result := V.IsValid and not nextpas.core.js.lifecycle.JsPureContextIsClosed(V.FContextId);
 end;
 function JsPureThreadSelf: UInt64; inline;

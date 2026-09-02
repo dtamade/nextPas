@@ -1,5 +1,5 @@
 unit nextpas.core.js.lifecycle;
-{ lifecycle owner — single source for pure Context registry: GPureClosed compact 4B generation epoch*2+closed atomic acquire/release, scalar NextId/Len/Lock each 64B VARMIN isolated, freelist recycling bounded memory via bytes.ops geometric single source + mem.dynarray Exactly-Once + shrink, generation-tagged Id for INV-7 strong consistency, write-once rare, bulk IsValid zero atomic via FValid, strong acquire; spinlock single source via sync.spinlock RawSpinAcquire/Release sampled 64-spin amortized 5ms deadline (no per-spin syscall storm), exponential backoff + yield, Close no-skip guarantees bounded GPureNextId/GPureClosed, base remains thin type-carrier per four-piece, lifecycle extracted to js.lifecycle single source, 复用 bytes.ops单源几何 via BytesNextCapacity + mem.dynarray poke Exactly-Once, inline零拷贝, amortized O(1), L0-L3守分层. L0 thread/time single slit via lifecycle (platform.thread + platform.time single source), quickjs.value thin-forwards, no dual entry. }
+{ lifecycle owner — single source for pure Context registry: GPureClosed compact 4B }
 {$I nextpas.core.settings.inc}
 interface
 function JsPureContextRegister: UInt64;
@@ -7,7 +7,7 @@ procedure JsPureContextClose(AId: UInt64);
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 function JsPureThreadSelf: UInt64; inline;
 function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
-// L0 time single slit — owner lifecycle via platform.time single source, inline zero-copy, exactly-once deadline, 1024-sample amortized, bytes.ops single source remains
+// L0 time single slit via platform.time, inline zero-copy
 function JsPureMonotonicNs: QWord; inline;
 procedure JsPureDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
 function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
@@ -22,33 +22,32 @@ uses
   nextpas.core.platform.time,
   nextpas.core.sync.spinlock;
 const
-  JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // 64 via mem.base single source, no magic
-  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60 via CACHE_LINE single source
-  JS_LIFECYCLE_PAD64 = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int64); // 56 via CACHE_LINE single source
-  JS_LIFECYCLE_SPIN_TIMEOUT_NS = QWord(5 * 1000000); // 5ms deadline single source now in sync.spinlock RawSpinAcquire sampled (64-spin amortized, no per-spin syscall), lifecycle delegates to owner
+  JS_LIFECYCLE_CACHE_LINE = MEM_CACHE_LINE_SIZE; // single source via mem.base
+  JS_LIFECYCLE_PAD = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int32); // 60
+  JS_LIFECYCLE_PAD64 = JS_LIFECYCLE_CACHE_LINE - SizeOf(Int64); // 56
 {$PUSH}{$CODEALIGN RECORDMIN=16}{$PACKRECORDS C}
 type
-  TPureNextIdSlot = record Value: Int64; Padding: array[0..JS_LIFECYCLE_PAD64 - 1] of Byte; end; // 64B padded scalar, cache-line isolated via VARMIN 64 + pad
-  TPureLenSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B padded len publication, isolated
-  TPureLockSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B padded lock, isolated
+  TPureNextIdSlot = record Value: Int64; Padding: array[0..JS_LIFECYCLE_PAD64 - 1] of Byte; end; // 64B isolated
+  TPureLenSlot = record Value: PtrUInt; Padding: array[0..JS_LIFECYCLE_CACHE_LINE - SizeOf(PtrUInt) - 1] of Byte; end; // 64B isolated, PtrUInt (SizeUInt) avoids Int32 truncation
+  TPureLockSlot = record Value: Int32; Padding: array[0..JS_LIFECYCLE_PAD - 1] of Byte; end; // 64B isolated
 {$POP}
 {$PUSH}{$CODEALIGN VARMIN=64}
 var
-  GPureClosed: array of UInt32; // compact 4B per Context: stored = epoch*2 + closed (0 alive,1 closed), 10k ~40KB vs 64B*10k=640KB before, cache-friendly, bytes.ops geometric single source
-  GPureNextId: TPureNextIdSlot = (Value:1);
-  GPureClosedLen: TPureLenSlot = (Value:0); // atomic publication length: SetLength release / IsClosed acquire, fixes FPC dynarray non-atomic publish race, 64B isolated
-  GPureClosedLock: TPureLockSlot = (Value:0); // owner js.lifecycle: 64B padded lock, spinlock with deadline, bulk IsValid zero via FValid, strong acquire, 64B isolated
-  GPureFree: array of UInt64; // freelist stack of indices, bounded, geometric via bytes.ops single source, shrinkable, 64B isolated via VARMIN
+  GPureClosed: array of UInt32; // compact 4B per Context: epoch*2+closed
+  GPureNextId: TPureNextIdSlot = (Value:1); // 64B isolated
+  GPureClosedLen: TPureLenSlot = (Value:0); // atomic Len, acquire/release, 64B isolated
+  GPureClosedLock: TPureLockSlot = (Value:0); // 64B isolated, sync.spinlock single source
+  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric, 64B isolated
 {$POP}
 function GPureClosedCapacity: SizeUInt; inline;
 begin
-  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc, compact 4B slot
+  // inline zero-copy via mem.dynarray single source
   Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(UInt32));
 end;
 procedure PokePureClosedLen(const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute GPureClosed;
 begin
-  // perf: inline Exactly-Once poke via mem.dynarray single source, zero-copy header, amortized O(1), geometric via bytes.ops single source, single slit
+  // inline Exactly-Once poke via mem.dynarray single source, zero-copy
   nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
 end;
 function GPureFreeCapacity: SizeUInt; inline;
@@ -70,7 +69,7 @@ end;
 procedure TryShrinkGPureFreeLocked; inline;
 var LCap, LLen: SizeUInt;
 begin
-  // perf: inline shrink when capacity >> length (4x) to avoid long-service bloat, single SetLength to LLen Exactly-Once header (no double SetLength+poke jitter/barrier), bytes.ops geometric single source kept, zero-copy, amortized O(1), inline
+  // inline shrink when 4x bloat, single SetLength, bytes.ops single source
   LCap := GPureFreeCapacity;
   LLen := SizeUInt(Length(GPureFree));
   if LLen = 0 then
@@ -84,7 +83,7 @@ end;
 function JsPureContextRegister: UInt64;
 var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;
 begin
-  // phase A: freelist recycle under sampled spinlock single source (sync.spinlock RawSpin* 64-spin amortized, 5ms sampled deadline, inline zero-copy, no per-spin syscall storm), generation-tagged Id for INV-7 strong consistency, avoids bulk NewContext livelock
+  // freelist recycle bounded, generation-tagged INV-7, sync.spinlock single source
   RawSpinAcquire(GPureClosedLock.Value);
   try
     if Length(GPureFree) > 0 then
@@ -103,13 +102,13 @@ begin
   finally
     RawSpinRelease(GPureClosedLock.Value);
   end;
-  // phase B: no free slot — lock-free id via atomic_fetch_add_64 mo_relaxed, compact 4B slot, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), sampled spinlock single source (rare), inline zero-copy header
+  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric, inline zero-copy
   LId := Int64(atomic_fetch_add_64(GPureNextId.Value, Int64(1), mo_relaxed));
   LIdx := UInt32(UInt64(LId));
   Result := GPureMakeId(LIdx, 0);
-  if LIdx >= UInt32(atomic_load(GPureClosedLen.Value, mo_acquire)) then
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire) then
   begin
-    // spinlock for resize — rare write-once, sampled 5ms deadline single source via sync.spinlock, avoids bulk NewContext contention livelock, inline, compact 4B slot
+    // resize rare, sync.spinlock single source, compact 4B
     RawSpinAcquire(GPureClosedLock.Value);
     try
       if LIdx >= UInt32(Length(GPureClosed)) then
@@ -125,9 +124,9 @@ begin
         begin
           LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
           SetLength(GPureClosed, Integer(LCap));
-          // Exactly-Once: SetLength is capacity reservation (heap alloc) — logical length becomes LCap >= LNeed single header write, no extra DynArraySetLength down-poke, amortized O(1) geometric, preserves capacity, single header poke, bytes.ops single source, compact 4B slot
+          // Exactly-Once capacity reservation, bytes.ops single source, amortized O(1)
         end;
-        atomic_store(GPureClosedLen.Value, Int32(Length(GPureClosed)), mo_release);
+        atomic_store(GPureClosedLen.Value, PtrUInt(Length(GPureClosed)), mo_release);
       end;
     finally
       RawSpinRelease(GPureClosedLock.Value);
@@ -140,7 +139,7 @@ var LCap, LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if (AId = 0) or (LIdx >= UInt32(atomic_load(GPureClosedLen.Value, mo_acquire))) then Exit;
+  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire)) then Exit;
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
   if (LStored shr 1) <> LEpoch then Exit; // stale generation => already closed/reused per INV-7 strong
   if (LStored and 1) <> 0 then Exit;
@@ -148,7 +147,7 @@ begin
   LExpected := LStored;
   LDesired := (LEpoch shl 1) or 1; // epoch*2+1 closed
   if not atomic_compare_exchange_strong(GPureClosed[LIdx], LExpected, LDesired) then Exit;
-  // push index to freelist bounded recycling, sampled spinlock single source, guarantees recycling bounded, avoids unbounded GPureNextId/GPureClosed growth, shrinkable
+  // freelist bounded recycling, sync.spinlock single source
   RawSpinAcquire(GPureClosedLock.Value);
   try
     LNeed := SizeUInt(Length(GPureFree)) + 1;
@@ -156,7 +155,7 @@ begin
     begin
       LCap := BytesNextCapacity(SizeUInt(Length(GPureFree)), LNeed);
       SetLength(GPureFree, Integer(LCap));
-      // Exactly-Once: capacity reserved (LCap >= LNeed) single alloc via bytes.ops geometric, logical length will be poked to LNeed below without extra alloc, amortized O(1)
+      // Exactly-Once capacity reservation, bytes.ops single source, amortized O(1)
     end;
     SetLength(GPureFree, Integer(LNeed));
     GPureFree[High(GPureFree)] := UInt64(LIdx);
@@ -167,39 +166,39 @@ end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 var LIdx, LEpoch, LStored: UInt32;
 begin
-  // perf: inline acquire single bounds check via atomic publication Len (fixes FPC dynarray non-atomic SetLength race, no phantom), compact 4B slot + generation mismatch => strong closed per INV-7, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
+  // inline acquire via atomic Len, compact 4B + generation mismatch => strong closed INV-7
   if AId = 0 then Exit(False);
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if LIdx >= UInt32(atomic_load(GPureClosedLen.Value, mo_acquire)) then Exit(False);
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen.Value, mo_acquire) then Exit(False);
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
-  if (LStored shr 1) <> LEpoch then Exit(True); // generation mismatch => old epoch, strong closed per INV-7
+  if (LStored shr 1) <> LEpoch then Exit(True); // generation mismatch => strong closed INV-7
   Result := (LStored and 1) <> 0;
 end;
 function JsPureThreadSelf: UInt64; inline;
 begin
-  // perf: inline thin-forward to platform.thread single source (L0 single slit), zero-copy token, single syscall via pthread_self/GetCurrentThreadId, inline hot path, bytes.ops 单源几何同保持
+  // inline thin-forward to platform.thread single source, zero-copy
   Result := UInt64(platform_thread_self);
 end;
 function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 begin
-  // perf: inline single compare via JsPureThreadSelf single source, zero syscall beyond one, no duplication, thread-affine single source via lifecycle
+  // inline single compare via JsPureThreadSelf single source
   Result := JsPureThreadSelf = ACreationId;
 end;
 function JsPureMonotonicNs: QWord; inline;
 begin
-  // perf: inline thin-forward to platform.time single source (L0 single slit via platform_monotonic_ns, vdso), single syscall, zero-copy, bytes.ops single source复用见 deadline, lifecycle single source
+  // inline thin-forward to platform.time single source, zero-copy
   Result := QWord(platform_monotonic_ns);
 end;
 procedure JsPureDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
 begin
-  // perf: inline L0 single source via JsPureMonotonicNs, Timeout=0 zero syscall, exactly-once deadline, inline zero-copy, amortized O(1), bytes.ops single source保持 CONTRACT
+  // inline via JsPureMonotonicNs, Timeout=0 zero syscall, exactly-once
   if ATimeoutMs <= 0 then ADeadlineNs := 0
   else ADeadlineNs := Int64(JsPureMonotonicNs + QWord(ATimeoutMs) * 1000000);
 end;
 function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // perf: inline sampling 1024/sample via JsPureMonotonicNs single source, L0 platform.time single slit via lifecycle, cache-line friendly, exactly-once timeout语义, zero-copy, inline
+  // inline sampling 1024 via JsPureMonotonicNs single source
   if ADeadlineNs = 0 then Exit(False);
   Inc(ACounter);
   if (ACounter and 1023) <> 0 then Exit(False);
@@ -207,7 +206,7 @@ begin
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;
 initialization
-  // no mutex init, atomic only, VARMIN 64 ensures scalar cache-line isolation, GPureClosed compact 4B keeps L1/L2 friendly
+  // atomic only, VARMIN 64 isolated, GPureClosed compact 4B
 finalization
   SetLength(GPureClosed, 0);
   SetLength(GPureFree, 0);

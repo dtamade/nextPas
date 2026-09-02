@@ -95,7 +95,7 @@ end;
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
 var Idx: Integer;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
   case AVal.Kind of
     jskString: if Assigned(JS_NewStringPtr) then Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
@@ -115,8 +115,8 @@ begin
         Idx := JsValueStoreFind(S.Pure, AVal);
         if (Idx >= 0) and (Idx < Length(S.QjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(ACtx, S.QjsHeap[Idx]);
       end;
-    jskNull, jskUndefined: FillChar(Result, SizeOf(Result), 0);
-    else FillChar(Result, SizeOf(Result), 0);
+    jskNull, jskUndefined: BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
+    else BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
   end;
 end;
 
@@ -219,7 +219,7 @@ begin
   if (JsValueStoreHeapLength(S.Pure) > 0) and Assigned(JS_NewObjectPtr) and (ACtx <> nil) then
     S.QjsHeap[High(S.QjsHeap)] := JS_NewObjectPtr(ACtx)
   else if Length(S.QjsHeap) > 0 then
-    FillChar(S.QjsHeap[High(S.QjsHeap)], SizeOf(TJSQjsValue), 0);
+    BytesZero(@S.QjsHeap[High(S.QjsHeap)], SizeUInt(SizeOf(TJSQjsValue))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
 end;
 
 procedure QjsStoreClear(var S: TJsQjsValueStore; ACtx: Pointer);
@@ -241,10 +241,10 @@ begin
   if AIdx < 0 then Exit;
   if AIsArray then
   begin
-    if Assigned(JS_NewArrayPtr) and (ACtx <> nil) then Q := JS_NewArrayPtr(ACtx) else FillChar(Q, SizeOf(Q), 0);
+    if Assigned(JS_NewArrayPtr) and (ACtx <> nil) then Q := JS_NewArrayPtr(ACtx) else BytesZero(@Q, SizeUInt(SizeOf(Q))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
   end else
   begin
-    if Assigned(JS_NewObjectPtr) and (ACtx <> nil) then Q := JS_NewObjectPtr(ACtx) else FillChar(Q, SizeOf(Q), 0);
+    if Assigned(JS_NewObjectPtr) and (ACtx <> nil) then Q := JS_NewObjectPtr(ACtx) else BytesZero(@Q, SizeUInt(SizeOf(Q))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
   end;
   S.QjsHeap[AIdx] := Q;
 end;
@@ -306,7 +306,7 @@ procedure QjsStoreMirrorDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; AIdx:
 var QUndef: TJSQjsValue;
 begin
   if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (ACtx = nil) then Exit;
-  FillChar(QUndef, SizeOf(QUndef), 0);
+  BytesZero(@QUndef, SizeUInt(SizeOf(QUndef))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
   JS_SetPropertyStrPtr(ACtx, S.QjsHeap[AIdx], PAnsiChar(AName), QUndef);
 end;
 

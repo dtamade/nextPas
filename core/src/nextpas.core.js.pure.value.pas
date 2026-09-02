@@ -34,6 +34,9 @@ function JsPureNewInt(AValue: Int64; AContextId: UInt64): TJsValue; inline;
 function JsPureNewDouble(AValue: Double; AContextId: UInt64): TJsValue; inline;
 function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
+// arg view single source — backslash unescape thin-forward via text.escape single source, inline zero-copy via text.view, pure.value single seam (js.eval → pure.value → text.escape, L2→L2 single-point)
+function JsPureNeedsBackslashUnescapeView(const AView: TStringView): Boolean; inline;
+function JsPureUnescapeBackslashView(const AView: TStringView): string; inline;
 function JsPureToJsonString(const AValue: TJsValue): string;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
 // Batch: owner pure.value, FNV1a32 single pre-hash via pure.hash→bytes.ops→HashBytes inline zero-copy + SpanEqual zero-copy, bytes.ops single source geometric BytesNextCapacity amortized O(1), loop not inline per red-line 2, threshold >1000 batch vs loop ratio in build/bench-eval-*.json,回归>10%门禁已生效
@@ -333,13 +336,14 @@ begin
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 begin
-  // inline via JsStringViewValue single source, zero-copy
+  // inline single-copy via JsStringViewValue single source (bytes.ops SpanToString Move, one alloc, zero dangling)
+  // perf: NewStringView B/op=1 at creation, AsString B/op=0 via hosted FStrVal inline zero-copy single source
   if AView.IsEmpty then Result := JsValueBindContext(JsStringValue(''), AContextId)
   else Result := JsValueBindContext(JsStringViewValue(AView.Data, AView.Len), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 begin
-  // inline via JsStringViewValue single source, zero-copy
+  // inline single-copy via JsStringViewValue single source (bytes.ops single source)
   if AView.IsEmpty then Result := JsStringValue('')
   else Result := JsStringViewValue(AView.Data, AView.Len);
 end;
@@ -361,6 +365,16 @@ begin
   else if AJson.IsArray then Result := JsValueBindContext(JsPureHeapNewArray(Heap), AContextId)
   else if AJson.IsObject then Result := JsValueBindContext(JsPureHeapNewObject(Heap), AContextId)
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
+end;
+function JsPureNeedsBackslashUnescapeView(const AView: TStringView): Boolean; inline;
+begin
+  // inline thin-forward single source via text.escape TextNeedsBackslashUnescapeView, zero-copy, bytes.ops single source
+  Result := TextNeedsBackslashUnescapeView(AView);
+end;
+function JsPureUnescapeBackslashView(const AView: TStringView): string; inline;
+begin
+  // inline thin-forward single source via text.escape TextUnescapeBackslashView, zero-copy BytesCopy single source via bytes.ops
+  Result := TextUnescapeBackslashView(AView);
 end;
 { layers for JsPureToJsonString: primitive via text.number single source inline zero-copy, string fast clean via bytes.ops BytesCopy single source, escaped via json.writer single source try-finally Done, heavy paths out-of-line per red-line 2 }
 function JsPureJsonIntToStr(AValue: Int64): string; inline;

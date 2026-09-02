@@ -32,7 +32,6 @@ implementation
 uses
   nextpas.core.text.number,
   nextpas.core.bytes.ops,
-  nextpas.core.text.escape,
   nextpas.core.simd.vec,
   nextpas.core.simd.base,
   nextpas.core.js.pure.value;
@@ -41,24 +40,28 @@ type
     HasWhile: Boolean;
     HasJson: Boolean;
     HasX: Boolean;
+    HasPlus: Boolean;
+    HasParen: Boolean;
+    PlusPos: SizeUInt;
   end;
   PJsPureHostBuckets = ^TJsPureHostBuckets;
-function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
-var P: PtrInt; L, R: TStringView; A, B: Int64;
+function TryPureIntAdd(const V: TStringView; const Pred: TEvalPredicates; out OutVal: TJsValue): Boolean;
+var P: SizeUInt; L, R: TStringView; A, B: Int64;
 begin
   Result := False;
-  P := V.IndexOf('+');
-  if P < 0 then Exit;
-  if V.IndexOf('(') >= 0 then Exit;
-  L := V.Slice(0, SizeUInt(P)).Trim;
-  R := V.Slice(SizeUInt(P) + 1, V.Len - SizeUInt(P) - 1).Trim;
+  // single source via ScanEvalPredicates single-pass SIMD, zero extra O(n) IndexOf, bytes.ops single source
+  if not Pred.HasPlus then Exit;
+  if Pred.HasParen then Exit;
+  P := Pred.PlusPos;
+  L := V.Slice(0, P).Trim;
+  R := V.Slice(P + 1, V.Len - P - 1).Trim;
   if L.IsEmpty or R.IsEmpty then Exit;
   if not ViewToInt64(L, A) then Exit;
   if not ViewToInt64(R, B) then Exit;
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// scanner — table-driven single-pass SIMD via VecCmpEq single source, zero-copy views, not inline per red-line 2 (O(n) single scan vs O(2n) double IndexOfStr), bytes.ops single source via Slice.Equals
+// scanner — table-driven single-pass SIMD via VecCmpEq single source, zero-copy views, not inline per red-line 2 (O(n) single scan vs O(3n) triple IndexOf), bytes.ops single source via Slice.Equals, plus/paren coalesced into same pass
 procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates);
 var
   LLen: SizeUInt;
@@ -70,16 +73,17 @@ var
   LBit: Int32;
 begin
   Pred.HasWhile := False; Pred.HasJson := False; Pred.HasX := False;
+  Pred.HasPlus := False; Pred.HasParen := False; Pred.PlusPos := 0;
   if V.IsEmpty then Exit;
   LLen := V.Len;
   LJsonLen := SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY));
   LWhileLen := SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE));
   LNeedJson := LLen >= LJsonLen;
   LNeedWhile := (ATimeoutMs > 0) and (LLen >= LWhileLen);
-  if not LNeedJson and not LNeedWhile then Exit;
+  // no early exit on LNeedJson/While alone: Plus/Paren coalesced into same single pass for TryPureIntAdd zero extra O(n)
   LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
   LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  // perf: single-pass table-driven SIMD VecCmpEq single source, O(n) single scan vs O(2n) double pass, bytes.ops Slice.Equals single source, early exit
+  // perf: single-pass table-driven SIMD VecCmpEq single source, O(n) single scan vs O(3n) triple pass, bytes.ops Slice.Equals single source, early exit only when all predicates known
   LPos := 0;
   while LPos + VecWidth <= LLen do
   begin
@@ -87,24 +91,30 @@ begin
     if LNeedJson and not Pred.HasJson then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LJsonView.Data[0]));
     if LNeedWhile and not Pred.HasWhile then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LWhileView.Data[0]));
     if LNeedJson and not Pred.HasX then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord('x'));
+    if not Pred.HasPlus then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord('+'));
+    if not Pred.HasParen then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord('('));
     if LCombined = TVecMask(0) then begin Inc(LPos, VecWidth); Continue; end;
     while LCombined <> TVecMask(0) do
     begin
       LBit := VecCtz(LCombined);
+      if not Pred.HasPlus and (V.Data[LPos + SizeUInt(LBit)] = '+') then begin Pred.HasPlus := True; Pred.PlusPos := LPos + SizeUInt(LBit); end;
+      if not Pred.HasParen and (V.Data[LPos + SizeUInt(LBit)] = '(') then Pred.HasParen := True;
       if LNeedJson and not Pred.HasJson and (V.Data[LPos + SizeUInt(LBit)] = LJsonView.Data[0]) then
         if (LPos + SizeUInt(LBit) + LJsonLen <= LLen) and V.Slice(LPos + SizeUInt(LBit), LJsonLen).Equals(LJsonView) then Pred.HasJson := True;
       if LNeedWhile and not Pred.HasWhile and (V.Data[LPos + SizeUInt(LBit)] = LWhileView.Data[0]) then
         if (LPos + SizeUInt(LBit) + LWhileLen <= LLen) and V.Slice(LPos + SizeUInt(LBit), LWhileLen).Equals(LWhileView) then Pred.HasWhile := True;
       if LNeedJson and not Pred.HasX and (V.Data[LPos + SizeUInt(LBit)] = 'x') then Pred.HasX := True;
       LCombined := LCombined and not TVecMask(TVecMask(1) shl LBit);
-      if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+      if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) and Pred.HasPlus and Pred.HasParen then Break;
     end;
-    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) and Pred.HasPlus and Pred.HasParen then Break;
     Inc(LPos, VecWidth);
   end;
   while LPos < LLen do
   begin
-    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) and Pred.HasPlus and Pred.HasParen then Break;
+    if not Pred.HasPlus and (V.Data[LPos] = '+') then begin Pred.HasPlus := True; Pred.PlusPos := LPos; end;
+    if not Pred.HasParen and (V.Data[LPos] = '(') then Pred.HasParen := True;
     if LNeedJson and not Pred.HasJson and (V.Data[LPos] = LJsonView.Data[0]) then
       if (LPos + LJsonLen <= LLen) and V.Slice(LPos, LJsonLen).Equals(LJsonView) then Pred.HasJson := True;
     if LNeedWhile and not Pred.HasWhile and (V.Data[LPos] = LWhileView.Data[0]) then
@@ -173,19 +183,19 @@ function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
   Result := JsStringValue(V.ToString);
 end;
-// arg view single source — outer quote strip + backslash unescape via text.escape single source, zero-copy via text.view + JsPureNewStringView, not inline per red-line 2 (owner text.escape SIMD block BytesCopy)
+// arg view single source — outer quote strip + backslash unescape via pure.value single source (text.escape → pure.value → js.eval), zero-copy via text.view + JsPureNewStringView, not inline per red-line 2 (owner pure.value SIMD block BytesCopy)
 function EvalArgValue(const V: TStringView): TJsValue;
 var
   LInner: TStringView;
   LStr: string;
 begin
-  // single source via text.escape TextNeedsBackslashUnescape/TextUnescapeBackslashView single source, bytes.ops single source via BytesCopy, zero dangling
+  // single source via pure.value JsPureNeedsBackslashUnescapeView/JsPureUnescapeBackslashView (owner text.escape via pure.value), bytes.ops BytesCopy single source, zero dangling, L2→L2 single-point
   if (V.Len >= 2) and ((V.Data[0] = '"') or (V.Data[0] = '''')) and (V.Data[V.Len - 1] = V.Data[0]) then
   begin
     LInner := V.Slice(1, V.Len - 2);
-    if TextNeedsBackslashUnescapeView(LInner) then
+    if JsPureNeedsBackslashUnescapeView(LInner) then
     begin
-      LStr := TextUnescapeBackslashView(LInner);
+      LStr := JsPureUnescapeBackslashView(LInner);
       Result := JsStringValue(LStr);
     end else
       Result := JsPureNewStringView(LInner);
@@ -302,7 +312,7 @@ begin
   EvalEnforceSentinel(AView, ABackend);
   if EvalTryJsonTrick(Pred, LVal) then Exit(LVal);
   if EvalTryLiteralTable(AView, LVal) then Exit(LVal);
-  if TryPureIntAdd(AView, LVal) then Exit(LVal);
+  if TryPureIntAdd(AView, Pred, LVal) then Exit(LVal);
   if TryHostDispatch(AView, ACtx, Hosts, ABuckets, AGlobal, ABackend, LVal) then Exit(LVal);
   Result := EvalFallback(AView);
 end;

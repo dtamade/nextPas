@@ -1,11 +1,5 @@
 unit nextpas.core.js.registry;
-{** @desc JS 后端注册表：L2 唯一扇出 owner，收敛 5 后端工厂与探测单源（fake/js888/v8/chakra/QuickJS）。
-     工厂经 registry 单缝 O(1) 索引分发（工厂自身零直接 uses，传递扇出经 registry 单源，非掩盖；扩展优雅 JsRegisterBackend）。
-     守四件套 base←intf←registry←factory←门面 与 L0-L3（L2 内聚，registry 唯一扇出，factory 薄转发单向），
-     复用 bytes.ops 单源（经 loader 探测名单 via SpanTrim/SpanEqual + pure.base 几何 BytesNextCapacity，零拷贝），
-     热点 inline 零拷贝 + Move 单源（BytesCopy 单源 inline），资源幂等不丢（pure.base JsPureClose / quickjs StoreClear exactly-once）。
-     线程安全：GVault 单 owner 模块化 vault 隔离（非裸全局，经 inline snapshot 单源访问，IMutex→platform.sync acquire/release 原子保护，64B 友好 O(1) 快照，零锁外分发，lazy init 原子 Exactly-Once，热路径 JsRegistryAvailable init后无锁读单次 acquire load 零锁零额外栅栏），
-     资源 try-finally 不丢，业务以 CONTRACT 为准，owner 缺口反哺 platform.sync/sync/atomic/bytes.ops。 *}
+{** @desc L2: JS 后端注册表：L2 唯一扇出 owner，收敛 5 后端工厂与探测单源 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -175,8 +169,7 @@ begin
   end
   else
   begin
-    if not Assigned(VaultRef^.Lock) then
-      raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
+    EnsureVaultLock;
     VaultRef^.Lock.Acquire;
     try
       atomic_thread_fence(mo_acquire);
