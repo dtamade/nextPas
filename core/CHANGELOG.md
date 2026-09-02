@@ -10,9 +10,15 @@
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 
-`1.0.0` 后 23 期巡检收敛（S64—S87），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+`1.0.0` 后 32 期巡检收敛（S64—S96），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
 
-### Highlights (S80—S87)
+### Highlights (S80—S96)
+### Highlights (S80—S95)
+### Highlights (S80—S94)
+### Highlights (S80—S92)
+`1.0.0` 后 25 期巡检收敛（S64—S89），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+
+### Highlights (S80—S89)
 - **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
 - **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
 - **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
@@ -21,6 +27,15 @@
 - **S85 AES 单源**：`aes.ResolveZipMethodWithAes` 单源化 `reader/sequential` 的 AES 方法分发重复，`EParseError/ENotSupportedError` 语义守恒
 - **S86 Local 单源**：`common.ParseLocalHeader` 单源化 `reader` 双 `LocatePayload` 本地头走查，`bad local header signature` 语义守恒
 - **S87 Password 单源**：`common.GuardEntryPassword` 单源化 `reader/sequential` 的缺口令守卫，`EInvalidOperationError` 语义守恒
+- **S88 Index 单源**：`common.GuardZipIndex` 单源化 `reader` 双 `CheckIndex` 越界守卫，`EIndexOutOfRangeError` 语义守恒，`S85—S88` 四单源平台期
+- **S89 Find 单源**：`common.FindZipEntry` 单源化 `reader` 双 `Find` 线性查找，首命中语义守恒，`S85—S89` 五单源平台期
+- **S90 总量单源**：`common.GuardTotalOutputAdvance` 单源化批量 `GuardTotalOutputSize` 与增量 `CheckTotalLimit` 的总量溢出守卫，`EZipLimitError/EIOError` 分叉归一，`S85—S90` 六单源平台期
+- **S91 泵送单源**：`reader.ZipPumpReader` 单源化 `CopyEntryTo` 双泵送循环，`EArgumentError/EIOError` 语义守恒，`S85—S91` 七单源平台期
+- **S92 三路泵单源**：`reader.ZipPumpReader` 三路收口 `TSequentialZipReader.CopyTo`（3×16→3×1），`reader` 为读/顺序三形态共享泵内核，`S85—S92` 八单源平台期
+- **S93 管道单源**：`reader.ZipWrapEntryReader` 单源化双 `OpenEntry` 解压管道（`AES→inflate→Verify` 2×20→2×1），`S85—S93` 九单源平台期
+- **S94 EOCD 单源**：`reader.ZipFindEocd` 单源化双 `ParseCentralDirectory` 的 EOCD 回扫（2×12→2×1），`S85—S94` 十单源平台期
+- **S95 EOCD 字段单源**：`reader.ZipDecodeEocd` 单源化双 `ParseCentralDirectory` 的 EOCD 字段解析（2×8→2×1），`S85—S95` 十一单源平台期
+- **S96 中央循环单源**：`reader.ZipParseCentralEntries` 单源化双 `ParseCentralDirectory` 的中央条目循环（2×10→2×1，含 `GuardTotalOutputSize`），`S85—S96` 十二单源平台期
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
 

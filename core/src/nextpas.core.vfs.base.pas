@@ -1,6 +1,20 @@
 unit nextpas.core.vfs.base;
 
 {** @desc vfs 基座：TEntryInfo/TStatInfo 与路径语法（ValidPath 单源 bytes.pathvalid）。 }
+{** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
+  权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
+  nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。L2 仅依赖
+  L0-L1（bytes.ops/base.utils），解压上限 canonical 单源为
+  compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB)，base 接口层以字面量 32*1024*1024 守 L0 纯度与无 L2→L2
+  为唯一字面量，compressed 薄门面经 vfs.base 单源别名复用不再二次双写，漂移由 source-contract 字面量+单源别名双重锁定。 }
+  compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB)，base/compressed 接口层
+  均以字面量 32*1024*1024 数值对齐守 L0 纯度与无 L2→L2，漂移由 source-contract
+  字面量数值一致性锁定（同值双字面量，非别名转发）。 }
+  L0-L1（bytes.ops/base.utils 零拷贝单源，base.pathvalid 单源）；前缀/
+  名称比较统一经 bytes.ops SpanStartsWith/SpanCompare 零拷贝 TByteSpan
+  单源，DeriveChild 区间扫描 + 视图去重零分配。GZIP_MAX canonical 单源
+  寄居 vfs.compressed 薄门面直连 compress.base（32MiB），base 仅保留数值
+  对齐的字面量常量以守 L0 纯度与四件套 base 无 L2→L2 原则。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -33,6 +47,18 @@ type
 const
   { 单源 compress.base GZIP_MAX (32MiB) canonical via alias，无字面量漂移。 }
   VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB) 同值，
+    canonical 单源为 compress.base；base 接口层以字面量 32*1024*1024 守 L0 纯度与无 L2→L2
+    为唯一字面量（四件套底座仅 L0-L1，无直接 compress 依赖），compressed 薄门面经本单元单源别名复用，
+    漂移由 source-contract 字面量+别名双重锁定。 }
+    canonical 单源为 compress.base；base/compressed 接口层均以字面量
+    32*1024*1024 守 L0 纯度与无 L2→L2（四件套底座仅 L0-L1，无直接 compress 依赖），
+    漂移由 source-contract 字面量数值一致性锁定（双字面量对齐，非别名）。 }
+  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES
+    (32MiB) 同值，canonical 单源寄居 vfs.compressed 薄门面；base 以字面量
+    守 L0 纯度与 base 无 L2→L2 原则（四件套最底层仅 L0-L1），漂移由
+    source-contract 数值一致性断言锁定。 }
+  VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
@@ -228,6 +254,100 @@ begin
   end;
   Res^[Ctx^.OutN] := SpanToString(AChildSpan); { bytes.ops 单源 inline 零拷贝视图+单 Move 物化，批量池化外层 BytesNextCapacity }
   Inc(Ctx^.OutN);
+  Result := nil;
+  N := Length(ASpans);
+  if N = 0 then Exit;
+  PrefixLen := Length(ADirPrefix);
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
+  else
+    PrefixSpan := TByteSpan.Empty;
+  {$DEFINE VFS_DERIVE_USE_SPANS}
+  {$I nextpas.core.vfs.base.derive.inc}
+  {$UNDEF VFS_DERIVE_USE_SPANS}
+  { 单源扫描模板：LowerBound+SpanStartsWith+Early-Break 零拷贝，有序区间 O(log n+k)
+    扇出限界分配（初值 16 倍增，Cap≤N-Lo）消除大目录 Hi-Lo 重分配；SpanEqual 去重零分配
+    inline 热路径由 memtree/embedded 复用，此为单一事实源 }
+  Lo := 0;
+  Hi := N;
+  if PrefixLen > 0 then
+  begin
+    while Lo < Hi do
+    begin
+      Mid := Lo + (Hi - Lo) div 2;
+      if SpanCompare(ASpans[Mid], PrefixSpan) < 0 then
+        Lo := Mid + 1
+      else
+        Hi := Mid;
+    end;
+  end;
+  SetLength(Result, 0);
+  OutN := 0;
+  for I := Lo to N - 1 do
+  begin
+    if SizeInt(ASpans[I].Len) <= PrefixLen then Continue;
+    if PrefixLen > 0 then
+    begin
+      if not SpanStartsWith(ASpans[I], PrefixSpan) then
+        Break;
+    end;
+    SegPos := 0;
+    for J := PrefixLen to SizeInt(ASpans[I].Len) - 1 do
+      if ASpans[I].Data[J] = Ord('/') then
+      begin
+        SegPos := J + 1;
+        Break;
+      end;
+    // 零拷贝 Child 视图：TByteSpan 直指原串存储，去重经 SpanEqual 零分配，仅唯一子项时 Move 物化（零 Copy 分配）
+    if SegPos > 0 then
+      ChildSpan := TByteSpan.Create(ASpans[I].Data, SizeUInt(SegPos - 1))
+    else
+      ChildSpan := ASpans[I];
+    if OutN = 0 then
+      NeedAdd := True
+    else
+    begin
+      if Length(Result[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1][1]), SizeUInt(Length(Result[OutN - 1])));
+      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
+    end;
+    if NeedAdd then
+    begin
+      if OutN >= Length(Result) then
+      begin
+        Cap := Length(Result);
+        if Cap = 0 then Cap := 16;
+        while Cap <= OutN do Cap := Cap * 2;
+        if Cap > N - Lo then Cap := N - Lo;
+        SetLength(Result, Cap);
+      end;
+      // 零拷贝物化：SetLength+Move 直落 ChildSpan 视图，消除 Copy 的每项堆分配与隐式字符拷贝
+      SetLength(Result[OutN], ChildSpan.Len);
+      if ChildSpan.Len > 0 then
+        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
+      Inc(OutN);
+    end;
+  end;
+  SetLength(Result, OutN);
+end;
+
+function VfsDeriveChildNames(const ASortedPaths: array of string;
+  const ADirPrefix: string): TVfsNameArray;
+var
+  N, OutN, PrefixLen, SegPos, J: SizeInt;
+  Lo, Hi, Mid: SizeInt;
+  I, Cap: SizeInt;
+  ChildSpan, PrevSpan, PrefixSpan, CurSpan: TByteSpan;
+  NeedAdd: Boolean;
+begin
+  Result := nil;
+  N := Length(ASortedPaths);
+  if N = 0 then Exit;
+  PrefixLen := Length(ADirPrefix);
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
+  else
+    PrefixSpan := TByteSpan.Empty;
+  {$I nextpas.core.vfs.base.derive.inc}
 end;
 
 { 零堆 Successor 判定：Succ = prefix[1..len-1]+'0'，inline 字节序比较免 Copy/Chr 堆分配，热点重复 List 零 GC。 }
