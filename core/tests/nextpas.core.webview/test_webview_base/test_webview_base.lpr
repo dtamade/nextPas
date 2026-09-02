@@ -9,7 +9,8 @@ uses
   SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
-  nextpas.core.webview.base;
+  nextpas.core.webview.base,
+  nextpas.core.webview.validation;
 
 procedure TestDefaultsSnapshot;
 var

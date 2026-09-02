@@ -101,6 +101,8 @@ uses
   nextpas.core.collections.hashset,
   nextpas.core.atomic,
   nextpas.core.sync.mutex,
+  nextpas.core.webview.base,
+  nextpas.core.webview.validation,
   nextpas.core.webview.live,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
@@ -245,9 +247,9 @@ begin
 end;
 
 { 统一路由辅助：单表 CWebviewProbeOrder 单源，AParent 有无 × AKind 偏好二维收敛，
-  Builder.Parent / CreateWebviewOn 零重复分支，inline 零额外调用，O(n) n≤3 线性回退零分配 }
+  Builder.Parent / CreateWebviewOn 零重复分支，外联避免 I-Cache 复制膨胀（路由/循环体禁 inline，第二条红线），O(n) n≤3 线性回退零分配 }
 function DoCreateWebviewRouted(const AParent: IWindow; AKind: TWebviewKind;
-  const AOptions: TWebviewOptions): IWebviewWindow; inline;
+  const AOptions: TWebviewOptions): IWebviewWindow;
 var
   LKind: TWebviewKind;
   LFakeAcc: nextpas.core.window.fake.IFakeSelfAccess;
@@ -580,7 +582,7 @@ end;
 function TBuilderImpl.Build: IWebviewWindow;
 begin
   // perf: registry Snapshot -> bytes.ops VecSnapshot 单源 inline (nil fast path + single SetLength + per-elem copy), 零拷贝单源叙事统一
-  // perf: 统一路由 DoCreateWebviewRouted inline 零额外调用，Builder.Parent/CreateWebviewOn 单源收敛，零重复分支
+  // perf: 统一路由 DoCreateWebviewRouted 外联（路由/循环体禁 inline），Builder.Parent/CreateWebviewOn 单源收敛零重复分支；Snapshot 经 bytes.ops VecSnapshot 单源零拷贝
   FInitScripts.Snapshot(FOptions.InitScripts);
   Result := ApplyTo(DoCreateWebviewRouted(FParent, FKind, FOptions));
 end;

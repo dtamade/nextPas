@@ -33,6 +33,9 @@
 - 所有源码平铺在单一 `src/` 目录下
 - `.inc` 文件同样放在 `src/` 目录下
 - `.inc` 文件命名跟随所属单元：`nextpas.core.platform.unix.inc`、`nextpas.core.platform.windows.inc`
+- `.inc` 分两类，纪律不同：
+  - **hand-written .inc**：平台分支、内联汇编等高效实现手写分片，直接编辑，随门面 `{$I}` 消费。
+  - **generated .inc**：由单一可读源派生的 Pascal 转义/代码生成产物（如 `nextpas.core.webview.bridge.js → nextpas.core.webview.bridge.script.inc`、`simdgen → src/generated/*.inc`），头部必须含 `AUTO-GENERATED` + `Source:` + `Regenerate:`/`Verify:` 标注，禁止直接手改；再生成与校验门在 `core/docs/<module>/` 与 `core/tests/*/contracts/` 显式声明；虽平铺于 `src/` 且已跟踪提交，但属意向跟踪源而非零产物口径下的构建产物，`scripts/build-hygiene-check.sh` 的零产物检查仅拦截 `.o/.ppu/.a/.exe/link*.res` 等二进制产物，不视其为违规。
 - `.inc` 用于要求高效实现的地方（平台分支、内联汇编等）
 - 要求优雅的地方用多态
 

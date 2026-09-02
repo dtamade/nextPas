@@ -1,9 +1,9 @@
 unit nextpas.core.webview.wk.loader;
 
-{** @desc WKWebView 装载探针（Wave 3 桩→S106 探针闭环）。
+{** @desc WKWebView 装载探针（Wave 3 桩→S106 探针闭环→S107 二次绑定诚实）。
 
        - Linux/Windows：诚实 dlopen 探测（WebKit.framework/libobjc 均缺失→False，非恒False桩，已与gtk/webview2同纪律走platform.dl真探）
-       - Darwin：经 platform.dl dlopen WebKit.framework + libobjc（TryDlOpen双soname容错），命中即 Loaded=True，待stage0 ObjC能力探通后以纯C objc_msgSend接WKWebView（复用window.cocoa的IWindow has-a，无需L3自建ObjC链）
+       - Darwin：经 platform.dl dlopen WebKit.framework + libobjc（TryDlOpen双soname容错），双库命中后以符号存在性二次绑定校验（libobjc 3 必备 + OBJC_CLASS_$_WKWebView，类 gtk 40+ BindReq 诚实，防空壳 so 欺骗；失败全量 platform_dl_release 释放不丢），校验通过才 Loaded=True，待stage0 ObjC能力探通后以纯C objc_msgSend接WKWebView（复用window.cocoa的IWindow has-a，无需L3自建ObjC链）
        - 幂等缓存双检锁inline零分配，与gtk/webview2 loader同纪律；platform_dl_release释放不丢
        - 落地路径已闭环：真实现候选 nextpas.core.window.cocoa L2 focused-runtime已落地，WK以WKWebView child addSubview于其IWindow.NativeHandle *}
 
@@ -66,6 +66,23 @@ begin
   platform_dl_release(GWebKitLib);
 end;
 
+function HasSym(const ALib: TPlatformLibrary; const AName: string): Boolean; inline;
+var LP: Pointer;
+begin
+  { perf: inline 零额外调用；单点 Sym 探测，零堆分配，与 gtk.loader BindReq 同诚实 }
+  Result := ALib.Sym(PAnsiChar(AName), LP) = 0;
+end;
+
+function WkSymReady: Boolean; inline;
+begin
+  { perf: inline + 零拷贝 view 思想；双库二次绑定校验：libobjc 3 必备 + WebKit WKWebView 类符号，防空壳 so 欺骗，与 gtk 40+ BindReq 同纪律，能力分支诚实 }
+  Result :=
+    HasSym(GObjCLib, 'objc_getClass') and
+    HasSym(GObjCLib, 'sel_registerName') and
+    HasSym(GObjCLib, 'objc_msgSend') and
+    HasSym(GWebKitLib, 'OBJC_CLASS_$_WKWebView');
+end;
+
 function TryLoadWk(out AInfo: TWkLoadInfo): Boolean;
 var LHit: string;
 begin
@@ -103,7 +120,16 @@ begin
       AInfo := GInfo;
       Exit(False);
     end;
-    // 双库命中即视为WK可用；DllName记WebKit命中名便于诊断
+    // 二次绑定校验：双库 dlopen 成功后以符号存在性二次校验，与 gtk 40+ BindReq 同诚实（防空壳 so 欺骗）；失败则全量释放不丢
+    if not WkSymReady then
+    begin
+      ReleaseAll;
+      GInfo.Loaded := False;
+      GInfo.DllName := '';
+      AInfo := GInfo;
+      Exit(False);
+    end;
+    // 双库 + 符号均命中即视为WK可用；DllName记WebKit命中名便于诊断
     GInfo.Loaded := True;
     GInfo.DllName := LHit;
     AInfo := GInfo;

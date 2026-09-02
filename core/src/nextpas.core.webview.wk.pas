@@ -21,6 +21,7 @@ interface
 uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
+  nextpas.core.webview.validation,
   nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops,

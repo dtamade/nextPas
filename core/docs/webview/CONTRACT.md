@@ -13,7 +13,8 @@
 
 | 单元 | 层 | 职责 | 波次 |
 |------|----|------|------|
-| `nextpas.core.webview.base` | 类型根 | options/events/kinds/错误分类（含 `EWebviewError` 族） | W1 |
+| `nextpas.core.webview.base` | 类型根 | options/events/kinds/错误分类（含 `EWebviewError` 族）— 纯数据类型，无校验实现（四件套纯度） | W1 |
+| `nextpas.core.webview.validation` | 校验 | `CheckWebviewOptions`/`CheckInvokeCmd`/`CheckWebview*` 校验实现层（`base←intf←validation←factory/bridge` 纯度；复用 L1 `text.view` `TStringView.Trim` 零拷贝 + L2 `validation.URL` 单源，inline 零额外调用） | W1 |
 | `nextpas.core.webview.intf` | 接口 | `IWebviewWindow` / `IWebviewDispatcher` / `IWebviewAssets` / invoke 契约类型 | W1 |
 | `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现） | W1 |
 | `nextpas.core.webview.live` | 私有索引 | 活窗紧凑 Vec 注册表（`bytes.ops.VecGrow/VecGrowCapacity` 单源 inline 0→4→2×，swap/shift 双形态零拷贝，`TWebviewLiveRegistry<T>` 泛型封装，4 后端 has-a 复用，析构 `Default(T)` nil 释放不丢） | S105 |
@@ -21,7 +22,7 @@
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
-| `nextpas.core.webview.gtk.win` | **deleted (next major, file removed)** | 文件已删除（F4 空单元兼容期结束，下一主版本彻底移除完成；窗口壳唯一事实源仍为 `nextpas.core.window.gtk3` 的 `WindowGtkRaw*` 12 项 inline 薄转发，零拷贝 inline 零额外调用） | W1→F4→deleted |
+| `nextpas.core.webview.gtk.win` | **deprecated shim (compat, inline thin-forward, file retained until next major)** | 文件保留为 deprecated shim（F4 空单元兼容期：窗口壳已单源至 `nextpas.core.window.gtk3` 的 `WindowGtkRaw*` 12 项 inline 薄转发，零拷贝 inline 零额外调用，自身零状态零分配、释放不丢；下一主版本移除） | W1→F4→deprecated |
 | `nextpas.core.webview.gtk` | 后端 | Linux 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebKit 视图挂载、scheme、idle dispatch、WebKitGTK 信号桥接（窗口壳经 `window.gtk3` Raw 单源 inline 零拷贝） | W1→M6 has-a |
 | `nextpas.core.webview.mime` | 薄门面 | `GuessWebviewMime` inline 薄转发至 L2 `nextpas.core.mime.types`（65 项 O(1) 哈希 128 槽，零分配切片，1-2 探测；与 `http.mime` 同源复用，L3 同层依赖已消除） | S13→S106 |
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
@@ -29,7 +30,7 @@
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + UserAgent + WebMessageArgs/Navigation handlers，无 external） | **W2 S23 完整（含 UA）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
-| `nextpas.core.webview.webview2.win` | **deleted (next major, file removed)** | 文件已删除（M6 has-a 彻底，Win32Shell* 15 项 deprecated 桩全量移除完成，下一主版本彻底移除；窗口壳唯一事实源仍为 `nextpas.core.window.win32` 的 `IWindow`/`WindowRunLoop`，调度经 `IWindow.Dispatcher.Post` 零拷贝 inline 转发） | W2→M6→deleted |
+| `nextpas.core.webview.webview2.win` | **deprecated shim (compat, inline thin-forward, file retained until next major)** | 文件保留为 deprecated shim（M6 has-a 已彻底，Win32Shell* 15 项 deprecated inline 薄转发已收口至 `nextpas.core.window.win32` 的 `IWindow`/`WindowRunLoop` 单源，零拷贝 inline 薄转发、调度经 `IWindow.Dispatcher.Post`，自身零状态零分配、释放不丢；下一主版本移除） | W2→M6→deprecated |
 | `nextpas.core.webview.webview2` | 后端 | Windows 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebView2 controller 真接线（Env→Controller 异步链、ExecuteScript/WebMessage、Post 调度、pending exactly-once、UA/DataDirectory） | **W2 S23 调度收口→M6 has-a** |
 | `nextpas.core.webview.wk.ffi` | ABI | WKWebView 类型与探针结果（无 external，无逻辑；Darwin 真实现复用 `window.cocoa` ObjC 运行时，不自建） | **W3 S25 桩→S106 探针闭环（ffi 保持无逻辑，真实现复用 window.cocoa）** |
 | `nextpas.core.webview.wk.loader` | 装载 | WK 运行时探测（经 `platform.dl` 真探：Darwin `WebKit.framework/WebKit` + `libobjc` 双 soname 容错，Linux 诚实 False 非恒 False；幂等缓存双检锁 inline 零分配，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢） | **W3 S25 桩→S106 探针闭环（platform.dl Darwin 真探，Linux 诚实 False）** |
@@ -38,9 +39,10 @@
 ### 依赖方向
 
 ```
-base ← intf ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源) → factory → 门面    （L3→L2 has-a）
+base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 inline 零拷贝) ← intf ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源) → factory → 门面    （L3→L2 has-a）
               └── mime(薄门面→L2 mime.types 零拷贝 O(1) 哈希)/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow + live）
 gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
+validation 为家族内校验实现层（四件套纯度 base←validation←intf←impl←facade；仅 bridge/factory/后端 uses，不经门面重复实现；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
 live/assets 为家族内私有索引（不经门面 re-export）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 探测 + VecGrowCapacity 单源，Finalize 全量串/接口不丢）
 window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）
 ```
@@ -55,7 +57,7 @@ window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/g
 
 **落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `bridge`（含 `assets` 私有索引单哈希单源）/ `live`（4 后端 has-a 紧凑 Vec 单源）/ `fake`(has-a) / `factory`(has-a) /
 门面与 `gtk.ffi` / `gtk.loader` / `gtk`(has-a) 已全部落地；
-`gtk.win`/`webview2.win` 已删除（`window.gtk3`/`window.win32` Raw 单源 inline 零拷贝，F4/M6 彻底收口，空单元历史兼容期结束，文件已移除），见 §1.1。
+`gtk.win`/`webview2.win` 已退化为 deprecated shim 保留（`window.gtk3`/`window.win32` 单源 inline 薄转发，12/15 项 deprecated inline 零拷贝零额外调用，F4/M6 has-a 收口，薄转发层零状态零分配、资源释放不丢；文件兼容期保留，下一主版本移除），见 §1.1。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；
 DefaultWebviewKind 能力探测驱动（无 IFDEF）；资产路由语义见 §3。
@@ -91,7 +93,7 @@ S0 文档 slice 不改注册表。
 
 **M6 has-a 收口（已兑现，见 §1 依赖图）**：`nextpas.core.window` 独立 Lane 已落地（L2），
 `webview.fake/gtk/webview2/wk` 全量改为 `has-a IWindow`（`FWindow: IWindow`，`Builder.Parent(const AParent: IWindow)` / `CreateWebviewOn(const AParent: IWindow; ...)`），
-`gtk.win`/`webview2.win` 已移除（`WinShell*` 12 项 / `Win32Shell*` 15 项 deprecated shim 全量 inline 转发已收口至 `window.gtk3`/`window.win32` Raw 单源，空单元零 API，文件已删除），
+`gtk.win`/`webview2.win` 已退化为 deprecated shim 保留（`WinShell*` 12 项 / `Win32Shell*` 15 项 deprecated inline 薄转发已收口至 `window.gtk3`/`window.win32` 单源，inline 零拷贝零额外调用，薄转发层零状态零分配、调度经 `IWindow.Dispatcher.Post` 资源释放不丢；文件兼容期保留，下一主版本移除），
 `IWebviewWindow` 不再直接暴露 `Show/SetTitle/SetBounds` 等窗口壳方法，统一经 `Window: IWindow` 组合访问；
 `WebviewRunLoop`/`WebviewExitLoop` 收敛为 `WindowRunLoop`/`WindowExitLoop` 的 `deprecated shim`（单泵归 `window.factory`，见 §5）。
 

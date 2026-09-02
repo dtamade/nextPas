@@ -16,6 +16,7 @@ uses
   nextpas.core.vfs,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
+  nextpas.core.webview.validation,
   nextpas.core.webview.mime,
   nextpas.core.webview.factory,
   nextpas.core.webview.vfs,
@@ -114,12 +115,12 @@ end;
 
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 begin
-  nextpas.core.webview.base.CheckWebviewOptions(AOptions);
+  nextpas.core.webview.validation.CheckWebviewOptions(AOptions);
 end;
 
 procedure CheckInvokeCmd(const ACmd: string);
 begin
-  nextpas.core.webview.base.CheckInvokeCmd(ACmd);
+  nextpas.core.webview.validation.CheckInvokeCmd(ACmd);
 end;
 
 function DefaultWebviewKind: TWebviewKind;

@@ -37,3 +37,70 @@ if ! "$PYTHON" "$UNIFIED" --core-root "$CORE_ROOT" --check webview --summary-lin
 fi
 
 echo "webview-source-contracts=pass"
+
+# -- bridge.js → bridge.script.inc generated vs hand-written hygiene gate --
+# Hygiene 零产物显式标注：.script.inc 为意向跟踪生成源（AUTO-GENERATED），非构建产物；
+# 校验门以 JS 真值重生成 body 并与已提交 .inc body diff，确保已跟踪产物严格由单一源派生。
+echo "== webview bridge.js → bridge.script.inc generation check =="
+BRIDGE_JS="$CORE_ROOT/core/src/nextpas.core.webview.bridge.js"
+BRIDGE_INC="$CORE_ROOT/core/src/nextpas.core.webview.bridge.script.inc"
+if [[ ! -f "$BRIDGE_JS" ]]; then
+  echo "FAIL: bridge JS source missing: $BRIDGE_JS"
+  echo "webview-bridge-generation=FAIL"
+  exit 1
+fi
+if [[ ! -f "$BRIDGE_INC" ]]; then
+  echo "FAIL: bridge script inc missing: $BRIDGE_INC"
+  echo "webview-bridge-generation=FAIL"
+  exit 1
+fi
+if ! grep -q "AUTO-GENERATED" "$BRIDGE_INC"; then
+  echo "FAIL: bridge script inc must contain AUTO-GENERATED marker (design-conventions §1 generated vs hand-written)"
+  echo "webview-bridge-generation=FAIL"
+  exit 1
+fi
+if ! grep -q "Source of truth" "$BRIDGE_INC"; then
+  echo "FAIL: bridge script inc must annotate Source of truth"
+  echo "webview-bridge-generation=FAIL"
+  exit 1
+fi
+if ! "$PYTHON" - "$BRIDGE_JS" "$BRIDGE_INC" << 'PY'
+import sys
+js_path, inc_path = sys.argv[1], sys.argv[2]
+with open(js_path, 'r', encoding='utf-8') as f:
+    js_lines = f.read().splitlines()
+# expected body: each JS line escaped '' and wrapped as '...' #10 (+ except last)
+expected = []
+for i, line in enumerate(js_lines):
+    esc = line.replace("'", "''")
+    if i < len(js_lines) - 1:
+        expected.append(f"'{esc}'#10 +")
+    else:
+        expected.append(f"'{esc}'#10")
+# actual body: lines in inc that start with "'" (Pascal string lines), strip whitespace
+with open(inc_path, 'r', encoding='utf-8') as f:
+    inc_lines = f.read().splitlines()
+actual = [l.strip() for l in inc_lines if l.strip().startswith("'")]
+if expected != actual:
+    print("FAIL: bridge script inc body out of sync with JS source", file=sys.stderr)
+    print(f"  expected {len(expected)} body lines, actual {len(actual)}", file=sys.stderr)
+    # show first mismatch
+    for idx, (e, a) in enumerate(zip(expected, actual)):
+        if e != a:
+            print(f"  mismatch at js line {idx+1}:", file=sys.stderr)
+            print(f"    expected: {e!r}", file=sys.stderr)
+            print(f"    actual  : {a!r}", file=sys.stderr)
+            break
+    if len(expected) != len(actual):
+        print(f"  length mismatch expected={len(expected)} actual={len(actual)}", file=sys.stderr)
+        extra = expected[len(actual):] if len(expected) > len(actual) else actual[len(expected):]
+        for line in extra[:3]:
+            print(f"    extra: {line!r}", file=sys.stderr)
+    sys.exit(1)
+print("bridge generation body matches JS source")
+PY
+then
+  echo "webview-bridge-generation=FAIL"
+  exit 1
+fi
+echo "webview-bridge-generation=pass"

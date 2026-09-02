@@ -1,5 +1,12 @@
 unit nextpas.core.webview.webview2.win;
 
+{** @desc Win32 窗口壳内部缝 — M6 has-a 收口完成：本单元已退化为
+       deprecated shim（文件保留至下一主版本，15 项 Win32Shell* inline
+       薄转发桩），窗口壳唯一事实源为 nextpas.core.window.win32 的
+       IWindow/WindowRunLoop。调度经 IWindow.Dispatcher.Post。
+       性能：全量 inline 零拷贝薄转发、零额外调用、零状态零分配；
+       稳定性：薄转发层无资源持有，释放不丢（所有权归 window.win32）。 *}
+
 {$I nextpas.core.settings.inc}
 
 interface

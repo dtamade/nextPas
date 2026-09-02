@@ -25,6 +25,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.assets,
+  nextpas.core.collections.hashmap,
   nextpas.core.log.intf;
 
 const
@@ -90,35 +91,25 @@ type
       存储（design-conventions §8 范式），直接实现 IWebviewInvokeRegistry；
       fake 与 gtk 后端共用同一实例语义。命名空间校验委托 base.CheckInvokeCmd；
       重复 cmd 抛 EWebviewInvalidState；Unregister 对未注册 cmd 静默。
-      非线程安全——只允许 UI 主线程触碰（与窗口壳同线程）。 *}
+      非线程安全——只允许 UI 主线程触碰（与窗口壳同线程）。
+      容器单源：委托 L1 collections.hashmap 通用开放寻址（WyHash/HashMix32/
+      NextPow2/0.75 负载/Bitmap 单源），消除私有桶/Rehash/FindSlot 分叉；
+      资产索引 distinctLens 最长前缀语义与通用 Map 不可映射故豁免（仅哈希/
+      生长/相等仍单源，见 assets.pas）。 *}
   TWebviewInvokeRegistry = class(TInterfacedObject, IWebviewInvokeRegistry)
   private type
-    TBucket = record
-      State: Byte; // 0 Empty,1 Occupied,2 Deleted
-      Hash: UInt32;
-      Cmd: string;
+    TInvokeEntry = record
       IsAsync: Boolean;
       SyncHandler: TWebviewInvokeSyncHandler;
       AsyncHandler: TWebviewInvokeAsyncHandler;
     end;
   private
-    FBuckets: array of TBucket;
-    FCapacity: SizeUInt;
-    FMask: SizeUInt;
-    FCount: SizeUInt;
-    FUsed: SizeUInt;
-    FMaxLoad: SizeUInt;
-    function HashOf(const S: string): UInt32; inline;
-    function NextPow2(X: SizeUInt): SizeUInt; inline;
-    procedure RecalcMaxLoad; inline;
-    procedure InitCapacity(ACap: SizeUInt);
-    procedure Rehash(ANewCap: SizeUInt);
-    function FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean;
-    function IndexOf(const ACmd: string): Integer;
+    FMap: specialize THashMap<string, TInvokeEntry>;
     procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
       const ASync: TWebviewInvokeSyncHandler;
       const AAsync: TWebviewInvokeAsyncHandler);
   public
+    constructor Create;
     destructor Destroy; override;
     { IWebviewInvokeRegistry }
     procedure Register(const ACmd: string;
@@ -176,7 +167,10 @@ const
     内部面 __resolve/__reject/__emit 由 native 经 Eval 调用；
     ready promise 于脚本尾部兑现（§4 握手时序）。
     独立资源：真值在 nextpas.core.webview.bridge.js，Pascal 侧经
-    nextpas.core.webview.bridge.script.inc 生成，单源可维护。 }
+    nextpas.core.webview.bridge.script.inc 生成，单源可维护；
+    hygiene 视其为意向跟踪生成源非构建产物（design-conventions.md §1
+    generated vs hand-written），校验见 BRIDGE_PROTOCOL §2 与
+    core/tests/nextpas.core.webview/contracts/check_webview_contracts.sh。 }
   NPW_BRIDGE_SCRIPT: string =
 {$I nextpas.core.webview.bridge.script.inc}
     ;
@@ -193,6 +187,8 @@ uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.bitops,
   nextpas.core.log.intf,
+  nextpas.core.webview.base,
+  nextpas.core.webview.validation,
   nextpas.core.webview.utils;
 
 { JsStringLit: JSON Str subset, reuse json owner, no manual scan. }
@@ -294,12 +290,12 @@ begin
   Result := True;
 end;
 
-function BridgeNormalizePayload(const APayload: TJsonValue): string;
+function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
 begin
+  { perf: inline + json owner 单源 canonical 重序列化；缺省/显式 null 零分配快路径；复杂 payload 经 JsonStringify 单源，热点 View+Document Arena 复用零分配（parse 零拷贝），Stringify 单次 builder 分配，双重 JSON 编解码已最小化——如需完全零拷贝需 json owner 反哺 RawSlice 能力（CONTRACT 为准） }
   if APayload.IsNull then
-    Result := 'null'
-  else
-    Result := JsonStringify(APayload);
+    Exit('null');
+  Result := JsonStringify(APayload);
 end;
 
 function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
@@ -441,152 +437,28 @@ end;
 
 { ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 + 单哈希 O(1) ---- }
 
-function TWebviewInvokeRegistry.HashOf(const S: string): UInt32; inline;
-begin
-  { perf: inline + WyHash32 单源 nextpas.core.hash.wyhash 零拷贝，空串 2166136261 seed 与 THashMap/asset 单源一致，零分配 }
-  if Length(S) = 0 then
-    Exit(HashMix32(2166136261));
-  Result := WyHash32(@S[1], SizeUInt(Length(S)));
-end;
+{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 + 单哈希 O(1) ---- }
+{ perf: 容器单源 L1 collections.hashmap（WyHash/HashMix32/NextPow2/Bitmap 单源，0.75 负载），零私有桶分叉；inline 薄转零额外调用 }
 
-function TWebviewInvokeRegistry.NextPow2(X: SizeUInt): UInt32; inline;
+constructor TWebviewInvokeRegistry.Create;
 begin
-  { perf: inline + NextPow2 单源 nextpas.core.simd.bitops，位运算单指令，零额外调用 }
-  if X <= 1 then Exit(1);
-{$IF SizeOf(SizeUInt)=8}
-  Result := UInt32(NextPow2_64(TU64(X)));
-{$ELSE}
-  Result := UInt32(NextPow2_32(TU32(X)));
-{$ENDIF}
-end;
-
-procedure TWebviewInvokeRegistry.RecalcMaxLoad; inline;
-begin
-  { perf: inline 0.75 负载单源，零额外调用 }
-  FMaxLoad := Trunc(FCapacity * 0.75);
-  if (FCapacity > 0) and (FMaxLoad >= FCapacity) then
-    FMaxLoad := FCapacity - 1;
-end;
-
-procedure TWebviewInvokeRegistry.InitCapacity(ACap: SizeUInt);
-begin
-  if ACap < 4 then ACap := 4;
-  ACap := SizeUInt(NextPow2(ACap));
-  SetLength(FBuckets, ACap);
-  { stability: SetLength 已按 Default(TBucket) 零初始化托管字段（string/interface=nil），
-    禁止 FillChar 全容量覆写托管语义与 O(cap) 置零抖动；inline 单源 }
-  FCapacity := ACap;
-  if ACap > 0 then
-    FMask := ACap - 1
-  else
-    FMask := 0;
-  FCount := 0;
-  FUsed := 0;
-  RecalcMaxLoad;
-end;
-
-procedure TWebviewInvokeRegistry.Rehash(ANewCap: SizeUInt);
-var
-  LOld: array of TBucket;
-  LOldCap: SizeUInt;
-  I: SizeUInt;
-  LIdx: SizeUInt;
-begin
-  { stability: 线性探测重哈希，Finalize 全量串/接口不丢，Move 零拷贝转移所有权，旧桶清零防 double finalize }
-  LOld := FBuckets;
-  LOldCap := FCapacity;
-  FBuckets := nil;
-  FCapacity := 0;
-  InitCapacity(ANewCap);
-  for I := 0 to LOldCap - 1 do
-    if LOld[I].State = 1 then
-    begin
-      LIdx := LOld[I].Hash and FMask;
-      while FBuckets[LIdx].State = 1 do
-        LIdx := (LIdx + 1) and FMask;
-      { stability: 托管赋值转移所有权（string/interface AddRef），旧桶置空释放不丢，零 FillChar 绕过 }
-      FBuckets[LIdx] := LOld[I];
-      LOld[I].Cmd := '';
-      LOld[I].SyncHandler := nil;
-      LOld[I].AsyncHandler := nil;
-      LOld[I].State := 0;
-      LOld[I].Hash := 0;
-      LOld[I].IsAsync := False;
-      Inc(FCount);
-      Inc(FUsed);
-    end;
-  SetLength(LOld, 0);
-end;
-
-function TWebviewInvokeRegistry.FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean;
-var
-  LIdx, LStart: SizeUInt;
-  LFirstDel: SizeInt;
-begin
-  { perf: O(1) 平均线性探测（非 inline：含 while 循环体禁 inline，避 I-Cache 复制膨胀），WyHash32 视图哈希直算，Deleted 链路保持，零堆分配 }
-  Result := False;
-  if FCapacity = 0 then begin AIdx := 0; Exit(False); end;
-  LIdx := AHash and FMask;
-  LStart := LIdx;
-  LFirstDel := -1;
-  while True do
-  begin
-    case FBuckets[LIdx].State of
-      0: begin
-           if LFirstDel >= 0 then AIdx := SizeUInt(LFirstDel) else AIdx := LIdx;
-           Exit(False);
-         end;
-      1: if (FBuckets[LIdx].Hash = AHash) and (FBuckets[LIdx].Cmd = ACmd) then
-         begin AIdx := LIdx; Exit(True); end;
-      2: if LFirstDel < 0 then LFirstDel := SizeInt(LIdx);
-    end;
-    LIdx := (LIdx + 1) and FMask;
-    if LIdx = LStart then begin
-      if LFirstDel >= 0 then AIdx := SizeUInt(LFirstDel) else AIdx := LIdx;
-      Exit(False);
-    end;
-  end;
-end;
-
-function TWebviewInvokeRegistry.IndexOf(const ACmd: string): Integer;
-var
-  H: UInt32;
-  LIdx: SizeUInt;
-begin
-  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，hash 相等再字符串相等双筛，inline 零额外调用 }
-  if FCount = 0 then Exit(-1);
-  H := HashOf(ACmd);
-  if FindSlot(ACmd, H, LIdx) then
-    Exit(Integer(LIdx));
-  Result := -1;
+  inherited Create;
+  FMap := specialize THashMap<string, TInvokeEntry>.Create(4);
 end;
 
 procedure TWebviewInvokeRegistry.AddEntry(const ACmd: string;
   AIsAsync: Boolean; const ASync: TWebviewInvokeSyncHandler;
   const AAsync: TWebviewInvokeAsyncHandler);
 var
-  H: UInt32;
-  LIdx: SizeUInt;
+  LEntry: TInvokeEntry;
 begin
   CheckInvokeCmd(ACmd);
-  if FCapacity = 0 then InitCapacity(4);
-  H := HashOf(ACmd);
-  if FindSlot(ACmd, H, LIdx) then
+  LEntry.IsAsync := AIsAsync;
+  LEntry.SyncHandler := ASync;
+  LEntry.AsyncHandler := AAsync;
+  if not FMap.Add(ACmd, LEntry) then
     raise EWebviewInvalidState.CreateFmt(
       'invoke handler already registered: %s', [ACmd]);
-  if FUsed >= FMaxLoad then
-  begin
-    Rehash(FCapacity shl 1);
-    FindSlot(ACmd, H, LIdx);
-  end;
-  FBuckets[LIdx].State := 1;
-  FBuckets[LIdx].Hash := H;
-  FBuckets[LIdx].Cmd := ACmd;
-  FBuckets[LIdx].IsAsync := AIsAsync;
-  FBuckets[LIdx].SyncHandler := ASync;
-  FBuckets[LIdx].AsyncHandler := AAsync;
-  Inc(FCount);
-  Inc(FUsed);
 end;
 
 procedure TWebviewInvokeRegistry.Register(const ACmd: string;
@@ -644,69 +516,42 @@ begin
 end;
 
 destructor TWebviewInvokeRegistry.Destroy;
-var
-  I: SizeUInt;
 begin
-  { stability: Finalize 全量串/接口，nil 释放不丢，无 FillChar 绕过托管语义，inline 薄转 }
-  if FCapacity > 0 then
-    for I := 0 to FCapacity - 1 do
-      if FBuckets[I].State = 1 then
-      begin
-        Finalize(FBuckets[I].Cmd);
-        Finalize(FBuckets[I].SyncHandler);
-        Finalize(FBuckets[I].AsyncHandler);
-        FBuckets[I].State := 0;
-        FBuckets[I].Hash := 0;
-        FBuckets[I].IsAsync := False;
-      end;
-  SetLength(FBuckets, 0);
-  FCapacity := 0;
-  FMask := 0;
-  FCount := 0;
-  FUsed := 0;
+  { stability: FMap.Free 释放全量托管串/接口（Clear→Finalize），nil 释放不丢，无 FillChar 绕过托管语义，inline 薄转 }
+  if FMap <> nil then
+    FMap.Free;
+  FMap := nil;
   inherited Destroy;
 end;
 
 procedure TWebviewInvokeRegistry.Unregister(const ACmd: string);
-var
-  H: UInt32;
-  LIdx: SizeUInt;
 begin
-  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，Deleted tombstone 保持链路，Finalize 释放串/接口不丢 }
-  if FCount = 0 then Exit;
-  H := HashOf(ACmd);
-  if not FindSlot(ACmd, H, LIdx) then
-    Exit; { 未注册是静默 no-op }
-  Finalize(FBuckets[LIdx].Cmd);
-  Finalize(FBuckets[LIdx].SyncHandler);
-  Finalize(FBuckets[LIdx].AsyncHandler);
-  FBuckets[LIdx].State := 2; // Deleted
-  FBuckets[LIdx].Hash := 0;
-  Dec(FCount);
+  { perf: O(1) 平均哈希探测（hashmap 单源 WyHash/HashMix32），tombstone 链路保持，静默 no-op }
+  if FMap = nil then Exit;
+  FMap.Remove(ACmd);
 end;
 
 function TWebviewInvokeRegistry.Count: Integer; inline;
 begin
   { perf: inline O(1) 读，零额外调用 }
-  Result := Integer(FCount);
+  if FMap = nil then Exit(0);
+  Result := Integer(FMap.GetCount);
 end;
 
 function TWebviewInvokeRegistry.Find(const ACmd: string; out AIsAsync: Boolean;
   out ASync: TWebviewInvokeSyncHandler;
   out AAsync: TWebviewInvokeAsyncHandler): Boolean;
 var
-  H: UInt32;
-  LIdx: SizeUInt;
+  LEntry: TInvokeEntry;
 begin
-  { perf: O(1) 平均哈希探测，WyHash32 单源零拷贝，hash 相等再字符串相等双筛，inline 热分发零额外调用 }
-  if FCount = 0 then Exit(False);
-  H := HashOf(ACmd);
-  if not FindSlot(ACmd, H, LIdx) then
+  { perf: O(1) 平均哈希探测（WyHash 单源零拷贝 via HashOfAnsiString/HashMix32），hash 相等再字符串相等双筛，inline 热分发零额外调用 }
+  if (FMap = nil) or (FMap.GetCount = 0) then Exit(False);
+  if not FMap.TryGetValue(ACmd, LEntry) then
     Exit(False);
   Result := True;
-  AIsAsync := FBuckets[LIdx].IsAsync;
-  ASync := FBuckets[LIdx].SyncHandler;
-  AAsync := FBuckets[LIdx].AsyncHandler;
+  AIsAsync := LEntry.IsAsync;
+  ASync := LEntry.SyncHandler;
+  AAsync := LEntry.AsyncHandler;
 end;
 
 { ---- TWebviewAssetsImpl：前缀路由 + provider 链 ---- }
