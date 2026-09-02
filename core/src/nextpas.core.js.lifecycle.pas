@@ -25,10 +25,10 @@ uses
   nextpas.core.js.base;
 type
   TCacheLinePad = array[0..MEM_CACHE_LINE_SIZE div SizeOf(Int64) - 1] of Int64; // 64B pad via MEM_CACHE_LINE_SIZE single source
-  // single vault luxury whitespace: header 64B + 5 fields converged (was 5 arrays + 4 pads scattered -> one vault, luxury留白)
+  // vault: header 64B + 5 fields converged (single vault isolation, false-sharing free)
   TJsLifecycleVault = record
-    HeaderPad: TCacheLinePad; // 64B luxury header single, false-sharing free, vault isolation
-    Closed: array of UInt32; // compact 4B epoch*2+closed
+    HeaderPad: TCacheLinePad; // 64B isolation, false-sharing free
+    Closed: array of UInt32; // compact 4B flags
     ClosedLen: PtrUInt;
     NextId: Int64;
     Lock: Int32;
@@ -84,11 +84,11 @@ begin
   end;
   // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric single source via collections.freelist, vault single source
   LId := Int64(atomic_fetch_add_64(VaultRef^.NextId, Int64(1), mo_relaxed));
-  // wrap detect: 2^32 index space, long service freelist reuse not hard DoS — bounded freelist retry with backoff, generation-tagged epoch protects ABA per INV-7
+  // wrap detect: 2^32 index space, long service freelist reuse with throttled backoff, generation-tagged epoch protects ABA per INV-7
   if UInt64(LId) > High(UInt32) then
   begin
-    // stability: burst NewContext/Close churn at wrap boundary uses bounded retry (8×) with cpu_pause, not single-shot hard DoS; long service bounded recycling via Free
-    for LRetry := 0 to 7 do
+    // stability: burst churn at wrap boundary uses throttled backoff retry (32×) with cpu_pause, not hard DoS; no free slots => throttled retry, caller backs off, long service bounded recycling via Free
+    for LRetry := 0 to 31 do
     begin
       RawSpinAcquire(VaultRef^.Lock);
       try
@@ -107,8 +107,12 @@ begin
         RawSpinRelease(VaultRef^.Lock);
       end;
       cpu_pause;
+      if (LRetry and 7) = 7 then
+      begin
+        cpu_pause; cpu_pause; cpu_pause; cpu_pause;
+      end;
     end;
-    raise EInvalidOperation.Create('JsPureContextRegister: id space exhausted (2^32 wrap) — no free slots after bounded freelist retry (8×), all 4B contexts live');
+    raise EInvalidOperation.Create('JsPureContextRegister: throttled — id space wrap busy (2^32), no free slots after bounded retry (32×), retry after backoff');
   end;
   LIdx := UInt32(UInt64(LId));
   Result := GPureMakeId(LIdx, 0);
@@ -249,22 +253,16 @@ end;
 function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline;
 var LInterval: Cardinal;
 begin
-  // perf: inline sampling 可配 via JsInterruptSampleIntervalNormalized single source (base owner, bytes.ops 单源), 1→逐次 15-30% 开销, 1024→15-30%降为惰性, 65536→更低开销但最长65536次延迟, power-of-two 快路径 and mask else mod 分支, 惰性刷新 single source, inline 零拷贝, exactly-once
+  // perf: inline sampling via JsInterruptSampleIntervalNormalized pow2 single source (base owner, bytes.ops single source, always pow2 => single and-mask, zero div), 1→逐次 15-30% 开销, 1024→15-30%降为惰性, 65536→更低开销但最长65536延迟, and-mask single path zero mod, inline zero-copy, exactly-once
   if ADeadlineNs = 0 then Exit(False);
   Inc(ACounter);
   LInterval := JsInterruptSampleIntervalNormalized(ASampleInterval);
-  if (LInterval and (LInterval - 1)) = 0 then
-  begin
-    if (ACounter and (LInterval - 1)) <> 0 then Exit(False);
-  end else
-  begin
-    if (ACounter mod LInterval) <> 0 then Exit(False);
-  end;
+  if (ACounter and (LInterval - 1)) <> 0 then Exit(False);
   ALastNs := JsPureMonotonicNs;
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;
 initialization
-  // 64B isolated vault: single luxury header pad, vault convergence of 5 fields, false-sharing free, vault single source
+  // 64B isolated vault: single header pad, vault convergence of 5 fields, false-sharing free, vault single source
   GLifecycleVault.ClosedLen := 0;
   GLifecycleVault.NextId := 1;
   GLifecycleVault.Lock := 0;

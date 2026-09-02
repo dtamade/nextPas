@@ -20,7 +20,7 @@
 
 | 单元 | 职责 | 允许 uses | 禁止 |
 |------|------|-----------|------|
-| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 + `JsTrimEquals` + `CheckJsRuntimeOptions` | `exception`、`base` | `js.*`、`platform`、`json`、`text.view` |
+| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 + `JsTrimEquals` + `CheckJsRuntimeOptions` | `exception`、`base`（`interface`） + `bytes.ops`（`implementation` 窄缝单源 `StringTrimEquals` inline 零拷贝 `SpanTrim/SpanEqual`、单源常量 `JS_INTERRUPT_SAMPLE_DEFAULT`） | `js.*`、`platform`、`json`、`text.view` |
 | `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`）| `js.base`、`json.types`（仅 `TJsonValue` 类型引用，interface 窄缝；implementation 经 `bytes.ops`+`js.pure.value` 单源单缝 `json.writer`/`text.*` single source via `pure.value`，L2→L2 单向 `js→json` 单点、cycle-gated、无反向 `json`→`js`，`bytes.ops` `SpanToString`/`BytesCopy` inline 零拷贝，`try..finally`/`Done` 不丢，见 module-registry allowlist） | `js.fake`/`js.quickjs.*`/`js.js888`、`platform.dl` |
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |

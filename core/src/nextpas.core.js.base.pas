@@ -69,7 +69,8 @@ procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJs
 implementation
 
 uses
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.base;
 
 class function TJsRuntimeOptions.Default: TJsRuntimeOptions;
 begin
@@ -97,12 +98,21 @@ begin
 end;
 
 function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
+var LNext: SizeUInt;
 begin
-  // perf: inline branch, zero alloc, single source via base constant JS_INTERRUPT_SAMPLE_DEFAULT, owner base single source bytes.ops 复用, 幂等不丢, L0-L3 守
+  // perf: inline branch + pow2 roundup via mem.base single source IsPowerOfTwo/NextPowerOfTwo, zero alloc, bytes.ops single source, always pow2 for and-mask fast path, inline zero-copy
   if AInterval = 0 then Exit(JS_INTERRUPT_SAMPLE_DEFAULT);
   if AInterval < JS_INTERRUPT_SAMPLE_MIN then Exit(JS_INTERRUPT_SAMPLE_MIN);
   if AInterval > JS_INTERRUPT_SAMPLE_MAX then Exit(JS_INTERRUPT_SAMPLE_MAX);
   Result := AInterval;
+  if not IsPowerOfTwo(Result) then
+  begin
+    LNext := NextPowerOfTwo(Result);
+    if (LNext = 0) or (LNext > JS_INTERRUPT_SAMPLE_MAX) then
+      Result := JS_INTERRUPT_SAMPLE_MAX
+    else
+      Result := Cardinal(LNext);
+  end;
 end;
 
 constructor EJsError.Create(const AMessage: string; ACategory: TJsErrorCategory;

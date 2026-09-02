@@ -168,6 +168,8 @@ var
   LThis: TJsValue;
   RPos: SizeUInt;
   LArgs: array of TJsValue;
+  LStack: array[0..3] of TJsValue;
+  UseStack: Boolean;
   Upper, LArgCount: SizeUInt;
   LStart, Pos, LLen: SizeUInt;
   Depth: Integer;
@@ -199,15 +201,20 @@ begin
     OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
     Exit(True);
   end;
-  // single bulk allocation via bytes.ops single source geometric 0→64→2× amortized O(1) (BytesDynEnsureLength once vs per-arg Exactly-Once poke, no second shrink poke), zero-copy views, not per-arg geometric thrash, inline not per red-line 2, bytes.ops single source
+  // zero-alloc fast path for host hotspot: stack 4 inline + Slice zero-copy (B/op=0 for noop single-arg BENCHMARKS) vs bulk heap via bytes.ops single source geometric 0→64→2× Exactly-Once poke for larger, inline not per red-line 2, bytes.ops single source
   Upper := nextpas.core.text.scan.ScanCountJsArgs(LInner);
   if Upper = 0 then Upper := 1;
   // trailing comma overestimates by 1 (ScanCount is commas+1, tail empty not added) — correct before alloc to keep Exactly-Once poke, B/op=0, bytes.ops single source
   if (Upper > 0) and (LInner.Len > 0) and (LInner.Data[LInner.Len - 1] = AnsiChar(',')) then Dec(Upper);
-  if Upper > 0 then
-    nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), Upper)
-  else
+  UseStack := False;
+  if Upper = 0 then
+    LArgs := nil
+  else if Upper <= SizeUInt(High(LStack) + 1) then
+  begin
+    UseStack := True;
     LArgs := nil;
+  end else
+    nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), Upper);
   // multi-arg split via L1 owner text.scan single source SIMD (ScanFindByte2+ScanFindAny5 VecWidth skip, O(n/VecWidth) vs per-char, zero-copy Slice/Trim), resource managed not丢 (dynamic array, no leak)
   LStart := 0; Depth := 0; InQuote := #0; Escaped := False; LArgCount := 0; Pos := 0; LLen := LInner.Len;
   while Pos < LLen do
@@ -236,8 +243,8 @@ begin
       else if (C = ',') and (Depth = 0) then
       begin
         LView := LInner.Slice(LStart, Pos - LStart).Trim;
-        // zero-copy via TStringView.Slice/Trim + EvalArgValue single source via text.escape, single bulk alloc not per-arg
-        LArgs[LArgCount] := EvalArgValue(LView);
+        // zero-copy via TStringView.Slice/Trim + EvalArgValue single source via text.escape, single bulk/stack alloc not per-arg
+        if UseStack then LStack[LArgCount] := EvalArgValue(LView) else LArgs[LArgCount] := EvalArgValue(LView);
         Inc(LArgCount);
         LStart := Pos + 1;
       end;
@@ -250,12 +257,15 @@ begin
   begin
     if LArgCount < Upper then
     begin
-      LArgs[LArgCount] := EvalArgValue(LView);
+      if UseStack then LStack[LArgCount] := EvalArgValue(LView) else LArgs[LArgCount] := EvalArgValue(LView);
       Inc(LArgCount);
     end;
   end;
-  // no second BytesDynSetLengthGeneric shrink — Upper pre-corrected for trailing comma, Exactly-Once poke via single BytesDynEnsureLength, bytes.ops single source, stability no leak
-  OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
+  // no second BytesDynSetLengthGeneric shrink — Upper pre-corrected for trailing comma, Exactly-Once poke via single BytesDynEnsureLength (heap path) or zero-alloc stack Slice (hot path B/op=0 via System.Slice zero-copy inline, stack managed finalize不丢), bytes.ops single source, stability no leak
+  if UseStack then
+    OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, System.Slice(LStack, Integer(LArgCount)), ABackend)
+  else
+    OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
   Result := True;
 end;
 // composed core — pipeline dispatch, each layer inline thin-forward, no 50-line if chain

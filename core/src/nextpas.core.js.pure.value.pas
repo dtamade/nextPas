@@ -54,7 +54,7 @@ procedure JsPureValueStateInit(var S: TJsPureValueState; AContextId: UInt64); in
 procedure JsPureValueStateClear(var S: TJsPureValueState); inline;
 function JsPureValueStateHasProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
 function JsPureValueStateDeleteProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
-function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline;
+function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline; deprecated 'Use JsPureValueStateGetKeysView zero-copy (B/op=0, TStringView borrow) for hot loops; GetKeys materialized O(n) alloc is compat only';
 function JsPureValueStateGetKeysView(const S: TJsPureValueState; const AObj: TJsValue): TJsStringViewArray; inline;
 function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): TJsValue; inline;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;

@@ -4,7 +4,7 @@ unit nextpas.core.js.intf;
  *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 interface narrow: json.types only; impl narrow single slit via bytes.ops+pure.value+lifecycle single source (see implementation uses, source-contract explicit anchoring, L2→L2 single-point cycle-gated via pure.value)
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 interface narrow: json.types only; impl narrow single slit via bytes.ops+pure.value+lifecycle single source
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
