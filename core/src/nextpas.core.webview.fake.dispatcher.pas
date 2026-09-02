@@ -12,11 +12,15 @@ unit nextpas.core.webview.fake.dispatcher;
        VecRingCopy 放大尾延迟；现改为预校验重试：快照后先 O(1) 锁内预校验
        （有空位则直接槽位写入无分配/无拷贝，stale 则无分配/无拷贝直接重取快照），
        仅快照仍有效时才在锁外 SetLength+VecRingCopy 单源 inline 线性化，
-       二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale 则 LNew:=nil
-       释放重试，零 O(n) 持锁、竞争重试零额外线性化，bytes.ops 单源。
-       纪律修复：PostRef 含 while 竞争重试与 VecRingCopy O(n) 两段式线性化，按
-       design-conventions §2 红线二外联（禁 inline）避 I-Cache 膨胀；内部
-       VecGrowCapacity/VecRingCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
+       二次持锁仅 O(1) 指针检查与槽位写入/安装，拷贝窗口竞争 stale 则保留 LNew
+       缓冲复用（SetLength 长度检查避免重复零化 O(Cap)，VecRingCopy 覆盖），
+       零 O(n) 持锁、竞争重试零额外线性化，bytes.ops 单源。
+       突发预分配：新增 Reserve/EnsureCapacity 预扩容接口，单源 VecGrowCapacity
+       0→4→2× 倍增在锁外 SetLength+VecRingCopy 一次性线性化，安装仅 O(1) 检查，
+       高并发突发前预分配消除 PostRef 临界 O(n) 尾延迟，stale 丢弃零泄漏。
+       纪律修复：PostRef/Reserve 含 while 竞争重试与 VecRingCopy O(n) 两段式线
+       性化，按 design-conventions §2 红线二外联（禁 inline）避 I-Cache 膨胀；
+       内部 VecGrowCapacity/VecRingCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -47,6 +51,8 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure PostRef(AProc: TWebviewProcRef);
+    procedure Reserve(ACapacity: Integer);
+    procedure EnsureCapacity(ACapacity: Integer); inline;
     function IsOnMainThread: Boolean; inline;
     function PumpOnce: Boolean;
     procedure PumpAll;
@@ -174,8 +180,7 @@ begin
         Inc(FCount);
         Exit;
       end;
-      // contention during copy window (rare) — discard linearized LNew and retry, zero O(n) under lock, avoids tail latency amplification
-      LNew := nil;
+      // contention during copy window (rare) — keep LNew buffer for reuse (SetLength Length vs Cap check avoids repeated O(Cap) zero-init, VecRingCopy overwrites), zero O(n) under lock, Finalize on reuse/Exit zero leak
     finally
       FLck.Release;
     end;
@@ -272,6 +277,66 @@ end;
 procedure TFakeDispatcher.Post(AProc: TWebviewProc);
 begin
   PostRef(WebviewProcToRef(AProc));
+end;
+
+procedure TFakeDispatcher.Reserve(ACapacity: Integer);
+{ not inline per design-conventions §2 red line 2: while + VecRingCopy O(n) would bloat I-Cache; inner VecGrowCapacity/VecRingCopy stay inline single source bytes.ops zero-copy }
+var
+  LNew: TFakeDispatcherRing;
+  LCap, LNeed, LHead, LCount: Integer;
+  LOldRing: TFakeDispatcherRing;
+begin
+  if ACapacity <= 0 then
+    Exit;
+  // fast check under lock
+  FLck.Acquire;
+  try
+    if Length(FRing) >= ACapacity then
+      Exit;
+    LCap := Length(FRing);
+    if LCap = 0 then
+      LCap := 4
+    else
+      // perf: single source bytes.ops VecGrowCapacity 0→4→2× inline, powers of two, zero mod/div, zero extra call
+      while LCap < ACapacity do
+        LCap := VecGrowCapacity(LCap);
+    LNeed := LCap;
+    LHead := FHead;
+    LCount := FCount;
+    LOldRing := FRing;
+  finally
+    FLck.Release;
+  end;
+  // perf: heap SetLength zero-init + VecRingCopy single source bytes.ops inline zero-copy outside lock, O(Cap) not held, pow2 amortized; single source VecGrowCapacity, managed ref preserved
+  SetLength(LNew, LNeed);
+  if LCount > 0 then
+    specialize VecRingCopy<TWebviewProcRef>(LOldRing, LHead, LCount, LNew);
+  FLck.Acquire;
+  try
+    if Length(FRing) >= ACapacity then
+    begin
+      // stale — another thread already grew enough, release linearized refs
+      LNew := nil;
+      Exit;
+    end;
+    if (FHead = LHead) and (FCount = LCount) then
+    begin
+      // stability: FRing:=LNew transfers ownership, finalization releases old ring refs, LNew retains AddRef, zero leak; Finalize of LNew at exit decrements one ref leaving FRing single owner
+      FRing := LNew;
+      FHead := 0;
+      Exit;
+    end;
+    // stale but still needs capacity — discard; Post path will grow, caller may retry Reserve before burst
+    LNew := nil;
+  finally
+    FLck.Release;
+  end;
+end;
+
+procedure TFakeDispatcher.EnsureCapacity(ACapacity: Integer); inline;
+begin
+  // thin alias to Reserve, inline zero extra call, bytes.ops single source preserved
+  Reserve(ACapacity);
 end;
 
 end.

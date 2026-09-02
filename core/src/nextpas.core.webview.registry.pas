@@ -36,6 +36,9 @@ function WebviewRawProbe(AKind: TWebviewKind): Boolean; inline;
 implementation
 
 uses
+  nextpas.core.atomic,
+  nextpas.core.sync,
+  nextpas.core.sync.mutex,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.wk.loader;
@@ -83,11 +86,37 @@ const
     (Kind: wvWk; Probe: @ProbeWk)
   );
 
-{ ---- 快照缓存：热点路径零重复双检锁（进程级稳定，loader 已幂等） ---- }
+{ ---- 快照缓存：热点路径零重复双检锁（进程级稳定，loader 已幂等） ----
+  匠心修复：ShortInt -1 魔数→显式枚举哨兵 + 原子可见性 + L1 sync Owner 单源锁 }
+
+type
+  { 显式 Option/枚举哨兵：消除 ShortInt -1 类型不诚实，零魔数漂移 }
+  TProbeSnap = (psUnknown, psFalse, psTrue);
+
+const
+  REG_DEFAULT_UNKNOWN = 0; { 0 unknown, else Ord(TWebviewKind)+1 }
 
 var
-  GProbeSnapshot: array[TWebviewKind] of ShortInt = (-1, -1, -1, -1);
-  GDefaultSnapshot: ShortInt = -1; { -1 unknown, else Ord(TWebviewKind) }
+  GProbeSnapshot: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { Ord(TProbeSnap) 原子，acquire/release 可见性 }
+  GDefaultSnapshot: Int32 = 0; { REG_DEFAULT_UNKNOWN else Ord(kind)+1 原子 }
+  GRegistryLock: TMutex; { L1 sync Owner 单源：首触并发零撕裂，替代裸全局变量竞态 }
+  GRegistryOnce: IOnce; { L1 sync.once 单源：锁惰性创建零双分配 }
+
+procedure EnsureRegistryLock; inline;
+begin
+  // perf: inline 零额外调用；Once 单源保护懒创建，热点双检锁零分配
+  if GRegistryLock <> nil then Exit;
+  if GRegistryOnce = nil then
+  begin
+    GRegistryLock := TMutex.Create;
+    Exit;
+  end;
+  GRegistryOnce.DoOnce(procedure
+  begin
+    if GRegistryLock = nil then
+      GRegistryLock := TMutex.Create;
+  end);
+end;
 
 function FindProbe(AKind: TWebviewKind): TWebviewProbe; inline;
 var I: Integer;
@@ -108,36 +137,83 @@ begin
 end;
 
 function WebviewProbeAvailable(AKind: TWebviewKind): Boolean; inline;
-var LSnap: ShortInt;
+var LSnap: Int32;
 begin
   if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
   if AKind = wvFake then Exit(True);
-  // perf: inline 快照 O(1) 复用，命中零 Probe/零双检锁/零堆分配；未命中单次 RawProbe 落 loader 缓存
-  LSnap := GProbeSnapshot[AKind];
-  if LSnap <> -1 then Exit(LSnap = 1);
-  Result := WebviewRawProbe(AKind);
-  GProbeSnapshot[AKind] := ShortInt(Ord(Result));
+  // perf: inline 快照 O(1) acquire 复用，命中零 Probe/零锁/零堆分配；未命中单次 RawProbe 落 loader 缓存（原子+mutex 双检锁）
+  LSnap := atomic_load(GProbeSnapshot[AKind], mo_acquire);
+  if LSnap <> Ord(psUnknown) then Exit(LSnap = Ord(psTrue));
+  EnsureRegistryLock;
+  GRegistryLock.Acquire;
+  try
+    LSnap := atomic_load(GProbeSnapshot[AKind], mo_acquire);
+    if LSnap <> Ord(psUnknown) then Exit(LSnap = Ord(psTrue));
+    Result := WebviewRawProbe(AKind);
+    if Result then LSnap := Ord(psTrue) else LSnap := Ord(psFalse);
+    atomic_store(GProbeSnapshot[AKind], LSnap, mo_release);
+  finally
+    GRegistryLock.Release;
+  end;
 end;
 
 function WebviewDefaultKind: TWebviewKind; inline;
 var
+  LSnap: Int32;
   I: Integer;
   LKind: TWebviewKind;
+  LProbeSnap: Int32;
+  LAvail: Boolean;
 begin
-  // perf: inline 快照复用，命中零循环零 Probe/零双检锁，零拷贝
-  if GDefaultSnapshot <> -1 then Exit(TWebviewKind(GDefaultSnapshot));
-  for I := Low(WEBVIEW_PROBES) to High(WEBVIEW_PROBES) do
-  begin
-    LKind := WEBVIEW_PROBES[I].Kind;
-    if LKind = wvFake then Continue;
-    if WebviewProbeAvailable(LKind) then
+  // perf: inline 快照复用 acquire，命中零循环零 Probe/零锁，零拷贝
+  LSnap := atomic_load(GDefaultSnapshot, mo_acquire);
+  if LSnap <> REG_DEFAULT_UNKNOWN then Exit(TWebviewKind(LSnap - 1));
+  EnsureRegistryLock;
+  GRegistryLock.Acquire;
+  try
+    LSnap := atomic_load(GDefaultSnapshot, mo_acquire);
+    if LSnap <> REG_DEFAULT_UNKNOWN then Exit(TWebviewKind(LSnap - 1));
+    for I := Low(WEBVIEW_PROBES) to High(WEBVIEW_PROBES) do
     begin
-      GDefaultSnapshot := ShortInt(Ord(LKind));
-      Exit(LKind);
+      LKind := WEBVIEW_PROBES[I].Kind;
+      if LKind = wvFake then Continue;
+      // 锁内直探，避免嵌套 WebviewProbeAvailable 重入同一 mutex 死锁；仍复用原子快照+RawProbe 单源
+      LProbeSnap := atomic_load(GProbeSnapshot[LKind], mo_acquire);
+      if LProbeSnap <> Ord(psUnknown) then
+      begin
+        if LProbeSnap = Ord(psTrue) then
+        begin
+          atomic_store(GDefaultSnapshot, Ord(LKind) + 1, mo_release);
+          Exit(LKind);
+        end;
+        Continue;
+      end;
+      LAvail := WebviewRawProbe(LKind);
+      if LAvail then LProbeSnap := Ord(psTrue) else LProbeSnap := Ord(psFalse);
+      atomic_store(GProbeSnapshot[LKind], LProbeSnap, mo_release);
+      if LAvail then
+      begin
+        atomic_store(GDefaultSnapshot, Ord(LKind) + 1, mo_release);
+        Exit(LKind);
+      end;
     end;
+    atomic_store(GDefaultSnapshot, Ord(wvFake) + 1, mo_release);
+    Result := wvFake;
+  finally
+    GRegistryLock.Release;
   end;
-  GDefaultSnapshot := ShortInt(Ord(wvFake));
-  Result := wvFake;
 end;
+
+initialization
+  GRegistryOnce := Once;
+  EnsureRegistryLock;
+
+finalization
+  if GRegistryLock <> nil then
+  begin
+    GRegistryLock.Free;
+    GRegistryLock := nil;
+  end;
+  GRegistryOnce := nil;
 
 end.

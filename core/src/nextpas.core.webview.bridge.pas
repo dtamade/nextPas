@@ -197,19 +197,59 @@ uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
-  nextpas.core.webview.utils;
+  nextpas.core.webview.utils,
+  nextpas.core.platform.thread;
 
-{ 文档池化：高频 invoke 单帧约 4µs 热路径复用线程局域 arena，零每帧堆分配；Parse 复用局部容量零重建，Done 仅 finalization 释放不丢，复用 bytes.ops 单源思想，inline 零额外调用。 }
+{ 文档池化 STA 亲和显式约束 (CONTRACT §4)：高频 invoke 单帧约 4µs 热路径
+  复用线程局域 arena 零每帧堆分配；Parse 复用局部容量零重建。GBridgeDoc
+  为 per-thread 池化 TJsonDocument，线程退出由 L0 platform.thread Owner
+  的 TLS 析构统一 Done（委派 L0 内存/线程 Owner 统一清理，零 heaptrc 泄漏），
+  仅 STA UI 线程允许触碰（隐式共享隐患已在类型层面显式约束，见
+  BridgeRequireSTA inline 零额外调用，复用 bytes.ops 单源思想）。 }
 threadvar
   GBridgeDoc: TJsonDocument;
   GBridgeDocInited: Boolean;
 
+var
+  GBridgeOwnerThread: UInt64 = 0;
+  GBridgeOwnerInited: Boolean = False;
+  GBridgeTLSKey: TPlatformTLSKey = 0;
+  GBridgeTLSKeyInited: Boolean = False;
+
+procedure BridgeThreadCleanup(AData: Pointer); cdecl; forward;
+{$IFDEF NEXTPAS_WINDOWS}
+procedure BridgeThreadCleanupFls(AData: Pointer); stdcall; forward;
+{$ENDIF}
+
+procedure BridgeRequireSTA; inline;
+begin
+  { CONTRACT §4 STA 单线程亲和类型级显式约束：仅 UI 主线程允许编解码/回执构造 }
+  if GBridgeOwnerInited and (platform_thread_id <> GBridgeOwnerThread) then
+    raise EWebviewInvalidState.Create('webview bridge STA violation: call only on UI thread');
+end;
+
+procedure BridgeCleanupTLS; inline;
+begin
+  if GBridgeDocInited then
+  begin
+    GBridgeDoc.Done;
+    GBridgeDocInited := False;
+  end;
+end;
+
 procedure EnsureBridgeDoc; inline;
 begin
+  if not GBridgeOwnerInited then
+  begin
+    GBridgeOwnerThread := platform_thread_id;
+    GBridgeOwnerInited := True;
+  end;
   if not GBridgeDocInited then
   begin
     GBridgeDoc.Init(nil);
     GBridgeDocInited := True;
+    if GBridgeTLSKeyInited then
+      platform_tls_set(GBridgeTLSKey, Pointer(1));
   end;
 end;
 
@@ -361,7 +401,8 @@ var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { 池化 Doc 复用 arena，零每帧堆分配，高频 invoke 单帧约 4µs 仍付堆分配消除；Parse 复用局部容量，inline 零拷贝视图，复用 bytes.ops 单源。 }
+  { 池化 Doc 复用 arena，零每帧堆分配，高频 invoke 单帧约 4µs 仍付堆分配消除；Parse 复用局部容量，inline 零拷贝视图，复用 bytes.ops 单源。STA 亲和显式约束见 BridgeRequireSTA。 }
+  BridgeRequireSTA;
   Result := False;
   AFrame := Default(TWebviewFrame);
   EnsureBridgeDoc;
@@ -395,7 +436,8 @@ function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: st
 var
   LId: Int64;
 begin
-  { 池化 Doc 复用 arena，超限路径零每帧堆分配；id 提取单源复用 BridgeTryExtractId，消除与 BridgeParseFrame 的 Parse+Get('id') 重复，inline 零拷贝视图。 }
+  { 池化 Doc 复用 arena，超限路径零每帧堆分配；id 提取单源复用 BridgeTryExtractId，消除与 BridgeParseFrame 的 Parse+Get('id') 重复，inline 零拷贝视图。STA 亲和见 BridgeRequireSTA。 }
+  BridgeRequireSTA;
   Result := False;
   ARejectScript := '';
   if not WebviewMetricsIsOversized(AView) then
@@ -417,20 +459,21 @@ function BuildResolveScript(AId: Int64; const AResultJson: string): string;
 var
   LJson: string;
   LB: TStringBuilder;
-  W: TJsonWriter;
+  LView: TStringView;
 begin
+  { 单 Reserve + 单源 JsonEscape 薄转发 L1 text.escape（复用 VecWidth SIMD inline 零拷贝，bytes.ops 单源思想），消除 TStringBuilder Reserve+JsonWriter 双重转义/双重 Reserve 水位膨胀；零拷贝 TStringView 视图 }
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
+  LView := TStringView.FromStr(LJson);
   LB.Init(256);
   try
-    LB.Reserve(SizeUInt(16 + 20 + Length(LJson) + 8));
     LB.AppendBytes('__npw.__resolve(', 16);
     LB.AppendInt(AId);
     LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LJson);
-    LB.AppendChar(')');
+    LB.AppendChar('"');
+    JsonEscapeToBuilder(LView, LB);
+    LB.AppendBytes('")', 2);
     Result := LB.ToString;
   finally
     LB.Done;
@@ -687,8 +730,34 @@ begin
   Result := FIndex.Count;
 end;
 
+{ L0 委派清理：TLS 线程退出析构统一 Done，per-thread arena 零 heaptrc 泄漏，复用 bytes.ops 单源思想；主线程 finalization 兜底 }
+
+procedure BridgeThreadCleanup(AData: Pointer); cdecl;
+begin
+  BridgeCleanupTLS;
+end;
+
+{$IFDEF NEXTPAS_WINDOWS}
+procedure BridgeThreadCleanupFls(AData: Pointer); stdcall;
+begin
+  BridgeCleanupTLS;
+end;
+{$ENDIF}
+
+initialization
+{$IFDEF NEXTPAS_UNIX}
+  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, @BridgeThreadCleanup) = 0;
+{$ELSE}
+{$IFDEF NEXTPAS_WINDOWS}
+  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, @BridgeThreadCleanupFls) = 0;
+{$ELSE}
+  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, nil) = 0;
+{$ENDIF}
+{$ENDIF}
+
 finalization
-  if GBridgeDocInited then
-    GBridgeDoc.Done;
+  BridgeCleanupTLS;
+  if GBridgeTLSKeyInited then
+    platform_tls_destroy_dtor(GBridgeTLSKey);
 
 end.

@@ -10,9 +10,11 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.platform.time,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.bridge;
+  nextpas.core.webview.bridge,
+  nextpas.core.webview.metrics;
 
 const
   { 典型 invoke 帧：3 字段对象负载，~70B }
@@ -79,6 +81,23 @@ begin
   GScript := BuildEmitScript(EVENT_NAME, EVENT_PAYLOAD);
 end;
 
+procedure CaseIsOversized;
+var
+  LView: TStringView;
+begin
+  LView := TStringView.FromStr(FRAME_JSON);
+  GKeep := IsWebviewFrameOversizedView(LView);
+end;
+
+procedure CaseIsOversizedExpanded;
+var
+  LView, LPayload: TStringView;
+begin
+  LView := TStringView.FromStr(FRAME_JSON);
+  LPayload := TStringView.FromStr('{"a":1}');
+  GKeep := IsWebviewFrameOversizedExpanded(LView, LPayload);
+end;
+
 procedure TimeCase(const AName: string; AOnce: TWebviewProc);
 var
   LVals: TDoubles;
@@ -125,6 +144,8 @@ begin
   TimeCase('BuildResolveScript', @CaseResolve);
   TimeCase('BuildRejectScript', @CaseReject);
   TimeCase('BuildEmitScript', @CaseEmit);
+  TimeCase('IsOversizedView', @CaseIsOversized);
+  TimeCase('IsOversizedExpanded', @CaseIsOversizedExpanded);
 
   { 防死代码消除：消费全部产物 }
   if (not GKeep) and (LScript = '') then

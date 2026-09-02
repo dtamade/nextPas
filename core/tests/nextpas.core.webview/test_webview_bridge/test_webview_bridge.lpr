@@ -16,6 +16,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
+  nextpas.core.webview.metrics,
   nextpas.core.webview.fake;
 
 var
@@ -484,6 +485,35 @@ begin
   end;
 end;
 
+procedure TestWaterLevelRegressionAnchor;
+var
+  LView, LPayload: TStringView;
+  LRawLen, LPayloadLen, LExpanded: SizeUInt;
+  LFrame: TWebviewFrame;
+  LBigPayload, LFrameJson: string;
+begin
+  { CONTRACT §6 水位回归锚点：1 MiB Hard Limit 单源于 L2 metrics，expanded = raw + payload + raw shr1 + 1024 }
+  CheckEqual(Int64(1048576), Int64(NPW_MAX_FRAME_BYTES), '1MiB hard limit anchor');
+  CheckEqual(Int64(WEBVIEW_MAX_FRAME_BYTES), Int64(NPW_MAX_FRAME_BYTES), 'alias zero drift');
+  LView := TStringView.FromStr('{"v":1,"id":1,"cmd":"a"}');
+  LPayload := TStringView.Create(nil, 0);
+  Check(not IsWebviewFrameOversizedExpanded(LView, LPayload), 'small not oversized expanded');
+  { 构造接近阈值的 expanded：600k raw + 300k payload + 300k overhead +1k >1MiB 应判超限 }
+  LRawLen := 600 * 1024;
+  LPayloadLen := 300 * 1024;
+  LExpanded := LRawLen + LPayloadLen + (LRawLen shr 1) + 1024;
+  Check(LExpanded > SizeUInt(NPW_MAX_FRAME_BYTES), 'expanded formula exceeds threshold');
+  LView := TStringView.Create(nil, LRawLen);
+  Check(IsWebviewFrameOversizedExpanded(LView, LPayloadLen), 'expanded oversized anchor');
+  Check(IsWebviewFrameOversizedExpandedView(LView, TStringView.Create(nil, LPayloadLen)), 'expanded view anchor');
+  { 二次校验路径：raw 未超限但 expanded 超限的解码应被拒（零拷贝视图水位闭环） }
+  SetLength(LBigPayload, 700 * 1024);
+  FillChar(LBigPayload[1], Length(LBigPayload), Ord('a'));
+  LFrameJson := '{"v":1,"id":1,"cmd":"big","payload":"' + LBigPayload + '"}';
+  { raw 700k+ overhead <1MiB 但 payload 700k 导致 expanded ~ 700k+700k+350k >1MiB，二次校验应拦截 }
+  Check(not TryDecodeFrame(LFrameJson, LFrame), 'expanded oversized frame rejected via secondary check');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -506,5 +536,6 @@ begin
   T.Test('fake frame closed window', @TestFakeFrameClosedWindow);
   T.Test('assets prefix routing', @TestAssetsPrefixRouting);
   T.Test('assets miss and validation', @TestAssetsMissAndValidation);
+  T.Test('water level regression anchor (§6)', @TestWaterLevelRegressionAnchor);
   if not T.Run then Halt(1);
 end.

@@ -3,8 +3,8 @@ unit nextpas.core.webview.gtk.pool;
 {** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval / GCancellable 五池私有复用，dispatcher 专用。
 
        契约：容量/操作单源 L1 bytes.ops / sync.pool，类型单源 webview.intf，私于 gtk 不经门面（CONTRACT §1）。
-       性能：inline 薄转发零拷贝（SlabTryAcquire/Release 薄转发 sync.pool 单源 inline 零额外调用），冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化，LazyLock 非 inline 原子 CAS 单源零闭包堆分配零泄漏（was Once+anon closure 每池堆分配、inline 5 路路由膨胀、nil 分支无同步并发重复泄漏），原子发布可见性保障并发首触零重复泄漏。
-       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，CAS 失败分支 Free 单所有权不丢，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 逐槽释放。 *}
+       性能：inline 薄转发零拷贝（SlabTryAcquire/Release 薄转发 sync.pool 单源 inline 零额外调用），冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化，LazyLock 非 inline 原子 CAS 单源零闭包堆分配零泄漏（was Once+anon closure 每池堆分配、inline 5 路路由膨胀、nil 分支无同步并发重复泄漏），原子发布可见性保障并发首触零重复泄漏，Release finalize 原子门控分支预测零额外调用热路径 <1µs。
+       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，CAS 失败分支 Free 单所有权不丢，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 持 per-pool 锁逐槽释放 + atomic_exchange 原子置 nil 单所有权 Free 零双释放，GPoolFinalized 原子门控幂等 CAS 零重入竞态，LazyLock 终结期双检零重建泄漏，与并发 Acquire/Release UAF/重复释放零竞态。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -94,6 +94,7 @@ var
   GAssetHolderOnce: IOnce = nil;
   GEvalOnce: IOnce = nil;
   GCancelOnce: IOnce = nil;
+  GPoolFinalized: Int32 = 0;
 
 function LazyLock(var ALock: TMutex): TMutex;
 var
@@ -101,10 +102,16 @@ var
   LNew: TMutex;
   LExpected: Pointer;
 begin
+  // finalized gate: mo_acquire vis prevents reconstruct after PoolFinalize CAS publish, zero extra alloc after fini
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+    Exit(TMutex(atomic_load(PPointer(@ALock)^, mo_acquire)));
   // perf: atomic acquire fast path <1µs zero heap, not inline per design-conventions §2 red-line 2 (routing/heavy CAS bans inline, avoids I-Cache bloat); zero anon closure heap vs Once DoOnce (was 5 pools × closure heap per cold start), CAS single source via atomic mo_acq_rel ensures zero duplicate leak + mo_acquire visibility, short critical <1µs zero copy via sync.pool
   LLoaded := atomic_load(PPointer(@ALock)^, mo_acquire);
   if LLoaded <> nil then
     Exit(TMutex(LLoaded));
+  // double-check finalized after fastpath to avoid alloc race with finalize
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+    Exit(nil);
   LNew := TMutex.Create;
   LExpected := nil;
   if atomic_compare_exchange_strong(PPointer(@ALock)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
@@ -138,6 +145,11 @@ begin
   // inline 薄转发单源 SlabRelease，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Proc := nil; A^.Method := nil; A^.Plain := nil; A^.Kind := 0;
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    Dispose(A);
+    Exit;
+  end;
   if not specialize SlabRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock, A) then
     Dispose(A);
 end;
@@ -155,6 +167,11 @@ begin
   if A = nil then Exit;
   A^.Win := nil; A^.FrameId := 0; A^.Cmd := ''; A^.IsError := False;
   A^.ResultJson := ''; A^.Code := ''; A^.MsgText := '';
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    Dispose(A);
+    Exit;
+  end;
   if not specialize SlabRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock, A) then
     Dispose(A);
 end;
@@ -171,6 +188,11 @@ begin
   // inline 薄转发单源 SlabRelease，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Bytes := nil;
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    Dispose(A);
+    Exit;
+  end;
   if not specialize SlabRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
     Dispose(A);
 end;
@@ -187,6 +209,11 @@ procedure ReleaseEvalRec(A: PEvalRec); inline;
 begin
   if A = nil then Exit;
   A^.Callback := nil; A^.OnError := nil; A^.Done := False; A^.Owner := nil; A^.Cancel := nil;
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    Dispose(A);
+    Exit;
+  end;
   if not specialize SlabRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A) then
     Dispose(A);
 end;
@@ -220,6 +247,11 @@ begin
     GtkObjectUnref(A);
     Exit;
   end;
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then
+  begin
+    GtkObjectUnref(A);
+    Exit;
+  end;
   if not specialize SlabRelease<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock, A) then
     GtkObjectUnref(A);
 end;
@@ -230,42 +262,92 @@ begin
 end;
 
 procedure PoolFinalize; inline;
+var
+  LLock: TMutex;
 begin
-  while GIdlePoolCount > 0 do
-  begin
-    Dec(GIdlePoolCount);
-    Dispose(GIdlePool[GIdlePoolCount]);
+  // idempotent CAS gate mo_acq_rel publish to LazyLock/CAS, ensures single owner Free
+  if atomic_load(GPoolFinalized, mo_acquire) <> 0 then Exit;
+  if atomic_exchange(GPoolFinalized, 1, mo_acq_rel) <> 0 then Exit;
+  // Idle — hold per-pool lock while draining, lock via atomic_load, exchange to nil single ownership
+  LLock := TMutex(atomic_load(PPointer(@GIdleLock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while GIdlePoolCount > 0 do
+    begin
+      Dec(GIdlePoolCount);
+      Dispose(GIdlePool[GIdlePoolCount]);
+    end;
+    SetLength(GIdlePool, 0);
+    GIdlePoolCount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
   end;
-  SetLength(GIdlePool, 0);
-  while GCompletionPoolCount > 0 do
-  begin
-    Dec(GCompletionPoolCount);
-    Dispose(GCompletionPool[GCompletionPoolCount]);
+  LLock := TMutex(atomic_exchange(PPointer(@GIdleLock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
+  // Completion
+  LLock := TMutex(atomic_load(PPointer(@GCompletionLock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while GCompletionPoolCount > 0 do
+    begin
+      Dec(GCompletionPoolCount);
+      Dispose(GCompletionPool[GCompletionPoolCount]);
+    end;
+    SetLength(GCompletionPool, 0);
+    GCompletionPoolCount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
   end;
-  SetLength(GCompletionPool, 0);
-  while GAssetHolderCount > 0 do
-  begin
-    Dec(GAssetHolderCount);
-    Dispose(GAssetHolder[GAssetHolderCount]);
+  LLock := TMutex(atomic_exchange(PPointer(@GCompletionLock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
+  // AssetHolder
+  LLock := TMutex(atomic_load(PPointer(@GAssetHolderLock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while GAssetHolderCount > 0 do
+    begin
+      Dec(GAssetHolderCount);
+      Dispose(GAssetHolder[GAssetHolderCount]);
+    end;
+    SetLength(GAssetHolderPool, 0);
+    GAssetHolderCount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
   end;
-  SetLength(GAssetHolderPool, 0);
-  while GEvalPoolCount > 0 do
-  begin
-    Dec(GEvalPoolCount);
-    Dispose(GEvalPool[GEvalPoolCount]);
+  LLock := TMutex(atomic_exchange(PPointer(@GAssetHolderLock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
+  // Eval
+  LLock := TMutex(atomic_load(PPointer(@GEvalLock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while GEvalPoolCount > 0 do
+    begin
+      Dec(GEvalPoolCount);
+      Dispose(GEvalPool[GEvalPoolCount]);
+    end;
+    SetLength(GEvalPool, 0);
+    GEvalPoolCount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
   end;
-  SetLength(GEvalPool, 0);
-  while GCancelPoolCount > 0 do
-  begin
-    Dec(GCancelPoolCount);
-    GtkObjectUnref(GCancelPool[GCancelPoolCount]);
+  LLock := TMutex(atomic_exchange(PPointer(@GEvalLock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
+  // Cancel — G_object unref under lock single ownership
+  LLock := TMutex(atomic_load(PPointer(@GCancelLock)^, mo_acquire));
+  if LLock <> nil then LLock.Acquire;
+  try
+    while GCancelPoolCount > 0 do
+    begin
+      Dec(GCancelPoolCount);
+      GtkObjectUnref(GCancelPool[GCancelPoolCount]);
+    end;
+    SetLength(GCancelPool, 0);
+    GCancelPoolCount := 0;
+  finally
+    if LLock <> nil then LLock.Release;
   end;
-  SetLength(GCancelPool, 0);
-  FreeAndNil(GCancelLock);
-  FreeAndNil(GIdleLock);
-  FreeAndNil(GCompletionLock);
-  FreeAndNil(GAssetHolderLock);
-  FreeAndNil(GEvalLock);
+  LLock := TMutex(atomic_exchange(PPointer(@GCancelLock)^, nil, mo_acq_rel));
+  if LLock <> nil then LLock.Free;
 end;
 
 initialization

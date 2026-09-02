@@ -23,7 +23,7 @@
 | 单元 | 层 | 职责 | 波次 |
 |------|----|------|------|
 | `nextpas.core.webview.base` | 类型根 | options/events/kinds/错误分类（含 `EWebviewError` 族）— 纯数据类型，无校验实现（四件套纯度） | W1 |
-| `nextpas.core.webview.validation` | 校验 | `CheckWebviewOptions`/`CheckInvokeCmd`/`CheckWebview*` 校验实现层（`base←validation←intf` 纯度；复用 L1 `text.view` `TStringView.Trim` 零拷贝 + L2 `validation.URL` 单源，`inline` 零额外调用，释放不丢） | W1 |
+| `nextpas.core.webview.validation` | 校验 | `CheckWebviewOptions`/`CheckInvokeCmd`/`CheckWebview*` 校验实现层（与 `intf` 并列、均仅依赖 `base`；四件套 `base←intf←impl←facade` 守恒，`validation` 为独立校验分支；复用 L1 `text.view` `TStringView.Trim` 零拷贝 + L2 `validation.URL` 单源，`inline` 零额外调用，释放不丢） | W1 |
 | `nextpas.core.webview.intf` | 接口 | `IWebviewWindow` / `IWebviewDispatcher` / `IWebviewAssets` / invoke 契约类型 | W1 |
 | `nextpas.core.webview.utils` | 共享辅助 | 资产路径归一 `NormalizeWebviewAssetPath`/`ViewFromPChar` 薄转发 L1 `text.view` 单源（`TStringView` 零拷贝 `inline` + `SliceToStr` 单次 `SetString+Move`，`Finalize` 释放不丢） | W1 |
 | `nextpas.core.webview.callbacks` | 共享辅助 | method/proc→reference 单源适配（4 后端 `inline` 薄转发，`Move` 零拷贝，释放不丢） | W1 |
@@ -58,9 +58,11 @@
 ### 依赖方向
 
 ```
-base ← validation ← intf ← utils/callbacks ← bridge(←assets) ← fake/gtk → factory → builder → 门面   （L3→L2 has-a IWindow）
+base ─┬─ validation（校验实现层，仅依赖 base；复用 L1 text.view + L2 validation，inline 零拷贝，释放不丢）
+      └─ intf（仅依赖 base + window.intf）→ utils/callbacks → bridge(←assets) ← fake/gtk → factory → builder → 门面   （L3→L2 has-a IWindow）
 gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool ← gtk
 ```
+> 实测 uses 闭包：`validation`→`base`（`nextpas.core.webview.validation.pas:57` 仅 `uses base`），`intf`→`base,window.intf`（`nextpas.core.webview.intf.pas:19-21` 无 `validation`）；二者为 `base` 并列分支，四件套 `base←intf←impl←facade` 守恒，互不依赖。
 - `validation` 为校验实现层（`inline` 零拷贝，失败抛 `EWebviewInvalidState`，无堆资源释放不丢；复用 L1 `text.view` + L2 `validation` 单源）。
 - `utils`/`callbacks` 为家族共享辅助（不经门面；`utils` 复用 `text.view` 单源 `inline` 零拷贝 `TStringView` + `SliceToStr` 单次 `SetString+Move`，`callbacks` 仅依 `intf` `inline` 薄转发，`Default(T)` 释放不丢）。
 - `assets`/`viewmap`/`pool` 为私有索引/池化（不经门面；已反哺 `collections.prefixrouter`/`hashmap`/`sync.pool` 单源，`inline` 零拷贝，`Finalize`/`Dispose`/`FreeAndNil` 释放不丢）。
