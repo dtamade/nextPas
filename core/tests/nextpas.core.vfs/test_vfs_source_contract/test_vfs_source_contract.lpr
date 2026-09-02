@@ -94,7 +94,7 @@ end;
 
 procedure TestVfsSourcesNoFpcRtl;
 const
-  FILES: array[0..13] of string = (
+  FILES: array[0..14] of string = (
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -106,6 +106,7 @@ const
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
+    'src/nextpas.core.vfs.cache.pas',
     'src/nextpas.core.vfs.transform.pas',
     'src/nextpas.core.vfs.compressed.pas',
     'src/nextpas.core.vfs.decorator.pas');
@@ -132,7 +133,7 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..17] of string = (
+  NO_SEAM: array[0..18] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
@@ -148,6 +149,7 @@ const
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
+    'src/nextpas.core.vfs.cache.pas',
     'src/nextpas.core.vfs.transform.pas',
     'src/nextpas.core.vfs.compressed.pas',
     'src/nextpas.core.vfs.decorator.pas');
@@ -185,13 +187,21 @@ begin
   Src := LoadSourceText('src/nextpas.core.vfs.transform.pas');
   Check(Pos('nextpas.core.fs', Src) = 0,
     'transform must not reference fs');
-  { base 纯度：四件套最底层不得直连 compress.base，GZIP_MAX canonical 寄居 compress.base，vfs 侧字面量对齐 }
+  { base 单源：GZIP_MAX canonical 寄居 compress.base，vfs.base 经 compress.base 单源别名无字面量漂移，复用 bytes.ops 单源 inline 零拷贝 }
   Src := LoadSourceText('src/nextpas.core.vfs.base.pas');
-  Check(Pos('nextpas.core.compress', Src) = 0,
-    'vfs.base must not reference compress (L0 purity, no L2→L2)');
-  Check(Pos('32 * 1024 * 1024', Src) > 0,
-    'vfs.base VFS_DECOMPRESS_MAX_BYTES must be literal 32MiB aligned with compress GZIP_MAX');
-  { 单源收敛：base 为唯一字面量 32MiB 对齐 canonical GZIP_MAX，compressed 经 vfs.base 单源别名复用消除二次字面量双写，接口层无 L2→L2 直连 compress.base }
+  Check(Pos('nextpas.core.compress.base', Src) > 0,
+    'vfs.base VFS_DECOMPRESS_MAX_BYTES must alias compress.base single source');
+  Check(Pos('GZIP_MAX_DECOMPRESS_BYTES', Src) > 0,
+    'vfs.base must reference GZIP_MAX_DECOMPRESS_BYTES canonical');
+  Check(Pos('32 * 1024 * 1024', Src) = 0,
+    'vfs.base must not duplicate literal 32MiB (single source via compress.base alias)');
+  Check(Pos('VfsSpanFromString', Src) > 0,
+    'vfs.base must have VfsSpanFromString single source helper (inline zero-copy)');
+  Check(Pos('TByteSpan.FromStr', Src) > 0,
+    'vfs.base helper must reuse TByteSpan.FromStr single source');
+  Check(Pos('inline;', Src) > 0,
+    'vfs.base has inline hot paths (perf evidence)');
+  { 单源收敛：base 经 compress.base GZIP_MAX 单源别名（无字面量），compressed 经 vfs.base 单源别名复用消除二次字面量双写，链路 canonical 单源 }
   Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
   Check(Pos('32 * 1024 * 1024', Src) = 0,
     'compressed must not duplicate literal 32MiB (single source via vfs.base alias)');
@@ -242,6 +252,7 @@ begin
   AssertNoRespackSeam('vfs.sub', LoadSourceText('src/nextpas.core.vfs.sub.pas'));
   AssertNoRespackSeam('vfs.mount', LoadSourceText('src/nextpas.core.vfs.mount.pas'));
   AssertNoRespackSeam('vfs.overlay', LoadSourceText('src/nextpas.core.vfs.overlay.pas'));
+  AssertNoRespackSeam('vfs.cache', LoadSourceText('src/nextpas.core.vfs.cache.pas'));
   AssertNoRespackSeam('vfs.transform', LoadSourceText('src/nextpas.core.vfs.transform.pas'));
   AssertNoRespackSeam('vfs.compressed', LoadSourceText('src/nextpas.core.vfs.compressed.pas'));
   AssertNoRespackSeam('vfs.decorator', LoadSourceText('src/nextpas.core.vfs.decorator.pas'));

@@ -5,8 +5,8 @@ unit nextpas.core.vfs.overlay;
   （同一虚拟路径多层，首命中胜出）。INV-O1：列表按传入优先级有序，Exists/Stat/
   OpenRead 按序首命中；List('.') 去重合并按首层优先保留。
   INV-V2 不可变快照+热点缓存：发布后只读，SwissTable 16槽 RWLock 读并发零争用/
-  阻塞 AcquireWrite 热点 List 缓存单源 helper via vfs.cache（对齐 mount §6，防 TryAcquireWrite 丢弃致重复 O(k log k)），首击 k 路归并 O(k·m) 零哈希零额外堆（仅 Result 一次分配，inline VfsNameCompare/SpanCompare 零拷贝单源 via bytes.ops，去重后已有序免二次 VfsSortEntries）后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops
-  VfsNameCompare SpanCompare 零拷贝单源，VfsSortEntries 单源（归并已有序不再二次排序）。 }
+  阻塞 AcquireWrite 热点 List 缓存单源 helper via vfs.cache（对齐 mount §6，防 TryAcquireWrite 丢弃致重复 O(k log k)），首击 k 路归并 O(k·m) 零哈希零额外堆（仅 Result 一次分配，头 Span 缓存+SpanCompare/SpanEqual 零拷贝 inline via bytes.ops，BestSpan 视图免 string 拷贝/refcnt，去重后已有序免二次 VfsSortEntries）后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops
+  VfsNameCompare/SpanCompare/SpanEqual 零拷贝单源，VfsSortEntries 单源（归并已有序不再二次排序）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -169,7 +169,7 @@ begin
   SetLength(AArr, SizeInt(LCap));
 end;
 
-{ k 路归并去重 List：零哈希零额外堆（热点 Miss 仅 Result 一次分配，后续 O(1) 哈希+O(k) Copy 缓存）；各层 List 已有序（os/embedded/memtree VfsSortEntries 单源），按字典序归并同时按首层优先去重，VfsNameCompare/SpanCompare 零拷贝单源 via bytes.ops inline 去重后已有序免二次 VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline（ALimit 回缩<64 零浪费），资源释放不丢（LCurs/Result/Idx 局部托管，无 Seen 堆表 try-finally）。 }
+{ k 路归并去重 List：零哈希零额外堆（热点 Miss 仅 Result 一次分配，后续 O(1) 哈希+O(k) Copy 缓存）；各层 List 已有序（os/embedded/memtree VfsSortEntries 单源），按字典序归并同时按首层优先去重，SpanCompare/SpanEqual 零拷贝单源 via bytes.ops inline（头 Span 缓存 FromStr 视图，BestSpan 零拷贝免 string 拷贝/refcnt，长目录热点路径比较每轮 2m 次 Span 构造→每元素 1 次），去重后已有序免二次 VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline（ALimit 回缩<64 零浪费），资源释放不丢（LCurs/CurSpans/Result/Idx 局部托管，无 Seen 堆表 try-finally）。 }
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
   I: Integer;
@@ -178,9 +178,9 @@ var
   LStat: TStatInfo;
   LCurs: array of TEntryArray;
   Idx: array of SizeInt;
-  BestName: string;
+  CurSpans: array of TByteSpan; { 头 Span 缓存：零拷贝 FromStr 视图直指 LCurs Name 存储，inline SpanCompare/SpanEqual bytes.ops 单源，热点长目录每元素一次构造 }
+  BestSpan: TByteSpan; { BestSpan 视图免 string 拷贝/refcnt，零额外堆 }
   BestLayer, BestIdx: Integer;
-  CurName: string;
   Lcmp: Integer;
 begin
   if not VfsValidPath(ADirPath, True) then
@@ -212,32 +212,38 @@ begin
   end;
   SetLength(Idx, Length(LCurs));
   for I := 0 to High(Idx) do Idx[I] := 0;
+  { 头 Span 缓存初始化：每层头元素 FromStr 零拷贝视图（TByteSpan 直指 string 存储，无 Copy），BestSpan 视图免 string 拷贝，长目录热点路径比较每轮 2m 次构造→每元素 1 次，inline 零拷贝 }
+  SetLength(CurSpans, Length(LCurs));
+  for I := 0 to High(LCurs) do
+    if Length(LCurs[I]) > 0 then
+      CurSpans[I] := TByteSpan.FromStr(LCurs[I][0].Name) { bytes.ops 单源 inline 零拷贝 }
+    else
+      CurSpans[I] := TByteSpan.Empty;
   Result := nil;
   OutN := 0;
-  { k 路归并：O(k·m)（m=层数，常量 2~3）零哈希零额外堆，仅 Result 按 LTotal 指数扩容（OverlayEnsureCapEntries 单源，<64 回缩）；VfsNameCompare 零拷贝 inline via bytes.ops SpanCompare 单源，去重后已有序免 VfsSortEntries }
+  { k 路归并：O(k·m)（m=层数，常量 2~3）零哈希零额外堆，仅 Result 按 LTotal 指数扩容（OverlayEnsureCapEntries 单源，<64 回缩）；SpanCompare/SpanEqual 零拷贝 inline via bytes.ops 单源（CurSpans 缓存+BestSpan 视图），去重后已有序免 VfsSortEntries }
   while True do
   begin
     BestIdx := -1;
     BestLayer := -1;
-    BestName := '';
+    BestSpan := TByteSpan.Empty;
     for I := 0 to High(LCurs) do
     begin
       if Idx[I] >= Length(LCurs[I]) then Continue;
-      CurName := LCurs[I][Idx[I]].Name;
       if BestIdx = -1 then
       begin
         BestIdx := I;
         BestLayer := I;
-        BestName := CurName;
+        BestSpan := CurSpans[I]; { 零拷贝视图赋值，无 string 拷贝/refcnt }
       end
       else
       begin
-        Lcmp := VfsNameCompare(CurName, BestName);
+        Lcmp := SpanCompare(CurSpans[I], BestSpan); { bytes.ops 单源 inline 零拷贝，长目录热点路径零额外 Span 构造 }
         if Lcmp < 0 then
         begin
           BestIdx := I;
           BestLayer := I;
-          BestName := CurName;
+          BestSpan := CurSpans[I];
         end
         else if Lcmp = 0 then
         begin
@@ -250,8 +256,14 @@ begin
     Result[OutN] := LCurs[BestLayer][Idx[BestLayer]];
     Inc(OutN);
     for I := 0 to High(LCurs) do
-      if (Idx[I] < Length(LCurs[I])) and (VfsNameCompare(LCurs[I][Idx[I]].Name, BestName) = 0) then
+      if (Idx[I] < Length(LCurs[I])) and SpanEqual(CurSpans[I], BestSpan) then { bytes.ops SpanEqual 单源 inline，Len 短路+Memequal，免 SpanCompare 全比较 }
+      begin
         Inc(Idx[I]);
+        if Idx[I] < Length(LCurs[I]) then
+          CurSpans[I] := TByteSpan.FromStr(LCurs[I][Idx[I]].Name) { 推进时单次 FromStr 零拷贝更新，每元素 1 次 }
+        else
+          CurSpans[I] := TByteSpan.Empty;
+      end;
   end;
   if OutN = 0 then
   begin

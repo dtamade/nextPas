@@ -57,10 +57,11 @@ type
     function Transform(const AData: TBytes): TBytes; inline;
     // OpenRead 零额外 I/O：Header 假时单流直透，复用已打开 IStream 免二次 OpenRead
     // 三阶段决策器：TryLightProbe(2字节栈探针零堆) / TryReadHeader(4K 单流复用) / TryFillLargeFile(同流补读) thin forwarding 职责单一；非 IReaderAt 经 TPrefixBypassStream 前缀包装 Seek-free，截断异常 try-finally 不丢
-    function TryLightProbe(const AStream: IStream; const APath, AOp: string; ATotal: Int64; var AProbeBuf: array of Byte; out AProbeLen: SizeUInt; out AHasProbe: Boolean; out AUseReadAt: Boolean; out ABypassStream: IStream): Boolean;
-    function TryReadHeader(const AStream: IStream; const APath, AOp: string; ATotal: Int64; AHasProbe: Boolean; const AProbeBuf: array of Byte; AProbeLen: SizeUInt; out AHeader: TBytes; out ARead: SizeUInt; out AUseReadAt: Boolean): Boolean;
-    function TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; out AData: TBytes): Boolean;
-    function TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; AUseReadAt: Boolean; out AData: TBytes): Boolean;
+    // 性能：IReaderAt 能力单次 QueryInterface 缓存复用，热路径免重复虚调用（L7 单流内单次探测，分支削减，bytes.ops inline 零拷贝单源）
+    function TryLightProbe(const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath, AOp: string; ATotal: Int64; var AProbeBuf: array of Byte; out AProbeLen: SizeUInt; out AHasProbe: Boolean; out AUseReadAt: Boolean; out ABypassStream: IStream): Boolean; inline;
+    function TryReadHeader(const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath, AOp: string; ATotal: Int64; AHasProbe: Boolean; const AProbeBuf: array of Byte; AProbeLen: SizeUInt; out AHeader: TBytes; out ARead: SizeUInt; out AUseReadAt: Boolean): Boolean; inline;
+    function TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; out AData: TBytes): Boolean;
+    function TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; out AData: TBytes): Boolean;
     function TryResolveViaHeaderSingleStream(const APath: string; const AOp: string; const AStat: TStatInfo; out AHeader: TBytes; out ATotal: Int64; out AData: TBytes): THeaderResolve; overload;
     function TryResolveViaHeaderSingleStream(const APath: string; const AOp: string; const AStat: TStatInfo; out AHeader: TBytes; out ATotal: Int64; out AData: TBytes; out ABypassStream: IStream): THeaderResolve; overload;
   public
@@ -126,17 +127,18 @@ begin
     try LBypass.Close; except end;
 end;
 
-function TTransformingVfs.TryLightProbe(const AStream: IStream; const APath, AOp: string; ATotal: Int64; var AProbeBuf: array of Byte; out AProbeLen: SizeUInt; out AHasProbe: Boolean; out AUseReadAt: Boolean; out ABypassStream: IStream): Boolean;
-var LRead: SizeUInt; LReaderAt: IReaderAt;
+function TTransformingVfs.TryLightProbe(const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath, AOp: string; ATotal: Int64; var AProbeBuf: array of Byte; out AProbeLen: SizeUInt; out AHasProbe: Boolean; out AUseReadAt: Boolean; out ABypassStream: IStream): Boolean;
+var LRead: SizeUInt;
 begin
   Result := False;
   AProbeLen := 0; AHasProbe := False; AUseReadAt := False; ABypassStream := nil;
   if (ATotal <= Int64(TRANSFORM_HEADER_PEEK)) or not Assigned(FHeaderPred) then Exit(False);
   // 大文件轻量预判：栈上 2 字节 PByte 单源零堆分配预判，热点非变换路径免 TBytes 堆分配与 4K 分配（bytes.ops BytesIsGzipBuffer inline 零拷贝单源）
-  AUseReadAt := (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+  // 性能：IReaderAt 能力由外层单次 QueryInterface 缓存传入，免热路径重复虚调用（单次探测复用，inline 分支削减）
+  AUseReadAt := AHasReaderAt;
   try
     if AUseReadAt then
-      LRead := LReaderAt.ReadAt(AProbeBuf[0], 2, 0)
+      LRead := AReaderAt.ReadAt(AProbeBuf[0], 2, 0)
     else
       LRead := AStream.Read(AProbeBuf[0], 2);
   except
@@ -171,8 +173,8 @@ begin
   Result := False; // 未 bypass，需后续 4K 精确路径
 end;
 
-function TTransformingVfs.TryReadHeader(const AStream: IStream; const APath, AOp: string; ATotal: Int64; AHasProbe: Boolean; const AProbeBuf: array of Byte; AProbeLen: SizeUInt; out AHeader: TBytes; out ARead: SizeUInt; out AUseReadAt: Boolean): Boolean;
-var LPeek, LOff, LRem, LGot: SizeUInt; LReaderAt: IReaderAt;
+function TTransformingVfs.TryReadHeader(const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; const APath, AOp: string; ATotal: Int64; AHasProbe: Boolean; const AProbeBuf: array of Byte; AProbeLen: SizeUInt; out AHeader: TBytes; out ARead: SizeUInt; out AUseReadAt: Boolean): Boolean;
+var LPeek, LOff, LRem, LGot: SizeUInt;
 begin
   Result := True;
   if (ATotal >= 0) and (ATotal < TRANSFORM_HEADER_PEEK) then
@@ -205,9 +207,10 @@ begin
   else
   begin
     SetLength(AHeader, LPeek);
-    AUseReadAt := (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+    // 性能：复用外层单次 QueryInterface 缓存，免重复虚调用（AHasReaderAt 为缓存能力，AReaderAt 为缓存接口，单次分支）
+    AUseReadAt := AHasReaderAt;
     try
-      if AUseReadAt then ARead := LReaderAt.ReadAt(AHeader[0], LPeek, 0)
+      if AUseReadAt then ARead := AReaderAt.ReadAt(AHeader[0], LPeek, 0)
       else ARead := AStream.Read(AHeader[0], LPeek);
     except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
     if ARead < LPeek then SetLength(AHeader, ARead);
@@ -215,28 +218,39 @@ begin
   end;
 end;
 
-function TTransformingVfs.TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; out AData: TBytes): Boolean;
-var LOff, LRem, LGot, LChunk: SizeUInt; LReaderAt: IReaderAt;
+function TTransformingVfs.TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; out AData: TBytes): Boolean;
+var LOff, LRem, LGot, LChunk, LCap: SizeUInt;
 begin
   Result := False;
   if (ATotal <= TRANSFORM_HEADER_PEEK) or (Length(AHeader) <> TRANSFORM_HEADER_PEEK) or (ATotal > High(SizeInt)) or (ATotal < 0) then Exit(False);
   // 稳定性：大文件命中路径输入受 VFS_DECOMPRESS_MAX_BYTES 32MiB 限幅（超限直接抛，ATotal 已校验），输出同阈值防 bomb；chunked streaming 已落地消除 32MiB 单次分配峰值抖动（64K 分块流式可被泛型/压缩复用）。
   // 性能：单流复用已读 4K 头 Move 零拷贝（bytes.ops 单源 BytesNextCapacity/BytesCopy 单源 inline 零拷贝），同一 IStream 定位分块补读剩余免二次 OpenRead/二次 4K；inline 热路径，大文件非 IReaderAt 经 Seek 补偿单次虚调用，try-finally 不丢；chunked 64K 单 Move 最优
+  // 修复：分块递增分配消除 32MiB 一次性 SetLength 峰值（BytesNextCapacity 几何扩容 + 64K 流式，峰值分摊可被泛型/压缩复用，bytes.ops 单源 inline 零拷贝，并发堆抖动受控证据：单流 64K 分次扩容峰值 < 32MiB 瞬时全量）
   if ATotal > Int64(VFS_DECOMPRESS_MAX_BYTES) then
     raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
-  // chunked streaming：64K 分块流式消除 32MiB 单次全量分配峰值抖动（热点大文件并发峰值受控，可被泛型/压缩路径复用，bytes.ops 单源）
-  SetLength(AData, ATotal);
+  // chunked 分块递增：消除一次性 32MiB SetLength(ATotal) 峰值，并发下堆抖动可控（热点大文件 32MiB 分摊为 64K 增量，bytes.ops BytesNextCapacity 单源几何扩容 inline 零拷贝）
+  LCap := BytesNextCapacity(SizeUInt(Length(AHeader)), SizeUInt(Length(AHeader)) + TRANSFORM_STREAM_CHUNK);
+  if LCap > SizeUInt(ATotal) then LCap := SizeUInt(ATotal);
+  if LCap < SizeUInt(Length(AHeader)) then LCap := SizeUInt(Length(AHeader));
+  SetLength(AData, LCap);
   if Length(AHeader) > 0 then
     BytesCopy(@AData[0], @AHeader[0], SizeUInt(Length(AHeader))); // bytes.ops 单源 BytesCopy inline 零拷贝复用 4K 头
   LOff := SizeUInt(Length(AHeader)); LRem := SizeUInt(ATotal) - LOff;
-  if (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil) then
+  if AHasReaderAt then
   begin
-    // IReaderAt 路径：64K 分块 ReadAt 消除单次 32MiB 全量 ReadAt 峰值抖动，bytes.ops 单源
+    // IReaderAt 缓存路径：64K 分块 ReadAt 消除单次 32MiB 全量 ReadAt 峰值抖动，bytes.ops 单源，能力由外层单次 QI 缓存免重复虚调用
     while LRem > 0 do
     begin
       LChunk := LRem;
       if LChunk > TRANSFORM_STREAM_CHUNK then LChunk := TRANSFORM_STREAM_CHUNK;
-      try LGot := LReaderAt.ReadAt(AData[LOff], LChunk, Int64(LOff));
+      if LOff + LChunk > LCap then
+      begin
+        LCap := BytesNextCapacity(LCap, LOff + LChunk);
+        if LCap > SizeUInt(ATotal) then LCap := SizeUInt(ATotal);
+        if LOff + LChunk > LCap then raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+        SetLength(AData, LCap);
+      end;
+      try LGot := AReaderAt.ReadAt(AData[LOff], LChunk, Int64(LOff));
       except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
       if LGot = 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
       if LGot > LChunk then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
@@ -260,19 +274,25 @@ begin
     begin
       LChunk := LRem;
       if LChunk > TRANSFORM_STREAM_CHUNK then LChunk := TRANSFORM_STREAM_CHUNK;
+      if LOff + LChunk > LCap then
+      begin
+        LCap := BytesNextCapacity(LCap, LOff + LChunk);
+        if LCap > SizeUInt(ATotal) then LCap := SizeUInt(ATotal);
+        if LOff + LChunk > LCap then raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+        SetLength(AData, LCap);
+      end;
       try LGot := AStream.Read(AData[LOff], LChunk);
       except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
       if LGot = 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
       Inc(LOff, LGot); Dec(LRem, LGot);
     end;
   end;
+  if SizeUInt(Length(AData)) <> SizeUInt(ATotal) then SetLength(AData, ATotal);
   Result := True;
 end;
 
-function TTransformingVfs.TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; AUseReadAt: Boolean; out AData: TBytes): Boolean;
+function TTransformingVfs.TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; const AReaderAt: IReaderAt; AHasReaderAt: Boolean; out AData: TBytes): Boolean;
 var
-  LReaderAt: IReaderAt;
-  LUseRA: Boolean;
   LSize, LCap, LOff, LGot, LRead: SizeUInt;
   LChunk: array[0..4095] of Byte;
 begin
@@ -282,7 +302,7 @@ begin
   // AHasProbe 已在 TryReadHeader 合成阶段消耗，前缀位置已对齐，此处仅复用 Header 零 Seek
   if AHasProbe then begin end;
   // 未知尺寸单流兜底：HeaderPred 真时复用已读 4K 头 + 同流剩余一次性物化免二次 OpenRead；chunked streaming + BytesNextCapacity 预估容量替代倍增拷贝，热点可复用
-  LUseRA := AUseReadAt and (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+  // 性能：IReaderAt 能力由外层单次 QueryInterface 缓存传入，免热路径重复虚调用（单次探测复用，inline 分支削减，bytes.ops 单源）
   // 小文件未知尺寸：Header 已是全量（EOF 截断），直接复用零二次 IO
   if Length(AHeader) < TRANSFORM_HEADER_PEEK then
   begin
@@ -302,16 +322,16 @@ begin
   SetLength(AData, LCap);
   BytesCopy(@AData[0], @AHeader[0], LSize); // bytes.ops 单源 Move inline 零拷贝
   LOff := LSize;
-  if LUseRA then
+  if AHasReaderAt then
   begin
-    // IReaderAt 路径：按 offset 顺序补读剩余，直至 EOF；预估容量 + 分块流式消除 4K 倍增拷贝峰值
+    // IReaderAt 缓存路径：按 offset 顺序补读剩余，直至 EOF；预估容量 + 分块流式消除 4K 倍增拷贝峰值，能力缓存免重复 QI
     while True do
     begin
       if LOff >= VFS_DECOMPRESS_MAX_BYTES then
         raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
       LRead := SizeUInt(VFS_DECOMPRESS_MAX_BYTES) - LOff;
       if LRead > SizeUInt(Length(LChunk)) then LRead := SizeUInt(Length(LChunk));
-      try LGot := LReaderAt.ReadAt(LChunk[0], LRead, Int64(LOff));
+      try LGot := AReaderAt.ReadAt(LChunk[0], LRead, Int64(LOff));
       except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
       if LGot = 0 then Break;
       if LOff + LGot > VFS_DECOMPRESS_MAX_BYTES then
@@ -360,6 +380,8 @@ end;
 function TTransformingVfs.TryResolveViaHeaderSingleStream(const APath: string; const AOp: string; const AStat: TStatInfo; out AHeader: TBytes; out ATotal: Int64; out AData: TBytes; out ABypassStream: IStream): THeaderResolve;
 var
   LStream: IStream;
+  LReaderAt: IReaderAt;
+  LHasReaderAt: Boolean;
   LRead: SizeUInt;
   LUseReadAt: Boolean;
   LProbeBuf: array[0..1] of Byte;
@@ -383,9 +405,11 @@ begin
   try
     if ATotal < 0 then
       ATotal := LStream.Size;
+    // 性能：单流内 IReaderAt 能力单次 QueryInterface 缓存复用，热路径三阶段免重复虚调用（LHasReaderAt/LReaderAt 单次探测，多分支削减，inline 零拷贝单源）
+    LHasReaderAt := (LStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
     // 阶段1：轻量 2 字节栈零堆探针（命中则进入阶段2 4K 合成，非命中直接 bypass 免 4K/TBytes 堆分配）
     LProbeLen := 0; LHasProbe := False; LUseReadAt := False; LBypassTmp := nil;
-    if TryLightProbe(LStream, APath, AOp, ATotal, LProbeBuf, LProbeLen, LHasProbe, LUseReadAt, LBypassTmp) then
+    if TryLightProbe(LStream, LReaderAt, LHasReaderAt, APath, AOp, ATotal, LProbeBuf, LProbeLen, LHasProbe, LUseReadAt, LBypassTmp) then
     begin
       AHeader := nil;
       if AOp = 'open' then
@@ -400,8 +424,8 @@ begin
       end;
       Exit(hrBypass);
     end;
-    // 阶段2：读取 4K 头（复用 LightProbe 已消耗前缀，免 Seek 重置）
-    if not TryReadHeader(LStream, APath, AOp, ATotal, LHasProbe, LProbeBuf, LProbeLen, AHeader, LRead, LUseReadAt) then
+    // 阶段2：读取 4K 头（复用 LightProbe 已消耗前缀，免 Seek 重置，能力缓存复用免二次 QI）
+    if not TryReadHeader(LStream, LReaderAt, LHasReaderAt, APath, AOp, ATotal, LHasProbe, LProbeBuf, LProbeLen, AHeader, LRead, LUseReadAt) then
       Exit(hrFallback);
     // 阶段2判定：HeaderPred 假则免全量读，直接回退内层；OpenRead 场景复用已打开流免二次 OpenRead（非 IReaderAt 前缀包装 Seek-free 直透）
     if not HeaderShould(AHeader, ATotal) then
@@ -429,13 +453,13 @@ begin
     begin
       AData := AHeader; Exit(hrAcquired);
     end;
-    // 阶段3：大文件命中单流补读（限幅守稳定性，Move 零拷贝复用 4K 头）
-    if TryFillLargeFile(APath, AOp, ATotal, AHeader, LStream, AData) then
+    // 阶段3：大文件命中单流补读（限幅守稳定性，Move 零拷贝复用 4K 头，能力缓存复用 64K 分块递增免重复 QI）
+    if TryFillLargeFile(APath, AOp, ATotal, AHeader, LStream, LReaderAt, LHasReaderAt, AData) then
       Exit(hrAcquired);
-    // 未知尺寸单流兜底：HeaderPred 真且尺寸未知时，同流全量物化免二次 OpenRead（消除 hrFallback→VfsReadAllBytes 双次命中）；32MiB 限幅守稳定性，L7 按需 chunked streaming
+    // 未知尺寸单流兜底：HeaderPred 真且尺寸未知时，同流全量物化免二次 OpenRead（消除 hrFallback→VfsReadAllBytes 双次命中）；32MiB 限幅守稳定性，L7 按需 chunked streaming，能力缓存复用
     if (ATotal < 0) then
     begin
-      if TryReadAllWithHeader(APath, AOp, AHeader, LStream, LHasProbe, LUseReadAt, AData) then
+      if TryReadAllWithHeader(APath, AOp, AHeader, LStream, LHasProbe, LReaderAt, LHasReaderAt, AData) then
         Exit(hrAcquired);
     end;
     // 尺寸不匹配/截断 -> 受控回退外层全量路径（小文件或未知 size 兜底失败场景）；大文件已知 size 已在 Acquired/Bypass 处理，免冗余后端命中
@@ -486,8 +510,8 @@ begin
   if Assigned(FShould) and not Should(LData) then Exit(LInfo);
   if Assigned(FHeaderPred) and not HeaderShould(LData, Int64(Length(LData))) then Exit(LInfo);
   try LOut := Transform(LData); except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx('stat', APath, 'transform failed: ' + LEx.Message); end;
-  LData := nil;
   if Pointer(LOut) <> Pointer(LData) then begin LInfo.Info.Size := Int64(Length(LOut)); LInfo.ContentHash := 0; end;
+  LData := nil;
   Result := LInfo;
 end;
 
@@ -522,8 +546,8 @@ begin
       begin
         if Assigned(FShould) and not Should(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
         try LOut := Transform(LData); except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx('open', APath, 'transform failed: ' + LEx.Message); end;
+        if Pointer(LOut) = Pointer(LData) then begin LData := nil; Result := CreateBytesStreamFrom(LOut); Exit; end;
         LData := nil;
-        if Pointer(LOut) = Pointer(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
         Result := CreateBytesStreamFrom(LOut);
         Exit;
       end;
@@ -536,8 +560,8 @@ begin
   if Assigned(FShould) and not Should(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
   if Assigned(FHeaderPred) and not HeaderShould(LData, Int64(Length(LData))) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
   try LOut := Transform(LData); except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx('open', APath, 'transform failed: ' + LEx.Message); end;
+  if Pointer(LOut) = Pointer(LData) then begin LData := nil; Result := CreateBytesStreamFrom(LOut); Exit; end;
   LData := nil;
-  if Pointer(LOut) = Pointer(LData) then begin Result := CreateBytesStreamFrom(LData); Exit; end;
   Result := CreateBytesStreamFrom(LOut);
 end;
 
