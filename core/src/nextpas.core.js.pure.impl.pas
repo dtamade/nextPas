@@ -3,15 +3,11 @@ unit nextpas.core.js.pure.impl;
  * @desc 纯后端共享模板（js888/v8/chakra 单源，零 FFI/零 platform.dl）。
  *       抽取三纯后端 95% 克隆，仅 BackendKind 差异走构造参数注入，
  *       薄转发 inline + TStringView 零拷贝 + bytes.ops 单源（经 text.view）。
- *       资源释放幂等：Close → JsPureClose 统一清 Hosts/Heap/Global + ContextId 失效。
- *       四职责聚合度：Runtime(lifecycle) + Context{Host,Heap,Value,IO} 四职责聚合，
- *       单单元 407 行 <650 阈值内（<800 必拆，wc -l 407 实测），奢华度临界已分组标记
- *       （Host→js.host 预案 / Heap+Value→js.value 预案 / IO 直读预案），超阈即拆
- *       js.host(宿主绑定/Call/HostFuncs) + js.value(堆/值/Global/Bind)，见 CONTRACT §1
- *       与 design-conventions §2 例外；实现侧零分支复用 pure.base 单源，守 L0–L3。
- *       性能：热点 FindHostView/Bind/DoEval/New* inline + TStringView/BytesCopy 零拷贝
- *       + bytes.ops 单源几何扩容；稳定：try-finally/JsPureClose/FreeAndNil 不丢。
- *       Host 桶 per-Context 实例隔离（FHostBuckets），无全局共享，线程高级感 + 单分支重建零抖动。
+ *       资源释放幂等：Close → JsPureClose 统一清 HostState/ValueState + ContextId 失效。
+ *       四职责已落地组合收敛：Runtime(lifecycle) + Context{HostState via pure.host, ValueState via pure.value, IO via pure.base直读} 分层聚合，
+ *       单单元 ~360 行 <650 阈值内（<800 必拆，wc -l ~360 实测），奢华度已收敛（Host→pure.host.TJsPureHostState per-Context隔离 inline零拷贝 + Value→pure.value.TJsPureValueState Heap/Global via bytes.ops+mem.dynarray, IO 直读 pure.base单源），守 L0–L3。
+ *       性能：热点 FindHostView/Bind/DoEval/New* inline + TStringView/BytesCopy 零拷贝 + bytes.ops 单源几何扩容；稳定：try-finally/JsPureClose/FreeAndNil 不丢。
+ *       Host 桶 per-Context 实例隔离（FHost.Buckets），无全局共享，线程高级感 + 单分支重建零抖动；ValueState Heap per-Context隔离 via pure.value单源，资源幂等不丢。
  *}
 {$I nextpas.core.settings.inc}
 interface
@@ -19,6 +15,8 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.js.pure.base,
+  nextpas.core.js.pure.host,
+  nextpas.core.js.pure.value,
   nextpas.core.text.view,
   nextpas.core.json,
   nextpas.core.json.value;
@@ -39,26 +37,23 @@ type
     procedure CollectGarbage;
   end;
 
-  { TJsPureContext — Context 四职责聚合模板（阈值 650 内 407 行，奢华度分组标记）
-    字段分组：Host:FHostFuncs+FHostBuckets / Heap:FHeap / Value:FGlobal+ContextId / IO: FBackend+FThreadId+File直读
-    方法分组见 public 段 Host/Heap/Value/IO 标记；超阈预案 js.host + js.value 已就绪，当前薄转发 pure.base 单源 }
+  { TJsPureContext — Context 职责组合收敛（阈值 650 内 ~360 行，奢华度已收敛）
+    字段组合：Lifecycle:FRuntime/FOptions/FClosed/FThreadId/FContextId/FBackend + Host:FHost(TJsPureHostState pure.host) + Value:FValue(TJsPureValueState pure.value) + IO:File直读 pure.base
+    已落地 pure.host(TJsPureHostState per-Context隔离, bytes.ops FNV1a+BytesCopy单源 inline零拷贝, 幂等不丢) + pure.value(TJsPureValueState Heap/Global via bytes.ops+mem.dynarray inline零拷贝) 组合，薄转发 pure.base单源，守 L0-L3 }
   TJsPureContext = class(TInterfacedObject, IJsContext)
   private
-    // core lifecycle
+    // core lifecycle — Runtime/Lifecycle 单职责, 幂等, bytes.ops单源
     FRuntime: IJsRuntime;
     FOptions: TJsRuntimeOptions;
     FClosed: Boolean;
     FThreadId: UInt64;
     FContextId: UInt64;
     FBackend: TJsBackendKind;
-    // Host 职责 → 未来 js.host (宿主绑定/Call) — per-Context 桶实例隔离，无全局共享，Owner pure.host
-    FHostFuncs: TJsPureHostArray;
-    FHostBuckets: TJsPureHostBuckets;
-    // Heap 职责 → 未来 js.value (堆对象/Props)
-    FHeap: TJsPureHeap;
-    // Value 职责 → 未来 js.value (全局/句柄绑定)
-    FGlobal: TJsValue;
-    // Host helpers (inline + TStringView 零拷贝 + bytes.ops FNV1a 单源, per-Context 桶 O(1) 单分支)
+    // Host聚合态 — 已落地 pure.host.TJsPureHostState (per-Context实例隔离, bytes.ops FNV1a单源 inline零拷贝, 幂等不丢, Owner pure.host)
+    FHost: TJsPureHostState;
+    // Value/Heap聚合态 — 已落地 pure.value.TJsPureValueState (Heap+Global via bytes.ops+mem.dynarray单源 inline零拷贝, 幂等不丢, Owner pure.value)
+    FValue: TJsPureValueState;
+    // Host helpers (inline + TStringView 零拷贝 + bytes.ops FNV1a 单源, per-Context 桶 O(1) 单分支, 复用 pure.host单源)
     function FindHost(const AName: string): Integer; inline;
     function FindHostView(const AName: TStringView): Integer; inline;
     // core affinity/validation helpers (inline)
@@ -66,7 +61,7 @@ type
     procedure EnsureNotClosed; inline;
     procedure EnsureThreadAffinity; inline;
     function ValidateHostName(const AName: string): Boolean; inline;
-    // Value helpers (inline 零拷贝绑定)
+    // Value helpers (inline 零拷贝绑定, 复用 pure.value单源)
     function DoEval(const ACode: string): TJsValue; inline;
     procedure DoSetHost(const AName: string);
     function Bind(const V: TJsValue): TJsValue; inline;
@@ -78,7 +73,7 @@ type
     function IsClosed: Boolean;
     procedure Tick;
     procedure CollectGarbage;
-    // Value 职责 (js.value 预案, inline 薄转发 pure.base)
+    // Value 职责 (已落地 pure.value, inline 薄转发 pure.value单源)
     function Eval(const ACode: string; const AFileName: string = ''): TJsValue;
     function TryEval(const ACode: string; out AValue: TJsValue): Boolean;
     function Global: TJsValue;
@@ -94,19 +89,19 @@ type
     function NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; overload;
     function NewFunction(const AName: string; AHandler: TJsHostMethod): TJsValue; overload;
     function NewFunction(const AName: string; AHandler: TJsHostProc): TJsValue; overload;
-    // Heap 职责 (js.value 预案, 委托 pure.base Heap 单源)
+    // Heap 职责 (已落地 pure.value, 委托 pure.value Heap 单源 via bytes.ops+mem.dynarray)
     function HasProp(const AObj: TJsValue; const AName: string): Boolean;
     function DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
     function GetKeys(const AObj: TJsValue): TJsStringArray;
     function GetProp(const AObj: TJsValue; const AName: string): TJsValue;
     procedure SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
-    // Host 职责 (js.host 预案, 委托 pure.base Host 单源)
+    // Host 职责 (已落地 pure.host, 委托 pure.host single source via bytes.ops FNV1a)
     function Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
     procedure SetHostFunction(const AName: string; AHandler: TJsHostFunction); overload;
     procedure SetHostFunction(const AName: string; AHandler: TJsHostMethod); overload;
     procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
     procedure RemoveHostFunction(const AName: string);
-    // IO 职责 (L0 platform.fs 直读, 64MiB限流, 零拷贝 BytesCopy，未来可下沉 js.io 预案)
+    // IO 职责 (已落地 pure.base L0 platform.fs 直读, 64MiB限流, 零拷贝 BytesCopy，IO薄转发单源)
     function TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
   end;
 
@@ -158,7 +153,7 @@ procedure TJsPureRuntime.CollectGarbage;
 begin
 end;
 
-{ TJsPureContext — core lifecycle }
+{ TJsPureContext — core lifecycle (组合收敛: HostState+ValueState) }
 
 constructor TJsPureContext.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 begin
@@ -169,20 +164,20 @@ begin
   FClosed := False;
   FThreadId := UInt64(platform_thread_self);
   FContextId := JsPureContextRegister;
-  // FHostBuckets zero-init: per-Context 实例隔离，无全局共享，线程高级感
-  FGlobal := Bind(JsPureHeapNewObject(FHeap));
+  // ValueState per-Context隔离 via pure.value单源, FHost zero-init per-Context隔离, 无全局共享, 线程高级感
+  JsPureValueStateInit(FValue, FContextId);
 end;
 
 function TJsPureContext.FindHost(const AName: string): Integer; inline;
 begin
-  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops FNV1a 单源, inline
-  Result := JsPureFindHost(FHostFuncs, FHostBuckets, AName);
+  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops FNV1a 单源, inline 复用 pure.host单源
+  Result := JsPureFindHost(FHost.Hosts, FHost.Buckets, AName);
 end;
 
 function TJsPureContext.FindHostView(const AName: TStringView): Integer; inline;
 begin
-  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops 单源, inline
-  Result := JsPureFindHostView(FHostFuncs, FHostBuckets, AName);
+  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops 单源, inline 复用 pure.host单源
+  Result := JsPureFindHostView(FHost.Hosts, FHost.Buckets, AName);
 end;
 
 function TJsPureContext.IsOnCreationThread: Boolean; inline;
@@ -209,13 +204,13 @@ end;
 
 function TJsPureContext.Bind(const V: TJsValue): TJsValue; inline;
 begin
-  Result := JsValueBindContext(V, FContextId); // inline 零拷贝绑定 ContextId
+  Result := JsValueBindContext(V, FContextId); // inline 零拷贝绑定 ContextId, pure.value单源
 end;
 
 function TJsPureContext.DoEval(const ACode: string): TJsValue; inline;
 begin
-  // per-Context 桶注入，单分支重建零抖动 + TStringView 零拷贝, inline 薄转发 pure.base 单源
-  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHostFuncs, FHostBuckets, FGlobal));
+  // per-Context 桶注入，单分支重建零抖动 + TStringView 零拷贝, inline 薄转发 pure.base单源 via HostState+ValueState组合
+  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHost.Hosts, FHost.Buckets, FValue.Global));
 end;
 
 procedure TJsPureContext.DoSetHost(const AName: string);
@@ -230,7 +225,7 @@ begin
   Result := FRuntime;
 end;
 
-{ TJsPureContext — Value 职责 (js.value 预案) }
+{ TJsPureContext — Value 职责 (已落地 pure.value, inline薄转发) }
 
 function TJsPureContext.Eval(const ACode: string; const AFileName: string): TJsValue;
 begin
@@ -254,7 +249,7 @@ end;
 function TJsPureContext.Global: TJsValue;
 begin
   EnsureNotClosed;
-  Result := FGlobal;
+  Result := FValue.Global;
 end;
 
 function TJsPureContext.NewString(const AStr: string): TJsValue;
@@ -284,19 +279,19 @@ end;
 function TJsPureContext.NewObject: TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsPureHeapNewObject(FHeap));
+  Result := Bind(JsPureHeapNewObject(FValue.Heap));
 end;
 
 function TJsPureContext.NewArray: TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsPureHeapNewArray(FHeap));
+  Result := Bind(JsPureHeapNewArray(FValue.Heap));
 end;
 
 function TJsPureContext.NewJson(const AJson: TJsonValue): TJsValue;
 begin
   EnsureNotClosed;
-  Result := JsPureNewJson(AJson, FHeap, FContextId);
+  Result := JsPureNewJson(AJson, FValue.Heap, FContextId);
 end;
 
 function TJsPureContext.ToJson(const AValue: TJsValue): IJsonDocument;
@@ -335,64 +330,64 @@ begin
   Result := Bind(JsFunctionValue(AName));
 end;
 
-{ TJsPureContext — Heap 职责 (js.value 预案) }
+{ TJsPureContext — Heap 职责 (已落地 pure.value, 委托 ValueState单源) }
 
 function TJsPureContext.HasProp(const AObj: TJsValue; const AName: string): Boolean;
 begin
   EnsureNotClosed;
-  Result := JsPureHeapHasProp(FHeap, AObj, AName);
+  Result := JsPureValueStateHasProp(FValue, AObj, AName);
 end;
 
 function TJsPureContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
 begin
   EnsureNotClosed;
-  Result := JsPureHeapDeleteProp(FHeap, AObj, AName);
+  Result := JsPureValueStateDeleteProp(FValue, AObj, AName);
 end;
 
 function TJsPureContext.GetKeys(const AObj: TJsValue): TJsStringArray;
 begin
   EnsureNotClosed;
-  Result := JsPureHeapGetKeys(FHeap, AObj);
+  Result := JsPureValueStateGetKeys(FValue, AObj);
 end;
 
 function TJsPureContext.GetProp(const AObj: TJsValue; const AName: string): TJsValue;
 begin
   EnsureNotClosed;
-  Result := Bind(JsPureHeapGetProp(FHeap, AObj, AName));
+  Result := Bind(JsPureValueStateGetProp(FValue, AObj, AName));
 end;
 
 procedure TJsPureContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
 begin
   EnsureNotClosed;
-  JsPureHeapSetProp(FHeap, AObj, AName, AVal);
+  JsPureValueStateSetProp(FValue, AObj, AName, AVal);
 end;
 
-{ TJsPureContext — Host 职责 (js.host 预案) }
+{ TJsPureContext — Host 职责 (已落地 pure.host, 委托 HostState单源) }
 
 function TJsPureContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
 begin
   EnsureNotClosed;
   EnsureThreadAffinity;
-  // per-Context 桶 O(1) 单分支, inline
-  Result := Bind(JsPureCall(Self, FHostFuncs, FHostBuckets, AFunc, AThis, AArgs, FBackend));
+  // per-Context 桶 O(1) 单分支, inline 复用 pure.host/pure.base单源 via HostState组合
+  Result := Bind(JsPureCall(Self, FHost.Hosts, FHost.Buckets, AFunc, AThis, AArgs, FBackend));
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
 begin
   EnsureNotClosed;
-  JsPureHostSetFunc(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
+  JsPureHostStateSetFunc(FHost, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
 begin
   EnsureNotClosed;
-  JsPureHostSetMethod(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
+  JsPureHostStateSetMethod(FHost, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostProc);
 begin
   EnsureNotClosed;
-  JsPureHostSetProc(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
+  JsPureHostStateSetProc(FHost, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.RemoveHostFunction(const AName: string);
@@ -400,11 +395,11 @@ begin
   if FClosed then
     Exit;
   EnsureThreadAffinity;
-  // per-Context 桶失效，仅本实例，不影响他 Context，线程隔离高级感
-  JsPureHostRemove(FHostFuncs, FHostBuckets, AName);
+  // per-Context 桶失效，仅本实例，不影响他 Context，线程隔离高级感, 复用 HostState单源
+  JsPureHostStateRemove(FHost, AName);
 end;
 
-{ TJsPureContext — IO 职责 (L0 platform.fs 直读) }
+{ TJsPureContext — IO 职责 (L0 platform.fs 直读, 已落地 pure.base单源) }
 
 function TJsPureContext.TryEvalFile(const AFileName: string; out AValue: TJsValue): Boolean;
 var
@@ -417,7 +412,7 @@ begin
   Result := TryEval(C, AValue);
 end;
 
-{ TJsPureContext — lifecycle / GC (幂等, 资源不丢) }
+{ TJsPureContext — lifecycle / GC (幂等, 资源不丢, 组合收敛) }
 
 procedure TJsPureContext.Tick;
 begin
@@ -438,7 +433,7 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  JsPureClose(FHostFuncs, FHostBuckets, FHeap, FGlobal, FContextId);
+  JsPureClose(FHost.Hosts, FHost.Buckets, FValue.Heap, FValue.Global, FContextId);
 end;
 
 function TJsPureContext.IsClosed: Boolean;

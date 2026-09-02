@@ -1,8 +1,8 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~130行 <500 阈值内 (wc -l ~130, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 js.value via json.writer seam。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~130行 <500 阈值内 (wc -l ~130, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 json.writer TJsonWriter seam via bytes.ops。奢华薄 intf 零可变全局, 生命周期单源下沉 pure.base。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, impl 经 writer 单缝单源
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 json.writer/bytes.ops single source, 零 intf→实现 反向依赖
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
@@ -59,30 +59,14 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
-// Context 寿命（INV-7）：值绑定 ContextId，由 pure.base/pure.impl 托管生命周期，intf 仅契约声明，零可变全局，状态下沉至 owner（THREAD-AFFINE，bulk 路径零原子）
-function JsContextRegister: UInt64; // compat stub: real registry lives in pure.base (L2 owner), thread-affine, geometric via bytes.ops, single poke
-procedure JsContextClose(AId: UInt64); // compat stub: real impl in pure.base
-function JsContextIsClosed(AId: UInt64): Boolean; inline; // compat stub: pure.base 为单源，需强一致时直调 pure.base.JsPureContextIsClosed
+// Context 寿命（INV-7）：状态单源下沉至 pure.base (GPureClosed/GPureNextId 4B atomic acquire/release, 自然4B对齐, 64B/4 伪共享, write-once rare, geometric via bytes.ops single source, 零双注册), intf 零可变全局奢华薄, 不暴露 JsContextRegister/Close/IsClosed 桩 (需强一致时直调 pure.base.JsPureContextIsClosed acquire), 生命周期由 IJsContext.IsClosed 显式检查
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
+// intf 奢华薄：零可变全局，守四件套 base←intf←(pure.base 单源 owner)→pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner pure.base (THREAD-AFFINE, bulk 零原子)
 uses
-  nextpas.core.js.value; // single source AsJson via js.value (TJsonWriter seam), zero-copy inline thin-forward, L2→L2 narrow seam
-// 兼容桩：真实生命周期下沉至 pure.base（GPureClosed/GPureNextId，4B atomic acquire/release, 自然 4B 对齐, 64B/4 伪共享缓解, write-once rare, bulk IsValid 零屏障）
-// intf 零可变全局，守四件套极简（base←intf←pure.base←pure.impl←factory←门面），L0-L3 单向，热点 inline 零拷贝
-function JsContextRegister: UInt64;
-begin
-  // thin compat: id 仅单调递增，不触堆数组；真实堆由 pure.base.JsPureContextRegister 几何扩容与原子可见性担保
-  Result := 0;
-end;
-procedure JsContextClose(AId: UInt64);
-begin
-  // no-op compat: real Close 由 pure.base.JsPureContextClose 原子 release 担保可见性，幂等不丢
-end;
-function JsContextIsClosed(AId: UInt64): Boolean; inline;
-begin
-  // perf: inline zero-branch zero-alloc zero-atomic, thread-affine bulk 零成本；强一致需调 pure.base.JsPureContextIsClosed(acquire)
-  Result := False;
-end;
+  nextpas.core.text.builder,
+  nextpas.core.json.writer,
+  nextpas.core.bytes.ops;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
@@ -125,9 +109,44 @@ function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigIn
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
 function TJsValue.AsJson: string;
+var B: TStringBuilder; W: TJsonWriter; S: string;
 begin
-  // single source via js.value.JsValueAsJson (json.writer TJsonWriter seam, builder geometric via bytes.ops, zero-copy inline thin-forward)
-  Result := JsValueAsJson(Self);
+  // single source via json.writer TJsonWriter seam (text.escape SIMD) + text.builder geometric via bytes.ops BytesNextCapacity, zero-copy BytesCopy single source, single alloc, try-finally 不丢
+  // perf: thin-forward via json.writer single seam, builder geometric via bytes.ops single source, single alloc, zero-copy Move via BytesCopy, not inline per red-line (branch+builder), bulk 零拷贝视图, single seam with js.value.JsValueAsJson
+  case Self.Kind of
+    jskUndefined: Exit('undefined');
+    jskNull: Exit('null');
+    jskBoolean: if Self.AsBool then Exit('true') else Exit('false');
+    jskNumber:
+      begin
+        B.Init(32);
+        try
+          W.Init(B);
+          if Double(Self.AsInt) = Self.AsDouble then W.Int(Self.AsInt) else W.Float(Self.AsDouble);
+          Result := B.ToString;
+        finally B.Done; end;
+        Exit;
+      end;
+    jskString:
+      begin
+        S := Self.AsString;
+        B.Init(SizeUInt(Length(S)) + 2);
+        try
+          W.Init(B);
+          W.Str(S);
+          Result := B.ToString;
+        finally B.Done; end;
+        Exit;
+      end;
+    jskSymbol: Result := 'Symbol(' + Self.AsString + ')';
+    jskBigInt:
+      begin
+        Str(Self.AsInt, Result);
+        Result := Result + 'n';
+      end;
+  else
+    Result := '';
+  end;
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;

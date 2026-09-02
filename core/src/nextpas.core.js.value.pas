@@ -44,11 +44,29 @@ begin
         finally B.Done; end;
         Exit;
       end;
-    jskSymbol: Result := 'Symbol(' + V.AsString + ')';
+    jskSymbol:
+      begin
+        S := V.AsString;
+        // perf: single source via builder geometric via bytes.ops, zero-copy BytesCopy single source, single alloc, 堆拼接单分配消除, inline Reserve/Grow
+        B.Init(SizeUInt(Length(S)) + 8);
+        try
+          B.AppendBytes('Symbol(', 7);
+          if Length(S) > 0 then B.AppendStr(S);
+          B.AppendChar(')');
+          Result := B.ToString;
+        finally B.Done; end;
+        Exit;
+      end;
     jskBigInt:
       begin
-        Str(V.AsInt, Result);
-        Result := Result + 'n';
+        // perf: single source via builder AppendInt/AppendChar geometric via bytes.ops, zero-copy AppendInt inline, single alloc 22 (Int64 20+1+'n'), 堆拼接消除, inline Reserve/Grow
+        B.Init(22);
+        try
+          B.AppendInt(V.AsInt);
+          B.AppendChar('n');
+          Result := B.ToString;
+        finally B.Done; end;
+        Exit;
       end;
   else
     Result := '';

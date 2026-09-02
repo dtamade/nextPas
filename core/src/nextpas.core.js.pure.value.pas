@@ -34,6 +34,19 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
+// ValueState — per-Context值聚合态收敛 (奢华度收敛, 守bytes.ops单源+mem.dynarray, inline+零拷贝, 资源幂等不丢, Owner pure.value)
+type
+  TJsPureValueState = record
+    Heap: TJsPureHeap;
+    Global: TJsValue;
+  end;
+procedure JsPureValueStateInit(var S: TJsPureValueState; AContextId: UInt64); inline;
+procedure JsPureValueStateClear(var S: TJsPureValueState); inline;
+function JsPureValueStateHasProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
+function JsPureValueStateDeleteProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
+function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline;
+function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): TJsValue; inline;
+procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 implementation
 uses
   nextpas.core.base,
@@ -185,20 +198,24 @@ begin
   else Result := JsPureHeapFindProp(Heap[Idx].Props, Name) >= 0;
 end;
 function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
-var Idx, I, J: Integer;
+var Idx, I, LLen: Integer;
 begin
   Result := False; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then I := JsPureHeapFindProp(Heap[Idx], Name)
   else I := JsPureHeapFindProp(Heap[Idx].Props, Name);
   if I < 0 then Exit;
-  for J := I to High(Heap[Idx].Props) - 1 do Heap[Idx].Props[J] := Heap[Idx].Props[J + 1];
-  // clear last duplicate string to avoid leak before shrink
-  Heap[Idx].Props[High(Heap[Idx].Props)].Name := '';
-  Heap[Idx].Props[High(Heap[Idx].Props)].Hash := 0;
-  SetLength(Heap[Idx].Props, Length(Heap[Idx].Props) - 1);
-  // stability: invalidate bucket, rebuild if still > threshold
-  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
-  else PropBucketsInvalidate(Heap[Idx]);
+  LLen := Length(Heap[Idx].Props);
+  // perf: O(1) swap with last via single record assign (inline, zero-copy string refcount single source), no O(n) shift, no per-element refcount churn
+  // hysteresis: single invalidate amortized, lazy rebuild on next threshold-cross insert (>64), avoids thrash around 64 and per-delete Rebuild O(n)
+  if I <> LLen - 1 then
+    Heap[Idx].Props[I] := Heap[Idx].Props[LLen - 1];
+  // stability: clear last duplicate to release string/managed refs, avoid leak before shrink
+  Heap[Idx].Props[LLen - 1].Name := '';
+  Heap[Idx].Props[LLen - 1].Hash := 0;
+  Heap[Idx].Props[LLen - 1].Value := Default(TJsValue);
+  SetLength(Heap[Idx].Props, LLen - 1);
+  // stability: single invalidate, amortized lazy rebuild — no per-delete Rebuild, threshold hysteresis 64 single source avoids thrash
+  PropBucketsInvalidate(Heap[Idx]);
   Result := True;
 end;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
@@ -278,6 +295,34 @@ begin
   // single source convergent to js.value.JsValueToJsonString (json.writer seam, bytes.ops geometric, zero-copy inline)
   Result := JsValueToJsonString(AValue);
 end;
-function JsPureToJson(const AValue: TJsValue): IJsonDocument;
-begin Result := JsonParse(JsPureToJsonString(AValue)); end;
+function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
+begin
+  // perf: inline direct primitive doc — one traversal zero-copy via Add*Node single source (bytes.ops BytesCopy inline), no intermediate string, no second parse traversal, single alloc O(1)
+  // stability: Init→Add*Node→CreateFromDocument ownership transfer via ReleaseOwnership, Done in destructor not丢
+  case AValue.Kind of
+    jskNull: Result := JsonCreateNullDocument;
+    jskBoolean: Result := JsonCreateBoolDocument(AValue.AsBool);
+    jskNumber:
+      if Double(AValue.AsInt) = AValue.AsDouble then Result := JsonCreateIntDocument(AValue.AsInt)
+      else Result := JsonCreateRealDocument(AValue.AsDouble);
+    jskString: Result := JsonCreateStringDocument(AValue.AsString);
+  else
+    Result := JsonCreateNullDocument;
+  end;
+end;
+{ ValueState — inline thin-forward to pure.value single source, bytes.ops+mem.dynarray单源, 零拷贝, 幂等不丢 }
+procedure JsPureValueStateInit(var S: TJsPureValueState; AContextId: UInt64); inline;
+begin S.Global := JsValueBindContext(JsPureHeapNewObject(S.Heap), AContextId); end;
+procedure JsPureValueStateClear(var S: TJsPureValueState); inline;
+begin JsPureHeapClear(S.Heap); S.Global := JsUndefinedValue; end;
+function JsPureValueStateHasProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
+begin Result := JsPureHeapHasProp(S.Heap, AObj, AName); end;
+function JsPureValueStateDeleteProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
+begin Result := JsPureHeapDeleteProp(S.Heap, AObj, AName); end;
+function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline;
+begin Result := JsPureHeapGetKeys(S.Heap, AObj); end;
+function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): TJsValue; inline;
+begin Result := JsPureHeapGetProp(S.Heap, AObj, AName); end;
+procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
+begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
 end.

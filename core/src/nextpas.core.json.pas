@@ -37,6 +37,14 @@ function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;
 function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument; overload;
 function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument; overload;
 
+{ Direct primitive documents — single traversal zero-copy via Add*Node single source, inline allocator, no intermediate string/parse }
+function JsonCreateNullDocument: IJsonDocument; inline;
+function JsonCreateBoolDocument(AValue: Boolean): IJsonDocument; inline;
+function JsonCreateIntDocument(AValue: Int64): IJsonDocument; inline;
+function JsonCreateRealDocument(AValue: Double): IJsonDocument; inline;
+function JsonCreateStringDocument(const AValue: string): IJsonDocument; inline;
+function JsonCreateStringViewDocument(const AView: TStringView): IJsonDocument; inline;
+
 { Serialize a TJsonValue subtree to compact JSON string. }
 function JsonStringify(const AValue: TJsonValue): string;
 
@@ -68,6 +76,7 @@ type
   public
     constructor Create(const AInput: string; const AAllocator: TMemAllocator);
     constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator); inline;
+    constructor CreateFromDocument(var ADoc: TJsonDocument); inline;
     destructor Destroy; override;
     function Root: TJsonValue;
     function HasError: Boolean;
@@ -93,6 +102,16 @@ begin
   FInputCopy := '';
   FDoc.Init(AAllocator);
   FDoc.Parse(AInput);
+end;
+
+constructor TJsonDocumentImpl.CreateFromDocument(var ADoc: TJsonDocument); inline;
+begin
+  inherited Create;
+  // perf: inline move ownership — zero-copy transfer, no alloc/parse, single source nodes
+  // stability: steal ADoc (Done-safe via ReleaseOwnership), release old FDoc.Done not needed (fresh)
+  FDoc := ADoc;
+  FInputCopy := '';
+  ADoc.ReleaseOwnership;
 end;
 
 destructor TJsonDocumentImpl.Destroy;
@@ -393,6 +412,56 @@ end;
 function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument;
 begin
   Result := TJsonDocumentImpl.CreateFromView(AInput, AAllocator);
+end;
+
+function JsonCreateNullDocument: IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  // perf: inline + zero-copy single alloc O(1), no string/parse, direct node Build via bytes.ops single source
+  // stability: Init/Done via try-finally ownership transfer, ReleaseOwnership prevents double free
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddNullNode;
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateBoolDocument(AValue: Boolean): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddBoolNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateIntDocument(AValue: Int64): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddIntNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateRealDocument(AValue: Double): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddRealNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateStringDocument(const AValue: string): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddStringNode(TStringView.FromStr(AValue));
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateStringViewDocument(const AView: TStringView): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddStringNode(AView);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
 end;
 
 function JsonStringify(const AValue: TJsonValue): string;

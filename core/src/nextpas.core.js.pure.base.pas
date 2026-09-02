@@ -1,5 +1,6 @@
 unit nextpas.core.js.pure.base;
-{ facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval) }
+{ facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval)
+  Note: pure.* is pure-family prefix, base is shared base suffix (not independent module) — non-standard four-piece naming explicit exception per CONTRACT §1. Host/Heap/Value/IO four duties aggregated but wc -l 370 <650 (<800 must-split), thin forwards via pure.host/pure.value single source; over threshold split to js.host(Host+Call)+js.value(Heap/Value) ready, see pure.impl grouping marks, L0-L3 kept, bytes.ops single source. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -39,7 +40,7 @@ function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringV
 function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
-// single dispatch template — 3 forms × bucket/non-bucket 12 inline thin forwards converged via _JsPureHostSetDispatch (PBuckets nil=linear, Kind 0/1/2 dispatches Func/Method/Proc), inline zero-copy via host view, bytes.ops FNV1a single source, validated Func/Method/Proc share same dispatch + JsPureCheckHostName single source
+// single dispatch template — 3 forms × bucket/non-bucket 12 inline thin forwards converged via _JsPureHostSetDispatch (PBuckets nil=linear, Kind 0/1/2 dispatches Func/Method/Proc), inline zero-copy via host view, bytes.ops FNV1a single source, validated Func/Method/Proc share same dispatch + JsPureCheckHostName single source; Host duties thin-forward to pure.host owner (future js.host), Heap/Value to pure.value (future js.value), IO stays base Level
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
@@ -100,9 +101,10 @@ type
   PJsPureHostBuckets = ^TJsPureHostBuckets;
 var GPureClosed: array of Int32; GPureNextId: UInt64 = 1; // owner pure.base: 4B atomic acquire/release, 自然 4B 对齐 (FPC dynarray 8B header + 4B元素), 非 16B 堆对齐虚假宣称, 64B/4 伪共享 16条目/行 write-once rare,  bulk IsValid 零原子 via FValid, 强一致走 acquire
 
-// single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source
+// single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source; 6 overloads converged to one dispatch (PBuckets nil=linear else bucketed), future js.host split ready when >800
 procedure _JsPureHostSetDispatch(var Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AName: string; const AFunc: TJsHostFunction; const AMethod: TJsHostMethod; const AProc: TJsHostProc; AKind: Integer); inline;
 begin
+  // perf: inline single branch PBuckets nil check, zero-copy host view, bytes.ops single source, no heap alloc
   if Buckets <> nil then
     case AKind of
       0: nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets^, AName, AFunc, AKind);
@@ -117,19 +119,34 @@ begin
     end;
 end;
 
-function JsPureContextRegister: UInt64;
-var LNeed, LCap: SizeUInt; LBytes: TBytes absolute GPureClosed;
+function GPureClosedCapacity: SizeUInt; inline;
 begin
-  // perf: thread-affine geometric via bytes.ops BytesNextCapacity single source, Exactly-Once poke via mem.dynarray DynArraySetLength, amortized O(1), single SetLength+single poke, zero double alloc
+  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(Int32));
+end;
+
+function JsPureContextRegister: UInt64;
+var LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute GPureClosed;
+begin
+  // perf: thread-affine geometric via bytes.ops BytesNextCapacity single source, capacity-aware Exactly-Once poke via mem.dynarray DynArraySetLength, amortized O(1), single SetLength only when capacity insufficient + single poke, zero redundant zeroing/double alloc, inline zero-copy header
   Result := GPureNextId;
   Inc(GPureNextId);
   if Result >= UInt64(Length(GPureClosed)) then
   begin
-    LNeed := SizeUInt(Result) + 32;
-    LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
-    SetLength(GPureClosed, Integer(LCap));
-    if LCap <> SizeUInt(Result) + 1 then
-      DynArraySetLength(LBytes, SizeUInt(Result) + 1);
+    LNeed := SizeUInt(Result) + 1;
+    LCurCap := GPureClosedCapacity;
+    if LCurCap >= LNeed then
+    begin
+      if SizeUInt(Length(GPureClosed)) <> LNeed then
+        DynArraySetLength(LBytes, LNeed);
+    end
+    else
+    begin
+      LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
+      SetLength(GPureClosed, Integer(LCap));
+      if LCap <> LNeed then
+        DynArraySetLength(LBytes, LNeed);
+    end;
   end;
   atomic_store(GPureClosed[Result], 0, mo_release);
 end;
