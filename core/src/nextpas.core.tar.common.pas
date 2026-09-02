@@ -41,13 +41,16 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** ustar 魔数/版本单点：收敛 EmitPaxHeader/WriteHeader 逐字节拼装，复用 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 常量与 TarPutHeaderString 单源 Move，inline 薄转发零拷贝 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
+{** pax 记录单点：长度前缀十进制自洽与拼接收敛至 common，复用 bytes.ops CopyStringToBuffer 单源 Move 单次 SetLength 分配，零拷贝 PAnsiChar 视图，外联禁 inline（含循环/分配） *}
+function TarFormatPaxRecord(const AKey, AValue: string): string;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -144,37 +147,12 @@ end;
 function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 var
   Stored, U, S: Int64;
-  I: SizeUInt;
-  B: Byte;
-  IsZero: Boolean;
 begin
-  Stored := TarParseNumericField(@ABlock[C_TAR_OFF_CHKSUM], C_TAR_LEN_CHKSUM, C_TAR_OFF_CHKSUM);
-  IsZero := True;
-  U := 0;
-  S := 0;
-  for I := 0 to C_TAR_OFF_CHKSUM - 1 do
-  begin
-    B := ABlock[I];
-    if B <> 0 then
-      IsZero := False;
-    U := U + B;
-    S := S + ShortInt(B);
-  end;
-  for I := C_TAR_OFF_CHKSUM to C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM - 1 do
-    if ABlock[I] <> 0 then
-      IsZero := False;
-  U := U + C_TAR_LEN_CHKSUM * Ord(' ');
-  S := S + C_TAR_LEN_CHKSUM * Ord(' ');
-  for I := C_TAR_OFF_CHKSUM + C_TAR_LEN_CHKSUM to C_TAR_BLOCK_SIZE - 1 do
-  begin
-    B := ABlock[I];
-    if B <> 0 then
-      IsZero := False;
-    U := U + B;
-    S := S + ShortInt(B);
-  end;
-  if IsZero then
+  Stored := TarStoredChecksum(ABlock);
+  // 单源复用：零块复用 bytes.ops.IsZeroBytes via TarHeaderIsZeroBlock（TByteSpan 零拷贝视图，外联），校验和复用 TarComputeChecksumsDual 单次 512 双累加（分段无分支，外联，薄守卫 inline 零拷贝）；消除双扫描重复，循环体外联守 design-conventions
+  if TarHeaderIsZeroBlock(ABlock) then
     Exit(True);
+  TarComputeChecksumsDual(ABlock, U, S);
   if (Stored <> U) and (Stored <> S) then
     raise EIOError.CreateFmt('tar: header checksum mismatch at offset %d (stored %d, computed unsigned %d signed %d)', [APos, Stored, U, S]);
   Result := False;
@@ -290,6 +268,49 @@ begin
   // 单源：复用 TarPutHeaderString 单源 Move，C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 单点
   TarPutHeaderString(ABlock, C_TAR_OFF_MAGIC, C_TAR_LEN_MAGIC, C_TAR_MAGIC_USTAR);
   TarPutHeaderString(ABlock, C_TAR_OFF_VERSION, C_TAR_LEN_VERSION, C_TAR_VERSION_00);
+end;
+
+{ — pax 单点：长度前缀十进制自洽与拼接收敛至 common，复用 bytes.ops CopyStringToBuffer 单源 Move 单次 SetLength 分配，零拷贝 PAnsiChar 视图，外联禁 inline（含循环/分配） — }
+function TarFormatPaxRecord(const AKey, AValue: string): string;
+var
+  LBase, LLen, LDigits: Integer;
+  SLen: string;
+  LPos: SizeInt;
+begin
+  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
+  LDigits := 1;
+  LLen := LBase + LDigits;
+  SLen := nextpas.core.text.conv.IntToStr(LLen);
+  while Length(SLen) <> LDigits do
+  begin
+    LDigits := Length(SLen);
+    LLen := LBase + LDigits;
+    SLen := nextpas.core.text.conv.IntToStr(LLen);
+  end;
+  // perf: 单次 SetLength(Result,LLen)+顺序 CopyStringToBuffer（bytes.ops 单源 Move，零拷贝 PAnsiChar 视图，外联单次 Move 规避 FPC 3.3.1 inline+Move 单字节缺陷），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
+  // stability: 空键/值守零长不 Copy，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 bytes.ops CopyStringToBuffer 审计（同 common.pas SpanToString/TarPutHeaderString 单源），资源由托管 string 释放不丢
+  SetLength(Result, LLen);
+  LPos := 1;
+  if Length(SLen) > 0 then
+  begin
+    CopyStringToBuffer(SLen, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(SLen)));
+    Inc(LPos, Length(SLen));
+  end;
+  Result[LPos] := ' ';
+  Inc(LPos);
+  if Length(AKey) > 0 then
+  begin
+    CopyStringToBuffer(AKey, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AKey)));
+    Inc(LPos, Length(AKey));
+  end;
+  Result[LPos] := '=';
+  Inc(LPos);
+  if Length(AValue) > 0 then
+  begin
+    CopyStringToBuffer(AValue, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AValue)));
+    Inc(LPos, Length(AValue));
+  end;
+  Result[LPos] := #10;
 end;
 
 { — pax 单点：零拷贝 PByte 切片解析，复用 bytes.ops TByteSpan 零拷贝思想，无 Copy 分配 — }

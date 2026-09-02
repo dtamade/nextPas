@@ -75,7 +75,7 @@ const
 type
   {** @desc ustar 字段描述：Off/Len 合一，单点零拷贝 *}
   TTarField = record Off: SizeUInt; Len: SizeUInt; end;
-  {** @desc ustar 头部布局记录表：14字段单源收敛，生成器校验连续性，读写一致零错位 *}
+  {** @desc ustar 头部布局记录表：16字段单源收敛（含 devmajor/devminor），生成器校验连续性，读写一致零错位 *}
   TTarUstarLayout = record
     Name: TTarField;
     Mode: TTarField;
@@ -90,6 +90,8 @@ type
     Version: TTarField;
     UName: TTarField;
     GName: TTarField;
+    DevMajor: TTarField;
+    DevMinor: TTarField;
     Prefix: TTarField;
   end;
 
@@ -109,10 +111,12 @@ const
     Version: (Off: 263; Len: 2);
     UName: (Off: 265; Len: 32);
     GName: (Off: 297; Len: 32);
+    DevMajor: (Off: 329; Len: 8);
+    DevMinor: (Off: 337; Len: 8);
     Prefix: (Off: 345; Len: 155)
   );
 
-  { 兼容别名（生成器收敛）：散列常量由 C_TAR_LAYOUT 单源与算术生成器派生，声明噪声归一，防手动错位；inline 薄转发零拷贝，逐步迁移至 C_TAR_LAYOUT.* }
+  { 兼容别名（生成器收敛）：散列常量由算术生成器派生，相对 C_TAR_LAYOUT 单源保持数值一致（FPC const 不支持记录字段常量表达式），声明噪声归一，防手动错位 }
   C_TAR_OFF_NAME = 0; C_TAR_LEN_NAME = 100;
   C_TAR_OFF_MODE = C_TAR_OFF_NAME + C_TAR_LEN_NAME; C_TAR_LEN_MODE = 8;
   C_TAR_OFF_UID = C_TAR_OFF_MODE + C_TAR_LEN_MODE; C_TAR_LEN_UID = 8;
@@ -126,7 +130,9 @@ const
   C_TAR_OFF_VERSION = C_TAR_OFF_MAGIC + C_TAR_LEN_MAGIC; C_TAR_LEN_VERSION = 2;
   C_TAR_OFF_UNAME = C_TAR_OFF_VERSION + C_TAR_LEN_VERSION; C_TAR_LEN_UNAME = 32;
   C_TAR_OFF_GNAME = C_TAR_OFF_UNAME + C_TAR_LEN_UNAME; C_TAR_LEN_GNAME = 32;
-  C_TAR_OFF_PREFIX = C_TAR_OFF_GNAME + C_TAR_LEN_GNAME + 16; C_TAR_LEN_PREFIX = 155;
+  C_TAR_OFF_DEVMAJOR = C_TAR_OFF_GNAME + C_TAR_LEN_GNAME; C_TAR_LEN_DEVMAJOR = 8;
+  C_TAR_OFF_DEVMINOR = C_TAR_OFF_DEVMAJOR + C_TAR_LEN_DEVMAJOR; C_TAR_LEN_DEVMINOR = 8;
+  C_TAR_OFF_PREFIX = C_TAR_OFF_DEVMINOR + C_TAR_LEN_DEVMINOR; C_TAR_LEN_PREFIX = 155;
 
   { base-256 哨兵与默认权限（0644/0755） }
   C_TAR_BASE256_SENTINEL = $80;
@@ -145,6 +151,8 @@ const
 
   { builder 初始容量：4K 一页对齐，几何扩容单源，避免大写多次重分配，调优单点 }
   C_TAR_BUILDER_INITIAL_CAPACITY = 4096;
+
+function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
 procedure ValidateTarEntryName(const AName: string);
@@ -210,6 +218,19 @@ end;
 function TarDirectoryMode(APermissionBits: Word): Word; inline;
 begin
   Result := C_TAR_UNIX_IFDIR or (APermissionBits and C_TAR_UNIX_PERM_MASK);
+end;
+
+function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
+begin
+  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY 单源，含两零块尾
+  if AEstimatedTotal = 0 then
+    Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
+  // 预留两零块 + 头开销，按 4K 对齐向上取整，消除大写抖动
+  Result := AEstimatedTotal + 2 * C_TAR_BLOCK_SIZE;
+  if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
+    Result := C_TAR_BUILDER_INITIAL_CAPACITY;
+  // 4K 对齐
+  Result := (Result + 4095) and not SizeUInt(4095);
 end;
 
 function TarFieldOff(const AField: TTarField): SizeUInt; inline;

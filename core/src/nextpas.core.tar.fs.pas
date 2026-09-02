@@ -99,9 +99,8 @@ var
   W: TTarWriter;
 begin
   Result := nil;
-  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源(C_TAR_BUILDER_INITIAL_CAPACITY 4K 页对齐)+ archive 单源 CreateArchiveBuilderSink，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
-  LBuilder := CreateBytesBuilder(C_TAR_BUILDER_INITIAL_CAPACITY);
-  LSink := CreateArchiveBuilderSink(LBuilder);
+  // 统一工厂单源：复用 archive.fs CreateArchiveBuilder (CreateBytesBuilder C_TAR_BUILDER_INITIAL_CAPACITY + CreateArchiveBuilderSink)，inline 零拷贝直写切片，消除与 tar.builder 同模板重复 + 二次大块 Move
+  CreateArchiveBuilder(C_TAR_BUILDER_INITIAL_CAPACITY, LBuilder, LSink);
   W := TTarWriter.Create(LSink);
   try
     TarPackDirInto(ADir, W);

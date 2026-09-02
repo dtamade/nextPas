@@ -55,6 +55,8 @@ function TarPackDir(const ADir: string): TBytes; inline;
 procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions); inline;
 procedure TarExtractToDir(const AData: TBytes; const ADestDir: string); inline;
 function TarBuilder: ITarBuilder; inline;
+function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
+function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 
 implementation
 
@@ -116,6 +118,16 @@ end;
 function TarBuilder: ITarBuilder; inline;
 begin
   Result := nextpas.core.tar.builder.TarBuilder;
+end;
+
+function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
+begin
+  Result := nextpas.core.tar.builder.TarBuilderWithCapacity(AEstimatedTotal);
+end;
+
+function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.tar.base.TarBuilderCapacityFor(AEstimatedTotal);
 end;
 
 end.
