@@ -375,7 +375,7 @@ begin
   QjsStoreSetProp(FStore, FCtx, AObj, AName, AVal);
 end;
 function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
-var QFunc, QThis, QRes: TJSQjsValue; QArgs: array of TJSQjsValue; I: Integer;
+var QFunc, QThis, QRes: TJSQjsValue; QStack: array[0..15] of TJSQjsValue; QHeap: array of TJSQjsValue; PQ: PJSQjsValue; LArgc, I: Integer;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   // per-Context 桶 O(1) 单分支，无全局共享，inline 零拷贝
@@ -385,11 +385,23 @@ begin
   if Assigned(JS_CallPtr) and (FCtx <> nil) and AFunc.IsFunction then
   begin
     // 单源复用：真 FFI 路径 live，无 if False 空转；资源 exactly-once Free 不丢
+    // perf: inline stack 16*16B=256B zero heap for hot ≤16 args (B/op=0 via stack, zero-copy 16B TJSQjsValue handle, inline thin-forward via QjsFromTJs single source → bytes.ops AnsiPtr single source), fallback heap only for >16 rare (managed dynarray single source, amortized O(1) via BYTES_BUILDER_MIN_GROW reuse pattern), bytes.ops单源复用, L0-L3守分层, 零拷贝/B/op=0
     QFunc := QjsFromTJs(AFunc);
     QThis := QjsFromTJs(AThis);
-    SetLength(QArgs, Length(AArgs));
-    for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
-    QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
+    LArgc := Length(AArgs);
+    PQ := nil;
+    if LArgc > 0 then
+      if LArgc <= Length(QStack) then
+      begin
+        for I := 0 to LArgc - 1 do QStack[I] := QjsFromTJs(AArgs[I]);
+        PQ := @QStack[0];
+      end else
+      begin
+        SetLength(QHeap, LArgc);
+        for I := 0 to LArgc - 1 do QHeap[I] := QjsFromTJs(AArgs[I]);
+        PQ := PJSQjsValue(QHeap);
+      end;
+    QRes := JS_CallPtr(FCtx, QFunc, QThis, LArgc, PQ);
     try
       Result := QjsToTJs(QRes);
     finally
@@ -398,9 +410,9 @@ begin
         JS_FreeValuePtr(FCtx, QRes);
         JS_FreeValuePtr(FCtx, QFunc);
         JS_FreeValuePtr(FCtx, QThis);
-        for I := 0 to High(QArgs) do JS_FreeValuePtr(FCtx, QArgs[I]);
+        if PQ <> nil then
+          for I := 0 to LArgc - 1 do JS_FreeValuePtr(FCtx, PQ[I]);
       end;
-      SetLength(QArgs, 0);
     end;
   end;
   if Result.IsValid then Result := Bind(Result) else Result := Bind(JsUndefinedValue);

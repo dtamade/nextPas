@@ -115,7 +115,7 @@ begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
 procedure PokePropsLen(var Props: array of TJsPureProp; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute Props;
 begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
-{ prop hash — single source FNV1a32 via bytes.ops, inline zero-copy }
+{ prop hash — single source FNV1a32 via bytes.ops, inline zero-copy, converges with pure.host HostHashView via bytes.ops single source; candidate shared helper nextpas.core.js.pure.hash if growth }
 function PropHashStr(const S: string): UInt32; inline;
 begin
   if Length(S)=0 then Exit(0);
@@ -358,13 +358,13 @@ begin
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 begin
-  // perf: inline zero-copy view via JsStringViewValue (PAnsiChar+Len) single source, B/op=0 hot path (host dispatch), bytes.ops single source deferred to AsString materialize, no heap alloc, owner intf
+  // perf: inline eager hosted via JsStringViewValue single source (bytes.ops SpanToString single source), B/op=1 alloc single-state lifecycle, owner intf bytes.ops single source, zero dangling view
   if AView.IsEmpty then Result := JsValueBindContext(JsStringValue(''), AContextId)
   else Result := JsValueBindContext(JsStringViewValue(AView.Data, AView.Len), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 begin
-  // perf: inline zero-copy view via JsStringViewValue single source, B/op=0, no ToString alloc, bytes.ops single source on AsString
+  // perf: inline eager hosted via JsStringViewValue single source, B/op=1 alloc single-state, bytes.ops single source at creation, no deferred cache complexity
   if AView.IsEmpty then Result := JsStringValue('')
   else Result := JsStringViewValue(AView.Data, AView.Len);
 end;

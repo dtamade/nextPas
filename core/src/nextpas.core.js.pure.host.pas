@@ -79,14 +79,14 @@ begin
 end;
 function HostHashView(const V: TStringView): UInt32; inline;
 begin
-  // single source FNV1a via bytes.ops, inline + zero-copy view, no heap alloc
+  // single source FNV1a via bytes.ops, inline + zero-copy view, no heap alloc, converges with pure.value PropHashStr via bytes.ops single source; candidate shared helper nextpas.core.js.pure.hash if growth
   if V.Len = 0 then Exit(0);
   Result := FNV1a32(PByte(V.Data), V.Len);
 end;
 function HostHashStr(const S: string): UInt32; inline;
 var V: TStringView;
 begin
-  // single source: delegate to HostHashView via TStringView.FromStr zero-copy, no duplicate FNV
+  // single source: delegate to HostHashView via TStringView.FromStr zero-copy, no duplicate FNV, bytes.ops single source converges with PropHashStr
   V := TStringView.FromStr(S);
   Result := HostHashView(V);
 end;
@@ -348,30 +348,30 @@ begin
   JsPureHostSet(Hosts, Buckets, AName, AHandler, 2);
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
-var LIdx, LCount, I: Integer;
+var LIdx, LCount: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx < 0 then Exit;
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // stability: managed assignment semantics — for managed record (string/interface) use per-element assignment, avoids raw BytesCopy/BytesZero double-free/leak and handmade zero fragility, resource not丢 via assignment refcount
-  // perf: O(n) assignment shift, bulk delete O(n) not O(n²), inline zero-copy view via HostFind, poke amortized O(1) via mem.dynarray single source
-  for I := LIdx to LCount - 2 do
-    Hosts[I] := Hosts[I + 1];
+  // stability: managed assignment semantics — swap-last single assignment + clear duplicate last to release string/managed refs, avoids raw BytesCopy/BytesZero double-free/leak, resource not丢 via assignment refcount
+  // perf: O(1) swap-last single refcount churn vs O(n) shift, bulk delete O(n) not O(n²), inline zero-copy view via HostFind, poke amortized O(1) via mem.dynarray single source
+  if LIdx <> LCount - 1 then
+    Hosts[LIdx] := Hosts[LCount - 1];
   Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);
-var LIdx, LCount, I: Integer;
+var LIdx, LCount: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, Buckets, AName);
   if LIdx < 0 then Exit;
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // stability: managed assignment semantics — per-element assignment for string/interface, avoids raw BytesCopy/BytesZero fragility, resource not丢
-  // perf: O(n) assignment shift bulk delete O(n) not O(n²), bucket invalidate single source, poke amortized O(1)
-  for I := LIdx to LCount - 2 do
-    Hosts[I] := Hosts[I + 1];
+  // stability: managed assignment semantics — swap-last single assignment + clear duplicate last to release string/managed refs, avoids raw BytesCopy/BytesZero fragility, resource not丢
+  // perf: O(1) swap-last single refcount churn vs O(n) shift, bulk delete O(n) not O(n²), bucket invalidate single source, poke amortized O(1)
+  if LIdx <> LCount - 1 then
+    Hosts[LIdx] := Hosts[LCount - 1];
   Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
   JsPureHostBucketsInvalidate(Buckets);

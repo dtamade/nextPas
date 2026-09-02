@@ -7,7 +7,7 @@ type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
   TJsValue = record
-  private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64; FViewData: PAnsiChar; FViewLen: SizeUInt;
+  private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
   public
     function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
@@ -72,7 +72,7 @@ begin
   Result := AValue;
   Result.FContextId := AContextId;
 end;
-function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; Result.FViewData:=nil; Result.FViewLen:=0; end;
+function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
 function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
@@ -80,8 +80,9 @@ function JsDoubleValue(AValue: Double): TJsValue; begin Result:=JsUndefinedValue
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // perf: inline zero-copy view via PAnsiChar+Len, no heap, owner intf, bytes.ops not needed until AsString materializes via single source SpanToString, B/op=0 hot path when host discards args
-  Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FViewData:=AData; Result.FViewLen:=ALen; Result.FStrVal:='';
+  // perf: inline eager materialize via bytes.ops SpanToString single source, single string hosted owner, zero dangling view, lifecycle single-state, B/op=1 alloc
+  if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
+  else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=SpanToString(TByteSpan.Create(PByte(AData), ALen)); end;
 end;
 function JsObjectValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; end;
 function JsArrayValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskArray; end;
@@ -114,32 +115,22 @@ function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigIn
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
+  // single source: FStrVal hosted string, inline zero-copy return, bytes.ops SpanToString single source at creation via JsStringViewValue, lifecycle single-state, resource not丢
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
-  if Length(FStrVal)>0 then Exit(FStrVal);
-  if FViewLen>0 then begin
-    // single source materialize via bytes.ops SpanToString single source (SetString+BytesCopy via bytes.ops.text, owner bytes.ops), deferred zero-copy view, cache FStrVal for B/op=0 second call, inline hot path when host discards args, resource not丢
-    if FViewData<>nil then begin Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); Self.FStrVal := Result; Self.FViewData := nil; Self.FViewLen := 0; end else Result:='';
-    Exit;
-  end;
-  Result:='';
+  Result:=FStrVal;
 end;
 function TJsValue.AsJson: string;
 begin
   // single source via pure.value JsPureToJsonString single seam (json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source), thin-forward, single alloc fast path, resource try-finally in pure.value not lost, not inline per red-line (branch+builder)
-  // perf: thin-forward to pure.value single source, number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder, escaped path builder geometric via bytes.ops single source try-finally Done not lost, bulk zero-copy view, AsString view cached via FStrVal B/op=0 second call
+  // perf: thin-forward to pure.value single source, number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder, escaped path builder geometric via bytes.ops single source try-finally Done not lost, bulk TStringView zero-copy via text.view via bytes.ops SpanEqual single source, AsString single-state hosted via bytes.ops single source
   Result := JsPureToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
+  // single source: hosted FStrVal, inline, bytes.ops single source at creation, zero view caching complexity, resource not丢
   Result:=FKind=jskString;
-  if Result then begin
-    if Length(FStrVal)>0 then V:=FStrVal
-    else if FViewLen>0 then begin
-      // single source via bytes.ops SpanToString, deferred materialize, cache FStrVal for B/op=0 second call, inline zero-copy, resource not丢
-      if FViewData<>nil then begin V := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); Self.FStrVal := V; Self.FViewData := nil; Self.FViewLen := 0; end else V:='';
-    end else V:='';
-  end else V:='';
+  if Result then V:=FStrVal else V:='';
 end;
 end.
