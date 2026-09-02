@@ -20,7 +20,7 @@ plus the encoded header via `SetPassword`.
 |------|------|
 | `nextpas.core.sevenz.base` | Container constants, method/property IDs, `TSevenZEntryInfo`, UTF-8↔UTF-16LE name conversion, FILETIME helpers, `ESevenZError` |
 | `nextpas.core.sevenz.intf` | `ISevenZReader`/`ISevenZWriter`, LZMA backend contracts (`ISevenZLzmaDecoder`/`ISevenZLzmaEncoder`) |
-| `nextpas.core.sevenz.header` | varint codec, StreamsInfo/FilesInfo TLV parsing, encoded-header handling + `IBytesBuilder ToBuilder` 单源（`SevenZWriteNumberToBuilder/Append*ToBuilder`，`bytes.builder Grow` 均摊 O(n)） |
+| `nextpas.core.sevenz.header` | varint codec, StreamsInfo/FilesInfo TLV parsing, encoded-header handling + `IBytesBuilder ToBuilder` 单源（`SevenZWriteNumberToBuilder/Append*ToBuilder`，`bytes.builder Grow` 均摊 O(n)；`ParseSubStreamsInfo` CRC 两遍计数单分配 O(n²)→O(n)） |
 | `nextpas.core.sevenz.coders` | coder dispatch: backend resolution, Delta/BCJ family, Deflate/BZip2, folder decode chains |
 | `nextpas.core.sevenz.bcj.x86` | BCJ x86 branch/call address conversion (both directions; xz-reference algorithm) |
 | `nextpas.core.sevenz.bcj.arm` | BCJ ARM branch conversion (both directions; xz-reference) |
