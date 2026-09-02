@@ -157,7 +157,7 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
-- `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（四件套外内部核例外）：不属于四件套公共面，仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引；由 `core/docs/<module>/CONTRACT.md` 源契约与 `test_*_contract` 机械门禁锁定。
+- `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（类型级隔离·门面零 re-export，仅受信实现 `implementation uses` 可见，辅以 `CONTRACT` 机械门禁双重收敛；四件套外内部核形态，不属于四件套公共面）：仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引。
 - `tar` 的 `ITarBuilder` 单口直达 `AddEntryFromReader`（`nextpas.core.tar.intf` L2→L1 单向 `nextpas.core.io.intf(IReader)`，2026-09-02 精简完成，消除 `ITarStreamBuilder`+`AsStreamBuilder`+`TarBuilderAddFromReader` 四入口与 `QueryInterface` 分发仪式，`TarBuilder.Add(...).AddEntryFromReader(...).Finish` 一链直达），守 `bytes.ops` 单源 `CopyMemory/Move` inline 零拷贝、per-entry 局域缓冲 `try..finally` 必释无滞留（见 `core/docs/tar/CONTRACT.md §4`）。
 
 ### 单元体积指引

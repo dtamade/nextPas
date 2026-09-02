@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
 Tar bench 回归门：对比 BASELINE.json 与当前 build/bench-tar.json。
-以 allocs 为硬预算（+2 抖动），bytes 必须相等，ns/op 允许 +50%（噪声大）。
-任一硬门失败即非零退出，CI 红；ns/MB/s 超限仅 WARN。
+以 allocs 为硬预算（+2 抖动）、bytes 强一致、ns/op ≤1.50×、MB/s ≥0.65× 均为硬门（CI 红）；
+status=ok 强一致。Go/Rust 对照（若存在 compare 基准）同口径 Pascal ns/op ≤1.50× 且 MB/s ≥0.70× 为硬门。
+任一硬门失败即非零退出，CI 红。
 """
 import json
 import sys
@@ -69,11 +70,18 @@ def main():
         base_ns = float(bbase.get("ns_per_op", 0))
         cur_ns = float(bcur.get("ns_per_op", 0))
         if base_ns > 0 and cur_ns > base_ns * 1.50:
-            print(f"  WARN {name}: ns {cur_ns:.0f} > baseline {base_ns:.0f} *1.5 ({cur_ns/base_ns:.2f}x) — noise?", file=sys.stderr)
+            print(f"  FAIL {name}: ns {cur_ns:.0f} > baseline {base_ns:.0f} *1.5 ({cur_ns/base_ns:.2f}x)", file=sys.stderr)
+            failed += 1
+        else:
+            print(f"  OK   {name}: ns {cur_ns:.0f} <= {base_ns:.0f}*1.5")
         base_mbs = float(bbase.get("bytes_per_op", 0)) / base_ns if base_ns else 0
         cur_mbs = float(bcur.get("bytes_per_op", 0)) / cur_ns if cur_ns else 0
         if base_mbs > 0 and cur_mbs < base_mbs * 0.65:
-            print(f"  WARN {name}: MB/s {cur_mbs:.1f} < baseline {base_mbs:.1f} *0.65", file=sys.stderr)
+            print(f"  FAIL {name}: MB/s {cur_mbs:.1f} < baseline {base_mbs:.1f} *0.65 ({cur_mbs/base_mbs:.2f}x)", file=sys.stderr)
+            failed += 1
+        else:
+            if base_mbs > 0:
+                print(f"  OK   {name}: MB/s {cur_mbs:.1f} >= {base_mbs:.1f}*0.65")
         if bcur.get("status") != "ok":
             print(f"  FAIL {name}: status {bcur.get('status')} != ok", file=sys.stderr)
             failed += 1
@@ -83,7 +91,7 @@ def main():
     if failed:
         print(f"[regression] {failed} check(s) failed", file=sys.stderr)
         sys.exit(1)
-    print("[regression] all allocs/bytes checks passed")
+    print("[regression] all checks passed (allocs/bytes/ns/MB/s hard gate, status ok)")
     sys.exit(0)
 
 if __name__ == "__main__":

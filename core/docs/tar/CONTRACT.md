@@ -60,7 +60,7 @@
 
 生产单元（`src/nextpas.core.tar*.pas`）不得 `uses` 非 `nextpas.*`，经 `test_tar_contract` 机械执行。门面仅 `re-export` + `inline` 委托，无控制流。
 
-- 四件套 `base←intf←实现←门面`；`nextpas.core.tar.common` 为内部共享内核仅供 `reader/writer/fs` 复用，`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
+- 四件套 `base←intf←实现←门面`；`nextpas.core.tar.common` 为内部共享内核（类型级隔离：门面零 re-export，仅 `reader/writer/fs` 受信实现 `implementation uses` 可见，辅以本契约机械门禁双重收敛）仅供 `reader/writer/fs` 复用，`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
 
 ## 5. 测试入口
 
@@ -78,6 +78,8 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 
 数值单源于 `core/benchmarks/nextpas.core.tar/bench_tar/BASELINE.json`（`build/bench-tar.json` 人工审查固化，`make baseline` 刷新）。
 
-- 口径：`bench_tar` `TBenchSuite` 承载，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现。
-- 门限：`allocs/bytes` 硬门、`ns/MB/s` 软门；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 判定。
-- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 持有型零拷贝；`bytes.ops` 单源 `CopyMemory/SpanClone`，`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`。
+- 口径：`bench_tar` `TBenchSuite` 承载，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现（`GOMAXPROCS=1` 降噪，`SetMinDuration 300ms/MinSamples 7/Warmup 1`，`ACtx.SetBytes` 换算吞吐，双路归档 `build/bench-tar.json`）。
+- 门限（CI 硬红）：`allocs` 硬预算 `baseline+2` / `bytes` 强一致（`!=` 即红）与 `ns/op ≤1.50×` / `MB/s ≥0.65×` 均为硬门（`status=ok` 强一致，任一超限 `check_regression.py` 非零退出，CI 红）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 判定。
+- 对照（CI 硬红）：Go `archive/tar` / Rust `tar` `compare_go`/`compare_rust` 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续双机复现升硬门）。
+- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 持有型零拷贝；`bytes.ops` 单源 `CopyMemory/SpanClone`，`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀）。
+- 确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序定稿 + 未显式 `mtime=0` 同输入同字节（除 pax 长名外），跨机复现高级感。

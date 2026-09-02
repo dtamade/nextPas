@@ -227,7 +227,7 @@ begin
   Result := FData[AOfs];
 end;
 
-function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; inline;
+function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
 var
   EndOfs: SizeUInt;
   LLen: SizeUInt;
@@ -241,7 +241,7 @@ begin
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative table-driven, no magic Off/Len dup, inline zero-copy
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative table-driven, no magic Off/Len dup, zero-copy
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
@@ -255,19 +255,15 @@ begin
         if LLen = 0 then Exit(TByteSpan.Empty);
         Exit(TByteSpan.Create(@FData[AOfs], LLen));
       end;
-    // fallback: non-7 header field — reuse remaining 512B hot cache (LUT余量), inline zero-copy direct scan within ALen without extra 512B rescan, bytes.ops single-source equivalence (SpanIndexOf/MemFindByte), cold path micro-optimized
-    LLen := ALen;
-    for LIdx := 0 to SizeInt(ALen) - 1 do
-      if FData[AOfs + SizeUInt(LIdx)] = 0 then
-      begin
-        LLen := SizeUInt(LIdx);
-        Break;
-      end;
+    // fallback: non-7 header field — bytes.ops single source SpanIndexOf/MemFindByte SIMD zero-copy, no scalar loop
+    LSpan := TByteSpan.Create(@FData[AOfs], ALen);
+    LIdx := SpanIndexOf(LSpan, 0);
+    if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
     if LLen = 0 then Exit(TByteSpan.Empty);
     Result := TByteSpan.Create(@FData[AOfs], LLen);
     Exit;
   end;
-  // non-header: single SpanIndexOf zero-copy, bytes.ops single source, inline zero-copy view
+  // non-header: single SpanIndexOf zero-copy, bytes.ops single source, zero-copy view
   LSpan := TByteSpan.Create(@FData[AOfs], ALen);
   LIdx := SpanIndexOf(LSpan, 0);
   if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);

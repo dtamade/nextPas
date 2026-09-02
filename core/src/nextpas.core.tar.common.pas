@@ -1,9 +1,10 @@
 unit nextpas.core.tar.common;
 {**
- * @desc Tar 共享内核：reader/writer 单点复用（@internal，四件套外内部核例外形态）。
+ * @desc Tar 共享内核：reader/writer 单点复用（类型级隔离·门面零 re-export，仅 reader/writer/fs 受信 uses，CONTRACT 双重收敛）。
  *}
 
 {$I nextpas.core.settings.inc}
+{** 类型级隔离：门面零 re-export，仅 reader/writer/fs 于 implementation 受信 uses；复用 bytes.ops 单源 inline 零拷贝视图，CONTRACT 双重收敛。 *}
 
 interface
 

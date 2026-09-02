@@ -100,7 +100,7 @@ end;
 
 procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
 begin
-  // perf: inline thin-forward to bytes.ops.BytesEnsureCapacity single source (geometric 2× amortized O(1), AlignUp4K via TarIOBufCapacityFor caller), zero-copy PByte view, no manual GetMem/FreeMem, high-water retained
+  // single source via bytes.ops.BytesEnsureCapacity
   BytesEnsureCapacity(FIOBuf, ANeed);
 end;
 
@@ -179,7 +179,7 @@ function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
 var
   I: Integer;
 begin
-  // perf: table-driven single scan 155 iterations max, 2000 entries ~310k compares, L1 cache friendly, PAnsiChar view zero-copy; no long-name hit cache per design — 155*2000=310k Branch ~0.3M, table-driven已最优, 缓存命中率低且引入 string 持有/比较开销, 属可接受微缝 (CONTRACT §2 INV-1)
+  // backward scan for prefix cut, max 155 iterations
   Result := 0;
   if Length(AName) <= C_TAR_LAYOUT.Name.Len then Exit;
   I := C_TAR_LAYOUT.Prefix.Len;
@@ -484,10 +484,9 @@ procedure TTarWriter.Finish;
 begin
   if FFinished then Exit;
   FFinished := True;
-  // perf+stability: zero-copy single source via bytes.ops ZeroBufPtr (GZeroBuf4K 4K), two WriteChecked single dispatch, eliminates 512B stack Zero+SpanFill+WriteBlock double copy, inline zero-copy
-  WriteChecked(ZeroBufPtr, C_TAR_BLOCK_SIZE);
-  WriteChecked(ZeroBufPtr, C_TAR_BLOCK_SIZE);
-  // stability: pooled TBytes freed via SetLength nil (bytes.ops single source, no manual FreeMem size mismatch), try..finally in Destroy guarantees not lost
+  // zero-copy via bytes.ops ZeroBufPtr single source, single dispatch 1024
+  WriteChecked(ZeroBufPtr, 2 * C_TAR_BLOCK_SIZE);
+  // pooled TBytes freed via SetLength nil
   if Length(FIOBuf) > 0 then
     SetLength(FIOBuf, 0);
 end;

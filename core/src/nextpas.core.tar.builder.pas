@@ -69,7 +69,7 @@ end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // 稳定性：析构永不抛异常，Warn 可观测并 try..finally 必释 FWriter，避免 IsExceptionUnwinding 分叉掩盖原始异常
+  // 稳定性：析构永不抛异常，仅 Warn 可观测，try..finally 必释；IsFinished 单源幂等，见 CONTRACT §1.4
   try
     if (FWriter <> nil) and (not FWriter.IsFinished) then
       NullLogger.Warn('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');

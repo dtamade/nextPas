@@ -150,32 +150,17 @@ var
   LSink: IWriter;
   W: TTarWriter;
   LWalks: TArchiveWalkArray;
-  LI, LWalksCount: Integer;
-  LEstimated, LCap: SizeUInt;
-  LAccum: UInt64;
+  LWalksCount: Integer;
+  LCap: SizeUInt;
 begin
   Result := nil;
-  // 按预估总量经 TarBuilderCapacityFor 4K 对齐预扩容（bytes.ops AlignUp4K 单源），单次 ToBytes 零额外拷贝
   SetLength(LWalks, 0);
   LWalksCount := 0;
   ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
   try
-    // 批量 AlignUp(...,512) 单源对齐，预估经 TarBuilderCapacityFor 4K 对齐，零额外拷贝
-    LAccum := UInt64(LWalksCount) * SizeUInt(C_TAR_BLOCK_SIZE);
-    for LI := 0 to High(LWalks) do
-      if not LWalks[LI].FIsDir then
-      begin
-        if LWalks[LI].FSize > 0 then
-          LAccum := LAccum + AlignUp(SizeUInt(LWalks[LI].FSize), 512);
-        if Length(LWalks[LI].FRel) > C_TAR_NAME_FIELD then
-          LAccum := LAccum + 1024;
-      end;
-    if LAccum > High(SizeUInt) then
-      LEstimated := High(SizeUInt)
-    else
-      LEstimated := SizeUInt(LAccum);
-    LCap := TarBuilderCapacityFor(LEstimated);
+    // perf: 单遍内联预估 — 消除 LAccum 逐项 AlignUp 预扫的 O(N) 第二遍，PackWalks 单遍 inline 零拷贝直写；按基础量 TarBuilderCapacityFor 4K 对齐预扩容（bytes.ops AlignUp4K 单源，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝），200×512B 等批量小文件经 PackWalks 内惰性 I/O 池化已单遍覆盖，无预扫 max、无零填充，接口自动释资源不丢
+    LCap := TarBuilderCapacityFor(UInt64(LWalksCount) * SizeUInt(C_TAR_BLOCK_SIZE));
     CreateArchiveBuilder(LCap, LBuilder, LSink);
     W := TTarWriter.Create(LSink);
     try
