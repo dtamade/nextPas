@@ -26,7 +26,7 @@ uses
 
 type
   TBitmapFormat = (bfRGBA, bfBGRA, bfGray8);
-  TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif);
+  TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif, ifQoi);
 
   TImageInfo = record
     Width, Height: Integer;

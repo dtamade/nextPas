@@ -1,6 +1,6 @@
 # nextpas.core.graphics — 惊艳的 Pascal 图形地基
 
-> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（S2 已落地：`graphics.base/color/path` + `image.base` + `vector.tess` + `canvas.raster` + `effect.graph` 全量可用，见 `CONTRACT.md` 0.2.0-source-contract）
+> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（S2 已落地：`graphics.base/color/path` + `image.base` + `vector.tess` + `canvas.raster` + `effect.graph` 全量可用，`image.dispatch` 6 格式注册 `png/jpeg/webp/bmp/gif/qoi`，见 `CONTRACT.md` 0.2.1-source-contract，`bench_image` 1MB 固化 `512×512`）
 > 为 `directui` 与高性能矢量系统而生，提供图像设计、矢量排版、滤镜与转换的完整能力支撑，对标 `gui-framework` 的 `UiScene → DrawPlan → RenderGraph → RenderBackend`，图形只产 `TBitmap/ICanvas`。
 > **铁律**：零直引 FPC RTL（`SysUtils/Graphics/FPImage`），缺失反哺 `nextpas.core`；存量可抽代码迁入本家族；超越 Go 1.22 / Rust tiny-skia 0.11。
 
@@ -51,7 +51,7 @@ font→graphics.text(GlyphRun) ─┘                ↑  effect.graph(Bake 并�
 | 模块 | 层 | 惊艳点 |
 |---|---|---|
 | `graphics` | L1 | `TColor32/TRgba/TBlendMode 27种/TColorSpace/TRect/TVec2/TMat2D/TPath/TGradient.WithTransform`，值类型 COW |
-| `image` | L2 | `TBitmap(Stride AlignUp 64B)` + `Png/Jpeg/WebP/Bmp`，`EImageDecodeError` 闭环，`TryImageDecode` |
+| `image` | L2 | `TBitmap(Stride AlignUp 64B)` + `Png/Jpeg/WebP/Bmp/Gif/Qoi` 6 格式 `image.dispatch` 注册，`EImageDecodeError` 闭环，`TryImageDecode` 不抛 |
 | `vector` | L2 | `PathUnion/Diff/Stroke` + `tess(Double)` |
 | `canvas` | L2 | `ICanvas(Save/Restore RAII)` + `DrawGlyphRun`，CPU 光栅 `simd` 批 blend |
 | `graphics.effect` | L2 | `EffectGraph(Blur/Shadow/Hue/LUT)` 序列化，`Bake` tile 并行 |
@@ -62,12 +62,12 @@ font→graphics.text(GlyphRun) ─┘                ↑  effect.graph(Bake 并�
 ## 性能底牌（性能）
 
 - `Single` 外部 / `Double` 内部 tess（`math.EPSILON 1e-6`），`Tile 16x16` + `simd`，`Stride 64B`（AVX cacheline）
-- Bench 冻结：`bench_raster(Fill/Stroke/DrawBitmap256)` + `bench_image(1MB Decode)`，`ns/op + MB/s`，锁版本 `Go1.22/tiny-skia0.11`，`nextpas.core.bench`（禁手搓）
+- Bench 冻结：`bench_raster(Fill/Stroke/DrawBitmap256)` + `bench_image(1MB Decode)`（`512×512×4` 单次，`Decode/Encode` 双项，`ns/op + MB/s`，`bench --verify` 锁表），锁版本 `Go1.22/tiny-skia0.11`，`nextpas.core.bench`（禁手搓）
 
 ## 稳定性
 
 - 族 `EGraphicsError → {EColorError, EImageDecodeError, EVectorError, ECanvasError, EEffectError}`，`Try` 双形态，`fuzz` 门禁
-- `SemVer 0.2.0-source-contract`，`focused-runtime` 准备中（L1/L2 四件套 + bench 已齐，待 source-contract 全绿升档）
+- `SemVer 0.2.1-source-contract`，`focused-runtime` 准备中（L1/L2 四件套 + 6 格式调度 + `bench_image` 1MB 已齐，待 source-contract 全绿升档）
 
 ## 测试入口
 

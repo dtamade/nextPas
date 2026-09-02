@@ -4,7 +4,7 @@
 **层级**：见 `core/docs/core-module-registry.md` 拟新增行
 **Owner**：graphics lane（`codex/core-graphics`）
 **最后更新**：2026-09-02
-**版本**：S2 0.2.0-source-contract focused-runtime preparation（自 S0 0.1.0-draft 提升：已落地 `graphics.base/color/path + image.base/vector.tess/canvas.raster/effect.graph`；L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError→EColorError/EImageError(EImageDecodeError)/EVectorError/ECanvasError/EEffectError` + `bench` 门禁 `nextpas.core.bench`（`bench_raster/bench_image` 单次调用 `ns/op + MB/s`，锁 `Go1.22/tiny-skia0.11`）已齐并由 `source-contract` 锁定，层级 `graphics L1 + image/vector/canvas/effect L2 + gpu.canvas L3` 已在 `core/docs/core-module-registry.md` 冻结；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`）
+**版本**：S2 0.2.1-source-contract focused-runtime preparation（自 S0 0.1.0-draft 提升：已落地 `graphics.base/color/path + image.base/vector.tess/canvas.raster/effect.graph`；L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError→EColorError/EImageError(EImageDecodeError)/EVectorError/ECanvasError/EEffectError` + `bench` 门禁 `nextpas.core.bench`（`bench_raster/bench_image` 单次调用 `ns/op + MB/s`，锁 `Go1.22/tiny-skia0.11`，`bench_image` 1MB 固化 `512×512×4`）已齐并由 `source-contract` 锁定，层级 `graphics L1 + image/vector/canvas/effect L2 + gpu.canvas L3` 已在 `core/docs/core-module-registry.md` 冻结；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`；0.2.1 新增 `image.dispatch` 6 格式注册 `png/jpeg/webp/bmp/gif/qoi` + `bench_image --verify` 锁表）
 
 ---
 
@@ -65,7 +65,7 @@ TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cachelin
   function IsEmpty: Boolean; inline;
   procedure Premultiply; procedure Unpremultiply;
 end;
-TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif); // ifUnknown 为探测/空输入哨兵，Gif 仅保留枚举位暂无编解码
+TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif, ifQoi); // ifUnknown 为探测/空输入哨兵，6 格式全量：png/jpeg/webp/bmp/gif/qoi 均经 image.dispatch 注册，Probe 纯嗅探不解，Try* 不抛
 TImageInfo = record Width,Height: Integer; Format: TImageFormat; HasAlpha: Boolean; end;
 
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBitmap;
@@ -137,7 +137,7 @@ end;
 - L1 值类型纯函数，线程安全；`TMat2D/ColorConvert` 无共享可变
 - `TBitmap` COW 写时复制，读并发安全，写需外同步（`Interlocked` 引用计数）
 - `ICanvas` 非线程安全，单线程录制 + `Save/Restore` 栈；`EffectGraph.Bake` tile 并行（`thread` 池，`TVec2` 只读）
-- 版本：`SemVer 0.2.0-source-contract` focused-runtime preparation（自 S0 0.1.0-draft 提升：L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError` 五子类 + `bench` 门禁 `bench_raster/bench_image` 已齐并由 `source-contract` 锁定，层级 `L1/L2/L3` 已冻结于 `core/docs/core-module-registry.md`；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`，`bytes.ops` 单源 `Move` 零拷贝 + `inline` 转发，`TBitmap` COW `EnsureUnique` 资源释放不丢）
+- 版本：`SemVer 0.2.1-source-contract` focused-runtime preparation（自 S0 0.1.0-draft 提升：L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环 `EGraphicsError` 五子类 + `bench` 门禁 `bench_raster/bench_image`（`bench_image` 1MB `512×512×4` 单次 `ns/op + MB/s`）已齐并由 `source-contract` 锁定，层级 `L1/L2/L3` 已冻结于 `core/docs/core-module-registry.md`；`draft → focused-runtime` 升档待 `source-contract` 全绿，见 `ROADMAP Gates`；0.2.1 `image.dispatch` 6 格式 `png/jpeg/webp/bmp/gif/qoi` 注册闭环，`bytes.ops` 单源 `Move` 零拷贝 + `inline` 转发，`TBitmap` COW `EnsureUnique` 资源释放不丢）
 
 ## 4. 依赖边界
 
@@ -169,6 +169,6 @@ end;
 | 文本 GlyphRun | `tests/nextpas.core.graphics/test_graphics_text` | 复用度 |
 
 Bench（`nextpas.core.bench`，禁手搓计时，单次调用不内循环）：
-- `bench_raster: FillPath/Stroke/DrawBitmap(256x256)` + `bench_image: Decode/Encode(1MB)`，输出 `ns/op + MB/s`
-- 锁版本 `Go 1.22 / tiny-skia 0.11`，`bench --verify` 对比表，见 `PARITY-go-rust.md`
-- `make focused FOCUS=benchmarks/nextpas.core.canvas/bench_raster` + `bench --verify-go-rust`
+- `bench_raster: FillPath/Stroke/DrawBitmap(256x256)` + `bench_image: Decode/Encode(1MB)`（`512×512×4 = 1,048,576 bytes` 单次，`Encode 512x512 + Decode 512x512`），输出 `ns/op + MB/s`，`--verify` 锁表回 `bench-image.json` + 门禁 `Decode 512x512 < 800µs × (Bytes/1MB)`（`GATE_DECODE_US=800.0`）
+- 锁版本 `Go 1.22 / tiny-skia 0.11`，`bench --verify` 对比表，见 `PARITY-go-rust.md`；0.2.1 `image.dispatch` 6 格式 `ifPng/ifJpeg/ifWebP/ifBmp/ifGif/ifQoi` 均经 `ImageRegisterCodec` 注册，`DetectImageFormat` 嗅探命中
+- `make focused FOCUS=benchmarks/nextpas.core.canvas/bench_raster` + `make focused FOCUS=benchmarks/nextpas.core.image/bench_image --verify` + `bench --verify-go-rust`
