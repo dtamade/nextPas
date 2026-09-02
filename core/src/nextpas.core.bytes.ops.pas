@@ -87,6 +87,7 @@ generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; co
 generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 { 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
 generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
+generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: array of T; ACount, ANewCap: Integer); inline;
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
 
@@ -817,6 +818,23 @@ var
   I: Integer;
 begin
   // perf: inline single source bulk copy — managed per-elem AddRef, blittable single Move zero refcnt churn, single source for linear grow; zero extra call
+  if ACount <= 0 then Exit;
+  if System.IsManagedType(T) then
+  begin
+    for I := 0 to ACount - 1 do
+      ADst[I] := ASrc[I];
+  end
+  else if ACount > 0 then
+    Move(ASrc[0], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+end;
+
+{ 生长分配+拷贝单源：锁外一次性 SetLength(LCap) 零化 + VecCopy 线性化，inline 单源复用 VecGrowCapacity/VecCopy 零额外调用，短临界 <1µs；SetLength 零化 O(Cap) 在锁外且经 0→4→2× 倍增摊销为 O(1)/push（大 Count 单次 O(n) 零化不持锁、不放大尾延迟，尾零 spare 经复用逐步兑现），managed 逐元素保 refcnt、blittable 单 Move 零拷贝，stale 重试零重复拷贝（复用 LNew 缓冲判定 Length) }
+generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: array of T; ACount, ANewCap: Integer); inline;
+var
+  I: Integer;
+begin
+  if Length(ADst) <> ANewCap then
+    SetLength(ADst, ANewCap);
   if ACount <= 0 then Exit;
   if System.IsManagedType(T) then
   begin

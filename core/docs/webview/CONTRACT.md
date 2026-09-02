@@ -6,10 +6,10 @@
 **最后更新**：2026-09-02
 **版本**：2.00（S106 WK 探针闭环 · `focused-runtime, source-contract`）
 <details>
-<summary>版本分层：S106 探针闭环与 S105 基线（点击展开）</summary>
+<summary>版本分层：S106 探针闭环（点击展开）</summary>
 
-- **S106 探针闭环**：`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`（幂等缓存双检锁 inline 零分配，Linux 诚实 False 非恒 False，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢）；真实现落地路径已闭环为 `window.cocoa` L2 `focused-runtime` 的 `IWindow` 组合（`WKWebView` child `addSubview`，无需 L3 自建 ObjC，待 stage0 `objectivec1`/`objc_msgSend` 探通后接线）；CONTRACT §1/§10 与 registry 对齐。
-- **S105 基线（零退化）**：`WebviewGrowCapacity(0→4→2×)` 单源 inline（`grep SetLength` 54→4 定容切片/快照、50 Grow 全量 inline 单源，`F*Count` 全量闭环，三后端/bridge/factory 容量保留，零 `O(n²)` 零 `UAF`，薄转发 159 inline 零额外调用；`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`hygiene`/`source-contracts` 双 pass，vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0）。
+- **S106 探针闭环**：`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc` — 幂等缓存双检锁 `inline` 零分配，Linux 诚实 False，与 `gtk`/`webview2` 同纪律，`platform_dl_release` 释放不丢。真实现经 `window.cocoa` L2 `focused-runtime` 的 `IWindow` 组合，`WKWebView` 以 child `addSubview` 挂载，无需 L3 自建 ObjC，待 stage0 `objectivec1`/`objc_msgSend` 探通后接线。见 CONTRACT §1/§10 与 `registry` 对齐。
+- **S105 基线**：`WebviewGrowCapacity 0→4→2×` 单源 `inline`，`F*Count` 全量闭环，零 `O(n²)` 零 `UAF` — 详见 §8 门禁与 §10 稳定性。
 - **考古栈**：1.98←1.13 折叠至 [ROADMAP §3](ROADMAP.md#3-回溯s0-s44-已交付)。
 
 > 单文件 650+ 行属契约完整性保留，阅读以本折叠层与 §1 家族布局为入口，细节按需展开。
@@ -45,6 +45,7 @@
 | `nextpas.core.webview.registry` | 注册表（L3 Owner 单源） | 后端探测注册表独立单源（Probe 单表 `WEBVIEW_PROBES` + 热点快照 `GProbeSnapshot/GDefaultSnapshot` O(1) 复用，factory 创建分发零耦合；`factory` `WEBVIEW_BACKENDS` 仅 Create 单表，探测薄转发至此 `inline` 零额外双检锁/零堆分配，`platform_dl_release` 释放不丢） | S* 匠心修复落地 (2026-09-02) |
 | `nextpas.core.webview.vfs` | 适配 | `IVfs → IWebviewAssetProvider`（respack/vfs 集成，CONTRACT §3.4 唯一收口） | S11 |
 | `nextpas.core.webview.factory` | 工厂 | 后端创建分发 + 选择（探测已抽 `registry` 独立候选单源，`WEBVIEW_BACKENDS` 仅 Create/CreateOn，零 Probe 耦合；`DefaultWebviewKind/WebviewBackendAvailable` `inline` 薄转发至 `registry` 快照复用，热点零重复 `TryLoad*` 双检锁，`bytes.ops` 单源思想） | W1→S* 探测/创建分离 |
+| `nextpas.core.webview.builder` | 构建器 | fluent Builder 链式组装 `TWebviewOptions` + `RegisterInvoke`/`OnReady`/`AddInitScript`，`Build` 单源路由至 `factory.CreateWebviewEx` 零重复分支，`Run`/`RunHtml` 便捷；`TBuilderLive` 三组 `bytes.ops.TCompactLiveRegistry<T>` 聚合 — `VecGrowCapacity` 0→4→2× / `Snapshot` 单次 `SetLength+Move` `inline` 零拷贝，`Done` 逐槽 `Default(T)` + `Free` 释放不丢，校验 `inline` 复用 `validation` 单源 | W1→S* Builder 分离（factory 创建单源，builder 组装单源） |
 | `nextpas.core.webview` | 门面 | 聚合 re-export 全部公共 API | W1 |
 | `nextpas.core.webview.webview2.ffi` | ABI | WebView2 COM 完整 vtable（ICoreWebView2/Controller/Environment/Settings + UserAgent + WebMessageArgs/Navigation handlers，无 external） | **W2 S23 完整（含 UA）** |
 | `nextpas.core.webview.webview2.loader` | 装载 | WebView2Loader.dll 探测与符号装载（platform.dl，wine 兼容） | **W2 桩已落地（S18）** |
@@ -57,13 +58,13 @@
 ### 依赖方向
 
 ```
-base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 inline 零拷贝) ← intf ← utils/callbacks(共享辅助：utils 复用 text.view Slice 单源零拷贝，callbacks 仅依 intf 4 后端 inline 薄转发零拷贝) ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源 + viewmap/pool 私有) → factory → 门面    （L3→L2 has-a）
+base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 inline 零拷贝) ← intf ← utils/callbacks(共享辅助：utils 复用 text.view Slice 单源零拷贝，callbacks 仅依 intf 4 后端 inline 薄转发零拷贝) ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源 + viewmap/pool 私有) → factory → builder → 门面    （L3→L2 has-a）
               └── vfs 单桥位（已直连 L2 mime.types 单源 MimeTypeFromPath inline 零拷贝 View 直通，无堆分配，复用 bytes.ops 单源）；mime 薄门面已物理删除（S107，不再参与家族 glob，单源收敛）；webview2/wk 同 gtk 位（均 has-a IWindow + live + callbacks 单源）
 gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool(私有：viewmap 单哈希单源 + pool Slab 单源) ← gtk        （loader 装载 ffi 函数指针；viewmap/pool 仅 gtk 后端 uses，不经门面）
 validation 为家族内校验实现层（四件套纯度 base←validation/intf←utils/callbacks/bridge←impl←facade；utils/callbacks 为家族内共享辅助，不经门面重复实现，仅 bridge/factory/后端 uses；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
 live/assets/viewmap/pool 为家族内索引/池化（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发/直复用不自溢，live 过程式双形已收敛删除且兼容别名已物理删除）：live 已物理删除 `TWebviewLiveRegistry<T>` 兼容薄别名，家族已全量直用 L1 `bytes.ops.TCompactLiveRegistry<T>` 单源（`VecGrow/RemoveSwap/Snapshot/Trim` inline 零额外调用，0→4→2× 单源，`Default(T)` 释放不丢；不再经 `webview.live` 薄别名中转，`webview2` GLive 直用 `VecGrow/VecRemoveSwap` 单源；过程式 `WebviewLiveAdd/Remove` 已删除消除薄转发冗余，跨家族 `window.live` 同源零重复，已反哺落地 2026-09-02 经设计评审）、assets 已反哺 L2 `collections.prefixrouter` 稀疏 Trie（`TryGetLongestPrefixView` inline 零拷贝）、viewmap 已直复用 L1 `collections.hashmap`（`@PointerHash→HashMix32` 已落地 2026-09-02）、pool 已反哺 L1 `sync.pool`（`SyncPoolTryAcquire/Release` 双池 Slab 已落地 2026-09-02）；均 `inline/零拷贝` + `Finalize/Dispose/FreeAndNil` 不丢，跨家族收敛至 `bytes.ops`/`sync.pool`/`hashmap` 单源，业务以 CONTRACT 为准、缺能力先反哺 Owner，经设计评审不自溢
 utils/callbacks 为家族内共享辅助（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发不自溢）：utils 已反哺 L1 `text.view` Owner 单源（`TrimLeftChar`/`StripLeadingSlashView`/`StripLeadingSlash`/`ViewFromPChar`，`SliceToStr`/`CStrLen` 单源，热点 `TStringView` 零拷贝 `inline` 薄转发、String 版 `SliceToStr` 单次 `SetString+Move` CoW 零分配，`Finalize` 不丢，已落地 2026-09-02 经设计评审）、callbacks 已反哺 L0 `base.callbacks`（`Callback*MethodToRef/ProcToRef` 三形态 `TProc`/`TProc1<T>`/`TCallbackScaleHandler` inline 零拷贝 `Move` 零拷贝，已落地 2026-09-02 经设计评审）；`inline/零拷贝` + `Default(T)` 不丢，守四件套与 L0-L3，跨家族单源审计通过，经设计评审不自溢
-window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
+window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory/builder）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
 
 ### 1.2 可抽模块候选——Owner 归属（单源薄转发）
 

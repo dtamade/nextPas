@@ -367,11 +367,8 @@ begin
     finally
       FLck.Release;
     end;
-    // perf: heap allocation (SetLength zero-init) outside lock, only after snapshot validated still needs grow, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
-    SetLength(LNew, LCap);
-    // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy; only executed when pre-validate passed, so competitive retry does not repeat copy
-    if LCount > 0 then
-      specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
+    // perf: heap allocation + VecCopy single source bytes.ops VecGrowCopy inline zero-copy outside lock,复用 LNew 缓冲避免重试重复零化 O(n)；SetLength 零化 O(Cap) 在锁外且经 0→4→2× 摊销 O(1)/push，大 Count 单次 O(n) 不持锁不放大尾延迟，managed 保 refcnt/blittable 单 Move 零拷贝
+    specialize VecGrowCopy<TFakeInvokeOutcome>(LOld, LNew, LCount, LCap);
     // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
     FLck.Acquire;
     try
@@ -395,8 +392,7 @@ begin
         WriteAt(LIdx);
         Exit;
       end;
-      // contention during copy window (rare) — discard linearized LNew and retry, zero O(n) under lock, avoids tail latency amplification
-      LNew := nil;
+      // contention during copy window (rare) — keep LNew buffer for reuse (VecGrowCopy checks Length vs LCap, avoids repeated SetLength zero-init O(n)), zero O(n) under lock, avoids tail latency amplification; Finalize on reuse/Exit handles refs
     finally
       FLck.Release;
     end;

@@ -3,8 +3,8 @@ unit nextpas.core.webview.gtk.pool;
 {** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval / GCancellable 五池私有复用，dispatcher 专用。
 
        契约：容量/操作单源 L1 bytes.ops / sync.pool，类型单源 webview.intf，私于 gtk 不经门面（CONTRACT §1）。
-       性能：inline 薄转发零拷贝，冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化。
-       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 逐槽释放。 *}
+       性能：inline 薄转发零拷贝（SlabTryAcquire/Release 薄转发 sync.pool 单源 inline 零额外调用），冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化，LazyLock 非 inline 原子 CAS 单源零闭包堆分配零泄漏（was Once+anon closure 每池堆分配、inline 5 路路由膨胀、nil 分支无同步并发重复泄漏），原子发布可见性保障并发首触零重复泄漏。
+       稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，CAS 失败分支 Free 单所有权不丢，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 逐槽释放。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -70,6 +70,7 @@ procedure PoolFinalize; inline;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.webview.gtk.loader;
 
 var
@@ -94,74 +95,22 @@ var
   GEvalOnce: IOnce = nil;
   GCancelOnce: IOnce = nil;
 
-function LazyLock(var ALock: TMutex): TMutex; inline;
+function LazyLock(var ALock: TMutex): TMutex;
+var
+  LLoaded: Pointer;
+  LNew: TMutex;
+  LExpected: Pointer;
 begin
-  // 单源 inline 薄转发 L1 sync.once：快路径单次 nil 检查 inline <1ns，慢路径 Once 单源保护懒创建零 InterlockedCompareExchange 重复、零双分配零泄漏，platform.sync futex 去重，短临界 <1µs 零拷贝
-  Result := ALock;
-  if Result <> nil then Exit;
-  if @ALock = @GIdleLock then
-  begin
-    if GIdleOnce <> nil then
-      GIdleOnce.DoOnce(procedure
-      begin
-        if GIdleLock = nil then
-          GIdleLock := TMutex.Create;
-      end)
-    else if GIdleLock = nil then
-      GIdleLock := TMutex.Create;
-    Exit(GIdleLock);
-  end
-  else if @ALock = @GCompletionLock then
-  begin
-    if GCompletionOnce <> nil then
-      GCompletionOnce.DoOnce(procedure
-      begin
-        if GCompletionLock = nil then
-          GCompletionLock := TMutex.Create;
-      end)
-    else if GCompletionLock = nil then
-      GCompletionLock := TMutex.Create;
-    Exit(GCompletionLock);
-  end
-  else if @ALock = @GAssetHolderLock then
-  begin
-    if GAssetHolderOnce <> nil then
-      GAssetHolderOnce.DoOnce(procedure
-      begin
-        if GAssetHolderLock = nil then
-          GAssetHolderLock := TMutex.Create;
-      end)
-    else if GAssetHolderLock = nil then
-      GAssetHolderLock := TMutex.Create;
-    Exit(GAssetHolderLock);
-  end
-  else if @ALock = @GEvalLock then
-  begin
-    if GEvalOnce <> nil then
-      GEvalOnce.DoOnce(procedure
-      begin
-        if GEvalLock = nil then
-          GEvalLock := TMutex.Create;
-      end)
-    else if GEvalLock = nil then
-      GEvalLock := TMutex.Create;
-    Exit(GEvalLock);
-  end
-  else if @ALock = @GCancelLock then
-  begin
-    if GCancelOnce <> nil then
-      GCancelOnce.DoOnce(procedure
-      begin
-        if GCancelLock = nil then
-          GCancelLock := TMutex.Create;
-      end)
-    else if GCancelLock = nil then
-      GCancelLock := TMutex.Create;
-    Exit(GCancelLock);
-  end;
-  if ALock = nil then
-    ALock := TMutex.Create;
-  Result := ALock;
+  // perf: atomic acquire fast path <1µs zero heap, not inline per design-conventions §2 red-line 2 (routing/heavy CAS bans inline, avoids I-Cache bloat); zero anon closure heap vs Once DoOnce (was 5 pools × closure heap per cold start), CAS single source via atomic mo_acq_rel ensures zero duplicate leak + mo_acquire visibility, short critical <1µs zero copy via sync.pool
+  LLoaded := atomic_load(PPointer(@ALock)^, mo_acquire);
+  if LLoaded <> nil then
+    Exit(TMutex(LLoaded));
+  LNew := TMutex.Create;
+  LExpected := nil;
+  if atomic_compare_exchange_strong(PPointer(@ALock)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
+    Exit(LNew);
+  LNew.Free;
+  Result := TMutex(atomic_load(PPointer(@ALock)^, mo_acquire));
 end;
 
 generic function SlabTryAcquire<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex): T; inline;
@@ -277,7 +226,7 @@ end;
 
 procedure PoolInit; inline;
 begin
-  // 冷启动零常驻：锁按需懒创建 via LazyLock，低频进程 0 堆分配（was 5×TMutex.Create）；池已懒生长 0→4→2× 零常驻，锁亦零常驻；突发首用时单次 Create，后续短临界 <1µs 零额外调用
+  // 冷启动零常驻：锁按需懒创建 via LazyLock 原子 CAS 零闭包堆分配（was Once+anon closure 每池堆分配）、非 inline 零 I-Cache 膨胀、并发 CAS 零重复泄漏原子可见性，低频进程 0 堆分配（was 5×TMutex.Create）；池已懒生长 0→4→2× 零常驻，锁亦零常驻；突发首用时单次 CAS Create，后续短临界 <1µs 零额外调用
 end;
 
 procedure PoolFinalize; inline;

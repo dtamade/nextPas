@@ -199,6 +199,39 @@ uses
   nextpas.core.webview.validation,
   nextpas.core.webview.utils;
 
+{ 文档池化：高频 invoke 单帧约 4µs 热路径复用线程局域 arena，零每帧堆分配；Parse 复用局部容量零重建，Done 仅 finalization 释放不丢，复用 bytes.ops 单源思想，inline 零额外调用。 }
+threadvar
+  GBridgeDoc: TJsonDocument;
+  GBridgeDocInited: Boolean;
+
+procedure EnsureBridgeDoc; inline;
+begin
+  if not GBridgeDocInited then
+  begin
+    GBridgeDoc.Init(nil);
+    GBridgeDocInited := True;
+  end;
+end;
+
+{ BridgeTryExtractId: 超限路径 id 提取单源，复用 BridgeParseFrame 的 Parse+Get('id') 逻辑零重复；零拷贝视图，Parse 复用池化 arena 零每帧堆分配。 }
+function BridgeTryExtractId(const AView: TStringView; var ADoc: TJsonDocument; out AId: Int64): Boolean;
+var
+  LRoot: TJsonValue;
+  LIdVal: TJsonValue;
+begin
+  Result := False;
+  AId := 0;
+  if not ADoc.Parse(AView) then Exit;
+  if ADoc.HasError then Exit;
+  LRoot := TJsonValue.Create(ADoc, ADoc.Root);
+  if not LRoot.IsObject then Exit;
+  LIdVal := LRoot.Get('id');
+  if not LIdVal.IsInt then Exit;
+  AId := LIdVal.AsInt;
+  if (AId <= 0) or (AId > NPW_MAX_FRAME_ID) then Exit;
+  Result := True;
+end;
+
 { JsStringLit: JSON Str via json owner，局部 Builder 零共享；含 Builder/Writer 循环体按 design-conventions §2 红线二外联，避 I-Cache 膨胀，零共享+零拷贝视图由调用方保障。 }
 function JsStringLit(const AValue: string): string;
 var
@@ -325,32 +358,27 @@ end;
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
-  LDoc: TJsonDocument;
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { 局部 Doc 生命周期，Parse 复用局部容量，Done 释放不丢，零 threadvar/TLS 混入，协议纯度收敛。 }
+  { 池化 Doc 复用 arena，零每帧堆分配，高频 invoke 单帧约 4µs 仍付堆分配消除；Parse 复用局部容量，inline 零拷贝视图，复用 bytes.ops 单源。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  LDoc.Init(nil);
-  try
-    if not BridgeParseFrame(AView, LDoc, LRoot) then
-      Exit;
-    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-      Exit;
-    LPayload := LRoot.Get('payload');
-    { 解析后规范化膨胀：计入 payload 视图 + 节点/arena 水位，单一 Len 水位偏差闭环；
-      零拷贝 RawSlice 视图判定，inline 薄转发，复用 bytes.ops 单源思想 }
-    if WebviewMetricsIsOversizedExpandedView(AView, LPayload.RawSlice) then
-    begin
-      WebviewMetricsNoteOversized(WebviewMetricsExpandedSize(AView, LPayload.RawSlice.Len));
-      Exit(False);
-    end;
-    AFrame.Payload := BridgeNormalizePayload(LPayload);
-    Result := True;
-  finally
-    LDoc.Done;
+  EnsureBridgeDoc;
+  if not BridgeParseFrame(AView, GBridgeDoc, LRoot) then
+    Exit;
+  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+    Exit;
+  LPayload := LRoot.Get('payload');
+  { 解析后规范化膨胀：计入 payload 视图 + 节点/arena 水位，单一 Len 水位偏差闭环；
+    零拷贝 RawSlice 视图判定，inline 薄转发，复用 bytes.ops 单源思想 }
+  if WebviewMetricsIsOversizedExpandedView(AView, LPayload.RawSlice) then
+  begin
+    WebviewMetricsNoteOversized(WebviewMetricsExpandedSize(AView, LPayload.RawSlice.Len));
+    Exit(False);
   end;
+  AFrame.Payload := BridgeNormalizePayload(LPayload);
+  Result := True;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -365,36 +393,19 @@ end;
 
 function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: string): Boolean;
 var
-  LDoc: TJsonDocument;
-  LRoot: TJsonValue;
-  LIdVal: TJsonValue;
   LId: Int64;
 begin
+  { 池化 Doc 复用 arena，超限路径零每帧堆分配；id 提取单源复用 BridgeTryExtractId，消除与 BridgeParseFrame 的 Parse+Get('id') 重复，inline 零拷贝视图。 }
   Result := False;
   ARejectScript := '';
   if not WebviewMetricsIsOversized(AView) then
     Exit;
   WebviewMetricsNoteOversized(AView.Len);
-  LDoc.Init(nil);
-  try
-    if not LDoc.Parse(AView) then
-      Exit(True);
-    if LDoc.HasError then
-      Exit(True);
-    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
-    if not LRoot.IsObject then
-      Exit(True);
-    LIdVal := LRoot.Get('id');
-    if not LIdVal.IsInt then
-      Exit(True);
-    LId := LIdVal.AsInt;
-    if (LId <= 0) or (LId > NPW_MAX_FRAME_ID) then
-      Exit(True);
-    ARejectScript := BuildRejectScript(LId, NPW_CODE_BAD_REQUEST, 'frame oversized');
-    Result := True;
-  finally
-    LDoc.Done;
-  end;
+  EnsureBridgeDoc;
+  if not BridgeTryExtractId(AView, GBridgeDoc, LId) then
+    Exit(True);
+  ARejectScript := BuildRejectScript(LId, NPW_CODE_BAD_REQUEST, 'frame oversized');
+  Result := True;
 end;
 
 function TryBuildOversizedReject(const AFrameJson: string; out ARejectScript: string): Boolean; inline;
@@ -675,5 +686,9 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
+
+finalization
+  if GBridgeDocInited then
+    GBridgeDoc.Done;
 
 end.
