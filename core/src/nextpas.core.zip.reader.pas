@@ -87,6 +87,7 @@ uses
   nextpas.core.bytes.cursor,
   nextpas.core.checksum.crc32,
   nextpas.core.compress,
+  nextpas.core.compress.deflate,
   nextpas.core.zip.aes,
   nextpas.core.zip.common,
   nextpas.core.zip.extra;
@@ -703,7 +704,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end
@@ -1060,7 +1061,7 @@ begin
   LInflate := nil;
   if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
   begin
-    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
+    LInflate := CreateRawDeflateReaderWithMaxOutputSize(LInner,
       FMaxOutputSize);
     LInner := LInflate;
   end

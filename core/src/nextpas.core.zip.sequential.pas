@@ -50,6 +50,7 @@ uses
   nextpas.core.exception,
   nextpas.core.checksum.crc32,
   nextpas.core.compress,
+  nextpas.core.compress.deflate,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
   nextpas.core.zip.extra;
