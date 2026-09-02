@@ -49,8 +49,9 @@ type
     function Stat(const APath: string): TResPackEntry;
 
     function EntryAt(const AIdx: SizeUInt): TResPackEntry;
-    function PathOf(const AEntry: TResPackEntry): string; inline;
-    function StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline;
+    { PathOf 每次 SpanToString 分配；仅在需要 string 时调用，热路径用 StoredPathSpanOf 零拷贝视图 }
+    function PathOf(const AEntry: TResPackEntry): string; inline; // 热路径请用 StoredPathSpanOf 零拷贝
+    function StoredPathSpanOf(const AEntry: TResPackEntry): TByteSpan; inline; // 零拷贝视图：10k 枚举零分配
 
     property Count: SizeUInt read GetCount;
     property Header: TResPackHeader read FHdr;
@@ -520,10 +521,10 @@ begin
   DecodeWire(AIdx, Result);
 end;
 
-function TResPack.PathOf(const AEntry: TResPackEntry): string; inline;
+function TResPack.PathOf(const AEntry: TResPackEntry): string; inline; // 热路径请用 StoredPathSpanOf 零拷贝
 begin
   RequireOpen;
-  Result := SpanToString(StoredPathSpanOf(AEntry));
+  Result := SpanToString(StoredPathSpanOf(AEntry)); // 分配：热路径请用 StoredPathSpanOf 零拷贝
 end;
 
 function TResPack.LowerBound(const APath: string): SizeUInt;

@@ -130,8 +130,10 @@ type
   TResPackDistinct = record Off: UInt64; Size: UInt64; end;
   PResPackDistinct = ^TResPackDistinct;
 
+  // MIN=256 为哈希分散下限，tiny pack(N=1-2) 256*8=2K slab 相对 Total 可忽略，已评估；
+  // 若需优化可在调用方对 N<=4 时用线性扫描分支，但当前 arena 单 slab 已极简，保留 MIN。
   TResPackDedupBuckets = record
-    const MIN = 256;
+    const MIN = 256; // MIN 256 保障哈希分散，tiny pack 2K slab 可忽略
     const MAX = 65536;
     class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
   end;

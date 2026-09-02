@@ -117,6 +117,7 @@ var
     Pad: UInt64;
   begin
     ChunkCap := RESPACK_STREAM_HEAD_CHUNK;
+    // 64K HeadBuf 单次分配/Build，复用分片
     SetLength(HeadBuf, ChunkCap);
     ChunkPos := 0;
     N := L.N;
