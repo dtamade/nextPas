@@ -227,15 +227,16 @@ begin
 end;
 
 { Arena 复用（CONTRACT INV-3 单源编解码）：UI 线程亲和单例 Document/Arena 复用，
-  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；零锁竞争、
-  复用 bytes.ops 单源容量生长，Parse 内部重用节点/Arena/溢出表。
-  性能：单全局复用零 threadvar TLS 间接，零锁；稳定性：finalization 定点释放无 threadvar 泄漏。 }
+  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；单写入者零锁（仅 UI 线程触碰，
+  首帧前由 UI 线程显式 lazy-init 完成），不依赖零初始化时序竞争；复用 bytes.ops
+  单源容量生长，Parse 内部重用节点/Arena/溢出表。性能：单全局复用零 threadvar TLS
+  间接，零锁且零额外调用；稳定性：finalization 定点 Done 释放无 threadvar 泄漏。 }
 var
   GDecodeDoc: TJsonDocument;
   GDecodeDocInited: Boolean;
   GDecodeMainTid: UInt64;
 
-procedure EnsureDecodeDoc; inline;
+procedure EnsureDecodeDoc;
 begin
   if GDecodeDocInited then Exit;
   GDecodeDoc.Init(nil);
@@ -244,7 +245,7 @@ begin
     GDecodeMainTid := nextpas.core.platform.thread.platform_thread_id;
 end;
 
-procedure AssertBridgeMainThread; inline;
+procedure AssertBridgeMainThread;
 begin
   if (GDecodeMainTid <> 0) and (nextpas.core.platform.thread.platform_thread_id <> GDecodeMainTid) then
     raise EWebviewInvalidState.Create('webview bridge: TryDecodeFrame must be called on UI thread');
@@ -369,7 +370,7 @@ begin
   Result := H[ANibble and $F];
 end;
 
-procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder); inline;
+procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder);
 var
   LPos: SizeUInt;
   LCombined: TVecMask;

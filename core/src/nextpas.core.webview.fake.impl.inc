@@ -224,14 +224,6 @@ begin
   Result := Self;
 end;
 
-function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
-begin
-  // perf: thin forward to window.base single source WindowOptionsCreate inline zero-copy, eliminates 8-field duplication with gtk.shell
-  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height,
-    AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight,
-    AOptions.Resizable, AOptions.Maximized);
-end;
-
 constructor TFakeWebview.Create(const AOptions: TWebviewOptions);
 var
   LReg: TFakeInvokeRegistry;
@@ -245,7 +237,7 @@ begin
   FUserAgent := '';
   FBridgeReady := False;
   FDebugTools := AOptions.DebugTools;
-  LWinOpts := WindowOptionsOf(AOptions);
+  LWinOpts := WebviewWindowOptionsOf(AOptions);
   FWindow := TFakeWindow.Create(LWinOpts);
   FOwnsWindow := True;
   LReg := TFakeInvokeRegistry.Create;

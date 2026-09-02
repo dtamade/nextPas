@@ -70,7 +70,6 @@ type
     FOnReadyCount: Integer;
     FScaleHandlers: array of TWebviewScaleHandler;
     FScaleHandlersCount: Integer;
-    {$IFDEF MSWINDOWS}
     FEnv: ICoreWebView2Environment;
     FController: ICoreWebView2Controller;
     FWebView: ICoreWebView2;
@@ -78,7 +77,6 @@ type
     FNavStartingToken: Int64;
     FNavCompletedToken: Int64;
     FBridgeScriptId: WideString;
-    {$ENDIF}
     procedure RequireOpen;
     procedure HandleWindowEvent(const AEvent: TWindowEvent);
     procedure UpdateControllerBounds;
@@ -87,7 +85,7 @@ type
     procedure FireReadyOnce;
     procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
     procedure HandleNativeDestroy;
-    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
     procedure TryCreateEnvironment;
     procedure GrowPendingEvals; inline;
     procedure GrowOnNavStarted; inline;
@@ -98,11 +96,9 @@ type
     procedure GrowScale; inline;
     procedure DoScaleChanged(ANewScale: Double); inline;
     procedure RemovePending(ARec: PEvalRec);
-    {$IFDEF MSWINDOWS}
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
     procedure OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
     procedure OnWebMessageReceived(const AJson: string);
-    {$ENDIF}
     class function MapInvokeCodeSafe(E: Exception): string; static;
   public
     constructor Create(const AOptions: TWebviewOptions);
@@ -166,9 +162,7 @@ uses
   nextpas.core.webview.webview2.loader,
   nextpas.core.window.factory;
 
-{$IFDEF MSWINDOWS}
-procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTaskMemFree';
-{$ENDIF}
+{$I nextpas.core.webview.webview2.ole32.inc}
 
 var
   GLive: Integer = 0;
@@ -198,7 +192,6 @@ begin
   Result := GLive;
 end;
 
-{$IFDEF MSWINDOWS}
 type
   TEnvCompletedHandler = class(TInterfacedObject, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)
   private
@@ -248,7 +241,6 @@ type
     constructor Create(AOwner: TWebView2Webview);
     function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationCompletedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
   end;
-{$ENDIF}
 
 type
   TLocalInvokeCompletion = class(TInterfacedObject, IWebviewInvokeCompletion)
@@ -261,8 +253,6 @@ type
     procedure Ok(const AResultJson: string);
     procedure Fail(const ACode, AMessage: string);
   end;
-
-{$IFDEF MSWINDOWS}
 
 constructor TEnvCompletedHandler.Create(AOwner: TWebView2Webview);
 begin
@@ -484,7 +474,6 @@ begin
     FOwner.FireReadyOnce;
   end;
 end;
-{$ENDIF}
 
 constructor TLocalInvokeCompletion.Create(AOwner: TWebView2Webview; AId: Int64);
 begin
@@ -635,32 +624,18 @@ begin
 end;
 
 procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
-var I, J: Integer;
 begin
-  for I := 0 to FPendingCount - 1 do
-    if FPendingEvals[I] = ARec then
-    begin
-      for J := I to FPendingCount - 2 do
-        FPendingEvals[J] := FPendingEvals[J + 1];
-      Dec(FPendingCount);
-      if FPendingCount < Length(FPendingEvals) then
-        FPendingEvals[FPendingCount] := nil;
-      Exit;
-    end;
+  // perf: single source bytes.ops VecRemoveSwap O(1) zero-copy swap, Default(nil) trailing, avoids O(n²) shift, inline zero extra call via live registry pattern
+  specialize VecRemoveSwap<PEvalRec>(FPendingEvals, FPendingCount, ARec);
 end;
 
-function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
+  // perf: single source window.base.WindowOptionsCreate inline zero-copy, eliminates 8-field duplication, gtk via shell thin-forward single source
+  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height, AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight, AOptions.Resizable, AOptions.Maximized);
 end;
 
 procedure TWebView2Webview.UpdateControllerBounds;
-{$IFDEF MSWINDOWS}
 var R: tagRECT;
 begin
   if FController = nil then Exit;
@@ -668,10 +643,6 @@ begin
   R.Left := 0; R.Top := 0; R.Right := FWindow.GetWidth; R.Bottom := FWindow.GetHeight;
   FController.put_Bounds(R);
 end;
-{$ELSE}
-begin
-end;
-{$ENDIF}
 
 procedure TWebView2Webview.DispatchFrame(const AFrame: TWebviewFrame);
 var
@@ -724,7 +695,6 @@ begin
   Eval(LJs, nil, nil);
 end;
 
-{$IFDEF MSWINDOWS}
 procedure TWebView2Webview.OnWebMessageReceived(const AJson: string);
 var
   LFrame: TWebviewFrame;
@@ -795,10 +765,8 @@ begin
     NavigateToString(FOptions.InitialHtml);
   FireReadyOnce;
 end;
-{$ENDIF}
 
 procedure TWebView2Webview.TryCreateEnvironment;
-{$IFDEF MSWINDOWS}
 var
   LHandler: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
   LUserData: WideString;
@@ -812,10 +780,6 @@ begin
   // EphemeralSession: WebView2 no explicit ephemeral; caller should use temp folder or leave nil for OS temp (closest to private)
   CreateCoreWebView2EnvironmentWithOptions(nil, LUserDataPtr, nil, LHandler);
 end;
-{$ELSE}
-begin
-end;
-{$ENDIF}
 
 constructor TWebView2Webview.Create(const AOptions: TWebviewOptions);
 var LInfo: TWebView2LoadInfo;
@@ -944,7 +908,6 @@ begin
   FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
   UnregisterLive(Self);
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
   begin
     if FWebMessageToken <> 0 then
@@ -961,7 +924,6 @@ begin
   FWebView := nil;
   FController := nil;
   FEnv := nil;
-  {$ENDIF}
   if FOwnsWindow and (FWindow <> nil) then
     FWindow.Close;
   FWindow := nil;
@@ -1061,14 +1023,11 @@ procedure TWebView2Webview.SetZoom(AFactor: Double);
 begin
   RequireOpen;
   FZoom := AFactor;
-  {$IFDEF MSWINDOWS}
   if FController <> nil then
     FController.put_ZoomFactor(AFactor);
-  {$ENDIF}
 end;
 function TWebView2Webview.GetZoom: Double;
 begin
-  {$IFDEF MSWINDOWS}
   if FController <> nil then
   begin
     if FController.get_ZoomFactor(FZoom) = S_OK then
@@ -1077,18 +1036,15 @@ begin
       Result := FZoom;
     Exit;
   end;
-  {$ENDIF}
   Result := FZoom;
 end;
 procedure TWebView2Webview.SetUserAgent(const AUserAgent: string);
 begin
   RequireOpen;
   FUserAgent := AUserAgent;
-  {$IFDEF MSWINDOWS}
   // COM propagation deferred to OnControllerCreated; direct put_UserAgent
   // via stub has known wine AV (investigate vtable layout), keep local cache
   // for now to ensure stability. OnControllerCreated will attempt once.
-  {$ENDIF}
 end;
 function TWebView2Webview.GetUserAgent: string;
 begin
@@ -1119,77 +1075,52 @@ end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Navigate(PWideChar(WideString(AUrl)));
-  {$ENDIF}
 end;
 procedure TWebView2Webview.NavigateToString(const AHtml: string);
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.NavigateToString(PWideChar(WideString(AHtml)));
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Reload;
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Reload;
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Stop;
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Stop;
-  {$ENDIF}
 end;
 function TWebView2Webview.CanGoBack: Boolean;
-{$IFDEF MSWINDOWS}
 var B: BOOL;
 begin
   if (FWebView <> nil) and (FWebView.get_CanGoBack(B) = S_OK) then
     Result := B else Result := False;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 function TWebView2Webview.GoBack: Boolean;
 begin
   Result := CanGoBack;
-  {$IFDEF MSWINDOWS}
   if Result and (FWebView <> nil) then
     FWebView.GoBack;
-  {$ENDIF}
 end;
 function TWebView2Webview.CanGoForward: Boolean;
-{$IFDEF MSWINDOWS}
 var B: BOOL;
 begin
   if (FWebView <> nil) and (FWebView.get_CanGoForward(B) = S_OK) then
     Result := B else Result := False;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 function TWebView2Webview.GoForward: Boolean;
 begin
   Result := CanGoForward;
-  {$IFDEF MSWINDOWS}
   if Result and (FWebView <> nil) then
     FWebView.GoForward;
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
-{$IFDEF MSWINDOWS}
 var
   LRec: PEvalRec;
   LHandler: ICoreWebView2ExecuteScriptCompletedHandler;
@@ -1215,18 +1146,6 @@ begin
   LHandler := TExecuteScriptHandler.Create(Self, LRec);
   FWebView.ExecuteScript(PWideChar(WideString(AJavascript)), LHandler);
 end;
-{$ELSE}
-var
-  LErr: EWebviewEvalFailed;
-begin
-  RequireOpen;
-  if Assigned(AOnError) then
-  begin
-    LErr := EWebviewEvalFailed.Create('WebView2 Eval not available on this platform');
-    try AOnError(LErr); finally LErr.Free; end;
-  end;
-end;
-{$ENDIF}
 procedure TWebView2Webview.Emit(const AEvent, APayloadJson: string);
 begin
   RequireOpen;

@@ -43,6 +43,7 @@ uses
   nextpas.core.webview.bridge,
   nextpas.core.webview.live,
   nextpas.core.webview.callbacks,
+  nextpas.core.webview.utils,
   nextpas.core.bytes.ops,
   nextpas.core.window.base,
   nextpas.core.window.intf,

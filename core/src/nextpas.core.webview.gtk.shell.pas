@@ -21,7 +21,8 @@ uses
   nextpas.core.log.intf,
   nextpas.core.webview.base,
   nextpas.core.window.base,
-  nextpas.core.window.intf;
+  nextpas.core.window.intf,
+  nextpas.core.webview.utils;
 
 type
   TGtkDebugLogger = class(TInterfacedObject, ILogger)
@@ -254,10 +255,8 @@ end;
 
 function ShellWindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  // perf: thin forward to window.base single source WindowOptionsCreate inline zero-copy, eliminates 8-field duplication with fake impl
-  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height,
-    AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight,
-    AOptions.Resizable, AOptions.Maximized);
+  // perf: thin forward to webview.utils single source WebviewWindowOptionsOf inline zero-copy, eliminates 8-field duplication with fake impl via bytes.ops single source
+  Result := nextpas.core.webview.utils.WebviewWindowOptionsOf(AOptions);
 end;
 
 procedure ShellInitLocks; inline;

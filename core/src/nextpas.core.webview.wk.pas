@@ -81,12 +81,12 @@ type
     procedure OnScaleChanged(AHandler: TWebviewScaleHandler); overload;
     procedure OnScaleChanged(AHandler: TWebviewScaleMethod); overload;
     procedure OnScaleChanged(AHandler: TWebviewScaleProc); overload;
-    procedure Navigate(const AUrl: string); procedure NavigateToString(const AHtml: string);
+    procedure Navigate(const {%H-}AUrl: string); procedure NavigateToString(const {%H-}AHtml: string);
     procedure Reload; procedure Stop;
     function CanGoBack: Boolean; function GoBack: Boolean;
     function CanGoForward: Boolean; function GoForward: Boolean;
-    procedure Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
-    procedure Emit(const AEvent, APayloadJson: string);
+    procedure Eval(const {%H-}AJavascript: string; {%H-}ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
+    procedure Emit(const {%H-}AEvent, {%H-}APayloadJson: string);
     function GetDispatcher: IWebviewDispatcher;
     function NativeHandle: TWebviewNativeHandle;
     procedure OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
@@ -313,7 +313,6 @@ begin
   Result := FClosed;
 end;
 
-{$PUSH}{$HINTS OFF}
 procedure TWkWebview.Show; begin if FClosed then Exit; if FWindow<>nil then FWindow.Show; end;
 procedure TWkWebview.Hide; begin if FClosed then Exit; if FWindow<>nil then FWindow.Hide; end;
 function TWkWebview.IsVisible: Boolean; begin if FClosed then Exit(False); if FWindow<>nil then Result:=FWindow.IsVisible else Result:=not FClosed; end;
@@ -376,17 +375,15 @@ begin
   if not Assigned(AHandler) then Exit;
   OnScaleChanged(WebviewScaleProcToRef(AHandler));
 end;
-procedure TWkWebview.Navigate(const AUrl: string); begin end;
-procedure TWkWebview.NavigateToString(const AHtml: string); begin end;
+procedure TWkWebview.Navigate(const {%H-}AUrl: string); begin end;
+procedure TWkWebview.NavigateToString(const {%H-}AHtml: string); begin end;
 procedure TWkWebview.Reload; begin end;
 procedure TWkWebview.Stop; begin end;
 function TWkWebview.CanGoBack: Boolean; begin Result := False; end;
 function TWkWebview.GoBack: Boolean; begin Result := False; end;
 function TWkWebview.CanGoForward: Boolean; begin Result := False; end;
 function TWkWebview.GoForward: Boolean; begin Result := False; end;
-{$POP}
-{$PUSH}{$HINTS OFF}
-procedure TWkWebview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
+procedure TWkWebview.Eval(const {%H-}AJavascript: string; {%H-}ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
 var
   LErr: EWebviewEvalFailed;
 begin
@@ -406,7 +403,7 @@ begin
     try AOnError(LErr); finally LErr.Free; end;
   end;
 end;
-procedure TWkWebview.Emit(const AEvent, APayloadJson: string); begin end;
+procedure TWkWebview.Emit(const {%H-}AEvent, {%H-}APayloadJson: string); begin end;
 procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
 begin
   if not Assigned(AHandler) then Exit;
@@ -492,7 +489,6 @@ function TWkWebview.GetInvokes: IWebviewInvokeRegistry; inline; begin Result := 
 function TWkWebview.GetAssets: IWebviewAssets; inline; begin Result := FAssetsIntf; end;
 function TWkWebview.NativeHandle: TWebviewNativeHandle; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.NativeHandle else Result:=nil; end;
 function TWkWebview.GetDispatcher: IWebviewDispatcher; begin if FWindow<>nil then Result:=FWindow.Dispatcher as IWebviewDispatcher else Result:=nil; end;
-{$POP}
 procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
 procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
 procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;

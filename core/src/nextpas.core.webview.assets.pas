@@ -42,6 +42,7 @@ type
     constructor Create;
     destructor Destroy; override;
     function Add(const APrefix: string; AProvider: IWebviewAssetProvider): Boolean;
+    procedure Reserve(ACount: SizeUInt); inline;
     function TryGetByStr(const APrefix: string; out AProvider: IWebviewAssetProvider): Boolean; inline;
     function TryGetByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;
     function TryGetLongestPrefixByView(const AView: TStringView; out AProvider: IWebviewAssetProvider): Boolean; inline;
@@ -91,6 +92,19 @@ begin
     Exit(False);
   FTrie.Add(APrefix, AProvider);
   Result := True;
+end;
+
+procedure TWebviewAssetIndex.Reserve(ACount: SizeUInt); inline;
+var
+  LNeed: SizeUInt;
+begin
+  // 批量预分配：消除高频多前缀挂载的重复 NextPow2 重哈希（双写 FMap+FTrie）
+  // 单源 L1 THashMap.Reserve (NextPow2 via hashmap.base/simd.bitops, 0.75 负载, Bitmap CTZ) inline 薄转发，零额外 Rehash/Find 分叉
+  // 容量换算：期望条目 ACount → 桶数 ceil(ACount/0.75)+slack，整数算式避免浮点；Trie 稀疏节点经 bytes.ops VecGrow 0→4→2× 单源 inline，已零重哈希故仅 hash 侧需预分配
+  // 性能 inline 零额外调用，零拷贝（无串拷贝）；稳定性 FMap nil/0 早退不丢
+  if (FMap = nil) or (ACount = 0) then Exit;
+  LNeed := ACount + (ACount div 3) + 4;
+  FMap.Reserve(LNeed);
 end;
 
 function TWebviewAssetIndex.TryGetByStr(const APrefix: string; out AProvider: IWebviewAssetProvider): Boolean; inline;

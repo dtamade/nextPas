@@ -123,10 +123,10 @@ end;
 
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，Bytes nil 释放 ref，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolTryRelease 单源零锁内 VecGrow，热点单槽复用零扩容抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Bytes := nil;
-  if not specialize SyncPoolRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
+  if not specialize SyncPoolTryRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
     Dispose(A);
 end;
 
@@ -151,12 +151,12 @@ procedure PoolInit; inline;
 var
   LCap: Integer;
 begin
-  // 批量化：单次 VecGrowCapacity 单源双阶倍增 0→4→8→16 批量预分配四池，零 4 次重复调用，突发高频 Eval/Idle 零锁内 VecGrow 重分配与 SetLength 抖动，单源 inline 零额外调用；四 per-pool 锁分离消除 Post/Eval 跨池争用
+  // 批量化：单次 VecGrowCapacity 单源五阶倍增 0→4→8→16→32→64 批量预分配四池，零 5 次重复调用，突发高频 Eval/Idle/AssetHolder 热点小文件 scheme 64 并发零锁内 VecGrow 重分配与 SetLength 抖动，单源 inline 零额外调用；四 per-pool 锁分离消除 Post/Eval 跨池争用，突发回落 New/Dispose 抖动消除
   GIdleLock := TMutex.Create;
   GCompletionLock := TMutex.Create;
   GAssetHolderLock := TMutex.Create;
   GEvalLock := TMutex.Create;
-  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0))); // 16: bytes.ops 单源 0→4→8→16，inline 零额外调用
+  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0))))); // 64: bytes.ops 单源 0→4→8→16→32→64，inline 零额外调用，Slab 零每 Post 堆分配，热点小文件 burst 零 New 抖动
   SetLength(GIdlePool, LCap);
   SetLength(GCompletionPool, LCap);
   SetLength(GAssetHolderPool, LCap);

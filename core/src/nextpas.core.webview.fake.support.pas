@@ -84,10 +84,8 @@ end;
 
 function WindowOptionsOf(const AOptions: TWebviewOptions): nextpas.core.window.base.TWindowOptions; inline;
 begin
-  // perf: thin forward to window.base single source WindowOptionsCreate inline zero-copy, eliminates 8-field duplication with gtk.shell
-  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height,
-    AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight,
-    AOptions.Resizable, AOptions.Maximized);
+  // perf: thin forward to webview.utils single source WebviewWindowOptionsOf inline zero-copy, eliminates 8-field duplication with gtk.shell via bytes.ops single source
+  Result := nextpas.core.webview.utils.WebviewWindowOptionsOf(AOptions);
 end;
 
 end.
