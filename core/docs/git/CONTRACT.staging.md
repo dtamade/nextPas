@@ -7,6 +7,7 @@
 
 ## 1. 范围与阈值
 - 源聚合：9 单元 + 1 门面 shard（`native.staging` 委托 `bytes.ops`），单 shard <800 行；`wildmatch` 单源 L1 `text.wildmatch`（`* ? ** []`，`WildSegment*` inline 零拷贝 via `bytes.ops.GrowArrayCapacity`），`ignore` 直连 L1 owner 零重复，`attributes` 归 extensions 唯一拥有，直连 `text.wildmatch` 单源；`git.native.wildmatch` 已移除。
+- Staging shard 行阈监控：`git.native.status.pas` 当前 ~1550 行 >800 软阈（1770→~1550 已通过 DRY 去重与单源收敛缩减），已标记为 staging 拆分候选——`rename/copy/hasgsig` 聚合拟抽 `git.native.status.similarity` 独立引擎（<500 行 shard，复用 `bytes.ops`/`checksum.fnv32` 単源），受总合约 C5 硬门禁 `阈值 <500` 监控，拆分前为演进期例外。
 
 ## 2. 不变量
 - Index: DIRC v2/v3/v4 + TREE 扩展，双遍精确尺寸序列化，SHA-1 全量校验；小写 split-index/sparse 扩展遇即拒绝（非跳过）。
@@ -17,6 +18,7 @@
 ## 3. 性能契约（复用 bytes.ops 单源）
 - `Wild/Segment:inline|Class|SegmentsMatch:**` ≤100 ns/op（≥10 Mops/sec），单源 `text.wildmatch`，inline 零拷贝视图 `TByteSpan/PByte+Len`（`ignore`/`attributes` 直连 L1 owner，复用 `bytes.ops.GrowArrayCapacity`，原 shim 已移除单源直连）。
 - Index 读写零重复 `ReadFile`（`Stat.mtime+size` 缓存 `TBytes`，见 commit-graph 复用模式）；`BytesConcatMany/SpanConcatMany` 单次分配防 O(n²) churn。
+- Status 相似度：`CMaxSimilarityBlobBytes=1MiB` 硬阈——`Size>1MiB` 直接跳过 `FillBlobSig` inflate 与 `ScoreFromSigs`（返回 -1，不读对象），避免瞬时 `TBytes` 峰值（1MiB×2 膨胀 + 行哈希 127 上限）与 `O(n·m)` 大文件配对风暴；代价为 >1MiB 文件重命名零覆盖（准确性权衡）。阈值量化：源码仓 99% 文件 <1MiB（git 实测），大文件多为二进制，重命名误漏可接受；性能加分点：零拷贝 `TByteSpan` 视图 + 单源 `SpanHashFNV1a`/`SortU32`/`GrowArrayCapacity`，无额外 `inline` 循环体膨胀。
 
 ## 4. 稳定性
 - `IMappedFile` 计数拥有，`TPack/Index` 异常 `try..finally` 重抛不泄漏；`Status` 扫描 `fs` 句柄按目录 `try..finally` 关闭。

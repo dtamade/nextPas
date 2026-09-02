@@ -161,21 +161,16 @@ end;
 function SortedHasString(const ASorted: TStringArray;
   const AValue: string): Boolean;
 var
-  Lo, Hi, Mid: Integer;
+  Idx: SizeInt;
 begin
-  Result := False;
-  Lo := 0;
-  Hi := High(ASorted);
-  while Lo <= Hi do
-  begin
-    Mid := (Lo + Hi) div 2;
-    if ASorted[Mid] = AValue then
-      Exit(True);
-    if ASorted[Mid] < AValue then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
-  end;
+  // single-source: collections.algorithms.BinarySearch (reuse single source binary search, branch-predictor friendly)
+  Result := specialize BinarySearch<string>(ASorted, AValue, @CompareString, nil, Idx);
+end;
+
+function OidHash(const AOid: TGitOid): UInt32;
+begin
+  // single-source FNV-1a via bytes.ops SpanHashFNV1a (L1) -> base.utils HashFNV1a (L0), zero-copy span
+  Result := SpanHashFNV1a(TByteSpan.Create(PByte(@AOid.Bytes[0]), SizeUInt(GitOidRawLen)));
 end;
 
 { Flattens a tree object into path/oid/kind triples, recursing into
@@ -256,7 +251,7 @@ end;
   is reused — dirty stat => modified without 32K streaming SHA-1,
   eliminating hotspot I/O for thousands of files. }
 function WorkCodeFor(const AWorkTree: string;
-  const AEntry: TGitIndexEntry): TGitStatusCode; inline;
+  const AEntry: TGitIndexEntry): TGitStatusCode;
 var
   Full: string;
   Info: TFileInfo;
@@ -307,7 +302,7 @@ begin
     Exit(gscUnmodified);
   // perf: stat missed => reuse index cache (mtime/size/mode) without I/O;
   // eliminates 32K chunked streaming SHA-1 hotspot for thousands files,
-  // zero-copy (no TBytes/IHasher alloc, no Read), inline fast path;
+  // zero-copy (no TBytes/IHasher alloc, no Read), not inline per red line 2 (IO routing);
   // stability: no IFile handle to leak, no hash state to free
   if WorkMode <> AEntry.Mode then
     Exit(gscModified);
@@ -316,8 +311,8 @@ end;
 
 { ── hashsig-like similarity ─────────────────────────────────────────────── }
 
-function HashForLine(const ASpan: TByteSpan): UInt32; inline;
-  // perf: inline hot, zero-copy TByteSpan.Data view (no string alloc), single pass up to 80 bytes, bytes.ops single source via MemEqual not needed
+function HashForLine(const ASpan: TByteSpan): UInt32;
+  // perf: not inline per red line 2 (loop 80 bytes exceeds I-Cache), zero-copy TByteSpan.Data view, bytes.ops single source
 const
   CHashStart: UInt64 = UInt64($012345678ABCDEF0);
 var
@@ -335,11 +330,11 @@ begin
 end;
 
 procedure CollectLineHashes(const ASpan: TByteSpan; var AOut: array of UInt32;
-  var ACount: Integer); inline;
+  var ACount: Integer);
 var
   I, Start, N: Integer;
   LineSpan: TByteSpan;
-  // perf: inline hot, zero-copy TByteSpan.Slice view (no alloc, single Move via HashForLine inline), single source; early exit on empty span avoids SortU32 work
+  // perf: not inline per red line 2 (full scan loop exceeds I-Cache), zero-copy TByteSpan.Slice view, bytes.ops single source
 begin
   ACount := 0;
   if ASpan.Len = 0 then
@@ -468,7 +463,7 @@ begin
   ASig.Valid := True;
 end;
 
-function ScoreFromSigs(const SA, SB: TBlobSig): Integer; inline;
+function ScoreFromSigs(const SA, SB: TBlobSig): Integer;
 var
   IA, IB, Matches: Integer;
   // perf: inline hot two-pointer merge O(CA+CB) capped 127, zero-copy array view, bytes.ops single source; early guards avoid hash work for invalid/large/ratio-skipped blobs
@@ -501,16 +496,8 @@ var
   Modes: array of Boolean;
   States: array of Byte;
   FirstPos: array of Integer;
-  function OidHashInline(const AOid: TGitOid): UInt32; inline;
-  var K: Integer;
-  begin
-    // single source FNV-1a over 20 oid bytes (same as revwalk GitOidHash), zero-copy via span view
-    Result := UInt32(2166136261);
-    for K := 0 to GitOidRawLen - 1 do
-      Result := (Result xor UInt32(AOid.Bytes[K])) * UInt32(16777619);
-  end;
 begin
-  // perf: O(n) avg open-addressing hash vs O(n²) linear scan; not inline outer per red line 2, inline inner OidHashInline + zero-copy SpanEqual via GitOidSame (bytes.ops)
+  // perf: O(n) avg open-addressing hash vs O(n²) linear scan; not inline outer per red line 2, OidHash via bytes.ops single source
   SetLength(AOut, Length(AList));
   if Length(AList) = 0 then Exit;
   Cap := 16;
@@ -523,7 +510,7 @@ begin
   for I := 0 to High(AList) do
   begin
     LIsBlob := IsBlobMode(AList[I].Mode);
-    LHash := OidHashInline(AList[I].Oid);
+    LHash := OidHash(AList[I].Oid);
     if LIsBlob then LHash := LHash xor UInt32($9E3779B9);
     Idx := Integer(LHash and UInt32(Mask));
     Found := False;
@@ -549,10 +536,9 @@ end;
 function SimilarityForPair(ARepo: TNativeRepository;
   const ASource, ATarget: TPathOid): Integer;
 var
-  KindA, KindB: TGitObjectKind;
-  SizeA, SizeB: Int64;
-  DataA, DataB: TBytes;
+  SA, SB: TBlobSig;
 begin
+  // retired dual-track: old inline inflate+HashSigScore path removed, now single-source via FillBlobSig/ScoreFromSigs (cached sig, guards, 127 cap)
   Result := -1;
   if not IsBlobMode(ASource.Mode) then
     Exit;
@@ -560,44 +546,11 @@ begin
     Exit;
   if GitOidSame(ASource.Oid, ATarget.Oid) then
     Exit(100);
-  // perf: size ratio guard before inflate — avoids O(n·m) extra decompress+hash
-  // git rule: if both >127 and one >8x the other, skip similarity (return -1)
-  // single source: size via TNativeRepository.TryGetObjectSize (loose header / pack header)
-  // zero-copy: header-only parse, no payload alloc; bytes.ops single source for payload path
-  // stability: TryGetObjectSize returns False for missing, raises EGitError for corrupt — treat as -1
-  try
-    if not ARepo.TryGetObjectSize(ASource.Oid, KindA, SizeA) then
-      Exit(-1);
-    if KindA <> gokBlob then
-      Exit(-1);
-    if not ARepo.TryGetObjectSize(ATarget.Oid, KindB, SizeB) then
-      Exit(-1);
-    if KindB <> gokBlob then
-      Exit(-1);
-    if (SizeA > 127) and (SizeB > 127) then
-      if (SizeA > SizeB * 8) or (SizeB > SizeA * 8) then
-        Exit(-1);
-    // stability: large-blob guard before inflate — avoid transient TBytes peak for huge blobs, return -1 without payload alloc; not dependent on exception fallback
-    if (SizeA > CMaxSimilarityBlobBytes) or (SizeB > CMaxSimilarityBlobBytes) then
-      Exit(-1);
-  except
-    on E: EGitError do
-      Exit(-1);
-  end;
-  // only now inflate payloads for hashsig scoring
-  // stability: ReadObject uses managed TBytes, auto freed on exception; no leak
-  try
-    DataA := ARepo.ReadObject(ASource.Oid, KindA);
-    if KindA <> gokBlob then
-      Exit(-1);
-    DataB := ARepo.ReadObject(ATarget.Oid, KindB);
-    if KindB <> gokBlob then
-      Exit(-1);
-  except
-    on E: EGitError do
-      Exit(-1);
-  end;
-  Result := HashSigScoreForBlobs(DataA, DataB);
+  FillBlobSig(ARepo, ASource, SA);
+  FillBlobSig(ARepo, ATarget, SB);
+  if not SA.Valid or not SB.Valid then
+    Exit(-1);
+  Result := ScoreFromSigs(SA, SB);
 end;
 
 { perf: not inline per red line 2 (recursive ReadDir+Ignore heavy IO routing); thin forwarders only inline, zero-copy via bytes.ops SpanCopy single source }
@@ -610,7 +563,6 @@ var
   HaveIgnore: Boolean;
   I: SizeInt;
   LCount, LCap: SizeInt;
-  LDirLen, LNameLen: SizeInt;
 begin
   if ADirRel = '' then
     DirAbs := AWorkTree
@@ -634,20 +586,8 @@ begin
       if ADirRel = '' then
         Rel := Items[I].Name
       else
-      begin
-        // single alloc + zero-copy avoids ADirRel+'/'+Name temp storm; inline for hot fan-out
-        // perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1)
-        LDirLen := Length(ADirRel);
-        LNameLen := Length(Items[I].Name);
-        SetLength(Rel, LDirLen + 1 + LNameLen);
-        if LDirLen > 0 then
-          SpanCopy(TByteSpan.Create(PByte(@Rel[1]), SizeUInt(LDirLen)),
-            TByteSpan.Create(PByte(@ADirRel[1]), SizeUInt(LDirLen)));
-        Rel[LDirLen + 1] := '/';
-        if LNameLen > 0 then
-          SpanCopy(TByteSpan.Create(PByte(@Rel[1]) + SizeUInt(LDirLen + 1), SizeUInt(LNameLen)),
-            TByteSpan.Create(PByte(@Items[I].Name[1]), SizeUInt(LNameLen)));
-      end;
+        // single-source PathJoin via platform.path (zero-copy PByte+Len in fs.path, single allocation), readable PathJoin
+        Rel := PathJoin([ADirRel, Items[I].Name]);
       if Items[I].IsDir then
       begin
         // pruning an ignored subtree is what keeps "!x/y" under an
@@ -841,9 +781,6 @@ var
   Idx: TGitIndexFile;
   HeadList: TPathOidArray;
   Tracked: TStringArray;
-  UntrackedPaths: TStringArray;
-  UntrackedStatus: TGitNativeStatusArray;
-  Ignore: TGitIgnoreMatcher;
   ExcludeFile: string;
   HaveHead: Boolean;
   HeadCommit: TGitOid;
@@ -869,7 +806,6 @@ var
   // amortized caps (bytes.ops single-source doubling, zero-copy Move)
   LTrackedCount, LTrackedCap: SizeInt;
   LStatusCount, LStatusCap: SizeInt;
-  LUntrackedCount, LUntrackedCap: SizeInt;
   LCandCount, LCandCap: SizeInt;
   LRenameCount, LRenameCap: SizeInt;
   LCopyCount, LCopyCap: SizeInt;
@@ -884,7 +820,7 @@ var
   LVisitedList: array of Integer;
   LVisitedCount: Integer;
 
-  procedure BuildStage0; inline;
+  procedure BuildStage0;
   var
     K: Integer;
     LCount, LCap: SizeInt;
@@ -914,7 +850,7 @@ var
     end;
   end;
 
-  procedure BuildRenameSets; inline;
+  procedure BuildRenameSets;
   var
     HI, SI: Integer;
     LDelCount, LDelCap: SizeInt;
@@ -1015,6 +951,90 @@ var
       SetLength(BothPaths, LBothCount);
       SetLength(BothEntry, LBothCount);
     end;
+  end;
+
+  procedure BuildAddIndexes;
+  var
+    II, KK, Bucket, DI2: Integer;
+    HVal: UInt32;
+    TotalHashes: Integer;
+  begin
+    // oid buckets single source via OidHash (bytes.ops)
+    LAddOidCap := 16;
+    while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
+    SetLength(LAddOidBuckets, LAddOidCap);
+    SetLength(LOidEntries, Length(Adds));
+    for II := 0 to LAddOidCap - 1 do LAddOidBuckets[II] := -1;
+    for DI2 := 0 to High(Adds) do
+    begin
+      HVal := OidHash(Adds[DI2].Oid);
+      if IsBlobMode(Adds[DI2].Mode) then HVal := HVal xor UInt32($9E3779B9);
+      Bucket := Integer(HVal and UInt32(LAddOidCap - 1));
+      LOidEntries[DI2].AddIdx := DI2;
+      LOidEntries[DI2].Next := LAddOidBuckets[Bucket];
+      LAddOidBuckets[Bucket] := DI2;
+    end;
+    // inverted hash index
+    TotalHashes := 0;
+    for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(TotalHashes, AddSigs[DI2].Count);
+    II := 16;
+    while II < TotalHashes * 2 do II := II * 2;
+    if II < 16 then II := 16;
+    SetLength(LHashHeads, II);
+    for KK := 0 to High(LHashHeads) do LHashHeads[KK] := -1;
+    SetLength(LHashEntries, TotalHashes);
+    KK := 0;
+    for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then
+      for II := 0 to AddSigs[DI2].Count - 1 do
+      begin
+        Bucket := Integer(AddSigs[DI2].Hashes[II] and UInt32(Length(LHashHeads) - 1));
+        LHashEntries[KK].Hash := AddSigs[DI2].Hashes[II];
+        LHashEntries[KK].AddIdx := DI2;
+        LHashEntries[KK].Next := LHashHeads[Bucket];
+        LHashHeads[Bucket] := KK;
+        Inc(KK);
+      end;
+    SetLength(LVisited, Length(Adds));
+    SetLength(LVisitedList, Length(Adds));
+    for II := 0 to High(LVisited) do LVisited[II] := False;
+  end;
+
+  procedure AppendUntrackedGroupToResult(var AResult: TGitNativeStatusArray);
+  var
+    LPaths: TStringArray;
+    LStatus: TGitNativeStatusArray;
+    LCount, LCap: SizeInt;
+    LIgnore: TGitIgnoreMatcher;
+    II: Integer;
+  begin
+    if not AIncludeUntracked then Exit;
+    LPaths := nil;
+    LIgnore := TGitIgnoreMatcher.Create;
+    try
+      PushInfoAndGlobalExcludes(LIgnore, AGitDir);
+      CollectUntracked(AWorkTree, '', Tracked, LIgnore, LPaths);
+    finally
+      LIgnore.Free;
+    end;
+    SortStrings(LPaths);
+    LStatus := nil;
+    LCount := 0; LCap := 0;
+    for II := 0 to High(LPaths) do
+    begin
+      if LCount = LCap then
+      begin
+        LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        SetLength(LStatus, LCap);
+      end;
+      LStatus[LCount].Path := LPaths[II];
+      LStatus[LCount].OldPath := '';
+      LStatus[LCount].Similarity := 0;
+      LStatus[LCount].HeadCode := gscUnmodified;
+      LStatus[LCount].WorkCode := gscUntracked;
+      Inc(LCount);
+    end;
+    if LCap <> LCount then SetLength(LStatus, LCount);
+    AppendUntrackedGroup(AResult, LStatus);
   end;
 
 var
@@ -1172,38 +1192,7 @@ begin
             SetLength(TrackedStatus, LStatusCount);
           SortStatusByPath(TrackedStatus);
           Result := TrackedStatus;
-          if AIncludeUntracked then
-          begin
-            UntrackedPaths := nil;
-            Ignore := TGitIgnoreMatcher.Create;
-            try
-              PushInfoAndGlobalExcludes(Ignore, AGitDir);
-              CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-            finally
-              Ignore.Free;
-            end;
-            SortStrings(UntrackedPaths);
-            UntrackedStatus := nil;
-            LUntrackedCount := 0;
-            LUntrackedCap := 0;
-            for I := 0 to High(UntrackedPaths) do
-            begin
-              if LUntrackedCount = LUntrackedCap then
-              begin
-                LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
-                SetLength(UntrackedStatus, LUntrackedCap);
-              end;
-              UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
-              UntrackedStatus[LUntrackedCount].OldPath := '';
-              UntrackedStatus[LUntrackedCount].Similarity := 0;
-              UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
-              UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
-              Inc(LUntrackedCount);
-            end;
-            if LUntrackedCap <> LUntrackedCount then
-              SetLength(UntrackedStatus, LUntrackedCount);
-            AppendUntrackedGroup(Result, UntrackedStatus);
-          end;
+          AppendUntrackedGroupToResult(Result);
           Exit;
         end;
     end;
@@ -1242,38 +1231,7 @@ begin
         Result := TrackedStatus;
       end;
 
-      if AIncludeUntracked then
-      begin
-        UntrackedPaths := nil;
-        Ignore := TGitIgnoreMatcher.Create;
-        try
-          PushInfoAndGlobalExcludes(Ignore, AGitDir);
-          CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-        finally
-          Ignore.Free;
-        end;
-        SortStrings(UntrackedPaths);
-        UntrackedStatus := nil;
-        LUntrackedCount := 0;
-        LUntrackedCap := 0;
-        for I := 0 to High(UntrackedPaths) do
-        begin
-          if LUntrackedCount = LUntrackedCap then
-          begin
-            LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
-            SetLength(UntrackedStatus, LUntrackedCap);
-          end;
-          UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
-          UntrackedStatus[LUntrackedCount].OldPath := '';
-          UntrackedStatus[LUntrackedCount].Similarity := 0;
-          UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
-          UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
-          Inc(LUntrackedCount);
-        end;
-        if LUntrackedCap <> LUntrackedCount then
-          SetLength(UntrackedStatus, LUntrackedCount);
-        AppendUntrackedGroup(Result, UntrackedStatus);
-      end;
+      AppendUntrackedGroupToResult(Result);
       Exit;
     end;
 
@@ -1290,62 +1248,17 @@ begin
     LCandCap := 0;
     if (Length(Deletes) > 0) and (Length(Adds) > 0) and (Int64(Length(Deletes)) * Int64(Length(Adds)) > 4096) then
     begin
-      // large: O(n+m) oid map + inverted hash index reduces ScoreFromSigs merges from O(n·m) to shared-hash only
-      LAddOidCap := 16;
-      while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
-      SetLength(LAddOidBuckets, LAddOidCap);
-      SetLength(LOidEntries, Length(Adds));
-      for I := 0 to LAddOidCap - 1 do LAddOidBuckets[I] := -1;
-      for DI2 := 0 to High(Adds) do
-      begin
-        Score := 0; // reuse as hash temp
-        Score := Integer(UInt32(2166136261));
-        for K := 0 to GitOidRawLen - 1 do
-          Score := Integer((UInt32(Score) xor UInt32(Adds[DI2].Oid.Bytes[K])) * UInt32(16777619));
-        if IsBlobMode(Adds[DI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
-        I := (UInt32(Score) and UInt32(LAddOidCap - 1));
-        LOidEntries[DI2].AddIdx := DI2;
-        LOidEntries[DI2].Next := LAddOidBuckets[I];
-        LAddOidBuckets[I] := DI2;
-      end;
-      // inverted hash index for Adds
-      K := 0;
-      for DI2 := 0 to High(Adds) do
-        if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
-      I := 16;
-      while I < K * 2 do I := I * 2;
-      if I < 16 then I := 16;
-      SetLength(LHashHeads, I);
-      for K := 0 to High(LHashHeads) do LHashHeads[K] := -1;
-      K := 0;
-      for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
-      SetLength(LHashEntries, K);
-      K := 0;
-      for DI2 := 0 to High(Adds) do
-        if AddSigs[DI2].Valid then
-          for I := 0 to AddSigs[DI2].Count - 1 do
-          begin
-            Score := Integer(AddSigs[DI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
-            LHashEntries[K].Hash := AddSigs[DI2].Hashes[I];
-            LHashEntries[K].AddIdx := DI2;
-            LHashEntries[K].Next := LHashHeads[Score];
-            LHashHeads[Score] := K;
-            Inc(K);
-          end;
-      SetLength(LVisited, Length(Adds));
-      SetLength(LVisitedList, Length(Adds));
-      for I := 0 to High(LVisited) do LVisited[I] := False;
+      // large: O(n+m) oid map + inverted hash index reduces ScoreFromSigs merges from O(n·m) to shared-hash only (single-source BuildAddIndexes)
+      BuildAddIndexes;
       // per delete, collect shared-hash + exact-oid candidates
       for SI2 := 0 to High(Deletes) do
       begin
         if not IsBlobMode(Deletes[SI2].Mode) then Continue;
         LVisitedCount := 0;
-        // exact oid matches via oid buckets
-        Score := Integer(UInt32(2166136261));
-        for K := 0 to GitOidRawLen - 1 do
-          Score := Integer((UInt32(Score) xor UInt32(Deletes[SI2].Oid.Bytes[K])) * UInt32(16777619));
+        // exact oid matches via oid buckets (single-source OidHash)
+        Score := Integer(OidHash(Deletes[SI2].Oid));
         if IsBlobMode(Deletes[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
-        I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+        I := Integer(UInt32(Score) and UInt32(LAddOidCap - 1));
         DI2 := LAddOidBuckets[I];
         while DI2 <> -1 do
         begin
@@ -1487,64 +1400,17 @@ begin
       LCandCap := 0;
       if (Length(HeadList) > 0) and (Length(Adds) > 0) and (Int64(Length(HeadList)) * Int64(Length(Adds)) > 4096) then
       begin
-        // large: reuse Adds oid/hash index (build if not already from rename large path)
-        if (Length(LAddOidBuckets) = 0) or (Length(LAddOidBuckets) <> 0) and (Length(LOidEntries) <> Length(Adds)) then
-        begin
-          LAddOidCap := 16;
-          while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
-          SetLength(LAddOidBuckets, LAddOidCap);
-          SetLength(LOidEntries, Length(Adds));
-          for I := 0 to LAddOidCap - 1 do LAddOidBuckets[I] := -1;
-          for DI2 := 0 to High(Adds) do
-          begin
-            Score := Integer(UInt32(2166136261));
-            for K := 0 to GitOidRawLen - 1 do
-              Score := Integer((UInt32(Score) xor UInt32(Adds[DI2].Oid.Bytes[K])) * UInt32(16777619));
-            if IsBlobMode(Adds[DI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
-            I := (UInt32(Score) and UInt32(LAddOidCap - 1));
-            LOidEntries[DI2].AddIdx := DI2;
-            LOidEntries[DI2].Next := LAddOidBuckets[I];
-            LAddOidBuckets[I] := DI2;
-          end;
-        end;
-        if Length(LHashHeads) = 0 then
-        begin
-          K := 0;
-          for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
-          I := 16;
-          while I < K * 2 do I := I * 2;
-          if I < 16 then I := 16;
-          SetLength(LHashHeads, I);
-          for K := 0 to High(LHashHeads) do LHashHeads[K] := -1;
-          K := 0;
-          for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
-          SetLength(LHashEntries, K);
-          K := 0;
-          for DI2 := 0 to High(Adds) do
-            if AddSigs[DI2].Valid then
-              for I := 0 to AddSigs[DI2].Count - 1 do
-              begin
-                Score := Integer(AddSigs[DI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
-                LHashEntries[K].Hash := AddSigs[DI2].Hashes[I];
-                LHashEntries[K].AddIdx := DI2;
-                LHashEntries[K].Next := LHashHeads[Score];
-                LHashHeads[Score] := K;
-                Inc(K);
-              end;
-          SetLength(LVisited, Length(Adds));
-          SetLength(LVisitedList, Length(Adds));
-          for I := 0 to High(LVisited) do LVisited[I] := False;
-        end;
+        // large: reuse Adds oid/hash index (build if not already from rename large path) single-source BuildAddIndexes
+        if Length(LAddOidBuckets) = 0 then
+          BuildAddIndexes;
         for SI2 := 0 to High(HeadList) do
         begin
           if not IsBlobMode(HeadList[SI2].Mode) then Continue;
           LVisitedCount := 0;
-          // exact oid
-          Score := Integer(UInt32(2166136261));
-          for K := 0 to GitOidRawLen - 1 do
-            Score := Integer((UInt32(Score) xor UInt32(HeadList[SI2].Oid.Bytes[K])) * UInt32(16777619));
+          // exact oid single-source OidHash
+          Score := Integer(OidHash(HeadList[SI2].Oid));
           if IsBlobMode(HeadList[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
-          I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+          I := Integer(UInt32(Score) and UInt32(LAddOidCap - 1));
           DI2 := LAddOidBuckets[I];
           while DI2 <> -1 do
           begin
@@ -1715,38 +1581,7 @@ begin
     SortStatusByPath(TrackedStatus);
     Result := TrackedStatus;
 
-    if AIncludeUntracked then
-    begin
-      UntrackedPaths := nil;
-      Ignore := TGitIgnoreMatcher.Create;
-      try
-        PushInfoAndGlobalExcludes(Ignore, AGitDir);
-        CollectUntracked(AWorkTree, '', Tracked, Ignore, UntrackedPaths);
-      finally
-        Ignore.Free;
-      end;
-      SortStrings(UntrackedPaths);
-      UntrackedStatus := nil;
-      LUntrackedCount := 0;
-      LUntrackedCap := 0;
-      for I := 0 to High(UntrackedPaths) do
-      begin
-        if LUntrackedCount = LUntrackedCap then
-        begin
-          LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
-          SetLength(UntrackedStatus, LUntrackedCap);
-        end;
-        UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
-        UntrackedStatus[LUntrackedCount].OldPath := '';
-        UntrackedStatus[LUntrackedCount].Similarity := 0;
-        UntrackedStatus[LUntrackedCount].HeadCode := gscUnmodified;
-        UntrackedStatus[LUntrackedCount].WorkCode := gscUntracked;
-        Inc(LUntrackedCount);
-      end;
-      if LUntrackedCap <> LUntrackedCount then
-        SetLength(UntrackedStatus, LUntrackedCount);
-      AppendUntrackedGroup(Result, UntrackedStatus);
-    end;
+    AppendUntrackedGroupToResult(Result);
   finally
     Repo.Free;
   end;
