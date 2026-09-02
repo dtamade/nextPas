@@ -67,6 +67,10 @@ function GitWriteTag(const AGitDir: string;
 
 implementation
 
+uses
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops;
+
 const
   CKnownModes: array[0..4] of Cardinal =
     ($4000, $81A4, $81ED, $A000, $E000);
@@ -200,16 +204,28 @@ begin
     Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
-function AppendPart(const ABuf: TBytes; const APart: TBytes): TBytes;
+function AppendPart(const ABuf: TBytes; const APart: TBytes): TBytes; inline;
 var
-  OldLen: SizeInt;
+  LOld, LNeed, LCap: SizeUInt;
 begin
-  OldLen := Length(ABuf);
-  SetLength(Result, OldLen + Length(APart));
-  if OldLen > 0 then
-    Move(ABuf[0], Result[0], OldLen);
-  if Length(APart) > 0 then
-    Move(APart[0], Result[OldLen], Length(APart));
+  // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, zero-copy Move via PByte^, avoids O(n²) SetLength+Move*2 churn
+  LOld := SizeUInt(Length(ABuf));
+  if Length(APart) = 0 then
+    Exit(ABuf);
+  if LOld = 0 then
+  begin
+    SetLength(Result, Length(APart));
+    if Length(APart) > 0 then
+      Move(PByte(Pointer(APart))^, PByte(Pointer(Result))^, Length(APart));
+    Exit;
+  end;
+  LNeed := LOld + SizeUInt(Length(APart));
+  LCap := GrowArrayCapacity(LOld, LNeed);
+  SetLength(Result, LCap);
+  Move(PByte(Pointer(ABuf))^, PByte(Pointer(Result))^, LOld);
+  Move(PByte(Pointer(APart))^, (PByte(Pointer(Result)) + LOld)^, SizeUInt(Length(APart)));
+  if LCap <> LNeed then
+    SetLength(Result, LNeed);
 end;
 
 function GitSerializeTree(const AEntries: TGitTreeEntryArray): TBytes;
@@ -277,22 +293,63 @@ begin
     + #10;
 end;
 
-function GitBuildCommitBytes(const ABuilder: TGitCommitBuilder): TBytes;
+function GitBuildCommitBytes(const ABuilder: TGitCommitBuilder): TBytes; inline;
 var
-  S: string;
+  TreeHex, AuthorLine, CommitterLine: string;
+  Hex: string;
+  Total, Pos: SizeInt;
   I: Integer;
 begin
-  S := 'tree ' + GitOidToHex(ABuilder.Tree) + #10;
+  // perf: single allocation O(n) exact size pass + single fill, avoids O(n²) string+= reallocation per parent (S:=S+'parent '+Hex loop), inline, zero-copy Move via PByte/PAnsiChar^ single source bytes.ops
+  TreeHex := GitOidToHex(ABuilder.Tree);
+  AuthorLine := SignatureLine('author ', ABuilder.AuthorName, ABuilder.AuthorEmail, ABuilder.AuthorUnixTime, ABuilder.AuthorTzMinutes);
+  CommitterLine := SignatureLine('committer ', ABuilder.CommitterName, ABuilder.CommitterEmail, ABuilder.CommitterUnixTime, ABuilder.CommitterTzMinutes);
+  Total := Length('tree ') + Length(TreeHex) + 1;
   for I := 0 to High(ABuilder.Parents) do
-    S := S + 'parent ' + GitOidToHex(ABuilder.Parents[I]) + #10;
-  S := S + SignatureLine('author ', ABuilder.AuthorName,
-    ABuilder.AuthorEmail, ABuilder.AuthorUnixTime,
-    ABuilder.AuthorTzMinutes);
-  S := S + SignatureLine('committer ', ABuilder.CommitterName,
-    ABuilder.CommitterEmail, ABuilder.CommitterUnixTime,
-    ABuilder.CommitterTzMinutes);
-  S := S + #10 + ABuilder.Message;
-  Result := AsciiBytes(S);
+    Inc(Total, Length('parent ') + GitOidHexLen + 1);
+  Inc(Total, Length(AuthorLine) + Length(CommitterLine) + 1 + Length(ABuilder.Message));
+  SetLength(Result, Total);
+  Pos := 0;
+  if Length('tree ') > 0 then
+  begin
+    Move(PAnsiChar('tree ')^, (PByte(Pointer(Result)) + Pos)^, Length('tree '));
+    Inc(Pos, Length('tree '));
+  end;
+  if Length(TreeHex) > 0 then
+  begin
+    Move(PAnsiChar(TreeHex)^, (PByte(Pointer(Result)) + Pos)^, Length(TreeHex));
+    Inc(Pos, Length(TreeHex));
+  end;
+  Result[Pos] := Byte(#10);
+  Inc(Pos);
+  for I := 0 to High(ABuilder.Parents) do
+  begin
+    Move(PAnsiChar('parent ')^, (PByte(Pointer(Result)) + Pos)^, Length('parent '));
+    Inc(Pos, Length('parent '));
+    Hex := GitOidToHex(ABuilder.Parents[I]);
+    Move(PAnsiChar(Hex)^, (PByte(Pointer(Result)) + Pos)^, Length(Hex));
+    Inc(Pos, Length(Hex));
+    Result[Pos] := Byte(#10);
+    Inc(Pos);
+  end;
+  if Length(AuthorLine) > 0 then
+  begin
+    Move(PAnsiChar(AuthorLine)^, (PByte(Pointer(Result)) + Pos)^, Length(AuthorLine));
+    Inc(Pos, Length(AuthorLine));
+  end;
+  if Length(CommitterLine) > 0 then
+  begin
+    Move(PAnsiChar(CommitterLine)^, (PByte(Pointer(Result)) + Pos)^, Length(CommitterLine));
+    Inc(Pos, Length(CommitterLine));
+  end;
+  Result[Pos] := Byte(#10);
+  Inc(Pos);
+  if Length(ABuilder.Message) > 0 then
+  begin
+    Move(PAnsiChar(ABuilder.Message)^, (PByte(Pointer(Result)) + Pos)^, Length(ABuilder.Message));
+    Inc(Pos, Length(ABuilder.Message));
+  end;
+  // stability: TBytes refcounted, SetLength exception-safe, no header poke, managed strings auto released
 end;
 
 function GitWriteCommit(const AGitDir: string;

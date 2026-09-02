@@ -15,20 +15,23 @@ uses
 
 { Commit-graph v1 reader+writer+cache (SHA-1) for local revwalk acceleration.
   Note: history-domain core (~1320 lines) exceeds design-conventions §2
-    800-line soft guide; retained per CONTRACT history shard as cohesive
-    exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE.
-    Thin aggregator is history.traversal; split would dilute ownership.
-    Monitored 1320→1500 hard split threshold per CONTRACT.history §6; I-Cache
-    impact bounded via region markers (Cache/Reader/Writer/Collect) + audit.
+    800-line soft guide; retained per CONTRACT.history §6 as cohesive
+    exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE
+    invariants + single mmap owner. Thin aggregator is history.traversal;
+    split would dilute ownership + double cache owner + merge conflict risk.
+    Monitored 1320→1500 hard split threshold per CONTRACT.history §6;
+    I-Cache impact bounded via inline red-line discipline (thin O(1) forwards
+    inline, loops/SIMD not inline) + 4 region markers for audit.
   L2 exempt: git-native-commitgraph-l2-exempt — L2 git→hash.sha1 single-source
     via bytes.ops SpanCompare/SpanCopy + NewSHA1, no duplicate SHA-1 loop;
     registry core/docs/core-module-registry.md git row (same-layer one-way
-    fs/compress/hash/zlib/checksum), traceable via C5 anchor pattern (zlib анал).
+    fs/compress/hash/zlib/checksum), traceable via C5 anchor pattern (zlib analog).
 
-  Audit: regions Cache/Reader/Writer/Collect via markers; 1320 vs 800 is
-    §2 soft-guide exception (shared invariants). Shard split would double
-    mmap cache owner + merge conflict risk (see CONTRACT.history §1/§6).
-    Hashed Dir index (FNV-1a via bytes.ops) keeps cache O(1) avg.
+  Audit: 4 regions via markers — Cache / Reader / Writer / Collect;
+    1320 vs 800 is §2 soft-guide exception with shared invariants, not
+    exemption from audit. Volume restraint via region markers + 1500 hard
+    threshold (see CONTRACT.history §1/§6). Hashed Dir index (FNV-1a via
+    bytes.ops) keeps cache O(1) avg without string-scan churn.
 
   Perf: mmap zero-copy via io.mapped + bytes.ops single source
     (SpanCopy/SpanCompare, PByte window); inline O(1) touch;
@@ -41,11 +44,13 @@ uses
     lock model, O(1) touch), swap-with-last O(1) keeps refcount safe;
     former external-sync model retired (was not locked).
   Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
-    when shards fan-in or cache ownership dilutes auditability;
-    hand-rolled 16-cap LRU retained over collections.lrucache (O(Cap)<30ns
-    vs AllocMem/THashMap overhead, see CONTRACT.history §6).
-  Volume: 800 soft guide — exception not exemption from audit; Cary via
-    region markers preserves restraint; see CONTRACT.history §6 threshold.
+    when shards fan-in or cache ownership dilutes auditability; reuse/test
+    isolation via history.traversal thin shard (<210 lines) + owner single
+    source (bytes.ops/collections.lrucache candidate). Hand-rolled 16-cap LRU
+    retained over collections.lrucache (O(Cap)<30ns vs AllocMem/THashMap
+    overhead, see CONTRACT.history §6).
+  Volume: 800 soft guide — exception not exemption; Cary via region markers
+    preserves restraint and high-end auditability; see CONTRACT.history §6.
 
   File layout honours the spec consumed by git's commit-graph.c and
   libgit2's commit_graph.c: header "CGPH" v1 oid_version 1, chunk TOC

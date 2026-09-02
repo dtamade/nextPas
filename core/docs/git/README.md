@@ -36,7 +36,7 @@ core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/Ne
 core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化）
 core/src/nextpas.core.git.libgit2.types.pas      ← libgit2 词汇 helper（标量/句柄/OID/枚举，基础类型 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 违 §6 已迁出）
 core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<30 行，极简占位，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 base/types + ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF）
-core/src/nextpas.core.git.libgit2.ffi.types.pas   ← **已移除**（空 tombstone，零 re-export 零 external 探针，词汇单源 base←types，ffi 仅 external 极简；下一 minor 删除文件，新代码直用 libgit2.types）
+core/src/nextpas.core.git.libgit2.ffi.types.pas   ← **已删除**（文件已物理删除，零 tombstone 零 re-export 零 external 探针，词汇单源 base←types via nextpas.core.git.libgit2.types，ffi 仅 external 极简；新代码直用 libgit2.types；零死文件噪音、hygiene 零产物假象已消除）
 core/src/nextpas.core.git.libgit2.ffi.structs.pas ← FFI 记录域（buf/strarray/time/sig/error/config/indexer/diff/blame，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.callbacks.pas← FFI 回调域（全部回调 typedef，<100 行）
 core/src/nextpas.core.git.libgit2.ffi.options.pas ← FFI 选项域（remote/fetch/checkout/clone/push/worktree/diff 选项，<200 行）

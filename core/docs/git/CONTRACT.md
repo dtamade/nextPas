@@ -35,7 +35,7 @@
 | git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
 | git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化，复用 bytes.ops） |
 | git.libgit2.types | 词汇 helper（标量/句柄/OID/枚举，纯 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 已迁出，ffi 仅 external 极简 <30 行） |
-| git.libgit2.ffi.types | **已移除**（空 tombstone，零 re-export 零 external 探针，词汇单源 base←types，ffi 仅 external 极简；新代码直用 libgit2.types，下一 minor 删除文件） |
+| git.libgit2.ffi.types | **已删除**（文件已物理删除，零 tombstone 零 re-export 零 external 探针；词汇单源 base←types via nextpas.core.git.libgit2.types，ffi 仅 external 极简；新代码直用 libgit2.types；零死文件噪音、hygiene 零产物假象已消除） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |

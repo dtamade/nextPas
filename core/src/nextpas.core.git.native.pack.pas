@@ -130,11 +130,7 @@ begin
     raise EGitError.Create('delta target size exceeds limit');
   TgtSize := Int64(UTgt);
   if Int64(Length(AOut)) <> TgtSize then
-  begin
-    if SizeUInt(Length(AOut)) < SizeUInt(TgtSize) then
-      BytesEnsureCapacity(AOut, SizeUInt(TgtSize));
-    SetLength(AOut, TgtSize);
-  end;
+    SetLength(AOut, TgtSize); // single alloc: SetLength exact, no BytesEnsureCapacity double alloc; depth 64 keeps O(n) not O(n*realloc), SpanCopy zero-copy via bytes.ops
   if TgtSize = 0 then
     Exit;
   LOutSpan := TByteSpan.FromBytes(AOut);

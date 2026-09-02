@@ -349,47 +349,18 @@ var
   LOldStates: array of Byte;
   LOldTicks: array of UInt64;
   LOldCap: SizeInt;
-  I, J: Integer;
+  I: Integer;
   LIdx: SizeInt;
   LHash: UInt32;
-  LSorted: array of Integer;
-  LSortedLen: SizeInt;
-  LSortedCap: SizeInt;
-  // not inline: partition loop, avoids I-Cache bloat per design rule
-  procedure QuickSelect(AL, AR, AK: Integer);
-  var
-    LI, RJ: Integer;
-    LPivot: UInt64;
-    LTmp: Integer;
-  begin
-    while AL < AR do
-    begin
-      LI := AL;
-      RJ := AR;
-      LPivot := LOldTicks[LSorted[(AL + AR) div 2]];
-      repeat
-        while LOldTicks[LSorted[LI]] > LPivot do Inc(LI);
-        while LOldTicks[LSorted[RJ]] < LPivot do Dec(RJ);
-        if LI <= RJ then
-        begin
-          LTmp := LSorted[LI];
-          LSorted[LI] := LSorted[RJ];
-          LSorted[RJ] := LTmp;
-          Inc(LI);
-          Dec(RJ);
-        end;
-      until LI > RJ;
-      if AK <= RJ then
-        AR := RJ
-      else if AK >= LI then
-        AL := LI
-      else
-        Break;
-    end;
-  end;
+  LThreshold: UInt64;
 begin
   if FCount <= CKeep then
     Exit;
+  // threshold keeps newest CKeep ticks, linear O(n) without sort/QuickSelect
+  if FTick > UInt64(CKeep) then
+    LThreshold := FTick - UInt64(CKeep)
+  else
+    LThreshold := 0;
   LOldBuckets := FBuckets;
   LOldHashes := FHashes;
   LOldWhens := FWhens;
@@ -410,48 +381,31 @@ begin
   SetLength(FStates, FCap);
   SetLength(FTicks, FCap);
   FCount := 0;
-  // collect active indices by recency
-  LSorted := nil;
-  LSortedLen := 0;
-  LSortedCap := 0;
-  SetLength(LSorted, 0);
+  // linear scan, keep ticks > threshold, zero alloc, reuse cached hash, CoW share
   for I := 0 to LOldCap - 1 do
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      if LSortedLen >= LSortedCap then
+      if LOldTicks[I] > LThreshold then
       begin
-        LSortedCap := SizeInt(GrowArrayCapacity(SizeUInt(LSortedCap), SizeUInt(LSortedLen + 1)));
-        SetLength(LSorted, LSortedCap);
-      end;
-      LSorted[LSortedLen] := I;
-      Inc(LSortedLen);
-    end;
-  SetLength(LSorted, LSortedLen);
-  if (LSortedLen > CKeep) and (Length(LSorted) > 1) then
-    QuickSelect(0, High(LSorted), CKeep - 1);
-  for I := 0 to High(LSorted) do
-  begin
-    J := LSorted[I];
-    if I < CKeep then
-    begin
-      LHash := LOldHashes[J]; { reuse cached hash }
-      LIdx := OidProbeEmpty(FStates, FMask, LHash);
-      if LIdx < 0 then
-      begin
-        Rehash(FCap * 2);
+        LHash := LOldHashes[I]; { reuse cached hash }
         LIdx := OidProbeEmpty(FStates, FMask, LHash);
-      end;
-      FBuckets[LIdx] := LOldBuckets[J];
-      FHashes[LIdx] := LHash;
-      FWhens[LIdx] := LOldWhens[J];
-      FParents[LIdx] := LOldParents[J]; { CoW share }
-      FTicks[LIdx] := LOldTicks[J];
-      FStates[LIdx] := 1;
-      Inc(FCount);
-    end
-    else
-      SetLength(LOldParents[J], 0);
-  end;
+        if LIdx < 0 then
+        begin
+          Rehash(FCap * 2);
+          LIdx := OidProbeEmpty(FStates, FMask, LHash);
+        end;
+        FBuckets[LIdx] := LOldBuckets[I];
+        FHashes[LIdx] := LHash;
+        FWhens[LIdx] := LOldWhens[I];
+        FParents[LIdx] := LOldParents[I]; { CoW share }
+        FTicks[LIdx] := LOldTicks[I];
+        FStates[LIdx] := 1;
+        Inc(FCount);
+      end
+      else
+        SetLength(LOldParents[I], 0);
+    end;
+  // stability: when gaps keep < CKeep, no extra sort needed; cache stays valid (re-parse on miss)
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
