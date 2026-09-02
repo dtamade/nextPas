@@ -113,7 +113,9 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset; ALength: SizeUInt): string; inline;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
-{ not inline: loop+Move }
+{ not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
+function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
+{ not inline: loop+Move — reuses AnsiPtrLen single source, zero-copy Move }
 function AnsiPtrToString(const P: PAnsiChar): string;
 { not inline: loop }
 function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;
@@ -837,23 +839,28 @@ begin
   Result := nextpas.core.bytes.ops.text.TryClampSlice(AOffset, ALength, ATotal, AClampedLen);
 end;
 
-function AnsiPtrToString(const P: PAnsiChar): string;
+function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
 var
   LP: PAnsiChar;
-  LLen: SizeUInt;
 begin
-  Result := '';
   if P = nil then
-    Exit;
+    Exit(0);
   LP := P;
   while LP^ <> #0 do
     Inc(LP);
-  LLen := SizeUInt(LP - P);
+  Result := SizeUInt(LP - P);
+end;
+
+function AnsiPtrToString(const P: PAnsiChar): string;
+var
+  LLen: SizeUInt;
+begin
+  Result := '';
+  LLen := AnsiPtrLen(P);
   if LLen = 0 then
     Exit;
   SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(P^, Pointer(Result)^, LLen);
+  Move(P^, Pointer(Result)^, LLen);
 end;
 
 function BigEndianUnicodeBytesToString(const AData: TBytes): string; inline;

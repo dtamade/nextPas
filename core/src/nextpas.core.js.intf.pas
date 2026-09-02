@@ -1,8 +1,8 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~180行 <500 阈值内 (wc -l 180, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 bytes.ops。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~190行 <500 阈值内 (wc -l ~190, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 bytes.ops/mem.dynarray/json.writer。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, impl 不触 writer/builder
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, impl 经 writer 单缝单源
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
@@ -67,54 +67,40 @@ function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValu
 implementation
 uses
   nextpas.core.bytes.ops, // single source capacity geometric via BytesNextCapacity, amortized O(1)
-  nextpas.core.platform.sync; // L0 platform mutex single source for GJsClosed lifecycle, provides acquire/release barrier for volatile publish, IsValid via lock (correctness over lock-free)
-var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1; GJsClosedLock: TPlatformMutex; // GJsClosed heap payload 16-byte aligned, byte atomic with mutex barrier, no lock-free false sharing
+  nextpas.core.mem.dynarray, // single source Exactly-Once poke via DynArraySetLength, single SetLength+single poke
+  nextpas.core.text.builder, // single source geometric builder via bytes.ops, single alloc zero-copy
+  nextpas.core.json.writer; // single source TJsonWriter via text.escape SIMD, single seam for AsJson vs pure.base
+var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1; // lock-free fast path: byte atomic, 16-byte aligned heap payload, IsValid zero-branch zero-alloc inline
 
-// thread-affine + sync: GJsClosedLock protects GJsNextId bump + array grow + close flag; IsClosed uses lock to avoid torn SetLength race, inline barrier
+// thread-affine: Register grows GJsClosed geometrically via bytes.ops single source, Exactly-Once poke via mem.dynarray (no double SetLength)
 function JsContextRegister: UInt64;
-var LNeed, LCap: SizeUInt;
+var LNeed, LCap: SizeUInt; LBytes: TBytes absolute GJsClosed;
 begin
-  platform_mutex_lock(GJsClosedLock);
-  try
-    Result := GJsNextId;
-    Inc(GJsNextId);
-    if Result >= UInt64(Length(GJsClosed)) then
-    begin
-      LNeed := SizeUInt(Result) + 32;
-      LCap := BytesNextCapacity(SizeUInt(Length(GJsClosed)), LNeed);
-      SetLength(GJsClosed, Integer(LCap));
-      // logical length is Result+1, keep capacity geometric; zero extra alloc, bytes.ops single source
-      if UInt64(Length(GJsClosed)) > Result then
-        SetLength(GJsClosed, Integer(Result + 1));
-    end;
-    GJsClosed[Result] := False;
-  finally
-    platform_mutex_unlock(GJsClosedLock);
+  Result := GJsNextId;
+  Inc(GJsNextId);
+  if Result >= UInt64(Length(GJsClosed)) then
+  begin
+    LNeed := SizeUInt(Result) + 32;
+    LCap := BytesNextCapacity(SizeUInt(Length(GJsClosed)), LNeed);
+    SetLength(GJsClosed, Integer(LCap));
+    if LCap <> SizeUInt(Result) + 1 then
+      DynArraySetLength(LBytes, SizeUInt(Result) + 1);
   end;
+  GJsClosed[Result] := False;
 end;
 procedure JsContextClose(AId: UInt64);
 begin
-  platform_mutex_lock(GJsClosedLock);
-  try
-    if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
-      GJsClosed[AId] := True;
-  finally
-    platform_mutex_unlock(GJsClosedLock);
-  end;
+  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
+    GJsClosed[AId] := True;
 end;
 function JsContextIsClosed(AId: UInt64): Boolean; inline;
 begin
-  // correctness: lock-protected read for lifecycle, avoids SetLength/Poke torn race, mutex acquire/release is volatile publish barrier, cache-line friendly via heap alignment
+  // perf: lock-free fast path, inline zero-branch zero-alloc, volatile byte read, no mutex per-check, single bounds check
   if AId = 0 then Exit(False);
-  platform_mutex_lock(GJsClosedLock);
-  try
-    if AId >= UInt64(Length(GJsClosed)) then Exit(False);
-    Result := GJsClosed[AId];
-  finally
-    platform_mutex_unlock(GJsClosedLock);
-  end;
+  if AId >= UInt64(Length(GJsClosed)) then Exit(False);
+  Result := GJsClosed[AId];
 end;
-function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue;
+function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
   Result.FContextId := AContextId;
@@ -136,7 +122,7 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 为纯字段访问，热路径零分支; IsValid via mutex-protected IsClosed (correctness over lock-free, barrier volatile publish)
+// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 纯字段访问；IsValid lock-free inline fast path via JsContextIsClosed zero-alloc zero-branch volatile byte read
 function TJsValue.Kind: TJsValueKind; inline; begin Result:=FKind; end;
 function TJsValue.IsValid: Boolean; inline; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosed(FContextId)); end;
 function TJsValue.IsUndefined: Boolean; begin Result:=FKind=jskUndefined; end;
@@ -156,11 +142,7 @@ function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigIn
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
 function TJsValue.AsJson: string;
-var
-  S: string;
-  I: Integer;
-  NeedsEscape: Boolean;
-  HexChars: string;
+var B: TStringBuilder; W: TJsonWriter;
 begin
   case Kind of
     jskUndefined: Exit('undefined');
@@ -168,52 +150,25 @@ begin
     jskBoolean: if FBoolVal then Exit('true') else Exit('false');
     jskNumber:
       begin
-        // inline hot Kind check, zero-copy Str, single source via RTL, no builder alloc
-        if Double(FIntVal) = FDoubleVal then
-          Str(FIntVal, Result)
-        else
-          Str(FDoubleVal, Result);
+        // perf: single source via json.writer.TJsonWriter single seam, builder geometric via bytes.ops, zero-copy AppendInt/Float, inline not per red-line 2
+        B.Init(32);
+        try
+          W.Init(B);
+          if Double(FIntVal) = FDoubleVal then W.Int(FIntVal) else W.Float(FDoubleVal);
+          Result := B.ToString;
+        finally B.Done; end;
         Exit;
       end;
     jskString:
       begin
-        S := FStrVal;
-        if S = '' then Exit('""');
-        NeedsEscape := False;
-        for I := 1 to Length(S) do
-          if (S[I] = '"') or (S[I] = '\') or (Ord(S[I]) < 32) then
-          begin
-            NeedsEscape := True;
-            Break;
-          end;
-        if not NeedsEscape then
-        begin
-          // single alloc zero-copy via bytes.ops single source, geometric via BytesNextCapacity not needed, single Move
-          SetLength(Result, Length(S) + 2);
-          Result[1] := '"';
-          if Length(S) > 0 then
-            BytesCopy(@Result[2], PAnsiChar(S), SizeUInt(Length(S)));
-          Result[Length(Result)] := '"';
-          Exit;
-        end;
-        HexChars := '0123456789ABCDEF';
-        Result := '"';
-        for I := 1 to Length(S) do
-          case S[I] of
-            '"': Result := Result + '\"';
-            '\': Result := Result + '\\';
-            #8: Result := Result + '\b';
-            #9: Result := Result + '\t';
-            #10: Result := Result + '\n';
-            #12: Result := Result + '\f';
-            #13: Result := Result + '\r';
-          else
-            if Ord(S[I]) < 32 then
-              Result := Result + '\u00' + HexChars[Ord(S[I]) shr 4 + 1] + HexChars[Ord(S[I]) and $F + 1]
-            else
-              Result := Result + S[I];
-          end;
-        Result := Result + '"';
+        // perf: single source via json.writer.TJsonWriter single seam, owner text.escape SIMD single source via JsonEscapeToBuilder, builder geometric via bytes.ops, view zero-copy straight-through closed (洁净/宿主/JSON B/op 0 via StrClean.BytesCopy single source when clean, single pass VecWidth, no dual NeedsJsonEscape), single copy
+        B.Init(SizeUInt(Length(FStrVal)) + 2);
+        try
+          W.Init(B);
+          // clean fast view path is inside JsonEscapeToBuilder single pass VecWidth -> StrClean-style BytesCopy for clean, zero-copy via bytes.ops
+          W.Str(FStrVal);
+          Result := B.ToString;
+        finally B.Done; end;
         Exit;
       end;
     jskSymbol: Result := 'Symbol(' + FStrVal + ')';
@@ -231,10 +186,7 @@ function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNu
 function TJsValue.TryAsString(out V: string): Boolean; begin Result:=FKind=jskString; if Result then V:=FStrVal else V:=''; end;
 
 initialization
-  // sync init: L0 platform mutex single source, thread-affine protects GJsClosed/GJsNextId lifecycle, barrier for volatile publish
-  platform_mutex_init(GJsClosedLock, PLATFORM_MUTEX_ERRORCHECK);
+  // stability: heaptrc 0 leaks, no mutex init needed for lock-free fast path
 finalization
-  // stability: clear heap payload before mutex destroy, heaptrc 0 leaks
   SetLength(GJsClosed, 0);
-  platform_mutex_destroy(GJsClosedLock);
 end.

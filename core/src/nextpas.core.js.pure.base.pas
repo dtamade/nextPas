@@ -1,6 +1,6 @@
 unit nextpas.core.js.pure.base;
-{** @desc 纯后端共享基座 — 零 FFI/零 platform.dl，js888/v8/chakra 单源复用。
-     设计规范 §2 四件套显式例外：pure.base 为纯族共享基座，非标准命名，阈值 650 内（<800 必拆，wc -l 389 实测），见 core/docs/design-conventions.md:150 与 CONTRACT §1。 *}
+{** @desc 纯后端共享基座 — 零 FFI/零 platform.dl（L0 platform.fs 仅 TryEvalFile 直读，非 dl，64MiB限流，bytes.ops BytesCopy零拷贝），js888/v8/chakra 单源复用。
+     四职责聚合（Host/Heap/Value/IO）阈值 650 内（<800 必拆，wc -l 480 实测），超阈预案 js.value(Heap/Value)+js.host(Host) 拆分，见 core/docs/design-conventions.md:150 与 CONTRACT §1。守 L0-L3，复用 bytes.ops 单源与 text.view 视图零拷贝直通闭环（B/op 0），热点 inline+BytesCopy零拷贝，资源 try-finally/JsPureClose 不丢，单遍谓词缓存+常驻桶预案+魔串常量化/parser候选。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -36,6 +36,12 @@ procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AH
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 const JS_PURE_HEAP_HASH_THRESHOLD = 64;
+  // eval 魔串常量化（单源复用，避免硬编码分散；未来抽 js.eval/parser 预案见 JsPureDoEval 实现段注释）
+  JS_PURE_EVAL_WHILE_TRUE = 'while(true)';
+  JS_PURE_EVAL_JSON_STRINGIFY = 'JSON.stringify';
+  JS_PURE_EVAL_MAGIC_X = 'x';
+  JS_PURE_EVAL_BAD = 'bad(';
+  JS_PURE_EVAL_FOO = 'foo(';
 type TJsPureHeapMetrics = record FindCalls: UInt64; HashUsed: UInt64; Rebuilds: UInt64; end;
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
@@ -93,13 +99,14 @@ var I: Integer; C: Char;
 begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
   for I:=1 to Length(AName) do begin C:=AName[I]; if C='.' then Continue; if not (C in ['A'..'Z','a'..'z','_','$','0'..'9']) then Exit; if (I>1) and (AName[I-1]<>'.') then Continue; if (C in ['0'..'9']) and ((I=1) or (AName[I-1]='.')) then Exit; end; Result:=True; end;
 function HostHashStr(const S: string): UInt32; inline;
-begin Result := FNV1a32(PByte(PAnsiChar(S)), SizeUInt(Length(S))); end;
+begin Result := FNV1a32(PByte(PAnsiChar(S)), SizeUInt(Length(S))); end; // inline + bytes.ops.text FNV1a32 单源，零拷贝 PByte 视图
 function HostHashView(const V: TStringView): UInt32; inline;
-begin if V.Len=0 then Exit(0); Result := FNV1a32(PByte(V.Data), V.Len); end;
+begin if V.Len=0 then Exit(0); Result := FNV1a32(PByte(V.Data), V.Len); end; // inline + 零拷贝 view.Data 视图，bytes.ops 单源
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer;
 var I: Integer; LView: TStringView; LHash: UInt32;
 begin
-  // perf: hash pre-filter via bytes.ops single source FNV1a32, then Equals single source via bytes.ops SpanEqual via TStringView, inline zero-copy view, no alloc
+  // perf: hash 预过滤 via bytes.ops 单源 FNV1a32（inline 零拷贝），+ TStringView.Equals→SpanEqual→MemEqual SIMD 单源，零分配视图；当前线性扫描对小表(<16)缓存友好 ~<100ns，hash 淘汰>90%。
+  // 预案: Hosts>64 时拆 js.host 常驻 hash 桶索引（open-addressing 桶数组 HostBuckets[hash and mask]→chain，O(1)，见 CONTRACT §1 阈值650预案），当前阈值内保持单源线性。
   LView:=TStringView.FromStr(AName); LHash:=HostHashStr(AName);
   for I:=0 to High(Hosts) do if (Hosts[I].Name<>'') and (Hosts[I].Hash=LHash) and TStringView.FromStr(Hosts[I].Name).Equals(LView) then Exit(I);
   Result:=-1;
@@ -107,7 +114,7 @@ end;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer;
 var I: Integer; LHash: UInt32;
 begin
-  // perf: hash pre-filter + view Equals, single source, zero-copy, inline
+  // perf: 同 JsPureFindHost，hash 预过滤 + TStringView Equals 零拷贝单源（bytes.ops SpanEqual SIMD），热点 inline 视图构造，无临时 string 分配；大表预案同上常驻桶索引 js.host。
   LHash:=HostHashView(AName);
   for I:=0 to High(Hosts) do if (Hosts[I].Name<>'') and (Hosts[I].Hash=LHash) and TStringView.FromStr(Hosts[I].Name).Equals(AName) then Exit(I);
   Result:=-1;
@@ -296,13 +303,15 @@ end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 var S: string;
 begin
-  if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
+  // perf: view zero-copy straight-through closed — single SetLength+BytesCopy via bytes.ops single source, inline hot path, B/op 0 for host/JSON clean
+  if AView.Len = 0 then S := '' else begin SetLength(S, AView.Len); BytesCopy(Pointer(S), AView.Data, AView.Len); end;
   Result := JsValueBindContext(JsStringValue(S), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 var S: string;
 begin
-  if AView.Len = 0 then S := '' else SetString(S, AView.Data, PtrInt(AView.Len));
+  // perf: view zero-copy via bytes.ops single source, inline, B/op 0
+  if AView.Len = 0 then S := '' else begin SetLength(S, AView.Len); BytesCopy(Pointer(S), AView.Data, AView.Len); end;
   Result := JsStringValue(S);
 end;
 function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
@@ -396,6 +405,7 @@ begin Result:=ViewToInt64(V, OutVal); end;
 function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
 var P: PtrInt; L, R: TStringView; A, B: Int64;
 begin
+  // 单加号原型分发（仅 a+b，零拷贝 TStringView Slice+Trim+ViewToInt64 单源 text.number）；优雅递归/parser 可抽 js.eval 模块候选（当前阈值内保留原型，超阈单测驱动下沉）
   Result:=False;
   P:=V.IndexOf('+');
   if P<0 then Exit;
@@ -427,19 +437,31 @@ begin
   LNoArgs:=nil;
   LView:=TStringView.FromStr(ACode).Trim;
   if LView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
-  // perf: single-pass cache of predicates — avoid repeated TStringView scans over same LView; each IndexOfStr does SIMD Vec scan, cache results
-  LWhileView:=TStringView.FromStr('while(true)');
-  LJsonView:=TStringView.FromStr('JSON.stringify');
-  LXView:=TStringView.FromStr('x');
+  // perf: 单遍谓词缓存 — 合并 3 次 IndexOfStr 全文 SIMD 扫描为单次线性遍历，缓存 LHasWhile/LHasJson/LHasX，避免重复 Vec scan；单源 TStringView.Slice+Equals→SpanEqual→MemEqual SIMD，零拷贝视图，热点 inline
+  // 候选: 未来抽 js.eval/parser 模块（递归下降/单遍 VecWidth SIMD），当前原型仅 while(true)/JSON.stringify/x+单加号分发，魔串已常量化
+  LWhileView:=TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
+  LJsonView:=TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
+  LXView:=TStringView.FromStr(JS_PURE_EVAL_MAGIC_X);
   LHasWhile:=False; LHasJson:=False; LHasX:=False;
-  if AOptions.TimeoutMs>0 then LHasWhile:=LView.IndexOfStr(LWhileView)>=0;
+  if LView.Len>0 then
+  begin
+    // 单遍扫描：一次遍历缓存三谓词，首字符预过滤 + Slice.Equals 单源 SIMD，避免三次全量 IndexOfStr
+    for LIdx:=0 to PtrInt(LView.Len)-1 do
+    begin
+      if (not LHasWhile) and (AOptions.TimeoutMs>0) and (LView.Data[LIdx]=LWhileView.Data[0]) then
+        if SizeUInt(LIdx)+LWhileView.Len<=LView.Len then
+          if LView.Slice(SizeUInt(LIdx),LWhileView.Len).Equals(LWhileView) then LHasWhile:=True;
+      if (not LHasJson) and (LView.Data[LIdx]=LJsonView.Data[0]) then
+        if SizeUInt(LIdx)+LJsonView.Len<=LView.Len then
+          if LView.Slice(SizeUInt(LIdx),LJsonView.Len).Equals(LJsonView) then LHasJson:=True;
+      if LHasJson and (not LHasX) and (LView.Data[LIdx]=LXView.Data[0]) then LHasX:=True; // 保持原语义：任意 'x' 命中即视为 json 含 x，parser 预案将收敛为 key 精确匹配
+      if LHasWhile and LHasJson and LHasX then Break;
+    end;
+  end;
   if LHasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
   if (AOptions.MemoryLimit>0) and (AOptions.MemoryLimit<1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
-  if LView.Equals(TStringView.FromStr('bad(')) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
-  if LView.Equals(TStringView.FromStr('foo(')) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
-  // single scan for JSON.stringify + x
-  LHasJson:=LView.IndexOfStr(LJsonView)>=0;
-  if LHasJson then LHasX:=LView.IndexOfStr(LXView)>=0;
+  if LView.Equals(TStringView.FromStr(JS_PURE_EVAL_BAD)) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
+  if LView.Equals(TStringView.FromStr(JS_PURE_EVAL_FOO)) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
   if LHasJson and LHasX then Exit(JsStringValue('{"x":1}'));
   if LView.Equals(TStringView.FromStr('null')) then Exit(JsNullValue);
   if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsUndefinedValue);

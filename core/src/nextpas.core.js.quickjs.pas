@@ -189,9 +189,8 @@ function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inlin
 
 function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
-  if P = nil then Exit(0);
-  // perf: inline single scan via System.StrLen (RTL SIMD, single source), zero-copy via TStringView/bytes.ops single source — no CChunk 4096 loop, inline hot path
-  Result := SizeUInt(System.StrLen(P));
+  // perf: inline thin-forward to bytes.ops.AnsiPtrLen single source (zero-copy view length, single scan, no System.StrLen分叉), inline hot path
+  Result := nextpas.core.bytes.ops.AnsiPtrLen(P);
 end;
 
 procedure TJsQuickJsContext.EnsureQjsHeapCapacity(ANeed: Integer);
@@ -210,7 +209,7 @@ end;
 
 function TJsQuickJsContext.QjsView(P: PAnsiChar): TStringView; inline;
 begin
-  // perf: inline single scan via QjsCStrLen (RTL SIMD) → zero-copy TStringView (bytes.ops single source SpanEqual/Move), inline hot path, no重复扫描
+  // perf: inline single scan via QjsCStrLen (bytes.ops AnsiPtrLen single source) → zero-copy TStringView (bytes.ops single source SpanEqual/Move), inline hot path, no重复扫描
   if P = nil then Exit(TStringView.Empty);
   Result := TStringView.Create(P, QjsCStrLen(P));
 end;

@@ -5,7 +5,7 @@
 **层级**：L2（只依赖 L0–L1；同层允许单向依赖，例 js→json 见 core-module-registry:50（`module-registry` deprecated alias），禁止循环；`webview` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js`
 **最后更新**：2026-09-02
-**版本**：1.4（匠心修复 INV-1 单源：js.intf 实现段仅 json.types/writer 单缝 去 json.value/text.escape 双路径归一 TJsonWriter，IsValid 热路径 inline+lock-free 零拷贝 via bytes.ops 几何，intf ~200行 <500 阈值内极简奢华 四件套 base←intf←实现←门面 守 L0-L3，pure.base JsPureToJsonString 单源化，18 份对齐）
+**版本**：1.4（匠心修复 INV-1 单源：js.intf 实现段仅 json.types/writer 单缝 去 json.value/text.escape 双路径归一 TJsonWriter，IsValid 热路径 inline+lock-free 零拷贝 via bytes.ops 几何，intf 240行 <500 阈值内极简奢华 四件套 base←intf←实现←门面 守 L0-L3，pure.base 480行 JsPureToJsonString 单源化，18 份对齐）
 
 ---
 
@@ -27,7 +27,7 @@
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
 | `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
-| `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 dl，**非标准四件套命名显式例外**：`pure.base` 单源复用 `js888/v8/chakra` 三纯后端，`pure` 为纯族聚合前缀、`base` 为共享基座后缀，非独立模块，守 L0–L3，复用 `bytes.ops` 单源与 `text.view` 零拷贝，阈值 650 内（<800 必拆，wc -l 380 实测）） | `js.base/intf`、`text.view`、`json` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 `platform.dl`（L0 `platform.fs` 仅 `TryEvalFile` 直读，非 dl，64MiB限流，`bytes.ops Move`零拷贝），**非标准四件套命名显式例外**：`pure.base` 单源复用 `js888/v8/chakra` 三纯后端，四职责聚合 Host/Heap/Value/IO 阈值 650 内（<800 必拆，wc -l 480 实测，超阈预案 `js.value`+`js.host`），`pure` 为纯族聚合前缀、`base` 为共享基座后缀，非独立模块，守 L0–L3，复用 `bytes.ops` 单源与 `text.view` 零拷贝） | `js.base/intf`、`text.view`、`json`、`platform.fs`（L0 直读） | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`js.pure.base`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
@@ -36,7 +36,7 @@
 
 ```
 base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js888, v8, chakra}} ← factory ← 门面
-         ↑ pure.base 单源 380 行，js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内（单单元 <650，<800 必拆，wc -l 380 实测）与 quickjs 平级；factory 单源分支/探测，门面 inline 零拷贝薄转发
+         ↑ pure.base 单源 480 行，js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内（单单元 <650，<800 必拆，wc -l 480 实测）与 quickjs 平级；factory 单源分支/探测，门面 inline 零拷贝薄转发
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
@@ -47,7 +47,7 @@ base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← {js88
 - `js.js888/js.v8/js.chakra` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
 - 工厂 `CreateJsRuntime(jsbkJs888/jsbkV8/jsbkChakra)` 走纯分支，`JsBackendAvailable(..)=True` 恒真（零 so 探测）
 
-**文件体积指引**：单单元 >800 行必拆；`js.intf` 含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`；`js.fake` 含 `platform.thread/platform.fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 380 行 + `js.js888/v8/chakra` 各 ~29 行，单单元均 <650（<800 必拆，wc -l 380 实测），阈值内（`wc -l` 实测 380+29×3≈467，纯族共享后单源 380 行，阈值 650 内、<800 必拆）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 650/800（`js.fake` 146，其余 500，纯族 380 行体量同步 BENCHMARKS 1.6，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，热点 `JsPureFindHostView/JsPureNew*` inline + `Move` 零拷贝，资源 `try-finally/JsPureClose/FreeAndNil` 不丢，守 L0–L3 与四件套例外）。
+**文件体积指引**：单单元 >800 行必拆；`js.intf` 240行含值+宿主+运行时三职责，>500 行即拆 `js.value.pas`/`js.host.pas`（wc -l 240实测 <500 阈值内极简）；`js.fake` 含 `platform.thread/platform.fs` 集成与三形态宿主，阈值放宽至 550（`design-conventions §2` 加严；见 `SIXDIM_REVIEW M-1/M-2`）。纯族 `pure.base` 480 行四职责聚合 Host/Heap/Value/IO（IO 仅 L0 `platform.fs` 直读，非 dl，64MiB限流）+ `js.js888/v8/chakra` 各 ~29 行，单单元均 <650（<800 必拆，wc -l 480 实测），阈值内（`wc -l` 实测 480+29×3≈567，纯族共享后单源 480 行，阈值 650 内、<800 必拆，超阈预案 `js.value`+`js.host`）。`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警阈值 650/800（`js.fake` 146，其余 500，纯族 480 行体量同步 BENCHMARKS 1.6，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，热点 `JsPureFindHostView/JsPureNew*` inline + `Move` 零拷贝，资源 `try-finally/JsPureClose/FreeAndNil` 不丢，守 L0–L3 与四件套例外，`JsPureDoEval` 单遍谓词缓存避免重复 SIMD 扫面，常驻 hash 桶索引预案就绪，魔串常量化+单加号 parser 候选）。
 
 ---
 
