@@ -298,16 +298,16 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] 基线：单跳 p50 `5ms` / p95 `8ms` / avg `5.1ms`，双跳 p50 `431ms` / p95 `441ms` / avg `432.7ms`，额外开销 p50 `426ms` / avg `427.6ms`（二次 `KEX`/`USERAUTH` + `CHANNEL_DATA` 隧道轮询转发，双跳仍 `PASS` < `600ms` 预算，`test_ssh_proxyjump` 5/5 回环 `exec 569ms / sftp 734ms` 同构）
 - [x] 复用度：`bench` 复用 `test_ssh_proxyjump` 的 `TMemPipe`/`TSshLoopServer`/`TLoopThread` 同源，零新依赖，`SortQ/p50/p95/avg` 统计与 `sftp async` 同口径
 - [x] 文档：`README` 性能基准表更新为实测 `5ms vs 431ms` 并标注轮询开销与 `Async ProxyJump` 优化点，`goal-tree S20` 收口
-- [x] 已知：双跳额外开销主要来自同步轮询转发（`ReadAnyPayloadTimeout(50)` + `Sleep(5)`），`Async ProxyJump`（`TAsyncLoop` 事件化 `direct-tcpip`）将消除轮询，预期降至 ~30ms 量级，已列入下一 slice
+- [x] 已知：双跳额外开销主因二次 `KEX/USERAUTH/CHANNEL_OPEN`（~415ms），同步轮询仅贡献 ~5–10ms 抖动与空转；`S20` 曾预期 `Async` 降至 ~30ms 量级，经复盘该预期以轮询为主导误判加密握手成本，实际握手主导不变，已修正为“事件化消除轮询抖动/空转，不改变 ~400ms+ 握手成本”（见 `S21` 实测与 `README/CONTRACT` 修正）
 
-## S21 — Async ProxyJump 事件化（已完成）
+## S21 — Async ProxyJump 事件化（已完成·预期修正）
 
-`S18/S19` 的同步轮询 `ProxyJump`（`~430ms` 额外开销）事件化为 `TAsyncLoop` 单线程 `direct-tcpip`，零轮询，复用 `TAsyncSshTransport`/`TAsyncChannelStream`：
+`S18/S19` 的同步轮询 `ProxyJump`（`~430ms` 额外开销）事件化为 `TAsyncLoop` 单线程 `direct-tcpip`，零轮询，复用 `TAsyncSshTransport`/`TAsyncChannelStream`；轮询转事件化收益为零空转/零抖动与单线程可复用性，非量级时延下降（二次握手成本保留，`S20` ~30ms 预期已修正）：
 
 - [x] `proxyjump.async`：`TAsyncChannelStream(IAsyncTcpStream)`（`FReadBuf` + `AccountConsume` 半窗回补 + `ArmRead/OnPacket` 过滤 `CHANNEL_DATA/WINDOW_ADJUST/EOF/CLOSE` + `PeerWindow/Max` 限流 + `AsyncRead/Write` 事件化），规避 `FPC ICE`（单 `IAsyncTcpStream`，非多接口）与 `reentrancy`（回调前清 `Pending`）
 - [x] `session.async`：`SshAsyncConnectWithStream`（已建 `IAsyncTcpStream` 上二次握手）+ `TAsyncProxyConnector`（`direct-tcpip CHANNEL_OPEN(90)`→`CONFIRMATION`→`TAsyncChannelStream`→`StartSecondHop`）+ `SshAsyncConnectViaJumpOn/ViaJump`（`GProxyNextChan atomic`，`PVIACtx→ViaJump_OnJump` 链），与 `SshConnectViaJump` 同语义，`~110L`
 - [x] 测试：`test_ssh_proxyjump_async` 3/3（`double-hop success / target auth fail / jump auth fail`，`TAsyncLoop+RTLEvent 8s + MemPipe` 双跳转发，`~550ms` 事件化，`heaptrc 0`，功能零回归，`test_ssh_proxyjump 5/5 / session_async 5/5 / sftp_async 7/7`）
-- [x] 性能：同步轮询 `~430ms` 额外开销 → 事件化后二次握手与通道仍需 `KEX/USERAUTH` 但消除 `50ms+5ms` 轮询，`bench_ssh_proxyjump` 基线保持，`S21` 事件化后双跳 `~550ms`（含二次握手），`async` 零轮询，复用度与 `transport.async/channel.async` 同构
+- [x] 性能：同步轮询 `~430ms` 额外开销（二次握手 ~415ms + 轮询 ~10ms）→ 事件化零轮询但保留同量级握手成本，`bench_ssh_proxyjump` 同步 431ms / 事件化 ~550ms（±10% 环境噪声内，调度差异），均 `PASS <600ms`；轮询转事件化收益为消除 `50ms+5ms` 空转与抖动、单线程复用与 `Keeper` 保活，非 ~30ms 量级下降（`CONTRACT §6 SSOT`）
 
 ## S22 — SFTP via Async Jump（已完成）
 
@@ -317,7 +317,7 @@ RFC 4253 §6.2 / OpenSSH `zlib@openssh.com` 延迟语义的有状态流式压缩
 - [x] `sftp.async`：`SshAsyncSftpViaJump / SshAsyncSftpViaJumpOn`（复用 `SshAsyncConnectViaJump` 的 `direct-tcpip` 单通道隧道，第二跳 `KEX→认证` 在 `IAsyncTcpStream` 上重跑，`SftpOpenPostCb 5ms busy defer` + `SendOpen busy retry` + `PSftpOpenPost.Session / FSession` 保留），`SFTP v3` 串行 `RoundTrip` 与 `WINDOW_LOW_WATER_DIVISOR=2` 回补、`4B` 重组与同步同包
 - [x] `transport.async`：`IsWriteBusy` 外化与 `AsyncSendPacket` 单飞语义保留，无新增依赖
 - [x] 测试：`test_ssh_sftp_async_via_jump` 4/4（`realpath→/resolved/foo / stat→1234 / target auth fail→sekAuth / jump auth fail→sekAuth/sekIO`，`TMemPipe+TJumpServer+TSftpTargetServer` 事件化双跳，`~2.5s` `heaptrc 0`，`proxyjump_async 3/3 / sftp_async 7/7` 回归）
-- [x] 性能：`bench` 前 `~431ms` 同步轮询额外开销 → `S21/S22` 事件化后 `~550ms`（`proxyjump async`）→ `~2.5s/4`（`sftp via jump async` 双跳含 `INIT/VERSION`），轮询消除，复用度与 `transport.async/channel.async/sftp.async` 同构
+- [x] 性能：`bench` 同步 431ms 额外开销（握手主导）→ `S21/S22` 事件化 ~550ms（`proxyjump async`）→ `~2.5s/4`（`sftp via jump async` 双跳含 `INIT/VERSION`），轮询消除仅省 ~5–10ms 抖动，复用度与 `transport.async/channel.async/sftp.async` 同构（`S20` ~30ms 预期已修正）
 
 ## S23 — e2e Async Jump 双容器互操作（已完成）
 

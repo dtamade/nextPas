@@ -154,8 +154,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.base,
   nextpas.core.bytes.binary,
-  nextpas.core.bytes.builder,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.builder;
 
 procedure TraceStr(const ALine: string);
 begin

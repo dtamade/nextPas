@@ -10,8 +10,8 @@ unit nextpas.core.crypto.rsa;
  *  热路径 inline。
  *}
 
-{$mode objfpc}{$H+}{$J-}
 {$I nextpas.core.settings.inc}
+{$J-}
 
 interface
 

@@ -97,7 +97,7 @@ begin
   except
     Result := '';
   end;
-  if LR <> nil then LR.Free;
+  LR.Free;
 end;
 
 function SshAgentKeyBlobToSignFlags(const ABlob: TBytes): UInt32;

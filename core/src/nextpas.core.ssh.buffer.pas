@@ -35,7 +35,7 @@ type
     FLen: SizeUInt;
     procedure Ensure(ACount: SizeUInt);
   public
-    constructor Create(ACapacityHint: SizeUInt = 256);
+    constructor Create(ACapacityHint: SizeUInt);
     procedure Init(ACapacityHint: SizeUInt = 256); inline;
     procedure Done; inline;
     procedure Free; inline;

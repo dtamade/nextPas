@@ -31,6 +31,7 @@ type
     FBuffered: array of TSftpBuffered; { out-of-order stash: hash slots SFTP_PIPELINE_WINDOW*2=32, O(1) probe, zero-copy ref }
     FBufferedMask: Integer;
     FBufferedCount: Integer;
+    function AllocId: UInt32; inline;
     function BufferedHash(AId: UInt32): Integer; inline;
     function FindBuffered(AId: UInt32): Integer; inline;
     function FindInsertSlot(AId: UInt32): Integer; inline;
@@ -85,7 +86,7 @@ begin
   inherited Destroy;
 end;
 
-function TSftpConnection.AllocId: UInt32;
+function TSftpConnection.AllocId: UInt32; inline;
 begin
   Result := FNextId;
   Inc(FNextId);

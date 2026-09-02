@@ -291,7 +291,8 @@ begin
     if Assigned(LFwdShared) then begin DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared); end;
     if Assigned(LScJump) then begin Finalize(LScJump^); Dispose(LScJump); end;
     if Assigned(LScTarget) then begin Finalize(LScTarget^); Dispose(LScTarget); end;
-    Finalize(LJumpOpts); Finalize(LTargetOpts); Finalize(AResult);
+    if not Result then Finalize(AResult);
+    Finalize(LJumpOpts); Finalize(LTargetOpts);
   end;
 end;
 

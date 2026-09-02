@@ -11,6 +11,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.framing,
   nextpas.core.ssh.sftp.base,
   nextpas.core.ssh.sftp.intf,
   nextpas.core.ssh.channel;
@@ -19,7 +20,7 @@ type
   TSshChannelWire = class(TInterfacedObject, ISftpWire)
   private
     FChan: TSshChannel;
-    FWire: nextpas.core.bytes.framing.TWireBuffer;
+    FWire: TWireBuffer;
   public
     constructor Create(AChannel: TSshChannel);
     destructor Destroy; override;
@@ -30,7 +31,6 @@ type
 implementation
 
 uses
-  nextpas.core.bytes.framing,
   nextpas.core.ssh.errors;
 
 constructor TSshChannelWire.Create(AChannel: TSshChannel);

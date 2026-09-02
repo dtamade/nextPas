@@ -56,9 +56,7 @@ function SshSetReadDeadline(const AStream: IReadWriteCloser; const ADeadline: TD
 implementation
 
 uses
-  nextpas.core.net,
-  nextpas.core.net.async.tcp,
-  nextpas.core.net.async.dial;
+  nextpas.core.net;
 
 function TSshDefaultDialer.Dial(const AHost: string; APort: Word; ATimeoutMs: Int64): ITcpStream; inline;
 begin
@@ -110,7 +108,7 @@ end;
 function SshSetReadDeadline(const AStream: IReadWriteCloser; const ADeadline: TDeadline): Boolean; inline;
 var L: ITcpStream;
 begin
-  if Supports(AStream, ITcpStream, L) then
+  if (AStream <> nil) and (AStream.QueryInterface(ITcpStream, L) = S_OK) then
   begin
     L.SetReadDeadline(ADeadline);
     Exit(True);

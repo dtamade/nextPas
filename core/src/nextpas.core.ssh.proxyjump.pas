@@ -22,13 +22,20 @@ uses
   nextpas.core.ssh.session;
 
 type
-  TProxyJumpSession = class(TInterfacedObject, ISshSession)
+  IProxyJumpInner = interface ['{3E2A9B1C-4D5E-4A90-9F12-345678ABCDEF}']
+    function GetInnerTarget: ISshSession;
+    function GetInnerJump: ISshSession;
+  end;
+
+  TProxyJumpSession = class(TInterfacedObject, ISshSession, IProxyJumpInner)
   private
     FJump: ISshSession;
     FTarget: ISshSession;
   public
     constructor Create(const AJump, ATarget: ISshSession);
     destructor Destroy; override;
+    function GetInnerTarget: ISshSession;
+    function GetInnerJump: ISshSession;
     function GetConnected: Boolean;
     function GetServerVersion: string;
     function GetServerHostKeyFingerprint: string;
@@ -50,11 +57,6 @@ function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): IS
 function SshConnectViaJumpOn(const AJumpSession: ISshSession;
   const ATargetOpts: TSshConnectOptions): ISshSession;
 
-{ 内部缝隙：经跳板会话 opening direct-tcpip → IReadWriteCloser，供测试与
-  FFI 层单源复用；对外仍通过上述两个公共函数进入。 }
-function SshProxyJumpOpenStream(const AJumpSession: ISshSession;
-  const ATargetOpts: TSshConnectOptions): IReadWriteCloser;
-
 implementation
 
 uses
@@ -68,6 +70,16 @@ begin
   inherited Create;
   FJump := AJump;
   FTarget := ATarget;
+end;
+
+function TProxyJumpSession.GetInnerTarget: ISshSession;
+begin
+  Result := FTarget;
+end;
+
+function TProxyJumpSession.GetInnerJump: ISshSession;
+begin
+  Result := FJump;
 end;
 
 destructor TProxyJumpSession.Destroy;
@@ -161,13 +173,29 @@ begin
   if FJump <> nil then try FJump.Close; except end;
 end;
 
+{ 跳板链解包助手：链式透传逐层解包 FTarget 直至底层，避免嵌套丢失；QueryInterface 安全解包，无硬转 }
+function SshProxyJumpResolveBase(const ASession: ISshSession): ISshSession; inline;
+var
+  LCur: ISshSession;
+  LInner: IProxyJumpInner;
+begin
+  LCur := ASession;
+  while (LCur <> nil) and (LCur.QueryInterface(IProxyJumpInner, LInner) = S_OK) do
+  begin
+    LCur := LInner.GetInnerTarget;
+    LInner := nil;
+    if LCur = nil then Break;
+  end;
+  Result := LCur;
+end;
+
+{ 内部缝隙：经跳板链解包后 opening direct-tcpip → IReadWriteCloser；单源封装于本单元，不对外暴露 }
 function SshProxyJumpOpenStream(const AJumpSession: ISshSession;
   const ATargetOpts: TSshConnectOptions): IReadWriteCloser;
 var
   LJump: ISshSession;
 begin
-  { 链式 ProxyJump 透传：逐层解包 FTarget 直至底层 TSshSession，避免嵌套丢失 }
-  LJump := AJumpSession;
+  LJump := SshProxyJumpResolveBase(AJumpSession);
   Result := SshSessionOpenDirectTcpip(LJump, ATargetOpts.Host,
     ATargetOpts.Port, ATargetOpts.InitialWindowSize, ATargetOpts.MaxPacket,
     ATargetOpts.ExecTimeoutMs);

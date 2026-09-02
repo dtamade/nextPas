@@ -19,7 +19,7 @@
 | `nextpas.core.ssh.base.pas` | 协议常量、消息号、选项记录 `TSshConnectOptions` | base |
 | `nextpas.core.ssh.errors.pas` | `ESSHError` + `TSshErrorKind`（9 类） | base 侧 |
 | `nextpas.core.ssh.intf.pas` | 缝隙接口 `IDialer/ISshAgentDialer`（隔离 `net` 直连，仅 `io.intf+net.intf`） | intf |
-| `nextpas.core.ssh.net.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，同步 `TcpConnect/UnixConnect` 经 `ISshDialer/ISshAgentDialer`、异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async` 零直连 `net.async.tcp`，L2 单缝隙统一） | ffi |
+| `nextpas.core.ssh.net.ffi.pas` | 网络 FFI 外壳（唯一拉取 `nextpas.core.net` 的单元，同步 `TcpConnect/UnixConnect` 经 `ISshDialer/ISshAgentDialer`、异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async/session.async/proxyjump.async` 零直连 `net.async.tcp/dial`，L2 单缝隙统一） | ffi |
 | `nextpas.core.ssh.buffer.pas` | RFC 4251 wire 类型读写器 `TSshWriter/TSshReader`（`Ensure/Need` 边界） | impl |
 | `nextpas.core.ssh.cipher.pas` | 包加密门面 `ISshPacketSender/Receiver`（纯 re-export + 工厂薄转发，`FWriteBuf` move 语义零拷贝，`bytes.ops` 单源） | 门面 |
 | `nextpas.core.ssh.cipher.base.pas` | 加密共享基座（算法名判定/密钥尺寸/`PutU32BE/U32BEOf` `bytes.binary` 单源，`inline`） | base |
@@ -250,7 +250,7 @@ end;
 | cipher aes256-gcm | 50 MiB/s/方向 | ~418–598 MiB/s | PASS |
 | cipher aes128-ctr+hmac-sha2-256-etm | 50 MiB/s/方向 | ~132–137 MiB/s | PASS |
 | proxyjump 单跳 p50 | — | 5ms | 基准 |
-| proxyjump 双跳 p50 | <600ms | 同步 431ms / 事件化 550ms（额外 426ms=二次KEX/轮询→零轮询） | PASS |
+| proxyjump 双跳 p50 | <600ms | 同步 431ms / 事件化 ~550ms（额外 ~426ms=二次KEX/USERAUTH ~415ms + 轮询 ~10ms → 事件化零轮询，保留加密握手成本，未降至 ~30ms） | PASS |
 
 实测以 `MiB/s / p50/p95/avg` 输出；同量级波动 <10% 统一视为环境噪声（SSOT 容差），不铺陈于 README。
 
@@ -266,7 +266,7 @@ end;
   - `text` 单源：`UTF8IsValid/StringsSplit/IntToStr` 经 `nextpas.core.text.*`，零 `SysUtils` 直连。
   - `time` 单源：`TInstant/TDuration` 单调时钟经 `nextpas.core.time.base`，`rekey/keepalive` 均复用，先反哺 `core.time` 再消费（反哺证据：`time.GetTickCount64/TInstant`）。
 - **FFI 边界**：
-  - `nextpas.core.ssh.net.ffi` 为唯一拉取 `nextpas.core.net` 的单元（同步 `ISshDialer/ISshAgentDialer` + 异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async+session.async` 零直连 `net.async.tcp/dial`，L2 单缝隙统一；同层单向经单缝隙允许，见设计规范 §3）。
+  - `nextpas.core.ssh.net.ffi` 为唯一拉取 `nextpas.core.net` 的单元（同步 `ISshDialer/ISshAgentDialer` + 异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async/session.async/proxyjump.async` 零直连 `net.async.tcp/dial`，L2 单缝隙统一；同层单向经单缝隙允许，见设计规范 §3）。
   - `compress → compress.zlib.ffi` 唯一 zlib 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 - **零 RTL**：`core/src/nextpas.core.ssh*.pas` 禁止 `uses SysUtils/Classes/Windows/BaseUnix`（`tests` 除外）；缺能力先反哺 owner（如 `time` 单调时钟、`text.conv` 转换），不堆 workaround。
 - **双编译器**：`nextpas.core.ssh` 为唯一实现层，不为 FPC 包装 `TStream/SysUtils` 兼容层；`units/<target>/` stub 仅名称桥接，方向为最终消除对 FPC 单元名的引用。
@@ -363,7 +363,7 @@ make hygiene && git diff --check
 
 - `grep -R 'SysUtils' core/src/nextpas.core.ssh*`：`uses` 零命中（注释提及除外）。
 - `grep -R 'zlib|paszlib' core/src/nextpas.core.ssh*`：仅 `compress.pas → compress.zlib.ffi`。
-- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：`net.ffi` 为唯一 `net` 拉取缝隙（`transport.async+session.async` 已 0 命中 `net.async.tcp/dial`，经 `ssh.net.ffi` 单缝隙复用 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)` `inline` 零拷贝，`bytes.ops` 单源 `Move`，`try-finally` 释放不丢；`grep -R 'nextpas.core.net.base|net.intf|net.async.tcp|net.async.dial' core/src/nextpas.core.ssh.net.ffi.pas` 为缝隙唯一命中，`core/src/nextpas.core.ssh.transport.async.pas` 与 `core/src/nextpas.core.ssh.session.async.pas` 零直连；`proxyjump.async` 的 `net.async` 直连列为下一阶段收口项，`transport+session` 层已单缝隙闭合）。
+- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：`net.ffi` 为唯一 `net` 拉取缝隙（`transport.async+session.async+proxyjump.async` 均 0 命中 `net.async.tcp/dial`，经 `ssh.net.ffi` 单缝隙复用 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)` `inline` 零拷贝，`bytes.ops` 单源 `Move`，`try-finally` 释放不丢；`grep -R 'nextpas.core.net.base|net.intf|net.async.tcp|net.async.dial' core/src/nextpas.core.ssh.net.ffi.pas` 为缝隙唯一命中，`transport.async/session.async/proxyjump.async` 零直连，L2 单缝隙已闭合）。
 - `grep -R 'bytes.ops' core/src/nextpas.core.ssh.buffer`：单源复用。
 - 产物卫生：`scripts/build-hygiene-check.sh` 拦截 `.o/.ppu/.a/.so/dylib/link*.res` 落源码树；`build/` 与 `.nextpas/` 为唯一产物区。
 
