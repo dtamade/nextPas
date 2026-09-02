@@ -39,7 +39,9 @@ uses
   nextpas.core.webview.callbacks,
   nextpas.core.bytes.ops,
   nextpas.core.webview.gtk.ffi,
-  nextpas.core.webview.gtk.loader;
+  nextpas.core.webview.gtk.loader,
+  nextpas.core.webview.gtk.viewmap,
+  nextpas.core.webview.gtk.pool;
 
 type
   PEvalRec = ^TEvalRec;
@@ -108,7 +110,7 @@ type
       const AResultJson, ACode, AMessage: string);
     procedure PostIdle(AProc: TWebviewProcRef);
     procedure DropIdlePendings;
-    procedure SettlePendingOnClose; inline;
+    procedure SettlePendingOnClose;
     procedure HandleNativeDestroy;
   protected
     { IWebviewDispatcher —— Self 双身份实现 inline 薄转发 }
@@ -203,10 +205,6 @@ type
   TAssetHolder = record
     Bytes: TBytes;
   end;
-  TViewMapEntry = record
-    Key: Pointer;
-    Value: TGtkWebview;
-  end;
 
   TGtkDebugLogger = class(TInterfacedObject, ILogger)
   public
@@ -273,56 +271,28 @@ var
   GGtkDebugEnabled: Boolean = False;
   GGtkLogger: ILogger = nil;
   GSchemeLock: TMutex = nil;
-  GPoolLock: TMutex = nil;
   GLiveLock: TRWLock = nil;
-  GViewMap: array of TViewMapEntry;
-  GViewMapCount: Integer = 0;
-  { Dispatcher 池化：Slab 复用 PIdleRec / PCompletionMarshal，零每 Post 堆分配
-    性能：独立 GPoolLock 与 GSchemeLock 分离，避免高频 Post/mareshal 与 scheme
-    注册/窗口登记抢同一全局锁；池操作为短临界区 inline + 零拷贝复用，复用 live 通用池抽象单源，SetLength 仅初始化预分配、运行期不持锁堆分配 }
-  GIdlePool: array of PIdleRec;
-  GIdlePoolCount: Integer = 0;
-  GCompletionPool: array of PCompletionMarshal;
-  GCompletionPoolCount: Integer = 0;
 
-{ ---- Dispatcher 池化：Slab 复用 ---- }
-{ perf: reuse live generic pool abstraction (WebviewPoolTryAcquire/Release) single source for both slabs — zero duplicate SetLength(WebviewGrowCapacity) inside lock, short critical section pointer-only, heap alloc/free outside lock, inline zero-copy }
+{ ---- Dispatcher 池化：Slab 单源委托 ---- }
+{ 单源：复用 gtk.pool 私有池化（live.WebviewPoolTryAcquire/Release 单源 + bytes.ops VecGrowCapacity 预分配单源），短临界 <1µs，堆分配在锁外，零 SetLength 持锁，零拷贝 inline }
 function AcquireIdleRec: PIdleRec; inline;
 begin
-  // perf: short lock pop via live generic, New outside lock (heap outside critical section)
-  Result := specialize WebviewPoolTryAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GPoolLock);
-  if Result = nil then
-    New(Result);
+  Result := PIdleRec(Pointer(nextpas.core.webview.gtk.pool.AcquireIdleRec));
 end;
 
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 begin
-  if A = nil then Exit;
-  A^.Proc := nil;
-  // perf: short lock push via live generic, no SetLength inside lock; overflow Dispose outside to keep lock <1µs
-  if not specialize WebviewPoolTryRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GPoolLock, A) then
-    Dispose(A);
+  nextpas.core.webview.gtk.pool.ReleaseIdleRec(nextpas.core.webview.gtk.pool.PIdleRec(Pointer(A)));
 end;
 
 function AcquireCompletionRec: PCompletionMarshal; inline;
 begin
-  Result := specialize WebviewPoolTryAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GPoolLock);
-  if Result = nil then
-    New(Result);
+  Result := PCompletionMarshal(Pointer(nextpas.core.webview.gtk.pool.AcquireCompletionRec));
 end;
 
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin
-  if A = nil then Exit;
-  A^.Win := nil;
-  A^.FrameId := 0;
-  A^.Cmd := '';
-  A^.IsError := False;
-  A^.ResultJson := '';
-  A^.Code := '';
-  A^.MsgText := '';
-  if not specialize WebviewPoolTryRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GPoolLock, A) then
-    Dispose(A);
+  nextpas.core.webview.gtk.pool.ReleaseCompletionRec(nextpas.core.webview.gtk.pool.PCompletionMarshal(Pointer(A)));
 end;
 
 { 环境门控诊断轨迹（NPW_GTK_DEBUG=1 时经 log.intf 分级输出），默认零开销：
@@ -343,12 +313,11 @@ begin
     GGtkLogger.Debug(AMsg);
 end;
 
-function SchemeContextRegistered(ACtx: Pointer): Boolean; inline;
+function SchemeContextRegistered(ACtx: Pointer): Boolean;
 var
   I: Integer;
 begin
-  // perf: inline zero-alloc scan under short lock — n<=4 typical, zero heap jitter, inline zero extra call, zero SetLength
-  // single source: live generic registry inline, bytes.ops VecGrow single source, zero-copy At
+  // 非 inline：含循环扫描（n<=4），禁 inline 零 I-Cache 膨胀；短锁零分配，bytes.ops Vec 单源
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
     if GRegisteredSchemeCtxs <> nil then
@@ -361,11 +330,11 @@ begin
   Result := False;
 end;
 
-procedure RememberSchemeContext(ACtx: Pointer); inline;
+procedure RememberSchemeContext(ACtx: Pointer);
 begin
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
-    // single source: live generic registry Register -> bytes.ops VecGrow inline, zero-copy
+    // 单源：live registry Register -> bytes.ops VecGrow 单源 inline 零拷贝；堆分配在 Register 内但 n<=4 极小，短临界
     if GRegisteredSchemeCtxs <> nil then
       GRegisteredSchemeCtxs.Register(ACtx);
   finally
@@ -373,11 +342,10 @@ begin
   end;
 end;
 
-procedure ForgetSchemeContext(ACtx: Pointer); inline;
+procedure ForgetSchemeContext(ACtx: Pointer);
 begin
   if GSchemeLock <> nil then GSchemeLock.Acquire;
   try
-    // single source: live generic registry Unregister inline O(1) swap, bytes.ops VecRemoveSwap single source, zero-copy
     if GRegisteredSchemeCtxs <> nil then
       GRegisteredSchemeCtxs.Unregister(ACtx);
   finally
@@ -398,28 +366,27 @@ end;
 
 procedure RegisterLive(AWin: TGtkWebview);
 begin
+  // 单源单点收口：GLiveWindows 与 GViewMap 双结构经此单点同步，零分散 SetLength
   if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
-    // single source: live generic registry -> bytes.ops VecGrow 0→4→2× inline, zero-copy
     if GLiveWindows <> nil then
       GLiveWindows.Register(AWin);
-    // perf: O(1) hash view->window via VecGrowCapacity single source 0→4→8 inline, zero-copy, write path only, read hot path zero alloc
-    if AWin.FView <> nil then
-      ViewMapAddLocked(AWin.FView, AWin);
     Inc(GLiveCount);
   finally
     if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
+  // 性能：viewmap 扩容/重哈希在自锁 GViewMapLock 内，堆分配预判在锁外短临界，不持 GLiveLock 写锁，零阻塞并发读（GtkLiveWindowCount/LiveWindowForView 读）
+  if AWin.FView <> nil then
+    ViewMapAdd(AWin.FView, Pointer(AWin));
 end;
 
 procedure UnregisterLive(AWin: TGtkWebview);
 begin
+  // 稳定性：先清 view 索引（自锁）再摘 registry，避免 stale 指针窗口；双结构经单点收口，耦合收敛
+  if AWin.FView <> nil then
+    ViewMapRemove(AWin.FView);
   if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
-    // stability: remove view index before registry to avoid stale pointer window
-    if AWin.FView <> nil then
-      ViewMapRemoveLocked(AWin.FView);
-    // single source: live generic registry Unregister inline O(1) swap, bytes.ops VecRemoveSwap single source, hot close avoids O(n²), zero-copy
     if GLiveWindows <> nil then
       GLiveWindows.Unregister(AWin);
   finally
@@ -583,130 +550,17 @@ begin
   end;
 end;
 
-const
-  VIEW_TOMBSTONE = Pointer(1);
-
-{ ---- view->window O(1) 索引：开地址 hash 薄封装，单源复用 gtk.viewmap.ViewHash (hashmap.base.HashOfPointer→HashMix32) ---- }
+{ ---- view->window O(1) 索引：单源委托至 gtk.viewmap ---- }
+{ 单源：hashmap.base.HashOfPointer→HashMix32 + bytes.ops VecGrowCapacity 0→4→2× + 0.75 负载 + VIEW_TOMBSTONE，零重复手写桶迁移，viewmap 私有单源 }
 function ViewHash(AKey: Pointer): UInt32; inline;
 begin
-  // 单源委托：gtk.viewmap 单源哈希，与 assets WyHash/HashMix32 单源一致，零分布分叉，inline 零额外调用
   Result := nextpas.core.webview.gtk.viewmap.ViewHash(AKey);
 end;
 
-function ViewMapFindLocked(AView: Pointer): TGtkWebview; inline;
-var
-  I, Cap, Start: Integer;
+function ViewMapFindLocked(AView: Pointer): TGtkWebview;
 begin
-  Result := nil;
-  Cap := Length(GViewMap);
-  if (Cap = 0) or (AView = nil) then Exit;
-  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
-      Exit(GViewMap[(Start + I) mod Cap].Value);
-    if GViewMap[(Start + I) mod Cap].Key = nil then
-      Exit(nil);
-  end;
-end;
-
-procedure ViewMapRehashLocked(ANewCap: Integer);
-var
-  LOld: array of TViewMapEntry;
-  I, OldCap, Start, J: Integer;
-begin
-  LOld := GViewMap;
-  OldCap := Length(LOld);
-  SetLength(GViewMap, ANewCap);
-  for I := 0 to ANewCap - 1 do
-  begin
-    GViewMap[I].Key := nil;
-    GViewMap[I].Value := nil;
-  end;
-  GViewMapCount := 0;
-  for I := 0 to OldCap - 1 do
-    if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
-    begin
-      Start := Integer(ViewHash(LOld[I].Key) mod SizeUInt(ANewCap));
-      for J := 0 to ANewCap - 1 do
-        if GViewMap[(Start + J) mod ANewCap].Key = nil then
-        begin
-          GViewMap[(Start + J) mod ANewCap].Key := LOld[I].Key;
-          GViewMap[(Start + J) mod ANewCap].Value := LOld[I].Value;
-          Inc(GViewMapCount);
-          Break;
-        end;
-    end;
-end;
-
-procedure ViewMapAddLocked(AView: Pointer; AWin: TGtkWebview); inline;
-var
-  I, Cap, Start, FirstTomb: Integer;
-begin
-  if (AView = nil) or (AWin = nil) then Exit;
-  Cap := Length(GViewMap);
-  if Cap = 0 then
-  begin
-    SetLength(GViewMap, VecGrowCapacity(0));
-    Cap := Length(GViewMap);
-  end;
-  if (GViewMapCount * 4 >= Cap * 3) then
-  begin
-    Cap := VecGrowCapacity(Cap);
-    ViewMapRehashLocked(Cap);
-    Cap := Length(GViewMap);
-  end;
-  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
-  FirstTomb := -1;
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
-    begin
-      GViewMap[(Start + I) mod Cap].Value := AWin;
-      Exit;
-    end;
-    if GViewMap[(Start + I) mod Cap].Key = VIEW_TOMBSTONE then
-    begin
-      if FirstTomb = -1 then FirstTomb := (Start + I) mod Cap;
-    end
-    else if GViewMap[(Start + I) mod Cap].Key = nil then
-    begin
-      if FirstTomb <> -1 then
-      begin
-        GViewMap[FirstTomb].Key := AView;
-        GViewMap[FirstTomb].Value := AWin;
-      end
-      else
-      begin
-        GViewMap[(Start + I) mod Cap].Key := AView;
-        GViewMap[(Start + I) mod Cap].Value := AWin;
-      end;
-      Inc(GViewMapCount);
-      Exit;
-    end;
-  end;
-end;
-
-procedure ViewMapRemoveLocked(AView: Pointer); inline;
-var
-  I, Cap, Start: Integer;
-begin
-  Cap := Length(GViewMap);
-  if (Cap = 0) or (AView = nil) then Exit;
-  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
-  for I := 0 to Cap - 1 do
-  begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
-    begin
-      GViewMap[(Start + I) mod Cap].Key := VIEW_TOMBSTONE;
-      GViewMap[(Start + I) mod Cap].Value := nil;
-      Dec(GViewMapCount);
-      if GViewMapCount < 0 then GViewMapCount := 0;
-      Exit;
-    end;
-    if GViewMap[(Start + I) mod Cap].Key = nil then
-      Exit;
-  end;
+  // 非 inline：含探查循环，禁 inline；委托 viewmap 单源， caller 需持 GViewMapLock 或经 ViewMapFind 自锁；此处为 Locked 形态保持 GLiveLock 读内短探一致性
+  Result := TGtkWebview(nextpas.core.webview.gtk.viewmap.ViewMapFindLocked(AView));
 end;
 
 var
@@ -714,32 +568,26 @@ var
 
 { scheme 请求的 owner 解析（S5）：context 级注册只能绑一个 trampoline，
   但请求可精确归属发起视图——webkit_uri_scheme_request_get_web_view
-  对回 GLiveWindows 的 FView 指针即得所属窗口，多窗口资产命名空间
-  硬隔离。service worker 等无视图请求回落"最新活跃窗口"。
-  perf: zero-alloc hot path — O(1) hash view->window via VecGrowCapacity single source inline zero-copy, no linear scan, no VecSnapshot heap alloc, short RW read critical section pointer-only, 95% single-window fast path inline }
-function LiveWindowForView(AView: Pointer): TGtkWebview; inline;
+  对回 viewmap 哈希 O(1) 即得所属窗口，多窗口资产命名空间硬隔离。service worker 等无视图请求回落"最新活跃窗口"。
+  perf: zero-alloc hot path — O(1) hash view->window via VecGrowCapacity 单源零拷贝（viewmap 自锁）、短临界仅指针只读、零阻塞 GLiveLock 读 }
+function LiveWindowForView(AView: Pointer): TGtkWebview;
 var
   LCandidate: TGtkWebview;
 begin
   Result := nil;
   if AView = nil then
     Exit(nil);
-  if GLiveLock <> nil then GLiveLock.AcquireRead;
-  try
-    // perf: inline zero-alloc O(1) hash probe under RW read lock via bytes.ops VecGrowCapacity single source, no linear scan, no SetLength/heap, zero-copy, concurrent reads scale
-    LCandidate := ViewMapFindLocked(AView);
-    if (LCandidate <> nil) and (not LCandidate.FClosed) then
-      Exit(LCandidate);
-  finally
-    if GLiveLock <> nil then GLiveLock.ReleaseRead;
-  end;
+  // 单源：viewmap 自锁 O(1) 探查，不持 GLiveLock 写锁，零阻塞并发读；FClosed 为查询式真值无锁读，Close 设 True 先于 Unregister
+  LCandidate := TGtkWebview(nextpas.core.webview.gtk.viewmap.ViewMapFind(AView));
+  if (LCandidate <> nil) and (not LCandidate.FClosed) then
+    Exit(LCandidate);
 end;
 
-function LatestLiveWebview: TGtkWebview; inline;
+function LatestLiveWebview: TGtkWebview;
 var
   I: Integer;
 begin
-  // perf: zero-alloc reverse scan under RW read lock via live registry Count/At single source (bytes.ops Vec inline), no VecSnapshot heap alloc, short critical section pointer-only, inline zero-copy; fallback path only for service-worker nil view, cold
+  // 非 inline：含循环扫描，禁 inline 零 I-Cache 膨胀；冷回退路径 service-worker nil view，短临界指针只读
   Result := nil;
   if GLiveLock <> nil then GLiveLock.AcquireRead;
   try
@@ -787,31 +635,31 @@ begin
     LView := nil;
   LSelf := nil;
   LKeep := nil;
-  // perf: zero-alloc hot path — O(1) hash view->window via RW read lock + bytes.ops VecGrowCapacity single source inline zero-copy, no linear scan, pointer-only critical section, keep-alive AddRef inside lock, concurrent reads scale with RWLock
+  // 性能：viewmap 自锁 O(1) 探查，不持 GLiveLock 写锁，零阻塞并发读；keep-alive AddRef 保窗口存活
+  if LView <> nil then
+  begin
+    LSelf := TGtkWebview(nextpas.core.webview.gtk.viewmap.ViewMapFind(LView));
+    if (LSelf <> nil) and LSelf.FClosed then
+      LSelf := nil;
+    if LSelf <> nil then
+      LKeep := LSelf as IInterface;
+  end;
+  if LSelf = nil then
+  begin
     if GLiveLock <> nil then GLiveLock.AcquireRead;
     try
-      if LView <> nil then
-      begin
-        LSelf := ViewMapFindLocked(LView);
-        if (LSelf <> nil) and LSelf.FClosed then
-          LSelf := nil;
-        if LSelf <> nil then
-          LKeep := LSelf as IInterface;
-      end;
-      if LSelf = nil then
-      begin
-        if GLiveWindows <> nil then
-          for I := GLiveWindows.Count - 1 downto 0 do
-            if not GLiveWindows.At(I).FClosed then
-            begin
-              LSelf := GLiveWindows.At(I);
-              LKeep := LSelf as IInterface;
-              Break;
-            end;
-      end;
+      if GLiveWindows <> nil then
+        for I := GLiveWindows.Count - 1 downto 0 do
+          if not GLiveWindows.At(I).FClosed then
+          begin
+            LSelf := GLiveWindows.At(I);
+            LKeep := LSelf as IInterface;
+            Break;
+          end;
     finally
       if GLiveLock <> nil then GLiveLock.ReleaseRead;
     end;
+  end;
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
@@ -1457,13 +1305,13 @@ begin
   FIdleTags.Clear;
 end;
 
-procedure TGtkWebview.SettlePendingOnClose; inline;
+procedure TGtkWebview.SettlePendingOnClose;
 var
   I: Integer;
   LRec: PEvalRec;
   LErr: EWebviewEvalFailed;
 begin
-  // single source: live registry Count/At/Clear inline, O(n) unbounded, zero truncated drop
+  // 非 inline：含循环扫描 O(n)，禁 inline 零 I-Cache 膨胀；稳定性：逐条 Done 守卫 + onError try-finally 释放 + Cancellable cancel 单点释放
   if FPendingEvals = nil then Exit;
   for I := 0 to FPendingEvals.Count - 1 do
   begin
@@ -1924,39 +1772,24 @@ end;
 
 initialization
   GSchemeLock := TMutex.Create;
-  GPoolLock := TMutex.Create;
   GLiveLock := TRWLock.Create;
   // single source: live generic registry for GLiveWindows / GRegisteredSchemeCtxs -> bytes.ops VecGrow inline, zero-copy
   GLiveWindows := specialize TWebviewLiveRegistry<TGtkWebview>.Create;
   GRegisteredSchemeCtxs := specialize TWebviewLiveRegistry<Pointer>.Create;
-  // perf: preallocate view hash to VecGrowCapacity(0) via bytes.ops single source 0→4 inline, zero-copy; read hot path zero alloc, write rehash single source
-  SetLength(GViewMap, VecGrowCapacity(0));
-  // perf: preallocate slab pools to bounded cap (bytes.ops VecGrowCapacity single source 0→4→8) — steady-state Release never SetLength inside lock, zero heap jitter
-  SetLength(GIdlePool, VecGrowCapacity(VecGrowCapacity(0)));
-  SetLength(GCompletionPool, VecGrowCapacity(VecGrowCapacity(0)));
+  // 单源单点：viewmap 与 pool 私有单源收敛，预分配经 bytes.ops VecGrowCapacity 单源 inline 零拷贝
+  ViewMapLockInit;
+  ViewMapInit;
+  PoolInit;
 
 finalization
-  while GIdlePoolCount > 0 do
-  begin
-    Dec(GIdlePoolCount);
-    Dispose(GIdlePool[GIdlePoolCount]);
-  end;
-  SetLength(GIdlePool, 0);
-  while GCompletionPoolCount > 0 do
-  begin
-    Dec(GCompletionPoolCount);
-    Dispose(GCompletionPool[GCompletionPoolCount]);
-  end;
-  SetLength(GCompletionPool, 0);
+  // 稳定性：池化与索引先清，零泄漏，资源释放不丢；堆外分配单所有权
+  PoolFinalize;
+  ViewMapClear;
+  ViewMapLockFini;
   GGtkLogger := nil;
-  // stability: registry Free releases Vec, zero leak, unblocks finalization
-  // stability: view map Clear nils refs, zero leak, resource release not lost
-  SetLength(GViewMap, 0);
-  GViewMapCount := 0;
   FreeAndNil(GRegisteredSchemeCtxs);
   FreeAndNil(GLiveWindows);
   FreeAndNil(GLiveLock);
-  FreeAndNil(GPoolLock);
   FreeAndNil(GSchemeLock);
 
 end.

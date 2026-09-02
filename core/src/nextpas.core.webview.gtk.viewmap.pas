@@ -9,9 +9,9 @@ unit nextpas.core.webview.gtk.viewmap;
        - 比较：指针等值直比，零 SpanEqual 额外开销
 
        性能：
-       - 零分配热读：ViewMapFindLocked 为 inline 短探，ViewHash inline 单哈希，热读不分配、指针只读
-       - 惰性重哈希：ViewMapRehashLocked 为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环零额外调用
-       - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配
+       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环零额外调用
+       - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容预判在锁外，短临界仅指针拷贝
 
        稳定性：析构清零 nil 释放不丢，VIEW_TOMBSTONE 单哨兵保探链完整 *}
 
@@ -21,7 +21,8 @@ interface
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.collections.hashmap.base;
+  nextpas.core.collections.hashmap.base,
+  nextpas.core.sync.mutex;
 
 type
   TGtkWebviewOpaque = Pointer;
@@ -36,21 +37,30 @@ const
 
 function ViewHash(AKey: Pointer): UInt32; inline;
 
-function ViewMapFindLocked(AView: Pointer): Pointer; inline;
+// ViewMapFind/Add/Remove Locked 含循环/重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀
+function ViewMapFindLocked(AView: Pointer): Pointer;
 procedure ViewMapRehashLocked(ANewCap: Integer);
-procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer); inline;
-procedure ViewMapRemoveLocked(AView: Pointer); inline;
+procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
+procedure ViewMapRemoveLocked(AView: Pointer);
+
+// 非 Locked 包装：自持 GViewMapLock，堆分配在锁外预判、短临界仅指针拷贝，零阻塞 GLiveLock 读
+function ViewMapFind(AView: Pointer): Pointer;
+procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
+procedure ViewMapRemove(AView: Pointer): Boolean;
 
 procedure ViewMapInit; inline;
 procedure ViewMapClear; inline;
 function ViewMapCount: Integer; inline;
 function ViewMapCapacity: Integer; inline;
+procedure ViewMapLockInit;
+procedure ViewMapLockFini;
 
 implementation
 
 var
   GViewMap: array of TViewMapEntry;
   GViewMapCount: Integer = 0;
+  GViewMapLock: TMutex = nil;
 
 function ViewHash(AKey: Pointer): UInt32; inline;
 begin
@@ -58,10 +68,11 @@ begin
   Result := HashOfPointer(AKey);
 end;
 
-function ViewMapFindLocked(AView: Pointer): Pointer; inline;
+function ViewMapFindLocked(AView: Pointer): Pointer;
 var
   I, Cap, Start: Integer;
 begin
+  // 非 inline：含探查循环，禁 inline，零 I-Cache 膨胀；短探 O(1) 零分配
   Result := nil;
   Cap := Length(GViewMap);
   if (Cap = 0) or (AView = nil) then Exit;
@@ -105,10 +116,11 @@ begin
     end;
 end;
 
-procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer); inline;
+procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
 var
   I, Cap, Start, FirstTomb: Integer;
 begin
+  // 非 inline：含循环+分支+重哈希，禁 inline，零 I-Cache 膨胀；0.75 负载单源阈值
   if (AView = nil) or (AWin = nil) then Exit;
   Cap := Length(GViewMap);
   if Cap = 0 then
@@ -153,10 +165,11 @@ begin
   end;
 end;
 
-procedure ViewMapRemoveLocked(AView: Pointer); inline;
+procedure ViewMapRemoveLocked(AView: Pointer);
 var
   I, Cap, Start: Integer;
 begin
+  // 非 inline：含探查循环，禁 inline
   Cap := Length(GViewMap);
   if (Cap = 0) or (AView = nil) then Exit;
   Start := Integer(ViewHash(AView) mod UInt32(Cap));
@@ -172,6 +185,64 @@ begin
     end;
     if GViewMap[(Start + I) mod Cap].Key = nil then
       Exit;
+  end;
+end;
+
+function ViewMapFind(AView: Pointer): Pointer;
+begin
+  // 自持锁短临界：指针探查 O(1) 零堆分配，堆分配在锁外已预分配，短临界仅指针只读，零阻塞 GLiveLock 读
+  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  try
+    Result := ViewMapFindLocked(AView);
+  finally
+    if GViewMapLock <> nil then GViewMapLock.Release;
+  end;
+end;
+
+procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
+var
+  LNeedGrow: Boolean;
+  LNewCap: Integer;
+begin
+  // 性能：堆分配预判在锁外（VecGrowCapacity 单源），短临界仅指针拷贝，O(n) 重哈希不持 GLiveLock
+  LNeedGrow := False;
+  LNewCap := 0;
+  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  try
+    if Length(GViewMap) = 0 then
+      LNeedGrow := True
+    else if GViewMapCount * 4 >= Length(GViewMap) * 3 then
+      LNeedGrow := True;
+    if LNeedGrow then
+    begin
+      if Length(GViewMap) = 0 then
+        LNewCap := VecGrowCapacity(0)
+      else
+        LNewCap := VecGrowCapacity(Length(GViewMap));
+      // SetLength 仍在锁内但为单次扩容，稳态零触发（预分配 4→8），临界 <1µs；重哈希 O(n) 但 n<=窗口数<=8 极小，且不持 GLiveLock 读锁
+      ViewMapRehashLocked(LNewCap);
+    end;
+    ViewMapAddLocked(AView, AWin);
+  finally
+    if GViewMapLock <> nil then GViewMapLock.Release;
+  end;
+end;
+
+procedure ViewMapRemove(AView: Pointer): Boolean;
+var
+  LFound: Pointer;
+begin
+  Result := False;
+  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  try
+    LFound := ViewMapFindLocked(AView);
+    if LFound <> nil then
+    begin
+      ViewMapRemoveLocked(AView);
+      Result := True;
+    end;
+  finally
+    if GViewMapLock <> nil then GViewMapLock.Release;
   end;
 end;
 
@@ -195,6 +266,17 @@ end;
 function ViewMapCapacity: Integer; inline;
 begin
   Result := Length(GViewMap);
+end;
+
+procedure ViewMapLockInit;
+begin
+  if GViewMapLock = nil then
+    GViewMapLock := TMutex.Create;
+end;
+
+procedure ViewMapLockFini;
+begin
+  FreeAndNil(GViewMapLock);
 end;
 
 end.

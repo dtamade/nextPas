@@ -7,8 +7,9 @@ unit nextpas.core.webview.assets;
        契约：
        - Normalize 已在外层完成，本模块只存归一后前缀字符串；
        - 首个同前缀胜（Add 去重，不覆盖），与 CONTRACT §3.4 同长先挂一致；
-       - 探测：TryGetByView 零拷贝 view 哈希线性探测 O(1) 平均，
-         TryResolveByPath 按 distinctLens 降序枚举最长前缀首命中，
+       - 探测：TryGetByView 零拷贝 view 哈希线性探测 O(1) 平均（0.75 负载 Rehash 单表，整除 3/4 零浮点），
+         TryResolveByPath 按 distinctLens 降序枚举最长前缀首命中—最坏 O(d)≤O(m)（d=DistinctCount≤m，逐前缀 WyHash+SpanEqual 哈希探测），
+         d 通常 ≤4-8 小常数均摊 O(1)，单挂载 inline 快路径严格 O(1)；严格 O(1) 需 Trie/前缀树，已登记 prefix-router 演进候选，
          未命中 provider False 即 404 不回退（命名空间隔离）。
 
        单源复用（零重复）：
@@ -25,9 +26,10 @@ unit nextpas.core.webview.assets;
 
        性能：
        - 零拷贝：TStringView 切片零堆分配，TryGetByView 按 view.Data/Len 直算 WyHash32 与
-         SpanEqual 直比，单 distinct 零 Copy，热点单挂载仍内联快路径；
+         SpanEqual 直比，单 distinct 零 Copy，热点单挂载仍内联快路径（inline 零额外调用，404 零 ToString）；
        - 容量：VecGrowCapacity(0→4→2×) bytes.ops 单源 inline 倍增，3/4 负载重哈希（整数 Cap*3 div 4 零浮点，热点扩容零 FPU），零 O(n²)；
-       - distinctLens 摊销 O(1) 追加 + 惰性 IntroSort 降序 O(n log n) 单次（collections.algorithms.SortInt32DescRange 单源，Heap 回退+Tukey ninther，最坏 O(n log n)，零自实现快排分叉），DistinctCount 惰性一次 Ensure 后 LensAtUnchecked 零重复 Ensure 零额外分配，MountCount = distinct 哈希数，FindBy/TryGet 全 inline。
+       - distinctLens 摊销 O(1) 追加 + 惰性 IntroSort 降序 O(n log n) 单次（collections.algorithms.SortInt32DescRange 单源，Heap 回退+Tukey ninther，最坏 O(n log n)，零自实现快排分叉），DistinctCount 惰性一次 Ensure 后 LensAtUnchecked 零重复 Ensure 零额外分配，MountCount = distinct 哈希数，FindBy/TryGet 全 inline；
+       - 路由：Rehash 0.75 负载单表保证 TryGetByView O(1) 平均，TryResolve 最坏 O(d)≤O(m) 降序枚举+每步 O(1) 哈希（d=DistinctCount），d 小常数均摊 O(1)，单根快路径 inline O(1) 零枚举；严格 O(1) 需 Trie，已登记 prefix-router 演进候选。
 
        稳定性：析构 Finalize 全量串/接口，no leak；inline 薄转零额外调用。 *}
 

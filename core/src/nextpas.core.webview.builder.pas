@@ -3,7 +3,8 @@ unit nextpas.core.webview.builder;
 {** @desc webview fluent Builder：链式组装 TWebviewOptions + invoke/ready 脚本，
        Build 为工厂路由单源收敛（CreateWebviewEx），Run 为 Build+Navigate 便捷。
        与 factory 分离：factory 只管后端注册/探测/创建，builder 只管组装；
-       避免同单元 3 Registry+HashSet+原子缓存混杂，高级感简洁。 *}
+       去重单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry（重复抛 EWebviewInvalidState），
+       Builder 零 HashSet 冗余状态，仅 Vec 暂存，ApplyTo 单点分发即单源校验，简洁 inline 零拷贝。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -55,7 +56,6 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.collections.hashset,
   nextpas.core.window.factory,
   nextpas.core.webview.validation,
   nextpas.core.webview.live,
@@ -77,9 +77,7 @@ type
     FInvokes: specialize TWebviewLiveRegistry<TFakeInvokeReg>;
     FReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
     FInitScripts: specialize TWebviewLiveRegistry<string>;
-    FDedup: specialize THashSet<string>;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
-    procedure EnsureUniqueCmd(const ACmd: string); inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -119,18 +117,15 @@ begin
   inherited Create;
   FOptions := DefaultWebviewOptions;
   FKind := DefaultWebviewKind;
-  // perf: registry 单源收敛三组 Vec 样板，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用
+  // perf: registry 单源收敛三组 Vec 样板，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用，零 HashSet 额外分配
   FInvokes := specialize TWebviewLiveRegistry<TFakeInvokeReg>.Create;
   FReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
   FInitScripts := specialize TWebviewLiveRegistry<string>.Create;
-  FDedup := specialize THashSet<string>.Create;
 end;
 
 destructor TBuilderImpl.Destroy;
 begin
-  // stability: registry Free 释放内部 Vec 并 nil 串/接口；dedup 复用 collections.hashset 单源，Swiss Table 自动 Finalize 全量串，资源释放不丢
-  FDedup.Free;
-  FDedup := nil;
+  // stability: registry Clear->Default(T) 逐槽 nil 释放串/接口并 SetLength 0，资源释放不丢；无 HashSet 二重状态，单源释放
   FInitScripts.Free;
   FReady.Free;
   FInvokes.Free;
@@ -228,14 +223,6 @@ begin
   Result := Self;
 end;
 
-procedure TBuilderImpl.EnsureUniqueCmd(const ACmd: string); inline;
-begin
-  { perf: inline O(1) 平均哈希去重，复用 collections.hashset 单源 Swiss Table WyHash + 0.75 负载，零额外调用，零拷贝；资源由 THashSet 自动 Finalize 释放不丢，与 assets/bridge 单源一致 }
-  if FDedup.Contains(ACmd) then
-    raise EWebviewInvalidState.CreateFmt('duplicate invoke cmd in builder: %s', [ACmd]);
-  FDedup.Add(ACmd);
-end;
-
 function TBuilderImpl.RegisterInvoke(const ACmd: string;
   AHandler: TWebviewInvokeSyncHandler): IWebviewBuilder;
 var
@@ -244,8 +231,7 @@ begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
-  EnsureUniqueCmd(ACmd);
-  // perf: registry Register 单源 VecGrow 0→4→2× inline 零额外调用
+  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry (hashmap 单源 O(1) WyHash+0.75)，Builder 仅 Vec 单写零额外 HashSet 分配，ApplyTo 时桥侧抛 EWebviewInvalidState 单源语义；registry VecGrow 0→4→2× inline 零拷贝
   LReg.Cmd := ACmd;
   LReg.Sync := AHandler;
   LReg.Async := nil;
@@ -262,7 +248,7 @@ begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
-  EnsureUniqueCmd(ACmd);
+  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry 单源，Builder 零 HashSet 额外分配，inline 注册零拷贝
   LReg.Cmd := ACmd;
   LReg.Sync := nil;
   LReg.Async := AHandler;
@@ -303,7 +289,8 @@ var
   I: Integer;
   LReg: TFakeInvokeReg;
 begin
-  // perf: registry At inline O(1) + invoke 单源 Vec 单写，零额外堆分配
+  // perf: registry At inline O(1) 零拷贝 + invoke 单源 Vec 单写；重复校验单源至 bridge hashmap O(1) WyHash+0.75，Builder 零 HashSet 分配，单源语义零掩盖
+  // stability: 失败早抛 EWebviewInvalidState（bridge 单源），已注册项由窗口析构统一释放不丢
   for I := 0 to FInvokes.Count - 1 do
   begin
     LReg := FInvokes.At(I);

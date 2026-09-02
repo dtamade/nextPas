@@ -187,8 +187,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.simd.bitops,
-  nextpas.core.simd.vec,
   nextpas.core.atomic,
   nextpas.core.log.intf,
   nextpas.core.webview.base,
@@ -317,69 +315,17 @@ begin
   Result := True;
 end;
 
-function BridgeHasWhitespaceOutsideString(const AView: TStringView): Boolean; forward;
-
-function BridgeNormalizePayload(const APayload: TJsonValue): string;
+function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
 var
   LView: TStringView;
 begin
-  { perf: RawSlice zero-copy single Move, JsonStringify compact fallback }
+  { perf: inline + zero-copy RawSlice reuse (single Move via ToString), zero extra O(n) scan; JsonStringify fallback only when RawSlice empty (missing/diagnostic). Single source via json owner (RawSlice/JsonStringify) and bytes.ops view semantics; eliminates per-frame SIMD scan for compact JSON. }
   if APayload.IsNull then
     Exit('null');
   LView := APayload.RawSlice;
   if LView.Len > 0 then
-  begin
-    if not BridgeHasWhitespaceOutsideString(LView) then
-      Exit(LView.ToString);
-    Exit(JsonStringify(APayload));
-  end;
+    Exit(LView.ToString);
   Result := JsonStringify(APayload);
-end;
-
-function BridgeHasWhitespaceOutsideString(const AView: TStringView): Boolean;
-var
-  LPos: SizeUInt;
-  LInStr, LEsc: Boolean;
-  LMaskWS, LMaskQuote, LMaskBack: TVecMask;
-  I: SizeUInt;
-  LCh: AnsiChar;
-begin
-  { perf: SIMD VecWidth skip clean blocks, bytes.ops single source }
-  Result := False;
-  if AView.Len = 0 then Exit;
-  LInStr := False; LEsc := False; LPos := 0;
-  while LPos + SizeUInt(VecWidth) <= AView.Len do
-  begin
-    if LEsc then
-    begin
-      LCh := AView.Data[LPos]; LEsc := False;
-      if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
-      Inc(LPos); if LPos + SizeUInt(VecWidth) > AView.Len then Break;
-    end;
-    LMaskWS := VecCmpLtU(PByte(AView.Data + LPos), 33);
-    LMaskQuote := VecCmpEq(PByte(AView.Data + LPos), Byte('"'));
-    LMaskBack := VecCmpEq(PByte(AView.Data + LPos), Byte('\'));
-    if (LMaskWS = TVecMask(0)) and (LMaskQuote = TVecMask(0)) and (LMaskBack = TVecMask(0)) then
-    begin Inc(LPos, SizeUInt(VecWidth)); Continue; end;
-    for I := 0 to SizeUInt(VecWidth) - 1 do
-    begin
-      LCh := AView.Data[LPos + I];
-      if LEsc then LEsc := False
-      else if LCh = '\' then begin if LInStr then LEsc := True; end
-      else if LCh = '"' then LInStr := not LInStr
-      else if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
-    end;
-    Inc(LPos, SizeUInt(VecWidth));
-  end;
-  while LPos < AView.Len do
-  begin
-    LCh := AView.Data[LPos];
-    if LEsc then LEsc := False
-    else if LCh = '\' then begin if LInStr then LEsc := True; end
-    else if LCh = '"' then LInStr := not LInStr
-    else if (not LInStr) and (Byte(LCh) <= 32) then Exit(True);
-    Inc(LPos);
-  end;
 end;
 
 function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
@@ -677,7 +623,8 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc)
+  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); TryResolve 最坏 O(d)≤O(m) 降序枚举+每步 WyHash+SpanEqual O(1) 哈希（d=DistinctCount，小常数均摊 O(1)）
+  // 单挂载(Count=1, lens=0) inline 快路径严格 O(1) 零枚举；严格 O(1) 需 Trie，已登记 prefix-router 演进候选（assets.pas 单源 WyHash/SpanEqual/VecGrow/SortInt32Desc）
   LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
   if LNormView.Len = 0 then
     Exit;
@@ -709,5 +656,10 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
+
+finalization
+  { stability: atomic_exchange nil + _Release to reclaim final logger ref; prevents heaptrc leak for resident process exit }
+  if GWebviewBridgeLoggerRaw <> nil then
+    ILogger(atomic_exchange(GWebviewBridgeLoggerRaw, nil, mo_acq_rel))._Release;
 
 end.

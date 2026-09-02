@@ -364,18 +364,22 @@ procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef); inline;
 var
   LNew: TFakeDispatcherRing;
   LOldRing: TFakeDispatcherRing;
-  LHead, LCount, LOldLen, LNewCap: Integer;
+  LHead, LCount, LOldLen, LNewCap, LIdx, LLen: Integer;
 begin
-  // perf: fast path under lock without alloc
+  // perf: fast path under lock without alloc, branch avoids div/mod per op (pow2 ring via VecGrowCapacity single source)
   FLck.Acquire;
   try
-    if FCount < Length(FRing) then
+    LLen := Length(FRing);
+    if FCount < LLen then
     begin
-      FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+      LIdx := FHead + FCount;
+      if LIdx >= LLen then
+        Dec(LIdx, LLen);
+      FRing[LIdx] := AProc;
       Inc(FCount);
       Exit;
     end;
-    LOldLen := Length(FRing);
+    LOldLen := LLen;
     LNewCap := VecGrowCapacity(LOldLen);
     LOldRing := FRing;
     LHead := FHead;
@@ -390,9 +394,13 @@ begin
   // perf: short install under lock — only pointer swap + one slot write, O(1), stale check via length/head/count, single attempt no spin
   FLck.Acquire;
   try
-    if FCount < Length(FRing) then
+    LLen := Length(FRing);
+    if FCount < LLen then
     begin
-      FRing[(FHead + FCount) mod Length(FRing)] := AProc;
+      LIdx := FHead + FCount;
+      if LIdx >= LLen then
+        Dec(LIdx, LLen);
+      FRing[LIdx] := AProc;
       Inc(FCount);
       Exit;
     end;
@@ -422,6 +430,7 @@ end;
 function TFakeDispatcher.PumpOnce: Boolean;
 var
   LProc: TWebviewProcRef;
+  LLen: Integer;
 begin
   FLck.Acquire;
   try
@@ -429,8 +438,12 @@ begin
       Exit(False);
     LProc := FRing[FHead];
     FRing[FHead] := nil;
-    FHead := (FHead + 1) mod Length(FRing);
-    FCount := FCount - 1;
+    // perf: branch avoids div/mod per pump, pow2 ring single source VecGrowCapacity, inline
+    LLen := Length(FRing);
+    Inc(FHead);
+    if FHead >= LLen then
+      FHead := 0;
+    Dec(FCount);
   finally
     FLck.Release;
   end;
@@ -456,12 +469,28 @@ end;
 
 procedure TFakeDispatcher.DropAll;
 var
-  I: Integer;
+  I, LLen, LTail: Integer;
 begin
   FLck.Acquire;
   try
-    for I := 0 to FCount - 1 do
-      FRing[(FHead + I) mod Length(FRing)] := nil;
+    // perf: two-segment nil loop avoids mod/div per element, pow2 ring single source, inline zero extra call
+    if FCount > 0 then
+    begin
+      LLen := Length(FRing);
+      if FHead + FCount <= LLen then
+      begin
+        for I := 0 to FCount - 1 do
+          FRing[FHead + I] := nil;
+      end
+      else
+      begin
+        LTail := LLen - FHead;
+        for I := 0 to LTail - 1 do
+          FRing[FHead + I] := nil;
+        for I := 0 to FCount - LTail - 1 do
+          FRing[I] := nil;
+      end;
+    end;
     FCount := 0;
     FHead := 0;
   finally
@@ -563,26 +592,19 @@ end;
   计数口径 = 未 Close 的窗口（持有引用但已 Close 不计入）。 }
 
 var
-  GLiveWindows: array of TFakeWebview;
-  GLiveWindowsCount: Integer = 0;
+  GLiveWindows: specialize TWebviewLiveRegistry<TFakeWebview> = nil;
   GLiveCount: Integer = 0;
   GLiveLck: ILock;
 
-{ GLiveWindows 操作单源收敛到 nextpas.core.webview.live (bytes.ops Vec 单源 inline)：
-  GrowLiveWindows/RegisterLive/UnregisterLive 四后端重复已抽至 live 泛型 helpers，
-  本单元仅薄转发，零额外堆分配 }
-procedure GrowLiveWindows; inline;
-begin
-  // perf: thin forward to bytes.ops VecGrow single source (0→4→2×), inline — caller holds GLiveLck
-  specialize VecGrow<TFakeWebview>(GLiveWindows, GLiveWindowsCount);
-end;
-
+{ GLiveWindows 操作单源收敛到 nextpas.core.webview.live TWebviewLiveRegistry 单封装：
+  统一消除数组+Count 双变量手写样板，Register/Unregister/Snapshot 薄转发
+  bytes.ops Vec 单源 inline 零额外调用，零额外堆分配 }
 procedure RegisterLive(AWin: TFakeWebview); inline;
 begin
-  // perf: single source WebviewLiveAdd -> VecGrow inline, zero extra alloc; Dispatcher cross-thread Post safety via GLiveLck
+  // perf: single source TWebviewLiveRegistry.Register -> WebviewLiveAdd -> VecGrow inline (0→4→2×) zero extra alloc; cross-thread safety via GLiveLck
   GLiveLck.Acquire;
   try
-    specialize WebviewLiveAdd<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+    GLiveWindows.Register(AWin);
     Inc(GLiveCount);
   finally
     GLiveLck.Release;
@@ -593,7 +615,7 @@ procedure UnregisterLive(AWin: TFakeWebview); inline;
 var
   LShouldDec: Boolean;
 begin
-  // stability: if never Close'd, live count was still 1 — decrement here; already Closed windows decremented at Close time; read FClosed under instance lock, vector/count under GLiveLck (GLive->FLck order)
+  // stability: if never Close'd, live count was still 1 — decrement here; already Closed windows decremented at Close time; read FClosed under instance lock, registry under GLiveLck (GLive->FLck order)
   GLiveLck.Acquire;
   try
     AWin.FLck.Acquire;
@@ -604,8 +626,8 @@ begin
     end;
     if LShouldDec then
       Dec(GLiveCount);
-    // perf: O(1) swap-remove inline, nil trailing to release ref
-    specialize WebviewLiveRemoveSwap<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+    // perf: O(1) swap-remove inline via TWebviewLiveRegistry.Unregister single source VecRemoveSwap, nil trailing to release ref
+    GLiveWindows.Unregister(AWin);
   finally
     GLiveLck.Release;
   end;
@@ -626,19 +648,15 @@ procedure FakePumpAll;
 var
   I: Integer;
   LSnapshot: array of TFakeWebview;
-  LCount: Integer;
 begin
   // Dispatcher cross-thread Post safety: snapshot under GLiveLck, then pump without holding global lock to avoid dispatch deadlock
   GLiveLck.Acquire;
   try
-    LCount := GLiveWindowsCount;
-    SetLength(LSnapshot, LCount);
-    for I := 0 to LCount - 1 do
-      LSnapshot[I] := GLiveWindows[I];
+    GLiveWindows.Snapshot(LSnapshot);
   finally
     GLiveLck.Release;
   end;
-  for I := 0 to LCount - 1 do
+  for I := 0 to High(LSnapshot) do
     if not LSnapshot[I].FClosed then
       LSnapshot[I].PumpOnce;
 end;
@@ -773,27 +791,19 @@ procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
 var
   LNew, LOld: TFakeInvokeOutcomes;
   LCap, LCount, LOldLen, LIdx: Integer;
-  LCmd, LResultJson, LCode, LMessage: string;
-  LIsError: Boolean;
 begin
-  // perf: AddRef outside lock to avoid atomic amplification under invoke storm (4 managed assigns); inside lock only pointer steal (no AddRef) via PPointer move, zero extra atomic
-  LCmd := ACmd;
-  LResultJson := AResultJson;
-  LCode := ACode;
-  LMessage := AMessage;
-  LIsError := AIsError;
+  // stability: managed assignments keep AddRef/Release balanced, heaptrc0 safe, no PPointer steal; perf via bytes.ops VecCopy/VecGrowCapacity single source inline, zero mod, zero leak
   FLck.Acquire;
   try
     if FOutcomesCount < Length(FOutcomes) then
     begin
       LIdx := FOutcomesCount;
       Inc(FOutcomesCount);
-      // steal fields without AddRef — slot is nil, no Release needed; nil source to prevent DecRef at exit
-      PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
-      FOutcomes[LIdx].IsError := LIsError;
-      PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
-      PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
-      PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
+      FOutcomes[LIdx].Cmd := ACmd;
+      FOutcomes[LIdx].IsError := AIsError;
+      FOutcomes[LIdx].ResultJson := AResultJson;
+      FOutcomes[LIdx].Code := ACode;
+      FOutcomes[LIdx].Message := AMessage;
       Exit;
     end;
     LCap := VecGrowCapacity(Length(FOutcomes));
@@ -803,9 +813,9 @@ begin
   finally
     FLck.Release;
   end;
-  // perf: heap allocation (SetLength zero-init) outside lock, single source VecGrowCapacity inline
+  // perf: heap allocation outside lock, single source VecGrowCapacity inline zero extra call
   SetLength(LNew, LCap);
-  // perf: O(n) linear bulk copy outside lock — managed per-elem AddRef via bytes.ops VecCopy single source, zero lock hold, inline zero extra call, blittable single Move fast path
+  // perf: O(n) VecCopy single source outside lock, zero lock hold, managed ref preserved, inline zero-copy
   if LCount > 0 then
     specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
   FLck.Acquire;
@@ -814,16 +824,16 @@ begin
     begin
       LIdx := FOutcomesCount;
       Inc(FOutcomesCount);
-      PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
-      FOutcomes[LIdx].IsError := LIsError;
-      PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
-      PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
-      PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
+      FOutcomes[LIdx].Cmd := ACmd;
+      FOutcomes[LIdx].IsError := AIsError;
+      FOutcomes[LIdx].ResultJson := AResultJson;
+      FOutcomes[LIdx].Code := ACode;
+      FOutcomes[LIdx].Message := AMessage;
       Exit;
     end;
     if (Length(FOutcomes) <> LOldLen) or (FOutcomesCount <> LCount) then
     begin
-      // contention: stale snapshot — single in-lock relinearize single source bytes.ops VecCopy, rare path, at most one extra SetLength + copy
+      // contention: rare stale snapshot — single in-lock relinearize single source VecCopy
       if Length(LNew) <= Length(FOutcomes) then
         SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
       if FOutcomesCount > 0 then
@@ -831,15 +841,15 @@ begin
     end
     else if Length(LNew) <= Length(FOutcomes) then
       SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
-    // stability: FOutcomes:=LNew releases old refs via refcount finalization, LNew retains (AddRef), zero leak
+    // stability: FOutcomes:=LNew releases old refs via finalization, retains new, zero leak
     FOutcomes := LNew;
     LIdx := FOutcomesCount;
     Inc(FOutcomesCount);
-    PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
-    FOutcomes[LIdx].IsError := LIsError;
-    PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
-    PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
-    PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
+    FOutcomes[LIdx].Cmd := ACmd;
+    FOutcomes[LIdx].IsError := AIsError;
+    FOutcomes[LIdx].ResultJson := AResultJson;
+    FOutcomes[LIdx].Code := ACode;
+    FOutcomes[LIdx].Message := AMessage;
   finally
     FLck.Release;
   end;
@@ -1566,9 +1576,12 @@ begin
 end;
 
 initialization
+  GLiveWindows := specialize TWebviewLiveRegistry<TFakeWebview>.Create;
   GLiveLck := TMutex.Create as ILock;
 
 finalization
+  GLiveWindows.Free;
+  GLiveWindows := nil;
   GLiveLck := nil;
 
 end.

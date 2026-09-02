@@ -41,11 +41,12 @@ uses
 generic procedure WebviewLiveAdd<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemove<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemoveSwap<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
-{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline }
+{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline — 可抽模块候选显式登记（待反哺 L1 通用池 owner sync.pool/collections 并经设计评审，当前家族内私有不经门面 re-export，CONTRACT §1/§50） }
 generic function WebviewPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
 generic function WebviewPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 
 type
+  { 可抽模块候选显式登记：紧凑 Vec 泛型封装 TWebviewLiveRegistry<T> 待反哺 L1 通用数组辅助 owner bytes.ops/collections，当前家族内私有不经门面 re-export，CONTRACT §1/§50；与 window.live 同复用 bytes.ops 单源思想，零重复实现 }
   generic TWebviewLiveRegistry<T> = class
   private
     FList: array of T;
