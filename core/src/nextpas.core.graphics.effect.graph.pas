@@ -1,4 +1,4 @@
-{ nextpas.core.graphics.effect.graph - 滤镜图 DSL + Bake (boxblur/serialize 分离) }
+{ nextpas.core.graphics.effect.graph - 滤镜图 DSL + Bake (boxblur/serialize 分离, LUT 缓存 + tile64 arena 复用) }
 unit nextpas.core.graphics.effect.graph;
 
 {$I nextpas.core.settings.inc}
@@ -50,7 +50,11 @@ uses
   nextpas.core.graphics.effect.graph.boxblur,
   nextpas.core.graphics.effect.graph.serialize,
   nextpas.core.simd.raster,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv;
+
+var
+  GLutIntern: array of TBytes;
 
 function BoxBlur(const ASrc: TBitmap; ARadius: Integer): TBitmap;
 begin
@@ -110,13 +114,27 @@ end;
 function TEffectGraph.AddLUT(const AData: TBytes): Integer;
 var
   N: TEffectNode;
+  I: Integer;
 begin
   if Length(AData) <> 256 * 3 then raise EArgumentError.Create('nextpas.core.graphics.effect.graph.pas: TEffectGraph.AddLUT: LUT must be 256*3 bytes (got ' + IntToStr(Length(AData)) + ' expected 768)');
+  // LUT 缓存：bytes.ops 单源 BytesEqual 判等，命中则零拷贝共享引用，避免 768B 重复堆分配
+  for I := 0 to High(GLutIntern) do
+    if BytesEqual(GLutIntern[I], AData) then
+    begin
+      N.Kind := ekLUT; N.LutData := GLutIntern[I];
+      N.Radius := 0; N.Dx := 0; N.Dy := 0; N.ShadowColor := 0; N.HueShift := 0;
+      SetLength(FNodes, Length(FNodes) + 1);
+      Result := High(FNodes);
+      FNodes[Result] := N;
+      Exit;
+    end;
   N.Kind := ekLUT; N.LutData := Copy(AData, 0, Length(AData));
   N.Radius := 0; N.Dx := 0; N.Dy := 0; N.ShadowColor := 0; N.HueShift := 0;
   SetLength(FNodes, Length(FNodes) + 1);
   Result := High(FNodes);
   FNodes[Result] := N;
+  SetLength(GLutIntern, Length(GLutIntern) + 1);
+  GLutIntern[High(GLutIntern)] := N.LutData;
 end;
 
 function TEffectGraph.Serialize: TBytes;
@@ -138,6 +156,7 @@ var
   SrcRow, DstRow: PByte;
   SC: TColor32;
   SR, SG, SB, SA: Byte;
+  LutPtr: PByte;
 begin
   if ASrc.IsEmpty then raise EEffectError.Create('nextpas.core.graphics.effect.graph.pas: TEffectGraph.Bake: src empty');
   Cur := ASrc.Clone;
@@ -187,15 +206,20 @@ begin
             if Steps = 0 then Steps := 1;
             if H < 0 then Steps := (3 - Steps) mod 3;
           end;
+          Cur.EnsureUnique;
           for S := 0 to Steps - 1 do
             for Y := 0 to Cur.Height - 1 do
-              RasterRotateRGB(Cur.RowPtr(Y), Cur.Width);
+              RasterRotateRGB(Cur.UnsafeMutableRowPtr(Y), Cur.Width);
         end;
       ekLUT:
         begin
           if Length(FNodes[I].LutData) <> 256 * 3 then raise EEffectError.Create('nextpas.core.graphics.effect.graph.pas: TEffectGraph.Bake: lut size mismatch (got ' + IntToStr(Length(FNodes[I].LutData)) + ' expected 768 index=' + IntToStr(I) + ')');
+          // LUT 缓存零拷贝：单次 pin LutPtr + 单次 EnsureUnique，行级批量 inline 无重复 RC 检查
+          if Length(FNodes[I].LutData) = 0 then Continue;
+          Cur.EnsureUnique;
+          LutPtr := @FNodes[I].LutData[0];
           for Y := 0 to Cur.Height - 1 do
-            RasterApplyLut(Cur.RowPtr(Y), Cur.Width, @FNodes[I].LutData[0]);
+            RasterApplyLut(Cur.UnsafeMutableRowPtr(Y), Cur.Width, LutPtr);
         end;
     end;
   Result := Cur;

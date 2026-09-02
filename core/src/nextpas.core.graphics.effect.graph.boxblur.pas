@@ -34,11 +34,28 @@ uses
 
 var
   GBlurPool: IThreadPool;
+  GBlurArena: IArena;
+  GBlurArenaCap: SizeUInt;
 
 function GetBlurPool: IThreadPool;
 begin
   if GBlurPool = nil then GBlurPool := CreateThreadPool(0);
   Result := GBlurPool;
+end;
+
+function AcquireBlurArena(ASize: SizeUInt): IArena; inline;
+begin
+  if (GBlurArena <> nil) and (GBlurArenaCap >= ASize) then
+  begin
+    GBlurArena.Reset;
+    Result := GBlurArena;
+  end
+  else
+  begin
+    GBlurArena := TLocalArena.Create(ASize);
+    GBlurArenaCap := ASize;
+    Result := GBlurArena;
+  end;
 end;
 
 procedure HorzRowInto(const ASrcRow: PByte; AW, AR: Integer; ADstR, ADstG, ADstB, ADstA: PInteger); inline;
@@ -342,7 +359,8 @@ begin
   UseGlobal := NeedHH <= BOXBLUR_ARENA_LIMIT;
   if UseGlobal then
   begin
-    Arena := TLocalArena.Create(NeedHH);
+    // tile64 arena 复用深化：AcquireBlurArena 复用全局 IArena + Reset 零重复 Create，1024x1024 r32 线性命中热路径，heaptrc0
+    Arena := AcquireBlurArena(NeedHH);
     HH_Base := PInteger(Arena.AllocAligned(SizeUInt(H) * SizeUInt(W) * 4 * SizeOf(Integer), BOXBLUR_ALIGN));
     if HH_Base = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: arena alloc failed (need=' + IntToStr(Int64(H) * Int64(W) * 4 * SizeOf(Integer)) + ' W=' + IntToStr(W) + ' H=' + IntToStr(H) + ' radius=' + IntToStr(ARadius) + ')');
     HH_R := HH_Base;
