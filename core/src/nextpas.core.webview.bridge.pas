@@ -364,63 +364,30 @@ end;
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
-  LB: TStringBuilder;
-  procedure AppendDoubleEscaped(const S: string); inline;
-  var
-    V: TStringView;
-    I: SizeUInt;
-    B: Byte;
-  const
-    Hex: array[0..15] of AnsiChar = '0123456789abcdef';
-  begin
-    { perf: single-pass double-escape inline zero-copy view → LB direct, no LTmp heap; reuse text.escape single source semantics (bytes.ops view), bytes.ops single reserve, inline zero alloc }
-    if S = '' then Exit;
-    V := TStringView.FromStr(S);
-    for I := 0 to V.Len - 1 do
-    begin
-      B := Byte(V.Data[I]);
-      case B of
-        Ord('"'):
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('"'); end;
-        Ord('\'):
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('\'); end;
-        8:
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('b'); end;
-        9:
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('t'); end;
-        10:
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('n'); end;
-        12:
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('f'); end;
-        13:
-          begin LB.AppendChar('\'); LB.AppendChar('\'); LB.AppendChar('r'); end;
-      else
-        if B < $20 then
-        begin
-          LB.AppendChar('\'); LB.AppendChar('\');
-          LB.AppendChar('u'); LB.AppendChar('0'); LB.AppendChar('0');
-          LB.AppendChar(Hex[(B shr 4) and $F]); LB.AppendChar(Hex[B and $F]);
-        end
-        else
-          LB.AppendChar(AnsiChar(B));
-      end;
-    end;
-  end;
+  LB, LInner: TStringBuilder;
+  W: TJsonWriter;
+  LInnerJson: string;
 begin
-  { perf: single outer TStringBuilder reserve + zero-copy AppendInt/AppendChar inline single-pass double-escape (no LTmp heap, bytes.ops view single source, text.escape semantics single source), inline helper, no IJsonBuilder heap; stability LB.Done finally }
+  { perf: reuse text.escape single source SIMD table-driven via TJsonWriter; two-stage avoids per-byte 7x AppendChar branch & I-Cache bloat, single reserve each stage, zero manual double-escape }
   LCode := NormalizeInvokeCode(ACode);
-  LB.Init(SizeUInt(40 + SizeUInt(Length(LCode)) * 7 + SizeUInt(Length(AMessage)) * 7));
+  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2 + 16));
+  try
+    W.Init(LInner);
+    W.BeginObject;
+    W.Key('code'); W.Str(LCode);
+    W.Key('message'); W.Str(AMessage);
+    W.EndObject;
+    LInnerJson := LInner.ToString;
+  finally
+    LInner.Done;
+  end;
+  LB.Init(SizeUInt(20 + SizeUInt(Length(LInnerJson)) * 2 + 16));
   try
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
     LB.AppendChar(',');
-    LB.AppendChar('"');
-    LB.AppendBytes('{\"code\":\"', 12);
-    AppendDoubleEscaped(LCode);
-    LB.AppendBytes('\",\"message\":\"', 17);
-    AppendDoubleEscaped(AMessage);
-    LB.AppendBytes('\"}', 3);
-    LB.AppendChar('"');
+    W.Init(LB);
+    W.Str(LInnerJson);
     LB.AppendChar(')');
     Result := LB.ToString;
   finally

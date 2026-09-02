@@ -4,8 +4,8 @@ unit nextpas.core.webview.validation;
        base 仅承载纯数据类型（record/enum/const/error 族 + Default 无重依赖
        载体），本单元承载 IsValidWebviewSchemeToken + 所有 Check* 不变量校验
        实现；四件套 base←intf←impl←facade 纯度恢复，依赖 L1 text.char
-       表驱动 IsLower/IsDigit + L1 text.view.TStringView.Trim 单源 inline
-       零拷贝 + L2 validation.URL 单源校验 DevServerUrl；L3→L1/L2 复用允许；
+       表驱动 IsLower/IsDigit + L1 text.view.TStringView.Trim 单源
+       零拷贝 view + L2 validation.URL 单源校验 DevServerUrl；L3→L1/L2 复用允许；
        bytes.ops 生长/快照仍由 live 单源承载，本单元不重复；稳定性资源释放
        不丢（无堆资源，仅抛异常）。 *}
 
@@ -48,8 +48,9 @@ procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string)
 { 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
 procedure CheckWebviewInitScript(const AScript: string); inline;
 procedure CheckWebviewEventName(const AEvent: string); inline;
-{ 开发模式 URL 校验（S95）：非空时必须是 http/https 绝对 URL，与 CheckWebviewOptions 同源复用。 }
-procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
+{ 开发模式 URL 校验（S95）：非空时必须是 http/https 绝对 URL，与 CheckWebviewOptions 同源复用。
+  perf: out-of-line 零 I-Cache 膨胀（真实循环体禁 inline 红线二）+ TStringView 零拷贝 view 零分配快路径单源复用 + L2 validation.URL 单源 http(s) 语义。 }
+procedure CheckWebviewDevServerUrl(const AUrl: string);
 
 implementation
 
@@ -126,12 +127,12 @@ begin
     raise EWebviewInvalidState.Create('webview event name must not be empty');
 end;
 
-procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
+procedure CheckWebviewDevServerUrl(const AUrl: string);
 var
   LView: TStringView;
   LTrimmed: string;
 begin
-  // perf: inline + TStringView zero-copy view (L1 text.view single source, VecWidth SIMD scan, zero alloc fast path) + validation.URL L2 single source http(s) scheme, single allocation only when trimmed
+  // perf: out-of-line（真实循环体禁 inline 红线二零 I-Cache 膨胀）+ TStringView zero-copy view (L1 text.view single source, VecWidth SIMD scan, zero alloc fast path) + validation.URL L2 single source http(s) scheme, single allocation only when trimmed
   LView := TStringView.FromStr(AUrl).Trim;
   if LView.IsEmpty then Exit;
   if LView.Contains(' ') then

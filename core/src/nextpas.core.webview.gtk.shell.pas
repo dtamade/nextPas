@@ -45,6 +45,7 @@ procedure ShellForgetSchemeContext(ACtx: Pointer);
 function ShellLiveWindowCount: Integer; inline;
 procedure ShellRegisterLive(AWin: Pointer);
 procedure ShellUnregisterLive(AWin: Pointer);
+function ShellLatestLiveWindow: Pointer; inline;
 
 function ShellWindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 
@@ -64,6 +65,7 @@ var
   GShellSchemeCtxs: specialize TWebviewLiveRegistry<Pointer> = nil;
   GShellLiveWindows: specialize TWebviewLiveRegistry<Pointer> = nil;
   GShellLiveCount: Integer = 0;
+  GShellLatestLive: Pointer = nil;
   GShellSchemeLock: TMutex = nil;
   GShellLiveLock: TRWLock = nil;
   GShellDebugChecked: Boolean = False;
@@ -177,25 +179,54 @@ end;
 
 procedure ShellRegisterLive(AWin: Pointer);
 begin
+  if AWin = nil then Exit;
   if GShellLiveLock <> nil then GShellLiveLock.AcquireWrite;
   try
     if GShellLiveWindows <> nil then
       GShellLiveWindows.Register(AWin);
     Inc(GShellLiveCount);
+    GShellLatestLive := AWin;
   finally
     if GShellLiveLock <> nil then GShellLiveLock.ReleaseWrite;
   end;
-  { viewmap 扩容在自锁内，零阻塞 GLive 读 — 调用方在 shell 上层加 view }
 end;
 
 procedure ShellUnregisterLive(AWin: Pointer);
+var
+  LBefore: Integer;
 begin
+  if AWin = nil then Exit;
   if GShellLiveLock <> nil then GShellLiveLock.AcquireWrite;
   try
     if GShellLiveWindows <> nil then
+    begin
+      LBefore := GShellLiveWindows.Count;
       GShellLiveWindows.Unregister(AWin);
+      if GShellLiveWindows.Count < LBefore then
+      begin
+        if GShellLiveCount > 0 then Dec(GShellLiveCount);
+        if GShellLatestLive = AWin then
+        begin
+          if GShellLiveWindows.Count > 0 then
+            GShellLatestLive := GShellLiveWindows.At(GShellLiveWindows.Count - 1)
+          else
+            GShellLatestLive := nil;
+        end;
+      end;
+    end;
   finally
     if GShellLiveLock <> nil then GShellLiveLock.ReleaseWrite;
+  end;
+end;
+
+function ShellLatestLiveWindow: Pointer; inline;
+begin
+  // O(1) hash: cached latest pointer, zero scan, zero alloc, short read <1µs
+  if GShellLiveLock <> nil then GShellLiveLock.AcquireRead;
+  try
+    Result := GShellLatestLive;
+  finally
+    if GShellLiveLock <> nil then GShellLiveLock.ReleaseRead;
   end;
 end;
 
@@ -236,6 +267,7 @@ end;
 
 procedure ShellFiniRegistries; inline;
 begin
+  GShellLatestLive := nil;
   FreeAndNil(GShellSchemeCtxs);
   FreeAndNil(GShellLiveWindows);
   GShellLogger := nil;

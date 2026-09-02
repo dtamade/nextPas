@@ -221,6 +221,16 @@ type
     Value: CONDITION_VARIABLE;
   end;
 
+  {** @desc 矩形区域 (Windows RECT / tagRECT) — host owner single source.
+         ABI: left,top,right,bottom 4×LONG (16B)，与 Win32 SDK 二进制一致。
+         window.win32.ffi 与 webview.webview2.ffi 均复用此定义，禁止各家重定义。
+         性能：纯值类型 16B 栈上传参，inline 零拷贝，无堆分配。 *}
+  tagRECT = record Left, Top, Right, Bottom: LONG; end;
+  RECT = tagRECT;
+  PRECT = ^RECT;
+  PRect = ^RECT;
+  TRect = tagRECT;
+
 const
   INFINITE = DWORD($FFFFFFFF);
   WAIT_OBJECT_0 = DWORD(0);
