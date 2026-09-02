@@ -67,16 +67,15 @@ procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
 { TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise. }
-{ perf: hot path View+var ADoc reuse zero alloc (Arena reuse), TStringView zero-copy via bytes.ops single source, inline thin forward; local overload Init/Done per call via try-finally, no threadvar global pool, test isolation via explicit ADoc lifecycle. }
-{ note: string/View 便利重载 per-call Init/Done；hot loops must use View+var ADoc overload for zero alloc. }
+{ perf: hot path View+var ADoc reuse zero alloc (Arena reuse) inline, TStringView zero-copy via bytes.ops single source; cold string/View convenience overloads per-call Init/Done via try-finally, no threadvar global pool, test isolation via explicit ADoc lifecycle; hot loops must use View+var ADoc overload for zero alloc. }
 function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
-{ View 入口：TStringView 零拷贝借用 }
+{ View 入口：TStringView 零拷贝借用 — 冷路径 per-call Init/Done，非零分配；热循环用 View+var ADoc 复用 }
 function TryDecodeFrame(const AView: TStringView;
-  out AFrame: TWebviewFrame): Boolean; overload; inline;
-{ Document 复用：caller Init/Done, Parse reuse Arena, zero alloc per frame }
-function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
   out AFrame: TWebviewFrame): Boolean; overload;
+{ Document 复用：caller Init/Done, Parse reuse Arena, zero alloc per frame — 热路径唯一零分配入口 }
+function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
   合法 JSON 文本（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，
@@ -234,10 +233,12 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
+{$PUSH}{$WARN 5024 OFF}
 procedure SetWebviewBridgeLogger(ALogger: ILogger);
 begin
-  if ALogger <> nil then ;
+  { deprecated no-op: global logger removed, caller owns ILogger; empty body彻底移除空分支噪音，零额外调用 }
 end;
+{$POP}
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
 
@@ -298,11 +299,12 @@ begin
 end;
 
 function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
-  out AFrame: TWebviewFrame): Boolean; overload;
+  out AFrame: TWebviewFrame): Boolean; overload; inline;
 var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
+  { perf: inline 热路径零分配 — caller 复用 ADoc Arena，Parse 仅重置 FNodeCount/FStrArenaUsed 零堆分配，TStringView 零拷贝经 bytes.ops 单源，单次 Parse→Validate→Normalize 零额外拷贝 }
   Result := False;
   AFrame := Default(TWebviewFrame);
   if not BridgeParseFrame(AView, ADoc, LRoot) then
@@ -315,10 +317,11 @@ begin
 end;
 
 function TryDecodeFrame(const AView: TStringView;
-  out AFrame: TWebviewFrame): Boolean; overload; inline;
+  out AFrame: TWebviewFrame): Boolean; overload;
 var
   LDoc: TJsonDocument;
 begin
+  { cold path: per-call Init/Done 新建/释放 Arena，每帧分配；热循环必须用 View+var ADoc 复用重载零分配 }
   LDoc.Init(nil);
   try
     Result := TryDecodeFrame(AView, LDoc, AFrame);

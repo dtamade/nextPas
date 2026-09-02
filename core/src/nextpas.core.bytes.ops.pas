@@ -85,8 +85,8 @@ generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
 generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
 { 零拷贝截断：按 ACount 精确 SetLength，inline 单源，消除手写 SetLength 重复 }
 generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
-{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，inline 零额外调用，bytes.ops 唯一权威；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
-generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+{ 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap 含扫描循环按 design-conventions §2 去 inline 避 I-Cache 膨胀、ordered 仍 inline 单源；webview.live 薄转发，热关闭路径默认 Swap 避免 O(n²) }
+generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
 { 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
 generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
@@ -706,11 +706,11 @@ begin
     SetLength(AArr, ACount);
 end;
 
-generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T); inline;
+generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 var
   I: Integer;
 begin
-  // perf: O(1) swap-remove inline, zero extra call, single source bytes.ops; trailing Default(T) nils ref/interface to release, zero leak, zero-copy pointer swap
+  // perf: O(1) swap-remove single source bytes.ops; trailing Default(T) nils ref/interface to release, zero leak, zero-copy pointer swap — not inline per design-conventions §2 (real loop body bans inline, avoids I-Cache bloat)
   for I := 0 to ACount - 1 do
     if AArr[I] = AValue then
     begin
