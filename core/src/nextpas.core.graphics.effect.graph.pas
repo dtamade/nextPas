@@ -47,6 +47,8 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
+  nextpas.core.simd.base,
+  nextpas.core.simd.inline,
   nextpas.core.simd.raster,
   nextpas.core.thread.pool,
   nextpas.core.thread.intf,
@@ -99,35 +101,41 @@ begin
 end;
 procedure VecAddI32(ADst, ASrc: PInteger; N: Integer); inline;
 var
-  I, N8, R: Integer;
+  I: Integer;
   D, S: PInteger;
+  VDst, VSrc: ^TVecI32x4;
 begin
   if (ADst = nil) or (ASrc = nil) or (N <= 0) then Exit;
   D := ADst; S := ASrc;
-  N8 := N shr 3; R := N and 7;
-  for I := 0 to N8 - 1 do
+  // reuse simd.inline I32x4 batch (portable pure Pascal, scalar/SSE2/AVX2/NEON inline)
+  while N >= 4 do
   begin
-    D[0] += S[0]; D[1] += S[1]; D[2] += S[2]; D[3] += S[3];
-    D[4] += S[4]; D[5] += S[5]; D[6] += S[6]; D[7] += S[7];
-    Inc(D, 8); Inc(S, 8);
+    VDst := Pointer(D);
+    VSrc := Pointer(S);
+    VDst^ := InlineVecI32x4Add(VDst^, VSrc^);
+    Inc(D, 4); Inc(S, 4); Dec(N, 4);
   end;
-  for I := 0 to R - 1 do D[I] += S[I];
+  for I := 0 to N - 1 do
+  begin D[I] += S[I]; end;
 end;
 procedure VecSubI32(ADst, ASrc: PInteger; N: Integer); inline;
 var
-  I, N8, R: Integer;
+  I: Integer;
   D, S: PInteger;
+  VDst, VSrc: ^TVecI32x4;
 begin
   if (ADst = nil) or (ASrc = nil) or (N <= 0) then Exit;
   D := ADst; S := ASrc;
-  N8 := N shr 3; R := N and 7;
-  for I := 0 to N8 - 1 do
+  // reuse simd.inline I32x4 batch (portable pure Pascal)
+  while N >= 4 do
   begin
-    D[0] -= S[0]; D[1] -= S[1]; D[2] -= S[2]; D[3] -= S[3];
-    D[4] -= S[4]; D[5] -= S[5]; D[6] -= S[6]; D[7] -= S[7];
-    Inc(D, 8); Inc(S, 8);
+    VDst := Pointer(D);
+    VSrc := Pointer(S);
+    VDst^ := InlineVecI32x4Sub(VDst^, VSrc^);
+    Inc(D, 4); Inc(S, 4); Dec(N, 4);
   end;
-  for I := 0 to R - 1 do D[I] -= S[I];
+  for I := 0 to N - 1 do
+  begin D[I] -= S[I]; end;
 end;
 procedure BuildHorzSums(const ASrc: TBitmap; AR: Integer; HH_R, HH_G, HH_B, HH_A: PInteger);
 var
@@ -137,7 +145,7 @@ begin
   W := ASrc.Width; H := ASrc.Height;
   for Y := 0 to H - 1 do
   begin
-    SrcRow := ASrc.RowPtr(Y);
+    SrcRow := ASrc.ConstRowPtr(Y);
     HorzRowInto(SrcRow, W, AR, HH_R + Y * W, HH_G + Y * W, HH_B + Y * W, HH_A + Y * W);
   end;
 end;
@@ -190,7 +198,7 @@ begin
   W := ASrc.Width;
   for Y := 0 to AYCount - 1 do
   begin
-    SrcRow := ASrc.RowPtr(AY0 + Y);
+    SrcRow := ASrc.ConstRowPtr(AY0 + Y);
     HorzRowInto(SrcRow, W, AR, HH_R + Y * W, HH_G + Y * W, HH_B + Y * W, HH_A + Y * W);
   end;
 end;
@@ -200,7 +208,7 @@ begin
   T := PHorzTask(AData);
   for Y := T^.Y0 to T^.Y1 - 1 do
   begin
-    Row := T^.Src^.RowPtr(Y);
+    Row := T^.Src^.ConstRowPtr(Y);
     HorzRowInto(Row, T^.W, T^.R, T^.HH_R + Y * T^.W, T^.HH_G + Y * T^.W, T^.HH_B + Y * T^.W, T^.HH_A + Y * T^.W);
   end;
 end;
@@ -210,10 +218,17 @@ var
   VCInv: Cardinal;
   DstRow: PByte;
   RowPtr: PInteger;
+  DstBase: PByte;
+  DstStride: Integer;
 begin
   if (AY0 >= AY1) or (AW <= 0) or (AH <= 0) then Exit;
   if (VSumR = nil) or (VSumG = nil) or (VSumB = nil) or (VSumA = nil) then Exit;
   if (VCInvTab = nil) or (VCInvLen <= 0) then Exit;
+  if ADst.IsEmpty then Exit;
+  // COW hoist: single EnsureUnique outside Y loop, then UnsafeMutable base+stride (FillTrapezoids pattern)
+  ADst.EnsureUnique;
+  DstBase := ADst.UnsafeMutableRowPtr(0);
+  DstStride := ADst.Stride;
   for X := 0 to AW - 1 do
   begin
     VSumR[X] := 0; VSumG[X] := 0; VSumB[X] := 0; VSumA[X] := 0;
@@ -228,7 +243,7 @@ begin
   for Y := AY0 to AY1 - 1 do
   begin
     VC := VertCount(Y, AH, AR);
-    DstRow := ADst.RowPtr(Y);
+    DstRow := DstBase + Y * DstStride;
     if VC <= 0 then VCInv := 0
     else if (VC >= 0) and (VC < VCInvLen) then VCInv := VCInvTab[VC]
     else VCInv := Cardinal((QWord(1) shl 32) div QWord(Cardinal(VC)));

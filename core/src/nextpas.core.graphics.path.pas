@@ -3,7 +3,8 @@
  * 指数扩容 AlignUp(mem.base 单源 8) + Move(单源 System.Move/bytes.ops 约束)；L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现。
  * COW 写时 RC<>1 判别（复用 TBitmap.EnsureUnique 模式，Unique 时零拷贝）；TPath 链式 fluent 不可变值语义，
  * 小路径(<64)链式 O(N²) 常数小可直接用；Reserve 预分配后链式仍 O(N²)（1K 链式≈500K 拷贝，因 Result:=Self 共享 RC=2 需逐次 COW），
- * 大路径用 TPathBuilder 批量 O(N) 约 1K 拷贝；Builder fluent 链式 (MoveTo/LineTo→TPathBuilder) 与 TPath 风格统一，Append* 为同构别名。
+ * 大路径必须用 TPathBuilder 批量 O(N) 约 1K 拷贝（热点显著，链式禁用）；Builder fluent 链式
+ * (MoveTo/LineTo→TPathBuilder) 与 TPath 风格统一，Append* 为同构别名；EnsureUnique 仅拷贝已用前缀非全容量。
  * TGradient 防御性 Copy 冷路径，热路径零分配；Colors/Stops 为防御性 Copy（不可变冷路径一次堆分配），
  * 高频循环用 GetColor/GetStop+Count inline 零堆分配；拒绝 ColorsView/StopsView 零拷贝别名外泄可变引用。
  *}
@@ -23,7 +24,7 @@ type
   TColor32Array = array of TColor32;
   TSingleArray = array of Single;
 
-  { TPath 不可变链 fluent：小路径(<64)链式可用 O(N²) 常数小；大路径用 TPathBuilder 批量 O(N)（Reserve 后链式仍 O(N²)，COW RC=2 逐次拷贝） }
+  { TPath 不可变链 fluent：小路径(<64)链式可用 O(N²) 常数小；大路径必须用 TPathBuilder 批量 O(N)（热点，Reserve 后链式仍 O(N²)，COW RC=2 逐次拷贝） }
   TPath = record
   private
     FVerbs: array of TPathVerb;
@@ -139,11 +140,17 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.math;
 
-{ TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，Move 单源(bytes.ops 约束)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现 }
+{ TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，Move 单源(bytes.ops 约束)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现
+  EnsureUnique/EnsureCap 共享时仅拷贝已用前缀 (FVerbCount/FPointCount) 非全容量，减少 Reserve 后链式尾部垃圾拷贝；大路径仍 O(N²)，须用 Builder 批量 O(N) }
 
 procedure TPath.EnsureVerbCap(ANeeded: Integer);
 var
   LCap, LNewCap: SizeUInt;
+  LOld: array of TPathVerb;
+  LCopy: Integer;
+  P: PByte;
+  RC: SizeInt;
+  PRC: ^SizeInt;
 begin
   LCap := SizeUInt(Length(FVerbs));
   if LCap >= SizeUInt(ANeeded) then Exit;
@@ -151,12 +158,27 @@ begin
   else begin LNewCap := LCap * 2; if LNewCap < SizeUInt(ANeeded) then LNewCap := SizeUInt(ANeeded); end;
   LNewCap := AlignUp(LNewCap, 8);
   if LNewCap = 0 then LNewCap := SizeUInt(ANeeded);
+  if Length(FVerbs) = 0 then begin SetLength(FVerbs, Integer(LNewCap)); Exit; end;
+  // Unique 时直接 SetLength 复用 realloc；共享时仅拷贝已用前缀非全容量
+  P := PByte(@FVerbs[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  RC := PRC^;
+  if RC = 1 then begin SetLength(FVerbs, Integer(LNewCap)); Exit; end;
+  if FVerbCount > 0 then LCopy := FVerbCount else LCopy := 0;
+  LOld := FVerbs;
+  FVerbs := nil;
   SetLength(FVerbs, Integer(LNewCap));
+  if LCopy > 0 then Move(LOld[0], FVerbs[0], LCopy * SizeOf(TPathVerb));
 end;
 
 procedure TPath.EnsurePointCap(ANeeded: Integer);
 var
   LCap, LNewCap: SizeUInt;
+  LOld: array of TVec2;
+  LCopy: Integer;
+  P: PByte;
+  RC: SizeInt;
+  PRC: ^SizeInt;
 begin
   LCap := SizeUInt(Length(FPoints));
   if LCap >= SizeUInt(ANeeded) then Exit;
@@ -164,7 +186,16 @@ begin
   else begin LNewCap := LCap * 2; if LNewCap < SizeUInt(ANeeded) then LNewCap := SizeUInt(ANeeded); end;
   LNewCap := AlignUp(LNewCap, 8);
   if LNewCap = 0 then LNewCap := SizeUInt(ANeeded);
+  if Length(FPoints) = 0 then begin SetLength(FPoints, Integer(LNewCap)); Exit; end;
+  P := PByte(@FPoints[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  RC := PRC^;
+  if RC = 1 then begin SetLength(FPoints, Integer(LNewCap)); Exit; end;
+  if FPointCount > 0 then LCopy := FPointCount else LCopy := 0;
+  LOld := FPoints;
+  FPoints := nil;
   SetLength(FPoints, Integer(LNewCap));
+  if LCopy > 0 then Move(LOld[0], FPoints[0], LCopy * SizeOf(TVec2));
 end;
 
 procedure TPath.EnsureVerbUnique;
@@ -172,13 +203,21 @@ var
   P: PByte;
   RC: SizeInt;
   PRC: ^SizeInt;
+  LCap: Integer;
+  LOld: array of TPathVerb;
 begin
   if Length(FVerbs) = 0 then Exit;
   P := PByte(@FVerbs[0]);
   PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
   RC := PRC^;
   if RC <> 1 then
-    SetLength(FVerbs, Length(FVerbs));
+  begin
+    LCap := Length(FVerbs);
+    LOld := FVerbs;
+    FVerbs := nil;
+    SetLength(FVerbs, LCap);
+    if FVerbCount > 0 then Move(LOld[0], FVerbs[0], FVerbCount * SizeOf(TPathVerb));
+  end;
 end;
 
 procedure TPath.EnsurePointUnique;
@@ -186,13 +225,21 @@ var
   P: PByte;
   RC: SizeInt;
   PRC: ^SizeInt;
+  LCap: Integer;
+  LOld: array of TVec2;
 begin
   if Length(FPoints) = 0 then Exit;
   P := PByte(@FPoints[0]);
   PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
   RC := PRC^;
   if RC <> 1 then
-    SetLength(FPoints, Length(FPoints));
+  begin
+    LCap := Length(FPoints);
+    LOld := FPoints;
+    FPoints := nil;
+    SetLength(FPoints, LCap);
+    if FPointCount > 0 then Move(LOld[0], FPoints[0], FPointCount * SizeOf(TVec2));
+  end;
 end;
 
 class function TPath.New: TPath;

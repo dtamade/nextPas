@@ -35,6 +35,7 @@ function ProcWood(Size: Integer; Base, Ring: TColor32): TBitmap;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.simd.raster,
   nextpas.core.bytes.binary;
 
@@ -65,9 +66,13 @@ function ProcCheckerboard(Size, TileSize: Integer; C1, C2: TColor32): TBitmap;
 var Y, X, Rem, TX, TY: Integer; Row: PByte; C: TColor32; R, G, B, A: Byte;
   Base: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcCheckerboard: Size must be >0');
+  if TileSize <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcCheckerboard: TileSize must be >0');
   Result := TBitmap.Create(Size, Size);
   Result.EnsureUnique;
-  Base := Result.ConstRowPtr(0);
+  Base := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -92,6 +97,14 @@ var X, Y, BX, BY, Off, N, SegLen, K, Run: Integer; R, G, B, MR, MG, MB, MA: Byte
   RowHash: array of ShortInt;
   Base: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcBrick: Size must be >0');
+  if BrickW <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcBrick: BrickW must be >0');
+  if BrickH <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcBrick: BrickH must be >0');
+  if Mortar <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcBrick: Mortar must be >0');
   Result := TBitmap.Create(Size, Size);
   Color32Decompose(MortarC, MR, MG, MB, MA);
   BR := Color32R(BrickC);
@@ -99,7 +112,7 @@ begin
   BB := Color32B(BrickC);
   SetLength(RowHash, Size);
   Result.EnsureUnique;
-  Base := Result.ConstRowPtr(0);
+  Base := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -163,11 +176,15 @@ var X, Y, N, R, G, B: Integer; Row, Dst: PByte; BR, BG, BB, BA: Byte;
   RowDelta: array of ShortInt;
   BasePtr: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcNoise: Size must be >0');
+  if Variation <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcNoise: Variation must be >0');
   Result := TBitmap.Create(Size, Size);
   Color32Decompose(Base, BR, BG, BB, BA);
   SetLength(RowDelta, Size);
   Result.EnsureUnique;
-  BasePtr := Result.ConstRowPtr(0);
+  BasePtr := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -218,9 +235,11 @@ function ProcGradientV(Size: Integer; Top, Bottom: TColor32): TBitmap;
 var Y: Integer; T: Single; C: TColor32; R, G, B, A: Byte; Row: PByte;
   Base: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcGradientV: Size must be >0');
   Result := TBitmap.Create(Size, Size);
   Result.EnsureUnique;
-  Base := Result.ConstRowPtr(0);
+  Base := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -237,11 +256,13 @@ var X, Y, I, SX, SY, SLen, SD, N, R, G, B: Integer; Row, Dst: PByte; P: PByte; B
   RowGrain: array of ShortInt;
   BasePtr: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcMetal: Size must be >0');
   Result := TBitmap.Create(Size, Size);
   Color32Decompose(Base, BR, BG, BB, BA);
   SetLength(RowGrain, Size);
   Result.EnsureUnique;
-  BasePtr := Result.ConstRowPtr(0);
+  BasePtr := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -309,12 +330,16 @@ function ProcGrid(Size, LineWidth: Integer; Bg, Line: TColor32): TBitmap;
 var X, Y, Cell, Rem: Integer; Row: PByte; LR, LG, LB, LA, BR, BG2, BB, BA2: Byte;
   Base: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcGrid: Size must be >0');
+  if LineWidth <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcGrid: LineWidth must be >0');
   Result := TBitmap.Create(Size, Size);
   Cell := Size div 8; if Cell < 4 then Cell := 4;
   Color32Decompose(Line, LR, LG, LB, LA);
   Color32Decompose(Bg, BR, BG2, BB, BA2);
   Result.EnsureUnique;
-  Base := Result.ConstRowPtr(0);
+  Base := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin
@@ -352,6 +377,8 @@ var X, Y: Integer; CX, CY, DY, Dist, Rf, T: Single; Row, Dst: PByte; R, G, B, A:
   RowN: array of ShortInt;
   BasePtr: PByte; Stride: Integer;
 begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcWood: Size must be >0');
   Result := TBitmap.Create(Size, Size);
   CX := Size / 2; CY := Size / 2;
   Color32Decompose(Base, BR, BG, BB, BA);
@@ -364,7 +391,7 @@ begin
     T := X - CX; DX2[X] := T * T;
   end;
   Result.EnsureUnique;
-  BasePtr := Result.ConstRowPtr(0);
+  BasePtr := Result.UnsafeMutableRowPtr(0);
   Stride := Result.Stride;
   for Y := 0 to Size - 1 do
   begin

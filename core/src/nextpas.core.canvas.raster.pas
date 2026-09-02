@@ -1,16 +1,8 @@
-{**
- * nextpas.core.canvas.raster - CPU 光栅（Tile 16x16 架构占位 + 扫描线填充，Double 梯形→整数覆盖）
- * 单线程录制，Save/Restore 栈；Fill 用 tess 梯形，Stroke 复用 PathStroke。
- * 已接入跨平台内联光栅层 nextpas.core.simd.raster（FillSolid/BlendSrcOver 直联 SSE2/标量，不走分发表，可内联）。
- * L2 依赖：单向引用 L2 vector.tess/vector.path 与 L2 image.base（canvas→vector/image），无反向；同层循环受控监控（610 行，阈 800）。
- *}
+{ nextpas.core.canvas.raster - CPU raster }
 unit nextpas.core.canvas.raster;
-
 {$I nextpas.core.settings.inc}
 {$modeswitch advancedrecords}
-
 interface
-
 uses
   nextpas.core.canvas.base,
   nextpas.core.graphics.base,
@@ -21,13 +13,14 @@ uses
   nextpas.core.canvas.intf;
 
 type
-  TCanvasState = record Mat: TMat2D; Clip: TPath; HasClip: Boolean; end;
+  TCanvasState = record Mat: TMat2D; Clip: TPath; HasClip: Boolean; ClipR: TRect; end;
   TRasterCanvas = class(TInterfacedObject, ICanvas)
   private
     FBitmap: TBitmap;
     FStack: array of TCanvasState;
     FClip: TPath;
     FHasClip: Boolean;
+    FClipR: TRect;
     FMat: TMat2D;
     procedure FillTrapezoids(const ATraps: array of TTrapezoid; AColor: TColor32);
     procedure FillTrapezoidsGradient(const ATraps: array of TTrapezoid; const AGrad: TGradient; const ABounds: TRect; ARadial: Boolean);
@@ -44,9 +37,7 @@ type
     procedure DrawGlyphRun(const ARun: TGlyphRun; const APos: TVec2);
     function Snapshot: TBitmap;
   end;
-
 function CreateRasterCanvas(AWidth, AHeight: Integer): ICanvas;
-
 implementation
 
 uses
@@ -69,8 +60,13 @@ end;
 
 constructor TRasterCanvas.Create(AWidth, AHeight: Integer);
 begin
+  if (AWidth <= 0) or (AHeight <= 0) then
+    raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Create: width/height must be > 0 (width='+IntToStr(AWidth)+' height='+IntToStr(AHeight)+')');
+  if (AWidth > 16384) or (AHeight > 16384) then
+    raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Create: width/height exceeds 16384 cap (width='+IntToStr(AWidth)+' height='+IntToStr(AHeight)+')');
   inherited Create;
-  FBitmap := TBitmap.Create(AWidth, AHeight, bfRGBA);
+  try FBitmap := TBitmap.Create(AWidth, AHeight, bfRGBA);
+  except on E: EArgumentError do raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Create: '+E.Message); end;
   FMat := TMat2D.Identity;
   FHasClip := False;
 end;
@@ -83,42 +79,52 @@ begin
   FStack[High(FStack)].Mat := FMat;
   FStack[High(FStack)].Clip := FClip;
   FStack[High(FStack)].HasClip := FHasClip;
+  FStack[High(FStack)].ClipR := FClipR;
 end;
-
 procedure TRasterCanvas.Restore;
 begin
   if Length(FStack)=0 then raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Restore: stack underflow (depth=0)');
   FMat := FStack[High(FStack)].Mat;
   FClip := FStack[High(FStack)].Clip;
   FHasClip := FStack[High(FStack)].HasClip;
+  FClipR := FStack[High(FStack)].ClipR;
   SetLength(FStack, Length(FStack)-1);
 end;
-
 procedure TRasterCanvas.Concat(const AMat: TMat2D);
 begin
   FMat := FMat.Concat(AMat);
 end;
-
 procedure TRasterCanvas.ClipPath(const APath: TPath);
+var Poly: TPoly; R: TRect; Ix,Iy,Ix2,Iy2: Single;
 begin
-  FClip := APath;
-  FHasClip := not APath.IsEmpty;
+  if APath.IsEmpty then Exit;
+  Poly:=PathFlatten(APath,0.25); Poly:=TransformPoly(Poly);
+  if Length(Poly)=0 then Exit;
+  R:=PolyBounds(Poly);
+  if R.IsEmpty then begin FClipR:=R; FClip:=APath; FHasClip:=True; Exit; end;
+  if not FHasClip then begin FClip:=APath; FClipR:=R; FHasClip:=True; Exit; end;
+  Ix:=FClipR.X; if R.X>Ix then Ix:=R.X; Iy:=FClipR.Y; if R.Y>Iy then Iy:=R.Y;
+  Ix2:=FClipR.X+FClipR.W; if R.X+R.W<Ix2 then Ix2:=R.X+R.W;
+  Iy2:=FClipR.Y+FClipR.H; if R.Y+R.H<Iy2 then Iy2:=R.Y+R.H;
+  if (Ix2<=Ix) or (Iy2<=Iy) then begin FClipR:=TRect.From(0,0,0,0); FClip:=TPath.New; FHasClip:=True; Exit; end;
+  FClipR:=TRect.From(Ix,Iy,Ix2-Ix,Iy2-Iy); FClip:=PathIntersect(FClip,APath);
 end;
-
 procedure TRasterCanvas.ClipRect(const AR: TRect);
+var Poly: TPoly; R: TRect; P: TPath; Ix,Iy,Ix2,Iy2: Single;
 begin
-  FClip := TPath.New.MoveTo(AR.X, AR.Y).LineTo(AR.X+AR.W, AR.Y).LineTo(AR.X+AR.W, AR.Y+AR.H).LineTo(AR.X, AR.Y+AR.H).Close;
-  FHasClip := not AR.IsEmpty;
+  if AR.IsEmpty then begin FClipR:=TRect.From(0,0,0,0); FClip:=TPath.New; FHasClip:=True; Exit; end;
+  P:=TPath.New.MoveTo(AR.X,AR.Y).LineTo(AR.X+AR.W,AR.Y).LineTo(AR.X+AR.W,AR.Y+AR.H).LineTo(AR.X,AR.Y+AR.H).Close;
+  Poly:=PathFlatten(P,0.25); Poly:=TransformPoly(Poly);
+  if Length(Poly)=0 then Exit;
+  R:=PolyBounds(Poly);
+  if not FHasClip then begin FClip:=P; FClipR:=R; FHasClip:=True; Exit; end;
+  Ix:=FClipR.X; if R.X>Ix then Ix:=R.X; Iy:=FClipR.Y; if R.Y>Iy then Iy:=R.Y;
+  Ix2:=FClipR.X+FClipR.W; if R.X+R.W<Ix2 then Ix2:=R.X+R.W;
+  Iy2:=FClipR.Y+FClipR.H; if R.Y+R.H<Iy2 then Iy2:=R.Y+R.H;
+  if (Ix2<=Ix) or (Iy2<=Iy) then begin FClipR:=TRect.From(0,0,0,0); FClip:=TPath.New; FHasClip:=True; Exit; end;
+  FClipR:=TRect.From(Ix,Iy,Ix2-Ix,Iy2-Iy); FClip:=PathIntersect(FClip,P);
 end;
-
-function TRasterCanvas.TransformPoly(const APoly: array of TVec2): TPoly;
-var
-  I: Integer;
-begin
-  SetLength(Result, Length(APoly));
-  for I := 0 to High(APoly) do
-    Result[I] := FMat.TransformPoint(APoly[I]);
-end;
+function TRasterCanvas.TransformPoly(const APoly: array of TVec2): TPoly; var I: Integer; begin SetLength(Result,Length(APoly)); for I:=0 to High(APoly) do Result[I]:=FMat.TransformPoint(APoly[I]); end;
 
 function SampleGradient(const AGrad: TGradient; t: Single): TColor32; inline;
 var
@@ -143,7 +149,6 @@ begin
   end
   else
   begin
-    // 二分查找替代线性 while，O(log n)；stops 递增已在 TBrush.ValidateGradient 保证
     lo := 0;
     hi := n - 1;
     while hi - lo > 1 do
@@ -192,7 +197,6 @@ begin
   B := Byte(LongWord(AColor) and $FF);
   A := Byte((LongWord(AColor) shr 24) and $FF);
   if A = 0 then Exit;
-  // COW 外提：与 DrawBitmap 一致，单次 EnsureUnique 避免每行 RowPtr SetLength 校验
   FBitmap.EnsureUnique;
   for I := 0 to High(ATraps) do
   begin
@@ -204,30 +208,28 @@ begin
     if Abs(DH) < EPSILON then Continue;
     YStart := Trunc(Tr.Y0);
     YEnd := Trunc(Tr.Y1);
-    // tile 剔除：完全在可视外跳过
     if (YEnd <= 0) or (YStart >= H) then Continue;
     if YStart < 0 then YStart := 0;
     if YEnd > H then YEnd := H;
+    if FHasClip then begin
+      if FClipR.IsEmpty then Continue;
+      if YEnd <= Trunc(FClipR.Y) then Continue;
+      if YStart >= Trunc(FClipR.Y+FClipR.H) then Continue;
+      if YStart < Trunc(FClipR.Y) then YStart:=Trunc(FClipR.Y);
+      if YEnd > Trunc(FClipR.Y+FClipR.H) then YEnd:=Trunc(FClipR.Y+FClipR.H);
+    end;
     if YEnd <= YStart then Continue;
     for Y := YStart to YEnd - 1 do
     begin
-      if DH <= 1.01 then
-      begin
-        XL := Tr.XL0; XR := Tr.XR0;
-      end
-      else
-      begin
-        T := (Single(Y) + 0.5 - Tr.Y0) / DH;
-        if T < 0 then T := 0 else if T > 1 then T := 1;
-        XL := Tr.XL0 + T * (Tr.XL1 - Tr.XL0);
-        XR := Tr.XR0 + T * (Tr.XR1 - Tr.XR0);
+      if DH <= 1.01 then begin XL:=Tr.XL0; XR:=Tr.XR0; end
+      else begin T:=(Single(Y)+0.5-Tr.Y0)/DH; if T<0 then T:=0 else if T>1 then T:=1; XL:=Tr.XL0+T*(Tr.XL1-Tr.XL0); XR:=Tr.XR0+T*(Tr.XR1-Tr.XR0); end;
+      X0:=Trunc(XL+0.5); X1:=Trunc(XR+0.5);
+      if X0<0 then X0:=0; if X1>W then X1:=W;
+      if FHasClip then begin
+        if X1<=Trunc(FClipR.X) then Continue; if X0>=Trunc(FClipR.X+FClipR.W) then Continue;
+        if X0<Trunc(FClipR.X) then X0:=Trunc(FClipR.X); if X1>Trunc(FClipR.X+FClipR.W) then X1:=Trunc(FClipR.X+FClipR.W);
       end;
-      X0 := Trunc(XL + 0.5);
-      X1 := Trunc(XR + 0.5);
-      if X0 < 0 then X0 := 0;
-      if X1 > W then X1 := W;
       if X1 <= X0 then Continue;
-      // 已外提 EnsureUnique，改用 UnsafeMutableRowPtr 写，避免 Const* 语义模糊
       P := FBitmap.UnsafeMutableRowPtr(Y) + X0 * 4;
       if A = 255 then
         RasterFillSolid(P, X1 - X0, R, G, B, A)
@@ -269,9 +271,6 @@ begin
   if ABounds.IsEmpty then Exit;
   n := AGrad.ColorCount;
   if n = 0 then Exit;
-  // LUT per-path cached: 256 entries, O(256) build (once per FillPath) vs O(pixels) sampling; no per-pixel Round.
-  // 零堆分配 LUT：高频用 GetColor/GetStop+Count 无堆分配，O(n+256) 线性扫描替代 O(256 log n) 二分
-  // Build uses Round per LUT entry (256×), sampling uses integer Trunc index (no per-pixel Round/float lerp).
   hasStops := AGrad.StopCount > 0;
   if n = 1 then
     for c := 0 to LUT_N - 1 do Lut[c] := LongWord(AGrad.GetColor(0))
@@ -323,7 +322,6 @@ begin
   if ABounds.W > ABounds.H then Rad := ABounds.W * 0.5 else Rad := ABounds.H * 0.5;
   if Rad < EPSILON then Rad := 1;
   if ABounds.W < EPSILON then invW := 0 else invW := 1 / ABounds.W;
-  // COW 外提：与 DrawBitmap 一致，单次 EnsureUnique 避免每行 RowPtr SetLength 校验
   FBitmap.EnsureUnique;
   for I := 0 to High(ATraps) do
   begin
@@ -338,24 +336,16 @@ begin
     if (YEnd <= 0) or (YStart >= H) then Continue;
     if YStart < 0 then YStart := 0;
     if YEnd > H then YEnd := H;
+    if FHasClip then begin if FClipR.IsEmpty then Continue; if YEnd<=Trunc(FClipR.Y) then Continue; if YStart>=Trunc(FClipR.Y+FClipR.H) then Continue; if YStart<Trunc(FClipR.Y) then YStart:=Trunc(FClipR.Y); if YEnd>Trunc(FClipR.Y+FClipR.H) then YEnd:=Trunc(FClipR.Y+FClipR.H); end;
     if YEnd <= YStart then Continue;
     for Y := YStart to YEnd - 1 do
     begin
-      if DH <= 1.01 then
-      begin XL := Tr.XL0; XR := Tr.XR0; end
-      else
-      begin
-        T := (Single(Y) + 0.5 - Tr.Y0) / DH;
-        if T < 0 then T := 0 else if T > 1 then T := 1;
-        XL := Tr.XL0 + T * (Tr.XL1 - Tr.XL0);
-        XR := Tr.XR0 + T * (Tr.XR1 - Tr.XR0);
-      end;
-      X0 := Trunc(XL + 0.5);
-      X1 := Trunc(XR + 0.5);
-      if X0 < 0 then X0 := 0;
-      if X1 > W then X1 := W;
+      if DH <= 1.01 then begin XL:=Tr.XL0; XR:=Tr.XR0; end
+      else begin T:=(Single(Y)+0.5-Tr.Y0)/DH; if T<0 then T:=0 else if T>1 then T:=1; XL:=Tr.XL0+T*(Tr.XL1-Tr.XL0); XR:=Tr.XR0+T*(Tr.XR1-Tr.XR0); end;
+      X0:=Trunc(XL+0.5); X1:=Trunc(XR+0.5);
+      if X0<0 then X0:=0; if X1>W then X1:=W;
+      if FHasClip then begin if X1<=Trunc(FClipR.X) then Continue; if X0>=Trunc(FClipR.X+FClipR.W) then Continue; if X0<Trunc(FClipR.X) then X0:=Trunc(FClipR.X); if X1>Trunc(FClipR.X+FClipR.W) then X1:=Trunc(FClipR.X+FClipR.W); end;
       if X1 <= X0 then Continue;
-      // 已外提 EnsureUnique，改用 UnsafeMutableRowPtr 写，避免 Const* 语义模糊
       Row := FBitmap.UnsafeMutableRowPtr(Y);
       py := Single(Y) + 0.5;
       if UseInv then
@@ -373,7 +363,6 @@ begin
         begin
           cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
           allOpaque := True;
-          // per-pixel: integer LUT lookup via Trunc, no per-pixel Round/float lerp
           for j := 0 to cnt - 1 do
           begin
             tt := t0 + Single(off + j) * stepT;
@@ -402,7 +391,6 @@ begin
         begin
           cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
           allOpaque := True;
-          // per-pixel: integer LUT lookup via Trunc, no per-pixel Round/float lerp
           for j := 0 to cnt - 1 do
           begin
             Dx := Dx0 + Single(off + j) * stepDx;
@@ -468,6 +456,7 @@ procedure TRasterCanvas.DrawBitmap(const ABitmap: TBitmap; const ASrc, ADst: TRe
 var SW, SH, DW, DH, DX, DY, Y, X, SY, SX, DstY, ClipX0, ClipX1, IX0, IY0, IX1, IY1, c4, wyI, wxI, w00i, w10i, w01i, w11i, DstStride, SrcStride, wxInc, wyInc, fxFixedStart, fyFixedStart, fxFixed, fyFixed, ky, kx, sxK, syK: Integer;
   SX0f, SY0f, ScaleX, ScaleY, FX, FY, fxF, fyF, rAcc, gAcc, bAcc, aAcc: Single;
   SrcRow, DstRow, SrcRow0, SrcRow1: PByte; DstBase, SrcBase: PByte; C00, C10, C01, C11: LongWord; R, G, B, A: Byte; wxW, wyW: array[0..3] of Single; sc: LongWord;
+  CubicRows: array[0..3] of PByte;
   function CubicW(AT: Single): Single; inline;
   var Av: Single;
   begin Av:=Abs(AT); if Av<1 then Result:=1.5*Av*Av*Av-2.5*Av*Av+1 else if Av<2 then Result:=-0.5*Av*Av*Av+2.5*Av*Av-4*Av+2 else Result:=0; end;
@@ -484,7 +473,8 @@ begin
      (Abs(ASrc.X) > High(Integer)) or (Abs(ASrc.Y) > High(Integer)) or
      (Abs(ADst.X) > High(Integer)) or (Abs(ADst.Y) > High(Integer)) then
     raise EArgumentError.Create('nextpas.core.canvas.raster.pas: DrawBitmap: rect value overflow');
-  if (Abs(ADst.W) < EPSILON) or (Abs(ADst.H) < EPSILON) then Exit;
+  if (Abs(ADst.W) < EPSILON) or (Abs(ADst.H) < EPSILON) then
+    raise EArgumentError.Create('nextpas.core.canvas.raster.pas: DrawBitmap: dst W/H too small (<EPSILON)');
   SW := Trunc(ASrc.W); SH := Trunc(ASrc.H);
   DW := Trunc(ADst.W); DH := Trunc(ADst.H);
   if (SW <= 0) or (SH <= 0) or (DW <= 0) or (DH <= 0) then Exit;
@@ -492,8 +482,11 @@ begin
   SX0f := ASrc.X; SY0f := ASrc.Y;
   ScaleX := ASrc.W / ADst.W;
   ScaleY := ASrc.H / ADst.H;
-  if IsNaN(ScaleX) or IsInfinite(ScaleX) or IsNaN(ScaleY) or IsInfinite(ScaleY) then Exit;
-  if (Abs(ScaleX) > 16384) or (Abs(ScaleY) > 16384) then Exit;
+  if IsNaN(ScaleX) or IsInfinite(ScaleX) or IsNaN(ScaleY) or IsInfinite(ScaleY) then
+    raise EArgumentError.Create('nextpas.core.canvas.raster.pas: DrawBitmap: scale is NaN/Inf');
+  if (Abs(ScaleX) > 16384) or (Abs(ScaleY) > 16384) then
+    raise EArgumentError.Create('nextpas.core.canvas.raster.pas: DrawBitmap: scale exceeds 16384 cap');
+  if FHasClip and FClipR.IsEmpty then Exit;
   FBitmap.EnsureUnique;
   DstStride := FBitmap.Stride;
   SrcStride := ABitmap.Stride;
@@ -513,6 +506,7 @@ begin
       begin
         DstY := DY + Y;
         if (DstY < 0) or (DstY >= FBitmap.Height) then Continue;
+        if FHasClip then begin if DstY<Trunc(FClipR.Y) then Continue; if DstY>=Trunc(FClipR.Y+FClipR.H) then Continue; end;
         SY := Trunc(SY0f) + Y;
         if (SY < 0) or (SY >= ABitmap.Height) then Continue;
         ClipX0 := 0;
@@ -522,6 +516,7 @@ begin
         if ClipX1 <= ClipX0 then Continue;
         if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
         if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
+        if FHasClip then begin if DX+ClipX1<=Trunc(FClipR.X) then Continue; if DX+ClipX0>=Trunc(FClipR.X+FClipR.W) then Continue; if DX+ClipX0<Trunc(FClipR.X) then ClipX0:=Trunc(FClipR.X)-DX; if DX+ClipX1>Trunc(FClipR.X+FClipR.W) then ClipX1:=Trunc(FClipR.X+FClipR.W)-DX; end;
         if ClipX1 <= ClipX0 then Continue;
         SrcRow := SrcBase + SY * SrcStride + Trunc(SX0f) * 4 + ClipX0 * 4;
         DstRow := DstBase + DstY * DstStride + DX * 4 + ClipX0 * 4;
@@ -537,6 +532,7 @@ begin
         begin
           DstY := DY + Y;
           if (DstY < 0) or (DstY >= FBitmap.Height) then Continue;
+          if FHasClip then begin if DstY<Trunc(FClipR.Y) then Continue; if DstY>=Trunc(FClipR.Y+FClipR.H) then Continue; end;
           FY := SY0f + Y * ScaleY;
           SY := Trunc(FY);
           if SY < 0 then SY := 0 else if SY >= ABitmap.Height then SY := ABitmap.Height - 1;
@@ -546,6 +542,7 @@ begin
           ClipX1 := DW;
           if DX < 0 then ClipX0 := -DX;
           if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
+          if FHasClip then begin if DX+ClipX1<=Trunc(FClipR.X) then Continue; if DX+ClipX0>=Trunc(FClipR.X+FClipR.W) then Continue; if DX+ClipX0<Trunc(FClipR.X) then ClipX0:=Trunc(FClipR.X)-DX; if DX+ClipX1>Trunc(FClipR.X+FClipR.W) then ClipX1:=Trunc(FClipR.X+FClipR.W)-DX; end;
           if ClipX1 <= ClipX0 then Continue;
           for X := ClipX0 to ClipX1 - 1 do
           begin
@@ -565,6 +562,7 @@ begin
         if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
         if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
         if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
+        if FHasClip then begin if DX+ClipX1<=Trunc(FClipR.X) then Exit; if DX+ClipX0>=Trunc(FClipR.X+FClipR.W) then Exit; if DX+ClipX0<Trunc(FClipR.X) then ClipX0:=Trunc(FClipR.X)-DX; if DX+ClipX1>Trunc(FClipR.X+FClipR.W) then ClipX1:=Trunc(FClipR.X+FClipR.W)-DX; end;
         if ClipX1 <= ClipX0 then Exit;
         fxFixedStart := Round((SX0f + (ClipX0 + 0.5)*ScaleX - 0.5)*256);
         fyFixedStart := Round((SY0f + 0.5*ScaleY - 0.5)*256);
@@ -573,6 +571,7 @@ begin
         begin
           DstY := DY + Y;
           if (DstY < 0) or (DstY >= FBitmap.Height) then begin Inc(fyFixed, wyInc); Continue; end;
+          if FHasClip then begin if DstY<Trunc(FClipR.Y) then begin Inc(fyFixed, wyInc); Continue; end; if DstY>=Trunc(FClipR.Y+FClipR.H) then begin Inc(fyFixed, wyInc); Continue; end; end;
           if fyFixed >= 0 then begin IY0 := fyFixed div 256; wyI := fyFixed and 255; end
           else begin IY0 := (fyFixed - 255) div 256; wyI := fyFixed - IY0*256; end;
           if ABitmap.Height = 1 then begin IY0 := 0; wyI := 0; end
@@ -656,6 +655,7 @@ begin
         if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
         if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
         if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
+        if FHasClip then begin if DX+ClipX1<=Trunc(FClipR.X) then Exit; if DX+ClipX0>=Trunc(FClipR.X+FClipR.W) then Exit; if DX+ClipX0<Trunc(FClipR.X) then ClipX0:=Trunc(FClipR.X)-DX; if DX+ClipX1>Trunc(FClipR.X+FClipR.W) then ClipX1:=Trunc(FClipR.X+FClipR.W)-DX; end;
         if ClipX1 <= ClipX0 then Exit;
         fxFixedStart := Round((SX0f + (ClipX0 + 0.5)*ScaleX - 0.5)*256);
         fyFixedStart := Round((SY0f + 0.5*ScaleY - 0.5)*256);
@@ -664,9 +664,16 @@ begin
         begin
           DstY := DY + Y;
           if (DstY < 0) or (DstY >= FBitmap.Height) then begin Inc(fyFixed, wyInc); Continue; end;
+          if FHasClip then begin if DstY<Trunc(FClipR.Y) then begin Inc(fyFixed, wyInc); Continue; end; if DstY>=Trunc(FClipR.Y+FClipR.H) then begin Inc(fyFixed, wyInc); Continue; end; end;
           if fyFixed >= 0 then begin IY0 := fyFixed div 256; wyI := fyFixed and 255; end
           else begin IY0 := (fyFixed - 255) div 256; wyI := fyFixed - IY0*256; end;
           DstRow := DstBase + DstY * DstStride;
+          for ky := 0 to 3 do
+          begin
+            syK := IY0 + ky - 1;
+            if syK < 0 then syK := 0 else if syK >= ABitmap.Height then syK := ABitmap.Height - 1;
+            CubicRows[ky] := SrcBase + syK * SrcStride;
+          end;
           fxFixed := fxFixedStart;
           for X := ClipX0 to ClipX1 - 1 do
           begin
@@ -678,9 +685,7 @@ begin
               rAcc := 0; gAcc := 0; bAcc := 0; aAcc := 0;
               for ky := 0 to 3 do
               begin
-                syK := IY0 + ky - 1;
-                if syK < 0 then syK := 0 else if syK >= ABitmap.Height then syK := ABitmap.Height - 1;
-                SrcRow := ABitmap.ConstRowPtr(syK);
+                SrcRow := CubicRows[ky];
                 for kx := 0 to 3 do
                 begin
                   sxK := IX0 + kx - 1;
