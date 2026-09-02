@@ -63,7 +63,16 @@ begin
 end;
 
 destructor TAudioPlaylist.Destroy;
+var I: Integer;
 begin
+  if Assigned(FLock) then
+  begin
+    FLock.Acquire;
+    try
+      for I := 0 to High(FItems) do SetLength(FItems[I].Buffer.Data, 0);
+      SetLength(FItems, 0);
+    finally FLock.Release; end;
+  end;
   FLock.Free;
   inherited;
 end;
@@ -152,6 +161,7 @@ begin
     AudioEnsureCapacity(LCap, FCount + 1, 4);
     if Length(FItems) <> LCap then SetLength(FItems, LCap);
     FItems[FCount].Buffer := ABuffer;
+    FItems[FCount].Buffer.Data := SpanClone(TByteSpan.FromBytes(ABuffer.Data)); // bytes.ops 单源 deep copy 隔离
     FItems[FCount].Gain := AGain;
     FItems[FCount].CrossfadeMs := ACrossfadeMs;
     Inc(FCount);
@@ -161,9 +171,11 @@ begin
 end;
 
 procedure TAudioPlaylist.Clear;
+var I: Integer;
 begin
   FLock.Acquire;
   try
+    for I := 0 to High(FItems) do SetLength(FItems[I].Buffer.Data, 0);
     SetLength(FItems, 0);
     FCount := 0;
     FIndex := 0;
