@@ -160,10 +160,17 @@ begin
   ResPackLayoutClear(ALayout);
   N := SizeUInt(Length(AEntries));
   ALayout.N := N;
+  if N > RESPACK_MAX_ENTRY_COUNT then
+    raise EResPackTooLarge.Create('respack: entry count exceeds limit');
 
   { ── 校验 + 上限 ── }
   TotalInput := 0;
-  SetLength(ALayout.PathLens, N);
+  try
+    SetLength(ALayout.PathLens, N);
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  end;
   if N > 0 then
     for I := 0 to N - 1 do
     begin
@@ -183,7 +190,12 @@ begin
     raise EResPackError.Create('respack: unsupported CodecId, v1 only store(0)');
 
   { ── 排序 ── }
-  SetLength(ALayout.Order, N);
+  try
+    SetLength(ALayout.Order, N);
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  end;
   if N > 0 then
   begin
     for I := 0 to N - 1 do
@@ -202,7 +214,12 @@ begin
 
   { ── fnv ── }
   NeedFnv := AOpts.Hashes or AOpts.Deduplicate;
-  SetLength(ALayout.FnvBuf, N);
+  try
+    SetLength(ALayout.FnvBuf, N);
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  end;
   if NeedFnv and (N > 0) then
     for I := 0 to N - 1 do
       ALayout.FnvBuf[I] := ResPackFnv1a32(AEntries[I].Data, AEntries[I].DataSize);
@@ -225,8 +242,13 @@ begin
     DataStart := StrTabBase;
   ALayout.DataStart := DataStart;
 
-  SetLength(ALayout.EntrySlots, N);
-  SetLength(ALayout.Slots, N);
+  try
+    SetLength(ALayout.EntrySlots, N);
+    SetLength(ALayout.Slots, N);
+  except
+    on E: EOutOfMemory do
+      raise EResPackTooLarge.Create('respack: entry count too large for host');
+  end;
   SlotCount := 0;
   Cur := DataStart;
   if AOpts.Deduplicate then

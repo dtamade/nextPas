@@ -303,7 +303,12 @@ begin
   { Arena 预算：单 slab TLocalArena 承载全量 entry 元数据，TryMulSizeUInt 预算防恶意包 RESPACK_MAX_ENTRY_COUNT 时堆 churn/回绕，BytesCopy 单源复用，inline 零拷贝视图，try..finally 由 Open 释放。 }
   if not TryMulSizeUInt(ACount, SizeUInt(SizeOf(TResPackEntry)), NeedBytes) then
     raise EResPackTooLarge.Create('respack: entry table size overflow');
-  ACachedArena := TLocalArena.Create(NeedBytes);
+  try
+    ACachedArena := TLocalArena.Create(NeedBytes);
+  except
+    on E: EOutOfMemoryError do
+      raise EResPackTooLarge.Create('respack: entry table too large');
+  end;
   ACachedPtr := PResPackEntry(ACachedArena.Alloc(NeedBytes));
   if ACachedPtr = nil then
     raise EResPackTooLarge.Create('respack: entry table arena alloc failed');
