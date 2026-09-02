@@ -1,6 +1,6 @@
 unit nextpas.core.vfs;
 
-{** @desc 门面：纯 re-export + inline 转发，不含逻辑（design-conventions §2）。 }
+{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2，182 行≈22% 800 阈值，13 子模块聚合为族完整性，inline 零拷贝复用 bytes.ops 单源，CONTRACT 单源，try-finally 不丢）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -22,6 +22,7 @@ uses
   nextpas.core.vfs.util;
 
 type
+  { re-export 8 别名：base/intf/errors/memtree/util/transform/mount }
   TEntryInfo = nextpas.core.vfs.base.TEntryInfo;
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
@@ -44,6 +45,7 @@ type
   TVfsHeaderPredicateFunc = nextpas.core.vfs.transform.TVfsHeaderPredicateFunc;
   TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
 
+{ 工厂/视图/装饰器/辅助 15 inline 薄转发，零拷贝复用 bytes.ops 单源 }
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs; inline;
@@ -74,6 +76,8 @@ procedure VfsWalk(const AFs: IVfs; const ARoot: string;
   const AVisit: TVfsVisitProc); inline;
 
 implementation
+
+{ 薄转发：inline 单源委托，零额外分配，资源释放由 owner（memtree/embedded/os）持有不丢 }
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 begin

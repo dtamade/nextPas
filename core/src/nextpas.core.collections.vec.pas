@@ -3,6 +3,12 @@ unit nextpas.core.collections.vec;
 
 
 {$I nextpas.core.settings.inc}
+{ Inline policy (red-line 2): only hot zero-copy/small accessors are conditional-inline
+  (TDrainIter.GetCurrent, SyncDataPtr, DoIter*, CalcGrowSize, Count, GetMemory,
+   GetUnchecked/PutUnchecked/GetPtrUnchecked, SliceView, PushUnchecked).
+  Loop/SIMD/route/search/sort/shuffle bodies remain out-of-line to avoid
+  per-specialization I-Cache bloat. Growth via FactorGrow/BytesGrowCapacity single
+  source (bytes.ops), SliceView via TSpan.FromPointer zero-copy (no alloc). }
 
 interface
 
@@ -141,333 +147,333 @@ type
     procedure SaveToUnchecked(aDst: TCollection); override;
 
     function  GetMemory: PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  GetItem(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure PutItem(aIndex: SizeUInt; const aValue: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  Get(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetItem(aIndex: SizeUInt): T;
+    procedure PutItem(aIndex: SizeUInt; const aValue: T);
+    function  Get(aIndex: SizeUInt): T;
     function  GetUnchecked(aIndex: SizeUInt): T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Put(aIndex: SizeUInt; const aValue: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Put(aIndex: SizeUInt; const aValue: T);
     procedure PutUnchecked(aIndex: SizeUInt; const aValue: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  GetPtr(aIndex: SizeUInt): PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetPtr(aIndex: SizeUInt): PElement;
     function  GetPtrUnchecked(aIndex: SizeUInt): PElement; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     // Read-only view into a contiguous subrange (zero-copy)
     function  SliceView(aIndex, aCount: SizeUInt): TSpan; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Resize(aNewSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Ensure(aCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Resize(aNewSize: SizeUInt);
+    procedure Ensure(aCount: SizeUInt);
 
-    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection); overload;
+    procedure Overwrite(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure OverwriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
-    procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Read(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure Read(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure ReadUnchecked(aIndex: SizeUInt; var aDst: specialize TGenericArray<T>; aCount: SizeUInt); overload;
 
-    procedure Swap(aIndex1, aIndex2: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Swap(aIndex1, aIndex2, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Swap(aIndex1, aIndex2, aCount, aSwapBufferSize: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Swap(aIndex1, aIndex2: SizeUInt); overload;
+    procedure SwapUnchecked(aIndex1, aIndex2: SizeUInt);
+    procedure Swap(aIndex1, aIndex2, aCount: SizeUInt); overload;
+    procedure Swap(aIndex1, aIndex2, aCount, aSwapBufferSize: SizeUInt); overload;
 
-    procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Copy(aSrcIndex, aDstIndex, aCount: SizeUInt);
+    procedure CopyUnchecked(aSrcIndex, aDstIndex, aCount: SizeUInt);
 
-    procedure Fill(aIndex: SizeUInt; const aValue: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Fill(aIndex, aCount: SizeUInt; const aValue: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Fill(aIndex: SizeUInt; const aValue: T); overload;
+    procedure Fill(aIndex, aCount: SizeUInt; const aValue: T); overload;
 
-    procedure Zero(aIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Zero(aIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Zero(aIndex: SizeUInt); overload;
+    procedure Zero(aIndex, aCount: SizeUInt); overload;
 
-    function Find(const aValue: T): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T): SizeInt; overload;
+    function Find(const aValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function Find(const aValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Find(const aValue: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-    function Find(const aValue: T; aStartIndex: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T; aStartIndex: SizeUInt): SizeInt; overload;
+    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-    function Find(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-
-    function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Find(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    procedure Reverse(aStartIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Reverse(aStartIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-
-    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-
-    function FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Reverse(aStartIndex: SizeUInt); overload;
+    procedure Reverse(aStartIndex, aCount: SizeUInt); overload;
+
+    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function ForEach(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
-    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function ForEach(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    function CountOf(const aElement: T; aStartIndex: SizeUInt): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-
-    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
-
-    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLastIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    procedure Sort; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aComparer: specialize TCompareFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aComparer: specialize TCompareMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountOf(const aElement: T; aStartIndex: SizeUInt): SizeUInt; overload;
+    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Sort(aComparer: specialize TCompareRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountOf(const aElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
-    procedure Sort(aStartIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt): SizeUInt; overload;
+    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    procedure Sort(aStartIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountOf(const aElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function BinarySearch(const aElement: T): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearch(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountIf(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeUInt; overload;
+    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeUInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function CountIf(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeUInt; overload;
     {$ENDIF}
 
-    function BinarySearchInsert(const aElement: T): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt); overload;
+    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload;
+    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Replace(const aElement, aNewElement: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt); overload;
+    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer); overload;
+    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Replace(const aElement, aNewElement: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>); overload;
     {$ENDIF}
 
-    procedure Shuffle; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Shuffle(aRandomGenerator: TRandomGeneratorRefFunc); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
-    procedure Shuffle(aStartIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-    procedure Shuffle(aStartIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ReplaceIf(const aNewElement: T; aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
 
-    function IsSorted: Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort; overload;
+    procedure Sort(aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure Sort(aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function IsSorted(aComparer: specialize TCompareRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort(aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
-    function IsSorted(aStartIndex: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort(aStartIndex: SizeUInt); overload;
+    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
-    function IsSorted(aStartIndex, aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort(aStartIndex, aCount: SizeUInt); overload;
+    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer); overload;
+    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$ENDIF}
-
-    function FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Sort(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>); overload;
     {$ENDIF}
 
-    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function BinarySearch(const aElement: T): SizeInt; overload;
+    function BinarySearch(const aElement: T; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearch(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function BinarySearch(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+    function BinarySearch(const aElement: T; aStartIndex: SizeUInt): SizeInt; overload;
+    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function BinarySearch(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function BinarySearch(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function BinarySearchInsert(const aElement: T): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function BinarySearchInsert(const aElement: T; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function BinarySearchInsert(const aElement: T; aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): SizeInt; overload;
+    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function BinarySearchInsert(const aElement: T; aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function FindLast(const aValue: T): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Shuffle; overload;
+    procedure Shuffle(aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure Shuffle(aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLast(const aValue: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Shuffle(aRandomGenerator: TRandomGeneratorRefFunc); overload;
+    {$ENDIF}
+    procedure Shuffle(aStartIndex: SizeUInt); overload;
+    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    procedure Shuffle(aStartIndex: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
+    {$ENDIF}
+    procedure Shuffle(aStartIndex, aCount: SizeUInt); overload;
+    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorFunc; aData: Pointer); overload;
+    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorMethod; aData: Pointer); overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    procedure Shuffle(aStartIndex, aCount: SizeUInt; aRandomGenerator: TRandomGeneratorRefFunc); overload;
     {$ENDIF}
 
-    function FindLast(const aValue: T; aStartIndex: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function IsSorted: Boolean; overload;
+    function IsSorted(aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSorted(aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function IsSorted(aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
+    {$ENDIF}
+    function IsSorted(aStartIndex: SizeUInt): Boolean; overload;
+    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function IsSorted(aStartIndex: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
+    {$ENDIF}
+    function IsSorted(aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer): Boolean; overload;
+    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareMethod<T>; aData: Pointer): Boolean; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function IsSorted(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function Contains(const aValue: T; aStartIndex: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateMethod<T>; aData: Pointer): SizeInt; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindIfNot(aStartIndex, aCount: SizeUInt; aPredicate: specialize TPredicateRefFunc<T>): SizeInt; overload;
     {$ENDIF}
 
-    function  GetCapacity: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SetCapacity(aCapacity: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  GetGrowStrategy: IGrowthStrategy; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SetGrowStrategy(aGrowStrategy: IGrowthStrategy); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLast(const aValue: T): SizeInt; overload;
+    function FindLast(const aValue: T; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLast(const aValue: T; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function FindLast(const aValue: T; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
 
-    function  TryReserve(aAdditional: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Reserve(aAdditional: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryReserveExact(aAdditional: SizeUInt): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure ReserveExact(aAdditional: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure EnsureCapacity(aCapacity: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function FindLast(const aValue: T; aStartIndex: SizeUInt): SizeInt; overload;
+    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function FindLast(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+
+    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt): SizeInt; overload;
+    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): SizeInt; overload;
+    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): SizeInt; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function FindLast(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): SizeInt; overload;
+    {$ENDIF}
+
+    function Contains(const aValue: T; aStartIndex: SizeUInt): Boolean; overload;
+    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function Contains(const aValue: T; aStartIndex: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
+    {$ENDIF}
+
+    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt): Boolean; overload;
+    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsFunc<T>; aData: Pointer): Boolean; overload;
+    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsMethod<T>; aData: Pointer): Boolean; overload;
+    {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
+    function Contains(const aValue: T; aStartIndex, aCount: SizeUInt; aEquals: specialize TEqualsRefFunc<T>): Boolean; overload;
+    {$ENDIF}
+
+    function  GetCapacity: SizeUInt;
+    procedure SetCapacity(aCapacity: SizeUInt);
+    function  GetGrowStrategy: IGrowthStrategy;
+    procedure SetGrowStrategy(aGrowStrategy: IGrowthStrategy);
+
+    function  TryReserve(aAdditional: SizeUInt): Boolean;
+    procedure Reserve(aAdditional: SizeUInt);
+    function  TryReserveExact(aAdditional: SizeUInt): Boolean;
+    procedure ReserveExact(aAdditional: SizeUInt);
+    procedure EnsureCapacity(aCapacity: SizeUInt);
 
     procedure Shrink;
     procedure ShrinkTo(aCapacity: SizeUInt);
@@ -478,93 +484,93 @@ type
     procedure DisableAlignedGrowth;
     function  IsAlignedGrowthEnabled: Boolean;
     procedure Truncate(aCount: SizeUInt);
-    procedure ResizeExact(aNewSize: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure ResizeExact(aNewSize: SizeUInt);
 
-    procedure Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Insert(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnchecked(aIndex: SizeUInt; const aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Insert(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Insert(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Insert(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Insert(aIndex: SizeUInt; const aElement: T); overload;
+    procedure InsertUnchecked(aIndex: SizeUInt; const aElement: T); overload;
+    procedure Insert(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure Insert(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure InsertUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
-    procedure Write(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Write(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Write(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection); overload;
+    procedure Write(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure WriteUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
-    procedure WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: array of T); overload;
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection); overload;
+    procedure WriteExact(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure WriteExactUnchecked(aIndex: SizeUInt; const aSrc: TCollection; aCount: SizeUInt); overload;
 
-    procedure Push(const aSrc: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Push(const aSrc: array of T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Push(const aSrc: TCollection; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Push(const aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPop(aDst: Pointer; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPop(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPop(var aDst: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPeek(out aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Push(const aSrc: Pointer; aCount: SizeUInt); overload;
+    procedure Push(const aSrc: array of T); overload;
+    procedure Push(const aSrc: TCollection; aCount: SizeUInt); overload;
+    procedure Push(const aElement: T); overload;
+    function  TryPop(aDst: Pointer; aCount: SizeUInt): Boolean; overload;
+    function  TryPop(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload;
+    function  TryPop(var aDst: T): Boolean; overload;
+    function  TryPeek(out aElement: T): Boolean; overload;
 
 
-    function  Pop: T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryPeek(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  PeekRange(aCount: SizeUInt): PElement; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  Peek: T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  Pop: T; overload;
+    function  TryPeekCopy(aDst: Pointer; aCount: SizeUInt): Boolean; overload;
+    function  TryPeek(var aDst: specialize TGenericArray<T>; aCount: SizeUInt): Boolean; overload;
+    function  PeekRange(aCount: SizeUInt): PElement; overload;
+    function  Peek: T; overload;
 
-    procedure Delete(aIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Delete(aIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure DeleteSwap(aIndex, aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure DeleteSwap(aIndex: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Delete(aIndex, aCount: SizeUInt); overload;
+    procedure Delete(aIndex: SizeUInt); overload;
+    procedure DeleteSwap(aIndex, aCount: SizeUInt); overload;
+    procedure DeleteSwap(aIndex: SizeUInt); overload;
 
-    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  RemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  SwapRemoveAt(aIndex: SizeUInt): T; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure RemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
+    procedure RemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure RemoveAt(aIndex: SizeUInt; var aElement: T); overload;
+    function  RemoveAt(aIndex: SizeUInt): T; overload;
+    function  TryRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload;
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer; aCount: SizeUInt); overload;
+    procedure SwapRemoveCopyAt(aIndex: SizeUInt; aDst: Pointer); overload;
+    procedure SwapRemoveArrayAt(aIndex: SizeUInt; var aElements: specialize TGenericArray<T>; aCount: SizeUInt); overload;
+    procedure SwapRemoveAt(aIndex: SizeUInt; var aElement: T); overload;
+    function  SwapRemoveAt(aIndex: SizeUInt): T; overload;
+    function  TrySwapRemoveAt(aIndex: SizeUInt; var aElement: T): Boolean; overload;
 
     { 函数式编程方法 }
-    function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Filter(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Filter(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): specialize IVec<T>; overload;
+    function Filter(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): specialize IVec<T>; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Filter(aPredicate: specialize TPredicateRefFunc<T>): specialize IVec<T>; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Filter(aPredicate: specialize TPredicateRefFunc<T>): specialize IVec<T>; overload;
     {$ENDIF}
 
-    function Any(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Any(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Any(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function Any(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function Any(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Any(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
-    function All(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function All(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function All(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boolean; overload;
+    function All(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): Boolean; overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    function All(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function All(aPredicate: specialize TPredicateRefFunc<T>): Boolean; overload;
     {$ENDIF}
 
     { 就地操作方法 }
-    procedure Retain(aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    procedure Retain(aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Retain(aPredicate: specialize TPredicateFunc<T>; aData: Pointer); overload;
+    procedure Retain(aPredicate: specialize TPredicateMethod<T>; aData: Pointer); overload;
     {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-    procedure Retain(aPredicate: specialize TPredicateRefFunc<T>); overload; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    procedure Retain(aPredicate: specialize TPredicateRefFunc<T>); overload;
     {$ENDIF}
 
-    function Drain(aStart, aCount: SizeUInt): specialize IVec<T>; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function Drain(aStart, aCount: SizeUInt): specialize IVec<T>;
     function DrainRange(aStart, aEnd: SizeUInt): TDrainIter;
 
     function SplitOff(aIndex: SizeUInt): specialize IVec<T>;
@@ -577,8 +583,8 @@ type
     { 便利方法 }
     function ToArray: specialize TGenericArray<T>; override;
     function Clone: TCollection; override;
-    function First: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function Last: T; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function First: T;
+    function Last: T;
 
     { 高性能无检查方法 }
     procedure PushUnchecked(const aElement: T); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}

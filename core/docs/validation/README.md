@@ -8,7 +8,7 @@ carrier types and avoiding `SysUtils` duplication.
 - Layer: L2 (depends on L0-L1: `base` exception taxonomy, record helpers).
 - Public facade: `src/nextpas.core.validation.pas`.
 - Dependency policy: L0-L1 only; no `SysUtils`, no `platform` raw units.
-- Truth: `focused-runtime` (`module-registry` L2 `validation`).
+- Truth: `focused-runtime` (`core-module-registry` L2 `validation`; `module-registry` deprecated alias).
 - Four-piece: facade-only single-unit (record API, no separate base/intf/ffi; helpers are inline-friendly pure functions).
 
 ## Gates

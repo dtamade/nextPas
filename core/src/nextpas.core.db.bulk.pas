@@ -154,6 +154,7 @@ procedure DbBulkEndCopy(var ABuffer: TDbBulkBuffer; AMaxPlaceholders: Integer;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.text.sql;
 
@@ -525,17 +526,17 @@ begin
     end;
     SetLength(Result, LCap);
     P := PAnsiChar(Result); P0 := P;
-    Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CIns), Length(CIns)); Inc(P, Length(CIns));
     L := SqlWriteQuotedIdent(P, ATable); Inc(P, L);
-    Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
-    if Length(AColList) > 0 then begin Move(PAnsiChar(AColList)^, P^, Length(AColList)); Inc(P, Length(AColList)); end;
-    Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CParen), Length(CParen)); Inc(P, Length(CParen));
+    if Length(AColList) > 0 then begin nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(AColList), Length(AColList)); Inc(P, Length(AColList)); end;
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CValues), Length(CValues)); Inc(P, Length(CValues));
     for I := 0 to High(ARow) do
     begin
       if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
       L := SqlWriteLiteralText(P, ARow[I]); Inc(P, L);
     end;
-    Move(PAnsiChar(CRParen)^, P^, Length(CRParen)); Inc(P, Length(CRParen));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CRParen), Length(CRParen)); Inc(P, Length(CRParen));
     SetLength(Result, P - P0);
   except
     on E: ESqlError do raise EDbError.CreateSimple(dbkUnknown, E.Message);
@@ -585,15 +586,15 @@ begin
     end;
     SetLength(Result, LCap);
     P := PAnsiChar(Result); P0 := P;
-    Move(PAnsiChar(CIns)^, P^, Length(CIns)); Inc(P, Length(CIns));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CIns), Length(CIns)); Inc(P, Length(CIns));
     L := WriteQuoted(P, ATable); Inc(P, L);
-    Move(PAnsiChar(CParen)^, P^, Length(CParen)); Inc(P, Length(CParen));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CParen), Length(CParen)); Inc(P, Length(CParen));
     for I := 0 to High(ACols) do
     begin
       if I > 0 then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;
       L := WriteQuoted(P, ACols[I]); Inc(P, L);
     end;
-    Move(PAnsiChar(CValues)^, P^, Length(CValues)); Inc(P, Length(CValues));
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(CValues), Length(CValues)); Inc(P, Length(CValues));
     for I := AFrom to E do
     begin
       if I > AFrom then begin P[0] := ','; P[1] := ' '; Inc(P, 2); end;

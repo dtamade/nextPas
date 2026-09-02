@@ -36,6 +36,7 @@ type
     FMaxKeys: Integer;
     FNowNs: TKeyedNowNsFn;
     FLock: INativeMutex;
+    FCount: Integer;
     FKeys: array of string;
     FTokens: array of Double;
     FLastRefillNs: array of UInt64;
@@ -66,6 +67,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.math,
   nextpas.core.platform.time;   { platform_monotonic_ns }
@@ -98,6 +100,7 @@ begin
   else
     FNowNs := ANowNs;
   FLock := Mutex;
+  FCount := 0;
 end;
 
 destructor TKeyedTokenBucketLimiter.Destroy;
@@ -107,6 +110,7 @@ begin
   FLastRefillNs := nil;
   FLastUsedNs := nil;
   FDeniedUntilNs := nil;
+  FCount := 0;
   FNowNs := nil;
   FLock := nil;
   inherited Destroy;
@@ -116,17 +120,18 @@ function TKeyedTokenBucketLimiter.FindOrCreate(const AKey: string;
   const ANowNs: UInt64): Integer;
 var
   LI, LEvict: Integer;
+  LCap: Integer;
 begin
   Result := -1;
   LEvict := -1;
-  for LI := 0 to High(FKeys) do
+  for LI := 0 to FCount - 1 do
   begin
     if FKeys[LI] = AKey then
       Exit(LI);
     if (LEvict < 0) or (FLastUsedNs[LI] < FLastUsedNs[LEvict]) then
       LEvict := LI;
   end;
-  if Length(FKeys) >= FMaxKeys then
+  if FCount >= FMaxKeys then
   begin
     if LEvict < 0 then
       Exit;
@@ -134,12 +139,19 @@ begin
   end
   else
   begin
-    SetLength(FKeys, Length(FKeys) + 1);
-    SetLength(FTokens, Length(FTokens) + 1);
-    SetLength(FLastRefillNs, Length(FLastRefillNs) + 1);
-    SetLength(FLastUsedNs, Length(FLastUsedNs) + 1);
-    SetLength(FDeniedUntilNs, Length(FDeniedUntilNs) + 1);
-    Result := High(FKeys);
+    { perf: 指数预分配 via bytes.ops.BytesGrowCapacityInt 单源 amortized O(1),
+      批量 SetLength 至容量（非 +1 线性），热点锁内少重分配；not inline per red-line 2 }
+    if FCount >= Length(FKeys) then
+    begin
+      LCap := BytesGrowCapacityInt(Length(FKeys), FCount + 1);
+      SetLength(FKeys, LCap);
+      SetLength(FTokens, LCap);
+      SetLength(FLastRefillNs, LCap);
+      SetLength(FLastUsedNs, LCap);
+      SetLength(FDeniedUntilNs, LCap);
+    end;
+    Result := FCount;
+    Inc(FCount);
   end;
   FKeys[Result] := AKey;
   FTokens[Result] := FBurst;
@@ -220,6 +232,7 @@ begin
     FLastRefillNs := nil;
     FLastUsedNs := nil;
     FDeniedUntilNs := nil;
+    FCount := 0;
   finally
     FLock.Release;
   end;
@@ -229,7 +242,7 @@ function TKeyedTokenBucketLimiter.KeyCount: Integer;
 begin
   FLock.Acquire;
   try
-    Result := Length(FKeys);
+    Result := FCount;
   finally
     FLock.Release;
   end;
