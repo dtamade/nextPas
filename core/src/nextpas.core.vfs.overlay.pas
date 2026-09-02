@@ -5,9 +5,8 @@ unit nextpas.core.vfs.overlay;
   （同一虚拟路径多层，首命中胜出）。INV-O1：列表按传入优先级有序，Exists/Stat/
   OpenRead 按序首命中；List('.') 去重合并按首层优先保留。
   INV-V2 不可变快照+热点缓存：发布后只读，SwissTable 16槽 RWLock 读并发零争用/
-  阻塞 AcquireWrite 热点 List 缓存单源 helper via vfs.cache（对齐 mount §6，防 TryAcquireWrite 丢弃致重复 O(k log k)），首击流式增量哈希去重 O(k)+O(k log k)
-  VfsSortEntries 去重后排序后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops
-  VfsNameCompare SpanCompare 零拷贝单源，VfsSortEntries 单源。 }
+  阻塞 AcquireWrite 热点 List 缓存单源 helper via vfs.cache（对齐 mount §6，防 TryAcquireWrite 丢弃致重复 O(k log k)），首击 k 路归并 O(k·m) 零哈希零额外堆（仅 Result 一次分配，inline VfsNameCompare/SpanCompare 零拷贝单源 via bytes.ops，去重后已有序免二次 VfsSortEntries）后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops
+  VfsNameCompare SpanCompare 零拷贝单源，VfsSortEntries 单源（归并已有序不再二次排序）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -27,8 +26,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
-  nextpas.core.collections.hashmap.swiss.str;
+  nextpas.core.bytes.ops;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -157,7 +155,7 @@ begin
   raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
-{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；ALimit 回缩守零浪费（小目录<64 按限界裁剪不对齐 BYTES_BUILDER_MIN_GROW 预分配，复用 mount 同款模板 vialimit）；资源释放不丢（Seen 哈希表 try-finally 托管异常自动释放，Result/Cur 局部托管） }
+{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；ALimit 回缩守零浪费（小目录<64 按限界裁剪不对齐 BYTES_BUILDER_MIN_GROW 预分配，复用 mount 同款模板 vialimit）；资源释放不丢（LCurs/Result/Idx 局部托管，无 Seen 堆表） }
 procedure OverlayEnsureCapEntries(var AArr: TEntryArray; const ANeed: SizeInt; const ALimit: SizeInt); inline;
 var
   LCap: SizeUInt;
@@ -171,20 +169,23 @@ begin
   SetLength(AArr, SizeInt(LCap));
 end;
 
-{ 流式增量去重 List：优先级顺序 O(k) 哈希去重 + 去重后 O(k log k) VfsSortEntries 单源排序，避免全量 Temp 物化后 Sort+Unique+Copy 双重拷贝；bytes.ops VfsNameCompare SpanCompare 零拷贝单源 via VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline（ALimit 回缩小目录<64 零浪费）。 }
+{ k 路归并去重 List：零哈希零额外堆（热点 Miss 仅 Result 一次分配，后续 O(1) 哈希+O(k) Copy 缓存）；各层 List 已有序（os/embedded/memtree VfsSortEntries 单源），按字典序归并同时按首层优先去重，VfsNameCompare/SpanCompare 零拷贝单源 via bytes.ops inline 去重后已有序免二次 VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline（ALimit 回缩<64 零浪费），资源释放不丢（LCurs/Result/Idx 局部托管，无 Seen 堆表 try-finally）。 }
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J: Integer;
+  I: Integer;
   OutN: SizeInt;
-  Cur: TEntryArray;
-  LCurs: array of TEntryArray;
   LTotal: SizeInt;
   LStat: TStatInfo;
-  Seen: specialize TSwissTableStr<Byte>;
+  LCurs: array of TEntryArray;
+  Idx: array of SizeInt;
+  BestName: string;
+  BestLayer, BestIdx: Integer;
+  CurName: string;
+  Lcmp: Integer;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
-  { 热点目录缓存：SwissTable 16槽 RWLock 读并发零争用/阻塞 AcquireWrite 单源 helper，首击流式增量哈希去重+去重后排序 后续 O(1) 哈希+O(k) Copy 隔离，对齐 mount §6，零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline via VfsSortEntries }
+  { 热点目录缓存：SwissTable 16槽 RWLock 读并发零争用/阻塞 AcquireWrite 单源 helper，首击 k 路归并零哈希零额外堆（仅 Result 一次分配，去重后已有序）后续 O(1) 哈希+O(k) Copy 隔离，对齐 mount §6，零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline 免二次 VfsSortEntries }
   if TryGetListCached(ADirPath, Result) then Exit;
   if not VfsIsRoot(ADirPath) then
   begin
@@ -193,7 +194,7 @@ begin
     if not LStat.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
-  { 预取各层 List 以得精确 ALimit 上界：sum Length(Cur) 为去重前最大扇出，bytes.ops BytesNextCapacity 按此限界回缩，小目录<64 避免 BYTES_BUILDER_MIN_GROW=64 预分配浪费；零拷贝 Move 单源 }
+  { 预取各层 List 以得精确 ALimit 上界：sum Length 为去重前最大扇出，bytes.ops BytesNextCapacity 按此限界回缩，小目录<64 避免 BYTES_BUILDER_MIN_GROW=64 预分配浪费；零拷贝 Move 单源 }
   SetLength(LCurs, Length(FList));
   LTotal := 0;
   for I := 0 to High(FList) do
@@ -201,38 +202,67 @@ begin
     try LCurs[I] := FList[I].List(ADirPath);
     except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
     Inc(LTotal, Length(LCurs[I]));
+    { 契约：各后端 List 已有序（os VfsSortEntries、memtree/embedded 有序枚举单源），归并前不二次排序以守零额外 O(k log k)；若需强保序可在此对 LCurs[I] VfsSortEntries（bytes.ops 单源 inline） }
   end;
+  if LTotal = 0 then
+  begin
+    Result := nil;
+    CacheList(ADirPath, Result);
+    Exit(nil);
+  end;
+  SetLength(Idx, Length(LCurs));
+  for I := 0 to High(Idx) do Idx[I] := 0;
   Result := nil;
   OutN := 0;
-  Seen := specialize TSwissTableStr<Byte>.Create(16);
-  try
+  { k 路归并：O(k·m)（m=层数，常量 2~3）零哈希零额外堆，仅 Result 按 LTotal 指数扩容（OverlayEnsureCapEntries 单源，<64 回缩）；VfsNameCompare 零拷贝 inline via bytes.ops SpanCompare 单源，去重后已有序免 VfsSortEntries }
+  while True do
+  begin
+    BestIdx := -1;
+    BestLayer := -1;
+    BestName := '';
     for I := 0 to High(LCurs) do
     begin
-      Cur := LCurs[I];
-      if Length(Cur) = 0 then Continue;
-      for J := 0 to High(Cur) do
+      if Idx[I] >= Length(LCurs[I]) then Continue;
+      CurName := LCurs[I][Idx[I]].Name;
+      if BestIdx = -1 then
       begin
-        if Seen.ContainsKey(Cur[J].Name) then Continue;
-        Seen.Put(Cur[J].Name, 0);
-        { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1) inline+Move 零拷贝，按 LTotal 回缩（小目录<64 零浪费），单源复用 mount/derive 模板 via OverlayEnsureCapEntries }
-        OverlayEnsureCapEntries(Result, OutN + 1, LTotal);
-        Result[OutN] := Cur[J];
-        Inc(OutN);
+        BestIdx := I;
+        BestLayer := I;
+        BestName := CurName;
+      end
+      else
+      begin
+        Lcmp := VfsNameCompare(CurName, BestName);
+        if Lcmp < 0 then
+        begin
+          BestIdx := I;
+          BestLayer := I;
+          BestName := CurName;
+        end
+        else if Lcmp = 0 then
+        begin
+          if I < BestLayer then BestLayer := I;
+        end;
       end;
     end;
-    if OutN = 0 then
-    begin
-      SetLength(Result, 0);
-      Result := nil;
-      CacheList(ADirPath, Result);
-      Exit(nil);
-    end;
-    SetLength(Result, SizeInt(OutN));
-    VfsSortEntries(Result);
-    CacheList(ADirPath, Result);
-  finally
-    Seen.Free;
+    if BestIdx = -1 then Break;
+    OverlayEnsureCapEntries(Result, OutN + 1, LTotal);
+    Result[OutN] := LCurs[BestLayer][Idx[BestLayer]];
+    Inc(OutN);
+    for I := 0 to High(LCurs) do
+      if (Idx[I] < Length(LCurs[I])) and (VfsNameCompare(LCurs[I][Idx[I]].Name, BestName) = 0) then
+        Inc(Idx[I]);
   end;
+  if OutN = 0 then
+  begin
+    SetLength(Result, 0);
+    Result := nil;
+    CacheList(ADirPath, Result);
+    Exit(nil);
+  end;
+  SetLength(Result, SizeInt(OutN));
+  { 已归并有序，无需二次 VfsSortEntries；bytes.ops 单源 VfsNameCompare 零拷贝已在归并中承载 }
+  CacheList(ADirPath, Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;

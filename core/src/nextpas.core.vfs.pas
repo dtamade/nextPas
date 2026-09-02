@@ -1,6 +1,6 @@
 unit nextpas.core.vfs;
 
-{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2，182 行≈22% 800 阈值，13 子模块聚合为族完整性，扇出度高但阈值内；后续decorator独立族L7拆分可降门面耦合与阈值压力，inline 零拷贝复用 bytes.ops 单源，CONTRACT 单源，try-finally 不丢）。 }
+{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2；decorator 族经 nextpas.core.vfs.decorator 单点聚合、门面扇出收敛、族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢；L7 独立族按需演进）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -17,12 +17,11 @@ uses
   nextpas.core.vfs.sub,
   nextpas.core.vfs.mount,
   nextpas.core.vfs.overlay,
-  nextpas.core.vfs.transform,
-  nextpas.core.vfs.compressed,
+  nextpas.core.vfs.decorator,
   nextpas.core.vfs.util;
 
 type
-  { re-export 8 别名：base/intf/errors/memtree/util/transform/mount }
+  { re-export 8 别名：base/intf/errors/memtree/util/decorator/mount }
   TEntryInfo = nextpas.core.vfs.base.TEntryInfo;
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
@@ -40,9 +39,9 @@ type
   EVfsInvalidPath = nextpas.core.vfs.errors.EVfsInvalidPath;
   EVfsClosed = nextpas.core.vfs.errors.EVfsClosed;
 
-  TVfsTransformFunc = nextpas.core.vfs.transform.TVfsTransformFunc;
-  TVfsShouldTransformFunc = nextpas.core.vfs.transform.TVfsShouldTransformFunc;
-  TVfsHeaderPredicateFunc = nextpas.core.vfs.transform.TVfsHeaderPredicateFunc;
+  TVfsTransformFunc = nextpas.core.vfs.decorator.TVfsTransformFunc;
+  TVfsShouldTransformFunc = nextpas.core.vfs.decorator.TVfsShouldTransformFunc;
+  TVfsHeaderPredicateFunc = nextpas.core.vfs.decorator.TVfsHeaderPredicateFunc;
   TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
 
 { 工厂/视图/装饰器/辅助 15 inline 薄转发，零拷贝复用 bytes.ops 单源 }
@@ -108,7 +107,7 @@ function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
   const AShould: TVfsShouldTransformFunc): IVfs;
 begin
-  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould);
+  Result := nextpas.core.vfs.decorator.CreateTransformingVfs(AInner, ATransform, AShould);
 end;
 
 function CreateTransformingVfs(const AInner: IVfs;
@@ -116,12 +115,12 @@ function CreateTransformingVfs(const AInner: IVfs;
   const AShould: TVfsShouldTransformFunc;
   const AHeaderPred: TVfsHeaderPredicateFunc): IVfs;
 begin
-  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould, AHeaderPred);
+  Result := nextpas.core.vfs.decorator.CreateTransformingVfs(AInner, ATransform, AShould, AHeaderPred);
 end;
 
 function CreateDecompressingVfs(const AInner: IVfs): IVfs;
 begin
-  Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
+  Result := nextpas.core.vfs.decorator.CreateDecompressingVfs(AInner);
 end;
 
 function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;

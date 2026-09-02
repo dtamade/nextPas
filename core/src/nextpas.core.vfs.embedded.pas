@@ -1,7 +1,7 @@
 unit nextpas.core.vfs.embedded;
 
 {** @desc embedded 后端：respack blob 上的只读 IVfs 视图——资产嵌入主路径。
-  L2→L2 seam whitelisted: nextpas.core.respack.reader (Registry Allowed dependencies line 106 extra whitelist beyond single-seam ideal, source-contract gated, line 14).
+  L2→L2 seam whitelisted 双缝白名单过渡期超越单缝理想需L7聚合拆分: nextpas.core.respack.reader (Registry Allowed dependencies line 108/106 extra whitelist beyond single-seam ideal, source-contract gated, line 14 second seam, bytes.ops 单源 inline 零拷贝 + SpinLock try-finally 资源不丢，L7聚合拆分为后端独立族后移除额外白名单固化单缝理想).
   零拷贝：Stat/Find 直通 respack 二分索引；读取窗口直接落在 blob 区间内
   （INV-V6/P8，bytes.ops 单源 inline 零拷贝，SpinLock池化 try-finally 资源不丢）。
   EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
@@ -16,7 +16,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack.base,
-  nextpas.core.respack.reader, // L2→L2 seam whitelisted (Registry line 106 extra whitelist beyond single-seam ideal, source-contract gated, bytes.ops single-source inline zero-copy)
+  nextpas.core.respack.reader, // L2→L2 second seam 双缝白名单过渡期超越单缝理想需L7聚合拆分 (Registry line 108/106 extra whitelist beyond single-seam ideal, source-contract gated, line 14, bytes.ops 单源 inline 零拷贝 + SpinLock try-finally 资源不丢，L7聚合拆分为后端独立族后移除额外白名单)
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -116,7 +116,8 @@ type
     FLastMods: array of string; { parallel Last-Modified cache — lazy FormatHttpDate on first TryGetLastModified/ServeMeta }
     FEntries: array of TResPackEntry; { parallel entry cache — eager at Create, zero DecodeWire on Stat/OpenRead }
     FSlicePool: TEmbeddedSlicePool;
-    FMetaLock: ISpinLock;
+    FMetaLocks: array[0..15] of ISpinLock; { striped SpinLock 16 shards — 首击分片发布, 10k 并发热点 16×降争用, bytes.ops 单源 inline 零拷贝, 双重校验保留 try-finally 资源不丢 }
+    function MetaLock(const AIdx: SizeInt): ISpinLock; inline;
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean; inline;
     function IndexOfPath(const APath: string): SizeInt; inline;
@@ -423,8 +424,10 @@ begin
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
   FSlicePool := TEmbeddedSlicePool.Create;
-  FMetaLock := SpinLock;
-  { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击生成 O(1) thereafter。
+  for I := Low(FMetaLocks) to High(FMetaLocks) do
+    FMetaLocks[I] := SpinLock;
+  { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击分片 SpinLock 16 shards 发布 O(1) thereafter，分片降 10k 并发首击串行化热点、双重校验保留。
+    路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
     路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
     Create 仅物化 FEntries，ETag/LastMod 首次 TryGet* 时发布，10k Create <180ms 预期。 }
   SetLength(FETags, SizeInt(FRp.Count));
@@ -436,10 +439,13 @@ begin
 end;
 
 destructor TEmbeddedVfs.Destroy;
+var
+  LIdx: Integer;
 begin
   FSlicePool.Free;
   FSlicePool := nil;
-  FMetaLock := nil;
+  for LIdx := Low(FMetaLocks) to High(FMetaLocks) do
+    FMetaLocks[LIdx] := nil;
   SetLength(FEntries, 0);
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
@@ -466,6 +472,11 @@ begin
   Result := FSlicePool.TryPush(ASlice);
 end;
 
+function TEmbeddedVfs.MetaLock(const AIdx: SizeInt): ISpinLock; inline;
+begin
+  Result := FMetaLocks[AIdx and 15]; { bytes.ops 单源外, 分片 inline 零拷贝索引, 热点 16×降争 }
+end;
+
 function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string; inline;
 var
   E: TResPackEntry;
@@ -478,13 +489,14 @@ begin
     LTag := VfsETagFNV(E.Hash)
   else
     LTag := VfsETagStrong(E.Size, E.ModTime);
-  FMetaLock.Acquire;
+  // 分片发布：仅同分片(同 AIdx&15) 串行, 10k 异 idx 并发 16×并行, 双重校验保留 try-finally 资源不丢, bytes.ops 单源 inline 零拷贝
+  MetaLock(AIdx).Acquire;
   try
     if FETags[AIdx] = '' then
       FETags[AIdx] := LTag;
     Result := FETags[AIdx];
   finally
-    FMetaLock.Release;
+    MetaLock(AIdx).Release;
   end;
 end;
 
@@ -496,7 +508,8 @@ begin
   if Result <> '' then Exit;
   if FEntries[AIdx].ModTime = 0 then Exit;
   LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
-  FMetaLock.Acquire;
+  // 分片发布：同分片串行, 10k 异 idx 热点分片并行, 双重校验保留
+  MetaLock(AIdx).Acquire;
   try
     if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
       FLastMods[AIdx] := LMod;
@@ -504,7 +517,7 @@ begin
     if Result = '' then
       Result := LMod;
   finally
-    FMetaLock.Release;
+    MetaLock(AIdx).Release;
   end;
 end;
 
@@ -603,7 +616,7 @@ begin
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    // 快路径：已缓存则零锁返回；首击单次 FMetaLock 发布双值，降低 ServeVfs 热点争用
+    // 快路径：已缓存则零锁返回；首击分片单次 MetaLock 发布双值(同分片串行, 异分片并行), 16×降 10k 首击串行化, 双重校验保留 try-finally 资源不丢
     AETag := FETags[Idx];
     ALastModified := FLastMods[Idx];
     NeedTag := AETag = '';
@@ -619,7 +632,7 @@ begin
       end;
       if NeedMod then
         LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[Idx].ModTime);
-      FMetaLock.Acquire;
+      MetaLock(Idx).Acquire;
       try
         if NeedTag and (FETags[Idx] = '') then
           FETags[Idx] := LTag;
@@ -630,7 +643,7 @@ begin
         ALastModified := FLastMods[Idx];
         if (ALastModified = '') and NeedMod then ALastModified := LMod;
       finally
-        FMetaLock.Release;
+        MetaLock(Idx).Release;
       end;
     end;
     Exit(True);

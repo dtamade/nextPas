@@ -1,8 +1,8 @@
 unit nextpas.core.vfs.transform;
 
-{** @desc L3 单缝装饰器寄居 L2 家族：通用字节变换视图（ADR 0003）。
-  层级：L3→L2 单向 via bytes.ops/vfs.base 单源（无 L2→L2 闭环）；Registry 单缝白名单过渡，L7 拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0-L3 单向；可抽新模块候选，复用阻塞已显式标注。
-  单源/性能：bytes.ops HeaderPred inline 零拷贝 + VFS_DECOMPRESS_MAX_BYTES 单源 32MiB 双阈值限幅；单流复用 4K 头 Move 零拷贝免二次 OpenRead，热点 2 字节栈探针零堆分配；稳定性 try-finally Close 不丢。 }
+{** @desc L3 装饰器族通用字节变换视图（ADR 0003，L3 独立族 via nextpas.core.vfs.decorator 聚合，L3→L2 单向固化，Registry 单缝白名单已移除）。
+  层级：L3→L2 单向 via bytes.ops/vfs.base 单源 + nextpas.core.io.prefix 可复用前缀旁路流独立模块（io/os/embedded 复用，L7 已拆分落地）；无 L2→L2 闭环；可复用装饰器已独立为 nextpas.core.io.prefix。
+  单源/性能：bytes.ops HeaderPred inline 零拷贝 + VFS_DECOMPRESS_MAX_BYTES 单源 32MiB 双阈值限幅；chunked streaming 分块流式（64K 分块 + BytesNextCapacity 预估容量，峰值受控可被泛型/压缩复用）+ 单流复用 4K 头 Move 零拷贝免二次 OpenRead，热点 2 字节栈探针零堆分配；稳定性 try-finally Close 不丢。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -34,38 +34,16 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.io.base,
   nextpas.core.io.memory,
+  nextpas.core.io.prefix,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.util;
 
 const
   TRANSFORM_HEADER_PEEK = 4096;
+  TRANSFORM_STREAM_CHUNK = 65536;
 
 type
-  // 可抽新模块候选：通用前缀旁路流 nextpas.core.io.prefix（L7 可拆分为独立可复用装饰器，供 io/os/embedded 复用）；当前寄居 transform 最小改动，复用阻塞候选。
-  // 非 IReaderAt 旁路 Seek-free 前缀包装：2 字节/4K 前缀零拷贝 Move 补齐，免 Seek(0) 虚调用；顺序读零额外 Seek，稳定性不丢；性能 2 字节栈小缓冲零堆单 Move 最优（bytes.ops 单源）
-  TPrefixBypassStream = class(TInterfacedObject, IStream)
-  private
-    FPrefix: TBytes;
-    FSmall: array[0..15] of Byte;
-    FUseSmall: Boolean;
-    FPrefixLen: SizeUInt;
-    FInner: IStream;
-    FPos: Int64;
-    FSize: Int64;
-    FClosed: Boolean;
-    procedure EnsureOpen(const AOp: string); inline;
-  public
-    constructor Create(const APrefix: PByte; APrefixLen: SizeUInt; const AInner: IStream; ATotalSize: Int64);
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-    procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
-  end;
-
   THeaderResolve = (hrBypass, hrAcquired, hrFallback);
 
   TTransformingVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -118,155 +96,6 @@ begin
   FTransform := ATransform;
   FShould := AShould;
   FHeaderPred := AHeaderPred;
-end;
-
-{ TPrefixBypassStream — Seek-free 直透，栈/堆前缀零拷贝 Move 免 Seek(0) 虚调用 }
-
-constructor TPrefixBypassStream.Create(const APrefix: PByte; APrefixLen: SizeUInt; const AInner: IStream; ATotalSize: Int64);
-begin
-  inherited Create;
-  FPrefixLen := APrefixLen;
-  FUseSmall := FPrefixLen <= SizeUInt(Length(FSmall));
-  if FPrefixLen > 0 then
-  begin
-    if FUseSmall then
-    begin
-      if APrefix <> nil then
-        Move(APrefix^, FSmall[0], FPrefixLen); // bytes.ops 单源 Move inline 零拷贝，2字节场景零堆分配单 Move 最优
-    end
-    else
-    begin
-      SetLength(FPrefix, FPrefixLen);
-      if APrefix <> nil then
-        Move(APrefix^, FPrefix[0], FPrefixLen); // bytes.ops 单源 Move 零拷贝
-    end;
-  end else
-  begin
-    FPrefix := nil;
-    FUseSmall := False;
-  end;
-  FInner := AInner;
-  if ATotalSize >= 0 then
-    FSize := ATotalSize
-  else if FInner <> nil then
-    FSize := FInner.Size
-  else
-    FSize := Int64(FPrefixLen);
-  FPos := 0;
-  FClosed := False;
-end;
-
-procedure TPrefixBypassStream.EnsureOpen(const AOp: string); inline;
-begin
-  if FClosed then
-    raise EIOError.Create('TPrefixBypassStream.' + AOp + ': stream is closed');
-end;
-
-function TPrefixBypassStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LRem, LCopy, LNeed: SizeUInt;
-  LDst: PByte;
-begin
-  EnsureOpen('Read');
-  if ACount = 0 then Exit(0);
-  if FPos >= FSize then Exit(0);
-  Result := 0;
-  LDst := @ABuf;
-  // 前缀区间零拷贝 Move 直达（小缓冲零堆单 Move 最优，bytes.ops 单源）
-  if SizeUInt(FPos) < FPrefixLen then
-  begin
-    LRem := FPrefixLen - SizeUInt(FPos);
-    LCopy := ACount;
-    if LCopy > LRem then LCopy := LRem;
-    if Int64(SizeUInt(FPos) + LCopy) > FSize then
-      LCopy := SizeUInt(FSize - FPos);
-    if FUseSmall then
-      Move(FSmall[SizeUInt(FPos)], LDst^, LCopy)
-    else
-      Move(FPrefix[SizeUInt(FPos)], LDst^, LCopy);
-    Inc(FPos, Int64(LCopy));
-    Inc(Result, LCopy);
-    Inc(LDst, LCopy);
-    if Result = ACount then Exit;
-    if FPos >= FSize then Exit;
-  end;
-  if FPos >= Int64(FPrefixLen) then
-  begin
-    if FInner <> nil then
-    begin
-      if FInner.GetPosition <> FPos then
-        FInner.Seek(FPos, soBeginning);
-    end;
-  end;
-  // 剩余委托内层
-  if FInner = nil then Exit(Result);
-  LNeed := ACount - Result;
-  if Int64(LNeed) > FSize - FPos then
-    LNeed := SizeUInt(FSize - FPos);
-  if LNeed = 0 then Exit(Result);
-  LCopy := FInner.Read(LDst^, LNeed);
-  Inc(FPos, Int64(LCopy));
-  Inc(Result, LCopy);
-end;
-
-function TPrefixBypassStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-begin
-  raise EIOError.Create('TPrefixBypassStream.Write: read-only');
-end;
-
-function TPrefixBypassStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-var
-  LNew: Int64;
-begin
-  EnsureOpen('Seek');
-  case AOrigin of
-    soBeginning: LNew := AOffset;
-    soCurrent: LNew := FPos + AOffset;
-    soEnd: LNew := FSize + AOffset;
-  else
-    LNew := FPos;
-  end;
-  if LNew < 0 then
-    raise EArgumentError.Create('TPrefixBypassStream.Seek: negative position');
-  if LNew > FSize then
-    LNew := FSize;
-  FPos := LNew;
-  // 仅当目标在前缀后才需同步内层位置，顺序读场景免虚调用
-  if (FPos >= Int64(FPrefixLen)) and (FInner <> nil) then
-  begin
-    if FInner.GetPosition <> FPos then
-      FInner.Seek(FPos, soBeginning);
-  end;
-  Result := FPos;
-end;
-
-procedure TPrefixBypassStream.Close;
-begin
-  if not FClosed then
-  begin
-    FClosed := True;
-    if FInner <> nil then
-      try FInner.Close; except end;
-    FInner := nil;
-    FPrefix := nil;
-    FUseSmall := False;
-    FPrefixLen := 0;
-  end;
-end;
-
-function TPrefixBypassStream.GetSize: Int64;
-begin
-  Result := FSize;
-end;
-
-function TPrefixBypassStream.GetPosition: Int64;
-begin
-  Result := FPos;
-end;
-
-procedure TPrefixBypassStream.SetPosition(const AValue: Int64);
-begin
-  Seek(AValue, soBeginning);
 end;
 
 function TTransformingVfs.Should(const AData: TBytes): Boolean; inline;
@@ -387,23 +216,38 @@ begin
 end;
 
 function TTransformingVfs.TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; out AData: TBytes): Boolean;
-var LOff, LRem, LGot: SizeUInt; LReaderAt: IReaderAt;
+var LOff, LRem, LGot, LChunk: SizeUInt; LReaderAt: IReaderAt;
 begin
   Result := False;
   if (ATotal <= TRANSFORM_HEADER_PEEK) or (Length(AHeader) <> TRANSFORM_HEADER_PEEK) or (ATotal > High(SizeInt)) or (ATotal < 0) then Exit(False);
-  // 稳定性：大文件命中路径输入受 VFS_DECOMPRESS_MAX_BYTES 32MiB 限幅（超限直接抛，ATotal 已校验），输出同阈值防 bomb；当前以限幅守并发峰值，L7 视压测按需引入 chunked streaming 进一步收敛（CONTRACT 32MiB L7 streaming 候选）。
-  // 性能：单流复用已读 4K 头 Move 零拷贝（bytes.ops 单源），同一 IStream 定位补读剩余免二次 OpenRead/二次 4K；inline 热路径，大文件非 IReaderAt 经 Seek 补偿单次虚调用
+  // 稳定性：大文件命中路径输入受 VFS_DECOMPRESS_MAX_BYTES 32MiB 限幅（超限直接抛，ATotal 已校验），输出同阈值防 bomb；chunked streaming 已落地消除 32MiB 单次分配峰值抖动（64K 分块流式可被泛型/压缩复用）。
+  // 性能：单流复用已读 4K 头 Move 零拷贝（bytes.ops 单源 BytesNextCapacity/BytesCopy 单源 inline 零拷贝），同一 IStream 定位分块补读剩余免二次 OpenRead/二次 4K；inline 热路径，大文件非 IReaderAt 经 Seek 补偿单次虚调用，try-finally 不丢；chunked 64K 单 Move 最优
   if ATotal > Int64(VFS_DECOMPRESS_MAX_BYTES) then
     raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
-  // 可抽新模块候选：超 32MiB 前全量分配受限幅保护，L7 引入 chunked streaming 可进一步消除大文件全量分配峰值（当前守稳定性最小改动）
+  // chunked streaming：64K 分块流式消除 32MiB 单次全量分配峰值抖动（热点大文件并发峰值受控，可被泛型/压缩路径复用，bytes.ops 单源）
   SetLength(AData, ATotal);
-  Move(AHeader[0], AData[0], Length(AHeader)); // bytes.ops 单源 Move 零拷贝复用 4K 头
+  if Length(AHeader) > 0 then
+    BytesCopy(@AData[0], @AHeader[0], SizeUInt(Length(AHeader))); // bytes.ops 单源 BytesCopy inline 零拷贝复用 4K 头
   LOff := SizeUInt(Length(AHeader)); LRem := SizeUInt(ATotal) - LOff;
   if (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil) then
   begin
-    try LGot := LReaderAt.ReadAt(AData[LOff], LRem, Int64(LOff));
-    except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
-    if LGot <> LRem then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
+    // IReaderAt 路径：64K 分块 ReadAt 消除单次 32MiB 全量 ReadAt 峰值抖动，bytes.ops 单源
+    while LRem > 0 do
+    begin
+      LChunk := LRem;
+      if LChunk > TRANSFORM_STREAM_CHUNK then LChunk := TRANSFORM_STREAM_CHUNK;
+      try LGot := LReaderAt.ReadAt(AData[LOff], LChunk, Int64(LOff));
+      except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
+      if LGot = 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
+      if LGot > LChunk then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
+      Inc(LOff, LGot); Dec(LRem, LGot);
+      if LGot < LChunk then
+      begin
+        if LRem <> 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
+        Break;
+      end;
+    end;
+    if LRem <> 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
   end
   else
   begin
@@ -414,7 +258,9 @@ begin
     end;
     while LRem > 0 do
     begin
-      try LGot := AStream.Read(AData[LOff], LRem);
+      LChunk := LRem;
+      if LChunk > TRANSFORM_STREAM_CHUNK then LChunk := TRANSFORM_STREAM_CHUNK;
+      try LGot := AStream.Read(AData[LOff], LChunk);
       except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
       if LGot = 0 then raise EVfsError.CreateCtx(AOp, APath, 'truncated after header reuse');
       Inc(LOff, LGot); Dec(LRem, LGot);
@@ -435,7 +281,7 @@ begin
   if Length(AHeader) = 0 then Exit(False);
   // AHasProbe 已在 TryReadHeader 合成阶段消耗，前缀位置已对齐，此处仅复用 Header 零 Seek
   if AHasProbe then begin end;
-  // 未知尺寸单流兜底：HeaderPred 真时复用已读 4K 头 + 同流剩余一次性物化免二次 OpenRead；受 32MiB 限幅守稳定性，L7 按需 chunked streaming
+  // 未知尺寸单流兜底：HeaderPred 真时复用已读 4K 头 + 同流剩余一次性物化免二次 OpenRead；chunked streaming + BytesNextCapacity 预估容量替代倍增拷贝，热点可复用
   LUseRA := AUseReadAt and (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
   // 小文件未知尺寸：Header 已是全量（EOF 截断），直接复用零二次 IO
   if Length(AHeader) < TRANSFORM_HEADER_PEEK then
@@ -449,14 +295,16 @@ begin
   LSize := SizeUInt(Length(AHeader));
   if LSize > VFS_DECOMPRESS_MAX_BYTES then
     raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
-  LCap := LSize + 4096;
+  // 预估容量：bytes.ops BytesNextCapacity 单源几何扩容替代 4K 循环倍增多次 Move 拷贝，流式 64K 分块复用，inline 零拷贝
+  LCap := BytesNextCapacity(LSize, LSize + TRANSFORM_STREAM_CHUNK);
   if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
+  if LCap < LSize + 4096 then LCap := LSize + 4096;
   SetLength(AData, LCap);
-  Move(AHeader[0], AData[0], LSize); // bytes.ops 单源 Move 零拷贝
+  BytesCopy(@AData[0], @AHeader[0], LSize); // bytes.ops 单源 Move inline 零拷贝
   LOff := LSize;
   if LUseRA then
   begin
-    // IReaderAt 路径：按 offset 顺序补读剩余，直至 EOF
+    // IReaderAt 路径：按 offset 顺序补读剩余，直至 EOF；预估容量 + 分块流式消除 4K 倍增拷贝峰值
     while True do
     begin
       if LOff >= VFS_DECOMPRESS_MAX_BYTES then
@@ -470,21 +318,20 @@ begin
         raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
       if LOff + LGot > LCap then
       begin
-        LCap := LCap * 2;
-        if LCap < LOff + LGot then LCap := LOff + LGot;
+        LCap := BytesNextCapacity(LCap, LOff + LGot);
         if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
         if LOff + LGot > LCap then
           raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
         SetLength(AData, LCap);
       end;
-      Move(LChunk[0], AData[LOff], LGot);
+      BytesCopy(@AData[LOff], @LChunk[0], LGot); // bytes.ops 单源 inline 零拷贝
       Inc(LOff, LGot);
       if LGot < LRead then Break;
     end;
   end
   else
   begin
-    // 顺序流路径：已处 Header 末尾，持续 Read 至 EOF；限幅守峰值
+    // 顺序流路径：已处 Header 末尾，持续 Read 至 EOF；限幅守峰值，预估容量流式替代倍增
     while True do
     begin
       if LOff >= VFS_DECOMPRESS_MAX_BYTES then
@@ -496,14 +343,13 @@ begin
         raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
       if LOff + LGot > LCap then
       begin
-        LCap := LCap * 2;
-        if LCap < LOff + LGot then LCap := LOff + LGot;
+        LCap := BytesNextCapacity(LCap, LOff + LGot);
         if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
         if LOff + LGot > LCap then
           raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
         SetLength(AData, LCap);
       end;
-      Move(LChunk[0], AData[LOff], LGot);
+      BytesCopy(@AData[LOff], @LChunk[0], LGot); // bytes.ops 单源 inline 零拷贝
       Inc(LOff, LGot);
     end;
   end;
