@@ -62,8 +62,10 @@ type
     FScanValid: Boolean;
     FScanPos: SizeUInt;
     FScanLens: TTarScanLens;
-    FGuards: array of TTarGlobalPaxGuard; // weak, no FBuf retention
+    FGuards: array of TTarGlobalPaxGuard; // weak, no FBuf retention, geometric 2× capacity: Length=cap, FGuardCount=logical
+    FGuardCount: SizeUInt; // logical guard count, geometric growth single source bytes.ops (BytesEnsureCapacity/IBytesBuilder.Grow)
     FLogger: ILogger; // warn on auto-clear if explicit logger
+    function HasGuards: Boolean; inline;
     procedure LogGlobalPaxAutoClear;
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
@@ -71,7 +73,8 @@ type
     function ByteAt(AOfs: SizeUInt): Byte;
     function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
     function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
-    function StringField(AOfs, ALen: SizeUInt): string; // out-of-line
+    function MaterializeSpan(const ASpan: TByteSpan): string; inline; // single source SpanToString, empty guard
+    function StringField(AOfs, ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function NumericField(AOfs, ALen: SizeUInt): Int64;
     function MagicHasUStar: Boolean; inline;
     procedure VerifyChecksum;
@@ -79,9 +82,9 @@ type
     function ParsePaxRecordsSlice(ABase: PByte; ALen: SizeUInt): Boolean;
     function ParsePaxRecords(const AData: TBytes): Boolean;
     function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
-    function SliceToString(ABase: PByte; ALen: SizeUInt): string; // out-of-line
+    function SliceToString(ABase: PByte; ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function CombinePrefixName(const APrefix, AName: TByteSpan): string; // out-of-line
-    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; // out-of-line, SpanEqual reuse
+    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; // out-of-line, SpanEqual reuse via MaterializeSpan
   public
     procedure ClearGlobalPax; inline;
     {** @desc RAII guard: acquire IInterface that clears global g pax on scope exit; use `var G := Reader.AcquireGlobalPaxGuard;` to auto-isolate. Inline thin forward, zero alloc until called. *}
@@ -151,6 +154,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FGuardCount := 0;
   FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -168,6 +172,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FGuardCount := 0;
   FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -226,6 +231,8 @@ begin
 end;
 
 function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
+type
+  TFieldMap = record Off, Len: SizeUInt; PLen: PSizeUInt; end;
 var
   EndOfs: SizeUInt;
   LLen: SizeUInt;
@@ -234,6 +241,9 @@ var
   LOneField: array[0..0] of TFieldRange;
   LOneLen: array[0..0] of SizeUInt;
   LBlockTmp: TByteSpan;
+  LMap: array[0..6] of TFieldMap;
+  I: Integer;
+  Found: Boolean;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
@@ -245,21 +255,23 @@ begin
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
-    if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-      LLen := FScanLens.Name
-    else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-      LLen := FScanLens.Prefix
-    else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-      LLen := FScanLens.LinkName
-    else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-      LLen := FScanLens.UName
-    else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-      LLen := FScanLens.GName
-    else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-      LLen := FScanLens.Magic
-    else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-      LLen := FScanLens.Version
-    else
+    // table-driven 7-field index map: single stack table, loop dispatch, zero-alloc, reuses C_TAR_LAYOUT single source
+    LMap[0].Off := C_TAR_LAYOUT.Name.Off;     LMap[0].Len := C_TAR_LAYOUT.Name.Len;     LMap[0].PLen := @FScanLens.Name;
+    LMap[1].Off := C_TAR_LAYOUT.LinkName.Off; LMap[1].Len := C_TAR_LAYOUT.LinkName.Len; LMap[1].PLen := @FScanLens.LinkName;
+    LMap[2].Off := C_TAR_LAYOUT.Magic.Off;    LMap[2].Len := C_TAR_LAYOUT.Magic.Len;    LMap[2].PLen := @FScanLens.Magic;
+    LMap[3].Off := C_TAR_LAYOUT.Version.Off;  LMap[3].Len := C_TAR_LAYOUT.Version.Len;  LMap[3].PLen := @FScanLens.Version;
+    LMap[4].Off := C_TAR_LAYOUT.UName.Off;    LMap[4].Len := C_TAR_LAYOUT.UName.Len;    LMap[4].PLen := @FScanLens.UName;
+    LMap[5].Off := C_TAR_LAYOUT.GName.Off;    LMap[5].Len := C_TAR_LAYOUT.GName.Len;    LMap[5].PLen := @FScanLens.GName;
+    LMap[6].Off := C_TAR_LAYOUT.Prefix.Off;   LMap[6].Len := C_TAR_LAYOUT.Prefix.Len;   LMap[6].PLen := @FScanLens.Prefix;
+    Found := False;
+    for I := 0 to High(LMap) do
+      if (AOfs = FPos + LMap[I].Off) and (ALen = LMap[I].Len) then
+      begin
+        LLen := LMap[I].PLen^;
+        Found := True;
+        Break;
+      end;
+    if not Found then
     begin
       // fallback: non-cached header field via single-field scan
       LOneField[0].Off := AOfs - FPos;
@@ -295,15 +307,21 @@ begin
   Result := TByteSpan.Create(ABase, Trim);
 end;
 
+function TTarReader.MaterializeSpan(const ASpan: TByteSpan): string; inline;
+begin
+  // single source: zero-copy view -> string materialization, empty guard, SpanToString single source (bytes.ops inline)
+  if ASpan.Len = 0 then
+    Exit('');
+  Result := SpanToString(ASpan);
+end;
+
 function TTarReader.StringField(AOfs, ALen: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin
-  // out-of-line: avoid Move(Result[1]) inline bloat
+  // out-of-line: FieldSlice zero-copy then MaterializeSpan single source (avoids SpanToString duplicate)
   LSpan := FieldSlice(AOfs, ALen);
-  if LSpan.Len = 0 then
-    Exit('');
-  Result := SpanToString(LSpan);
+  Result := MaterializeSpan(LSpan);
 end;
 
 function TTarReader.NumericField(AOfs, ALen: SizeUInt): Int64;
@@ -341,11 +359,9 @@ function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin
-  // out-of-line: avoid Move(Result[1]) inline bloat
+  // out-of-line: TrimmedSlice zero-copy then MaterializeSpan single source
   LSpan := TrimmedSlice(ABase, ALen);
-  if LSpan.Len = 0 then
-    Exit('');
-  Result := SpanToString(LSpan);
+  Result := MaterializeSpan(LSpan);
 end;
 
 function TTarReader.CombinePrefixName(const APrefix, AName: TByteSpan): string;
@@ -359,7 +375,7 @@ var
   LCachedSpan: TByteSpan;
   LCachedLen: SizeUInt;
 begin
-  // zero-copy then SpanEqual reuse, fast first-byte filter
+  // zero-copy FieldSlice then SpanEqual reuse, fast first-byte filter, MaterializeSpan single source
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -376,7 +392,7 @@ begin
     else if SpanEqual(LCachedSpan, LSpan) then
       Exit(ACached);
   end;
-  Result := SpanToString(LSpan);
+  Result := MaterializeSpan(LSpan);
   ACached := Result;
 end;
 
@@ -394,26 +410,41 @@ begin
     FLogger := NullLogger;
 end;
 
+function TTarReader.HasGuards: Boolean; inline;
+begin
+  Result := FGuardCount <> 0;
+end;
+
 procedure TTarReader.RegisterGuard(AGuard: TTarGlobalPaxGuard);
 var
-  L: SizeUInt;
+  NewCap: SizeUInt;
 begin
   if AGuard = nil then Exit;
-  L := SizeUInt(Length(FGuards));
-  SetLength(FGuards, L + 1);
-  FGuards[L] := AGuard;
+  // geometric 2× amortized O(1), single source with bytes.ops BytesEnsureCapacity / IBytesBuilder.Grow (BYTES_BUILDER_MIN_GROW doubling, no header poke)
+  if FGuardCount >= SizeUInt(Length(FGuards)) then
+  begin
+    if Length(FGuards) = 0 then
+      NewCap := 4
+    else
+      NewCap := SizeUInt(Length(FGuards)) * 2;
+    if NewCap < FGuardCount + 1 then
+      NewCap := FGuardCount + 1;
+    SetLength(FGuards, NewCap);
+  end;
+  FGuards[FGuardCount] := AGuard;
+  Inc(FGuardCount);
 end;
 
 procedure TTarReader.UnregisterGuard(AGuard: TTarGlobalPaxGuard);
 var
-  I, L: SizeInt;
+  I: SizeInt;
 begin
-  L := Length(FGuards);
-  for I := 0 to L - 1 do
+  for I := 0 to SizeInt(FGuardCount) - 1 do
     if FGuards[I] = AGuard then
     begin
-      FGuards[I] := FGuards[L - 1];
-      SetLength(FGuards, L - 1);
+      FGuards[I] := FGuards[FGuardCount - 1];
+      FGuards[FGuardCount - 1] := nil;
+      Dec(FGuardCount);
       Exit;
     end;
 end;
@@ -422,9 +453,10 @@ procedure TTarReader.InvalidateGuards;
 var
   I: SizeInt;
 begin
-  for I := 0 to High(FGuards) do
+  for I := 0 to SizeInt(FGuardCount) - 1 do
     if FGuards[I] <> nil then
       FGuards[I].Invalidate;
+  FGuardCount := 0;
   SetLength(FGuards, 0);
 end;
 
@@ -619,7 +651,7 @@ begin
       else if FGlobalPaxPath <> '' then
       begin
         AHeader.Name := FGlobalPaxPath;
-        if Length(FGuards) = 0 then
+        if FGuardCount = 0 then
         begin
           LogGlobalPaxAutoClear;
           FGlobalPaxPath := '';
@@ -651,7 +683,7 @@ begin
       else if FGlobalPaxLinkPath <> '' then
       begin
         AHeader.LinkName := FGlobalPaxLinkPath;
-        if Length(FGuards) = 0 then
+        if FGuardCount = 0 then
         begin
           LogGlobalPaxAutoClear;
           FGlobalPaxLinkPath := '';

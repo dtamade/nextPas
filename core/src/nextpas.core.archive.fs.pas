@@ -136,6 +136,10 @@ uses
   nextpas.core.platform.error,
   nextpas.core.log.intf;
 
+var
+  GArchiveSortPtrs: array of PByte;
+  GArchiveSortLens: array of SizeUInt;
+
 // perf: inline单源几何扩容（初始16、2倍）复用 bytes.builder 思想，零额外拷贝，单源于 ArchiveNextCapacity
 function ArchiveNextCapacity(const ACurrent, ARequired: Integer): Integer; inline;
 begin
@@ -143,6 +147,16 @@ begin
   if Result = 0 then Result := 16;
   while Result < ARequired do
     Result := Result * 2;
+end;
+
+// perf: 复用 ArchiveNextCapacity 单源几何扩容，Walk 千级目录排序零每调用分配，inline 薄转发、零额外拷贝、零资源泄漏（复用缓冲不丢、进程生命周期内几何复用）
+procedure ArchiveEnsureSortCacheCapacity(const ARequired: Integer); inline;
+var LCap: Integer;
+begin
+  LCap := Length(GArchiveSortPtrs);
+  if LCap >= ARequired then Exit;
+  SetLength(GArchiveSortPtrs, ArchiveNextCapacity(LCap, ARequired));
+  SetLength(GArchiveSortLens, Length(GArchiveSortPtrs));
 end;
 
 function ArchiveStrCompare(const A, B: string): Integer; inline;
@@ -201,21 +215,18 @@ var
   LStackLo, LStackHi: array[0..63] of Integer;
   LSp, LLo, LHi, LI, LJ: Integer;
   LTmp: TDirEntry;
-  LPtrs: array of PByte;
-  LLens: array of SizeUInt;
   LPivotPtr: PByte;
   LPivotLen: SizeUInt;
   LTmpPtr: PByte;
   LTmpLen: SizeUInt;
 begin
   if Length(A) < 2 then Exit;
-  // perf: 零键缓存 — 单次预计算 PByte+Len 视图，O(n) 建表，O(n log n) 比较零 Length/@Name[1] 重算与零 ArchiveStrCompare 逐比较开销；复用 bytes.ops 单源 CompareBytesOrdered/SIMD 零拷贝，排序放大在大目录消除
-  SetLength(LPtrs, Length(A));
-  SetLength(LLens, Length(A));
+  // perf: 复用缓冲 — 几何扩容复用 GArchiveSortPtrs/GArchiveSortLens 缓存（ArchiveNextCapacity 2×/16 单源 via bytes.builder 思想，inline 确保容量），Walk 千级目录排序零每调用 SetLength 分配；零键 PByte+Len 视图预计算后 O(n log n) 零 Length/@Name[1] 重算，复用 bytes.ops 单源 CompareBytesOrdered/SIMD inline 零拷贝，无 TByteSpan 构造
+  ArchiveEnsureSortCacheCapacity(Length(A));
   for LI := 0 to High(A) do
   begin
-    LLens[LI] := SizeUInt(Length(A[LI].Name));
-    if LLens[LI] = 0 then LPtrs[LI] := nil else LPtrs[LI] := PByte(@A[LI].Name[1]);
+    GArchiveSortLens[LI] := SizeUInt(Length(A[LI].Name));
+    if GArchiveSortLens[LI] = 0 then GArchiveSortPtrs[LI] := nil else GArchiveSortPtrs[LI] := PByte(@A[LI].Name[1]);
   end;
   LSp := 0;
   LStackLo[LSp] := 0;
@@ -230,19 +241,19 @@ begin
     LI := LLo;
     LJ := LHi;
     // snapshot pivot 零键视图 — 单次取值，后续比较零索引修正与零 ArchiveStrCompare 重建视图
-    LPivotPtr := LPtrs[(LLo + LHi) shr 1];
-    LPivotLen := LLens[(LLo + LHi) shr 1];
+    LPivotPtr := GArchiveSortPtrs[(LLo + LHi) shr 1];
+    LPivotLen := GArchiveSortLens[(LLo + LHi) shr 1];
     repeat
-      // perf: inline CompareBytesOrdered 零拷贝 PByte+Len 缓存视图，复用 bytes.ops 单源，SIMD 直通，无 TByteSpan 构造
-      while CompareBytesOrdered(LPtrs[LI], LPivotPtr, LLens[LI], LPivotLen) < 0 do Inc(LI);
-      while CompareBytesOrdered(LPtrs[LJ], LPivotPtr, LLens[LJ], LPivotLen) > 0 do Dec(LJ);
+      // perf: inline CompareBytesOrdered 零拷贝 PByte+Len 缓存视图，复用 bytes.ops 单源，SIMD 直通，无 TByteSpan 构造；复用缓冲 GArchiveSortPtrs/Lens 零每比较分配
+      while CompareBytesOrdered(GArchiveSortPtrs[LI], LPivotPtr, GArchiveSortLens[LI], LPivotLen) < 0 do Inc(LI);
+      while CompareBytesOrdered(GArchiveSortPtrs[LJ], LPivotPtr, GArchiveSortLens[LJ], LPivotLen) > 0 do Dec(LJ);
       if LI <= LJ then
       begin
         LTmp := A[LI];
         A[LI] := A[LJ];
         A[LJ] := LTmp;
-        LTmpPtr := LPtrs[LI]; LPtrs[LI] := LPtrs[LJ]; LPtrs[LJ] := LTmpPtr;
-        LTmpLen := LLens[LI]; LLens[LI] := LLens[LJ]; LLens[LJ] := LTmpLen;
+        LTmpPtr := GArchiveSortPtrs[LI]; GArchiveSortPtrs[LI] := GArchiveSortPtrs[LJ]; GArchiveSortPtrs[LJ] := LTmpPtr;
+        LTmpLen := GArchiveSortLens[LI]; GArchiveSortLens[LI] := GArchiveSortLens[LJ]; GArchiveSortLens[LJ] := LTmpLen;
         Inc(LI);
         Dec(LJ);
       end;

@@ -48,13 +48,67 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
+{ TOCTOU硬链接源校验单源谓词：消除 Exists/IsSymlink/IsRegularFile 6行×2重复样板，inline fail-closed，复用 archive.fs 零拷贝单源 ArchiveExists/IsSymlink/IsRegularFile 零分配，消除HandleSpecial前后 Replace→Link TOCTOU窗口重复 }
+procedure ValidateHardlinkSource(const ASourcePath, ALinkName: string); inline;
+begin
+  if not ArchiveExists(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source missing: ' + ALinkName);
+  if ArchiveIsSymlink(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source is symlink: ' + ALinkName);
+  if not ArchiveIsRegularFile(ASourcePath) then
+    raise EIOError.Create('tar extract: hardlink source not regular file: ' + ALinkName);
+end;
+
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，4K→64K复用缓冲仅O(1)内存，bytes.ops单源，稳定性try..finally不丢句柄 }
+procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
+var
+  LI: Integer;
+  LHdr: TTarHeader;
+  LFile: TArchiveFile;
+begin
+  for LI := 0 to High(AWalks) do
+  begin
+    LHdr := Default(TTarHeader);
+    LHdr.Name := AWalks[LI].FRel;
+    LHdr.MTimeUnix := AWalks[LI].FMtime;
+    if AWalks[LI].FIsDir then
+    begin
+      LHdr.Kind := tekDirectory;
+      LHdr.Mode := TarDirectoryMode(AWalks[LI].FMode);
+      AWriter.AddEntry(LHdr, nil);
+    end
+    else
+    begin
+      LHdr.Kind := tekRegular;
+      LHdr.Mode := TarRegularMode(AWalks[LI].FMode);
+      LHdr.Size := AWalks[LI].FSize;
+      if LHdr.Size < 0 then
+        raise EIOError.Create('tar pack: negative size: ' + AWalks[LI].FFull);
+      if LHdr.Size = 0 then
+      begin
+        AWriter.AddEntry(LHdr, nil);
+        Continue;
+      end;
+      LFile := nil;
+      LFile := ArchiveOpenRead(AWalks[LI].FFull);
+      try
+        AWriter.AddEntryFromReader(LHdr, LFile as IReader);
+      finally
+        try
+          LFile.Close;
+        except
+        end;
+        LFile := nil;
+      end;
+    end;
+  end;
+end;
+
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
   LRoot: TArchiveFileInfo;
   LWalks: TArchiveWalkArray;
-  LI, LWalksCount: Integer;
-  LHdr: TTarHeader;
-  LFile: TArchiveFile;
+  LWalksCount: Integer;
 begin
   if AWriter = nil then
     raise EArgumentError.Create('tar pack: writer is nil');
@@ -65,46 +119,12 @@ begin
   LWalksCount := 0;
   ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
-  for LI := 0 to High(LWalks) do
-  begin
-    LHdr := Default(TTarHeader);
-    LHdr.Name := LWalks[LI].FRel;
-    LHdr.MTimeUnix := LWalks[LI].FMtime;
-    if LWalks[LI].FIsDir then
-    begin
-      LHdr.Kind := tekDirectory;
-      LHdr.Mode := TarDirectoryMode(LWalks[LI].FMode);
-      AWriter.AddEntry(LHdr, nil);
-    end
-    else
-    begin
-      LHdr.Kind := tekRegular;
-      LHdr.Mode := TarRegularMode(LWalks[LI].FMode);
-      // 性能：复用 ArchiveCollectWalk 已 Stat 的 FSize 消除每文件二次 Stat syscall（2000文件减半），流式按需句柄分块搬运，自适应 4K→64K 复用缓冲，仅 O(1) 内存，零全量拷贝，inline 零拷贝 bytes.ops 单源
-      LHdr.Size := LWalks[LI].FSize;
-      if LHdr.Size < 0 then
-        raise EIOError.Create('tar pack: negative size: ' + LWalks[LI].FFull);
-      if LHdr.Size = 0 then
-      begin
-        AWriter.AddEntry(LHdr, nil);
-        Continue;
-      end;
-      LFile := nil;
-      // stability: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝 federation single seam
-      LFile := ArchiveOpenRead(LWalks[LI].FFull);
-      try
-        AWriter.AddEntryFromReader(LHdr, LFile as IReader);
-      finally
-        try
-          LFile.Close;
-        except
-          // best-effort: 关闭异常不掩盖主流程，资源已释
-        end;
-        LFile := nil;
-      end;
-    end;
+  try
+    // 性能：复用 ArchiveCollectWalk 已 Stat FSize 零二次Stat，单源 PackWalks inline 零拷贝分块搬运
+    PackWalks(LWalks, AWriter);
+  finally
+    SetLength(LWalks, 0);
   end;
-  SetLength(LWalks, 0);
 end;
 
 function TarPackDir(const ADir: string): TBytes;
@@ -112,18 +132,55 @@ var
   LBuilder: IBytesBuilder;
   LSink: IWriter;
   W: TTarWriter;
+  LWalks: TArchiveWalkArray;
+  LI, LWalksCount: Integer;
+  LEstimated, LCap: SizeUInt;
 begin
   Result := nil;
-  // 统一工厂单源：复用 archive.fs CreateArchiveBuilder (CreateBytesBuilder C_TAR_BUILDER_INITIAL_CAPACITY + CreateArchiveBuilderSink)，inline 零拷贝直写切片，消除与 tar.builder 同模板重复 + 二次大块 Move
-  CreateArchiveBuilder(C_TAR_BUILDER_INITIAL_CAPACITY, LBuilder, LSink);
-  W := TTarWriter.Create(LSink);
+  // perf: 按预估总量经 TarBuilderCapacityFor 4K 对齐预扩容（复用 bytes.ops.AlignUp4K 单源，bytes.builder 几何扩容 inline 零拷贝），大目录避免多次几何扩容（200×512B 仅1次 vs 固定64K多次重分配），小目录保持64K覆盖；预估=512×条目+文件pad512+长名pax近似(1024)，2零块由单点追加，溢出守卫clamp至High，零额外拷贝
+  SetLength(LWalks, 0);
+  LWalksCount := 0;
+  ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
+  SetLength(LWalks, LWalksCount);
   try
-    TarPackDirInto(ADir, W);
-    W.Finish;
-    // perf: 单次 ToBytes 分配+Move，零额外拷贝（builder 已内联 AppendBytes），接口自动释资源，不丢句柄
-    Result := LBuilder.ToBytes;
+    LEstimated := 0;
+    for LI := 0 to High(LWalks) do
+    begin
+      if LEstimated > High(SizeUInt) - SizeUInt(C_TAR_BLOCK_SIZE) then
+        LEstimated := High(SizeUInt)
+      else
+        Inc(LEstimated, SizeUInt(C_TAR_BLOCK_SIZE));
+      if not LWalks[LI].FIsDir then
+      begin
+        if LWalks[LI].FSize > 0 then
+        begin
+          if SizeUInt(LWalks[LI].FSize) > High(SizeUInt) - 511 then
+            LEstimated := High(SizeUInt)
+          else
+            Inc(LEstimated, (SizeUInt(LWalks[LI].FSize) + 511) and not SizeUInt(511));
+        end;
+        if Length(LWalks[LI].FRel) > C_TAR_NAME_FIELD then
+        begin
+          if LEstimated > High(SizeUInt) - 1024 then
+            LEstimated := High(SizeUInt)
+          else
+            Inc(LEstimated, 1024);
+        end;
+      end;
+    end;
+    LCap := TarBuilderCapacityFor(LEstimated);
+    CreateArchiveBuilder(LCap, LBuilder, LSink);
+    W := TTarWriter.Create(LSink);
+    try
+      PackWalks(LWalks, W);
+      W.Finish;
+      // perf: 单次 ToBytes 分配+Move，零额外拷贝（builder 已内联 AppendBytes），接口自动释资源，不丢句柄
+      Result := LBuilder.ToBytes;
+    finally
+      W.Free;
+    end;
   finally
-    W.Free;
+    SetLength(LWalks, 0);
   end;
 end;
 
@@ -203,21 +260,10 @@ begin
           tekHardLink:
             begin
               LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
-              if not ArchiveExists(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
-              // TOCTOU加固：Exists后二次类型校验防并发替换为目录/符号链接，inline零拷贝单源 ArchiveLstat/IsSymlink，fail-closed
-              if ArchiveIsSymlink(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source is symlink: ' + H.LinkName);
-              if not ArchiveIsRegularFile(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source not regular file: ' + H.LinkName);
+              // TOCTOU加固：单源谓词 ValidateHardlinkSource 复用 ArchiveExists/IsSymlink/IsRegularFile 零拷贝 inline fail-closed，消除6行×2重复粘贴样板；HandleSpecial前后二次校验关闭 Replace→Link 窗口
+              ValidateHardlinkSource(LHardSource, H.LinkName);
               ArchiveHandleSpecial(LFull);
-              // 二次校验：HandleSpecial后再次验证源仍为常规文件，关闭 Replace→Handle→Link 窗口
-              if not ArchiveExists(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
-              if ArchiveIsSymlink(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source is symlink: ' + H.LinkName);
-              if not ArchiveIsRegularFile(LHardSource) then
-                raise EIOError.Create('tar extract: hardlink source not regular file: ' + H.LinkName);
+              ValidateHardlinkSource(LHardSource, H.LinkName);
               ArchiveHardLink(LHardSource, LFull);
             end;
           tekFifo:

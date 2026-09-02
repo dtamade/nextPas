@@ -44,8 +44,8 @@ uses
   nextpas.core.log.intf;
 
 const
-  C_STREAM_BUF_SIZE = 65536;
-  C_STREAM_BUF_INIT = 4096;
+  C_STREAM_BUF_SIZE = C_TAR_IOBUF_SIZE;
+  C_STREAM_BUF_INIT = C_TAR_IOBUF_INIT;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -321,6 +321,7 @@ var
   LRemaining: Int64;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
+  LNeed: SizeUInt;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
@@ -337,24 +338,10 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // pooled FIOBuf, bytes.ops single source; lifecycle bound to Finish (released on Finish, amortized 1 alloc)
-  // perf: 4K initial (AlignUp4K) for 512B small files (2000 files save ~60K + syscall), grow on demand to 64K pooled reuse zero-copy (bytes.ops single source), avoids small->large second SetLength + syscall dominance
-  if Length(FIOBuf) = 0 then
-  begin
-    if AHdr.Size <= C_STREAM_BUF_INIT then
-      SetLength(FIOBuf, C_STREAM_BUF_INIT)
-    else if AHdr.Size < C_STREAM_BUF_SIZE then
-      SetLength(FIOBuf, AlignUp4K(SizeUInt(AHdr.Size)))
-    else
-      SetLength(FIOBuf, C_STREAM_BUF_SIZE);
-  end
-  else if (SizeUInt(Length(FIOBuf)) < SizeUInt(AHdr.Size)) and (Length(FIOBuf) < C_STREAM_BUF_SIZE) then
-  begin
-    if AHdr.Size < C_STREAM_BUF_SIZE then
-      SetLength(FIOBuf, AlignUp4K(SizeUInt(AHdr.Size)))
-    else
-      SetLength(FIOBuf, C_STREAM_BUF_SIZE);
-  end;
+  // pooled FIOBuf 64K, bytes.ops single source AlignUp4K via TarIOBufCapacityFor capacity helper single source (DRY inline, zero-copy); lifecycle Finish即释+Destroy finally双保险无linger峰值，IsExceptionUnwinding分叉防次生掩盖原异常（见 Finish/Destroy）；perf: single helper收敛两分支重复AlignUp4K+阈值判断，单次 SetLength 摊销 1 alloc pooled 复用（4K 初始省 512B 小文件 2000×~60K+syscall，64K 复用避递增序列二次重分配+syscall dominance）
+  LNeed := TarIOBufCapacityFor(AHdr.Size);
+  if SizeUInt(Length(FIOBuf)) < LNeed then
+    SetLength(FIOBuf, LNeed);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin

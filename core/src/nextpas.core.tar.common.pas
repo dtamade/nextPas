@@ -4,12 +4,6 @@ unit nextpas.core.tar.common;
  * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
- * 性能：
- * - 薄守卫 inline
- * - 零拷贝 PByte 切片
- * - 循环体外联守 design-conventions 真实循环体禁 inline
- * - Checksum 经 bytes.ops BytesSumAndCountHighBit SWAR 单源向量化（单遍融合，1 分发 vs 旧 4 分发）
- * - pax 经 archive.pax 单源
  *}
 
 {$I nextpas.core.settings.inc}
@@ -50,12 +44,12 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
-{** 生成 pax 记录；历史兼容薄包装，已收敛至 archive.pax ArchivePaxFormatRecord 单源（builder 零拷贝 Reserve+AppendBytes 几何扩容，禁双复制）；inline 薄转发单源，复用 bytes.ops 零拷贝视图，deprecated 收敛至 archive.pax 单源 *}
+{** 生成 pax 记录；已收敛至 archive.pax 单源，inline 薄转发 *}
 function TarFormatPaxRecord(const AKey, AValue: string): string; inline; deprecated 'use ArchivePaxFormatRecord';
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 追加 pax 记录至 builder，已收敛至 archive.pax ArchivePaxAppendRecord 单源；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容），历史兼容薄包装 *}
+{** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，外联 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
-{** 通用 pax 键值迭代已收敛至 archive.pax ArchivePaxParseRecords 单点（零拷贝 PByte 切片，strict fail-closed），tar 侧不再提供 TarParsePaxKVRecords 别名，复用 TArchivePaxKVHandler 单源 *}
+{** 通用 pax 键值迭代已收敛至 archive.pax 单源 *}
 
 implementation
 
@@ -102,9 +96,7 @@ var
   LHigh: SizeUInt;
   I: SizeUInt;
 begin
-  // perf: fused single-pass via bytes.ops BytesSumAndCountHighBit SWAR 单源，零拷贝 PByte 切片，外联（design-conventions 真实循环体禁 inline，避 I-Cache 膨胀）；dual via AU + signed correction，消除 512B 双循环分支 + 4 次 SIMD 分发 → 单遍 QWord 64-bit/8 单分发
-  // evidence: single BytesSumAndCountHighBit dispatch over 512B whole block + 8-byte scalar hole fix, vs old BytesSum×2+BytesCountHighBit×2=4 dispatches；2000 条目 8000→2000 调度
-  // stability: nil guard keeps fail-closed identical to old BytesSum nil-early-exit; no AV on hole deref
+  // 单遍融合 via bytes.ops 单源，外联；nil 守卫保 fail-closed
   if ABlock = nil then
   begin
     AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
@@ -147,7 +139,7 @@ procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
 var
   Stored, U, S: Int64;
 begin
-  // perf: thin guard inline + zero-copy PByte slice, single dispatch via dual (old 4→1), fail-closed
+  // 薄守卫 inline，零拷贝 PByte 切片
   Stored := TarStoredChecksum(ABlock);
   TarComputeChecksumsDual(ABlock, U, S);
   if (Stored <> U) and (Stored <> S) then
@@ -156,7 +148,7 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
-  // perf: fast qword reject + SIMD dispatch via IsZeroBytes single source (bytes.ops MemEqual chunked), zero-copy PByte slice; out-of-line loop per design-conventions, single dispatch vs 512B serial scan
+  // 快路径 qword 拒识 + IsZeroBytes 单源，外联
   if ABlock = nil then Exit(True);
   if PQWord(ABlock)^ <> 0 then Exit(False);
   Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
@@ -285,17 +277,17 @@ end;
 
 function TarFormatPaxRecord(const AKey, AValue: string): string; inline;
 begin
-  // 单源收敛至 archive.pax ArchivePaxFormatRecord，inline 薄转发零拷贝最优路径（CreateBytesBuilder+ArchivePaxAppendRecord+SpanToString 单次 Move，复用 bytes.ops 单源），历史兼容 deprecated
+  // 已收敛至 archive.pax 单源，inline 薄转发
   Result := ArchivePaxFormatRecord(AKey, AValue);
 end;
 
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
 begin
-  // 单源收敛至 archive.pax ArchivePaxAppendRecord 零拷贝最优路径（Reserve+AppendBytes 几何扩容、bytes.ops 单源），外联禁 inline
+  // 已收敛至 archive.pax 单源，外联
   ArchivePaxAppendRecord(ABuilder, AKey, AValue);
 end;
 
-{ — pax 解析：零拷贝 PByte 切片 — 单源委托 archive.pax 通用解析器 ArchivePaxParseRecords，strict 长度前缀校验畸形抛 EIOError，禁静默 Exit 回退截断名；TarParsePaxKVRecords 别名已收敛至 archive.pax 单点 — }
+{ — pax 解析：委托 archive.pax 单源，strict 校验 — }
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
   LFound: Boolean;
@@ -308,7 +300,7 @@ begin
   LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  // 通用迭代：零拷贝回调仅命中 path/linkpath 时物化，降 O(n) 分配峰值；其余键由调用方经 archive.pax ArchivePaxParseRecords 零拷贝迭代处理 atime/mtime/size 等扩展（tar 侧已收敛至 archive.pax 单点）
+  // 零拷贝回调，仅 path/linkpath 物化
   ArchivePaxParseRecords(ABase, ALen,
     procedure(const AKey, AValue: TByteSpan)
     begin
