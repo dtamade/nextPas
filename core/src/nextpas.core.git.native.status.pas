@@ -94,6 +94,8 @@ const
   CModeExec = $81ED;
   CModeSymlink = $A000;
   CModeGitlink = $E000;
+  // stability: cap hashsig inflate — beyond this blobs skip similarity without ReadObject, avoids transient peak for huge blobs, threshold guard not exception
+  CMaxSimilarityBlobBytes = Int64(1024 * 1024);
 
 
 
@@ -473,6 +475,8 @@ begin
     if not ARepo.TryGetObjectSize(AEntry.Oid, Kind, Size) then Exit;
     if Kind <> gokBlob then Exit;
     ASig.Size := Size;
+    // stability: large-blob guard before inflate — avoid transient peak, Valid stays False, ScoreFromSigs returns -1 without payload alloc
+    if Size > CMaxSimilarityBlobBytes then Exit;
     Data := ARepo.ReadObject(AEntry.Oid, Kind);
     if Kind <> gokBlob then Exit;
   except
@@ -494,6 +498,7 @@ var
 begin
   Result := -1;
   if not SA.Valid or not SB.Valid then Exit;
+  if (SA.Size > CMaxSimilarityBlobBytes) or (SB.Size > CMaxSimilarityBlobBytes) then Exit(-1);
   if (SA.Size > 127) and (SB.Size > 127) then
     if (SA.Size > SB.Size * 8) or (SB.Size > SA.Size * 8) then Exit(-1);
   if (SA.Count = 0) and (SB.Count = 0) then Exit(100);
@@ -595,6 +600,9 @@ begin
     if (SizeA > 127) and (SizeB > 127) then
       if (SizeA > SizeB * 8) or (SizeB > SizeA * 8) then
         Exit(-1);
+    // stability: large-blob guard before inflate — avoid transient TBytes peak for huge blobs, return -1 without payload alloc; not dependent on exception fallback
+    if (SizeA > CMaxSimilarityBlobBytes) or (SizeB > CMaxSimilarityBlobBytes) then
+      Exit(-1);
   except
     on E: EGitError do
       Exit(-1);
@@ -615,7 +623,7 @@ begin
   Result := HashSigScoreForBlobs(DataA, DataB);
 end;
 
-{ perf: not inline per red line 2 (recursive ReadDir+Ignore heavy IO routing); thin forwarders only inline, zero-copy Move via PAnsiChar }
+{ perf: not inline per red line 2 (recursive ReadDir+Ignore heavy IO routing); thin forwarders only inline, zero-copy via bytes.ops SpanCopy single source }
 procedure CollectUntracked(const AWorkTree, ADirRel: string;
   const ATrackedSorted: TStringArray; AIgnore: TGitIgnoreMatcher;
   var AOut: TStringArray);
@@ -650,16 +658,18 @@ begin
         Rel := Items[I].Name
       else
       begin
-        // single alloc + Move (zero-copy) avoids ADirRel+'/'+Name temp storm; inline for hot fan-out
-        // perf: inline + zero-copy PAnsiChar^ Move single source (bytes.ops discipline), no indexed var for untyped Move param
+        // single alloc + zero-copy avoids ADirRel+'/'+Name temp storm; inline for hot fan-out
+        // perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1)
         LDirLen := Length(ADirRel);
         LNameLen := Length(Items[I].Name);
         SetLength(Rel, LDirLen + 1 + LNameLen);
         if LDirLen > 0 then
-          Move(PAnsiChar(ADirRel)^, PAnsiChar(Rel)^, LDirLen);
+          SpanCopy(TByteSpan.Create(PByte(@Rel[1]), SizeUInt(LDirLen)),
+            TByteSpan.Create(PByte(@ADirRel[1]), SizeUInt(LDirLen)));
         Rel[LDirLen + 1] := '/';
         if LNameLen > 0 then
-          Move(PAnsiChar(Items[I].Name)^, (PAnsiChar(Rel) + LDirLen + 1)^, LNameLen);
+          SpanCopy(TByteSpan.Create(PByte(@Rel[1]) + SizeUInt(LDirLen + 1), SizeUInt(LNameLen)),
+            TByteSpan.Create(PByte(@Items[I].Name[1]), SizeUInt(LNameLen)));
       end;
       if Items[I].IsDir then
       begin

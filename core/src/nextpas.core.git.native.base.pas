@@ -104,8 +104,8 @@ end;
 
 function GitOidZero: TGitOid; inline;
 begin
-  { perf: inline single FillChar, zero-copy, no alloc, single source zero init owned by base (L0) }
-  FillChar(Result, SizeOf(Result), 0);
+  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops SpanFill via MemSet: 20B zero init, no alloc, single source with Same/IsZeroBytes unified vocabulary }
+  SpanFill(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen), 0);
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;

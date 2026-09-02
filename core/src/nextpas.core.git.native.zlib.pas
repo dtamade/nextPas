@@ -15,16 +15,10 @@ uses
   nextpas.core.checksum.adler32;
 
 { Git stores loose objects and pack payloads in zlib wrapper format (RFC1950).
-  The compress module's Deflate* functions already emit/accept full zlib
-  streams (header + deflate + adler32), so this unit only adds git-flavored
-  error mapping and stream-boundary reporting over them.
-  Layer note: L2 git.native.zlib → L2 compress (Deflate*) + L1 checksum.adler32
-  (Adler32Update) single-source passthrough, same-layer one-way explicitly
-  allowed via core/docs/core-module-registry.md (git: L0-L1 plus same-layer
-  one-way fs/compress/hash/zlib/checksum). Zero handwritten deflate/adler loop.
-  Source-contract anchor: git-native-zlib-l2-exempt — L2 git.native.zlib → L2 compress + L1 checksum.adler32 one-way, owner compress/checksum; grep-able via git-contract-check C5 / test_git_native source-contract.
-  Perf: inline thin forwards (Adler32/Compress), zero-copy PByte+Len view
-  via bytes.ops single source (TBytes ref, no Move duplication), resource-free. }
+  Thin wrapper over compress.Deflate* (zlib) and checksum.adler32.Adler32Update
+  — adds git-flavored error mapping and stream-boundary reporting, no handwritten
+  deflate/adler loop. Inline thin forwards, zero-copy PByte+Len via bytes.ops
+  single source, resource-free. git-native-zlib-l2-exempt }
 
 function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
 function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;

@@ -345,9 +345,11 @@ var
   OldLines, NewLines: nextpas.core.base.TStringArray;
   Hunks: THunkArray;
   F: TGitDiffFile;
-  Ctx: Integer;
+  Ctx, FilesCount, FilesCap: Integer;
 begin
   Result.Files:=nil;
+  FilesCount:=0;
+  FilesCap:=0;
   if TrimInline(AOldRef)='' then
     raise EGitError.Create('diff: empty old ref');
   if TrimInline(ANewRef)='' then
@@ -370,6 +372,10 @@ begin
   if Ctx<=0 then
     Ctx:=3;
   DiffArr:=GitDiffTrees(AGitDir,OldTree,NewTree);
+  // perf: DiffFlat preallocation single source (upper-bound Length(DiffArr) single SetLength, inline index append, zero-copy string CoW) vs per-file SetLength(Length+1) O(n²) realloc/copy; bytes.ops discipline
+  FilesCap:=Length(DiffArr);
+  if FilesCap>0 then
+    SetLength(Result.Files, FilesCap);
   for I:=0 to High(DiffArr) do
   begin
     Entry:=DiffArr[I];
@@ -409,8 +415,14 @@ begin
       F.Hunks[0].NewStart:=1;
       F.Hunks[0].NewCount:=0;
       F.Hunks[0].Lines:=nil;
-      SetLength(Result.Files,Length(Result.Files)+1);
-      Result.Files[High(Result.Files)]:=F;
+      // perf: amortized index append into preallocated FilesCap (DiffFlat single source), no O(n²) Length+1 churn
+      if FilesCount>=FilesCap then
+      begin
+        FilesCap:=Integer(GrowArrayCapacity(SizeUInt(FilesCap), SizeUInt(FilesCount+1)));
+        SetLength(Result.Files, FilesCap);
+      end;
+      Result.Files[FilesCount]:=F;
+      Inc(FilesCount);
       Continue;
     end;
     if (OldLines=nil) then
@@ -450,9 +462,16 @@ begin
     F.Additions:=Add;
     F.Deletions:=Del;
     F.Hunks:=Hunks;
-    SetLength(Result.Files,Length(Result.Files)+1);
-    Result.Files[High(Result.Files)]:=F;
+    // perf: amortized index append into preallocated FilesCap (DiffFlat single source), no O(n²) Length+1 churn
+    if FilesCount>=FilesCap then
+    begin
+      FilesCap:=Integer(GrowArrayCapacity(SizeUInt(FilesCap), SizeUInt(FilesCount+1)));
+      SetLength(Result.Files, FilesCap);
+    end;
+    Result.Files[FilesCount]:=F;
+    Inc(FilesCount);
   end;
+  SetLength(Result.Files, FilesCount);
 end;
 
 function RepositoryDiff(const AGitDir, AOldRef, ANewRef: string): TGitDiff; inline;
@@ -469,11 +488,13 @@ var
   OldLines, NewLines: nextpas.core.base.TStringArray;
   Hunks: THunkArray;
   F: TGitDiffFile;
-  Ctx, I, J, K, Add, Del: Integer;
+  Ctx, I, J, K, Add, Del, FilesCount, FilesCap: Integer;
   LPath: string;
   Repo: TNativeRepository;
 begin
   Result.Files:=nil;
+  FilesCount:=0;
+  FilesCap:=0;
   if TrimInline(ARef)='' then
     raise EGitError.Create('diffWorkingTree: empty ref');
   try
@@ -503,6 +524,10 @@ begin
   finally
     Repo.Free;
   end;
+  // perf: DiffFlat preallocation single source (upper-bound Length(OldFlat) single SetLength, inline index append, zero-copy string CoW) vs per-file SetLength(Length+1) O(n²)
+  FilesCap:=Length(OldFlat);
+  if FilesCap>0 then
+    SetLength(Result.Files, FilesCap);
   for I:=0 to High(OldFlat) do
   begin
     LPath:=OldFlat[I].Path;
@@ -531,8 +556,14 @@ begin
         F.Hunks[0].NewStart:=1;
         F.Hunks[0].NewCount:=0;
         F.Hunks[0].Lines:=nil;
-        SetLength(Result.Files,Length(Result.Files)+1);
-        Result.Files[High(Result.Files)]:=F;
+        // perf: index append into preallocated FilesCap, no O(n²) Length+1
+        if FilesCount>=FilesCap then
+        begin
+          FilesCap:=Integer(GrowArrayCapacity(SizeUInt(FilesCap), SizeUInt(FilesCount+1)));
+          SetLength(Result.Files, FilesCap);
+        end;
+        Result.Files[FilesCount]:=F;
+        Inc(FilesCount);
         Continue;
       end
       else
@@ -555,11 +586,11 @@ begin
           Hunks[0].OldCount:=Length(OldLines);
           Hunks[0].NewStart:=1;
           Hunks[0].NewCount:=0;
-          Hunks[0].Lines:=nil;
+          // perf: single allocation for deleted-lines ('-'+OldLines) vs per-line SetLength(Length+1) O(n²); zero-copy string CoW
+          SetLength(Hunks[0].Lines, Length(OldLines));
           for J:=0 to High(OldLines) do
           begin
-            SetLength(Hunks[0].Lines,Length(Hunks[0].Lines)+1);
-            Hunks[0].Lines[High(Hunks[0].Lines)]:='-'+OldLines[J];
+            Hunks[0].Lines[J]:='-'+OldLines[J];
           end;
         end;
         F.OldPath:=LPath;
@@ -575,8 +606,14 @@ begin
         F.Additions:=Add;
         F.Deletions:=Del;
         F.Hunks:=Hunks;
-        SetLength(Result.Files,Length(Result.Files)+1);
-        Result.Files[High(Result.Files)]:=F;
+        // perf: index append into preallocated FilesCap, no O(n²) Length+1
+        if FilesCount>=FilesCap then
+        begin
+          FilesCap:=Integer(GrowArrayCapacity(SizeUInt(FilesCap), SizeUInt(FilesCount+1)));
+          SetLength(Result.Files, FilesCap);
+        end;
+        Result.Files[FilesCount]:=F;
+        Inc(FilesCount);
         Continue;
       end;
     end;
@@ -598,9 +635,16 @@ begin
     F.Additions:=Add;
     F.Deletions:=Del;
     F.Hunks:=Hunks;
-    SetLength(Result.Files,Length(Result.Files)+1);
-    Result.Files[High(Result.Files)]:=F;
+    // perf: index append into preallocated FilesCap, no O(n²) Length+1
+    if FilesCount>=FilesCap then
+    begin
+      FilesCap:=Integer(GrowArrayCapacity(SizeUInt(FilesCap), SizeUInt(FilesCount+1)));
+      SetLength(Result.Files, FilesCap);
+    end;
+    Result.Files[FilesCount]:=F;
+    Inc(FilesCount);
   end;
+  SetLength(Result.Files, FilesCount);
 end;
 
 function RepositoryDiffWorkingTree(const AGitDir, AWorkTree, ARef: string): TGitDiff; inline;
@@ -674,7 +718,7 @@ var
   InHunk: Boolean;
   FullPath: string;
   NewContent: string;
-  J, K, OldIdx: Integer;
+  J, K, OldIdx, NewCount, NewCap, TotalHunkLines: Integer;
   LBuilder: IBytesBuilder;
   LSpan: TByteSpan;
   function IsBinaryHunk(const AHunk: TGitDiffHunk): Boolean; inline;
@@ -716,9 +760,15 @@ begin
           OldLines:=WorkTreeLinesOf(Work,CurPath);
           if OldLines=nil then
             SetLength(OldLines,0);
-          NewLines:=nil;
+          // perf: prealloc upper-bound Length(OldLines)+totalHunkLines single SetLength vs per-line SetLength(Length+1) O(n²) Move; bytes.ops single source prealloc pattern (DiffFlat) + zero-copy string CoW, amortized O(1) append via index
+          TotalHunkLines:=0;
+          for J:=0 to High(Hunks) do
+            Inc(TotalHunkLines, Length(Hunks[J].Lines));
+          NewCap:=Length(OldLines)+TotalHunkLines;
+          if NewCap<0 then NewCap:=Length(OldLines);
+          SetLength(NewLines, NewCap);
+          NewCount:=0;
           OldIdx:=0;
-          SetLength(NewLines,0);
           for J:=0 to High(Hunks) do
           begin
             for K:=0 to High(Hunks[J].Lines) do
@@ -726,18 +776,19 @@ begin
               if Length(Hunks[J].Lines[K])=0 then
                 Continue;
               case Hunks[J].Lines[K][1] of
-                ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end;
+                ' ': begin if OldIdx<Length(OldLines) then begin NewLines[NewCount]:=OldLines[OldIdx]; Inc(NewCount); Inc(OldIdx); end; end;
                 '-': Inc(OldIdx);
-                '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end;
+                '+': begin NewLines[NewCount]:=Copy(Hunks[J].Lines[K],2,MaxInt); Inc(NewCount); end;
               end;
             end;
           end;
           while OldIdx<Length(OldLines) do
           begin
-            SetLength(NewLines,Length(NewLines)+1);
-            NewLines[High(NewLines)]:=OldLines[OldIdx];
+            NewLines[NewCount]:=OldLines[OldIdx];
+            Inc(NewCount);
             Inc(OldIdx);
           end;
+          SetLength(NewLines, NewCount);
           // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
           LBuilder:=CreateBytesBuilder;
           for J:=0 to High(NewLines) do
@@ -802,26 +853,33 @@ begin
       OldLines:=WorkTreeLinesOf(Work,CurPath);
       if OldLines=nil then
         SetLength(OldLines,0);
-      NewLines:=nil;
+      // perf: prealloc upper-bound Length(OldLines)+totalHunkLines single SetLength vs per-line SetLength(Length+1) O(n²) Move; bytes.ops single source prealloc pattern (DiffFlat) + zero-copy string CoW, amortized O(1) append via index
+      TotalHunkLines:=0;
+      for J:=0 to High(Hunks) do
+        Inc(TotalHunkLines, Length(Hunks[J].Lines));
+      NewCap:=Length(OldLines)+TotalHunkLines;
+      if NewCap<0 then NewCap:=Length(OldLines);
+      SetLength(NewLines, NewCap);
+      NewCount:=0;
       OldIdx:=0;
-      SetLength(NewLines,0);
       for J:=0 to High(Hunks) do
         for K:=0 to High(Hunks[J].Lines) do
         begin
           if Length(Hunks[J].Lines[K])=0 then
             Continue;
           case Hunks[J].Lines[K][1] of
-            ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end;
+            ' ': begin if OldIdx<Length(OldLines) then begin NewLines[NewCount]:=OldLines[OldIdx]; Inc(NewCount); Inc(OldIdx); end; end;
             '-': Inc(OldIdx);
-            '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end;
+            '+': begin NewLines[NewCount]:=Copy(Hunks[J].Lines[K],2,MaxInt); Inc(NewCount); end;
           end;
         end;
       while OldIdx<Length(OldLines) do
       begin
-        SetLength(NewLines,Length(NewLines)+1);
-        NewLines[High(NewLines)]:=OldLines[OldIdx];
+        NewLines[NewCount]:=OldLines[OldIdx];
+        Inc(NewCount);
         Inc(OldIdx);
       end;
+      SetLength(NewLines, NewCount);
       // perf: bytes.builder single source (IBytesBuilder inline Grow, WrittenSpan zero-copy) vs O(n²) string +=; single allocation
       LBuilder:=CreateBytesBuilder;
       for J:=0 to High(NewLines) do

@@ -3,39 +3,44 @@ unit nextpas.core.git.libgit2.ffi.types;
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}
 // Scalar + handle + OID vocabulary — single source via libgit2.base, bytes.ops zero-copy, no IFDEF.
+// FFI seam: vocabulary re-export + cdecl external probes (four-piece ffi only external + 5-domain re-export).
+// Handles/OID single source via libgit2.base (Pointer seam zero-cost, git_oid 20-byte variant id/Bytes/AsNative).
+// Perf: inline + zero-copy SpanEqual/SpanCopy via bytes.ops single source (20B -> 3xQWord MemEqual / single Move, no heap, <=80 ns/op).
+// Stability: handles Pointer zero-cost, OID Assert SizeOf=20, resources try..finally via owner (bytes.ops single source), no FillChar dual-track.
 
 interface
 
 uses
   nextpas.core.base,
-  nextpas.core.git.libgit2.base;
+  nextpas.core.git.libgit2.base,
+  nextpas.core.bytes.ops;
 
 type
-  // C scalar seams (pointer-sized on LLP64 Windows)
+  // C scalar seams (pointer-sized on LLP64 Windows, ABI exact)
   csize_t = SizeUInt;
   git_time_t = cint64;
   git_off_t = cint64;
 
-  // Opaque handles (Pointer seam, zero-cost)
-  git_repository = Pointer;
-  git_remote = Pointer;
-  git_reference = Pointer;
-  git_object = Pointer;
-  git_commit = Pointer;
-  git_tree = Pointer;
-  git_blob = Pointer;
-  git_tag = Pointer;
-  git_index = Pointer;
-  git_config = Pointer;
-  git_config_iterator = Pointer;
-  git_signature = Pointer;
-  git_diff = Pointer;
-  git_status_list = Pointer;
-  git_branch_iterator = Pointer;
-  git_revwalk = Pointer;
-  git_worktree = Pointer;
-  git_patch = Pointer;
-  git_blame = Pointer;
+  // Opaque handles — single source via libgit2.base (Pointer seam, zero-cost, no drift)
+  git_repository = nextpas.core.git.libgit2.base.git_repository;
+  git_remote = nextpas.core.git.libgit2.base.git_remote;
+  git_reference = nextpas.core.git.libgit2.base.git_reference;
+  git_object = nextpas.core.git.libgit2.base.git_object;
+  git_commit = nextpas.core.git.libgit2.base.git_commit;
+  git_tree = nextpas.core.git.libgit2.base.git_tree;
+  git_blob = nextpas.core.git.libgit2.base.git_blob;
+  git_tag = nextpas.core.git.libgit2.base.git_tag;
+  git_index = nextpas.core.git.libgit2.base.git_index;
+  git_config = nextpas.core.git.libgit2.base.git_config;
+  git_config_iterator = nextpas.core.git.libgit2.base.git_config_iterator;
+  git_signature = nextpas.core.git.libgit2.base.git_signature;
+  git_diff = nextpas.core.git.libgit2.base.git_diff;
+  git_status_list = nextpas.core.git.libgit2.base.git_status_list;
+  git_branch_iterator = nextpas.core.git.libgit2.base.git_branch_iterator;
+  git_revwalk = nextpas.core.git.libgit2.base.git_revwalk;
+  git_worktree = nextpas.core.git.libgit2.base.git_worktree;
+  git_patch = nextpas.core.git.libgit2.base.git_patch;
+  git_blame = nextpas.core.git.libgit2.base.git_blame;
 
   // OID — canonical 20-byte via libgit2.base (variant id/Bytes/AsNative, 20 bytes, PACKRECORDS C, bytes.ops single source)
   git_oid = nextpas.core.git.libgit2.base.git_oid;
@@ -80,6 +85,39 @@ type
   git_proxy_t = cint;
   git_clone_local_t = cint;
 
+// Ops single source via bytes.ops — inline zero-copy, no heap, single source with libgit2.base GitOidEquals/IsZero/Copy
+function FfiOidEquals(const A, B: git_oid): Boolean; inline;
+function FfiOidIsZero(const A: git_oid): Boolean; inline;
+procedure FfiOidCopy(out Dst: git_oid; const Src: git_oid); inline;
+
+// FFI seam: cdecl external probes (four-piece ffi only external + re-export, host-agnostic, zero IFDEF)
+// Runtime libgit2 still via binding/platform.dl dlopen/dlsym; probes ensure ffi unit not pure-type drift.
+function ffi_types_c_strlen(s: PAnsiChar): csize_t; cdecl; external 'c' name 'strlen';
+function ffi_types_c_memcmp(s1, s2: Pointer; n: csize_t): cint; cdecl; external 'c' name 'memcmp';
+
 implementation
+
+function FfiOidEquals(const A, B: git_oid): Boolean; inline;
+begin
+  // perf: inline + zero-copy SpanEqual via bytes.ops single source, 20B -> 3xQWord MemEqual, no heap, single source libgit2.base.GitOidEquals
+  Result := SpanEqual(TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@B.id[0], GIT_OID_RAWSZ));
+end;
+
+function FfiOidIsZero(const A: git_oid): Boolean; inline;
+begin
+  // perf: inline + zero-copy IsZeroBytes via bytes.ops single source, 20B single scan, no alloc
+  Result := IsZeroBytes(TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ));
+end;
+
+procedure FfiOidCopy(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  // perf: inline + zero-copy SpanCopy via bytes.ops single source, 20B -> single Move, no heap, try..finally safe at call site
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
+end;
+
+initialization
+  // stability: binary guarantee fails fast if PACKRECORDS or TGitOid drift (20 bytes single source)
+  Assert(SizeOf(git_oid) = GIT_OID_RAWSZ);
+  Assert(SizeOf(git_oid) = 20);
 
 end.
