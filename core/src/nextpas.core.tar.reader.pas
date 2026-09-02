@@ -59,11 +59,14 @@ type
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
     constructor CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions); overload;
     function Next(out AHeader: TTarHeader): Boolean;
-    { 拷贝路径：单次 SetLength+Move（bytes.ops SpanClone 单源），峰值约 2× 切片视图；热路径/大载荷优先 EntryDataSlice/OpenEntryStream 零拷贝（extract-all 320µs vs extract-slice 236µs，约 -26%） }
+    { 拷贝分流：单次 SetLength+Move（bytes.ops SpanClone 单源），峰值 2× TrySlice/切片视图；热路径/大载荷必须优先 TrySlice/EntryDataSlice/OpenEntryStream 零拷贝（extract-all 320µs vs extract-slice 236µs，约 -26%）— 显式 TrySlice(TByteSpan) 引导避免误用拷贝 }
     function EntryData: TBytes;
     function EntryDataOfs: SizeUInt;
     { 零拷贝视图：返回当前条目载荷在原镜像中的区间（未拷贝，生命周期默认绑定 Reader） }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
+    { 显式零拷贝分流：TrySlice 返回 TByteSpan 视图（零拷贝/零分配，inline 薄转发，生命周期绑 Reader）；热路径/大载荷优先于 EntryData（EntryData 峰值 2× 切片），失败返 False 不抛（空条目或未 Next），成功得切片后按需 SpanClone 单次 Move（bytes.ops 单源） }
+    function TrySlice(out ASlice: TByteSpan): Boolean; inline;
+    function TryEntryDataSlice(out ASlice: TByteSpan): Boolean; inline;
     { 拉式零拷贝流：基于切片的 IReader；若 Reader 拥有 TBytes 镜像则流持有镜像拷贝（所有权转移防悬垂），外部 PByte 镜像则流固化拷贝自包含；Reader 释放后流仍可读 }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
@@ -495,18 +498,15 @@ end;
 
 function TTarReader.EntryData: TBytes;
 var
-  N: SizeInt;
+  LS: TByteSpan;
 begin
   Result := nil;
-  if (FEntryDataOfs = 0) or (FEntrySize <= 0) then
+  if not TrySlice(LS) then
     Exit;
-  if FEntryDataOfs + SizeUInt(FEntrySize) > FCount then
-    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, FEntrySize, Int64(FCount) - Int64(FEntryDataOfs)]);
-  if UInt64(FEntrySize) > UInt64(FMaxEntry) then
-    raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [FEntrySize, Int64(FMaxEntry), FEntryDataOfs]);
-  N := SizeInt(FEntrySize);
-  // 单源：bytes.ops SpanClone 单次 Move 审计入口，替代手写 Move；拷贝分流：峰值 2× 切片视图，热路径优先 EntryDataSlice/OpenEntryStream 零拷贝（320µs vs 236µs）
-  Result := SpanClone(TByteSpan.Create(@FData[FEntryDataOfs], SizeUInt(N)));
+  if UInt64(LS.Len) > UInt64(FMaxEntry) then
+    raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [Int64(LS.Len), Int64(FMaxEntry), FEntryDataOfs]);
+  // 单源：bytes.ops SpanClone 单次 Move 审计入口；显式经 TrySlice 零拷贝视图分流—拷贝仅按需，峰值 2× 切片（LS 无分配），热路径优先 TrySlice/OpenEntryStream；inline/零拷贝证据见 TrySlice
+  Result := SpanClone(LS);
 end;
 
 function TTarReader.EntryDataOfs: SizeUInt;
@@ -514,19 +514,42 @@ begin
   Result := FEntryDataOfs;
 end;
 
-function TTarReader.EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
+function TTarReader.TrySlice(out ASlice: TByteSpan): Boolean; inline;
 begin
+  // 显式零拷贝分流：TrySlice 单源 TByteSpan 视图（零拷贝/零分配，生命周期绑 Reader），失败返 False 不抛（空条目/未 Next），截断抛 EIOError；inline 薄转发供 EntryDataSlice/EntryData 复用，峰值对比 2× 证据见 EntryData
   if (FEntryDataOfs = 0) or (FEntrySize <= 0) then
   begin
-    AData := nil;
-    ACount := 0;
+    ASlice := TByteSpan.Empty;
     Exit(False);
   end;
   if FEntryDataOfs + SizeUInt(FEntrySize) > FCount then
     raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, FEntrySize, Int64(FCount) - Int64(FEntryDataOfs)]);
-  AData := @FData[FEntryDataOfs];
-  ACount := SizeUInt(FEntrySize);
+  ASlice := TByteSpan.Create(@FData[FEntryDataOfs], SizeUInt(FEntrySize));
   Result := True;
+end;
+
+function TTarReader.TryEntryDataSlice(out ASlice: TByteSpan): Boolean; inline;
+begin
+  // 别名薄转发：复用 TrySlice 单源，inline 零拷贝，引导热路径显式调用
+  Result := TrySlice(ASlice);
+end;
+
+function TTarReader.EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
+var
+  LS: TByteSpan;
+begin
+  // 薄转发：复用 TrySlice 单源 TByteSpan 视图，避免 PByte/Count 分流重复分支与截断校验分叉
+  Result := TrySlice(LS);
+  if Result then
+  begin
+    AData := LS.Data;
+    ACount := LS.Len;
+  end
+  else
+  begin
+    AData := nil;
+    ACount := 0;
+  end;
 end;
 
 { — TTarSliceReader：零拷贝切片的拉式 IReader（职责解耦：流不与块解析混杂；单源 bytes.ops CopyMemory + 所有权守卫） — }

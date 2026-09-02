@@ -575,7 +575,12 @@ begin
         if platform_file_lstat(@LBuf[0], LSt) = 0 then
         begin
           if LSt.FileType = ftSymlink then
+          begin
+            // allow symlink to directory (e.g. /tmp -> /vm/tmp), follow stat
+            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
+              Exit(0);
             Exit(PLATFORM_ERR_ENOTDIR);
+          end;
           if LSt.FileType = ftDirectory then
             Exit(0);
           Exit(PLATFORM_ERR_ENOTDIR);
@@ -598,10 +603,18 @@ begin
         begin
           if LSt.FileType = ftSymlink then
           begin
-            LBuf[I] := '/';
-            Exit(PLATFORM_ERR_ENOTDIR);
-          end;
-          if LSt.FileType <> ftDirectory then
+            // allow symlink to directory (system /tmp), follow stat
+            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
+            begin
+              // ok symlink dir, continue
+            end
+            else
+            begin
+              LBuf[I] := '/';
+              Exit(PLATFORM_ERR_ENOTDIR);
+            end;
+          end
+          else if LSt.FileType <> ftDirectory then
           begin
             LBuf[I] := '/';
             Exit(PLATFORM_ERR_ENOTDIR);
@@ -620,8 +633,15 @@ begin
           if platform_file_lstat(@LBuf[0], LSt) = 0 then
             if LSt.FileType = ftSymlink then
             begin
-              LBuf[I] := '/';
-              Exit(PLATFORM_ERR_ENOTDIR);
+              if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
+              begin
+                // ok
+              end
+              else
+              begin
+                LBuf[I] := '/';
+                Exit(PLATFORM_ERR_ENOTDIR);
+              end;
             end;
         end;
       {$IFDEF NEXTPAS_WINDOWS}

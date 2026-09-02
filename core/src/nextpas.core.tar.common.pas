@@ -47,8 +47,7 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.bytes.ops,
-  nextpas.core.simd;
+  nextpas.core.bytes.ops;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -138,8 +137,8 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
-  // 单源：复用 simd.SumBytes 向量化判零，无逐字节分支，万级小文件单次 SIMD 扫描
-  Result := SumBytes(ABlock, C_TAR_BLOCK_SIZE) = 0;
+  // 单源：复用 bytes.ops.IsZeroBytes 零拷贝 TByteSpan 判零，无逐字节分支扩散，外联守 design-conventions 真实循环体禁 inline
+  Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
 end;
 
 function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
