@@ -148,6 +148,12 @@ function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
     @return 0 成功，否则返回错误码 *}
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
 
+{** @desc 创建 FIFO 特殊文件（owner 反哺：tar device/fifo 完整性闭环）
+    @param APath 路径
+    @param AMode 权限
+    @return 0 成功，否则返回错误码 *}
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32;
+
 {** @desc 创建目录
     @param APath 目录路径
     @param AMode 目录权限
@@ -625,6 +631,13 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
   Result := PosixCheck(truncate(APath, ASize));
+end;
+
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PosixCheck(mkfifo(APath, AMode));
 end;
 
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
@@ -1677,6 +1690,7 @@ function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileSta
 function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -226,6 +226,10 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 function ExceptAddr: Pointer; inline;
 function ExceptFrameCount: LongInt; inline;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+{ ExceptObject — single-source query of current exception (RaiseList 封装),
+  inline zero-copy, L0 owner for SafeFail without L2 直接耦合编译器运行时细节. }
+function ExceptObject: TObject; inline;
+function IsExceptionUnwinding: Boolean; inline;
 
 implementation
 
@@ -638,6 +642,16 @@ begin
   else
     Result := SysUtils.ExceptFrames[AIndex];
 end;
+
+function ExceptObject: TObject; inline;
+begin
+  Result := SysUtils.ExceptObject;
+end;
+
+function IsExceptionUnwinding: Boolean; inline;
+begin
+  Result := SysUtils.ExceptObject <> nil;
+end;
 {$ELSE}
 function ExceptAddr: Pointer; inline;
 begin
@@ -652,6 +666,16 @@ end;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
   Result := nil;
+end;
+
+function ExceptObject: TObject; inline;
+begin
+  Result := nil;
+end;
+
+function IsExceptionUnwinding: Boolean; inline;
+begin
+  Result := False;
 end;
 {$ENDIF}
 

@@ -47,6 +47,8 @@ function FsReadlink(const APath: string): string;
 function FsRealPath(const APath: string): string;
 {** @desc 创建硬链接（对齐 Go os.Link / Rust hard_link） *}
 procedure FsHardLink(const AOldPath, ANewPath: string);
+{** @desc 创建 FIFO 特殊文件（owner 反哺：tar fifo 完整性，对齐 Go/Rust mkfifo） *}
+procedure FsMkFifo(const APath: string; const APerm: TFilePermission = PermDefault);
 {** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TFileInfo.ModTime 同单位） *}
 procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);
 {** @desc 设置所有者（对齐 Go os.Chown 跟随链接；Windows 不支持） *}
@@ -516,6 +518,17 @@ begin
   LResult := platform_file_link(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'hardlink', ANewPath);
+end;
+
+procedure FsMkFifo(const APath: string; const APerm: TFilePermission);
+var
+  LResult: Int32;
+begin
+  if APath = '' then
+    raise EArgumentError.Create('MkFifo path must not be empty');
+  LResult := platform_file_mkfifo(PAnsiChar(APath), UInt32(APerm));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'mkfifo', APath);
 end;
 
 procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);

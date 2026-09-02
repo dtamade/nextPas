@@ -273,22 +273,30 @@ end;
 { — pax 单点：长度前缀十进制自洽与拼接收敛至 common，复用 bytes.ops CopyStringToBuffer 单源 Move 单次 SetLength 分配，零拷贝 PAnsiChar 视图，外联禁 inline（含循环/分配） — }
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 var
-  LBase, LLen, LDigits: Integer;
+  LBase, LLen, LDigits, LNeed: Integer;
   SLen: string;
   LPos: SizeInt;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
   LLen := LBase + LDigits;
-  SLen := nextpas.core.text.conv.IntToStr(LLen);
-  while Length(SLen) <> LDigits do
+  while True do
   begin
-    LDigits := Length(SLen);
+    if LLen < 10 then LNeed := 1
+    else if LLen < 100 then LNeed := 2
+    else if LLen < 1000 then LNeed := 3
+    else if LLen < 10000 then LNeed := 4
+    else if LLen < 100000 then LNeed := 5
+    else if LLen < 1000000 then LNeed := 6
+    else if LLen < 10000000 then LNeed := 7
+    else if LLen < 100000000 then LNeed := 8
+    else if LLen < 1000000000 then LNeed := 9
+    else LNeed := 10;
+    if LNeed = LDigits then Break;
+    LDigits := LNeed;
     LLen := LBase + LDigits;
-    SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  // perf: 单次 SetLength(Result,LLen)+顺序 CopyStringToBuffer（bytes.ops 单源 Move，零拷贝 PAnsiChar 视图，外联单次 Move 规避 FPC 3.3.1 inline+Move 单字节缺陷），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
-  // stability: 空键/值守零长不 Copy，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 bytes.ops CopyStringToBuffer 审计（同 common.pas SpanToString/TarPutHeaderString 单源），资源由托管 string 释放不丢
+  SLen := nextpas.core.text.conv.IntToStr(LLen);
   SetLength(Result, LLen);
   LPos := 1;
   if Length(SLen) > 0 then

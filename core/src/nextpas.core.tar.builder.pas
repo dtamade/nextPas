@@ -75,11 +75,11 @@ end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // fail-closed SafeFail：未显式 Finish 时正常抛 EInvalidOperationError；若已在异常展开中（System.RaiseList<>nil）则抑制二次异常逃逸，StdErr WARN 后释资源（不引入 SysUtils，守 nextpas.* 单源）
+  // fail-closed SafeFail：未显式 Finish 时正常抛 EInvalidOperationError；若已在异常展开中（ExceptObject<>nil via nextpas.core.exception 单源 inline零拷贝）则抑制二次异常逃逸，StdErr WARN 后释资源（不直引编译器内部 RaiseList，守 nextpas.* 自包含）
   try
     if not FFinished then
     begin
-      if System.RaiseList = nil then
+      if ExceptObject = nil then
         raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')
       else
       begin

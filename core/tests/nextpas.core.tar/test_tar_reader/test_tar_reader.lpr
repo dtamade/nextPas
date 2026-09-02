@@ -10,6 +10,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.tar.base,
+  nextpas.core.tar.common,
   nextpas.core.tar.reader,
   nextpas.core.tar.writer,
   nextpas.core.io.memory,
@@ -188,6 +189,98 @@ begin
   finally R.Free; end;
 end;
 
+procedure EmitHeader(var ABuf: TBytes; const AName: string; AType: Char; ASize: Int64);
+var
+  Block: array[0..511] of Byte;
+  P: PByte;
+begin
+  FillChar(Block[0], 512, 0);
+  P := @Block[0];
+  TarPutHeaderString(P, C_TAR_OFF_NAME, C_TAR_LEN_NAME, AName);
+  TarFormatNumericField(P, C_TAR_OFF_MODE, C_TAR_LEN_MODE, $1A4);
+  TarFormatNumericField(P, C_TAR_OFF_UID, C_TAR_LEN_UID, 0);
+  TarFormatNumericField(P, C_TAR_OFF_GID, C_TAR_LEN_GID, 0);
+  TarFormatNumericField(P, C_TAR_OFF_SIZE, C_TAR_LEN_SIZE, ASize);
+  TarFormatNumericField(P, C_TAR_OFF_MTIME, C_TAR_LEN_MTIME, 0);
+  Block[C_TAR_OFF_TYPEFLAG] := Ord(AType);
+  TarWriteUStarMagic(P);
+  TarFinalizeHeaderChecksum(P);
+  BytesAppend(ABuf, P, 512);
+end;
+
+procedure AppendPayload(var ABuf: TBytes; const AData: TBytes);
+var
+  Pad: SizeInt;
+begin
+  if Length(AData) > 0 then
+    BytesAppend(ABuf, PByte(@AData[0]), SizeUInt(Length(AData)));
+  Pad := TarPadToBlock(Int64(Length(AData)));
+  if Pad > 0 then
+  begin
+    SetLength(ABuf, Length(ABuf) + Pad);
+    FillChar(ABuf[Length(ABuf)-Pad], Pad, 0);
+  end;
+end;
+
+procedure TestGlobalPaxMultiEntryInheritance;
+var
+  Tar: TBytes;
+  R: TTarReader;
+  H: TTarHeader;
+  PaxRec: string;
+  PaxBytes: TBytes;
+begin
+  Tar := nil;
+  PaxRec := TarFormatPaxRecord('path', 'inherited.txt');
+  PaxBytes := StringToBytes(PaxRec);
+  EmitHeader(Tar, '', 'g', Length(PaxBytes));
+  AppendPayload(Tar, PaxBytes);
+  EmitHeader(Tar, 'a.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('hi1'));
+  EmitHeader(Tar, 'b.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('hi2'));
+  SetLength(Tar, Length(Tar) + 1024);
+  FillChar(Tar[Length(Tar)-1024], 1024, 0);
+  R := TTarReader.Create(Tar);
+  try
+    CheckTrue(R.Next(H), 'first after g');
+    CheckEqual('inherited.txt', H.Name, 'g persists entry1');
+    CheckTrue(R.Next(H), 'second after g');
+    CheckEqual('inherited.txt', H.Name, 'g persists entry2 multi-entry inheritance');
+    CheckTrue(R.Next(H)=False, 'end');
+  finally R.Free; end;
+end;
+
+procedure TestGlobalPaxMaliciousClear;
+var
+  Tar: TBytes;
+  R: TTarReader;
+  H: TTarHeader;
+  PaxRec: string;
+  PaxBytes: TBytes;
+begin
+  Tar := nil;
+  PaxRec := TarFormatPaxRecord('path', '../evil.txt');
+  PaxBytes := StringToBytes(PaxRec);
+  EmitHeader(Tar, '', 'g', Length(PaxBytes));
+  AppendPayload(Tar, PaxBytes);
+  EmitHeader(Tar, 'ok.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('ok1'));
+  EmitHeader(Tar, 'ok2.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('ok2'));
+  SetLength(Tar, Length(Tar) + 1024);
+  FillChar(Tar[Length(Tar)-1024], 1024, 0);
+  R := TTarReader.Create(Tar);
+  try
+    CheckTrue(R.Next(H), 'evil first');
+    CheckEqual('../evil.txt', H.Name, 'malicious g pollutes first');
+    CheckTrue(not IsSafeTarEntryName(H.Name), 'unsafe detected');
+    R.ClearGlobalPax;
+    CheckTrue(R.Next(H), 'after clear');
+    CheckEqual('ok2.txt', H.Name, 'explicit clear prevents pollution, fail-closed optional');
+  finally R.Free; end;
+end;
+
 var
   Suite: TTestSuite;
   Runner: TSuiteRunner;
@@ -199,6 +292,8 @@ begin
   Suite.Test('long names prefix split', @TestGNUAndPaxLongNames);
   Suite.Test('base256 and checksum', @TestBase256AndChecksum);
   Suite.Test('zero-copy slice and stream', @TestZeroCopySliceAndStream);
+  Suite.Test('global pax multi-entry inheritance', @TestGlobalPaxMultiEntryInheritance);
+  Suite.Test('global pax malicious clear', @TestGlobalPaxMaliciousClear);
   Runner := TSuiteRunner.Create('main');
   Runner.Add(Suite);
   Runner.RunAllWithResult(Results);
