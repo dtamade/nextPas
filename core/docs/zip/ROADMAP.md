@@ -226,6 +226,9 @@
 ### S95 — EOCD 字段单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `reader.ZipDecodeEocd` 单源化双 `ParseCentralDirectory` EOCD 字段解析重复（`ReadU32LE sig + 2/2/2/2/4/4/2` 2×8 行 → 2×1 行 `ZipDecodeEocd(Cursor, DiskNum,CdStartDisk,Count16,CommentLen,CdSize,CdOffset)`），`bad end of central directory signature` 与 `multi-disk/truncated comment` 守恒，`reader` 双形态共享字段内核，12 门 + `bench_zip 221783` 可编译回归，`S85—S95` 十一单源平台期
 
+### S96 — 中央条目循环单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipParseCentralEntries` 单源化双 `ParseCentralDirectory` 中央条目循环重复（`NeedRange+sig+ParseCentralEntry` 2×10 行 → 2×1 行 `ZipParseCentralEntries(Cursor,BaseOffset,Entries,Flags,MaxTotal)`，含 `GuardTotalOutputSize` 守恒），`bad central header signature` 与 `entry count out of range` 语义守恒，`reader` 双形态共享条目内核（`FC 0基` vs `Tail LCdOffset基`），12 门 + `bench_zip 221787` 可编译回归，`S85—S96` 十二单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -258,4 +261,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S95 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e76ebe5` 已落地（S94→S95 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd` 十二单源（三路泵+双管道+EOCD双） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S96 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 655e573` 已落地（S95→S96 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries` 十三单源（三路泵+双管道+EOCD双+中央循环） + AES 零堆栈。

@@ -104,12 +104,16 @@ const
   C_MAX_COMMENT_LEN    = 65535;
 
 type
+  TZipEntryArray = array of TZipEntryInfo;
+  TZipFlagArray = array of Word;
+
+type
   TZipReaderImpl = class(TInterfacedObject, IZipReader)
   private
     FData: TBytes;
     FC: IByteCursor;
-    FEntries: array of TZipEntryInfo;
-    FFlags: array of Word;
+    FEntries: TZipEntryArray;
+    FFlags: TZipFlagArray;
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
@@ -194,8 +198,8 @@ type
     FSrc: IStream;              { 保活源对象 }
     FAt: IReaderAt;             { 同一对象的定位读面 }
     FSize: Int64;               { 源总长（构造时缓存） }
-    FEntries: array of TZipEntryInfo;
-    FFlags: array of Word;
+    FEntries: TZipEntryArray;
+    FFlags: TZipFlagArray;
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
@@ -475,6 +479,22 @@ begin
     ((LExtAttrs shr 16) and $F000) = C_ZIP_UNIX_MODE_SYMLINK;
 end;
 
+procedure ZipParseCentralEntries(var AC: IByteCursor; ABaseOffset: Int64;
+  var AEntries: TZipEntryArray; var AFlags: TZipFlagArray; AMaxTotal: UInt64);
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(AEntries) do
+  begin
+    NeedRangeIn(AC, Int64(AC.Position), C_CENTRAL_HEADER_LEN, 'central header');
+    if AC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
+      raise EParseError.Create('zip: bad central header signature at ' +
+        IntToStr(ABaseOffset + Int64(AC.Position) - 4));
+    ParseCentralEntry(AC, AEntries[LI], AFlags[LI]);
+  end;
+  GuardTotalOutputSize(AEntries, AMaxTotal);
+end;
+
 function DefaultZipReadOptions: TZipReadOptions;
 begin
   Result := nextpas.core.zip.base.DefaultZipReadOptions;
@@ -601,15 +621,7 @@ begin
   SetLength(FFlags, LCount);
 
   FC.Seek(SizeUInt(LCdOffset));
-  for LI := 0 to LCount - 1 do
-  begin
-    NeedRange(Int64(FC.Position), C_CENTRAL_HEADER_LEN, 'central header');
-    if FC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
-      raise EParseError.Create('zip: bad central header signature at ' +
-        IntToStr(Int64(FC.Position) - 4));
-    ParseCentralEntry(FC, FEntries[LI], FFlags[LI]);
-  end;
-  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
+  ZipParseCentralEntries(FC, 0, FEntries, FFlags, FMaxTotalOutputSize);
 end;
 
 function TZipReaderImpl.CheckIndex(AIndex: Integer): Integer;
@@ -873,15 +885,7 @@ begin
 
   Fetch(Int64(LCdOffset), SizeUInt(LCdSize), LCDBuf, 'central directory');
   LC := NewByteCursor(LCDBuf);
-  for LI := 0 to LCount - 1 do
-  begin
-    NeedRangeIn(LC, Int64(LC.Position), C_CENTRAL_HEADER_LEN, 'central header');
-    if LC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
-      raise EParseError.Create('zip: bad central header signature at ' +
-        IntToStr(Int64(LCdOffset) + Int64(LC.Position) - 4));
-    ParseCentralEntry(LC, FEntries[LI], FFlags[LI]);
-  end;
-  GuardTotalOutputSize(FEntries, FMaxTotalOutputSize);
+  ZipParseCentralEntries(LC, Int64(LCdOffset), FEntries, FFlags, FMaxTotalOutputSize);
 end;
 
 function TZipSourceReader.CheckIndex(AIndex: Integer): Integer;
