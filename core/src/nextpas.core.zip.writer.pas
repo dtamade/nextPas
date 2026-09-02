@@ -591,11 +591,18 @@ begin
     { 认证+加密是原地变换：先拷入重用缓冲，绝不回写调用方缓冲 }
     if Length(FScratch) < SizeInt(ACount) then
     begin
-      // 几何预留，避免 deflate 抖动切片导致逐次 ReAlloc
+      // 几何预留，避免 deflate 抖动切片导致逐次 ReAlloc；与 reader.EnsureScratch 对称
       if Length(FScratch) = 0 then
         SetLength(FScratch, 4096);
       while Length(FScratch) < SizeInt(ACount) do
+      begin
+        if Length(FScratch) > High(SizeInt) div 2 then
+        begin
+          SetLength(FScratch, SizeInt(ACount));
+          Break;
+        end;
         SetLength(FScratch, Length(FScratch) * 2);
+      end;
     end;
     Move(ABuf, FScratch[0], ACount);
     FSealer.Transform(FScratch[0], ACount);
