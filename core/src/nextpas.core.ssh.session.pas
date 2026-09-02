@@ -81,7 +81,9 @@ function SshConnect(const AOptions: TSshConnectOptions): ISshSession;
 { 细粒度入口：在自建 IO（如测试内存管道）上完成握手与认证。
   认证方式由 AOptions 决定，语义同 SshConnect；不拨号。}
 function SshConnectOn(const AIO: IReadWriteCloser;
-  const AOptions: TSshConnectOptions): ISshSession;
+  const AOptions: TSshConnectOptions): ISshSession; overload;
+procedure SshConnectOn(const AIO: IReadWriteCloser;
+  const AOptions: TSshConnectOptions; out ASession: ISshSession); overload;
 
 { 创建未认证会话，供 AuthenticateWithXxx/AuthenticateWithAgentOn 手动驱动
   （测试缝隙；不拨号，不触发 RunAuthentication）。}
@@ -376,19 +378,27 @@ begin
   end;
 end;
 
-function SshConnectOn(const AIO: IReadWriteCloser;
-  const AOptions: TSshConnectOptions): ISshSession;
+procedure SshConnectOn(const AIO: IReadWriteCloser;
+  const AOptions: TSshConnectOptions; out ASession: ISshSession); overload;
 var
   LSession: TSshSession;
 begin
+  ASession := nil;
   LSession := TSshSession.CreateInternal(AIO, AOptions);
   try
     RunAuthentication(LSession, AOptions);
-    Result := LSession;
+    ASession := LSession;
   except
     LSession.Free;
     raise;
   end;
+end;
+
+function SshConnectOn(const AIO: IReadWriteCloser;
+  const AOptions: TSshConnectOptions): ISshSession; overload;
+begin
+  Result := nil;
+  SshConnectOn(AIO, AOptions, Result);
 end;
 
 function SshCreateSession(const AIO: IReadWriteCloser;

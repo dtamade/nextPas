@@ -55,7 +55,9 @@ type
 
 function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;
 function SshConnectViaJumpOn(const AJumpSession: ISshSession;
-  const ATargetOpts: TSshConnectOptions): ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession; overload;
+procedure SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions; out ASession: ISshSession); overload;
 
 implementation
 
@@ -203,23 +205,31 @@ begin
     raise ESSHError.Create(sekIO, 'proxy jump: failed to open direct-tcpip stream');
 end;
 
-function SshConnectViaJumpOn(const AJumpSession: ISshSession;
-  const ATargetOpts: TSshConnectOptions): ISshSession;
+procedure SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions; out ASession: ISshSession); overload;
 var
   LStream: IReadWriteCloser;
   LTarget: ISshSession;
 begin
+  ASession := nil;
   if AJumpSession = nil then
     raise ESSHError.Create(sekProtocol, 'proxy jump: nil jump session');
   LStream := SshProxyJumpOpenStream(AJumpSession, ATargetOpts);
   try
     LTarget := SshConnectOn(LStream, ATargetOpts);
-    Result := TProxyJumpSession.Create(AJumpSession, LTarget);
+    ASession := TProxyJumpSession.Create(AJumpSession, LTarget);
     LStream := nil;
   except
     if LStream <> nil then try LStream.Close; except end;
     raise;
   end;
+end;
+
+function SshConnectViaJumpOn(const AJumpSession: ISshSession;
+  const ATargetOpts: TSshConnectOptions): ISshSession; overload;
+begin
+  Result := nil;
+  SshConnectViaJumpOn(AJumpSession, ATargetOpts, Result);
 end;
 
 function SshConnectViaJump(const ATargetOpts, AJumpOpts: TSshConnectOptions): ISshSession;

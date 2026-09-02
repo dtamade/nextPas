@@ -1,9 +1,19 @@
 program bench_ssh_proxyjump;
 {$mode ObjFPC}{$H+}
+{
+  proxyjump latency benchmark – uses nextpas.core.bench TBenchSuite.
+  - 单跳/双跳 Exec 往返，MemPipe 真服务端（独立逻辑）证明协同正确。
+  - 统一测量：框架自适应采样，p50/p95/avg 由 bench 统计输出，无自计时循环。
+  - 性能门禁见 core/docs/ssh/CONTRACT.md §6（单跳 ~5ms，双跳 <600ms）。
+
+  计时保真：bench_common.mk -O3 -Xs 无 heaptrc，泄漏由 Tier-1 覆盖。
+}
 uses
   nextpas.core.bytes.ops,
   cthreads,
   Classes, SysUtils, Math,
+  nextpas.core.bench,
+  nextpas.core.bench.intf,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
   nextpas.core.ssh.buffer,
@@ -147,68 +157,153 @@ end;
 constructor TLoopThread.Create(AEnd: TMemPipeEnd; ASc: PSshLoopServerScenario); begin inherited Create(True); FEnd:=AEnd; FSc:=ASc; FreeOnTerminate:=False; end;
 procedure TLoopThread.Execute; var Srv: TSshLoopServer; begin Srv:=TSshLoopServer.Create(FEnd, FSc); try Srv.Run; finally Srv.Free; end; end;
 
-// Real bench helpers: measure via QWord arrays
-procedure DoBench;
-const N=50;
-var SingleTimes, DoubleTimes: array of QWord;
-    i: Integer; LStart,LEnd: QWord; R: TSshExecResult;
-    LC,LS: TMemPipeEnd; LShared: PPipeShared; LSc: PSshLoopServerScenario; T: TThread; Opts: TSshConnectOptions; S: ISshSession;
-    LJc, LJs: TMemPipeEnd; LJShared: PPipeShared; LFwdA,LFwdB: TMemPipeEnd; LFwdShared: PPipeShared; LScJ, LScT: PSshLoopServerScenario; TJ, TT: TThread; S1,S2: ISshSession; JOpts, TOpts: TSshConnectOptions;
-    procedure SortQ(var A: array of QWord);
-    var j,k: Integer; tmp: QWord;
-    begin for j:=0 to High(A)-1 do for k:=j+1 to High(A) do if A[j]>A[k] then begin tmp:=A[j]; A[j]:=A[k]; A[k]:=tmp; end; end;
-    function Avg(const A: array of QWord): Double; var s: QWord; idx: Integer; begin s:=0; for idx:=0 to High(A) do s+=A[idx]; Result:=s/Length(A); end;
-    function P50(const A: array of QWord): QWord; begin Result:=A[Length(A) div 2]; end;
-    function P95(const A: array of QWord): QWord; begin Result:=A[Trunc(Length(A)*0.95)]; end;
+var
+  GIter: Integer = 0;
+
+procedure BenchSingleHop(const ACtx: IBenchContext);
+var
+  LC, LS: TMemPipeEnd;
+  LShared: PPipeShared;
+  LSc: PSshLoopServerScenario;
+  T: TThread;
+  Opts: TSshConnectOptions;
+  S: ISshSession;
+  R: TSshExecResult;
 begin
-  SetLength(SingleTimes, N);
-  for i:=0 to N-1 do begin
-    New(LSc); LSc^:=Default(TSshLoopServerScenario); LSc^.HostSeed:=PatternBytes(Byte($A0+(i and $FF)),32); LSc^.AcceptUser:='u'; LSc^.AcceptPassword:='p'; LSc^.StdOut1:=StringToBytes('ok'); LSc^.ExitCode:=0; LSc^.IsJump:=False;
-    MakePipe(LC, LS, LShared);
-    T:=TLoopThread.Create(LS, LSc); T.Start; Sleep(5);
-    LStart:=GetTickCount64;
-    try
-      Opts:=DefaultSshConnectOptions('bench'); Opts.Host:='bench'; Opts.User:='u'; Opts.Password:='p'; Opts.ExecTimeoutMs:=5000;
-      S:=SshConnectOn(LC as IReadWriteCloser, Opts);
-      R:=S.Exec('echo hi');
-      S.Close; S:=nil;
-    except on E:Exception do begin Writeln('[bench] single iter ',i,' failed: ',E.Message); Halt(1); end; end;
-    LEnd:=GetTickCount64; SingleTimes[i]:=LEnd-LStart;
-    try LC.Close; except end; try LS.Close; except end; T.WaitFor; T.Free;
-    Finalize(LSc^); Dispose(LSc); DoneCriticalSection(LShared^.Lock); Dispose(LShared);
+  Inc(GIter);
+  New(LSc);
+  LSc^ := Default(TSshLoopServerScenario);
+  LSc^.HostSeed := PatternBytes(Byte($A0 + (GIter and $FF)), 32);
+  LSc^.AcceptUser := 'u';
+  LSc^.AcceptPassword := 'p';
+  LSc^.StdOut1 := StringToBytes('ok');
+  LSc^.ExitCode := 0;
+  LSc^.IsJump := False;
+  MakePipe(LC, LS, LShared);
+  T := TLoopThread.Create(LS, LSc);
+  T.Start;
+  Sleep(5);
+  try
+    Opts := DefaultSshConnectOptions('bench');
+    Opts.Host := 'bench';
+    Opts.User := 'u';
+    Opts.Password := 'p';
+    Opts.ExecTimeoutMs := 5000;
+    S := nil;
+    SshConnectOn(LC as IReadWriteCloser, Opts, S);
+    R := S.Exec('echo hi');
+    BenchBlackBoxInt64(R.ExitCode);
+    S.Close;
+    S := nil;
+  except
+    on E: Exception do
+    begin
+      Writeln('[bench] single failed: ', E.Message);
+      Halt(1);
+    end;
   end;
-
-  SetLength(DoubleTimes, N);
-  for i:=0 to N-1 do begin
-    New(LScJ); LScJ^:=Default(TSshLoopServerScenario); LScJ^.HostSeed:=PatternBytes(Byte($10+(i and $FF)),32); LScJ^.IsJump:=True;
-    New(LScT); LScT^:=Default(TSshLoopServerScenario); LScT^.HostSeed:=PatternBytes(Byte($33+(i and $FF)),32); LScT^.AcceptUser:='u'; LScT^.AcceptPassword:='p'; LScT^.StdOut1:=StringToBytes('via-jump-ok'); LScT^.ExitCode:=0; LScT^.IsJump:=False;
-    MakePipe(LJc, LJs, LJShared); MakePipe(LFwdA, LFwdB, LFwdShared); LScJ^.FwdPipe:=LFwdA;
-    TT:=TLoopThread.Create(LFwdB, LScT); TJ:=TLoopThread.Create(LJs, LScJ); TT.Start; TJ.Start; Sleep(5);
-    LStart:=GetTickCount64;
-    try
-      JOpts:=DefaultSshConnectOptions('jump'); JOpts.Host:='jump'; JOpts.User:='u'; JOpts.Password:='p'; JOpts.ExecTimeoutMs:=5000;
-      TOpts:=DefaultSshConnectOptions('target'); TOpts.Host:='target'; TOpts.User:='u'; TOpts.Password:='p'; TOpts.ExecTimeoutMs:=5000;
-      S1:=SshConnectOn(LJc as IReadWriteCloser, JOpts);
-      S2:=SshConnectViaJumpOn(S1, TOpts);
-      R:=S2.Exec('echo hi');
-      S2.Close; S1.Close; S2:=nil; S1:=nil;
-    except on E:Exception do begin Writeln('[bench] double iter ',i,' failed: ',E.Message); Halt(1); end; end;
-    LEnd:=GetTickCount64; DoubleTimes[i]:=LEnd-LStart;
-    try LFwdA.Close; except end; try LFwdB.Close; except end; try LJc.Close; except end; try LJs.Close; except end;
-    TJ.WaitFor; TT.WaitFor; TJ.Free; TT.Free;
-    Finalize(LScJ^); Dispose(LScJ); Finalize(LScT^); Dispose(LScT);
-    DoneCriticalSection(LJShared^.Lock); Dispose(LJShared); DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared);
-  end;
-
-  SortQ(SingleTimes); SortQ(DoubleTimes);
-  Writeln('[bench] proxyjump 50 iter MemPipe, chacha20-poly1305, password auth');
-  Writeln(Format('  single p50=%d ms p95=%d ms avg=%.1f ms', [P50(SingleTimes), P95(SingleTimes), Avg(SingleTimes)]));
-  Writeln(Format('  double p50=%d ms p95=%d ms avg=%.1f ms', [P50(DoubleTimes), P95(DoubleTimes), Avg(DoubleTimes)]));
-  Writeln(Format('  overhead avg=%.1f ms p50=%.1f ms', [Avg(DoubleTimes)-Avg(SingleTimes), Double(P50(DoubleTimes)-P50(SingleTimes))]));
-  if (Avg(SingleTimes)>30) or (Avg(DoubleTimes)>600) then begin Writeln('[bench] WARN latency above expected budget'); end;
-  Writeln('[bench] PASS');
+  try LC.Close; except end;
+  try LS.Close; except end;
+  T.WaitFor;
+  T.Free;
+  Finalize(LSc^);
+  Dispose(LSc);
+  DoneCriticalSection(LShared^.Lock);
+  Dispose(LShared);
 end;
 
+procedure BenchDoubleHop(const ACtx: IBenchContext);
+var
+  LJc, LJs: TMemPipeEnd; LJShared: PPipeShared;
+  LFwdA, LFwdB: TMemPipeEnd; LFwdShared: PPipeShared;
+  LScJ, LScT: PSshLoopServerScenario;
+  TJ, TT: TThread;
+  S1, S2: ISshSession;
+  JOpts, TOpts: TSshConnectOptions;
+  R: TSshExecResult;
 begin
-  DoBench;
+  Inc(GIter);
+  New(LScJ);
+  LScJ^ := Default(TSshLoopServerScenario);
+  LScJ^.HostSeed := PatternBytes(Byte($10 + (GIter and $FF)), 32);
+  LScJ^.IsJump := True;
+  New(LScT);
+  LScT^ := Default(TSshLoopServerScenario);
+  LScT^.HostSeed := PatternBytes(Byte($33 + (GIter and $FF)), 32);
+  LScT^.AcceptUser := 'u';
+  LScT^.AcceptPassword := 'p';
+  LScT^.StdOut1 := StringToBytes('via-jump-ok');
+  LScT^.ExitCode := 0;
+  LScT^.IsJump := False;
+  MakePipe(LJc, LJs, LJShared);
+  MakePipe(LFwdA, LFwdB, LFwdShared);
+  LScJ^.FwdPipe := LFwdA;
+  TT := TLoopThread.Create(LFwdB, LScT);
+  TJ := TLoopThread.Create(LJs, LScJ);
+  TT.Start;
+  TJ.Start;
+  Sleep(5);
+  try
+    JOpts := DefaultSshConnectOptions('jump');
+    JOpts.Host := 'jump';
+    JOpts.User := 'u';
+    JOpts.Password := 'p';
+    JOpts.ExecTimeoutMs := 5000;
+    TOpts := DefaultSshConnectOptions('target');
+    TOpts.Host := 'target';
+    TOpts.User := 'u';
+    TOpts.Password := 'p';
+    TOpts.ExecTimeoutMs := 5000;
+    S1 := nil; S2 := nil;
+    SshConnectOn(LJc as IReadWriteCloser, JOpts, S1);
+    SshConnectViaJumpOn(S1, TOpts, S2);
+    R := S2.Exec('echo hi');
+    BenchBlackBoxInt64(R.ExitCode);
+    S2.Close;
+    S1.Close;
+    S2 := nil;
+    S1 := nil;
+  except
+    on E: Exception do
+    begin
+      Writeln('[bench] double failed: ', E.Message);
+      Halt(1);
+    end;
+  end;
+  try LFwdA.Close; except end;
+  try LFwdB.Close; except end;
+  try LJc.Close; except end;
+  try LJs.Close; except end;
+  TJ.WaitFor;
+  TT.WaitFor;
+  TJ.Free;
+  TT.Free;
+  Finalize(LScJ^);
+  Dispose(LScJ);
+  Finalize(LScT^);
+  Dispose(LScT);
+  DoneCriticalSection(LJShared^.Lock);
+  Dispose(LJShared);
+  DoneCriticalSection(LFwdShared^.Lock);
+  Dispose(LFwdShared);
+end;
+
+var
+  LResults: IBenchResults;
+begin
+  try
+    Writeln('[bench] proxyjump MemPipe chacha20-poly1305 password auth – nextpas.core.bench');
+    LResults := TBenchSuite.Create('ssh-proxyjump')
+      .Add('single-hop', @BenchSingleHop)
+      .Add('double-hop', @BenchDoubleHop)
+      .Run;
+    Writeln(LResults.PrintToConsole);
+    Writeln('[bench] PASS');
+  except
+    on E: Exception do
+    begin
+      Writeln('[bench] EXCEPTION: ', E.ClassName, ': ', E.Message);
+      Halt(1);
+    end;
+  end;
 end.
