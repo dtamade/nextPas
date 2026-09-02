@@ -244,19 +244,8 @@ begin
 end;
 
 function TSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LN: SizeUInt;
 begin
-  LN := ACount;
-  if LN > FRemaining then
-    LN := FRemaining;
-  if LN > 0 then
-  begin
-    Move(FBase^, ABuf, LN);
-    Inc(FBase, LN);
-    Dec(FRemaining, LN);
-  end;
-  Result := LN;
+  Result := ZipSliceRead(FBase, FRemaining, ABuf, ACount);
 end;
 
 { TZipVerifyReader }

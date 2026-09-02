@@ -30,6 +30,8 @@ function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 
 procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
 procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
+function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
 
 procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
 
@@ -112,6 +114,42 @@ procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
 begin
   if (APos < 0) or (ALen < 0) or (APos + ALen > ASize) then
     raise EParseError.Create('zip: truncated ' + AWhat);
+end;
+
+function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+var
+  LN: SizeUInt;
+begin
+  LN := ACount;
+  if LN > ARemaining then
+    LN := ARemaining;
+  if LN > 0 then
+  begin
+    Move(ABase^, ABuf, LN);
+    Inc(ABase, LN);
+    Dec(ARemaining, LN);
+  end;
+  Result := LN;
+end;
+
+function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+var
+  LAvail: SizeUInt;
+begin
+  if ACount = 0 then
+    Exit(0);
+  if APos >= SizeUInt(Length(AData)) then
+    Exit(0);
+  LAvail := SizeUInt(Length(AData)) - APos;
+  if ACount < LAvail then
+    Result := ACount
+  else
+    Result := LAvail;
+  if Result > 0 then
+  begin
+    Move(AData[APos], ABuf, Result);
+    Inc(APos, Result);
+  end;
 end;
 
 procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);

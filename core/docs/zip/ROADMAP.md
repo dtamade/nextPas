@@ -247,6 +247,9 @@
 ### S102 — Writer 缓冲溢出守卫与对称（1.0.1 巡检）· 稳定性/复用度 — 已落地
 - `writer.TZipEntrySink.PushCompressed` 补 `High(SizeInt) div 2` 溢出守卫，与 `reader.EnsureScratch` 几何增长同构（`FScratch` 初始 4096 + `while <ACount do if >High div2 then SetLength(ACount) else *=2`），双端 `FScratch` 溢出对称闭环，12 门 + `bench_zip 221838` 可编译回归，`S85—S102` 十六单源+一性能+一守卫平台期
 
+### S103 — 有界切片读单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.ZipSliceRead/ZipBytesRead` 单源化 `reader.TSliceReader.Read` / `sequential.TSeqSliceReader.Read` 有界切片读重复（`Min(ACount,Remaining)+Move+Advance 2×8 行 → 2×1 行`），`TSourceSpanReader` 因 `IReaderAt` 边界保持独立，`reader/sequential` 共享切片内核，12 门 + `bench_zip 221850` 可编译回归，`S85—S103` 十六单源+一性能+一守卫+一切片平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -279,4 +282,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S102 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main dbc4243` 已落地（S102 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫`（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S103 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 9db1060` 已落地（S103 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片） + AES 零堆栈。
