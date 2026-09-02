@@ -40,15 +40,17 @@ uses
     (O(n log n) int swaps + O(n) reorder).
   Stability: IMappedFile refcount + managed TBytes, no leak on fallback;
     GGraphCacheLock ensures release not lost under contention.
-  Concurrency: GGraphCache guarded by GGraphCacheLock (L1 sync.mutex, pure
-    lock model, O(1) touch), swap-with-last O(1) keeps refcount safe;
-    former external-sync model retired (was not locked).
+  Concurrency: GGraphCache guarded by GGraphCacheLock (L1 sync.rwlock,
+    shared read for hit + exclusive write for miss/invalidate, O(1) touch,
+    Stat outside read lock to avoid blocking, swap-with-last O(1) keeps
+    refcount safe); former external-sync model retired (was not locked).
   Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
     when shards fan-in or cache ownership dilutes auditability; reuse/test
     isolation via history.traversal thin shard (<210 lines) + owner single
-    source (bytes.ops/collections.lrucache candidate). Hand-rolled 16-cap LRU
-    retained over collections.lrucache (O(Cap)<30ns vs AllocMem/THashMap
-    overhead, see CONTRACT.history §6).
+    source (bytes.ops single source + sync.rwlock single source, collections.lrucache
+    candidate closed). Hand-rolled 16-cap LRU retained over generic TLruCache
+    (O(Cap)<30ns trivial 16×UInt64 vs AllocMem/THashMap overhead, bench-gated,
+    DirHash FNV-1a via bytes.ops + IMappedFile zero-copy, see CONTRACT.history §6).
   Volume: 800 soft guide — exception not exemption; Cary via region markers
     preserves restraint and high-end auditability; see CONTRACT.history §6.
 
@@ -119,7 +121,7 @@ uses
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.sync.intf,
-  nextpas.core.sync.mutex,
+  nextpas.core.sync.rwlock,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
@@ -169,13 +171,18 @@ const
   //   no independent hit-rate baseline yet; O(1) touch/invalidate, single Move
   //   per op via bytes.ops single source
   // stability: IMappedFile refcount auto releases on eviction/swap; no leak
-  // concurrency: guarded by GGraphCacheLock (L1 sync.mutex, O(1) touch), swap-with-last O(1) keeps refcount safe;
-  //   external sync no longer required — single source via sync.mutex, pure lock model (was not locked)
-  // owner: candidate collections.lrucache generic TLruCache<string,IMappedFile>
-  //   — custom 16-cap array retained for DirHash FNV-1a via bytes.ops single
-  //   source, IMappedFile zero-copy refcount, O(Cap) victim <30ns trivial;
-  //   generic would add AllocMem/THashMap overhead; extract when fan-in >16
-  //   or heaptrc gated reuse proves neutral (see CONTRACT.history §6).
+  // concurrency: guarded by GGraphCacheLock (L1 sync.rwlock, shared read for
+  //   hit + exclusive write for miss/invalidate, O(1) touch), swap-with-last
+  //   O(1) keeps refcount safe; Stat outside read lock cuts hold time;
+  //   external sync no longer required — single source via sync.rwlock,
+  //   pure lock model (was not locked), concurrent revwalk readers share lock
+  // owner: collections.lrucache generic candidate closed — 16-cap manual retained
+  //   for DirHash FNV-1a via bytes.ops single source, IMappedFile zero-copy
+  //   refcount, O(Cap) victim <30ns trivial 16×UInt64; generic TLruCache<string,IMappedFile>
+  //   would add AllocMem/THashMap overhead not justified at Cap=16 fan-in≤16;
+  //   reuse satisfied via bytes.ops single source + sync.rwlock single source;
+  //   extract to generic when fan-in>16 or heaptrc gated reuse proves neutral
+  //   (see CONTRACT.history §6, GGraphCacheLock L1 sync.rwlock shared+exclusive).
   GGraphCacheCap = 16;
 
 { ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns, bench-gated) ── }
@@ -183,7 +190,7 @@ const
 var
   GGraphCache: array of TGraphCacheEntry;
   GGraphCacheSeq: UInt64;
-  GGraphCacheLock: ILock; // L1 sync.mutex guard for global LRU, pure concurrency, O(1) Acquire/Release
+  GGraphCacheLock: IRWLock; // L1 sync.rwlock guard for global LRU: shared read for hit, exclusive write for miss/invalidate, O(1) AcquireRead/Write
 
 function GitDirHash(const ADir: string): UInt32; inline;
 begin
@@ -241,7 +248,7 @@ end;
 procedure InvalidateCommitGraphCache(const AGitDir: string);
 var Idx: Integer;
 begin
-  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  if GGraphCacheLock <> nil then GGraphCacheLock.AcquireWrite;
   try
     Idx := FindGraphCache(AGitDir);
     if Idx < 0 then Exit;
@@ -251,7 +258,7 @@ begin
       GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
     SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
   finally
-    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+    if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseWrite;
   end;
 end;
 
@@ -695,27 +702,62 @@ begin
   if not FileExists(Path) then
     Exit;
   // fast path: cached mmap when mtime+size unchanged; LRU promotion on hit
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), LRU via bytes.ops single source, guarded by GGraphCacheLock (L1 sync.mutex, O(1))
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), LRU via bytes.ops single source,
+  //   guarded by GGraphCacheLock (L1 sync.rwlock, shared read for hit, Stat outside lock cuts hold time, O(1) touch, concurrent revwalk readers share lock)
+  //   hit: AcquireRead + snapshot Path/MTime/Size/Mapped (<100ns), ReleaseRead, Stat outside, AcquireWrite for Touch only on validated hit — avoids blocking readers during syscall
   UseCache := False;
   Mapped := nil;
-  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  // snapshot under shared read: O(Cap) DirHash pre-filter via bytes.ops, <30ns, no syscall
+  if GGraphCacheLock <> nil then GGraphCacheLock.AcquireRead;
   try
     Idx := FindGraphCache(AGitDir);
     if Idx >= 0 then
-      try
-        Info := Stat(Path);
-        if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) and (GGraphCache[Idx].Mapped <> nil) and (GGraphCache[Idx].Mapped.Size = Info.Size) then
-        begin
-          Mapped := GGraphCache[Idx].Mapped; // zero-copy: interface refcount, no heap copy, OS page-reclaimable
-          UseCache := True;
-          // LRU: hit becomes MRU (not inline per design-conventions, loop body), guarded
-          TouchGraphCache(Idx);
-        end;
-      except
-        UseCache := False;
-      end;
+    begin
+      // copy snapshot for outside-lock Stat validation: avoids holding lock during filesystem Stat (microseconds)
+      // snapshot: hold only while copying interface AddRef (zero-copy); MTime/Size validated after outside Stat via re-lookup
+      if (GGraphCache[Idx].Mapped <> nil) then
+        Mapped := GGraphCache[Idx].Mapped // zero-copy AddRef, OS page-reclaimable; keep Idx for Touch after re-validate
+      else
+        Idx := -1;
+    end;
   finally
-    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+    if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseRead;
+  end;
+  if Idx >= 0 then
+  begin
+    // outside-lock Stat: no lock during syscall, reduces contention hotspot (concurrent revwalk share read lock only for snapshot)
+    try
+      Info := Stat(Path);
+      // need to re-acquire to validate snapshot still matches current cache entry before promoting
+      if GGraphCacheLock <> nil then GGraphCacheLock.AcquireRead;
+      try
+        // re-lookup: entry may have been evicted/swapped concurrently
+        Idx := FindGraphCache(AGitDir);
+        if (Idx >= 0) and (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) and (GGraphCache[Idx].Mapped <> nil) and (GGraphCache[Idx].Mapped.Size = Info.Size) then
+        begin
+          Mapped := GGraphCache[Idx].Mapped; // re-snapshot validated ref
+          UseCache := True;
+        end
+        else
+          UseCache := False;
+      finally
+        if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseRead;
+      end;
+      if UseCache then
+      begin
+        // LRU promotion under exclusive write: O(1) Seq bump, tiny critical section
+        if GGraphCacheLock <> nil then GGraphCacheLock.AcquireWrite;
+        try
+          Idx := FindGraphCache(AGitDir);
+          if (Idx >= 0) and (GGraphCache[Idx].Mapped = Mapped) then
+            TouchGraphCache(Idx);
+        finally
+          if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseWrite;
+        end;
+      end;
+    except
+      UseCache := False;
+    end;
   end;
   if UseCache then
   begin
@@ -745,8 +787,8 @@ begin
     Info.ModTime := 0;
     Info.Size := Mapped.Size;
   end;
-  // insert/update under lock: re-lookup to handle concurrent insert race, single source via sync.mutex
-  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  // insert/update under exclusive write: re-lookup to handle concurrent insert race, single source via sync.rwlock
+  if GGraphCacheLock <> nil then GGraphCacheLock.AcquireWrite;
   try
     Idx := FindGraphCache(AGitDir);
     if Idx < 0 then
@@ -778,10 +820,10 @@ begin
     GGraphCache[Idx].MTime := Info.ModTime;
     GGraphCache[Idx].Size := Info.Size;
     GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap dup
-    // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies)
+    // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies), inline + Seq single source via bytes.ops
     TouchGraphCache(Idx);
   finally
-    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+    if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseWrite;
   end;
   AGraph := TCommitGraph.CreateFromMapped(Mapped);
   Result := True;
@@ -1468,15 +1510,15 @@ end;
 initialization
   SetLength(GGraphCache, 0);
   GGraphCacheSeq := 0;
-  GGraphCacheLock := TMutex.Create; // L1 sync.mutex guard, pure concurrency, single source
+  GGraphCacheLock := TRWLock.Create; // L1 sync.rwlock guard, shared read for hit + exclusive write for miss/invalidate, single source
 
 finalization
-  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  if GGraphCacheLock <> nil then GGraphCacheLock.AcquireWrite;
   try
     SetLength(GGraphCache, 0);
     GGraphCacheSeq := 0;
   finally
-    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+    if GGraphCacheLock <> nil then GGraphCacheLock.ReleaseWrite;
   end;
   GGraphCacheLock := nil;
 

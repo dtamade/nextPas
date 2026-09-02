@@ -218,6 +218,57 @@ begin
   Result := False;
 end;
 
+// perf: single source sorted dedup builder — HashString FNV-1a via base, BlameQuickSort O(N log N), in-place compact, bytes.ops single source not needed here (dedup is Move of managed record), inline hot, zero-copy string CoW share
+function BuildBlameSortedDedup(const AOld: TStringArray; out AUCount: Integer): TBlameLineArray; inline;
+var N, I, UCount: Integer;
+begin
+  N := Length(AOld);
+  AUCount := 0;
+  if N = 0 then Exit(nil);
+  SetLength(Result, N);
+  for I := 0 to N - 1 do
+  begin
+    Result[I].Hash := HashString(AOld[I]);
+    Result[I].Idx := I;
+    Result[I].Line := AOld[I]; // refcounted CoW, zero-copy
+  end;
+  if N > 1 then BlameQuickSort(Result, 0, N - 1);
+  UCount := 1;
+  for I := 1 to N - 1 do
+    if (Result[I].Hash <> Result[UCount - 1].Hash) or (Result[I].Line <> Result[UCount - 1].Line) then
+    begin
+      if I <> UCount then Result[UCount] := Result[I];
+      Inc(UCount);
+    end;
+  if UCount <> N then SetLength(Result, UCount);
+  AUCount := UCount;
+end;
+
+// perf: probe via binary search O(M log U), single source GrowArrayCapacity for amortized O(1) append, inline hot, zero-copy hash via HashString FNV-1a, no alloc per probe
+function MatchesFromSortedDedup(const ASorted: TBlameLineArray; AUCount: Integer; const ANew: TStringArray): TMatchArray; inline;
+var J, FoundIdx: Integer; H: THashCode; LCount, LCap: SizeUInt;
+begin
+  Result := nil;
+  if (AUCount = 0) or (Length(ANew) = 0) then Exit;
+  LCount := 0; LCap := 0;
+  for J := 0 to High(ANew) do
+  begin
+    H := HashString(ANew[J]);
+    if BlameFindLine(ASorted, AUCount, H, ANew[J], FoundIdx) then
+    begin
+      if LCount >= LCap then
+      begin
+        LCap := GrowArrayCapacity(LCap, LCount + 1);
+        SetLength(Result, LCap);
+      end;
+      Result[LCount].OldIdx := FoundIdx;
+      Result[LCount].NewIdx := J;
+      Inc(LCount);
+    end;
+  end;
+  if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
+end;
+
 function NextPow2(AValue: Integer): Integer; inline;
 begin
   Result := 1;
@@ -358,50 +409,14 @@ end;
 function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray; inline;
 var
   Entries: TBlameLineArray;
-  N, M, I, J, UCount, FoundIdx: Integer;
-  H: THashCode;
-  LCount, LCap: SizeUInt;
+  UCount: Integer;
 begin
-  // perf: sorted dedup array O(N log N + M log U) time, O(N) memory (single compacted array), no N*2 open-address Table spike; single source HashString via base FNV-1a, bytes.ops GrowArrayCapacity for amortized O(1) result append
-  // stability: managed arrays auto-released on exception, no manual free, zero-copy string view via refcounted copy
+  // perf: single source via BuildBlameSortedDedup + MatchesFromSortedDedup — O(N log N+M log U), single compacted array, no N*2 Table spike, HashString FNV-1a via base, bytes.ops GrowArrayCapacity single source, inline hot, zero-copy CoW
+  // stability: managed arrays auto-released on exception, no manual free, zero-copy string view via refcounted copy; thin wrapper keeps threshold tests single source
   Result := nil;
-  N := Length(AOld); M := Length(ANew);
-  if (N = 0) or (M = 0) then Exit;
-  SetLength(Entries, N);
-  for I := 0 to N - 1 do
-  begin
-    Entries[I].Hash := HashString(AOld[I]);
-    Entries[I].Idx := I;
-    Entries[I].Line := AOld[I];
-  end;
-  if N > 1 then BlameQuickSort(Entries, 0, N - 1);
-  // in-place dedup: compact distinct (hash,line) keeping smallest idx first due to sorted order
-  UCount := 1;
-  for I := 1 to N - 1 do
-    if (Entries[I].Hash <> Entries[UCount - 1].Hash) or (Entries[I].Line <> Entries[UCount - 1].Line) then
-    begin
-      if I <> UCount then Entries[UCount] := Entries[I];
-      Inc(UCount);
-    end;
-  if UCount <> N then SetLength(Entries, UCount);
-  // probe new lines via binary search; result grows via single-source GrowArrayCapacity (inline, amortized O(1))
-  LCount := 0; LCap := 0;
-  for J := 0 to M - 1 do
-  begin
-    H := HashString(ANew[J]);
-    if BlameFindLine(Entries, UCount, H, ANew[J], FoundIdx) then
-    begin
-      if LCount >= LCap then
-      begin
-        LCap := GrowArrayCapacity(LCap, LCount + 1);
-        SetLength(Result, LCap);
-      end;
-      Result[LCount].OldIdx := FoundIdx;
-      Result[LCount].NewIdx := J;
-      Inc(LCount);
-    end;
-  end;
-  if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
+  if (Length(AOld) = 0) or (Length(ANew) = 0) then Exit;
+  Entries := BuildBlameSortedDedup(AOld, UCount);
+  Result := MatchesFromSortedDedup(Entries, UCount, ANew);
 end;
 
 // threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M defined in interface (single source, was 10M in native-reference-map.md).
@@ -481,6 +496,8 @@ var
   BlameOids: array of TGitOid;
   CacheOids: TGitOidArray;
   CacheLines: array of TStringArray;
+  CacheEntries: array of TBlameLineArray;
+  CacheUCounts: array of Integer;
   CacheCap, CacheCnt: SizeUInt;
   I, J, K: Integer;
   Kind: TGitObjectKind;
@@ -517,16 +534,17 @@ begin
     HeadBlobOid := FindBlobOid(Repo, HeadTree, APath);
     SetLength(BlameOids, Length(HeadLines));
     for I := 0 to High(BlameOids) do BlameOids[I] := Oids[0];
-    // blob cache: maps blob Oid -> lines, single source text.strings split, avoids duplicate Read+Split for unchanged file
+    // blob cache: maps blob Oid -> lines + sorted dedup, single source text.strings split, avoids duplicate Read+Split for unchanged file; sorted dedup cache eliminates C×O(N log N) repeated QuickSort for 500+ commit large-file blame (one sort per distinct blob, then O(M log U) probe via MatchesFromSortedDedup)
     // commit-graph reuse: Infos[] already caches one-parse-per-commit via Repo.Read+GitParseCommit (mirrors revwalk TCommitParseCache discipline, commit-graph when available via GitCollectCommits)
-    CacheOids := nil; CacheLines := nil; CacheCap := 0; CacheCnt := 0;
+    CacheOids := nil; CacheLines := nil; CacheEntries := nil; CacheUCounts := nil; CacheCap := 0; CacheCnt := 0;
     // seed cache with HEAD blob to avoid re-read on equality fast path
     if not IsZeroOid(HeadBlobOid) then
     begin
-      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per distinct blob, avoids O(n²) SetLength(Length+1) churn on 500+ commit blame; zero-copy CoW share for HeadLines, parallel Oid+Lines arrays share Cap/Cnt
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per distinct blob, avoids O(n²) SetLength(Length+1) churn on 500+ commit blame; zero-copy CoW share for HeadLines, parallel Oid+Lines+Entries arrays share Cap/Cnt
       CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
-      SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap);
+      SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap); SetLength(CacheEntries, CacheCap); SetLength(CacheUCounts, CacheCap);
       CacheOids[CacheCnt] := HeadBlobOid; CacheLines[CacheCnt] := HeadLines; // CoW share, zero-copy
+      CacheEntries[CacheCnt] := nil; CacheUCounts[CacheCnt] := 0; // lazy sorted dedup, built on first fallback need (zero-copy until then)
       Inc(CacheCnt);
     end;
 
@@ -542,7 +560,7 @@ begin
         for J := 0 to High(BlameOids) do BlameOids[J] := Oids[I];
         Continue;
       end;
-      // cache lookup (linear probe over distinct blobs, typically small; avoids re-inflate+SplitLines)
+      // cache lookup (linear probe over distinct blobs, typically small; avoids re-inflate+SplitLines + repeated QuickSort)
       FoundCache := False;
       for K := 0 to Integer(CacheCnt) - 1 do
         if GitOidSame(CacheOids[K], CurBlobOid) then
@@ -562,13 +580,28 @@ begin
         if CacheCnt >= CacheCap then
         begin
           CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
-          SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap);
+          SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap); SetLength(CacheEntries, CacheCap); SetLength(CacheUCounts, CacheCap);
         end;
         CacheOids[CacheCnt] := CurBlobOid;
         CacheLines[CacheCnt] := PrevLines; // CoW share, zero-copy
+        CacheEntries[CacheCnt] := nil; CacheUCounts[CacheCnt] := 0; // lazy, built on fallback
+        K := Integer(CacheCnt); // K points to newly inserted index for fallback build below
         Inc(CacheCnt);
       end;
-      Matches := ComputeMatches(PrevLines, HeadLines);
+      // perf: threshold-gated fallback uses cached sorted dedup O(N log N) once per distinct blob + O(M log U) probe per commit; Hirschberg path stays exact LCS inline hot, zero-copy slice, bytes.ops GrowArrayCapacity reuse; eliminates C× repeated QuickSort for 500+ large-file commits, single source BuildBlameSortedDedup/HashString FNV-1a + BlameQuickSort/BinarySearch, bytes.ops GrowArrayCapacity, inline, zero-copy CoW, stable managed release
+      if Int64(Length(PrevLines)) * Int64(Length(HeadLines)) > BLAME_HIRSCHBERG_CELLS_LIMIT then
+      begin
+        // fallback path: reuse or build sorted dedup cache for this distinct blob
+        if (K >= 0) and (K < Length(CacheEntries)) and (CacheEntries[K] = nil) then
+        begin
+          CacheEntries[K] := BuildBlameSortedDedup(PrevLines, CacheUCounts[K]);
+        end
+        else if (K >= 0) and (K < Length(CacheEntries)) and (CacheEntries[K] <> nil) and (CacheUCounts[K] = 0) then
+          CacheUCounts[K] := Length(CacheEntries[K]);
+        Matches := MatchesFromSortedDedup(CacheEntries[K], CacheUCounts[K], HeadLines);
+      end
+      else
+        Matches := ComputeMatches(PrevLines, HeadLines);
       for J := 0 to High(Matches) do
         BlameOids[Matches[J].NewIdx] := Oids[I];
     end;

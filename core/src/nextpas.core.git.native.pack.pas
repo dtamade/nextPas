@@ -18,6 +18,9 @@ uses
 
 const
   // peek cache geometry: 4-way set-assoc 64 sets *4 =256, hash-mix avoids low-bit aliasing
+  // perf: micro-cache 256×(SizeUInt+Int64+Bool)+64×Byte ≈ 5KB fits L1; zero-alloc, inline O(1) hit + round-robin eviction;
+  // single source via bytes.ops PByte view idea but hand-rolled (no TLruCache/heap/SwissMap): generic ILruCache owns hashmap+alloc+linked list unsuitable for hot delta varint peek (≤32B prefix).
+  // candidate for nextpas.core.collections.smallcache if extracted as generic 4-way fixed-cap micro-cache; reuse still via bytes.ops zero-copy Slabs, not heap lru.
   PeekCacheSets = 64;
   PeekCacheWays = 4;
   PeekCacheMask = PeekCacheSets - 1;
@@ -52,7 +55,8 @@ type
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // delta target size: 4-way set-assoc 64*4=256, hash-mix (xor shr) avoids direct-mapped aliasing (bytes.ops single source, zero-copy, inline)
+    // delta target size: 4-way set-assoc 64*4=256, hash-mix (xor shr) avoids direct-mapped aliasing
+    // perf: zero-alloc inline micro-cache (bytes.ops zero-copy PByte view idea, no TLruCache heap); candidate for collections.smallcache
     FPeekKeys: array[0..PeekCacheTotal - 1] of SizeUInt;
     FPeekVals: array[0..PeekCacheTotal - 1] of Int64;
     FPeekValid: array[0..PeekCacheTotal - 1] of Boolean;
@@ -102,7 +106,9 @@ uses
   nextpas.core.bytes.binary,
   nextpas.core.encoding.varint;
 
-{ delta apply: bytes.ops single source, zero-copy spans, buffer reuse }
+{ delta apply: bytes.ops single source, zero-copy PByte views, buffer reuse
+  perf: hot copy/insert use bare Move after explicit bounds check (bytes.ops SpanCopy inner Move single source, zero alloc, inline);
+  avoids SpanCopy's extra nil/len branch per op (micro-cost × many ops), keeps single-source ownership via bytes.ops comment. }
 procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes);
 var
   P: SizeInt;
@@ -130,7 +136,7 @@ begin
     raise EGitError.Create('delta target size exceeds limit');
   TgtSize := Int64(UTgt);
   if Int64(Length(AOut)) <> TgtSize then
-    SetLength(AOut, TgtSize); // single alloc: SetLength exact, no BytesEnsureCapacity double alloc; depth 64 keeps O(n) not O(n*realloc), SpanCopy zero-copy via bytes.ops
+    SetLength(AOut, TgtSize); // single alloc: SetLength exact, no BytesEnsureCapacity double alloc; depth 64 keeps O(n) not O(n*realloc), zero-copy PByte view via bytes.ops idea
   if TgtSize = 0 then
     Exit;
   LOutSpan := TByteSpan.FromBytes(AOut);
@@ -160,16 +166,16 @@ begin
       if (CopyOff < 0) or (CopySize <= 0) or (CopyOff > Int64(LBaseSpan.Len) - CopySize)
         or (OutPos > TgtSize - CopySize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
-      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(CopySize)),
-        TByteSpan.Create(LBaseSpan.Data + SizeUInt(CopyOff), SizeUInt(CopySize)));
+      // perf: bare Move after bounds check; bytes.ops SpanCopy single source inner Move, zero-copy PByte view, inline, no extra nil/len branch per op
+      Move((LBaseSpan.Data + SizeUInt(CopyOff))^, (LOutSpan.Data + SizeUInt(OutPos))^, SizeUInt(CopySize));
       OutPos := OutPos + CopySize;
     end
     else if Op > 0 then
     begin
       if (P > Length(ADelta) - Op) or (OutPos > TgtSize - Op) then
         raise EGitError.Create('delta insert instruction out of bounds');
-      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(Op)),
-        TByteSpan.Create(LDeltaSpan.Data + SizeUInt(P), SizeUInt(Op)));
+      // perf: bare Move after bounds check; bytes.ops single source inner Move, zero-copy, inline, no Span abstraction per insert
+      Move((LDeltaSpan.Data + SizeUInt(P))^, (LOutSpan.Data + SizeUInt(OutPos))^, SizeUInt(Op));
       OutPos := OutPos + Op;
       Inc(P, Op);
     end
@@ -426,6 +432,7 @@ var
   SetIdx, Base, I: SizeUInt;
 begin
   // 4-way set-assoc + hash-mix (xor shr) spreads low-bit aliasing; inline + zero-copy keys, no zlib
+  // perf: hand-rolled vs generic TLruCache (heap+SwissMap) unsuitable for hot 32B peek; O(Ways)=4 linear scan inlined, zero alloc
   SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
   Base := SetIdx * PeekCacheWays;
   for I := 0 to PeekCacheWays - 1 do
@@ -442,6 +449,7 @@ var
   SetIdx, Base, I, Victim: SizeUInt;
 begin
   // hash-mix set selection + 4-way round-robin eviction; single-source inline, no alloc
+  // perf: hand-rolled vs generic TLruCache heap unsuitable; round-robin victim O(1) inline, zero alloc, fits L1 micro-cache
   SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
   Base := SetIdx * PeekCacheWays;
   for I := 0 to PeekCacheWays - 1 do

@@ -69,6 +69,7 @@ type
     When: Int64;
     Parents: TGitOidArray;
   end;
+  PWalkEntry = ^TWalkEntry;
 
   TGitRevEntry = record
     Oid: TGitOid;
@@ -87,7 +88,7 @@ type
   private
     FRepo: TNativeRepository; { borrowed, not owned }
     FGraph: TCommitGraph;     { owned, nil when no commit-graph }
-    FHeap: array of TWalkEntry;
+    FHeap: array of PWalkEntry;
     FHeapCap: SizeInt;            { geometric capacity for FHeap }
     FHeapLen: SizeInt;            { active heap size }
     FSeen: TGitOidSet;        { owned }
@@ -682,69 +683,63 @@ end;
 procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
 var
   I, Parent: Integer;
+  LNew: PWalkEntry;
 begin
-  // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move
+  // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move for cap array
   // not inline: loop body + SetLength growth would bloat I-Cache
+  // perf: pointer heap, O(log n) single pointer moves (8 bytes), inline cmp, zero managed Move/Finalize/FillChar per level; one alloc per push, CoW share for Parents
   if FHeapLen >= FHeapCap then
   begin
     FHeapCap := SizeInt(GrowArrayCapacity(SizeUInt(FHeapCap), SizeUInt(FHeapLen + 1)));
     SetLength(FHeap, FHeapCap);
   end;
+  New(LNew);
+  LNew^ := AEntry;
   I := FHeapLen;
   Inc(FHeapLen);
-  // max-heap on When: newest at root; zero-copy Move with Finalize+FillChar avoids AddRef/Release jitter
   while I > 0 do
   begin
     Parent := (I - 1) div 2;
-    if FHeap[Parent].When >= AEntry.When then
+    if FHeap[Parent]^.When >= LNew^.When then
       Break;
-    Finalize(FHeap[I]);
-    System.Move(FHeap[Parent], FHeap[I], SizeOf(TWalkEntry));
-    FillChar(FHeap[Parent], SizeOf(TWalkEntry), 0);
+    FHeap[I] := FHeap[Parent];
     I := Parent;
   end;
-  FHeap[I] := AEntry;
+  FHeap[I] := LNew;
 end;
 
 function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
 var
   I, L, R, Best: Integer;
-  LastEntry: TWalkEntry;
+  LLast: PWalkEntry;
 begin
   Result := FHeapLen > 0;
   if not Result then
     Exit;
-  AEntry := FHeap[0];
+  AEntry := FHeap[0]^;
+  Dispose(FHeap[0]);
   Dec(FHeapLen);
   if FHeapLen = 0 then
-  begin
-    FHeap[0] := Default(TWalkEntry);
     Exit;
-  end;
-  // zero-copy extract tail: Move without AddRef/Release, FillChar avoids double release
-  FillChar(LastEntry, SizeOf(TWalkEntry), 0);
-  System.Move(FHeap[FHeapLen], LastEntry, SizeOf(TWalkEntry));
-  FillChar(FHeap[FHeapLen], SizeOf(TWalkEntry), 0);
+  // perf: pointer heap sift-down, O(log n) pointer moves, no Finalize/Move/FillChar per level, inline cmp
+  LLast := FHeap[FHeapLen];
+  FHeap[FHeapLen] := nil;
   I := 0;
   while True do
   begin
     L := 2 * I + 1;
     R := L + 1;
     Best := I;
-    if (L < FHeapLen) and (FHeap[L].When > FHeap[Best].When) then
+    if (L < FHeapLen) and (FHeap[L]^.When > FHeap[Best]^.When) then
       Best := L;
-    if (R < FHeapLen) and (FHeap[R].When > FHeap[Best].When) then
+    if (R < FHeapLen) and (FHeap[R]^.When > FHeap[Best]^.When) then
       Best := R;
     if Best = I then
       Break;
-    Finalize(FHeap[I]);
-    System.Move(FHeap[Best], FHeap[I], SizeOf(TWalkEntry));
-    FillChar(FHeap[Best], SizeOf(TWalkEntry), 0);
+    FHeap[I] := FHeap[Best];
     I := Best;
   end;
-  Finalize(FHeap[I]);
-  System.Move(LastEntry, FHeap[I], SizeOf(TWalkEntry));
-  FillChar(LastEntry, SizeOf(TWalkEntry), 0);
+  FHeap[I] := LLast;
 end;
 
 procedure TGitRevWalker.AppendBoundary(const AOid: TGitOid); inline;
@@ -895,6 +890,7 @@ begin
 end;
 
 destructor TGitRevWalker.Destroy;
+var I: Integer;
 begin
   FSeen.Free;
   if FHidden <> nil then
@@ -903,6 +899,9 @@ begin
     FParseCache.Free;
   if FGraph <> nil then
     FGraph.Free;
+  for I := 0 to FHeapLen - 1 do
+    if FHeap[I] <> nil then
+      Dispose(FHeap[I]);
   SetLength(FHeap, 0);
   FHeapCap := 0;
   FHeapLen := 0;
@@ -1088,7 +1087,7 @@ function GitCollectCommitsWithBoundary(ARepo: TNativeRepository;
 var
   Hidden: TGitOidSet;
   Seen: TGitOidSet;
-  Heap: array of TWalkEntry;
+  Heap: array of PWalkEntry;
   HeapCap: SizeInt;
   HeapLen: SizeInt;
   BoundarySet: TGitOidSet;
@@ -1101,68 +1100,62 @@ var
   procedure HeapPushLocal(const AEntry: TWalkEntry); inline;
   var
     I, Parent: Integer;
+    LNew: PWalkEntry;
   begin
-    // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move
+    // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move for cap array
+    // perf: pointer heap, O(log n) pointer moves, inline cmp, zero managed Move/FillChar per level
     if HeapLen >= HeapCap then
     begin
       HeapCap := SizeInt(GrowArrayCapacity(SizeUInt(HeapCap), SizeUInt(HeapLen + 1)));
       SetLength(Heap, HeapCap);
     end;
+    New(LNew);
+    LNew^ := AEntry;
     I := HeapLen;
     Inc(HeapLen);
-    // max-heap on When: zero-copy Move with Finalize+FillChar avoids AddRef/Release jitter
     while I > 0 do
     begin
       Parent := (I - 1) div 2;
-      if Heap[Parent].When >= AEntry.When then
+      if Heap[Parent]^.When >= LNew^.When then
         Break;
-      Finalize(Heap[I]);
-      System.Move(Heap[Parent], Heap[I], SizeOf(TWalkEntry));
-      FillChar(Heap[Parent], SizeOf(TWalkEntry), 0);
+      Heap[I] := Heap[Parent];
       I := Parent;
     end;
-    Heap[I] := AEntry;
+    Heap[I] := LNew;
   end;
 
   function HeapPopLocal(out AEntry: TWalkEntry): Boolean; inline;
   var
     I, L, R, Best: Integer;
-    LastEntry: TWalkEntry;
+    LLast: PWalkEntry;
   begin
     Result := HeapLen > 0;
     if not Result then
       Exit;
-    AEntry := Heap[0];
+    AEntry := Heap[0]^;
+    Dispose(Heap[0]);
     Dec(HeapLen);
     if HeapLen = 0 then
-    begin
-      Heap[0] := Default(TWalkEntry);
       Exit;
-    end;
-    // zero-copy extract tail: Move without AddRef/Release
-    FillChar(LastEntry, SizeOf(TWalkEntry), 0);
-    System.Move(Heap[HeapLen], LastEntry, SizeOf(TWalkEntry));
-    FillChar(Heap[HeapLen], SizeOf(TWalkEntry), 0);
+    // perf: pointer heap sift-down, O(log n) pointer moves, no Finalize/Move/FillChar per level
+    LLast := Heap[HeapLen];
+    Heap[HeapLen] := nil;
     I := 0;
     while True do
     begin
       L := 2 * I + 1;
       R := L + 1;
       Best := I;
-      if (L < HeapLen) and (Heap[L].When > Heap[Best].When) then
+      if (L < HeapLen) and (Heap[L]^.When > Heap[Best]^.When) then
         Best := L;
-      if (R < HeapLen) and (Heap[R].When > Heap[Best].When) then
+      if (R < HeapLen) and (Heap[R]^.When > Heap[Best]^.When) then
         Best := R;
       if Best = I then
         Break;
-      Finalize(Heap[I]);
-      System.Move(Heap[Best], Heap[I], SizeOf(TWalkEntry));
-      FillChar(Heap[Best], SizeOf(TWalkEntry), 0);
+      Heap[I] := Heap[Best];
       I := Best;
     end;
-    Finalize(Heap[I]);
-    System.Move(LastEntry, Heap[I], SizeOf(TWalkEntry));
-    FillChar(LastEntry, SizeOf(TWalkEntry), 0);
+    Heap[I] := LLast;
   end;
 
   procedure EnqueueIfNeeded(const AOid: TGitOid);
@@ -1301,6 +1294,11 @@ begin
     SetLength(Result, ResCount);
     SetLength(BoundaryList, BndCount);
   finally
+    // stability: dispose leftover pointer heap entries, no managed leak on early MaxCount break
+    for I := 0 to HeapLen - 1 do
+      if Heap[I] <> nil then
+        Dispose(Heap[I]);
+    SetLength(Heap, 0);
     Seen.Free;
     BoundarySet.Free;
     ParseCache.Free;
