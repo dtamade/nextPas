@@ -59,8 +59,8 @@
 | `nextpas.core.agent.intf.pas` | 接缝 | IAgentProvider/IAgentCompletion/IAgentTransport/IAgentWireStream/IAgentWireDecoder/IAgentTool/IToolExecutor/IAgentClock/IAgentTranscriptStore | base, errors, async.cancellation |
 | `nextpas.core.agent.fold.pas` | 协议 | TAssistantBuild 增量累积器 + FoldDelta/FoldDeltas 纯折叠（唯一实现，禁止重写） | base, errors |
 | `nextpas.core.agent.sse.pas` | 协议 | **feed 式增量 SSE 解析器**（Feed(buf)→PopEvent；内部单元，http.sse 晋升候选）；DoS 上限触发抛 aecProtocol（SECURITY §3）| base, errors, text.builder |
-| `nextpas.core.agent.clock.pas` | 支撑 | IAgentClock 实现：真实时钟（可取消睡眠）+ fake 时钟（测试注入） | intf, async.cancellation, stopwatch, time.sleep |
-| `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上；流式只重试到首 delta——首 delta 门回放） | intf, base, errors, async.cancellation, platform.random |
+| `nextpas.core.agent.clock.pas` | 支撑 | IAgentClock 实现：真实时钟（可取消睡眠+RandomU64）+ fake 时钟（测试注入，确定性 LCG） | intf, async.cancellation, stopwatch, time.sleep, platform.random |
+| `nextpas.core.agent.retry.pas` | 策略 | TRetryPolicy 记录 + `WithRetry(inner, policy, clock)` 装饰器（纯策略无 IO，睡在 clock 上，抖动经 clock.RandomU64 可测；流式只重试到首 delta——首 delta 门回放） | intf, base, errors, async.cancellation, clock |
 | `nextpas.core.agent.fallback.pas` | 策略 | `NewFallbackProvider(chain, policy)` 容灾链装饰器（白名单内逐家切换、流式首 delta 门、全链耗尽透传最后原始错误、取消即止；OnSwitch 观测） | intf, base, errors |
 | `nextpas.core.agent.throttle.pas` | 策略 | IAgentRateGate 细接口 + `NewThrottledProvider(inner, gate, clock, policy)` 客户端限流（拒绝→clock 取消感知等待重取，超窗本地 aecRateLimited）；`NewTokenBucketGate` 适配 core.lockfree.ratelimit 标准库 | intf, base, errors, clock, lockfree.ratelimit |
 | `nextpas.core.agent.hedge.pas` | 策略 | `NewHedgedProvider(inner, clock, policy)` 对冲装饰器（DelayMs 无响应即并发第二路取先达、输路取消令牌合并必 Cancel、流式首 delta 先达者胜投递不重复、双倍 token 成本工厂级 opt-in；OnHedged 观测；DelayMs→ns 溢出钳制 High(Int64)） | intf, base, errors, async.cancellation, sync.event, clock |
@@ -72,10 +72,11 @@
 | `nextpas.core.agent.provider.common.wire.pas` | 适配支撑子域 | wire JSON 组装/读取、SSE data 帧→delta 公共骨架、帧序 FSM 骨架（565 行） | base, errors, json, intf |
 | `nextpas.core.agent.provider.common.extra.pas` | 适配支撑子域 | Extra 无损捕获与 64 键上限（109 行） | base, json |
 | `nextpas.core.agent.provider.common.slots.pas` | 适配支撑子域 | `TWireToolSlotPool` 直映表 + `CAgentMaxSlotMap` 256 上限（519 行） | base, errors |
-| `nextpas.core.agent.provider.openai.pas` | 适配（薄壳 326 行） | OpenAI Chat Completions 门面，inline 转发至三子域；公开编解码器三件（D13）；Q-O1..O7 全部落码+gate | openai.encode/decode/decoder, base, errors, intf, common, transport, fold |
+| `nextpas.core.agent.provider.openai.pas` | 适配（薄壳 ~150 行） | OpenAI Chat Completions 门面，inline 转发至四子域；公开编解码器三件（D13）；Q-O1..O7 全部落码+gate | openai.encode/decode/decoder/factory, base, errors, intf, common |
 | `nextpas.core.agent.provider.openai.encode.pas` | 适配子域 | Chat 编码子域（351 行纯函数） | base, intf, errors, common, json, json.builder, text.builder |
 | `nextpas.core.agent.provider.openai.decode.pas` | 适配子域 | Chat 解码子域（233 行纯函数） | base, intf, errors, common, json |
 | `nextpas.core.agent.provider.openai.decoder.pas` | 适配子域 | Chat WireDecoder 状态机（360 行，Q-O 流式） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.openai.factory.pas` | 适配子域 | Chat 工厂子域（280 行，BuildUrl+Provider 工厂+TOpenAIProvider 实现） | base, intf, errors, common, transport, fold, log |
 | `nextpas.core.agent.provider.openai.responses.pas` | 适配（薄壳 256 行） | Responses 门面，inline 转发至三子域；同款公开编解码器三件（WIRE-MAPPINGS §3，Q-R1..R7） | responses.encode/decode/decoder, base, errors, intf, common, transport, fold |
 | `nextpas.core.agent.provider.openai.responses.encode.pas` | 适配子域 | Responses 编码子域（308 行纯函数，input/instructions/tool_choice/text.format） | base, intf, errors, common, json, json.builder, text.builder |
 | `nextpas.core.agent.provider.openai.responses.decode.pas` | 适配子域 | Responses 解码子域（246 行纯函数，output 项+usage details） | base, intf, errors, common, json |
@@ -94,7 +95,7 @@
 | `nextpas.core.agent.streambox.pas` | 复用 | **Phase4 流式盒（2026-09-01）**：`TAgentStreamBox` Lock+Done+id 迟到丢弃封装（`TPlatformMutex` 经 `platform.sync`，零直接依赖 SyncObjs），对应 `PERFORMANCE.md §7.2` TAiStreamBox 的可复用落点 | agent.base, platform.sync |
 
 体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
-现状（2026-09-05 Stage Review P0/P1 收口 — 预算同源/对冲链路/排水看门狗/配额回拨+溢出，2026-09-11 同步主线 105 合并后校准）：`provider.common` 291+565+110+520 / `provider.openai` 326+351+233+360 / `provider.openai.responses` 256+308+246+442 / `provider.anthropic` 398+451+197+333 —— provider 域 14/14 <800 全达标（含 fake 407）；`base` 250+587+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 84 + `streambox` 131（托管逐项赋值）/ `loop` 57+97+152+191+690 / `transport.http` 73+197+464=734 / `hedge` 590 / `session` 552 / `tools` 523 / `quota` 186 / `pricing` 146；总量 13785（`wc -l core/src/nextpas.core.agent.*.pas`）。
+现状（2026-09-11 校准 + 2026-09-12 工厂子域收口）：`provider.common` 291+565+110+520 / `provider.openai` ~150+351+233+360+280 / `provider.openai.responses` 256+308+246+442 / `provider.anthropic` 398+451+197+333 —— provider 域 15/15 <800 全达标（含 fake 407；openai 工厂 4/4 落地）；`base` 250+587+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 84 + `streambox` 131（托管逐项赋值）/ `loop` 57+97+152+191+690 / `transport.http` 73+197+464=734 / `hedge` 590 / `session` 552 / `tools` 523 / `quota` 186 / `pricing` 146；总量 ~13900（`wc -l core/src/nextpas.core.agent.*.pas`）。
 
 ## 3. 数据流
 

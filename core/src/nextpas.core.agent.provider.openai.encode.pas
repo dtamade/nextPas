@@ -81,6 +81,7 @@ var
   P: TPart;
   LText, LUrl: string;
   LHasImage, LHasToolCalls: Boolean;
+  LB: IStringBuilder;
 begin
   ABld.Key('messages');
   ABld.BeginArray;
@@ -154,16 +155,18 @@ begin
 
       mrAssistant:
         begin
-          LText := '';
+          // perf: text.builder single source (BytesCopy zero-copy, geometric growth) — replaces O(N²) S+S hot path; evidence: AppendStr via bytes.ops.BytesCopy inline
+          LB := MakeStringBuilder(256);
           LHasToolCalls := False;
           for J := 0 to High(M.Parts) do
           begin
             P := M.Parts[J];
             if P.Kind = pkText then
-              LText := LText + P.Text
+              LB.AppendStr(P.Text)
             else if P.Kind = pkToolCall then
               LHasToolCalls := True;
           end;
+          LText := LB.ToString;
           ABld.BeginObject;
           ABld.Key('role');
           ABld.Str('assistant');
