@@ -50,22 +50,50 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.bytes.ops.text;
-function HostHashStr(const S: string): UInt32; inline;
+  nextpas.core.bytes.ops.text,
+  nextpas.core.mem.dynarray,
+  nextpas.core.system.heap;
+type
+  PDynArrayHeader = ^TDynArrayHeader;
+  TDynArrayHeader = record RefCnt: PtrInt; High: PtrInt; end;
+function HostCapacity(const Hosts: TJsPureHostArray): SizeUInt; inline;
+var LP: Pointer; LBlock: Pointer; LSize: SizeUInt;
 begin
-  Result := FNV1a32(PByte(PAnsiChar(S)), SizeUInt(Length(S)));
+  LP := Pointer(Hosts);
+  if LP = nil then Exit(0);
+  LBlock := PByte(LP) - SizeOf(TDynArrayHeader);
+  LSize := NpSystemMemSize(LBlock);
+  if LSize < SizeOf(TDynArrayHeader) then Exit(SizeUInt(Length(Hosts)));
+  Result := (LSize - SizeOf(TDynArrayHeader)) div SizeOf(TJsPureHostRec);
+end;
+procedure PokeHostLen(var Hosts: TJsPureHostArray; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute Hosts;
+begin
+  // single source geometric via bytes.ops + exactly-once poke via mem.dynarray, amortized O(1), no double alloc
+  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
 end;
 function HostHashView(const V: TStringView): UInt32; inline;
 begin
+  // single source FNV1a via bytes.ops, inline + zero-copy view, no heap alloc
   if V.Len = 0 then Exit(0);
   Result := FNV1a32(PByte(V.Data), V.Len);
 end;
-function HostCount(const Hosts: TJsPureHostArray): Integer; inline;
-var I: Integer;
+function HostHashStr(const S: string): UInt32; inline;
+var V: TStringView;
 begin
-  Result := 0;
-  for I := 0 to High(Hosts) do
-    if Hosts[I].Name <> '' then Inc(Result) else Break;
+  // single source: delegate to HostHashView via TStringView.FromStr zero-copy, no duplicate FNV
+  V := TStringView.FromStr(S);
+  Result := HostHashView(V);
+end;
+function HostCount(const Hosts: TJsPureHostArray): Integer; inline;
+begin
+  // perf: O(1) via Length — dense packed, no linear scan, amortized O(1) with poke, single source Length
+  Result := Length(Hosts);
+end;
+function HostEquals(const ARec: TJsPureHostRec; AHash: UInt32; const AView: TStringView): Boolean; inline;
+begin
+  // single source equality: hash filter + zero-copy TStringView.Equals via bytes.ops SpanEqual SIMD
+  Result := (ARec.Hash = AHash) and TStringView.FromStr(ARec.Name).Equals(AView);
 end;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 begin
@@ -79,7 +107,8 @@ var
   LCount, LCap, I, LIdx: Integer;
   LHash: UInt32;
 begin
-  LCount := HostCount(Hosts);
+  // perf: O(1) count via Length, no scan, amortized O(1) rebuild only when >64 and invalid
+  LCount := Length(Hosts);
   if LCount <= JS_PURE_HOST_THRESHOLD then
   begin
     JsPureHostBucketsInvalidate(Buckets);
@@ -100,20 +129,20 @@ begin
   end;
 end;
 function HostFindCoreLinear(const Hosts: TJsPureHostArray; AHash: UInt32; const AView: TStringView): Integer; inline;
-var I, LCount: Integer;
+var I: Integer;
 begin
-  LCount := HostCount(Hosts);
-  for I := 0 to LCount - 1 do
-    if (Hosts[I].Hash = AHash) and TStringView.FromStr(Hosts[I].Name).Equals(AView) then Exit(I);
+  // perf: inline + zero-copy view + HostEquals single source (hash filter + SpanEqual), O(n) for <=64, no extra HostCount scan
+  for I := 0 to High(Hosts) do
+    if HostEquals(Hosts[I], AHash, AView) then Exit(I);
   Result := -1;
 end;
 function HostFindCoreBucketed(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; AHash: UInt32; const AView: TStringView): Integer; inline;
 var I, LIdx, LProbe, LCount: Integer;
 begin
-  LCount := HostCount(Hosts);
+  // perf: unified template — O(1) count via Length, single-branch bucket valid check, inline hash via bytes.ops single source
+  LCount := Length(Hosts);
   if LCount <= JS_PURE_HOST_THRESHOLD then
     Exit(HostFindCoreLinear(Hosts, AHash, AView));
-  // single-branch: ensure resident bucket valid (one rebuild at most), then single probe — no double lookup jitter
   if (Length(Buckets.Buckets) = 0) or (Buckets.Count <> LCount) then
     JsPureHostBucketsRebuild(Hosts, Buckets);
   if (Length(Buckets.Buckets) > 0) and (Buckets.Count = LCount) then
@@ -123,7 +152,7 @@ begin
     begin
       if Buckets.Buckets[LIdx] = -1 then Exit(-1);
       I := Buckets.Buckets[LIdx];
-      if (Hosts[I].Hash = AHash) and TStringView.FromStr(Hosts[I].Name).Equals(AView) then Exit(I);
+      if HostEquals(Hosts[I], AHash, AView) then Exit(I);
       LIdx := (LIdx + 1) and Integer(Buckets.Mask);
     end;
     Exit(-1);
@@ -149,63 +178,74 @@ begin
   Result := True;
 end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer;
-var LView: TStringView; LHash: UInt32;
+var LView: TStringView;
 begin
-  // zero-copy view + hash, linear path (no global bucket) — per-Context isolation keeps correctness, bucket overload used by Context for O(1)
+  // unified template: zero-copy view + single source hash via HostHashView, inline linear O(n) without bucket
   LView := TStringView.FromStr(AName);
-  LHash := HostHashStr(AName);
-  Result := HostFindCoreLinear(Hosts, LHash, LView);
+  Result := HostFindCoreLinear(Hosts, HostHashView(LView), LView);
 end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer;
-var LView: TStringView; LHash: UInt32;
+var LView: TStringView;
 begin
-  // per-Context bucket O(1) when >64, single-branch rebuild, inline hash via bytes.ops FNV1a single source, zero-copy view
+  // unified template: zero-copy view + single source hash, bucket O(1) when >64 single-branch rebuild
   LView := TStringView.FromStr(AName);
-  LHash := HostHashStr(AName);
-  Result := HostFindCoreBucketed(Hosts, Buckets, LHash, LView);
+  Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(LView), LView);
 end;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer;
-var LHash: UInt32;
 begin
-  LHash := HostHashView(AName);
-  Result := HostFindCoreLinear(Hosts, LHash, AName);
+  // unified template: view zero-copy, single source hash inline
+  Result := HostFindCoreLinear(Hosts, HostHashView(AName), AName);
 end;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer;
-var LHash: UInt32;
 begin
-  LHash := HostHashView(AName);
-  Result := HostFindCoreBucketed(Hosts, Buckets, LHash, AName);
+  // unified template: view zero-copy, single source hash, bucket O(1)
+  Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(AName), AName);
 end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
-var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
+var LIdx, LCount: Integer; LNeed, LCap, LCurCap: SizeUInt; LView: TStringView; LHash: UInt32;
 begin
-  LIdx := JsPureFindHost(Hosts, AName);
+  // perf: unified hash/view single source, O(1) count via Length, amortized O(1) geometric via bytes.ops + poke
+  LView := TStringView.FromStr(AName);
+  LHash := HostHashView(LView);
+  LIdx := HostFindCoreLinear(Hosts, LHash, LView);
   if LIdx >= 0 then Exit(LIdx);
-  LCount := HostCount(Hosts);
+  LCount := Length(Hosts);
   LNeed := SizeUInt(LCount) + 1;
-  if LNeed > SizeUInt(Length(Hosts)) then
+  LCurCap := HostCapacity(Hosts);
+  if LCurCap >= LNeed then
+  begin
+    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
+  end else
   begin
     LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
     SetLength(Hosts, LCap);
+    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
   end;
   Hosts[LCount].Name := AName;
-  Hosts[LCount].Hash := HostHashStr(AName);
+  Hosts[LCount].Hash := LHash;
   Result := LCount;
 end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer;
-var LIdx, LCount, I: Integer; LNeed, LCap: SizeUInt;
+var LIdx, LCount: Integer; LNeed, LCap, LCurCap: SizeUInt; LView: TStringView; LHash: UInt32;
 begin
-  LIdx := JsPureFindHost(Hosts, Buckets, AName);
+  LView := TStringView.FromStr(AName);
+  LHash := HostHashView(LView);
+  LIdx := HostFindCoreBucketed(Hosts, Buckets, LHash, LView);
   if LIdx >= 0 then Exit(LIdx);
-  LCount := HostCount(Hosts);
+  LCount := Length(Hosts);
   LNeed := SizeUInt(LCount) + 1;
-  if LNeed > SizeUInt(Length(Hosts)) then
+  LCurCap := HostCapacity(Hosts);
+  if LCurCap >= LNeed then
+  begin
+    if SizeUInt(LCount) <> LNeed then PokeHostLen(Hosts, LNeed);
+  end else
   begin
     LCap := BytesNextCapacity(SizeUInt(Length(Hosts)), LNeed);
     SetLength(Hosts, LCap);
+    if LCap <> LNeed then PokeHostLen(Hosts, LNeed);
   end;
   Hosts[LCount].Name := AName;
-  Hosts[LCount].Hash := HostHashStr(AName);
+  Hosts[LCount].Hash := LHash;
   JsPureHostBucketsInvalidate(Buckets);
   Result := LCount;
 end;
@@ -236,7 +276,7 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Func := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if SizeUInt(Length(Hosts)) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
+  if Length(Hosts) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer);
 var LIdx: Integer;
@@ -244,7 +284,7 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Method := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if SizeUInt(Length(Hosts)) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
+  if Length(Hosts) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer);
 var LIdx: Integer;
@@ -252,7 +292,7 @@ begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
   Hosts[LIdx].Proc := AHandler;
   Hosts[LIdx].Kind := AKind;
-  if SizeUInt(Length(Hosts)) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
+  if Length(Hosts) > JS_PURE_HOST_THRESHOLD then JsPureHostBucketsInvalidate(Buckets);
 end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin
@@ -305,18 +345,21 @@ end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
 var LIdx, I, LCount: Integer;
 begin
+  // perf: O(1) count via Length, single HostFind (no nested HostCount), shift O(n) but not O(n²), poke amortized O(1)
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx < 0 then Exit;
-  LCount := HostCount(Hosts);
+  LCount := Length(Hosts);
   for I := LIdx to LCount - 2 do Hosts[I] := Hosts[I + 1];
   if LCount > 0 then
   begin
+    // stability: clear last duplicate to release string/managed refs, avoid leak
     Hosts[LCount - 1].Name := '';
     Hosts[LCount - 1].Func := nil;
     Hosts[LCount - 1].Method := nil;
     Hosts[LCount - 1].Proc := nil;
     Hosts[LCount - 1].Kind := 0;
     Hosts[LCount - 1].Hash := 0;
+    PokeHostLen(Hosts, SizeUInt(LCount - 1));
   end;
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);
@@ -324,7 +367,7 @@ var LIdx, I, LCount: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, Buckets, AName);
   if LIdx < 0 then Exit;
-  LCount := HostCount(Hosts);
+  LCount := Length(Hosts);
   for I := LIdx to LCount - 2 do Hosts[I] := Hosts[I + 1];
   if LCount > 0 then
   begin
@@ -334,6 +377,7 @@ begin
     Hosts[LCount - 1].Proc := nil;
     Hosts[LCount - 1].Kind := 0;
     Hosts[LCount - 1].Hash := 0;
+    PokeHostLen(Hosts, SizeUInt(LCount - 1));
   end;
   JsPureHostBucketsInvalidate(Buckets);
 end;

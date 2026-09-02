@@ -41,6 +41,9 @@ function DynArrayRefCountStr(const A: TStringArray): PtrInt; inline;
 {** TStringArray length poke: set header High := NewLen-1; nil+0 is no-op. }
 procedure DynArraySetLengthStr(var A: TStringArray; const ANewLen: SizeUInt); inline;
 
+{** Generic capacity probe: (heap block - header) div AElemSize; fallback ALen. }
+function DynArrayCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
+
 implementation
 
 uses
@@ -127,6 +130,17 @@ begin
     Exit;
   end;
   PDynArrayHeader(PByte(Pointer(A)) - SizeOf(TDynArrayHeader))^.High := PtrInt(ANewLen) - 1;
+end;
+
+function DynArrayCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
+var LBlock: Pointer; LSize: SizeUInt;
+begin
+  if APtr = nil then Exit(0);
+  if AElemSize = 0 then Exit(ALen);
+  LBlock := PByte(APtr) - SizeOf(TDynArrayHeader);
+  LSize := NpSystemMemSize(LBlock);
+  if LSize < SizeOf(TDynArrayHeader) then Exit(ALen);
+  Result := (LSize - SizeOf(TDynArrayHeader)) div AElemSize;
 end;
 
 end.

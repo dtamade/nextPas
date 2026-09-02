@@ -39,6 +39,7 @@ function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringV
 function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
+// single dispatch template — 3 forms × bucket/non-bucket 12 inline thin forwards converged via _JsPureHostSetDispatch (PBuckets nil=linear, Kind 0/1/2 dispatches Func/Method/Proc), inline zero-copy via host view, bytes.ops FNV1a single source, validated Func/Method/Proc share same dispatch + JsPureCheckHostName single source
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
@@ -91,10 +92,30 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.mem.dynarray,
   nextpas.core.atomic,
-  nextpas.core.format.limits,
   nextpas.core.platform.fs,
   nextpas.core.js.eval;
+const
+  JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
+type
+  PJsPureHostBuckets = ^TJsPureHostBuckets;
 var GPureClosed: array of Int32; GPureNextId: UInt64 = 1; // owner pure.base: 4B atomic acquire/release, 自然 4B 对齐 (FPC dynarray 8B header + 4B元素), 非 16B 堆对齐虚假宣称, 64B/4 伪共享 16条目/行 write-once rare,  bulk IsValid 零原子 via FValid, 强一致走 acquire
+
+// single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source
+procedure _JsPureHostSetDispatch(var Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AName: string; const AFunc: TJsHostFunction; const AMethod: TJsHostMethod; const AProc: TJsHostProc; AKind: Integer); inline;
+begin
+  if Buckets <> nil then
+    case AKind of
+      0: nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets^, AName, AFunc, AKind);
+      1: nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets^, AName, AMethod, AKind);
+      2: nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets^, AName, AProc, AKind);
+    end
+  else
+    case AKind of
+      0: nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AFunc, AKind);
+      1: nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AMethod, AKind);
+      2: nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AProc, AKind);
+    end;
+end;
 
 function JsPureContextRegister: UInt64;
 var LNeed, LCap: SizeUInt; LBytes: TBytes absolute GPureClosed;
@@ -151,31 +172,31 @@ begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, AName); e
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline;
 begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, Buckets, AName); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, nil, AName, AHandler, Default(TJsHostMethod), Default(TJsHostProc), AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, nil, AName, Default(TJsHostFunction), AHandler, Default(TJsHostProc), AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, nil, AName, Default(TJsHostFunction), Default(TJsHostMethod), AHandler, AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, @Buckets, AName, AHandler, Default(TJsHostMethod), Default(TJsHostProc), AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, @Buckets, AName, Default(TJsHostFunction), AHandler, Default(TJsHostProc), AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
+begin _JsPureHostSetDispatch(Hosts, @Buckets, AName, Default(TJsHostFunction), Default(TJsHostMethod), AHandler, AKind); end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureCheckHostName(AName, ABackend); end;
 procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, nil, AName, AHandler, Default(TJsHostMethod), Default(TJsHostProc), 0); end;
 procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, Buckets, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, @Buckets, AName, AHandler, Default(TJsHostMethod), Default(TJsHostProc), 0); end;
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, nil, AName, Default(TJsHostFunction), AHandler, Default(TJsHostProc), 1); end;
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, Buckets, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, @Buckets, AName, Default(TJsHostFunction), AHandler, Default(TJsHostProc), 1); end;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, nil, AName, Default(TJsHostFunction), Default(TJsHostMethod), AHandler, 2); end;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, Buckets, AName, AHandler, ABackend); end;
+begin JsPureCheckHostName(AName, ABackend); if not Assigned(AHandler) then raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend); _JsPureHostSetDispatch(Hosts, @Buckets, AName, Default(TJsHostFunction), Default(TJsHostMethod), AHandler, 2); end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
 begin nextpas.core.js.pure.host.JsPureHostRemove(Hosts, AName); end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline;
@@ -321,7 +342,7 @@ begin
   LErr := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
   if LErr <> 0 then Exit;
   try
-    if LLen > FORMAT_BULK_PARSE_MAX_BYTES then Exit(False);
+    if LLen > JS_PURE_FILE_MAX_BYTES then Exit(False);
     if LLen > 0 then
     begin
       SetLength(AText, LLen);

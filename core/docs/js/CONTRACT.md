@@ -26,7 +26,9 @@
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
 | `js.quickjs.loader` | `platform.dl` 探测与符号装载（唯一可触 `platform.dl`） | `platform.dl`、`js.base`、`js.quickjs.ffi` | `DynLibs`、`Windows/BaseUnix` |
-| `js.quickjs` | QuickJS 真实现（`uses ffi/loader`，实现 `intf`） | `js.base/intf`、`js.quickjs.ffi/loader`、`json`、`mem` | `webview.*` |
+| `js.value.store` | 纯存储单源（`Heap+Global` via `pure.base` single source `bytes.ops+mem.dynarray` 几何 `BYTES_BUILDER_MIN_GROW 64→2×` 均摊O1, 零FFI/零dl, 独立`js.value`语义, `inline`零拷贝 via `text.view`） | `js.base/intf`、`js.pure.base`、`text.view`、`bytes.ops` | `platform.dl`、`*.ffi`、`webview.*` |
+| `js.quickjs.value` | QuickJS 镜像装饰器（装饰`js.value.store`纯存储, `QjsHeap` via `FFI` single source `bytes.ops+mem.dynarray` 几何, `QJS互转` single source via `bytes.ops`零拷贝, `FFI枚举/镜像Set/Delete` exactly-once Free不丢, `inline`热路径, `Pure+QjsHeap`组合消除双堆耦合） | `js.base/intf`、`js.value.store`、`js.quickjs.ffi`、`bytes.ops` | `platform.dl` (仅loader), `webview.*` |
+| `js.quickjs` | QuickJS 真实现（`uses value.store/quickjs.value+ffi/loader`，实现 `intf`，装饰器组合 `Pure+QjsHeap` 单Store字段） | `js.base/intf`、`js.value.store`、`js.quickjs.ffi/loader/value`、`json`、`mem` | `webview.*` |
 | `js.pure.base` | 纯后端共享基座（`JsPure*` 零分配视图，零 FFI/零 `platform.dl`（L0 `platform.fs` 仅 `TryEvalFile` 直读，非 dl，64MiB限流，`bytes.ops Move`零拷贝），**非标准四件套命名显式例外**：`pure.base` 单源复用 `js888/v8/chakra` 三纯后端，四职责聚合 Host/Heap/Value/IO 阈值 650 内（<800 必拆，wc -l 501 实测，超阈预案 `js.value`+`js.host`），`pure` 为纯族聚合前缀、`base` 为共享基座后缀，非独立模块，守 L0–L3，复用 `bytes.ops` 单源与 `text.view` 零拷贝） | `js.base/intf`、`text.view`、`json`、`platform.fs`（L0 直读） | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.pure.impl` | 纯模板单源（Runtime+Context，Host/Heap/Value/IO 四职责聚合，`TJsPureContext` 分组标记阈值 650 内（<800 必拆，wc -l 407 实测，奢华度临界→分组收敛，超阈预案 `js.value`(Heap/Value)+`js.host`(Host/Call)），`js888/v8/chakra` 三纯后端 95% 复用，零 FFI/零 `platform.dl`，`bytes.ops` 几何扩容与 `text.view` 零拷贝直通，热点 inline+`Move` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3） | `js.base/intf`、`js.pure.base`、`text.view`、`json`、`platform.thread/fs`（L0 直读） | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.js888` | 纯 Pascal 后端（`jsbkJs888`，零 FFI/零 dl，恒可用） | `js.base/intf`、`js.pure.base`、`js.pure.impl`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
@@ -36,8 +38,8 @@
 | `js.pas` | 门面：纯 re-export（`inline` 薄转发至 `js.factory`，零分支零探测） | `js.base/intf/factory` | 逻辑（四件套纯聚合） |
 
 ```
-base ← intf ← {fake, quickjs.ffi ← loader ← quickjs, pure.base ← pure.impl(Runtime+Context四职责分组 407行) ← {js888, v8, chakra}} ← factory ← 门面
-         ↑ pure.base 501 行 + pure.impl 407 行分组标记（各<650，<800 必拆，wc -l 501/407 实测，超阈预案 js.value+js.host）js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内与 quickjs 平级；factory 单源分支/探测，门面 inline 零拷贝薄转发
+base ← intf ← {fake, quickjs.ffi, value.store(Pure Heap/Global via pure.base), quickjs.value(Pure+QjsHeap装饰器 via value.store+ffi), quickjs(装饰器组合 Pure+QjsHeap), pure.base ← pure.impl(Runtime+Context四职责分组 407行) ← {js888, v8, chakra}} ← factory ← 门面
+         ↑ pure.base 501 行 + pure.impl 407 行 + value.store ~70 行 + quickjs.value ~250 行 (Pure+QjsHeap装饰器单Store, wc -l ~320, <650/<800 必拆, 匠心双堆耦合收敛至 js.value.store 单源)；js888/v8/chakra 各 ~29 行零 FFI/零 dl，纯族阈值内与 quickjs 平级；factory 单源分支/探测，门面 inline 零拷贝薄转发
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为**零 FFI/零 platform.dl/零 so、恒可用**，与 `js.fake` 同约束；尾部追加只在 `TJsBackendKind` 末尾加，保持序号稳定（`db.TDbKind` 同纪律）。—— `js.base/js.intf` 为后端无关契约，加新纯后端时零改动，仅新增一单元 + 门面分支 + 枚举尾部一项。
@@ -241,14 +243,14 @@ function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 - `Eval` 不做沙箱 beyond `MemoryLimit / Timeout`；`SetHostFunction` 暴露面即攻击面，默认不暴露 `os/fs/process`。
 - 二进制走 `TBytes` + `AsJson` base64（`encoding` owner），不做裸二进制帧。
 - `MemoryLimit` 超限 fail-closed，不静默回收。
-- `TryEvalFile` 读文件受 `FORMAT_BULK_PARSE_MAX_BYTES`（`nextpas.core.format.limits`，默认 64 MiB）约束，超限抛 `EArgumentError`（与 `json` 同约束）。
+- `TryEvalFile` 读文件受 `JS_PURE_FILE_MAX_BYTES`（本地 64 MiB，数值对齐 `FORMAT_BULK_PARSE_MAX_BYTES` canonical `nextpas.core.format.limits`，无 L2→L2，`bytes.ops BytesCopy` 零拷贝单源，`platform.fs` 直读 + `try-finally` 释放不丢）约束，超限 `False`（与 `json` bulk 64MiB 同值对齐）。
 
 ---
 
 ## 9. 依赖与复用边界（复用度铁律）
 
-- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`platform.fs`（`TryEvalFile` L0直读，bytes.ops Move零拷贝，`FORMAT_BULK_PARSE_MAX_BYTES` 64MiB限流）、`encoding`（`TBytes` base64 若涉二进制）—— **L2 js 禁止依赖同层 `fs`（`nextpas.core.fs`），已由 `platform.fs` L0单源替代，守 module-registry `json/text.view/mem+platform.dl`**
-- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`platform.fs`/`nextpas.core.bench`/`nextpas.core.test` owner，`fs` 已下沉至 `platform.fs` L0）
+- 允许：`base`、`errors`、`exception`、`json`、`text.view/builder`、`mem`、`platform.dl`（仅 loader）、`platform.fs`（`TryEvalFile` L0直读，`bytes.ops BytesCopy` 零拷贝单源 `JS_PURE_FILE_MAX_BYTES` 64MiB 本地限流，数值对齐 `FORMAT_BULK_PARSE_MAX_BYTES` canonical 无 L2→L2，`try-finally` 释放不丢）、`encoding`（`TBytes` base64 若涉二进制）—— **L2 js 禁止依赖同层 `fs`/`format.limits`（`nextpas.core.fs`/`nextpas.core.format.limits`），已由 `platform.fs` L0单源 + 本地 64MiB 常量替代，守 module-registry `json/text.view/mem+platform.dl` 单缝单向，`bytes.ops` 单源 `SpanEqual/BytesCopy` 零拷贝 `inline`**
+- 禁止：`L3` 任何模块（`http/webview/tui`）反向依赖；`*.ffi` 外的生产单元出现 `Windows/BaseUnix/DynLibs/ctypes`；`base/intf` 出现 `platform.dl` 或后端符号；同层 `js→format.limits` 未登记即禁（已由本地 `JS_PURE_FILE_MAX_BYTES` 替代，单源 `bytes.ops`）；**禁止在 `js.*` 内自造 `json` 解析/转义、`fs` 归一化、计时、bench、test runner**（一律复用 `json`/`platform.fs`/`nextpas.core.bench`/`nextpas.core.test` owner，`fs` 已下沉至 `platform.fs` L0）
 - **复用与反哺纪律**（基本要求）：开发中发现 `json/text/mem/platform.dl/platform.fs` 缺口或性能瓶颈，**毫不犹豫反哺 owner 模块**（提 `core/docs/...` 变更 + 加回归），禁止在 `js` 内堆 workaround/重复造轮子/抄低质量代码；`AI_GUIDE §5 C7/C9` 同检，`ACCEPTANCE G-M1-3` 的 `source-contract` 禁止 `js` 内出现 `SysUtils` 手写转义/自计时
 
 **Source-contract 扫描**（`core/tests/architecture/check_source_contracts.py`）：
@@ -352,3 +354,4 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-09-02 | 1.2 | 对齐修复：pure.base 实测 517→630 行（wc -l 630，阈值 550→650，<800 必拆），18 份对齐，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 `JsPureFindHostView/JsPureNew*` inline + `Move` 零拷贝，资源 `try-finally/JsPureClose/FreeAndNil` 不丢，守四件套与 L0–L3 | codex/core-js |
 | 2026-09-02 | 1.4 | 匠心修复：INV-1 闭环 js.intf 实现段去 json.value/text.escape/text.view 越界 仅留 json.types+writer 单缝，AsJson/JsPureToJsonString 双路径归一 TJsonWriter 单源 via json.writer/bytes.ops 几何 单 alloc 零拷贝 inline 热路径，二分堆+单视图+SIMD 复用；IsValid 热路径 lock-free Fast inline 零拷贝 去 per-check mutex；单单元 ~200行 <500 极简奢华 四件套 base←intf←门面 阈值 500 内 预案 js.value/host 就绪，资源 mutex 释放不丢 try-finally，18 份对齐 | codex/core-js |
 | 2026-09-02 | 1.5 | 匠心修复·高级感对齐：pure.base 480→501 行（wc -l 501 阈值650内<800必拆）与 BENCHMARKS 1.6→1.7 时效同步，18 份对齐，复用 bytes.ops 单源与 text.view 零拷贝，热点 JsPureFindHostView/JsPureNew* inline+BytesCopy 零拷贝，资源 try-finally/JsPureClose 不丢，守 L0–L3 与四件套例外 | codex/core-js |
+| 2026-09-02 | 1.6 | 匠心修复·双堆装饰器收敛：TJsQjsValueStore 双堆耦合 (Heap+QjsHeap同一record) 收敛至独立 js.value.store 子模块单源 (value.store 纯Heap/Global via pure.base/bytes.ops单源, quickjs.value 仅QjsHeap镜像via FFI单源, Pure+QjsHeap装饰器组合单Store消除双写, inline/零拷贝/BytesGrowCapacityInt+mem.dynarray Exactly-Once几何均摊O1, 资源幂等Free不丢, 守四件套base←intf←value.store←quickjs.value与L0-L3, bytes.ops单源复用, CONTRACT为准) | codex/core-js |

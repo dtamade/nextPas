@@ -1,8 +1,9 @@
 unit nextpas.core.js.quickjs.value;
 {**
- * @desc QuickJS 双堆装饰器值子模块 — 独立 js.value 语义，沉淀 FHeap 纯堆 + FQjsHeap 镜像 + FGlobal 三元同饰器.
- *       职责显式拆分：pure.base 拥有纯堆单源 (JsPureHeap* via bytes.ops+mem.dynarray)，本模块拥有 QJS 镜像同步 (FQjsHeap 容量/分配/FFI 枚举/镜像 Set/Delete)，
- *       Context 仅持单一 Store 字段，消除双写耦合。守四件套 base←intf←value←门面 与 L0-L3，复用 bytes.ops 单源，热点 inline/零拷贝，资源幂等不丢，CONTRACT 为准缺能力反哺 owner.
+ * @desc QuickJS 镜像装饰器值子模块 — 装饰 js.value.store 纯存储，沉淀 QjsHeap 镜像 + FFI 同步.
+ *       职责显式拆分：pure.base 拥有纯堆单源 (JsPureHeap* via bytes.ops+mem.dynarray)，js.value.store 拥有纯存储契约 (Heap/Global) 单源，
+ *       本模块仅拥有 QJS 镜像同步 (QjsHeap 容量/分配/FFI枚举/镜像 Set/Delete + QJS互转)，Context 经装饰器组合单一 Store 字段消除双写耦合.
+ *       守四件套 base←intf←value.store←quickjs.value 与 L0-L3，复用 bytes.ops 单源几何扩容与 text.view 零拷贝，热点 inline/零拷贝，资源幂等不丢，CONTRACT为准缺能力反哺 owner (bytes.ops+mem.dynarray owner).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -13,13 +14,13 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.js.pure.base,
+  nextpas.core.js.value.store,
   nextpas.core.js.quickjs.ffi,
   nextpas.core.text.view;
 
 type
   TJsQjsValueStore = record
-    Heap: TJsPureHeap;
-    Global: TJsValue;
+    Pure: TJsValueStore;
     QjsHeap: array of TJSQjsValue;
   end;
 
@@ -34,7 +35,7 @@ procedure QjsStoreMirrorDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; AIdx:
 function QjsStoreGlobal(const S: TJsQjsValueStore): TJsValue; inline;
 function QjsStoreHeapLength(const S: TJsQjsValueStore): Integer; inline;
 
-{ QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value 持有 Ctx 转换，保持 JSON owner 单源 }
+{ QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
@@ -58,15 +59,14 @@ end;
 
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
-  // perf: inline thin-forward to bytes.ops.AnsiPtrLen single source (zero-copy view length, single scan, no System.StrLen分叉), inline hot path
-  Result := nextpas.core.bytes.ops.AnsiPtrLen(P);
+  // perf: inline thin-forward to js.value.store single source JsValueCStrLen → bytes.ops.AnsiPtrLen single source (zero-copy view length, single scan), inline hot path, decorator reuse no duplication
+  Result := nextpas.core.js.value.store.JsValueCStrLen(P);
 end;
 
 function QjsView(P: PAnsiChar): TStringView; inline;
 begin
-  // perf: inline single scan via QjsCStrLen (bytes.ops AnsiPtrLen single source) → zero-copy TStringView, inline hot path, no重复扫描
-  if P = nil then Exit(TStringView.Empty);
-  Result := TStringView.Create(P, QjsCStrLen(P));
+  // perf: inline thin-forward to js.value.store single source JsValueView → bytes.ops AnsiPtrLen single source → zero-copy TStringView, inline hot path, no重复扫描, decorator reuse
+  Result := nextpas.core.js.value.store.JsValueView(P);
 end;
 
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
@@ -84,7 +84,7 @@ begin
     jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(ACtx, Ord(AVal.AsBool));
     jskObject, jskArray, jskFunction:
       begin
-        Idx := JsPureHeapFind(S.Heap, AVal);
+        Idx := JsValueStoreFind(S.Pure, AVal);
         if (Idx >= 0) and (Idx < Length(S.QjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(ACtx, S.QjsHeap[Idx]);
       end;
     jskNull, jskUndefined: FillChar(Result, SizeOf(Result), 0);
@@ -126,7 +126,7 @@ end;
 procedure QjsStoreEnsureCapacity(var S: TJsQjsValueStore; ANeed: Integer); inline;
 var LOld, LCap: Integer;
 begin
-  // reuse bytes.ops single source + mem.dynarray exactly-once geometric (no双写分支克隆 pure.base): SetLength(LCap) + single poke to ANeed via PokeQjsHeapLen→DynArraySetLength, amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy capacity math
+  // reuse bytes.ops single source + mem.dynarray exactly-once geometric (no双写分支克隆 pure.base/value.store): SetLength(LCap) + single poke to ANeed via PokeQjsHeapLen→DynArraySetLength, amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy capacity math, decorator pure length via value.store
   LOld := Length(S.QjsHeap);
   if LOld >= ANeed then Exit;
   LCap := BytesGrowCapacityInt(LOld, ANeed);
@@ -136,25 +136,28 @@ end;
 
 function QjsStoreFind(const S: TJsQjsValueStore; const AObj: TJsValue): Integer; inline;
 begin
-  Result := JsPureHeapFind(S.Heap, AObj);
+  // perf: inline thin-forward to js.value.store single source JsValueStoreFind → pure.base JsPureHeapFind (hash>64 O1), zero-copy, inline hot path, decorator pure single source
+  Result := JsValueStoreFind(S.Pure, AObj);
 end;
 
 function QjsStoreHeapLength(const S: TJsQjsValueStore): Integer; inline;
 begin
-  Result := Length(S.Heap);
+  // perf: inline thin-forward to js.value.store single source JsValueStoreHeapLength, zero-copy Length read, O(1), decorator pure single source
+  Result := JsValueStoreHeapLength(S.Pure);
 end;
 
 function QjsStoreGlobal(const S: TJsQjsValueStore): TJsValue; inline;
 begin
-  Result := S.Global;
+  // perf: inline thin-forward to js.value.store single source JsValueStoreGlobal, zero-copy value return, decorator pure single source
+  Result := JsValueStoreGlobal(S.Pure);
 end;
 
 procedure QjsStoreInit(var S: TJsQjsValueStore; AContextId: UInt64; ARuntime, ACtx: Pointer); inline;
 begin
-  // owner boundary: pure.base owns Heap alloc, mirror owns QjsHeap sync via FFI single source, bytes.ops+mem single source capacity, inline zero-copy
-  S.Global := JsValueBindContext(JsPureHeapNewObject(S.Heap), AContextId);
-  SetLength(S.QjsHeap, Length(S.Heap));
-  if (Length(S.Heap) > 0) and Assigned(JS_NewObjectPtr) and (ACtx <> nil) then
+  // owner boundary: value.store owns Heap/Global alloc single source via pure.base+bytes.ops, mirror owns QjsHeap sync via FFI single source, inline zero-copy, decorator composition Pure+QjsHeap single field Store eliminated double-heap coupling
+  JsValueStoreInit(S.Pure, AContextId);
+  SetLength(S.QjsHeap, JsValueStoreHeapLength(S.Pure));
+  if (JsValueStoreHeapLength(S.Pure) > 0) and Assigned(JS_NewObjectPtr) and (ACtx <> nil) then
     S.QjsHeap[High(S.QjsHeap)] := JS_NewObjectPtr(ACtx)
   else if Length(S.QjsHeap) > 0 then
     FillChar(S.QjsHeap[High(S.QjsHeap)], SizeOf(TJSQjsValue), 0);
@@ -163,20 +166,19 @@ end;
 procedure QjsStoreClear(var S: TJsQjsValueStore; ACtx: Pointer);
 var I: Integer;
 begin
-  // stability: resource release幂等不丢 — QjsHeap逐项JS_FreeValue+Clear, pure heap clear, inline poke single source BYTES_BUILDER_MIN_GROW均摊O1 via SetLength+mem.dynarray poke
+  // stability: resource release幂等不丢 — QjsHeap逐项JS_FreeValue+Clear + value.store纯堆Clear single source, inline poke single source BYTES_BUILDER_MIN_GROW均摊O1 via SetLength+mem.dynarray poke, decorator pure+mirror exactly-once Free不丢
   for I := 0 to High(S.QjsHeap) do
     if Assigned(JS_FreeValuePtr) and (ACtx <> nil) then
       JS_FreeValuePtr(ACtx, S.QjsHeap[I]);
   SetLength(S.QjsHeap, 0);
-  JsPureHeapClear(S.Heap);
-  S.Global := JsUndefinedValue;
+  JsValueStoreClear(S.Pure);
 end;
 
 procedure QjsStoreSyncNewEntry(var S: TJsQjsValueStore; AIdx: Integer; AIsArray: Boolean; ACtx: Pointer); inline;
 var Q: TJSQjsValue;
 begin
-  // perf: amortized O(1) via BytesGrowCapacityInt single source (BYTES_BUILDER_MIN_GROW 64→2×), mem.dynarray Exactly-Once poke, inline thin-forward, zero-copy header poke
-  QjsStoreEnsureCapacity(S, Length(S.Heap));
+  // perf: amortized O(1) via BytesGrowCapacityInt single source (BYTES_BUILDER_MIN_GROW 64→2×), mem.dynarray Exactly-Once poke, inline thin-forward, zero-copy header poke, decorator pure length via value.store
+  QjsStoreEnsureCapacity(S, JsValueStoreHeapLength(S.Pure));
   if AIdx < 0 then Exit;
   if AIsArray then
   begin
@@ -198,7 +200,7 @@ var
 begin
   Result := False;
   AKeys := nil;
-  // perf: FFI真堆枚举经 JS_GetOwnPropertyNames single source (bytes.ops zero-copy AnsiPtrToString), inline path; 资源 exactly-once Free不丢; fallback由调用方接管纯堆
+  // perf: FFI真堆枚举经 JS_GetOwnPropertyNames single source (bytes.ops zero-copy AnsiPtrToString), inline path; 资源 exactly-once Free不丢; fallback由调用方接管纯堆 via value.store
   if (ACtx = nil) or (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) then Exit;
   if not Assigned(JS_GetOwnPropertyNamesPtr) or not Assigned(JS_FreePropertyEnumPtr) or not Assigned(JS_AtomToStringPtr) or not Assigned(JS_ToCStringPtr) or not Assigned(JS_FreeCStringPtr) or not Assigned(JS_FreeValuePtr) then Exit;
   LLen := 0;
@@ -229,10 +231,10 @@ end;
 procedure QjsStoreMirrorSetProp(var S: TJsQjsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string; const AVal: TJsValue); inline;
 var QVal: TJSQjsValue;
 begin
-  // owner boundary: pure heap already updated by caller via JsPureHeapSetProp; mirror only syncs QjsHeap via FFI single source JS_SetPropertyStr, exactly-once Free不丢, inline zero-copy PAnsiChar view (bytes.ops single source)
+  // owner boundary: pure heap already updated by caller via JsPureHeapSetProp→value.store Pure.Heap single source; mirror only syncs QjsHeap via FFI single source JS_SetPropertyStr, exactly-once Free不丢, inline zero-copy PAnsiChar view (bytes.ops single source), decorator pure Global via value.store
   if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (ACtx = nil) then
   begin
-    AIdx := QjsStoreFind(S, S.Global);
+    AIdx := QjsStoreFind(S, JsValueStoreGlobal(S.Pure));
     if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) then Exit;
   end;
   QVal := QjsFromTJsValue(S, ACtx, AVal);

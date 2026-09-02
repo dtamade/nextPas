@@ -39,7 +39,6 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.system.heap,
   nextpas.core.js.value;
 var
   GPureHeapMetrics: TJsPureHeapMetrics;
@@ -79,29 +78,14 @@ begin
   for I := 0 to High(Heap) do if Heap[I].Id = LId then Exit(I);
   Result := -1;
 end;
-{ capacity helpers — single source geometric via bytes.ops, zero-copy header poke via mem.dynarray }
-type
-  PDynArrayHeader = ^TDynArrayHeader;
-  TDynArrayHeader = record RefCnt: PtrInt; High: PtrInt; end;
+{ capacity helpers — single source via mem.dynarray DynArrayCapacityElem (owner mem), geometric via bytes.ops, inline zero-copy }
 function HeapCapacity(const Heap: TJsPureHeap): SizeUInt; inline;
-var LP: Pointer; LBlock: Pointer; LSize: SizeUInt;
 begin
-  LP := Pointer(Heap);
-  if LP = nil then Exit(0);
-  LBlock := PByte(LP) - SizeOf(TDynArrayHeader);
-  LSize := NpSystemMemSize(LBlock);
-  if LSize < SizeOf(TDynArrayHeader) then Exit(SizeUInt(Length(Heap)));
-  Result := (LSize - SizeOf(TDynArrayHeader)) div SizeOf(TJsPureObject);
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(Heap), SizeUInt(Length(Heap)), SizeOf(TJsPureObject));
 end;
 function PropsCapacityObj(const Obj: TJsPureObject): SizeUInt; inline;
-var LP: Pointer; LBlock: Pointer; LSize: SizeUInt;
 begin
-  LP := Pointer(Obj.Props);
-  if LP = nil then Exit(0);
-  LBlock := PByte(LP) - SizeOf(TDynArrayHeader);
-  LSize := NpSystemMemSize(LBlock);
-  if LSize < SizeOf(TDynArrayHeader) then Exit(SizeUInt(Length(Obj.Props)));
-  Result := (LSize - SizeOf(TDynArrayHeader)) div SizeOf(TJsPureProp);
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(Obj.Props), SizeUInt(Length(Obj.Props)), SizeOf(TJsPureProp));
 end;
 procedure PokeHeapLen(var Heap: TJsPureHeap; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute Heap;
@@ -122,8 +106,7 @@ var LCount, LCap, I, LIdx: Integer; LHash: UInt32;
 begin
   LCount := Length(Obj.Props);
   if LCount <= JS_PURE_HEAP_HASH_THRESHOLD then begin PropBucketsInvalidate(Obj); Exit; end;
-  LCap := 1;
-  while LCap < LCount*2 do LCap := LCap shl 1;
+  LCap := Integer(BytesNextCapacity(0, SizeUInt(LCount)*2));
   SetLength(Obj.PropsBuckets, LCap);
   for I:=0 to LCap-1 do Obj.PropsBuckets[I]:=-1;
   Obj.PropsMask := UInt32(LCap-1);
@@ -177,20 +160,13 @@ begin
   Result:=-1;
 end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
-var LId: Int64; LOld, LNeed, LCap, LCurCap: SizeUInt;
+var LId: Int64; LOld, LNeed, LCap: SizeUInt;
 begin
   LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1; LCap := BytesNextCapacity(LOld, LNeed);
-  LCurCap := HeapCapacity(Heap);
-  if LCurCap >= LNeed then
-  begin
-    // perf: capacity sufficient — exactly-once poke via mem.dynarray, no SetLength, amortized O(1) batch NewObject, zero-copy header
-    if LOld <> LNeed then PokeHeapLen(Heap, LNeed);
-  end else
-  begin
-    Inc(GPureHeapMetrics.Rebuilds);
-    SetLength(Heap, LCap);
-    if LCap <> LNeed then PokeHeapLen(Heap, LNeed);
-  end;
+  // perf: single source geometric via bytes.ops BytesNextCapacity, exactly-once SetLength+poke via mem.dynarray DynArraySetLength, amortized O(1), zero-copy header, no extra NpSystemMemSize probe
+  Inc(GPureHeapMetrics.Rebuilds);
+  SetLength(Heap, LCap);
+  if LCap <> LNeed then PokeHeapLen(Heap, LNeed);
   LId := Int64(LNeed); if LId = 0 then LId := 1;
   Heap[High(Heap)].Id := LId;
   SetLength(Heap[High(Heap)].Props, 0);
@@ -234,7 +210,7 @@ var Idx, P: Integer; begin Result := JsUndefinedValue; Idx := JsPureHeapFind(Hea
   if P >= 0 then Result := Heap[Idx].Props[P].Value;
 end;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
-var Idx, P: Integer; LOld, LNeed, LCap, LCurCap: SizeUInt; LHash: UInt32;
+var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt; LHash: UInt32;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then P := JsPureHeapFindProp(Heap[Idx], Name)
@@ -242,17 +218,10 @@ begin
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LHash := PropHashStr(Name);
   LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1; LCap := BytesNextCapacity(LOld, LNeed);
-  LCurCap := PropsCapacityObj(Heap[Idx]);
-  if LCurCap >= LNeed then
-  begin
-    // perf: capacity sufficient — exactly-once poke via mem.dynarray, no SetLength, amortized O(1) batch SetProp
-    if LOld <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end else
-  begin
-    Inc(GPureHeapMetrics.Rebuilds);
-    SetLength(Heap[Idx].Props, LCap);
-    if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end;
+  // perf: single source geometric via bytes.ops BytesNextCapacity, exactly-once SetLength+poke via mem.dynarray DynArraySetLength, amortized O(1), zero-copy header, no extra NpSystemMemSize probe
+  Inc(GPureHeapMetrics.Rebuilds);
+  SetLength(Heap[Idx].Props, LCap);
+  if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;

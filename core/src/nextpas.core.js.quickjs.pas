@@ -155,7 +155,7 @@ begin
     if Assigned(JS_SetMemoryLimitPtr) then JS_SetMemoryLimitPtr(FRT, FOptions.MemoryLimit);
   FCtx := JS_NewContextPtr(FRT);
   if FCtx = nil then begin JS_FreeRuntimePtr(FRT); FRT := nil; raise EJsError.Create('JS_NewContext failed', jecUnknown, 'Error', '', jsbkQuickJs); end;
-  // decorator boundary: value submodule owns Heap+QjsHeap+Global, single-field Store, bytes.ops single source, inline zero-copy, amortized O1
+  // decorator boundary: js.value.store owns Pure Heap/Global single source via bytes.ops, quickjs.value owns QjsHeap mirror via FFI single source, single Store via Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW
   QjsStoreInit(FStore, FContextId, FRT, FCtx);
   if FOptions.TimeoutMs > 0 then
   begin
@@ -326,8 +326,8 @@ function TJsQuickJsContext.NewObject: TJsValue;
 var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: value submodule owns Heap+QjsHeap+Global, single Store, bytes.ops single source, inline zero-copy, amortized O1
-  Result:=Bind(JsPureHeapNewObject(FStore.Heap));
+  // decorator boundary: js.value.store owns Pure Heap/Global single source via pure.base/bytes.ops, quickjs.value decorates QjsHeap mirror via FFI single source, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW, Pure+QjsHeap composition eliminates double-heap coupling
+  Result:=Bind(JsPureHeapNewObject(FStore.Pure.Heap));
   Idx := HeapIndexOf(Result);
   QjsStoreSyncNewEntry(FStore, Idx, False, FCtx);
 end;
@@ -335,8 +335,8 @@ function TJsQuickJsContext.NewArray: TJsValue;
 var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: value submodule owns Heap+QjsHeap+Global, single Store, bytes.ops single source, inline zero-copy, amortized O1
-  Result:=Bind(JsPureHeapNewArray(FStore.Heap));
+  // decorator boundary: js.value.store owns Pure Heap/Global single source via pure.base/bytes.ops, quickjs.value decorates QjsHeap mirror via FFI single source, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW, Pure+QjsHeap composition eliminates double-heap coupling
+  Result:=Bind(JsPureHeapNewArray(FStore.Pure.Heap));
   Idx := HeapIndexOf(Result);
   QjsStoreSyncNewEntry(FStore, Idx, True, FCtx);
 end;
@@ -348,8 +348,8 @@ function TJsQuickJsContext.HasProp(const AObj: TJsValue; const AName: string): B
 var Idx: Integer; QRes: TJSQjsValue; P: PChar;
 begin
   EnsureNotClosed;
-  // decorator boundary: pure heap CONTRACT 主路径经 value Store.Heap, FFI 旁路经 Store.QjsHeap single source, bytes.ops零拷贝视图
-  Result := JsPureHeapHasProp(FStore.Heap, AObj, AName);
+  // decorator boundary: pure heap CONTRACT 主路径经 js.value.store Pure.Heap single source via pure.base/bytes.ops, FFI 旁路经 Store.QjsHeap single source via FFI, bytes.ops零拷贝视图, Pure+QjsHeap composition
+  Result := JsPureHeapHasProp(FStore.Pure.Heap, AObj, AName);
   if Result then Exit;
   Idx := HeapIndexOf(AObj);
   if (Idx >= 0) and (Idx < Length(FStore.QjsHeap)) and Assigned(JS_GetPropertyStrPtr) and (FCtx <> nil) then
@@ -375,8 +375,8 @@ function TJsQuickJsContext.DeleteProp(const AObj: TJsValue; const AName: string)
 var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: value submodule owns dual-heap delete, pure path via Store.Heap single source, mirror via Store.QjsHeap FFI single source
-  Result := JsPureHeapDeleteProp(FStore.Heap, AObj, AName);
+  // decorator boundary: js.value.store owns Pure.Heap single source via pure.base/bytes.ops, mirror via Store.QjsHeap FFI single source via quickjs.value, Pure+QjsHeap composition
+  Result := JsPureHeapDeleteProp(FStore.Pure.Heap, AObj, AName);
   Idx := HeapIndexOf(AObj);
   QjsStoreMirrorDeleteProp(FStore, FCtx, Idx, AName);
 end;
@@ -386,11 +386,11 @@ var
   LTmp: TJsStringArray;
 begin
   EnsureNotClosed;
-  // decorator boundary: FFI真堆枚举优先经 value Store.TryGetKeysFFI (bytes.ops zero-copy, inline, exactly-once Free), 失败回落纯堆 CONTRACT pure.base单源 via Store.Heap
+  // decorator boundary: FFI真堆枚举优先经 quickjs.value Store.TryGetKeysFFI (bytes.ops zero-copy, inline, exactly-once Free), 失败回落纯堆 CONTRACT js.value.store Pure.Heap single source via pure.base/bytes.ops
   Idx := HeapIndexOf(AObj);
   if QjsStoreTryGetKeysFFI(FStore, FCtx, Idx, LTmp) then Exit(LTmp);
-  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源)
-  Result := JsPureHeapGetKeys(FStore.Heap, AObj);
+  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源 via js.value.store)
+  Result := JsPureHeapGetKeys(FStore.Pure.Heap, AObj);
 end;
 function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
@@ -401,8 +401,8 @@ var Idx: Integer; QRes: TJSQjsValue;
 begin
   EnsureNotClosed;
   Idx := HeapIndexOf(AObj);
-  if Idx >= 0 then Exit(Bind(JsPureHeapGetProp(FStore.Heap, AObj, AName)));
-  // decorator boundary: FFI 真堆路径经 Store.QjsHeap single source, pure path经 Store.Heap, 零拷贝视图转 TJsValue via value submodule
+  if Idx >= 0 then Exit(Bind(JsPureHeapGetProp(FStore.Pure.Heap, AObj, AName)));
+  // decorator boundary: FFI 真堆路径经 Store.QjsHeap single source via quickjs.value FFI, pure path经 js.value.store Pure.Heap single source via pure.base, 零拷贝视图转 TJsValue via value.store, Pure+QjsHeap composition
   if Assigned(JS_GetPropertyStrPtr) and (FCtx <> nil) and (Idx >= 0) and (Idx < Length(FStore.QjsHeap)) then
   begin
     QRes := JS_GetPropertyStrPtr(FCtx, FStore.QjsHeap[Idx], PAnsiChar(AName));
@@ -420,9 +420,9 @@ procedure TJsQuickJsContext.SetProp(const AObj: TJsValue; const AName: string; c
 var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: value submodule owns dual-heap SetProp, pure via Store.Heap single source, mirror via Store.QjsHeap single source JS_SetPropertyStr, inline zero-copy, exactly-once Free不丢
+  // decorator boundary: js.value.store owns Pure.Heap single source via pure.base/bytes.ops, mirror via Store.QjsHeap single source JS_SetPropertyStr via quickjs.value FFI, inline zero-copy, exactly-once Free不丢, Pure+QjsHeap composition
   Idx := HeapIndexOf(AObj);
-  if Idx >= 0 then JsPureHeapSetProp(FStore.Heap, AObj, AName, AVal);
+  if Idx >= 0 then JsPureHeapSetProp(FStore.Pure.Heap, AObj, AName, AVal);
   QjsStoreMirrorSetProp(FStore, FCtx, Idx, AName, AVal);
 end;
 function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
@@ -467,7 +467,7 @@ procedure TJsQuickJsContext.Tick; begin if FClosed then Exit; EnsureThreadAffini
 procedure TJsQuickJsContext.CollectGarbage; begin if FClosed then Exit; EnsureThreadAffinity; if Assigned(JS_RunGCPtr) and (FRT<>nil) then JS_RunGCPtr(FRT); end;
 procedure TJsQuickJsContext.Close;
 begin
-  // stability: resource release幂等不丢 — value Store幂等Clear逐项JS_FreeValue+纯堆Clear via js.quickjs.value single source, FreeContext/FreeRuntime, JsPureClose复用; perf: inline路径复用TStringView零拷贝(bytes.ops单源BYTES_BUILDER_MIN_GROW均摊O1)
+  // stability: resource release幂等不丢 — js.value.store Pure幂等Clear + quickjs.value QjsHeap逐项JS_FreeValue single source via bytes.ops/BYTES_BUILDER_MIN_GROW均摊O1, FreeContext/FreeRuntime, JsPureClose复用; perf: inline路径复用TStringView零拷贝(bytes.ops单源), Pure+QjsHeap exactly-once Free不丢
   if FClosed then Exit;
   FClosed:=True;
   JsPureContextClose(FContextId);

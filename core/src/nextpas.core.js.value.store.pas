@@ -1,9 +1,10 @@
 unit nextpas.core.js.value.store;
 {**
- * @desc JS 值存储独立子模块 — 双堆装饰器下沉单源 (js.value 语义，独立于 quickjs 宿主).
- *       沉淀 pure Heap + QJS 镜像 + Global 三元，消除 Context 内双写耦合，装饰器边界显式拆分.
- *       Context 仅持单一 Store 字段，容量/镜像/枚举/集/删经本模块 single source  via bytes.ops+mem.dynarray，
- *       热点 inline/零拷贝，资源幂等不丢，守四件套 base←intf←value←门面 与 L0-L3，缺能力反哺 owner.
+ * @desc JS 值存储独立子模块 — 纯堆单源收敛 (js.value 语义，独立于 quickjs 宿主).
+ *       拥有 Heap 纯堆 + Global 门面，QJS 镜像下沉至 quickjs.value 装饰器，消除双写耦合.
+ *       职责显式拆分：pure.base 拥有堆实现 (JsPureHeap* via bytes.ops+mem.dynarray)，本模块拥有纯存储契约 (Heap/Global) 单源，
+ *       quickjs.value 仅装饰 QjsHeap 镜像 (容量/分配/FFI枚举/镜像Set/Delete).
+ *       Context 仅持单一 Store 字段 via 装饰器组合，守四件套 base←intf←value.store←门面 与 L0-L3，复用 bytes.ops 单源几何扩容与 text.view 零拷贝，热点 inline/零拷贝，资源幂等不丢，CONTRACT为准缺能力反哺 owner.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,100 +15,70 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.js.pure.base,
-  nextpas.core.js.quickjs.ffi,
   nextpas.core.text.view;
 
 type
-  TJsValueStore = nextpas.core.js.quickjs.value.TJsQjsValueStore;
+  TJsValueStore = record
+    Heap: TJsPureHeap;
+    Global: TJsValue;
+  end;
 
-procedure JsValueStoreInit(var S: TJsValueStore; AContextId: UInt64; ARuntime, ACtx: Pointer); inline;
-procedure JsValueStoreClear(var S: TJsValueStore; ACtx: Pointer); inline;
+procedure JsValueStoreInit(var S: TJsValueStore; AContextId: UInt64); inline;
+procedure JsValueStoreClear(var S: TJsValueStore); inline;
 function JsValueStoreFind(const S: TJsValueStore; const AObj: TJsValue): Integer; inline;
-procedure JsValueStoreEnsureCapacity(var S: TJsValueStore; ANeed: Integer); inline;
-procedure JsValueStoreSyncNewEntry(var S: TJsValueStore; AIdx: Integer; AIsArray: Boolean; ACtx: Pointer); inline;
-function JsValueStoreTryGetKeysFFI(const S: TJsValueStore; ACtx: Pointer; AIdx: Integer; out AKeys: TJsStringArray): Boolean; inline;
-procedure JsValueStoreMirrorSetProp(var S: TJsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string; const AVal: TJsValue); inline;
-procedure JsValueStoreMirrorDeleteProp(var S: TJsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string); inline;
 function JsValueStoreGlobal(const S: TJsValueStore): TJsValue; inline;
 function JsValueStoreHeapLength(const S: TJsValueStore): Integer; inline;
 function JsValueCStrLen(P: PAnsiChar): SizeUInt; inline;
 function JsValueView(P: PAnsiChar): TStringView; inline;
-function JsValueFromTJs(const S: TJsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-function JsValueToTJs(const S: TJsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 
 implementation
 
 uses
-  nextpas.core.js.quickjs.value;
+  nextpas.core.bytes.ops;
 
-procedure JsValueStoreInit(var S: TJsValueStore; AContextId: UInt64; ARuntime, ACtx: Pointer); inline;
+procedure JsValueStoreInit(var S: TJsValueStore; AContextId: UInt64); inline;
 begin
-  nextpas.core.js.quickjs.value.QjsStoreInit(S, AContextId, ARuntime, ACtx);
+  // owner boundary: pure.base owns Heap alloc single source via bytes.ops+mem.dynarray, inline zero-copy, single Store single source, no FFI, no double-heap coupling
+  // perf: inline thin-forward to pure.base JsPureHeapNewObject single source, zero-copy Bind, amortized O(1) via BYTES_BUILDER_MIN_GROW
+  S.Global := JsValueBindContext(JsPureHeapNewObject(S.Heap), AContextId);
 end;
 
-procedure JsValueStoreClear(var S: TJsValueStore; ACtx: Pointer); inline;
+procedure JsValueStoreClear(var S: TJsValueStore); inline;
 begin
-  nextpas.core.js.quickjs.value.QjsStoreClear(S, ACtx);
+  // stability: resource release幂等不丢 — 纯堆Clear single source via pure.base, inline poke single source BYTES_BUILDER_MIN_GROW均摊O1, zero-copy header poke
+  JsPureHeapClear(S.Heap);
+  S.Global := JsUndefinedValue;
 end;
 
 function JsValueStoreFind(const S: TJsValueStore; const AObj: TJsValue): Integer; inline;
 begin
-  Result := nextpas.core.js.quickjs.value.QjsStoreFind(S, AObj);
-end;
-
-procedure JsValueStoreEnsureCapacity(var S: TJsValueStore; ANeed: Integer); inline;
-begin
-  nextpas.core.js.quickjs.value.QjsStoreEnsureCapacity(S, ANeed);
-end;
-
-procedure JsValueStoreSyncNewEntry(var S: TJsValueStore; AIdx: Integer; AIsArray: Boolean; ACtx: Pointer); inline;
-begin
-  nextpas.core.js.quickjs.value.QjsStoreSyncNewEntry(S, AIdx, AIsArray, ACtx);
-end;
-
-function JsValueStoreTryGetKeysFFI(const S: TJsValueStore; ACtx: Pointer; AIdx: Integer; out AKeys: TJsStringArray): Boolean; inline;
-begin
-  Result := nextpas.core.js.quickjs.value.QjsStoreTryGetKeysFFI(S, ACtx, AIdx, AKeys);
-end;
-
-procedure JsValueStoreMirrorSetProp(var S: TJsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string; const AVal: TJsValue); inline;
-begin
-  nextpas.core.js.quickjs.value.QjsStoreMirrorSetProp(S, ACtx, AIdx, AName, AVal);
-end;
-
-procedure JsValueStoreMirrorDeleteProp(var S: TJsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string); inline;
-begin
-  nextpas.core.js.quickjs.value.QjsStoreMirrorDeleteProp(S, ACtx, AIdx, AName);
+  // perf: inline thin-forward to pure.base JsPureHeapFind single source (hash>64 O1 via pure.value single source), zero-copy, inline hot path
+  Result := JsPureHeapFind(S.Heap, AObj);
 end;
 
 function JsValueStoreGlobal(const S: TJsValueStore): TJsValue; inline;
 begin
-  Result := nextpas.core.js.quickjs.value.QjsStoreGlobal(S);
+  // perf: inline zero-copy value return, single source Global gate, no heap scan
+  Result := S.Global;
 end;
 
 function JsValueStoreHeapLength(const S: TJsValueStore): Integer; inline;
 begin
-  Result := nextpas.core.js.quickjs.value.QjsStoreHeapLength(S);
+  // perf: inline zero-copy Length read, no scan, O(1)
+  Result := Length(S.Heap);
 end;
 
 function JsValueCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
-  Result := nextpas.core.js.quickjs.value.QjsCStrLen(P);
+  // perf: inline thin-forward to bytes.ops.AnsiPtrLen single source (zero-copy view length, single scan, no System.StrLen分叉), inline hot path, reused by quickjs.value single source
+  Result := nextpas.core.bytes.ops.AnsiPtrLen(P);
 end;
 
 function JsValueView(P: PAnsiChar): TStringView; inline;
 begin
-  Result := nextpas.core.js.quickjs.value.QjsView(P);
-end;
-
-function JsValueFromTJs(const S: TJsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-begin
-  Result := nextpas.core.js.quickjs.value.QjsFromTJsValue(S, ACtx, AVal);
-end;
-
-function JsValueToTJs(const S: TJsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
-begin
-  Result := nextpas.core.js.quickjs.value.QjsToTJsValue(S, ACtx, ACtxtId, V);
+  // perf: inline single scan via JsValueCStrLen (bytes.ops AnsiPtrLen single source) → zero-copy TStringView, inline hot path, no重复扫描
+  if P = nil then Exit(TStringView.Empty);
+  Result := TStringView.Create(P, JsValueCStrLen(P));
 end;
 
 end.
