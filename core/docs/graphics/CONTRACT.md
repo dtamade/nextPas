@@ -171,6 +171,7 @@ end;
 | 编解码 round-trip + 错误注入 + fuzz | `tests/nextpas.core.image/test_image_*`（PNG/JPEG/WebP golden + CRC/截断 + `test_image_fuzz`） | 稳定性/完整性 |
 | 路径布尔/描边 + Tess 双精度 | `tests/nextpas.core.vector/test_vector_*` | 模块化 |
 | 光栅 golden PNG（容差 ≤1，锁版本） | `tests/nextpas.core.canvas/test_canvas_raster`（离屏 → PNG → 像素比对） | 完整性 |
+| 海报 512×256 固化 `md5 27b73e0d9a765c491bee8c85b367cef2`（svg-import 后 det 确定性：filter 0 + Deflate 固定 + Stride64 `ToCompact` 零拷贝 `bytes.ops` 单源，`inline` 行拷贝） | `examples/graphics/demo_vector_poster.lpr` → `core/tests/nextpas.core.graphics/test_poster_golden` md5 锁 + `benchmarks/nextpas.core.canvas/golden/poster_512x256.png` | 完整性 |
 | 滤镜图序列化 + `Bake` 并行 | `tests/nextpas.core.effect/test_effect_graph` | 复用度 |
 | BoxBlur 16M/32M/Tile64/AlignUp64 + heaptrc0 不变量 | `tests/nextpas.core.graphics/test_graphics_base` + `tests/nextpas.core.effect/test_effect_graph` + `source-contract` | 稳定性 |
 | 文本 GlyphRun | `tests/nextpas.core.graphics/test_graphics_text` | 复用度 |

@@ -12,6 +12,9 @@
  *   禁止通过 Const* 野指针写入（COW 隔离绕过）。
  * 只读约束：Const* 返回只读视图，禁止写入；需紧凑数据用 ToCompact。
  * L2，仅 L0-L1，零 RTL；Premultiply 复用 simd.raster 批量接口。
+ * 性能：AlignUp64/IsEmpty/BytePerPixel/Clone/Const* 为 inline；ToCompact/FromCompact
+ *   逐行 Move 零拷贝复用 bytes.ops 单源语义（Stride 64B 已对齐时整块 Move，否则逐行）。
+ *   512×256 海报固化 md5 27b73e0d9a765c491bee8c85b367cef2 依赖此确定性紧凑化。
  *}
 unit nextpas.core.image.base;
 
