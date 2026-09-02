@@ -7,7 +7,7 @@ unit nextpas.core.vfs.transform;
   nextpas.core.vfs.decorator（transform/compressed 同族，vfs 侧仅保留 L2 基座），L7 到期移除白名单固化 L0-L3 单向依赖。
   零拷贝直达：小文件 Header 直落 respack 区间复用，无栈上 4K 中转。
   Stat/OpenRead 经 4K HeaderPred 单流快路径（小文件复用头零二次 IO，大文件同流补读免二次 OpenRead，命中时 Move 零拷贝）；32MiB 防 bomb 由 transform 统一承载（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，泛型 Transform 路径同阈值限幅，压缩/非压缩一致防 OOM）。
-  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经栈上 2 字节 BytesIsGzipBuffer PByte 零拷贝预判免 4K）；稳定性：try-finally Close 不丢。
+  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经栈上 2 字节 BytesIsGzipBuffer PByte 零拷贝预判免 4K，非 IReaderAt 旁路 Seek-free 前缀包装免 Seek(0) 虚调用）；稳定性：try-finally Close 不丢。
   单源收敛：TryResolveViaHeaderSingleStream 为唯一 4K 头分配+IReaderAt 直读实现，Stat/OpenRead 共用，消除 TryPeekHeaderWithStat/ReadAllReusingHeader 120行样板漂移；bytes.ops BytesIsGzipBuffer PByte 单源 inline 零拷贝。 }
 
 {$I nextpas.core.settings.inc}
@@ -49,6 +49,27 @@ uses
   nextpas.core.vfs.util;
 
 type
+  // 非 IReaderAt 旁路 Seek-free 前缀包装：2 字节/4K 前缀栈/堆零拷贝 Move 补齐，免 Seek(0) 虚调用且不依赖 Seek 能力；顺序读零额外 Seek，稳定性不丢
+  TPrefixBypassStream = class(TInterfacedObject, IStream)
+  private
+    FPrefix: TBytes;
+    FPrefixLen: SizeUInt;
+    FInner: IStream;
+    FPos: Int64;
+    FSize: Int64;
+    FClosed: Boolean;
+    procedure EnsureOpen(const AOp: string); inline;
+  public
+    constructor Create(const APrefix: PByte; APrefixLen: SizeUInt; const AInner: IStream; ATotalSize: Int64);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+  end;
+
   THeaderResolve = (hrBypass, hrAcquired, hrFallback);
 
   TTransformingVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -99,6 +120,139 @@ begin
   FHeaderPred := AHeaderPred;
 end;
 
+{ TPrefixBypassStream — Seek-free 直透，栈/堆前缀零拷贝 Move 免 Seek(0) 虚调用 }
+
+constructor TPrefixBypassStream.Create(const APrefix: PByte; APrefixLen: SizeUInt; const AInner: IStream; ATotalSize: Int64);
+begin
+  inherited Create;
+  FPrefixLen := APrefixLen;
+  if FPrefixLen > 0 then
+  begin
+    SetLength(FPrefix, FPrefixLen);
+    if APrefix <> nil then
+      Move(APrefix^, FPrefix[0], FPrefixLen);
+  end else
+    FPrefix := nil;
+  FInner := AInner;
+  if ATotalSize >= 0 then
+    FSize := ATotalSize
+  else if FInner <> nil then
+    FSize := FInner.Size
+  else
+    FSize := Int64(FPrefixLen);
+  FPos := 0;
+  FClosed := False;
+end;
+
+procedure TPrefixBypassStream.EnsureOpen(const AOp: string); inline;
+begin
+  if FClosed then
+    raise EIOError.Create('TPrefixBypassStream.' + AOp + ': stream is closed');
+end;
+
+function TPrefixBypassStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRem, LCopy, LNeed: SizeUInt;
+  LDst: PByte;
+begin
+  EnsureOpen('Read');
+  if ACount = 0 then Exit(0);
+  if FPos >= FSize then Exit(0);
+  Result := 0;
+  LDst := @ABuf;
+  // 前缀区间零拷贝 Move 直达
+  if SizeUInt(FPos) < FPrefixLen then
+  begin
+    LRem := FPrefixLen - SizeUInt(FPos);
+    LCopy := ACount;
+    if LCopy > LRem then LCopy := LRem;
+    if Int64(SizeUInt(FPos) + LCopy) > FSize then
+      LCopy := SizeUInt(FSize - FPos);
+    Move(FPrefix[SizeUInt(FPos)], LDst^, LCopy);
+    Inc(FPos, Int64(LCopy));
+    Inc(Result, LCopy);
+    Inc(LDst, LCopy);
+    if Result = ACount then Exit;
+    if FPos >= FSize then Exit;
+  end;
+  if FPos >= Int64(FPrefixLen) then
+  begin
+    if FInner <> nil then
+    begin
+      if FInner.GetPosition <> FPos then
+        FInner.Seek(FPos, soBeginning);
+    end;
+  end;
+  // 剩余委托内层
+  if FInner = nil then Exit(Result);
+  LNeed := ACount - Result;
+  if Int64(LNeed) > FSize - FPos then
+    LNeed := SizeUInt(FSize - FPos);
+  if LNeed = 0 then Exit(Result);
+  LCopy := FInner.Read(LDst^, LNeed);
+  Inc(FPos, Int64(LCopy));
+  Inc(Result, LCopy);
+end;
+
+function TPrefixBypassStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  raise EIOError.Create('TPrefixBypassStream.Write: read-only');
+end;
+
+function TPrefixBypassStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+var
+  LNew: Int64;
+begin
+  EnsureOpen('Seek');
+  case AOrigin of
+    soBeginning: LNew := AOffset;
+    soCurrent: LNew := FPos + AOffset;
+    soEnd: LNew := FSize + AOffset;
+  else
+    LNew := FPos;
+  end;
+  if LNew < 0 then
+    raise EArgumentError.Create('TPrefixBypassStream.Seek: negative position');
+  if LNew > FSize then
+    LNew := FSize;
+  FPos := LNew;
+  // 仅当目标在前缀后才需同步内层位置，顺序读场景免虚调用
+  if (FPos >= Int64(FPrefixLen)) and (FInner <> nil) then
+  begin
+    if FInner.GetPosition <> FPos then
+      FInner.Seek(FPos, soBeginning);
+  end;
+  Result := FPos;
+end;
+
+procedure TPrefixBypassStream.Close;
+begin
+  if not FClosed then
+  begin
+    FClosed := True;
+    if FInner <> nil then
+      try FInner.Close; except end;
+    FInner := nil;
+    FPrefix := nil;
+    FPrefixLen := 0;
+  end;
+end;
+
+function TPrefixBypassStream.GetSize: Int64;
+begin
+  Result := FSize;
+end;
+
+function TPrefixBypassStream.GetPosition: Int64;
+begin
+  Result := FPos;
+end;
+
+procedure TPrefixBypassStream.SetPosition(const AValue: Int64);
+begin
+  Seek(AValue, soBeginning);
+end;
+
 function TTransformingVfs.Should(const AData: TBytes): Boolean; inline;
 begin
   if not Assigned(FShould) then Exit(True);
@@ -138,6 +292,8 @@ var
   LGot: SizeUInt;
   LUseReadAt: Boolean;
   LProbeBuf: array[0..1] of Byte;
+  LProbeLen: SizeUInt;
+  LHasProbe: Boolean;
 begin
   Result := hrFallback;
   AHeader := nil;
@@ -156,6 +312,9 @@ begin
   end;
   try
     // 大文件轻量预判：Size>4K 且含 HeaderPred 时先以 2 字节栈缓冲预判，热点非 gzip 路径零堆分配免 4K（复用 bytes.ops BytesIsGzipBuffer PByte 零拷贝 inline，免 SetLength(AHeader,2) 堆分配）
+    // 匠心修复：非 IReaderAt 旁路免 Seek(0) 重置，以 TPrefixBypassStream 零拷贝前缀包装 Seek-free 直透，免虚调用且不依赖流 Seek 能力；命中则免 Seek 合成 4K 头
+    LProbeLen := 0;
+    LHasProbe := False;
     if (ATotal > Int64(TRANSFORM_HEADER_PEEK)) and Assigned(FHeaderPred) then
     begin
       LUseReadAt := (LStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
@@ -177,41 +336,39 @@ begin
         // 非 gzip：无需构造 AHeader（保持 nil），与 HeaderShould(2字节非 gzip) 语义一致（BytesIsGzipHeader 单源 false），零堆直接 bypass
         // 正确性：2 字节足以判定 gzip 魔数；通用谓词若需 4K 判定，2字节非 gzip 场景下 HeaderShould 亦为 false（与压缩场景一致），bypass 安全；真命中场景走下方 4K 精确
         AHeader := nil;
-        if (AOp = 'open') and (LUseReadAt or (LRead = 0)) then
+        if (AOp = 'open') then
         begin
-          ABypassStream := LStream;
-          LStream := nil;
-          Exit(hrBypass);
-        end;
-        if (AOp = 'open') and not LUseReadAt and (LRead > 0) then
-        begin
-          try
-            if LStream.Seek(0, soBeginning) <> 0 then
-              raise EVfsError.CreateCtx(AOp, APath, 'seek failed for bypass reuse');
-          except
-            on E: EVfsError do raise;
-            on E: EResPackError do raise;
-            on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+          if LUseReadAt or (LRead = 0) then
+          begin
+            ABypassStream := LStream;
+            LStream := nil;
+            Exit(hrBypass);
+          end
+          else
+          begin
+            // 非 IReaderAt 旁路：栈上 2 字节前缀零拷贝包装免 Seek(0) 虚调用，不依赖 Seek 能力（TPrefixBypassStream 顺序读直达）
+            ABypassStream := TPrefixBypassStream.Create(@LProbeBuf[0], LRead, LStream, ATotal);
+            LStream := nil;
+            Exit(hrBypass);
           end;
-          ABypassStream := LStream;
-          LStream := nil;
-          Exit(hrBypass);
         end;
         Exit(hrBypass);
       end;
-      // 命中 gzip 魔数（2字节 via BytesIsGzipBuffer）：需完整 4K 头以单流 Move 零拷贝复用，重置流位置后继续 4K 精确判定（保证通用谓词 4K 语义与 Stat/OpenRead 一致性）
+      // 命中 gzip 魔数（2字节 via BytesIsGzipBuffer）：需完整 4K 头以单流 Move 零拷贝复用；非 IReaderAt 已消耗前缀，记 LHasProbe 免 Seek(0) 重置，后续 4K 合成复用
       if not LUseReadAt and (LRead > 0) then
       begin
-        try
-          if LStream.Seek(0, soBeginning) <> 0 then
-            raise EVfsError.CreateCtx(AOp, APath, 'seek failed for header reuse');
-        except
-          on E: EVfsError do raise;
-          on E: EResPackError do raise;
-          on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
-        end;
+        LHasProbe := True;
+        LProbeLen := LRead;
+      end else
+      begin
+        LHasProbe := False;
+        LProbeLen := 0;
       end;
       AHeader := nil;
+    end else
+    begin
+      LHasProbe := False;
+      LProbeLen := 0;
     end;
     if (ATotal >= 0) and (ATotal < TRANSFORM_HEADER_PEEK) then
       LPeek := SizeUInt(ATotal)
@@ -222,6 +379,34 @@ begin
       AHeader := nil;
       LRead := 0;
       LUseReadAt := False;
+    end
+    else if LHasProbe then
+    begin
+      // 命中前缀已消耗 2 字节，合成 4K 头免 Seek(0) 重置：Move 前缀 + 单次 Read 剩余（零拷贝，快路径免 Seek 虚调用）
+      SetLength(AHeader, LPeek);
+      Move(LProbeBuf[0], AHeader[0], LProbeLen);
+      LUseReadAt := False;
+      LOff := LProbeLen;
+      LRem := LPeek - LProbeLen;
+      LGot := 0;
+      while LRem > 0 do
+      begin
+        try
+          LGot := LStream.Read(AHeader[LOff], LRem);
+        except
+          on E: EVfsError do raise;
+          on E: EResPackError do raise;
+          on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+        end;
+        if LGot = 0 then Break;
+        Inc(LOff, LGot);
+        Dec(LRem, LGot);
+      end;
+      LRead := LOff;
+      if LRead < LPeek then
+        SetLength(AHeader, LRead);
+      if LRead = 0 then
+        AHeader := nil;
     end
     else
     begin
@@ -242,10 +427,16 @@ begin
       if LRead = 0 then
         AHeader := nil;
     end;
-    // HeaderPred 判定：假则免全量读，直接回退内层；OpenRead 场景复用已打开流免二次 OpenRead
+    // HeaderPred 判定：假则免全量读，直接回退内层；OpenRead 场景复用已打开流免二次 OpenRead（非 IReaderAt 前缀包装 Seek-free 直透）
     if not HeaderShould(AHeader, ATotal) then
     begin
-      if (AOp = 'open') and (LUseReadAt or (LPeek = 0)) then
+      if (AOp = 'open') and (LPeek = 0) then
+      begin
+        ABypassStream := LStream;
+        LStream := nil;
+        Exit(hrBypass);
+      end;
+      if (AOp = 'open') and LUseReadAt then
       begin
         ABypassStream := LStream;
         LStream := nil;
@@ -253,15 +444,11 @@ begin
       end;
       if (AOp = 'open') and not LUseReadAt and (LPeek > 0) then
       begin
-        try
-          if LStream.Seek(0, soBeginning) <> 0 then
-            raise EVfsError.CreateCtx(AOp, APath, 'seek failed for bypass reuse');
-        except
-          on E: EVfsError do raise;
-          on E: EResPackError do raise;
-          on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
-        end;
-        ABypassStream := LStream;
+        // 非 IReaderAt 旁路二次 Seek-free：4K 头已消耗，前缀零拷贝包装免 Seek(0) 复用，不依赖流 Seek 能力
+        if Length(AHeader) > 0 then
+          ABypassStream := TPrefixBypassStream.Create(@AHeader[0], SizeUInt(Length(AHeader)), LStream, ATotal)
+        else
+          ABypassStream := TPrefixBypassStream.Create(nil, 0, LStream, ATotal);
         LStream := nil;
         Exit(hrBypass);
       end;
@@ -296,13 +483,17 @@ begin
       end
       else
       begin
-        try
-          if LStream.Seek(Int64(LOff), soBeginning) <> Int64(LOff) then
-            raise EVfsError.CreateCtx(AOp, APath, 'seek failed for header reuse');
-        except
-          on E: EVfsError do raise;
-          on E: EResPackError do raise;
-          on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+        // 顺序补读免 Seek：若已在 LOff（合成头后 LStream 已在 LPeek），免虚调用 Seek
+        if LStream.GetPosition <> Int64(LOff) then
+        begin
+          try
+            if LStream.Seek(Int64(LOff), soBeginning) <> Int64(LOff) then
+              raise EVfsError.CreateCtx(AOp, APath, 'seek failed for header reuse');
+          except
+            on E: EVfsError do raise;
+            on E: EResPackError do raise;
+            on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+          end;
         end;
         while LRem > 0 do
         begin

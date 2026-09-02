@@ -24,6 +24,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms;
 
 type
@@ -137,6 +138,7 @@ type
     Entry: TEntryInfo;
     Prio: Integer;
   end;
+  TOverlayTempArray = array of TOverlayTemp;
 
 { 单源排序比较：Name 字节序 + Prio 优先级；复用 bytes.ops 零拷贝 VfsNameCompare inline }
 function CompareOverlayTemp(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
@@ -152,12 +154,22 @@ begin
   Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
 end;
 
+{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；资源释放不丢（Temp 局部托管异常自动释放） }
+procedure OverlayEnsureCap(var AArr: TOverlayTempArray; const ANeed: SizeInt); inline;
+var
+  LCap: SizeUInt;
+begin
+  if ANeed <= Length(AArr) then Exit;
+  LCap := BytesNextCapacity(SizeUInt(Length(AArr)), SizeUInt(ANeed));
+  SetLength(AArr, SizeInt(LCap));
+end;
+
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
   I, J, TempN: Integer;
   Cur: TEntryArray;
   LStat: TStatInfo;
-  Temp: array of TOverlayTemp;
+  Temp: TOverlayTempArray;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -176,8 +188,8 @@ begin
     try Cur := FList[I].List(ADirPath);
     except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
     if Length(Cur) = 0 then Continue;
-    if TempN + Length(Cur) > Length(Temp) then
-      SetLength(Temp, TempN + Length(Cur));
+    { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1)；扇出限界 Cap≤N  via mount 同款模板，inline 零拷贝单 Move，消多层 O(n²) realloc }
+    OverlayEnsureCap(Temp, TempN + Length(Cur));
     for J := 0 to High(Cur) do
     begin
       Temp[TempN].Entry := Cur[J];

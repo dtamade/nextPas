@@ -648,7 +648,7 @@ begin
 end;
 
 procedure EmbeddedHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
-  ASourceIdx: SizeInt; AUserData: Pointer);
+  ASourceIdx: SizeInt; AUserData: Pointer); inline;
 var
   Ctx: PEmbeddedListCtx;
   Cap: SizeInt;
@@ -656,15 +656,11 @@ begin
   Ctx := PEmbeddedListCtx(AUserData);
   if Ctx^.OutN >= Length(Ctx^.Result) then
   begin
-    Cap := Length(Ctx^.Result);
-    if Cap = 0 then Cap := 16;
-    while Cap <= Ctx^.OutN do Cap := Cap * 2;
+    Cap := SizeInt(BytesNextCapacity(SizeUInt(Length(Ctx^.Result)), SizeUInt(Ctx^.OutN + 1)));
     if Cap > Ctx^.N then Cap := Ctx^.N;
     SetLength(Ctx^.Result, Cap);
   end;
-  SetLength(Ctx^.Result[Ctx^.OutN].Name, AChildSpan.Len);
-  if AChildSpan.Len > 0 then
-    Move(AChildSpan.Data^, Ctx^.Result[Ctx^.OutN].Name[1], AChildSpan.Len);
+  Ctx^.Result[Ctx^.OutN].Name := SpanToString(AChildSpan); { bytes.ops 单源 inline 零拷贝+单 Move，批量池化外层 BytesNextCapacity }
   if AFullSpan.Len = AChildSpan.Len then
   begin
     Ctx^.Result[Ctx^.OutN].Size := Int64(Ctx^.Owner.FEntries[ASourceIdx].Size);

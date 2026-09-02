@@ -53,14 +53,12 @@ function VfsIsRoot(const APath: string): Boolean; inline;
 function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
 function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 
-{ 路径字节序比较（'/' 分隔语义下与逐字节一致）；三后端共用同一序定义
-  复用 bytes.ops 单源 SpanCompare（zero-copy TByteSpan + CompareBytesOrdered），inline。 }
+{ 路径字节序比较：三后端共用同一序定义（bytes.ops 单源，见上）。 }
 function VfsNameCompare(const AA, AB: string): Integer; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
-  避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度（仅 L0 依赖）。
-  非 inline 权衡：前缀/比较族为热路径零拷贝（SpanStartsWith/SpanCompare via bytes.ops，O(log n+k) 高频调用，inline 消除调用开销并内联 MemEqual/CompareBytesOrdered）
-  故 inline；而 ETag 含堆分配(SetLength+hex 循环)主导开销，inline 仅膨胀代码无可测吞吐增益，且 FPC 对 untyped/open-array 参的 inline 存在 codegen/内联失败风险，故保持非 inline 以稳尺寸与可维护性。 }
+  避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度。
+  非 inline 权衡：前缀/比较族已 inline（见上），ETag 含堆分配主导开销不 inline 以稳尺寸。 }
 function VfsETagStrong(const ASize, AModTime: Int64): string;
 function VfsETagFNV(const AHash: UInt32): string;
 
@@ -71,22 +69,15 @@ procedure VfsSortEntries(var AItems: TEntryArray);
 procedure VfsDedupSortedEntries(var AItems: TEntryArray);
 
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
-  输入只含文件路径（memtree/respack 均不存目录条目）；ADirPrefix 为
-  'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描：LowerBound 二分定位 +
-  前缀连续段 Early-Break（k=子树扇出），零分配 SpanStartsWith 前缀判定，
-  Child 去重经 TByteSpan 视图 SpanEqual 零拷贝（仅唯一子项时 Move 物化零 Copy），热路径
-  零小堆分配。单源收口：VfsEnumerateChildSpans 为唯一 LowerBound+SpanStartsWith+Early-Break+16倍增+Move 实现（bytes.ops 单源 inline 零拷贝，derive.inc 仅历史兼容）；
-  VfsDeriveChildNames* 为适配薄壳经 getter/handler 委托该单源（string 零拷贝视图 vs Span 直视），数值与分配策略单点收敛，消除二分/前缀扫描手写重复漂移。 }
+  输入只含文件路径；ADirPrefix 为 'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描。
+  单源 VfsEnumerateChildSpans（derive.inc 仅历史兼容），VfsDeriveChildNames* 为适配薄壳。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
-{ 零拷贝 Span 版本：ASpans 已为有序 TByteSpan（直指 FRp/字符串存储），ADirPrefix 同上；
-  单源委托 VfsEnumerateChildSpans（bytes.ops inline 零拷贝，cached PrevSpan/IsFirst 去重无 per-iteration Result 字符串寻址，derive.inc 仅历史兼容 shim），
-  embedded 零拷贝路径直接复用，无额外 string 落地；双版本 16 倍增限界 Cap≤N 单源 }
+{ 零拷贝 Span 版本：ASpans 有序直指存储，ADirPrefix 同上；单源 VfsEnumerateChildSpans。 }
 function VfsDeriveChildNamesFromSpans(const ASpans: array of TByteSpan;
   const ADirPrefix: string): TVfsNameArray;
 
-{ 有序区间扫描零拷贝通用模板：LowerBound 二分+SpanStartsWith Early-Break+SpanEqual 去重，单源 bytes.ops inline，扇出由调用方限界 16 倍增 Cap≤N（单源寄居 VfsEnumerateChildSpans，derive.inc 历史兼容）。
-  供 memtree/embedded List 复用，零拷贝 TByteSpan 直指存储，无 Spans O(n) 堆分配，O(k) 直取无二次二分；VfsDerive* 经同一单源委托，资源释放不丢（调用方持有 Result）。 }
+{ 有序区间扫描通用模板：供 memtree/embedded List 复用，VfsDerive* 经同一单源委托，资源释放不丢。 }
 type
   TVfsSpanGetter = function(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
   TVfsChildHandler = procedure(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
@@ -227,7 +218,7 @@ begin
 end;
 
 procedure DeriveCollectHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
-  ASourceIdx: SizeInt; AUserData: Pointer);
+  ASourceIdx: SizeInt; AUserData: Pointer); inline;
 var
   Ctx: PDeriveCollectCtx;
   Cap: SizeInt;
@@ -237,20 +228,15 @@ begin
   Res := Ctx^.ResultPtr;
   if Ctx^.OutN >= Length(Res^) then
   begin
-    Cap := Length(Res^);
-    if Cap = 0 then Cap := 16;
-    while Cap <= Ctx^.OutN do Cap := Cap * 2;
+    Cap := SizeInt(BytesNextCapacity(SizeUInt(Length(Res^)), SizeUInt(Ctx^.OutN + 1)));
     if Cap > Ctx^.N then Cap := Ctx^.N;
     SetLength(Res^, Cap);
   end;
-  SetLength(Res^[Ctx^.OutN], AChildSpan.Len);
-  if AChildSpan.Len > 0 then
-    Move(AChildSpan.Data^, Res^[Ctx^.OutN][1], AChildSpan.Len);
+  Res^[Ctx^.OutN] := SpanToString(AChildSpan); { bytes.ops 单源 inline 零拷贝视图+单 Move 物化，批量池化外层 BytesNextCapacity }
   Inc(Ctx^.OutN);
 end;
 
-{ 单源收口：唯一的 LowerBound 二分 + SpanStartsWith 前缀扫描 + '/' 分段 + SpanEqual 去重实现。
-  热路径复用 bytes.ops 单源 inline 零拷贝（SpanCompare/SpanStartsWith/SpanEqual → MemEqual/CompareBytesOrdered），O(log n+k)，inline 消除调用开销；资源释放不丢。 }
+{ 单源：LowerBound + 前缀扫描 + '/' 分段 + 去重；资源释放不丢。 }
 procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
   AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
   AHandlerData: Pointer);
