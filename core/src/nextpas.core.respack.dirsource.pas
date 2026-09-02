@@ -369,39 +369,61 @@ end;
 function ResPackEntriesFromDir(const ARoot: string;
   const AInclude: TResPackIncludeFunc): TResPackDirEntries;
 var
-  Ctx: TDirContext;
+  Ctx: TStreamContext;
   RootClean: string;
+  I: SizeUInt;
 begin
   Result.Entries := nil;
   Result.Contents := nil;
   { 单源收口：尾斜杠归一复用 nextpas.core.path.ExcludeTrailingPathDelimiter
     （内部 FsPathTrimSep → platform_path_trim_sep 单源，原地去重 '\\'/'/'，保留根 '/'，
-    inline 零额外分配，替代手写 while Delete O(n) 多次移动）。 }
+    inline 零额外分配，替代手写 while Delete O(n) 多次移动）。
+    流式mmap 单源：WalkProcStream/MmapOpen 零拷贝，64MiB 限额防 2× 堆 OOM，BytesCopy 至 Contents 锚点。 }
   RootClean := ExcludeTrailingPathDelimiter(ARoot);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
     raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
       + ARoot + '"');
 
   Ctx.Root := RootClean;
-  Ctx.RootPrefixLen := Length(RootClean);
   Ctx.Include := AInclude;
   Ctx.Entries := nil;
-  Ctx.Bytes := nil;
+  Ctx.Maps := nil;
   Ctx.Count := 0;
   Ctx.Cap := 0;
   Ctx.Total := 0;
   Ctx.Failed := False;
   Ctx.FailMsg := '';
-  WalkEx(RootClean, @WalkProc, @Ctx);
-  if Ctx.Failed then
-    raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
-  if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
-  begin
-    SetLength(Ctx.Entries, Ctx.Count);
-    SetLength(Ctx.Bytes, Ctx.Count);
+  try
+    WalkEx(RootClean, @WalkProcStream, @Ctx);
+    if Ctx.Failed then
+      raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
+    if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
+    begin
+      SetLength(Ctx.Entries, Ctx.Count);
+      SetLength(Ctx.Maps, Ctx.Count);
+    end;
+    if Ctx.Total > SizeUInt(64) * 1024 * 1024 then
+      raise EResPackTooLarge.Create('deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
+    SetLength(Result.Entries, Ctx.Count);
+    SetLength(Result.Contents, Ctx.Count);
+    for I := 0 to Ctx.Count - 1 do
+    begin
+      Result.Entries[I].Path := Ctx.Entries[I].Path;
+      Result.Entries[I].DataSize := Ctx.Entries[I].DataSize;
+      Result.Entries[I].ModTime := Ctx.Entries[I].ModTime;
+      SetLength(Result.Contents[I], SizeInt(Ctx.Entries[I].DataSize));
+      if Ctx.Entries[I].DataSize > 0 then
+      begin
+        BytesCopy(@Result.Contents[I][0], Ctx.Entries[I].Data, Ctx.Entries[I].DataSize);
+        Result.Entries[I].Data := @Result.Contents[I][0];
+      end
+      else
+        Result.Entries[I].Data := nil;
+    end;
+  finally
+    SetLength(Ctx.Maps, 0);
+    SetLength(Ctx.Entries, 0);
   end;
-  Result.Entries := Ctx.Entries;
-  Result.Contents := Ctx.Bytes;   { 锚点随 bundle 逃逸，生命期与 Entries 绑定；大包请优先流式mmap 以避 2× 峰值 }
 end;
 
 procedure ResPackBuildStreamFromDir(const ARoot: string;
@@ -447,40 +469,38 @@ end;
 function ResPackBuildFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): TResPackBlob;
 var
-  Ctx: TStreamContext;
-  RootClean: string;
+  SinkBuf: TBytes;
+  SinkLen: SizeUInt;
+  SinkCap: SizeUInt;
+  SinkProc: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单源复用：WalkEx 收集 mmap 视图后直接复用 writer 门面 ResPackBuild 单源（布局/头/槽间隙/数据/digest 全链路于 writer.builder/layout 单源，零双份维护，bytes.ops BytesCopy/BytesZero inline 零拷贝）；消 writer.pas 约70行 GetMem+FillHead+BytesZero+BytesCopy+digest 回填重复组装，布局后段单源防漂移；峰值 ~1×+头（mmap 零堆拷贝），接口锚点 try..finally 释放不丢 }
-  RootClean := ExcludeTrailingPathDelimiter(ARoot);
-  if (not Exists(RootClean)) or (not IsDir(RootClean)) then
-    raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
-      + ARoot + '"');
-  Ctx.Root := RootClean;
-  Ctx.Include := AInclude;
-  Ctx.Entries := nil;
-  Ctx.Maps := nil;
-  Ctx.Count := 0;
-  Ctx.Cap := 0;
-  Ctx.Total := 0;
-  Ctx.Failed := False;
-  Ctx.FailMsg := '';
-  try
-    WalkEx(RootClean, @WalkProcStream, @Ctx);
-    if Ctx.Failed then
-      raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
-    if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
+  { 单源复用：ResPackBuildStreamFromDir 管线 + BytesNextCapacity sink 收集，零重复 WalkEx/ResPackBuild 组装；
+    布局/头/槽间隙/数据/digest 全链路于 writer.builder/layout 单源，BytesCopy/BytesZero inline 零拷贝；
+    峰值 ~1×+头（mmap 零堆拷贝），接口锚点由 stream 内层 try..finally 释放不丢，sink 侧 BytesNextCapacity 指数扩容消 O(n²)。 }
+  SinkBuf := nil;
+  SinkLen := 0;
+  SinkCap := 0;
+  SinkProc :=
+    procedure(const AData: PByte; const ASize: SizeUInt)
     begin
-      SetLength(Ctx.Entries, Ctx.Count);
-      SetLength(Ctx.Maps, Ctx.Count);
+      if ASize = 0 then Exit;
+      if SinkLen + ASize > SinkCap then
+      begin
+        SinkCap := BytesNextCapacity(SinkCap, SinkLen + ASize);
+        SetLength(SinkBuf, SinkCap);
+      end;
+      BytesCopy(@SinkBuf[SinkLen], AData, ASize);
+      Inc(SinkLen, ASize);
     end;
-    Result := ResPackBuild(Ctx.Entries, AOpts);
-  finally
-    SetLength(Ctx.Maps, 0);
-    SetLength(Ctx.Entries, 0);
-  end;
+  ResPackBuildStreamFromDir(ARoot, AOpts, SinkProc, AInclude);
+  if SinkLen = 0 then Exit;
+  GetMem(Result.Data, SinkLen);
+  Result.Size := SinkLen;
+  Result.Owned := True;
+  BytesCopy(Result.Data, @SinkBuf[0], SinkLen);
 end;
 
 function ResPackBuildStreamSizeFromDir(const ARoot: string;
