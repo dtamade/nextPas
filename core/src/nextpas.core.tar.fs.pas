@@ -100,8 +100,8 @@ var
   W: TTarWriter;
 begin
   Result := nil;
-  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源 + archive 单源 CreateArchiveBuilderSink，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
-  LBuilder := CreateBytesBuilder(4096);
+  // IBytesBuilder 直写切片，复用 bytes.builder 几何扩容单源(C_TAR_BUILDER_INITIAL_CAPACITY 4K 页对齐)+ archive 单源 CreateArchiveBuilderSink，消除 CreateBytesStream+ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
+  LBuilder := CreateBytesBuilder(C_TAR_BUILDER_INITIAL_CAPACITY);
   LSink := CreateArchiveBuilderSink(LBuilder);
   W := TTarWriter.Create(LSink);
   try

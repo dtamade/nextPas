@@ -1,7 +1,7 @@
 unit nextpas.core.tar.base;
 {**
  * @desc Tar 基座：类型、常量与名安全谓词，L2 单点。
- * 仅依赖 nextpas.core.base / exception，无 FPC RTL 直引。
+ * 依赖 nextpas.core.base / exception + nextpas.core.bytes.pathvalid（复用 bytes.ops 单源、inline/零拷贝原串索引，无 FPC RTL 直引）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -115,6 +115,9 @@ const
   C_TAR_UNIX_IFDIR    = $4000; // S_IFDIR
   C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
+
+  { builder 初始容量：4K 一页对齐，几何扩容单源，避免大写多次重分配，调优单点 }
+  C_TAR_BUILDER_INITIAL_CAPACITY = 4096;
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
 procedure ValidateTarEntryName(const AName: string);

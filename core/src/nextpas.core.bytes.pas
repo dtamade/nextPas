@@ -61,6 +61,9 @@ function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+{ Single-source Move (zero-copy PByte, bytes.ops owner) }
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt); inline;
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 
 { Binary: swap }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
@@ -238,6 +241,16 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string;
 begin
   Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
+end;
+
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyStringToBuffer(AText, ADest, ACount);
+end;
+
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyMemory(ASrc, ADest, ACount);
 end;
 
 { Binary: swap }

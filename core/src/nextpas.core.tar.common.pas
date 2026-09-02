@@ -35,7 +35,7 @@ function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 
-{** 头字段单点：文本/校验和构造收敛至 common，复用 bytes.ops 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline） *}
+{** 头字段单点：文本/校验和构造收敛至 common，机械委托 bytes.ops.CopyStringToBuffer/CopyMemory 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline，外联可静态校验） *}
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
@@ -233,29 +233,29 @@ begin
   end;
 end;
 
-{ — 头字段单点：文本与校验和构造收敛至 common，消除 writer 双嵌 PutText/PutOctal/校验和分散（Move[AValue[1]] 禁 inline） — }
+{ — 头字段单点：文本与校验和构造收敛至 common，消除 writer 双嵌 PutText/PutOctal/校验和分散（Move[AValue[1]] 禁 inline，外联单源） — }
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：复用 bytes.ops SpanToString/StringToBytes 单源 Move 语义，inline 零拷贝单次 Move
+  // 单源：机械委托 bytes.ops.CopyStringToBuffer 单源 Move 语义，零拷贝 PByte 切片单次 Move（PAnsiChar 解引用规避 inline 单字节缺陷，外联禁 inline 避免 I-Cache 膨胀，可静态校验）
   CopyLen := SizeUInt(Length(AValue));
   if CopyLen > ALen then
     CopyLen := ALen;
   if CopyLen > 0 then
-    Move(AValue[1], ABlock[AOff], CopyLen);
+    CopyStringToBuffer(AValue, @ABlock[AOff], CopyLen);
 end;
 
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：复用 bytes.ops 零拷贝 PByte 切片 Move 语义，消除 Copy(Name,1,N) 临时串二次分配与 Move；按需截断 ALen（Move 索引禁 inline，外联避免 I-Cache 膨胀）
+  // 单源：机械委托 bytes.ops.CopyMemory 单源 Move 语义，零拷贝 PByte 切片单次 Move，消除 Copy(Name,1,N) 临时串二次分配；按需截断 ALen（外联避免 I-Cache 膨胀，可静态校验）
   CopyLen := ACount;
   if CopyLen > ALen then
     CopyLen := ALen;
   if (CopyLen > 0) and (AData <> nil) then
-    Move(AData^, ABlock[AOff], CopyLen);
+    CopyMemory(AData, @ABlock[AOff], CopyLen);
 end;
 
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);

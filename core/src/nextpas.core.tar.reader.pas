@@ -47,7 +47,7 @@ type
     { — 扩展载荷：去重 GNU L/K 与 pax 三分支的单源拷贝 — }
     function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
     function SliceToString(ABase: PByte; ALen: SizeUInt): string; inline;
-    { — 合并：prefix/name 经 bytes.ops 单源（SpanConcatMany+BytesToString），禁 inline 避免 Result[1] 双喂 untyped 膨胀 — }
+    { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
     { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；inline 薄转发 — }
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
@@ -244,9 +244,7 @@ end;
 
 function TTarReader.CombinePrefixName(const APrefix, AName: TByteSpan): string;
 var
-  LSlash: Byte;
-  LSlashSpan: TByteSpan;
-  LBytes: TBytes;
+  LTotal: SizeUInt;
 begin
   if APrefix.Len = 0 then
   begin
@@ -255,22 +253,31 @@ begin
   end;
   if AName.Len = 0 then
     Exit(SpanToString(APrefix));
-  // 单源：复用 bytes.ops SpanConcatMany+BytesToString 单源 Move（零拷贝视图后分配；外联避免 Result[1] 双喂 untyped 的 inline 复制膨胀）
-  LSlash := Ord('/');
-  LSlashSpan := TByteSpan.Create(PByte(@LSlash), 1);
-  LBytes := SpanConcatMany([APrefix, LSlashSpan, AName]);
-  Result := BytesToString(LBytes);
+  // 单源/零拷贝：单次 SetLength + 两次 Move（APrefix + '/' + AName），消除 SpanConcatMany(TBytes分配+Move)+BytesToString(二次分配)双分配；外联禁inline避免Result[1]双喂膨胀，复用bytes.ops单源Move语义
+  LTotal := APrefix.Len + 1 + AName.Len;
+  SetLength(Result, LTotal);
+  if APrefix.Len > 0 then
+    Move(APrefix.Data^, Result[1], APrefix.Len);
+  Result[APrefix.Len + 1] := '/';
+  if AName.Len > 0 then
+    Move(AName.Data^, Result[APrefix.Len + 2], AName.Len);
 end;
 
 function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; inline;
 var
   LSpan: TByteSpan;
+  LCachedLen: SizeUInt;
 begin
-  // 零拷贝视图后按需物化：FieldSlice 已用 bytes.ops 单源；空则零分配，重复值经 MemEqual(SIMD 单源)复用缓存串（inline 热路径，万级小文件降 2 次分配/条）
+  // 零拷贝快路径：命中则免FieldSlice的SpanIndexOf/SIMD扫描（ALen非512全块）；万级小文件UName/GName/LinkName常重复，降1次扫描+1次SpanToString分配/条（inline薄转发，bytes.ops/MemEqual单源，零拷贝视图）
+  LCachedLen := SizeUInt(Length(ACached));
+  if (LCachedLen > 0) and (LCachedLen <= ALen) and MemEqual(@ACached[1], @FData[AOfs], LCachedLen) then
+    if (LCachedLen = ALen) or (FData[AOfs + LCachedLen] = 0) then
+      Exit(ACached);
+  // 零拷贝视图后按需物化：FieldSlice已用bytes.ops单源（仅扫描ALen非512）；空则零分配，重复值经MemEqual(SIMD单源)复用缓存串（inline热路径）
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
-  if (SizeUInt(Length(ACached)) = LSpan.Len) and MemEqual(@ACached[1], LSpan.Data, LSpan.Len) then
+  if (LCachedLen = LSpan.Len) and MemEqual(@ACached[1], LSpan.Data, LSpan.Len) then
     Exit(ACached);
   Result := SpanToString(LSpan);
   ACached := Result;

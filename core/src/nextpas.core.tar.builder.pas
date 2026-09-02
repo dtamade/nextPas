@@ -48,8 +48,8 @@ type
 constructor TTarBuilder.Create;
 begin
   inherited Create;
-  // bytes.builder 单源：初始 4K，几何扩容避免大写多次重分配，复用 BYTES_BUILDER_* 常量；IWriter 适配复用 archive 单源 CreateArchiveBuilderSink
-  FBuilder := CreateBytesBuilder(4096);
+  // bytes.builder 单源：初始 C_TAR_BUILDER_INITIAL_CAPACITY（4K 页对齐），几何扩容避免大写多次重分配，复用 bytes.builder 常量族；IWriter 适配复用 archive 单源 CreateArchiveBuilderSink
+  FBuilder := CreateBytesBuilder(C_TAR_BUILDER_INITIAL_CAPACITY);
   FSink := CreateArchiveBuilderSink(FBuilder);
   FWriter := TTarWriter.Create(FSink);
 end;
