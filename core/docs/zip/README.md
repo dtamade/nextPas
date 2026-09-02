@@ -309,7 +309,7 @@ allocate beyond the configured output cap — `store` 与 `deflate` 同受 `MaxO
 - `test_zip_perf` 以 `CountingMemoryManager` 锁定 `200×512B ≤815 / Reserve ≤810 / 1MiB ≤12 allocs`，回归即红（S20）；`test_zip_stress` 以 `70k Zip64 1.07s` / `1k 混合双路径` / `Bomb` / `并发` 验证极限（S21）
 - `BASELINE.json` + `check_regression.py` 以 `allocs +2` 硬预算、`bytes` 强一致、`ns +50%` 告警构成 `make regression` 硬门（`make baseline` 需人工审查，S22）
 
-**历代收敛**：S36 栈上 AES + `FScratch` 几何；S37 `LCumTotal` 去复用；S38 `INV-8/11/16` 入约；S39 `GuardTotalOutputSize` 单点化；S40 `zip_roundtrip` 三路径 `MaxOutput/MaxTotal` 演示；S41 顺序零拷贝；S42 无签名四形态；S43 PByte 直写；S44 AES 描述符对偶；S45 阈值可配；S46 中央零分配；S81 `Normalize` 单源；S83 `TryMethod` 单源；S85 `ResolveWithAes` 单源；S86 `ParseLocalHeader` 单源；S87 `GuardPassword` 单源；详见 `ROADMAP` 与 `CHANGELOG`。
+**历代收敛**：S36 栈上 AES + `FScratch` 几何；S37 `LCumTotal` 去复用；S38 `INV-8/11/16` 入约；S39 `GuardTotalOutputSize` 单点化；S40 `zip_roundtrip` 三路径 `MaxOutput/MaxTotal` 演示；S41 顺序零拷贝；S42 无签名四形态；S43 PByte 直写；S44 AES 描述符对偶；S45 阈值可配；S46 中央零分配；S81 `Normalize` 单源；S83 `TryMethod` 单源；S85 `ResolveWithAes` 单源；S86 `ParseLocalHeader` 单源；S87 `GuardPassword` 单源；S88 `GuardIndex` 单源；S89 `FindEntry` 单源；详见 `ROADMAP` 与 `CHANGELOG`。
 
 Sequential read reuses the same `DecompressEntryVerified` kernel via
 `nextpas.core.zip.common`（reader/sequential 单点复用，fail-closed 语义一致），
@@ -419,4 +419,4 @@ ZipExtractToDirAtomicWithOptions(Bytes, '/out/dir', Opts); // 透传总量/口�
 
 Runnable example: [examples/nextpas.core.zip](../../examples/nextpas.core.zip) (`zip_roundtrip` 7 式 `all demos ok`).
 
-Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S87 已落地，1.0.1 巡检（`VERSION 1.0.1`，`SECURITY.md` 五模型，12门+16项全绿，`test_zip_fs` 12 项，`bench 16项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword` 五单源）。
+Roadmap: [ROADMAP.md](./ROADMAP.md) — S0—S89 已落地，1.0.1 巡检（`VERSION 1.0.1`，`SECURITY.md` 五模型，12门+16项全绿，`test_zip_fs` 12 项，`bench 16项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry` 七单源）。

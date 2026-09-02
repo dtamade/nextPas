@@ -11,6 +11,7 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.js.pure.base,
+  nextpas.core.text.view,
   nextpas.core.json,
   nextpas.core.json.value;
 
@@ -41,11 +42,12 @@ type
     FGlobal: TJsValue;
     FBackend: TJsBackendKind;
     function FindHost(const AName: string): Integer; inline;
+    function FindHostView(const AName: TStringView): Integer; inline;
     function IsOnCreationThread: Boolean; inline;
     procedure EnsureNotClosed; inline;
     procedure EnsureThreadAffinity; inline;
     function ValidateHostName(const AName: string): Boolean; inline;
-    function DoEval(const ACode: string): TJsValue;
+    function DoEval(const ACode: string): TJsValue; inline;
     procedure DoSetHost(const AName: string);
     function Bind(const V: TJsValue): TJsValue; inline;
   public
@@ -150,6 +152,11 @@ begin
   Result := JsPureFindHost(FHostFuncs, AName);
 end;
 
+function TJsPureContext.FindHostView(const AName: TStringView): Integer; inline;
+begin
+  Result := JsPureFindHostView(FHostFuncs, AName); // inline + TStringView 零拷贝 + bytes.ops 单源
+end;
+
 function TJsPureContext.IsOnCreationThread: Boolean; inline;
 begin
   Result := UInt64(platform_thread_self) = FThreadId;
@@ -174,12 +181,12 @@ end;
 
 function TJsPureContext.Bind(const V: TJsValue): TJsValue; inline;
 begin
-  Result := JsValueBindContext(V, FContextId);
+  Result := JsValueBindContext(V, FContextId); // inline 零拷贝绑定 ContextId
 end;
 
-function TJsPureContext.DoEval(const ACode: string): TJsValue;
+function TJsPureContext.DoEval(const ACode: string): TJsValue; inline;
 begin
-  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHostFuncs, Global));
+  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHostFuncs, Global)); // inline 薄转发 + TStringView 零拷贝
 end;
 
 procedure TJsPureContext.DoSetHost(const AName: string);

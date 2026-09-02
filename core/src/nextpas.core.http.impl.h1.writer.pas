@@ -85,7 +85,9 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
+  nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -294,10 +296,7 @@ end;
 procedure TH1ResponseWriter.WriteHeaderBlock;
 begin
   if not TryWriteSmallHeaderBlock then
-  begin
     WriteAllHeaders;
-    WriteCRLF;
-  end;
 end;
 
 function TH1ResponseWriter.TryWriteSmallHeaderBlock: Boolean;
@@ -306,111 +305,107 @@ const
   HEADER_SEPARATOR: AnsiString = ': ';
   CRLF: AnsiString = #13#10;
 var
-  LBuf: array[0..HEADER_BLOCK_STACK_LIMIT - 1] of AnsiChar;
-  LCanFit: Boolean;
-  LPos: SizeInt;
+  LBuilder: TBufStringBuilder;
+  LExceeds: Boolean;
+  LP: PAnsiChar;
+  LNeed: SizeUInt;
 begin
-  LCanFit := True;
-  LPos := 0;
-
-  FHeaders.ForEach(procedure(const AName, AValue: string)
-  var
-    LLineLen: SizeInt;
-    LNameLen: SizeInt;
-    LValueLen: SizeInt;
-  begin
-    if not LCanFit then
-      Exit;
-
-    LNameLen := Length(AName);
-    LValueLen := Length(AValue);
-    LLineLen := LNameLen + 4 + LValueLen;
-    if LLineLen > SizeInt(SizeOf(LBuf)) - LPos - 2 then
+  // perf: single allocation via TBufStringBuilder (L1 owner text.builder) reusing bytes.ops.BytesGrowCapacity single source geometric growth (BYTES_BUILDER_MIN_GROW) amortized O(1), zero-copy via bytes.ops.BytesCopy inline + Reserve+Tail+AdvanceLen single buffer batch; eliminates per-header SetLength allocations and multiple Moves; stability via try/finally Done; inline Reserve/Tail/AdvanceLen
+  LExceeds := False;
+  LBuilder.Init(HEADER_BLOCK_STACK_LIMIT);
+  try
+    FHeaders.ForEach(procedure(const AName, AValue: string)
+    var
+      LNameLen, LValueLen: SizeUInt;
     begin
-      LCanFit := False;
-      Exit;
-    end;
-
-    if LNameLen > 0 then
-    begin
-      Move(AName[1], LBuf[LPos], LNameLen);
-      Inc(LPos, LNameLen);
-    end;
-    Move(HEADER_SEPARATOR[1], LBuf[LPos], 2);
-    Inc(LPos, 2);
-    if LValueLen > 0 then
-    begin
-      Move(AValue[1], LBuf[LPos], LValueLen);
-      Inc(LPos, LValueLen);
-    end;
-    Move(CRLF[1], LBuf[LPos], 2);
-    Inc(LPos, 2);
-  end);
-
-  Result := LCanFit;
-  if not Result then
-    Exit;
-
-  Move(CRLF[1], LBuf[LPos], 2);
-  Inc(LPos, 2);
-  WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LPos));
+      if LExceeds then
+        Exit;
+      LNameLen := SizeUInt(Length(AName));
+      LValueLen := SizeUInt(Length(AValue));
+      LNeed := LNameLen + 2 + LValueLen + 2;
+      if LBuilder.Len + LNeed + 2 > HEADER_BLOCK_STACK_LIMIT then
+      begin
+        LExceeds := True;
+        Exit;
+      end;
+      LBuilder.Reserve(LNeed);
+      LP := LBuilder.Tail;
+      // perf: zero-copy single Move via bytes.ops BytesCopy inline (single source INV-5), Reserve+Tail+AdvanceLen evidence
+      if LNameLen > 0 then
+      begin
+        BytesCopy(LP, PAnsiChar(AName), LNameLen);
+        Inc(LP, LNameLen);
+      end;
+      BytesCopy(LP, PAnsiChar(HEADER_SEPARATOR), 2);
+      Inc(LP, 2);
+      if LValueLen > 0 then
+      begin
+        BytesCopy(LP, PAnsiChar(AValue), LValueLen);
+        Inc(LP, LValueLen);
+      end;
+      BytesCopy(LP, PAnsiChar(CRLF), 2);
+      LBuilder.AdvanceLen(LNeed);
+    end);
+    if LExceeds then
+      Exit(False);
+    LBuilder.Reserve(2);
+    LP := LBuilder.Tail;
+    BytesCopy(LP, PAnsiChar(CRLF), 2);
+    LBuilder.AdvanceLen(2);
+    if LBuilder.Len > 0 then
+      WriteAllOrRaise(FWriter, LBuilder.AsView.Data^, LBuilder.Len);
+    Result := True;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 procedure TH1ResponseWriter.WriteAllHeaders;
 const
-  HEADER_LINE_STACK_LIMIT = 512;
   HEADER_SEPARATOR: AnsiString = ': ';
   CRLF: AnsiString = #13#10;
+var
+  LBuilder: TBufStringBuilder;
+  LP: PAnsiChar;
+  LNeed: SizeUInt;
 begin
-  FHeaders.ForEach(procedure(const AName, AValue: string)
-  var
-    LBuf: array[0..HEADER_LINE_STACK_LIMIT - 1] of AnsiChar;
-    LLine: string;
-    LLineLen: SizeInt;
-    LNameLen: SizeInt;
-    LValueLen: SizeInt;
-    LPos: SizeInt;
-  begin
-    LNameLen := Length(AName);
-    LValueLen := Length(AValue);
-    LLineLen := LNameLen + 4 + LValueLen;
-    if LLineLen <= SizeInt(SizeOf(LBuf)) then
+  // perf: single buffer batch via TBufStringBuilder (text.builder L1 owner) Reserve+Tail+AdvanceLen zero-copy via bytes.ops.BytesCopy single source; eliminates per-header SetLength allocations and per-header Moves/512-stack fallback, amortized O(1) growth via BytesGrowCapacity (BYTES_BUILDER_MIN_GROW), single WriteAllOrRaise for whole block + terminal CRLF; stability via try/finally Done; inline Reserve/Tail/AdvanceLen
+  LBuilder.Init(1024);
+  try
+    FHeaders.ForEach(procedure(const AName, AValue: string)
+    var
+      LNameLen, LValueLen: SizeUInt;
     begin
-      LPos := 0;
+      LNameLen := SizeUInt(Length(AName));
+      LValueLen := SizeUInt(Length(AValue));
+      LNeed := LNameLen + 2 + LValueLen + 2;
+      LBuilder.Reserve(LNeed);
+      LP := LBuilder.Tail;
+      // perf: zero-copy single Move via bytes.ops BytesCopy inline
       if LNameLen > 0 then
       begin
-        Move(AName[1], LBuf[LPos], LNameLen);
-        Inc(LPos, LNameLen);
+        BytesCopy(LP, PAnsiChar(AName), LNameLen);
+        Inc(LP, LNameLen);
       end;
-      Move(HEADER_SEPARATOR[1], LBuf[LPos], 2);
-      Inc(LPos, 2);
+      BytesCopy(LP, PAnsiChar(HEADER_SEPARATOR), 2);
+      Inc(LP, 2);
       if LValueLen > 0 then
       begin
-        Move(AValue[1], LBuf[LPos], LValueLen);
-        Inc(LPos, LValueLen);
+        BytesCopy(LP, PAnsiChar(AValue), LValueLen);
+        Inc(LP, LValueLen);
       end;
-      Move(CRLF[1], LBuf[LPos], 2);
-      WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LLineLen));
-      Exit;
-    end;
-
-    SetLength(LLine, LLineLen);
-    LPos := 1;
-    if LNameLen > 0 then
-    begin
-      Move(AName[1], LLine[LPos], LNameLen);
-      Inc(LPos, LNameLen);
-    end;
-    Move(HEADER_SEPARATOR[1], LLine[LPos], 2);
-    Inc(LPos, 2);
-    if LValueLen > 0 then
-    begin
-      Move(AValue[1], LLine[LPos], LValueLen);
-      Inc(LPos, LValueLen);
-    end;
-    Move(CRLF[1], LLine[LPos], 2);
-    WriteStr(LLine);
-  end);
+      BytesCopy(LP, PAnsiChar(CRLF), 2);
+      LBuilder.AdvanceLen(LNeed);
+    end);
+    LBuilder.Reserve(2);
+    LP := LBuilder.Tail;
+    BytesCopy(LP, PAnsiChar(CRLF), 2);
+    LBuilder.AdvanceLen(2);
+    if LBuilder.Len > 0 then
+      WriteAllOrRaise(FWriter, LBuilder.AsView.Data^, LBuilder.Len);
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TH1ResponseWriter.ResponseMustNotHaveBody: Boolean;

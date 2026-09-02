@@ -2,7 +2,8 @@
  * nextpas.core.platform.fs - 高层文件系统操作
  *
  * 职责：文件系统级操作（exists/is_file/mkdir_p/copy_file/write_atomic/read_file/walk）
- * 层次：路径级操作，依赖 files.pas 的底层 fd 操作
+ * 层次：路径级操作，依赖 files.pas 的底层 fd 操作（L0）
+ *  单源纪律：L0 platform 例外 — raw Move/FillChar 允许（不能依赖 L1 bytes.ops，避免 L0→L1 上向依赖）；L1+ 必须经 bytes.ops.BytesCopy/BytesZero（门禁 test_bytes_ops_source_contracts 文档化 L0 例外）
  *
  * 与 files.pas 的关系：
  *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
@@ -418,7 +419,7 @@ begin
       PPtrUIntLocal(LNewRaw)^ := LNewSize;
       LNewBuf := PlatformFsRawToPayload(LNewRaw);
       if LTotal > 0 then
-        Move(LBuf^, LNewBuf^, LTotal);
+        Move(LBuf^, LNewBuf^, LTotal); // L0 exception: platform.fs raw Move allowed (cannot depend on L1 bytes.ops); L1+ gate via BytesCopy
       FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
       LRaw := LNewRaw;
       LBuf := LNewBuf;

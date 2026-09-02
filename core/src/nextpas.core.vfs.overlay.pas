@@ -44,6 +44,8 @@ type
     procedure CacheList(const ADirPath: string; const AEntries: TEntryArray);
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
+    function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
     destructor Destroy; override;
@@ -116,6 +118,11 @@ end;
 procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer);
 var
   LDummy: Integer;
+{ 单次探测首命中：按优先级依次 Stat，首成功即胜出；EVfsNotFound 继续下层，
+  EVfsInvalidPath 透传；零二次 Exists 二分，inline 热路径 }
+function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+var
+  I: Integer;
 begin
   if (FIndex = nil) or (FIndexLock = nil) then Exit;
   if not FIndexLock.TryAcquireWrite then Exit;
@@ -191,14 +198,12 @@ begin
     try
       AInfo := FList[I].Stat(APath);
       AFs := FList[I];
-      CacheResult(APath, I);
       Exit(True);
     except
       on E: EVfsNotFound do Continue;
       on E: EVfsInvalidPath do raise;
     end;
   end;
-  CacheResult(APath, -1);
   AFs := nil;
   Result := False;
 end;

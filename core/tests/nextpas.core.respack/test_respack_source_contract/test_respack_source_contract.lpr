@@ -181,8 +181,8 @@ begin
   Check(Pos('RelativizePath', Src) > 0, 'dirsource single RelativizePath via PathStripPrefix');
   Check(Pos('FilterRelPath', Src) > 0, 'dirsource DRY FilterRelPath pipeline');
   Check(Pos('TryReserveTotal', Src) > 0, 'dirsource DRY TryReserveTotal/TryAddSizeUInt single source');
-  Check(Pos('EnsureDirCapacity', Src) > 0, 'dirsource DRY EnsureDirCapacity');
   Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
+  Check(Pos('EnsureEmbedCapacity', Src) > 0, 'dirsource DRY EnsureEmbedCapacity');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
   { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定（uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
@@ -205,9 +205,13 @@ begin
   Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'writer.stream declares bytes.ops single source');
   Check(Pos('nextpas.core.respack.writer.layout', Src) > 0, 'writer.stream reuses writer.layout single source');
   Check(Pos('ResPackLayoutClear', Src) > 0, 'writer.stream try..finally ResPackLayoutClear not leak');
-  Check(Pos('FreeMem', Src) > 0, 'writer.stream FreeMem in try..finally');
+  Check((Pos('TBytes', Src) > 0) and (Pos('SetLength(HeadBuf', Src) > 0), 'writer.stream Head TBytes RAII托管 SetLength');
+  Check(Pos('GetMem(Head', Src) = 0, 'writer.stream no manual GetMem(Head) (RAII托管)');
+  Check(Pos('FreeMem(Head', Src) = 0, 'writer.stream no manual FreeMem(Head) (RAII托管)');
   Check(Pos('try', Src) > 0, 'writer.stream has try..finally stability');
   Check(Pos('inline', Src) > 0, 'writer.stream inline zero-copy evidence');
+  Check(Pos('WriteZeros', Src) > 0, 'writer.stream WriteZeros inline fast-path');
+  Check(Pos('BYTES_ZERO_PAGE', Src) > 0, 'writer.stream reuses bytes.ops BYTES_ZERO_PAGE single source');
 end;
 
 procedure TestExceptionRootDiscipline;
