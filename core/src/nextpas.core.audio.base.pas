@@ -348,6 +348,7 @@ var
   LAvail, LToCopy: Integer;
   LBytesNeeded, LBytesToCopy: Int64;
   LBlockAlign: Integer;
+  LOffset: Int64;
   PSrc, PDst: PByte;
 begin
   Result := 0;
@@ -369,10 +370,14 @@ begin
   LToCopy := AFrames;
   if LToCopy > LAvail then LToCopy := LAvail;
   LBytesToCopy := Int64(LToCopy) * Int64(LBlockAlign);
+  // APos*BlockAlign Int64 intermediate + bounds guard + 32-bit safe PtrInt
+  LOffset := Int64(APos) * Int64(LBlockAlign);
+  if LOffset >= Int64(Length(ASrc.Data)) then Exit(0);
+  if (LOffset > High(PtrInt)) or (LBytesToCopy > High(PtrInt)) or (LBytesNeeded > High(PtrInt)) then Exit(0);
   if LBytesToCopy > 0 then
   begin
     PSrc := PByte(@ASrc.Data[0]);
-    Inc(PSrc, PtrInt(Int64(APos) * Int64(LBlockAlign)));
+    Inc(PSrc, PtrInt(LOffset));
     PDst := PByte(@ABuffer.Data[0]);
     BytesCopy(PDst, PSrc, SizeUInt(LBytesToCopy));
   end;

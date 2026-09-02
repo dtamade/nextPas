@@ -667,6 +667,8 @@ end;
 
 function TWavStreamingSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 begin
+  // realtime恒静音为设计，离线走Fill: per audio.intf FillRealtime forbids I/O/lock/alloc/exception,
+  // so I/O-backed TWavStreamingSource returns silence here; offline path uses Fill with FStream.Position/Read
   Result := AudioSilentFill(ABuffer, FFormat, AFrames);
 end;
 
@@ -694,6 +696,8 @@ var
   LBlockAlign: Word;
   LByteRate: DWord;
   LDataSize: DWord;
+  LDataSize64: Int64;
+  LChunkSize64: Int64;
   LUseExt: Boolean;
   LMask: DWord;
   LSubFormat: TGuidBytes;
@@ -718,7 +722,11 @@ begin
 
   LSampleRate := DWord(LFormat.SampleRate);
   LChannels := Word(LFormat.Channels);
-  LDataSize := DWord(Length(ABuffer.Data));
+  // RIFF ChunkSize is DWord — Int64 accumulate then guard wrap-around (>High(DWord)-44)
+  LDataSize64 := Int64(Length(ABuffer.Data));
+  if LDataSize64 > Int64(High(DWord)) - 44 then
+    raise EAudioEncodeError.Create('wav encode: payload exceeds RIFF limit, use RF64');
+  LDataSize := DWord(LDataSize64);
   LIsFloat := LFormat.SampleFormat = sfF32;
   case LFormat.SampleFormat of
     sfU8: LBits := 8;
@@ -757,20 +765,24 @@ begin
   LSubFormat[12] := $00; LSubFormat[13] := $38; LSubFormat[14] := $9B; LSubFormat[15] := $71;
 
   WriteTag(ADest, 'RIFF');
+  // Int64 accumulate then verify DWord range before cast
   if LUseExt then
   begin
     if LIsFloat then
-      WriteDWordLE(ADest, DWord(4 + (8+40) + (8+4) + (8+LDataSize)))
+      LChunkSize64 := Int64(4) + (8+40) + (8+4) + (8+LDataSize64)
     else
-      WriteDWordLE(ADest, DWord(4 + (8+40) + (8+LDataSize)));
+      LChunkSize64 := Int64(4) + (8+40) + (8+LDataSize64);
   end
   else
   begin
     if LIsFloat then
-      WriteDWordLE(ADest, DWord(4 + (8+16) + (8+4) + (8+LDataSize)))
+      LChunkSize64 := Int64(4) + (8+16) + (8+4) + (8+LDataSize64)
     else
-      WriteDWordLE(ADest, DWord(4 + (8+16) + (8+LDataSize)));
+      LChunkSize64 := Int64(4) + (8+16) + (8+LDataSize64);
   end;
+  if LChunkSize64 > High(DWord) then
+    raise EAudioEncodeError.Create('wav encode: RIFF chunk size exceeds DWord, use RF64');
+  WriteDWordLE(ADest, DWord(LChunkSize64));
   WriteTag(ADest, 'WAVE');
 
   WriteTag(ADest, 'fmt ');
