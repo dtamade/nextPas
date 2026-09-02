@@ -66,9 +66,18 @@ begin
 end;
 
 procedure THIRPrinter.AppendLast(const S: string);
+var
+  P: ^string;
+  LOld, LAdd: SizeUInt;
 begin
-  if FLines.Count > 0 then
-    FLines.GetPtr(FLines.Count - 1)^ := FLines[FLines.Count - 1] + S;
+  if FLines.Count = 0 then Exit;
+  if S = '' then Exit;
+  P := FLines.GetPtr(FLines.Count - 1);
+  LOld := SizeUInt(Length(P^));
+  LAdd := SizeUInt(Length(S));
+  SetLength(P^, LOld + LAdd);
+  if LAdd > 0 then
+    Move(PAnsiChar(S)^, (PAnsiChar(P^) + LOld)^, LAdd);
 end;
 
 function THIRPrinter.LastLine: string;
@@ -104,6 +113,7 @@ end;
 procedure THIRPrinter.PrintType(AId: THIRTypeId);
 var
   T: THIRTypeRec;
+  LB: TBufStringBuilder;
 begin
   if AId = 0 then
   begin
@@ -115,10 +125,16 @@ begin
     htkVoid: AppendLast('void');
     htkBool: AppendLast('bool');
     htkInt:
-      if T.Signed then
-        AppendLast('i' + IntToStr(T.BitWidth))
-      else
-        AppendLast('u' + IntToStr(T.BitWidth));
+      begin
+        LB.Init(8);
+        try
+          if T.Signed then LB.AppendChar('i') else LB.AppendChar('u');
+          LB.AppendUInt(T.BitWidth);
+          AppendLast(LB.ToString);
+        finally
+          LB.Done;
+        end;
+      end;
     htkFloat:
       case T.FloatWidth of
         fwF32: AppendLast('f32');
@@ -137,13 +153,57 @@ begin
         skUnicode: AppendLast('unicodestring');
       end;
     htkPointer:
-      AppendLast('ptr<' + IntToStr(T.PointeeTypeId) + '>');
+      begin
+        LB.Init(16);
+        try
+          LB.AppendStr('ptr<');
+          LB.AppendInt(T.PointeeTypeId);
+          LB.AppendChar('>');
+          AppendLast(LB.ToString);
+        finally
+          LB.Done;
+        end;
+      end;
     htkArray:
-      AppendLast('array[' + IntToStr(T.LowBound) + '..' + IntToStr(T.HighBound) + ']<' + IntToStr(T.ElemTypeId) + '>');
+      begin
+        LB.Init(40);
+        try
+          LB.AppendStr('array[');
+          LB.AppendInt(T.LowBound);
+          LB.AppendStr('..');
+          LB.AppendInt(T.HighBound);
+          LB.AppendStr(']<');
+          LB.AppendInt(T.ElemTypeId);
+          LB.AppendChar('>');
+          AppendLast(LB.ToString);
+        finally
+          LB.Done;
+        end;
+      end;
     htkDynArray:
-      AppendLast('dynarray<' + IntToStr(T.ElemTypeId) + '>');
+      begin
+        LB.Init(24);
+        try
+          LB.AppendStr('dynarray<');
+          LB.AppendInt(T.ElemTypeId);
+          LB.AppendChar('>');
+          AppendLast(LB.ToString);
+        finally
+          LB.Done;
+        end;
+      end;
     htkRecord:
-      AppendLast('record(' + T.Name + ')');
+      begin
+        LB.Init(SizeUInt(Length(T.Name)) + 16);
+        try
+          LB.AppendStr('record(');
+          LB.AppendStr(T.Name);
+          LB.AppendChar(')');
+          AppendLast(LB.ToString);
+        finally
+          LB.Done;
+        end;
+      end;
   else
     AppendLast(TypeKindStr(T.Kind));
   end;
@@ -153,43 +213,72 @@ procedure THIRPrinter.PrintInstr(const AInstr: THIRInstr);
 var
   Line: string;
   I: LongInt;
+  LB: TBufStringBuilder;
 begin
-  Line := '    %' + IntToStr(AInstr.ResultId) + ' = ';
-  case AInstr.Kind of
-    hikAlloca: Line := Line + 'alloca ';
-    hikLoad: Line := Line + 'load ';
-    hikStore: Line := Line + 'store ';
-    hikGetFieldPtr: Line := Line + 'getfieldptr ';
-    hikAdd: Line := Line + 'add ';
-    hikSub: Line := Line + 'sub ';
-    hikMul: Line := Line + 'mul ';
-    hikDiv: Line := Line + 'div ';
-    hikMod: Line := Line + 'mod ';
-    hikNeg: Line := Line + 'neg ';
-    hikNot: Line := Line + 'not ';
-    hikBitAnd: Line := Line + 'and ';
-    hikBitOr: Line := Line + 'or ';
-    hikBitXor: Line := Line + 'xor ';
-    hikShl: Line := Line + 'shl ';
-    hikShr: Line := Line + 'shr ';
-    hikCmpEq: Line := Line + 'cmp.eq ';
-    hikCmpNe: Line := Line + 'cmp.ne ';
-    hikCmpLt: Line := Line + 'cmp.lt ';
-    hikCmpLe: Line := Line + 'cmp.le ';
-    hikCmpGt: Line := Line + 'cmp.gt ';
-    hikCmpGe: Line := Line + 'cmp.ge ';
-    hikTrunc: Line := Line + 'trunc ';
-    hikZext: Line := Line + 'zext ';
-    hikSext: Line := Line + 'sext ';
-    hikBitcast: Line := Line + 'bitcast ';
-    hikIntToFloat: Line := Line + 'int_to_float ';
-    hikFloatToInt: Line := Line + 'float_to_int ';
-    hikCall: Line := Line + 'call @' + AInstr.CallTarget + ' ';
-    hikIndirectCall: Line := Line + 'indirect_call ';
-    hikIntrinsic: Line := Line + 'intrinsic @' + AInstr.IntrinsicName + ' ';
-    hikInsertField: Line := Line + 'insertfield [' + IntToStr(AInstr.FieldIndex) + '] ';
-    hikExtractField: Line := Line + 'extractfield [' + IntToStr(AInstr.FieldIndex) + '] ';
-    hikPhi: Line := Line + 'phi ';
+  LB.Init(64);
+  try
+    LB.AppendStr('    %');
+    LB.AppendInt(AInstr.ResultId);
+    LB.AppendStr(' = ');
+    case AInstr.Kind of
+      hikAlloca: LB.AppendStr('alloca ');
+      hikLoad: LB.AppendStr('load ');
+      hikStore: LB.AppendStr('store ');
+      hikGetFieldPtr: LB.AppendStr('getfieldptr ');
+      hikAdd: LB.AppendStr('add ');
+      hikSub: LB.AppendStr('sub ');
+      hikMul: LB.AppendStr('mul ');
+      hikDiv: LB.AppendStr('div ');
+      hikMod: LB.AppendStr('mod ');
+      hikNeg: LB.AppendStr('neg ');
+      hikNot: LB.AppendStr('not ');
+      hikBitAnd: LB.AppendStr('and ');
+      hikBitOr: LB.AppendStr('or ');
+      hikBitXor: LB.AppendStr('xor ');
+      hikShl: LB.AppendStr('shl ');
+      hikShr: LB.AppendStr('shr ');
+      hikCmpEq: LB.AppendStr('cmp.eq ');
+      hikCmpNe: LB.AppendStr('cmp.ne ');
+      hikCmpLt: LB.AppendStr('cmp.lt ');
+      hikCmpLe: LB.AppendStr('cmp.le ');
+      hikCmpGt: LB.AppendStr('cmp.gt ');
+      hikCmpGe: LB.AppendStr('cmp.ge ');
+      hikTrunc: LB.AppendStr('trunc ');
+      hikZext: LB.AppendStr('zext ');
+      hikSext: LB.AppendStr('sext ');
+      hikBitcast: LB.AppendStr('bitcast ');
+      hikIntToFloat: LB.AppendStr('int_to_float ');
+      hikFloatToInt: LB.AppendStr('float_to_int ');
+      hikCall:
+        begin
+          LB.AppendStr('call @');
+          LB.AppendStr(AInstr.CallTarget);
+          LB.AppendChar(' ');
+        end;
+      hikIndirectCall: LB.AppendStr('indirect_call ');
+      hikIntrinsic:
+        begin
+          LB.AppendStr('intrinsic @');
+          LB.AppendStr(AInstr.IntrinsicName);
+          LB.AppendChar(' ');
+        end;
+      hikInsertField:
+        begin
+          LB.AppendStr('insertfield [');
+          LB.AppendInt(AInstr.FieldIndex);
+          LB.AppendStr('] ');
+        end;
+      hikExtractField:
+        begin
+          LB.AppendStr('extractfield [');
+          LB.AppendInt(AInstr.FieldIndex);
+          LB.AppendStr('] ');
+        end;
+      hikPhi: LB.AppendStr('phi ');
+    end;
+    Line := LB.ToString;
+  finally
+    LB.Done;
   end;
 
   Emit(Line);
@@ -201,14 +290,32 @@ begin
     begin
       if I > 0 then
         AppendLast(',');
-      AppendLast(' [%' + IntToStr(AInstr.PhiEntries[I].ValueId) +
-        ', bb' + IntToStr(AInstr.PhiEntries[I].BlockId) + ']');
+      LB.Init(32);
+      try
+        LB.AppendStr(' [%');
+        LB.AppendInt(AInstr.PhiEntries[I].ValueId);
+        LB.AppendStr(', bb');
+        LB.AppendInt(AInstr.PhiEntries[I].BlockId);
+        LB.AppendChar(']');
+        AppendLast(LB.ToString);
+      finally
+        LB.Done;
+      end;
     end;
   end
   else
   begin
     for I := 0 to High(AInstr.Operands) do
-      AppendLast(' %' + IntToStr(AInstr.Operands[I].ValueId));
+    begin
+      LB.Init(16);
+      try
+        LB.AppendStr(' %');
+        LB.AppendInt(AInstr.Operands[I].ValueId);
+        AppendLast(LB.ToString);
+      finally
+        LB.Done;
+      end;
+    end;
   end;
 end;
 
@@ -247,18 +354,40 @@ procedure THIRPrinter.PrintBlock(const ABlock: THIRBlock);
 var
   I: LongInt;
   PredStr: string;
+  LB: TBufStringBuilder;
+  LPredBuilder: TBufStringBuilder;
 begin
-  PredStr := '';
-  if ABlock.Preds <> nil then
-    for I := 0 to LongInt(ABlock.Preds.Count) - 1 do
+  LPredBuilder.Init(64);
+  try
+    if ABlock.Preds <> nil then
+      for I := 0 to LongInt(ABlock.Preds.Count) - 1 do
+      begin
+        if I > 0 then LPredBuilder.AppendStr(', ');
+        LPredBuilder.AppendStr('bb');
+        LPredBuilder.AppendInt(ABlock.Preds[SizeUInt(I)]);
+      end;
+    PredStr := LPredBuilder.ToString;
+  finally
+    LPredBuilder.Done;
+  end;
+  LB.Init(64 + SizeUInt(Length(PredStr)) + SizeUInt(Length(ABlock.Name)));
+  try
+    LB.AppendStr('  bb');
+    LB.AppendInt(ABlock.Id);
+    LB.AppendStr(' (');
+    LB.AppendStr(ABlock.Name);
+    LB.AppendChar(')');
+    if PredStr <> '' then
     begin
-      if I > 0 then PredStr := PredStr + ', ';
-      PredStr := PredStr + 'bb' + IntToStr(ABlock.Preds[SizeUInt(I)]);
-    end;
-  if PredStr <> '' then
-    Emit('  bb' + IntToStr(ABlock.Id) + ' (' + ABlock.Name + ')  ; preds: ' + PredStr)
-  else
-    Emit('  bb' + IntToStr(ABlock.Id) + ' (' + ABlock.Name + '):');
+      LB.AppendStr('  ; preds: ');
+      LB.AppendStr(PredStr);
+    end
+    else
+      LB.AppendChar(':');
+    Emit(LB.ToString);
+  finally
+    LB.Done;
+  end;
 
   if ABlock.Instrs <> nil then
     for I := 0 to LongInt(ABlock.Instrs.Count) - 1 do
@@ -273,28 +402,58 @@ var
   I: LongInt;
   ParamStr: string;
   T: THIRTypeRec;
+  PB: TBufStringBuilder;
+  HB: TBufStringBuilder;
 begin
-  ParamStr := '';
-  if AFunc.Params <> nil then
-    for I := 0 to LongInt(AFunc.Params.Count) - 1 do
-    begin
-      if I > 0 then ParamStr := ParamStr + ', ';
-      T := FModule.Types.GetType(AFunc.Params[SizeUInt(I)].TypeId);
-      if AFunc.Params[SizeUInt(I)].IsVar then
-        ParamStr := ParamStr + 'var ';
-      if AFunc.Params[SizeUInt(I)].IsConst then
-        ParamStr := ParamStr + 'const ';
-      ParamStr := ParamStr + '%' +
-        IntToStr(AFunc.Params[SizeUInt(I)].ValueId) + ': ';
-      ParamStr := ParamStr + TypeKindStr(T.Kind);
-    end;
+  PB.Init(128);
+  try
+    if AFunc.Params <> nil then
+      for I := 0 to LongInt(AFunc.Params.Count) - 1 do
+      begin
+        if I > 0 then PB.AppendStr(', ');
+        T := FModule.Types.GetType(AFunc.Params[SizeUInt(I)].TypeId);
+        if AFunc.Params[SizeUInt(I)].IsVar then
+          PB.AppendStr('var ');
+        if AFunc.Params[SizeUInt(I)].IsConst then
+          PB.AppendStr('const ');
+        PB.AppendChar('%');
+        PB.AppendInt(AFunc.Params[SizeUInt(I)].ValueId);
+        PB.AppendStr(': ');
+        PB.AppendStr(TypeKindStr(T.Kind));
+      end;
+    ParamStr := PB.ToString;
+  finally
+    PB.Done;
+  end;
 
   Emit('');
   if AFunc.IsExternal then
-    Emit('declare @' + AFunc.Name + '(' + ParamStr + ')')
+  begin
+    HB.Init(SizeUInt(Length(AFunc.Name)) + SizeUInt(Length(ParamStr)) + 16);
+    try
+      HB.AppendStr('declare @');
+      HB.AppendStr(AFunc.Name);
+      HB.AppendChar('(');
+      HB.AppendStr(ParamStr);
+      HB.AppendChar(')');
+      Emit(HB.ToString);
+    finally
+      HB.Done;
+    end;
+  end
   else
   begin
-    Emit('func @' + AFunc.Name + '(' + ParamStr + ') -> ');
+    HB.Init(SizeUInt(Length(AFunc.Name)) + SizeUInt(Length(ParamStr)) + 16);
+    try
+      HB.AppendStr('func @');
+      HB.AppendStr(AFunc.Name);
+      HB.AppendChar('(');
+      HB.AppendStr(ParamStr);
+      HB.AppendStr(') -> ');
+      Emit(HB.ToString);
+    finally
+      HB.Done;
+    end;
     PrintType(AFunc.ReturnTypeId);
     AppendLast(' {');
     if AFunc.Blocks <> nil then
@@ -305,11 +464,30 @@ begin
 end;
 
 procedure THIRPrinter.PrintGlobal(const AGlobal: THIRGlobal);
+var
+  HB: TBufStringBuilder;
 begin
-  Emit('global @' + AGlobal.Name + ': ');
+  HB.Init(SizeUInt(Length(AGlobal.Name)) + 16);
+  try
+    HB.AppendStr('global @');
+    HB.AppendStr(AGlobal.Name);
+    HB.AppendStr(': ');
+    Emit(HB.ToString);
+  finally
+    HB.Done;
+  end;
   PrintType(AGlobal.TypeId);
   if AGlobal.HasInit then
-    AppendLast(' = ' + IntToStr(AGlobal.InitValue));
+  begin
+    HB.Init(24);
+    try
+      HB.AppendStr(' = ');
+      HB.AppendInt(AGlobal.InitValue);
+      AppendLast(HB.ToString);
+    finally
+      HB.Done;
+    end;
+  end;
 end;
 
 procedure THIRPrinter.Print;
@@ -363,10 +541,13 @@ var
 begin
   AssignFile(F, APath);
   Rewrite(F);
-  if FLines.Count > 0 then
-    for I := 0 to FLines.Count - 1 do
-      WriteLn(F, FLines[I]);
-  CloseFile(F);
+  try
+    if FLines.Count > 0 then
+      for I := 0 to FLines.Count - 1 do
+        WriteLn(F, FLines[I]);
+  finally
+    CloseFile(F);
+  end;
 end;
 
 end.

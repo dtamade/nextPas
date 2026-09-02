@@ -244,15 +244,39 @@ function ExtractUnitClosureHeader(
       Inc(ACursor);
   end;
 
-  procedure AppendUse(var AUses: TStringArray; const AName: string);
+  procedure EnsureStrArrayCapacity(var AArr: TStringArray; var ACap: SizeUInt; const ARequired: SizeUInt);
+  var
+    LNewCap: SizeUInt;
+  begin
+    if ARequired <= ACap then
+      Exit;
+    LNewCap := ACap;
+    if LNewCap < 4 then
+      LNewCap := 4;
+    while LNewCap < ARequired do
+    begin
+      if LNewCap <= High(SizeUInt) div 2 then
+        LNewCap := LNewCap * 2
+      else
+      begin
+        LNewCap := ARequired;
+        Break;
+      end;
+    end;
+    SetLength(AArr, LNewCap);
+    ACap := LNewCap;
+  end;
+
+  procedure AppendUse(var AUses: TStringArray; var ACap: SizeUInt; var ACount: SizeUInt; const AName: string);
   begin
     if AName = '' then
       Exit;
-    SetLength(AUses, Length(AUses) + 1);
-    AUses[High(AUses)] := AName;
+    EnsureStrArrayCapacity(AUses, ACap, ACount + 1);
+    AUses[ACount] := AName;
+    Inc(ACount);
   end;
 
-  function ParseUsesList(var ACursor: LongInt; var AUses: TStringArray): Boolean;
+  function ParseUsesList(var ACursor: LongInt; var AUses: TStringArray; var ACap: SizeUInt; var ACount: SizeUInt): Boolean;
   var
     UseName: string;
   begin
@@ -271,7 +295,7 @@ function ExtractUnitClosureHeader(
       end;
       if not ConsumePath(ACursor, UseName) then
         Exit(False);
-      AppendUse(AUses, UseName);
+      AppendUse(AUses, ACap, ACount, UseName);
       SkipInClause(ACursor);
       SkipTrivia(ACursor);
       if Tok(ACursor) = tkComma then
@@ -293,11 +317,19 @@ var
   Cursor: LongInt;
   Kind: TTokenKind;
   Dummy: string;
+  InterfaceCap: SizeUInt;
+  ImplementationCap: SizeUInt;
+  InterfaceCount: SizeUInt;
+  ImplementationCount: SizeUInt;
 begin
   ADeclaredName := '';
   ARootKindName := 'unknown';
   SetLength(AInterfaceUses, 0);
   SetLength(AImplementationUses, 0);
+  InterfaceCap := 0;
+  ImplementationCap := 0;
+  InterfaceCount := 0;
+  ImplementationCount := 0;
   Result := False;
   Cursor := 0;
   SkipTrivia(Cursor);
@@ -324,7 +356,7 @@ begin
         if Tok(Cursor) = tkInterfaceKeyword then
         begin
           Inc(Cursor);
-          if not ParseUsesList(Cursor, AInterfaceUses) then
+          if not ParseUsesList(Cursor, AInterfaceUses, InterfaceCap, InterfaceCount) then
             Exit(False);
         end;
         { Skip interface body until implementation (token scan, no parse). }
@@ -340,13 +372,13 @@ begin
         if Tok(Cursor) = tkImplementationKeyword then
         begin
           Inc(Cursor);
-          if not ParseUsesList(Cursor, AImplementationUses) then
+          if not ParseUsesList(Cursor, AImplementationUses, ImplementationCap, ImplementationCount) then
             Exit(False);
         end;
       end;
     tkProgramKeyword, tkLibraryKeyword:
       begin
-        if not ParseUsesList(Cursor, AInterfaceUses) then
+        if not ParseUsesList(Cursor, AInterfaceUses, InterfaceCap, InterfaceCount) then
           Exit(False);
       end;
     tkPackageKeyword:
@@ -354,6 +386,9 @@ begin
         { package requires/contains — not needed for stage0 unit graph edges. }
       end;
   end;
+  { Trim geometric over-allocation to logical count (zero-copy final SetLength). }
+  SetLength(AInterfaceUses, InterfaceCount);
+  SetLength(AImplementationUses, ImplementationCount);
   Dummy := '';
   Result := ADeclaredName <> '';
 end;

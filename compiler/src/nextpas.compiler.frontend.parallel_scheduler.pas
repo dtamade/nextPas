@@ -20,6 +20,7 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.sync.mutex,
   nextpas.core.text.strings,
   nextpas.core.collections.vec,
   nextpas.compiler.frontend.unit_graph;
@@ -46,6 +47,7 @@ type
   {** 并行编译调度器 }
   TParallelScheduler = class
   private
+    FLock: TMutex;
     FTasks: TCompileTaskVec;
     FCompileOrder: TCompileOrderVec;
     FMaxParallel: LongInt;
@@ -83,6 +85,7 @@ implementation
 constructor TParallelScheduler.Create;
 begin
   inherited Create;
+  FLock := TMutex.Create;
   FTasks := TCompileTaskVec.Create;
   FTasks.EnsureCapacity(64);
   FCompileOrder := TCompileOrderVec.Create;
@@ -96,14 +99,21 @@ begin
   FTasks := nil;
   FCompileOrder.Free;
   FCompileOrder := nil;
+  FLock.Free;
+  FLock := nil;
   inherited Destroy;
 end;
 
 function TParallelScheduler.GetTaskCount: LongInt;
 begin
-  if FTasks = nil then
-    Exit(0);
-  Result := LongInt(FTasks.Count);
+  if FLock <> nil then FLock.Acquire;
+  try
+    if FTasks = nil then
+      Exit(0);
+    Result := LongInt(FTasks.Count);
+  finally
+    if FLock <> nil then FLock.Release;
+  end;
 end;
 
 function TParallelScheduler.FindTaskIndex(const AUnitId: string): LongInt;
@@ -125,28 +135,33 @@ var
   Task: TCompileTask;
   Unit_: TResolvedUnit;
 begin
-  if FTasks = nil then
-    FTasks := TCompileTaskVec.Create;
-  FTasks.Clear;
-  if FCompileOrder = nil then
-    FCompileOrder := TCompileOrderVec.Create;
-  FCompileOrder.Clear;
+  if FLock <> nil then FLock.Acquire;
+  try
+    if FTasks = nil then
+      FTasks := TCompileTaskVec.Create;
+    FTasks.Clear;
+    if FCompileOrder = nil then
+      FCompileOrder := TCompileOrderVec.Create;
+    FCompileOrder.Clear;
 
-  { 为每个已解析的单元创建任务 }
-  for I := 0 to AGraph.ResolvedUnitCount - 1 do
-  begin
-    Unit_ := AGraph.ResolvedUnitAt(I);
-    Task := Default(TCompileTask);
-    Task.UnitId := Unit_.UnitId;
-    Task.Status := tsPending;
-    Task.ErrorMessage := '';
-    FTasks.Push(Task);
+    { 为每个已解析的单元创建任务 }
+    for I := 0 to AGraph.ResolvedUnitCount - 1 do
+    begin
+      Unit_ := AGraph.ResolvedUnitAt(I);
+      Task := Default(TCompileTask);
+      Task.UnitId := Unit_.UnitId;
+      Task.Status := tsPending;
+      Task.ErrorMessage := '';
+      FTasks.Push(Task);
+    end;
+
+    { 获取拓扑排序（图 API 仍返回 dynarray；session 表落 TVec 默认堆） }
+    Order := AGraph.TopologicalInitOrder;
+    for I := 0 to Length(Order) - 1 do
+      FCompileOrder.Push(Order[I]);
+  finally
+    if FLock <> nil then FLock.Release;
   end;
-
-  { 获取拓扑排序（图 API 仍返回 dynarray；session 表落 TVec 默认堆） }
-  Order := AGraph.TopologicalInitOrder;
-  for I := 0 to Length(Order) - 1 do
-    FCompileOrder.Push(Order[I]);
 end;
 
 function TParallelScheduler.GetNextBatch: TStringArray;
@@ -154,34 +169,41 @@ var
   I, BatchCount: LongInt;
   Idx: LongInt;
   Task: TCompileTask;
+  LMax: LongInt;
 begin
-  SetLength(Result, FMaxParallel);
-  BatchCount := 0;
+  if FLock <> nil then FLock.Acquire;
+  try
+    LMax := FMaxParallel;
+    SetLength(Result, LMax);
+    BatchCount := 0;
 
-  if FCompileOrder = nil then
-  begin
-    SetLength(Result, 0);
-    Exit;
-  end;
-
-  { 按拓扑序获取 pending 任务 }
-  for I := 0 to LongInt(FCompileOrder.Count) - 1 do
-  begin
-    if BatchCount >= FMaxParallel then
-      Break;
-
-    Idx := FindTaskIndex(FCompileOrder[SizeUInt(I)]);
-    if (Idx >= 0) and (FTasks[SizeUInt(Idx)].Status = tsPending) then
+    if FCompileOrder = nil then
     begin
-      Task := FTasks[SizeUInt(Idx)];
-      Task.Status := tsRunning;
-      FTasks[SizeUInt(Idx)] := Task;
-      Result[BatchCount] := Task.UnitId;
-      Inc(BatchCount);
+      SetLength(Result, 0);
+      Exit;
     end;
-  end;
 
-  SetLength(Result, BatchCount);
+    { 按拓扑序获取 pending 任务 — 全程持锁防止 lost-update/越界 }
+    for I := 0 to LongInt(FCompileOrder.Count) - 1 do
+    begin
+      if BatchCount >= LMax then
+        Break;
+
+      Idx := FindTaskIndex(FCompileOrder[SizeUInt(I)]);
+      if (Idx >= 0) and (FTasks[SizeUInt(Idx)].Status = tsPending) then
+      begin
+        Task := FTasks[SizeUInt(Idx)];
+        Task.Status := tsRunning;
+        FTasks[SizeUInt(Idx)] := Task;
+        Result[BatchCount] := Task.UnitId;
+        Inc(BatchCount);
+      end;
+    end;
+
+    SetLength(Result, BatchCount);
+  finally
+    if FLock <> nil then FLock.Release;
+  end;
 end;
 
 procedure TParallelScheduler.MarkCompleted(const AUnitId: string;
@@ -190,30 +212,40 @@ var
   Idx: LongInt;
   Task: TCompileTask;
 begin
-  Idx := FindTaskIndex(AUnitId);
-  if Idx < 0 then Exit;
+  if FLock <> nil then FLock.Acquire;
+  try
+    Idx := FindTaskIndex(AUnitId);
+    if Idx < 0 then Exit;
 
-  Task := FTasks[SizeUInt(Idx)];
-  if ASuccess then
-    Task.Status := tsSuccess
-  else
-  begin
-    Task.Status := tsFailed;
-    Task.ErrorMessage := AError;
+    Task := FTasks[SizeUInt(Idx)];
+    if ASuccess then
+      Task.Status := tsSuccess
+    else
+    begin
+      Task.Status := tsFailed;
+      Task.ErrorMessage := AError;
+    end;
+    FTasks[SizeUInt(Idx)] := Task;
+  finally
+    if FLock <> nil then FLock.Release;
   end;
-  FTasks[SizeUInt(Idx)] := Task;
 end;
 
 function TParallelScheduler.AllDone: Boolean;
 var
   I: LongInt;
 begin
-  if FTasks = nil then
-    Exit(True);
-  for I := 0 to LongInt(FTasks.Count) - 1 do
-    if FTasks[SizeUInt(I)].Status in [tsPending, tsRunning] then
-      Exit(False);
-  Result := True;
+  if FLock <> nil then FLock.Acquire;
+  try
+    if FTasks = nil then
+      Exit(True);
+    for I := 0 to LongInt(FTasks.Count) - 1 do
+      if FTasks[SizeUInt(I)].Status in [tsPending, tsRunning] then
+        Exit(False);
+    Result := True;
+  finally
+    if FLock <> nil then FLock.Release;
+  end;
 end;
 
 procedure TParallelScheduler.GetStats(out APending, ARunning, ASuccess, AFailed: LongInt);
@@ -225,15 +257,20 @@ begin
   ASuccess := 0;
   AFailed := 0;
 
-  if FTasks = nil then
-    Exit;
-  for I := 0 to LongInt(FTasks.Count) - 1 do
-    case FTasks[SizeUInt(I)].Status of
-      tsPending: Inc(APending);
-      tsRunning: Inc(ARunning);
-      tsSuccess: Inc(ASuccess);
-      tsFailed: Inc(AFailed);
-    end;
+  if FLock <> nil then FLock.Acquire;
+  try
+    if FTasks = nil then
+      Exit;
+    for I := 0 to LongInt(FTasks.Count) - 1 do
+      case FTasks[SizeUInt(I)].Status of
+        tsPending: Inc(APending);
+        tsRunning: Inc(ARunning);
+        tsSuccess: Inc(ASuccess);
+        tsFailed: Inc(AFailed);
+      end;
+  finally
+    if FLock <> nil then FLock.Release;
+  end;
 end;
 
 end.

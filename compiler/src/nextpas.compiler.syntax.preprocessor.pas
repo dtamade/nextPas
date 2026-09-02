@@ -357,12 +357,15 @@ begin
     Assign(F, APath);
     {$I-} Reset(F); {$I+}
     if IOResult <> 0 then Exit(False);
-    while not System.EOF(F) do
-    begin
-      ReadLn(F, Line);
-      AContent := AContent + Line + #10;
+    try
+      while not System.EOF(F) do
+      begin
+        ReadLn(F, Line);
+        AContent := AContent + Line + #10;
+      end;
+    finally
+      Close(F);
     end;
-    Close(F);
     Exit(True);
   end;
   for I := 0 to LongInt(FSearchPaths.Count) - 1 do
@@ -374,12 +377,15 @@ begin
       Assign(F, APath);
       {$I-} Reset(F); {$I+}
       if IOResult <> 0 then Exit(False);
-      while not System.EOF(F) do
-      begin
-        ReadLn(F, Line);
-        AContent := AContent + Line + #10;
+      try
+        while not System.EOF(F) do
+        begin
+          ReadLn(F, Line);
+          AContent := AContent + Line + #10;
+        end;
+      finally
+        Close(F);
       end;
-      Close(F);
       Exit(True);
     end;
   end;

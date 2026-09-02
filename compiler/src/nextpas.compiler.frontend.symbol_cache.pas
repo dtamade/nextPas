@@ -49,7 +49,7 @@ function ComputeSourceFingerprintFromFile(const ASourcePath: string): UInt32;
 implementation
 
 uses
-  nextpas.core.fs, nextpas.core.text.conv;
+  nextpas.core.base, nextpas.core.fs, nextpas.core.text.conv;
 
 { FNV-1a hash — same algorithm as SwissTable.HashStr }
 
@@ -67,28 +67,39 @@ end;
 
 function ComputeSourceFingerprintFromFile(const ASourcePath: string): UInt32;
 var
-  LContent: string;
-  LFile: Text;
-  LLine: string;
+  LBytes: TBytes;
+  LHash: UInt32;
+  I: Integer;
 begin
   Result := 0;
-  if not FileExists(ASourcePath) then
-    Exit;
-
-  LContent := '';
-  Assign(LFile, ASourcePath);
-  Reset(LFile);
   try
-    while not EOF(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      LContent := LContent + LLine + #10;
-    end;
-  finally
-    Close(LFile);
+    LBytes := nextpas.core.fs.ReadFile(ASourcePath);
+  except
+    Exit;
   end;
-
-  Result := ComputeSourceFingerprint(LContent);
+  if Length(LBytes) = 0 then
+    Exit(ComputeSourceFingerprint(''));
+  // zero-copy incremental FNV-1a over normalized content (CRLF->LF, lone CR->LF);
+  // single bulk ReadFile (one allocation, no Text mode) + single pass, avoids O(n^2) LContent+LLine
+  LHash := 2166136261;
+  for I := 0 to High(LBytes) do
+  begin
+    if LBytes[I] = 13 then
+    begin
+      if (I + 1 <= High(LBytes)) and (LBytes[I + 1] = 10) then
+        Continue; // CRLF -> single LF (hashed on LF iteration)
+      LHash := (LHash xor 10) * 16777619; // lone CR -> LF
+    end
+    else
+      LHash := (LHash xor LBytes[I]) * 16777619;
+  end;
+  // ReadLn semantics: every line gets trailing LF, even last line without LF
+  if LBytes[High(LBytes)] <> 10 then
+    LHash := (LHash xor 10) * 16777619;
+  LHash := (LHash xor (LHash shr 16)) * UInt32($7feb352d);
+  LHash := (LHash xor (LHash shr 15)) * UInt32($846ca68b);
+  LHash := LHash xor (LHash shr 16);
+  Result := LHash;
 end;
 
 { TDiskSymbolCache }
@@ -182,34 +193,36 @@ begin
   Assign(LFile, LPath);
   Reset(LFile, 1);
   try
-    if System.FileSize(LFile) < 16 then
-      Exit;
+    try
+      if System.FileSize(LFile) < 16 then
+        Exit;
 
-    BlockRead(LFile, LMagic, 4);
-    if LMagic <> NPB_MAGIC then
-      Exit;
-    BlockRead(LFile, LVersion, 4);
-    if LVersion <> NPB_VERSION then
-      Exit;
+      BlockRead(LFile, LMagic, 4);
+      if LMagic <> NPB_MAGIC then
+        Exit;
+      BlockRead(LFile, LVersion, 4);
+      if LVersion <> NPB_VERSION then
+        Exit;
 
-    ACachedUnit.Fingerprint := 0;
-    BlockRead(LFile, ACachedUnit.Fingerprint, 4);
-    if ACachedUnit.Fingerprint <> AExpectedFingerprint then
-      Exit;
+      ACachedUnit.Fingerprint := 0;
+      BlockRead(LFile, ACachedUnit.Fingerprint, 4);
+      if ACachedUnit.Fingerprint <> AExpectedFingerprint then
+        Exit;
 
-    ACachedUnit.UnitId := ReadStr(LFile);
-    ACachedUnit.SourcePath := ReadStr(LFile);
-    ACachedUnit.SymbolCount := ReadInt(LFile);
-    SetLength(ACachedUnit.Symbols, ACachedUnit.SymbolCount);
-    for I := 0 to ACachedUnit.SymbolCount - 1 do
-      ACachedUnit.Symbols[I] := ReadEntry(LFile);
+      ACachedUnit.UnitId := ReadStr(LFile);
+      ACachedUnit.SourcePath := ReadStr(LFile);
+      ACachedUnit.SymbolCount := ReadInt(LFile);
+      SetLength(ACachedUnit.Symbols, ACachedUnit.SymbolCount);
+      for I := 0 to ACachedUnit.SymbolCount - 1 do
+        ACachedUnit.Symbols[I] := ReadEntry(LFile);
 
-    Result := True;
-  except
-    Result := False;
+      Result := True;
+    except
+      Result := False;
+    end;
+  finally
+    Close(LFile);
   end;
-
-  Close(LFile);
 end;
 
 procedure TDiskSymbolCache.Save(const AUnit: TDiskCachedUnit);

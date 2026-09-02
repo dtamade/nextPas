@@ -412,9 +412,12 @@ begin
   Translate;
   AssignFile(F, APath);
   Rewrite(F);
-  if FLines.Count > 0 then
-    for I := 0 to FLines.Count - 1 do
-      WriteLn(F, FLines[I]);
-  CloseFile(F);
+  try
+    if FLines.Count > 0 then
+      for I := 0 to FLines.Count - 1 do
+        WriteLn(F, FLines[I]);
+  finally
+    CloseFile(F);
+  end;
 end;
 end.
