@@ -513,17 +513,17 @@ var
   GWhen: Int64;
   GParents: TGitOidArray;
   StackCap, StackLen: SizeInt;
-  procedure StackPush(const AOid: TGitOid);
+  procedure StackPush(const AOid: TGitOid); inline;
   begin
     if StackLen >= StackCap then
     begin
-      if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap * 2 else Inc(StackCap, 4096);
+      StackCap := SizeInt(GrowArrayCapacity(SizeUInt(StackCap), SizeUInt(StackLen + 1)));
       SetLength(Stack, StackCap);
     end;
     Stack[StackLen] := AOid;
     Inc(StackLen);
   end;
-  function StackPop(out AOid: TGitOid): Boolean;
+  function StackPop(out AOid: TGitOid): Boolean; inline;
   begin
     Result := StackLen > 0;
     if not Result then Exit;
@@ -722,17 +722,17 @@ var
   GWhen: Int64;
   GParents: TGitOidArray;
   StackCap, StackLen: SizeInt;
-  procedure StackPush(const APushOid: TGitOid);
+  procedure StackPush(const APushOid: TGitOid); inline;
   begin
     if StackLen >= StackCap then
     begin
-      if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap * 2 else Inc(StackCap, 4096);
+      StackCap := SizeInt(GrowArrayCapacity(SizeUInt(StackCap), SizeUInt(StackLen + 1)));
       SetLength(Stack, StackCap);
     end;
     Stack[StackLen] := APushOid;
     Inc(StackLen);
   end;
-  function StackPop(out AOid: TGitOid): Boolean;
+  function StackPop(out AOid: TGitOid): Boolean; inline;
   begin
     Result := StackLen > 0;
     if not Result then Exit;
@@ -1336,7 +1336,7 @@ begin
     for I := 0 to High(AStarts) do
     begin
       if StackLen >= StackCap then
-      begin if StackCap = 0 then StackCap := 64 else if StackCap < 4096 then StackCap := StackCap*2 else Inc(StackCap, 4096); SetLength(Stack, StackCap); end;
+      begin StackCap := SizeInt(GrowArrayCapacity(SizeUInt(StackCap), SizeUInt(StackLen + 1))); SetLength(Stack, StackCap); end;
       Stack[StackLen] := AStarts[I]; Inc(StackLen);
     end;
     while StackLen > 0 do
@@ -1358,7 +1358,7 @@ begin
       for J := 0 to High(GParents) do
       begin
         if StackLen >= StackCap then
-        begin if StackCap=0 then StackCap:=64 else if StackCap<4096 then StackCap:=StackCap*2 else Inc(StackCap,4096); SetLength(Stack, StackCap); end;
+        begin StackCap := SizeInt(GrowArrayCapacity(SizeUInt(StackCap), SizeUInt(StackLen + 1))); SetLength(Stack, StackCap); end;
         Stack[StackLen] := GParents[J]; Inc(StackLen);
       end;
     end;
@@ -1490,13 +1490,13 @@ var
   ParseCache: TCommitParseCache;
   StackCap, StackLen: SizeInt;
   BndCount, BndCap, ResCount, ResCap, ReadyCap, ReadyLen: SizeInt;
-  procedure PushStack(const AOid: TGitOid);
+  procedure PushStack(const AOid: TGitOid); inline;
   begin
     if StackLen >= StackCap then
-    begin if StackCap=0 then StackCap:=64 else if StackCap<4096 then StackCap:=StackCap*2 else Inc(StackCap,4096); SetLength(Stack, StackCap); end;
+    begin StackCap := SizeInt(GrowArrayCapacity(SizeUInt(StackCap), SizeUInt(StackLen + 1))); SetLength(Stack, StackCap); end;
     Stack[StackLen] := AOid; Inc(StackLen);
   end;
-  function PopStack(out AOid: TGitOid): Boolean;
+  function PopStack(out AOid: TGitOid): Boolean; inline;
   begin Result:= StackLen>0; if not Result then Exit; Dec(StackLen); AOid:=Stack[StackLen]; end;
   procedure AppendBoundary(const AOid: TGitOid);
   begin

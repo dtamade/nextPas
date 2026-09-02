@@ -22,6 +22,7 @@ uses
   (Adler32Update) single-source passthrough, same-layer one-way explicitly
   allowed via core/docs/core-module-registry.md (git: L0-L1 plus same-layer
   one-way fs/compress/hash/zlib/checksum). Zero handwritten deflate/adler loop.
+  Source-contract anchor: git-native-zlib-l2-exempt — L2 git.native.zlib → L2 compress + L1 checksum.adler32 one-way, owner compress/checksum; grep-able via git-contract-check C5 / test_git_native source-contract.
   Perf: inline thin forwards (Adler32/Compress), zero-copy PByte+Len view
   via bytes.ops single source (TBytes ref, no Move duplication), resource-free. }
 
@@ -93,11 +94,11 @@ begin
       decTrailingBytes:
         Result := EGitError.Create('corrupt zlib payload: data error');
     else
-      Result := EGitError.Create('corrupt zlib payload: ' + E.Message);
+      Result := EGitError.Create('corrupt zlib payload');
     end
   else
-    // fallback: non-typed EIOError or future raw path — still no Pos
-    Result := EGitError.Create('corrupt zlib payload: ' + E.Message);
+    // fallback: non-typed EIOError or future raw path — typed Code dispatch, no Pos, no E.Message concat
+    Result := EGitError.Create('corrupt zlib payload');
 end;
 
 function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;

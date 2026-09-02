@@ -202,11 +202,14 @@ var P, I: SizeInt;
     Oid: TGitOid;
     Prereq: TGitBundlePrereq;
     Ref: TGitBundleRef;
+    PrereqCnt, PrereqCap, RefsCnt, RefsCap: SizeUInt;
+    LNewCap: SizeUInt;
 begin
   Result.Prerequisites := nil;
   Result.Refs := nil;
   Result.PackOffset := -1;
   APackOff := -1;
+  PrereqCnt := 0; PrereqCap := 0; RefsCnt := 0; RefsCap := 0;
   if Length(AData) < 10 then
     raise EGitError.Create('bundle: file too short');
   // find first "\n\n" (10,10)
@@ -251,8 +254,15 @@ begin
       end;
       Prereq.Oid := Oid;
       Prereq.Comment := Rest;
-      SetLength(Result.Prerequisites, Length(Result.Prerequisites)+1);
-      Result.Prerequisites[High(Result.Prerequisites)] := Prereq;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized, zero-copy record Move
+      if PrereqCnt >= PrereqCap then
+      begin
+        LNewCap := GrowArrayCapacity(PrereqCap, PrereqCnt + 1);
+        SetLength(Result.Prerequisites, LNewCap);
+        PrereqCap := LNewCap;
+      end;
+      Result.Prerequisites[PrereqCnt] := Prereq;
+      Inc(PrereqCnt);
     end
     else
     begin
@@ -270,10 +280,22 @@ begin
       Oid := GitOidFromHex(LowerHex(OidHex));
       Ref.Oid := Oid;
       Ref.Name := Rest;
-      SetLength(Result.Refs, Length(Result.Refs)+1);
-      Result.Refs[High(Result.Refs)] := Ref;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized, zero-copy record Move
+      if RefsCnt >= RefsCap then
+      begin
+        LNewCap := GrowArrayCapacity(RefsCap, RefsCnt + 1);
+        SetLength(Result.Refs, LNewCap);
+        RefsCap := LNewCap;
+      end;
+      Result.Refs[RefsCnt] := Ref;
+      Inc(RefsCnt);
     end;
   end;
+  // single shrink after loop: bytes.ops geometric growth -> one SetLength to exact, avoids O(n²) jitter, stability: managed strings trimmed, no leak
+  if SizeUInt(Length(Result.Prerequisites)) <> PrereqCnt then
+    SetLength(Result.Prerequisites, PrereqCnt);
+  if SizeUInt(Length(Result.Refs)) <> RefsCnt then
+    SetLength(Result.Refs, RefsCnt);
   Result.PackOffset := P + 2;
   APackOff := P + 2;
 end;
@@ -350,6 +372,7 @@ var Wants: array of TGitOid;
     Comment: string;
     LHeader: TBufStringBuilder;
     LHeaderBytes: TBytes;
+    WantsCnt, WantsCap, ExcludesCnt, ExcludesCap, WantNamesCnt, WantNamesCap, PrereqCommentsCnt, PrereqCommentsCap, LNewCap: SizeUInt;
 begin
   if ABundlePath = '' then
     raise EGitError.Create('bundle: empty bundle path');
@@ -360,6 +383,8 @@ begin
   SetLength(Excludes, 0);
   SetLength(WantNames, 0);
   SetLength(PrereqComments, 0);
+  WantsCnt := 0; WantsCap := 0; ExcludesCnt := 0; ExcludesCap := 0;
+  WantNamesCnt := 0; WantNamesCap := 0; PrereqCommentsCnt := 0; PrereqCommentsCap := 0;
   for I := 0 to High(ARevs) do
   begin
     Raw := TrimLocal(ARevs[I]);
@@ -371,13 +396,26 @@ begin
       if RevName = '' then
         raise EGitError.CreateFmt('bundle: empty exclude "%s"', [Raw]);
       Oid := GitRevParse(AGitDir, RevName);
-      SetLength(Excludes, Length(Excludes)+1);
-      Excludes[High(Excludes)] := Oid;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized, zero-copy Move
+      if ExcludesCnt >= ExcludesCap then
+      begin
+        LNewCap := GrowArrayCapacity(ExcludesCap, ExcludesCnt + 1);
+        SetLength(Excludes, LNewCap);
+        ExcludesCap := LNewCap;
+      end;
+      Excludes[ExcludesCnt] := Oid;
+      Inc(ExcludesCnt);
       // comment for header prereq: commit subject
       Comment := CommitFirstLine(AGitDir, Oid);
       if Comment = '' then Comment := GitOidToHex(Oid);
-      SetLength(PrereqComments, Length(PrereqComments)+1);
-      PrereqComments[High(PrereqComments)] := Comment;
+      if PrereqCommentsCnt >= PrereqCommentsCap then
+      begin
+        LNewCap := GrowArrayCapacity(PrereqCommentsCap, PrereqCommentsCnt + 1);
+        SetLength(PrereqComments, LNewCap);
+        PrereqCommentsCap := LNewCap;
+      end;
+      PrereqComments[PrereqCommentsCnt] := Comment;
+      Inc(PrereqCommentsCnt);
     end
     else
     begin
@@ -395,31 +433,72 @@ begin
         if RevName <> '' then
         begin
           Oid := GitRevParse(AGitDir, RevName);
-          SetLength(Excludes, Length(Excludes)+1);
-          Excludes[High(Excludes)] := Oid;
+          if ExcludesCnt >= ExcludesCap then
+          begin
+            LNewCap := GrowArrayCapacity(ExcludesCap, ExcludesCnt + 1);
+            SetLength(Excludes, LNewCap);
+            ExcludesCap := LNewCap;
+          end;
+          Excludes[ExcludesCnt] := Oid;
+          Inc(ExcludesCnt);
           Comment := CommitFirstLine(AGitDir, Oid);
           if Comment = '' then Comment := GitOidToHex(Oid);
-          SetLength(PrereqComments, Length(PrereqComments)+1);
-          PrereqComments[High(PrereqComments)] := Comment;
+          if PrereqCommentsCnt >= PrereqCommentsCap then
+          begin
+            LNewCap := GrowArrayCapacity(PrereqCommentsCap, PrereqCommentsCnt + 1);
+            SetLength(PrereqComments, LNewCap);
+            PrereqCommentsCap := LNewCap;
+          end;
+          PrereqComments[PrereqCommentsCnt] := Comment;
+          Inc(PrereqCommentsCnt);
         end;
         RevName := Copy(Raw, Pos('..', Raw)+2, MaxInt);
         if RevName = '' then RevName := 'HEAD';
         Oid := GitRevParse(AGitDir, RevName);
-        SetLength(Wants, Length(Wants)+1);
-        Wants[High(Wants)] := Oid;
-        SetLength(WantNames, Length(WantNames)+1);
-        WantNames[High(WantNames)] := RevName;
+        if WantsCnt >= WantsCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantsCap, WantsCnt + 1);
+          SetLength(Wants, LNewCap);
+          WantsCap := LNewCap;
+        end;
+        Wants[WantsCnt] := Oid;
+        Inc(WantsCnt);
+        if WantNamesCnt >= WantNamesCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantNamesCap, WantNamesCnt + 1);
+          SetLength(WantNames, LNewCap);
+          WantNamesCap := LNewCap;
+        end;
+        WantNames[WantNamesCnt] := RevName;
+        Inc(WantNamesCnt);
       end
       else
       begin
         Oid := GitRevParse(AGitDir, Raw);
-        SetLength(Wants, Length(Wants)+1);
-        Wants[High(Wants)] := Oid;
-        SetLength(WantNames, Length(WantNames)+1);
-        WantNames[High(WantNames)] := Raw;
+        if WantsCnt >= WantsCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantsCap, WantsCnt + 1);
+          SetLength(Wants, LNewCap);
+          WantsCap := LNewCap;
+        end;
+        Wants[WantsCnt] := Oid;
+        Inc(WantsCnt);
+        if WantNamesCnt >= WantNamesCap then
+        begin
+          LNewCap := GrowArrayCapacity(WantNamesCap, WantNamesCnt + 1);
+          SetLength(WantNames, LNewCap);
+          WantNamesCap := LNewCap;
+        end;
+        WantNames[WantNamesCnt] := Raw;
+        Inc(WantNamesCnt);
       end;
     end;
   end;
+  // single shrink after loop: geometric growth -> one SetLength to exact, avoids O(n²) jitter
+  if SizeUInt(Length(Wants)) <> WantsCnt then SetLength(Wants, WantsCnt);
+  if SizeUInt(Length(Excludes)) <> ExcludesCnt then SetLength(Excludes, ExcludesCnt);
+  if SizeUInt(Length(WantNames)) <> WantNamesCnt then SetLength(WantNames, WantNamesCnt);
+  if SizeUInt(Length(PrereqComments)) <> PrereqCommentsCnt then SetLength(PrereqComments, PrereqCommentsCnt);
   if Length(Wants) = 0 then
     raise EGitError.Create('bundle: no want refs resolved');
   Pack := BuildPackFromRevs(AGitDir, Wants, Excludes);

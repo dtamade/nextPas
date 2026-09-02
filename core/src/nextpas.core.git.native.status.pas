@@ -192,12 +192,7 @@ var
       begin
         if LCount = LCap then
         begin
-          if LCap = 0 then
-            LCap := 16
-          else if LCap <= High(SizeInt) div 2 then
-            LCap := LCap * 2
-          else
-            LCap := LCount + 1;
+          LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
           SetLength(AOut, LCap);
         end;
         AOut[LCount].Path := APrefixInner + Entries[I].Name;
@@ -532,12 +527,7 @@ begin
       begin
         if LCount = LCap then
         begin
-          if LCap = 0 then
-            LCap := 16
-          else if LCap <= High(SizeInt) div 2 then
-            LCap := LCap * 2
-          else
-            LCap := LCount + 1;
+          LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
           SetLength(AOut, LCap);
         end;
         AOut[LCount] := Rel;
@@ -599,9 +589,7 @@ begin
   if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then Exit;
   if ACount = ACap then
   begin
-    if ACap = 0 then ACap := 16
-    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
-    else ACap := ACount + 1;
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
     SetLength(AOut, ACap);
   end;
   AOut[ACount].Path := APath;
@@ -617,9 +605,7 @@ procedure AppendRenamedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: S
 begin
   if ACount = ACap then
   begin
-    if ACap = 0 then ACap := 16
-    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
-    else ACap := ACount + 1;
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
     SetLength(AOut, ACap);
   end;
   AOut[ACount].Path := ANewPath;
@@ -635,9 +621,7 @@ procedure AppendCopiedFast(var AOut: TGitNativeStatusArray; var ACount, ACap: Si
 begin
   if ACount = ACap then
   begin
-    if ACap = 0 then ACap := 16
-    else if ACap <= High(SizeInt) div 2 then ACap := ACap * 2
-    else ACap := ACount + 1;
+    ACap := SizeInt(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
     SetLength(AOut, ACap);
   end;
   AOut[ACount].Path := ANewPath;
@@ -769,9 +753,7 @@ var
         Continue;
       if LCount = LCap then
       begin
-        if LCap = 0 then LCap := 16
-        else if LCap <= High(SizeInt) div 2 then LCap := LCap * 2
-        else LCap := LCount + 1;
+        LCap := SizeInt(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
         SetLength(Stage0Entries, LCap);
         SetLength(Stage0Pos, LCap);
       end;
@@ -796,9 +778,7 @@ var
     begin
       if LDelCount = LDelCap then
       begin
-        if LDelCap = 0 then LDelCap := 16
-        else if LDelCap <= High(SizeInt) div 2 then LDelCap := LDelCap * 2
-        else LDelCap := LDelCount + 1;
+        LDelCap := SizeInt(GrowArrayCapacity(SizeUInt(LDelCap), SizeUInt(LDelCount + 1)));
         SetLength(Deletes, LDelCap);
       end;
     end;
@@ -806,9 +786,7 @@ var
     begin
       if LAddCount = LAddCap then
       begin
-        if LAddCap = 0 then LAddCap := 16
-        else if LAddCap <= High(SizeInt) div 2 then LAddCap := LAddCap * 2
-        else LAddCap := LAddCount + 1;
+        LAddCap := SizeInt(GrowArrayCapacity(SizeUInt(LAddCap), SizeUInt(LAddCount + 1)));
         SetLength(Adds, LAddCap);
         SetLength(AddEntryPos, LAddCap);
       end;
@@ -817,9 +795,7 @@ var
     begin
       if LBothCount = LBothCap then
       begin
-        if LBothCap = 0 then LBothCap := 16
-        else if LBothCap <= High(SizeInt) div 2 then LBothCap := LBothCap * 2
-        else LBothCap := LBothCount + 1;
+        LBothCap := SizeInt(GrowArrayCapacity(SizeUInt(LBothCap), SizeUInt(LBothCount + 1)));
         SetLength(BothPaths, LBothCap);
         SetLength(BothEntry, LBothCap);
       end;
@@ -936,9 +912,7 @@ begin
       begin
         if LTrackedCount = LTrackedCap then
         begin
-          if LTrackedCap = 0 then LTrackedCap := 16
-          else if LTrackedCap <= High(SizeInt) div 2 then LTrackedCap := LTrackedCap * 2
-          else LTrackedCap := LTrackedCount + 1;
+          LTrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LTrackedCap), SizeUInt(LTrackedCount + 1)));
           SetLength(Tracked, LTrackedCap);
         end;
         Tracked[LTrackedCount] := Idx.Entries[I].Path;
@@ -1070,9 +1044,7 @@ begin
             begin
               if LUntrackedCount = LUntrackedCap then
               begin
-                if LUntrackedCap = 0 then LUntrackedCap := 16
-                else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
-                else LUntrackedCap := LUntrackedCount + 1;
+                LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
                 SetLength(UntrackedStatus, LUntrackedCap);
               end;
               UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
@@ -1142,9 +1114,7 @@ begin
         begin
           if LUntrackedCount = LUntrackedCap then
           begin
-            if LUntrackedCap = 0 then LUntrackedCap := 16
-            else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
-            else LUntrackedCap := LUntrackedCount + 1;
+            LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
             SetLength(UntrackedStatus, LUntrackedCap);
           end;
           UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];
@@ -1180,9 +1150,7 @@ begin
           Continue;
         if LCandCount = LCandCap then
         begin
-          if LCandCap = 0 then LCandCap := 16
-          else if LCandCap <= High(SizeInt) div 2 then LCandCap := LCandCap * 2
-          else LCandCap := LCandCount + 1;
+          LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
           SetLength(Candidates, LCandCap);
         end;
         Candidates[LCandCount].SrcIdx := SI2;
@@ -1215,9 +1183,7 @@ begin
       PairedDst[Cand.DstIdx] := True;
       if LRenameCount = LRenameCap then
       begin
-        if LRenameCap = 0 then LRenameCap := 16
-        else if LRenameCap <= High(SizeInt) div 2 then LRenameCap := LRenameCap * 2
-        else LRenameCap := LRenameCount + 1;
+        LRenameCap := SizeInt(GrowArrayCapacity(SizeUInt(LRenameCap), SizeUInt(LRenameCount + 1)));
         SetLength(RenamePairs, LRenameCap);
       end;
       RenamePairs[LRenameCount] := Cand;
@@ -1250,9 +1216,7 @@ begin
             Continue;
           if LCandCount = LCandCap then
           begin
-            if LCandCap = 0 then LCandCap := 16
-            else if LCandCap <= High(SizeInt) div 2 then LCandCap := LCandCap * 2
-            else LCandCap := LCandCount + 1;
+            LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
             SetLength(Candidates, LCandCap);
           end;
           Candidates[LCandCount].SrcIdx := SI2;
@@ -1273,9 +1237,7 @@ begin
         PairedDst[Cand.DstIdx] := True;
         if LCopyCount = LCopyCap then
         begin
-          if LCopyCap = 0 then LCopyCap := 16
-          else if LCopyCap <= High(SizeInt) div 2 then LCopyCap := LCopyCap * 2
-          else LCopyCap := LCopyCount + 1;
+          LCopyCap := SizeInt(GrowArrayCapacity(SizeUInt(LCopyCap), SizeUInt(LCopyCount + 1)));
           SetLength(CopyPairs, LCopyCap);
         end;
         CopyPairs[LCopyCount] := Cand;
@@ -1352,9 +1314,7 @@ begin
       begin
         if LUntrackedCount = LUntrackedCap then
         begin
-          if LUntrackedCap = 0 then LUntrackedCap := 16
-          else if LUntrackedCap <= High(SizeInt) div 2 then LUntrackedCap := LUntrackedCap * 2
-          else LUntrackedCap := LUntrackedCount + 1;
+          LUntrackedCap := SizeInt(GrowArrayCapacity(SizeUInt(LUntrackedCap), SizeUInt(LUntrackedCount + 1)));
           SetLength(UntrackedStatus, LUntrackedCap);
         end;
         UntrackedStatus[LUntrackedCount].Path := UntrackedPaths[I];

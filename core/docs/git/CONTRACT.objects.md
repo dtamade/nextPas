@@ -8,6 +8,7 @@
 ## 1. 范围与阈值
 - 源聚合：8 单元 + 1 门面 shard（`native.objects` <400 行），单 shard <800 行软阈，满足 `design-conventions.md §2` 必拆阈；跨 shard 仅薄聚合 `native` (<350 行) fan-in。
 - 禁止在对象层手写压缩/哈希：zlib 透传 `compress.Deflate*`，Adler-32 单源 `checksum.adler32`，oid 比对单源 `bytes.ops.SpanEqual`（20-byte 权威 `native.base.TGitOid`）。
+- 同层单向豁免锚点：`git-native-zlib-l2-exempt` 在 `nextpas.core.git.native.zlib.pas:22` 层注释可被 `grep git-native-zlib-l2-exempt` 自动校验（`scripts/git-contract-check.sh` C5 / `test_git_native` source-contract），防止 `L2 compress`/`L1 checksum.adler32` 依赖漂移；仅允许 `Deflate*` + `Adler32Update` 单源透传零 `Move` 重复。
 
 ## 2. 不变量
 - Oid 20-byte 原子：`GitOidIsValidHex/FromHex/ToHex/Same` 单源 `bytes.ops`，`Same` = `SpanEqual(TByteSpan(20),TByteSpan(20))` 零分配；`TGitOid33` 仅 legacy。
@@ -18,7 +19,7 @@
 ## 3. 性能契约（inline/零拷贝，复用 bytes.ops 单源）
 - `GitOidIsValidHex/FromHex/ToHex/Same:inline` ≤80 ns/op；`GitKindFromMode:inline` ≤30 ns/op
 - `GitZlibAdler32(PByte,Len):inline` 零拷贝（`Adler32Update(PByte,Len)` 单源，`ADLER32_MOD/NMAX` 单源，不自建循环）
-- `GitZlibCompress/DecompressPtr: PByte+Len` 零拷贝透传 `compress` owner
+- `GitZlibCompress/DecompressPtr: PByte+Len` 零拷贝透传 `compress` owner；`MapDeflateError` 纯 `TDeflateErrorCode` 分发，无 `E.Message` 拼接，热错路径零非定长分配
 - 门禁：`bench_git: Oid/*, Kind/*, Zlib/*, Adler32/*` 详见总 CONTRACT §7 的 Go/Rust 同机 A/B 归一双锚。
 
 ## 4. 稳定性

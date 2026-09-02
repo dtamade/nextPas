@@ -73,11 +73,13 @@ function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
-uses
-  nextpas.core.git.libgit2;
+{ facade impl zero libgit2: inline → factory(gbAuto) keeps compile graph pure;
+  libgit2 injected via RegisterLibGit2Creator (bytes.ops single-source, no {$IFDEF}) }
 
 function NewGitManager: IGitManager; inline;
 begin
+  { perf: inline value-type TGitBackend dispatch, single interface move zero-copy,
+    no alloc, no dlopen when gbNative; gbAuto/gbLibGit2 fail-closed if not registered }
   Result := nextpas.core.git.factory.NewGitManager(gbAuto);
 end;
 

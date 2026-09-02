@@ -2,8 +2,8 @@
 
 **模块**：`nextpas.core.git.*`
 **层级**：L2
-**北极星**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` 或 `uses nextpas.core.git.factory; NewNativeGitManager/NewGitManager(gbNative)`（未拉入 `nextpas.core.git.libgit2` 注册单元）时编译期/运行期/产物三零（`fpc -va Loading` 与 `nm -D` 双零，无 `dlopen`/`-lgit2`/`libgit2.so`，产物不含 `libgit2` 声明，`bytes.ops` 零拷贝 + `inline` 值类型枚举分发，接口引用计数零泄漏）；`factory.NewGitManager(gbAuto/gbLibGit2)` 需拉入 `libgit2` 注册单元才可用，否则 fail-closed 抛 `EGitError`；全维度三零经直连或 factory 纯路径达成，`gbAuto=gbLibGit2` 阶段 `uses nextpas.core.git` 门面仍含 `libgit2`（经门面 impl 注入，见 §3）。
-**状态**：Phase 0 契约冻结（gbAuto 首版 = gbLibGit2，见 §3 迁移公告；Phase 0–4 `uses nextpas.core.git` 门面仍含编译图，全维度北极星经直连 `native.manager` 或 `factory(gbNative)/NewNativeGitManager` 未拉入 `libgit2` 时达成）
+**北极星**：`uses nextpas.core.git; NewGitManager` 或 `uses nextpas.core.git.factory; NewNativeGitManager/NewGitManager(gbNative)` 或 `uses nextpas.core.git.native.manager; TNativeGitManager.Create`（未拉入 `nextpas.core.git.libgit2` 注册单元）时编译期/运行期/产物三零（`fpc -va Loading` 与 `nm -D` 双零，无 `dlopen`/`-lgit2`/`libgit2.so`，产物不含 `libgit2` 声明，`bytes.ops` 零拷贝 + `inline` 值类型枚举分发，接口引用计数零泄漏）；`factory.NewGitManager(gbAuto/gbLibGit2)` 需显式 `uses nextpas.core.git.libgit2` 注册才可用，否则 fail-closed 抛 `EGitError`；全维度三零经门面/ factory 纯路径/直连三重达成（门面 impl 零 libgit2，base←intf←factory←facade 隔离）。
+**状态**：Phase 5 门面纯化完成（gbAuto 首版仍 = gbLibGit2，见 §3 迁移公告；门面 impl 零 libgit2，`uses nextpas.core.git` 亦三零，仍需显式 `uses nextpas.core.git.libgit2` 才走 libgit2 轨道）
 **关联**：`CONTRACT.md` §1.1 / `native-reference-map.md` / `scripts/git-contract-check.sh` C4（`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义）
 
 ---
@@ -28,18 +28,17 @@ native.*              libgit2.ffi / binding / backend / bindings
                             |
       nextpas.core.git.factory (TGitBackend, NewGitManager/NewNativeGitManager, RegisterLibGit2Creator) ← 静态仅 native.manager
                 ↑                    ↑
-      nextpas.core.git (聚合门面，re-export + inline → factory, impl uses libgit2 触发注册，兼容路径)
-       nextpas.core.git.libgit2 (初始化注册 libgit2 后端)
+      nextpas.core.git (聚合门面，re-export base/intf + inline → factory(gbAuto)，impl 零 libgit2，base←intf←impl←facade 隔离)
+       nextpas.core.git.libgit2 (初始化 RegisterLibGit2Creator(@NewGitManager)，显式 uses 才注入 libgit2 轨道)
 ```
 
 ### 1.2 路径说明
 
-- **纯路径（全维度三零）**：`factory(gbNative)`/`NewNativeGitManager` 或 `native.manager.TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading libgit2` 零命中与 `nm -D <pure_bin> | grep " git_"` 零命中，双零；未拉入 `libgit2` 注册单元时编译图零 `libgit2`，`bytes.ops` 零拷贝 + `inline` 值类型枚举零拷贝分发，接口引用计数零泄漏，资源 `try..finally` 不丢，`EGitError` 单源 `native.base`）。
-- **全维度零 `libgit2` 直连路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 同上三零（直连与 factory 纯路径双重达成，未拉入 `libgit2` 时编译图/产物双零）。
-- **兼容路径**：`factory(gbAuto)` 首版 → `libgit2.manager` → 现有行为不变；
-  存量 `uses nextpas.core.git; NewGitManager;` 零改动，仍走 `dlopen`。
+- **纯路径（全维度三零）**：`git.NewGitManager`（未显式 uses libgit2）或 `factory(gbNative)`/`NewNativeGitManager` 或 `native.manager.TNativeGitManager.Create` → `native.*` → 编译期/运行时/产物三零（`fpc -va Loading libgit2` 零命中与 `nm -D <pure_bin> | grep " git_"` 零命中，双零；未拉入 `libgit2` 注册单元时编译图零 `libgit2`，`bytes.ops` 零拷贝 + `inline` 值类型枚举零拷贝分发，接口引用计数零泄漏，资源 `try..finally` 不丢，`EGitError` 单源 `native.base`）。
+- **全维度零 `libgit2` 直连路径**：`uses nextpas.core.git.native.manager; TNativeGitManager.Create` → `native.*` → 同上三零（门面/ factory 纯路径/直连三重达成，未拉入 `libgit2` 时编译图/产物双零）。
+- **兼容路径**：显式 `uses nextpas.core.git.libgit2; factory(gbAuto)` 或 `git.NewGitManager`（已注册）首版 → `libgit2.manager` → 显式注册后与旧行为一致；未注册时 `gbAuto/gbLibGit2` fail-closed 抛 `EGitError`（`not registered`）。
 - **归一原则**：依赖隔离在单元级（`uses` 图），FPC 通过编译图决定链接，不用 `{$IFDEF}` 分叉。
-- **汇聚点**：`factory` 静态仅依赖 `native.manager`，`libgit2` 经 `RegisterLibGit2Creator` 注册注入；`nextpas.core.git` 门面为兼容路径唯一静态聚合点（impl uses libgit2 触发注册）；其余单元不得跨轨。
+- **汇聚点**：`factory` 静态仅依赖 `native.manager`，`libgit2` 经 `RegisterLibGit2Creator` 注册注入；`nextpas.core.git` 门面 impl 零 libgit2（`base←intf←factory←facade` 隔离），不再为兼容路径静态聚合点，需显式 `uses nextpas.core.git.libgit2` 才注入；其余单元不得跨轨。
 - **枚举锚点**：后端选择由 `TGitBackend = (gbNative, gbLibGit2, gbAuto)` 驱动，定义于 `nextpas.core.git.factory`，首版 `gbAuto=gbLibGit2`，语义详见 §4。
 
 ### 1.3 允许 / 禁止
@@ -51,7 +50,7 @@ native.*              libgit2.ffi / binding / backend / bindings
 | `git.libgit2.manager` | `git.intf`, `git.libgit2.ffi/binding/backend` | `git.native.*`（除 `base` 的 `EGitError` 收敛外） |
 | `git.factory` | `git.base`, `git.intf`, `git.native.manager` (+ `native.base` EGitError) | `git.libgit2*` 静态（经注册注入） |
 | `git.libgit2` | `git.intf`, `git.libgit2.ffi/binding/backend`, `git.factory` (注册) | `git.native.*` |
-| `git.pas` 门面 | `git.base`, `git.intf`, `git.factory` (+ impl `git.libgit2` 兼容注入) | `git.native.*` 直引 |
+| `git.pas` 门面 | `git.base`, `git.intf`, `git.factory` (impl 零 libgit2，`base←intf←factory←facade` 隔离) | `git.libgit2*` / `git.native.*` 直引（需显式 uses libgit2 才走 libgit2 轨道） |
 
 ---
 
@@ -59,12 +58,12 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 | uses 场景 | 后端参数 | 实际后端 | 是否含 libgit2（编译图 / 运行时 dlopen / 产物符号） |
 |-----------|----------|----------|------------------------------------------------------|
-| `uses nextpas.core.git; NewGitManager;` | `gbAuto`（默认） | `gbLibGit2`（首版） | 是 / 是（`dlopen libgit2.so`）/ 是（`git_*` 符号） |
-| `uses nextpas.core.git.factory; NewGitManager(gbNative);` 或 `NewNativeGitManager;` | `gbNative` | `gbNative` | 否（未拉入 `libgit2` 注册单元时 fpc -va 零命中；拉入则与兼容路径同） / 否 / 否（未拉入时产物不含 `git_` 符号；三零经 factory 纯路径或直连达成，`inline` 值类型枚举零拷贝） |
-| `uses nextpas.core.git.factory; NewGitManager(gbLibGit2);` | `gbLibGit2` | `gbLibGit2` | 是 / 是 / 是 |
-| `uses nextpas.core.git.factory; NewGitManager(gbAuto);` | `gbAuto` | `gbLibGit2`（首版）→ 下版本 `gbNative` | 首版是 / 首版是 / 首版是；下版本否 |
+| `uses nextpas.core.git; NewGitManager;` | `gbAuto`（默认） | `gbLibGit2`（首版, 已注册）/ fail-closed（未注册） | 未显式 uses libgit2 时否 / 否 / 否（门面 impl 零 libgit2；显式 `uses nextpas.core.git.libgit2` 注册后是 / 是 / 是） |
+| `uses nextpas.core.git.factory; NewGitManager(gbNative);` 或 `NewNativeGitManager;` | `gbNative` | `gbNative` | 否 / 否 / 否（`inline` 值类型枚举零拷贝，未拉入 libgit2 注册单元时三零，经门面/ factory 纯路径/直连三重达成） |
+| `uses nextpas.core.git.factory; NewGitManager(gbLibGit2);` | `gbLibGit2` | `gbLibGit2` | 需显式注册时是 / 是 / 是；未注册时 fail-closed（`EGitError not registered`）/ 否 / 否 |
+| `uses nextpas.core.git.factory; NewGitManager(gbAuto);` | `gbAuto` | `gbLibGit2`（首版, 已注册）→ 下版本 `gbNative` | 已注册时首版是 / 是 / 是；未注册时否（fail-closed）/ 否 / 否；下版本否 |
 | `uses nextpas.core.git.native.manager; TNativeGitManager.Create;` | —（直连） | `gbNative` | 否 / 否 / 否 |
-| `uses nextpas.core.git;` 但不调用 `NewGitManager`（仅类型） | — | — | 取决于门面实现：重构后门面仅 `uses factory`，类型 re-export 不拉 libgit2；若门面仍硬 `uses libgit2` 则仍含（Phase 2 消除） |
+| `uses nextpas.core.git;` 但不调用 `NewGitManager`（仅类型） | — | — | 否（门面 impl 零 libgit2，类型 re-export 不拉 libgit2） |
 
 > 判定标准：`fpc -va` 的 `Loading` 行出现 `libgit2` 即视为编译图污染；
 `nm -D build/bin/<pure>` 含 `git_` 视为产物污染。
@@ -75,17 +74,17 @@ native.*              libgit2.ffi / binding / backend / bindings
 
 ### 3.1 gbAuto 语义版本化
 
-- **首版（Phase 0–4）**：`gbAuto = gbLibGit2`。存量代码 `NewGitManager` / `NewGitManager(gbAuto)` 行为与重构前完全一致，零 breaking change；此阶段 `uses nextpas.core.git` 门面仍含 `libgit2`（impl 注入），`factory(gbNative)`/`NewNativeGitManager` 未拉入 `libgit2` 时已达成全维度三零，直连 `native.manager` 亦三零。
-- **下版本（公告）**：`gbAuto` 将切换为 `gbNative`。切换前将在 `CHANGELOG.md` 与本文件顶部以 `BREAKING` 公告，并提供 `gbLibGit2` 显式保留路径；届时 `uses nextpas.core.git` 门面默认亦切纯路径，`factory` 注册注入不变，直连与 factory 纯路径双重三零。
-- 迁移建议：新代码显式传参 `gbNative` 或 `gbLibGit2`，避免依赖 `gbAuto` 的隐式默认值；`gbAuto` 仅用于“跟随默认后端”的场景；需三零证据的纯后端请直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（`fpc -va Loading` / `nm -D` 双零）。
+- **首版（Phase 5）**：`gbAuto = gbLibGit2`（仍需显式 `uses nextpas.core.git.libgit2` 注册才生效，未注册时 `gbAuto/gbLibGit2` fail-closed 抛 `EGitError('not registered')`）；`uses nextpas.core.git` 门面 impl 已零 libgit2（`base←intf←factory←facade` 隔离），未注册时亦三零；`factory(gbNative)`/`NewNativeGitManager`/直连 `native.manager` 均三零。
+- **下版本（公告）**：`gbAuto` 将切换为 `gbNative`。切换前将在 `CHANGELOG.md` 与本文件顶部以 `BREAKING` 公告，并提供 `gbLibGit2` 显式保留路径；届时 `uses nextpas.core.git` 门面默认亦纯路径，`factory` 注册注入不变，门面/ factory 纯路径/直连三重三零。
+- 迁移建议：新代码显式传参 `gbNative` 或 `gbLibGit2`，避免依赖 `gbAuto` 的隐式默认值；`gbAuto` 仅用于“跟随默认后端”的场景；需三零证据的纯后端用门面（未注册时）或 `factory(gbNative)`/`NewNativeGitManager` 或直连 `nextpas.core.git.native.manager.TNativeGitManager.Create`（`fpc -va Loading` / `nm -D` 双零）。
 
 ### 3.2 时间线
 
 | 阶段 | gbAuto 指向 | 备注 |
 |------|-------------|------|
-| Phase 0（当前） | `gbLibGit2` | 契约冻结，C4 门禁落地 |
-| Phase 1–3 | `gbLibGit2` | `native.manager/repository` 闭合，纯测试/Demo 绿 |
-| 下版本 | `gbNative` | 切换前发迁移公告，`gbLibGit2` 仍可用 |
+| Phase 0–4 | `gbLibGit2` | 契约冻结，C4 门禁落地（门面仍 impl 注入 libgit2） |
+| Phase 5（当前） | `gbLibGit2`（需显式注册） | 门面纯化完成（impl 零 libgit2，`base←intf←factory←facade` 隔离，门面亦三零） |
+| 下版本 | `gbNative` | 切换前发迁移公告，`gbLibGit2` 仍可用（显式 `uses libgit2`） |
 
 ---
 
