@@ -60,6 +60,9 @@ procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+// audio capacity helpers — single source geometric growth, moved from audio.base to keep base pure (L0) and reuse bytes.ops owner; inline zero-copy
+procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer = 4); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -155,6 +158,23 @@ begin
   while LCap < ANeed do
     if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
   Result := LCap;
+end;
+
+procedure AudioEnsureBytesCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+begin
+  // perf: inline + bytes.ops single source BytesEnsureCapacity (doubling, zero-copy, amortized O(1) steady)
+  BytesEnsureCapacity(ADest, ARequired);
+end;
+
+procedure AudioEnsureCapacity(var ACap: Integer; const ARequired: Integer; const AMinGrow: Integer); inline;
+begin
+  // perf: inline geometric growth via BytesNextCapacity single source, steady zero alloc after warmup; owner bytes.ops
+  if ACap >= ARequired then Exit;
+  if ACap < AMinGrow then ACap := AMinGrow;
+  while ACap < ARequired do
+  begin
+    if ACap <= High(Integer) div 2 then ACap := ACap * 2 else begin ACap := ARequired; Break; end;
+  end;
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;

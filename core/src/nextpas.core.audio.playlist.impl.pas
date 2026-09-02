@@ -16,6 +16,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.sync.mutex,
   nextpas.core.audio.errors,
   nextpas.core.audio.simd;

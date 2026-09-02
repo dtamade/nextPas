@@ -235,7 +235,7 @@ begin
 end;
 
 function TAudioBusMixer.MixRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var I, LCount, LNeeded: Integer; LFmt: TAudioFormat;
+var I, LCount, LNeeded: Integer; LFmt: TAudioFormat; LBus: IAudioBus;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
@@ -250,18 +250,24 @@ begin
   // scratch preallocated at Create (CAudioBusMixerScratchBytes), realtime grow is violation -> still via AudioEnsureCapacity but steady no alloc
   if Length(FScratch.Data) < LNeeded then EnsureScratch(LNeeded);
   if Length(FScratch.Data) < LNeeded then Exit(AFrames);
-  // snapshot buses lock-free mixing
+  // snapshot buses lock-free mixing — guard nil + local ref (B-prefix异形, zero-alloc steady, avoid double fetch)
   if Length(FSnapshotBuses) < LCount then EnsureSnapshotCapacity(LCount);
   FLock.Acquire; try for I:=0 to LCount-1 do if I < FBusCount then FSnapshotBuses[I] := FBuses[I]; finally FLock.Release; end;
   for I := 0 to LCount - 1 do
   begin
-    AudioSilentFill(FScratch, FSnapshotBuses[I].GetFormat, AFrames);
+    if (I < 0) or (I >= Length(FSnapshotBuses)) then Continue;
+    LBus := FSnapshotBuses[I];
+    if not Assigned(LBus) then Continue;
+    if not LBus.GetFormat.IsValid then Continue;
+    if Length(FScratch.Data) < LNeeded then Continue;
+    AudioSilentFill(FScratch, LBus.GetFormat, AFrames);
     try
-      (FSnapshotBuses[I] as IRealtimeAudioSource).FillRealtime(FScratch, AFrames);
+      (LBus as IRealtimeAudioSource).FillRealtime(FScratch, AFrames);
     except
       Continue;
     end;
-    SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FSnapshotBuses[I].GetFormat.Channels, 1.0);
+    if (Length(FScratch.Data)=0) or (Length(ABuffer.Data)=0) then Continue;
+    SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * LBus.GetFormat.Channels, 1.0);
   end;
   Result := AFrames;
 end;

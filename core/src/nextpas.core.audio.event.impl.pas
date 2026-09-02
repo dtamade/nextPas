@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.base.utils,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
