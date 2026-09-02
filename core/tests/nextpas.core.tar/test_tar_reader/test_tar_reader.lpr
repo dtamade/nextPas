@@ -50,6 +50,7 @@ var
   R: TTarReader;
   H: TTarHeader;
   Data, Out: TBytes;
+  LSlice: TByteSpan;
 begin
   Data := BytesOf('hello tar');
   S := CreateBytesStream;
@@ -68,7 +69,8 @@ begin
     CheckTrue(R.Next(H), 'first');
     CheckEqual('a.txt', H.Name, 'name');
     CheckEqual(9, H.Size, 'size');
-    Out := R.EntryData;
+    CheckTrue(R.TrySlice(LSlice), 'slice');
+    Out := SpanClone(LSlice);
     CheckTrue(SameBytes(Out, BytesOf('hello tar')), 'payload');
     CheckTrue(R.Next(H), 'second');
     CheckEqual('dir/', H.Name, 'dir name');
@@ -118,6 +120,7 @@ var
   H: TTarHeader;
   Hello: TBytes;
   Sum, I: Integer;
+  LSp: TByteSpan;
   procedure PutTextAt(AOfs: Integer; const V: string);
   begin
     // single-source: bytes.ops.CopyStringToBuffer zero-copy PAnsiChar view, single Move, owner bytes.ops
@@ -145,7 +148,8 @@ begin
   try
     CheckTrue(R.Next(H), 'entry');
     CheckEqual(5, H.Size, 'base256 size');
-    CheckTrue(SameBytes(R.EntryData, Hello), 'payload');
+    CheckTrue(R.TrySlice(LSp), 'slice');
+    CheckTrue(SameBytes(SpanClone(LSp), Hello), 'payload');
   finally R.Free; end;
   B[3] := B[3] xor $20;
   try
@@ -229,6 +233,7 @@ var
   H: TTarHeader;
   PaxRec: string;
   PaxBytes: TBytes;
+  Guard: IInterface;
 begin
   Tar := nil;
   PaxRec := TarFormatPaxRecord('path', 'inherited.txt');
@@ -243,10 +248,41 @@ begin
   FillChar(Tar[Length(Tar)-1024], 1024, 0);
   R := TTarReader.Create(Tar);
   try
+    // persistence requires guard scope; without guard g is single-use auto-cleared to prevent pollution
+    Guard := R.AcquireGlobalPaxGuard;
     CheckTrue(R.Next(H), 'first after g');
-    CheckEqual('inherited.txt', H.Name, 'g persists entry1');
+    CheckEqual('inherited.txt', H.Name, 'g persists entry1 with guard');
     CheckTrue(R.Next(H), 'second after g');
-    CheckEqual('inherited.txt', H.Name, 'g persists entry2 multi-entry inheritance');
+    CheckEqual('inherited.txt', H.Name, 'g persists entry2 with guard multi-entry');
+    CheckTrue(R.Next(H)=False, 'end');
+  finally R.Free; end;
+end;
+
+procedure TestGlobalPaxSingleUseWithoutGuard;
+var
+  Tar: TBytes;
+  R: TTarReader;
+  H: TTarHeader;
+  PaxRec: string;
+  PaxBytes: TBytes;
+begin
+  Tar := nil;
+  PaxRec := TarFormatPaxRecord('path', 'once.txt');
+  PaxBytes := StringToBytes(PaxRec);
+  EmitHeader(Tar, '', 'g', Length(PaxBytes));
+  AppendPayload(Tar, PaxBytes);
+  EmitHeader(Tar, 'a.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('hi1'));
+  EmitHeader(Tar, 'b.txt', '0', 3);
+  AppendPayload(Tar, BytesOf('hi2'));
+  SetLength(Tar, Length(Tar) + 1024);
+  FillChar(Tar[Length(Tar)-1024], 1024, 0);
+  R := TTarReader.Create(Tar);
+  try
+    CheckTrue(R.Next(H), 'first after g');
+    CheckEqual('once.txt', H.Name, 'g single-use first');
+    CheckTrue(R.Next(H), 'second');
+    CheckEqual('b.txt', H.Name, 'g auto-cleared second without guard prevents pollution');
     CheckTrue(R.Next(H)=False, 'end');
   finally R.Free; end;
 end;
@@ -294,6 +330,7 @@ begin
   Suite.Test('base256 and checksum', @TestBase256AndChecksum);
   Suite.Test('zero-copy slice and stream', @TestZeroCopySliceAndStream);
   Suite.Test('global pax multi-entry inheritance', @TestGlobalPaxMultiEntryInheritance);
+  Suite.Test('global pax single-use without guard', @TestGlobalPaxSingleUseWithoutGuard);
   Suite.Test('global pax malicious clear', @TestGlobalPaxMaliciousClear);
   Runner := TSuiteRunner.Create('main');
   Runner.Add(Suite);

@@ -2,8 +2,14 @@ unit nextpas.core.tar.builder;
 {**
  * @desc Tar 链式构造器：ZipBuilder 手感的薄门面。
  *
- * 薄委托 `TTarWriter`，仅做流畅 API 封装，不含序列化逻辑，
- * 字节形态与写器一致，单工厂 `TarBuilder` / `TarBuilderWithCapacity`。
+ * 极简两字段薄委托 `FBuilder+FWriter` 单层归属，`FSink` 仅构造期局域
+ * 经 `TTarWriter` 单缝持有，零冗余；`FFinished/FLogger` 合并至 `FWriter.IsFinished`
+ * 单源，`Destroy` 单层 fail-closed 硬失败防缺两零块截断（非 unwind 抛
+ * `EInvalidOperationError`，unwind 期 `IsExceptionUnwinding` 抑制次生并依
+ * 赖 `TTarWriter` 内置 `log.intf` 可观测），消除.Builder/Writer双层Finish
+ * 语义重叠，门面极简高级感与 ZipBuilder 单 `FWriter` 手感对齐；联邦
+ * 单缝经 `nextpas.core.archive.fs` 联邦，字节形态与写器一致，单工厂
+ * `TarBuilder` / `TarBuilderWithCapacity`。
  *
  * 联邦 — 唯一经 `nextpas.core.archive.fs` 单缝联邦。
  * 与 `tar.fs` 共用单源 `CreateArchiveBuilder` / `IArchiveBuilder` /
@@ -24,13 +30,11 @@ unit nextpas.core.tar.builder;
  * 零拷贝 64K pooled 复用缓冲分块 `Move` 单源 `bytes.ops`（经
  * `writer` 单源透出），委托 `writer` 单源。
  *
- * 稳定性 — `Destroy` fail-closed：未 `Finish` 析构即硬失败
- * （缺两零块截断），非 unwind 期抛 `EInvalidOperationError`，
- * unwind 期 `IsExceptionUnwinding` 抑制次生以保原始异常上下文
- * 并经 `log.intf ILogger.Warn` 可观测（`NullLogger` 默认零分配，
- * 无 `System.WriteLn` 直触），避免链式漏 `Finish` 静默丢数据；
- * `try..finally` 必释 `FWriter`，复用 `TTarWriter` 同策略，
- * 无 `System.WriteLn` 直触 RTL 控制台，L2 经 `log.intf` 平台抽象克制。
+ * 稳定性 — `Destroy` fail-closed 单源：以 `FWriter.IsFinished` 为
+ * 唯一真源判未 `Finish` 即截断，`try..finally` 必释 `FWriter`（其
+ * `Destroy` 内置 `IsExceptionUnwinding` 次生抑制 + `ILogger.Warn`
+ * `NullLogger` 零分配可观测，L2 经 `log.intf` 单缝），`FBuilder`
+ * 接口自动释，零泄漏无 `System.WriteLn` 直触。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -51,17 +55,13 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.log.intf,
   nextpas.core.archive.fs; // federation single seam: 唯一入口 archive.fs，IArchiveBuilder/CreateArchiveBuilder/Sink 单源联邦（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出），注册表显式登记，消除 L2 同层双引稀释
 
 type
   TTarBuilder = class(TInterfacedObject, ITarBuilder)
   private
-    FBuilder: IArchiveBuilder;
-    FSink: IWriter;
-    FWriter: TTarWriter;
-    FFinished: Boolean;
-    FLogger: ILogger; // L2 经 log.intf 单缝可观测（NullLogger 默认零分配），不直触 System.StdErr，平台抽象克制
+    FBuilder: IArchiveBuilder; // 联邦单源直写切片，bytes.builder 几何扩容单源 inline 零拷贝
+    FWriter: TTarWriter; // 薄委托唯一写器，持有 Sink 单缝，IsFinished 单源
   public
     constructor Create; overload;
     constructor CreateWithCapacity(const AEstimatedTotal: SizeUInt); overload;
@@ -76,41 +76,36 @@ type
   end;
 
 constructor TTarBuilder.Create;
+var LSink: IWriter;
 begin
   inherited Create;
-  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，联邦单源 CreateArchiveBuilder 经 archive.fs 透出 bytes.builder 几何扩容单源，inline 零拷贝直写切片（bytes.ops 单源 Move），消除与 tar.fs 同模板重复
-  FLogger := NullLogger(); // L2 经 log.intf 平台抽象可观测，默认 no-op 零分配 inline 薄转发，无 StdErr 直触
-  CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, FSink);
-  FWriter := TTarWriter.Create(FSink);
-  FFinished := False;
+  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，联邦单源 CreateArchiveBuilder 经 archive.fs 透出 bytes.builder 几何扩容单源，inline 零拷贝直写切片（bytes.ops 单源 Move），消除与 tar.fs 同模板重复；LSink 局域经 FWriter 单缝持有，零字段冗余
+  CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, LSink);
+  FWriter := TTarWriter.Create(LSink);
 end;
 
 constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
-var LCap: SizeUInt;
+var LCap: SizeUInt; LSink: IWriter;
 begin
   inherited Create;
   // perf: 按预估总量预扩容 4K 对齐，TarBuilderCapacityFor 单源，避免大归档多次 2× 几何扩容与重分配；inline/零拷贝证据经 archive.fs 联邦透出 bytes.builder 单源（AppendBytes 单次 Move，bytes.ops 单源）
-  FLogger := NullLogger(); // 同 Create 单源，log.intf 克制不直触 RTL 控制台
   LCap := TarBuilderCapacityFor(AEstimatedTotal);
-  CreateArchiveBuilder(LCap, FBuilder, FSink);
-  FWriter := TTarWriter.Create(FSink);
-  FFinished := False;
+  CreateArchiveBuilder(LCap, FBuilder, LSink);
+  FWriter := TTarWriter.Create(LSink);
 end;
 
 destructor TTarBuilder.Destroy;
 var
   LUnwinding: Boolean;
 begin
-  // fail-closed：未 Finish 即截断（缺两零块）硬失败；IsExceptionUnwinding 判 unwind 期抑制次生以保原始异常，可观测经 log.intf ILogger.Warn 单源薄转发（NullLogger no-op 零拷贝 inline），不直触 System.WriteLn/System.StdErr，L2 平台抽象克制；try..finally 必释 FWriter，复用 TTarWriter 同策略，零额外拷贝
+  // fail-closed 单层：以 FWriter.IsFinished 单源判未 Finish 即截断（缺两零块）硬失败；IsExceptionUnwinding 判 unwind 期抑制次生以保原始异常，可观测由 FWriter.Destroy 内置 log.intf ILogger.Warn 单缝承接（NullLogger no-op 零拷贝 inline），不直触 System.WriteLn；try..finally 必释 FWriter，FBuilder 接口自动释，无 linger 峰值
   LUnwinding := IsExceptionUnwinding;
   try
-    if not FFinished then
+    if (FWriter <> nil) and (not FWriter.IsFinished) then
     begin
       if not LUnwinding then
         raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
-      // unwind 期仅可观测，不抛次生覆盖原始异常；L2 经 log.intf 单缝，无 RTL 控制台直触
-      if FLogger <> nil then
-        FLogger.Warn('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
+      // unwind 期仅抑制次生，不抛覆盖原始异常；可观测由 FWriter.Destroy 经 log.intf 单缝 Warn
     end;
   finally
     FWriter.Free;
@@ -159,8 +154,8 @@ end;
 
 function TTarBuilder.Finish: TBytes; inline;
 begin
+  // 单层 Finish：委托 FWriter.Finish 写两零块（幂等 via IsFinished），再经 FBuilder.ToBytes 单次分配+Move 零额外拷贝
   FWriter.Finish;
-  FFinished := True;
   // 零拷贝直写切片：复用 builder.ToBytes 单次分配+Move，消除 ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
   Result := FBuilder.ToBytes;
 end;

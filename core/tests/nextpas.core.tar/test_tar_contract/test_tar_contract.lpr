@@ -196,15 +196,15 @@ var
 begin
   S := ReadText('src/nextpas.core.tar.reader.pas');
   Low := LowerCase(S);
-  // 8字段单遍512融合：FieldSlice 不再每字段 SpanIndexOf，需经 EnsureHeaderScanned 单次扫描
-  Check(Pos('ensureheaderscanned', Low) > 0, 'reader has EnsureHeaderScanned fusion entry');
-  Check((Pos('fscanvalid', Low) > 0) or (Pos('fscan.valid', Low) > 0) or (Pos('ttarscancache', Low) > 0), 'reader has FScanValid cache flag (flat or record TTarScanCache.Valid)');
-  Check((Pos('fnamelen', Low) > 0) or (Pos('namelen', Low) > 0), 'reader caches FNameLen via single pass');
-  Check((Pos('for i := 0 to cblocksize - 1', Low) > 0) or (Pos('spanindexof', Low) > 0), 'single 512 loop or 7×SpanIndexOf fusion exists');
-  // FieldSlice 必须含缓存分发，避免8次 SIMD；单源 C_TAR_LAYOUT 零错位
+  // 单遍512融合：FieldSlice 经不透明缓存单次 ScanNulFieldTruncations，接口不暴露七字段扁平化 TTarScanCache
+  Check(Pos('ttarscancache', Low) = 0, 'reader must not expose TTarScanCache flat 7-field cache in interface');
+  Check(Pos('scannulfieldtruncations', Low) > 0, 'reader uses ScanNulFieldTruncations single-source single-pass 512B');
+  Check((Pos('fscanvalid', Low) > 0) and (Pos('fscanpos', Low) > 0) and (Pos('fscanlens', Low) > 0), 'reader has opaque FScanValid/FScanPos/FScanLens generic cache');
   Check(Pos('c_tar_layout', Low) > 0, 'reader references tar layout single source');
-  // 确保 FieldSlice 内仅一次 fallback SpanIndexOf（非头块），而非8次 per entry naive
   Check(Pos('lcached', Low) > 0, 'FieldSlice uses LCached fusion dispatch');
+  // EnsureHeaderScanned 融合实现细节已下沉为实现侧 CacheHeader，不在接口暴露
+  Check(Pos('procedure ensureheaderscanned', Low) = 0, 'EnsureHeaderScanned must not be exposed as class method');
+  Check(Pos('cacheheader', Low) > 0, 'impl uses CacheHeader opaque helper');
 end;
 
 procedure TestReaderInlineGate;
@@ -220,6 +220,9 @@ begin
   Check(Pos('function slicetostring(abase: pbyte; alen: sizeuint): string; inline', Low) = 0, 'SliceToString must not be inline (Move Result[1] red line1)');
   Check(Pos('function cachedfield(aofs, alen: sizeuint; var acached: string): string; inline', Low) = 0, 'CachedField must not be inline (CompareMem @ACached[1] red line1)');
   Check(Pos('function combineprefixname(const aprefix, aname: tbytespan): string; inline', Low) = 0, 'CombinePrefixName must not be inline (Result[1] double feed)');
+  // 已移除 EntryData deprecated 拷贝（401 vs 201 allocs 翻倍），热路径零拷贝 TrySlice；EntryDataOfs/EntryDataSlice 为合法薄转发，需精确匹配 ': tbytes' 避免前缀误命中
+  Check(Pos('function entrydata:', Low) = 0, 'EntryData removed, use TrySlice/EntryDataSlice zero-copy');
+  Check(Pos('function entrydata(', Low) = 0, 'EntryData removed, use TrySlice/EntryDataSlice zero-copy');
   // 薄转发安全者保持 inline
   Check(Pos('function magichasustar: boolean; inline', Low) > 0, 'MagicHasUStar stays inline (safe thin)');
   Check(Pos('procedure clearglobalpax; inline', Low) > 0, 'ClearGlobalPax stays inline (safe)');
@@ -227,6 +230,20 @@ begin
   // 实现侧亦禁 inline（含 Move）
   Check(Pos('function ttarreader.stringfield(aofs, alen: sizeuint): string; inline', Low) = 0, 'impl StringField not inline');
   Check(Pos('function ttarreader.slicetostring(abase: pbyte; alen: sizeuint): string; inline', Low) = 0, 'impl SliceToString not inline');
+end;
+
+procedure TestPaxGlobalIsolation;
+var
+  S, Low: string;
+begin
+  S := ReadText('src/nextpas.core.tar.reader.pas');
+  Low := LowerCase(S);
+  // pax g 全局持久需 guard 作用域，无 guard 单次消费自动清理防跨条目/跨镜像污染
+  Check(Pos('acquireglobalpaxguard', Low) > 0, 'reader has AcquireGlobalPaxGuard RAII');
+  Check(Pos('clearglobalpax', Low) > 0, 'reader has ClearGlobalPax');
+  Check(Pos('fglobalpaxpath', Low) > 0, 'reader has FGlobalPaxPath guard state');
+  Check(Pos('length(fguards) = 0', Low) > 0, 'reader auto-clears global when no guard (single-use)');
+  Check(Pos('fglobalpaxpath := ''''', Low) > 0, 'auto-clear assigns empty to prevent pollution');
 end;
 
 begin
@@ -239,5 +256,6 @@ begin
   Suite.Test('common no inline loops', @TestCommonNoInlineLoops);
   Suite.Test('reader single pass header scan', @TestReaderSinglePass);
   Suite.Test('reader inline redline gate', @TestReaderInlineGate);
+  Suite.Test('pax global isolation', @TestPaxGlobalIsolation);
   if not Suite.Run then Halt(1);
 end.

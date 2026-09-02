@@ -27,7 +27,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | USTAR prefix splitting | Yes | Yes | >100 字符名自动 `prefix/name` 分割，无 prefix 切分时写端以 `pax x` 承载 |
 | GNU base-256 numeric | Yes (overflow) | Yes | 超 octal 容量自动 `$80` + big-endian |
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
-| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes` 最优路径单源，`TarFormatPaxRecord` 薄包装 `SpanToString` 单次 Move），读端 per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由 `IsSafeTarEntryName` 自动 Guard 丢弃、`ClearGlobalPax` 显式或 `AcquireGlobalPaxGuard` RAII 自动隔离；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 零拷贝迭代 `atime/mtime/size` 等扩展键，长度前缀缺空格/非数字/越界/缺换行即抛 `EIOError` 禁回退截断名 |
+| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes` 最优路径单源，`TarFormatPaxRecord` 薄包装 `SpanToString` 单次 Move），读端 per-entry 优于 global，`g` 在 `AcquireGlobalPaxGuard` 作用域内持久至下一 `g` 覆盖、无 guard 时单次消费自动清理防跨条目/跨镜像污染、恶意由 `IsSafeTarEntryName` 自动 Guard 丢弃、`ClearGlobalPax` 显式或 `AcquireGlobalPaxGuard` RAII 自动隔离；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 零拷贝迭代 `atime/mtime/size` 等扩展键，长度前缀缺空格/非数字/越界/缺换行即抛 `EIOError` 禁回退截断名 |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝） |
 
@@ -50,14 +50,13 @@ W.Finish; // 两零块，需显式调用，析构 SafeFail 抑制 EIOError 二�
 ### Read
 
 ```pascal
-var R: TTarReader; H: TTarHeader; Data: TBytes; P: PByte; C: SizeUInt; RS: IReader; S: TByteSpan;
+var R: TTarReader; H: TTarHeader; P: PByte; C: SizeUInt; RS: IReader; S: TByteSpan;
 R := TTarReader.Create(Bytes); // 或 Create(PByte, Count) + WithOptions(bomb 上限)
 while R.Next(H) do
 begin
   WriteLn(H.Name, ' ', H.Size, ' ', Ord(H.Kind));
-  Data := R.EntryData; // 拷贝（SpanClone 单源）
-  if R.TrySlice(S) then // 单一规范零拷贝视图（inline，生命周期绑 Reader）
-    ; // 按需 SpanClone(S) 单次 Move（bytes.ops 单源）
+  if R.TrySlice(S) then // 单一规范零拷贝视图（inline，生命周期绑 Reader），批量 201 vs 401 allocs
+    ; // 按需 SpanClone(S) 单次 Move（bytes.ops 单源），已移除 EntryData 避免峰值翻倍
   if R.EntryDataSlice(P, C) then // 薄转发复用 TrySlice
     RS := R.OpenEntryStream; // 持有型流，Reader 释放后仍可读
 end;
@@ -98,8 +97,8 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Lifecycle 零拷贝视图 vs 持有型流
 
-- `TrySlice`/`EntryDataSlice`：零拷贝 `TByteSpan`/`PByte` 视图，`inline` 单一规范，生命周期绑 `Reader`（`Reader.Free` 后视图悬垂）。
-- `EntryData`：`SpanClone` 单源拷贝，一次 `SetLength+Move`，200×512B 批量提取产生200次分配峰值，热路径优先视图。
+- `TrySlice`/`EntryDataSlice`：零拷贝 `TByteSpan`/`PByte` 视图，`inline` 单一规范，生命周期绑 `Reader`（`Reader.Free` 后视图悬垂），批量 200×512B 仅 201 allocs。
+- 已移除 `EntryData`：原 `SpanClone` 单次拷贝致 401 vs 201 allocs 翻倍，改按需 `SpanClone(TrySlice)` 单次 Move（`bytes.ops` 单源）。
 - `OpenEntryStream`：持有型 `IReader`（`TTarSliceReader.CreateWithHold`固化），`FBuf` 时持有镜像引用，外部 `PByte` 时 `SpanClone` 固化拷贝自包含，`Reader` 释放后仍可读（`bytes.ops.CopyMemory` 单源）。
 
 ```
@@ -112,12 +111,12 @@ Reader ── TrySlice ──► 零拷贝视图（绑 Reader）
 ## Safety Model
 
 - `IsSafeTarEntryName` 拒绝空名、绝对路径、盘符、`\\`、`//` 空段、`./` 单点段、`..` 段；写端 `ValidateTarEntryName` 即 `EArgumentError`，读端/落盘前 `EParseError`，`TarExtractToDir` 对 `H.Name` 二次 `GuardTarNameForRead`。
-- Bomb 守卫：`TTarReadOptions.MaxEntrySize`（默认 1 GiB）单条目、`MaxTotalSize` 跨条目总量，`common.Guard*` 单点 fail-closed；`EntryData`/`EntryDataSlice` 中途生效。
+- Bomb 守卫：`TTarReadOptions.MaxEntrySize`（默认 1 GiB）单条目、`MaxTotalSize` 跨条目总量，`common.Guard*` 单点 fail-closed；`TrySlice`/`EntryDataSlice` 中途生效。
 - 落盘前 `EnsureNoSymlinkInPath` 拒绝路径中符号链接段，避免劫持。
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 单次 `SpanIndexOf` 单源视图；`EntryData` 为 `SpanClone` 单源拷贝，`OpenEntryStream` 持有型 `FHold` 防悬垂，`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 全局持久至下一 `g` 覆盖，`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WriteBlock` 去 inline 避 512 栈 I-Cache 复制膨胀、out-of-line 单拷贝，`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` 64K pooled 复用 `FIOBuf` 于 Finish 即释 amortized 1 alloc 零拷贝，`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` fail-closed（非 unwind 期抛 `EInvalidOperationError` 硬失败防截断，unwind 期 `IsExceptionUnwinding` 抑制次生并 `log.intf` `ILogger.Warn` 薄转发，无 `System.WriteLn/StdErr` 直触）），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarAppendPaxRecord` builder 零拷贝最优路径（`TarFormatPaxRecord` 薄包装单源 `SpanToString`）及 `ArchivePaxParseRecords` 通用 pax-kv 严格校验零拷贝 `PByte` 复用 `bytes.ops` 单源（畸形 `pax: ...` 即抛 `EIOError` 禁回退，`TarParsePaxKVRecords` 供归档族复用；薄守卫 inline，热循环外联）。
+- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 不透明缓存单次 `ScanNulFieldTruncations` 单源（`bytes.ops`）单遍 512B、接口不暴露七字段扁平化，`OpenEntryStream` 持有型 `FHold` 防悬垂，`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 在 guard 作用域内持久至下一 `g` 覆盖、无 guard 单次消费自动清理防污染、`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WriteBlock` 去 inline 避 512 栈 I-Cache 复制膨胀、out-of-line 单拷贝，`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` 64K pooled 复用 `FIOBuf` 于 Finish 即释 amortized 1 alloc 零拷贝，`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` fail-closed（非 unwind 期抛 `EInvalidOperationError` 硬失败防截断，unwind 期 `IsExceptionUnwinding` 抑制次生并 `log.intf` `ILogger.Warn` 薄转发，无 `System.WriteLn/StdErr` 直触）），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarAppendPaxRecord` builder 零拷贝最优路径（`TarFormatPaxRecord` 薄包装单源 `SpanToString`）及 `ArchivePaxParseRecords` 通用 pax-kv 严格校验零拷贝 `PByte` 复用 `bytes.ops` 单源（畸形 `pax: ...` 即抛 `EIOError` 禁回退，`TarParsePaxKVRecords` 供归档族复用；薄守卫 inline，热循环外联）。
 - **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
 - **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 红），`ns/op` `1.5×` WARN 与 `MB/s` `0.65×` WARN；Go/Rust 对照同口径 `compare_go`/`compare_rust` 守卫 `Pascal ns/op ≤1.5×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续两机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门。
 

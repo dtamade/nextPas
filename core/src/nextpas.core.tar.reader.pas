@@ -10,19 +10,6 @@ uses
   nextpas.core.io.intf;
 
 type
-  { — 头扫描记录表：7字段NUL截断缓存收敛为记录，单次512B循环替代7×小Span SIMD扫描，万级条目降调用开销 — }
-  TTarScanCache = record
-    Pos: SizeUInt;
-    Valid: Boolean;
-    NameLen: SizeUInt;
-    PrefixLen: SizeUInt;
-    LinkLen: SizeUInt;
-    UNameLen: SizeUInt;
-    GNameLen: SizeUInt;
-    MagicLen: SizeUInt;
-    VersionLen: SizeUInt;
-  end;
-
   TTarReader = class;
 
   {** @desc RAII guard for global g pax: weak ref to Reader, clears FGlobalPax on scope exit.
@@ -59,13 +46,14 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { — 缓存收敛：7字段 NUL 截断经 bytes.ops ScanNulFieldTruncations 单源单次512B扫描，声明式收敛 — }
-    FScan: TTarScanCache;
+    { header cache: opaque 7-field NUL truncation via bytes.ops single 512B scan — internal, not exposed }
+    FScanValid: Boolean;
+    FScanPos: SizeUInt;
+    FScanLens: array[0..6] of SizeUInt; // [Name,Link,Magic,Version,UName,GName,Prefix] generic, hides 7-field flatten
     FGuards: array of TTarGlobalPaxGuard; // weak list for invalidation, no FBuf retention
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
-    procedure EnsureHeaderScanned;
     { — 热路径外联禁 inline，薄转发可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
     { — 零拷贝视图：字段切片不分配，按需 SpanToString 单次 Move（bytes.ops 单源）— }
@@ -98,8 +86,6 @@ type
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
     constructor CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions); overload;
     function Next(out AHeader: TTarHeader): Boolean;
-    {** @desc 拷贝交付：SpanClone 单源 SetLength+Move；200×512B 批量提取产生200次分配峰值(bench_tar BASELINE extract-all 401 vs extract-slice 201 allocs 翻倍)，热路径优先 TrySlice/EntryDataSlice 零拷贝 inline 视图 *}
-    function EntryData: TBytes; deprecated 'use TrySlice/EntryDataSlice zero-copy view; batch EntryData causes 200× alloc peak (401 vs 201 allocs bench_tar) — prefer TrySlice+SpanClone reuse';
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
@@ -156,8 +142,8 @@ begin
     FData := nil;
   FCount := SizeUInt(Length(AData));
   FPos := 0;
-  FScan.Valid := False;
-  FScan.Pos := 0;
+  FScanValid := False;
+  FScanPos := 0;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -172,8 +158,8 @@ begin
   FData := AData;
   FCount := ACount;
   FPos := 0;
-  FScan.Valid := False;
-  FScan.Pos := 0;
+  FScanValid := False;
+  FScanPos := 0;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -182,28 +168,27 @@ begin
   FCumTotal := 0;
 end;
 
-procedure TTarReader.EnsureHeaderScanned;
+// opaque header scan: single 512B ScanNulFieldTruncations via bytes.ops, hides 7-field flatten — impl only, no interface leak
+procedure CacheHeader(ASelf: TTarReader);
 var
   LFields: array[0..6] of TFieldRange;
   LLens: array[0..6] of SizeUInt;
   LBlock: TByteSpan;
 begin
-  if FScan.Valid and (FScan.Pos = FPos) then
-    Exit;
-  if FPos + C_TAR_BLOCK_SIZE > FCount then
+  if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
+  if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    FScan.NameLen := C_TAR_LAYOUT.Name.Len;
-    FScan.PrefixLen := C_TAR_LAYOUT.Prefix.Len;
-    FScan.LinkLen := C_TAR_LAYOUT.LinkName.Len;
-    FScan.UNameLen := C_TAR_LAYOUT.UName.Len;
-    FScan.GNameLen := C_TAR_LAYOUT.GName.Len;
-    FScan.MagicLen := C_TAR_LAYOUT.Magic.Len;
-    FScan.VersionLen := C_TAR_LAYOUT.Version.Len;
-    FScan.Pos := FPos;
-    FScan.Valid := True;
+    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
+    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
+    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
+    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
+    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
+    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
+    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
+    ASelf.FScanPos := ASelf.FPos;
+    ASelf.FScanValid := True;
     Exit;
   end;
-  // declarative: descriptor array + bytes.ops single-source single-pass scan, no Found/Continue nesting
   LFields[0].Off := C_TAR_LAYOUT.Name.Off;     LFields[0].Len := C_TAR_LAYOUT.Name.Len;
   LFields[1].Off := C_TAR_LAYOUT.LinkName.Off; LFields[1].Len := C_TAR_LAYOUT.LinkName.Len;
   LFields[2].Off := C_TAR_LAYOUT.Magic.Off;    LFields[2].Len := C_TAR_LAYOUT.Magic.Len;
@@ -211,17 +196,17 @@ begin
   LFields[4].Off := C_TAR_LAYOUT.UName.Off;    LFields[4].Len := C_TAR_LAYOUT.UName.Len;
   LFields[5].Off := C_TAR_LAYOUT.GName.Off;    LFields[5].Len := C_TAR_LAYOUT.GName.Len;
   LFields[6].Off := C_TAR_LAYOUT.Prefix.Off;   LFields[6].Len := C_TAR_LAYOUT.Prefix.Len;
-  LBlock := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
+  LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
   ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
-  FScan.NameLen := LLens[0];
-  FScan.LinkLen := LLens[1];
-  FScan.MagicLen := LLens[2];
-  FScan.VersionLen := LLens[3];
-  FScan.UNameLen := LLens[4];
-  FScan.GNameLen := LLens[5];
-  FScan.PrefixLen := LLens[6];
-  FScan.Pos := FPos;
-  FScan.Valid := True;
+  ASelf.FScanLens[0] := LLens[0];
+  ASelf.FScanLens[1] := LLens[1];
+  ASelf.FScanLens[2] := LLens[2];
+  ASelf.FScanLens[3] := LLens[3];
+  ASelf.FScanLens[4] := LLens[4];
+  ASelf.FScanLens[5] := LLens[5];
+  ASelf.FScanLens[6] := LLens[6];
+  ASelf.FScanPos := ASelf.FPos;
+  ASelf.FScanValid := True;
 end;
 
 function TTarReader.ByteAt(AOfs: SizeUInt): Byte;
@@ -243,25 +228,25 @@ begin
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // 头块内 7 字段命中缓存零额外 SpanIndexOf，cache miss 缓存失效时仅首字段触发单次 Ensure（后续字段 inline Valid 命中零调用），非头块单次 SpanIndexOf 单源
+  // 头块内 7 字段命中缓存零额外 SpanIndexOf，cache miss 时单次 512B 缓存（后续字段 Valid 命中），非头块单次 SpanIndexOf 单源
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
-    if not (FScan.Valid and (FScan.Pos = FPos)) then
-      EnsureHeaderScanned;
+    if not (FScanValid and (FScanPos = FPos)) then
+      CacheHeader(Self);
     if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-      LLen := FScan.NameLen
+      LLen := FScanLens[0]
     else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-      LLen := FScan.PrefixLen
+      LLen := FScanLens[6]
     else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-      LLen := FScan.LinkLen
+      LLen := FScanLens[1]
     else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-      LLen := FScan.UNameLen
+      LLen := FScanLens[4]
     else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-      LLen := FScan.GNameLen
+      LLen := FScanLens[5]
     else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-      LLen := FScan.MagicLen
+      LLen := FScanLens[2]
     else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-      LLen := FScan.VersionLen
+      LLen := FScanLens[3]
     else
     begin
       // 非 7 缓存字段且位于头块内（防御分支，正常不命中）：单次 SpanIndexOf 单源，避免回退链多分支
@@ -600,7 +585,7 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      // 二次防御：g 早丢弃后仍 IsSafe 复核，显式 ClearGlobalPax 或 RAII AcquireGlobalPaxGuard 自动隔离前继承，调用方可按需清理防跨条目污染
+      // 二次防御：g 早丢弃后仍 IsSafe 复核；无 guard 时单次消费自动清理防跨条目/跨镜像污染，持久需 AcquireGlobalPaxGuard
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
         FGlobalPaxPath := '';
       if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
@@ -610,7 +595,11 @@ begin
       else if FPaxPath <> '' then
         AHeader.Name := FPaxPath
       else if FGlobalPaxPath <> '' then
-        AHeader.Name := FGlobalPaxPath
+      begin
+        AHeader.Name := FGlobalPaxPath;
+        if Length(FGuards) = 0 then
+          FGlobalPaxPath := ''; // auto-clear single-use when no guard, prevent pollution
+      end
       else
       begin
         if MagicHasUStar then
@@ -635,7 +624,11 @@ begin
       else if FPaxLinkPath <> '' then
         AHeader.LinkName := FPaxLinkPath
       else if FGlobalPaxLinkPath <> '' then
-        AHeader.LinkName := FGlobalPaxLinkPath
+      begin
+        AHeader.LinkName := FGlobalPaxLinkPath;
+        if Length(FGuards) = 0 then
+          FGlobalPaxLinkPath := '';
+      end
       else
         AHeader.LinkName := CachedField(FPos + C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, FLastLinkName);
       AHeader.Kind := TypeFlagToKind(Flag);
@@ -670,19 +663,6 @@ begin
     Pad := TarPadToBlock(Size);
     FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(Pad);
   end;
-end;
-
-{ — 性能：SpanClone 单次 SetLength+Move 拷贝，200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice/EntryDataSlice 零拷贝视图（bytes.ops 单源）；本方法保留兼容但 deprecated，批量场景请复用 TrySlice 视图 — }
-function TTarReader.EntryData: TBytes;
-var
-  LS: TByteSpan;
-begin
-  Result := nil;
-  if not TrySlice(LS) then
-    Exit;
-  if UInt64(LS.Len) > UInt64(FMaxEntry) then
-    raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [Int64(LS.Len), Int64(FMaxEntry), FEntryDataOfs]);
-  Result := SpanClone(LS);
 end;
 
 function TTarReader.EntryDataOfs: SizeUInt;

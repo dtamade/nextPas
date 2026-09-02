@@ -18,6 +18,7 @@ uses
   nextpas.core.io.memory,
   nextpas.core.tar,
   nextpas.core.tar.base,
+  nextpas.core.bytes.ops,
   nextpas.core.exception;
 
 const
@@ -126,9 +127,9 @@ begin
 end;
 
 procedure BenchExtractAll(const ACtx: IBenchContext);
-var R: TTarReader; H: TTarHeader; LGot: TBytes;
+var R: TTarReader; H: TTarHeader; LSp: TByteSpan; LGot: TBytes;
 begin
-  R := TTarReader.Create(GArchive); try while R.Next(H) do begin LGot := R.EntryData; BenchBlackBoxBytes(LGot[0], Length(LGot)); end; finally R.Free; end; ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
+  R := TTarReader.Create(GArchive); try while R.Next(H) do if R.TrySlice(LSp) then begin LGot := SpanClone(LSp); BenchBlackBoxBytes(LGot[0], Length(LGot)); end; finally R.Free; end; ACtx.SetBytes(Int64(BENCH_PACK_COUNT) * FILE_SIZE);
 end;
 
 procedure BenchExtractSlice(const ACtx: IBenchContext);
@@ -145,15 +146,16 @@ begin
 end;
 
 procedure BenchRead1MB(const ACtx: IBenchContext);
-var R: TTarReader; H: TTarHeader; LGot: TBytes;
+var R: TTarReader; H: TTarHeader; LSp: TByteSpan; LGot: TBytes;
 begin
-  R := TTarReader.Create(GBigArchive); try if R.Next(H) then begin LGot := R.EntryData; BenchBlackBoxBytes(LGot[0], Length(LGot)); end; finally R.Free; end; ACtx.SetBytes(BIG_SIZE);
+  R := TTarReader.Create(GBigArchive); try if R.Next(H) then if R.TrySlice(LSp) then begin LGot := SpanClone(LSp); BenchBlackBoxBytes(LGot[0], Length(LGot)); end; finally R.Free; end; ACtx.SetBytes(BIG_SIZE);
 end;
 
 var
   LResults: IBenchResults;
   LSuit: IBenchSuite;
   R: TTarReader; H: TTarHeader; LGot: TBytes; LArc: TBytes; B: ITarBuilder; S: IStream; W: TTarWriter;
+  LSp2: TByteSpan;
 begin
   GenerateData;
   GArchive := BuildManyArchiveBench;
@@ -164,7 +166,7 @@ begin
   B := TarBuilder; B.Add('a.txt', StrBytes('hello')).Add('b.txt', StrBytes('world'));
   LArc := B.Finish;
   R := TTarReader.Create(LArc); try if not R.Next(H) then raise EInvalidOperationError.Create('parity'); finally R.Free; end;
-  R := TTarReader.Create(GBigArchive); try if R.Next(H) then begin LGot := R.EntryData; CheckBytesEqual(GBlob, LGot, 'big roundtrip'); end; finally R.Free; end;
+  R := TTarReader.Create(GBigArchive); try if R.Next(H) then begin if R.TrySlice(LSp2) then LGot := SpanClone(LSp2) else LGot := nil; CheckBytesEqual(GBlob, LGot, 'big roundtrip'); end; finally R.Free; end;
 
   LSuit := TBenchSuite.Create('tar')
     .SetMinDuration(TDuration.FromMilliseconds(300)).SetMinSamples(7).SetWarmupIters(1).SetMaxIterations(25)

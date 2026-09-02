@@ -13,7 +13,7 @@
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
-| `TTarReader` | `Next(out H):Boolean` / `EntryData:TBytes` (拷贝，`SpanClone` 单源，**deprecated** 批量 200×512B 产生200次分配峰值 `bench_tar` `extract-all 401 vs extract-slice 201 allocs` 翻倍，热路径优先 `TrySlice`/`EntryDataSlice` 零拷贝 `inline` 视图) / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发 / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（弱引用不延长 `Reader/FBuf` 大镜像，`Reader.Destroy` 先 `InvalidateGuards` 避免峰值滞留，稳定性不丢） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描，复用 `Span` 单源 |
+| `TTarReader` | `Next(out H):Boolean` / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发（复用 TrySlice 单源，批量 200×512B 零拷贝 201 allocs，`EntryData` 已移除避免 401 vs 201 翻倍峰值，`SpanClone` 按需单次 Move 经 `bytes.ops` 单源） / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（弱引用不延长 `Reader/FBuf` 大镜像，`Reader.Destroy` 先 `InvalidateGuards` 避免峰值滞留，稳定性不丢；无 guard 时 g 单次消费自动清理防跨条目/跨镜像污染，guard 作用域内持久至下一 g 覆盖） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描（实现侧不透明缓存，接口不暴露 `TTarScanCache` 七字段扁平化细节），复用 `Span` 单源 |
 | `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，需显式 Finish，`FIOBuf` 于 Finish 即释避免滞留峰值，析构兜底补两零块 best-effort 极简 fail-closed，`IsFinished` 供 builder fail-closed 校验） |
 
 ### 1.2 常量与谓词
@@ -32,11 +32,11 @@
 
 - **[INV-1]** USTAR 写入：`magic "ustar\0"` @257 + `version "00"` @263 固定，>100 字符名自动 `prefix/name` 分割（最大 `/` 使后缀 ≤100，否则以 `pax` 扩展头 `typeflag 'x'` 承载 `path/linkpath` 记录，长度前缀十进制自洽，读端 `x/g` 与 `GNU L/K` 单点覆盖，消除读写不对称），`linkname>100` 同走 `pax linkpath`，目录补 `/`。
 - **[INV-2]** 数值字段八进制为主，超 `octal capacity` 自动 `base-256`（首字节 `$80` + big-endian），读端双路径兼容。
-- **[INV-3]** 读写对称：读端支持 `GNU L/K` 长名、`pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖，`Next` 对 `H.Name` 自动 `GuardTarNameForRead` 拒绝路径穿越，`ClearGlobalPax` 显式 fail-closed 或 `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离防跨条目静默继承污染），pax 记录含长度前缀 strict 校验（`archive.pax ArchivePaxParseRecords` 零拷贝 PByte 切片，长度缺空格/非数字/越界/缺换行即抛 `EIOError`，禁静默 `Exit(False)` 回退截断名，fail-closed）；写端>100 且无 `prefix` 切分或 `linkpath>100` 时自动前置 `pax` `x` 扩展头（`path/linkpath` 单条记录，`common.TarAppendPaxRecord` builder 零拷贝最优路径单源 `Reserve+AppendBytes` 直写，`TarFormatPaxRecord` 为 `CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 单次 Move 薄包装单源，`bytes.ops` 单源视图），与读端 `TarParsePaxRecords`/`TarParsePaxKVRecords` 单点互通编解码同源；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 供归档族复用 `atime/mtime/ctime/size/uid/gid` 等 pax 扩展键零拷贝迭代。
+- **[INV-3]** 读写对称：读端支持 `GNU L/K` 长名、`pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 全局在 `AcquireGlobalPaxGuard` 作用域内持久至下一 `g` 覆盖，无 guard 时单次消费自动清理防跨条目/跨镜像污染，`Next` 对 `H.Name` 自动 `GuardTarNameForRead` 拒绝路径穿越，`ClearGlobalPax` 显式 fail-closed 或 `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离），pax 记录含长度前缀 strict 校验（`archive.pax ArchivePaxParseRecords` 零拷贝 PByte 切片，长度缺空格/非数字/越界/缺换行即抛 `EIOError`，禁静默 `Exit(False)` 回退截断名，fail-closed）；写端>100 且无 `prefix` 切分或 `linkpath>100` 时自动前置 `pax` `x` 扩展头（`path/linkpath` 单条记录，`common.TarAppendPaxRecord` builder 零拷贝最优路径单源 `Reserve+AppendBytes` 直写，`TarFormatPaxRecord` 为 `CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 单次 Move 薄包装单源，`bytes.ops` 单源视图），与读端 `TarParsePaxRecords`/`TarParsePaxKVRecords` 单点互通编解码同源；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 供归档族复用 `atime/mtime/ctime/size/uid/gid` 等 pax 扩展键零拷贝迭代。
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//` 空段/`./` 单点段/`..` 段，尾随 `/` 终段空合法；写端 `Validate` 即 `EArgumentError`，读端/落盘前 `EParseError`，`..` 经 `TarExtractToDir` 二次拒绝。
-- **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 跨条目总量在 `common.Guard*` 单点，`Next` 仅对正则载荷累计（`GNU L/K` 与 `pax x/g` 扩展元数据不计入 `FCumTotal`，避免含大量长名归档误触总量），`EntryData`/`OpenEntryStream` 中途同受，超限 `EIOError`。
-- **[INV-7]** 零块结束：双零块收尾，单零块后非零即 `truncated stream`；`FEntryDataOfs/Size` 视图与 `EntryData` 拷贝一致；`TrySlice` 为单一规范零拷贝 `TByteSpan` 视图（`inline` 薄转发，生命周期绑 `Reader`），`EntryDataSlice` 为 `PByte/Count` 薄转发（复用 `TrySlice` 单源）；`OpenEntryStream` 为持有型 `IReader`（`Reader` 拥有 `TBytes` 时流持有镜像引用，外部 `PByte` 时流固化拷贝自包含）；设备条目 `DevMajor/DevMinor` 由 `C_TAR_LAYOUT.DevMajor/DevMinor` 单源解析/回写，往返完整；容量预扩容 `TarBuilderCapacityFor` 经 `bytes.ops.AlignUp4K` 4K 对齐单源（div/mul 无掩码截断，32/64 位 SizeUInt 安全）。
+- **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 跨条目总量在 `common.Guard*` 单点，`Next` 仅对正则载荷累计（`GNU L/K` 与 `pax x/g` 扩展元数据不计入 `FCumTotal`，避免含大量长名归档误触总量），`TrySlice`/`OpenEntryStream` 中途同受，超限 `EIOError`。
+- **[INV-7]** 零块结束：双零块收尾，单零块后非零即 `truncated stream`；`FEntryDataOfs/Size` 视图单一规范；`TrySlice` 为单一规范零拷贝 `TByteSpan` 视图（`inline` 薄转发，生命周期绑 `Reader`），`EntryDataSlice` 为 `PByte/Count` 薄转发（复用 `TrySlice` 单源，零拷贝，批量 200×512B 仅 201 allocs）；`OpenEntryStream` 为持有型 `IReader`（`Reader` 拥有 `TBytes` 时流持有镜像引用，外部 `PByte` 时流固化拷贝自包含）；设备条目 `DevMajor/DevMinor` 由 `C_TAR_LAYOUT.DevMajor/DevMinor` 单源解析/回写，往返完整；容量预扩容 `TarBuilderCapacityFor` 经 `bytes.ops.AlignUp4K` 4K 对齐单源（div/mul 无掩码截断，32/64 位 SizeUInt 安全）。
 - **[INV-8]** 确定性：未显式 mtime 取 `0`，mode 默认 `0644/0755`，同输入同字节（除 pax 长名外）。
 
 ## 3. 错误模型
@@ -86,14 +86,13 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression       # 回归门�
 
 ## 附录 B · 零拷贝与持有型生命周期
 
-> 单一规范：`TrySlice` 为零拷贝 `TByteSpan` 视图唯一入口（inline 薄转发，生命周期绑 `TTarReader`）；`EntryDataSlice` 为 `PByte/Count` 薄转发复用 `TrySlice` 单源；`EntryData` 为 `SpanClone` 单源拷贝（一次 `SetLength+Move`），200×512B 批量提取产生200次分配峰值，批量场景优先复用 `TrySlice` 零拷贝视图（`deprecated 'use TrySlice/EntryDataSlice'`）。
+> 单一规范：`TrySlice` 为零拷贝 `TByteSpan` 视图唯一入口（inline 薄转发，生命周期绑 `TTarReader`）；`EntryDataSlice` 为 `PByte/Count` 薄转发复用 `TrySlice` 单源；已移除 `EntryData` 单次 `SpanClone` 拷贝（曾 200×512B 401 vs 201 allocs 翻倍），批量场景零拷贝 `TrySlice` + 按需 `SpanClone` 单次 Move（`bytes.ops` 单源）。
 
 ```
 Reader.Create(Bytes|PByte) ── FBuf/FData 持有镜像
   │
   ├─ TrySlice(out Span) ──► TByteSpan{Data=PByte, Len} 零拷贝视图，inline，Reader 释放后失效
   ├─ EntryDataSlice(out PByte, Count) ──► 同上薄转发
-  ├─ EntryData ──► SpanClone(Slice) 单次分配+Move 拷贝，独立生命周期
   └─ OpenEntryStream ──► IReader 持有型
         ├─ FBuf 非空：TTarSliceReader.CreateWithHold(FBuf, Ofs, Size) 持有镜像引用，Reader 释放后仍可读
         └─ 外部 PByte：SpanClone 固化拷贝自包含（FHold 独立），Reader 释放后仍可读

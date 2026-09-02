@@ -42,19 +42,19 @@ function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
 { perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
-  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
-  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
-  convenience only. }
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
-procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
+  or looped appends prefer IBytesBuilder (preallocated Grow, inline AppendBytes/Move zero-copy, geometric 2× amortized O(1)) or BytesConcatMany/
+  SpanConcatMany (single allocation, single Move per part, zero-copy) to avoid O(n²) churn. Keep inline for single-use
+  convenience only. Mechanical gate: deprecated with hint; source-contract test_bytes_source_contract forbids looped BytesAppend. }
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload; deprecated 'BytesAppend: O(n) realloc per call, O(n²) in loops; use IBytesBuilder (preallocated Grow, inline zero-copy Move) or BytesConcatMany/SpanConcatMany single allocation';
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload; deprecated 'BytesAppend: O(n) realloc per call, O(n²) in loops; use IBytesBuilder or BytesConcatMany/SpanConcatMany';
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline; deprecated 'BytesAppendByte: O(n) realloc per call; use IBytesBuilder.AppendByte (geometric Grow, inline)';
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline; deprecated 'BytesAppendUInt16BE: O(n) realloc; use IBytesBuilder.AppendUInt16BE (geometric Grow, inline)';
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline; deprecated 'BytesAppendUInt16LE: O(n) realloc; use IBytesBuilder.AppendUInt16LE (geometric Grow, inline)';
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline; deprecated 'BytesAppendUInt24BE: O(n) realloc; use IBytesBuilder (geometric Grow) or BytesConcatMany';
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline; deprecated 'BytesAppendUInt32BE: O(n) realloc; use IBytesBuilder.AppendUInt32BE (geometric Grow, inline)';
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline; deprecated 'BytesAppendUInt32LE: O(n) realloc; use IBytesBuilder.AppendUInt32LE (geometric Grow, inline)';
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline; deprecated 'BytesAppendUInt64BE: O(n) realloc; use IBytesBuilder.AppendUInt64BE (geometric Grow, inline)';
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline; deprecated 'BytesAppendUInt64LE: O(n) realloc; use IBytesBuilder.AppendUInt64LE (geometric Grow, inline)';
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
@@ -76,6 +76,8 @@ function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
+function SpanSumBytes(const ASpan: TByteSpan): UInt64; inline;
+function BytesSum(const AData: PByte; ALen: SizeUInt): UInt64; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
@@ -663,6 +665,20 @@ begin
     Result := StripLeadingZeroSpan(ASpan).Len = 0
   else
     Result := IsZeroMem(ASpan.Data, ASpan.Len);
+end;
+
+function SpanSumBytes(const ASpan: TByteSpan): UInt64; inline;
+begin
+  // perf: SIMD SumBytes dispatch (SSE2/AVX2/NEON via nextpas.core.simd single source), zero-copy TByteSpan view, inline thin forward; single dispatch eliminates scalar per-byte loop for checksum bulk
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then Exit(0);
+  Result := SumBytes(ASpan.Data, ASpan.Len);
+end;
+
+function BytesSum(const AData: PByte; ALen: SizeUInt): UInt64; inline;
+begin
+  // perf: same SIMD SumBytes single source, zero-copy PByte+Len, inline thin forward; tar checksum dual path reuses this single source
+  if (AData = nil) or (ALen = 0) then Exit(0);
+  Result := SumBytes(AData, ALen);
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;

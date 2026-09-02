@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.bytes*.pas`（8 个源文件）
 **层级**：L1（依赖 L0: base, mem, platform, simd；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
-**版本**：1.1
+**最后更新**：2026-09-02
+**版本**：1.2
 
 ---
 
@@ -73,7 +73,7 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 | `SpanClone(Span): TBytes` | 克隆 |
 | `SpanConcatMany/BysConcatMany` | 多段拼接 |
 | `BytesEqual/Compare/IndexOf/Concat/StartsWith/EndsWith` | TBytes 便捷面（inline → Span） |
-| `BytesAppend/BytesToString/StringToBytes` | TBytes 追加与字符串互转 |
+| `BytesAppend(*)/BytesToString/StringToBytes` | TBytes 追加与字符串互转（`BytesAppend*` 均为 `inline + single Move` 零拷贝单源，但 `SetLength+Move` 逐次重分配 O(n)，高频/循环拼接 O(n²)；机械门禁 `deprecated` 强制改用 `IBytesBuilder` 几何扩容或 `BytesConcatMany/SpanConcatMany` 单次分配，见 INV-8） |
 | `SpanClone/SpanCopySlice` | 仅两处分配；其余 Span 为非拥有视图 |
 
 约定：`bytes.ops` 为 Span/TBytes 比较与切片的唯一实现源；门面与其它实现均 inline 转发，不复制逻辑。
@@ -109,6 +109,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **[INV-5]** 单源复用：比较/查找经 `bytes.ops`（`MemEqual/MemCompare/MemFindByte/BytesIndexOf` + SIMD）；门面全部 `inline` 转发，不分叉实现。
 - **[INV-6]** 资源释放不丢：`TBytesBuilderImpl.Destroy` 与 `TByteStreamBuf.Destroy` 以 sized `FreeMemOf/ReallocMemOf` 经注入 `TMemAllocator/IAllocator` 释放；`Clear/Consume` 不丢块；`try-finally/Free` 语义由调用方持有接口/对象生命周期保证。
 - **[INV-7]** L0-L3 分层：bytes 为 L1，仅依赖 L0（`base/mem/platform/simd`）及文档化 `bytes↔text↔encoding` seam（interface/implementation 分区引用，不形成循环）；门面不含逻辑。
+- **[INV-8]** 追加门禁：`BytesAppend*`（含 `AppendByte/UInt16/32/64BE/LE`）`inline + single Move` 零拷贝但 `SetLength` 逐次重分配 O(n) → 循环 O(n²)；单次便利仅 `deprecated` 保留，高频/循环必须改用 `IBytesBuilder.Append*`（`Grow` 几何 2×，`BYTES_BUILDER_MIN_GROW` 下界，inline 零拷贝单 `Move/FillChar`）或 `BytesConcatMany/SpanConcatMany`（单次 `SetLength+Move` per part，零拷贝视图），由 `test_bytes_source_contract` 机械门禁（`deprecated` 编译提示 + `check_bytes_append_contract.sh` 循环扫描）。
 
 ---
 
@@ -146,9 +147,10 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 | test_bytes | Span/TBytes 操作 + 字节序编解码 + Builder（含 allocator 注入、增长、截断） |
 | test_cursor | IByteCursor 顺序/BE/peek/Seek/Try* / 边界守卫 / 裸指针构造 |
 | test_stream | TByteStreamBuf append/consume/compact/EnsureCapacity/Clear/ReserveAppend/Grow |
-| **合计** | **3 个测试目录** |
+| test_bytes_source_contract | `BytesAppend*` 机械门禁：`deprecated` 编译提示 + 循环拼接扫描（`check_bytes_append_contract.sh`），强制 `IBytesBuilder/ConcatMany` 单源复用 |
+| **合计** | **4 个测试目录** |
 
-门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`（均 `heaptrc 0`）。
+门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`；`make -C core/tests/nextpas.core.bytes/test_bytes_source_contract test`（均 `heaptrc 0`）。
 
 ---
 
@@ -158,3 +160,4 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2 | 匠心修复 BytesAppend O(n²)：`BytesAppend*` 全族 `deprecated` 机械门禁（`inline` 保留单次便利，`deprecated` 提示改用 `IBytesBuilder` 几何 Grow 或 `ConcatMany` 单分配，零拷贝单 `Move` 单源），新增 INV-8 与 `test_bytes_source_contract` 门禁 | tar lane |

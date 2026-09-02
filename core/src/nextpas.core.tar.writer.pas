@@ -7,8 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.tar.base,
-  nextpas.core.io.intf,
-  nextpas.core.log.intf;
+  nextpas.core.io.intf;
 
 type
   {** @desc Tar 写器：以 IWriter 为目标产出 ustar 流（两零块收尾，可对接 gzip）。 *}
@@ -17,7 +16,6 @@ type
     FDst: IWriter;
     FFinished: Boolean;
     FIOBuf: TBytes; // pooled 64K, bytes.ops single source, released on Finish
-    FLogger: ILogger; // L0 single seam可观测（NullLogger默认零分配），不直触System.StdErr，平台抽象克制，复用builder同款
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -71,7 +69,6 @@ begin
   if ADst = nil then
     raise EArgumentError.Create('tar: destination writer is nil');
   FDst := ADst;
-  FLogger := NullLogger(); // L2经log.intf单缝可观测，默认no-op零分配inline薄转发，无StdErr直触，复用builder单源
 end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
@@ -395,32 +392,18 @@ begin
 end;
 
 destructor TTarWriter.Destroy;
-var
-  LUnwinding: Boolean;
 begin
-  // fail-closed: IsExceptionUnwinding判unwind期抑制次生以保原始异常上下文并经log.intf ILogger.Warn单源薄转发（NullLogger no-op零拷贝inline），非unwind期硬失败透传Finish异常防缺两零块截断静默丢数据（EIOError/short-write透传）；bytes.ops单源retained；FIOBuf于Finish即释+析构finally双保险无linger峰值；try..finally必释，复用builder同款LUnwinding单源
-  LUnwinding := IsExceptionUnwinding;
+  // L2 pure I/O: IWriter单一职责克制，无ILogger可观测缝；best-effort补两零块，抑制次生逃逸保原始异常上下文，无异常展开分支与日志告警；bytes.ops单源zero-copy retained（WriteBlock/WritePaddedPayload直接Write切片，FillChar仅PadLen，inline EmitEntry）；FIOBuf于Finish即释+析构finally双保险无linger峰值，try..finally必释资源不丢
   try
     if not FFinished then
-    begin
-      if LUnwinding then
-      begin
-        try
-          Finish;
-        except
-          // unwind期抑制次生以保原始异常上下文，不透传
-        end;
-        // unwind期仅可观测，不抛次生覆盖原始异常；L2经log.intf单缝，无RTL控制台直触，NullLogger零分配inline薄转发
-        if FLogger <> nil then
-          FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated)');
-      end
-      else
-        Finish; // 非unwind硬失败：透传EIOError/short-write，fail-closed防截断
-    end;
+      try
+        Finish;
+      except
+        // best-effort suppress secondary escape
+      end;
   finally
     FIOBuf := nil;
     FDst := nil;
-    FLogger := nil;
     inherited Destroy;
   end;
 end;

@@ -4,7 +4,7 @@ unit nextpas.core.tar.common;
  * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
- * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline。
+ * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline，Checksum 经 bytes.ops SpanSumBytes/SumBytes SIMD 单源 dispatch。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -50,10 +50,7 @@ function TarFormatPaxRecord(const AKey, AValue: string): string;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 {** 追加 pax 记录至 builder，合并双超限单次构建；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容） *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
-{** 通用 pax 键值迭代：零拷贝 PByte 切片，供归档族复用；strict length 前缀校验畸形抛 EIOError，外联 *}
-type
-  TTarPaxKVHandler = TArchivePaxKVHandler;
-function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TTarPaxKVHandler): Boolean;
+{** 通用 pax 键值迭代已收敛至 archive.pax ArchivePaxParseRecords 单点（零拷贝 PByte 切片，strict fail-closed），tar 侧不再提供 TarParsePaxKVRecords 别名，复用 TArchivePaxKVHandler 单源 *}
 
 implementation
 
@@ -93,28 +90,25 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和：单次扫描双累加 — }
+{ — 校验和：SIMD 单源双累加 — }
 procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
+  LSumHead, LSumTail: UInt64;
+  LHigh: SizeUInt;
   I: SizeUInt;
-  B: Byte;
 begin
-  AU := 0;
-  ASig := 0;
+  // perf: SIMD dispatch via bytes.ops BytesSum/SpanSumBytes single source (nextpas.core.simd SumBytes SSE2/AVX2/NEON), zero-copy PByte slice, out-of-line per design-conventions; dual accumulation fused via AU + signed correction
+  LSumHead := BytesSum(ABlock, C_TAR_LAYOUT.Chksum.Off);
+  LSumTail := BytesSum(ABlock + C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len,
+    C_TAR_BLOCK_SIZE - (C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len));
+  AU := Int64(LSumHead + LSumTail + UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
+  // signed correction: ASig = AU -256*highCount (high bit set)
+  LHigh := 0;
   for I := 0 to C_TAR_LAYOUT.Chksum.Off - 1 do
-  begin
-    B := ABlock[I];
-    AU := AU + B;
-    ASig := ASig + ShortInt(B);
-  end;
-  AU := AU + C_TAR_LAYOUT.Chksum.Len * Ord(' ');
-  ASig := ASig + C_TAR_LAYOUT.Chksum.Len * Ord(' ');
+    if ABlock[I] >= 128 then Inc(LHigh);
   for I := C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len to C_TAR_BLOCK_SIZE - 1 do
-  begin
-    B := ABlock[I];
-    AU := AU + B;
-    ASig := ASig + ShortInt(B);
-  end;
+    if ABlock[I] >= 128 then Inc(LHigh);
+  ASig := AU - Int64(LHigh) * 256;
 end;
 
 { — 校验和：单遍 512 — }
@@ -328,13 +322,7 @@ begin
   ABuilder.AppendByte(10);
 end;
 
-{ — pax 解析：零拷贝 PByte 切片 — 单源委托 archive.pax 通用解析器，strict 长度前缀校验畸形抛 EIOError，禁静默 Exit 回退截断名 — }
-function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TTarPaxKVHandler): Boolean;
-begin
-  // 单源：复用 archive.pax ArchivePaxParseRecords 零拷贝切片+ bytes.ops 单源视图；外联禁 inline，strict fail-closed
-  Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
-end;
-
+{ — pax 解析：零拷贝 PByte 切片 — 单源委托 archive.pax 通用解析器 ArchivePaxParseRecords，strict 长度前缀校验畸形抛 EIOError，禁静默 Exit 回退截断名；TarParsePaxKVRecords 别名已收敛至 archive.pax 单点 — }
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
   LFound: Boolean;
@@ -347,7 +335,7 @@ begin
   LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  // 通用迭代：零拷贝回调仅命中 path/linkpath 时物化，降 O(n) 分配峰值；其余键经 TarParsePaxKVRecords 暴露给归档族处理 atime/mtime/size 等扩展
+  // 通用迭代：零拷贝回调仅命中 path/linkpath 时物化，降 O(n) 分配峰值；其余键由调用方经 archive.pax ArchivePaxParseRecords 零拷贝迭代处理 atime/mtime/size 等扩展（tar 侧已收敛至 archive.pax 单点）
   ArchivePaxParseRecords(ABase, ALen,
     procedure(const AKey, AValue: TByteSpan)
     begin
@@ -368,7 +356,7 @@ begin
         LFound := True;
       end
       else
-        ; // 扩展键由调用方通过 TarParsePaxKVRecords 零拷贝迭代处理，不在此静默忽略外抛
+        ; // 扩展键由调用方经 archive.pax ArchivePaxParseRecords 零拷贝迭代处理，不在此静默忽略外抛
     end);
   APath := LPathTmp;
   ALinkPath := LLinkTmp;
