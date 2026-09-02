@@ -427,31 +427,10 @@ begin
   Result := False;
 end;
 
-function MapNativeToFlags(HeadCode, WorkCode: TGitStatusCode): TGitStatusFlags;
+function MapNativeToFlags(HeadCode, WorkCode: TGitStatusCode): TGitStatusFlags; inline;
 begin
-  Result := [];
-  case HeadCode of
-    gscAdded: Include(Result, gsIndexNew);
-    gscModified: Include(Result, gsIndexModified);
-    gscDeleted: Include(Result, gsIndexDeleted);
-    gscRenamed: Include(Result, gsIndexRenamed);
-    gscTypeChanged: Include(Result, gsIndexTypeChange);
-    gscCopied: Include(Result, gsIndexRenamed);
-    gscUnmerged: Include(Result, gsConflicted);
-    gscUntracked: Include(Result, gsWtNew);
-  end;
-  case WorkCode of
-    gscAdded: Include(Result, gsWtNew);
-    gscModified: Include(Result, gsWtModified);
-    gscDeleted: Include(Result, gsWtDeleted);
-    gscTypeChanged: Include(Result, gsWtTypeChange);
-    gscRenamed: Include(Result, gsWtRenamed);
-    gscCopied: Include(Result, gsWtRenamed);
-    gscUnmerged: Include(Result, gsConflicted);
-    gscUntracked: Include(Result, gsWtNew);
-  end;
-  if WorkCode = gscUntracked then
-    Include(Result, gsWtNew);
+  // single source via base.GitStatusCodesToFlags — inline zero-copy set ops, eliminates dual track mapping
+  Result := nextpas.core.git.base.GitStatusCodesToFlags(HeadCode, WorkCode);
 end;
 
 function TNativeRepositoryAdapter.Status: nextpas.core.base.TStringArray;

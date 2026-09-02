@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.git.base,
   nextpas.core.git.native.base,
   nextpas.core.git.native.index,
   nextpas.core.git.native.cachetree,
@@ -20,7 +21,8 @@ type
   TGitIndexFile = nextpas.core.git.native.index.TGitIndexFile;
   TGitIndexEntryArray = nextpas.core.git.native.index.TGitIndexEntryArray;
   TGitCacheTree = nextpas.core.git.native.cachetree.TGitCacheTree;
-  TGitStatusCode = nextpas.core.git.native.status.TGitStatusCode;
+  // single source via base — staging re-exports base vocab directly (native also aliases base, eliminates dual track)
+  TGitStatusCode = nextpas.core.git.base.TGitStatusCode;
   TGitNativeStatusEntry =
     nextpas.core.git.native.status.TGitNativeStatusEntry;
   TGitNativeStatusArray =
@@ -31,15 +33,16 @@ type
   TGitLsFilesOptions = nextpas.core.git.native.lsfiles.TGitLsFilesOptions;
 
 const
-  gscUnmodified = nextpas.core.git.native.status.gscUnmodified;
-  gscAdded = nextpas.core.git.native.status.gscAdded;
-  gscModified = nextpas.core.git.native.status.gscModified;
-  gscDeleted = nextpas.core.git.native.status.gscDeleted;
-  gscTypeChanged = nextpas.core.git.native.status.gscTypeChanged;
-  gscUnmerged = nextpas.core.git.native.status.gscUnmerged;
-  gscUntracked = nextpas.core.git.native.status.gscUntracked;
-  gscRenamed = nextpas.core.git.native.status.gscRenamed;
-  gscCopied = nextpas.core.git.native.status.gscCopied;
+  // single source via base (inline zero-copy const alias, no alloc), keeps native.status qualified consumers valid via base single source
+  gscUnmodified = nextpas.core.git.base.gscUnmodified;
+  gscAdded = nextpas.core.git.base.gscAdded;
+  gscModified = nextpas.core.git.base.gscModified;
+  gscDeleted = nextpas.core.git.base.gscDeleted;
+  gscTypeChanged = nextpas.core.git.base.gscTypeChanged;
+  gscUnmerged = nextpas.core.git.base.gscUnmerged;
+  gscUntracked = nextpas.core.git.base.gscUntracked;
+  gscRenamed = nextpas.core.git.base.gscRenamed;
+  gscCopied = nextpas.core.git.base.gscCopied;
 
 function GitParseIndex(const AData: TBytes): TGitIndexFile; inline;
 function GitReadIndex(const AGitDir: string): TGitIndexFile; inline;

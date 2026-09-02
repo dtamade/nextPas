@@ -12,6 +12,7 @@ uses
 type
   TGitBranchKind = nextpas.core.git.base.TGitBranchKind;
   TGitPullFastForwardResult = nextpas.core.git.base.TGitPullFastForwardResult;
+  TGitStatusCode = nextpas.core.git.base.TGitStatusCode;
   TGitStatusFlag = nextpas.core.git.base.TGitStatusFlag;
   TGitStatusFlags = nextpas.core.git.base.TGitStatusFlags;
   TGitStatusEntry = nextpas.core.git.base.TGitStatusEntry;
@@ -67,6 +68,16 @@ const
   gsWtRenamed = nextpas.core.git.base.gsWtRenamed;
   gsIgnored = nextpas.core.git.base.gsIgnored;
   gsConflicted = nextpas.core.git.base.gsConflicted;
+
+  gscUnmodified = nextpas.core.git.base.gscUnmodified;
+  gscAdded = nextpas.core.git.base.gscAdded;
+  gscModified = nextpas.core.git.base.gscModified;
+  gscDeleted = nextpas.core.git.base.gscDeleted;
+  gscTypeChanged = nextpas.core.git.base.gscTypeChanged;
+  gscUnmerged = nextpas.core.git.base.gscUnmerged;
+  gscUntracked = nextpas.core.git.base.gscUntracked;
+  gscRenamed = nextpas.core.git.base.gscRenamed;
+  gscCopied = nextpas.core.git.base.gscCopied;
 
 function NewGitManager: IGitManager; inline;
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
