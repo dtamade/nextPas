@@ -3,8 +3,7 @@ unit nextpas.core.js.pure.base;
 {$I nextpas.core.settings.inc}
 interface
 uses
-  nextpas.core.js.base,
-  nextpas.core.collections.base;
+  nextpas.core.js.base;
 type
   { Host — canonical via pure.base minimal carrier (Name/Kind/Hash only), handlers owned by pure.host single source via js.intf (base zero-dep, base←intf单向, bytes.ops pool via pure.host, inline zero-copy, resource Finalize via pure.host managed fields幂等不丢) }
   TJsPureHostRec = record
@@ -12,7 +11,7 @@ type
     Kind: Integer;
     Hash: UInt32;
   end;
-  TJsPureHostArray = specialize TGenericArray<TJsPureHostRec>;
+  TJsPureHostArray = array of TJsPureHostRec;
   TJsPureHostBuckets = record
     Buckets: array of Integer;
     Mask: UInt32;
@@ -22,20 +21,24 @@ type
     Hosts: TJsPureHostArray;
     Buckets: TJsPureHostBuckets;
   end;
-  { Heap/Value — canonical via pure.base, value stored as raw string+kind to keep base zero-dep (no TJsValue), owner pure.value converts via TJsValue single source, bytes.ops geometric via BytesNextCapacity single source, inline zero-copy }
+  { Heap/Value — canonical via pure.base, value stored as raw string+kind to keep base zero-dep (no TJsValue), owner pure.value converts via TJsValue single source inline zero-copy (base←intf单向, base零依赖), bytes.ops geometric via BytesNextCapacity single source, inline zero-copy }
   TJsPureProp = record
     Name: string;
     Hash: UInt32;
-    Value: TJsValue;
+    Kind: TJsValueKind;
+    StrVal: string;
+    IntVal: Int64;
+    DblVal: Double;
+    BoolVal: Boolean;
   end;
-  TJsPurePropArray = specialize TGenericArray<TJsPureProp>;
+  TJsPurePropArray = array of TJsPureProp;
   TJsPureObject = record
     Id: Int64;
     Props: TJsPurePropArray;
     PropsBuckets: array of Integer;
     PropsMask: UInt32;
   end;
-  TJsPureHeap = specialize TGenericArray<TJsPureObject>;
+  TJsPureHeap = array of TJsPureObject;
   TJsValueArray = array of string;
 implementation
 end.

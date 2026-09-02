@@ -22,7 +22,8 @@ flowchart TB
   phash["js.pure.hash<br/>FNV1a32 单源<br/>bytes.ops HashBytes"]
   eval["js.eval<br/>Eval 单源·字面量/调用分发<br/>pure.host 调度·零拷贝"]
   pbase["js.pure.base<br/>纯类型载体 ~45行<br/>零依赖·base←intf"]
-  pimpl["js.pure.impl<br/>纯模板组合 Runtime+Context<br/>Host/Value/IO 聚合"]
+  ppure["js.pure<br/>标准聚合门面 Runtime+Context<br/>Host/Value/IO 薄聚合 ~40行 机械四件套"]
+  pimpl["js.pure.impl<br/>兼容薄别名<br/>存量保留→pure"]
   js888["js.js888<br/>纯 Pascal js888<br/>零FFI/零dl"]
   v8["js.v8<br/>纯 Pascal V8 占位<br/>零FFI/零dl"]
   chakra["js.chakra<br/>纯 Pascal Chakra 占位<br/>零FFI/零dl"]
@@ -39,24 +40,25 @@ flowchart TB
   intf --> pvalue
   intf --> phash
   intf --> eval
-  intf --> pbase --> pimpl
-  phost --> pimpl
-  pvalue --> pimpl
+  intf --> pbase --> ppure
+  phost --> ppure
+  pvalue --> ppure
   phash -. 单源 .-> phost
   phash -. 单源 .-> pvalue
-  eval --> pimpl
-  lifecycle --> pimpl
+  eval --> ppure
+  lifecycle --> ppure
   vstore --> qvalue --> qjs
-  pimpl --> js888 --> registry
-  pimpl --> v8 --> registry
-  pimpl --> chakra --> registry
+  ppure --> js888 --> registry
+  ppure --> v8 --> registry
+  ppure --> chakra --> registry
+  pimpl -. 兼容 .-> ppure
   fake --> registry
   qjs --> registry
   registry --> factory --> facade
   facade -. "可选 uses" .-> webview["webview.fake.js<br/>活在 webview 家族"]
 ```
 
-> `base` 永不触 `intf/ffi`，`intf` 永不触 `ffi/loader`，`js` 永不 `uses webview`；`pure.host/pure.value/js.eval/lifecycle` 四者与 `pure.base` 分离单源（CONTRACT §1 20 单元：`base/intf/fake/quickjs.ffi/quickjs.loader/quickjs/quickjs.value/value.store/lifecycle/pure.host/pure.value/eval/pure.base/pure.impl/js888/v8/chakra/registry/factory/门面`，`pure.hash` 为 FNV1a 单源支撑），`pure.host` 归 `pure.host` owner、`pure.value` 归 `pure.value` owner、`js.eval` 归 `js.eval` owner、`lifecycle` 归 `js.lifecycle` owner，分层单缝 `bytes.ops` 几何 + `text.view` 零拷贝 `inline` 热路径 + `try-finally`/`JsPureClose` 幂等不丢，守四件套 `base←intf←impl←门面` 与 L0–L3。
+> `base` 永不触 `intf/ffi`，`intf` 永不触 `ffi/loader`，`js` 永不 `uses webview`；`pure.host/pure.value/js.eval/lifecycle` 四者与 `pure.base` 分离单源（CONTRACT §1 21 单元：`base/intf/fake/quickjs.ffi/quickjs.loader/quickjs/quickjs.value/value.store/lifecycle/pure.host/pure.value/eval/pure.base/pure/pure.impl/js888/v8/chakra/registry/factory/门面`，`pure` 为标准门面 `pure.impl` 为兼容别名，`pure.hash` 为 FNV1a 单源支撑），`pure.host` 归 `pure.host` owner、`pure.value` 归 `pure.value` owner、`js.eval` 归 `js.eval` owner、`lifecycle` 归 `js.lifecycle` owner，分层单缝 `bytes.ops` 几何 + `text.view` 零拷贝 `inline` 热路径 + `try-finally`/`JsPureClose` 幂等不丢，守四件套 `base←runtime/context←门面` 与 L0–L3 机械形态。
 
 ---
 
@@ -140,13 +142,13 @@ flowchart TB
 ## 7. 依赖与分层
 
 ```
-L2 js:  base(后端无关·纯类型载体·CheckJsRuntimeOptions ABackend 透传) → intf(不透明TJsValue·后端无关) → {fake, quickjs.ffi←loader(JS_QUICKJS_PROBE_NAMES[0..7] 单源)·quickjs.value+vstore→quickjs, lifecycle, pure.base←pure.impl←{js888,v8,chakra}, pure.host, pure.value, js.eval, pure.hash} → registry(唯一扇出·vault IMutex O(1)) → factory(薄转发至 registry) → 门面(纯 re-export inline·阈值800)
-         ↳ lifecycle/pure.host/pure.value/js.eval 四者分离单源（CONTRACT §1 20 单元：lifecycle 为上下文生命周期 owner 紧凑 4B epoch*2+closed+freelist / pure.host 为 per-Context HostState O(1)桶 / pure.value 为 ValueState Heap/Props 几何 / js.eval 为 Eval 单源分发，pure.base ~45 行纯类型载体零依赖，pure.hash 为 FNV1a32 单源经 bytes.ops），value.store 为纯存储单源（bytes.ops+mem.dynarray 几何 BYTES_BUILDER_MIN_GROW 均摊O1·text.view 零拷贝 inline），quickjs.value 为 QjsHeap 镜像装饰器（Pure+QjsHeap 组合·bytes.ops 单源）；纯族（js888/v8/chakra）与 quickjs 平级零FFI/零dl复用同 intf；registry 单点扇出 vault 幂等，factory 零直接 uses 守四件套 base←intf←impl←门面 与 L0–L3
+L2 js:  base(后端无关·纯类型载体·CheckJsRuntimeOptions ABackend 透传) → intf(不透明TJsValue·后端无关) → {fake, quickjs.ffi←loader(JS_QUICKJS_PROBE_NAMES[0..7] 单源)·quickjs.value+vstore→quickjs, lifecycle, pure.base←pure(pure.runtime+pure.context)←{js888,v8,chakra}, pure.host, pure.value, js.eval, pure.hash} → registry(唯一扇出·vault IMutex O(1)) → factory(薄转发至 registry) → 门面(纯 re-export inline·阈值800) 〔pure.impl 为兼容薄别名存量保留，新代码 uses pure；机械四件套 pure.base←runtime/context←门面〕
+         ↳ lifecycle/pure.host/pure.value/js.eval 四者分离单源（CONTRACT §1 21 单元：lifecycle 为上下文生命周期 owner 紧凑 4B epoch*2+closed+freelist / pure.host 为 per-Context HostState O(1)桶 / pure.value 为 ValueState Heap/Props 几何 / js.eval 为 Eval 单源分发，pure.base ~45 行纯类型载体零依赖，pure ~40 行标准门面(pure.runtime~45+pure.context~360)，pure.hash 为 FNV1a32 单源经 bytes.ops），value.store 为纯存储单源（bytes.ops+mem.dynarray 几何 BYTES_BUILDER_MIN_GROW 均摊O1·text.view 零拷贝 inline），quickjs.value 为 QjsHeap 镜像装饰器（Pure+QjsHeap 组合·bytes.ops 单源）；纯族（js888/v8/chakra）与 quickjs 平级零FFI/零dl复用同 intf；registry 单点扇出 vault 幂等，factory 零直接 uses 守四件套 base←runtime/context←门面 与 L0–L3 机械形态
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
          ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查
 ```
 
-`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。**体积预案**：单单元 >800 行必拆（hygiene `wc -l core/src/nextpas.core.js*.pas` 抽样，阈值 800，见 `core/tests/nextpas.core.js/test_js_source_contracts/Makefile` 锚定）；实测 `js.intf` ~144 行、`js.base` ~147 行、`lifecycle` ~205 行、`js.eval` ~240 行、`pure.host` ~400 行、`pure.value` ~490 行、`pure.hash` <60 行、`pure.base` ~45 行、`pure.impl` ~440 行、`value.store` ~120 行、`quickjs.value` ~390 行、`registry` ~210 行、`factory`/`门面` ~50 行、`js888/v8/chakra` ~30 行，均 <800（wc -l 抽样阈值 800，纯族 pure.base 零依赖，热点 inline+bytes.ops BytesCopy 零拷贝单源，资源 try-finally/JsPureClose 幂等不丢，守四件套与 L0–L3）；**纯后端约束**：`js.js888/js.v8/js.chakra` 禁 `platform.dl/ffi`，与 `js.fake` 同检，`pure.host/pure.value/js.eval/lifecycle` 亦禁 `platform.dl/ffi`（仅 registry/loader 可触 `platform.dl`，`js.quickjs.value/quickjs` 经装饰器单缝）。
+`js` 永不 `uses webview.*`，`webview` 的适配活在 `webview` 家族（`webview.fake.js` 或 `webview.adapter.js`），`js` 不感知。**体积预案**：单单元 >800 行必拆（hygiene `wc -l core/src/nextpas.core.js*.pas` 抽样，阈值 800，见 `core/tests/nextpas.core.js/test_js_source_contracts/Makefile` 锚定）；实测 `js.intf` ~144 行、`js.base` ~147 行、`lifecycle` ~205 行、`js.eval` ~240 行、`pure.host` ~400 行、`pure.value` ~490 行、`pure.hash` <60 行、`pure.base` ~45 行、`pure` ~40 行(`pure.runtime`~45+`pure.context`~360，`pure.impl` 兼容别名 ~40 同体量)、`value.store` ~120 行、`quickjs.value` ~390 行、`registry` ~210 行、`factory`/`门面` ~50 行、`js888/v8/chakra` ~30 行，均 <800（wc -l 抽样阈值 800，纯族 pure.base 零依赖，热点 inline+bytes.ops BytesCopy 零拷贝单源，资源 try-finally/JsPureClose 幂等不丢，守四件套 `base←runtime/context←门面` 机械形态与 L0–L3）；**纯后端约束**：`js.js888/js.v8/js.chakra` 禁 `platform.dl/ffi`，与 `js.fake` 同检，`pure.host/pure.value/js.eval/lifecycle` 亦禁 `platform.dl/ffi`（仅 registry/loader 可触 `platform.dl`，`js.quickjs.value/quickjs` 经装饰器单缝）。
 
 **层级校验**：`core/tests/architecture/check_source_contracts.py` 扫描 `js` 闭包不得含 `webview/http/tui`；`base/intf` 不得含 `platform.dl`；`grep -R "quickjs\|v8" core/src/nextpas.core.js.base.pas` 守 `INV-1`；`grep -R "platform\.dl" core/src/nextpas.core.js.js888.pas core/src/nextpas.core.js.pure.host.pas core/src/nextpas.core.js.pure.value.pas core/src/nextpas.core.js.eval.pas core/src/nextpas.core.js.pure.base.pas` 0 命中（仅 `js.quickjs.loader`/`js.registry` 可触 `platform.dl` 经 vault 单源）；`grep -R "platform\.dl" core/src/nextpas.core.js.pure.impl.pas` 仅限 `platform.thread/fs` L0 直读单缝。
 

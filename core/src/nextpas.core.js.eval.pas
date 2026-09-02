@@ -1,6 +1,5 @@
 unit nextpas.core.js.eval;
-{ gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic + ScanFindByte3 single-pass float marker O(n) vs O(3n), ScanTryJsLiteral/Sentinels merged EVAL_* single source via text.scan SCAN_JS_*, TryHostDispatch via text.scan ScanFindMatchingParen/ScanCountJsArgs+ScanFindAny5/ScanFindByte2 SIMD single source), zero-copy via bytes.ops SIMD (Slice.Equals/TStringView/SpanEqual, single bulk BytesDynEnsureLength via bytes.ops geometric 0→64→2× amortized O(1) vs per-arg, BytesDynReserve single source), resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
-  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2) + hoisted EvalJsonView/EvalWhileView constant views (once at unit init vs per Eval FromStr), EvalTryPureNumber single-pass via ScanHasFloatMarker/ScanFindByte3 VecWidth O(n) vs 3×IndexOf O(3n), EvalTryLiteralTable/EvalEnforceSentinel via text.scan ScanTryJs* single source, TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view/text.scan. }
+{ gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic + ScanFindByte3 single-pass float marker O(n) vs O(3n)) }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -226,10 +225,15 @@ begin
     OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
     Exit(True);
   end;
-  // single bulk allocation via bytes.ops single source geometric 0→64→2× amortized O(1) (BytesDynEnsureLength once vs per-arg), zero-copy views, not per-arg geometric thrash, inline not per red-line 2
+  // single bulk allocation via bytes.ops single source geometric 0→64→2× amortized O(1) (BytesDynEnsureLength once vs per-arg Exactly-Once poke, no second shrink poke), zero-copy views, not per-arg geometric thrash, inline not per red-line 2, bytes.ops single source
   Upper := nextpas.core.text.scan.ScanCountJsArgs(LInner);
   if Upper = 0 then Upper := 1;
-  nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), Upper);
+  // trailing comma overestimates by 1 (ScanCount is commas+1, tail empty not added) — correct before alloc to keep Exactly-Once poke, B/op=0, bytes.ops single source
+  if (Upper > 0) and (LInner.Len > 0) and (LInner.Data[LInner.Len - 1] = AnsiChar(',')) then Dec(Upper);
+  if Upper > 0 then
+    nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), Upper)
+  else
+    LArgs := nil;
   // multi-arg split via L1 owner text.scan single source SIMD (ScanFindByte2+ScanFindAny5 VecWidth skip, O(n/VecWidth) vs per-char, zero-copy Slice/Trim), resource managed not丢 (dynamic array, no leak)
   LStart := 0; Depth := 0; InQuote := #0; Escaped := False; LArgCount := 0; Pos := 0; LLen := LInner.Len;
   while Pos < LLen do
@@ -266,7 +270,7 @@ begin
       Inc(Pos);
     end;
   end;
-  // tail — zero-copy via text.view Slice/Trim, single source EvalArgValue, no per-arg EnsureLength, shrink if overestimated (trailing comma)
+  // tail — zero-copy via text.view Slice/Trim, single source EvalArgValue, no per-arg EnsureLength, no shrink (Exactly-Once poke)
   LView := LInner.Slice(LStart, LLen - LStart).Trim;
   if not LView.IsEmpty then
   begin
@@ -276,11 +280,7 @@ begin
       Inc(LArgCount);
     end;
   end;
-  if LArgCount <> Upper then
-  begin
-    if LArgCount = 0 then SetLength(LArgs, 0)
-    else nextpas.core.bytes.ops.BytesDynSetLengthGeneric(LArgs, LArgCount);
-  end;
+  // no second BytesDynSetLengthGeneric shrink — Upper pre-corrected for trailing comma, Exactly-Once poke via single BytesDynEnsureLength, bytes.ops single source, stability no leak
   OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
   Result := True;
 end;

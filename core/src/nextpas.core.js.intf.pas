@@ -21,7 +21,7 @@ type
     FViewLen: SizeUInt;
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
-    function MaterializeViewString: string; inline;
+    function MaterializeViewString: string; // not inline: alloc via bytes.ops single source SpanToString, hot loops prefer TryGetView B/op=0
   public
     // core
     function Kind: TJsValueKind; inline;
@@ -47,7 +47,7 @@ type
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
-    function AsString: string; inline;
+    function AsString: string; // not inline: alloc via MaterializeViewString single source, hot loops prefer TryGetView B/op=0
     function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
@@ -373,9 +373,9 @@ begin
   Result := FDoubleVal;
 end;
 
-function TJsValue.MaterializeViewString: string; inline;
+function TJsValue.MaterializeViewString: string;
 begin
-  // single source view物化 helper via bytes.ops SpanToString (single alloc BytesCopy零拷贝inline) — AsString/TryAsString双写收敛，缓存FStrVal零分配(强一致 IsAlive acquire per INV-7 dual-track)，首调单次分配+单次IsAlive acquire，热循环优先TryGetView B/op=0；IsAlive强一致acquire via lifecycle single source INV-7悬垂安全
+  // not inline: single alloc view物化 via bytes.ops SpanToString single source BytesCopy zero-copy inline — AsString/TryAsString cache FStrVal zero alloc (INV-7 IsAlive acquire), first call single alloc+single acquire, hot loops prefer TryGetView B/op=0; lifecycle single source not inline to avoid hot-loop inline bloat+alloc
   if FViewLen = 0 then
     Exit(FStrVal);
   if not IsAlive then
@@ -386,9 +386,9 @@ begin
   Result := FStrVal;
 end;
 
-function TJsValue.AsString: string; inline;
+function TJsValue.AsString: string;
 begin
-  // hosted viewed缓存零分配+inline薄转发至MaterializeViewString单源(bytes.ops SpanToString单次分配+BytesCopy零拷贝)，强一致 IsAlive acquire per INV-7，热循环优先TryGetView B/op=0；INV-7悬垂安全
+  // not inline: hosted view cache zero-alloc thin-forward to MaterializeViewString single source (bytes.ops SpanToString single alloc BytesCopy zero-copy), INV-7 IsAlive acquire; hot loops prefer TryGetView B/op=0 zero-copy inline, avoid inline alloc bloat
   if FKind = jskSymbol then
     Exit(FStrVal);
   if FKind <> jskString then
@@ -466,7 +466,7 @@ end;
 
 function TJsValue.TryAsString(out V: string): Boolean;
 begin
-  // inline薄转发至MaterializeViewString单源，缓存零分配(强一致 IsAlive acquire per INV-7)，bytes.ops零拷贝单源，热循环优先TryGetView
+  // thin-forward to MaterializeViewString single source (not inline alloc), cache zero alloc INV-7 IsAlive acquire, bytes.ops single source, hot loops prefer TryGetView B/op=0
   Result := FKind = jskString;
   if Result then
     V := MaterializeViewString

@@ -246,16 +246,32 @@ if grep -q "nextpas.core.js.lifecycle" "$ROOT/core/src/nextpas.core.js.pure.base
 else
   say_ok "pure.base zero dependency (no same-module uses, base←owner single source via js.lifecycle/pure.host/value/js.eval)"
 fi
-# sentinel single source: JS_PURE_EVAL_* must only live in js.eval (owner), not duplicated in pure.base
+# sentinel+threshold single source: JS_PURE_EVAL_* 5× via js.eval, JS_PURE_HASH_THRESHOLD 16 via pure.hash, no pure.base dual-table regression (28→16 pure.hash, 34→5× js.eval)
 if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
   say_fail "js.pure.base must not define JS_PURE_EVAL_* (sentinels single source via js.eval, pure.hash for threshold, no duplication)"
 else
   say_ok "sentinels single source via js.eval (pure.base zero duplication, pure.hash for threshold)"
 fi
-if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.eval.pas" && grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
-  say_ok "single source owners present: eval owns sentinels, pure.hash owns threshold"
+if grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must not define JS_PURE_HASH_THRESHOLD (threshold 16 single source via pure.hash, no pure.base dual-table regression)"
 else
-  say_fail "single source owners missing: eval must own JS_PURE_EVAL_* and pure.hash must own JS_PURE_HASH_THRESHOLD"
+  say_ok "threshold single source via pure.hash (pure.base zero duplication)"
+fi
+if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.eval.pas" && grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
+  say_ok "single source owners present: eval owns 5× sentinels, pure.hash owns threshold 16"
+else
+  say_fail "single source owners missing: eval must own JS_PURE_EVAL_* (5×) and pure.hash must own JS_PURE_HASH_THRESHOLD (16)"
+fi
+# double-check: pure.hash threshold value anchored 16, eval sentinels count 5× (JS_PURE_EVAL_* single source via js.eval per CONTRACT §1 pure.base)
+if grep -q "JS_PURE_HASH_THRESHOLD = 16" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
+  say_ok "threshold value anchored 16 via pure.hash single source"
+else
+  say_fail "JS_PURE_HASH_THRESHOLD must be 16 in pure.hash (single source anchored)"
+fi
+if [[ $(grep -c "JS_PURE_EVAL_" "$ROOT/core/src/nextpas.core.js.eval.pas") -ge 5 ]]; then
+  say_ok "sentinels 5× anchored via js.eval single source"
+else
+  say_fail "js.eval must own 5× JS_PURE_EVAL_* sentinels single source (threshold 16 via pure.hash)"
 fi
 
 # 13) volume hygiene: single threshold 800, wc -l <800 anchored in Makefile (防漂移, 历史 550/650 已收敛)
@@ -271,8 +287,8 @@ for f in "$ROOT"/core/src/nextpas.core.js.*.pas; do
     say_ok "volume $base wc -l $lines <800 (阈值800)"
   fi
 done
-# pure family explicit samples (CONTRACT §1: pure.base ~360 <800, pure.host/value etc)
-for suffix in "pure.base" "pure.host" "pure.value" "pure.impl" "lifecycle" "registry" "factory" "value.store" "quickjs.value"; do
+# pure family explicit samples (CONTRACT §1: pure.base ~45 + pure ~40 (runtime/context) mechanical four-piece, pure.impl compatible alias)
+for suffix in "pure.base" "pure" "pure.impl" "pure.host" "pure.value" "lifecycle" "registry" "factory" "value.store" "quickjs.value"; do
   pf="$ROOT/core/src/nextpas.core.js.$suffix.pas"
   if [[ -f "$pf" ]]; then
     lines=$(wc -l < "$pf")

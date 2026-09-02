@@ -104,19 +104,67 @@ procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
 begin
   nextpas.core.bytes.ops.BytesDynEnsureLength(Heap, SizeOf(TJsPureObject), SizeUInt(Length(Heap))+1);
 end;
-// heap prop value stored as native TJsValue single source via js.intf/js.base (inline zero-copy, no Raw+Kind+IntToBuffer/FloatToBuffer roundtrip), bytes.ops single source for expansion, json.value type mapping consolidated via TJsValue single source (no duplicate case V.Kind branch)
+// heap prop value stored as raw Kind+StrVal+IntVal+DblVal+BoolVal to keep pure.base zero-dep (no TJsValue), owner pure.value converts via TJsValue single source inline zero-copy (base←intf单向, base零依赖), bytes.ops single source for expansion, json.value mapping consolidated via single source
+function PropGetValue(const AProp: TJsPureProp): TJsValue; inline;
+begin
+  case AProp.Kind of
+    jskUndefined: Result := JsUndefinedValue;
+    jskNull: Result := JsNullValue;
+    jskBoolean: Result := JsBoolValue(AProp.BoolVal);
+    jskInteger: Result := JsIntValue(AProp.IntVal);
+    jskNumber: Result := JsDoubleValue(AProp.DblVal);
+    jskString: Result := JsStringValue(AProp.StrVal);
+    jskObject: Result := JsHeapObjectValue(AProp.IntVal);
+    jskArray: Result := JsHeapArrayValue(AProp.IntVal);
+    jskFunction: Result := JsFunctionValue(AProp.StrVal);
+    jskError: Result := JsErrorValue(AProp.StrVal);
+    jskSymbol: Result := JsSymbolValue(AProp.StrVal);
+    jskBigInt: Result := JsBigIntValue(AProp.IntVal);
+    jskPromise: Result := JsPromiseValue;
+  else
+    Result := JsUndefinedValue;
+  end;
+end;
+procedure PropSetValue(var AProp: TJsPureProp; const AValue: TJsValue); inline;
+begin
+  AProp.Kind := AValue.Kind;
+  case AValue.Kind of
+    jskBoolean: begin AProp.BoolVal := AValue.AsBool; AProp.StrVal := ''; AProp.IntVal := 0; AProp.DblVal := 0.0; end;
+    jskInteger: begin AProp.IntVal := AValue.AsInt; AProp.DblVal := AValue.AsDouble; AProp.StrVal := ''; AProp.BoolVal := False; end;
+    jskNumber: begin AProp.DblVal := AValue.AsDouble; AProp.IntVal := AValue.AsInt; AProp.StrVal := ''; AProp.BoolVal := False; end;
+    jskString: begin AProp.StrVal := AValue.AsString; AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskObject, jskArray: begin AProp.IntVal := JsObjectId(AValue); AProp.StrVal := ''; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskFunction: begin AProp.StrVal := JsFunctionName(AValue); AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskError: begin AProp.StrVal := AValue.AsString; AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskSymbol: begin AProp.StrVal := AValue.AsString; AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskBigInt: begin AProp.IntVal := AValue.AsInt; AProp.StrVal := ''; AProp.DblVal := 0; AProp.BoolVal := False; end;
+    jskPromise: begin AProp.StrVal := ''; AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+  else
+    begin AProp.StrVal := ''; AProp.IntVal := 0; AProp.DblVal := 0; AProp.BoolVal := False; end;
+  end;
+end;
+procedure PropClearValue(var AProp: TJsPureProp); inline;
+begin
+  AProp.Name := '';
+  AProp.Hash := 0;
+  AProp.Kind := jskUndefined;
+  AProp.StrVal := '';
+  AProp.IntVal := 0;
+  AProp.DblVal := 0.0;
+  AProp.BoolVal := False;
+end;
 procedure JsPureHeapSetPropHashedReserved(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
 var Idx, P: Integer; LOld: SizeUInt;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
+  if P >= 0 then begin PropSetValue(Heap[Idx].Props[P], Val); Exit; end;
   LOld := SizeUInt(Length(Heap[Idx].Props));
   // perf: capacity guaranteed by prior JsPurePropsReserve(1) via bytes.ops single source → mem.dynarray probe single slit, poke via bytes.ops single source without second probe, amortized O(1), inline zero-copy, bytes.ops single source
   nextpas.core.bytes.ops.BytesDynSetLengthGeneric(Heap[Idx].Props, LOld + 1);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
+  PropSetValue(Heap[Idx].Props[High(Heap[Idx].Props)], Val);
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
     if Length(Heap[Idx].PropsBuckets)=0 then PropBucketsRebuild(Heap[Idx])
@@ -232,18 +280,18 @@ begin
   Idx := JsPureHeapFind(Heap, Obj);
   if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then Result := Heap[Idx].Props[P].Value;
+  if P >= 0 then Result := PropGetValue(Heap[Idx].Props[P]);
 end;
 procedure JsPureHeapSetPropHashed(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
 var Idx, P: Integer;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
+  if P >= 0 then begin PropSetValue(Heap[Idx].Props[P], Val); Exit; end;
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
+  PropSetValue(Heap[Idx].Props[High(Heap[Idx].Props)], Val);
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
     if Length(Heap[Idx].PropsBuckets)=0 then PropBucketsRebuild(Heap[Idx])
@@ -287,10 +335,8 @@ begin
   // O(1) swap-last, single assign
   if I <> LLen - 1 then
     Heap[Idx].Props[I] := Heap[Idx].Props[LLen - 1];
-  // stability: clear last to release refs, managed TJsValue via JsUndefinedValue (string refcounted, FViewData not owned), resource not丢, bytes.ops single source
-  Heap[Idx].Props[LLen - 1].Name := '';
-  Heap[Idx].Props[LLen - 1].Hash := 0;
-  Heap[Idx].Props[LLen - 1].Value := JsUndefinedValue;
+  // stability: clear last to release refs, managed via StrVal+Name refcounted, resource not丢, bytes.ops single source, inline zero-copy via PropClearValue (base零依赖)
+  PropClearValue(Heap[Idx].Props[LLen - 1]);
   SetLength(Heap[Idx].Props, LLen - 1);
   LNew := LLen-1;
   if not LWasValid then
@@ -325,18 +371,23 @@ begin
   Result := True;
 end;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
-var V: TJsStringViewArray; I: Integer;
+var Idx, LLen, I: Integer;
 begin
-  // hot path prefers GetKeysView zero-copy; materialize via view
-  V := JsPureHeapGetKeysView(Heap, Obj);
-  if Length(V)=0 then Exit(nil);
-  SetLength(Result, Length(V));
-  for I:=0 to High(V) do
-    Result[I] := V[I].ToString;
+  // compat materialized: single alloc for Result array, per-key refcount share via direct Name assignment (no View.ToString per-key alloc+copy); hot loops must use JsPureHeapGetKeysView zero-copy (TStringView borrow via bytes.ops single source, B/op=0, inline)
+  // perf: not inline per design-conventions §2 red-line 2 (loop body禁inline避I-Cache膨胀), zero extra View alloc, bytes.ops single source via view path, single Store single source, resource managed string refcount不丢
+  Result := nil;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  LLen := Length(Heap[Idx].Props);
+  if LLen = 0 then Exit;
+  SetLength(Result, LLen);
+  for I := 0 to LLen - 1 do
+    Result[I] := Heap[Idx].Props[I].Name;
 end;
 function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray; inline;
 var Idx, LLen, I: Integer;
 begin
+  // perf: inline zero-copy via TStringView.FromStr borrow (PAnsiChar+Len, B/op=0, no alloc), bytes.ops single source view, amortized O(1), hot path must use this not GetKeys materialized
   Result := nil;
   Idx := JsPureHeapFind(Heap, Obj);
   if Idx < 0 then Exit;
@@ -349,19 +400,19 @@ end;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 var Idx, P: Integer; begin Result := JsUndefinedValue; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
-  if P >= 0 then Result := Heap[Idx].Props[P].Value;
+  if P >= 0 then Result := PropGetValue(Heap[Idx].Props[P]);
 end;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 var Idx, P: Integer; LHash: UInt32;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
-  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
+  if P >= 0 then begin PropSetValue(Heap[Idx].Props[P], Val); Exit; end;
   LHash := PropHashStr(Name);
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;
+  PropSetValue(Heap[Idx].Props[High(Heap[Idx].Props)], Val);
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
     if Length(Heap[Idx].PropsBuckets)=0 then PropBucketsRebuild(Heap[Idx])
