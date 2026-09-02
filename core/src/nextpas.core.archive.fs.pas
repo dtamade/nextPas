@@ -271,7 +271,6 @@ begin
         LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
         begin
-          // allow system /tmp symlink to /vm/tmp (real dir), not attacker-controlled interior
           if LPrefix <> '/tmp' then
             raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
         end;

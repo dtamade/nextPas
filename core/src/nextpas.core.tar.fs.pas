@@ -33,6 +33,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.bytes.builder,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.pathvalid,
   nextpas.core.archive.fs,
   nextpas.core.fs;
 
@@ -40,34 +41,10 @@ uses
 
 { Walk 递归已完全下沉至 archive.fs: ArchiveCollectWalk 单源，tar 仅薄委托，无重复实现 }
 
-{ symlink/hardlink target 安全校验：复用 zip IsSafeSymlinkTarget 语义，bytes.ops 单源思想，拒绝绝对/盘符/反斜杠/..空段/超长，inline 零拷贝段扫描 }
+{ symlink/hardlink target 安全校验：参数化复用 bytes.pathvalid.IsSafeArchiveEntryNameEx 单源（阈值4096/禁尾斜杠），inline 薄转发、零拷贝段扫描（原串索引无Copy/分配），复用 bytes.ops 单源思想，消除与 IsSafeArchiveEntryName 的80%重复 }
 function IsSafeTarLinkTarget(const ATarget: string): Boolean; inline;
-var
-  LI, LSegStart: Integer;
 begin
-  Result := False;
-  if (ATarget = '') or (Length(ATarget) > 4096) then Exit;
-  if (ATarget[1] = '/') or (ATarget[1] = '\') then Exit;
-  if (Length(ATarget) >= 2) and (ATarget[2] = ':') and (UpCase(ATarget[1]) in ['A'..'Z']) then Exit;
-  if Pos('\', ATarget) > 0 then Exit;
-  LSegStart := 1;
-  for LI := 1 to Length(ATarget) + 1 do
-  begin
-    if (LI <= Length(ATarget)) and (ATarget[LI] <> '/') then Continue;
-    if LI - LSegStart = 0 then
-    begin
-      if LI <= Length(ATarget) then Exit; // 空段 //
-    end
-    else if (LI - LSegStart = 1) and (ATarget[LSegStart] = '.') then
-    begin
-      // 单点段 ./ 视为空段保守拒绝
-      Exit;
-    end
-    else if (LI - LSegStart = 2) and (ATarget[LSegStart] = '.') and (ATarget[LSegStart+1] = '.') then
-      Exit;
-    LSegStart := LI + 1;
-  end;
-  Result := True;
+  Result := IsSafeArchiveEntryNameEx(ATarget, 4096, False);
 end;
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);

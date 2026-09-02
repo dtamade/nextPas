@@ -35,6 +35,8 @@ type
     MTimeUnix: Int64;
     UName: string;
     GName: string;
+    DevMajor: Int64;
+    DevMinor: Int64;
   end;
 
   {** @desc 写入选项（按条目覆盖 header 字段） *}
