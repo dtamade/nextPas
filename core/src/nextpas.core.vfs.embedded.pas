@@ -11,7 +11,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack.base,
-  nextpas.core.respack.reader,
+  nextpas.core.vfs.backends,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -90,7 +90,7 @@ const
   EMBEDDED_POOL_SLOTS_PER_SHARD = EMBEDDED_POOL_SIZE div EMBEDDED_POOL_SHARDS;
 
 type
-  { 切片池：64 槽 16 分片 SpinLock，热点 16×降争 }
+  { 切片池：64 槽 16 分片 SpinLock 阻塞 Acquire，热点 16×降争，争用阻塞复用免堆抖动，FKeep 强引保活 Owner 生命期（try-finally 不丢） }
   TEmbeddedSlicePool = class
   private
     FPools: array[0..EMBEDDED_POOL_SHARDS - 1, 0..EMBEDDED_POOL_SLOTS_PER_SHARD - 1] of TEmbeddedSlice;
@@ -185,7 +185,7 @@ begin
     raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
-function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt; inline;
 var
   Avail: SizeUInt;
 begin
@@ -196,7 +196,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(FPos))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(FPos), Avail);
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -251,7 +251,7 @@ begin
 end;
 
 function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
-  const AOffset: Int64): SizeUInt;
+  const AOffset: Int64): SizeUInt; inline;
 var
   Avail: SizeUInt;
 begin
@@ -262,7 +262,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(AOffset))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(AOffset), Avail);
   Result := Avail;
 end;
 
@@ -403,7 +403,7 @@ begin
     S := (Start + I) and 15;
     LLock := FLocks[S];
     if LLock = nil then Continue;
-    if not LLock.TryAcquire then Continue;
+    LLock.Acquire;
     try
       if FCounts[S] > 0 then
       begin
@@ -432,7 +432,7 @@ begin
     S := (Start + I) and 15;
     LLock := FLocks[S];
     if LLock = nil then Continue;
-    if not LLock.TryAcquire then Continue;
+    LLock.Acquire;
     try
       if FCounts[S] < EMBEDDED_POOL_SLOTS_PER_SHARD then
       begin

@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1；L2 双缝过渡白名单——`os→fs/path` 与 `embedded→respack.reader` 双缝并存，source-contract gated，L7 聚合为 `nextpas.core.vfs.backends` 后端独立族后收敛至单缝；`mount/overlay` 纯复合；L3 装饰器经 `vfs.decorator` 单点聚合）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
-**版本**：1.13（后端独立族落地：L2 双缝过渡白名单，L7 聚合为 `nextpas.core.vfs.backends` 后收敛单缝 source-contract gated）
+**版本**：1.14（门面经 backends+decorator 双族单缝收敛，扇出 12→10，L7 单缝已落地）
 
 ---
 
@@ -28,7 +28,7 @@ vfs.util      ← 便利函数（VfsStat/List/ReadAll/Walk）
 vfs.transform ← L3 通用字节变换装饰器（经 decorator 聚合）
 vfs.compressed← L3 解压薄门面（经 transform 承载 gzip）
 vfs.decorator ← L3 装饰器族聚合：transform+compressed 单点收口
-vfs.pas       ← 门面 re-export + 便利函数（经 decorator 聚合，扇出 12）
+vfs.pas       ← 门面 re-export + 便利函数（经 backends+decorator 双族聚合，扇出 10）
 ```
 
 *注：性能实现细节（bytes.ops 单源 inline 零拷贝、SpinLock 池化、4K HeaderPred、try-finally）归实现文档与源码注释，契约仅保留接口与不变量。*
@@ -152,3 +152,4 @@ end;
 | 2026-09-02 | 1.11 | decorator 族单点聚合收敛门面扇出 | AI |
 | 2026-09-02 | 1.12 | 契约精简：规格与实现分离，L2→L2 双缝白名单过渡收敛至 L7 后端独立族单缝理想，移除行话堆砌 | AI |
 | 2026-09-02 | 1.13 | 后端独立族落地：`vfs.backends` 聚合三后端单缝收口，L2 双缝过渡白名单 L7 收敛单缝 source-contract gated | AI |
+| 2026-09-02 | 1.14 | 门面双族单缝收敛落地：`vfs.pas` 经 backends+decorator 双聚合，扇出 12→10，src 16 闭环补齐 | AI |
