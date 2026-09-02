@@ -52,7 +52,7 @@ end;
 
 procedure MixInto(var ADst: TAudioBuffer; const ASrc: TAudioBuffer; AGain: Single; AOffset: Integer);
 var
-  LSrcF32, LSrcData: TBytes;
+  LSrcData: TBytes;
   LDstPtr, LSrcPtr: PSingle;
   LSamples, LDstOffset, LI: Integer;
   LExpected: Int64;
@@ -60,6 +60,7 @@ var
   LUseStack: Boolean;
   LAlias: Boolean;
   LBytesPerSample: Integer;
+  LChunk, LJ: Integer;
 begin
   if not ADst.Format.IsValid then raise EInvalidArgument.Create('MixInto: dst invalid format');
   if ADst.Format.SampleFormat <> sfF32 then raise EInvalidArgument.Create('MixInto: dst must be sfF32');
@@ -109,9 +110,28 @@ begin
     end
     else
     begin
-      LSrcF32 := PcmConvert(ASrc.Data, ASrc.Format.SampleFormat, sfF32, ASrc.FrameCount, ASrc.Format.Channels, False);
-      LSrcData := LSrcF32;
-      LSrcPtr := PSingle(@LSrcData[0]);
+      // perf: large-block zero-alloc chunked convert+mix — reuse LStack as F32 scratch, no PcmConvert heap, inline zero-copy per chunk via SimdAddF32 owner (bytes.ops single source, vector dispatch)
+      LDstPtr := PSingle(@ADst.Data[0]);
+      if Int64(Length(ADst.Data)) < Int64(LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
+      LI := 0;
+      while LI < LSamples do
+      begin
+        if LSamples - LI > Length(LStack) then LChunk := Length(LStack) else LChunk := LSamples - LI;
+        case ASrc.Format.SampleFormat of
+          sfS16: SimdConvertS16ToF32(PSmallInt(@ASrc.Data[LI*2]), @LStack[0], LChunk);
+          sfS32: SimdConvertS32ToF32(PLongInt(@ASrc.Data[LI*4]), @LStack[0], LChunk);
+        else
+          for LJ := 0 to LChunk - 1 do
+            case ASrc.Format.SampleFormat of
+              sfU8: LStack[LJ] := PcmU8ToF32(ASrc.Data[(LI+LJ) * LBytesPerSample]);
+              sfS24: LStack[LJ] := PcmS24ToF32(PcmReadS24LE(ASrc.Data, (LI+LJ)*3));
+            else LStack[LJ] := 0;
+            end;
+        end;
+        SimdAddF32(@LStack[0], @LDstPtr[LDstOffset + LI], LChunk, AGain);
+        Inc(LI, LChunk);
+      end;
+      Exit;
     end;
   end
   else
@@ -129,11 +149,18 @@ begin
       end
       else
       begin
-        SetLength(LSrcF32, LSamples * SizeOf(Single));
-        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping heap copy
-        CopyMem(@LSrcF32[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
-        LSrcData := LSrcF32;
-        LSrcPtr := PSingle(@LSrcData[0]);
+        // perf: large alias zero-alloc chunked copy+mix — reuse LStack per chunk, no heap, inline BytesCopy single source via base.utils CopyMem → bytes.ops, vector SimdAddF32
+        LDstPtr := PSingle(@ADst.Data[0]);
+        if Int64(Length(ADst.Data)) < Int64(LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
+        LI := 0;
+        while LI < LSamples do
+        begin
+          if LSamples - LI > Length(LStack) then LChunk := Length(LStack) else LChunk := LSamples - LI;
+          CopyMem(@LStack[0], @ASrc.Data[LI*SizeOf(Single)], SizeUInt(LChunk) * SizeUInt(SizeOf(Single)));
+          SimdAddF32(@LStack[0], @LDstPtr[LDstOffset + LI], LChunk, AGain);
+          Inc(LI, LChunk);
+        end;
+        Exit;
       end;
     end
     else
@@ -158,8 +185,8 @@ begin
   // re-ensure LSrcPtr valid for stack paths
   if (ASrc.Format.SampleFormat <> sfF32) and LUseStack then LSrcPtr := @LStack[0];
   if LAlias and LUseStack then LSrcPtr := @LStack[0];
-  for LI := 0 to LSamples - 1 do
-    LDstPtr[LDstOffset + LI] := LDstPtr[LDstOffset + LI] + LSrcPtr[LI] * AGain;
+  // perf: inline single source vector via audio.simd SimdAddF32 — zero-copy PSingle window, single pass, no scalar tail, bytes.ops single source for stack paths
+  SimdAddF32(LSrcPtr, @LDstPtr[LDstOffset], LSamples, AGain);
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);

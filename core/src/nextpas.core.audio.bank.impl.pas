@@ -133,15 +133,15 @@ begin
   Result := True;
 end;
 
-function TBankVoiceSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
+function TBankVoiceSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer; inline;
 var
   OutPtr: PSingle;
   I, Ch, Idx0, Idx1: Integer;
   Frac, V0, V1, V: Single;
   SrcPtr: PSingle;
   Gains: TAudioPanGains;
-  Lgain, Rgain: Single;
-  Needed: Integer;
+  Needed, Actual: Integer;
+  ChanGains: array[0..7] of Single;
 begin
   Needed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < Needed then
@@ -152,18 +152,20 @@ begin
   end;
   if FEof and not FLoop then
   begin
-    FillChar(ABuffer.Data[0], Needed, 0);
+    if Needed > 0 then BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
     ABuffer.FrameCount := AFrames;
     Exit(0);
   end;
   OutPtr := PSingle(@ABuffer.Data[0]);
   SrcPtr := PSingle(@FData[0]);
-  { PanLawGains0dB 复用：0dB center for bank loudness }
+  for Ch := 0 to FChannels - 1 do ChanGains[Ch] := FGain;
   if FChannels = 2 then
   begin
     Gains := PanLawGains0dB(FPan);
-    Lgain := Gains.X; Rgain := Gains.Y;
-  end else begin Lgain := 1; Rgain := 1; end;
+    ChanGains[0] := FGain * Gains.X;
+    ChanGains[1] := FGain * Gains.Y;
+  end;
+  Actual := 0;
   for I := 0 to AFrames - 1 do
   begin
     if FPos >= FFrames then
@@ -183,22 +185,18 @@ begin
       V0 := SrcPtr[Idx0*FChannels + Ch];
       V1 := SrcPtr[Idx1*FChannels + Ch];
       V := V0 + (V1 - V0)*Frac;
-      V := V * FGain;
-      if FChannels = 2 then
-      begin
-        if Ch = 0 then V := V * Lgain
-        else V := V * Rgain;
-      end;
+      V := V * ChanGains[Ch];
       OutPtr[I*FChannels + Ch] := V;
     end;
     FPos := FPos + FPitch;
+    Inc(Actual);
   end;
   if FEof then
   begin
-    for I := I to AFrames -1 do
-      for Ch := 0 to FChannels-1 do
-        OutPtr[I*FChannels+Ch] := 0;
+    if Actual < AFrames then
+      BytesZero(@OutPtr[Actual*FChannels], SizeUInt((AFrames - Actual)*FChannels*SizeOf(Single)));
     ABuffer.FrameCount := AFrames;
+    ABuffer.Format := FFormat;
     Result := 0;
     Exit;
   end;
@@ -660,7 +658,7 @@ begin
     if AFrames <= 0 then Exit(0);
     Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
   end;
-  FillChar(ABuffer.Data[0], Needed, 0);
+  if Needed > 0 then BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
   { two-phase snapshot + EnsureScratch 零分配：与 graph/timeline 同 discipline }
   FLock.Acquire;
   try
@@ -669,9 +667,6 @@ begin
   finally
     FLock.Release;
   end;
-  EnsureScratch(FScratchTmp, Needed);
-  if Length(FSnapshotVoices) < AliveN then
-    SetLength(FSnapshotVoices, AliveN);
   if AliveN = 0 then
   begin
     ABuffer.FrameCount := AFrames;
@@ -679,6 +674,9 @@ begin
     Result := AFrames;
     Exit;
   end;
+  EnsureScratch(FScratchTmp, Needed);
+  if Length(FSnapshotVoices) < AliveN then
+    SetLength(FSnapshotVoices, AliveN);
   if AliveN > 0 then
   begin
     FLock.Acquire;
@@ -705,24 +703,8 @@ begin
   HasData := False;
   for I := 0 to AliveN - 1 do
   begin
-    FillChar(Tmp.Data[0], Needed, 0);
-    try
-      J := Snap[I].FillRealtime(Tmp, AFrames);
-    except
-      InterlockedExchangeAdd64(FViolations, 1);
-      Continue;
-    end;
-    if J < 0 then
-    begin
-      InterlockedExchangeAdd64(FViolations, 1);
-      Continue;
-    end;
-    if J = 0 then Continue;
-    if J < AFrames then
-    begin
-      FillChar((PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign)^, (AFrames - J) * FFormat.BlockAlign, 0);
-      J := AFrames;
-    end;
+    J := Snap[I].FillRealtime(Tmp, AFrames);
+    if J <= 0 then Continue;
     HasData := True;
     TmpPtr := PSingle(@Tmp.Data[0]);
     NSamples := AFrames * FFormat.Channels;
@@ -731,7 +713,6 @@ begin
   end;
   if not HasData then
   begin
-    FillChar(ABuffer.Data[0], Needed, 0);
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     Result := AFrames;

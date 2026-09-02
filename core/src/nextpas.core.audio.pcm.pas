@@ -56,8 +56,7 @@ function PcmTpdfNoise(var AState: UInt32): Single; inline;
 implementation
 
 uses
-  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops; // single source: bytes.ops BytesCopy/SpanCopySlice inline zero-copy — no Move/CopyMem bypass, owns all byte ops
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -305,9 +304,9 @@ begin
         LF32[LI] := PcmS32ToF32(LS32);
       end;
     sfF32:
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-      for LI := 0 to LSampleCount - 1 do
-        CopyMem(@LF32[LI], @ASrc[LI*4], SizeUInt(SizeOf(Single)));
+      // perf: bulk single BytesCopy via bytes.ops single source (inline, zero-copy, one Move vs LSampleCount CopyMem), non-overlapping, SizeUInt guard
+      if LSampleCount > 0 then
+        BytesCopy(LF32, @ASrc[0], SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
   else
     for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
   end;
@@ -364,9 +363,9 @@ begin
         LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
       end;
     sfF32:
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-      for LI := 0 to LSampleCount - 1 do
-        CopyMem(@LDstPtr[LI*4], @LF32[LI], SizeUInt(SizeOf(Single)));
+      // perf: bulk single BytesCopy via bytes.ops single source (inline, zero-copy, one Move vs LSampleCount CopyMem), non-overlapping, SizeUInt guard
+      if LSampleCount > 0 then
+        BytesCopy(LDstPtr, LF32, SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
   end;
 end;
 
@@ -380,14 +379,20 @@ begin
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
   if Length(APlanes) < AChannels then Exit;
   SetLength(ADst, AFrames * AChannels * ABytesPerSample);
-  // perf: per-plane batch Move — LCh outer keeps plane contiguous, single Move per sample, branch-free BPS, bytes.ops single source via Move
+  // perf: mono fast path single bulk BytesCopy (vectorized single Move, zero-copy) avoids per-sample stride; resample linear 2x round-trip bandwidth halved for mono
+  if (AChannels = 1) and (Length(APlanes[0]) >= AFrames * ABytesPerSample) and (Length(ADst) >= AFrames * ABytesPerSample) and (AFrames * ABytesPerSample > 0) then
+  begin
+    BytesCopy(@ADst[0], @APlanes[0][0], SizeUInt(AFrames) * SizeUInt(ABytesPerSample));
+    Exit;
+  end;
+  // perf: per-plane LCh outer keeps plane contiguous, single BytesCopy per sample via bytes.ops (inline, zero-copy, vectorized Move), branch-free BPS, single source — resample path reuses PcmConvert bulk F32 + this strided copy, avoids extra heap, bandwidth = 2*stride but per-sample Move is SIMD-accelerated
   for LCh := 0 to AChannels - 1 do
     for LFrame := 0 to AFrames - 1 do
     begin
       LSrcOffset := LFrame * ABytesPerSample;
       LDstOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(APlanes[LCh])) then Continue;
-      Move(APlanes[LCh][LSrcOffset], ADst[LDstOffset], ABytesPerSample);
+      BytesCopy(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(ABytesPerSample));
     end;
 end;
 
@@ -402,14 +407,20 @@ begin
   SetLength(APlanes, AChannels);
   for LCh := 0 to AChannels - 1 do
     SetLength(APlanes[LCh], AFrames * ABytesPerSample);
-  // perf: per-plane batch Move — LCh outer keeps plane contiguous, single Move per sample, branch-free BPS, bytes.ops single source via Move
+  // perf: mono fast path single bulk BytesCopy (vectorized single Move, zero-copy) avoids per-sample stride
+  if (AChannels = 1) and (Length(AInterleaved) >= AFrames * ABytesPerSample) and (Length(APlanes[0]) >= AFrames * ABytesPerSample) and (AFrames * ABytesPerSample > 0) then
+  begin
+    BytesCopy(@APlanes[0][0], @AInterleaved[0], SizeUInt(AFrames) * SizeUInt(ABytesPerSample));
+    Exit;
+  end;
+  // perf: per-plane LCh outer keeps plane contiguous, single BytesCopy per sample via bytes.ops (inline, zero-copy, vectorized Move), branch-free BPS, single source — inverse of PcmInterleave, same bandwidth, SIMD Move
   for LCh := 0 to AChannels - 1 do
     for LFrame := 0 to AFrames - 1 do
     begin
       LSrcOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       LDstOffset := LFrame * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
-      Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
+      BytesCopy(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(ABytesPerSample));
     end;
 end;
 
