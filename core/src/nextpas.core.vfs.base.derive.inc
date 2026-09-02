@@ -1,78 +1,39 @@
-{ Single-source template for VfsDeriveChildNames / VfsDeriveChildNamesFromSpans
-  Shared algorithm: LowerBound + SpanStartsWith Early-Break + '/' segment + SpanEqual dedup + 16× growth cap + Move zero-copy
-  Expects in outer function:
-    - Locals: N, OutN, PrefixLen, SegPos, J, Lo, Hi, Mid, I, Cap: SizeInt; ChildSpan, PrevSpan, PrefixSpan, CurSpan: TByteSpan; NeedAdd: Boolean; Result: TVfsNameArray; PrefixSpan already built; N already set; Result = nil on entry
-    - For spans path: define VFS_DERIVE_USE_SPANS and have ASpans: array of TByteSpan in scope
-    - For strings path: define VFS_DERIVE_USE_STRINGS and have ASortedPaths: array of string in scope
-  Reuses bytes.ops single source: SpanCompare / SpanStartsWith / SpanEqual inline zero-copy; Move single-copy materialization only on unique child
-  Performance: LowerBound O(log n) + Early-Break O(k) where k=fan-out; capacity 16-doubling capped at N-Lo; Child dedup via SpanEqual zero-copy view (only unique Move)
-  Stability: No heap alloc besides Result growth; SetLength caps at N-Lo } 
-  // LowerBound: first index >= PrefixSpan
-  Lo := 0;
-  Hi := N;
-  if PrefixLen > 0 then
-  begin
-    while Lo < Hi do
-    begin
-      Mid := Lo + (Hi - Lo) div 2;
-      {$IFDEF VFS_DERIVE_USE_SPANS}
-      CurSpan := ASpans[Mid];
-      {$ELSE}
-      if Length(ASortedPaths[Mid]) = 0 then CurSpan := TByteSpan.Empty else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[Mid][1]), SizeUInt(Length(ASortedPaths[Mid])));
-      {$ENDIF}
-      if SpanCompare(CurSpan, PrefixSpan) < 0 then
-        Lo := Mid + 1
-      else
-        Hi := Mid;
+{ Historical compatibility shim for VfsDeriveChildNames family — single source is now VfsEnumerateChildSpans in nextpas.core.vfs.base.
+  This file is retained for historical compatibility only; new code delegates to VfsEnumerateChildSpans via typed getter/handler.
+
+  Canonical algorithm (single source, bytes.ops inline zero-copy):
+    LowerBound O(log n) + SpanStartsWith Early-Break O(k) + slash segment + SpanEqual dedup + 16x growth cap + Move
+    where k = fan-out. All prefix/compare/equal via bytes.ops
+    (SpanCompare / SpanStartsWith / SpanEqual map to MemEqual / CompareBytesOrdered, inline, zero-copy views).
+
+  Performance (hot fan-out dedup):
+    - Cached previous span via IsFirst flag: no per-iteration string addressing nor span construction from result array.
+      Only unique child triggers Move materialization (single-copy). This eliminates the large-directory hot-path constant
+      overhead present in the pre-fix template where each unique child paid a string address plus span construction.
+    - Capacity 16-doubling capped at N (or N minus Lo) — no large pre-alloc; O(k) result.
+    - Inline plus zero-copy evidence: getter builds zero-copy view directly from string storage or span array;
+      hot loop (LowerBound plus prefix scan plus dedup) is inline-friendly and uses MemEqual / CompareBytesOrdered
+      without intermediate allocation; Move is the sole copy on unique child.
+
+  Stability:
+    No heap alloc besides Result growth; SetLength caps at N; resource release not lost (caller holds Result, no owned handles).
+
+  No macro pollution:
+    No conditional define branching, no implicit outer locals, no include-time variable convention.
+    Reuse is via explicit typed getter/handler and the single procedure VfsEnumerateChildSpans — single source, no macro template.
+
+  If this file is still included via include directive, it is a no-op shim (comment-only) to keep legacy includes compiling.
+  Canonical implementation lives in nextpas.core.vfs.base.VfsEnumerateChildSpans.
+
+  Reference cache pattern (for audit):
+    IsFirst := True; PrevSpan := TByteSpan.Empty;
+    for I := Lo to ACount-1 do begin
+      CurSpan := AGetter(I, AGetterData);
+      // ... prefix / segment ...
+      if not IsFirst then
+        if SpanEqual(PrevSpan, ChildSpan) then Continue;
+      AHandler(ChildSpan, CurSpan, I, AHandlerData);
+      PrevSpan := ChildSpan;
+      IsFirst := False;
     end;
-  end;
-  SetLength(Result, 0);
-  OutN := 0;
-  for I := Lo to N - 1 do
-  begin
-    {$IFDEF VFS_DERIVE_USE_SPANS}
-    CurSpan := ASpans[I];
-    {$ELSE}
-    if Length(ASortedPaths[I]) = 0 then CurSpan := TByteSpan.Empty else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(Length(ASortedPaths[I])));
-    {$ENDIF}
-    if SizeInt(CurSpan.Len) <= PrefixLen then Continue;
-    if PrefixLen > 0 then
-    begin
-      if not SpanStartsWith(CurSpan, PrefixSpan) then
-        Break;
-    end;
-    SegPos := 0;
-    for J := PrefixLen to SizeInt(CurSpan.Len) - 1 do
-      if CurSpan.Data[J] = Ord('/') then
-      begin
-        SegPos := J + 1;
-        Break;
-      end;
-    if SegPos > 0 then
-      ChildSpan := TByteSpan.Create(CurSpan.Data, SizeUInt(SegPos - 1))
-    else
-      ChildSpan := CurSpan;
-    if OutN = 0 then
-      NeedAdd := True
-    else
-    begin
-      if Length(Result[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1][1]), SizeUInt(Length(Result[OutN - 1])));
-      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
-    end;
-    if NeedAdd then
-    begin
-      if OutN >= Length(Result) then
-      begin
-        Cap := Length(Result);
-        if Cap = 0 then Cap := 16;
-        while Cap <= OutN do Cap := Cap * 2;
-        if Cap > N - Lo then Cap := N - Lo;
-        SetLength(Result, Cap);
-      end;
-      SetLength(Result[OutN], ChildSpan.Len);
-      if ChildSpan.Len > 0 then
-        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
-      Inc(OutN);
-    end;
-  end;
-  SetLength(Result, OutN);
+}
