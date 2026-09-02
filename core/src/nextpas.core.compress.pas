@@ -1,6 +1,7 @@
 unit nextpas.core.compress;
 {**
- * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib、Tar。
+ * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib。
+ * @note Tar 已晋升独立 L2 nextpas.core.tar，兼容薄转发保留于 nextpas.core.compress.tar 经 archive.fs 单缝联邦（deprecated，新增请 uses nextpas.core.tar），本门面不再 re-export Tar 以守 L2→L0-L1 依赖（见 module-registry）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,7 +15,6 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.compress.deflate,
   nextpas.core.compress.gzip,
-  nextpas.core.compress.tar,
   nextpas.core.compress.zstd
   {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   , nextpas.core.compress.lz4.native
@@ -28,10 +28,6 @@ type
   TCompressionLevel = nextpas.core.compress.base.TCompressionLevel;
   ICompressWriter = nextpas.core.compress.intf.ICompressWriter;
   IDecompressReader = nextpas.core.compress.intf.IDecompressReader;
-  TTarEntryKind = nextpas.core.compress.tar.TTarEntryKind;
-  TTarHeader = nextpas.core.compress.tar.TTarHeader;
-  TTarReader = nextpas.core.compress.tar.TTarReader;
-  TTarWriter = nextpas.core.compress.tar.TTarWriter;
 
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;

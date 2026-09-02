@@ -10,7 +10,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.base` | 种类枚举、头记录、选项、常量 `C_TAR_BLOCK_SIZE=512`、名安全谓词、模式助手 |
 | `nextpas.core.tar.intf` | `ITarBuilder` 接口契约（`base←intf←实现←门面`） |
 | `nextpas.core.tar.reader` | `TTarReader`：迭代内存镜像，pax/x/g + GNU L/K + base-256 全兼容 |
-| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出 + `devmajor/devminor` 设备号（`C_TAR_LAYOUT.DevMajor/DevMinor` 单源），需显式 `Finish`（`Destroy` SafeFail 抑制 `EIOError` 二次逃逸） |
+| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出 + `devmajor/devminor` 设备号（`C_TAR_LAYOUT.DevMajor/DevMinor` 单源），需显式 `Finish`（`Destroy` best-effort `Finish`，`IsExceptionUnwinding` 判 unwind 期抑制 `EIOError/short-write` 二次逃逸以保原始异常上下文，非 unwind 期则透传，`try..finally` 必释资源） |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
 | `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed，`AddEntryFromReader` 流式零拷贝 64K pooled 复用 via `FIOBuf` 无缩容） |
 | `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
@@ -27,7 +27,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | USTAR prefix splitting | Yes | Yes | >100 字符名自动 `prefix/name` 分割，无 prefix 切分时写端以 `pax x` 承载 |
 | GNU base-256 numeric | Yes (overflow) | Yes | 超 octal 容量自动 `$80` + big-endian |
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
-| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由 `IsSafeTarEntryName` 拒绝、`ClearGlobalPax` 显式可选 |
+| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由 `IsSafeTarEntryName` 自动 Guard 丢弃、`ClearGlobalPax` 显式可选 |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝） |
 
@@ -95,6 +95,19 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddEntryFromReader(Hdr2, Reader) // 流式零拷贝 64K pooled 复用 via FIOBuf 无缩容（首分配≤64K后200文件复用）、无 TBytes 全量拷贝，抽取 WritePaddedPayload 单源
           .Finish; // 显式 Finish 必需，未调即析构抛 EInvalidOperationError
 ```
+
+## Lifecycle 零拷贝视图 vs 持有型流
+
+- `TrySlice`/`EntryDataSlice`：零拷贝 `TByteSpan`/`PByte` 视图，`inline` 单一规范，生命周期绑 `Reader`（`Reader.Free` 后视图悬垂）。
+- `EntryData`：`SpanClone` 单源拷贝，一次 `SetLength+Move`，200×512B 批量提取产生200次分配峰值，热路径优先视图。
+- `OpenEntryStream`：持有型 `IReader`（`TTarSliceReader.CreateWithHold`固化），`FBuf` 时持有镜像引用，外部 `PByte` 时 `SpanClone` 固化拷贝自包含，`Reader` 释放后仍可读（`bytes.ops.CopyMemory` 单源）。
+
+```
+Reader ── TrySlice ──► 零拷贝视图（绑 Reader）
+       └─ OpenEntryStream ──► 持有型流（自包含，Reader 释放后仍可读）
+```
+
+详见 `CONTRACT.md 附录 B` 单一规范与生命周期图解。
 
 ## Safety Model
 

@@ -23,7 +23,8 @@ type
     VersionLen: SizeUInt;
   end;
 
-  {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。 *}
+  {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 持有镜像，外部 PByte 时 SpanClone 固化拷贝自包含，Reader 释放后仍可读）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -36,6 +37,7 @@ type
     FPendingLongLink: string;
     FPaxPath: string;
     FPaxLinkPath: string;
+    { g 全局持久至下一 g 覆盖，未自动失效；恶意路径由 IsSafe 拒绝，需显式 ClearGlobalPax 防静默劫持 }
     FGlobalPaxPath: string;
     FGlobalPaxLinkPath: string;
     FMaxEntry: SizeUInt;
@@ -76,10 +78,14 @@ type
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
     constructor CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions); overload;
     function Next(out AHeader: TTarHeader): Boolean;
+    {** @desc 拷贝交付：SpanClone 单源 SetLength+Move；200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice/EntryDataSlice 零拷贝视图 *}
     function EntryData: TBytes;
     function EntryDataOfs: SizeUInt;
+    { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
+    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型，外部 PByte 时固化拷贝自包含 — }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
+    { — 持有型流：FBuf 非空时 CreateWithHold 持有镜像，外部 PByte 时 SpanClone 固化拷贝自包含，Reader 释放后仍可读 — }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
   end;
@@ -512,6 +518,11 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
+      // g 全局持久至下一 g 覆盖，未自动失效；恶意路径显式 Clear 前静默劫持，此处 IsSafe 丢弃防污染
+      if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
+        FGlobalPaxPath := '';
+      if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
+        FGlobalPaxLinkPath := '';
       if FPendingLongName <> '' then
         AHeader.Name := FPendingLongName
       else if FPaxPath <> '' then
@@ -536,6 +547,7 @@ begin
         else
           AHeader.Name := StringField(FPos + C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len);
       end;
+      GuardTarNameForRead(AHeader.Name);
       if FPendingLongLink <> '' then
         AHeader.LinkName := FPendingLongLink
       else if FPaxLinkPath <> '' then
@@ -578,6 +590,7 @@ begin
   end;
 end;
 
+{ — 性能：SpanClone 单次 SetLength+Move 拷贝，200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice 零拷贝视图（bytes.ops 单源）— }
 function TTarReader.EntryData: TBytes;
 var
   LS: TByteSpan;

@@ -157,6 +157,7 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（四件套外内部核例外）：不属于四件套公共面，仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引；由 `core/docs/<module>/CONTRACT.md` 源契约与 `test_*_contract` 机械门禁锁定。
 
 ### 单元体积指引
 

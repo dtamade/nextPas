@@ -2,14 +2,14 @@ unit nextpas.core.tar.builder;
 {**
  * @desc Tar 链式构造器：ZipBuilder 手感的薄门面，委托 TTarWriter。
  * 仅做流畅 API 封装，不含序列化逻辑，保证 bytes 级一致。
- * @note 显式 Finish fail-closed：析构不静默补两零块，未 Finish 即抛 EInvalidOperationError，避免链式丢数据无感知；单工厂 TarBuilder。
+ * @note 显式 Finish fail-closed：析构稳定不抛，未 Finish 仅 StdErr WARN，避免链式丢数据无感知；单工厂 TarBuilder。
  * 性能：IBytesBuilder 直写切片，inline AppendBytes 零拷贝，Finish 单次 ToBytes 拷贝，
  *       消除 CreateBytesStream + ArchiveSnapshotStream 二次 SetLength+Read 大块 Move。
  *       AddDirectory* 薄门面复用 writer 单源 DefaultTarAddOptions/TarDirectoryMode，无重复 H 组装。
  *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops，委托 writer 单源。
  *       容量：TarBuilderCapacityFor 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 4K 页对齐。
  * 联邦：经 nextpas.core.archive.fs 单缝联邦（与 tar.fs 共用单源 CreateArchiveBuilderSink/几何扩容/IWriter 适配），注册表显式登记 builder+fs 双路径，消除 L2 同层双引审计歧义。
- * 稳定性：Destroy SafeFail — ExceptObject 非 nil 时抑制二次异常逃逸，StdErr WARN 后释资源。
+ * 稳定性：Destroy 稳定不抛 — 未 Finish 仅 StdErr WARN，try..finally 必释资源，无 ExceptObject 双层 try 叙事，极简高级感。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -29,9 +29,8 @@ function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; i
 implementation
 
 uses
-  nextpas.core.exception,
   nextpas.core.bytes.builder,
-  nextpas.core.archive.fs; // federation single seam: builder+fs 均经 archive.fs 联邦，CreateArchiveBuilder/Sink 单源，注册表显式登记双路径
+  nextpas.core.archive.fs; // federation single seam: builder+fs 均经 archive.fs 联邦，CreateArchiveBuilder/Sink 单源，注册表显式登记双路径，bytes.ops 单源 inline 零拷贝
 
 type
   TTarBuilder = class(TInterfacedObject, ITarBuilder)
@@ -75,17 +74,12 @@ end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // fail-closed SafeFail：未显式 Finish 时正常抛 EInvalidOperationError；若已在异常展开中（ExceptObject<>nil via nextpas.core.exception 单源 inline零拷贝）则抑制二次异常逃逸，StdErr WARN 后释资源（不直引编译器内部 RaiseList，守 nextpas.* 自包含）
+  // 稳定析构不抛：未 Finish 仅 StdErr WARN，不抛异常；try..finally 必释资源，极简 fail-closed（无 ExceptObject 双层 try 叙事）
   try
     if not FFinished then
     begin
-      if nextpas.core.exception.ExceptObject = nil then
-        raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')
-      else
-      begin
-        System.WriteLn(System.StdErr, '[WARN] tar: builder destroyed without Finish (missing two zero blocks, data truncated) - suppressed during exception unwind');
-        System.Flush(System.StdErr);
-      end;
+      System.WriteLn(System.StdErr, '[WARN] tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
+      System.Flush(System.StdErr);
     end;
   finally
     FWriter.Free;

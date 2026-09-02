@@ -17,7 +17,7 @@ type
     FFinished: Boolean;
     FIOBuf: TBytes; // pooled 64K, bytes.ops single source
     procedure WriteBlock(const ABlock: array of Byte);
-    procedure WritePaddedPayload(const AData: TBytes); inline;
+    procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
@@ -97,13 +97,13 @@ begin
   end;
 end;
 
-procedure TTarWriter.WritePaddedPayload(const AData: TBytes); inline;
+procedure TTarWriter.WritePaddedPayload(const AData: TBytes);
 var
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
 begin
-  // bytes.ops single source, inline zero-copy
+  // no inline: Bulk/Tail+Pad three branches with CopyMemory, avoid I-Cache copy bloat per design-conventions; bytes.ops single source, zero-copy
   if Length(AData) = 0 then
     Exit;
   PadLen := TarPadToBlock(Length(AData));
@@ -385,22 +385,19 @@ destructor TTarWriter.Destroy;
 var
   LUnwinding: Boolean;
 begin
-  // SafeFail: suppress on ExceptObject, WARN, free resources
-  // FIOBuf bound to writer, bytes.ops single source
-  LUnwinding := nextpas.core.exception.ExceptObject <> nil;
+  // Best-effort Finish: preserve original exception context during unwind
+  // LUnwinding captured before Finish to avoid ExceptObject shadowing by secondary
+  // bytes.ops single source retained; FIOBuf lifecycle bound to writer, no linger peak
+  LUnwinding := nextpas.core.exception.IsExceptionUnwinding;
   try
     if not FFinished then
-    try
-      Finish;
-    except
-      on E: Exception do
-      begin
-        System.WriteLn(System.StdErr, '[WARN] tar: writer Destroy Finish suppressed: ', E.Message, ' unwinding=', LUnwinding);
-        System.Flush(System.StdErr);
+    begin
+      try
+        Finish;
+      except
         if not LUnwinding then
-        begin
-          // suppressed, fail-closed via explicit Finish
-        end;
+          raise;
+        // else suppress secondary EIOError/short-write to preserve original exception context
       end;
     end;
   finally
