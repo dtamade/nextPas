@@ -184,7 +184,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation, archive, tar, zip)
-     ↑ 只依赖 L0-L1；同层允许 `archive`→`tar`/`zip` 经 `archive.fs` 单向显式依赖（见 module-registry L2 同层一-way），禁循环
+     ↑ 只依赖 L0-L1；同层允许 `archive`→`tar`/`zip` 经 `archive.fs` + `archive.pax` 家族缝单向显式依赖（见 module-registry L2 同层一-way），禁循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -195,7 +195,7 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 - 只能向下依赖，不能向上依赖
 - 同层内允许单向依赖，禁止循环依赖
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- L2 同层显式 one-way 仅 via `nextpas.core.archive.fs` 联邦：`tar`/`zip`/`sevenz.fs` 共享 walk/排序/防劫持/零拷贝落盘等单源，单 seam 归一，需在 `core/docs/core-module-registry.md` 显式登记 `federation via archive.fs` / `allowed dependencies`（L2 同层显式一-way），禁循环或隐式同层依赖
+- L2 同层显式 one-way 仅 via `nextpas.core.archive.fs` + `nextpas.core.archive.pax` 家族缝联邦：`tar`/`zip`/`sevenz.fs` 共享 walk/排序/防劫持/零拷贝落盘与 pax kv 等单源，家族缝归一，需在 `core/docs/core-module-registry.md` 显式登记 `federation via archive.fs + archive.pax` / `allowed dependencies`（L2 同层显式一-way），禁循环或隐式同层依赖
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -883,7 +883,7 @@ build/
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
-| `archive`    | 归档共享助手（tar/zip 共享 walk/排序/防劫持/快照/零拷贝落盘，federated via archive.fs，平台文件经 fs 单缝透出，L2 同层显式一-way，几何扩容 2×/16 + 零拷贝 pivot） |
+| `archive`    | 归档共享助手（tar/zip 共享 walk/排序/防劫持/快照/零拷贝落盘 + pax kv，federated via archive.fs + archive.pax 家族缝，平台文件经 fs 单缝透出、pax kv 经 pax 单缝透出，L2 同层显式一-way，几何扩容 2×/16 + 零拷贝 pivot） |
 | `tar`        | tar 容器（ustar/pax/GNU，块对齐，两零块收尾，沙盒化，`base` 单源校验 + `common` 单点 pad/guard + 零拷贝切片 `EntryDataSlice`/`PByte` + `bytes.ops` 单源 `StringToBytes` 一次 Move + pax x/g 与 GNU L/K 长名 + bomb 守卫 + 确定性排序委托 `ArchiveCollectWalk` + 链式 `ITarBuilder` 薄门面） |
 | `zip`        | ZIP 容器（store/deflate，Zip64，WinZip AES，沙盒化，central+EOCD，流式解析，`base` 单源安全谓词 + `common` DOS 互转 + `bytes.ops` 单源 `StringToBytes`/`SpanCompare` + 零拷贝 `PByte` 落盘 + `builder` 薄门面） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |

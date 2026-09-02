@@ -15,6 +15,7 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
+    procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -81,29 +82,43 @@ begin
   FDst := ADst;
 end;
 
+procedure TTarWriter.WriteChecked(AData: PByte; ACount: SizeUInt); inline;
+begin
+  // single source short-write guard, inline thin forward, zero-copy PByte single source
+  if (ACount = 0) or (AData = nil) then
+    Exit;
+  if FDst.Write(AData^, ACount) <> ACount then
+    raise EIOError.Create('tar: short write');
+end;
+
+procedure PadCopy(ASrc, ADst: PByte; AUsed, ATotal: SizeUInt); inline;
+begin
+  // bytes.ops single source CopyMemory+FillChar single seam, inline zero-copy, minimal pad
+  if (AUsed > 0) and (ASrc <> nil) and (ADst <> nil) then
+    CopyMemory(ASrc, ADst, AUsed);
+  if (ATotal > AUsed) and (ADst <> nil) then
+    FillChar((ADst + AUsed)^, ATotal - AUsed, 0);
+end;
+
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
 var
   Pad: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Len: SizeInt;
 begin
-  // no inline: 512B stack guard
+  // no inline: 512B stack guard, single source PadCopy+WriteChecked
   Len := Length(ABlock);
   if Len > C_TAR_BLOCK_SIZE then
     raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, C_TAR_BLOCK_SIZE]);
   if Len = C_TAR_BLOCK_SIZE then
-  begin
-    // bytes.ops single source, inline zero-copy
-    if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
-      raise EIOError.Create('tar: short write');
-  end
+    WriteChecked(@ABlock[0], SizeUInt(Len))
   else
   begin
-    // bytes.ops single source, single Write tail+pad, FillChar PadLen minimal zero, inline
+    // bytes.ops single source PadCopy inline, single Write tail+pad
     if Len > 0 then
-      CopyMemory(@ABlock[0], @Pad[0], SizeUInt(Len));
-    FillChar(Pad[Len], C_TAR_BLOCK_SIZE - Len, 0);
-    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
-      raise EIOError.Create('tar: short write');
+      PadCopy(@ABlock[0], @Pad[0], SizeUInt(Len), C_TAR_BLOCK_SIZE)
+    else
+      PadCopy(nil, @Pad[0], 0, C_TAR_BLOCK_SIZE);
+    WriteChecked(@Pad[0], C_TAR_BLOCK_SIZE);
   end;
 end;
 
@@ -113,36 +128,27 @@ var
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
 begin
-  // no inline: I-Cache guard (512B stack)
+  // no inline: I-Cache guard (512B stack), Bulk+Tail single Write, bytes.ops PadCopy single source
   if Length(AData) = 0 then
     Exit;
   PadLen := TarPadToBlock(Length(AData));
   if PadLen = 0 then
-  begin
-    // bytes.ops single source, inline zero-copy Bulk
-    if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
-      raise EIOError.Create('tar: short write');
-  end
+    WriteChecked(@AData[0], SizeUInt(Length(AData)))
   else if SizeUInt(Length(AData)) <= C_TAR_BLOCK_SIZE then
   begin
-    // bytes.ops single source, single Write tail+pad, FillChar PadLen, inline
-    CopyMemory(@AData[0], @Pad[0], SizeUInt(Length(AData)));
-    FillChar(Pad[Length(AData)], SizeUInt(PadLen), 0);
-    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
-      raise EIOError.Create('tar: short write');
+    // bytes.ops single source PadCopy inline, single Write tail+pad
+    PadCopy(@AData[0], @Pad[0], SizeUInt(Length(AData)), C_TAR_BLOCK_SIZE);
+    WriteChecked(@Pad[0], C_TAR_BLOCK_SIZE);
   end
   else
   begin
-    // bytes.ops single source, zero-copy Bulk + single Write tail+pad, FillChar PadLen, inline
+    // bytes.ops single source, zero-copy Bulk + single Write tail+pad via PadCopy
     BulkLen := (SizeUInt(Length(AData)) div SizeUInt(C_TAR_BLOCK_SIZE)) * SizeUInt(C_TAR_BLOCK_SIZE);
     TailLen := SizeUInt(Length(AData)) - BulkLen;
     if BulkLen > 0 then
-      if FDst.Write(AData[0], BulkLen) <> BulkLen then
-        raise EIOError.Create('tar: short write');
-    CopyMemory(@AData[BulkLen], @Pad[0], TailLen);
-    FillChar(Pad[TailLen], SizeUInt(PadLen), 0);
-    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
-      raise EIOError.Create('tar: short write');
+      WriteChecked(@AData[0], BulkLen);
+    PadCopy(@AData[BulkLen], @Pad[0], TailLen, C_TAR_BLOCK_SIZE);
+    WriteChecked(@Pad[0], C_TAR_BLOCK_SIZE);
   end;
 end;
 
@@ -392,7 +398,7 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // bytes.ops single source via TarIOBufCapacityFor (AlignUp4K), per-entry local buf, zero-copy
+  // bytes.ops single source via TarIOBufCapacityFor (AlignUp4K), per-entry local buf, zero-copy, try..finally 控制峰值避免滞留
   LNeed := TarIOBufCapacityFor(AHdr.Size);
   SetLength(LBuf, LNeed);
   try
@@ -405,8 +411,7 @@ begin
       LRead := AReader.Read(LBuf[0], LToRead);
       if LRead = 0 then
         raise EIOError.Create('tar: short read');
-      if FDst.Write(LBuf[0], LRead) <> LRead then
-        raise EIOError.Create('tar: short write');
+      WriteChecked(@LBuf[0], LRead);
       Dec(LRemaining, Int64(LRead));
     end;
   finally
@@ -415,9 +420,8 @@ begin
   PadLen := TarPadToBlock(AHdr.Size);
   if PadLen > 0 then
   begin
-    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-    if FDst.Write(PadBlock[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
-      raise EIOError.Create('tar: short write');
+    FillChar(PadBlock[0], SizeUInt(PadLen), 0);
+    WriteChecked(@PadBlock[0], SizeUInt(PadLen));
   end;
 end;
 
@@ -440,14 +444,14 @@ end;
 
 destructor TTarWriter.Destroy;
 begin
-  // best-effort Finish 失败 Warn 抑制次生；bytes.ops 单源 zero-copy, try..finally 必释
+  // best-effort Finish 失败 Warn 抑制次生；bytes.ops 单源 zero-copy, try..finally 必释, NullLogger 零分配 inline（常量串无拼接，避免 E.Message 分配）
   try
     if not FFinished then
       try
         Finish;
       except
         on E: Exception do
-          NullLogger.Warn('tar: writer destroy suppress finish failure (short write): ' + E.Message);
+          NullLogger.Warn('tar: writer destroy suppress finish failure (short write)');
       end;
   finally
     FDst := nil;

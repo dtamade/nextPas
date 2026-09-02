@@ -45,8 +45,8 @@ procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，外联，零拷贝 Reserve+AppendBytes 单源 *}
-procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+{** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，inline 薄转发，零拷贝 Reserve+AppendBytes 单源 *}
+procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
 {** 通用 pax 键值迭代已收敛至 archive.pax 单源 *}
 
 implementation
@@ -87,13 +87,13 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和：单遍融合双累加（inline 薄转发，循环/SWAR 体下沉 bytes.ops 单源外联禁 inline，零拷贝 PByte 切片，nil 守卫 + chksum 空洞单遍排除无外联循环分支） — }
+{ 校验和：单遍融合双累加，见 CONTRACT §2 INV-4，经 bytes.ops 单源 }
 procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64); inline;
 var
   LSum: UInt64;
   LHigh: SizeUInt;
 begin
-  // inline 零拷贝薄转发：nil 守卫 fail-closed（热路径外联无分支，单次 inline 分支），SWAR 融合 + chksum 8 字节空洞排除下沉 bytes.ops 单源两段 SWAR，无外联 8 字节 post 循环分支
+  // inline 零拷贝薄转发：nil 守卫 fail-closed，见 bytes.ops 单源
   if ABlock = nil then
   begin
     AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
@@ -267,9 +267,9 @@ begin
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.Version.Off, C_TAR_LAYOUT.Version.Len, C_TAR_VERSION_00);
 end;
 
-procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
 begin
-  // 已收敛至 archive.pax 单源，外联，零拷贝 Reserve+AppendBytes 单源；字符串形态由 archive.pax ArchivePaxFormatRecord 单源承载
+  // inline 零拷贝薄转发至 archive.pax 单源
   ArchivePaxAppendRecord(ABuilder, AKey, AValue);
 end;
 

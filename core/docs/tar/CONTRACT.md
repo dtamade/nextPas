@@ -24,6 +24,10 @@
 
 `TarPackDirInto/TarPackDir/TarExtractToDirWithOptions/TarExtractToDir`（`nextpas.core.tar.fs`，目录递归确定性排序，deferred dir 逆序定稿）。
 
+- **PackWalks 单源**：`TarPackDir`/`TarPackDirInto` 共用 `PackWalks` inline 单源，消除 30+ 行重复粘贴；零拷贝分块搬运复用 `ArchiveCollectWalk` 已 Stat 的 `FSize` 零二次 Stat，`bytes.ops` 单源，`try..finally` 不丢句柄；`TarPackDir` 按预估总量经 `TarBuilderCapacityFor` 4K 对齐预扩容（`bytes.ops.AlignUp4K` 单源，`bytes.builder` 几何扩容 inline 零拷贝），大目录 200×512B 仅1次扩容，小目录 64K 覆盖，零额外拷贝（代码层仅保留克制调用，性能故事沉于此）。
+- **文件系统单缝**：`tar.fs` 仅 `uses nextpas.core.archive.fs` 单缝联邦，Walk/排序/防劫持/零拷贝落盘均经 `archive.fs` 单源，无自有递归样板；`IsSafeTarLinkTarget`/`ValidateHardlinkSource` 复用 `bytes.pathvalid`/`archive.fs` 单源 `inline` 薄转发。
+- **硬链接 TOCTOU 闭环**：`tekHardLink` 经 `ArchiveHardLinkVerified` → `FsHardLinkVerified` → `platform_file_link_verified` 单源原子落盘：`O_NOFOLLOW|O_CLOEXEC` 打开源 fd 校验 `ftRegular` 后经 `/proc/self/fd`（Linux）或 `/dev/fd`（Darwin/BSD）fd 链路 `link`，消除 `Validate→HandleSpecial→HardLink` 窗口并发替换源为 symlink 的绕过。
+
 ### 1.4 链式构造器
 
 `ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/AddEntryFromReader/Finish` 链式单口直达。
@@ -103,10 +107,10 @@ Reader.Create(Bytes|PByte) ── FBuf/FData 持有镜像
   │
   ├─ TrySlice(out Span) ──► TByteSpan{Data=PByte, Len} 零拷贝视图，inline，Reader 释放后失效
   ├─ EntryDataSlice(out PByte, Count) ──► 同上薄转发
-  └─ OpenEntryStream ──► IReader 持有型
-        ├─ FBuf 非空：TTarSliceReader.CreateWithHold(FBuf, Ofs, Size) 持有镜像引用，Reader 释放后仍可读
+  └─ OpenEntryStream ──► IReader 持有型（nextpas.core.io.slice TIOSliceReader/CreateSliceReaderWithHold 单源，tar/zip 统一）
+        ├─ FBuf 非空：CreateSliceReaderWithHold(FBuf, Ofs, Size) 持有镜像引用，Reader 释放后仍可读
         └─ 外部 PByte：SpanClone 固化拷贝自包含（FHold 独立），Reader 释放后仍可读
 ```
 
 - 视图失效：`Reader.Free` 后 `Span.Data` 悬垂，禁止再访；流持有型则安全（`FHold` 自包含）。
-- 单源：`SpanClone/CopyMemory/CopyStringToBuffer` 均经 `bytes.ops` 单源 `Move`，`TTarSliceReader.Read` 经 `CopyMemory` 单源零拷贝。
+- 单源：`SpanClone/CopyMemory/CopyStringToBuffer` 均经 `bytes.ops` 单源 `Move`，`TIOSliceReader.Read`（io.slice）经 `CopyMemory` 单源零拷贝，`FieldSlice` 七字段表驱动（layout 表+ScanLens 数组 loop，无 if-else 链，单次 512B ScanNulFieldTruncations 缓存）。

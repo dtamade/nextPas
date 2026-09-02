@@ -34,6 +34,7 @@ type
   private
     FBuilder: IArchiveBuilder; // 联邦单源直写切片，bytes.builder 几何扩容单源 inline 零拷贝
     FWriter: TTarWriter; // 薄委托唯一写器，持有 Sink 单缝，IsFinished 单源
+    procedure InitBuilder(const ACap: SizeUInt); inline; // 薄门面单源：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）—— 构造器双入口共用，零 QueryInterface 直达
   public
     constructor Create; overload;
     constructor CreateWithCapacity(const AEstimatedTotal: SizeUInt); overload;
@@ -47,23 +48,24 @@ type
     function Finish: TBytes; inline;
   end;
 
-constructor TTarBuilder.Create;
+procedure TTarBuilder.InitBuilder(const ACap: SizeUInt); inline;
 var LSink: IWriter;
 begin
-  inherited Create;
-  // 薄门面：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）
-  CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, LSink);
+  // 薄门面单源：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）—— bytes.builder 几何扩容单源 inline 零拷贝，ITarBuilder 单口直达零 QueryInterface 仪式
+  CreateArchiveBuilder(ACap, FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
 end;
 
-constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
-var LCap: SizeUInt; LSink: IWriter;
+constructor TTarBuilder.Create;
 begin
   inherited Create;
-  // 薄门面：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）
-  LCap := TarBuilderCapacityFor(AEstimatedTotal);
-  CreateArchiveBuilder(LCap, FBuilder, LSink);
-  FWriter := TTarWriter.Create(LSink);
+  InitBuilder(TarBuilderCapacityFor(0));
+end;
+
+constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
+begin
+  inherited Create;
+  InitBuilder(TarBuilderCapacityFor(AEstimatedTotal));
 end;
 
 destructor TTarBuilder.Destroy;
@@ -112,7 +114,7 @@ end;
 
 function TTarBuilder.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
 begin
-  // 流式零拷贝：per-entry 局域缓冲 via TarIOBufCapacityFor (AlignUp4K), bytes.ops 单源
+  // 流式零拷贝：委托 TTarWriter.AddEntryFromReader 单源，per-entry 局域缓冲 via TarIOBufCapacityFor (AlignUp4K) try..finally 必释无滞留，bytes.ops 单源 inline 零拷贝
   FWriter.AddEntryFromReader(AHdr, AReader);
   Result := Self;
 end;
