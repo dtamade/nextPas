@@ -67,13 +67,14 @@ nextpas.core.respack.limits.pas         ← 阈值策略兼容转发（仅 inlin
 nextpas.core.embed.pas                  ← 嵌入策略门面（L1，策略单源 embed.limits 纯转发，供其他载体直接复用）
 nextpas.core.respack.reader.pas         ← 校验 + 索引二分查找（只读，无分配热路径）
 nextpas.core.respack.writer.layout.pas  ← 布局单源：排序/去重/对齐/槽位/总量（首遍，inline 零拷贝，复用 bytes.ops+mem.base+collections）
+nextpas.core.respack.writer.builder.pas ← 头/index/string 单源 builder：消除 writer/stream 30 行重复（WrU*LE/BytesCopy/BytesZero 单源，registry 明示 + source-contract 门禁，内部单源模块）
 nextpas.core.respack.writer.pas         ← 纯内存组装：GetMem(Total) + 回填（保留确定性/golden 路径，≥64MB 定向 gap 清零 2.03×→1.15×）
 nextpas.core.respack.writer.stream.pas  ← 流式两遍：复用 layout 首遍，总量预取 + 头/index/string 合批 + 槽间隙零填 + data 零拷贝 Move 分段 + digest（峰值 ~1×+头，try..finally 不丢资源）
 nextpas.core.respack.dirsource.pas      ← 目录枚举（输入）+ 解包落盘（输出）+ 嵌入打包（StripPrefix→Glob→AddPrefix 管线，唯一 L2→L2 IO seam，fs+io.mapped mmap 零拷贝 via mem.memory_map）
 nextpas.core.respack.embed.pas          ← 嵌入工具链库：blob → .inc/.inc unit 纯内存生成（S4，阈值单源于 embed.limits 独立模块 + 单次 SetLength+分段 BytesCopy 与 writer.builder 通用文本组装单源收敛，inline 零拷贝；可配置 MaxBlobBytes）
 ```
 
-依赖方向：`base ← reader/writer.layout ← writer/writer.stream ← dirsource/embed ← 门面`（布局单源复用，流式零双驻留仅 via layout）。
+依赖方向：`base ← reader/writer.layout ← writer.builder ← writer/writer.stream ← dirsource/embed ← 门面`（布局+头单源复用，流式零双驻留仅 via layout/builder）。
 
 ### 依赖白名单
 
@@ -81,9 +82,10 @@ nextpas.core.respack.embed.pas          ← 嵌入工具链库：blob → .inc/.
 |------|----------|------|
 | `base` | L0（`base`/`errors`） | 纯类型与常量 |
 | `reader` | `base` | 无堆分配查找路径 |
-| `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源：字节比较 `ResPackCmpPath`→`SpanCompare` inline 零拷贝 + `Sort` 单源（替代手写排序）+ `AlignUp64` 单源，无堆热点外分配（`ResPackLayoutClear` inline 释放） |
-| `writer` | `writer.layout` + `base` | 纯内存组装（`GetMem(Total)` 一次性，`try..except FreeMem` 不丢资源；≥64MB 定向 gap 清零，d×→1.15×） |
-| `writer.stream` | `writer.layout` + `base` | 流式两遍分段零双驻留：首遍同布局（排序/去重/对齐）`ResPackComputeLayout` 单源复用，`ResPackBuildStreamSize` 零分配预取 Total；次遍分段 `AWrite` 回调（头/index/string 合批 GetMem(DataStart) `try..finally FreeMem` + 槽间隙 4K 零页 `WriteZeros` + data `Move` 零拷贝 + digest 零额外 Total 缓冲），峰值 `~1×+头`，稳定性 `try..finally ResPackLayoutClear` |
+| `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源：字节比较 `ResPackCmpPath`→`SpanCompare` inline 零拷贝 + `Sort` 单源（替代手写排序）+ `AlignUp64` 单源，无堆热点外分配（`ResPackLayoutClear` out-of-line 释放） |
+| `writer.builder` | `base` + `writer.layout` + `bytes.ops` | 头/index/string 单源 builder：`WrU*LE`/`BytesCopy`/`BytesZero` 单源，消除 writer/stream 30 行重复（WrU*LE/Move），registry 明示 + source-contract 门禁，内部单源模块 |
+| `writer` | `writer.layout` + `writer.builder` + `base` | 纯内存组装（`GetMem(Total)` 一次性，`try..except FreeMem` 不丢资源；≥64MB 定向 gap 清零，d×→1.15×，头/index/string 单源于 builder） |
+| `writer.stream` | `writer.layout` + `writer.builder` + `base` | 流式两遍分段零双驻留：首遍同布局（排序/去重/对齐）`ResPackComputeLayout` 单源复用，`ResPackBuildStreamSize` 零分配预取 Total；次遍分段 `AWrite` 回调（头/index/string 合批 `TBytes` RAII `SetLength` + 槽间隙 4K 零页 `WriteZeros` inline 快道 + data `Move` 零拷贝 + digest 零额外 Total 缓冲），峰值 `~1×+头`，稳定性 `try..finally ResPackLayoutClear` |
 | `dirsource` | `writer`/`reader` + `nextpas.core.fs` + `nextpas.core.io.mapped`（唯一 L2→L2 IO seam，fs + mmap 零拷贝 via `mem.memory_map` owner）+ `nextpas.core.path`/`bytes.ops`/`text.strings` + `base.utils`（L1/L0 单源：`PathStripPrefix` 前缀剥离+`PathToSlash` 归一 inline 单遍扫描零拷贝 + `GlobMatch` L1 单源 PChar 零拷贝 + `BytesCopy` 零拷贝单源 + `TryAddSizeUInt` 溢出防护，替代手写 Copy/while/Delete/StringReplace O(n²)） | **唯一的 L2→L2 IO seam**：目录枚举、extract 落盘 + **嵌入打包管线**（`ResPackEmbedBuild`：StripPrefix→ValidPath→GlobMatch→AddPrefix→ValidPath，`MapAndFilter` + `CheckGlobList`/`StartsSlash`，复用 L1 `text.strings.GlobMatch` 单源）都收口在此，registry 明示 + source-contract 门禁（同 `vfs.os` seam 范式）；路径归一与前缀剥离已收口至 `nextpas.core.path.PathStripPrefix` 单源（`RelativizePath` 单一转发，Windows 宿主归一无 $IFDEF，Unix 零开销，inline 零额外分配）；公共过滤/限额/扩容管线单源（`FilterRelPath`/`TryReserveTotal`/`Ensure*Capacity`，消 WalkProc 80% 重复，DRY）；零拷贝 `BytesCopy` 单源（分段回填/解包三处 `Move` → `BytesCopy`）；累计校验改用 `TryAddSizeUInt` 单源防 32 位回绕；非流式 `ResPackEntriesFromDir` 为小包便捷（TBytes 2×+头），大包请优先 `ResPackBuildStreamFromDir` 流式mmap（~1×+头，接口锚点 try..finally 释放不丢） |
 | `embed` | `nextpas.core.text.strings`/`text.char`/`text.conv` + `nextpas.core.bytes.ops` + `nextpas.core.encoding.hex` + `nextpas.core.embed.limits`（L1 独立策略模块，供其他载体复用；`respack.limits` 为兼容转发，纯 L0-L1，零 FS/零 writer/零 dirsource） | **纯内存嵌入**：仅 `blob → .inc / .inc unit` 文本生成；glob 经 `text.strings.GlobMatch` + 标识符经 `text.char.IsAlpha/IsAlphaNum` + 数值经 `text.conv.IntToStr` 三单源（PChar 零拷贝视图 + *非 inline* 循环体守红线2 + O(pat×name) 双追踪器）+ `bytes.ops.BytesCopy` 单源（`WriteStr`/`IncUnit` 单次 `SetLength(Total)`+分段 `BytesCopy` inline 零拷贝，与 `writer.builder` `GetMem(Total)` 通用文本组装单源收敛，替代 `BytesConcatMany` 二次分配）+ `embed.limits` 独立阈值策略单源（`EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝，可配置 `MaxBlobBytes`，硬编码 4MiB 仅一处，`respack.limits` 兼容转发），`fs.glob` 为薄转发同源，无额外 L2 依赖；目录管线已收口 dirsource，修复 L1→L2 上行依赖，纯内存可复用 |
 

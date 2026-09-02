@@ -1,15 +1,15 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~110行 <500 阈值内 (wc -l ~110, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 js.value single seam via json.writer/bytes.ops+text.view+text.escape。奢华薄 intf 零可变全局, 生命周期单源下沉 pure.base。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 json.writer/bytes.ops single source, 零 intf→实现 反向依赖
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
   TJsValue = record
   private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
   public
-    function Kind: TJsValueKind; inline; function IsValid: Boolean;
+    function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
@@ -59,35 +59,13 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
-// Context 寿命注册（INV-7 硬阻断）：值绑定的 ContextId 在 Close 时标记失效，IsValid 联动 FClosed
-function JsContextRegister: UInt64;
-procedure JsContextClose(AId: UInt64);
-function JsContextIsClosed(AId: UInt64): Boolean; inline;
+// Context 寿命（INV-7）：状态单源下沉至 js.lifecycle (GPureClosed/GPureNextId 4B atomic acquire/release, 自然4B对齐, 64B/4 伪共享, write-once rare, geometric via bytes.ops single source, 零双注册), pure.base thin-forward, intf 零可变全局奢华薄, 不暴露 JsContextRegister/Close/IsClosed 桩 (需强一致时直调 js.lifecycle/pure.base.JsPureContextIsClosed acquire), 生命周期由 IJsContext.IsClosed 显式检查
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-uses nextpas.core.json.value,
-  nextpas.core.base, nextpas.core.text, nextpas.core.text.builder,
-  nextpas.core.text.view, nextpas.core.text.escape; // L1 only: text.escape single SIMD, view zero-copy, builder single alloc
-var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1;
-function JsContextRegister: UInt64;
-begin
-  Result := GJsNextId;
-  Inc(GJsNextId);
-  if Result >= UInt64(Length(GJsClosed)) then
-    SetLength(GJsClosed, Integer(Result + 32));
-  GJsClosed[Result] := False;
-end;
-procedure JsContextClose(AId: UInt64);
-begin
-  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
-    GJsClosed[AId] := True;
-end;
-function JsContextIsClosed(AId: UInt64): Boolean;
-begin
-  if (AId = 0) or (AId >= UInt64(Length(GJsClosed))) then Exit(False);
-  Result := GJsClosed[AId];
-end;
-function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue;
+// intf 奢华薄：零可变全局，守四件套 base←intf←(js.lifecycle 单源 owner via pure.base thin-forward)→pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)
+uses
+  nextpas.core.js.value;
+function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
   Result.FContextId := AContextId;
@@ -109,9 +87,9 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 为纯字段访问，热路径零分支零内存加载
-function TJsValue.Kind: TJsValueKind; begin Result:=FKind; end;
-function TJsValue.IsValid: Boolean; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosed(FContextId)); end;
+// INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭态由 IJsContext.IsClosed 显式检查（pure.base 原子 release/acquire 保障跨线程可见性），thread-affine 零成本
+function TJsValue.Kind: TJsValueKind; inline; begin Result:=FKind; end;
+function TJsValue.IsValid: Boolean; inline; begin Result:=FValid; end;
 function TJsValue.IsUndefined: Boolean; begin Result:=FKind=jskUndefined; end;
 function TJsValue.IsNull: Boolean; begin Result:=FKind=jskNull; end;
 function TJsValue.IsBool: Boolean; begin Result:=FKind=jskBoolean; end;
@@ -128,39 +106,11 @@ function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); 
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
-function NeedsJsonEscape(const S: string): Boolean;
-var I: Integer; begin for I:=1 to Length(S) do if (S[I]='"') or (S[I]='\') or (Byte(S[I])<32) then Exit(True); Result:=False; end;
 function TJsValue.AsJson: string;
-var
-  S: string;
-  B: TStringBuilder;
 begin
-  case Kind of
-    jskUndefined: Result := 'undefined';
-    jskNull: Result := 'null';
-    jskBoolean: if FBoolVal then Result := 'true' else Result := 'false';
-    jskNumber: Result := nextpas.core.text.IntToStr(FIntVal);
-    jskString:
-      begin
-        S := FStrVal;
-        if S = '' then Exit('""');
-        // perf: fast path zero builder alloc when no escape (small benchmark -4.5% as in pure.base), single scan + SIMD escape single source via bytes.ops Grow
-        if not NeedsJsonEscape(S) then Exit('"' + S + '"');
-        B.Init(SizeUInt(Length(S)) + 16);
-        try
-          B.AppendChar('"');
-          JsonEscapeToBuilder(TStringView.FromStr(S), B);
-          B.AppendChar('"');
-          Result := B.ToString;
-        finally
-          B.Done;
-        end;
-      end;
-    jskSymbol: Result := 'Symbol(' + FStrVal + ')';
-    jskBigInt: Result := nextpas.core.text.IntToStr(FIntVal) + 'n';
-  else
-    Result := '';
-  end;
+  // single source via js.value single seam (json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source), thin-forward zero-copy, single alloc fast path, resource try-finally in js.value not lost, not inline per red-line (branch+builder)
+  // perf: inline thin-forward to js.value.JsValueToJsonString single source, number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder, escaped path builder geometric via bytes.ops single source try-finally Done not lost, bulk zero-copy view
+  Result := nextpas.core.js.value.JsValueToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;

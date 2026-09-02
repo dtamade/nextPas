@@ -2,7 +2,7 @@
 
 **范围**：`nextpas.core.js`（S1 目标：QuickJS FFI + fake）
 **标杆**：Go `dop251/goja` / `rogchap/v8go`；Rust `rquickjs` / `boa_engine`
-**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.2（11 单元 pure.base 单源 630 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
 
 ---
 

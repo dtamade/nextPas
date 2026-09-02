@@ -56,7 +56,7 @@ TGradient = record Kind: TGradientKind; Colors: array of TColor32; Stops: array 
 ### 1.2 L2 `nextpas.core.image.base`（含 TBitmap）
 
 ```pascal
-TBitmapFormat = (RGBA, BGRA, Gray8);
+TBitmapFormat = (bfRGBA, bfBGRA, bfGray8);
 TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cacheline）
   Width, Height, Stride: Integer; // Stride = AlignUp(Width*4, 64)
   Format: TBitmapFormat;
@@ -65,7 +65,7 @@ TBitmap = record // COW，TBytes 持有像素，Stride 64B 对齐（AVX cachelin
   function IsEmpty: Boolean; inline;
   procedure Premultiply; procedure Unpremultiply;
 end;
-TImageFormat = (Png, Jpeg, WebP, Bmp, Gif);
+TImageFormat = (ifUnknown, ifPng, ifJpeg, ifWebP, ifBmp, ifGif); // ifUnknown 为探测/空输入哨兵，Gif 仅保留枚举位暂无编解码
 TImageInfo = record Width,Height: Integer; Format: TImageFormat; HasAlpha: Boolean; end;
 
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBitmap;
@@ -143,6 +143,7 @@ end;
 
 - `graphics` L1：仅 `base/math`（+ `mem` 分配器间接），零 `bytes/font` 依赖（`TPath` 不用 `TBytes`）
 - `image/vector/canvas/effect` L2：仅 L0-L1，同层仅 `effect` 单向依赖 `image.base TBitmap`（Stride 64B 承载，已在 `core-module-registry.md` 显式 allowlist `L0-L1 plus same-layer one-way image`，禁止循环），`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
+- `image/vector/canvas/effect` L2：默认仅 L0-L1；`canvas.raster → vector.tess/vector.path + image.base` 为 Registry allowlist 单向缝（`canvas→vector/image`，cycle-gated，bytes.ops 单源 inline/零拷贝，source-contract 门禁），不依赖 `gpu`
 - `gpu.canvas` L3：唯一允许依赖 `gpu.gl` + `platform.dl`
 
 ## 4.1 FPC RTL 零直接依赖（双编译器架构）

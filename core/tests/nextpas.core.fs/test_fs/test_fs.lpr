@@ -1319,8 +1319,11 @@ var
   LBuf: array[0..1023] of AnsiChar;
   LLen: nextpas.core.platform.posix.base.ssize_t;
   LTarget: string;
+  LRealWanted: string;
 begin
   Result := -1;
+  // /tmp may be symlink (e.g. /tmp -> /vm/tmp); /proc/self/fd reports realpath — compare via RealPath
+  try LRealWanted := FsRealPath(APath); except LRealWanted := APath; end;
   for I := 3 to 1024 do
   begin
     LFdPath := '/proc/self/fd/' + IntToStr(I);
@@ -1331,8 +1334,9 @@ begin
       Continue;
     LBuf[LLen] := #0;
     LTarget := StrPas(@LBuf[0]);
-    if LTarget = APath then
+    if (LTarget = APath) or (LTarget = LRealWanted) then
       Exit(I);
+    try if FsRealPath(LTarget) = LRealWanted then Exit(I); except end;
   end;
 end;
 
@@ -1839,7 +1843,11 @@ begin
   try
     FsSetCwd(GTmpDir + '/cwd-sub');
     LNewCwd := FsGetCwd;
-    CheckEqual(GTmpDir + '/cwd-sub', LNewCwd, 'FsGetCwd reflects FsSetCwd');
+    // /tmp may be symlink to /vm/tmp; kernel getcwd returns realpath — compare via RealPath to handle both
+    if FsRealPath(GTmpDir + '/cwd-sub') <> FsRealPath(LNewCwd) then
+      CheckEqual(GTmpDir + '/cwd-sub', LNewCwd, 'FsGetCwd reflects FsSetCwd')
+    else
+      Check(True, 'FsGetCwd reflects FsSetCwd via realpath');
   finally
     FsSetCwd(LOldCwd);
   end;

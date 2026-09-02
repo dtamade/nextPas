@@ -68,7 +68,11 @@ end;
 function PlatformQuotaWindowExpired(const AKind: TPlatformQuotaWindowKind;
   const AStart, ANowSec: Int64): Boolean;
 begin
-  Result := (AStart > 0) and (ANowSec - AStart >= PlatformQuotaWindowSeconds(AKind));
+  if AStart <= 0 then
+    Exit(False);
+  if ANowSec < AStart then
+    Exit(True);
+  Result := ANowSec - AStart >= PlatformQuotaWindowSeconds(AKind);
 end;
 
 function PlatformQuotaExpired(const AKind: TPlatformQuotaWindowKind;
@@ -88,13 +92,25 @@ end;
 
 function PlatformQuotaExceeded(const AKind: TPlatformQuotaWindowKind;
   const ALimit, AUsage, AStart, ANowSec, AEstCost: Int64): Boolean;
+var
+  LEff: Int64;
+  LSum: Int64;
+  LEst: Int64;
 begin
   if ALimit < 0 then
-    Result := False
-  else if ALimit = 0 then
-    Result := True
-  else
-    Result := PlatformQuotaUsage(AKind, AUsage, AStart, ANowSec) + AEstCost > ALimit;
+    Exit(False);
+  if ALimit = 0 then
+    Exit(True);
+  LEff := PlatformQuotaUsage(AKind, AUsage, AStart, ANowSec);
+  LEst := AEstCost;
+  if LEst < 0 then
+    LEst := 0;
+  if LEff < 0 then
+    LEff := 0;
+  if LEst > High(Int64) - LEff then
+    Exit(True);
+  LSum := LEff + LEst;
+  Result := LSum > ALimit;
 end;
 
 function SerializePlatformQuotaItem(const AItem: TPlatformQuotaItem;
