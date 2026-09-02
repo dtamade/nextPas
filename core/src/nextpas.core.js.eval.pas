@@ -166,27 +166,20 @@ function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
   Result := JsStringValue(V.ToString);
 end;
-// arg view single source — outer quote strip + backslash unescape via pure.value single source (text.escape → pure.value → js.eval), zero-copy via text.view + JsPureNewStringView, not inline per red-line 2 (owner pure.value SIMD block BytesCopy)
+// arg view single source — outer quote strip + backslash unescape via pure.value single source (text.escape → pure.value → js.eval), zero-copy via text.view + JsPureNewStringView, not inline per red-line 2 (owner text.escape SIMD block BytesCopy, StripOuterQuotes via text.escape single source)
 function EvalArgValue(const V: TStringView): TJsValue;
 var
   LInner: TStringView;
   LStr: string;
 begin
-  // single source via pure.value JsPureNeedsBackslashUnescapeView/JsPureUnescapeBackslashView (owner text.escape via pure.value), bytes.ops BytesCopy single source, zero dangling, L2→L2 single-point
-  if (V.Len >= 2) and ((V.Data[0] = '"') or (V.Data[0] = '''')) and (V.Data[V.Len - 1] = V.Data[0]) then
+  // single source via text.escape TextStripOuterQuotesView/JsPureStripOuterQuotesView + JsPureNeedsBackslashUnescapeView/JsPureUnescapeBackslashView (owner text.escape), bytes.ops BytesCopy single source, zero dangling, L2→L2 single-point, feed-back to text.escape single source
+  LInner := JsPureStripOuterQuotesView(V);
+  if JsPureNeedsBackslashUnescapeView(LInner) then
   begin
-    LInner := V.Slice(1, V.Len - 2);
-    if JsPureNeedsBackslashUnescapeView(LInner) then
-    begin
-      LStr := JsPureUnescapeBackslashView(LInner);
-      Result := JsStringValue(LStr);
-    end else
-      Result := JsPureNewStringView(LInner);
+    LStr := JsPureUnescapeBackslashView(LInner);
+    Result := JsStringValue(LStr);
   end else
-  begin
-    if V.IsEmpty then Result := JsStringValue('')
-    else Result := JsPureNewStringView(V);
-  end;
+    Result := JsPureNewStringView(LInner);
 end;
 // Layer 5 host dispatch — single source via pure.host.JsPureHostInvoke, zero-copy, bytes.ops single source, not inline per red-line 2 (quote/escape/paren loops + arg split, I-Cache)
 // robust host dispatch: matching paren depth + quote/escape, multi-arg split, nested brackets, outer quote strip + backslash unescape via EvalArgValue single source
@@ -267,18 +260,19 @@ begin
     else if (C = ',') and (Depth = 0) then
     begin
       LView := LInner.Slice(LStart, I - LStart).Trim;
-      SetLength(LArgs, LArgCount + 1);
+      nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), SizeUInt(LArgCount + 1));
       LArgs[LArgCount] := EvalArgValue(LView);
       Inc(LArgCount);
       LStart := I + 1;
     end;
   end;
-  // tail — single source via EvalArgValue, text.view zero-copy, not inline
+  // tail — single source via EvalArgValue, text.view zero-copy, geometric via bytes.ops BytesDynEnsureLength amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), not inline
   LView := LInner.Slice(LStart, LInner.Len - LStart).Trim;
   if not LView.IsEmpty then
   begin
-    SetLength(LArgs, Length(LArgs) + 1);
-    LArgs[High(LArgs)] := EvalArgValue(LView);
+    nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), SizeUInt(LArgCount + 1));
+    LArgs[LArgCount] := EvalArgValue(LView);
+    Inc(LArgCount);
   end;
   OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
   Result := True;

@@ -26,6 +26,9 @@ function TextNeedsBackslashUnescape(const ASrc: PAnsiChar; const ALen: SizeUInt)
 function TextNeedsBackslashUnescapeView(const ASrc: TStringView): Boolean; inline;
 function TextUnescapeBackslashToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt; const ADst: PAnsiChar): SizeUInt;
 function TextUnescapeBackslashView(const ASrc: TStringView): string; inline;
+// outer quote strip owner — single source for js.eval arg view (text.escape → pure.value → js.eval), O(1) first/last byte, zero-copy view, feed-back from js.eval
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
 
 implementation
 
@@ -516,6 +519,16 @@ begin
   SetLength(Result, ASrc.Len);
   LOut := TextUnescapeBackslashToBuffer(ASrc.Data, ASrc.Len, PAnsiChar(Result));
   SetLength(Result, LOut);
+end;
+
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+begin
+  Result := (ASrc.Len >= 2) and ((ASrc.Data[0] = '"') or (ASrc.Data[0] = '''')) and (ASrc.Data[ASrc.Len - 1] = ASrc.Data[0]);
+end;
+
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
+begin
+  if TextIsQuotedView(ASrc) then Result := ASrc.Slice(1, ASrc.Len - 2) else Result := ASrc;
 end;
 
 end.

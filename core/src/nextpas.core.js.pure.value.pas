@@ -37,6 +37,8 @@ function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextI
 // text.escape single source
 function JsPureNeedsBackslashUnescapeView(const AView: TStringView): Boolean; inline;
 function JsPureUnescapeBackslashView(const AView: TStringView): string; inline;
+function JsPureIsQuotedView(const AView: TStringView): Boolean; inline;
+function JsPureStripOuterQuotesView(const AView: TStringView): TStringView; inline;
 function JsPureToJsonString(const AValue: TJsValue): string;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
 // Batch: pure.hash single source, loop not inline
@@ -328,6 +330,14 @@ end;
 function JsPureUnescapeBackslashView(const AView: TStringView): string; inline;
 begin
   Result := TextUnescapeBackslashView(AView);
+end;
+function JsPureIsQuotedView(const AView: TStringView): Boolean; inline;
+begin
+  Result := TextIsQuotedView(AView);
+end;
+function JsPureStripOuterQuotesView(const AView: TStringView): TStringView; inline;
+begin
+  Result := TextStripOuterQuotesView(AView);
 end;
 function JsPureJsonIntToStr(AValue: Int64): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;

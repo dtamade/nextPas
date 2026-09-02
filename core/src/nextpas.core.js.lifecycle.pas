@@ -15,28 +15,24 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.dynarray,
+  nextpas.core.collections.freelist,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.sync.spinlock;
 type
-  TCacheLinePad = array[0..7] of Int64; // 64B isolation, false-sharing free
+  TCacheLinePad = array[0..7] of Int64; // 64B pad
 var
-  GPureClosed: array of UInt32; // compact 4B per Context: epoch*2+closed
-  GPureClosedPad: TCacheLinePad; // 64B isolation from NextId
-  GPureNextId: Int64 = 1; // atomic monotonic, 64B isolated
-  GPureNextIdPad: TCacheLinePad; // 64B isolation from Len
-  GPureClosedLen: PtrUInt = 0; // atomic Len, release/acquire, 64B isolated
-  GPureClosedLenPad: TCacheLinePad; // 64B isolation from Lock
-  GPureClosedLock: Int32 = 0; // spinlock single source, 64B isolated
-  GPureClosedLockPad: TCacheLinePad; // 64B isolation from Free
-  GPureFree: array of UInt64; // freelist bounded recycling via bytes.ops geometric + mem.dynarray Exactly-Once poke single source, amortized O(1) inline zero-copy, freelist reuse candidate (extractable to nextpas.core.collections.freelist)
-function GPureFreeCapacity: SizeUInt; inline;
-begin
-  // inline single source probe via bytes.ops -> mem.dynarray, zero-copy heap probe, bytes.ops single slit
-  Result := BytesDynCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
-end;
+  // 64B isolated lifecycle state: GPureClosed compact 4B epoch*2+closed + NextId/Len/Lock/Free pads
+  GPureClosed: array of UInt32;
+  GPureClosedPad: TCacheLinePad;
+  GPureNextId: Int64 = 1;
+  GPureNextIdPad: TCacheLinePad;
+  GPureClosedLen: PtrUInt = 0;
+  GPureClosedLenPad: TCacheLinePad;
+  GPureClosedLock: Int32 = 0;
+  GPureClosedLockPad: TCacheLinePad;
+  GPureFree: array of UInt64; // freelist via collections.freelist single source
 function GPureIndexOf(AId: UInt64): UInt32; inline;
 begin
   Result := UInt32(AId and $FFFFFFFF);
@@ -49,82 +45,49 @@ function GPureMakeId(AIdx: UInt32; AEpoch: UInt32): UInt64; inline;
 begin
   Result := (UInt64(AEpoch) shl 32) or UInt64(AIdx);
 end;
-procedure TryShrinkGPureFreeLocked; inline;
-var LCap, LLen, LNewCap: SizeUInt;
-begin
-  // inline geometric half-shrink when 4x bloat, bytes.ops single source + mem.dynarray Exactly-Once poke, amortized O(1) inline zero-copy, avoids periodic large copy jitter in long bulk NewContext/Close
-  LCap := GPureFreeCapacity;
-  LLen := SizeUInt(Length(GPureFree));
-  if LLen = 0 then
-  begin
-    if LCap > 0 then SetLength(GPureFree, 0);
-    Exit;
-  end;
-  if (LCap > 64) and (LLen * 4 < LCap) then
-  begin
-    // half shrink vs exact truncate: decay 2x not LLen, reduces copy size and frequency, bytes.ops geometric single source + poke heap capacity retained
-    LNewCap := LCap shr 1;
-    if LNewCap < 64 then LNewCap := 64;
-    if LNewCap < LLen then LNewCap := LLen;
-    if LNewCap < LCap then
-    begin
-      SetLength(GPureFree, Integer(LNewCap));
-      if SizeUInt(Length(GPureFree)) <> LLen then
-        DynArraySetLengthGeneric(GPureFree, LLen);
-    end;
-  end;
-end;
-// heap growth single source via bytes.ops geometric (BytesDynEnsureLength) single slit, inline zero-copy, amortized O(1)
+// heap growth single source via bytes.ops geometric single slit, inline zero-copy, amortized O(1)
 procedure GPureClosedEnsure(const ANewLen: SizeUInt); inline;
 begin
-  // perf: inline thin-forward to bytes.ops single source geometric via BytesDynEnsureLength (BytesNextCapacity + probe/poke), zero-copy, amortized O(1), trivial U32
   BytesDynEnsureLength(GPureClosed, SizeOf(UInt32), ANewLen);
 end;
-procedure GPureFreeEnsure(const ANewLen: SizeUInt); inline;
-begin
-  // perf: inline thin-forward to bytes.ops single source geometric via BytesDynEnsureLength, zero-copy, amortized O(1), trivial U64
-  BytesDynEnsureLength(GPureFree, SizeOf(UInt64), ANewLen);
-end;
 function JsPureContextRegister: UInt64;
-var LNeed: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;
+var LNeed: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32; LTmp: UInt64;
 begin
-  // freelist recycle bounded, generation-tagged INV-7, sync.spinlock single source
+  // freelist via collections.freelist, generation-tagged INV-7, sync.spinlock single source
   RawSpinAcquire(GPureClosedLock);
   try
-    if Length(GPureFree) > 0 then
+    if FreelistPopU64(GPureFree, LTmp) then
     begin
-      LIdx := UInt32(GPureFree[High(GPureFree)]);
-      SetLength(GPureFree, Length(GPureFree) - 1);
+      LIdx := UInt32(LTmp);
       // generation increment: stored was epoch*2+1 (closed), next alive = (epoch+1)*2
       LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
       LEpoch := (LStored shr 1) + 1;
       LStored := LEpoch shl 1; // alive  epoch*2
       atomic_store(GPureClosed[LIdx], LStored, mo_release);
       Result := GPureMakeId(LIdx, LEpoch);
-      TryShrinkGPureFreeLocked;
+      FreelistTryShrinkU64(GPureFree);
       Exit;
     end;
   finally
     RawSpinRelease(GPureClosedLock);
   end;
-  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric, inline zero-copy, freelist bounded recycling single source via bytes.ops+mem.dynarray
+  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric single source via collections.freelist
   LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
   // wrap detect: 2^32 index space, long service freelist reuse not hard DoS — retry freelist before throw, generation-tagged epoch protects ABA per INV-7
   if UInt64(LId) > High(UInt32) then
   begin
-    // stability: long service bulk NewContext/Close churn recycles via GPureFree, not monotonic DoS; retry freelist bounded recycling single source
+    // stability: long service bulk NewContext/Close churn recycles via GPureFree, not monotonic DoS; retry freelist single source
     RawSpinAcquire(GPureClosedLock);
     try
-      if Length(GPureFree) > 0 then
+      if FreelistPopU64(GPureFree, LTmp) then
       begin
-        LIdx := UInt32(GPureFree[High(GPureFree)]);
-        SetLength(GPureFree, Length(GPureFree) - 1);
+        LIdx := UInt32(LTmp);
         LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
         LEpoch := (LStored shr 1) + 1;
         LStored := LEpoch shl 1;
         atomic_store(GPureClosed[LIdx], LStored, mo_release);
         Result := GPureMakeId(LIdx, LEpoch);
-        TryShrinkGPureFreeLocked;
+        FreelistTryShrinkU64(GPureFree);
         Exit;
       end;
     finally
@@ -152,7 +115,7 @@ begin
   atomic_store(GPureClosed[LIdx], UInt32(0), mo_release); // epoch 0 alive
 end;
 procedure JsPureContextClose(AId: UInt64);
-var LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
+var LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
@@ -164,12 +127,10 @@ begin
   LExpected := LStored;
   LDesired := (LEpoch shl 1) or 1; // epoch*2+1 closed
   if not atomic_compare_exchange_strong(GPureClosed[LIdx], LExpected, LDesired) then Exit;
-  // freelist bounded recycling, sync.spinlock single source, bytes.ops geometric single source via GPureFreeEnsure
+  // freelist via collections.freelist single source, sync.spinlock single source, amortized O(1) inline zero-copy
   RawSpinAcquire(GPureClosedLock);
   try
-    LNeed := SizeUInt(Length(GPureFree)) + 1;
-    GPureFreeEnsure(LNeed);
-    GPureFree[High(GPureFree)] := UInt64(LIdx);
+    FreelistPushU64(GPureFree, UInt64(LIdx));
   finally
     RawSpinRelease(GPureClosedLock);
   end;

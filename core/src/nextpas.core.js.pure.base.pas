@@ -3,11 +3,8 @@ unit nextpas.core.js.pure.base;
 {$I nextpas.core.settings.inc}
 interface
 uses
-  nextpas.core.js.base,
   nextpas.core.js.intf,
-  nextpas.core.text.view,
-  nextpas.core.json,
-  nextpas.core.json.value;
+  nextpas.core.text.view;
 type
   { Host — canonical via pure.base }
   TJsPureHostRec = record

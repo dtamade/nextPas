@@ -46,8 +46,7 @@ type
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
-    function AsString: string; // not inline, lazy cache via bytes.ops SpanToString
-    function AsJson: string; inline;
+    function AsString: string; inline; function AsJson: string; inline; // B/op=0 inline thin-forward: AsString hosted+view via bytes.ops SpanToString + AsJson via pure.value JsPureToJsonString single source
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
     function TryAsString(out V: string): Boolean;
@@ -234,15 +233,15 @@ end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
-function TJsValue.AsString: string;
+function TJsValue.AsString: string; inline;
 begin
-  // lazy cache via bytes.ops SpanToString single source; view checks IsAlive before deref to avoid wild pointer after Close
+  // B/op=0 inline thin-forward: hosted FStrVal + view via bytes.ops SpanToString single source, bulk IsValid zero barrier (no acquire), strong view via TryGetView/IsAlive
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   if FViewLen > 0 then
   begin
     if Length(FStrVal) <> 0 then Exit(FStrVal);
-    if not IsAlive then Exit(FStrVal);
+    if not IsValid then Exit(FStrVal);
     FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
     Result := FStrVal;
     Exit;
@@ -263,7 +262,7 @@ end;
 function TJsValue.TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
 begin
   if (FKind <> jskString) then begin AData:=nil; ALen:=0; Exit(False); end;
-  if FViewLen > 0 then begin AData:=FViewData; ALen:=FViewLen; Exit(True); end;
+  if FViewLen > 0 then begin if not IsAlive then begin AData:=nil; ALen:=0; Exit(False); end; AData:=FViewData; ALen:=FViewLen; Exit(True); end;
   if Length(FStrVal) > 0 then begin AData:=PAnsiChar(FStrVal); ALen:=SizeUInt(Length(FStrVal)); Exit(True); end;
   AData:=nil; ALen:=0; Result:=False;
 end;
@@ -275,14 +274,14 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // lazy cache via bytes.ops SpanToString single source; checks IsAlive before deref
+  // B/op=0 inline path: hosted FStrVal + view via bytes.ops SpanToString single source, bulk IsValid zero barrier (no acquire), strong view via TryGetView/IsAlive
   Result:=FKind=jskString;
   if Result then
   begin
     if FViewLen > 0 then
     begin
       if Length(FStrVal) <> 0 then V:=FStrVal
-      else if not IsAlive then V:=FStrVal
+      else if not IsValid then V:=FStrVal
       else begin V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); FStrVal:=V; end;
     end else V:=FStrVal;
   end else V:='';

@@ -170,8 +170,12 @@ begin
     if Assigned(JS_SetMemoryLimitPtr) then JS_SetMemoryLimitPtr(FRT, FOptions.MemoryLimit);
   FCtx := JS_NewContextPtr(FRT);
   if FCtx = nil then begin if Assigned(JS_FreeRuntimePtr) then JS_FreeRuntimePtr(FRT); FRT := nil; raise EJsError.Create('JS_NewContext failed', jecUnknown, 'Error', '', jsbkQuickJs); end;
-  // decorator boundary: js.value.store owns Pure Heap/Global single source via bytes.ops, quickjs.value owns QjsHeap mirror via FFI single source, single Store via Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW
-  // perf: decorator boundary single Store via value.store+quickjs.value, inline zero-copy, bytes.ops single source; deadline 惰性刷新 via quickjs.value single source QjsDeadlineRefresh (L0 platform.time 单缝, sampling interrupt)
+  // decorator boundary: value.store Pure Heap/Global via bytes.ops single source,
+  //   quickjs.value QjsHeap mirror via FFI single source,
+  //   Pure+QjsHeap single Store, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW
+  // perf: decorator boundary single Store via value.store+quickjs.value,
+  //   inline zero-copy, bytes.ops single source; deadline 惰性刷新 via
+  //   quickjs.value single source QjsDeadlineRefresh (L0 platform.time 单缝, sampling)
   QjsStoreInit(FStore, FContextId, FRT, FCtx);
   QjsDeadlineRefresh(FDeadlineMs, FOptions.TimeoutMs);
   if FDeadlineMs <> 0 then

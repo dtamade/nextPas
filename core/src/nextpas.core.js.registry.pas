@@ -47,8 +47,7 @@ begin
 end;
 procedure EnsureVaultLock; inline;
 begin
-  // perf: inline thin-forward to vault single source (sync.vault SyncVaultEnsureLock out-of-line loop per design-conventions §2 red-line 2, avoids I-Cache copy, 64B friendly)
-  // stability: single atomic authority via helper, resource not丢
+  // inline → vault single source
   SyncVaultEnsureLock(GVaultInit, GVault.Lock);
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);
