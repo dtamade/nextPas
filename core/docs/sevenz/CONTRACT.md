@@ -14,7 +14,7 @@
 - [INV-7Z5] 过滤链：`C_MAX_FILTERS=16`，`MethodId/Props/Convert` 表驱动，Delta 零分配 in-place
 
 ## 线程与资源
-- header `IBytesBuilder ToBuilder` 单源（`SevenZWriteNumberToBuilder/Append*ToBuilder`，`bytes.builder Grow` 均摊，O(n) 替代 `TBytes SetLength` O(n²)；FilesInfo/外层均按载荷预估 `CreateBytesBuilder(N)` 近零 Grow）+ `FEntries` 几何扩容（`FCount + EnsureEntriesCapacity ×2`，条目表 O(n²)→O(n)）+ reader `2-entry LRU 64MiB` 缓存（大 solid 单 MRU 保留）+ `Sort` 单源 `collections.algorithms.Sort`（`TSevenZSortCtx`）+ `EnsureSortedGeneric` 懒加载，`ReverseStr/LowerBoundGeneric` 外联避热点膨胀，writer `platform.thread` 并行（`IsMultiThread` 门控，`BytesReplicateCopy` 零拷贝，Move 语义去深拷，header/Block 经 `IBytesBuilder` 均摊），`CopyMatch` 倍增 Move，`ValidateEntryName` 复用 `bytes.pathvalid` 单源
+- header `IBytesBuilder ToBuilder` 单源（`SevenZWriteNumberToBuilder/Append*ToBuilder`，`bytes.builder Grow` 均摊，O(n) 替代 `TBytes SetLength` O(n²)；FilesInfo/外层均按载荷预估 `CreateBytesBuilder(N)` 近零 Grow）+ `FEntries` 几何扩容（`FCount + EnsureEntriesCapacity` 复用 `bytes.ops.BytesNextCapacity` 单源 `BYTES_BUILDER_MIN_GROW×2` 均摊，条目表 O(n²)→O(n)）+ reader `2-entry LRU 64MiB` 缓存（大 solid 单 MRU 保留）+ `Sort` 单源 `collections.algorithms.Sort`（`TSevenZSortCtx`）+ `EnsureSortedGeneric` 懒加载，`ReverseStr/LowerBoundGeneric` 外联避热点膨胀，writer `platform.thread` 并行（`IsMultiThread` 门控，`BytesReplicateCopy` 零拷贝，Move 语义去深拷，header/Block 经 `IBytesBuilder` 均摊），`CopyMatch` 倍增 Move，`ValidateEntryName` 复用 `bytes.pathvalid` 单源
 
 ## 契约测试
 - `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 166 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断等
