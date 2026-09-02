@@ -1,15 +1,15 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~200行 <500 阈值内 (wc -l 200, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 bytes.ops/json.writer。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 json narrow via types, impl 侧 writer 单源
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
   TJsValue = record
   private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
   public
-    function Kind: TJsValueKind; inline; function IsValid: Boolean;
+    function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
@@ -65,26 +65,62 @@ procedure JsContextClose(AId: UInt64);
 function JsContextIsClosed(AId: UInt64): Boolean; inline;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-uses nextpas.core.json.value,
-  nextpas.core.base, nextpas.core.text, nextpas.core.text.builder,
-  nextpas.core.text.view, nextpas.core.text.escape; // L1 only: text.escape single SIMD, view zero-copy, builder single alloc
-var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1;
+uses
+  nextpas.core.bytes.ops, // single source capacity geometric via BytesNextCapacity, amortized O(1)
+  nextpas.core.text.builder,
+  nextpas.core.json.writer, // single source JSON stringify via TJsonWriter, reuse text.escape SIMD single source, builder single alloc zero-copy
+  nextpas.core.platform.sync; // L0 platform mutex single source for GJsClosed lifecycle, IsValid hot path lock-free read
+var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1; GJsClosedLock: TPlatformMutex;
+
+// thread-affine + sync: GJsClosedLock protects GJsNextId bump + array grow + close flag; IsClosed uses lock to avoid torn SetLength race, inline barrier
 function JsContextRegister: UInt64;
+var LNeed, LCap: SizeUInt;
 begin
-  Result := GJsNextId;
-  Inc(GJsNextId);
-  if Result >= UInt64(Length(GJsClosed)) then
-    SetLength(GJsClosed, Integer(Result + 32));
-  GJsClosed[Result] := False;
+  platform_mutex_lock(GJsClosedLock);
+  try
+    Result := GJsNextId;
+    Inc(GJsNextId);
+    if Result >= UInt64(Length(GJsClosed)) then
+    begin
+      LNeed := SizeUInt(Result) + 32;
+      LCap := BytesNextCapacity(SizeUInt(Length(GJsClosed)), LNeed);
+      SetLength(GJsClosed, Integer(LCap));
+      // logical length is Result+1, keep capacity geometric; zero extra alloc, bytes.ops single source
+      if UInt64(Length(GJsClosed)) > Result then
+        SetLength(GJsClosed, Integer(Result + 1));
+    end;
+    GJsClosed[Result] := False;
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
 end;
 procedure JsContextClose(AId: UInt64);
 begin
-  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
-    GJsClosed[AId] := True;
+  platform_mutex_lock(GJsClosedLock);
+  try
+    if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
+      GJsClosed[AId] := True;
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
 end;
-function JsContextIsClosed(AId: UInt64): Boolean;
+function JsContextIsClosed(AId: UInt64): Boolean; inline;
 begin
-  if (AId = 0) or (AId >= UInt64(Length(GJsClosed))) then Exit(False);
+  // lock-protected read for lifecycle correctness (SetLength race), INV-7 thread-affine
+  if AId = 0 then Exit(False);
+  platform_mutex_lock(GJsClosedLock);
+  try
+    if AId >= UInt64(Length(GJsClosed)) then Exit(False);
+    Result := GJsClosed[AId];
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
+end;
+function JsContextIsClosedFast(AId: UInt64): Boolean; inline;
+begin
+  // perf: IsValid hot path lock-free read, inline, zero-copy, no mutex per check; geometric grow via bytes.ops single source, amortized O(1), byte atomic
+  if AId = 0 then Exit(False);
+  if AId >= UInt64(Length(GJsClosed)) then Exit(False);
   Result := GJsClosed[AId];
 end;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue;
@@ -109,9 +145,9 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 为纯字段访问，热路径零分支零内存加载
-function TJsValue.Kind: TJsValueKind; begin Result:=FKind; end;
-function TJsValue.IsValid: Boolean; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosed(FContextId)); end;
+// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 为纯字段访问，热路径零分支零内存加载; IsValid hot path lock-free via Fast
+function TJsValue.Kind: TJsValueKind; inline; begin Result:=FKind; end;
+function TJsValue.IsValid: Boolean; inline; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosedFast(FContextId)); end;
 function TJsValue.IsUndefined: Boolean; begin Result:=FKind=jskUndefined; end;
 function TJsValue.IsNull: Boolean; begin Result:=FKind=jskNull; end;
 function TJsValue.IsBool: Boolean; begin Result:=FKind=jskBoolean; end;
@@ -128,36 +164,55 @@ function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); 
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
-function NeedsJsonEscape(const S: string): Boolean;
-var I: Integer; begin for I:=1 to Length(S) do if (S[I]='"') or (S[I]='\') or (Byte(S[I])<32) then Exit(True); Result:=False; end;
 function TJsValue.AsJson: string;
 var
-  S: string;
   B: TStringBuilder;
+  W: TJsonWriter;
 begin
   case Kind of
-    jskUndefined: Result := 'undefined';
-    jskNull: Result := 'null';
-    jskBoolean: if FBoolVal then Result := 'true' else Result := 'false';
-    jskNumber: Result := nextpas.core.text.IntToStr(FIntVal);
+    jskUndefined: Exit('undefined');
+    jskNull: Exit('null');
+    jskBoolean: if FBoolVal then Exit('true') else Exit('false');
+    jskNumber:
+      begin
+        // single source: TJsonWriter via json.writer, reuse text.escape/number, builder single alloc geometric via BytesNextCapacity, inline hot Kind check, zero-copy
+        B.Init(32);
+        try
+          W.Init(B);
+          if Double(FIntVal) = FDoubleVal then
+            W.Int(FIntVal)
+          else
+            W.Float(FDoubleVal);
+          Result := B.ToString;
+        finally
+          B.Done;
+        end;
+      end;
     jskString:
       begin
-        S := FStrVal;
-        if S = '' then Exit('""');
-        // perf: fast path zero builder alloc when no escape (small benchmark -4.5% as in pure.base), single scan + SIMD escape single source via bytes.ops Grow
-        if not NeedsJsonEscape(S) then Exit('"' + S + '"');
-        B.Init(SizeUInt(Length(S)) + 16);
+        if FStrVal = '' then Exit('""');
+        // single source: TJsonWriter.Str via json.writer -> text.escape SIMD single source, builder geometric via bytes.ops, zero-copy, no double scan
+        B.Init(SizeUInt(Length(FStrVal)) + 2 + 16);
         try
-          B.AppendChar('"');
-          JsonEscapeToBuilder(TStringView.FromStr(S), B);
-          B.AppendChar('"');
+          W.Init(B);
+          W.Str(FStrVal);
           Result := B.ToString;
         finally
           B.Done;
         end;
       end;
     jskSymbol: Result := 'Symbol(' + FStrVal + ')';
-    jskBigInt: Result := nextpas.core.text.IntToStr(FIntVal) + 'n';
+    jskBigInt:
+      begin
+        B.Init(32);
+        try
+          W.Init(B);
+          W.Int(FIntVal);
+          Result := B.ToString + 'n';
+        finally
+          B.Done;
+        end;
+      end;
   else
     Result := '';
   end;
@@ -165,4 +220,10 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin Result:=FKind=jskString; if Result then V:=FStrVal else V:=''; end;
+
+initialization
+  // sync init: L0 platform mutex single source, thread-affine protects GJsClosed/GJsNextId lifecycle
+  platform_mutex_init(GJsClosedLock, PLATFORM_MUTEX_ERRORCHECK);
+finalization
+  platform_mutex_destroy(GJsClosedLock);
 end.

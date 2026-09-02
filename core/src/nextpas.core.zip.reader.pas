@@ -545,10 +545,7 @@ end;
 
 function TZipReaderImpl.CheckIndex(AIndex: Integer): Integer;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FEntries)) then
-    raise EIndexOutOfRangeError.Create(
-      'zip: entry index out of range: ' + IntToStr(AIndex));
-  Result := AIndex;
+  Result := GuardZipIndex(AIndex, Length(FEntries));
 end;
 
 function TZipReaderImpl.EntryCount: Integer;
@@ -562,13 +559,8 @@ begin
 end;
 
 function TZipReaderImpl.Find(const AName: string): Integer;
-var
-  LI: Integer;
 begin
-  for LI := 0 to High(FEntries) do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
-  Result := -1;
+  Result := FindZipEntry(FEntries, AName);
 end;
 
 { 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移。
@@ -884,10 +876,7 @@ end;
 
 function TZipSourceReader.CheckIndex(AIndex: Integer): Integer;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FEntries)) then
-    raise EIndexOutOfRangeError.Create(
-      'zip: entry index out of range: ' + IntToStr(AIndex));
-  Result := AIndex;
+  Result := GuardZipIndex(AIndex, Length(FEntries));
 end;
 
 function TZipSourceReader.EntryCount: Integer;
@@ -901,13 +890,8 @@ begin
 end;
 
 function TZipSourceReader.Find(const AName: string): Integer;
-var
-  LI: Integer;
 begin
-  for LI := 0 to High(FEntries) do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
-  Result := -1;
+  Result := FindZipEntry(FEntries, AName);
 end;
 
 { 加密/安全名守卫 + local header 走查（定位读 30 字节固定头），

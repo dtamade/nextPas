@@ -53,6 +53,7 @@ function WalletListLedger(const APool: TDbPool; const AUserId, AAfter: string; A
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.id.uuid,
   nextpas.core.time,
   nextpas.core.text.utils,

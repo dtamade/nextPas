@@ -35,7 +35,14 @@ type
     Total: UInt64;
   end;
 
-procedure ResPackLayoutClear(var ALayout: TResPackLayout); inline;
+type
+  TResPackDedupBuckets = record
+    const MIN = 256;
+    const MAX = 65536;
+    class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
+  end;
+
+procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
 
@@ -48,8 +55,23 @@ uses
   nextpas.core.mem.base;
 
 const
+  BUCKET_MIN = TResPackDedupBuckets.MIN;
+  BUCKET_MAX = TResPackDedupBuckets.MAX; { 去重桶上限 64K：BucketsHead 64K*SizeInt≈256KB + SlotNext N*SizeInt，峰值受控；原 4M 桶双数组最高 32MB(4M*8)，大去重集热点 SpanEqual 逐字节回验叠加 O(n) 期望外最坏拷贝开销，收敛至 64K 控热点 }
+
+class function TResPackDedupBuckets.BucketCountFor(const ANeeded: SizeUInt): SizeUInt; inline;
+var
+  Target: SizeUInt;
+begin
+  if ANeeded <= MIN then Exit(MIN);
+  if ANeeded >= MAX then Exit(MAX);
+  Target := ANeeded;
+  Result := BytesNextCapacity(MIN, Target);
+  if Result > MAX then Result := MAX;
+  if Result < MIN then Result := MIN;
+end;
   BUCKET_MIN = 256;
   BUCKET_MAX = 65536; { 去重桶上限 64K：BucketsHead 64K*SizeInt≈256KB + SlotNext N*SizeInt，峰值受控；原 4M 桶双数组最高 32MB(4M*8)，大去重集热点 SpanEqual 逐字节回验叠加 O(n) 期望外最坏拷贝开销，收敛至 64K 控热点 }
+BUCKET_MAX = 4194304;
 
 function CmpPath(const AEntries: array of TResPackInputEntry;
   const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
@@ -83,7 +105,7 @@ begin
   Result := nextpas.core.mem.base.AlignUp64(AValue, AAlign);
 end;
 
-procedure ResPackLayoutClear(var ALayout: TResPackLayout); inline;
+procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 begin
   ALayout.PathLens := nil;
   ALayout.Order := nil;
@@ -195,17 +217,8 @@ begin
     Target := 0;
     if not TryMulSizeUInt(N, 2, Target) then
       Target := High(SizeUInt);
-    { 容量策略单源：bytes.ops.BytesNextCapacity inline 零拷贝，替代手写 while shl，单源防漂移；BUCKET_MAX 64K 封顶控 32MB 热点 }
-    if Target > BUCKET_MAX then
-      Target := BUCKET_MAX;
-    if Target <= BUCKET_MIN then
-      BucketCount := BUCKET_MIN
-    else
-      BucketCount := BytesNextCapacity(BUCKET_MIN, Target);
-    if BucketCount > BUCKET_MAX then
-      BucketCount := BUCKET_MAX;
-    if BucketCount < BUCKET_MIN then
-      BucketCount := BUCKET_MIN;
+    { 容量策略单源：TResPackDedupBuckets.BucketCountFor via BytesNextCapacity inline 零拷贝，MIN256 MAX65536 控热点，单源防漂移 }
+    BucketCount := TResPackDedupBuckets.BucketCountFor(Target);
     { 去重分桶：单次扁平分配，无逐桶 SetLength*2 小堆 churn。
       BucketsHead[BucketIdx] 为链头(-1=空)，SlotNext 串链(slot 索引)，平均 0.5 槽/桶，O(1) 期望。 }
     SetLength(BucketsHead, BucketCount);
