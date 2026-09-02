@@ -441,13 +441,14 @@ begin
     if LArgc > 0 then
       if LArgc <= Length(QStack) then
       begin
-        for I := 0 to LArgc - 1 do QStack[I] := QjsFromTJs(AArgs[I]);
+        // perf: bulk single source via quickjs.value QjsBatchFromTJsValue (inline loop via QjsFromTJsValue → bytes.ops zero-copy Slize/AnsiPtr single source, inline thin-forward), stack 16*16B=256B B/op=0 hot ≤16, zero per-call alloc, inline, bytes.ops single source, L0-L3守, stability exactly-once not lost
+        QjsBatchFromTJsValue(FStore, FCtx, AArgs, @QStack[0], LArgc);
         PQ := @QStack[0];
       end else
       begin
-        // perf: heap reuse via FCallHeap geometric BytesNextCapacity single source (BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1)), B/op=0 after warm for >16 rare, zero per-call alloc, inline, bytes.ops single source, stability typed pointer @FCallHeap[0] type-safe
+        // perf: bulk single source via quickjs.value QjsBatchFromTJsValue (inline) + heap geometric BytesNextCapacity single source (BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1) via EnsureCallHeap→BytesDynEnsureLength), B/op=0 after warm for >16 rare (单次几何后 poke 无分配), zero per-call alloc, inline, bytes.ops single source, stability typed pointer @FCallHeap[0] type-safe, exactly-once Free
         EnsureCallHeap(LArgc);
-        for I := 0 to LArgc - 1 do FCallHeap[I] := QjsFromTJs(AArgs[I]);
+        QjsBatchFromTJsValue(FStore, FCtx, AArgs, @FCallHeap[0], LArgc);
         if LArgc > 0 then PQ := @FCallHeap[0];
       end;
     QRes := JS_CallPtr(FCtx, QFunc, QThis, LArgc, PQ);

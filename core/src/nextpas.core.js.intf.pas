@@ -235,15 +235,14 @@ function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger)
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
-  // B/op=0 inline thin-forward: hosted FStrVal + view via bytes.ops SpanToString single source, bulk IsValid zero barrier (no acquire), strong view via TryGetView/IsAlive
+  // B/op=0 inline thin-forward: hosted FStrVal zero-copy (no alloc, refcnt inc only) + view via bytes.ops SpanToString single source; immutable value semantics — no FStrVal cache write (copy would not persist per-call & races IsValid/IsAlive dual-track), view materializes per-call; bulk IsValid zero barrier (no acquire), strong view via TryGetView/IsAlive — prefer TryGetView for B/op=0 view
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   if FViewLen > 0 then
   begin
     if Length(FStrVal) <> 0 then Exit(FStrVal);
     if not IsValid then Exit(FStrVal);
-    FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
-    Result := FStrVal;
+    Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
     Exit;
   end;
   Result:=FStrVal;
@@ -274,7 +273,7 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // B/op=0 inline path: hosted FStrVal + view via bytes.ops SpanToString single source, bulk IsValid zero barrier (no acquire), strong view via TryGetView/IsAlive
+  // B/op=0 inline: hosted FStrVal zero-copy (no alloc) + view via bytes.ops SpanToString single source; immutable value — no cache write (copy not persisted per-call & IsValid/IsAlive data race), per-call materialize; bulk IsValid zero barrier, strong via TryGetView
   Result:=FKind=jskString;
   if Result then
   begin
@@ -282,7 +281,7 @@ function TJsValue.TryAsString(out V: string): Boolean; begin
     begin
       if Length(FStrVal) <> 0 then V:=FStrVal
       else if not IsValid then V:=FStrVal
-      else begin V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); FStrVal:=V; end;
+      else V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
     end else V:=FStrVal;
   end else V:='';
 end;

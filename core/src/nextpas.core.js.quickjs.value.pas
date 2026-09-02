@@ -46,6 +46,7 @@ procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJ
 
 { QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
+procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
@@ -141,6 +142,15 @@ begin
     jskNull, jskUndefined: BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
     else BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
   end;
+end;
+
+procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
+var I: Integer;
+begin
+  // perf: inline bulk zero-copy via single source QjsFromTJsValue (bytes.ops TStringView→JS_NewStringLen zero-copy, inline thin-forward), single loop not per-call SetLength, B/op=0 for >16 after warm via caller EnsureCallHeap geometric BytesNextCapacity single source, amortized O(1) via BYTES_BUILDER_MIN_GROW, bytes.ops single source, owner quickjs.value single slit (四件套 pure.base→value.store→quickjs.value, L0-L3守), stability exactly-once Free via caller finally
+  if (ADst = nil) or (ACount <= 0) or (ACtx = nil) then Exit;
+  if ACount > Length(AArgs) then ACount := Length(AArgs);
+  for I := 0 to ACount - 1 do ADst[I] := QjsFromTJsValue(S, ACtx, AArgs[I]);
 end;
 
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;

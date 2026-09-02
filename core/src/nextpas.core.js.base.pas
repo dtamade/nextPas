@@ -51,7 +51,7 @@ type
   EJsMemoryLimit = class(EJsError);
 
 const
-  // QuickJS prob names single source: 8-entry probe table converges loader array + EJsBackendUnavailable message prob table via one constant (bytes.ops/text single source, no ifdef duplication, comma-join via loader TBufStringBuilder geometric single source)
+  // QuickJS prob names single source: 8-entry probe table converges loader array + EJsBackendUnavailable message prob table via one constant (bytes.ops StringJoin single source, no ifdef duplication, comma-join via bytes.ops BytesCopy single source zero-copy single alloc, loader BuildProbeNames thin-forward)
   JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
     'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
     'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'

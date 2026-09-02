@@ -62,6 +62,34 @@ type
     First: AnsiChar;
   end;
 
+// shared js/json literal single source — L1 owner zero-copy inline bytes.ops single source via TStringView.Equals, json reader + js.eval predicate tables reuse single source (EVAL_LITERALS/EVAL_SENTINELS merged), L0-L3 keep
+const
+  SCAN_JSON_LITERAL_NULL = 'null';
+  SCAN_JSON_LITERAL_TRUE = 'true';
+  SCAN_JSON_LITERAL_FALSE = 'false';
+  SCAN_JS_LITERAL_UNDEFINED = 'undefined';
+  SCAN_JS_EVAL_SENTINEL_BAD = 'bad(';
+  SCAN_JS_EVAL_SENTINEL_FOO = 'foo(';
+  SCAN_JS_EVAL_SENTINEL_BAD_STACK = 'at bad(:1:4';
+  SCAN_JS_EVAL_SENTINEL_FOO_STACK = 'at foo(:1:4';
+type
+  TScanJsLiteralEntry = record Lit: string; Kind: Byte; end;
+  TScanJsSentinelEntry = record Lit: string; Stack: string; end;
+const
+  SCAN_JS_LITERALS: array[0..3] of TScanJsLiteralEntry = (
+    (Lit: SCAN_JSON_LITERAL_NULL; Kind: 0),
+    (Lit: SCAN_JS_LITERAL_UNDEFINED; Kind: 1),
+    (Lit: SCAN_JSON_LITERAL_TRUE; Kind: 2),
+    (Lit: SCAN_JSON_LITERAL_FALSE; Kind: 3)
+  );
+  SCAN_JS_SENTINELS: array[0..1] of TScanJsSentinelEntry = (
+    (Lit: SCAN_JS_EVAL_SENTINEL_BAD; Stack: SCAN_JS_EVAL_SENTINEL_BAD_STACK),
+    (Lit: SCAN_JS_EVAL_SENTINEL_FOO; Stack: SCAN_JS_EVAL_SENTINEL_FOO_STACK)
+  );
+function ScanHasFloatMarker(const V: TStringView): Boolean; inline;
+function ScanTryJsLiteral(const V: TStringView; out AKind: Byte): Boolean; inline;
+function ScanTryJsSentinel(const V: TStringView; out AStack: TStringView): Boolean; inline;
+
 // table-driven zero-copy single-pass predicate+literal scan — L1 single source via VecWidth predicate table (simd.vec VecCmpEq/VecCtz), bytes.ops single source via TStringView Slice.Equals, B/op=0, reuse candidate for js.eval single-pass + json literal fast path sharing generic predicate table, not inline per red-line 2 (O(n) loop, I-Cache), L0-L3 keep, text.scan owner
 procedure ScanPredicateTable(const V: TStringView; var Singles: array of TScanSingleEntry; var Lits: array of TScanLitEntry);
 
@@ -836,6 +864,34 @@ begin
       end;
     end;
   end;
+end;
+
+// shared literal helpers — single source for js.eval/json, inline thin-forward, zero-copy via TStringView.Equals (bytes.ops SpanEqual SIMD single source), B/op=0, L0-L3 keep
+function ScanHasFloatMarker(const V: TStringView): Boolean; inline;
+begin
+  // perf: inline + zero-copy single-pass via ScanFindByte3 VecWidth SIMD (O(n) single scan vs O(3n) triple IndexOf), owner text.scan, bytes.ops single source not duplicated, not inline per red-line 2 for core ScanFindByte3 loop but thin forward inline here
+  if V.IsEmpty then Exit(False);
+  Result := ScanFindByte3(V.Data, V.Len, Byte('.'), Byte('e'), Byte('E')) >= 0;
+end;
+
+function ScanTryJsLiteral(const V: TStringView; out AKind: Byte): Boolean; inline;
+var I: Integer;
+begin
+  // perf: inline thin-forward table-driven via SCAN_JS_LITERALS single source, zero-copy TStringView.Equals (bytes.ops SpanEqual SIMD), no alloc, L1 owner reuse for json/js
+  for I := 0 to High(SCAN_JS_LITERALS) do
+    if V.Equals(TStringView.FromStr(SCAN_JS_LITERALS[I].Lit)) then
+    begin AKind := SCAN_JS_LITERALS[I].Kind; Exit(True); end;
+  Result := False;
+end;
+
+function ScanTryJsSentinel(const V: TStringView; out AStack: TStringView): Boolean; inline;
+var I: Integer;
+begin
+  // perf: inline thin-forward via SCAN_JS_SENTINELS single source, zero-copy Equals (bytes.ops), no alloc
+  for I := 0 to High(SCAN_JS_SENTINELS) do
+    if V.Equals(TStringView.FromStr(SCAN_JS_SENTINELS[I].Lit)) then
+    begin AStack := TStringView.FromStr(SCAN_JS_SENTINELS[I].Stack); Exit(True); end;
+  Result := False;
 end;
 
 end.

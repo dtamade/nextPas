@@ -8,7 +8,7 @@ function JsQuickJsProbeNames: string;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
-uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.sync.vault, nextpas.core.text.builder, nextpas.core.atomic;
+uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.sync.vault, nextpas.core.atomic;
 type
   // Vault 统一隔离：单 owner 收敛 GLib/GAvailable/GLoaded/GProbeIndex 裸全局，经 VaultRef inline 单源访问，IMutex→platform.sync 原子保护，64B 友好，lazy Exactly-Once
   TJsQuickJsVault = record
@@ -37,25 +37,14 @@ begin
   SyncVaultEnsureLock(GVaultInit, GVault.Lock);
 end;
 function BuildProbeNames: string;
-var B: TBufStringBuilder; I: Integer;
 begin
-  // perf: single source comma-join via TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy single source, zero-copy Move, inline hot path, try-finally Done 不丢
-  // stability: try-finally Done 不丢, single source for probe names
-  B.Init(128);
-  try
-    for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
-    begin
-      if I > 0 then B.AppendStr(', ');
-      B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
-    end;
-    Result := B.ToString;
-  finally
-    B.Done;
-  end;
+  // perf: single source via bytes.ops StringJoin single source (BytesCopy inline zero-copy single Move, single alloc O(n) precompute total, no TBufStringBuilder geometric alloc/try-finally per call, loop not inline per design-conventions §2 red-line 2, 8-name table single source)
+  // stability: no resource to release, exception-safe single SetLength, single source for 8-name probe table via bytes.ops, resource not丢
+  Result := StringJoin(JS_QUICKJS_PROBE_NAMES, ', ');
 end;
 function JsQuickJsProbeNames: string;
 begin
-  // perf: fast path atomic acquire load of Ready flag (single atomic, no lock/TBufStringBuilder), zero-copy immutable string refcount inc only when ready, hot path lock-free after init, try-finally Done 不丢
+  // perf: fast path atomic acquire load of Ready flag (single atomic, no lock/StringJoin alloc), zero-copy immutable string refcount inc only when ready, hot path lock-free after init, single source via bytes.ops StringJoin
   // stability: DCL with acquire/release fences guards non-atomic string publication (refcount野指针 fix), Exactly-Once via VaultRef^.Lock→platform.sync, GProbeNamesReady acquire before string read + release after string write
   if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit(GProbeNamesCache);
   EnsureVaultLock;
@@ -234,7 +223,7 @@ end;
 procedure InitProbeCache;
 var LTmp: string;
 begin
-  // perf: double-checked locking via VaultRef^.Lock Exactly-Once + atomic Ready flag fast path (single acquire load, zero-copy Move, try-finally Done 不丢), one-time TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy
+  // perf: double-checked locking via VaultRef^.Lock Exactly-Once + atomic Ready flag fast path (single acquire load, zero-copy Move, StringJoin single alloc via bytes.ops BytesCopy single source, no TBufStringBuilder try-finally)
   // stability: acquire/release fences guard non-atomic string publication (refcount野指针 fix), lock protects GProbeNamesCache heap alloc/overwrite, immutable after init, GProbeNamesReady release after write / acquire before read
   if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit;
   EnsureVaultLock;

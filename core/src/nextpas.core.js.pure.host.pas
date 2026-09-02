@@ -68,6 +68,47 @@ uses
   nextpas.core.mem.dynarray,
   nextpas.core.js.pure.base,
   nextpas.core.platform.fs;
+type
+  PJsHostFunc = ^TJsHostFunction;
+  PJsHostMethod = ^TJsHostMethod;
+  PJsHostProc = ^TJsHostProc;
+procedure HostFreeRec(var Rec: TJsPureHostRec); inline;
+var PF: PJsHostFunc; PM: PJsHostMethod; PP: PJsHostProc;
+begin
+  if Rec.FuncPtr <> nil then begin PF := PJsHostFunc(Rec.FuncPtr); Dispose(PF); Rec.FuncPtr := nil; end;
+  if Rec.MethodPtr <> nil then begin PM := PJsHostMethod(Rec.MethodPtr); Dispose(PM); Rec.MethodPtr := nil; end;
+  if Rec.ProcPtr <> nil then begin PP := PJsHostProc(Rec.ProcPtr); Dispose(PP); Rec.ProcPtr := nil; end;
+  Rec.Name := '';
+  Rec.Hash := 0;
+  Rec.Kind := 0;
+end;
+procedure HostSetFuncPtr(var Rec: TJsPureHostRec; AHandler: TJsHostFunction; AKind: Integer);
+var PF: PJsHostFunc; PM: PJsHostMethod; PP: PJsHostProc;
+begin
+  if Rec.FuncPtr <> nil then begin PF := PJsHostFunc(Rec.FuncPtr); Dispose(PF); Rec.FuncPtr := nil; end;
+  if Rec.MethodPtr <> nil then begin PM := PJsHostMethod(Rec.MethodPtr); Dispose(PM); Rec.MethodPtr := nil; end;
+  if Rec.ProcPtr <> nil then begin PP := PJsHostProc(Rec.ProcPtr); Dispose(PP); Rec.ProcPtr := nil; end;
+  New(PF); PF^ := AHandler; Rec.FuncPtr := Pointer(PF);
+  Rec.Kind := AKind;
+end;
+procedure HostSetMethodPtr(var Rec: TJsPureHostRec; AHandler: TJsHostMethod; AKind: Integer);
+var PF: PJsHostFunc; PM: PJsHostMethod; PP: PJsHostProc;
+begin
+  if Rec.FuncPtr <> nil then begin PF := PJsHostFunc(Rec.FuncPtr); Dispose(PF); Rec.FuncPtr := nil; end;
+  if Rec.MethodPtr <> nil then begin PM := PJsHostMethod(Rec.MethodPtr); Dispose(PM); Rec.MethodPtr := nil; end;
+  if Rec.ProcPtr <> nil then begin PP := PJsHostProc(Rec.ProcPtr); Dispose(PP); Rec.ProcPtr := nil; end;
+  New(PM); PM^ := AHandler; Rec.MethodPtr := Pointer(PM);
+  Rec.Kind := AKind;
+end;
+procedure HostSetProcPtr(var Rec: TJsPureHostRec; AHandler: TJsHostProc; AKind: Integer);
+var PF: PJsHostFunc; PM: PJsHostMethod; PP: PJsHostProc;
+begin
+  if Rec.FuncPtr <> nil then begin PF := PJsHostFunc(Rec.FuncPtr); Dispose(PF); Rec.FuncPtr := nil; end;
+  if Rec.MethodPtr <> nil then begin PM := PJsHostMethod(Rec.MethodPtr); Dispose(PM); Rec.MethodPtr := nil; end;
+  if Rec.ProcPtr <> nil then begin PP := PJsHostProc(Rec.ProcPtr); Dispose(PP); Rec.ProcPtr := nil; end;
+  New(PP); PP^ := AHandler; Rec.ProcPtr := Pointer(PP);
+  Rec.Kind := AKind;
+end;
 function JsPureCategoryFromErrorCategory(const ACategory: TErrorCategory): TJsErrorCategory; inline;
 begin
   case ACategory of
@@ -82,13 +123,14 @@ begin
 end;
 
 function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
+var LFunc: TJsHostFunction; LMethod: TJsHostMethod; LProc: TJsHostProc;
 begin
-  // single source Host Kind dispatch via pure.host, zero-copy, bytes.ops single source via host view not needed here, resource try-finally via exception wrap, L0-L3 kept — not inline per red-line 2 (heavy try..except+case)
+  // single source Host Kind dispatch via pure.host, zero-copy, bytes.ops single source via host view not needed here, resource try-finally via exception wrap, L0-L3 kept — not inline per red-line 2 (heavy try..except+case), opaque pointers per base zero-dep
   try
     case AHost.Kind of
-      0: Result := AHost.Func(ACtx, AThis, AArgs);
-      1: Result := AHost.Method(ACtx, AThis, AArgs);
-      2: Result := AHost.Proc(ACtx, AThis, AArgs);
+      0: if AHost.FuncPtr <> nil then begin LFunc := PJsHostFunc(AHost.FuncPtr)^; Result := LFunc(ACtx, AThis, AArgs); end else Result := JsUndefinedValue;
+      1: if AHost.MethodPtr <> nil then begin LMethod := PJsHostMethod(AHost.MethodPtr)^; Result := LMethod(ACtx, AThis, AArgs); end else Result := JsUndefinedValue;
+      2: if AHost.ProcPtr <> nil then begin LProc := PJsHostProc(AHost.ProcPtr)^; Result := LProc(ACtx, AThis, AArgs); end else Result := JsUndefinedValue;
     else
       Result := JsUndefinedValue;
     end;
@@ -247,25 +289,16 @@ begin
   Result := HostFindCoreBucketed(Hosts, Buckets, HostHashView(AName), AName);
 end;
 function HostAllocOne(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer;
-var
-  LCount: Integer;
-  LOld, LNeed, LCap, LCurCap: SizeUInt;
 begin
-  // type-safe without absolute: geometric via bytes.ops BytesNextCapacity single source + Exactly-Once poke via mem.dynarray, amortized O(1), inline zero-copy, no type pun, bytes.ops single source
-  LCount := Length(Hosts);
-  LOld := SizeUInt(LCount);
-  LNeed := LOld + 1;
-  LCurCap := HostCapacity(Hosts);
-  if LCurCap < LNeed then
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Hosts, LCap);
-    if LCap <> LOld then PokeHostLen(Hosts, LOld);
-  end;
-  if SizeUInt(Length(Hosts)) <> LNeed then PokeHostLen(Hosts, LNeed);
-  Hosts[LCount].Name := AName;
-  Hosts[LCount].Hash := AHash;
-  Result := LCount;
+  // single source via bytes.ops BytesDynEnsureLength (BytesNextCapacity + mem.dynarray probe/poke Exactly-Once, BYTES_BUILDER_MIN_GROW 64→2× amortized O(1)), host/pure shared single source via bytes.ops→mem.dynarray, inline zero-copy, no duplicate SetLength+Poke per call-site, zero-dep base via opaque pointers
+  Result := Length(Hosts);
+  nextpas.core.bytes.ops.BytesDynEnsureLength(Hosts, SizeOf(TJsPureHostRec), SizeUInt(Result + 1));
+  Hosts[Result].Name := AName;
+  Hosts[Result].Hash := AHash;
+  Hosts[Result].Kind := 0;
+  Hosts[Result].FuncPtr := nil;
+  Hosts[Result].MethodPtr := nil;
+  Hosts[Result].ProcPtr := nil;
 end;
 
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
@@ -310,43 +343,37 @@ procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandl
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
-  Hosts[LIdx].Func := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetFuncPtr(Hosts[LIdx], AHandler, AKind);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer);
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
-  Hosts[LIdx].Method := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetMethodPtr(Hosts[LIdx], AHandler, AKind);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer);
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, AName);
-  Hosts[LIdx].Proc := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetProcPtr(Hosts[LIdx], AHandler, AKind);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer);
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
-  Hosts[LIdx].Func := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetFuncPtr(Hosts[LIdx], AHandler, AKind);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer);
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
-  Hosts[LIdx].Method := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetMethodPtr(Hosts[LIdx], AHandler, AKind);
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer);
 var LIdx: Integer;
 begin
   LIdx := JsPureHostFindOrAlloc(Hosts, Buckets, AName);
-  Hosts[LIdx].Proc := AHandler;
-  Hosts[LIdx].Kind := AKind;
+  HostSetProcPtr(Hosts[LIdx], AHandler, AKind);
 end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin
@@ -403,11 +430,17 @@ begin
   if LIdx < 0 then Exit;
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // stability: managed assignment semantics — swap-last single assignment + clear duplicate last to release string/managed refs, avoids raw BytesCopy/BytesZero double-free/leak, resource not丢 via assignment refcount
-  // perf: O(1) swap-last single refcount churn vs O(n) shift, bulk delete O(n) not O(n²), inline zero-copy view via HostFind, poke amortized O(1) via mem.dynarray single source
+  // stability: free opaque handler pointers before swap, managed string via assignment, resource not丢 via HostFreeRec, poke amortized O(1)
+  HostFreeRec(Hosts[LIdx]);
   if LIdx <> LCount - 1 then
     Hosts[LIdx] := Hosts[LCount - 1];
-  Hosts[LCount - 1] := Default(TJsPureHostRec);
+  // clear last to release refs, pointers already nil via move or freed
+  Hosts[LCount - 1].Name := '';
+  Hosts[LCount - 1].Hash := 0;
+  Hosts[LCount - 1].Kind := 0;
+  Hosts[LCount - 1].FuncPtr := nil;
+  Hosts[LCount - 1].MethodPtr := nil;
+  Hosts[LCount - 1].ProcPtr := nil;
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
 end;
 function HostBucketFindPos(const Buckets: TJsPureHostBuckets; AHash: UInt32; AIdx: Integer): Integer;
@@ -456,11 +489,16 @@ begin
   LWasValid := (Length(Buckets.Buckets) > 0) and (Buckets.Count = LCount);
   LHashRemoved := Hosts[LIdx].Hash;
   if LIdx <> LCount - 1 then LHashMoved := Hosts[LCount - 1].Hash else LHashMoved := 0;
-  // stability: managed assignment — swap-last single assign + clear last to release managed refs, avoids BytesCopy/Zero fragility, resource not丢 via Default, poke amortized O(1) via mem.dynarray single source, bytes.ops单源
-  // perf: O(1) swap-last vs O(n) shift, bulk delete O(n) not O(n²)
+  // stability: free removed host handlers before swap, managed string via assignment, resource not丢 via HostFreeRec
+  HostFreeRec(Hosts[LIdx]);
   if LIdx <> LCount - 1 then
     Hosts[LIdx] := Hosts[LCount - 1];
-  Hosts[LCount - 1] := Default(TJsPureHostRec);
+  Hosts[LCount - 1].Name := '';
+  Hosts[LCount - 1].Hash := 0;
+  Hosts[LCount - 1].Kind := 0;
+  Hosts[LCount - 1].FuncPtr := nil;
+  Hosts[LCount - 1].MethodPtr := nil;
+  Hosts[LCount - 1].ProcPtr := nil;
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
   LNew := LCount - 1;
   if not LWasValid then
@@ -510,8 +548,10 @@ begin Result := JsPureFindHostView(S.Hosts, S.Buckets, AName); end;
 function JsPureHostStateFindViewBucketed(var S: TJsPureHostState; const AName: TStringView): Integer; inline;
 begin Result := JsPureFindHostView(S.Hosts, S.Buckets, AName); end;
 procedure JsPureHostStateClear(var S: TJsPureHostState); inline;
+var I: Integer;
 begin
-  // perf: SetLength 0 single-pass finalize managed Name/Func/Method/Proc O(n) vs prior O(2n) dual traversal; Close批量 O(n), inline零拷贝, 资源Finalize幂等不丢, 守bytes.ops单源+FNV1a+Buckets单源, L0-L3
+  // perf: free opaque handlers O(n) single-pass, inline zero-copy, resource Finalize幂等不丢, 守bytes.ops单源+FNV1a+Buckets单源, L0-L3, try-finally not丢 via HostFreeRec
+  for I := 0 to High(S.Hosts) do HostFreeRec(S.Hosts[I]);
   SetLength(S.Hosts, 0); JsPureHostBucketsInvalidate(S.Buckets);
 end;
 procedure JsPureHostStateSetFunc(var S: TJsPureHostState; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
@@ -523,8 +563,10 @@ begin JsPureHostSetProc(S.Hosts, S.Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostStateRemove(var S: TJsPureHostState; const AName: string); inline;
 begin JsPureHostRemove(S.Hosts, S.Buckets, AName); end;
 procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
+var I: Integer;
 begin
-  // perf: SetLength 0 single-pass finalize managed Name/Func/Method/Proc O(n) vs prior O(2n); Close批量 O(n) via single source, resource Finalize幂等不丢, bytes.ops单源, inline零拷贝, L0-L3
+  // perf: free opaque handlers O(n) single-pass, resource Finalize幂等不丢, bytes.ops单源, inline零拷贝, L0-L3, opaque pointers via HostFreeRec
+  for I := 0 to High(Hosts) do HostFreeRec(Hosts[I]);
   SetLength(Hosts, 0);
 end;
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;

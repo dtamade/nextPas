@@ -99,6 +99,9 @@ function BytesToUTF8(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+{ String join single source — L1 canonical comma-join via BytesCopy single source, zero-copy Move, single alloc O(n); owner bytes.ops, js probe 8-name single source via this, no TBufStringBuilder duplicate loop, not inline per red-line 2 (loop), resource no leak }
+function StringJoin(const AParts: array of string; const ASep: string): string;
+function BytesJoinStrings(const AParts: array of string; const ASep: string): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 { Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
 function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
@@ -831,6 +834,49 @@ begin
   { 零拷贝借用：Slice 仅建视图不分配，生命周期绑 ABytes }
   LSpan := TByteSpan.FromBytes(ABytes).Slice(AOffset, ALength);
   Result := SpanToString(LSpan);
+end;
+
+function StringJoin(const AParts: array of string; const ASep: string): string;
+var
+  I: Integer;
+  LTotal, LPos, LSepLen, LPartLen: SizeUInt;
+begin
+  // perf: single source via BytesCopy inline zero-copy single Move, single alloc O(n) (precompute total, one SetLength, loop Moves), no TBufStringBuilder geometric alloc/try-finally per call, loop not inline per design-conventions §2 red-line 2
+  // stability: single SetLength, zero-copy Moves, no resource to release, exception-safe (SetLength raise), 8-name probe table single source via this helper
+  if Length(AParts) = 0 then Exit('');
+  if Length(AParts) = 1 then Exit(AParts[0]);
+  LSepLen := SizeUInt(Length(ASep));
+  LTotal := 0;
+  for I := 0 to High(AParts) do
+    Inc(LTotal, SizeUInt(Length(AParts[I])));
+  if LSepLen > 0 then
+    Inc(LTotal, LSepLen * SizeUInt(High(AParts)));
+  SetLength(Result, LTotal);
+  if LTotal = 0 then Exit;
+  LPos := 0;
+  for I := 0 to High(AParts) do
+  begin
+    if I > 0 then
+    begin
+      if LSepLen > 0 then
+      begin
+        BytesCopy(PAnsiChar(Result) + LPos, PAnsiChar(ASep), LSepLen);
+        Inc(LPos, LSepLen);
+      end;
+    end;
+    LPartLen := SizeUInt(Length(AParts[I]));
+    if LPartLen > 0 then
+    begin
+      BytesCopy(PAnsiChar(Result) + LPos, PAnsiChar(AParts[I]), LPartLen);
+      Inc(LPos, LPartLen);
+    end;
+  end;
+end;
+
+function BytesJoinStrings(const AParts: array of string; const ASep: string): string; inline;
+begin
+  // perf: inline thin-forward to StringJoin single source, zero-copy, L1 single source, no duplicate loop
+  Result := StringJoin(AParts, ASep);
 end;
 
 function StringLowerAsciiAware(const S: string): string; inline;
