@@ -345,6 +345,20 @@ begin
   end;
 end;
 
+function ZipFindEocd(const AC: IByteCursor; ALower: Int64): Int64;
+var
+  LI: Int64;
+begin
+  Result := -1;
+  LI := Int64(AC.Length) - C_EOCD_MIN_LEN;
+  while LI >= ALower do
+  begin
+    if AC.PeekU32LE(SizeUInt(LI)) = C_ZIP_EOCD_SIG then
+      Exit(LI);
+    Dec(LI);
+  end;
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -519,20 +533,10 @@ begin
     raise EParseError.Create('zip: truncated archive');
 
   { 从尾部向前找 EOCD 签名（注释区可含任意字节，取最靠后者） }
-  LEocdPos := -1;
   LMinPos := Int64(FC.Length) - C_EOCD_MIN_LEN - C_MAX_COMMENT_LEN;
   if LMinPos < 0 then
     LMinPos := 0;
-  LI := Int64(FC.Length) - C_EOCD_MIN_LEN;
-  while LI >= LMinPos do
-  begin
-    if FC.PeekU32LE(SizeUInt(LI)) = C_ZIP_EOCD_SIG then
-    begin
-      LEocdPos := LI;
-      Break;
-    end;
-    Dec(LI);
-  end;
+  LEocdPos := ZipFindEocd(FC, LMinPos);
   if LEocdPos < 0 then
     raise EParseError.Create('zip: end of central directory not found');
 
@@ -805,17 +809,7 @@ begin
     LTailBase := 0;
   Fetch(LTailBase, SizeUInt(FSize - LTailBase), LTail, 'archive');
   LC := NewByteCursor(LTail);
-  LEocdRel := -1;
-  LI := Integer(LC.Length) - C_EOCD_MIN_LEN;
-  while LI >= 0 do
-  begin
-    if LC.PeekU32LE(SizeUInt(LI)) = C_ZIP_EOCD_SIG then
-    begin
-      LEocdRel := LI;
-      Break;
-    end;
-    Dec(LI);
-  end;
+  LEocdRel := ZipFindEocd(LC, 0);
   if LEocdRel < 0 then
     raise EParseError.Create('zip: end of central directory not found');
   LEocdAbs := LTailBase + LEocdRel;

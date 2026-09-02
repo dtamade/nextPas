@@ -220,6 +220,9 @@
 ### S93 — 解压管道单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `reader.ZipWrapEntryReader` 单源化 `TZipReaderImpl.OpenEntry` / `TZipSourceReader.OpenEntry` 解压管道重复（`AES解帧→RawDeflateReaderWithMaxOutputSize→TZipVerifyReader` 2×20 行 → 2×1 行 `ZipWrapEntryReader(切片/区间,LE,Password,MaxOutput)`），`ENotSupportedError` 与 `store/deflate/AES` 语义守恒，`reader` 双形态共享管道内核，`TSliceReader/TSourceSpanReader` 各自仅保留切片构造，12 门 + `bench_zip 221789` 可编译回归，`S85—S93` 九单源平台期
 
+### S94 — EOCD 扫描单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipFindEocd` 单源化 `TZipReaderImpl.ParseCentralDirectory` / `TZipSourceReader.ParseCentralDirectory` EOCD 扫描循环重复（`PeekU32LE 逐字节回扫` 2×12 行 → 2×1 行 `ZipFindEocd(Cursor,LowerBound)`），`end of central directory not found` 语义守恒，`reader` 双形态共享扫描内核（`FC` 全量与 `Tail` 窗口统一），12 门 + `bench_zip 221783` 可编译回归，`S85—S94` 十单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -252,4 +255,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S93 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c94783b` 已落地（S92→S93 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader` 十单源（三路泵+双管道） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S94 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main b0a829a` 已落地（S93→S94 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd` 十一单源（三路泵+双管道+EOCD） + AES 零堆栈。
