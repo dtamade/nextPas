@@ -63,6 +63,10 @@ procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+// dynarray probe/poke single source for non-TBytes arrays — lifecycle/pure.value unified entry via bytes.ops, inline zero-copy, amortized O(1) (owner L1 bytes.ops, probes via L0 mem.dynarray)
+function BytesDynCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
+function BytesDynCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
+procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -138,6 +142,24 @@ function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 begin
   // perf: inline thin-forward single source via bytes.ops.capacity BytesGrowCapacity geometric 0→64→2× amortized O(1) zero extra call
   Result := BytesGrowCapacity(AOld, ANeed);
+end;
+
+function BytesDynCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
+begin
+  // inline single source probe via L0 mem.dynarray, zero-copy heap probe, bytes.ops single slit
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(APtr, ALen, AElemSize);
+end;
+
+function BytesDynCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
+begin
+  // inline single source probe via L0 mem.dynarray, zero-copy, bytes.ops single slit
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityGeneric(A, AElemSize);
+end;
+
+procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
+begin
+  // inline single source poke via L0 mem.dynarray, zero-copy header High, Exactly-Once, bytes.ops single slit
+  nextpas.core.mem.dynarray.DynArraySetLengthGeneric(A, ANewLen);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;

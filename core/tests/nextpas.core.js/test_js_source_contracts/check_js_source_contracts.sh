@@ -236,10 +236,27 @@ IMPL_SECT=$(sed -n '/^implementation/,/^end\./p' "$FILE")
 IMPL_UNITS=$(echo "$IMPL_SECT" | grep -o "nextpas.core\.[a-z0-9._]*" | sort -u || true)
 for u in $IMPL_UNITS; do
   case "$u" in
-    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base) say_ok "impl narrow allow $u" ;;
-    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base narrow (found $u)" ;;
+    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base|nextpas.core.js.lifecycle) say_ok "impl narrow allow $u" ;;
+    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base/lifecycle narrow (found $u)" ;;
   esac
 done
+# base zero dependency gate: pure.base must not use same-module js.* (lifecycle/host/value/eval via owner single source, base zero dependency)
+if grep -q "nextpas.core.js.lifecycle" "$ROOT/core/src/nextpas.core.js.pure.base.pas" && grep -q "uses" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must be zero-dependency base (no same-module uses, lifecycle via owner js.lifecycle single source, base zero dependency)"
+else
+  say_ok "pure.base zero dependency (no same-module uses, base←owner single source via js.lifecycle/pure.host/value/js.eval)"
+fi
+# sentinel single source: JS_PURE_EVAL_* must only live in js.eval (owner), not duplicated in pure.base
+if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.pure.base.pas"; then
+  say_fail "js.pure.base must not define JS_PURE_EVAL_* (sentinels single source via js.eval, pure.hash for threshold, no duplication)"
+else
+  say_ok "sentinels single source via js.eval (pure.base zero duplication, pure.hash for threshold)"
+fi
+if grep -q "JS_PURE_EVAL_WHILE_TRUE" "$ROOT/core/src/nextpas.core.js.eval.pas" && grep -q "JS_PURE_HASH_THRESHOLD" "$ROOT/core/src/nextpas.core.js.pure.hash.pas"; then
+  say_ok "single source owners present: eval owns sentinels, pure.hash owns threshold"
+else
+  say_fail "single source owners missing: eval must own JS_PURE_EVAL_* and pure.hash must own JS_PURE_HASH_THRESHOLD"
+fi
 
 # 13) volume hygiene: single threshold 800, wc -l <800 anchored in Makefile (防漂移, 历史 550/650 已收敛)
 THRESHOLD=800

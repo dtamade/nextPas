@@ -62,7 +62,6 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.dynarray,
   nextpas.core.text.builder,
   nextpas.core.json.writer,
   nextpas.core.text.number,
@@ -84,48 +83,35 @@ begin
   end;
   Result := -1;
 end;
-{ capacity: geometric via bytes.ops + Exactly-Once via mem.dynarray, not inline per red-line 2 }
+{ capacity: geometric via bytes.ops single source + Exactly-Once via bytes.ops poke single source, not inline per red-line 2 }
+generic procedure JsPureArrayReserve<T>(var Arr: specialize TJsArray<T>; AAdditional: SizeUInt);
+var LOld, LNeed, LCap, LCurCap: SizeUInt;
+begin
+  if AAdditional=0 then Exit;
+  LOld:=SizeUInt(Length(Arr)); LNeed:=LOld+AAdditional;
+  LCurCap:=BytesDynCapacityGeneric(Arr, SizeOf(T));
+  if LCurCap>=LNeed then Exit;
+  LCap:=BytesNextCapacity(LOld, LNeed);
+  SetLength(Arr, LCap);
+  if LCap<>LOld then BytesDynSetLengthGeneric(Arr, LOld);
+end;
 generic procedure EnsureCapacityOne<T>(var Arr: specialize TJsArray<T>);
-var LOld, LNeed, LCap: SizeUInt;
+var LOld: SizeUInt;
 begin
-  LOld := SizeUInt(Length(Arr)); LNeed := LOld + 1;
-  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Arr, SizeOf(T)) >= LNeed then
-  begin
-    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Arr, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Arr, LCap);
-    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Arr, LNeed);
-  end;
+  // single source geometric via JsPureArrayReserve (bytes.ops BytesNextCapacity single source + bytes.ops poke Exactly-Once single slit), amortized O(1), inline zero-copy BytesNextCapacity not duplicated
+  LOld:=SizeUInt(Length(Arr));
+  specialize JsPureArrayReserve<T>(Arr, 1);
+  if SizeUInt(Length(Arr))<>LOld+1 then BytesDynSetLengthGeneric(Arr, LOld+1);
 end;
-procedure EnsurePropsCapacityOne(var Props: TJsPurePropArray);
+procedure EnsurePropsCapacityOne(var Props: TJsPurePropArray); inline;
 begin specialize EnsureCapacityOne<TJsPureProp>(Props); end;
-procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap);
+procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
 begin specialize EnsureCapacityOne<TJsPureObject>(Heap); end;
-{ bulk reserve: single probe + geometric via bytes.ops, Exactly-Once via mem.dynarray, amortized O(1) for batch }
-procedure JsPurePropsReserve(var Props: TJsPurePropArray; AAdditional: SizeUInt);
-var LOld, LNeed, LCap, LCurCap: SizeUInt;
-begin
-  if AAdditional=0 then Exit;
-  LOld:=SizeUInt(Length(Props)); LNeed:=LOld+AAdditional;
-  LCurCap:=nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Props, SizeOf(TJsPureProp));
-  if LCurCap>=LNeed then Exit;
-  LCap:=BytesNextCapacity(LOld, LNeed);
-  SetLength(Props, LCap);
-  if LCap<>LOld then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Props, LOld);
-end;
-procedure JsPureHeapReserve(var Heap: TJsPureHeap; AAdditional: SizeUInt);
-var LOld, LNeed, LCap, LCurCap: SizeUInt;
-begin
-  if AAdditional=0 then Exit;
-  LOld:=SizeUInt(Length(Heap)); LNeed:=LOld+AAdditional;
-  LCurCap:=nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Heap, SizeOf(TJsPureObject));
-  if LCurCap>=LNeed then Exit;
-  LCap:=BytesNextCapacity(LOld, LNeed);
-  SetLength(Heap, LCap);
-  if LCap<>LOld then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap, LOld);
-end;
+{ bulk reserve: single source via JsPureArrayReserve, inline thin-forward, geometric via bytes.ops, Exactly-Once via bytes.ops poke single slit, amortized O(1) for batch }
+procedure JsPurePropsReserve(var Props: TJsPurePropArray; AAdditional: SizeUInt); inline;
+begin specialize JsPureArrayReserve<TJsPureProp>(Props, AAdditional); end;
+procedure JsPureHeapReserve(var Heap: TJsPureHeap; AAdditional: SizeUInt); inline;
+begin specialize JsPureArrayReserve<TJsPureObject>(Heap, AAdditional); end;
 { prop hash: single source via pure.hash, inline }
 function PropHashStr(const S: string): UInt32; inline;
 begin
@@ -480,21 +466,32 @@ begin
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
-var I, J, Idx: Integer; LHash: UInt32; LFound: Boolean;
+var I, Idx: Integer; LHash: UInt32; LCap: Integer; LMask: UInt32; LDummy: Integer; Buckets: array of Integer; LProbe, LPos: Integer; LIdxHash: UInt32; LFound: Boolean;
 begin
-  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source) + bulk reserve single probe via bytes.ops BytesNextCapacity geometric amortized O(1), zero-copy SpanEqual filter, zero extra heap alloc via O(M²) inline dedup (no Need[Heap] FillChar), not inline loop per red-line 2, bytes.ops single source
+  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source) + bulk reserve single probe via bytes.ops BytesNextCapacity geometric amortized O(1), zero-copy SpanEqual filter, O(M) hash-set dedup via pure.hash buckets single source (BytesNextCapacity geometric) not O(M²), not inline loop per red-line 2, bytes.ops single source
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
   LHash := PropHashStr(AName);
-  // bulk reserve: distinct heap objects need 1 slot each (amortized O(1), single probe per heap) — zero heap alloc via inline dedup, bytes.ops geometric via JsPurePropsReserve
+  // bulk reserve: distinct heap objects need 1 slot each (amortized O(1), single probe per heap) — O(M) hash dedup via buckets single source pure.hash→bytes.ops, no 50w comparisons, zero extra heap growth
+  LCap := JsPureBucketCapacity(Length(Objs));
+  SetLength(Buckets, LCap);
+  LDummy := 0;
+  JsPureBucketsPrepare(Buckets, LMask, LDummy, LCap, 0);
   for I:=0 to High(Objs) do
   begin
     Idx:=JsPureHeapFind(Heap, Objs[I]);
     if (Idx<0) or (JsPureHeapFindPropHashed(Heap[Idx], AName, LHash)>=0) then Continue;
-    LFound:=False;
-    for J:=0 to I-1 do
-      if JsPureHeapFind(Heap, Objs[J])=Idx then begin LFound:=True; Break; end;
+    LIdxHash := UInt32(Idx) * 2654435761;
+    LPos := Integer(LIdxHash and LMask);
+    LFound := False;
+    for LProbe:=0 to High(Buckets) do
+    begin
+      if Buckets[LPos] = -1 then Break;
+      if Buckets[LPos] = Idx then begin LFound := True; Break; end;
+      LPos := (LPos + 1) and Integer(LMask);
+    end;
     if LFound then Continue;
+    Buckets[LPos] := Idx;
     JsPurePropsReserve(Heap[Idx].Props, 1);
   end;
   for I := 0 to High(Objs) do

@@ -39,8 +39,8 @@ procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); ov
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 procedure JsPureHostBucketsRebuild(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets);
-// Host dispatch — single source via pure.host, inline zero-copy, bytes.ops single source, L0-L3 kept, resource try-finally via exception wrap
-function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+// Host dispatch — single source via pure.host, zero-copy, bytes.ops single source, L0-L3 kept, resource try-finally via exception wrap — not inline per red-line 2 (try..except+case dispatch I-Cache)
+function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
 const JS_PURE_FILE_MAX_BYTES = BYTES_BULK_PARSE_MAX_BYTES; // 64MiB canonical single source via bytes.ops BYTES_BULK_PARSE_MAX_BYTES (L1 owner, Format/JS single source, no L2→L2, bytes.ops BytesCopy zero-copy single source, L0-L3 kept, try-finally not丢)
 procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;
@@ -82,9 +82,9 @@ begin
   else Result := jecUnknown; end;
 end;
 
-function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+function JsPureHostInvoke(const AHost: TJsPureHostRec; ACtx: IJsContext; const AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
 begin
-  // single source Host Kind dispatch via pure.host, inline zero-copy, bytes.ops single source via host view not needed here, resource try-finally via exception wrap, L0-L3 kept
+  // single source Host Kind dispatch via pure.host, zero-copy, bytes.ops single source via host view not needed here, resource try-finally via exception wrap, L0-L3 kept — not inline per red-line 2 (heavy try..except+case)
   try
     case AHost.Kind of
       0: Result := AHost.Func(ACtx, AThis, AArgs);
@@ -412,20 +412,97 @@ begin
   Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
 end;
-procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);
-var LIdx, LCount: Integer;
+function HostBucketFindPos(const Buckets: TJsPureHostBuckets; AHash: UInt32; AIdx: Integer): Integer;
+var LPos, LProbe: Integer;
 begin
-  LIdx := JsPureFindHost(Hosts, Buckets, AName);
-  if LIdx < 0 then Exit;
+  // not inline per red-line 2 (loop probe, I-Cache) — single source probe via Mask, bytes.ops single source
+  LPos := Integer(AHash and Buckets.Mask);
+  for LProbe := 0 to High(Buckets.Buckets) do
+  begin
+    if Buckets.Buckets[LPos] = AIdx then Exit(LPos);
+    if Buckets.Buckets[LPos] = -1 then Exit(-1);
+    LPos := (LPos + 1) and Integer(Buckets.Mask);
+  end;
+  Result := -1;
+end;
+
+procedure HostBucketDeletePos(var Buckets: TJsPureHostBuckets; ADelPos: Integer; const Hosts: TJsPureHostArray);
+var LCur, LRe: Integer; LHash: UInt32;
+begin
+  // not inline per red-line 2 (loop cluster rehash) — single source linear-probing delete with tail reinsert via pure.hash Put, bytes.ops single source
+  Buckets.Buckets[ADelPos] := -1;
+  LCur := (ADelPos + 1) and Integer(Buckets.Mask);
+  while Buckets.Buckets[LCur] <> -1 do
+  begin
+    LRe := Buckets.Buckets[LCur];
+    if (LRe < 0) or (LRe >= Length(Hosts)) then
+    begin
+      Buckets.Buckets[LCur] := -1;
+      LCur := (LCur + 1) and Integer(Buckets.Mask);
+      Continue;
+    end;
+    LHash := Hosts[LRe].Hash;
+    Buckets.Buckets[LCur] := -1;
+    JsPureBucketPut(Buckets.Buckets, Buckets.Mask, LHash, LRe);
+    LCur := (LCur + 1) and Integer(Buckets.Mask);
+  end;
+end;
+
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);
+var LIdx, LCount, LNew, LPosMoved, LPosRemoved: Integer; LHashRemoved, LHashMoved: UInt32; LWasValid: Boolean;
+begin
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // stability: managed assignment semantics — swap-last single assignment + clear duplicate last to release string/managed refs, avoids raw BytesCopy/BytesZero fragility, resource not丢
-  // perf: O(1) swap-last single refcount churn vs O(n) shift, bulk delete O(n) not O(n²), bucket invalidate single source, poke amortized O(1)
+  LIdx := JsPureFindHost(Hosts, Buckets, AName);
+  if LIdx < 0 then Exit;
+  LWasValid := (Length(Buckets.Buckets) > 0) and (Buckets.Count = LCount);
+  LHashRemoved := Hosts[LIdx].Hash;
+  if LIdx <> LCount - 1 then LHashMoved := Hosts[LCount - 1].Hash else LHashMoved := 0;
+  // stability: managed assignment — swap-last single assign + clear last to release managed refs, avoids BytesCopy/Zero fragility, resource not丢 via Default, poke amortized O(1) via mem.dynarray single source, bytes.ops单源
+  // perf: O(1) swap-last vs O(n) shift, bulk delete O(n) not O(n²)
   if LIdx <> LCount - 1 then
     Hosts[LIdx] := Hosts[LCount - 1];
   Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
-  JsPureHostBucketsInvalidate(Buckets);
+  LNew := LCount - 1;
+  if not LWasValid then
+  begin
+    if (LNew <= JS_PURE_HASH_THRESHOLD) and (Length(Buckets.Buckets) > 0) then
+      JsPureHostBucketsInvalidate(Buckets);
+    Exit;
+  end;
+  if LNew <= JS_PURE_HASH_THRESHOLD then
+  begin
+    JsPureHostBucketsInvalidate(Buckets);
+    Exit;
+  end;
+  if Length(Buckets.Buckets) < JsPureBucketCapacity(LNew) then
+  begin
+    JsPureHostBucketsInvalidate(Buckets);
+    Exit;
+  end;
+  // amortized O(1) incremental patch vs O(n) full invalidate+rebuild — batch删O(k) not O(k·n), I-Cache零拷贝 via hash single source, bytes.ops single source
+  if LIdx = LCount - 1 then
+  begin
+    LPosRemoved := HostBucketFindPos(Buckets, LHashRemoved, LIdx);
+    if LPosRemoved >= 0 then
+    begin
+      HostBucketDeletePos(Buckets, LPosRemoved, Hosts);
+      Buckets.Count := LNew;
+    end else
+      JsPureHostBucketsInvalidate(Buckets);
+  end else
+  begin
+    LPosMoved := HostBucketFindPos(Buckets, LHashMoved, LCount - 1);
+    LPosRemoved := HostBucketFindPos(Buckets, LHashRemoved, LIdx);
+    if (LPosMoved >= 0) and (LPosRemoved >= 0) then
+    begin
+      Buckets.Buckets[LPosMoved] := LIdx;
+      HostBucketDeletePos(Buckets, LPosRemoved, Hosts);
+      Buckets.Count := LNew;
+    end else
+      JsPureHostBucketsInvalidate(Buckets);
+  end;
 end;
 { HostState — inline thin-forward to pure.host single source, bytes.ops FNV1a+BytesCopy single source, per-Context isolated, O(1)桶+零拷贝, 资源幂等不丢 }
 function JsPureHostStateFind(var S: TJsPureHostState; const AName: string): Integer; inline;

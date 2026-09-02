@@ -394,14 +394,14 @@ end;
 
 function QjsThreadSelf: UInt64; inline;
 begin
-  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle→pure.base), zero-copy token, decorator reuse, single syscall via lifecycle
-  Result := JsPureThreadSelf;
+  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle), zero-copy token, decorator reuse, single syscall via lifecycle, base zero dependency inline zero-copy
+  Result := nextpas.core.js.lifecycle.JsPureThreadSelf;
 end;
 
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 begin
-  // perf: inline single compare via js.lifecycle single source JsPureIsOnCreationThread, zero syscall beyond one, no duplication, L0 platform.thread 单缝收敛至 lifecycle
-  Result := JsPureIsOnCreationThread(ACreationId);
+  // perf: inline single compare via js.lifecycle single source JsPureIsOnCreationThread, zero syscall beyond one, no duplication, L0 platform.thread 单缝收敛至 lifecycle single source, base zero dependency
+  Result := nextpas.core.js.lifecycle.JsPureIsOnCreationThread(ACreationId);
 end;
 
 function QjsMonotonicNs: QWord; inline;

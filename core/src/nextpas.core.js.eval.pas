@@ -26,6 +26,7 @@ const
   );
 function EvalLiteralValue(AKind: Byte): TJsValue; inline;
 function EvalTryLiteralTable(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
+function EvalTryPureNumber(const V: TStringView; AContextId: UInt64; out OutVal: TJsValue): Boolean; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; overload;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; overload;
 implementation
@@ -178,6 +179,21 @@ begin
     if EvalIsLiteralEquals(V, EVAL_LITERALS[I].Lit) then
     begin OutVal := EvalLiteralValue(EVAL_LITERALS[I].Kind); Exit(True); end;
   Result := False;
+end;
+function EvalTryPureNumber(const V: TStringView; AContextId: UInt64; out OutVal: TJsValue): Boolean; inline;
+var LFirst: AnsiChar; LInt: Int64; LDbl: Double;
+begin
+  // single source numeric discriminant via text.number single source (EiselLemire), bytes.ops single source, first-byte O(1) filter, B/op=0, single source for js.quickjs Eval and TryPureIntAdd path, inline thin-forward
+  Result := False;
+  if V.IsEmpty then Exit;
+  LFirst := V.Data[0];
+  if not (LFirst in ['0'..'9','-','+','.']) then Exit;
+  if (V.IndexOf('.') < 0) and (V.IndexOf('e') < 0) and (V.IndexOf('E') < 0) then
+  begin
+    if ViewToInt64(V, LInt) then begin OutVal := JsPureNewInt(LInt, AContextId); Exit(True); end;
+    if ViewToDouble(V, LDbl) then begin OutVal := JsPureNewDouble(LDbl, AContextId); Exit(True); end;
+  end else
+    if ViewToDouble(V, LDbl) then begin OutVal := JsPureNewDouble(LDbl, AContextId); Exit(True); end;
 end;
 function EvalFallback(const V: TStringView): TJsValue; inline;
 begin

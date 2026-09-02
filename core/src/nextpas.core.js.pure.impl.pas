@@ -110,7 +110,10 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.view,
-  nextpas.core.js.eval;
+  nextpas.core.js.eval,
+  nextpas.core.js.lifecycle,
+  nextpas.core.js.pure.host,
+  nextpas.core.js.pure.value;
 
 { TJsPureRuntime — Lifecycle }
 
@@ -182,7 +185,7 @@ end;
 
 function TJsPureContext.IsOnCreationThread: Boolean; inline;
 begin
-  // perf: inline thin-forward to js.lifecycle/pure.base single source JsPureIsOnCreationThread (L0 platform.thread single slit via lifecycle), zero-copy token, single syscall inline, bytes.ops 单源同保持
+  // perf: inline thin-forward to js.lifecycle single source JsPureIsOnCreationThread (L0 platform.thread single slit via lifecycle), zero-copy token, single syscall inline, bytes.ops 单源同保持, base zero dependency inline zero-copy
   Result := JsPureIsOnCreationThread(FThreadId);
 end;
 
@@ -434,7 +437,10 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  JsPureClose(FHost, FValue.Heap, FValue.Global, FContextId);
+  // base zero dependency: lifecycle single source + host/value owner single source via bytes.ops, resource幂等不丢 via single source inline zero-copy
+  JsPureContextClose(FContextId);
+  JsPureHostStateClear(FHost);
+  JsPureValueStateClear(FValue);
 end;
 
 function TJsPureContext.IsClosed: Boolean;

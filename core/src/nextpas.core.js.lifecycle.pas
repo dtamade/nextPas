@@ -15,7 +15,6 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.dynarray,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
@@ -28,18 +27,17 @@ var
   GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric
 function GPureClosedCapacity: SizeUInt; inline;
 begin
-  // inline zero-copy via mem.dynarray single source
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(UInt32));
+  // inline zero-copy via bytes.ops single source (probe via mem.dynarray single slit)
+  Result := BytesDynCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(UInt32));
 end;
 procedure PokePureClosedLen(const ANewLen: SizeUInt); inline;
-var LBytes: TBytes absolute GPureClosed;
 begin
-  // inline Exactly-Once poke via mem.dynarray single source, zero-copy
-  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+  // inline Exactly-Once poke via bytes.ops single source (header High, zero-copy)
+  BytesDynSetLengthGeneric(GPureClosed, ANewLen);
 end;
 function GPureFreeCapacity: SizeUInt; inline;
 begin
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
+  Result := BytesDynCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
 end;
 function GPureIndexOf(AId: UInt64): UInt32; inline;
 begin
@@ -96,9 +94,9 @@ begin
     raise EInvalidOperation.Create('JsPureContextRegister: id space exhausted (2^32 wrap)');
   LIdx := UInt32(UInt64(LId));
   Result := GPureMakeId(LIdx, 0);
-  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed) then
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_acquire) then
   begin
-    // resize rare, sync.spinlock single source, compact 4B
+    // resize rare, sync.spinlock single source, compact 4B, bytes.ops geometric single source
     RawSpinAcquire(GPureClosedLock);
     try
       if LIdx >= UInt32(Length(GPureClosed)) then
@@ -114,7 +112,9 @@ begin
         begin
           LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
           SetLength(GPureClosed, Integer(LCap));
-          // Exactly-Once capacity reservation, bytes.ops single source, amortized O(1)
+          if LCap <> LNeed then
+            PokePureClosedLen(LNeed);
+          // Exactly-Once capacity reservation via bytes.ops single source + poke, amortized O(1), zero-fill jitter avoided (first 64-slot only LNeed zeroed logically)
         end;
         atomic_store(GPureClosedLen, PtrUInt(Length(GPureClosed)), mo_release);
       end;
@@ -129,7 +129,7 @@ var LCap, LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed)) then Exit;
+  if (AId = 0) or (PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_acquire)) then Exit;
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
   if (LStored shr 1) <> LEpoch then Exit; // stale generation => already closed/reused per INV-7 strong
   if (LStored and 1) <> 0 then Exit;
@@ -145,9 +145,12 @@ begin
     begin
       LCap := BytesNextCapacity(SizeUInt(Length(GPureFree)), LNeed);
       SetLength(GPureFree, Integer(LCap));
-      // Exactly-Once capacity reservation, bytes.ops single source, amortized O(1)
+      if LCap <> LNeed then
+        BytesDynSetLengthGeneric(GPureFree, LNeed);
+      // Exactly-Once capacity reservation via bytes.ops single source + poke, amortized O(1), geometric 0→64→2×
     end;
-    SetLength(GPureFree, Integer(LNeed));
+    if SizeUInt(Length(GPureFree)) <> LNeed then
+      BytesDynSetLengthGeneric(GPureFree, LNeed);
     GPureFree[High(GPureFree)] := UInt64(LIdx);
   finally
     RawSpinRelease(GPureClosedLock);
@@ -156,12 +159,12 @@ end;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 var LIdx, LEpoch, LStored: UInt32;
 begin
-  // perf: single acquire (slot) + relaxed Len, compact 4B, generation mismatch => strong closed INV-7, inline zero-copy
-  // bulk hot path must use TJsValue.IsValid (FValid only, zero barrier); IsAlive/IsClosed via this acquire single source for strong consistency, reduces 2*acquire cache coherence
+  // perf: single acquire (slot) + acquire Len, compact 4B, generation mismatch => strong closed INV-7, inline zero-copy
+  // bulk hot path must use TJsValue.IsValid (FValid only, zero barrier); IsAlive/IsClosed via this acquire single source for strong consistency, reduces cache coherence but INV-7 strong requires acquire pair with release
   if AId = 0 then Exit(False);
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
-  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_relaxed) then Exit(False);
+  if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_acquire) then Exit(False);
   LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
   if (LStored shr 1) <> LEpoch then Exit(True); // generation mismatch => strong closed INV-7
   Result := (LStored and 1) <> 0;

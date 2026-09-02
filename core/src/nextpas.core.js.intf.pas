@@ -26,8 +26,8 @@ type
     function Kind: TJsValueKind; inline;
     // validity dual-track per INV-7: bulk zero barrier vs strong acquire
     function IsValid: Boolean; inline; // bulk: FValid only, zero atomic, thread-affine hot bulk
-    function IsAlive: Boolean; inline; // strong: FValid + acquire GPureClosed via lifecycle
-    function IsClosed: Boolean; inline; // strong explicit closed via acquire
+    function IsAlive: Boolean; // strong: FValid + acquire GPureClosed via lifecycle, not inline per red-line 2
+    function IsClosed: Boolean; // strong explicit closed via acquire, not inline per red-line 2
     // type checks: thin via IsKind single source, inline
     function IsUndefined: Boolean; inline;
     function IsNull: Boolean; inline;
@@ -46,7 +46,7 @@ type
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
-    function AsString: string; inline;
+    function AsString: string; // not inline per red-line 2 (branch+SpanToString alloc), lazy cache B/op=0 repeat
     function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
@@ -99,14 +99,14 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
-// Context 寿命：状态下沉 js.lifecycle，经 pure.base 透出
+// Context 寿命：状态下沉 js.lifecycle single source
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-// intf 薄层：零可变全局，四件套，L0-L3 单向，状态下沉 lifecycle
+// intf 薄层：零可变全局，四件套，L0-L3 单向，状态下沉 lifecycle single source via js.lifecycle
 uses
   nextpas.core.bytes.ops,
   nextpas.core.js.pure.value,
-  nextpas.core.js.pure.base;
+  nextpas.core.js.lifecycle;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
@@ -165,16 +165,17 @@ begin
   Result := FValid;
 end;
 
-function TJsValue.IsAlive: Boolean; inline;
+function TJsValue.IsAlive: Boolean;
 begin
-  // strong: FValid + acquire GPureClosed compact 4B epoch*2+closed via lifecycle single source (atomic_load mo_acquire)
-  // perf: inline acquire single bounds check via GPureClosedLen + generation mismatch => closed per INV-7
+  // not inline per red-line 2 (branch+atomic acquire via js.lifecycle single source, I-Cache avoid)
+  // perf: single acquire via GPureClosed compact 4B epoch*2+closed (atomic_load mo_acquire) single source via js.lifecycle, bulk IsValid zero barrier kept, inline zero-copy acquire
   Result := FValid and not JsPureContextIsClosed(FContextId);
 end;
 
-function TJsValue.IsClosed: Boolean; inline;
+function TJsValue.IsClosed: Boolean;
 begin
-  // strong explicit closed via acquire single source, generation mismatch => closed
+  // not inline per red-line 2 (branch+atomic acquire, I-Cache avoid)
+  // perf: single acquire via js.lifecycle single source, generation mismatch => closed, inline zero-copy
   Result := FValid and JsPureContextIsClosed(FContextId);
 end;
 
@@ -245,13 +246,20 @@ end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
-function TJsValue.AsString: string; inline;
+function TJsValue.AsString: string;
 begin
-  // inline zero-copy via bytes.ops TByteSpan single source: view B/op=0 path materializes lazily via SpanToString single Move, hosted B/op=0 fast path via FStrVal
-  // perf: inline single branch + SpanToString via bytes.ops BytesCopy single source, zero-copy view extent, L0-L3 kept
+  // not inline per red-line 2 (branch+SpanToString alloc would bloat I-Cache if inlined)
+  // perf: single source via bytes.ops SpanToString (SetString+Move single source), zero-copy view extent, bytes.ops single source, L0-L3 kept
+  // cache: first materialize lazily via SpanToString single Move, repeat B/op=0 via FStrVal cache (hosted path), view borrow zero-copy, resource not丢
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
-  if FViewLen > 0 then Exit(SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)));
+  if FViewLen > 0 then
+  begin
+    if Length(FStrVal) <> 0 then Exit(FStrVal);
+    FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
+    Result := FStrVal;
+    Exit;
+  end;
   Result:=FStrVal;
 end;
 
@@ -282,12 +290,16 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // perf: inline zero-copy view via bytes.ops SpanToString single source lazily, B/op=0 bulk view creation, B/op=1 only on materialize
+  // not inline per red-line 2 (branch+SpanToString alloc, I-Cache avoid); cache B/op=0 repeat via FStrVal single source
+  // perf: single source via bytes.ops SpanToString, zero-copy view extent, lazy cache into FStrVal for AsString/TryAsString shared B/op=0 repeat, resource not丢
   Result:=FKind=jskString;
   if Result then
   begin
-    if FViewLen > 0 then V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen))
-    else V:=FStrVal;
+    if FViewLen > 0 then
+    begin
+      if Length(FStrVal) <> 0 then V:=FStrVal
+      else begin V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); FStrVal:=V; end;
+    end else V:=FStrVal;
   end else V:='';
 end;
 end.

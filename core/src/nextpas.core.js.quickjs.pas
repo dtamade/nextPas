@@ -48,6 +48,7 @@ type
     FDeadlineMs: Int64;
     FInterruptCount: Cardinal;
     FLastCheckNs: QWord;
+    FCallHeap: array of TJSQjsValue;
     function FindHost(const AName: string): Integer; inline;
     function IsOnCreationThread: Boolean; inline;
     procedure EnsureNotClosed; inline; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity; inline;
@@ -61,6 +62,10 @@ type
     function QjsFromTJs(const AVal: TJsValue): TJSQjsValue; inline;
     function QjsToTJs(const V: TJSQjsValue): TJsValue; inline;
     function HeapIndexOf(const AObj: TJsValue): Integer; inline;
+    // eval single-responsibility decomposition: numeric via js.eval single source, materialize via bytes.ops zero-copy
+    function EvalTryNumeric(const AView: TStringView; out AVal: TJsValue): Boolean; inline;
+    function EvalMaterialize(const AOrig, AView: TStringView): TJsValue; inline;
+    procedure EnsureCallHeap(ANeed: Integer); inline;
   public
     constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
     destructor Destroy; override;
@@ -101,12 +106,12 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.view,
-  nextpas.core.text.number,
   nextpas.core.json.types,
-  nextpas.core.json,
   nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray,
   nextpas.core.js.eval,
-  nextpas.core.js.quickjs.loader;
+  nextpas.core.js.quickjs.loader,
+  nextpas.core.js.lifecycle;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var
@@ -177,6 +182,7 @@ destructor TJsQuickJsContext.Destroy;
 begin
   if not FClosed then Close;
   SetLength(FHostFuncs, 0);
+  SetLength(FCallHeap, 0);
   inherited;
 end;
 
@@ -215,6 +221,45 @@ function TJsQuickJsContext.HeapIndexOf(const AObj: TJsValue): Integer; inline;
 begin
   // perf: inline thin-forward to js.quickjs.value single source (pure.base JsPureHeapFind, amortized O1 hash>64, zero-copy), decorator boundary explicit
   Result := nextpas.core.js.quickjs.value.QjsStoreFind(FStore, AObj);
+end;
+
+procedure PokeCallHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute AHeap;
+begin
+  // perf: inline poke via mem.dynarray DynArraySetLength single source (exactly-once geometric), zero-copy header poke, amortized O(1) via BYTES_BUILDER_MIN_GROW, bytes.ops single source
+  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+end;
+
+procedure TJsQuickJsContext.EnsureCallHeap(ANeed: Integer); inline;
+var LOld, LCap: SizeUInt;
+begin
+  // perf: geometric reuse via bytes.ops BytesNextCapacity single source (0→64→2× amortized O(1)), B/op=0 after warm for >16 args, zero per-call heap alloc, inline, bytes.ops single source, stability poke exactly-once not lost
+  if ANeed <= 0 then Exit;
+  LOld := SizeUInt(Length(FCallHeap));
+  if LOld >= SizeUInt(ANeed) then
+  begin
+    if LOld <> SizeUInt(ANeed) then PokeCallHeapLen(FCallHeap, SizeUInt(ANeed));
+    Exit;
+  end;
+  LCap := BytesNextCapacity(LOld, SizeUInt(ANeed));
+  SetLength(FCallHeap, LCap);
+  if LCap <> SizeUInt(ANeed) then PokeCallHeapLen(FCallHeap, SizeUInt(ANeed));
+end;
+
+function TJsQuickJsContext.EvalTryNumeric(const AView: TStringView; out AVal: TJsValue): Boolean; inline;
+begin
+  // perf: inline thin-forward to js.eval single source EvalTryPureNumber (text.number EiselLemire single source, bytes.ops SpanEqual reuse), zero-copy via text.view, decorator single seam L2→L2 pure.value via json single point, inline
+  Result := nextpas.core.js.eval.EvalTryPureNumber(AView, FContextId, AVal);
+end;
+
+function TJsQuickJsContext.EvalMaterialize(const AOrig, AView: TStringView): TJsValue; inline;
+begin
+  // perf: zero-copy via text.view Slice single source (TryClampSlice inline) + bytes.ops single source JsPureNewStringView single BytesCopy, preserves embedded NUL via QjsViewLen, B/op=0 for array/object single alloc
+  if (not AView.IsEmpty) and (AView.Len >= 2) and (AView.Data[0] = '"') and (AView.Data[AView.Len - 1] = '"') then
+    Exit(JsPureNewStringView(AView.Slice(1, AView.Len - 2), FContextId));
+  if (not AView.IsEmpty) and ((AView.Data[0] = '[') or (AView.Data[0] = '{')) then
+    Exit(JsPureNewStringView(AOrig, FContextId));
+  Result := JsPureNewStringView(AOrig, FContextId);
 end;
 
 function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string; inline;
@@ -271,12 +316,9 @@ var
   S: string;
   LFileName: string;
   LOrig, LView: TStringView;
-  LInt: Int64;
-  LDbl: Double;
   P: PAnsiChar;
   LLen: SizeUInt;
   LVal: TJsValue;
-  LFirst: AnsiChar;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   if JsTrimEquals(ACode,'') then
@@ -308,32 +350,12 @@ begin
       LOrig := QjsView(P);
     end;
     LView := LOrig.Trim;
-    // perf: single-pass dispatch via eval single source table-driven EVAL_LITERALS (bytes.ops SpanEqual single source, inline zero-copy) eliminating hand Equals*4 double scan; bytes.ops single source, inline thin-forward via EvalTryLiteralTable
+    // single-responsibility dispatch via eval single source: literals + numeric + materialize
     if nextpas.core.js.eval.EvalTryLiteralTable(LView, LVal) then
       Exit(JsValueBindContext(LVal, FContextId));
-    // perf: single-pass numeric discriminant via first-byte O(1) filter + single ViewToInt64/ViewToDouble scan each via text.number single source (EiselLemire), bytes.ops SpanEqual reuse, B/op=0 for numbers; avoids triple O(n) sequential Equals+Int+Double scans
-    if not LView.IsEmpty then
-    begin
-      LFirst := LView.Data[0];
-      if (LFirst in ['0'..'9','-','+','.']) then
-      begin
-        if (LView.IndexOf('.') < 0) and (LView.IndexOf('e') < 0) and (LView.IndexOf('E') < 0) then
-        begin
-          if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
-          if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
-        end else
-          if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
-      end;
-    end;
-    // perf: 非数值回退零拷贝判别 text.view single source TStringView.Trim+Slice zero-copy inline O(1) discriminant via bytes.ops single source (TryClampSlice/SpanTrim) + JsPureNewStringView single BytesCopy single source — binary-safe length-aware view preserves embedded NUL via QjsViewLen, B/op 0 for array/object via single alloc
-    // stability: 资源 exactly-once Free via try-finally (P/JS_FreeCString+JS_FreeValue) 不丢, 双堆幂等, 装饰边界 Pure single source via JsPureNewStringView (bytes.ops SpanToString single source, inline, zero dangling)
-    if (not LView.IsEmpty) and (LView.Len >= 2) and (LView.Data[0] = '"') and (LView.Data[LView.Len - 1] = '"') then
-      // json string literal quoted via QuickJS ToCString JSON-compat: 去外引号零拷贝 Slice (TryClampSlice single source inline) + JsPureNewStringView single BytesCopy single source (bytes.ops single source, preserves embedded NUL via length-aware LOrig/LView)
-      Exit(JsPureNewStringView(LView.Slice(1, LView.Len - 2), FContextId));
-    if (not LView.IsEmpty) and ((LView.Data[0] = '[') or (LView.Data[0] = '{')) then
-      // array/object: 零拷贝视图直通 JsPureNewStringView(LOrig) single BytesCopy single source via bytes.ops single source, binary-safe length-aware, inline
-      Exit(JsPureNewStringView(LOrig, FContextId));
-    Result := JsPureNewStringView(LOrig, FContextId);
+    if EvalTryNumeric(LView, LVal) then
+      Exit(LVal);
+    Result := EvalMaterialize(LOrig, LView);
   finally
     if (P <> nil) and Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(FCtx, P);
     if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V);
@@ -406,7 +428,7 @@ begin
   QjsStoreSetProp(FStore, FCtx, AObj, AName, AVal);
 end;
 function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
-var QFunc, QThis, QRes: TJSQjsValue; QStack: array[0..15] of TJSQjsValue; QHeap: array of TJSQjsValue; PQ: PJSQjsValue; LArgc, I: Integer;
+var QFunc, QThis, QRes: TJSQjsValue; QStack: array[0..15] of TJSQjsValue; PQ: PJSQjsValue; LArgc, I: Integer;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   // per-Context 桶 O(1) 单分支，无全局共享，inline 零拷贝
@@ -428,10 +450,10 @@ begin
         PQ := @QStack[0];
       end else
       begin
-        SetLength(QHeap, LArgc);
-        for I := 0 to LArgc - 1 do QHeap[I] := QjsFromTJs(AArgs[I]);
-        // perf: typed pointer @QHeap[0] type-safe (vs PJSQjsValue(QHeap) header alias), stack 16*16B=256B B/op=0 zero-copy, heap fallback rare, inline + zero-copy 16B handle, exactly-once free; stability: LArgc>0 guard + nil for 0 arg no dangling
-        if LArgc > 0 then PQ := @QHeap[0];
+        // perf: heap reuse via FCallHeap geometric BytesNextCapacity single source (BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1)), B/op=0 after warm for >16 rare, zero per-call alloc, inline, bytes.ops single source, stability typed pointer @FCallHeap[0] type-safe
+        EnsureCallHeap(LArgc);
+        for I := 0 to LArgc - 1 do FCallHeap[I] := QjsFromTJs(AArgs[I]);
+        if LArgc > 0 then PQ := @FCallHeap[0];
       end;
     QRes := JS_CallPtr(FCtx, QFunc, QThis, LArgc, PQ);
     try
@@ -472,6 +494,7 @@ begin
   if Assigned(JS_FreeRuntimePtr) and (FRT <> nil) then JS_FreeRuntimePtr(FRT);
   FRT:=nil;
   SetLength(FHostFuncs, 0);
+  SetLength(FCallHeap, 0);
   JsPureHostBucketsInvalidate(FHostBuckets);
 end;
 function TJsQuickJsContext.IsClosed: Boolean; begin Result:=FClosed; end;
