@@ -172,6 +172,78 @@ begin
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'stream must not reference fs (uses graph)');
 end;
 
+procedure AssertNoCompressSeam(const ALabel, ASource: string); inline;
+begin
+  Check(not FindUsesUnit(ASource, 'nextpas.core.compress'), ALabel + ' — must not reference nextpas.core.compress (uses graph)');
+  Check(not FindUsesUnit(ASource, 'nextpas.core.compress.intf'), ALabel + ' — must not reference nextpas.core.compress.intf (uses graph)');
+  Check(not FindUsesUnit(ASource, 'nextpas.core.compress.deflate'), ALabel + ' — must not reference nextpas.core.compress.deflate (uses graph)');
+  Check(not FindUsesUnit(ASource, 'nextpas.core.compress.bzip2'), ALabel + ' — must not reference nextpas.core.compress.bzip2 (uses graph)');
+end;
+
+procedure TestCompressSeamUniqueness;
+const
+  NO_COMPRESS: array[0..23] of string = (
+    'src/nextpas.core.sevenz.base.pas',
+    'src/nextpas.core.sevenz.intf.pas',
+    'src/nextpas.core.sevenz.header.pas',
+    'src/nextpas.core.sevenz.filters.pas',
+    'src/nextpas.core.sevenz.limits.pas',
+    'src/nextpas.core.sevenz.aes.pas',
+    'src/nextpas.core.sevenz.bcj.x86.pas',
+    'src/nextpas.core.sevenz.bcj.arm.pas',
+    'src/nextpas.core.sevenz.bcj.arm64.pas',
+    'src/nextpas.core.sevenz.bcj.ppc.pas',
+    'src/nextpas.core.sevenz.bcj.ia64.pas',
+    'src/nextpas.core.sevenz.bcj.sparc.pas',
+    'src/nextpas.core.sevenz.bcj.armt.pas',
+    'src/nextpas.core.sevenz.bcj.riscv.pas',
+    'src/nextpas.core.sevenz.bcj.utils.pas',
+    'src/nextpas.core.sevenz.bcj2.pas',
+    'src/nextpas.core.sevenz.lzma.rc.pas',
+    'src/nextpas.core.sevenz.lzma.decoder.pas',
+    'src/nextpas.core.sevenz.lzma.encoder.pas',
+    'src/nextpas.core.sevenz.lzma.ffi.pas',
+    'src/nextpas.core.sevenz.lzma.ffi.decoder.pas',
+    'src/nextpas.core.sevenz.reader.pas',
+    'src/nextpas.core.sevenz.stream.pas',
+    'src/nextpas.core.sevenz.fs.pas');
+var
+  I: Integer;
+  Src, Reg: string;
+begin
+  Src := LoadSourceText('src/nextpas.core.sevenz.coders.pas');
+  Check(FindUsesUnit(Src, 'nextpas.core.compress.intf'), 'sevenz.coders declares compress.intf single seam (uses graph)');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0, 'sevenz.coders declares bytes.ops single source (inline zero-copy)');
+  Check(Pos('SpanClone', Src) > 0, 'sevenz.coders reuses bytes.ops SpanClone single source (zero-copy view)');
+  Check(Pos('inline', Src) > 0, 'sevenz.coders has inline thin forward (perf evidence, SevenZBZip2Available/DeflateForTest)');
+  Check(Pos('CompressBZip2IsAvailable', Src) > 0, 'sevenz.coders thin forward via compress.intf CompressBZip2IsAvailable');
+  Check(Pos('CompressDeflateDecompressWithMax', Src) > 0, 'sevenz.coders thin forward via compress.intf CompressDeflateDecompressWithMax');
+  Check(Pos('CompressBZip2DecompressWithMax', Src) > 0, 'sevenz.coders thin forward via compress.intf CompressBZip2DecompressWithMax');
+  Check(Pos('CompressIsLimitExceeded', Src) > 0, 'sevenz.coders reuses compress.intf limit single source (ESevenZLimitError)');
+  Check(Pos('try', Src) > 0, 'sevenz.coders has try..except resource/异常不丢 (Deflate/BZip2 bomb)');
+  for I := Low(NO_COMPRESS) to High(NO_COMPRESS) do
+    AssertNoCompressSeam(NO_COMPRESS[I], LoadSourceText(NO_COMPRESS[I]));
+  Src := LoadSourceText('src/nextpas.core.sevenz.writer.pas');
+  Check(Pos('nextpas.core.compress', Src) > 0, 'writer declares compress for encode (allowed encode seam, not decode)');
+  Src := LoadSourceText('src/nextpas.core.sevenz.levels.pas');
+  Check(FindUsesUnit(Src, 'nextpas.core.compress.base'), 'levels declares compress.base pure mapping (not L2 decode seam)');
+  Src := LoadSourceText('src/nextpas.core.sevenz.pas');
+  Check(Pos('nextpas.core.compress.base', Src) > 0, 'facade declares compress.base via levels (not second decode seam)');
+  Check(not FindUsesUnit(Src, 'nextpas.core.compress.intf'), 'facade must not directly reference compress.intf (only coders)');
+  Src := LoadSourceText('src/nextpas.core.compress.intf.pas');
+  Check(Pos('nextpas.core.sevenz', Src) = 0, 'compress.intf must not reference sevenz (cycle-gated)');
+  Src := LoadSourceText('src/nextpas.core.compress.deflate.pas');
+  Check(Pos('nextpas.core.sevenz', Src) = 0, 'compress.deflate must not reference sevenz (cycle-gated)');
+  Src := LoadSourceText('src/nextpas.core.compress.bzip2.pas');
+  Check(Pos('nextpas.core.sevenz', Src) = 0, 'compress.bzip2 must not reference sevenz (cycle-gated)');
+  Reg := LoadSourceText('docs/core-module-registry.md');
+  Check(Pos('sevenz.coders', Reg) > 0, 'registry documents sevenz.coders seam');
+  Check(Pos('compress', Reg) > 0, 'registry documents compress allowlist');
+  Check(Pos('single L2→L2 seam', Reg) > 0, 'registry marks compress via sevenz.coders single L2→L2 seam (source-contract gated)');
+  Check(Pos('cycle-gated', Reg) > 0, 'registry marks cycle-gated (compress→sevenz forbidden)');
+  Check(Pos('thin inline forward', Reg) > 0, 'registry marks thin inline forward');
+end;
+
 procedure TestExceptionRootDiscipline;
 var
   Src: string;
@@ -189,6 +261,7 @@ begin
   T.Test('sevenz sources no bare FPC RTL', @TestSevenzSourcesNoFpcRtl);
   T.Test('sevenz gate sources no bare FPC RTL', @TestSevenzGateSourcesNoFpcRtl);
   T.Test('L2→L2 seam uniqueness', @TestSeamUniqueness);
+  T.Test('L2→L2 compress seam uniqueness', @TestCompressSeamUniqueness);
   T.Test('exception root discipline', @TestExceptionRootDiscipline);
   if not T.Run then Halt(1);
 end.

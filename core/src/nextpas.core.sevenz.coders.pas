@@ -1,12 +1,18 @@
 unit nextpas.core.sevenz.coders;
 
 {**
- * nextpas.core.sevenz.coders - coder 执行引擎与后端选择
+ * nextpas.core.sevenz.coders - coder 执行引擎与后端选择（L2 单点聚合缝）
  *
  * 按 folder 的 coder 有向图迭代解码（线性链为常见形态，实现支持任意绑定拓扑）。
  * LZMA 后端接口化：纯 Pascal 与 liblzma FFI 双实现运行时切换；
  * Copy 为本模块内置；BCJ/Delta 等过滤器由 nextpas.core.sevenz.filters 单源实现，
  * 本模块仅经 SevenZFilterConvert 分发，不再重复暴露 Delta 编解码入口。
+ * 缝位：L2 同层单向 allowlist 轻量缝 `sevenz.coders → compress`（Deflate/BZip2经
+ * nextpas.core.compress.intf 单点聚合薄转发，inline 零开销；BCJ2/AES/filters/lzma.*
+ * 为同族内聚非跨域缝），Registry 显式 allowlist + source-contract 门禁，
+ * cycle-gated 无 reverse（compress.* → sevenz.* 禁止，类 sevenz.fs→fs 单缝范式），
+ * bytes.ops 单源 inline/零拷贝（SpanClone 视图复用，Move 单源），资源 try..finally
+ * 不丢，异常 ESevenZLimitError 单源判限 via CompressIsLimitExceeded。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -44,10 +50,10 @@ function SevenZDecodeFolder(const AFolder: TSevenZFolder;
   代理 nextpas.core.compress.bzip2 的 FFI 可用性判定，门面仅 inline forward，
   保持 facade 纯 re-export 职责与 L2→L2 聚合收口 }
 function SevenZBZip2Available: Boolean; inline;
-{ Deflate 解码测试钩子：直通内部分支，供回归测试验证 zlib/raw 双路径 }
-function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
-{ BZip2 解码测试钩子 }
-function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+{ Deflate 解码测试钩子：薄转发 inline 零开销直通内部分支，供回归测试验证 zlib/raw 双路径 }
+function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
+{ BZip2 解码测试钩子：薄转发 inline 零开销 }
+function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 
 implementation
 
@@ -55,7 +61,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.text.conv,
-  nextpas.core.compress.intf,
+  nextpas.core.compress.intf, // L2→L2 single seam: only this unit may reference compress.intf (Registry allowlist + source-contract gated, compress→sevenz cycle-gated, thin inline forward)
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
@@ -196,8 +202,9 @@ begin
     raise ESevenZLimitError.Create('raw inflate: decompressed size exceeds limit');
 end;
 
-function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 begin
+  // thin inline forward, zero overhead via DeflateDecodeSevenZ -> compress.intf single source
   Result := DeflateDecodeSevenZ(AInput, AOutSize);
 end;
 
@@ -225,14 +232,15 @@ begin
   end;
 end;
 
-function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 begin
+  // thin inline forward, zero overhead via BZip2DecodeSevenZ -> compress.intf single source
   Result := BZip2DecodeSevenZ(AInput, AOutSize);
 end;
 
-function SevenZBZip2Available: Boolean;
+function SevenZBZip2Available: Boolean; inline;
 begin
-  // owner经compress.intf聚合，inline forward零开销
+  // owner经compress.intf聚合，inline forward零开销，单源复用 CompressBZip2IsAvailable
   Result := CompressBZip2IsAvailable;
 end;
 {$POP}
