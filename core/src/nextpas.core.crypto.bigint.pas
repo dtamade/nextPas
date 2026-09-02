@@ -18,6 +18,23 @@ interface
 uses
   nextpas.core.base;
 
+type
+  TBigNat = array of UInt32;  // little-endian limbs, crypto.bigint single source
+
+  TMontgomeryContext = record
+    Modulus: TBigNat;
+    LimbCount: Integer;
+    NPrime: UInt32;
+    One: TBigNat;
+    RModN: TBigNat;
+    R2ModN: TBigNat;
+  end;
+
+function BigNatFromUnsignedBytes(const ABytes: TBytes): TBigNat;
+function BigNatToUnsignedBytes(const AValue: TBigNat): TBytes;
+function TryGetMontgomeryContext(const AModulusBytes: TBytes; out ACtx: TMontgomeryContext; out AError: string): Boolean;
+function TryBigIntModExpWithMont(const ABase, AExponent: TBytes; const AMontCtx: TMontgomeryContext; out AResult: TBytes; out AError: string): Boolean;
+
 function TryRSAModExpSignPurePascal(
   const AEncodedMessage: TBytes;
   const AModulus: TBytes;
@@ -81,18 +98,6 @@ function TryBigIntToFixedLengthFromUnsignedBytes(
 procedure ClearBigIntCache;
 
 implementation
-
-type
-  TBigNat = array of UInt32;  // little-endian limbs
-
-  TMontgomeryContext = record
-    Modulus: TBigNat;
-    LimbCount: Integer;
-    NPrime: UInt32;
-    One: TBigNat;
-    RModN: TBigNat;
-    R2ModN: TBigNat;
-  end;
 
 const
   LIMB_BITS = 32;
@@ -1311,6 +1316,37 @@ var
 begin
   LValue := BigNatFromUnsignedBytes(AValue);
   Result := TryBigNatToFixedLengthBytes(LValue, ALength, AResult, AError);
+end;
+
+function TryGetMontgomeryContext(const AModulusBytes: TBytes; out ACtx: TMontgomeryContext; out AError: string): Boolean;
+var
+  LModulus: TBigNat;
+begin
+  // single source: bytes -> BigNat -> cached Montgomery (DH group14 reuses, avoiding per-KEX R/R2 recompute)
+  LModulus := BigNatFromUnsignedBytes(AModulusBytes);
+  Result := TryGetCachedMontCtx(LModulus, ACtx, AError);
+end;
+
+function TryBigIntModExpWithMont(const ABase, AExponent: TBytes; const AMontCtx: TMontgomeryContext; out AResult: TBytes; out AError: string): Boolean;
+var
+  LBase, LExp, LReduced, LOut: TBigNat;
+begin
+  // single source: reuse cached Montgomery context without re-parsing modulus bytes
+  LBase := BigNatFromUnsignedBytes(ABase);
+  LExp := BigNatFromUnsignedBytes(AExponent);
+  SetLength(AResult, 0);
+  AError := '';
+  Result := False;
+  if BigNatIsZero(LExp) then
+  begin
+    AResult := BigNatToUnsignedBytes(BigNatMod(BigNatFromWord(1), AMontCtx.Modulus));
+    Result := True;
+    Exit;
+  end;
+  LReduced := BigNatMod(LBase, AMontCtx.Modulus);
+  LOut := BigNatModExpMontgomery(LReduced, LExp, AMontCtx);
+  AResult := BigNatToUnsignedBytes(LOut);
+  Result := True;
 end;
 
 procedure ClearMontgomeryCache;

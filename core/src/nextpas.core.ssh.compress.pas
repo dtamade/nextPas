@@ -211,11 +211,16 @@ begin
       begin
         if LCap >= SSH_COMP_MAX_DECOMPRESSED then
           raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
-        // reuse compress.base single source; bytes.ops doubling kept via SetLength after CompressNextCapacity
-        LCap := CompressNextCapacity(LCap, SSH_COMP_MAX_DECOMPRESSED);
-        if LCap = 0 then
+        // single source: geometric growth via bytes.ops (BYTES_BUILDER_MIN_GROW=64, 2x, amortized O(1)), bounded by SSH_COMP_MAX_DECOMPRESSED
+        BytesEnsureCapacity(Result, LCap + 1);
+        LCap := SizeUInt(Length(Result));
+        if LCap > SSH_COMP_MAX_DECOMPRESSED then
+        begin
+          LCap := SSH_COMP_MAX_DECOMPRESSED;
+          SetLength(Result, LCap);
+        end;
+        if (LCap = 0) or (LOutLen >= LCap) then
           raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
-        SetLength(Result, LCap);
       end;
       FInflate.next_out := pBytef(@Result[LOutLen]);
       FInflate.avail_out := LongWord(LCap - LOutLen);

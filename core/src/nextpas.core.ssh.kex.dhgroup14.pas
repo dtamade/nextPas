@@ -73,6 +73,13 @@ var
   GPrimeValid: Boolean;
   GGen: TBytes;
   GGenValid: Boolean;
+  // perf: cached BigNat + Montgomery (crypto.bigint single source), avoid per-KEX re-parse/recompute
+  GPrimeBN: TBigNat;
+  GPrimeBNValid: Boolean;
+  GGenBN: TBigNat;
+  GGenBNValid: Boolean;
+  GMontCtx: TMontgomeryContext;
+  GMontValid: Boolean;
 
 function SshDHGroup14Prime: TBytes;
 const
@@ -122,6 +129,43 @@ begin
   Result := GGen;
 end;
 
+function SshDHGroup14PrimeBN: TBigNat;
+begin
+  // perf: cached BigNat (crypto.bigint single source), avoid per-KEX BigNatFromUnsignedBytes
+  if GPrimeBNValid then
+    Exit(GPrimeBN);
+  GPrimeBN := BigNatFromUnsignedBytes(SshDHGroup14Prime);
+  GPrimeBNValid := True;
+  Result := GPrimeBN;
+end;
+
+function SshDHGroup14GeneratorBN: TBigNat;
+begin
+  // perf: cached g=2 BigNat (single source)
+  if GGenBNValid then
+    Exit(GGenBN);
+  GGenBN := BigNatFromUnsignedBytes(SshDHGroup14Generator);
+  GGenBNValid := True;
+  Result := GGenBN;
+end;
+
+function TrySshDHGroup14MontCtx(out ACtx: TMontgomeryContext; out AError: string): Boolean;
+begin
+  // perf: cached Montgomery (R/R2/N' ~50ms init) reused per KEX, crypto.bigint single source
+  if GMontValid then
+  begin
+    ACtx := GMontCtx;
+    AError := '';
+    Result := True;
+    Exit;
+  end;
+  if not TryGetMontgomeryContext(SshDHGroup14Prime, ACtx, AError) then
+    Exit(False);
+  GMontCtx := ACtx;
+  GMontValid := True;
+  Result := True;
+end;
+
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
   const AClientKexInit, AServerKexInit, AHostKeyBlob,
   AClientE, AServerF, ASharedK: TBytes): TBytes;
@@ -155,17 +199,26 @@ constructor TSshKexDHGroup14.Create;
 var
   LPub: TBytes;
   LErr: string;
+  LMont: TMontgomeryContext;
 begin
   inherited Create;
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
+  // warm caches: PrimeBN/GenBN/MontCtx single source, no per-KEX recompute
+  SshDHGroup14PrimeBN;
+  SshDHGroup14GeneratorBN;
   FPriv := GenerateSecureRandomBytes(32);
   if (Length(FPriv) = 0) or IsZeroBytes(FPriv) then
   begin
     FPriv[0] := $7F;
     FPriv[High(FPriv)] := $01;
   end;
-  if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
+  if TrySshDHGroup14MontCtx(LMont, LErr) then
+  begin
+    if not TryBigIntModExpWithMont(FGenerator, FPriv, LMont, LPub, LErr) then
+      raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
+  end
+  else if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
     raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
   FPub := LPub;
 end;
@@ -212,6 +265,7 @@ var
   LServerF, LShared, LHashInput: TBytes;
   LPrime, LGen: TBytes;
   LErr: string;
+  LMont: TMontgomeryContext;
 begin
   LR := TsshReader.Create(APayload);
   try
@@ -226,16 +280,23 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  // perf: single fetch cached prime/gen, zero-copy CoW, bytes.ops single source
+  // perf: single fetch cached prime/gen/BigNat/MontCtx, zero-copy CoW, bytes.ops+bigint single source
   LGen := SshDHGroup14Generator;
   LPrime := SshDHGroup14Prime;
+  SshDHGroup14PrimeBN;
+  SshDHGroup14GeneratorBN;
   if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LGen) <= 0)
     or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LPrime) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
   if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
-  if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, LPrime, LShared, LErr) then
+  if TrySshDHGroup14MontCtx(LMont, LErr) then
+  begin
+    if not TryBigIntModExpWithMont(LServerF, FPriv, LMont, LShared, LErr) then
+      raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
+  end
+  else if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, LPrime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
   if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
@@ -251,9 +312,19 @@ end;
 initialization
   GPrimeValid := False;
   GGenValid := False;
+  GPrimeBNValid := False;
+  GGenBNValid := False;
+  GMontValid := False;
 
 finalization
   GPrime := nil;
   GGen := nil;
+  GPrimeBN := nil;
+  GGenBN := nil;
+  GMontCtx.Modulus := nil;
+  GMontCtx.One := nil;
+  GMontCtx.RModN := nil;
+  GMontCtx.R2ModN := nil;
+  GMontValid := False;
 
 end.
