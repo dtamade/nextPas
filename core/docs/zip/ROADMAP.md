@@ -204,6 +204,9 @@
 - `common.GuardZipIndex` 单源化 `TZipReaderImpl.CheckIndex` / `TZipSourceReader.CheckIndex` 越界守卫重复（`0 ≤ Index < Count → EIndexOutOfRangeError('zip: entry index out of range: '+Int)`），2×4 行 → 2×1 行 `inline`，`EIndexOutOfRangeError` 语义守恒
 - `common` 为 `reader` 双形态共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/GuardTotalOutputSize/ParseLocalHeader`），冷路径 `inline` 零成本，12 门 + `bench_zip 221747` 可编译回归，`S85—S88` 四单源平台期证据化
 
+### S89 — Find 单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.FindZipEntry` 单源化 `TZipReaderImpl.Find` / `TZipSourceReader.Find` 线性查找重复（`Name = AName → 首命中 Index / -1`），2×6 行 → 2×1 行 `inline`，首命中语义守恒，`common` 为 `reader` 双形态共享查找内核，12 门 + `bench_zip 221757` 可编译回归，`S85—S89` 五单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -236,4 +239,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S88 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 84cc22f` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex` 六单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S89 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 0dfb25e` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry` 七单源 + AES 零堆栈。

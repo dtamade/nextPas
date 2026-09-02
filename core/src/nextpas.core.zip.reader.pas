@@ -559,13 +559,8 @@ begin
 end;
 
 function TZipReaderImpl.Find(const AName: string): Integer;
-var
-  LI: Integer;
 begin
-  for LI := 0 to High(FEntries) do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
-  Result := -1;
+  Result := FindZipEntry(FEntries, AName);
 end;
 
 { 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移。
@@ -895,13 +890,8 @@ begin
 end;
 
 function TZipSourceReader.Find(const AName: string): Integer;
-var
-  LI: Integer;
 begin
-  for LI := 0 to High(FEntries) do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
-  Result := -1;
+  Result := FindZipEntry(FEntries, AName);
 end;
 
 { 加密/安全名守卫 + local header 走查（定位读 30 字节固定头），

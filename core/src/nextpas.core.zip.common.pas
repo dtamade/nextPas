@@ -36,6 +36,7 @@ procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word)
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
 function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
@@ -149,6 +150,16 @@ begin
     raise EIndexOutOfRangeError.Create(
       'zip: entry index out of range: ' + IntToStr(AIndex));
   Result := AIndex;
+end;
+
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(AEntries) do
+    if AEntries[LI].Name = AName then
+      Exit(LI);
+  Result := -1;
 end;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;

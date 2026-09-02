@@ -2,9 +2,9 @@
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 
-`1.0.0` 后 24 期巡检收敛（S64—S88），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+`1.0.0` 后 25 期巡检收敛（S64—S89），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
 
-### Highlights (S80—S88)
+### Highlights (S80—S89)
 - **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
 - **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
 - **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
@@ -14,6 +14,7 @@
 - **S86 Local 单源**：`common.ParseLocalHeader` 单源化 `reader` 双 `LocatePayload` 本地头走查，`bad local header signature` 语义守恒
 - **S87 Password 单源**：`common.GuardEntryPassword` 单源化 `reader/sequential` 的缺口令守卫，`EInvalidOperationError` 语义守恒
 - **S88 Index 单源**：`common.GuardZipIndex` 单源化 `reader` 双 `CheckIndex` 越界守卫，`EIndexOutOfRangeError` 语义守恒，`S85—S88` 四单源平台期
+- **S89 Find 单源**：`common.FindZipEntry` 单源化 `reader` 双 `Find` 线性查找，首命中语义守恒，`S85—S89` 五单源平台期
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
 
