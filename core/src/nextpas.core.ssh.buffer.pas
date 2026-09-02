@@ -48,11 +48,11 @@ type
     procedure PutUInt32(AValue: UInt32); inline;
     procedure PutUInt64(AValue: UInt64); inline;
     procedure PutStringBytes(const AValue: TBytes); inline;
-    procedure PutStringText(const AText: string); inline;
+    procedure PutStringText(const AText: string);
     { 无符号大端 magnitude → RFC 4251 mpint（补符号位前导零；0 编码为空串）}
     procedure PutMPInt(const AMagnitude: TBytes);
     procedure PutNameList(const ANames: array of string);
-    procedure PutRaw(const APtr: PByte; ALen: SizeUInt); overload; inline;
+    procedure PutRaw(const APtr: PByte; ALen: SizeUInt); overload;
     procedure PutRaw(const AValue: TBytes); overload; inline;
   end;
 
@@ -206,8 +206,10 @@ begin
   PutRaw(AValue);
 end;
 
-procedure TSshWriter.PutStringText(const AText: string); inline;
+procedure TSshWriter.PutStringText(const AText: string);
 begin
+  { non-inline per design-conventions §2 red line — PChar string internal Move feeds untyped var param;
+    inlined constant string prop would mis-compile (valgrind+asm proven, tls13 lane); single Ensure+Move via PutRaw zero-copy }
   if (Length(AText) > 0) and (not UTF8IsValid(PByte(PChar(AText)), SizeUInt(Length(AText)))) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
   PutUInt32(UInt32(Length(AText)));
@@ -241,24 +243,55 @@ end;
 procedure TSshWriter.PutNameList(const ANames: array of string);
 var
   I: Integer;
-  LArr: TStringArray;
-  LJoined: string;
+  LTotal: SizeUInt;
+  LLen: SizeUInt;
 begin
   if Length(ANames) = 0 then
   begin
     PutStringText('');
     Exit;
   end;
-  { single source: comma join via text.strings.StringsJoin, UTF-8 via PutStringText }
-  SetLength(LArr, Length(ANames));
+  { perf: zero-temp comma join single source — no TStringArray/StringsJoin interim heap;
+    single PutUInt32 + single Ensure + Move-per-name zero-copy, KEXINIT 10 name-list handshake zero churn
+    single source: FBuf geometric grow via BytesEnsureCapacity (BYTES_BUILDER_MIN_GROW=64, 2x), Move zero-copy
+    non-inline per design-conventions §2 red lines: Move with FBuf[FLen]/AStr[1] untyped sink + loop body avoids I-Cache bloat
+    stability: overflow/packet-limit guarded by Ensure; resource-free (stack record, try-finally at callsite) }
+  LTotal := 0;
   for I := 0 to High(ANames) do
-    LArr[I] := ANames[I];
-  LJoined := StringsJoin(LArr, ',');
-  PutStringText(LJoined);
+  begin
+    LLen := SizeUInt(Length(ANames[I]));
+    if LTotal > High(SizeUInt) - LLen then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: name-list too large');
+    Inc(LTotal, LLen);
+    if I > 0 then
+    begin
+      if LTotal = High(SizeUInt) then
+        raise ESSHError.Create(sekProtocol, 'ssh buffer: name-list too large');
+      Inc(LTotal);
+    end;
+  end;
+  PutUInt32(UInt32(LTotal));
+  Ensure(LTotal);
+  for I := 0 to High(ANames) do
+  begin
+    if I > 0 then
+    begin
+      FBuf[FLen] := Byte(',');
+      Inc(FLen);
+    end;
+    LLen := SizeUInt(Length(ANames[I]));
+    if LLen > 0 then
+    begin
+      Move(ANames[I][1], FBuf[FLen], LLen);
+      Inc(FLen, LLen);
+    end;
+  end;
 end;
 
-procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt); inline;
+procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
 begin
+  { perf: non-inline per design-conventions §2 red line 1 — Move dest FBuf[FLen] indexed feeds untyped var param;
+    inlined constant string prop would mis-compile (valgrind+asm proven, tls13 lane). Single Ensure+Move zero-copy, amortized O(1) }
   if (ALen = 0) or (APtr = nil) then
     Exit;
   Ensure(ALen);

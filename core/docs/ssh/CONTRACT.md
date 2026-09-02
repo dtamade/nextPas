@@ -4,7 +4,7 @@
 **层级**: L2（与 `tls` 同层：面向字节流的协议实现；仅依赖 L0–L1 及 `crypto`/`hash`/`net` 已文档化 owner）
 **Owner**: `codex/core-ssh` / ssh lane（`.worktrees/ssh`）
 **最后更新**: 2026-09-02
-**版本**: 1.9
+**版本**: 1.10
 **权威性**: 本文件为 ssh 模块 SSOT。以本 CONTRACT 为准；`README.md` 为入口概览，`goal-tree.md` 与 `ROADMAP_FINAL.md` 为阶段证据。业务以 CONTRACT 为准，缺能力先反哺 owner。
 
 ---
@@ -42,7 +42,7 @@
 | `nextpas.core.ssh.agent.pas` | ssh-agent 协议客户端（Unix socket 长度前缀帧，经 `intf+net.ffi` 注入） | impl |
 | `nextpas.core.ssh.channel.pas` | 连接协议：单通道引擎 `TSshChannel` + `TChannelStream` | impl |
 | `nextpas.core.ssh.channel.async.pas` | 异步通道 `TAsyncExecRunner` + `TAsyncSftpChannel` 复用窗口 | impl |
-| `nextpas.core.ssh.window.pas` | 通道窗口兼容门面（纯 re-export `nextpas.core.flow.window.TFlowWindow`，`SSH_WINDOW_LOW_WATER_DIVISOR` alias，零堆 `inline`，`bytes.ops` 单源由 flow 侧保证） | 门面（薄别名） |
+| `nextpas.core.ssh.window.pas` | 通道窗口兼容门面（`TChannelWindow = TFlowWindow` 零成本 alias，直连 `flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR=2` 单源，已收敛二跳 `flow.window` 间接，零堆 `inline`，`bytes.ops` 单源由 flow 侧保证） | 门面（薄别名·已收敛） |
 | `nextpas.core.flow.window.pas` | 通用流控窗口 `TFlowWindow`（L1，零堆 `inline` `Init/Consume/Grant/SliceSize/CanSend/DidSend`，`FLOW_WINDOW_LOW_WATER_DIVISOR=2` 半水位回补，`ssh.channel/channel.async/proxyjump.async` + `http.h2`/`quic` 复用） | L1 impl（单源） |
 | `nextpas.core.ssh.rekey.pas` | Rekey 策略 `TSshRekeyPolicy`（`TInstant` 单调时钟） | impl |
 | `nextpas.core.ssh.keepalive.pas` | KeepAlive 策略 `TKeepAlivePolicy`（`TInstant` 单调时钟） | impl |
@@ -258,7 +258,7 @@ end;
 
 ## 7. 依赖与分层纪律
 
-- **L2 约束**：`nextpas.core.ssh` 为 L2 协议模块，与 `tls` 同层，仅依赖 L0–L1（`base/errors/platform/mem/bytes/text/collections/sync/async/time`）及文档化 L2 `crypto/hash/compress/net` owner；不依赖 L3（`http/websocket/tui/config/app`），同层无环。
+- **L2 约束**：`nextpas.core.ssh` 为 L2 协议模块，与 `tls` 同层，仅依赖 L0–L1（`base/errors/platform/mem/bytes/text/collections/sync/async/time`）及文档化 L2 `crypto/hash/compress/net` owner，**第二 L2 缝 `net.maintenance` 豁免**（`ssh.rekey/keepalive(.scheduler)` 已抽离为 `net.maintenance.rekey/keepalive/scheduler` L1/L2，同 owner `net` 薄门面 alias，按 `design-conventions §3` 同层单向单缝隙+module-registry 豁免，`grep -R 'nextpas.core.net.maintenance' core/src/nextpas.core.ssh*` 仅 `ssh.rekey/keepalive*` 薄门面命中，`transport.core → net.maintenance.rekey` 单源复用，无新增直连）；不依赖 L3（`http/websocket/tui/config/app`），同层无环。
 - **四件套**：`base ← intf/ffi ← 实现 ← 门面`（见 §1.1）；无独立 `intf/ffi` 的实现直接依赖 `base` 与宿主 FFI，不机械创建空文件。
 - **单源复用**：
   - `bytes.ops` 单源：`Equal/Compare/IndexOf/Fill/Reverse/Concat/Clone/CopySlice` 全部经 `nextpas.core.bytes.ops`，门面 `Bytes*` 便捷面 `inline` 转发，不复制逻辑（`StripLeadingZeroView/IsZeroBytes/CompareUnsigned` 单源）。
@@ -267,6 +267,7 @@ end;
   - `time` 单源：`TInstant/TDuration` 单调时钟经 `nextpas.core.time.base`，`rekey/keepalive` 均复用，先反哺 `core.time` 再消费（反哺证据：`time.GetTickCount64/TInstant`）。
 - **FFI 边界**：
   - `nextpas.core.ssh.net.ffi` 为唯一拉取 `nextpas.core.net` 的单元（同步 `ISshDialer/ISshAgentDialer` + 异步 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)/SshAsyncTcpStreamAdopt` 经 `IAsyncTcpStream` `inline` 零拷贝注入；`bytes.ops` 单源由外层 `Move` 保证，`try-finally` 释放不丢；`transport.async/session.async/proxyjump.async` 零直连 `net.async.tcp/dial`，L2 单缝隙统一；同层单向经单缝隙允许，见设计规范 §3）。
+  - `net.maintenance → ssh.rekey/keepalive(.scheduler)` 为第二 L2 缝豁免（同 owner `net` 薄门面 alias，L1 策略 `rekey/keepalive` + L2 调度 `scheduler`，`TInstant` 单调时钟，`record` 全 `inline` 零堆，按 `design-conventions §3` 同层单向经单缝隙+registry 豁免；`grep -R 'nextpas.core.net.maintenance' core/src/nextpas.core.ssh*` 仅 `ssh.rekey/keepalive*` 薄门面命中，`transport.core → net.maintenance.rekey` 单源复用，无新增直连）。
   - `compress → compress.zlib.ffi` 唯一 zlib 入口（`grep` 已验证零直连 `zlib/paszlib`）。
 - **零 RTL**：`core/src/nextpas.core.ssh*.pas` 禁止 `uses SysUtils/Classes/Windows/BaseUnix`（`tests` 除外）；缺能力先反哺 owner（如 `time` 单调时钟、`text.conv` 转换），不堆 workaround。
 - **双编译器**：`nextpas.core.ssh` 为唯一实现层，不为 FPC 包装 `TStream/SysUtils` 兼容层；`units/<target>/` stub 仅名称桥接，方向为最终消除对 FPC 单元名的引用。
@@ -288,6 +289,7 @@ end;
 | 加密/哈希 | `nextpas.core.crypto/hash` | 全部经 owner，不自带 AES/ChaCha/SHA256 实现 |
 | 压缩 | `nextpas.core.compress.zlib.ffi` | 唯一入口，不直连 `zlib` |
 | 网络 | `nextpas.core.net` | 经 `net.ffi+intf` 单缝隙注入（`IAsyncTcpStream` re-export + `inline` 转发，`transport.async+session.async` 零直连）；`AsyncTcpDial(RFC8305)` 同缝隙复用 |
+| 连接维护 | `nextpas.core.net.maintenance` | 第二 L2 缝豁免：`ssh.rekey/keepalive(.scheduler)` 薄门面 alias 至 `net.maintenance.rekey/keepalive/scheduler`（L1 策略+ L2 调度，`TInstant` 单调时钟，`inline` 零堆），同 owner `net`，按 `design-conventions §3` 单向单缝隙+registry 豁免；新代码应直接 `uses nextpas.core.net.maintenance` |
 | 平台 | `nextpas.core.platform` | 禁止直接使用 `Windows/BaseUnix` |
 
 ### 8.2 奢华可抽取边界（formal）
@@ -298,7 +300,7 @@ end;
 |--------|------|------|--------|------|
 | `TSshRekeyPolicy` | **已抽取** (`rekey.pas`) | `record` + `TInstant` 单调时钟，`Init/Reset/Account/ShouldRekey(bool)` | `transport / transport.async` 单源；可复用于 `TLS/QUIC` 长连接 | S24 `base←rekey←transport(+.async)` 零 `SysUtils` |
 | `TKeepAlivePolicy` | **已抽取** (`keepalive.pas`) | `record` + `TInstant`，`Init/Reset/ShouldSend` | `session(+.async)` 心跳；可复用于 `TLS/QUIC` KeepAlive | S25 `SendKeepAlive/AsyncSendKeepAlive` 为 `SSH_MSG_IGNORE` |
-| `TChannelWindow` | **已抽取·ssh 兼容** (`ssh.window.pas` 薄门面 re-export `flow.window.TFlowWindow`，`SSH_WINDOW_LOW_WATER_DIVISOR` alias) | `TFlowWindow` 单源（`flow.window` record + `FLOW_WINDOW_LOW_WATER_DIVISOR=2`，`inline` 零堆），`ssh.window` 纯 alias 零拷贝 | `channel / channel.async / sftp.async / proxyjump.async`（ssh 内）+ `flow.window` L1 单源 | S15 flow.window 抽离：`TFlowWindow` L1 零堆 `inline`，`ssh.window` 薄门面兼容，`bytes.ops` 单源 |
+| `TChannelWindow` | **已抽取·ssh 兼容·已收敛** (`ssh.window.pas` 薄门面 `TChannelWindow = TFlowWindow` 零成本 alias，直连 `flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR=2` 单源，已收敛 `flow.window` 二跳间接) | `TFlowWindow` 单源（`flow.window` record + `FLOW_WINDOW_LOW_WATER_DIVISOR=2`，`inline` 零堆），`ssh.window` 零拷贝 alias | `channel / channel.async / sftp.async / proxyjump.async`（ssh 内）+ `flow.window` L1 单源 | S15 flow.window 抽离 + S15收敛：`TFlowWindow` L1 零堆 `inline`，`ssh.window` 直连 base 单源、零堆 `inline` `bytes.ops` 单源 |
 | `TFlowWindow` 通用 | **已抽取** (`flow.window.pas` L1，`flow.window.base` 常量) | `record` + `FLOW_WINDOW_LOW_WATER_DIVISOR=2`，`Init/Consume/Grant/SliceSize/CanSend/DidSend` 全 `inline` 零堆，半水位回补，`bytes.ops` 单源（外层 Move） | `ssh.channel/channel.async/proxyjump.async/sftp.async` + `http.h2`/`quic` 预留复用（L1 单源，跨协议 ≥2 实证后晋升通用宣称） | S15 P1-1：抽 `ssh.window.TChannelWindow` 为 `nextpas.core.flow.window` L1，`ssh.window` 薄别名兼容，`inline` 零拷贝，`grep TChannelWindow` 仅 flow.window 真源 + 兼容门面 |
 | `KnownHosts` 协议帧 | **已回归** (`hostkey` 单源) | `TSshKnownHosts` 单源于 `hostkey`，薄别名 `knownhosts.pas` 已删除，零额外堆分配，`bytes.ops/TConstantTime` 单源，`hostkey` `inline` 零拷贝 Move | 复用于 `core.net` 隧道主机校验 | S15 P3-2 回归：薄别名删除，`hostkey` 归一，复用 `bytes.ops` 单源 |
 | `Agent` 协议帧 | **已抽取** (`agent.pas` 已独立) | `TSshAgentClient` 4B BE 长度帧 + `List(11→12)/Sign(13→14)` + `SshAgentKeyBlobToAlgName/Flags` | 复用于 `core.net` 隧道 agent 转发 | S14→S27′ 已独立，Unix socket 缝隙注入，零直连 `net` |
@@ -363,7 +365,7 @@ make hygiene && git diff --check
 
 - `grep -R 'SysUtils' core/src/nextpas.core.ssh*`：`uses` 零命中（注释提及除外）。
 - `grep -R 'zlib|paszlib' core/src/nextpas.core.ssh*`：仅 `compress.pas → compress.zlib.ffi`。
-- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：`net.ffi` 为唯一 `net` 拉取缝隙（`transport.async+session.async+proxyjump.async` 均 0 命中 `net.async.tcp/dial`，经 `ssh.net.ffi` 单缝隙复用 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)` `inline` 零拷贝，`bytes.ops` 单源 `Move`，`try-finally` 释放不丢；`grep -R 'nextpas.core.net.base|net.intf|net.async.tcp|net.async.dial' core/src/nextpas.core.ssh.net.ffi.pas` 为缝隙唯一命中，`transport.async/session.async/proxyjump.async` 零直连，L2 单缝隙已闭合）。
+- `grep -R 'nextpas.core.net' core/src/nextpas.core.ssh*`：`net.ffi` 为唯一 `net` 拉取缝隙（`transport.async+session.async+proxyjump.async` 均 0 命中 `net.async.tcp/dial`，经 `ssh.net.ffi` 单缝隙复用 `IAsyncTcpStream/SshAsyncTcpDial(RFC8305)` `inline` 零拷贝，`bytes.ops` 单源 `Move`，`try-finally` 释放不丢；`grep -R 'nextpas.core.net.base|net.intf|net.async.tcp|net.async.dial' core/src/nextpas.core.ssh.net.ffi.pas` 为缝隙唯一命中，`transport.async/session.async/proxyjump.async` 零直连，L2 单缝隙已闭合）+ **第二 L2 缝 `net.maintenance` 豁免**（`grep -R 'nextpas.core.net.maintenance' core/src/nextpas.core.ssh*` 仅 `ssh.rekey/keepalive(.scheduler)` 薄门面 alias 命中，`transport.core → net.maintenance.rekey` 单源，同 owner `net`，按 `design-conventions §3` 注册豁免）。
 - `grep -R 'bytes.ops' core/src/nextpas.core.ssh.buffer`：单源复用。
 - 产物卫生：`scripts/build-hygiene-check.sh` 拦截 `.o/.ppu/.a/.so/dylib/link*.res` 落源码树；`build/` 与 `.nextpas/` 为唯一产物区。
 
@@ -382,3 +384,4 @@ make hygiene && git diff --check
 | 2026-09-02 | 1.7 | 契约匠心修复：显式 Tier-1/Tier-2 门禁分级（§5/§9：Tier-1 15 门 `heaptrc 0` 全封闭，Tier-2 bench 2 门 `HEAPTRC_GATE=0` 计时保真豁免，`bench_common.mk -O3 -Xs` 无 heaptrc，泄漏由 Tier-1 覆盖，消除全门与豁免并存矛盾）；流控/源数叙事收敛至高级感稳定态（`flow.window` L1 单源+`ssh.window` 薄门面，源数 46 核心源稳定，消除 48→47→46 与晋升/回退/删除反复横跳，`inline` 零堆 `bytes.ops` 单源与资源释放不丢证据保留，业务以 CONTRACT 为准） | ssh lane |
 | 2026-09-02 | 1.8 | 匠心修复：消除 `transport.async` 第二 L2 缝隙（`nextpas.core.net.async.tcp` 直连），`IAsyncTcpStream/SshAsyncTcpDial(RFC8305)` 经 `ssh.net.ffi` 单缝隙 re-export + `inline` 零拷贝薄转发（`FWriteBuf` 保活至回调，外层 `Move` 单源复用 `bytes.ops`），`transport.async` 零直连；`try-finally` 释放不丢，L2 单缝隙统一，业务以 CONTRACT 为准、缺能力先反哺 owner（`ssh.net.ffi` 异步能力） | ssh lane |
 | 2026-09-02 | 1.9 | 匠心修复：闭合 `session.async` 第二 L2 缝隙（`nextpas.core.net.async.tcp/dial` 直连），`IAsyncTcpStream/TAsyncTcpDialOptions/SshAsyncTcpDial(RFC8305)+SshDefaultAsyncDialOptions` 经 `ssh.net.ffi` 单缝隙 re-export + `inline` 薄转发（`SshAsyncTcpDial` 不拷贝缓冲区，外层 `Move` 单源复用 `bytes.ops`，`FWriteBuf` 保活至回调），`transport.async+session.async` 零直连 `net.async.tcp/dial`；`try-finally/FreeAndNil` 释放不丢，L2 单缝隙统一，业务以 CONTRACT 为准、缺能力先反哺 owner | ssh lane |
+| 2026-09-02 | 1.10 | 匠心修复：`buffer` inline 禁触收口（`PutRaw(PByte,SizeUInt)` 已去 `inline` 抽 thin helper、`PutStringText(PChar/Move)` 去 `inline`，`PutNameList` 单次 `Ensure+Move-per-name` 零间歇堆，`Move(FBuf[FLen]/AStr[1])` untyped 禁 inline 闭合）；`window` 别名漂移收敛（`TChannelWindow/SSH_WINDOW_LOW_WATER_DIVISOR` 直连 `flow.window.base` 单源，已收敛二跳间接，`deprecated` 标记提示新代码直连 `flow.window`）；`CONTRACT §7/§8/§9` 补 `net.maintenance` 第二 L2 缝豁免（`ssh.rekey/keepalive(.scheduler)→net.maintenance` 同 owner 薄门面，`design-conventions §3` 注册豁免，`grep` 仅薄门面命中，`transport.core → net.maintenance.rekey` 单源，无新增直连） | ssh lane |

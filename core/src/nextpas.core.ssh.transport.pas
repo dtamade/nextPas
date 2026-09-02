@@ -54,6 +54,7 @@ type
     FMyKexInitPayload: TBytes;
     FReadAhead: TBytes;
     FReadAheadPos: SizeUInt;
+    FReadBuf: TBytes;
     procedure ApplyDeadlineToStream;
     procedure CheckRekeyOrDisconnect;
     procedure SendRaw(const ABytes: TBytes);
@@ -145,6 +146,9 @@ begin
     FillChar(FReadAhead[0], SizeUInt(Length(FReadAhead)), 0);
   SetLength(FReadAhead, 0);
   FReadAheadPos := 0;
+  if Length(FReadBuf) > 0 then
+    FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
+  SetLength(FReadBuf, 0);
   FCore.Free;
   inherited Destroy;
 end;
@@ -160,6 +164,9 @@ begin
     FillChar(FReadAhead[0], SizeUInt(Length(FReadAhead)), 0);
   SetLength(FReadAhead, 0);
   FReadAheadPos := 0;
+  if Length(FReadBuf) > 0 then
+    FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
+  SetLength(FReadBuf, 0);
 end;
 
 procedure TSshClientTransport.SetOverallDeadline(const ADeadline: TDeadline);
@@ -435,35 +442,36 @@ end;
 
 function TSshClientTransport.ReadPacket: TBytes;
 var
-  LHeader: TBytes;
-  LPacket: TBytes;
   LBodyLen: UInt32;
   LTrailerSize: SizeUInt;
+  LTotal: SizeUInt;
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
   try
-    SetLength(LHeader, RECV_HEADER_SIZE);
-    ReadFull(LHeader, 0, RECV_HEADER_SIZE);
-    LBodyLen := FCore.BodyLengthFromHeader(LHeader);
+    // FReadBuf 复用零拷贝：头直接读入复用缓冲，无 LHeader/LPacket 双分配与 Move；bytes.ops 单源几何扩容
+    BytesEnsureCapacity(FReadBuf, RECV_HEADER_SIZE);
+    SetLength(FReadBuf, RECV_HEADER_SIZE);
+    ReadFull(FReadBuf, 0, RECV_HEADER_SIZE);
+    LBodyLen := FCore.BodyLengthFromHeader(FReadBuf);
   if SshTransportDump <> nil then
   begin
     SshTransportDump('rseq', UInt32Bytes(FCore.RecvSeq));
-    SshTransportDump('rhdr', LHeader);
+    SshTransportDump('rhdr', Copy(FReadBuf, 0, RECV_HEADER_SIZE));
     SshTransportDump('rlen', UInt32Bytes(LBodyLen));
   end;
   if (LBodyLen < 1) or (LBodyLen > SSH_MAX_RECEIVE_PACKET) then
     raise ESSHError.Create(sekProtocol,
       'ssh transport: unreasonable packet length ' + nextpas.core.text.conv.IntToStr(Int64(LBodyLen)));
-    // single alloc LPacket (4+Trailer) zero-copy, bytes.ops single source; eliminates LTrailer double alloc + double Move (400B+ hot path ~50% heap)
     LTrailerSize := SizeUInt(FCore.TrailerSize(LBodyLen));
-    SetLength(LPacket, 4 + LTrailerSize);
-    Move(LHeader[0], LPacket[0], 4);
+    LTotal := 4 + LTrailerSize;
+    BytesEnsureCapacity(FReadBuf, LTotal);
+    SetLength(FReadBuf, LTotal);
     if LTrailerSize > 0 then
-      ReadFull(LPacket, 4, LTrailerSize);
-    Result := FCore.DecodePacket(LPacket);
-    if Length(LPacket) > 0 then
-      FillChar(LPacket[0], SizeUInt(Length(LPacket)), 0);
+      ReadFull(FReadBuf, 4, LTrailerSize);
+    Result := FCore.DecodePacket(FReadBuf);
+    if Length(FReadBuf) > 0 then
+      FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
   except
     on E: ESSHError do
     begin

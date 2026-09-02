@@ -1,7 +1,7 @@
 unit nextpas.core.ssh.cipher.gcm;
 
 {** nextpas.core.ssh.cipher.gcm - aes*-gcm@openssh.com。
- *  单源 bytes.ops / bytes.binary；FWriteBuf move 零拷贝。 *}
+ *  单源 bytes.ops / bytes.binary；FWriteBuf move 零拷贝；栈上 12B nonce 零堆分配。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -26,18 +26,20 @@ uses
   nextpas.core.ssh.cipher.base,
   nextpas.core.ssh.errors;
 
-function GcmNonce(const ABaseIV: TBytes; ACounter: UInt64): TBytes; inline;
+type
+  TGcmNonceBuf = array[0..11] of Byte;
+
+procedure FillGcmNonce(var ANonce: TGcmNonceBuf; const ABaseIV: TGcmNonceBuf; ACounter: UInt64); inline;
 begin
-  Result := nil;
-  Result := Copy(ABaseIV, 0, 12);
-  WriteUInt32BE(PByte(@Result[8]), UInt32(ACounter));
+  Move(ABaseIV[0], ANonce[0], 12);
+  WriteUInt32BE(PByte(@ANonce[8]), UInt32(ACounter));
 end;
 
 type
   TSshGcmSender = class(TInterfacedObject, ISshPacketSender)
   private
     FKey: TBytes;
-    FBaseIV: TBytes;
+    FBaseIV: TGcmNonceBuf;
     FCounter: UInt64;
     FWriteBuf: TBytes;
   public
@@ -52,7 +54,7 @@ type
   TSshGcmReceiver = class(TInterfacedObject, ISshPacketReceiver)
   private
     FKey: TBytes;
-    FBaseIV: TBytes;
+    FBaseIV: TGcmNonceBuf;
     FCounter: UInt64;
   public
     constructor Create(const AKey, AIV: TBytes);
@@ -67,14 +69,14 @@ begin
   inherited Create;
   RequireLen(AIV, 12, 'gcm iv');
   FKey := Copy(AKey, 0, Length(AKey));
-  FBaseIV := Copy(AIV, 0, 12);
+  Move(AIV[0], FBaseIV[0], 12);
   FCounter := 1;
 end;
 
 destructor TSshGcmSender.Destroy;
 begin
   SecureZeroBytes(FKey);
-  SecureZeroBytes(FBaseIV);
+  SecureZeroMemory(@FBaseIV[0], SizeOf(FBaseIV));
   SecureZeroBytes(FWriteBuf);
   inherited;
 end;
@@ -91,7 +93,7 @@ end;
 
 function TSshGcmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce: TBytes;
+  LNonce: TGcmNonceBuf;
   LBodyLen: SizeUInt;
   LPlainPtr, LDestPtr: PByte;
   LOk: Boolean;
@@ -103,7 +105,7 @@ begin
   LBodyLen := SizeUInt(Length(ABodyPlain));
   BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + GCM_TAG);
   SetLength(FWriteBuf, 4 + LBodyLen + GCM_TAG);
-  LNonce := GcmNonce(FBaseIV, FCounter);
+  FillGcmNonce(LNonce, FBaseIV, FCounter);
   try
     PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
     if LBodyLen > 0 then
@@ -134,13 +136,13 @@ begin
     Result := FWriteBuf;
     FWriteBuf := nil; // move ownership
   finally
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 
 function TSshGcmSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
 var
-  LNonce: TBytes;
+  LNonce: TGcmNonceBuf;
   LPayloadLen, LBodyLen: SizeUInt;
   LOk: Boolean;
 begin
@@ -159,7 +161,7 @@ begin
   if APadLen > 0 then
     if not SecureRandomBytes(@FWriteBuf[5 + LPayloadLen], Integer(APadLen)) then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
-  LNonce := GcmNonce(FBaseIV, FCounter);
+  FillGcmNonce(LNonce, FBaseIV, FCounter);
   try
     LOk := False;
     if IsAESNIAvailable then
@@ -184,7 +186,7 @@ begin
     Result := FWriteBuf;
     FWriteBuf := nil;
   finally
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 
@@ -193,14 +195,14 @@ begin
   inherited Create;
   RequireLen(AIV, 12, 'gcm iv');
   FKey := Copy(AKey, 0, Length(AKey));
-  FBaseIV := Copy(AIV, 0, 12);
+  Move(AIV[0], FBaseIV[0], 12);
   FCounter := 1;
 end;
 
 destructor TSshGcmReceiver.Destroy;
 begin
   SecureZeroBytes(FKey);
-  SecureZeroBytes(FBaseIV);
+  SecureZeroMemory(@FBaseIV[0], SizeOf(FBaseIV));
   inherited;
 end;
 
@@ -216,7 +218,7 @@ end;
 
 function TSshGcmReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LNonce: TBytes;
+  LNonce: TGcmNonceBuf;
   LWireLen, LCtLen: SizeUInt;
   LOk: Boolean;
   LCtPtr, LTagPtr, LAadPtr, LDestPtr: PByte;
@@ -229,7 +231,7 @@ begin
   if FCounter >= GCM_SEQ_THRESHOLD then
     raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm counter exhausted');
   LCtLen := LWireLen - 4 - GCM_TAG;
-  LNonce := GcmNonce(FBaseIV, FCounter);
+  FillGcmNonce(LNonce, FBaseIV, FCounter);
   try
     SetLength(Result, LCtLen);
     LOk := False;
@@ -271,7 +273,7 @@ begin
       raise ESSHError.Create(sekCrypto, 'ssh cipher: gcm auth failed');
     Inc(FCounter);
   finally
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 

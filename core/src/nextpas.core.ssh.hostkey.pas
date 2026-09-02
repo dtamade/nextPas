@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text.view,
   nextpas.core.text.strings,
   nextpas.core.text.conv,
   nextpas.core.text.utils,
@@ -77,7 +78,8 @@ type
     procedure LoadFromFile(const APath: string); overload;
     procedure LoadFromFile(const APath: string; const AReader: IHostKeyFileReader); overload;
     procedure LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
-    procedure AddLine(const ALine: string);
+    procedure AddLine(const ALine: string); overload;
+    procedure AddLine(const ALine: TStringView); overload;
     function Count: Integer;
 
     { 返回匹配该主机的全部密钥 blob（可能为空数组）}
@@ -379,49 +381,69 @@ end;
 procedure TSshKnownHosts.LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
 var
   LContent: string;
-  I, LStart: Integer;
+  LView, LLine: TStringView;
+  LStart, I: SizeUInt;
 begin
   if (AReader = nil) or not AReader.ReadAllText(APath, LContent) then
     Exit;                       { 文件不存在/不可读：保持当前集合 }
-  LStart := 1;
-  for I := 1 to Length(LContent) + 1 do
+  // perf: TByteSpan/TStringView 零拷贝视图遍 LContent，O(n) 单次扫描零中间分配；bytes.ops 单源 Move 仅存最终 AddEntry
+  // stability: LContent 生命周期覆盖全部 view，切片不逃逸，AddLine 内 ToString 仅对有效条目两份拷贝
+  LView := TStringView.FromStr(LContent);
+  LStart := 0;
+  for I := 0 to LView.Len do
   begin
-    if (I > Length(LContent)) or (LContent[I] = #10) then
+    if (I = LView.Len) or (LView.Data[I] = #10) then
     begin
-      AddLine(Copy(LContent, LStart, I - LStart));
+      LLine := LView.Slice(LStart, I - LStart);
+      // CRLF 尾 #13 由 AddLine.Trim 单源 IsWhitespace 零拷贝剔除
+      AddLine(LLine);
       LStart := I + 1;
     end;
   end;
 end;
 
-procedure TSshKnownHosts.AddLine(const ALine: string);
+procedure TSshKnownHosts.AddLine(const ALine: string); inline;
+begin
+  // perf: string 薄转发至 view 单源，零拷贝 Trim/切片，inline 消除调用开销
+  AddLine(TStringView.FromStr(ALine));
+end;
+
+procedure TSshKnownHosts.AddLine(const ALine: TStringView);
 var
-  LTrimmed: string;
-  LRaw, LParts: TStringArray;
-  I, LKept: Integer;
+  LView: TStringView;
+  LFields: array[0..2] of TStringView;
+  LCount: Integer;
+  LPos, LStart: SizeUInt;
+  LPattern, LB64: string;
   LBlob: TBytes;
 begin
-  LTrimmed := Trim(ALine);
-  if (LTrimmed = '') or (LTrimmed[1] = '#') then
+  // perf: 单源 bytes.ops/TStringView 零拷贝 Trim+Slice；仅有效条目触发两份 ToString（pattern+blob b64）
+  LView := ALine.Trim;
+  if LView.IsEmpty then
     Exit;
-  { @cert-authority / @revoked 标记行：当前不支持 CA 语义，跳过 }
-  if LTrimmed[1] = '@' then
+  if (LView.Data[0] = '#') or (LView.Data[0] = '@') then
+    Exit; { # 注释 / @cert-authority/@revoked：当前不支持 CA 语义，跳过 }
+  LCount := 0;
+  LPos := 0;
+  while (LPos < LView.Len) and (LCount < 3) do
+  begin
+    while (LPos < LView.Len) and (LView.Data[LPos] = ' ') do
+      Inc(LPos);
+    if LPos >= LView.Len then
+      Break;
+    LStart := LPos;
+    while (LPos < LView.Len) and (LView.Data[LPos] <> ' ') do
+      Inc(LPos);
+    LFields[LCount] := LView.Slice(LStart, LPos - LStart);
+    Inc(LCount);
+  end;
+  if LCount < 3 then
     Exit;
-  { 手工剔除空字段：known_hosts 允许连续空格分隔 }
-  LRaw := StringsSplit(LTrimmed, ' ', True);
-  SetLength(LParts, Length(LRaw));
-  LKept := 0;
-  for I := 0 to High(LRaw) do
-    if LRaw[I] <> '' then
-    begin
-      LParts[LKept] := LRaw[I];
-      Inc(LKept);
-    end;
-  if LKept < 3 then
-    Exit;
-  LBlob := Base64Decode(LParts[2]);
+  LPattern := LFields[0].ToString;
+  LB64 := LFields[2].ToString;
+  LBlob := Base64Decode(LB64);
   if Length(LBlob) > 0 then
-    AddEntry(LParts[0], LBlob);
+    AddEntry(LPattern, LBlob);
 end;
 
 function TSshKnownHosts.Count: Integer;

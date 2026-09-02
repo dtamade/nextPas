@@ -30,7 +30,7 @@ if W.ShouldReplenish then Need := W.ReplenishAmount;
 nextpas.core.flow.window.base.pas ← 常量 `FLOW_WINDOW_LOW_WATER_DIVISOR`
 nextpas.core.flow.window.pas      ← `TFlowWindow` record 全 `inline` 零堆实现
 nextpas.core.flow.pas             ← 门面纯 re-export
-nextpas.core.ssh.window.pas       ← ssh 兼容门面（`TChannelWindow = TFlowWindow` alias，零成本）
+nextpas.core.ssh.window.pas       ← ssh 兼容门面（`TChannelWindow = TFlowWindow` 零成本 alias，直连 `flow.window.base` 常量已收敛二跳间接，`bytes.ops` 单源）
 ```
 
 ## 性能

@@ -6,14 +6,14 @@ unit nextpas.core.ssh.sftp.base;
  * 供 intf/实现子模块共同依赖，不触通道/连接逻辑。
  * 类型化集合：SFTP: TSftpConstants 单源 record const 聚合 30+ 协议常量，
  * 逐项别名收口为 SFTP 单缝隙，门面仅 re-export SFTP。
- * Base 纯度：零 nextpas.core.text.conv 直连（SftpStatusName 经 SysUtils.IntToStr）。 *}
+ * Base 纯度：SftpStatusName 经 nextpas.core.text.conv.IntToStr 单源（零 SysUtils 直连），inline 薄转发。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 type
   TSftpPacketTypes = record
@@ -188,7 +188,7 @@ begin
     5: Result := 'bad-message';
     8: Result := 'op-unsupported';
   else
-    Result := 'status-' + SysUtils.IntToStr(Int64(ACode));
+    Result := 'status-' + nextpas.core.text.conv.IntToStr(Int64(ACode));
   end;
 end;
 

@@ -72,7 +72,7 @@ nextpas.core.ssh.rekey.pas           ← Rekey 策略（`TSshRekeyPolicy`，`TIn
 nextpas.core.ssh.keepalive.pas       ← KeepAlive 策略（`TKeepAlivePolicy`，`TInstant` 单调时钟，同步预留/异步 `TAsyncLoop.ScheduleMethod`，零 `SysUtils` 直连）
 nextpas.core.ssh.keepalive.scheduler.pas ← KeepAlive 调度器（`TKeepAliveScheduler`，`TAsyncLoop` 周期调度，复用于 TLS/QUIC，见 §8 已晋升）
 nextpas.core.flow.window.pas         ← 通用流控窗口 `TFlowWindow`（L1 零堆 `inline`，`FLOW_WINDOW_LOW_WATER_DIVISOR=2`，见 CONTRACT §8；`ssh.window` 为薄兼容门面 re-export）
-nextpas.core.ssh.window.pas          ← 通道窗口兼容门面（纯 re-export `flow.window.TFlowWindow` → `TChannelWindow`，`SSH_WINDOW_LOW_WATER_DIVISOR` alias，零堆 `inline`）
+nextpas.core.ssh.window.pas          ← 通道窗口兼容门面（`TChannelWindow = TFlowWindow` 零成本 alias，直连 `flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR=2` 已收敛二跳间接，零堆 `inline`）
 nextpas.core.ssh.buffer.pas          ← RFC 4251 wire 类型读写器（`Ensure/Need` 边界 + `SSH_MAX_RECEIVE_PACKET` 上限）
 nextpas.core.ssh.cipher.pas          ← 包加密编解码器（AEAD / CTR+ETM，`TAesCtrStream` record值语义跨包 `keystream` 持久，`bytes.ops.MemXor` 批量 + `SecureZero`）
 nextpas.core.ssh.transport.pas       ← 版本交换 + 二进制包协议状态机（阻塞，薄包装 `transport.core`）
