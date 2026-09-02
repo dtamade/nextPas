@@ -13,7 +13,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.mem.arena.local;
 
 const
   { 线格式常量（FORMAT.md） }
@@ -128,6 +129,24 @@ type
   EResPackTooLarge = class(EResPackError);
   EResPackDirSourceFailed = class(EResPackError);
 
+{ Dedup/overlap arena 单源底座：由 base 统一拥有，供 writer.layout 与 reader 共享，消除 reader→writer.layout 反向依赖
+  base←impl←facade 单向；BucketCountFor via bytes.ops.BytesNextCapacity inline 零拷贝，ResPackOverlapInit 单 slab
+  TLocalArena 零三堆 churn，(BucketCount+N)*SizeInt+N*Distinct 单块，try..finally ResPackDedupDone 稳定释放。 }
+type
+  PSizeInt = ^SizeInt;
+  TResPackDistinct = record Off: UInt64; Size: UInt64; end;
+  PResPackDistinct = ^TResPackDistinct;
+
+  TResPackDedupBuckets = record
+    const MIN = 256;
+    const MAX = 65536;
+    class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
+  end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+
 { LE 编解码 — 单源于 bytes.binary.Read/WriteUInt*LE (host-endian 无关), inline 零拷贝转发 }
 function RdU16LE(AData: PByte): Word; inline;
 function RdU32LE(AData: PByte): UInt32; inline;
@@ -162,6 +181,7 @@ procedure ResPackFreeBlob(var ABlob: TResPackBlob); inline;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
@@ -238,6 +258,85 @@ begin
   ABlob.Data := nil;
   ABlob.Size := 0;
   ABlob.Owned := False;
+end;
+
+{ Dedup/overlap arena 单源实现：base 统一拥有，writer.layout/reader 共享，bytes.ops.BytesNextCapacity 单源，TLocalArena 单 slab }
+
+class function TResPackDedupBuckets.BucketCountFor(const ANeeded: SizeUInt): SizeUInt; inline;
+var
+  Target: SizeUInt;
+begin
+  if ANeeded <= MIN then Exit(MIN);
+  if ANeeded >= MAX then Exit(MAX);
+  Target := ANeeded;
+  Result := BytesNextCapacity(MIN, Target);
+  if Result > MAX then Result := MAX;
+  if Result < MIN then Result := MIN;
+end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt);
+var
+  NeedArena: SizeUInt;
+  Target: SizeUInt;
+  I: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ABucketCount := 0;
+  if AN = 0 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then
+    Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedArena) then
+    raise EResPackTooLarge.Create('respack: dedup arena size overflow');
+  AArena := TLocalArena.Create(NeedArena);
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) then
+    raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
+  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
+  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+end;
+
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+var
+  NeedBuckets, NeedDistinct, Total: SizeUInt;
+  Target: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ADistinct := nil;
+  ABucketCount := 0;
+  if AN <= 1 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  if not TryMulSizeUInt(AN, SizeUInt(SizeOf(TResPackDistinct)), NeedDistinct) then
+    raise EResPackTooLarge.Create('respack: overlap distinct size overflow');
+  if not TryAddSizeUInt(NeedBuckets, NeedDistinct, Total) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  AArena := TLocalArena.Create(Total);
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  ADistinct := PResPackDistinct(AArena.Alloc(AN * SizeUInt(SizeOf(TResPackDistinct))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) or (ADistinct = nil) then
+    raise EResPackTooLarge.Create('respack: overlap arena alloc failed');
+  FillChar(ABucketsHead^, ABucketCount * SizeUInt(SizeOf(SizeInt)), $FF);
+  FillChar(ASlotNext^, AN * SizeUInt(SizeOf(SizeInt)), $FF);
+end;
+
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+begin
+  if AArena <> nil then
+  begin
+    AArena.Free;
+    AArena := nil;
+  end;
 end;
 
 { 十进制整数转字符串 — 单源于 L1 text.number.UIntToBuffer (DIGIT_PAIRS 批量),

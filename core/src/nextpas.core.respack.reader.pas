@@ -68,8 +68,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.mem.arena.local,
-  nextpas.core.respack.writer.layout;
+  nextpas.core.mem.arena.local;
 
 type
   TResPackEntries = array of TResPackEntry;
@@ -225,8 +224,8 @@ begin
 end;
 
 { Data overlap — O(n) hash, CONTRACT §6; distinct intervals monotonic.
-  单 slab TLocalArena via writer.layout ResPackOverlapInit 单源，零三堆分配(原 3×SetLength+FillChar 重复堆 churn)，
-  单次 (BucketCount+N)*SizeInt+N*Distinct 单块 inline 桶索引，try..finally ResPackDedupDone 稳定释放，bytes.ops 零拷贝。 }
+  单 slab TLocalArena via respack.base ResPackOverlapInit 单源（共享底座，消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向），
+  零三堆分配(原 3×SetLength+FillChar 重复堆 churn)，单次 (BucketCount+N)*SizeInt+N*Distinct 单块，try..finally ResPackDedupDone 稳定释放，bytes.ops 零拷贝。 }
 procedure CheckDataOverlapON(const ACachedPtr: PResPackEntry; const ACount: SizeUInt;
   const AStrTabEnd: UInt64);
 var
@@ -376,7 +375,7 @@ begin
   end;
 end;
 
-procedure GuardStep7Order(const ARes: TResPack; const ACachedPtr: PResPackEntry; const ACount: SizeUInt); inline;
+procedure GuardStep7Order(const ARes: TResPack; const ACachedPtr: PResPackEntry; const ACount: SizeUInt);
 var
   I: SizeUInt;
 begin

@@ -1,7 +1,9 @@
 unit nextpas.core.respack.dirsource;
 
 {** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。
-  4 职责承载：枚举/流式mmap/嵌入管线/extract；约 730 行已以通用 Walk 单源（generic TWalkCtx<T> + EnsureWalkCapacity<T> + WalkPre 统一模板，inline 零拷贝）收口，近 800 指引候选拆分已评估，当前以单源模板化守阈，超限再抽子模块（CONTRACT 业务为准，缺能力反哺 owner）。 }
+  4 职责承载：枚举/流式mmap/嵌入管线/extract；约 780 行逼近 800 软阈，已以通用 Walk 单源（generic TWalkCtx<T> + EnsureWalkCapacity<T> + WalkPre 统一模板，inline 零拷贝）收口，
+  流式零双驻留：ResPackBuildFromDir/ResPackEmbedBuild 单次 Walk + ResPackBuildStreamSize 预取 Total 直写终态 Buf，消除 512MB 二次 GetMem+BytesCopy 大块 Move，峰值 ~1×+头（mmap 零堆拷贝 + writer.stream 两遍）。
+  门禁：本文件>800行强制拆分为 dirsource.walk / dirsource.embed / dirsource.extract 子模块（四件套门面纯转发，L0-L3 守阈，CONTRACT 业务为准，缺能力反哺 owner）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -493,38 +495,40 @@ end;
 function ResPackBuildFromDir(const ARoot: string;
   const AOpts: TResPackBuildOptions; const AInclude: TResPackIncludeFunc): TResPackBlob;
 var
-  SinkBuf: TBytes;
-  SinkLen: SizeUInt;
-  SinkCap: SizeUInt;
+  Total: UInt64;
+  Buf: PByte;
+  Off: SizeUInt;
   SinkProc: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单源复用：ResPackBuildStreamFromDir 管线 + BytesNextCapacity sink 收集，零重复 WalkEx/ResPackBuild 组装；
-    布局/头/槽间隙/数据/digest 全链路于 writer.builder/layout 单源，BytesCopy/BytesZero inline 零拷贝；
-    峰值 ~1×+头（mmap 零堆拷贝），接口锚点由 stream 内层 try..finally 释放不丢，sink 侧 BytesNextCapacity 指数扩容消 O(n²)。 }
-  SinkBuf := nil;
-  SinkLen := 0;
-  SinkCap := 0;
+  { 单源复用：ResPackBuildStreamSizeFromDir 预取 Total + 直接 GetMem 直写，消除 TBytes SinkBuf 二次大块 Move（512MB 省一次 Move），峰值 ~1×+头，BytesCopy inline 零拷贝，try..except 释放不丢 }
+  Total := ResPackBuildStreamSizeFromDir(ARoot, AOpts, AInclude);
+  if Total = 0 then Exit;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  GetMem(Buf, SizeUInt(Total));
+  Off := 0;
   SinkProc :=
     procedure(const AData: PByte; const ASize: SizeUInt)
     begin
       if ASize = 0 then Exit;
-      if SinkLen + ASize > SinkCap then
-      begin
-        SinkCap := BytesNextCapacity(SinkCap, SinkLen + ASize);
-        SetLength(SinkBuf, SinkCap);
-      end;
-      BytesCopy(@SinkBuf[SinkLen], AData, ASize);
-      Inc(SinkLen, ASize);
+      BytesCopy(Buf + Off, AData, ASize);
+      Inc(Off, ASize);
     end;
-  ResPackBuildStreamFromDir(ARoot, AOpts, SinkProc, AInclude);
-  if SinkLen = 0 then Exit;
-  GetMem(Result.Data, SinkLen);
-  Result.Size := SinkLen;
-  Result.Owned := True;
-  BytesCopy(Result.Data, @SinkBuf[0], SinkLen);
+  try
+    ResPackBuildStreamFromDir(ARoot, AOpts, SinkProc, AInclude);
+    if Off <> SizeUInt(Total) then
+      raise EResPackError.Create('respack: stream size mismatch');
+    Result.Data := Buf;
+    Result.Size := SizeUInt(Total);
+    Result.Owned := True;
+    Buf := nil;
+  except
+    if Buf <> nil then FreeMem(Buf);
+    raise;
+  end;
 end;
 
 function ResPackBuildStreamSizeFromDir(const ARoot: string;
@@ -745,39 +749,91 @@ begin
   end;
 end;
 
+function ResPackEmbedStreamSizeFromDir(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions): UInt64;
+var
+  Ctx: TEmbedStreamContext;
+  RootClean: string;
+  TmpEntries: TResPackInputArray;
+begin
+  if (AOpts.StripPrefix <> '') and (not StartsSlash(AOpts.StripPrefix)) then
+    raise EResPackError.Create('respack.embed: StripPrefix must be empty or ' +
+      'end with "/" ("' + AOpts.StripPrefix + '")');
+  if (AOpts.AddPrefix <> '') and (not StartsSlash(AOpts.AddPrefix)) then
+    raise EResPackError.Create('respack.embed: AddPrefix must be empty or ' +
+      'end with "/" ("' + AOpts.AddPrefix + '")');
+  CheckGlobList(AOpts.IncludeGlobs, 'include');
+  CheckGlobList(AOpts.ExcludeGlobs, 'exclude');
+  RootClean := ExcludeTrailingPathDelimiter(ASourceDir);
+  if (not Exists(RootClean)) or (not IsDir(RootClean)) then
+    raise EResPackDirSourceFailed.CreateCtx('opendir', ASourceDir, 'respack.dirsource: not a directory "'
+      + ASourceDir + '"');
+  Ctx.Root := RootClean;
+  Ctx.EmbedOpts := AOpts;
+  Ctx.Entries := nil;
+  Ctx.Maps := nil;
+  Ctx.Count := 0;
+  Ctx.Cap := 0;
+  Ctx.Total := 0;
+  Ctx.Failed := False;
+  Ctx.FailMsg := '';
+  try
+    WalkEx(RootClean, @WalkProcEmbedStream, @Ctx);
+    if Ctx.Failed then
+      raise EResPackDirSourceFailed.CreateCtx('walk', ASourceDir, 'respack.dirsource: ' + Ctx.FailMsg);
+    if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
+    begin
+      SetLength(Ctx.Entries, Ctx.Count);
+      SetLength(Ctx.Maps, Ctx.Count);
+    end;
+    if Ctx.Count = 0 then
+      raise EResPackError.Create('respack.embed: no entries matched after ' +
+        'filter/mapping (source "' + ASourceDir + '")');
+    TmpEntries := Ctx.Entries;
+    Result := ResPackBuildStreamSize(TmpEntries, Ctx.EmbedOpts.Build);
+  finally
+    SetLength(Ctx.Maps, 0);
+    SetLength(Ctx.Entries, 0);
+  end;
+end;
+
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 var
-  SinkBuf: TBytes;
-  SinkLen: SizeUInt;
-  SinkCap: SizeUInt;
+  Total: UInt64;
+  Buf: PByte;
+  Off: SizeUInt;
   SinkProc: TResPackWriteProc;
 begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 单源复用：委托 ResPackEmbedBuildStream 流式mmap 管线 + BytesNextCapacity/BytesCopy sink 收集；峰值 ~1×+头，接口锚点由 stream 内层 try..finally 释放不丢 }
-  SinkBuf := nil;
-  SinkLen := 0;
-  SinkCap := 0;
+  { 单源复用：ResPackEmbedStreamSizeFromDir 预取 Total + 直接 GetMem 直写，消除二次 Move，峰值 ~1×+头，BytesCopy inline 零拷贝 }
+  Total := ResPackEmbedStreamSizeFromDir(ASourceDir, AOpts);
+  if Total = 0 then Exit;
+  if Total > High(SizeUInt) then
+    raise EResPackTooLarge.Create('respack: blob too large for host SizeUInt');
+  GetMem(Buf, SizeUInt(Total));
+  Off := 0;
   SinkProc :=
     procedure(const AData: PByte; const ASize: SizeUInt)
     begin
       if ASize = 0 then Exit;
-      if SinkLen + ASize > SinkCap then
-      begin
-        SinkCap := BytesNextCapacity(SinkCap, SinkLen + ASize);
-        SetLength(SinkBuf, SinkCap);
-      end;
-      BytesCopy(@SinkBuf[SinkLen], AData, ASize);
-      Inc(SinkLen, ASize);
+      BytesCopy(Buf + Off, AData, ASize);
+      Inc(Off, ASize);
     end;
-  ResPackEmbedBuildStream(ASourceDir, AOpts, SinkProc);
-  if SinkLen = 0 then Exit;
-  GetMem(Result.Data, SinkLen);
-  Result.Size := SinkLen;
-  Result.Owned := True;
-  BytesCopy(Result.Data, @SinkBuf[0], SinkLen);
+  try
+    ResPackEmbedBuildStream(ASourceDir, AOpts, SinkProc);
+    if Off <> SizeUInt(Total) then
+      raise EResPackError.Create('respack: stream size mismatch');
+    Result.Data := Buf;
+    Result.Size := SizeUInt(Total);
+    Result.Owned := True;
+    Buf := nil;
+  except
+    if Buf <> nil then FreeMem(Buf);
+    raise;
+  end;
 end;
 
 end.

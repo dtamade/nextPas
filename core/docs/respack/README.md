@@ -81,8 +81,8 @@ nextpas.core.respack.embed.pas          ← 嵌入工具链库：blob → .inc/.
 | 单元 | 允许依赖 | 说明 |
 |------|----------|------|
 | `base` | L0（`base`/`errors`） | 纯类型与常量 |
-| `reader` | `base` | 无堆分配查找路径 |
-| `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源：字节比较 `ResPackCmpPath`→`SpanCompare` inline 零拷贝 + `Sort` 单源（替代手写排序）+ `AlignUp64` 单源，无堆热点外分配（`ResPackLayoutClear` out-of-line 释放） |
+| `reader` | `base`（含 dedup arena 共享底座 via `bytes.ops`+`mem.arena.local` 单 slab `TLocalArena`，`ResPackOverlapInit`/`ResPackDedupDone` 单源 via `base`，消除 `reader→writer.layout` 反向依赖守 `base←impl←facade` 单向；`GuardStep7Order` 外联守红线2） | 无堆分配查找路径；八步校验 `GuardStep7Order` 非 inline（`for I:=0 to Count-1` 循环禁 inline，10k 条目守 I-Cache） |
+| `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源：字节比较 `ResPackCmpPath`→`SpanCompare` inline 零拷贝 + `Sort` 单源（替代手写排序）+ `AlignUp64` 单源；dedup arena 薄转发至 `base` 共享底座（`bytes.ops`+`mem.arena.local` 单源，守红线2外联），无堆热点外分配（`ResPackLayoutClear` out-of-line 释放），单向复用守 `base←impl←facade` |
 | `writer.builder` | `base` + `writer.layout` + `bytes.ops` | 头/index/string 单源 builder：`WrU*LE`/`BytesCopy`/`BytesZero` 单源，消除 writer/stream 30 行重复（WrU*LE/Move），registry 明示 + source-contract 门禁，内部单源模块 |
 | `writer` | `writer.layout` + `writer.builder` + `base` | 纯内存组装（`GetMem(Total)` 一次性，`try..except FreeMem` 不丢资源；≥64MB 定向 gap 清零，d×→1.15×，头/index/string 单源于 builder） |
 | `writer.stream` | `writer.layout` + `writer.builder` + `base` | 流式两遍分段零双驻留：首遍同布局（排序/去重/对齐）`ResPackComputeLayout` 单源复用，`ResPackBuildStreamSize` 零分配预取 Total；次遍分段 `AWrite` 回调（头/index/string 合批 `TBytes` RAII `SetLength` + 槽间隙 4K 零页 `WriteZeros` inline 快道 + data `Move` 零拷贝 + digest 零额外 Total 缓冲），峰值 `~1×+头`，稳定性 `try..finally ResPackLayoutClear` |

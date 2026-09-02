@@ -574,10 +574,14 @@ begin
       begin
         if platform_file_lstat(@LBuf[0], LSt) = 0 then
         begin
-          if LSt.FileType = ftSymlink then
-            Exit(PLATFORM_ERR_ENOTDIR);
           if LSt.FileType = ftDirectory then
             Exit(0);
+          if LSt.FileType = ftSymlink then
+          begin
+            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
+              Exit(0);
+            Exit(PLATFORM_ERR_ENOTDIR);
+          end;
           Exit(PLATFORM_ERR_ENOTDIR);
         end;
         LR := platform_file_mkdir(@LBuf[0], AMode);
@@ -596,12 +600,19 @@ begin
         LBuf[I] := #0;
         if platform_file_lstat(@LBuf[0], LSt) = 0 then
         begin
-          if LSt.FileType = ftSymlink then
+          if LSt.FileType = ftDirectory then
           begin
-            LBuf[I] := '/';
-            Exit(PLATFORM_ERR_ENOTDIR);
-          end;
-          if LSt.FileType <> ftDirectory then
+            { already directory - keep slash and continue }
+          end
+          else if LSt.FileType = ftSymlink then
+          begin
+            if (platform_file_stat(@LBuf[0], LSt) <> 0) or (LSt.FileType <> ftDirectory) then
+            begin
+              LBuf[I] := '/';
+              Exit(PLATFORM_ERR_ENOTDIR);
+            end;
+          end
+          else
           begin
             LBuf[I] := '/';
             Exit(PLATFORM_ERR_ENOTDIR);

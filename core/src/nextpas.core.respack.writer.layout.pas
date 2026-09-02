@@ -3,7 +3,8 @@ unit nextpas.core.respack.writer.layout;
 {** @desc respack 布局单源：排序/去重/对齐/槽位/总量计算。
   由 writer 与 writer.stream 共用，消除双驻留假流式不可复用；
   零拷贝字节比较单源 respack.base.ResPackCmpPath（→bytes.ops）、
-  排序单源 collections.algorithms、对齐单源 mem.base.AlignUp64。 }
+  排序单源 collections.algorithms、对齐单源 mem.base.AlignUp64；
+  dedup arena 已收敛至 respack.base 共享底座（bytes.ops 单源 TLocalArena 单 slab，消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -37,21 +38,16 @@ type
   end;
 
 type
-  TResPackDedupBuckets = record
-    const MIN = 256;
-    const MAX = 65536;
-    class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
-  end;
+  TResPackDedupBuckets = nextpas.core.respack.base.TResPackDedupBuckets;
+  PSizeInt = nextpas.core.respack.base.PSizeInt;
+  TResPackDistinct = nextpas.core.respack.base.TResPackDistinct;
+  PResPackDistinct = nextpas.core.respack.base.PResPackDistinct;
 
-type
-  PSizeInt = ^SizeInt;
-  TResPackDistinct = record Off: UInt64; Size: UInt64; end;
-  PResPackDistinct = ^TResPackDistinct;
-
-{ Dedup arena 单源：writer.layout 与 reader.CheckDataOverlapON 共用，单 slab TLocalArena 零双堆 churn，
-  BucketCountFor via BytesNextCapacity inline 零拷贝，try..finally ResPackDedupDone 稳定释放。 }
+{ Dedup arena 薄转发至 respack.base 共享底座：单源收敛消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向；
+  BucketCountFor via bytes.ops.BytesNextCapacity inline 零拷贝，ResPackOverlapInit 单 slab TLocalArena 单块 (BucketCount+N)*SizeInt+N*Distinct，try..finally ResPackDedupDone 稳定释放；
+  Init/Overlap 外联守红线2（双循环清零 64K 桶+N 槽 I-Cache 敏感），Done inline 薄转发。 }
 procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
-procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt); inline;
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -66,27 +62,18 @@ uses
   nextpas.core.collections.algorithms,
   nextpas.core.mem.base;
 
-const
-  BUCKET_MIN = TResPackDedupBuckets.MIN;
-  BUCKET_MAX = TResPackDedupBuckets.MAX; { 去重桶上限 64K：BucketsHead 64K*SizeInt≈256KB + SlotNext N*SizeInt，峰值受控；原 4M 桶双数组最高 32MB(4M*8)，大去重集热点 SpanEqual 逐字节回验叠加 O(n) 期望外最坏拷贝开销，收敛至 64K 控热点 }
-
-class function TResPackDedupBuckets.BucketCountFor(const ANeeded: SizeUInt): SizeUInt; inline;
-var
-  Target: SizeUInt;
-begin
-  if ANeeded <= MIN then Exit(MIN);
-  if ANeeded >= MAX then Exit(MAX);
-  Target := ANeeded;
-  Result := BytesNextCapacity(MIN, Target);
-  if Result > MAX then Result := MAX;
-  if Result < MIN then Result := MIN;
-end;
-
 function CmpPath(const AEntries: array of TResPackInputEntry;
   const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
+var
+  PA, PB: PByte;
+  LA, LB: SizeUInt;
 begin
-  // 单源视图: TByteSpan.FromStr 零拷贝工厂 inline 零分配, 复用 bytes.ops.SpanCompare 单源, 消 PByte(@Str[1]) 裸指针重复
-  Result := SpanCompare(TByteSpan.FromStr(AEntries[AI].Path), TByteSpan.FromStr(AEntries[AJ].Path));
+  // perf: inline 零拷贝热路径，复用 ALens 缓存免重复 Length/FromStr 取指针长度；单源 respack.base.ResPackCmpPath→bytes.ops.SpanCompare，零分配消裸指针重复，降 O(n log n) 比较开销
+  LA := SizeUInt(ALens[AI]);
+  LB := SizeUInt(ALens[AJ]);
+  if LA = 0 then PA := nil else PA := PByte(@AEntries[AI].Path[1]);
+  if LB = 0 then PB := nil else PB := PByte(@AEntries[AJ].Path[1]);
+  Result := ResPackCmpPath(PA, LA, PB, LB);
 end;
 
 type
@@ -103,10 +90,16 @@ type
 function CompareOrder(const A, B: SizeUInt; Data: Pointer): SizeInt;
 var
   D: POrderSortData;
+  PA, PB: PByte;
+  LA, LB: SizeUInt;
 begin
   D := POrderSortData(Data);
-  // 单源视图: TByteSpan.FromStr 零拷贝 inline, 复用 bytes.ops.SpanCompare, 消裸指针算术
-  Result := SpanCompare(TByteSpan.FromStr(D^.Entries^[A].Path), TByteSpan.FromStr(D^.Entries^[B].Path));
+  // perf: O(n log n) 热路径零拷贝，复用 Lens 缓存免重复 FromStr/Length，单源 respack.base.ResPackCmpPath→bytes.ops.SpanCompare，inline 零分配消裸指针算术
+  LA := SizeUInt(D^.Lens^[A]);
+  LB := SizeUInt(D^.Lens^[B]);
+  if LA = 0 then PA := nil else PA := PByte(@D^.Entries^[A].Path[1]);
+  if LB = 0 then PB := nil else PB := PByte(@D^.Entries^[B].Path[1]);
+  Result := ResPackCmpPath(PA, LA, PB, LB);
 end;
 
 function AlignUpU64(const AValue, AAlign: UInt64): UInt64; inline;
@@ -115,69 +108,18 @@ begin
 end;
 
 procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
-var
-  NeedArena: SizeUInt;
-  Target: SizeUInt;
-  I: SizeUInt;
 begin
-  AArena := nil;
-  ABucketsHead := nil;
-  ASlotNext := nil;
-  ABucketCount := 0;
-  if AN = 0 then Exit;
-  Target := 0;
-  if not TryMulSizeUInt(AN, 2, Target) then
-    Target := High(SizeUInt);
-  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedArena) then
-    raise EResPackTooLarge.Create('respack: dedup arena size overflow');
-  AArena := TLocalArena.Create(NeedArena);
-  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
-  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
-  if (ABucketsHead = nil) or (ASlotNext = nil) then
-    raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
-  for I := 0 to ABucketCount - 1 do ABucketsHead[I] := -1;
-  for I := 0 to AN - 1 do ASlotNext[I] := -1;
+  nextpas.core.respack.base.ResPackDedupInit(AN, AArena, ABucketsHead, ASlotNext, ABucketCount);
 end;
 
-procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
-var
-  NeedBuckets, NeedDistinct, Total: SizeUInt;
-  Target: SizeUInt;
-  I: SizeUInt;
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt); inline;
 begin
-  AArena := nil;
-  ABucketsHead := nil;
-  ASlotNext := nil;
-  ADistinct := nil;
-  ABucketCount := 0;
-  if AN <= 1 then Exit;
-  Target := 0;
-  if not TryMulSizeUInt(AN, 2, Target) then Target := High(SizeUInt);
-  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
-    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
-  if not TryMulSizeUInt(AN, SizeUInt(SizeOf(TResPackDistinct)), NeedDistinct) then
-    raise EResPackTooLarge.Create('respack: overlap distinct size overflow');
-  if not TryAddSizeUInt(NeedBuckets, NeedDistinct, Total) then
-    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
-  AArena := TLocalArena.Create(Total);
-  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
-  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
-  ADistinct := PResPackDistinct(AArena.Alloc(AN * SizeUInt(SizeOf(TResPackDistinct))));
-  if (ABucketsHead = nil) or (ASlotNext = nil) or (ADistinct = nil) then
-    raise EResPackTooLarge.Create('respack: overlap arena alloc failed');
-  for I := 0 to ABucketCount - 1 do ABucketsHead[I] := -1;
-  for I := 0 to AN - 1 do ASlotNext[I] := -1;
+  nextpas.core.respack.base.ResPackOverlapInit(AN, AArena, ABucketsHead, ASlotNext, ADistinct, ABucketCount);
 end;
 
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
 begin
-  if AArena <> nil then
-  begin
-    AArena.Free;
-    AArena := nil;
-  end;
+  nextpas.core.respack.base.ResPackDedupDone(AArena);
 end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
