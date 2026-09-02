@@ -1,9 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。
-  4 职责承载：枚举/流式mmap/嵌入管线/extract；约 780 行逼近 800 软阈，已以通用 Walk 单源（generic TWalkCtx<T> + EnsureWalkCapacity<T> + WalkPre 统一模板，inline 零拷贝）收口，
-  流式零双驻留：ResPackBuildFromDir/ResPackEmbedBuild 单次 Walk + ResPackBuildStreamSize 预取 Total 直写终态 Buf，消除 512MB 二次 GetMem+BytesCopy 大块 Move，峰值 ~1×+头（mmap 零堆拷贝 + writer.stream 两遍）。
-  门禁：本文件>800行强制拆分为 dirsource.walk / dirsource.embed / dirsource.extract 子模块（四件套门面纯转发，L0-L3 守阈，CONTRACT 业务为准，缺能力反哺 owner）。 }
+{** @desc 目录 → 打包适配：唯一 L2→L2 IO seam，流式mmap 零双驻留 ~1×+头，generic Walk 单源。 }
 
 {$I nextpas.core.settings.inc}
 

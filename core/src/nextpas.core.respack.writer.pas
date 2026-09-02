@@ -1,9 +1,6 @@
 unit nextpas.core.respack.writer;
 
-{** @desc respack 打包器：条目列表 → 单个确定性 blob。
-  流程见 FORMAT.md「Writer 构造流程」；不变量见 CONTRACT.md INV-R5/R6/R8/R10。
-  布局计算单源于 nextpas.core.respack.writer.layout（首遍排序/去重/对齐），
-  组装复用 writer.stream 分段零拷贝管线达 ~1×+头零双驻留（RESULTS 512MiB 峰值 1038MiB→~526MiB）。 }
+{** @desc respack 打包器：条目 → 确定性 blob，布局单源 layout，组装复用 stream 零双驻留。 }
 
 {$I nextpas.core.settings.inc}
 

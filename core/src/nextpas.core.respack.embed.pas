@@ -1,15 +1,6 @@
 unit nextpas.core.respack.embed;
 
-{** @desc 嵌入工具链库（S4）：blob → .inc typed const 源文本。格式逻辑全部收口 core 侧，
-  CLI（core/tools/respack）只是薄壳。本单元仅依赖 L1 text.strings/text.char/
-  text.conv 三单源（GlobMatch/IsAlpha/IntToStr 各归一、零文件系统依赖，PChar 零拷贝
-  视图 + inline 热路径）+ embed.limits 阈值策略独立模块单源（4MiB 策略集中、可配置 MaxBlobBytes、
-  前置拒绝单源 EmbedRequireIncSize/ResPackRequireIncSize inline 零拷贝，已从 respack.limits 抽取为
-  L1 独立策略模块 nextpas.core.embed.limits 供其他嵌入载体复用，respack.limits 为兼容转发）
-  + bytes.ops 单源（WriteStrTo 单源 inline 零拷贝：BytesCopy 单 Move + PAnsiChar 零拷贝视图，EmitIncContent/IncUnit 共用，IncUnit 单次 SetLength+分段 BytesCopy 与
-  writer.builder GetMem(Total)单源收敛，通用文本组装单源，替代二次分配拼接），纯内存可复用（零 FS/零 writer/
-  零 dirsource 依赖，目录 → 过滤/映射 → 打包 blob 的 IO 管线收口于
-  respack.dirsource（L2 FS 缝），唯一 L2→L2 FS seam）。 }
+{** @desc 嵌入工具链：blob → .inc typed const（确定性，golden 锁定），纯内存，阈值单源 embed.limits（4MiB）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -127,7 +118,7 @@ begin
     raise EResPackTooLarge.Create(AMsg);
 end;
 
-{ capacity helpers — single-source fixed overflow message, inline zero-copy, 消除 14 次重复字符串行噪，复用 Checked* 单源 }
+{ capacity helpers — 单源固定 overflow 消息，inline 零拷贝 }
 procedure CapAdd(var ACap: SizeUInt; const ADelta: SizeUInt); inline;
 begin
   CheckedAdd(ACap, ADelta, 'respack.embed: capacity overflow');
@@ -138,7 +129,7 @@ begin
   CheckedMul(ALeft, ARight, ARes, 'respack.embed: capacity overflow');
 end;
 
-{ WriteStr 单源：PByte 游标追加 string，bytes.ops.BytesCopy inline 单 Move 零拷贝（PAnsiChar 视图无分配），外层 EmitIncContent/IncUnit 均复用；消除 EmitIncContent 与 ResPackEmbedIncUnitSource 内同名闭包重复，inline 守热路径 }
+{ WriteStr 单源：BytesCopy 单 Move，EmitIncContent/IncUnit 复用，inline 热路径 }
 procedure WriteStrTo(var ADst: PByte; const S: string); inline;
 var
   L: SizeInt;
@@ -150,7 +141,7 @@ begin
   Inc(ADst, L);
 end;
 
-{ Inc 内容直写单源：header+声明+body+尾零拷贝写入，bytes.ops.BytesCopy inline 单 Move，HexEncodeDollarCommaBulkUpper 4-wide 单源，外联守 I-Cache（外层不 inline 避热点复制膨胀，内层 WriteStrTo/BytesCopy inline），writer.builder 单源收敛；供 IncSource/IncUnit 单次 SetLength 直写复用，消除 4MiB 内二次整包拷贝 }
+{ Inc 直写单源：header+body+尾零拷贝，Hex 4-wide 单源，外联守 I-Cache }
 procedure EmitIncContent(var AW: PByte; const ABlob: TResPackBlob; const AName, ANStr: string; const APerLine: Integer; const AN: SizeUInt);
 var
   I: SizeInt;

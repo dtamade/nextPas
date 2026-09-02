@@ -223,9 +223,7 @@ begin
     raise EResPackCorrupted.CreateStep(4, 'buffer truncated versus blobTotal');
 end;
 
-{ Data overlap — O(n) hash, CONTRACT §6; distinct intervals monotonic.
-  单 slab TLocalArena via respack.base ResPackOverlapInit 单源（共享底座，消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向），
-  零三堆分配(原 3×SetLength+FillChar 重复堆 churn)，单次 (BucketCount+N)*SizeInt+N*Distinct 单块，try..finally ResPackDedupDone 稳定释放，bytes.ops 零拷贝。 }
+{ Data overlap O(n) hash：单 slab TLocalArena via base ResPackOverlapInit 单源。 }
 procedure CheckDataOverlapON(const ACachedPtr: PResPackEntry; const ACount: SizeUInt;
   const AStrTabEnd: UInt64);
 var
@@ -300,7 +298,7 @@ begin
   end;
   if UInt64(ACount) > RESPACK_MAX_ENTRY_COUNT then
     raise EResPackCorrupted.CreateStep(3, 'entry count exceeds limit');
-  { Arena 预算：单 slab TLocalArena 承载全量 entry 元数据，TryMulSizeUInt 预算防恶意包 RESPACK_MAX_ENTRY_COUNT 时堆 churn/回绕，BytesCopy 单源复用，inline 零拷贝视图，try..finally 由 Open 释放。 }
+  { 单 slab TLocalArena 承载全量 entry，TryMul 预算防回绕。 }
   if not TryMulSizeUInt(ACount, SizeUInt(SizeOf(TResPackEntry)), NeedBytes) then
     raise EResPackTooLarge.Create('respack: entry table size overflow');
   try
