@@ -1,12 +1,12 @@
 # nextpas.core.git — 历史契约（history）
 
-**模块路径**：`core/src/nextpas.core.git.native.{revwalk,commitgraph,reflog,revparse,log,describe,diff,blame,mergebase,show,shortlog,catfile,cherrypick,revert}.pas` + `nextpas.core.git.native.history.pas` 门面
+**模块路径**：`core/src/nextpas.core.git.native.{revwalk,commitgraph,reflog,revparse,log,describe,diff,blame,mergebase,show,shortlog,catfile,cherrypick,revert}.pas` + `nextpas.core.git.native.history.{traversal,query,ops}.pas` 3 分片 + `nextpas.core.git.native.history.pas` umbrella
 **层级**：L2（L0-L1: base, bytes, text, fs, io；依赖 objects 域 `repo/objmodel/pack`）
 **Owner**：git lane
 **不变量域**：历史遍历与查询（revwalk / commit-graph / 日志 / 差异 / 归因 / 合并基）
 
 ## 1. 范围与阈值
-- 源聚合：14 单元 + 1 门面 shard（`native.history`），单 shard 单次交付门面，超阈即再分片；历史层不自建对象/压缩，仅复用 owner。
+- 源聚合：14 单元 + 3 分片 + 1 umbrella（`native.history`），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；umbrella 聚合 3 分片 <380 行、总门面 <600 软阈，四件套聚合度不稀释；历史层不自建对象/压缩，仅复用 owner。
 
 ## 2. 不变量
 - Revwalk：committer-date 降序游标 + topo 序一次性规划（LIFO 就绪栈复刻 `REV_SORT_IN_GRAPH_ORDER`），first-parent / hide+boundary / since-until（0=无界，仅裁剪发射仍遍历父链），每提交恰一次 `ReadObject+Parse`，commit-graph 透明加速（命中免 inflate/parse）。

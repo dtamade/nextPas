@@ -40,7 +40,10 @@ type
   end;
   TFlatFileArray = array of TFlatFile;
 
-procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatFileArray);
+{ CollectFlat: amortized O(n) via bytes.ops GrowArrayCapacity single source.
+  Previously SetLength(AOut,Length+1) per entry → O(n²) copies.
+  Zero-copy: string assignment is refcounted move, TGitOid 20B inline copy via direct assignment. }
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatFileArray; var ACount, ACap: SizeUInt); overload; inline;
 var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer; Full: string;
 begin
   if GitOidIsZero(ATreeOid) then Exit;
@@ -51,24 +54,42 @@ begin
   begin
     Full := APrefix + Entries[I].Name;
     if Entries[I].Mode = $4000 then
-      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut)
+      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut, ACount, ACap)
     else if Entries[I].Mode = $E000 then Continue // gitlink skipped
     else
-    begin SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Path := Full;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
+    begin
+      if ACount >= ACap then
+      begin
+        // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per append, zero-copy TGitOid Move via direct assignment, avoids O(n²) SetLength(Length+1) churn
+        ACap := GrowArrayCapacity(ACap, ACount + 1);
+        SetLength(AOut, ACap);
+      end;
+      AOut[ACount].Path := Full;
+      AOut[ACount].Mode := Entries[I].Mode;
+      AOut[ACount].Oid := Entries[I].Oid;
+      Inc(ACount);
     end;
   end;
 end;
 
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatFileArray); overload; inline;
+var Cnt, Cap: SizeUInt;
+begin
+  Cnt := SizeUInt(Length(AOut)); Cap := Cnt;
+  CollectFlat(ARepo, ATreeOid, APrefix, AOut, Cnt, Cap);
+  SetLength(AOut, Cnt);
+end;
+
 function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatFileArray;
-var Repo: TNativeRepository;
+var Repo: TNativeRepository; Cnt, Cap: SizeUInt;
 begin
   Result := nil;
   if GitOidIsZero(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
-  try CollectFlat(Repo, ATreeOid, '', Result);
+  try
+    Cnt := 0; Cap := 0;
+    CollectFlat(Repo, ATreeOid, '', Result, Cnt, Cap);
+    SetLength(Result, Cnt);
   finally Repo.Free; end;
 end;
 

@@ -59,7 +59,10 @@ core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/co
 core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base）
 core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝）
 core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
-core/src/nextpas.core.git.native.history.pas  ← 历史门面分片（revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert，20+类型/40+inline，<600阈值内单 shard 单次交付，超阈按不变量域再分片）
+core/src/nextpas.core.git.native.history.traversal.pas ← 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元，<210 行，inline 零拷贝 via bytes.ops）
+core/src/nextpas.core.git.native.history.query.pas      ← 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元，<260 行）
+core/src/nextpas.core.git.native.history.ops.pas        ← 历史·操作分片（shortlog/catfile/cherrypick/revert，4 单元，<180 行）
+core/src/nextpas.core.git.native.history.pas  ← 历史 umbrella（聚合 traversal/query/ops 3 分片，<380 行，总门面 <600，预拆前 14 单元/464 行已按不变量域：revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert）
 core/src/nextpas.core.git.native.branches.pas ← 分支门面分片（branch/tag/stash/notes）
 core/src/nextpas.core.git.native.transport.pas ← 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset）
 core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect）

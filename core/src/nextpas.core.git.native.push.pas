@@ -69,10 +69,10 @@ begin
     Exit;
   end;
   Out_ := RunWithInput('git', ['--git-dir=' + ALocalGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
-    GitStringToBytes(RevInput));
+    StringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('pack-objects failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
-  Result := GitStringToBytes(Out_.StdOut);
+  Result := StringToBytes(Out_.StdOut);
   if (Length(Result) > 0) and ((Length(Result) < 12) or (Result[0] <> Ord('P'))) then
     raise EGitError.Create('push: pack-objects produced invalid pack');
 end;
@@ -121,12 +121,12 @@ begin
     if (Length(Pkts[I].Data) > 0) and (Pkts[I].Data[0] in [1, 2, 3]) then
     begin
       if Length(Pkts[I].Data) <= 1 then Continue;
-      S := GitBytesToString(Copy(Pkts[I].Data, 1, Length(Pkts[I].Data) - 1));
+      S := BytesToString(Copy(Pkts[I].Data, 1, Length(Pkts[I].Data) - 1));
       if Pkts[I].Data[0] = 3 then
         Msg := Msg + Trim(S) + LineEnding;
       Continue;
     end;
-    S := GitBytesToString(Pkts[I].Data);
+    S := BytesToString(Pkts[I].Data);
     S := Trim(S);
     if S = '' then Continue;
     if Copy(S, 1, 7) = 'unpack ' then
@@ -186,13 +186,13 @@ begin
   Out_ := RunWithInput('git', ['receive-pack', '--stateless-rpc', ARemoteGitDir], Req);
   if not ProcessSucceeded(Out_) then
   begin
-    Resp := GitStringToBytes(Out_.StdOut + Out_.StdErr);
+    Resp := StringToBytes(Out_.StdOut + Out_.StdErr);
     if Length(Resp) = 0 then
       raise EGitError.CreateFmt('receive-pack failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr)]);
-    ParsePushResponse(GitStringToBytes(Out_.StdOut));
+    ParsePushResponse(StringToBytes(Out_.StdOut));
     raise EGitError.CreateFmt('receive-pack failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
   end;
-  Resp := GitStringToBytes(Out_.StdOut);
+  Resp := StringToBytes(Out_.StdOut);
   Result := ParsePushResponse(Resp);
 end;
 

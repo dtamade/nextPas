@@ -211,7 +211,7 @@ var
   B: TBytes;
 begin
   B := GitNotesGet(AGitDir, ARefName, ATarget);
-  Result := GitBytesToString(B);
+  Result := BytesToString(B);
 end;
 
 function GitNotesGetStr(const AGitDir: string; const ATarget: TGitOid): string;
@@ -362,7 +362,7 @@ end;
 
 function GitNotesAdd(const AGitDir, ARefName: string; const ATarget: TGitOid; const ANote: string): TGitOid;
 begin
-  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, GitStringToBytes(ANote));
+  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, StringToBytes(ANote));
 end;
 
 function GitNotesAdd(const AGitDir: string; const ATarget: TGitOid; const ANote: string): TGitOid;

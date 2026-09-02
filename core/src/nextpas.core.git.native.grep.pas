@@ -27,6 +27,7 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.base.utils,
   nextpas.core.git.native.repo,
@@ -52,21 +53,54 @@ begin
   Result := nextpas.core.base.utils.CompareBytesOrdered(PA, PB, SizeUInt(Length(A)), SizeUInt(Length(B)));
 end;
 
-procedure SortHits(var A: TGitGrepHitArray); inline;
-var I, J, Cmp: Integer; T: TGitGrepHit;
-begin
-  for I := 1 to High(A) do
+{ SortHits: O(n log n) quicksort (median-of-3 + tail recursion).
+  Replaces prior insertion O(n²). Zero-copy: swaps records, compares
+  via inline LocalCompareStr single source base.utils CompareBytesOrdered (same as bytes.ops SpanCompare) on existing string storage (PByte+Len view, no alloc), inline. }
+procedure QuickSortHits(var A: TGitGrepHitArray; L, R: Integer);
+var I, J, M: Integer; Pivot: TGitGrepHit; Tmp: TGitGrepHit;
+  function CmpHit(const X, Y: TGitGrepHit): Integer; inline;
+  var C: Integer;
   begin
-    J := I;
-    while J > 0 do
+    C := LocalCompareStr(X.Path, Y.Path);
+    if C <> 0 then Exit(C);
+    if X.LineNo < Y.LineNo then Exit(-1);
+    if X.LineNo > Y.LineNo then Exit(1);
+    Result := 0;
+  end;
+begin
+  while L < R do
+  begin
+    M := (L + R) shr 1;
+    if CmpHit(A[L], A[M]) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
+    if CmpHit(A[M], A[R]) > 0 then begin Tmp := A[M]; A[M] := A[R]; A[R] := Tmp; end;
+    if CmpHit(A[L], A[M]) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
+    Pivot := A[M];
+    I := L; J := R;
+    repeat
+      while CmpHit(A[I], Pivot) < 0 do Inc(I);
+      while CmpHit(A[J], Pivot) > 0 do Dec(J);
+      if I <= J then
+      begin
+        if I <> J then begin Tmp := A[I]; A[I] := A[J]; A[J] := Tmp; end;
+        Inc(I); Dec(J);
+      end;
+    until I > J;
+    if (J - L) < (R - I) then
     begin
-      Cmp := LocalCompareStr(A[J-1].Path, A[J].Path); // inline zero-copy single-source, cached
-      if Cmp < 0 then Break;
-      if (Cmp = 0) and (A[J-1].LineNo <= A[J].LineNo) then Break;
-      T := A[J-1]; A[J-1] := A[J]; A[J] := T;
-      Dec(J);
+      if L < J then QuickSortHits(A, L, J);
+      L := I;
+    end else
+    begin
+      if I < R then QuickSortHits(A, I, R);
+      R := J;
     end;
   end;
+end;
+
+procedure SortHits(var A: TGitGrepHitArray); inline;
+begin
+  if Length(A) < 2 then Exit;
+  QuickSortHits(A, 0, High(A));
 end;
 
 type
@@ -76,7 +110,10 @@ type
   end;
   TFlatBlobArray = array of TFlatBlob;
 
-procedure CollectBlobs(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatBlobArray);
+{ CollectBlobs: amortized O(n) via bytes.ops GrowArrayCapacity single source.
+  Previously SetLength(AOut,Length+1) per entry → O(n²) copies.
+  Zero-copy: string assignment is refcounted move, TGitOid 20B inline copy via direct assignment, inline wrapper. }
+procedure CollectBlobs(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatBlobArray; var ACount, ACap: Integer); overload;
 var Kind: TGitObjectKind;
     Data: TBytes;
     Entries: TGitTreeEntryArray;
@@ -92,19 +129,32 @@ begin
   begin
     Full := APrefix + Entries[I].Name;
     if Entries[I].Mode = $4000 then
-      CollectBlobs(ARepo, Entries[I].Oid, Full + '/', AOut)
+      CollectBlobs(ARepo, Entries[I].Oid, Full + '/', AOut, ACount, ACap)
     else if Entries[I].Mode = $E000 then
       Continue // gitlink
     else if Entries[I].Mode = $A000 then
       Continue // symlink blob is link target, skip for text grep
     else
     begin
-      // regular blob 100644/100755
-      SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Path := Full;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
+      // regular blob 100644/100755 - amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized, zero-copy TGitOid Move via direct assignment
+      if ACount >= ACap then
+      begin
+        ACap := Integer(GrowArrayCapacity(SizeUInt(ACap), SizeUInt(ACount + 1)));
+        SetLength(AOut, ACap);
+      end;
+      AOut[ACount].Path := Full;
+      AOut[ACount].Oid := Entries[I].Oid;
+      Inc(ACount);
     end;
   end;
+end;
+
+procedure CollectBlobs(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatBlobArray); overload; inline;
+var Cnt, Cap: Integer;
+begin
+  Cnt := Length(AOut); Cap := Length(AOut);
+  CollectBlobs(ARepo, ATreeOid, APrefix, AOut, Cnt, Cap);
+  SetLength(AOut, Cnt);
 end;
 
 function ContainsFixed(const ALine, APat: string; AIgnoreCase: Boolean): Boolean;
@@ -164,7 +214,7 @@ begin
       HasNul := False;
       for K := 0 to High(Data) do if Data[K] = 0 then begin HasNul := True; Break; end;
       if HasNul then Continue;
-      Text := GitBytesToString(Data);
+      Text := BytesToString(Data);
       Lines := SplitLines(Text);
       for J := 0 to High(Lines) do
         if ContainsFixed(Lines[J], APattern, AIgnoreCase) then

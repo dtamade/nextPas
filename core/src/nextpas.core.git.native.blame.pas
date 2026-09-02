@@ -151,7 +151,7 @@ begin
   Data := ARepo.ReadObject(BlobOid, Kind);
   if Kind = gokTree then Exit(False);
   // for symlink/gitlink, treat content as is (blame still lines)
-  S := GitBytesToString(Data);
+  S := BytesToString(Data);
   ALines := SplitLines(S);
   Result := True;
 end;

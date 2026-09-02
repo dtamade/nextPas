@@ -61,13 +61,9 @@ begin
 end;
 
 function IsBinaryBytes(const AData: TBytes): Boolean; inline;
-var
-  I: Integer;
 begin
-  for I := 0 to High(AData) do
-    if AData[I]=0 then
-      Exit(True);
-  Result:=False;
+  // perf: single-source via bytes.ops BytesIndexOf (inline SpanIndexOf -> MemFindByte SIMD disp.), zero-copy span view, no per-byte Pascal loop; early exit via SIMD
+  Result := BytesIndexOf(AData, 0) >= 0;
 end;
 
 function BlobLinesOf(const AGitDir: string; const AOid: TGitOid): nextpas.core.base.TStringArray; inline;
@@ -85,7 +81,7 @@ begin
     D:=R.ReadObject(AOid,K);
     if IsBinaryBytes(D) then
       Exit(nil);
-    S:=GitBytesToString(D);
+    S:=BytesToString(D);
     Result:=GitSplitLines(S);
     if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then
       SetLength(Result,0);
@@ -125,7 +121,7 @@ begin
   end;
   if IsBinaryBytes(D) then
     Exit(nil);
-  S:=GitBytesToString(D);
+  S:=BytesToString(D);
   Result:=GitSplitLines(S);
   if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then
     SetLength(Result,0);
@@ -158,7 +154,7 @@ var
   N,I, OldNo, NewNo, SPos, EPos, HS, HE, OC, NC, K: Integer;
   H: TGitDiffHunk;
   ChangedBlocks: array of record SPos,EPos: Integer; end;
-  CB: Integer;
+  CB, ResCount, LOldLen, LAddLen: Integer;
 begin
   Result:=nil;
   N:=Length(AOpcodes);
@@ -184,6 +180,9 @@ begin
   end;
   if Length(ChangedBlocks)=0 then
     Exit;
+  // perf: pre-allocate Result to ChangedBlocks upper bound (single allocation, amortized O(1) append via index)
+  ResCount:=0;
+  SetLength(Result, Length(ChangedBlocks));
   OldNo:=1;
   NewNo:=1;
   for I:=0 to High(AOpcodes) do
@@ -242,20 +241,22 @@ begin
     H.OldCount:=OC;
     H.NewCount:=NC;
     H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@';
-    SetLength(H.Lines,0);
+    // perf: single allocation for hunk lines (HE-HS+1) vs per-line SetLength(Length+1) O(n²) realloc/copy
+    SetLength(H.Lines, HE - HS + 1);
     for K:=HS to HE do
     begin
-      SetLength(H.Lines,Length(H.Lines)+1);
       if AOpcodes[K]=' ' then
-        H.Lines[High(H.Lines)]:=' '+AOldTexts[K]
+        H.Lines[K - HS]:=' '+AOldTexts[K]
       else if AOpcodes[K]='-' then
-        H.Lines[High(H.Lines)]:='-'+AOldTexts[K]
+        H.Lines[K - HS]:='-'+AOldTexts[K]
       else
-        H.Lines[High(H.Lines)]:='+'+ANewTexts[K];
+        H.Lines[K - HS]:='+'+ANewTexts[K];
     end;
-    SetLength(Result,Length(Result)+1);
-    Result[High(Result)]:=H;
+    // perf: amortized single pre-allocation to ChangedBlocks upper bound (single SetLength) + index append; no per-hunk Length+1 churn (bytes.ops GrowArrayCapacity discipline)
+    Result[ResCount]:=H;
+    Inc(ResCount);
   end;
+  SetLength(Result, ResCount);
   if Length(Result)>1 then
   begin
     I:=0;
@@ -263,11 +264,12 @@ begin
     begin
       if Result[I].NewStart+Result[I].NewCount + AContext >= Result[I+1].NewStart then
       begin
-        for K:=0 to High(Result[I+1].Lines) do
-        begin
-          SetLength(Result[I].Lines,Length(Result[I].Lines)+1);
-          Result[I].Lines[High(Result[I].Lines)]:=Result[I+1].Lines[K];
-        end;
+        // perf: single allocation for merged lines (old+add) vs per-line SetLength(Length+1)
+        LOldLen:=Length(Result[I].Lines);
+        LAddLen:=Length(Result[I+1].Lines);
+        SetLength(Result[I].Lines, LOldLen + LAddLen);
+        for K:=0 to LAddLen-1 do
+          Result[I].Lines[LOldLen + K]:=Result[I+1].Lines[K];
         Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount;
         Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount;
         Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@';

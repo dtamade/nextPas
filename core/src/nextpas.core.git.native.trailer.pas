@@ -31,9 +31,10 @@ function GitAppendTrailer(const AMessage, AKey, AValue: string): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util;
 
-function IsTrailerLine(const ALine: string; out AKey, AValue: string): Boolean;
+function IsTrailerLine(const ALine: string; out AKey, AValue: string): Boolean; inline;
 var P: Integer; K,V: string;
 begin
   AKey:=''; AValue:='';
@@ -49,7 +50,10 @@ begin
 end;
 
 function GitParseTrailers(const AMessage: string): TGitTrailerArray;
-var Lines: TStringArray; I, StartIdx, N: Integer; K,V: string; Tmp: TGitTrailerArray;
+var Lines: TStringArray; I, N: Integer; K,V: string;
+  LCnt, LCap, LNewCap: SizeUInt;
+  LTmp: TGitTrailer;
+  J: Integer;
 begin
   Result:=nil;
   if AMessage='' then Exit;
@@ -63,20 +67,41 @@ begin
   // Walk backwards collecting while trailer line; stop on non-trailer.
   // If we encounter a blank line before trailers, trailers are only those after blank.
   // But if no blank line, trailing trailers still count (git requires blank separator, but we are permissive: trailing contiguous trailers)
-  Tmp:=nil;
+  // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy Move, single shrink; reverse in-place avoids second allocation
+  LCnt:=0; LCap:=0;
+  SetLength(Result, 0);
+  // use local Tmp then move to Result to keep reverse zero-copy; reuse Result as Tmp buffer to avoid extra variable
+  // we grow Result directly as Tmp
   for I:=N-1 downto 0 do
   begin
     if GitTrimSpaces(GitStripCR(Lines[I]))='' then
-    begin
       Break;
-    end;
     if IsTrailerLine(GitStripCR(Lines[I]), K, V) then
-    begin SetLength(Tmp, Length(Tmp)+1); Tmp[High(Tmp)].Key:=K; Tmp[High(Tmp)].Value:=V; end
+    begin
+      if LCnt >= LCap then
+      begin
+        LNewCap:=GrowArrayCapacity(LCap, LCnt+1);
+        SetLength(Result, LNewCap);
+        LCap:=LNewCap;
+      end;
+      Result[LCnt].Key:=K; Result[LCnt].Value:=V;
+      Inc(LCnt);
+    end
     else Break;
   end;
-  // Tmp currently reversed (from bottom up), reverse to preserve original order
-  for I:=High(Tmp) downto 0 do
-  begin SetLength(Result, Length(Result)+1); Result[High(Result)]:=Tmp[I]; end;
+  if LCnt=0 then
+  begin
+    Result:=nil;
+    Exit;
+  end;
+  SetLength(Result, LCnt);
+  // Tmp currently reversed (from bottom up), reverse in-place zero-copy swap (no second array)
+  for J:=0 to Integer(LCnt div 2)-1 do
+  begin
+    LTmp:=Result[J];
+    Result[J]:=Result[Integer(LCnt)-1-J];
+    Result[Integer(LCnt)-1-J]:=LTmp;
+  end;
 end;
 
 function GitFindTrailer(const ATrailers: TGitTrailerArray; const AKey: string): string;
@@ -94,19 +119,65 @@ begin
   Result:=False;
 end;
 
-function GitFormatTrailer(const AKey, AValue: string): string;
+function GitFormatTrailer(const AKey, AValue: string): string; inline;
+var L1,R1,L2,R2, LKeyLen, LValLen: Integer; LTotal: SizeUInt; LPos: SizeUInt;
 begin
-  Result:=GitTrimSpaces(AKey)+': '+GitTrimSpaces(AValue);
+  // perf: single allocation zero-copy via Move, inline; trims without extra string alloc
+  L1:=1; R1:=Length(AKey);
+  while (L1<=R1) and (AKey[L1] <= ' ') do Inc(L1);
+  while (R1>=L1) and (AKey[R1] <= ' ') do Dec(R1);
+  L2:=1; R2:=Length(AValue);
+  while (L2<=R2) and (AValue[L2] <= ' ') do Inc(L2);
+  while (R2>=L2) and (AValue[R2] <= ' ') do Dec(R2);
+  if L1>R1 then LKeyLen:=0 else LKeyLen:=R1-L1+1;
+  if L2>R2 then LValLen:=0 else LValLen:=R2-L2+1;
+  LTotal:=SizeUInt(LKeyLen) + 2 + SizeUInt(LValLen);
+  SetLength(Result, LTotal);
+  if LTotal=0 then Exit;
+  LPos:=1;
+  if LKeyLen>0 then begin Move(AKey[L1], Result[LPos], LKeyLen); Inc(LPos, SizeUInt(LKeyLen)); end;
+  Result[LPos]:=':'; Inc(LPos);
+  Result[LPos]:=' '; Inc(LPos);
+  if LValLen>0 then Move(AValue[L2], Result[LPos], LValLen);
 end;
 
 function GitFormatTrailers(const ATrailers: TGitTrailerArray): string;
-var I: Integer;
+var I: Integer; LTotal, LPos: SizeUInt; L1,R1,L2,R2, LKeyLen, LValLen: Integer;
 begin
-  Result:='';
+  if Length(ATrailers)=0 then Exit('');
+  // perf: single allocation for entire trailer block, zero-copy Move of trimmed slices, inline trims; avoids O(n²) Result+ #10 reallocation
+  LTotal:=0;
   for I:=0 to High(ATrailers) do
   begin
-    if I>0 then Result:=Result+#10;
-    Result:=Result+GitFormatTrailer(ATrailers[I].Key, ATrailers[I].Value);
+    L1:=1; R1:=Length(ATrailers[I].Key);
+    while (L1<=R1) and (ATrailers[I].Key[L1] <= ' ') do Inc(L1);
+    while (R1>=L1) and (ATrailers[I].Key[R1] <= ' ') do Dec(R1);
+    L2:=1; R2:=Length(ATrailers[I].Value);
+    while (L2<=R2) and (ATrailers[I].Value[L2] <= ' ') do Inc(L2);
+    while (R2>=L2) and (ATrailers[I].Value[R2] <= ' ') do Dec(R2);
+    if L1>R1 then LKeyLen:=0 else LKeyLen:=R1-L1+1;
+    if L2>R2 then LValLen:=0 else LValLen:=R2-L2+1;
+    Inc(LTotal, SizeUInt(LKeyLen) + 2 + SizeUInt(LValLen));
+  end;
+  if Length(ATrailers)>1 then Inc(LTotal, SizeUInt(Length(ATrailers)-1));
+  SetLength(Result, LTotal);
+  if LTotal=0 then Exit;
+  LPos:=1;
+  for I:=0 to High(ATrailers) do
+  begin
+    if I>0 then begin Result[LPos]:=#10; Inc(LPos); end;
+    L1:=1; R1:=Length(ATrailers[I].Key);
+    while (L1<=R1) and (ATrailers[I].Key[L1] <= ' ') do Inc(L1);
+    while (R1>=L1) and (ATrailers[I].Key[R1] <= ' ') do Dec(R1);
+    L2:=1; R2:=Length(ATrailers[I].Value);
+    while (L2<=R2) and (ATrailers[I].Value[L2] <= ' ') do Inc(L2);
+    while (R2>=L2) and (ATrailers[I].Value[R2] <= ' ') do Dec(R2);
+    if L1>R1 then LKeyLen:=0 else LKeyLen:=R1-L1+1;
+    if L2>R2 then LValLen:=0 else LValLen:=R2-L2+1;
+    if LKeyLen>0 then begin Move(ATrailers[I].Key[L1], Result[LPos], LKeyLen); Inc(LPos, SizeUInt(LKeyLen)); end;
+    Result[LPos]:=':'; Inc(LPos);
+    Result[LPos]:=' '; Inc(LPos);
+    if LValLen>0 then begin Move(ATrailers[I].Value[L2], Result[LPos], LValLen); Inc(LPos, SizeUInt(LValLen)); end;
   end;
 end;
 

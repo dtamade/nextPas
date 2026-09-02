@@ -104,7 +104,7 @@ begin
     if Pkts[I].Kind = gpkDelim then
       Continue;
     // gpkData
-    Line := GitBytesToString(Pkts[I].Data);
+    Line := BytesToString(Pkts[I].Data);
     // Git pkt payloads for advertise end with LF; allow missing LF for robustness but strip if present
     if (Length(Line) > 0) and (Line[Length(Line)] = #10) then
       SetLength(Line, Length(Line) - 1);

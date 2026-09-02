@@ -162,10 +162,10 @@ begin
   if TrimLocal(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
-    GitStringToBytes(RevInput));
+    StringToBytes(RevInput));
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('bundle pack-objects failed (%d): %s', [Out_.ExitCode, TrimLocal(Out_.StdErr + Out_.StdOut)]);
-  Result := GitStringToBytes(Out_.StdOut);
+  Result := StringToBytes(Out_.StdOut);
   if Length(Result) = 0 then
     raise EGitError.Create('bundle: pack-objects produced empty pack');
   if (Length(Result) < 12) or (Result[0] <> Ord('P')) then
@@ -525,7 +525,7 @@ begin
   finally
     LHeader.Done;
   end;
-  LHeaderBytes := GitStringToBytes(HeaderText);
+  LHeaderBytes := StringToBytes(HeaderText);
   // bytes.ops 单源流式一次分配，替代临拼 BytesConcat(OutBytes, PackBytes)
   OutBytes := BytesConcatMany([LHeaderBytes, Pack]);
   // ensure parent dir
