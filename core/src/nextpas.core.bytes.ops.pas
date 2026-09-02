@@ -19,6 +19,10 @@ function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+function StringTrimEquals(const S, Lit: string): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
@@ -43,12 +47,9 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-{ perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
-  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
-  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
-  convenience only. }
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
+{ perf: BytesAppend geometric via bytes.ops.capacity BytesGrowCapacity single source (BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1), zero-copy Move single source); looped/high-frequency still prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany (single allocation) to avoid per-append probe — single-use amortized O(1) not O(n²), inline thin-forward for single append, builder for loops }
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
@@ -98,18 +99,15 @@ implementation
 
 uses
   nextpas.core.simd,
-  nextpas.core.text.unicode.utils;
+  nextpas.core.text.unicode.utils,
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray;
 
-{ BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
-  Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
-  for amortized slack; that depends on FPC heap layout and races under multithread.
-  New: capacity == Length (single source via RTL), no global state, no unsafe
-  pointer arithmetic, fully portable to nextPas compiler and thread-safe per var.
-  perf: inline + zero-copy Move in BytesAppend* callers (single Move per append);
-  no extra alloc in failure path. For looped/high-frequency appends use
-  IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany to avoid
-  O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
-  writes that could corrupt heap on exception. }
+{ BytesEnsureCapacity/Reserve: geometric via bytes.ops.capacity single source (INV-5/INV-2)
+  BYTES_BUILDER_MIN_GROW 0→64→2× amortized O(1) zero O(n²); thin-forward to BytesGrowCapacity, no duplicate loop.
+  Old header poke + GCapMap removed (heap layout dependent, race); new portable via RTL + mem.dynarray probe for BytesAppend exact logical len vs heap capacity.
+  perf: BytesAppend geometric single SetLength + single Move zero-copy (owner bytes.ops), looped/high-frequency still prefer IBytesBuilder/ConcatMany; inline hot views zero-copy, batch not inline per red-line.
+  Stability: SetLength exception-safe; BytesAppend via DynArrayCapacity/RefCount probe + DynArraySetLength poke keeps heap capacity while logical len exact, no leak, sized free via allocator. }
 
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
@@ -118,22 +116,8 @@ begin
   LOld := SizeUInt(Length(ADest));
   if ARequired <= LOld then
     Exit;
-  // single doubling growth to amortize when called directly; callers that need
-  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
-  // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < ARequired do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ARequired;
-      Break;
-    end;
-  end;
+  // single source geometric via bytes.ops.capacity (BYTES_BUILDER_MIN_GROW 0→64→2×) amortized O(1) — not inline per red-line 2 (loop)
+  LNewCap := BytesGrowCapacity(LOld, ARequired);
   SetLength(ADest, LNewCap);
 end;
 
@@ -149,16 +133,9 @@ begin
 end;
 
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
-var LCap: SizeUInt;
 begin
-  if ANeed = 0 then Exit(0);
-  if AOld = 0 then LCap := BYTES_BUILDER_MIN_GROW else LCap := AOld;
-  if LCap < BYTES_BUILDER_MIN_GROW then LCap := BYTES_BUILDER_MIN_GROW;
-  if LCap < 4 then LCap := 4;
-  if LCap >= ANeed then Exit(LCap);
-  while LCap < ANeed do
-    if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
-  Result := LCap;
+  // perf: inline thin-forward single source via bytes.ops.capacity BytesGrowCapacity geometric 0→64→2× amortized O(1) zero extra call
+  Result := BytesGrowCapacity(AOld, ANeed);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
@@ -227,6 +204,55 @@ begin
   if ASuffix.Len > AData.Len then
     Exit(False);
   Result := MemEqual(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
+end;
+
+function SpanTrimLeft(const ASpan: TByteSpan): TByteSpan;
+var
+  LPos: SizeUInt;
+begin
+  // single source: zero-copy view trim left, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LPos := 0;
+  while (LPos < ASpan.Len) and ((ASpan.Data[LPos] = 9) or (ASpan.Data[LPos] = 10) or (ASpan.Data[LPos] = 13) or (ASpan.Data[LPos] = 32)) do
+    Inc(LPos);
+  if LPos >= ASpan.Len then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data + LPos;
+  Result.Len := ASpan.Len - LPos;
+end;
+
+function SpanTrimRight(const ASpan: TByteSpan): TByteSpan;
+var
+  LEnd: SizeUInt;
+begin
+  // single source: zero-copy view trim right, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  if ASpan.Len = 0 then
+    Exit(TByteSpan.Empty);
+  LEnd := ASpan.Len;
+  while (LEnd > 0) and ((ASpan.Data[LEnd - 1] = 9) or (ASpan.Data[LEnd - 1] = 10) or (ASpan.Data[LEnd - 1] = 13) or (ASpan.Data[LEnd - 1] = 32)) do
+    Dec(LEnd);
+  if LEnd = 0 then
+    Exit(TByteSpan.Empty);
+  Result.Data := ASpan.Data;
+  Result.Len := LEnd;
+end;
+
+function SpanTrim(const ASpan: TByteSpan): TByteSpan; inline;
+begin
+  // perf: inline thin-forward via SpanTrimLeft+SpanTrimRight single source, zero-copy view, no heap alloc, owner bytes.ops
+  Result := SpanTrimRight(SpanTrimLeft(ASpan));
+end;
+
+function StringTrimEquals(const S, Lit: string): Boolean;
+var
+  LTrim: TByteSpan;
+  LLit: TByteSpan;
+begin
+  // single source: reuse SpanTrim+SpanEqual zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops (MemEqual SIMD)
+  LTrim := SpanTrim(TByteSpan.FromStr(S));
+  LLit := TByteSpan.FromStr(Lit);
+  Result := SpanEqual(LTrim, LLit);
 end;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
@@ -376,54 +402,110 @@ begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
-  // perf: inline + single SetLength + single Move (zero-copy via Move); no header poke
+  // perf: geometric via bytes.ops.capacity BytesGrowCapacity single source (0→64→2×) amortized O(1), zero-copy single Move, not inline per red-line 1/2 (SetLength+Move batch loop)
+  // stability: DynArrayCapacity/RefCount probe + DynArraySetLength poke keeps heap capacity while logical len exact, exception-safe SetLength; looped/high-frequency still prefer IBytesBuilder
   if Length(ASrc) = 0 then
     Exit;
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + SizeUInt(Length(ASrc)));
+  LNeed := LOldLen + SizeUInt(Length(ASrc));
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   Move(ASrc[0], ADest[LOldLen], Length(ASrc));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric via BytesGrowCapacity single source amortized O(1), zero-copy single Move, not inline per red-line 1/2
+  // stability: probe + poke as above
   if (ASrc = nil) or (ASrcLen = 0) then
     Exit;
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + ASrcLen);
+  LNeed := LOldLen + ASrcLen;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   Move(ASrc^, ADest[LOldLen], ASrcLen);
 end;
 
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric via BytesGrowCapacity single source amortized O(1), inline tiny store, probe+poke keeps heap capacity, logical len exact
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 1);
+  LNeed := LOldLen + 1;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := AValue;
 end;
 
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric via BytesGrowCapacity single source amortized O(1), inline tiny stores
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
+  LNeed := LOldLen + 2;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue shr 8);
   ADest[LOldLen + 1] := Byte(AValue);
 end;
 
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1) single source
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 3);
+  LNeed := LOldLen + 3;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue shr 16);
   ADest[LOldLen + 1] := Byte(AValue shr 8);
   ADest[LOldLen + 2] := Byte(AValue);
@@ -431,10 +513,21 @@ end;
 
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1) single source
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
+  LNeed := LOldLen + 4;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue shr 24);
   ADest[LOldLen + 1] := Byte(AValue shr 16);
   ADest[LOldLen + 2] := Byte(AValue shr 8);
@@ -443,20 +536,42 @@ end;
 
 procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1)
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
+  LNeed := LOldLen + 2;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue);
   ADest[LOldLen + 1] := Byte(AValue shr 8);
 end;
 
 procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1)
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
+  LNeed := LOldLen + 4;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue);
   ADest[LOldLen + 1] := Byte(AValue shr 8);
   ADest[LOldLen + 2] := Byte(AValue shr 16);
@@ -465,10 +580,21 @@ end;
 
 procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1)
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
+  LNeed := LOldLen + 8;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue shr 56);
   ADest[LOldLen + 1] := Byte(AValue shr 48);
   ADest[LOldLen + 2] := Byte(AValue shr 40);
@@ -481,10 +607,21 @@ end;
 
 procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed, LCap: SizeUInt;
 begin
+  // perf: geometric amortized O(1)
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
+  LNeed := LOldLen + 8;
+  if (DynArrayCapacity(ADest) >= LNeed) and (DynArrayRefCount(ADest) = 1) then
+    DynArraySetLength(ADest, LNeed)
+  else
+  begin
+    LCap := BytesGrowCapacity(LOldLen, LNeed);
+    if LCap <> SizeUInt(Length(ADest)) then
+      SetLength(ADest, LCap);
+    if SizeUInt(Length(ADest)) <> LNeed then
+      DynArraySetLength(ADest, LNeed);
+  end;
   ADest[LOldLen] := Byte(AValue);
   ADest[LOldLen + 1] := Byte(AValue shr 8);
   ADest[LOldLen + 2] := Byte(AValue shr 16);

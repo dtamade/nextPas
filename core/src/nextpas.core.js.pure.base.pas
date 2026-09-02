@@ -1,9 +1,9 @@
 unit nextpas.core.js.pure.base;
-{ facade: thin re-export host/value/eval/lifecycle via pure.host/pure.value/js.eval/js.lifecycle single source
-  non-standard four-piece naming exception per CONTRACT §1 & design-conventions:150
-  single responsibility = type-carrier + inline thin-forward, no mutable globals, zero logic
-  preferred entry = TJsPureHostState unified (JsPureHostStateSet*), no legacy HostSet/JsPureClose compat shim, luxury thin
-  inline zero-copy via bytes.ops/text.view, L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
+{ base: pure family shared type-carrier + inline thin-forward per four-piece (standard submodule base: nextpas.core.js.pure.base)
+  single source via pure.host/pure.value/js.eval/js.lifecycle (host/heap/value/lifecycle owners), no mutable globals, zero logic
+  single responsibility = type-carrier + inline thin-forward per four-piece base←intf←impl←门面, luxury thin
+  preferred entry = TJsPureHostState unified (JsPureHostStateSet*), no legacy shim, luxury thin
+  inline zero-copy via bytes.ops/text.view single source (BytesCopy/SpanEqual), L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
 {$I nextpas.core.settings.inc}
 interface
 uses

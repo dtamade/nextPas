@@ -335,7 +335,11 @@ begin
   Result := QjsStoreNewArray(FStore, FContextId, FCtx);
 end;
 function TJsQuickJsContext.NewJson(const AJson: TJsonValue): TJsValue;
-begin EnsureNotClosed; if AJson.IsStr then Result:=JsPureNewString(AJson.AsStr.ToString, FContextId) else if AJson.IsInt then Result:=JsPureNewInt(AJson.AsInt, FContextId) else if AJson.IsReal then Result:=JsPureNewDouble(AJson.AsFloat, FContextId) else if AJson.IsBool then Result:=JsPureNewBool(AJson.AsBool, FContextId) else if AJson.IsNull then Result:=JsValueBindContext(JsNullValue, FContextId) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=JsValueBindContext(JsUndefinedValue, FContextId); end;
+begin
+  EnsureNotClosed;
+  // perf: inline single source via quickjs.value QjsStoreNewJson → pure.value JsPureNewJson (IsStr/IsInt/IsReal/IsBool/IsNull single source, inline zero-copy, bytes.ops single source), array/object via QjsStoreNewArray/NewObject decorator single source (Pure+QjsHeap composition, inline zero-copy, amortized O1), eliminates duplicate IsStr/IsInt/IsReal判别分支, decorator boundary pure+QjsHeap single source, resource exactly-once not lost
+  Result := QjsStoreNewJson(FStore, AJson, FContextId, FCtx);
+end;
 function TJsQuickJsContext.ToJson(const AValue: TJsValue): IJsonDocument;
 begin EnsureNotClosed; Result:=JsPureToJson(AValue); end;
 function TJsQuickJsContext.HasProp(const AObj: TJsValue; const AName: string): Boolean;

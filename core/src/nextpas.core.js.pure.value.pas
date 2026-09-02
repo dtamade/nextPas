@@ -57,7 +57,6 @@ uses
   nextpas.core.mem.dynarray,
   nextpas.core.text.builder,
   nextpas.core.json.writer,
-  nextpas.core.text.escape,
   nextpas.core.text.number;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
@@ -75,21 +74,36 @@ begin
   end;
   Result := -1;
 end;
-{ capacity helpers — single source via mem.dynarray DynArrayCapacityElem (owner mem), geometric via bytes.ops, inline zero-copy }
-function HeapCapacity(const Heap: TJsPureHeap): SizeUInt; inline;
+{ capacity helpers — single source via mem.dynarray generic (DynArrayCapacityGeneric/DynArraySetLengthGeneric), geometric via bytes.ops, inline zero-copy }
+{ heap/props grow — single source inline helper via mem.dynarray+bytes.ops Exactly-Once geometric, amortized O(1) single seam, zero double write barrier }
+procedure EnsurePropsCapacityOne(var Props: array of TJsPureProp); inline;
+var LOld, LNeed, LCap: SizeUInt;
 begin
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(Heap), SizeUInt(Length(Heap)), SizeOf(TJsPureObject));
+  LOld := SizeUInt(Length(Props)); LNeed := LOld + 1;
+  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Props, SizeOf(TJsPureProp)) >= LNeed then
+  begin
+    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Props, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Props, LCap);
+    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Props, LNeed);
+  end;
 end;
-function PropsCapacityObj(const Obj: TJsPureObject): SizeUInt; inline;
+procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
+var LOld, LNeed, LCap: SizeUInt;
 begin
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(Obj.Props), SizeUInt(Length(Obj.Props)), SizeOf(TJsPureProp));
+  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1;
+  if nextpas.core.mem.dynarray.DynArrayCapacityGeneric(Heap, SizeOf(TJsPureObject)) >= LNeed then
+  begin
+    if LOld <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Heap, LCap);
+    if LCap <> LNeed then nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap, LNeed);
+  end;
 end;
-procedure PokeHeapLen(var Heap: TJsPureHeap; const ANewLen: SizeUInt); inline;
-var LBytes: TBytes absolute Heap;
-begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
-procedure PokePropsLen(var Props: array of TJsPureProp; const ANewLen: SizeUInt); inline;
-var LBytes: TBytes absolute Props;
-begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
 { prop hash — single source via pure.hash JsPureHashStr (bytes.ops FNV1a32), inline zero-copy, converged with pure.host HostHashView via pure.hash }
 function PropHashStr(const S: string): UInt32; inline;
 begin
@@ -175,42 +189,31 @@ begin
   if P >= 0 then Result := Heap[Idx].Props[P].Value;
 end;
 procedure JsPureHeapSetPropHashed(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
-var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt;
+var Idx, P: Integer;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
-  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1;
-  if PropsCapacityObj(Heap[Idx]) >= LNeed then
-  begin
-    if LOld <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Heap[Idx].Props, LCap);
-    if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end;
+  // perf: single source via EnsurePropsCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1) single source
+  EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
-  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
+  // jitter suppress: >64 only rebuild when cap mismatch else O(1) put, amortized O(1) vs per-insert O(n) thrash
+  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
+  begin
+    if Length(Heap[Idx].PropsBuckets)=0 then PropBucketsRebuild(Heap[Idx])
+    else if Length(Heap[Idx].PropsBuckets) <> JsPureBucketCapacity(Length(Heap[Idx].Props)) then PropBucketsRebuild(Heap[Idx])
+    else JsPureBucketPut(Heap[Idx].PropsBuckets, Heap[Idx].PropsMask, AHash, High(Heap[Idx].Props));
+  end
   else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
 end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
-var LId: Int64; LOld, LNeed, LCap, LCurCap: SizeUInt;
+var LId: Int64; LNeed: SizeUInt;
 begin
-  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1;
-  // perf: exactly-once header via mem.dynarray DynArraySetLength single source, capacity-aware via HeapCapacity, geometric via bytes.ops BytesNextCapacity single source, amortized O(1), zero double write barrier
-  LCurCap := HeapCapacity(Heap);
-  if LCurCap >= LNeed then
-  begin
-    if LOld <> LNeed then PokeHeapLen(Heap, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Heap, LCap);
-    if LCap <> LNeed then PokeHeapLen(Heap, LNeed);
-  end;
+  // perf: single source via EnsureHeapCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1), zero double write barrier
+  LNeed := SizeUInt(Length(Heap)) + 1;
+  EnsureHeapCapacityOne(Heap);
   LId := Int64(LNeed); if LId = 0 then LId := 1;
   Heap[High(Heap)].Id := LId;
   SetLength(Heap[High(Heap)].Props, 0);
@@ -255,28 +258,24 @@ var Idx, P: Integer; begin Result := JsUndefinedValue; Idx := JsPureHeapFind(Hea
   if P >= 0 then Result := Heap[Idx].Props[P].Value;
 end;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
-var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt; LHash: UInt32;
+var Idx, P: Integer; LHash: UInt32;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LHash := PropHashStr(Name);
-  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1;
-  // perf: exactly-once via PropsCapacityObj+mem.dynarray poke single source, geometric via bytes.ops BytesNextCapacity single source, amortized O(1), zero double write barrier
-  if PropsCapacityObj(Heap[Idx]) >= LNeed then
-  begin
-    if LOld <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end else
-  begin
-    LCap := BytesNextCapacity(LOld, LNeed);
-    SetLength(Heap[Idx].Props, LCap);
-    if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
-  end;
+  // perf: single source via EnsurePropsCapacityOne inline — Exactly-Once via mem.dynarray+bytes.ops geometric single seam, amortized O(1) single source
+  EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;
-  // bucket maintenance
-  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
+  // jitter suppress: >64 only rebuild when cap mismatch else O(1) put, amortized O(1) vs per-insert O(n) thrash
+  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
+  begin
+    if Length(Heap[Idx].PropsBuckets)=0 then PropBucketsRebuild(Heap[Idx])
+    else if Length(Heap[Idx].PropsBuckets) <> JsPureBucketCapacity(Length(Heap[Idx].Props)) then PropBucketsRebuild(Heap[Idx])
+    else JsPureBucketPut(Heap[Idx].PropsBuckets, Heap[Idx].PropsMask, LHash, High(Heap[Idx].Props));
+  end
   else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
 end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
@@ -324,8 +323,8 @@ end;
 function JsPureToJsonString(const AValue: TJsValue): string;
 var B: TStringBuilder; W: TJsonWriter; S: string; LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
-  // single source owner pure.value via json.writer TJsonWriter seam + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy BytesCopy single source, text.view zero-copy, text.escape SIMD single source
-  // perf: number path zero builder via text.number IntToBuffer/FloatToBuffer stack single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder single alloc ('"'+S+'"' inline), escaped path single alloc + try-finally Done not lost, not inline per red-line (branch+builder), bytes.ops single source, resource try-finally Done 不丢
+  // single source owner pure.value via json.writer TJsonWriter single seam + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy via bytes.ops BytesCopy single source inside writer, text.view zero-copy, text.escape SIMD single source via writer single-pass JsonEscapeToBuilder
+  // perf: number path zero builder via text.number IntToBuffer/FloatToBuffer stack single source single alloc, string single source builder luxury unified via TJsonWriter.Str single seam single alloc + try-finally Done 不丢 (no hand-rolled BytesCopy dual path split), not inline per red-line (builder), bytes.ops single source, resource try-finally Done 不丢
   case AValue.Kind of
     jskUndefined: Exit('undefined');
     jskNull: Exit('null');
@@ -347,16 +346,7 @@ begin
     jskString:
       begin
         S := AValue.AsString;
-        if not JsonNeedsEscapeStr(S) then
-        begin
-          // perf: single alloc for Result (B/op=1 for returned string, 0 extra allocs beyond Result) zero-copy via BytesCopy single source (bytes.ops) + SetLength, stack-like single Move vs '"'+S+'"' double alloc, text.escape SIMD predicate single source, inline zero-copy BytesCopy; benchmark B/op counts only extra allocs, Result alloc not counted as overhead
-          SetLength(Result, Length(S) + 2);
-          Result[1] := '"';
-          if Length(S) > 0 then
-            BytesCopy(PAnsiChar(Result) + 1, PAnsiChar(S), SizeUInt(Length(S)));
-          Result[Length(Result)] := '"';
-          Exit;
-        end;
+        // single source builder luxury unified — single seam via TJsonWriter.Str + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy via bytes.ops BytesCopy single source inside writer, text.escape SIMD single source single-pass via JsonEscapeToBuilder, single alloc via B.ToString single Move, inline hot, no hand-rolled BytesCopy dual path split, resource try-finally Done 不丢
         B.Init(SizeUInt(Length(S)) + 2);
         try
           W.Init(B);

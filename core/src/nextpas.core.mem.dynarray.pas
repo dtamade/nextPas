@@ -44,6 +44,12 @@ procedure DynArraySetLengthStr(var A: TStringArray; const ANewLen: SizeUInt); in
 {** Generic capacity probe: (heap block - header) div AElemSize; fallback ALen. }
 function DynArrayCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
 
+{** Generic capacity for any dynarray var (single source, no per-type wrapper). }
+function DynArrayCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
+
+{** Generic length poke for any dynarray var (single source, no per-type wrapper). }
+procedure DynArraySetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
+
 implementation
 
 uses
@@ -141,6 +147,24 @@ begin
   LSize := NpSystemMemSize(LBlock);
   if LSize < SizeOf(TDynArrayHeader) then Exit(ALen);
   Result := (LSize - SizeOf(TDynArrayHeader)) div AElemSize;
+end;
+
+function DynArrayCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
+var LP: Pointer; LBlock: Pointer; LSize: SizeUInt;
+begin
+  LP := PPointer(@A)^;
+  if LP = nil then Exit(0);
+  if AElemSize = 0 then Exit(SizeUInt(PDynArrayHeader(PByte(LP) - SizeOf(TDynArrayHeader))^.High + 1));
+  LBlock := PByte(LP) - SizeOf(TDynArrayHeader);
+  LSize := NpSystemMemSize(LBlock);
+  if LSize < SizeOf(TDynArrayHeader) then Exit(SizeUInt(PDynArrayHeader(PByte(LP) - SizeOf(TDynArrayHeader))^.High + 1));
+  Result := (LSize - SizeOf(TDynArrayHeader)) div AElemSize;
+end;
+
+procedure DynArraySetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute A;
+begin
+  DynArraySetLength(LBytes, ANewLen);
 end;
 
 end.

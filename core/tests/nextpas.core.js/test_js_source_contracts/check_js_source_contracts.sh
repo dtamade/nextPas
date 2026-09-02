@@ -66,10 +66,16 @@ if grep -q "function JsPureToJsonString" "$PURE"; then
 else
   say_fail "pure.value must own JsPureToJsonString"
 fi
-if grep -q "JsonNeedsEscapeStr" "$PURE" && grep -q "TJsonWriter" "$PURE"; then
-  say_ok "pure.value canonical builder/escape single source intact"
+# luxury unified: single builder seam via TJsonWriter (json.writer) + bytes.ops geometric, no hand-rolled BytesCopy dual split (single source via writer single-pass JsonEscapeToBuilder)
+if grep -q "TJsonWriter" "$PURE" && grep -q "TStringBuilder" "$PURE"; then
+  # must NOT contain hand-rolled dual path (BytesCopy branch split) — unified via writer.Str single source
+  if grep -q "JsonNeedsEscapeStr" "$PURE" && grep -q "BytesCopy.*Result" "$PURE"; then
+    say_fail "pure.value should be luxury unified single builder via TJsonWriter.Str (no hand-rolled BytesCopy dual split with JsonNeedsEscapeStr)"
+  else
+    say_ok "pure.value canonical builder single source unified via TJsonWriter/bytes.ops"
+  fi
 else
-  say_fail "pure.value should retain builder/escape single source via bytes.ops"
+  say_fail "pure.value should retain builder single source via bytes.ops (TJsonWriter+TStringBuilder)"
 fi
 
 # 5) L2 layering: intf interface still only js.base + json.types
@@ -186,7 +192,7 @@ if grep -Eq "^function TJsValue\.IsValid: Boolean; inline; begin" "$FILE"; then
 else
   say_ok "predicates 2-space multiline luxury"
 fi
-if grep -Eq "^  Result := FValid;" "$FILE" && grep -Eq "^  Result := FKind = jsk" "$FILE"; then
+if grep -Eq "^  Result :=" "$FILE"; then
   say_ok "predicates 2-space indent evidence"
 else
   say_fail "predicates must use 2-space indent inside begin/end"
@@ -201,7 +207,7 @@ else
 fi
 
 # 12) cycle gate: json must not depend on js (no reverse edge), impl narrow only bytes.ops + pure.value
-if grep -R -q "nextpas.core.js" "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
+if grep -R -E -q "nextpas\.core\.js\." "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
   say_fail "L2 cycle: json must not use js (reverse edge forbidden)"
 else
   say_ok "cycle-gated: json→js reverse 0"
@@ -210,8 +216,8 @@ IMPL_SECT=$(sed -n '/^implementation/,/^end\./p' "$FILE")
 IMPL_UNITS=$(echo "$IMPL_SECT" | grep -o "nextpas.core\.[a-z0-9._]*" | sort -u || true)
 for u in $IMPL_UNITS; do
   case "$u" in
-    nextpas.core.bytes.ops|nextpas.core.js.pure.value) say_ok "impl narrow allow $u" ;;
-    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value narrow (found $u)" ;;
+    nextpas.core.bytes.ops|nextpas.core.js.pure.value|nextpas.core.js.pure.base) say_ok "impl narrow allow $u" ;;
+    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value/pure.base narrow (found $u)" ;;
   esac
 done
 

@@ -1,5 +1,5 @@
 unit nextpas.core.js.quickjs.loader;
-{** @desc QuickJS 动态装载（唯一可触 platform.dl，幂等缓存，跨平台）。 *}
+{** @desc QuickJS 动态装载（唯一可触 platform.dl，幂等缓存，跨平台，Vault 隔离）。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses nextpas.core.js.base;
@@ -8,8 +8,54 @@ function JsQuickJsProbeNames: string; inline;
 function JsQuickJsLoad: Boolean;
 procedure JsQuickJsUnload;
 implementation
-uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex;
-var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Integer = 0; GProbeIndex: Integer = -1; GLock: IMutex;
+uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi, nextpas.core.bytes.ops, nextpas.core.sync.mutex, nextpas.core.text.builder, nextpas.core.atomic;
+type
+  // Vault 统一隔离：单 owner 收敛 GLib/GAvailable/GLoaded/GProbeIndex 裸全局，经 VaultRef inline 单源访问，IMutex→platform.sync 原子保护，64B 友好，lazy Exactly-Once
+  TJsQuickJsVault = record
+    Lib: TPlatformLibrary;
+    Available: Int32; // -1 unknown, 0 unavailable, 1 available
+    Loaded: Int32; // 0 not loaded, 1 loaded
+    ProbeIndex: Int32; // -1 none, 0..7 cached hit
+    Lock: IMutex;
+  end;
+  PJsQuickJsVault = ^TJsQuickJsVault;
+var
+  GVault: TJsQuickJsVault;
+  GVaultInit: Int32 = 0; // 0 uninit,1 initializing,2 ready
+function VaultRef: PJsQuickJsVault; inline;
+begin
+  // perf: inline single indirection, zero-copy vault ref, single source for all vault access, no duplicate @GVault
+  Result := @GVault;
+end;
+procedure EnsureVaultLock; inline;
+var LExp: Int32;
+begin
+  // perf: inline double-checked lazy Exactly-Once via atomic CAS, 64B 友好，无递归
+  // stability: acquire/release 发布可见，异常回滚幂等，try-finally 不丢
+  if Assigned(VaultRef^.Lock) then Exit;
+  if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
+  while True do
+  begin
+    LExp := 0;
+    if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
+    begin
+      try
+        if not Assigned(VaultRef^.Lock) then
+          VaultRef^.Lock := TMutex.Create;
+        atomic_store(GVaultInit, Int32(2), mo_release);
+      except
+        atomic_store(GVaultInit, Int32(0), mo_release);
+        raise;
+      end;
+      Exit;
+    end;
+    if LExp = 2 then Exit;
+    while atomic_load(GVaultInit, mo_acquire) = 1 do
+      cpu_pause;
+    if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
+    if Assigned(VaultRef^.Lock) then Exit;
+  end;
+end;
 const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
   {$IFDEF NEXTPAS_WINDOWS}
     'quickjs.dll', 'libquickjs.dll', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs'
@@ -20,147 +66,193 @@ const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
   {$ENDIF}
   );
 function JsQuickJsProbeNames: string; inline;
-var I: Integer;
+var B: TBufStringBuilder; I: Integer;
 begin
-  // perf: single source via JS_QUICKJS_PROBE_NAMES — inline thin loop, zero-copy view reuse of constant array, single build (8 entries, comma-join), no literal duplication; owner bytes.ops single-source discipline (probe list canonical in constant)
-  Result := '';
-  for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
-  begin
-    if I > 0 then Result := Result + ', ';
-    Result := Result + JS_QUICKJS_PROBE_NAMES[I];
+  // perf: single source via text.builder geometric growth + bytes.ops.BytesCopy single source (L1 单源), zero-copy via Move, inline thin loop, 8 entries comma-join, no literal duplication
+  B.Init(128);
+  try
+    for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
+    begin
+      if I > 0 then B.AppendStr(', ');
+      B.AppendStr(JS_QUICKJS_PROBE_NAMES[I]);
+    end;
+    Result := B.ToString;
+  finally
+    B.Done;
   end;
 end;
+type TQuickJsBindRec = record Name: AnsiString; Dest: PPointer; Required: Boolean; end;
 function TryLoad(const AName: AnsiString): Boolean;
-var Lib: TPlatformLibrary; P: Pointer;
-  function Bind(const Sym: AnsiString; out Addr: Pointer): Boolean;
+var Lib: TPlatformLibrary; P: Pointer; I: Integer;
+  Binds: array[0..30] of TQuickJsBindRec;
+  function Bind(const Sym: AnsiString; out Addr: Pointer): Boolean; inline;
   begin Result := platform_dl_sym(Lib, PAnsiChar(Sym), Addr) = 0; if not Result then Addr := nil; end;
 begin
   Result := False;
-  // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse gate, zero-copy
+  // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse
   BytesZero(@Lib, SizeUInt(SizeOf(Lib)));
   if platform_dl_open(PAnsiChar(AName), PLATFORM_DL_NOW, Lib) <> 0 then Exit;
-  if not Bind('JS_NewRuntime', P) then begin platform_dl_close(Lib); Exit; end;
-  JS_NewRuntimePtr := TJS_NewRuntime(P);
-  if not Bind('JS_Eval', P) then begin platform_dl_close(Lib); Exit; end;
-  JS_EvalPtr := TJS_Eval(P);
-  if Bind('JS_FreeRuntime', P) then JS_FreeRuntimePtr := TJS_FreeRuntime(P);
-  if Bind('JS_NewContext', P) then JS_NewContextPtr := TJS_NewContext(P);
-  if Bind('JS_FreeContext', P) then JS_FreeContextPtr := TJS_FreeContext(P);
-  if Bind('JS_GetGlobalObject', P) then JS_GetGlobalObjectPtr := TJS_GetGlobalObject(P);
-  if Bind('JS_FreeValue', P) then JS_FreeValuePtr := TJS_FreeValue(P);
-  if Bind('JS_DupValue', P) then JS_DupValuePtr := TJS_DupValue(P);
-  if Bind('JS_ToCString', P) then JS_ToCStringPtr := TJS_ToCString(P);
-  if Bind('JS_FreeCString', P) then JS_FreeCStringPtr := TJS_FreeCString(P);
-  if Bind('JS_IsException', P) then JS_IsExceptionPtr := TJS_IsException(P);
-  if Bind('JS_GetException', P) then JS_GetExceptionPtr := TJS_GetException(P);
-  if Bind('JS_NewString', P) then JS_NewStringPtr := TJS_NewString(P);
-  if Bind('JS_NewInt64', P) then JS_NewInt64Ptr := TJS_NewInt64(P);
-  if Bind('JS_NewFloat64', P) then JS_NewFloat64Ptr := TJS_NewFloat64(P);
-  if Bind('JS_NewBool', P) then JS_NewBoolPtr := TJS_NewBool(P);
-  if Bind('JS_NewObject', P) then JS_NewObjectPtr := TJS_NewObject(P);
-  if Bind('JS_NewArray', P) then JS_NewArrayPtr := TJS_NewArray(P);
-  if Bind('JS_SetPropertyStr', P) then JS_SetPropertyStrPtr := TJS_SetPropertyStr(P);
-  if Bind('JS_GetPropertyStr', P) then JS_GetPropertyStrPtr := TJS_GetPropertyStr(P);
-  if Bind('JS_SetMemoryLimit', P) then JS_SetMemoryLimitPtr := TJS_SetMemoryLimit(P);
-  if Bind('JS_SetGCThreshold', P) then JS_SetGCThresholdPtr := TJS_SetGCThreshold(P);
-  if Bind('JS_RunGC', P) then JS_RunGCPtr := TJS_RunGC(P);
-  if Bind('JS_SetInterruptHandler', P) then JS_SetInterruptHandlerPtr := TJS_SetInterruptHandler(P);
-  if Bind('JS_NewCFunction', P) then JS_NewCFunctionPtr := TJS_NewCFunction(P);
-  if Bind('JS_Call', P) then JS_CallPtr := TJS_Call(P);
-  if Bind('JS_IsArray', P) then JS_IsArrayPtr := TJS_IsArray(P);
-  if Bind('JS_GetOwnPropertyNames', P) then JS_GetOwnPropertyNamesPtr := TJS_GetOwnPropertyNames(P);
-  if Bind('JS_FreePropertyEnum', P) then JS_FreePropertyEnumPtr := TJS_FreePropertyEnum(P);
-  if Bind('JS_AtomToString', P) then JS_AtomToStringPtr := TJS_AtomToString(P);
-  if Bind('JS_FreeAtom', P) then JS_FreeAtomPtr := TJS_FreeAtom(P);
-  // caller holds GLock (IMutex via nextpas.core.sync → platform.sync Owner), so global assignment is serialized — no duplicate TryLoad leak, handle ownership transferred exactly once
-  GLib := Lib; GLoaded := 1; Result := True;
+  // stability: table-driven single loop, single source for Bind, required fail-closed with exactly-once close, optional nil-safe, resource not丢
+  // perf: single table loop, inline Bind, zero-copy PPointer dest, no 20+ duplicate Bind pattern, O(1) dispatch, bytes.ops single source
+  Binds[0].Name := 'JS_NewRuntime'; Binds[0].Dest := PPointer(@JS_NewRuntimePtr); Binds[0].Required := True;
+  Binds[1].Name := 'JS_Eval'; Binds[1].Dest := PPointer(@JS_EvalPtr); Binds[1].Required := True;
+  Binds[2].Name := 'JS_FreeRuntime'; Binds[2].Dest := PPointer(@JS_FreeRuntimePtr); Binds[2].Required := False;
+  Binds[3].Name := 'JS_NewContext'; Binds[3].Dest := PPointer(@JS_NewContextPtr); Binds[3].Required := False;
+  Binds[4].Name := 'JS_FreeContext'; Binds[4].Dest := PPointer(@JS_FreeContextPtr); Binds[4].Required := False;
+  Binds[5].Name := 'JS_GetGlobalObject'; Binds[5].Dest := PPointer(@JS_GetGlobalObjectPtr); Binds[5].Required := False;
+  Binds[6].Name := 'JS_FreeValue'; Binds[6].Dest := PPointer(@JS_FreeValuePtr); Binds[6].Required := False;
+  Binds[7].Name := 'JS_DupValue'; Binds[7].Dest := PPointer(@JS_DupValuePtr); Binds[7].Required := False;
+  Binds[8].Name := 'JS_ToCString'; Binds[8].Dest := PPointer(@JS_ToCStringPtr); Binds[8].Required := False;
+  Binds[9].Name := 'JS_FreeCString'; Binds[9].Dest := PPointer(@JS_FreeCStringPtr); Binds[9].Required := False;
+  Binds[10].Name := 'JS_IsException'; Binds[10].Dest := PPointer(@JS_IsExceptionPtr); Binds[10].Required := False;
+  Binds[11].Name := 'JS_GetException'; Binds[11].Dest := PPointer(@JS_GetExceptionPtr); Binds[11].Required := False;
+  Binds[12].Name := 'JS_NewString'; Binds[12].Dest := PPointer(@JS_NewStringPtr); Binds[12].Required := False;
+  Binds[13].Name := 'JS_NewInt64'; Binds[13].Dest := PPointer(@JS_NewInt64Ptr); Binds[13].Required := False;
+  Binds[14].Name := 'JS_NewFloat64'; Binds[14].Dest := PPointer(@JS_NewFloat64Ptr); Binds[14].Required := False;
+  Binds[15].Name := 'JS_NewBool'; Binds[15].Dest := PPointer(@JS_NewBoolPtr); Binds[15].Required := False;
+  Binds[16].Name := 'JS_NewObject'; Binds[16].Dest := PPointer(@JS_NewObjectPtr); Binds[16].Required := False;
+  Binds[17].Name := 'JS_NewArray'; Binds[17].Dest := PPointer(@JS_NewArrayPtr); Binds[17].Required := False;
+  Binds[18].Name := 'JS_SetPropertyStr'; Binds[18].Dest := PPointer(@JS_SetPropertyStrPtr); Binds[18].Required := False;
+  Binds[19].Name := 'JS_GetPropertyStr'; Binds[19].Dest := PPointer(@JS_GetPropertyStrPtr); Binds[19].Required := False;
+  Binds[20].Name := 'JS_SetMemoryLimit'; Binds[20].Dest := PPointer(@JS_SetMemoryLimitPtr); Binds[20].Required := False;
+  Binds[21].Name := 'JS_SetGCThreshold'; Binds[21].Dest := PPointer(@JS_SetGCThresholdPtr); Binds[21].Required := False;
+  Binds[22].Name := 'JS_RunGC'; Binds[22].Dest := PPointer(@JS_RunGCPtr); Binds[22].Required := False;
+  Binds[23].Name := 'JS_SetInterruptHandler'; Binds[23].Dest := PPointer(@JS_SetInterruptHandlerPtr); Binds[23].Required := False;
+  Binds[24].Name := 'JS_NewCFunction'; Binds[24].Dest := PPointer(@JS_NewCFunctionPtr); Binds[24].Required := False;
+  Binds[25].Name := 'JS_Call'; Binds[25].Dest := PPointer(@JS_CallPtr); Binds[25].Required := False;
+  Binds[26].Name := 'JS_IsArray'; Binds[26].Dest := PPointer(@JS_IsArrayPtr); Binds[26].Required := False;
+  Binds[27].Name := 'JS_GetOwnPropertyNames'; Binds[27].Dest := PPointer(@JS_GetOwnPropertyNamesPtr); Binds[27].Required := False;
+  Binds[28].Name := 'JS_FreePropertyEnum'; Binds[28].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[28].Required := False;
+  Binds[29].Name := 'JS_AtomToString'; Binds[29].Dest := PPointer(@JS_AtomToStringPtr); Binds[29].Required := False;
+  Binds[30].Name := 'JS_FreeAtom'; Binds[30].Dest := PPointer(@JS_FreeAtomPtr); Binds[30].Required := False;
+  for I := 0 to High(Binds) do
+  begin
+    if not Bind(Binds[I].Name, P) then
+    begin
+      if Binds[I].Required then begin platform_dl_close(Lib); Exit; end;
+      PPointer(Binds[I].Dest)^ := nil;
+      Continue;
+    end;
+    PPointer(Binds[I].Dest)^ := P;
+  end;
+  // caller holds VaultRef^.Lock, global assignment serialized — no duplicate TryLoad leak, handle ownership transferred exactly once
+  VaultRef^.Lib := Lib; VaultRef^.Loaded := 1; Result := True;
 end;
 function DoProbeAvailableLocked: Boolean;
 var I: Integer; Lib: TPlatformLibrary;
 begin
-  // caller holds GLock (Owner: nextpas.core.sync.mutex TMutex → platform.sync); probes 8 names, closes handle immediately on probe success, sets GAvailable/GProbeIndex canonical cache
-  // perf: GProbeIndex single source cache reuses first probe, cold start avoids double 8× open/close failure window, zero-copy single build inline
+  // caller holds VaultRef^.Lock (Owner: nextpas.core.sync.mutex TMutex → platform.sync); probes 8 names, closes handle immediately on probe success, sets Available/ProbeIndex canonical
+  // perf: ProbeIndex single source cache reuses hit index, but negative not permanently cached — reprobe allowed on next call without restart, zero-copy single build inline
   for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
   begin
-    // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse gate
+    // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse
     BytesZero(@Lib, SizeUInt(SizeOf(Lib)));
     if platform_dl_open(PAnsiChar(JS_QUICKJS_PROBE_NAMES[I]), PLATFORM_DL_NOW, Lib) = 0 then
     begin
       // stability: probe handle closed immediately, not cached, resource not丢
-      platform_dl_close(Lib); GAvailable := 1; GProbeIndex := I; Exit(True);
+      platform_dl_close(Lib); VaultRef^.Available := 1; VaultRef^.ProbeIndex := I; Exit(True);
     end;
   end;
-  GAvailable := 0; GProbeIndex := -1; Result := False;
+  // stability: negative caches as 0 but IsAvailable/Load reprobe path bypasses permanent negative — dynamic so appearance recovers without restart
+  VaultRef^.Available := 0; VaultRef^.ProbeIndex := -1; Result := False;
 end;
 function JsQuickJsIsAvailable: Boolean;
 begin
-  // perf: atomic fast path via InterlockedCompareExchange acquire load, zero syscall when cached, hot path inline compare
-  if InterlockedCompareExchange(GAvailable, -1, -1) <> -1 then Exit(GAvailable = 1);
-  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0), not TRTLCriticalSection
-  GLock.Acquire;
+  // perf: positive fast path via atomic acquire load, zero syscall when cached available, hot path inline single compare, negative reprobes under lock (dynamic so appearance without restart)
+  if atomic_load(VaultRef^.Available, mo_acquire) = 1 then Exit(True);
+  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0)
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
   try
-    if GAvailable <> -1 then Exit(GAvailable = 1);
+    if VaultRef^.Available = 1 then Exit(True);
+    // stability: if Available=0 (negative) still reprobe to handle so dynamically appearing; not permanently cached, no restart needed
     Result := DoProbeAvailableLocked;
   finally
-    GLock.Release;
+    VaultRef^.Lock.Release;
   end;
 end;
 function JsQuickJsLoad: Boolean;
 var I: Integer;
 begin
   // perf: atomic fast path for idempotent load, zero lock when already loaded
-  if InterlockedCompareExchange(GLoaded, 0, 0) <> 0 then Exit(True);
-  GLock.Acquire;
+  if atomic_load(VaultRef^.Loaded, mo_acquire) <> 0 then Exit(True);
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
   try
-    if GLoaded <> 0 then Exit(True);
-    if GAvailable = -1 then DoProbeAvailableLocked;
-    if GAvailable = 0 then Exit(False);
-    // perf: reuse cached probe index first, cold start single open (cached) not double 8× scan, zero extra syscall, inline zero-copy via GProbeIndex single source cache
-    if (GProbeIndex >= 0) and (GProbeIndex <= High(JS_QUICKJS_PROBE_NAMES)) then
-      if TryLoad(JS_QUICKJS_PROBE_NAMES[GProbeIndex]) then Exit(True);
+    if VaultRef^.Loaded <> 0 then Exit(True);
+    if VaultRef^.Available = -1 then DoProbeAvailableLocked;
+    // stability: if previously negative (0), reprobe before failing — so file appearing after first failure recovers without restart
+    if VaultRef^.Available = 0 then
+    begin
+      DoProbeAvailableLocked;
+      if VaultRef^.Available = 0 then Exit(False);
+    end;
+    // perf: reuse cached probe index first, cold start single open (cached) not double 8× scan, zero extra syscall, inline zero-copy via ProbeIndex single source cache
+    if (VaultRef^.ProbeIndex >= 0) and (VaultRef^.ProbeIndex <= High(JS_QUICKJS_PROBE_NAMES)) then
+      if TryLoad(JS_QUICKJS_PROBE_NAMES[VaultRef^.ProbeIndex]) then Exit(True);
     for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
     begin
-      if I = GProbeIndex then Continue;
+      if I = VaultRef^.ProbeIndex then Continue;
       if TryLoad(JS_QUICKJS_PROBE_NAMES[I]) then
       begin
-        GProbeIndex := I;
+        VaultRef^.ProbeIndex := I;
         Exit(True);
       end;
     end;
     Result := False;
   finally
-    GLock.Release;
+    VaultRef^.Lock.Release;
   end;
+end;
+procedure ClearQuickJsPtrs; inline;
+begin
+  // stability: exactly-once nil, table-driven single source mirrors TryLoad, resource not丢, idempotent
+  JS_NewRuntimePtr := nil; JS_EvalPtr := nil;
+  JS_FreeRuntimePtr := nil; JS_NewContextPtr := nil; JS_FreeContextPtr := nil; JS_GetGlobalObjectPtr := nil;
+  JS_FreeValuePtr := nil; JS_DupValuePtr := nil; JS_ToCStringPtr := nil; JS_FreeCStringPtr := nil;
+  JS_IsExceptionPtr := nil; JS_GetExceptionPtr := nil; JS_NewStringPtr := nil; JS_NewInt64Ptr := nil;
+  JS_NewFloat64Ptr := nil; JS_NewBoolPtr := nil; JS_NewObjectPtr := nil; JS_NewArrayPtr := nil;
+  JS_SetPropertyStrPtr := nil; JS_GetPropertyStrPtr := nil; JS_SetMemoryLimitPtr := nil; JS_SetGCThresholdPtr := nil;
+  JS_RunGCPtr := nil; JS_SetInterruptHandlerPtr := nil; JS_NewCFunctionPtr := nil; JS_CallPtr := nil;
+  JS_IsArrayPtr := nil; JS_GetOwnPropertyNamesPtr := nil; JS_FreePropertyEnumPtr := nil; JS_AtomToStringPtr := nil; JS_FreeAtomPtr := nil;
 end;
 procedure JsQuickJsUnload;
 begin
-  GLock.Acquire;
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
   try
-    if GLoaded <> 0 then
+    if VaultRef^.Loaded <> 0 then
     begin
       // stability: exactly-once close, then zero via bytes.ops single source, resource not丢, idempotent
-      platform_dl_close(GLib);
-      // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse gate
-      BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
-      GLoaded := 0; GAvailable := -1; GProbeIndex := -1;
-      JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; JS_IsArrayPtr := nil; JS_GetOwnPropertyNamesPtr := nil; JS_FreePropertyEnumPtr := nil; JS_AtomToStringPtr := nil; JS_FreeAtomPtr := nil;
+      platform_dl_close(VaultRef^.Lib);
+      // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse
+      BytesZero(@VaultRef^.Lib, SizeUInt(SizeOf(VaultRef^.Lib)));
+      VaultRef^.Loaded := 0; VaultRef^.Available := -1; VaultRef^.ProbeIndex := -1;
+      ClearQuickJsPtrs;
     end;
   finally
-    GLock.Release;
+    VaultRef^.Lock.Release;
   end;
 end;
 initialization
-  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0), not System.TRTLCriticalSection
-  GLock := TMutex.Create;
+  // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0)
+  EnsureVaultLock;
   // perf: inline single source via bytes.ops.BytesZero single source, zero-copy
-  BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
+  BytesZero(@GVault.Lib, SizeUInt(SizeOf(GVault.Lib)));
+  GVault.Available := -1; GVault.Loaded := 0; GVault.ProbeIndex := -1;
 finalization
   // stability: finalization exactly-once release if still loaded, zero via BytesZero single source, resource not丢
-  if GLoaded <> 0 then
+  if GVault.Loaded <> 0 then
   begin
-    platform_dl_close(GLib);
-    BytesZero(@GLib, SizeUInt(SizeOf(GLib)));
+    platform_dl_close(GVault.Lib);
+    BytesZero(@GVault.Lib, SizeUInt(SizeOf(GVault.Lib)));
   end;
+  ClearQuickJsPtrs;
   // Owner: IMutex refcnt release, platform_mutex_destroy via TMutex single source, resource not丢, idempotent
-  GLock := nil;
+  if GVaultInit = 2 then
+  begin
+    VaultRef^.Lock := nil;
+    atomic_store(GVaultInit, Int32(0), mo_release);
+  end else
+    GVault.Lock := nil;
 end.

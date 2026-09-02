@@ -20,10 +20,11 @@ function JsRegistryCreate(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptio
 function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean; inline;
 implementation
 uses
-  // L0-L1 single source: vault 同步经 sync.mutex→platform.sync, 原子经 atomic single source
+  // L0-L1 single source: vault 同步经 sync.mutex→platform.sync, 原子经 atomic single source, 退避经 platform.thread
   nextpas.core.sync.mutex,
   nextpas.core.atomic,
   nextpas.core.platform.sync,
+  nextpas.core.platform.thread,
   // bootstrap: registry 为 L2 唯一扇出点，5 后端工厂经 JsRegisterBackend 扩展优雅，factory 零直接 uses 传递经此单源（显式收敛，非掩盖）
   nextpas.core.js.fake,
   nextpas.core.js.js888,
@@ -52,10 +53,12 @@ end;
 procedure EnsureVaultLock; inline;
 var
   LExp: Int32;
+  LDelay: Int32;
+  LPause: Int32;
+  LIter: Int32;
 begin
-  // perf: inline double-checked zero alloc single branch, lazy Exactly-Once via atomic CAS, 64B 友好，无递归迭代自旋
-  // stability: acquire/release 发布可见，创建异常回滚幂等（GVaultInit 0 回滚 Lock nil 幂等重试），try-finally 不丢，迭代替代递归防栈溢
-  if Assigned(VaultRef^.Lock) then Exit;
+  // perf: inline 单次 acquire 快照零锁快读，指数退避有界 1..64 + yield + futex 阻塞，高并发线程高级感，零额外栅栏
+  // stability: GVaultInit 单原子权威（消除 GLock 可空与原子双重依赖），wake 唤醒串行化零锁竞争窗口，异常回滚 wake-one 限流
   if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
   while True do
   begin
@@ -66,17 +69,33 @@ begin
         if not Assigned(VaultRef^.Lock) then
           VaultRef^.Lock := TMutex.Create;
         atomic_store(GVaultInit, Int32(2), mo_release);
+        platform_wake_address_all(@GVaultInit);
       except
         atomic_store(GVaultInit, Int32(0), mo_release);
+        platform_wake_address_one(@GVaultInit);
         raise;
       end;
       Exit;
     end;
     if LExp = 2 then Exit;
-    while atomic_load(GVaultInit, mo_acquire) = 1 do
-      cpu_pause;
+    // LExp=1: initializing — bounded exponential backoff 1→64, yield after 2 iters, then futex wait
+    LDelay := 1;
+    for LIter := 0 to 7 do
+    begin
+      for LPause := 1 to LDelay do
+        cpu_pause;
+      if atomic_load(GVaultInit, mo_acquire) <> 1 then Break;
+      if LIter >= 2 then
+        platform_thread_yield;
+      if LDelay < 64 then
+        LDelay := LDelay shl 1;
+    end;
+    if atomic_load(GVaultInit, mo_acquire) = 1 then
+      platform_wait_address32(@GVaultInit, 1, 5000000);
     if atomic_load(GVaultInit, mo_acquire) = 2 then Exit;
-    if Assigned(VaultRef^.Lock) then Exit;
+    // 零锁窗口收敛：仅以原子权威判定就绪，消除 Assigned 竞争误判；0 状态 yield 限流避免惊群
+    if atomic_load(GVaultInit, mo_acquire) = 0 then
+      platform_thread_yield;
   end;
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);

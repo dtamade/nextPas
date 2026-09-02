@@ -16,6 +16,7 @@ uses
   nextpas.core.js.pure.base,
   nextpas.core.js.value.store,
   nextpas.core.js.quickjs.ffi,
+  nextpas.core.json.value,
   nextpas.core.text.view;
 
 type
@@ -36,6 +37,7 @@ function QjsStoreGlobal(const S: TJsQjsValueStore): TJsValue; inline;
 function QjsStoreHeapLength(const S: TJsQjsValueStore): Integer; inline;
 function QjsStoreNewObject(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 function QjsStoreNewArray(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
+function QjsStoreNewJson(var S: TJsQjsValueStore; const AJson: TJsonValue; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
 function QjsStoreDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
 function QjsStoreGetKeys(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue): TJsStringArray;
@@ -60,7 +62,8 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.js.lifecycle;
+  nextpas.core.js.lifecycle,
+  nextpas.core.js.pure.value;
 
 procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute AHeap;
@@ -295,6 +298,14 @@ begin
   Result := JsValueBindContext(JsPureHeapNewArray(S.Pure.Heap), AContextId);
   Idx := QjsStoreFind(S, Result);
   QjsStoreSyncNewEntry(S, Idx, True, ACtx);
+end;
+
+function QjsStoreNewJson(var S: TJsQjsValueStore; const AJson: TJsonValue; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
+begin
+  // perf: inline single source via pure.value JsPureNewJson for primitives (IsStr/IsInt/IsReal/IsBool/IsNull single source, inline zero-copy, bytes.ops single source), array/object via QjsStoreNewArray/NewObject decorator single source (Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW), eliminates duplicate IsStr branch in quickjs context, pure.value owner single source, resource exactly-once mirror not lost
+  if AJson.IsArray then Exit(QjsStoreNewArray(S, AContextId, ACtx));
+  if AJson.IsObject then Exit(QjsStoreNewObject(S, AContextId, ACtx));
+  Result := nextpas.core.js.pure.value.JsPureNewJson(AJson, S.Pure.Heap, AContextId);
 end;
 
 function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;

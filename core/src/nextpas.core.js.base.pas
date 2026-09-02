@@ -10,8 +10,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception,
-  nextpas.core.bytes.ops;
+  nextpas.core.exception;
 
 type
   TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
@@ -54,10 +53,13 @@ type
 function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
+function JsTrimEquals(const S, Lit: string): Boolean;
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 class function TJsRuntimeOptions.Default: TJsRuntimeOptions;
 begin
@@ -134,9 +136,9 @@ begin
   end;
 end;
 
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
+function JsTrimEquals(const S, Lit: string): Boolean;
 begin
-  // single source: bytes.ops.StringTrimEquals — zero-copy TByteSpan view via SpanTrim (owner bytes.ops) + SpanEqual SIMD, no heap alloc; perf: inline thin-forward, loop not inline in owner per red-line 2 (design-conventions §2)
+  // single source: bytes.ops.StringTrimEquals — zero-copy TByteSpan view via SpanTrim (owner bytes.ops) + SpanEqual SIMD, no heap alloc; perf: thin-forward via owner, loop not inline per design-conventions §2 red-line 2, zero-copy view no alloc, O(n) single pass
   Result := StringTrimEquals(S, Lit);
 end;
 

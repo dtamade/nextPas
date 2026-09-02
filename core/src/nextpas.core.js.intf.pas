@@ -7,9 +7,14 @@ type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
   TJsValue = record
-  private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
+  private
+    FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
+    function IsKind(AKind: TJsValueKind): Boolean; inline;
+    function IsKindIn(A, B: TJsValueKind): Boolean; inline;
   public
-    function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
+    function Kind: TJsValueKind; inline;
+    function IsValid: Boolean; inline;
+    function IsAlive: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsInteger: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
@@ -63,10 +68,11 @@ function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunc
 // Context 寿命（INV-7）：状态单源下沉至 js.lifecycle (GPureClosed/GPureNextId 4B atomic acquire/release, 自然4B对齐, 64B/4 伪共享, write-once rare, geometric via bytes.ops single source, 零双注册), pure.base thin-forward, intf 零可变全局奢华薄, 不暴露 JsContextRegister/Close/IsClosed 桩 (需强一致时直调 js.lifecycle/pure.base.JsPureContextIsClosed acquire), 生命周期由 IJsContext.IsClosed 显式检查
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-// intf 奢华薄：零可变全局，守四件套 base←intf←pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)，单源 pure.value owner via bytes.ops 几何/零拷贝 (json.writer+text.escape+text.number+text.builder+text.view via pure.value 单缝)，零 intf→实现重逻辑反向依赖，资源 try-finally Done 在 owner 不丢
+// intf 奢华薄：零可变全局，守四件套 base←intf←pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE bulk IsValid 零原子; 强一致 IsAlive via pure.base→lifecycle acquire 单源)，单源 pure.value owner via bytes.ops 几何/零拷贝 (json.writer+text.escape+text.number+text.builder+text.view via pure.value 单缝)，Kind 掩码复用 IsKind/IsKindIn 表驱动 inline 单字段，零 intf→实现重逻辑反向依赖，资源 try-finally Done 在 owner 不丢
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.js.pure.value;
+  nextpas.core.js.pure.value,
+  nextpas.core.js.pure.base;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
@@ -95,11 +101,21 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭态由 IJsContext.IsClosed 显式检查（pure.base 原子 release/acquire 保障跨线程可见性），thread-affine 零成本
-// perf: 值语义谓词全 inline 零分支单字段访问，奢华薄 intf 2-space 缩进可读，单源 FKind/FValid 零拷贝，bulk 零屏障
+// INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭后旧句柄仍 IsValid=True，易悬垂误用，跨线程强一致需 IsAlive/JsPureValueIsValid (pure.base→lifecycle acquire)，thread-affine 零成本，IJsContext.IsClosed 显式检查
+// perf: 值语义谓词全 inline 单字段零分支零拷贝，奢华薄 intf 2-space，Kind 掩码复用 IsKind/IsKindIn 表驱动单源 via base，bulk 零屏障，IsAlive 强一致 acquire 单源 via lifecycle
 function TJsValue.Kind: TJsValueKind; inline;
 begin
   Result := FKind;
+end;
+
+function TJsValue.IsKind(AKind: TJsValueKind): Boolean; inline;
+begin
+  Result := FKind = AKind;
+end;
+
+function TJsValue.IsKindIn(A, B: TJsValueKind): Boolean; inline;
+begin
+  Result := (FKind = A) or (FKind = B);
 end;
 
 function TJsValue.IsValid: Boolean; inline;
@@ -107,71 +123,76 @@ begin
   Result := FValid;
 end;
 
+function TJsValue.IsAlive: Boolean; inline;
+begin
+  // perf: inline strong FValid + acquire GPureClosed via pure.base→lifecycle single source, single branch, bulk IsValid zero barrier preserved for hot path
+  Result := FValid and not JsPureContextIsClosed(FContextId);
+end;
+
 function TJsValue.IsUndefined: Boolean; inline;
 begin
-  Result := FKind = jskUndefined;
+  Result := IsKind(jskUndefined);
 end;
 
 function TJsValue.IsNull: Boolean; inline;
 begin
-  Result := FKind = jskNull;
+  Result := IsKind(jskNull);
 end;
 
 function TJsValue.IsBool: Boolean; inline;
 begin
-  Result := FKind = jskBoolean;
+  Result := IsKind(jskBoolean);
 end;
 
 function TJsValue.IsNumber: Boolean; inline;
 begin
-  // perf: Kind integer mark carries integer path zero FPU compare (jskInteger+jskNumber both numbers), inline single branch, zero FPU, preserves 2^53 exact; integer mark via Kind single source via base, L0-L3 keep, decorator zero-copy
-  Result := (FKind = jskNumber) or (FKind = jskInteger);
+  // perf: Kind 掩码复用 IsKindIn 表驱动 via IsKindIn inline 单字段零分支，zero FPU，jskInteger+jskNumber both numbers preserves 2^53
+  Result := IsKindIn(jskNumber, jskInteger);
 end;
 
 function TJsValue.IsInteger: Boolean; inline;
 begin
-  // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip), inline single compare, zero FPU overhead, avoids 2^53 precision loss, owner intf via base Kind single source
-  Result := FKind = jskInteger;
+  Result := IsKind(jskInteger);
 end;
 
 function TJsValue.IsString: Boolean; inline;
 begin
-  Result := FKind = jskString;
+  Result := IsKind(jskString);
 end;
 
 function TJsValue.IsObject: Boolean; inline;
 begin
-  Result := FKind = jskObject;
+  Result := IsKind(jskObject);
 end;
 
 function TJsValue.IsArray: Boolean; inline;
 begin
-  Result := FKind = jskArray;
+  Result := IsKind(jskArray);
 end;
 
 function TJsValue.IsFunction: Boolean; inline;
 begin
-  Result := FKind = jskFunction;
+  Result := IsKind(jskFunction);
 end;
 
 function TJsValue.IsError: Boolean; inline;
 begin
-  Result := FKind = jskError;
+  Result := IsKind(jskError);
 end;
 
 function TJsValue.IsPromise: Boolean; inline;
 begin
-  Result := FKind = jskPromise;
+  Result := IsKind(jskPromise);
 end;
 
 function TJsValue.IsSymbol: Boolean; inline;
 begin
-  Result := FKind = jskSymbol;
+  Result := IsKind(jskSymbol);
 end;
 
 function TJsValue.IsBigInt: Boolean; inline;
 begin
-  Result := FKind = jskBigInt;
+  Result := IsKind(jskBigInt);
 end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
