@@ -83,33 +83,25 @@ begin
   end;
   Result := -1;
 end;
-{ bytes.ops single source }
-generic procedure JsPureArrayReserve<T>(var Arr: specialize TJsArray<T>; AAdditional: SizeUInt);
-var LOld, LNeed, LCap, LCurCap: SizeUInt;
+{ bytes.ops single source — geometric via BytesDynReserve/BytesDynEnsureLength single source, no generic copy, no TBytes absolute alias in pure.value, heap layout encapsulated in mem.dynarray via bytes.ops, amortized O(1) BYTES_BUILDER_MIN_GROW 64→2×, inline thin-forward zero-copy }
+procedure JsPurePropsReserve(var Props: TJsPurePropArray; AAdditional: SizeUInt); inline;
 begin
   if AAdditional=0 then Exit;
-  LOld:=SizeUInt(Length(Arr)); LNeed:=LOld+AAdditional;
-  LCurCap:=BytesDynCapacityGeneric(Arr, SizeOf(T));
-  if LCurCap>=LNeed then Exit;
-  LCap:=BytesNextCapacity(LOld, LNeed);
-  SetLength(Arr, LCap);
-  if LCap<>LOld then BytesDynSetLengthGeneric(Arr, LOld);
+  nextpas.core.bytes.ops.BytesDynReserve(Props, SizeOf(TJsPureProp), AAdditional);
 end;
-generic procedure EnsureCapacityOne<T>(var Arr: specialize TJsArray<T>);
-var LOld: SizeUInt;
+procedure JsPureHeapReserve(var Heap: TJsPureHeap; AAdditional: SizeUInt); inline;
 begin
-  LOld:=SizeUInt(Length(Arr));
-  specialize JsPureArrayReserve<T>(Arr, 1);
-  if SizeUInt(Length(Arr))<>LOld+1 then BytesDynSetLengthGeneric(Arr, LOld+1);
+  if AAdditional=0 then Exit;
+  nextpas.core.bytes.ops.BytesDynReserve(Heap, SizeOf(TJsPureObject), AAdditional);
 end;
 procedure EnsurePropsCapacityOne(var Props: TJsPurePropArray); inline;
-begin specialize EnsureCapacityOne<TJsPureProp>(Props); end;
+begin
+  nextpas.core.bytes.ops.BytesDynEnsureLength(Props, SizeOf(TJsPureProp), SizeUInt(Length(Props))+1);
+end;
 procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
-begin specialize EnsureCapacityOne<TJsPureObject>(Heap); end;
-procedure JsPurePropsReserve(var Props: TJsPurePropArray; AAdditional: SizeUInt); inline;
-begin specialize JsPureArrayReserve<TJsPureProp>(Props, AAdditional); end;
-procedure JsPureHeapReserve(var Heap: TJsPureHeap; AAdditional: SizeUInt); inline;
-begin specialize JsPureArrayReserve<TJsPureObject>(Heap, AAdditional); end;
+begin
+  nextpas.core.bytes.ops.BytesDynEnsureLength(Heap, SizeOf(TJsPureObject), SizeUInt(Length(Heap))+1);
+end;
 function PropHashStr(const S: string): UInt32; inline;
 begin
   Result := JsPureHashStr(S);

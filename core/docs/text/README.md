@@ -37,7 +37,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | 单元                                  | 职责                                   | 关键 API                                                                        | 适合场景                                |
 | ------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------- |
 | `nextpas.core.text.view`              | 非 owning 的 UTF-8/byte 视图           | `TStringView.Create`, `Slice`, `Trim`, `IndexOfStr`                             | parser、零拷贝 slice、轻量比较          |
-| `nextpas.core.text.scan`              | SIMD 优先的扫描原语                    | `ScanSkipWhitespace`, `ScanJsonNumber`, `ScanFindSubstring`, `ViewMatchLiteral` | JSON/TOML/YAML/tokenizer 这类指针式扫描 |
+| `nextpas.core.text.scan`              | SIMD 优先的扫描原语（新增 `ScanPredicateTable` 通用谓词+字面量表单遍 VecWidth，复用 `bytes.ops`/`simd.vec` 单源，零拷贝，B/op=0，js.eval/json 共享） | `ScanSkipWhitespace`, `ScanJsonNumber`, `ScanFindSubstring`, `ViewMatchLiteral`, `ScanPredicateTable` | JSON/TOML/YAML/tokenizer 这类指针式扫描 |
 | `nextpas.core.text.utf8`              | UTF-8 解码、编码、校验、迭代           | `UTF8Decode`, `UTF8Encode`, `UTF8IsValid`, `TUTF8Iterator`                      | 需要自己控制码点迭代或校验边界          |
 | `nextpas.core.text.number`            | 数值到缓冲区的底层格式化               | `IntToBuffer`, `UIntToBuffer`, `FloatToBuffer`                                  | Builder、writer、formatter 的底层输出   |
 | `nextpas.core.text.unicode.props`     | Unicode property/general category 查询 | `HasBinaryProperty`, `GetGeneralCategory`, `IsLetter`, `IsWhitespace`           | Unicode 语义分类、校验规则              |

@@ -48,6 +48,23 @@ procedure ViewSkipWhitespace(var AView: TStringView); inline;
 function ViewMatchLiteral(var AView: TStringView;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
 
+type
+  TScanSingleEntry = record
+    Ch: AnsiChar;
+    Need: Boolean;
+    Found: Boolean;
+    Pos: SizeUInt;
+  end;
+  TScanLitEntry = record
+    View: TStringView;
+    Need: Boolean;
+    Found: Boolean;
+    First: AnsiChar;
+  end;
+
+// table-driven zero-copy single-pass predicate+literal scan — L1 single source via VecWidth predicate table (simd.vec VecCmpEq/VecCtz), bytes.ops single source via TStringView Slice.Equals, B/op=0, reuse candidate for js.eval single-pass + json literal fast path sharing generic predicate table, not inline per red-line 2 (O(n) loop, I-Cache), L0-L3 keep, text.scan owner
+procedure ScanPredicateTable(const V: TStringView; var Singles: array of TScanSingleEntry; var Lits: array of TScanLitEntry);
+
 implementation
 
 uses
@@ -731,6 +748,94 @@ begin
   if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
     Exit;
   Result := LPos;
+end;
+
+// ScanPredicateTable — generic table-driven single-pass SIMD VecWidth predicate table single source, zero-copy views via TStringView Slice.Equals (bytes.ops single source), VecWidth single pass + tail VecWidth overlapping single pass (short <VecWidth scalar branchless), not inline per red-line 2 (O(n) single scan vs O(k*n) multi-pass), B/op=0, reuse candidate for js.eval + json literal fast path
+procedure ScanPredicateTable(const V: TStringView; var Singles: array of TScanSingleEntry; var Lits: array of TScanLitEntry);
+var
+  LLen, LPos: SizeUInt;
+  LCombined: TVecMask;
+  I, J: Integer;
+  B: AnsiChar;
+  function AllDone: Boolean; inline;
+  var K: Integer;
+  begin
+    for K := 0 to High(Singles) do if Singles[K].Need and not Singles[K].Found then Exit(False);
+    for K := 0 to High(Lits) do if Lits[K].Need and not Lits[K].Found then Exit(False);
+    Result := True;
+  end;
+  procedure ProcessMaskedChunk(const ABase: SizeUInt; const AMask: TVecMask); inline;
+  var
+    LLocalMask: TVecMask;
+    LLocalBit: Int32;
+    K: Integer;
+  begin
+    LLocalMask := AMask;
+    while LLocalMask <> TVecMask(0) do
+    begin
+      LLocalBit := VecCtz(LLocalMask);
+      B := V.Data[ABase + SizeUInt(LLocalBit)];
+      for K := 0 to High(Singles) do if Singles[K].Need and not Singles[K].Found and (B = Singles[K].Ch) then
+      begin
+        Singles[K].Found := True;
+        Singles[K].Pos := ABase + SizeUInt(LLocalBit);
+        Singles[K].Need := False;
+        Break;
+      end;
+      for K := 0 to High(Lits) do if Lits[K].Need and not Lits[K].Found and (B = Lits[K].First) then
+        if (ABase + SizeUInt(LLocalBit) + Lits[K].View.Len <= LLen) and V.Slice(ABase + SizeUInt(LLocalBit), Lits[K].View.Len).Equals(Lits[K].View) then
+        begin
+          Lits[K].Found := True;
+          Lits[K].Need := False;
+          Break;
+        end;
+      LLocalMask := LLocalMask and not TVecMask(TVecMask(1) shl LLocalBit);
+      if AllDone then Break;
+    end;
+  end;
+begin
+  LLen := V.Len;
+  if LLen = 0 then Exit;
+  for I := 0 to High(Lits) do if Lits[I].View.Len > 0 then Lits[I].First := Lits[I].View.Data[0];
+  LPos := 0;
+  while LPos + VecWidth <= LLen do
+  begin
+    if AllDone then Break;
+    LCombined := TVecMask(0);
+    for I := 0 to High(Singles) do if Singles[I].Need and not Singles[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(Singles[I].Ch));
+    for I := 0 to High(Lits) do if Lits[I].Need and not Lits[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(Lits[I].First));
+    if LCombined = TVecMask(0) then begin Inc(LPos, VecWidth); Continue; end;
+    ProcessMaskedChunk(LPos, LCombined);
+    if AllDone then Break;
+    Inc(LPos, VecWidth);
+  end;
+  if AllDone then Exit;
+  if LPos < LLen then
+  begin
+    if LLen >= VecWidth then
+    begin
+      LPos := LLen - VecWidth;
+      if not AllDone then
+      begin
+        LCombined := TVecMask(0);
+        for I := 0 to High(Singles) do if Singles[I].Need and not Singles[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(Singles[I].Ch));
+        for I := 0 to High(Lits) do if Lits[I].Need and not Lits[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(Lits[I].First));
+        if LCombined <> TVecMask(0) then ProcessMaskedChunk(LPos, LCombined);
+      end;
+    end else
+    begin
+      while LPos < LLen do
+      begin
+        if AllDone then Break;
+        B := V.Data[LPos];
+        for J := 0 to High(Singles) do if Singles[J].Need and not Singles[J].Found and (B = Singles[J].Ch) then
+        begin Singles[J].Found := True; Singles[J].Pos := LPos; Singles[J].Need := False; Break; end;
+        for J := 0 to High(Lits) do if Lits[J].Need and not Lits[J].Found and (B = Lits[J].First) and (LPos + Lits[J].View.Len <= LLen) and V.Slice(LPos, Lits[J].View.Len).Equals(Lits[J].View) then
+        begin Lits[J].Found := True; Lits[J].Need := False; Break; end;
+        Inc(LPos);
+      end;
+    end;
+  end;
 end;
 
 end.

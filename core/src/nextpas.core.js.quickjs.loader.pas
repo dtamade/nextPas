@@ -23,6 +23,7 @@ var
   GVault: TJsQuickJsVault;
   GVaultInit: Int32 = 0; // 0 uninit,1 initializing,2 ready
   GProbeNamesCache: string = ''; // cached handle reuse: one-time build, zero per-call alloc/geom expand on error path
+  GProbeNamesReady: Int32 = 0; // atomic publication flag: 0 uninit,1 ready — guards non-atomic string via acquire/release
 procedure ClearQuickJsPtrs; forward;
 function VaultRef: PJsQuickJsVault; inline;
 begin
@@ -54,15 +55,16 @@ begin
 end;
 function JsQuickJsProbeNames: string;
 begin
-  // perf: fast path single string refcount inc zero-copy (no TBufStringBuilder alloc), hot path lock-free read of immutable after init
-  // stability: double-checked locking via VaultRef^.Lock (IMutex→platform.sync), Exactly-Once via SyncVaultEnsureLock, no race double BuildProbeNames alloc/overwrite
-  if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
+  // perf: fast path atomic acquire load of Ready flag (single atomic, no lock/TBufStringBuilder), zero-copy immutable string refcount inc only when ready, hot path lock-free after init, try-finally Done 不丢
+  // stability: DCL with acquire/release fences guards non-atomic string publication (refcount野指针 fix), Exactly-Once via VaultRef^.Lock→platform.sync, GProbeNamesReady acquire before string read + release after string write
+  if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit(GProbeNamesCache);
   EnsureVaultLock;
   VaultRef^.Lock.Acquire;
   try
-    if GProbeNamesCache <> '' then Exit(GProbeNamesCache);
+    if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit(GProbeNamesCache);
     Result := BuildProbeNames;
     GProbeNamesCache := Result;
+    atomic_store(GProbeNamesReady, Int32(1), mo_release);
   finally
     VaultRef^.Lock.Release;
   end;
@@ -232,15 +234,16 @@ end;
 procedure InitProbeCache;
 var LTmp: string;
 begin
-  // perf: double-checked locking via VaultRef^.Lock Exactly-Once, one-time TBufStringBuilder geometric (BytesGrowCapacity single source via bytes.ops BytesCopy, zero-copy Move, try-finally Done 不丢), cached handle reuse zero per-call alloc
-  // stability: lock protects GProbeNamesCache non-atomic string, no race double BuildProbeNames heap alloc/overwrite, immutable after init, try-finally Done 不丢
-  if GProbeNamesCache <> '' then Exit;
+  // perf: double-checked locking via VaultRef^.Lock Exactly-Once + atomic Ready flag fast path (single acquire load, zero-copy Move, try-finally Done 不丢), one-time TBufStringBuilder geometric BytesGrowCapacity single source via bytes.ops BytesCopy
+  // stability: acquire/release fences guard non-atomic string publication (refcount野指针 fix), lock protects GProbeNamesCache heap alloc/overwrite, immutable after init, GProbeNamesReady release after write / acquire before read
+  if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit;
   EnsureVaultLock;
   VaultRef^.Lock.Acquire;
   try
-    if GProbeNamesCache <> '' then Exit;
+    if atomic_load(GProbeNamesReady, mo_acquire) <> 0 then Exit;
     LTmp := BuildProbeNames;
     GProbeNamesCache := LTmp;
+    atomic_store(GProbeNamesReady, Int32(1), mo_release);
   finally
     VaultRef^.Lock.Release;
   end;
@@ -252,8 +255,8 @@ initialization
   // perf: inline single source via bytes.ops.BytesZero single source, zero-copy
   BytesZero(@GVault.Lib, SizeUInt(SizeOf(GVault.Lib)));
   GVault.Available := -1; GVault.Loaded := 0; GVault.ProbeIndex := -1;
-  // perf: one-time probe names cache, bytes.ops single source via InitProbeCache, zero per-call heap on error path
-  if GProbeNamesCache = '' then InitProbeCache;
+  // perf: one-time probe names cache, bytes.ops single source via InitProbeCache, zero per-call heap on error path, atomic Ready flag single source
+  if atomic_load(GProbeNamesReady, mo_acquire) = 0 then InitProbeCache;
 finalization
   // stability: finalization exactly-once release if still loaded, zero via BytesZero single source, resource not丢
   if GVault.Loaded <> 0 then

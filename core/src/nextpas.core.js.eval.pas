@@ -1,7 +1,6 @@
 unit nextpas.core.js.eval;
-{ gated scan + strategy table — single source via bytes.ops SIMD, zero-copy,
-  resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
-  Perf: ScanEvalPredicates/TryHostDispatch not inline per red-line 2 (O(n) loops, I-Cache), thin forwards inline, bytes.ops single source. }
+{ gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic), zero-copy via bytes.ops SIMD (Slice.Equals/TStringView), resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
+  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2), TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -33,8 +32,7 @@ implementation
 uses
   nextpas.core.text.number,
   nextpas.core.bytes.ops,
-  nextpas.core.simd.vec,
-  nextpas.core.simd.base,
+  nextpas.core.text.scan,
   nextpas.core.js.pure.value;
 type
   TEvalPredicates = record
@@ -62,132 +60,36 @@ begin
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// scanner — table-driven single-pass SIMD VecWidth predicate table single source, zero-copy views, not inline per red-line 2 (O(n) single scan vs O(3n) triple IndexOf), bytes.ops single source via Slice.Equals (CONTRACT §9), plus/paren + HasX singles coalesced + HasJson/While literals table-driven single source, VecWidth single pass + tail VecWidth overlapping single pass (short <VecWidth table-driven scalar branchless), inline thin helpers, B/op=0
+// scanner — delegated to text.scan generic predicate+literal table — independent scan semantics via text.scan ScanPredicateTable single source, VecWidth predicate table via simd.vec/bytes.ops, zero-copy views, not inline per red-line 2, L0-L3 keep, B/op=0
 procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates);
 var
   LLen: SizeUInt;
   LNeedJson, LNeedWhile: Boolean;
-  LJsonLen, LWhileLen: SizeUInt;
   LJsonView, LWhileView: TStringView;
-  LPos: SizeUInt;
-  LCombined: TVecMask;
-  // table-driven singles: '+' '(' 'x' (x gated by LNeedJson)
-  LPredSingles: array[0..2] of AnsiChar;
-  LSingleNeed: array[0..2] of Boolean;
-  // table-driven lits: Json, While (first-char probe + Slice.Equals single source via bytes.ops)
-  LLitViews: array[0..1] of TStringView;
-  LLitLens: array[0..1] of SizeUInt;
-  LLitNeed: array[0..1] of Boolean;
-  LLitFirst: array[0..1] of AnsiChar;
-  I: Integer;
-  B: AnsiChar;
-  function AllDone: Boolean; inline;
-  begin
-    Result := (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) and Pred.HasPlus and Pred.HasParen;
-  end;
-  procedure ProcessMaskedChunk(const ABase: SizeUInt; const AMask: TVecMask); inline;
-  var
-    LLocalMask: TVecMask;
-    LLocalBit: Int32;
-    J: Integer;
-  begin
-    LLocalMask := AMask;
-    while LLocalMask <> TVecMask(0) do
-    begin
-      LLocalBit := VecCtz(LLocalMask);
-      B := V.Data[ABase + SizeUInt(LLocalBit)];
-      // singles table-driven dispatch single source
-      for J := 0 to 2 do if LSingleNeed[J] and (B = LPredSingles[J]) then
-      begin
-        case J of
-          0: if not Pred.HasPlus then begin Pred.HasPlus := True; Pred.PlusPos := ABase + SizeUInt(LLocalBit); LSingleNeed[J] := False; end;
-          1: if not Pred.HasParen then begin Pred.HasParen := True; LSingleNeed[J] := False; end;
-          2: if not Pred.HasX then begin Pred.HasX := True; LSingleNeed[J] := False; end;
-        end;
-        Break;
-      end;
-      // lits table-driven single source via bytes.ops Slice.Equals zero-copy
-      for J := 0 to 1 do if LLitNeed[J] and (B = LLitFirst[J]) then
-        if (ABase + SizeUInt(LLocalBit) + LLitLens[J] <= LLen) and V.Slice(ABase + SizeUInt(LLocalBit), LLitLens[J]).Equals(LLitViews[J]) then
-        begin
-          case J of 0: Pred.HasJson := True; 1: Pred.HasWhile := True; end;
-          LLitNeed[J] := False;
-          Break;
-        end;
-      LLocalMask := LLocalMask and not TVecMask(TVecMask(1) shl LLocalBit);
-      if AllDone then Break;
-    end;
-  end;
+  LSingles: array[0..2] of TScanSingleEntry;
+  LLits: array[0..1] of TScanLitEntry;
 begin
   Pred.HasWhile := False; Pred.HasJson := False; Pred.HasX := False;
   Pred.HasPlus := False; Pred.HasParen := False; Pred.PlusPos := 0;
   if V.IsEmpty then Exit;
   LLen := V.Len;
-  LJsonLen := SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY));
-  LWhileLen := SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE));
-  LNeedJson := LLen >= LJsonLen;
-  LNeedWhile := (ATimeoutMs > 0) and (LLen >= LWhileLen);
-  // no early exit on LNeedJson/While alone: Plus/Paren coalesced into same single pass for TryPureIntAdd zero extra O(n)
+  LNeedJson := LLen >= SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY));
+  LNeedWhile := (ATimeoutMs > 0) and (LLen >= SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE)));
   LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
   LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  // table-driven init single source via bytes.ops zero-copy views, VecWidth predicate table
-  LPredSingles[0] := '+'; LPredSingles[1] := '('; LPredSingles[2] := 'x';
-  LSingleNeed[0] := True; LSingleNeed[1] := True; LSingleNeed[2] := LNeedJson;
-  LLitViews[0] := LJsonView; LLitViews[1] := LWhileView;
-  LLitLens[0] := LJsonLen; LLitLens[1] := LWhileLen;
-  LLitNeed[0] := LNeedJson; LLitNeed[1] := LNeedWhile;
-  LLitFirst[0] := LJsonView.Data[0]; LLitFirst[1] := LWhileView.Data[0];
-  // perf: single-pass table-driven SIMD VecCmpEq single source, O(n) single scan vs O(3n) triple pass, bytes.ops Slice.Equals single source, VecWidth predicate table + literal table single source, early exit only when all predicates known, B/op=0
-  LPos := 0;
-  while LPos + VecWidth <= LLen do
-  begin
-    if AllDone then Break;
-    LCombined := TVecMask(0);
-    for I := 0 to 2 do if LSingleNeed[I] then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(LPredSingles[I]));
-    for I := 0 to 1 do if LLitNeed[I] then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LLitFirst[I]));
-    if LCombined = TVecMask(0) then begin Inc(LPos, VecWidth); Continue; end;
-    ProcessMaskedChunk(LPos, LCombined);
-    if AllDone then Break;
-    Inc(LPos, VecWidth);
-  end;
-  if AllDone then goto Final;
-  // tail merged to VecWidth predicate table: overlapping final VecWidth for LLen >= VecWidth (single pass, no per-byte multi-branch), else table-driven scalar branchless
-  if LPos < LLen then
-  begin
-    if LLen >= VecWidth then
-    begin
-      // overlapping tail VecWidth window covers remaining <VecWidth without per-byte multi-branch
-      LPos := LLen - VecWidth;
-      if not AllDone then
-      begin
-        LCombined := TVecMask(0);
-        for I := 0 to 2 do if LSingleNeed[I] then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(LPredSingles[I]));
-        for I := 0 to 1 do if LLitNeed[I] then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LLitFirst[I]));
-        if LCombined <> TVecMask(0) then ProcessMaskedChunk(LPos, LCombined);
-      end;
-    end else
-    begin
-      // short string (<VecWidth): single-branch O(n) jump table vs O(n·m) double loops, zero VecWidth setup, bytes.ops Slice.Equals single source, inline, zero-copy, B/op=0
-      while LPos < LLen do
-      begin
-        if AllDone then Break;
-        B := V.Data[LPos];
-        // single dispatch chain — one compare cascade vs two nested for-loops (5× per byte), branchless table via direct equality single source
-        if LSingleNeed[0] and (B = LPredSingles[0]) then
-        begin if not Pred.HasPlus then begin Pred.HasPlus := True; Pred.PlusPos := LPos; end; LSingleNeed[0] := False; end
-        else if LSingleNeed[1] and (B = LPredSingles[1]) then
-        begin if not Pred.HasParen then begin Pred.HasParen := True; LSingleNeed[1] := False; end; end
-        else if LSingleNeed[2] and (B = LPredSingles[2]) then
-        begin if not Pred.HasX then begin Pred.HasX := True; LSingleNeed[2] := False; end; end
-        else if LLitNeed[0] and (B = LLitFirst[0]) and (LPos + LLitLens[0] <= LLen) and V.Slice(LPos, LLitLens[0]).Equals(LLitViews[0]) then
-        begin Pred.HasJson := True; LLitNeed[0] := False; end
-        else if LLitNeed[1] and (B = LLitFirst[1]) and (LPos + LLitLens[1] <= LLen) and V.Slice(LPos, LLitLens[1]).Equals(LLitViews[1]) then
-        begin Pred.HasWhile := True; LLitNeed[1] := False; end;
-        Inc(LPos);
-      end;
-    end;
-  end;
-Final:
+  // table-driven init single source via text.scan zero-copy views, VecWidth predicate table delegated to L1 text.scan generic ScanPredicateTable (bytes.ops single source via Slice.Equals), reuse candidate for json literal fast path sharing generic predicate table, inline thin, B/op=0
+  LSingles[0].Ch := '+'; LSingles[0].Need := True; LSingles[0].Found := False; LSingles[0].Pos := 0;
+  LSingles[1].Ch := '('; LSingles[1].Need := True; LSingles[1].Found := False; LSingles[1].Pos := 0;
+  LSingles[2].Ch := 'x'; LSingles[2].Need := LNeedJson; LSingles[2].Found := False; LSingles[2].Pos := 0;
+  LLits[0].View := LJsonView; LLits[0].Need := LNeedJson; LLits[0].Found := False; LLits[0].First := #0;
+  LLits[1].View := LWhileView; LLits[1].Need := LNeedWhile; LLits[1].Found := False; LLits[1].First := #0;
+  // perf: single-pass table-driven SIMD via text.scan single source, O(n) single scan vs O(k*n) multi-pass, bytes.ops Slice.Equals single source, VecWidth predicate+literal table generic sharing, not inline per red-line 2, L0-L3 keep
+  ScanPredicateTable(V, LSingles, LLits);
+  Pred.HasPlus := LSingles[0].Found; Pred.PlusPos := LSingles[0].Pos;
+  Pred.HasParen := LSingles[1].Found;
+  Pred.HasX := LSingles[2].Found;
+  Pred.HasJson := LLits[0].Found;
+  Pred.HasWhile := LLits[1].Found;
   if not Pred.HasJson then Pred.HasX := False;
 end;
 function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; inline;

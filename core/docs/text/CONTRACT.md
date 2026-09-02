@@ -26,7 +26,7 @@ text.escape        ← C/JSON/HTML 转义/反转义
 text.grapheme      ← Grapheme 宽度门面（边界委托 unicode.segment）
 text.width         ← 显示宽度计算（EastAsianWidth）
 text.number        ← 高性能数字→字符串（Ryu 算法）
-text.scan          ← 字符串扫描/解析
+text.scan          ← 字符串扫描/解析（新增 ScanPredicateTable 通用谓词+字面量 VecWidth 表驱动单源，零拷贝 via bytes.ops/simd.vec，js.eval/json 共享复用，L1 single source）
 text.unicode       ← Unicode 门面（属性/case/normalize/segment/collate…）
   ├── types / base / utils
   ├── props          ← GC / BinaryProperty / GCB / InCB

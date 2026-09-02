@@ -15,6 +15,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
@@ -30,9 +31,10 @@ var
   GPureClosedLenPad: TCacheLinePad; // 64B isolation from Lock
   GPureClosedLock: Int32 = 0; // spinlock single source, 64B isolated
   GPureClosedLockPad: TCacheLinePad; // 64B isolation from Free
-  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric, 64B tail
+  GPureFree: array of UInt64; // freelist bounded recycling via bytes.ops geometric + mem.dynarray Exactly-Once poke single source, amortized O(1) inline zero-copy, freelist reuse candidate (extractable to nextpas.core.collections.freelist)
 function GPureFreeCapacity: SizeUInt; inline;
 begin
+  // inline single source probe via bytes.ops -> mem.dynarray, zero-copy heap probe, bytes.ops single slit
   Result := BytesDynCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
 end;
 function GPureIndexOf(AId: UInt64): UInt32; inline;
@@ -48,9 +50,9 @@ begin
   Result := (UInt64(AEpoch) shl 32) or UInt64(AIdx);
 end;
 procedure TryShrinkGPureFreeLocked; inline;
-var LCap, LLen: SizeUInt;
+var LCap, LLen, LNewCap: SizeUInt;
 begin
-  // inline shrink when 4x bloat, single SetLength, bytes.ops single source
+  // inline geometric half-shrink when 4x bloat, bytes.ops single source + mem.dynarray Exactly-Once poke, amortized O(1) inline zero-copy, avoids periodic large copy jitter in long bulk NewContext/Close
   LCap := GPureFreeCapacity;
   LLen := SizeUInt(Length(GPureFree));
   if LLen = 0 then
@@ -59,7 +61,18 @@ begin
     Exit;
   end;
   if (LCap > 64) and (LLen * 4 < LCap) then
-    SetLength(GPureFree, Integer(LLen));
+  begin
+    // half shrink vs exact truncate: decay 2x not LLen, reduces copy size and frequency, bytes.ops geometric single source + poke heap capacity retained
+    LNewCap := LCap shr 1;
+    if LNewCap < 64 then LNewCap := 64;
+    if LNewCap < LLen then LNewCap := LLen;
+    if LNewCap < LCap then
+    begin
+      SetLength(GPureFree, Integer(LNewCap));
+      if SizeUInt(Length(GPureFree)) <> LLen then
+        DynArraySetLengthGeneric(GPureFree, LLen);
+    end;
+  end;
 end;
 // heap growth single source via bytes.ops geometric (BytesDynEnsureLength) single slit, inline zero-copy, amortized O(1)
 procedure GPureClosedEnsure(const ANewLen: SizeUInt); inline;
@@ -94,11 +107,31 @@ begin
   finally
     RawSpinRelease(GPureClosedLock);
   end;
-  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric, inline zero-copy
+  // no free slot — lock-free id via atomic_fetch_add_64, bytes.ops geometric, inline zero-copy, freelist bounded recycling single source via bytes.ops+mem.dynarray
   LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
-  // wrap detect: UInt32 low 32 bits is index, >2^32 would reuse and collide with freelist epoch
+  // wrap detect: 2^32 index space, long service freelist reuse not hard DoS — retry freelist before throw, generation-tagged epoch protects ABA per INV-7
   if UInt64(LId) > High(UInt32) then
-    raise EInvalidOperation.Create('JsPureContextRegister: id space exhausted (2^32 wrap)');
+  begin
+    // stability: long service bulk NewContext/Close churn recycles via GPureFree, not monotonic DoS; retry freelist bounded recycling single source
+    RawSpinAcquire(GPureClosedLock);
+    try
+      if Length(GPureFree) > 0 then
+      begin
+        LIdx := UInt32(GPureFree[High(GPureFree)]);
+        SetLength(GPureFree, Length(GPureFree) - 1);
+        LStored := atomic_load(GPureClosed[LIdx], mo_acquire);
+        LEpoch := (LStored shr 1) + 1;
+        LStored := LEpoch shl 1;
+        atomic_store(GPureClosed[LIdx], LStored, mo_release);
+        Result := GPureMakeId(LIdx, LEpoch);
+        TryShrinkGPureFreeLocked;
+        Exit;
+      end;
+    finally
+      RawSpinRelease(GPureClosedLock);
+    end;
+    raise EInvalidOperation.Create('JsPureContextRegister: id space exhausted (2^32 wrap) — no free slots after freelist retry, all 4B contexts live');
+  end;
   LIdx := UInt32(UInt64(LId));
   Result := GPureMakeId(LIdx, 0);
   if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_acquire) then
