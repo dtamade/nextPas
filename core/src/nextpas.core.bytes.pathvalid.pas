@@ -18,7 +18,7 @@ function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
   无'//'/'.'/'..'段，尾随'/'合法。inline+零拷贝：原串索引扫描，无Copy/分配。 }
 function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
 { 参数化单源：阈值/尾斜杠差异收敛（复用 bytes.ops 单源段扫描、零拷贝原串索引，无Copy/分配）；
-  AAllowTrailingSlash=False 时尾随'/'拒绝（tar link target 4096 语义），True 时允许（归档名 tar/zip）。
+  AAllowTrailingSlash=False 时尾随'/'拒绝（tar link target C_TAR_MAX_LINK_BYTES 语义），True 时允许（归档名 tar/zip）。
   IsSafeArchiveEntryName 为 True 薄转发，IsSafeTarLinkTarget 经此 Ex 薄转发，消除 80% 重复。inline 薄转发。 }
 function IsSafeArchiveEntryNameEx(const AName: string; const AMaxBytes: SizeInt; const AAllowTrailingSlash: Boolean): Boolean; inline;
 

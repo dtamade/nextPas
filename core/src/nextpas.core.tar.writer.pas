@@ -40,7 +40,8 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.builder,
-  nextpas.core.tar.common;
+  nextpas.core.tar.common,
+  nextpas.core.log.intf;
 
 const
   C_STREAM_BUF_SIZE = 65536;
@@ -389,14 +390,22 @@ begin
 end;
 
 destructor TTarWriter.Destroy;
+var
+  LUnwinding: Boolean;
 begin
-  // L2 pure I/O: IWriter单一职责克制，无ILogger可观测缝；best-effort补两零块，抑制次生逃逸保原始异常上下文，无异常展开分支与日志告警；bytes.ops单源zero-copy retained（WriteBlock/WritePaddedPayload直接Write切片，FillChar仅PadLen，inline EmitEntry）；FIOBuf于Finish即释+析构finally双保险无linger峰值，try..finally必释资源不丢
+  // 复用 builder IsExceptionUnwinding 显式分叉：捕获于 Finish 前；unwind 期抑制次生并经 log.intf Warn 可观测（NullLogger 默认零分配 inline，无 StdErr 直触），非 unwind 期透传保链式 Finish fail-closed 一致；bytes.ops 单源 zero-copy（WriteBlock/WritePaddedPayload 直接 Write 切片，FillChar 仅 PadLen，inline EmitEntry）；FIOBuf 于 Finish 即释+析构 finally 双保险无 linger 峰值，try..finally 必释资源
+  LUnwinding := IsExceptionUnwinding;
   try
     if not FFinished then
       try
         Finish;
       except
-        // best-effort suppress secondary escape
+        on E: Exception do
+        begin
+          if not LUnwinding then
+            raise;
+          NullLogger.Warn('tar: writer destroy suppress finish failure (short write): ' + E.Message);
+        end;
       end;
   finally
     FIOBuf := nil;

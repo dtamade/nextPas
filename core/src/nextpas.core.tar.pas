@@ -42,6 +42,7 @@ const
   C_TAR_BLOCK_SIZE = nextpas.core.tar.base.C_TAR_BLOCK_SIZE;
   C_TAR_DEFAULT_MAX_ENTRY = nextpas.core.tar.base.C_TAR_DEFAULT_MAX_ENTRY;
   C_TAR_MAX_NAME_BYTES = nextpas.core.tar.base.C_TAR_MAX_NAME_BYTES;
+  C_TAR_MAX_LINK_BYTES = nextpas.core.tar.base.C_TAR_MAX_LINK_BYTES;
 
 function IsSafeTarEntryName(const AName: string): Boolean; inline;
 procedure ValidateTarEntryName(const AName: string); inline;

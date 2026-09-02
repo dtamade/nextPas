@@ -15,7 +15,8 @@ uses
   nextpas.core.tar.writer,
   nextpas.core.io.memory,
   nextpas.core.fs,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.archive.pax;
 
 function BytesOf(const S: string): TBytes; inline;
 begin
@@ -236,7 +237,7 @@ var
   Guard: IInterface;
 begin
   Tar := nil;
-  PaxRec := TarFormatPaxRecord('path', 'inherited.txt');
+  PaxRec := ArchivePaxFormatRecord('path', 'inherited.txt');
   PaxBytes := StringToBytes(PaxRec);
   EmitHeader(Tar, '', 'g', Length(PaxBytes));
   AppendPayload(Tar, PaxBytes);
@@ -267,7 +268,7 @@ var
   PaxBytes: TBytes;
 begin
   Tar := nil;
-  PaxRec := TarFormatPaxRecord('path', 'once.txt');
+  PaxRec := ArchivePaxFormatRecord('path', 'once.txt');
   PaxBytes := StringToBytes(PaxRec);
   EmitHeader(Tar, '', 'g', Length(PaxBytes));
   AppendPayload(Tar, PaxBytes);
@@ -296,7 +297,7 @@ var
   PaxBytes: TBytes;
 begin
   Tar := nil;
-  PaxRec := TarFormatPaxRecord('path', '../evil.txt');
+  PaxRec := ArchivePaxFormatRecord('path', '../evil.txt');
   PaxBytes := StringToBytes(PaxRec);
   EmitHeader(Tar, '', 'g', Length(PaxBytes));
   AppendPayload(Tar, PaxBytes);

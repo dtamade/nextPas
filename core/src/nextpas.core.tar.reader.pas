@@ -88,7 +88,7 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string;
     { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
-    { — 非热点字段缓存：零拷贝 slice 后单次 SpanEqual 复用已分配串（长度不等直接跳 MemEqual，首字节快滤降额外开销，低命中率零额外 Span 构造），bytes.ops 单源 SIMD，万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
+    { — 非热点字段缓存：零拷贝 slice 后单次 SpanEqual 复用已分配串（长度不等直接跳 MemEqual，首字节快滤与 SpanEqual 同源 TByteSpan 视图内聚：LCachedSpan/LSpan.Data^ 单源快路径，零拷贝 inline 复用，低命中率零额外 MemEqual），bytes.ops 单源 SIMD，万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
   public
     procedure ClearGlobalPax; inline;
@@ -364,9 +364,10 @@ end;
 function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
 var
   LSpan: TByteSpan;
+  LCachedSpan: TByteSpan;
   LCachedLen: SizeUInt;
 begin
-  // 单源收敛：零拷贝视图后单次 SpanEqual（bytes.ops SIMD MemEqual）复用已分配串，长度不等直接跳过 MemEqual，首字节快滤避免低命中率额外 Span 构造+MemEqual；外联禁 inline
+  // 单源收敛：零拷贝视图后单次 SpanEqual（bytes.ops SIMD MemEqual）复用已分配串，长度不等直接跳过 MemEqual；首字节快滤与 SpanEqual 同源 TByteSpan 视图内聚（LCachedSpan/LSpan 单源快路径，复用 Span.Data^ 零拷贝 inline 视图，低命中率零额外 MemEqual，无 PByte(PAnsiChar)^ / FData[] 手写双层解引用错位）；外联禁 inline
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -375,12 +376,13 @@ begin
   begin
     if LCachedLen = 0 then
       Exit(ACached);
-    // fast first-byte filter before SIMD dispatch, low hit rate avoids full MemEqual
-    if PByte(PAnsiChar(ACached))^ <> FData[AOfs] then
+    // single-source fast first-byte filter via TByteSpan.Data^ cohesion before SIMD dispatch, low hit rate avoids MemEqual
+    LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
+    if LCachedSpan.Data^ <> LSpan.Data^ then
     begin
-      // miss fast path: no SpanEqual
+      // miss fast path: single-source TByteSpan.Data^ cohesion, no SpanEqual dispatch
     end
-    else if SpanEqual(TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen), LSpan) then
+    else if SpanEqual(LCachedSpan, LSpan) then
       Exit(ACached);
   end;
   Result := SpanToString(LSpan);

@@ -68,6 +68,7 @@ const
   C_TAR_NAME_FIELD = 100;
   C_TAR_PREFIX_FIELD = 155;
   C_TAR_MAX_NAME_BYTES = 512;
+  C_TAR_MAX_LINK_BYTES = 4096;
 
   { ustar 固定 }
   C_TAR_MAGIC_USTAR = 'ustar';
@@ -202,14 +203,14 @@ end;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
-  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY(64K)单源，含两零块尾；复用 bytes.ops AlignUp4K 常量 4096 位掩码单源零除法，无 and not SizeUInt 截断，32/64 位安全；大归档请用 TarBuilderWithCapacity 显式预估，避免默认 64K 仍需 2 次扩容（200×512B≈205K：64K→128K→256K），旧 4K 需 6 次
+  // 预扩容：预估+两零块，4K 对齐，复用 bytes.ops.AlignUp4K 单源
   if AEstimatedTotal = 0 then
     Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
-  // 预留两零块 + 头开销，按 4K 对齐向上取整，消除大写抖动
+  if AEstimatedTotal > High(SizeUInt) - 2 * C_TAR_BLOCK_SIZE then
+    Exit(High(SizeUInt) and not SizeUInt(4095));
   Result := AEstimatedTotal + 2 * C_TAR_BLOCK_SIZE;
   if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
     Result := C_TAR_BUILDER_INITIAL_CAPACITY;
-  // 4K 对齐：复用 bytes.ops AlignUp4K 常量 4096 位掩码单源零除法，无截断，32/64 位安全
   Result := AlignUp4K(Result);
 end;
 

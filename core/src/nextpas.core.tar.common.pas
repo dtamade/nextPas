@@ -45,8 +45,8 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
-{** 生成 pax 记录；含循环/分配，外联 — 已收敛至 archive.pax ArchivePaxFormatRecord/ArchivePaxAppendRecord 单源（builder 零拷贝 Reserve+AppendBytes 几何扩容，禁双复制），历史兼容薄包装 *}
-function TarFormatPaxRecord(const AKey, AValue: string): string;
+{** 生成 pax 记录；历史兼容薄包装，已收敛至 archive.pax ArchivePaxFormatRecord 单源（builder 零拷贝 Reserve+AppendBytes 几何扩容，禁双复制）；inline 薄转发单源，复用 bytes.ops 零拷贝视图，deprecated 收敛至 archive.pax 单源 *}
+function TarFormatPaxRecord(const AKey, AValue: string): string; inline; deprecated 'use ArchivePaxFormatRecord';
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 {** 追加 pax 记录至 builder，已收敛至 archive.pax ArchivePaxAppendRecord 单源；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容），历史兼容薄包装 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
@@ -268,15 +268,9 @@ begin
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.Version.Off, C_TAR_LAYOUT.Version.Len, C_TAR_VERSION_00);
 end;
 
-{ — pax 长度前缀单源：已收敛至 archive.pax ArchivePaxCalcRecordLen 单源，循环体外联 — }
-function TarCalcPaxRecordLen(const AKey, AValue: string): Integer;
+function TarFormatPaxRecord(const AKey, AValue: string): string; inline;
 begin
-  Result := ArchivePaxCalcRecordLen(AKey, AValue);
-end;
-
-function TarFormatPaxRecord(const AKey, AValue: string): string;
-begin
-  // 单源收敛至 archive.pax ArchivePaxFormatRecord，薄包装外联禁 inline；历史兼容入口保留，委托 archive.pax 零拷贝最优路径
+  // 单源收敛至 archive.pax ArchivePaxFormatRecord，inline 薄转发零拷贝最优路径（CreateBytesBuilder+ArchivePaxAppendRecord+SpanToString 单次 Move，复用 bytes.ops 单源），历史兼容 deprecated
   Result := ArchivePaxFormatRecord(AKey, AValue);
 end;
 

@@ -2,7 +2,7 @@ unit nextpas.core.archive.pax;
 {**
  * @desc Archive 通用 pax 键值解析：length-prefix 严格校验零拷贝 PByte 切片，供归档族复用。
  * 抽取 tar pax 仅 path/linkpath 沉默忽略局限，归一 atime/mtime/size 等扩展键的零拷贝迭代能力；
- * strict fail-closed：长度前缀非法/越界/缺换行即抛 EIOError，避免外层静默丢弃回退截断名。
+ * strict fail-closed：长度前缀非法/越界/缺换行/缺 '=' 即抛 EIOError，避免外层静默丢弃回退截断名。
  * 性能：零拷贝 PByte 切片 + bytes.ops SpanEqual 单源；循环体外联禁 inline 避 I-Cache 膨胀。
  * 归属：archive 共享内核（内部核例外形态，四件套外），仅供 tar/zip/sevenz 族复用，禁止门面外直引。
  *}
@@ -82,12 +82,7 @@ begin
     while (Eq < RecEnd - 1) and (ABase[Eq] <> Ord('=')) do
       Inc(Eq);
     if Eq >= RecEnd - 1 then
-    begin
-      // 无 '=' 的记录视为畸形但非 length 越界，按 pax 规范应抛；为兼容 tar 历史静默跳过，仍继续下条
-      // strict 策略：length 已严格，key 缺 '=' 仅跳过不抛，避免整档因单条扩展键失败；如需硬失败可改为 raise
-      P := RecEnd;
-      Continue;
-    end;
+      raise EIOError.CreateFmt('pax: missing key-value separator at offset %d (need ''='')', [Eq]);
     KeyLen := Eq - Sp - 1;
     ValLen := RecEnd - 1 - (Eq + 1);
     if KeyLen > 0 then

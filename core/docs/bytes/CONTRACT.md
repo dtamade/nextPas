@@ -96,7 +96,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **TByteStreamBuf**：`EnsureCapacity/ReserveAppend/CommitAppend/Append/Consume/Clear/Compact`；容量保留、尾部零分配、头游标延迟压实；Destroy 经 `FreeMemOf(FAllocator, FPtr, FCap)` 释放。
 - **IByteCursor**：`NewByteCursor(TBytes)` 持有 `TBytes` 拷贝保活；`NewByteCursorAt(PByte, Len)` 裸指针由调用方保活；只读无分配（`ReadBytes` 除外）。
 - **ValidPath**：`BytesValidPath/BaseValidPath(APath, AAllowRoot)` — Go `io/fs.ValidPath` 语义，复用 `text.utf8.UTF8IsValid` 单源，段扫描零拷贝。
-- **ArchiveEntry**：`IsSafeArchiveEntryName(AName, AMaxBytes)` / `IsSafeArchiveEntryNameEx(AName, AMaxBytes, AAllowTrailingSlash)` — tar/zip 归档名与 tar link target 安全谓词参数化单源（非空/≤AMaxBytes/非'/'/无盘符/无'\'/无'//'/'.'/'..'，尾随'/'由 `AAllowTrailingSlash` 决定；`IsSafeArchiveEntryName` 为 `Ex(..., True)` 薄转发，`IsSafeTarLinkTarget` 经 `Ex(..., 4096, False)` 零拷贝段扫描单源、消除80%重复），inline+零拷贝原串索引，无Copy/分配，tar.base/zip.base/tar.fs 薄 inline 转发，复用 `bytes.ops` 单源。
+- **ArchiveEntry**：`IsSafeArchiveEntryName(AName, AMaxBytes)` / `IsSafeArchiveEntryNameEx(AName, AMaxBytes, AAllowTrailingSlash)` — tar/zip 归档名与 tar link target 安全谓词参数化单源（非空/≤AMaxBytes/非'/'/无盘符/无'\'/无'//'/'.'/'..'，尾随'/'由 `AAllowTrailingSlash` 决定；`IsSafeArchiveEntryName` 为 `Ex(..., True)` 薄转发，`IsSafeTarLinkTarget` 经 `Ex(..., C_TAR_MAX_LINK_BYTES, False)` 零拷贝段扫描单源、消除80%重复），inline+零拷贝原串索引，无Copy/分配，tar.base/zip.base/tar.fs 薄 inline 转发，复用 `bytes.ops` 单源。
 
 ---
 
