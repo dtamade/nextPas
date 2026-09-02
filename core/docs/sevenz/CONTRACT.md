@@ -19,3 +19,5 @@
 ## 契约测试
 - `make -C core/tests/nextpas.core.sevenz/test_sevenz clean test` 171 用例：UTF/FILETIME/LZMA2往返/BCJ全家/Delta/Deflate-BZip2黄金档/过滤链/AES/炸弹/截断/五探针（writer 炸弹早期 viaReader / 纯↔FFI 一致性 / pack>64MiB / name>64KiB / 截断归档）等
 - `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run` 6/17/42/200/80 MB/s 锚点，含 Filter+Copy+AES 多形态容器探针（copy+bcj / copy+bcj+pw / copy+bcj+pw multi，红线 50/1/0.5 MB/s create、500 MB/s extract）+ glob 10k 四红线（1000/500/300/100k ops/s）+ lzma/bcj/delta 基线（bytes.ops 单源）
+
+**Bench Redlines**（1MiB 语料，`ffi=yes`）：`lzma encode pure ≥4 / decode pure ≥10 / decode ffi ≥30 / bcj ≥200 / delta ≥50 MB/s`；`container copy+bcj create ≥50 / copy+bcj+pw ≥1.0 / copy+bcj+pw multi ≥0.5 / extract ≥500 MB/s`；`glob 10k prefix* ≥1000 / *suffix ≥500 / p*s ≥300 / exact ≥100k ops/s`（`WARN` 即阈值固化，实测 6.8/18.3/49.7/276/88/123/3.5/1.0/1142 与 140k/612/653/1.89M 远高阈值）
