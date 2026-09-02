@@ -1,7 +1,7 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片 + `scripts/git-contract-check.sh` C5 自动门禁；双编译器 stub：源码 `uses SysUtils` 等经 `units/<target>/` 名称桥接，无 `{$IFDEF}` 分叉，stub 仅过渡、随 `nextpas.core` 自有类型落地自然废弃）
-**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免；88 源/40+ 能力聚合已按不变量域拆 6 shard（`design-conventions.md §2` 单单元 >800 必拆），各 shard 行阈与 umbrella 索引由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值——非人工巡检，属演进监控点；1→88 源演进经 C5 固化）
+**模块路径**：`core/src/nextpas.core.git*.pas`（89 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片 + `libgit2.types` 词汇 helper + `scripts/git-contract-check.sh` C5 自动门禁；双编译器 stub：源码 `uses SysUtils` 等经 `units/<target>/` 名称桥接，无 `{$IFDEF}` 分叉，stub 仅过渡、随 `nextpas.core` 自有类型落地自然废弃）
+**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免；89 源/40+ 能力聚合已按不变量域拆 6 shard（`design-conventions.md §2` 单单元 >800 必拆），各 shard 行阈与 umbrella 索引由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值——非人工巡检，属演进监控点；1→89 源演进经 C5 固化）
 **拆分生效**：2026-09-02（按业务不变量域独立契约，umbrella 仅索引与跨域不变量；分域不变量、门面阈值与 SLO 归各 shard 权威；总索引阈值由 C5 硬门禁维持，属演进监控点）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-02
@@ -18,7 +18,7 @@
 | git.base | TGitStatusEntry, TGitStatusFilter 基础类型 |
 | git.intf | IGitManager, IGitRepository, IGitCommit 等接口定义 |
 | git.libgit2 | libgit2 集成门面 |
-| git.libgit2.ffi | libgit2 C FFI 缝隙（极简占位 <30 行，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 libgit2.base/ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF） |
+| git.libgit2.ffi | libgit2 C FFI 缝隙（极简占位 <30 行，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 libgit2.base/types + ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF） |
 | git.libgit2.binding | libgit2 函数指针绑定（dlopen/dlsym 运行时加载） |
 | git.libgit2.backend | libgit2 后端实现 |
 | git.libgit2.bindings | libgit2 门面（<150 行，re-export 10 域分片，零重复） |
@@ -34,6 +34,8 @@
 | git.libgit2.bindings.diff | tree/diff/patch 域 |
 | git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
 | git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化，复用 bytes.ops） |
+| git.libgit2.types | 词汇 helper（标量/句柄/OID/枚举，纯 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 已迁出，ffi 仅 external） |
+| git.libgit2.ffi.types | 已弃用 shim（re-export libgit2.types + external git_ffi_types_probe 满足 ffi 仅 external，<60 行，新代码直用 libgit2.types） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |
@@ -95,7 +97,7 @@
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
-| git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝，<400 行） |
+| git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为 BC shim 零转发） |
 | git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
 | git.native.history.query | 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元 <260 行） |
@@ -104,7 +106,7 @@
 | git.native.branches | 分支门面分片（branch/tag/stash/notes） |
 | git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
 | git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect） |
-| git.native | 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base；staging/history/branches/transport/extensions 需直引分片，旧 `uses git.native` 对非对象域已弃用以消除两级嵌套稀释） |
+| git.native | 子家族薄网关（<60 行，BC shim 仅 types/consts via objects，零函数转发；对象层函数单源于 objects，零 I-Cache 复制，fan-in 收敛至 objects→owners；staging/history/branches/transport/extensions 需直引分片，旧 `uses git.native` 对对象域函数已弃用以消除双重薄网关稀释） |
 | git.pas | 门面 re-export（inline NewGitManager → factory.NewGitManager(gbAuto)，impl 零 libgit2，base←intf←factory←facade 隔离） |
 
 ### 1.1.1 native 子家族（2026-08-25 起）
@@ -160,7 +162,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 
 ### 1.1.3 按不变量域独立合约拆分（2026-09-02 起）
 
-88 源/40+ 能力聚合已超越单 CONTRACT 可审计阈（`design-conventions.md §2` 800 行软阈），按业务不变量域独立契约拆分，本文件仅作总索引与跨域不变量权威；门禁由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值（各 shard 单单元 ≤800 行，门面 shard 按域分档 <250-600 行，umbrella 仅索引，超阈即红），属演进监控点（1→88 源含 6 native 门面 + C5 自动门禁固化）：
+89 源/40+ 能力聚合已超越单 CONTRACT 可审计阈（`design-conventions.md §2` 800 行软阈），按业务不变量域独立契约拆分，本文件仅作总索引与跨域不变量权威；门禁由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值（各 shard 单单元 ≤800 行，门面 shard 按域分档 <250-600 行，umbrella 仅索引，超阈即红），属演进监控点（1→89 源含 6 native 门面 + libgit2.types + C5 自动门禁固化）：
 
 | 不变量域 | 权威 CONTRACT | 门面 shard | 行阈 | 能力 |
 |---|---|---|---|---|
@@ -171,8 +173,8 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 | 传输 | `CONTRACT.transport.md` | `git.native.transport` | <600 行 | config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset |
 | 扩展 | `CONTRACT.extensions.md` | `git.native.extensions` | <400 行 | archive/submodule/mailmap/trailer/bundle/grep/bisect + attributes |
 
-> **权威规则**：分域内不变量、阈值与门面规模以各 shard CONTRACT 为准；跨域不变量、选择层与总体 88 源清单以本 umbrella 为准。新增能力先反哺 owner（bytes/compress/checksum/wildmatch），分域仅薄编排。
-> **演进监控点**：总索引 1→88 源（含 6 native 门面 + 10 bindings 域分片）及各 shard 行阈（objects <400 / staging <500 / history 各 <260 & umbrella <80 & 总 <650 / branches <300 / transport <600 / extensions <400 / native <250 / bindings 门面 <150 & 分片 <800）均由 `scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检；阈值接近 800 软阈或 fan-in 显著时再评估拆分（见各 shard §6 与本 umbrella §8）。
+> **权威规则**：分域内不变量、阈值与门面规模以各 shard CONTRACT 为准；跨域不变量、选择层与总体 89 源清单以本 umbrella 为准。新增能力先反哺 owner（bytes/compress/checksum/wildmatch），分域仅薄编排。
+> **演进监控点**：总索引 1→89 源（含 6 native 门面 + libgit2.types + 10 bindings 域分片）及各 shard 行阈（objects <400 / staging <500 / history 各 <260 & umbrella <80 & 总 <650 / branches <300 / transport <600 / extensions <400 / native <250 / bindings 门面 <150 & 分片 <800）均由 `scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检；阈值接近 800 软阈或 fan-in 显著时再评估拆分（见各 shard §6 与本 umbrella §8）。
 
 ### 1.2 核心接口
 
@@ -298,7 +300,7 @@ end;
 
 ## 8. 演进监控（C5 硬门禁，阈值自动维持）
 
-- **总索引**：1→88 源演进已固化（88 `nextpas.core.git*.pas`，含 6 native 门面 shard + 10 bindings 域分片 + `native` 薄网关 `<250` 行 + `git.pas` 门面）；`scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检。
+- **总索引**：1→89 源演进已固化（89 `nextpas.core.git*.pas`，含 6 native 门面 shard + libgit2.types + 10 bindings 域分片 + `native` 薄网关 `<250` 行 + `git.pas` 门面）；`scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检。
 - **分片阈值（硬门禁，`wc -l` 行阈）**：`objects <400` / `staging <500` / `history.traversal|query|ops` 各 `<260` & `history` umbrella `<80` & 总 `<650` / `branches <300` / `transport <600` / `extensions <400` / `bindings` 门面 `<150` & 各分片 `<800`（含 `types/structs/consts/c/oid/odb/refs/commit/repo/diff/extra` 各 `<800`）；单源 `bytes.ops`/`checksum.adler32`/`compress`/`text.wildmatch` 零拷贝 `inline` 约束同步门禁。
 - **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph.pas` 约 1320 行已标记为历史域内聚例外（见 `CONTRACT.history.md §6`），不计入 800 阈但受 region 标记与独立门禁约束。
 - **资源与性能同门禁**：`IMappedFile`/`TPackFile`/`TBytes` 零泄漏（`try..finally` + 接口计数，`HEAPTRC` 双 pin）、`inline` 零拷贝 `PByte+Len/TByteSpan`（`bytes.ops` 单源）与 SLO 双锚（§7）同 C5 聚合于 `build/verify_local.sh`。

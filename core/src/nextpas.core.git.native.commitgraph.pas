@@ -10,7 +10,7 @@ uses
   nextpas.core.fs,
   nextpas.core.io.mapped,
   nextpas.core.hash.intf,
-  nextpas.core.hash.sha1,
+  nextpas.core.hash.sha1, // git-native-commitgraph-l2-exempt: L2 git→hash.sha1 single-source via bytes.ops, registry core/docs/core-module-registry.md git row (C5 zlib anchor pattern)
   nextpas.core.git.native.base;
 
 { Commit-graph v1 reader+writer+cache (SHA-1) for local revwalk acceleration.
@@ -18,6 +18,10 @@ uses
     800-line soft guide; retained per CONTRACT history shard as cohesive
     exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE.
     Thin aggregator is history.traversal; split would dilute ownership.
+  L2 exempt: git-native-commitgraph-l2-exempt — L2 git→hash.sha1 single-source
+    via bytes.ops SpanCompare/SpanCopy + NewSHA1, no duplicate SHA-1 loop;
+    registry core/docs/core-module-registry.md git row (same-layer one-way
+    fs/compress/hash/zlib/checksum), traceable via C5 anchor pattern (zlib анал).
 
   Audit: regions Cache/Reader/Writer/Collect via markers; 1320 vs 800 is
     §2 soft-guide exception (shared invariants). Shard split would double
@@ -31,6 +35,8 @@ uses
     sync required, swap-with-last O(1) keeps refcount safe.
   Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
     when shards fan-in or cache ownership dilutes auditability.
+  Volume: 800 soft guide — exception not exemption from audit; Cary via
+    region markers preserves restraint; see CONTRACT.history §6 threshold.
 
   File layout honours the spec consumed by git's commit-graph.c and
   libgit2's commit_graph.c: header "CGPH" v1 oid_version 1, chunk TOC
@@ -148,6 +154,11 @@ const
   //   per op via bytes.ops single source
   // stability: IMappedFile refcount auto releases on eviction/swap; no leak
   // concurrency: global cache not locked, caller sync required
+  // owner: candidate collections.lrucache generic TLruCache<string,IMappedFile>
+  //   — custom 16-cap array retained for DirHash FNV-1a via bytes.ops single
+  //   source, IMappedFile zero-copy refcount, O(Cap) victim <30ns trivial;
+  //   generic would add AllocMem/THashMap overhead; extract when fan-in >16
+  //   or heaptrc gated reuse proves neutral (see CONTRACT.history §6).
   GGraphCacheCap = 16;
 
 { ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns, bench-gated) ── }

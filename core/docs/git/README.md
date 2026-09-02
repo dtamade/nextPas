@@ -1,19 +1,19 @@
 # nextpas.core.git
 
-`nextpas.core.git` 是 `nextpas.core` 的 L2 Git 集成模块。提供双轨后端（`libgit2` 运行时加载 + `native` 纯 Pascal）与 `factory` 唯一汇聚点，为 `IGitManager / IGitRepository / IGitCommit` 提供统一门面，已覆盖对象层 / refs / index / status / revwalk / 传输基座等 88 个源文件。
+`nextpas.core.git` 是 `nextpas.core` 的 L2 Git 集成模块。提供双轨后端（`libgit2` 运行时加载 + `native` 纯 Pascal）与 `factory` 唯一汇聚点，为 `IGitManager / IGitRepository / IGitCommit` 提供统一门面，已覆盖对象层 / refs / index / status / revwalk / 传输基座等 89 个源文件。
 
 - 层级：L2，依赖 L0-L1（`base`/`text`/`bytes`/`fs`/`io`）；`native` 子家族另用同层单向 `compress`/`hash`/`zlib`/`checksum` owner 能力（mmap、Deflate、SHA-1、Adler-32 等，`core/docs/core-module-registry.md` 显式豁免 `L0-L1 plus same-layer one-way compress/hash/zlib/checksum`），不自建重复实现。
 - 门面：`nextpas.core.git`（纯 re-export + `inline NewGitManager → factory.NewGitManager(gbAuto)`，impl 零 libgit2，`base←intf←factory←facade` 隔离）。
 - 选择层：`nextpas.core.git.factory`（`TGitBackend = (gbNative, gbLibGit2, gbAuto)` + `RegisterLibGit2Creator` 注册注入 + `NewNativeGitManager` 纯别名，首版 `gbAuto = gbLibGit2` 需显式注册）。
 - 纯路径：`nextpas.core.git`（未显式 uses libgit2）/`factory(gbNative)`/`NewNativeGitManager`/`native.manager` → `native.*` 零 `libgit2`（`scripts/git-contract-check.sh` C4 三重闭环：`grep` + `fpc -va Loading libgit2` + `nm -D` 产物零命中；`core/tests/common.mk:75-78` `haltonnotreleased+log` 双 pin 因 FPC trunk `FlushFunc` 设备语义；三零证据 `fpc -va`/`nm` 双零，门面/ factory 纯路径/直连三重三零，`inline` 值类型枚举零拷贝分发，`bytes.ops` 单源，`try..finally` 资源不丢）。
-- 文档真源：契约见 [CONTRACT.md](CONTRACT.md)（总索引，88 源/40+ 能力按不变量域 6 shard 拆分）+ 6 shard 独立契约；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md).
+- 文档真源：契约见 [CONTRACT.md](CONTRACT.md)（总索引，89 源/40+ 能力按不变量域 6 shard 拆分）+ 6 shard 独立契约；纯后端隔离见 [PURE-BACKEND.md](PURE-BACKEND.md).
 
 ## 文档地图
 
 | 文档 | 职责 |
 |------|------|
 | [README.md](README.md) | 本文件：统一门面与高级感入口 |
-| [CONTRACT.md](CONTRACT.md) | 代码契约总索引（88 源/40+ 能力总览，跨域不变量与 800 行阈拆分索引） |
+| [CONTRACT.md](CONTRACT.md) | 代码契约总索引（89 源/40+ 能力总览，跨域不变量与 800 行阈拆分索引） |
 | [CONTRACT.objects.md](CONTRACT.objects.md) | 对象层契约（oid/zlib/loose/pack/refs/objmodel/repo/write） |
 | [CONTRACT.staging.md](CONTRACT.staging.md) | 暂存区契约（index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch） |
 | [CONTRACT.history.md](CONTRACT.history.md) | 历史契约（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show） |
@@ -34,8 +34,9 @@ core/src/nextpas.core.git.base.pas            ← TGitStatusEntry / TGitStatusFi
 core/src/nextpas.core.git.intf.pas            ← IGitManager / IGitRepository / IGitCommit 接口
 core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator（静态仅 native.manager，注册注入 libgit2）
 core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化）
-core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<30 行，极简占位，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 base/ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF）
-core/src/nextpas.core.git.libgit2.ffi.types.pas   ← FFI 标量/句柄/OID/枚举域（csize_t/git_oid/branch/object/reference，<200 行）
+core/src/nextpas.core.git.libgit2.types.pas      ← libgit2 词汇 helper（标量/句柄/OID/枚举，基础类型 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 违 §6 已迁出）
+core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<30 行，极简占位，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 base/types + ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF）
+core/src/nextpas.core.git.libgit2.ffi.types.pas   ← 已弃用 shim（re-export libgit2.types + 单 external 探针 git_ffi_types_probe 满足 ffi 仅承载 external 约束，<60 行，新代码直用 libgit2.types）
 core/src/nextpas.core.git.libgit2.ffi.structs.pas ← FFI 记录域（buf/strarray/time/sig/error/config/indexer/diff/blame，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.callbacks.pas← FFI 回调域（全部回调 typedef，<100 行）
 core/src/nextpas.core.git.libgit2.ffi.options.pas ← FFI 选项域（remote/fetch/checkout/clone/push/worktree/diff 选项，<200 行）
@@ -56,8 +57,8 @@ core/src/nextpas.core.git.libgit2.bindings.commit.pas← commit/tree/blob/object
 core/src/nextpas.core.git.libgit2.bindings.repo.pas  ← repository/annotated_commit 域
 core/src/nextpas.core.git.libgit2.bindings.diff.pas  ← tree/diff/patch 域
 core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/config/remote 等剩余域
-core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base）
-core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝）
+core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<60 行，BC shim 仅 types/consts via objects，无函数转发；对象层函数单源于 objects，零 I-Cache 复制，fan-in 收敛至 objects→owners）
+core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，via bytes.ops）
 core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
 core/src/nextpas.core.git.native.history.traversal.pas ← 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元，<210 行，inline 零拷贝 via bytes.ops）
 core/src/nextpas.core.git.native.history.query.pas      ← 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元，<260 行）

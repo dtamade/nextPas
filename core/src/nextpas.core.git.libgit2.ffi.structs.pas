@@ -3,13 +3,13 @@ unit nextpas.core.git.libgit2.ffi.structs;
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}
 // Struct domain — buffers, time, signature, error, config, indexer, diff/blame/worktree structs.
-// Zero IFDEF, single source OID via ffi.types, bytes.ops single source for OID ops.
+// Zero IFDEF, single source OID via libgit2.types, bytes.ops single source for OID ops.
 
 interface
 
 uses
   nextpas.core.base,
-  nextpas.core.git.libgit2.ffi.types;
+  nextpas.core.git.libgit2.types;
 
 type
   git_buf = record

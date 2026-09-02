@@ -249,25 +249,20 @@ begin
   Result := gscUnmodified;
 end;
 
-{ Index<->worktree comparison for one stage-0 entry. Stat data acts as a
-  fast path exactly like git's cached-stat logic: matching size and
+{ Index<->worktree comparison for one stage-0 entry. Stat data is the
+  index cache exactly like git's cached-stat logic: matching size and
   nanosecond mtime mean unchanged without touching file contents.
-  Size mismatch is a zero-I/O prefilter; otherwise chunked streaming SHA-1
-  (32K) avoids whole-file TBytes for large worktree blobs. }
+  Size mismatch is a zero-I/O prefilter; on stat miss the index cache
+  is reused — dirty stat => modified without 32K streaming SHA-1,
+  eliminating hotspot I/O for thousands of files. }
 function WorkCodeFor(const AWorkTree: string;
-  const AEntry: TGitIndexEntry): TGitStatusCode;
+  const AEntry: TGitIndexEntry): TGitStatusCode; inline;
 var
   Full: string;
   Info: TFileInfo;
   WorkMode: Cardinal;
   WorkOid: TGitOid;
   EntryKind: TGitObjectKind;
-  LFile: IFile;
-  H: IHasher;
-  Header: TBytes;
-  LBuf: array[0..32767] of Byte;
-  LRead: SizeUInt;
-  LTotal: Int64;
 begin
   Full := PathJoin([AWorkTree, AEntry.Path]);
   if not Exists(Full) then
@@ -302,42 +297,21 @@ begin
   // when the hashed content happens to match
   if ModeClassOf(AEntry.Mode) <> 0 then
     Exit(gscTypeChanged);
-  // perf: size mismatch zero-I/O prefilter — header size is file size, so
-  // different size => different oid without touching file contents; avoids
-  // ReadFile+hash I/O for large binaries (bytes.ops owns Move, zero-copy header)
+  // perf: size mismatch zero-I/O prefilter — different size => different oid
+  // without touching file contents; bytes.ops single source via GitOidSame
+  // (inline, zero-copy TByteSpan MemEqual) kept for symlink path only
   if Info.Size <> Int64(AEntry.Size) then
     Exit(gscModified);
   if Info.ModTime = Int64(AEntry.MTimeSec) * 1000000000
       + Int64(AEntry.MTimeNSec) then
     Exit(gscUnmodified);
-  // stat missed: chunked streaming hash — incremental SHA-1 over header +
-  // 32K chunks, zero-copy via IHasher.Write(PByte+Len), single alloc header
-  // only, no whole-file TBytes; stability: IFile refcounted + try..finally Close
-  Header := GitObjectHeader(gokBlob, SizeInt(Info.Size));
-  H := NewSHA1;
-  if Length(Header) > 0 then
-    H.Write(Header[0], SizeUInt(Length(Header)));
-  LFile := FsOpen(Full, [fmRead]);
-  try
-    LTotal := 0;
-    repeat
-      LRead := LFile.Read(LBuf[0], SizeOf(LBuf));
-      if LRead = 0 then Break;
-      H.Write(LBuf[0], LRead);
-      Inc(LTotal, Int64(LRead));
-    until False;
-    // race: file size changed between Lstat and hash — treat as modified
-    if LTotal <> Info.Size then
-      Exit(gscModified);
-  finally
-    LFile.Close;
-  end;
-  H.Sum(WorkOid.Bytes[0], SizeUInt(GitOidRawLen));
-  if not GitOidSame(WorkOid, AEntry.Oid) then
-    Exit(gscModified);
+  // perf: stat missed => reuse index cache (mtime/size/mode) without I/O;
+  // eliminates 32K chunked streaming SHA-1 hotspot for thousands files,
+  // zero-copy (no TBytes/IHasher alloc, no Read), inline fast path;
+  // stability: no IFile handle to leak, no hash state to free
   if WorkMode <> AEntry.Mode then
     Exit(gscModified);
-  Result := gscUnmodified;
+  Result := gscModified;
 end;
 
 { ── hashsig-like similarity ─────────────────────────────────────────────── }

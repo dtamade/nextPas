@@ -55,7 +55,7 @@ function GitOidIsValidHex(const AHex: string): Boolean;
 var
   I: Integer;
 begin
-  { perf: not inline per design-conventions red line 2 (40× loop exceeds inline I-Cache); zero-copy single-source HexVal scan (40× table lookup via encoding.hex.HexVal, no alloc), single-source reused by FromHex }
+  { 40× HexVal scan, reused by FromHex }
   if Length(AHex) <> GitOidHexLen then
     Exit(False);
   for I := 1 to GitOidHexLen do
@@ -68,7 +68,7 @@ function GitOidFromHex(const AHex: string): TGitOid;
 var
   LBytes: TBytes;
 begin
-  { perf: not inline per red line 2 (HexDecode alloc+20× table lookup loop exceeds inline); reuses GitOidIsValidHex single source then single-source encoding.hex.HexDecode (table-driven, single alloc, zero-copy PByte scan) + single-source bytes.ops SpanCopy (inline Move via TByteSpan, zero-copy view) }
+  { via GitOidIsValidHex + HexDecode + SpanCopy }
   if not GitOidIsValidHex(AHex) then
     raise EGitError.CreateFmt('invalid git oid hex "%s"', [AHex]);
   LBytes := HexDecode(AHex);
@@ -80,7 +80,7 @@ function GitOidToHex(const AOid: TGitOid): string;
 var
   LBytes: TBytes;
 begin
-  { perf: not inline per red line 2 (HexEncode loop+alloc exceeds inline); single-source bytes.ops SpanCopy (inline Move via TByteSpan, zero-copy view) + single-source encoding.hex.HexEncode (20->40 hex, PByte+Len table lookup, single SetLength) }
+  { via SpanCopy + HexEncode }
   SetLength(LBytes, GitOidRawLen);
   SpanCopy(TByteSpan.Create(@LBytes[0], GitOidRawLen),
     TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
@@ -89,14 +89,13 @@ end;
 
 function GitOidHash(const AOid: TGitOid): UInt32; inline;
 begin
-  { single source FNV-1a via bytes.ops SpanHashFNV1a (20B zero-copy, inline, batch-8), no per-site loop }
+  { via bytes.ops SpanHashFNV1a }
   Result := SpanHashFNV1a(TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 begin
-  { inline + zero-copy TByteSpan view single-source bytes.ops SpanEqual via MemEqual:
-    20 bytes -> ~3×QWord compares, no alloc }
+  { via bytes.ops SpanEqual }
   Result := SpanEqual(
     TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
     TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
@@ -104,13 +103,13 @@ end;
 
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
-  { inline zero-copy via bytes.ops IsZeroBytes }
+  { via bytes.ops IsZeroBytes }
   Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
 end;
 
 function GitOidZero: TGitOid; inline;
 begin
-  { inline zero-copy via bytes.ops SpanFill }
+  { via bytes.ops SpanFill }
   SpanFill(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen), 0);
 end;
 
@@ -152,15 +151,13 @@ end;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
-  { perf: inline thin forward to bytes.ops.BytesToString single source;
-    zero-copy via single SetLength+Move(PByte^→PChar^), inline-safe }
+  { via bytes.ops BytesToString }
   Result := BytesToString(ABytes);
 end;
 
 function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  { perf: inline thin forward to bytes.ops.StringToBytes single source;
-    zero-copy via single SetLength+Move(PChar^→PByte^), inline-safe }
+  { via bytes.ops StringToBytes }
   Result := StringToBytes(AText);
 end;
 

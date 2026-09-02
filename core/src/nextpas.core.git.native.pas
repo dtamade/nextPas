@@ -3,20 +3,19 @@ unit nextpas.core.git.native;
 {$I nextpas.core.settings.inc}
 
 {**
- * @desc Pure-Pascal git subfamily object-layer facade — stable gateway.
- *  Owner boundary: `nextpas.core.git.native.objects` owns 6 subdomains
- *  (oid/zlib/loose/pack/refs/objmodel/write); `native` re-exports only
- *  object types/consts for BC and inline gateway (<350 lines, fan-in = 1 + base)
- *  keeping base←intf←impl←facade traceability. Extended domains are shard
- *  facades (staging/history/branches/transport/extensions) and must be used
- *  directly (`uses nextpas.core.git.native.staging` etc.); legacy
- *  `uses nextpas.core.git.native` for those domains is deprecated.
- *  Perf: all forwards `inline` thin wrappers; zero-copy via Move/PByte+Len
- *  /TByteSpan single source bytes.ops (oid hex 20B Move, zlib PByte+Len
- *  Deflate*, loose/pack/objmodel/write via TByteSpan). Stability:
- *  TNativeRepository/TPackFile are classes; TPackFile owns IMappedFile
- *  (refcounted, auto released on Free/destructor); TBytes results are
- *  refcounted and exception-safe (no manual free leak).
+ * @desc Pure-Pascal git subfamily thin BC gateway — object-layer duplicate collapsed.
+ *  Owner boundary: `nextpas.core.git.native.objects` is the single source for
+ *  object-layer (oid/zlib/loose/pack/refs/objmodel/write); `native` retains only
+ *  type/const re-exports for BC (fan-in = 1: objects → owners). New code must use
+ *  `nextpas.core.git.native.objects` directly for all object-layer functions.
+ *  Extended domains are shard facades (staging/history/branches/transport/extensions)
+ *  and must be used directly (`uses nextpas.core.git.native.staging` etc.);
+ *  legacy `uses nextpas.core.git.native` for those domains is deprecated.
+ *  Perf: object-layer `inline` + zero-copy (Move/PByte+Len/TByteSpan via bytes.ops
+ *  single source) lives single-sourced in `native.objects`; this shim holds zero
+ *  inline forwards to avoid I-Cache duplication and double thin gateway.
+ *  Stability: TPackFile owns IMappedFile (refcounted, auto released on Free);
+ *  TBytes refcounted, exception-safe (no manual free leak).
  *}
 
 interface
@@ -26,7 +25,7 @@ uses
   nextpas.core.git.native.objects;
 
 type
-  { Re-export core object types (single source via objects shard) }
+  { Re-export core object types (single source via objects shard) — BC shim, prefer objects directly }
   TGitObjectKind = nextpas.core.git.native.objects.TGitObjectKind;
   TGitOid = nextpas.core.git.native.objects.TGitOid;
   EGitError = nextpas.core.git.native.objects.EGitError;
@@ -45,259 +44,12 @@ const
   GitOidRawLen = nextpas.core.git.native.objects.GitOidRawLen;
   GitMaxDeltaDepth = nextpas.core.git.native.objects.GitMaxDeltaDepth;
 
-{ Core object-layer inline gateway (zero-copy via bytes.ops / PByte+Len) }
-function GitOidFromHex(const AHex: string): TGitOid; inline;
-function GitOidToHex(const AOid: TGitOid): string; inline;
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
-function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-function GitKindToString(AKind: TGitObjectKind): string; inline;
-function GitKindFromString(const AName: string): TGitObjectKind; inline;
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
-
-function GitZlibAdler32(const AData: TBytes): UInt32; inline;
-function GitZlibCompress(const AData: TBytes): TBytes; inline;
-function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
-  out AEndPos: SizeUInt): TBytes; inline;
-
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
-function GitHashObject(AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid; inline;
-function GitLoosePath(const AGitDir: string;
-  const AOid: TGitOid): string; inline;
-function GitLooseExists(const AGitDir: string;
-  const AOid: TGitOid): Boolean; inline;
-function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid; inline;
-function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
-  out AKind: TGitObjectKind): TBytes; inline;
-
-function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
-
-function IsGitDirShape(const APath: string): Boolean; inline;
-function GitTryDiscoverGitDir(const AStartDir: string;
-  out AGitDir: string): Boolean; inline;
-function GitDiscoverGitDir(const AStartDir: string): string; inline;
-function GitHeadRefName(const AGitDir: string): string; inline;
-function GitResolveHead(const AGitDir: string): TGitOid; inline;
-function GitResolveRef(const AGitDir: string;
-  const ARefName: string): TGitOid; inline;
-
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
-function GitParseSignature(const ALine: string): TGitSignature; inline;
-function GitParseCommit(const AData: TBytes): TGitCommitInfo; inline;
-function GitParseTag(const AData: TBytes): TGitTagInfo; inline;
-
-procedure GitSortTreeEntries(var AEntries: TGitTreeEntryArray); inline;
-function GitEntryCompare(const AA, AB: TGitTreeEntry): Integer; inline;
-function GitModeToString(AMode: Cardinal): string; inline;
-function GitSerializeTree(const AEntries: TGitTreeEntryArray): TBytes; inline;
-function GitWriteBlob(const AGitDir: string;
-  const AContent: TBytes): TGitOid; inline;
-function GitWriteTree(const AGitDir: string;
-  var AEntries: TGitTreeEntryArray): TGitOid; inline;
-function GitBuildCommitBytes(
-  const ABuilder: TGitCommitBuilder): TBytes; inline;
-function GitWriteCommit(const AGitDir: string;
-  const ABuilder: TGitCommitBuilder): TGitOid; inline;
-function GitBuildTagBytes(const ABuilder: TGitTagBuilder): TBytes; inline;
-function GitWriteTag(const AGitDir: string;
-  const ABuilder: TGitTagBuilder): TGitOid; inline;
+{ Object-layer functions: single-sourced in nextpas.core.git.native.objects.
+  Use that unit directly (inline + zero-copy via bytes.ops, PByte+Len/TByteSpan,
+  Move 20B oid, Adler32/Deflate via compress/checksum single source) to avoid
+  double thin gateway and I-Cache duplication. This shim intentionally exposes
+  no function forwards; see objects.pas for the authoritative inline impl. }
 
 implementation
-
-function GitOidFromHex(const AHex: string): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitOidFromHex(AHex);
-end;
-
-function GitOidToHex(const AOid: TGitOid): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitOidToHex(AOid);
-end;
-
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitOidIsValidHex(AHex);
-end;
-
-function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitOidSame(AA, AB);
-end;
-
-function GitKindToString(AKind: TGitObjectKind): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitKindToString(AKind);
-end;
-
-function GitKindFromString(const AName: string): TGitObjectKind; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitKindFromString(AName);
-end;
-
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitKindFromMode(AMode);
-end;
-
-function GitZlibAdler32(const AData: TBytes): UInt32; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitZlibAdler32(AData);
-end;
-
-function GitZlibCompress(const AData: TBytes): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitZlibCompress(AData);
-end;
-
-function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
-  out AEndPos: SizeUInt): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitZlibDecompress(AData, AStart, AEndPos);
-end;
-
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitObjectHeader(AKind, ASize);
-end;
-
-function GitHashObject(AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitHashObject(AKind, AData);
-end;
-
-function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitLoosePath(AGitDir, AOid);
-end;
-
-function GitLooseExists(const AGitDir: string; const AOid: TGitOid): Boolean; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitLooseExists(AGitDir, AOid);
-end;
-
-function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
-  const AData: TBytes): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitLooseWrite(AGitDir, AKind, AData);
-end;
-
-function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
-  out AKind: TGitObjectKind): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitLooseRead(AGitDir, AOid, AKind);
-end;
-
-function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitApplyDelta(ABase, ADelta);
-end;
-
-function IsGitDirShape(const APath: string): Boolean; inline;
-begin
-  Result := nextpas.core.git.native.objects.IsGitDirShape(APath);
-end;
-
-function GitTryDiscoverGitDir(const AStartDir: string;
-  out AGitDir: string): Boolean; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitTryDiscoverGitDir(AStartDir, AGitDir);
-end;
-
-function GitDiscoverGitDir(const AStartDir: string): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitDiscoverGitDir(AStartDir);
-end;
-
-function GitHeadRefName(const AGitDir: string): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitHeadRefName(AGitDir);
-end;
-
-function GitResolveHead(const AGitDir: string): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitResolveHead(AGitDir);
-end;
-
-function GitResolveRef(const AGitDir: string;
-  const ARefName: string): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitResolveRef(AGitDir, ARefName);
-end;
-
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitParseTree(AData);
-end;
-
-function GitParseSignature(const ALine: string): TGitSignature; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitParseSignature(ALine);
-end;
-
-function GitParseCommit(const AData: TBytes): TGitCommitInfo; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitParseCommit(AData);
-end;
-
-function GitParseTag(const AData: TBytes): TGitTagInfo; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitParseTag(AData);
-end;
-
-procedure GitSortTreeEntries(var AEntries: TGitTreeEntryArray); inline;
-begin
-  nextpas.core.git.native.objects.GitSortTreeEntries(AEntries);
-end;
-
-function GitEntryCompare(const AA, AB: TGitTreeEntry): Integer; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitEntryCompare(AA, AB);
-end;
-
-function GitModeToString(AMode: Cardinal): string; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitModeToString(AMode);
-end;
-
-function GitSerializeTree(const AEntries: TGitTreeEntryArray): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitSerializeTree(AEntries);
-end;
-
-function GitWriteBlob(const AGitDir: string;
-  const AContent: TBytes): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitWriteBlob(AGitDir, AContent);
-end;
-
-function GitWriteTree(const AGitDir: string;
-  var AEntries: TGitTreeEntryArray): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitWriteTree(AGitDir, AEntries);
-end;
-
-function GitBuildCommitBytes(const ABuilder: TGitCommitBuilder): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitBuildCommitBytes(ABuilder);
-end;
-
-function GitWriteCommit(const AGitDir: string;
-  const ABuilder: TGitCommitBuilder): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitWriteCommit(AGitDir, ABuilder);
-end;
-
-function GitBuildTagBytes(const ABuilder: TGitTagBuilder): TBytes; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitBuildTagBytes(ABuilder);
-end;
-
-function GitWriteTag(const AGitDir: string;
-  const ABuilder: TGitTagBuilder): TGitOid; inline;
-begin
-  Result := nextpas.core.git.native.objects.GitWriteTag(AGitDir, ABuilder);
-end;
 
 end.

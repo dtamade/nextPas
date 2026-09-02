@@ -14,7 +14,7 @@ interface
 
 uses nextpas.core.base, nextpas.core.exception,
   nextpas.core.git.libgit2.base,
-  nextpas.core.git.libgit2.ffi.types,
+  nextpas.core.git.libgit2.types,
   nextpas.core.git.libgit2.ffi.structs,
   nextpas.core.git.libgit2.ffi.callbacks,
   nextpas.core.git.libgit2.ffi.options,

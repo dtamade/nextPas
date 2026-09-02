@@ -13,8 +13,9 @@ unit nextpas.core.git.libgit2.ffi;
 interface
 
 { intentionally minimal — no re-export, no libc external probe.
-  Vocabulary: consumers import libgit2.base (handles/OID) and ffi.* subdomains directly:
-    nextpas.core.git.libgit2.ffi.types / structs / callbacks / options / consts
+  Vocabulary: consumers import libgit2.base (handles/OID) and libgit2.types + ffi subdomains directly:
+    nextpas.core.git.libgit2.types (scalar/handle/OID/enum) + ffi.structs/callbacks/options/consts
+    (former ffi.types moved to plain types helper per §6 — ffi only carries cdecl external)
   Runtime: libgit2 binding via platform.dl (binding.pas), not static external 'c' linkage. }
 
 implementation

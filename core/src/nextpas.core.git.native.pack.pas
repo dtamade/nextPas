@@ -16,6 +16,13 @@ uses
   delta chains (ofs/ref) are resolved on demand with a depth cap.
   Index CRC verification and index v1 are out of scope for this slice. }
 
+const
+  // peek cache geometry: 4-way set-assoc 64 sets *4 =256, hash-mix avoids low-bit aliasing
+  PeekCacheSets = 64;
+  PeekCacheWays = 4;
+  PeekCacheMask = PeekCacheSets - 1;
+  PeekCacheTotal = PeekCacheSets * PeekCacheWays;
+
 type
   TPackFile = class
   private
@@ -45,10 +52,11 @@ type
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // delta target size: 64-entry direct-mapped O(1) mask 63 (bytes.ops single source, zero-copy, inline)
-    FPeekKeys: array[0..63] of SizeUInt;
-    FPeekVals: array[0..63] of Int64;
-    FPeekValid: array[0..63] of Boolean;
+    // delta target size: 4-way set-assoc 64*4=256, hash-mix (xor shr) avoids direct-mapped aliasing (bytes.ops single source, zero-copy, inline)
+    FPeekKeys: array[0..PeekCacheTotal - 1] of SizeUInt;
+    FPeekVals: array[0..PeekCacheTotal - 1] of Int64;
+    FPeekValid: array[0..PeekCacheTotal - 1] of Boolean;
+    FPeekNext: array[0..PeekCacheSets - 1] of Byte;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -67,6 +75,24 @@ function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TB
 const
   GitMaxDeltaDepth = 64;
   GitMaxDeltaTargetSize = 256 * 1024 * 1024;
+  // pack header varint: type(3b @4) + size(4b low + 7b/cont)
+  PackHdrContBit = $80;
+  PackHdrTypeMask = $07;
+  PackHdrTypeShift = 4;
+  PackHdrSizeLowMask = $0F;
+  PackHdrSizeLowBits = 4;
+  PackHdrSizeContMask = $7F;
+  PackHdrSizeContBits = 7;
+  // ofs_delta offset varint
+  OfsDeltaContBit = $80;
+  OfsDeltaPayloadMask = $7F;
+  OfsDeltaPayloadBits = 7;
+  // delta op: copy $80 set, off bits 0..3, size bits 4..6, zero size => $10000
+  DeltaCopyFlag = $80;
+  DeltaCopyOffMask = $0F;
+  DeltaCopySizeMask = $70;
+  DeltaCopySizeBit0 = $10;
+  DeltaCopySizeDefault = $10000;
 
 implementation
 
@@ -117,7 +143,7 @@ begin
   begin
     Op := ADelta[P];
     Inc(P);
-    if (Op and $80) <> 0 then
+    if (Op and DeltaCopyFlag) <> 0 then
     begin
       CopyOff := 0;
       CopySize := 0;
@@ -128,13 +154,13 @@ begin
           Inc(P);
         end;
       for I := 0 to 2 do
-        if (Op and ($10 shl I)) <> 0 then
+        if (Op and (DeltaCopySizeBit0 shl I)) <> 0 then
         begin
           CopySize := CopySize or (Int64(ADelta[P]) shl (8 * I));
           Inc(P);
         end;
       if CopySize = 0 then
-        CopySize := $10000;
+        CopySize := DeltaCopySizeDefault;
       if (CopyOff < 0) or (CopySize <= 0) or (CopyOff > Int64(LBaseSpan.Len) - CopySize)
         or (OutPos > TgtSize - CopySize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
@@ -183,6 +209,7 @@ begin
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
   SpanFill(TByteSpan.Create(PByte(@FPeekValid[0]), SizeOf(FPeekValid)), 0);
+  SpanFill(TByteSpan.Create(PByte(@FPeekNext[0]), SizeOf(FPeekNext)), 0);
   LoadIndex(AIdxPath);
 end;
 
@@ -400,25 +427,38 @@ end;
 
 function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
 var
-  Idx: SizeUInt;
+  SetIdx, Base, I: SizeUInt;
 begin
-  Idx := APos and 63;
-  if FPeekValid[Idx] and (FPeekKeys[Idx] = APos) then
-  begin
-    ATargetSize := FPeekVals[Idx];
-    Exit(True);
-  end;
+  // 4-way set-assoc + hash-mix (xor shr) spreads low-bit aliasing; inline + zero-copy keys, no zlib
+  SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
+  Base := SetIdx * PeekCacheWays;
+  for I := 0 to PeekCacheWays - 1 do
+    if FPeekValid[Base + I] and (FPeekKeys[Base + I] = APos) then
+    begin
+      ATargetSize := FPeekVals[Base + I];
+      Exit(True);
+    end;
   Result := False;
 end;
 
 procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
 var
-  Idx: SizeUInt;
+  SetIdx, Base, I, Victim: SizeUInt;
 begin
-  Idx := APos and 63;
-  FPeekKeys[Idx] := APos;
-  FPeekVals[Idx] := ATargetSize;
-  FPeekValid[Idx] := True;
+  // hash-mix set selection + 4-way round-robin eviction; single-source inline, no alloc
+  SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
+  Base := SetIdx * PeekCacheWays;
+  for I := 0 to PeekCacheWays - 1 do
+    if FPeekValid[Base + I] and (FPeekKeys[Base + I] = APos) then
+    begin
+      FPeekVals[Base + I] := ATargetSize;
+      Exit;
+    end;
+  Victim := Base + FPeekNext[SetIdx];
+  FPeekKeys[Victim] := APos;
+  FPeekVals[Victim] := ATargetSize;
+  FPeekValid[Victim] := True;
+  FPeekNext[SetIdx] := (FPeekNext[SetIdx] + 1) and (PeekCacheWays - 1);
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
@@ -461,19 +501,19 @@ begin
     P := CurOff;
     B := ByteAt(P);
     Inc(P);
-    Typ := (B shr 4) and $07;
-    Sz := B and $0F;
-    Shift := 4;
-    while (B and $80) <> 0 do
+    Typ := (B shr PackHdrTypeShift) and PackHdrTypeMask;
+    Sz := B and PackHdrSizeLowMask;
+    Shift := PackHdrSizeLowBits;
+    while (B and PackHdrContBit) <> 0 do
     begin
       if Shift > 63 then
         raise EGitError.Create('pack entry size varint overflow');
       B := ByteAt(P);
       Inc(P);
-      Sz := Sz or (Int64(B and $7F) shl Shift);
+      Sz := Sz or (Int64(B and PackHdrSizeContMask) shl Shift);
       if Sz < 0 then
         raise EGitError.Create('pack entry size out of range');
-      Inc(Shift, 7);
+      Inc(Shift, PackHdrSizeContBits);
     end;
     if (Sz < 0) or (Sz > MaxInt) then
       raise EGitError.Create('pack entry size out of range');
@@ -491,14 +531,14 @@ begin
     begin
       B := ByteAt(P);
       Inc(P);
-      Rel := B and $7F;
-      while (B and $80) <> 0 do
+      Rel := B and OfsDeltaPayloadMask;
+      while (B and OfsDeltaContBit) <> 0 do
       begin
-        if Rel > (High(Int64) shr 7) then
+        if Rel > (High(Int64) shr OfsDeltaPayloadBits) then
           raise EGitError.Create('ofs_delta offset out of range');
         B := ByteAt(P);
         Inc(P);
-        Rel := ((Rel + 1) shl 7) or (B and $7F);
+        Rel := ((Rel + 1) shl OfsDeltaPayloadBits) or (B and OfsDeltaPayloadMask);
       end;
       BaseOffSigned := Int64(CurOff) - Rel;
       if (BaseOffSigned < 0) or (BaseOffSigned >= Int64(CurOff)) then
@@ -638,8 +678,8 @@ var
       LPos := SizeUInt(LOff);
       if LPos >= FDataSize then Exit;
       LB := FData[LPos]; Inc(LPos);
-      LTyp := (LB shr 4) and $07;
-      while (LB and $80) <> 0 do
+      LTyp := (LB shr PackHdrTypeShift) and PackHdrTypeMask;
+      while (LB and PackHdrContBit) <> 0 do
       begin
         if LPos >= FDataSize then Exit;
         LB := FData[LPos]; Inc(LPos);
@@ -653,13 +693,13 @@ var
           begin
             if LPos >= FDataSize then Exit;
             LB := FData[LPos]; Inc(LPos);
-            LRel := LB and $7F;
-            while (LB and $80) <> 0 do
+            LRel := LB and OfsDeltaPayloadMask;
+            while (LB and OfsDeltaContBit) <> 0 do
             begin
-              if LRel > (High(Int64) shr 7) then Exit;
+              if LRel > (High(Int64) shr OfsDeltaPayloadBits) then Exit;
               if LPos >= FDataSize then Exit;
               LB := FData[LPos]; Inc(LPos);
-              LRel := ((LRel + 1) shl 7) or (LB and $7F);
+              LRel := ((LRel + 1) shl OfsDeltaPayloadBits) or (LB and OfsDeltaPayloadMask);
             end;
             LOff := LOff - LRel;
             if LOff < 0 then Exit;
@@ -692,17 +732,17 @@ begin
   P := SizeUInt(AOff);
   if P >= FDataSize then Exit;
   B := FData[P]; Inc(P);
-  Typ := (B shr 4) and $07;
-  Sz := Int64(B and $0F);
-  Shift := 4;
-  while (B and $80) <> 0 do
+  Typ := (B shr PackHdrTypeShift) and PackHdrTypeMask;
+  Sz := Int64(B and PackHdrSizeLowMask);
+  Shift := PackHdrSizeLowBits;
+  while (B and PackHdrContBit) <> 0 do
   begin
     if Shift > 63 then Exit;
     if P >= FDataSize then Exit;
     B := FData[P]; Inc(P);
-    Sz := Sz or (Int64(B and $7F) shl Shift);
+    Sz := Sz or (Int64(B and PackHdrSizeContMask) shl Shift);
     if Sz < 0 then Exit;
-    Inc(Shift, 7);
+    Inc(Shift, PackHdrSizeContBits);
   end;
   if (Sz < 0) or (Sz > MaxInt) then Exit;
   case Typ of
@@ -717,13 +757,13 @@ begin
         begin
           if P >= FDataSize then Exit;
           B := FData[P]; Inc(P);
-          Rel := B and $7F;
-          while (B and $80) <> 0 do
+          Rel := B and OfsDeltaPayloadMask;
+          while (B and OfsDeltaContBit) <> 0 do
           begin
-            if Rel > (High(Int64) shr 7) then Exit;
+            if Rel > (High(Int64) shr OfsDeltaPayloadBits) then Exit;
             if P >= FDataSize then Exit;
             B := FData[P]; Inc(P);
-            Rel := ((Rel + 1) shl 7) or (B and $7F);
+            Rel := ((Rel + 1) shl OfsDeltaPayloadBits) or (B and OfsDeltaPayloadMask);
           end;
           BaseOff := AOff - Rel;
           if (BaseOff < 0) or (BaseOff >= AOff) then Exit;

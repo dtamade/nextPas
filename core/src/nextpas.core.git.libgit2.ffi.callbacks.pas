@@ -8,7 +8,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.git.libgit2.ffi.types,
+  nextpas.core.git.libgit2.types,
   nextpas.core.git.libgit2.ffi.structs;
 
 type

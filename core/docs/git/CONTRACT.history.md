@@ -7,7 +7,7 @@
 
 ## 1. 范围与阈值
 - 源聚合：14 单元 + 3 分片（`native.history` umbrella 已移除，零聚合），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；历史伞已删除（原 <80 行/总门面<600，已移除 46 inline 转发），新代码一律分片直引（`history.traversal / query / ops`）零转发零分配；历史层不自建对象/压缩，仅复用 owner（bytes.ops 单源）。
-- Commit-graph 单文件 `nextpas.core.git.native.commitgraph.pas` 约 1320 行超 `design-conventions §2` 800 行软阈，属**历史域内聚例外**（reader+writer+cache+collect 共享 CGPH/OIDF/OIDL/CDAT/EDGE 不变量与 mmap owner）；已加内部 region 标记 Cache/Reader/Writer/Collect 以保分层可审计性（全局缓存无锁，单线程 git lane / 外部同步），拆分会稀释 ownership 并引入 double-cache / 合入冲突，故保留单文件，1320→1500 阈值监控演进见 §6。
+- Commit-graph 单文件 `nextpas.core.git.native.commitgraph.pas` 约 1320 行超 `design-conventions §2` 800 行软阈，属**历史域内聚例外**（reader+writer+cache+collect 共享 CGPH/OIDF/OIDL/CDAT/EDGE 不变量与 mmap owner）；已加内部 region 标记 Cache/Reader/Writer/Collect 以保分层可审计性（全局缓存无锁，单线程 git lane / 外部同步），拆分会稀释 ownership 并引入 double-cache / 合入冲突，故保留单文件，1320→1500 阈值监控演进见 §6。L2 同层豁免显式锚点 `git-native-commitgraph-l2-exempt`（L2 git→hash.sha1 via `bytes.ops` + `io.mapped`，`core/docs/core-module-registry.md` git 行）已在源码头与 uses 锚定，C5 `git-native-zlib-l2-exempt` 同模式可追溯。
 
 ## 2. 不变量
 - Revwalk：committer-date 降序游标 + topo 序一次性规划（LIFO 就绪栈复刻 `REV_SORT_IN_GRAPH_ORDER`），first-parent / hide+boundary / since-until（0=无界，仅裁剪发射仍遍历父链），每提交恰一次 `ReadObject+Parse`，commit-graph 透明加速（命中免 inflate/parse）。
@@ -32,5 +32,5 @@
 
 ## 6. 演进监控
 - 600 行阈为 umbrella 单文件软阈（非 shards 累加），当前 shards 210+260+180=~650 为不变量域自然分片；umbrella 已移除（原 <80 行）后总聚合度稀释消除。
-- `commitgraph.pas` 1320 行超 800 软阈为已评审例外（Cache/Reader/Writer/Collect 内聚共享 CGPH 解析与 mmap owner，region 标记保可审计性，全局缓存无锁需外部同步，Oid 比较经 `bytes.ops SpanCompare` 单源无 `CompareBytesOrdered` 直调分叉）；拆分前需权衡稀释 ownership 与合入冲突风险（double-cache/重复 mmap owner），阈值接近 1500 或分片直引 fan-in 显著时再行拆分，Compiles 时与 I-Cache 压力持续监控。
+- `commitgraph.pas` 1320 行超 800 软阈为已评审例外（Cache/Reader/Writer/Collect 内聚共享 CGPH 解析与 mmap owner，region 标记保可审计性，全局缓存无锁需外部同步，Oid 比较经 `bytes.ops SpanCompare` 单源无 `CompareBytesOrdered` 直调分叉）；显式锚点 `git-native-commitgraph-l2-exempt` 已补（同层 L2 git→hash.sha1 owner 边界显性），`GGraphCache` 16-cap 手工 LRU 候选 `collections.lrucache` 通用化（当前 DirHash FNV-1a via `bytes.ops` + `IMappedFile` refcount 零拷贝，`O(Cap)` <30ns trivial vs `TLruCache` AllocMem/THashMap 开销，待 fan-in>16 再抽）；拆分前需权衡稀释 ownership 与合入冲突风险（double-cache/重复 mmap owner），阈值接近 1500 或分片直引 fan-in 显著时再行拆分，Compiles 时与 I-Cache 压力持续监控。
 - 新增历史能力先归 owner（bytes/compress/checksum），分片仅薄编排 inline 零拷贝；分片超 260 行即告警 review。Commit-graph 多仓缓存波动由 §3 `CommitGraph/CacheHit|Miss` bench 双锚门禁覆盖。

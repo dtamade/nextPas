@@ -3,12 +3,15 @@ unit nextpas.core.git.native.objects;
 {$I nextpas.core.settings.inc}
 
 {**
- * @desc Object-layer shard facade (oid/zlib/loose/pack/refs/objmodel/write)
+ * @desc Object-layer shard facade (oid/zlib/loose/pack/refs/objmodel/write) — single source.
  * Thin gateway: pure inline forwards, no logic duplication, <400 lines.
+ * Single source: this is the sole inline gateway for object-layer; `native.pas`
+ *   is a thin BC shim (types/consts only, zero function forwards) to avoid double
+ *   thin gateway and I-Cache duplication (fan-in collapses to owners).
  * Fan-in: interface imports type-bearing shards only (base/pack/repo/objmodel/write);
  *   func-only shards (zlib/loose/refs) in implementation (6 vs 9).
  * Perf: all forwards `inline`; zero-copy via bytes.ops single source
- *   (Move/PByte+Len/TByteSpan: oid 20B, zlib Deflate*, others TByteSpan).
+ *   (Move/PByte+Len/TByteSpan: oid 20B, zlib Deflate*, others TByteSpan, SpanEqual/SpanCopy).
  * Stability: TPackFile owns IMappedFile (refcounted, auto released); TBytes refcounted.
  *}
 interface
