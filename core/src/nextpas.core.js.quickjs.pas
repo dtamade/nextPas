@@ -231,19 +231,10 @@ begin
 end;
 
 procedure TJsQuickJsContext.EnsureCallHeap(ANeed: Integer); inline;
-var LOld, LCap: SizeUInt;
 begin
-  // perf: geometric reuse via bytes.ops BytesNextCapacity single source (0→64→2× amortized O(1)), B/op=0 after warm for >16 args, zero per-call heap alloc, inline, bytes.ops single source, stability poke exactly-once not lost
+  // single source via bytes.ops BytesDynEnsureLength (BytesNextCapacity + mem.dynarray probe/poke Exactly-Once), amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, B/op=0 after warm for >16 args, inline, bytes.ops single source, stability poke exactly-once not lost, no duplicate SetLength+Poke per call-site
   if ANeed <= 0 then Exit;
-  LOld := SizeUInt(Length(FCallHeap));
-  if LOld >= SizeUInt(ANeed) then
-  begin
-    if LOld <> SizeUInt(ANeed) then PokeCallHeapLen(FCallHeap, SizeUInt(ANeed));
-    Exit;
-  end;
-  LCap := BytesNextCapacity(LOld, SizeUInt(ANeed));
-  SetLength(FCallHeap, LCap);
-  if LCap <> SizeUInt(ANeed) then PokeCallHeapLen(FCallHeap, SizeUInt(ANeed));
+  nextpas.core.bytes.ops.BytesDynEnsureLength(FCallHeap, SizeOf(TJSQjsValue), SizeUInt(ANeed));
 end;
 
 function TJsQuickJsContext.EvalTryNumeric(const AView: TStringView; out AVal: TJsValue): Boolean; inline;

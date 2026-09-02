@@ -93,25 +93,34 @@ begin
 end;
 
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt;
+var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt; LTmp: string;
 begin
   BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
   case AVal.Kind of
     jskString:
-      if Assigned(JS_NewStringPtr) then
+      if Assigned(JS_NewStringPtr) or Assigned(JS_NewStringLenPtr) then
       begin
-        // perf: zero-copy TStringView直通 via TJsValue.TryGetView single source (bytes.ops TByteSpan zero-copy, inline, B/op=0) — hot path eliminates PAnsiChar(AVal.AsString) one heap alloc+Move; slice non-terminated fallback to AsString materializes single alloc to preserve C-string contract, exactly-once JS_NewString, inline thin-forward, decorator single source
+        // perf: zero-copy B/op=0 via TStringView direct (bytes.ops TByteSpan single source, inline) — hot path eliminates AsString alloc+Move; len-aware JS_NewStringLen single source via bytes.ops zero-copy Slize view, non-NUL slice no AsString fallback, exactly-once JS_NewStringLen, inline thin-forward, decorator single source; fallback to JS_NewString only if len API absent, resource exactly-once
         if AVal.TryGetView(LData, LLen) and (LData <> nil) then
         begin
-          // stability: guard slice view not NUL-terminated at Len (Data[Len] != #0) — fallback to AsString single alloc preserves binary slice correctness, resource exactly-once, bytes.ops single source kept
-          if (LLen = 0) or (LData[LLen] = #0) then
+          if Assigned(JS_NewStringLenPtr) then
+            Result := JS_NewStringLenPtr(ACtx, LData, LLen)
+          else if (LLen = 0) or (LData[LLen] = #0) then
             Result := JS_NewStringPtr(ACtx, LData)
           else
             Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
         end
         else
-          Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+        begin
+          // stability: fallback materializes single alloc via AsString, prefers len-aware to avoid NUL scan, B/op=1 single alloc, resource exactly-once, bytes.ops single source kept
+          if Assigned(JS_NewStringLenPtr) then
+          begin
+            LTmp := AVal.AsString;
+            Result := JS_NewStringLenPtr(ACtx, PAnsiChar(LTmp), SizeUInt(Length(LTmp)));
+          end else
+            Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+        end;
       end;
     jskInteger:
       begin
@@ -197,14 +206,10 @@ begin
 end;
 
 procedure QjsStoreEnsureCapacity(var S: TJsQjsValueStore; ANeed: Integer); inline;
-var LOld, LCap: Integer;
 begin
-  // reuse bytes.ops single source + mem.dynarray exactly-once geometric (no双写分支克隆 pure.base/value.store): SetLength(LCap) + single poke to ANeed via PokeQjsHeapLen→DynArraySetLength, amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy capacity math, decorator pure length via value.store
-  LOld := Length(S.QjsHeap);
-  if LOld >= ANeed then Exit;
-  LCap := BytesGrowCapacityInt(LOld, ANeed);
-  SetLength(S.QjsHeap, LCap);
-  if LCap <> ANeed then PokeQjsHeapLen(S.QjsHeap, SizeUInt(ANeed));
+  // single source via bytes.ops BytesDynEnsureLength (BytesNextCapacity + mem.dynarray probe/poke Exactly-Once), amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy, decorator pure length via value.store, no duplicate SetLength+Poke per call-site
+  if ANeed <= 0 then Exit;
+  nextpas.core.bytes.ops.BytesDynEnsureLength(S.QjsHeap, SizeOf(TJSQjsValue), SizeUInt(ANeed));
 end;
 
 function QjsStoreFind(const S: TJsQjsValueStore; const AObj: TJsValue): Integer; inline;
@@ -317,10 +322,23 @@ begin
 end;
 
 procedure QjsStoreMirrorDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string); inline;
-var QUndef: TJSQjsValue;
+var Atom: UInt32; QUndef: TJSQjsValue;
 begin
-  if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (ACtx = nil) then Exit;
-  BytesZero(@QUndef, SizeUInt(SizeOf(QUndef))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
+  // stability: true delete via JS_DeleteProperty (atom) single source, aligns HasProp/GetKeys with true heap semantics vs undefined overlay divergence; perf: no alloc, inline atom path, resource atom Free exactly-once, bytes.ops single source via DeleteProperty+NewAtom/FreeAtom; fallback to undefined overlay only if Delete API absent (graceful compat, single SetPropertyStr single source)
+  if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or (ACtx = nil) then Exit;
+  if Assigned(JS_DeletePropertyPtr) and Assigned(JS_NewAtomPtr) and Assigned(JS_FreeAtomPtr) then
+  begin
+    Atom := JS_NewAtomPtr(ACtx, PAnsiChar(AName));
+    try
+      JS_DeletePropertyPtr(ACtx, S.QjsHeap[AIdx], Atom, 0);
+    finally
+      JS_FreeAtomPtr(ACtx, Atom);
+    end;
+    Exit;
+  end;
+  if not Assigned(JS_SetPropertyStrPtr) then Exit;
+  // fallback compat: undefined overlay when Delete API unavailable, BytesZero single source via bytes.ops SIMD, exactly-once FFI single source, resource not丢
+  BytesZero(@QUndef, SizeUInt(SizeOf(QUndef)));
   JS_SetPropertyStrPtr(ACtx, S.QjsHeap[AIdx], PAnsiChar(AName), QUndef);
 end;
 
@@ -351,9 +369,9 @@ begin
 end;
 
 function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
-var Idx: Integer; QRes: TJSQjsValue; P: PAnsiChar;
+var Idx: Integer; QRes: TJSQjsValue; LTag: Int64;
 begin
-  // perf: inline decorator pure single source via value.store JsValueStoreHasProp (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy), FFI mirror single source via JS_GetPropertyStr, bytes.ops zero-copy view, exactly-once Free not lost
+  // perf: inline decorator pure single source via value.store JsValueStoreHasProp (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy), FFI mirror single source via JS_GetPropertyStr tag check, B/op=0 zero alloc via Data[1] vs prior ToCString+view alloc+Trim, exactly-once Free not丢, aligns with true delete (JS_DeleteProperty) for GetKeys/HasProp consistency
   Result := JsValueStoreHasProp(S.Pure, AObj, AName);
   if Result then Exit;
   Idx := QjsStoreFind(S, AObj);
@@ -361,13 +379,9 @@ begin
   QRes := JS_GetPropertyStrPtr(ACtx, S.QjsHeap[Idx], PAnsiChar(AName));
   try
     if Assigned(JS_IsExceptionPtr) and (JS_IsExceptionPtr(QRes) <> 0) then Exit(False);
-    if not Assigned(JS_ToCStringPtr) then Exit(False);
-    P := JS_ToCStringPtr(ACtx, QRes);
-    if P = nil then Exit(False);
-    try
-      // perf: zero-copy view via bytes.ops single source QjsView (AnsiPtrLen single scan) + Trim Equals inline, no alloc, decorator reuse
-      Result := not QjsView(P).Trim.Equals(TStringView.FromStr('undefined'));
-    finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+    // stability: tag check aligns with true delete semantics vs undefined overlay divergence, no ToCString PAnsiChar indirection, zero-copy inline via FFI Data[1] single source, B/op=0
+    LTag := Int64(QRes.Data[1]);
+    Result := LTag <> JS_TAG_UNDEFINED;
   finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(ACtx, QRes); end;
 end;
 

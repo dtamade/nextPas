@@ -163,6 +163,8 @@ begin
   // inline single source poke via L0 mem.dynarray, zero-copy header High, Exactly-Once, bytes.ops single slit
   nextpas.core.mem.dynarray.DynArraySetLengthGeneric(A, ANewLen);
 end;
+// reserve geometric — single source amortized O(1) via BytesNextCapacity single source + Exactly-Once poke, trivial types, inline reserve not loop per red-line, bytes.ops single slit
+procedure BytesDynReserve(var A; AElemSize: SizeUInt; AAdditional: SizeUInt); inline;
 
 type
   PDynArrayHeaderLocal = ^TDynArrayHeaderLocal;
@@ -192,6 +194,21 @@ begin
   SetLength(LBytes, LCap * AElemSize);
   if LCap <> ANewLen then
     BytesDynSetLengthGeneric(A, ANewLen);
+end;
+
+procedure BytesDynReserve(var A; AElemSize: SizeUInt; AAdditional: SizeUInt); inline;
+var LP: Pointer; LOld, LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute A;
+begin
+  // single source geometric via BytesNextCapacity + probe/poke Exactly-Once, amortized O(1), inline reserve not loop per red-line, bytes.ops single slit via DynArray ops, trivial types only
+  if (AElemSize = 0) or (AAdditional = 0) then Exit;
+  LP := PPointer(@A)^;
+  if LP = nil then LOld := 0 else LOld := SizeUInt(PDynArrayHeaderLocal(PByte(LP) - SizeOf(TDynArrayHeaderLocal))^.High + 1);
+  LNeed := LOld + AAdditional;
+  LCurCap := BytesDynCapacityGeneric(A, AElemSize);
+  if LCurCap >= LNeed then Exit;
+  LCap := BytesNextCapacity(LOld, LNeed);
+  SetLength(LBytes, LCap * AElemSize);
+  if LCap <> LOld then BytesDynSetLengthGeneric(A, LOld);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;

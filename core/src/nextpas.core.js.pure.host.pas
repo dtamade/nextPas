@@ -67,7 +67,6 @@ uses
   nextpas.core.bytes.ops.text,
   nextpas.core.mem.dynarray,
   nextpas.core.js.pure.base,
-  nextpas.core.js.pure.value,
   nextpas.core.platform.fs;
 function JsPureCategoryFromErrorCategory(const ACategory: TErrorCategory): TJsErrorCategory; inline;
 begin
@@ -132,17 +131,10 @@ begin
   nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
 end;
 procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer);
-var LOld, LNeed, LCap: SizeUInt; LCurCap: SizeUInt;
 begin
-  // batch geometric pre扩: single alloc via bytes.ops BytesNextCapacity single source + single poke, amortized O(1), zero per-insert SetLength+Poke thrash for bulk registration
+  // single source via bytes.ops BytesDynReserve (BytesNextCapacity + mem.dynarray probe/poke Exactly-Once), amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline reserve single source, no duplicate SetLength+Poke per call-site, zero per-insert thrash for bulk registration
   if AAdditional <= 0 then Exit;
-  LOld := SizeUInt(Length(Hosts));
-  LNeed := LOld + SizeUInt(AAdditional);
-  LCurCap := HostCapacity(Hosts);
-  if LCurCap >= LNeed then Exit;
-  LCap := BytesNextCapacity(LOld, LNeed);
-  SetLength(Hosts, LCap);
-  if LCap <> LOld then PokeHostLen(Hosts, LOld);
+  nextpas.core.bytes.ops.BytesDynReserve(Hosts, SizeOf(TJsPureHostRec), SizeUInt(AAdditional));
 end;
 function HostHashView(const V: TStringView): UInt32; inline;
 begin
@@ -173,19 +165,11 @@ begin
 end;
 procedure JsPureHostBucketsRebuild(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets);
 var
-  LCount, LCap, I: Integer;
+  LCount, I: Integer;
 begin
-  // perf: O(1) count via Length, no scan, amortized O(1) rebuild only when >16 and invalid; single source bucket template via pure.hash (threshold 16 aligned json.types)
+  // perf: O(1) count via Length, no scan, amortized O(1) rebuild only when >16 and invalid; single source bucket template via pure.hash TryRebuild (threshold 16 aligned json.types), inline zero-copy, bytes.ops single source
   LCount := Length(Hosts);
-  if LCount <= JS_PURE_HASH_THRESHOLD then
-  begin
-    JsPureHostBucketsInvalidate(Buckets);
-    Exit;
-  end;
-  // single source geometric via pure.hash JsPureBucketCapacity (bytes.ops BytesNextCapacity 0→64→2×) + Prepare/Put template converged, shared single template with PropBucketsRebuild, bytes.ops single source amortized O(1)
-  LCap := JsPureBucketCapacity(LCount);
-  SetLength(Buckets.Buckets, LCap);
-  JsPureBucketsPrepare(Buckets.Buckets, Buckets.Mask, Buckets.Count, LCap, LCount);
+  if not JsPureBucketsTryRebuild(Buckets.Buckets, Buckets.Mask, Buckets.Count, LCount) then Exit;
   for I := 0 to LCount - 1 do
     JsPureBucketPut(Buckets.Buckets, Buckets.Mask, Hosts[I].Hash, I);
 end;
@@ -265,11 +249,20 @@ end;
 function HostAllocOne(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer;
 var
   LCount: Integer;
-  LArr: specialize nextpas.core.js.pure.base.TJsArray<TJsPureHostRec> absolute Hosts;
+  LOld, LNeed, LCap, LCurCap: SizeUInt;
 begin
-  // single source via pure.value generic EnsureCapacityOne single seam — geometric via bytes.ops BytesNextCapacity + poke via mem.dynarray Exactly-Once, amortized O(1), bytes.ops single source, L0-L3 kept, not inline per red-line 2 (routing body)
+  // type-safe without absolute: geometric via bytes.ops BytesNextCapacity single source + Exactly-Once poke via mem.dynarray, amortized O(1), inline zero-copy, no type pun, bytes.ops single source
   LCount := Length(Hosts);
-  specialize nextpas.core.js.pure.value.EnsureCapacityOne<TJsPureHostRec>(LArr);
+  LOld := SizeUInt(LCount);
+  LNeed := LOld + 1;
+  LCurCap := HostCapacity(Hosts);
+  if LCurCap < LNeed then
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Hosts, LCap);
+    if LCap <> LOld then PokeHostLen(Hosts, LOld);
+  end;
+  if SizeUInt(Length(Hosts)) <> LNeed then PokeHostLen(Hosts, LNeed);
   Hosts[LCount].Name := AName;
   Hosts[LCount].Hash := AHash;
   Result := LCount;
@@ -296,7 +289,7 @@ begin
   LCountBefore := Length(Hosts);
   LWasValid := (Length(Buckets.Buckets) > 0) and (Buckets.Count = LCountBefore);
   Result := HostAllocOne(Hosts, AName, LHash);
-  // amortized O(1): valid+capacity足够→O(1)Put, capacity不足→lazy invalidate单次 rebuild, invalid→keep lazy避免千次失效
+  // amortized O(1): valid+capacity足够→O(1)Put, capacity不足→immediate rebuild geometric via bytes.ops (no deferred O(n) find spike), 千宿主突发均摊O(1) via BytesNextCapacity 0→64→2×, inline zero-copy, bytes.ops single source
   if LWasValid then
   begin
     if Length(Buckets.Buckets) >= JsPureBucketCapacity(LCountBefore + 1) then
@@ -304,9 +297,14 @@ begin
       Buckets.Count := LCountBefore + 1;
       JsPureBucketPut(Buckets.Buckets, Buckets.Mask, LHash, Result);
     end else
-      JsPureHostBucketsInvalidate(Buckets);
-  end else if (Length(Hosts) <= JS_PURE_HASH_THRESHOLD) and (Length(Buckets.Buckets) > 0) then
-    JsPureHostBucketsInvalidate(Buckets);
+      JsPureHostBucketsRebuild(Hosts, Buckets);
+  end else
+  begin
+    if (Length(Hosts) <= JS_PURE_HASH_THRESHOLD) and (Length(Buckets.Buckets) > 0) then
+      JsPureHostBucketsInvalidate(Buckets)
+    else if Length(Hosts) > JS_PURE_HASH_THRESHOLD then
+      JsPureHostBucketsRebuild(Hosts, Buckets);
+  end;
 end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer);
 var LIdx: Integer;

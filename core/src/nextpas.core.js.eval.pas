@@ -167,23 +167,22 @@ begin
       end;
     end else
     begin
-      // short string (<VecWidth): table-driven scalar single branch via lookup tables, zero VecWidth overhead, single predicate table
+      // short string (<VecWidth): single-branch O(n) jump table vs O(n·m) double loops, zero VecWidth setup, bytes.ops Slice.Equals single source, inline, zero-copy, B/op=0
       while LPos < LLen do
       begin
         if AllDone then Break;
         B := V.Data[LPos];
-        for I := 0 to 2 do if LSingleNeed[I] and (B = LPredSingles[I]) then
-        begin
-          case I of
-            0: begin if not Pred.HasPlus then begin Pred.HasPlus := True; Pred.PlusPos := LPos; end; LSingleNeed[I] := False; end;
-            1: begin if not Pred.HasParen then begin Pred.HasParen := True; LSingleNeed[I] := False; end; end;
-            2: begin if not Pred.HasX then begin Pred.HasX := True; LSingleNeed[I] := False; end; end;
-          end;
-          Break;
-        end;
-        for I := 0 to 1 do if LLitNeed[I] and (B = LLitFirst[I]) then
-          if (LPos + LLitLens[I] <= LLen) and V.Slice(LPos, LLitLens[I]).Equals(LLitViews[I]) then
-          begin case I of 0: Pred.HasJson := True; 1: Pred.HasWhile := True; end; LLitNeed[I] := False; Break; end;
+        // single dispatch chain — one compare cascade vs two nested for-loops (5× per byte), branchless table via direct equality single source
+        if LSingleNeed[0] and (B = LPredSingles[0]) then
+        begin if not Pred.HasPlus then begin Pred.HasPlus := True; Pred.PlusPos := LPos; end; LSingleNeed[0] := False; end
+        else if LSingleNeed[1] and (B = LPredSingles[1]) then
+        begin if not Pred.HasParen then begin Pred.HasParen := True; LSingleNeed[1] := False; end; end
+        else if LSingleNeed[2] and (B = LPredSingles[2]) then
+        begin if not Pred.HasX then begin Pred.HasX := True; LSingleNeed[2] := False; end; end
+        else if LLitNeed[0] and (B = LLitFirst[0]) and (LPos + LLitLens[0] <= LLen) and V.Slice(LPos, LLitLens[0]).Equals(LLitViews[0]) then
+        begin Pred.HasJson := True; LLitNeed[0] := False; end
+        else if LLitNeed[1] and (B = LLitFirst[1]) and (LPos + LLitLens[1] <= LLen) and V.Slice(LPos, LLitLens[1]).Equals(LLitViews[1]) then
+        begin Pred.HasWhile := True; LLitNeed[1] := False; end;
         Inc(LPos);
       end;
     end;

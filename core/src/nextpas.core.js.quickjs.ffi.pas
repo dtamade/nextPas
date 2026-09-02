@@ -37,6 +37,9 @@ type
   TJS_IsException = function(Val: TJSQjsValue): Integer; cdecl;
   TJS_GetException = function(Ctx: PJSContext): TJSQjsValue; cdecl;
   TJS_NewString = function(Ctx: PJSContext; Str: PAnsiChar): TJSQjsValue; cdecl;
+  TJS_NewStringLen = function(Ctx: PJSContext; Str: PAnsiChar; Len: SizeUInt): TJSQjsValue; cdecl;
+  TJS_NewAtom = function(Ctx: PJSContext; Str: PAnsiChar): UInt32; cdecl;
+  TJS_DeleteProperty = function(Ctx: PJSContext; This: TJSQjsValue; Prop: UInt32; Flags: Integer): Integer; cdecl;
   TJS_NewInt64 = function(Ctx: PJSContext; Val: Int64): TJSQjsValue; cdecl;
   TJS_NewFloat64 = function(Ctx: PJSContext; Val: Double): TJSQjsValue; cdecl;
   TJS_NewBool = function(Ctx: PJSContext; Val: Integer): TJSQjsValue; cdecl;
@@ -97,6 +100,9 @@ var
   JS_IsExceptionPtr: TJS_IsException = nil;
   JS_GetExceptionPtr: TJS_GetException = nil;
   JS_NewStringPtr: TJS_NewString = nil;
+  JS_NewStringLenPtr: TJS_NewStringLen = nil;
+  JS_NewAtomPtr: TJS_NewAtom = nil;
+  JS_DeletePropertyPtr: TJS_DeleteProperty = nil;
   JS_NewInt64Ptr: TJS_NewInt64 = nil;
   JS_NewFloat64Ptr: TJS_NewFloat64 = nil;
   JS_NewBoolPtr: TJS_NewBool = nil;

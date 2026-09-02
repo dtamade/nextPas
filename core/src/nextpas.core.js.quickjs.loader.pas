@@ -70,7 +70,7 @@ end;
 type TQuickJsBindRec = record Name: PAnsiChar; Dest: PPointer; Required: Boolean; end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer; I: Integer;
-  Binds: array[0..31] of TQuickJsBindRec;
+  Binds: array[0..34] of TQuickJsBindRec;
   function Bind(const Sym: PAnsiChar; out Addr: Pointer): Boolean; inline;
   begin Result := platform_dl_sym(Lib, Sym, Addr) = 0; if not Result then Addr := nil; end;
 begin
@@ -113,6 +113,9 @@ begin
   Binds[29].Name := 'JS_FreePropertyEnum'; Binds[29].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[29].Required := False;
   Binds[30].Name := 'JS_AtomToString'; Binds[30].Dest := PPointer(@JS_AtomToStringPtr); Binds[30].Required := False;
   Binds[31].Name := 'JS_FreeAtom'; Binds[31].Dest := PPointer(@JS_FreeAtomPtr); Binds[31].Required := False;
+  Binds[32].Name := 'JS_NewStringLen'; Binds[32].Dest := PPointer(@JS_NewStringLenPtr); Binds[32].Required := False;
+  Binds[33].Name := 'JS_NewAtom'; Binds[33].Dest := PPointer(@JS_NewAtomPtr); Binds[33].Required := False;
+  Binds[34].Name := 'JS_DeleteProperty'; Binds[34].Dest := PPointer(@JS_DeletePropertyPtr); Binds[34].Required := False;
   // stability: two-phase required-first fail-fast — required symbols (10) bound first, optional (22) only if required OK; cold fail up to 10 lookups not 32 (8×10=80 vs 256), success single 32
   // perf: inline Bind PAnsiChar zero-copy, no AnsiString heap, early exit avoids 22 optional dl_sym on probe miss, bytes.ops single source for zero
   for I := 0 to High(Binds) do if Binds[I].Required then
@@ -202,7 +205,7 @@ begin
   JS_NewRuntimePtr := nil; JS_EvalPtr := nil;
   JS_FreeRuntimePtr := nil; JS_NewContextPtr := nil; JS_FreeContextPtr := nil; JS_GetGlobalObjectPtr := nil;
   JS_FreeValuePtr := nil; JS_DupValuePtr := nil; JS_ToCStringPtr := nil; JS_ToCStringLenPtr := nil; JS_FreeCStringPtr := nil;
-  JS_IsExceptionPtr := nil; JS_GetExceptionPtr := nil; JS_NewStringPtr := nil; JS_NewInt64Ptr := nil;
+  JS_IsExceptionPtr := nil; JS_GetExceptionPtr := nil; JS_NewStringPtr := nil; JS_NewStringLenPtr := nil; JS_NewAtomPtr := nil; JS_DeletePropertyPtr := nil; JS_NewInt64Ptr := nil;
   JS_NewFloat64Ptr := nil; JS_NewBoolPtr := nil; JS_NewObjectPtr := nil; JS_NewArrayPtr := nil;
   JS_SetPropertyStrPtr := nil; JS_GetPropertyStrPtr := nil; JS_SetMemoryLimitPtr := nil; JS_SetGCThresholdPtr := nil;
   JS_RunGCPtr := nil; JS_SetInterruptHandlerPtr := nil; JS_NewCFunctionPtr := nil; JS_CallPtr := nil;

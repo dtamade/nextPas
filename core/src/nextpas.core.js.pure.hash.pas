@@ -13,6 +13,9 @@ function JsPureHashStr(const S: string): UInt32; inline;
 function JsPureBucketCapacity(AItemCount: Integer): Integer; inline;
 procedure JsPureBucketsPrepare(var Buckets: array of Integer; var Mask: UInt32; var Count: Integer; ACap: Integer; AItemCount: Integer);
 procedure JsPureBucketPut(var Buckets: array of Integer; AMask: UInt32; AHash: UInt32; AIndex: Integer);
+// shared bucket template — threshold+capacity+prepare single source for host/prop, inline threshold, amortized O(1) via bytes.ops, candidate for future pure.hash.buckets auxiliary module
+function JsPureBucketsShouldUse(AItemCount: Integer): Boolean; inline;
+function JsPureBucketsTryRebuild(var Buckets: array of Integer; var Mask: UInt32; var Count: Integer; AItemCount: Integer): Boolean;
 implementation
 uses
   nextpas.core.bytes.ops;
@@ -50,5 +53,27 @@ begin
   LIdx := Integer(AHash and AMask);
   while Buckets[LIdx] <> -1 do LIdx := (LIdx + 1) and Integer(AMask);
   Buckets[LIdx] := AIndex;
+end;
+function JsPureBucketsShouldUse(AItemCount: Integer): Boolean; inline;
+begin
+  // inline threshold single source, zero alloc, shared by host/prop
+  Result := AItemCount > JS_PURE_HASH_THRESHOLD;
+end;
+function JsPureBucketsTryRebuild(var Buckets: array of Integer; var Mask: UInt32; var Count: Integer; AItemCount: Integer): Boolean;
+var LCap: Integer;
+begin
+  // shared template: threshold+capacity+prepare single source, amortized O(1) via bytes.ops BytesNextCapacity, host/prop deduplicated, candidate for pure.hash.buckets auxiliary module
+  if AItemCount <= JS_PURE_HASH_THRESHOLD then
+  begin
+    SetLength(Buckets, 0);
+    Mask := 0;
+    Count := 0;
+    Result := False;
+    Exit;
+  end;
+  LCap := JsPureBucketCapacity(AItemCount);
+  SetLength(Buckets, LCap);
+  JsPureBucketsPrepare(Buckets, Mask, Count, LCap, AItemCount);
+  Result := True;
 end;
 end.
