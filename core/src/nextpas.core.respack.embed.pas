@@ -20,6 +20,7 @@ uses
   nextpas.core.embed.limits,
   nextpas.core.respack.base,
   nextpas.core.respack.limits;
+nextpas.core.respack.base;
 
 type
   { 嵌入打包选项；Build 字段透传 writer（去重/hash/digest/输入上限） }
@@ -41,6 +42,8 @@ type
 const
   RESPACK_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.embed.limits.EMBED_INC_DEFAULT_BYTES_PER_LINE;
   RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.EMBED_INC_MAX_BLOB_BYTES; { 兼容别名，单源于 embed.limits EMBED_* 规范，消除 RESPACK->RESPACK 二重转发冗余；经验阈值 <4MiB 走 .inc }
+RESPACK_INC_DEFAULT_BYTES_PER_LINE = nextpas.core.embed.limits.RESPACK_INC_DEFAULT_BYTES_PER_LINE;
+  RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.RESPACK_INC_MAX_BLOB_BYTES; { 兼容别名，单源于 embed.limits 独立模块；经验阈值 <4MiB 走 .inc }
 
 function ResPackDefaultEmbedOptions: TResPackEmbedOptions; inline;
 function ResPackDefaultIncOptions: TResPackIncOptions;
@@ -216,6 +219,7 @@ begin
   LineCols := 0;
   PData := ABlob.Data;
   // 批量向量化：行分块 + 4-wide 向量化 HexEncodeDollarCommaBulkUpper 单源（encoding.hex HEX_UPPER 单源、外联守红线2避 I-Cache 膨胀、内层表 inline 零拷贝），避免逐字节 HexEncodeByteUpper 调用与分支；行首 2 空格前缀批量 $XX, 写入，末行末字节 $XX 无逗号，保持确定性 golden 一致，单次分配零额外拷贝
+// 批量向量化：行分块 + 4-wide 向量化 HexEncodeDollarCommaBulkUpper 单源（encoding.hex HEX_UPPER 表 inline 零拷贝），避免逐字节 HexEncodeByteUpper 调用与分支；行首 2 空格前缀批量 $XX, 写入，末行末字节 $XX 无逗号，保持确定性 golden 一致，单次分配零额外拷贝
   I := 0;
   while I < SizeInt(N) do
   begin

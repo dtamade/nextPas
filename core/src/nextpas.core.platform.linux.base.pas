@@ -262,6 +262,14 @@ const
   MAP_STACK     = $20000;
   MAP_HUGETLB   = $40000;
 
+  { NUMA memory policy (mbind) }
+  MPOL_DEFAULT    = cint(0);
+  MPOL_PREFERRED  = cint(1);
+  MPOL_BIND       = cint(2);
+  MPOL_INTERLEAVE = cint(3);
+  MPOL_MF_MOVE    = cuint(1 shl 1);
+  MPOL_MF_STRICT  = cuint(1 shl 0);
+
   PR_SET_NAME = cint(15);
   PR_GET_NAME = cint(16);
 

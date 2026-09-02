@@ -1,6 +1,7 @@
 unit nextpas.core.db.redis.resp;
 
 {** @desc RESP2 协议编解码纯函数（V3-A5）。
+       缝位纯度：本单元纯 L0/L1 依赖（text.conv/base），不触 net/tls 同层缝（缝仅在 transport/adapter 单点，cycle-gated 无 reverse，类 vfs.embedded→respack.reader 单向范式），bytes.ops 单源 indirect（经 StrToBytes 零拷贝 Move 单次，inline 薄转发由 adapter 侧承载）。
        编码：参数数组 → RESP array-of-bulk-strings 帧（二进制安全，
        值无需转义——长度前缀即注入安全边界）。解析：增量式
        TryParse（数据不足返回 false 不抛错），数组递归；RESP2 空形

@@ -375,6 +375,39 @@ const
     @return 0 成功，-1 失败 *}
 function ioctl(AFd: cint; ARequest: culong; AArgp: Pointer): cint; cdecl; external 'c' name 'ioctl';
 
+{ NUMA / CPU topology — host-owned raw truth for L2 numa }
+
+{** @desc 获取当前 CPU 与节点（getcpu）
+    @param cpu 输出 CPU
+    @param node 输出节点
+    @param tcache 缓存指针
+    @return 0 成功 *}
+function getcpu(cpu: pcint; node: pcint; tcache: Pointer): cint; cdecl; external 'c' name 'getcpu';
+
+{** @desc 绑定内存到节点（mbind）
+    @param addr 地址
+    @param len 长度
+    @param mode 策略（MPOL_*）
+    @param nodemask 节点掩码
+    @param maxnode 最大节点
+    @param flags 标志（MPOL_MF_*）
+    @return 0 成功 *}
+function mbind(addr: Pointer; len: culong; mode: cint; nodemask: Pculong; maxnode: culong; flags: cuint): cint; cdecl; external 'c' name 'mbind';
+
+{** @desc 设置 CPU 亲和性
+    @param pid 进程/线程 ID
+    @param cpusetsize 掩码大小
+    @param mask CPU 掩码
+    @return 0 成功 *}
+function sched_setaffinity(pid: pid_t; cpusetsize: size_t; mask: Pointer): cint; cdecl; external 'c' name 'sched_setaffinity';
+
+{** @desc 获取 CPU 亲和性
+    @param pid 进程/线程 ID
+    @param cpusetsize 掩码大小
+    @param mask 输出掩码
+    @return 0 成功 *}
+function sched_getaffinity(pid: pid_t; cpusetsize: size_t; mask: Pointer): cint; cdecl; external 'c' name 'sched_getaffinity';
+
 implementation
 
 end.

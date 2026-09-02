@@ -605,30 +605,15 @@ end;
 { TList<T> - 抽象方法实现 }
 
 function TList.IsOverlap(const aSrc: Pointer; aElementCount: SizeUInt): Boolean;
-var
-  LCurrent: PDoubleNode;
-  LSrcStart, LSrcEnd: PtrUInt;
 begin
-  // 链表的内存是分散的，需要检查每个节点是否与源内存重叠
+  // Scattered node storage (TNodeManager block pool) has no contiguous
+  // buffer/capacity interval; O(n) per-node scan penalizes
+  // TryLoadFrom/AppendUnchecked hot path. Capacity fast-path: empty
+  // list never overlaps. Aligns with THashMap/TTreeMap/THashSet
+  // (return False) — element copy is per-node, zero-copy per element.
+  if (aSrc = nil) or (aElementCount = 0) or (FCount = 0) then
+    Exit(False);
   Result := False;
-
-  if (aSrc = nil) or (aElementCount = 0) then
-    Exit;
-
-  LSrcStart := PtrUInt(aSrc);
-  LSrcEnd := LSrcStart + aElementCount * SizeOf(T);
-
-  LCurrent := FHead;
-  while LCurrent <> nil do
-  begin
-    if (PtrUInt(@LCurrent^.Data) >= LSrcStart) and
-       (PtrUInt(@LCurrent^.Data) < LSrcEnd) then
-    begin
-      Result := True;
-      Exit;
-    end;
-    LCurrent := PDoubleNode(LCurrent^.GetNext);
-  end;
 end;
 
 procedure TList.DoZero;

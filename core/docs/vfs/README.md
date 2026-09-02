@@ -105,7 +105,7 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）�
 ```
 
 依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
-`embedded` 额外依赖 `respack.reader`；`os` 额外依赖 `nextpas.core.fs`。
+`embedded` 额外依赖 `respack.reader`（L2→L2 单向 allowlist 单缝，cycle-gated，超出默认 L0-L1）；`os` 额外依赖 `nextpas.core.fs`（L2→L2 单向 allowlist 单缝，cycle-gated，超出默认 L0-L1）；两处需 registry+source-contract 双锁防循环。
 
 ### 依赖白名单
 
@@ -113,10 +113,10 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）�
 |------|----------|------|
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
+| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader` 单向 allowlist 单缝，cycle-gated） | |
 | `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead），零 `SysUtils` 直引（`QueryInterface`） |
 | `compressed` | `transform` + `compress` (`compress.base` + `compress.gzip`) + `bytes.ops` | L3 薄门面（单缝寄居正名，长期待拆分）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` 单源、`GZIP_MAX` 单源），模板复用 `transform` 单源决策器承载 32MiB 防 bomb |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
+| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **L2→L2 单向 allowlist 单缝之一**（另一为 embedded→respack.reader），超出默认 L0-L1，registry 记录，source-contract 单向门禁防循环 |
 
 ## 核心契约
 

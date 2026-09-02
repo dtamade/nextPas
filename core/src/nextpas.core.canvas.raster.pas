@@ -2,7 +2,7 @@
  * nextpas.core.canvas.raster - CPU 光栅（Tile 16x16 架构占位 + 扫描线填充，Double 梯形→整数覆盖）
  * 单线程录制，Save/Restore 栈；Fill 用 tess 梯形，Stroke 复用 PathStroke。
  * 已接入跨平台内联光栅层 nextpas.core.simd.raster（FillSolid/BlendSrcOver 直联 SSE2/标量，不走分发表，可内联）。
- * L2 依赖：单向引用 L2 vector.tess/vector.path 与 L2 image.base（canvas→vector/image），无反向；同层循环受控监控（610 行，阈 800）。
+ * L2 依赖：单向引用 L2 vector.tess/vector.path 与 L2 image.base（canvas→vector/image，Registry allowlist 单向缝 `canvas.raster→vector/image` cycle-gated，无反向，bytes.ops 单源 inline/零拷贝，资源释放不丢；同层循环受控监控（610 行，阈 800））。
  *}
 unit nextpas.core.canvas.raster;
 

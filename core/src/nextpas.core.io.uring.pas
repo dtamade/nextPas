@@ -97,13 +97,14 @@ function IoUringCqeGetData(ACqe: PIoUringCqe): UInt64; inline;
 implementation
 
 uses
-  BaseUnix;
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
 
 const
-  PROT_READ  = 1;
-  PROT_WRITE = 2;
-  MAP_SHARED = 1;
-  MAP_POPULATE = $8000;
+  PROT_READ  = PLATFORM_POSIX_PROT_READ;
+  PROT_WRITE = PLATFORM_POSIX_PROT_WRITE;
+  MAP_SHARED = PLATFORM_POSIX_MAP_SHARED;
+  MAP_POPULATE = $8000; // host-owned Linux MAP_POPULATE via nextpas.core.platform.linux.base
 
   IORING_OFF_SQ_RING = 0;
   IORING_OFF_CQ_RING = $8000000;
@@ -129,10 +130,8 @@ begin
   {$ENDIF}
 end;
 
-function do_mmap(addr: Pointer; len: size_t; prot: cint; flags: cint;
-  fd: cint; offset: off_t): Pointer; cdecl; external 'c' name 'mmap';
-function do_munmap(addr: Pointer; len: size_t): cint; cdecl; external 'c' name 'munmap';
-
+{ mmap/munmap/close via platform host-owner nextpas.core.platform.posix.ffi — no direct FPC host unit/external (design-conventions §18) }
+{ perf: zero-copy ring mmap via platform mmap (single syscall, no extra copy); munmap/close reuse platform owner }
 class function TIoUring.Create(AEntries: UInt32; AFlags: UInt32): TIoUring;
 var
   LParams: TIoUringParams;
@@ -151,9 +150,9 @@ begin
   // mmap SQ ring
   LSqRingSize := SizeUInt(LParams.sq_off.array_off) +
     SizeUInt(LParams.sq_entries) * SizeOf(UInt32);
-  LSqPtr := do_mmap(nil, LSqRingSize, PROT_READ or PROT_WRITE,
-    MAP_SHARED or MAP_POPULATE, Result.FFd, IORING_OFF_SQ_RING);
-  if LSqPtr = Pointer(-1) then begin FpClose(Result.FFd); Result.FFd := -1; Exit; end;
+  LSqPtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(LSqRingSize), PROT_READ or PROT_WRITE,
+    MAP_SHARED or MAP_POPULATE, Result.FFd, Int64(IORING_OFF_SQ_RING));
+  if LSqPtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then begin nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit; end;
 
   Result.FSqRing.RingPtr := LSqPtr;
   Result.FSqRing.RingSize := LSqRingSize;
@@ -168,12 +167,12 @@ begin
   // mmap CQ ring
   LCqRingSize := SizeUInt(LParams.cq_off.cqes) +
     SizeUInt(LParams.cq_entries) * SizeOf(TIoUringCqe);
-  LCqPtr := do_mmap(nil, LCqRingSize, PROT_READ or PROT_WRITE,
-    MAP_SHARED or MAP_POPULATE, Result.FFd, IORING_OFF_CQ_RING);
-  if LCqPtr = Pointer(-1) then
+  LCqPtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(LCqRingSize), PROT_READ or PROT_WRITE,
+    MAP_SHARED or MAP_POPULATE, Result.FFd, Int64(IORING_OFF_CQ_RING));
+  if LCqPtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then
   begin
-    do_munmap(LSqPtr, LSqRingSize);
-    FpClose(Result.FFd); Result.FFd := -1; Exit;
+    nextpas.core.platform.posix.ffi.munmap(LSqPtr, PtrUInt(LSqRingSize));
+    nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit;
   end;
 
   Result.FCqRing.RingPtr := LCqPtr;
@@ -186,14 +185,14 @@ begin
   Result.FCqRing.CqesPtr := PIoUringCqe(LCqPtr + LParams.cq_off.cqes);
 
   // mmap SQE array
-  LSqePtr := do_mmap(nil, SizeUInt(LParams.sq_entries) * SizeOf(TIoUringSqe),
+  LSqePtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(SizeUInt(LParams.sq_entries) * SizeOf(TIoUringSqe)),
     PROT_READ or PROT_WRITE, MAP_SHARED or MAP_POPULATE,
-    Result.FFd, IORING_OFF_SQES);
-  if LSqePtr = Pointer(-1) then
+    Result.FFd, Int64(IORING_OFF_SQES));
+  if LSqePtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then
   begin
-    do_munmap(LCqPtr, LCqRingSize);
-    do_munmap(LSqPtr, LSqRingSize);
-    FpClose(Result.FFd); Result.FFd := -1; Exit;
+    nextpas.core.platform.posix.ffi.munmap(LCqPtr, PtrUInt(LCqRingSize));
+    nextpas.core.platform.posix.ffi.munmap(LSqPtr, PtrUInt(LSqRingSize));
+    nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit;
   end;
 
   Result.FSqeArray := PIoUringSqe(LSqePtr);
@@ -206,13 +205,13 @@ procedure TIoUring.Close;
 begin
   if not FValid then Exit;
   if FSqeArray <> nil then
-    do_munmap(FSqeArray, SizeUInt(FSqeCount) * SizeOf(TIoUringSqe));
+    nextpas.core.platform.posix.ffi.munmap(FSqeArray, PtrUInt(SizeUInt(FSqeCount) * SizeOf(TIoUringSqe)));
   if FCqRing.RingPtr <> nil then
-    do_munmap(FCqRing.RingPtr, FCqRing.RingSize);
+    nextpas.core.platform.posix.ffi.munmap(FCqRing.RingPtr, PtrUInt(FCqRing.RingSize));
   if FSqRing.RingPtr <> nil then
-    do_munmap(FSqRing.RingPtr, FSqRing.RingSize);
+    nextpas.core.platform.posix.ffi.munmap(FSqRing.RingPtr, PtrUInt(FSqRing.RingSize));
   if FFd >= 0 then
-    FpClose(FFd);
+    nextpas.core.platform.posix.ffi.close(FFd);
   FValid := False;
 end;
 

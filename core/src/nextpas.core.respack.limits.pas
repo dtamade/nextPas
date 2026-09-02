@@ -20,6 +20,7 @@ uses
   nextpas.core.embed.limits,
   nextpas.core.respack.base,
   nextpas.core.text.number;
+nextpas.core.embed.limits;
 
 const
   RESPACK_INC_MAX_BLOB_BYTES = nextpas.core.embed.limits.EMBED_INC_MAX_BLOB_BYTES;
@@ -29,6 +30,7 @@ const
 function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 
 { 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝，text.number.UIntToBuffer+bytes.ops.BytesCopy 单源，owner 边界 respack.base 独立异常 }
+{ 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝转发至 embed.limits 单源 }
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
 implementation
@@ -59,6 +61,8 @@ begin
     raise EResPackTooLarge.Create('respack.embed: blob too large for .inc ('
       + SStr + ' > ' + LStr + ', use .pack)');
   end;
+begin
+  nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
 end;
 
 end.

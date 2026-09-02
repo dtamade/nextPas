@@ -11,6 +11,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.text.number;
+nextpas.core.exception;
 
 const
   EMBED_INC_MAX_BLOB_BYTES = 4 * 1024 * 1024;
@@ -22,6 +23,18 @@ type
 function EmbedEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
 
 procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+RESPACK_INC_MAX_BLOB_BYTES = EMBED_INC_MAX_BLOB_BYTES;
+  RESPACK_INC_DEFAULT_BYTES_PER_LINE = EMBED_INC_DEFAULT_BYTES_PER_LINE;
+
+type
+  EResPackTooLarge = class(EResourceExhaustedError);
+  EEmbedTooLarge = EResPackTooLarge;
+
+function EmbedEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
+function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
+
+procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
 implementation
 
@@ -54,6 +67,22 @@ begin
     raise EEmbedTooLarge.Create('respack.embed: blob too large for .inc ('
       + SStr + ' > ' + LStr + ', use .pack)');
   end;
+function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline;
+begin
+  Result := EmbedEffectiveIncLimit(AConfigured);
+end;
+
+procedure EmbedRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+begin
+  if ASize > ALimit then
+    raise EResPackTooLarge.Create('respack.embed: blob too large for .inc ('
+      + IntToStr(UInt64(ASize)) + ' > '
+      + IntToStr(UInt64(ALimit)) + ', use .pack)');
+end;
+
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+begin
+  EmbedRequireIncSize(ASize, ALimit);
 end;
 
 end.

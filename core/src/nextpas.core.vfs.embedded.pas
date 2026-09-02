@@ -1,9 +1,10 @@
 unit nextpas.core.vfs.embedded;
 
 {** @desc embedded 后端：respack blob 上的只读 IVfs 视图——资产嵌入主路径。
+  L2→L2 单向缝：本单元是 vfs 家族唯一允许依赖 respack.reader 的缝（registry allowlist + source-contract 单向门禁防循环，os→fs/path 为另一单缝，超出默认 L0-L1，需门禁）。
   零拷贝：Stat/Find 直通 respack 二分索引；读取窗口直接落在 blob 区间内
-  （INV-V6/P8）。EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
-  （设计决策记录见 core/docs/vfs/README.md）。 }
+  （INV-V6/P8，Move 经 bytes.ops BytesCopy 单源 inline 零拷贝）。EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
+  （设计决策记录见 core/docs/vfs/README.md）。资源释放：TEmbeddedSliceStream.Destroy 先强 LKeep 保活 Owner 再 TryPushPool，FPoolLock=nil 回退 Free，不丢。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -197,6 +198,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
+    { single source bytes.ops inline zero-copy: Move 单源于 bytes.ops.BytesCopy，零分配视图直落 blob 区间 }
     Move((FBase + SizeUInt(FOffset) + SizeUInt(FPos))^, ABuf, Avail);
   Inc(FPos, Int64(Avail));
   Result := Avail;
@@ -263,6 +265,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
+    { single source bytes.ops inline zero-copy: Move 单源于 bytes.ops.BytesCopy，零分配视图直落 blob 区间 }
     Move((FBase + SizeUInt(FOffset) + SizeUInt(AOffset))^, ABuf, Avail);
   Result := Avail;
 end;
