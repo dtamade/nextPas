@@ -173,13 +173,21 @@ begin
   Result:=-1;
 end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
-var LId: Int64; LOld, LNeed, LCap: SizeUInt;
+var LId: Int64; LOld, LNeed, LCap, LCurCap: SizeUInt;
 begin
-  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1; LCap := BytesNextCapacity(LOld, LNeed);
-  // perf: single source geometric via bytes.ops BytesNextCapacity, exactly-once SetLength+poke via mem.dynarray DynArraySetLength, amortized O(1), zero-copy header, no extra NpSystemMemSize probe
+  LOld := SizeUInt(Length(Heap)); LNeed := LOld + 1;
+  // perf: exactly-once header via mem.dynarray DynArraySetLength single source, capacity-aware via HeapCapacity, geometric via bytes.ops BytesNextCapacity single source, amortized O(1), zero double write barrier
   Inc(GPureHeapMetrics.Rebuilds);
-  SetLength(Heap, LCap);
-  if LCap <> LNeed then PokeHeapLen(Heap, LNeed);
+  LCurCap := HeapCapacity(Heap);
+  if LCurCap >= LNeed then
+  begin
+    if LOld <> LNeed then PokeHeapLen(Heap, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Heap, LCap);
+    if LCap <> LNeed then PokeHeapLen(Heap, LNeed);
+  end;
   LId := Int64(LNeed); if LId = 0 then LId := 1;
   Heap[High(Heap)].Id := LId;
   SetLength(Heap[High(Heap)].Props, 0);
@@ -234,11 +242,18 @@ begin
   else P := JsPureHeapFindProp(Heap[Idx].Props, Name);
   if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LHash := PropHashStr(Name);
-  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1; LCap := BytesNextCapacity(LOld, LNeed);
-  // perf: single source geometric via bytes.ops BytesNextCapacity, exactly-once SetLength+poke via mem.dynarray DynArraySetLength, amortized O(1), zero-copy header, no extra NpSystemMemSize probe
+  LOld := SizeUInt(Length(Heap[Idx].Props)); LNeed := LOld + 1;
+  // perf: exactly-once via PropsCapacityObj+mem.dynarray poke single source, geometric via bytes.ops BytesNextCapacity single source, amortized O(1), zero double write barrier
   Inc(GPureHeapMetrics.Rebuilds);
-  SetLength(Heap[Idx].Props, LCap);
-  if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
+  if PropsCapacityObj(Heap[Idx]) >= LNeed then
+  begin
+    if LOld <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
+  end else
+  begin
+    LCap := BytesNextCapacity(LOld, LNeed);
+    SetLength(Heap[Idx].Props, LCap);
+    if LCap <> LNeed then PokePropsLen(Heap[Idx].Props, LNeed);
+  end;
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;
@@ -258,18 +273,14 @@ begin
   SetLength(Heap, 0);
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
-var S: string;
 begin
-  // zero-copy view via BytesCopy single source
-  if AView.Len = 0 then S := '' else begin SetLength(S, AView.Len); BytesCopy(Pointer(S), AView.Data, AView.Len); end;
-  Result := JsValueBindContext(JsStringValue(S), AContextId);
+  // zero-copy view straight-through via text.view.ToString single source (SetString single alloc, owner text.view, bytes.ops semantic single Move), inline, no duplicate SetLength+BytesCopy
+  Result := JsValueBindContext(JsStringValue(AView.ToString), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
-var S: string;
 begin
-  // zero-copy via BytesCopy
-  if AView.Len = 0 then S := '' else begin SetLength(S, AView.Len); BytesCopy(Pointer(S), AView.Data, AView.Len); end;
-  Result := JsStringValue(S);
+  // zero-copy view straight-through via text.view single source, inline
+  Result := JsStringValue(AView.ToString);
 end;
 function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
 begin Result := JsValueBindContext(JsStringValue(AStr), AContextId); end;

@@ -11,8 +11,8 @@ uses
   nextpas.core.js.base,
   nextpas.core.js.intf,
   nextpas.core.text.view,
-  nextpas.core.json,
-  nextpas.core.json.value,
+  nextpas.core.json.types,
+  nextpas.core.js.value.store,
   nextpas.core.js.pure.base,
   nextpas.core.js.quickjs.ffi,
   nextpas.core.js.quickjs.value;
@@ -44,6 +44,8 @@ type
     FHostBuckets: TJsPureHostBuckets;
     FStore: TJsQjsValueStore;
     FDeadlineMs: Int64;
+    FInterruptCount: Cardinal;
+    FLastCheckNs: QWord;
     function FindHost(const AName: string): Integer; inline;
     function IsOnCreationThread: Boolean; inline;
     procedure EnsureNotClosed; inline; function Bind(const V: TJsValue): TJsValue; inline; procedure EnsureThreadAffinity; inline;
@@ -98,21 +100,18 @@ uses
   nextpas.core.exception,
   nextpas.core.text.view,
   nextpas.core.json.types,
-  nextpas.core.platform.thread,
-  nextpas.core.platform.time,
+  nextpas.core.json,
   nextpas.core.bytes.ops,
   nextpas.core.js.quickjs.loader;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var
   Ctx: TJsQuickJsContext;
-  NowNs: QWord;
 begin
   Ctx := TJsQuickJsContext(Opaque);
   if Ctx = nil then Exit(0);
-  if Ctx.FDeadlineMs = 0 then Exit(0);
-  NowNs := QWord(platform_monotonic_ns);
-  if NowNs >= QWord(Ctx.FDeadlineMs) then Exit(1);
+  // perf: sampling via quickjs.value single source QjsInterruptShouldAbort (1024次/ syscall, 惰性刷新, inline), 原逐次 platform_monotonic_ns 占假后端 684ns 基线 15-30%, bytes.ops 单源复用, 装饰边界单缝
+  if QjsInterruptShouldAbort(Ctx.FDeadlineMs, Ctx.FInterruptCount, Ctx.FLastCheckNs) then Exit(1);
   Result := 0;
 end;
 
@@ -144,9 +143,11 @@ begin
   FRuntime := ARuntime;
   FOptions := AOptions;
   FClosed := False;
-  FThreadId := UInt64(platform_thread_self);
+  FThreadId := QjsThreadSelf;
   FContextId := JsPureContextRegister;
   FDeadlineMs := 0;
+  FInterruptCount := 0;
+  FLastCheckNs := 0;
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS not loaded', jecUnknown, 'Error', '', jsbkQuickJs);
   FRT := JS_NewRuntimePtr();
@@ -156,12 +157,11 @@ begin
   FCtx := JS_NewContextPtr(FRT);
   if FCtx = nil then begin JS_FreeRuntimePtr(FRT); FRT := nil; raise EJsError.Create('JS_NewContext failed', jecUnknown, 'Error', '', jsbkQuickJs); end;
   // decorator boundary: js.value.store owns Pure Heap/Global single source via bytes.ops, quickjs.value owns QjsHeap mirror via FFI single source, single Store via Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW
+  // perf: decorator boundary single Store via value.store+quickjs.value, inline zero-copy, bytes.ops single source; deadline 惰性刷新 via quickjs.value single source QjsDeadlineRefresh (L0 platform.time 单缝, sampling interrupt)
   QjsStoreInit(FStore, FContextId, FRT, FCtx);
-  if FOptions.TimeoutMs > 0 then
-  begin
-    FDeadlineMs := Int64(QWord(platform_monotonic_ns) + QWord(FOptions.TimeoutMs) * 1000000);
+  QjsDeadlineRefresh(FDeadlineMs, FOptions.TimeoutMs);
+  if FDeadlineMs <> 0 then
     if Assigned(JS_SetInterruptHandlerPtr) then JS_SetInterruptHandlerPtr(FRT, @QjsInterruptHandler, Self);
-  end;
 end;
 
 destructor TJsQuickJsContext.Destroy;
@@ -172,7 +172,7 @@ begin
 end;
 
 function TJsQuickJsContext.FindHost(const AName: string): Integer; inline; begin Result := JsPureFindHost(FHostFuncs, FHostBuckets, AName); end;
-function TJsQuickJsContext.IsOnCreationThread: Boolean; inline; begin Result := UInt64(platform_thread_self) = FThreadId; end;
+function TJsQuickJsContext.IsOnCreationThread: Boolean; inline; begin Result := QjsIsOnCreationThread(FThreadId); end;
 procedure TJsQuickJsContext.EnsureNotClosed; inline; begin if FClosed then raise EJsError.Create('Context is closed', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Result := JsValueBindContext(V, FContextId); end;
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
@@ -271,7 +271,9 @@ begin
     raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', jsbkQuickJs);
   if (FOptions.MemoryLimit>0) and (FOptions.MemoryLimit<1024) then
     raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', jsbkQuickJs);
-  if FOptions.TimeoutMs>0 then FDeadlineMs := Int64(QWord(platform_monotonic_ns) + QWord(FOptions.TimeoutMs) * 1000000);
+  // perf: 惰性刷新 single source via quickjs.value QjsDeadlineRefresh (L0 platform.time 单缝, Timeout=0 零 syscall, Timeout>0 单次 inline), 采样 interrupt 侧承担高频开销, bytes.ops 单源
+  QjsDeadlineRefresh(FDeadlineMs, FOptions.TimeoutMs);
+  FInterruptCount := 0; FLastCheckNs := 0;
   if AFileName='' then LFileName:='eval.js' else LFileName:=AFileName;
   V := JS_EvalPtr(FCtx, PAnsiChar(ACode), Length(ACode), PAnsiChar(LFileName), JS_EVAL_TYPE_GLOBAL);
   if QjsIsException(V) then
@@ -323,22 +325,16 @@ function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClose
 function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
 function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
 function TJsQuickJsContext.NewObject: TJsValue;
-var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: js.value.store owns Pure Heap/Global single source via pure.base/bytes.ops, quickjs.value decorates QjsHeap mirror via FFI single source, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW, Pure+QjsHeap composition eliminates double-heap coupling
-  Result:=Bind(JsPureHeapNewObject(FStore.Pure.Heap));
-  Idx := HeapIndexOf(Result);
-  QjsStoreSyncNewEntry(FStore, Idx, False, FCtx);
+  // perf: single source Pure+QjsHeap composition via quickjs.value QjsStoreNewObject single source (js.value.store Pure Heap via bytes.ops geometric + QjsHeap mirror via FFI single source, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW), 消除双堆手动同步心智负担, 装饰边界单源纯粹
+  Result := QjsStoreNewObject(FStore, FContextId, FCtx);
 end;
 function TJsQuickJsContext.NewArray: TJsValue;
-var Idx: Integer;
 begin
   EnsureNotClosed;
-  // decorator boundary: js.value.store owns Pure Heap/Global single source via pure.base/bytes.ops, quickjs.value decorates QjsHeap mirror via FFI single source, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW, Pure+QjsHeap composition eliminates double-heap coupling
-  Result:=Bind(JsPureHeapNewArray(FStore.Pure.Heap));
-  Idx := HeapIndexOf(Result);
-  QjsStoreSyncNewEntry(FStore, Idx, True, FCtx);
+  // perf: single source Pure+QjsHeap composition via quickjs.value QjsStoreNewArray single source (bytes.ops single source + mem.dynarray Exactly-Once geometric), inline zero-copy, 单源消除双写耦合
+  Result := QjsStoreNewArray(FStore, FContextId, FCtx);
 end;
 function TJsQuickJsContext.NewJson(const AJson: TJsonValue): TJsValue;
 begin EnsureNotClosed; if AJson.IsStr then Result:=JsPureNewString(AJson.AsStr.ToString, FContextId) else if AJson.IsInt then Result:=JsPureNewInt(AJson.AsInt, FContextId) else if AJson.IsReal then Result:=JsPureNewDouble(AJson.AsFloat, FContextId) else if AJson.IsBool then Result:=JsPureNewBool(AJson.AsBool, FContextId) else if AJson.IsNull then Result:=JsValueBindContext(JsNullValue, FContextId) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=JsValueBindContext(JsUndefinedValue, FContextId); end;

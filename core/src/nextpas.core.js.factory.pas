@@ -1,9 +1,11 @@
 unit nextpas.core.js.factory;
-{** @desc JS 工厂：分支与探测（门面零逻辑，薄转发豁免收敛）。
-     承载 CreateJsRuntime / JsBackendAvailable / DefaultJsRuntimeOptions 分支与探测抛异常，
-     门面仅 inline 薄转发，守四件套 base←intf←实现←门面 与 L0-L3。
-     复用 bytes.ops 单源（经 js.pure.base/pure.impl 几何扩容与 text.view 零拷贝），
-     热点薄转发 inline + Move 零拷贝（门面侧），资源释放不丢（pure.base JsPureClose / quickjs Free 不丢，构造失败 exactly-once 抛 EJsBackendUnavailable）。 *}
+{** @desc JS 工厂：薄转发至注册表（零 L2 扇出，注册表单源）。
+     承载 CreateJsRuntime / JsBackendAvailable / DefaultJsRuntimeOptions 薄转发，
+     5 后端分支与探测下沉至 js.registry（O(1) 索引 + JsRegisterBackend 扩展优雅），
+     工厂零直接 uses fake/js888/v8/chakra/quickjs，门面 inline 薄转发收益完整。
+     守四件套 base←intf←registry←factory←门面 与 L0-L3（L2→L2 单缝经 intf/pure.base，零循环），
+     复用 bytes.ops 单源（经 js.pure.base 几何 + js.registry 探测名单 + text.view 零拷贝），
+     热点 inline 零拷贝 + Move 单源（registry O(1) 数组索引），资源幂等不丢（registry 构造 exactly-once 抛 EJsBackendUnavailable/CheckJsRuntimeOptions fail-closed，pure.base JsPureClose / quickjs StoreClear 不丢）。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -11,56 +13,30 @@ uses
   nextpas.core.js.intf;
 function CreateJsRuntime(AKind: TJsBackendKind = jsbkFake): IJsRuntime; overload;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; overload;
-function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
+function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 implementation
 uses
-  nextpas.core.js.fake,
-  nextpas.core.js.js888,
-  nextpas.core.js.v8,
-  nextpas.core.js.chakra,
-  nextpas.core.js.quickjs.loader,
-  nextpas.core.js.quickjs;
+  nextpas.core.js.registry;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 begin
   // perf: inline thin-forward to TJsRuntimeOptions.Default, zero-copy record return, no heap alloc
   Result := TJsRuntimeOptions.Default;
 end;
-function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
+function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 begin
-  // L2→L2 单缝 json 仅经 intf types, 本单元零 json 直接依赖；探测幂等缓存（loader 单源）
-  case AKind of
-    jsbkFake, jsbkJs888, jsbkV8, jsbkChakra: Result := True;
-    jsbkQuickJs: Result := JsQuickJsIsAvailable;
-  else
-    Result := False;
-  end;
+  // perf: inline thin-forward to registry single source O(1) enum index, zero-copy, no case duplication, no heap alloc
+  Result := JsRegistryAvailable(AKind);
 end;
-function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime;
+function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime; inline;
 begin
-  // perf: thin-forward via factory single source, inline at facade, no extra alloc
+  // perf: inline thin-forward via factory single source, zero-copy IJsRuntime refcnt, no branching duplication
   Result := CreateJsRuntime(AKind, DefaultJsRuntimeOptions);
 end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
 begin
-  // stability: CheckJsRuntimeOptions 先验负 Timeout, 失败抛 EJsError fail-closed, 无资源泄漏
+  // stability: CheckJsRuntimeOptions 先验负 Timeout fail-closed 无泄漏，registry O(1) 分发 exactly-once 抛 EJsBackendUnavailable（含 probe 名表，bytes.ops 单源）
   CheckJsRuntimeOptions(AOptions);
-  case AKind of
-    jsbkFake: Result := TJsFakeRuntime.Create(jsbkFake, AOptions);
-    jsbkJs888: Result := TJsJs888Runtime.Create(AOptions);
-    jsbkV8: Result := TJsV8Runtime.Create(AOptions);
-    jsbkChakra: Result := TJsChakraRuntime.Create(AOptions);
-    jsbkQuickJs:
-      begin
-        // 探测抛异常单源：先 probenames 透传，再 load，双重 exactly-once，不丢探测名表
-        if not JsQuickJsIsAvailable then
-          raise EJsBackendUnavailable.Create('QuickJS not available (probe: ' + JsQuickJsProbeNames + ')', jecUnknown, 'Error', '', jsbkQuickJs);
-        if not JsQuickJsLoad then
-          raise EJsBackendUnavailable.Create('QuickJS load failed', jecUnknown, 'Error', '', jsbkQuickJs);
-        Result := TJsQuickJsRuntime.Create(AOptions);
-      end;
-  else
-    raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
-  end;
+  Result := JsRegistryCreate(AKind, AOptions);
 end;
 end.

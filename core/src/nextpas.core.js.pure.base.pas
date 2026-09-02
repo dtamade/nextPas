@@ -1,6 +1,6 @@
 unit nextpas.core.js.pure.base;
-{ facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval)
-  Note: pure.* is pure-family prefix, base is shared base suffix (not independent module) — non-standard four-piece naming explicit exception per CONTRACT §1. Host/Heap/Value/IO four duties aggregated but wc -l 370 <650 (<800 must-split), thin forwards via pure.host/pure.value single source; over threshold split to js.host(Host+Call)+js.value(Heap/Value) ready, see pure.impl grouping marks, L0-L3 kept, bytes.ops single source. }
+{ lifecycle owner + facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval)
+  Note: pure.* pure-family prefix, base shared base suffix — non-standard four-piece naming explicit exception per CONTRACT §1 & design-conventions:150. Single responsibility = lifecycle registry (GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero atomic via FValid, strong acquire) + thin facade; Host→pure.host (future js.host, now pure.host single source), Heap/Value→pure.value (future js.value, now pure.value single source), IO→platform.fs L0 64MiB BytesCopy single source, all inline zero-copy via bytes.ops/text.view single source. wc -l ~380 <650 (<800 must-split), thin forwards via pure.host/pure.value/js.eval single source, L0-L3 kept. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -28,11 +28,12 @@ const
   JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
   JS_PURE_EVAL_BAD = nextpas.core.js.eval.JS_PURE_EVAL_BAD;
   JS_PURE_EVAL_FOO = nextpas.core.js.eval.JS_PURE_EVAL_FOO;
-// lifecycle owner: pure.base is shared base for pure.impl + quickjs, holds GJsClosed state single source, intf零可变全局
+// lifecycle owner — pure.base single source: GPureClosed 64B padded atomic (acquire/release, cache-line isolated, write-once rare, atomic_fetch_add id), intf零可变全局, bulk IsValid零原子 via FValid
 function JsPureContextRegister: UInt64;
 procedure JsPureContextClose(AId: UInt64);
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
+// Host — owner pure.host (future js.host) — inline thin-forward, bytes.ops FNV1a single source, per-Context buckets instance-isolated
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
 function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
@@ -57,6 +58,7 @@ procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHos
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline; overload;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline; overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
+// Heap/Value — owner pure.value (future js.value) — inline thin-forward, bytes.ops+mem.dynarray single source, per-Context TJsPureValueState
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
@@ -78,10 +80,12 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
+// Call/Close — thin compose pure.host+pure.value single source, lifecycle via GPureClosed padded atomic, resource JsPureClose幂等不丢
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
+// IO — owner platform.fs L0 (TryEvalFile) 64MiB BytesCopy single source, Eval→js.eval single source
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; inline; overload;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline; overload;
@@ -99,7 +103,8 @@ const
   JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
 type
   PJsPureHostBuckets = ^TJsPureHostBuckets;
-var GPureClosed: array of Int32; GPureNextId: UInt64 = 1; // owner pure.base: 4B atomic acquire/release, 自然 4B 对齐 (FPC dynarray 8B header + 4B元素), 非 16B 堆对齐虚假宣称, 64B/4 伪共享 16条目/行 write-once rare,  bulk IsValid 零原子 via FValid, 强一致走 acquire
+  TPureClosedSlot = record Value: Int32; _Pad: array[0..59] of Byte; end; // 64B cache-line padded, instance-isolated atomic slot, false-sharing free, write-once rare
+var GPureClosed: array of TPureClosedSlot; GPureNextId: Int64 = 1; GPureClosedLock: Int32 = 0; // owner pure.base: lifecycle single source, GPureNextId atomic fetch_add lock-free, GPureClosed 64B padded 4B atomic acquire/release per slot, spinlock for resize, bulk IsValid zero via FValid, strong acquire
 
 // single dispatch template — three forms × bucket/non-bucket converged via PHostBuckets nil=linear, Kind dispatches handler type, inline zero-copy via host view, bytes.ops FNV1a single source; 6 overloads converged to one dispatch (PBuckets nil=linear else bucketed), future js.host split ready when >800
 procedure _JsPureHostSetDispatch(var Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AName: string; const AFunc: TJsHostFunction; const AMethod: TJsHostMethod; const AProc: TJsHostProc; AKind: Integer); inline;
@@ -121,49 +126,63 @@ end;
 
 function GPureClosedCapacity: SizeUInt; inline;
 begin
-  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(Int32));
+  // capacity probe single source via mem.dynarray owner, zero-copy header, no alloc, 64B padded slot
+  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(TPureClosedSlot));
 end;
 
 function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute GPureClosed;
+var LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute GPureClosed; LId: Int64; LExp: Int32;
 begin
-  // perf: thread-affine geometric via bytes.ops BytesNextCapacity single source, capacity-aware Exactly-Once poke via mem.dynarray DynArraySetLength, amortized O(1), single SetLength only when capacity insufficient + single poke, zero redundant zeroing/double alloc, inline zero-copy header
-  Result := GPureNextId;
-  Inc(GPureNextId);
+  // perf: lock-free id via atomic_fetch_add_64 mo_seq_cst, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock for resize critical section (rare), inline zero-copy header, 64B padded slot
+  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_seq_cst));
+  Result := UInt64(LId);
   if Result >= UInt64(Length(GPureClosed)) then
   begin
-    LNeed := SizeUInt(Result) + 1;
-    LCurCap := GPureClosedCapacity;
-    if LCurCap >= LNeed then
+    // spinlock for resize — rare write-once, protects SetLength+poke, fast path lock-free when capacity sufficient
+    LExp := 0;
+    while not atomic_compare_exchange_strong(GPureClosedLock, LExp, Int32(1), mo_acquire, mo_relaxed) do
     begin
-      if SizeUInt(Length(GPureClosed)) <> LNeed then
-        DynArraySetLength(LBytes, LNeed);
-    end
-    else
-    begin
-      LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
-      SetLength(GPureClosed, Integer(LCap));
-      if LCap <> LNeed then
-        DynArraySetLength(LBytes, LNeed);
+      LExp := 0;
+      cpu_pause;
+    end;
+    try
+      if Result >= UInt64(Length(GPureClosed)) then
+      begin
+        LNeed := SizeUInt(Result) + 1;
+        LCurCap := GPureClosedCapacity;
+        if LCurCap >= LNeed then
+        begin
+          if SizeUInt(Length(GPureClosed)) <> LNeed then
+            DynArraySetLength(LBytes, LNeed);
+        end
+        else
+        begin
+          LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
+          SetLength(GPureClosed, Integer(LCap));
+          if LCap <> LNeed then
+            DynArraySetLength(LBytes, LNeed);
+        end;
+      end;
+    finally
+      atomic_store(GPureClosedLock, Int32(0), mo_release);
     end;
   end;
-  atomic_store(GPureClosed[Result], 0, mo_release);
+  atomic_store(GPureClosed[Result].Value, 0, mo_release);
 end;
 
 procedure JsPureContextClose(AId: UInt64);
 begin
   if (AId > 0) and (AId < UInt64(Length(GPureClosed))) then
-    atomic_store(GPureClosed[AId], 1, mo_release);
+    atomic_store(GPureClosed[AId].Value, 1, mo_release);
 end;
 
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 var LVal: Int32;
 begin
-  // perf: inline acquire single bounds check, 4B volatile atomic, write-once rare, ~1ns read, 强一致路径单用；bulk 路径用 FValid 零屏障
+  // perf: inline acquire single bounds check, 64B padded atomic slot (false-sharing free), write-once rare, ~1ns read, 强一致 acquire；bulk via FValid zero barrier
   if AId = 0 then Exit(False);
   if AId >= UInt64(Length(GPureClosed)) then Exit(False);
-  LVal := atomic_load(GPureClosed[AId], mo_acquire);
+  LVal := atomic_load(GPureClosed[AId].Value, mo_acquire);
   Result := LVal <> 0;
 end;
 
