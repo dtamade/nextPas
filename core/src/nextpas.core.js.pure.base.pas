@@ -101,8 +101,6 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline; overload;
 implementation
 uses
-  nextpas.core.base,
-  nextpas.core.exception,
   nextpas.core.js.eval;
 type
   PJsPureHostBuckets = ^TJsPureHostBuckets;
@@ -220,19 +218,7 @@ function JsPureToJsonString(const AValue: TJsValue): string; inline;
 begin Result := nextpas.core.js.pure.value.JsPureToJsonString(AValue); end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
 begin Result := nextpas.core.js.pure.value.JsPureToJson(AValue); end;
-function JsCategoryFromErrorCategory(const ACategory: TErrorCategory): TJsErrorCategory; inline;
-begin
-  case ACategory of
-    ecParse: Result := jecSyntax;
-    ecNullReference: Result := jecReference;
-    ecInvalidArgument, ecInvalidOperation: Result := jecType;
-    ecNotImplemented, ecNotSupported: Result := jecNotSupported;
-    ecTimeout: Result := jecTimeout;
-    ecResourceExhausted: Result := jecMemory;
-    ecInternal: Result := jecUnknown;
-  else Result := jecUnknown; end;
-end;
-// PBuckets single template — luxury convergence: dual overloads 42行 95%克隆收敛为 PBuckets nil=linear else bucketed single source, inline零拷贝 via host view, bytes.ops single source, no heap alloc
+// PBuckets single template — luxury convergence: dual overloads 42行 95%克隆收敛为 PBuckets nil=linear else bucketed single source, inline零拷贝 via host view, bytes.ops single source, no heap alloc — Host Kind dispatch single source via pure.host.JsPureHostInvoke (bytes.ops single source, inline zero-copy, resource try-finally not丢)
 function _JsPureCallImpl(ACtx: IJsContext; const Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
 var LIdx: Integer; LName: string;
 begin
@@ -242,17 +228,7 @@ begin
   if LName = '' then Exit;
   if Buckets <> nil then LIdx := JsPureFindHost(Hosts, Buckets^, LName) else LIdx := JsPureFindHost(Hosts, LName);
   if LIdx < 0 then Exit;
-  try
-    case Hosts[LIdx].Kind of
-      0: Result := Hosts[LIdx].Func(ACtx, AThis, AArgs);
-      1: Result := Hosts[LIdx].Method(ACtx, AThis, AArgs);
-      2: Result := Hosts[LIdx].Proc(ACtx, AThis, AArgs);
-    end;
-  except
-    on E: EJsError do raise;
-    on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend);
-    on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend);
-  end;
+  Result := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LIdx], ACtx, AThis, AArgs, ABackend);
 end;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
 begin Result := _JsPureCallImpl(ACtx, Hosts, nil, AFunc, AThis, AArgs, ABackend); end;

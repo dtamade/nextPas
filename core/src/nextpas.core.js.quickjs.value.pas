@@ -130,15 +130,7 @@ begin
       end;
     JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
       begin
-        // perf: object/array 快路径 FFI JS_IsArray O(1) single source if available, else single ToCString via bytes.ops single source, no JsonParse, inline zero-copy, 资源 exactly-once Free不丢
-        if Assigned(JS_IsArrayPtr) then
-          if JS_IsArrayPtr(ACtx, V) <> 0 then
-          begin
-            if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
-            P := JS_ToCStringPtr(ACtx, V);
-            if P = nil then Exit(JsPureNewString('', ACtxtId));
-            try Exit(JsPureNewString(nextpas.core.bytes.ops.AnsiPtrToString(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
-          end;
+        // perf: object/array 统一单次ToCString via bytes.ops single source (merged JS_IsArray真假两路重复ToCString+AnsiPtrToString → 单次FFI往返), no JsonParse, inline zero-copy, 资源 exactly-once Free不丢 — 单次 ToCString+AnsiPtrToString 零拷贝单扫, 消除多一次FFI往返
         if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsPureNewString('', ACtxtId));

@@ -4,7 +4,7 @@ unit nextpas.core.js.registry;
      守四件套 base←intf←registry←factory←门面 与 L0-L3（L2 内聚，registry 唯一扇出，factory 薄转发单向），
      复用 bytes.ops 单源（经 loader 探测名单 via SpanTrim/SpanEqual + pure.base 几何 BytesNextCapacity，零拷贝），
      热点 inline 零拷贝 + Move 单源（BytesCopy 单源 inline），资源幂等不丢（pure.base JsPureClose / quickjs StoreClear exactly-once）。
-     线程安全：GVault 单 owner 模块化 vault 隔离（非裸全局，经 inline snapshot 单源访问，IMutex→platform.sync acquire/release 原子保护，64B 友好 O(1) 快照，零锁外分发，lazy init 原子 Exactly-Once），
+     线程安全：GVault 单 owner 模块化 vault 隔离（非裸全局，经 inline snapshot 单源访问，IMutex→platform.sync acquire/release 原子保护，64B 友好 O(1) 快照，零锁外分发，lazy init 原子 Exactly-Once，热路径 JsRegistryAvailable init后无锁读单次 acquire load 零锁零额外栅栏），
      资源 try-finally 不丢，业务以 CONTRACT 为准，owner 缺口反哺 platform.sync/sync/atomic/bytes.ops。 *}
 {$I nextpas.core.settings.inc}
 interface
@@ -112,17 +112,25 @@ var
   LAvail: TJsAvailableFunc;
   LAvailRes: Boolean;
 begin
-  // perf: inline thin-forward to registry single source, O(1) avail check, zero alloc, platform.sync 快照无锁外阻塞, bytes.ops 单源探针 via VaultRef
-  // stability: snapshot under lock, call outside lock 防重入, try-finally 不丢
-  if not Assigned(VaultRef^.Lock) then
-    Exit(False);
-  VaultRef^.Lock.Acquire;
-  try
-    atomic_thread_fence(mo_acquire);
+  // perf: inline hot probe init后无锁读零拷贝 O(1) 索引：GVaultInit=2 时无锁快照零竞争零额外栅栏（单次 acquire load 可见，64B 友好），Avail 调用锁外防重入，bytes.ops 单源 via VaultRef，热点 inline 零拷贝
+  // stability: owner GVault via VaultRef，GVaultInit acquire 发布可见，未就绪才走锁快照 try-finally 不丢，exactly-once
+  if atomic_load(GVaultInit, mo_acquire) = 2 then
+  begin
     LReg := VaultRef^.Registered[AKind];
     LAvail := VaultRef^.Avail[AKind];
-  finally
-    VaultRef^.Lock.Release;
+  end
+  else
+  begin
+    if not Assigned(VaultRef^.Lock) then
+      Exit(False);
+    VaultRef^.Lock.Acquire;
+    try
+      atomic_thread_fence(mo_acquire);
+      LReg := VaultRef^.Registered[AKind];
+      LAvail := VaultRef^.Avail[AKind];
+    finally
+      VaultRef^.Lock.Release;
+    end;
   end;
   if not LReg then
     Exit(False);

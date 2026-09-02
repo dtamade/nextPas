@@ -1,8 +1,8 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~140行 <500 阈值内 (wc -l ~140, 纯族 host/value 已收敛至 pure.host/pure.value 单源 owner, 见 CONTRACT §1/§6), 单源 json.writer/bytes.ops+text.view+text.escape+text.number+text.builder 单缝 via bytes.ops 几何，零 intf→实现反向依赖。奢华薄 intf 零可变全局, 生命周期单源下沉 pure.base。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~125行 <500 阈值内 (wc -l ~125, 纯族 host/value 已收敛至 pure.host/pure.value 单源 owner, 见 CONTRACT §1/§6), 奢华薄 intf 零可变全局, AsJson inline 薄转发至 pure.value 单源 owner (json.writer/bytes.ops+text.view+text.escape+text.number+text.builder 单缝 via bytes.ops 几何 via pure.value), 零 intf→实现重逻辑, 状态下沉 lifecycle。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 json.writer/bytes.ops single source, 零 intf→实现 反向依赖
+uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, 单源 via pure.value owner (json.writer/bytes.ops single source), 零重逻辑反向依赖
 type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
@@ -14,7 +14,7 @@ type
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
     function IsError: Boolean; inline; function IsPromise: Boolean; inline; function IsSymbol: Boolean; inline; function IsBigInt: Boolean; inline;
-    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string;
+    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean; function TryAsDouble(out V: Double): Boolean; function TryAsString(out V: string): Boolean;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
@@ -63,13 +63,10 @@ function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunc
 // Context 寿命（INV-7）：状态单源下沉至 js.lifecycle (GPureClosed/GPureNextId 4B atomic acquire/release, 自然4B对齐, 64B/4 伪共享, write-once rare, geometric via bytes.ops single source, 零双注册), pure.base thin-forward, intf 零可变全局奢华薄, 不暴露 JsContextRegister/Close/IsClosed 桩 (需强一致时直调 js.lifecycle/pure.base.JsPureContextIsClosed acquire), 生命周期由 IJsContext.IsClosed 显式检查
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-// intf 奢华薄：零可变全局，守四件套 base←intf←pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)，单源 json.writer/bytes.ops+text.escape+text.number+text.view+text.builder 几何/零拷贝 via bytes.ops 单源，零 intf→实现反向依赖
+// intf 奢华薄：零可变全局，守四件套 base←intf←pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)，单源 pure.value owner via bytes.ops 几何/零拷贝 (json.writer+text.escape+text.number+text.builder+text.view via pure.value 单缝)，零 intf→实现重逻辑反向依赖，资源 try-finally Done 在 owner 不丢
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.text.builder,
-  nextpas.core.json.writer,
-  nextpas.core.text.escape,
-  nextpas.core.text.number;
+  nextpas.core.js.pure.value;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
@@ -123,56 +120,10 @@ begin
   if FKind<>jskString then Exit('');
   Result:=FStrVal;
 end;
-function TJsValue.AsJson: string;
-var
-  B: TStringBuilder; W: TJsonWriter; S: string; LBuf: array[0..63] of AnsiChar; LLen: Int32;
+function TJsValue.AsJson: string; inline;
 begin
-  // single source via json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source, single alloc fast path, resource try-finally Done not lost, not inline per red-line (branch+builder), bytes.ops single source via BytesCopy single Move, bulk TStringView zero-copy via text.view, L0-L3 单向 base←intf 零反向 impl 依赖
-  // perf: number path zero builder via text.number stack buffer single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder single alloc (BytesCopy single Move), escaped path builder geometric via bytes.ops single source try-finally Done not lost, AsString single-state hosted via bytes.ops single source
-  case FKind of
-    jskUndefined: Exit('undefined');
-    jskNull: Exit('null');
-    jskBoolean: if FBoolVal then Exit('true') else Exit('false');
-    jskNumber:
-      begin
-        if Double(FIntVal) = FDoubleVal then
-          LLen := IntToBuffer(FIntVal, @LBuf[0])
-        else
-          LLen := FloatToBuffer(FDoubleVal, @LBuf[0]);
-        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
-        Exit;
-      end;
-    jskString:
-      begin
-        S := FStrVal;
-        if not JsonNeedsEscapeStr(S) then
-        begin
-          SetLength(Result, Length(S) + 2);
-          Result[1] := '"';
-          if Length(S) > 0 then
-            BytesCopy(PAnsiChar(Result) + 1, PAnsiChar(S), SizeUInt(Length(S)));
-          Result[Length(Result)] := '"';
-          Exit;
-        end;
-        B.Init(SizeUInt(Length(S)) + 2);
-        try
-          W.Init(B);
-          W.Str(S);
-          Result := B.ToString;
-        finally B.Done; end;
-        Exit;
-      end;
-    jskSymbol: Exit('Symbol(' + FStrVal + ')');
-    jskBigInt:
-      begin
-        LLen := IntToBuffer(FIntVal, @LBuf[0]);
-        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
-        Result := Result + 'n';
-        Exit;
-      end;
-  else
-    Result := '';
-  end;
+  // perf: inline thin-forward to pure.value owner single source JsPureToJsonString via json.writer TStringBuilder+text.escape SIMD+text.number stack single source, bytes.ops single source via BytesCopy single Move, text.view zero-copy, 单源单缝 via pure.value, 热点 inline 零拷贝, 资源 try-finally Done 在 owner 不丢, 守 L0-L3 单向 base←intf 薄 intf 零重逻辑
+  Result := JsPureToJsonString(Self);
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;

@@ -28,8 +28,8 @@ end;
 function JsPureContextRegister: UInt64;
 var LNeed, LCap, LCurCap: SizeUInt; LBytes: TBytes absolute GPureClosed; LId: Int64; LExp: Int32;
 begin
-  // perf: lock-free id via atomic_fetch_add_64 mo_seq_cst, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock for resize critical section (rare), inline zero-copy header, 64B padded slot
-  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_seq_cst));
+  // perf: lock-free id via atomic_fetch_add_64 mo_relaxed, instance-isolated, thread-affine geometric via bytes.ops single source, Exactly-Once poke via mem.dynarray, amortized O(1), spinlock for resize critical section (rare), inline zero-copy header, 64B padded slot — downgraded from mo_seq_cst to save MFENCE vs mo_acq_rel, release paired via slot store
+  LId := Int64(atomic_fetch_add_64(GPureNextId, Int64(1), mo_relaxed));
   Result := UInt64(LId);
   if Result >= UInt64(Length(GPureClosed)) then
   begin

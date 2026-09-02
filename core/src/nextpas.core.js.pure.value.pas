@@ -6,13 +6,14 @@ uses
   nextpas.core.js.intf,
   nextpas.core.text.view,
   nextpas.core.json,
-  nextpas.core.json.value;
+  nextpas.core.json.value,
+  nextpas.core.js.pure.hash;
 type
   TJsPureProp = record Name: string; Value: TJsValue; Hash: UInt32; end;
   TJsPureObject = record Id: Int64; Props: array of TJsPureProp; PropsBuckets: array of Integer; PropsMask: UInt32; end;
   TJsPureHeap = array of TJsPureObject;
   TJsPureHeapMetrics = record FindCalls: UInt64; HashUsed: UInt64; Rebuilds: UInt64; end;
-const JS_PURE_HEAP_HASH_THRESHOLD = 64;
+const JS_PURE_HEAP_HASH_THRESHOLD = JS_PURE_HASH_THRESHOLD; // single source via pure.hash 64, unify with host threshold 0→64→2× geometric
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
@@ -105,30 +106,29 @@ begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
 procedure PokePropsLen(var Props: array of TJsPureProp; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute Props;
 begin nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen); end;
-{ prop hash — single source FNV1a32 via bytes.ops, inline zero-copy, converges with pure.host HostHashView via bytes.ops single source; candidate shared helper nextpas.core.js.pure.hash if growth }
+{ prop hash — single source via pure.hash JsPureHashStr (bytes.ops FNV1a32), inline zero-copy, converged with pure.host HostHashView via pure.hash }
 function PropHashStr(const S: string): UInt32; inline;
 begin
-  if Length(S)=0 then Exit(0);
-  Result := FNV1a32(PByte(PAnsiChar(S)), SizeUInt(Length(S)));
+  // single source via pure.hash, inline thin-forward, zero-copy, no duplicate FNV
+  Result := JsPureHashStr(S);
 end;
 procedure PropBucketsInvalidate(var Obj: TJsPureObject); inline;
 begin SetLength(Obj.PropsBuckets,0); Obj.PropsMask:=0; end;
 procedure PropBucketsRebuild(var Obj: TJsPureObject);
-var LCount, LCap, I, LIdx: Integer; LHash: UInt32;
+var LCount, LCap, I, LDummy: Integer; LHash: UInt32;
 begin
   LCount := Length(Obj.Props);
   if LCount <= JS_PURE_HEAP_HASH_THRESHOLD then begin PropBucketsInvalidate(Obj); Exit; end;
-  LCap := Integer(BytesNextCapacity(0, SizeUInt(LCount)*2));
+  // single source bucket template via pure.hash (geometric 0→64→2× + Prepare/Put), unify with JsPureHostBucketsRebuild 95% clone converged, bytes.ops single source
+  LCap := JsPureBucketCapacity(LCount);
   SetLength(Obj.PropsBuckets, LCap);
-  for I:=0 to LCap-1 do Obj.PropsBuckets[I]:=-1;
-  Obj.PropsMask := UInt32(LCap-1);
+  LDummy := 0;
+  JsPureBucketsPrepare(Obj.PropsBuckets, Obj.PropsMask, LDummy, LCap, LCount);
   for I:=0 to LCount-1 do
   begin
     LHash := Obj.Props[I].Hash;
-    if LHash=0 then begin LHash:=PropHashStr(Obj.Props[I].Name); Obj.Props[I].Hash:=LHash; end;
-    LIdx := Integer(LHash and Obj.PropsMask);
-    while Obj.PropsBuckets[LIdx]<>-1 do LIdx := (LIdx+1) and Integer(Obj.PropsMask);
-    Obj.PropsBuckets[LIdx]:=I;
+    if LHash=0 then begin LHash:=JsPureHashStr(Obj.Props[I].Name); Obj.Props[I].Hash:=LHash; end;
+    JsPureBucketPut(Obj.PropsBuckets, Obj.PropsMask, LHash, I);
   end;
   Inc(GPureHeapMetrics.Rebuilds);
 end;

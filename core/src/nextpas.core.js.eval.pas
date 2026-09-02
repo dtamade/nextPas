@@ -18,8 +18,6 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; overload;
 implementation
 uses
-  nextpas.core.base,
-  nextpas.core.exception,
   nextpas.core.text.number,
   nextpas.core.bytes.ops,
   nextpas.core.js.pure.value;
@@ -30,18 +28,6 @@ type
     HasX: Boolean;
   end;
   PJsPureHostBuckets = ^TJsPureHostBuckets;
-function JsCategoryFromErrorCategory(const ACategory: TErrorCategory): TJsErrorCategory; inline;
-begin
-  case ACategory of
-    ecParse: Result := jecSyntax;
-    ecNullReference: Result := jecReference;
-    ecInvalidArgument, ecInvalidOperation: Result := jecType;
-    ecNotImplemented, ecNotSupported: Result := jecNotSupported;
-    ecTimeout: Result := jecTimeout;
-    ecResourceExhausted: Result := jecMemory;
-    ecInternal: Result := jecUnknown;
-  else Result := jecUnknown; end;
-end;
 function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
 var P: PtrInt; L, R: TStringView; A, B: Int64;
 begin
@@ -162,7 +148,7 @@ function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
   Result := JsStringValue(V.ToString);
 end;
-// Layer 5 host dispatch — single source via pure.host/value, inline zero-copy
+// Layer 5 host dispatch — single source via pure.host.JsPureHostInvoke, inline zero-copy, bytes.ops single source
 function TryHostDispatch(const AView: TStringView; ACtx: IJsContext; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue; ABackend: TJsBackendKind; out OutVal: TJsValue): Boolean; inline;
 var
   LIdxPos: PtrInt;
@@ -170,9 +156,6 @@ var
   LHostIdx: Integer;
   LSingle: array[0..0] of TJsValue;
   LNoArgs: array of TJsValue;
-  LHandler: TJsHostFunction;
-  LMethod: TJsHostMethod;
-  LProc: TJsHostProc;
   LThis: TJsValue;
   LHasArg: Boolean;
 begin
@@ -196,17 +179,11 @@ begin
   if LHasArg then LSingle[0] := JsPureNewStringView(LArgView);
   LThis := AGlobal;
   LNoArgs := nil;
-  try
-    case Hosts[LHostIdx].Kind of
-      0: begin LHandler := Hosts[LHostIdx].Func; if LHasArg then OutVal := LHandler(ACtx, LThis, LSingle) else OutVal := LHandler(ACtx, LThis, LNoArgs); end;
-      1: begin LMethod := Hosts[LHostIdx].Method; if LHasArg then OutVal := LMethod(ACtx, LThis, LSingle) else OutVal := LMethod(ACtx, LThis, LNoArgs); end;
-      2: begin LProc := Hosts[LHostIdx].Proc; if LHasArg then OutVal := LProc(ACtx, LThis, LSingle) else OutVal := LProc(ACtx, LThis, LNoArgs); end;
-    else OutVal := JsUndefinedValue; end;
-  except
-    on E: EJsError do raise;
-    on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend);
-    on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend);
-  end;
+  // single source Host Kind dispatch via pure.host.JsPureHostInvoke (bytes.ops single source, inline zero-copy, resource try-finally via invoke)
+  if LHasArg then
+    OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LSingle, ABackend)
+  else
+    OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LNoArgs, ABackend);
   Result := True;
 end;
 // composed core — pipeline dispatch, each layer inline thin-forward, no 50-line if chain
