@@ -60,6 +60,11 @@ procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -81,8 +86,6 @@ function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
-function BytesIsGzipBuffer(AData: PByte; const ALength: SizeUInt): Boolean; inline;
-function BytesIsGzipSpan(const ASpan: TByteSpan): Boolean; inline;
 function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
@@ -91,8 +94,6 @@ function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
-{ Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
 
 implementation
 
@@ -159,6 +160,62 @@ begin
   while LCap < ANeed do
     if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
   Result := LCap;
+end;
+
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+var
+  LNewCap: SizeUInt;
+begin
+  if ARequired <= ACurrent then
+    Exit(ACurrent);
+  LNewCap := ACurrent;
+  if LNewCap < AMinGrow then
+    LNewCap := AMinGrow;
+  if LNewCap = 0 then
+    LNewCap := 1;
+  while LNewCap < ARequired do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := ARequired;
+      Break;
+    end;
+  end;
+  Result := LNewCap;
+end;
+
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  Result := BytesGrowCapacityWithMin(ACurrent, ARequired, BYTES_BUILDER_MIN_GROW);
+end;
+
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+var
+  LCur, LReq, LCap, LMin: SizeUInt;
+begin
+  if ARequired <= ACurrent then
+    Exit(ACurrent);
+  if ACurrent < 0 then LCur := 0 else LCur := SizeUInt(ACurrent);
+  if ARequired < 0 then LReq := 0 else LReq := SizeUInt(ARequired);
+  if AMinGrow < 0 then LMin := 0 else LMin := SizeUInt(AMinGrow);
+  LCap := BytesGrowCapacityWithMin(LCur, LReq, LMin);
+  if LCap > SizeUInt(High(Integer)) then
+    LCap := SizeUInt(High(Integer));
+  Result := Integer(LCap);
+end;
+
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+begin
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ARequired, Integer(BYTES_BUILDER_MIN_GROW));
+end;
+
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+begin
+  if ACurrent = 0 then
+    Exit(4);
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ACurrent + 1, 0);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
@@ -628,22 +685,10 @@ begin
   Result := IsZeroBytes(AData);
 end;
 
-function BytesIsGzipBuffer(AData: PByte; const ALength: SizeUInt): Boolean; inline;
-begin
-  // perf: inline + zero-copy PByte 单源 gzip 魔数 ($1F $8B)，compress.base GZIP_MAGIC 字面量对齐 canonical，无 TBytes 分配，供 transform 栈上 2 字节探针零堆复用
-  Result := (ALength >= 2) and (AData <> nil) and (AData[0] = $1F) and (AData[1] = $8B);
-end;
-
-function BytesIsGzipSpan(const ASpan: TByteSpan): Boolean; inline;
-begin
-  Result := BytesIsGzipBuffer(ASpan.Data, ASpan.Len);
-end;
-
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 begin
-  // perf: inline + zero-copy single source via BytesIsGzipBuffer PByte 单源，compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
-  if Length(AData) < 2 then Exit(False);
-  Result := BytesIsGzipBuffer(@AData[0], SizeUInt(Length(AData)));
+  // perf: inline + zero-copy single source gzip magic ($1F $8B), compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
+  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
 end;
 
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
@@ -696,21 +741,6 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
-end;
-
-const
-  HEX_UPPER_BYTESOPS: array[0..15] of AnsiChar = '0123456789ABCDEF';
-
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
-var I: Integer; V: UInt64;
-begin
-  SetLength(Result, ADigits);
-  V := AValue;
-  for I := ADigits - 1 downto 0 do
-  begin
-    Result[I + 1] := HEX_UPPER_BYTESOPS[V and $F];
-    V := V shr 4;
-  end;
 end;
 
 end.
