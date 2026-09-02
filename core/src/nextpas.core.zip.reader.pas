@@ -412,6 +412,28 @@ begin
   GuardRange(ATotalSize, Result, Int64(LE.CompressedSize), 'entry payload');
 end;
 
+function ZipExtractToBytesViaPayload(const LE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes; AMaxOutput: SizeUInt): TBytes; inline;
+begin
+  Result := DecompressEntryVerified(LE, APayload, APassword, AMaxOutput);
+end;
+
+function ZipExtractToBufferViaPayload(const LE: TZipEntryInfo;
+  const APayload: TBytes; const APassword: TBytes; ADst: PByte;
+  ABufLen: SizeUInt; AMaxOutput: SizeUInt): SizeUInt; inline;
+begin
+  if LE.IsDirectory then Exit(0);
+  Result := DecompressEntryToBuffer(LE, APayload, APassword, ADst, ABufLen, AMaxOutput);
+end;
+
+function ZipOpenViaPayload(const LE: TZipEntryInfo; AFlags: Word;
+  const APassword: TBytes; AMaxOutput: SizeUInt;
+  const APayloadReader: IReader): IDecompressReader; inline;
+begin
+  GuardEntryPassword(LE, APassword);
+  Result := ZipWrapEntryReader(APayloadReader, LE, APassword, AMaxOutput);
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -687,7 +709,7 @@ var
 begin
   LE := FEntries[CheckIndex(AIndex)];
   LPayload := Copy(FData, LocatePayload(AIndex), Int64(LE.CompressedSize));
-  Result := DecompressEntryVerified(LE, LPayload, FPassword, FMaxOutputSize);
+  Result := ZipExtractToBytesViaPayload(LE, LPayload, FPassword, FMaxOutputSize);
 end;
 
 function TZipReaderImpl.ExtractToBytes(AIndex: Integer): TBytes;
@@ -712,10 +734,8 @@ var
   LPayload: TBytes;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  if LE.IsDirectory then
-    Exit(0);
   LPayload := Copy(FData, LocatePayload(AIndex), Int64(LE.CompressedSize));
-  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+  Result := ZipExtractToBufferViaPayload(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
 end;
 
 function TZipReaderImpl.ExtractToBufferByName(const AName: string;
@@ -736,11 +756,10 @@ var
   LSlice: TSliceReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSlice := TSliceReader.Create(FData, SizeUInt(LOfs),
     SizeUInt(LE.CompressedSize));
-  Result := ZipWrapEntryReader(LSlice, LE, FPassword, FMaxOutputSize);
+  Result := ZipOpenViaPayload(LE, FFlags[AIndex], FPassword, FMaxOutputSize, LSlice);
 end;
 
 function TZipReaderImpl.OpenEntryByName(const AName: string): IDecompressReader;
@@ -937,7 +956,7 @@ begin
   LE := FEntries[CheckIndex(AIndex)];
   Fetch(LocatePayload(AIndex), SizeUInt(LE.CompressedSize), LPayload,
     'entry payload');
-  Result := DecompressEntryVerified(LE, LPayload, FPassword, FMaxOutputSize);
+  Result := ZipExtractToBytesViaPayload(LE, LPayload, FPassword, FMaxOutputSize);
 end;
 
 function TZipSourceReader.ExtractToBytes(AIndex: Integer): TBytes;
@@ -962,10 +981,8 @@ var
   LPayload: TBytes;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  if LE.IsDirectory then
-    Exit(0);
   Fetch(LocatePayload(AIndex), SizeUInt(LE.CompressedSize), LPayload, 'entry payload');
-  Result := DecompressEntryToBuffer(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
+  Result := ZipExtractToBufferViaPayload(LE, LPayload, FPassword, ADst, ABufLen, FMaxOutputSize);
 end;
 
 function TZipSourceReader.ExtractToBufferByName(const AName: string;
@@ -986,10 +1003,9 @@ var
   LSpan: TSourceSpanReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSpan := TSourceSpanReader.Create(FAt, LOfs, SizeUInt(LE.CompressedSize));
-  Result := ZipWrapEntryReader(LSpan, LE, FPassword, FMaxOutputSize);
+  Result := ZipOpenViaPayload(LE, FFlags[AIndex], FPassword, FMaxOutputSize, LSpan);
 end;
 
 function TZipSourceReader.OpenEntryByName(const AName: string): IDecompressReader;
