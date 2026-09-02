@@ -18,7 +18,7 @@
 | git.base | TGitStatusEntry, TGitStatusFilter 基础类型 |
 | git.intf | IGitManager, IGitRepository, IGitCommit 等接口定义 |
 | git.libgit2 | libgit2 集成门面 |
-| git.libgit2.ffi | libgit2 C FFI 类型层（回调 typedef 等，dlsym 系词汇） |
+| git.libgit2.ffi | libgit2 C FFI 缝隙（仅含 cdecl external ‘c’ 探针 + 5 域词汇 re-export，满足四件套 FFI 仅含 external 约束；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym） |
 | git.libgit2.binding | libgit2 函数指针绑定（dlopen/dlsym 运行时加载） |
 | git.libgit2.backend | libgit2 后端实现 |
 | git.libgit2.bindings | libgit2 门面（<150 行，re-export 10 域分片，零重复） |
@@ -152,9 +152,9 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 - 选择层默认仍走 libgit2（需显式 `uses nextpas.core.git.libgit2` 注册）：`nextpas.core.git.factory.NewGitManager(gbAuto)` 首版等价 `gbLibGit2`（已注册时），未注册时 fail-closed；`uses nextpas.core.git; NewGitManager;` 未注册时亦三零（门面 impl 零 libgit2，base←intf←factory←facade）；纯路径 `gbNative`/`NewNativeGitManager` 或直连 `native.manager` 无需注册（见 PURE-BACKEND.md §2-§3）。
 - 词汇收敛（单源 `native.base.TGitOid` 20-byte 为权威，`bytes.ops` 单源 `SpanEqual/SpanCopy/IsZeroBytes`，`inline` 零拷贝 `Move`/`MemEqual` 3×QWord，§7 `Oid/*:inline` ≤80 ns/op）：
   运行时 `git_oid` 为 `libgit2.base.git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20=GitOidRawLen`，`Assert` 二进制保证，`GitOidToNative/NativeToGitOid` `inline` 零拷贝 overlay 无 `Move`，Pascal 别名 `TGitOid/TGitOid20` 同体）；
-  静态 `TGitOid`（`bindings.structs` 33-byte `&type+id[32]`，SHA256-ready 通用）保留，SHA1 20-byte 路径经 `libgit2.base.git_oid / TGitOid20 / PGitOid` 别名 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接（`FillChar` 尾零）互转零堆；
+  静态 `TGitOid`（`bindings.structs` 33-byte `&type+id[32]`，SHA256-ready 通用）仅 legacy 保留（`deprecated 'Use libgit2.base.git_oid / native.base.TGitOid (20-byte) for SHA1; 33-byte is SHA256-ready generic, new code must use 20-byte path'`，`bindings.structs:682` 置 `deprecated`），SHA1 20-byte 路径经 `libgit2.base.git_oid / TGitOid20 / PGitOid` 别名 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接（`FillChar` 尾零）互转零堆；新模块禁直接 `uses bindings.structs.TGitOid`，一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn）；
   Ops 单源收敛：`libgit2.base.GitOidEquals/IsZero/Copy` 与 `bindings.oid.BindingsGitOidEquals/Copy` 同经 `bytes.ops`（`SpanEqual`→`MemEqual`、`SpanCopy`→`Move`），`helper Equals/IsZero/Assign` 亦同源，消除分散 `Move/CompareMem` 双轨；
-  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7 清理历史 `PChar/cint` 词汇并归一 gate，期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
+  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7（2026-09-02）清理静态 33-byte `TGitOid` 双轨与历史 `PChar/cint` 词汇（`deprecated` 硬门禁，`scripts/git-contract-check.sh` C5 `grep -R TGitOid.*bindings\.structs` + `grep deprecated` 双重），并归一 gate，期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
   稳定性：`PACKRECORDS C` + `Assert(SizeOf)` 失败即停，句柄 `Pointer` 缝隙零成本，`try..finally` 资源不丢，`heaptrc` 双 pin 零泄漏门禁同 §6。
 - 再生成与坑清单见 `bindings-pitfalls.md`。
 

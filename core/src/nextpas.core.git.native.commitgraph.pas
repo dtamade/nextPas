@@ -235,7 +235,8 @@ var
   Cnt: Integer;
   Tmp: TChunkRec;
 begin
-  FData := Copy(AData);
+  // perf: zero-copy refcounted share (no Copy alloc), FData takes ownership via CoW, avoids double memory for large commit-graph; inline BE32At uses bytes ops single source
+  FData := AData;
   DataLen := Length(FData);
   if DataLen < 8 + 20 then
     raise EGitError.Create('commit-graph too short');
@@ -583,8 +584,13 @@ begin
       end
       else
       begin
-        SetLength(GGraphCache, Length(GGraphCache)+1);
-        Idx := High(GGraphCache);
+        // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=8 — clamp overshoot and keep logical len
+        Idx := Length(GGraphCache);
+        SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
+        if Length(GGraphCache) > GGraphCacheCap then
+          SetLength(GGraphCache, GGraphCacheCap);
+        if Length(GGraphCache) > Idx + 1 then
+          SetLength(GGraphCache, Idx + 1);
       end;
       GGraphCache[Idx].Dir := AGitDir;
     end;

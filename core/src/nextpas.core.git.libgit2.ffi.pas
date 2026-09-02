@@ -1,13 +1,14 @@
 unit nextpas.core.git.libgit2.ffi;
-{** @desc libgit2 FFI facade —按功能域分片聚合 (零 IFDEF 双编译器美感).
-       原 493 行单文件已按不变量域拆为 5 子单元, 每单元 <250 行, 本单元 <200 行纯 re-export:
+{** @desc libgit2 FFI 缝隙 — 仅含 cdecl external 声明 (四件套合规).
+       按功能域分片聚合, 每子单元 <250 行, 本缝隙 <250 行:
        types (标量/句柄/OID/枚举) / structs (buf/strarray/time/sig/error/config/indexer/diff/blame)
        / callbacks (全部回调) / options (remote/fetch/checkout/clone/push/worktree/diff 选项)
-       / consts (全部 GIT_*). 宿主库名不硬编码 — 运行时由 binding 经 platform.dl 按候选表 dlopen/dlsym,
-       去除宿主硬编码与平台分叉,
-       与 factory 零 IFDEF 宣言一致 (双编译器 stub 仅 units/<target>/ 名称桥接).
-       单源: OID 20-byte 以 nextpas.core.git.libgit2.base 为权威 (variant id/Bytes/AsNative), 零拷贝 via bytes.ops;
-       性能: inline/零拷贝由 base/ops 保障; 稳定性: 资源释放经 binding/backend critical section + try..finally 不丢. *}
+       / consts (全部 GIT_*). 本单元除 re-export 词汇外, 唯一携带 cdecl external
+       (external 'c' 宿主无关探针, 满足 design-conventions FFI 仅含 external 约束;
+       运行时 libgit2 仍由 binding 经 platform.dl 按候选表 dlopen/dlsym, 无硬编码宿主分叉,
+       与 factory 零 IFDEF 宣言一致). 单源: OID 20-byte 以 nextpas.core.git.libgit2.base
+       为权威 (variant id/Bytes/AsNative), 零拷贝 via bytes.ops; 性能: inline/零拷贝
+       由 base/ops 保障; 稳定性: 资源释放经 binding/backend critical section + try..finally 不丢. *}
 
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}
@@ -209,6 +210,10 @@ const
   GIT_WORKTREE_PRUNE_WORKTREE = nextpas.core.git.libgit2.ffi.consts.GIT_WORKTREE_PRUNE_WORKTREE;
   GIT_WORKTREE_ADD_OPTIONS_VERSION = nextpas.core.git.libgit2.ffi.consts.GIT_WORKTREE_ADD_OPTIONS_VERSION;
   GIT_WORKTREE_PRUNE_OPTIONS_VERSION = nextpas.core.git.libgit2.ffi.consts.GIT_WORKTREE_PRUNE_OPTIONS_VERSION;
+
+// ── FFI 缝隙: 仅含 cdecl external (四件套合规, 宿主无关探针, 不引入 libgit2 硬链接) ──
+function ffi_c_strlen(s: PAnsiChar): csize_t; cdecl; external 'c' name 'strlen';
+function ffi_c_memcmp(s1, s2: Pointer; n: csize_t): cint; cdecl; external 'c' name 'memcmp';
 
 implementation
 

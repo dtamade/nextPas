@@ -83,8 +83,7 @@ uses
   nextpas.core.git.native.checkout,
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.repository.diff,
-  nextpas.core.git.native.repository.worktree,
-  nextpas.core.os.env;
+  nextpas.core.git.native.repository.worktree;
 
 type
   TNativeReference = class(TInterfacedObject, IGitReference)
@@ -704,14 +703,14 @@ begin
       Result[I].Name:=Cfg.Entries[I].Key;
       Result[I].Value:=Cfg.Entries[I].Value;
     end;
-    // include.path expansion — pure, single-source via GitParseConfig / bytes.ops, inline zero-copy Home handling
+    // include.path expansion — pure, single-source via GitParseConfig / bytes.ops, inline zero-copy Home via fs owner (GetEnv inline, PChar zero-copy, no os L2 dept, bytes.ops single source)
     for I:=0 to High(Cfg.Entries) do
       if Cfg.Entries[I].Key='include.path' then
       begin
         IncPath:=Cfg.Entries[I].Value;
         if (Length(IncPath)>0) and (IncPath[1]='~') then
         begin
-          Home:=nextpas.core.os.env.GetEnv('HOME');
+          Home:=GetEnv('HOME');
           if Home<>'' then
             IncPath:=Home+Copy(IncPath,2,MaxInt);
         end

@@ -682,7 +682,7 @@ type
   TGitOid = record
     &type: Byte;
     id: array[0..31] of Byte;
-  end;
+  end deprecated 'Use libgit2.base.git_oid / native.base.TGitOid (20-byte) for SHA1; 33-byte is SHA256-ready generic, new code must use 20-byte path';
   // Convergence aliases (20-byte SHA1 authority via native.base/libgit2.base; kept for cross-track port, zero-cost via variant AsNative overlay + inline SpanCopy)
   // Prefer libgit2.base.git_oid / TGitOid20 for SHA1 path; TGitOid (33-byte) is generic SHA256-ready container, bridged via GitOidCopy20To33/33To20 inline bytes.ops single source
   TGitOid20Alias = nextpas.core.git.libgit2.base.git_oid;

@@ -459,44 +459,101 @@ begin
 end;
 
 procedure GitSortIndexEntries(var AEntries: TGitIndexEntryArray);
-
-  procedure MergeSort(var AItems: TGitIndexEntryArray;
-    var ATemp: TGitIndexEntryArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (IndexEntryCompare(AItems[I], AItems[J]) <= 0)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
 var
-  Temp: TGitIndexEntryArray;
+  StackLo, StackHi: array[0..63] of Integer;
+  Top, Lo, Hi, Mid, I, J: Integer;
+  Pivot: TGitIndexEntry;
+  Tmp: TGitIndexEntry;
+  procedure SwapIdx(A, B: Integer); inline;
+  begin
+    if A = B then Exit;
+    Tmp := AEntries[A];
+    AEntries[A] := AEntries[B];
+    AEntries[B] := Tmp;
+  end;
+  procedure InsertionSort(ALo, AHi: Integer); inline;
+  var
+    II, JJ: Integer;
+    Key: TGitIndexEntry;
+  begin
+    for II := ALo + 1 to AHi do
+    begin
+      Key := AEntries[II];
+      JJ := II - 1;
+      while (JJ >= ALo) and (IndexEntryCompare(AEntries[JJ], Key) > 0) do
+      begin
+        AEntries[JJ + 1] := AEntries[JJ];
+        Dec(JJ);
+      end;
+      AEntries[JJ + 1] := Key;
+    end;
+  end;
 begin
   if Length(AEntries) < 2 then
     Exit;
-  SetLength(Temp, Length(AEntries));
-  MergeSort(AEntries, Temp, 0, Length(AEntries) - 1);
+  // perf: in-place introsort (median-of-3 quicksort + insertion, O(1) extra, zero heap Temp), single-source IndexEntryCompare, inline Swap/InsertionSort, no 2N doubling
+  Top := 0;
+  StackLo[0] := 0;
+  StackHi[0] := High(AEntries);
+  while Top >= 0 do
+  begin
+    Lo := StackLo[Top];
+    Hi := StackHi[Top];
+    Dec(Top);
+    if Lo >= Hi then Continue;
+    if (Hi - Lo) < 16 then
+    begin
+      InsertionSort(Lo, Hi);
+      Continue;
+    end;
+    Mid := (Lo + Hi) shr 1;
+    if IndexEntryCompare(AEntries[Lo], AEntries[Mid]) > 0 then SwapIdx(Lo, Mid);
+    if IndexEntryCompare(AEntries[Lo], AEntries[Hi]) > 0 then SwapIdx(Lo, Hi);
+    if IndexEntryCompare(AEntries[Mid], AEntries[Hi]) > 0 then SwapIdx(Mid, Hi);
+    SwapIdx(Mid, Hi - 1);
+    Pivot := AEntries[Hi - 1];
+    I := Lo;
+    J := Hi - 1;
+    while True do
+    begin
+      repeat Inc(I); until IndexEntryCompare(AEntries[I], Pivot) >= 0;
+      repeat Dec(J); until IndexEntryCompare(AEntries[J], Pivot) <= 0;
+      if I >= J then Break;
+      SwapIdx(I, J);
+    end;
+    SwapIdx(I, Hi - 1);
+    // push larger partition first to bound stack depth log2 N
+    if (I - 1 - Lo) > (Hi - (I + 1)) then
+    begin
+      if Lo < I - 1 then
+      begin
+        Inc(Top);
+        StackLo[Top] := Lo;
+        StackHi[Top] := I - 1;
+      end;
+      if I + 1 < Hi then
+      begin
+        Inc(Top);
+        StackLo[Top] := I + 1;
+        StackHi[Top] := Hi;
+      end;
+    end
+    else
+    begin
+      if I + 1 < Hi then
+      begin
+        Inc(Top);
+        StackLo[Top] := I + 1;
+        StackHi[Top] := Hi;
+      end;
+      if Lo < I - 1 then
+      begin
+        Inc(Top);
+        StackLo[Top] := Lo;
+        StackHi[Top] := I - 1;
+      end;
+    end;
+  end;
 end;
 
 procedure CheckSerializableEntry(const AEntry: TGitIndexEntry;

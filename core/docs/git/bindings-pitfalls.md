@@ -107,6 +107,6 @@ libgit2 源码在 `~/projects/libgit2`。
 
 因此两套体系是**互补的加载策略**，职责边界已写入 CONTRACT.md §1.1.2：
 运行时加载系是默认消费路径；静态声明系（本产物）服务完整 ABI 面
-场景。词汇已收敛：权威 20-byte `native.base.TGitOid` 单源，运行时 `git_oid` variant 叠加（`AsNative` 零拷贝）/静态 33-byte `TGitOid` 通用保留 + 20-byte `git_oid/TGitOid20` 别名桥接（`GitOidCopy20To33` 等 `inline SpanCopy`），Ops 同经 `bytes.ops` 单源（详见 CONTRACT §1.1.2 收敛路线），各自 gate 仍独立但须经单源 Ops。
-手写 ffi 中的 PChar/cint 词汇属历史遗留，Phase 7 随收敛路线统一收敛，
+场景。词汇已收敛：权威 20-byte `native.base.TGitOid` 单源，运行时 `git_oid` variant 叠加（`AsNative` 零拷贝）/静态 33-byte `TGitOid` 仅 legacy 保留（`deprecated 'Use libgit2.base.git_oid / native.base.TGitOid (20-byte)'`，`bindings.structs:682` 置 `deprecated`，新模块禁直接引用）+ 20-byte `git_oid/TGitOid20` 别名桥接（`GitOidCopy20To33` 等 `inline SpanCopy`），Ops 同经 `bytes.ops` 单源（详见 CONTRACT §1.1.2 收敛路线），各自 gate 仍独立但须经单源 Ops。
+手写 ffi 中的 PChar/cint 词汇与静态 `TGitOid` 双轨属历史遗留，Phase 7（2026-09-02）随收敛路线统一收敛（`deprecated` 硬门禁 + `scripts/git-contract-check.sh` C5 双重），
 本产物范围仅保留 `PACKRECORDS C` + `inline` 零拷贝桥接。

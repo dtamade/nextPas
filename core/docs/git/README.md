@@ -34,7 +34,7 @@ core/src/nextpas.core.git.base.pas            ← TGitStatusEntry / TGitStatusFi
 core/src/nextpas.core.git.intf.pas            ← IGitManager / IGitRepository / IGitCommit 接口
 core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator（静态仅 native.manager，注册注入 libgit2）
 core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，TGitOid33 legacy）
-core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 聚合门面（<200 行，re-export 5 域分片，零 IFDEF，宿主库名经 binding/platform.dl 运行时候选）
+core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<250 行，仅含 cdecl external ‘c’ 探针 + re-export 5 域分片，零 IFDEF；运行时 libgit2 仍经 binding/platform.dl 候选表 dlopen/dlsym，满足四件套 FFI 仅含 external 约束）
 core/src/nextpas.core.git.libgit2.ffi.types.pas   ← FFI 标量/句柄/OID/枚举域（csize_t/git_oid/branch/object/reference，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.structs.pas ← FFI 记录域（buf/strarray/time/sig/error/config/indexer/diff/blame，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.callbacks.pas← FFI 回调域（全部回调 typedef，<100 行）

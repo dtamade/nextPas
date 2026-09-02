@@ -166,6 +166,61 @@ type
 // reuse single source HashString (nextpas.core.base, FNV-1a) — no duplicate hash
 type
   TIntArray = array of Integer;
+  TBlameLineEntry = record Hash: THashCode; Idx: Integer; Line: string; end;
+  TBlameLineArray = array of TBlameLineEntry;
+
+function BlameLineLess(const A, B: TBlameLineEntry): Boolean; inline;
+begin
+  // perf: FNV-1a HashString single source (nextpas.core.base), inline hot, no alloc; order by hash then string then idx (keeps smallest idx first for dedup)
+  if A.Hash < B.Hash then Exit(True);
+  if A.Hash > B.Hash then Exit(False);
+  if A.Line < B.Line then Exit(True);
+  if A.Line > B.Line then Exit(False);
+  Result := A.Idx < B.Idx;
+end;
+
+procedure BlameSwapLines(var A, B: TBlameLineEntry); inline;
+var Tmp: TBlameLineEntry;
+begin
+  // perf: single Move of managed record via assignment (refcounted string copy-on-write, no heap, inline hot)
+  Tmp := A; A := B; B := Tmp;
+end;
+
+procedure BlameQuickSort(var Arr: TBlameLineArray; L, R: Integer);
+var I, J: Integer; Pivot: TBlameLineEntry;
+begin
+  if R - L < 1 then Exit;
+  I := L; J := R;
+  Pivot := Arr[(L + R) shr 1];
+  repeat
+    while BlameLineLess(Arr[I], Pivot) do Inc(I);
+    while BlameLineLess(Pivot, Arr[J]) do Dec(J);
+    if I <= J then
+    begin
+      if I <> J then BlameSwapLines(Arr[I], Arr[J]);
+      Inc(I); Dec(J);
+    end;
+  until I > J;
+  if L < J then BlameQuickSort(Arr, L, J);
+  if I < R then BlameQuickSort(Arr, I, R);
+end;
+
+function BlameFindLine(const Arr: TBlameLineArray; Count: Integer; AHash: THashCode; const ALine: string; out AIdx: Integer): Boolean; inline;
+var Lo, Hi, Mid: Integer;
+begin
+  // perf: binary search O(log U), inline hot, zero-copy string compare (no alloc), branch-light
+  Lo := 0; Hi := Count - 1;
+  while Lo <= Hi do
+  begin
+    Mid := (Lo + Hi) shr 1;
+    if Arr[Mid].Hash < AHash then Lo := Mid + 1
+    else if Arr[Mid].Hash > AHash then Hi := Mid - 1
+    else if Arr[Mid].Line < ALine then Lo := Mid + 1
+    else if Arr[Mid].Line > ALine then Hi := Mid - 1
+    else begin AIdx := Arr[Mid].Idx; Exit(True); end;
+  end;
+  Result := False;
+end;
 
 function NextPow2(AValue: Integer): Integer; inline;
 begin
@@ -300,62 +355,52 @@ begin
 end;
 
 function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray; inline;
-type
-  THashEntry = record Used: Boolean; Hash: THashCode; Idx: Integer; Line: string; end;
 var
-  Table: array of THashEntry;
-  Mask, I, J, Pos: Integer;
+  Entries: TBlameLineArray;
+  N, M, I, J, UCount, FoundIdx: Integer;
   H: THashCode;
-  N, M: Integer;
   LCount, LCap: SizeUInt;
 begin
+  // perf: sorted dedup array O(N log N + M log U) time, O(N) memory (single compacted array), no N*2 open-address Table spike; single source HashString via base FNV-1a, bytes.ops GrowArrayCapacity for amortized O(1) result append
+  // stability: managed arrays auto-released on exception, no manual free, zero-copy string view via refcounted copy
   Result := nil;
   N := Length(AOld); M := Length(ANew);
   if (N = 0) or (M = 0) then Exit;
-  Mask := NextPow2(N * 2 + 1) - 1;
-  SetLength(Table, Mask + 1);
+  SetLength(Entries, N);
   for I := 0 to N - 1 do
   begin
-    H := HashString(AOld[I]);
-    Pos := Integer(H and THashCode(Mask));
-    while Table[Pos].Used do
-    begin
-      if (Table[Pos].Hash = H) and (Table[Pos].Line = AOld[I]) then Break;
-      Pos := (Pos + 1) and Mask;
-    end;
-    if not Table[Pos].Used then
-    begin
-      Table[Pos].Used := True;
-      Table[Pos].Hash := H;
-      Table[Pos].Idx := I;
-      Table[Pos].Line := AOld[I];
-    end;
+    Entries[I].Hash := HashString(AOld[I]);
+    Entries[I].Idx := I;
+    Entries[I].Line := AOld[I];
   end;
-  // perf: amortized doubling via bytes.ops GrowArrayCapacity single source, amortized O(1), final shrink once
+  if N > 1 then BlameQuickSort(Entries, 0, N - 1);
+  // in-place dedup: compact distinct (hash,line) keeping smallest idx first due to sorted order
+  UCount := 1;
+  for I := 1 to N - 1 do
+    if (Entries[I].Hash <> Entries[UCount - 1].Hash) or (Entries[I].Line <> Entries[UCount - 1].Line) then
+    begin
+      if I <> UCount then Entries[UCount] := Entries[I];
+      Inc(UCount);
+    end;
+  if UCount <> N then SetLength(Entries, UCount);
+  // probe new lines via binary search; result grows via single-source GrowArrayCapacity (inline, amortized O(1))
   LCount := 0; LCap := 0;
   for J := 0 to M - 1 do
   begin
     H := HashString(ANew[J]);
-    Pos := Integer(H and THashCode(Mask));
-    while Table[Pos].Used do
+    if BlameFindLine(Entries, UCount, H, ANew[J], FoundIdx) then
     begin
-      if (Table[Pos].Hash = H) and (Table[Pos].Line = ANew[J]) then
+      if LCount >= LCap then
       begin
-        if LCount >= LCap then
-        begin
-          LCap := GrowArrayCapacity(LCap, LCount + 1);
-          SetLength(Result, LCap);
-        end;
-        Result[LCount].OldIdx := Table[Pos].Idx;
-        Result[LCount].NewIdx := J;
-        Inc(LCount);
-        Break;
+        LCap := GrowArrayCapacity(LCap, LCount + 1);
+        SetLength(Result, LCap);
       end;
-      Pos := (Pos + 1) and Mask;
+      Result[LCount].OldIdx := FoundIdx;
+      Result[LCount].NewIdx := J;
+      Inc(LCount);
     end;
   end;
-  if SizeUInt(Length(Result)) <> LCount then
-    SetLength(Result, LCount);
+  if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
 end;
 
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray;
