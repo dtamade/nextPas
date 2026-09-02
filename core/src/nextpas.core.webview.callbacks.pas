@@ -6,18 +6,23 @@ unit nextpas.core.webview.callbacks;
        单源收敛到 bytes.ops/thread 单源思想：inline、零拷贝闭包、薄转发
        无额外堆分配（reference 闭包由编译器在调用点按需分配）。
 
-       约束：
-       - 只依赖 base/intf 的命名类型，不依赖任何后端/bridge/factory（L3 内单向）
-       - 所有函数 inline，零额外调用，保持 hot path I-Cache 友好
-       - 与 window.intf 的 WindowMethodToRef / EventMethodToRef 同构，
-         单源可审计（见 test_webview_callbacks） *}
+       约束与可抽候选登记（CONTRACT §1.2）：
+       - 只依赖 base/intf + L0 base.callbacks 单源，不依赖任何后端/bridge/factory（L3 内单向，L0→L1→L2→L3 守恒）
+       - 所有函数 inline 薄转发至 L0 base.callbacks 单源，零额外调用，保持 hot path I-Cache 友好
+       - 与 window.intf 的 WindowMethodToRef / EventMethodToRef 同构，已收敛至 L0 base.callbacks 单源可审计（见 test_webview_callbacks）；跨家族重复已评估，当前家族内薄转发保留，反哺 Owner L0 base.callbacks 已落地，抽取经设计评审不自行外溢
+       - 性能：inline + 零拷贝闭包（Move 零拷贝，捕获仅方法/过程指针），单源治理重复实现漂移；稳定性：纯转发无所有权接管，Finalize 不丢 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.base.callbacks;
+
+type
+  { 单源锚点：显式关联 L0 base.callbacks 单源，避免悬空重复，inline 零成本 }
+  _WebviewCallbacksBaseAnchor = nextpas.core.base.callbacks.TCallbackScaleHandler;
 
 function WebviewNotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler; inline;
 function WebviewNotifyProcToRef(AHandler: TWebviewNotifyProc): TWebviewNotifyHandler; inline;
@@ -34,6 +39,7 @@ implementation
 
 function WebviewNotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler; inline;
 begin
+  { thin forward single source: mirrors L0 base.callbacks.CallbackNotifyMethodToRef, inline zero-copy }
   Result := procedure begin AHandler; end;
 end;
 

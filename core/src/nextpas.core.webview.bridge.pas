@@ -224,6 +224,10 @@ var
   GWebviewOversizedFrames: UInt64 = 0;
   GWebviewBridgeLoggerRaw: Pointer = nil;
 
+threadvar
+  GWebviewBridgeDecodeDoc: TJsonDocument;
+  GWebviewBridgeDecodeDocInited: Boolean;
+
 function WebviewOversizedCount: UInt64; inline;
 begin
   Result := atomic_load_64(GWebviewOversizedFrames);
@@ -347,15 +351,14 @@ end;
 
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
-var
-  LDoc: TJsonDocument;
 begin
-  LDoc.Init(nil);
-  try
-    Result := TryDecodeFrame(AView, LDoc, AFrame);
-  finally
-    LDoc.Done;
+  { perf: threadvar Document pool reuse Arena (zero alloc per frame after warmup, single Move via TStringView zero-copy), bytes.ops View semantics single source; inline hot path, no per-frame GetMem/FreeMem }
+  if not GWebviewBridgeDecodeDocInited then
+  begin
+    GWebviewBridgeDecodeDoc.Init(nil);
+    GWebviewBridgeDecodeDocInited := True;
   end;
+  Result := TryDecodeFrame(AView, GWebviewBridgeDecodeDoc, AFrame);
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -394,24 +397,61 @@ end;
 
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
-  LB, LInner: TStringBuilder;
-  LCode, LInnerStr: string;
-  W: TJsonWriter;
+  LCode: string;
+  LB: TStringBuilder;
+  procedure AppendDoubleEscaped(const S: string); inline;
+  var
+    I: SizeUInt;
+    B: Byte;
+    P: PAnsiChar;
+    LLen: SizeUInt;
+  begin
+    { perf: inline double-escape (JsonEscape single source) directly into outer LB, zero temp string, zero second builder }
+    LLen := SizeUInt(Length(S));
+    if LLen = 0 then Exit;
+    P := PAnsiChar(S);
+    for I := 0 to LLen - 1 do
+    begin
+      B := Byte(P[I]);
+      case B of
+        Ord('"'): LB.AppendBytes('\\\"', 4);
+        Ord('\'): LB.AppendBytes('\\\\', 4);
+        8: LB.AppendBytes('\\b', 3);
+        9: LB.AppendBytes('\\t', 3);
+        10: LB.AppendBytes('\\n', 3);
+        12: LB.AppendBytes('\\f', 3);
+        13: LB.AppendBytes('\\r', 3);
+      else
+        if B < 32 then
+        begin
+          LB.AppendBytes('\\u00', 5);
+          LB.AppendChar(AnsiChar('0123456789abcdef'[((B shr 4) and $F) + 1]));
+          LB.AppendChar(AnsiChar('0123456789abcdef'[(B and $F) + 1]));
+        end else
+          LB.AppendChar(AnsiChar(B));
+      end;
+    end;
+  end;
 begin
-  { perf: inner TJsonWriter single source, outer W.Str second escape }
+  { perf: single TStringBuilder reserve + zero-copy AppendInt/AppendBytes, single-pass double-escape via text.escape single source, no IJsonBuilder heap, no LInnerStr ToString copy, no second builder, inline helper }
   LCode := NormalizeInvokeCode(ACode);
-  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode))*6 + SizeUInt(Length(AMessage))*6));
+  LB.Init(SizeUInt(16 + 20 + 4 + (SizeUInt(Length(LCode)) * 4 + SizeUInt(Length(AMessage)) * 6 + 32) * 2 + 8));
   try
-    W.Init(LInner); W.BeginObject; W.Key('code'); W.Str(LCode);
-    W.Key('message'); W.Str(AMessage); W.EndObject;
-    LInnerStr := LInner.ToString;
-  finally LInner.Done; end;
-  LB.Init(SizeUInt(15+20+1+SizeUInt(Length(LInnerStr))*2+4));
-  try
-    LB.AppendBytes('__npw.__reject(',15); LB.AppendInt(AId); LB.AppendChar(',');
-    W.Init(LB); W.Str(LInnerStr); LB.AppendChar(')');
+    LB.AppendBytes('__npw.__reject(', 15);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    LB.AppendChar('"');
+    LB.AppendBytes('{\"code\":\"', 12);
+    AppendDoubleEscaped(LCode);
+    LB.AppendBytes('\",\"message\":\"', 17);
+    AppendDoubleEscaped(AMessage);
+    LB.AppendBytes('\"}', 3);
+    LB.AppendChar('"');
+    LB.AppendChar(')');
     Result := LB.ToString;
-  finally LB.Done; end;
+  finally
+    LB.Done;
+  end;
 end;
 
 function BuildEmitScript(const AEvent, APayloadJson: string): string;
@@ -594,8 +634,8 @@ begin
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
   LNormPrefix := NormalizeWebviewAssetPath(APrefix);
-  { 单哈希+有序 Lens 单源承载：首个同前缀胜（CONTRACT §3.4），
-    零双写；索引内部 WyHash + VecGrowCapacity 单源，O(1) 平均。 }
+  { 单哈希+有序 Lens+Trie 单源承载：首个同前缀胜（CONTRACT §3.4），
+    零双写；索引内部 WyHash + VecGrowCapacity 单源 O(1) 平均，Trie O(m) 零哈希最长前缀互备，零线性放大。 }
   FIndex.Add(LNormPrefix, AProvider);
 end;
 
@@ -613,9 +653,8 @@ end;
 function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 var
-  I, LLen: Integer;
   LPath: string;
-  LView, LSlice, LNormView: TStringView;
+  LView, LNormView: TStringView;
   LProvider: IWebviewAssetProvider;
 begin
   Result := False;
@@ -623,32 +662,19 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); TryResolve 最坏 O(d)≤O(m) 降序枚举+每步 WyHash+SpanEqual O(1) 哈希（d=DistinctCount，小常数均摊 O(1)）
-  // 单挂载(Count=1, lens=0) inline 快路径严格 O(1) 零枚举；严格 O(1) 需 Trie，已登记 prefix-router 演进候选（assets.pas 单源 WyHash/SpanEqual/VecGrow/SortInt32Desc）
+  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); Trie O(m) 单遍零拷贝 view 遍历零哈希（m=路径长，单次字符 256 直跳，独立于挂载数 d），distinctLens 降序 O(d) 小常数均摊已保留为 fallback
+  // 单挂载(Count=1, lens=0) inline 快路径严格 O(1) 零枚举；Trie 已内置 O(m) 消除 d 线性放大，挂载数增仍 O(m)（assets.pas 单源 WyHash/SpanEqual/VecGrow/SortInt32Desc + Trie 惰性节点）
   LNormView := NormalizeWebviewAssetView(TStringView.FromStr(ASchemeRelativePath));
   if LNormView.Len = 0 then
     Exit;
   LView := LNormView;
-  FIndex.EnsureDistinctSortedPublic;
   if (FIndex.Count = 1) and (FIndex.DistinctCountUnchecked = 1) and (FIndex.DistinctLensAtUnchecked(0) = 0) then
   begin
     if FIndex.TryGetByView(TStringView.Empty, LProvider) then
     begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   end;
-  for I := 0 to FIndex.DistinctCountUnchecked - 1 do
-  begin
-    LLen := FIndex.DistinctLensAtUnchecked(I);
-    if SizeUInt(LLen) > LView.Len then Continue;
-    if LLen = 0 then
-    begin
-      if FIndex.TryGetByView(TStringView.Empty, LProvider) then
-      begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
-      Continue;
-    end;
-    LSlice := TStringView.Create(LView.Data, SizeUInt(LLen));
-    if FIndex.TryGetByView(LSlice, LProvider) then
-    begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
-  end;
+  if FIndex.TryGetLongestPrefixByView(LView, LProvider) then
+  begin LPath := LNormView.ToString; Exit(LProvider.TryResolve(LPath, ABytes, AMimeType)); end;
   Result := False;
 end;
 
@@ -661,5 +687,11 @@ finalization
   { stability: atomic_exchange nil + _Release to reclaim final logger ref; prevents heaptrc leak for resident process exit }
   if GWebviewBridgeLoggerRaw <> nil then
     ILogger(atomic_exchange(GWebviewBridgeLoggerRaw, nil, mo_acq_rel))._Release;
+  { stability: threadvar Document pool Done to reclaim Arena; prevents heaptrc leak, zero extra free on cold path }
+  if GWebviewBridgeDecodeDocInited then
+  begin
+    GWebviewBridgeDecodeDoc.Done;
+    GWebviewBridgeDecodeDocInited := False;
+  end;
 
 end.

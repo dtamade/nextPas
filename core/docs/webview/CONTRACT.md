@@ -4,7 +4,16 @@
 **层级**：L3 家族（依赖 L0-L2；后端实现子单元随家族落位）
 **Owner**：core-webview lane
 **最后更新**：2026-09-02
-**版本**：2.00（S106——WK 探针闭环：`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`（幂等缓存双检锁 inline 零分配，Linux 诚实 False 非恒 False，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢），真实现落地路径已闭环为 `window.cocoa` L2 `focused-runtime` 的 `IWindow` 组合（`WKWebView` child `addSubview`，无需 L3 自建 ObjC，待 stage0 `objectivec1`/`objc_msgSend` 探通后接线），CONTRACT §1/§10 与 registry `focused-runtime, source-contract` 对齐；基线承接 1.99/S105 `WebviewGrowCapacity(0→4→2×)` 单源 inline 零退化（`grep SetLength` 54→4 定容切片/快照、50 Grow 全量 inline 单源，`F*Count` 全量闭环，三后端/bridge/factory 全量容量保留，零 `O(n²)` 零 `UAF`，薄转发 159 inline 零额外调用；`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`hygiene`/`source-contracts` 双 pass，vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0）；S105 CONTRACT 精炼承接 1.98←1.13 考古栈折叠至 ROADMAP §3）
+**版本**：2.00（S106 WK 探针闭环 · `focused-runtime, source-contract`）
+<details>
+<summary>版本分层：S106 探针闭环与 S105 基线（点击展开）</summary>
+
+- **S106 探针闭环**：`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`（幂等缓存双检锁 inline 零分配，Linux 诚实 False 非恒 False，与 gtk/webview2 同纪律，`platform_dl_release` 释放不丢）；真实现落地路径已闭环为 `window.cocoa` L2 `focused-runtime` 的 `IWindow` 组合（`WKWebView` child `addSubview`，无需 L3 自建 ObjC，待 stage0 `objectivec1`/`objc_msgSend` 探通后接线）；CONTRACT §1/§10 与 registry 对齐。
+- **S105 基线（零退化）**：`WebviewGrowCapacity(0→4→2×)` 单源 inline（`grep SetLength` 54→4 定容切片/快照、50 Grow 全量 inline 单源，`F*Count` 全量闭环，三后端/bridge/factory 容量保留，零 `O(n²)` 零 `UAF`，薄转发 159 inline 零额外调用；`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`hygiene`/`source-contracts` 双 pass，vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0）。
+- **考古栈**：1.98←1.13 折叠至 [ROADMAP §3](ROADMAP.md#3-回溯s0-s44-已交付)。
+
+> 单文件 650+ 行属契约完整性保留，阅读以本折叠层与 §1 家族布局为入口，细节按需展开。
+</details>
 **对标基准**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）
 
 ---
@@ -20,7 +29,7 @@
 | `nextpas.core.webview.callbacks` | 共享辅助 | method/proc→reference 单源适配（4 后端 `Webview*MethodToRef/ProcToRef` inline 薄转发，零拷贝闭包，消除重复；仅依赖 `intf`，不触后端/bridge/factory，资源释放不丢） | S105 单源收敛 |
 | `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现） | W1 |
 | `nextpas.core.webview.live` | 私有索引 | 活窗紧凑 Vec 注册表（`bytes.ops.VecGrow/VecGrowCapacity` 单源 inline 0→4→2×，swap/shift 双形态零拷贝，`TWebviewLiveRegistry<T>` 泛型封装，4 后端 has-a 复用，析构 `Default(T)` nil 释放不丢） | S105 |
-| `nextpas.core.webview.assets` | 私有索引 | 资产前缀单哈希路由索引（`bridge` 单源承载：`WyHash` 单源 + 0.75 负载单表，`TStringView` 零拷贝 view 哈希探测，`VecGrowCapacity` 单源 0→4→2×，`distinctLens` 降序最长前缀，`Finalize` 全量串/接口不丢） | S105 |
+| `nextpas.core.webview.assets` | 私有索引 | 资产前缀单哈希 + Trie 路由索引（`bridge` 单源承载：`WyHash` 单源 + 0.75 负载单表 + 内置 Byte-Trie O(m) 最长前缀，`TStringView` 零拷贝 view 哈希/Trie 遍历双源，`VecGrowCapacity` 单源 0→4→2×，`distinctLens` 降序 + Trie 单遍，`Finalize` 全量串/接口 + Trie 递归 Dispose 不丢） | S105→S107 Trie |
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
@@ -47,9 +56,22 @@ base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 in
               └── mime(薄门面→L2 mime.types 零拷贝 O(1) 哈希)/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow + live + callbacks 单源）
 gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool(私有：viewmap 单哈希单源 + pool Slab 单源) ← gtk        （loader 装载 ffi 函数指针；viewmap/pool 仅 gtk 后端 uses，不经门面）
 validation 为家族内校验实现层（四件套纯度 base←validation/intf←utils/callbacks/bridge←impl←facade；utils/callbacks 为家族内共享辅助，不经门面重复实现，仅 bridge/factory/后端 uses；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
-live/assets/viewmap/pool 为家族内私有索引/池化（不经门面 re-export，可抽模块候选显式登记）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 探测 + VecGrowCapacity 单源，Finalize 全量串/接口不丢），viewmap 供 gtk 专用 O(1) view→window 哈希（hashmap.base HashOfPointer 单源 + VecGrowCapacity 单源，VIEW_TOMBSTONE 保探链），pool 供 gtk dispatcher 双池 Slab 复用（live Pool 单源 + VecGrowCapacity 单源，短临界 <1µs 单所有权）；与 window.live 紧凑 Vec 跨家族重复已评估——二者同源 bytes.ops 单源思想（webview 侧 0→4→2× + window 侧极小 n 保持 Length 计数，swap 语义同源），当前不另立通用辅助/池模块，抽取需反哺 L1 collections/通用池 owner 并经设计评审不自行外溢
-utils/callbacks 为家族内共享辅助（不经门面 re-export，可抽模块候选显式登记）：utils 供 bridge/vfs/gtk 复用路径归一 View 单源（text.view 单源，SliceToStr 单次 SetString+Move，热点 View 零拷贝），callbacks 供 4 后端复用三形态归一（method/proc→reference inline 薄转发，零拷贝闭包）；二者均为 L3 内单向依赖（仅依 base/intf），抽取候选 window/通用辅助已评估——当前留家族内，迁移需经设计评审不自行外溢（live/pool 同为候选，评估结论同上段跨家族收敛）
+live/assets/viewmap/pool 为家族内私有索引/池化（不经门面 re-export，可抽模块候选显式登记，触发与 Owner 时序见 §1.2）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希+Trie 单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 哈希/Trie O(m) 单遍遍历 + VecGrowCapacity 单源 + 惰性 Trie 节点，Finalize 全量串/接口 + Trie 递归 Dispose 不丢），viewmap 供 gtk 专用 O(1) view→window 哈希（hashmap.base HashOfPointer 单源 + VecGrowCapacity 单源，VIEW_TOMBSTONE 保探链），pool 供 gtk dispatcher 双池 Slab 复用（live Pool 单源 + VecGrowCapacity 单源，短临界 <1µs 单所有权）；与 window.live 紧凑 Vec 跨家族重复已评估——二者同源 bytes.ops 单源思想（webview 侧 0→4→2× + window 侧极小 n 保持 Length 计数，swap 语义同源），当前不另立通用辅助/池模块，抽取需反哺 L1 collections/通用池 owner 并经设计评审不自行外溢
+utils 为家族内共享辅助（不经门面 re-export，可抽模块候选显式登记，触发与 Owner 时序见 §1.2）：供 bridge/vfs/gtk 复用路径归一 View 单源（text.view 单源，SliceToStr 单次 SetString+Move，热点 View 零拷贝），抽取候选 window/通用辅助已评估——当前留家族内，迁移需经设计评审不自行外溢；callbacks 已反哺 L0 `base.callbacks` 单源落地（2026-09-02）：供 4 后端复用三形态归一（`TProc`/`TProc1<T>`/`TCallbackScaleHandler` inline 薄转发，零拷贝闭包，单源治理 window/webview 同构重复），L3 内单向依赖 `base/intf` + L0 `base.callbacks`，跨家族单源审计通过（live/pool 同为候选，评估结论同上段跨家族收敛）
 window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
+
+### 1.2 可抽模块候选——触发条件与 Owner 归属时序
+
+| 候选 | 当前归属 | 目标 Owner（反哺） | 抽取触发条件 | 时序与纪律 |
+|------|----------|-------------------|--------------|------------|
+| `live` | 家族内私有 `webview.live`（紧凑 Vec） | L1 `nextpas.core.collections` / `bytes.ops` 泛化 Vec | 第三个家族复用紧凑 Vec 或 `window.live` 需泛型统一（当前已同源 `bytes.ops` 单源零重复） | S107+ 经设计评审，受控跨模块 slice；保持 `VecGrowCapacity 0→4→2×` inline 零拷贝、`Default(T)` 释放不丢 |
+| `assets` | 家族内私有 `webview.assets`（前缀单哈希 + Trie O(m)） | L2 `collections/prefix-router` 或 `http.router` 通用前缀路由 | 第二处前缀路由复用（http/vfs）或需 Trie 严格 O(m) | 已内置 Byte-Trie O(m) 零哈希最长前缀（惰性 256 分支，零拷贝 view 遍历，独立于挂载数，d 放大不线性），deferred-Res 转正前评估通用 prefix-router 抽取；保持 WyHash + 0.75 负载 + `TStringView` 零拷贝 + Trie 递归 Dispose、`Finalize` 不丢 |
+| `viewmap` | 家族内私有 `gtk.viewmap`（指针键哈希） | L1 `collections.hashmap` 指针键特化 | 第二个指针键 O(1) view→window 映射需求 | S105 后评估；保持 `HashOfPointer→HashMix32` + `VecGrowCapacity` 单源、`VIEW_TOMBSTONE` 保探链 |
+| `pool` | 家族内私有 `gtk.pool`（Slab 双池） | L1 `sync.pool` / `mem.pool` 通用 Slab | 第三处 dispatcher/对象池复用或跨家族池化需求 | S107 后评估；保持短临界 <1µs + 单所有权 `Dispose` 释放不丢 |
+| `utils` | 家族内共享 `webview.utils`（路径归一） | L1 `text.view` 共享路径归一 | 第二个资源路径归一复用（window/vfs/http）且需零拷贝 View 直通 | S52 单源收敛后评估；保持 `SliceToStr SetString+Move` 单源、热点 View 零拷贝 |
+| `callbacks` | 家族内共享 `webview.callbacks`（三形态归一） | L0 `base.callbacks`（`nextpas.core.base.callbacks`） | 跨家族（window/webview/async）三形态重复且需单源审计 | **已反哺落地（2026-09-02）**：L0 `base.callbacks` 单源 inline 零拷贝（`TProc`/`TProc1<T>`/`TCallbackScaleHandler` 薄转发，`reference` 闭包 Move 零拷贝），window/webview 同构已收敛至此单源，家族内保留 thin-forward 门面，跨家族单源审计通过 |
+
+> 纪律：可抽≠可自溢；抽取前必须先反哺目标 Owner（补单测与性能基线 inline/零拷贝），再由 webview 侧 `uses` 新 Owner 单源；守四件套 `base←intf←impl←facade` 与 L0-L3 单向依赖，抽取经设计评审，受控跨模块 slice。
 ```
 
 - **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs、window 单元**（`intf` 仅在 M6 后例外允许 `uses window.intf` 以暴露 `IWindow` 类型与 `Window` 属性，仍禁止触后端实现）。

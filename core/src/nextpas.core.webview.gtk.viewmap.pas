@@ -7,10 +7,11 @@ unit nextpas.core.webview.gtk.viewmap;
        - 容量：bytes.ops.VecGrowCapacity (0→4→2× inline 单源) — 与 webview.live/assetIndex 单源一致
        - 负载：0.75 (hashmap.base.DEFAULT_MAX_LOAD_FACTOR) — 单源阈值，零阈值漂移
        - 比较：指针等值直比，零 SpanEqual 额外开销
+       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，抽取需反哺 L1 collections/hashmap.base 通用指针哈希 owner 并经设计评审不自行外溢（CONTRACT §1/§50 登记，L0-L3 守恒）
 
        性能：
-       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读
-       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环零额外调用
+       - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读，探测 and Mask 位掩码与 assets FMask 单源一致热读零除法
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环 and Mask 零额外调用零除法
        - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容预判在锁外，短临界仅指针拷贝
 
        稳定性：析构清零 nil 释放不丢，VIEW_TOMBSTONE 单哨兵保探链完整 *}
@@ -70,18 +71,19 @@ end;
 
 function ViewMapFindLocked(AView: Pointer): Pointer;
 var
-  I, Cap, Start: Integer;
+  I, Cap, Start, Mask: Integer;
 begin
-  // 非 inline：含探查循环，禁 inline，零 I-Cache 膨胀；短探 O(1) 零分配
+  // 非 inline：含探查循环，禁 inline，零 I-Cache 膨胀；短探 O(1) 零分配，and Mask 与 assets 单源一致热读零除法
   Result := nil;
   Cap := Length(GViewMap);
   if (Cap = 0) or (AView = nil) then Exit;
-  Start := Integer(ViewHash(AView) mod UInt32(Cap));
+  Mask := Cap - 1;
+  Start := Integer(ViewHash(AView) and UInt32(Mask));
   for I := 0 to Cap - 1 do
   begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
-      Exit(GViewMap[(Start + I) mod Cap].Value);
-    if GViewMap[(Start + I) mod Cap].Key = nil then
+    if GViewMap[(Start + I) and Mask].Key = AView then
+      Exit(GViewMap[(Start + I) and Mask].Value);
+    if GViewMap[(Start + I) and Mask].Key = nil then
       Exit(nil);
   end;
 end;
@@ -89,9 +91,9 @@ end;
 procedure ViewMapRehashLocked(ANewCap: Integer);
 var
   LOld: array of TViewMapEntry;
-  I, OldCap, Start, J: Integer;
+  I, OldCap, Start, J, Mask: Integer;
 begin
-  // 非 inline：含双层循环与重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀
+  // 非 inline：含双层循环与重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀，and Mask 与 assets 单源一致
   LOld := GViewMap;
   OldCap := Length(LOld);
   SetLength(GViewMap, ANewCap);
@@ -101,15 +103,16 @@ begin
     GViewMap[I].Value := nil;
   end;
   GViewMapCount := 0;
+  Mask := ANewCap - 1;
   for I := 0 to OldCap - 1 do
     if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
     begin
-      Start := Integer(ViewHash(LOld[I].Key) mod UInt32(ANewCap));
+      Start := Integer(ViewHash(LOld[I].Key) and UInt32(Mask));
       for J := 0 to ANewCap - 1 do
-        if GViewMap[(Start + J) mod ANewCap].Key = nil then
+        if GViewMap[(Start + J) and Mask].Key = nil then
         begin
-          GViewMap[(Start + J) mod ANewCap].Key := LOld[I].Key;
-          GViewMap[(Start + J) mod ANewCap].Value := LOld[I].Value;
+          GViewMap[(Start + J) and Mask].Key := LOld[I].Key;
+          GViewMap[(Start + J) and Mask].Value := LOld[I].Value;
           Inc(GViewMapCount);
           Break;
         end;
@@ -118,9 +121,9 @@ end;
 
 procedure ViewMapAddLocked(AView: Pointer; AWin: Pointer);
 var
-  I, Cap, Start, FirstTomb: Integer;
+  I, Cap, Start, FirstTomb, Mask: Integer;
 begin
-  // 非 inline：含循环+分支+重哈希，禁 inline，零 I-Cache 膨胀；0.75 负载单源阈值
+  // 非 inline：含循环+分支+重哈希，禁 inline，零 I-Cache 膨胀；0.75 负载单源阈值，and Mask 与 assets 单源一致零除法
   if (AView = nil) or (AWin = nil) then Exit;
   Cap := Length(GViewMap);
   if Cap = 0 then
@@ -134,20 +137,21 @@ begin
     ViewMapRehashLocked(Cap);
     Cap := Length(GViewMap);
   end;
-  Start := Integer(ViewHash(AView) mod UInt32(Cap));
+  Mask := Cap - 1;
+  Start := Integer(ViewHash(AView) and UInt32(Mask));
   FirstTomb := -1;
   for I := 0 to Cap - 1 do
   begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
+    if GViewMap[(Start + I) and Mask].Key = AView then
     begin
-      GViewMap[(Start + I) mod Cap].Value := AWin;
+      GViewMap[(Start + I) and Mask].Value := AWin;
       Exit;
     end;
-    if GViewMap[(Start + I) mod Cap].Key = VIEW_TOMBSTONE then
+    if GViewMap[(Start + I) and Mask].Key = VIEW_TOMBSTONE then
     begin
-      if FirstTomb = -1 then FirstTomb := (Start + I) mod Cap;
+      if FirstTomb = -1 then FirstTomb := (Start + I) and Mask;
     end
-    else if GViewMap[(Start + I) mod Cap].Key = nil then
+    else if GViewMap[(Start + I) and Mask].Key = nil then
     begin
       if FirstTomb <> -1 then
       begin
@@ -156,8 +160,8 @@ begin
       end
       else
       begin
-        GViewMap[(Start + I) mod Cap].Key := AView;
-        GViewMap[(Start + I) mod Cap].Value := AWin;
+        GViewMap[(Start + I) and Mask].Key := AView;
+        GViewMap[(Start + I) and Mask].Value := AWin;
       end;
       Inc(GViewMapCount);
       Exit;
@@ -167,23 +171,24 @@ end;
 
 procedure ViewMapRemoveLocked(AView: Pointer);
 var
-  I, Cap, Start: Integer;
+  I, Cap, Start, Mask: Integer;
 begin
-  // 非 inline：含探查循环，禁 inline
+  // 非 inline：含探查循环，禁 inline，and Mask 与 assets 单源一致热读零除法
   Cap := Length(GViewMap);
   if (Cap = 0) or (AView = nil) then Exit;
-  Start := Integer(ViewHash(AView) mod UInt32(Cap));
+  Mask := Cap - 1;
+  Start := Integer(ViewHash(AView) and UInt32(Mask));
   for I := 0 to Cap - 1 do
   begin
-    if GViewMap[(Start + I) mod Cap].Key = AView then
+    if GViewMap[(Start + I) and Mask].Key = AView then
     begin
-      GViewMap[(Start + I) mod Cap].Key := VIEW_TOMBSTONE;
-      GViewMap[(Start + I) mod Cap].Value := nil;
+      GViewMap[(Start + I) and Mask].Key := VIEW_TOMBSTONE;
+      GViewMap[(Start + I) and Mask].Value := nil;
       Dec(GViewMapCount);
       if GViewMapCount < 0 then GViewMapCount := 0;
       Exit;
     end;
-    if GViewMap[(Start + I) mod Cap].Key = nil then
+    if GViewMap[(Start + I) and Mask].Key = nil then
       Exit;
   end;
 end;
