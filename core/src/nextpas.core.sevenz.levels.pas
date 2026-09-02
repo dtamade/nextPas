@@ -4,10 +4,9 @@ unit nextpas.core.sevenz.levels;
  * nextpas.core.sevenz.levels - 压缩级别到引擎参数的纯映射
  *
  * 将 7z 的 TSevenZCompressionLevel 映射为 deflate/bzip2 等底层引擎
- * 的具体参数，writer 与 bench 共享同一纯函数，避免两处硬编码漂移。
- * 本单元仅依赖 nextpas.core.compress.base，不依赖 intf 的接口声明，
- * 以 Ord 方式接受级别，避免循环依赖。映射为单源表驱动：以 Ord 为索引
- * 查表，O(1) 且分支预测稳定，bench 可观测为常数开销。
+ * 的具体参数，writer/bench/facade 共享同一纯函数，避免两处硬编码漂移。
+ * Ord 入口保持单源表驱动 (O(1) 索引、分支预测稳定、bench 可观测)；
+ * typed 重载以 intf 枚举直连 Facade，门面零 Ord 薄逻辑、纯 inline forward。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -15,10 +14,13 @@ unit nextpas.core.sevenz.levels;
 interface
 
 uses
-  nextpas.core.compress.base;
+  nextpas.core.compress.base,
+  nextpas.core.sevenz.intf;
 
 function SevenZLevelOrdToDeflateLevel(AOrd: Integer): TCompressionLevel; inline;
 function SevenZLevelOrdToBZip2BlockSize(AOrd: Integer): Integer; inline;
+function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel; inline;
+function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer; inline;
 
 implementation
 
@@ -42,6 +44,16 @@ begin
     Result := CSevenZBZip2BlockSizeMap[AOrd]
   else
     Result := 9;
+end;
+
+function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
+begin
+  Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
+end;
+
+function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
+begin
+  Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
 end;
 
 end.

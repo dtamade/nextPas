@@ -131,7 +131,7 @@ end;
 function BigNatBitLength(const AValue: TBigNat): Integer; forward;
 function BigNatGetBit(const AValue: TBigNat; ABitIndex: Integer): Boolean; forward;
 
-procedure NormalizeBigNat(var AValue: TBigNat);
+procedure NormalizeBigNat(var AValue: TBigNat); inline;
 var
   LLen: Integer;
 begin
@@ -155,17 +155,17 @@ begin
   Result[0] := AValue;
 end;
 
-function BigNatIsZero(const AValue: TBigNat): Boolean;
+function BigNatIsZero(const AValue: TBigNat): Boolean; inline;
 begin
   Result := Length(AValue) = 0;
 end;
 
-function BigNatIsOdd(const AValue: TBigNat): Boolean;
+function BigNatIsOdd(const AValue: TBigNat): Boolean; inline;
 begin
   Result := (Length(AValue) > 0) and ((AValue[0] and 1) = 1);
 end;
 
-function BigNatIsOne(const AValue: TBigNat): Boolean;
+function BigNatIsOne(const AValue: TBigNat): Boolean; inline;
 begin
   Result := (Length(AValue) = 1) and (AValue[0] = 1);
 end;
@@ -654,9 +654,9 @@ begin
   Result := True;
 end;
 
-function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean;
+function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean; inline;
 begin
-  { Cache disabled for HEAPTRC zero-leak }
+  { Cache disabled for HEAPTRC zero-leak — zero-copy bytes.ops path, no global retained heap }
   Result := TryInitMontgomeryContext(AModulus, ACtx, AError);
 end;
 
@@ -1300,7 +1300,7 @@ begin
   Result := TryBigNatToFixedLengthBytes(LValue, ALength, AResult, AError);
 end;
 
-procedure ClearMontgomeryCache;
+procedure ClearMontgomeryCache; inline;
 begin
   GLatestMontModulus := nil;
   GLatestMontCtx.Modulus := nil;
@@ -1312,7 +1312,7 @@ begin
   GP384PBigNatValid := False;
 end;
 
-procedure ClearBigIntCache;
+procedure ClearBigIntCache; inline;
 begin
   ClearMontgomeryCache;
 end;

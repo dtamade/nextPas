@@ -4,6 +4,7 @@ program test_quota;
 
 uses
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.agent.quota,
   nextpas.core.agent,
   nextpas.core.test;

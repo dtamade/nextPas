@@ -52,7 +52,8 @@ uses
   nextpas.core.compress,
   nextpas.core.bytes.builder,
   nextpas.core.zip.aes,
-  nextpas.core.zip.extra;
+  nextpas.core.zip.extra,
+  nextpas.core.zip.reader;
 
 const
   C_LOCAL_HEADER_LEN = 30;
@@ -201,13 +202,7 @@ end;
 
 procedure TSequentialZipReader.CheckTotalLimit;
 begin
-  if FMaxTotalOutput = 0 then
-    Exit;
-  if FCurrent.UncompressedSize > FMaxTotalOutput then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  if FCumulative > FMaxTotalOutput - FCurrent.UncompressedSize then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  Inc(FCumulative, FCurrent.UncompressedSize);
+  GuardTotalOutputAdvance(FCumulative, FCurrent.UncompressedSize, FMaxTotalOutput);
 end;
 
 function TSequentialZipReader.HasPushBack: Boolean;
@@ -779,30 +774,8 @@ begin
 end;
 
 function TSequentialZipReader.CopyTo(const ADst: IWriter): SizeUInt;
-var
-  LS: IDecompressReader;
-  LBuf: array[0..65535] of Byte;
-  LN: SizeUInt;
-  LHold: IDecompressReader;
 begin
-  if ADst = nil then
-    raise EArgumentError.Create('zip: destination writer is nil');
-  LHold := Open;
-  LS := LHold;
-  Result := 0;
-  try
-    repeat
-      LN := LS.Read(LBuf[0], SizeOf(LBuf));
-      if LN > 0 then
-      begin
-        if ADst.Write(LBuf[0], LN) <> LN then
-          raise EIOError.Create('zip: short write while pumping entry');
-        Inc(Result, LN);
-      end;
-    until LN = 0;
-  finally
-    LS.Close;
-  end;
+  Result := ZipPumpReader(Open, ADst);
 end;
 
 procedure TSequentialZipReader.Skip;

@@ -4,6 +4,10 @@ unit nextpas.core.tui;
  * @desc nextpas.core.tui Core 门面——默认暴露终端正确性的最小闭包。
  *       非基础 app/runtime、图像、clipboard、复杂 widget 能力通过 ext /
  *       experimental / full 门面显式引入。
+ *       边界：终端能力（TTerminal/TTuiEnter*/TFrame）由 `tui.terminal`
+ *       子家族独立拥有，本门面仅 `T* = tui.terminal.T*` 薄别名 `inline` 转发，
+ *       无独立堆分配；泄漏门禁与子家族共享 `HEAPTRC_GATE=1` heaptrc0
+ *      （`DoLeaveTui` 幂等释放不丢），`bytes.ops` 单源复用不复制。
  *}
 
 {$I nextpas.core.settings.inc}

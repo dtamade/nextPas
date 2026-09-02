@@ -151,3 +151,27 @@
 | `d1d3125be` | docs | `ARCHITECTURE §2` 体积 13665→13687 同步（`provider.openai` 326/`responses` 256 精确化） |
 
 **Gates**: `test_pricing` 6 passed + `test_hedge` 10 passed + `test_snapshot` 5 passed + `make hygiene` pass。
+
+## agent-p0-perfection-2026-09-04 — P0 六维精修：预算/限流/SSE/loop 语义收口 (4 commits)
+
+**Scope**: Stage Review P0 缺陷修复 + 文档/体积/门面对齐 — hvStop 全批阻断 + 限流阈值 + SSE 空值 + tool_call 预算 + skBlocked 计入 + 体积/CHANGELOG 同步。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `9448d7718` | fix | P0 5 项：`loop.impl` hvStop 仅丢 allowance 内批（保留 CalledCount/Fire 一致） + `throttle` MaxAcquires>0 校验 + `sse` 无冒号行作空值 + `loop` 纯 tool_call 估算经 `LoopEstimateTokensFallback` + `loop.exec` skBlocked 计入预算 |
+| `d3b4af3f1` | fix | `io.uring` 去重 `posix.base` 引入（`core` 层 debt 清理，`agent` lane 验证同步） |
+| `42e845ef8` | refactor | `loop.impl` 清理未用 `SCount/Env` 变量（`AGENT.md` 悬垂变量规约） |
+| `234f3ce4c` | fix | `loop.impl` 清理残留 `SCount` 赋值（`ARCHITECTURE` loop.impl 684→682 行，体积 13724→13722） |
+
+**Gates**: `lane-focused --lane agent` 全绿（`555508 lines, 22.5 sec, 9 passed skeleton`，`build-hygiene=pass`，`make hygiene` 绿，`landing-check` path-limited 清零 `io.uring` debt）。
+
+## agent-stage-review-p0-2026-09-05 — Stage Review P0/P1 深度收口（2 commits）
+
+**Scope**: 编译门/预算同源/对冲链路/排水看门狗/配额回拨与溢出 + 体积/CHANGELOG 同步。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `98e6ce2a6` | fix | P0/P1 6 项：`test_pricing/protocol/quota` 补 `base/json.value` uses（15 门全绿） + `loop.budget` LoopCostForMessage 增 provider 重载走 Fallback（与 LoopAddOutUsed 同源） + `hedge` 双路 CreateChildToken(LOuter) 链路化取消 + `tools` 排水 5s 看门狗 + `loop.impl` GuidedFinish 回滚污染 + `quota` 回拨过期+溢出钳制 |
+| `c612fbbbe` | docs | `ARCHITECTURE §2` 体积 13722→13776（loop 152/690 hedge 581 tools 523 quota 186） |
+
+**Gates**: `test_pricing 6` / `test_protocol 10` / `test_quota 5` / `lane-focused 9 skeleton` 全 `HEAPTRC OK`，`landing-check` 绿，完成 `for d in test_*; make test` 全量绿。

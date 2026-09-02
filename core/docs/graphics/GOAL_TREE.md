@@ -37,4 +37,4 @@
 - [x] `graphics.effect` 图（Blur/Shadow/Hue/LUT）+ 序列化（`EEffectError`，4e0828e9d，BoxBlur tile占位，Serialize/Deserialize+Bake PASS）
 - [x] `gpu.canvas`（`TAtlas/TAtlasRegion/ScaleFactor`，2048分页，AtlasAlloc 行装箱，Scale 1..4）
 - [x] `demo_vector_poster` / `demo_converter` 能力示例（3be299081，双示例可视闭环，PNG/BMP 往返 PASS）
-- [ ] `SvgImport` 预留 + `RenderAssetBundle`/`PdfExport` 预留（S3+ 完整性）
+- [x] `SvgImport` 最小闭环 (`nextpas.core.graphics.svg` M/L/H/V/C/Q/Z, `SvgPathFromData`/`TrySvgPathFromData`, 16384 cap, `EVectorError` 闭环) — `RenderAssetBundle`/`PdfExport` 预留 S3+ 完整性

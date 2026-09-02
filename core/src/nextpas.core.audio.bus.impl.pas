@@ -56,6 +56,7 @@ type
     FLock: IMutex;
     FViolations: Int64;
     procedure EnsureScratch(ANeeded: Integer); inline;
+    procedure EnsureBusCapacity(ANeeded: Integer); inline;
     procedure EnsureSnapshotCapacity(ANeeded: Integer); inline;
   public
     constructor Create;
@@ -69,14 +70,19 @@ type
 { TAudioBus }
 
 constructor TAudioBus.Create(AId: TAudioBusId; const AFormat: TAudioFormat);
-var Cap: Integer;
+var Cap: Integer; LCapBytes: Int64;
 begin
   inherited Create;
   FId := AId;
   FGain := 1.0;
   FFormat := AFormat;
   FLock := Mutex;
-  Cap := CAudioBusMaxScratchFrames * AFormat.BlockAlign;
+  // BlockAlign Int64防溢出: AudioBytesForFrames 单源计算, Int64中间值+溢出守卫
+  LCapBytes := AudioBytesForFrames(AFormat, CAudioBusMaxScratchFrames);
+  if (LCapBytes <= 0) or (LCapBytes > High(Integer)) then
+    Cap := 0
+  else
+    Cap := Integer(LCapBytes);
   SetLength(FScratch.Data, Cap);
   FScratch.Format := AFormat;
 end;
@@ -116,6 +122,7 @@ end;
 procedure TAudioBus.EnsureScratch(ANeeded: Integer); inline;
 var LCap: Integer;
 begin
+  // control-plane geometric via bytes.ops单源 AudioEnsureCapacity (power-of-two, doubling), inline零拷贝, realtime不调此路径
   if Length(FScratch.Data) >= ANeeded then Exit;
   LCap := Length(FScratch.Data);
   AudioEnsureCapacity(LCap, ANeeded, 256);
@@ -134,7 +141,7 @@ begin
 end;
 
 function TAudioBus.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var LSrc: IRealtimeAudioSource; LGain: Single; LNeeded: Integer;
+var LSrc: IRealtimeAudioSource; LGain: Single; LNeeded: Integer; LNSamples: Int64;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
@@ -145,6 +152,7 @@ begin
   // two-phase snapshot: copy source/gain under lock, mixing lock-free — realtime no alloc
   FLock.Acquire; try LSrc := FSource; LGain := FGain; finally FLock.Release; end;
   if not Assigned(LSrc) then Exit(AFrames);
+  // realtime no alloc: scratch预分配于Create (geometric, AudioEnsureCapacity单源), 不足则计违规不分配
   if Length(FScratch.Data) < LNeeded then Exit(AFrames);
   FScratch.FrameCount := AFrames;
   try
@@ -152,7 +160,9 @@ begin
   except
     Exit(AFrames);
   end;
-  SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * FFormat.Channels, LGain);
+  LNSamples := Int64(AFrames) * Int64(FFormat.Channels);
+  if (LNSamples <= 0) or (LNSamples > High(Integer)) then Exit(AFrames);
+  SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), Integer(LNSamples), LGain);
   Result := AFrames;
 end;
 
@@ -178,22 +188,33 @@ end;
 procedure TAudioBusMixer.EnsureScratch(ANeeded: Integer); inline;
 var LCap: Integer;
 begin
+  // control-plane geometric via bytes.ops单源 AudioEnsureCapacity (power-of-two, doubling), inline零拷贝, realtime不调此路径
   if Length(FScratch.Data) >= ANeeded then Exit;
   LCap := Length(FScratch.Data);
   AudioEnsureCapacity(LCap, ANeeded, 256);
   if Length(FScratch.Data) <> LCap then SetLength(FScratch.Data, LCap);
 end;
 
+procedure TAudioBusMixer.EnsureBusCapacity(ANeeded: Integer); inline;
+var LCap: Integer;
+begin
+  // geometry: 1.5x / power-of-two via bytes.ops单源 AudioEnsureCapacity (doubling, BytesNextCapacity), 非 SetLength(Count+1)
+  LCap := Length(FBuses);
+  AudioEnsureCapacity(LCap, ANeeded, 4);
+  if Length(FBuses) <> LCap then SetLength(FBuses, LCap);
+end;
+
 procedure TAudioBusMixer.EnsureSnapshotCapacity(ANeeded: Integer); inline;
 var LCap: Integer;
 begin
+  // geometry: 1.5x / power-of-two via bytes.ops单源 AudioEnsureCapacity (doubling), 控制面预增, 实时零分配复用
   LCap := Length(FSnapshotBuses);
   AudioEnsureCapacity(LCap, ANeeded, 4);
   if Length(FSnapshotBuses) <> LCap then SetLength(FSnapshotBuses, LCap);
 end;
 
 function TAudioBusMixer.CreateBus(const AFormat: TAudioFormat): IAudioBus;
-var LCap: Integer; B: TAudioBus;
+var B: TAudioBus;
 begin
   if not AFormat.IsValid then
     raise EAudioDeviceError.Create('bus: invalid format');
@@ -201,9 +222,7 @@ begin
   try
     B := TAudioBus.Create(FNextId, AFormat);
     Inc(FNextId);
-    LCap := Length(FBuses);
-    AudioEnsureCapacity(LCap, FBusCount + 1, 4);
-    if Length(FBuses) <> LCap then SetLength(FBuses, LCap);
+    EnsureBusCapacity(FBusCount + 1);
     FBuses[FBusCount] := B;
     Inc(FBusCount);
     // control-plane preallocate snapshot capacity (geometric, zero violation steady)
@@ -235,7 +254,7 @@ begin
 end;
 
 function TAudioBusMixer.MixRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var I, LCount, LNeeded: Integer; LFmt: TAudioFormat; LBus: IAudioBus;
+var I, LCount, LNeeded: Integer; LFmt: TAudioFormat; LBus: IAudioBus; LNSamples: Int64;
 begin
   Result := 0;
   if AFrames <= 0 then Exit(0);
@@ -254,11 +273,12 @@ begin
     Exit(AFrames);
   end;
   // snapshot buses lock-free mixing — guard nil + local ref (B-prefix异形, zero-alloc steady, avoid double fetch)
+  // realtime no alloc: 不做 SetLength/EnsureSnapshotCapacity, 仅截断+计数
   if Length(FSnapshotBuses) < LCount then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
-    EnsureSnapshotCapacity(LCount);
-    if Length(FSnapshotBuses) < LCount then Exit(AFrames);
+    LCount := Length(FSnapshotBuses);
+    if LCount = 0 then Exit(AFrames);
   end;
   FLock.Acquire; try for I:=0 to LCount-1 do if I < FBusCount then FSnapshotBuses[I] := FBuses[I]; finally FLock.Release; end;
   for I := 0 to LCount - 1 do
@@ -281,7 +301,9 @@ begin
       Continue;
     end;
     if (Length(FScratch.Data)=0) or (Length(ABuffer.Data)=0) then Continue;
-    SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), AFrames * LBus.GetFormat.Channels, 1.0);
+    LNSamples := Int64(AFrames) * Int64(LBus.GetFormat.Channels);
+    if (LNSamples <= 0) or (LNSamples > High(Integer)) then Continue;
+    SimdAddF32(PSingle(@FScratch.Data[0]), PSingle(@ABuffer.Data[0]), Integer(LNSamples), 1.0);
   end;
   Result := AFrames;
 end;
