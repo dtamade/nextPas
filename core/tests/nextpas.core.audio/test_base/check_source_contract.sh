@@ -4,9 +4,9 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
 fail=0
 check_no_ffi() { local file="$1"; if grep -qiE "uses.*\.ffi|vendor|miniaudio|mpg123|opusfile" "$file"; then if grep -E "^\s*uses" "$file" | grep -qiE "\.ffi|vendor"; then echo "[FAIL] $file contains forbidden ffi/vendor in uses"; fail=1; fi; fi; if grep -E "uses" "$file" | grep -q "\.ffi"; then echo "[FAIL] $file uses .ffi"; fail=1; fi; if grep -q "\.ffi" "$file"; then echo "[FAIL] $file contains '.ffi' token"; grep -n "\.ffi" "$file" || true; fail=1; fi; if grep -qi "vendor" "$file"; then echo "[FAIL] $file contains 'vendor' token"; grep -n -i "vendor" "$file" || true; fail=1; fi; }
-# audio source-contract gate — 85 files (core 29 + extension 56, unique 83+2 bus facade) — 契约 1.5.2 (opus 四件套占位, prOggOpus)
-# Header: 81→85 sync — enumeration includes wav 四件套 + codec flac/mp3/vorbis/opus 四件套 (各 base/intf/impl/pas, opus 占位) + bank/resource/event/spatial.impl + 5 base + playlist 4件套 + codec 3×3 decoder/sse, for loop must include test_automation
-echo "== audio source-contract gate (85 files: core 29 + extension 56) =="
+# audio source-contract gate — 87 files (core 31 + extension 56, unique 85+2 bus facade) — 契约 1.5.8 (pcm_wav四件套 base/impl/facade + opus 四件套, prOggOpus)
+# Header: 85→87 sync — enumeration includes wav/pcm_wav 四件套 + codec flac/mp3/vorbis/opus 四件套 (各 base/intf/impl/pas, opus 占位, pcm_wav: base/impl/pas) + bank/resource/event/spatial.impl + 5 base + playlist 4件套 + codec 3×3 decoder/sse, for loop must include test_automation
+echo "== audio source-contract gate (87 files: core 31 + extension 56) =="
 for f in \
   "$SRC/nextpas.core.audio.base.pas" \
   "$SRC/nextpas.core.audio.intf.pas" \
@@ -43,6 +43,8 @@ for f in \
   "$SRC/nextpas.core.audio.errors.pas" \
   "$SRC/nextpas.core.audio.pcm.pas" \
   "$SRC/nextpas.core.audio.pcm.simd.pas" \
+  "$SRC/nextpas.core.audio.pcm_wav.base.pas" \
+  "$SRC/nextpas.core.audio.pcm_wav.impl.pas" \
   "$SRC/nextpas.core.audio.pcm_wav.pas" \
   "$SRC/nextpas.core.audio.resample.pas" \
   "$SRC/nextpas.core.audio.resample.sinc.pas" \
@@ -93,7 +95,7 @@ for f in \
   "$SRC/nextpas.core.audio.studio.sequencer.pas" \
   "$SRC/nextpas.core.audio.studio.pas" \
   "$SRC/nextpas.core.audio.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
-echo "[OK] 85 files (core 29 + candidate 56) no ffi/vendor — 契约 1.5.2 已对齐实盘（unique 83+2 bus facade, wav/flac/mp3/vorbis/opus 四件套）"
+echo "[OK] 87 files (core 31 + candidate 56) no ffi/vendor — 契约 1.5.8 已对齐实盘（unique 85+2 bus facade, wav/pcm_wav四件套+flac/mp3/vorbis/opus 四件套）"
 if ! grep -q "实时路径仅调 FillRealtime" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] missing realtime comment"; fail=1; else echo "[OK] realtime discipline comment present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000010" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IAudioSource GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000011" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IRealtimeAudioSource GUID missing"; fail=1; fi
@@ -201,4 +203,4 @@ if [ ! -f "$SRC/nextpas.core.audio.codec.opus.impl.pas" ]; then echo "[FAIL] opu
 # test_automation gate 存活校验（for loop 同步）
 if [ ! -f "$SRC/../tests/nextpas.core.audio/test_automation/test_automation.lpr" ] && [ ! -f "$ROOT/core/tests/nextpas.core.audio/test_automation/test_automation.lpr" ]; then echo "[FAIL] test_automation gate missing"; fail=1; else echo "[OK] test_automation gate present"; fi
 if [ "$fail" -ne 0 ]; then echo "source-contract gate FAILED"; exit 1; fi
-echo "source-contract gate PASSED — 85 files (core 29 + extension 56, unique 83+2 bus facade) + 23 GUID + test_automation — 契约 1.5.2 (codec.wav/flac/mp3/vorbis/opus 四件套完整)"
+echo "source-contract gate PASSED — 87 files (core 31 + extension 56, unique 85+2 bus facade) + 23 GUID + test_automation — 契约 1.5.8 (wav/pcm_wav四件套+codec.flac/mp3/vorbis/opus 四件套完整)"
