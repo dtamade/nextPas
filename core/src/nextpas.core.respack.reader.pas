@@ -56,7 +56,7 @@ type
     property Header: TResPackHeader read FHdr;
     property Data: PByte read FData;
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
-    function DigestPtr(const AIdx: SizeUInt): PByte;
+    function DigestPtr(const AIdx: SizeUInt): PByte; inline;
     function HasDigests: Boolean; inline;
     { Path span view via bytes.ops; LowerBound not inline (loop). }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
@@ -100,7 +100,7 @@ begin
   Result := FData + SizeUInt(AEntry.DataOffset);
 end;
 
-function TResPack.DigestPtr(const AIdx: SizeUInt): PByte;
+function TResPack.DigestPtr(const AIdx: SizeUInt): PByte; inline;
 begin
   RequireOpen;
   if FDigests = nil then

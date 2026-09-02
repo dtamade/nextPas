@@ -37,9 +37,7 @@ begin
   Result.Data := nil;
   Result.Size := 0;
   Result.Owned := False;
-  { 复用 writer.stream 分段零拷贝管线：Total 预取零分配 + 分段 AWrite 直填最终 Buf，
-    布局/头单源于 writer.layout/builder，间隙零填 4K 零页、data/digest 零拷贝 BytesCopy 单源 inline，
-    峰值 ~1×+头（512MiB 由 2×+头 1038MiB 降至 ~526MiB），确定性 INV-R5 同流式；异常 FreeMem 不丢资源。 }
+  { 复用 stream 分段管线：Total 预取 + 分段直填 Buf，~1×+头（512MiB 1038→526MiB），INV-R5 同流式；Sink 单闭包分配/Build（~40B，相对 Total 可忽略），异常 FreeMem 不丢资源。 }
   Total := ResPackBuildStreamSize(AEntries, AOpts);
   if Total = 0 then Exit;
   if Total > High(SizeUInt) then
@@ -52,7 +50,7 @@ begin
       if ASize = 0 then Exit;
       BytesCopy(Buf + Off, AData, ASize);
       Inc(Off, ASize);
-    end;
+    end; { 单闭包/Build，堆分配一次，零每块分配 }
   try
     ResPackBuildStream(AEntries, AOpts, Sink);
     if Off <> SizeUInt(Total) then
