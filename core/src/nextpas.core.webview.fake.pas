@@ -28,7 +28,8 @@ unit nextpas.core.webview.fake;
        inline 零拷贝，短临界 <1µs，资源 Finalize 释放不丢；性能修复见 impl.inc。
        队列治理（S110+）：内部 eval/pending 裸队列已收敛至 L1 bytes.ops.TCompactLiveRegistry 单源
        inline 零拷贝（gtk 同源 8 组 Registry 单源闭环，VecGrowCapacity 0→4→2× / RemoveAtOrdered 保序 FIFO / Default(T) 释放不丢），
-       裸 GrowQueue/Shift 手写样板已删除，单源零重复。 *}
+       裸 GrowQueue/Shift 手写样板已删除，单源零重复。
+       单源收敛（S111+）：FOutcomes/FEmits/FHistory/FCaptured/On* 余量裸数组+Count+VecGrow 手写已全部收敛至 TCompactLiveRegistry 单源 inline 零拷贝（0→4→2× / Default 释放不丢），与家族 wk/gtk/webview2 8/8 同源闭环，零手写样板。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -120,28 +121,20 @@ type
     FEvalScripts: specialize TCompactLiveRegistry<TFakeEvalRecord>; // bytes.ops 单源 inline 零拷贝，Append/At/SetAt 保序，Default(T) 释放不丢，gtk 同源
     FEvalQueue: specialize TCompactLiveRegistry<TFakeEvalQueueEntry>; // 同源 FIFO：Register 0→4→2× VecGrowCapacity inline 零拷贝，PopFrontOrdered 保序 VecRemoveOrdered/Default 释放不丢
     FPendingEvals: specialize TCompactLiveRegistry<TFakePendingEval>; // 同源 FIFO：Register/RemoveAtOrdered 保序，gtk FPendingEvals 同源
-    FOutcomes: TFakeInvokeOutcomes;
-    FOutcomesCount: Integer;
+    FOutcomes: specialize TCompactLiveRegistry<TFakeInvokeOutcome>; // bytes.ops 单源 inline 0→4→2× VecGrowCapacity 零拷贝，Default 释放不丢，S111+ 8/8 同源闭环，RecordOutcome 乐观重试复用 LNew 零化不放大
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
-    FCapturedEvals: array of string;
-    FCapturedCount: Integer;
-    FEmits: TFakeEmits;
-    FEmitsCount: Integer;
+    FCapturedEvals: specialize TCompactLiveRegistry<string>; // bytes.ops 单源 inline 0→4→2× 零拷贝，Default 释放不丢
+    FEmits: specialize TCompactLiveRegistry<TFakeEmit>; // 同源 inline 零拷贝
     FDroppedEmits: Integer;
     FNavigateCount: Integer;
     FReloadCount: Integer;
     FStopCount: Integer;
-    FHistory: array of string;
-    FHistoryCount: Integer;
+    FHistory: specialize TCompactLiveRegistry<string>; // 同源 inline 零拷贝，RemoveAtOrdered 保序截尾 Default 释放不丢
     FHistIdx: Integer;
-    FOnNavStarted: array of TWebviewNavEventHandler;
-    FOnNavStartedCount: Integer;
-    FOnNavFinished: array of TWebviewNavEventHandler;
-    FOnNavFinishedCount: Integer;
-    FOnNavFailed: array of TWebviewNavFailedHandler;
-    FOnNavFailedCount: Integer;
-    FOnReady: array of TWebviewNotifyHandler;
-    FOnReadyCount: Integer;
+    FOnNavStarted: specialize TCompactLiveRegistry<TWebviewNavEventHandler>; // 同源 inline 零拷贝
+    FOnNavFinished: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFailed: specialize TCompactLiveRegistry<TWebviewNavFailedHandler>;
+    FOnReady: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
     procedure RequireOpen;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);

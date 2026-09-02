@@ -21,7 +21,8 @@ unit nextpas.core.webview.fake.dispatcher;
        高并发突发前预分配消除 PostRef 临界 O(n) 尾延迟，stale 丢弃零泄漏。
        纪律修复：PostRef/Reserve 含 while 竞争重试与 VecRingCopy O(n) 两段式线
        性化，按 design-conventions §2 红线二外联（禁 inline）避 I-Cache 膨胀；
-       内部 VecGrowCapacity/VecRingCopy/VecRingGrowCopy 单源 inline 零拷贝，零 mod/div 热点。 *}
+       内部 VecGrowCapacity/VecRingCopy/VecRingGrowCopy 单源 inline 零拷贝，零 mod/div 热点。
+       同构说明：上层 FRing/FHead/FCount 环形 FIFO 管理与 nextpas.core.window.fake.TFakeDispatcher 同构，双处各 thin-forward 至 L1 bytes.ops 单源 inline 零拷贝（VecGrowCapacity 0→4→2× / VecRingCopy/VecRingGrowCopy 两段式免模，零额外调用，managed 保 refcnt/blittable 单 Move 零拷贝）；底层已单源，上层仍双份薄封装，抽为通用 RingQueue<T>（L1 bytes.ops VecRing* / L2 collections.circularbuffer/deque）为 S* 候选，当前已零拷贝单源、分支免 mod/div、低拷贝，低优先级暂保留双封装，缺能力先反哺 Owner 评审后单源落地，守四件套与 L0-L3。 *}
 
 {$I nextpas.core.settings.inc}
 

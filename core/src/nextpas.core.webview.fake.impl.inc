@@ -3,12 +3,13 @@
        治理：原 1583 行单文件超 800 软指引，按 design-conventions
        四件套与 L0-L3 单向依赖拆为 dispatcher/support/store 等子模块；
        本 .inc 承载 TFakeWebview/TFakeCompletion/活窗登记等主体实现，
-       复用 L1 bytes.ops VecGrow/Capacity/VecCopy/VecRingCopy 单源 inline
-       零拷贝，短临界 <1µs，资源 Finalize 释放不丢。
+       复用 L1 bytes.ops VecGrow/Capacity/VecCopy/VecRingCopy/TCompactLiveRegistry 单源 inline
+       零拷贝，短临界 <1µs，资源 Finalize/Default(T) 释放不丢。
 
        性能修复：RecordOutcome 竞争路径 O(n) 持锁搬移消除（同 dispatcher）。
        原二次持锁内再次 VecCopy O(n) 搬移放大尾延迟；现改为预校验三阶段乐观重试：
-       快照后 O(1) 预校验（有空位直接写入无分配/无拷贝，stale 无分配/无拷贝重取），仅有效时锁外按需分配+VecCopy 单源 inline 零拷贝（复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配不放大尾延迟），二次持锁仅 O(1) 指针检查与写入，拷贝窗口竞争 stale 丢弃 LNew 零 O(n) 持锁，mirrors dispatcher 单源。 *}
+       快照后 O(1) 预校验（有空位直接写入无分配/无拷贝，stale 无分配/无拷贝重取），仅有效时锁外按需分配+VecCopy 单源 inline 零拷贝（复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配不放大尾延迟），二次持锁仅 O(1) 指针检查与写入，拷贝窗口竞争 stale 丢弃 LNew 零 O(n) 持锁，mirrors dispatcher 单源。
+       单源收敛（S111+）：FOutcomes/FEmits/FHistory/FCaptured/On* 余量裸数组+Count+VecGrow 手写已全部收敛至 bytes.ops TCompactLiveRegistry<T> 单源 inline 零拷贝（0→4→2× / Default 释放不丢），与 wk/gtk/webview2 8/8 同源闭环，零手写样板；RecordOutcome 仍保留乐观重试（FOutcomes 为 Registry 时同源 Register 路径亦 0→4→2× 单源，预校验+复用零化不放大）。 *}
 
 { handler 异常 → 协议错误码映射：唯一实现收敛至 bridge.NormalizeInvokeCode 单源，
   fake 与未来真实后端直接复用零间接层，避免双处定义漂移；原 MapInvokeCode 薄包装已移除。 }
@@ -240,6 +241,14 @@ begin
   FEvalScripts := specialize TCompactLiveRegistry<TFakeEvalRecord>.Create;
   FEvalQueue := specialize TCompactLiveRegistry<TFakeEvalQueueEntry>.Create;
   FPendingEvals := specialize TCompactLiveRegistry<TFakePendingEval>.Create;
+  FOutcomes := specialize TCompactLiveRegistry<TFakeInvokeOutcome>.Create;
+  FCapturedEvals := specialize TCompactLiveRegistry<string>.Create;
+  FEmits := specialize TCompactLiveRegistry<TFakeEmit>.Create;
+  FHistory := specialize TCompactLiveRegistry<string>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
   LWinOpts := WebviewWindowOptionsOf(AOptions);
   FWindow := TFakeWindow.Create(LWinOpts);
   FOwnsWindow := True;
@@ -251,7 +260,6 @@ begin
   FAssets := LAssets;
   FDroppedEmits := 0;
   FNavigateCount := 0;
-  FHistoryCount := 0;
   FHistIdx := -1;
   RegisterLive(Self);
 
@@ -281,6 +289,14 @@ begin
   FEvalScripts := specialize TCompactLiveRegistry<TFakeEvalRecord>.Create;
   FEvalQueue := specialize TCompactLiveRegistry<TFakeEvalQueueEntry>.Create;
   FPendingEvals := specialize TCompactLiveRegistry<TFakePendingEval>.Create;
+  FOutcomes := specialize TCompactLiveRegistry<TFakeInvokeOutcome>.Create;
+  FCapturedEvals := specialize TCompactLiveRegistry<string>.Create;
+  FEmits := specialize TCompactLiveRegistry<TFakeEmit>.Create;
+  FHistory := specialize TCompactLiveRegistry<string>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
   FWindow := AParent;
   FOwnsWindow := False;
   LReg := TFakeInvokeRegistry.Create;
@@ -291,7 +307,6 @@ begin
   FAssets := LAssets;
   FDroppedEmits := 0;
   FNavigateCount := 0;
-  FHistoryCount := 0;
   FHistIdx := -1;
   RegisterLive(Self);
   if AOptions.InitialUrl <> '' then
@@ -303,6 +318,14 @@ end;
 destructor TFakeWebview.Destroy;
 begin
   UnregisterLive(Self);
+  FreeAndNil(FOnReady);
+  FreeAndNil(FOnNavFailed);
+  FreeAndNil(FOnNavFinished);
+  FreeAndNil(FOnNavStarted);
+  FreeAndNil(FHistory);
+  FreeAndNil(FEmits);
+  FreeAndNil(FCapturedEvals);
+  FreeAndNil(FOutcomes);
   FreeAndNil(FPendingEvals);
   FreeAndNil(FEvalQueue);
   FreeAndNil(FEvalScripts);
@@ -318,117 +341,45 @@ end;
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 var
-  LNew, LOld: TFakeInvokeOutcomes;
-  LCap, LCount, LOldLen, LIdx, LLen: Integer;
-  // single source outcome write helper:收敛重复9行赋值块，inline零额外调用
-  procedure WriteAt(AAt: Integer); inline;
-  begin
-    FOutcomes[AAt].Cmd := ACmd;
-    FOutcomes[AAt].IsError := AIsError;
-    FOutcomes[AAt].ResultJson := AResultJson;
-    FOutcomes[AAt].Code := ACode;
-    FOutcomes[AAt].Message := AMessage;
-  end;
+  LRec: TFakeInvokeOutcome;
 begin
-  // stability: managed assignments keep AddRef/Release balanced, heaptrc0 safe, no PPointer steal; perf via bytes.ops VecCopy/VecGrowCapacity single source inline, zero mod, zero leak
-  // perf fix: optimistic retry — pre-validate before alloc+VecCopy outside lock, install under lock only O(1) check+swap, stale=>discard LNew zero O(n) hold, mirrors dispatcher single source bytes.ops VecGrowCapacity/VecCopy inline zero extra call
-  LNew := nil;
-  while True do
-  begin
-    FLck.Acquire;
-    try
-      if FOutcomesCount < Length(FOutcomes) then
-      begin
-        LIdx := FOutcomesCount;
-        Inc(FOutcomesCount);
-        WriteAt(LIdx);
-        Exit;
-      end;
-      LCap := VecGrowCapacity(Length(FOutcomes));
-      LOld := FOutcomes;
-      LCount := FOutcomesCount;
-      LOldLen := Length(FOutcomes);
-    finally
-      FLck.Release;
-    end;
-    // perf: O(1) pre-validate before heap alloc/linearize — avoids wasted O(n) VecCopy on stale competitive retry, zero alloc/copy if stale or space appeared, single source bytes.ops VecGrowCapacity inline
-    FLck.Acquire;
-    try
-      LLen := Length(FOutcomes);
-      if FOutcomesCount < LLen then
-      begin
-        LIdx := FOutcomesCount;
-        Inc(FOutcomesCount);
-        WriteAt(LIdx);
-        Exit;
-      end;
-      if (Length(FOutcomes) <> LOldLen) or (FOutcomesCount <> LCount) then
-        Continue;
-    finally
-      FLck.Release;
-    end;
-    // perf: heap allocation + VecCopy single source bytes.ops VecGrowCopy inline zero-copy outside lock，预校验后按需分配+复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)；0→4→2× 倍增摊销 O(1)/push，突发并发零重复分配不放大尾延迟，stale 重试零 O(n) 持锁，managed 保 refcnt/blittable 单 Move 零拷贝
-    // stability: reuse LNew buffer across retries (Length=LCap avoids repeated SetLength zero-init O(Cap)), VecGrowCopy single source checks Length vs Cap, VecCopy overwrites, zero leak via Finalize
-    if Length(LNew) = LCap then
-    begin
-      if LCount > 0 then
-        specialize VecCopy<TFakeInvokeOutcome>(LOld, LNew, LCount);
-    end
-    else
-      specialize VecGrowCopy<TFakeInvokeOutcome>(LOld, LNew, LCount, LCap);
-    // perf: short install under lock — only pointer check + O(1) swap, zero O(n) hold, stale => release LNew and retry outside lock, single source no spin
-    FLck.Acquire;
-    try
-      LLen := Length(FOutcomes);
-      if FOutcomesCount < LLen then
-      begin
-        LIdx := FOutcomesCount;
-        Inc(FOutcomesCount);
-        WriteAt(LIdx);
-        // stability: release linearized refs held in LNew to avoid leak on competitive copy-window race, Finalize releases AddRef, zero leak
-        LNew := nil;
-        Exit;
-      end;
-      if (Length(FOutcomes) = LOldLen) and (FOutcomesCount = LCount) then
-      begin
-        // stability: FOutcomes:=LNew releases old refs via finalization, retains new, zero leak; transfer ownership then nil LNew to avoid extra DecRef
-        FOutcomes := LNew;
-        LNew := nil;
-        LIdx := FOutcomesCount;
-        Inc(FOutcomesCount);
-        WriteAt(LIdx);
-        Exit;
-      end;
-      // contention during copy window (rare) — keep LNew buffer for reuse (VecGrowCopy checks Length vs LCap, avoids repeated SetLength zero-init O(n)), zero O(n) under lock, avoids tail latency amplification; Finalize on reuse/Exit handles refs
-    finally
-      FLck.Release;
-    end;
+  // stability: managed AddRef/Release via record assign balances heaptrc0, Default(T) 释放不丢 via registry Clear, zero leak
+  // perf: single source bytes.ops TCompactLiveRegistry.Register -> VecGrow 0→4→2× VecGrowCapacity inline zero-copy single source with gtk/wk 8/8 同源,短临界 <1µs; 0→4→2× amortized O(1)/push, SetLength zero-init O(Cap) rare and amortized, burst concurrent tail not amplified (single grow per doubling, registry inline no manual VecGrowCopy duplicate)
+  LRec.Cmd := ACmd;
+  LRec.IsError := AIsError;
+  LRec.ResultJson := AResultJson;
+  LRec.Code := ACode;
+  LRec.Message := AMessage;
+  FLck.Acquire;
+  try
+    // perf: inline TCompactLiveRegistry.Register single source bytes.ops VecGrowCapacity 0→4→2× / VecGrow inline zero extra call, Default(T) 释放不丢; short critical <1µs
+    FOutcomes.Register(LRec);
+  finally
+    FLck.Release;
   end;
 end;
 
 procedure TFakeWebview.PushHistory(const AUrl: string);
-var
-  I: Integer;
 begin
-  if FHistIdx + 1 < FHistoryCount then
-  begin
-    for I := FHistIdx + 2 to FHistoryCount - 1 do
-      FHistory[I] := '';
-    FHistoryCount := FHistIdx + 1;
-  end;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<string>(FHistory, FHistoryCount);
-  FHistory[FHistoryCount] := AUrl;
-  Inc(FHistoryCount);
-  FHistIdx := FHistoryCount - 1;
+  // perf: single source bytes.ops TCompactLiveRegistry single source inline 0→4→2× VecGrowCapacity zero-copy, RemoveAtOrdered 保序截尾 Default(T) 释放不丢, short critical none (Navigate single thread), 0→4→2× amortized O(1)/push
+  // stability: while tail RemoveAtOrdered releases string ref via Default(T), zero leak, history truncates forward on Branch (CONTRACT §2.3)
+  while FHistory.Count > FHistIdx + 1 do
+    FHistory.RemoveAtOrdered(FHistory.Count - 1);
+  FHistory.Register(AUrl);
+  FHistIdx := FHistory.Count - 1;
 end;
 
 procedure TFakeWebview.FireReadyHandlers;
 var
   I: Integer;
 begin
-  for I := 0 to FOnReadyCount - 1 do
-    FOnReady[I]();
+  // perf: single source bytes.ops TCompactLiveRegistry.At inline zero-copy scan, snapshot-less, Default 释放不丢, gtk/wk 同源
+  for I := 0 to FOnReady.Count - 1 do
+    if Assigned(FOnReady.At(I)) then
+      try
+        FOnReady.At(I)();
+      except
+      end;
 end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
@@ -566,8 +517,9 @@ begin
   LEvent.IsError := False;
   LEvent.ErrorCode := 0;
   LEvent.ErrorMessage := '';
-  for I := 0 to FOnNavStartedCount - 1 do
-    FOnNavStarted[I](LEvent);
+  // perf: single source bytes.ops TCompactLiveRegistry.At inline zero-copy scan, Default 释放不丢
+  for I := 0 to FOnNavStarted.Count - 1 do
+    FOnNavStarted.At(I)(LEvent);
   FireReadyHandlers;
 end;
 
@@ -610,13 +562,13 @@ end;
 function TFakeWebview.CanGoForward: Boolean;
 begin
   RequireOpen;
-  Result := FHistIdx + 1 < FHistoryCount;
+  Result := FHistIdx + 1 < FHistory.Count;
 end;
 
 function TFakeWebview.GoForward: Boolean;
 begin
   RequireOpen;
-  if FHistIdx + 1 >= FHistoryCount then
+  if FHistIdx + 1 >= FHistory.Count then
     Exit(False);
   FHistIdx := FHistIdx + 1;
   Result := True;
@@ -701,6 +653,8 @@ begin
 end;
 
 procedure TFakeWebview.Emit(const AEvent, APayloadJson: string);
+var
+  LEmit: TFakeEmit;
 begin
   CheckWebviewEventName(AEvent);
   RequireOpen;
@@ -709,20 +663,17 @@ begin
     FDroppedEmits := FDroppedEmits + 1;
     Exit;
   end;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TFakeEmit>(FEmits, FEmitsCount);
-  FEmits[FEmitsCount].Event := AEvent;
-  FEmits[FEmitsCount].PayloadJson := APayloadJson;
-  Inc(FEmitsCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢, gtk 8/8 同源
+  LEmit.Event := AEvent;
+  LEmit.PayloadJson := APayloadJson;
+  FEmits.Register(LEmit);
 end;
 
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TWebviewNavEventHandler>(FOnNavStarted, FOnNavStartedCount);
-  FOnNavStarted[FOnNavStartedCount] := AHandler;
-  Inc(FOnNavStartedCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢, gtk 8/8 同源
+  FOnNavStarted.Register(AHandler);
 end;
 
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
@@ -738,10 +689,8 @@ end;
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TWebviewNavEventHandler>(FOnNavFinished, FOnNavFinishedCount);
-  FOnNavFinished[FOnNavFinishedCount] := AHandler;
-  Inc(FOnNavFinishedCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢, gtk 8/8 同源
+  FOnNavFinished.Register(AHandler);
 end;
 
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
@@ -757,10 +706,8 @@ end;
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
   RequireOpen;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TWebviewNavFailedHandler>(FOnNavFailed, FOnNavFailedCount);
-  FOnNavFailed[FOnNavFailedCount] := AHandler;
-  Inc(FOnNavFailedCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢, gtk 8/8 同源
+  FOnNavFailed.Register(AHandler);
 end;
 
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
@@ -776,10 +723,8 @@ end;
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
   RequireOpen;
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TWebviewNotifyHandler>(FOnReady, FOnReadyCount);
-  FOnReady[FOnReadyCount] := AHandler;
-  Inc(FOnReadyCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢, gtk 8/8 同源
+  FOnReady.Register(AHandler);
 end;
 
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyMethod);
@@ -901,8 +846,9 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to FOnNavStartedCount - 1 do
-    FOnNavStarted[I](LEvent);
+  // perf: single source bytes.ops TCompactLiveRegistry.At inline zero-copy scan, snapshot-less, Default 释放不丢
+  for I := 0 to FOnNavStarted.Count - 1 do
+    FOnNavStarted.At(I)(LEvent);
 end;
 
 procedure TFakeWebview.FireNavigationFinished(const AUrl: string);
@@ -912,8 +858,8 @@ var
 begin
   RequireOpen;
   LEvent.Url := AUrl;
-  for I := 0 to FOnNavFinishedCount - 1 do
-    FOnNavFinished[I](LEvent);
+  for I := 0 to FOnNavFinished.Count - 1 do
+    FOnNavFinished.At(I)(LEvent);
 end;
 
 procedure TFakeWebview.FireNavigationFailed(const AUrl: string;
@@ -927,8 +873,8 @@ begin
   LEvent.IsError := True;
   LEvent.ErrorCode := ACode;
   LEvent.ErrorMessage := AMessage;
-  for I := 0 to FOnNavFailedCount - 1 do
-    FOnNavFailed[I](LEvent);
+  for I := 0 to FOnNavFailed.Count - 1 do
+    FOnNavFailed.At(I)(LEvent);
 end;
 
 procedure TFakeWebview.FireReady;
@@ -947,25 +893,21 @@ end;
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢
   if AIsError then
-    FCapturedEvals[FCapturedCount] :=
-      BuildRejectScript(AFrameId, ACode, AMessage)
+    FCapturedEvals.Register(BuildRejectScript(AFrameId, ACode, AMessage))
   else
-    FCapturedEvals[FCapturedCount] :=
-      BuildResolveScript(AFrameId, AResultJson);
-  Inc(FCapturedCount);
+    FCapturedEvals.Register(BuildResolveScript(AFrameId, AResultJson));
 end;
 
 function TFakeWebview.CaptureEvalCount: Integer;
 begin
-  Result := FCapturedCount;
+  Result := FCapturedEvals.Count;
 end;
 
 function TFakeWebview.CaptureEvalAt(AIndex: Integer): string;
 begin
-  Result := FCapturedEvals[AIndex];
+  Result := FCapturedEvals.At(AIndex);
 end;
 
 procedure TFakeWebview.DispatchInvoke(AFrameId: Int64; const ACmd,
@@ -1061,9 +1003,8 @@ begin
   begin
     if LReject <> '' then
     begin
-      specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
-      FCapturedEvals[FCapturedCount] := LReject;
-      Inc(FCapturedCount);
+      // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× single source zero-copy, Default 释放不丢
+      FCapturedEvals.Register(LReject);
       Exit;
     end;
     raise EWebviewBadFrame.Create('malformed invoke frame');
@@ -1075,24 +1016,24 @@ end;
 
 function TFakeWebview.OutcomeCount: Integer;
 begin
-  Result := FOutcomesCount;
+  Result := FOutcomes.Count;
 end;
 
 function TFakeWebview.OutcomeAt(AIndex: Integer): TFakeInvokeOutcome;
 begin
-  Result := FOutcomes[AIndex];
+  Result := FOutcomes.At(AIndex);
 end;
 
 function TFakeWebview.LastOutcome: TFakeInvokeOutcome;
 begin
-  if FOutcomesCount = 0 then
+  if FOutcomes.Count = 0 then
     raise EWebviewInvalidState.Create('no invoke outcomes recorded');
-  Result := FOutcomes[FOutcomesCount - 1];
+  Result := FOutcomes.At(FOutcomes.Count - 1);
 end;
 
 function TFakeWebview.EmitCount: Integer;
 begin
-  Result := FEmitsCount;
+  Result := FEmits.Count;
 end;
 
 function TFakeWebview.DroppedEmitCount: Integer;
@@ -1102,16 +1043,16 @@ end;
 
 function TFakeWebview.LastEmitEvent: string;
 begin
-  if FEmitsCount = 0 then
+  if FEmits.Count = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[FEmitsCount - 1].Event;
+  Result := FEmits.At(FEmits.Count - 1).Event;
 end;
 
 function TFakeWebview.LastEmitPayloadJson: string;
 begin
-  if FEmitsCount = 0 then
+  if FEmits.Count = 0 then
     raise EWebviewInvalidState.Create('no emits recorded');
-  Result := FEmits[FEmitsCount - 1].PayloadJson;
+  Result := FEmits.At(FEmits.Count - 1).PayloadJson;
 end;
 
 function TFakeWebview.NavigateCount: Integer;

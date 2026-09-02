@@ -230,18 +230,18 @@ begin
 end;
 procedure LoadChangedCb(AView: Pointer; AEvent: guint; AUserData: Pointer); cdecl;
 const WEBKIT_LOAD_STARTED=0; WEBKIT_LOAD_FINISHED=3; WEBKIT_LOAD_FAILED=4;
-var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer;
+var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer; LSnapNav: array of TWebviewNavEventHandler; LSnapFailed: array of TWebviewNavFailedHandler;
 begin case AEvent of
-  WEBKIT_LOAD_STARTED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav started: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavStarted<>nil then for I:=0 to LSelf.FOnNavStarted.Count-1 do if Assigned(LSelf.FOnNavStarted.At(I)) then try LSelf.FOnNavStarted.At(I)(LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationStarted', E); end; end;
-  WEBKIT_LOAD_FINISHED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav finished: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavFinished<>nil then for I:=0 to LSelf.FOnNavFinished.Count-1 do if Assigned(LSelf.FOnNavFinished.At(I)) then try LSelf.FOnNavFinished.At(I)(LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFinished', E); end; LSelf.FireReadyOnce; end;
-  WEBKIT_LOAD_FAILED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav failed(load-changed): '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; LEv.IsError:=True; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFailed', E); end; end;
+  WEBKIT_LOAD_STARTED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav started: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavStarted<>nil then begin LSnapNav:=nil; LSelf.FOnNavStarted.Snapshot(LSnapNav); for I:=0 to High(LSnapNav) do if Assigned(LSnapNav[I]) then try LSnapNav[I](LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationStarted', E); end; LSnapNav:=nil; end; end;
+  WEBKIT_LOAD_FINISHED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav finished: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavFinished<>nil then begin LSnapNav:=nil; LSelf.FOnNavFinished.Snapshot(LSnapNav); for I:=0 to High(LSnapNav) do if Assigned(LSnapNav[I]) then try LSnapNav[I](LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFinished', E); end; LSnapNav:=nil; end; LSelf.FireReadyOnce; end;
+  WEBKIT_LOAD_FAILED: begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav failed(load-changed): '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; LEv.IsError:=True; if LSelf.FOnNavFailed<>nil then begin LSnapFailed:=nil; LSelf.FOnNavFailed.Snapshot(LSnapFailed); for I:=0 to High(LSnapFailed) do if Assigned(LSnapFailed[I]) then try LSnapFailed[I](LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFailed', E); end; LSnapFailed:=nil; end; end;
 end; end;
 procedure LoadFailedCb(AView, ALoadEvent, AFailingUri, AErr, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer; LUriView: TStringView; LUriStr: string;
-begin if LSelf.FClosed then Exit; LUriView:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(AFailingUri)); LUriStr:=LUriView.ToString; if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav failed: '+LUriStr); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LUriStr; LEv.IsError:=True; if AErr<>nil then begin LEv.ErrorCode:=PGError(AErr)^.Code; if PGError(AErr)^.Message<>nil then LEv.ErrorMessage:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(PGError(AErr)^.Message)).ToString; end; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFailed', E); end; end;
+var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer; LUriView: TStringView; LUriStr: string; LSnap: array of TWebviewNavFailedHandler;
+begin if LSelf.FClosed then Exit; LUriView:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(AFailingUri)); LUriStr:=LUriView.ToString; if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('nav failed: '+LUriStr); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LUriStr; LEv.IsError:=True; if AErr<>nil then begin LEv.ErrorCode:=PGError(AErr)^.Code; if PGError(AErr)^.Message<>nil then LEv.ErrorMessage:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(PGError(AErr)^.Message)).ToString; end; if LSelf.FOnNavFailed<>nil then begin LSnap:=nil; LSelf.FOnNavFailed.Snapshot(LSnap); for I:=0 to High(LSnap) do if Assigned(LSnap[I]) then try LSnap[I](LEv); except on E:Exception do ReportGtkHandlerException('OnNavigationFailed', E); end; LSnap:=nil; end; end;
 procedure ScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview absolute AUserData; LNew: Double; I: Integer;
-begin if LSelf.FClosed then Exit; LNew:=LSelf.GetScaleFactor; if Abs(LNew-LSelf.FScale)>1e-9 then begin LSelf.FScale:=LNew; if LSelf.FOnScaleChanged<>nil then for I:=0 to LSelf.FOnScaleChanged.Count-1 do if Assigned(LSelf.FOnScaleChanged.At(I)) then try LSelf.FOnScaleChanged.At(I)(LNew); except on E:Exception do ReportGtkHandlerException('OnScaleChanged', E); end; end; end;
+var LSelf: TGtkWebview absolute AUserData; LNew: Double; I: Integer; LSnap: array of TWebviewScaleHandler;
+begin if LSelf.FClosed then Exit; LNew:=LSelf.GetScaleFactor; if Abs(LNew-LSelf.FScale)>1e-9 then begin LSelf.FScale:=LNew; if LSelf.FOnScaleChanged<>nil then begin LSnap:=nil; LSelf.FOnScaleChanged.Snapshot(LSnap); for I:=0 to High(LSnap) do if Assigned(LSnap[I]) then try LSnap[I](LNew); except on E:Exception do ReportGtkHandlerException('OnScaleChanged', E); end; LSnap:=nil; end; end; end;
 function ViewHash(AKey: Pointer): UInt32; inline;
 begin Result:=nextpas.core.webview.gtk.viewmap.ViewHash(AKey); end;
 function ViewMapFindLocked(AView: Pointer): TGtkWebview;
@@ -327,16 +327,18 @@ begin inherited Create; DoCommonInit(nil, AOptions); end;
 constructor TGtkWebview.CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions);
 begin inherited Create; if AParent=nil then raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn'); DoCommonInit(AParent, AOptions); end;
 destructor TGtkWebview.Destroy;
-var I: Integer; LRec: PEvalRec;
+var I: Integer; LRec: PEvalRec; LSnap: array of PEvalRec;
 begin if FOwnsContext and (FContext<>nil) then begin nextpas.core.webview.gtk.shell.ShellForgetSchemeContext(FContext); G_object_unref(FContext); FContext:=nil; end; DoUnregisterLive; FWindow:=nil; FWin:=nil; FView:=nil; FreeAndNil(FOnScaleChanged); FreeAndNil(FOnReady); FreeAndNil(FOnWindowClosed); FreeAndNil(FOnNavFailed); FreeAndNil(FOnNavFinished); FreeAndNil(FOnNavStarted);
   if FPendingEvals<>nil then
   begin
-    for I:=0 to FPendingEvals.Count-1 do
+    LSnap:=nil; FPendingEvals.Snapshot(LSnap);
+    for I:=0 to High(LSnap) do
     begin
-      LRec:=FPendingEvals.At(I);
+      LRec:=LSnap[I];
       nextpas.core.webview.eval.EvalLiveRemove(Pointer(LRec));
       FreeEvalRec(LRec);
     end;
+    LSnap:=nil;
     FreeAndNil(FPendingEvals);
   end;
   FreeAndNil(FIdleTags); FreeAndNil(FPendingLock); inherited Destroy; end;
@@ -352,7 +354,7 @@ begin
     if FPendingLock <> nil then FPendingLock.Release;
   end;
 end;
-procedure TGtkWebview.FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>); var I: Integer; begin if AReg=nil then Exit; for I:=0 to AReg.Count-1 do if Assigned(AReg.At(I)) then try AReg.At(I)(); except on E:Exception do ReportGtkHandlerException('FireNotifyHandlers', E); end; end;
+procedure TGtkWebview.FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>); var I: Integer; LSnap: array of TWebviewNotifyHandler; begin if AReg=nil then Exit; LSnap:=nil; AReg.Snapshot(LSnap); for I:=0 to High(LSnap) do if Assigned(LSnap[I]) then try LSnap[I](); except on E:Exception do ReportGtkHandlerException('FireNotifyHandlers', E); end; LSnap:=nil; end;
 procedure TGtkWebview.SetupSessionContext; begin FOwnsContext:=False; if FOptions.EphemeralSession then FOwnsContext:=True else if FOptions.DataDirectory<>'' then FOwnsContext:=True; end;
 function TGtkWebview.ResolveContext: Pointer; var LManager: Pointer; begin if not FOwnsContext then Exit(WEBKIT_web_context_get_default()); if FOptions.EphemeralSession then Result:=WEBKIT_web_context_new_ephemeral() else begin LManager:=WEBKIT_website_data_manager_new('base-data-directory',PAnsiChar(FOptions.DataDirectory),Pointer(nil)); if LManager=nil then raise EWebviewNotInitialized.Create('webkit_website_data_manager_new failed (data directory rejected)'); Result:=WEBKIT_web_context_new_with_website_data_manager(LManager); G_object_unref(LManager); end; FContext:=Result; end;
 procedure TGtkWebview.HandleWindowEvent(const AEvent: TWindowEvent); begin if FClosed then Exit; case AEvent.Kind of weCloseRequested,weClosed: Close; weScaleChanged,weDpiChanged: begin FScale:=AEvent.NewScale; FireNotifyHandlers(FOnScaleChanged); end; weResized: ; end; end;
@@ -373,7 +375,7 @@ function TGtkWebview.GetWindow: IWindow; inline; begin Result:=FWindow; end;
 procedure TGtkWebview.AddUserScript(const ASource: string); var LUcm, LScript: Pointer; begin LUcm:=WEBKIT_web_view_get_user_content_manager(FView); LScript:=WEBKIT_user_script_new(PAnsiChar(ASource),WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,nil,nil); WEBKIT_user_content_manager_add_script(LUcm,LScript); WEBKIT_user_script_unref(LScript); end;
 procedure TGtkWebview.WireSignals; begin g_signal_connect_data(FWin,'destroy',@DestroyCb,Self,nil,0); g_signal_connect_data(WEBKIT_web_view_get_user_content_manager(FView),'script-message-received::npw',@ScriptMessageCb,Self,nil,0); WEBKIT_user_content_manager_register_script_message_handler(WEBKIT_web_view_get_user_content_manager(FView),'npw'); AddUserScript(NPW_BRIDGE_SCRIPT); g_signal_connect_data(FView,'load-changed',@LoadChangedCb,Self,nil,0); g_signal_connect_data(FView,'load-failed',@LoadFailedCb,Self,nil,0); g_signal_connect_data(FView,'notify::scale-factor',@ScaleNotifyCb,Self,nil,0); end;
 function TGtkWebview.CurrentUri: string; var LP: PAnsiChar; begin LP:=WEBKIT_web_view_get_uri(FView); Result:=nextpas.core.webview.utils.ViewFromPChar(LP).ToString; end;
-procedure TGtkWebview.FireReadyOnce; var I: Integer; begin if FReadyFired or FClosed then Exit; FReadyFired:=True; if FOnReady<>nil then for I:=0 to FOnReady.Count-1 do if Assigned(FOnReady.At(I)) then try FOnReady.At(I)(); except on E:Exception do ReportGtkHandlerException('OnReady', E); end; end;
+procedure TGtkWebview.FireReadyOnce; var I: Integer; LSnap: array of TWebviewNotifyHandler; begin if FReadyFired or FClosed then Exit; FReadyFired:=True; if FOnReady<>nil then begin LSnap:=nil; FOnReady.Snapshot(LSnap); for I:=0 to High(LSnap) do if Assigned(LSnap[I]) then try LSnap[I](); except on E:Exception do ReportGtkHandlerException('OnReady', E); end; LSnap:=nil; end; end;
 class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string; begin if E is EWebviewInvokeError then Result:=NormalizeInvokeCode(EWebviewInvokeError(E).Code) else Result:=NPW_CODE_HANDLER_ERROR; end;
 procedure TGtkWebview.DispatchFrame(const AFrame: TWebviewFrame);
 begin
@@ -387,12 +389,14 @@ procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef); var LRec:PIdleRec; LTag:
   LTag:=G_idle_add_full(G_PRIORITY_DEFAULT,@IdleTrampoline,LRec,@IdleDestroy); if FIdleTags<>nil then FIdleTags.Register(LTag);
 end;
 procedure TGtkWebview.DropIdlePendings;
-var I: Integer;
+var I: Integer; LSnap: array of guint;
 begin
-  // perf: thin-forward to webview.dispatch Owner single source idle tag registry via bytes.ops TCompactLiveRegistry inline zero-copy (VecGrowCapacity 0→4→2× / VecRemoveSwap O(1)), short critical <1µs pointer-only, Dispose/ Default(T) 释放不丢; stability: G_source_remove 逐源释放不丢，Clear 单所有权
+  // perf: thin-forward to webview.dispatch Owner single source idle tag registry via bytes.ops TCompactLiveRegistry Snapshot SetLength+Move inline 零拷贝 (VecGrowCapacity 0→4→2× / VecRemoveSwap O(1)), short critical <1µs pointer-only, Dispose/ Default(T) 释放不丢, Snapshot inline 零拷贝避 Count 虚调用与重入扩容越界; stability: G_source_remove 逐源释放不丢，Clear 单所有权
   if FIdleTags=nil then Exit;
-  for I:=0 to FIdleTags.Count-1 do
-    G_source_remove(FIdleTags.At(I));
+  LSnap:=nil; FIdleTags.Snapshot(LSnap);
+  for I:=0 to High(LSnap) do
+    G_source_remove(LSnap[I]);
+  LSnap:=nil;
   FIdleTags.Clear;
 end;
 procedure TGtkWebview.SettlePendingOnClose;

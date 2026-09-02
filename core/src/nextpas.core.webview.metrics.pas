@@ -4,6 +4,9 @@ unit nextpas.core.webview.metrics;
        （CONTRACT §1.2 / §7 INV-7 / BRIDGE_PROTOCOL §6）。
        阈值/计数/膨胀水位单源收口于 L2 `nextpas.core.metrics(.base)`，本单元仅为
        兼容 alias 与 inline 薄转发零双写；业务以 CONTRACT 为准、缺能力先反哺 Owner。
+       阈值/膨胀水位每变需两层同步更新属必要兼容别名非重复实现——L2 单源权威
+       （METRICS_MAX_FRAME_BYTES/Metrics*），L3 WEBVIEW_MAX_FRAME_BYTES + 8×
+       WebviewMetrics* inline 薄转发零双写零漂移（bridge.NPW_MAX_FRAME_BYTES 同 alias）。
        性能 inline 薄转发零额外调用（TStringView.Len 零拷贝视图，复用 bytes.ops 单源）、
        稳定 plain 全局零句柄 Default 释放不丢、线程 UI 线程亲和（无 atomic）。 }
 

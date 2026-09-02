@@ -49,12 +49,15 @@ const
 
 type
   { js→native invoke 帧（§3.1）。payload 以零拷贝视图携带；
-    缺省或显式 null 统一为 'null' 视图（零堆分配，Hot Path 零 ToString）。 }
+    缺省或显式 null 统一为 'null' 视图（零堆分配，Hot Path 零 ToString）。
+    悬垂警告（池化单例复用）：Payload 为 TJsonDocument RawSlice 零拷贝视图，指向
+    GBridgeEnv.PooledDoc arena，仅本次 TryDecodeFrame 返回后至下次解码前有效；
+    跨帧缓存会悬垂，需调用方即时消费或经 PayloadJson/ToString 固化为 string；Trim 亦会失效，复用 bytes.ops 零拷贝思想。 }
   TWebviewFrame = record
     Id: Int64;
     Cmd: string;
-    Payload: TStringView;
-    { 兼容：历史 PayloadJson 字符串形态按需 ToString，热路径用 Payload 零拷贝视图直通 }
+    Payload: TStringView; { 池化 RawSlice 零拷贝，悬垂：仅下次解码前有效，跨帧需 ToString 固化 }
+    { 兼容：历史 PayloadJson 字符串形态按需 ToString 固化，热路径用 Payload 零拷贝视图直通；跨帧缓存必须经此固化避免悬垂 }
     function PayloadJson: string; inline;
   end;
 
@@ -72,7 +75,8 @@ function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
 procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 
-{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid. }
+{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid.
+  池化 RawSlice 零拷贝：返回的 TWebviewFrame.Payload 指向 GBridgeEnv.PooledDoc arena，仅下次解码/Trim 前有效；跨帧缓存会悬垂，需即时消费或 PayloadJson.ToString 固化，复用 bytes.ops 零拷贝思想。 }
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 function TryDecodeFrame(const AFrameJson: string;
@@ -85,6 +89,10 @@ function TryDecodeFrame(const AFrameJson: string;
   性能：零拷贝视图判定，解析仅超限路径触发，inline 薄转发。 }
 function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: string): Boolean; overload;
 function TryBuildOversizedReject(const AFrameJson: string; out ARejectScript: string): Boolean; overload; inline;
+
+{ 池化水位回落：1MiB 峰值后 arena 常驻至 finalization 的 Trim 入口，Owner 单源复用 json.parser TrimExcess，idle 时 MaybeTrim 自动回落，长时大帧水位不常驻；inline 零额外调用。 }
+procedure WebviewBridgeTrim; inline;
+function WebviewBridgeNeedsTrim: Boolean; inline;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 须为合法 JSON（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，经 json owner 转义。 }
 function BuildResolveScript(AId: Int64; const AResultJson: string): string;
@@ -225,34 +233,115 @@ uses
 { STA 亲和显式约束 (CONTRACT §4)：池化复用零 heaptrc 泄漏
   单例 TJsonDocument 复用 arena/节点，Parse 重用缓冲零每帧 GetMem churn；
   仅 STA UI 线程允许触碰（Owner 在 initialization 锚定主线程，杜绝首调非 UI 误绑），
-  BridgeRequireSTA inline 零额外调用，复用 bytes.ops 单源思想。 }
+  BridgeRequireSTA inline 零额外调用，复用 bytes.ops 单源思想。
+  Owner 类化单源：TWebviewBridgeEnv 收口 STA+Doc 生命周期，类型封装校验零全局可变散落，复用 metrics Owner 单源思想 inline零额外调用。 }
+
+type
+  TWebviewBridgeEnv = class
+  private
+    FOwnerThread: UInt64;
+    FOwnerInited: Boolean;
+    FDoc: TJsonDocument;
+    FDocInited: Boolean;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure RequireSTA; inline;
+    function PooledDoc: ^TJsonDocument; inline;
+    procedure MaybeTrim; inline;
+    procedure ForceTrim; inline;
+    procedure Done;
+  end;
 
 var
-  GBridgeOwnerThread: UInt64 = 0;
-  GBridgeOwnerInited: Boolean = False;
-  GBridgeDoc: TJsonDocument;
-  GBridgeDocInited: Boolean = False;
+  GBridgeEnv: TWebviewBridgeEnv = nil;
 
+constructor TWebviewBridgeEnv.Create;
+begin
+  inherited Create;
+  FOwnerThread := platform_thread_id;
+  FOwnerInited := True;
+  FDocInited := False;
+end;
+
+destructor TWebviewBridgeEnv.Destroy;
+begin
+  Done;
+  inherited Destroy;
+end;
+
+procedure TWebviewBridgeEnv.Done;
+begin
+  if FDocInited then
+  begin
+    FDoc.Done;
+    FDocInited := False;
+  end;
+  FOwnerInited := False;
+end;
+
+procedure TWebviewBridgeEnv.RequireSTA; inline;
+begin
+  { CONTRACT §4 STA 单线程亲和：Owner 在 initialization 锚定主线程，杜绝首调非 UI 线程误绑；仅 UI 主线程允许编解码/回执构造，inline 零额外调用，类型封装零全局校验漂移 }
+  if FOwnerInited and (platform_thread_id <> FOwnerThread) then
+    raise EWebviewInvalidState.Create('webview bridge STA violation: call only on UI thread');
+end;
+
+function TWebviewBridgeEnv.PooledDoc: ^TJsonDocument; inline;
+begin
+  if not FDocInited then
+  begin
+    FDoc.Init(nil);
+    FDocInited := True;
+  end;
+  Result := @FDoc;
+end;
+
+procedure TWebviewBridgeEnv.MaybeTrim; inline;
+begin
+  { 1MiB 峰值后水位回落：若 arena/节点已膨胀且当前空闲（TryShrink idle 判定），则 Done+Init 释放至初始 32/1KiB，inline 零额外调用，复用 json.parser TrimExcess 单源 bytes.ops思想；避免长时大帧常驻至 finalization }
+  if FDocInited and FDoc.NeedsTrim then
+    FDoc.TrimExcess;
+end;
+
+procedure TWebviewBridgeEnv.ForceTrim; inline;
+begin
+  if FDocInited then
+    FDoc.TrimExcess;
+end;
+
+{ 薄转发兼容：inline 零额外调用，单源收口至 GBridgeEnv 类型封装，消除过程式 var 散落 }
 procedure BridgeRequireSTA; inline;
 begin
-  { CONTRACT §4 STA 单线程亲和：Owner 在 initialization 锚定主线程，杜绝首调非 UI 线程误绑；仅 UI 主线程允许编解码/回执构造，inline 零额外调用 }
-  if GBridgeOwnerInited and (platform_thread_id <> GBridgeOwnerThread) then
-    raise EWebviewInvalidState.Create('webview bridge STA violation: call only on UI thread');
+  if GBridgeEnv <> nil then GBridgeEnv.RequireSTA;
 end;
 
 procedure BridgeEnsureOwner; inline;
 begin
-  { 兼容保留：Owner 已在 initialization 锚定主线程，此处空转杜绝非 UI 首调误绑；BridgeRequireSTA 严格校验 }
+  { 兼容保留：Owner 已在 initialization 经 GBridgeEnv 锚定主线程，此处空转杜绝非 UI 首调误绑；BridgeRequireSTA 严格校验，inline 零额外调用 }
 end;
 
 function BridgePooledDoc: ^TJsonDocument; inline;
 begin
-  if not GBridgeDocInited then
+  { 入口 Trim：下次解码前若上一大帧已膨胀且当前空闲则回收，避免本次 Payload RawSlice 悬垂前误 Trim；Trim 在 PooledDoc 获取时 idle 判定，零额外调用 }
+  if GBridgeEnv <> nil then
   begin
-    GBridgeDoc.Init(nil);
-    GBridgeDocInited := True;
-  end;
-  Result := @GBridgeDoc;
+    GBridgeEnv.MaybeTrim;
+    Result := GBridgeEnv.PooledDoc;
+  end
+  else
+    Result := nil;
+end;
+
+{ 对外 Trim 入口：长时大帧后手动回收，业务可 idle 时调用，inline 薄转发 Owner 单源，复用 json.parser 单源 }
+procedure WebviewBridgeTrim; inline;
+begin
+  if GBridgeEnv <> nil then GBridgeEnv.ForceTrim;
+end;
+
+function WebviewBridgeNeedsTrim: Boolean; inline;
+begin
+  Result := (GBridgeEnv <> nil) and GBridgeEnv.FDocInited and GBridgeEnv.FDoc.NeedsTrim;
 end;
 
 { BridgeTryExtractId: 超限路径 id 提取单源，复用 Parse+Get('id') 逻辑零重复；零拷贝视图，入参 Doc 为池化复用单例（STA 单例复用 arena，零每帧 Init/Done churn） }
@@ -376,7 +465,8 @@ function BridgeNormalizePayload(const APayload: TJsonValue): TStringView; inline
 var
   LView: TStringView;
 begin
-  { perf: pure zero-copy RawSlice 单源，缺省/显式 null 统一 'null' 视图，空切片零堆分配回退 'null'；零 SetString+Move，inline 零拷贝视图，复用 bytes.ops CStrLen/ViewFromPChar 单源思想，消除 JsonStringify/ToString 额外堆分配。 }
+  { perf: pure zero-copy RawSlice 单源，缺省/显式 null 统一 'null' 视图，空切片零堆分配回退 'null'；零 SetString+Move，inline 零拷贝视图，复用 bytes.ops CStrLen/ViewFromPChar 单源思想，消除 JsonStringify/ToString 额外堆分配。
+    悬垂：RawSlice 指向 GBridgeEnv.PooledDoc arena，池化复用仅下次解码/Trim 前有效，跨帧缓存悬垂需 ToString 固化，复用 bytes.ops 零拷贝。 }
   if not APayload.IsValid then
     Exit(TStringView.Create(PAnsiChar('null'), 4));
   if APayload.IsNull then
@@ -462,29 +552,18 @@ begin
   Result := TryBuildOversizedReject(TStringView.FromStr(AFrameJson), ARejectScript);
 end;
 
-function BuildResolveScript(AId: Int64; const AResultJson: string): string;
-var
-  LJson: string;
-  LB: TStringBuilder;
-  LView: TStringView;
+{ 统一脚本构造器：抽 TStringBuilder Init/Reserve/Append+JsonEscapeToBuilder 骨架至单源，复用 text.escape 单源零拷贝，bytes.ops 零拷贝思想；三脚本（Resolve/Reject/Emit）共用 Init+Quoted+Done，消除重复 Reserve/Append 分叉，inline 零额外调用。 }
+procedure BridgeScriptInit(var LB: TStringBuilder; AReserve: SizeUInt); inline;
 begin
-  { 单 Reserve + 单源 JsonEscape 薄转发 L1 text.escape（复用 VecWidth SIMD inline 零拷贝，bytes.ops 单源思想），消除 TStringBuilder Reserve+JsonWriter 双重转义/双重 Reserve 水位膨胀；零拷贝 TStringView 视图 }
-  LJson := AResultJson;
-  if LJson = '' then
-    LJson := 'null';
-  LView := TStringView.FromStr(LJson);
   LB.Init(256);
-  try
-    LB.AppendBytes('__npw.__resolve(', 16);
-    LB.AppendInt(AId);
-    LB.AppendChar(',');
-    LB.AppendChar('"');
-    JsonEscapeToBuilder(LView, LB);
-    LB.AppendBytes('")', 2);
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  LB.Reserve(AReserve);
+end;
+
+procedure BridgeAppendQuotedJson(var LB: TStringBuilder; const AView: TStringView); inline;
+begin
+  LB.AppendChar('"');
+  JsonEscapeToBuilder(AView, LB);
+  LB.AppendChar('"');
 end;
 
 { JsonDoubleEscapeToBuilder 薄转发 L1 text.escape Owner 单源（复用 VecWidth SIMD 单源 inline 零拷贝，bytes.ops 单源）；桥侧零重复循环，inline 薄转发零额外调用。 }
@@ -493,7 +572,31 @@ begin
   nextpas.core.text.escape.JsonDoubleEscapeToBuilder(AView, ADst);
 end;
 
-{ BuildRejectScript 外联：含 SIMD 转义循环禁 inline (design-conventions §2 红线二)，避高频 reject I-Cache 膨胀。 }
+function BuildResolveScript(AId: Int64; const AResultJson: string): string;
+var
+  LJson: string;
+  LB: TStringBuilder;
+  LView: TStringView;
+begin
+  { 统一构造器单源：BridgeScriptInit/AppendQuotedJson 复用 text.escape 单源 SIMD inline 零拷贝，消除双重 Reserve 水位膨胀；零拷贝 TStringView 视图，bytes.ops 单源 }
+  LJson := AResultJson;
+  if LJson = '' then
+    LJson := 'null';
+  LView := TStringView.FromStr(LJson);
+  BridgeScriptInit(LB, SizeUInt(16 + 20 + LView.Len * 2 + 8));
+  try
+    LB.AppendBytes('__npw.__resolve(', 16);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    BridgeAppendQuotedJson(LB, LView);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
+end;
+
+{ BuildRejectScript 外联：含 SIMD 转义循环禁 inline (design-conventions §2 红线二)，避高频 reject I-Cache 膨胀。统一构造器 BridgeScriptInit 单源复用 Reserve/Init 骨架，JsonDoubleEscape 单源零重复。 }
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
@@ -503,9 +606,8 @@ begin
   LCode := NormalizeInvokeCode(ACode);
   LCodeView := TStringView.FromStr(LCode);
   LMsgView := TStringView.FromStr(AMessage);
-  LB.Init(256);
+  BridgeScriptInit(LB, SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
   try
-    LB.Reserve(SizeUInt(32 + LCodeView.Len + LMsgView.Len + 64));
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
     LB.AppendBytes(',"', 2);
@@ -527,25 +629,19 @@ var
   LB: TStringBuilder;
   LEventView, LJsonView: TStringView;
 begin
-  { 单 Init + 双 JsonEscapeToBuilder 直写，消除同一 Builder 上重复 W.Init 覆盖与 Writer 分支开销；
-    单 Reserve + inline 零拷贝视图，复用 bytes.ops 单源思想；性能零额外转义分支。 }
+  { 统一构造器 BridgeScriptInit/AppendQuotedJson 单源，消除同一 Builder 上重复 W.Init 覆盖与 Reserve 分叉；inline 零拷贝视图，复用 bytes.ops 单源思想；性能零额外转义分支。 }
   CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
   LEventView := TStringView.FromStr(AEvent);
   LJsonView := TStringView.FromStr(LJson);
-  LB.Init(256);
+  BridgeScriptInit(LB, SizeUInt(13 + LEventView.Len * 4 + LJsonView.Len * 4 + 16));
   try
-    LB.Reserve(SizeUInt(13 + LEventView.Len * 4 + LJsonView.Len * 4 + 16));
     LB.AppendBytes('__npw.__emit(', 13);
-    LB.AppendChar('"');
-    JsonEscapeToBuilder(LEventView, LB);
-    LB.AppendChar('"');
+    BridgeAppendQuotedJson(LB, LEventView);
     LB.AppendChar(',');
-    LB.AppendChar('"');
-    JsonEscapeToBuilder(LJsonView, LB);
-    LB.AppendChar('"');
+    BridgeAppendQuotedJson(LB, LJsonView);
     LB.AppendChar(')');
     Result := LB.ToString;
   finally
@@ -836,14 +932,13 @@ begin
 end;
 
 initialization
-  GBridgeOwnerThread := platform_thread_id;
-  GBridgeOwnerInited := True;
+  GBridgeEnv := TWebviewBridgeEnv.Create;
 
 finalization
-  if GBridgeDocInited then
+  if GBridgeEnv <> nil then
   begin
-    GBridgeDoc.Done;
-    GBridgeDocInited := False;
+    GBridgeEnv.Free;
+    GBridgeEnv := nil;
   end;
 
 end.

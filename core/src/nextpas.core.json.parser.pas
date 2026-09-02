@@ -58,6 +58,13 @@ type
     function Input: TStringView; inline;
     procedure EnsureObjectIndex(AObjectIdx: UInt32);
     function LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
+    { Arena waterline observability + Trim (bridge peak Trim single source, bytes.ops思想零拷贝inline). }
+    function ArenaCapacity: SizeUInt; inline;
+    function ArenaUsed: SizeUInt; inline;
+    function NodeCapacity: UInt32; inline;
+    function OverflowCount: UInt32; inline;
+    function NeedsTrim: Boolean; inline;
+    procedure TrimExcess; { Shrink to initial if oversized and idle, Done+Init single source, inline零拷贝 }
   end;
 
 function JsonParseDoc(const AInput: TStringView;
@@ -307,6 +314,45 @@ end;
 function TJsonDocument.Input: TStringView;
 begin
   Result := FInput;
+end;
+
+function TJsonDocument.ArenaCapacity: SizeUInt; inline;
+begin
+  Result := FStrArenaCap;
+end;
+
+function TJsonDocument.ArenaUsed: SizeUInt; inline;
+begin
+  Result := FStrArenaUsed;
+end;
+
+function TJsonDocument.NodeCapacity: UInt32; inline;
+begin
+  Result := FNodeCap;
+end;
+
+function TJsonDocument.OverflowCount: UInt32; inline;
+begin
+  Result := FStrOverflowCount;
+end;
+
+function TJsonDocument.NeedsTrim: Boolean; inline;
+begin
+  { Waterline: >4× initial node/arena or overflow>32, single source bytes.ops思想 inline零拷贝, 零堆分配 }
+  Result := (FNodeCap > INITIAL_NODE_CAP * 8) or (FStrArenaCap > INITIAL_ARENA_CAP * 64) or (FStrOverflowCap > 32);
+end;
+
+procedure TJsonDocument.TrimExcess;
+var
+  LAlloc: TMemAllocator;
+begin
+  if not FInited then Exit;
+  if not NeedsTrim then Exit;
+  { Only shrink when idle waterline low (used < cap/4, count < cap/4), avoid thrash on sustained large frames; single source Done+Init, releases peak 1MiB arena till next large frame, inline零额外调用 }
+  if (FNodeCount > FNodeCap div 4) or (FStrArenaUsed > FStrArenaCap div 4) or (FStrOverflowCount > FStrOverflowCap div 4) then Exit;
+  LAlloc := FAllocator;
+  Done;
+  Init(LAlloc);
 end;
 
 { Parser implementation }

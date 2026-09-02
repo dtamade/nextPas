@@ -38,6 +38,11 @@ function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array
 function EvalTryMarkDoneInline(ASlot: PEvalSlot): Boolean; inline;
 procedure EvalSettleInline(ASlot: PEvalSlot; AOk: Boolean; const AText: string); inline;
 procedure EvalClearRegistryInline(AReg: TEvalRegistry; ALock: TMutex); inline;
+// global live set single source via bytes.ops TCompactLiveRegistry<Pointer> inline zero-copy, short critical <1µs, bytes.ops VecGrow 0→4→2× single source, stability Default(T) not lost — guards UAF when Close freed rec before callback, exactly-once via live set + Done guard
+procedure EvalLiveInit; inline;
+procedure EvalLiveFini; inline;
+procedure EvalLiveAdd(APtr: Pointer); inline;
+function EvalLiveRemove(APtr: Pointer): Boolean; inline;
 
 implementation
 
@@ -122,5 +127,54 @@ begin
   if ALock <> nil then ALock.Acquire;
   try AReg.Clear; finally if ALock <> nil then ALock.Release; end;
 end;
+
+var
+  GEvalLive: specialize TCompactLiveRegistry<Pointer> = nil;
+  GEvalLiveLock: TMutex = nil;
+
+procedure EvalLiveInit; inline;
+begin
+  // perf: lazy init single source bytes.ops TCompactLiveRegistry, inline zero-copy, short critical <1µs, VecGrow 0→4→2× single source; stability: per-owner single ownership, FreeAndNil not lost
+  if GEvalLive = nil then GEvalLive := specialize TCompactLiveRegistry<Pointer>.Create;
+  if GEvalLiveLock = nil then GEvalLiveLock := TMutex.Create;
+end;
+
+procedure EvalLiveFini; inline;
+begin
+  FreeAndNil(GEvalLive);
+  FreeAndNil(GEvalLiveLock);
+end;
+
+procedure EvalLiveAdd(APtr: Pointer); inline;
+begin
+  // perf: inline thin-forward to bytes.ops TCompactLiveRegistry.Register VecGrow 0→4→2× inline zero-copy, short critical <1µs pointer-only, single source; stability: lazy init guards nil, Default(T) not lost
+  if APtr = nil then Exit;
+  if (GEvalLive = nil) or (GEvalLiveLock = nil) then EvalLiveInit;
+  if GEvalLiveLock <> nil then GEvalLiveLock.Acquire;
+  try
+    if GEvalLive <> nil then GEvalLive.Register(APtr);
+  finally
+    if GEvalLiveLock <> nil then GEvalLiveLock.Release;
+  end;
+end;
+
+function EvalLiveRemove(APtr: Pointer): Boolean; inline;
+var LBefore: Integer;
+begin
+  // perf: O(1) VecRemoveSwap bytes.ops single source inline zero-copy, short critical <1µs, single source; stability: returns whether was live to guard UAF double settlement, Default(T) nils not lost
+  Result := False;
+  if (APtr = nil) or (GEvalLive = nil) then Exit(False);
+  if GEvalLiveLock <> nil then GEvalLiveLock.Acquire;
+  try
+    LBefore := GEvalLive.Count;
+    GEvalLive.Unregister(APtr);
+    Result := GEvalLive.Count < LBefore;
+  finally
+    if GEvalLiveLock <> nil then GEvalLiveLock.Release;
+  end;
+end;
+
+initialization EvalLiveInit;
+finalization EvalLiveFini;
 
 end.
