@@ -88,6 +88,8 @@ procedure ArchiveEnsureNoSymlinkInPath(const APath: string);
 procedure ArchiveEnsureNoSymlinkInPathLen(const APath: string; ALen: SizeUInt);
 { 父目录一站式：增量前缀单遍 Ensure+Mkdir，避免外层 Copy 父串分配，复用 ArchiveJoinPath 单源，fail-closed }
 procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
+{ 同父缓存单源：消除 tar.fs 手写 CopyMemory+CompareMem 双重 if 展开，inline 薄转发复用 bytes.ops.CopyMemory/base.utils.CompareMem 单源零拷贝，联邦单缝 via archive.fs，tar/zip 共用，零额外分配 }
+procedure ArchiveSyncParentCache(const AFull: string; var ALastParent: string; var AParentLen: SizeUInt); inline;
 { fs 单缝转发：tar/zip 经 archive 联邦，消除直接 uses nextpas.core.fs 张力；inline 薄转发单源 }
 function ArchiveStat(const APath: string): TFileInfo; inline;
 function ArchiveLstat(const APath: string): TFileInfo; inline;
@@ -443,6 +445,29 @@ begin
     finally
       P[LClamped] := Saved;
     end;
+  end;
+end;
+
+procedure ArchiveSyncParentCache(const AFull: string; var ALastParent: string; var AParentLen: SizeUInt); inline;
+var
+  LSep: SizeInt;
+begin
+  // perf: inline + bytes.ops 单源 CopyMemory/CompareMem 零拷贝 PByte 视图，单源于 archive.fs 联邦，消除 tar.fs 55行手写双重 if 展开，零额外分配，L2 单缝
+  LSep := StringLastIndexOf(AFull, '/');
+  if LSep <= 0 then Exit;
+  AParentLen := SizeUInt(LSep - 1);
+  if AParentLen <> SizeUInt(Length(ALastParent)) then
+  begin
+    ArchivePrepareParentDir(AFull, AParentLen);
+    SetLength(ALastParent, AParentLen);
+    if AParentLen > 0 then
+      CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
+  end
+  else if (AParentLen > 0) and not CompareMem(Pointer(@AFull[1]), Pointer(@ALastParent[1]), AParentLen) then
+  begin
+    ArchivePrepareParentDir(AFull, AParentLen);
+    SetLength(ALastParent, AParentLen);
+    CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
   end;
 end;
 

@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.tar.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.log.intf;
 
 type
   TTarWriter = class
@@ -15,10 +16,10 @@ type
     FDst: IWriter;
     FFinished: Boolean;
     FIOBuf: TBytes; // pooled I/O buffer via bytes.ops single source (BytesEnsureCapacity), high-water retained, zero GetMem/FreeMem jitter
+    FLogger: ILogger; // observability for Destroy best-effort Finish, default NullLogger zero-alloc inline
     procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
-    procedure MaybeReclaimIOBuf(const AHintSize: Int64); inline;
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -37,6 +38,7 @@ type
     procedure CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
   public
     constructor Create(const ADst: IWriter);
+    procedure SetLogger(const ALogger: ILogger); inline;
     procedure AddEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure AddEntryWithOptions(const AName: string; const AData: TBytes; const AOpts: TTarAddOptions); overload;
     procedure AddFile(const AName: string; const AData: TBytes; AMode: Cardinal = C_TAR_DEFAULT_FILE_MODE; AMTimeUnix: Int64 = 0);
@@ -58,15 +60,11 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.builder,
-  nextpas.core.tar.common,
-  nextpas.core.log.intf;
+  nextpas.core.tar.common;
 
 const
   C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
   C_STREAM_BUF_INIT = C_TAR_IOBUF_INIT;
-
-var
-  GZero512: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -89,6 +87,15 @@ begin
     raise EArgumentError.Create('tar: destination writer is nil');
   FDst := ADst;
   FIOBuf := nil;
+  FLogger := NullLogger;
+end;
+
+procedure TTarWriter.SetLogger(const ALogger: ILogger); inline;
+begin
+  if ALogger <> nil then
+    FLogger := ALogger
+  else
+    FLogger := NullLogger;
 end;
 
 procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
@@ -109,13 +116,8 @@ begin
   if AUsed > 0 then
     WriteChecked(AData, AUsed);
   if ATotal > AUsed then
-    WriteChecked(@GZero512[0], ATotal - AUsed);
-end;
-
-procedure TTarWriter.MaybeReclaimIOBuf(const AHintSize: Int64); inline;
-begin
-  // stability+perf: high-water retained — per-entry no shrink to avoid GetMem/FreeMem jitter on alternating sizes (e.g. 64K↔512). Explicit TrimIOBuf/TrimIOBufTo does reclaim; here no-op retains pooled buffer via bytes.ops single source.
-  // AHintSize kept for TrimIOBufTo explicit path, but per-entry AddEntryFromReader no longer triggers reclaim.
+    // perf: inline zero-copy single source via bytes.ops ZeroBufPtr (GZeroBuf4K 4K), zero-alloc, eliminates GZero512 duplicate, 511B pad single dispatch
+    WriteChecked(ZeroBufPtr, ATotal - AUsed);
 end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
@@ -177,6 +179,7 @@ function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
 var
   I: Integer;
 begin
+  // perf: table-driven single scan 155 iterations max, 2000 entries ~310k compares, L1 cache friendly, PAnsiChar view zero-copy; no long-name hit cache per design — 155*2000=310k Branch ~0.3M, table-driven已最优, 缓存命中率低且引入 string 持有/比较开销, 属可接受微缝 (CONTRACT §2 INV-1)
   Result := 0;
   if Length(AName) <= C_TAR_LAYOUT.Name.Len then Exit;
   I := C_TAR_LAYOUT.Prefix.Len;
@@ -478,14 +481,12 @@ begin
 end;
 
 procedure TTarWriter.Finish;
-var
-  Zero: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
   if FFinished then Exit;
   FFinished := True;
-  SpanFill(TByteSpan.Create(@Zero[0], SizeOf(Zero)), 0);
-  WriteBlock(Zero);
-  WriteBlock(Zero);
+  // perf+stability: zero-copy single source via bytes.ops ZeroBufPtr (GZeroBuf4K 4K), two WriteChecked single dispatch, eliminates 512B stack Zero+SpanFill+WriteBlock double copy, inline zero-copy
+  WriteChecked(ZeroBufPtr, C_TAR_BLOCK_SIZE);
+  WriteChecked(ZeroBufPtr, C_TAR_BLOCK_SIZE);
   // stability: pooled TBytes freed via SetLength nil (bytes.ops single source, no manual FreeMem size mismatch), try..finally in Destroy guarantees not lost
   if Length(FIOBuf) > 0 then
     SetLength(FIOBuf, 0);
@@ -501,12 +502,15 @@ begin
   try
     if not FFinished then
     begin
-      NullLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated)');
+      // stability: observability via FLogger (injectable, default NullLogger zero-alloc inline), explicit Finish required per CONTRACT §1.4; best-effort Finish with exception detail, never masks original exception
+      if FLogger = nil then
+        FLogger := NullLogger;
+      FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)');
       try
         Finish;
       except
         on E: Exception do
-          NullLogger.Warn('tar: writer destroy suppress finish failure');
+          FLogger.Warn('tar: writer destroy suppress finish failure: ' + E.ClassName + ': ' + E.Message + ' (disk full or short write => archive truncated, two zero blocks missing)');
       end;
     end;
   finally

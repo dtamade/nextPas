@@ -180,7 +180,7 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values = C_TAR_LAYOUT, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名
+// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values derived from C_TAR_LAYOUT single source, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名
 const
   C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
     (Off: 0; Len: 100),
@@ -255,15 +255,19 @@ begin
         if LLen = 0 then Exit(TByteSpan.Empty);
         Exit(TByteSpan.Create(@FData[AOfs], LLen));
       end;
-    // fallback: non-7 header field — single field SpanIndexOf zero-copy, reuses cached bytes without 512B rescan (cold path, still zero-copy, bytes.ops single source)
-    LSpan := TByteSpan.Create(@FData[AOfs], ALen);
-    LIdx := SpanIndexOf(LSpan, 0);
-    if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+    // fallback: non-7 header field — reuse remaining 512B hot cache (LUT余量), inline zero-copy direct scan within ALen without extra 512B rescan, bytes.ops single-source equivalence (SpanIndexOf/MemFindByte), cold path micro-optimized
+    LLen := ALen;
+    for LIdx := 0 to SizeInt(ALen) - 1 do
+      if FData[AOfs + SizeUInt(LIdx)] = 0 then
+      begin
+        LLen := SizeUInt(LIdx);
+        Break;
+      end;
     if LLen = 0 then Exit(TByteSpan.Empty);
     Result := TByteSpan.Create(@FData[AOfs], LLen);
     Exit;
   end;
-  // non-header: single SpanIndexOf zero-copy
+  // non-header: single SpanIndexOf zero-copy, bytes.ops single source, inline zero-copy view
   LSpan := TByteSpan.Create(@FData[AOfs], ALen);
   LIdx := SpanIndexOf(LSpan, 0);
   if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);

@@ -108,7 +108,7 @@ Reader ── TrySlice ──► 零拷贝视图（绑 Reader）
        └─ OpenEntryStream ──► FBuf: 持有型流（自包含，Reader 释放后仍可读）| PByte: 零拷贝视图（绑外部内存/Reader，零额外 Move）
 ```
 
-详见 `CONTRACT.md 附录 B` 单一规范与生命周期图解。
+详见 `CONTRACT.md §2 INV-7` 单一规范与生命周期。
 
 ## Safety Model
 

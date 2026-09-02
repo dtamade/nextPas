@@ -93,6 +93,9 @@ function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator:
 { 单源对齐：power-of-two 位掩码零除法，无截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源，常量 4096 位掩码零除法 }
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
 function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+{ 单源零垫：4K 零源 GZeroBuf4K inline 零拷贝访问，tar 512B 零垫/两零块与 IsZeroMem 单源复用，L1 owner bytes.ops 单源，零分配 }
+function ZeroBufPtr: PByte; inline;
+function ZeroBufSize: SizeUInt; inline;
 { 单源高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit 单源 + 尾部无分支，复用 simd 单源思想；tar 校验和 signed 校正单源，避免 512B 双循环分支开销，零拷贝 PByte 切片，外联禁 inline }
 function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
 function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
@@ -954,6 +957,17 @@ begin
   if AValue > High(SizeUInt) - C4KMask then
     Exit(High(SizeUInt) and not C4KMask);
   Result := (AValue + C4KMask) and not C4KMask;
+end;
+
+function ZeroBufPtr: PByte; inline;
+begin
+  // perf: inline 零拷贝单源访问 GZeroBuf4K，tar 512B 垫零/两零块与 IsZeroMem 同源，零分配，L1 owner 复用
+  Result := @GZeroBuf4K[0];
+end;
+
+function ZeroBufSize: SizeUInt; inline;
+begin
+  Result := SizeUInt(Length(GZeroBuf4K));
 end;
 
 end.

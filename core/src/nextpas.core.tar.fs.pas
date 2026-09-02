@@ -191,27 +191,10 @@ begin
   end;
 end;
 
-{ 同父缓存 helper：抽取 TarExtractToDirWithOptions 中55行手工 CopyMemory+CompareMem 双重 if 展开，inline 薄转发、复用 bytes.ops.CopyMemory / base.utils.CompareMem 单源零拷贝，门面薄而优雅，避免内联膨胀，保持 L0-L3 单缝 }
+{ 同父缓存已下沉 archive.fs 单源 ArchiveSyncParentCache，tar 为 inline 薄转发，复用 bytes.ops 单源零拷贝，消除手写 CopyMemory+CompareMem 重复，保持 L0-L3 联邦单缝 }
 procedure SyncTarParentCache(const AFull: string; var ALastParent: string; var AParentLen: SizeUInt); inline;
-var
-  LSep: SizeInt;
 begin
-  LSep := StringLastIndexOf(AFull, '/');
-  if LSep <= 0 then Exit;
-  AParentLen := SizeUInt(LSep - 1);
-  if AParentLen <> SizeUInt(Length(ALastParent)) then
-  begin
-    ArchivePrepareParentDir(AFull, AParentLen);
-    SetLength(ALastParent, AParentLen);
-    if AParentLen > 0 then
-      CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
-  end
-  else if (AParentLen > 0) and not CompareMem(Pointer(@AFull[1]), Pointer(@ALastParent[1]), AParentLen) then
-  begin
-    ArchivePrepareParentDir(AFull, AParentLen);
-    SetLength(ALastParent, AParentLen);
-    CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
-  end;
+  ArchiveSyncParentCache(AFull, ALastParent, AParentLen);
 end;
 
 procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions);

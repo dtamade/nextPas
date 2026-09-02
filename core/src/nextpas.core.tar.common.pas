@@ -57,7 +57,7 @@ uses
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
-  // 复用 bytes.ops.AlignUp 单源：power-of-two 位掩码零除法，无截断，与 base AlignUp4K 同叙事；零拷贝 inline 薄转发
+  // 块对齐委托 bytes.ops.AlignUp 单源实现
   if ASize <= 0 then
     Exit(0);
   Result := Int64(AlignUp(SizeUInt(ASize), SizeUInt(C_TAR_BLOCK_SIZE))) - ASize;
