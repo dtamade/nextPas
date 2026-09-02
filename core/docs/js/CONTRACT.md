@@ -51,7 +51,7 @@ base ← intf ← {fake, quickjs.ffi, value.store, quickjs.value, quickjs, lifec
 - `js.js888/js.v8/js.chakra` 禁止 `uses platform.dl/ffi`，只 `uses js.base/js.intf/json/mem`，与 `js.fake` 同约束，`source-contract` 同检
 - 工厂 `CreateJsRuntime(jsbkJs888/jsbkV8/jsbkChakra)` 走纯分支，`JsBackendAvailable(..)=True` 恒真（零 so 探测）
 
-**文件体积指引**：单单元阈值 800（`wc -l core/src/nextpas.core.js*.pas` 抽样，`make hygiene` 必过，`core/tests/nextpas.core.js/test_js_source_contracts/Makefile` 锚定 <800，超阈必拆，单一阈值 800）。实测（wc -l）：`js.intf` ~144、`js.base` ~147、`js.lifecycle` ~205、`js.eval` ~240、`js.pure.host` ~400、`js.pure.value` ~490、`js.pure.base` 45（纯类型载体，threshold 16 via pure.hash、哨兵5× via js.eval）、`js.pure.impl` ~40（`pure.runtime`+`pure.context` 薄聚合）、`js.value.store` ~120、`js.quickjs.value` ~390、`js.registry` ~210、`js.factory` ~50、门面 ~50、`js888/v8/chakra` ~30、`quickjs.ffi/loader` <50、`js.fake` ~380，均 <800。热点 `inline` + `bytes.ops`/`BytesCopy`/`text.view` 零拷贝单源（via `TByteSpan` 视图 + `Move` 单源），资源 `try-finally` 幂等不丢，守四件套与 L0–L3。
+**文件体积指引**：单单元阈值 800（`wc -l core/src/nextpas.core.js*.pas` 抽样，`make hygiene` 必过，超阈必拆，单一阈值）。实测均 <800：`js.intf` ~144、`js.base` ~147、`js.lifecycle` ~205、`js.eval` ~240、`js.pure.host` ~400、`js.pure.value` ~490、`js.pure.base` 45（threshold 16 via pure.hash、哨兵 5× via js.eval）、`js.pure.impl` ~40（薄聚合门面：`pure.runtime` ~45 + `pure.context` ~360）、`js.value.store` ~120、`js.quickjs.value` ~390、`js.registry` ~210、`js.factory`/`门面` ~50、`js888/v8/chakra` ~30、`ffi/loader` <50、`js.fake` ~380。热点 `inline` + `bytes.ops BytesCopy/SpanTrim/SpanEqual` 零拷贝单源（`TByteSpan` 视图 + `Move`），`try-finally` 幂等不丢。
 
 ---
 
@@ -348,14 +348,14 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 
 ## 附录：极简契约（可抽取候选，≤80 行）
 
-> 奢华被冗余淹没 → 本附录为可抽取精简版：阈值 800 单一、20 单元、pure.base 45 行均 <800、热点 inline+bytes.ops 零拷贝、资源幂等不丢；业务以本契约 §1–§6 为准，owner 反哺缺口。
+> 精简视图（聚焦 §6 不变量，体积见 §1 单一阈值 800，业务以正文为准，缺能力反哺 owner）。
 
 | 单元 | 职责 | 关键不变量 |
 |------|------|------------|
 | `js.base` | 类型载体 | 零 `quickjs/v8`，`bytes.ops` 单缝 via impl |
 | `js.intf` | `IJsRuntime/Context/TJsValue` | 后端无关，不暴露 `JSValue` |
-| `js.pure.base` 45 行 | 纯类型载体 | base零依赖，threshold via `pure.hash` |
+| `js.pure.base` | 纯类型载体 | base 零依赖，threshold 16 via `pure.hash` |
 | `js.registry/factory/门面` | 单源扇出 + 薄转发 | vault 隔离，`CheckJsRuntimeOptions` 归因透传 |
-| 阈值 | 单一 800 | `wc -l` 抽样，超阈必拆 |
+| 不变量 | INV-1..7 | 见 §6，§1–§5 为实现证据 |
 
-热点：`inline` + `bytes.ops BytesCopy/SpanTrim/SpanEqual` 零拷贝单源（`TByteSpan` 视图 + `Move`），`try-finally` 幂等不丢，守四件套 `base←intf←impl←门面` 与 L0–L3，`bytes.ops` 单源。
+守四件套 `base←intf←impl←门面` 与 L0–L3，`bytes.ops` 单源。

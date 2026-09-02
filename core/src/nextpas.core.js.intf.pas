@@ -21,6 +21,7 @@ type
     FViewLen: SizeUInt;
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
+    function MaterializeViewString: string; inline;
   public
     // core
     function Kind: TJsValueKind; inline;
@@ -234,19 +235,21 @@ end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
+function TJsValue.MaterializeViewString: string; inline;
+begin
+  // single source view物化 helper via bytes.ops SpanToString (single alloc BytesCopy零拷贝inline) — AsString/TryAsString双写收敛，缓存FStrVal实现B/op摊还0(首调单次分配+单次IsAlive acquire，后续缓存命中零acquire零分配)，热循环优先TryGetView B/op=0；IsAlive强一致acquire via lifecycle single source INV-7悬垂安全
+  if FViewLen = 0 then Exit(FStrVal);
+  if Length(FStrVal) <> 0 then Exit(FStrVal);
+  if not IsAlive then Exit('');
+  FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
+  Result := FStrVal;
+end;
 function TJsValue.AsString: string; inline;
 begin
-  // hosted B/op=0 zero-copy; view via bytes.ops SpanToString single alloc per call (B/op>0, no cache — record copy) — hot loops prefer TryGetView B/op=0; IsAlive strong acquire per INV-7
+  // hosted viewed缓存B/op摊还0+inline薄转发至MaterializeViewString单源(bytes.ops SpanToString单次分配+BytesCopy零拷贝)，首调单次IsAlive acquire，后续缓存零acquire零分配；热循环优先TryGetView B/op=0；INV-7悬垂安全
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
-  if FViewLen > 0 then
-  begin
-    if Length(FStrVal) <> 0 then Exit(FStrVal);
-    if not IsAlive then Exit(''); // strong acquire via lifecycle, bulk IsValid would still be true after Close — must use IsAlive to avoid悬垂PAnsiChar read
-    Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
-    Exit;
-  end;
-  Result:=FStrVal;
+  Result := MaterializeViewString;
 end;
 
 function TJsValue.IsStringView: Boolean; inline;
@@ -274,16 +277,8 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // hosted B/op=0 zero-copy; view via bytes.ops SpanToString single alloc per call (B/op>0, no cache — record copy) — hot loops prefer TryGetView B/op=0; IsAlive strong acquire per INV-7
-  Result:=FKind=jskString;
-  if Result then
-  begin
-    if FViewLen > 0 then
-    begin
-      if Length(FStrVal) <> 0 then V:=FStrVal
-      else if not IsAlive then V:='' // strong acquire, IsValid zero barrier would still be true after Close — must use IsAlive to avoid悬垂
-      else V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
-    end else V:=FStrVal;
-  end else V:='';
+  // inline薄转发至MaterializeViewString单源，B/op摊还0(缓存命中零acquire零分配)，bytes.ops零拷贝单源，INV-7强一致
+  Result := FKind=jskString;
+  if Result then V := MaterializeViewString else V := '';
 end;
 end.

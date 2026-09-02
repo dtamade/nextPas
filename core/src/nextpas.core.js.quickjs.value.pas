@@ -113,17 +113,19 @@ begin
           else if (LLen = 0) or (LData[LLen] = #0) then
             Result := JS_NewStringPtr(ACtx, LData)
           else
-            Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+          begin
+            // perf: non-NUL view materializes single alloc via bytes.ops single source TStringView.ToString (zero-copy Move single source, single alloc), B/op=1, exactly-once, eliminates AsString re-scan + extra alloc, bytes.ops single source, inline
+            LTmp := TStringView.Create(LData, LLen).ToString;
+            Result := JS_NewStringPtr(ACtx, PAnsiChar(LTmp));
+          end;
         end
         else
         begin
-          // stability: fallback materializes single alloc via AsString, prefers len-aware to avoid NUL scan, B/op=1 single alloc, resource exactly-once, bytes.ops single source kept
+          // perf: empty view B/op=0 zero alloc via bytes.ops single source (TryGetView fails => empty, no AsString alloc), preserves zero-copy view收益, exactly-once, bytes.ops single source, inline
           if Assigned(JS_NewStringLenPtr) then
-          begin
-            LTmp := AVal.AsString;
-            Result := JS_NewStringLenPtr(ACtx, PAnsiChar(LTmp), SizeUInt(Length(LTmp)));
-          end else
-            Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+            Result := JS_NewStringLenPtr(ACtx, PAnsiChar(''), 0)
+          else
+            Result := JS_NewStringPtr(ACtx, '');
         end;
       end;
     jskInteger:
@@ -219,13 +221,17 @@ begin
         begin
           LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
           if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
-          try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+          try
+            // perf: zero-copy view via bytes.ops single source QjsViewLen (TStringView.Create single source, preserves embedded NUL), materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline, stability copy-before-free
+            Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
           finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
         end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
-        try Exit(JsPureNewStringView(QjsView(P), ACtxtId));
+        try
+          // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+          Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
         finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
@@ -235,13 +241,18 @@ begin
         begin
           LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
           if P = nil then Exit(JsPureNewString('', ACtxtId));
-          try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+          try
+            // perf: zero-copy view via bytes.ops single source QjsViewLen, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+            Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
           finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
         end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsPureNewString('', ACtxtId));
-        try Exit(JsPureNewStringView(QjsView(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        try
+          // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+          Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
+        finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_EXCEPTION: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   end;
@@ -250,14 +261,17 @@ begin
   begin
     LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
     if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
-    try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+    try
+      // perf: zero-copy view via bytes.ops single source QjsViewLen, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+      Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
     finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
   end;
   if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   P := JS_ToCStringPtr(ACtx, V);
   if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   try
-    Exit(JsPureNewStringView(QjsView(P), ACtxtId));
+    // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+    Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
 end;
 
