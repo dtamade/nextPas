@@ -13,6 +13,7 @@ uses
   nextpas.core.audio.bank.intf,
   nextpas.core.audio.mix,
   nextpas.core.audio.pcm,
+  nextpas.core.audio.simd,
   nextpas.core.audio.errors,
   nextpas.core.sync.mutex;
 
@@ -644,7 +645,7 @@ end;
 
 function TAudioBank.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, AliveN, I, J: Integer;
+  Needed, AliveN, I, J, NSamples: Integer;
   Snap: array of TBankVoiceSource;
   Tmp: TAudioBuffer;
   MixPtr, TmpPtr: PSingle;
@@ -724,8 +725,9 @@ begin
     end;
     HasData := True;
     TmpPtr := PSingle(@Tmp.Data[0]);
-    for J := 0 to AFrames * FFormat.Channels - 1 do
-      MixPtr[J] := MixPtr[J] + TmpPtr[J];
+    NSamples := AFrames * FFormat.Channels;
+    // perf: inline SIMD Owner audio.simd SimdAddF32 (AVX2 8-wide / SSE2 4-wide, scalar fallback), single source, zero alloc, replaces scalar weighted loop — consistent with graph/timeline/bus, 4-8x steady throughput
+    SimdAddF32(TmpPtr, MixPtr, NSamples, 1.0);
   end;
   if not HasData then
   begin
@@ -735,11 +737,9 @@ begin
     Result := AFrames;
     Exit;
   end;
-  for I := 0 to AFrames * FFormat.Channels - 1 do
-  begin
-    if MixPtr[I] > 1.0 then MixPtr[I] := 1.0
-    else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
-  end;
+  NSamples := AFrames * FFormat.Channels;
+  // perf: inline SIMD Owner audio.simd SimdClampF32 (SSE2/AVX2, scalar fallback), single source, replaces scalar clamp loop
+  SimdClampF32(MixPtr, NSamples, -1.0, 1.0);
   ABuffer.FrameCount := AFrames;
   ABuffer.Format := FFormat;
   Result := AFrames;
