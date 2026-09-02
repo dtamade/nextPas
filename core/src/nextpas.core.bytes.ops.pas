@@ -78,6 +78,8 @@ function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 tex
 { 单源 Move：string/PByte 零拷贝单次 Move，tar/header 等复用此单源避免分散 Move；外联避免 Move[AValue[1]] inline 膨胀与 FPC 3.3.1 inline+Move 单字节缺陷（PAnsiChar 解引用） }
 procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
 procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
+{ 单源路径拼接：prefix/name 单次 SetLength + 两 Move（bytes.ops 单源 CopyMemory），tar/zip 联邦 ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，切片零拷贝视图单源，热路径 inline 薄转发 }
+function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
 
 implementation
 
@@ -644,6 +646,25 @@ begin
   if (ACount = 0) or (ASrc = nil) or (ADest = nil) then
     Exit;
   Move(ASrc^, ADest^, ACount);
+end;
+
+function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator: Char): string; inline;
+var
+  LTotal: SizeUInt;
+begin
+  // 单源：单次 SetLength + 两 CopyMemory（bytes.ops 单源 Move），archive.fs ArchiveJoinPath 与 tar.reader CombinePrefixName 同构收敛至此，零拷贝 PByte 视图单源，热路径按需物化
+  if ALeft.Len = 0 then
+  begin
+    if ARight.Len = 0 then Exit('');
+    Exit(SpanToString(ARight));
+  end;
+  if ARight.Len = 0 then
+    Exit(SpanToString(ALeft));
+  LTotal := ALeft.Len + 1 + ARight.Len;
+  SetLength(Result, LTotal);
+  CopyMemory(ALeft.Data, PByte(@Result[1]), ALeft.Len);
+  Result[ALeft.Len + 1] := ASeparator;
+  CopyMemory(ARight.Data, PByte(@Result[ALeft.Len + 2]), ARight.Len);
 end;
 
 end.

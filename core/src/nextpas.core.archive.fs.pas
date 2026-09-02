@@ -56,8 +56,8 @@ type
 
 function CreateArchiveBuilderSink(const ABuilder: IBytesBuilder): IWriter; inline;
 
-{ 路径拼接：单次 SetLength+Move 去 Delete 抖动，bytes.ops 单源，落盘热路径 inline }
-function ArchiveJoinPath(const ABase, AName: string): string; inline;
+{ 路径拼接：单次 SetLength+零拷贝单源 Move 去 Delete 抖动，bytes.ops 单源（Move[AName[1]/ABase[1]] 禁 inline，外联可静态校验，守 design-conventions 红线1） }
+function ArchiveJoinPath(const ABase, AName: string): string;
 
 { 单文件元数据定稿：Chmod/Chtimes best-effort 带可观测性（StdErr WARN），与 ArchiveRestoreDeferredDirs 一致 }
 procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean);
@@ -433,12 +433,14 @@ begin
   Result := TArchiveBuilderSink.Create(ABuilder);
 end;
 
-function ArchiveJoinPath(const ABase, AName: string): string; inline;
+function ArchiveJoinPath(const ABase, AName: string): string;
 var
-  LBaseLen, LNameLen, LNameOff, LTotal: SizeUInt;
+  LBaseLen, LNameLen, LNameOff: SizeUInt;
   LBaseIsAbs: Boolean;
+  LBaseSpan, LNameSpan: TByteSpan;
 begin
-  // perf: inline + 单次 SetLength+Move，零 Delete 堆抖动；复用 bytes.ops 单源思想，落盘热路径
+  // perf: 单次 SetLength + bytes.ops 单源 Move（CopyMemory 零拷贝 PByte 视图，单次分配），零 Delete 堆抖动；
+  // stability: Move(AName[1]/ABase[1]) untyped 禁 inline（守 design-conventions 红线1，防 FPC 常量折叠单字符值污染栈临时，tar 打包复用安全），外联可静态校验单源
   LBaseLen := Length(ABase);
   LBaseIsAbs := (LBaseLen > 0) and (ABase[1] = '/');
   while (LBaseLen > 0) and (ABase[LBaseLen] = '/') do
@@ -458,24 +460,24 @@ begin
     begin
       SetLength(Result, 1 + LNameLen);
       Result[1] := '/';
-      Move(AName[LNameOff], Result[2], LNameLen);
+      // 单源：bytes.ops.CopyMemory 零拷贝 PByte 视图，避免裸 Move 分散审计，与 tar.common 已收敛单源一致
+      CopyMemory(PByte(@AName[LNameOff]), PByte(@Result[2]), LNameLen);
       Exit;
     end;
     SetLength(Result, LNameLen);
-    Move(AName[LNameOff], Result[1], LNameLen);
+    CopyMemory(PByte(@AName[LNameOff]), PByte(@Result[1]), LNameLen);
     Exit;
   end;
   if LNameLen = 0 then
   begin
     SetLength(Result, LBaseLen);
-    Move(ABase[1], Result[1], LBaseLen);
+    CopyMemory(PByte(@ABase[1]), PByte(@Result[1]), LBaseLen);
     Exit;
   end;
-  LTotal := LBaseLen + 1 + LNameLen;
-  SetLength(Result, LTotal);
-  Move(ABase[1], Result[1], LBaseLen);
-  Result[LBaseLen + 1] := '/';
-  Move(AName[LNameOff], Result[LBaseLen + 2], LNameLen);
+  // 单源：复用 bytes.ops SpanJoinWithSeparator 单次 SetLength + 两 CopyMemory（bytes.ops 单源 Move），与 tar.reader CombinePrefixName 同构收敛至同一 helper，零拷贝 PByte 视图单源
+  LBaseSpan := TByteSpan.Create(PByte(@ABase[1]), LBaseLen);
+  LNameSpan := TByteSpan.Create(PByte(PAnsiChar(AName) + LNameOff - 1), LNameLen);
+  Result := SpanJoinWithSeparator(LBaseSpan, LNameSpan, '/');
 end;
 
 procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean);

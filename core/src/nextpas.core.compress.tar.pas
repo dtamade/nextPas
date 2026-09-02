@@ -7,25 +7,22 @@ unit nextpas.core.compress.tar;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.tar.base,
-  nextpas.core.tar.reader,
-  nextpas.core.tar.writer;
+  nextpas.core.tar;
 
 type
-  TTarEntryKind = nextpas.core.tar.base.TTarEntryKind;
-  TTarHeader = nextpas.core.tar.base.TTarHeader;
-  TTarReader = nextpas.core.tar.reader.TTarReader;
-  TTarWriter = nextpas.core.tar.writer.TTarWriter;
+  TTarEntryKind = nextpas.core.tar.TTarEntryKind;
+  TTarHeader = nextpas.core.tar.TTarHeader;
+  TTarReader = nextpas.core.tar.TTarReader;
+  TTarWriter = nextpas.core.tar.TTarWriter;
 
 const
-  tekRegular = nextpas.core.tar.base.tekRegular;
-  tekHardLink = nextpas.core.tar.base.tekHardLink;
-  tekSymlink = nextpas.core.tar.base.tekSymlink;
-  tekCharDevice = nextpas.core.tar.base.tekCharDevice;
-  tekBlockDevice = nextpas.core.tar.base.tekBlockDevice;
-  tekDirectory = nextpas.core.tar.base.tekDirectory;
-  tekFifo = nextpas.core.tar.base.tekFifo;
+  tekRegular = nextpas.core.tar.tekRegular;
+  tekHardLink = nextpas.core.tar.tekHardLink;
+  tekSymlink = nextpas.core.tar.tekSymlink;
+  tekCharDevice = nextpas.core.tar.tekCharDevice;
+  tekBlockDevice = nextpas.core.tar.tekBlockDevice;
+  tekDirectory = nextpas.core.tar.tekDirectory;
+  tekFifo = nextpas.core.tar.tekFifo;
 
 implementation
 

@@ -323,7 +323,7 @@ begin
   if AOpts.Mode = LDef.Mode then
     H.Mode := C_TAR_DEFAULT_DIR_MODE
   else
-    H.Mode := TarDirectoryMode(AOpts.Mode and C_TAR_UNIX_PERM_MASK) and C_TAR_UNIX_PERM_MASK;
+    H.Mode := TarDirectoryMode(AOpts.Mode and C_TAR_UNIX_PERM_MASK);
   H.UID := AOpts.UID;
   H.GID := AOpts.GID;
   H.MTimeUnix := AOpts.MTimeUnix;
@@ -336,7 +336,7 @@ procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: I
 const
   C_STREAM_BUF = 65536;
 var
-  LRead, LToRead: SizeUInt;
+  LRead, LToRead, LNeeded: SizeUInt;
   LRemaining: Int64;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
@@ -356,10 +356,13 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // perf: pooled 64K buffer reuse via FStreamBuf (instance-level pool), amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth only once, no per-entry SetLength/Free
+  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand, no per-entry SetLength/Free
   // stability: buffer retains capacity across calls, exception-safe, freed on Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
-  if Length(FStreamBuf) < C_STREAM_BUF then
-    SetLength(FStreamBuf, C_STREAM_BUF);
+  LNeeded := SizeUInt(AHdr.Size);
+  if LNeeded > C_STREAM_BUF then
+    LNeeded := C_STREAM_BUF;
+  if SizeUInt(Length(FStreamBuf)) < LNeeded then
+    SetLength(FStreamBuf, LNeeded);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin

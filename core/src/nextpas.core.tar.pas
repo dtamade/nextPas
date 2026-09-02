@@ -31,6 +31,13 @@ type
   ITarBuilder = nextpas.core.tar.intf.ITarBuilder;
 
 const
+  tekRegular = nextpas.core.tar.base.tekRegular;
+  tekHardLink = nextpas.core.tar.base.tekHardLink;
+  tekSymlink = nextpas.core.tar.base.tekSymlink;
+  tekCharDevice = nextpas.core.tar.base.tekCharDevice;
+  tekBlockDevice = nextpas.core.tar.base.tekBlockDevice;
+  tekDirectory = nextpas.core.tar.base.tekDirectory;
+  tekFifo = nextpas.core.tar.base.tekFifo;
   C_TAR_BLOCK_SIZE = nextpas.core.tar.base.C_TAR_BLOCK_SIZE;
   C_TAR_DEFAULT_MAX_ENTRY = nextpas.core.tar.base.C_TAR_DEFAULT_MAX_ENTRY;
   C_TAR_MAX_NAME_BYTES = nextpas.core.tar.base.C_TAR_MAX_NAME_BYTES;

@@ -29,7 +29,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
 | PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
-| Zero-copy slice/stream | — | Yes | `EntryDataSlice` 零拷贝视图 + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝） |
+| Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝；`TryEntryDataSlice deprecated→TrySlice`） |
 
 ## API
 
@@ -50,13 +50,15 @@ W.Finish; // 两零块，需显式调用，析构兜底 best-effort
 ### Read
 
 ```pascal
-var R: TTarReader; H: TTarHeader; Data: TBytes; P: PByte; C: SizeUInt; RS: IReader;
+var R: TTarReader; H: TTarHeader; Data: TBytes; P: PByte; C: SizeUInt; RS: IReader; S: TByteSpan;
 R := TTarReader.Create(Bytes); // 或 Create(PByte, Count) + WithOptions(bomb 上限)
 while R.Next(H) do
 begin
   WriteLn(H.Name, ' ', H.Size, ' ', Ord(H.Kind));
-  Data := R.EntryData; // 拷贝：峰值 2× 切片视图，热路径优先切片（extract-all 320µs vs extract-slice 236µs）
-  if R.EntryDataSlice(P, C) then // 零拷贝视图（生命周期默认绑定 Reader，inline 薄转发）
+  Data := R.EntryData; // 拷贝分流：峰值 2× TrySlice 切片，热路径优先 TrySlice（extract-all 320µs vs extract-slice 236µs 约 -26%）
+  if R.TrySlice(S) then // 单一规范零拷贝 TByteSpan 视图（inline 薄转发，生命周期绑 Reader）
+    ; // 按需 SpanClone(S) 单次 Move（bytes.ops 单源）或零拷贝处理
+  if R.EntryDataSlice(P, C) then // PByte 薄转发（复用 TrySlice 单源，inline）
     RS := R.OpenEntryStream; // 持有型拉式流：拥有镜像时引用计数持有，外部 PByte 时固化拷贝，Reader 释放后仍可读（bytes.ops.CopyMemory 单源）
 end;
 ```
@@ -102,7 +104,7 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片与外部 `PByte` 视图（无 `Copy`，`FEntryDataOfs/Size` 与 `EntryData` 一致；`TTarSliceReader.Read`/`CombinePrefixName` 统一收敛至 `bytes.ops.CopyMemory` 单源 `Move`；`EntryData` 拷贝分流峰值 2×，热路径 `EntryDataSlice/OpenEntryStream`；`OpenEntryStream` 持有型 `FHold` 防悬垂），`writer` 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`AddDirectoryWithOptions` 复用 `writer.AddDirWithOptions` 单源），`TarPackDirInto` 同层排序+`deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联，详见 `CONTRACT.md §6`）。
+- **inline/零拷贝/单源**：`reader` 零拷贝切片与外部 `PByte` 视图（无 `Copy`，`FEntryDataOfs/Size` 与 `EntryData` 一致；`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`TryEntryDataSlice deprecated→TrySlice` 收敛冗余；`FieldSlice` 块级 NUL 索引单次 512 扫描摊薄 5 次 `SpanIndexOf/SIMD`；`CombinePrefixName/ArchiveJoinPath` 经 `bytes.ops.SpanJoinWithSeparator` 单次 `SetLength+两Move` 同构收敛；`TTarSliceReader.Read` 统一收敛至 `bytes.ops.CopyMemory` 单源 `Move`；`EntryData` 拷贝分流峰值 2×，热路径 `TrySlice/EntryDataSlice/OpenEntryStream`；`OpenEntryStream` 持有型 `FHold` 防悬垂），`writer` 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`AddDirectoryWithOptions` 复用 `writer.AddDirWithOptions` 单源），`TarPackDirInto` 同层排序+`deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联，详见 `CONTRACT.md §6`）。
 - **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
 - **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 红），`ns/op` `1.5×` WARN 与 `MB/s` `0.65×` WARN；Go/Rust 对照同口径 `compare_go`/`compare_rust` 守卫 `Pascal ns/op ≤1.5×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续两机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门。
 
