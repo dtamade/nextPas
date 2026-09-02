@@ -25,7 +25,7 @@ type
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
-   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时固化拷贝自包含 via SpanClone 单源 FHold 持有副本防 UAF、Reader 释放后仍可读，单次 Move）。 *}
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为零拷贝视图（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时 CreateSliceReader 零拷贝直视、生命周期绑外部 PByte/Reader，零分配，inline/bytes.ops 单源，单次 Move 按需 SpanClone，防高频 allocs 次 GC）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -89,10 +89,10 @@ type
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型（FBuf 时零拷贝持有镜像、外部 PByte 时固化拷贝自包含防 UAF） — }
+    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 零拷贝（FBuf 时持有型、外部 PByte 时直视）— }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
-    { — 持有型流：FBuf 非空时 CreateWithHold 零拷贝持有镜像（Reader 释放后仍可读）；外部 PByte 时 SpanClone 固化拷贝自包含 via CreateSliceReaderWithHold（FHold 防悬垂、Reader 释放后仍可读） — }
-    function OpenEntryStream: IReader;
+    { — 零拷贝流：FBuf 非空时 CreateWithHold 零拷贝持有镜像（Reader 释放后仍可读）；外部 PByte 时 CreateSliceReader 零拷贝直视（生命周期绑外部 PByte/Reader，零分配，inline/bytes.ops 单源，按需 SpanClone 自包含，防高频 allocs 次 GC）— }
+    function OpenEntryStream: IReader; inline;
     function EntrySize: Int64; inline;
   end;
 
@@ -767,14 +767,14 @@ begin
   end;
 end;
 
-function TTarReader.OpenEntryStream: IReader;
+function TTarReader.OpenEntryStream: IReader; inline;
 var
   P: PByte;
   C: SizeUInt;
-  LCopy: TBytes;
 begin
-  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂
-  // 性能+稳定：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径固化拷贝自包含 via SpanClone 单源（FHold 持有副本防 UAF，Reader 释放后仍可读，单次 Move，避免外部 TBytes 释放后悬垂）
+  // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory 单源，FHold 防悬垂；inline 薄转发，零拷贝视图生命周期绑 Reader/外部 PByte
+  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径 CreateSliceReader 零拷贝直视（零分配，生命周期绑外部 PByte/Reader，按需 SpanClone 自包含，防高频 200× allocs 次 GC；单次 Move 仅按需路径，bytes.ops 单源）
+  // 稳定：FBuf 零拷贝持有镜像 try..finally 必释；外部 PByte 零拷贝直视不丢句柄，按需用 TrySlice+SpanClone 单源拷贝自包含（FHold）防 UAF；nil/空守卫，inline 薄转发避 I-Cache 膨胀
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
@@ -786,9 +786,7 @@ begin
   begin
     if (P = nil) or (C = 0) then
       Exit(CreateSliceReader(nil, 0));
-    // stability: clone external slice to self-contained hold, eliminates UAF when caller frees external buffer
-    LCopy := SpanClone(TByteSpan.Create(P, C));
-    Result := CreateSliceReaderWithHold(LCopy, 0, C);
+    Result := CreateSliceReader(P, C);
   end;
 end;
 

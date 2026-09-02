@@ -29,6 +29,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base.utils,
   nextpas.core.tar.common,
+  nextpas.core.tar.capacity,
   nextpas.core.tar.reader,
   nextpas.core.io.intf,
   nextpas.core.io.base,
@@ -49,7 +50,7 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀） }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 capacity.TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀） }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter);
 var
   LI: Integer;
@@ -81,7 +82,7 @@ begin
       end;
       LFile := ArchiveOpenRead(AWalks[LI].FFull);
       try
-        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化，TarIOBufCapacityFor+bytes.ops单源inline，try..finally必释不丢
+        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化，capacity.TarIOBufCapacityFor+bytes.ops单源inline，try..finally必释不丢
         AWriter.AddEntryFromReader(LHdr, LFile as IReader);
       finally
         try
@@ -136,7 +137,7 @@ begin
   Result := nil;
   CollectTarWalks(ADir, LWalks, LWalksCount);
   try
-    // perf: 按实际载荷预估 — header 512 + AlignUp(FSize,512) 单遍累加（bytes.ops AlignUp 单源 512 对齐），经 TarBuilderCapacityFor 4K 对齐预扩容，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝，接口自动释资源不丢
+    // perf: 按实际载荷预估 — header 512 + AlignUp(FSize,512) 单遍累加（bytes.ops AlignUp 单源 512 对齐），经 capacity.TarBuilderCapacityFor 4K 对齐预扩容，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝，接口自动释资源不丢
     LEst := 0;
     for LI := 0 to LWalksCount - 1 do
     begin
@@ -146,9 +147,9 @@ begin
         LEst := LEst + UInt64(C_TAR_BLOCK_SIZE);
     end;
     if LEst > High(SizeUInt) then
-      LCap := TarBuilderCapacityFor(High(SizeUInt))
+      LCap := nextpas.core.tar.capacity.TarBuilderCapacityFor(High(SizeUInt))
     else
-      LCap := TarBuilderCapacityFor(SizeUInt(LEst));
+      LCap := nextpas.core.tar.capacity.TarBuilderCapacityFor(SizeUInt(LEst));
     CreateArchiveBuilder(LCap, LBuilder, LSink);
     W := TTarWriter.Create(LSink);
     try

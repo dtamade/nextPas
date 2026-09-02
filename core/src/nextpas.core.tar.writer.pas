@@ -57,7 +57,8 @@ uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.builder,
-  nextpas.core.tar.common;
+  nextpas.core.tar.common,
+  nextpas.core.tar.capacity;
 
 const
   C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
@@ -104,8 +105,8 @@ end;
 procedure TTarWriter.EnsureIOBufForSize(ASize: Int64); inline;
 var LNeed: SizeUInt;
 begin
-  // I/O缓冲策略单源抽取：TarIOBufCapacityFor(AlignUp4K零拷贝)+BytesEnsureCapacity几何2×高水位复用，inline零拷贝单分发，消除EnsureIOBufCapacity与CopyReaderAndPad双路分叉
-  LNeed := TarIOBufCapacityFor(ASize);
+  // I/O缓冲策略单源已下沉 capacity：TarIOBufCapacityFor(AlignUp4K零拷贝单源)+BytesEnsureCapacity几何2×高水位复用，inline零拷贝单分发
+  LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(ASize);
   BytesEnsureCapacity(FIOBuf, LNeed);
 end;
 
@@ -409,7 +410,8 @@ begin
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then Exit;
-  // I/O缓冲策略单源收敛：EnsureIOBufForSize(TarIOBufCapacityFor+bytes.ops单源)+DoCopyAndPad零拷贝PByte视图inline单口直达，high-water池化无GetMem抖动，1M封顶1MB单分发
+  // I/O缓冲单源：EnsureIOBufForSize -> TarIOBufCapacityFor(AlignUp4K via bytes.ops) -> BytesEnsureCapacity inline 单口
+  // perf: DoCopyAndPad 零拷贝 PByte 视图直达；high-water 池化 1M 封顶单次分发，无 GetMem 抖动
   EnsureIOBufForSize(AHdr.Size);
   DoCopyAndPad(AReader, AHdr.Size, @FIOBuf[0], SizeUInt(Length(FIOBuf)));
 end;
@@ -425,14 +427,14 @@ procedure TTarWriter.TrimIOBufTo(const AHintSize: Int64); inline;
 var
   LNeed: SizeUInt;
 begin
-  // perf: explicit high-water reclaim to hint — unified pool, zero-copy, inline; retains if smaller than current only when explicit Trim requested, avoids per-entry jitter
+  // perf: explicit high-water reclaim to hint — 单源已下沉 capacity.TarIOBufCapacityFor inline 零拷贝，统一池化无抖动
   if Length(FIOBuf) = 0 then Exit;
   if AHintSize <= 0 then
   begin
     SetLength(FIOBuf, 0);
     Exit;
   end;
-  LNeed := TarIOBufCapacityFor(AHintSize);
+  LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(AHintSize);
   if SizeUInt(Length(FIOBuf)) > LNeed then
     SetLength(FIOBuf, LNeed);
 end;

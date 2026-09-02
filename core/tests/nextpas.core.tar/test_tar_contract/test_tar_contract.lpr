@@ -12,11 +12,12 @@ var
   Suite: TTestSuite;
 
 const
-  C_TAR_UNITS: array[0..7] of string = (
+  C_TAR_UNITS: array[0..8] of string = (
     'src/nextpas.core.tar.pas',
     'src/nextpas.core.tar.base.pas',
     'src/nextpas.core.tar.intf.pas',
     'src/nextpas.core.tar.common.pas',
+    'src/nextpas.core.tar.capacity.pas',
     'src/nextpas.core.tar.reader.pas',
     'src/nextpas.core.tar.writer.pas',
     'src/nextpas.core.tar.fs.pas',
@@ -111,15 +112,16 @@ end;
 
 procedure TestCommonInternalBoundary;
 var
-  Facade, CommonSrc, LowCommon: string;
+  Facade, CommonSrc, LowCommon, CapSrc, LowCap: string;
   SR: TSearchRec;
   BaseDir, FileName, FilePath, Content, Low: string;
-  Allowed: TStringList;
+  AllowedCommon, AllowedCap: TStringList;
   Hit: string;
 begin
-  // facade must not re-export common (strip comments to avoid false positive from doc comment)
+  // facade must not re-export common/capacity (strip comments to avoid false positive from doc comment)
   Facade := LowerCase(StripComments(ReadText('src/nextpas.core.tar.pas')));
   Check(Pos('tar.common', Facade) = 0, 'facade must not uses tar.common (internal kernel not re-exported)');
+  Check(Pos('tar.capacity', Facade) = 0, 'facade must not uses tar.capacity (internal capacity kernel not re-exported)');
   // common is internal: minimal @desc, details compensated by docs and gate (conceptual entropy via facade purity docs/gate)
   CommonSrc := ReadText('src/nextpas.core.tar.common.pas');
   LowCommon := LowerCase(CommonSrc);
@@ -127,34 +129,66 @@ begin
   Check(Pos('内部单元', CommonSrc) = 0, 'common header minimal: no expanded internal line (compensated by docs/gate)');
   Check(Pos('禁止门面外直引', CommonSrc) = 0, 'common header minimal: forbid note moved to docs/gate');
   Check(Pos('design-conventions', LowCommon) = 0, 'common header minimal:范式 exception documented in design-conventions/CONTRACT, not header');
-  // mechanical: any core/src/*.pas outside allowed set must not uses tar.common
-  Allowed := TStringList.Create;
+  // capacity is internal dedicated kernel: check minimal desc and type isolation
+  CapSrc := ReadText('src/nextpas.core.tar.capacity.pas');
+  LowCap := LowerCase(CapSrc);
+  Check(Pos('tar 容量与对齐专用内核', LowCap) > 0, 'capacity has minimal desc (internal capacity kernel)');
+  Check(Pos('bytes.ops.alignup4k', LowCap) > 0, 'capacity uses bytes.ops.AlignUp4K single source inline');
+  Check(Pos('tarbuild~', LowCap) = 0, 'capacity header minimal: no expanded forbidden note');
+  // mechanical: any core/src/*.pas outside allowed set must not uses tar.common / tar.capacity
+  AllowedCommon := TStringList.Create;
+  AllowedCap := TStringList.Create;
   try
-    Allowed.Sorted := True;
-    Allowed.Duplicates := dupIgnore;
-    Allowed.Add('nextpas.core.tar.common.pas');
-    Allowed.Add('nextpas.core.tar.reader.pas');
-    Allowed.Add('nextpas.core.tar.writer.pas');
-    Allowed.Add('nextpas.core.tar.fs.pas');
+    AllowedCommon.Sorted := True;
+    AllowedCommon.Duplicates := dupIgnore;
+    AllowedCommon.Add('nextpas.core.tar.common.pas');
+    AllowedCommon.Add('nextpas.core.tar.reader.pas');
+    AllowedCommon.Add('nextpas.core.tar.writer.pas');
+    AllowedCommon.Add('nextpas.core.tar.fs.pas');
+    AllowedCap.Sorted := True;
+    AllowedCap.Duplicates := dupIgnore;
+    AllowedCap.Add('nextpas.core.tar.capacity.pas');
+    AllowedCap.Add('nextpas.core.tar.base.pas');
+    AllowedCap.Add('nextpas.core.tar.builder.pas');
+    AllowedCap.Add('nextpas.core.tar.writer.pas');
+    AllowedCap.Add('nextpas.core.tar.fs.pas');
     BaseDir := ExpandFileName('../../../core/src');
     if FindFirst(BaseDir + PathDelim + 'nextpas.core.*.pas', faAnyFile, SR) = 0 then
     try
       repeat
         FileName := SR.Name;
-        if Allowed.IndexOf(LowerCase(FileName)) >= 0 then Continue;
-        // skip tar units already allowed, check rest
-        FilePath := BaseDir + PathDelim + FileName;
-        Content := '';
-        try
-          with TStringList.Create do try LoadFromFile(FilePath); Content := Text; finally Free; end;
-        except Content := ''; end;
-        Low := LowerCase(StripComments(Content));
-        Hit := '';
-        if Pos('nextpas.core.tar.common', Low) > 0 then Hit := FileName;
-        Check(Hit = '', 'external direct use of tar.common forbidden (found in ' + Hit + ')');
+        // check common
+        if AllowedCommon.IndexOf(LowerCase(FileName)) < 0 then
+        begin
+          FilePath := BaseDir + PathDelim + FileName;
+          Content := '';
+          try
+            with TStringList.Create do try LoadFromFile(FilePath); Content := Text; finally Free; end;
+          except Content := ''; end;
+          Low := LowerCase(StripComments(Content));
+          Hit := '';
+          if Pos('nextpas.core.tar.common', Low) > 0 then Hit := FileName;
+          Check(Hit = '', 'external direct use of tar.common forbidden (found in ' + Hit + ')');
+        end;
+        // check capacity
+        if AllowedCap.IndexOf(LowerCase(FileName)) < 0 then
+        begin
+          FilePath := BaseDir + PathDelim + FileName;
+          Content := '';
+          try
+            with TStringList.Create do try LoadFromFile(FilePath); Content := Text; finally Free; end;
+          except Content := ''; end;
+          Low := LowerCase(StripComments(Content));
+          Hit := '';
+          if Pos('nextpas.core.tar.capacity', Low) > 0 then Hit := FileName;
+          Check(Hit = '', 'external direct use of tar.capacity forbidden (found in ' + Hit + ')');
+        end;
       until FindNext(SR) <> 0;
     finally FindClose(SR); end;
-  finally Allowed.Free; end;
+  finally
+    AllowedCommon.Free;
+    AllowedCap.Free;
+  end;
 end;
 
 procedure TestCommonNoInlineLoops;
@@ -248,6 +282,42 @@ begin
   Check(Pos('fguardhead', Low) > 0, 'reader uses simple linked list guard without array geometric');
 end;
 
+procedure TestCapacitySingleSource;
+var
+  S, Low, R: string;
+begin
+  S := ReadText('src/nextpas.core.tar.capacity.pas');
+  Low := LowerCase(S);
+  Check(Pos('function tarcapacityalign4k', Low) > 0, 'capacity has TarCapacityAlign4K');
+  Check(Pos('function tarcapacityalign4k(const avalue: sizeuint): sizeuint; inline', Low) > 0, 'TarCapacityAlign4K inline single source AlignUp4K');
+  Check(Pos('alignup4k', Low) > 0, 'capacity delegates to AlignUp4K');
+  Check(Pos('function tarbuildercapacityfor', Low) > 0, 'capacity has TarBuilderCapacityFor');
+  Check(Pos('function tarbuildercapacityfor(const aestimatedtotal: sizeuint): sizeuint; inline', Low) > 0, 'TarBuilderCapacityFor inline');
+  Check(Pos('function tariobufcapacityfor', Low) > 0, 'capacity has TarIOBufCapacityFor');
+  // base must be thin forward to capacity
+  S := ReadText('src/nextpas.core.tar.base.pas');
+  Low := LowerCase(S);
+  Check(Pos('nextpas.core.tar.capacity', Low) > 0, 'base implementation uses capacity single source');
+  Check(Pos('tarcapacityalign4k(avalue)', Low) > 0, 'base thin forward Align4K');
+  // builder/writer/fs must directly use capacity single source in implementation
+  S := ReadText('src/nextpas.core.tar.writer.pas');
+  Low := LowerCase(S);
+  Check(Pos('nextpas.core.tar.capacity', Low) > 0, 'writer implementation uses capacity');
+  S := ReadText('src/nextpas.core.tar.builder.pas');
+  Low := LowerCase(S);
+  Check(Pos('nextpas.core.tar.capacity', Low) > 0, 'builder implementation uses capacity');
+  Check(Pos('tarbuildercapacityfor', Low) > 0, 'builder calls capacity builder cap');
+  S := ReadText('src/nextpas.core.tar.fs.pas');
+  Low := LowerCase(S);
+  Check(Pos('nextpas.core.tar.capacity', Low) > 0, 'fs implementation uses capacity');
+  // docs must mention capacity as dedicated kernel
+  R := ReadText('docs/tar/CONTRACT.md');
+  Check(Pos('tar.capacity', LowerCase(R)) > 0, 'CONTRACT mentions capacity kernel');
+  Check(Pos('bytes.ops.alignup4k', LowerCase(R)) > 0, 'CONTRACT notes AlignUp4K single source');
+  R := ReadText('docs/tar/README.md');
+  Check(Pos('tar.capacity', LowerCase(R)) > 0, 'README mentions capacity kernel');
+end;
+
 begin
   Suite:=TTestSuite.Create('tar.contract');
   Suite.Test('no fpc rtl', @TestNoFpcRtl);
@@ -259,5 +329,6 @@ begin
   Suite.Test('reader single pass header scan', @TestReaderSinglePass);
   Suite.Test('reader inline redline gate', @TestReaderInlineGate);
   Suite.Test('pax global isolation', @TestPaxGlobalIsolation);
+  Suite.Test('capacity single source', @TestCapacitySingleSource);
   if not Suite.Run then Halt(1);
 end.

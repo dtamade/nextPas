@@ -22,6 +22,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.archive.fs, // 联邦单缝：唯一入口 archive.fs（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出）
+  nextpas.core.tar.capacity, // 容量单源已下沉 capacity 专用内核，单源 inline 零拷贝
   nextpas.core.log.intf;
 
 type
@@ -53,13 +54,13 @@ end;
 constructor TTarBuilder.Create;
 begin
   inherited Create;
-  InitBuilder(TarBuilderCapacityFor(0));
+  InitBuilder(nextpas.core.tar.capacity.TarBuilderCapacityFor(0));
 end;
 
 constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
 begin
   inherited Create;
-  InitBuilder(TarBuilderCapacityFor(AEstimatedTotal));
+  InitBuilder(nextpas.core.tar.capacity.TarBuilderCapacityFor(AEstimatedTotal));
 end;
 
 destructor TTarBuilder.Destroy;
@@ -108,7 +109,7 @@ end;
 
 function TTarBuilder.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
 begin
-  // 流式零拷贝：委托 TTarWriter.AddEntryFromReader 单源，per-entry 局域缓冲 via TarIOBufCapacityFor (AlignUp4K) try..finally 必释无滞留，bytes.ops 单源 inline 零拷贝
+  // 流式零拷贝：委托 TTarWriter.AddEntryFromReader 单源，per-entry 局域缓冲 via capacity.TarIOBufCapacityFor (AlignUp4K) try..finally 必释无滞留，bytes.ops 单源 inline 零拷贝
   FWriter.AddEntryFromReader(AHdr, AReader);
   Result := Self;
 end;

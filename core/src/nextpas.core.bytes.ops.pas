@@ -55,8 +55,9 @@ procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline; depr
 procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline; deprecated 'BytesAppendUInt32LE: O(n) realloc; use IBytesBuilder.AppendUInt32LE (geometric Grow, inline)';
 procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline; deprecated 'BytesAppendUInt64BE: O(n) realloc; use IBytesBuilder.AppendUInt64BE (geometric Grow, inline)';
 procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline; deprecated 'BytesAppendUInt64LE: O(n) realloc; use IBytesBuilder.AppendUInt64LE (geometric Grow, inline)';
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -139,45 +140,47 @@ end;
   for amortized slack; that depends on FPC heap layout and races under multithread.
   New: capacity == Length (single source via RTL), no global state, no unsafe
   pointer arithmetic, fully portable to nextPas compiler and thread-safe per var.
-  perf: inline + zero-copy Move in BytesAppend* callers (single Move per append);
-  no extra alloc in failure path. For looped/high-frequency appends use
-  IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany to avoid
-  O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
-  writes that could corrupt heap on exception. }
+  perf: inline + BytesNextCapacity 2× geometric doubling (BYTES_BUILDER_MIN_GROW floor,
+  overflow clamp, single SetLength, zero-copy Move in callers), single source for
+  tar IOBuf/builder high-water; for looped/high-frequency appends prefer
+  IBytesBuilder (preallocated Grow, inline zero-copy Move) or BytesConcatMany/
+  SpanConcatMany single alloc to avoid O(n²). Stability: SetLength exception-safe;
+  no header poke / no global map race; LNewCap doubles then SetLength(ADest, LNewCap)
+  gives slack ≥ ARequired, amortized O(1) when callers use Ensure/Reserve path. }
 
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+var LCap: SizeUInt;
+begin
+  // perf: inline single-source 2× growth, BYTES_BUILDER_MIN_GROW floor, overflow clamp, zero-copy, tar/builder/Ensure single source
+  if ANeed = 0 then Exit(0);
+  if AOld = 0 then LCap := BYTES_BUILDER_MIN_GROW else LCap := AOld;
+  if LCap < BYTES_BUILDER_MIN_GROW then LCap := BYTES_BUILDER_MIN_GROW;
+  if LCap < 4 then LCap := 4;
+  if LCap >= ANeed then Exit(LCap);
+  while LCap < ANeed do
+    if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
+  Result := LCap;
+end;
+
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 var
   LOld, LNewCap: SizeUInt;
 begin
+  // perf: inline hot path, single BytesNextCapacity geometric 2×, single SetLength, zero-copy, no header poke
   LOld := SizeUInt(Length(ADest));
   if ARequired <= LOld then
     Exit;
-  // single doubling growth to amortize when called directly; callers that need
-  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
-  // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < ARequired do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ARequired;
-      Break;
-    end;
-  end;
+  LNewCap := BytesNextCapacity(LOld, ARequired);
   SetLength(ADest, LNewCap);
 end;
 
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
 var
   LNeed: SizeUInt;
 begin
+  // perf: inline thin-forward to BytesEnsureCapacity single source, overflow guard, zero-copy
   if AAdditional = 0 then
     Exit;
-  // overflow guard: if Length + Additional wraps, let SetLength raise
   LNeed := SizeUInt(Length(ADest)) + AAdditional;
   BytesEnsureCapacity(ADest, LNeed);
 end;
