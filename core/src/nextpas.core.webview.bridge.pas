@@ -183,8 +183,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils,
-  nextpas.core.webview.metrics,
-  nextpas.core.sync;
+  nextpas.core.webview.metrics;
 
 { JsStringLit: JSON Str subset via json owner. }
 function JsStringLit(const AValue: string): string; inline;
@@ -292,27 +291,28 @@ begin
   Result := JsonStringify(APayload);
 end;
 
-var
-  GDecodeDoc: TJsonDocument;
-  GDecodeOnce: IOnce;
-
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
+  LDoc: TJsonDocument;
 begin
-  { hot View: Arena reuse, TStringView zero-copy (bytes.ops single source). }
+  { UI 线程亲和严谨：栈上局部 Arena，零全局共享、无锁竞争；TStringView 零拷贝 (bytes.ops 单源)，inline 薄转发。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  GDecodeOnce.DoOnce(procedure begin GDecodeDoc.Init(nil); end);
-  if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
-    Exit;
-  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-    Exit;
-  LPayload := LRoot.Get('payload');
-  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
-  Result := True;
+  LDoc.Init(nil);
+  try
+    if not BridgeParseFrame(AView, LDoc, LRoot) then
+      Exit;
+    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+      Exit;
+    LPayload := LRoot.Get('payload');
+    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+    Result := True;
+  finally
+    LDoc.Done;
+  end;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -596,12 +596,5 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
-
-initialization
-  GDecodeOnce := Once;
-
-finalization
-  if (GDecodeOnce <> nil) and GDecodeOnce.Done then
-    GDecodeDoc.Done;
 
 end.

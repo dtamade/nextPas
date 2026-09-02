@@ -5,7 +5,7 @@ unit nextpas.core.webview.gtk.bridge;
        单源：
        - 协议编解码 → nextpas.core.webview.bridge 唯一权威（TryDecodeFrame/BuildResolveScript 等，inline 零拷贝）
        - 资产路径归一 → nextpas.core.webview.utils NormalizeWebviewAssetView / ViewFromPChar 单源零拷贝 view 哈希 + 单次 SetString+Move
-       - MIME → nextpas.core.mime.types MimeTypeFromPath L2 单一事实源 O(1) 哈希（bytes.ops HashFNV1aLower 单源，零转发）
+       - MIME → nextpas.core.mime.types MimeTypeFromPathView L2 单一事实源 O(1) 哈希（bytes.ops HashFNV1aLower 单源，零 View→string 物化，零转发）
        - 视图索引 → nextpas.core.webview.gtk.viewmap THashMap<Pointer,Pointer> 直接复用 L1 单源（HashOfPointer→HashMix32，VecGrowCapacity 单源）
        - 资产 Holder 池化 → nextpas.core.webview.gtk.pool Acquire/ReleaseAssetHolder 单源（bytes.ops VecGrow + sync.pool 单源，热点小文件零双分配）
        性能：热点 SchemeRequest 零拷贝 COW 共享 + Holder Slab 复用（单 Holder+Stream 零 GBytes 中间对象，G_memory_input_stream_new_from_data 零拷贝切片直通），Threshold 已 retire 统一单路径，inline 零堆抖动，short-circuited view 零中间串
@@ -97,7 +97,7 @@ end;
 procedure BridgeSchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
 var
   LPathView: TStringView;
-  LPath, LMime: string;
+  LMime: string;
   LRaw: PAnsiChar;
   LBytes: TBytes;
   LStream: Pointer;
@@ -121,14 +121,14 @@ begin
       Exit;
     end;
     LRaw := PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest));
+    // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView (L1 text.view 单源), 零 SetString+Move 中间串；热点 404 零分配
     LPathView := NormalizeWebviewAssetView(ViewFromPChar(LRaw));
     if LPathView.Len = 0 then
     begin
       BridgeFinishNotFound(ARequest);
       Exit;
     end;
-    LPath := LPathView.ToString;
-    // 资产解析接线：CONTRACT §3.4/§5 最长前缀 + 视图硬隔离，单源 via viewmap/shell + IWebviewAssets.TryResolve
+    // 资产解析接线：CONTRACT §3.4/§5 最长前缀 + 视图硬隔离，单源 via viewmap/shell + IWebviewAssets.TryResolveView 零拷贝视图
     LAssets := nil;
     if Assigned(WEBKIT_uri_scheme_request_get_web_view) then
       LView := WEBKIT_uri_scheme_request_get_web_view(ARequest)
@@ -151,8 +151,9 @@ begin
       BridgeFinishNotFound(ARequest);
       Exit;
     end;
+    // perf: TryResolveView 零拷贝直通 View 索引 (Trie O(m) + Hash O(1) 单源)，404 零 ToString/堆分配；命中时 bridge 内委托 View→LPath 单次 ToString 复用 provider 接口（L1 text.view SliceToStr 单源，单次 SetString+Move）
     try
-      if not LAssets.TryResolve(LPath, LBytes, LMime) then
+      if not LAssets.TryResolveView(LPathView, LBytes, LMime) then
       begin
         BridgeFinishNotFound(ARequest);
         Exit;
@@ -165,7 +166,7 @@ begin
       end;
     end;
     if LMime = '' then
-      LMime := MimeTypeFromPath(LPath);
+      LMime := MimeTypeFromPathView(LPathView);
     LStream := nil;
     if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then
     begin
