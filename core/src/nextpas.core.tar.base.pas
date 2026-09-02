@@ -133,8 +133,8 @@ const
   C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
-  { builder 初始容量：4K 一页对齐，几何扩容单源，避免大写多次重分配，调优单点 }
-  C_TAR_BUILDER_INITIAL_CAPACITY = 4096;
+  { builder 初始容量：64K（16×4K 页）对齐，几何扩容单源；小归档覆盖 ~60×(512 header+512 data) 无扩容，200×512B 仅需 2 次 2× 扩容 vs 旧 4K 的 6 次重分配；大归档必须用 TarBuilderWithCapacity 显式预估（TarBuilderCapacityFor 单点 4K 对齐），调优单点 }
+  C_TAR_BUILDER_INITIAL_CAPACITY = 65536;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 
@@ -148,11 +148,6 @@ function DefaultTarExtractOptions: TTarExtractOptions; inline;
 {** posix 权限位助手（与 zip 对称，保持调用方手感一致） *}
 function TarRegularMode(APermissionBits: Word): Word; inline;
 function TarDirectoryMode(APermissionBits: Word): Word; inline;
-
-{** ustar 布局访问器：inline 薄转发零拷贝，复用 C_TAR_LAYOUT 单源 *}
-function TarFieldOff(const AField: TTarField): SizeUInt; inline;
-function TarFieldLen(const AField: TTarField): SizeUInt; inline;
-function TarLayout: TTarUstarLayout; inline;
 
 implementation
 
@@ -207,7 +202,7 @@ end;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
-  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY 单源，含两零块尾；复用 bytes.ops AlignUp4K 常量 4096 位掩码单源零除法，无 and not SizeUInt 截断，32/64 位安全
+  // perf: 预扩容按预估总量单点对齐 4K 页，避免大归档多次 2× 几何扩容与重分配；inline 薄转发，复用 C_TAR_BUILDER_INITIAL_CAPACITY(64K)单源，含两零块尾；复用 bytes.ops AlignUp4K 常量 4096 位掩码单源零除法，无 and not SizeUInt 截断，32/64 位安全；大归档请用 TarBuilderWithCapacity 显式预估，避免默认 64K 仍需 2 次扩容（200×512B≈205K：64K→128K→256K），旧 4K 需 6 次
   if AEstimatedTotal = 0 then
     Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
   // 预留两零块 + 头开销，按 4K 对齐向上取整，消除大写抖动
@@ -216,21 +211,6 @@ begin
     Result := C_TAR_BUILDER_INITIAL_CAPACITY;
   // 4K 对齐：复用 bytes.ops AlignUp4K 常量 4096 位掩码单源零除法，无截断，32/64 位安全
   Result := AlignUp4K(Result);
-end;
-
-function TarFieldOff(const AField: TTarField): SizeUInt; inline;
-begin
-  Result := AField.Off;
-end;
-
-function TarFieldLen(const AField: TTarField): SizeUInt; inline;
-begin
-  Result := AField.Len;
-end;
-
-function TarLayout: TTarUstarLayout; inline;
-begin
-  Result := C_TAR_LAYOUT;
 end;
 
 end.

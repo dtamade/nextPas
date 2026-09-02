@@ -4,7 +4,7 @@ unit nextpas.core.tar.common;
  * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
- * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline，Checksum 经 bytes.ops SpanSumBytes/SumBytes SIMD 单源 dispatch。
+ * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline，Checksum 经 bytes.ops SpanSumBytes/SumBytes/BytesCountHighBit SWAR 单源向量化，pax 经 archive.pax 单源。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -45,10 +45,10 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
-{** 生成 pax 记录；含循环/分配，外联 — 单源委托 TarAppendPaxRecord builder 零拷贝路径，禁双复制 SetLength+CopyStringToBuffer 误用；合并双超限单次构建，复用 bytes.builder 几何扩容单源 *}
+{** 生成 pax 记录；含循环/分配，外联 — 已收敛至 archive.pax ArchivePaxFormatRecord/ArchivePaxAppendRecord 单源（builder 零拷贝 Reserve+AppendBytes 几何扩容，禁双复制），历史兼容薄包装 *}
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 追加 pax 记录至 builder，合并双超限单次构建；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容） *}
+{** 追加 pax 记录至 builder，已收敛至 archive.pax ArchivePaxAppendRecord 单源；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容），历史兼容薄包装 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
 {** 通用 pax 键值迭代已收敛至 archive.pax ArchivePaxParseRecords 单点（零拷贝 PByte 切片，strict fail-closed），tar 侧不再提供 TarParsePaxKVRecords 别名，复用 TArchivePaxKVHandler 单源 *}
 
@@ -69,7 +69,7 @@ procedure GuardTarEntrySize(const AHeader: TTarHeader; AMaxEntry: SizeUInt);
 begin
   if (AMaxEntry = 0) then
     Exit;
-  if (AHeader.Kind = tekRegular) and (AHeader.Size > Int64(AMaxEntry)) then
+  if AHeader.Size > Int64(AMaxEntry) then
     raise EIOError.CreateFmt('tar: entry size exceeds limit for "%s" (%d > %d)',
       [AHeader.Name, AHeader.Size, Int64(AMaxEntry)]);
 end;
@@ -95,19 +95,16 @@ procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
   LSumHead, LSumTail: UInt64;
   LHigh: SizeUInt;
-  I: SizeUInt;
 begin
-  // perf: SIMD dispatch via bytes.ops BytesSum/SpanSumBytes single source (nextpas.core.simd SumBytes SSE2/AVX2/NEON), zero-copy PByte slice, out-of-line per design-conventions; dual accumulation fused via AU + signed correction
+  // perf: SIMD dispatch via bytes.ops BytesSum/BytesCountHighBit SWAR 单源（nextpas.core.simd SumBytes + bytes.ops 高位 SWAR 向量化），零拷贝 PByte 切片，外联；dual accumulation fused via AU + signed correction，消除 512B 双循环分支（→ 2×QWord 64-bit/8 + SIMD dispatch）
   LSumHead := BytesSum(ABlock, C_TAR_LAYOUT.Chksum.Off);
   LSumTail := BytesSum(ABlock + C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len,
     C_TAR_BLOCK_SIZE - (C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len));
   AU := Int64(LSumHead + LSumTail + UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
-  // signed correction: ASig = AU -256*highCount (high bit set)
-  LHigh := 0;
-  for I := 0 to C_TAR_LAYOUT.Chksum.Off - 1 do
-    if ABlock[I] >= 128 then Inc(LHigh);
-  for I := C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len to C_TAR_BLOCK_SIZE - 1 do
-    if ABlock[I] >= 128 then Inc(LHigh);
+  // signed correction: ASig = AU -256*highCount (high bit set) — 向量化 via bytes.ops BytesCountHighBit 单源 SWAR，无分支
+  LHigh := BytesCountHighBit(ABlock, C_TAR_LAYOUT.Chksum.Off)
+         + BytesCountHighBit(ABlock + C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len,
+            C_TAR_BLOCK_SIZE - (C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len));
   ASig := AU - Int64(LHigh) * 256;
 end;
 
@@ -271,55 +268,22 @@ begin
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.Version.Off, C_TAR_LAYOUT.Version.Len, C_TAR_VERSION_00);
 end;
 
-{ — pax 长度前缀单源：LBase/LDigits/Len 自洽，复用 UInt64DecimalDigits；消除 TarFormat/TarAppend 双复制，循环体外联 — }
+{ — pax 长度前缀单源：已收敛至 archive.pax ArchivePaxCalcRecordLen 单源，循环体外联 — }
 function TarCalcPaxRecordLen(const AKey, AValue: string): Integer;
-var
-  LBase, LDigits, LNeed: Integer;
 begin
-  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
-  LDigits := 1;
-  Result := LBase + LDigits;
-  while True do
-  begin
-    LNeed := UInt64DecimalDigits(UInt64(Result));
-    if LNeed = LDigits then
-      Break;
-    LDigits := LNeed;
-    Result := LBase + LDigits;
-  end;
+  Result := ArchivePaxCalcRecordLen(AKey, AValue);
 end;
 
 function TarFormatPaxRecord(const AKey, AValue: string): string;
-var
-  LBuilder: IBytesBuilder;
-  LSpan: TByteSpan;
 begin
-  // 性能：单源委托 TarAppendPaxRecord builder 零拷贝直写路径（Reserve+AppendBytes 几何扩容、单源 CopyMemory），消除 SetLength+多次 CopyStringToBuffer 双复制；单次 SpanToString Move 复用 bytes.ops 单源，薄包装外联禁 inline
-  LBuilder := CreateBytesBuilder(SizeUInt(TarCalcPaxRecordLen(AKey, AValue)));
-  TarAppendPaxRecord(LBuilder, AKey, AValue);
-  LSpan := LBuilder.WrittenSpan;
-  Result := SpanToString(LSpan);
+  // 单源收敛至 archive.pax ArchivePaxFormatRecord，薄包装外联禁 inline；历史兼容入口保留，委托 archive.pax 零拷贝最优路径
+  Result := ArchivePaxFormatRecord(AKey, AValue);
 end;
 
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
-var
-  LLen: Integer;
-  LBuf: array[0..20] of AnsiChar;
-  LNumLen: Int32;
 begin
-  if ABuilder = nil then
-    Exit;
-  LLen := TarCalcPaxRecordLen(AKey, AValue);
-  LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
-  ABuilder.Reserve(SizeUInt(LLen));
-  ABuilder.AppendBytes(PByte(@LBuf[0]), SizeUInt(LNumLen));
-  ABuilder.AppendByte(Ord(' '));
-  if Length(AKey) > 0 then
-    ABuilder.AppendBytes(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)));
-  ABuilder.AppendByte(Ord('='));
-  if Length(AValue) > 0 then
-    ABuilder.AppendBytes(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
-  ABuilder.AppendByte(10);
+  // 单源收敛至 archive.pax ArchivePaxAppendRecord 零拷贝最优路径（Reserve+AppendBytes 几何扩容、bytes.ops 单源），外联禁 inline
+  ArchivePaxAppendRecord(ABuilder, AKey, AValue);
 end;
 
 { — pax 解析：零拷贝 PByte 切片 — 单源委托 archive.pax 通用解析器 ArchivePaxParseRecords，strict 长度前缀校验畸形抛 EIOError，禁静默 Exit 回退截断名；TarParsePaxKVRecords 别名已收敛至 archive.pax 单点 — }

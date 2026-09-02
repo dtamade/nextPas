@@ -8,11 +8,11 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 |------|------|
 | `nextpas.core.tar` | Facade: re-exports 全量公共面（唯一公共入口） |
 | `nextpas.core.tar.base` | 种类枚举、头记录、选项、常量 `C_TAR_BLOCK_SIZE=512`、名安全谓词、模式助手 |
-| `nextpas.core.tar.intf` | `ITarBuilder` 接口契约（`base←intf←实现←门面`） |
+| `nextpas.core.tar.intf` | `ITarBuilder` 接口契约（`base←intf←实现←门面` 纯 `nextpas.core.tar.base`，无 L1 依赖；流式收敛至 `builder`） |
 | `nextpas.core.tar.reader` | `TTarReader`：迭代内存镜像，pax/x/g + GNU L/K + base-256 全兼容 |
 | `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出 + `devmajor/devminor` 设备号（`C_TAR_LAYOUT.DevMajor/DevMinor` 单源），需显式 `Finish`（`Destroy` best-effort `Finish` 极简 fail-closed 抑制二次逃逸，`FIOBuf` 于 Finish 即释避免滞留峰值，`try..finally` 必释资源） |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
-| `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed：未 `Finish` 析构非 unwind 期抛 `EInvalidOperationError` 硬失败防缺两零块截断，unwind 期 `IsExceptionUnwinding` 抑制次生并经 `log.intf` `ILogger.Warn` 可观测（`NullLogger` 零分配，无 `StdErr` 直触，L2 平台抽象克制），`AddEntryFromReader` 流式零拷贝 64K pooled 复用 via `FIOBuf` 于 Finish 即释） |
+| `nextpas.core.tar.builder` | `ITarBuilder` 实现 + `ITarStreamBuilder` 流式扩展：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed：未 `Finish` 析构非 unwind 期抛 `EInvalidOperationError` 硬失败防缺两零块截断，unwind 期 `IsExceptionUnwinding` 抑制次生并经 `log.intf` `ILogger.Warn` 可观测（`NullLogger` 零分配，无 `StdErr` 直触，L2 平台抽象克制），`ITarStreamBuilder.AddEntryFromReader`/`AsStreamBuilder`/`TarBuilderAddFromReader` 流式零拷贝 64K pooled 复用 via `FIOBuf` 于 Finish 即释，`bytes.ops` 单源 inline `Move`） |
 | `nextpas.core.compress.tar` | 已删除（空存根已移除，单源收敛完成；新增请直接 uses `nextpas.core.tar`） |
 
 > 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarFormatPaxRecord`（`CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 薄包装单源，`TarAppendPaxRecord` 为 `Reserve+AppendBytes` 零拷贝最优路径）/`TarParsePaxRecords`/`TarParsePaxKVRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源，`archive.pax ArchivePaxParseRecords` 通用 pax-kv 严格校验供归档族复用，畸形抛 `EIOError`；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用；`nextpas.core.archive.pax` 为通用 pax-kv 解析共享内核（内部核例外，归档族 `tar.common → archive.pax` 联邦复用，零拷贝迭代 `atime/mtime/size` 等扩展键）。
@@ -91,8 +91,11 @@ Opts := DefaultTarAddOptions; Opts.Mode := $1A4; Opts.MTimeUnix := 1700000000;
 TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddDirectoryWithOptions('assets', Opts)
           .AddEntry(Hdr, Data)
-          .AddEntryFromReader(Hdr2, Reader) // 流式零拷贝 64K pooled 复用 via FIOBuf 于 Finish 即释（首分配≤64K后200文件复用 amortized 1 alloc）、无 TBytes 全量拷贝，抽取 WritePaddedPayload 单源
-          .Finish; // 显式 Finish 必需，未调即析构 fail-closed 非 unwind 期抛 EInvalidOperationError（unwind 期 IsExceptionUnwinding 抑制次生并 ILogger.Warn，无 StdErr 直触）
+          .Finish;
+ // 流式零拷贝（实现层 ITarStreamBuilder，intf 保持纯 base←intf 非流式最小依赖）：
+ // AsStreamBuilder(TarBuilder.Add('a', Data)).AddEntryFromReader(Hdr2, Reader).Finish
+ // 或 TarBuilderAddFromReader(TarBuilder.Add('a', Data), Hdr2, Reader).Finish
+ // 64K pooled 复用 via FIOBuf 于 Finish 即释（首分配≤64K后200文件复用 amortized 1 alloc）、无 TBytes 全量拷贝，抽取 WritePaddedPayload 单源，bytes.ops 单源 inline Move
 ```
 
 ## Lifecycle 零拷贝视图 vs 持有型流

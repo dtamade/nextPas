@@ -7,9 +7,21 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.tar.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.log.intf;
 
 type
+  { header scan lens: named 7-field NUL truncation (replaces generic array[0..6] flatten, semantic explicit) }
+  TTarScanLens = record
+    Name: SizeUInt;
+    LinkName: SizeUInt;
+    Magic: SizeUInt;
+    Version: SizeUInt;
+    UName: SizeUInt;
+    GName: SizeUInt;
+    Prefix: SizeUInt;
+  end;
+
   TTarReader = class;
 
   {** @desc RAII guard for global g pax: weak ref to Reader, clears FGlobalPax on scope exit.
@@ -46,11 +58,13 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { header cache: opaque 7-field NUL truncation via bytes.ops single 512B scan — internal, not exposed }
+    { header cache: opaque named 7-field NUL truncation via bytes.ops single 512B scan — internal, not exposed }
     FScanValid: Boolean;
     FScanPos: SizeUInt;
-    FScanLens: array[0..6] of SizeUInt; // [Name,Link,Magic,Version,UName,GName,Prefix] generic, hides 7-field flatten
+    FScanLens: TTarScanLens; // named: Name/LinkName/Magic/Version/UName/GName/Prefix explicit, single 512B scan
     FGuards: array of TTarGlobalPaxGuard; // weak list for invalidation, no FBuf retention
+    FLogger: ILogger; // explicit warn on global pax auto-clear (silent pollution window)
+    procedure LogGlobalPaxAutoClear; // out-of-line warn via FLogger, zero alloc on hot path
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
@@ -74,12 +88,13 @@ type
     function SliceToString(ABase: PByte; ALen: SizeUInt): string;
     { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
-    { — 非热点字段缓存：零拷贝 slice + SpanEqual/MemEqual 复用已分配串（bytes.ops 单源 SIMD），万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
+    { — 非热点字段缓存：零拷贝 slice 后单次 SpanEqual 复用已分配串（长度不等直接跳 MemEqual，首字节快滤降额外开销，低命中率零额外 Span 构造），bytes.ops 单源 SIMD，万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
   public
     procedure ClearGlobalPax; inline;
     {** @desc RAII guard: acquire IInterface that clears global g pax on scope exit; use `var G := Reader.AcquireGlobalPaxGuard;` to auto-isolate. Inline thin forward, zero alloc until called. *}
     function AcquireGlobalPaxGuard: IInterface; inline;
+    procedure SetLogger(const ALogger: ILogger); inline;
     destructor Destroy; override;
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
@@ -144,6 +159,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -160,6 +176,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
@@ -168,7 +185,7 @@ begin
   FCumTotal := 0;
 end;
 
-// opaque header scan: single 512B ScanNulFieldTruncations via bytes.ops, hides 7-field flatten — impl only, no interface leak
+// opaque header scan: single 512B ScanNulFieldTruncations via bytes.ops, named 7-field lens — impl only, not exposed
 procedure CacheHeader(ASelf: TTarReader);
 var
   LFields: array[0..6] of TFieldRange;
@@ -178,13 +195,13 @@ begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
-    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
-    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
-    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
-    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
-    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
-    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
+    ASelf.FScanLens.Name := C_TAR_LAYOUT.Name.Len;
+    ASelf.FScanLens.Prefix := C_TAR_LAYOUT.Prefix.Len;
+    ASelf.FScanLens.LinkName := C_TAR_LAYOUT.LinkName.Len;
+    ASelf.FScanLens.UName := C_TAR_LAYOUT.UName.Len;
+    ASelf.FScanLens.GName := C_TAR_LAYOUT.GName.Len;
+    ASelf.FScanLens.Magic := C_TAR_LAYOUT.Magic.Len;
+    ASelf.FScanLens.Version := C_TAR_LAYOUT.Version.Len;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
@@ -198,13 +215,13 @@ begin
   LFields[6].Off := C_TAR_LAYOUT.Prefix.Off;   LFields[6].Len := C_TAR_LAYOUT.Prefix.Len;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
   ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
-  ASelf.FScanLens[0] := LLens[0];
-  ASelf.FScanLens[1] := LLens[1];
-  ASelf.FScanLens[2] := LLens[2];
-  ASelf.FScanLens[3] := LLens[3];
-  ASelf.FScanLens[4] := LLens[4];
-  ASelf.FScanLens[5] := LLens[5];
-  ASelf.FScanLens[6] := LLens[6];
+  ASelf.FScanLens.Name := LLens[0];
+  ASelf.FScanLens.LinkName := LLens[1];
+  ASelf.FScanLens.Magic := LLens[2];
+  ASelf.FScanLens.Version := LLens[3];
+  ASelf.FScanLens.UName := LLens[4];
+  ASelf.FScanLens.GName := LLens[5];
+  ASelf.FScanLens.Prefix := LLens[6];
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
 end;
@@ -222,37 +239,42 @@ var
   LLen: SizeUInt;
   LIdx: SizeInt;
   LSpan: TByteSpan;
+  LOneField: array[0..0] of TFieldRange;
+  LOneLen: array[0..0] of SizeUInt;
+  LBlockTmp: TByteSpan;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // 头块内 7 字段命中缓存零额外 SpanIndexOf，cache miss 时单次 512B 缓存（后续字段 Valid 命中），非头块单次 SpanIndexOf 单源
+  // 头块内 7 字段命中命名缓存零额外扫描，cache miss 时单次 512B ScanNulFieldTruncations 填充（后续字段 Valid 命中），非头块单次 SpanIndexOf 单源
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-      LLen := FScanLens[0]
+      LLen := FScanLens.Name
     else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-      LLen := FScanLens[6]
+      LLen := FScanLens.Prefix
     else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-      LLen := FScanLens[1]
+      LLen := FScanLens.LinkName
     else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-      LLen := FScanLens[4]
+      LLen := FScanLens.UName
     else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-      LLen := FScanLens[5]
+      LLen := FScanLens.GName
     else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-      LLen := FScanLens[2]
+      LLen := FScanLens.Magic
     else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-      LLen := FScanLens[3]
+      LLen := FScanLens.Version
     else
     begin
-      // 非 7 缓存字段且位于头块内（防御分支，正常不命中）：单次 SpanIndexOf 单源，避免回退链多分支
-      LSpan := TByteSpan.Create(@FData[AOfs], ALen);
-      LIdx := SpanIndexOf(LSpan, 0);
-      if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+      // 防御：头块内非 7 命名缓存字段（正常不命中，仅防御）— 复用 bytes.ops ScanNulFieldTruncations 单字段零分配路径，完全纳入单次 512B 缓存语义，无独立 SpanIndexOf 分支
+      LOneField[0].Off := AOfs - FPos;
+      LOneField[0].Len := ALen;
+      LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
+      ScanNulFieldTruncations(LBlockTmp, LOneField, @LOneLen[0]);
+      LLen := LOneLen[0];
       if LLen = 0 then Exit(TByteSpan.Empty);
       Result := TByteSpan.Create(@FData[AOfs], LLen);
       Exit;
@@ -343,29 +365,22 @@ function TTarReader.CachedField(AOfs, ALen: SizeUInt; var ACached: string): stri
 var
   LSpan: TByteSpan;
   LCachedLen: SizeUInt;
-  LCachedSpan: TByteSpan;
 begin
-  // 单源收敛：SpanEqual（bytes.ops SIMD MemEqual）替代 System.CompareMem，零拷贝视图单次 Move，inline 热路径
-  LCachedLen := SizeUInt(Length(ACached));
-  if (LCachedLen > 0) and (LCachedLen <= ALen) then
-  begin
-    LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
-    if SpanEqual(LCachedSpan, TByteSpan.Create(@FData[AOfs], LCachedLen)) then
-      if (LCachedLen = ALen) or (FData[AOfs + LCachedLen] = 0) then
-        Exit(ACached);
-  end;
+  // 单源收敛：零拷贝视图后单次 SpanEqual（bytes.ops SIMD MemEqual）复用已分配串，长度不等直接跳过 MemEqual，首字节快滤避免低命中率额外 Span 构造+MemEqual；外联禁 inline
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
+  LCachedLen := SizeUInt(Length(ACached));
   if LCachedLen = LSpan.Len then
   begin
-    if LCachedLen > 0 then
+    if LCachedLen = 0 then
+      Exit(ACached);
+    // fast first-byte filter before SIMD dispatch, low hit rate avoids full MemEqual
+    if PByte(PAnsiChar(ACached))^ <> FData[AOfs] then
     begin
-      LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
-      if SpanEqual(LCachedSpan, LSpan) then
-        Exit(ACached);
+      // miss fast path: no SpanEqual
     end
-    else
+    else if SpanEqual(TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen), LSpan) then
       Exit(ACached);
   end;
   Result := SpanToString(LSpan);
@@ -376,6 +391,14 @@ procedure TTarReader.ClearGlobalPax; inline;
 begin
   FGlobalPaxPath := '';
   FGlobalPaxLinkPath := '';
+end;
+
+procedure TTarReader.SetLogger(const ALogger: ILogger); inline;
+begin
+  if ALogger <> nil then
+    FLogger := ALogger
+  else
+    FLogger := NullLogger;
 end;
 
 procedure TTarReader.RegisterGuard(AGuard: TTarGlobalPaxGuard);
@@ -410,6 +433,13 @@ begin
     if FGuards[I] <> nil then
       FGuards[I].Invalidate;
   SetLength(FGuards, 0);
+end;
+
+procedure TTarReader.LogGlobalPaxAutoClear;
+begin
+  // explicit warn: single-use auto-clear without guard — if caller did AcquireGlobalPaxGuard without holding, it degrades to single-use; cross Next/image reuse must hold guard, else silent pollution window
+  if FLogger <> nil then
+    FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
 end;
 
 function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;
@@ -598,7 +628,10 @@ begin
       begin
         AHeader.Name := FGlobalPaxPath;
         if Length(FGuards) = 0 then
-          FGlobalPaxPath := ''; // auto-clear single-use when no guard, prevent pollution
+        begin
+          LogGlobalPaxAutoClear; // explicit warn: no guard held, single-use cleared (hold AcquireGlobalPaxGuard to persist)
+          FGlobalPaxPath := '';
+        end;
       end
       else
       begin
@@ -627,7 +660,10 @@ begin
       begin
         AHeader.LinkName := FGlobalPaxLinkPath;
         if Length(FGuards) = 0 then
+        begin
+          LogGlobalPaxAutoClear;
           FGlobalPaxLinkPath := '';
+        end;
       end
       else
         AHeader.LinkName := CachedField(FPos + C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, FLastLinkName);

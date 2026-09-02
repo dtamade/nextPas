@@ -320,7 +320,7 @@ end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
 var
-  LRead, LToRead, LBufSize: SizeUInt;
+  LRead, LToRead: SizeUInt;
   LRemaining: Int64;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
@@ -341,12 +341,9 @@ begin
   if AHdr.Size = 0 then
     Exit;
   // pooled 64K FIOBuf, bytes.ops single source; lifecycle bound to Finish (released on Finish, amortized 1 alloc)
-  // perf: pooled reuse via CopyMemory zero-copy (bytes.ops single source), inline thin forwarding; exception-safe, no leak
-  LBufSize := SizeUInt(AHdr.Size);
-  if LBufSize > C_STREAM_BUF_SIZE then
-    LBufSize := C_STREAM_BUF_SIZE;
-  if Length(FIOBuf) < SizeInt(LBufSize) then
-    SetLength(FIOBuf, LBufSize);
+  // perf: prealloc 64K single-shot on first use, pooled reuse zero-copy (bytes.ops single source), avoids small->large second SetLength
+  if Length(FIOBuf) = 0 then
+    SetLength(FIOBuf, C_STREAM_BUF_SIZE);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin

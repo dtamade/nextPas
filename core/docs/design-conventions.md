@@ -158,7 +158,7 @@ end.
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
 - `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（四件套外内部核例外）：不属于四件套公共面，仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引；由 `core/docs/<module>/CONTRACT.md` 源契约与 `test_*_contract` 机械门禁锁定。
-- `tar` 的 `*.intf` 例外依赖 L1 `nextpas.core.io.intf(IReader)`（10:13 `uses nextpas.core.io.intf, nextpas.core.tar.base`）：偏离 `base←intf` 纯数据依赖，仅为 `ITarBuilder.AddEntryFromReader` 流式零拷贝必需，已在 `core/docs/tar/CONTRACT.md §4` 显式备案；守 L2→L1 单向、复用 `bytes.ops` 单源 `CopyMemory/Move` inline 零拷贝、64K pooled `FIOBuf` 于 `Finish` 即释 + `try..finally` 必释资源不丢。
+- `tar` 的 `ITarBuilder` 已收敛至纯 `base←intf`（`nextpas.core.tar.intf` 仅 `uses nextpas.core.tar.base`，无 L1 依赖；2026-09-02 收敛完成，历史 `nextpas.core.io.intf(IReader)` 例外已移除）：流式 `AddEntryFromReader` 下沉至实现层 `nextpas.core.tar.builder ITarStreamBuilder`（`ITarBuilder` 扩展，L2→L1 单向 `nextpas.core.io.intf` 仅在实现层），守 `bytes.ops` 单源 `CopyMemory/Move` inline 零拷贝、64K pooled `FIOBuf` 于 `Finish` 即释 + `try..finally` 必释资源不丢（见 `core/docs/tar/CONTRACT.md §4`）。
 
 ### 单元体积指引
 

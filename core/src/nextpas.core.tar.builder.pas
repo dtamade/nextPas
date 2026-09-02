@@ -1,40 +1,10 @@
 unit nextpas.core.tar.builder;
 {**
- * @desc Tar 链式构造器：ZipBuilder 手感的薄门面。
- *
- * 极简两字段薄委托 `FBuilder+FWriter` 单层归属，`FSink` 仅构造期局域
- * 经 `TTarWriter` 单缝持有，零冗余；`FFinished/FLogger` 合并至 `FWriter.IsFinished`
- * 单源，`Destroy` 单层 fail-closed 硬失败防缺两零块截断（非 unwind 抛
- * `EInvalidOperationError`，unwind 期 `IsExceptionUnwinding` 抑制次生并依
- * 赖 `TTarWriter` 内置 `log.intf` 可观测），消除.Builder/Writer双层Finish
- * 语义重叠，门面极简高级感与 ZipBuilder 单 `FWriter` 手感对齐；联邦
- * 单缝经 `nextpas.core.archive.fs` 联邦，字节形态与写器一致，单工厂
- * `TarBuilder` / `TarBuilderWithCapacity`。
- *
- * 联邦 — 唯一经 `nextpas.core.archive.fs` 单缝联邦。
- * 与 `tar.fs` 共用单源 `CreateArchiveBuilder` / `IArchiveBuilder` /
- * 几何扩容 / `IWriter` 适配，`bytes.builder` / `bytes.ops` 单源
- * inline 零拷贝经 `archive.fs` 透出；注册表显式登记，消除 L2
- * 同层双引（`bytes.builder` + `archive.fs`）稀释克制感。
- *
- * 容量 — `TarBuilderCapacityFor` 按预估总量 4K 对齐预扩容，
- * 避免大归档多次几何扩容；默认 `C_TAR_BUILDER_INITIAL_CAPACITY`
- * 4K 页对齐。
- *
- * 性能 — `IArchiveBuilder` 联邦单源直写切片（`archive.fs` 透出
- * `bytes.builder` 几何扩容单源），`inline AppendBytes` 零拷贝，
- * `Finish` 单次 `ToBytes` 拷贝，消除 `CreateBytesStream` +
- * `ArchiveSnapshotStream` 二次 `SetLength`+`Read` 大块 `Move`；
- * `AddDirectory*` 薄门面复用 `writer` 单源 `DefaultTarAddOptions` /
- * `TarDirectoryMode`，无重复 `H` 组装；`AddEntryFromReader` 流式
- * 零拷贝 64K pooled 复用缓冲分块 `Move` 单源 `bytes.ops`（经
- * `writer` 单源透出），委托 `writer` 单源。
- *
- * 稳定性 — `Destroy` fail-closed 单源：以 `FWriter.IsFinished` 为
- * 唯一真源判未 `Finish` 即截断，`try..finally` 必释 `FWriter`（其
- * `Destroy` 内置 `IsExceptionUnwinding` 次生抑制 + `ILogger.Warn`
- * `NullLogger` 零分配可观测，L2 经 `log.intf` 单缝），`FBuilder`
- * 接口自动释，零泄漏无 `System.WriteLn` 直触。
+ * @desc Tar 链式构造器：薄门面委托 TTarWriter + archive.fs 联邦单缝。
+ *  需显式 Finish（两零块）；未 Finish 析构 fail-closed（IsFinished 单源）。
+ *  联邦/容量/性能/稳定性详见 CONTRACT §1.4/§3，源码仅保留单缝与单源证据。
+ *  收敛：流式 AddEntryFromReader 已收敛至实现层 ITarStreamBuilder（L2→L1 单向，
+ *  intf 保持纯 base←intf），复用 bytes.ops 单源 inline 零拷贝 + 64K pooled FIOBuf。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -51,14 +21,25 @@ uses
 function TarBuilder: ITarBuilder; inline;
 function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
 
+type
+  {** @desc 流式扩展：实现层承接 L1 IReader，intf 保持纯数据最小依赖。 *}
+  ITarStreamBuilder = interface(ITarBuilder)
+    ['{B2C3D4E5-F6A7-8901-BCDE-222222222223}']
+    function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder;
+  end;
+
+function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
+function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
+
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.archive.fs; // federation single seam: 唯一入口 archive.fs，IArchiveBuilder/CreateArchiveBuilder/Sink 单源联邦（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出），注册表显式登记，消除 L2 同层双引稀释
+  nextpas.core.archive.fs, // 联邦单缝：唯一入口 archive.fs（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出）
+  nextpas.core.log.intf;
 
 type
-  TTarBuilder = class(TInterfacedObject, ITarBuilder)
+  TTarBuilder = class(TInterfacedObject, ITarBuilder, ITarStreamBuilder)
   private
     FBuilder: IArchiveBuilder; // 联邦单源直写切片，bytes.builder 几何扩容单源 inline 零拷贝
     FWriter: TTarWriter; // 薄委托唯一写器，持有 Sink 单缝，IsFinished 单源
@@ -79,7 +60,7 @@ constructor TTarBuilder.Create;
 var LSink: IWriter;
 begin
   inherited Create;
-  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，联邦单源 CreateArchiveBuilder 经 archive.fs 透出 bytes.builder 几何扩容单源，inline 零拷贝直写切片（bytes.ops 单源 Move），消除与 tar.fs 同模板重复；LSink 局域经 FWriter 单缝持有，零字段冗余
+  // perf: TarBuilderCapacityFor 4K 对齐预扩容，CreateArchiveBuilder 经 archive.fs 联邦透出 bytes.builder 单源 inline 零拷贝（bytes.ops Move）；LSink 局域经 FWriter 单缝持有
   CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
 end;
@@ -88,7 +69,7 @@ constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
 var LCap: SizeUInt; LSink: IWriter;
 begin
   inherited Create;
-  // perf: 按预估总量预扩容 4K 对齐，TarBuilderCapacityFor 单源，避免大归档多次 2× 几何扩容与重分配；inline/零拷贝证据经 archive.fs 联邦透出 bytes.builder 单源（AppendBytes 单次 Move，bytes.ops 单源）
+  // perf: TarBuilderCapacityFor 按预估量 4K 对齐，复用 bytes.builder 单源 inline 零拷贝（AppendBytes 单次 Move via bytes.ops）
   LCap := TarBuilderCapacityFor(AEstimatedTotal);
   CreateArchiveBuilder(LCap, FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
@@ -98,14 +79,14 @@ destructor TTarBuilder.Destroy;
 var
   LUnwinding: Boolean;
 begin
-  // fail-closed 单层：以 FWriter.IsFinished 单源判未 Finish 即截断（缺两零块）硬失败；IsExceptionUnwinding 判 unwind 期抑制次生以保原始异常，可观测由 FWriter.Destroy 内置 log.intf ILogger.Warn 单缝承接（NullLogger no-op 零拷贝 inline），不直触 System.WriteLn；try..finally 必释 FWriter，FBuilder 接口自动释，无 linger 峰值
+  // fail-closed 单源 IsFinished；非 unwind 硬失败防截断，unwind 经 log.intf Warn 可观测并抑制次生；try..finally 必释 FWriter
   LUnwinding := IsExceptionUnwinding;
   try
     if (FWriter <> nil) and (not FWriter.IsFinished) then
     begin
       if not LUnwinding then
         raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
-      // unwind 期仅抑制次生，不抛覆盖原始异常；可观测由 FWriter.Destroy 经 log.intf 单缝 Warn
+      NullLogger.Warn('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
     end;
   finally
     FWriter.Free;
@@ -158,6 +139,20 @@ begin
   FWriter.Finish;
   // 零拷贝直写切片：复用 builder.ToBytes 单次分配+Move，消除 ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
   Result := FBuilder.ToBytes;
+end;
+
+function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
+begin
+  // thin QI: zero-copy, inline, reuse existing TTarBuilder instance; non-stream consumers never QI; QueryInterface single source without SysUtils Supports
+  Result := nil;
+  if (ABuilder = nil) or (ABuilder.QueryInterface(ITarStreamBuilder, Result) <> 0) or (Result = nil) then
+    raise EInvalidOperationError.Create('tar: builder does not support streaming (unexpected)');
+end;
+
+function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
+begin
+  // zero-copy streaming via writer single source (64K pooled FIOBuf, bytes.ops Move), Finish 即释
+  Result := AsStreamBuilder(ABuilder).AddEntryFromReader(AHdr, AReader);
 end;
 
 function TarBuilder: ITarBuilder; inline;

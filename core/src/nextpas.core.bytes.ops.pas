@@ -93,6 +93,9 @@ function SpanJoinWithSeparator(const ALeft, ARight: TByteSpan; const ASeparator:
 { 单源对齐：power-of-two 位掩码零除法，无截断，32/64 位 SizeUInt 安全，溢出守卫，inline 零拷贝单点，tar.builder 4K/ZIP 容量等复用此单源，常量 4096 位掩码零除法 }
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt; inline;
 function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
+{ 单源高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit 单源 + 尾部无分支，复用 simd 单源思想；tar 校验和 signed 校正单源，避免 512B 双循环分支开销，零拷贝 PByte 切片，外联禁 inline }
+function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
+function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
 
 implementation
 
@@ -679,6 +682,40 @@ begin
   // perf: same SIMD SumBytes single source, zero-copy PByte+Len, inline thin forward; tar checksum dual path reuses this single source
   if (AData = nil) or (ALen = 0) then Exit(0);
   Result := SumBytes(AData, ALen);
+end;
+
+function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
+var
+  QC: SizeUInt;
+  PQ: PQWord;
+  V, M: QWord;
+  I: SizeUInt;
+const
+  C_HighMask = QWord($8080808080808080);
+  C_SumMask = QWord($0101010101010101);
+begin
+  Result := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  QC := ALen div 8;
+  if QC > 0 then
+  begin
+    PQ := PQWord(AData);
+    for I := 0 to QC - 1 do
+    begin
+      V := PQ[I];
+      M := V and C_HighMask;
+      M := M shr 7;
+      // M now 0x01 per high byte at 0,8,16...; sum via multiply
+      Result := Result + SizeUInt((M * C_SumMask) shr 56);
+    end;
+  end;
+  for I := QC * 8 to ALen - 1 do
+    Result := Result + SizeUInt((AData[I] shr 7) and 1);
+end;
+
+function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
+begin
+  Result := BytesCountHighBit(ASpan.Data, ASpan.Len);
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;

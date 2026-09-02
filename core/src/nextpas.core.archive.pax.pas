@@ -13,7 +13,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.base;
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.builder;
 
 type
   {** @desc pax 键值处理器：零拷贝视图回调，生命周期绑解析缓冲 *}
@@ -24,12 +25,18 @@ type
  *  @perf 外联（真实循环体禁 inline），单源复用 bytes.ops 视图
  *}
 function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean;
+{** @desc pax 记录格式化/追加单源：length-prefix 自洽，builder 零拷贝最优路径单源，供 tar/zip 复用；含循环/分配，外联禁 inline *}
+function ArchivePaxCalcRecordLen(const AKey, AValue: string): Integer;
+procedure ArchivePaxAppendRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+function ArchivePaxFormatRecord(const AKey, AValue: string): string;
 
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
+  nextpas.core.text.number;
 
 function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean;
 var
@@ -96,6 +103,53 @@ begin
     Result := True;
     P := RecEnd;
   end;
+end;
+
+function ArchivePaxCalcRecordLen(const AKey, AValue: string): Integer;
+var
+  LBase, LDigits, LNeed: Integer;
+begin
+  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
+  LDigits := 1;
+  Result := LBase + LDigits;
+  while True do
+  begin
+    LNeed := UInt64DecimalDigits(UInt64(Result));
+    if LNeed = LDigits then Break;
+    LDigits := LNeed;
+    Result := LBase + LDigits;
+  end;
+end;
+
+procedure ArchivePaxAppendRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+var
+  LLen: Integer;
+  LBuf: array[0..20] of AnsiChar;
+  LNumLen: Int32;
+begin
+  if ABuilder = nil then Exit;
+  LLen := ArchivePaxCalcRecordLen(AKey, AValue);
+  LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
+  ABuilder.Reserve(SizeUInt(LLen));
+  ABuilder.AppendBytes(PByte(@LBuf[0]), SizeUInt(LNumLen));
+  ABuilder.AppendByte(Ord(' '));
+  if Length(AKey) > 0 then
+    ABuilder.AppendBytes(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)));
+  ABuilder.AppendByte(Ord('='));
+  if Length(AValue) > 0 then
+    ABuilder.AppendBytes(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+  ABuilder.AppendByte(10);
+end;
+
+function ArchivePaxFormatRecord(const AKey, AValue: string): string;
+var
+  LBuilder: IBytesBuilder;
+  LSpan: TByteSpan;
+begin
+  LBuilder := CreateBytesBuilder(SizeUInt(ArchivePaxCalcRecordLen(AKey, AValue)));
+  ArchivePaxAppendRecord(LBuilder, AKey, AValue);
+  LSpan := LBuilder.WrittenSpan;
+  Result := SpanToString(LSpan);
 end;
 
 end.
