@@ -30,8 +30,8 @@ function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 
 procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
 procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
-function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
-function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt;
+function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt;
 
 procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
 
@@ -57,6 +57,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
   nextpas.core.compress.deflate,
   nextpas.core.zip.aes;
@@ -116,7 +117,7 @@ begin
     raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
-function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+function ZipSliceRead(var ABase: PByte; var ARemaining: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt;
 var
   LN: SizeUInt;
 begin
@@ -125,14 +126,14 @@ begin
     LN := ARemaining;
   if LN > 0 then
   begin
-    Move(ABase^, ABuf, LN);
+    BytesCopy(@ABuf, ABase, LN);
     Inc(ABase, LN);
     Dec(ARemaining, LN);
   end;
   Result := LN;
 end;
 
-function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt; inline;
+function ZipBytesRead(const AData: TBytes; var APos: SizeUInt; var ABuf; ACount: SizeUInt): SizeUInt;
 var
   LAvail: SizeUInt;
 begin
@@ -147,7 +148,7 @@ begin
     Result := LAvail;
   if Result > 0 then
   begin
-    Move(AData[APos], ABuf, Result);
+    BytesCopy(@ABuf, @AData[APos], Result);
     Inc(APos, Result);
   end;
 end;

@@ -253,6 +253,9 @@
 ### S104 — 边界守卫薄包装消除与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - 移除 `reader.TZipReaderImpl.NeedRange/TZipSourceReader.NeedRange` 薄包装（`2×4 行声明+2×4 行实现 → 0`），调用点直通 `common.GuardCursorRange/GuardRange`（`6 处 NeedRange → Guard*`），`reader` 双形态共享边界内核零包装，12 门 + `bench_zip 221836` 可编译回归，`S85—S104` 十六单源+一性能+一守卫+一切片+一包装消除平台期
 
+### S105 — 切片读去 inline 与 bytes.ops 单源与平台期（1.0.1 巡检）· 稳定性/复用度/高级感 — 已落地
+- `common.ZipSliceRead/ZipBytesRead` 去 `inline`（`2× inline→0`，消除 `Move(var untyped)` 常量传播踩栈红线 1）并收口 `Move → bytes.ops.BytesCopy` 单源（`2× Move → 2× BytesCopy`，`PByte` 与 `TBytes[APos]` 零拷贝同源），`reader/sequential` 共享切片内核零红线，12 门 + `bench_zip 221837` 可编译回归，`S85—S105` 十六单源+一性能+一守卫+一切片+一包装消除+一去 inline 平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -285,4 +288,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S104 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 60f586a` 已落地（S104 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片 + `NeedRange` 薄包装消除（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片+包装消除） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S105 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c654d91` 已落地（S105 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片 + `NeedRange` 包装消除 + 去 inline（`bytes.ops.BytesCopy` 单源，三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片+包装消除+去 inline） + AES 零堆栈。
