@@ -18,10 +18,10 @@ uses
 
 { scheme token 校验：纯谓词，规则非空且全小写 [a-z][a-z0-9+.-]*，空串返回
   False（由 CheckWebviewOptions 视为用默认）；单源复用 L1 text.char 表驱动
-  IsLower/IsDigit inline 零拷贝，零重复分支；剩余 '+','-','.' 为符号单点；
-  perf: inline + 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string
-  分配），无堆资源、释放不丢。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
+  IsLower/IsDigit 零拷贝，零重复分支；剩余 '+','-','.' 为符号单点；
+  perf: 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），
+  含扫描循环依 design-conventions 红线二去 inline 避免 I-Cache 膨胀，无堆资源、释放不丢。 }
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
 
 { 选项校验：违反不变量抛 EWebviewInvalidState。
   规则：
@@ -58,12 +58,12 @@ uses
   nextpas.core.text.view,
   nextpas.core.validation;
 
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
 var
   I: Integer;
   B: Byte;
 begin
-  // perf: inline + 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），单源 text.char IsLower/IsDigit，无手写区间漂移，零重复分支
+  // perf: 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），单源 text.char IsLower/IsDigit，无手写区间漂移，零重复分支；去 inline（真实循环体禁 inline 红线二）
   Result := False;
   if AScheme = '' then
     Exit;
@@ -174,7 +174,8 @@ procedure CheckInvokeCmd(const ACmd: string); inline;
 begin
   if ACmd = '' then
     raise EWebviewInvalidState.Create('invoke cmd must not be empty');
-  if (Copy(ACmd, 1, 4) = 'npw.') or (ACmd[1] = '_') then
+  // perf: inline + TStringView zero-copy view (L1 text.view single source, VecWidth SIMD, zero alloc) 代替 Copy 临时串分配，高频注册路径零拷贝
+  if (TStringView.FromStr(ACmd).StartsWith(TStringView.FromStr('npw.'))) or (ACmd[1] = '_') then
     raise EWebviewInvalidState.CreateFmt(
       'invoke cmd "%s" collides with the protocol namespace', [ACmd]);
 end;

@@ -13,16 +13,20 @@ unit nextpas.core.window.live;
          WindowPumpOnceZero 的 16ns 早退路径；若未来需跨线程直接注册，
          再引入 ILock 也不破坏 Count 的 O(1) 语义（本版先保性能）
        - sdl 变体附带 WindowID 平行数组，供 FindByID 路由
-       - 跨家族评估（webview.live 紧凑 Vec 重复）：与 webview.live 已评估，
-         二者同复用 bytes.ops 单源思想（webview 侧 VecGrowCapacity 0→4→2×
+       - 跨家族评估（webview.live 紧凑 Vec 重复）：与 webview.live 已反哺落地 L1
+         bytes.ops.TCompactLiveRegistry<T>（webview 侧 VecGrowCapacity 0→4→2×
          inline 零拷贝、VecRemoveSwap O(1) 零拷贝 swap；本单元 n≤7 极小紧凑
-         Vec 保持 Length 计数 1-by-1 零额外容量 bookkeeping， swap 语义同源
-         bytes.ops），无跨家族重复实现；若抽通用辅助/池模块需反哺 L1
-         collections/通用池 owner 并经设计评审，当前不自行外溢（L0-L3 守恒）。 *}
+         Vec 保持 Length 计数 1-by-1 零额外容量 bookkeeping，swap 语义同源
+         bytes.ops VecRemoveSwap 单源 inline 零额外调用），跨家族同构已消除（单源
+         bytes.ops，零重复实现）；若抽通用辅助/池模块需反哺 L1
+         collections/通用池 owner 并经设计评审，当前不自行外溢（L0-L3 守恒，CONTRACT §1.2/§50 已登记并落地 L1）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
+
+uses
+  nextpas.core.bytes.ops;
 
 type
   TWindowLiveRegistry = class

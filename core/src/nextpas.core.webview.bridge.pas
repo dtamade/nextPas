@@ -182,6 +182,7 @@ implementation
 uses
   nextpas.core.text.view,
   nextpas.core.text.builder,
+  nextpas.core.text.escape,
   nextpas.core.json.parser,
   nextpas.core.json.writer,
   nextpas.core.bytes.ops,
@@ -401,39 +402,22 @@ var
   LB: TStringBuilder;
   procedure AppendDoubleEscaped(const S: string); inline;
   var
-    I: SizeUInt;
-    B: Byte;
-    P: PAnsiChar;
-    LLen: SizeUInt;
+    LTmp: TStringBuilder;
+    V: TStringView;
   begin
-    { perf: inline double-escape (JsonEscape single source) directly into outer LB, zero temp string, zero second builder }
-    LLen := SizeUInt(Length(S));
-    if LLen = 0 then Exit;
-    P := PAnsiChar(S);
-    for I := 0 to LLen - 1 do
-    begin
-      B := Byte(P[I]);
-      case B of
-        Ord('"'): LB.AppendBytes('\\\"', 4);
-        Ord('\'): LB.AppendBytes('\\\\', 4);
-        8: LB.AppendBytes('\\b', 3);
-        9: LB.AppendBytes('\\t', 3);
-        10: LB.AppendBytes('\\n', 3);
-        12: LB.AppendBytes('\\f', 3);
-        13: LB.AppendBytes('\\r', 3);
-      else
-        if B < 32 then
-        begin
-          LB.AppendBytes('\\u00', 5);
-          LB.AppendChar(AnsiChar('0123456789abcdef'[((B shr 4) and $F) + 1]));
-          LB.AppendChar(AnsiChar('0123456789abcdef'[(B and $F) + 1]));
-        end else
-          LB.AppendChar(AnsiChar(B));
-      end;
+    { perf: batch double-escape via L2 text.escape single source (SIMD bulk Move), inline zero-copy views }
+    if S = '' then Exit;
+    V := TStringView.FromStr(S);
+    LTmp.Init(SizeUInt(Length(S)) * 2 + 16);
+    try
+      JsonEscapeToBuilder(V, LTmp);
+      JsonEscapeToBuilder(LTmp.AsView, LB);
+    finally
+      LTmp.Done;
     end;
   end;
 begin
-  { perf: single TStringBuilder reserve + zero-copy AppendInt/AppendBytes, single-pass double-escape via text.escape single source, no IJsonBuilder heap, no LInnerStr ToString copy, no second builder, inline helper }
+  { perf: single outer TStringBuilder reserve + zero-copy AppendInt/AppendBytes/Views, two-stage SIMD batch JsonEscapeToBuilder via L2 text.escape single source (bytes.ops view semantics), inline helper, no IJsonBuilder heap }
   LCode := NormalizeInvokeCode(ACode);
   LB.Init(SizeUInt(16 + 20 + 4 + (SizeUInt(Length(LCode)) * 4 + SizeUInt(Length(AMessage)) * 6 + 32) * 2 + 8));
   try

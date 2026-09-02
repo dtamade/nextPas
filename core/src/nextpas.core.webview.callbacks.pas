@@ -39,53 +39,53 @@ implementation
 
 function WebviewNotifyMethodToRef(AHandler: TWebviewNotifyMethod): TWebviewNotifyHandler; inline;
 begin
-  { thin forward single source: mirrors L0 base.callbacks.CallbackNotifyMethodToRef, inline zero-copy }
-  Result := procedure begin AHandler; end;
+  { inline thin forward to L0 single source, zero extra call, zero-copy closure (Move only) }
+  Result := TWebviewNotifyHandler(CallbackNotifyMethodToRef(AHandler));
 end;
 
 function WebviewNotifyProcToRef(AHandler: TWebviewNotifyProc): TWebviewNotifyHandler; inline;
 begin
-  Result := procedure begin AHandler; end;
+  Result := TWebviewNotifyHandler(CallbackNotifyProcToRef(AHandler));
 end;
 
 function WebviewNavMethodToRef(AHandler: TWebviewNavEventMethod): TWebviewNavEventHandler; inline;
 begin
-  Result := procedure(const AEvent: TWebviewNavigationEvent) begin AHandler(AEvent); end;
+  Result := TWebviewNavEventHandler(specialize CallbackEventMethodToRef<TWebviewNavigationEvent>(AHandler));
 end;
 
 function WebviewNavProcToRef(AHandler: TWebviewNavEventProc): TWebviewNavEventHandler; inline;
 begin
-  Result := procedure(const AEvent: TWebviewNavigationEvent) begin AHandler(AEvent); end;
+  Result := TWebviewNavEventHandler(specialize CallbackEventProcToRef<TWebviewNavigationEvent>(AHandler));
 end;
 
 function WebviewNavFailedMethodToRef(AHandler: TWebviewNavFailedMethod): TWebviewNavFailedHandler; inline;
 begin
-  Result := procedure(const AEvent: TWebviewNavigationEvent) begin AHandler(AEvent); end;
+  Result := TWebviewNavFailedHandler(specialize CallbackEventMethodToRef<TWebviewNavigationEvent>(AHandler));
 end;
 
 function WebviewNavFailedProcToRef(AHandler: TWebviewNavFailedProc): TWebviewNavFailedHandler; inline;
 begin
-  Result := procedure(const AEvent: TWebviewNavigationEvent) begin AHandler(AEvent); end;
+  Result := TWebviewNavFailedHandler(specialize CallbackEventProcToRef<TWebviewNavigationEvent>(AHandler));
 end;
 
 function WebviewScaleMethodToRef(AHandler: TWebviewScaleMethod): TWebviewScaleHandler; inline;
 begin
-  Result := procedure(ANewScale: Double) begin AHandler(ANewScale); end;
+  Result := TWebviewScaleHandler(CallbackScaleMethodToRef(TCallbackScaleMethod(AHandler)));
 end;
 
 function WebviewScaleProcToRef(AHandler: TWebviewScaleProc): TWebviewScaleHandler; inline;
 begin
-  Result := procedure(ANewScale: Double) begin AHandler(ANewScale); end;
+  Result := TWebviewScaleHandler(CallbackScaleProcToRef(TCallbackScaleProc(AHandler)));
 end;
 
 function WebviewProcMethodToRef(AHandler: TWebviewProcMethod): TWebviewProcRef; inline;
 begin
-  Result := procedure begin AHandler(); end;
+  Result := TWebviewProcRef(CallbackNotifyMethodToRef(AHandler));
 end;
 
 function WebviewProcToRef(AHandler: TWebviewProc): TWebviewProcRef; inline;
 begin
-  Result := procedure begin AHandler(); end;
+  Result := TWebviewProcRef(CallbackNotifyProcToRef(AHandler));
 end;
 
 end.

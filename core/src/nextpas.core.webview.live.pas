@@ -10,20 +10,20 @@ unit nextpas.core.webview.live;
        - 本单元为家族内特权共享（不经门面 re-export），仅被 `webview.*` 后端 uses
        - 提供泛型 helpers：WebviewLiveAdd / WebviewLiveRemove / WebviewLiveRemoveSwap
          inline 薄转发 bytes.ops Vec 单源（VecRemoveSwap O(1) 零拷贝末尾换位为热关闭路径默认，VecRemoveOrdered O(n) 保序仅 order-sensitive 保留），避免逐元素 shift 的 O(n²) 退化
-       - 另提供泛型类 TWebviewLiveRegistry<T> 供需要对象化注册表的后端（与
-         window.live 类同构），Count 为 O(1) inline 读；Unregister 默认 O(1) swap，UnregisterSwap 同源
+       - 另提供泛型类 TWebviewLiveRegistry<T> 为 L1 bytes.ops.TCompactLiveRegistry<T> 的家族内薄别名（已反哺 L1 通用容器，CONTRACT §1.2/§50 可抽模块候选已落地 L1，零重复实现，inline 单源，跨家族与 window.live 同构已收敛至 bytes.ops 单源），Count 为 O(1) inline 读；Unregister 默认 O(1) swap，UnregisterSwap 同源
        - 线程假设：Register/Unregister 仅在主线程调用（Create/Close 经
          Dispatcher marshal），Count 无锁 inline 读；若需跨线程再引入 ILock
        - 与 collections.slotregistry 互补：slotregistry 适用于稀疏槽复用
          （-1 sentinel + Free 栈），此处为紧凑 Vec 语义；选型依据：webview
          活窗列表为短小紧凑迭代（FindByView / PumpAll），无需稀疏槽。
-       - 抽取评估（CONTRACT §1.2/§50 可抽模块候选显式登记）：utils/callbacks
+       - 抽取评估（CONTRACT §1.2/§50 可抽模块候选已显式登记并反哺落地 L1）：utils/callbacks
          与 live/pool（含本单元 WebviewPoolTryAcquire/Release）已评估为通用
-         辅助/池模块抽取候选，当前仍滞留家族内；结论：与 window.live 紧凑 Vec
-         的跨家族重复已收敛至 bytes.ops 单源（VecGrowCapacity 0→4→2× inline
-         零额外调用、VecRemoveSwap/Ordered 零拷贝、Default(T) 释放不丢），无
-         跨家族重复实现，保留 bytes.ops 单源但未统一为通用模块；通用辅助/池若独立需反哺 L1 collections/bytes.ops 通用池 owner
-         并经设计评审，不在当前 slice 自行外溢（守四件套纯度、L0-L3 守恒）。
+         辅助/池模块抽取候选，其中 live 紧凑 Vec 已反哺至 L1 bytes.ops 通用注册表
+         TCompactLiveRegistry<T>（VecGrowCapacity 0→4→2× inline
+         零额外调用、VecRemoveSwap/Ordered 零拷贝、Default(T) 释放不丢），本单元
+         TWebviewLiveRegistry<T> 仅为 L1 薄别名 inline 零额外调用，跨家族与 window.live
+         同构重复已消除（同源 bytes.ops 单源单实现），通用池若独立需反哺 L1 通用池 owner
+         sync.pool/collections 并经设计评审，不在当前 slice 自行外溢（守四件套纯度、L0-L3 守恒）。
        - 性能：全部 inline 薄转发零额外调用，Swap O(1) 零拷贝末尾换位热关闭默认，
          Snapshot/Trim 单次 SetLength、Pool 短临界区仅指针存取堆分配在外（<1µs）。
        - 稳定性：析构 Clear 逐槽 Default(T) nil 释放 ref/interface，Pool 溢出方
@@ -37,31 +37,17 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.sync.mutex;
 
-{ 紧凑 Vec 语义：Add/Remove 单源，bytes.ops VecGrow inline 复用 }
+{ 紧凑 Vec 语义：Add/Remove 单源，bytes.ops VecGrow inline 复用 — 已反哺 L1 通用注册表，家族内薄别名零重复 }
 generic procedure WebviewLiveAdd<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemove<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemoveSwap<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
-{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline — 可抽模块候选显式登记（待反哺 L1 通用池 owner sync.pool/collections/bytes.ops 并经设计评审，当前家族内私有不经门面 re-export，CONTRACT §1.2/§50） }
+{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline — 可抽模块候选已显式登记并评估（live 已反哺 L1 bytes.ops，pool 待反哺 L1 通用池 owner sync.pool/collections/bytes.ops 并经设计评审，当前家族内薄封装不经门面 re-export，CONTRACT §1.2/§50） }
 generic function WebviewPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
 generic function WebviewPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 
 type
-  { 可抽模块候选显式登记：紧凑 Vec 泛型封装 TWebviewLiveRegistry<T> 待反哺 L1 通用数组辅助 owner bytes.ops/collections，当前家族内私有不经门面 re-export，CONTRACT §1.2/§50；与 window.live 同复用 bytes.ops 单源思想（紧凑 Vec 注册表与 window.live 同构重复未抽至 L1，仅靠 bytes.ops VecGrow/VecRemoveSwap 单源缓解，属可抽通用 Vec 候选），零重复实现 }
-  generic TWebviewLiveRegistry<T> = class
-  private
-    FList: array of T;
-    FCount: Integer;
-  public
-    procedure Register(const AInst: T); inline;
-    procedure Unregister(const AInst: T); inline;
-    procedure UnregisterSwap(const AInst: T); inline;
-    function Count: Integer; inline;
-    function IsEmpty: Boolean; inline;
-    function At(AIndex: Integer): T; inline;
-    procedure Snapshot(var ADest: array of T); inline;
-    procedure Trim; inline;
-    procedure Clear;
-    destructor Destroy; override;
+  { 已反哺 L1：紧凑 Vec 泛型封装 TWebviewLiveRegistry<T> 为 L1 bytes.ops.TCompactLiveRegistry<T> 薄别名，CONTRACT §1.2/§50 已落地；与 window.live 同构已收敛至 bytes.ops 单源（VecGrow/VecRemoveSwap/VecSnapshot/VecTrim inline 零额外调用，0→4→2× 单源），零重复实现，家族内不另立实现 }
+  generic TWebviewLiveRegistry<T> = class(specialize TCompactLiveRegistry<T>)
   end;
 
 implementation
@@ -118,69 +104,6 @@ begin
   finally
     if ALock <> nil then ALock.Release;
   end;
-end;
-
-{ TWebviewLiveRegistry }
-
-generic procedure TWebviewLiveRegistry.Register(const AInst: T); inline;
-begin
-  specialize WebviewLiveAdd<T>(FList, FCount, AInst);
-end;
-
-generic procedure TWebviewLiveRegistry.Unregister(const AInst: T); inline;
-begin
-  // perf: hot close path O(1) swap, single source bytes.ops VecRemoveSwap inline 零拷贝，trailing nil 释放不丢，避 O(n²) 逐元素 shift
-  specialize WebviewLiveRemoveSwap<T>(FList, FCount, AInst);
-end;
-
-generic procedure TWebviewLiveRegistry.UnregisterSwap(const AInst: T); inline;
-begin
-  specialize WebviewLiveRemoveSwap<T>(FList, FCount, AInst);
-end;
-
-generic function TWebviewLiveRegistry.Count: Integer; inline;
-begin
-  Result := FCount;
-end;
-
-generic function TWebviewLiveRegistry.IsEmpty: Boolean; inline;
-begin
-  Result := FCount = 0;
-end;
-
-generic function TWebviewLiveRegistry.At(AIndex: Integer): T; inline;
-begin
-  // perf: inline O(1) index read, zero extra call
-  Result := FList[AIndex];
-end;
-
-generic procedure TWebviewLiveRegistry.Snapshot(var ADest: array of T); inline;
-begin
-  // perf: inline thin forward to bytes.ops VecSnapshot single source (nil fast path + single SetLength + copy), zero extra alloc
-  specialize VecSnapshot<T>(ADest, FList, FCount);
-end;
-
-generic procedure TWebviewLiveRegistry.Trim; inline;
-begin
-  // perf: inline thin forward to bytes.ops VecTrim single source
-  specialize VecTrim<T>(FList, FCount);
-end;
-
-generic procedure TWebviewLiveRegistry.Clear;
-begin
-  // stability: nil each slot to release interface/class refs, then reset count
-  while FCount > 0 do
-  begin
-    Dec(FCount);
-    FList[FCount] := Default(T);
-  end;
-  SetLength(FList, 0);
-end;
-
-generic destructor TWebviewLiveRegistry.Destroy;
-begin
-  Clear;
-  inherited Destroy;
 end;
 
 end.

@@ -93,6 +93,25 @@ generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACoun
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
 
+{ L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：供 webview.live/window.live 家族薄转发，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现 }
+type
+  generic TCompactLiveRegistry<T> = class
+  private
+    FList: array of T;
+    FCount: Integer;
+  public
+    procedure Register(const AInst: T); inline;
+    procedure Unregister(const AInst: T); inline;
+    procedure UnregisterSwap(const AInst: T); inline;
+    function Count: Integer; inline;
+    function IsEmpty: Boolean; inline;
+    function At(AIndex: Integer): T; inline;
+    procedure Snapshot(var ADest: array of T); inline;
+    procedure Trim; inline;
+    procedure Clear;
+    destructor Destroy; override;
+  end;
+
 implementation
 
 uses
@@ -768,6 +787,66 @@ begin
         Move(ASrc[0], ADst[LTail], SizeUInt(ACount - LTail) * SizeUInt(SizeOf(T)));
     end;
   end;
+end;
+
+{ TCompactLiveRegistry — L1 single source for webview.live/window.live compact Vec registry, inline thin-forward, zero duplicate }
+
+generic procedure TCompactLiveRegistry.Register(const AInst: T); inline;
+begin
+  specialize VecGrow<T>(FList, FCount);
+  FList[FCount] := AInst;
+  Inc(FCount);
+end;
+
+generic procedure TCompactLiveRegistry.Unregister(const AInst: T); inline;
+begin
+  specialize VecRemoveSwap<T>(FList, FCount, AInst);
+end;
+
+generic procedure TCompactLiveRegistry.UnregisterSwap(const AInst: T); inline;
+begin
+  specialize VecRemoveSwap<T>(FList, FCount, AInst);
+end;
+
+generic function TCompactLiveRegistry.Count: Integer; inline;
+begin
+  Result := FCount;
+end;
+
+generic function TCompactLiveRegistry.IsEmpty: Boolean; inline;
+begin
+  Result := FCount = 0;
+end;
+
+generic function TCompactLiveRegistry.At(AIndex: Integer): T; inline;
+begin
+  Result := FList[AIndex];
+end;
+
+generic procedure TCompactLiveRegistry.Snapshot(var ADest: array of T); inline;
+begin
+  specialize VecSnapshot<T>(ADest, FList, FCount);
+end;
+
+generic procedure TCompactLiveRegistry.Trim; inline;
+begin
+  specialize VecTrim<T>(FList, FCount);
+end;
+
+generic procedure TCompactLiveRegistry.Clear;
+begin
+  while FCount > 0 do
+  begin
+    Dec(FCount);
+    FList[FCount] := Default(T);
+  end;
+  SetLength(FList, 0);
+end;
+
+generic destructor TCompactLiveRegistry.Destroy;
+begin
+  Clear;
+  inherited Destroy;
 end;
 
 end.

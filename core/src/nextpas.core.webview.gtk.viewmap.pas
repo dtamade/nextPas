@@ -7,11 +7,11 @@ unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1候选未提升：�
        - 容量：bytes.ops.VecGrowCapacity (0→4→2× inline 单源) — 与 webview.live/assetIndex 单源一致
        - 负载：0.75 (hashmap.base.DEFAULT_MAX_LOAD_FACTOR) — 单源阈值，零阈值漂移
        - 比较：指针等值直比，零 SpanEqual 额外开销
-       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，抽取需反哺 L1 collections/hashmap.base 通用指针哈希 owner 并经设计评审不自行外溢（CONTRACT §1.2 登记，L0-L3 守恒）
+       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，容器未直接复用 L1 THashMap generic（avoid allocator/bitmap/VTable 开销，blittable Pointer 数组 inline 零分配热读），抽取需反哺 L1 collections/hashmap.base 通用指针哈希特化 owner 并经设计评审不自行外溢（CONTRACT §1.2 登记，L0-L3 守恒），当前 VIEW_TOMBSTONE 单哨兵保探链完整
 
        性能：
        - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读，探测 and Mask 位掩码与 assets FMask 单源一致热读零除法
-       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环 and Mask 零额外调用零除法
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增，SetLength 单源单次，循环 and Mask 零额外调用零除法；ViewMapAdd 堆分配在锁外预分配（SetLength LNewMap 先于二次加锁），二次临界仅指针拷贝与 O(n) 桶迁移（n<=窗口数<=8，无堆分配，零阻塞读路径）
        - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容预判在锁外，短临界仅指针拷贝
 
        稳定性：析构清零 nil 释放不丢，VIEW_TOMBSTONE 单哨兵保探链完整 *}
@@ -94,6 +94,8 @@ var
   I, OldCap, Start, J, Mask: Integer;
 begin
   // 非 inline：含双层循环与重哈希，禁 inline（design-conventions 红线二），零 I-Cache 膨胀，and Mask 与 assets 单源一致
+  // 注意：此 Locked 形态仍含 SetLength（持 GViewMapLock 内堆分配），仅供 ViewMapAddLocked 直接持锁路径（n<=8 极小）；
+  // ViewMapAdd 非 Locked 包装已改两阶段：堆分配在锁外 LNewMap 预分配，二次临界仅指针拷贝与迁移，零阻塞读路径
   LOld := GViewMap;
   OldCap := Length(LOld);
   SetLength(GViewMap, ANewCap);
@@ -206,26 +208,64 @@ end;
 
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
 var
+  LCap, LCount, LNewCap, I, Mask, Start, J, LNewCount: Integer;
   LNeedGrow: Boolean;
-  LNewCap: Integer;
+  LNewMap, LOld: array of TViewMapEntry;
 begin
-  // 性能：堆分配预判在锁外（VecGrowCapacity 单源），短临界仅指针拷贝，O(n) 重哈希不持 GLiveLock
-  LNeedGrow := False;
-  LNewCap := 0;
+  // 性能：堆分配在锁外预分配，短临界仅指针拷贝与 O(n) 迁移，零阻塞读路径（GLiveLock/Find 读不持堆锁）
+  // 两阶段：阶段1短临界窥视是否需扩容并 fast-path 无扩容直插；需扩容则退锁在锁外 SetLength(LNewMap) 预分配，阶段2二次短临界安装并插入
+  if (AView = nil) or (AWin = nil) then Exit;
   if GViewMapLock <> nil then GViewMapLock.Acquire;
   try
-    if Length(GViewMap) = 0 then
-      LNeedGrow := True
-    else if GViewMapCount * 4 >= Length(GViewMap) * 3 then
-      LNeedGrow := True;
-    if LNeedGrow then
+    LCap := Length(GViewMap);
+    LCount := GViewMapCount;
+    LNeedGrow := (LCap = 0) or (LCount * 4 >= LCap * 3);
+    if not LNeedGrow then
     begin
-      if Length(GViewMap) = 0 then
-        LNewCap := VecGrowCapacity(0)
-      else
-        LNewCap := VecGrowCapacity(Length(GViewMap));
-      // SetLength 仍在锁内但为单次扩容，稳态零触发（预分配 4→8），临界 <1µs；重哈希 O(n) 但 n<=窗口数<=8 极小，且不持 GLiveLock 读锁
-      ViewMapRehashLocked(LNewCap);
+      ViewMapAddLocked(AView, AWin);
+      Exit;
+    end;
+    if LCap = 0 then
+      LNewCap := VecGrowCapacity(0)
+    else
+      LNewCap := VecGrowCapacity(LCap);
+  finally
+    if GViewMapLock <> nil then GViewMapLock.Release;
+  end;
+  // 堆分配在锁外：bytes.ops.VecGrowCapacity 单源 0→4→2× inline 零额外调用，单次 SetLength 零持锁阻塞
+  SetLength(LNewMap, LNewCap);
+  for I := 0 to LNewCap - 1 do
+  begin
+    LNewMap[I].Key := nil;
+    LNewMap[I].Value := nil;
+  end;
+  if GViewMapLock <> nil then GViewMapLock.Acquire;
+  try
+    // 双检：并发已扩容则复用现表，丢弃预分配 LNewMap（自动释放）
+    if (Length(GViewMap) = 0) or (GViewMapCount * 4 >= Length(GViewMap) * 3) then
+    begin
+      if Length(GViewMap) < Length(LNewMap) then
+      begin
+        LOld := GViewMap;
+        Mask := LNewCap - 1;
+        LNewCount := 0;
+        for I := 0 to Length(LOld) - 1 do
+          if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
+          begin
+            Start := Integer(ViewHash(LOld[I].Key) and UInt32(Mask));
+            for J := 0 to LNewCap - 1 do
+              if LNewMap[(Start + J) and Mask].Key = nil then
+              begin
+                LNewMap[(Start + J) and Mask].Key := LOld[I].Key;
+                LNewMap[(Start + J) and Mask].Value := LOld[I].Value;
+                Inc(LNewCount);
+                Break;
+              end;
+          end;
+        GViewMap := LNewMap;
+        GViewMapCount := LNewCount;
+        LNewMap := nil;
+      end;
     end;
     ViewMapAddLocked(AView, AWin);
   finally

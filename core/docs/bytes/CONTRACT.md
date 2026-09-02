@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.bytes*.pas`（8 个源文件）
 **层级**：L1（依赖 L0: base, mem, platform, simd；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
-**版本**：1.1
+**最后更新**：2026-09-02
+**版本**：1.2（S107 紧凑 Vec 注册表已反哺 L1 `TCompactLiveRegistry<T>`）
 
 ---
 
@@ -97,6 +97,11 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - **IByteCursor**：`NewByteCursor(TBytes)` 持有 `TBytes` 拷贝保活；`NewByteCursorAt(PByte, Len)` 裸指针由调用方保活；只读无分配（`ReadBytes` 除外）。
 - **ValidPath**：`BytesValidPath/BaseValidPath(APath, AAllowRoot)` — Go `io/fs.ValidPath` 语义，复用 `text.utf8.UTF8IsValid` 单源，段扫描零拷贝。
 
+### 1.6 Vec 单源与通用紧凑注册表（L1 已反哺）
+
+- **Vec 生长/删除/快照单源**：`VecGrowCapacity(0→4→2×)` / `VecGrow` / `VecRemoveSwap(O1零拷贝swap)` / `VecRemoveOrdered` / `VecSnapshot` / `VecTrim` / `VecCopy` / `VecRingCopy` 均为 `bytes.ops` 唯一权威，inline 零额外调用；`webview.live`/`window.live`/`collections` 复用此单源，零重复实现。
+- **通用紧凑 Vec 注册表**：`TCompactLiveRegistry<T>`（`bytes.ops`）为 L1 通用紧凑注册表，已反哺落地（CONTRACT §1.2/§50 可抽候选）：`webview.live.TWebviewLiveRegistry<T>` 为其薄别名 inline 零额外调用，`window.live` 同构已收敛至同源 Swap 语义；`Register` via `VecGrow` 0→4→2×，`Unregister` via `VecRemoveSwap` O(1) 零拷贝，`Snapshot` via `VecSnapshot` 单 SetLength + managed/blittable 分支零拷贝，`Clear` 逐槽 `Default(T)` 释放不丢，`Trim` 单源 `VecTrim`。
+
 ---
 
 ## 2. 不变量
@@ -157,3 +162,4 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
+| 2026-09-02 | 1.2 | S107 反哺：Vec 单源显式化 + `TCompactLiveRegistry<T>` 通用紧凑注册表落地 L1（`webview.live`/`window.live` 同构收敛至 `bytes.ops` 单源，VecGrowCapacity 0→4→2×/VecRemoveSwap 零拷贝/Default(T) 释放不丢，inline 单源） | webview lane |
