@@ -108,15 +108,6 @@ nextpas.core.vfs.decorator.pas  ← L3装饰器族聚合：transform+compressed 
 
 依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
 `embedded` 额外依赖 `respack.reader`（双缝白名单过渡期超越单缝理想需L7聚合拆分，Registry line 108/106 extra whitelist transitional L7 到期评估收敛至单缝理想，L7聚合拆分为后端独立族后移除额外白名单固化单缝理想，bytes.ops 单源 inline 零拷贝 + striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验保留 try-finally 资源不丢）；`os` 额外依赖 `nextpas.core.fs`（单缝保留，L7聚合拆分收口）。
-nextpas.core.vfs.transform.pas  ← L3 单缝通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` 单源决策器（单流 4K peek，大文件栈上 2 字节轻量预判零堆分配免 4K，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO，Stat/OpenRead 大文件解压一致性 via 单源，泛型路径输入/输出双 32MiB 防 bomb 统一），压缩/加密共用模板，inline+try-finally 零拷贝（L3 单缝寄居正名，Registry 单缝白名单过渡，L7 到期聚合为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单）
-nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator）：经 transform 单源决策器承载 gzip（`VFS_DECOMPRESS_MAX_BYTES` 单源别名复用 vfs.base 32MiB，canonical 寄居 compress.base GZIP_MAX 32MiB、base 为唯一字面量，漂移由 source-contract 别名单源锁定 + `daAuto/daGzip` 语义，直接复用 `TRANSFORM_HEADER_PEEK` 无本地别名 + `bytes.ops` inline 零拷贝单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致））
-nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator）：经 transform 单源决策器承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES` 字面量 32MiB 数值对齐 compress.base GZIP_MAX canonical 单源、漂移由 source-contract 锁定与 `daAuto/daGzip` 语义，直接复用 `TRANSFORM_HEADER_PEEK` 无本地别名 + `bytes.ops` inline 零拷贝单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致））
-nextpas.core.vfs.transform.pas  ← L3 单缝通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` 单源决策器（单流 4K peek，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO），压缩/加密共用模板，inline+try-finally 零拷贝（L3 单缝寄居正名，Registry 单缝白名单过渡，长期待 L3 族聚合拆分）
-nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）：经 transform 单源决策器承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，复用 `TRANSFORM_HEADER_PEEK` + `bytes.ops` 单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
-```
-
-依赖方向：`base/errors ← intf ← memtree/embedded/os/sub ← 门面`；
-`embedded` 额外依赖 `respack.reader`（L2→L2 单向 allowlist 单缝，cycle-gated，超出默认 L0-L1）；`os` 额外依赖 `nextpas.core.fs`（L2→L2 单向 allowlist 单缝，cycle-gated，超出默认 L0-L1）；两处需 registry+source-contract 双锁防循环。
 
 ### 依赖白名单
 
@@ -129,14 +120,6 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）�
 | `compressed` | `transform` + `compress.gzip` + `bytes.ops` + `vfs.base` | L3 薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator，经 vfs.base 链式单源 alias 压缩 canonical 无字面量（vfs.base→compress.base GZIP_MAX 32MiB，链式别名复用无二次字面量双写，L3→L2 合法）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` inline 零拷贝单源、4K HeaderPred 统一（impl 私有 4096 单源，接口不暴露，compressed 数值对齐无别名）、`VFS_DECOMPRESS_MAX_BYTES` 链式单源 32MiB canonical），模板复用 `transform` 单源决策器，32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致，输入/输出双阈值） |
 | `decorator` | `transform` + `compressed` + `vfs.base` + `vfs.intf` | L3装饰器族聚合：transform+compressed 单点收口（门面扇出收敛 13→12，bytes.ops 单源 inline 零拷贝，try-finally 不丢，L7 独立族过渡，门面经 decorator 单缝聚合收敛扇出） |
 | `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | L2→L2 seam whitelisted 双缝白名单过渡期超越单缝理想需L7聚合拆分 (Registry line 108/106 extra whitelist transitional L7 到期评估收敛至单缝理想 source-contract gated; double seam with embedded→respack.reader, 14→ respack.reader, bytes.ops 单源 inline 零拷贝 + striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验保留 try-finally 资源不丢，L7聚合拆分为后端独立族后移除额外白名单固化单缝理想) |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
-| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，大文件栈上 2 字节轻量预判零堆分配免 4K，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead，Stat/OpenRead 大文件解压一致性，泛型路径输入/输出双 32MiB 防 bomb 统一），零 `SysUtils` 直引（`QueryInterface`） |
-| `compressed` | `transform` + `compress.gzip` + `bytes.ops` + `vfs.base` | L3 薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator，经 vfs.base 单源别名复用 VFS_DECOMPRESS_MAX_BYTES 无二次字面量双写，L3→L2 合法）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` inline 零拷贝单源、直接复用 `TRANSFORM_HEADER_PEEK` 无本地别名、`VFS_DECOMPRESS_MAX_BYTES` 单源别名复用 vfs.base 32MiB canonical 单源），模板复用 `transform` 单源决策器，32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致，输入/输出双阈值） |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader` 单向 allowlist 单缝，cycle-gated） | |
-| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead），零 `SysUtils` 直引（`QueryInterface`） |
-| `compressed` | `transform` + `compress` (`compress.base` + `compress.gzip`) + `bytes.ops` | L3 薄门面（单缝寄居正名，长期待拆分）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` 单源、`GZIP_MAX` 单源），模板复用 `transform` 单源决策器承载 32MiB 防 bomb |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **L2→L2 单向 allowlist 单缝之一**（另一为 embedded→respack.reader），超出默认 L0-L1，registry 记录，source-contract 单向门禁防循环 |
 
 ## 核心契约
 
