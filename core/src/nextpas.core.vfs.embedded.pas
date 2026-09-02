@@ -1,10 +1,6 @@
 unit nextpas.core.vfs.embedded;
 
-{** @desc embedded 后端：respack blob 只读 IVfs 视图——资产嵌入主路径。
-  依赖 respack.reader（Registry whitelisted，source-contract gated，L7 后端族聚合后收敛单缝）；
-  零拷贝：Stat/Find 直通二分索引，读取窗口落 blob 区间
-  （bytes.ops 单源 inline 零拷贝，SpinLock 池化 try-finally 保证释放）。
-  EResPackCorrupted 原样透传，详见 core/docs/vfs/README.md。 }
+{** @desc embedded 后端：respack blob 只读 IVfs 视图。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -90,14 +86,18 @@ type
 
 const
   EMBEDDED_POOL_SIZE = 64; { 池容量，CONTRACT 单源 }
+  EMBEDDED_POOL_SHARDS = 16;
+  EMBEDDED_POOL_SLOTS_PER_SHARD = EMBEDDED_POOL_SIZE div EMBEDDED_POOL_SHARDS;
 
 type
-  { 切片池：64 槽 SpinLock，二次校验 FLock=nil 安全回退 }
+  { 切片池：64 槽 16 分片 SpinLock，热点 16×降争 }
   TEmbeddedSlicePool = class
   private
-    FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
-    FCount: Integer;
-    FLock: ISpinLock;
+    FPools: array[0..EMBEDDED_POOL_SHARDS - 1, 0..EMBEDDED_POOL_SLOTS_PER_SHARD - 1] of TEmbeddedSlice;
+    FCounts: array[0..EMBEDDED_POOL_SHARDS - 1] of Integer;
+    FLocks: array[0..EMBEDDED_POOL_SHARDS - 1] of ISpinLock;
+    function ShardOfStack(const AAddr: Pointer): Integer; inline;
+    function ShardOfPointer(const APtr: Pointer): Integer; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -351,67 +351,99 @@ end;
 
 { ── TEmbeddedSlicePool ── }
 
+function TEmbeddedSlicePool.ShardOfStack(const AAddr: Pointer): Integer; inline;
+begin
+  Result := Integer((PtrUInt(AAddr) shr 4) and 15);
+end;
+
+function TEmbeddedSlicePool.ShardOfPointer(const APtr: Pointer): Integer; inline;
+begin
+  Result := Integer((PtrUInt(APtr) shr 4) and 15);
+end;
+
 constructor TEmbeddedSlicePool.Create;
+var
+  I: Integer;
 begin
   inherited Create;
-  FLock := SpinLock;
-  FCount := 0;
+  for I := Low(FLocks) to High(FLocks) do
+  begin
+    FLocks[I] := SpinLock;
+    FCounts[I] := 0;
+  end;
 end;
 
 destructor TEmbeddedSlicePool.Destroy;
 var
-  I: Integer;
+  I, S: Integer;
 begin
-  if FCount > 0 then
+  for S := Low(FLocks) to High(FLocks) do
   begin
-    for I := 0 to FCount - 1 do
-      FPool[I].Free;
-    FCount := 0;
+    if FCounts[S] > 0 then
+    begin
+      for I := 0 to FCounts[S] - 1 do
+        FPools[S, I].Free;
+      FCounts[S] := 0;
+    end;
+    FLocks[S] := nil;
   end;
-  FLock := nil;
   inherited Destroy;
 end;
 
 function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
 var
+  Start, I, S: Integer;
   LLock: ISpinLock;
 begin
   Result := False;
   ASlice := nil;
-  LLock := FLock;
-  if (LLock = nil) or (FCount = 0) then Exit;
-  LLock.Acquire;
-  try
-    if FCount > 0 then
-    begin
-      Dec(FCount);
-      ASlice := FPool[FCount];
-      FPool[FCount] := nil;
-      Result := True;
+  Start := ShardOfStack(@ASlice);
+  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
+  begin
+    S := (Start + I) and 15;
+    LLock := FLocks[S];
+    if LLock = nil then Continue;
+    if not LLock.TryAcquire then Continue;
+    try
+      if FCounts[S] > 0 then
+      begin
+        Dec(FCounts[S]);
+        ASlice := FPools[S, FCounts[S]];
+        FPools[S, FCounts[S]] := nil;
+        Result := True;
+        Exit;
+      end;
+    finally
+      LLock.Release;
     end;
-  finally
-    LLock.Release;
   end;
 end;
 
 function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
 var
+  Start, I, S: Integer;
   LLock: ISpinLock;
 begin
   Result := False;
   if ASlice = nil then Exit;
-  LLock := FLock;
-  if LLock = nil then Exit;
-  LLock.Acquire;
-  try
-    if FCount < EMBEDDED_POOL_SIZE then
-    begin
-      FPool[FCount] := ASlice;
-      Inc(FCount);
-      Result := True;
+  Start := ShardOfPointer(ASlice);
+  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
+  begin
+    S := (Start + I) and 15;
+    LLock := FLocks[S];
+    if LLock = nil then Continue;
+    if not LLock.TryAcquire then Continue;
+    try
+      if FCounts[S] < EMBEDDED_POOL_SLOTS_PER_SHARD then
+      begin
+        FPools[S, FCounts[S]] := ASlice;
+        Inc(FCounts[S]);
+        Result := True;
+        Exit;
+      end;
+    finally
+      LLock.Release;
     end;
-  finally
-    LLock.Release;
   end;
 end;
 

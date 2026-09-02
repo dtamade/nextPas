@@ -1,10 +1,10 @@
 # nextpas.core.vfs 代码契约
 
-**模块路径**：`core/src/nextpas.core.vfs*.pas`（15 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/cache/util + decorator 聚合（transform/compressed L3单缝装饰器经 decorator 单点收口） + 门面）
-**层级**：L2 基座（依赖 L0-L1；L2→L2 seams whitelisted 双缝白名单过渡期超越单缝理想需L7聚合拆分（Registry line 108/line 106 extra whitelist source-contract gated: `os` → fs/path 单缝保留，`embedded` → respack.reader second seam line 14 transitional 白名单过渡 L7 到期评估收敛至单缝理想 via bytes.ops 单源 inline 零拷贝 striped SpinLock 16 shards 分片发布 10k 首击热点 16×降争 双重校验保留 try-finally 资源不丢，L7聚合拆分为 nextpas.core.vfs.* 后端独立族后移除额外白名单固化 L0—L3 单向单缝理想）；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed` via Registry 单缝白名单过渡，L3→L2 实现侧单向使用 compress.gzip + 链式单源 alias vfs.base→compress.base GZIP_MAX_DECOMPRESS_BYTES canonical 32MiB 无字面量（source-contract 单源 alias 锁定）+ bytes.ops 单源 inline 零拷贝，长期聚合为独立 L3 族 nextpas.core.vfs.decorator、L7 到期移除白名单固化 L0-L3 单向依赖，现阶段以链式单源守层级高级感统一性，L7聚合拆分收口双缝与装饰器双白名单）
+**模块路径**：`core/src/nextpas.core.vfs*.pas`（16 源文件：base/intf/errors/memtree/embedded/os/backends/sub/mount/overlay/cache/util + decorator 聚合 + 门面）
+**层级**：L2（依赖 L0-L1；L2 双缝过渡白名单——`os→fs/path` 与 `embedded→respack.reader` 双缝并存，source-contract gated，L7 聚合为 `nextpas.core.vfs.backends` 后端独立族后收敛至单缝；`mount/overlay` 纯复合；L3 装饰器经 `vfs.decorator` 单点聚合）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
-**版本**：1.11（匠心修复：decorator 族单点聚合收敛门面扇出（transform/compressed 经 nextpas.core.vfs.decorator 单缝收口，门面 14→15 文件、13→12 聚合扇出降 1，族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢））
+**版本**：1.13（后端独立族落地：L2 双缝过渡白名单，L7 聚合为 `nextpas.core.vfs.backends` 后收敛单缝 source-contract gated）
 
 ---
 
@@ -13,46 +13,47 @@
 ### 1.1 模块结构
 
 ```
-vfs.base      ← TEntryInfo/TStatInfo、ValidPath 工具、常量（ValidPath单源 base.pathvalid；VFS_DECOMPRESS_MAX_BYTES 单源 alias compress.base GZIP_MAX_DECOMPRESS_BYTES canonical 32MiB 无字面量，compressed 经 vfs.base 链式别名复用，漂移由 source-contract 单源 alias 锁定；FromString 单源 TByteSpan.FromStr inline 零拷贝）
-vfs.intf      ← IVfs/IVfsETag/IVfsServeMeta 契约
-vfs.errors    ← EVfsError(Op/Path) 及子类（Op∈{'stat','open','list','read','wrap'}）
-vfs.memtree   ← 内存不可变树 + Builder（Int64下标防回绕、防御拷贝防悬垂、两段式Freeze）
-vfs.embedded  ← respack blob → IVfs（零拷贝切片，EMBEDDED_POOL_SIZE=64 SpinLock池化，百并发阈值覆盖）
-vfs.os        ← nextpas.core.fs → IVfs 适配
-vfs.sub       ← 重定根视图包装（Go fs.Sub 对等物）
-vfs.mount     ← 挂载复合视图：多IVfs前缀最长匹配聚合（P2完整性，ETag/ServeMeta透传，CaseSensitive一致性）
-vfs.overlay   ← 叠加视图：多IVfs同根优先级叠加（游戏 patch>dlc>base 热更模型，List去重合并，ETag/ServeMeta优先透传）
-vfs.cache     ← L2热点List缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + 零拷贝 COW 共享（mount/overlay 单源 via vfs.cache，SwissTable/RWLock/bytes.ops 单源 inline 零拷贝，Put 侧 Copy 隔离，TryGet 零拷贝 O(1) 共享只读契约防篡改 Move 仅在篡改路径，try-finally 资源不丢）
-vfs.util      ← 便利函数（VfsStat/List/ReadAll/Walk，Go包级辅助同构）
-vfs.transform ← L3通用字节变换装饰器（独立族 via vfs.decorator，L3→L2 单向固化，Registry 白名单已移除，复用 io.prefix 可复用前缀旁路流）：TVfsTransformFunc/Should/HeaderPred 三谓词注入，单流 4K HeaderPred 单源决策器薄转发分层（LightProbe/HeaderRead/LargeFill 三阶段 inline 单一职责，Stat/OpenRead 共用，Move 零拷贝复用已读头，命中大文件同一 IStream 64K 分块补读剩余免二次 OpenRead/二次 4K，Header假时Stat回 FInner.Stat/OpenRead零物化直透），大文件 2 字节栈缓冲栈零堆分配 PByte 单源轻量预判免 4K/TBytes 堆分配（bytes.ops BytesIsGzipBuffer inline 零拷贝），泛型路径 32MiB 限幅防 bomb 并发峰值受控（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，输入/输出双阈值，chunked streaming 已落地 64K 分块 + BytesNextCapacity 预估容量，峰值受控可被泛型/压缩复用，bytes.ops 单源），压缩/加密共用模板，ETag禁用，try-finally Close 不丢
-vfs.compressed← L3解压薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator）：经transform单源决策器承载gzip（VFS_DECOMPRESS_MAX_BYTES 链式单源 alias vfs.base→compress.base GZIP_MAX_DECOMPRESS_BYTES 32MiB canonical 无字面量（source-contract 单源 alias 锁定）+ bytes.ops BytesIsGzip inline 零拷贝单源，daAuto 4K HeaderPred 统一（impl 私有常量 4096 单源，接口不暴露封装收口，compressed 数值对齐无别名），薄门面仅策略，防 bomb 由 transform 统一承载）
-vfs.decorator ← L3装饰器族聚合：transform+compressed 单点收口（门面扇出收敛，L7 独立族过渡，bytes.ops 单源 inline 零拷贝，try-finally 不丢，CONTRACT 单源）
-vfs.pas       ← 门面 re-export + 便利函数 + ETag/Decompress/Mount/Overlay重导出（IVfsETag/IVfsServeMeta/VFS_DECOMPRESS_MAX_BYTES/daGzip/daAuto + CreateTransformingVfs/CreateMountedVfs/VfsMountEntry/CreateOverlayVfs；decorator 族经 vfs.decorator 单点聚合，门面扇出 13→12）
+vfs.base      ← TEntryInfo/TStatInfo、ValidPath、常量（VFS_DECOMPRESS_MAX_BYTES 单源 alias compress.base）
+vfs.intf      ← IVfs/IVfsETag/IVfsServeMeta
+vfs.errors    ← EVfsError(Op/Path) 及子类
+vfs.memtree   ← 内存不可变树 + Builder
+vfs.embedded  ← respack blob → IVfs（零拷贝切片，池化）
+vfs.os        ← nextpas.core.fs → IVfs 适配（L2→L2 单缝保留）
+vfs.backends  ← 三后端聚合：memtree/embedded/os 单缝收口（L2 双缝过渡白名单 → L7 单缝，source-contract gated）
+vfs.sub       ← 重定根视图包装
+vfs.mount     ← 挂载复合：多 IVfs 前缀最长匹配
+vfs.overlay   ← 叠加视图：多 IVfs 同根优先级叠加
+vfs.cache     ← 热点 List 缓存单源 helper（SwissTable 16 槽 + RWLock）
+vfs.util      ← 便利函数（VfsStat/List/ReadAll/Walk）
+vfs.transform ← L3 通用字节变换装饰器（经 decorator 聚合）
+vfs.compressed← L3 解压薄门面（经 transform 承载 gzip）
+vfs.decorator ← L3 装饰器族聚合：transform+compressed 单点收口
+vfs.pas       ← 门面 re-export + 便利函数（经 decorator 聚合，扇出 12）
 ```
 
-### 1.2 核心签名（设计定稿）
+*注：性能实现细节（bytes.ops 单源 inline 零拷贝、SpinLock 池化、4K HeaderPred、try-finally）归实现文档与源码注释，契约仅保留接口与不变量。*
+
+### 1.2 核心签名
 
 | 领域 | 签名 | 说明 |
 |------|------|------|
 | 装配 | `CreateMemTreeVfs(ATree): IVfs` | Builder Freeze 产物 |
-| 装配 | `CreateEmbeddedVfsOwned/Borrowed(AData: PByte; ASize: SizeUInt): IVfs` | 零拷贝后端；Owned 归 VFS 所有（FreeMem）、Borrowed 归调用方（const 段零 Free，防布尔陷阱 double-free） |
-| 装配 | `CreateOsVfs(const ARoot: string): IVfs` | 真实目录后端 |
-| 视图 | `CreateSubVfs(AFs: IVfs; const ASubRoot: string): IVfs` | 重定根，不改底层实例 |
-| 视图 | `CreateMountedVfs(AMounts: array of TVfsMountEntry): IVfs` + `VfsMountEntry(APrefix,AFs)` | 挂载复合视图：多IVfs前缀最长匹配（根'.'兜底），List根去重合并，CaseSensitive一致性推导，ETag/ServeMeta透传 |
-| 视图 | `CreateOverlayVfs(AList: array of IVfs): IVfs` | 叠加视图：同根优先级叠加 patch>dlc>base（首命中胜出，List去重合并，ETag优先透传），游戏热更/DLC模型 |
-| 装饰 | `CreateTransformingVfs(AInner: IVfs; ATransform: TVfsTransformFunc; AShould: TVfsShouldTransformFunc; AHeaderPred: TVfsHeaderPredicateFunc)` | L3单缝变换装饰器（薄转发分层 TryResolveViaHeaderSingleStream：LightProbe/HeaderRead/LargeFill 三阶段 inline 单一职责）：泛型字节变换（压缩/加密共用模板，三谓词），`Stat` 单流 4K HeaderPred 免大文件全量读+小文件复用 Header 零二次 IO、`OpenRead` HeaderPred假时零物化直透 `FInner.OpenRead`（零拷贝无 materialize），真时单流 Move 零拷贝复用 4K 头+同流 IReaderAt/Seek 补读剩余（免二次 OpenRead），大文件 2 字节栈缓冲栈零堆 PByte 单源预判免 4K/TBytes 堆分配（bytes.ops BytesIsGzipBuffer inline 零拷贝），泛型路径输入/输出双 32MiB 限幅防 bomb 并发峰值受控（VFS_DECOMPRESS_MAX_BYTES 单源，L7 视压测按需 chunked streaming 进一步收敛），ETag禁用，Op/Path完整（'wrap'/'stat'/'open'，`try-finally` Close不丢，`inline` 热路径，非 IReaderAt 2字节小缓冲零堆单 Move 最优） |
-| 装饰 | `CreateDecompressingVfs(AInner: IVfs; AAlgo: TDecompressAlgo=daAuto): IVfs` | 解压薄门面（L3 单缝寄居正名，Registry 白名单过渡，L7 聚合拆分，经 transform 单源决策器）：`daGzip` 按gzip魔数（bytes.ops inline 零拷贝单源）按需解压，`VFS_DECOMPRESS_MAX_BYTES` 链式单源 alias vfs.base→compress.base GZIP_MAX 32MiB canonical 无字面量（source-contract 单源 alias 锁定），防 bomb 由 transform 统一承载（输入/输出双阈值），`daAuto` 单流 4K 头预判 HeaderPred 统一（impl 私有常量 4096 单源，接口不暴露封装收口，compressed 数值对齐无别名）、免 Stat 全量读，ETag禁用 |
-| 遍历 | `VfsWalk(AFs: IVfs; const ARoot: string; ACallback): Boolean` | 字典序全树遍历（Go WalkDir 对等物）；回调可置 AStop 中止 |
-| 便利 | `VfsStat(AFs; APath): TStatInfo` / `VfsList(AFs; ADir): TEntryArray` | 门面包函数，与 Go 包级辅助同构 |
-| 便利 | `VfsReadAllBytes(AFs; APath): TBytes` / `VfsReadAllText(...): string` | 门面函数，非接口方法 |
-| ETag | `IVfsETag.TryGetETag` + `VfsETagStrong/VfsETagFNV` + `VFS_DECOMPRESS_MAX_BYTES` | 门面重导出：embedded 预计算 ETag 零分配命中，压缩装饰器 ETag 禁用 |
+| 装配 | `CreateEmbeddedVfsOwned/Borrowed(AData,ASize): IVfs` | 零拷贝后端；Owned/Borrowed 所有权区分 |
+| 装配 | `CreateOsVfs(ARoot): IVfs` | 真实目录后端（L2→L2 单缝） |
+| 视图 | `CreateSubVfs(AFs,ASubRoot): IVfs` | 重定根 |
+| 视图 | `CreateMountedVfs(AMounts): IVfs` | 挂载复合，最长匹配 |
+| 视图 | `CreateOverlayVfs(AList): IVfs` | 叠加视图，优先级叠加 |
+| 装饰 | `CreateTransformingVfs(AInner,ATransform,AShould,AHeaderPred): IVfs` | L3 通用变换装饰器 |
+| 装饰 | `CreateDecompressingVfs(AInner,AAlgo): IVfs` | 解压薄门面（daGzip/daAuto） |
+| 遍历 | `VfsWalk(AFs,ARoot,ACallback)` | 字典序全树遍历 |
+| 便利 | `VfsStat/VfsList/VfsReadAllBytes/VfsReadAllText` | 门面包函数 |
 
 ```pascal
 IVfs = interface
   function Exists(const APath: string): Boolean;
   function Stat(const APath: string): TStatInfo;
   function List(const ADirPath: string): TEntryArray;
-  function OpenRead(const APath: string): IStream;   // io.intf 词汇
+  function OpenRead(const APath: string): IStream;
 end;
 ```
 
@@ -60,33 +61,18 @@ end;
 
 ## 2. 不变量
 
-- **[INV-V1]** v1 只读：任何 IVfs 实现不得提供写/删/改名能力；写入需求归 core.fs
-- **[INV-V2]** 发布后的 IVfs 为不可变快照：并发只读 ✅ 安全，无需外部锁；
-  构造期可变性收敛在 memtree Builder
-- **[INV-V3]** 路径一律先过 ValidPath（Go 语义，`.` 表根）；非法路径统一
-  `EVfsInvalidPath`，不做猜测性修正
-- **[INV-V4]** 错误携带上下文：所有异常 `Op ∈ {'stat','open','list','read'}` 且
-  `Path` = 出错虚拟路径（Go PathError 对等物）
-- **[INV-V5]** 错误分类固定：不存在 → `EVfsNotFound`；List 非目录 →
-  `EVfsNotADirectory`；目录上 OpenRead / 文件上 List → 对应子类；Exists 任何失败
-  返回 False 不抛
-- **[INV-V6]** embedded 后端零拷贝：OpenRead 的读取地址必须落在 blob 区间内
-  （conformance P8 断言）；接口持后备引用保活，const 段场景由调用方保证生命期
-- **[INV-V7]** 三后端语义一致：同一用例集在 memtree/embedded/os 上必须同结果。
-  **验证**：`test_vfs_conformance` 属性电池 P1–P8 以同一夹具树跑满
-  `{三后端} × {整树, Sub}` 矩阵；`test_vfs_facade` 的树签名用例再以纯门面 API 复证
-  （开发态/发布态切换承诺）
-- **[INV-V8]** List 结果按路径字节序升序；目录条目由文件路径推导，不要求存储存在
-- **[INV-V9]** Sub 视图不改变底层生命期与并发性质；`ASubRoot` 必须是已存在的目录路径
-- **[INV-V10]** os 后端大小写敏感性跟随平台并在实例上可查询；embedded/memtree 恒敏感。
-  **验证**：conformance 各后端电池末尾的 `CaseSensitive` 断言（posix 下三后端均为 True）
-- **[INV-V11]** VfsWalk 确定性：字典序访问、每路径恰好一次、由不可变快照保证无环；
-  回调置 AStop 后立即停止且不再进入子树。**验证**：conformance 全序列精确比对 +
-  facade gate 早停用例（恰好访问 2 个路径）
-- **[INV-V12]** OpenRead 返回的流 SHOULD 同时实现 `io.intf.IReaderAt`（三后端均可
-  提供 positioned 读）；consumer 经 Supports 探测，缺省退化 Seek+Read。
-  **验证**：conformance P4 内嵌断言——三后端流 QueryInterface(IReaderAt) 成功且
-  positioned 读逐字节正确
+- **[INV-V1]** v1 只读：IVfs 不提供写/删/改名
+- **[INV-V2]** 发布后 IVfs 为不可变快照：并发只读安全
+- **[INV-V3]** 路径先过 ValidPath（Go 语义，`.` 表根）；非法统一 `EVfsInvalidPath`
+- **[INV-V4]** 错误携带 Op/Path 上下文
+- **[INV-V5]** 错误分类：不存在→`EVfsNotFound`；List 非目录→`EVfsNotADirectory`；目录 OpenRead→`EVfsIsADirectory`；Exists 失败返回 False
+- **[INV-V6]** embedded 零拷贝：OpenRead 地址落在 blob 区间内
+- **[INV-V7]** 三后端语义一致：同一用例集在 memtree/embedded/os 同结果（`test_vfs_conformance` P1–P8 矩阵）
+- **[INV-V8]** List 按路径字节序升序
+- **[INV-V9]** Sub 不改变底层生命期；`ASubRoot` 为已存在目录
+- **[INV-V10]** 大小写敏感性可查询；embedded/memtree 恒敏感，os 跟随平台
+- **[INV-V11]** VfsWalk 字典序、每路径一次、回调可中止
+- **[INV-V12]** OpenRead 返回流 SHOULD 实现 `IReaderAt`
 
 ---
 
@@ -100,67 +86,60 @@ end;
 | 文件上 List | EVfsNotADirectory | list |
 | 路径非法 | EVfsInvalidPath | 随操作 |
 | 已 Close 后使用 | EVfsClosed | 随操作 |
-| os 后端底层 IO 错误 | 映射至 fs 错误分类并包成 EVfsError（保 Op/Path） | 随操作 |
+| os 底层 IO 错误 | 映射为 EVfsError（保 Op/Path） | 随操作 |
 
-全部继承 `EVfsError` ← `nextpas.core.exception.Exception`，不触碰 SysUtils。
+全部继承 `EVfsError ← nextpas.core.exception.Exception`。
 
 ---
 
 ## 4. 线程安全
 
-- IVfs 实例：并发只读 ✅（INV-V2）
-- IStream 实例：❌ 非线程安全，单流单线程；多线程各开各的流
-- memtree Builder：❌ 构造期单线程；Freeze 后产物 ✅
-- embedded 切片池：SpinLock 64槽并发归还安全（16→64 百并发阈值覆盖，inline热路径）；TEmbeddedSliceStream.Destroy 先强 LKeep 保活 Owner 再推导弱 FOwner，TryPushPool 遇 FPoolLock=nil（Owner 析构中）安全回退 Free，无 use-after-free（契约显式），饱和仍 Free 不丢
+- IVfs 实例：并发只读安全
+- IStream 实例：非线程安全，单流单线程
+- memtree Builder：构造期单线程，Freeze 后只读
+- embedded 切片池：SpinLock 64 槽并发安全，归还失败回退 Free，try-finally 不丢
 
 ---
 
 ## 5. 内存管理
 
-- List/TEntryArray 每次调用分配返回，调用方持有；List 扇出限界倍增（初值16 Cap≤Hi-Lo）消除大目录 Hi-Lo 预分配与 O(k log k) Sort/Dedup 重分配
-- OpenRead 的 IStream 引用计数持后备存储（堆场景）；const 段场景见 INV-V6 生命期规则；切片池归还 LKeep强→LOwner弱时序契约，资源不丢（归还失败即 Free）
-- VfsReadAllBytes/Text 单次分配结果
-- embedded Owned：最后一个派生接口释放时释放 blob（引用计数托底）；Borrowed 常驻调用方（const 段防 Free）
+- List 每次调用分配返回，调用方持有
+- OpenRead 的 IStream 引用计数保活后备存储
+- embedded Owned：末接口释放时释放 blob；Borrowed 归调用方保活
 
 ---
 
-## 6. 性能契约（S3基准 + S6装饰器校准，HeaderPred/零拷贝实测）
+## 6. 性能契约（S3 基准 + S6 校准）
 
 | 操作 | 目标 | 证据 |
 |------|------|------|
-| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire，HasSubtreePath SpanStartsWith bytes.ops单源 inline 零拷贝；bench_hotspots `Exists/embedded` `Stat/embedded/file` 阈值锁定 |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；64槽SpinLock池化10k 163ms 4.9×预算（百并发阈值覆盖，饱和率4×↓），heaptrc0，FKeep强保活+FOwner弱归还契约显式（LKeep先于LOwner，FPoolLock=nil 安全回退Free，inline热路径）；bench_hotspots `OpenRead/embedded/4k` 阈值锁定 |
-| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 O(k) | LowerBound(O(log n))+SpanStartsWith/SpanEqual 单源 bytes.ops 零拷贝 inline，FEntries 并行缓存 O(k) 直取 Size/ModTime 无 IndexOfPath 二分（Spans O(n) 分配已移除），扇出限界初值16 Cap≤N-Lo，天然有序免 Sort/Dedup；bench_hotspots `List/embedded/*` 阈值锁定 |
-| List（memtree） | 有序区间扫描扇出限界，一次扇出数组 O(k) | VfsEnumerateChildSpans 单源 bytes.ops 零拷贝 inline，FItems 并行缓存 O(k) 直取，扇出限界初值16；bench_hotspots `List/memtree/*` 阈值锁定 |
-| OpenRead（memtree） | O(1) TBytes 防御拷贝 + IReaderAt 零拷贝视图 | TMemStream.Move 单源零拷贝，IReaderAt 单次直读；bench_hotspots `OpenRead/memtree/4k` 阈值锁定 |
-| OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一；bench_hotspots `OpenRead/os/4k` 阈值锁定 |
-| Exists/Stat（os） | 二分/一次 Stat，无分配（memtree/embedded同理） | VfsValidPath inline + LowerBound/HasSubtree bytes.ops 单源零拷贝；bench_hotspots `Exists/os` `Stat/os/file` 阈值锁定 |
-| Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制；bench_hotspots `List/sub/*` `OpenRead/sub/*` 独立阈值锁定 |
-| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性；bench_hotspots `Walk/*`（memtree/embedded/os/sub）阈值锁定 |
-| Stat(large非gzip) | 轻量 2 字节栈缓冲零堆分配预判免 4K 分配+全量读 | `TTransformingVfs.TryResolveViaHeaderSingleStream` 单源决策器（大文件先栈上 2 字节轻量 peek + `HeaderShould` bytes.ops inline 非变换直接回 `FInner.Stat` 免 4K 堆分配，小文件复用 Header 零二次 IO，大文件命中同流 IReaderAt/Seek 补读免二次 OpenRead），`TAuto` 亦轻量透传；TargetL 1MiB非gzip Stat ~972ns 零解压，bench_transform `Stat/large-non-gzip/header-peek` 阈值锁定 |
-| OpenRead(非gzip) | 轻量 2 字节栈缓冲零物化直透免 VfsReadAllBytes/4K | `TTransformingVfs.OpenRead` 单源决策器 HeaderPred 假时栈上 2 字节 peek 后零物化直透 `FInner.OpenRead`（零拷贝无 `VfsReadAllBytes` materialize，栈缓冲零堆分配 2 字节 peek ~数百 ns，免 4K 分配），命中时 4K 单流复用；bench_transform `Open/large-non-gzip/passthrough` 阈值锁定 |
-| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb统一（transform 承载，泛型/压缩一致），大小文件 Stat/OpenRead 一致 | `GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES 链式单源 alias vfs.base→compress.base GZIP_MAX 32MiB canonical 无字面量（source-contract 单源 alias 锁定） + bytes.ops 单源魔数 inline 零拷贝)` + 泛型 Transform 输入/输出双 32MiB 限幅，`ContentHash=0/ETag` 禁用，HeaderPred真时小文件复用 Header（≤4K）& 大文件栈上 2 字节轻量预判后单流 Move 4K 头+同流补读避免二次全量读（HeaderPred 统一 4096 单源，接口不暴露封装收口），Stat 与 OpenRead 大文件解压后尺寸一致 |
+| Exists/Stat（embedded） | 二分查找，无分配 | LowerBound + bytes.ops inline 零拷贝 |
+| OpenRead（embedded） | O(1) 切片，零复制 | TEmbeddedSlice 落 blob 区间，池化复用 |
+| List（embedded/memtree） | 有序区间扫描 O(k) | VfsEnumerateChildSpans 单源，SwissTable 扇出限界 |
+| OpenRead（memtree） | O(1) 防御拷贝 + IReaderAt | Move 零拷贝 |
+| OpenRead（os） | 经 fs.Open，句柄开销 | fs 单缝 |
+| Sub/Walk | O(1) 包装 / O(n) 遍历 | 无树复制；Walk 批量 List |
+| Stat/OpenRead（大文件非 gzip） | 2 字节栈探针免 4K 分配 | HeaderPred 单源决策器，假时直透 |
+| Stat/OpenRead（gzip） | 按需解压，32MiB 限幅 | VFS_DECOMPRESS_MAX_BYTES 单源 32MiB，bytes.ops 魔数 |
+
+*实现证据：bytes.ops 单源 inline 零拷贝；热点 inline；try-finally 资源不丢；bench_hotspots/bench_transform 阈值锁定。*
 
 ---
 
-## 7. 测试覆盖（P2/S6实测校准，2026-08-31：13门闭环 respack5 + vfs8）
+## 7. 测试覆盖
 
 | 测试目录 | 用例数 | 说明 |
 |----------|--------|------|
-| test_vfs_memtree | 16 | Builder/Freeze/错误语义/`.` 根/IReaderAt（Int64防回绕/防御拷贝/两段式/零双驻留，S6后新增2例） |
-| test_vfs_embedded | 8 | 切片/AOwnsBlob 双态生命期/损坏透传/空包/边界窗口（池化16槽SpinLock零分配，S6后新增2例） |
-| test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
-| test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
-| test_vfs_mount | 10 | 挂载+叠加双视图：basic/longest/duplicate/etag/case/notfound/nested + overlay priority/list dedup/etag priority（P2+游戏热更完整性，最长匹配+优先级叠加双模型） |
-| test_vfs_transform | 6 | 通用变换装饰器：单源决策器 TryResolveViaHeaderSingleStream（单流 4K + 大文件栈上 2 字节轻量预判零堆分配免 4K + Move 复用 inline 零拷贝，Header假直透/小复用/大同流补读三态，Stat/OpenRead 大文件解压一致性，泛型路径输入/输出双 32MiB 防 bomb），upper/谓词/错误' transform failed' Op/Path/ETag禁用/CaseSensitive（L3 单缝模板，`inline`+`try-finally`不丢） |
-| test_vfs_compressed | 7 | 解压薄门面（L3 单缝正名，L7 到期拆分，链式单源 alias vfs.base→compress.base）：daAuto/gzip Stat Size/ContentHash 校正/ETag禁用/daGzip 强制失败/空包/大文件栈上 2 字节轻量预判零堆分配+单流 4K 头预判 HeaderPred（VFS_DECOMPRESS_MAX_BYTES 链式单源 alias vfs.base→compress.base GZIP_MAX 32MiB canonical 无字面量 + bytes.ops 魔数 inline 零拷贝单源，4K HeaderPred 统一（impl 私有常量 4096 单源，接口不暴露），复用 transform 单源决策器，防 bomb 由 transform 统一承载，Stat/OpenRead 大文件一致） |
-| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含 decorator 聚合 transform/compressed 单缝寄居白名单：L3→L2 单缝过渡经 decorator 单点收口，L7 独立族按需演进，文档正名+拆分路线） |
+| test_vfs_memtree | 16 | Builder/Freeze/错误/`.` 根/IReaderAt |
+| test_vfs_embedded | 8 | 切片/双态生命期 |
+| test_vfs_conformance | 7 | P1–P8 × {3 后端} × {整树,Sub} |
+| test_vfs_facade | 6 | 便利函数 + 切换 |
+| test_vfs_mount | 10 | 挂载+叠加双视图 |
+| test_vfs_transform | 6 | 通用变换装饰器 |
+| test_vfs_compressed | 7 | 解压薄门面 |
+| test_vfs_source_contract | 5 | uses 白名单（L2 双缝过渡白名单，L7 聚合为 `vfs.backends` 后收敛单缝 source-contract gated） |
 
-合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform + bench_hotspots 2基准阈值锁定，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
-
-- 原设计的独立 `test_vfs_os` 门折叠进 conformance：os 行为断言在电池里以真实目录
-  夹具全覆盖，独立门只会复制夹具（README 测试计划节有记录）
-- 全部 gate heaptrc 0 leak 为门禁
+合计 8 门；heaptrc 0 为门禁。`vfs.backends` 已落地为三后端单缝收口；source-contract 固化 `os→fs/path` 与 `embedded→respack.reader` 双缝仅经 backends 族透出，门面经 backends 单缝收敛。
 
 ---
 
@@ -168,16 +147,8 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
-| 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
-| 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面实现；INV-V7/V10/V11/V12 补验证方式；测试表按实测校准；os 门折叠进 conformance 的偏离记录 | AI |
-| 2026-08-28 | 1.1 | facade 校准：补 `CreateDecompressingVfs(AAlgo)` 重载与 `IVfsETag/VFS_DECOMPRESS_MAX_BYTES` 重导出；门数 12 闭环 | AI |
-| 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
-| 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
-| 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
-| 2026-09-02 | 1.5 | 匠心修复：transform 单流复用+单源决策器（Stat/OpenRead 共用 TryResolveViaHeaderSingleStream，单流 Move 零拷贝 50 行去重，小/大/回退三态 inline+try-finally）+ L3 单缝寄居正名（L3→L2 单缝白名单过渡，长期待 L3 族聚合拆分）+ bytes.ops 单源魔数 + 性能/稳定性证据 | AI |
-| 2026-09-02 | 1.6 | 匠心修复：transform 大文件 2 字节轻量预判免 4K（Stat/OpenRead 大文件解压一致性 via 单源，OpenRead 大文件非 gzip 免 4K 分配与单流读）+ L7 单缝正名（L7 到期拆分为 nextpas.core.vfs.decorator 后移除白名单）+ bytes.ops 单源魔数 inline 零拷贝 | AI |
-| 2026-09-02 | 1.7 | 匠心修复：transform 栈上 2 字节零堆分配（热点非 gzip 路径栈缓冲免 SetLength(AHeader,2) 堆分配）+ 泛型路径 32MiB 防 bomb 统一（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，输入/输出双阈值防 OOM，压缩/非压缩一致）+ L7 单缝寄居文档正名固化（现阶段以单缝+文档正名守层级高级感，L7 到期拆分为 decorator 固化 L0-L3） | AI |
-| 2026-09-02 | 1.8 | 匠心修复：compressed 薄门面 VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 消除接口层字面量双写（base 经 compress.base 单源别名 canonical，drift 由 source-contract 别名单源锁定）+ bytes.ops inline 零拷贝，消除数值双写漂移 | AI |
-| 2026-09-02 | 1.9 | 匠心修复：热路径基准覆盖补齐（design-conventions 每模块热路径基准覆盖）：新增 bench_hotspots 24项（memtree/embedded/os × Exists/Stat/List/OpenRead/Walk/Sub 全热路径，inline 零拷贝 bytes.ops 单源 VfsEnumerateChildSpans/Span* 单源，扇出限界16，try-finally Close不丢）+ bench_memtree/bench_embedded/bench_os 三独立 per-backend 基准，perf CONTRACT §6 逐行阈值锁定，业务以 CONTRACT 为准，缺能力反哺 owner（os→fs，embedded→respack） | AI |
-| 2026-09-02 | 1.10 | 匠心修复：cache 四件套正名与零拷贝（热点 List 缓存纳入四件套与门面文档结构 mount/overlay 单源透明 + TryGet 零拷贝 COW 共享 O(1) 替代 O(k) Move 隔离，Put 侧 Copy 单源 bytes.ops 零拷贝 inline+try-finally 不丢） | AI |
-| 2026-09-02 | 1.11 | 匠心修复：decorator 族单点聚合收敛门面扇出（transform/compressed 经 nextpas.core.vfs.decorator 单缝收口，门面 14→15 文件、13→12 聚合扇出降 1，族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢） | AI |
+| 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面；INV 补齐 | AI |
+| 2026-08-30 | 1.2 | S6 装饰器落地：transform+compressed | AI |
+| 2026-09-02 | 1.11 | decorator 族单点聚合收敛门面扇出 | AI |
+| 2026-09-02 | 1.12 | 契约精简：规格与实现分离，L2→L2 双缝白名单过渡收敛至 L7 后端独立族单缝理想，移除行话堆砌 | AI |
+| 2026-09-02 | 1.13 | 后端独立族落地：`vfs.backends` 聚合三后端单缝收口，L2 双缝过渡白名单 L7 收敛单缝 source-contract gated | AI |
