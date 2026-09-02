@@ -39,7 +39,7 @@ var
 begin
   Result := prUnknown;
   LLen := Length(APrefix);
-  // Probe≤4KB guard: COpusProbeLimit=4096 — zero-alloc, capped before scan, single source via opus.base (aligned with CWavProbeLimit/CFlacProbeLimit=4096)
+  // Probe≤4KB guard: COpusProbeLimit=4096 — zero-alloc, capped before scan, single source via opus.base (aligned with CWavProbeLimit/CFlacProbeLimit=4096), bytes.ops single source, L0 only, no ffi
   if LLen > COpusProbeLimit then LLen := COpusProbeLimit;
   if LLen < 4 then Exit;
   if (APrefix[0] = $4F) and (APrefix[1] = $67) and (APrefix[2] = $67) and (APrefix[3] = $53) then
@@ -53,8 +53,6 @@ begin
       if (APrefix[I] = $4F) and (APrefix[I+1] = $70) and (APrefix[I+2] = $75) and (APrefix[I+3] = $73) and
          (APrefix[I+4] = $54) and (APrefix[I+5] = $61) and (APrefix[I+6] = $67) and (APrefix[I+7] = $73) then
         Exit(prOggOpus);
-    // minimal OggS header without explicit OpusHead still treat as Opus if pure OggS and length >=27 and not vorbis
-    // to avoid overlap with vorbis, require not containing "vorbis" — already handled by vorbis Probe priority, here pure OggS -> unknown
     Exit(prUnknown);
   end;
 end;
