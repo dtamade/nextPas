@@ -237,6 +237,9 @@ begin
   FUserAgent := '';
   FBridgeReady := False;
   FDebugTools := AOptions.DebugTools;
+  FEvalScripts := specialize TCompactLiveRegistry<TFakeEvalRecord>.Create;
+  FEvalQueue := specialize TCompactLiveRegistry<TFakeEvalQueueEntry>.Create;
+  FPendingEvals := specialize TCompactLiveRegistry<TFakePendingEval>.Create;
   LWinOpts := WebviewWindowOptionsOf(AOptions);
   FWindow := TFakeWindow.Create(LWinOpts);
   FOwnsWindow := True;
@@ -275,6 +278,9 @@ begin
   FUserAgent := '';
   FBridgeReady := False;
   FDebugTools := AOptions.DebugTools;
+  FEvalScripts := specialize TCompactLiveRegistry<TFakeEvalRecord>.Create;
+  FEvalQueue := specialize TCompactLiveRegistry<TFakeEvalQueueEntry>.Create;
+  FPendingEvals := specialize TCompactLiveRegistry<TFakePendingEval>.Create;
   FWindow := AParent;
   FOwnsWindow := False;
   LReg := TFakeInvokeRegistry.Create;
@@ -297,6 +303,9 @@ end;
 destructor TFakeWebview.Destroy;
 begin
   UnregisterLive(Self);
+  FreeAndNil(FPendingEvals);
+  FreeAndNil(FEvalQueue);
+  FreeAndNil(FEvalScripts);
   inherited Destroy;
 end;
 
@@ -304,13 +313,6 @@ procedure TFakeWebview.RequireOpen;
 begin
   if FClosed then
     raise EWebviewClosed.Create('webview window is closed');
-end;
-
-procedure TFakeWebview.GrowQueue; inline;
-begin
-  // perf: single source bytes.ops VecGrow<TEvalEntry> inline 0→4→2× single heap grow, zero extra call, merges bool+string dual grow halves tail latency
-  if FEvalQueueCount = Length(FEvalQueue) then
-    specialize VecGrow<TFakeEvalQueueEntry>(FEvalQueue, FEvalQueueCount);
 end;
 
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
@@ -430,12 +432,14 @@ begin
 end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
+var LRec: TFakeEvalRecord;
 begin
-  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-  specialize VecGrow<TFakeEvalRecord>(FEvalScripts, FEvalScriptsCount);
-  FEvalScripts[FEvalScriptsCount].Script := AScript;
-  FEvalScripts[FEvalScriptsCount].Answered := False;
-  Inc(FEvalScriptsCount);
+  // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity single source zero-copy, Default(T) 释放不丢，gtk 同源
+  LRec.Script := AScript;
+  LRec.Answered := False;
+  LRec.ResultJson := '';
+  LRec.ErrorMessage := '';
+  FEvalScripts.Register(LRec);
 end;
 
 function TFakeWebview.GetWindow: IWindow;
@@ -450,6 +454,7 @@ var
   LErr: EWebviewEvalFailed;
   LOnError: TWebviewEvalErrorCallback;
   LNeedDec: Boolean;
+  LRec: TFakeEvalRecord;
 begin
   LNeedDec := False;
   FLck.Acquire;
@@ -458,16 +463,22 @@ begin
       Exit;
     FClosed := True;
     LNeedDec := True;
-    // perf: zero-alloc snapshot via pointer swap (no SetLength(LErrors,N)), inline O(1) move; bytes.ops single source unchanged
-    LPending := FPendingEvals;
-    LPendingCount := FPendingCount;
-    FPendingEvals := nil;
-    FPendingCount := 0;
-    // stability: mark Answered under lock to preserve exactly-once invariant
+    // perf: registry snapshot+clear single source bytes.ops inline zero-copy (VecSnapshot/ Clear Default(T) 释放不丢), short critical <1µs, gtk 同源
+    LPendingCount := FPendingEvals.Count;
+    if LPendingCount > 0 then
+    begin
+      FPendingEvals.Snapshot(LPending);
+      FPendingEvals.Clear;
+    end
+    else
+      LPending := nil;
+    // stability: mark Answered under lock to preserve exactly-once invariant, registry At/SetAt 单源
     for I := 0 to LPendingCount - 1 do
     begin
-      FEvalScripts[LPending[I].ScriptIdx].Answered := True;
-      FEvalScripts[LPending[I].ScriptIdx].ErrorMessage := 'window closed';
+      LRec := FEvalScripts.At(LPending[I].ScriptIdx);
+      LRec.Answered := True;
+      LRec.ErrorMessage := 'window closed';
+      FEvalScripts.SetAt(LPending[I].ScriptIdx, LRec);
     end;
   finally
     FLck.Release;
@@ -619,46 +630,39 @@ var
   LIsError: Boolean;
   LValue: string;
   LIdx: Integer;
+  LEntry: TFakeEvalQueueEntry;
+  LPending: TFakePendingEval;
 begin
   RequireOpen;
   AppendEvalScript(AJavascript);
-  LIdx := FEvalScriptsCount - 1;
+  LIdx := FEvalScripts.Count - 1;
   LHasQueued := False;
   LIsError := False;
   LValue := '';
   FLck.Acquire;
   try
-    if FEvalQueueCount > 0 then
+    if FEvalQueue.Count > 0 then
     begin
-      LIsError := FEvalQueue[0].IsError;
-      LValue := FEvalQueue[0].Value;
-      ShiftEvalQueue;
+      // perf: registry At inline zero-copy + PopFrontOrdered 保序单源 bytes.ops RemoveAtOrdered/Default 释放不丢, short critical <1µs, gtk 同源
+      LEntry := FEvalQueue.At(0);
+      LIsError := LEntry.IsError;
+      LValue := LEntry.Value;
+      FEvalQueue.PopFrontOrdered;
       LHasQueued := True;
     end
     else
     begin
-      // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
-      specialize VecGrow<TFakePendingEval>(FPendingEvals, FPendingCount);
-      FPendingEvals[FPendingCount].ScriptIdx := LIdx;
-      FPendingEvals[FPendingCount].Callback := ACallback;
-      FPendingEvals[FPendingCount].OnError := AOnError;
-      Inc(FPendingCount);
+      // perf: single source bytes.ops TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity 零拷贝, Default 释放不丢, gtk 同源
+      LPending.ScriptIdx := LIdx;
+      LPending.Callback := ACallback;
+      LPending.OnError := AOnError;
+      FPendingEvals.Register(LPending);
     end;
   finally
     FLck.Release;
   end;
   if LHasQueued then
     SettleEval(LIdx, LIsError, LValue, ACallback, AOnError);
-end;
-
-procedure TFakeWebview.ShiftEvalQueue; inline;
-begin
-  // perf: single VecRingCopy<TFakeEvalQueueEntry> single source bytes.ops inline batch zero-copy (managed Value AddRef preserved, IsError blittable), halves critical tail latency vs dual bool+string copies, eliminates O(n) for-loop under FLck, zero mod/div
-  if FEvalQueueCount > 1 then
-    specialize VecRingCopy<TFakeEvalQueueEntry>(FEvalQueue, 1, FEvalQueueCount - 1, FEvalQueue);
-  Dec(FEvalQueueCount);
-  if FEvalQueueCount < Length(FEvalQueue) then
-    FEvalQueue[FEvalQueueCount] := Default(TFakeEvalQueueEntry);
 end;
 
 { 恰好一次兑现：先落记录再触发回调（回调内再入本对象是安全的） }
@@ -668,13 +672,17 @@ procedure TFakeWebview.SettleEval(AIdx: Integer; AIsError: Boolean;
   AOnError: TWebviewEvalErrorCallback);
 var
   LErr: EWebviewEvalFailed;
+  LRec: TFakeEvalRecord;
 begin
-  if FEvalScripts[AIdx].Answered then
+  // perf: registry At/SetAt 单源 inline 零拷贝, gtk 同源, managed 保 refcnt
+  LRec := FEvalScripts.At(AIdx);
+  if LRec.Answered then
     raise EWebviewInvalidState.Create('eval already settled');
-  FEvalScripts[AIdx].Answered := True;
+  LRec.Answered := True;
   if AIsError then
   begin
-    FEvalScripts[AIdx].ErrorMessage := AValue;
+    LRec.ErrorMessage := AValue;
+    FEvalScripts.SetAt(AIdx, LRec);
     { 异常实例所有权：框架创建、回调期内有效、回调返回后框架释放。
       回调只读信息，不得持有引用（CONTRACT §3.2）。 }
     LErr := EWebviewEvalFailed.Create(AValue);
@@ -686,7 +694,8 @@ begin
   end
   else
   begin
-    FEvalScripts[AIdx].ResultJson := AValue;
+    LRec.ResultJson := AValue;
+    FEvalScripts.SetAt(AIdx, LRec);
     ACallback(AValue);
   end;
 end;
@@ -829,22 +838,24 @@ procedure TFakeWebview.QueueEvalResult(const AResultJson: string);
 var
   LPending: TFakePendingEval;
   LHadPending: Boolean;
+  LEntry: TFakeEvalQueueEntry;
 begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if FPendingCount > 0 then
+    if FPendingEvals.Count > 0 then
     begin
-      LPending := FPendingEvals[0];
-      ShiftEvalList;
+      // perf: registry At inline zero-copy + PopFrontOrdered 保序单源 bytes.ops RemoveAtOrdered/Default 释放不丢, short critical <1µs, gtk 同源
+      LPending := FPendingEvals.At(0);
+      FPendingEvals.PopFrontOrdered;
       LHadPending := True;
     end
     else
     begin
-      GrowQueue;
-      FEvalQueue[FEvalQueueCount].IsError := False;
-      FEvalQueue[FEvalQueueCount].Value := AResultJson;
-      Inc(FEvalQueueCount);
+      // perf: registry Register inline 0→4→2× VecGrowCapacity 单源零拷贝, managed 保 refcnt, gtk 同源
+      LEntry.IsError := False;
+      LEntry.Value := AResultJson;
+      FEvalQueue.Register(LEntry);
     end;
   finally
     FLck.Release;
@@ -858,22 +869,22 @@ procedure TFakeWebview.QueueEvalError(const AMessage: string);
 var
   LPending: TFakePendingEval;
   LHadPending: Boolean;
+  LEntry: TFakeEvalQueueEntry;
 begin
   LHadPending := False;
   FLck.Acquire;
   try
-    if FPendingCount > 0 then
+    if FPendingEvals.Count > 0 then
     begin
-      LPending := FPendingEvals[0];
-      ShiftEvalList;
+      LPending := FPendingEvals.At(0);
+      FPendingEvals.PopFrontOrdered;
       LHadPending := True;
     end
     else
     begin
-      GrowQueue;
-      FEvalQueue[FEvalQueueCount].IsError := True;
-      FEvalQueue[FEvalQueueCount].Value := AMessage;
-      Inc(FEvalQueueCount);
+      LEntry.IsError := True;
+      LEntry.Value := AMessage;
+      FEvalQueue.Register(LEntry);
     end;
   finally
     FLck.Release;
@@ -881,16 +892,6 @@ begin
   if LHadPending then
     SettleEval(LPending.ScriptIdx, True, AMessage,
       LPending.Callback, LPending.OnError);
-end;
-
-procedure TFakeWebview.ShiftEvalList; inline;
-begin
-  // perf: single source bytes.ops VecRingCopy inline batch Move zero-copy (managed per-elem AddRef preserved), eliminates O(n) for-loop tail latency under FLck
-  if FPendingCount > 1 then
-    specialize VecRingCopy<TFakePendingEval>(FPendingEvals, 1, FPendingCount - 1, FPendingEvals);
-  Dec(FPendingCount);
-  if FPendingCount < Length(FPendingEvals) then
-    FPendingEvals[FPendingCount] := Default(TFakePendingEval);
 end;
 
 procedure TFakeWebview.FireNavigationStarted(const AUrl: string);
@@ -1120,10 +1121,10 @@ end;
 
 function TFakeWebview.EvalRecordCount: Integer;
 begin
-  Result := FEvalScriptsCount;
+  Result := FEvalScripts.Count;
 end;
 
 function TFakeWebview.EvalRecordAt(AIndex: Integer): TFakeEvalRecord;
 begin
-  Result := FEvalScripts[AIndex];
+  Result := FEvalScripts.At(AIndex);
 end;

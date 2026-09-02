@@ -25,7 +25,10 @@ unit nextpas.core.webview.fake;
        - nextpas.core.webview.fake.support（回调适配与选项辅助，callbacks 单源）
        - nextpas.core.webview.fake.impl.inc（主体实现手写 .inc，主体逻辑与活窗登记）
        本门面仅保留类型契约与薄转发，主体实现经 .inc 单源复用 bytes.ops，
-       inline 零拷贝，短临界 <1µs，资源 Finalize 释放不丢；性能修复见 impl.inc。 *}
+       inline 零拷贝，短临界 <1µs，资源 Finalize 释放不丢；性能修复见 impl.inc。
+       队列治理（S110+）：内部 eval/pending 裸队列已收敛至 L1 bytes.ops.TCompactLiveRegistry 单源
+       inline 零拷贝（gtk 同源 8 组 Registry 单源闭环，VecGrowCapacity 0→4→2× / RemoveAtOrdered 保序 FIFO / Default(T) 释放不丢），
+       裸 GrowQueue/Shift 手写样板已删除，单源零重复。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -114,12 +117,9 @@ type
     FAssetsIntf: IWebviewAssets;            // 拥有
     FInvokes: TObject;             // 非拥有别名：同类私有访问用
     FAssets: TObject;              // 同上
-    FEvalScripts: TFakeEvalRecords;
-    FEvalScriptsCount: Integer;
-    FEvalQueue: TFakeEvalQueue; // 单记录队列：IsError+Value 单数组，单次 VecRingCopy 批量搬移，临界区尾延迟减半，bytes.ops 单源 inline 零拷贝
-    FEvalQueueCount: Integer;
-    FPendingEvals: array of TFakePendingEval;
-    FPendingCount: Integer;
+    FEvalScripts: specialize TCompactLiveRegistry<TFakeEvalRecord>; // bytes.ops 单源 inline 零拷贝，Append/At/SetAt 保序，Default(T) 释放不丢，gtk 同源
+    FEvalQueue: specialize TCompactLiveRegistry<TFakeEvalQueueEntry>; // 同源 FIFO：Register 0→4→2× VecGrowCapacity inline 零拷贝，PopFrontOrdered 保序 VecRemoveOrdered/Default 释放不丢
+    FPendingEvals: specialize TCompactLiveRegistry<TFakePendingEval>; // 同源 FIFO：Register/RemoveAtOrdered 保序，gtk FPendingEvals 同源
     FOutcomes: TFakeInvokeOutcomes;
     FOutcomesCount: Integer;
     { DeliverFrame 协议路径产生的回执脚本（resolve/reject）捕获队列 }
@@ -143,7 +143,6 @@ type
     FOnReady: array of TWebviewNotifyHandler;
     FOnReadyCount: Integer;
     procedure RequireOpen;
-    procedure GrowQueue; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -155,8 +154,6 @@ type
     procedure PushHistory(const AUrl: string);
     procedure FireReadyHandlers;
     procedure AppendEvalScript(const AScript: string);
-    procedure ShiftEvalQueue;
-    procedure ShiftEvalList;
     procedure SettleEval(AIdx: Integer; AIsError: Boolean;
       const AValue: string;
       ACallback: TWebviewEvalCallback;

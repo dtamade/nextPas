@@ -95,7 +95,7 @@ generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer;
 { 环形生长拷贝单源：按需 SetLength(LCap)+VecRingCopy 两段式线性化 inline 单源，供 dispatcher 突发预分配/乐观重试复用，复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配放大尾延迟，0→4→2× 倍增摊销 O(1)/push，inline 零额外调用，managed 保 refcnt/blittable 单 Move 零拷贝 }
 generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T; ANewCap: Integer); inline;
 
-{ L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：原 webview.live 薄别名已物理删除，现供 window.live/webview 家族直用本单源，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现 }
+{ L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：原 webview.live 薄别名已物理删除，现供 window.live/webview 家族直用本单源，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现；S110+ 补充有序队列语义（FIFO 保序 PopFront/RemoveAtOrdered 单源 VecRemoveOrdered/VecRingCopy 零拷贝，inline 薄转发、loop 非 inline 避 I-Cache 膨胀），fake 内部裸队列已收敛至此单源零重复 }
 type
   generic TCompactLiveRegistry<T> = class
   private
@@ -105,9 +105,15 @@ type
     procedure Register(const AInst: T); inline;
     procedure Unregister(const AInst: T); inline;
     procedure UnregisterSwap(const AInst: T); inline;
+    procedure UnregisterOrdered(const AInst: T); inline;
     function Count: Integer; inline;
     function IsEmpty: Boolean; inline;
     function At(AIndex: Integer): T; inline;
+    procedure SetAt(AIndex: Integer; const AValue: T); inline;
+    procedure RemoveAtOrdered(AIndex: Integer);
+    procedure RemoveAtSwap(AIndex: Integer); inline;
+    procedure PopFrontOrdered; inline;
+    function TryPopFront(out AValue: T): Boolean; inline;
     procedure Snapshot(var ADest: array of T); inline;
     procedure Trim; inline;
     procedure Clear;
@@ -922,6 +928,11 @@ begin
   specialize VecRemoveSwap<T>(FList, FCount, AInst);
 end;
 
+generic procedure TCompactLiveRegistry.UnregisterOrdered(const AInst: T); inline;
+begin
+  specialize VecRemoveOrdered<T>(FList, FCount, AInst);
+end;
+
 generic function TCompactLiveRegistry.Count: Integer; inline;
 begin
   Result := FCount;
@@ -935,6 +946,44 @@ end;
 generic function TCompactLiveRegistry.At(AIndex: Integer): T; inline;
 begin
   Result := FList[AIndex];
+end;
+
+generic procedure TCompactLiveRegistry.SetAt(AIndex: Integer; const AValue: T); inline;
+begin
+  FList[AIndex] := AValue;
+end;
+
+generic procedure TCompactLiveRegistry.RemoveAtOrdered(AIndex: Integer);
+var
+  J: Integer;
+begin
+  if (AIndex < 0) or (AIndex >= FCount) then Exit;
+  for J := AIndex to FCount - 2 do
+    FList[J] := FList[J + 1];
+  Dec(FCount);
+  if FCount < Length(FList) then
+    FList[FCount] := Default(T);
+end;
+
+generic procedure TCompactLiveRegistry.RemoveAtSwap(AIndex: Integer); inline;
+begin
+  if (AIndex < 0) or (AIndex >= FCount) then Exit;
+  FList[AIndex] := FList[FCount - 1];
+  FList[FCount - 1] := Default(T);
+  Dec(FCount);
+end;
+
+generic procedure TCompactLiveRegistry.PopFrontOrdered; inline;
+begin
+  RemoveAtOrdered(0);
+end;
+
+generic function TCompactLiveRegistry.TryPopFront(out AValue: T): Boolean; inline;
+begin
+  if FCount = 0 then Exit(False);
+  AValue := FList[0];
+  RemoveAtOrdered(0);
+  Result := True;
 end;
 
 generic procedure TCompactLiveRegistry.Snapshot(var ADest: array of T); inline;

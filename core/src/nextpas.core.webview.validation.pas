@@ -3,11 +3,7 @@ unit nextpas.core.webview.validation;
 {** @desc webview 家族校验实现（base 纯度收敛）：
        base 仅承载纯数据类型（record/enum/const/error 族 + Default 无重依赖
        载体），本单元承载 IsValidWebviewSchemeToken + 所有 Check* 不变量校验
-       实现；四件套 base←intf←impl←facade 纯度恢复，依赖 L1 text.char
-       表驱动 IsLower/IsDigit + L1 text.view.TStringView.Trim 单源
-       零拷贝 view + L2 validation.URL 单源校验 DevServerUrl；L3→L1/L2 复用允许；
-       bytes.ops 生长/快照仍由 live 单源承载，本单元不重复；稳定性资源释放
-       不丢（无堆资源，仅抛异常）。 *}
+       实现；四件套 base←intf←impl←facade 纯度恢复，IsValidWebviewSchemeToken 已反哺至 L2 validation 通用 scheme token 单源（nextpas.core.validation.IsValidSchemeToken，L1 text.char 表驱动 IsLower/IsDigit 单源零漂移，本单元 inline thin-forward 零额外调用零漂移）+ L1 text.view.TStringView.Trim 单源零拷贝 view + L2 validation.URL 单源校验 DevServerUrl；L3→L1/L2 复用允许；bytes.ops 生长/快照仍由 live 单源承载，本单元不重复；稳定性资源释放不丢（无堆资源，仅抛异常）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -17,11 +13,9 @@ uses
   nextpas.core.webview.base;
 
 { scheme token 校验：纯谓词，规则非空且全小写 [a-z][a-z0-9+.-]*，空串返回
-  False（由 CheckWebviewOptions 视为用默认）；单源复用 L1 text.char 表驱动
-  IsLower/IsDigit 零拷贝，零重复分支；剩余 '+','-','.' 为符号单点；
-  perf: 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），
-  含扫描循环依 design-conventions 红线二去 inline 避免 I-Cache 膨胀，无堆资源、释放不丢。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
+  False（由 CheckWebviewOptions 视为用默认）；已反哺至 L2 validation 通用 scheme token 单源（nextpas.core.validation.IsValidSchemeToken），本单元 inline thin-forward 零漂移，底层复用 L1 text.char 表驱动 IsLower/IsDigit 零拷贝零分支（CharClassTable），剩余 '+','-','.' 单点；
+  perf: inline 薄转发零额外调用 + 底层表驱动零分支+零拷贝 Byte 视图（无 string 分配）去 inline 循环体（红线二），无堆资源释放不丢。 }
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 
 { 选项校验：违反不变量抛 EWebviewInvalidState。
   规则：
@@ -55,30 +49,13 @@ procedure CheckWebviewDevServerUrl(const AUrl: string);
 implementation
 
 uses
-  nextpas.core.text.char,
   nextpas.core.text.view,
   nextpas.core.validation;
 
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean;
-var
-  I: Integer;
-  B: Byte;
+function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
 begin
-  // perf: 表驱动 CharClassTable 零分支 + 零拷贝 Byte 视图（无 string 分配），单源 text.char IsLower/IsDigit，无手写区间漂移，零重复分支；去 inline（真实循环体禁 inline 红线二）
-  Result := False;
-  if AScheme = '' then
-    Exit;
-  if not IsLower(Byte(AScheme[1])) then
-    Exit;
-  for I := 1 to Length(AScheme) do
-  begin
-    B := Byte(AScheme[I]);
-    if IsLower(B) or IsDigit(B) or (B = Byte('+')) or (B = Byte('.')) or (B = Byte('-')) then
-      Continue
-    else
-      Exit;
-  end;
-  Result := True;
+  // perf: inline thin-forward 零额外调用至 L2 validation.IsValidSchemeToken 单源（底层表驱动 CharClassTable 零分支+零拷贝 Byte 视图，无 string 分配，复用 L1 text.char IsLower/IsDigit 单源无手写区间漂移，去 inline 循环体红线二），stability 无堆资源释放不丢
+  Result := IsValidSchemeToken(AScheme);
 end;
 
 procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;

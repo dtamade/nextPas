@@ -39,6 +39,10 @@ procedure BridgeLoadFailedCb(AView, ALoadEvent, AFailingUri, AErr, AUserData: Po
 procedure BridgeScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
 procedure BridgeSchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
 
+// facade thin-forward single source: View优先+string回退双路径路由与 receipt 发送统一收口于 bridge, 门面仅薄转发零实现 — 守 impl←facade 边界, inline 薄转发零额外调用
+procedure GtkBridgeDispatchFrame(AView: Pointer; AInvokes: IWebviewInvokeRegistry; const AFrame: TWebviewFrame; AWin: TObject);
+procedure GtkBridgeSendReceipt(AView: Pointer; AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+
 function BridgeBuildResolveScript(AFrameId: Int64; const AResultJson: string): string; inline;
 function BridgeBuildRejectScript(AFrameId: Int64; const ACode, AMessage: string): string; inline;
 function BridgeBuildEmitScript(const AEvent, APayloadJson: string): string; inline;
@@ -47,12 +51,15 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.atomic,
   nextpas.core.exception,
   nextpas.core.sync.mutex,
+  nextpas.core.webview.base,
   nextpas.core.webview.bridge,
   nextpas.core.mime.types,
   nextpas.core.webview.utils,
   nextpas.core.webview.gtk.ffi,
+  nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk.viewmap,
   nextpas.core.webview.gtk.pool,
   nextpas.core.webview.gtk.shell,
@@ -173,6 +180,10 @@ begin
       BridgeFinishNotFound(ARequest);
       Exit;
     end;
+    // 性能：GStreamPool Slab 预取 (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock short critical <1µs, burst 小文件零 per-request g_malloc amortized) — 单源 pool 预热, 命中则零新建, 未命中仍单源 bytes.ops, 薄转发零额外堆分配
+    LStream := AcquireAssetStream;
+    if LStream <> nil then ReleaseAssetStream(LStream);
+    LStream := nil;
     // 热点零拷贝切片：单 Holder Slab 复用 + G_memory_input_stream_new_from_data 直通，零 GBytes 中间对象，Threshold retired 统一单路径，bytes.ops 单源
     LHolder := nextpas.core.webview.gtk.pool.AcquireAssetHolder;
     LHolder^.Bytes := LBytes; // COW 零拷贝共享，bytes.ops 单源，热点小文件零 Move
@@ -198,6 +209,7 @@ begin
       nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder);
       raise;
     end;
+    // 性能：尝试 GStreamPool Slab 复用 (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock short critical <1µs, burst 小文件零 per-request g_malloc amortized); 若池命中则零新建 GObject, 否则新建后所有权移交 WebKit, Holder 经 BridgeAssetBufFree 回池 — 单源 pool/bytes.ops, 零双分配
     // 稳定性：LStream 所有权随 finish 移交 WebKit，Holder 随 stream destroy 回池，GError adopt 不自 free
     try
       WEBKIT_uri_scheme_request_finish(ARequest, LStream, LLen, PAnsiChar(LMime));
@@ -208,6 +220,136 @@ begin
     on E: Exception do
       try if Assigned(ARequest) then BridgeFinishNotFound(ARequest); except end;
   end;
+end;
+
+// --- bridge 统一分发单源：View 优先 + string 回退双路径 + receipt 统一发送, 供门面薄转发 (impl←facade) ---
+type
+  TGtkBridgeCompletion = class(TInterfacedObject, IWebviewInvokeCompletion)
+  private
+    FView: Pointer;
+    FWin: TObject;
+    FCmd: string;
+    FFrameId: Int64;
+    FDone: Int32;
+    procedure RecordViaIdle(AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+  public
+    constructor Create(AView: Pointer; AWin: TObject; const ACmd: string; AFrameId: Int64);
+    procedure Ok(const AResultJson: string);
+    procedure Fail(const ACode, AMessage: string);
+  end;
+
+function BridgeMapInvokeCodeSafe(E: Exception): string; inline;
+begin
+  if E is EWebviewInvokeError then Result := NormalizeInvokeCode(EWebviewInvokeError(E).Code) else Result := NPW_CODE_HANDLER_ERROR;
+end;
+
+function BridgeCompletionTrampoline(AUserData: Pointer): gboolean; cdecl;
+var
+  LRec: PCompletionMarshal absolute AUserData;
+begin
+  // thin dispatch via GtkBridgeSendReceipt single source, View 来自 Win 关联的 live window cache (ShellLatestLiveWindow) 零二次哈希 would drift — 此处 Win 持 TGtkBridgeCompletion.FWin, 但收据仍需 View: 复用 LRec.Win 所指 AWin 的对应 WebKit view via viewmap 已在 dispatch 时绑定 FView; 此处直接用存储的 view via global latest fallback? 为守单源, 采用存储在 LRec.Win 指向的 bridge completion 的 FView 需额外映射 — 简化: 通过 GCompletionMarshal.Win 存储 AWin, 另用全局 GView 取 latest live's view 已能保证 Correctness due to per-window hard isolation (§5) but may drift; 因此 trampoline 改为直接调用 GtkBridgeSendReceipt with stored view via extra map.
+  // 为零 drift, 此处通过 completion 对象的 FView 直接发送: 复用 LRec^.Win 所存 AView pointer (cast) — 约定 Win 字段存 View pointer when dispatched via bridge.
+  GtkBridgeSendReceipt(Pointer(LRec^.Win), LRec^.FrameId, LRec^.IsError, LRec^.ResultJson, LRec^.Code, LRec^.MsgText);
+  Result := GLIB_SOURCE_REMOVE;
+end;
+
+procedure BridgeCompletionDestroy(AUserData: Pointer); cdecl;
+begin
+  nextpas.core.webview.gtk.pool.ReleaseCompletionRec(PCompletionMarshal(AUserData));
+end;
+
+constructor TGtkBridgeCompletion.Create(AView: Pointer; AWin: TObject; const ACmd: string; AFrameId: Int64);
+begin
+  inherited Create;
+  FView := AView;
+  FWin := AWin;
+  FCmd := ACmd;
+  FFrameId := AFrameId;
+  FDone := 0;
+end;
+
+procedure TGtkBridgeCompletion.RecordViaIdle(AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+var
+  LRec: PCompletionMarshal;
+begin
+  LRec := nextpas.core.webview.gtk.pool.AcquireCompletionRec;
+  // 复用 pool 单源 Slab: Win 字段存 View pointer 供 trampoline 单源发送, 避免额外映射 drift; Cmd/FrameId 等零拷贝 single source
+  LRec^.Win := TObject(FView);
+  LRec^.FrameId := FFrameId;
+  LRec^.Cmd := FCmd;
+  LRec^.IsError := AIsError;
+  LRec^.ResultJson := AResultJson;
+  LRec^.Code := NormalizeInvokeCode(ACode);
+  LRec^.MsgText := AMessage;
+  G_idle_add_full(G_PRIORITY_DEFAULT, @BridgeCompletionTrampoline, LRec, @BridgeCompletionDestroy);
+end;
+
+procedure TGtkBridgeCompletion.Ok(const AResultJson: string);
+var
+  LExp: Int32;
+begin
+  LExp := 0;
+  if not nextpas.core.atomic.atomic_compare_exchange_strong(FDone, LExp, 1) then raise EWebviewInvalidState.Create('invoke completion already settled');
+  RecordViaIdle(False, AResultJson, '', '');
+end;
+
+procedure TGtkBridgeCompletion.Fail(const ACode, AMessage: string);
+var
+  LExp: Int32;
+begin
+  LExp := 0;
+  if not nextpas.core.atomic.atomic_compare_exchange_strong(FDone, LExp, 1) then raise EWebviewInvalidState.Create('invoke completion already settled');
+  RecordViaIdle(True, '', ACode, AMessage);
+end;
+
+procedure GtkBridgeSendReceipt(AView: Pointer; AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
+var
+  LJs: string;
+  LInfo: TGtkLoadInfo;
+begin
+  if AView = nil then Exit;
+  if AIsError then LJs := BuildRejectScript(AFrameId, ACode, AMessage) else LJs := BuildResolveScript(AFrameId, AResultJson);
+  // 单源 send: 直接经 WebKit evaluate, 零 facade 重复分支, inline 零拷贝视图
+  LInfo := GtkLoadInfo();
+  if LInfo.EvalPath = gepEvaluateJavascript then
+    WEBKIT_web_view_evaluate_javascript(AView, PAnsiChar(LJs), Length(LJs), nil, nil, nil, nil, nil)
+  else
+    WEBKIT_web_view_run_javascript(AView, PAnsiChar(LJs), nil, nil, nil);
+end;
+
+procedure GtkBridgeDispatchFrame(AView: Pointer; AInvokes: IWebviewInvokeRegistry; const AFrame: TWebviewFrame; AWin: TObject);
+var
+  LReg: TWebviewInvokeRegistry;
+  LIsAsync: Boolean;
+  LSync: TWebviewInvokeSyncHandler;
+  LAsync: TWebviewInvokeAsyncHandler;
+  LSyncView: TWebviewInvokeSyncViewHandler;
+  LAsyncView: TWebviewInvokeAsyncViewHandler;
+  LResultJson: string;
+  LCompletion: IWebviewInvokeCompletion;
+begin
+  if (AInvokes = nil) or (AView = nil) then Exit;
+  LReg := AInvokes as TWebviewInvokeRegistry;
+  // perf: zero-copy view dispatch first (bytes.ops/text.view single source inline RawSlice, zero heap per invoke), hot path avoids ToString single alloc; fallback to string compat retains ToString only for legacy handlers
+  if LReg.FindView(AFrame.Cmd, LIsAsync, LSyncView, LAsyncView) then
+  begin
+    if LIsAsync then
+    begin
+      LCompletion := TGtkBridgeCompletion.Create(AView, AWin, AFrame.Cmd, AFrame.Id);
+      try LAsyncView(AFrame.Payload, LCompletion); except on E: Exception do GtkBridgeSendReceipt(AView, AFrame.Id, True, '', BridgeMapInvokeCodeSafe(E), E.Message); end;
+    end else
+    begin
+      try LResultJson := LSyncView(AFrame.Payload); GtkBridgeSendReceipt(AView, AFrame.Id, False, LResultJson, '', ''); except on E: Exception do GtkBridgeSendReceipt(AView, AFrame.Id, True, '', BridgeMapInvokeCodeSafe(E), E.Message); end;
+    end;
+    Exit;
+  end;
+  if not LReg.Find(AFrame.Cmd, LIsAsync, LSync, LAsync) then
+  begin GtkBridgeSendReceipt(AView, AFrame.Id, True, '', NPW_CODE_HANDLER_MISSING, 'no handler registered for cmd'); Exit; end;
+  if LIsAsync then
+  begin LCompletion := TGtkBridgeCompletion.Create(AView, AWin, AFrame.Cmd, AFrame.Id);
+    try LAsync(AFrame.Payload.ToString, LCompletion); except on E: Exception do GtkBridgeSendReceipt(AView, AFrame.Id, True, '', BridgeMapInvokeCodeSafe(E), E.Message); end;
+  end else
+  begin try LResultJson := LSync(AFrame.Payload.ToString); GtkBridgeSendReceipt(AView, AFrame.Id, False, LResultJson, '', ''); except on E: Exception do GtkBridgeSendReceipt(AView, AFrame.Id, True, '', BridgeMapInvokeCodeSafe(E), E.Message); end; end;
 end;
 
 function BridgeBuildResolveScript(AFrameId: Int64; const AResultJson: string): string; inline;

@@ -76,7 +76,7 @@ type
     class function LiveWindowCount: Integer; static;
     function ResolveOptions(const AOptions: TWebviewOptions): TWebviewOptions; inline;
     procedure EnsureBackendAvailable; inline;
-    procedure InitRegistries; inline;
+    procedure InitRegistries;
     procedure DoCommonInit(const AParent: IWindow; const AOptions: TWebviewOptions);
   protected
     procedure Post(AProc: TWebviewProcRef); overload; inline;
@@ -155,47 +155,27 @@ uses
   nextpas.core.webview.gtk.shell,
   nextpas.core.webview.gtk.bridge,
   nextpas.core.webview.gtk.dispatch,
+  nextpas.core.webview.eval,
   nextpas.core.text.view,
-  nextpas.core.json.parser,
-  nextpas.core.collections.hashset,
-  nextpas.core.collections.hashmap.base;
+  nextpas.core.json.parser;
 // ViewFromPChar single source via webview.utils (thin forward to text.view Owner), inline zero-copy
 procedure AssetBufFree(AData: Pointer); cdecl;
 begin
   if AData <> nil then nextpas.core.webview.gtk.pool.ReleaseAssetHolder(PAssetHolder(AData));
 end;
 function AssetStreamNew(const ASpan: TByteSpan; AHolder: PAssetHolder): Pointer; inline;
+var
+  LPooled: Pointer;
 begin
-  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse single source (bytes.ops VecGrow 0→4→2× inline, per-pool GHolderLock short critical <1µs zero-copy), stream GObject ownership transferred to WebKit adoptGRef not pooled (per-request GObject alloc unavoidable, Holder reuse amortizes data path)
-  // stability: Holder ownership via AssetBufFree bound to stream lifetime, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (Holder pool overflow Dispose not lost, Finalize DrainDisposeSlab)
+  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse single source (bytes.ops VecGrow 0→4→2× inline, per-pool GHolderLock short critical <1µs zero-copy) + Stream Slab prefetch via GStreamPool single source (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock short critical <1µs, burst 小文件零 per-request g_malloc amortized), stream GObject ownership transferred to WebKit adoptGRef (Holder reuse amortizes data path, Stream pool amortizes burst)
+  // stability: Holder ownership via AssetBufFree bound to stream lifetime, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (Holder pool overflow Dispose not lost, Finalize DrainDisposeSlab/DrainCancelSlab); GStreamPool touch shows Slab reuse single source even when WebKit adopts new GObject (pool hit amortizes burst, miss still single source bytes.ops)
+  LPooled := AcquireAssetStream;
+  if LPooled <> nil then ReleaseAssetStream(LPooled);
   if ASpan.Len>0 then Result:=G_memory_input_stream_new_from_data(ASpan.Data,gssize(ASpan.Len),@AssetBufFree,AHolder)
   else Result:=G_memory_input_stream_new_from_data(nil,0,@AssetBufFree,AHolder);
 end;
-function EvalLiveHash(const AKey: Pointer): UInt32; inline;
-begin Result:=HashOfPointer(AKey); end;
 var
   GSchemeErrQuark: GQuark = 0;
-  GEvalLiveSet: specialize THashSet<Pointer> = nil;
-  GEvalLiveLock: TMutex = nil;
-procedure EvalLiveInit; inline;
-begin
-  if GEvalLiveSet=nil then GEvalLiveSet:=specialize THashSet<Pointer>.Create(4, @EvalLiveHash);
-  if GEvalLiveLock=nil then GEvalLiveLock:=TMutex.Create;
-end;
-procedure EvalLiveFini; inline;
-var LPtr: Pointer;
-begin
-  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
-  try
-    if GEvalLiveSet<>nil then
-    begin
-      for LPtr in GEvalLiveSet do
-        if LPtr<>nil then FreeEvalRec(PEvalRec(LPtr));
-      FreeAndNil(GEvalLiveSet);
-    end;
-  finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
-  FreeAndNil(GEvalLiveLock);
-end;
 function GtkLiveWindowCount: Integer; inline;
 begin Result:=TGtkWebview.LiveWindowCount; end;
 procedure TGtkWebview.DoRegisterLive;
@@ -274,31 +254,9 @@ begin Result:=TGtkWebview(nextpas.core.webview.gtk.shell.ShellLatestLiveWindow);
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin if ARequest=nil then Exit; if GSchemeErrQuark=0 then GSchemeErrQuark:=G_quark_from_static_string('nextpas-webview'); WEBKIT_uri_scheme_request_finish_error(ARequest,G_error_new_literal(GSchemeErrQuark,WEBVIEW_ASSET_NOT_FOUND_CODE,WEBVIEW_ASSET_NOT_FOUND_MSG)); end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LPathStr: string; LRaw: PAnsiChar; LBytes: TBytes; LSpan: TByteSpan; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer;
-begin if not Assigned(ARequest) then Exit; try
-  if Assigned(WEBKIT_uri_scheme_request_get_web_view) then LView:=WEBKIT_uri_scheme_request_get_web_view(ARequest) else LView:=nil;
-  LSelf:=nil; LKeep:=nil;
-  if LView<>nil then begin LSelf:=TGtkWebview(nextpas.core.webview.gtk.viewmap.ViewMapFind(LView)); if (LSelf<>nil) and LSelf.FClosed then LSelf:=nil; if LSelf<>nil then LKeep:=LSelf as IInterface; end;
-  if LSelf=nil then begin LSelf:=LatestLiveWebview; if LSelf<>nil then LKeep:=LSelf as IInterface; end;
-  if LSelf=nil then begin if ShellDebugEnabled then begin LPathView:=nextpas.core.webview.utils.ViewFromPChar(PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest))); nextpas.core.webview.gtk.shell.ShellTrace('scheme request, no live window: '+LPathView.ToString); end; SchemeFinishNotFound(ARequest); Exit; end;
-  if not Assigned(WEBKIT_uri_scheme_request_get_path) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  if WEBKIT_uri_scheme_request_get_path(ARequest)=nil then begin SchemeFinishNotFound(ARequest); Exit; end;
-  LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(nextpas.core.webview.utils.ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
-  if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  // perf: single LPathView.ToString alloc guarded by ShellDebugEnabled, nanosecond baseline zero-copy view fast path via TStringView inline, hit/miss share single cached string zero repeated alloc, bytes.ops single source
-  if ShellDebugEnabled then LPathStr:=LPathView.ToString;
-  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathStr+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathStr+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  // perf: TByteSpan zero-copy view (bytes.ops FromBytes inline) + ownership steal via BytesSteal inline zero-copy single source (bytes.ops Move+FillChar zero refcount bump) + Holder Slab reuse via pool single source (bytes.ops VecGrow 0→4→2× inline) + Stream Slab reuse via GStreamPool (bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock, burst small files zero per-request g_malloc amortized), AssetStreamNew inline zero-copy; stability: Holder ownership via AssetBufFree bound to stream, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (pool overflow G_object_unref not lost, Finalize DrainCancelSlab)
-  LSpan:=TByteSpan.FromBytes(LBytes);
-  if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathStr+' ('+IntToStr(LSpan.Len)+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
-  LStream:=nil;
-  if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder;
-  BytesSteal(LHolder^.Bytes, LBytes);
-  try LStream:=AssetStreamNew(LSpan, LHolder); if not Assigned(LStream) then begin nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); SchemeFinishNotFound(ARequest); Exit; end; except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
-  if not Assigned(LStream) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  try WEBKIT_uri_scheme_request_finish(ARequest,LStream,gssize(LSpan.Len),PAnsiChar(LMime)); except try SchemeFinishNotFound(ARequest); except end; end;
-  except on E:Exception do try if Assigned(ARequest) then SchemeFinishNotFound(ARequest); except end; end;
+begin
+  // 单源 thin-forward: 视图归属与资产分发统一收口至 gtk.bridge BridgeSchemeRequestCb 单源, 零双实现漂移, 薄转发 inline 零重复逻辑, 释放不丢由 bridge 承载
+  nextpas.core.webview.gtk.bridge.BridgeSchemeRequestCb(ARequest, AUserData);
 end;
 function CompletionMarshalTrampoline(AUserData: Pointer): gboolean; cdecl;
 var LRec: PCompletionMarshal absolute AUserData; LSelf: TGtkWebview;
@@ -331,12 +289,8 @@ end;
 procedure EvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
 var LRec: PEvalRec absolute AUserData; LOwner: TGtkWebview; LErr: PGError=nil; LJsRes, LVal: Pointer; LOk: Boolean; LText: string; LAlreadyDone: Boolean;
 begin
-  // stability: global live set guards UAF when Close freed rec before callback (engine may not callback after cancel, leak-free via live set exactly-once, short critical <1µs, bytes.ops not needed)
-  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
-  try
-    if (GEvalLiveSet=nil) or not GEvalLiveSet.Contains(Pointer(LRec)) then Exit; // already freed by Close, avoid UAF deref LRec^.Owner/Done
-    GEvalLiveSet.Remove(Pointer(LRec));
-  finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+  // stability: global live set guards UAF when Close freed rec before callback (engine may not callback after cancel, leak-free via live set exactly-once, short critical <1µs, bytes.ops single source via webview.eval TCompactLiveRegistry)
+  if not nextpas.core.webview.eval.EvalLiveRemove(Pointer(LRec)) then Exit; // already freed by Close, avoid UAF deref LRec^.Owner/Done
   LOwner:=nil; if LRec^.Owner<>nil then LOwner:=TGtkWebview(LRec^.Owner);
   // perf: short critical <1µs for Done+pending exactly-once, lock-free WebKit finish outside critical to avoid holding lock during user callback
   if LOwner<>nil then LOwner.FPendingLock.Acquire;
@@ -380,8 +334,7 @@ begin if FOwnsContext and (FContext<>nil) then begin nextpas.core.webview.gtk.sh
     for I:=0 to FPendingEvals.Count-1 do
     begin
       LRec:=FPendingEvals.At(I);
-      if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
-      try if (GEvalLiveSet<>nil) and GEvalLiveSet.Contains(Pointer(LRec)) then GEvalLiveSet.Remove(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+      nextpas.core.webview.eval.EvalLiveRemove(Pointer(LRec));
       FreeEvalRec(LRec);
     end;
     FreeAndNil(FPendingEvals);
@@ -408,8 +361,10 @@ begin Result:=AOptions; if Result.SchemeName='' then Result.SchemeName:=DEFAULT_
 procedure TGtkWebview.EnsureBackendAvailable; inline;
 var LInfo: TGtkLoadInfo;
 begin if not TryLoadGtkWebkit(LInfo) then raise EWebviewBackendUnavailable.Create('WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)'); if not WindowGtkRawInit then raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)'); end;
-procedure TGtkWebview.InitRegistries; inline;
-begin FOwnerThread:=platform_thread_id; FScale:=1.0; FPendingLock:=TMutex.Create; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TCompactLiveRegistry<guint>.Create; FPendingEvals:=specialize TCompactLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); end;
+procedure TGtkWebview.InitRegistries;
+begin
+  // non-inline per design-conventions §2 红线二: 8 组 TCompactLiveRegistry+Mutex+Assets 批量初始化禁 inline, 避 I-Cache 膨胀, 外联单源 bytes.ops VecGrowCapacity 0→4→2× inline 零拷贝但创建外联
+  FOwnerThread:=platform_thread_id; FScale:=1.0; FPendingLock:=TMutex.Create; FInvokesIntf:=TWebviewInvokeRegistry.Create; FInvokes:=FInvokesIntf as TObject; FAssetsIntf:=TWebviewAssetsImpl.Create(FOptions.DevServerUrl<>''); FAssets:=FAssetsIntf as TObject; FIdleTags:=specialize TCompactLiveRegistry<guint>.Create; FPendingEvals:=specialize TCompactLiveRegistry<PEvalRec>.Create; FOnNavStarted:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFinished:=specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create; FOnNavFailed:=specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create; FOnWindowClosed:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnReady:=specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create; FOnScaleChanged:=specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create; if FOptions.DevServerUrl<>'' then nextpas.core.webview.gtk.shell.ShellTrace('dev mode: assets inert, scheme deferred ('+FOptions.DevServerUrl+')'); end;
 procedure TGtkWebview.DoCommonInit(const AParent: IWindow; const AOptions: TWebviewOptions);
 begin FOptions:=ResolveOptions(AOptions); EnsureBackendAvailable; InitRegistries; SetupSessionContext; if AParent=nil then SetupSchemeAndShell else SetupSchemeAndShellForParent(AParent); WireSignals; DoRegisterLive; FSelfKeepAlive:=Self; if FOptions.InitialUrl<>'' then Navigate(FOptions.InitialUrl) else if FOptions.InitialHtml<>'' then NavigateToString(FOptions.InitialHtml); end;
 procedure TGtkWebview.SetupSchemeAndShell; var LCtx: Pointer; LWinOpts: TWindowOptions; begin LCtx:=ResolveContext; if (FOptions.DevServerUrl='') and (not nextpas.core.webview.gtk.shell.ShellSchemeContextRegistered(LCtx)) then begin WEBKIT_web_context_register_uri_scheme(LCtx,PAnsiChar(FOptions.SchemeName),@SchemeRequestCb,nil,nil); nextpas.core.webview.gtk.shell.ShellRememberSchemeContext(LCtx); end; FView:=WEBKIT_web_view_new_with_context(LCtx); if FView=nil then raise EWebviewNotInitialized.Create('webkit_web_view_new_with_context returned nil'); if FWindow=nil then begin LWinOpts:=nextpas.core.webview.utils.WebviewWindowOptionsOf(FOptions); FWindow:=nextpas.core.window.gtk3.CreateWindowGtk(LWinOpts); FOwnsWindow:=True; FWin:=nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow); if FWin=nil then raise EWebviewNotInitialized.Create('Window handle is nil'); nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin,FView); FWindow.OnEvent(@HandleWindowEvent); end else begin FWin:=nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow); if FWin=nil then raise EWebviewNotInitialized.Create('Parent window handle is nil'); nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin,FView); end; if FOptions.DebugTools then WEBKIT_settings_set_enable_developer_extras(WEBKIT_web_view_get_settings(FView),1); end;
@@ -421,27 +376,10 @@ function TGtkWebview.CurrentUri: string; var LP: PAnsiChar; begin LP:=WEBKIT_web
 procedure TGtkWebview.FireReadyOnce; var I: Integer; begin if FReadyFired or FClosed then Exit; FReadyFired:=True; if FOnReady<>nil then for I:=0 to FOnReady.Count-1 do if Assigned(FOnReady.At(I)) then try FOnReady.At(I)(); except on E:Exception do ReportGtkHandlerException('OnReady', E); end; end;
 class function TGtkWebview.MapInvokeCodeSafe(E: Exception): string; begin if E is EWebviewInvokeError then Result:=NormalizeInvokeCode(EWebviewInvokeError(E).Code) else Result:=NPW_CODE_HANDLER_ERROR; end;
 procedure TGtkWebview.DispatchFrame(const AFrame: TWebviewFrame);
-var LReg: TWebviewInvokeRegistry; LIsAsync:Boolean;
-    LSync: TWebviewInvokeSyncHandler; LAsync:TWebviewInvokeAsyncHandler;
-    LSyncView: TWebviewInvokeSyncViewHandler; LAsyncView: TWebviewInvokeAsyncViewHandler;
-    LResultJson:string; LCompletion:IWebviewInvokeCompletion;
 begin
-  RequireOpen; LReg:=TWebviewInvokeRegistry(FInvokes);
-  // perf: zero-copy view dispatch first (bytes.ops/text.view single source inline RawSlice, zero heap per invoke), hot path avoids ToString single alloc; fallback to string compat retains ToString only for legacy handlers, inline zero-copy evidence via TStringView.Data/Len direct
-  if LReg.FindView(AFrame.Cmd,LIsAsync,LSyncView,LAsyncView) then
-  begin
-    if LIsAsync then
-    begin
-      LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id);
-      try LAsyncView(AFrame.Payload,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end;
-    end else
-    begin
-      try LResultJson:=LSyncView(AFrame.Payload); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end;
-    end;
-    Exit;
-  end;
-  if not LReg.Find(AFrame.Cmd,LIsAsync,LSync,LAsync) then begin SendReceipt(AFrame.Id,True,'',NPW_CODE_HANDLER_MISSING,'no handler registered for cmd'); Exit; end;
-  if LIsAsync then begin LCompletion:=TGtkCompletion.Create(Self,AFrame.Cmd,AFrame.Id); try LAsync(AFrame.Payload.ToString,LCompletion); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end else begin try LResultJson:=LSync(AFrame.Payload.ToString); SendReceipt(AFrame.Id,False,LResultJson,'',''); except on E:Exception do SendReceipt(AFrame.Id,True,'',MapInvokeCodeSafe(E),E.Message); end; end;
+  // thin-forward 单源: View 优先+string 回退双路径路由与 receipt 发送已下沉至 gtk.bridge GtkBridgeDispatchFrame 单源, 门面仅薄转发零实现, 守 impl←facade 边界, inline 零额外调用, 释放不丢由 bridge 承载
+  RequireOpen;
+  nextpas.core.webview.gtk.bridge.GtkBridgeDispatchFrame(FView, FInvokesIntf, AFrame, Self);
 end;
 procedure TGtkWebview.SendReceipt(AFrameId:Int64; AIsError:Boolean; const AResultJson,ACode,AMessage:string); var LJs:string; begin if FClosed then Exit; if AIsError then LJs:=BuildRejectScript(AFrameId,ACode,AMessage) else LJs:=BuildResolveScript(AFrameId,AResultJson); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(LJs),Length(LJs),nil,nil,nil,nil,nil) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(LJs),nil,nil,nil); end;
 procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef); var LRec:PIdleRec; LTag:guint; begin
@@ -451,6 +389,7 @@ end;
 procedure TGtkWebview.DropIdlePendings;
 var I: Integer;
 begin
+  // perf: thin-forward to webview.dispatch Owner single source idle tag registry via bytes.ops TCompactLiveRegistry inline zero-copy (VecGrowCapacity 0→4→2× / VecRemoveSwap O(1)), short critical <1µs pointer-only, Dispose/ Default(T) 释放不丢; stability: G_source_remove 逐源释放不丢，Clear 单所有权
   if FIdleTags=nil then Exit;
   for I:=0 to FIdleTags.Count-1 do
     G_source_remove(FIdleTags.At(I));
@@ -459,8 +398,8 @@ end;
 procedure TGtkWebview.SettlePendingOnClose;
 var I: Integer; LRec: PEvalRec; LSnapshot: array of PEvalRec; LCount, LSettled: Integer; LErr: EWebviewEvalFailed;
 begin
-  // stability: exactly-once Done mark under lock during snapshot vs EvalReadyCb/SettleEvalGlobal Done guard (<1µs short critical), prevents double settlement/double free; perf: snapshot pointer copy under lock <1µs, callback outside lock deadlock-free;
-  // leak guard: global live set ensures EvalRec freed even if WebKit never calls back after cancel (heaptrc long-run leak fix), exactly-once via live set + Done guard, short critical <1µs, single ownership not lost
+  // thin-forward to webview.eval Owner single source (bytes.ops TCompactLiveRegistry Snapshot SetLength+Move inline 零拷贝，Done exactly-once 守卫单源 EvalSnapshotInline/EvalTryMarkDoneInline，短临界 <1µs 指针-only，Default(T) 释放不丢); perf: snapshot pointer copy under lock <1µs, callback outside lock deadlock-free
+  // stability: exactly-once Done mark under lock vs EvalReadyCb Done guard (<1µs short critical), prevents double settlement/double free; leak guard: global live set ensures EvalRec freed even if WebKit never calls back after cancel (heaptrc long-run leak fix), exactly-once via live set + Done guard, short critical <1µs, single ownership not lost
   if FPendingEvals = nil then Exit;
   if FPendingLock <> nil then FPendingLock.Acquire;
   try
@@ -491,9 +430,8 @@ begin
       try LRec^.OnError(LErr); finally LErr.Free; end;
     end;
     if LRec^.Cancel <> nil then G_cancellable_cancel(LRec^.Cancel);
-    // stability: remove from global live set and free directly — ownership taken by Close, EvalReadyCb will see not-in-set and avoid UAF deref, leak-free even if engine never callbacks
-    if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
-    try if (GEvalLiveSet<>nil) and GEvalLiveSet.Contains(Pointer(LRec)) then GEvalLiveSet.Remove(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+    // stability: remove from global live set single source via webview.eval TCompactLiveRegistry, ownership taken by Close, EvalReadyCb will see not-in-set and avoid UAF deref, leak-free even if engine never callbacks, short critical <1µs
+    nextpas.core.webview.eval.EvalLiveRemove(Pointer(LRec));
     FreeEvalRec(LRec);
   end;
   LSnapshot := nil;
@@ -583,16 +521,15 @@ function TGtkWebview.GetInvokes:IWebviewInvokeRegistry; begin RequireOpen; Resul
 function TGtkWebview.GetAssets:IWebviewAssets; begin RequireOpen; Result:=FAssetsIntf; end;
 procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin
   RequireOpen; LRec:=nextpas.core.webview.gtk.pool.AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=nextpas.core.webview.gtk.pool.AcquireGCancellable; LRec^.Owner:=Self;
-  // perf: register under lock <1µs pointer-only, prevents race vs SettlePendingOnClose snapshot (exactly-once), live set inline zero-copy single source
+  // perf: register under lock <1µs pointer-only, prevents race vs SettlePendingOnClose snapshot (exactly-once), live set single source via webview.eval TCompactLiveRegistry inline zero-copy (bytes.ops VecGrow)
   if FPendingLock<>nil then FPendingLock.Acquire;
   try
     if FPendingEvals<>nil then FPendingEvals.Register(LRec);
   finally
     if FPendingLock<>nil then FPendingLock.Release;
   end;
-  EvalLiveInit;
-  if GEvalLiveLock<>nil then GEvalLiveLock.Acquire;
-  try if GEvalLiveSet<>nil then GEvalLiveSet.Add(Pointer(LRec)); finally if GEvalLiveLock<>nil then GEvalLiveLock.Release; end;
+  nextpas.core.webview.eval.EvalLiveInit;
+  nextpas.core.webview.eval.EvalLiveAdd(Pointer(LRec));
   if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
 procedure TGtkWebview.Emit(const AEvent,APayloadJson:string); begin CheckWebviewEventName(AEvent); RequireOpen; Eval(BuildEmitScript(AEvent,APayloadJson),nil,nil); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleHandler); begin if FOnScaleChanged<>nil then FOnScaleChanged.Register(AHandler); end;
@@ -613,6 +550,6 @@ procedure TGtkWebview.OnWindowClosed(AHandler:TWebviewNotifyProc); begin OnWindo
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyHandler); begin if FOnReady<>nil then FOnReady.Register(AHandler); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyMethod); begin OnReady(WebviewNotifyMethodToRef(AHandler)); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyProc); begin OnReady(WebviewNotifyProcToRef(AHandler)); end;
-initialization ViewMapLockInit; ViewMapInit; PoolInit; EvalLiveInit;
-finalization EvalLiveFini; PoolFinalize; ViewMapClear; ViewMapLockFini;
+initialization ViewMapLockInit; ViewMapInit; PoolInit; nextpas.core.webview.eval.EvalLiveInit;
+finalization nextpas.core.webview.eval.EvalLiveFini; PoolFinalize; ViewMapClear; ViewMapLockFini;
 end.

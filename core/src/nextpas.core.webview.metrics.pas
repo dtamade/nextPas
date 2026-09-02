@@ -1,17 +1,11 @@
 unit nextpas.core.webview.metrics;
 
-{** @desc webview 家族可观测性 thin-forward（L3→L2）：阈值与背压计数已反哺
-       L2 通用可观测 Owner（nextpas.core.metrics / nextpas.core.metrics.base），
-       本单元仅为兼容 alias 与 inline 薄转发零重复定义。
-       阈值 1 MiB Hard Limit（BRIDGE_PROTOCOL §6）常量即契约单源收口于 L2
-       METRICS_MAX_FRAME_BYTES，bridge 仅复用本常量 NPW_MAX_FRAME_BYTES 薄转发；
-       计数单调递增 UI 线程亲和 plain UInt64，L2 单源承载，bench/log 正交
-       （bench 为 tooling harness 时序统计、log 为结构化日志，均不提供 UI 亲和计数）。
-       解析后规范化膨胀已计入：IsOversizedExpanded* 以 raw + payload + 节点/arena
-       估算实际内存水位（零拷贝 TStringView.Len 视图判定，复用 bytes.ops 单源思想
-       inline 零额外调用），修正单一 Len 比对与水位偏差。
-       性能 inline 薄转发零额外调用、稳定性 plain 全局零句柄 Default 释放不丢、
-       线程 UI 线程亲和（无 atomic，跨线程需外层同步）。 }
+{** @desc L3 metrics thin-forward → L2 `nextpas.core.metrics` Owner 单源
+       （CONTRACT §1.2 / §7 INV-7 / BRIDGE_PROTOCOL §6）。
+       阈值/计数/膨胀水位单源收口于 L2 `nextpas.core.metrics(.base)`，本单元仅为
+       兼容 alias 与 inline 薄转发零双写；业务以 CONTRACT 为准、缺能力先反哺 Owner。
+       性能 inline 薄转发零额外调用（TStringView.Len 零拷贝视图，复用 bytes.ops 单源）、
+       稳定 plain 全局零句柄 Default 释放不丢、线程 UI 线程亲和（无 atomic）。 }
 
 {$I nextpas.core.settings.inc}
 
