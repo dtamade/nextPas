@@ -317,7 +317,8 @@ for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
          test_flac test_mp3 test_vorbis test_spatial test_bus test_bank test_resource test_playlist test_event test_studio test_automation; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench  # -O2, 输出 ns/op + MB/s，GWrite 预分配 + Graph/Timeline/Bank 零分配快照
+for b in bench_pcm_wav bench_flac bench_mp3 bench_vorbis bench_opus bench_mix bench_studio bench_spatial bench_bus bench_bank; do make -C core/benchmarks/nextpas.core.audio/$b clean bench; done  # -O2 ns/op+MB/s 10 bench（见 README 基线矩阵）
+bash core/benchmarks/nextpas.core.audio/run_3way.sh  # 一键·FNV 校验
 make hygiene && git diff --check
 ```
 

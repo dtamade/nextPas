@@ -170,6 +170,29 @@ make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns
 
 `bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照；基准已扩 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K` 五项实时域）。
 
+### 基线矩阵（perfection-8 完整性·10 bench ns/op+MB/s）
+
+| 域 | bench | 项 | 度量 | 基线说明 |
+|---|---|---|---|---|
+| pcm_wav/graph/timeline/device | `bench_pcm_wav` | Parse/64KB,1MB/Write/1MB/Graph1K,4K/Timeline1K,Loop/DeviceDrive1K | ns/op+MB/s | live·-O2 已冻结 |
+| flac | `bench_flac` | Decode/1K,Probe/4B | ns/op+MB/s | live·合成 fLaC 1K 零分配 |
+| mp3 | `bench_mp3` | Decode/1K,Probe/2B | ns/op+MB/s | live·合成 MP3 帧 1K |
+| vorbis | `bench_vorbis` | Decode/1K,Probe/4B | ns/op+MB/s | 新增占位·OggS 1K 合成，Probe≤4KB 零分配 |
+| opus | `bench_opus` | Decode/1K,Probe/8B | ns/op+MB/s | 新增占位·`prOggOpus`+1024帧静音桩，Probe≤4KB |
+| mix/simd | `bench_mix` | MixInto/1K,ApplyGain/1K,SimdAdd/256 | ns/op+MB/s | live |
+| studio | `bench_studio` | Sequencer/256,Automation/1,Timeline/256 | ns/op+MB/s | live |
+| spatial | `bench_spatial` | Fill/1K,4K,Attenuation | ns/op+MB/s | 新增占位·零分配快照 |
+| bus | `bench_bus` | Mix/1K,Mix4K/2bus,Single/256 | ns/op+MB/s | 新增占位·local pin 快照 |
+| bank | `bench_bank` | Fill/1K,4K,Play/Stop | ns/op+MB/s | 新增占位·deep copy 零泄漏 |
+| 3way 对比 | `bench_compare` | FLAC/MP3/Vorbis nextpas vs music888 | FNV+ms/run | FNV 对齐·-O2 对比基线 |
+
+```bash
+for b in bench_pcm_wav bench_flac bench_mp3 bench_vorbis bench_opus bench_mix bench_studio bench_spatial bench_bus bench_bank; do
+  make -C core/benchmarks/nextpas.core.audio/$b clean bench  # -O2 ns/op+MB/s，HEAPTRC 关
+done
+bash core/benchmarks/nextpas.core.audio/run_3way.sh  # 10 bench 一键·FNV 末行校验
+```
+
 ## 演进与复用
 
 - **已完成**：PR1 base → PR2 wav(四件套 `wav.base/intf/impl/pas`, `CWavProbeLimit=4096` L2化) → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 sfx（`game` 保留为 deprecated 薄转发）→ PR9 timeline → 1.5 codec四件套(78→85: flac/mp3/vorbis/opus各 base/intf/impl/pas, opus占位 `prOggOpus/1024帧静音/STUB/8MB`) → 1.5.3 bus本地pin+实时零分配+8MB守卫
