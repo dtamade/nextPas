@@ -62,8 +62,8 @@ function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
 { 背压可观测：超限帧计数（单调递增，跨线程可见需外层同步，UI 线程亲和） }
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
-procedure WebviewNoteOversized(ASize: SizeUInt); inline;
-procedure SetWebviewBridgeLogger(ALogger: ILogger); inline;
+procedure WebviewNoteOversized(ASize: SizeUInt);
+procedure SetWebviewBridgeLogger(ALogger: ILogger);
 
 { TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise. }
 { perf: hot path View+Document reuse zero alloc (Arena reuse), TStringView zero-copy. }
@@ -188,6 +188,8 @@ uses
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.bitops,
+  nextpas.core.simd.vec,
+  nextpas.core.atomic,
   nextpas.core.log.intf,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
@@ -222,29 +224,53 @@ end;
 
 var
   GWebviewOversizedFrames: UInt64 = 0;
-  GWebviewBridgeLogger: ILogger = nil;
+  GWebviewBridgeLoggerRaw: Pointer = nil;
 
 function WebviewOversizedCount: UInt64; inline;
 begin
-  Result := GWebviewOversizedFrames;
+  Result := atomic_load_64(GWebviewOversizedFrames);
 end;
 
 procedure WebviewResetOversizedCount; inline;
 begin
-  GWebviewOversizedFrames := 0;
+  atomic_store_64(GWebviewOversizedFrames, 0);
 end;
 
-procedure WebviewNoteOversized(ASize: SizeUInt); inline;
+procedure WebviewNoteOversized(ASize: SizeUInt);
+var
+  LCount: UInt64;
+  LPtr: Pointer;
+  LLogger: ILogger;
 begin
-  Inc(GWebviewOversizedFrames);
-  { stability: Release 亦可观测背压，Warn 告警防连续小帧/拼接攻击隐式堆积；采样避免洪泛日志 }
-  if (GWebviewBridgeLogger <> nil) and ((GWebviewOversizedFrames <= 5) or (GWebviewOversizedFrames mod 64 = 0)) then
-    GWebviewBridgeLogger.Warn('webview frame oversized');
+  LCount := atomic_fetch_add_64(GWebviewOversizedFrames, UInt64(1)) + 1;
+  { stability: Release 亦可观测背压，Warn 告警防连续小帧/拼接攻击隐式堆积；采样避免洪泛日志.
+    atomic FetchAdd 保证跨线程不丢数不撕裂，Logger 指针经 atomic_load + AddRef 保证并发安全 }
+  if (LCount <= 5) or ((LCount mod 64) = 0) then
+  begin
+    LPtr := atomic_load(GWebviewBridgeLoggerRaw);
+    if LPtr <> nil then
+    begin
+      ILogger(LPtr)._AddRef;
+      Pointer(LLogger) := LPtr;
+      try
+        LLogger.Warn('webview frame oversized');
+      finally
+        LLogger := nil;
+      end;
+    end;
+  end;
 end;
 
-procedure SetWebviewBridgeLogger(ALogger: ILogger); inline;
+procedure SetWebviewBridgeLogger(ALogger: ILogger);
+var
+  LNewPtr, LOldPtr: Pointer;
 begin
-  GWebviewBridgeLogger := ALogger;
+  LNewPtr := Pointer(ALogger);
+  if LNewPtr <> nil then
+    ILogger(LNewPtr)._AddRef;
+  LOldPtr := atomic_exchange(GWebviewBridgeLoggerRaw, LNewPtr);
+  if LOldPtr <> nil then
+    ILogger(LOldPtr)._Release;
 end;
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
@@ -292,24 +318,72 @@ begin
   Result := True;
 end;
 
-function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
+function BridgeHasWhitespaceOutsideString(const AView: TStringView): Boolean; forward;
+
+function BridgeNormalizePayload(const APayload: TJsonValue): string;
 var
   LView: TStringView;
-  I: SizeUInt;
-  LInStr, LEsc: Boolean;
-  LCh: AnsiChar;
 begin
-  { perf: inline + json owner RawSlice 零拷贝单源（parse 零拷贝 View+Arena 复用，RawSlice 仅借用输入切片单次 ToString Move，无二次 builder 分配与转义；复用 bytes.ops 单源思想零额外分配，热点 View+Document 零分配证据见 bench_bridge）；缺省/显式 null 零分配快路径；仅当 RawSlice 缺失或含格式化空白时回退 JsonStringify 单源兜底（CONTRACT 为准，owner 已反哺 RawStart/RawLen 零拷贝能力，热路径最小 JSON 已零拷贝） }
+  { perf: outline non-inline 避免 I-Cache 膨胀（design-conventions §2 真实循环体禁 inline），
+    热路径 View+Document 零分配：RawSlice 零拷贝借用输入切片单次 ToString Move，无二次 builder；
+    复用 bytes.ops 单源思想，缺省/显式 null 零分配快路径；仅含格式化空白时回退 JsonStringify 单源兜底 }
   if APayload.IsNull then
     Exit('null');
   LView := APayload.RawSlice;
   if LView.Len > 0 then
   begin
-    LInStr := False;
-    LEsc := False;
-    for I := 0 to LView.Len - 1 do
+    if not BridgeHasWhitespaceOutsideString(LView) then
+      Exit(LView.ToString);
+    Result := JsonStringify(APayload);
+    Exit;
+  end;
+  Result := JsonStringify(APayload);
+end;
+
+function BridgeHasWhitespaceOutsideString(const AView: TStringView): Boolean;
+var
+  LPos: SizeUInt;
+  LInStr, LEsc: Boolean;
+  LMaskWS, LMaskQuote, LMaskBack: TVecMask;
+  I: SizeUInt;
+  LCh: AnsiChar;
+begin
+  { perf: SIMD 文本扫描单源（nextpas.core.simd.vec VecWidth 16/32 自适应，VecCmpLtU/VecCmpEq 批量探测），
+    大帧下按 VecWidth 跳过大段无空白/引号/反斜杠的洁净块，平均 O(n/VecWidth) 向量比较 + 仅脏块单字节回退，
+    复用 text.view/escape 同源 Vec 能力，零额外分配，热点 bench_bridge 零拷贝证据 }
+  Result := False;
+  if AView.Len = 0 then
+    Exit;
+  LInStr := False;
+  LEsc := False;
+  LPos := 0;
+  while LPos + SizeUInt(VecWidth) <= AView.Len do
+  begin
+    if LEsc then
     begin
-      LCh := LView.Data[I];
+      { 前一块末尾逃逸跨块：首字节被转义，标量消耗一字节后继续向量块 }
+      LCh := AView.Data[LPos];
+      LEsc := False;
+      if LCh = '"' then
+        { escaped quote not toggle }
+      else if (not LInStr) and (Byte(LCh) <= 32) then
+        Exit(True);
+      Inc(LPos);
+      if LPos + SizeUInt(VecWidth) > AView.Len then
+        Break;
+    end;
+    LMaskWS := VecCmpLtU(PByte(AView.Data + LPos), 33);
+    LMaskQuote := VecCmpEq(PByte(AView.Data + LPos), Byte('"'));
+    LMaskBack := VecCmpEq(PByte(AView.Data + LPos), Byte('\'));
+    if (LMaskWS = TVecMask(0)) and (LMaskQuote = TVecMask(0)) and (LMaskBack = TVecMask(0)) then
+    begin
+      { 洁净块：无空白、引号、反斜杠，且不在转义中，串状态不变，可整块跳过 }
+      Inc(LPos, SizeUInt(VecWidth));
+      Continue;
+    end;
+    for I := 0 to SizeUInt(VecWidth) - 1 do
+    begin
+      LCh := AView.Data[LPos + I];
       if LEsc then
         LEsc := False
       else if LCh = '\' then
@@ -319,14 +393,25 @@ begin
       else if LCh = '"' then
         LInStr := not LInStr
       else if (not LInStr) and (Byte(LCh) <= 32) then
-      begin
-        Result := JsonStringify(APayload);
-        Exit;
-      end;
+        Exit(True);
     end;
-    Exit(LView.ToString);
+    Inc(LPos, SizeUInt(VecWidth));
   end;
-  Result := JsonStringify(APayload);
+  while LPos < AView.Len do
+  begin
+    LCh := AView.Data[LPos];
+    if LEsc then
+      LEsc := False
+    else if LCh = '\' then
+    begin
+      if LInStr then LEsc := True;
+    end
+    else if LCh = '"' then
+      LInStr := not LInStr
+    else if (not LInStr) and (Byte(LCh) <= 32) then
+      Exit(True);
+    Inc(LPos);
+  end;
 end;
 
 function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;

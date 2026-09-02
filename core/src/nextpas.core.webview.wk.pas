@@ -137,25 +137,20 @@ uses
 
 var
   GLive: Integer = 0;
-  GLiveList: array of TWkWebview;
-  GLiveListCount: Integer = 0;
-
-procedure GrowLiveList; inline;
-begin
-  // single source: bytes.ops VecGrow (0→4→2×) inline via webview.live
-  specialize VecGrow<TWkWebview>(GLiveList, GLiveListCount);
-end;
+  GLiveWindows: specialize TWebviewLiveRegistry<TWkWebview> = nil;
 
 procedure RegisterLive(AWin: TWkWebview); inline;
 begin
-  // single source: webview.live WebviewLiveAdd -> VecGrow inline
-  specialize WebviewLiveAdd<TWkWebview>(GLiveList, GLiveListCount, AWin);
+  // single source: live registry Register -> bytes.ops VecGrow inline (0→4→2×), zero extra call, zero-copy, single source
+  if GLiveWindows <> nil then
+    GLiveWindows.Register(AWin);
 end;
 
-procedure UnregisterLive(AWin: TWkWebview);
+procedure UnregisterLive(AWin: TWkWebview); inline;
 begin
-  // single source: webview.live WebviewLiveRemoveSwap inline O(1) swap, bytes.ops single source, hot close avoids O(n²) shift
-  specialize WebviewLiveRemoveSwap<TWkWebview>(GLiveList, GLiveListCount, AWin);
+  // single source: live registry Unregister inline O(1) swap, bytes.ops VecRemoveSwap single source, hot close avoids O(n²) shift, trailing nil release
+  if GLiveWindows <> nil then
+    GLiveWindows.Unregister(AWin);
 end;
 
 function WkLiveWindowCount: Integer; inline;
@@ -309,20 +304,10 @@ begin
   specialize VecGrow<PEvalRec>(FPendingEvals, FPendingCount);
 end;
 
-procedure TWkWebview.RemovePending(ARec: PEvalRec);
-var
-  I, J: Integer;
+procedure TWkWebview.RemovePending(ARec: PEvalRec); inline;
 begin
-  for I := 0 to FPendingCount - 1 do
-    if FPendingEvals[I] = ARec then
-    begin
-      for J := I to FPendingCount - 2 do
-        FPendingEvals[J] := FPendingEvals[J + 1];
-      Dec(FPendingCount);
-      if FPendingCount < Length(FPendingEvals) then
-        FPendingEvals[FPendingCount] := nil;
-      Exit;
-    end;
+  // perf: single source bytes.ops VecRemoveSwap inline O(1) zero-copy swap + Default(nil) trailing, avoids O(n) ordered shift O(n²) on cancel storm, single source
+  specialize VecRemoveSwap<PEvalRec>(FPendingEvals, FPendingCount, ARec);
 end;
 
 procedure TWkWebview.GrowOnNavStarted; inline;
@@ -508,5 +493,11 @@ procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed th
 procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
 procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
 function TWkWebview.IsOnMainThread: Boolean; begin if FWindow<>nil then Result:=FWindow.Dispatcher.IsOnMainThread else Result:= platform_thread_id = FOwnerThread; end;
+
+initialization
+  GLiveWindows := specialize TWebviewLiveRegistry<TWkWebview>.Create;
+
+finalization
+  GLiveWindows.Free;
 
 end.

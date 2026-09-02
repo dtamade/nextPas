@@ -47,8 +47,8 @@ procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
 procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -95,6 +95,7 @@ implementation
 
 uses
   nextpas.core.simd,
+  nextpas.core.simd.bitops,
   nextpas.core.text.unicode.utils;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
@@ -108,33 +109,34 @@ uses
   O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
   writes that could corrupt heap on exception. }
 
-procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
+procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 var
   LOld, LNewCap: SizeUInt;
 begin
   LOld := SizeUInt(Length(ADest));
   if ARequired <= LOld then
     Exit;
-  // single doubling growth to amortize when called directly; callers that need
-  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
-  // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < ARequired do
+  // perf: single-source growth via simd.bitops NextPow2 (O(1) bit-ops, inline, zero-copy),
+  // replaces while LNewCap < ARequired do LNewCap*2 loop (O(log n) iterations for large ARequired);
+  // no header poke, SetLength exception-safe (no leak on fail)
+  if ARequired <= BYTES_BUILDER_MIN_GROW then
+    LNewCap := BYTES_BUILDER_MIN_GROW
+  else
   begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
+{$IFDEF CPU64}
+    LNewCap := SizeUInt(NextPow2_64(TU64(ARequired)));
+{$ELSE}
+    LNewCap := SizeUInt(NextPow2_32(TU32(ARequired)));
+{$ENDIF}
+    if LNewCap = 0 then
       LNewCap := ARequired;
-      Break;
-    end;
+    if LNewCap < BYTES_BUILDER_MIN_GROW then
+      LNewCap := BYTES_BUILDER_MIN_GROW;
   end;
   SetLength(ADest, LNewCap);
 end;
 
-procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
+procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
 var
   LNeed: SizeUInt;
 begin

@@ -566,45 +566,81 @@ var
   GLiveWindows: array of TFakeWebview;
   GLiveWindowsCount: Integer = 0;
   GLiveCount: Integer = 0;
+  GLiveLck: ILock;
 
 { GLiveWindows 操作单源收敛到 nextpas.core.webview.live (bytes.ops Vec 单源 inline)：
   GrowLiveWindows/RegisterLive/UnregisterLive 四后端重复已抽至 live 泛型 helpers，
   本单元仅薄转发，零额外堆分配 }
 procedure GrowLiveWindows; inline;
 begin
-  // perf: thin forward to bytes.ops VecGrow single source (0→4→2×), inline
+  // perf: thin forward to bytes.ops VecGrow single source (0→4→2×), inline — caller holds GLiveLck
   specialize VecGrow<TFakeWebview>(GLiveWindows, GLiveWindowsCount);
 end;
 
 procedure RegisterLive(AWin: TFakeWebview); inline;
 begin
-  // perf: single source WebviewLiveAdd -> VecGrow inline, zero extra alloc
-  specialize WebviewLiveAdd<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
-  Inc(GLiveCount);
+  // perf: single source WebviewLiveAdd -> VecGrow inline, zero extra alloc; Dispatcher cross-thread Post safety via GLiveLck
+  GLiveLck.Acquire;
+  try
+    specialize WebviewLiveAdd<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+    Inc(GLiveCount);
+  finally
+    GLiveLck.Release;
+  end;
 end;
 
 procedure UnregisterLive(AWin: TFakeWebview); inline;
+var
+  LShouldDec: Boolean;
 begin
-  // stability: if never Close'd, live count was still 1 — decrement here; already Closed windows decremented at Close time
-  if not AWin.FClosed then
-    Dec(GLiveCount);
-  // perf: O(1) swap-remove inline, nil trailing to release ref
-  specialize WebviewLiveRemoveSwap<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+  // stability: if never Close'd, live count was still 1 — decrement here; already Closed windows decremented at Close time; read FClosed under instance lock, vector/count under GLiveLck (GLive->FLck order)
+  GLiveLck.Acquire;
+  try
+    AWin.FLck.Acquire;
+    try
+      LShouldDec := not AWin.FClosed;
+    finally
+      AWin.FLck.Release;
+    end;
+    if LShouldDec then
+      Dec(GLiveCount);
+    // perf: O(1) swap-remove inline, nil trailing to release ref
+    specialize WebviewLiveRemoveSwap<TFakeWebview>(GLiveWindows, GLiveWindowsCount, AWin);
+  finally
+    GLiveLck.Release;
+  end;
 end;
 
 function FakeLiveWindowCount: Integer; inline;
 begin
-  // perf: O(1) cached count inline, zero scan, close 密集零遍历
-  Result := GLiveCount;
+  // perf: O(1) cached count inline, zero scan, close 密集零遍历; Dispatcher cross-thread Post safety via GLiveLck
+  GLiveLck.Acquire;
+  try
+    Result := GLiveCount;
+  finally
+    GLiveLck.Release;
+  end;
 end;
 
 procedure FakePumpAll;
 var
   I: Integer;
+  LSnapshot: array of TFakeWebview;
+  LCount: Integer;
 begin
-  for I := 0 to GLiveWindowsCount - 1 do
-    if not GLiveWindows[I].FClosed then
-      GLiveWindows[I].PumpOnce;
+  // Dispatcher cross-thread Post safety: snapshot under GLiveLck, then pump without holding global lock to avoid dispatch deadlock
+  GLiveLck.Acquire;
+  try
+    LCount := GLiveWindowsCount;
+    SetLength(LSnapshot, LCount);
+    for I := 0 to LCount - 1 do
+      LSnapshot[I] := GLiveWindows[I];
+  finally
+    GLiveLck.Release;
+  end;
+  for I := 0 to LCount - 1 do
+    if not LSnapshot[I].FClosed then
+      LSnapshot[I].PumpOnce;
 end;
 
 { ---- TFakeWebview ---- }
@@ -736,19 +772,28 @@ procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 var
   LNew, LOld: TFakeInvokeOutcomes;
-  LCap, LCount, LOldLen: Integer;
+  LCap, LCount, LOldLen, LIdx: Integer;
+  LCmd, LResultJson, LCode, LMessage: string;
+  LIsError: Boolean;
 begin
-  // perf: fast path under lock without alloc; contended path snapshot + alloc + O(n) copy outside lock to avoid lock-amplification under invoke storm, single source bytes.ops VecCopy/VecGrowCapacity inline zero extra call
+  // perf: AddRef outside lock to avoid atomic amplification under invoke storm (4 managed assigns); inside lock only pointer steal (no AddRef) via PPointer move, zero extra atomic
+  LCmd := ACmd;
+  LResultJson := AResultJson;
+  LCode := ACode;
+  LMessage := AMessage;
+  LIsError := AIsError;
   FLck.Acquire;
   try
     if FOutcomesCount < Length(FOutcomes) then
     begin
-      FOutcomes[FOutcomesCount].Cmd := ACmd;
-      FOutcomes[FOutcomesCount].IsError := AIsError;
-      FOutcomes[FOutcomesCount].ResultJson := AResultJson;
-      FOutcomes[FOutcomesCount].Code := ACode;
-      FOutcomes[FOutcomesCount].Message := AMessage;
+      LIdx := FOutcomesCount;
       Inc(FOutcomesCount);
+      // steal fields without AddRef — slot is nil, no Release needed; nil source to prevent DecRef at exit
+      PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
+      FOutcomes[LIdx].IsError := LIsError;
+      PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
+      PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
+      PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
       Exit;
     end;
     LCap := VecGrowCapacity(Length(FOutcomes));
@@ -767,12 +812,13 @@ begin
   try
     if FOutcomesCount < Length(FOutcomes) then
     begin
-      FOutcomes[FOutcomesCount].Cmd := ACmd;
-      FOutcomes[FOutcomesCount].IsError := AIsError;
-      FOutcomes[FOutcomesCount].ResultJson := AResultJson;
-      FOutcomes[FOutcomesCount].Code := ACode;
-      FOutcomes[FOutcomesCount].Message := AMessage;
+      LIdx := FOutcomesCount;
       Inc(FOutcomesCount);
+      PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
+      FOutcomes[LIdx].IsError := LIsError;
+      PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
+      PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
+      PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
       Exit;
     end;
     if (Length(FOutcomes) <> LOldLen) or (FOutcomesCount <> LCount) then
@@ -787,12 +833,13 @@ begin
       SetLength(LNew, VecGrowCapacity(Length(FOutcomes)));
     // stability: FOutcomes:=LNew releases old refs via refcount finalization, LNew retains (AddRef), zero leak
     FOutcomes := LNew;
-    FOutcomes[FOutcomesCount].Cmd := ACmd;
-    FOutcomes[FOutcomesCount].IsError := AIsError;
-    FOutcomes[FOutcomesCount].ResultJson := AResultJson;
-    FOutcomes[FOutcomesCount].Code := ACode;
-    FOutcomes[FOutcomesCount].Message := AMessage;
+    LIdx := FOutcomesCount;
     Inc(FOutcomesCount);
+    PPointer(@FOutcomes[LIdx].Cmd)^ := PPointer(@LCmd)^; PPointer(@LCmd)^ := nil;
+    FOutcomes[LIdx].IsError := LIsError;
+    PPointer(@FOutcomes[LIdx].ResultJson)^ := PPointer(@LResultJson)^; PPointer(@LResultJson)^ := nil;
+    PPointer(@FOutcomes[LIdx].Code)^ := PPointer(@LCode)^; PPointer(@LCode)^ := nil;
+    PPointer(@FOutcomes[LIdx].Message)^ := PPointer(@LMessage)^; PPointer(@LMessage)^ := nil;
   finally
     FLck.Release;
   end;
@@ -843,14 +890,15 @@ var
   LPending: array of TFakePendingEval;
   LErr: EWebviewEvalFailed;
   LOnError: TWebviewEvalErrorCallback;
+  LNeedDec: Boolean;
 begin
+  LNeedDec := False;
   FLck.Acquire;
   try
     if FClosed then
       Exit;
     FClosed := True;
-    // perf: O(1) live count decrement under instance lock (single writer), close密集零扫描
-    Dec(GLiveCount);
+    LNeedDec := True;
     // perf: zero-alloc snapshot via pointer swap (no SetLength(LErrors,N)), inline O(1) move; bytes.ops single source unchanged
     LPending := FPendingEvals;
     LPendingCount := FPendingCount;
@@ -864,6 +912,15 @@ begin
     end;
   finally
     FLck.Release;
+  end;
+  if LNeedDec then
+  begin
+    GLiveLck.Acquire;
+    try
+      Dec(GLiveCount);
+    finally
+      GLiveLck.Release;
+    end;
   end;
   // perf: single exception instance reused for N callbacks, inline alloc once, zero per-pending heap churn
   if LPendingCount > 0 then
@@ -1509,7 +1566,9 @@ begin
 end;
 
 initialization
+  GLiveLck := TMutex.Create as ILock;
 
 finalization
+  GLiveLck := nil;
 
 end.

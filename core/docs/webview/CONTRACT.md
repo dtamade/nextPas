@@ -16,12 +16,16 @@
 | `nextpas.core.webview.base` | 类型根 | options/events/kinds/错误分类（含 `EWebviewError` 族）— 纯数据类型，无校验实现（四件套纯度） | W1 |
 | `nextpas.core.webview.validation` | 校验 | `CheckWebviewOptions`/`CheckInvokeCmd`/`CheckWebview*` 校验实现层（`base←intf←validation←factory/bridge` 纯度；复用 L1 `text.view` `TStringView.Trim` 零拷贝 + L2 `validation.URL` 单源，inline 零额外调用） | W1 |
 | `nextpas.core.webview.intf` | 接口 | `IWebviewWindow` / `IWebviewDispatcher` / `IWebviewAssets` / invoke 契约类型 | W1 |
+| `nextpas.core.webview.utils` | 共享辅助 | 资产路径归一 `NormalizeWebviewAssetPath`/`NormalizeWebviewAssetView`/`ViewFromPChar`，复用 L1 `text.view` `TStringView` 零拷贝 view 哈希探测与单 `SetString+Move` 单源（bridge/vfs/gtk 同源，inline/out-of-line 零额外调用，非 inline 避热膨胀，`Finalize` 不丢） | W1→S52 单源收敛 |
+| `nextpas.core.webview.callbacks` | 共享辅助 | method/proc→reference 单源适配（4 后端 `Webview*MethodToRef/ProcToRef` inline 薄转发，零拷贝闭包，消除重复；仅依赖 `intf`，不触后端/bridge/factory，资源释放不丢） | S105 单源收敛 |
 | `nextpas.core.webview.bridge` | 协议 | 桥协议 v1 编解码 + pending 表 + 注入脚本常量（后端无关，唯一实现） | W1 |
 | `nextpas.core.webview.live` | 私有索引 | 活窗紧凑 Vec 注册表（`bytes.ops.VecGrow/VecGrowCapacity` 单源 inline 0→4→2×，swap/shift 双形态零拷贝，`TWebviewLiveRegistry<T>` 泛型封装，4 后端 has-a 复用，析构 `Default(T)` nil 释放不丢） | S105 |
 | `nextpas.core.webview.assets` | 私有索引 | 资产前缀单哈希路由索引（`bridge` 单源承载：`WyHash` 单源 + 0.75 负载单表，`TStringView` 零拷贝 view 哈希探测，`VecGrowCapacity` 单源 0→4→2×，`distinctLens` 降序最长前缀，`Finalize` 全量串/接口不丢） | S105 |
 | `nextpas.core.webview.fake` | 测试后端 | 无头脚本化后端：记录调用、手动驱动回调，契约测试全走它 | W1 |
 | `nextpas.core.webview.gtk.ffi` | ABI | WebKitGTK/GLib/GTK3 类型与函数指针变量声明（无 external） | W1 |
 | `nextpas.core.webview.gtk.loader` | 装载 | dlopen 探测与符号装载（经 `platform.dl`），版本探测 4.1→4.0 | W1 |
+| `nextpas.core.webview.gtk.viewmap` | 私有索引 | GTK 指针键 view→window O(1) 开地址哈希（`hashmap.base.HashOfPointer→HashMix32` 单源 WyHash 一致，`bytes.ops.VecGrowCapacity` 0→4→2× 单源 inline 零额外调用，0.75 负载，`VIEW_TOMBSTONE` 保探链，析构清零 nil 释放不丢） | S105 单源收敛 |
+| `nextpas.core.webview.gtk.pool` | 私有池化 | GTK dispatcher 池化 Slab（Idle/Completion 双池复用，`live.WebviewPoolTryAcquire/Release` 泛型单源 inline 零拷贝，`bytes.ops VecGrowCapacity` 预分配单源，短临界 <1µs，溢出 `Dispose` 单所有权释放不丢） | S105 单源收敛 |
 | `nextpas.core.webview.gtk.win` | **deprecated shim (compat, inline thin-forward, file retained until next major)** | 文件保留为 deprecated shim（F4 空单元兼容期：窗口壳已单源至 `nextpas.core.window.gtk3` 的 `WindowGtkRaw*` 12 项 inline 薄转发，零拷贝 inline 零额外调用，自身零状态零分配、释放不丢；下一主版本移除） | W1→F4→deprecated |
 | `nextpas.core.webview.gtk` | 后端 | Linux 实现：**has-a `IWindow`**（`nextpas.core.window` L2）+ WebKit 视图挂载、scheme、idle dispatch、WebKitGTK 信号桥接（窗口壳经 `window.gtk3` Raw 单源 inline 零拷贝） | W1→M6 has-a |
 | `nextpas.core.webview.mime` | 薄门面 | `GuessWebviewMime` inline 薄转发至 L2 `nextpas.core.mime.types`（65 项 O(1) 哈希 128 槽，零分配切片，1-2 探测；与 `http.mime` 同源复用，L3 同层依赖已消除） | S13→S106 |
@@ -39,12 +43,13 @@
 ### 依赖方向
 
 ```
-base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 inline 零拷贝) ← intf ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源) → factory → 门面    （L3→L2 has-a）
-              └── mime(薄门面→L2 mime.types 零拷贝 O(1) 哈希)/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow + live）
-gtk.ffi ← gtk.loader ← gtk        （loader 装载 ffi 函数指针）
-validation 为家族内校验实现层（四件套纯度 base←validation←intf←impl←facade；仅 bridge/factory/后端 uses，不经门面重复实现；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
-live/assets 为家族内私有索引（不经门面 re-export）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 探测 + VecGrowCapacity 单源，Finalize 全量串/接口不丢）
-window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）
+base ← validation(校验实现，复用 L1 text.view + L2 validation 单源 inline 零拷贝) ← intf ← utils/callbacks(共享辅助：utils 复用 text.view Slice 单源零拷贝，callbacks 仅依 intf 4 后端 inline 薄转发零拷贝) ← bridge(←assets 私有索引单哈希单源) ← fake/gtk(uses window + live 紧凑 Vec 单源 + viewmap/pool 私有) → factory → 门面    （L3→L2 has-a）
+              └── mime(薄门面→L2 mime.types 零拷贝 O(1) 哈希)/vfs 同桥位；webview2/wk 同 gtk 位（均 has-a IWindow + live + callbacks 单源）
+gtk.ffi ← gtk.loader ← gtk.viewmap/gtk.pool(私有：viewmap 单哈希单源 + pool Slab 单源) ← gtk        （loader 装载 ffi 函数指针；viewmap/pool 仅 gtk 后端 uses，不经门面）
+validation 为家族内校验实现层（四件套纯度 base←validation/intf←utils/callbacks/bridge←impl←facade；utils/callbacks 为家族内共享辅助，不经门面重复实现，仅 bridge/factory/后端 uses；inline 零拷贝，校验失败抛 EWebviewInvalidState，资源释放不丢）
+live/assets/viewmap/pool 为家族内私有索引/池化（不经门面 re-export）：live 供 4 后端 has-a 复用紧凑 Vec（bytes.ops VecGrowCapacity 单源 inline 0→4→2×，swap/shift 零拷贝，析构 Default(T) nil 释放不丢），assets 供 bridge 单哈希单源承载（WyHash + 0.75 负载 + TStringView 零拷贝 view 探测 + VecGrowCapacity 单源，Finalize 全量串/接口不丢），viewmap 供 gtk 专用 O(1) view→window 哈希（hashmap.base HashOfPointer 单源 + VecGrowCapacity 单源，VIEW_TOMBSTONE 保探链），pool 供 gtk dispatcher 双池 Slab 复用（live Pool 单源 + VecGrowCapacity 单源，短临界 <1µs 单所有权）
+utils/callbacks 为家族内共享辅助（不经门面 re-export，可抽模块候选显式登记）：utils 供 bridge/vfs/gtk 复用路径归一 View 单源（text.view 单源，SliceToStr 单次 SetString+Move，热点 View 零拷贝），callbacks 供 4 后端复用三形态归一（method/proc→reference inline 薄转发，零拷贝闭包）；二者均为 L3 内单向依赖（仅依 base/intf），抽取候选 window/通用辅助已评估——当前留家族内，迁移需经设计评审不自行外溢
+window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
 ```
 
 - **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs、window 单元**（`intf` 仅在 M6 后例外允许 `uses window.intf` 以暴露 `IWindow` 类型与 `Window` 属性，仍禁止触后端实现）。
@@ -55,8 +60,8 @@ window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/g
   **禁止使用 FPC `DynLibs` 单元**（gate policy：raw host units 仅限 owner path）。
 - **webview→window**：`nextpas.core.webview.fake/gtk/webview2/wk/factory` 允许 `uses nextpas.core.window.*`（has-a 组合，L3→L2）；`gtk.ffi/loader` 等 `ffi/loader` 仍仅经 `platform.dl`，不直触 `DynLibs`。
 
-**落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `bridge`（含 `assets` 私有索引单哈希单源）/ `live`（4 后端 has-a 紧凑 Vec 单源）/ `fake`(has-a) / `factory`(has-a) /
-门面与 `gtk.ffi` / `gtk.loader` / `gtk`(has-a) 已全部落地；
+**落地状态**（M6 has-a 收口后）：`base` / `intf`（`uses window.intf` 暴露 `IWindow`）/ `utils`（`text.view` 单源零拷贝）/ `callbacks`（4 后端 method/proc→reference inline 单源）/ `bridge`（含 `assets` 私有索引单哈希单源）/ `live`（4 后端 has-a 紧凑 Vec 单源）/ `fake`(has-a + callbacks) / `factory`(has-a) /
+门面与 `gtk.ffi` / `gtk.loader` / `gtk.viewmap`（`hashmap.base HashOfPointer` + `bytes.ops` 单源）/ `gtk.pool`（`live` Pool 单源 + `bytes.ops` 单源）/ `gtk`(has-a + viewmap/pool) 已全部落地；
 `gtk.win`/`webview2.win` 已退化为 deprecated shim 保留（`window.gtk3`/`window.win32` 单源 inline 薄转发，12/15 项 deprecated inline 零拷贝零额外调用，F4/M6 has-a 收口，薄转发层零状态零分配、资源释放不丢；文件兼容期保留，下一主版本移除），见 §1.1。
 webview2（W2）/ wk（W3）按波次接入同一 bridge 与 factory 位。
 S4 打磨：scheme 未命中走真实 GError 404；IsMinimized 查询式真值；

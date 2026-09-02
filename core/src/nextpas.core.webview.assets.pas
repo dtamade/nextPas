@@ -20,12 +20,13 @@ unit nextpas.core.webview.assets;
        - 生长：VecGrow/VecGrowCapacity 单源 nextpas.core.bytes.ops（0→4→2× inline，零额外调用）；
        - 容器特化说明：前缀路由需“最长前缀降序枚举 + 零拷贝 TStringView 探测 + 404 命名空间隔离
          + distinctLens 有序表”，通用 THashMap/TSwissTable 无此语义且 view 需串分配破坏零拷贝，
-         故保留专用线性探测表但哈希/容量/相等/生长全量委托单源，零容器逻辑重复。
+         故保留专用线性探测表但哈希/容量/相等/生长全量委托单源，零容器逻辑重复；
+         演进候选：通用 prefix-router 可抽 L2/L3 独立模块供 http/vfs 复用，当前专用表哈希(WyHash32+HashMix32)/NextPow2/SpanEqual/VecGrow 全量单源已零重复，迁移零成本（登记为演进候选，不在当前 slice 外溢）。
 
        性能：
        - 零拷贝：TStringView 切片零堆分配，TryGetByView 按 view.Data/Len 直算 WyHash32 与
          SpanEqual 直比，单 distinct 零 Copy，热点单挂载仍内联快路径；
-       - 容量：VecGrowCapacity(0→4→2×) bytes.ops 单源 inline 倍增，0.75 负载重哈希，零 O(n²)；
+       - 容量：VecGrowCapacity(0→4→2×) bytes.ops 单源 inline 倍增，3/4 负载重哈希（整数 Cap*3 div 4 零浮点，热点扩容零 FPU），零 O(n²)；
        - distinctLens 摊销 O(1) 追加 + 惰性 IntroSort 降序 O(n log n) 单次（collections.algorithms.SortInt32DescRange 单源，Heap 回退+Tukey ninther，最坏 O(n log n)，零自实现快排分叉），DistinctCount 惰性一次 Ensure 后 LensAtUnchecked 零重复 Ensure 零额外分配，MountCount = distinct 哈希数，FindBy/TryGet 全 inline。
 
        稳定性：析构 Finalize 全量串/接口，no leak；inline 薄转零额外调用。 *}
@@ -151,7 +152,7 @@ end;
 
 procedure TWebviewAssetIndex.RecalcMaxLoad; inline;
 begin
-  FMaxLoad := Trunc(FCapacity * 0.75);
+  FMaxLoad := FCapacity * 3 div 4;
   if FMaxLoad >= FCapacity then
     FMaxLoad := FCapacity - 1;
 end;
