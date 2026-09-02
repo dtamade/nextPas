@@ -12,6 +12,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.io.intf,
@@ -113,8 +114,12 @@ procedure ArchiveMkFifo(const APath: string; const APerm: TFilePermission); inli
 function ArchiveTryMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean): Boolean;
 { 单源：特殊文件预清理（Exists/IsSymlink→Remove best-effort），消除 tar.fs 四分支重复样板，inline 薄转发零额外分配 }
 procedure ArchiveHandleSpecial(const APath: string); inline;
-{ 单源：设备落盘 fallback 空文件占位，复用 ArchiveWriteFileSlice+ArchiveRestoreFileMeta，inline 薄转发 }
-procedure ArchiveWriteEmptyFallback(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean); inline;
+{ 单源：设备落盘 fallback 空文件占位（已废弃，保留仅为兼容历史调用，禁止新增使用；设备语义 fail-closed，不静默降级），复用 ArchiveWriteFileSlice+ArchiveRestoreFileMeta，inline 薄转发 }
+procedure ArchiveWriteEmptyFallback(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean); inline; deprecated 'device/fifo fallback silently downgrades to regular file — use fail-closed, do not call';
+{ 联邦单缝薄转发：消除 tar.fs 直引 fs.errors/text.conv 双缝，复用 fs.errors 单源/log.intf 单源、bytes.ops 单源 inline 零拷贝 }
+procedure ArchiveWarnCloseFailed(const AOp, APath: string; const E: Exception); inline;
+function ArchiveIntToStr(const AValue: Int64): string; inline;
+procedure ArchiveLogWarn(const AMsg: string); inline;
 
 { 快照：IStream.Size/Seek/Read + short-snapshot 校验复用，消除 TarPackDir/builder.Finish 重复 }
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;
@@ -137,12 +142,12 @@ function ArchiveEstimateTarSize(const AWalks: TArchiveWalkArray; ACount: Integer
 implementation
 
 uses
-  nextpas.core.exception,
   nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.fs.stream,
   nextpas.core.fs.errors,
   nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.bytes.ops,
   nextpas.core.platform.fs,
   nextpas.core.platform.files,
@@ -630,9 +635,27 @@ end;
 
 procedure ArchiveWriteEmptyFallback(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean); inline;
 begin
-  // 单源：设备/mkfifo 失败后的空文件占位+定稿，复用 ArchiveWriteFileSlice/ArchiveRestoreFileMeta，避免四处重复
+  // 单源：设备/mkfifo 失败后的空文件占位+定稿，复用 ArchiveWriteFileSlice/ArchiveRestoreFileMeta，避免四处重复；已废弃（fail-closed，不静默降级），仅兼容历史调用
   ArchiveWriteFileSlice(APath, nil, 0, ArchivePermDefault);
   ArchiveRestoreFileMeta(APath, AMode, AMtimeNs, ARestoreMode);
+end;
+
+procedure ArchiveWarnCloseFailed(const AOp, APath: string; const E: Exception); inline;
+begin
+  // 联邦单缝：tar.fs 经 archive.fs 单缝复用 fs.errors FsWarnCloseFailed 单源（log.intf NullLogger 零分配 inline 薄转发，统一可观测，不静默吞）
+  FsWarnCloseFailed(AOp, APath, E);
+end;
+
+function ArchiveIntToStr(const AValue: Int64): string; inline;
+begin
+  // 联邦单缝：tar.fs 经 archive.fs 单缝复用 text.conv IntToStr 单源，bytes.ops 单源思想 inline 零拷贝，避免 tar.fs 直引 text.conv 破坏 L2 联邦单缝
+  Result := nextpas.core.text.conv.IntToStr(AValue);
+end;
+
+procedure ArchiveLogWarn(const AMsg: string); inline;
+begin
+  // 联邦单缝：tar.fs 经 archive.fs 单缝可观测（log.intf NullLogger 零分配 inline 薄转发，无 StdErr 直触，L2 克制，复用单一 Warn 入口）
+  NullLogger.Warn(AMsg);
 end;
 
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;

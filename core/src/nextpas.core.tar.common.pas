@@ -4,7 +4,7 @@ unit nextpas.core.tar.common;
  *}
 
 {$I nextpas.core.settings.inc}
-{** 类型级隔离：门面零 re-export，仅 reader/writer/fs 于 implementation 受信 uses；复用 bytes.ops 单源 inline 零拷贝视图，CONTRACT 双重收敛。 *}
+{ 内核隔离：仅 reader/writer/fs 受信 uses }
 
 interface
 
@@ -17,38 +17,30 @@ uses
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 
-{** 校验：单条目尺寸与总量 *}
 procedure GuardTarEntrySize(const AHeader: TTarHeader; AMaxEntry: SizeUInt);
 procedure GuardTarTotalSize(ACum, ANext: UInt64; AMaxTotal: UInt64);
-
-{** 名安全守卫（写端 EArgumentError，读端/落盘 EParseError 由调用方选） *}
 procedure GuardTarNameForRead(const AName: string);
 
-{** 512 块校验和计算与验证 *}
-function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
-function TarComputeChecksumSigned(ABlock: PByte): Int64;
+{ 512 块校验和：主入口为 TarComputeChecksumsDual；Unsigned/Signed 为兼容薄封装，推荐 dual }
+procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
+function TarComputeChecksumUnsigned(ABlock: PByte): Int64; deprecated 'use TarComputeChecksumsDual';
+function TarComputeChecksumSigned(ABlock: PByte): Int64; deprecated 'use TarComputeChecksumsDual';
 function TarStoredChecksum(ABlock: PByte): Int64; inline;
 procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 
-{** 数值字段：八进制/base-256 双路径编解码 *}
 function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 
-{** 头字段写入，委托 bytes.ops 单源 TByteSpan 视图零拷贝；Move 索引禁 inline *}
 procedure TarPutHeaderField(ABlock: PByte; AOff, ALen: SizeUInt; const ASpan: TByteSpan);
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
-{** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂
- *  @perf 零分配：提供 Raw 重载（plain procedural + UserData）消除 per-pax 匿名闭包堆分配，归一 bytes.ops SpanEqual/SpanToString 单源零拷贝视图 *}
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline; overload;
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean; inline; overload;
-{** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，inline 薄转发，零拷贝 Reserve+AppendBytes 单源 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
 
 implementation
@@ -63,7 +55,7 @@ type
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
-  // 块对齐委托 bytes.ops.AlignUp 单源实现
+  // 块对齐委托 bytes.ops.AlignUp
   if ASize <= 0 then
     Exit(0);
   Result := Int64(AlignUp(SizeUInt(ASize), SizeUInt(C_TAR_BLOCK_SIZE))) - ASize;
@@ -94,13 +86,12 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ 校验和：单遍融合双累加，见 CONTRACT §2 INV-4，经 bytes.ops 单源；外联避 I-Cache 膨胀，零拷贝 BytesSumAndCountHighBitExclude 单源单遍 }
 procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
   LSum: UInt64;
   LHigh: SizeUInt;
 begin
-  // 外联零拷贝：单遍 BytesSumAndCountHighBitExclude 单源，nil 守卫 fail-closed，复用 bytes.ops SWAR 视图片段，避 inline 512B 双累加 I-Cache 膨胀
+  // 外联：BytesSumAndCountHighBitExclude 经 simd.SumBytes 批量 512B，nil 守卫，避 inline 膨胀
   if ABlock = nil then
   begin
     AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
@@ -147,7 +138,7 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
-  // 快路径 qword 拒识 + IsZeroBytes 单源，外联
+  // 快路径 qword 拒识 + IsZeroBytes
   if ABlock = nil then Exit(True);
   if PQWord(ABlock)^ <> 0 then Exit(False);
   Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
@@ -238,7 +229,7 @@ procedure TarPutHeaderField(ABlock: PByte; AOff, ALen: SizeUInt; const ASpan: TB
 var
   CopyLen: SizeUInt;
 begin
-  // 单源 TByteSpan 零拷贝：收敛 string/slice 双路径，单次 CopyMemory，复用 bytes.ops 单源，截断零分支
+  // 收敛 string/slice 双路径，单次 CopyMemory
   if (ABlock = nil) or (ALen = 0) or (ASpan.Len = 0) or (ASpan.Data = nil) then
     Exit;
   CopyLen := ASpan.Len;
@@ -249,7 +240,7 @@ end;
 
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 begin
-  // 薄转发至 TByteSpan 单源，零拷贝视图，复用 bytes.ops CopyMemory 单源，避免 CopyStringToBuffer 分立
+  // 薄转发至 TByteSpan 视图
   if (ABlock = nil) or (ALen = 0) or (Length(AValue) = 0) then
     Exit;
   TarPutHeaderField(ABlock, AOff, ALen, TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue))));
@@ -257,18 +248,17 @@ end;
 
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 begin
-  // 薄转发至 TByteSpan 单源，零拷贝 PByte 切片，复用 bytes.ops CopyMemory 单源，消除双 Move 分立
   TarPutHeaderField(ABlock, AOff, ALen, TByteSpan.Create(AData, ACount));
 end;
 
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 var
-  Sum: Int64;
+  U, S: Int64;
   I: SizeUInt;
 begin
-  Sum := TarComputeChecksumUnsigned(ABlock);
+  TarComputeChecksumsDual(ABlock, U, S);
   for I := 0 to 5 do
-    ABlock[C_TAR_LAYOUT.Chksum.Off + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
+    ABlock[C_TAR_LAYOUT.Chksum.Off + I] := Byte(Ord('0') + ((U shr ((5 - I) * 3)) and 7));
   ABlock[C_TAR_LAYOUT.Chksum.Off + 6] := 0;
   ABlock[C_TAR_LAYOUT.Chksum.Off + 7] := Ord(' ');
 end;
@@ -281,16 +271,14 @@ end;
 
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
 begin
-  // inline 零拷贝薄转发至 archive.pax 单源
   ArchivePaxAppendRecord(ABuilder, AKey, AValue);
 end;
 
-{ — pax 解析：委托 archive.pax 单源，strict 校验 — }
 procedure TarPaxPathHandler(const AKey, AValue: TByteSpan; AUserData: Pointer);
 var
   Ctx: PTarPaxCtx;
 begin
-  // 零分配回调：plain procedural + UserData，无闭包捕获堆分配，复用 bytes.ops 单源零拷贝视图
+  // plain procedural + UserData，无闭包
   Ctx := PTarPaxCtx(AUserData);
   if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
   begin
@@ -306,13 +294,11 @@ end;
 
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
 begin
-  // inline 零拷贝薄转发至 archive.pax 单源，零拷贝 PByte 切片单源
   Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
 end;
 
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean; inline;
 begin
-  // inline 零分配薄转发至 archive.pax Raw 重载，零拷贝 PByte 切片单源，无闭包
   Result := ArchivePaxParseRecords(ABase, ALen, AHandler, AUserData);
 end;
 
@@ -329,7 +315,6 @@ begin
   LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  // 零分配：plain procedural + UserData，无匿名闭包 per-pax 堆分配；仅 path/linkpath 物化，其余扩展键由调用方经 TarParsePaxKVRecords Raw 单源零拷贝迭代无二次全量解析
   LCtx.Path := @LPathTmp;
   LCtx.LinkPath := @LLinkTmp;
   LCtx.Found := @LFound;

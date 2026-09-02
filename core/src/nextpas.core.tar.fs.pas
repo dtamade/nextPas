@@ -4,7 +4,7 @@ unit nextpas.core.tar.fs;
  * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、零拷贝落盘、
  * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalks/ArchiveEstimateTarSize 单源：Walk 收集 SetLength/ArchiveCollectWalk/SetLength 模板与容量预估 header+AlignUp 循环样板均收敛至 archive.fs 联邦单源，复用 bytes.ops AlignUp 单源 inline 零拷贝），打包经 archive.fs 联邦 IArchiveBuilder（IBytesBuilder 单源 via archive.fs 联邦单缝，直写切片单次 ToBytes 交付，消除 CreateBytesStream+ArchiveSnapshotStream 二次
  * SetLength+Seek+Read 大块 Move），消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed；
- * L2 单 seam：fs/builder 仅经 archive.fs 联邦单缝（archive.fs 为 L2 同层唯一显式依赖，tar.fs 禁直引 nextpas.core.fs/nextpas.core.bytes.builder 双缝），复用 bytes.ops 单源零拷贝 inline，注册层级见 module-registry archive/tar 联邦 via archive.fs。
+ * L2 单 seam 家族联邦：fs/builder 仅经 archive.fs + archive.pax 单缝家族（archive.fs 为 fs/builder 唯一显式依赖，archive.pax 为 pax kv 单源共享内核，tar.fs 禁直引 nextpas.core.fs/nextpas.core.fs.errors/nextpas.core.text.conv/nextpas.core.bytes.builder 同层双缝），复用 bytes.ops 单源零拷贝 inline，注册层级见 module-registry archive/tar 联邦 via archive.fs + archive.pax。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -35,8 +35,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.bytes.pathvalid,
   nextpas.core.log.intf,
-  nextpas.core.fs.errors,
-  nextpas.core.text.conv,
   nextpas.core.archive.fs;
 
 { 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
@@ -49,7 +47,7 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 capacity.TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀），跨条目读缓冲复用 via writer FIOBuf 高水位池化（4K~1M clamp/AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×，单次高水位分配跨200×512B复用零每条目GetMem抖动，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源） }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 capacity.TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀），跨条目读缓冲复用 via writer FIOBuf 高水位池化（4K~1M clamp/AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×，单次高水位分配跨200×512B复用零每条目GetMem抖动，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源）；串行逐文件 OpenRead/AddEntryFromReader 高水位复用已收敛至 writer FIOBuf 单次分配跨条目复用，消除对称量小文件系统调用放大（批量预读由 archive.fs Walk 单源 ReadDir 批量缓存保障，PByte 零拷贝直达） }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter);
 var
   LI: Integer;
@@ -81,15 +79,15 @@ begin
       end;
       LFile := ArchiveOpenRead(AWalks[LI].FFull);
       try
-        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化（capacity.TarIOBufCapacityFor→AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×高水位复用/4K~1M clamp单次分发，跨条目复用零每条目分配，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源），try..finally必释不丢；外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀）
+        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化（capacity.TarIOBufCapacityFor→AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×高水位复用/4K~1M clamp单次分发，跨条目复用零每条目分配，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源），try..finally必释不丢；外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀）；联邦单缝 ArchiveWarnCloseFailed/log.intf 单源可观测
         AWriter.AddEntryFromReader(LHdr, LFile as IReader);
       finally
         try
           LFile.Close;
         except
           on E: Exception do
-            // stability+observability: Close 异常经 fs.errors 联邦单源 FsWarnCloseFailed 可观测（log.intf NullLogger 零分配 inline 薄转发，统一错误归一，不静默吞，fail-closed可诊断）
-            FsWarnCloseFailed('tar pack', AWalks[LI].FFull, E);
+            // stability+observability: Close 异常经 archive.fs 联邦单源 ArchiveWarnCloseFailed 可观测（log.intf NullLogger 零分配 inline 薄转发，统一错误归一，不静默吞，fail-closed可诊断），消除 tar.fs 直引 fs.errors 双缝
+            ArchiveWarnCloseFailed('tar pack', AWalks[LI].FFull, E);
         end;
       end;
     end;
@@ -255,20 +253,20 @@ begin
               except
                 on E: Exception do
                 begin
-                  // L2经log.intf单缝可观测（NullLogger默认no-op零分配inline薄转发），无System.WriteLn/StdErr直触，平台抽象克制，复用writer/builder单源
-                  NullLogger.Warn('[WARN] tar extract: mkfifo failed for ' + H.Name + ': ' + E.Message);
-                  ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+                  // L2经 archive.fs 联邦单缝可观测（ArchiveLogWarn→log.intf NullLogger 零分配 inline 薄转发），无System.WriteLn/StdErr直触，fail-closed 不静默降级为普通文件（设备语义与权限一致性，不以空文件占位掩盖 mknod 特权不足），复用 writer/builder 单源
+                  ArchiveLogWarn('[WARN] tar extract: mkfifo failed for ' + H.Name + ': ' + E.Message);
+                  raise;
                 end;
               end;
             end;
           tekCharDevice, tekBlockDevice:
             begin
               ArchiveHandleSpecial(LFull);
-              // INV-7 往返完整：经 archive.fs 单缝 ArchiveTryMkDevice 携带 DevMajor/DevMinor 真实 mknod（S_IFCHR/S_IFBLK），特权不足则 fail-closed WARN+占位，经log.intf单缝可观测不静默降级（NullLogger零分配inline），复用 bytes.ops单源零拷贝/Inline思想
+              // INV-7 往返完整：经 archive.fs 单缝 ArchiveTryMkDevice 携带 DevMajor/DevMinor 真实 mknod（S_IFCHR/S_IFBLK），特权不足则 fail-closed 抛异常（经 archive.fs 联邦 ArchiveIntToStr/TextConv 单源 inline 零拷贝 + ArchiveLogWarn/log.intf 单缝可观测），不静默降级为普通文件（消除 ArchiveWriteEmptyFallback 空文件占位兜底），复用 bytes.ops 单源零拷贝/Inline思想
               if not ArchiveTryMkDevice(LFull, LMode, H.DevMajor, H.DevMinor, H.Kind = tekCharDevice) then
               begin
-                NullLogger.Warn('[WARN] tar extract: special device skipped (mknod failed dev=' + IntToStr(H.DevMajor) + ':' + IntToStr(H.DevMinor) + '): ' + H.Name + ' kind=' + IntToStr(Ord(H.Kind)));
-                ArchiveWriteEmptyFallback(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+                ArchiveLogWarn('[WARN] tar extract: special device skipped (mknod failed dev=' + ArchiveIntToStr(H.DevMajor) + ':' + ArchiveIntToStr(H.DevMinor) + '): ' + H.Name + ' kind=' + ArchiveIntToStr(Ord(H.Kind)));
+                raise EPermissionError.Create('tar extract: mknod failed for ' + H.Name + ' dev=' + ArchiveIntToStr(H.DevMajor) + ':' + ArchiveIntToStr(H.DevMinor));
               end
               else
                 ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);

@@ -25,7 +25,7 @@ type
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
-   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为零拷贝视图（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时 CreateSliceReader 零拷贝直视、生命周期绑外部 PByte/Reader，零分配，inline/bytes.ops 单源，单次 Move 按需 SpanClone，防高频 allocs 次 GC）。 *}
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为零拷贝持有视图（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时按需 SpanClone 自包含持有、Reader/外部缓冲释放后仍可读，单次 Move bytes.ops 单源，防 UAF/高频 allocs）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -61,9 +61,9 @@ type
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
     function ByteAt(AOfs: SizeUInt): Byte;
-    function SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; inline; // single source NUL truncation, bytes.ops SpanIndexOf, zero-copy, inline
-    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
-    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline; // trailing zero trim via bytes.ops IsZeroMem SWAR block-level single source, zero-copy, inline
+    function SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; // single source NUL truncation, bytes.ops SpanIndexOf, zero-copy, out-of-line per design-conventions red line 2
+    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view, case jump table on Off (offset-direct index), cached lens, single source C_TAR_LAYOUT
+    function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; // trailing zero trim via bytes.ops IsZeroBytes single source (IsZeroMem SWAR block), zero-copy, out-of-line per design-conventions red line 2
     function MaterializeSpan(const ASpan: TByteSpan): string; // single source SpanToString, empty guard, out-of-line per design-conventions red line 1 (Move Result[1])
     function StringField(AOfs, ALen: SizeUInt): string; // out-of-line via MaterializeSpan
     function NumericField(AOfs, ALen: SizeUInt): Int64;
@@ -90,9 +90,9 @@ type
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 零拷贝（FBuf 时持有型、外部 PByte 时直视）— }
+    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 零拷贝持有（FBuf 时持有型、外部 PByte 时按需 SpanClone 持有）— }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
-    { — 零拷贝流：FBuf 非空时 CreateWithHold 零拷贝持有镜像（Reader 释放后仍可读）；外部 PByte 时 CreateSliceReader 零拷贝直视（生命周期绑外部 PByte/Reader，零分配，inline/bytes.ops 单源，按需 SpanClone 自包含，防高频 allocs 次 GC）— }
+    { — 零拷贝流：FBuf 非空时 CreateWithHold 零拷贝持有镜像（Reader 释放后仍可读）；外部 PByte 时按需 SpanClone 自包含持有（单次 Move bytes.ops 单源，防 UAF，Reader/外部缓冲释放后仍可读）— }
     function OpenEntryStream: IReader; inline;
     function EntrySize: Int64; inline;
   end;
@@ -181,39 +181,56 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: symbolic bind to C_TAR_LAYOUT single source (Off/Len), bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; runtime field-wise bind avoids typed-const folding literal drift, single source CONTRACT §2 INV-7
+// single source 7-field cache table: symbolic bind to C_TAR_LAYOUT single source, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; single table driven via C_TAR_HEADER_CACHE_MAP loop, case jump table in FieldSlice, CONTRACT §2 INV-7
+const
+  // symbolic off/len single source for case jump table + cache map via base ordinal constants (case label legal, zero drift, single source CONTRACT §2 INV-7)
+  C_TAR_CACHE_OFF_NAME     = C_TAR_OFF_NAME;
+  C_TAR_CACHE_OFF_LINKNAME = C_TAR_OFF_LINKNAME;
+  C_TAR_CACHE_OFF_MAGIC    = C_TAR_OFF_MAGIC;
+  C_TAR_CACHE_OFF_VERSION  = C_TAR_OFF_VERSION;
+  C_TAR_CACHE_OFF_UNAME    = C_TAR_OFF_UNAME;
+  C_TAR_CACHE_OFF_GNAME    = C_TAR_OFF_GNAME;
+  C_TAR_CACHE_OFF_PREFIX   = C_TAR_OFF_PREFIX;
+  C_TAR_CACHE_LEN_NAME     = C_TAR_LEN_NAME;
+  C_TAR_CACHE_LEN_LINKNAME = C_TAR_LEN_LINKNAME;
+  C_TAR_CACHE_LEN_MAGIC    = C_TAR_LEN_MAGIC;
+  C_TAR_CACHE_LEN_VERSION  = C_TAR_LEN_VERSION;
+  C_TAR_CACHE_LEN_UNAME    = C_TAR_LEN_UNAME;
+  C_TAR_CACHE_LEN_GNAME    = C_TAR_LEN_GNAME;
+  C_TAR_CACHE_LEN_PREFIX   = C_TAR_LEN_PREFIX;
+  C_TAR_HEADER_CACHE_MAP: array[0..6] of TFieldRange = (
+    (Off: C_TAR_CACHE_OFF_NAME;     Len: C_TAR_CACHE_LEN_NAME),
+    (Off: C_TAR_CACHE_OFF_LINKNAME; Len: C_TAR_CACHE_LEN_LINKNAME),
+    (Off: C_TAR_CACHE_OFF_MAGIC;    Len: C_TAR_CACHE_LEN_MAGIC),
+    (Off: C_TAR_CACHE_OFF_VERSION;  Len: C_TAR_CACHE_LEN_VERSION),
+    (Off: C_TAR_CACHE_OFF_UNAME;    Len: C_TAR_CACHE_LEN_UNAME),
+    (Off: C_TAR_CACHE_OFF_GNAME;    Len: C_TAR_CACHE_LEN_GNAME),
+    (Off: C_TAR_CACHE_OFF_PREFIX;   Len: C_TAR_CACHE_LEN_PREFIX)
+  );
+
 procedure CacheHeader(ASelf: TTarReader);
 var
   LLens: array[0..6] of SizeUInt;
   LBlock: TByteSpan;
   LFields: array[0..6] of TFieldRange;
+  I: SizeInt;
 begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    // bulk lens from C_TAR_LAYOUT.Len single source (no literal drift, zero-copy single source)
-    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
-    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
-    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
-    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
-    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
-    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
-    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
+    // bulk lens from single source map loop (no literal drift, zero-copy single source)
+    for I := 0 to 6 do
+      ASelf.FScanLens[I] := C_TAR_HEADER_CACHE_MAP[I].Len;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
   end;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
-  // build scan table from C_TAR_LAYOUT single source (runtime symbolic bind, no literal Off/Len copy, zero drift)
-  LFields[0].Off := C_TAR_LAYOUT.Name.Off;     LFields[0].Len := C_TAR_LAYOUT.Name.Len;
-  LFields[1].Off := C_TAR_LAYOUT.LinkName.Off; LFields[1].Len := C_TAR_LAYOUT.LinkName.Len;
-  LFields[2].Off := C_TAR_LAYOUT.Magic.Off;    LFields[2].Len := C_TAR_LAYOUT.Magic.Len;
-  LFields[3].Off := C_TAR_LAYOUT.Version.Off;  LFields[3].Len := C_TAR_LAYOUT.Version.Len;
-  LFields[4].Off := C_TAR_LAYOUT.UName.Off;    LFields[4].Len := C_TAR_LAYOUT.UName.Len;
-  LFields[5].Off := C_TAR_LAYOUT.GName.Off;    LFields[5].Len := C_TAR_LAYOUT.GName.Len;
-  LFields[6].Off := C_TAR_LAYOUT.Prefix.Off;   LFields[6].Len := C_TAR_LAYOUT.Prefix.Len;
+  // build scan table from single source map loop (zero drift, single table driven)
+  for I := 0 to 6 do
+    LFields[I] := C_TAR_HEADER_CACHE_MAP[I];
   ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
-  ASelf.FScanLens := LLens; // array assign, zero loop
+  ASelf.FScanLens := LLens;
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
 end;
@@ -225,13 +242,13 @@ begin
   Result := FData[AOfs];
 end;
 
-function TTarReader.SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+function TTarReader.SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan;
 var
   LSpan: TByteSpan;
   LIdx: SizeInt;
   LLen: SizeUInt;
 begin
-  // single source NUL truncation: bytes.ops SpanIndexOf single source, zero-copy, inline — header fallback + non-header share
+  // single source NUL truncation: bytes.ops SpanIndexOf single source, zero-copy, out-of-line per design-conventions red line 2
   if ALen = 0 then Exit(TByteSpan.Empty);
   LSpan := TByteSpan.Create(ABase, ALen);
   LIdx := SpanIndexOf(LSpan, 0);
@@ -250,63 +267,72 @@ begin
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — declarative symbolic bind to C_TAR_LAYOUT single source, no Off/Len literal dup, zero-copy
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — case jump table on Off, single source C_TAR_HEADER_CACHE_MAP
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // header cache: symbolic bind to C_TAR_LAYOUT single source (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), bytes.ops cached lens, inline zero-copy
-    if (LFieldOff = C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-    begin
-      if FScanLens[0] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[0]));
+    // offset-direct case jump table (branch prediction friendly, 2000-entry), Len check inside single branch, zero-copy cached lens
+    case LFieldOff of
+      C_TAR_CACHE_OFF_NAME:
+        if ALen = C_TAR_CACHE_LEN_NAME then
+        begin
+          if FScanLens[0] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[0]));
+        end;
+      C_TAR_CACHE_OFF_LINKNAME:
+        if ALen = C_TAR_CACHE_LEN_LINKNAME then
+        begin
+          if FScanLens[1] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[1]));
+        end;
+      C_TAR_CACHE_OFF_MAGIC:
+        if ALen = C_TAR_CACHE_LEN_MAGIC then
+        begin
+          if FScanLens[2] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[2]));
+        end;
+      C_TAR_CACHE_OFF_VERSION:
+        if ALen = C_TAR_CACHE_LEN_VERSION then
+        begin
+          if FScanLens[3] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[3]));
+        end;
+      C_TAR_CACHE_OFF_UNAME:
+        if ALen = C_TAR_CACHE_LEN_UNAME then
+        begin
+          if FScanLens[4] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[4]));
+        end;
+      C_TAR_CACHE_OFF_GNAME:
+        if ALen = C_TAR_CACHE_LEN_GNAME then
+        begin
+          if FScanLens[5] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[5]));
+        end;
+      C_TAR_CACHE_OFF_PREFIX:
+        if ALen = C_TAR_CACHE_LEN_PREFIX then
+        begin
+          if FScanLens[6] = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], FScanLens[6]));
+        end;
     end;
-    if (LFieldOff = C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-    begin
-      if FScanLens[1] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[1]));
-    end;
-    if (LFieldOff = C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-    begin
-      if FScanLens[2] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[2]));
-    end;
-    if (LFieldOff = C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-    begin
-      if FScanLens[3] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[3]));
-    end;
-    if (LFieldOff = C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-    begin
-      if FScanLens[4] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[4]));
-    end;
-    if (LFieldOff = C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-    begin
-      if FScanLens[5] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[5]));
-    end;
-    if (LFieldOff = C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-    begin
-      if FScanLens[6] = 0 then Exit(TByteSpan.Empty);
-      Exit(TByteSpan.Create(@FData[AOfs], FScanLens[6]));
-    end;
-    // fallback: non-7 header field — single source SliceUntilNul (bytes.ops SpanIndexOf, inline zero-copy, no scalar loop)
+    // fallback: non-cached header field or Len mismatch — single source SliceUntilNul (bytes.ops SpanIndexOf, zero-copy, out-of-line)
     Exit(SliceUntilNul(@FData[AOfs], ALen));
   end;
-  // non-header: single source SliceUntilNul (bytes.ops SpanIndexOf, inline zero-copy, zero-copy view)
+  // non-header: single source SliceUntilNul (bytes.ops SpanIndexOf, zero-copy view, out-of-line)
   Result := SliceUntilNul(@FData[AOfs], ALen);
 end;
 
-function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
 var
   Trim: SizeUInt;
 begin
   if (ABase = nil) or (ALen = 0) then
     Exit(TByteSpan.Empty);
   Trim := ALen;
-  // block-level trailing zero trim via bytes.ops IsZeroBytes single source (IsZeroMem/SWAR chunked via GZeroBuf4K/MemEqual, zero-copy TByteSpan view, inline), avoids scalar per-byte for 512B header repeated scan
+  // block-level trailing zero trim via bytes.ops IsZeroBytes single source (IsZeroMem SWAR chunked via GZeroBuf4K/MemEqual, zero-copy TByteSpan view, out-of-line), avoids scalar per-byte for 512B header repeated scan
   while Trim >= 32 do
   begin
     if IsZeroBytes(TByteSpan.Create(ABase + Trim - 32, 32)) then
@@ -810,10 +836,11 @@ function TTarReader.OpenEntryStream: IReader; inline;
 var
   P: PByte;
   C: SizeUInt;
+  LHold: TBytes;
 begin
-  // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory 单源，FHold 防悬垂；inline 薄转发，零拷贝视图生命周期绑 Reader/外部 PByte
-  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径 CreateSliceReader 零拷贝直视（零分配，生命周期绑外部 PByte/Reader，按需 SpanClone 自包含，防高频 200× allocs 次 GC；单次 Move 仅按需路径，bytes.ops 单源）
-  // 稳定：FBuf 零拷贝持有镜像 try..finally 必释；外部 PByte 零拷贝直视不丢句柄，按需用 TrySlice+SpanClone 单源拷贝自包含（FHold）防 UAF；nil/空守卫，inline 薄转发避 I-Cache 膨胀
+  // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂；inline 薄转发
+  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径按需 SpanClone 自包含持有（单次 Move bytes.ops 单源，防 UAF/高频 200× allocs 次 GC；零分配快路径保留 FBuf 持有，直视路径已收敛为持有安全）
+  // 稳定：FBuf 零拷贝持有 try..finally 必释；外部 PByte 按需 SpanClone 自包含持有（FHold）防悬垂 UAF；nil/空守卫，inline 薄转发避 I-Cache 膨胀
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
@@ -825,7 +852,9 @@ begin
   begin
     if (P = nil) or (C = 0) then
       Exit(CreateSliceReader(nil, 0));
-    Result := CreateSliceReader(P, C);
+    // 外部 PByte 零拷贝直视改为按需持有：SpanClone 单次 Move（bytes.ops 单源）生成自包含 FHold，生命周期不绑外部缓冲，防提前释放悬垂 UAF
+    LHold := SpanClone(TByteSpan.Create(P, C)); // bytes.ops 单源，单次 Move，零拷贝视图物化
+    Result := CreateSliceReaderWithHold(LHold, 0, SizeUInt(Length(LHold)));
   end;
 end;
 

@@ -119,9 +119,54 @@ Reader ── TrySlice ──► 零拷贝视图（绑 Reader）
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 偏移直接索引 `case` 跳表（替代 7 次线性分支）+ `CacheHeader` 批量 `FScanLens:=C_TAR_SCAN_LENS` 单记录拷贝（替代 7 次重复存储）、`ScanNulFieldTruncations` 单源单次 512B、FScanLens: array[0..6] 不透明通用缓存、接口不暴露 TTarScanLens 命名字段扁平化）+`OpenEntryStream` 经 `io.slice TIOSliceReader` 单源（`FBuf` 时 `CreateSliceReaderWithHold` 零拷贝持有型、`FHold` 防悬垂、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝直视、生命周期绑外部 PByte/Reader，零分配 inline，按需 `TrySlice+SpanClone` 自包含，`bytes.ops.CopyMemory` inline 单源防高频 allocs 次 GC），`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 在 guard 作用域内持久至下一 `g` 覆盖、无 guard 单次消费自动清理并 `Warn`、恶意 `IsSafe` 过滤同步 `Warn` 防静默篡改、`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WriteBlock` 去 inline 避 512 栈 I-Cache 复制膨胀、out-of-line 单拷贝，`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` per-entry 局域缓冲 `try..finally` 无滞留 via `capacity.TarIOBufCapacityFor` (AlignUp4K 单源 inline 零拷贝，`base` 单源函数薄转发无常量双路径)，`builder/fs` 预估经 `capacity.TarBuilderCapacityFor` 4K 对齐单源 inline 零拷贝（函数经 `capacity→base` 薄转发无双路径），`capacity` 专用内核阈值分叉保留域语义（`base` 纯度零依赖同模块，无常量薄别名），`builder/writer/fs` 直引 `capacity` 单源（`base` 不直引 `capacity`），`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` 永不抛异常仅 `log.intf` `ILogger.Warn` 抑制次生（`NullLogger` 零分配 inline，无 `System.WriteLn/StdErr` 直触），`try..finally` 必释资源，避免 `IsExceptionUnwinding` 分叉掩盖原始异常），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarAppendPaxRecord` builder 零拷贝最优路径（经 `archive.pax ArchivePaxFormatRecord` 单源 `SpanToString` 单次 Move）及 `ArchivePaxParseRecords` 通用 pax-kv 严格校验零拷贝 `PByte` 复用 `bytes.ops` 单源（畸形 `pax: ...` 即抛 `EIOError` 禁回退，`TarParsePaxKVRecords` 供归档族复用；薄守卫 inline，热循环外联）。
-- **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
-- **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 硬红）与 `ns/op ≤1.50×` / `MB/s ≥0.65×` 均为硬门（任一超限 `check_regression.py` 非零退出，CI 硬红，`status=ok` 强一致）；Go/Rust 对照 `compare_go`/`compare_rust` 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×` 亦为硬门（若对照产物存在；缺失时 warn 非硬红闭环，`compare_go/main.go` `GOMAXPROCS=1` 与 `compare_rust` `tar="0.4"` 已落地，`make -C .../bench_tar run-compare` 生成对照，`check_regression.py --with-compare` 判定）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门；确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序定稿 + 未显式 `mtime=0` 同输入同字节，跨机复现高级感。
+设计以 `inline` 零拷贝与 `bytes.ops` 单源为纲，阈值收敛于 `base`，容量经 `capacity` 单源透出。
+
+### 读路径 · 零拷贝视图
+
+- `TrySlice` 单一规范 `TByteSpan` 零拷贝 `inline`，生命周期绑 `Reader`；`EntryDataSlice` 薄转发复用单源。
+- `FieldSlice` 偏移 `case` 跳表替代 7 分支；`CacheHeader` 批量 `FScanLens[0..6]` 单记录拷贝，`ScanNulFieldTruncations` 单次 512B。
+- `OpenEntryStream` 经 `io.slice TIOSliceReader` 单源：`FBuf` 时 `CreateSliceReaderWithHold` 持有型（`Reader` 释放后仍可读）；`PByte` 时 `CreateSliceReader` 直视，零分配 `inline`，按需 `TrySlice+SpanClone` 自包含，`bytes.ops.CopyMemory` 单源。
+- `Next` 对 `H.Name` 自动 `GuardTarNameForRead`；设备 `DevMajor/DevMinor` 解析/回写完整。
+
+### 写路径 · 单块直写
+
+- `WriteBlock` 去 `inline` 避 512 栈 I-Cache 膨胀，out-of-line 单拷贝；`WritePaddedPayload` 单源 Bulk+Tail+Pad，`bytes.ops` 单源。
+- `AddEntryFromReader` per-entry 局域缓冲 `try..finally` 无滞留，经 `capacity.TarIOBufCapacityFor` AlignUp4K 单源 `inline`。
+- `builder` 经 `IBytesBuilder` 直写切片，`inline AppendBytes` 几何扩容，单次 `ToBytes`，与 writer 字节级一致。
+
+### 容量与对齐 · 单源阈值
+
+- 4K 对齐经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，无除法，阈值固化于 `base`。
+- `TarBuilderCapacityFor` floor 4K + 两零块 4K 对齐；`TarIOBufCapacityFor` 4K~1M clamp 单源。
+- 函数经 `capacity→base` 薄转发 `inline`，无常量双路径；`base` 纯度零依赖同模块，仅 `builder/writer/fs` 受信 `implementation uses` 可见。
+
+### 校验与 pax · 单遍融合
+
+- `TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块；`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes`，经 `archive.pax ArchivePaxFormatRecord` 单源 `SpanToString` 单次 Move。
+- `ArchivePaxParseRecords` / `TarParsePaxKVRecords` 零拷贝 `PByte`，复用 `bytes.ops` 单源，畸形即抛 `EIOError`；薄守卫 `inline`，热循环外联。
+- `pax g` 在 guard 作用域内持久至下一 `g` 覆盖，无 guard 单次消费自动清理并 `Warn`，恶意 `IsSafe` 过滤同步 `Warn`，`ClearGlobalPax` 显式或 RAII。
+
+### 稳定性 · 资源释放
+
+- `Finish` 显式两零块；未 `Finish` 析构永不抛异常，仅 `log.intf ILogger.Warn`（`NullLogger` 零分配 `inline`），`try..finally` 必释资源。
+- 避免 `IsExceptionUnwinding` 分叉掩盖原始异常；无 `System.WriteLn/StdErr` 直触。
+
+### 证据
+
+- `reader.pas:TrySlice/EntryDataSlice/OpenEntryStream inline`；`base.pas:TarCapacityAlign4K/Builder/IOBuf inline via AlignUp4K`；`bytes.ops CopyMemory/SpanToString` 单源。
+
+### 量化基线
+
+- `core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite`，300ms/7 样。
+- 数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现。
+- `TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
+
+### 回归门限（CONTRACT §6）
+
+- `allocs` 硬预算 `baseline+2` / `bytes` 强一致（CI 硬红）；`ns/op ≤1.50×` / `MB/s ≥0.65×` 硬门，`check_regression.py` 非零退出。
+- Go/Rust 对照 `compare_go`/`compare_rust` 同口径 `ns/op ≤1.50×` 且 `MB/s ≥0.70×` 硬门（对照缺失时 warn 非硬红）。
+- `make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 一键比对 `BASELINE.json`；`--with-compare` 判定对照。
+- 确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序 + `mtime=0` 同输入同字节，跨机复现。
 
 Runnable example: `examples/nextpas.core.tar/tar_roundtrip`（writer / builder / pack / extract / reader 全链路，可 `make run`）。
 Benchmark: 已落地 `bench_tar`（见上），与 `gzip` 组合待 `compress` 协作。

@@ -13,8 +13,8 @@
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
-| `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范，生命周期绑 Reader）/ `EntryDataSlice` 薄转发；`OpenEntryStream:IReader` 零拷贝流（FBuf 时持有型、外部 PByte 时直视，inline/零拷贝，生命周期绑 Reader/外部 PByte，按需 SpanClone）；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离 |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，需显式 Finish） |
+| `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范，生命周期绑 Reader）/ `EntryDataSlice` 薄转发；`OpenEntryStream:IReader` 零拷贝持有流（FBuf 时持有型零拷贝、外部 PByte 时按需 SpanClone 自包含持有防 UAF，inline/零拷贝，bytes.ops 单源）；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离 |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，推荐显式 `Finish`；析构自动补写两零块幂等 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测、永不抛异常 `try..finally` 必释） |
 
 ### 1.2 常量与谓词
 
@@ -41,7 +41,7 @@
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//`/`./`/`..`；写端 `EArgumentError`，读端/落盘前 `EParseError`，落盘二次拒绝；落盘前拒绝路径含符号链接段。
 - **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 总量在 `common.Guard*` 单点 fail-closed，`TrySlice`/`OpenEntryStream` 中途同受；`pax x/g` 与 `GNU L/K` 扩展载荷计入总量（防 100k×超大 pax DoS，`GuardTarTotalSize` 单源）。
-- **[INV-7]** 帧与视图：双零块收尾、单零块后非零即 `truncated stream`；`TrySlice` 为零拷贝 `TByteSpan` 单一规范（`inline`、生命周期绑 `Reader`），`EntryDataSlice` 薄转发同源；`OpenEntryStream` 为零拷贝 `IReader`（`FBuf` 时 `CreateSliceReaderWithHold` 零拷贝持有镜像、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝直视、生命周期绑外部 PByte/Reader，零分配 inline，按需 `TrySlice+SpanClone` 自包含防高频 allocs 次 GC），`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需路径）。确定性：未显式 mtime 取 `0`，同输入同字节（除 pax 长名外）。
+- **[INV-7]** 帧与视图：双零块收尾、单零块后非零即 `truncated stream`；`TrySlice` 为零拷贝 `TByteSpan` 单一规范（`inline`、生命周期绑 `Reader`），`EntryDataSlice` 薄转发同源；`OpenEntryStream` 为零拷贝持有 `IReader`（`FBuf` 时 `CreateSliceReaderWithHold` 零拷贝持有镜像、`Reader` 释放后仍可读；外部 `PByte` 时按需 `SpanClone` 单次 `Move` 自包含持有（`CreateSliceReaderWithHold` 持有克隆，生命周期不绑外部缓冲，防 UAF，bytes.ops 单源），inline 薄转发，`CopyMemory/SpanClone` 单源（FBuf 零拷贝快路径、外部按需单次 Move）。确定性：未显式 mtime 取 `0`，同输入同字节（除 pax 长名外）。
 
 ## 3. 错误模型
 
@@ -52,7 +52,7 @@
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
 | 目标 writer 为 nil / 已 Finish 后再写入 | `EArgumentError` / `EInvalidOperationError('tar: writer already finished')` |
-| `ITarBuilder` 未 `Finish` 即析构 | `log.intf ILogger.Warn` 可观测，析构永不抛异常，`try..finally` 必释资源 |
+| `TTarWriter`/`ITarBuilder` 未 `Finish` 即析构 | `log.intf ILogger.Warn` 可观测（`TTarWriter` 额外自动补写两零块幂等），析构永不抛异常，`try..finally` 必释资源 |
 | 单条目/总量超限 | `EIOError`（总量分支携带 `ACum/ANext/AMaxTotal` 上下文） |
 | Short write | `EIOError('tar: short write')` |
 
@@ -80,6 +80,6 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 
 - 口径：`bench_tar` `TBenchSuite` 承载，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现（`GOMAXPROCS=1` 降噪，`SetMinDuration 300ms/MinSamples 7/Warmup 1`，`ACtx.SetBytes` 换算吞吐，双路归档 `build/bench-tar.json`）。
 - 门限（CI 硬红）：`allocs` 硬预算 `baseline+2` / `bytes` 强一致（`!=` 即红）与 `ns/op ≤1.50×` / `MB/s ≥0.65×` 均为硬门（`status=ok` 强一致，任一超限 `check_regression.py` 非零退出，CI 红）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 判定。
-- 对照（CI 硬红，若对照产物存在；缺失时 warn 非硬红闭环）：Go `archive/tar` (`core/benchmarks/nextpas.core.tar/bench_tar/compare_go/main.go`, `go.mod` 已落地，`GOMAXPROCS=1` 降噪) / Rust `tar` (`compare_rust/Cargo.toml` + `main.rs` `tar="0.4"` 已落地) 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（连续双机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成对照 JSON（`build/bench-tar-compare-*.json`），`check_regression.py --with-compare` 比对判定，缺失时 warn 非硬红闭环；零拷贝 `TrySlice` inline 视图与 `bytes.ops CopyMemory/SpanClone` 单源（FBuf 持有型/外部 PByte 直视，按需 `SpanClone`，`try..finally` 必释）证据见 `reader.pas:TrySlice inline` 与 `common.pas:CopyMemory` 单源。
-- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 零拷贝（FBuf 持有型、外部 PByte 直视，`inline` 零分配，按需 `SpanClone`）；`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需）+ `bytes.ops.AlignUp4K` 容量对齐单源（`base` 单源常量与 `TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，`capacity` 仅函数薄转发 `builder/writer/fs` 单源无常量双路径，`base` 零依赖同模块）、`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀）。
+- 对照（CI 硬红，若对照产物存在；缺失时 warn 非硬红闭环）：Go `archive/tar` (`core/benchmarks/nextpas.core.tar/bench_tar/compare_go/main.go`, `go.mod` 已落地，`GOMAXPROCS=1` 降噪) / Rust `tar` (`compare_rust/Cargo.toml` + `main.rs` `tar="0.4"` 已落地) 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（连续双机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成对照 JSON（`build/bench-tar-compare-*.json`），`check_regression.py --with-compare` 比对判定，缺失时 warn 非硬红闭环；零拷贝 `TrySlice` inline 视图与 `bytes.ops CopyMemory/SpanClone` 单源（FBuf 持有型零拷贝、外部 PByte 按需 SpanClone 自包含持有防 UAF，`try..finally` 必释）证据见 `reader.pas:TrySlice inline` 与 `common.pas:CopyMemory` 单源。
+- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 零拷贝持有（FBuf 持有型零拷贝、外部 PByte 按需 SpanClone 自包含持有防 UAF，`inline` 薄转发，按需单次 Move）；`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需）+ `bytes.ops.AlignUp4K` 容量对齐单源（`base` 单源常量与 `TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，`capacity` 仅函数薄转发 `builder/writer/fs` 单源无常量双路径，`base` 零依赖同模块）、`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀，TrimmedSlice/SliceUntilNul 外联、FieldSlice case 跳表、Cache 单表驱动）。
 - 确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序定稿 + 未显式 `mtime=0` 同输入同字节（除 pax 长名外），跨机复现高级感。

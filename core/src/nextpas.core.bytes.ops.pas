@@ -100,13 +100,13 @@ function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
 { 单源零垫：4K 零源 GZeroBuf4K inline 零拷贝访问，tar 512B 零垫/两零块与 IsZeroMem 单源复用，L1 owner bytes.ops 单源，零分配 }
 function ZeroBufPtr: PByte; inline;
 function ZeroBufSize: SizeUInt; inline;
-{ 单源高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit 单源 + 尾部无分支，复用 simd 单源思想；tar 校验和 signed 校正单源，避免 512B 双循环分支开销，零拷贝 PByte 切片，外联禁 inline }
+{ 高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit + 尾部无分支，零拷贝 PByte 切片，外联 }
 function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
 function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
-{ 单源融合：一次 SWAR 遍历同时计算字节和与高位计数，零拷贝 PByte 切片，外联禁 inline；tar 校验和 dual 单遍单源，消除 BytesSum×2+BytesCountHighBit×2 四分发 → 单分发 SWAR 8 字节 QWord + 尾部无分支 }
+{ 融合：字节和经 simd.SumBytes 单源，highbit 经 SWAR 单源，零拷贝 PByte 切片，外联；tar dual 复用 SIMD 批量 512B 提速 }
 procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
 function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
-{ 单源融合空洞排除：tar 校验和 chksum 8 字节空洞单遍排除，零拷贝 PByte 切片，外联禁 inline；两段 SWAR（hole 前/后）复用 BytesSumAndCountHighBit 单源，无外联 8 字节循环分支，nil/越界守卫 fail-closed }
+{ 融合空洞排除：tar chksum 8 字节空洞排除，和经 simd.SumBytes 分段累加，high 经 SWAR 分段，外联；nil/越界守卫 }
 procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
 function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
 
@@ -761,36 +761,13 @@ begin
 end;
 
 procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
-var
-  QC: SizeUInt;
-  PQ: PQWord;
-  V, M: QWord;
-  I: SizeUInt;
-const
-  C_HighMask = QWord($8080808080808080);
-  C_SumMask = QWord($0101010101010101);
 begin
   ASum := 0;
   AHigh := 0;
   if (AData = nil) or (ALen = 0) then Exit;
-  QC := ALen div 8;
-  if QC > 0 then
-  begin
-    PQ := PQWord(AData);
-    for I := 0 to QC - 1 do
-    begin
-      V := PQ[I];
-      M := (V and C_HighMask) shr 7;
-      AHigh := AHigh + SizeUInt((M * C_SumMask) shr 56);
-      ASum := ASum + QWord(Byte(V)) + QWord(Byte(V shr 8)) + QWord(Byte(V shr 16)) + QWord(Byte(V shr 24))
-            + QWord(Byte(V shr 32)) + QWord(Byte(V shr 40)) + QWord(Byte(V shr 48)) + QWord(Byte(V shr 56));
-    end;
-  end;
-  for I := QC * 8 to ALen - 1 do
-  begin
-    ASum := ASum + AData[I];
-    AHigh := AHigh + SizeUInt((AData[I] shr 7) and 1);
-  end;
+  // 和经 simd.SumBytes 单源（SSE2/AVX2/NEON），high 经 SWAR 单源；拆分两遍但和部分 SIMD 批量 512B 显著提速，零拷贝
+  ASum := SumBytes(AData, ALen);
+  AHigh := BytesCountHighBit(AData, ALen);
 end;
 
 function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
@@ -807,11 +784,9 @@ end;
 
 procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
 var
-  LSum1, LSum2: UInt64;
-  LHigh1, LHigh2: SizeUInt;
   LSecondOff, LSecondLen: SizeUInt;
 begin
-  // perf: 两段 SWAR 复用 BytesSumAndCountHighBit 单源，零拷贝 PByte 切片，外联禁 inline；hole 前/后各一次 SWAR，消除 8 字节 post 循环分支，nil/越界守卫 fail-closed
+  // 和经 simd.SumBytes 分段单源，high 经 SWAR 分段；hole 前/后各一次分发，512B 批量 SIMD 提速，零拷贝，外联
   ASum := 0;
   AHigh := 0;
   if (AData = nil) or (ALen = 0) then Exit;
@@ -822,15 +797,18 @@ begin
   end;
   if AExcludeOff + AExcludeLen > ALen then
     AExcludeLen := ALen - AExcludeOff;
-  LSum1 := 0; LHigh1 := 0; LSum2 := 0; LHigh2 := 0;
   if AExcludeOff > 0 then
-    BytesSumAndCountHighBit(AData, AExcludeOff, LSum1, LHigh1);
+  begin
+    ASum := SumBytes(AData, AExcludeOff);
+    AHigh := BytesCountHighBit(AData, AExcludeOff);
+  end;
   LSecondOff := AExcludeOff + AExcludeLen;
   LSecondLen := ALen - LSecondOff;
   if LSecondLen > 0 then
-    BytesSumAndCountHighBit(AData + LSecondOff, LSecondLen, LSum2, LHigh2);
-  ASum := LSum1 + LSum2;
-  AHigh := LHigh1 + LHigh2;
+  begin
+    ASum := ASum + SumBytes(AData + LSecondOff, LSecondLen);
+    AHigh := AHigh + BytesCountHighBit(AData + LSecondOff, LSecondLen);
+  end;
 end;
 
 function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;

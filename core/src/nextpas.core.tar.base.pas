@@ -1,7 +1,7 @@
 unit nextpas.core.tar.base;
 {**
  * @desc Tar 基座：类型、常量与名安全谓词，L2 单点。
- * 依赖 nextpas.core.base / exception + nextpas.core.bytes.ops 单源 AlignUp4K 位掩码零除法 inline 零拷贝 + nextpas.core.bytes.pathvalid（复用 bytes.ops 单源、inline/零拷贝原串索引，无 FPC RTL 直引）。零依赖同模块文件，守四件套 base 纯度（base←intf←实现←门面）。
+ * 依赖 nextpas.core.base / exception + nextpas.core.bytes.ops (AlignUp4K 单源) + nextpas.core.bytes.pathvalid。零依赖同模块，守四件套 base 纯度。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -99,24 +99,43 @@ type
   end;
 
 const
+  {** @desc ustar 字段 Off/Len 单源常量：16 字段 ordinal 常量，布局与 reader case 跳表单源零漂移，见 CONTRACT §2 INV-7 *}
+  C_TAR_OFF_NAME     = 0;   C_TAR_LEN_NAME     = 100;
+  C_TAR_OFF_MODE     = 100; C_TAR_LEN_MODE     = 8;
+  C_TAR_OFF_UID      = 108; C_TAR_LEN_UID      = 8;
+  C_TAR_OFF_GID      = 116; C_TAR_LEN_GID      = 8;
+  C_TAR_OFF_SIZE     = 124; C_TAR_LEN_SIZE     = 12;
+  C_TAR_OFF_MTIME    = 136; C_TAR_LEN_MTIME    = 12;
+  C_TAR_OFF_CHKSUM   = 148; C_TAR_LEN_CHKSUM   = 8;
+  C_TAR_OFF_TYPEFLAG = 156; C_TAR_LEN_TYPEFLAG = 1;
+  C_TAR_OFF_LINKNAME = 157; C_TAR_LEN_LINKNAME = 100;
+  C_TAR_OFF_MAGIC    = 257; C_TAR_LEN_MAGIC    = 6;
+  C_TAR_OFF_VERSION  = 263; C_TAR_LEN_VERSION  = 2;
+  C_TAR_OFF_UNAME    = 265; C_TAR_LEN_UNAME    = 32;
+  C_TAR_OFF_GNAME    = 297; C_TAR_LEN_GNAME    = 32;
+  C_TAR_OFF_DEVMAJOR = 329; C_TAR_LEN_DEVMAJOR = 8;
+  C_TAR_OFF_DEVMINOR = 337; C_TAR_LEN_DEVMINOR = 8;
+  C_TAR_OFF_PREFIX   = 345; C_TAR_LEN_PREFIX   = 155;
+
+const
   {** @desc ustar 布局单源表：16 字段 Off/Len，读写经 C_TAR_LAYOUT inline 零拷贝访问，见 CONTRACT §2 INV-7 *}
   C_TAR_LAYOUT: TTarUstarLayout = (
-    Name: (Off: 0; Len: 100);
-    Mode: (Off: 100; Len: 8);
-    UID: (Off: 108; Len: 8);
-    GID: (Off: 116; Len: 8);
-    Size: (Off: 124; Len: 12);
-    MTime: (Off: 136; Len: 12);
-    Chksum: (Off: 148; Len: 8);
-    TypeFlag: (Off: 156; Len: 1);
-    LinkName: (Off: 157; Len: 100);
-    Magic: (Off: 257; Len: 6);
-    Version: (Off: 263; Len: 2);
-    UName: (Off: 265; Len: 32);
-    GName: (Off: 297; Len: 32);
-    DevMajor: (Off: 329; Len: 8);
-    DevMinor: (Off: 337; Len: 8);
-    Prefix: (Off: 345; Len: 155)
+    Name: (Off: C_TAR_OFF_NAME; Len: C_TAR_LEN_NAME);
+    Mode: (Off: C_TAR_OFF_MODE; Len: C_TAR_LEN_MODE);
+    UID: (Off: C_TAR_OFF_UID; Len: C_TAR_LEN_UID);
+    GID: (Off: C_TAR_OFF_GID; Len: C_TAR_LEN_GID);
+    Size: (Off: C_TAR_OFF_SIZE; Len: C_TAR_LEN_SIZE);
+    MTime: (Off: C_TAR_OFF_MTIME; Len: C_TAR_LEN_MTIME);
+    Chksum: (Off: C_TAR_OFF_CHKSUM; Len: C_TAR_LEN_CHKSUM);
+    TypeFlag: (Off: C_TAR_OFF_TYPEFLAG; Len: C_TAR_LEN_TYPEFLAG);
+    LinkName: (Off: C_TAR_OFF_LINKNAME; Len: C_TAR_LEN_LINKNAME);
+    Magic: (Off: C_TAR_OFF_MAGIC; Len: C_TAR_LEN_MAGIC);
+    Version: (Off: C_TAR_OFF_VERSION; Len: C_TAR_LEN_VERSION);
+    UName: (Off: C_TAR_OFF_UNAME; Len: C_TAR_LEN_UNAME);
+    GName: (Off: C_TAR_OFF_GNAME; Len: C_TAR_LEN_GNAME);
+    DevMajor: (Off: C_TAR_OFF_DEVMAJOR; Len: C_TAR_LEN_DEVMAJOR);
+    DevMinor: (Off: C_TAR_OFF_DEVMINOR; Len: C_TAR_LEN_DEVMINOR);
+    Prefix: (Off: C_TAR_OFF_PREFIX; Len: C_TAR_LEN_PREFIX)
   );
 
   { base-256 哨兵与默认权限（0644/0755） }
@@ -134,8 +153,8 @@ const
   C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
-  { 容量：单源经 nextpas.core.bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉固化于本 base 常量零漂移（base 纯度：零依赖同模块文件，不直引 capacity 内核） }
-  C_TAR_BUILDER_INITIAL_CAPACITY = 4096; // 4K floor，单条目 512B 仅 8倍，按需 4K 对齐零拷贝，修复 64K 128倍驻留
+  { 容量阈值固化于本 base 常量，对齐经 bytes.ops.AlignUp4K 单源 }
+  C_TAR_BUILDER_INITIAL_CAPACITY = 4096; // 4K floor
   C_TAR_IOBUF_INIT = 4096;
   C_TAR_IOBUF_MAX = 1048576; // 1M clamp，单分发 high-water，消除 1M 拆 16次 WriteChecked 抖动
   C_TAR_CAP_ALIGN = 4096;
@@ -148,7 +167,7 @@ const
   C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH = 'tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)';
   C_TAR_WARN_BUILDER_DESTROYED_WITHOUT_FINISH = 'tar: builder destroyed without Finish (missing two zero blocks, data truncated)';
 
-{ 容量策略：单源 nextpas.core.bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉已固化（builder 4K floor / IOBuf 4K~1M clamp），零漂移，base 纯度零依赖同模块 }
+{ 容量策略：对齐经 bytes.ops.AlignUp4K 单源，阈值见上方常量 }
 function TarCapacityAlign4K(const AValue: SizeUInt): SizeUInt; inline;
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;

@@ -25,7 +25,7 @@ type
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
-    function FindPrefixCut(const AName: string): SizeInt; inline;
+    function FindPrefixCut(const AName: string): SizeInt;
     function NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
     procedure ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
     procedure EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
@@ -179,12 +179,13 @@ begin
   WritePaddedPayload(APayload);
 end;
 
-function TTarWriter.FindPrefixCut(const AName: string): SizeInt; inline;
+function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
 var
   LSpan: TByteSpan;
   LPos: SizeInt;
   LLimit: SizeUInt;
 begin
+  // 外联：真实循环体（while 扫描 '/' + SpanLastIndexOf 迭代）禁 inline，遵 design-conventions 红线2，避 I-Cache 复制膨胀，复用 bytes.ops 单源零拷贝视图
   Result := 0;
   if Length(AName) <= C_TAR_LAYOUT.Name.Len then Exit;
   LSpan := StringAsSpan(AName);
@@ -411,9 +412,6 @@ begin
 end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
-var
-  LBuf: TBytes;
-  LNeed: SizeUInt;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
@@ -428,14 +426,9 @@ begin
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then Exit;
-  LBuf := nil;
-  LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(AHdr.Size);
-  BytesEnsureCapacity(LBuf, LNeed);
-  try
-    DoCopyAndPad(AReader, AHdr.Size, @LBuf[0], SizeUInt(Length(LBuf)));
-  finally
-    BytesRelease(LBuf);
-  end;
+  // perf: 高水位缓冲复用 via FIOBuf（capacity.TarIOBufCapacityFor→AlignUp4K 位掩码 inline 零拷贝/BytesEnsureCapacity 几何 2× 高水位 4K~1M clamp，跨条目复用零每条目分配，单次高水位分配跨 200×512B 复用零每条目 GetMem 抖动，DoCopyAndPad PByte 视图零拷贝直达 bytes.ops.CopyMemory 单源，消除对称量小文件系统调用放大，外联遵设计公约红线 2 循环/IO 分发禁 inline 避 I-Cache 膨胀，资源 try..finally 必释不丢，Finish/TrimIOBuf 统一释放）
+  EnsureIOBufForSize(AHdr.Size);
+  DoCopyAndPad(AReader, AHdr.Size, @FIOBuf[0], SizeUInt(Length(FIOBuf)));
 end;
 
 procedure TTarWriter.TrimIOBuf; inline;
@@ -478,6 +471,12 @@ begin
       if FLogger = nil then
         FLogger := NullLogger;
       FLogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH);
+      // 稳定性：遗漏 Finish 自动补写两零块，避免截断归档被下游误判为有效 tar；幂等 IsFinished 单源，异常吞没永不抛，资源 try..finally 必释
+      try
+        Finish;
+      except
+        // 析构永不抛异常，可观测已 Warn，吞没 WriteChecked 短写/IO 异常
+      end;
     end;
   finally
     BytesRelease(FIOBuf);
