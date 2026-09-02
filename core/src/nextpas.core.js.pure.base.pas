@@ -1,9 +1,9 @@
 unit nextpas.core.js.pure.base;
 { facade: thin re-export host/value/eval/lifecycle via pure.host/pure.value/js.eval/js.lifecycle single source
   non-standard four-piece naming exception per CONTRACT §1 & design-conventions:150
-  single responsibility = type-carrier + inline thin-forward, no mutable globals
-  preferred entry = TJsPureHostState unified (JsPureHostStateSet*), legacy 12 HostSet thin-forwards deprecated compat direct to pure.host
-  inline zero-copy via bytes.ops/text.view, L0-L3 kept, wc -l ~310 <800, CONTRACT §1 }
+  single responsibility = type-carrier + inline thin-forward, no mutable globals, zero logic
+  preferred entry = TJsPureHostState unified (JsPureHostStateSet*), no legacy HostSet/JsPureClose compat shim, luxury thin
+  inline zero-copy via bytes.ops/text.view, L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -12,6 +12,7 @@ uses
   nextpas.core.text.view,
   nextpas.core.json,
   nextpas.core.json.value,
+  nextpas.core.js.pure.hash,
   nextpas.core.js.pure.host,
   nextpas.core.js.pure.value,
   nextpas.core.js.eval,
@@ -25,8 +26,8 @@ type
   TJsPureObject = nextpas.core.js.pure.value.TJsPureObject;
   TJsPureHeap = nextpas.core.js.pure.value.TJsPureHeap;
 const
-  // single source: heap threshold owned by pure.value, eval tokens owned by js.eval
-  JS_PURE_HEAP_HASH_THRESHOLD = nextpas.core.js.pure.value.JS_PURE_HEAP_HASH_THRESHOLD;
+  // single source: hash threshold owned by pure.hash 64 unified, geometric 0→64→2× via bytes.ops BytesNextCapacity single source, inline zero-copy, no alias diffusion via Host/Heap re-export
+  JS_PURE_HASH_THRESHOLD = nextpas.core.js.pure.hash.JS_PURE_HASH_THRESHOLD;
   JS_PURE_EVAL_WHILE_TRUE = nextpas.core.js.eval.JS_PURE_EVAL_WHILE_TRUE;
   JS_PURE_EVAL_JSON_STRINGIFY = nextpas.core.js.eval.JS_PURE_EVAL_JSON_STRINGIFY;
   JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
@@ -47,20 +48,7 @@ function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringV
 function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
-// HostSet — legacy compat 12 overloads deprecated, direct to pure.host single source, inline zero-copy; preferred TJsPureHostState unified
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline; deprecated 'use JsPureHostStateSet* via TJsPureHostState';
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
-procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetFunc via TJsPureHostState';
-procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetFunc via TJsPureHostState';
-procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetMethod via TJsPureHostState';
-procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetMethod via TJsPureHostState';
-procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetProc via TJsPureHostState';
-procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload; deprecated 'use JsPureHostStateSetProc via TJsPureHostState';
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline; overload;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline; overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
@@ -98,12 +86,10 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
-// Call/Close — thin compose pure.host+pure.value, lifecycle via js.lifecycle; preferred State unified
-function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
-function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
+// Call/Close — thin compose pure.host+pure.value, lifecycle via js.lifecycle; State unified, inline zero-copy via bytes.ops single source
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload; inline;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload; inline;
 function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload; inline;
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload; deprecated 'use State overload via TJsPureHostState';
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload; deprecated 'use State overload via TJsPureHostState';
 procedure JsPureClose(var AState: TJsPureHostState; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload; inline;
 // IO — owner pure.host via platform.fs L0 64MiB, Eval→js.eval single source; preferred State
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
@@ -113,8 +99,6 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 implementation
 uses
   nextpas.core.js.eval;
-type
-  PJsPureHostBuckets = ^TJsPureHostBuckets;
 function JsPureContextRegister: UInt64; inline;
 begin Result := nextpas.core.js.lifecycle.JsPureContextRegister; end;
 procedure JsPureContextClose(AId: UInt64); inline;
@@ -151,32 +135,8 @@ function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string)
 begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, AName); end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline;
 begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, Buckets, AName); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
-procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
-begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureCheckHostName(AName, ABackend); end;
-procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, AName, AHandler, ABackend); end;
-procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, Buckets, AName, AHandler, ABackend); end;
-procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, AName, AHandler, ABackend); end;
-procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, Buckets, AName, AHandler, ABackend); end;
-procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, AName, AHandler, ABackend); end;
-procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
 begin nextpas.core.js.pure.host.JsPureHostRemove(Hosts, AName); end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline;
@@ -245,39 +205,12 @@ function JsPureToJsonString(const AValue: TJsValue): string; inline;
 begin Result := nextpas.core.js.pure.value.JsPureToJsonString(AValue); end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
 begin Result := nextpas.core.js.pure.value.JsPureToJson(AValue); end;
-// PBuckets single template — dual overloads converged to PBuckets nil=linear else bucketed, inline zero-copy via host view, bytes.ops single source
-function _JsPureCallImpl(ACtx: IJsContext; const Hosts: TJsPureHostArray; Buckets: PJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
-var LIdx: Integer; LName: string;
-begin
-  Result := JsUndefinedValue;
-  if not AFunc.IsFunction then Exit;
-  LName := JsFunctionName(AFunc);
-  if LName = '' then Exit;
-  if Buckets <> nil then LIdx := JsPureFindHost(Hosts, Buckets^, LName) else LIdx := JsPureFindHost(Hosts, LName);
-  if LIdx < 0 then Exit;
-  Result := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LIdx], ACtx, AThis, AArgs, ABackend);
-end;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
-begin Result := _JsPureCallImpl(ACtx, Hosts, nil, AFunc, AThis, AArgs, ABackend); end;
+begin Result := nextpas.core.js.pure.host.JsPureCall(ACtx, Hosts, AFunc, AThis, AArgs, ABackend); end;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
-begin Result := _JsPureCallImpl(ACtx, Hosts, @Buckets, AFunc, AThis, AArgs, ABackend); end;
+begin Result := nextpas.core.js.pure.host.JsPureCall(ACtx, Hosts, Buckets, AFunc, AThis, AArgs, ABackend); end;
 function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
-begin Result := _JsPureCallImpl(ACtx, AState.Hosts, @AState.Buckets, AFunc, AThis, AArgs, ABackend); end;
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
-begin
-  JsPureContextClose(AContextId);
-  nextpas.core.js.pure.host.JsPureHostsClear(Hosts);
-  JsPureHeapClear(Heap);
-  Global := JsUndefinedValue;
-end;
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
-begin
-  JsPureContextClose(AContextId);
-  nextpas.core.js.pure.host.JsPureHostsClear(Hosts);
-  JsPureHostBucketsInvalidate(Buckets);
-  JsPureHeapClear(Heap);
-  Global := JsUndefinedValue;
-end;
+begin Result := nextpas.core.js.pure.host.JsPureCall(ACtx, AState, AFunc, AThis, AArgs, ABackend); end;
 procedure JsPureClose(var AState: TJsPureHostState; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
 begin
   JsPureContextClose(AContextId);

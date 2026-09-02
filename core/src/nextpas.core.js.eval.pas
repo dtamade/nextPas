@@ -1,6 +1,7 @@
 unit nextpas.core.js.eval;
-{ gated scan + strategy table — single source via bytes.ops SIMD, inline zero-copy,
-  resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels. }
+{ gated scan + strategy table — single source via bytes.ops SIMD, zero-copy,
+  resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
+  Perf: ScanEvalPredicates/TryHostDispatch not inline per red-line 2 (O(n) loops, I-Cache), thin forwards inline, bytes.ops single source. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -43,22 +44,8 @@ begin
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// scanner — gated single source via bytes.ops, inline zero-copy, conditional SIMD
-function EvalNeedsJsonScan(const V: TStringView): Boolean; inline;
-begin
-  // length guard eliminates SpanIndexOfSpan for short codes (<15)
-  if V.Len < SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY)) then Exit(False);
-  // cheap single-byte filter before Boyer-Moore-Horspool SIMD
-  Result := SpanIndexOf(V.ToSpan, Byte('J')) >= 0;
-end;
-function EvalNeedsWhileScan(const V: TStringView; ATimeoutMs: Integer): Boolean; inline;
-begin
-  if ATimeoutMs <= 0 then Exit(False);
-  if V.Len < SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE)) then Exit(False);
-  Result := SpanIndexOf(V.ToSpan, Byte('w')) >= 0;
-end;
-// single-pass predicate merge — one linear scan, zero-copy views, inline hot path, bytes.ops SpanEqual single source
-procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates); overload; inline;
+// scanner — single-pass predicate merge via bytes.ops, zero-copy views, not inline per red-line 2 (O(n) linear scan, I-Cache), bytes.ops SpanEqual single source
+procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates);
 var
   LData: PAnsiChar;
   LLen, I, LRem: SizeUInt;
@@ -98,12 +85,6 @@ begin
       if not LNeedWhile or Pred.HasWhile then Break;
   end;
   Pred.HasX := Pred.HasJson and LHasXSeen;
-end;
-procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out HasWhile, HasJson, HasX: Boolean); overload; inline;
-var P: TEvalPredicates;
-begin
-  ScanEvalPredicates(V, ATimeoutMs, P);
-  HasWhile := P.HasWhile; HasJson := P.HasJson; HasX := P.HasX;
 end;
 function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; inline;
 begin
@@ -171,9 +152,47 @@ function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
   Result := JsStringValue(V.ToString);
 end;
-// Layer 5 host dispatch — single source via pure.host.JsPureHostInvoke, inline zero-copy, bytes.ops single source
-// robust host dispatch: matching paren depth + quote/escape, multi-arg split, nested brackets, outer quote strip + backslash unescape
-function TryHostDispatch(const AView: TStringView; ACtx: IJsContext; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue; ABackend: TJsBackendKind; out OutVal: TJsValue): Boolean; inline;
+// arg view single source — outer quote strip + backslash unescape zero-copy via text.view + JsPureNewStringView single source, not inline per red-line 2 (loop + SetLength), bytes.ops single source at call-site, text.view helper candidate converged
+function EvalArgValue(const V: TStringView): TJsValue;
+var
+  LInner: TStringView;
+  LNeedUnescape: Boolean;
+  J, LOut: SizeUInt;
+  LStr: string;
+begin
+  // single source via text.view Slice/Equals zero-copy + JsPureNewStringView BytesCopy single source (bytes.ops), backslash unescape single template, not inline per red-line 2
+  if (V.Len >= 2) and ((V.Data[0] = '"') or (V.Data[0] = '''')) and (V.Data[V.Len - 1] = V.Data[0]) then
+  begin
+    LInner := V.Slice(1, V.Len - 2);
+    LNeedUnescape := False;
+    for J := 0 to LInner.Len - 1 do if LInner.Data[J] = '\' then begin LNeedUnescape := True; Break; end;
+    if LNeedUnescape then
+    begin
+      SetLength(LStr, LInner.Len);
+      LOut := 0; J := 0;
+      while J < LInner.Len do
+      begin
+        if (LInner.Data[J] = '\') and (J + 1 < LInner.Len) then
+        begin
+          Inc(J);
+          LStr[LOut + 1] := LInner.Data[J];
+          Inc(LOut);
+        end else begin LStr[LOut + 1] := LInner.Data[J]; Inc(LOut); end;
+        Inc(J);
+      end;
+      SetLength(LStr, LOut);
+      Result := JsStringValue(LStr);
+    end else
+      Result := JsPureNewStringView(LInner);
+  end else
+  begin
+    if V.IsEmpty then Result := JsStringValue('')
+    else Result := JsPureNewStringView(V);
+  end;
+end;
+// Layer 5 host dispatch — single source via pure.host.JsPureHostInvoke, zero-copy, bytes.ops single source, not inline per red-line 2 (quote/escape/paren loops + arg split, I-Cache)
+// robust host dispatch: matching paren depth + quote/escape, multi-arg split, nested brackets, outer quote strip + backslash unescape via EvalArgValue single source
+function TryHostDispatch(const AView: TStringView; ACtx: IJsContext; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue; ABackend: TJsBackendKind; out OutVal: TJsValue): Boolean;
 var
   LIdxPos: PtrInt;
   LNameView, LInner: TStringView;
@@ -189,10 +208,6 @@ var
   LStart: SizeUInt;
   LArgCount: Integer;
   LView: TStringView;
-  LInnerUnq: TStringView;
-  LStr: string;
-  J, LOut: SizeUInt;
-  LNeedUnescape: Boolean;
 begin
   Result := False;
   LIdxPos := AView.IndexOf('(');
@@ -254,60 +269,18 @@ begin
     else if (C = ',') and (Depth = 0) then
     begin
       LView := LInner.Slice(LStart, I - LStart).Trim;
-      // strip outer quotes + backslash unescape zero-copy
-      if (LView.Len >= 2) and ((LView.Data[0] = '"') or (LView.Data[0] = '''')) and (LView.Data[LView.Len - 1] = LView.Data[0]) then
-      begin
-        LInnerUnq := LView.Slice(1, LView.Len - 2);
-        LNeedUnescape := False;
-        for J := 0 to LInnerUnq.Len - 1 do if LInnerUnq.Data[J] = '\' then begin LNeedUnescape := True; Break; end;
-        if LNeedUnescape then
-        begin
-          SetLength(LStr, LInnerUnq.Len);
-          LOut := 0; J := 0;
-          while J < LInnerUnq.Len do
-          begin
-            if (LInnerUnq.Data[J] = '\') and (J + 1 < LInnerUnq.Len) then
-            begin
-              Inc(J);
-              LStr[LOut + 1] := LInnerUnq.Data[J];
-              Inc(LOut);
-            end else begin LStr[LOut + 1] := LInnerUnq.Data[J]; Inc(LOut); end;
-            Inc(J);
-          end;
-          SetLength(LStr, LOut);
-          SetLength(LArgs, LArgCount + 1); LArgs[LArgCount] := JsStringValue(LStr);
-        end else begin SetLength(LArgs, LArgCount + 1); LArgs[LArgCount] := JsPureNewStringView(LInnerUnq); end;
-      end else
-      begin
-        SetLength(LArgs, LArgCount + 1);
-        if LView.IsEmpty then LArgs[LArgCount] := JsStringValue('') else LArgs[LArgCount] := JsPureNewStringView(LView);
-      end;
+      SetLength(LArgs, LArgCount + 1);
+      LArgs[LArgCount] := EvalArgValue(LView);
       Inc(LArgCount);
       LStart := I + 1;
     end;
   end;
-  // tail
+  // tail — single source via EvalArgValue, text.view zero-copy, not inline
   LView := LInner.Slice(LStart, LInner.Len - LStart).Trim;
   if not LView.IsEmpty then
   begin
-    if (LView.Len >= 2) and ((LView.Data[0] = '"') or (LView.Data[0] = '''')) and (LView.Data[LView.Len - 1] = LView.Data[0]) then
-    begin
-      LInnerUnq := LView.Slice(1, LView.Len - 2);
-      LNeedUnescape := False;
-      for J := 0 to LInnerUnq.Len - 1 do if LInnerUnq.Data[J] = '\' then begin LNeedUnescape := True; Break; end;
-      if LNeedUnescape then
-      begin
-        SetLength(LStr, LInnerUnq.Len);
-        LOut := 0; J := 0;
-        while J < LInnerUnq.Len do
-        begin
-          if (LInnerUnq.Data[J] = '\') and (J + 1 < LInnerUnq.Len) then begin Inc(J); LStr[LOut + 1] := LInnerUnq.Data[J]; Inc(LOut); end else begin LStr[LOut + 1] := LInnerUnq.Data[J]; Inc(LOut); end;
-          Inc(J);
-        end;
-        SetLength(LStr, LOut);
-        SetLength(LArgs, Length(LArgs) + 1); LArgs[High(LArgs)] := JsStringValue(LStr);
-      end else begin SetLength(LArgs, Length(LArgs) + 1); LArgs[High(LArgs)] := JsPureNewStringView(LInnerUnq); end;
-    end else begin SetLength(LArgs, Length(LArgs) + 1); LArgs[High(LArgs)] := JsPureNewStringView(LView); end;
+    SetLength(LArgs, Length(LArgs) + 1);
+    LArgs[High(LArgs)] := EvalArgValue(LView);
   end;
   OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
   Result := True;

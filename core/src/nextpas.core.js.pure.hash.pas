@@ -8,8 +8,6 @@ uses
   nextpas.core.text.view;
 const
   JS_PURE_HASH_THRESHOLD = 64;
-  JS_PURE_HOST_THRESHOLD = JS_PURE_HASH_THRESHOLD; // alias for host compat, single source
-  JS_PURE_HEAP_HASH_THRESHOLD = JS_PURE_HASH_THRESHOLD; // alias for heap compat, single source
 function JsPureHashView(const V: TStringView): UInt32; inline;
 function JsPureHashStr(const S: string): UInt32; inline;
 function JsPureBucketCapacity(AItemCount: Integer): Integer; inline;

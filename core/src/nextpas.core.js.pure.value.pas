@@ -12,7 +12,6 @@ type
   TJsPureProp = record Name: string; Value: TJsValue; Hash: UInt32; end;
   TJsPureObject = record Id: Int64; Props: array of TJsPureProp; PropsBuckets: array of Integer; PropsMask: UInt32; end;
   TJsPureHeap = array of TJsPureObject;
-const JS_PURE_HEAP_HASH_THRESHOLD = JS_PURE_HASH_THRESHOLD; // single source via pure.hash 64, unify with host threshold 0→64→2× geometric
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
@@ -103,7 +102,7 @@ procedure PropBucketsRebuild(var Obj: TJsPureObject);
 var LCount, LCap, I, LDummy: Integer; LHash: UInt32;
 begin
   LCount := Length(Obj.Props);
-  if LCount <= JS_PURE_HEAP_HASH_THRESHOLD then begin PropBucketsInvalidate(Obj); Exit; end;
+  if LCount <= JS_PURE_HASH_THRESHOLD then begin PropBucketsInvalidate(Obj); Exit; end;
   // single source bucket template via pure.hash (geometric 0→64→2× + Prepare/Put converged, bytes.ops single source, amortized O(1) single template shared with JsPureHostBucketsRebuild)
   LCap := JsPureBucketCapacity(LCount);
   SetLength(Obj.PropsBuckets, LCap);
@@ -130,7 +129,7 @@ end;
 function JsPureHeapFindPropHashed(const Obj: TJsPureObject; const AName: string; const AHash: UInt32): Integer; overload;
 var LIdx, LProbe, LPos: Integer;
 begin
-  if Length(Obj.Props) > JS_PURE_HEAP_HASH_THRESHOLD then
+  if Length(Obj.Props) > JS_PURE_HASH_THRESHOLD then
   begin
     if Length(Obj.PropsBuckets)>0 then
     begin
@@ -194,7 +193,7 @@ begin
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
-  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
+  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
   else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
 end;
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
@@ -277,7 +276,7 @@ begin
   Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;
   // bucket maintenance
-  if Length(Heap[Idx].Props) > JS_PURE_HEAP_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
+  if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then PropBucketsRebuild(Heap[Idx])
   else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
 end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
