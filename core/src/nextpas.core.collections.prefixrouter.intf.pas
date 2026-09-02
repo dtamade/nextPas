@@ -15,6 +15,7 @@ type
     function TryGet(const AKey: string; out AValue: V): Boolean;
     function TryGetLongestPrefix(const AKey: string; out AValue: V): Boolean;
     function TryGetLongestPrefixView(const AView: TStringView; out AValue: V): Boolean;
+    procedure Reserve(ACapacity: SizeUInt);
     procedure Clear;
     function GetCount: SizeUInt;
     function IsEmpty: Boolean;

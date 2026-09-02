@@ -40,6 +40,7 @@ type
     function TryGet(const AKey: string; out AValue: V): Boolean;
     function TryGetLongestPrefix(const AKey: string; out AValue: V): Boolean; inline;
     function TryGetLongestPrefixView(const AView: TStringView; out AValue: V): Boolean; inline;
+    procedure Reserve(ACapacity: SizeUInt); inline;
     procedure Clear;
     function GetCount: SizeUInt; inline;
     function IsEmpty: Boolean; inline;
@@ -197,6 +198,24 @@ begin
     Exit(True);
   end;
   Result := False;
+end;
+
+procedure TPrefixRouter.Reserve(ACapacity: SizeUInt); inline;
+var
+  LCap: SizeUInt;
+  LNewCap: Integer;
+begin
+  // 单源预分配：稀疏子节点小表经 bytes.ops VecGrowCapacity 0→4→2× 单源 inline，消除重复 NextPow2 重分配；Byte 分支上限 256 封顶，零额外调用，零拷贝
+  if (FRoot = nil) or (ACapacity = 0) then Exit;
+  if ACapacity > 256 then ACapacity := 256;
+  LCap := SizeUInt(Length(FRoot^.Children));
+  if LCap >= ACapacity then Exit;
+  LNewCap := Length(FRoot^.Children);
+  while SizeUInt(LNewCap) < ACapacity do
+    LNewCap := VecGrowCapacity(LNewCap);
+  if LNewCap > 256 then LNewCap := 256;
+  if LNewCap > Length(FRoot^.Children) then
+    SetLength(FRoot^.Children, LNewCap);
 end;
 
 procedure TPrefixRouter.Clear;

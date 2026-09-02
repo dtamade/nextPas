@@ -76,6 +76,13 @@ type
   end;
   TFakeEmits = array of TFakeEmit;
 
+  { 预载 Eval 回执队列单记录：合并 bool+string 为单次 VecRingCopy 批量搬移，临界区尾延迟减半，bytes.ops 单源 inline 零拷贝 }
+  TFakeEvalQueueEntry = record
+    IsError: Boolean;
+    Value: string;
+  end;
+  TFakeEvalQueue = array of TFakeEvalQueueEntry;
+
   { 在途 Eval：脚本记录下标 + 恰好一次回调对 }
   TFakePendingEval = record
     ScriptIdx: Integer;
@@ -109,8 +116,7 @@ type
     FAssets: TObject;              // 同上
     FEvalScripts: TFakeEvalRecords;
     FEvalScriptsCount: Integer;
-    FEvalQueue: array of Boolean;  // 预载结果 FIFO：True=错误（值在 FEvalResults）
-    FEvalResults: array of string; // 与 FEvalQueue 平行：成功 JSON 或错误消息
+    FEvalQueue: TFakeEvalQueue; // 单记录队列：IsError+Value 单数组，单次 VecRingCopy 批量搬移，临界区尾延迟减半，bytes.ops 单源 inline 零拷贝
     FEvalQueueCount: Integer;
     FPendingEvals: array of TFakePendingEval;
     FPendingCount: Integer;

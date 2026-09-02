@@ -73,6 +73,8 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
 { C string length single source: PAnsiChar null-terminated length, SIMD via System.StrLen (SSE2/AVX2/NEON), inline zero-copy, replaces scalar while AP[LLen]<>#0 loop; nil=>0; single source for text.utils CStrToStr/webview ViewFromPChar hot scheme path }
 function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
+{ 零拷贝所有权偷取：inline Move+FillChar 零 refcount 抖动，单源治理 TBytes 手工转移，零拷贝零额外调用，供 webview scheme/pool 热路径复用，源归零无双释放，stability: FillChar 零化防 UAF/双释放 }
+procedure BytesSteal(var ADest: TBytes; var ASrc: TBytes); inline;
 
 { vec/smallvec 生长单源：0→4→2× 倍增，inline 零额外调用，bytes.ops 唯一权威；webview/collections 复用此单源 }
 function VecGrowCapacity(ACurrent: Integer): Integer; inline;
@@ -736,6 +738,13 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
+end;
+
+procedure BytesSteal(var ADest: TBytes; var ASrc: TBytes); inline;
+begin
+  // perf: inline Move+FillChar 零拷贝所有权偷取单源（bytes.ops 唯一权威），零 refcount 抖动，零分配；stability: 源 FillChar 零化防双释放/UAF，dest 覆盖前由调用方保证释放不丢（pool Holder 已 nil）
+  Move(ASrc, ADest, SizeOf(TBytes));
+  FillChar(ASrc, SizeOf(TBytes), 0);
 end;
 
 function VecGrowCapacity(ACurrent: Integer): Integer; inline;

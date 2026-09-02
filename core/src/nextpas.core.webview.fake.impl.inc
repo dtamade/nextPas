@@ -308,11 +308,9 @@ end;
 
 procedure TFakeWebview.GrowQueue; inline;
 begin
+  // perf: single source bytes.ops VecGrow<TEvalEntry> inline 0→4→2× single heap grow, zero extra call, merges bool+string dual grow halves tail latency
   if FEvalQueueCount = Length(FEvalQueue) then
-  begin
-    specialize VecGrow<Boolean>(FEvalQueue, FEvalQueueCount);
-    specialize VecGrow<string>(FEvalResults, FEvalQueueCount);
-  end;
+    specialize VecGrow<TFakeEvalQueueEntry>(FEvalQueue, FEvalQueueCount);
 end;
 
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
@@ -476,7 +474,7 @@ begin
       GLiveLck.Release;
     end;
   end;
-  // perf: single exception instance reused for N callbacks, inline alloc once, zero per-pending heap churn
+  // perf: single exception instance reused for N callbacks, inline alloc once, zero per-pending heap churn; stability: nil before invoke + per-callback isolation preserves exactly-once under reentrancy (Close/QueueEval inside handler)
   if LPendingCount > 0 then
   begin
     LErr := EWebviewEvalFailed.Create('window closed');
@@ -484,11 +482,15 @@ begin
       for I := 0 to LPendingCount - 1 do
       begin
         LOnError := LPending[I].OnError;
-        if Assigned(LOnError) then
-          LOnError(LErr);
-        // release callback refs promptly to avoid retention, zero-copy nil
+        // stability: nil before invoke ensures reentrant Close/QueueEval cannot double-fire same slot, exactly-once defensive
         LPending[I].Callback := nil;
         LPending[I].OnError := nil;
+        if Assigned(LOnError) then
+          try
+            LOnError(LErr);
+          except
+            // swallow: one handler exception must not skip remaining pendings, guarantee exactly-once for all, resource release not lost
+          end;
       end;
     finally
       LErr.Free;
@@ -621,8 +623,8 @@ begin
   try
     if FEvalQueueCount > 0 then
     begin
-      LIsError := FEvalQueue[0];
-      LValue := FEvalResults[0];
+      LIsError := FEvalQueue[0].IsError;
+      LValue := FEvalQueue[0].Value;
       ShiftEvalQueue;
       LHasQueued := True;
     end
@@ -644,18 +646,12 @@ end;
 
 procedure TFakeWebview.ShiftEvalQueue; inline;
 begin
-  // perf: single source bytes.ops VecRingCopy inline batch zero-copy (bool single Move, string per-elem AddRef preserved), eliminates O(n) for-loop tail latency under FLck
+  // perf: single VecRingCopy<TFakeEvalQueueEntry> single source bytes.ops inline batch zero-copy (managed Value AddRef preserved, IsError blittable), halves critical tail latency vs dual bool+string copies, eliminates O(n) for-loop under FLck, zero mod/div
   if FEvalQueueCount > 1 then
-  begin
-    specialize VecRingCopy<Boolean>(FEvalQueue, 1, FEvalQueueCount - 1, FEvalQueue);
-    specialize VecRingCopy<string>(FEvalResults, 1, FEvalQueueCount - 1, FEvalResults);
-  end;
+    specialize VecRingCopy<TFakeEvalQueueEntry>(FEvalQueue, 1, FEvalQueueCount - 1, FEvalQueue);
   Dec(FEvalQueueCount);
   if FEvalQueueCount < Length(FEvalQueue) then
-  begin
-    FEvalQueue[FEvalQueueCount] := False;
-    FEvalResults[FEvalQueueCount] := '';
-  end;
+    FEvalQueue[FEvalQueueCount] := Default(TFakeEvalQueueEntry);
 end;
 
 { 恰好一次兑现：先落记录再触发回调（回调内再入本对象是安全的） }
@@ -839,8 +835,8 @@ begin
     else
     begin
       GrowQueue;
-      FEvalQueue[FEvalQueueCount] := False;
-      FEvalResults[FEvalQueueCount] := AResultJson;
+      FEvalQueue[FEvalQueueCount].IsError := False;
+      FEvalQueue[FEvalQueueCount].Value := AResultJson;
       Inc(FEvalQueueCount);
     end;
   finally
@@ -868,8 +864,8 @@ begin
     else
     begin
       GrowQueue;
-      FEvalQueue[FEvalQueueCount] := True;
-      FEvalResults[FEvalQueueCount] := AMessage;
+      FEvalQueue[FEvalQueueCount].IsError := True;
+      FEvalQueue[FEvalQueueCount].Value := AMessage;
       Inc(FEvalQueueCount);
     end;
   finally

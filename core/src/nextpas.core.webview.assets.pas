@@ -21,7 +21,7 @@ unit nextpas.core.webview.assets;
 
        性能：哈希/探测委托 L1 THashMap 内联单源（WyHash 单源 inline 零额外调用，容量 NextPow2 单源 via hashmap.base/simd.bitops，Bitmap CTZ 单指令）；
        TStringView 零拷贝 Trie 遍历，VecGrowCapacity 0→4→2× inline；TryGetLongestPrefixByView
-       inline 薄转发至 L2 前缀路由，零额外调用，零 distinctLens 排序开销。
+       inline 薄转发至 L2 前缀路由，零额外调用，零 distinctLens 排序开销；Reserve 双预分配 FMap NextPow2 + FTrie VecGrowCapacity 双 inline 单源，零分裂双轨。
        稳定性：FMap.Clear 全量串/接口 Finalize + 前缀路由 Clear 递归 Dispose 不丢。 *}
 
 {$I nextpas.core.settings.inc}
@@ -98,13 +98,14 @@ procedure TWebviewAssetIndex.Reserve(ACount: SizeUInt); inline;
 var
   LNeed: SizeUInt;
 begin
-  // 批量预分配：消除高频多前缀挂载的重复 NextPow2 重哈希（双写 FMap+FTrie）
-  // 单源 L1 THashMap.Reserve (NextPow2 via hashmap.base/simd.bitops, 0.75 负载, Bitmap CTZ) inline 薄转发，零额外 Rehash/Find 分叉
-  // 容量换算：期望条目 ACount → 桶数 ceil(ACount/0.75)+slack，整数算式避免浮点；Trie 稀疏节点经 bytes.ops VecGrow 0→4→2× 单源 inline，已零重哈希故仅 hash 侧需预分配
-  // 性能 inline 零额外调用，零拷贝（无串拷贝）；稳定性 FMap nil/0 早退不丢
-  if (FMap = nil) or (ACount = 0) then Exit;
+  // 批量预分配：消除高频多前缀挂载的重复 NextPow2 重哈希（双写 FMap+FTrie 单源容量收敛）
+  // 单源 L1 THashMap.Reserve (NextPow2 via hashmap.base/simd.bitops, 0.75 负载, Bitmap CTZ) + L2 TPrefixRouter.Reserve (bytes.ops VecGrowCapacity 0→4→2× 稀疏子节点单源) inline 双薄转发，零额外 Rehash/Find 分叉
+  // 容量换算：期望条目 ACount → 桶数 ceil(ACount/0.75)+slack，整数算式避免浮点；Trie 稀疏节点经 bytes.ops VecGrow 单源预分配（ACount 上限 256 Byte 分支封顶），零分裂双轨
+  // 性能 inline 零额外调用，零拷贝（无串拷贝）；稳定性 nil/0 早退不丢
+  if (FMap = nil) or (FTrie = nil) or (ACount = 0) then Exit;
   LNeed := ACount + (ACount div 3) + 4;
   FMap.Reserve(LNeed);
+  FTrie.Reserve(ACount);
 end;
 
 function TWebviewAssetIndex.TryGetByStr(const APrefix: string; out AProvider: IWebviewAssetProvider): Boolean; inline;
