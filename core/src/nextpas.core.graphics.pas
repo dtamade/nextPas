@@ -1,6 +1,5 @@
 {**
  * nextpas.core.graphics - 图形 L1 门面：纯 re-export，消费方 uses 此单元即可。
- * 门面通过 inline 转发聚合 base/color/path 的公共 API，无自有逻辑，符合设计规范门面职责
  *}
 unit nextpas.core.graphics;
 

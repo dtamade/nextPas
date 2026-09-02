@@ -5,10 +5,9 @@ unit nextpas.core.audio.device.null;
 interface
 
 uses
+  Classes,
+  SyncObjs,
   nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
-  nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.device.intf,
@@ -21,13 +20,11 @@ type
     FFormat: TAudioFormat;
     FState: TDeviceState;
     FSource: IRealtimeAudioSource;
-    FLock: TMutex;
+    FLock: TCriticalSection;
     FPosition: UInt64;
     FUnderruns: Int64;
     FViolations: Int64;
     FEvents: TDeviceEventArray;
-    FEventHead: Integer;
-    FEventCount: Integer;
     FConsecutiveUnderruns: Integer;
     FScratch: TBytes;
     procedure PushEvent(AKind: TDeviceEventKind; const AMsg: string);
@@ -75,48 +72,34 @@ begin
   FInfo := AInfo;
   FFormat := AFormat;
   FState := dsOpened;
-  FLock := TMutex.Create;
+  FLock := TCriticalSection.Create;
   FPosition := 0;
   FUnderruns := 0;
   FViolations := 0;
   SetLength(FEvents, 0);
-  FEventHead := 0;
-  FEventCount := 0;
   FConsecutiveUnderruns := 0;
-  SetLength(FScratch, 0);
 end;
 
 destructor TNullAudioDevice.Destroy;
 begin
-  SetLength(FScratch, 0);
-  SetLength(FEvents, 0);
-  FEventHead := 0;
-  FEventCount := 0;
   FLock.Free;
   inherited;
 end;
 
 procedure TNullAudioDevice.PushEvent(AKind: TDeviceEventKind; const AMsg: string);
-var LCap, LTail: Integer;
+var L: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
-    if FEventCount >= Length(FEvents) then
-    begin
-      LCap := Length(FEvents);
-      AudioEnsureCapacity(LCap, FEventCount + 1, 8);
-      if Length(FEvents) <> LCap then SetLength(FEvents, LCap);
-    end;
-    if Length(FEvents) = 0 then Exit;
-    LTail := (FEventHead + FEventCount) mod Length(FEvents);
-    FEvents[LTail].Kind := AKind;
-    FEvents[LTail].DeviceID := FInfo.ID;
-    FEvents[LTail].Message := AMsg;
-    FEvents[LTail].Position.Frame := FPosition;
-    FEvents[LTail].Position.SampleRate := FFormat.SampleRate;
-    Inc(FEventCount);
+    L := Length(FEvents);
+    SetLength(FEvents, L + 1);
+    FEvents[L].Kind := AKind;
+    FEvents[L].DeviceID := FInfo.ID;
+    FEvents[L].Message := AMsg;
+    FEvents[L].Position.Frame := FPosition;
+    FEvents[L].Position.SampleRate := FFormat.SampleRate;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
@@ -128,18 +111,18 @@ begin Result := FFormat; end;
 
 function TNullAudioDevice.GetState: TDeviceState;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try Result := FState;
-  finally FLock.Release; end;
+  finally FLock.Leave; end;
 end;
 
 function TNullAudioDevice.GetPosition: TAudioClock;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     Result.Frame := FPosition;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   Result.SampleRate := FFormat.SampleRate;
 end;
@@ -151,36 +134,36 @@ function TNullAudioDevice.GetContractViolationCount: UInt64;
 begin Result := UInt64(FViolations); end;
 
 function TNullAudioDevice.PollEvent(out AEvent: TDeviceEvent): Boolean;
+var I: Integer;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
-    if FEventCount = 0 then Exit(False);
-    AEvent := FEvents[FEventHead];
-    FEvents[FEventHead] := Default(TDeviceEvent);
-    FEventHead := (FEventHead + 1) mod Length(FEvents);
-    Dec(FEventCount);
-    if FEventCount = 0 then FEventHead := 0;
+    if Length(FEvents) = 0 then Exit(False);
+    AEvent := FEvents[0];
+    for I := 1 to High(FEvents) do
+      FEvents[I - 1] := FEvents[I];
+    SetLength(FEvents, Length(FEvents) - 1);
     Result := True;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
 procedure TNullAudioDevice.SetSource(const ASource: IRealtimeAudioSource);
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState = dsStarted then
       raise EAudioDeviceError.Create('SetSource: cannot change while started');
     FSource := ASource;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
 end;
 
 function TNullAudioDevice.Start: Boolean;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState = dsStarted then Exit(True);
     if FState = dsClosed then
@@ -192,7 +175,7 @@ begin
       raise EAudioDeviceError.Create('Start: source format mismatch rate/ch');
     FState := dsStarted;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   PushEvent(devStarted, 'started');
   Result := True;
@@ -200,13 +183,13 @@ end;
 
 function TNullAudioDevice.Stop: Boolean;
 begin
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState <> dsStarted then Exit(True);
     FState := dsOpened;
     Result := True;
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   PushEvent(devStopped, 'stopped');
 end;
@@ -218,22 +201,17 @@ var
   LRet: Integer;
 begin
   if AFrames <= 0 then Exit(0);
-  FLock.Acquire;
+  FLock.Enter;
   try
     if FState <> dsStarted then Exit(0);
     if not Assigned(FSource) then Exit(0);
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
-  LNeeded := Integer(AudioBytesForFrames(FFormat, AFrames));
-  if (LNeeded <= 0) or (Length(FScratch) < LNeeded) then
-  begin
-    if LNeeded <= 0 then LNeeded := AFrames * FFormat.BlockAlign;
-    if Length(FScratch) < LNeeded then
-      AudioEnsureBytesCapacity(FScratch, SizeUInt(LNeeded));
-  end;
+  LNeeded := AFrames * FFormat.BlockAlign;
+  if Length(FScratch) <> LNeeded then
+    SetLength(FScratch, LNeeded);
   // FScratch reuse — zero alloc steady state: LBuf.Data shares backing, no Copy/Move
-  // 单源：字节预算 AudioBytesForFrames + 容量 AudioEnsureBytesCapacity/BytesEnsureCapacity，inline doubling，稳态零堆增长
   LBuf.Data := FScratch;
   LBuf.Format := FFormat;
   LBuf.FrameCount := AFrames;
@@ -242,14 +220,14 @@ begin
   except
     InterlockedExchangeAdd64(FViolations, 1);
     if Length(LBuf.Data) > 0 then
-      FillMem(@LBuf.Data[0], SizeUInt(Length(LBuf.Data)), 0);
+      FillChar(LBuf.Data[0], Length(LBuf.Data), 0);
     LRet := AFrames;
-    // exception path no alloc — counting only, avoids PushEvent heap alloc
-    FLock.Acquire;
+    PushEvent(devDeviceError, 'FillRealtime raised exception — muted');
+    FLock.Enter;
     try
       FPosition := FPosition + UInt64(AFrames);
     finally
-      FLock.Release;
+      FLock.Leave;
     end;
     Exit(AFrames);
   end;
@@ -262,16 +240,16 @@ begin
   begin
     FConsecutiveUnderruns := 0;
     PushEvent(devStopped, 'eof');
-    FLock.Acquire;
-    try FState := dsOpened; finally FLock.Release; end;
+    FLock.Enter;
+    try FState := dsOpened; finally FLock.Leave; end;
     Result := 0;
     Exit;
   end;
-  FLock.Acquire;
+  FLock.Enter;
   try
     FPosition := FPosition + UInt64(AFrames);
   finally
-    FLock.Release;
+    FLock.Leave;
   end;
   if LRet < AFrames then
   begin

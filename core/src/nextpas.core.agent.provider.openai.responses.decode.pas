@@ -27,7 +27,6 @@ procedure DecodeResponsesResponse(const ABody: TJsonText;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.json,
   nextpas.core.agent.errors,
   nextpas.core.agent.provider.common;

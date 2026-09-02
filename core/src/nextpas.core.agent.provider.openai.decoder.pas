@@ -24,7 +24,6 @@ function NewOpenAIWireDecoder(const ALog: ILogger = nil): IAgentWireDecoder;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,

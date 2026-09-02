@@ -65,8 +65,7 @@ procedure JsContextClose(AId: UInt64);
 function JsContextIsClosed(AId: UInt64): Boolean; inline;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
-uses nextpas.core.json.value,
-  nextpas.core.base, nextpas.core.text, nextpas.core.text.builder,
+uses nextpas.core.base, nextpas.core.text, nextpas.core.text.builder,
   nextpas.core.text.view, nextpas.core.text.escape; // L1 only: text.escape single SIMD, view zero-copy, builder single alloc
 var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1;
 function JsContextRegister: UInt64;

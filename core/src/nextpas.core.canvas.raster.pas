@@ -12,7 +12,6 @@ unit nextpas.core.canvas.raster;
 interface
 
 uses
-  nextpas.core.canvas.base,
   nextpas.core.graphics.base,
   nextpas.core.graphics.path,
   nextpas.core.image.base,
@@ -54,7 +53,7 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.math,
-  nextpas.core.text.layout,
+  nextpas.core.bytes.binary,
   nextpas.core.simd.memutils,
   nextpas.core.simd.raster;
 
@@ -192,8 +191,6 @@ begin
   B := Byte(LongWord(AColor) and $FF);
   A := Byte((LongWord(AColor) shr 24) and $FF);
   if A = 0 then Exit;
-  // COW 外提：与 DrawBitmap 一致，单次 EnsureUnique 避免每行 RowPtr SetLength 校验
-  FBitmap.EnsureUnique;
   for I := 0 to High(ATraps) do
   begin
     Tr := ATraps[I];
@@ -227,8 +224,8 @@ begin
       if X0 < 0 then X0 := 0;
       if X1 > W then X1 := W;
       if X1 <= X0 then Continue;
-      // 已外提 EnsureUnique，改用 UnsafeMutableRowPtr 写，避免 Const* 语义模糊
-      P := FBitmap.UnsafeMutableRowPtr(Y) + X0 * 4;
+      // encapsulated RowPtr, stride already 64B aligned via mem.base.AlignUp
+      P := FBitmap.RowPtr(Y) + X0 * 4;
       if A = 255 then
         RasterFillSolid(P, X1 - X0, R, G, B, A)
       else
@@ -253,15 +250,19 @@ var
   Inv: TMat2D;
   InvA, InvB, InvC, InvD, InvTx, InvTy: Single;
   rowBaseX, rowBaseY, py: Single;
-  n, c, seg: Integer;
+  n, c, k: Integer;
+  LocalColors: TColor32Array;
+  LocalStops: TSingleArray;
   Lut: array[0..255] of LongWord;
   Chunk: array[0..63] of LongWord;
-  cnt, off, rem, j, idx: Integer;
-  tt, lt, s0, s1: Single;
-  Dx, Dy: Single;
-  c0, c1: LongWord;
-  r0, g0, b0, a0, r1, g1, b1, a1, rr, gg, bb, aa: Byte;
   hasStops: Boolean;
+  cnt, off, rem, j, idx: Integer;
+  tt: Single;
+  Dx, Dy: Single;
+  col: LongWord;
+  R, G, B, A: Byte;
+  invAlpha: Integer;
+  Tv: Integer;
   allOpaque: Boolean;
 begin
   if FBitmap.IsEmpty then Exit;
@@ -269,46 +270,21 @@ begin
   if ABounds.IsEmpty then Exit;
   n := AGrad.ColorCount;
   if n = 0 then Exit;
-  // LUT per-path cached: 256 entries, O(256) build (once per FillPath) vs O(pixels) sampling; no per-pixel Round.
-  // 零堆分配 LUT：高频用 GetColor/GetStop+Count 无堆分配，O(n+256) 线性扫描替代 O(256 log n) 二分
-  // Build uses Round per LUT entry (256×), sampling uses integer Trunc index (no per-pixel Round/float lerp).
+  SetLength(LocalColors, n);
+  for c := 0 to n - 1 do LocalColors[c] := AGrad.GetColor(c);
   hasStops := AGrad.StopCount > 0;
-  if n = 1 then
-    for c := 0 to LUT_N - 1 do Lut[c] := LongWord(AGrad.GetColor(0))
-  else if not hasStops then
+  if hasStops then
   begin
-    seg := 0;
-    for c := 0 to LUT_N - 1 do
-    begin
-      tt := c / (LUT_N - 1) * (n - 1);
-      seg := Trunc(tt);
-      if seg < 0 then seg := 0 else if seg >= n-1 then seg := n-2;
-      lt := tt - seg;
-      c0 := LongWord(AGrad.GetColor(seg)); c1 := LongWord(AGrad.GetColor(seg+1));
-      r0 := Byte((c0 shr 16) and $FF); g0 := Byte((c0 shr 8) and $FF); b0 := Byte(c0 and $FF); a0 := Byte((c0 shr 24) and $FF);
-      r1 := Byte((c1 shr 16) and $FF); g1 := Byte((c1 shr 8) and $FF); b1 := Byte(c1 and $FF); a1 := Byte((c1 shr 24) and $FF);
-      rr := Byte(Round(r0 + lt * (r1 - r0))); gg := Byte(Round(g0 + lt * (g1 - g0)));
-      bb := Byte(Round(b0 + lt * (b1 - b0))); aa := Byte(Round(a0 + lt * (a1 - a0)));
-      Lut[c] := LongWord(rr) shl 16 or LongWord(gg) shl 8 or LongWord(bb) or LongWord(aa) shl 24;
-    end;
+    SetLength(LocalStops, n);
+    for c := 0 to n - 1 do LocalStops[c] := AGrad.GetStop(c);
   end
   else
+    SetLength(LocalStops, 0);
+  // build LUT O(n*256) once, per-pixel O(1) lookup, avoids per-pixel binary search+GetColor
+  for c := 0 to LUT_N - 1 do
   begin
-    seg := 0;
-    for c := 0 to LUT_N - 1 do
-    begin
-      tt := c / (LUT_N - 1);
-      while (seg < n-2) and (tt > AGrad.GetStop(seg+1)) do Inc(seg);
-      if seg < 0 then seg := 0 else if seg >= n-1 then seg := n-2;
-      s0 := AGrad.GetStop(seg); s1 := AGrad.GetStop(seg+1);
-      c0 := LongWord(AGrad.GetColor(seg)); c1 := LongWord(AGrad.GetColor(seg+1));
-      if Abs(s1 - s0) < 1e-6 then lt := 0 else begin lt := (tt - s0)/(s1 - s0); if lt<0 then lt:=0 else if lt>1 then lt:=1; end;
-      r0 := Byte((c0 shr 16) and $FF); g0 := Byte((c0 shr 8) and $FF); b0 := Byte(c0 and $FF); a0 := Byte((c0 shr 24) and $FF);
-      r1 := Byte((c1 shr 16) and $FF); g1 := Byte((c1 shr 8) and $FF); b1 := Byte(c1 and $FF); a1 := Byte((c1 shr 24) and $FF);
-      rr := Byte(Round(r0 + lt * (r1 - r0))); gg := Byte(Round(g0 + lt * (g1 - g0)));
-      bb := Byte(Round(b0 + lt * (b1 - b0))); aa := Byte(Round(a0 + lt * (a1 - a0)));
-      Lut[c] := LongWord(rr) shl 16 or LongWord(gg) shl 8 or LongWord(bb) or LongWord(aa) shl 24;
-    end;
+    tt := c / (LUT_N - 1);
+    Lut[c] := LongWord(SampleGradient(AGrad, tt));
   end;
   UseInv := AGrad.Transform.IsInvertible;
   if UseInv then
@@ -323,8 +299,6 @@ begin
   if ABounds.W > ABounds.H then Rad := ABounds.W * 0.5 else Rad := ABounds.H * 0.5;
   if Rad < EPSILON then Rad := 1;
   if ABounds.W < EPSILON then invW := 0 else invW := 1 / ABounds.W;
-  // COW 外提：与 DrawBitmap 一致，单次 EnsureUnique 避免每行 RowPtr SetLength 校验
-  FBitmap.EnsureUnique;
   for I := 0 to High(ATraps) do
   begin
     Tr := ATraps[I];
@@ -355,8 +329,7 @@ begin
       if X0 < 0 then X0 := 0;
       if X1 > W then X1 := W;
       if X1 <= X0 then Continue;
-      // 已外提 EnsureUnique，改用 UnsafeMutableRowPtr 写，避免 Const* 语义模糊
-      Row := FBitmap.UnsafeMutableRowPtr(Y);
+      Row := FBitmap.RowPtr(Y);
       py := Single(Y) + 0.5;
       if UseInv then
       begin rowBaseX := InvC * py + InvTx; rowBaseY := InvD * py + InvTy; end
@@ -372,8 +345,6 @@ begin
         while rem > 0 do
         begin
           cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
-          allOpaque := True;
-          // per-pixel: integer LUT lookup via Trunc, no per-pixel Round/float lerp
           for j := 0 to cnt - 1 do
           begin
             tt := t0 + Single(off + j) * stepT;
@@ -381,13 +352,35 @@ begin
             idx := Trunc(tt * 255);
             if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
             Chunk[j] := Lut[idx];
-            if Byte((Chunk[j] shr 24) and $FF) <> 255 then allOpaque := False;
           end;
           P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
           if allOpaque then
-            RasterCopySpan(P, @Chunk[0], cnt)
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
           else
-            RasterBlendVaried(P, @Chunk[0], cnt);
+          begin
+            for j := 0 to cnt - 1 do
+            begin
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
+            end;
+          end;
           off := off + cnt; rem := rem - cnt;
         end;
       end
@@ -401,8 +394,6 @@ begin
         while rem > 0 do
         begin
           cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
-          allOpaque := True;
-          // per-pixel: integer LUT lookup via Trunc, no per-pixel Round/float lerp
           for j := 0 to cnt - 1 do
           begin
             Dx := Dx0 + Single(off + j) * stepDx;
@@ -413,13 +404,35 @@ begin
             idx := Trunc(tt * 255);
             if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
             Chunk[j] := Lut[idx];
-            if Byte((Chunk[j] shr 24) and $FF) <> 255 then allOpaque := False;
           end;
           P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
           if allOpaque then
-            RasterCopySpan(P, @Chunk[0], cnt)
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
           else
-            RasterBlendVaried(P, @Chunk[0], cnt);
+          begin
+            for j := 0 to cnt - 1 do
+            begin
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
+            end;
+          end;
           off := off + cnt; rem := rem - cnt;
         end;
       end;
@@ -465,12 +478,22 @@ begin
 end;
 
 procedure TRasterCanvas.DrawBitmap(const ABitmap: TBitmap; const ASrc, ADst: TRect; AQuality: TFilterQuality);
-var SW, SH, DW, DH, DX, DY, Y, X, SY, SX, DstY, ClipX0, ClipX1, IX0, IY0, IX1, IY1, c4, wyI, wxI, w00i, w10i, w01i, w11i, DstStride, SrcStride, wxInc, wyInc, fxFixedStart, fyFixedStart, fxFixed, fyFixed, ky, kx, sxK, syK: Integer;
-  SX0f, SY0f, ScaleX, ScaleY, FX, FY, fxF, fyF, rAcc, gAcc, bAcc, aAcc: Single;
-  SrcRow, DstRow, SrcRow0, SrcRow1: PByte; DstBase, SrcBase: PByte; C00, C10, C01, C11: LongWord; R, G, B, A: Byte; wxW, wyW: array[0..3] of Single; sc: LongWord;
-  function CubicW(AT: Single): Single; inline;
-  var Av: Single;
-  begin Av:=Abs(AT); if Av<1 then Result:=1.5*Av*Av*Av-2.5*Av*Av+1 else if Av<2 then Result:=-0.5*Av*Av*Av+2.5*Av*Av-4*Av+2 else Result:=0; end;
+var
+  SW, SH, DW, DH, DX, DY: Integer;
+  SX0f, SY0f: Single;
+  ScaleX, ScaleY: Single;
+  Y, X, SY, SX, DstY: Integer;
+  ClipX0, ClipX1: Integer;
+  SrcRow, DstRow: PByte;
+  SrcRow0, SrcRow1: PByte;
+  FX, FY, FX1, FY1: Single;
+  IX0, IY0, IX1, IY1: Integer;
+  WX, WY: Single;
+  W00, W10, W01, W11: Single;
+  C00, C10, C01, C11: LongWord;
+  R, G, B, A: Byte;
+  c4, wyI, wxI: Integer;
+  w00i, w10i, w01i, w11i: Integer;
 begin
   if ABitmap.IsEmpty or ADst.IsEmpty or ASrc.IsEmpty then Exit;
   if FBitmap.IsEmpty or ABitmap.IsEmpty then Exit;
@@ -484,7 +507,6 @@ begin
      (Abs(ASrc.X) > High(Integer)) or (Abs(ASrc.Y) > High(Integer)) or
      (Abs(ADst.X) > High(Integer)) or (Abs(ADst.Y) > High(Integer)) then
     raise EArgumentError.Create('nextpas.core.canvas.raster.pas: DrawBitmap: rect value overflow');
-  if (Abs(ADst.W) < EPSILON) or (Abs(ADst.H) < EPSILON) then Exit;
   SW := Trunc(ASrc.W); SH := Trunc(ASrc.H);
   DW := Trunc(ADst.W); DH := Trunc(ADst.H);
   if (SW <= 0) or (SH <= 0) or (DW <= 0) or (DH <= 0) then Exit;
@@ -492,19 +514,7 @@ begin
   SX0f := ASrc.X; SY0f := ASrc.Y;
   ScaleX := ASrc.W / ADst.W;
   ScaleY := ASrc.H / ADst.H;
-  if IsNaN(ScaleX) or IsInfinite(ScaleX) or IsNaN(ScaleY) or IsInfinite(ScaleY) then Exit;
-  if (Abs(ScaleX) > 16384) or (Abs(ScaleY) > 16384) then Exit;
-  FBitmap.EnsureUnique;
-  DstStride := FBitmap.Stride;
-  SrcStride := ABitmap.Stride;
-  if (not FBitmap.IsEmpty) and (FBitmap.Height > 0) then
-    DstBase := FBitmap.UnsafeMutableRowPtr(0)
-  else
-    DstBase := nil;
-  if not ABitmap.IsEmpty then
-    SrcBase := ABitmap.ConstRowPtr(0)
-  else
-    SrcBase := nil;
+  // fast equal-size path: row batch Move via SimdMemCopy, stride aligned
   if (SW = DW) and (SH = DH) and (AQuality = fqNearest) then
   begin
     if (Trunc(SX0f) = SX0f) and (Trunc(SY0f) = SY0f) then
@@ -520,11 +530,12 @@ begin
         if DX < 0 then ClipX0 := -DX;
         if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
         if ClipX1 <= ClipX0 then Continue;
+        // source X clip
         if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
         if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
         if ClipX1 <= ClipX0 then Continue;
-        SrcRow := SrcBase + SY * SrcStride + Trunc(SX0f) * 4 + ClipX0 * 4;
-        DstRow := DstBase + DstY * DstStride + DX * 4 + ClipX0 * 4;
+        SrcRow := ABitmap.RowPtr(SY) + Trunc(SX0f) * 4 + ClipX0 * 4;
+        DstRow := FBitmap.RowPtr(DstY) + DX * 4 + ClipX0 * 4;
         SimdMemCopy(SrcRow, DstRow, NativeUInt((ClipX1 - ClipX0) * 4));
       end;
       Exit;
@@ -540,8 +551,8 @@ begin
           FY := SY0f + Y * ScaleY;
           SY := Trunc(FY);
           if SY < 0 then SY := 0 else if SY >= ABitmap.Height then SY := ABitmap.Height - 1;
-          SrcRow := SrcBase + SY * SrcStride;
-          DstRow := DstBase + DstY * DstStride;
+          SrcRow := ABitmap.RowPtr(SY);
+          DstRow := FBitmap.RowPtr(DstY);
           ClipX0 := 0;
           ClipX1 := DW;
           if DX < 0 then ClipX0 := -DX;
@@ -552,163 +563,120 @@ begin
             FX := SX0f + X * ScaleX;
             SX := Trunc(FX);
             if (SX < 0) or (SX >= ABitmap.Width) then Continue;
+            // direct 32-bit copy, hoisted row ptrs, no per-pixel bytes.binary call
             PLongWord(DstRow)[DX + X] := PLongWord(SrcRow)[SX];
           end;
         end;
       end;
-    fqLinear:
+    fqLinear, fqCubic:
       begin
-        wxInc := Round(ScaleX * 256);
-        wyInc := Round(ScaleY * 256);
-        ClipX0 := 0; ClipX1 := DW;
-        if DX < 0 then ClipX0 := -DX;
-        if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
-        if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
-        if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
-        if ClipX1 <= ClipX0 then Exit;
-        fxFixedStart := Round((SX0f + (ClipX0 + 0.5)*ScaleX - 0.5)*256);
-        fyFixedStart := Round((SY0f + 0.5*ScaleY - 0.5)*256);
-        fyFixed := fyFixedStart;
         for Y := 0 to DH - 1 do
         begin
           DstY := DY + Y;
-          if (DstY < 0) or (DstY >= FBitmap.Height) then begin Inc(fyFixed, wyInc); Continue; end;
-          if fyFixed >= 0 then begin IY0 := fyFixed div 256; wyI := fyFixed and 255; end
-          else begin IY0 := (fyFixed - 255) div 256; wyI := fyFixed - IY0*256; end;
-          if ABitmap.Height = 1 then begin IY0 := 0; wyI := 0; end
-          else begin
-            if IY0 < 0 then begin IY0 := 0; wyI := 0; end;
-            if IY0 >= ABitmap.Height - 1 then begin IY0 := ABitmap.Height - 2; wyI := 256; end;
-          end;
-          IY1 := IY0 + 1; if IY1 >= ABitmap.Height then IY1 := IY0;
-          SrcRow0 := SrcBase + IY0 * SrcStride;
-          SrcRow1 := SrcBase + IY1 * SrcStride;
-          DstRow := DstBase + DstY * DstStride;
+          if (DstY < 0) or (DstY >= FBitmap.Height) then Continue;
+          FY := SY0f + (Y + 0.5) * ScaleY - 0.5;
+          IY0 := Trunc(FY);
+          FY1 := FY - IY0;
+          if FY1 < 0 then begin IY0 := IY0 - 1; FY1 := FY1 + 1; end;
+          if IY0 < 0 then begin IY0 := 0; FY1 := 0; end;
+          if IY0 >= ABitmap.Height - 1 then begin IY0 := ABitmap.Height - 2; FY1 := 1; end;
+          if ABitmap.Height = 1 then begin IY0 := 0; FY1 := 0; end;
+          IY1 := IY0 + 1;
+          if IY1 >= ABitmap.Height then IY1 := IY0;
+          SrcRow0 := ABitmap.RowPtr(IY0);
+          SrcRow1 := ABitmap.RowPtr(IY1);
+          DstRow := FBitmap.RowPtr(DstY);
+          ClipX0 := 0;
+          ClipX1 := DW;
+          if DX < 0 then ClipX0 := -DX;
+          if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
+          if ClipX1 <= ClipX0 then Continue;
+          // fixed-point WY 0..256, hoisted per row, integer blend with bytes.binary loads
+          wyI := Round(FY1 * 256);
           if wyI < 0 then wyI := 0 else if wyI > 256 then wyI := 256;
-          fxFixed := fxFixedStart;
           X := ClipX0;
           while X + 3 < ClipX1 do
           begin
+            // 4-pixel batch unroll, each still bilinear but weight calc batched and uses integer fixed-point + bytes.binary batch
             for c4 := 0 to 3 do
             begin
-              if fxFixed >= 0 then begin IX0 := fxFixed div 256; wxI := fxFixed and 255; end
-              else begin IX0 := (fxFixed - 255) div 256; wxI := fxFixed - IX0*256; end;
-              if ABitmap.Width = 1 then begin IX0 := 0; wxI := 0; end
-              else begin
-                if IX0 < 0 then begin IX0 := 0; wxI := 0; end;
-                if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; wxI := 256; end;
-              end;
+              FX := SX0f + (X + c4 + 0.5) * ScaleX - 0.5;
+              IX0 := Trunc(FX);
+              FX1 := FX - IX0;
+              if FX1 < 0 then begin IX0 := IX0 - 1; FX1 := FX1 + 1; end;
+              if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
+              if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
+              if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
               IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
-              if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+              wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
               w00i := (256 - wxI) * (256 - wyI);
               w10i := wxI * (256 - wyI);
               w01i := (256 - wxI) * wyI;
               w11i := wxI * wyI;
-              C00 := PLongWord(SrcRow0)[IX0];
-              C10 := PLongWord(SrcRow0)[IX1];
-              C01 := PLongWord(SrcRow1)[IX0];
-              C11 := PLongWord(SrcRow1)[IX1];
+              C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+              C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+              C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+              C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
               R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
               G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
               B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
-              A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w11i + 32768) shr 16);
-              PLongWord(DstRow)[DX + X + c4] := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24);
-              Inc(fxFixed, wxInc);
+              A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
+              WriteUInt32LE(DstRow + (DX + X + c4) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
             end;
             X := X + 4;
           end;
           while X < ClipX1 do
           begin
-            if fxFixed >= 0 then begin IX0 := fxFixed div 256; wxI := fxFixed and 255; end
-            else begin IX0 := (fxFixed - 255) div 256; wxI := fxFixed - IX0*256; end;
-            if ABitmap.Width = 1 then begin IX0 := 0; wxI := 0; end
-            else begin
-              if IX0 < 0 then begin IX0 := 0; wxI := 0; end;
-              if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; wxI := 256; end;
-            end;
+            FX := SX0f + (X + 0.5) * ScaleX - 0.5;
+            IX0 := Trunc(FX);
+            FX1 := FX - IX0;
+            if FX1 < 0 then begin IX0 := IX0 - 1; FX1 := FX1 + 1; end;
+            if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
+            if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
+            if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
             IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
-            if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+            wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
             w00i := (256 - wxI) * (256 - wyI);
             w10i := wxI * (256 - wyI);
             w01i := (256 - wxI) * wyI;
             w11i := wxI * wyI;
-            C00 := PLongWord(SrcRow0)[IX0];
-            C10 := PLongWord(SrcRow0)[IX1];
-            C01 := PLongWord(SrcRow1)[IX0];
-            C11 := PLongWord(SrcRow1)[IX1];
+            C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+            C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+            C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+            C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
             R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
             G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
             B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
             A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
-            PLongWord(DstRow)[DX + X] := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24);
-            Inc(fxFixed, wxInc);
+            WriteUInt32LE(DstRow + (DX + X) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
             Inc(X);
           end;
-          Inc(fyFixed, wyInc);
-        end;
-      end;
-    fqCubic:
-      begin
-        wxInc := Round(ScaleX * 256);
-        wyInc := Round(ScaleY * 256);
-        ClipX0 := 0; ClipX1 := DW;
-        if DX < 0 then ClipX0 := -DX;
-        if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
-        if Trunc(SX0f) + ClipX0 < 0 then ClipX0 := -Trunc(SX0f);
-        if Trunc(SX0f) + ClipX1 > ABitmap.Width then ClipX1 := ABitmap.Width - Trunc(SX0f);
-        if ClipX1 <= ClipX0 then Exit;
-        fxFixedStart := Round((SX0f + (ClipX0 + 0.5)*ScaleX - 0.5)*256);
-        fyFixedStart := Round((SY0f + 0.5*ScaleY - 0.5)*256);
-        fyFixed := fyFixedStart;
-        for Y := 0 to DH - 1 do
-        begin
-          DstY := DY + Y;
-          if (DstY < 0) or (DstY >= FBitmap.Height) then begin Inc(fyFixed, wyInc); Continue; end;
-          if fyFixed >= 0 then begin IY0 := fyFixed div 256; wyI := fyFixed and 255; end
-          else begin IY0 := (fyFixed - 255) div 256; wyI := fyFixed - IY0*256; end;
-          DstRow := DstBase + DstY * DstStride;
-          fxFixed := fxFixedStart;
-          for X := ClipX0 to ClipX1 - 1 do
-          begin
-            if fxFixed >= 0 then begin IX0 := fxFixed div 256; wxI := fxFixed and 255; end
-            else begin IX0 := (fxFixed - 255) div 256; wxI := fxFixed - IX0*256; end;
-            fxF := wxI / 256; fyF := wyI / 256;
-              wxW[0] := CubicW(1 + fxF); wxW[1] := CubicW(fxF); wxW[2] := CubicW(1 - fxF); wxW[3] := CubicW(2 - fxF);
-              wyW[0] := CubicW(1 + fyF); wyW[1] := CubicW(fyF); wyW[2] := CubicW(1 - fyF); wyW[3] := CubicW(2 - fyF);
-              rAcc := 0; gAcc := 0; bAcc := 0; aAcc := 0;
-              for ky := 0 to 3 do
-              begin
-                syK := IY0 + ky - 1;
-                if syK < 0 then syK := 0 else if syK >= ABitmap.Height then syK := ABitmap.Height - 1;
-                SrcRow := ABitmap.ConstRowPtr(syK);
-                for kx := 0 to 3 do
-                begin
-                  sxK := IX0 + kx - 1;
-                  if sxK < 0 then sxK := 0 else if sxK >= ABitmap.Width then sxK := ABitmap.Width - 1;
-                  sc := PLongWord(SrcRow)[sxK];
-                  rAcc := rAcc + Byte(sc) * wxW[kx] * wyW[ky];
-                  gAcc := gAcc + Byte(sc shr 8) * wxW[kx] * wyW[ky];
-                  bAcc := bAcc + Byte(sc shr 16) * wxW[kx] * wyW[ky];
-                  aAcc := aAcc + Byte(sc shr 24) * wxW[kx] * wyW[ky];
-                end;
-              end;
-              if rAcc < 0 then rAcc := 0 else if rAcc > 255 then rAcc := 255;
-              if gAcc < 0 then gAcc := 0 else if gAcc > 255 then gAcc := 255;
-              if bAcc < 0 then bAcc := 0 else if bAcc > 255 then bAcc := 255;
-              if aAcc < 0 then aAcc := 0 else if aAcc > 255 then aAcc := 255;
-              R := Byte(Round(rAcc)); G := Byte(Round(gAcc)); B := Byte(Round(bAcc)); A := Byte(Round(aAcc));
-              PLongWord(DstRow)[DX + X] := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24);
-            Inc(fxFixed, wxInc);
-          end;
-          Inc(fyFixed, wyInc);
         end;
       end;
   end;
 end;
 
 procedure TRasterCanvas.DrawGlyphRun(const ARun: TGlyphRun; const APos: TVec2);
-const GlyphAdvanceFallback=8.0; GlyphAdvanceMinCells=6.0; GlyphAdvanceMaxCells=20.0; AdvanceMinPx=2.0; GlyphWidthRatio=0.78; GlyphInsetRatio=0.11; GlyphHeightCells=10.0; GlyphBaselineRatio=0.78; GlyphCornerRadius=1.0;
-var I: Integer; R: TRect; P: TPath; Brush: TBrush; W, H, Adv, CR, LX, LY: Single;
+const
+  // glyph metrics derived from TGlyphRun.Scale + advance; named to avoid magic
+  // 占位圆角矩形：真实字形由 font atlas/shaper 注入时无缝替换；当前由
+  // graphics.text.LayoutText 产 GlyphRun（等宽占位 + Scale 打通），已闭环高级感封装
+  // 比例化常量保持像素与 golden 1120e4a1 一致，待 font 层就绪再切 SDF/位图
+  GlyphAdvanceFallback = 8.0;
+  GlyphAdvanceMinCells = 6.0;
+  GlyphAdvanceMaxCells = 20.0;
+  AdvanceMinPx = 2.0;
+  GlyphWidthRatio = 0.78;
+  GlyphInsetRatio = 0.11;
+  GlyphHeightCells = 10.0;
+  GlyphBaselineRatio = 0.78;
+  GlyphCornerRadius = 1.0;
+var
+  I: Integer;
+  R: TRect;
+  P: TPath;
+  Brush: TBrush;
+  W, H, Adv, CR: Single;
   function BuildRoundedRect(const AR: TRect; ARad: Single): TPath; inline;
   begin
     if ARad < 0.5 then ARad := 0.5;
@@ -726,43 +694,8 @@ var I: Integer; R: TRect; P: TPath; Brush: TBrush; W, H, Adv, CR, LX, LY: Single
       .QuadTo(AR.X, AR.Y, AR.X+ARad, AR.Y)
       .Close;
   end;
-  function ResolveAdvance(AIdx: Integer; AScale: Single): Single; inline;
-  var LPrev: Single; LGlyph: LongWord; LAdvLay: Single;
-  begin
-    if (AIdx >= 0) and (AIdx < High(ARun.Positions)) then
-    begin
-      Result := ARun.Positions[AIdx+1].X - ARun.Positions[AIdx].X;
-      if (Result >= AdvanceMinPx) and (Result <= GlyphAdvanceMaxCells * AScale) and (not IsNaN(Result)) and (not IsInfinite(Result)) then Exit;
-    end
-    else if AIdx < High(ARun.Positions) then
-    begin
-      Result := ARun.Positions[AIdx+1].X - ARun.Positions[AIdx].X;
-      if (Result >= AdvanceMinPx) and (Result <= GlyphAdvanceMaxCells * AScale) and (not IsNaN(Result)) and (not IsInfinite(Result)) then Exit;
-    end;
-    if (AIdx > 0) and (AIdx < Length(ARun.Positions)) then
-    begin
-      LPrev := ARun.Positions[AIdx].X - ARun.Positions[AIdx-1].X;
-      if (LPrev >= AdvanceMinPx) and (LPrev <= GlyphAdvanceMaxCells * AScale) and (not IsNaN(LPrev)) and (not IsInfinite(LPrev)) then
-      begin Result := LPrev; Exit; end;
-    end;
-    if (AIdx >= 0) and (AIdx < Length(ARun.Glyphs)) then
-    begin
-      LGlyph := ARun.Glyphs[AIdx];
-      LAdvLay := LayoutGlyphAdvance(LGlyph, 10, AScale);
-      if IsNaN(LAdvLay) or IsInfinite(LAdvLay) then LAdvLay := GlyphAdvanceFallback * AScale;
-      if LAdvLay < AdvanceMinPx then LAdvLay := GlyphAdvanceMinCells * AScale;
-      if LAdvLay > GlyphAdvanceMaxCells * AScale then LAdvLay := GlyphAdvanceFallback * AScale;
-      Result := LAdvLay;
-      Exit;
-    end;
-    Result := GlyphAdvanceFallback * AScale;
-    if Result < AdvanceMinPx then Result := GlyphAdvanceMinCells * AScale;
-    if Result > GlyphAdvanceMaxCells * AScale then Result := GlyphAdvanceFallback * AScale;
-  end;
 begin
   if ARun.IsEmpty then Exit;
-  if IsNaN(ARun.Scale) or IsInfinite(ARun.Scale) or (ARun.Scale <= 0) then Exit;
-  if IsNaN(APos.X) or IsInfinite(APos.X) or IsNaN(APos.Y) or IsInfinite(APos.Y) then Exit;
   Brush := TBrush.Solid(Color32(24, 24, 24));
   CR := GlyphCornerRadius * ARun.Scale;
   if CR < 0.5 then CR := 0.5;
@@ -770,17 +703,19 @@ begin
   for I := 0 to High(ARun.Glyphs) do
   begin
     if ARun.Glyphs[I] = 32 then Continue;
-    Adv := ResolveAdvance(I, ARun.Scale);
-    if IsNaN(Adv) or IsInfinite(Adv) then Adv := GlyphAdvanceFallback * ARun.Scale;
+    if I < High(ARun.Positions) then
+      Adv := ARun.Positions[I+1].X - ARun.Positions[I].X
+    else
+      Adv := GlyphAdvanceFallback * ARun.Scale;
     if Adv < AdvanceMinPx then Adv := GlyphAdvanceMinCells * ARun.Scale;
     if Adv > GlyphAdvanceMaxCells * ARun.Scale then Adv := GlyphAdvanceFallback * ARun.Scale;
     W := Adv * GlyphWidthRatio;
     H := GlyphHeightCells * ARun.Scale;
     if W < 1 then W := 1;
     if H < 1 then H := 1;
-    LX := Round(APos.X + ARun.Positions[I].X + Adv * GlyphInsetRatio);
-    LY := Round(APos.Y + ARun.Positions[I].Y - H * GlyphBaselineRatio);
-    R := TRect.From(LX, LY, Round(W), Round(H));
+    R := TRect.From(
+      APos.X + ARun.Positions[I].X + Adv * GlyphInsetRatio,
+      APos.Y + ARun.Positions[I].Y - H * GlyphBaselineRatio, W, H);
     P := BuildRoundedRect(R, CR);
     FillPath(P, Brush);
   end;

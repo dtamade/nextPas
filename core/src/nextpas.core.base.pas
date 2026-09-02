@@ -280,7 +280,6 @@ type
     Len: SizeUInt;
     class function Create(const AData: PByte; const ALen: SizeUInt): TByteSpan; static; inline;
     class function FromBytes(const ABytes: TBytes): TByteSpan; static; inline;
-    class function FromStr(const AStr: string): TByteSpan; static; inline;
     class function Empty: TByteSpan; static; inline;
     function IsEmpty: Boolean; inline;
     function Slice(const AOffset, ALength: SizeUInt): TByteSpan;
@@ -653,14 +652,6 @@ begin
     Result.Data := nil;
     Result.Len := 0;
   end;
-end;
-
-class function TByteSpan.FromStr(const AStr: string): TByteSpan; inline;
-begin
-  if Length(AStr) = 0 then
-    Exit(TByteSpan.Empty);
-  Result.Data := PByte(@AStr[1]);
-  Result.Len := SizeUInt(Length(AStr));
 end;
 
 class function TByteSpan.Empty: TByteSpan;

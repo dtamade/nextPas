@@ -95,7 +95,6 @@ procedure RunToolBatch(const AJobs: array of TToolJob;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.exception;
 
 const

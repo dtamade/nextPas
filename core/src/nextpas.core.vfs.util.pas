@@ -71,38 +71,12 @@ end;
 
 function VfsReadAllText(const AFs: IVfs; const APath: string): string;
 var
-  S: IStream;
-  LSize: Int64;
-  Total, Got, Rem: SizeUInt;
-  PDst: PByte;
+  B: TBytes;
 begin
-  // perf: zero-copy single alloc — direct SetLength(Result) + stream→string buffer, no TBytes intermediate
-  // saves 1 alloc + 1 Move (2× mem) vs prior B:=VfsReadAllBytes+Move; reuses VfsReadAllBytes error/size single source
-  // stability: try-finally S.Close preserved; non-inline per design-conventions §2 loop/SIMD/routing red line
-  Result := '';
-  S := AFs.OpenRead(APath);
-  try
-    LSize := S.Size;
-    if (LSize < 0) or (UInt64(LSize) > UInt64(High(SizeInt))) then
-      raise EVfsError.CreateCtx('read', APath, 'declared size out of range');
-    SetLength(Result, LSize);
-    if LSize = 0 then
-      Exit;
-    Total := 0;
-    PDst := PByte(@Result[1]);
-    while Total < SizeUInt(LSize) do
-    begin
-      if Total >= SizeUInt(Length(Result)) then
-        raise EVfsError.CreateCtx('read', APath, 'truncated: size exceeds addressable length');
-      Rem := SizeUInt(Length(Result)) - Total;
-      Got := S.Read(PDst[Total], Rem);
-      if Got = 0 then
-        raise EVfsError.CreateCtx('read', APath, 'stream ended before declared size');
-      Total := Total + Got;
-    end;
-  finally
-    S.Close;
-  end;
+  B := VfsReadAllBytes(AFs, APath);
+  SetLength(Result, Length(B));
+  if Length(B) > 0 then
+    Move(B[0], Result[1], Length(B));
 end;
 
 procedure WalkLevel(const AFs: IVfs; const ADirPath: string;

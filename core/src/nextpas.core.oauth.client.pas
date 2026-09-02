@@ -60,7 +60,6 @@ function RefreshAccessToken(const AClient: IHttpClient;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.encoding.url,
   nextpas.core.http.client.helpers,
   nextpas.core.http.message,

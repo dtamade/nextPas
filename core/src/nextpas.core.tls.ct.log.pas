@@ -82,7 +82,6 @@ function Base64Decode(const Input: string): TBytes;
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,

@@ -29,60 +29,57 @@ implementation
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.errors,
   nextpas.core.exception,
-  nextpas.core.fs,
-  nextpas.core.sync.mutex
-  // registry 薄封装 — 具体 codec 通过工厂注册注入，registry 自身不硬依赖 L2 实现，可独立编译
-  // wav/aiff 为内置最小集；flac/mp3/vorbis 等通过 AudioRegisterDecoder 运行时注入（@CreateFlacDecoder 等工厂参数传入），不在此硬 uses
-  ;
+  nextpas.core.fs;
 
 var
   GFactories: array of TDecoderFactory;
-  GLock: TRecursiveMutex;
+  GLock: TRTLCriticalSection;
   GInited: Boolean;
 
 procedure EnsureInited;
 begin
   if GInited then Exit;
-  GLock := TRecursiveMutex.Create;
+  InitCriticalSection(GLock);
   GInited := True;
-  // 内置最小集自动注册；flac/mp3/vorbis 等通过外部 AudioRegisterDecoder(@CreateFlacDecoder) 注入，不在此硬注册
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
+  AudioRegisterDecoder(@CreateFlacDecoder);
+  AudioRegisterDecoder(@CreateMp3Decoder);
+  AudioRegisterDecoder(@CreateVorbisDecoder);
 end;
 
 procedure AudioRegisterDecoder(AFactory: TDecoderFactory);
 var
-  L, I: Integer;
+  L: Integer;
 begin
   if not Assigned(AFactory) then
     raise EInvalidArgument.Create('AudioRegisterDecoder: factory is nil');
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     L := Length(GFactories);
-    // SizeUInt boundary: L+1 must fit Integer/SizeUInt range, guard overflow before growth
-    if (L >= High(Integer)) or (SizeUInt(L) >= High(SizeUInt)) then
-      raise EInvalidArgument.Create('AudioRegisterDecoder: too many factories');
-    // for 循环赋值已单源化 — single loop move, SizeUInt boundary guarded above, no duplicate assignment source
     SetLength(GFactories, L + 1);
-    for I := L downto 1 do
-      GFactories[I] := GFactories[I - 1];
+    if L > 0 then
+      Move(GFactories[0], GFactories[1], L * SizeOf(TDecoderFactory));
     GFactories[0] := AFactory;
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
 function SnapshotFactories: TDecoderFactoryArray;
 begin
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     Result := Copy(GFactories);
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
@@ -250,7 +247,7 @@ initialization
   GInited := False;
 
 finalization
-  if GInited and Assigned(GLock) then
-    GLock.Free;
+  if GInited then
+    DoneCriticalSection(GLock);
 
 end.

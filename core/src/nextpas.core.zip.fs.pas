@@ -13,10 +13,7 @@ unit nextpas.core.zip.fs;
  * 位。目录的权限与 mtime 延迟到全部内容写完后再还原（否则子条目写入会刷新
  * 目录 mtime，收紧的目录权限也可能阻断后续落盘）。解包非原子：已落盘文件不
  * 回滚；异常时已收集的 LDirs 仍在 finally 中逆序定稿（权限/mtime），需外层
- * 整体清理或改用原子变体 `ZipExtractToDirAtomic*`（临时目录+rename，见下）。
- * TOCTOU 已加固为落盘前/后双重 EnsureNoSymlinkInPath + 落盘结果非 symlink
- * 校验；原子变体在同文件系统内 `TempDir`+`Rename` 原子提交，异常时自动清理
- * 临时目录，已存在目标则拒绝覆盖以保原子语义。
+ * 整体清理或改用 WithOptions 的原子变体（临时目录+rename，待提供）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -58,19 +55,6 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AMaxOutputSize: SizeUInt = 0); overload;
 {** 同上，按完整选项（保留 MaxTotalOutputSize/SkipSymlinks 语义）。 *}
 procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions); overload;
-
-{** 原子解包：先解到同文件系统临时目录，成功后 Rename 原子提交；
-    ADestDir 已存在则拒绝覆盖（抛 EArgumentError），异常时自动清理临时目录。
-    其余语义同 ZipExtractToDirWithOptions（含 TOCTOU 双校验与 MaxTotal 守卫）。 *}
-procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
-  const ADestDir: string; const AOptions: TZipExtractOptions);
-
-{** 同上，按默认选项。AMaxOutputSize=0 取读端默认上限。 *}
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt = 0); overload;
-{** 同上，按完整选项。 *}
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
   const AOptions: TZipExtractOptions); overload;
 
 implementation
@@ -123,67 +107,35 @@ end;
 
 procedure EnsureNoSymlinkInPath(const APath: string); inline;
 var
-  LI, LLen: Integer;
+  LI: Integer;
   LPrefix: string;
 begin
   if APath = '' then Exit;
-  SetLength(LPrefix, Length(APath));
   for LI := 1 to Length(APath) do
   begin
     if (APath[LI] = '/') or (LI = Length(APath)) then
     begin
       if LI = Length(APath) then
-        LLen := Length(APath)
+        LPrefix := APath
       else
-        LLen := LI - 1;
-      if LLen = 0 then Continue;
-      SetLength(LPrefix, LLen);
-      Move(APath[1], LPrefix[1], LLen);
-      if IsSymlink(LPrefix) then
+        LPrefix := Copy(APath, 1, LI - 1);
+      if (LPrefix <> '') and IsSymlink(LPrefix) then
         raise EParseError.Create('zip extract: symlink in path: ' + LPrefix);
     end;
   end;
 end;
 
-function CalcGrowCapacity(ACap, AMin: Integer): Integer; inline;
-begin
-  if ACap = 0 then ACap := 16;
-  Result := ACap;
-  while Result < AMin do
-    Result := Result * 2;
-end;
-
-function ParentDirOf(const APath: string): string; inline;
-var
-  LSep: Integer;
-begin
-  LSep := Length(APath);
-  while (LSep > 0) and (APath[LSep] <> '/') do
-    Dec(LSep);
-  if LSep = 0 then
-    Result := ''
-  else if LSep = 1 then
-    Result := '/' { "/a" → "/" ; "/" → "/" (调用方视空处理) }
-  else
-    Result := Copy(APath, 1, LSep - 1);
-end;
-
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
 var
-  LCap: Integer;
+  LCap, LNew: Integer;
 begin
   LCap := Length(A);
   if LCap >= AMin then Exit;
-  SetLength(A, CalcGrowCapacity(LCap, AMin));
-end;
-
-procedure EnsureDeferredCapacity(var A: TDeferredDirArray; AMin: Integer); inline;
-var
-  LCap: Integer;
-begin
-  LCap := Length(A);
-  if LCap >= AMin then Exit;
-  SetLength(A, CalcGrowCapacity(LCap, AMin));
+  if LCap = 0 then LCap := 16;
+  LNew := LCap;
+  while LNew < AMin do
+    LNew := LNew * 2;
+  SetLength(A, LNew);
 end;
 
 procedure WalkAppend(var A: TWalkArray; var ACount: Integer;
@@ -356,7 +308,7 @@ procedure ZipExtractToDirWithOptions(const AData: TBytes;
 var
   LOpts: TZipReadOptions;
   LR: IZipReader;
-  LI, LDirsCount: Integer;
+  LI, LSep: Integer;
   LE: TZipEntryInfo;
   LFull, LParent, LTarget: string;
   LNs: Int64;
@@ -367,11 +319,9 @@ begin
   LOpts.MaxOutputSize := AOptions.MaxOutputSize;
   LOpts.MaxTotalOutputSize := AOptions.MaxTotalOutputSize;
   LR := NewZipReaderWithOptions(AData, LOpts);
-  EnsureNoSymlinkInPath(ADestDir);
   MkdirAll(ADestDir, PermDirDefault);
   EnsureNoSymlinkInPath(ADestDir);
   SetLength(LDirs, 0);
-  LDirsCount := 0;
   try
   for LI := 0 to LR.EntryCount - 1 do
   begin
@@ -391,21 +341,20 @@ begin
     { 目录条目名可能不带尾随 '/'（依赖外部属性判定的归档） }
     while (LFull <> '') and (LFull[Length(LFull)] = '/') do
       Delete(LFull, Length(LFull), 1);
-    LParent := ParentDirOf(LFull);
-    if LParent <> '' then
+    LSep := Length(LFull);
+    while (LSep > 0) and (LFull[LSep] <> '/') do
+      Dec(LSep);
+    if LSep > 0 then
     begin
+      LParent := Copy(LFull, 1, LSep - 1);
       EnsureNoSymlinkInPath(LParent);
       MkdirAll(LParent, PermDirDefault);
-      EnsureNoSymlinkInPath(LParent);
     end;
     { 仅 unix 归档（高 16 位模式字非零）还原权限；其余保持平台默认。
       权限位 = 模式字低 12 位（含 setuid/sticky）。 }
     LMode := ZipUnixModeOf(LE);
     if LE.IsDirectory then
-    begin
-      MkdirAll(LFull, PermDirDefault);
-      EnsureNoSymlinkInPath(LFull);
-    end
+      MkdirAll(LFull, PermDirDefault)
     else if LE.IsSymlink then
     begin
       { opt-in 保真路径：条目载荷即链接目标文本，二次校验防绝对/..穿越 }
@@ -417,25 +366,17 @@ begin
         raise EParseError.Create('zip extract: refusing unsafe symlink target: ' + LE.Name + ' -> ' + LTarget);
       EnsureNoSymlinkInPath(LParent);
       Symlink(LTarget, LFull);
-      EnsureNoSymlinkInPath(LParent);
     end
     else
-    begin
       WriteFile(LFull, LR.ExtractToBytes(LI), PermDefault);
-      { TOCTOU 加固：落盘后二次校验父路径仍无 symlink 穿透，且落盘结果非 symlink }
-      EnsureNoSymlinkInPath(LParent);
-      if IsSymlink(LFull) then
-        raise EParseError.Create('zip extract: symlink in path after write: ' + LFull);
-    end;
     if not LE.IsSymlink then
     begin
       if LE.IsDirectory then
       begin
-        EnsureDeferredCapacity(LDirs, LDirsCount + 1);
-        LDirs[LDirsCount].FFull := LFull;
-        LDirs[LDirsCount].FMode := LMode;
-        LDirs[LDirsCount].FMtimeNs := LE.ModTimeUnixSec * 1000000000;
-        Inc(LDirsCount);
+        SetLength(LDirs, Length(LDirs) + 1);
+        LDirs[High(LDirs)].FFull := LFull;
+        LDirs[High(LDirs)].FMode := LMode;
+        LDirs[High(LDirs)].FMtimeNs := LE.ModTimeUnixSec * 1000000000;
       end
       else
       begin
@@ -449,9 +390,8 @@ begin
   end;
   finally
     { 收尾逆序定稿目录：先深层后浅层，权限收紧不阻断兄弟/祖先处理；
-      置于 finally 保证异常时已收集的目录仍定稿（非原子语义，见单元头）。
-      LDirs 几何预留，迭代以 LDirsCount 为准，避免 O(n²) 重分配。 }
-    for LI := LDirsCount - 1 downto 0 do
+      置于 finally 保证异常时已收集的目录仍定稿（非原子语义，见单元头）。 }
+    for LI := High(LDirs) downto 0 do
     begin
       if AOptions.RestoreMode and (LDirs[LI].FMode <> 0) then
         try
@@ -483,86 +423,6 @@ procedure ZipExtractToDir(const AData: TBytes; const ADestDir: string;
   const AOptions: TZipExtractOptions);
 begin
   ZipExtractToDirWithOptions(AData, ADestDir, AOptions);
-end;
-
-procedure ZipExtractToDirAtomicWithOptions(const AData: TBytes;
-  const ADestDir: string; const AOptions: TZipExtractOptions);
-var
-  LDestTrim, LParent, LTemp: string;
-begin
-  if ADestDir = '' then
-    raise EArgumentError.Create('zip extract atomic: empty dest dir');
-  LDestTrim := ADestDir;
-  while (LDestTrim <> '') and (LDestTrim[Length(LDestTrim)] = '/') do
-    Delete(LDestTrim, Length(LDestTrim), 1);
-  if LDestTrim = '' then
-    raise EArgumentError.Create('zip extract atomic: empty dest dir');
-  LParent := ParentDirOf(LDestTrim);
-  if LParent = '' then
-    LParent := '.';
-  EnsureNoSymlinkInPath(LParent);
-  if Exists(LDestTrim) then
-    raise EArgumentError.Create('zip extract atomic: destination already exists: ' + LDestTrim);
-  { 同文件系统临时目录：sibling + 16hex 随机，FsTempDir 保证唯一与 32 次重试 }
-  LTemp := TempDir(LParent, '.zip-atomic-');
-  try
-    ZipExtractToDirWithOptions(AData, LTemp, AOptions);
-    EnsureNoSymlinkInPath(LParent);
-    if Exists(LDestTrim) then
-      raise EArgumentError.Create('zip extract atomic: destination appeared during extract: ' + LDestTrim);
-    try
-      Rename(LTemp, LDestTrim);
-      LTemp := '';
-    except
-      on E: Exception do
-      begin
-        if Exists(LDestTrim) then
-          raise;
-        try
-          CopyTree(LTemp, LDestTrim);
-        except
-          on E2: Exception do
-          begin
-            if Exists(LDestTrim) then
-              try
-                RemoveAll(LDestTrim);
-              except
-                on E3: Exception do ;
-              end;
-            raise;
-          end;
-        end;
-        RemoveAll(LTemp);
-        LTemp := '';
-      end;
-    end;
-    if IsSymlink(LDestTrim) then
-      raise EParseError.Create('zip extract atomic: symlink in dest after commit: ' + LDestTrim);
-    EnsureNoSymlinkInPath(LDestTrim);
-  finally
-    if (LTemp <> '') and Exists(LTemp) then
-      try
-        RemoveAll(LTemp);
-      except
-        on E: Exception do ;
-      end;
-  end;
-end;
-
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AMaxOutputSize: SizeUInt);
-var
-  LOpts: TZipExtractOptions;
-begin
-  LOpts := DefaultZipExtractOptions;
-  LOpts.MaxOutputSize := AMaxOutputSize;
-  ZipExtractToDirAtomicWithOptions(AData, ADestDir, LOpts);
-end;
-
-procedure ZipExtractToDirAtomic(const AData: TBytes; const ADestDir: string;
-  const AOptions: TZipExtractOptions);
-begin
-  ZipExtractToDirAtomicWithOptions(AData, ADestDir, AOptions);
 end;
 
 end.

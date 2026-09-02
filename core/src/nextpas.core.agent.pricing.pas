@@ -63,8 +63,6 @@ var
   LPromptCost: Int64;
   LCompletionCost: Int64;
 begin
-  if APromptTokens < 0 then APromptTokens := 0;
-  if ACompletionTokens < 0 then ACompletionTokens := 0;
   LRate := ARateMultiplier;
   if LRate <= 0 then
     LRate := 10000;
@@ -91,14 +89,14 @@ end;
 
 { ── T1.4 ── }
 
-function EstimateCost(APromptTokens, ACompletionTokens: Int64): Int64; inline;
+function EstimateCost(APromptTokens, ACompletionTokens: Int64): Int64;
 begin
   Result := EstimateCost(APromptTokens, ACompletionTokens,
     CDefaultPromptPer1k, CDefaultCompletionPer1k);
 end;
 
 function EstimateCost(APromptTokens, ACompletionTokens: Int64;
-  APromptPer1k, ACompletionPer1k: Int64): Int64; inline;
+  APromptPer1k, ACompletionPer1k: Int64): Int64;
 begin
   if APromptTokens < 0 then
     APromptTokens := 0;
@@ -108,7 +106,7 @@ begin
           + (ACompletionTokens * ACompletionPer1k + 500) div 1000;
 end;
 
-function EstimateCost(const AUsage: TTokenUsage): Int64; inline;
+function EstimateCost(const AUsage: TTokenUsage): Int64;
 begin
   Result := EstimateCost(AUsage, CDefaultPromptPer1k, CDefaultCompletionPer1k);
 end;

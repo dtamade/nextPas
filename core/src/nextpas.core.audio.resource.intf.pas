@@ -5,12 +5,11 @@ unit nextpas.core.audio.resource.intf;
 interface
 
 uses
-  nextpas.core.audio.base,
-  nextpas.core.audio.resource.base;
+  nextpas.core.audio.base;
 
 type
-  TAudioResourceState = nextpas.core.audio.resource.base.TAudioResourceState;
-  TAudioResourceId = nextpas.core.audio.resource.base.TAudioResourceId;
+  TAudioResourceState = (arsLoading, arsReady, arsFailed);
+  TAudioResourceId = Integer;
 
   // Resource manager: async preload file → TAudioBuffer, Bank-friendly, thread-safe.
   // State machine: loading → ready | failed, explicit Release frees entry.

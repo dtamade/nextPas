@@ -6,17 +6,16 @@ interface
 
 uses
   nextpas.core.audio.base,
-  nextpas.core.audio.event.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.spatial.intf;
 
 type
-  TAudioEventId = nextpas.core.audio.event.base.TAudioEventId;
-  TAudioEventInstanceId = nextpas.core.audio.event.base.TAudioEventInstanceId;
-  TAudioEventParamId = nextpas.core.audio.event.base.TAudioEventParamId;
+  TAudioEventId = Integer;
+  TAudioEventInstanceId = Integer;
+  TAudioEventParamId = Integer;
 
 const
-  CAudioMaxEventParams = 8; // = event.base.CAudioMaxEventParams keep literal for FPC const expr, base←intf via uses
+  CAudioMaxEventParams = 8;
 
 type
   TAudioEventDesc = record
