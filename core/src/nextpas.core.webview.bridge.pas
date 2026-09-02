@@ -48,19 +48,26 @@ const
   NPW_MAX_FRAME_BYTES = WEBVIEW_MAX_FRAME_BYTES;
 
 type
-  { js→native invoke 帧（§3.1）。payload 以规范化重序列化文本携带；
-    缺省或显式 null 统一为 'null'。 }
+  { js→native invoke 帧（§3.1）。payload 以零拷贝视图携带；
+    缺省或显式 null 统一为 'null' 视图（零堆分配，Hot Path 零 ToString）。 }
   TWebviewFrame = record
     Id: Int64;
     Cmd: string;
-    PayloadJson: string;
+    Payload: TStringView;
+    { 兼容：历史 PayloadJson 字符串形态按需 ToString，热路径用 Payload 零拷贝视图直通 }
+    function PayloadJson: string; inline;
   end;
 
-{ 帧超限判定与计数（Owner: webview.metrics，UI 线程亲和）。
-  薄转发收敛至 metrics 单源，零重复阈值/计数定义，inline 零额外调用。 }
+function WebviewFramePayloadJson(const AFrame: TWebviewFrame): string; inline;
+
+{ 帧超限判定与计数（Owner: L2 metrics via webview.metrics thin-forward，UI 线程亲和）。
+  薄转发收敛至 L2 metrics 单源（METRICS_MAX_FRAME_BYTES），零重复阈值/计数定义，inline 零额外调用；
+  解析后规范化膨胀由 IsOversizedExpanded* 覆盖实际内存水位（raw + payload + arena），零拷贝视图。 }
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
-{ 背压计数（Owner: webview.metrics）。 }
+function IsWebviewFrameOversizedExpanded(const AView, APayloadView: TStringView): Boolean; inline;
+function IsWebviewFrameOversizedExpandedLen(const AView: TStringView; const APayloadLen: SizeUInt): Boolean; inline;
+{ 背压计数（Owner: L2 metrics via webview.metrics）。 }
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
 procedure WebviewNoteOversized(ASize: SizeUInt); inline;
@@ -219,6 +226,16 @@ begin
   Result := WebviewMetricsIsOversized(AView);
 end;
 
+function IsWebviewFrameOversizedExpanded(const AView, APayloadView: TStringView): Boolean; inline;
+begin
+  Result := WebviewMetricsIsOversizedExpandedView(AView, APayloadView);
+end;
+
+function IsWebviewFrameOversizedExpandedLen(const AView: TStringView; const APayloadLen: SizeUInt): Boolean; inline;
+begin
+  Result := WebviewMetricsIsOversizedExpanded(AView, APayloadLen);
+end;
+
 function WebviewOversizedCount: UInt64; inline;
 begin
   Result := WebviewMetricsOversizedCount;
@@ -280,19 +297,29 @@ begin
   Result := True;
 end;
 
-function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
+function BridgeNormalizePayload(const APayload: TJsonValue): TStringView; inline;
 var
   LView: TStringView;
 begin
-  { zero-copy RawSlice 单源，缺省/显式 null 统一 'null'，空切片零堆分配回退 'null'，消除 JsonStringify 额外堆分配。 }
+  { perf: pure zero-copy RawSlice 单源，缺省/显式 null 统一 'null' 视图，空切片零堆分配回退 'null'；零 SetString+Move，inline 零拷贝视图，复用 bytes.ops CStrLen/ViewFromPChar 单源思想，消除 JsonStringify/ToString 额外堆分配。 }
   if not APayload.IsValid then
-    Exit('null');
+    Exit(TStringView.Create(PAnsiChar('null'), 4));
   if APayload.IsNull then
-    Exit('null');
+    Exit(TStringView.Create(PAnsiChar('null'), 4));
   LView := APayload.RawSlice;
   if LView.Len > 0 then
-    Exit(LView.ToString);
-  Result := 'null';
+    Exit(LView);
+  Result := TStringView.Create(PAnsiChar('null'), 4);
+end;
+
+function TWebviewFrame.PayloadJson: string; inline;
+begin
+  Result := Payload.ToString;
+end;
+
+function WebviewFramePayloadJson(const AFrame: TWebviewFrame): string; inline;
+begin
+  Result := AFrame.Payload.ToString;
 end;
 
 function TryDecodeFrame(const AView: TStringView;
@@ -312,7 +339,14 @@ begin
     if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
       Exit;
     LPayload := LRoot.Get('payload');
-    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+    { 解析后规范化膨胀：计入 payload 视图 + 节点/arena 水位，单一 Len 水位偏差闭环；
+      零拷贝 RawSlice 视图判定，inline 薄转发，复用 bytes.ops 单源思想 }
+    if WebviewMetricsIsOversizedExpandedView(AView, LPayload.RawSlice) then
+    begin
+      WebviewMetricsNoteOversized(WebviewMetricsExpandedSize(AView, LPayload.RawSlice.Len));
+      Exit(False);
+    end;
+    AFrame.Payload := BridgeNormalizePayload(LPayload);
     Result := True;
   finally
     LDoc.Done;

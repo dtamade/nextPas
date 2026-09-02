@@ -1070,7 +1070,7 @@ begin
   end;
   if not TryDecodeFrame(AFrameJson, LFrame) then
     raise EWebviewBadFrame.Create('malformed invoke frame');
-  DispatchInvoke(LFrame.Id, LFrame.Cmd, LFrame.PayloadJson);
+  DispatchInvoke(LFrame.Id, LFrame.Cmd, LFrame.Payload.ToString);
 end;
 
 function TFakeWebview.OutcomeCount: Integer;

@@ -92,7 +92,7 @@ begin
     raise Exception.Create('setup: decode broken');
   if (GFrame.Id <> 42) or (GFrame.Cmd <> 'demo.sum') then
     raise Exception.Create('setup: decode fields wrong');
-  if Pos('"b":23', GFrame.PayloadJson) = 0 then
+  if Pos('"b":23', GFrame.Payload.ToString) = 0 then
     raise Exception.Create('setup: payload canonicalization broken');
   LScript := BuildResolveScript(7, RESULT_JSON);
   if Pos('__resolve(7,', LScript) = 0 then

@@ -46,6 +46,14 @@ procedure UnloadGtkWebkit;
 { 当前装载快照（不触发装载）。 }
 function GtkLoadInfo: TGtkLoadInfo; inline;
 
+{ GCancellable 能力封装（经 platform.dl 单源，pool 等消费方禁止直探 ffi 变量，inline 薄转发零拷贝） }
+function GtkCancellableHasReset: Boolean; inline;
+function GtkCancellableHasIsCancelled: Boolean; inline;
+procedure GtkCancellableReset(ACancellable: Pointer); inline;
+function GtkCancellableIsCancelled(ACancellable: Pointer): Boolean; inline;
+function GtkCancellableNew: Pointer; inline;
+procedure GtkObjectUnref(AObj: Pointer); inline;
+
 implementation
 
 uses
@@ -298,6 +306,41 @@ begin
   finally
     GGtkLock.Release;
   end;
+end;
+
+function GtkCancellableHasReset: Boolean; inline;
+begin
+  Result := Assigned(G_cancellable_reset);
+end;
+
+function GtkCancellableHasIsCancelled: Boolean; inline;
+begin
+  Result := Assigned(G_cancellable_is_cancelled);
+end;
+
+procedure GtkCancellableReset(ACancellable: Pointer); inline;
+begin
+  if (ACancellable <> nil) and Assigned(G_cancellable_reset) then
+    G_cancellable_reset(ACancellable);
+end;
+
+function GtkCancellableIsCancelled(ACancellable: Pointer): Boolean; inline;
+begin
+  Result := (ACancellable <> nil) and Assigned(G_cancellable_is_cancelled) and (G_cancellable_is_cancelled(ACancellable) <> 0);
+end;
+
+function GtkCancellableNew: Pointer; inline;
+begin
+  if Assigned(G_cancellable_new) then
+    Result := G_cancellable_new()
+  else
+    Result := nil;
+end;
+
+procedure GtkObjectUnref(AObj: Pointer); inline;
+begin
+  if (AObj <> nil) and Assigned(G_object_unref) then
+    G_object_unref(AObj);
 end;
 
 initialization

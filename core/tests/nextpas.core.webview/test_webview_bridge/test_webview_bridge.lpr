@@ -41,24 +41,24 @@ begin
     LFrame), 'full frame decodes');
   CheckEqual(Int64(42), LFrame.Id);
   CheckEqual('ping', LFrame.Cmd);
-  CheckEqual('{"hello":"world"}', LFrame.PayloadJson);
+  CheckEqual('{"hello":"world"}', LFrame.Payload.ToString);
 
-  { payload 缺省 → 'null' }
+  { payload 缺省 → 'null'（零拷贝视图，无 ToString 分配在解码热路径） }
   Check(TryDecodeFrame('{"v":1,"id":1,"cmd":"a"}', LFrame), 'absent payload');
-  CheckEqual('null', LFrame.PayloadJson);
+  CheckEqual('null', LFrame.Payload.ToString);
 
   { payload 显式 null → 'null' }
   Check(TryDecodeFrame('{"v":1,"id":1,"cmd":"a","payload":null}', LFrame),
     'explicit null payload');
-  CheckEqual('null', LFrame.PayloadJson);
+  CheckEqual('null', LFrame.Payload.ToString);
 
   { 标量/数组 payload 规范化保真 }
   Check(TryDecodeFrame('{"v":1,"id":2,"cmd":"a","payload":"txt"}', LFrame),
     'string payload');
-  CheckEqual('"txt"', LFrame.PayloadJson);
+  CheckEqual('"txt"', LFrame.Payload.ToString);
   Check(TryDecodeFrame('{"v":1,"id":3,"cmd":"a","payload":[1, 2, 3]}', LFrame),
     'array payload canonicalized');
-  CheckEqual('[1,2,3]', LFrame.PayloadJson);
+  CheckEqual('[1,2,3]', LFrame.Payload.ToString);
 
   { u53 上边界内可解 }
   Check(TryDecodeFrame('{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID) + ',"cmd":"a"}', LFrame),

@@ -6,7 +6,7 @@ unit nextpas.core.webview.gtk.dispatch;
        - 池化 → nextpas.core.webview.gtk.pool (L1 sync.pool.SyncPoolTryAcquire/Release 单源，bytes.ops VecGrowCapacity/VecGrow 单源 inline 零拷贝)
        - 注册表 → L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝（VecGrowCapacity 0→4→2× / VecRemoveSwap O(1) 零拷贝）
        性能：Slab 复用零每 Post 堆分配，短临界 <1µs，inline 零额外调用，零拷贝闭包 Move，GIdle/GCompletion 双池分离零抢锁
-       稳定性：GCancellable 单拥有 G_object_unref，Pending Done 守卫，Close 时 EWebviewEvalFailed 收尾，destroy-notify 单所有权释放不丢 *}
+       稳定性：GCancellable 单拥有 pool.ReleaseGCancellable/reuse（G_object_unref 单源），Pending Done 守卫，Close 时 EWebviewEvalFailed 收尾，destroy-notify 单所有权释放不丢 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -15,31 +15,17 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.webview.base,
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.webview.gtk.pool;
 
 type
-  PEvalRec = ^TEvalRec;
-  TEvalRec = record
-    Callback: TWebviewEvalCallback;
-    OnError: TWebviewEvalErrorCallback;
-    Done: Boolean;
-    Cancel: Pointer;
-    Owner: Pointer;
-  end;
-  PIdleRec = ^TIdleRec;
-  TIdleRec = record
-    Proc: TWebviewProcRef;
-  end;
-  PCompletionMarshal = ^TCompletionMarshal;
-  TCompletionMarshal = record
-    Win: TObject;
-    FrameId: Int64;
-    Cmd: string;
-    IsError: Boolean;
-    ResultJson: string;
-    Code: string;
-    MsgText: string;
-  end;
+  // 单源别名：复用 nextpas.core.webview.gtk.pool 单源类型，消除 Pointer 硬转类型岛；L1 sync.pool/bytes.ops 单源 inline 零拷贝由 pool 承载，dispatch 仅薄转发（四件套纯度；性能 inline 零额外调用，Slab 零每 Post 堆分配）
+  PEvalRec = nextpas.core.webview.gtk.pool.PEvalRec;
+  TEvalRec = nextpas.core.webview.gtk.pool.TEvalRec;
+  PIdleRec = nextpas.core.webview.gtk.pool.PIdleRec;
+  TIdleRec = nextpas.core.webview.gtk.pool.TIdleRec;
+  PCompletionMarshal = nextpas.core.webview.gtk.pool.PCompletionMarshal;
+  TCompletionMarshal = nextpas.core.webview.gtk.pool.TCompletionMarshal;
 
 function DispatchAcquireIdleRec: PIdleRec; inline;
 procedure DispatchReleaseIdleRec(A: PIdleRec); inline;
@@ -66,29 +52,38 @@ uses
 
 function DispatchAcquireIdleRec: PIdleRec; inline;
 begin
-  Result := PIdleRec(Pointer(nextpas.core.webview.gtk.pool.AcquireIdleRec));
+  // 单源薄转发：直连 pool.AcquireIdleRec 单源 inline 零拷贝，无 Pointer 硬转，Slab 复用零每 Post 堆分配
+  Result := nextpas.core.webview.gtk.pool.AcquireIdleRec;
 end;
 
 procedure DispatchReleaseIdleRec(A: PIdleRec); inline;
 begin
-  nextpas.core.webview.gtk.pool.ReleaseIdleRec(nextpas.core.webview.gtk.pool.PIdleRec(Pointer(A)));
+  // 单源薄转发：直连 pool.ReleaseIdleRec 单源 inline 零拷贝，无 Pointer 硬转，溢出 Dispose 兜底单所有权不丢
+  nextpas.core.webview.gtk.pool.ReleaseIdleRec(A);
 end;
 
 function DispatchAcquireCompletionRec: PCompletionMarshal; inline;
 begin
-  Result := PCompletionMarshal(Pointer(nextpas.core.webview.gtk.pool.AcquireCompletionRec));
+  // 单源薄转发：直连 pool.AcquireCompletionRec 单源 inline 零拷贝，无 Pointer 硬转
+  Result := nextpas.core.webview.gtk.pool.AcquireCompletionRec;
 end;
 
 procedure DispatchReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin
-  nextpas.core.webview.gtk.pool.ReleaseCompletionRec(nextpas.core.webview.gtk.pool.PCompletionMarshal(Pointer(A)));
+  // 单源薄转发：直连 pool.ReleaseCompletionRec 单源 inline 零拷贝，无 Pointer 硬转，溢出 Dispose 兜底不丢
+  nextpas.core.webview.gtk.pool.ReleaseCompletionRec(A);
 end;
 
 procedure DispatchFreeEvalRec(ARec: PEvalRec);
 begin
+  // 稳定性：GCancellable 单拥有经 pool.ReleaseGCancellable 单源释放（reset 或 unref），EvalRec 经 pool.ReleaseEvalRec 回池/Dispose 单所有权不丢；零泄漏
+  if ARec = nil then Exit;
   if ARec^.Cancel <> nil then
-    G_object_unref(ARec^.Cancel);
-  Dispose(ARec);
+  begin
+    nextpas.core.webview.gtk.pool.ReleaseGCancellable(ARec^.Cancel);
+    ARec^.Cancel := nil;
+  end;
+  nextpas.core.webview.gtk.pool.ReleaseEvalRec(ARec);
 end;
 
 procedure DispatchSettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
@@ -147,7 +142,12 @@ var
   LRec: PIdleRec absolute AUserData;
 begin
   try
-    LRec^.Proc();
+    // 零拷贝闭包分发：复用 pool.TIdleRec.Kind 单源（0=ref,1=method,2=proc），inline 零额外调用，短临界 <1µs
+    case LRec^.Kind of
+      1: if Assigned(LRec^.Method) then LRec^.Method();
+      2: if Assigned(LRec^.Plain) then LRec^.Plain();
+      else if Assigned(LRec^.Proc) then LRec^.Proc();
+    end;
   except
     on E: Exception do
     begin

@@ -106,7 +106,7 @@ begin
     Halt(1);
   end;
   if (GFrame.Id <> 42) or (GFrame.Cmd <> 'demo.sum') or
-     (Pos('"b":23', GFrame.PayloadJson) = 0) then
+     (Pos('"b":23', GFrame.Payload.ToString) = 0) then
   begin
     WriteLn('BENCH-ABORT decode fields wrong');
     Halt(1);

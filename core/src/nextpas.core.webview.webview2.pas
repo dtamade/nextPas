@@ -643,7 +643,7 @@ begin
   begin
     LCompletion := TLocalInvokeCompletion.Create(Self, AFrame.Id);
     try
-      LAsync(AFrame.PayloadJson, LCompletion);
+      LAsync(AFrame.Payload.ToString, LCompletion);
     except
       on E: Exception do
         SendReceipt(AFrame.Id, True, '', MapInvokeCodeSafe(E), E.Message);
@@ -652,7 +652,7 @@ begin
   else
   begin
     try
-      LResultJson := LSync(AFrame.PayloadJson);
+      LResultJson := LSync(AFrame.Payload.ToString);
       SendReceipt(AFrame.Id, False, LResultJson, '', '');
     except
       on E: Exception do

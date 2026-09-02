@@ -885,6 +885,7 @@ build/
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
 | `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
 | `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
+| `metrics`    | 通用可观测（`METRICS_MAX_FRAME_BYTES` 阈值 + `MetricsOversizedCount/ExpandedSize` plain UInt64 计数单源，L3 `webview.metrics` thin-forward） |
 | `window`     | 窗口外壳 + surface（nextpas.core.window 家族；首个消费者 webview/gpu/directui/game888；11 后端含 fake；1.0 单源收口含 gtk3 Raw `WindowGtkRaw*` 12项，`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢） |
 
 ### L3: 框架（只依赖 L0-L2）
@@ -903,7 +904,7 @@ build/
 | `ratelimit` | 限流、熔断、重试、降级                                     |
 | `auth`      | JWT/Session/认证/权限                                      |
 | `template`  | 模板引擎                                                   |
-| `metrics`   | 指标采集、Prometheus、健康检查                             |
+| `metrics`   | 指标采集、Prometheus、健康检查（L2 `nextpas.core.metrics` 为阈值/计数通用单源，`webview.metrics` L3 thin-forward 见 `core/docs/webview/CONTRACT.md §1.2`） |
 | `event`     | 进程内事件总线（pub/sub）                                  |
 | `job`       | 异步任务队列（重试、死信、优先级）                         |
 | `webview`   | 桌面应用外壳（WebKitGTK/WebView2/WKWebView 三后端 + 统一 IPC 桥，L3→L2 has-a IWindow；`bytes.ops VecGrowCapacity` 单源 inline 零拷贝，`try-finally` 资源释放不丢，详 `core/docs/webview/CONTRACT.md`） |

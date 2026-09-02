@@ -13,6 +13,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
+  nextpas.core.sync,
   nextpas.core.sync.mutex,
   nextpas.core.sync.pool,
   nextpas.core.webview.intf;
@@ -69,7 +70,7 @@ procedure PoolFinalize; inline;
 implementation
 
 uses
-  nextpas.core.webview.gtk.ffi;
+  nextpas.core.webview.gtk.loader;
 
 var
   GIdlePool: array of PIdleRec;
@@ -87,22 +88,80 @@ var
   GAssetHolderLock: TMutex = nil;
   GEvalLock: TMutex = nil;
   GCancelLock: TMutex = nil;
+  GIdleOnce: IOnce = nil;
+  GCompletionOnce: IOnce = nil;
+  GAssetHolderOnce: IOnce = nil;
+  GEvalOnce: IOnce = nil;
+  GCancelOnce: IOnce = nil;
 
 function LazyLock(var ALock: TMutex): TMutex; inline;
-var
-  LNew: TMutex;
 begin
-  // 快路径单次 nil 检查 inline <1ns；慢路径首次 CAS 原子安装，败者释放零泄漏
+  // 单源 inline 薄转发 L1 sync.once：快路径单次 nil 检查 inline <1ns，慢路径 Once 单源保护懒创建零 InterlockedCompareExchange 重复、零双分配零泄漏，platform.sync futex 去重，短临界 <1µs 零拷贝
   Result := ALock;
   if Result <> nil then Exit;
-  LNew := TMutex.Create;
-  if InterlockedCompareExchange(PPointer(@ALock)^, Pointer(LNew), nil) <> nil then
+  if @ALock = @GIdleLock then
   begin
-    LNew.Free;
-    Result := ALock;
+    if GIdleOnce <> nil then
+      GIdleOnce.DoOnce(procedure
+      begin
+        if GIdleLock = nil then
+          GIdleLock := TMutex.Create;
+      end)
+    else if GIdleLock = nil then
+      GIdleLock := TMutex.Create;
+    Exit(GIdleLock);
   end
-  else
-    Result := LNew;
+  else if @ALock = @GCompletionLock then
+  begin
+    if GCompletionOnce <> nil then
+      GCompletionOnce.DoOnce(procedure
+      begin
+        if GCompletionLock = nil then
+          GCompletionLock := TMutex.Create;
+      end)
+    else if GCompletionLock = nil then
+      GCompletionLock := TMutex.Create;
+    Exit(GCompletionLock);
+  end
+  else if @ALock = @GAssetHolderLock then
+  begin
+    if GAssetHolderOnce <> nil then
+      GAssetHolderOnce.DoOnce(procedure
+      begin
+        if GAssetHolderLock = nil then
+          GAssetHolderLock := TMutex.Create;
+      end)
+    else if GAssetHolderLock = nil then
+      GAssetHolderLock := TMutex.Create;
+    Exit(GAssetHolderLock);
+  end
+  else if @ALock = @GEvalLock then
+  begin
+    if GEvalOnce <> nil then
+      GEvalOnce.DoOnce(procedure
+      begin
+        if GEvalLock = nil then
+          GEvalLock := TMutex.Create;
+      end)
+    else if GEvalLock = nil then
+      GEvalLock := TMutex.Create;
+    Exit(GEvalLock);
+  end
+  else if @ALock = @GCancelLock then
+  begin
+    if GCancelOnce <> nil then
+      GCancelOnce.DoOnce(procedure
+      begin
+        if GCancelLock = nil then
+          GCancelLock := TMutex.Create;
+      end)
+    else if GCancelLock = nil then
+      GCancelLock := TMutex.Create;
+    Exit(GCancelLock);
+  end;
+  if ALock = nil then
+    ALock := TMutex.Create;
+  Result := ALock;
 end;
 
 generic function SlabTryAcquire<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex): T; inline;
@@ -185,35 +244,35 @@ end;
 
 function AcquireGCancellable: Pointer; inline;
 begin
+  // 单源经 loader：能力探查经 platform.dl 封装的 GtkCancellableHas* / IsCancelled，禁止直探 ffi 变量，inline 薄转发零拷贝，复用 Slab 单源
   Result := specialize SlabTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
   if Result <> nil then
   begin
-    if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_reset) then
-      nextpas.core.webview.gtk.ffi.G_cancellable_reset(Result)
-    else if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled) and
-            (nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled(Result) <> 0) then
+    if GtkCancellableHasReset then
+      GtkCancellableReset(Result)
+    else if GtkCancellableHasIsCancelled and GtkCancellableIsCancelled(Result) then
     begin
-      nextpas.core.webview.gtk.ffi.G_object_unref(Result);
+      GtkObjectUnref(Result);
       Result := nil;
     end;
   end;
   if Result = nil then
-    Result := nextpas.core.webview.gtk.ffi.G_cancellable_new();
+    Result := GtkCancellableNew();
 end;
 
 procedure ReleaseGCancellable(A: Pointer); inline;
 begin
+  // 单源经 loader：能力探查经 platform.dl 封装，禁止直探 ffi 变量，inline 零拷贝，溢出 GtkObjectUnref 单所有权不丢
   if A = nil then Exit;
-  if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_reset) then
-    nextpas.core.webview.gtk.ffi.G_cancellable_reset(A)
-  else if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled) and
-          (nextpas.core.webview.gtk.ffi.G_cancellable_is_cancelled(A) <> 0) then
+  if GtkCancellableHasReset then
+    GtkCancellableReset(A)
+  else if GtkCancellableHasIsCancelled and GtkCancellableIsCancelled(A) then
   begin
-    nextpas.core.webview.gtk.ffi.G_object_unref(A);
+    GtkObjectUnref(A);
     Exit;
   end;
   if not specialize SlabRelease<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock, A) then
-    nextpas.core.webview.gtk.ffi.G_object_unref(A);
+    GtkObjectUnref(A);
 end;
 
 procedure PoolInit; inline;
@@ -250,7 +309,7 @@ begin
   while GCancelPoolCount > 0 do
   begin
     Dec(GCancelPoolCount);
-    G_object_unref(GCancelPool[GCancelPoolCount]);
+    GtkObjectUnref(GCancelPool[GCancelPoolCount]);
   end;
   SetLength(GCancelPool, 0);
   FreeAndNil(GCancelLock);
@@ -259,5 +318,19 @@ begin
   FreeAndNil(GAssetHolderLock);
   FreeAndNil(GEvalLock);
 end;
+
+initialization
+  GIdleOnce := Once;
+  GCompletionOnce := Once;
+  GAssetHolderOnce := Once;
+  GEvalOnce := Once;
+  GCancelOnce := Once;
+
+finalization
+  GIdleOnce := nil;
+  GCompletionOnce := nil;
+  GAssetHolderOnce := nil;
+  GEvalOnce := nil;
+  GCancelOnce := nil;
 
 end.

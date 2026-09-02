@@ -6,8 +6,9 @@ unit nextpas.core.webview.factory;
        ResolveDefaultKind 切到平台优先并接入探测。默认 kind 的选择
        是本单元唯一职责，禁止散落到后端单元。
 
-       工厂只管后端注册/探测/选择与创建分发；Builder 已抽至
-       nextpas.core.webview.builder 单元，职责分离，高级感简洁。 *}
+       工厂只管后端创建分发；探测已抽至 nextpas.core.webview.registry
+       独立注册模块候选单源（Probe 单表 + 热点快照复用），Builder 已
+       抽至 nextpas.core.webview.builder 单元，职责分离，高级感简洁。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -55,32 +56,23 @@ uses
   nextpas.core.window.factory,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
+  nextpas.core.webview.registry,
   nextpas.core.webview.fake,
-  nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
-  nextpas.core.webview.webview2.loader,
   nextpas.core.webview.webview2,
-  nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
 type
-  TWebviewProbe = function: Boolean;
   TWebviewCreate = function(const AOptions: TWebviewOptions): IWebviewWindow;
   TWebviewCreateOn = function(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow;
-  TWebviewBackendDesc = record
+  TWebviewFactoryDesc = record
     Kind: TWebviewKind;
-    Probe: TWebviewProbe;
     Create: TWebviewCreate;
     CreateOn: TWebviewCreateOn;
   end;
-  PWebviewBackendDesc = ^TWebviewBackendDesc;
+  PWebviewFactoryDesc = ^TWebviewFactoryDesc;
 
-{ ---- 后端注册表：不可变声明式表（唯一真相，零可变全局，零 Once 嵌套） ---- }
-
-function ProbeFake: Boolean; inline;
-begin
-  Result := True;
-end;
+{ ---- 后端创建注册表：不可变声明式表（创建分发唯一真相，探测已抽 registry 候选单源，零耦合） ---- }
 
 function CreateFake(const AOptions: TWebviewOptions): IWebviewWindow; inline;
 begin
@@ -90,12 +82,6 @@ end;
 function CreateFakeOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 begin
   Result := TFakeWebview.CreateOn(AParent, AOptions);
-end;
-
-function ProbeGtk: Boolean;
-var L: TGtkLoadInfo;
-begin
-  Result := TryLoadGtkWebkit(L);
 end;
 
 function CreateGtk(const AOptions: TWebviewOptions): IWebviewWindow; inline;
@@ -111,12 +97,6 @@ begin
     Result := TGtkWebview.CreateOn(AParent, AOptions);
 end;
 
-function ProbeWebView2: Boolean;
-var L: TWebView2LoadInfo;
-begin
-  Result := TryLoadWebView2(L);
-end;
-
 function CreateWebView2(const AOptions: TWebviewOptions): IWebviewWindow; inline;
 begin
   Result := TWebView2Webview.Create(AOptions);
@@ -125,12 +105,6 @@ end;
 function CreateWebView2On(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 begin
   Result := TWebView2Webview.CreateOn(AParent, AOptions);
-end;
-
-function ProbeWk: Boolean;
-var L: TWkLoadInfo;
-begin
-  Result := TryLoadWk(L);
 end;
 
 function CreateWk(const AOptions: TWebviewOptions): IWebviewWindow; inline;
@@ -144,14 +118,14 @@ begin
 end;
 
 const
-  WEBVIEW_BACKENDS: array[0..3] of TWebviewBackendDesc = (
-    (Kind: wvFake; Probe: @ProbeFake; Create: @CreateFake; CreateOn: @CreateFakeOn),
-    (Kind: wvGtk; Probe: @ProbeGtk; Create: @CreateGtk; CreateOn: @CreateGtkOn),
-    (Kind: wvWebview2; Probe: @ProbeWebView2; Create: @CreateWebView2; CreateOn: @CreateWebView2On),
-    (Kind: wvWk; Probe: @ProbeWk; Create: @CreateWk; CreateOn: @CreateWkOn)
+  WEBVIEW_BACKENDS: array[0..3] of TWebviewFactoryDesc = (
+    (Kind: wvFake; Create: @CreateFake; CreateOn: @CreateFakeOn),
+    (Kind: wvGtk; Create: @CreateGtk; CreateOn: @CreateGtkOn),
+    (Kind: wvWebview2; Create: @CreateWebView2; CreateOn: @CreateWebView2On),
+    (Kind: wvWk; Create: @CreateWk; CreateOn: @CreateWkOn)
   );
 
-function FindBackend(AKind: TWebviewKind): PWebviewBackendDesc; inline;
+function FindBackend(AKind: TWebviewKind): PWebviewFactoryDesc; inline;
 var I: Integer;
 begin
   for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
@@ -160,37 +134,16 @@ begin
   Result := nil;
 end;
 
-function RawProbe(AKind: TWebviewKind): Boolean; inline;
-var B: PWebviewBackendDesc;
-begin
-  if AKind = wvFake then Exit(True);
-  B := FindBackend(AKind);
-  if (B = nil) or not Assigned(B^.Probe) then Exit(False);
-  Result := B^.Probe();
-end;
-
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 begin
-  if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
-  if AKind = wvFake then Exit(True);
-  // perf: inline zero-copy table-driven, probe cached at loader (platform.dl double-checked atomic+mutex), no extra Once nesting, L0-L3 single source
-  Result := RawProbe(AKind);
+  // perf: inline 薄转发至 registry 单源快照复用 O(1) 命中零双检锁/零堆分配，未命中单次 RawProbe 落 loader 双检锁幂等缓存，热点路径零重复 TryLoad*，零拷贝
+  Result := nextpas.core.webview.registry.WebviewProbeAvailable(AKind);
 end;
 
 function DefaultWebviewKind: TWebviewKind; inline;
-var
-  I: Integer;
-  LKind: TWebviewKind;
 begin
-  // perf: inline zero-copy table-driven, no Once; loader double-checked lock already caches, zero extra alloc, zero global mutable
-  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
-  begin
-    LKind := WEBVIEW_BACKENDS[I].Kind;
-    if LKind = wvFake then Continue;
-    if WebviewBackendAvailable(LKind) then
-      Exit(LKind);
-  end;
-  Result := wvFake;
+  // perf: inline 薄转发至 registry 快照复用 GDefaultSnapshot 命中零循环零 Probe/零双检锁，零拷贝/零堆分配
+  Result := nextpas.core.webview.registry.WebviewDefaultKind;
 end;
 
 function CreateFakeWebview(
@@ -209,14 +162,15 @@ begin
   Result := TFakeWebview.CreateOn(AParent, AOptions);
 end;
 
-{ 单表分发：新增后端仅需在 WEBVIEW_BACKENDS 登记，零重复 case }
+{ 单表分发：新增后端仅需在 WEBVIEW_BACKENDS 登记，零重复 case；探测走 registry 快照单源 }
 function TryCreateForKind(AKind: TWebviewKind; const AParent: IWindow;
   const AOptions: TWebviewOptions; out AWin: IWebviewWindow): Boolean; inline;
 var
-  B: PWebviewBackendDesc;
+  B: PWebviewFactoryDesc;
 begin
+  if not WebviewBackendAvailable(AKind) then Exit(False);
   B := FindBackend(AKind);
-  if (B = nil) or not Assigned(B^.Probe) or not B^.Probe() then Exit(False);
+  if B = nil then Exit(False);
   if AParent = nil then
   begin
     if not Assigned(B^.Create) then Exit(False);
@@ -253,7 +207,7 @@ end;
 function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 var
-  B: PWebviewBackendDesc;
+  B: PWebviewFactoryDesc;
 begin
   if not WebviewBackendAvailable(AKind) then
     raise EWebviewBackendUnavailable.CreateFmt(
