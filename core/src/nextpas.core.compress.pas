@@ -1,7 +1,7 @@
 unit nextpas.core.compress;
 {**
  * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib。
- * @note Tar 已晋升独立 L2 nextpas.core.tar，兼容薄转发保留于 nextpas.core.compress.tar 经 archive.fs 单缝联邦（deprecated，新增请 uses nextpas.core.tar），本门面不再 re-export Tar 以守 L2→L0-L1 依赖（见 module-registry）。
+ * @note Tar 已晋升独立 L2 nextpas.core.tar，兼容薄转发保留于 nextpas.core.compress.tar 经 nextpas.core.tar 门面单源薄转发（deprecated，新增请直接 uses nextpas.core.tar，待迁移后移除），本门面不再 re-export Tar 以守 L2→L0-L1 依赖（见 module-registry）。
  *}
 
 {$I nextpas.core.settings.inc}

@@ -32,7 +32,7 @@
 
 - **[INV-1]** USTAR 写入：`magic "ustar\0"` @257 + `version "00"` @263 固定，>100 字符名自动 `prefix/name` 分割（最大 `/` 使后缀 ≤100，否则以 `pax` 扩展头 `typeflag 'x'` 承载 `path/linkpath` 记录，长度前缀十进制自洽，读端 `x/g` 与 `GNU L/K` 单点覆盖，消除读写不对称），`linkname>100` 同走 `pax linkpath`，目录补 `/`。
 - **[INV-2]** 数值字段八进制为主，超 `octal capacity` 自动 `base-256`（首字节 `$80` + big-endian），读端双路径兼容。
-- **[INV-3]** 读写对称：读端支持 `GNU L/K` 长名、`pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖，`Next` 对 `H.Name` 自动 `GuardTarNameForRead` 拒绝路径穿越，`ClearGlobalPax` 供调用方显式 fail-closed），pax 记录含长度前缀校验；写端>100 且无 `prefix` 切分或 `linkpath>100` 时自动前置 `pax` `x` 扩展头（`path/linkpath` 单条记录，`common.TarFormatPaxRecord`+`bytes.builder` 单源一次 `ToBytes` Move，`bytes.ops` 单源视图），与读端 `TarParsePaxRecords` 单点互通编解码同源。
+- **[INV-3]** 读写对称：读端支持 `GNU L/K` 长名、`pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖，`Next` 对 `H.Name` 自动 `GuardTarNameForRead` 拒绝路径穿越，`ClearGlobalPax` 供调用方显式 fail-closed），pax 记录含长度前缀 strict 校验（`archive.pax ArchivePaxParseRecords` 零拷贝 PByte 切片，长度缺空格/非数字/越界/缺换行即抛 `EIOError`，禁静默 `Exit(False)` 回退截断名，fail-closed）；写端>100 且无 `prefix` 切分或 `linkpath>100` 时自动前置 `pax` `x` 扩展头（`path/linkpath` 单条记录，`common.TarAppendPaxRecord` builder 零拷贝最优路径单源 `Reserve+AppendBytes` 直写，`TarFormatPaxRecord` 为 `CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 单次 Move 薄包装单源，`bytes.ops` 单源视图），与读端 `TarParsePaxRecords`/`TarParsePaxKVRecords` 单点互通编解码同源；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 供归档族复用 `atime/mtime/ctime/size/uid/gid` 等 pax 扩展键零拷贝迭代。
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//` 空段/`./` 单点段/`..` 段，尾随 `/` 终段空合法；写端 `Validate` 即 `EArgumentError`，读端/落盘前 `EParseError`，`..` 经 `TarExtractToDir` 二次拒绝。
 - **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 跨条目总量在 `common.Guard*` 单点，`Next` 归一真实尺寸后累计，`EntryData`/`OpenEntryStream` 中途同受，超限 `EIOError`。
@@ -43,7 +43,7 @@
 
 | 场景 | 异常 |
 |------|------|
-| 结构损坏（截断、八进制非法、校验和不符、不支持 typeflag、负尺寸、长名过长、孤儿块） | `EIOError('tar: ...')` |
+| 结构损坏（截断、八进制非法、校验和不符、不支持 typeflag、负尺寸、长名过长、孤儿块、pax 长度前缀非法/越界/缺换行） | `EIOError('tar: ...'/'pax: ...')` |
 | 名不安全（写端） | `EArgumentError('tar entry name ...')` |
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
@@ -54,7 +54,7 @@
 
 ## 4. 源契约
 
-生产单元（`src/nextpas.core.tar*.pas`）不得 uses 任何非 `nextpas.*` 单元，经 `test_tar_contract` 门机械执行。门面仅 re-export + inline 委托，无控制流。`nextpas.core.tar.common` 为内部共享内核（`TarPadToBlock`/`GuardTarEntrySize`/`GuardTarTotalSize`/`GuardTarNameForRead` + 校验和单点 `TarComputeChecksumUnsigned`/`TarComputeChecksumSigned`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarFormatPaxRecord`/`TarParsePaxRecords` 编解码同源，零拷贝 PByte 切片、复用 `bytes.ops` 单源视图；薄守卫 `TarPadToBlock`/`TarStoredChecksum`/`TarVerifyBlockChecksum` inline，含 512/变长循环的 `TarComputeChecksum*`/`TarHeaderIsZero*`/`TarParseNumericField`/`TarFormatNumericField`/`TarFormatPaxRecord`/`TarParsePaxRecords` 保持外联以遵 design-conventions 真实循环体禁 inline，避免 I-Cache 复制膨胀），仅供 `tar.reader/writer/fs` 实现内复用，禁止门面（`nextpas.core.tar`）外直接 `uses`；绕过门面直引视为违契，`test_tar_contract` 覆盖该边界。
+生产单元（`src/nextpas.core.tar*.pas`）不得 uses 任何非 `nextpas.*` 单元，经 `test_tar_contract` 门机械执行。门面仅 re-export + inline 委托，无控制流。`nextpas.core.tar.common` 为内部共享内核（`TarPadToBlock`/`GuardTarEntrySize`/`GuardTarTotalSize`/`GuardTarNameForRead` + 校验和单点 `TarComputeChecksumUnsigned`/`TarComputeChecksumSigned`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarFormatPaxRecord`（`CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 单次 Move 薄包装，`TarAppendPaxRecord` 为 `Reserve+AppendBytes` 零拷贝最优路径单源，禁 `SetLength+CopyStringToBuffer` 双复制误用）/`TarParsePaxRecords`/`TarParsePaxKVRecords` 编解码同源，零拷贝 PByte 切片、复用 `bytes.ops` 单源视图，`archive.pax ArchivePaxParseRecords` 为通用 pax-kv 严格校验解析供归档族复用，`pax: ...` 畸形即抛 `EIOError` 禁静默回退；薄守卫 `TarPadToBlock`/`TarStoredChecksum`/`TarVerifyBlockChecksum` inline，含 512/变长循环的 `TarComputeChecksum*`/`TarHeaderIsZero*`/`TarParseNumericField`/`TarFormatNumericField`/`TarAppendPaxRecord`/`TarParsePaxRecords`/`TarParsePaxKVRecords`/`ArchivePaxParseRecords` 保持外联以遵 design-conventions 真实循环体禁 inline，避免 I-Cache 复制膨胀），仅供 `tar.reader/writer/fs` 实现内复用，禁止门面（`nextpas.core.tar`）外直接 `uses`；`nextpas.core.archive.pax` 为通用 pax-kv 解析共享内核（同为内部核例外，四件套外，归档族经 `tar.common → archive.pax` 联邦复用）；绕过门面直引视为违契，`test_tar_contract` 覆盖该边界。
 
 ## 5. 测试入口
 

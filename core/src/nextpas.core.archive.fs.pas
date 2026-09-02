@@ -45,6 +45,10 @@ const
   ArchivePermDefault = PermDefault;
   ArchivePermDirDefault = PermDirDefault;
 
+{ 联邦单缝 bytes.builder 别名：tar.builder 仅经 archive.fs 单源持有 builder/sink，消除 L2 同层双引（bytes.builder + archive.fs）稀释克制感，复用 bytes.builder 几何扩容单源，inline 零拷贝单次 Move（bytes.ops 单源） }
+type
+  IArchiveBuilder = IBytesBuilder;
+
 { IBytesBuilder→IWriter 薄适配：tar.builder/tar.fs/zip.writer 单源复用，复用 bytes.builder 几何扩容单源，inline 单次 Move 零额外拷贝 }
 type
   TArchiveBuilderSink = class(TInterfacedObject, IWriter)
@@ -118,6 +122,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.fs.stream,
   nextpas.core.fs.errors,
@@ -139,14 +144,14 @@ begin
 end;
 
 function ArchiveStrCompare(const A, B: string): Integer; inline;
-var LA, LB: SizeUInt; SA, SB: TByteSpan;
+var LA, LB: SizeUInt; PA, PB: PByte;
 begin
-  // perf: inline + SpanCompare零拷贝（PByte+Len视图，SIMD CompareBytesOrdered单源，无临时串分配）
+  // perf: inline + CompareBytesOrdered零拷贝（PByte+Len视图，复用 bytes.ops 单源 CompareBytesOrdered/SIMD，无 TByteSpan 构造；2000 条目排序万级比较零分配）
   LA := SizeUInt(Length(A));
   LB := SizeUInt(Length(B));
-  if LA = 0 then SA := TByteSpan.Empty else SA := TByteSpan.Create(PByte(@A[1]), LA);
-  if LB = 0 then SB := TByteSpan.Empty else SB := TByteSpan.Create(PByte(@B[1]), LB);
-  Result := SpanCompare(SA, SB);
+  if LA = 0 then PA := nil else PA := PByte(@A[1]);
+  if LB = 0 then PB := nil else PB := PByte(@B[1]);
+  Result := CompareBytesOrdered(PA, PB, LA, LB);
 end;
 
 procedure ArchiveEnsureWalkCapacity(var A: TArchiveWalkArray; AMin: Integer);
@@ -282,6 +287,7 @@ begin
       if LSegLen > 0 then
       begin
         // perf: 复用ArchiveJoinPath单次SetLength+Move（bytes.ops单源思想），消除Copy+拼接O(N²)短生命周期串分配
+        // security: 仅 /tmp 根 symlink 放行（系统 /tmp→/vm/tmp 真实目录），其余 symlink 即 fail-closed 防劫持
         LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
         begin
@@ -325,6 +331,7 @@ begin
       if LSegLen > 0 then
       begin
         // perf: 零拷贝 Len 视图，复用 ArchiveJoinPath 单源，消除外层 Copy(LFull,1,LSep-1) 200 次分配
+        // security: 仅 /tmp 根 symlink 放行，其余即 fail-closed
         LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
         begin
@@ -369,6 +376,7 @@ begin
       Saved := P[I-1];
       P[I-1] := #0;
       try
+        // security: 仅 /tmp 根放行，其余 symlink 即 fail-closed
         if platform_fs_is_symlink(P) then
         begin
           if StrPas(P) <> '/tmp' then
@@ -391,6 +399,7 @@ begin
     Saved := P[LClamped];
     P[LClamped] := #0;
     try
+      // security: 仅 /tmp 根放行
       if platform_fs_is_symlink(P) then
       begin
         if StrPas(P) <> '/tmp' then

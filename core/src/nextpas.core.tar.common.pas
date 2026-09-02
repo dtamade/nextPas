@@ -14,7 +14,9 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.tar.base,
-  nextpas.core.bytes.builder;
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.builder,
+  nextpas.core.archive.pax;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 
@@ -43,11 +45,15 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
-{** 生成 pax 记录；含循环/分配，外联 *}
+{** 生成 pax 记录；含循环/分配，外联 — 单源委托 TarAppendPaxRecord builder 零拷贝路径，禁双复制 SetLength+CopyStringToBuffer 误用；合并双超限单次构建，复用 bytes.builder 几何扩容单源 *}
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 追加 pax 记录至 builder，合并双超限单次构建；外联 *}
+{** 追加 pax 记录至 builder，合并双超限单次构建；外联 — 零拷贝最优路径单源（Reserve+AppendBytes 直写，复用 bytes.ops 单源视图，inline AppendBytes 几何扩容） *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+{** 通用 pax 键值迭代：零拷贝 PByte 切片，供归档族复用；strict length 前缀校验畸形抛 EIOError，外联 *}
+type
+  TTarPaxKVHandler = TArchivePaxKVHandler;
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TTarPaxKVHandler): Boolean;
 
 implementation
 
@@ -288,31 +294,14 @@ end;
 
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 var
-  LLen: Integer;
-  LPos: SizeInt;
-  LBuf: array[0..20] of AnsiChar;
-  LNumLen: Int32;
+  LBuilder: IBytesBuilder;
+  LSpan: TByteSpan;
 begin
-  LLen := TarCalcPaxRecordLen(AKey, AValue);
-  SetLength(Result, LLen);
-  LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
-  CopyMemory(PByte(@LBuf[0]), PByte(PAnsiChar(Result)), SizeUInt(LNumLen));
-  LPos := LNumLen + 1;
-  Result[LPos] := ' ';
-  Inc(LPos);
-  if Length(AKey) > 0 then
-  begin
-    CopyStringToBuffer(AKey, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AKey)));
-    Inc(LPos, Length(AKey));
-  end;
-  Result[LPos] := '=';
-  Inc(LPos);
-  if Length(AValue) > 0 then
-  begin
-    CopyStringToBuffer(AValue, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AValue)));
-    Inc(LPos, Length(AValue));
-  end;
-  Result[LPos] := #10;
+  // 性能：单源委托 TarAppendPaxRecord builder 零拷贝直写路径（Reserve+AppendBytes 几何扩容、单源 CopyMemory），消除 SetLength+多次 CopyStringToBuffer 双复制；单次 SpanToString Move 复用 bytes.ops 单源，薄包装外联禁 inline
+  LBuilder := CreateBytesBuilder(SizeUInt(TarCalcPaxRecordLen(AKey, AValue)));
+  TarAppendPaxRecord(LBuilder, AKey, AValue);
+  LSpan := LBuilder.WrittenSpan;
+  Result := SpanToString(LSpan);
 end;
 
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
@@ -336,87 +325,51 @@ begin
   ABuilder.AppendByte(10);
 end;
 
-{ — pax 解析：零拷贝 PByte 切片 — }
+{ — pax 解析：零拷贝 PByte 切片 — 单源委托 archive.pax 通用解析器，strict 长度前缀校验畸形抛 EIOError，禁静默 Exit 回退截断名 — }
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TTarPaxKVHandler): Boolean;
+begin
+  // 单源：复用 archive.pax ArchivePaxParseRecords 零拷贝切片+ bytes.ops 单源视图；外联禁 inline，strict fail-closed
+  Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
+end;
+
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
-  P, Sp, Eq, RecEnd: SizeInt;
-  LenVal: SizeInt;
-  I: SizeInt;
-  B: Byte;
-  KeySpan, ValSpan: TByteSpan;
-  KeyLen, ValLen: SizeInt;
+  LFound: Boolean;
+  LPathTmp, LLinkTmp: string;
 begin
   APath := '';
   ALinkPath := '';
-  Result := False;
+  LFound := False;
+  LPathTmp := '';
+  LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  P := 0;
-  while P < SizeInt(ALen) do
-  begin
-    Sp := P;
-    while (Sp < SizeInt(ALen)) and (ABase[Sp] <> Ord(' ')) do
-      Inc(Sp);
-    if Sp >= SizeInt(ALen) then
-      Exit;
-    LenVal := 0;
-    for I := P to Sp - 1 do
+  // 通用迭代：零拷贝回调仅命中 path/linkpath 时物化，降 O(n) 分配峰值；其余键经 TarParsePaxKVRecords 暴露给归档族处理 atime/mtime/size 等扩展
+  ArchivePaxParseRecords(ABase, ALen,
+    procedure(const AKey, AValue: TByteSpan)
     begin
-      B := ABase[I];
-      if (B < Ord('0')) or (B > Ord('9')) then
+      if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
       begin
-        LenVal := 0;
-        Break;
-      end;
-      LenVal := LenVal * 10 + (B - Ord('0'));
-      if LenVal > SizeInt(ALen) then
-        Break;
-    end;
-    if LenVal <= 0 then
-      Exit;
-    RecEnd := P + LenVal;
-    if (RecEnd <= P) or (RecEnd > SizeInt(ALen)) then
-      Exit;
-    Eq := Sp + 1;
-    while (Eq < RecEnd) and (ABase[Eq] <> Ord('=')) do
-      Inc(Eq);
-    if Eq >= RecEnd then
-    begin
-      P := RecEnd;
-      Continue;
-    end;
-    KeyLen := Eq - Sp - 1;
-    ValLen := RecEnd - 1 - (Eq + 1);
-    if KeyLen > 0 then
-      KeySpan := TByteSpan.Create(@ABase[Sp + 1], SizeUInt(KeyLen))
-    else
-      KeySpan := TByteSpan.Empty;
-    if ValLen > 0 then
-      ValSpan := TByteSpan.Create(@ABase[Eq + 1], SizeUInt(ValLen))
-    else
-      ValSpan := TByteSpan.Empty;
-    // 零拷贝：SpanEqual 比对 key，仅命中时物化 value，降 O(n) 分配峰值
-    // CONTRACT：仅 path/linkpath 落盘，其余 pax 键静默忽略；扩展解析候选：atime/mtime/ctime/size/uid/gid/charset/comment 等按需接入
-    if (KeyLen = 4) and SpanEqual(KeySpan, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
-    begin
-      if ValLen > 0 then
-        APath := SpanToString(ValSpan)
+        if AValue.Len > 0 then
+          LPathTmp := SpanToString(AValue)
+        else
+          LPathTmp := '';
+        LFound := True;
+      end
+      else if (AKey.Len = 8) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
+      begin
+        if AValue.Len > 0 then
+          LLinkTmp := SpanToString(AValue)
+        else
+          LLinkTmp := '';
+        LFound := True;
+      end
       else
-        APath := '';
-      Result := True;
-    end
-    else if (KeyLen = 8) and SpanEqual(KeySpan, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
-    begin
-      if ValLen > 0 then
-        ALinkPath := SpanToString(ValSpan)
-      else
-        ALinkPath := '';
-      Result := True;
-    end
-    else
-      ; // 扩展候选：其余 pax 键静默忽略，保留零拷贝切片可扩展性
-    P := RecEnd;
-  end;
+        ; // 扩展键由调用方通过 TarParsePaxKVRecords 零拷贝迭代处理，不在此静默忽略外抛
+    end);
+  APath := LPathTmp;
+  ALinkPath := LLinkTmp;
+  Result := LFound;
 end;
 
 end.

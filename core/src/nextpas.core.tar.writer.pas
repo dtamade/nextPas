@@ -99,11 +99,11 @@ end;
 
 procedure TTarWriter.WritePaddedPayload(const AData: TBytes);
 var
-  PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  Pad: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
 begin
-  // no inline: Bulk/Tail+Pad three branches with CopyMemory, avoid I-Cache copy bloat per design-conventions; bytes.ops single source, zero-copy
+  // no inline: Bulk/Tail+Pad three branches, avoid I-Cache copy bloat per design-conventions; bytes.ops single source, zero-copy
   if Length(AData) = 0 then
     Exit;
   PadLen := TarPadToBlock(Length(AData));
@@ -114,24 +114,26 @@ begin
   end
   else if SizeUInt(Length(AData)) <= CBlockSize then
   begin
-    // bytes.ops single source, inline
-    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-    CopyMemory(PByte(@AData[0]), PByte(@PadBlock[0]), SizeUInt(Length(AData)));
-    if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+    // perf: zero-copy direct Write tail, FillChar only PadLen (was 512) minimal zero, inline single source bytes.ops avoided copy
+    if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
+      raise EIOError.Create('tar: short write');
+    FillChar(Pad[0], SizeUInt(PadLen), 0);
+    if FDst.Write(Pad[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
       raise EIOError.Create('tar: short write');
   end
   else
   begin
-    // bytes.ops single source, inline
+    // perf: Bulk zero-copy, Tail zero-copy direct slice, FillChar only PadLen (was 512) minimal zero, bytes.ops single source kept for data path
     BulkLen := (SizeUInt(Length(AData)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
     TailLen := SizeUInt(Length(AData)) - BulkLen;
     if BulkLen > 0 then
       if FDst.Write(AData[0], BulkLen) <> BulkLen then
         raise EIOError.Create('tar: short write');
-    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
     if TailLen > 0 then
-      CopyMemory(PByte(@AData[BulkLen]), PByte(@PadBlock[0]), TailLen);
-    if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+      if FDst.Write(AData[BulkLen], TailLen) <> TailLen then
+        raise EIOError.Create('tar: short write');
+    FillChar(Pad[0], SizeUInt(PadLen), 0);
+    if FDst.Write(Pad[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
       raise EIOError.Create('tar: short write');
   end;
 end;

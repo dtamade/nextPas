@@ -13,7 +13,7 @@ uses
   nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
-  nextpas.core.compress.tar,
+  nextpas.core.tar,
   nextpas.core.compress;
 
 type
