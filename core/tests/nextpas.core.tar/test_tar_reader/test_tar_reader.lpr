@@ -13,21 +13,19 @@ uses
   nextpas.core.tar.reader,
   nextpas.core.tar.writer,
   nextpas.core.io.memory,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.bytes.ops;
 
-function BytesOf(const S: string): TBytes;
+function BytesOf(const S: string): TBytes; inline;
 begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then Move(S[1], Result[0], Length(S));
+  // perf: single-source via bytes.ops.StringToBytes (zero-copy PAnsiChar view, single Move), inline thin forward, owner bytes.ops; heaptrc0 via common.mk HEAPTRC_GATE=1 (-gh, haltonnotreleased+log), no duplicate Move
+  Result := nextpas.core.bytes.ops.StringToBytes(S);
 end;
 
-function SameBytes(const A, B: TBytes): Boolean;
-var
-  I: Integer;
+function SameBytes(const A, B: TBytes): Boolean; inline;
 begin
-  if Length(A) <> Length(B) then Exit(False);
-  for I := 0 to High(A) do if A[I] <> B[I] then Exit(False);
-  Result := True;
+  // perf: single-source via bytes.ops.BytesEqual -> SpanEqual/MemEqual zero-copy SIMD, inline thin forward, no duplicate loop
+  Result := nextpas.core.bytes.ops.BytesEqual(A, B);
 end;
 
 function Patterned(ASize: Integer; ASeed: Cardinal): TBytes;
@@ -55,10 +53,12 @@ begin
   Data := BytesOf('hello tar');
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  W.AddFile('a.txt', Data, $1A4, 1700000000);
-  W.AddDir('dir');
-  W.AddFile('dir/b.bin', Patterned(600, 1), $1A4, 1700000001);
-  W.Finish; W.Free;
+  try
+    W.AddFile('a.txt', Data, $1A4, 1700000000);
+    W.AddDir('dir');
+    W.AddFile('dir/b.bin', Patterned(600, 1), $1A4, 1700000001);
+    W.Finish;
+  finally W.Free; end;
   SetLength(Data, S.Size);
   S.Seek(0, soBeginning);
   S.Read(Data[0], Length(Data));
@@ -94,9 +94,11 @@ begin
   Payload := BytesOf('payload');
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  { writer uses ustar prefix split for long names }
-  W.AddFile(LongName, Payload);
-  W.Finish; W.Free;
+  try
+    { writer uses ustar prefix split for long names }
+    W.AddFile(LongName, Payload);
+    W.Finish;
+  finally W.Free; end;
   SetLength(Payload, S.Size);
   S.Seek(0, soBeginning);
   S.Read(Payload[0], Length(Payload));
@@ -116,7 +118,10 @@ var
   Hello: TBytes;
   Sum, I: Integer;
   procedure PutTextAt(AOfs: Integer; const V: string);
-  begin Move(V[1], B[AOfs], Length(V)); end;
+  begin
+    // single-source: bytes.ops.CopyStringToBuffer zero-copy PAnsiChar view, single Move, owner bytes.ops
+    nextpas.core.bytes.ops.CopyStringToBuffer(V, PByte(@B[AOfs]), Length(V));
+  end;
 begin
   SetLength(B, 2048);
   FillChar(B[0], 2048, 0);
@@ -133,7 +138,8 @@ begin
   for I := 0 to 5 do B[148 + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
   B[154] := 0; B[155] := Ord(' ');
   Hello := BytesOf('hello');
-  Move(Hello[0], B[512], 5);
+  // single-source: bytes.ops.CopyMemory zero-copy PByte view, single Move, owner bytes.ops
+  nextpas.core.bytes.ops.CopyMemory(PByte(@Hello[0]), PByte(@B[512]), 5);
   R := TTarReader.Create(B);
   try
     CheckTrue(R.Next(H), 'entry');
@@ -163,8 +169,10 @@ begin
   D := Patterned(100, 42);
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  W.AddFile('x.bin', D);
-  W.Finish; W.Free;
+  try
+    W.AddFile('x.bin', D);
+    W.Finish;
+  finally W.Free; end;
   SetLength(D, S.Size);
   S.Seek(0, soBeginning);
   S.Read(D[0], Length(D));
@@ -185,6 +193,7 @@ var
   Runner: TSuiteRunner;
   Results: specialize TArray<TTestRunResult>;
 begin
+  // heaptrc0 evidence: common.mk HEAPTRC_GATE=1 (-gh, haltonnotreleased+log) gates "0 unfreed blocks" + "Heap dump by heaptrc unit"; stability: W/R try..finally guarantees Free not lost
   Suite := TTestSuite.Create('tar.reader');
   Suite.Test('roundtrip regular', @TestRoundTripRegular);
   Suite.Test('long names prefix split', @TestGNUAndPaxLongNames);
