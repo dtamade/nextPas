@@ -1,10 +1,7 @@
 unit nextpas.core.respack.writer.layout;
 
-{** @desc respack 布局单源：排序/去重/对齐/槽位/总量计算。
-  由 writer 与 writer.stream 共用，消除双驻留假流式不可复用；
-  零拷贝字节比较单源 respack.base.ResPackCmpPath（→bytes.ops）、
-  排序单源 collections.algorithms、对齐单源 mem.base.AlignUp64；
-  dedup arena 已收敛至 respack.base 共享底座（bytes.ops 单源 TLocalArena 单 slab，消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向）。 }
+{** @desc respack 布局单源：排序/去重/对齐/槽位计算，供 writer/stream 共用。
+  单源于 base/bytes.ops/collections.algorithms/mem.base。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -43,9 +40,7 @@ type
   TResPackDistinct = nextpas.core.respack.base.TResPackDistinct;
   PResPackDistinct = nextpas.core.respack.base.PResPackDistinct;
 
-{ Dedup arena 薄转发至 respack.base 共享底座：单源收敛消除 reader→writer.layout 反向依赖，守 base←impl←facade 单向；
-  BucketCountFor via bytes.ops.BytesNextCapacity inline 零拷贝，ResPackOverlapInit 单 slab TLocalArena 单块 (BucketCount+N)*SizeInt+N*Distinct，try..finally ResPackDedupDone 稳定释放；
-  Init/Overlap 外联守红线2（双循环清零 64K 桶+N 槽 I-Cache 敏感），Done inline 薄转发。 }
+{ Dedup arena 薄转发至 respack.base 共享底座，单源收敛。 }
 procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
 procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt); inline;
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
@@ -68,7 +63,6 @@ var
   PA, PB: PByte;
   LA, LB: SizeUInt;
 begin
-  // perf: inline 零拷贝热路径，复用 ALens 缓存免重复 Length/FromStr 取指针长度；单源 respack.base.ResPackCmpPath→bytes.ops.SpanCompare，零分配消裸指针重复，降 O(n log n) 比较开销
   LA := SizeUInt(ALens[AI]);
   LB := SizeUInt(ALens[AJ]);
   if LA = 0 then PA := nil else PA := PByte(@AEntries[AI].Path[1]);
@@ -94,7 +88,6 @@ var
   LA, LB: SizeUInt;
 begin
   D := POrderSortData(Data);
-  // perf: O(n log n) 热路径零拷贝，复用 Lens 缓存免重复 FromStr/Length，单源 respack.base.ResPackCmpPath→bytes.ops.SpanCompare，inline 零分配消裸指针算术
   LA := SizeUInt(D^.Lens^[A]);
   LB := SizeUInt(D^.Lens^[B]);
   if LA = 0 then PA := nil else PA := PByte(@D^.Entries^[A].Path[1]);
@@ -253,7 +246,6 @@ begin
   Cur := DataStart;
   if AOpts.Deduplicate then
   begin
-    { 单源 DedupInit：单 slab TLocalArena 复用 BucketCountFor+TryMulSizeUInt 预算，零双堆 churn，inline 零拷贝视图，try..finally 稳定释放 (bytes.ops/collections.algorithms/mem.base 单源收敛)。 }
     BucketsHead := nil;
     SlotNext := nil;
     DedupArena := nil;
@@ -269,7 +261,6 @@ begin
           while Probe <> -1 do
           begin
             K := SizeUInt(Probe);
-            { 去重回验：bytes.ops.SpanEqual inline 零拷贝 TByteSpan 视图→MemEqual SIMD 单源，fnv+size 双重预滤后才逐字节比对，O(1) 期望；零堆拷贝，无最坏 O(n) 拷贝开销 }
             if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
               and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
               and ((AEntries[J].DataSize = 0)
