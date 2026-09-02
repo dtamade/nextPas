@@ -107,6 +107,6 @@ libgit2 源码在 `~/projects/libgit2`。
 
 因此两套体系是**互补的加载策略**，职责边界已写入 CONTRACT.md §1.1.2：
 运行时加载系是默认消费路径；静态声明系（本产物）服务完整 ABI 面
-场景。词汇已收敛：权威 20-byte `native.base.TGitOid` 单源，运行时 `git_oid` variant 叠加（`AsNative` 零拷贝，`SizeOf=20`，`Assert` 保证，`inline` 零拷贝 overlay）/静态 `TGitOid` 已单源化为 20-byte `libgit2.base.git_oid` 别名（`TGitOid33` 仅 SHA256 泛型 via `libgit2.base.TGitOid33`，Phase 7 2026-09-02 已清理 33-byte 双轨，`bindings.structs:682` 不再 `deprecated`）+ 20-byte `git_oid/TGitOid20` 同体 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接，Ops 同经 `bytes.ops` 单源（详见 CONTRACT §1.1.2 收敛路线），各自 gate 仍独立但须经单源 Ops。
+场景。词汇已收敛：权威 20-byte `native.base.TGitOid` 单源，运行时 `git_oid` variant 叠加（`AsNative` 零拷贝，`SizeOf=20`，`PACKRECORDS C` 双编译器等价 stub 经 `settings.inc`，`Assert` 保证，`inline` 零拷贝 overlay）/静态 `TGitOid` 已单源化为 20-byte `libgit2.base.git_oid` 别名（33-byte `TGitOid33` 及其 `GitOidCopy20To33/33To20` 桥接已于 Phase7 (2026-09-02) 彻底移除，`grep -R TGitOid33` 零命中，SHA256 泛型候选改经 `bytes.ops` `Len` 参化 `TByteSpan`，`bindings.structs:682` 无 `TGitOid33`）+ 20-byte `git_oid/TGitOid20` 同体，Ops 同经 `bytes.ops` 单源（详见 CONTRACT §1.1.2 收敛路线），各自 gate 仍独立但须经单源 Ops。
 手写 ffi 中的 PChar/cint 词汇已随 Phase 7 收敛（`scripts/git-contract-check.sh` C5 归一 gate，双轨零残留），
-本产物范围仅保留 `PACKRECORDS C` + `Assert(SizeOf=20)` + `inline` 零拷贝桥接（`SpanEqual` 3×QWord/`SpanCopy` 单Move，`bytes.ops` 单源，`try..finally` 资源不丢）。
+本产物范围仅保留 `PACKRECORDS C`（FPC/nextPas 双编译器等价 stub 经 `settings.inc`） + `Assert(SizeOf=20)` + `inline` 零拷贝桥接（`SpanEqual` 3×QWord/`SpanCopy` 单Move，`bytes.ops` 单源，`try..finally` 资源不丢）。

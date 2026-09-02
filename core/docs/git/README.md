@@ -33,7 +33,7 @@ core/src/nextpas.core.git.pas                 ← 聚合门面（re-export base/
 core/src/nextpas.core.git.base.pas            ← TGitStatusEntry / TGitStatusFilter 基础类型
 core/src/nextpas.core.git.intf.pas            ← IGitManager / IGitRepository / IGitCommit 接口
 core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator（静态仅 native.manager，注册注入 libgit2）
-core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，TGitOid33 legacy）
+core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化）
 core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<250 行，仅含 cdecl external ‘c’ 探针 + re-export 5 域分片，零 IFDEF；运行时 libgit2 仍经 binding/platform.dl 候选表 dlopen/dlsym，满足四件套 FFI 仅含 external 约束）
 core/src/nextpas.core.git.libgit2.ffi.types.pas   ← FFI 标量/句柄/OID/枚举域（csize_t/git_oid/branch/object/reference，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.structs.pas ← FFI 记录域（buf/strarray/time/sig/error/config/indexer/diff/blame，<200 行）
@@ -71,7 +71,8 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
   status,ignore,revwalk,commitgraph,reflog,stash,notes,branch,tag,log,describe,diff,blame,
   mergebase,show,shortlog,catfile,lsfiles,cherrypick,revert,archive,submodule,mailmap,
   trailer,attributes,bundle,grep,bisect,worktree,config,pktline,remote,advertise,negotiate,
-  sideband,indexer,fetch,clone,checkout,push,reset,prune,clean,revparse,common,util,wildmatch,manager,repository}.pas
+  sideband,indexer,fetch,clone,checkout,push,reset,prune,clean,revparse,common,util,manager,repository}.pas
+  { `wildmatch` 已收敛至 L1 `nextpas.core.text.wildmatch` 单源 via `bytes.ops`；`git.native.wildmatch` 仅 `deprecated` 残余薄 shim 将移除，`ignore`/`attributes` 已直连 L1 `WildSegment*` inline 零拷贝 }
 ```
 
 四件套范式：`base ← intf ← 实现 ← 门面`；依赖只向下，禁止同层循环。
@@ -80,7 +81,7 @@ core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index
 
 - **Ownership 单一所有者**：`TPackFile.FMapped: IMappedFile` 独占 `PByte+Size` 零拷贝视图，析构释放；`WriteAtomic` 临时句柄 `try..finally`。
 - **Exactly-once 单次交付**：`revwalk`/`zlib`/`status-rename` 均恰一次 `ReadObject+Parse / inflate / 归并`，零重复开销。
-- **单源复用**：`ignore/attributes` 委托 `wildmatch`（`GitWildSegment*`/`GitSegmentsMatch`，inline）；`Adler-32` 委托 `nextpas.core.checksum.adler32`（`ADLER32_INIT/MOD/NMAX` 单源，`PByte+Len` 零拷贝）；`Span/Bytes` 委托 `nextpas.core.bytes.ops`；`zlib` 委托 `nextpas.core.compress`（`CreateDeflateReaderEmbedded`）。禁止手写重复循环。
+- **单源复用**：`ignore`/`attributes` 直连 L1 `text.wildmatch`（`WildSegment*`/`WildSegmentsMatch` inline 零拷贝 via `bytes.ops.GrowArrayCapacity`，无 `git.native.wildmatch` 重复）；`Adler-32` 委托 `nextpas.core.checksum.adler32`（`ADLER32_INIT/MOD/NMAX` 单源，`PByte+Len` 零拷贝）；`Span/Bytes` 委托 `nextpas.core.bytes.ops`；`zlib` 委托 `nextpas.core.compress`（`CreateDeflateReaderEmbedded`）。禁止手写重复循环；残余 `git.native.wildmatch` 仅 `deprecated` 薄 shim 将移除。
 - **性能 inline/零拷贝**：`GitOidIsValidHex/GitOidSame/GitKindFromMode/GitZlibAdler32(PByte)` 等 `inline`；`GitZlibDecompressPtr/Adler32Update(PByte,Len)` 为 `Pointer+Len` 零拷贝，复用 `bytes.ops` 零分配路径。
 - **稳定性**：`EIOError → EGitError` 映射保留 `EGitError` 原样 `raise`；`TPackFile/LoadPacks/Index` 异常 `try..finally` 重抛且不泄漏；`HEAPTRC=haltonnotreleased,log=*.heaptrc` 双 pin 零泄漏（`FPC trunk FlushFunc` 设备语义：`pipe/tty` 逐写刷新，`file` 缓冲丢失，`common.mk:75-78` 双通道）。
 

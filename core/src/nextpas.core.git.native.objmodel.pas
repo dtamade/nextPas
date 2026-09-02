@@ -114,12 +114,14 @@ begin
         Cap := EntryCount + 1;
       SetLength(Result, Cap);
     end;
-    // zero-copy slice via bytes.ops (no intermediate TBytes), inline Slice+Move
+    // perf: zero-copy slice via bytes.ops (no intermediate TBytes), inline Slice+BytesSliceToString (single view + single copy)
     Result[EntryCount].Mode := ParseOctalText(
       BytesSliceToString(AData, SizeUInt(ModeStart), SizeUInt(NameStart - ModeStart - 1)));
     Result[EntryCount].Name :=
       BytesSliceToString(AData, SizeUInt(NameStart), SizeUInt(P - NameStart - 1));
-    Move(AData[P], Result[EntryCount].Oid.Bytes[0], GitOidRawLen);
+    // perf: single source OID copy via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no heap), replaces scattered Move 20B
+    SpanCopy(TByteSpan.Create(@Result[EntryCount].Oid.Bytes[0], GitOidRawLen),
+      TByteSpan.Create(@AData[P], GitOidRawLen));
     Inc(P, GitOidRawLen);
     Inc(EntryCount);
   end;

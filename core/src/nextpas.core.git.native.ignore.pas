@@ -64,7 +64,7 @@ type
 implementation
 
 uses
-  nextpas.core.git.native.wildmatch;
+  nextpas.core.text.wildmatch;
 
 function CountTrailingBackslashesBefore(const AValue: string;
   APos: Integer): Integer; inline;
@@ -83,7 +83,7 @@ var
 begin
   Result := False;
   if AChar = '/' then
-    Exit(GitHasUnescapedSlash(AValue));
+    Exit(HasUnescapedSlash(AValue));
   I := 1;
   while I <= Length(AValue) do
   begin
@@ -118,17 +118,17 @@ begin
     Delete(Result, Length(Result), 1);
 end;
 
-{ single-source delegation: all fnmatch lives in wildmatch }
+{ single-source delegation: all fnmatch lives in L1 text.wildmatch owner (inline, zero-copy range, bytes.ops single source via GrowArrayCapacity) }
 class function TGitIgnoreMatcher.WildSegment(
-  const APattern, AName: string): Boolean;
+  const APattern, AName: string): Boolean; inline;
 begin
-  Result := GitWildSegment(APattern, AName);
+  Result := WildSegment(APattern, AName);
 end;
 
 class function TGitIgnoreMatcher.SegmentsMatch(
-  const APattern, APath: string): Boolean;
+  const APattern, APath: string): Boolean; inline;
 begin
-  Result := GitSegmentsMatch(APattern, APath);
+  Result := WildSegmentsMatch(APattern, APath);
 end;
 
 class procedure TGitIgnoreMatcher.CompileLine(const ALine: string;
@@ -240,7 +240,7 @@ begin
       else
       begin
         BStart := BasenameStart(Sub);
-        if GitWildSegmentRange(FSources[G].Patterns[P].Text, 1,
+        if WildSegmentRange(FSources[G].Patterns[P].Text, 1,
           Length(FSources[G].Patterns[P].Text), Sub, BStart,
           Length(Sub) - BStart + 1) then
           Exit(not FSources[G].Patterns[P].Negated);

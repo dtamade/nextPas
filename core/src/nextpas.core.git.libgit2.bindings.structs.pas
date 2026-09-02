@@ -679,11 +679,8 @@ type
   TGitCert = record
     cert_type: TGitCertT;
   end;
-  // Single source: TGitOid is 20-byte authoritative via libgit2.base.git_oid (variant id/Bytes/AsNative at offset 0, SizeOf=20, PACKRECORDS C, Assert guarantee, inline zero-copy overlay, bytes.ops single source SpanEqual/SpanCopy/IsZeroBytes, ≤80 ns/op)
+  // Single source: TGitOid is 20-byte authoritative via libgit2.base.git_oid (variant id/Bytes/AsNative at offset 0, SizeOf=20, PACKRECORDS C dual stub via settings.inc, Assert guarantee, inline zero-copy overlay, bytes.ops single source SpanEqual/SpanCopy/IsZeroBytes, ≤80 ns/op) — 33-byte TGitOid33 removed Phase7 (2026-09-02), generic SHA256 via bytes.ops len-param TByteSpan
   TGitOid = nextpas.core.git.libgit2.base.git_oid;
-  // Legacy SHA256-ready generic (type+32) retained only via libgit2.base.TGitOid33, bridge via GitOidCopy20To33/33To20 inline SpanCopy zero-copy + FillChar tail zero, no heap, try..finally safe
-  TGitOid33 = nextpas.core.git.libgit2.base.TGitOid33;
-  PGitOid33 = ^TGitOid33;
   TGitOid20 = nextpas.core.git.libgit2.base.git_oid;
   PGitOid20 = ^TGitOid20;
   // Compat alias: cross-track 20-byte authority, zero-cost via variant AsNative overlay + inline SpanCopy, bytes.ops single source

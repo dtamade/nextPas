@@ -1,7 +1,7 @@
 unit nextpas.core.git.libgit2.base;
-{** @desc libgit2 运行时词汇权威：20-byte `TGitOid` 单源 `native.base.TGitOid`，`git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20`，`PACKRECORDS C`，`Assert` 二进制保证），`inline` 零拷贝 overlay（无 `Move`），`TGitOid33` 仅 SHA256-ready 泛型保留（deprecated 桥接专用，单源 20-byte 权威稀释负担）；所有 OID Ops 单源 `bytes.ops`（`SpanEqual`→`MemEqual` 3×QWord/`SpanCopy`→`Move`/`SpanFill`/`IsZeroBytes`），`inline` 热路径 ≤80 ns/op，`try..finally` 资源不丢；静态轨 33-byte 桥接（`GitOidCopy20To33/33To20`）统一复用 `AsNative` 零拷贝 overlay + `SpanFill` 尾零单源，无 `FillChar` 双轨。 *}
+{** @desc libgit2 运行时词汇权威：20-byte `TGitOid` 单源 `native.base.TGitOid`，`git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20`，`PACKRECORDS C` 双编译器等价 stub 经 `settings.inc`，`Assert` 二进制保证），`inline` 零拷贝 overlay（无 `Move`），Phase7 已彻底清理 33-byte `TGitOid33` 双轨（`deprecated` 类型与 `GitOidCopy20To33/33To20/GitOid33Equals` 桥接均移除，单源 20-byte 权威），SHA256 泛型候选经 `bytes.ops` `Len` 参化 `TByteSpan` 非定长结构（见 `TGitOidGeneric` 注释）；所有 OID Ops 单源 `bytes.ops`（`SpanEqual`→`MemEqual` 3×QWord/`SpanCopy`→`Move`/`SpanFill`/`IsZeroBytes`），`inline` 热路径 ≤80 ns/op，`try..finally` 资源不丢。 *}
 {$I nextpas.core.settings.inc}
-{$PACKRECORDS C}
+{$PACKRECORDS C} // dual: FPC C ABI / nextPas C ABI stub via settings.inc (both support PACKRECORDS C; Assert SizeOf=20 guarantees layout)
 
 interface
 
@@ -38,15 +38,13 @@ type
   git_config_iterator = Pointer;
   git_signature = Pointer;
 
-  // Single source alias: TGitOid is native 20-byte (not 33-byte); TGitOid33 legacy SHA256-ready, bridge-only
+  // Single source alias: TGitOid is native 20-byte authoritative; 33-byte TGitOid33 removed Phase7 (2026-09-02), 20-byte single source
   TGitOid = nextpas.core.git.native.base.TGitOid;
   PGitOid = ^TGitOid;
-  // Legacy static-track OID (type prefix + 32 bytes) - SHA256-ready padded, not default TGitOid; retained only for compat via GitOidCopy20To33/33To20 bridge, new code must use 20-byte TGitOid/git_oid authority
-  TGitOid33 = record
-    &type: Byte;
-    id: array[0..31] of Byte;
-  end deprecated 'Use TGitOid (20-byte native.base) - TGitOid33 legacy SHA256-ready, bridge via GitOidCopy20To33/33To20';
-  PGitOid33 = ^TGitOid33 deprecated 'Use PGitOid (20-byte) - PGitOid33 legacy';
+  // Generic OID candidate for future SHA256 (32B): len-param via bytes.ops TByteSpan, not fixed 33-byte struct.
+  // Use TGitOid for SHA1 (20B authority); for SHA256 use TByteSpan.Create(@Buf[0], 32) + SpanEqual/SpanCopy/SpanFill single source.
+  // TGitOid33 bridge removed; generic path is Len-param, zero-copy, inline, no heap, single source bytes.ops.
+
   // Single source: canonical SHA1 OID (20 bytes) via native.base.TGitOid.
   // Variant exposes both C `id` and Pascal `Bytes` zero-cost overlay; binary-identical, no branch.
   // Binary guarantee: AsNative overlay ensures SizeOf(git_oid)=SizeOf(TGitOid)=GitOidRawLen (20), zero-copy via bytes.ops
@@ -61,9 +59,6 @@ type
   TGitOid20 = git_oid;
   PGitOid20 = ^TGitOid20;
 
-function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
-procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
-procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
 function GitOidToNative(const A: git_oid): TGitOid; inline;
 function NativeToGitOid(const A: TGitOid): git_oid; inline;
 function GitOidSameNative(const A, B: TGitOid): Boolean; inline;
@@ -82,26 +77,6 @@ type
   end;
 
 implementation
-
-function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
-begin
-  // perf: inline + zero-copy SpanEqual via bytes.ops single source (32 bytes -> 4×QWord MemEqual), no heap, reuse 20-byte authoritative GitOidSame/SpanEqual path
-  Result := (A.&type = B.&type) and SpanEqual(TByteSpan.Create(@A.id[0], GIT_OID_MAX_SIZE), TByteSpan.Create(@B.id[0], GIT_OID_MAX_SIZE));
-end;
-
-procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;
-begin
-  Dst.&type := 1; // GIT_OID_SHA1
-  // perf: inline + zero-copy variant overlay AsNative (single source TGitOid 20B, no Move) + SpanFill tail zero via bytes.ops single source, unified with GitOidToNative/NativeToGitOid overlay, no FillChar dual-track, no heap
-  PGitOid(@Dst.id[0])^ := Src.AsNative;
-  SpanFill(TByteSpan.Create(@Dst.id[GIT_OID_RAWSZ], GIT_OID_MAX_SIZE - GIT_OID_RAWSZ), 0);
-end;
-
-procedure GitOidCopy33To20(out Dst: git_oid; const Src: TGitOid33); inline;
-begin
-  // perf: inline + zero-copy variant overlay AsNative (single source TGitOid 20B, no Move), unified with GitOidToNative/NativeToGitOid overlay path, no SpanCopy dual-track, no heap
-  Dst.AsNative := PGitOid(@Src.id[0])^;
-end;
 
 function GitOidToNative(const A: git_oid): TGitOid; inline;
 begin

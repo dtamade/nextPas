@@ -27,7 +27,7 @@ text.grapheme      ← Grapheme 宽度门面（边界委托 unicode.segment）
 text.width         ← 显示宽度计算（EastAsianWidth）
 text.number        ← 高性能数字→字符串（Ryu 算法）
 text.scan          ← 字符串扫描/解析
-text.wildmatch     ← 通配引擎 owner（`* ? ** []` 含转义/字符类，零 SysUtils，bytes.ops 单源，inline 零拷贝，git/fs/http/tui 共用；原 git.native.wildmatch 已薄委派）
+text.wildmatch     ← 通配引擎 owner（`* ? ** []` 含转义/字符类，零 SysUtils，bytes.ops 单源，inline 零拷贝，git/fs/http/tui 共用；原 `git.native.wildmatch` 薄 shim 已 `deprecated` 将移除，新代码直连本 owner）
 text.unicode       ← Unicode 门面（属性/case/normalize/segment/collate…）
   ├── types / base / utils
   ├── props          ← GC / BinaryProperty / GCB / InCB
@@ -161,3 +161,4 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 | 2026-07-01 | 1.0 | 初始版本 |
 | 2026-08-31 | 1.5 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
 | 2026-09-02 | 1.6 | wildmatch 下沉：`text.wildmatch` 为 L1 通配 owner（`* ? ** []` 单源，bytes.ops + inline 零拷贝），`git.native.wildmatch` 薄委派 |
+| 2026-09-02 | 1.6.1 | wildmatch 收敛：`git.native.wildmatch` 残余薄 shim 已 `deprecated` 将移除，`git.native.ignore/attributes` 直连 `text.wildmatch` 单源（inline 零拷贝 via `bytes.ops`），文档与 bench 已同步 |

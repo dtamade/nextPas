@@ -229,6 +229,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.platform.base,
   nextpas.core.platform.dl,
   nextpas.core.platform.env,
   nextpas.core.bytes.ops,
@@ -236,11 +237,8 @@ uses
 
 function LibLoaded(const ALib: TPlatformLibrary): Boolean; inline;
 begin
-  {$IFDEF NEXTPAS_WINDOWS}
-  Result := ALib.Handle <> 0;
-  {$ELSE}
-  Result := ALib.Handle <> nil;
-  {$ENDIF}
+  // platform unified: TPlatformLibrary.IsValid abstracts Handle 0/nil, zero IFDEF
+  Result := ALib.IsValid;
 end;
 
 function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer; inline;
@@ -749,21 +747,27 @@ end;
 
 function TryLoadLibGit2FromCandidates: Boolean;
 const
-  {$IFDEF MSWINDOWS}
-  CANDIDATES: array[0..1] of string = ('git2.dll', 'libgit2.dll');
-  {$ELSEIF defined(DARWIN)}
-  CANDIDATES: array[0..2] of string = ('libgit2.1.dylib', 'libgit2.dylib', 'git2');
-  {$ELSE}
-  CANDIDATES: array[0..6] of string = ('libgit2.so', 'libgit2.so.1.9', 'libgit2.so.1.8', 'libgit2.so.1.7', 'libgit2.so.1.6', 'libgit2.so.1.5', 'git2');
-  {$ENDIF}
+  CANDIDATES_WINDOWS: array[0..1] of string = ('git2.dll', 'libgit2.dll');
+  CANDIDATES_DARWIN: array[0..2] of string = ('libgit2.1.dylib', 'libgit2.dylib', 'git2');
+  CANDIDATES_LINUX: array[0..6] of string = ('libgit2.so', 'libgit2.so.1.9', 'libgit2.so.1.8', 'libgit2.so.1.7', 'libgit2.so.1.6', 'libgit2.so.1.5', 'git2');
 var
   I: Integer;
 begin
   Result := False;
-  for I := Low(CANDIDATES) to High(CANDIDATES) do
-  begin
-    if TryLoadLibGit2FromPath(CANDIDATES[I]) then
-      Exit(True);
+  // platform unified: runtime dispatch via CURRENT_OS (L0 base), zero IFDEF in L2, no MSWINDOWS/DARWIN dual-track
+  case CURRENT_OS of
+    osWindows:
+      for I := Low(CANDIDATES_WINDOWS) to High(CANDIDATES_WINDOWS) do
+        if TryLoadLibGit2FromPath(CANDIDATES_WINDOWS[I]) then
+          Exit(True);
+    osMacOS:
+      for I := Low(CANDIDATES_DARWIN) to High(CANDIDATES_DARWIN) do
+        if TryLoadLibGit2FromPath(CANDIDATES_DARWIN[I]) then
+          Exit(True);
+  else
+    for I := Low(CANDIDATES_LINUX) to High(CANDIDATES_LINUX) do
+      if TryLoadLibGit2FromPath(CANDIDATES_LINUX[I]) then
+        Exit(True);
   end;
 end;
 

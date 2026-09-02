@@ -668,8 +668,11 @@ begin
       Common := CommonPrefixLen(PrevPath, AEntries[I].Path);
       WriteOffsetVarint(Result, P, Length(PrevPath) - Common);
       if Common < Length(AEntries[I].Path) then
-        Move(AEntries[I].Path[Common + 1], Result[P],
-          Length(AEntries[I].Path) - Common);
+      begin
+        { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1) }
+        SpanCopy(TByteSpan.Create(PByte(@Result[P]), SizeUInt(Length(AEntries[I].Path) - Common)),
+          TByteSpan.Create(PByte(@AEntries[I].Path[Common + 1]), SizeUInt(Length(AEntries[I].Path) - Common)));
+      end;
       P := P + Length(AEntries[I].Path) - Common;
       Result[P] := 0;
       Inc(P);
@@ -679,7 +682,9 @@ begin
       // name plus padding only — the fixed part is already advanced past
       EntSize := ((EntSize + Length(AEntries[I].Path) + 8) and (not 7))
         - EntSize;
-      Move(AEntries[I].Path[1], Result[P], Length(AEntries[I].Path));
+      { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1) }
+      SpanCopy(TByteSpan.Create(PByte(@Result[P]), SizeUInt(Length(AEntries[I].Path))),
+        TByteSpan.Create(PByte(@AEntries[I].Path[1]), SizeUInt(Length(AEntries[I].Path))));
       // padding bytes are already zeroed by the allocation above
       P := P + EntSize;
     end;

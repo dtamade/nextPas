@@ -33,7 +33,7 @@
 | git.libgit2.bindings.repo | repository 域 |
 | git.libgit2.bindings.diff | tree/diff/patch 域 |
 | git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
-| git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，TGitOid33 仅 legacy，复用 bytes.ops） |
+| git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化，复用 bytes.ops） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |
@@ -91,7 +91,7 @@
 | git.native.bisect | 二分（`bisect` 首坏提交定位，`good..bad` 候选经 `revwalk` topo 排除 + 二分回调，对齐 `git bisect` 线性史） |
 | git.native.common | 共享对象助手（tree 查找/tag 剥离单源，GitFindBlobInTree/GitPeelToTree，零重复，EGitError 语义） |
 | git.native.util | 通用工具单源（Trim/SplitLines/WorktreeDir/FindBlobInTree/PeelToTree，inline/零拷贝，去重 common） |
-| git.native.wildmatch | 薄委派至 L1 `text.wildmatch` 的通配 shim（`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils，ignore/attributes 经 `GitWildSegment*/GitSegmentsMatch` inline 转发至 `text.wildmatch` 单源） |
+| git.native.wildmatch | **已废弃薄 shim**（owner 已收敛至 L1 `text.wildmatch`，`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils；`ignore`/`attributes` 已直连 `text.wildmatch.WildSegment*` inline 零拷贝 via `bytes.ops` 单源，本 shim 仅 `deprecated` 兼容转发、将移除） |
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
@@ -151,11 +151,11 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
   （如绑定生成器、ABI 审计、未来静态链接发行形态）的场景。
 - 选择层默认仍走 libgit2（需显式 `uses nextpas.core.git.libgit2` 注册）：`nextpas.core.git.factory.NewGitManager(gbAuto)` 首版等价 `gbLibGit2`（已注册时），未注册时 fail-closed；`uses nextpas.core.git; NewGitManager;` 未注册时亦三零（门面 impl 零 libgit2，base←intf←factory←facade）；纯路径 `gbNative`/`NewNativeGitManager` 或直连 `native.manager` 无需注册（见 PURE-BACKEND.md §2-§3）。
 - 词汇收敛（单源 `native.base.TGitOid` 20-byte 为权威，`bytes.ops` 单源 `SpanEqual/SpanCopy/IsZeroBytes/SpanFill`，`inline` 零拷贝 `Move`/`MemEqual`/`MemSet` 3×QWord，§7 `Oid/Same:inline` ≤80 ns/op, `Oid/IsValidHex|FromHex|ToHex` ≤150 ns/op not inline per red line 2）：
-  运行时 `git_oid` 为 `libgit2.base.git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20=GitOidRawLen`，`Assert` 二进制保证，`GitOidToNative/NativeToGitOid` `inline` 零拷贝 overlay 无 `Move`，Pascal 别名 `TGitOid/TGitOid20` 同体）；
-  静态 `TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（`SizeOf=20`，`PACKRECORDS C`，`Assert` 同源，`inline` 零拷贝 `SpanEqual` 3×QWord / `SpanCopy` 单 `Move` 无堆，`try..finally` 资源不丢），`TGitOid33` 仅 SHA256-ready 泛型 via `libgit2.base.TGitOid33` 保留，SHA1 20-byte 路径经 `libgit2.base.git_oid / TGitOid / TGitOid20 / PGitOid` 同体 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接（`FillChar` 尾零）互转零堆；新模块一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn，Phase 7 2026-09-02 已收敛清理静态 33-byte 双轨）；
+  运行时 `git_oid` 为 `libgit2.base.git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20=GitOidRawLen`，`PACKRECORDS C` 双编译器等价 stub 经 `settings.inc`，`Assert` 二进制保证，`GitOidToNative/NativeToGitOid` `inline` 零拷贝 overlay 无 `Move`，Pascal 别名 `TGitOid/TGitOid20` 同体）；
+  静态 `TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（`SizeOf=20`，`PACKRECORDS C` 双编译器 stub，`Assert` 同源，`inline` 零拷贝 `SpanEqual` 3×QWord / `SpanCopy` 单 `Move` 无堆，`try..finally` 资源不丢），33-byte `TGitOid33` 及其 `GitOidCopy20To33/33To20/GitOid33Equals` 桥接已于 Phase7 (2026-09-02) 彻底移除（`grep -R TGitOid33` 零命中），SHA256 泛型候选改经 `bytes.ops` `Len` 参化 `TByteSpan`（`SpanEqual/Create(@Buf,32)`）非定长结构，不再占用单源；新模块一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn，Phase 7 已清理静态 33-byte 双轨，`bindings.structs:685` 不再 `TGitOid33`）；
   Ops 单源收敛：`libgit2.base.GitOidEquals/IsZero/Copy` 与 `bindings.oid.BindingsGitOidEquals/Copy` 同经 `bytes.ops`（`SpanEqual`→`MemEqual`、`SpanCopy`→`Move`，`GIT_OID_RAWSZ` 单源，`inline` ≤80 ns/op），`helper Equals/IsZero/Assign` 亦同源，消除分散 `Move/CompareMem` 双轨；
-  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7（2026-09-02）已完成静态 33-byte `TGitOid` 双轨清理与历史 `PChar/cint` 词汇收敛（`grep -R TGitOid.*33-byte` 零命中 + `scripts/git-contract-check.sh` C5 归一 gate），期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
-  稳定性：`PACKRECORDS C` + `Assert(SizeOf=20)` 失败即停，句柄 `Pointer` 缝隙零成本，`try..finally` 资源不丢，`heaptrc` 双 pin 零泄漏门禁同 §6。
+  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7（2026-09-02）已完成静态 33-byte `TGitOid33` 双轨彻底清理与历史 `PChar/cint` 词汇收敛（`grep -R TGitOid33` 零命中 + `scripts/git-contract-check.sh` C5 归一 gate），期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
+  稳定性：`PACKRECORDS C`（FPC/nextPas 双编译器等价 stub 经 `settings.inc`） + `Assert(SizeOf=20)` 失败即停，句柄 `Pointer` 缝隙零成本，`try..finally` 资源不丢，`heaptrc` 双 pin 零泄漏门禁同 §6。
 - 再生成与坑清单见 `bindings-pitfalls.md`。
 
 ### 1.1.3 按不变量域独立合约拆分（2026-09-02 起）

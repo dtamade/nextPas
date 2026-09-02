@@ -49,15 +49,15 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.wildmatch,
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.git.native.wildmatch,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.util;
 
-{ single-source pattern matching: delegates to wildmatch, zero-copy basename }
+{ single-source pattern matching: delegates to L1 text.wildmatch owner, zero-copy basename, inline hot path via bytes.ops, no SysUtils }
 function AttrPatternMatches(const APattern, APath: string): Boolean; inline;
 var
   Pat: string;
@@ -65,7 +65,7 @@ var
   BStart: Integer;
 begin
   if APattern='' then Exit(False);
-  HasSlash:= GitHasUnescapedSlash(APattern);
+  HasSlash:= HasUnescapedSlash(APattern);
   Pat:= APattern;
   if (Length(Pat)>0) and (Pat[1]='/') then
     Delete(Pat,1,1);
@@ -74,10 +74,10 @@ begin
     BStart:= Length(APath);
     while (BStart>0) and (APath[BStart]<>'/') do Dec(BStart);
     Inc(BStart);
-    Result:= GitWildSegmentRange(Pat,1,Length(Pat), APath,BStart,Length(APath)-BStart+1);
+    Result:= WildSegmentRange(Pat,1,Length(Pat), APath,BStart,Length(APath)-BStart+1);
   end
   else
-    Result:= GitSegmentsMatch(Pat, APath);
+    Result:= WildSegmentsMatch(Pat, APath);
 end;
 
 function SplitWs(const S: string): TStringArray; inline;

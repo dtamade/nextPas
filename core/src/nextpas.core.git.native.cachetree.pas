@@ -139,7 +139,8 @@ begin
   Need(AData, APos, 1);
   SetLength(ATree.Name, APos - NameStart);
   if APos > NameStart then
-    Move(AData[NameStart], ATree.Name[1], APos - NameStart);
+    SpanCopy(TByteSpan.Create(PByte(@ATree.Name[1]), SizeUInt(APos - NameStart)),
+      TByteSpan.Create(@AData[NameStart], SizeUInt(APos - NameStart))); // perf: inline single Move via bytes.ops SpanCopy (zero-copy TByteSpan view), single source replaces bare Move
   Inc(APos); // the NUL terminator
   ATree.EntryCount := ParseCount(AData, APos, Ord(' '), 'entry count');
   SubtreeNr := ParseCount(AData, APos, 10, 'subtree count');
@@ -148,7 +149,8 @@ begin
   if ATree.EntryCount >= 0 then
   begin
     Need(AData, APos, GitOidRawLen);
-    Move(AData[APos], ATree.Oid.Bytes[0], GitOidRawLen);
+    SpanCopy(TByteSpan.Create(@ATree.Oid.Bytes[0], GitOidRawLen),
+      TByteSpan.Create(@AData[APos], GitOidRawLen)); // perf: inline single Move via bytes.ops SpanCopy (zero-copy TByteSpan, 20B), single source replaces bare Move
     Inc(APos, GitOidRawLen);
   end;
   SetLength(ATree.Children, SubtreeNr);
@@ -185,15 +187,20 @@ var
   I: SizeInt;
 begin
   Head := AsciiPart(ATree.Name + #0);
-  Move(Head[0], ABuf[APos], Length(Head));
+  if Length(Head) > 0 then
+    SpanCopy(TByteSpan.Create(@ABuf[APos], SizeUInt(Length(Head))),
+      TByteSpan.Create(@Head[0], SizeUInt(Length(Head)))); // perf: inline single Move via bytes.ops SpanCopy (zero-copy TByteSpan), single source replaces bare Move
   Inc(APos, Length(Head));
   Head := AsciiPart(DecimalText(ATree.EntryCount) + ' '
     + DecimalText(Length(ATree.Children)) + #10);
-  Move(Head[0], ABuf[APos], Length(Head));
+  if Length(Head) > 0 then
+    SpanCopy(TByteSpan.Create(@ABuf[APos], SizeUInt(Length(Head))),
+      TByteSpan.Create(@Head[0], SizeUInt(Length(Head)))); // perf: inline single Move via bytes.ops SpanCopy (zero-copy TByteSpan), single source replaces bare Move
   Inc(APos, Length(Head));
   if ATree.EntryCount >= 0 then
   begin
-    Move(ATree.Oid.Bytes[0], ABuf[APos], GitOidRawLen);
+    SpanCopy(TByteSpan.Create(@ABuf[APos], GitOidRawLen),
+      TByteSpan.Create(@ATree.Oid.Bytes[0], GitOidRawLen)); // perf: inline single Move via bytes.ops SpanCopy (zero-copy TByteSpan, 20B), single source replaces bare Move
     Inc(APos, GitOidRawLen);
   end;
   for I := 0 to High(ATree.Children) do
