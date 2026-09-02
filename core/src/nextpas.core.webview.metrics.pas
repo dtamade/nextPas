@@ -10,10 +10,22 @@ unit nextpas.core.webview.metrics;
 
 interface
 
+uses
+  nextpas.core.text.view;
+
+const
+  { 帧长上限：BRIDGE_PROTOCOL §6 业务建议 1 MiB Hard Limit，统一命名常量。
+    单源契约：复用 bytes.ops 单源思想，常量即契约，避免魔法数字漂移；与文档 §6 一致。
+    Owner 收敛：由 metrics 单源承载，bridge 仅复用本常量，零双处定义漂移。 }
+  WEBVIEW_MAX_FRAME_BYTES = 1 * 1024 * 1024;
+
 { 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；L3 metrics Owner 单源承载，复用 bench/log 可观测 Owner 候选） }
 function WebviewMetricsOversizedCount: UInt64; inline;
 procedure WebviewMetricsResetOversizedCount; inline;
 procedure WebviewMetricsNoteOversized({%H-}ASize: SizeUInt); inline;
+{ 帧超限判定单源（Owner: metrics）：复用 bytes.ops 零拷贝视图思想，inline 薄转发零额外调用 }
+function WebviewMetricsIsOversized(const AView: TStringView): Boolean; inline;
+function WebviewMetricsIsOversizedStr(const AFrameJson: string): Boolean; inline;
 
 implementation
 
@@ -33,6 +45,16 @@ end;
 procedure WebviewMetricsNoteOversized({%H-}ASize: SizeUInt); inline;
 begin
   Inc(GWebviewOversizedFrames);
+end;
+
+function WebviewMetricsIsOversized(const AView: TStringView): Boolean; inline;
+begin
+  Result := AView.Len > SizeUInt(WEBVIEW_MAX_FRAME_BYTES);
+end;
+
+function WebviewMetricsIsOversizedStr(const AFrameJson: string): Boolean; inline;
+begin
+  Result := SizeUInt(Length(AFrameJson)) > SizeUInt(WEBVIEW_MAX_FRAME_BYTES);
 end;
 
 end.

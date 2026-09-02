@@ -89,11 +89,20 @@ var
   GCancelLock: TMutex = nil;
 
 function LazyLock(var ALock: TMutex): TMutex; inline;
+var
+  LNew: TMutex;
 begin
-  // 冷启动零常驻：PoolInit 不创建，首次 Acquire/Release 按需懒创建，低频进程 5 堆分配归零；热路径单次 nil 检查 inline 零额外调用 <1ns
-  if ALock = nil then
-    ALock := TMutex.Create;
+  // 快路径单次 nil 检查 inline <1ns；慢路径首次 CAS 原子安装，败者释放零泄漏
   Result := ALock;
+  if Result <> nil then Exit;
+  LNew := TMutex.Create;
+  if InterlockedCompareExchange(PPointer(@ALock)^, Pointer(LNew), nil) <> nil then
+  begin
+    LNew.Free;
+    Result := ALock;
+  end
+  else
+    Result := LNew;
 end;
 
 generic function SlabTryAcquire<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex): T; inline;

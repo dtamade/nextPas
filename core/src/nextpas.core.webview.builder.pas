@@ -69,14 +69,21 @@ type
     IsAsync: Boolean;
   end;
 
+  {** 三组 LiveRegistry 单记录聚合：样板归一，流畅高级感；复用 bytes.ops VecGrow 0→4→2×/Snapshot 单源 inline 零拷贝，Clear 逐槽 Default(T) 释放不丢。 *}
+  TBuilderLive = record
+    Invokes: specialize TWebviewLiveRegistry<TFakeInvokeReg>;
+    Ready: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
+    InitScripts: specialize TWebviewLiveRegistry<string>;
+    procedure Init; inline;
+    procedure Done; inline;
+  end;
+
   TBuilderImpl = class(TInterfacedObject, IWebviewBuilder)
   private
     FOptions: TWebviewOptions;
     FKind: TWebviewKind;
     FParent: IWindow;
-    FInvokes: specialize TWebviewLiveRegistry<TFakeInvokeReg>;
-    FReady: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>;
-    FInitScripts: specialize TWebviewLiveRegistry<string>;
+    FLive: TBuilderLive;
     function ApplyTo(AWin: IWebviewWindow): IWebviewWindow;
   public
     constructor Create;
@@ -112,23 +119,36 @@ begin
   Result := TBuilderImpl.Create;
 end;
 
+procedure TBuilderLive.Init; inline;
+begin
+  // perf: 三组 Vec 单记录聚合单点成型，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用，零 HashSet 额外分配，单源薄转零拷贝
+  Invokes := specialize TWebviewLiveRegistry<TFakeInvokeReg>.Create;
+  Ready := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
+  InitScripts := specialize TWebviewLiveRegistry<string>.Create;
+end;
+
+procedure TBuilderLive.Done; inline;
+begin
+  // stability: 单记录聚合单点释放：Clear->Default(T) 逐槽 nil 释放串/接口并 SetLength 0，资源释放不丢；逆序 Free 单源释放不丢，无 HashSet 二重状态
+  InitScripts.Free;
+  Ready.Free;
+  Invokes.Free;
+  Invokes := nil;
+  Ready := nil;
+  InitScripts := nil;
+end;
+
 constructor TBuilderImpl.Create;
 begin
   inherited Create;
   FOptions := DefaultWebviewOptions;
   FKind := DefaultWebviewKind;
-  // perf: registry 单源收敛三组 Vec 样板，初始 nil 零分配，Grow 统一经 bytes.ops VecGrow 0→4→2× inline 零额外调用，零 HashSet 额外分配
-  FInvokes := specialize TWebviewLiveRegistry<TFakeInvokeReg>.Create;
-  FReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
-  FInitScripts := specialize TWebviewLiveRegistry<string>.Create;
+  FLive.Init;
 end;
 
 destructor TBuilderImpl.Destroy;
 begin
-  // stability: registry Clear->Default(T) 逐槽 nil 释放串/接口并 SetLength 0，资源释放不丢；无 HashSet 二重状态，单源释放
-  FInitScripts.Free;
-  FReady.Free;
-  FInvokes.Free;
+  FLive.Done;
   inherited;
 end;
 
@@ -218,8 +238,8 @@ end;
 function TBuilderImpl.AddInitScript(const AJavascript: string): IWebviewBuilder; inline;
 begin
   CheckWebviewInitScript(AJavascript);
-  // perf: registry Register -> WebviewLiveAdd -> bytes.ops VecGrow 单源 0→4→2× inline 零额外调用，零拷贝
-  FInitScripts.Register(AJavascript);
+  // perf: registry Register -> WebviewLiveAdd -> bytes.ops VecGrow 单源 0→4→2× inline 零额外调用，零拷贝（FLive 单记录聚合单点分发）
+  FLive.InitScripts.Register(AJavascript);
   Result := Self;
 end;
 
@@ -231,12 +251,12 @@ begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('invoke handler must not be nil: %s', [ACmd]);
-  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry (hashmap 单源 O(1) WyHash+0.75)，Builder 仅 Vec 单写零额外 HashSet 分配，ApplyTo 时桥侧抛 EWebviewInvalidState 单源语义；registry VecGrow 0→4→2× inline 零拷贝
+  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry (hashmap 单源 O(1) WyHash+0.75)，Builder 仅 Vec 单写零额外 HashSet 分配，ApplyTo 时桥侧抛 EWebviewInvalidState 单源语义；registry VecGrow 0→4→2× inline 零拷贝（FLive 聚合）
   LReg.Cmd := ACmd;
   LReg.Sync := AHandler;
   LReg.Async := nil;
   LReg.IsAsync := False;
-  FInvokes.Register(LReg);
+  FLive.Invokes.Register(LReg);
   Result := Self;
 end;
 
@@ -248,12 +268,12 @@ begin
   CheckInvokeCmd(ACmd);
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.CreateFmt('async invoke handler must not be nil: %s', [ACmd]);
-  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry 单源，Builder 零 HashSet 额外分配，inline 注册零拷贝
+  // perf: dedup 单源收敛至 bridge.TWebviewInvokeRegistry.AddEntry 单源，Builder 零 HashSet 额外分配，inline 注册零拷贝（FLive 聚合）
   LReg.Cmd := ACmd;
   LReg.Sync := nil;
   LReg.Async := AHandler;
   LReg.IsAsync := True;
-  FInvokes.Register(LReg);
+  FLive.Invokes.Register(LReg);
   Result := Self;
 end;
 
@@ -261,8 +281,8 @@ function TBuilderImpl.OnReady(AHandler: TWebviewNotifyHandler): IWebviewBuilder;
 begin
   if not Assigned(AHandler) then
     raise EWebviewInvalidState.Create('OnReady handler must not be nil');
-  // perf: registry Register 单源 VecGrow inline
-  FReady.Register(AHandler);
+  // perf: registry Register 单源 VecGrow inline（FLive 单记录聚合）
+  FLive.Ready.Register(AHandler);
   Result := Self;
 end;
 
@@ -289,26 +309,26 @@ var
   I: Integer;
   LReg: TFakeInvokeReg;
 begin
-  // perf: registry At inline O(1) 零拷贝 + invoke 单源 Vec 单写；重复校验单源至 bridge hashmap O(1) WyHash+0.75，Builder 零 HashSet 分配，单源语义零掩盖
+  // perf: FLive 单记录聚合：At inline O(1) 零拷贝 + invoke 单源 Vec 单写；重复校验单源至 bridge hashmap O(1) WyHash+0.75，零 HashSet 分配，单源语义零掩盖，聚合分发流畅
   // stability: 失败早抛 EWebviewInvalidState（bridge 单源），已注册项由窗口析构统一释放不丢
-  for I := 0 to FInvokes.Count - 1 do
+  for I := 0 to FLive.Invokes.Count - 1 do
   begin
-    LReg := FInvokes.At(I);
+    LReg := FLive.Invokes.At(I);
     if LReg.IsAsync then
       AWin.Invokes.RegisterAsync(LReg.Cmd, LReg.Async)
     else
       AWin.Invokes.Register(LReg.Cmd, LReg.Sync);
   end;
-  for I := 0 to FReady.Count - 1 do
-    AWin.OnReady(FReady.At(I));
+  for I := 0 to FLive.Ready.Count - 1 do
+    AWin.OnReady(FLive.Ready.At(I));
   Result := AWin;
 end;
 
 function TBuilderImpl.Build: IWebviewWindow;
 begin
-  // perf: registry Snapshot -> bytes.ops VecSnapshot 单源 inline (nil fast path + single SetLength + per-elem copy), 零拷贝单源叙事统一
+  // perf: FLive 聚合 Snapshot -> bytes.ops VecSnapshot 单源 inline (nil fast path + single SetLength + per-elem copy), 零拷贝单源叙事统一
   // perf: 统一路由 DoCreateWebviewRouted 外联（路由/循环体禁 inline），Builder.Parent/CreateWebviewOn 单源收敛零重复分支；Snapshot 经 bytes.ops VecSnapshot 单源零拷贝
-  FInitScripts.Snapshot(FOptions.InitScripts);
+  FLive.InitScripts.Snapshot(FOptions.InitScripts);
   if FParent <> nil then
     Result := ApplyTo(CreateWebviewEx(FParent, FKind, FOptions))
   else

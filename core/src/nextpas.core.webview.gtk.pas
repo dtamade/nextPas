@@ -180,10 +180,21 @@ begin nextpas.core.webview.gtk.pool.ReleaseIdleRec(PIdleRec(AUserData)); end;
 procedure DestroyCb(AWidget: Pointer; AUserData: Pointer); cdecl;
 begin TGtkWebview(AUserData).HandleNativeDestroy; end;
 procedure ScriptMessageCb(AManager, AJsResult, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LView: TStringView; LFrame: TWebviewFrame;
+var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LView: TStringView; LFrame: TWebviewFrame; LReject: string;
 begin
   if LSelf.FClosed then Exit; LVal:=WEBKIT_javascript_result_get_js_value(AJsResult); LRaw:=JSC_value_to_string(LVal); if LRaw=nil then Exit; try
     LView:=TStringView.Create(PAnsiChar(LRaw), CStrLen(PAnsiChar(LRaw)));
+    if TryBuildOversizedReject(LView, LReject) then
+    begin
+      if LReject <> '' then
+      begin
+        if LSelf.FView <> nil then
+        begin
+          if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(LSelf.FView,PAnsiChar(LReject),Length(LReject),nil,nil,nil,nil,nil) else WEBKIT_web_view_run_javascript(LSelf.FView,PAnsiChar(LReject),nil,nil,nil);
+        end;
+      end;
+      Exit;
+    end;
     if TryDecodeFrame(LView, LFrame) then LSelf.DispatchFrame(LFrame);
   finally G_free(LRaw); end;
 end;

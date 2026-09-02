@@ -27,7 +27,8 @@ uses
   nextpas.core.webview.assets,
   nextpas.core.webview.utils,
   nextpas.core.text.view,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap,
+  nextpas.core.webview.metrics;
 
 const
   { 错误码稳定词汇表（BRIDGE_PROTOCOL §5） }
@@ -42,8 +43,9 @@ const
   NPW_MAX_FRAME_ID = 9007199254740991;
 
   { 帧长上限：BRIDGE_PROTOCOL §6 业务建议 1 MiB Hard Limit，统一命名常量。
-    复用 bytes.ops 单源思想：常量即契约，避免魔法数字漂移；与文档 §6 一致。 }
-  NPW_MAX_FRAME_BYTES = 1 * 1024 * 1024;
+    复用 bytes.ops 单源思想：常量即契约；单源收敛至 metrics Owner，
+    bridge 仅为兼容别名，阈值判定以 metrics.WEBVIEW_MAX_FRAME_BYTES 为权威。 }
+  NPW_MAX_FRAME_BYTES = WEBVIEW_MAX_FRAME_BYTES;
 
 type
   { js→native invoke 帧（§3.1）。payload 以规范化重序列化文本携带；
@@ -54,7 +56,8 @@ type
     PayloadJson: string;
   end;
 
-{ 帧超限判定与计数（Owner: webview.metrics，UI 线程亲和）。 }
+{ 帧超限判定与计数（Owner: webview.metrics，UI 线程亲和）。
+  薄转发收敛至 metrics 单源，零重复阈值/计数定义，inline 零额外调用。 }
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
 { 背压计数（Owner: webview.metrics）。 }
@@ -67,6 +70,14 @@ function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
+
+{ 超长帧回执注入：超 1 MiB 时计数并尝试构建 __reject 脚本以避免 JS Promise 悬挂。
+  - 命中阈值时 WebviewMetricsNoteOversized 并尝试从 AView 解析 id；
+  - 若 id 合法则 ARejectScript := BuildRejectScript(id, 'npw.bad_request', 'frame oversized')；
+  - 未超限或无法提取合法 id 时返回 False（调用方静默忽略）。
+  性能：零拷贝视图判定，解析仅超限路径触发，inline 薄转发。 }
+function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: string): Boolean; overload;
+function TryBuildOversizedReject(const AFrameJson: string; out ARejectScript: string): Boolean; overload; inline;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 须为合法 JSON（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，经 json owner 转义。 }
 function BuildResolveScript(AId: Int64; const AResultJson: string): string;
@@ -177,77 +188,35 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.simd.base,
-  nextpas.core.simd.vec,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
-  nextpas.core.webview.utils,
-  nextpas.core.webview.metrics,
-  nextpas.core.platform.thread;
+  nextpas.core.webview.utils;
 
-threadvar
-  GWebviewBridgeDoc: TJsonDocument;
-  GWebviewBridgeDocInited: Boolean;
-  GWebviewBridgeBuilder: TStringBuilder;
-  GWebviewBridgeBuilderInited: Boolean;
-
-var
-  GWebviewBridgeTlsKey: TPlatformTLSKey;
-  GWebviewBridgeTlsKeyInited: Boolean;
-
-{$IFDEF NEXTPAS_WINDOWS}
-procedure WebviewBridgeThreadCleanup(AData: Pointer); stdcall;
-{$ELSE}
-procedure WebviewBridgeThreadCleanup(AData: Pointer); cdecl;
-{$ENDIF}
-begin
-  if GWebviewBridgeDocInited then
-  begin
-    GWebviewBridgeDoc.Done;
-    GWebviewBridgeDocInited := False;
-  end;
-  if GWebviewBridgeBuilderInited then
-  begin
-    GWebviewBridgeBuilder.Done;
-    GWebviewBridgeBuilderInited := False;
-  end;
-end;
-
-function BridgeBuilder: ^TStringBuilder; inline;
-begin
-  if not GWebviewBridgeBuilderInited then
-  begin
-    GWebviewBridgeBuilder.Init(256);
-    GWebviewBridgeBuilderInited := True;
-    if GWebviewBridgeTlsKeyInited then
-      platform_tls_set(GWebviewBridgeTlsKey, Pointer(1));
-  end
-  else
-    GWebviewBridgeBuilder.Clear;
-  Result := @GWebviewBridgeBuilder;
-end;
-
-{ JsStringLit: JSON Str via json owner, threadvar Builder slab reuse, inline zero-copy. }
+{ JsStringLit: JSON Str via json owner, 局部 Builder 零共享，inline 零拷贝。 }
 function JsStringLit(const AValue: string): string; inline;
 var
-  LB: ^TStringBuilder;
+  LB: TStringBuilder;
   W: TJsonWriter;
 begin
-  LB := BridgeBuilder();
-  LB^.Reserve(SizeUInt(Length(AValue)) + 8);
-  W.Init(LB^);
-  W.Str(AValue);
-  Result := LB^.ToString;
+  LB.Init(256);
+  try
+    LB.Reserve(SizeUInt(Length(AValue)) + 8);
+    W.Init(LB);
+    W.Str(AValue);
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 begin
-  Result := IsWebviewFrameOversizedView(TStringView.FromStr(AFrameJson));
+  Result := WebviewMetricsIsOversizedStr(AFrameJson);
 end;
 
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
 begin
-  Result := AView.Len > SizeUInt(NPW_MAX_FRAME_BYTES);
+  Result := WebviewMetricsIsOversized(AView);
 end;
 
 function WebviewOversizedCount: UInt64; inline;
@@ -265,9 +234,7 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{ Slab reuse: threadvar Doc/Builder bounded 1 MiB, bytes.ops single source, indices/overflow sized clear, TStringView zero-copy, inline. }
-
-{ Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
+{ Parse→Validate→Normalize: three-layer split, zero-copy View, 局部 Doc/Builder 零共享，bytes.ops 单源。 }
 
 function BridgeParseFrame(const AView: TStringView; var ADoc: TJsonDocument;
   out ARoot: TJsonValue): Boolean; inline;
@@ -275,9 +242,9 @@ begin
   Result := False;
   if AView.Len = 0 then
     Exit;
-  if IsWebviewFrameOversizedView(AView) then
+  if WebviewMetricsIsOversized(AView) then
   begin
-    WebviewNoteOversized(AView.Len);
+    WebviewMetricsNoteOversized(AView.Len);
     Exit;
   end;
   if not ADoc.Parse(AView) then
@@ -316,38 +283,39 @@ function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
 var
   LView: TStringView;
 begin
-  { zero-copy RawSlice; fallback JsonStringify only when empty. }
+  { zero-copy RawSlice 单源，缺省/显式 null 统一 'null'，空切片零堆分配回退 'null'，消除 JsonStringify 额外堆分配。 }
+  if not APayload.IsValid then
+    Exit('null');
   if APayload.IsNull then
     Exit('null');
   LView := APayload.RawSlice;
   if LView.Len > 0 then
     Exit(LView.ToString);
-  Result := JsonStringify(APayload);
+  Result := 'null';
 end;
 
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
+  LDoc: TJsonDocument;
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { Reuse threadvar Doc slab; Parse reuses cap, sized clear indices/overflow. }
+  { 局部 Doc 生命周期，Parse 复用局部容量，Done 释放不丢，零 threadvar/TLS 混入，协议纯度收敛。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  if not GWebviewBridgeDocInited then
-  begin
-    GWebviewBridgeDoc.Init(nil);
-    GWebviewBridgeDocInited := True;
-    if GWebviewBridgeTlsKeyInited then
-      platform_tls_set(GWebviewBridgeTlsKey, Pointer(1));
+  LDoc.Init(nil);
+  try
+    if not BridgeParseFrame(AView, LDoc, LRoot) then
+      Exit;
+    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+      Exit;
+    LPayload := LRoot.Get('payload');
+    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+    Result := True;
+  finally
+    LDoc.Done;
   end;
-  if not BridgeParseFrame(AView, GWebviewBridgeDoc, LRoot) then
-    Exit;
-  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-    Exit;
-  LPayload := LRoot.Get('payload');
-  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
-  Result := True;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -360,24 +328,67 @@ begin
   Result := TryDecodeFrame(LView, AFrame);
 end;
 
+function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: string): Boolean;
+var
+  LDoc: TJsonDocument;
+  LRoot: TJsonValue;
+  LIdVal: TJsonValue;
+  LId: Int64;
+begin
+  Result := False;
+  ARejectScript := '';
+  if not WebviewMetricsIsOversized(AView) then
+    Exit;
+  WebviewMetricsNoteOversized(AView.Len);
+  LDoc.Init(nil);
+  try
+    if not LDoc.Parse(AView) then
+      Exit(True);
+    if LDoc.HasError then
+      Exit(True);
+    LRoot := TJsonValue.Create(LDoc, LDoc.Root);
+    if not LRoot.IsObject then
+      Exit(True);
+    LIdVal := LRoot.Get('id');
+    if not LIdVal.IsInt then
+      Exit(True);
+    LId := LIdVal.AsInt;
+    if (LId <= 0) or (LId > NPW_MAX_FRAME_ID) then
+      Exit(True);
+    ARejectScript := BuildRejectScript(LId, NPW_CODE_BAD_REQUEST, 'frame oversized');
+    Result := True;
+  finally
+    LDoc.Done;
+  end;
+end;
+
+function TryBuildOversizedReject(const AFrameJson: string; out ARejectScript: string): Boolean; inline;
+begin
+  Result := TryBuildOversizedReject(TStringView.FromStr(AFrameJson), ARejectScript);
+end;
+
 function BuildResolveScript(AId: Int64; const AResultJson: string): string;
 var
   LJson: string;
-  LB: ^TStringBuilder;
+  LB: TStringBuilder;
   W: TJsonWriter;
 begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  LB := BridgeBuilder();
-  LB^.Reserve(SizeUInt(16 + 20 + Length(LJson) + 8));
-  LB^.AppendBytes('__npw.__resolve(', 16);
-  LB^.AppendInt(AId);
-  LB^.AppendChar(',');
-  W.Init(LB^);
-  W.Str(LJson);
-  LB^.AppendChar(')');
-  Result := LB^.ToString;
+  LB.Init(256);
+  try
+    LB.Reserve(SizeUInt(16 + 20 + Length(LJson) + 8));
+    LB.AppendBytes('__npw.__resolve(', 16);
+    LB.AppendInt(AId);
+    LB.AppendChar(',');
+    W.Init(LB);
+    W.Str(LJson);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 { JsonDoubleEscapeToBuilder 薄转发 L1 text.escape Owner 单源（复用 VecWidth SIMD 单源 inline 零拷贝，bytes.ops 单源）；桥侧零重复循环，inline 薄转发零额外调用。 }
@@ -390,46 +401,54 @@ end;
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
-  LB: ^TStringBuilder;
+  LB: TStringBuilder;
   LCodeView, LMsgView: TStringView;
 begin
   LCode := NormalizeInvokeCode(ACode);
   LCodeView := TStringView.FromStr(LCode);
   LMsgView := TStringView.FromStr(AMessage);
-  LB := BridgeBuilder();
-  LB^.Reserve(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
-  LB^.AppendBytes('__npw.__reject(', 15);
-  LB^.AppendInt(AId);
-  LB^.AppendBytes(',"', 2);
-  LB^.AppendBytes('{\"code\":\"', 12);
-  JsonDoubleEscapeToBuilder(LCodeView, LB^);
-  LB^.AppendBytes('\",\"message\":\"', 17);
-  JsonDoubleEscapeToBuilder(LMsgView, LB^);
-  LB^.AppendBytes('\"}"', 4);
-  LB^.AppendChar(')');
-  Result := LB^.ToString;
+  LB.Init(256);
+  try
+    LB.Reserve(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
+    LB.AppendBytes('__npw.__reject(', 15);
+    LB.AppendInt(AId);
+    LB.AppendBytes(',"', 2);
+    LB.AppendBytes('{\"code\":\"', 12);
+    JsonDoubleEscapeToBuilder(LCodeView, LB);
+    LB.AppendBytes('\",\"message\":\"', 17);
+    JsonDoubleEscapeToBuilder(LMsgView, LB);
+    LB.AppendBytes('\"}"', 4);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
-  LB: ^TStringBuilder;
+  LB: TStringBuilder;
   W: TJsonWriter;
 begin
   CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
-  LB := BridgeBuilder();
-  LB^.Reserve(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
-  LB^.AppendBytes('__npw.__emit(', 13);
-  W.Init(LB^);
-  W.Str(AEvent);
-  LB^.AppendChar(',');
-  W.Init(LB^);
-  W.Str(LJson);
-  LB^.AppendChar(')');
-  Result := LB^.ToString;
+  LB.Init(256);
+  try
+    LB.Reserve(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
+    LB.AppendBytes('__npw.__emit(', 13);
+    W.Init(LB);
+    W.Str(AEvent);
+    LB.AppendChar(',');
+    W.Init(LB);
+    W.Str(LJson);
+    LB.AppendChar(')');
+    Result := LB.ToString;
+  finally
+    LB.Done;
+  end;
 end;
 
 function NormalizeInvokeCode(const ACode: string): string; inline;
@@ -621,27 +640,5 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
-
-initialization
-  GWebviewBridgeTlsKeyInited :=
-    platform_tls_create_with_destructor(GWebviewBridgeTlsKey,
-      @WebviewBridgeThreadCleanup) = 0;
-
-finalization
-  if GWebviewBridgeDocInited then
-  begin
-    GWebviewBridgeDoc.Done;
-    GWebviewBridgeDocInited := False;
-  end;
-  if GWebviewBridgeBuilderInited then
-  begin
-    GWebviewBridgeBuilder.Done;
-    GWebviewBridgeBuilderInited := False;
-  end;
-  if GWebviewBridgeTlsKeyInited then
-  begin
-    platform_tls_destroy_dtor(GWebviewBridgeTlsKey);
-    GWebviewBridgeTlsKeyInited := False;
-  end;
 
 end.

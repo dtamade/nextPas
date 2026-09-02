@@ -1034,8 +1034,20 @@ end;
 procedure TFakeWebview.DeliverFrame(const AFrameJson: string);
 var
   LFrame: TWebviewFrame;
+  LReject: string;
 begin
   RequireOpen;
+  if TryBuildOversizedReject(AFrameJson, LReject) then
+  begin
+    if LReject <> '' then
+    begin
+      specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
+      FCapturedEvals[FCapturedCount] := LReject;
+      Inc(FCapturedCount);
+      Exit;
+    end;
+    raise EWebviewBadFrame.Create('malformed invoke frame');
+  end;
   if not TryDecodeFrame(AFrameJson, LFrame) then
     raise EWebviewBadFrame.Create('malformed invoke frame');
   DispatchInvoke(LFrame.Id, LFrame.Cmd, LFrame.PayloadJson);

@@ -40,7 +40,7 @@ function CreateWebviewOf(AKind: TWebviewKind;
 function CreateWebviewOn(const AParent: IWindow;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
-{ 供 Builder 复用的带 Parent+Kind 路由（表驱动单源，含回退）；parent=nil 时等价 CreateWebviewOf }
+{ 供 Builder 复用的带 Parent+Kind 路由（表驱动单源，显式 Kind fail-fast）；parent=nil 时等价 CreateWebviewOf }
 function CreateWebviewEx(const AParent: IWindow; AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
 
@@ -53,7 +53,6 @@ implementation
 uses
   nextpas.core.system.typinfo,
   nextpas.core.window.factory,
-  nextpas.core.sync,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.fake,
@@ -76,14 +75,7 @@ type
   end;
   PWebviewBackendDesc = ^TWebviewBackendDesc;
 
-var
-  GDefaultOnce: IOnce;
-  GDefaultKind: TWebviewKind;
-  GBackendsOnce: IOnce;
-  GAvailOnce: array[TWebviewKind] of IOnce;
-  GAvailYes: array[TWebviewKind] of Boolean;
-
-{ ---- 后端注册表：表驱动唯一真相 ---- }
+{ ---- 后端注册表：不可变声明式表（唯一真相，零可变全局，零 Once 嵌套） ---- }
 
 function ProbeFake: Boolean; inline;
 begin
@@ -151,25 +143,17 @@ begin
   Result := TWkWebview.CreateOn(AParent, AOptions);
 end;
 
-var
-  WEBVIEW_BACKENDS: array[0..3] of TWebviewBackendDesc;
-
-procedure InitBackends; inline;
-begin
-  if GBackendsOnce.Done then Exit;
-  GBackendsOnce.DoOnce(procedure
-  begin
-    WEBVIEW_BACKENDS[0].Kind := wvFake;     WEBVIEW_BACKENDS[0].Probe := @ProbeFake;     WEBVIEW_BACKENDS[0].Create := @CreateFake;     WEBVIEW_BACKENDS[0].CreateOn := @CreateFakeOn;
-    WEBVIEW_BACKENDS[1].Kind := wvGtk;      WEBVIEW_BACKENDS[1].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[1].Create := @CreateGtk;      WEBVIEW_BACKENDS[1].CreateOn := @CreateGtkOn;
-    WEBVIEW_BACKENDS[2].Kind := wvWebview2; WEBVIEW_BACKENDS[2].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[2].Create := @CreateWebView2; WEBVIEW_BACKENDS[2].CreateOn := @CreateWebView2On;
-    WEBVIEW_BACKENDS[3].Kind := wvWk;       WEBVIEW_BACKENDS[3].Probe := @ProbeWk;       WEBVIEW_BACKENDS[3].Create := @CreateWk;       WEBVIEW_BACKENDS[3].CreateOn := @CreateWkOn;
-  end);
-end;
+const
+  WEBVIEW_BACKENDS: array[0..3] of TWebviewBackendDesc = (
+    (Kind: wvFake; Probe: @ProbeFake; Create: @CreateFake; CreateOn: @CreateFakeOn),
+    (Kind: wvGtk; Probe: @ProbeGtk; Create: @CreateGtk; CreateOn: @CreateGtkOn),
+    (Kind: wvWebview2; Probe: @ProbeWebView2; Create: @CreateWebView2; CreateOn: @CreateWebView2On),
+    (Kind: wvWk; Probe: @ProbeWk; Create: @CreateWk; CreateOn: @CreateWkOn)
+  );
 
 function FindBackend(AKind: TWebviewKind): PWebviewBackendDesc; inline;
 var I: Integer;
 begin
-  InitBackends;
   for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
     if WEBVIEW_BACKENDS[I].Kind = AKind then
       Exit(@WEBVIEW_BACKENDS[I]);
@@ -185,44 +169,28 @@ begin
   Result := B^.Probe();
 end;
 
-{$PUSH}{$WARNINGS OFF}
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 begin
   if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
   if AKind = wvFake then Exit(True);
-  // perf: per-kind Once single source inline zero-copy, L1 sync.once去重幂等
-  if GAvailOnce[AKind].Done then Exit(GAvailYes[AKind]);
-  GAvailOnce[AKind].DoOnce(procedure
-  begin
-    GAvailYes[AKind] := RawProbe(AKind);
-  end);
-  Result := GAvailYes[AKind];
+  // perf: inline zero-copy table-driven, probe cached at loader (platform.dl double-checked atomic+mutex), no extra Once nesting, L0-L3 single source
+  Result := RawProbe(AKind);
 end;
-{$POP}
 
 function DefaultWebviewKind: TWebviewKind; inline;
+var
+  I: Integer;
+  LKind: TWebviewKind;
 begin
-  // perf: single Once single source inline zero-copy, table-driven
-  if GDefaultOnce.Done then Exit(GDefaultKind);
-  GDefaultOnce.DoOnce(procedure
-  var
-    I: Integer;
-    LKind: TWebviewKind;
+  // perf: inline zero-copy table-driven, no Once; loader double-checked lock already caches, zero extra alloc, zero global mutable
+  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
   begin
-    InitBackends;
-    for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
-    begin
-      LKind := WEBVIEW_BACKENDS[I].Kind;
-      if LKind = wvFake then Continue;
-      if WebviewBackendAvailable(LKind) then
-      begin
-        GDefaultKind := LKind;
-        Exit;
-      end;
-    end;
-    GDefaultKind := wvFake;
-  end);
-  Result := GDefaultKind;
+    LKind := WEBVIEW_BACKENDS[I].Kind;
+    if LKind = wvFake then Continue;
+    if WebviewBackendAvailable(LKind) then
+      Exit(LKind);
+  end;
+  Result := wvFake;
 end;
 
 function CreateFakeWebview(
@@ -264,22 +232,15 @@ end;
 
 function CreateWebviewEx(const AParent: IWindow; AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow;
-var
-  I: Integer;
-  LCand: TWebviewKind;
 begin
   if AParent = nil then
     Exit(CreateWebviewOf(AKind, AOptions));
   CheckWebviewOptions(AOptions);
   if TryCreateForKind(AKind, AParent, AOptions, Result) then Exit;
-  InitBackends;
-  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
-  begin
-    LCand := WEBVIEW_BACKENDS[I].Kind;
-    if (LCand = AKind) or (LCand = wvFake) then Continue;
-    if TryCreateForKind(LCand, AParent, AOptions, Result) then Exit;
-  end;
-  Result := TFakeWebview.CreateOn(AParent, AOptions);
+  // CONTRACT fail-fast: 显式 Kind 不可用即抛 EWebviewBackendUnavailable，不静默遍历其他后端/回退 fake，缺库部署可排查
+  raise EWebviewBackendUnavailable.CreateFmt(
+    'webview backend "%s" is not available in this build', [
+    GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
 end;
 
 function CreateWebviewOn(const AParent: IWindow;
@@ -316,22 +277,5 @@ procedure WebviewExitLoop; inline;
 begin
   WindowExitLoop;
 end;
-
-initialization
-  GDefaultOnce := Once;
-  GDefaultKind := wvFake;
-  GBackendsOnce := Once;
-  GAvailOnce[wvFake] := Once; GAvailYes[wvFake] := True;
-  GAvailOnce[wvGtk] := Once;
-  GAvailOnce[wvWebview2] := Once;
-  GAvailOnce[wvWk] := Once;
-
-finalization
-  GDefaultOnce := nil;
-  GBackendsOnce := nil;
-  GAvailOnce[wvFake] := nil;
-  GAvailOnce[wvGtk] := nil;
-  GAvailOnce[wvWebview2] := nil;
-  GAvailOnce[wvWk] := nil;
 
 end.

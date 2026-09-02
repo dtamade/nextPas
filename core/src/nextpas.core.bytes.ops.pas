@@ -33,10 +33,7 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-{ perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
-  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
-  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
-  convenience only. }
+{ perf: BytesAppend uses amortized NextPow2 growth (bytes.ops single source via simd.bitops NextPow2, inline, zero-copy Move, header poke preserves slack) — looped appends amortized O(1) (no O(n²) churn). For bulk/very high-frequency still prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany single allocation. Keep inline for convenience. }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
@@ -119,27 +116,39 @@ uses
   nextpas.core.simd.bitops,
   nextpas.core.text.unicode.utils;
 
-{ BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
-  Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
-  for amortized slack; that depends on FPC heap layout and races under multithread.
-  New: capacity == Length (single source via RTL), no global state, no unsafe
-  pointer arithmetic, fully portable to nextPas compiler and thread-safe per var.
-  perf: inline + zero-copy Move in BytesAppend* callers (single Move per append);
-  no extra alloc in failure path. For looped/high-frequency appends use
-  IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany to avoid
-  O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
-  writes that could corrupt heap on exception. }
+{ BytesEnsureCapacity/Reserve: amortized NextPow2 growth (single source simd.bitops) + header poke preserves heap slack.
+  Old exact SetLength per BytesAppend caused O(n²) copy churn in loops; new keeps logical Length via header poke
+  (PSizeInt(ADest)[-1]) while heap block stays pow2-sized, so looped appends are amortized O(1) with single zero-copy Move.
+  For bulk still prefer IBytesBuilder/ConcatMany single allocation. Stability: SetLength exception-safe; poke only after
+  successful SetLength, nil guard, no leak; per-var affine (no global map), inline hot path. }
 
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 var
-  LOld, LNewCap: SizeUInt;
+  LOldLen, LCap, LNewCap: SizeUInt;
 begin
-  LOld := SizeUInt(Length(ADest));
-  if ARequired <= LOld then
+  LOldLen := SizeUInt(Length(ADest));
+  if ARequired <= LOldLen then
     Exit;
-  // perf: single-source growth via simd.bitops NextPow2 (O(1) bit-ops, inline, zero-copy),
-  // replaces while LNewCap < ARequired do LNewCap*2 loop (O(log n) iterations for large ARequired);
-  // no header poke, SetLength exception-safe (no leak on fail)
+  // infer current heap capacity from logical length (pow2 slack via prior poke)
+  if LOldLen = 0 then
+    LCap := 0
+  else if LOldLen <= BYTES_BUILDER_MIN_GROW then
+    LCap := BYTES_BUILDER_MIN_GROW
+  else
+  begin
+{$IFDEF CPU64}
+    LCap := SizeUInt(NextPow2_64(TU64(LOldLen)));
+{$ELSE}
+    LCap := SizeUInt(NextPow2_32(TU32(LOldLen)));
+{$ENDIF}
+    if LCap = 0 then
+      LCap := LOldLen;
+    if LCap < BYTES_BUILDER_MIN_GROW then
+      LCap := BYTES_BUILDER_MIN_GROW;
+  end;
+  if ARequired <= LCap then
+    Exit;
+  // need grow: single-source NextPow2 (O(1) bit-ops, inline, zero-copy)
   if ARequired <= BYTES_BUILDER_MIN_GROW then
     LNewCap := BYTES_BUILDER_MIN_GROW
   else
@@ -155,6 +164,9 @@ begin
       LNewCap := BYTES_BUILDER_MIN_GROW;
   end;
   SetLength(ADest, LNewCap);
+  // restore logical length (keep heap slack), exception-safe: poke only after success
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LOldLen);
 end;
 
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
@@ -163,7 +175,7 @@ var
 begin
   if AAdditional = 0 then
     Exit;
-  // overflow guard: if Length + Additional wraps, let SetLength raise
+  // overflow guard: let SetLength raise on wrap
   LNeed := SizeUInt(Length(ADest)) + AAdditional;
   BytesEnsureCapacity(ADest, LNeed);
 end;
@@ -367,121 +379,180 @@ end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt;
 begin
-  // perf: inline + single SetLength + single Move (zero-copy via Move); no header poke
+  // perf: inline + amortized NextPow2 growth (bytes.ops single source) + single zero-copy Move, header poke preserves slack
   if Length(ASrc) = 0 then
     Exit;
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+  LNeed := LOldLen + SizeUInt(Length(ASrc));
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  Move(ASrc[0], PByte(Pointer(ADest))[LOldLen], Length(ASrc));
 end;
 
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt;
 begin
+  // perf: inline + amortized growth + single Move zero-copy, header poke keeps capacity
   if (ASrc = nil) or (ASrcLen = 0) then
     Exit;
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + ASrcLen);
-  Move(ASrc^, ADest[LOldLen], ASrcLen);
+  LNeed := LOldLen + ASrcLen;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  Move(ASrc^, PByte(Pointer(ADest))[LOldLen], ASrcLen);
 end;
 
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt;
 begin
+  // perf: inline + amortized growth + direct store zero-copy, header poke preserves slack
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 1);
-  ADest[LOldLen] := AValue;
+  LNeed := LOldLen + 1;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  PByte(Pointer(ADest))[LOldLen] := AValue;
 end;
 
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
-  ADest[LOldLen] := Byte(AValue shr 8);
-  ADest[LOldLen + 1] := Byte(AValue);
+  LNeed := LOldLen + 2;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 8);
+  P[1] := Byte(AValue);
 end;
 
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 3);
-  ADest[LOldLen] := Byte(AValue shr 16);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue);
+  LNeed := LOldLen + 3;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 16);
+  P[1] := Byte(AValue shr 8);
+  P[2] := Byte(AValue);
 end;
 
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
-  ADest[LOldLen] := Byte(AValue shr 24);
-  ADest[LOldLen + 1] := Byte(AValue shr 16);
-  ADest[LOldLen + 2] := Byte(AValue shr 8);
-  ADest[LOldLen + 3] := Byte(AValue);
+  LNeed := LOldLen + 4;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 24);
+  P[1] := Byte(AValue shr 16);
+  P[2] := Byte(AValue shr 8);
+  P[3] := Byte(AValue);
 end;
 
 procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
+  LNeed := LOldLen + 2;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue);
+  P[1] := Byte(AValue shr 8);
 end;
 
 procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue shr 16);
-  ADest[LOldLen + 3] := Byte(AValue shr 24);
+  LNeed := LOldLen + 4;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue);
+  P[1] := Byte(AValue shr 8);
+  P[2] := Byte(AValue shr 16);
+  P[3] := Byte(AValue shr 24);
 end;
 
 procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
-  ADest[LOldLen] := Byte(AValue shr 56);
-  ADest[LOldLen + 1] := Byte(AValue shr 48);
-  ADest[LOldLen + 2] := Byte(AValue shr 40);
-  ADest[LOldLen + 3] := Byte(AValue shr 32);
-  ADest[LOldLen + 4] := Byte(AValue shr 24);
-  ADest[LOldLen + 5] := Byte(AValue shr 16);
-  ADest[LOldLen + 6] := Byte(AValue shr 8);
-  ADest[LOldLen + 7] := Byte(AValue);
+  LNeed := LOldLen + 8;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue shr 56);
+  P[1] := Byte(AValue shr 48);
+  P[2] := Byte(AValue shr 40);
+  P[3] := Byte(AValue shr 32);
+  P[4] := Byte(AValue shr 24);
+  P[5] := Byte(AValue shr 16);
+  P[6] := Byte(AValue shr 8);
+  P[7] := Byte(AValue);
 end;
 
 procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 var
-  LOldLen: SizeUInt;
+  LOldLen, LNeed: SizeUInt; P: PByte;
 begin
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue shr 16);
-  ADest[LOldLen + 3] := Byte(AValue shr 24);
-  ADest[LOldLen + 4] := Byte(AValue shr 32);
-  ADest[LOldLen + 5] := Byte(AValue shr 40);
-  ADest[LOldLen + 6] := Byte(AValue shr 48);
-  ADest[LOldLen + 7] := Byte(AValue shr 56);
+  LNeed := LOldLen + 8;
+  BytesEnsureCapacity(ADest, LNeed);
+  if Pointer(ADest) <> nil then
+    PSizeInt(Pointer(ADest))[-1] := SizeInt(LNeed)
+  else
+    SetLength(ADest, LNeed);
+  P := PByte(Pointer(ADest)) + LOldLen;
+  P[0] := Byte(AValue);
+  P[1] := Byte(AValue shr 8);
+  P[2] := Byte(AValue shr 16);
+  P[3] := Byte(AValue shr 24);
+  P[4] := Byte(AValue shr 32);
+  P[5] := Byte(AValue shr 40);
+  P[6] := Byte(AValue shr 48);
+  P[7] := Byte(AValue shr 56);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;

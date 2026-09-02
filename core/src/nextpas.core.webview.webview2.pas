@@ -676,8 +676,14 @@ end;
 procedure TWebView2Webview.OnWebMessageReceived(const AJson: string);
 var
   LFrame: TWebviewFrame;
+  LReject: string;
 begin
   if FClosed then Exit;
+  if TryBuildOversizedReject(AJson, LReject) then
+  begin
+    if LReject <> '' then Eval(LReject, nil, nil);
+    Exit;
+  end;
   if TryDecodeFrame(AJson, LFrame) then
     DispatchFrame(LFrame);
 end;
