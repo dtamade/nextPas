@@ -549,6 +549,9 @@ var
   LBuf: array[0..4095] of AnsiChar;
   LLen, I: Int32;
   LR: Int32;
+  LSt: TPlatformFileStat;
+  LSave: AnsiChar;
+  LIsFinal: Boolean;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(PLATFORM_ERR_INVALID);
@@ -570,88 +573,57 @@ begin
     if (LBuf[I] = '/') or (I = LLen) then
   {$ENDIF}
     begin
-      if I = LLen then
+      LIsFinal := (I = LLen);
+      LSave := LBuf[I];
+      if not LIsFinal then
+        LBuf[I] := #0;
+      if platform_file_lstat(@LBuf[0], LSt) = 0 then
       begin
-        if platform_file_lstat(@LBuf[0], LSt) = 0 then
+        if LSt.FileType = ftSymlink then
         begin
-          if LSt.FileType = ftSymlink then
+          if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
           begin
-            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
-              Exit(0)
-            else
-              Exit(PLATFORM_ERR_ENOTDIR);
+            if not LIsFinal then
+              LBuf[I] := LSave;
+            Exit(PLATFORM_ERR_ENOTDIR);
           end;
-          if LSt.FileType = ftDirectory then
-            Exit(0);
+        end
+        else if LSt.FileType <> ftDirectory then
+        begin
+          if not LIsFinal then
+            LBuf[I] := LSave;
           Exit(PLATFORM_ERR_ENOTDIR);
         end;
-        LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and platform_fs_is_dir(@LBuf[0]) then
-          LR := 0
-        else if (LR = 0) then
-        begin
-          if platform_file_lstat(@LBuf[0], LSt) = 0 then
-            if LSt.FileType = ftSymlink then
-              if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
-                Exit(PLATFORM_ERR_ENOTDIR);
-        end;
-        LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and platform_fs_is_dir(@LBuf[0]) then
-          LR := 0;
-        if LR <> 0 then Exit(LR);
       end
       else
       begin
-        LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+        if LR <> 0 then
         begin
-          if LSt.FileType = ftSymlink then
+          if platform_fs_is_dir(@LBuf[0]) then
+            LR := 0
+          else
           begin
-            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
-            begin
-              LBuf[I] := '/';
-            end
-            else
-            begin
-              LBuf[I] := '/';
-              Exit(PLATFORM_ERR_ENOTDIR);
-            end;
-          end else
-          if LSt.FileType <> ftDirectory then
-          begin
-            LBuf[I] := '/';
-            Exit(PLATFORM_ERR_ENOTDIR);
+            if not LIsFinal then
+              LBuf[I] := LSave;
+            Exit(LR);
           end;
         end
         else
         begin
-          LR := platform_file_mkdir(@LBuf[0], AMode);
-          if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+          if (platform_file_lstat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftSymlink) then
           begin
-            if LR = PLATFORM_ERR_EXIST then
-              LR := PLATFORM_ERR_ENOTDIR;
-            LBuf[I] := '/';
-            Exit(LR);
+            if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
+            begin
+              if not LIsFinal then
+                LBuf[I] := LSave;
+              Exit(PLATFORM_ERR_ENOTDIR);
+            end;
           end;
-          if platform_file_lstat(@LBuf[0], LSt) = 0 then
-            if LSt.FileType = ftSymlink then
-              if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
-              begin
-                LBuf[I] := '/';
-                Exit(PLATFORM_ERR_ENOTDIR);
-              end;
-          if LR = PLATFORM_ERR_EXIST then
-            LR := PLATFORM_ERR_ENOTDIR;
-          LBuf[I] := '/';
-          Exit(LR);
         end;
-      {$IFDEF NEXTPAS_WINDOWS}
-        LBuf[I] := '\';
-      {$ELSE}
-        LBuf[I] := '/';
-      {$ENDIF}
       end;
+      if not LIsFinal then
+        LBuf[I] := LSave;
     end;
     Inc(I);
   end;

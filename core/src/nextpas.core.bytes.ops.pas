@@ -74,8 +74,12 @@ procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
 procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word);
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word);
 procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal);
 procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord);
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord);
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
@@ -118,7 +122,6 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 { Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
 function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
-function BytesSliceToString(const ABytes: TBytes; const AOffset; ALength: SizeUInt): string; inline;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 { not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
 function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
@@ -157,7 +160,8 @@ uses
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops.capacity,
   nextpas.core.bytes.ops.text,
-  nextpas.core.bytes.ops.ascii;
+  nextpas.core.bytes.ops.ascii,
+  nextpas.core.text.unicode.utils;
 
 { capacity growth — single source delegates to bytes.ops.capacity leaf }
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
@@ -656,6 +660,72 @@ begin
   PByte(Pointer(ADest) + LOldLen + 3)^ := Byte(AValue);
 end;
 
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word);
+var
+  LOldLen, LReq: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  if High(SizeUInt) - LOldLen < 2 then
+    raise EOutOfMemory.Create('BytesAppendUInt16LE: size overflow');
+  LReq := LOldLen + 2;
+  EnsureAppendCapacity(ADest, LOldLen, LReq);
+  PByte(Pointer(ADest) + LOldLen)^ := Byte(AValue);
+  PByte(Pointer(ADest) + LOldLen + 1)^ := Byte(AValue shr 8);
+end;
+
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal);
+var
+  LOldLen, LReq: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  if High(SizeUInt) - LOldLen < 4 then
+    raise EOutOfMemory.Create('BytesAppendUInt32LE: size overflow');
+  LReq := LOldLen + 4;
+  EnsureAppendCapacity(ADest, LOldLen, LReq);
+  PByte(Pointer(ADest) + LOldLen)^ := Byte(AValue);
+  PByte(Pointer(ADest) + LOldLen + 1)^ := Byte(AValue shr 8);
+  PByte(Pointer(ADest) + LOldLen + 2)^ := Byte(AValue shr 16);
+  PByte(Pointer(ADest) + LOldLen + 3)^ := Byte(AValue shr 24);
+end;
+
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord);
+var
+  LOldLen, LReq: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  if High(SizeUInt) - LOldLen < 8 then
+    raise EOutOfMemory.Create('BytesAppendUInt64BE: size overflow');
+  LReq := LOldLen + 8;
+  EnsureAppendCapacity(ADest, LOldLen, LReq);
+  PByte(Pointer(ADest) + LOldLen)^ := Byte(AValue shr 56);
+  PByte(Pointer(ADest) + LOldLen + 1)^ := Byte(AValue shr 48);
+  PByte(Pointer(ADest) + LOldLen + 2)^ := Byte(AValue shr 40);
+  PByte(Pointer(ADest) + LOldLen + 3)^ := Byte(AValue shr 32);
+  PByte(Pointer(ADest) + LOldLen + 4)^ := Byte(AValue shr 24);
+  PByte(Pointer(ADest) + LOldLen + 5)^ := Byte(AValue shr 16);
+  PByte(Pointer(ADest) + LOldLen + 6)^ := Byte(AValue shr 8);
+  PByte(Pointer(ADest) + LOldLen + 7)^ := Byte(AValue);
+end;
+
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord);
+var
+  LOldLen, LReq: SizeUInt;
+begin
+  LOldLen := SizeUInt(Length(ADest));
+  if High(SizeUInt) - LOldLen < 8 then
+    raise EOutOfMemory.Create('BytesAppendUInt64LE: size overflow');
+  LReq := LOldLen + 8;
+  EnsureAppendCapacity(ADest, LOldLen, LReq);
+  PByte(Pointer(ADest) + LOldLen)^ := Byte(AValue);
+  PByte(Pointer(ADest) + LOldLen + 1)^ := Byte(AValue shr 8);
+  PByte(Pointer(ADest) + LOldLen + 2)^ := Byte(AValue shr 16);
+  PByte(Pointer(ADest) + LOldLen + 3)^ := Byte(AValue shr 24);
+  PByte(Pointer(ADest) + LOldLen + 4)^ := Byte(AValue shr 32);
+  PByte(Pointer(ADest) + LOldLen + 5)^ := Byte(AValue shr 40);
+  PByte(Pointer(ADest) + LOldLen + 6)^ := Byte(AValue shr 48);
+  PByte(Pointer(ADest) + LOldLen + 7)^ := Byte(AValue shr 56);
+end;
+
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
 begin
   Result := SpanStartsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(APrefix));
@@ -850,9 +920,15 @@ begin
     Move(PAnsiChar(AText)^, Pointer(Result)^, Length(AText));
 end;
 
-function BytesSliceToString(const ABytes: TBytes; const AOffset; ALength: SizeUInt): string; inline;
+function BytesSliceToString(const ABytes: TBytes; const AOffset,
+  ALength: SizeUInt): string; inline;
 begin
   Result := nextpas.core.bytes.ops.text.BytesSliceToString(ABytes, AOffset, ALength);
+end;
+
+function StringLowerAsciiAware(const S: string): string; inline;
+begin
+  Result := ToLowerAsciiAware(S);
 end;
 
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;

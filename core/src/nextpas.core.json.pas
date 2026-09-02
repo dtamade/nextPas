@@ -75,8 +75,8 @@ type
     FInputCopy: string;
   public
     constructor Create(const AInput: string; const AAllocator: TMemAllocator);
-    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator); inline;
-    constructor CreateFromDocument(var ADoc: TJsonDocument); inline;
+    constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
+    constructor CreateFromDocument(var ADoc: TJsonDocument);
     destructor Destroy; override;
     function Root: TJsonValue;
     function HasError: Boolean;
@@ -94,7 +94,7 @@ begin
   FDoc.Parse(TStringView.FromStr(FInputCopy));
 end;
 
-constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator); inline;
+constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
   // perf: inline + zero-copy TStringView view (no SetString/alloc/copy); bytes.ops single source preserved (view only, no Move)
@@ -104,7 +104,7 @@ begin
   FDoc.Parse(AInput);
 end;
 
-constructor TJsonDocumentImpl.CreateFromDocument(var ADoc: TJsonDocument); inline;
+constructor TJsonDocumentImpl.CreateFromDocument(var ADoc: TJsonDocument);
 begin
   inherited Create;
   // perf: inline move ownership — zero-copy transfer, no alloc/parse, single source nodes
