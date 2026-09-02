@@ -244,7 +244,10 @@ begin
   LOuter := MergeCancellationTokens(FAmbientToken, AToken);
   RequireNotCancelled(LOuter);
 
-  LTokMain := CreateCancellationToken;
+  if LOuter <> nil then
+    LTokMain := LOuter.CreateChildToken
+  else
+    LTokMain := CreateCancellationToken;
   LEvMain := CreateEvent(True);
   LEvTick := CreateEvent(True);      { 哑事件：仅作切片睡眠载体 }
   LMain := THedgeOutcome.Create;
@@ -291,7 +294,10 @@ begin
       FPolicy.OnHedged(FPolicy.DelayMs);
     LHedgeFired := True;
     LEvHedge := CreateEvent(True);
-    LTokHedge := CreateCancellationToken;
+    if LOuter <> nil then
+      LTokHedge := LOuter.CreateChildToken
+    else
+      LTokHedge := CreateCancellationToken;
     LHedge := THedgeOutcome.Create;
     FPool.Submit(procedure
       begin
@@ -394,7 +400,10 @@ begin
   LOuter := MergeCancellationTokens(FAmbientToken, AToken);
   RequireNotCancelled(LOuter);
 
-  LTokMain := CreateCancellationToken;
+  if LOuter <> nil then
+    LTokMain := LOuter.CreateChildToken
+  else
+    LTokMain := CreateCancellationToken;
   LEvMain := CreateEvent(True);
   LEvTick := CreateEvent(True);
   LMain := THedgeOutcome.Create;
@@ -443,7 +452,10 @@ begin
       FPolicy.OnHedged(FPolicy.DelayMs);
     LHedgeFired := True;
     LEvHedge := CreateEvent(True);
-    LTokHedge := CreateCancellationToken;
+    if LOuter <> nil then
+      LTokHedge := LOuter.CreateChildToken
+    else
+      LTokHedge := CreateCancellationToken;
     LHedge := THedgeOutcome.Create;
     FPool.Submit(procedure
       begin

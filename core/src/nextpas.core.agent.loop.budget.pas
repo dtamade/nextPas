@@ -34,7 +34,9 @@ procedure LoopAccumulateUsage(var ATotal: TTokenUsage;
 function LoopAddOutUsed(AOutUsed: Int64; const AMsg: TMessage;
   const AProvider: IAgentProvider): Int64;
 
-function LoopCostForMessage(const AMsg: TMessage): Int64;
+function LoopCostForMessage(const AMsg: TMessage): Int64; overload;
+function LoopCostForMessage(const AMsg: TMessage;
+  const AProvider: IAgentProvider): Int64; overload;
 
 implementation
 
@@ -123,6 +125,12 @@ begin
 end;
 
 function LoopCostForMessage(const AMsg: TMessage): Int64;
+begin
+  Result := LoopCostForMessage(AMsg, nil);
+end;
+
+function LoopCostForMessage(const AMsg: TMessage;
+  const AProvider: IAgentProvider): Int64;
 var
   LText, LSyn: string;
   I: Integer;
@@ -131,14 +139,14 @@ begin
     Exit(EstimateCost(AMsg.Usage));
   LText := MessageText(AMsg);
   if LText <> '' then
-    Exit(EstimateCost(0, AgentEstimateTokens(LText)));
+    Exit(EstimateCost(0, LoopEstimateTokensFallback(AProvider, LText)));
   LSyn := '';
   for I := 0 to High(AMsg.Parts) do
     if AMsg.Parts[I].Kind = pkToolCall then
       LSyn := LSyn + AMsg.Parts[I].ToolName + AMsg.Parts[I].ArgumentsJson;
   if LSyn = '' then
     LSyn := 'tool_call';
-  Result := EstimateCost(0, AgentEstimateTokens(LSyn));
+  Result := EstimateCost(0, LoopEstimateTokensFallback(AProvider, LSyn));
 end;
 
 end.

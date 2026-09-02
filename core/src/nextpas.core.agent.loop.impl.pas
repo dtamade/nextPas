@@ -387,12 +387,20 @@ var
     Req2 := LOpt.RequestBase;
     Req2.Messages := System.Copy(Transcript, 0, Length(Transcript));
     Req2.Tools := nil;
-    if not CompleteRound(Req2, M2) then
-      Exit(False);
+    try
+      if not CompleteRound(Req2, M2) then
+      begin
+        SetLength(Transcript, N2);
+        Exit(False);
+      end;
+    except
+      SetLength(Transcript, N2);
+      raise;
+    end;
     R.AccumulateUsage(M2.Usage);
     if Assigned(LOpt.UsageSink) then
     try
-      LCost := LoopCostForMessage(M2);
+      LCost := LoopCostForMessage(M2, FProvider);
       LOpt.UsageSink.RecordUsage(FProvider.GetName, Req2, M2.Usage, LCost);
     except
     end;
@@ -484,7 +492,7 @@ begin
     end;
     if Assigned(LOpt.UsageSink) then
     try
-      LCost := LoopCostForMessage(Asst);
+      LCost := LoopCostForMessage(Asst, FProvider);
       LOpt.UsageSink.RecordUsage(FProvider.GetName, Req, Asst.Usage, LCost);
     except
     end;
