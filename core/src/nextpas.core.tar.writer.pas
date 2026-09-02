@@ -18,6 +18,7 @@ type
     FIOBuf: TBytes; // I/O buffer
     FLogger: ILogger;
     procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
+    procedure EnsureIOBufForSize(ASize: Int64); inline; // I/O缓冲策略单源：TarIOBufCapacityFor+bytes.ops.BytesEnsureCapacity inline零拷贝单口
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
     procedure WriteBlock(const ABlock: array of Byte);
@@ -34,8 +35,6 @@ type
     procedure FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
     procedure DoCopyAndPad(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
-    procedure CopyReaderAndPad(const AReader: IReader; ASize: Int64; var ABuf: TBytes);
-    procedure CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
   public
     constructor Create(const ADst: IWriter);
     procedure SetLogger(const ALogger: ILogger); inline;
@@ -45,8 +44,6 @@ type
     procedure AddDir(const AName: string; AMode: Cardinal = C_TAR_DEFAULT_DIR_MODE; AMTimeUnix: Int64 = 0);
     procedure AddDirWithOptions(const AName: string; const AOpts: TTarAddOptions);
     procedure AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
-    procedure AddEntryFromReaderWithSharedBuf(const AHdr: TTarHeader; const AReader: IReader; var ASharedBuf: TBytes);
-    procedure AddEntryFromReaderWithRawBuf(const AHdr: TTarHeader; const AReader: IReader; ABuf: PByte; ABufCap: SizeUInt);
     procedure TrimIOBuf; inline;
     procedure TrimIOBufTo(const AHintSize: Int64); inline;
     procedure Finish;
@@ -102,6 +99,14 @@ procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
 begin
   // single source via bytes.ops.BytesEnsureCapacity
   BytesEnsureCapacity(FIOBuf, ANeed);
+end;
+
+procedure TTarWriter.EnsureIOBufForSize(ASize: Int64); inline;
+var LNeed: SizeUInt;
+begin
+  // I/O缓冲策略单源抽取：TarIOBufCapacityFor(AlignUp4K零拷贝)+BytesEnsureCapacity几何2×高水位复用，inline零拷贝单分发，消除EnsureIOBufCapacity与CopyReaderAndPad双路分叉
+  LNeed := TarIOBufCapacityFor(ASize);
+  BytesEnsureCapacity(FIOBuf, LNeed);
 end;
 
 procedure TTarWriter.WriteChecked(AData: PByte; ACount: SizeUInt); inline;
@@ -389,25 +394,7 @@ begin
     WritePadded(nil, 0, SizeUInt(PadLen));
 end;
 
-procedure TTarWriter.CopyReaderAndPad(const AReader: IReader; ASize: Int64; var ABuf: TBytes);
-var
-  LNeed: SizeUInt;
-begin
-  if ASize = 0 then Exit;
-  LNeed := TarIOBufCapacityFor(ASize);
-  // perf: inline unified pooling via bytes.ops.BytesEnsureCapacity single source (geometric 2×, zero-copy PByte view), high-water retained
-  BytesEnsureCapacity(ABuf, LNeed);
-  DoCopyAndPad(AReader, ASize, @ABuf[0], SizeUInt(Length(ABuf)));
-end;
-
-procedure TTarWriter.CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
-begin
-  DoCopyAndPad(AReader, ASize, ABuf, ABufCap);
-end;
-
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
-var
-  LNeed: SizeUInt;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
@@ -422,39 +409,9 @@ begin
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then Exit;
-  LNeed := TarIOBufCapacityFor(AHdr.Size);
-  EnsureIOBufCapacity(LNeed);
-  // perf: zero-copy PByte view into pooled TBytes (bytes.ops single source), high-water retained, no per-entry GetMem/FreeMem jitter
+  // I/O缓冲策略单源收敛：EnsureIOBufForSize(TarIOBufCapacityFor+bytes.ops单源)+DoCopyAndPad零拷贝PByte视图inline单口直达，high-water池化无GetMem抖动，1M封顶1MB单分发
+  EnsureIOBufForSize(AHdr.Size);
   DoCopyAndPad(AReader, AHdr.Size, @FIOBuf[0], SizeUInt(Length(FIOBuf)));
-end;
-
-procedure TTarWriter.AddEntryFromReaderWithSharedBuf(const AHdr: TTarHeader; const AReader: IReader; var ASharedBuf: TBytes);
-begin
-  if FFinished then
-    raise EInvalidOperationError.Create('tar: writer already finished');
-  if AHdr.Kind <> tekRegular then
-  begin
-    WriteHeader(AHdr, 0);
-    Exit;
-  end;
-  if AHdr.Size < 0 then
-    raise EArgumentError.Create('tar: negative size');
-  if (AHdr.Size > 0) and (AReader = nil) then
-    raise EArgumentError.Create('tar: reader is nil');
-  WriteHeader(AHdr, AHdr.Size);
-  if AHdr.Size = 0 then Exit;
-  CopyReaderAndPad(AReader, AHdr.Size, ASharedBuf);
-end;
-
-procedure TTarWriter.AddEntryFromReaderWithRawBuf(const AHdr: TTarHeader; const AReader: IReader; ABuf: PByte; ABufCap: SizeUInt);
-begin
-  if FFinished then raise EInvalidOperationError.Create('tar: writer already finished');
-  if AHdr.Kind <> tekRegular then begin WriteHeader(AHdr, 0); Exit; end;
-  if AHdr.Size < 0 then raise EArgumentError.Create('tar: negative size');
-  if (AHdr.Size > 0) and (AReader = nil) then raise EArgumentError.Create('tar: reader is nil');
-  WriteHeader(AHdr, AHdr.Size);
-  if AHdr.Size = 0 then Exit;
-  CopyReaderAndPadRaw(AReader, AHdr.Size, ABuf, ABufCap);
 end;
 
 procedure TTarWriter.TrimIOBuf; inline;

@@ -138,6 +138,13 @@ const
   C_TAR_BUILDER_INITIAL_CAPACITY = 65536;
   C_TAR_IOBUF_INIT = 4096;
 
+  { 全局 pax 可观测 Warn 文案单源（reader 日志复用，防硬编码分散） }
+  C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR = 'tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)';
+  C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX = 'tar: global pax rejected unsafe name: ';
+  C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX = ' (filtered, not persisted)';
+
+{ 统一容量策略单源：4K 对齐经 bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉由调用方域语义决定（builder floor 64K / IOBuf 4K~64K clamp），候选下沉 nextpas.core.tar.capacity 专用模块 }
+function TarCapacityAlign4K(const AValue: SizeUInt): SizeUInt; inline;
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
 
@@ -203,9 +210,15 @@ begin
   Result := C_TAR_UNIX_IFDIR or (APermissionBits and C_TAR_UNIX_PERM_MASK);
 end;
 
+function TarCapacityAlign4K(const AValue: SizeUInt): SizeUInt; inline;
+begin
+  // 统一容量策略单源：4K 对齐经 bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉保留域语义，候选下沉 nextpas.core.tar.capacity 专用模块
+  Result := AlignUp4K(AValue);
+end;
+
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
-  // 预扩容：预估+两零块，4K 对齐，复用 bytes.ops.AlignUp4K 单源
+  // 统一容量策略：预估+两零块，floor 64K，4K 对齐经 TarCapacityAlign4K→bytes.ops.AlignUp4K 单源 inline 零拷贝（阈值分叉：builder floor 64K/IOBuf clamp 4K~64K 同复用对齐单源）
   if AEstimatedTotal = 0 then
     Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
   if AEstimatedTotal > High(SizeUInt) - 2 * C_TAR_BLOCK_SIZE then
@@ -213,17 +226,17 @@ begin
   Result := AEstimatedTotal + 2 * C_TAR_BLOCK_SIZE;
   if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
     Result := C_TAR_BUILDER_INITIAL_CAPACITY;
-  Result := AlignUp4K(Result);
+  Result := TarCapacityAlign4K(Result);
 end;
 
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
 begin
-  // 复用 bytes.ops.AlignUp4K 单源，与 TarBuilderCapacityFor 同阈值
+  // perf: 统一容量策略阈值分叉+对齐单源 TarCapacityAlign4K→bytes.ops.AlignUp4K inline零拷贝；>64K直达AlignUp4K消除1MB拆16次WriteChecked抖动，1M封顶单分发high-water池化，候选tar.capacity模块
   if ASize <= Int64(C_TAR_IOBUF_INIT) then
     Exit(C_TAR_IOBUF_INIT);
-  if ASize < Int64(C_TAR_BUILDER_INITIAL_CAPACITY) then
-    Exit(AlignUp4K(SizeUInt(ASize)));
-  Result := C_TAR_BUILDER_INITIAL_CAPACITY;
+  if ASize <= Int64(C_TAR_BUILDER_INITIAL_CAPACITY) * 16 then
+    Exit(TarCapacityAlign4K(SizeUInt(ASize)));
+  Result := SizeUInt(C_TAR_BUILDER_INITIAL_CAPACITY) * 16;
 end;
 
 end.

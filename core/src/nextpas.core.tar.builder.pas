@@ -1,11 +1,6 @@
 unit nextpas.core.tar.builder;
 {**
- * @desc Tar 链式构造器：薄门面委托 TTarWriter + archive.fs 联邦单缝。
- *  需显式 Finish（两零块）；未 Finish 析构 fail-closed（IsFinished 单源）。
- *  联邦/容量/性能/稳定性详见 CONTRACT §1.4/§3，源码仅保留单缝与单源证据。
- *  精简：单口 ITarBuilder 直达 AddEntryFromReader，零 QueryInterface 仪式，
- *  链式 TarBuilder.Add(...).AddEntryFromReader(...).Finish；复用 bytes.ops
- *  单源 inline 零拷贝 + per-entry 局域缓冲 try..finally 必释无滞留。
+ * @desc Tar builder facade
  *}
 
 {$I nextpas.core.settings.inc}

@@ -360,12 +360,9 @@ begin
   begin
     if LCachedLen = 0 then
       Exit(ACached);
-    // fast first-byte filter before SpanEqual
+    // fast first-byte filter before SpanEqual:不等即跳过，无空块占位，inline零拷贝
     LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
-    if LCachedSpan.Data^ <> LSpan.Data^ then
-    begin
-    end
-    else if SpanEqual(LCachedSpan, LSpan) then
+    if (LCachedSpan.Data^ = LSpan.Data^) and SpanEqual(LCachedSpan, LSpan) then
       Exit(ACached);
   end;
   Result := MaterializeSpan(LSpan);
@@ -438,16 +435,16 @@ end;
 
 procedure TTarReader.LogGlobalPaxAutoClear;
 begin
-  // INV-3 observability: warn whenever logger assigned, no NullLogger identity gate
+  // INV-3 observability: warn whenever logger assigned, no NullLogger identity gate — 文案单源 base 常量
   if FLogger = nil then Exit;
-  FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
+  FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR);
 end;
 
 procedure TTarReader.LogGlobalPaxRejected(const AName: string);
 begin
-  // INV-3 observability: global pax unsafe filter must Warn (consistent with auto-clear), prevents silent tamper
+  // INV-3 observability: global pax unsafe filter must Warn (consistent with auto-clear), prevents silent tamper — 文案单源 base 常量
   if FLogger = nil then Exit;
-  FLogger.Warn('tar: global pax rejected unsafe name: ' + AName + ' (filtered, not persisted)');
+  FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX + AName + C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX);
 end;
 
 function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;

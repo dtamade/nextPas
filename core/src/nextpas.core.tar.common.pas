@@ -36,7 +36,8 @@ function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 
-{** 头字段写入，委托 bytes.ops 单源；Move 索引禁 inline *}
+{** 头字段写入，委托 bytes.ops 单源 TByteSpan 视图零拷贝；Move 索引禁 inline *}
+procedure TarPutHeaderField(ABlock: PByte; AOff, ALen: SizeUInt; const ASpan: TByteSpan);
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
@@ -89,13 +90,13 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ 校验和：单遍融合双累加，见 CONTRACT §2 INV-4，经 bytes.ops 单源 }
-procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64); inline;
+{ 校验和：单遍融合双累加，见 CONTRACT §2 INV-4，经 bytes.ops 单源；外联避 I-Cache 膨胀，零拷贝 BytesSumAndCountHighBitExclude 单源单遍 }
+procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
   LSum: UInt64;
   LHigh: SizeUInt;
 begin
-  // inline 零拷贝薄转发：nil 守卫 fail-closed，见 bytes.ops 单源
+  // 外联零拷贝：单遍 BytesSumAndCountHighBitExclude 单源，nil 守卫 fail-closed，复用 bytes.ops SWAR 视图片段，避 inline 512B 双累加 I-Cache 膨胀
   if ABlock = nil then
   begin
     AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
@@ -229,26 +230,31 @@ begin
   end;
 end;
 
-procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
+procedure TarPutHeaderField(ABlock: PByte; AOff, ALen: SizeUInt; const ASpan: TByteSpan);
 var
   CopyLen: SizeUInt;
 begin
-  CopyLen := SizeUInt(Length(AValue));
+  // 单源 TByteSpan 零拷贝：收敛 string/slice 双路径，单次 CopyMemory，复用 bytes.ops 单源，截断零分支
+  if (ABlock = nil) or (ALen = 0) or (ASpan.Len = 0) or (ASpan.Data = nil) then
+    Exit;
+  CopyLen := ASpan.Len;
   if CopyLen > ALen then
     CopyLen := ALen;
-  if CopyLen > 0 then
-    CopyStringToBuffer(AValue, @ABlock[AOff], CopyLen);
+  CopyMemory(ASpan.Data, @ABlock[AOff], CopyLen);
+end;
+
+procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
+begin
+  // 薄转发至 TByteSpan 单源，零拷贝视图，复用 bytes.ops CopyMemory 单源，避免 CopyStringToBuffer 分立
+  if (ABlock = nil) or (ALen = 0) or (Length(AValue) = 0) then
+    Exit;
+  TarPutHeaderField(ABlock, AOff, ALen, TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue))));
 end;
 
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
-var
-  CopyLen: SizeUInt;
 begin
-  CopyLen := ACount;
-  if CopyLen > ALen then
-    CopyLen := ALen;
-  if (CopyLen > 0) and (AData <> nil) then
-    CopyMemory(AData, @ABlock[AOff], CopyLen);
+  // 薄转发至 TByteSpan 单源，零拷贝 PByte 切片，复用 bytes.ops CopyMemory 单源，消除双 Move 分立
+  TarPutHeaderField(ABlock, AOff, ALen, TByteSpan.Create(AData, ACount));
 end;
 
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
@@ -313,9 +319,8 @@ begin
         else
           LLinkTmp := '';
         LFound := True;
-      end
-      else
-        ; // 扩展键（atime/mtime/size/uid/gid 等）由调用方经 TarParsePaxKVRecords 单源零拷贝迭代处理，复用 bytes.ops 视图，无静默丢弃回退
+      end;
+      // 扩展键（atime/mtime/...）由调用方经 TarParsePaxKVRecords 单源零拷贝迭代处理，复用 bytes.ops 视图，无 else 空语句分支
     end);
   APath := LPathTmp;
   ALinkPath := LLinkTmp;

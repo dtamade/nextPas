@@ -24,7 +24,7 @@
 
 `TarPackDirInto/TarPackDir/TarExtractToDirWithOptions/TarExtractToDir`（`nextpas.core.tar.fs`，目录递归确定性排序，deferred dir 逆序定稿）。
 
-- 单源联邦：`tar.fs` 仅 `uses nextpas.core.archive.fs`，Walk/排序/防劫持/零拷贝落盘经 `archive.fs` 单源；`PackWalks` 内联单源；`bytes.ops` 单源，`try..finally` 不丢句柄。
+- 单源联邦：`tar.fs` 仅 `uses nextpas.core.archive.fs`，Walk/排序/防劫持/零拷贝落盘经 `archive.fs` 单源；`PackWalks` 外联单源（真实循环+文件IO分发遵设计公约红线2禁inline避I-Cache膨胀，零拷贝语义不变）；`bytes.ops` 单源，`try..finally` 不丢句柄。
 - 硬链接 TOCTOU 闭环：`tekHardLink` 经 `archive.fs` 统一谓词 `ArchiveValidateHardlinkSource` + `ArchiveHardLinkVerified` fd 级原子落盘（`O_NOFOLLOW|O_CLOEXEC`）。
 
 ### 1.4 链式构造器

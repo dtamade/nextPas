@@ -49,75 +49,47 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；惰性按需扩容+bytes.builder几何池化复用 I/O 块（TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，几何 2×），IBytesBuilder 接口自动释资源不丢，bytes.ops/builder 双单源 }
-procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀） }
+procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter);
 var
   LI: Integer;
   LHdr: TTarHeader;
   LFile: TArchiveFile;
-  LBuilder: IBytesBuilder;
-  LShared: PByte;
-  LSharedCap: SizeUInt;
-  LNeed: SizeUInt;
 begin
-  LBuilder := nil;
-  LShared := nil;
-  LSharedCap := 0;
-  try
-    for LI := 0 to High(AWalks) do
+  for LI := 0 to High(AWalks) do
+  begin
+    LHdr := Default(TTarHeader);
+    LHdr.Name := AWalks[LI].FRel;
+    LHdr.MTimeUnix := AWalks[LI].FMtime;
+    if AWalks[LI].FIsDir then
     begin
-      LHdr := Default(TTarHeader);
-      LHdr.Name := AWalks[LI].FRel;
-      LHdr.MTimeUnix := AWalks[LI].FMtime;
-      if AWalks[LI].FIsDir then
+      LHdr.Kind := tekDirectory;
+      LHdr.Mode := TarDirectoryMode(AWalks[LI].FMode);
+      AWriter.AddEntry(LHdr, nil);
+    end
+    else
+    begin
+      LHdr.Kind := tekRegular;
+      LHdr.Mode := TarRegularMode(AWalks[LI].FMode);
+      LHdr.Size := AWalks[LI].FSize;
+      if LHdr.Size < 0 then
+        raise EIOError.Create('tar pack: negative size: ' + AWalks[LI].FFull);
+      if LHdr.Size = 0 then
       begin
-        LHdr.Kind := tekDirectory;
-        LHdr.Mode := TarDirectoryMode(AWalks[LI].FMode);
         AWriter.AddEntry(LHdr, nil);
-      end
-      else
-      begin
-        LHdr.Kind := tekRegular;
-        LHdr.Mode := TarRegularMode(AWalks[LI].FMode);
-        LHdr.Size := AWalks[LI].FSize;
-        if LHdr.Size < 0 then
-          raise EIOError.Create('tar pack: negative size: ' + AWalks[LI].FFull);
-        if LHdr.Size = 0 then
-        begin
-          AWriter.AddEntry(LHdr, nil);
-          Continue;
-        end;
-        // perf: 惰性按需扩容 — 仅当需 I/O 时经 IBytesBuilder 几何 Reserve（bytes.builder 单源 2× / AlignUp4K 单源），接口自动释资源不丢
-        LNeed := TarIOBufCapacityFor(LHdr.Size);
-        if LSharedCap < LNeed then
-        begin
-          if LBuilder = nil then
-            LBuilder := CreateBytesBuilder(LNeed)
-          else
-            LBuilder.Reserve(LNeed);
-          LSharedCap := LBuilder.Capacity;
-          LShared := LBuilder.Data;
-        end;
-        LFile := nil;
-        LFile := ArchiveOpenRead(AWalks[LI].FFull);
+        Continue;
+      end;
+      LFile := ArchiveOpenRead(AWalks[LI].FFull);
+      try
+        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化，TarIOBufCapacityFor+bytes.ops单源inline，try..finally必释不丢
+        AWriter.AddEntryFromReader(LHdr, LFile as IReader);
+      finally
         try
-          if (LShared <> nil) and (LSharedCap > 0) then
-            AWriter.AddEntryFromReaderWithRawBuf(LHdr, LFile as IReader, LShared, LSharedCap)
-          else
-            AWriter.AddEntryFromReader(LHdr, LFile as IReader);
-        finally
-          try
-            LFile.Close;
-          except
-          end;
-          LFile := nil;
+          LFile.Close;
+        except
         end;
       end;
     end;
-  finally
-    // stability: IBytesBuilder 接口自动释资源（几何池化无 GetMem/FreeMem 手管），不丢句柄、零泄漏
-    LShared := nil;
-    LSharedCap := 0;
   end;
 end;
 
@@ -143,7 +115,7 @@ begin
     raise EArgumentError.Create('tar pack: not a directory: ' + ADir);
   CollectTarWalks(ADir, LWalks, LWalksCount);
   try
-    // 复用已Stat FSize，PackWalks inline 零拷贝
+    // 复用已Stat FSize，PackWalks 零拷贝（外联遵红线2，循环/IO分发不inline）
     PackWalks(LWalks, AWriter);
   finally
     SetLength(LWalks, 0);
