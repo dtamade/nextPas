@@ -36,7 +36,7 @@ core/src/nextpas.core.git.factory.pas         ← TGitBackend + NewGitManager/Ne
 core/src/nextpas.core.git.libgit2.base.pas     ← libgit2 基础类型/句柄/oid 单源（native.base TGitOid 20-byte 权威，git_oid id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化）
 core/src/nextpas.core.git.libgit2.types.pas      ← libgit2 词汇 helper（标量/句柄/OID/枚举，基础类型 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 违 §6 已迁出）
 core/src/nextpas.core.git.libgit2.ffi.pas     ← libgit2 C FFI 缝隙（<30 行，极简占位，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 base/types + ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF）
-core/src/nextpas.core.git.libgit2.ffi.types.pas   ← 已弃用 shim（re-export libgit2.types + 单 external 探针 git_ffi_types_probe 满足 ffi 仅承载 external 约束，<60 行，新代码直用 libgit2.types）
+core/src/nextpas.core.git.libgit2.ffi.types.pas   ← **已移除**（空 tombstone，零 re-export 零 external 探针，词汇单源 base←types，ffi 仅 external 极简；下一 minor 删除文件，新代码直用 libgit2.types）
 core/src/nextpas.core.git.libgit2.ffi.structs.pas ← FFI 记录域（buf/strarray/time/sig/error/config/indexer/diff/blame，<200 行）
 core/src/nextpas.core.git.libgit2.ffi.callbacks.pas← FFI 回调域（全部回调 typedef，<100 行）
 core/src/nextpas.core.git.libgit2.ffi.options.pas ← FFI 选项域（remote/fetch/checkout/clone/push/worktree/diff 选项，<200 行）
@@ -57,7 +57,7 @@ core/src/nextpas.core.git.libgit2.bindings.commit.pas← commit/tree/blob/object
 core/src/nextpas.core.git.libgit2.bindings.repo.pas  ← repository/annotated_commit 域
 core/src/nextpas.core.git.libgit2.bindings.diff.pas  ← tree/diff/patch 域
 core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/config/remote 等剩余域
-core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<60 行，BC shim 仅 types/consts via objects，无函数转发；对象层函数单源于 objects，零 I-Cache 复制，fan-in 收敛至 objects→owners）
+core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<30 行，已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，对象层唯一门面为 `objects`，零 I-Cache 复制，fan-in 收敛至 objects→owners）
 core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，via bytes.ops）
 core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
 core/src/nextpas.core.git.native.history.traversal.pas ← 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元，<210 行，inline 零拷贝 via bytes.ops）

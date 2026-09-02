@@ -317,6 +317,7 @@ end;
 { ── hashsig-like similarity ─────────────────────────────────────────────── }
 
 function HashForLine(const ASpan: TByteSpan): UInt32; inline;
+  // perf: inline hot, zero-copy TByteSpan.Data view (no string alloc), single pass up to 80 bytes, bytes.ops single source via MemEqual not needed
 const
   CHashStart: UInt64 = UInt64($012345678ABCDEF0);
 var
@@ -334,10 +335,11 @@ begin
 end;
 
 procedure CollectLineHashes(const ASpan: TByteSpan; var AOut: array of UInt32;
-  var ACount: Integer);
+  var ACount: Integer); inline;
 var
   I, Start, N: Integer;
   LineSpan: TByteSpan;
+  // perf: inline hot, zero-copy TByteSpan.Slice view (no alloc, single Move via HashForLine inline), single source; early exit on empty span avoids SortU32 work
 begin
   ACount := 0;
   if ASpan.Len = 0 then
@@ -432,7 +434,7 @@ begin
 end;
 
 { ── cached blob sig: O(n+m) inflate+hash+sort vs O(n·m) per pair ── }
-{ perf: per-blob single inflate + CollectLineHashes + single SortU32, then per-pair two-pointer merge O(CA+CB); not inline per red line 2 (loop+inflate exceeds I-Cache), zero-copy TByteSpan slice, bytes.ops single source }
+{ perf: per-blob single inflate + CollectLineHashes (inline, zero-copy slice) + single SortU32 (single source radix) + 127 truncation, then per-pair two-pointer merge O(CA+CB) capped 127; not inline per red line 2 (loop+inflate exceeds I-Cache), bytes.ops single source; stability: size guard before inflate avoids 1M+ transient alloc }
 procedure FillBlobSig(ARepo: TNativeRepository; const AEntry: TPathOid; out ASig: TBlobSig);
 var
   Kind: TGitObjectKind;
@@ -469,6 +471,7 @@ end;
 function ScoreFromSigs(const SA, SB: TBlobSig): Integer; inline;
 var
   IA, IB, Matches: Integer;
+  // perf: inline hot two-pointer merge O(CA+CB) capped 127, zero-copy array view, bytes.ops single source; early guards avoid hash work for invalid/large/ratio-skipped blobs
 begin
   Result := -1;
   if not SA.Valid or not SB.Valid then Exit;
@@ -487,7 +490,7 @@ begin
   Result := (100 * (Matches * 2)) div (SA.Count + SB.Count);
 end;
 
-{ perf: not inline per red line 2 (hash table + FillBlobSig heavy loop exceeds I-Cache); bytes.ops single source }
+{ perf: not inline per red line 2 (hash table + FillBlobSig heavy loop exceeds I-Cache); O(n) dedup via open-addressing + per-dedup single FillBlobSig (CollectLineHashes inline zero-copy + SortU32 single source + 127 cap) + per-pair ScoreFromSigs merge O(CA+CB) capped; size/ratio guards before inflate avoid large-blob hotspot; bytes.ops single source }
 procedure BuildBlobSigCache(ARepo: TNativeRepository; const AList: TPathOidArray; var AOut: TBlobSigArray);
 var
   I, Cap, Mask, Idx: Integer;
@@ -681,43 +684,6 @@ begin
   end;
 end;
 
-procedure AppendStatus(var AOut: TGitNativeStatusArray;
-  const APath: string; AHeadCode, AWorkCode: TGitStatusCode);
-begin
-  if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then
-    Exit;
-  SetLength(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := APath;
-  AOut[High(AOut)].OldPath := '';
-  AOut[High(AOut)].Similarity := 0;
-  AOut[High(AOut)].HeadCode := AHeadCode;
-  AOut[High(AOut)].WorkCode := AWorkCode;
-end;
-
-procedure AppendRenamed(var AOut: TGitNativeStatusArray;
-  const AOldPath, ANewPath: string; ASimilarity: Byte;
-  AWorkCode: TGitStatusCode);
-begin
-  SetLength(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := ANewPath;
-  AOut[High(AOut)].OldPath := AOldPath;
-  AOut[High(AOut)].Similarity := ASimilarity;
-  AOut[High(AOut)].HeadCode := gscRenamed;
-  AOut[High(AOut)].WorkCode := AWorkCode;
-end;
-
-procedure AppendCopied(var AOut: TGitNativeStatusArray;
-  const AOldPath, ANewPath: string; ASimilarity: Byte;
-  AWorkCode: TGitStatusCode);
-begin
-  SetLength(AOut, Length(AOut) + 1);
-  AOut[High(AOut)].Path := ANewPath;
-  AOut[High(AOut)].OldPath := AOldPath;
-  AOut[High(AOut)].Similarity := ASimilarity;
-  AOut[High(AOut)].HeadCode := gscCopied;
-  AOut[High(AOut)].WorkCode := AWorkCode;
-end;
-
 // amortized fast variants (bytes.ops single-source doubling, inline + zero-copy Move for string fields)
 procedure AppendStatusFast(var AOut: TGitNativeStatusArray; var ACount, ACap: SizeInt;
   const APath: string; AHeadCode, AWorkCode: TGitStatusCode); inline;
@@ -766,6 +732,40 @@ begin
   AOut[ACount].HeadCode := gscCopied;
   AOut[ACount].WorkCode := AWorkCode;
   Inc(ACount);
+end;
+
+// deprecated slow path: delegates to geometric Fast to avoid O(n²) SetLength(Length+1) churn; perf single source via bytes.ops GrowArrayCapacity, inline, zero-copy Move; stability: managed strings auto released
+procedure AppendStatus(var AOut: TGitNativeStatusArray;
+  const APath: string; AHeadCode, AWorkCode: TGitStatusCode); inline;
+var LCount, LCap: SizeInt;
+begin
+  if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then Exit;
+  LCount := Length(AOut);
+  LCap := LCount;
+  AppendStatusFast(AOut, LCount, LCap, APath, AHeadCode, AWorkCode);
+  if Length(AOut) <> LCount then SetLength(AOut, LCount);
+end;
+
+procedure AppendRenamed(var AOut: TGitNativeStatusArray;
+  const AOldPath, ANewPath: string; ASimilarity: Byte;
+  AWorkCode: TGitStatusCode); inline;
+var LCount, LCap: SizeInt;
+begin
+  LCount := Length(AOut);
+  LCap := LCount;
+  AppendRenamedFast(AOut, LCount, LCap, AOldPath, ANewPath, ASimilarity, AWorkCode);
+  if Length(AOut) <> LCount then SetLength(AOut, LCount);
+end;
+
+procedure AppendCopied(var AOut: TGitNativeStatusArray;
+  const AOldPath, ANewPath: string; ASimilarity: Byte;
+  AWorkCode: TGitStatusCode); inline;
+var LCount, LCap: SizeInt;
+begin
+  LCount := Length(AOut);
+  LCap := LCount;
+  AppendCopiedFast(AOut, LCount, LCap, AOldPath, ANewPath, ASimilarity, AWorkCode);
+  if Length(AOut) <> LCount then SetLength(AOut, LCount);
 end;
 
 { Appends the untracked group after the tracked one — git's porcelain

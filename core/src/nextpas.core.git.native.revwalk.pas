@@ -738,13 +738,15 @@ begin
   end;
   I := FHeapLen;
   Inc(FHeapLen);
-  // max-heap on When: newest at root; managed assignment preserves ref-counts
+  // max-heap on When: newest at root; zero-copy Move with Finalize+FillChar avoids AddRef/Release jitter
   while I > 0 do
   begin
     Parent := (I - 1) div 2;
     if FHeap[Parent].When >= AEntry.When then
       Break;
-    FHeap[I] := FHeap[Parent];
+    Finalize(FHeap[I]);
+    System.Move(FHeap[Parent], FHeap[I], SizeOf(TWalkEntry));
+    FillChar(FHeap[Parent], SizeOf(TWalkEntry), 0);
     I := Parent;
   end;
   FHeap[I] := AEntry;
@@ -765,8 +767,10 @@ begin
     FHeap[0] := Default(TWalkEntry);
     Exit;
   end;
-  LastEntry := FHeap[FHeapLen];
-  FHeap[FHeapLen] := Default(TWalkEntry);
+  // zero-copy extract tail: Move without AddRef/Release, FillChar avoids double release
+  FillChar(LastEntry, SizeOf(TWalkEntry), 0);
+  System.Move(FHeap[FHeapLen], LastEntry, SizeOf(TWalkEntry));
+  FillChar(FHeap[FHeapLen], SizeOf(TWalkEntry), 0);
   I := 0;
   while True do
   begin
@@ -779,10 +783,14 @@ begin
       Best := R;
     if Best = I then
       Break;
-    FHeap[I] := FHeap[Best];
+    Finalize(FHeap[I]);
+    System.Move(FHeap[Best], FHeap[I], SizeOf(TWalkEntry));
+    FillChar(FHeap[Best], SizeOf(TWalkEntry), 0);
     I := Best;
   end;
-  FHeap[I] := LastEntry;
+  Finalize(FHeap[I]);
+  System.Move(LastEntry, FHeap[I], SizeOf(TWalkEntry));
+  FillChar(LastEntry, SizeOf(TWalkEntry), 0);
 end;
 
 procedure TGitRevWalker.AppendBoundary(const AOid: TGitOid); inline;
@@ -1148,12 +1156,15 @@ var
     end;
     I := HeapLen;
     Inc(HeapLen);
+    // max-heap on When: zero-copy Move with Finalize+FillChar avoids AddRef/Release jitter
     while I > 0 do
     begin
       Parent := (I - 1) div 2;
       if Heap[Parent].When >= AEntry.When then
         Break;
-      Heap[I] := Heap[Parent];
+      Finalize(Heap[I]);
+      System.Move(Heap[Parent], Heap[I], SizeOf(TWalkEntry));
+      FillChar(Heap[Parent], SizeOf(TWalkEntry), 0);
       I := Parent;
     end;
     Heap[I] := AEntry;
@@ -1174,8 +1185,10 @@ var
       Heap[0] := Default(TWalkEntry);
       Exit;
     end;
-    LastEntry := Heap[HeapLen];
-    Heap[HeapLen] := Default(TWalkEntry);
+    // zero-copy extract tail: Move without AddRef/Release
+    FillChar(LastEntry, SizeOf(TWalkEntry), 0);
+    System.Move(Heap[HeapLen], LastEntry, SizeOf(TWalkEntry));
+    FillChar(Heap[HeapLen], SizeOf(TWalkEntry), 0);
     I := 0;
     while True do
     begin
@@ -1188,10 +1201,14 @@ var
         Best := R;
       if Best = I then
         Break;
-      Heap[I] := Heap[Best];
+      Finalize(Heap[I]);
+      System.Move(Heap[Best], Heap[I], SizeOf(TWalkEntry));
+      FillChar(Heap[Best], SizeOf(TWalkEntry), 0);
       I := Best;
     end;
-    Heap[I] := LastEntry;
+    Finalize(Heap[I]);
+    System.Move(LastEntry, Heap[I], SizeOf(TWalkEntry));
+    FillChar(LastEntry, SizeOf(TWalkEntry), 0);
   end;
 
   procedure EnqueueIfNeeded(const AOid: TGitOid);

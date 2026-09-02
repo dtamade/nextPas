@@ -34,8 +34,8 @@
 | git.libgit2.bindings.diff | tree/diff/patch 域 |
 | git.libgit2.bindings.extra | filter/attr/checkout/config/remote/revwalk 等剩余域 |
 | git.libgit2.base | libgit2 基础类型/句柄/oid 单源（20-byte 以 native.base.TGitOid 为权威，git_oid variant id/Bytes 零拷贝，33-byte TGitOid33 已移除 Phase7，SHA256 泛型候选经 bytes.ops Len 参化，复用 bytes.ops） |
-| git.libgit2.types | 词汇 helper（标量/句柄/OID/枚举，纯 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 已迁出，ffi 仅 external） |
-| git.libgit2.ffi.types | 已弃用 shim（re-export libgit2.types + external git_ffi_types_probe 满足 ffi 仅 external，<60 行，新代码直用 libgit2.types） |
+| git.libgit2.types | 词汇 helper（标量/句柄/OID/枚举，纯 re-export，bytes.ops 单源 inline 零拷贝；原 ffi.types 零 external 已迁出，ffi 仅 external 极简 <30 行） |
+| git.libgit2.ffi.types | **已移除**（空 tombstone，零 re-export 零 external 探针，词汇单源 base←types，ffi 仅 external 极简；新代码直用 libgit2.types，下一 minor 删除文件） |
 | git.libgit2.manager | libgit2 管理器实现（TGitManagerImpl/TGitRepositoryImpl 完整 IGit* 适配，经 backend/binding + dlopen/dlsym） |
 | git.native.base | 纯 Pas 对象层：TGitOid / TGitObjectKind / EGitError |
 | git.native.zlib | zlib 流边界处理（复用 compress.Deflate*，嵌入式 reader） |
@@ -97,7 +97,7 @@
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
-| git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为 BC shim 零转发） |
+| git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，唯一 inline 零拷贝网关，<400 行；native 为已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，唯一门面为 objects） |
 | git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
 | git.native.history.query | 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元 <260 行） |
@@ -106,7 +106,7 @@
 | git.native.branches | 分支门面分片（branch/tag/stash/notes） |
 | git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
 | git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect） |
-| git.native | 子家族薄网关（<60 行，BC shim 仅 types/consts via objects，零函数转发；对象层函数单源于 objects，零 I-Cache 复制，fan-in 收敛至 objects→owners；staging/history/branches/transport/extensions 需直引分片，旧 `uses git.native` 对对象域函数已弃用以消除双重薄网关稀释） |
+| git.native | 子家族薄网关（<30 行，已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，对象层唯一门面为 `objects`，零 I-Cache 复制，fan-in 收敛至 objects→owners；staging/history/branches/transport/extensions 需直引分片，旧 `uses git.native` 已弃用以消除类型/常量双重薄网关稀释，将移除） |
 | git.pas | 门面 re-export（inline NewGitManager → factory.NewGitManager(gbAuto)，impl 零 libgit2，base←intf←factory←facade 隔离） |
 
 ### 1.1.1 native 子家族（2026-08-25 起）

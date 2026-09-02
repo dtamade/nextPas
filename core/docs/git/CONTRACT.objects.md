@@ -1,12 +1,12 @@
 # nextpas.core.git — 对象层契约（objects）
 
-**模块路径**：`core/src/nextpas.core.git.native.{base,zlib,loose,pack,refs,objmodel,repo,write}.pas` + `nextpas.core.git.native.objects.pas` 唯一门面（`native.pas` 为 BC shim 仅 types/consts，零函数转发，消除双重薄网关与 I-Cache 复制）
+**模块路径**：`core/src/nextpas.core.git.native.{base,zlib,loose,pack,refs,objmodel,repo,write}.pas` + `nextpas.core.git.native.objects.pas` 唯一门面（`native.pas` 为已折叠空 BC shim 零类型/常量/函数转发 `@deprecated`，对象层唯一门面为 `objects`，消除双重薄网关与 I-Cache 复制，fan-in 收敛至 `objects→owners`）
 **层级**：L2（同层单向 `compress/hash/zlib/checksum` 豁免；L0-L1: base, bytes, text, fs, io）
 **Owner**：git lane
 **不变量域**：对象存储（oid / zlib / loose / pack / refs / objmodel / repo / write）
 
 ## 1. 范围与阈值
-- 源聚合：8 单元 + 1 门面 shard（`native.objects` <400 行，唯一 inline 零拷贝网关 via `bytes.ops`/`compress`/`checksum`）；`native.pas` <60 行 BC shim（types/consts only，零函数转发，消除与 objects 的 30+ inline 双重薄网关与 I-Cache 复制，fan-in 收敛至 objects→owners）；单 shard <800 行软阈，满足 `design-conventions.md §2` 必拆阈。
+- 源聚合：8 单元 + 1 门面 shard（`native.objects` <400 行，唯一 inline 零拷贝网关 via `bytes.ops`/`compress`/`checksum`）；`native.pas` <30 行已折叠空 BC shim（零类型/常量/函数转发 `@deprecated`，对象层唯一门面为 `objects`，消除与 objects 的类型/常量双重薄网关与 I-Cache 复制，fan-in 收敛至 objects→owners）；单 shard <800 行软阈，满足 `design-conventions.md §2` 必拆阈。
 - 禁止在对象层手写压缩/哈希：zlib 透传 `compress.Deflate*`，Adler-32 单源 `checksum.adler32`，oid 比对单源 `bytes.ops.SpanEqual`（20-byte 权威 `native.base.TGitOid`）。
 - 同层单向豁免：`git-native-zlib-l2-exempt` 锚点由 `scripts/git-contract-check.sh` C5 校验，限定 `Deflate*` + `Adler32Update` 单源透传，零手写 deflate/adler 循环与零 `Move` 重复。
 

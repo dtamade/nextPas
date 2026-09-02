@@ -18,6 +18,8 @@ uses
     800-line soft guide; retained per CONTRACT history shard as cohesive
     exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE.
     Thin aggregator is history.traversal; split would dilute ownership.
+    Monitored 1320→1500 hard split threshold per CONTRACT.history §6; I-Cache
+    impact bounded via region markers (Cache/Reader/Writer/Collect) + audit.
   L2 exempt: git-native-commitgraph-l2-exempt — L2 git→hash.sha1 single-source
     via bytes.ops SpanCompare/SpanCopy + NewSHA1, no duplicate SHA-1 loop;
     registry core/docs/core-module-registry.md git row (same-layer one-way
@@ -29,12 +31,19 @@ uses
     Hashed Dir index (FNV-1a via bytes.ops) keeps cache O(1) avg.
 
   Perf: mmap zero-copy via io.mapped + bytes.ops single source
-    (SpanCopy/SpanCompare, PByte window); inline O(1) touch.
-  Stability: IMappedFile refcount + managed TBytes, no leak on fallback.
-  Concurrency: GGraphCache is not locked; single-threaded git lane / external
-    sync required, swap-with-last O(1) keeps refcount safe.
+    (SpanCopy/SpanCompare, PByte window); inline O(1) touch;
+    OID copies single Move via SpanCopy (no for K byte loop); index-indirect
+    sort via integer indices avoids TRawCommit Parents AddRef/Release churn
+    (O(n log n) int swaps + O(n) reorder).
+  Stability: IMappedFile refcount + managed TBytes, no leak on fallback;
+    GGraphCacheLock ensures release not lost under contention.
+  Concurrency: GGraphCache guarded by GGraphCacheLock (L1 sync.mutex, pure
+    lock model, O(1) touch), swap-with-last O(1) keeps refcount safe;
+    former external-sync model retired (was not locked).
   Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
-    when shards fan-in or cache ownership dilutes auditability.
+    when shards fan-in or cache ownership dilutes auditability;
+    hand-rolled 16-cap LRU retained over collections.lrucache (O(Cap)<30ns
+    vs AllocMem/THashMap overhead, see CONTRACT.history §6).
   Volume: 800 soft guide — exception not exemption from audit; Cary via
     region markers preserves restraint; see CONTRACT.history §6 threshold.
 
@@ -104,6 +113,8 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
+  nextpas.core.sync.intf,
+  nextpas.core.sync.mutex,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.refs,
@@ -153,7 +164,8 @@ const
   //   no independent hit-rate baseline yet; O(1) touch/invalidate, single Move
   //   per op via bytes.ops single source
   // stability: IMappedFile refcount auto releases on eviction/swap; no leak
-  // concurrency: global cache not locked, caller sync required
+  // concurrency: guarded by GGraphCacheLock (L1 sync.mutex, O(1) touch), swap-with-last O(1) keeps refcount safe;
+  //   external sync no longer required — single source via sync.mutex, pure lock model (was not locked)
   // owner: candidate collections.lrucache generic TLruCache<string,IMappedFile>
   //   — custom 16-cap array retained for DirHash FNV-1a via bytes.ops single
   //   source, IMappedFile zero-copy refcount, O(Cap) victim <30ns trivial;
@@ -166,6 +178,7 @@ const
 var
   GGraphCache: array of TGraphCacheEntry;
   GGraphCacheSeq: UInt64;
+  GGraphCacheLock: ILock; // L1 sync.mutex guard for global LRU, pure concurrency, O(1) Acquire/Release
 
 function GitDirHash(const ADir: string): UInt32; inline;
 begin
@@ -223,13 +236,18 @@ end;
 procedure InvalidateCommitGraphCache(const AGitDir: string);
 var Idx: Integer;
 begin
-  Idx := FindGraphCache(AGitDir);
-  if Idx < 0 then Exit;
-  // perf: O(1) swap-with-last, single Move (one AddRef/Release); zero-copy
-  // stability: swap releases evicted Mapped via refcount + Finalize; no leak
-  if Idx <> High(GGraphCache) then
-    GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
-  SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
+  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  try
+    Idx := FindGraphCache(AGitDir);
+    if Idx < 0 then Exit;
+    // perf: O(1) swap-with-last, single Move (one AddRef/Release); zero-copy
+    // stability: swap releases evicted Mapped via refcount + Finalize; no leak
+    if Idx <> High(GGraphCache) then
+      GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
+    SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
+  finally
+    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+  end;
 end;
 
 { ── History.Reader: BE32+TByteSpan zero-copy via bytes.ops, fanout+OIDL verify ── }
@@ -503,8 +521,9 @@ begin
     raise EGitError.Create('commit-graph CDAT wrong length');
   for I := 0 to Integer(FNumCommits) - 1 do
   begin
-    for K := 0 to GitOidRawLen - 1 do
-      TmpOid.Bytes[K] := FView[FOidLookupOff + I * GitOidRawLen + K];
+    // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces for K byte loop
+    SpanCopy(TByteSpan.Create(@TmpOid.Bytes[0], GitOidRawLen),
+      TByteSpan.Create(FView + FOidLookupOff + I * GitOidRawLen, GitOidRawLen));
     if I = 0 then
       Prev := TmpOid
     else
@@ -570,8 +589,9 @@ begin
   AEntry.Generation := 0;
   SetLength(AEntry.Parents, 0);
   Base := FCommitDataOff + SizeInt(Pos) * (GitOidRawLen + 16);
-  for I := 0 to GitOidRawLen - 1 do
-    AEntry.TreeOid.Bytes[I] := FView[Base + I];
+  // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces for I byte loop
+  SpanCopy(TByteSpan.Create(@AEntry.TreeOid.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(FView + Base, GitOidRawLen));
   P1 := BE32At(Base + GitOidRawLen);
   P2 := BE32At(Base + GitOidRawLen + 4);
   GenField := BE32At(Base + GitOidRawLen + 8);
@@ -606,8 +626,9 @@ begin
   begin
     if P1 >= FNumCommits then
       raise EGitError.Create('commit-graph parent index out of range');
-    for I := 0 to GitOidRawLen - 1 do
-      AEntry.Parents[Count].Bytes[I] := FView[FOidLookupOff + Integer(P1) * GitOidRawLen + I];
+    // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces for I byte loop
+    SpanCopy(TByteSpan.Create(@AEntry.Parents[Count].Bytes[0], GitOidRawLen),
+      TByteSpan.Create(FView + FOidLookupOff + Integer(P1) * GitOidRawLen, GitOidRawLen));
     Inc(Count);
   end;
   if P2 <> MISSING_PARENT then
@@ -621,8 +642,9 @@ begin
         ParentIdx := BE32At(FExtraOff + I * 4) and EDGE_INDEX_MASK;
         if ParentIdx >= FNumCommits then
           raise EGitError.Create('commit-graph parent index out of range');
-        for K := 0 to GitOidRawLen - 1 do
-          AEntry.Parents[Count].Bytes[K] := FView[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + K];
+        // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces for K byte loop
+        SpanCopy(TByteSpan.Create(@AEntry.Parents[Count].Bytes[0], GitOidRawLen),
+          TByteSpan.Create(FView + FOidLookupOff + Integer(ParentIdx) * GitOidRawLen, GitOidRawLen));
         Inc(Count);
         if (BE32At(FExtraOff + I * 4) and EDGE_LAST_MASK) <> 0 then
           Break;
@@ -636,8 +658,9 @@ begin
       ParentIdx := P2;
       if ParentIdx >= FNumCommits then
         raise EGitError.Create('commit-graph parent index out of range');
-      for I := 0 to GitOidRawLen - 1 do
-        AEntry.Parents[Count].Bytes[I] := FView[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + I];
+      // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces for I byte loop
+      SpanCopy(TByteSpan.Create(@AEntry.Parents[Count].Bytes[0], GitOidRawLen),
+        TByteSpan.Create(FView + FOidLookupOff + Integer(ParentIdx) * GitOidRawLen, GitOidRawLen));
       Inc(Count);
     end;
   end;
@@ -657,7 +680,7 @@ var
   Path: string;
   Data: TBytes;
   Mapped: IMappedFile;
-  Idx, I: Integer;
+  Idx: Integer;
   Info: TFileInfo;
   UseCache: Boolean;
 begin
@@ -667,22 +690,28 @@ begin
   if not FileExists(Path) then
     Exit;
   // fast path: cached mmap when mtime+size unchanged; LRU promotion on hit
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), LRU via bytes.ops single source
-  Idx := FindGraphCache(AGitDir);
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), LRU via bytes.ops single source, guarded by GGraphCacheLock (L1 sync.mutex, O(1))
   UseCache := False;
-  if Idx >= 0 then
-    try
-      Info := Stat(Path);
-      if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) and (GGraphCache[Idx].Mapped <> nil) and (GGraphCache[Idx].Mapped.Size = Info.Size) then
-      begin
-        Mapped := GGraphCache[Idx].Mapped; // zero-copy: interface refcount, no heap copy, OS page-reclaimable
-        UseCache := True;
-        // LRU: hit becomes MRU (not inline per design-conventions, loop body)
-        TouchGraphCache(Idx);
+  Mapped := nil;
+  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  try
+    Idx := FindGraphCache(AGitDir);
+    if Idx >= 0 then
+      try
+        Info := Stat(Path);
+        if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) and (GGraphCache[Idx].Mapped <> nil) and (GGraphCache[Idx].Mapped.Size = Info.Size) then
+        begin
+          Mapped := GGraphCache[Idx].Mapped; // zero-copy: interface refcount, no heap copy, OS page-reclaimable
+          UseCache := True;
+          // LRU: hit becomes MRU (not inline per design-conventions, loop body), guarded
+          TouchGraphCache(Idx);
+        end;
+      except
+        UseCache := False;
       end;
-    except
-      UseCache := False;
-    end;
+  finally
+    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+  end;
   if UseCache then
   begin
     AGraph := TCommitGraph.CreateFromMapped(Mapped);
@@ -711,39 +740,44 @@ begin
     Info.ModTime := 0;
     Info.Size := Mapped.Size;
   end;
-  if Idx < 0 then
-  begin
-    // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1)
-    // perf: O(Cap) min-scan (Cap=16 trivial <30ns) + single overwrite via
-    //   bytes.ops GrowArrayCapacity single source; bench gate 10@200ms + 2×CV
-    // stability: overwritten slot old Mapped released via assignment, no leak
-    if Length(GGraphCache) >= GGraphCacheCap then
+  // insert/update under lock: re-lookup to handle concurrent insert race, single source via sync.mutex
+  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  try
+    Idx := FindGraphCache(AGitDir);
+    if Idx < 0 then
     begin
-      Idx := FindLRUCacheIndex; // O(Cap) scan (16 trivial), single overwrite
+      // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1)
+      // perf: O(Cap) min-scan (Cap=16 trivial <30ns) + single overwrite via
+      //   bytes.ops GrowArrayCapacity single source; bench gate 10@200ms + 2×CV
+      // stability: overwritten slot old Mapped released via assignment, no leak
+      if Length(GGraphCache) >= GGraphCacheCap then
+        Idx := FindLRUCacheIndex // O(Cap) scan (16 trivial), single overwrite
+      else
+      begin
+        // perf: geometric growth via bytes.ops GrowArrayCapacity single source
+        //   (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), bounded Cap=16
+        Idx := Length(GGraphCache);
+        SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
+        if Length(GGraphCache) > GGraphCacheCap then
+          SetLength(GGraphCache, GGraphCacheCap);
+        if Length(GGraphCache) > Idx + 1 then
+          SetLength(GGraphCache, Idx + 1);
+      end;
+      GGraphCache[Idx].Dir := AGitDir;
+      GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
     end
     else
-    begin
-      // perf: geometric growth via bytes.ops GrowArrayCapacity single source
-      //   (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), bounded Cap=16
-      Idx := Length(GGraphCache);
-      SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
-      if Length(GGraphCache) > GGraphCacheCap then
-        SetLength(GGraphCache, GGraphCacheCap);
-      if Length(GGraphCache) > Idx + 1 then
-        SetLength(GGraphCache, Idx + 1);
-    end;
-    GGraphCache[Idx].Dir := AGitDir;
-    GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
-  end
-  else
-    // keep hash coherent if Dir reused (swap-with-last may have moved entry)
-    GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
-  GGraphCache[Idx].Path := Path;
-  GGraphCache[Idx].MTime := Info.ModTime;
-  GGraphCache[Idx].Size := Info.Size;
-  GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap dup
-  // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies)
-  TouchGraphCache(Idx);
+      // keep hash coherent if Dir reused (swap-with-last may have moved entry)
+      GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
+    GGraphCache[Idx].Path := Path;
+    GGraphCache[Idx].MTime := Info.ModTime;
+    GGraphCache[Idx].Size := Info.Size;
+    GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap dup
+    // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies)
+    TouchGraphCache(Idx);
+  finally
+    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+  end;
   AGraph := TCommitGraph.CreateFromMapped(Mapped);
   Result := True;
 end;
@@ -777,69 +811,88 @@ begin
     TByteSpan.Create(@AB.Oid.Bytes[0], GitOidRawLen));
 end;
 
-procedure SortRawByOidInsertion(var A: TRawCommitArray; L, R: Integer); inline;
-var I, J: Integer; T: TRawCommit;
-begin
-  for I := L + 1 to R do
-  begin
-    T := A[I];
-    J := I;
-    while (J > L) and (CompareRawOid(A[J - 1], T) > 0) do
-    begin
-      A[J] := A[J - 1];
-      Dec(J);
-    end;
-    A[J] := T;
-  end;
-end;
-
-procedure SortRawByOidQuick(var A: TRawCommitArray; L, R: Integer);
-var I, J: Integer; Pivot: TGitOid; T: TRawCommit;
-begin
-  // hybrid quicksort: median-of-three + insertion cutoff 16, O(n log n) vs insertion O(n²), tail recursion elimination
-  while L < R do
-  begin
-    if R - L < 16 then
-    begin
-      SortRawByOidInsertion(A, L, R);
-      Exit;
-    end;
-    I := L;
-    J := R;
-    if CompareRawOid(A[L], A[(L + R) shr 1]) > 0 then
-    begin T := A[L]; A[L] := A[(L + R) shr 1]; A[(L + R) shr 1] := T; end;
-    if CompareRawOid(A[(L + R) shr 1], A[R]) > 0 then
-    begin T := A[(L + R) shr 1]; A[(L + R) shr 1] := A[R]; A[R] := T; end;
-    if CompareRawOid(A[L], A[(L + R) shr 1]) > 0 then
-    begin T := A[L]; A[L] := A[(L + R) shr 1]; A[(L + R) shr 1] := T; end;
-    Pivot := A[(L + R) shr 1].Oid; // pivot by value (20B), zero-copy via stack
-    repeat
-      // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered, 20B ≈ 3×QWord), no dual track
-      while SpanCompare(TByteSpan.Create(@A[I].Oid.Bytes[0], GitOidRawLen), TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) < 0 do Inc(I);
-      while SpanCompare(TByteSpan.Create(@A[J].Oid.Bytes[0], GitOidRawLen), TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) > 0 do Dec(J);
-      if I <= J then
-      begin
-        T := A[I]; A[I] := A[J]; A[J] := T; // ref-counted swap, exception-safe (EGitError preserved)
-        Inc(I); Dec(J);
-      end;
-    until I > J;
-    if (J - L) < (R - I) then
-    begin
-      if L < J then SortRawByOidQuick(A, L, J);
-      L := I;
-    end
-    else
-    begin
-      if I < R then SortRawByOidQuick(A, I, R);
-      R := J;
-    end;
-  end;
-end;
-
 procedure SortRawByOid(var A: TRawCommitArray); inline;
+var
+  Idx: array of Integer;
+  Tmp: TRawCommitArray;
+  I: Integer;
+
+  procedure SortIdxInsertion(AL, AR: Integer); inline;
+  var II, JJ, TT: Integer;
+  begin
+    for II := AL + 1 to AR do
+    begin
+      TT := Idx[II];
+      JJ := II;
+      while (JJ > AL) and (SpanCompare(
+        TByteSpan.Create(@A[Idx[JJ - 1]].Oid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(@A[TT].Oid.Bytes[0], GitOidRawLen)) > 0) do
+      begin
+        Idx[JJ] := Idx[JJ - 1];
+        Dec(JJ);
+      end;
+      Idx[JJ] := TT;
+    end;
+  end;
+
+  procedure SortIdxQuick(AL, AR: Integer);
+  var II, JJ: Integer; Pivot: TGitOid; TT: Integer;
+  begin
+    // hybrid quicksort on indices: median-of-three + insertion cutoff 16, tail recursion elimination
+    // perf: index-indirect avoids TRawCommit managed Parents AddRef/Release per swap (20B int vs record with dynamic array),
+    //   O(n log n) integer swaps + single O(n) reorder (one AddRef per element) vs O(n log n) record swaps
+    while AL < AR do
+    begin
+      if AR - AL < 16 then
+      begin
+        SortIdxInsertion(AL, AR);
+        Exit;
+      end;
+      II := AL;
+      JJ := AR;
+      if SpanCompare(TByteSpan.Create(@A[Idx[AL]].Oid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(@A[Idx[(AL + AR) shr 1]].Oid.Bytes[0], GitOidRawLen)) > 0 then
+      begin TT := Idx[AL]; Idx[AL] := Idx[(AL + AR) shr 1]; Idx[(AL + AR) shr 1] := TT; end;
+      if SpanCompare(TByteSpan.Create(@A[Idx[(AL + AR) shr 1]].Oid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(@A[Idx[AR]].Oid.Bytes[0], GitOidRawLen)) > 0 then
+      begin TT := Idx[(AL + AR) shr 1]; Idx[(AL + AR) shr 1] := Idx[AR]; Idx[AR] := TT; end;
+      if SpanCompare(TByteSpan.Create(@A[Idx[AL]].Oid.Bytes[0], GitOidRawLen),
+        TByteSpan.Create(@A[Idx[(AL + AR) shr 1]].Oid.Bytes[0], GitOidRawLen)) > 0 then
+      begin TT := Idx[AL]; Idx[AL] := Idx[(AL + AR) shr 1]; Idx[(AL + AR) shr 1] := TT; end;
+      Pivot := A[Idx[(AL + AR) shr 1]].Oid; // pivot by value (20B), zero-copy via stack
+      repeat
+        while SpanCompare(TByteSpan.Create(@A[Idx[II]].Oid.Bytes[0], GitOidRawLen),
+          TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) < 0 do Inc(II);
+        while SpanCompare(TByteSpan.Create(@A[Idx[JJ]].Oid.Bytes[0], GitOidRawLen),
+          TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) > 0 do Dec(JJ);
+        if II <= JJ then
+        begin
+          TT := Idx[II]; Idx[II] := Idx[JJ]; Idx[JJ] := TT; // integer swap, zero managed churn
+          Inc(II); Dec(JJ);
+        end;
+      until II > JJ;
+      if (JJ - AL) < (AR - II) then
+      begin
+        if AL < JJ then SortIdxQuick(AL, JJ);
+        AL := II;
+      end
+      else
+      begin
+        if II < AR then SortIdxQuick(II, AR);
+        AR := JJ;
+      end;
+    end;
+  end;
+
 begin
   if Length(A) < 2 then Exit;
-  SortRawByOidQuick(A, 0, High(A));
+  SetLength(Idx, Length(A));
+  for I := 0 to High(Idx) do Idx[I] := I;
+  SortIdxQuick(0, High(Idx));
+  // single O(n) reorder: one AddRef per element vs O(n log n) swaps (TRawCommit contains Parents: TGitOidArray managed)
+  Tmp := Copy(A, 0, Length(A));
+  for I := 0 to High(A) do
+    A[I] := Tmp[Idx[I]];
 end;
 
 function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer; inline;
@@ -1410,9 +1463,16 @@ end;
 initialization
   SetLength(GGraphCache, 0);
   GGraphCacheSeq := 0;
+  GGraphCacheLock := TMutex.Create; // L1 sync.mutex guard, pure concurrency, single source
 
 finalization
-  SetLength(GGraphCache, 0);
-  GGraphCacheSeq := 0;
+  if GGraphCacheLock <> nil then GGraphCacheLock.Acquire;
+  try
+    SetLength(GGraphCache, 0);
+    GGraphCacheSeq := 0;
+  finally
+    if GGraphCacheLock <> nil then GGraphCacheLock.Release;
+  end;
+  GGraphCacheLock := nil;
 
 end.
