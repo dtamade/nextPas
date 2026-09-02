@@ -45,11 +45,11 @@ function QjsStoreGetProp(const S: TJsQjsValueStore; ACtx: Pointer; AContextId: U
 procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 
 { QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
-function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
+function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue;
 procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
 function QjsValueNeedsFree(const V: TJSQjsValue): Boolean; inline;
 procedure QjsBatchFreeValues(ACtx: Pointer; AValues: PJSQjsValue; ACount: Integer); inline;
-function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
+function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
 function QjsViewLen(P: PAnsiChar; ALen: SizeUInt): TStringView; inline;
@@ -95,9 +95,10 @@ begin
   Result := TStringView.Create(P, ALen);
 end;
 
-function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
+function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue;
 var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt; LTmp: string; LDouble: Double;
 begin
+  // design: non-inline FFI dispatch + multi-branch routing per design-conventions §2 red line 2 avoid I-Cache bloat; inner zero-copy via bytes.ops single source retained
   BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
   case AVal.Kind of
@@ -197,12 +198,13 @@ begin
     if QjsValueNeedsFree(AValues[I]) then JS_FreeValuePtr(ACtx, AValues[I]);
 end;
 
-function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
+function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue;
 var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64; LLen: SizeUInt;
 begin
+  // design: non-inline routing/FFI dispatch + multi-branch ToCString per design-conventions §2 red line 2 avoid I-Cache bloat; inner zero-copy via bytes.ops single source retained
   Result := JsValueBindContext(JsUndefinedValue, ACtxtId);
   if ACtx = nil then Exit;
-  // perf: JS_Is* 快路径 O(1) tag inline + 零拷贝 single source via bytes.ops AnsiPtrToString single scan, 消除二次 O(n) ToCString+JsonParse; 1024 次热路径免 syscall/alloc, inline thin-forward via bytes.ops single source (设计约束 L0-L3 四件套 base←intf←value.store←quickjs.value, owner bytes.ops+mem.dynarray)
+  // perf: JS_Is* 快路径 O(1) tag + 零拷贝 single source via bytes.ops AnsiPtrToString single scan, 消除二次 O(n) ToCString+JsonParse; 1024 次热路径免 syscall/alloc, 零拷贝 via bytes.ops single source (设计约束 L0-L3 四件套 base←intf←value.store←quickjs.value, owner bytes.ops+mem.dynarray)
   LTag := Int64(V.Data[1]);
   case LTag of
     JS_TAG_UNDEFINED: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));

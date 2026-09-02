@@ -42,18 +42,19 @@ type
     function IsPromise: Boolean; inline;
     function IsSymbol: Boolean; inline;
     function IsBigInt: Boolean; inline;
-    // accessors: inline via hosted FStrVal / view single source (bytes.ops); AsString hosted B/op=0 zero-copy (refcnt inc) + view via bytes.ops SpanToString single source (IsAlive strong after Close, per INV-7) + AsJson via pure.value JsPureToJsonString single source; hot loops prefer TryGetView zero-copy view to amortize B/op=0
+    // accessors — inline, hosted B/op=0 zero-copy; view via bytes.ops single source
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
-    function AsString: string; inline; function AsJson: string; inline; // B/op=0 inline thin-forward: AsString hosted+view via bytes.ops SpanToString + AsJson via pure.value JsPureToJsonString single source (see impl perf evidence, TryGetView for zero-copy hot loop)
+    function AsString: string; inline;
+    function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
     function TryAsString(out V: string): Boolean;
-    // view — zero-copy via bytes.ops TByteSpan (single source SpanToString/BytesCopy), borrows caller buffer until materialized; TryGetView strong IsAlive acquire single source via js.lifecycle (B/op=0 zero-copy, amortizes AsString per-call alloc)
+    // view — zero-copy via bytes.ops; TryGetView B/op=0, strong IsAlive acquire — hot loops prefer TryGetView
     function IsStringView: Boolean; inline;
     function AsViewLen: SizeUInt; inline;
-    function TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline; // strong acquire via lifecycle, B/op=0 zero-copy, hot loops prefer this over AsString/TryAsString per-call SpanToString
+    function TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
   TJsHostFunction = reference to function(ACtx: IJsContext; AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
@@ -235,7 +236,7 @@ function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger)
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; inline;
 begin
-  // perf: inline thin-forward B/op=0 hosted FStrVal zero-copy (no alloc, refcnt inc only) + view via bytes.ops SpanToString single source (single alloc, bytes.ops single source, no heap for hosted); immutable value — no FStrVal cache write (record copy not persisted per-call & IsValid/IsAlive data race, per-call materialize B/op>0 hot loops prefer TryGetView zero-copy to amortize), bulk IsValid zero barrier (FValid only, no acquire), strong view via IsAlive acquire single source js.lifecycle — prevents dangling PAnsiChar after Close/cross-thread per INV-7; hot loops use TryGetView for B/op=0 zero-copy view
+  // hosted B/op=0 zero-copy; view via bytes.ops SpanToString single alloc per call (B/op>0, no cache — record copy) — hot loops prefer TryGetView B/op=0; IsAlive strong acquire per INV-7
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   if FViewLen > 0 then
@@ -273,7 +274,7 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // perf: inline thin-forward B/op=0 hosted FStrVal zero-copy (no alloc, refcnt inc only) + view via bytes.ops SpanToString single source (single alloc, bytes.ops single source); immutable value — no cache write (record copy not persisted per-call & IsValid/IsAlive data race, per-call materialize B/op>0 hot loops amortize via TryGetView zero-copy), bulk IsValid zero barrier (FValid only, no acquire), strong view via IsAlive acquire single source js.lifecycle — prevents dangling PAnsiChar after Close per INV-7; prefer TryGetView for B/op=0 view
+  // hosted B/op=0 zero-copy; view via bytes.ops SpanToString single alloc per call (B/op>0, no cache — record copy) — hot loops prefer TryGetView B/op=0; IsAlive strong acquire per INV-7
   Result:=FKind=jskString;
   if Result then
   begin

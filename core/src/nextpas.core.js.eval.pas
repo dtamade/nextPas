@@ -1,6 +1,6 @@
 unit nextpas.core.js.eval;
 { gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic + ScanFindByte3 single-pass float marker O(n) vs O(3n), ScanTryJsLiteral/Sentinels merged EVAL_* single source via text.scan SCAN_JS_*), zero-copy via bytes.ops SIMD (Slice.Equals/TStringView/SpanEqual), resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
-  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2), EvalTryPureNumber single-pass via ScanHasFloatMarker/ScanFindByte3 VecWidth O(n) vs 3×IndexOf O(3n), EvalTryLiteralTable/EvalEnforceSentinel via text.scan ScanTryJs* single source, TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view. }
+  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2) + hoisted EvalJsonView/EvalWhileView constant views (once at unit init vs per Eval FromStr), EvalTryPureNumber single-pass via ScanHasFloatMarker/ScanFindByte3 VecWidth O(n) vs 3×IndexOf O(3n), EvalTryLiteralTable/EvalEnforceSentinel via text.scan ScanTryJs* single source, TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -36,6 +36,10 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.scan,
   nextpas.core.js.pure.value;
+var
+  // hoisted constant views — zero-copy via TStringView.FromStr once at unit init, not per Eval (was LJsonView/LWhileView FromStr per ScanEvalPredicates), single source via TStringView inline, bytes.ops single source via view, B/op=0
+  EvalJsonView: TStringView;
+  EvalWhileView: TStringView;
 type
   TEvalPredicates = record
     HasWhile: Boolean;
@@ -67,7 +71,6 @@ procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred
 var
   LLen: SizeUInt;
   LNeedJson, LNeedWhile: Boolean;
-  LJsonView, LWhileView: TStringView;
   LSingles: array[0..2] of TScanSingleEntry;
   LLits: array[0..1] of TScanLitEntry;
 begin
@@ -77,14 +80,12 @@ begin
   LLen := V.Len;
   LNeedJson := LLen >= SizeUInt(Length(JS_PURE_EVAL_JSON_STRINGIFY));
   LNeedWhile := (ATimeoutMs > 0) and (LLen >= SizeUInt(Length(JS_PURE_EVAL_WHILE_TRUE)));
-  LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
-  LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  // table-driven init single source via text.scan zero-copy views, VecWidth predicate table delegated to L1 text.scan generic ScanPredicateTable (bytes.ops single source via Slice.Equals), reuse candidate for json literal fast path sharing generic predicate table, inline thin, B/op=0
+  // table-driven init single source via text.scan zero-copy hoisted constant views (EvalJsonView/EvalWhileView once at unit init, not per Eval FromStr), VecWidth predicate table delegated to L1 text.scan generic ScanPredicateTable (bytes.ops single source via Slice.Equals), reuse candidate for json literal fast path sharing generic predicate table, inline thin, B/op=0
   LSingles[0].Ch := '+'; LSingles[0].Need := True; LSingles[0].Found := False; LSingles[0].Pos := 0;
   LSingles[1].Ch := '('; LSingles[1].Need := True; LSingles[1].Found := False; LSingles[1].Pos := 0;
   LSingles[2].Ch := 'x'; LSingles[2].Need := LNeedJson; LSingles[2].Found := False; LSingles[2].Pos := 0;
-  LLits[0].View := LJsonView; LLits[0].Need := LNeedJson; LLits[0].Found := False; LLits[0].First := #0;
-  LLits[1].View := LWhileView; LLits[1].Need := LNeedWhile; LLits[1].Found := False; LLits[1].First := #0;
+  LLits[0].View := EvalJsonView; LLits[0].Need := LNeedJson; LLits[0].Found := False; LLits[0].First := #0;
+  LLits[1].View := EvalWhileView; LLits[1].Need := LNeedWhile; LLits[1].Found := False; LLits[1].First := #0;
   // perf: single-pass table-driven SIMD via text.scan single source, O(n) single scan vs O(k*n) multi-pass, bytes.ops Slice.Equals single source, VecWidth predicate+literal table generic sharing, not inline per red-line 2, L0-L3 keep
   ScanPredicateTable(V, LSingles, LLits);
   Pred.HasPlus := LSingles[0].Found; Pred.PlusPos := LSingles[0].Pos;
@@ -308,4 +309,9 @@ begin
   LView := TStringView.FromStr(ACode).Trim;
   Result := EvalCore(LView, ACtx, AOptions, ABackend, Hosts, @Buckets, AGlobal);
 end;
+
+initialization
+  // hoisted constant views — single FromStr at unit load, zero per-Eval alloc, zero-copy view via text.view inline, bytes.ops single source, B/op=0
+  EvalJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
+  EvalWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
 end.

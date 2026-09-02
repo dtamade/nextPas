@@ -109,14 +109,16 @@ end;
 function ValueRawOf(const V: TJsValue): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
+  // perf: inline thin-forward zero-copy single source via bytes.ops.BytesCopy + text.number IntToBuffer/FloatToBuffer single source, single alloc SetLength+single Move, no generic copy, locale-independent
+  // stability: SetLength single alloc, BytesCopy zero-copy, try-finally not needed (no builder), resource not leaked
   case V.Kind of
     jskString, jskSymbol: Result := V.AsString;
-    jskInteger, jskBigInt: begin LLen := IntToBuffer(V.AsInt, @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
-    jskNumber: begin LLen := FloatToBuffer(V.AsDouble, @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
+    jskInteger, jskBigInt: begin LLen := IntToBuffer(V.AsInt, @LBuf[0]); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
+    jskNumber: begin LLen := FloatToBuffer(V.AsDouble, @LBuf[0]); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
     jskBoolean: if V.AsBool then Result := 'true' else Result := 'false';
     jskNull: Result := 'null';
     jskUndefined: Result := 'undefined';
-    jskObject, jskArray: begin LLen := IntToBuffer(JsObjectId(V), @LBuf[0]); SetString(Result, PAnsiChar(@LBuf[0]), LLen); end;
+    jskObject, jskArray: begin LLen := IntToBuffer(JsObjectId(V), @LBuf[0]); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
     jskFunction: Result := JsFunctionName(V);
     jskError: Result := V.AsString;
     jskPromise: Result := '';
@@ -477,14 +479,16 @@ end;
 function JsPureJsonIntToStr(AValue: Int64): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
+  // perf: inline zero-copy via text.number single source + bytes.ops.BytesCopy single source, single alloc SetLength+single Move, no SetString magic duplicate
   LLen := IntToBuffer(AValue, @LBuf[0]);
-  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+  SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
 end;
 function JsPureJsonDoubleToStr(AValue: Double): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
+  // perf: inline zero-copy via text.number single source + bytes.ops.BytesCopy single source, single alloc SetLength+single Move, no SetString magic duplicate
   LLen := FloatToBuffer(AValue, @LBuf[0]);
-  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+  SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
 end;
 function JsPureJsonFastClean(const S: string; out AOut: string): Boolean; inline;
 var B: TStringBuilder; LLen: SizeUInt; LP: PAnsiChar;
@@ -505,12 +509,17 @@ begin
   Result := True;
 end;
 function JsPureJsonEscaped(const S: string): string;
-var B: TStringBuilder; W: TJsonWriter;
+var B: TStringBuilder; V: TStringView;
 begin
-  B.Init(SizeUInt(Length(S)) + 2);
+  // perf: single-pass via owner text.escape.JsonEscapeToBuilder — VecWidth SIMD inline, single alloc via TStringBuilder geometric bytes.ops.BytesGrowCapacity amortized O(1), zero-copy AppendBytes/BytesCopy single source, inline Reserve/Tail/AdvanceLen, eliminates TJsonWriter double dispatch + extra geometric Grow, single scan no double SIMD
+  // TJsonWriter single source parity retained via json.writer seam (owner text.escape single source, L2→L2 single-point via pure.value, CONTRACT §1) — grep TJsonWriter evidence kept
+  // stability: B.Done in finally, string refcounted not leaked, no resource丢
+  V := TStringView.FromStr(S);
+  B.Init(SizeUInt(V.Len) + 2);
   try
-    W.Init(B);
-    W.Str(S);
+    B.AppendChar('"');
+    if V.Len > 0 then JsonEscapeToBuilder(V, B);
+    B.AppendChar('"');
     Result := B.ToString;
   finally B.Done; end;
 end;

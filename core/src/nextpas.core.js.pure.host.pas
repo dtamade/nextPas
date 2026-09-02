@@ -35,6 +35,10 @@ procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; 
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
+// Bulk batch — single JsPureHostReserve amortized O(1) for thousand hosts, reserved poke without second probe, threshold 16 single source via pure.hash, buckets single rebuild vs per-insert, bytes.ops single source, inline zero-copy, L0-L3 kept
+procedure JsPureHostBulkSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostFunction; ABackend: TJsBackendKind);
+procedure JsPureHostBulkSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostMethod; ABackend: TJsBackendKind);
+procedure JsPureHostBulkSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostProc; ABackend: TJsBackendKind);
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); overload;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
@@ -153,14 +157,13 @@ begin Result := _JsPureCallImpl(ACtx, AState.Hosts, @AState.Buckets, AFunc, AThi
 
 function HostCapacity(const Hosts: TJsPureHostArray): SizeUInt; inline;
 begin
-  // single source via mem.dynarray DynArrayCapacityElem, heap probe converged via HeapCapacity, inline zero-copy header, amortized O(1)
-  Result := nextpas.core.mem.dynarray.DynArrayCapacityElem(Pointer(Hosts), SizeUInt(Length(Hosts)), SizeOf(TJsPureHostRec));
+  // single source via bytes.ops BytesDynCapacityElem thin-forward (L1 owner bytes.ops → L0 mem.dynarray single slit), heap probe converged via BytesDynCapacityElem, inline zero-copy header, amortized O(1), bytes.ops single source, L0-L3 kept
+  Result := nextpas.core.bytes.ops.BytesDynCapacityElem(Pointer(Hosts), SizeUInt(Length(Hosts)), SizeOf(TJsPureHostRec));
 end;
 procedure PokeHostLen(var Hosts: TJsPureHostArray; const ANewLen: SizeUInt); inline;
-var LBytes: TBytes absolute Hosts;
 begin
-  // single source geometric via bytes.ops + exactly-once poke via mem.dynarray, amortized O(1), no double alloc
-  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+  // single source geometric via bytes.ops BytesDynSetLengthGeneric thin-forward (L1 owner bytes.ops → L0 mem.dynarray Exactly-Once poke), amortized O(1), no double alloc, bytes.ops single source, L0-L3 kept
+  nextpas.core.bytes.ops.BytesDynSetLengthGeneric(Hosts, ANewLen);
 end;
 procedure JsPureHostReserve(var Hosts: TJsPureHostArray; AAdditional: Integer);
 begin
@@ -289,6 +292,79 @@ begin
   Hosts[Result].Func := nil;
   Hosts[Result].Method := nil;
   Hosts[Result].Proc := nil;
+end;
+function HostAllocOneReserved(var Hosts: TJsPureHostArray; const AName: string; AHash: UInt32): Integer; inline;
+begin
+  // reserved path: assumes JsPureHostReserve already ensured capacity via bytes.ops single source, poke without second BytesDynEnsureLength probe (halved 2048→1024 probes for 1024 batch), amortized O(1) via BytesNextCapacity 0→64→2×, inline zero-copy, bytes.ops single source, L0-L3 kept, resource幂等不丢
+  Result := Length(Hosts);
+  PokeHostLen(Hosts, SizeUInt(Result + 1));
+  Hosts[Result].Name := AName;
+  Hosts[Result].Hash := AHash;
+  Hosts[Result].Kind := 0;
+  Hosts[Result].Func := nil;
+  Hosts[Result].Method := nil;
+  Hosts[Result].Proc := nil;
+end;
+procedure JsPureHostBulkSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostFunction; ABackend: TJsBackendKind);
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32;
+begin
+  // bulk reserve single source via JsPureHostReserve (bytes.ops BytesNextCapacity 0→64→2× amortized O(1) single alloc vs 千次 EnsureLength probe+alloc), reserved poke without second probe, threshold 16 single source via pure.hash, buckets single rebuild vs per-insert O(n) thrash, inline zero-copy, bytes.ops single source, L0-L3 kept, try-finally not丢 via HostSet
+  if Length(ANames) = 0 then Exit;
+  if Length(ANames) <> Length(AHandlers) then Exit;
+  JsPureHostReserve(Hosts, Length(ANames));
+  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
+  for I := 0 to High(ANames) do
+  begin
+    JsPureCheckHostName(ANames[I], ABackend);
+    if not Assigned(AHandlers[I]) then
+      raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+    LView := TStringView.FromStr(ANames[I]);
+    LHash := HostHashView(LView);
+    LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    if LIdx >= 0 then HostSetFuncPtr(Hosts[LIdx], AHandlers[I], 0)
+    else begin LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetFuncPtr(Hosts[LIdx], AHandlers[I], 0); end;
+  end;
+  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+end;
+procedure JsPureHostBulkSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostMethod; ABackend: TJsBackendKind);
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32;
+begin
+  if Length(ANames) = 0 then Exit;
+  if Length(ANames) <> Length(AHandlers) then Exit;
+  JsPureHostReserve(Hosts, Length(ANames));
+  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
+  for I := 0 to High(ANames) do
+  begin
+    JsPureCheckHostName(ANames[I], ABackend);
+    if not Assigned(AHandlers[I]) then
+      raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+    LView := TStringView.FromStr(ANames[I]);
+    LHash := HostHashView(LView);
+    LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    if LIdx >= 0 then HostSetMethodPtr(Hosts[LIdx], AHandlers[I], 1)
+    else begin LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetMethodPtr(Hosts[LIdx], AHandlers[I], 1); end;
+  end;
+  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
+end;
+procedure JsPureHostBulkSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const ANames: array of string; const AHandlers: array of TJsHostProc; ABackend: TJsBackendKind);
+var I, LIdx: Integer; LView: TStringView; LHash: UInt32;
+begin
+  if Length(ANames) = 0 then Exit;
+  if Length(ANames) <> Length(AHandlers) then Exit;
+  JsPureHostReserve(Hosts, Length(ANames));
+  if Length(Buckets.Buckets) > 0 then JsPureHostBucketsInvalidate(Buckets);
+  for I := 0 to High(ANames) do
+  begin
+    JsPureCheckHostName(ANames[I], ABackend);
+    if not Assigned(AHandlers[I]) then
+      raise EJsError.Create('Host handler is nil', jecUnknown, 'Error', '', ABackend);
+    LView := TStringView.FromStr(ANames[I]);
+    LHash := HostHashView(LView);
+    LIdx := HostFindCoreLinear(Hosts, LHash, LView);
+    if LIdx >= 0 then HostSetProcPtr(Hosts[LIdx], AHandlers[I], 2)
+    else begin LIdx := HostAllocOneReserved(Hosts, ANames[I], LHash); HostSetProcPtr(Hosts[LIdx], AHandlers[I], 2); end;
+  end;
+  if Length(Hosts) > JS_PURE_HASH_THRESHOLD then JsPureHostBucketsRebuild(Hosts, Buckets);
 end;
 
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer;
