@@ -232,6 +232,9 @@
 ### S97 — Zip64 单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `reader.ZipDecodeZip64Locator/ZipDecodeZip64Eocd` 单源化双 `ParseCentralDirectory` 的 Zip64 定位与字段解析重复（locator 20B `sig+disk+offset` + eocd 56B `sig+size+version+disks+counts+sizes+offsets` 2×24 行 → 2×2 行 `ZipDecodeZip64Locator(Cursor, EocdOffset)` / `ZipDecodeZip64Eocd(Cursor, Count,CdSize,CdOffset)`），`zip64 records missing/bad zip64 EOCD signature` 语义守恒，`reader` 双形态共享 Zip64 内核（`FC Seek` 与 `Fetch+Cursor` 统一），12 门 + `bench_zip 221785` 可编译回归，`S85—S97` 十三单源平台期
 
+### S98 — 载荷定位单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipResolvePayloadOffset` 单源化双 `LocatePayload` 的载荷定位重复（`GuardReadable+ParseLocalHeader+payload GuardRange` 2×9 行 → 2×1 行 `ZipResolvePayloadOffset(LE,Flags,Cursor,TotalSize)`），`bad local header signature/truncated entry payload` 语义守恒，`reader` 双形态共享载荷内核（`FC Seek+FC.Length` 与 `Fetch+NewByteCursor+FSize` 统一），12 门 + `bench_zip 221786` 可编译回归，`S85—S98` 十四单源平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -264,4 +267,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S97 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 8a171b5` 已落地（S96→S97 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd` 十四单源（三路泵+双管道+EOCD双+中央循环+Zip64双） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S98 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 86f6fff` 已落地（S97→S98 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset` 十五单源（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位） + AES 零堆栈。

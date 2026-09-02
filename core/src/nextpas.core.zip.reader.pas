@@ -401,6 +401,17 @@ begin
   ACdOffset := AC.ReadU64LE;
 end;
 
+function ZipResolvePayloadOffset(const LE: TZipEntryInfo; AFlags: Word;
+  const AC: IByteCursor; ATotalSize: Int64): Int64;
+var
+  LNameLen, LExtraLen: Word;
+begin
+  GuardEntryReadable(LE, AFlags);
+  ParseLocalHeader(AC, LNameLen, LExtraLen);
+  Result := Int64(LE.LocalHeaderOffset) + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
+  GuardRange(ATotalSize, Result, Int64(LE.CompressedSize), 'entry payload');
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -661,17 +672,12 @@ function TZipReaderImpl.LocatePayload(AIndex: Integer): Int64;
 var
   LE: TZipEntryInfo;
   LLho: Int64;
-  LNameLen, LExtraLen: Word;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryReadable(LE, FFlags[AIndex]);
-
   LLho := Int64(LE.LocalHeaderOffset);
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   FC.Seek(SizeUInt(LLho));
-  ParseLocalHeader(FC, LNameLen, LExtraLen);
-  Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
-  NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
+  Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], FC, Int64(FC.Length));
 end;
 
 function TZipReaderImpl.ExtractIndex(AIndex: Integer): TBytes;
@@ -914,18 +920,13 @@ var
   LLho: Int64;
   LHeader: TBytes;
   LC: IByteCursor;
-  LNameLen, LExtraLen: Word;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryReadable(LE, FFlags[AIndex]);
-
   LLho := Int64(LE.LocalHeaderOffset);
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   Fetch(LLho, C_LOCAL_HEADER_LEN, LHeader, 'local header');
   LC := NewByteCursor(LHeader);
-  ParseLocalHeader(LC, LNameLen, LExtraLen);
-  Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
-  NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
+  Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], LC, FSize);
 end;
 
 function TZipSourceReader.ExtractIndex(AIndex: Integer): TBytes;
