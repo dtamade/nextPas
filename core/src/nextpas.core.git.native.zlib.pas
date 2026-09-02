@@ -45,18 +45,18 @@ function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
 
 implementation
 
-function GitZlibAdler32(const AData: TBytes): UInt32; inline;
-begin
-  if Length(AData) = 0 then
-    Exit(UInt32(ADLER32_INIT));
-  Result := UInt32(Adler32Update(ADLER32_INIT, PByte(AData), SizeUInt(Length(AData))));
-end;
-
 function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline;
 begin
   if (ACount = 0) or (AData = nil) then
     Exit(UInt32(ADLER32_INIT));
   Result := UInt32(Adler32Update(ADLER32_INIT, AData, ACount));
+end;
+
+function GitZlibAdler32(const AData: TBytes): UInt32; inline;
+begin
+  { perf: inline thin forward single source to PByte overload, zero-copy PByte+Len
+    view via bytes.ops idiom (PByte(AData)+Len), no duplicate Adler32Update, no alloc/Move }
+  Result := GitZlibAdler32(PByte(AData), SizeUInt(Length(AData)));
 end;
 
 function GitZlibCompress(const AData: TBytes): TBytes; inline;

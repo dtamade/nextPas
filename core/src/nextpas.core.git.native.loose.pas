@@ -173,7 +173,7 @@ begin
   if not GitLooseExists(AGitDir, AOid) then
     Exit;
   // perf: prefix inflate only header (≤64B) via GitZlibDecompressPrefix — zero-copy PByte+Len view, stack buffer 64B, single inflate, no Plain payload allocation; thin inline forward to compress owner, no extra heap beyond compressed Raw
-  // single source: bytes.ops TByteSpan view would own zero-copy header slice; here stack Head is zero-copy view, single SetLength+Move via PAnsiChar, no scattered Move
+  // single source: bytes.ops TByteSpan view owns zero-copy header slice; stack Head is zero-copy view, single SetLength+SpanCopy via TByteSpan, no scattered Move
   // stability: Raw is TBytes refcounted, Head is stack, inflateEnd in try..finally of compress owner; no leak even on exception, payload mismatch deferred to full Read
   Raw := ReadFile(GitLoosePath(AGitDir, AOid));
   if Length(Raw) = 0 then
@@ -197,11 +197,11 @@ begin
     end;
   if Sp <= 0 then
     raise EGitError.Create('corrupt loose object header');
-  // single source: header text via single SetLength+Move from stack view (bytes.ops owns Move pattern, zero-copy PByte^->PChar^, inline-safe)
-  // perf: inline single alloc (Nul <=64) + single Move, no TBytes Plain alloc, no payload heap
+  // single source: bytes.ops SpanCopy single Move (inline, zero-copy TByteSpan PByte+Len view, no scattered Move)
+  // perf: inline single alloc (Nul <=64) + single Move via SpanCopy, no TBytes Plain alloc, no payload heap
   SetLength(HeadText, Nul);
   if Nul > 0 then
-    Move(Head[0], PAnsiChar(HeadText)^, Nul);
+    SpanCopy(TByteSpan.Create(PByte(PAnsiChar(HeadText)), SizeUInt(Nul)), TByteSpan.Create(@Head[0], SizeUInt(Nul)));
   KindName := Copy(HeadText, 1, Sp);
   SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
   Declared := StrToInt64Def(SizeText, -1);

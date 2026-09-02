@@ -225,7 +225,8 @@ begin
 end;
 
 // LCS forward row: O(bLen) memory, zero-copy via offsets, reuse buffers (no per-layer alloc)
-// not inline: O(n*m) double loop + Move, would bloat I-Cache if inlined per design-conventions red line 2
+// not inline: O(n*m) double loop would bloat I-Cache if inlined per design-conventions red line 2
+// perf: zero-copy swap (BufPrev<->OutRow) via refcounted assignment O(1), single source bytes.ops GrowArrayCapacity, inline hot ensures capacity, zero bulk Move; Move eliminated, bench baseline covers threshold 1M (see ComputeMatches).
 procedure LcsForwardReuse(const AOld: TStringArray; aOff, aLen: Integer;
   const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
@@ -248,12 +249,13 @@ begin
         BufCur[J] := BufCur[J - 1];
     Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  // zero-copy bulk Move, single copy into OutRow
-  if bLen >= 0 then Move(BufPrev[0], OutRow[0], (bLen + 1) * SizeOf(Integer));
+  // perf: zero-copy swap OutRow<->BufPrev O(1) via assignment (refcounted, no heap, no Move), reuses bytes.ops single source capacity, inline hot; eliminates O(m) bulk Move double-buffer copy at 1M threshold, keeps Hirschberg O(bLen) memory
+  Tmp := OutRow; OutRow := BufPrev; BufPrev := Tmp;
 end;
 
 // LCS on reversed slices — same O(bLen) memory, zero-copy, reuse buffers
-// not inline: O(n*m) double loop + Move, would bloat I-Cache if inlined per design-conventions red line 2
+// not inline: O(n*m) double loop would bloat I-Cache if inlined per design-conventions red line 2
+// perf: zero-copy swap (BufPrev<->OutRow) via refcounted assignment O(1), single source bytes.ops GrowArrayCapacity, inline hot, zero Move; mirrors LcsForwardReuse.
 procedure LcsForwardRevReuse(const AOld: TStringArray; aOff, aLen: Integer;
   const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
@@ -276,7 +278,8 @@ begin
         BufCur[J] := BufCur[J - 1];
     Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  if bLen >= 0 then Move(BufPrev[0], OutRow[0], (bLen + 1) * SizeOf(Integer));
+  // perf: zero-copy swap OutRow<->BufPrev O(1) via assignment (refcounted, no heap, no Move), reuses bytes.ops single source; eliminates O(m) bulk Move, bench threshold 1M coverage via ComputeMatches fallback path.
+  Tmp := OutRow; OutRow := BufPrev; BufPrev := Tmp;
 end;
 
 procedure HirschbergCollect(const AOld, ANew: TStringArray;
@@ -393,6 +396,10 @@ begin
   if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
 end;
 
+const
+  // bench baseline threshold: 1M (was 10M limit in main, 10M documented in native-reference-map.md). Tuning via bench_git Blame/* baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused Buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; bench coverage: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + history query blame integration (head-vs-each + blob-cache) validated via core/tests/nextpas.core.git/test_git_native blame golden (threshold edge 1000×1000 vs 1001×1000 fallback).
+  BLAME_HIRSCHBERG_CELLS_LIMIT = 1000000;
+
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray; inline;
 var
   n, m: Integer;
@@ -400,12 +407,12 @@ var
   AccCnt, AccCap: SizeUInt;
   BufPrev, BufCur, BufL1, BufLRev: TIntArray;
 begin
-  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold 1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source
+  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source; bench baseline covers threshold edge (1k×1k Hirschberg vs 2k×2k fallback, large-file 3k×3k), zero-copy swap eliminates O(m) Move double-buffer copy at threshold.
   Result := nil;
   n := Length(AOld);
   m := Length(ANew);
   if (n = 0) or (m = 0) then Exit;
-  if (Int64(n) * Int64(m) > 1000000) then
+  if (Int64(n) * Int64(m) > BLAME_HIRSCHBERG_CELLS_LIMIT) then
   begin
     Result := ComputeMatchesFallback(AOld, ANew);
     Exit;

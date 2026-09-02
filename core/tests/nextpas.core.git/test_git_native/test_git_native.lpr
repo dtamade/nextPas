@@ -6,6 +6,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
@@ -41,24 +42,22 @@ var
   GTreeHex: string;
   GBranch: string;
 
-function BytesOfString(const AText: string): TBytes;
+function BytesOfString(const AText: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(AText[1], Result[0], Length(AText));
+  { single-source: bytes.ops.StringToBytes inline + PByte^ Move, zero-copy forwarding }
+  Result := nextpas.core.bytes.ops.StringToBytes(AText);
 end;
 
-function BytesToString(const B: TBytes): string;
+function BytesToString(const B: TBytes): string; inline;
 begin
-  SetLength(Result, Length(B));
-  if Length(B) > 0 then Move(B[0], Result[1], Length(B));
+  { single-source: bytes.ops.BytesToString inline, avoids local Move duplicate }
+  Result := nextpas.core.bytes.ops.BytesToString(B);
 end;
 
-function ConcatBytes(const AA, AB: TBytes): TBytes;
+function ConcatBytes(const AA, AB: TBytes): TBytes; inline;
 begin
-  SetLength(Result, Length(AA)+Length(AB));
-  if Length(AA)>0 then Move(AA[0], Result[0], Length(AA));
-  if Length(AB)>0 then Move(AB[0], Result[Length(AA)], Length(AB));
+  { single-source: bytes.ops.BytesConcat inline + SpanConcat single Move^, zero-copy }
+  Result := nextpas.core.bytes.ops.BytesConcat(AA, AB);
 end;
 
 procedure RunGit(const AArgs: array of string);

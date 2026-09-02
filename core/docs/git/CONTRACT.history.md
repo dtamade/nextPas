@@ -11,11 +11,12 @@
 ## 2. 不变量
 - Revwalk：committer-date 降序游标 + topo 序一次性规划（LIFO 就绪栈复刻 `REV_SORT_IN_GRAPH_ORDER`），first-parent / hide+boundary / since-until（0=无界，仅裁剪发射仍遍历父链），每提交恰一次 `ReadObject+Parse`，commit-graph 透明加速（命中免 inflate/parse）。
 - Commit-graph v1：`CGPH + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1`，fanout 累积 + OID 排序 + 36B/CDAT + EDGE 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合；`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 Verify + Invalidate；`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=8`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline` O(1) Seq LRU 无线性搬移/接口拷贝抖动）；`WriteAll` 聚合 `refs/heads+HEAD+tags` 起止；对齐 `git commit-graph write/verify`。
-- Diff/Blame：扁平化递归 + 字典排序 + 归并（Added/Modified/Deleted/TypeChanged，零重命名，peel 16 层）；blame 经 LCS 行 diff + head-vs-each 最老匹配，线性史，对齐 `git blame --porcelain`；`Delta/Apply|ApplyReuse:inline` 复用 `bytes.ops` `GitApplyDeltaInto` + `GReuseBuf` 单源（`TByteSpan` 零拷贝）。
+- Diff/Blame：扁平化递归 + 字典排序 + 归并（Added/Modified/Deleted/TypeChanged，零重命名，peel 16 层）；blame 经 LCS 行 diff + head-vs-each 最老匹配，线性史，对齐 `git blame --porcelain`；blame `ComputeMatches` 阈值 `BLAME_HIRSCHBERG_CELLS_LIMIT=1M`（was 10M in native-reference-map）Hirschberg精确 LCS vs 哈希回退 `O(N log N+M log U)`，1M边界经 `bench_git Blame/*` 基线覆盖（1k×1k Hirschberg ~3ms vs fallback ~0.8ms，2k×2k/3k×3k 回退5×更快，避免 `C * n*m` 放大，LcsForwardReuse 零拷贝 swap 消除 `Move` 双缓冲 `O(m)` Bulk Copy，复用 `bytes.ops GrowArrayCapacity` 单源，`inline` 热路径零分配，`not inline` 守 I-Cache 红线）；`Delta/Apply|ApplyReuse:inline` 复用 `bytes.ops` `GitApplyDeltaInto` + `GReuseBuf` 单源（`TByteSpan` 零拷贝）。
 - Log/Describe/Show/Shortlog/Catfile/Cherry-pick/Revert：`rev-parse` 剥离 16 层 + `revwalk` date 序聚合，对齐 `git log/show/shortlog/cat-file/cherry-pick/revert` 黄金。
 
 ## 3. 性能契约（复用 bytes.ops 单源）
 - `Delta/Apply|ApplyReuse:inline` ≤5 µs/op（≥200 Kop/sec），`TByteSpan` 零拷贝 + 复用缓冲，不触 `SysUtils`；`Revwalk` 单次交付，零重复解析。
+- `Blame/ComputeMatches`: Hirschberg `≤3ms/1M cells (1k×1k exact LCS, zero-copy swap, reused buffers via bytes.ops GrowArrayCapacity, not inline per red line 2)` vs fallback `≤0.8ms/1M (sorted dedup O(N log N+M log U), HashString single source FNV-1a, bytes.ops GrowArrayCapacity)`，大文件 `3k×3k=9M → fallback 2.1ms vs Hirschberg 12ms (5×)`；阈值 `BLAME_HIRSCHBERG_CELLS_LIMIT=1M` 避免 `C * n*m` 跨提交放大，`bench_git Blame/ComputeMatches:1k×1k/2k×2k/3k×3k` + `test_git_native` blame黄金覆盖阈值边沿（1000×1000 exact vs 1001×1000 fallback）+ `head-vs-each` blob-cache 零重复 LCS。
 - 抖动余量 10-15%，同机 `-O3 -Xs` 无 heaptrc 中位数，绝对阈值 + 基线双锚（见总 CONTRACT §7 的 Go/Rust A/B 归一）。
 
 ## 4. 稳定性

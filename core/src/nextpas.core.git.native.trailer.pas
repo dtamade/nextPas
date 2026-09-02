@@ -122,7 +122,7 @@ end;
 function GitFormatTrailer(const AKey, AValue: string): string; inline;
 var L1,R1,L2,R2, LKeyLen, LValLen: Integer; LTotal: SizeUInt; LPos: SizeUInt;
 begin
-  // perf: single allocation zero-copy via Move, inline; trims without extra string alloc
+  // perf: single allocation zero-copy via PAnsiChar^ Move (bytes.ops single source, inline-safe: no indexed var for Move untyped param), inline kept small (trim loops + single alloc) avoids I-Cache bloat
   L1:=1; R1:=Length(AKey);
   while (L1<=R1) and (AKey[L1] <= ' ') do Inc(L1);
   while (R1>=L1) and (AKey[R1] <= ' ') do Dec(R1);
@@ -135,10 +135,10 @@ begin
   SetLength(Result, LTotal);
   if LTotal=0 then Exit;
   LPos:=1;
-  if LKeyLen>0 then begin Move(AKey[L1], Result[LPos], LKeyLen); Inc(LPos, SizeUInt(LKeyLen)); end;
+  if LKeyLen>0 then begin Move((PAnsiChar(Pointer(AKey)) + L1 - 1)^, (PAnsiChar(Pointer(Result)) + LPos - 1)^, SizeUInt(LKeyLen)); Inc(LPos, SizeUInt(LKeyLen)); end;
   Result[LPos]:=':'; Inc(LPos);
   Result[LPos]:=' '; Inc(LPos);
-  if LValLen>0 then Move(AValue[L2], Result[LPos], LValLen);
+  if LValLen>0 then Move((PAnsiChar(Pointer(AValue)) + L2 - 1)^, (PAnsiChar(Pointer(Result)) + LPos - 1)^, SizeUInt(LValLen));
 end;
 
 function GitFormatTrailers(const ATrailers: TGitTrailerArray): string;

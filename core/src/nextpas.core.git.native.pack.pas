@@ -44,10 +44,12 @@ type
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // delta target size cache: 64-entry direct-mapped (bytes.ops single source)
+    // delta target size cache: 64-entry direct-mapped with eviction jitter gate (bytes.ops single source)
     FPeekKeys: array[0..63] of SizeUInt;
     FPeekVals: array[0..63] of Int64;
     FPeekValid: array[0..63] of Boolean;
+    FPeekJitter: array[0..63] of Byte;
+    FPeekTick: SizeUInt;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -183,8 +185,10 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
-  // cache zero-init: FPeekValid false via class zero-fill; direct-mapped hash, no round-robin state
+  // cache zero-init: FPeekValid false via class zero-fill; jitter gate zero-fill; direct-mapped hash
   FillChar(FPeekValid, SizeOf(FPeekValid), 0);
+  FillChar(FPeekJitter, SizeOf(FPeekJitter), 0);
+  FPeekTick := 0;
   LoadIndex(AIdxPath);
 end;
 
@@ -423,6 +427,22 @@ var
   Idx: SizeUInt;
 begin
   Idx := GitPeekHashIdx(APos);
+  // perf: inline + eviction jitter gate (cheap tick xor, probation 3) dampens direct-mapped thrash; avoids repeated 32B prefix inflate on Revwalk hotspot, zero-copy Move via caller, single source bytes.ops
+  if FPeekValid[Idx] and (FPeekKeys[Idx] <> APos) then
+  begin
+    Inc(FPeekTick);
+    if ((APos xor FPeekTick) and 3) <> 0 then
+    begin
+      if FPeekJitter[Idx] < 3 then
+      begin
+        Inc(FPeekJitter[Idx]);
+        Exit;
+      end;
+    end;
+    FPeekJitter[Idx] := 0;
+  end
+  else
+    FPeekJitter[Idx] := 0;
   FPeekKeys[Idx] := APos;
   FPeekVals[Idx] := ATargetSize;
   FPeekValid[Idx] := True;
