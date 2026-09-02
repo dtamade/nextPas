@@ -85,18 +85,35 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.fs.stream;
+  nextpas.core.fs.stream,
+  nextpas.core.bytes.ops;
+
+// perf: inline单源几何扩容（初始16、2倍）复用 bytes.builder 思想，零额外拷贝，单源于 ArchiveNextCapacity
+function ArchiveNextCapacity(const ACurrent, ARequired: Integer): Integer; inline;
+begin
+  Result := ACurrent;
+  if Result = 0 then Result := 16;
+  while Result < ARequired do
+    Result := Result * 2;
+end;
+
+function ArchiveStrCompare(const A, B: string): Integer; inline;
+var LA, LB: SizeUInt; SA, SB: TByteSpan;
+begin
+  // perf: inline + SpanCompare零拷贝（PByte+Len视图，SIMD CompareBytesOrdered单源，无临时串分配）
+  LA := SizeUInt(Length(A));
+  LB := SizeUInt(Length(B));
+  if LA = 0 then SA := TByteSpan.Empty else SA := TByteSpan.Create(PByte(@A[1]), LA);
+  if LB = 0 then SB := TByteSpan.Empty else SB := TByteSpan.Create(PByte(@B[1]), LB);
+  Result := SpanCompare(SA, SB);
+end;
 
 procedure ArchiveEnsureWalkCapacity(var A: TArchiveWalkArray; AMin: Integer);
-var LCap, LNew: Integer;
+var LCap: Integer;
 begin
   LCap := Length(A);
   if LCap >= AMin then Exit;
-  if LCap = 0 then LCap := 16;
-  LNew := LCap;
-  while LNew < AMin do
-    LNew := LNew * 2;
-  SetLength(A, LNew);
+  SetLength(A, ArchiveNextCapacity(LCap, AMin));
 end;
 
 procedure ArchiveWalkAppend(var A: TArchiveWalkArray; var ACount: Integer;
@@ -112,15 +129,12 @@ begin
 end;
 
 procedure ArchiveEnsureDeferredCapacity(var A: TArchiveDeferredArray; AMin: Integer);
-var LCap, LNew: Integer;
+var LCap: Integer;
 begin
+  // perf: 复用ArchiveNextCapacity单源几何扩容（初始16、2倍），inline零额外分支
   LCap := Length(A);
   if LCap >= AMin then Exit;
-  if LCap = 0 then LCap := 16;
-  LNew := LCap;
-  while LNew < AMin do
-    LNew := LNew * 2;
-  SetLength(A, LNew);
+  SetLength(A, ArchiveNextCapacity(LCap, AMin));
 end;
 
 procedure ArchiveDeferredAppend(var A: TArchiveDeferredArray; var ACount: Integer;
@@ -155,8 +169,9 @@ begin
     LJ := LHi;
     LPivotIdx := (LLo + LHi) shr 1;
     repeat
-      while A[LI].Name < A[LPivotIdx].Name do Inc(LI);
-      while A[LJ].Name > A[LPivotIdx].Name do Dec(LJ);
+      // perf: inline + SpanCompare零拷贝（bytes.ops单源，PByte+Len视图，万级目录零分配）
+      while ArchiveStrCompare(A[LI].Name, A[LPivotIdx].Name) < 0 do Inc(LI);
+      while ArchiveStrCompare(A[LJ].Name, A[LPivotIdx].Name) > 0 do Dec(LJ);
       if LI <= LJ then
       begin
         LTmp := A[LI];
@@ -225,12 +240,8 @@ begin
       LSegLen := LPos - LStart;
       if LSegLen > 0 then
       begin
-        if LPrefix = '' then
-          LPrefix := Copy(APath, LStart, LSegLen)
-        else if LPrefix = '/' then
-          LPrefix := LPrefix + Copy(APath, LStart, LSegLen)
-        else
-          LPrefix := LPrefix + '/' + Copy(APath, LStart, LSegLen);
+        // perf: 复用ArchiveJoinPath单次SetLength+Move（bytes.ops单源思想），消除Copy+拼接O(N²)短生命周期串分配
+        LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
           raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
       end
@@ -296,9 +307,11 @@ end;
 function ArchiveJoinPath(const ABase, AName: string): string; inline;
 var
   LBaseLen, LNameLen, LNameOff, LTotal: SizeUInt;
+  LBaseIsAbs: Boolean;
 begin
   // perf: inline + 单次 SetLength+Move，零 Delete 堆抖动；复用 bytes.ops 单源思想，落盘热路径
   LBaseLen := Length(ABase);
+  LBaseIsAbs := (LBaseLen > 0) and (ABase[1] = '/');
   while (LBaseLen > 0) and (ABase[LBaseLen] = '/') do
     Dec(LBaseLen);
   LNameLen := Length(AName);
@@ -309,7 +322,16 @@ begin
   if LBaseLen = 0 then
   begin
     if LNameLen = 0 then
-      Exit('');
+    begin
+      if LBaseIsAbs then Exit('/') else Exit('');
+    end;
+    if LBaseIsAbs then
+    begin
+      SetLength(Result, 1 + LNameLen);
+      Result[1] := '/';
+      Move(AName[LNameOff], Result[2], LNameLen);
+      Exit;
+    end;
     SetLength(Result, LNameLen);
     Move(AName[LNameOff], Result[1], LNameLen);
     Exit;

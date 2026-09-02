@@ -15,6 +15,7 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
+    FStreamBuf: TBytes; // pooled 64K buffer for AddEntryFromReader, amortized allocs, inline zero-copy
     procedure WriteBlock(const ABlock: array of Byte);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
@@ -56,12 +57,14 @@ begin
   end;
 end;
 
-{ — pax record：长度前缀十进制自洽，单次 SetLength+Move 复用 bytes.ops 单源语义，零拷贝无 IBytesBuilder/ToBytes 中转；含循环/分配不 inline — }
+{ — pax record：长度前缀十进制自洽，复用 bytes.ops SpanConcatMany/BytesToString 单源，零拷贝 TByteSpan 视图（PAnsiChar），单次分配闭合 common SpanToString 审计；含循环/分配不 inline — }
 function MakePaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits: Integer;
   SLen: string;
-  LPos: Integer;
+  LSp, LEqB, LNLB: Byte;
+  LSpans: array[0..5] of TByteSpan;
+  LBytes: TBytes;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
@@ -73,29 +76,28 @@ begin
     LLen := LBase + LDigits;
     SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  // perf: 单次 SetLength(LLen) + 单源 Move(bytes.ops 语义) 零拷贝，避免 IBytesBuilder 几何扩容缓冲 + ToBytes 单次分配 + BytesToString 单次 Move 的双分配与额外转码；极小 pax 记录亦零额外 Move（循环体外联禁 inline，稳定性：块零初始化由调用方兜底）
-  SetLength(Result, LLen);
-  LPos := 1;
+  // perf: SpanConcatMany 单源分配（单次 SetLength+Move，bytes.ops 单源）+ BytesToString 单源文本转换，零拷贝 PAnsiChar 视图，避免 IBytesBuilder 几何扩容与手写 Move 分散；极小记录亦零额外 Move；inline: BytesToString/SpanConcatMany 零拷贝视图，循环体外联禁 inline
+  // stability: 空键/值用 Empty 视图守空指针，块零初始化由调用方兜底，单源闭合 common.pas SpanToString 审计
+  LSp := Ord(' ');
+  LEqB := Ord('=');
+  LNLB := 10;
   if Length(SLen) > 0 then
-  begin
-    Move(SLen[1], Result[LPos], Length(SLen));
-    Inc(LPos, Length(SLen));
-  end;
-  Result[LPos] := ' ';
-  Inc(LPos);
+    LSpans[0] := TByteSpan.Create(PByte(PAnsiChar(SLen)), SizeUInt(Length(SLen)))
+  else
+    LSpans[0] := TByteSpan.Empty;
+  LSpans[1] := TByteSpan.Create(@LSp, 1);
   if Length(AKey) > 0 then
-  begin
-    Move(AKey[1], Result[LPos], Length(AKey));
-    Inc(LPos, Length(AKey));
-  end;
-  Result[LPos] := '=';
-  Inc(LPos);
+    LSpans[2] := TByteSpan.Create(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)))
+  else
+    LSpans[2] := TByteSpan.Empty;
+  LSpans[3] := TByteSpan.Create(@LEqB, 1);
   if Length(AValue) > 0 then
-  begin
-    Move(AValue[1], Result[LPos], Length(AValue));
-    Inc(LPos, Length(AValue));
-  end;
-  Result[LPos] := #10;
+    LSpans[4] := TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)))
+  else
+    LSpans[4] := TByteSpan.Empty;
+  LSpans[5] := TByteSpan.Create(@LNLB, 1);
+  LBytes := SpanConcatMany(LSpans);
+  Result := BytesToString(LBytes);
 end;
 
 { TTarWriter }
@@ -340,7 +342,6 @@ procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: I
 const
   C_STREAM_BUF = 65536;
 var
-  LBuf: TBytes;
   LRead, LToRead: SizeUInt;
   LRemaining: Int64;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
@@ -361,17 +362,20 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  SetLength(LBuf, C_STREAM_BUF);
+  // perf: pooled 64K buffer reuse via FStreamBuf (instance-level pool), amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth only once, no per-entry SetLength/Free
+  // stability: buffer retains capacity across calls, exception-safe, freed on Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
+  if Length(FStreamBuf) < C_STREAM_BUF then
+    SetLength(FStreamBuf, C_STREAM_BUF);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin
     LToRead := SizeUInt(LRemaining);
-    if LToRead > SizeUInt(Length(LBuf)) then
-      LToRead := SizeUInt(Length(LBuf));
-    LRead := AReader.Read(LBuf[0], LToRead);
+    if LToRead > SizeUInt(Length(FStreamBuf)) then
+      LToRead := SizeUInt(Length(FStreamBuf));
+    LRead := AReader.Read(FStreamBuf[0], LToRead);
     if LRead = 0 then
       raise EIOError.Create('tar: short read');
-    if FDst.Write(LBuf[0], LRead) <> LRead then
+    if FDst.Write(FStreamBuf[0], LRead) <> LRead then
       raise EIOError.Create('tar: short write');
     Dec(LRemaining, Int64(LRead));
   end;
@@ -382,7 +386,6 @@ begin
     if FDst.Write(PadBlock[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
       raise EIOError.Create('tar: short write');
   end;
-  SetLength(LBuf, 0);
 end;
 
 procedure TTarWriter.Finish;

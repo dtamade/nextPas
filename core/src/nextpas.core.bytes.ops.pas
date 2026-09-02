@@ -75,6 +75,9 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function SpanToString(const ASpan: TByteSpan): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
+{ 单源 Move：string/PByte 零拷贝单次 Move，tar/header 等复用此单源避免分散 Move；外联避免 Move[AValue[1]] inline 膨胀与 FPC 3.3.1 inline+Move 单字节缺陷（PAnsiChar 解引用） }
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 
 implementation
 
@@ -623,6 +626,24 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
+end;
+
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+begin
+  // 单源：string -> PByte 唯一 Move 入口，零拷贝单次 Move，PAnsiChar 解引用规避 FPC 3.3.1 inline+Move(AText[1]) 单字节缺陷；空串/零长/nil 守卫，无分配
+  if (ACount = 0) or (ADest = nil) or (Length(AText) = 0) then
+    Exit;
+  if ACount > SizeUInt(Length(AText)) then
+    ACount := SizeUInt(Length(AText));
+  Move(PAnsiChar(AText)^, ADest^, ACount);
+end;
+
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
+begin
+  // 单源：PByte -> PByte 唯一 Move 入口，零拷贝单次 Move；与 CopyStringToBuffer 同源，避免 tar 等分散 Move
+  if (ACount = 0) or (ASrc = nil) or (ADest = nil) then
+    Exit;
+  Move(ASrc^, ADest^, ACount);
 end;
 
 end.
