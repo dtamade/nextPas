@@ -13,6 +13,11 @@ uses
   nextpas.core.image.base,
   nextpas.core.image.intf,
   nextpas.core.image.png,
+  nextpas.core.image.bmp,
+  nextpas.core.image.jpeg,
+  nextpas.core.image.webp,
+  nextpas.core.graphics.gif.gif888,
+  nextpas.core.graphics.qoi.qoi888,
   nextpas.core.image.dispatch;
 
 type

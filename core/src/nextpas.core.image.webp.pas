@@ -1,7 +1,7 @@
 {**
- * nextpas.core.image.webp - WebP 编解码（FFI via platform.dl，零硬链接）
- * S1：懒加载 libwebp.so.7/libwebp.so，探针 WebPGetInfo/WebPEncodeRGBA；
- *      未命中则抛 EImageDecodeError，Try* 上层收敛为 false。
+ * nextpas.core.image.webp - WebP 编解码（纯 VP8L 子集 + FFI 回退 via platform.dl，零硬链接）
+ * Probe: RIFF/WEBP 单源（bytes.binary LE，inline 零拷贝）；Decode: 纯 VP8L header 先行，
+ *        VP8/VP8X 无 VP8L 则回退 libwebp；16M cap fail-closed，Try* 不抛。
  *}
 unit nextpas.core.image.webp;
 
@@ -22,13 +22,14 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.image.webp.loader,
+  nextpas.core.graphics.webp.webp888,
   nextpas.core.mem.base,
   nextpas.core.image.base,
   nextpas.core.image.dispatch;
 
 function WebPIsAvailable: Boolean;
 begin
-  Result := WebPLoaderIsAvailable;
+  Result := WebPPureIsAvailable or WebPLoaderIsAvailable;
 end;
 
 function WebPEncodeRgba(const APixels: TBytes; AWidth, AHeight: Integer; AQuality: Single): TBytes;
@@ -61,6 +62,23 @@ end;
 function WebPDecodeRgba(const AData: TBytes; out AWidth, AHeight: Integer): TBytes;
 begin
   AWidth := 0; AHeight := 0;
+  // pure VP8L subset first (zero platform.dl, inline probe)
+  if WebPPureProbe(AData) then
+    try
+      Result := WebPPureDecodeRgba(AData, AWidth, AHeight);
+      Exit;
+    except
+      on E: EImageDecodeError do
+      begin
+        // VP8 lossy / VP8X without VP8L -> fallback to FFI; truncated/bad header re-raises
+        if (Pos('VP8 lossy not in pure', E.Message) = 0)
+          and (Pos('VP8X without VP8L', E.Message) = 0)
+          and (Pos('missing VP8L', E.Message) = 0) then
+          raise;
+        // else fall through to FFI
+      end;
+    end;
+  // header validation for non-pure path (keep EImageDecodeError closed)
   if Length(AData) < 12 then
     raise EImageDecodeError.Create('webp: truncated (no RIFF)');
   if (AData[0] <> Ord('R')) or (AData[1] <> Ord('I')) or (AData[2] <> Ord('F')) or (AData[3] <> Ord('F')) then
@@ -68,16 +86,14 @@ begin
   if (AData[8] <> Ord('W')) or (AData[9] <> Ord('E')) or (AData[10] <> Ord('B')) or (AData[11] <> Ord('P')) then
     raise EImageDecodeError.Create('webp: bad WEBP');
   if not WebPLoaderIsAvailable then
-    raise EImageDecodeError.Create('webp: decoder not available (libwebp not found via platform.dl)');
+    raise EImageDecodeError.Create('webp: decoder not available (libwebp not found via platform.dl, pure VP8L only)');
   raise ENotImplementedError.Create('webp: decode wiring pending (S2 FFI)');
   Result := nil;
 end;
 
-function WebPProbe(const AData: TBytes): Boolean;
+function WebPProbe(const AData: TBytes): Boolean; inline;
 begin
-  Result := (Length(AData) >= 12) and (AData[0] = Ord('R')) and (AData[1] = Ord('I'))
-    and (AData[2] = Ord('F')) and (AData[3] = Ord('F')) and (AData[8] = Ord('W'))
-    and (AData[9] = Ord('E')) and (AData[10] = Ord('B')) and (AData[11] = Ord('P'));
+  Result := WebPPureProbe(AData);
 end;
 
 initialization
