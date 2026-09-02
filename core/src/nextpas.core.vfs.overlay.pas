@@ -33,12 +33,12 @@ type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
-    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；RWLock读写分离守并发，读并发零争用，inline热路径，零拷贝 SpanCompare 单源 via bytes.ops }
+    FIndex: TObject; { hash 索引：path->winning层(-1=miss)；RWLock读并发零争用/TryAcquireWrite非阻塞写防穿透惊群，bytes.ops SpanCompare零拷贝单源 }
     FIndexLock: IRWLock;
-    function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
-    procedure CacheResult(const APath: string; const AIdx: Integer); inline;
-    function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
-    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
+    function TryGetCached(const APath: string; out AIdx: Integer): Boolean;
+    procedure CacheResult(const APath: string; const AIdx: Integer);
+    function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
+    function FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
   public
     constructor Create(const AList: array of IVfs);
     destructor Destroy; override;
@@ -87,7 +87,7 @@ begin
   inherited Destroy;
 end;
 
-function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
+function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean;
 begin
   AIdx := -2;
   Result := False;
@@ -100,11 +100,14 @@ begin
   end;
 end;
 
-procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer); inline;
+procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer);
+var
+  LDummy: Integer;
 begin
   if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.AcquireWrite;
+  if not FIndexLock.TryAcquireWrite then Exit;
   try
+    if TOverlayIndex(FIndex).TryGetValue(APath, LDummy) then Exit;
     TOverlayIndex(FIndex).Put(APath, AIdx);
   finally
     FIndexLock.ReleaseWrite;
@@ -112,8 +115,8 @@ begin
 end;
 
 { 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
-  命中层单次 Stat 直达（零二次二分），RWLock读并发零争用/写互斥，inline热路径，bytes.ops零拷贝单源 }
-function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+  命中层单次 Stat 直达（零二次二分），RWLock读并发零争用/TryAcquireWrite非阻塞写防穿透惊群，bytes.ops零拷贝单源；非inline（循环+RWLock+try-except禁inline） }
+function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
 var
   I, LCached: Integer;
 begin
@@ -154,7 +157,7 @@ begin
   Result := False;
 end;
 
-function TOverlayVfs.FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
+function TOverlayVfs.FindStat(const APath: string; out AInfo: TStatInfo): Boolean;
 var
   LFs: IVfs;
 begin

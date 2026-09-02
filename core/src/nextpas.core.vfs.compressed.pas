@@ -1,10 +1,10 @@
 unit nextpas.core.vfs.compressed;
 
-{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名，L7 到期拆分为 nextpas.core.vfs.decorator 后移除白名单）。
-  本单元仅保留策略（VFS_DECOMPRESS_MAX_BYTES→compress.base GZIP_MAX 单源 32MiB、Gzip 魔数 bytes.ops 单源、daAuto/daGzip 语义），
+{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名，Registry 单缝白名单过渡，L7 到期聚合拆分为 nextpas.core.vfs.decorator 后移除白名单）。
+  本单元仅保留策略（VFS_DECOMPRESS_MAX_BYTES 字面量 32MiB 数值对齐 compress.base GZIP_MAX canonical 单源，数值漂移由 source-contract 锁定；Gzip 魔数 bytes.ops 单源；daAuto/daGzip 语义），
   模板复用 nextpas.core.vfs.transform 单源决策器（4K HeaderPred 单流复用 inline 零拷贝，大文件 2 字节轻量预判免 4K），消除 120+ 行样板重复。
-  分层：L3→L2 单缝白名单过渡，L7 到期随 L3 族聚合拆分，现阶段以薄门面仅策略+文档正名守层级高级感统一性。
-  STORE 零拷贝与 32MiB 防 bomb 由 transform 承载；daAuto 经 4K HeaderPred（复用 transform TRANSFORM_HEADER_PEEK + bytes.ops BytesIsGzipHeader 单源）+ 2 字节轻量预判免大文件 4K，Stat/OpenRead 大文件解压一致性 via 单源。 }
+  分层：L3→L2 无直接 compress.base 依赖（仅实现侧单向使用 compress.gzip，接口层以字面量守 L0 纯度与无 L2→L2，同 vfs.base 数值对齐纪律）；L7 到期随 L3 族聚合拆分，现阶段以薄门面仅策略+文档正名守层级高级感统一性。
+  STORE 零拷贝与 32MiB 防 bomb 由 transform 单源决策器承载；daAuto 经 4K HeaderPred（直接复用 transform.TRANSFORM_HEADER_PEEK 单源，无本地别名转发 + bytes.ops BytesIsGzipHeader inline 零拷贝单源）+ 2 字节轻量预判免大文件 4K，Stat/OpenRead 大文件解压一致性 via 单源；稳定性 try-finally Close 不丢。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -12,14 +12,16 @@ interface
 
 uses
   nextpas.core.vfs.base,
-  nextpas.core.vfs.intf,
-  nextpas.core.compress.base;
+  nextpas.core.vfs.intf;
 
 type
   TDecompressAlgo = (daAuto, daGzip);
 
 const
-  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB) 同值，
+    canonical 单源寄居 compress.base；本薄门面以字面量守 L0 纯度与无 L2→L2，
+    漂移由 source-contract 数值一致性断言锁定（同 vfs.base 对齐纪律）。 }
+  VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 function CreateDecompressingVfs(const AInner: IVfs;
   const AAlgo: TDecompressAlgo = daAuto): IVfs;
@@ -36,9 +38,6 @@ uses
   nextpas.core.vfs.transform,
   nextpas.core.vfs.util,
   nextpas.core.compress.gzip;
-
-const
-  COMPRESSED_HEADER_PEEK = TRANSFORM_HEADER_PEEK;
 
 function GzipTransform(const AData: TBytes): TBytes; inline;
 begin

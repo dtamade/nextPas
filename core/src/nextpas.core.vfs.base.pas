@@ -269,16 +269,83 @@ end;
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 var
-  Spans: array of TByteSpan;
-  I: SizeInt;
+  N, OutN, PrefixLen, SegPos, J: SizeInt;
+  Lo, Hi, Mid: SizeInt;
+  I, Cap: SizeInt;
+  ChildSpan, PrevSpan, PrefixSpan, CurSpan: TByteSpan;
+  NeedAdd: Boolean;
 begin
-  // 单源收敛：string 版薄封装转 Span 版，Move/Span 逻辑仅一处维护（FromSpans）
-  if Length(ASortedPaths) = 0 then Exit(nil);
-  SetLength(Spans, Length(ASortedPaths));
-  for I := 0 to High(ASortedPaths) do
-    if Length(ASortedPaths[I]) = 0 then Spans[I] := TByteSpan.Empty
-    else Spans[I] := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(Length(ASortedPaths[I])));
-  Result := VfsDeriveChildNamesFromSpans(Spans, ADirPrefix);
+  Result := nil;
+  N := Length(ASortedPaths);
+  if N = 0 then Exit;
+  PrefixLen := Length(ADirPrefix);
+  if PrefixLen > 0 then
+    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
+  else
+    PrefixSpan := TByteSpan.Empty;
+  // 零分配热点消除：不再分配 Spans 数组（原 O(n) 临时分配），按需零拷贝视图 TByteSpan.Create 复用 bytes.ops 单源 inline（SpanCompare/SpanStartsWith/SpanEqual + MemEqual/CompareBytesOrdered），仅结果 TVfsNameArray 按扇出限界 16 倍增分配
+  Lo := 0;
+  Hi := N;
+  if PrefixLen > 0 then
+  begin
+    while Lo < Hi do
+    begin
+      Mid := Lo + (Hi - Lo) div 2;
+      if Length(ASortedPaths[Mid]) = 0 then CurSpan := TByteSpan.Empty
+      else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[Mid][1]), SizeUInt(Length(ASortedPaths[Mid])));
+      if SpanCompare(CurSpan, PrefixSpan) < 0 then
+        Lo := Mid + 1
+      else
+        Hi := Mid;
+    end;
+  end;
+  SetLength(Result, 0);
+  OutN := 0;
+  for I := Lo to N - 1 do
+  begin
+    if Length(ASortedPaths[I]) = 0 then CurSpan := TByteSpan.Empty
+    else CurSpan := TByteSpan.Create(PByte(@ASortedPaths[I][1]), SizeUInt(Length(ASortedPaths[I])));
+    if SizeInt(CurSpan.Len) <= PrefixLen then Continue;
+    if PrefixLen > 0 then
+    begin
+      if not SpanStartsWith(CurSpan, PrefixSpan) then
+        Break;
+    end;
+    SegPos := 0;
+    for J := PrefixLen to SizeInt(CurSpan.Len) - 1 do
+      if CurSpan.Data[J] = Ord('/') then
+      begin
+        SegPos := J + 1;
+        Break;
+      end;
+    if SegPos > 0 then
+      ChildSpan := TByteSpan.Create(CurSpan.Data, SizeUInt(SegPos - 1))
+    else
+      ChildSpan := CurSpan;
+    if OutN = 0 then
+      NeedAdd := True
+    else
+    begin
+      if Length(Result[OutN - 1]) = 0 then PrevSpan := TByteSpan.Empty else PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1][1]), SizeUInt(Length(Result[OutN - 1])));
+      NeedAdd := not SpanEqual(PrevSpan, ChildSpan);
+    end;
+    if NeedAdd then
+    begin
+      if OutN >= Length(Result) then
+      begin
+        Cap := Length(Result);
+        if Cap = 0 then Cap := 16;
+        while Cap <= OutN do Cap := Cap * 2;
+        if Cap > N - Lo then Cap := N - Lo;
+        SetLength(Result, Cap);
+      end;
+      SetLength(Result[OutN], ChildSpan.Len);
+      if ChildSpan.Len > 0 then
+        Move(ChildSpan.Data^, Result[OutN][1], ChildSpan.Len);
+      Inc(OutN);
+    end;
+  end;
+  SetLength(Result, OutN);
 end;
 
 end.

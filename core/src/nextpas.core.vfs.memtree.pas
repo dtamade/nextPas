@@ -376,7 +376,7 @@ begin
     StatInto(Seen[I], Info);
     Result[I] := Info.Info;
   end;
-  VfsSortEntries(Result);
+  // Seen 已 LowerBound+SpanStartsWith 有序去重（有序区间扫描保证字典序），省去 VfsSortEntries O(k log k) 冗余排序，与 embedded 同模板
 end;
 
 function TMemVfs.OpenRead(const APath: string): IStream;
