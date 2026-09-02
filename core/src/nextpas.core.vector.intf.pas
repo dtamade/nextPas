@@ -9,9 +9,10 @@ unit nextpas.core.vector.intf;
 interface
 
 uses
-  nextpas.core.vector.base,
   nextpas.core.graphics.base,
-  nextpas.core.graphics.path;
+  nextpas.core.graphics.path,
+  nextpas.core.vector.path,
+  nextpas.core.vector.tess;
 
 type
   IVectorTessellator = interface
