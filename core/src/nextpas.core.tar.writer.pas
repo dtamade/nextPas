@@ -10,12 +10,13 @@ uses
   nextpas.core.io.intf;
 
 type
-  {** @desc Tar 写器：以 IWriter 为目标产出 ustar 流（两零块收尾，可对接 gzip）。 *}
   TTarWriter = class
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FIOBuf: TBytes; // pooled IO buffer for AddEntryFromReader: cross-entry reuse via TarIOBufCapacityFor, grows on demand, precise reclaim via TarIOBufCapacityFor/TrimIOBuf after short batch, released on Finish/Destroy (try..finally 必释，无长滞留)，inline zero-copy
+    FIOBuf: PByte;
+    FIOBufCap: SizeUInt;
+    procedure EnsureIOBufCapacity(ANeed: SizeUInt);
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
     procedure MaybeReclaimIOBuf(const AHintSize: Int64); inline;
@@ -23,7 +24,6 @@ type
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
-    // WriteHeader 优雅拆分：单职责小函数，复用 bytes.ops 单源，薄路径 inline 零拷贝
     function FindPrefixCut(const AName: string): SizeInt;
     function NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
     procedure ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
@@ -33,6 +33,7 @@ type
     procedure FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
     procedure FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
+    procedure DoCopyAndPad(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
     procedure CopyReaderAndPad(const AReader: IReader; ASize: Int64; var ABuf: TBytes);
     procedure CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
   public
@@ -65,6 +66,9 @@ const
   C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
   C_STREAM_BUF_INIT = C_TAR_IOBUF_INIT;
 
+var
+  GZero512: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
   case AKind of
@@ -79,62 +83,70 @@ begin
   end;
 end;
 
-{ — pax 记录委托 common — }
-
-{ TTarWriter }
-
 constructor TTarWriter.Create(const ADst: IWriter);
 begin
   inherited Create;
   if ADst = nil then
     raise EArgumentError.Create('tar: destination writer is nil');
   FDst := ADst;
+  FIOBuf := nil;
+  FIOBufCap := 0;
 end;
 
-procedure PadCopy(ASrc, ADst: PByte; AUsed, ATotal: SizeUInt); inline;
+procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt);
+var
+  LNew: PByte;
 begin
-  // bytes.ops single source CopyMemory+SpanFill/MemSet single seam, inline zero-copy TByteSpan view, minimal pad, 单缝纯度收敛（消除 FillChar 分叉）
-  if (AUsed > 0) and (ASrc <> nil) and (ADst <> nil) then
-    CopyMemory(ASrc, ADst, AUsed);
-  if (ATotal > AUsed) and (ADst <> nil) then
-    SpanFill(TByteSpan.Create(ADst + AUsed, ATotal - AUsed), 0);
+  if FIOBufCap >= ANeed then Exit;
+  if FIOBuf <> nil then
+    FreeMem(FIOBuf, FIOBufCap);
+  GetMem(LNew, ANeed);
+  FIOBuf := LNew;
+  FIOBufCap := ANeed;
 end;
 
 procedure TTarWriter.WriteChecked(AData: PByte; ACount: SizeUInt); inline;
 begin
-  // single source short-write guard, inline thin forward, zero-copy PByte single source
-  if (ACount = 0) or (AData = nil) then
-    Exit;
+  if (ACount = 0) or (AData = nil) then Exit;
   if FDst.Write(AData^, ACount) <> ACount then
     raise EIOError.Create('tar: short write');
 end;
 
 procedure TTarWriter.WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
-var
-  Pad: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
-  // single source pad write helper: PadCopy (bytes.ops CopyMemory+SpanFill single seam) + single WriteChecked, inline zero-copy, eliminates WriteBlock/WritePaddedPayload 512-block duplicate pad paths
-  PadCopy(AData, @Pad[0], AUsed, ATotal);
-  WriteChecked(@Pad[0], ATotal);
+  if AUsed > 0 then
+    WriteChecked(AData, AUsed);
+  if ATotal > AUsed then
+    WriteChecked(@GZero512[0], ATotal - AUsed);
 end;
 
 procedure TTarWriter.MaybeReclaimIOBuf(const AHintSize: Int64); inline;
 var
   LNeed: SizeUInt;
+  LNew: PByte;
 begin
-  // precise reclaim via TarIOBufCapacityFor (bytes.ops AlignUp4K single source): shrink pooled 64K after short batch to avoid long-lived peak retention, O(1) still, inline zero-copy, caller-visible via TrimIOBuf
-  if Length(FIOBuf) = 0 then
-    Exit;
+  if (FIOBuf = nil) or (FIOBufCap = 0) then Exit;
   LNeed := TarIOBufCapacityFor(AHintSize);
-  if SizeUInt(Length(FIOBuf)) > LNeed then
-    SetLength(FIOBuf, LNeed);
+  if FIOBufCap > LNeed then
+  begin
+    if LNeed = 0 then
+    begin
+      FreeMem(FIOBuf, FIOBufCap);
+      FIOBuf := nil;
+      FIOBufCap := 0;
+      Exit;
+    end;
+    GetMem(LNew, LNeed);
+    FreeMem(FIOBuf, FIOBufCap);
+    FIOBuf := LNew;
+    FIOBufCap := LNeed;
+  end;
 end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
 var
   Len: SizeInt;
 begin
-  // no inline: 512B stack guard, single source via WritePadded helper (PadCopy+SpanFill single seam, single Write)
   Len := Length(ABlock);
   if Len > C_TAR_BLOCK_SIZE then
     raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, C_TAR_BLOCK_SIZE]);
@@ -151,9 +163,7 @@ var
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
 begin
-  // no inline: I-Cache guard, Bulk+Tail single Write, single source via WritePadded helper (PadCopy single seam)
-  if Length(AData) = 0 then
-    Exit;
+  if Length(AData) = 0 then Exit;
   PadLen := TarPadToBlock(Length(AData));
   if PadLen = 0 then
     WriteChecked(@AData[0], SizeUInt(Length(AData)))
@@ -173,7 +183,6 @@ procedure TTarWriter.EmitPaxHeader(const APayload: TBytes);
 var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
-  // bytes.ops single source SpanFill/MemSet single seam, inline zero-copy TByteSpan view, 单缝纯度收敛（消除 FillChar 分叉，与 PadCopy 单源一致）
   SpanFill(TByteSpan.Create(@Block[0], SizeOf(Block)), 0);
   TarPutHeaderString(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, C_TAR_PAX_HEADER_NAME);
   TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, 0);
@@ -186,7 +195,6 @@ begin
   TarWriteUStarMagic(@Block[0]);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
-  // bytes.ops single source, inline
   WritePaddedPayload(APayload);
 end;
 
@@ -194,10 +202,8 @@ function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
 var
   I: Integer;
 begin
-  // no inline: loop body (design-conventions), bytes.ops single source is caller via TarPutHeaderSlice zero-copy
   Result := 0;
-  if Length(AName) <= C_TAR_LAYOUT.Name.Len then
-    Exit;
+  if Length(AName) <= C_TAR_LAYOUT.Name.Len then Exit;
   I := C_TAR_LAYOUT.Prefix.Len;
   while (I >= 1) and (Result = 0) do
   begin
@@ -209,13 +215,11 @@ end;
 
 function TTarWriter.NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
 begin
-  // inline: thin predicate, no alloc
   Result := ((Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0)) or (Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len);
 end;
 
 procedure TTarWriter.ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
 begin
-  // no inline: validation branches + exception paths, fail-closed
   if (AKind = tekDirectory) and (AName <> '') and (AName[Length(AName)] <> '/') then
     AName := AName + '/';
   ValidateTarEntryName(AName);
@@ -228,9 +232,7 @@ var
   LBuilder: IBytesBuilder;
   LPaxBytes: TBytes;
 begin
-  // out-of-line: builder alloc path
-  if not NeedsPaxHeader(AName, ALinkName, ACutPos) then
-    Exit;
+  if not NeedsPaxHeader(AName, ALinkName, ACutPos) then Exit;
   LBuilder := CreateBytesBuilder(256);
   if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
     TarAppendPaxRecord(LBuilder, 'path', AName);
@@ -242,7 +244,6 @@ end;
 
 procedure TTarWriter.FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
 begin
-  // bytes.ops single source, inline zero-copy slice
   if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
     TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(AName)), SizeUInt(C_TAR_LAYOUT.Name.Len))
   else if ACutPos <> 0 then
@@ -256,7 +257,6 @@ end;
 
 procedure TTarWriter.FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
 begin
-  // bytes.ops single source, inline zero-copy slice
   if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
     TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, PByte(PAnsiChar(ALinkName)), SizeUInt(C_TAR_LAYOUT.LinkName.Len))
   else
@@ -265,7 +265,6 @@ end;
 
 procedure TTarWriter.FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
 begin
-  // bytes.ops single source, inline numeric single point TarFormatNumericField
   TarFormatNumericField(ABlock, C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, AHdr.Mode);
   TarFormatNumericField(ABlock, C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, AHdr.UID);
   TarFormatNumericField(ABlock, C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, AHdr.GID);
@@ -278,7 +277,6 @@ end;
 
 procedure TTarWriter.FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
 begin
-  // bytes.ops single source, inline
   TarWriteUStarMagic(ABlock);
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, AHdr.UName);
   TarPutHeaderString(ABlock, C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, AHdr.GName);
@@ -292,7 +290,6 @@ var
   Name, LinkName: string;
   CutPos: SizeInt;
 begin
-  // orchestration only: validate -> prefix cut -> pax -> fill -> checksum, each step single-responsibility
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
   if ADataSize < 0 then
@@ -302,7 +299,6 @@ begin
   ValidateAndCanonicalizeNames(Name, LinkName, AHdr.Kind);
   CutPos := FindPrefixCut(Name);
   EmitPaxIfNeeded(Name, LinkName, CutPos);
-  // bytes.ops single source SpanFill single seam, inline zero-copy TByteSpan view, 单缝纯度收敛（消除 FillChar 分叉）
   SpanFill(TByteSpan.Create(@Block[0], SizeOf(Block)), 0);
   FillNameFields(@Block[0], Name, CutPos);
   FillNumericFields(@Block[0], AHdr, ADataSize);
@@ -316,7 +312,6 @@ end;
 
 procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes); inline;
 begin
-  // bytes.ops single source, inline
   WriteHeader(AHdr, Length(AData));
   if (AHdr.Kind = tekRegular) and (Length(AData) > 0) then
     WritePaddedPayload(AData);
@@ -376,7 +371,6 @@ var
   H: TTarHeader;
   LDef: TTarAddOptions;
 begin
-  // 单源：DefaultTarAddOptions 判零 + TarDirectoryMode 单点换算目录权限，零拷贝无需 bytes.ops；收敛三分支+二次 IFDIR 归一至单点，极简叙事
   LDef := DefaultTarAddOptions;
   H := Default(TTarHeader);
   H.Name := AName;
@@ -393,30 +387,23 @@ begin
   EmitEntry(H, nil);
 end;
 
-procedure TTarWriter.CopyReaderAndPad(const AReader: IReader; ASize: Int64; var ABuf: TBytes);
+procedure TTarWriter.DoCopyAndPad(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
 var
   LRead, LToRead: SizeUInt;
   LRemaining: Int64;
   PadLen: Int64;
-  LNeed: SizeUInt;
 begin
-  // no inline: loop body (design-conventions I-Cache guard), bytes.ops single source SpanFill/MemSet single seam via WritePadded helper, inline zero-copy TByteSpan view, 单缝纯度收敛
-  // single source helper for AddEntryFromReader / AddEntryFromReaderWithSharedBuf: 40行读-写-补零循环单源收敛，仅缓冲来源不同，零拷贝 PByte single source, TarIOBufCapacityFor AlignUp4K single source
-  if ASize = 0 then
-    Exit;
-  LNeed := TarIOBufCapacityFor(ASize);
-  if SizeUInt(Length(ABuf)) < LNeed then
-    SetLength(ABuf, LNeed);
+  if ASize = 0 then Exit;
+  if (ABuf = nil) or (ABufCap = 0) then
+    raise EArgumentError.Create('tar: buffer is nil');
   LRemaining := ASize;
   while LRemaining > 0 do
   begin
     LToRead := SizeUInt(LRemaining);
-    if LToRead > SizeUInt(Length(ABuf)) then
-      LToRead := SizeUInt(Length(ABuf));
-    LRead := AReader.Read(ABuf[0], LToRead);
-    if LRead = 0 then
-      raise EIOError.Create('tar: short read');
-    WriteChecked(@ABuf[0], LRead);
+    if LToRead > ABufCap then LToRead := ABufCap;
+    LRead := AReader.Read(ABuf^, LToRead);
+    if LRead = 0 then raise EIOError.Create('tar: short read');
+    WriteChecked(ABuf, LRead);
     Dec(LRemaining, Int64(LRead));
   end;
   PadLen := TarPadToBlock(ASize);
@@ -424,7 +411,25 @@ begin
     WritePadded(nil, 0, SizeUInt(PadLen));
 end;
 
+procedure TTarWriter.CopyReaderAndPad(const AReader: IReader; ASize: Int64; var ABuf: TBytes);
+var
+  LNeed: SizeUInt;
+begin
+  if ASize = 0 then Exit;
+  LNeed := TarIOBufCapacityFor(ASize);
+  if SizeUInt(Length(ABuf)) < LNeed then
+    SetLength(ABuf, LNeed);
+  DoCopyAndPad(AReader, ASize, @ABuf[0], SizeUInt(Length(ABuf)));
+end;
+
+procedure TTarWriter.CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
+begin
+  DoCopyAndPad(AReader, ASize, ABuf, ABufCap);
+end;
+
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
+var
+  LNeed: SizeUInt;
 begin
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
@@ -438,10 +443,10 @@ begin
   if (AHdr.Size > 0) and (AReader = nil) then
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
-  if AHdr.Size = 0 then
-    Exit;
-  // bytes.ops single source via TarIOBufCapacityFor (AlignUp4K), cross-entry pooled buffer FIOBuf: grow on demand, precise reclaim via TarIOBufCapacityFor/TrimIOBuf after short batch, released on Finish/Destroy (无长滞留), inline zero-copy, 200×512B 仅1次分配，单缝 helper CopyReaderAndPad
-  CopyReaderAndPad(AReader, AHdr.Size, FIOBuf);
+  if AHdr.Size = 0 then Exit;
+  LNeed := TarIOBufCapacityFor(AHdr.Size);
+  EnsureIOBufCapacity(LNeed);
+  DoCopyAndPad(AReader, AHdr.Size, FIOBuf, FIOBufCap);
   MaybeReclaimIOBuf(AHdr.Size);
 end;
 
@@ -459,34 +464,8 @@ begin
   if (AHdr.Size > 0) and (AReader = nil) then
     raise EArgumentError.Create('tar: reader is nil');
   WriteHeader(AHdr, AHdr.Size);
-  if AHdr.Size = 0 then
-    Exit;
-  // single source helper: 复用 CopyReaderAndPad 单缝，共享缓冲由调用方持有，零拷贝 PByte single source
+  if AHdr.Size = 0 then Exit;
   CopyReaderAndPad(AReader, AHdr.Size, ASharedBuf);
-end;
-
-procedure TTarWriter.CopyReaderAndPadRaw(const AReader: IReader; ASize: Int64; ABuf: PByte; ABufCap: SizeUInt);
-var
-  LRead, LToRead: SizeUInt;
-  LRemaining: Int64;
-  PadLen: Int64;
-begin
-  if ASize = 0 then Exit;
-  if (ABuf = nil) or (ABufCap = 0) then
-    raise EArgumentError.Create('tar: raw buffer is nil');
-  LRemaining := ASize;
-  while LRemaining > 0 do
-  begin
-    LToRead := SizeUInt(LRemaining);
-    if LToRead > ABufCap then LToRead := ABufCap;
-    LRead := AReader.Read(ABuf^, LToRead);
-    if LRead = 0 then raise EIOError.Create('tar: short read');
-    WriteChecked(ABuf, LRead);
-    Dec(LRemaining, Int64(LRead));
-  end;
-  PadLen := TarPadToBlock(ASize);
-  if PadLen > 0 then
-    WritePadded(nil, 0, SizeUInt(PadLen));
 end;
 
 procedure TTarWriter.AddEntryFromReaderWithRawBuf(const AHdr: TTarHeader; const AReader: IReader; ABuf: PByte; ABufCap: SizeUInt);
@@ -502,16 +481,11 @@ end;
 
 procedure TTarWriter.TrimIOBuf; inline;
 begin
-  // precise reclaim: shrink pooled 64K peak to C_TAR_IOBUF_INIT for long-lived writer short-batch, bytes.ops TarIOBufCapacityFor single source, inline zero-copy, O(1) still, explicit caller reclaim to avoid Finish-only retention
-  if Length(FIOBuf) = 0 then
-    Exit;
-  if SizeUInt(Length(FIOBuf)) > C_TAR_IOBUF_INIT then
-    SetLength(FIOBuf, C_TAR_IOBUF_INIT);
+  MaybeReclaimIOBuf(0);
 end;
 
 procedure TTarWriter.TrimIOBufTo(const AHintSize: Int64); inline;
 begin
-  // precise reclaim to TarIOBufCapacityFor hint, caller can hint next batch size, e.g., after large file TrimIOBufTo(0) or TrimIOBufTo(smallSize), bytes.ops AlignUp4K single source, inline zero-copy
   MaybeReclaimIOBuf(AHintSize);
 end;
 
@@ -519,15 +493,17 @@ procedure TTarWriter.Finish;
 var
   Zero: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
-  if FFinished then
-    Exit;
+  if FFinished then Exit;
   FFinished := True;
-  // bytes.ops single source SpanFill single seam, inline zero-copy TByteSpan view, 单缝纯度收敛（消除 FillChar 分叉）
   SpanFill(TByteSpan.Create(@Zero[0], SizeOf(Zero)), 0);
   WriteBlock(Zero);
   WriteBlock(Zero);
-  // stability: pooled 64K timely release on Finish, no long-lived retention, try..finally 必释 in Destroy remains fail-safe
-  FIOBuf := nil;
+  if FIOBuf <> nil then
+  begin
+    FreeMem(FIOBuf, FIOBufCap);
+    FIOBuf := nil;
+    FIOBufCap := 0;
+  end;
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -537,17 +513,24 @@ end;
 
 destructor TTarWriter.Destroy;
 begin
-  // best-effort Finish 失败 Warn 抑制次生；bytes.ops 单源 zero-copy SpanFill single seam, try..finally 必释, NullLogger 零分配 inline（常量串无拼接，避免 E.Message 分配），FIOBuf 池化跨条目复用、Finish/Destroy 统一释放消除长滞留/抖动
   try
     if not FFinished then
+    begin
+      NullLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated)');
       try
         Finish;
       except
         on E: Exception do
-          NullLogger.Warn('tar: writer destroy suppress finish failure (short write)');
+          NullLogger.Warn('tar: writer destroy suppress finish failure');
       end;
+    end;
   finally
-    FIOBuf := nil;
+    if FIOBuf <> nil then
+    begin
+      FreeMem(FIOBuf, FIOBufCap);
+      FIOBuf := nil;
+      FIOBufCap := 0;
+    end;
     FDst := nil;
     inherited Destroy;
   end;

@@ -49,7 +49,7 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，批量小文件单次分配合并缓冲复用 I/O 块（200×512B 仅1次 GetMem，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，跨条目共享 LShared 复用、O(1)内存，inline 零拷贝，GetMem无零填充避免4K无效写带宽），bytes.ops单源，稳定性try..finally不丢句柄 FreeMem }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；批量小文件单次 GetMem 合并缓冲复用 I/O 块（200×512B 仅1次 GetMem，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，O(1)复用无零填充），bytes.ops 单源，try..finally 不丢 }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
 var
   LI: Integer;
@@ -134,7 +134,7 @@ begin
   ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
   try
-    // 性能：复用 ArchiveCollectWalk 已 Stat FSize 零二次Stat，单源 PackWalks inline 零拷贝分块搬运
+    // 复用已Stat FSize，PackWalks inline 零拷贝
     PackWalks(LWalks, AWriter);
   finally
     SetLength(LWalks, 0);
@@ -152,13 +152,13 @@ var
   LAccum: UInt64;
 begin
   Result := nil;
-  // perf: 按预估总量经 TarBuilderCapacityFor 4K 对齐预扩容（复用 bytes.ops.AlignUp4K 单源，bytes.builder 几何扩容 inline 零拷贝），大目录避免多次几何扩容（200×512B 仅1次 vs 固定64K多次重分配），小目录保持64K覆盖；预估=512×条目+文件pad512+长名pax近似(1024)，2零块由单点追加，溢出守卫clamp至High，零额外拷贝
+  // 按预估总量经 TarBuilderCapacityFor 4K 对齐预扩容（bytes.ops AlignUp4K 单源），单次 ToBytes 零额外拷贝
   SetLength(LWalks, 0);
   LWalksCount := 0;
   ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
   try
-    // perf: 批量 UInt64 累加 + bytes.ops.AlignUp(...,512) 单源 inline 零拷贝对齐，消除逐项 High(SizeUInt) 守卫分支与手写 (Size+511)&~511 掩码；头块批量 LWalksCount*512，长名 pax 1024 近似批量累加，单点溢出 clamp 至 High，终经 TarBuilderCapacityFor 复用 bytes.ops.AlignUp4K 单源 4K 对齐（零除法位掩码，32/64位安全），与 bytes.builder 几何扩容 inline 零拷贝共道，大目录 200×512B 仅1次扩容，小目录 64K 覆盖，零额外拷贝
+    // 批量 AlignUp(...,512) 单源对齐，预估经 TarBuilderCapacityFor 4K 对齐，零额外拷贝
     LAccum := UInt64(LWalksCount) * SizeUInt(C_TAR_BLOCK_SIZE);
     for LI := 0 to High(LWalks) do
       if not LWalks[LI].FIsDir then
@@ -262,7 +262,7 @@ begin
             if not IsSafeTarLinkTarget(H.LinkName) then
               raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
         end;
-        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝；预分区快速路径：同父连续条目经前缀‘/’命中+小后缀‘/’扫描（仅basename长度）跳过全路径逆扫，200 同父文件由 200 次 StringLastIndexOf 全扫降至 1 次全扫+199 次前缀命中，复用 bytes.ops 单源零拷贝，inline 热路径；门面薄而优雅：55行手工 CopyMemory+CompareMem 双重 if 展开已抽 SyncTarParentCache inline helper 复用 bytes.ops 单源零拷贝，消除内联膨胀
+        // 单次 ArchiveJoinPath 复用 bytes.ops 单源，同父缓存+前缀命中 inline 零拷贝，SyncTarParentCache 单源
         LFull := ArchiveJoinPath(ADestDir, H.Name);
         if (LLastParent <> '') and (Length(LFull) > Length(LLastParent)) and (LFull[Length(LLastParent) + 1] = '/') then
         begin

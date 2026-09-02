@@ -11,17 +11,6 @@ uses
   nextpas.core.log.intf;
 
 type
-  { header scan lens: named 7-field NUL truncation (replaces generic array[0..6] flatten, semantic explicit) }
-  TTarScanLens = record
-    Name: SizeUInt;
-    LinkName: SizeUInt;
-    Magic: SizeUInt;
-    Version: SizeUInt;
-    UName: SizeUInt;
-    GName: SizeUInt;
-    Prefix: SizeUInt;
-  end;
-
   TTarReader = class;
 
   {** @desc RAII guard for global pax: clears global pax on scope exit. *}
@@ -36,7 +25,7 @@ type
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
-   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 持有镜像，外部 PByte 时 SpanClone 固化拷贝自包含，Reader 释放后仍可读）。 *}
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 持有镜像、Reader 释放后仍可读；外部 PByte 时零拷贝视图、生命周期绑外部内存/Reader，零额外大块 Move，避免大条目流式场景额外分配）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -58,10 +47,10 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    // header cache: 7-field NUL lens, single 512B scan
+    // header cache: opaque single 512B ScanNulFieldTruncations, generic 7-field array (interface 不暴露七字段命名字段，复用 bytes.ops 单源，inline 零拷贝)
     FScanValid: Boolean;
     FScanPos: SizeUInt;
-    FScanLens: TTarScanLens;
+    FScanLens: array[0..6] of SizeUInt; // opaque generic cache: 0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix
     FGuardHead: TTarGlobalPaxGuard; // guard chain
     FGuardCount: SizeUInt;
     FLogger: ILogger; // warn on auto-clear
@@ -99,9 +88,9 @@ type
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型，外部 PByte 时固化拷贝自包含 — }
+    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型（FBuf 时持有镜像、外部 PByte 时零拷贝视图绑外部内存） — }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
-    { — 持有型流：FBuf 非空时 CreateWithHold 持有镜像，外部 PByte 时 SpanClone 固化拷贝自包含，Reader 释放后仍可读 — }
+    { — 持有型流：FBuf 非空时 CreateWithHold 持有镜像（Reader 释放后仍可读）；外部 PByte 时零拷贝视图 CreateSliceReader（生命周期绑外部内存/Reader，零额外大块 Move，流式大条目零分配） — }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
   end;
@@ -191,7 +180,7 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: order = TTarScanLens (Name, LinkName, Magic, Version, UName, GName, Prefix), values = C_TAR_LAYOUT, bytes.ops ScanNulFieldTruncations single 512B pass
+// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values = C_TAR_LAYOUT, bytes.ops ScanNulFieldTruncations single 512B pass — opaque generic array, interface不暴露七字段命名
 const
   C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
     (Off: 0; Len: 100),
@@ -203,7 +192,7 @@ const
     (Off: 345; Len: 155)
   );
 
-// single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS
+// single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS, bytes.ops单源单次扫描
 procedure CacheHeader(ASelf: TTarReader);
 var
   LLens: array[0..6] of SizeUInt;
@@ -212,26 +201,26 @@ begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    ASelf.FScanLens.Name := C_TAR_LAYOUT.Name.Len;
-    ASelf.FScanLens.Prefix := C_TAR_LAYOUT.Prefix.Len;
-    ASelf.FScanLens.LinkName := C_TAR_LAYOUT.LinkName.Len;
-    ASelf.FScanLens.UName := C_TAR_LAYOUT.UName.Len;
-    ASelf.FScanLens.GName := C_TAR_LAYOUT.GName.Len;
-    ASelf.FScanLens.Magic := C_TAR_LAYOUT.Magic.Len;
-    ASelf.FScanLens.Version := C_TAR_LAYOUT.Version.Len;
+    ASelf.FScanLens[0] := C_TAR_LAYOUT.Name.Len;
+    ASelf.FScanLens[1] := C_TAR_LAYOUT.LinkName.Len;
+    ASelf.FScanLens[2] := C_TAR_LAYOUT.Magic.Len;
+    ASelf.FScanLens[3] := C_TAR_LAYOUT.Version.Len;
+    ASelf.FScanLens[4] := C_TAR_LAYOUT.UName.Len;
+    ASelf.FScanLens[5] := C_TAR_LAYOUT.GName.Len;
+    ASelf.FScanLens[6] := C_TAR_LAYOUT.Prefix.Len;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
   end;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
   ScanNulFieldTruncations(LBlock, C_TAR_SCAN_FIELDS, @LLens[0]);
-  ASelf.FScanLens.Name := LLens[0];
-  ASelf.FScanLens.LinkName := LLens[1];
-  ASelf.FScanLens.Magic := LLens[2];
-  ASelf.FScanLens.Version := LLens[3];
-  ASelf.FScanLens.UName := LLens[4];
-  ASelf.FScanLens.GName := LLens[5];
-  ASelf.FScanLens.Prefix := LLens[6];
+  ASelf.FScanLens[0] := LLens[0];
+  ASelf.FScanLens[1] := LLens[1];
+  ASelf.FScanLens[2] := LLens[2];
+  ASelf.FScanLens[3] := LLens[3];
+  ASelf.FScanLens[4] := LLens[4];
+  ASelf.FScanLens[5] := LLens[5];
+  ASelf.FScanLens[6] := LLens[6];
   ASelf.FScanPos := ASelf.FPos;
   ASelf.FScanValid := True;
 end;
@@ -265,54 +254,54 @@ begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // single source C_TAR_SCAN_FIELDS order, O(1) perfect hash via Off case + Len guard, eliminates 7-branch linear scan
+    // single source C_TAR_SCAN_FIELDS order, O(1) perfect hash via Off case + Len guard, eliminates 7-branch linear scan — opaque index mapping 0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix
     case LFieldOff of
       0:
         if ALen = 100 then
         begin
-          LLen := FScanLens.Name;
+          LLen := FScanLens[0];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       157:
         if ALen = 100 then
         begin
-          LLen := FScanLens.LinkName;
+          LLen := FScanLens[1];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       257:
         if ALen = 6 then
         begin
-          LLen := FScanLens.Magic;
+          LLen := FScanLens[2];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       263:
         if ALen = 2 then
         begin
-          LLen := FScanLens.Version;
+          LLen := FScanLens[3];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       265:
         if ALen = 32 then
         begin
-          LLen := FScanLens.UName;
+          LLen := FScanLens[4];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       297:
         if ALen = 32 then
         begin
-          LLen := FScanLens.GName;
+          LLen := FScanLens[5];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
       345:
         if ALen = 155 then
         begin
-          LLen := FScanLens.Prefix;
+          LLen := FScanLens[6];
           if LLen = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], LLen));
         end;
@@ -807,9 +796,9 @@ function TTarReader.OpenEntryStream: IReader;
 var
   P: PByte;
   C: SizeUInt;
-  LCopy: TBytes;
 begin
-  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader/CreateSliceReaderWithHold 单源，tar/zip 统一，bytes.ops.CopyMemory 单源零拷贝，FHold 防悬垂
+  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory 单源零拷贝，FHold 防悬垂
+  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径 CreateSliceReader 零拷贝视图（生命周期绑外部内存/Reader，零额外大块 SpanClone/CopyMemory，避免大条目流式场景额外一次分配/大块 Move，调用方需保证外部内存生命周期）
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
@@ -817,11 +806,6 @@ begin
   end;
   if Length(FBuf) > 0 then
     Result := CreateSliceReaderWithHold(FBuf, FEntryDataOfs, C)
-  else if C > 0 then
-  begin
-    LCopy := SpanClone(TByteSpan.Create(P, C));
-    Result := CreateSliceReaderWithHold(LCopy, 0, C);
-  end
   else
     Result := CreateSliceReader(P, C);
 end;

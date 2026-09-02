@@ -42,7 +42,7 @@ procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图，循环体外联零 I-Cache 膨胀；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂 *}
+{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂 *}
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
 {** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，inline 薄转发，零拷贝 Reserve+AppendBytes 单源 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
@@ -277,7 +277,7 @@ end;
 { — pax 解析：委托 archive.pax 单源，strict 校验 — }
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
 begin
-  // inline 零拷贝薄转发至 archive.pax 单源，循环体外联零 I-Cache 膨胀，零拷贝 PByte 切片单源
+  // inline 零拷贝薄转发至 archive.pax 单源，零拷贝 PByte 切片单源
   Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
 end;
 

@@ -13,7 +13,7 @@
 | `TTarAddOptions` | `Mode/UID/GID/MTimeUnix/UName/GName`（`DefaultTarAddOptions` 取 0/空） |
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
-| `TTarReader` | `Next(out H):Boolean` / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发（复用 TrySlice 单源，批量 200×512B 零拷贝 201 allocs，`EntryData` 已移除避免 401 vs 201 翻倍峰值，`SpanClone` 按需单次 Move 经 `bytes.ops` 单源） / `OpenEntryStream:IReader` / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（无 guard 时 g 单次消费自动清理防污染，guard 作用域内持久至下一 g 覆盖） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描（实现侧不透明缓存，接口不暴露七字段扁平化细节），复用 `Span` 单源 |
+| `TTarReader` | `Next(out H):Boolean` / `TrySlice(out TByteSpan):Boolean` 单一规范零拷贝 `inline` 视图 + `EntryDataSlice(out PByte,Count):Boolean` 薄转发（复用 TrySlice 单源，批量 200×512B 零拷贝 201 allocs，`EntryData` 已移除避免 401 vs 201 翻倍峰值，`SpanClone` 按需单次 Move 经 `bytes.ops` 单源） / `OpenEntryStream:IReader`（FBuf 时 `CreateSliceReaderWithHold` 持有型零拷贝、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝视图、生命周期绑外部内存/`Reader`、零额外大块 Move） / `EntryDataOfs:SizeUInt` / `Create(PByte,Count)` 双形态 + `WithOptions` / `ClearGlobalPax` 显式清理全局 g + `AcquireGlobalPaxGuard:IInterface` RAII 自动隔离（无 guard 时 g 单次消费自动清理防污染，guard 作用域内持久至下一 g 覆盖） / 头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 声明式扫描（实现侧不透明 `FScanLens: array[0..6]` 通用缓存，接口不暴露 `TTarScanLens` 七字段扁平化命名细节），复用 `Span` 单源 |
 | `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，需显式 Finish，`AddEntryFromReader` per-entry 局域缓冲 try..finally 无滞留峰值，析构 best-effort 补两零块永不抛异常仅 `log.intf Warn` 抑制次生，`IsFinished` 供 builder 可观测校验） |
 
 ### 1.2 常量与谓词
@@ -46,7 +46,7 @@
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//` 空段/`./` 单点段/`..` 段，尾随 `/` 终段空合法；写端 `Validate` 即 `EArgumentError`，读端/落盘前 `EParseError`，`..` 经 `TarExtractToDir` 二次拒绝。
 - **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 跨条目总量在 `common.Guard*` 单点，`Next` 仅对正则载荷累计（`GNU L/K` 与 `pax x/g` 扩展元数据不计入 `FCumTotal`，避免含大量长名归档误触总量），`TrySlice`/`OpenEntryStream` 中途同受，超限 `EIOError`。
-- **[INV-7]** 零块结束：双零块收尾，单零块后非零即 `truncated stream`；`FEntryDataOfs/Size` 视图单一规范；`TrySlice` 为单一规范零拷贝 `TByteSpan` 视图（`inline` 薄转发，生命周期绑 `Reader`），`EntryDataSlice` 为 `PByte/Count` 薄转发（复用 `TrySlice` 单源，零拷贝，批量 200×512B 仅 201 allocs）；`OpenEntryStream` 为持有型 `IReader`（`Reader` 拥有 `TBytes` 时流持有镜像引用，外部 `PByte` 时流固化拷贝自包含）；设备条目 `DevMajor/DevMinor` 由 `C_TAR_LAYOUT.DevMajor/DevMinor` 单源解析/回写，往返完整；容量预扩容 `TarBuilderCapacityFor` 经 `bytes.ops.AlignUp4K` 4K 对齐单源（div/mul 无掩码截断，32/64 位 SizeUInt 安全）。
+- **[INV-7]** 零块结束：双零块收尾，单零块后非零即 `truncated stream`；`FEntryDataOfs/Size` 视图单一规范；`TrySlice` 为单一规范零拷贝 `TByteSpan` 视图（`inline` 薄转发，生命周期绑 `Reader`），`EntryDataSlice` 为 `PByte/Count` 薄转发（复用 `TrySlice` 单源，零拷贝，批量 200×512B 仅 201 allocs）；`OpenEntryStream` 为持有型 `IReader`（`FBuf` 非空时 `CreateSliceReaderWithHold` 零拷贝持有镜像引用、`Reader` 释放后仍可读；外部 `PByte` 时 `CreateSliceReader` 零拷贝视图、生命周期绑外部内存/`Reader`，零额外 `SpanClone`/大块 `Move`，大条目流式场景零额外分配）；设备条目 `DevMajor/DevMinor` 由 `C_TAR_LAYOUT.DevMajor/DevMinor` 单源解析/回写，往返完整；容量预扩容 `TarBuilderCapacityFor` 经 `bytes.ops.AlignUp4K` 4K 对齐单源（div/mul 无掩码截断，32/64 位 SizeUInt 安全）；头 7 字段 `NUL` 截断经 `bytes.ops ScanNulFieldTruncations` 单源单次 512B 扫描（实现侧不透明 `FScanLens: array[0..6]` 通用缓存，接口不暴露 `TTarScanLens` 命名字段扁平化细节）。
 - **[INV-8]** 确定性：未显式 mtime 取 `0`，mode 默认 `0644/0755`，同输入同字节（除 pax 长名外）。
 
 ## 3. 错误模型
@@ -107,10 +107,10 @@ Reader.Create(Bytes|PByte) ── FBuf/FData 持有镜像
   │
   ├─ TrySlice(out Span) ──► TByteSpan{Data=PByte, Len} 零拷贝视图，inline，Reader 释放后失效
   ├─ EntryDataSlice(out PByte, Count) ──► 同上薄转发
-  └─ OpenEntryStream ──► IReader 持有型（nextpas.core.io.slice TIOSliceReader/CreateSliceReaderWithHold 单源，tar/zip 统一）
-        ├─ FBuf 非空：CreateSliceReaderWithHold(FBuf, Ofs, Size) 持有镜像引用，Reader 释放后仍可读
-        └─ 外部 PByte：SpanClone 固化拷贝自包含（FHold 独立），Reader 释放后仍可读
+  └─ OpenEntryStream ──► IReader（tar/zip 统一 via io.slice TIOSliceReader 单源，bytes.ops.CopyMemory 单源零拷贝）
+        ├─ FBuf 非空：CreateSliceReaderWithHold(FBuf, Ofs, Size) 持有镜像引用、Reader 释放后仍可读、FHold 防悬垂、inline 零拷贝
+        └─ 外部 PByte：CreateSliceReader(P, Size) 零拷贝视图、生命周期绑外部内存/Reader、零额外 SpanClone/大块 Move、大条目流式零额外分配
 ```
 
-- 视图失效：`Reader.Free` 后 `Span.Data` 悬垂，禁止再访；流持有型则安全（`FHold` 自包含）。
-- 单源：`SpanClone/CopyMemory/CopyStringToBuffer` 均经 `bytes.ops` 单源 `Move`，`TIOSliceReader.Read`（io.slice）经 `CopyMemory` 单源零拷贝，`FieldSlice` 七字段表驱动（layout 表+ScanLens 数组 loop，无 if-else 链，单次 512B ScanNulFieldTruncations 缓存）。
+- 视图失效：`Reader.Free` 后 `Span.Data` 悬垂，禁止再访；FBuf 持有型流自包含（`FHold`），外部 PByte 流绑定外部内存生命周期（调用方需保证外部内存存活至流读完）。
+- 单源：`SpanClone/CopyMemory/CopyStringToBuffer` 均经 `bytes.ops` 单源 `Move`，`TIOSliceReader.Read`（io.slice）经 `CopyMemory` 单源零拷贝，`FieldSlice` 七字段表驱动（layout 表+ ScanNulFieldTruncations 单源单次 512B 扫描、FScanLens: array[0..6] 不透明通用缓存、接口不暴露 TTarScanLens 命名字段扁平化）。
