@@ -61,7 +61,7 @@ type
     function ToCompact: TBytes;
     procedure Premultiply;
     procedure Unpremultiply;
-    function Clone: TBitmap;
+    function Clone: TBitmap; inline;
     // 写前去重：共享时 SetLength 深拷贝；扫描行批量写应外提一次避免每行校验；非线程安全需外部同步
     procedure EnsureUnique; inline;
     property Width: Integer read FWidth;
@@ -323,7 +323,7 @@ begin
   end;
 end;
 
-function TBitmap.Clone: TBitmap;
+function TBitmap.Clone: TBitmap; inline;
 begin
   Result := Self;
   // COW share: O(1) shallow copy, deep copy deferred to EnsureUnique on write

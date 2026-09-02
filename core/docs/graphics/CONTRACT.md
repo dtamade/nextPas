@@ -145,6 +145,13 @@ end;
 - `image/vector/canvas/effect` L2：仅 L0-L1，同层仅 `effect` 单向依赖 `image.base TBitmap`（Stride 64B 承载，已在 `core-module-registry.md` 显式 allowlist `L0-L1 plus same-layer one-way image`，禁止循环），`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
 - `gpu.canvas` L3：唯一允许依赖 `gpu.gl` + `platform.dl`
 
+### 4.0 image 888 命名守卫（S2 锁）
+
+- **恒为 `nextpas.core.graphics.<fmt>.<fmt>888`，禁 `*.pure` / `image.gif` 回退**：纯 Pascal 后端四格式 `gif/jpeg/webp/qoi` 恒走 `graphics.gif.gif888 / graphics.jpeg.jpeg888 / graphics.webp.webp888 / graphics.qoi.qoi888`，`png/bmp` 自含；`image.pas` 门面纯 re-export 并显式 `uses` 四 888 锚定链接，`grep -r "\.pure" core/src --include="*.pas" | grep graphics/image` 0，`image.gif` 0
+- **dispatch 6 格式注册不变**：`image.dispatch` 注册式 `ImageRegisterCodec(ifPng/ifJpeg/ifWebP/ifBmp/ifGif/ifQoi)` 6 项闭环，新增格式零侵入；`DetectImageFormat` 嗅探命中，`TryImageDecode` 不抛，`ImageRegisterCodec` 重复抛 `EArgumentError`
+- **四件套与单源**：`image` 四件套 `base←intf←dispatch/png/bmp/jpeg/webp/gif888/qoi888←facade`，`bytes.ops` 为 `Move/BytesCopy/BytesZero` 单源，`bytes.binary` 为 LE/BE 单源，性能 `inline` + 零拷贝
+- 门禁：`core/tests/nextpas.core.graphics/test_image_888_guard/check_image_888_guard.sh` + `make focused FOCUS=core/tests/nextpas.core.graphics/test_image_888_guard`
+
 ## 4.1 FPC RTL 零直接依赖（双编译器架构）
 
 - 禁止 `uses SysUtils/Classes/Graphics/FPImage/Types/Dialogs` 等 FPC RTL/包单元；文件 I/O 走 `nextpas.core.fs`，文本转换走 `nextpas.core.text.conv`，字节走 `bytes`/`checksum.crc32`（`image.png` 已示范纯 Pascal + `compress.deflate`）
