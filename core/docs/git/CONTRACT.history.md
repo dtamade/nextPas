@@ -6,11 +6,11 @@
 **不变量域**：历史遍历与查询（revwalk / commit-graph / 日志 / 差异 / 归因 / 合并基）
 
 ## 1. 范围与阈值
-- 源聚合：14 单元 + 3 分片 + 1 umbrella（`native.history`），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；umbrella 聚合 3 分片 <380 行、总门面 <600 软阈，四件套聚合度不稀释；历史层不自建对象/压缩，仅复用 owner。
+- 源聚合：14 单元 + 3 分片 + 1 umbrella（`native.history`），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；umbrella 为薄索引 <80 行（总 CONTRACT 阈 <380 行，umbrella 自身零转发仅 `deprecated TGitOid` BC 别名，总门面指 umbrella 档位 <600，已移除 46 inline 全量转发）；新代码一律分片直引（`history.traversal / query / ops`）以维持复用度与极简网关，umbrella 仅 BC 索引；历史层不自建对象/压缩，仅复用 owner（bytes.ops 单源）。
 
 ## 2. 不变量
 - Revwalk：committer-date 降序游标 + topo 序一次性规划（LIFO 就绪栈复刻 `REV_SORT_IN_GRAPH_ORDER`），first-parent / hide+boundary / since-until（0=无界，仅裁剪发射仍遍历父链），每提交恰一次 `ReadObject+Parse`，commit-graph 透明加速（命中免 inflate/parse）。
-- Commit-graph v1：`CGPH + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1`，fanout 累积 + OID 排序 + 36B/CDAT + EDGE 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合；`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 Verify + Invalidate；`TryLoad` 经 `Stat.mtime+size` 缓存 `TBytes` 零重复 `ReadFile`；`WriteAll` 聚合 `refs/heads+HEAD+tags` 起止；对齐 `git commit-graph write/verify`。
+- Commit-graph v1：`CGPH + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1`，fanout 累积 + OID 排序 + 36B/CDAT + EDGE 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合；`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 Verify + Invalidate；`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=2`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline`）；`WriteAll` 聚合 `refs/heads+HEAD+tags` 起止；对齐 `git commit-graph write/verify`。
 - Diff/Blame：扁平化递归 + 字典排序 + 归并（Added/Modified/Deleted/TypeChanged，零重命名，peel 16 层）；blame 经 LCS 行 diff + head-vs-each 最老匹配，线性史，对齐 `git blame --porcelain`；`Delta/Apply|ApplyReuse:inline` 复用 `bytes.ops` `GitApplyDeltaInto` + `GReuseBuf` 单源（`TByteSpan` 零拷贝）。
 - Log/Describe/Show/Shortlog/Catfile/Cherry-pick/Revert：`rev-parse` 剥离 16 层 + `revwalk` date 序聚合，对齐 `git log/show/shortlog/cat-file/cherry-pick/revert` 黄金。
 
@@ -25,3 +25,8 @@
 ## 5. 与总约关系
 - 本域权威：遍历/差异/归因语义以本文件为准；跨域仍以总 CONTRACT 为准。
 - 缺能力先反哺 owner：树扁平/delta 能力归 `bytes.ops` 与 `native.objects`，历史仅聚合。
+- 薄网关约束：`history` umbrella 已去聚合化（46 forwards 移除），fan-in 经分片直引度量；持续监控阈值（umbrella <380 / shards 各 <260，`scripts/git-contract-check.sh` C5）接近 800 软阈即再拆分。
+
+## 6. 演进监控
+- 600 行阈为 umbrella 单文件软阈（非 shards 累加），当前 shards 210+260+180=~650 为不变量域自然分片；umbrella 薄至 <80 行后总聚合度稀释消除。
+- 新增历史能力先归 owner（bytes/compress/checksum），分片仅薄编排 inline 零拷贝；超 80 行即告警review。

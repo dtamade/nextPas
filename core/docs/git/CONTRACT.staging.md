@@ -6,7 +6,7 @@
 **不变量域**：暂存区（index / cache-tree / status / ignore / worktree / lsfiles / clean）
 
 ## 1. 范围与阈值
-- 源聚合：10 单元 + 1 门面 shard（`native.staging` 委托 `bytes.ops`），单 shard <800 行；`wildmatch` 单源 `inline GitWildSegment*/GitSegmentsMatch`，ignore/attributes 委托此引擎零重复。
+- 源聚合：10 单元 + 1 门面 shard（`native.staging` 委托 `bytes.ops`），单 shard <800 行；`wildmatch` 单源 `inline GitWildSegment*/GitSegmentsMatch`，ignore 委托此引擎零重复（attributes 归 extensions 唯一拥有）。
 
 ## 2. 不变量
 - Index: DIRC v2/v3/v4 + TREE 扩展，双遍精确尺寸序列化，SHA-1 全量校验；小写 split-index/sparse 扩展遇即拒绝（非跳过）。

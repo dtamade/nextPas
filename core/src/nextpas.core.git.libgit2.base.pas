@@ -85,8 +85,8 @@ implementation
 
 function GitOid33Equals(const A, B: TGitOid33): Boolean; inline;
 begin
-  // perf: inline + single CompareMem after type byte, zero-copy
-  Result := (A.&type = B.&type) and CompareMem(@A.id[0], @B.id[0], GIT_OID_MAX_SIZE);
+  // perf: inline + zero-copy SpanEqual via bytes.ops single source (32 bytes -> 4×QWord MemEqual), no heap, reuse 20-byte authoritative GitOidSame/SpanEqual path
+  Result := (A.&type = B.&type) and SpanEqual(TByteSpan.Create(@A.id[0], GIT_OID_MAX_SIZE), TByteSpan.Create(@B.id[0], GIT_OID_MAX_SIZE));
 end;
 
 procedure GitOidCopy20To33(out Dst: TGitOid33; const Src: git_oid); inline;

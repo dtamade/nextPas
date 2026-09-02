@@ -112,7 +112,7 @@ begin
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
-      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+      raise EGitError.Create('corrupt zlib payload');
   end;
 end;
 
@@ -127,7 +127,7 @@ begin
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
-      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+      raise EGitError.Create('corrupt zlib payload');
   end;
 end;
 
@@ -144,7 +144,7 @@ begin
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
-      raise EGitError.Create('corrupt zlib payload: ' + E.Message);
+      raise EGitError.Create('corrupt zlib payload');
   end;
 end;
 
@@ -162,7 +162,7 @@ begin
     on E: EIOError do
       raise MapDeflateError(E);
     on E: Exception do
-      raise EGitError.Create(E.Message);
+      raise EGitError.Create('corrupt zlib payload');
   end;
 end;
 

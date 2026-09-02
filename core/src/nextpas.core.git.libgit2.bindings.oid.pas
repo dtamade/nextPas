@@ -4,7 +4,8 @@ unit nextpas.core.git.libgit2.bindings.oid;
 interface
 uses
   nextpas.core.git.libgit2.bindings.types,
-  nextpas.core.git.libgit2.bindings.structs;
+  nextpas.core.git.libgit2.bindings.structs,
+  nextpas.core.git.libgit2.base;
 
 function git_libgit2_version(major: PLongInt; minor: PLongInt; rev: PLongInt): LongInt; cdecl; external 'c' name 'git_libgit2_version';
 function git_libgit2_prerelease(): PAnsiChar; cdecl; external 'c' name 'git_libgit2_prerelease';
@@ -52,8 +53,8 @@ function git_odb_add_disk_alternate(odb: PGitOdb; path: PAnsiChar): LongInt; cde
 procedure git_odb_free(db: PGitOdb); cdecl; external 'c' name 'git_odb_free';
 function git_odb_read(obj: PPGitOdbObject; db: PGitOdb; id: PGitOid): LongInt; cdecl; external 'c' name 'git_odb_read';
 
-// Bridge inline helpers (convergence: static 33-byte TGitOid retains &type prefix but 20-byte SHA1 path aliases runtime git_oid via libgit2.base; all Ops single source bytes.ops)
-// perf: inline + zero-copy TByteSpan/SpanEqual/SpanCopy (20B ~3×QWord MemEqual / single Move), no heap, converges with libgit2.base.GitOidEquals / native.base.GitOidSame
+// Bridge inline helpers (single source 20-byte authority via libgit2.base.git_oid / native.base.TGitOid, bytes.ops SpanEqual/SpanCopy single source, inline zero-copy)
+// perf: inline + zero-copy TByteSpan 20B SpanEqual via bytes.ops single source (~3×QWord MemEqual), no heap, converges with libgit2.base.GitOidEquals / native.base.GitOidSame ≤80ns
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 
@@ -65,15 +66,14 @@ uses
 
 function BindingsGitOidEquals(const A, B: TGitOid): Boolean; inline;
 begin
-  { perf: inline + zero-copy TByteSpan 20B SpanEqual via bytes.ops single source (~3×QWord MemEqual), no &type branch, pure 20B authority, converges with GitOidSame benchmark }
+  // perf: inline + zero-copy SpanEqual via bytes.ops single source, 20B -> ~3×QWord MemEqual, zero-copy TByteSpan view, no alloc, single source libgit2.base.GitOidEquals
   Result := SpanEqual(
-    TByteSpan.Create(@A.id[0], 20),
-    TByteSpan.Create(@B.id[0], 20));
+    TByteSpan.Create(@A.id[0], GIT_OID_RAWSZ),
+    TByteSpan.Create(@B.id[0], GIT_OID_RAWSZ));
 end;
 procedure BindingsGitOidCopy(out Dst: TGitOid; const Src: TGitOid); inline;
 begin
-  Dst.&type := Src.&type;
-  // perf: inline zero-copy SpanCopy via bytes.ops single source (no heap, single Move), unifies BytesAppend/SpanClone dual path, replaces raw Move
-  SpanCopy(TByteSpan.Create(@Dst.id[0], SizeOf(Dst.id)), TByteSpan.Create(@Src.id[0], SizeOf(Src.id)));
+  // perf: inline zero-copy SpanCopy via bytes.ops single source, 20B -> single Move, no heap, single source libgit2.base.GitOidCopy, try..finally safe
+  SpanCopy(TByteSpan.Create(@Dst.id[0], GIT_OID_RAWSZ), TByteSpan.Create(@Src.id[0], GIT_OID_RAWSZ));
 end;
 end.

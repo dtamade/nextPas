@@ -48,7 +48,7 @@
 | git.native.status | worktree status 聚合（HEAD↔index 暂存态 / index↔worktree 工作树态 / untracked 扫描 + rename/copy 检测：oid 100 快路径 + hashsig 行哈希 0..100、阈值 50 配对、porcelain 分组序） |
 | git.native.ignore | .gitignore 引擎：模式编译（负规则/锚定/仅目录/字符类/**）、分组栈（深目录优先、文件内后者胜）、纯逻辑无 IO |
 | git.native.revwalk | 提交遍历（committer-date 降序游标 + topo 序一次性规划，first-parent / hide + boundary / since-until 日期裁剪，每提交恰一次读取解析，commit-graph 透明加速） |
-| git.native.commitgraph | commit-graph v1 读写+缓存（CGPH 头 + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1，fanout 二分，octopus 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合，`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重校验 + `Invalidate`，`TryLoad` 经 `Stat.mtime+size` 缓存 `TBytes` 零重复 `ReadFile`，`WriteAll` 聚合全量起止，`git commit-graph write/verify` 黄金） |
+| git.native.commitgraph | commit-graph v1 读写+缓存（CGPH 头 + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1，fanout 二分，octopus 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合，`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重校验 + `Invalidate`，`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=2`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline`），`WriteAll` 聚合全量起止，`git commit-graph write/verify` 黄金） |
 | git.native.reflog | reflog 读取（`logs/<ref>` 文本解析，`old new sig TAB msg`，签名复用 `GitParseSignature`，空文件与缺失回空数组） |
 | git.native.stash | stash 栈（`logs/refs/stash` reflog 列表反序 + `GitStashPush/Apply/Pop/Drop/Clear` 原生栈操作：push 为 index/working 树落盘→index/stash 提交→reflog append→refs/stash→检出回 HEAD；apply 为 `checkout` 目标树；pop=apply+drop；drop/clear 精确重写 reflog 与 refs，对齐 `git stash push/pop/apply/drop/clear`） |
 | git.native.worktree | worktree 列表与增删（`worktrees/<id>/commondir+gitdir+HEAD` 布局，`Add` 创建分支/检出、`AddDetached` 游离、`Remove` 清理，对齐 `git worktree add/list/remove --porcelain`） |
@@ -100,10 +100,10 @@
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
 | git.native.history.query | 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元 <260 行） |
 | git.native.history.ops | 历史·操作分片（shortlog/catfile/cherrypick/revert，4 单元 <180 行） |
-| git.native.history | 历史 umbrella（聚合 traversal/query/ops 3 分片 <380 行，总门面 <600；预拆前 14 单元/464 行已按不变量域 revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert 分片） |
+| git.native.history | 历史 umbrella 薄索引（<80 行，<380 阈，零转发仅 BC `TGitOid`；分片直引 `traversal/query/ops` 各 <260 行，总门面<600 指 umbrella 档位；预拆前 14 单元/464 行已按不变量域 revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert 分片，新代码禁 `uses history` 全量聚合） |
 | git.native.branches | 分支门面分片（branch/tag/stash/notes） |
 | git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
-| git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect） |
+| git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect） |
 | git.native | 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base；staging/history/branches/transport/extensions 需直引分片，旧 `uses git.native` 对非对象域已弃用以消除两级嵌套稀释） |
 | git.pas | 门面 re-export（inline NewGitManager → factory.NewGitManager(gbAuto)，impl 零 libgit2，base←intf←factory←facade 隔离） |
 
@@ -134,7 +134,7 @@
   bundle 为 `v2 bundle`（`# v2 git bundle` 头 + `-<oid> <title>` 前提 + `<oid> <ref>` 列表 + 空行 + `PACK` 流，经 `pack-objects --revs --delta-base-offset` 生成 pack，`SHA-1` 尾 20B 校验，`GitBundleVerify` 深校验经 `GitBuildPackIndex`，`Unbundle` 落盘 `pack-<hash>.pack/.idx` 并写 `refs/*` 与 `refs/bundle/HEAD`，与 `git bundle create/verify/list-heads/fetch` 黄金互通，支持 `HEAD~`/`^`/`..` 前提语法）；
   grep 为 `树内 grep`（`HEAD`/`ref` 经 `rev-parse` 16 层剥离至 `tree`，扁平化 `$4000` 递归 + 二进制 NUL 跳过 + `Pos` 固定串 + `-i` 大小写折叠，经 `path:lineNo` 排序，对齐 `git grep -n -F`）；
   bisect 为 `二分首坏`（`good..bad` 经 `GitTopoOrderCommits` 排除祖先 + 回调二分，`log N` 步定位，对齐 `git bisect` 线性史）；
-  commit-graph 读写为 `CGPH v1 构建+缓存`（`OIDF/OIDL/CDAT` 3 块 + 尾 SHA-1，`fanout` 累积 + `OIDL` 排序 + `CDAT` 36B/条 + `EDGE` 溢出 + `generation` 迭代收敛，`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 `Verify` 校验 + `Invalidate`，`TryLoad` 经 `Stat.mtime+size` 缓存 `TBytes` 零重复 `ReadFile`，`WriteAll` 聚合 `refs/heads + HEAD + tags` 起止，经 `GitCollectCommits` 全量闭合，对齐 `git commit-graph write/verify` 黄金）。
+  commit-graph 读写为 `CGPH v1 构建+缓存`（`OIDF/OIDL/CDAT` 3 块 + 尾 SHA-1，`fanout` 累积 + `OIDL` 排序 + `CDAT` 36B/条 + `EDGE` 溢出 + `generation` 迭代收敛，`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 `Verify` 校验 + `Invalidate`，`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=2`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline`），`WriteAll` 聚合 `refs/heads + HEAD + tags` 起止，经 `GitCollectCommits` 全量闭合，对齐 `git commit-graph write/verify` 黄金）。
 - 参考实现对照表见 `native-reference-map.md`（~/projects/libgit2 只读借鉴，
   不进源码树、不搬代码）。
 
@@ -152,10 +152,10 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 - 选择层默认仍走 libgit2（需显式 `uses nextpas.core.git.libgit2` 注册）：`nextpas.core.git.factory.NewGitManager(gbAuto)` 首版等价 `gbLibGit2`（已注册时），未注册时 fail-closed；`uses nextpas.core.git; NewGitManager;` 未注册时亦三零（门面 impl 零 libgit2，base←intf←factory←facade）；纯路径 `gbNative`/`NewNativeGitManager` 或直连 `native.manager` 无需注册（见 PURE-BACKEND.md §2-§3）。
 - 词汇收敛（单源 `native.base.TGitOid` 20-byte 为权威，`bytes.ops` 单源 `SpanEqual/SpanCopy/IsZeroBytes`，`inline` 零拷贝 `Move`/`MemEqual` 3×QWord，§7 `Oid/*:inline` ≤80 ns/op）：
   运行时 `git_oid` 为 `libgit2.base.git_oid` variant 叠加（`id/Bytes/AsNative` 同偏移 0，`SizeOf=20=GitOidRawLen`，`Assert` 二进制保证，`GitOidToNative/NativeToGitOid` `inline` 零拷贝 overlay 无 `Move`，Pascal 别名 `TGitOid/TGitOid20` 同体）；
-  静态 `TGitOid`（`bindings.structs` 33-byte `&type+id[32]`，SHA256-ready 通用）仅 legacy 保留（`deprecated 'Use libgit2.base.git_oid / native.base.TGitOid (20-byte) for SHA1; 33-byte is SHA256-ready generic, new code must use 20-byte path'`，`bindings.structs:682` 置 `deprecated`），SHA1 20-byte 路径经 `libgit2.base.git_oid / TGitOid20 / PGitOid` 别名 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接（`FillChar` 尾零）互转零堆；新模块禁直接 `uses bindings.structs.TGitOid`，一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn）；
-  Ops 单源收敛：`libgit2.base.GitOidEquals/IsZero/Copy` 与 `bindings.oid.BindingsGitOidEquals/Copy` 同经 `bytes.ops`（`SpanEqual`→`MemEqual`、`SpanCopy`→`Move`），`helper Equals/IsZero/Assign` 亦同源，消除分散 `Move/CompareMem` 双轨；
-  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7（2026-09-02）清理静态 33-byte `TGitOid` 双轨与历史 `PChar/cint` 词汇（`deprecated` 硬门禁，`scripts/git-contract-check.sh` C5 `grep -R TGitOid.*bindings\.structs` + `grep deprecated` 双重），并归一 gate，期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
-  稳定性：`PACKRECORDS C` + `Assert(SizeOf)` 失败即停，句柄 `Pointer` 缝隙零成本，`try..finally` 资源不丢，`heaptrc` 双 pin 零泄漏门禁同 §6。
+  静态 `TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（`SizeOf=20`，`PACKRECORDS C`，`Assert` 同源，`inline` 零拷贝 `SpanEqual` 3×QWord / `SpanCopy` 单 `Move` 无堆，`try..finally` 资源不丢），`TGitOid33` 仅 SHA256-ready 泛型 via `libgit2.base.TGitOid33` 保留，SHA1 20-byte 路径经 `libgit2.base.git_oid / TGitOid / TGitOid20 / PGitOid` 同体 + `GitOidCopy20To33/33To20` `inline SpanCopy` 零拷贝桥接（`FillChar` 尾零）互转零堆；新模块一律经 20-byte 权威（`scripts/git-contract-check.sh` C5 `grep -R TGitOid` 越界即 warn，Phase 7 2026-09-02 已收敛清理静态 33-byte 双轨）；
+  Ops 单源收敛：`libgit2.base.GitOidEquals/IsZero/Copy` 与 `bindings.oid.BindingsGitOidEquals/Copy` 同经 `bytes.ops`（`SpanEqual`→`MemEqual`、`SpanCopy`→`Move`，`GIT_OID_RAWSZ` 单源，`inline` ≤80 ns/op），`helper Equals/IsZero/Assign` 亦同源，消除分散 `Move/CompareMem` 双轨；
+  路线：Phase 6（2026-09）别名+Ops 收敛（本 CONTRACT 生效，`bindings-pitfalls.md` 同步），Phase 7（2026-09-02）已完成静态 33-byte `TGitOid` 双轨清理与历史 `PChar/cint` 词汇收敛（`grep -R TGitOid.*33-byte` 零命中 + `scripts/git-contract-check.sh` C5 归一 gate），期间任何一侧增补仍以各自 gate 为准但须经单源 Ops；
+  稳定性：`PACKRECORDS C` + `Assert(SizeOf=20)` 失败即停，句柄 `Pointer` 缝隙零成本，`try..finally` 资源不丢，`heaptrc` 双 pin 零泄漏门禁同 §6。
 - 再生成与坑清单见 `bindings-pitfalls.md`。
 
 ### 1.1.3 按不变量域独立合约拆分（2026-09-02 起）

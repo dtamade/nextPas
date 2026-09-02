@@ -117,6 +117,13 @@ type
     Score: Integer;
   end;
   TRenameCandidateArray = array of TRenameCandidate;
+  TBlobSig = record
+    Valid: Boolean;
+    Size: Int64;
+    Count: Integer;
+    Hashes: array[0..126] of UInt32;
+  end;
+  TBlobSigArray = array of TBlobSig;
 
 function CompareCandidateDesc(const A, B: TRenameCandidate; AData: Pointer): SizeInt;
 begin
@@ -414,6 +421,114 @@ begin
   Result := (100 * (Matches * 2)) div (CA + CB);
 end;
 
+{ ── cached blob sig: O(n+m) inflate+hash+sort vs O(n·m) per pair ── }
+{ perf: per-blob single inflate + CollectLineHashes + single SortU32, then per-pair two-pointer merge O(CA+CB); inline hot paths, zero-copy TByteSpan slice, bytes.ops single source }
+procedure FillBlobSig(ARepo: TNativeRepository; const AEntry: TPathOid; out ASig: TBlobSig); inline;
+var
+  Kind: TGitObjectKind;
+  Size: Int64;
+  Data: TBytes;
+  Tmp: array[0..255] of UInt32;
+  C, I: Integer;
+begin
+  ASig.Valid := False;
+  ASig.Size := 0;
+  ASig.Count := 0;
+  if not IsBlobMode(AEntry.Mode) then Exit;
+  try
+    if not ARepo.TryGetObjectSize(AEntry.Oid, Kind, Size) then Exit;
+    if Kind <> gokBlob then Exit;
+    ASig.Size := Size;
+    Data := ARepo.ReadObject(AEntry.Oid, Kind);
+    if Kind <> gokBlob then Exit;
+  except
+    on E: EGitError do Exit;
+  end;
+  C := 0;
+  CollectLineHashes(TByteSpan.FromBytes(Data), Tmp, C);
+  if C > 127 then C := 127;
+  if C > 1 then SortU32(Tmp, C);
+  ASig.Count := C;
+  for I := 0 to C - 1 do
+    ASig.Hashes[I] := Tmp[I];
+  ASig.Valid := True;
+end;
+
+function ScoreFromSigs(const SA, SB: TBlobSig): Integer; inline;
+var
+  IA, IB, Matches: Integer;
+begin
+  Result := -1;
+  if not SA.Valid or not SB.Valid then Exit;
+  if (SA.Size > 127) and (SB.Size > 127) then
+    if (SA.Size > SB.Size * 8) or (SB.Size > SA.Size * 8) then Exit(-1);
+  if (SA.Count = 0) and (SB.Count = 0) then Exit(100);
+  if (SA.Count = 0) or (SB.Count = 0) then Exit(0);
+  IA := 0; IB := 0; Matches := 0;
+  while (IA < SA.Count) and (IB < SB.Count) do
+  begin
+    if SA.Hashes[IA] < SB.Hashes[IB] then Inc(IA)
+    else if SA.Hashes[IA] > SB.Hashes[IB] then Inc(IB)
+    else begin Inc(Matches); Inc(IA); Inc(IB); end;
+  end;
+  Result := (100 * (Matches * 2)) div (SA.Count + SB.Count);
+end;
+
+procedure BuildBlobSigCache(ARepo: TNativeRepository; const AList: TPathOidArray; var AOut: TBlobSigArray); inline;
+var
+  I, Cap, Mask, Idx: Integer;
+  LHash: UInt32;
+  LIsBlob: Boolean;
+  Found: Boolean;
+  Buckets: array of TGitOid;
+  Modes: array of Boolean;
+  States: array of Byte;
+  FirstPos: array of Integer;
+  function OidHashInline(const AOid: TGitOid): UInt32; inline;
+  var K: Integer;
+  begin
+    // single source FNV-1a over 20 oid bytes (same as revwalk GitOidHash), zero-copy via span view
+    Result := UInt32(2166136261);
+    for K := 0 to GitOidRawLen - 1 do
+      Result := (Result xor UInt32(AOid.Bytes[K])) * UInt32(16777619);
+  end;
+begin
+  // perf: O(n) avg open-addressing hash vs O(n²) linear scan; inline + zero-copy SpanEqual via GitOidSame (bytes.ops)
+  SetLength(AOut, Length(AList));
+  if Length(AList) = 0 then Exit;
+  Cap := 16;
+  while Cap < Length(AList) * 2 do Cap := Cap * 2;
+  Mask := Cap - 1;
+  SetLength(Buckets, Cap);
+  SetLength(Modes, Cap);
+  SetLength(States, Cap);
+  SetLength(FirstPos, Cap);
+  for I := 0 to High(AList) do
+  begin
+    LIsBlob := IsBlobMode(AList[I].Mode);
+    LHash := OidHashInline(AList[I].Oid);
+    if LIsBlob then LHash := LHash xor UInt32($9E3779B9);
+    Idx := Integer(LHash and UInt32(Mask));
+    Found := False;
+    while States[Idx] = 1 do
+    begin
+      if GitOidSame(Buckets[Idx], AList[I].Oid) and (Modes[Idx] = LIsBlob) then
+      begin
+        AOut[I] := AOut[FirstPos[Idx]];
+        Found := True;
+        Break;
+      end;
+      Idx := (Idx + 1) and Mask;
+    end;
+    if Found then Continue;
+    FillBlobSig(ARepo, AList[I], AOut[I]);
+    Buckets[Idx] := AList[I].Oid;
+    Modes[Idx] := LIsBlob;
+    States[Idx] := 1;
+    FirstPos[Idx] := I;
+  end;
+end;
+
 function SimilarityForPair(ARepo: TNativeRepository;
   const ASource, ATarget: TPathOid): Integer;
 var
@@ -500,14 +615,15 @@ begin
       else
       begin
         // single alloc + Move (zero-copy) avoids ADirRel+'/'+Name temp storm; inline for hot fan-out
+        // perf: inline + zero-copy PAnsiChar^ Move single source (bytes.ops discipline), no indexed var for untyped Move param
         LDirLen := Length(ADirRel);
         LNameLen := Length(Items[I].Name);
         SetLength(Rel, LDirLen + 1 + LNameLen);
         if LDirLen > 0 then
-          Move(ADirRel[1], Rel[1], LDirLen);
+          Move(PAnsiChar(ADirRel)^, PAnsiChar(Rel)^, LDirLen);
         Rel[LDirLen + 1] := '/';
         if LNameLen > 0 then
-          Move(Items[I].Name[1], Rel[LDirLen + 2], LNameLen);
+          Move(PAnsiChar(Items[I].Name)^, (PAnsiChar(Rel) + LDirLen + 1)^, LNameLen);
       end;
       if Items[I].IsDir then
       begin
@@ -737,6 +853,7 @@ var
   LCandCount, LCandCap: SizeInt;
   LRenameCount, LRenameCap: SizeInt;
   LCopyCount, LCopyCap: SizeInt;
+  DeleteSigs, AddSigs, HeadSigs: TBlobSigArray;
 
   procedure BuildStage0; inline;
   var
@@ -1136,6 +1253,9 @@ begin
     BuildRenameSets;
 
     // collect rename candidates (amortized, bytes.ops doubling, inline)
+    // perf: O(n+m) cached sigs vs O(n·m) inflate+Collect+Sort per pair; inline + zero-copy dedup
+    BuildBlobSigCache(Repo, Deletes, DeleteSigs);
+    BuildBlobSigCache(Repo, Adds, AddSigs);
     Candidates := nil;
     LCandCount := 0;
     LCandCap := 0;
@@ -1143,11 +1263,11 @@ begin
     begin
       for DI2 := 0 to High(Adds) do
       begin
-        Score := SimilarityForPair(Repo, Deletes[SI2], Adds[DI2]);
-        if Score < ARenameThreshold then
-          Continue;
-        if Score < 0 then
-          Continue;
+        if not IsBlobMode(Deletes[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
+        if GitOidSame(Deletes[SI2].Oid, Adds[DI2].Oid) then Score := 100
+        else Score := ScoreFromSigs(DeleteSigs[SI2], AddSigs[DI2]);
+        if Score < 0 then Continue;
+        if Score < ARenameThreshold then Continue;
         if LCandCount = LCandCap then
         begin
           LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
@@ -1199,6 +1319,7 @@ begin
     LCopyCap := 0;
     if AFindCopies then
     begin
+      BuildBlobSigCache(Repo, HeadList, HeadSigs);
       Candidates := nil;
       LCandCount := 0;
       LCandCap := 0;
@@ -1209,11 +1330,11 @@ begin
         begin
           if PairedDst[DI2] then
             Continue;
-          Score := SimilarityForPair(Repo, HeadList[SI2], Adds[DI2]);
-          if Score < ACopyThreshold then
-            Continue;
-          if Score < 0 then
-            Continue;
+          if not IsBlobMode(HeadList[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
+          if GitOidSame(HeadList[SI2].Oid, Adds[DI2].Oid) then Score := 100
+          else Score := ScoreFromSigs(HeadSigs[SI2], AddSigs[DI2]);
+          if Score < 0 then Continue;
+          if Score < ACopyThreshold then Continue;
           if LCandCount = LCandCap then
           begin
             LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));

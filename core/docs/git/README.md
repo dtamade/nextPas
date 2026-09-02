@@ -19,7 +19,7 @@
 | [CONTRACT.history.md](CONTRACT.history.md) | 历史契约（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show） |
 | [CONTRACT.branches.md](CONTRACT.branches.md) | 分支契约（branch/tag/stash/notes） |
 | [CONTRACT.transport.md](CONTRACT.transport.md) | 传输契约（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
-| [CONTRACT.extensions.md](CONTRACT.extensions.md) | 扩展契约（archive/submodule/mailmap/trailer/bundle/grep/bisect） |
+| [CONTRACT.extensions.md](CONTRACT.extensions.md) | 扩展契约（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect） |
 | [PURE-BACKEND.md](PURE-BACKEND.md) | 纯 Pascal 后端隔离契约（依赖图、选择矩阵、`gbAuto` 迁移、`uses` 隔离与门禁） |
 | [native-reference-map.md](native-reference-map.md) | `native.*` ↔ `~/projects/libgit2` 只读对照（格式/算法/边界清单，不进源码树） |
 | [bindings-pitfalls.md](bindings-pitfalls.md) | `libgit2.bindings` 再生成管线与 C 绑定坑清单（c2pas888 / shim / 黄金对照） |
@@ -62,10 +62,10 @@ core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/
 core/src/nextpas.core.git.native.history.traversal.pas ← 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元，<210 行，inline 零拷贝 via bytes.ops）
 core/src/nextpas.core.git.native.history.query.pas      ← 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元，<260 行）
 core/src/nextpas.core.git.native.history.ops.pas        ← 历史·操作分片（shortlog/catfile/cherrypick/revert，4 单元，<180 行）
-core/src/nextpas.core.git.native.history.pas  ← 历史 umbrella（聚合 traversal/query/ops 3 分片，<380 行，总门面 <600，预拆前 14 单元/464 行已按不变量域：revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert）
+core/src/nextpas.core.git.native.history.pas  ← 历史 umbrella 薄索引（<80 行，<380 阈，零转发仅 BC TGitOid，新代码一律分片直引 traversal/query/ops；预拆前 14 单元/464 行已按不变量域：revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert）
 core/src/nextpas.core.git.native.branches.pas ← 分支门面分片（branch/tag/stash/notes）
 core/src/nextpas.core.git.native.transport.pas ← 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset）
-core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect）
+core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect）
 core/src/nextpas.core.git.native.base.pas     ← TGitOid / EGitError 等对象层基座
 core/src/nextpas.core.git.native.{zlib,loose,pack,refs,objmodel,repo,write,index,cachetree,
   status,ignore,revwalk,commitgraph,reflog,stash,notes,branch,tag,log,describe,diff,blame,

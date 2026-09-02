@@ -14,8 +14,7 @@ uses
   nextpas.core.git.native.worktree,
   nextpas.core.git.native.lsfiles,
   nextpas.core.git.native.clean,
-  nextpas.core.git.native.prune,
-  nextpas.core.git.native.attributes;
+  nextpas.core.git.native.prune;
 
 type
   TGitIndexEntry = nextpas.core.git.native.index.TGitIndexEntry;
@@ -31,11 +30,6 @@ type
   TGitWorktree = nextpas.core.git.native.worktree.TGitWorktree;
   TGitWorktreeArray = nextpas.core.git.native.worktree.TGitWorktreeArray;
   TGitLsFilesOptions = nextpas.core.git.native.lsfiles.TGitLsFilesOptions;
-  TGitAttr = nextpas.core.git.native.attributes.TGitAttr;
-  TGitAttrArray = nextpas.core.git.native.attributes.TGitAttrArray;
-  TGitAttrEntry = nextpas.core.git.native.attributes.TGitAttrEntry;
-  TGitAttrEntries = nextpas.core.git.native.attributes.TGitAttrEntries;
-  TGitAttrKind = nextpas.core.git.native.attributes.TGitAttrKind;
 
 const
   gscUnmodified = nextpas.core.git.native.status.gscUnmodified;
@@ -97,14 +91,6 @@ function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored:
 function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; overload; inline;
 
 function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
-
-function GitParseAttributes(const AText: string): TGitAttrEntries; overload; inline;
-function GitParseAttributes(const AData: TBytes): TGitAttrEntries; overload; inline;
-function GitLoadAttributes(const AGitDir: string): TGitAttrEntries; inline;
-function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray; overload; inline;
-function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray; overload; inline;
-function GitAttributeGet(const AGitDir, APath, AName: string): string; overload; inline;
-function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string; overload; inline;
 
 implementation
 
@@ -277,41 +263,6 @@ end;
 function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.prune.GitRemotePrune(ALocalGitDir, ARemoteName);
-end;
-
-function GitParseAttributes(const AText: string): TGitAttrEntries; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitParseAttributes(AText);
-end;
-
-function GitParseAttributes(const AData: TBytes): TGitAttrEntries; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitParseAttributes(AData);
-end;
-
-function GitLoadAttributes(const AGitDir: string): TGitAttrEntries; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitLoadAttributes(AGitDir);
-end;
-
-function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitAttributesFor(AGitDir, APath);
-end;
-
-function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitAttributesFor(AEntries, APath);
-end;
-
-function GitAttributeGet(const AGitDir, APath, AName: string): string; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitAttributeGet(AGitDir, APath, AName);
-end;
-
-function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string; inline;
-begin
-  Result := nextpas.core.git.native.attributes.GitAttributeGet(AEntries, APath, AName);
 end;
 
 end.

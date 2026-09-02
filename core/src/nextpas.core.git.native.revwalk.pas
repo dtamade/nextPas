@@ -372,30 +372,37 @@ var
   LSorted: array of Integer;
   LSortedLen: SizeInt;
   LSortedCap: SizeInt;
-  // not inline: loop body quicksort, avoids I-Cache bloat per design rule
-  procedure QuickSort(AL, AR: Integer);
+  // not inline: partition loop, avoids I-Cache bloat per design rule
+  procedure QuickSelect(AL, AR, AK: Integer);
   var
     LI, RJ: Integer;
     LPivot: UInt64;
     LTmp: Integer;
   begin
-    LI := AL;
-    RJ := AR;
-    LPivot := LOldTicks[LSorted[(AL + AR) div 2]];
-    repeat
-      while LOldTicks[LSorted[LI]] > LPivot do Inc(LI);
-      while LOldTicks[LSorted[RJ]] < LPivot do Dec(RJ);
-      if LI <= RJ then
-      begin
-        LTmp := LSorted[LI];
-        LSorted[LI] := LSorted[RJ];
-        LSorted[RJ] := LTmp;
-        Inc(LI);
-        Dec(RJ);
-      end;
-    until LI > RJ;
-    if AL < RJ then QuickSort(AL, RJ);
-    if LI < AR then QuickSort(LI, AR);
+    while AL < AR do
+    begin
+      LI := AL;
+      RJ := AR;
+      LPivot := LOldTicks[LSorted[(AL + AR) div 2]];
+      repeat
+        while LOldTicks[LSorted[LI]] > LPivot do Inc(LI);
+        while LOldTicks[LSorted[RJ]] < LPivot do Dec(RJ);
+        if LI <= RJ then
+        begin
+          LTmp := LSorted[LI];
+          LSorted[LI] := LSorted[RJ];
+          LSorted[RJ] := LTmp;
+          Inc(LI);
+          Dec(RJ);
+        end;
+      until LI > RJ;
+      if AK <= RJ then
+        AR := RJ
+      else if AK >= LI then
+        AL := LI
+      else
+        Break;
+    end;
   end;
 begin
   if FCount <= CKeep then
@@ -435,9 +442,9 @@ begin
       Inc(LSortedLen);
     end;
   SetLength(LSorted, LSortedLen);
-  // perf: quicksort descending by LOldTicks O(n log n) replaces insertion O(k²); 4096 cap rare eviction but hotspot deterministic, zero-copy index Move, not inline
-  if Length(LSorted) > 1 then
-    QuickSort(0, High(LSorted));
+  // perf: O(n) avg QuickSelect (nth_element) keeps 2048 largest ticks, replaces O(n log n) QuickSort; hotspot eviction at 4096 cap now linear, jitter eliminated, zero-copy index Move, not inline to avoid I-Cache bloat, bytes.ops single source
+  if (LSortedLen > CKeep) and (Length(LSorted) > 1) then
+    QuickSelect(0, High(LSorted), CKeep - 1);
   for I := 0 to High(LSorted) do
   begin
     J := LSorted[I];

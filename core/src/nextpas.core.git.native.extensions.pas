@@ -14,7 +14,8 @@ uses
   nextpas.core.git.native.trailer,
   nextpas.core.git.native.bundle,
   nextpas.core.git.native.grep,
-  nextpas.core.git.native.bisect;
+  nextpas.core.git.native.bisect,
+  nextpas.core.git.native.attributes;
 
 type
   TGitOid = nextpas.core.git.native.base.TGitOid;
@@ -34,6 +35,11 @@ type
   TGitBisectCheck = nextpas.core.git.native.bisect.TGitBisectCheck;
   TGitBisectResult = nextpas.core.git.native.bisect.TGitBisectResult;
   TGitOidArray = nextpas.core.git.native.revwalk.TGitOidArray;
+  TGitAttr = nextpas.core.git.native.attributes.TGitAttr;
+  TGitAttrArray = nextpas.core.git.native.attributes.TGitAttrArray;
+  TGitAttrEntry = nextpas.core.git.native.attributes.TGitAttrEntry;
+  TGitAttrEntries = nextpas.core.git.native.attributes.TGitAttrEntries;
+  TGitAttrKind = nextpas.core.git.native.attributes.TGitAttrKind;
 
 function GitArchive(const AGitDir: string; const ATreeOid: TGitOid): TBytes; overload; inline;
 function GitArchive(const AGitDir: string; const ACommitOid: TGitOid; APeelCommit: Boolean): TBytes; overload; inline;
@@ -76,6 +82,14 @@ function GitGrepTree(const AGitDir: string; const ATreeOid: TGitOid; const APatt
 
 function GitBisectCandidates(const AGitDir, AGoodRev, ABadRev: string): TGitOidArray; inline;
 function GitBisectFind(const AGitDir: string; const AGoodRev, ABadRev: string; ACheck: TGitBisectCheck): TGitBisectResult; inline;
+
+function GitParseAttributes(const AText: string): TGitAttrEntries; overload; inline;
+function GitParseAttributes(const AData: TBytes): TGitAttrEntries; overload; inline;
+function GitLoadAttributes(const AGitDir: string): TGitAttrEntries; inline;
+function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray; overload; inline;
+function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray; overload; inline;
+function GitAttributeGet(const AGitDir, APath, AName: string): string; overload; inline;
+function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string; overload; inline;
 
 implementation
 
@@ -252,6 +266,41 @@ end;
 function GitBisectFind(const AGitDir: string; const AGoodRev, ABadRev: string; ACheck: TGitBisectCheck): TGitBisectResult; inline;
 begin
   Result := nextpas.core.git.native.bisect.GitBisectFind(AGitDir, AGoodRev, ABadRev, ACheck);
+end;
+
+function GitParseAttributes(const AText: string): TGitAttrEntries; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitParseAttributes(AText);
+end;
+
+function GitParseAttributes(const AData: TBytes): TGitAttrEntries; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitParseAttributes(AData);
+end;
+
+function GitLoadAttributes(const AGitDir: string): TGitAttrEntries; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitLoadAttributes(AGitDir);
+end;
+
+function GitAttributesFor(const AGitDir, APath: string): TGitAttrArray; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitAttributesFor(AGitDir, APath);
+end;
+
+function GitAttributesFor(const AEntries: TGitAttrEntries; const APath: string): TGitAttrArray; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitAttributesFor(AEntries, APath);
+end;
+
+function GitAttributeGet(const AGitDir, APath, AName: string): string; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitAttributeGet(AGitDir, APath, AName);
+end;
+
+function GitAttributeGet(const AEntries: TGitAttrEntries; const APath, AName: string): string; inline;
+begin
+  Result := nextpas.core.git.native.attributes.GitAttributeGet(AEntries, APath, AName);
 end;
 
 end.

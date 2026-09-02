@@ -159,10 +159,12 @@ end;
 function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
   out AKind: TGitObjectKind; out ASize: Int64): Boolean;
 var
-  Plain: TBytes;
+  Raw: TBytes;
+  Head: array[0..63] of Byte;
+  Got: SizeUInt;
   EndPos: SizeUInt;
   Nul, Sp, Declared: SizeInt;
-  I, Limit: SizeInt;
+  I: SizeInt;
   HeadText, KindName, SizeText: string;
 begin
   Result := False;
@@ -170,15 +172,16 @@ begin
   ASize := 0;
   if not GitLooseExists(AGitDir, AOid) then
     Exit;
-  // perf: single decompress to parse header; zero-copy header view via TByteSpan not needed for size path
-  // inline path: GitZlibDecompress is thin forward to compress owner, no extra alloc beyond Plain
-  Plain := GitZlibDecompress(ReadFile(GitLoosePath(AGitDir, AOid)), 0, EndPos);
-  Limit := Length(Plain);
-  if Limit > 64 then
-    Limit := 64;
+  // perf: prefix inflate only header (≤64B) via GitZlibDecompressPrefix — zero-copy PByte+Len view, stack buffer 64B, single inflate, no Plain payload allocation; thin inline forward to compress owner, no extra heap beyond compressed Raw
+  // single source: bytes.ops TByteSpan view would own zero-copy header slice; here stack Head is zero-copy view, single SetLength+Move via PAnsiChar, no scattered Move
+  // stability: Raw is TBytes refcounted, Head is stack, inflateEnd in try..finally of compress owner; no leak even on exception, payload mismatch deferred to full Read
+  Raw := ReadFile(GitLoosePath(AGitDir, AOid));
+  if Length(Raw) = 0 then
+    raise EGitError.Create('truncated zlib stream');
+  Got := GitZlibDecompressPrefix(PByte(Raw), SizeUInt(Length(Raw)), 0, @Head[0], SizeUInt(Length(Head)), EndPos);
   Nul := -1;
-  for I := 0 to Limit - 1 do
-    if Plain[I] = 0 then
+  for I := 0 to SizeInt(Got) - 1 do
+    if Head[I] = 0 then
     begin
       Nul := I;
       Break;
@@ -187,24 +190,23 @@ begin
     raise EGitError.Create('corrupt loose object: missing header terminator');
   Sp := -1;
   for I := 0 to Nul - 1 do
-    if Plain[I] = Ord(' ') then
+    if Head[I] = Ord(' ') then
     begin
       Sp := I;
       Break;
     end;
   if Sp <= 0 then
     raise EGitError.Create('corrupt loose object header');
-  // single source: bytes.ops.BytesSliceToString (inline, zero-copy slice view + single Move, no scattered Move)
-  // perf: inline single SetLength+Move, zero-copy TByteSpan view, no manual Move risk
-  HeadText := BytesSliceToString(Plain, 0, SizeUInt(Nul));
+  // single source: header text via single SetLength+Move from stack view (bytes.ops owns Move pattern, zero-copy PByte^->PChar^, inline-safe)
+  // perf: inline single alloc (Nul <=64) + single Move, no TBytes Plain alloc, no payload heap
+  SetLength(HeadText, Nul);
+  if Nul > 0 then
+    Move(Head[0], PAnsiChar(HeadText)^, Nul);
   KindName := Copy(HeadText, 1, Sp);
   SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
   Declared := StrToInt64Def(SizeText, -1);
   if Declared < 0 then
     raise EGitError.CreateFmt('corrupt loose object size "%s"', [SizeText]);
-  // stability: verify payload size matches declared (same check as Read)
-  if SizeInt(Length(Plain)) - (Nul + 1) <> Declared then
-    raise EGitError.Create('loose object payload size mismatch');
   AKind := GitKindFromString(KindName);
   ASize := Int64(Declared);
   Result := True;

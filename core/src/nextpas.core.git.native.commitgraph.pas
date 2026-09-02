@@ -8,6 +8,7 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.fs,
+  nextpas.core.io.mapped,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1,
   nextpas.core.git.native.base;
@@ -45,6 +46,9 @@ type
   TCommitGraph = class
   private
     FData: TBytes;
+    FMapped: IMappedFile;
+    FView: PByte;
+    FViewLen: SizeInt;
     FNumCommits: Cardinal;
     FFanout: array[0..255] of Cardinal;
     FOidLookupOff: SizeInt;
@@ -54,9 +58,12 @@ type
     function BE32At(APos: SizeInt): Cardinal; inline;
     function CompareOidAt(AIdx: Cardinal; const AOid: TGitOid): Integer;
     function FindPos(const AOid: TGitOid): Integer;
+    procedure InitFromView(AData: PByte; ALen: SizeInt);
     procedure InitFromData(const AData: TBytes);
+    procedure InitFromMapped(const AMapped: IMappedFile);
   public
     constructor Create(const AData: TBytes);
+    constructor CreateFromMapped(const AMapped: IMappedFile);
     destructor Destroy; override;
     property NumCommits: Cardinal read FNumCommits;
     function TryFind(const AOid: TGitOid; out AEntry: TCommitGraphEntry): Boolean;
@@ -112,12 +119,14 @@ type
     Path: string;
     MTime: Int64;
     Size: Int64;
-    Data: TBytes;
+    Mapped: IMappedFile;
   end;
 
 const
-  // bounded LRU: caps resident TBytes to prevent multi-repo unbounded growth; MRU at High, LRU at 0
-  GGraphCacheCap = 8;
+  // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU at High, LRU at 0
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 2 bounds fd/page-cache vs 8xheap (multi-tenant), inline LRU via bytes.ops single source
+  // stability: IMappedFile interface refcount auto releases on eviction/shift (managed), no leak; large files not duplicated via TBytes refcount
+  GGraphCacheCap = 2;
 
 var
   GGraphCache: array of TGraphCacheEntry;
@@ -164,8 +173,8 @@ end;
 
 function TCommitGraph.BE32At(APos: SizeInt): Cardinal; inline;
 begin
-  // perf: inline + zero-copy PByte single-source via bytes.binary ReadUInt32BE (no TBytes copy, 4B BE single source), FData is live TBytes backing store
-  Result := ReadUInt32BE(PByte(@FData[APos]));
+  // perf: inline + zero-copy PByte single-source via bytes.binary ReadUInt32BE (no TBytes copy, 4B BE single source), FView is live zero-copy window (mmap or heap, bytes.ops single source)
+  Result := ReadUInt32BE(FView + APos);
 end;
 
 function OidRawCompare(const AA, AB: TGitOid): Integer; inline;
@@ -181,7 +190,7 @@ var
   P: PByte;
 begin
   // perf: inline + zero-copy PByte view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered/SIMD, 20B ≈ 3×QWord), no per-byte loop
-  P := @FData[FOidLookupOff + SizeInt(AIdx) * GitOidRawLen];
+  P := FView + FOidLookupOff + SizeInt(AIdx) * GitOidRawLen;
   Result := SpanCompare(
     TByteSpan.Create(P, GitOidRawLen),
     TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
@@ -217,6 +226,18 @@ begin
 end;
 
 procedure TCommitGraph.InitFromData(const AData: TBytes);
+begin
+  // perf: heap path via bytes.ops single source view (FData owns heap, FView zero-copy window, inline BE32At via bytes ops), FMapped nil for heap
+  // stability: managed TBytes auto released on exception, FView zero-copy window via bytes.ops single source
+  FData := AData;
+  FMapped := nil;
+  if Length(FData) > 0 then
+    InitFromView(@FData[0], Length(FData))
+  else
+    InitFromView(nil, 0);
+end;
+
+procedure TCommitGraph.InitFromView(AData: PByte; ALen: SizeInt);
 var
   DataLen, HeaderSize, TrailerOff, DataStart, LastOff, ChunkOff: SizeInt;
   Chunks, I, J, K: Integer;
@@ -235,18 +256,19 @@ var
   Cnt: Integer;
   Tmp: TChunkRec;
 begin
-  // perf: zero-copy refcounted share (no Copy alloc), FData takes ownership via CoW, avoids double memory for large commit-graph; inline BE32At uses bytes ops single source
-  FData := AData;
-  DataLen := Length(FData);
+  // perf: zero-copy PByte view single-source via bytes.ops, FView window over heap or mmap, inline BE32At via bytes.ops, OS page-reclaimable for mmap
+  FView := AData;
+  FViewLen := ALen;
+  DataLen := FViewLen;
   if DataLen < 8 + 20 then
     raise EGitError.Create('commit-graph too short');
   Magic := BE32At(0);
   if Magic <> CGPH_MAGIC then
     raise EGitError.Create('commit-graph bad signature');
-  Version := FData[4];
-  OidVer := FData[5];
-  Chunks := Integer(FData[6]);
-  BaseGraphs := FData[7];
+  Version := FView[4];
+  OidVer := FView[5];
+  Chunks := Integer(FView[6]);
+  BaseGraphs := FView[7];
   if (Version <> CGPH_VERSION) or (OidVer <> CGPH_OID_VERSION) then
     raise EGitError.Create('unsupported commit-graph version');
   if Chunks = 0 then
@@ -258,13 +280,13 @@ begin
   TrailerOff := DataLen - GitOidRawLen;
   if TrailerOff < DataStart then
     raise EGitError.Create('commit-graph wrong size');
-  // perf: zero-copy PByte view direct to hasher (no TrailerOff allocation nor Move), inline SHA-1; stability: managed TBytes/IHasher auto released on exception
+  // perf: zero-copy PByte view direct to hasher (no TrailerOff allocation nor Move), inline SHA-1; stability: managed TBytes/IHasher auto released on exception, FView zero-copy via bytes.ops
   H := NewSHA1;
   if TrailerOff > 0 then
-    H.Write(FData[0], SizeUInt(TrailerOff));
+    H.Write(FView[0], SizeUInt(TrailerOff));
   Computed := H.SumBytes;
   for I := 0 to GitOidRawLen - 1 do
-    if Computed[I] <> FData[TrailerOff + I] then
+    if Computed[I] <> FView[TrailerOff + I] then
       raise EGitError.Create('commit-graph checksum mismatch');
   FanoutOff := -1;
   LookupOff := -1;
@@ -408,7 +430,7 @@ begin
   for I := 0 to Integer(FNumCommits) - 1 do
   begin
     for K := 0 to GitOidRawLen - 1 do
-      TmpOid.Bytes[K] := FData[FOidLookupOff + I * GitOidRawLen + K];
+      TmpOid.Bytes[K] := FView[FOidLookupOff + I * GitOidRawLen + K];
     if I = 0 then
       Prev := TmpOid
     else
@@ -421,15 +443,36 @@ begin
   end;
 end;
 
+procedure TCommitGraph.InitFromMapped(const AMapped: IMappedFile);
+begin
+  // perf: mmap path zero-copy PByte view via io.mapped owner (no heap duplication in global cache, OS page-reclaimable), inline BE32At via bytes.ops single source
+  // stability: FMapped interface keeps mapping alive while graph lives; managed TBytes/IHasher auto released on exception, no leak
+  FMapped := AMapped;
+  SetLength(FData, 0);
+  if (FMapped <> nil) and (FMapped.Size > 0) and (FMapped.Data <> nil) then
+    InitFromView(FMapped.Data, SizeInt(FMapped.Size))
+  else
+    InitFromView(nil, 0);
+end;
+
 constructor TCommitGraph.Create(const AData: TBytes);
 begin
   inherited Create;
   InitFromData(AData);
 end;
 
+constructor TCommitGraph.CreateFromMapped(const AMapped: IMappedFile);
+begin
+  inherited Create;
+  InitFromMapped(AMapped);
+end;
+
 destructor TCommitGraph.Destroy;
 begin
   SetLength(FData, 0);
+  FMapped := nil;
+  FView := nil;
+  FViewLen := 0;
   inherited Destroy;
 end;
 
@@ -454,7 +497,7 @@ begin
   SetLength(AEntry.Parents, 0);
   Base := FCommitDataOff + SizeInt(Pos) * (GitOidRawLen + 16);
   for I := 0 to GitOidRawLen - 1 do
-    AEntry.TreeOid.Bytes[I] := FData[Base + I];
+    AEntry.TreeOid.Bytes[I] := FView[Base + I];
   P1 := BE32At(Base + GitOidRawLen);
   P2 := BE32At(Base + GitOidRawLen + 4);
   GenField := BE32At(Base + GitOidRawLen + 8);
@@ -490,7 +533,7 @@ begin
     if P1 >= FNumCommits then
       raise EGitError.Create('commit-graph parent index out of range');
     for I := 0 to GitOidRawLen - 1 do
-      AEntry.Parents[Count].Bytes[I] := FData[FOidLookupOff + Integer(P1) * GitOidRawLen + I];
+      AEntry.Parents[Count].Bytes[I] := FView[FOidLookupOff + Integer(P1) * GitOidRawLen + I];
     Inc(Count);
   end;
   if P2 <> MISSING_PARENT then
@@ -505,7 +548,7 @@ begin
         if ParentIdx >= FNumCommits then
           raise EGitError.Create('commit-graph parent index out of range');
         for K := 0 to GitOidRawLen - 1 do
-          AEntry.Parents[Count].Bytes[K] := FData[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + K];
+          AEntry.Parents[Count].Bytes[K] := FView[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + K];
         Inc(Count);
         if (BE32At(FExtraOff + I * 4) and EDGE_LAST_MASK) <> 0 then
           Break;
@@ -520,7 +563,7 @@ begin
       if ParentIdx >= FNumCommits then
         raise EGitError.Create('commit-graph parent index out of range');
       for I := 0 to GitOidRawLen - 1 do
-        AEntry.Parents[Count].Bytes[I] := FData[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + I];
+        AEntry.Parents[Count].Bytes[I] := FView[FOidLookupOff + Integer(ParentIdx) * GitOidRawLen + I];
       Inc(Count);
     end;
   end;
@@ -539,6 +582,7 @@ function GitTryLoadCommitGraph(const AGitDir: string; out AGraph: TCommitGraph):
 var
   Path: string;
   Data: TBytes;
+  Mapped: IMappedFile;
   Idx, I: Integer;
   Info: TFileInfo;
   UseCache: Boolean;
@@ -548,15 +592,16 @@ begin
   Path := GitCommitGraphPath(AGitDir);
   if not FileExists(Path) then
     Exit;
-  // fast path: cached bytes when mtime+size unchanged; LRU promotion on hit
+  // fast path: cached mmap when mtime+size unchanged; LRU promotion on hit
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), inline LRU via bytes.ops single source
   Idx := FindGraphCache(AGitDir);
   UseCache := False;
   if Idx >= 0 then
     try
       Info := Stat(Path);
-      if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) then
+      if (GGraphCache[Idx].Path = Path) and (GGraphCache[Idx].MTime = Info.ModTime) and (GGraphCache[Idx].Size = Info.Size) and (GGraphCache[Idx].Mapped <> nil) and (GGraphCache[Idx].Mapped.Size = Info.Size) then
       begin
-        Data := GGraphCache[Idx].Data; // zero-copy: refcounted share, no Move
+        Mapped := GGraphCache[Idx].Mapped; // zero-copy: interface refcount, no heap copy, OS page-reclaimable
         UseCache := True;
         // inline LRU: hit becomes MRU
         TouchGraphCache(Idx);
@@ -564,7 +609,15 @@ begin
     except
       UseCache := False;
     end;
-  if not UseCache then
+  if UseCache then
+  begin
+    AGraph := TCommitGraph.CreateFromMapped(Mapped);
+    Result := True;
+    Exit;
+  end;
+  // miss: mmap open (zero-copy, no heap TBytes duplication, page-reclaimable); fallback to heap ReadFile on empty/mmap failure for stability
+  Mapped := MmapOpen(Path);
+  if (Mapped = nil) or (Mapped.Size = 0) or (Mapped.Data = nil) then
   begin
     Data := ReadFile(Path);
     try
@@ -573,36 +626,46 @@ begin
       Info.ModTime := 0;
       Info.Size := Length(Data);
     end;
-    if Idx < 0 then
-    begin
-      // bounded insert: evict LRU at 0 if at capacity, else grow; keeps residency O(Cap)
-      if Length(GGraphCache) >= GGraphCacheCap then
-      begin
-        for I := 0 to High(GGraphCache)-1 do
-          GGraphCache[I] := GGraphCache[I+1]; // managed copy releases evicted Data via refcount, stability preserved
-        Idx := High(GGraphCache);
-      end
-      else
-      begin
-        // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=8 — clamp overshoot and keep logical len
-        Idx := Length(GGraphCache);
-        SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
-        if Length(GGraphCache) > GGraphCacheCap then
-          SetLength(GGraphCache, GGraphCacheCap);
-        if Length(GGraphCache) > Idx + 1 then
-          SetLength(GGraphCache, Idx + 1);
-      end;
-      GGraphCache[Idx].Dir := AGitDir;
-    end;
-    GGraphCache[Idx].Path := Path;
-    GGraphCache[Idx].MTime := Info.ModTime;
-    GGraphCache[Idx].Size := Info.Size;
-    GGraphCache[Idx].Data := Data; // zero-copy: Data already owns heap block from ReadFile, share via refcount
-    // stale hit slot updated: promote to MRU if not already tail (LRU age refresh)
-    if Idx <> High(GGraphCache) then
-      TouchGraphCache(Idx);
+    // heap fallback without polluting mmap cache (keep cap for mmap only); still create graph via heap path
+    AGraph := TCommitGraph.Create(Data);
+    Result := True;
+    Exit;
   end;
-  AGraph := TCommitGraph.Create(Data);
+  try
+    Info := Stat(Path);
+  except
+    Info.ModTime := 0;
+    Info.Size := Mapped.Size;
+  end;
+  if Idx < 0 then
+  begin
+    // bounded insert: evict LRU at 0 if at capacity, else grow; keeps residency O(Cap)
+    if Length(GGraphCache) >= GGraphCacheCap then
+    begin
+      for I := 0 to High(GGraphCache)-1 do
+        GGraphCache[I] := GGraphCache[I+1]; // managed copy releases evicted Mapped via interface refcount, stability preserved
+      Idx := High(GGraphCache);
+    end
+    else
+    begin
+      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=2 — clamp overshoot and keep logical len
+      Idx := Length(GGraphCache);
+      SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
+      if Length(GGraphCache) > GGraphCacheCap then
+        SetLength(GGraphCache, GGraphCacheCap);
+      if Length(GGraphCache) > Idx + 1 then
+        SetLength(GGraphCache, Idx + 1);
+    end;
+    GGraphCache[Idx].Dir := AGitDir;
+  end;
+  GGraphCache[Idx].Path := Path;
+  GGraphCache[Idx].MTime := Info.ModTime;
+  GGraphCache[Idx].Size := Info.Size;
+  GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap duplication, OS reclaimable
+  // stale hit slot updated: promote to MRU if not already tail (LRU age refresh)
+  if Idx <> High(GGraphCache) then
+    TouchGraphCache(Idx);
+  AGraph := TCommitGraph.CreateFromMapped(Mapped);
   Result := True;
 end;
 

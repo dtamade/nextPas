@@ -11,7 +11,7 @@
 - 同层单向豁免锚点：`git-native-zlib-l2-exempt` 在 `nextpas.core.git.native.zlib.pas:22` 层注释可被 `grep git-native-zlib-l2-exempt` 自动校验（`scripts/git-contract-check.sh` C5 / `test_git_native` source-contract），防止 `L2 compress`/`L1 checksum.adler32` 依赖漂移；仅允许 `Deflate*` + `Adler32Update` 单源透传零 `Move` 重复。
 
 ## 2. 不变量
-- Oid 20-byte 原子：`GitOidIsValidHex/FromHex/ToHex/Same` 单源 `bytes.ops`，`Same` = `SpanEqual(TByteSpan(20),TByteSpan(20))` 零分配；`TGitOid`（`bindings.structs` 33-byte）与 `TGitOid33` 仅 legacy（`deprecated`，新模块一律经 `native.base.TGitOid` / `libgit2.base.git_oid` 20-byte 权威，`scripts/git-contract-check.sh` C5 硬门禁）。
+- Oid 20-byte 原子：`GitOidIsValidHex/FromHex/ToHex/Same` 单源 `bytes.ops`，`Same` = `SpanEqual(TByteSpan(20),TByteSpan(20))` 零分配；`TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（`TGitOid33` 仅 SHA256 泛型 via `libgit2.base.TGitOid33`），新模块一律经 `native.base.TGitOid` / `libgit2.base.git_oid` 20-byte 权威，`scripts/git-contract-check.sh` C5 硬门禁，Phase 7 双轨已清理。
 - Loose 路径 `objects/xx/yyyy` SHA-1 寻址，zlib wrapper 经 `DeflateReaderEmbedded` 流边界即停。
 - Pack：`.idx v2` fanout 二分，OFS/REF delta 链深度 ≤64，CRC 不校验但 SHA-1 尾校验；`TPackFile.FMapped: IMappedFile` 独占 `PByte+Size` 零拷贝，析构释放（接口计数）。
 - Refs：HEAD/loose/packed-refs 去重归并，gitdir 发现经 `EffectiveGitDir` 透 linked worktree。

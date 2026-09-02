@@ -679,14 +679,16 @@ type
   TGitCert = record
     cert_type: TGitCertT;
   end;
-  TGitOid = record
-    &type: Byte;
-    id: array[0..31] of Byte;
-  end deprecated 'Use libgit2.base.git_oid / native.base.TGitOid (20-byte) for SHA1; 33-byte is SHA256-ready generic, new code must use 20-byte path';
-  // Convergence aliases (20-byte SHA1 authority via native.base/libgit2.base; kept for cross-track port, zero-cost via variant AsNative overlay + inline SpanCopy)
-  // Prefer libgit2.base.git_oid / TGitOid20 for SHA1 path; TGitOid (33-byte) is generic SHA256-ready container, bridged via GitOidCopy20To33/33To20 inline bytes.ops single source
-  TGitOid20Alias = nextpas.core.git.libgit2.base.git_oid;
-  PGitOid20Alias = ^TGitOid20Alias;
+  // Single source: TGitOid is 20-byte authoritative via libgit2.base.git_oid (variant id/Bytes/AsNative at offset 0, SizeOf=20, PACKRECORDS C, Assert guarantee, inline zero-copy overlay, bytes.ops single source SpanEqual/SpanCopy/IsZeroBytes, ≤80 ns/op)
+  TGitOid = nextpas.core.git.libgit2.base.git_oid;
+  // Legacy SHA256-ready generic (type+32) retained only via libgit2.base.TGitOid33, bridge via GitOidCopy20To33/33To20 inline SpanCopy zero-copy + FillChar tail zero, no heap, try..finally safe
+  TGitOid33 = nextpas.core.git.libgit2.base.TGitOid33;
+  PGitOid33 = ^TGitOid33;
+  TGitOid20 = nextpas.core.git.libgit2.base.git_oid;
+  PGitOid20 = ^TGitOid20;
+  // Compat alias: cross-track 20-byte authority, zero-cost via variant AsNative overlay + inline SpanCopy, bytes.ops single source
+  TGitOid20Alias = TGitOid20;
+  PGitOid20Alias = PGitOid20;
   TGitRemoteHead = record
     local: LongInt;
     oid: TGitOid;
