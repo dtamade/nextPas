@@ -85,6 +85,10 @@ for token in "nextpas.core.json.writer" "nextpas.core.text.builder" "nextpas.cor
   if [[ "$token" == "nextpas.core.text.builder" ]]; then
     LOTHER=$(echo "$LOTHER" | grep -v "nextpas.core.js.quickjs.loader.pas" || true)
   fi
+  # allow js.eval host-arg unquote via text.escape as domain-specific single source (EvalArgValue single source, pure.value owns json building)
+  if [[ "$token" == "nextpas.core.text.escape" ]]; then
+    LOTHER=$(echo "$LOTHER" | grep -v "nextpas.core.js.eval.pas" || true)
+  fi
   if [[ -n "$LOTHER" ]]; then
     say_fail "only pure.value may use $token (L2→L2 single-point js.* via pure.value, json.* internal excluded, found: $LOTHER)"
   else

@@ -103,6 +103,7 @@ uses
   nextpas.core.json.types,
   nextpas.core.json,
   nextpas.core.bytes.ops,
+  nextpas.core.js.eval,
   nextpas.core.js.quickjs.loader;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
@@ -266,6 +267,9 @@ var
   LInt: Int64;
   LDbl: Double;
   P: PAnsiChar;
+  LLen: SizeUInt;
+  LVal: TJsValue;
+  LFirst: AnsiChar;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
   if JsTrimEquals(ACode,'') then
@@ -283,26 +287,44 @@ begin
   end;
   P := nil;
   try
-    if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
-    P := JS_ToCStringPtr(FCtx, V);
-    if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: QjsView bytes.ops single source inline zero-copy (single AnsiPtrLen scan) + Trim zero-copy view
-    LOrig := QjsView(P);
+    // perf: length-aware ToCStringLen preserves embedded NUL (binary safe) single source via bytes.ops zero-copy view; fallback to single-scan QjsView via AnsiPtrLen, exactly-once Free
+    if Assigned(JS_ToCStringLenPtr) then
+    begin
+      LLen := 0; P := JS_ToCStringLenPtr(FCtx, @LLen, V);
+      if P = nil then Exit(Bind(JsUndefinedValue));
+      LOrig := nextpas.core.js.quickjs.value.QjsViewLen(P, LLen);
+    end else
+    begin
+      if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
+      P := JS_ToCStringPtr(FCtx, V);
+      if P = nil then Exit(Bind(JsUndefinedValue));
+      LOrig := QjsView(P);
+    end;
     LView := LOrig.Trim;
-    if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
-    if LView.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
-    if LView.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
-    if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
-    // perf: 零拷贝快路径 text.number single source ViewToInt64/ViewToDouble inline (zero-copy TStringView, single scan each, O(n) without JSON tree alloc) bypass JsonParse for hot numeric FFI; inline + bytes.ops single source via text.number ParseDouble(EiselLemire), no extra alloc, FFI path B/op=0 for numbers
-    if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
-    if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
-    // perf: 非数值回退零拷贝判别 text.view single source TStringView.Trim+Slice zero-copy inline O(1) discriminant via bytes.ops single source (TryClampSlice/SpanTrim) + JsPureNewStringView single BytesCopy single source — 消除对已 ToCString 再 JsonParse 的二次 O(n) 解析+树分配 (LDoc:=JsonParse(LView) fallback after QjsView), B/op 0 for array/object via single alloc single Move, FFI path exactly-once Free不丢, CONTRACT INV-5
+    // perf: single-pass dispatch via eval single source table-driven EVAL_LITERALS (bytes.ops SpanEqual single source, inline zero-copy) eliminating hand Equals*4 double scan; bytes.ops single source, inline thin-forward via EvalTryLiteralTable
+    if nextpas.core.js.eval.EvalTryLiteralTable(LView, LVal) then
+      Exit(JsValueBindContext(LVal, FContextId));
+    // perf: single-pass numeric discriminant via first-byte O(1) filter + single ViewToInt64/ViewToDouble scan each via text.number single source (EiselLemire), bytes.ops SpanEqual reuse, B/op=0 for numbers; avoids triple O(n) sequential Equals+Int+Double scans
+    if not LView.IsEmpty then
+    begin
+      LFirst := LView.Data[0];
+      if (LFirst in ['0'..'9','-','+','.']) then
+      begin
+        if (LView.IndexOf('.') < 0) and (LView.IndexOf('e') < 0) and (LView.IndexOf('E') < 0) then
+        begin
+          if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
+          if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
+        end else
+          if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
+      end;
+    end;
+    // perf: 非数值回退零拷贝判别 text.view single source TStringView.Trim+Slice zero-copy inline O(1) discriminant via bytes.ops single source (TryClampSlice/SpanTrim) + JsPureNewStringView single BytesCopy single source — binary-safe length-aware view preserves embedded NUL via QjsViewLen, B/op 0 for array/object via single alloc
     // stability: 资源 exactly-once Free via try-finally (P/JS_FreeCString+JS_FreeValue) 不丢, 双堆幂等, 装饰边界 Pure single source via JsPureNewStringView (bytes.ops SpanToString single source, inline, zero dangling)
     if (not LView.IsEmpty) and (LView.Len >= 2) and (LView.Data[0] = '"') and (LView.Data[LView.Len - 1] = '"') then
-      // json string literal quoted via QuickJS ToCString JSON-compat: 去外引号零拷贝 Slice (TryClampSlice single source inline via TStringView.Slice) + JsPureNewStringView single BytesCopy single source (bytes.ops single source, inline, B/op=1), 无 JSON 树 second pass, 无转义树分配
+      // json string literal quoted via QuickJS ToCString JSON-compat: 去外引号零拷贝 Slice (TryClampSlice single source inline) + JsPureNewStringView single BytesCopy single source (bytes.ops single source, preserves embedded NUL via length-aware LOrig/LView)
       Exit(JsPureNewStringView(LView.Slice(1, LView.Len - 2), FContextId));
     if (not LView.IsEmpty) and ((LView.Data[0] = '[') or (LView.Data[0] = '{')) then
-      // array/object: 零拷贝视图直通 JsPureNewStringView(LOrig) single BytesCopy single source via bytes.ops single source, inline, 无 JsonParse 树分配, B/op 0 额外之外 single Result alloc
+      // array/object: 零拷贝视图直通 JsPureNewStringView(LOrig) single BytesCopy single source via bytes.ops single source, binary-safe length-aware, inline
       Exit(JsPureNewStringView(LOrig, FContextId));
     Result := JsPureNewStringView(LOrig, FContextId);
   finally

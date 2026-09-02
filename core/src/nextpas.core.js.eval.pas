@@ -15,12 +15,26 @@ const
   JS_PURE_EVAL_MAGIC_X = 'x';
   JS_PURE_EVAL_BAD = 'bad(';
   JS_PURE_EVAL_FOO = 'foo(';
+type
+  TEvalLiteralEntry = record Lit: string; Kind: Byte; end;
+const
+  EVAL_LITERALS: array[0..3] of TEvalLiteralEntry = (
+    (Lit: 'null'; Kind: 0),
+    (Lit: 'undefined'; Kind: 1),
+    (Lit: 'true'; Kind: 2),
+    (Lit: 'false'; Kind: 3)
+  );
+function EvalLiteralValue(AKind: Byte): TJsValue; inline;
+function EvalTryLiteralTable(const V: TStringView; out OutVal: TJsValue): Boolean; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; overload;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; overload;
 implementation
 uses
   nextpas.core.text.number,
   nextpas.core.bytes.ops,
+  nextpas.core.text.escape,
+  nextpas.core.simd.vec,
+  nextpas.core.simd.base,
   nextpas.core.js.pure.value;
 type
   TEvalPredicates = record
@@ -44,13 +58,16 @@ begin
   OutVal := JsIntValue(A + B);
   Result := True;
 end;
-// scanner — predicate merge via bytes.ops SIMD SpanIndexOfSpan single source, zero-copy views, not inline per red-line 2 (O(n) SIMD scan, I-Cache), bytes.ops single source via TStringView.IndexOfStr/SpanIndexOfSpan
+// scanner — table-driven single-pass SIMD via VecCmpEq single source, zero-copy views, not inline per red-line 2 (O(n) single scan vs O(2n) double IndexOfStr), bytes.ops single source via Slice.Equals
 procedure ScanEvalPredicates(const V: TStringView; ATimeoutMs: Integer; out Pred: TEvalPredicates);
 var
   LLen: SizeUInt;
   LNeedJson, LNeedWhile: Boolean;
   LJsonLen, LWhileLen: SizeUInt;
   LJsonView, LWhileView: TStringView;
+  LPos: SizeUInt;
+  LCombined: TVecMask;
+  LBit: Int32;
 begin
   Pred.HasWhile := False; Pred.HasJson := False; Pred.HasX := False;
   if V.IsEmpty then Exit;
@@ -62,10 +79,40 @@ begin
   if not LNeedJson and not LNeedWhile then Exit;
   LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
   LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  // perf: single source bytes.ops SpanIndexOfSpan via IndexOfStr SIMD zero-copy, no per-byte Slice+Equals view build, Eval per-call O(n) single SIMD pass per predicate vs O(n*m) double scan loop, TryHostDispatch decoupled
-  if LNeedJson then Pred.HasJson := V.IndexOfStr(LJsonView) >= 0;
-  if LNeedWhile then Pred.HasWhile := V.IndexOfStr(LWhileView) >= 0;
-  if Pred.HasJson then Pred.HasX := V.IndexOf('x') >= 0;
+  // perf: single-pass table-driven SIMD VecCmpEq single source, O(n) single scan vs O(2n) double pass, bytes.ops Slice.Equals single source, early exit
+  LPos := 0;
+  while LPos + VecWidth <= LLen do
+  begin
+    LCombined := TVecMask(0);
+    if LNeedJson and not Pred.HasJson then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LJsonView.Data[0]));
+    if LNeedWhile and not Pred.HasWhile then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(LWhileView.Data[0]));
+    if LNeedJson and not Pred.HasX then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord('x'));
+    if LCombined = TVecMask(0) then begin Inc(LPos, VecWidth); Continue; end;
+    while LCombined <> TVecMask(0) do
+    begin
+      LBit := VecCtz(LCombined);
+      if LNeedJson and not Pred.HasJson and (V.Data[LPos + SizeUInt(LBit)] = LJsonView.Data[0]) then
+        if (LPos + SizeUInt(LBit) + LJsonLen <= LLen) and V.Slice(LPos + SizeUInt(LBit), LJsonLen).Equals(LJsonView) then Pred.HasJson := True;
+      if LNeedWhile and not Pred.HasWhile and (V.Data[LPos + SizeUInt(LBit)] = LWhileView.Data[0]) then
+        if (LPos + SizeUInt(LBit) + LWhileLen <= LLen) and V.Slice(LPos + SizeUInt(LBit), LWhileLen).Equals(LWhileView) then Pred.HasWhile := True;
+      if LNeedJson and not Pred.HasX and (V.Data[LPos + SizeUInt(LBit)] = 'x') then Pred.HasX := True;
+      LCombined := LCombined and not TVecMask(TVecMask(1) shl LBit);
+      if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+    end;
+    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < LLen do
+  begin
+    if (not LNeedJson or Pred.HasJson) and (not LNeedWhile or Pred.HasWhile) and (not LNeedJson or not Pred.HasJson or Pred.HasX) then Break;
+    if LNeedJson and not Pred.HasJson and (V.Data[LPos] = LJsonView.Data[0]) then
+      if (LPos + LJsonLen <= LLen) and V.Slice(LPos, LJsonLen).Equals(LJsonView) then Pred.HasJson := True;
+    if LNeedWhile and not Pred.HasWhile and (V.Data[LPos] = LWhileView.Data[0]) then
+      if (LPos + LWhileLen <= LLen) and V.Slice(LPos, LWhileLen).Equals(LWhileView) then Pred.HasWhile := True;
+    if LNeedJson and not Pred.HasX and (V.Data[LPos] = 'x') then Pred.HasX := True;
+    Inc(LPos);
+  end;
+  if not Pred.HasJson then Pred.HasX := False;
 end;
 function EvalIsLiteralEquals(const V: TStringView; const Lit: string): Boolean; inline;
 begin
@@ -74,17 +121,10 @@ end;
 // strategy tables — sentinel / literal, table-driven, inline, zero-copy via text.view
 type
   TEvalSentinel = record Lit: string; Stack: string; end;
-  TEvalLiteralEntry = record Lit: string; Kind: Byte; end;
 const
   EVAL_SENTINELS: array[0..1] of TEvalSentinel = (
     (Lit: JS_PURE_EVAL_BAD; Stack: 'at bad(:1:4'),
     (Lit: JS_PURE_EVAL_FOO; Stack: 'at foo(:1:4')
-  );
-  EVAL_LITERALS: array[0..3] of TEvalLiteralEntry = (
-    (Lit: 'null'; Kind: 0),
-    (Lit: 'undefined'; Kind: 1),
-    (Lit: 'true'; Kind: 2),
-    (Lit: 'false'; Kind: 3)
   );
 function EvalLiteralValue(AKind: Byte): TJsValue; inline;
 begin
@@ -133,50 +173,19 @@ function EvalFallback(const V: TStringView): TJsValue; inline;
 begin
   Result := JsStringValue(V.ToString);
 end;
-// arg view single source — outer quote strip + backslash unescape zero-copy via text.view + JsPureNewStringView single source, not inline per red-line 2 (loop + SetLength), bytes.ops single source at call-site, text.view helper candidate converged
+// arg view single source — outer quote strip + backslash unescape via text.escape single source, zero-copy via text.view + JsPureNewStringView, not inline per red-line 2 (owner text.escape SIMD block BytesCopy)
 function EvalArgValue(const V: TStringView): TJsValue;
 var
   LInner: TStringView;
-  LNeedUnescape: Boolean;
-  J, LOut, LChunkStart: SizeUInt;
   LStr: string;
 begin
-  // single source via text.view Slice/Equals zero-copy + JsPureNewStringView BytesCopy single source (bytes.ops), backslash unescape single template, not inline per red-line 2
+  // single source via text.escape TextNeedsBackslashUnescape/TextUnescapeBackslashView single source, bytes.ops single source via BytesCopy, zero dangling
   if (V.Len >= 2) and ((V.Data[0] = '"') or (V.Data[0] = '''')) and (V.Data[V.Len - 1] = V.Data[0]) then
   begin
     LInner := V.Slice(1, V.Len - 2);
-    LNeedUnescape := False;
-    for J := 0 to LInner.Len - 1 do if LInner.Data[J] = '\' then begin LNeedUnescape := True; Break; end;
-    if LNeedUnescape then
+    if TextNeedsBackslashUnescapeView(LInner) then
     begin
-      SetLength(LStr, LInner.Len);
-      LOut := 0; J := 0; LChunkStart := 0;
-      // perf: block BytesCopy single source via bytes.ops zero-copy Move, not per-byte branch-simulated Move, single allocation; inline Move via bytes.ops BytesCopy single source, zero dangling
-      while J < LInner.Len do
-      begin
-        if LInner.Data[J] = '\' then
-        begin
-          if J > LChunkStart then
-          begin
-            BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[LChunkStart]), J - LChunkStart);
-            Inc(LOut, J - LChunkStart);
-          end;
-          Inc(J);
-          if J < LInner.Len then
-          begin
-            BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[J]), 1);
-            Inc(LOut);
-            Inc(J);
-          end;
-          LChunkStart := J;
-        end else Inc(J);
-      end;
-      if LChunkStart < LInner.Len then
-      begin
-        BytesCopy(PByte(@LStr[LOut + 1]), PByte(@LInner.Data[LChunkStart]), LInner.Len - LChunkStart);
-        Inc(LOut, LInner.Len - LChunkStart);
-      end;
-      SetLength(LStr, LOut);
+      LStr := TextUnescapeBackslashView(LInner);
       Result := JsStringValue(LStr);
     end else
       Result := JsPureNewStringView(LInner);

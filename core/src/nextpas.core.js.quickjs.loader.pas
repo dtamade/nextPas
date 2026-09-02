@@ -63,7 +63,7 @@ end;
 type TQuickJsBindRec = record Name: AnsiString; Dest: PPointer; Required: Boolean; end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer; I: Integer;
-  Binds: array[0..30] of TQuickJsBindRec;
+  Binds: array[0..31] of TQuickJsBindRec;
   function Bind(const Sym: AnsiString; out Addr: Pointer): Boolean; inline;
   begin Result := platform_dl_sym(Lib, PAnsiChar(Sym), Addr) = 0; if not Result then Addr := nil; end;
 begin
@@ -82,28 +82,29 @@ begin
   Binds[6].Name := 'JS_FreeValue'; Binds[6].Dest := PPointer(@JS_FreeValuePtr); Binds[6].Required := False;
   Binds[7].Name := 'JS_DupValue'; Binds[7].Dest := PPointer(@JS_DupValuePtr); Binds[7].Required := False;
   Binds[8].Name := 'JS_ToCString'; Binds[8].Dest := PPointer(@JS_ToCStringPtr); Binds[8].Required := False;
-  Binds[9].Name := 'JS_FreeCString'; Binds[9].Dest := PPointer(@JS_FreeCStringPtr); Binds[9].Required := False;
-  Binds[10].Name := 'JS_IsException'; Binds[10].Dest := PPointer(@JS_IsExceptionPtr); Binds[10].Required := False;
-  Binds[11].Name := 'JS_GetException'; Binds[11].Dest := PPointer(@JS_GetExceptionPtr); Binds[11].Required := False;
-  Binds[12].Name := 'JS_NewString'; Binds[12].Dest := PPointer(@JS_NewStringPtr); Binds[12].Required := False;
-  Binds[13].Name := 'JS_NewInt64'; Binds[13].Dest := PPointer(@JS_NewInt64Ptr); Binds[13].Required := False;
-  Binds[14].Name := 'JS_NewFloat64'; Binds[14].Dest := PPointer(@JS_NewFloat64Ptr); Binds[14].Required := False;
-  Binds[15].Name := 'JS_NewBool'; Binds[15].Dest := PPointer(@JS_NewBoolPtr); Binds[15].Required := False;
-  Binds[16].Name := 'JS_NewObject'; Binds[16].Dest := PPointer(@JS_NewObjectPtr); Binds[16].Required := False;
-  Binds[17].Name := 'JS_NewArray'; Binds[17].Dest := PPointer(@JS_NewArrayPtr); Binds[17].Required := False;
-  Binds[18].Name := 'JS_SetPropertyStr'; Binds[18].Dest := PPointer(@JS_SetPropertyStrPtr); Binds[18].Required := False;
-  Binds[19].Name := 'JS_GetPropertyStr'; Binds[19].Dest := PPointer(@JS_GetPropertyStrPtr); Binds[19].Required := False;
-  Binds[20].Name := 'JS_SetMemoryLimit'; Binds[20].Dest := PPointer(@JS_SetMemoryLimitPtr); Binds[20].Required := False;
-  Binds[21].Name := 'JS_SetGCThreshold'; Binds[21].Dest := PPointer(@JS_SetGCThresholdPtr); Binds[21].Required := False;
-  Binds[22].Name := 'JS_RunGC'; Binds[22].Dest := PPointer(@JS_RunGCPtr); Binds[22].Required := False;
-  Binds[23].Name := 'JS_SetInterruptHandler'; Binds[23].Dest := PPointer(@JS_SetInterruptHandlerPtr); Binds[23].Required := False;
-  Binds[24].Name := 'JS_NewCFunction'; Binds[24].Dest := PPointer(@JS_NewCFunctionPtr); Binds[24].Required := False;
-  Binds[25].Name := 'JS_Call'; Binds[25].Dest := PPointer(@JS_CallPtr); Binds[25].Required := False;
-  Binds[26].Name := 'JS_IsArray'; Binds[26].Dest := PPointer(@JS_IsArrayPtr); Binds[26].Required := False;
-  Binds[27].Name := 'JS_GetOwnPropertyNames'; Binds[27].Dest := PPointer(@JS_GetOwnPropertyNamesPtr); Binds[27].Required := False;
-  Binds[28].Name := 'JS_FreePropertyEnum'; Binds[28].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[28].Required := False;
-  Binds[29].Name := 'JS_AtomToString'; Binds[29].Dest := PPointer(@JS_AtomToStringPtr); Binds[29].Required := False;
-  Binds[30].Name := 'JS_FreeAtom'; Binds[30].Dest := PPointer(@JS_FreeAtomPtr); Binds[30].Required := False;
+  Binds[9].Name := 'JS_ToCStringLen'; Binds[9].Dest := PPointer(@JS_ToCStringLenPtr); Binds[9].Required := False;
+  Binds[10].Name := 'JS_FreeCString'; Binds[10].Dest := PPointer(@JS_FreeCStringPtr); Binds[10].Required := False;
+  Binds[11].Name := 'JS_IsException'; Binds[11].Dest := PPointer(@JS_IsExceptionPtr); Binds[11].Required := False;
+  Binds[12].Name := 'JS_GetException'; Binds[12].Dest := PPointer(@JS_GetExceptionPtr); Binds[12].Required := False;
+  Binds[13].Name := 'JS_NewString'; Binds[13].Dest := PPointer(@JS_NewStringPtr); Binds[13].Required := False;
+  Binds[14].Name := 'JS_NewInt64'; Binds[14].Dest := PPointer(@JS_NewInt64Ptr); Binds[14].Required := False;
+  Binds[15].Name := 'JS_NewFloat64'; Binds[15].Dest := PPointer(@JS_NewFloat64Ptr); Binds[15].Required := False;
+  Binds[16].Name := 'JS_NewBool'; Binds[16].Dest := PPointer(@JS_NewBoolPtr); Binds[16].Required := False;
+  Binds[17].Name := 'JS_NewObject'; Binds[17].Dest := PPointer(@JS_NewObjectPtr); Binds[17].Required := False;
+  Binds[18].Name := 'JS_NewArray'; Binds[18].Dest := PPointer(@JS_NewArrayPtr); Binds[18].Required := False;
+  Binds[19].Name := 'JS_SetPropertyStr'; Binds[19].Dest := PPointer(@JS_SetPropertyStrPtr); Binds[19].Required := False;
+  Binds[20].Name := 'JS_GetPropertyStr'; Binds[20].Dest := PPointer(@JS_GetPropertyStrPtr); Binds[20].Required := False;
+  Binds[21].Name := 'JS_SetMemoryLimit'; Binds[21].Dest := PPointer(@JS_SetMemoryLimitPtr); Binds[21].Required := False;
+  Binds[22].Name := 'JS_SetGCThreshold'; Binds[22].Dest := PPointer(@JS_SetGCThresholdPtr); Binds[22].Required := False;
+  Binds[23].Name := 'JS_RunGC'; Binds[23].Dest := PPointer(@JS_RunGCPtr); Binds[23].Required := False;
+  Binds[24].Name := 'JS_SetInterruptHandler'; Binds[24].Dest := PPointer(@JS_SetInterruptHandlerPtr); Binds[24].Required := False;
+  Binds[25].Name := 'JS_NewCFunction'; Binds[25].Dest := PPointer(@JS_NewCFunctionPtr); Binds[25].Required := False;
+  Binds[26].Name := 'JS_Call'; Binds[26].Dest := PPointer(@JS_CallPtr); Binds[26].Required := False;
+  Binds[27].Name := 'JS_IsArray'; Binds[27].Dest := PPointer(@JS_IsArrayPtr); Binds[27].Required := False;
+  Binds[28].Name := 'JS_GetOwnPropertyNames'; Binds[28].Dest := PPointer(@JS_GetOwnPropertyNamesPtr); Binds[28].Required := False;
+  Binds[29].Name := 'JS_FreePropertyEnum'; Binds[29].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[29].Required := False;
+  Binds[30].Name := 'JS_AtomToString'; Binds[30].Dest := PPointer(@JS_AtomToStringPtr); Binds[30].Required := False;
+  Binds[31].Name := 'JS_FreeAtom'; Binds[31].Dest := PPointer(@JS_FreeAtomPtr); Binds[31].Required := False;
   for I := 0 to High(Binds) do
   begin
     if not Bind(Binds[I].Name, P) then
@@ -188,7 +189,7 @@ begin
   // stability: exactly-once nil, table-driven single source mirrors TryLoad, resource not丢, idempotent
   JS_NewRuntimePtr := nil; JS_EvalPtr := nil;
   JS_FreeRuntimePtr := nil; JS_NewContextPtr := nil; JS_FreeContextPtr := nil; JS_GetGlobalObjectPtr := nil;
-  JS_FreeValuePtr := nil; JS_DupValuePtr := nil; JS_ToCStringPtr := nil; JS_FreeCStringPtr := nil;
+  JS_FreeValuePtr := nil; JS_DupValuePtr := nil; JS_ToCStringPtr := nil; JS_ToCStringLenPtr := nil; JS_FreeCStringPtr := nil;
   JS_IsExceptionPtr := nil; JS_GetExceptionPtr := nil; JS_NewStringPtr := nil; JS_NewInt64Ptr := nil;
   JS_NewFloat64Ptr := nil; JS_NewBoolPtr := nil; JS_NewObjectPtr := nil; JS_NewArrayPtr := nil;
   JS_SetPropertyStrPtr := nil; JS_GetPropertyStrPtr := nil; JS_SetMemoryLimitPtr := nil; JS_SetGCThresholdPtr := nil;

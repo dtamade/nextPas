@@ -32,6 +32,7 @@ type
   TJS_FreeValue = procedure(Ctx: PJSContext; Val: TJSQjsValue); cdecl;
   TJS_DupValue = function(Ctx: PJSContext; Val: TJSQjsValue): TJSQjsValue; cdecl;
   TJS_ToCString = function(Ctx: PJSContext; Val: TJSQjsValue): PAnsiChar; cdecl;
+  TJS_ToCStringLen = function(Ctx: PJSContext; Len: PSizeUInt; Val: TJSQjsValue): PAnsiChar; cdecl;
   TJS_FreeCString = procedure(Ctx: PJSContext; Str: PAnsiChar); cdecl;
   TJS_IsException = function(Val: TJSQjsValue): Integer; cdecl;
   TJS_GetException = function(Ctx: PJSContext): TJSQjsValue; cdecl;
@@ -91,6 +92,7 @@ var
   JS_FreeValuePtr: TJS_FreeValue = nil;
   JS_DupValuePtr: TJS_DupValue = nil;
   JS_ToCStringPtr: TJS_ToCString = nil;
+  JS_ToCStringLenPtr: TJS_ToCStringLen = nil;
   JS_FreeCStringPtr: TJS_FreeCString = nil;
   JS_IsExceptionPtr: TJS_IsException = nil;
   JS_GetExceptionPtr: TJS_GetException = nil;

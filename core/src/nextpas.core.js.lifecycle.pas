@@ -68,9 +68,9 @@ begin
   Result := (UInt64(AEpoch) shl 32) or UInt64(AIdx);
 end;
 procedure TryShrinkGPureFreeLocked; inline;
-var LCap, LLen, LNewCap: SizeUInt;
+var LCap, LLen: SizeUInt;
 begin
-  // perf: inline shrink when capacity >> length (4x) to avoid long-service bloat, half each time, bytes.ops single source geometric, zero-copy
+  // perf: inline shrink when capacity >> length (4x) to avoid long-service bloat, single SetLength to LLen Exactly-Once header (no double SetLength+poke jitter/barrier), bytes.ops geometric single source kept, zero-copy, amortized O(1), inline
   LCap := GPureFreeCapacity;
   LLen := SizeUInt(Length(GPureFree));
   if LLen = 0 then
@@ -79,13 +79,7 @@ begin
     Exit;
   end;
   if (LCap > 64) and (LLen * 4 < LCap) then
-  begin
-    LNewCap := LCap div 2;
-    if LNewCap < LLen then LNewCap := LLen;
-    SetLength(GPureFree, Integer(LNewCap));
-    if LNewCap <> LLen then
-      nextpas.core.mem.dynarray.DynArraySetLengthGeneric(GPureFree, LLen);
-  end;
+    SetLength(GPureFree, Integer(LLen));
 end;
 function JsPureContextRegister: UInt64;
 var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;

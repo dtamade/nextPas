@@ -49,6 +49,7 @@ function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: T
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
+function QjsViewLen(P: PAnsiChar; ALen: SizeUInt): TStringView; inline;
 { L0 single source thread/time/deadline helpers — thread/time/deadline 单缝统收敛至 js.lifecycle single source (L0 platform.thread + platform.time single slit via lifecycle), inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops+mem.dynarray 单源约束 }
 function QjsThreadSelf: UInt64; inline;
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
@@ -84,6 +85,13 @@ begin
   Result := nextpas.core.js.value.store.JsValueView(P);
 end;
 
+function QjsViewLen(P: PAnsiChar; ALen: SizeUInt): TStringView; inline;
+begin
+  // perf: length-aware zero-copy view via bytes.ops single source (TStringView.Create single source, no scan), preserves embedded NUL for binary, inline hot path
+  if P = nil then Exit(TStringView.Empty);
+  Result := TStringView.Create(P, ALen);
+end;
+
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
 var Idx: Integer;
 begin
@@ -113,7 +121,7 @@ begin
 end;
 
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
-var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64;
+var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64; LLen: SizeUInt;
 begin
   Result := JsValueBindContext(JsUndefinedValue, ACtxtId);
   if ACtx = nil then Exit;
@@ -127,17 +135,30 @@ begin
     JS_TAG_FLOAT64: begin nextpas.core.bytes.ops.BytesCopy(@LDouble, @V.Data[0], SizeOf(Double)); Exit(JsPureNewDouble(LDouble, ACtxtId)); end; // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy), L1 single source, inline hot tag unpack
     JS_TAG_STRING:
       begin
+        // perf: length-aware ToCStringLen preserves embedded NUL (binary safe) via bytes.ops zero-copy view; fallback to single-scan QjsView when Len API unavailable, inline
+        if Assigned(JS_ToCStringLenPtr) then
+        begin
+          LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+          if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+          try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+          finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
-        try
-          // perf: single ToCString + single scan QjsView (bytes.ops AnsiPtrLen single source via JsValueCStrLen/QjsCStrLen) → zero-copy TStringView + JsPureNewStringView single BytesCopy single alloc (bytes.ops SpanToString/BytesCopy single source), inline, B/op=1, 资源 exactly-once Free不丢 — eliminates AnsiPtrToString+JsPureNewString double alloc, 纯视图 BytesCopy 单源零拷贝单分配
-          Exit(JsPureNewStringView(QjsView(P), ACtxtId));
+        try Exit(JsPureNewStringView(QjsView(P), ACtxtId));
         finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
       begin
-        // perf: object/array 统一单次ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source (merged JS_IsArray真假两路重复ToCString→单次FFI往返, inline, exactly-once Free不丢) — 纯视图 BytesCopy 单源零拷贝单分配, 消除多一次FFI往返+double alloc
+        // perf: length-aware single ToCStringLen + QjsViewLen zero-copy via bytes.ops single source, B/op=1, exactly-once Free, preserves embedded NUL
+        if Assigned(JS_ToCStringLenPtr) then
+        begin
+          LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+          if P = nil then Exit(JsPureNewString('', ACtxtId));
+          try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+          finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsPureNewString('', ACtxtId));
@@ -145,7 +166,14 @@ begin
       end;
     JS_TAG_EXCEPTION: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   end;
-  // fallback for BIG_INT/SYMBOL etc or NaN-boxing build unknown tag — single ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source, no JsonParse second pass, exactly-once Free不丢; 保 CONTRACT 单源 json owner 不在此 fallback 扩张 — 纯视图 BytesCopy 单源零拷贝单分配
+  // fallback: length-aware ToCStringLen single source via bytes.ops, preserves binary NUL
+  if Assigned(JS_ToCStringLenPtr) then
+  begin
+    LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+    if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+    try Exit(JsPureNewStringView(QjsViewLen(P, LLen), ACtxtId));
+    finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+  end;
   if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   P := JS_ToCStringPtr(ACtx, V);
   if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));

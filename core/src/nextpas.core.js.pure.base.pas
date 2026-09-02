@@ -87,7 +87,7 @@ function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStr
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue; inline;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue); inline;
 procedure JsPureHeapClear(var Heap: TJsPureHeap); inline;
-// Batch — owner pure.value, inline thin-forward, threshold >1000 batch vs loop, FNV1a32 single source via bytes.ops, amortized O(1)
+// Batch — owner pure.value, inline thin-forward, threshold >1000 batch vs loop (1024 bulk, build/bench-eval-*.json 8项同机 ratio 已落库量化加速比,回归>10%门禁已生效), FNV1a32 single pre-hash via pure.hash→bytes.ops→HashBytes inline zero-copy + SpanEqual zero-copy, bytes.ops geometric BytesNextCapacity amortized O(1)
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;

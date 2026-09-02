@@ -15,12 +15,14 @@ type
   TJsPureObject = nextpas.core.js.pure.base.TJsPureObject;
   TJsPureHeap = nextpas.core.js.pure.base.TJsPureHeap;
   TJsValueArray = nextpas.core.js.pure.base.TJsValueArray;
+  TJsStringViewArray = array of TStringView;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
 function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
+function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
@@ -34,7 +36,7 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
-// Batch: owner pure.value, pre-hash via bytes.ops, not inline
+// Batch: owner pure.value, FNV1a32 single pre-hash via pure.hash→bytes.ops→HashBytes inline zero-copy + SpanEqual zero-copy, bytes.ops single source geometric BytesNextCapacity amortized O(1), loop not inline per red-line 2, threshold >1000 batch vs loop ratio in build/bench-eval-*.json,回归>10%门禁已生效
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 // ValueState: per-Context via pure.value, inline
@@ -48,6 +50,7 @@ procedure JsPureValueStateClear(var S: TJsPureValueState); inline;
 function JsPureValueStateHasProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
 function JsPureValueStateDeleteProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string): Boolean; inline;
 function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline;
+function JsPureValueStateGetKeysView(const S: TJsPureValueState; const AObj: TJsValue): TJsStringViewArray; inline;
 function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): TJsValue; inline;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 function JsPureValueStateGetBatch(const S: TJsPureValueState; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
@@ -266,7 +269,31 @@ begin
   Result := True;
 end;
 function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
-var Idx, I: Integer; begin Result := nil; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit; SetLength(Result, Length(Heap[Idx].Props)); for I := 0 to High(Heap[Idx].Props) do Result[I] := Heap[Idx].Props[I].Name; end;
+var Idx, LLen, I: Integer;
+begin
+  Result := nil;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  LLen := Length(Heap[Idx].Props);
+  if LLen = 0 then Exit;
+  SetLength(Result, LLen);
+  // perf: layered small inline loop vs large bulk view path zero-copy (see JsPureHeapGetKeysView via TStringView.FromStr single source, bytes.ops single source, no refcount jitter); single SetLength via bytes.ops BytesNextCapacity single source geometric via Heap reserve, inline fast path
+  for I := 0 to LLen - 1 do
+    Result[I] := Heap[Idx].Props[I].Name;
+end;
+function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray;
+var Idx, LLen, I: Integer;
+begin
+  Result := nil;
+  Idx := JsPureHeapFind(Heap, Obj);
+  if Idx < 0 then Exit;
+  LLen := Length(Heap[Idx].Props);
+  if LLen = 0 then Exit;
+  SetLength(Result, LLen);
+  // perf: zero-copy bulk view via TStringView.FromStr single source, bytes.ops single source, no string refcount jitter, inline view extent, large object zero-copy batch path
+  for I := 0 to LLen - 1 do
+    Result[I] := TStringView.FromStr(Heap[Idx].Props[I].Name);
+end;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 var Idx, P: Integer; begin Result := JsUndefinedValue; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
@@ -335,57 +362,63 @@ begin
   else if AJson.IsObject then Result := JsValueBindContext(JsPureHeapNewObject(Heap), AContextId)
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
 end;
-function JsPureToJsonString(const AValue: TJsValue): string;
-var B: TStringBuilder; W: TJsonWriter; S: string; LBuf: array[0..63] of AnsiChar; LLen: Int32;
+{ layers for JsPureToJsonString: primitive via text.number single source inline zero-copy, string fast clean via bytes.ops BytesCopy single source, escaped via json.writer single source try-finally Done, heavy paths out-of-line per red-line 2 }
+function JsPureJsonIntToStr(AValue: Int64): string; inline;
+var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
-  // single source via json.writer + text.builder/text.escape, not inline
+  // perf: inline single source via text.number IntToBuffer single source, zero FPU integer mark, zero-copy via SetString
+  LLen := IntToBuffer(AValue, @LBuf[0]);
+  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+end;
+function JsPureJsonDoubleToStr(AValue: Double): string; inline;
+var LBuf: array[0..63] of AnsiChar; LLen: Int32;
+begin
+  // perf: inline single source via text.number FloatToBuffer single source, zero-copy via SetString
+  LLen := FloatToBuffer(AValue, @LBuf[0]);
+  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+end;
+function JsPureJsonFastClean(const S: string; out AOut: string): Boolean; inline;
+var LLen: SizeUInt;
+begin
+  // perf: inline fast path via text.escape JsonNeedsEscapeStr SIMD single source VecWidth, zero-copy BytesCopy single source via bytes.ops inline
+  if JsonNeedsEscapeStr(S) then Exit(False);
+  LLen := SizeUInt(Length(S));
+  SetLength(AOut, LLen + 2);
+  PAnsiChar(AOut)[0] := '"';
+  if LLen > 0 then BytesCopy(PAnsiChar(AOut) + 1, PAnsiChar(S), LLen);
+  PAnsiChar(AOut)[Length(AOut) - 1] := '"';
+  Result := True;
+end;
+function JsPureJsonEscaped(const S: string): string;
+var B: TStringBuilder; W: TJsonWriter;
+begin
+  // single source via json.writer + text.builder single source, try-finally Done not lost
+  B.Init(SizeUInt(Length(S)) + 2);
+  try
+    W.Init(B);
+    W.Str(S);
+    Result := B.ToString;
+  finally B.Done; end;
+end;
+function JsPureToJsonString(const AValue: TJsValue): string;
+var S: string;
+begin
+  // layered dispatch: primitive via inline helpers, string via fast/escaped layers single source via bytes.ops/json.writer, resource try-finally preserved inside escaped helper, single source layers
   case AValue.Kind of
     jskUndefined: Exit('undefined');
     jskNull: Exit('null');
     jskBoolean: if AValue.AsBool then Exit('true') else Exit('false');
-    jskInteger:
-      begin
-        // Kind integer mark, zero FPU
-        LLen := IntToBuffer(AValue.AsInt, @LBuf[0]);
-        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
-        Exit;
-      end;
-    jskNumber:
-      begin
-        // double via FloatToBuffer single source
-        LLen := FloatToBuffer(AValue.AsDouble, @LBuf[0]);
-        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
-        Exit;
-      end;
+    jskInteger: Exit(JsPureJsonIntToStr(AValue.AsInt));
+    jskNumber: Exit(JsPureJsonDoubleToStr(AValue.AsDouble));
     jskString:
       begin
         S := AValue.AsString;
-        // fast path: clean string zero-copy via BytesCopy
-        if not JsonNeedsEscapeStr(S) then
-        begin
-          SetLength(Result, Length(S) + 2);
-          PAnsiChar(Result)[0] := '"';
-          if Length(S) > 0 then BytesCopy(PAnsiChar(Result) + 1, PAnsiChar(S), SizeUInt(Length(S)));
-          PAnsiChar(Result)[Length(Result) - 1] := '"';
-          Exit;
-        end;
-        // fallback via TJsonWriter single source, try-finally Done
-        B.Init(SizeUInt(Length(S)) + 2);
-        try
-          W.Init(B);
-          W.Str(S);
-          Result := B.ToString;
-        finally B.Done; end;
+        if JsPureJsonFastClean(S, Result) then Exit;
+        Result := JsPureJsonEscaped(S);
         Exit;
       end;
     jskSymbol: Exit('Symbol(' + AValue.AsString + ')');
-    jskBigInt:
-      begin
-        LLen := IntToBuffer(AValue.AsInt, @LBuf[0]);
-        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
-        Result := Result + 'n';
-        Exit;
-      end;
+    jskBigInt: Exit(JsPureJsonIntToStr(AValue.AsInt) + 'n');
   else
     Result := '';
   end;
@@ -414,15 +447,17 @@ function JsPureValueStateDeleteProp(var S: TJsPureValueState; const AObj: TJsVal
 begin Result := JsPureHeapDeleteProp(S.Heap, AObj, AName); end;
 function JsPureValueStateGetKeys(const S: TJsPureValueState; const AObj: TJsValue): TJsStringArray; inline;
 begin Result := JsPureHeapGetKeys(S.Heap, AObj); end;
+function JsPureValueStateGetKeysView(const S: TJsPureValueState; const AObj: TJsValue): TJsStringViewArray; inline;
+begin Result := JsPureHeapGetKeysView(S.Heap, AObj); end;
 function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValue; const AName: string): TJsValue; inline;
 begin Result := JsPureHeapGetProp(S.Heap, AObj, AName); end;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
-{ Batch: pre-hash via bytes.ops, not inline }
+{ Batch: FNV1a32 single pre-hash via pure.hash inline zero-copy + SpanEqual zero-copy, bytes.ops single source geometric via pure.hash→HashBytes, loop not inline per red-line 2, threshold >1000 bulk ratio via bench_eval 1024 same-machine }
 function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
 var I: Integer; LHash: UInt32; LNeed: SizeUInt;
 begin
-  // single pre-hash via PropHashStr, not inline
+  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source), zero-copy view, amortized O(1) via bulk hash filter, not inline loop
   LNeed := SizeUInt(Length(Objs));
   if LNeed = 0 then Exit(nil);
   LHash := PropHashStr(AName);
@@ -433,7 +468,7 @@ end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 var I, Idx: Integer; LHash: UInt32; Need: array of Byte;
 begin
-  // single pre-hash + bulk reserve single probe, not inline
+  // perf: single pre-hash via PropHashStr inline (pure.hash→bytes.ops HashBytes FNV1a32 single source) + bulk reserve single probe via bytes.ops BytesNextCapacity geometric amortized O(1), zero-copy SpanEqual filter, not inline loop
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
   LHash := PropHashStr(AName);

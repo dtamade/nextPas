@@ -18,11 +18,24 @@ type
     function IsValid: Boolean; inline; // fail-closed: FValid and not closed
     function IsAlive: Boolean; inline; // strong: alias to IsValid via lifecycle acquire
     function IsClosed: Boolean; inline; // explicit closed state
-    function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
-    function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsInteger: Boolean; inline; function IsString: Boolean; inline;
-    function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
-    function IsError: Boolean; inline; function IsPromise: Boolean; inline; function IsSymbol: Boolean; inline; function IsBigInt: Boolean; inline;
-    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string; inline;
+    function IsUndefined: Boolean; inline;
+    function IsNull: Boolean; inline;
+    function IsBool: Boolean; inline;
+    function IsNumber: Boolean; inline;
+    function IsInteger: Boolean; inline;
+    function IsString: Boolean; inline;
+    function IsObject: Boolean; inline;
+    function IsArray: Boolean; inline;
+    function IsFunction: Boolean; inline;
+    function IsError: Boolean; inline;
+    function IsPromise: Boolean; inline;
+    function IsSymbol: Boolean; inline;
+    function IsBigInt: Boolean; inline;
+    function AsBool: Boolean; inline;
+    function AsInt: Int64; inline;
+    function AsDouble: Double; inline;
+    function AsString: string; inline;
+    function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean; function TryAsDouble(out V: Double): Boolean; function TryAsString(out V: string): Boolean;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
