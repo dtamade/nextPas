@@ -378,8 +378,8 @@ function DefaultBenchConfig: TBenchConfig;
 {** 分类异常值严重度（criterion 风格：mild/moderate/severe） }
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 
-{** Glob 模式匹配（* 匹配任意字符，? 匹配单个字符） }
-function GlobMatch(const APattern, AStr: string): Boolean;
+{ Glob 模式匹配 - 单源 L0 text.wildmatch }
+function GlobMatch(const APattern, AStr: string): Boolean; inline;
 
 {** IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
 function IsDoubleNaN(const AValue: Double): Boolean; inline;
@@ -411,7 +411,8 @@ procedure BenchBlackBoxReset;
 implementation
 
 uses
-  nextpas.core.math.scalar;
+  nextpas.core.math.scalar,
+  nextpas.core.text.wildmatch;
 
 { ===== TBenchResult 便捷方法 ===== }
 
@@ -1006,58 +1007,10 @@ begin
     Result := osNone;
 end;
 
-{** Glob 模式匹配实现
- *
- *  支持:
- *    * — 匹配任意字符序列（包括空）
- *    ? — 匹配单个字符
- *    其他字符按字面匹配（大小写敏感）
- *
- *  F-03: 迭代实现（双指针 + 回溯），避免递归堆分配。
- *  O(n*m) 最坏情况，基准名称通常很短，无性能问题。
- }
-function GlobMatch(const APattern, AStr: string): Boolean;
-var
-  LP, LS, LStarP, LStarS: PChar;
+{ Glob 模式匹配 - 单源 L0 text.wildmatch inline 转发 }
+function GlobMatch(const APattern, AStr: string): Boolean; inline;
 begin
-  if APattern = '' then
-    Exit(AStr = '');
-
-  LP := PChar(APattern);
-  LS := PChar(AStr);
-  LStarP := nil;
-  LStarS := nil;
-
-  while LS^ <> #0 do
-  begin
-    if (LP^ = '*') then
-    begin
-      { 记录回溯点：模式和字符串的当前位置 }
-      LStarP := LP;
-      LStarS := LS;
-      Inc(LP);
-    end
-    else if (LP^ = '?') or (LP^ = LS^) then
-    begin
-      Inc(LP);
-      Inc(LS);
-    end
-    else if LStarP <> nil then
-    begin
-      { 回溯：* 多匹配一个字符 }
-      Inc(LStarS);
-      LP := LStarP + 1;  { 跳过 * }
-      LS := LStarS;
-    end
-    else
-      Exit(False);
-  end;
-
-  { 跳过尾部的 * }
-  while LP^ = '*' do
-    Inc(LP);
-
-  Result := LP^ = #0;
+  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AStr);
 end;
 
 { ===== BenchBlackBox (anti-DCE) ===== }

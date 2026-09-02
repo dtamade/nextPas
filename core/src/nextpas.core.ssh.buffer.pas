@@ -36,7 +36,7 @@ type
 
     procedure Clear;
     function Count: SizeUInt;
-    function ToBytes: TBytes;
+    function ToBytes: TBytes; inline;
 
     procedure PutByte(AValue: Byte);
     procedure PutBoolean(AValue: Boolean);
@@ -140,12 +140,10 @@ begin
   Result := FLen;
 end;
 
-function TSshWriter.ToBytes: TBytes;
+function TSshWriter.ToBytes: TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, FLen);
-  if FLen > 0 then
-    Move(FBuf[0], Result[0], FLen);
+  { perf: single source via bytes.ops.SpanCopySlice (SetLength+single Move zero-copy), FLen=0 short-circuit no alloc; inline thin forward avoids duplicate Move drift }
+  Result := nextpas.core.bytes.ops.SpanCopySlice(TByteSpan.FromBytes(FBuf), 0, FLen);
 end;
 
 procedure TSshWriter.PutByte(AValue: Byte);
@@ -283,8 +281,8 @@ procedure TSshReader.Need(ACount: SizeUInt);
 begin
   if Remaining < ACount then
     raise ESSHError.Create(sekProtocol,
-      'ssh buffer: truncated payload (need ' + IntToStr(ACount) +
-      ', remaining ' + IntToStr(Remaining) + ')');
+      'ssh buffer: truncated payload (need ' + nextpas.core.text.conv.IntToStr(Int64(ACount)) +
+      ', remaining ' + nextpas.core.text.conv.IntToStr(Int64(Remaining)) + ')');
 end;
 
 function TSshReader.AtEnd: Boolean;

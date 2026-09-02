@@ -42,32 +42,32 @@ uses
   nextpas.core.ssh.cipher.etm,
   nextpas.core.ssh.errors;
 
-function SshCipherSupported(const ACipher: string): Boolean;
+function SshCipherSupported(const ACipher: string): Boolean; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshCipherSupported(ACipher);
 end;
 
-function SshMacSupported(const AMac: string): Boolean;
+function SshMacSupported(const AMac: string): Boolean; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshMacSupported(AMac);
 end;
 
-function SshCipherKeySize(const ACipher: string): Integer;
+function SshCipherKeySize(const ACipher: string): Integer; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshCipherKeySize(ACipher);
 end;
 
-function SshCipherIvSize(const ACipher: string): Integer;
+function SshCipherIvSize(const ACipher: string): Integer; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshCipherIvSize(ACipher);
 end;
 
-function SshMacKeySize(const AMac: string): Integer;
+function SshMacKeySize(const AMac: string): Integer; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshMacKeySize(AMac);
 end;
 
-function SshCipherRequiresMac(const ACipher: string): Boolean;
+function SshCipherRequiresMac(const ACipher: string): Boolean; inline;
 begin
   Result := nextpas.core.ssh.cipher.base.SshCipherRequiresMac(ACipher);
 end;

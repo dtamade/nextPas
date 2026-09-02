@@ -316,7 +316,7 @@ begin
   begin
     LInFile := FKnownHosts.ContainsKey(FOptions.Host, FOptions.Port, FHostKeyBlob);
     if (not LInFile) and FOptions.StrictHostKeyChecking then
-      raise ESSHError.Create(sekHostKey, 'ssh session: host key not in known_hosts (' + FOptions.Host + ':' + IntToStr(FOptions.Port) + ', ' + FHostKeyFingerprint + ')');
+      raise ESSHError.Create(sekHostKey, 'ssh session: host key not in known_hosts (' + FOptions.Host + ':' + nextpas.core.text.conv.IntToStr(Int64(FOptions.Port)) + ', ' + FHostKeyFingerprint + ')');
   end;
 end;
 
@@ -487,7 +487,7 @@ end;
 
 procedure TAsyncConnector.OnDial(AStream: IAsyncTcpStream; AError: Int32; AContext: Pointer);
 begin
-  if AError <> 0 then begin Fail(ESSHError.Create(sekIO, 'ssh async dial failed (' + IntToStr(AError) + ')')); Exit; end;
+  if AError <> 0 then begin Fail(ESSHError.Create(sekIO, 'ssh async dial failed (' + nextpas.core.text.conv.IntToStr(Int64(AError)) + ')')); Exit; end;
   if AStream = nil then begin Fail(ESSHError.Create(sekIO, 'ssh async dial: nil stream')); Exit; end;
   FTransport := TAsyncSshTransport.Create(FLoop, AStream);
   FTransport.ConfigureRekey(FOptions.RekeyBytes, FOptions.RekeyIntervalMs);

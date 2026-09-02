@@ -112,7 +112,7 @@ begin
     if (not LInFile) and AOptions.StrictHostKeyChecking then
       raise ESSHError.Create(sekHostKey,
         'ssh session: host key not in known_hosts (' +
-        AOptions.Host + ':' + IntToStr(AOptions.Port) + ', ' +
+        AOptions.Host + ':' + nextpas.core.text.conv.IntToStr(Int64(AOptions.Port)) + ', ' +
         AFingerprint + ')');
   end;
 end;

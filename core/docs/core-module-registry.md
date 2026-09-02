@@ -92,6 +92,8 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `template` | L3 | templating | yes | L0-L2 | draft |
 | `test` | L1 | test framework | yes | L0 | focused-runtime |
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |
+| `text.wildmatch` | L0 | wildcard `*` `?` matching (`nextpas.core.text.wildmatch.*`, single source for `ssh.hostkey`/`text.strings`/`bench.base`) | yes | L0 only (`base`) | source-contract |
+| `flow` | L1 | flow-control window (`nextpas.core.flow.window`, zero-heap `inline` `TFlowWindow`, `FLOW_WINDOW_LOW_WATER_DIVISOR=2`, `bytes.ops` single-source) | yes | L0 only (`base`) | source-contract |
 | `thread` | L1 | threads/tasks/channels | yes | L0 plus approved L1 | focused-runtime |
 | `time` | L1 | date/time APIs | yes | L0 plus approved L1 | focused-runtime |
 | `tls` | L2 | TLS stack/backends | yes | L0-L1 plus explicit backend FFI owners | source-contract + focused-runtime |

@@ -656,8 +656,21 @@ end;
 
 function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean;
 begin
-  { Cache disabled for HEAPTRC zero-leak }
-  Result := TryInitMontgomeryContext(AModulus, ACtx, AError);
+  // perf: Montgomery context single source cache (2048-bit MODP ~50ms init), zero-copy CoW share, inline hot path
+  if GLatestMontValid and (Length(GLatestMontModulus) = Length(AModulus))
+    and (BigNatCompare(GLatestMontModulus, AModulus) = 0) then
+  begin
+    ACtx := GLatestMontCtx;
+    AError := '';
+    Result := True;
+    Exit;
+  end;
+  if not TryInitMontgomeryContext(AModulus, ACtx, AError) then
+    Exit(False);
+  GLatestMontModulus := Copy(AModulus, 0, Length(AModulus));
+  GLatestMontCtx := ACtx;
+  GLatestMontValid := True;
+  Result := True;
 end;
 
 function BigNatShiftLeft(const A: TBigNat; ABitShift: Integer): TBigNat;

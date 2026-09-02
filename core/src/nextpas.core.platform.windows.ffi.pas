@@ -48,6 +48,21 @@ function GetCurrentProcessId: DWORD; stdcall; external 'kernel32' name 'GetCurre
     @return 线程 ID *}
 function GetCurrentThreadId: DWORD; stdcall; external 'kernel32' name 'GetCurrentThreadId';
 
+{** @desc 获取当前线程句柄（伪句柄） *}
+function GetCurrentThread: HANDLE; stdcall; external 'kernel32' name 'GetCurrentThread';
+
+{** @desc 获取当前处理器编号 *}
+function GetCurrentProcessorNumber: DWORD; stdcall; external 'kernel32' name 'GetCurrentProcessorNumber';
+
+{ NUMA }
+
+function GetNumaHighestNodeNumber(var HighestNodeNumber: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GetNumaHighestNodeNumber';
+function GetNumaProcessorNode(Processor: BYTE; var NodeNumber: BYTE): WINBOOL; stdcall; external 'kernel32' name 'GetNumaProcessorNode';
+function GetNumaNodeProcessorMask(Node: DWORD; var ProcessorMask: UInt64): WINBOOL; stdcall; external 'kernel32' name 'GetNumaNodeProcessorMask';
+function VirtualAllocExNuma(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD; nndPreferred: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAllocExNuma';
+function VirtualFreeEx(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): WINBOOL; stdcall; external 'kernel32' name 'VirtualFreeEx';
+function SetThreadAffinityMask(hThread: HANDLE; dwThreadAffinityMask: UInt64): UInt64; stdcall; external 'kernel32' name 'SetThreadAffinityMask';
+
 { Performance counters }
 
 {** @desc 获取性能计数器频率

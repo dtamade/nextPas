@@ -32,6 +32,7 @@ uses
   nextpas.core.text.utf8,
   nextpas.core.text.utils,
   nextpas.core.text.view,
+  nextpas.core.text.wildmatch,
   nextpas.core.text.width;
 
 type
@@ -129,6 +130,10 @@ function TextFormat(const AFmt: string; const AArgs: array of const): string; in
 
 { Case-insensitive ASCII comparison (from text.conv) }
 function SameText(const A, B: string): Boolean; inline;
+
+{ Wildmatch (from text.wildmatch) }
+function TextWildMatch(const APattern, AValue: string): Boolean; inline;
+function WildMatch(const APattern, AValue: string): Boolean; inline;
 
 implementation
 
@@ -420,6 +425,18 @@ end;
 function SameText(const A, B: string): Boolean;
 begin
   Result := nextpas.core.text.compare.SameText(A, B);
+end;
+
+{ Re-export: wildmatch }
+
+function TextWildMatch(const APattern, AValue: string): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AValue);
+end;
+
+function WildMatch(const APattern, AValue: string): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AValue);
 end;
 
 end.

@@ -71,8 +71,8 @@ function StringsToUpper(const AArr: TStringArray): TStringArray;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 
-{ Pattern matching }
-function GlobMatch(const APattern, AStr: string): Boolean;
+{ Pattern matching - single-source L0 text.wildmatch }
+function GlobMatch(const APattern, AStr: string): Boolean; inline;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
 
 { Additional utilities }
@@ -87,6 +87,7 @@ implementation
 
 uses
   nextpas.core.text.utils,
+  nextpas.core.text.wildmatch,
   nextpas.core.mem.utils;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
@@ -462,40 +463,10 @@ begin
   SetLength(Result, LCount);
 end;
 
-{ Pattern matching — glob style: * matches any, ? matches one char }
-
-function GlobMatch(const APattern, AStr: string): Boolean;
-var
-  LP, LS, LStarP, LStarS: SizeInt;
+{ Pattern matching — single-source via L0 text.wildmatch, inline zero-copy }
+function GlobMatch(const APattern, AStr: string): Boolean; inline;
 begin
-  LP := 1; LS := 1;
-  LStarP := 0; LStarS := 0;
-
-  while LS <= Length(AStr) do
-  begin
-    if (LP <= Length(APattern)) and ((APattern[LP] = '?') or (APattern[LP] = AStr[LS])) then
-    begin
-      Inc(LP); Inc(LS);
-    end
-    else if (LP <= Length(APattern)) and (APattern[LP] = '*') then
-    begin
-      LStarP := LP;
-      LStarS := LS;
-      Inc(LP);
-    end
-    else if LStarP > 0 then
-    begin
-      LP := LStarP + 1;
-      Inc(LStarS);
-      LS := LStarS;
-    end
-    else
-      Exit(False);
-  end;
-
-  while (LP <= Length(APattern)) and (APattern[LP] = '*') do
-    Inc(LP);
-  Result := LP > Length(APattern);
+  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AStr);
 end;
 
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;

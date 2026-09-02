@@ -461,7 +461,7 @@ begin
   end;
   if (LBodyLen < 1) or (LBodyLen > SSH_MAX_RECEIVE_PACKET) then
     raise ESSHError.Create(sekProtocol,
-      'ssh transport: unreasonable packet length ' + IntToStr(LBodyLen));
+      'ssh transport: unreasonable packet length ' + nextpas.core.text.conv.IntToStr(Int64(LBodyLen)));
     // single alloc LPacket (4+Trailer) zero-copy, bytes.ops single source; eliminates LTrailer double alloc + double Move (400B+ hot path ~50% heap)
     LTrailerSize := SizeUInt(FCore.TrailerSize(LBodyLen));
     SetLength(LPacket, 4 + LTrailerSize);

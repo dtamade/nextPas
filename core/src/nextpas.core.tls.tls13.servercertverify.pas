@@ -124,6 +124,7 @@ uses
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.p384,
   nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.rsa,
   nextpas.core.crypto.rsa.ct;
 
 const
@@ -134,20 +135,6 @@ const
   OID_RSASSA_PSS = '1.2.840.113549.1.1.10';
   OID_EC_PUBLIC_KEY = '1.2.840.10045.2.1';
   OID_EC_SECP256R1 = '1.2.840.10045.3.1.7';
-
-  SHA256_DIGESTINFO_PREFIX: array[0..18] of Byte = (
-    $30, $31, $30, $0D,
-    $06, $09, $60, $86, $48, $01, $65, $03, $04, $02, $01,
-    $05, $00,
-    $04, $20
-  );
-
-  SHA384_DIGESTINFO_PREFIX: array[0..18] of Byte = (
-    $30, $41, $30, $0D,
-    $06, $09, $60, $86, $48, $01, $65, $03, $04, $02, $02,
-    $05, $00,
-    $04, $30
-  );
 
 function BytesToAnsiString(const AData: TBytes): AnsiString;
 begin
@@ -1539,7 +1526,7 @@ begin
   end;
 
   LHash := SHA256(AMessage);
-  LTLen := Length(SHA256_DIGESTINFO_PREFIX) + Length(LHash);
+  LTLen := Length(DIGEST_INFO_SHA256) + Length(LHash);
   if AModulusLength < LTLen + 11 then
   begin
     AError := 'RSA modulus is too short for PKCS#1 v1.5 SHA-256 encoding';
@@ -1558,8 +1545,8 @@ begin
   AEncoded[LOffset] := 0;
   Inc(LOffset);
 
-  Move(SHA256_DIGESTINFO_PREFIX[0], AEncoded[LOffset], Length(SHA256_DIGESTINFO_PREFIX));
-  Inc(LOffset, Length(SHA256_DIGESTINFO_PREFIX));
+  Move(DIGEST_INFO_SHA256[0], AEncoded[LOffset], Length(DIGEST_INFO_SHA256));
+  Inc(LOffset, Length(DIGEST_INFO_SHA256));
   Move(LHash[0], AEncoded[LOffset], Length(LHash));
 
   Result := True;
@@ -1589,7 +1576,7 @@ begin
   end;
 
   LHash := SHA384(AMessage);
-  LTLen := Length(SHA384_DIGESTINFO_PREFIX) + Length(LHash);
+  LTLen := Length(DIGEST_INFO_SHA384) + Length(LHash);
   if AModulusLength < LTLen + 11 then
   begin
     AError := 'RSA modulus is too short for PKCS#1 v1.5 SHA-384 encoding';
@@ -1608,8 +1595,8 @@ begin
   AEncoded[LOffset] := 0;
   Inc(LOffset);
 
-  Move(SHA384_DIGESTINFO_PREFIX[0], AEncoded[LOffset], Length(SHA384_DIGESTINFO_PREFIX));
-  Inc(LOffset, Length(SHA384_DIGESTINFO_PREFIX));
+  Move(DIGEST_INFO_SHA384[0], AEncoded[LOffset], Length(DIGEST_INFO_SHA384));
+  Inc(LOffset, Length(DIGEST_INFO_SHA384));
   Move(LHash[0], AEncoded[LOffset], Length(LHash));
 
   Result := True;

@@ -606,7 +606,7 @@ begin
       end;
     end else
     begin
-      if not IsAcceptable(LType, FPending[LIdx].Accept) then begin Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekProtocol,'sftp async: unexpected reply '+IntToStr(LType)), Ctx); Continue; end;
+      if not IsAcceptable(LType, FPending[LIdx].Accept) then begin Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx); if Assigned(Cb) then Cb(nil, ESSHError.Create(sekProtocol,'sftp async: unexpected reply '+nextpas.core.text.conv.IntToStr(Int64(LType))), Ctx); Continue; end;
     end;
     Cb:=FPending[LIdx].Cb; Ctx:=FPending[LIdx].Ctx; RemovePendingIdx(LIdx);
     if Assigned(Cb) then Cb(LPkt, nil, Ctx);

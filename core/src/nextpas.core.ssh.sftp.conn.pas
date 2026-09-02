@@ -204,7 +204,7 @@ begin
         end;
       if not LOk then
         raise ESSHError.Create(sekProtocol,
-          'sftp: unexpected reply type ' + IntToStr(ARespType) +
+          'sftp: unexpected reply type ' + nextpas.core.text.conv.IntToStr(Int64(ARespType)) +
           ' for context ' + AContext);
       Result := LRaw;
       Exit;

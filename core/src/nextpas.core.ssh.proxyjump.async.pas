@@ -1,7 +1,7 @@
 unit nextpas.core.ssh.proxyjump.async;
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.base, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.net.async.tcp, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
+uses nextpas.core.base, nextpas.core.bytes.ops, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.io.intf, nextpas.core.net.base, nextpas.core.net.intf, nextpas.core.async.base, nextpas.core.async.loop, nextpas.core.async.cancellation, nextpas.core.ssh.net.ffi, nextpas.core.ssh.base, nextpas.core.ssh.errors, nextpas.core.ssh.transport.async, nextpas.core.ssh.window;
 type PWriteCtx = ^TWriteCtx; TWriteCtx = record Cb: TIoCompletion; Ctx: Pointer; Len: UInt32; end;
 type TAsyncChannelStream = class(TInterfacedObject, IAsyncTcpStream)
 private
@@ -76,17 +76,17 @@ begin
   if LGive>0 then begin LW:=TsshWriter.Create(16); try LW.PutByte(SSH_MSG_CHANNEL_WINDOW_ADJUST); LW.PutUInt32(FRemoteId); LW.PutUInt32(LGive); FTransport.AsyncSendPacket(LW.ToBytes, nil, nil); finally LW.Free; end; end;
 end;
 
-procedure TAsyncChannelStream.TryFlushQueued;
+procedure TAsyncChannelStream.TryFlushQueued; inline;
 begin if not FQueuedActive then Exit; if FTransport.AsyncSendPacket(FQueuedPayload, @Channel_WriteDone, FQueuedP) then begin FQueuedActive:=False; FQueuedPayload:=nil; FQueuedP:=nil; end else try FLoop.ScheduleAt(TDeadline.After(TDuration.FromMilliseconds(5)), @ChannelStreamRetryWrite, Self); except end;
 end;
-procedure TAsyncChannelStream.ArmRead;
+procedure TAsyncChannelStream.ArmRead; inline;
 begin if FPacketCbActive or FClosed then Exit; FPacketCbActive:=True; if not FTransport.AsyncReadPacket(@Channel_OnPacket, Self) then FPacketCbActive:=False; end;
-function TAsyncChannelStream.TrySatisfyPendingRead: Boolean;
+function TAsyncChannelStream.TrySatisfyPendingRead: Boolean; inline;
 var LCopy, LBufLen: UInt32; Cb: TIoCompletion; Ctx: Pointer;
 begin Result:=False; if not Assigned(FReadPendingCb) then Exit; if Length(FReadBuf)=0 then Exit;
   LBufLen:=Length(FReadBuf); LCopy:=FReadPendingLen; if LCopy>LBufLen then LCopy:=LBufLen;
-  Move(FReadBuf[0], FReadPendingBuf^, LCopy); AccountConsume(LCopy);
-  if LCopy<LBufLen then begin Move(FReadBuf[LCopy], FReadBuf[0], LBufLen-LCopy); SetLength(FReadBuf, LBufLen-LCopy); end else SetLength(FReadBuf,0);
+  Move(FReadBuf[0], FReadPendingBuf^, LCopy); AccountConsume(LCopy); { 零拷贝交付：单次 Move 到用户缓冲 }
+  BytesConsumePrefix(FReadBuf, LCopy); { bytes.ops 单源：原位 Move+SetLength 零拷贝尾移，无额外分配 }
   Cb:=FReadPendingCb; Ctx:=FReadPendingCtx; FReadPendingCb:=nil; FReadPendingCtx:=nil; FReadPendingBuf:=nil; Cb(0, Int32(LCopy), Ctx); Result:=True;
 end;
 function TAsyncChannelStream.AsyncRead(ABuf: Pointer; ALen: UInt32; ACallback: TIoCompletion; AContext: Pointer): Boolean;
@@ -115,13 +115,13 @@ var Ctx: Pointer; begin Ctx:=WrapIoCompletionRef(ACallback, AContext); Result:=A
 function TAsyncChannelStream.AsyncReadTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin Result:=AsyncRead(ABuf, ALen, ACallback, AContext); end;
 function TAsyncChannelStream.AsyncWriteTimeout(ABuf: Pointer; ALen: UInt32; const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean; begin Result:=AsyncWrite(ABuf, ALen, ACallback, AContext); end;
 procedure Channel_OnPacket(const APayload: TBytes; AErr: ESSHError; AContext: Pointer);
-var Self: TAsyncChannelStream; LR: TsshReader; LId, LDataType: UInt32; LData: TBytes; LOld: Integer;
+var Self: TAsyncChannelStream; LR: TsshReader; LId, LDataType: UInt32; LData: TBytes;
 begin
 Self:=TAsyncChannelStream(AContext); Self.FPacketCbActive:=False; if AErr<>nil then begin Self.FailPending(-1); AErr.Free; Exit; end;
   if Length(APayload)=0 then begin Self.ArmRead; Exit; end;
   case APayload[0] of
-    SSH_MSG_CHANNEL_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LData:=LR.ReadStringBytes; finally LR.Free; end; if Length(LData)>0 then begin LOld:=Length(Self.FReadBuf); SetLength(Self.FReadBuf, LOld+Length(LData)); Move(LData[0], Self.FReadBuf[LOld], Length(LData)); Self.TrySatisfyPendingRead; end; end;
-    SSH_MSG_CHANNEL_EXTENDED_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LDataType:=LR.ReadUInt32; LData:=LR.ReadStringBytes; finally LR.Free; end; if (LDataType=1) and (Length(LData)>0) then begin LOld:=Length(Self.FReadBuf); SetLength(Self.FReadBuf, LOld+Length(LData)); Move(LData[0], Self.FReadBuf[LOld], Length(LData)); Self.TrySatisfyPendingRead; end else if Length(LData)>0 then Self.AccountConsume(Length(LData)); end;
+    SSH_MSG_CHANNEL_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LData:=LR.ReadStringBytes; finally LR.Free; end; if Length(LData)>0 then begin BytesAppend(Self.FReadBuf, LData); { bytes.ops 单源：SetLength+Move 单次零拷贝追加 } Self.TrySatisfyPendingRead; end; end;
+    SSH_MSG_CHANNEL_EXTENDED_DATA: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; LDataType:=LR.ReadUInt32; LData:=LR.ReadStringBytes; finally LR.Free; end; if (LDataType=1) and (Length(LData)>0) then begin BytesAppend(Self.FReadBuf, LData); { bytes.ops 单源 } Self.TrySatisfyPendingRead; end else if Length(LData)>0 then Self.AccountConsume(Length(LData)); end;
     SSH_MSG_CHANNEL_WINDOW_ADJUST: begin LR:=TsshReader.Create(APayload); try LR.ReadByte; LId:=LR.ReadUInt32; if LId<>Self.FLocalId then begin LR.Free; Self.ArmRead; Exit; end; Self.FWindow.Grant(LR.ReadUInt32); finally LR.Free; end; end;
     SSH_MSG_CHANNEL_EOF, SSH_MSG_CHANNEL_CLOSE: begin Self.FClosed:=True; if Assigned(Self.FReadPendingCb) then Self.FReadPendingCb(0, 0, Self.FReadPendingCtx); Self.FReadPendingCb:=nil; end;
   end;

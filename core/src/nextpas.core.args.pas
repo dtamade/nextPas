@@ -141,6 +141,34 @@ type
 
 implementation
 
+uses
+  nextpas.core.platform.args;
+
+{ single source platform args (L0) : zero-copy buffered platform_args_get, inline helper }
+function PlatformArgsToArray: TStringArray; inline;
+var
+  LCount: Int32;
+  LIdx: Int32;
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: Int32;
+begin
+  LCount := platform_args_count;
+  if LCount < 0 then LCount := 0;
+  SetLength(Result, LCount);
+  for LIdx := 1 to LCount do
+  begin
+    LLen := platform_args_get(LIdx, @LBuf[0], SizeOf(LBuf));
+    if (LLen >= 0) and (LLen < SizeOf(LBuf)) then
+      SetString(Result[LIdx - 1], PAnsiChar(@LBuf[0]), LLen)
+    else if LLen >= SizeOf(LBuf) then
+    begin
+      SetString(Result[LIdx - 1], PAnsiChar(@LBuf[0]), SizeOf(LBuf) - 1);
+    end
+    else
+      Result[LIdx - 1] := '';
+  end;
+end;
+
 { TArgParser }
 
 constructor TArgParser.Create(const AAppName, ADescription: string);
@@ -565,12 +593,9 @@ end;
 
 procedure TArgParser.Parse;
 var
-  LArgs: array of string;
-  LI: Int32;
+  LArgs: TStringArray;
 begin
-  SetLength(LArgs, ParamCount);
-  for LI := 1 to ParamCount do
-    LArgs[LI - 1] := ParamStr(LI);
+  LArgs := PlatformArgsToArray;
   DoParseArgs(LArgs);
 end;
 
@@ -965,12 +990,9 @@ end;
 
 procedure TArgApp.Run;
 var
-  LArgs: array of string;
-  LI: Int32;
+  LArgs: TStringArray;
 begin
-  SetLength(LArgs, ParamCount);
-  for LI := 1 to ParamCount do
-    LArgs[LI - 1] := ParamStr(LI);
+  LArgs := PlatformArgsToArray;
   RunFrom(LArgs);
 end;
 

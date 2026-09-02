@@ -40,6 +40,7 @@ uses
   nextpas.core.exception,
   nextpas.core.compress.zlib.ffi,
   nextpas.core.compress.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv;
 
 function SshCompressionIsZlib(const AName: string): Boolean;
@@ -151,18 +152,16 @@ begin
   repeat
     if LOutLen >= LCap then
     begin
-      if LCap > High(SizeUInt) div 2 then
-        LCap := LCap + 65536
-      else
-        LCap := LCap * 2;
-      SetLength(Result, LCap);
+      // perf: single source doubling via bytes.ops (BYTES_BUILDER_MIN_GROW=64, 2x, amortized O(1)); zero-copy pBytef avoids Move
+      BytesEnsureCapacity(Result, LCap + 1);
+      LCap := SizeUInt(Length(Result));
     end;
     FDeflate.next_out := pBytef(@Result[LOutLen]);
     FDeflate.avail_out := LongWord(LCap - LOutLen);
     LAvail := FDeflate.avail_out;
     LRet := deflate(FDeflate, Z_SYNC_FLUSH);
     if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
-      raise ESSHError.Create(sekCrypto, 'ssh compress: deflate failed (' + IntToStr(LRet) + ')');
+      raise ESSHError.Create(sekCrypto, 'ssh compress: deflate failed (' + nextpas.core.text.conv.IntToStr(Int64(LRet)) + ')');
     LOutLen := LOutLen + SizeUInt(LAvail - FDeflate.avail_out);
     if FDeflate.avail_in = 0 then
       Break;
@@ -172,15 +171,15 @@ begin
   begin
     if LOutLen >= LCap then
     begin
-      if LCap > High(SizeUInt) div 2 then LCap := LCap + 65536 else LCap := LCap * 2;
-      SetLength(Result, LCap);
+      BytesEnsureCapacity(Result, LCap + 1);
+      LCap := SizeUInt(Length(Result));
     end;
     FDeflate.next_out := pBytef(@Result[LOutLen]);
     FDeflate.avail_out := LongWord(LCap - LOutLen);
     LAvail := FDeflate.avail_out;
     LRet := deflate(FDeflate, Z_SYNC_FLUSH);
     if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
-      raise ESSHError.Create(sekCrypto, 'ssh compress: deflate failed (' + IntToStr(LRet) + ')');
+      raise ESSHError.Create(sekCrypto, 'ssh compress: deflate failed (' + nextpas.core.text.conv.IntToStr(Int64(LRet)) + ')');
     LOutLen := LOutLen + SizeUInt(LAvail - FDeflate.avail_out);
   end;
   SetLength(Result, LOutLen);
@@ -201,7 +200,8 @@ begin
   try
     FInflate.next_in := pBytef(@AData[0]);
     FInflate.avail_in := LongWord(LInLen);
-    LCap := LInLen * 3;
+    // perf: single source via compress.base (shl2=4x, BYTES_BUILDER_MIN_GROW=64, amortized O(1)); initial 4x avoids multiple SetLength copies vs 3x
+    LCap := CompressInitialInflateCapacity(LInLen, SSH_COMP_MAX_DECOMPRESSED);
     if LCap < 256 then LCap := 256;
     if LCap > SSH_COMP_MAX_DECOMPRESSED then LCap := SSH_COMP_MAX_DECOMPRESSED;
     SetLength(Result, LCap);
@@ -211,10 +211,10 @@ begin
       begin
         if LCap >= SSH_COMP_MAX_DECOMPRESSED then
           raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
-        if LCap > SSH_COMP_MAX_DECOMPRESSED div 2 then
-          LCap := SSH_COMP_MAX_DECOMPRESSED
-        else
-          LCap := LCap * 2;
+        // reuse compress.base single source; bytes.ops doubling kept via SetLength after CompressNextCapacity
+        LCap := CompressNextCapacity(LCap, SSH_COMP_MAX_DECOMPRESSED);
+        if LCap = 0 then
+          raise ESSHError.Create(sekProtocol, 'ssh compress: decompressed size exceeds limit');
         SetLength(Result, LCap);
       end;
       FInflate.next_out := pBytef(@Result[LOutLen]);
@@ -225,7 +225,7 @@ begin
       begin
         if LRet = Z_DATA_ERROR then
           raise ESSHError.Create(sekProtocol, 'ssh compress: corrupt stream');
-        raise ESSHError.Create(sekProtocol, 'ssh compress: inflate failed (' + IntToStr(LRet) + ')');
+        raise ESSHError.Create(sekProtocol, 'ssh compress: inflate failed (' + nextpas.core.text.conv.IntToStr(Int64(LRet)) + ')');
       end;
       LOutLen := LOutLen + SizeUInt(LAvail - FInflate.avail_out);
       if LOutLen > SSH_COMP_MAX_DECOMPRESSED then

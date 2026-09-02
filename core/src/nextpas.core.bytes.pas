@@ -14,18 +14,23 @@ uses
   nextpas.core.bytes.binary,
   nextpas.core.bytes.builder,
   nextpas.core.bytes.cursor,
-  nextpas.core.bytes.stream;
+  nextpas.core.bytes.stream,
+  nextpas.core.bytes.framing;
 
 type
   TEndianness = nextpas.core.bytes.base.TEndianness;
   IBytesBuilder = nextpas.core.bytes.builder.IBytesBuilder;
   IByteCursor = nextpas.core.bytes.cursor.IByteCursor;
   TByteStreamBuf = nextpas.core.bytes.stream.TByteStreamBuf;
+  TWireBuffer = nextpas.core.bytes.framing.TWireBuffer;
 
 const
   endLittle = nextpas.core.bytes.base.endLittle;
   endBig = nextpas.core.bytes.base.endBig;
   NATIVE_ENDIAN = nextpas.core.bytes.base.NATIVE_ENDIAN;
+  WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE = nextpas.core.bytes.framing.WIRE_BUFFER_COMPACT_OFFSET_ABSOLUTE;
+  WIRE_BUFFER_COMPACT_OFFSET_HALF = nextpas.core.bytes.framing.WIRE_BUFFER_COMPACT_OFFSET_HALF;
+  WIRE_BUFFER_DEFAULT_MAX = nextpas.core.bytes.framing.WIRE_BUFFER_DEFAULT_MAX;
 
 { Builder }
 function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline;
@@ -108,6 +113,10 @@ function TryWriteUInt32LE(var ASpan: TByteSpan; const AValue: UInt32): Boolean; 
 function TryWriteUInt32BE(var ASpan: TByteSpan; const AValue: UInt32): Boolean; inline;
 function TryWriteUInt64LE(var ASpan: TByteSpan; const AValue: UInt64): Boolean; inline;
 function TryWriteUInt64BE(var ASpan: TByteSpan; const AValue: UInt64): Boolean; inline;
+
+{ Wire framing: 4B BE length-prefix }
+function WireEncodeFrame(const APayload: TBytes): TBytes; inline;
+procedure WireAppendEncoded(var ADest: TBytes; const APayload: TBytes); inline;
 
 implementation
 
@@ -425,6 +434,18 @@ end;
 function TryWriteUInt64BE(var ASpan: TByteSpan; const AValue: UInt64): Boolean;
 begin
   Result := nextpas.core.bytes.binary.TryWriteUInt64BE(ASpan, AValue);
+end;
+
+{ Wire framing }
+
+function WireEncodeFrame(const APayload: TBytes): TBytes;
+begin
+  Result := nextpas.core.bytes.framing.WireEncodeFrame(APayload);
+end;
+
+procedure WireAppendEncoded(var ADest: TBytes; const APayload: TBytes);
+begin
+  nextpas.core.bytes.framing.WireAppendEncoded(ADest, APayload);
 end;
 
 end.

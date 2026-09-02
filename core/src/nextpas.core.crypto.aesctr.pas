@@ -16,11 +16,11 @@ unit nextpas.core.crypto.aesctr;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.aesni,
-  nextpas.core.crypto.aes.ct64;
+  nextpas.core.crypto.aes.ct64,
+  nextpas.core.crypto.errors;
 
 type
   TAesCtrKind = (akNi128, akNi256, akCt64, akNaive);
@@ -48,7 +48,6 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.crypto.errors,
   nextpas.core.mem.secure;
 
 procedure TAesCtrStream.Init(const AKey, AIV: TBytes);
@@ -62,7 +61,7 @@ begin
   SecureZeroMemory(@FCt64Key, SizeOf(FCt64Key));
   SecureZeroMemory(@FExpanded[0], SizeOf(FExpanded));
   if Length(AIV) <> 16 then
-    raise Exception.Create('aesctr: invalid iv length');
+    RaiseCryptoError(cecInvalidArgument, 'aesctr: invalid iv length');
   FKSValid := False;
   FKSOff := 0;
   FNr := 0;
@@ -94,7 +93,7 @@ begin
   else
     begin
       if not (Length(AKey) in [16, 24, 32]) then
-        raise Exception.Create('aesctr: invalid key length');
+        RaiseCryptoError(cecInvalidArgument, 'aesctr: invalid key length');
       FKind := akNaive;
       AESKeyExpand(Copy(AKey, 0, Length(AKey)), FExpanded, FNr);
     end;
@@ -194,9 +193,9 @@ begin
   if Length(AInput) = 0 then
     Exit(nil);
   if (Length(AKey) <> 16) and (Length(AKey) <> 24) and (Length(AKey) <> 32) then
-    raise Exception.Create('aesctr: invalid aes key length');
+    RaiseCryptoError(cecInvalidArgument, 'aesctr: invalid aes key length');
   if Length(AIV) <> 16 then
-    raise Exception.Create('aesctr: invalid aes iv length');
+    RaiseCryptoError(cecInvalidArgument, 'aesctr: invalid aes iv length');
   Result := Copy(AInput, 0, Length(AInput));
   LStream.Init(AKey, AIV);
   try

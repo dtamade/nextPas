@@ -170,8 +170,8 @@ begin
   if Length(APkt) >= 5 then
     LFirst := (UInt32(APkt[1]) shl 24) or (UInt32(APkt[2]) shl 16) or
       (UInt32(APkt[3]) shl 8) or UInt32(APkt[4]);
-  SshChannelTrace(ATag + ': type=' + IntToStr(APkt[0]) +
-    ' first=' + IntToStr(LFirst) + ' len=' + IntToStr(Length(APkt)));
+  SshChannelTrace(ATag + ': type=' + nextpas.core.text.conv.IntToStr(Int64(APkt[0])) +
+    ' first=' + nextpas.core.text.conv.IntToStr(Int64(LFirst)) + ' len=' + nextpas.core.text.conv.IntToStr(Int64(Length(APkt))));
 end;
 
 
@@ -351,9 +351,9 @@ begin
           finally
             LR.Free;
           end;
-          TraceStr('open: confirmed remote=' + IntToStr(FRemoteId) +
-            ' peer_window=' + IntToStr(FWindow.PeerWindow) +
-            ' peer_max=' + IntToStr(FWindow.PeerMaxPacket));
+          TraceStr('open: confirmed remote=' + nextpas.core.text.conv.IntToStr(Int64(FRemoteId)) +
+            ' peer_window=' + nextpas.core.text.conv.IntToStr(Int64(FWindow.PeerWindow)) +
+            ' peer_max=' + nextpas.core.text.conv.IntToStr(Int64(FWindow.PeerMaxPacket)));
           Exit;
         end;
       SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -404,7 +404,7 @@ begin
           finally
             LR.Free;
           end;
-          TraceStr('direct-tcpip: confirmed remote=' + IntToStr(FRemoteId));
+          TraceStr('direct-tcpip: confirmed remote=' + nextpas.core.text.conv.IntToStr(Int64(FRemoteId)));
           Exit;
         end;
       SSH_MSG_CHANNEL_OPEN_FAILURE:
@@ -577,7 +577,7 @@ begin
     if LReqName = SSH_REQ_EXIT_STATUS then
     begin
       FExitStatus := Integer(LR.ReadUInt32);
-      TraceStr('chan: exit-status=' + IntToStr(FExitStatus));
+      TraceStr('chan: exit-status=' + nextpas.core.text.conv.IntToStr(Int64(FExitStatus)));
       if LWantReply then
         FTransport.SendPacket(ChannelReplyPayload(FRemoteId, True));
     end
@@ -618,8 +618,8 @@ begin
     end;
     if LRid <> FLocalId then
     begin
-      TraceStr('rx: stale chan frame id=' + IntToStr(LRid) +
-        ' mine=' + IntToStr(FLocalId) + ' dropped');
+      TraceStr('rx: stale chan frame id=' + nextpas.core.text.conv.IntToStr(Int64(LRid)) +
+        ' mine=' + nextpas.core.text.conv.IntToStr(Int64(FLocalId)) + ' dropped');
       Continue;
     end;
     if Result[0] = SSH_MSG_CHANNEL_WINDOW_ADJUST then

@@ -118,7 +118,7 @@ begin
     5: Result := 'bad-message';
     8: Result := 'op-unsupported';
   else
-    Result := 'status-' + IntToStr(ACode);
+    Result := 'status-' + nextpas.core.text.conv.IntToStr(Int64(ACode));
   end;
 end;
 

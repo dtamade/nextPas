@@ -68,6 +68,12 @@ uses
   nextpas.core.mem.secure,
   nextpas.core.bytes.ops;
 
+var
+  GPrime: TBytes;
+  GPrimeValid: Boolean;
+  GGen: TBytes;
+  GGenValid: Boolean;
+
 function SshDHGroup14Prime: TBytes;
 const
   P_HEX =
@@ -77,7 +83,7 @@ const
 var
   I: Integer;
 
-  function HexVal(C: Char): Byte;
+  function HexVal(C: Char): Byte; inline;
   begin
     case C of
       '0'..'9': Result := Ord(C) - Ord('0');
@@ -89,17 +95,31 @@ var
   end;
 
 begin
-  Result := nil;
-  SetLength(Result, Length(P_HEX) div 2);
-  for I := 0 to High(Result) do
-    Result[I] := (HexVal(P_HEX[2*I+1]) shl 4) or HexVal(P_HEX[2*I+2]);
+  // perf: cached 256-byte prime, single hex parse, zero-copy CoW share
+  if GPrimeValid then
+  begin
+    Result := GPrime;
+    Exit;
+  end;
+  SetLength(GPrime, Length(P_HEX) div 2);
+  for I := 0 to High(GPrime) do
+    GPrime[I] := (HexVal(P_HEX[2*I+1]) shl 4) or HexVal(P_HEX[2*I+2]);
+  GPrimeValid := True;
+  Result := GPrime;
 end;
 
 function SshDHGroup14Generator: TBytes;
 begin
-  Result := nil;
-  SetLength(Result, 1);
-  Result[0] := 2;
+  // perf: single-byte g=2 cached, zero-copy CoW share
+  if GGenValid then
+  begin
+    Result := GGen;
+    Exit;
+  end;
+  SetLength(GGen, 1);
+  GGen[0] := 2;
+  GGenValid := True;
+  Result := GGen;
 end;
 
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
@@ -190,6 +210,7 @@ function TSshKexDHGroup14.ProcessReplyNamed(const APayload: TBytes;
 var
   LR: TsshReader;
   LServerF, LShared, LHashInput: TBytes;
+  LPrime, LGen: TBytes;
   LErr: string;
 begin
   LR := TsshReader.Create(APayload);
@@ -205,17 +226,20 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
-    or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
+  // perf: single fetch cached prime/gen, zero-copy CoW, bytes.ops single source
+  LGen := SshDHGroup14Generator;
+  LPrime := SshDHGroup14Prime;
+  if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LGen) <= 0)
+    or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LPrime) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
   if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
-  if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, SshDHGroup14Prime, LShared, LErr) then
+  if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, LPrime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
   if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
-  if nextpas.core.bytes.ops.CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
+  if nextpas.core.bytes.ops.CompareUnsigned(LShared, LPrime) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');
 
   Result.SharedSecret := LShared;
@@ -223,5 +247,13 @@ begin
     Result.ServerHostKeyBlob, FPub, LServerF, LShared);
   Result.ExchangeHashH := SHA256(LHashInput);
 end;
+
+initialization
+  GPrimeValid := False;
+  GGenValid := False;
+
+finalization
+  GPrime := nil;
+  GGen := nil;
 
 end.

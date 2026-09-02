@@ -22,7 +22,7 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.compress,
   nextpas.core.ssh.kex,
-  nextpas.core.ssh.rekey;
+  nextpas.core.net.maintenance.rekey;
 
 const
   SSH_SEQ_REKEY_THRESHOLD = UInt32($FFFFFF00);
@@ -34,7 +34,7 @@ type
     FReceiver: ISshPacketReceiver;
     FSendSeq: UInt32;
     FRecvSeq: UInt32;
-    FRekey: TSshRekeyPolicy;
+    FRekey: TRekeyPolicy;
     FCompressor: ISshCompressor;
     FDecompressor: ISshCompressor;
     FNegCompCs: string;

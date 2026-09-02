@@ -18,6 +18,7 @@ uses
   nextpas.core.text.strings,
   nextpas.core.text.conv,
   nextpas.core.text.utils,
+  nextpas.core.text.wildmatch,
   nextpas.core.hash.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -86,8 +87,8 @@ type
       const ABlob: TBytes): Boolean;
   end;
 
-{ 通配符匹配：'*' 任意串、'?' 单字符；大小写敏感 }
-function SshWildMatch(const APattern, AValue: string): Boolean;
+{ 通配符匹配：'*' 任意串、'?' 单字符；大小写敏感 - 单源 L0 text.wildmatch inline 转发 }
+function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 
 implementation
 
@@ -302,41 +303,10 @@ end;
 
 { ---- 通配符匹配 ---- }
 
-{ 经典双指针回溯：'*' 任意串、'?' 恰好一字符 }
-function SshWildMatch(const APattern, AValue: string): Boolean;
-var
-  P, V, LStarP, LStarV: Integer;
+{ 单源转发至 L0 text.wildmatch，inline 零拷贝双指针回溯：'*' 任意串、'?' 单字符 }
+function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 begin
-  P := 1;
-  V := 1;
-  LStarP := 0;
-  LStarV := 0;
-  while V <= Length(AValue) do
-  begin
-    if (P <= Length(APattern))
-      and ((APattern[P] = '?') or (APattern[P] = AValue[V])) then
-    begin
-      Inc(P);
-      Inc(V);
-    end
-    else if (P <= Length(APattern)) and (APattern[P] = '*') then
-    begin
-      LStarP := P;
-      LStarV := V;
-      Inc(P);
-    end
-    else if LStarP > 0 then
-    begin
-      P := LStarP + 1;
-      Inc(LStarV);
-      V := LStarV;
-    end
-    else
-      Exit(False);
-  end;
-  while (P <= Length(APattern)) and (APattern[P] = '*') do
-    Inc(P);
-  Result := P > Length(APattern);
+  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AValue);
 end;
 
 { ---- known_hosts ---- }
@@ -465,7 +435,7 @@ begin
   if APort = SSH_DEFAULT_PORT then
     LQueryPorted := ''
   else
-    LQueryPorted := '[' + AHostName + ']:' + IntToStr(APort);
+    LQueryPorted := '[' + AHostName + ']:' + nextpas.core.text.conv.IntToStr(Int64(APort));
 
   LCands := StringsSplit(APatterns, ',');
   for I := 0 to High(LCands) do

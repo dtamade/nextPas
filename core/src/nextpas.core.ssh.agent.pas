@@ -250,7 +250,7 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh agent: empty identities answer');
   if LResp[0] = SSH_AGENT_FAILURE then Exit(False);
   if LResp[0] <> SSH_AGENT_IDENTITIES_ANSWER then
-    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected answer type ' + IntToStr(LResp[0]) + ' len=' + IntToStr(Length(LResp)));
+    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected answer type ' + nextpas.core.text.conv.IntToStr(Int64(LResp[0])) + ' len=' + nextpas.core.text.conv.IntToStr(Int64(Length(LResp))));
   LR := TsshReader.Create(LResp);
   try
     LR.ReadByte;
@@ -298,7 +298,7 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh agent: empty sign response');
   if LResp[0] = SSH_AGENT_FAILURE then Exit(False);
   if LResp[0] <> SSH_AGENT_SIGN_RESPONSE then
-    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected sign response ' + IntToStr(LResp[0]) + ' len=' + IntToStr(Length(LResp)));
+    raise ESSHError.Create(sekProtocol, 'ssh agent: unexpected sign response ' + nextpas.core.text.conv.IntToStr(Int64(LResp[0])) + ' len=' + nextpas.core.text.conv.IntToStr(Int64(Length(LResp))));
   LR := TsshReader.Create(LResp);
   try
     LR.ReadByte;
