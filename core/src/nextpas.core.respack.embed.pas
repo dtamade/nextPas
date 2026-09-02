@@ -281,7 +281,8 @@ begin
     W := @OutBuf[0];
   Start := W;
   EmitIncContent(W, ABlob, Name, NStr, PerLine, N);
-  SetLength(OutBuf, SizeInt(W - Start));
+  if SizeUInt(W - Start) <> Cap then
+    SetLength(OutBuf, SizeInt(W - Start));
   Result := OutBuf;
 end;
 

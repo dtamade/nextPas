@@ -583,8 +583,8 @@ begin
       for Idx := 0 to RP.Count - 1 do
       begin
         Entry := RP.EntryAt(Idx);
-        DestPath := ADestDir + '/' + RP.PathOf(Entry);
-        { 父目录：复用 nextpas.core.path.PathDir 单源（FsPathDir→platform_path_dirname 零拷贝视图，inline），替代手写 downto 逐字符扫 '/' + Copy 分叉。 }
+        DestPath := PathJoin(ADestDir, RP.PathOf(Entry));
+        { 父目录：复用 nextpas.core.path.PathDir 单源（零拷贝视图，inline），替代手写 downto 逐字符扫 '/' + Copy 分叉。 }
         ParentDir := PathDir(DestPath);
         if (ParentDir <> '') and (ParentDir <> '.') then
           MkdirAll(ParentDir);

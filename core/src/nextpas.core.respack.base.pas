@@ -1,11 +1,8 @@
 unit nextpas.core.respack.base;
 
 {** @desc respack 线格式 v1 基座：常量、record、LE 编解码、路径语法、FNV-1a、错误。
-  权威格式定义见 core/docs/respack/FORMAT.md；实现与文档冲突时先修文档。
-  双编译器：FPC 编译时 uses SysUtils 等经 FPC 自带 RTL 自然解析，nextPas 编译时经
-  units/<target>/SysUtils.pas stub 名称桥接（非兼容层）；本单元零直引 SysUtils
-  (uses 仅 L0/L1 单源 bytes.binary/bytes.pathvalid/checksum.fnv32/text.number/mem)，
-  证据链见 core/docs/respack/README.md 与 CLAUDE.md 双编译器架构。 }
+  权威定义见 FORMAT.md；双编译器：FPC 经 RTL 自然解析，nextPas 经
+  units/<target>/ stub 桥接。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -147,7 +144,7 @@ procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABuc
 procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
 
-{ LE 编解码 — 单源于 bytes.binary.Read/WriteUInt*LE (host-endian 无关), inline 零拷贝转发 }
+{ LE 编解码单源于 bytes.binary，inline 转发 }
 function RdU16LE(AData: PByte): Word; inline;
 function RdU32LE(AData: PByte): UInt32; inline;
 function RdU64LE(AData: PByte): UInt64; inline;
@@ -155,7 +152,7 @@ procedure WrU16LE(AData: PByte; const AValue: Word); inline;
 procedure WrU32LE(AData: PByte; const AValue: UInt32); inline;
 procedure WrU64LE(AData: PByte; const AValue: UInt64); inline;
 
-{ FNV-1a 32 — 单源于 L1 checksum.fnv32.Fnv1a32Update (批量 8 字节展开, 零拷贝 PByte+SizeUInt 视图), inline 转发; LE 单源于 bytes.binary }
+{ FNV-1a 32 单源于 checksum.fnv32，inline 转发 }
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 
 { Go io/fs.ValidPath 语义（FORMAT.md 路径规范）：UTF-8、unrooted、'/'
@@ -339,9 +336,7 @@ begin
   end;
 end;
 
-{ 十进制整数转字符串 — 单源于 L1 text.number.UIntToBuffer (DIGIT_PAIRS 批量),
-  仅 EResPackCorrupted.CreateStep 报错路径使用；冷路径外联避免 I-Cache 膨胀，
-  零拷贝单源 bytes.ops.BytesCopy inline 单 Move，禁止直调 Move 破坏单源纪律。 }
+{ 十进制转字符串单源于 text.number }
 function ResPackUIntToStr(AValue: UInt32): string;
 var
   LBuf: array[0..15] of AnsiChar;
