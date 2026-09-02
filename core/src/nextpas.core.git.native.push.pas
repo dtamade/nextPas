@@ -39,16 +39,16 @@ uses
   nextpas.core.git.native.refs,
   nextpas.core.git.native.util;
 
-function GitOidZero: TGitOid;
-var I: Integer;
+function GitOidZero: TGitOid; inline;
 begin
-  for I := 0 to GitOidRawLen - 1 do Result.Bytes[I] := 0;
+  // single source via base.GitOidZero (FillChar, inline, zero-copy), base owns primitive (base←impl), push delegates
+  Result := nextpas.core.git.native.base.GitOidZero;
 end;
 
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
-  // single source via bytes.ops IsZeroBytes, zero-copy TByteSpan view (no alloc), inline for hot path
-  Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
+  // single source via base.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy TByteSpan, inline), base owns primitive
+  Result := nextpas.core.git.native.base.GitOidIsZero(AOid);
 end;
 
 function BuildPack(const ALocalGitDir: string; const AUpdates: array of TGitPushUpdate): TBytes;

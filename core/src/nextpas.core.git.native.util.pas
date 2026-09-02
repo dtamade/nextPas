@@ -29,7 +29,7 @@ uses
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
 begin
-  // single source via common.GitOidIsZero -> push.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy span, inline)
+  // single source via base.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy TByteSpan, inline), base owns primitive (common delegates to base)
   Result := nextpas.core.git.native.common.GitOidIsZero(AOid);
 end;
 

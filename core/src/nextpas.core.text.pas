@@ -32,6 +32,7 @@ uses
   nextpas.core.text.utf8,
   nextpas.core.text.utils,
   nextpas.core.text.view,
+  nextpas.core.text.wildmatch,
   nextpas.core.text.width;
 
 type
@@ -126,6 +127,13 @@ function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
 
 { Formatting (from text.format) }
 function TextFormat(const AFmt: string; const AArgs: array of const): string; inline;
+
+{ Wildmatch (from text.wildmatch) — generic * ? ** [] engine, L1 owner, bytes.ops single source, inline zero-copy }
+function WildSegment(const APattern, AName: string): Boolean; inline;
+function WildSegmentRange(const APattern: string; APatPos, APatLen: Integer;
+  const AName: string; ANamePos, ANameLen: Integer): Boolean; inline;
+function WildSegmentsMatch(const APattern, APath: string): Boolean; inline;
+function WildHasUnescapedSlash(const AValue: string): Boolean; inline;
 
 { Case-insensitive ASCII comparison (from text.conv) }
 function SameText(const A, B: string): Boolean; inline;
@@ -413,6 +421,29 @@ end;
 function TextFormat(const AFmt: string; const AArgs: array of const): string;
 begin
   Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+end;
+
+{ Re-export: wildmatch }
+
+function WildSegment(const APattern, AName: string): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.WildSegment(APattern, AName);
+end;
+
+function WildSegmentRange(const APattern: string; APatPos, APatLen: Integer;
+  const AName: string; ANamePos, ANameLen: Integer): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.WildSegmentRange(APattern, APatPos, APatLen, AName, ANamePos, ANameLen);
+end;
+
+function WildSegmentsMatch(const APattern, APath: string): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.WildSegmentsMatch(APattern, APath);
+end;
+
+function WildHasUnescapedSlash(const AValue: string): Boolean;
+begin
+  Result := nextpas.core.text.wildmatch.HasUnescapedSlash(AValue);
 end;
 
 { Re-export: SameText }

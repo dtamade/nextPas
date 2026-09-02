@@ -13,10 +13,12 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.git.native.base;
 
-{ Commit-graph v1 reader (SHA-1, single file) for local revwalk acceleration.
-  Note: cohesive history-domain core exceeds design-conventions §2 800 soft threshold
-  (~1200 lines, reader+writer+cache+collection); retained per CONTRACT history shard
-  umbrella, split would dilute ownership — thin aggregator is history.traversal.
+{ Commit-graph v1 reader+writer+cache (SHA-1, single file) for local revwalk acceleration.
+  Note: cohesive history-domain core (~1320 lines, reader+writer+cache+collection)
+  exceeds design-conventions §2 800-line soft guide; retained per CONTRACT history shard
+  umbrella — thin aggregator is history.traversal, split would dilute ownership/double-cache.
+  Perf: mmap zero-copy via io.mapped + bytes.ops single source (SpanCopy/SpanCompare, PByte window);
+  Stability: IMappedFile refcount + managed TBytes, no leak on validate fallback.
 
   File layout honours the spec consumed by git's commit-graph.c and
   libgit2's commit_graph.c: header "CGPH" v1 oid_version 1, chunk TOC
@@ -124,25 +126,26 @@ type
 
 const
   // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU at High, LRU at 0
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 2 bounds fd/page-cache vs 8xheap (multi-tenant), inline LRU via bytes.ops single source
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 2 bounds fd/page-cache vs 8xheap (multi-tenant), LRU via bytes.ops single source
   // stability: IMappedFile interface refcount auto releases on eviction/shift (managed), no leak; large files not duplicated via TBytes refcount
   GGraphCacheCap = 2;
 
 var
   GGraphCache: array of TGraphCacheEntry;
 
-function FindGraphCache(const ADir: string): Integer; inline;
+function FindGraphCache(const ADir: string): Integer;
 var I: Integer;
 begin
+  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=2 keeps O(Cap) trivial
   for I := 0 to High(GGraphCache) do
     if GGraphCache[I].Dir = ADir then Exit(I);
   Result := -1;
 end;
 
-procedure TouchGraphCache(const AIdx: Integer); inline;
+procedure TouchGraphCache(const AIdx: Integer);
 var I: Integer; Tmp: TGraphCacheEntry;
 begin
-  // LRU promotion: move hit entry to MRU (High); O(Cap) with Cap=8, inline, zero-copy TBytes share via refcount
+  // not inline: array shift loop is routing body per design-conventions § inline red line 2 (no inline on real loops); Cap=2 O(Cap) trivial, zero-copy record Move via refcount
   if (AIdx < 0) or (AIdx >= Length(GGraphCache)) or (AIdx = High(GGraphCache)) then Exit;
   Tmp := GGraphCache[AIdx];
   for I := AIdx to High(GGraphCache)-1 do
@@ -593,7 +596,7 @@ begin
   if not FileExists(Path) then
     Exit;
   // fast path: cached mmap when mtime+size unchanged; LRU promotion on hit
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), inline LRU via bytes.ops single source
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable), LRU via bytes.ops single source
   Idx := FindGraphCache(AGitDir);
   UseCache := False;
   if Idx >= 0 then
@@ -603,7 +606,7 @@ begin
       begin
         Mapped := GGraphCache[Idx].Mapped; // zero-copy: interface refcount, no heap copy, OS page-reclaimable
         UseCache := True;
-        // inline LRU: hit becomes MRU
+        // LRU: hit becomes MRU (not inline per design-conventions, loop body)
         TouchGraphCache(Idx);
       end;
     except
@@ -967,7 +970,9 @@ begin
   // OIDL
   for I := 0 to N-1 do
   begin
-    Move(RawSorted[I].Oid.Bytes[0], Result[Pos], 20);
+    // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, no heap, 20B Oid), replaces scattered Move dual path
+    SpanCopy(TByteSpan.Create(@Result[Pos], 20),
+      TByteSpan.Create(@RawSorted[I].Oid.Bytes[0], 20));
     Inc(Pos, 20);
   end;
   // prepare extra offsets map: for each commit with octopus, record start index in Extra
@@ -998,8 +1003,9 @@ begin
   // compute start per commit by scanning
   for I := 0 to N-1 do
   begin
-    // tree oid
-    Move(RawSorted[I].TreeOid.Bytes[0], Result[Pos], 20);
+    // tree oid — perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B Oid), replaces scattered Move
+    SpanCopy(TByteSpan.Create(@Result[Pos], 20),
+      TByteSpan.Create(@RawSorted[I].TreeOid.Bytes[0], 20));
     Inc(Pos, 20);
     // parents
     if Length(RawSorted[I].Parents) = 0 then
@@ -1051,7 +1057,9 @@ begin
   H := NewSHA1;
   H.Write(Result[0], SizeUInt(TrailerOff));
   TmpHash := H.SumBytes;
-  Move(TmpHash[0], Result[Pos], 20);
+  // perf: zero-copy via bytes.ops SpanCopy single source (inline + single Move, 20B hash), replaces scattered Move
+  SpanCopy(TByteSpan.Create(@Result[Pos], 20),
+    TByteSpan.Create(@TmpHash[0], 20));
 end;
 
 procedure CollectRefsRecursive(const ABase, APrefix: string; var AOut: TStringArray);

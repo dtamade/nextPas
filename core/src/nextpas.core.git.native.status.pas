@@ -422,8 +422,8 @@ begin
 end;
 
 { ── cached blob sig: O(n+m) inflate+hash+sort vs O(n·m) per pair ── }
-{ perf: per-blob single inflate + CollectLineHashes + single SortU32, then per-pair two-pointer merge O(CA+CB); inline hot paths, zero-copy TByteSpan slice, bytes.ops single source }
-procedure FillBlobSig(ARepo: TNativeRepository; const AEntry: TPathOid; out ASig: TBlobSig); inline;
+{ perf: per-blob single inflate + CollectLineHashes + single SortU32, then per-pair two-pointer merge O(CA+CB); not inline per red line 2 (loop+inflate exceeds I-Cache), zero-copy TByteSpan slice, bytes.ops single source }
+procedure FillBlobSig(ARepo: TNativeRepository; const AEntry: TPathOid; out ASig: TBlobSig);
 var
   Kind: TGitObjectKind;
   Size: Int64;
@@ -474,7 +474,8 @@ begin
   Result := (100 * (Matches * 2)) div (SA.Count + SB.Count);
 end;
 
-procedure BuildBlobSigCache(ARepo: TNativeRepository; const AList: TPathOidArray; var AOut: TBlobSigArray); inline;
+{ perf: not inline per red line 2 (hash table + FillBlobSig heavy loop exceeds I-Cache); bytes.ops single source }
+procedure BuildBlobSigCache(ARepo: TNativeRepository; const AList: TPathOidArray; var AOut: TBlobSigArray);
 var
   I, Cap, Mask, Idx: Integer;
   LHash: UInt32;
@@ -493,7 +494,7 @@ var
       Result := (Result xor UInt32(AOid.Bytes[K])) * UInt32(16777619);
   end;
 begin
-  // perf: O(n) avg open-addressing hash vs O(n²) linear scan; inline + zero-copy SpanEqual via GitOidSame (bytes.ops)
+  // perf: O(n) avg open-addressing hash vs O(n²) linear scan; not inline outer per red line 2, inline inner OidHashInline + zero-copy SpanEqual via GitOidSame (bytes.ops)
   SetLength(AOut, Length(AList));
   if Length(AList) = 0 then Exit;
   Cap := 16;
@@ -580,9 +581,10 @@ begin
   Result := HashSigScoreForBlobs(DataA, DataB);
 end;
 
+{ perf: not inline per red line 2 (recursive ReadDir+Ignore heavy IO routing); thin forwarders only inline, zero-copy Move via PAnsiChar }
 procedure CollectUntracked(const AWorkTree, ADirRel: string;
   const ATrackedSorted: TStringArray; AIgnore: TGitIgnoreMatcher;
-  var AOut: TStringArray); inline;
+  var AOut: TStringArray);
 var
   DirAbs, Rel, IgnoreFile: string;
   Items: TDirEntryArray;
@@ -854,6 +856,15 @@ var
   LRenameCount, LRenameCap: SizeInt;
   LCopyCount, LCopyCap: SizeInt;
   DeleteSigs, AddSigs, HeadSigs: TBlobSigArray;
+  // hash-index pruning for O(n·m) -> O(n+m+shared) (bytes.ops single source for caps, zero-copy spans)
+  LAddOidBuckets: array of Integer;
+  LOidEntries: array of record AddIdx: Integer; Next: Integer; end;
+  LAddOidCap: Integer;
+  LHashHeads: array of Integer;
+  LHashEntries: array of record Hash: UInt32; AddIdx: Integer; Next: Integer; end;
+  LVisited: array of Boolean;
+  LVisitedList: array of Integer;
+  LVisitedCount: Integer;
 
   procedure BuildStage0; inline;
   var
@@ -1252,35 +1263,168 @@ begin
     BuildStage0;
     BuildRenameSets;
 
-    // collect rename candidates (amortized, bytes.ops doubling, inline)
-    // perf: O(n+m) cached sigs vs O(n·m) inflate+Collect+Sort per pair; inline + zero-copy dedup
+    // collect rename candidates (amortized, bytes.ops doubling, zero-copy)
+    // perf: O(n+m) cached sigs + O(n+m) oid hash + hash-index prune (reduces O(n·m) ScoreFromSigs merges); not inline per red line 2
     BuildBlobSigCache(Repo, Deletes, DeleteSigs);
     BuildBlobSigCache(Repo, Adds, AddSigs);
     Candidates := nil;
     LCandCount := 0;
     LCandCap := 0;
-    for SI2 := 0 to High(Deletes) do
+    if (Length(Deletes) > 0) and (Length(Adds) > 0) and (Int64(Length(Deletes)) * Int64(Length(Adds)) > 4096) then
     begin
+      // large: O(n+m) oid map + inverted hash index reduces ScoreFromSigs merges from O(n·m) to shared-hash only
+      LAddOidCap := 16;
+      while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
+      SetLength(LAddOidBuckets, LAddOidCap);
+      SetLength(LOidEntries, Length(Adds));
+      for I := 0 to LAddOidCap - 1 do LAddOidBuckets[I] := -1;
       for DI2 := 0 to High(Adds) do
       begin
-        if not IsBlobMode(Deletes[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
-        if GitOidSame(Deletes[SI2].Oid, Adds[DI2].Oid) then Score := 100
-        else Score := ScoreFromSigs(DeleteSigs[SI2], AddSigs[DI2]);
-        if Score < 0 then Continue;
-        if Score < ARenameThreshold then Continue;
-        if LCandCount = LCandCap then
-        begin
-          LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
-          SetLength(Candidates, LCandCap);
-        end;
-        Candidates[LCandCount].SrcIdx := SI2;
-        Candidates[LCandCount].DstIdx := DI2;
-        Candidates[LCandCount].Score := Score;
-        Inc(LCandCount);
+        Score := 0; // reuse as hash temp
+        Score := Integer(UInt32(2166136261));
+        for K := 0 to GitOidRawLen - 1 do
+          Score := Integer((UInt32(Score) xor UInt32(Adds[DI2].Oid.Bytes[K])) * UInt32(16777619));
+        if IsBlobMode(Adds[DI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+        I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+        LOidEntries[DI2].AddIdx := DI2;
+        LOidEntries[DI2].Next := LAddOidBuckets[I];
+        LAddOidBuckets[I] := DI2;
       end;
+      // inverted hash index for Adds
+      K := 0;
+      for DI2 := 0 to High(Adds) do
+        if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
+      I := 16;
+      while I < K * 2 do I := I * 2;
+      if I < 16 then I := 16;
+      SetLength(LHashHeads, I);
+      for K := 0 to High(LHashHeads) do LHashHeads[K] := -1;
+      K := 0;
+      for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
+      SetLength(LHashEntries, K);
+      K := 0;
+      for DI2 := 0 to High(Adds) do
+        if AddSigs[DI2].Valid then
+          for I := 0 to AddSigs[DI2].Count - 1 do
+          begin
+            Score := Integer(AddSigs[DI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+            LHashEntries[K].Hash := AddSigs[DI2].Hashes[I];
+            LHashEntries[K].AddIdx := DI2;
+            LHashEntries[K].Next := LHashHeads[Score];
+            LHashHeads[Score] := K;
+            Inc(K);
+          end;
+      SetLength(LVisited, Length(Adds));
+      SetLength(LVisitedList, Length(Adds));
+      for I := 0 to High(LVisited) do LVisited[I] := False;
+      // per delete, collect shared-hash + exact-oid candidates
+      for SI2 := 0 to High(Deletes) do
+      begin
+        if not IsBlobMode(Deletes[SI2].Mode) then Continue;
+        LVisitedCount := 0;
+        // exact oid matches via oid buckets
+        Score := Integer(UInt32(2166136261));
+        for K := 0 to GitOidRawLen - 1 do
+          Score := Integer((UInt32(Score) xor UInt32(Deletes[SI2].Oid.Bytes[K])) * UInt32(16777619));
+        if IsBlobMode(Deletes[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+        I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+        DI2 := LAddOidBuckets[I];
+        while DI2 <> -1 do
+        begin
+          K := LOidEntries[DI2].AddIdx;
+          if GitOidSame(Deletes[SI2].Oid, Adds[K].Oid) and IsBlobMode(Adds[K].Mode) then
+            if not LVisited[K] then
+            begin
+              LVisited[K] := True;
+              LVisitedList[LVisitedCount] := K;
+              Inc(LVisitedCount);
+            end;
+          DI2 := LOidEntries[DI2].Next;
+        end;
+        // hash-sharing candidates
+        if DeleteSigs[SI2].Valid then
+        begin
+          if DeleteSigs[SI2].Count = 0 then
+          begin
+            for DI2 := 0 to High(Adds) do
+              if AddSigs[DI2].Valid and (AddSigs[DI2].Count = 0) and IsBlobMode(Adds[DI2].Mode) then
+                if not LVisited[DI2] then
+                begin
+                  LVisited[DI2] := True;
+                  LVisitedList[LVisitedCount] := DI2;
+                  Inc(LVisitedCount);
+                end;
+          end
+          else
+          begin
+            for I := 0 to DeleteSigs[SI2].Count - 1 do
+            begin
+              Score := Integer(DeleteSigs[SI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+              K := LHashHeads[Score];
+              while K <> -1 do
+              begin
+                if LHashEntries[K].Hash = DeleteSigs[SI2].Hashes[I] then
+                begin
+                  DI2 := LHashEntries[K].AddIdx;
+                  if not LVisited[DI2] then
+                  begin
+                    LVisited[DI2] := True;
+                    LVisitedList[LVisitedCount] := DI2;
+                    Inc(LVisitedCount);
+                  end;
+                end;
+                K := LHashEntries[K].Next;
+              end;
+            end;
+          end;
+        end;
+        // score collected candidates
+        for K := 0 to LVisitedCount - 1 do
+        begin
+          DI2 := LVisitedList[K];
+          if not IsBlobMode(Adds[DI2].Mode) then Continue;
+          if GitOidSame(Deletes[SI2].Oid, Adds[DI2].Oid) then Score := 100
+          else Score := ScoreFromSigs(DeleteSigs[SI2], AddSigs[DI2]);
+          if Score < 0 then Continue;
+          if Score < ARenameThreshold then Continue;
+          if LCandCount = LCandCap then
+          begin
+            LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+            SetLength(Candidates, LCandCap);
+          end;
+          Candidates[LCandCount].SrcIdx := SI2;
+          Candidates[LCandCount].DstIdx := DI2;
+          Candidates[LCandCount].Score := Score;
+          Inc(LCandCount);
+        end;
+        for K := 0 to LVisitedCount - 1 do LVisited[LVisitedList[K]] := False;
+      end;
+      if LCandCap <> LCandCount then SetLength(Candidates, LCandCount);
+    end
+    else
+    begin
+      for SI2 := 0 to High(Deletes) do
+      begin
+        for DI2 := 0 to High(Adds) do
+        begin
+          if not IsBlobMode(Deletes[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
+          if GitOidSame(Deletes[SI2].Oid, Adds[DI2].Oid) then Score := 100
+          else Score := ScoreFromSigs(DeleteSigs[SI2], AddSigs[DI2]);
+          if Score < 0 then Continue;
+          if Score < ARenameThreshold then Continue;
+          if LCandCount = LCandCap then
+          begin
+            LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+            SetLength(Candidates, LCandCap);
+          end;
+          Candidates[LCandCount].SrcIdx := SI2;
+          Candidates[LCandCount].DstIdx := DI2;
+          Candidates[LCandCount].Score := Score;
+          Inc(LCandCount);
+        end;
+      end;
+      if LCandCap <> LCandCount then SetLength(Candidates, LCandCount);
     end;
-    if LCandCap <> LCandCount then
-      SetLength(Candidates, LCandCount);
     SortCandidatesByScoreDesc(Candidates);
 
     SetLength(PairedSrc, Length(Deletes));
@@ -1323,31 +1467,167 @@ begin
       Candidates := nil;
       LCandCount := 0;
       LCandCap := 0;
-      for SI2 := 0 to High(HeadList) do
+      if (Length(HeadList) > 0) and (Length(Adds) > 0) and (Int64(Length(HeadList)) * Int64(Length(Adds)) > 4096) then
       begin
-        // source is every HEAD blob, regardless of whether it was deleted
-        for DI2 := 0 to High(Adds) do
+        // large: reuse Adds oid/hash index (build if not already from rename large path)
+        if (Length(LAddOidBuckets) = 0) or (Length(LAddOidBuckets) <> 0) and (Length(LOidEntries) <> Length(Adds)) then
         begin
-          if PairedDst[DI2] then
-            Continue;
-          if not IsBlobMode(HeadList[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
-          if GitOidSame(HeadList[SI2].Oid, Adds[DI2].Oid) then Score := 100
-          else Score := ScoreFromSigs(HeadSigs[SI2], AddSigs[DI2]);
-          if Score < 0 then Continue;
-          if Score < ACopyThreshold then Continue;
-          if LCandCount = LCandCap then
+          LAddOidCap := 16;
+          while LAddOidCap < Length(Adds) * 2 do LAddOidCap := LAddOidCap * 2;
+          SetLength(LAddOidBuckets, LAddOidCap);
+          SetLength(LOidEntries, Length(Adds));
+          for I := 0 to LAddOidCap - 1 do LAddOidBuckets[I] := -1;
+          for DI2 := 0 to High(Adds) do
           begin
-            LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
-            SetLength(Candidates, LCandCap);
+            Score := Integer(UInt32(2166136261));
+            for K := 0 to GitOidRawLen - 1 do
+              Score := Integer((UInt32(Score) xor UInt32(Adds[DI2].Oid.Bytes[K])) * UInt32(16777619));
+            if IsBlobMode(Adds[DI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+            I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+            LOidEntries[DI2].AddIdx := DI2;
+            LOidEntries[DI2].Next := LAddOidBuckets[I];
+            LAddOidBuckets[I] := DI2;
           end;
-          Candidates[LCandCount].SrcIdx := SI2;
-          Candidates[LCandCount].DstIdx := DI2;
-          Candidates[LCandCount].Score := Score;
-          Inc(LCandCount);
         end;
+        if Length(LHashHeads) = 0 then
+        begin
+          K := 0;
+          for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
+          I := 16;
+          while I < K * 2 do I := I * 2;
+          if I < 16 then I := 16;
+          SetLength(LHashHeads, I);
+          for K := 0 to High(LHashHeads) do LHashHeads[K] := -1;
+          K := 0;
+          for DI2 := 0 to High(Adds) do if AddSigs[DI2].Valid then Inc(K, AddSigs[DI2].Count);
+          SetLength(LHashEntries, K);
+          K := 0;
+          for DI2 := 0 to High(Adds) do
+            if AddSigs[DI2].Valid then
+              for I := 0 to AddSigs[DI2].Count - 1 do
+              begin
+                Score := Integer(AddSigs[DI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+                LHashEntries[K].Hash := AddSigs[DI2].Hashes[I];
+                LHashEntries[K].AddIdx := DI2;
+                LHashEntries[K].Next := LHashHeads[Score];
+                LHashHeads[Score] := K;
+                Inc(K);
+              end;
+          SetLength(LVisited, Length(Adds));
+          SetLength(LVisitedList, Length(Adds));
+          for I := 0 to High(LVisited) do LVisited[I] := False;
+        end;
+        for SI2 := 0 to High(HeadList) do
+        begin
+          if not IsBlobMode(HeadList[SI2].Mode) then Continue;
+          LVisitedCount := 0;
+          // exact oid
+          Score := Integer(UInt32(2166136261));
+          for K := 0 to GitOidRawLen - 1 do
+            Score := Integer((UInt32(Score) xor UInt32(HeadList[SI2].Oid.Bytes[K])) * UInt32(16777619));
+          if IsBlobMode(HeadList[SI2].Mode) then Score := Score xor Integer(UInt32($9E3779B9));
+          I := (UInt32(Score) and UInt32(LAddOidCap - 1));
+          DI2 := LAddOidBuckets[I];
+          while DI2 <> -1 do
+          begin
+            K := LOidEntries[DI2].AddIdx;
+            if GitOidSame(HeadList[SI2].Oid, Adds[K].Oid) and IsBlobMode(Adds[K].Mode) and not PairedDst[K] then
+              if not LVisited[K] then
+              begin
+                LVisited[K] := True;
+                LVisitedList[LVisitedCount] := K;
+                Inc(LVisitedCount);
+              end;
+            DI2 := LOidEntries[DI2].Next;
+          end;
+          // hash sharing
+          if HeadSigs[SI2].Valid then
+          begin
+            if HeadSigs[SI2].Count = 0 then
+            begin
+              for DI2 := 0 to High(Adds) do
+                if not PairedDst[DI2] and AddSigs[DI2].Valid and (AddSigs[DI2].Count = 0) and IsBlobMode(Adds[DI2].Mode) then
+                  if not LVisited[DI2] then
+                  begin
+                    LVisited[DI2] := True;
+                    LVisitedList[LVisitedCount] := DI2;
+                    Inc(LVisitedCount);
+                  end;
+            end
+            else
+            begin
+              for I := 0 to HeadSigs[SI2].Count - 1 do
+              begin
+                Score := Integer(HeadSigs[SI2].Hashes[I] and UInt32(Length(LHashHeads) - 1));
+                K := LHashHeads[Score];
+                while K <> -1 do
+                begin
+                  if LHashEntries[K].Hash = HeadSigs[SI2].Hashes[I] then
+                  begin
+                    DI2 := LHashEntries[K].AddIdx;
+                    if not PairedDst[DI2] and not LVisited[DI2] then
+                    begin
+                      LVisited[DI2] := True;
+                      LVisitedList[LVisitedCount] := DI2;
+                      Inc(LVisitedCount);
+                    end;
+                  end;
+                  K := LHashEntries[K].Next;
+                end;
+              end;
+            end;
+          end;
+          for K := 0 to LVisitedCount - 1 do
+          begin
+            DI2 := LVisitedList[K];
+            if PairedDst[DI2] then Continue;
+            if not IsBlobMode(Adds[DI2].Mode) then Continue;
+            if GitOidSame(HeadList[SI2].Oid, Adds[DI2].Oid) then Score := 100
+            else Score := ScoreFromSigs(HeadSigs[SI2], AddSigs[DI2]);
+            if Score < 0 then Continue;
+            if Score < ACopyThreshold then Continue;
+            if LCandCount = LCandCap then
+            begin
+              LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+              SetLength(Candidates, LCandCap);
+            end;
+            Candidates[LCandCount].SrcIdx := SI2;
+            Candidates[LCandCount].DstIdx := DI2;
+            Candidates[LCandCount].Score := Score;
+            Inc(LCandCount);
+          end;
+          for K := 0 to LVisitedCount - 1 do LVisited[LVisitedList[K]] := False;
+        end;
+        if LCandCap <> LCandCount then SetLength(Candidates, LCandCount);
+      end
+      else
+      begin
+        for SI2 := 0 to High(HeadList) do
+        begin
+          // source is every HEAD blob, regardless of whether it was deleted
+          for DI2 := 0 to High(Adds) do
+          begin
+            if PairedDst[DI2] then
+              Continue;
+            if not IsBlobMode(HeadList[SI2].Mode) or not IsBlobMode(Adds[DI2].Mode) then Continue;
+            if GitOidSame(HeadList[SI2].Oid, Adds[DI2].Oid) then Score := 100
+            else Score := ScoreFromSigs(HeadSigs[SI2], AddSigs[DI2]);
+            if Score < 0 then Continue;
+            if Score < ACopyThreshold then Continue;
+            if LCandCount = LCandCap then
+            begin
+              LCandCap := SizeInt(GrowArrayCapacity(SizeUInt(LCandCap), SizeUInt(LCandCount + 1)));
+              SetLength(Candidates, LCandCap);
+            end;
+            Candidates[LCandCount].SrcIdx := SI2;
+            Candidates[LCandCount].DstIdx := DI2;
+            Candidates[LCandCount].Score := Score;
+            Inc(LCandCount);
+          end;
+        end;
+        if LCandCap <> LCandCount then
+          SetLength(Candidates, LCandCount);
       end;
-      if LCandCap <> LCandCount then
-        SetLength(Candidates, LCandCount);
       SortCandidatesByScoreDesc(Candidates);
       for I := 0 to High(Candidates) do
       begin

@@ -38,14 +38,12 @@ type
     function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
     procedure InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
     function TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
-    // delta peek cache helpers (O(1) hash, zero alloc, inline, zero-copy via stack buf)
     function TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
     procedure PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // hot rename pre-check cache: 64-entry direct-mapped hash (APos -> targetSize), O(1) single probe avoids per-candidate 32B inflate
-    // 64 slots + Knuth/xor-shift mix reduces collisions for large repo rename similarity O(n*m) checks, stable vs 32 xor-shift
+    // delta target size cache: 64-entry direct-mapped (bytes.ops single source)
     FPeekKeys: array[0..63] of SizeUInt;
     FPeekVals: array[0..63] of Int64;
     FPeekValid: array[0..63] of Boolean;
@@ -64,9 +62,7 @@ function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TB
 
 const
   GitMaxDeltaDepth = 64;
-  // streaming cap: 256 MB (single source with DEFLATE MAX_DECOMPRESS_SIZE), prevents heap amplification via single huge SetLength
   GitMaxDeltaTargetSize = 256 * 1024 * 1024;
-  // peek cache hash single source: Knuth golden ratio (was hardcoded 2654435761 ×2), readable, disperses sequential offsets; mask for 64 slots power-of-two
   GitPeekHashKnuth = 2654435761;
   GitPeekHashMask = 63;
 
@@ -78,10 +74,7 @@ uses
   nextpas.core.bytes.binary,
   nextpas.core.encoding.varint;
 
-{ GitApplyDeltaReuse: zero-copy span view + buffer reuse via bytes.ops single source.
-  Core decode is single-source with GitApplyDelta; this wrapper reuses AReuse
-  capacity (ping-pong) to avoid O(depth) allocations.
-  Perf: heavy decode loop NOT inline — I-Cache redline; thin wrapper also not inline. }
+{ delta apply: bytes.ops single source, zero-copy spans, buffer reuse }
 procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes);
 var
   P: SizeInt;
@@ -91,11 +84,9 @@ var
   LBaseSpan, LDeltaSpan, LOutSpan: TByteSpan;
   USrc, UTgt: UInt64;
 begin
-  // zero-copy views (single source via bytes.ops, no allocation)
   LBaseSpan := TByteSpan.FromBytes(ABase);
   LDeltaSpan := TByteSpan.FromBytes(ADelta);
   P := 0;
-  // single source varint via encoding.varint (inline zero-copy, no manual shift loop)
   if not TryVarintDecode(ADelta, P, USrc) then
     raise EGitError.Create('truncated varint in pack data');
   if USrc > UInt64(High(Int64)) then
@@ -110,8 +101,6 @@ begin
   if UTgt > UInt64(GitMaxDeltaTargetSize) then
     raise EGitError.Create('delta target size exceeds limit');
   TgtSize := Int64(UTgt);
-  // streaming cap + buffer reuse: bounded by GitMaxDeltaTargetSize (256 MB, same source as DEFLATE max), amortized doubling via bytes.ops prevents heap amplification
-  // perf: bytes.ops single source (BytesEnsureCapacity/GrowArrayCapacity inline, doubling), zero-copy spans, avoids ping-pong jitter across delta depth
   if Int64(Length(AOut)) <> TgtSize then
   begin
     if SizeUInt(Length(AOut)) < SizeUInt(TgtSize) then
@@ -144,21 +133,17 @@ begin
         end;
       if CopySize = 0 then
         CopySize := $10000;
-      // streaming chunk guard: overflow-safe via subtraction (bytes.ops single source for SpanCopy, inline, zero-copy Move)
       if (CopyOff < 0) or (CopySize <= 0) or (CopyOff > Int64(LBaseSpan.Len) - CopySize)
         or (OutPos > TgtSize - CopySize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
-      // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
       SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(CopySize)),
         TByteSpan.Create(LBaseSpan.Data + SizeUInt(CopyOff), SizeUInt(CopySize)));
       OutPos := OutPos + CopySize;
     end
     else if Op > 0 then
     begin
-      // streaming chunk guard: overflow-safe via subtraction (zero-copy SpanCopy, bytes.ops single source)
       if (P > Length(ADelta) - Op) or (OutPos > TgtSize - Op) then
         raise EGitError.Create('delta insert instruction out of bounds');
-      // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
       SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(Op)),
         TByteSpan.Create(LDeltaSpan.Data + SizeUInt(P), SizeUInt(Op)));
       OutPos := OutPos + Op;
@@ -173,7 +158,6 @@ end;
 
 function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes;
 begin
-  // not inline: heavy loop stays out-of-line, I-Cache friendly; single source via GitApplyDeltaInto
   GitApplyDeltaInto(ABase, ADelta, AReuse);
   Result := AReuse;
 end;
@@ -215,7 +199,6 @@ end;
 
 function TPackFile.IdxBE32(APos: SizeUInt): Cardinal; inline;
 begin
-  // single source via bytes.binary (zero-copy mmap view, bounds checked)
   if APos + 4 > FIdxSize then
     raise EGitError.Create('truncated pack index');
   Result := ReadUInt32BE(FIdxData + APos);
@@ -363,14 +346,9 @@ var
   Got: SizeUInt;
   PDst: PByte;
 begin
-  // not inline — heavy zlib path; capacity reuse via bytes.ops single source
-  // inflate directly into caller buffer to avoid O(depth) alloc/copy jitter on delta depth 64
-  // portable: managed SetLength only (RTL), no FPC heap header poke, thread-safe, nextPas compatible
-  // stability: SetLength exception-safe (managed array freed on exception), zero-copy via PByte view (bytes.ops single source)
-  // perf: amortized doubling via bytes.ops single source (BytesEnsureCapacity/GrowArrayCapacity inline, zero-copy PByte view), avoids O(depth) ping-pong realloc jitter at depth 64
+  // bytes.ops single source, zero-copy PByte view
   if (AExpectSize < 0) or (AExpectSize > MaxInt) then
     raise EGitError.Create('pack entry inflated size out of range');
-  // bytes.ops single source: amortized growth retains max capacity for ping-pong buffers, avoids repeated SetLength exact reallocs, portable no heap poke
   if SizeUInt(Length(AReuse)) <> SizeUInt(AExpectSize) then
   begin
     if SizeUInt(Length(AReuse)) < SizeUInt(AExpectSize) then
@@ -394,15 +372,11 @@ var
   LSpan: TByteSpan;
   USrc, UTgt: UInt64;
 begin
-  // perf: prefix inflate 32B only (delta varints ≤20B) vs full InflateAt (Sz bytes)
-  // hot rename similarity pre-check: per candidate saves full zlib inflate + alloc
-  // zero-copy TByteSpan view over stack buf (bytes.ops single source), not inline heavy
-  // single source varint via encoding.varint (inline, zero-copy TByteSpan advance)
+  // 32B prefix via GitZlibDecompressPrefix, bytes.ops single source
   Result := False;
   ATargetSize := 0;
   if APos >= FDataSize then
     Exit;
-  // fast cache: hot rename O(n*m) loop hits same delta offsets; O(1) hashed single probe avoids 32B inflate per candidate
   if TryPeekCacheHit(APos, ATargetSize) then
     Exit(True);
   try
@@ -414,7 +388,6 @@ begin
   if Got = 0 then
     Exit;
   LSpan := TByteSpan.Create(@Buf[0], Got);
-  // single source: two varints (src + target) via encoding.varint TryVarintDecode inline
   if not TryVarintDecode(LSpan, USrc) then
     Exit;
   if not TryVarintDecode(LSpan, UTgt) then
@@ -430,7 +403,6 @@ end;
 
 function GitPeekHashIdx(APos: SizeUInt): SizeUInt; inline;
 begin
-  // single source Knuth/xor-shift avalanche, inline, zero alloc/copy, readable constant (no magic duplication)
   Result := ((APos xor (APos shr 7) xor (APos shr 17)) * SizeUInt(GitPeekHashKnuth) xor (APos shr 11)) and SizeUInt(GitPeekHashMask);
 end;
 
@@ -438,8 +410,6 @@ function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Bool
 var
   Idx: SizeUInt;
 begin
-  // O(1) hashed single-probe, 64 slots, Knuth/xor-shift avalanche (inline, zero alloc, zero-copy); reduces collisions vs 32 xor-shift for large rename sets
-  // perf: inline hash via GitPeekHashIdx (constant single source, no magic duplication, Knuth golden ratio), single Move-free probe; stability: tag check avoids false hit
   Idx := GitPeekHashIdx(APos);
   if FPeekValid[Idx] and (FPeekKeys[Idx] = APos) then
   begin
@@ -453,8 +423,6 @@ procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
 var
   Idx: SizeUInt;
 begin
-  // O(1) hashed store, 64 slots, Knuth multiplicative avalanche disperses sequential pack offsets; single probe overwrite, zero alloc, inline
-  // perf: inline hash via GitPeekHashIdx (constant single source, no magic duplication)
   Idx := GitPeekHashIdx(APos);
   FPeekKeys[Idx] := APos;
   FPeekVals[Idx] := ATargetSize;
@@ -586,12 +554,9 @@ begin
   ReuseBuf := nil;
   DeltaBuf := nil;
   InflateInto(Chain[ChainLen-1].P, Chain[ChainLen-1].Sz, CurData);
-  // unwind deltas in reverse: base-1 .. 0, reusing buffers ping-pong + DeltaBuf reuse
-  // perf: not inline heavy paths; zero-copy TByteSpan.Move; single SetLength per layer
   for I := ChainLen - 2 downto 0 do
   begin
     InflateInto(Chain[I].P, Chain[I].Sz, DeltaBuf);
-    // buffer reuse: GitApplyDeltaInto writes into ReuseBuf with single allocation, zero-copy spans via bytes.ops
     GitApplyDeltaInto(CurData, DeltaBuf, ReuseBuf);
     // ping-pong swap to keep capacity for next iteration, avoids O(depth*size) alloc jitter
     Tmp := CurData;
@@ -629,7 +594,6 @@ var
   BaseSize: Int64;
   Rel: Int64;
 
-  // single source walk via direct FData view, inline zero-copy, no try/except
   function WalkKind(AStart: Int64; out AFound: TGitObjectKind): Boolean;
   var
     LOff: Int64;
@@ -699,7 +663,6 @@ begin
   Off := FindOffset(AOid);
   if Off < 0 then
     Exit;
-  // perf: header parse without inflate; zero-copy via FData direct view, inline bounds check (no exception)
   P := SizeUInt(Off);
   if P >= FDataSize then Exit;
   B := FData[P]; Inc(P);
@@ -723,8 +686,6 @@ begin
     4: begin AKind := gokTag; ASize := Sz; Exit(True); end;
     6, 7:
       begin
-        // perf: single-pass capture of base id + delta start; no double header re-parse
-        // 32B prefix inflate via TryPeekDeltaTargetSize (zero alloc, hot rename pre-check)
         if Typ = 6 then
         begin
           if P >= FDataSize then Exit;
@@ -750,9 +711,11 @@ begin
           DeltaStart := P;
           BaseOff := FindOffset(BaseOid);
         end;
-        if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then Exit;
-        ASize := TgtSize;
-        // kind: header-only walk, no full inflate fallback, no try/except (explicit bounds, WalkKind single source)
+        // hot path O(1) cache probe, only miss does 32B prefix inflate
+        if TryPeekCacheHit(DeltaStart, TgtSize) then
+          ASize := TgtSize
+        else if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then Exit
+        else ASize := TgtSize;
         if Typ = 7 then
         begin
           if (BaseOff >= 0) and TryGetObjectSize(BaseOid, BaseKind, BaseSize) then

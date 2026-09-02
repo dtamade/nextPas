@@ -91,7 +91,7 @@
 | git.native.bisect | 二分（`bisect` 首坏提交定位，`good..bad` 候选经 `revwalk` topo 排除 + 二分回调，对齐 `git bisect` 线性史） |
 | git.native.common | 共享对象助手（tree 查找/tag 剥离单源，GitFindBlobInTree/GitPeelToTree，零重复，EGitError 语义） |
 | git.native.util | 通用工具单源（Trim/SplitLines/WorktreeDir/FindBlobInTree/PeelToTree，inline/零拷贝，去重 common） |
-| git.native.wildmatch | 单源通配引擎（`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils，ignore/attributes 委托 GitWildSegment*/GitSegmentsMatch） |
+| git.native.wildmatch | 薄委派至 L1 `text.wildmatch` 的通配 shim（`*`/`?`/`**`/`[]` 含转义/字符类，零 SysUtils，ignore/attributes 经 `GitWildSegment*/GitSegmentsMatch` inline 转发至 `text.wildmatch` 单源） |
 | git.factory | TGitBackend + NewGitManager/NewNativeGitManager + RegisterLibGit2Creator 选择层（静态仅 native.manager，注册注入 libgit2，gbAuto 首版=gbLibGit2，详见 PURE-BACKEND.md §4） |
 | git.native.manager | TNativeGitManager 纯实现（零 libgit2，闭合 Initialize/IsRepository/OpenRepository/InitRepository） |
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
@@ -165,7 +165,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 | 不变量域 | 权威 CONTRACT | 门面 shard | 行阈 | 能力 |
 |---|---|---|---|---|
 | 对象层 | `CONTRACT.objects.md` | `git.native.objects` | <400 行 | oid/zlib/loose/pack/refs/objmodel/repo/write，零拷贝 via `bytes.ops`/`checksum.adler32`/`compress` |
-| 暂存区 | `CONTRACT.staging.md` | `git.native.staging` | <500 行 | index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch 单源 |
+| 暂存区 | `CONTRACT.staging.md` | `git.native.staging` | <500 行 | index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch 薄委派至 `text.wildmatch` |
 | 历史 | `CONTRACT.history.md` | `git.native.history.{traversal,query,ops}` + `history` umbrella | 各 <260 行 / umbrella <380 行 / 总 <600 行 | revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert 等，20+类型/40+inline，预拆前 14 单元/464 行已按 traversal/query/ops 域拆分 |
 | 分支 | `CONTRACT.branches.md` | `git.native.branches` | <300 行 | branch/tag/stash/notes |
 | 传输 | `CONTRACT.transport.md` | `git.native.transport` | <600 行 | config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset |

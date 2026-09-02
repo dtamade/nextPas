@@ -22,12 +22,12 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.git.native.objmodel,
-  nextpas.core.git.native.push;
+  nextpas.core.git.native.objmodel;
 
 function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 begin
-  Result := nextpas.core.git.native.push.GitOidIsZero(AOid);
+  // single source via base.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy TByteSpan, inline), base owns primitive (base←impl), no push dependency
+  Result := nextpas.core.git.native.base.GitOidIsZero(AOid);
 end;
 
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;

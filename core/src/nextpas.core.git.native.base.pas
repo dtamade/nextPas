@@ -34,6 +34,8 @@ function GitOidToHex(const AOid: TGitOid): string;
 function GitOidIsValidHex(const AHex: string): Boolean;
   { not inline: 40× HexVal loop exceeds inline benefit (red line 2) }
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+function GitOidZero: TGitOid; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
   { not inline: branch+alloc+raise, cold path, exceeds inline benefit }
 function GitKindFromString(const AName: string): TGitObjectKind;
@@ -91,6 +93,19 @@ begin
   Result := SpanEqual(
     TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
     TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
+end;
+
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+begin
+  { perf: inline + zero-copy TByteSpan view (Pointer+Len) single-source bytes.ops IsZeroBytes via StripLeadingZeroSpan:
+    20 bytes -> early exit on first non-zero, no alloc, hot push/status path }
+  Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
+end;
+
+function GitOidZero: TGitOid; inline;
+begin
+  { perf: inline single FillChar, zero-copy, no alloc, single source zero init owned by base (L0) }
+  FillChar(Result, SizeOf(Result), 0);
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;
