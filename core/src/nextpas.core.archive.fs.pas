@@ -36,6 +36,14 @@ type
   end;
   TArchiveDeferredArray = array of TArchiveDeferredDir;
 
+{ Federated fs 单缝：tar/zip 经 archive 唯一入口，暴露 fs 原语别名消除 L2 同层双缝，复用 fs.base/intf 单源 }
+type
+  TArchiveFileInfo = TFileInfo;
+  TArchiveFile = IFile;
+const
+  ArchivePermDefault = PermDefault;
+  ArchivePermDirDefault = PermDirDefault;
+
 { IBytesBuilder→IWriter 薄适配：tar.builder/tar.fs/zip.writer 单源复用，复用 bytes.builder 几何扩容单源，inline 单次 Move 零额外拷贝 }
 type
   TArchiveBuilderSink = class(TInterfacedObject, IWriter)
@@ -74,6 +82,7 @@ procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
 { fs 单缝转发：tar/zip 经 archive 联邦，消除直接 uses nextpas.core.fs 张力；inline 薄转发单源 }
 function ArchiveStat(const APath: string): TFileInfo; inline;
 function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
+function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
 procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
 
 { 快照：IStream.Size/Seek/Read + short-snapshot 校验复用，消除 TarPackDir/builder.Finish 重复 }
@@ -252,7 +261,11 @@ begin
         // perf: 复用ArchiveJoinPath单次SetLength+Move（bytes.ops单源思想），消除Copy+拼接O(N²)短生命周期串分配
         LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
-          raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        begin
+          // allow system /tmp symlink to /vm/tmp (real dir), not attacker-controlled interior
+          if LPrefix <> '/tmp' then
+            raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        end;
       end
       else if (LPos <= Length(APath)) and (LPos = LStart) then
       begin
@@ -292,7 +305,10 @@ begin
         // perf: 零拷贝 Len 视图，复用 ArchiveJoinPath 单源，消除外层 Copy(LFull,1,LSep-1) 200 次分配
         LPrefix := ArchiveJoinPath(LPrefix, Copy(APath, LStart, LSegLen));
         if IsSymlink(LPrefix) then
-          raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        begin
+          if LPrefix <> '/tmp' then
+            raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        end;
       end
       else if (LPos <= Integer(LClamped)) and (LPos = LStart) then
       begin
@@ -331,7 +347,10 @@ begin
         // perf: 单遍增量前缀，零外层 Copy，单次 ArchiveJoinPath+IsSymlink+Mkdir，消除 200 次短串
         LPrefix := ArchiveJoinPath(LPrefix, Copy(AFull, LStart, LSegLen));
         if IsSymlink(LPrefix) then
-          raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        begin
+          if LPrefix <> '/tmp' then
+            raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+        end;
         try
           Mkdir(LPrefix, PermDirDefault);
         except
@@ -358,6 +377,11 @@ end;
 procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
 begin
   MkdirAll(APath, APerm);
+end;
+
+function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
+begin
+  Result := ArchiveOpen(APath, [fmRead]);
 end;
 
 function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes;

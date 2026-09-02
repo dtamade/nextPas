@@ -75,27 +75,27 @@ begin
     LLen := LBase + LDigits;
     SLen := nextpas.core.text.conv.IntToStr(LLen);
   end;
-  // perf: 单次 SetLength(Result,LLen)+顺序 Move（bytes.ops 单源 CopyMemory/CopyStringToBuffer 语义，零拷贝 PAnsiChar 视图），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
-  // stability: 空键/值守零长不 Move，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 common.pas SpanToString 审计，资源由托管 string 释放不丢
+  // perf: 单次 SetLength(Result,LLen)+顺序 CopyStringToBuffer（bytes.ops 单源 Move，零拷贝 PAnsiChar 视图，外联单次 Move 规避 FPC 3.3.1 inline+Move 单字节缺陷），消除 SpanConcatMany->TBytes + BytesToString 双堆分配与二次 Move；长名冷路径少一次堆分配，极小记录亦零额外 Move；循环/分配外联禁 inline
+  // stability: 空键/值守零长不 Copy，PAnsiChar 非空断言由 Length>0 保障，块零初始化由调用方兜底，单源闭合 bytes.ops CopyStringToBuffer 审计（同 common.pas SpanToString/TarPutHeaderString 单源），资源由托管 string 释放不丢
   SetLength(Result, LLen);
   LPos := 1;
   if Length(SLen) > 0 then
   begin
-    Move(PAnsiChar(SLen)^, Result[LPos], Length(SLen));
+    CopyStringToBuffer(SLen, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(SLen)));
     Inc(LPos, Length(SLen));
   end;
   Result[LPos] := ' ';
   Inc(LPos);
   if Length(AKey) > 0 then
   begin
-    Move(PAnsiChar(AKey)^, Result[LPos], Length(AKey));
+    CopyStringToBuffer(AKey, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AKey)));
     Inc(LPos, Length(AKey));
   end;
   Result[LPos] := '=';
   Inc(LPos);
   if Length(AValue) > 0 then
   begin
-    Move(PAnsiChar(AValue)^, Result[LPos], Length(AValue));
+    CopyStringToBuffer(AValue, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(AValue)));
     Inc(LPos, Length(AValue));
   end;
   Result[LPos] := #10;

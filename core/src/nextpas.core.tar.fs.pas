@@ -29,8 +29,6 @@ uses
   nextpas.core.exception,
   nextpas.core.tar.common,
   nextpas.core.tar.reader,
-  nextpas.core.fs.base,
-  nextpas.core.fs.intf,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.bytes.builder,
@@ -42,12 +40,12 @@ uses
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
-  LRoot: TFileInfo;
+  LRoot: TArchiveFileInfo;
   LWalks: TArchiveWalkArray;
   LI, LWalksCount: Integer;
   LHdr: TTarHeader;
-  LFile: IFile;
-  LStat: TFileInfo;
+  LFile: TArchiveFile;
+  LStat: TArchiveFileInfo;
 begin
   if AWriter = nil then
     raise EArgumentError.Create('tar pack: writer is nil');
@@ -75,8 +73,8 @@ begin
       LHdr.Mode := TarRegularMode(LWalks[LI].FMode);
       // 流式：按需打开句柄分块搬运，64K 复用缓冲，仅 O(1) 内存，零全量拷贝
       LFile := nil;
-      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝
-      LFile := ArchiveOpen(LWalks[LI].FFull, [fmRead]);
+      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝 federation single seam
+      LFile := ArchiveOpenRead(LWalks[LI].FFull);
       try
         LStat := LFile.Stat;
         LHdr.Size := LStat.Size;
@@ -142,7 +140,7 @@ begin
   ROpts.MaxTotalSize := LMaxTotal;
   R := TTarReader.CreateWithOptions(AData, ROpts);
   try
-    ArchiveMkdirAll(ADestDir, PermDirDefault);
+    ArchiveMkdirAll(ADestDir, ArchivePermDirDefault);
     ArchiveEnsureNoSymlinkInPath(ADestDir);
     SetLength(LDirs, 0);
     LDirCount := 0;
@@ -164,14 +162,14 @@ begin
         end;
         LMode := Word(H.Mode and $0FFF);
         if H.Kind = tekDirectory then
-          ArchiveMkdirAll(LFull, PermDirDefault)
+          ArchiveMkdirAll(LFull, ArchivePermDirDefault)
         else if H.Kind = tekRegular then
         begin
           { 零拷贝：复用 Reader 已有的 EntryDataSlice/OpenEntryStream，避免 EntryData 的 SetLength+Move 双倍内存 }
           if R.EntryDataSlice(LSlice, LSliceCount) then
-            ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, PermDefault)
+            ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, ArchivePermDefault)
           else
-            ArchiveWriteFileSlice(LFull, nil, 0, PermDefault);
+            ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
           // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 带 StdErr WARN，不静默吞，fail-closed 高级感
           ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
         end

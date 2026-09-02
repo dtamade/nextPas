@@ -1,10 +1,10 @@
 # nextpas.core.compress 代码契约
 
-**模块路径**：`core/src/nextpas.core.compress*.pas`（8 个源文件）
+**模块路径**：`core/src/nextpas.core.compress*.pas`（11 个源文件，含 `compress.tar` 兼容转发 → 独立 `nextpas.core.tar`）
 **层级**：L2（依赖 L0-L1: base, io）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.2
+**最后更新**：2026-09-02
+**版本**：1.3
 
 ---
 
@@ -21,6 +21,9 @@
 | compress.zlib.ffi | zlib FFI 绑定 |
 | compress.lz4 | LZ4 压缩/解压 |
 | compress.lz4.ffi | LZ4 FFI 绑定 |
+| compress.zstd | Zstd 压缩/解压（libzstd FFI） |
+| compress.zstd.ffi | Zstd FFI 绑定 |
+| compress.tar | Tar 容器（ustar/pax，已晋升独立 L2 `nextpas.core.tar` 兼容转发，零拷贝视图 `EntryDataSlice/OpenEntryStream` + `bytes.ops` 单源 `Move`） |
 | compress.pas | 门面 |
 
 ### 1.2 接口
@@ -63,6 +66,10 @@ end;
 - **[INV-2]** IDecompressReader 遇到格式错误时抛异常
 - **[INV-3]** MaxOutputSize 限制防止 zip bomb 攻击
 - **[INV-4]** Gzip 格式包含 CRC32 校验和
+- **[INV-5] Tar 零拷贝视图**：`TTarReader.EntryDataSlice` 返回原镜像 `PByte` 区间不分配，`OpenEntryStream` 为持有型 `IReader`（`TBytes` 镜像时持有引用防悬垂，外部 `PByte` 时固化拷贝自包含，`Reader` 释放后仍可读）；`EntryData` 为拷贝分流（`bytes.ops SpanClone` 单源，峰值 2× 切片，热路径优先切片 `extract-all 320µs vs extract-slice 236µs 约 -26%`），`CombinePrefixName/pax` 单次 `SetLength+Move` 零拷贝
+- **[INV-6] Tar Move 单源**：所有 `PByte/string` `Move` 收敛至 `bytes.ops.CopyMemory/CopyStringToBuffer/SpanClone` 单源（`reader.FieldSlice/CombinePrefixName/TTarSliceReader.Read`、`writer.TarPutHeaderSlice/EmitPaxHeader/MakePaxRecord`、`common.TarPutHeaderString` 等零拷贝 `PByte` 切片一次 `Move`），禁止分散手写 `Move(AValue[1])`
+- **[INV-7] Tar inline/外联不变量**：薄转发与小访问器 `inline`（`Default*Options/TarPadToBlock/StringField/CachedField/IsSafeTarEntryName` 等），含循环/分配/SIMD 的 `TarComputeChecksum*/TarHeaderIsZeroOrValid/TarParseNumericField/TarFormatNumericField/TarParsePaxRecords/CombinePrefixName` 体外联（遵 `design-conventions` 真实循环体禁 `inline`，防 I-Cache 复制膨胀）
+- **[INV-8] Tar 吞吐不变量**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite`（`SetMinDuration 300ms/MinSamples 7/Warmup 1`，`ACtx.SetBytes` 换算吞吐，`SaveToJSON` 双路归档 `build/bench-tar.json`，`TAR_BENCH_FULL=1` 追加 `2000×512B`），`allocs` 硬预算 `baseline+2` 且 `bytes/op` 强一致（CI 红），`ns/op>1.5× baseline` 与 `MB/s<0.65×` 软告警；见 `core/docs/tar/CONTRACT.md §6` 与 `BASELINE.json` 单源
 
 ---
 
@@ -101,7 +108,16 @@ end;
 | test_compress_gzip | Gzip 格式 |
 | test_compress_lz4 | LZ4 算法 |
 | test_compress_streaming | 流式 API |
-| **合计** | **4 个测试目录** |
+| test_compress_zstd | Zstd 压缩/解压 |
+| test_compress_tar | Tar 容器（经 `compress.tar` 兼容转发，回归 `nextpas.core.tar` 全量） |
+| **合计** | **6 个测试目录** |
+
+## 7. 性能门禁（Tar 零拷贝/Move 单源/inline/吞吐）
+
+- **零拷贝证据**：`TTarReader.EntryDataSlice` 零拷贝视图不分配，`OpenEntryStream` 持有型 `IReader`（`FHold:TBytes` 防悬垂）经 `bytes.ops.CopyMemory` 单源 `Move`；`EntryData` 为 `SpanClone` 单源拷贝分流，热路径优先切片（实测 `extract-all 320µs vs extract-slice 236µs 约 -26%`）；`CombinePrefixName` 单次 `SetLength+两Move`，`pax` 单条记录 `StringToBytes` 一次 `Move`，`TarPutHeaderSlice/String` 零拷贝 `PByte` 切片单源
+- **Move 单源**：`bytes.ops` 为 `Move` 唯一审计入口（`CopyMemory/CopyStringToBuffer/SpanClone`），`reader/writer/common` 均委托单源，禁止 `Move(AValue[1])` 分散；`builder` 经 `IBytesBuilder` 几何扩容 inline `AppendBytes` 零拷贝 + `Finish ToBytes` 单次分配
+- **inline 不变量**：门面与小访问器 `inline`（`Default*Options/TarPadToBlock/StringField/CachedField/IsSafeTarEntryName/TarBuilder`），循环/SIMD/分配体外联（`TarComputeChecksum*/TarHeaderIsZeroOrValid/TarParseNumericField` 等，遵 `design-conventions` 防 I-Cache 膨胀）
+- **吞吐门禁**：`bench_tar` 7 项 `TBenchSuite` 口径（见 INV-8），`BASELINE.json` 单源固化，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 复现，`make regression` 比对 `allocs+2/bytes` 硬门与 `ns/MB/s` 软门；`make -C core/tests/nextpas.core.compress/test_compress_audit test` 为默认落地门（benchmark 编译证明，吞吐证据可选 `benchmark-run`）
 
 ---
 
@@ -112,3 +128,4 @@ end;
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
 | 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
+| 2026-09-02 | 1.3 | 补齐 Tar 契约：1.1 增 `compress.tar/zstd` 行、`§2 INV-5..8` 零拷贝/Move 单源/inline/吞吐不变量、`§7` 性能门禁与 `bench_tar BASELINE` 单源，守四件套与 `bytes.ops` 单源 | core-tar |
