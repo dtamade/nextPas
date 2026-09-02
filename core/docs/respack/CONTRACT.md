@@ -21,7 +21,7 @@ respack.writer        ← 条目列表 → blob（排序/去重/对齐/digest，
 respack.writer.layout ← 布局单源：排序/去重/对齐/槽位/总量（writer 与 writer.stream 共用；零拷贝 ResPackCmpPath via bytes.ops + Sort via collections.algorithms + AlignUp64 via mem.base，BucketCountFor via BytesNextCapacity，TResPackDedupBuckets MIN256 MAX65536，ResPackLayoutClear out-of-line）
 respack.writer.builder← 头/index/string 单源 builder（writer 与 writer.stream 共用，WrU*LE/BytesCopy/BytesZero 单源，registry 明示 + source-contract 门禁）
 respack.writer.stream ← 流式两遍分段零双驻留（复用 layout 首遍 + builder 头单源；头/index/string 合批 TBytes RAII SetLength → 槽间隙零填 WriteZeros inline 快道/4K 零页 → data 零拷贝 Move 分段 → digest；峰值 ~1×+头，try..finally ResPackLayoutClear 不丢资源）
-respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝 via mem.memory_map owner）
+respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝 via mem.memory_map owner；通用 Walk 单源 generic TWalkCtx<T>/EnsureWalkCapacity<T>/WalkPrePlain/Embed inline 零拷贝 + RESPACK_DIRSOURCE_LEGACY_LIMIT 64MiB 家族收口与 RESPACK_MAX_INPUT_BYTES 512MiB 同源）
 respack.embed         ← 嵌入工具链库：blob→.inc/.inc unit 纯内存生成（S4 已落地，阈值单源于 embed.limits 独立模块 + BytesCopy 单源零拷贝 + 非 inline 循环体守红线 + 通用组装单源收敛 writer.builder，纯内存可复用）
 respack.pas           ← 门面 re-export（纯转发，inline）
 embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed.limits 的纯转发门面，供其他载体直接复用）
@@ -58,8 +58,8 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 - **[INV-R8]** 路径必须通过 Go ValidPath 语义校验（含 `.` 根特例、反斜杠非分隔符）；
   writer 规范化输入，reader 校验存储形态
 - **[INV-R9]** digest 区存不透明 32 字节；算法由 `DigestFunc` 注入，header flags bit2-4 预留算法 ID（v1 仅 0=SHA-256，其余拒绝），本模块零加密依赖
-- **[INV-R10]** 内存上限：writer 声明输入 ≤ 512 MB；超限行为 = 显式 raise
-  （`EResPackTooLarge`），绝不静默产出损坏包
+- **[INV-R10]** 内存上限：writer 声明输入 ≤ 512 MB（`RESPACK_MAX_INPUT_BYTES`），dirsource 废弃便捷路径 ≤64MiB（`RESPACK_DIRSOURCE_LEGACY_LIMIT` 家族收口防 2×+头 OOM）；超限行为 = 显式 raise
+  （`EResPackTooLarge`，超阈引导流式mmap 1×+头），绝不静默产出损坏包
 
 ---
 

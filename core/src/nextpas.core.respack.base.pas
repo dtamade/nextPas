@@ -42,6 +42,8 @@ const
 
   { writer 输入上限（CONTRACT INV-R10）：超出显式 raise，绝不静默产出坏包 }
   RESPACK_MAX_INPUT_BYTES = SizeUInt(512) * 1024 * 1024;
+  { dirsource 废弃便捷路径限额（ResPackEntriesFromDir 小包便捷 ≤64MiB，峰值 ~2×  controlled；大包走流式mmap ~1×+头；与 512MiB 上限家族同源，单源常量防魔数分散，inline 零拷贝） }
+  RESPACK_DIRSOURCE_LEGACY_LIMIT = SizeUInt(64) * 1024 * 1024;
   { reader 熔断：entryCount 上界（INV-R10 防御深度，512M/40≈12.8M），SetLength 前硬熔断防恶意包 OOM }
   RESPACK_MAX_ENTRY_COUNT = RESPACK_MAX_INPUT_BYTES div RESPACK_ENTRY_SIZE;
 

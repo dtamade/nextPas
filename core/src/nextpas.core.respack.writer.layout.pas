@@ -11,7 +11,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.mem.arena.local;
 
 type
   TResPackSlot = record
@@ -42,6 +43,17 @@ type
     class function BucketCountFor(const ANeeded: SizeUInt): SizeUInt; static; inline;
   end;
 
+type
+  PSizeInt = ^SizeInt;
+  TResPackDistinct = record Off: UInt64; Size: UInt64; end;
+  PResPackDistinct = ^TResPackDistinct;
+
+{ Dedup arena 单源：writer.layout 与 reader.CheckDataOverlapON 共用，单 slab TLocalArena 零双堆 churn，
+  BucketCountFor via BytesNextCapacity inline 零拷贝，try..finally ResPackDedupDone 稳定释放。 }
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
 procedure ResPackComputeLayout(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; out ALayout: TResPackLayout);
@@ -52,7 +64,6 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
-  nextpas.core.mem.arena.local,
   nextpas.core.mem.base;
 
 const
@@ -88,7 +99,6 @@ type
     Lens: PWordArr;
   end;
   POrderSortData = ^TOrderSortData;
-  PSizeInt = ^SizeInt;
 
 function CompareOrder(const A, B: SizeUInt; Data: Pointer): SizeInt;
 var
@@ -102,6 +112,72 @@ end;
 function AlignUpU64(const AValue, AAlign: UInt64): UInt64; inline;
 begin
   Result := nextpas.core.mem.base.AlignUp64(AValue, AAlign);
+end;
+
+procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ABucketCount: SizeUInt); inline;
+var
+  NeedArena: SizeUInt;
+  Target: SizeUInt;
+  I: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ABucketCount := 0;
+  if AN = 0 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then
+    Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedArena) then
+    raise EResPackTooLarge.Create('respack: dedup arena size overflow');
+  AArena := TLocalArena.Create(NeedArena);
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) then
+    raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
+  for I := 0 to ABucketCount - 1 do ABucketsHead[I] := -1;
+  for I := 0 to AN - 1 do ASlotNext[I] := -1;
+end;
+
+procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
+var
+  NeedBuckets, NeedDistinct, Total: SizeUInt;
+  Target: SizeUInt;
+  I: SizeUInt;
+begin
+  AArena := nil;
+  ABucketsHead := nil;
+  ASlotNext := nil;
+  ADistinct := nil;
+  ABucketCount := 0;
+  if AN <= 1 then Exit;
+  Target := 0;
+  if not TryMulSizeUInt(AN, 2, Target) then Target := High(SizeUInt);
+  ABucketCount := TResPackDedupBuckets.BucketCountFor(Target);
+  if not TryMulSizeUInt(ABucketCount + AN, SizeUInt(SizeOf(SizeInt)), NeedBuckets) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  if not TryMulSizeUInt(AN, SizeUInt(SizeOf(TResPackDistinct)), NeedDistinct) then
+    raise EResPackTooLarge.Create('respack: overlap distinct size overflow');
+  if not TryAddSizeUInt(NeedBuckets, NeedDistinct, Total) then
+    raise EResPackTooLarge.Create('respack: overlap arena size overflow');
+  AArena := TLocalArena.Create(Total);
+  ABucketsHead := PSizeInt(AArena.Alloc(ABucketCount * SizeUInt(SizeOf(SizeInt))));
+  ASlotNext := PSizeInt(AArena.Alloc(AN * SizeUInt(SizeOf(SizeInt))));
+  ADistinct := PResPackDistinct(AArena.Alloc(AN * SizeUInt(SizeOf(TResPackDistinct))));
+  if (ABucketsHead = nil) or (ASlotNext = nil) or (ADistinct = nil) then
+    raise EResPackTooLarge.Create('respack: overlap arena alloc failed');
+  for I := 0 to ABucketCount - 1 do ABucketsHead[I] := -1;
+  for I := 0 to AN - 1 do ASlotNext[I] := -1;
+end;
+
+procedure ResPackDedupDone(var AArena: TLocalArena); inline;
+begin
+  if AArena <> nil then
+  begin
+    AArena.Free;
+    AArena := nil;
+  end;
 end;
 
 procedure ResPackLayoutClear(var ALayout: TResPackLayout);
@@ -130,7 +206,6 @@ var
   SlotNext: PSizeInt;
   Probe: SizeInt;
   DedupArena: TLocalArena;
-  NeedArena: SizeUInt;
   TotalInput: SizeUInt;
   StrLen: UInt64;
   StrTabBase, DataStart, Cur, EndData: UInt64;
@@ -138,7 +213,6 @@ var
   NeedFnv: Boolean;
   DigOff: UInt64;
   Total: UInt64;
-  Target: SizeUInt;
   SortData: TOrderSortData;
 begin
   ResPackLayoutClear(ALayout);
@@ -215,29 +289,13 @@ begin
   Cur := DataStart;
   if AOpts.Deduplicate then
   begin
-    Target := 0;
-    if not TryMulSizeUInt(N, 2, Target) then
-      Target := High(SizeUInt);
-    { 容量策略单源：TResPackDedupBuckets.BucketCountFor via BytesNextCapacity inline 零拷贝，MIN256 MAX65536 控热点，单源防漂移 }
-    BucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-    { 去重分桶：arena 单 slab 双数组复用，零双堆分配(原 BucketsHead 256KB+SlotNext N*8 双 SetLength 重复堆 churn)，
-      单次 TLocalArena 分配(BucketCount+N)*SizeOf(SizeInt)，两视图零拷贝 inline 索引，平均 0.5 槽/桶 O(1)期望，
-      10k 条目峰值 256KB+80KB 合一 336KB 单块，复用 arena 免重复堆分配，try..finally 稳定释放不丢资源。 }
+    { 单源 DedupInit：单 slab TLocalArena 复用 BucketCountFor+TryMulSizeUInt 预算，零双堆 churn，inline 零拷贝视图，try..finally 稳定释放 (bytes.ops/collections.algorithms/mem.base 单源收敛)。 }
     BucketsHead := nil;
     SlotNext := nil;
     DedupArena := nil;
-    if N > 0 then
-    begin
-      if not TryMulSizeUInt(BucketCount + N, SizeUInt(SizeOf(SizeInt)), NeedArena) then
-        raise EResPackTooLarge.Create('respack: dedup arena size overflow');
-      DedupArena := TLocalArena.Create(NeedArena);
-      try
-        BucketsHead := PSizeInt(DedupArena.Alloc(BucketCount * SizeUInt(SizeOf(SizeInt))));
-        SlotNext := PSizeInt(DedupArena.Alloc(N * SizeUInt(SizeOf(SizeInt))));
-        if (BucketsHead = nil) or (SlotNext = nil) then
-          raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
-        for I := 0 to BucketCount - 1 do BucketsHead[I] := -1;
-        for I := 0 to N - 1 do SlotNext[I] := -1;
+    ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
+    try
+      if N > 0 then
         for I := 0 to N - 1 do
         begin
           J := ALayout.Order[I];
@@ -276,9 +334,8 @@ begin
           end;
         end;
       finally
-        DedupArena.Free;
+        ResPackDedupDone(DedupArena);
       end;
-    end;
   end
   else if N > 0 then
     for I := 0 to N - 1 do

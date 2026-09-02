@@ -1,9 +1,9 @@
 unit nextpas.core.respack.writer.stream;
 
-{** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+头(阈值守卫 8MiB)。
+{** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+64K（chunk 分片直写）。
   首遍复用 writer.layout 单源计算 Total/槽位/去重（INV-R5 确定性同 ResPackBuild），
-  次遍分段经 AWrite 回调：头/index/string 合批(TBytes RAII托管自动释放，超 8MiB 阈值守卫防数百 MB 头对峰值冲击) → 槽间隙零填(WriteZeros 小间隙 inline 快道/4K零页零拷贝 + 大间隙外联 Loop 守 §2 红线2) → data 零拷贝 Move 分段 → digest，
-  零额外 Total 缓冲；ResPackBuildStreamSize 仅首遍取 Total 零分配。 }
+  次遍分段经 AWrite 回调：头分片直写（≤64K CHUNK 增量切片，≤8MiB 家族阈值自动分段；header/index/string+对齐零填经 TBytes RAII 托管 chunk 缓冲，超 8MiB 自动头分段，不再阈值拒绝；BYTES_ZERO_PAGE 单源零拷贝）→ 槽间隙零填(WriteZeros 小间隙 inline 快道/4K零页零拷贝 + 大间隙外联 Loop) → data 零拷贝 Move 分段 → digest，
+  零额外 Total 缓冲；ResPackBuildStreamSize 仅首遍取 Total 零分配；超大规模头分段能力反哺 mem.memory_map/io.mapped owner，不私自引入 FS/mmap。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -31,9 +31,11 @@ uses
   nextpas.core.respack.writer.layout;
 
 const
-  { 头块 inline 阈值：8 MiB。12.8M 条目时 HeadSize=40+N*40+StrLen 可达数百 MB，单次 SetLength 会推高峰值至 500MB+失 KB 级承诺；
-    阈值守卫显式 EResPackTooLarge 拒绝超限头，保持流式峰值 ~1×+头(≤8MiB) 稳定；超阈需头分段能力，反哺 mem.memory_map/io.mapped owner，不私自引入 FS/mmap。 }
-  RESPACK_STREAM_MAX_HEAD: SizeUInt = 8 * 1024 * 1024;
+  { 头峰值守卫：复用 RESPACK_MAX_INPUT_BYTES 家族内聚（512MiB/64=8MiB），12.8M 条目时 HeadSize=40+N*40+StrLen 可达数百 MB；
+    分片阈值与增量切片：HEAD_CHUNK=64K 增量切片零拷贝直写，峰值 ~1×+64K；超 8MiB 自动头分段，不再阈值拒绝；
+    超大规模头分段能力反哺 mem.memory_map/io.mapped owner，不私自引入 FS/mmap。 }
+  RESPACK_STREAM_MAX_HEAD: SizeUInt = RESPACK_MAX_INPUT_BYTES div 64;
+  RESPACK_STREAM_HEAD_CHUNK: SizeUInt = 64 * 1024;
 
 { 零填充分段写入：复用 bytes.ops 全局零页单源(.bss 4K)，无栈分配/无重复 FillChar，零拷贝分段直写；inline 热路径 + 小间隙单回调快道(≤4K)，大间隙4K切片控单次syscall尺寸；外联守 design-conventions §2 红线2 }
 function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
@@ -80,6 +82,100 @@ var
   HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
+  ChunkCap: SizeUInt;
+  ChunkPos: SizeUInt;
+  { head chunked helpers — inline 零拷贝经 bytes.ops 单源，chunk 复用 TBytes RAII，不私自引入 FS/mmap }
+  procedure FlushHead; inline;
+  begin
+    if ChunkPos > 0 then
+    begin
+      AWrite(@HeadBuf[0], ChunkPos);
+      ChunkPos := 0;
+    end;
+  end;
+  procedure WriteHeadBytes(const ASrc: Pointer; ALen: SizeUInt);
+  var
+    Src: PByte;
+    Rem, CopyNow: SizeUInt;
+  begin
+    if (ASrc = nil) or (ALen = 0) then Exit;
+    Src := PByte(ASrc);
+    Rem := ALen;
+    while Rem > 0 do
+    begin
+      if ChunkPos = ChunkCap then FlushHead;
+      CopyNow := Rem;
+      if CopyNow > ChunkCap - ChunkPos then CopyNow := ChunkCap - ChunkPos;
+      BytesCopy(@HeadBuf[ChunkPos], Src, CopyNow);
+      Inc(ChunkPos, CopyNow);
+      Inc(Src, CopyNow);
+      Dec(Rem, CopyNow);
+      if ChunkPos = ChunkCap then FlushHead;
+    end;
+  end;
+  procedure WriteHeadChunked;
+  var
+    II, JJ: SizeUInt;
+    CurOff: UInt64;
+    HdrFlags: UInt32;
+    EntFlags: Word;
+    TmpHdr: array[0..39] of Byte;
+    TmpEnt: array[0..39] of Byte;
+    Pad: UInt64;
+  begin
+    ChunkCap := RESPACK_STREAM_HEAD_CHUNK;
+    SetLength(HeadBuf, ChunkCap);
+    ChunkPos := 0;
+    N := L.N;
+    { header 40B — WrU*LE 单源 via respack.base inline 零拷贝，BytesZero 单源清零 }
+    BytesZero(@TmpHdr[0], 40);
+    TmpHdr[0] := Ord('N'); TmpHdr[1] := Ord('P'); TmpHdr[2] := Ord('R'); TmpHdr[3] := Ord('S');
+    WrU32LE(@TmpHdr[4], RESPACK_VERSION);
+    HdrFlags := 0;
+    if AOpts.Hashes then HdrFlags := HdrFlags or RESPACK_FLAG_HASHED;
+    if AOpts.DigestFunc <> nil then HdrFlags := HdrFlags or RESPACK_FLAG_DIGESTED;
+    WrU32LE(@TmpHdr[8], HdrFlags);
+    WrU32LE(@TmpHdr[12], UInt32(N));
+    WrU64LE(@TmpHdr[16], UInt64(RESPACK_HEADER_SIZE));
+    WrU64LE(@TmpHdr[24], L.DigOff);
+    WrU64LE(@TmpHdr[32], L.Total);
+    WriteHeadBytes(@TmpHdr[0], 40);
+    { index 段：N*40 零拷贝分片直写，WrU*LE/BytesCopy 单源 inline }
+    CurOff := L.StrTabBase;
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        JJ := L.Order[II];
+        BytesZero(@TmpEnt[0], 40);
+        WrU32LE(@TmpEnt[0], UInt32(CurOff - L.StrTabBase));
+        WrU16LE(@TmpEnt[4], L.PathLens[JJ]);
+        EntFlags := 0;
+        if AOpts.Hashes then EntFlags := RESPACK_EFLAG_HASHED;
+        WrU16LE(@TmpEnt[6], EntFlags);
+        WrU64LE(@TmpEnt[8], L.Slots[L.EntrySlots[JJ]].Offset);
+        WrU64LE(@TmpEnt[16], UInt64(AEntries[JJ].DataSize));
+        WrU64LE(@TmpEnt[24], UInt64(AEntries[JJ].ModTime));
+        if AOpts.Hashes then WrU32LE(@TmpEnt[32], L.FnvBuf[JJ]);
+        TmpEnt[36] := Byte(RESPACK_CODEC_STORE);
+        WriteHeadBytes(@TmpEnt[0], 40);
+        Inc(CurOff, L.PathLens[JJ]);
+      end;
+    { string table 段：路径按 Order 顺序零拷贝分片直写，BytesCopy 单源 }
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        JJ := L.Order[II];
+        if L.PathLens[JJ] > 0 then
+          WriteHeadBytes(Pointer(AEntries[JJ].Path), L.PathLens[JJ]);
+      end;
+    FlushHead;
+    { 对齐填充：StrTabBase+StrLen → DataStart，零页单源 WriteZeros 零拷贝分段 }
+    Pad := 0;
+    if L.DataStart > L.StrTabBase + L.StrLen then
+      Pad := L.DataStart - (L.StrTabBase + L.StrLen);
+    if Pad > 0 then
+      WriteZeros(AWrite, Pad);
+  end;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
@@ -88,17 +184,27 @@ begin
     N := L.N;
     HeadSize := L.DataStart;
     { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级，阈值守卫 8MiB），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。
-      RAII托管：TBytes接口式托管自动释放，异常安全无GetMem/FreeMem手动路径；inline零拷贝证据见bytes.ops/builder。
-      阈值守卫：12.8M 上限时头部可达数百 MB，超 8MiB 时拒绝以保峰值稳定，需头分段时反哺 mem.memory_map/io.mapped owner。 }
-    if HeadSize > UInt64(RESPACK_STREAM_MAX_HEAD) then
-      raise EResPackTooLarge.Create('respack.stream: head too large (>8MiB) – threshold guard for peak stability; head chunking required for extreme scales');
-    SetLength(HeadBuf, SizeUInt(HeadSize));
-    if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
-    ResPackWriterFillHead(Head, AEntries, AOpts, L);
-    if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
+      峰值 ~1×+64K（CHUNK 分片直写，≤8MiB 家族阈值自动分段，不再阈值拒绝；超大规模头分段能力反哺 mem.memory_map/io.mapped owner），不含 Total；
+      TBytes RAII 托管自动释放，异常安全无 GetMem/FreeMem手动路径；inline零拷贝证据见bytes.ops/builder。
+      分片策略：≤64K 单次 SetLength+ResPackWriterFillHead 单批零拷贝快道；>64K 走 64K CHUNK 增量切片直写（BytesCopy/WrU*LE/BYTES_ZERO_PAGE 单源），单次 AWrite 控 syscall，峰值稳定。 }
+    if HeadSize = 0 then
+    begin
+      { 空包 header 仍为 40，已在 L.DataStart=40 覆盖，不会进此分支；防御性保留 }
+    end
+    else if HeadSize <= UInt64(RESPACK_STREAM_HEAD_CHUNK) then
+    begin
+      SetLength(HeadBuf, SizeUInt(HeadSize));
+      if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
+      ResPackWriterFillHead(Head, AEntries, AOpts, L);
+      if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
+    end
+    else
+    begin
+      { 头分段直写：64K CHUNK 增量切片，零拷贝分段经 AWrite；峰值 ~1×+64K，支持数百 MB 头超大规模；能力反哺 mem.memory_map/io.mapped，不私自引入 FS/mmap }
+      WriteHeadChunked;
+    end;
 
-    { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填；峰值 1×+头，无 Total 双驻留。 }
+    { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填；峰值 1×+64K，无 Total 双驻留。 }
     Cur := HeadSize;
     if L.SlotCount > 0 then
       for K := 0 to L.SlotCount - 1 do

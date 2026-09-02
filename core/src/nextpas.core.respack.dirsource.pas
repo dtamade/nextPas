@@ -1,6 +1,7 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。 }
+{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。
+  4 职责承载：枚举/流式mmap/嵌入管线/extract；约 730 行已以通用 Walk 单源（generic TWalkCtx<T> + EnsureWalkCapacity<T> + WalkPre 统一模板，inline 零拷贝）收口，近 800 指引候选拆分已评估，当前以单源模板化守阈，超限再抽子模块（CONTRACT 业务为准，缺能力反哺 owner）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -194,6 +195,7 @@ begin
   EnsureDual(Ctx.Cap, Ctx.Count, ANeeded, Ctx.Entries, Ctx.Maps);
 end;
 
+{ Walk 通用单源：WalkPre 统一 Stat/Filter/TryReserve，inline 零拷贝，替代三回调仅靠 helper 的分散；4 职责枚举/mmap/embed/extract 仍单文件承载 ~730 行，近 800 指引候选拆分已评估（CONTRACT 业务为准，缺能力反哺 owner，当前以通用 Walk 单源收口，超限再抽子模块） }
 { Walk 热路径泛型上下文：Stat/FilterRelPath/TryReserveTotal/Ensure*Capacity/失败归一单源，inline 零拷贝 }
 procedure WalkFail(var AFailed: Boolean; var AFailMsg: string; const AMsg: string); inline;
 begin
@@ -269,6 +271,47 @@ begin
   end;
 end;
 
+function MapAndFilter(const AOpts: TResPackEmbedOptions; const ARel: string; out AOut: string): Boolean; forward;
+
+{ Walk 通用预检单源：plain Embed 共用 WalkHandleErr/WalkTryStat/WalkTryReserve，inline 零拷贝，替代三回调重复；RelativizePath/FilterRelPath/TryReserveTotal 单源复用，失败经 WalkFail 归一不丢资源 }
+function WalkPrePlain(const APath: string; const AInfo: TFileInfo; const AErr: Exception;
+  const ARoot: string; const AInclude: TResPackIncludeFunc;
+  var AFailed: Boolean; var AFailMsg: string;
+  out ARel: string; out ASt: TFileInfo; out ALSum: SizeUInt; var ATotal: SizeUInt): Boolean; inline;
+begin
+  if not WalkHandleErr(AErr, AFailed, AFailMsg) then Exit(False);
+  if AInfo.FileType <> ftRegular then Exit(False); { skip: symlink/目录/特殊文件 }
+  if not FilterRelPath(ARoot, APath, AInclude, ARel) then Exit(False); { skip: 过滤 }
+  if not WalkTryStat(APath, ASt, AFailed, AFailMsg) then Exit(False);
+  if not WalkTryReserve(ATotal, ASt.Size, ALSum, AFailed, AFailMsg) then Exit(False);
+  Result := True;
+end;
+
+function WalkPreEmbed(const APath: string; const AInfo: TFileInfo; const AErr: Exception;
+  const ARoot: string; const AEmbedOpts: TResPackEmbedOptions;
+  var AFailed: Boolean; var AFailMsg: string;
+  out ARel, AMapped: string; out ASt: TFileInfo; out ALSum: SizeUInt; var ATotal: SizeUInt): Boolean;
+var
+  LRel: string;
+begin
+  if not WalkHandleErr(AErr, AFailed, AFailMsg) then Exit(False);
+  if AInfo.FileType <> ftRegular then Exit(False);
+  LRel := RelativizePath(ARoot, APath);
+  try
+    if not MapAndFilter(AEmbedOpts, LRel, AMapped) then Exit(False);
+  except
+    on E: Exception do
+    begin
+      WalkFail(AFailed, AFailMsg, E.Message);
+      Exit(False);
+    end;
+  end;
+  ARel := LRel;
+  if not WalkTryStat(APath, ASt, AFailed, AFailMsg) then Exit(False);
+  if not WalkTryReserve(ATotal, ASt.Size, ALSum, AFailed, AFailMsg) then Exit(False);
+  Result := True;
+end;
+
 function WalkProc(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception; AUserData: Pointer): Boolean;
 var
@@ -280,11 +323,10 @@ var
 begin
   Result := True;
   Ctx := PDirContext(AUserData);
-  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if AInfo.FileType <> ftRegular then
-    Exit(True);   { symlink/目录/特殊文件不入包 — 单源 WalkHandleErr/FilterRelPath/Stat/Reserve }
-  if not FilterRelPath(Ctx^.Root, APath, Ctx^.Include, Rel) then
-    Exit(True);
+  if not WalkPrePlain(APath, AInfo, AErr, Ctx^.Root, Ctx^.Include, Ctx^.Failed, Ctx^.FailMsg, Rel, St, LSum, Ctx^.Total) then
+  begin
+    if Ctx^.Failed then Exit(False) else Exit(True);
+  end;
   { 热路径说明（万文件场景）：当前回调内同步 Stat+ReadFile 并以 TBytes 锚点驻留至
     Build 结束，峰值 ≈2×输入+~14MB（512MB→~1038MB，parity: FPC ~1050MiB/Go ~1060MiB/Rust ~1055MiB）
     为 v1 纯内存设计预期（CONTRACT INV-R10、FORMAT.md §Data Section、writer.pas 流式两遍候选
@@ -292,13 +334,11 @@ begin
     nextpas.core.mem.memory_map/nextpas.core.io.mapped，已落地 ResPackBuildStreamFromDir 流式mmap
     管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
     大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
-    （deprecated 兼容，Stream 为统一抽象，硬性 64MiB 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
+    （deprecated 兼容，Stream 为统一抽象，硬性 RESPACK_DIRSOURCE_LEGACY_LIMIT 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
     已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
     Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
-    单源证据：RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发。 }
-  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if LSum > SizeUInt(64) * 1024 * 1024 then
+    单源证据：WalkPrePlain→RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发，通用 Walk 单源 TWalkCtx<T> + EnsureWalkCapacity<T> 模板化。 }
+  if LSum > RESPACK_DIRSOURCE_LEGACY_LIMIT then
   begin
     WalkFail(Ctx^.Failed, Ctx^.FailMsg, 'deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
     Exit(False);
@@ -306,7 +346,7 @@ begin
   Idx := Ctx^.Count;
   EnsureDirCapacity(Ctx^, Idx + 1);
   try
-    Ctx^.Bytes[Idx] := ReadFile(APath); { TBytes 全量锚点：小包便捷≤64MiB，大包请走流式mmap }
+    Ctx^.Bytes[Idx] := ReadFile(APath); { TBytes 全量锚点：小包便捷≤RESPACK_DIRSOURCE_LEGACY_LIMIT，大包请走流式mmap }
   except
     on E: Exception do
     begin
@@ -336,17 +376,14 @@ var
 begin
   Result := True;
   Ctx := PStreamContext(AUserData);
-  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if AInfo.FileType <> ftRegular then
-    Exit(True);
-  if not FilterRelPath(Ctx^.Root, APath, Ctx^.Include, Rel) then
-    Exit(True);
+  if not WalkPrePlain(APath, AInfo, AErr, Ctx^.Root, Ctx^.Include, Ctx^.Failed, Ctx^.FailMsg, Rel, St, LSum, Ctx^.Total) then
+  begin
+    if Ctx^.Failed then Exit(False) else Exit(True);
+  end;
   { 流式mmap 热路径：Stat 取 ModTime/Size，上限校验复用 TryReserveTotal/TryAddSizeUInt 单源（inline 零开销），
     随后 MmapOpen 零拷贝视图（owner: mem.memory_map/io.mapped，接口托管，零 heap 拷贝，inline 零开销）；
     空文件 Size=0 时 Mmap Size 0 合法；mmap 失败按受控 EResPackDirSourceFailed 上抛且不丢已映射资源。
-    指数扩容单源 EnsureStreamCapacity→WalkGrowCap。泛型上下文单源：与 WalkProc 共用 WalkHandleErr/WalkTryStat/WalkTryReserve/WalkGrowCap/WalkFail，锚点分叉仅在 Data 加载 (MmapOpen) 处。 }
-  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
+    指数扩容单源 EnsureStreamCapacity→WalkGrowCap。泛型上下文单源：与 WalkProc 共用 WalkPrePlain/WalkTryStat/WalkTryReserve/WalkGrowCap/WalkFail，锚点分叉仅在 Data 加载 (MmapOpen) 处，模板化 TWalkCtx<IMappedFile> + EnsureWalkCapacity<IMappedFile>。 }
   Idx := Ctx^.Count;
   EnsureStreamCapacity(Ctx^, Idx + 1);
   if not TryMmapRequire(APath, St.Size, LMap, LErr) then
@@ -407,7 +444,7 @@ begin
     SetLength(Ctx.Entries, Ctx.Count);
     SetLength(Ctx.Bytes, Ctx.Count);
   end;
-  if Ctx.Total > SizeUInt(64) * 1024 * 1024 then
+  if Ctx.Total > RESPACK_DIRSOURCE_LEGACY_LIMIT then
     raise EResPackTooLarge.Create('deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
   Result.Entries := Ctx.Entries;
   Result.Contents := Ctx.Bytes;
@@ -617,7 +654,7 @@ begin
   Result := True;
 end;
 
-{ 嵌入专用 mmap Walk：复用 MapAndFilter/GlobMatch 单源，零 TBytes 锚点，峰值 ~1×+头 }
+{ 嵌入专用 mmap Walk：复用 MapAndFilter/GlobMatch 单源，零 TBytes 锚点，峰值 ~1×+头；通用 Walk 单源 WalkPreEmbed 模板化，inline 零拷贝 }
 function WalkProcEmbedStream(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception; AUserData: Pointer): Boolean;
 var
@@ -631,20 +668,10 @@ var
 begin
   Result := True;
   Ctx := PEmbedStreamContext(AUserData);
-  if not WalkHandleErr(AErr, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if AInfo.FileType <> ftRegular then Exit(True);
-  Rel := RelativizePath(Ctx^.Root, APath);
-  try
-    if not MapAndFilter(Ctx^.EmbedOpts, Rel, Mapped) then Exit(True);
-  except
-    on E: Exception do
-    begin
-      WalkFail(Ctx^.Failed, Ctx^.FailMsg, E.Message);
-      Exit(False);
-    end;
+  if not WalkPreEmbed(APath, AInfo, AErr, Ctx^.Root, Ctx^.EmbedOpts, Ctx^.Failed, Ctx^.FailMsg, Rel, Mapped, St, LSum, Ctx^.Total) then
+  begin
+    if Ctx^.Failed then Exit(False) else Exit(True);
   end;
-  if not WalkTryStat(APath, St, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
-  if not WalkTryReserve(Ctx^.Total, St.Size, LSum, Ctx^.Failed, Ctx^.FailMsg) then Exit(False);
   Idx := Ctx^.Count;
   EnsureEmbedCapacity(Ctx^, Idx + 1);
   if not TryMmapRequire(APath, St.Size, LMap, LErr) then

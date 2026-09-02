@@ -67,11 +67,15 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
+  nextpas.core.mem.arena.local,
   nextpas.core.respack.writer.layout;
 
 type
   TResPackEntries = array of TResPackEntry;
-  TDistinct = record Off: UInt64; Size: UInt64; end;
+  PResPackEntry = ^TResPackEntry;
+  TDistinct = TResPackDistinct;
+  PDistinct = PResPackDistinct;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -220,15 +224,18 @@ begin
     raise EResPackCorrupted.CreateStep(4, 'buffer truncated versus blobTotal');
 end;
 
-{ Data overlap — O(n) hash, CONTRACT §6; distinct intervals monotonic. }
-procedure CheckDataOverlapON(const ACached: array of TResPackEntry;
+{ Data overlap — O(n) hash, CONTRACT §6; distinct intervals monotonic.
+  单 slab TLocalArena via writer.layout ResPackOverlapInit 单源，零三堆分配(原 3×SetLength+FillChar 重复堆 churn)，
+  单次 (BucketCount+N)*SizeInt+N*Distinct 单块 inline 桶索引，try..finally ResPackDedupDone 稳定释放，bytes.ops 零拷贝。 }
+procedure CheckDataOverlapON(const ACachedPtr: PResPackEntry; const ACount: SizeUInt;
   const AStrTabEnd: UInt64);
 var
   I: SizeUInt;
   BucketCount: SizeUInt;
-  BucketsHead: array of SizeInt;
-  SlotNext: array of SizeInt;
-  Distinct: array of TDistinct;
+  BucketsHead: PSizeInt;
+  SlotNext: PSizeInt;
+  Distinct: PResPackDistinct;
+  OverlapArena: TLocalArena;
   DistinctCount: SizeUInt;
   LastEnd: UInt64;
   BucketIdx: SizeUInt;
@@ -236,21 +243,18 @@ var
   IsDup: Boolean;
   E: TResPackEntry;
 begin
-  if Length(ACached) <= 1 then Exit;
-  BucketCount := TResPackDedupBuckets.BucketCountFor(SizeUInt(Length(ACached)) * 2);
-  SetLength(BucketsHead, BucketCount);
-  SetLength(SlotNext, Length(ACached));
-  SetLength(Distinct, Length(ACached));
+  if ACount <= 1 then Exit;
+  OverlapArena := nil;
+  BucketsHead := nil;
+  SlotNext := nil;
+  Distinct := nil;
+  ResPackOverlapInit(ACount, OverlapArena, BucketsHead, SlotNext, Distinct, BucketCount);
   try
-    if BucketCount > 0 then
-      FillChar(BucketsHead[0], BucketCount * SizeOf(SizeInt), $FF);
-    if Length(SlotNext) > 0 then
-      FillChar(SlotNext[0], Length(SlotNext) * SizeOf(SizeInt), $FF);
     DistinctCount := 0;
     LastEnd := AStrTabEnd;
-    for I := 0 to SizeUInt(High(ACached)) do
+    for I := 0 to ACount - 1 do
     begin
-      E := ACached[I];
+      E := ACachedPtr[I];
       if E.Size = 0 then Continue;
       BucketIdx := (SizeUInt(E.DataOffset) xor SizeUInt(E.DataOffset shr 32) xor SizeUInt(E.Size)) and (BucketCount - 1);
       Probe := BucketsHead[BucketIdx];
@@ -272,31 +276,39 @@ begin
       LastEnd := E.DataOffset + E.Size;
     end;
   finally
-    SetLength(BucketsHead, 0);
-    SetLength(SlotNext, 0);
-    SetLength(Distinct, 0);
+    ResPackDedupDone(OverlapArena);
   end;
 end;
 
-procedure GuardStep5Entries(var ARes: TResPack; var ACached: TResPackEntries;
+procedure GuardStep5Entries(var ARes: TResPack; out ACachedArena: TLocalArena; out ACachedPtr: PResPackEntry; out ACount: SizeUInt;
   const AIdxBase: PByte; out AMinData: UInt64; out AMaxDataEnd: UInt64;
   out AStrLen: UInt64; const AHdrFlags: UInt32; out AStrTabEnd: UInt64);
 var
   I: SizeUInt;
   E: TResPackEntry;
+  NeedBytes: SizeUInt;
 begin
   AMinData := ARes.FHdr.BlobTotal;
   AMaxDataEnd := 0;
   AStrLen := 0;
-  if ARes.Count = 0 then
+  ACachedArena := nil;
+  ACachedPtr := nil;
+  ACount := ARes.Count;
+  if ACount = 0 then
   begin
     AStrTabEnd := ARes.FStrTabBase;
     Exit;
   end;
-  if UInt64(ARes.Count) > RESPACK_MAX_ENTRY_COUNT then
+  if UInt64(ACount) > RESPACK_MAX_ENTRY_COUNT then
     raise EResPackCorrupted.CreateStep(3, 'entry count exceeds limit');
-  SetLength(ACached, ARes.Count);
-  for I := 0 to ARes.Count - 1 do
+  { Arena 预算：单 slab TLocalArena 承载全量 entry 元数据，TryMulSizeUInt 预算防恶意包 RESPACK_MAX_ENTRY_COUNT 时堆 churn/回绕，BytesCopy 单源复用，inline 零拷贝视图，try..finally 由 Open 释放。 }
+  if not TryMulSizeUInt(ACount, SizeUInt(SizeOf(TResPackEntry)), NeedBytes) then
+    raise EResPackTooLarge.Create('respack: entry table size overflow');
+  ACachedArena := TLocalArena.Create(NeedBytes);
+  ACachedPtr := PResPackEntry(ACachedArena.Alloc(NeedBytes));
+  if ACachedPtr = nil then
+    raise EResPackTooLarge.Create('respack: entry table arena alloc failed');
+  for I := 0 to ACount - 1 do
   begin
     ARes.DecodeWire(I, E);
     if (E.Flags and not Word(RESPACK_EFLAG_KNOWN)) <> 0 then
@@ -324,11 +336,12 @@ begin
         raise EResPackCorrupted.CreateStep(5, 'data range overflow');
       if E.DataOffset + E.Size > AMaxDataEnd then AMaxDataEnd := E.DataOffset + E.Size;
     end;
-    ACached[I] := E;
+    { 零拷贝单源：bytes.ops.BytesCopy inline 单 Move 复用，替代直接赋值隐式拷贝，单源防漂移。 }
+    BytesCopy(@ACachedPtr[I], @E, SizeUInt(SizeOf(TResPackEntry)));
   end;
   if (AHdrFlags and RESPACK_FLAG_HASHED) <> 0 then
-    for I := 0 to ARes.Count - 1 do
-      if (ACached[I].Flags and RESPACK_EFLAG_HASHED) = 0 then
+    for I := 0 to ACount - 1 do
+      if (ACachedPtr[I].Flags and RESPACK_EFLAG_HASHED) = 0 then
         raise EResPackCorrupted.CreateStep(5, 'header hash flag inconsistent');
   if ARes.FStrTabBase > High(UInt64) - AStrLen then
     raise EResPackCorrupted.CreateStep(5, 'string table overflow');
@@ -338,23 +351,23 @@ begin
   AStrTabEnd := (AStrTabEnd + (RESPACK_DATA_ALIGN - 1)) and not UInt64(RESPACK_DATA_ALIGN - 1);
   if AMinData < ARes.FStrTabBase then
     raise EResPackCorrupted.CreateStep(5, 'data overlaps strtab');
-  for I := 0 to ARes.Count - 1 do
-    if ACached[I].DataOffset < AStrTabEnd then
+  for I := 0 to ACount - 1 do
+    if ACachedPtr[I].DataOffset < AStrTabEnd then
       raise EResPackCorrupted.CreateStep(5, 'data overlaps header/index/strtab');
-  CheckDataOverlapON(ACached, AStrTabEnd);
+  CheckDataOverlapON(ACachedPtr, ACount, AStrTabEnd);
 end;
 
-procedure GuardStep6Path(const ARes: TResPack; const ACached: array of TResPackEntry;
+procedure GuardStep6Path(const ARes: TResPack; const ACachedPtr: PResPackEntry; const ACount: SizeUInt;
   const AMinData: UInt64);
 var
   I: SizeUInt;
   PathEnd: UInt64;
 begin
-  if ARes.Count = 0 then Exit;
-  for I := 0 to ARes.Count - 1 do
+  if ACount = 0 then Exit;
+  for I := 0 to ACount - 1 do
   begin
-    PathEnd := UInt64(ACached[I].PathOffset) + UInt64(ACached[I].PathLen);
-    if PathEnd < UInt64(ACached[I].PathOffset) then
+    PathEnd := UInt64(ACachedPtr[I].PathOffset) + UInt64(ACachedPtr[I].PathLen);
+    if PathEnd < UInt64(ACachedPtr[I].PathOffset) then
       raise EResPackCorrupted.CreateStep(6, 'path range overflow');
     if PathEnd > AMinData - ARes.FStrTabBase then
       raise EResPackCorrupted.CreateStep(6, 'path beyond string table bound');
@@ -363,16 +376,16 @@ begin
   end;
 end;
 
-procedure GuardStep7Order(const ARes: TResPack; const ACached: array of TResPackEntry);
+procedure GuardStep7Order(const ARes: TResPack; const ACachedPtr: PResPackEntry; const ACount: SizeUInt); inline;
 var
   I: SizeUInt;
 begin
-  if ARes.Count = 0 then Exit;
-  for I := 0 to ARes.Count - 1 do
+  if ACount = 0 then Exit;
+  for I := 0 to ACount - 1 do
   begin
-    if (I > 0) and (ARes.CompareCachedEntries(ACached[I - 1], ACached[I]) >= 0) then
+    if (I > 0) and (ARes.CompareCachedEntries(ACachedPtr[I - 1], ACachedPtr[I]) >= 0) then
       raise EResPackCorrupted.CreateStep(7, 'index not strictly sorted or duplicate path');
-    if not ResPackValidSpan(ARes.StoredPathSpanOf(ACached[I]), True) then
+    if not ResPackValidSpan(ARes.StoredPathSpanOf(ACachedPtr[I]), True) then
       raise EResPackCorrupted.CreateStep(7, 'non-canonical path stored');
   end;
 end;
@@ -409,7 +422,9 @@ var
   MinData, MaxDataEnd, StrTabEnd, StrLen: UInt64;
   HdrFlags: UInt32;
   IdxBase: PByte;
-  Cached: TResPackEntries;
+  CachedArena: TLocalArena;
+  CachedPtr: PResPackEntry;
+  CachedCount: SizeUInt;
 begin
   Result.Close;
   GuardStep1(AData, ASize);
@@ -424,18 +439,26 @@ begin
   MaxDataEnd := 0;
   StrLen := 0;
   StrTabEnd := Result.FStrTabBase;
-  Cached := nil;
+  CachedArena := nil;
+  CachedPtr := nil;
+  CachedCount := 0;
   try
-    GuardStep5Entries(Result, Cached, IdxBase, MinData, MaxDataEnd, StrLen, HdrFlags, StrTabEnd);
-    GuardStep6Path(Result, Cached, MinData);
-    GuardStep7Order(Result, Cached);
+    GuardStep5Entries(Result, CachedArena, CachedPtr, CachedCount, IdxBase, MinData, MaxDataEnd, StrLen, HdrFlags, StrTabEnd);
+    GuardStep6Path(Result, CachedPtr, CachedCount, MinData);
+    GuardStep7Order(Result, CachedPtr, CachedCount);
     GuardStep8Digest(Result, StrLen, MaxDataEnd);
     if (Result.FHdr.Flags and RESPACK_FLAG_DIGESTED) <> 0 then
       Result.FDigests := AData + SizeUInt(Result.FHdr.DigestOffset)
     else
       Result.FDigests := nil;
   finally
-    SetLength(Cached, 0);
+    if CachedArena <> nil then
+    begin
+      CachedArena.Free;
+      CachedArena := nil;
+    end;
+    CachedPtr := nil;
+    CachedCount := 0;
   end;
   Result.FOpen := True;
 end;
