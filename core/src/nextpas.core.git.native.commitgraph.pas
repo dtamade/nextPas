@@ -48,7 +48,7 @@ type
     FCommitDataOff: SizeInt;
     FExtraOff: SizeInt;
     FNumExtra: Cardinal;
-    function BE32At(APos: SizeInt): Cardinal;
+    function BE32At(APos: SizeInt): Cardinal; inline;
     function CompareOidAt(AIdx: Cardinal; const AOid: TGitOid): Integer;
     function FindPos(const AOid: TGitOid): Integer;
     procedure InitFromData(const AData: TBytes);
@@ -72,6 +72,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.binary,
   nextpas.core.bytes.ops,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -158,13 +159,10 @@ begin
   Result := H.SumBytes;
 end;
 
-function TCommitGraph.BE32At(APos: SizeInt): Cardinal;
+function TCommitGraph.BE32At(APos: SizeInt): Cardinal; inline;
 begin
-  Result :=
-    (Cardinal(FData[APos]) shl 24) or
-    (Cardinal(FData[APos + 1]) shl 16) or
-    (Cardinal(FData[APos + 2]) shl 8) or
-    Cardinal(FData[APos + 3]);
+  // perf: inline + zero-copy PByte single-source via bytes.binary ReadUInt32BE (no TBytes copy, 4B BE single source), FData is live TBytes backing store
+  Result := ReadUInt32BE(PByte(@FData[APos]));
 end;
 
 function OidRawCompare(const AA, AB: TGitOid): Integer; inline;

@@ -27,9 +27,12 @@ const
   GitOidHexLen = 40;
   GitOidRawLen = 20;
 
-function GitOidFromHex(const AHex: string): TGitOid; inline;
-function GitOidToHex(const AOid: TGitOid): string; inline;
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidFromHex(const AHex: string): TGitOid;
+  { not inline: HexDecode alloc+table lookup (20 bytes), loop exceeds inline I-Cache benefit }
+function GitOidToHex(const AOid: TGitOid): string;
+  { not inline: HexEncode + 20B copy alloc, exceeds inline benefit }
+function GitOidIsValidHex(const AHex: string): Boolean;
+  { not inline: 40× HexVal loop exceeds inline benefit (red line 2) }
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
   { not inline: branch+alloc+raise, cold path, exceeds inline benefit }
@@ -45,12 +48,11 @@ implementation
 uses
   nextpas.core.base.utils;
 
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidIsValidHex(const AHex: string): Boolean;
 var
   I: Integer;
 begin
-  { perf: inline + zero-copy single-source HexVal scan (40× inline table lookup via encoding.hex.HexVal, no alloc);
-    hot per-commit/refs path; single-source validation reused by FromHex }
+  { perf: not inline per design-conventions red line 2 (40× loop exceeds inline I-Cache); zero-copy single-source HexVal scan (40× table lookup via encoding.hex.HexVal, no alloc), single-source reused by FromHex }
   if Length(AHex) <> GitOidHexLen then
     Exit(False);
   for I := 1 to GitOidHexLen do
@@ -59,26 +61,26 @@ begin
   Result := True;
 end;
 
-function GitOidFromHex(const AHex: string): TGitOid; inline;
+function GitOidFromHex(const AHex: string): TGitOid;
 var
   LBytes: TBytes;
 begin
-  { perf: inline hot path (refs lookup / commit parse per commit); reuses
-    GitOidIsValidHex single source, then single-source encoding.hex.HexDecode (table-driven 20× lookup, single alloc+Move, zero-copy PByte scan) }
+  { perf: not inline per red line 2 (HexDecode alloc+20× table lookup loop exceeds inline); reuses GitOidIsValidHex single source then single-source encoding.hex.HexDecode (table-driven, single alloc, zero-copy PByte scan) + single-source bytes.ops SpanCopy (inline Move via TByteSpan, zero-copy view) }
   if not GitOidIsValidHex(AHex) then
     raise EGitError.CreateFmt('invalid git oid hex "%s"', [AHex]);
   LBytes := HexDecode(AHex);
-  Move(LBytes[0], Result.Bytes[0], GitOidRawLen);
+  SpanCopy(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@LBytes[0], GitOidRawLen));
 end;
 
-function GitOidToHex(const AOid: TGitOid): string; inline;
+function GitOidToHex(const AOid: TGitOid): string;
 var
   LBytes: TBytes;
 begin
-  { perf: inline + single-source encoding.hex.HexEncode (20 bytes -> 40 hex, PByte+Len table lookup, single SetLength, zero-copy beyond result alloc);
-    hot display/log path }
+  { perf: not inline per red line 2 (HexEncode loop+alloc exceeds inline); single-source bytes.ops SpanCopy (inline Move via TByteSpan, zero-copy view) + single-source encoding.hex.HexEncode (20->40 hex, PByte+Len table lookup, single SetLength) }
   SetLength(LBytes, GitOidRawLen);
-  Move(AOid.Bytes[0], LBytes[0], GitOidRawLen);
+  SpanCopy(TByteSpan.Create(@LBytes[0], GitOidRawLen),
+    TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
   Result := HexEncode(LBytes);
 end;
 

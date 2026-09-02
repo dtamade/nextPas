@@ -55,11 +55,13 @@ begin
   Result := Copy(GitOidToHex(AOid), 1, 7);
 end;
 
-function IsZeroOid(const AOid: TGitOid): Boolean;
-var I: Integer;
+function IsZeroOid(const AOid: TGitOid): Boolean; inline;
+const ZeroOid: TGitOid = (Bytes: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0));
 begin
-  for I := 0 to GitOidRawLen - 1 do if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
+  // perf: single source via bytes.ops SpanEqual -> MemEqual 3×QWord for 20B, zero-copy TByteSpan view, inline hot, branch-free (hot query path)
+  Result := SpanEqual(
+    TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen),
+    TByteSpan.Create(PByte(@ZeroOid.Bytes[0]), GitOidRawLen));
 end;
 
 function SplitLines(const S: string): TStringArray; inline;

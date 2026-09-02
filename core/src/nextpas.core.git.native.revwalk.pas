@@ -43,11 +43,11 @@ type
     FCount: SizeInt;
     FCap: SizeInt;
     FMask: SizeInt;
-    procedure EnsureCapacity; inline;
+    procedure EnsureCapacity;
     procedure Rehash(ANewCap: SizeInt);
   public
     { no-op when already present }
-    procedure Add(const AOid: TGitOid); inline;
+    procedure Add(const AOid: TGitOid);
     function Contains(const AOid: TGitOid): Boolean; inline;
     function Count: SizeInt; inline;
   end;
@@ -66,14 +66,14 @@ type
     FCount: SizeInt;
     FCap: SizeInt;
     FMask: SizeInt;
-    procedure EnsureCapacity; inline;
+    procedure EnsureCapacity;
     procedure Rehash(ANewCap: SizeInt);
-    procedure Clear; inline;
+    procedure Clear;
     procedure CompactEvict; // LRU bounded eviction keeps 2048 newest at 4096 cap, avoids full clear jitter
   public
     destructor Destroy; override;
     function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean; inline;
-    procedure Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray); inline;
+    procedure Put(const AOid: TGitOid; AWhen: Int64; const AParents: TGitOidArray);
   end;
 
   TWalkEntry = record
@@ -232,7 +232,7 @@ begin
   Result := (ACap = 0) or (ACount * 10 >= ACap * 7);
 end;
 
-procedure TGitOidSet.EnsureCapacity; inline;
+procedure TGitOidSet.EnsureCapacity;
 begin
   if not OidShouldGrow(FCount, FCap) then Exit;
   if FCap = 0 then Rehash(16) else Rehash(FCap * 2);

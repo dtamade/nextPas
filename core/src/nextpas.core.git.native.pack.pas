@@ -38,17 +38,17 @@ type
     function InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
     procedure InflateInto(APos: SizeUInt; AExpectSize: Int64; var AReuse: TBytes);
     function TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
-    // delta peek cache inline helpers (bytes.ops single source, zero alloc, 32-entry LRU)
+    // delta peek cache helpers (O(1) hash, zero alloc, inline, zero-copy via stack buf)
     function TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
     procedure PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // hot rename pre-check cache: 32-entry (APos -> targetSize), inline linear scan avoids per-candidate 32B inflate
+    // hot rename pre-check cache: 32-entry direct-mapped hash (APos -> targetSize), O(1) single probe avoids per-candidate 32B inflate
     FPeekKeys: array[0..31] of SizeUInt;
     FPeekVals: array[0..31] of Int64;
     FPeekValid: array[0..31] of Boolean;
-    FPeekNext: Byte;
+    FPeekNext: Byte; // retained for ABI compat, unused after hash store (direct-mapped)
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -390,7 +390,7 @@ begin
   ATargetSize := 0;
   if APos >= FDataSize then
     Exit;
-  // fast cache: hot rename O(n*m) loop hits same delta offsets; inline linear scan (32 entries) avoids 32B inflate per candidate
+  // fast cache: hot rename O(n*m) loop hits same delta offsets; O(1) hashed single probe avoids 32B inflate per candidate
   if TryPeekCacheHit(APos, ATargetSize) then
     Exit(True);
   try
@@ -418,25 +418,27 @@ end;
 
 function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
 var
-  I: Integer;
+  Idx: SizeUInt;
 begin
-  // inline linear scan (32 entries), zero alloc, bytes.ops single source for size, hot rename loop benefits >100x inflate saving
-  for I := 0 to 31 do
-    if FPeekValid[I] and (FPeekKeys[I] = APos) then
-    begin
-      ATargetSize := FPeekVals[I];
-      Exit(True);
-    end;
+  // O(1) hashed single-probe (mix low bits, zero alloc, inline), replaces O(32) linear scan; hot rename O(n*m) saves ~250k*32 compares
+  Idx := (APos xor (APos shr 5) xor (APos shr 10) xor (APos shr 15)) and 31;
+  if FPeekValid[Idx] and (FPeekKeys[Idx] = APos) then
+  begin
+    ATargetSize := FPeekVals[Idx];
+    Exit(True);
+  end;
   Result := False;
 end;
 
 procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
+var
+  Idx: SizeUInt;
 begin
-  // circular eviction, zero alloc, inline store, keeps most recent 32 deltas
-  FPeekKeys[FPeekNext] := APos;
-  FPeekVals[FPeekNext] := ATargetSize;
-  FPeekValid[FPeekNext] := True;
-  FPeekNext := Byte((FPeekNext + 1) and 31);
+  // O(1) hashed store, single probe overwrite, zero alloc, inline; xor-shift mix spreads sequential pack offsets across 32 slots
+  Idx := (APos xor (APos shr 5) xor (APos shr 10) xor (APos shr 15)) and 31;
+  FPeekKeys[Idx] := APos;
+  FPeekVals[Idx] := ATargetSize;
+  FPeekValid[Idx] := True;
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
