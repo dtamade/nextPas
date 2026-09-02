@@ -99,6 +99,7 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.text.view,
+  nextpas.core.text.number,
   nextpas.core.json.types,
   nextpas.core.json,
   nextpas.core.bytes.ops,
@@ -262,6 +263,8 @@ var
   S: string;
   LFileName: string;
   LOrig, LView: TStringView;
+  LInt: Int64;
+  LDbl: Double;
   LDoc: IJsonDocument;
   LRoot: TJsonValue;
   P: PAnsiChar;
@@ -285,14 +288,17 @@ begin
     if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
     P := JS_ToCStringPtr(FCtx, V);
     if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
+    // perf: QjsView bytes.ops single source inline zero-copy (single AnsiPtrLen scan) + Trim zero-copy view
     LOrig := QjsView(P);
     LView := LOrig.Trim;
     if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
     if LView.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
     if LView.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
     if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
-    // 统一编解码：走 json owner 单源（JsonParse+TJsonValue），消双份拷贝，视图零拷贝入参，保持 CONTRACT INV-5
+    // perf: 零拷贝快路径 text.number single source ViewToInt64/ViewToDouble inline (zero-copy TStringView, single scan each, O(n) without JSON tree alloc) bypass JsonParse for hot numeric FFI; inline + bytes.ops single source via text.number ParseDouble(EiselLemire), no extra alloc, FFI path B/op=0 for numbers
+    if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
+    if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
+    // fallback: 复杂结构走 json owner 单源 JsonParse (arrays/objects/string) — 仅非数值路径 O(n) single pass, 视图零拷贝入参，保持 CONTRACT INV-5
     LDoc := JsonParse(LView);
     if not LDoc.HasError then
     begin
@@ -399,7 +405,8 @@ begin
       begin
         SetLength(QHeap, LArgc);
         for I := 0 to LArgc - 1 do QHeap[I] := QjsFromTJs(AArgs[I]);
-        PQ := PJSQjsValue(QHeap);
+        // perf: typed pointer @QHeap[0] type-safe (vs PJSQjsValue(QHeap) header alias), stack 16*16B=256B B/op=0 zero-copy, heap fallback rare, inline + zero-copy 16B handle, exactly-once free; stability: LArgc>0 guard + nil for 0 arg no dangling
+        if LArgc > 0 then PQ := @QHeap[0];
       end;
     QRes := JS_CallPtr(FCtx, QFunc, QThis, LArgc, PQ);
     try

@@ -47,7 +47,7 @@ function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: T
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
-{ L0 single source thread/time/deadline helpers — thread 单缝经 js.lifecycle JsPureThreadSelf 唯一持有 platform.thread (L0 single slit via lifecycle→pure.base), time/deadline 单缝仍经 quickjs.value platform.time, inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops 单源 }
+{ L0 single source thread/time/deadline helpers — thread/time/deadline 单缝统收敛至 js.lifecycle single source (L0 platform.thread + platform.time single slit via lifecycle), inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops+mem.dynarray 单源约束 }
 function QjsThreadSelf: UInt64; inline;
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 function QjsMonotonicNs: QWord; inline;
@@ -60,8 +60,7 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.js.lifecycle,
-  nextpas.core.platform.time;
+  nextpas.core.js.lifecycle;
 
 procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute AHeap;
@@ -363,25 +362,20 @@ end;
 
 function QjsMonotonicNs: QWord; inline;
 begin
-  // perf: inline thin-forward to platform.time single source (L0 single slit, vdso), single syscall, bytes.ops single source复用见 deadline
-  Result := QWord(platform_monotonic_ns);
+  // perf: inline thin-forward to js.lifecycle single source JsPureMonotonicNs (L0 platform.time single slit via lifecycle), single syscall, zero-copy, bytes.ops single source复用见 deadline, decorator reuse no dual entry
+  Result := nextpas.core.js.lifecycle.JsPureMonotonicNs;
 end;
 
 procedure QjsDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
 begin
-  // perf: 惰性刷新 single source via QjsMonotonicNs inline, 仅 Timeout>0 触发单次 syscall, 高频 Eval 零额外开销当 Timeout=0, 采样由 interrupt 侧承担, bytes.ops single source保持 CONTRACT
-  if ATimeoutMs <= 0 then ADeadlineNs := 0
-  else ADeadlineNs := Int64(QjsMonotonicNs + QWord(ATimeoutMs) * 1000000);
+  // perf: inline thin-forward to js.lifecycle single source JsPureDeadlineRefresh, 惰性刷新 single source via JsPureMonotonicNs inline, 仅 Timeout>0 触发单次 syscall, 高频 Eval 零额外开销, bytes.ops single source保持 CONTRACT, no dual platform.time entry
+  nextpas.core.js.lifecycle.JsPureDeadlineRefresh(ADeadlineNs, ATimeoutMs);
 end;
 
 function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // perf: 采样降频 1024 次/ syscall (原逐次 clock_gettime 占假后端 684ns 基线 15-30%), 缓存行友好, 惰性刷新, 零拷贝 inline, exactly-once timeout 语义
-  if ADeadlineNs = 0 then Exit(False);
-  Inc(ACounter);
-  if (ACounter and 1023) <> 0 then Exit(False);
-  ALastNs := QjsMonotonicNs;
-  Result := QWord(ALastNs) >= QWord(ADeadlineNs);
+  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort, 采样 1024次/syscall cache-line友好, 惰性刷新, 零拷贝 inline, exactly-once timeout语义 via lifecycle single slit
+  Result := nextpas.core.js.lifecycle.JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs);
 end;
 
 end.

@@ -168,7 +168,7 @@ begin
     JsPureHostBucketsInvalidate(Buckets);
     Exit;
   end;
-  // single source geometric via pure.hash JsPureBucketCapacity (bytes.ops BytesNextCapacity 0→64→2×) + Prepare/Put template, unify with PropBucketsRebuild 95% clone converged
+  // single source geometric via pure.hash JsPureBucketCapacity (bytes.ops BytesNextCapacity 0→64→2×) + Prepare/Put template converged, shared single template with PropBucketsRebuild, bytes.ops single source amortized O(1)
   LCap := JsPureBucketCapacity(LCount);
   SetLength(Buckets.Buckets, LCap);
   JsPureBucketsPrepare(Buckets.Buckets, Buckets.Mask, Buckets.Count, LCap, LCount);

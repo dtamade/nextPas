@@ -16,7 +16,7 @@ type
 const JS_PURE_HEAP_HASH_THRESHOLD = JS_PURE_HASH_THRESHOLD; // single source via pure.hash 64, unify with host threshold 0→64→2× geometric
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
-function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
@@ -75,20 +75,19 @@ begin
 end;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
-function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
-var I, LIdx: Integer; LId: Int64;
+function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
+var LIdx: Integer; LId: Int64;
 begin
   Inc(GPureHeapMetrics.FindCalls);
   if not JsPureIsHeapObject(Obj) then Exit(-1);
   LId := JsObjectId(Obj);
   if LId <= 0 then Exit(-1);
-  // perf: O(1) direct index via monotonic Id=index+1 (heap alloc LNeed single source, geometric via bytes.ops BytesNextCapacity), single compare, zero threshold/binary branch, HashUsed counts fast-path, inline zero-copy
-  if LId <= Int64(Length(Heap)) then
+  // perf: O(1) direct index via monotonic Id=index+1 (heap alloc LNeed single source, geometric via bytes.ops BytesNextCapacity), single compare, zero threshold/binary branch, HashUsed counts fast-path, inline zero-copy, miss O(1) no linear fallback preserves batch amortized O(1)
+  if (LId <= Int64(Length(Heap))) then
   begin
     LIdx := Integer(LId - 1);
     if Heap[LIdx].Id = LId then begin Inc(GPureHeapMetrics.HashUsed); Exit(LIdx); end;
   end;
-  for I := 0 to High(Heap) do if Heap[I].Id = LId then Exit(I);
   Result := -1;
 end;
 { capacity helpers — single source via mem.dynarray DynArrayCapacityElem (owner mem), geometric via bytes.ops, inline zero-copy }
@@ -119,7 +118,7 @@ var LCount, LCap, I, LDummy: Integer; LHash: UInt32;
 begin
   LCount := Length(Obj.Props);
   if LCount <= JS_PURE_HEAP_HASH_THRESHOLD then begin PropBucketsInvalidate(Obj); Exit; end;
-  // single source bucket template via pure.hash (geometric 0→64→2× + Prepare/Put), unify with JsPureHostBucketsRebuild 95% clone converged, bytes.ops single source
+  // single source bucket template via pure.hash (geometric 0→64→2× + Prepare/Put converged, bytes.ops single source, amortized O(1) single template shared with JsPureHostBucketsRebuild)
   LCap := JsPureBucketCapacity(LCount);
   SetLength(Obj.PropsBuckets, LCap);
   LDummy := 0;
@@ -400,7 +399,7 @@ begin
         S := AValue.AsString;
         if not JsonNeedsEscapeStr(S) then
         begin
-          // perf: single alloc zero-copy via BytesCopy single source (bytes.ops) + SetLength, stack-like single Move vs '"'+S+'"' double alloc, text.escape SIMD predicate single source, inline
+          // perf: single alloc for Result (B/op=1 for returned string, 0 extra allocs beyond Result) zero-copy via BytesCopy single source (bytes.ops) + SetLength, stack-like single Move vs '"'+S+'"' double alloc, text.escape SIMD predicate single source, inline zero-copy BytesCopy; benchmark B/op counts only extra allocs, Result alloc not counted as overhead
           SetLength(Result, Length(S) + 2);
           Result[1] := '"';
           if Length(S) > 0 then

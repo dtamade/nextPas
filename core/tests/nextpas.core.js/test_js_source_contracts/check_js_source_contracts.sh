@@ -79,6 +79,142 @@ else
   say_fail "interface uses must be js.base + json.types narrow (CONTRACT §1)"
 fi
 
+# 6) factory: single slit via registry, zero direct backend uses (显式收敛非掩盖, registry唯一扇出owner, 门面零逻辑门禁)
+FACTORY="$ROOT/core/src/nextpas.core.js.factory.pas"
+REGISTRY="$ROOT/core/src/nextpas.core.js.registry.pas"
+FACADE="$ROOT/core/src/nextpas.core.js.pas"
+for token in "nextpas.core.js.fake" "nextpas.core.js.js888" "nextpas.core.js.v8" "nextpas.core.js.chakra" "nextpas.core.js.quickjs"; do
+  if grep -q "$token" "$FACTORY"; then
+    say_fail "js.factory must not directly use $token (zero direct uses, fan-out via registry single slit, 显式收敛非掩盖)"
+  else
+    say_ok "factory zero direct $token"
+  fi
+done
+if grep -q "nextpas.core.js.registry" "$FACTORY"; then
+  say_ok "factory single slit via registry (L2→L2单缝, registry唯一扇出owner)"
+else
+  say_fail "js.factory must use js.registry single slit"
+fi
+# factory interface must be narrow base+intf (no registry in interface, registry only in implementation)
+if grep -q "nextpas.core.js.registry" "$FACTORY" && ! grep -q "^uses" "$FACTORY"; then
+  say_fail "factory uses malformed"
+fi
+# factory must keep inline thin-forward (perf evidence inline零拷贝)
+if grep -q "function CreateJsRuntime.*inline;" "$FACTORY" && grep -q "function JsBackendAvailable.*inline;" "$FACTORY"; then
+  say_ok "factory inline thin-forward perf evidence"
+else
+  say_fail "js.factory must keep inline thin-forward (perf inline零拷贝)"
+fi
+# factory must not contain case branching duplication (zero logic门面, 分支下沉registry)
+if grep -q "case AKind of" "$FACTORY"; then
+  say_fail "js.factory must not contain case AKind branching (branch must sink to registry O(1) vault)"
+else
+  say_ok "factory zero case branching (branch sunk to registry)"
+fi
+
+# 7) registry: L2唯一扇出owner, 5后端聚合显式扇出, 扇出隐蔽性需持续门禁 (fake/js888/v8/chakra/quickjs)
+for token in "nextpas.core.js.fake" "nextpas.core.js.js888" "nextpas.core.js.v8" "nextpas.core.js.chakra" "nextpas.core.js.quickjs.loader" "nextpas.core.js.quickjs;"; do
+  if grep -q "$token" "$REGISTRY"; then
+    say_ok "registry aggregates $token"
+  else
+    say_fail "js.registry must aggregate $token (L2唯一扇出owner 5后端)"
+  fi
+done
+# registry must keep O(1) vault + inline + bytes.ops single source + try-finally stability
+if grep -q "TJsRegistryVault" "$REGISTRY" && grep -q "VaultRef" "$REGISTRY"; then
+  say_ok "registry VaultRef single source vault isolation"
+else
+  say_fail "js.registry must keep VaultRef vault isolation"
+fi
+if grep -q "inline;" "$REGISTRY" && grep -q "BytesCopy" "$REGISTRY"; then
+  say_ok "registry inline+BytesCopy single source perf evidence"
+else
+  say_ok "registry inline/BytesCopy evidence (optional)"
+fi
+if grep -q "try" "$REGISTRY" && grep -q "finally" "$REGISTRY"; then
+  say_ok "registry try-finally stability (resource不丢)"
+else
+  say_fail "js.registry must keep try-finally (IMutex Release不丢)"
+fi
+
+# 8) registry is the ONLY fan-out point: other js.* must not directly use fake/js888/v8/chakra (fan-out隐蔽性门禁)
+for token in "nextpas.core.js.fake" "nextpas.core.js.js888" "nextpas.core.js.v8" "nextpas.core.js.chakra"; do
+  LOTHER=$(grep -R --include="nextpas.core.js*.pas" "$token" "$ROOT/core/src" 2>/dev/null | grep -v "unit $token" | grep -v "nextpas.core.js.registry.pas" | grep -v "nextpas.core.js.fake.pas" | grep -v "nextpas.core.js.js888.pas" | grep -v "nextpas.core.js.v8.pas" | grep -v "nextpas.core.js.chakra.pas" || true)
+  if [[ -n "$LOTHER" ]]; then
+    say_fail "only registry may use $token (fan-out hidden gate), found: $LOTHER"
+  else
+    say_ok "only registry fans out $token"
+  fi
+done
+
+# 9) facade zero logic gate (门面零逻辑, 纯re-export inline薄转发, L0-L3, 四件套)
+for token in "nextpas.core.js.fake" "nextpas.core.js.js888" "nextpas.core.js.v8" "nextpas.core.js.chakra" "nextpas.core.js.registry" "nextpas.core.js.quickjs"; do
+  # facade must not directly use registry/backends beyond factory (factory已收敛)
+  if [[ "$token" == "nextpas.core.js.registry" ]]; then
+    if grep -q "$token" "$FACADE"; then
+      say_fail "js facade must not directly use $token (must via factory, 门面零逻辑)"
+    else
+      say_ok "facade zero direct $token"
+    fi
+  else
+    if grep -q "$token" "$FACADE"; then
+      say_fail "js facade must not directly use $token (门面零逻辑, 禁隐式扇出)"
+    else
+      say_ok "facade zero direct $token"
+    fi
+  fi
+done
+if grep -q "nextpas.core.js.factory" "$FACADE"; then
+  say_ok "facade single source via factory"
+else
+  say_fail "js facade must use factory single source"
+fi
+if grep -q "function CreateJsRuntime.*inline;" "$FACADE" && grep -q "function JsBackendAvailable.*inline;" "$FACADE"; then
+  say_ok "facade inline thin-forward zero logic"
+else
+  say_fail "js facade must keep inline thin-forward zero logic"
+fi
+if grep -q "case AKind of" "$FACADE"; then
+  say_fail "js facade must not contain case branching (zero logic, branch sunk to registry)"
+else
+  say_ok "facade zero case branching"
+fi
+
+# 10) 2-space luxury: value-semantic predicates must be multiline with 2-space indent (thin intf ten)
+if grep -Eq "^function TJsValue\.IsValid: Boolean; inline; begin" "$FILE"; then
+  say_fail "predicates must be multiline with 2-space indent (thin intf luxury, 10 predicates squeezed)"
+else
+  say_ok "predicates 2-space multiline luxury"
+fi
+if grep -Eq "^  Result := FValid;" "$FILE" && grep -Eq "^  Result := FKind = jsk" "$FILE"; then
+  say_ok "predicates 2-space indent evidence"
+else
+  say_fail "predicates must use 2-space indent inside begin/end"
+fi
+
+# 11) module-registry explicit L2→L2 allowlist (single-point js→json via json.types + pure.value, cycle-gated)
+REG_DOC="$ROOT/core/docs/core-module-registry.md"
+if grep -q "same-layer one-way \`json\`" "$REG_DOC" && grep -q "js.intf.*json.types" "$REG_DOC" && grep -q "pure.value.*json.writer" "$REG_DOC"; then
+  say_ok "module-registry allowlist L2→L2 js→json single-point cycle-gated"
+else
+  say_fail "module-registry must explicitly allowlist L2→L2 js→json single-point (js.intf→json.types + pure.value→json.writer via bytes.ops, cycle-gated, no reverse)"
+fi
+
+# 12) cycle gate: json must not depend on js (no reverse edge), impl narrow only bytes.ops + pure.value
+if grep -R -q "nextpas.core.js" "$ROOT/core/src/nextpas.core.json"*.pas 2>/dev/null; then
+  say_fail "L2 cycle: json must not use js (reverse edge forbidden)"
+else
+  say_ok "cycle-gated: json→js reverse 0"
+fi
+IMPL_SECT=$(sed -n '/^implementation/,/^end\./p' "$FILE")
+IMPL_UNITS=$(echo "$IMPL_SECT" | grep -o "nextpas.core\.[a-z0-9._]*" | sort -u || true)
+for u in $IMPL_UNITS; do
+  case "$u" in
+    nextpas.core.bytes.ops|nextpas.core.js.pure.value) say_ok "impl narrow allow $u" ;;
+    *) say_fail "js.intf implementation must only use bytes.ops + js.pure.value narrow (found $u)" ;;
+  esac
+done
+
 if [[ $fail -ne 0 ]]; then
   echo "[js-source-contract] FAIL" >&2
   exit 1

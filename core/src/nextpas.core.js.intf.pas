@@ -96,20 +96,76 @@ function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUn
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
 // INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭态由 IJsContext.IsClosed 显式检查（pure.base 原子 release/acquire 保障跨线程可见性），thread-affine 零成本
-function TJsValue.Kind: TJsValueKind; inline; begin Result:=FKind; end;
-function TJsValue.IsValid: Boolean; inline; begin Result:=FValid; end;
-function TJsValue.IsUndefined: Boolean; begin Result:=FKind=jskUndefined; end;
-function TJsValue.IsNull: Boolean; begin Result:=FKind=jskNull; end;
-function TJsValue.IsBool: Boolean; begin Result:=FKind=jskBoolean; end;
-function TJsValue.IsNumber: Boolean; begin Result:=FKind=jskNumber; end;
-function TJsValue.IsString: Boolean; begin Result:=FKind=jskString; end;
-function TJsValue.IsObject: Boolean; begin Result:=FKind=jskObject; end;
-function TJsValue.IsArray: Boolean; begin Result:=FKind=jskArray; end;
-function TJsValue.IsFunction: Boolean; begin Result:=FKind=jskFunction; end;
-function TJsValue.IsError: Boolean; begin Result:=FKind=jskError; end;
-function TJsValue.IsPromise: Boolean; begin Result:=FKind=jskPromise; end;
-function TJsValue.IsSymbol: Boolean; begin Result:=FKind=jskSymbol; end;
-function TJsValue.IsBigInt: Boolean; begin Result:=FKind=jskBigInt; end;
+// perf: 值语义谓词全 inline 零分支单字段访问，奢华薄 intf 2-space 缩进可读，单源 FKind/FValid 零拷贝，bulk 零屏障
+function TJsValue.Kind: TJsValueKind; inline;
+begin
+  Result := FKind;
+end;
+
+function TJsValue.IsValid: Boolean; inline;
+begin
+  Result := FValid;
+end;
+
+function TJsValue.IsUndefined: Boolean; inline;
+begin
+  Result := FKind = jskUndefined;
+end;
+
+function TJsValue.IsNull: Boolean; inline;
+begin
+  Result := FKind = jskNull;
+end;
+
+function TJsValue.IsBool: Boolean; inline;
+begin
+  Result := FKind = jskBoolean;
+end;
+
+function TJsValue.IsNumber: Boolean; inline;
+begin
+  Result := FKind = jskNumber;
+end;
+
+function TJsValue.IsString: Boolean; inline;
+begin
+  Result := FKind = jskString;
+end;
+
+function TJsValue.IsObject: Boolean; inline;
+begin
+  Result := FKind = jskObject;
+end;
+
+function TJsValue.IsArray: Boolean; inline;
+begin
+  Result := FKind = jskArray;
+end;
+
+function TJsValue.IsFunction: Boolean; inline;
+begin
+  Result := FKind = jskFunction;
+end;
+
+function TJsValue.IsError: Boolean; inline;
+begin
+  Result := FKind = jskError;
+end;
+
+function TJsValue.IsPromise: Boolean; inline;
+begin
+  Result := FKind = jskPromise;
+end;
+
+function TJsValue.IsSymbol: Boolean; inline;
+begin
+  Result := FKind = jskSymbol;
+end;
+
+function TJsValue.IsBigInt: Boolean; inline;
+begin
+  Result := FKind = jskBigInt;
+end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;

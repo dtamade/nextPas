@@ -3,8 +3,8 @@ unit nextpas.core.js.pure.base;
   Note: pure.* pure-family prefix, base shared base suffix — non-standard four-piece naming explicit exception per CONTRACT §1 & design-conventions:150.
   Single responsibility = thin facade only (type-carrier, no mutable globals); lifecycle → js.lifecycle single source (GPureClosed 64B padded atomic acquire/release, cache-line isolated, write-once rare, bulk IsValid zero via FValid, strong acquire, atomic_fetch_add+spinlock geometric via bytes.ops);
   Host→pure.host single source permanent owner (including JsPureHostsClear+JsPureTryReadFileText single source via platform.fs/bytes.ops), Heap/Value→pure.value single source permanent owner, IO→pure.host single source (platform.fs L0 64MiB BytesCopy single source via host), Eval→js.eval single source,
-  all inline zero-copy via bytes.ops/text.view single source. wc -l ~280 <800 (800 must-split, 阈值 800), thin forwards via pure.host/pure.value/js.eval/js.lifecycle single source, L0-L3 kept. No threshold migration, pure.host/pure.value permanent single source owner, CONTRACT §1为准.
-  Close奢华收敛: JsPureClose dual overloads via pure.host.JsPureHostsClear single source, buckets variant adds single Invalidate; HostSet 12 thin-forwards direct to pure.host (no dispatcher inline branching, I-Cache 不膨胀); JsPureCall dual overloads converged via PBuckets nil template single source. }
+  all inline zero-copy via bytes.ops/text.view single source. wc -l ~310 <800 (800 must-split, 阈值 800), thin forwards via pure.host/pure.value/js.eval/js.lifecycle single source, L0-L3 kept. No threshold migration, pure.host/pure.value permanent single source owner, CONTRACT §1为准.
+  Close奢华收敛: JsPureClose dual overloads+State统一 via pure.host.JsPureHostStateClear single source, buckets variant adds single Invalidate; HostSet 12 thin-forwards direct to pure.host (no dispatcher inline branching, I-Cache 不膨胀, 首选 TJsPureHostState 统一门面 3+3 单选型零负担); JsPureCall dual overloads+State统一 converged via PBuckets nil template single source. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -21,6 +21,7 @@ type
   TJsPureHostRec = nextpas.core.js.pure.host.TJsPureHostRec;
   TJsPureHostArray = nextpas.core.js.pure.host.TJsPureHostArray;
   TJsPureHostBuckets = nextpas.core.js.pure.host.TJsPureHostBuckets;
+  TJsPureHostState = nextpas.core.js.pure.host.TJsPureHostState;
   TJsPureProp = nextpas.core.js.pure.value.TJsPureProp;
   TJsPureObject = nextpas.core.js.pure.value.TJsPureObject;
   TJsPureHeap = nextpas.core.js.pure.value.TJsPureHeap;
@@ -65,6 +66,17 @@ procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHos
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline; overload;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline; overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
+// HostState — 统一门面首选 (per-Context 聚合态 TJsPureHostState via pure.host single source, 消费者单选型零负担, 兼容保留 12 HostSet thin-forwards, inline thin-forward零拷贝 via pure.host, bytes.ops FNV1a+BytesCopy单源, 阈值64桶 O(1) 单分支, 资源幂等不丢, 奢华收敛, 守 L0-L3)
+function JsPureHostStateFind(var AState: TJsPureHostState; const AName: string): Integer; inline;
+function JsPureHostStateFindView(var AState: TJsPureHostState; const AName: TStringView): Integer; inline;
+procedure JsPureHostStateClear(var AState: TJsPureHostState); inline;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
+procedure JsPureHostStateSetFunc(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
+procedure JsPureHostStateSetMethod(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
+procedure JsPureHostStateSetProc(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
+procedure JsPureHostStateRemove(var AState: TJsPureHostState; const AName: string); inline;
 // Heap/Value — owner pure.value permanent single source — inline thin-forward, bytes.ops+mem.dynarray single source, per-Context TJsPureValueState, no js.value dual entry, pure.value single owner, L0-L3 kept
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
@@ -90,15 +102,18 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
-// Call/Close — thin compose pure.host+pure.value single source, lifecycle via js.lifecycle padded atomic, resource JsPureClose幂等不丢 (single-source pure.host.JsPureHostsClear)
+// Call/Close — thin compose pure.host+pure.value single source, lifecycle via js.lifecycle padded atomic, resource JsPureClose幂等不丢 (single-source pure.host.JsPureHostsClear/JsPureHostStateClear); State统一门面首选 (单选型)
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
+function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload; inline;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
-// IO — owner pure.host (platform.fs L0 64MiB BytesCopy single source via host), Eval→js.eval single source
+procedure JsPureClose(var AState: TJsPureHostState; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload; inline;
+// IO — owner pure.host (platform.fs L0 64MiB BytesCopy single source via host), Eval→js.eval single source; State统一门面首选
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; inline; overload;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline; overload;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; var AState: TJsPureHostState; const AGlobal: TJsValue): TJsValue; inline; overload;
 implementation
 uses
   nextpas.core.js.eval;
@@ -172,6 +187,26 @@ procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHost
 begin nextpas.core.js.pure.host.JsPureHostRemove(Hosts, Buckets, AName); end;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 begin nextpas.core.js.pure.host.JsPureHostBucketsInvalidate(Buckets); end;
+function JsPureHostStateFind(var AState: TJsPureHostState; const AName: string): Integer; inline;
+begin Result := nextpas.core.js.pure.host.JsPureHostStateFind(AState, AName); end;
+function JsPureHostStateFindView(var AState: TJsPureHostState; const AName: TStringView): Integer; inline;
+begin Result := nextpas.core.js.pure.host.JsPureHostStateFindView(AState, AName); end;
+procedure JsPureHostStateClear(var AState: TJsPureHostState); inline;
+begin nextpas.core.js.pure.host.JsPureHostStateClear(AState); end;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(AState.Hosts, AState.Buckets, AName, AHandler, AKind); end;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(AState.Hosts, AState.Buckets, AName, AHandler, AKind); end;
+procedure JsPureHostStateSet(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(AState.Hosts, AState.Buckets, AName, AHandler, AKind); end;
+procedure JsPureHostStateSetFunc(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostStateSetFunc(AState, AName, AHandler, ABackend); end;
+procedure JsPureHostStateSetMethod(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostStateSetMethod(AState, AName, AHandler, ABackend); end;
+procedure JsPureHostStateSetProc(var AState: TJsPureHostState; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostStateSetProc(AState, AName, AHandler, ABackend); end;
+procedure JsPureHostStateRemove(var AState: TJsPureHostState; const AName: string); inline;
+begin nextpas.core.js.pure.host.JsPureHostStateRemove(AState, AName); end;
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 begin Result := nextpas.core.js.pure.value.JsPureHeapMetricsGet; end;
 procedure JsPureHeapMetricsReset; inline;
@@ -234,6 +269,8 @@ function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc
 begin Result := _JsPureCallImpl(ACtx, Hosts, nil, AFunc, AThis, AArgs, ABackend); end;
 function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
 begin Result := _JsPureCallImpl(ACtx, Hosts, @Buckets, AFunc, AThis, AArgs, ABackend); end;
+function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; inline;
+begin Result := _JsPureCallImpl(ACtx, AState.Hosts, @AState.Buckets, AFunc, AThis, AArgs, ABackend); end;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
 begin
   JsPureContextClose(AContextId);
@@ -249,6 +286,13 @@ begin
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
 end;
+procedure JsPureClose(var AState: TJsPureHostState; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
+begin
+  JsPureContextClose(AContextId);
+  nextpas.core.js.pure.host.JsPureHostStateClear(AState);
+  JsPureHeapClear(Heap);
+  Global := JsUndefinedValue;
+end;
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureTryReadFileText(APath, AText); end;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; inline;
@@ -260,5 +304,10 @@ function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJs
 begin
   // buckets variant thin-forward reusing same eval single source (host view via buckets)
   Result := nextpas.core.js.eval.JsPureDoEval(ACtx, ACode, AOptions, ABackend, Hosts, Buckets, AGlobal);
+end;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; var AState: TJsPureHostState; const AGlobal: TJsValue): TJsValue; inline;
+begin
+  // State统一门面 thin-forward to js.eval single source via HostState single source (bytes.ops+text.view零拷贝, platform.fs L0, 64MiB限流, 资源幂等不丢, inline)
+  Result := nextpas.core.js.eval.JsPureDoEval(ACtx, ACode, AOptions, ABackend, AState.Hosts, AState.Buckets, AGlobal);
 end;
 end.
