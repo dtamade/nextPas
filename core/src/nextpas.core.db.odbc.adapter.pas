@@ -1088,6 +1088,12 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
   end;
 
 constructor TDbOdbcConnection.Create(AEnv, ADbc: Pointer;
@@ -1488,6 +1494,36 @@ function TDbOdbcConnection.MaxPlaceholders: Integer;
 begin
   Result := 999;    { ISO CLI 无参数上限 InfoType；取与 sqlite 保证值
     同级的保守下界 }
+end;
+
+function TDbOdbcConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbOdbcConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 { ---- 工厂 ---- }

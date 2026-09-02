@@ -199,6 +199,12 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
   end;
 
 type
@@ -675,6 +681,36 @@ end;
 function TDbRedisConnection.MaxPlaceholders: Integer;
 begin
   Result := 999;   { 保守下界，与家族一致 }
+end;
+
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbRedisConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 { ---- TDbRedisQuery ---- }

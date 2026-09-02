@@ -551,6 +551,12 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
   end;
 
 constructor TDbMyQuery.Create(AConnH: TMysql; AStmt: TMysqlStmt;
@@ -1476,6 +1482,36 @@ end;
 function TDbMyConnection.MaxPlaceholders: Integer;
 begin
   Result := 65535;  { COM_STMT_PREPARE 参数计数为 uint16 }
+end;
+
+function TDbMyConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbMyConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 { ---- 工厂 ---- }

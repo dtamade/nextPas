@@ -248,174 +248,174 @@ end;
 // Forward Vec
 generic function MakeVec<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IVec<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVec<T>(aCapacity, aAllocator, aGrowStrategy);
+  Result := specialize MakeVec<T>(aCapacity, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeVec<T>(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IVec<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVec<T>(aSrc, aAllocator, aGrowStrategy);
+  Result := specialize MakeVec<T>(aSrc, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeVec<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IVec<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVec<T>(aSrcCollection, aAllocator, aGrowStrategy);
+  Result := specialize MakeVec<T>(aSrcCollection, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeVec<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IVec<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVec<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
+  Result := specialize MakeVec<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeVecDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVecDeque<T>(aCapacity, aAllocator, aGrowStrategy);
+  Result := specialize MakeVecDeque<T>(aCapacity, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeArr<T>(aAllocator: TMemAllocator): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aAllocator);
+  Result := specialize MakeArr<T>(aAllocator);
 end;
 
 generic function MakeArr<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aSrc, aAllocator);
+  Result := specialize MakeArr<T>(aSrc, aAllocator);
 end;
 
 generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aSrcCollection, aAllocator);
+  Result := specialize MakeArr<T>(aSrcCollection, aAllocator);
 end;
 
 generic function MakeArr<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aSrcCollection, aAllocator, aData);
+  Result := specialize MakeArr<T>(aSrcCollection, aAllocator, aData);
 end;
 
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aSrc, aElementCount, aAllocator);
+  Result := specialize MakeArr<T>(aSrc, aElementCount, aAllocator);
 end;
 
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
 generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeHashMap<K,V>(aCapacity, aAllocator);
+  Result := specialize MakeHashMap<K,V>(aCapacity, aAllocator);
 end;
 
 generic function MakeHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
+  Result := specialize MakeHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
 end;
 
 generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeSwissHashMap<K,V>(aCapacity, aAllocator);
+  Result := specialize MakeSwissHashMap<K,V>(aCapacity, aAllocator);
 end;
 
 generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeSwissHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
+  Result := specialize MakeSwissHashMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
 end;
 
 generic function MakeMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeMap<K,V>(aCapacity, aAllocator);
+  Result := specialize MakeMap<K,V>(aCapacity, aAllocator);
 end;
 
 generic function MakeMap<K,V>(aCapacity: SizeUInt; aHash: specialize TKeyHashFunc<K>; aEquals: specialize TKeyEqualsFunc<K>; aAllocator: TMemAllocator): specialize IHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
+  Result := specialize MakeMap<K,V>(aCapacity, aHash, aEquals, aAllocator);
 end;
 
 generic function MakeHashSet<K>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashSet<K>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeHashSet<K>(aCapacity, aAllocator);
+  Result := specialize MakeHashSet<K>(aCapacity, aAllocator);
 end;
 
 generic function MakeSet<K>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IHashSet<K>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeSet<K>(aCapacity, aAllocator);
+  Result := specialize MakeSet<K>(aCapacity, aAllocator);
 end;
 {$ENDIF}
 
 generic function MakeTreeMap<K,V>(aCapacity: SizeUInt; aCompare: specialize TCompareFunc<K>; aAllocator: TMemAllocator): specialize ITreeMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeTreeMap<K,V>(aCapacity, aCompare, aAllocator);
+  Result := specialize MakeTreeMap<K,V>(aCapacity, aCompare, aAllocator);
 end;
 
 generic function MakeTreeSet<T>(aAllocator: TMemAllocator): specialize ITreeSet<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeTreeSet<T>(aAllocator);
+  Result := specialize MakeTreeSet<T>(aAllocator);
 end;
 
 generic function MakeTreeSet<T>(aCompare: specialize TCompareFunc<T>; aAllocator: TMemAllocator; aCompareData: Pointer): specialize ITreeSet<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeTreeSet<T>(aCompare, aAllocator, aCompareData);
+  Result := specialize MakeTreeSet<T>(aCompare, aAllocator, aCompareData);
 end;
 
 generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeLinkedHashSet<T>;
+  Result := specialize MakeLinkedHashSet<T>;
 end;
 
 generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: TMemAllocator): specialize IRBTreeMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeRBTreeMap<K,V>(aKeyComparer, aAllocator);
+  Result := specialize MakeRBTreeMap<K,V>(aKeyComparer, aAllocator);
 end;
 
 generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeBTreeMap<K,V>(aCompare);
+  Result := specialize MakeBTreeMap<K,V>(aCompare);
 end;
 
 generic function MakeBTreeSet<T>(aCompare: specialize TBTreeCompareFunc<T>): specialize IBTreeSet<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeBTreeSet<T>(aCompare);
+  Result := specialize MakeBTreeSet<T>(aCompare);
 end;
 
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeSkipList<K,V>;
+  Result := specialize MakeSkipList<K,V>;
 end;
 
 generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeSkipList<K,V>(aCompare);
+  Result := specialize MakeSkipList<K,V>(aCompare);
 end;
 
 generic function MakeTrie<V>: specialize ITrie<V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeTrie<V>;
+  Result := specialize MakeTrie<V>;
 end;
 
 generic function MakeLruCache<K,V>(aMaxSize: SizeUInt; aAllocator: TMemAllocator; aHash: specialize THashFunc<K>; aEquals: specialize TEqualsFunc<K>; aHashData: Pointer; aEqualsData: Pointer): specialize ILruCache<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeLruCache<K,V>(aMaxSize, aAllocator, aHash, aEquals, aHashData, aEqualsData);
+  Result := specialize MakeLruCache<K,V>(aMaxSize, aAllocator, aHash, aEquals, aHashData, aEqualsData);
 end;
 
 generic function MakeLinkedHashMap<K,V>(aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize ILinkedHashMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeLinkedHashMap<K,V>(aCapacity, aAllocator);
+  Result := specialize MakeLinkedHashMap<K,V>(aCapacity, aAllocator);
 end;
 
 generic function MakeCircularBuffer<T>(aCapacity: SizeUInt; aOverwriteOldest: Boolean): specialize ICircularBuffer<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeCircularBuffer<T>(aCapacity, aOverwriteOldest);
+  Result := specialize MakeCircularBuffer<T>(aCapacity, aOverwriteOldest);
 end;
 
 generic function MakePriorityQueue<T>(aComparer: specialize TCompareFunc<T>; aCapacity: SizeUInt; aAllocator: TMemAllocator): specialize IPriorityQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakePriorityQueue<T>(aComparer, aCapacity, aAllocator);
+  Result := specialize MakePriorityQueue<T>(aComparer, aCapacity, aAllocator);
 end;
 
 generic function MakeMultiMap<K,V>: specialize IMultiMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeMultiMap<K,V>;
+  Result := specialize MakeMultiMap<K,V>;
 end;
 
 generic function MakeMultiSet<T>: specialize IMultiSet<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeMultiSet<T>;
+  Result := specialize MakeMultiSet<T>;
 end;
 
 function MakeBitSet(aInitialCapacity: SizeUInt; aAllocator: TMemAllocator): IBitSet; inline;
@@ -425,189 +425,189 @@ end;
 
 generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt): specialize IConcurrentMap<K,V>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment);
+  Result := specialize MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment);
 end;
 
 {$IFDEF NEXTPAS_COLLECTIONS_FACADE}
 generic function MakeVecDeque<T>: specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeVecDeque<T>;
+  Result := specialize MakeVecDeque<T>;
 end;
 
 generic function MakeDeque<T>: specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>;
+  Result := specialize MakeDeque<T>;
 end;
 
 generic function MakeDeque<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aCapacity, aAllocator, aGrowStrategy);
+  Result := specialize MakeDeque<T>(aCapacity, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeDeque<T>(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aSrc, aAllocator, aGrowStrategy);
+  Result := specialize MakeDeque<T>(aSrc, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeDeque<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aSrcCollection, aAllocator, aGrowStrategy);
+  Result := specialize MakeDeque<T>(aSrcCollection, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeDeque<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
+  Result := specialize MakeDeque<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeDeque<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aSrcCollection, aAllocator, aGrowStrategy, aData);
+  Result := specialize MakeDeque<T>(aSrcCollection, aAllocator, aGrowStrategy, aData);
 end;
 
 generic function MakeDeque<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IDeque<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeDeque<T>(aSrc, aElementCount, aAllocator, aGrowStrategy, aData);
+  Result := specialize MakeDeque<T>(aSrc, aElementCount, aAllocator, aGrowStrategy, aData);
 end;
 
 generic function MakeQueue<T>: specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>;
+  Result := specialize MakeQueue<T>;
 end;
 
 generic function MakeQueue<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aCapacity, aAllocator, aGrowStrategy);
+  Result := specialize MakeQueue<T>(aCapacity, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeQueue<T>(const aSrc: array of T; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aSrc, aAllocator, aGrowStrategy);
+  Result := specialize MakeQueue<T>(aSrc, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeQueue<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aSrcCollection, aAllocator, aGrowStrategy);
+  Result := specialize MakeQueue<T>(aSrcCollection, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
+  Result := specialize MakeQueue<T>(aSrc, aElementCount, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeQueue<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aSrcCollection, aAllocator, aGrowStrategy, aData);
+  Result := specialize MakeQueue<T>(aSrcCollection, aAllocator, aGrowStrategy, aData);
 end;
 
 generic function MakeQueue<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy; aData: Pointer): specialize IQueue<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeQueue<T>(aSrc, aElementCount, aAllocator, aGrowStrategy, aData);
+  Result := specialize MakeQueue<T>(aSrc, aElementCount, aAllocator, aGrowStrategy, aData);
 end;
 
 generic function MakeStack<T>: specialize IStack<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeStack<T>;
+  Result := specialize MakeStack<T>;
 end;
 
 generic function MakeStack<T>(aAllocator: TMemAllocator): specialize IStack<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeStack<T>(aAllocator);
+  Result := specialize MakeStack<T>(aAllocator);
 end;
 
 generic function MakeStack<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IStack<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeStack<T>(aSrc, aAllocator);
+  Result := specialize MakeStack<T>(aSrc, aAllocator);
 end;
 
 generic function MakeStack<T>(const aSrcCollection: TCollection; aAllocator: TMemAllocator): specialize IStack<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeStack<T>(aSrcCollection, aAllocator);
+  Result := specialize MakeStack<T>(aSrcCollection, aAllocator);
 end;
 
 generic function MakeStack<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IStack<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeStack<T>(aSrc, aElementCount, aAllocator);
+  Result := specialize MakeStack<T>(aSrc, aElementCount, aAllocator);
 end;
 
 generic function MakeList<T>: specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>;
+  Result := specialize MakeList<T>;
 end;
 
 generic function MakeList<T>(aAllocator: TMemAllocator): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aAllocator);
+  Result := specialize MakeList<T>(aAllocator);
 end;
 
 generic function MakeList<T>(const aSrc: array of T): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aSrc);
+  Result := specialize MakeList<T>(aSrc);
 end;
 
 generic function MakeList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aSrc, aAllocator);
+  Result := specialize MakeList<T>(aSrc, aAllocator);
 end;
 
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aSrc, aElementCount);
+  Result := specialize MakeList<T>(aSrc, aElementCount);
 end;
 
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aSrc, aElementCount, aAllocator);
+  Result := specialize MakeList<T>(aSrc, aElementCount, aAllocator);
 end;
 
 generic function MakeList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aSrc, aElementCount, aAllocator, aData);
+  Result := specialize MakeList<T>(aSrc, aElementCount, aAllocator, aData);
 end;
 
 generic function MakeList<T>(aCapacity: SizeUInt; aAllocator: TMemAllocator; aGrowStrategy: TGrowthStrategy): specialize IList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeList<T>(aCapacity, aAllocator, aGrowStrategy);
+  Result := specialize MakeList<T>(aCapacity, aAllocator, aGrowStrategy);
 end;
 
 generic function MakeForwardList<T>: specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>;
+  Result := specialize MakeForwardList<T>;
 end;
 
 generic function MakeForwardList<T>(aAllocator: TMemAllocator): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aAllocator);
+  Result := specialize MakeForwardList<T>(aAllocator);
 end;
 
 generic function MakeForwardList<T>(const aSrc: array of T): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aSrc);
+  Result := specialize MakeForwardList<T>(aSrc);
 end;
 
 generic function MakeForwardList<T>(const aSrc: array of T; aAllocator: TMemAllocator): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aSrc, aAllocator);
+  Result := specialize MakeForwardList<T>(aSrc, aAllocator);
 end;
 
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aSrc, aElementCount);
+  Result := specialize MakeForwardList<T>(aSrc, aElementCount);
 end;
 
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aSrc, aElementCount, aAllocator);
+  Result := specialize MakeForwardList<T>(aSrc, aElementCount, aAllocator);
 end;
 
 generic function MakeForwardList<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IForwardList<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeForwardList<T>(aSrc, aElementCount, aAllocator, aData);
+  Result := specialize MakeForwardList<T>(aSrc, aElementCount, aAllocator, aData);
 end;
 {$ENDIF}
 
 generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TMemAllocator; aData: Pointer): specialize IArray<T>; inline;
 begin
-  Result := specialize nextpas.core.collections.factory.MakeArr<T>(aSrc, aElementCount, aAllocator, aData);
+  Result := specialize MakeArr<T>(aSrc, aElementCount, aAllocator, aData);
 end;
 
 end.
