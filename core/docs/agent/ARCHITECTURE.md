@@ -73,17 +73,17 @@
 | `nextpas.core.agent.provider.common.extra.pas` | 适配支撑子域 | Extra 无损捕获与 64 键上限（109 行） | base, json |
 | `nextpas.core.agent.provider.common.slots.pas` | 适配支撑子域 | `TWireToolSlotPool` 直映表 + `CAgentMaxSlotMap` 256 上限（519 行） | base, errors |
 | `nextpas.core.agent.provider.openai.pas` | 适配（薄壳 326 行） | OpenAI Chat Completions 门面，inline 转发至三子域；公开编解码器三件（D13）；Q-O1..O7 全部落码+gate | openai.encode/decode/decoder, base, errors, intf, common, transport, fold |
-| `nextpas.core.agent.provider.openai.encode.pas` | 适配子域 | Chat 编码子域（348 行纯函数） | base, intf, errors, common, json, json.builder, text.builder |
-| `nextpas.core.agent.provider.openai.decode.pas` | 适配子域 | Chat 解码子域（232 行纯函数） | base, intf, errors, common, json |
-| `nextpas.core.agent.provider.openai.decoder.pas` | 适配子域 | Chat WireDecoder 状态机（359 行，Q-O 流式） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.openai.encode.pas` | 适配子域 | Chat 编码子域（351 行纯函数） | base, intf, errors, common, json, json.builder, text.builder |
+| `nextpas.core.agent.provider.openai.decode.pas` | 适配子域 | Chat 解码子域（233 行纯函数） | base, intf, errors, common, json |
+| `nextpas.core.agent.provider.openai.decoder.pas` | 适配子域 | Chat WireDecoder 状态机（360 行，Q-O 流式） | base, intf, errors, common, json, log |
 | `nextpas.core.agent.provider.openai.responses.pas` | 适配（薄壳 256 行） | Responses 门面，inline 转发至三子域；同款公开编解码器三件（WIRE-MAPPINGS §3，Q-R1..R7） | responses.encode/decode/decoder, base, errors, intf, common, transport, fold |
-| `nextpas.core.agent.provider.openai.responses.encode.pas` | 适配子域 | Responses 编码子域（307 行纯函数，input/instructions/tool_choice/text.format） | base, intf, errors, common, json, json.builder, text.builder |
-| `nextpas.core.agent.provider.openai.responses.decode.pas` | 适配子域 | Responses 解码子域（245 行纯函数，output 项+usage details） | base, intf, errors, common, json |
-| `nextpas.core.agent.provider.openai.responses.decoder.pas` | 适配子域 | Responses WireDecoder 状态机（441 行，`response.*` 事件全集） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.openai.responses.encode.pas` | 适配子域 | Responses 编码子域（308 行纯函数，input/instructions/tool_choice/text.format） | base, intf, errors, common, json, json.builder, text.builder |
+| `nextpas.core.agent.provider.openai.responses.decode.pas` | 适配子域 | Responses 解码子域（246 行纯函数，output 项+usage details） | base, intf, errors, common, json |
+| `nextpas.core.agent.provider.openai.responses.decoder.pas` | 适配子域 | Responses WireDecoder 状态机（442 行，`response.*` 事件全集） | base, intf, errors, common, json, log |
 | `nextpas.core.agent.provider.anthropic.pas` | 适配（薄壳 397 行） | Anthropic 适配器门面（inline 转发至子域，调用方零改动） | anthropic.encode/decode/decoder, base, errors, intf, common, transport, fold |
 | `nextpas.core.agent.provider.anthropic.encode.pas` | 适配子域 | Anthropic 编码子域（449 行纯函数，Messages/count_tokens 同构） | base, intf, errors, common, json, json.builder, text.builder |
 | `nextpas.core.agent.provider.anthropic.decode.pas` | 适配子域 | Anthropic 解码子域（196 行纯函数，非流式 §2.2） | base, intf, errors, common, json |
-| `nextpas.core.agent.provider.anthropic.decoder.pas` | 适配子域 | Anthropic 状态机子域（332 行，WireDecoder Q-A1/A2/A6/A8） | base, intf, errors, common, json, log |
+| `nextpas.core.agent.provider.anthropic.decoder.pas` | 适配子域 | Anthropic 状态机子域（333 行，WireDecoder Q-A1/A2/A6/A8） | base, intf, errors, common, json, log |
 | `nextpas.core.agent.provider.fake.pas` | 测试 | scripted/fake provider：脚本化增量回放，离线走通全部上层代码路径；`NewFakeProvider`/`NewEchoProvider` 经门面 re-export（W7，406 行） | intf, fold, json |
 | `nextpas.core.agent.tools.pas` | 工具 | 名称/schema 注册校验（aecConfig）、§1.5 参数校验失败→error result、结果截断信封（UTF-8 安全切）、RunToolBatch 批执行器（时钟感知超时/取消合成/异常兜底 aecToolFailed/WriteGuard 迟到写仲裁）；`WithTools(array of IAgentTool)` 自由函数（G6 补齐 F-M13） | base, intf, clock, errors, atomic, json, text, cancellation |
 | `nextpas.core.agent.loop.pas` | 循环 | TAgentLoop 多轮工具循环：编排/预算/事件/防打转/引导收尾；**T1.4** 每轮 `AccumulateUsage` 后经 `pricing.EstimateCost` + `AgentEstimateTokens` 估 cost 透传 `IAgentUsageSink.RecordUsage`（nil 退化/吞异常不 raise）；全部工具经 IThreadPool（LIFECYCLE §5，D14/C9） | base, intf, clock, errors, tools, thread(pool), json, log, cancellation, pricing |
@@ -94,7 +94,7 @@
 | `nextpas.core.agent.streambox.pas` | 复用 | **Phase4 流式盒（2026-09-01）**：`TAgentStreamBox` Lock+Done+id 迟到丢弃封装（`TPlatformMutex` 经 `platform.sync`，零直接依赖 SyncObjs），对应 `PERFORMANCE.md §7.2` TAiStreamBox 的可复用落点 | agent.base, platform.sync |
 
 体积指引：单文件 >800 行必须拆分（provider.* 各子域预期 ~500-700 行，含 wire 映射注释；超出即拆 `provider.<name>.<aspect>` 子模块）。
-现状（2026-09-03 json 显式依赖收口 + 有界快照/流式盒）：`provider.common` 291+565+110+520 / `provider.openai` 326+351+233+360 / `provider.openai.responses` 256+308+246+442 / `provider.anthropic` 398+451+197+333 —— provider 域 14/14 <800 全达标（含 fake 407）；`base` 250+587+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 84 + `streambox` 131（托管逐项赋值）/ `loop` 57+97+122+187+681 / `transport.http` 73+197+464=734 / `hedge` 570 / `session` 552；总量 13687。
+现状（2026-09-04 P0 预算/限流/SSE 收口 + 有界快照/流式盒）：`provider.common` 291+565+110+520 / `provider.openai` 326+351+233+360 / `provider.openai.responses` 256+308+246+442 / `provider.anthropic` 398+451+197+333 —— provider 域 14/14 <800 全达标（含 fake 407）；`base` 250+587+414 + `slotmap` 145 + `deltabuilder` 128 + `snapshot` 84 + `streambox` 131（托管逐项赋值）/ `loop` 57+97+144+191+684 / `transport.http` 73+197+464=734 / `hedge` 569 / `session` 552；总量 13724。
 
 ## 3. 数据流
 

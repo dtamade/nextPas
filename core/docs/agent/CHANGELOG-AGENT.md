@@ -10,12 +10,12 @@
 
 | Hash | Type | Summary |
 |------|------|---------|
-| `TBD` | fix | `fold.pas:276 CloneArray` → `Copy` 编译修复，恢复 19 门编译 |
-| `TBD` | fix | `loop.budget:LoopAccumulateUsage` 补 `ReasoningTokens` 累加 |
-| `TBD` | fix | `loop.impl:GuidedFinish` 补 `AccumulateUsage` + `LoopAddOutUsed` + `UsageSink` 透传 |
-| `TBD` | fix | `loop.exec:LoopFinalizeSlots` 预算涵盖 `skInvalid/skUnknown` 防绕过 |
-| `TBD` | fix | `tools.pas` 排水加取消感知退出，防 `Timeout=0` 无限自旋 |
-| `TBD` | docs | `ARCHITECTURE §2/§7` 传输三子域 + 韧性四件 + 定价/会话白名单补齐；`API.md` 4方法+`ReadIdleTimeoutMs`+`SESSION.md`对齐；`lane-focused` 新增 `agent` |
+| `e73722e91` | fix | `fold.pas:276 CloneArray` → `Copy` 编译修复，恢复 19 门编译 |
+| `e73722e91` | fix | `loop.budget:LoopAccumulateUsage` 补 `ReasoningTokens` 累加 |
+| `e73722e91` | fix | `loop.impl:GuidedFinish` 补 `AccumulateUsage` + `LoopAddOutUsed` + `UsageSink` 透传 |
+| `e73722e91` | fix | `loop.exec:LoopFinalizeSlots` 预算涵盖 `skInvalid/skUnknown` 防绕过 |
+| `e73722e91` | fix | `tools.pas` 排水加取消感知退出，防 `Timeout=0` 无限自旋 |
+| `e73722e91` | docs | `ARCHITECTURE §2/§7` 传输三子域 + 韧性四件 + 定价/会话白名单补齐；`API.md` 4方法+`ReadIdleTimeoutMs`+`SESSION.md`对齐；`lane-focused` 新增 `agent` |
 
 ### Gates
 
@@ -145,9 +145,9 @@
 
 | Hash | Type | Summary |
 |------|------|---------|
-| `TBD` | fix | `hedge` DelayMs→ns 溢出钳制 `High div 1e6` + `pricing` 负 token 钳制 ` <0→0` + `snapshot` 首簇溢出空串分支 |
-| `TBD` | perf | `pricing` 三重载加 `inline`（`EstimateCost` 标量/Usage 两重载 inline 化，热点零分配） |
-| `TBD` | test | `test_pricing` 负值钳制回归 + `test_hedge` `High(Int64)` 溢出守卫回归 |
-| `TBD` | docs | `ARCHITECTURE §2` 体积 13665→13687 同步（`provider.openai` 326/`responses` 256 精确化） |
+| `6efee4652` | fix | `hedge` DelayMs→ns 溢出钳制 `High div 1e6` + `pricing` 负 token 钳制 ` <0→0` + `snapshot` 首簇溢出空串分支 |
+| `9e5c3c19d` | perf | `pricing` 三重载加 `inline`（`EstimateCost` 标量/Usage 两重载 inline 化，热点零分配） |
+| `9889cc2f1` | test | `test_pricing` 负值钳制回归 + `test_hedge` `High(Int64)` 溢出守卫回归 |
+| `d1d3125be` | docs | `ARCHITECTURE §2` 体积 13665→13687 同步（`provider.openai` 326/`responses` 256 精确化） |
 
 **Gates**: `test_pricing` 6 passed + `test_hedge` 10 passed + `test_snapshot` 5 passed + `make hygiene` pass。

@@ -186,7 +186,6 @@ type
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.text.strings,
   nextpas.core.tls.factory,

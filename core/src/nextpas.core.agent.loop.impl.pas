@@ -301,7 +301,7 @@ var
   RunStartMs: Int64;
   Req: TCompletionRequest;
   M, Asst: TMessage;
-  Round, RoundsDone, I, N, CI: Integer;
+  Round, RoundsDone, I, N, CI, LIdx: Integer;
   BatchSig, PrevSig: string;
   Streak: Integer;
   OutUsed: Int64;
@@ -612,7 +612,15 @@ begin
             hvStop:
               begin
                 LStopped := True;
-                SCount := CI;
+                Slots[CI].Kind := skBlocked;
+                LoopSynthErr(Slots[CI], 'stopped by pre-tool-call hook');
+                for LIdx := CI + 1 to Allowance - 1 do
+                begin
+                  Slots[LIdx].Kind := skBlocked;
+                  Slots[LIdx].CallPartIdx := Calls[LIdx];
+                  Slots[LIdx].Spec := LoopFindSpec(FSpecs, Asst.Parts[Calls[LIdx]].ToolName);
+                  LoopSynthErr(Slots[LIdx], 'stopped by pre-tool-call hook');
+                end;
                 Break;
               end;
             hvProceed:
@@ -638,11 +646,6 @@ begin
               end;
           end;
         end;
-      end;
-      if LStopped then
-      begin
-        SetLength(Slots, SCount);
-        SetLength(SlotJob, SCount);
       end;
       SetLength(Jobs, JCount);
       if Length(Jobs) > 0 then
