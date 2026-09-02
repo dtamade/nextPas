@@ -5,14 +5,14 @@ unit nextpas.compiler.ir.hir_llvm_emitter;
 interface
 
 uses
-  np_hir_llvm_emitter;
+  nextpas.compiler.ir.hir.llvm_emitter;
 
 type
-  TM2ResidualDecl = np_hir_llvm_emitter.TM2ResidualDecl;
-  TLlvmLineVec = np_hir_llvm_emitter.TLlvmLineVec;
-  TLlvmNameVec = np_hir_llvm_emitter.TLlvmNameVec;
-  TLlvmValueIdVec = np_hir_llvm_emitter.TLlvmValueIdVec;
-  THIRLlvmEmitter = np_hir_llvm_emitter.THIRLlvmEmitter;
+  TM2ResidualDecl = nextpas.compiler.ir.hir.llvm_emitter.TM2ResidualDecl;
+  TLlvmLineVec = nextpas.compiler.ir.hir.llvm_emitter.TLlvmLineVec;
+  TLlvmNameVec = nextpas.compiler.ir.hir.llvm_emitter.TLlvmNameVec;
+  TLlvmValueIdVec = nextpas.compiler.ir.hir.llvm_emitter.TLlvmValueIdVec;
+  THIRLlvmEmitter = nextpas.compiler.ir.hir.llvm_emitter.THIRLlvmEmitter;
 
 implementation
 

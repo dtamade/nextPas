@@ -813,77 +813,81 @@ var
   ArgIndex: LongInt;
   ArgNode: TGreenNode;
   Blob, LitValue, SourceName, TempName: string;
+  LBuilder: TBufStringBuilder;
+  LFirst: Boolean;
 begin
-  Result := '';
-  ArgIndex := 0;
-  if ACallNode.NodeKind = gnkFunctionCall then
-    ArgIndex := 1;
-  ClearPendingStringTempReleases;
-  while ArgIndex < ACallNode.ChildCount do
-  begin
-    ArgNode := ACallNode.ChildAt(ArgIndex);
-    if ArgNode = nil then
+  LBuilder.Init(256);
+  LFirst := True;
+  try
+    ArgIndex := 0;
+    if ACallNode.NodeKind = gnkFunctionCall then
+      ArgIndex := 1;
+    ClearPendingStringTempReleases;
+    while ArgIndex < ACallNode.ChildCount do
     begin
+      ArgNode := ACallNode.ChildAt(ArgIndex);
+      if ArgNode = nil then
+      begin
+        Inc(ArgIndex);
+        Continue;
+      end;
+      if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
+        Blob := 'strvar ' + ArgNode.Text + #10
+      else if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeArrVar(ArgNode.Text) then
+        Blob := 'arrvar ' + ArgNode.Text + #10
+      else if (ArgNode.NodeKind = gnkIdentifier) and IsRecordVar(ArgNode.Text) then
+        Blob := 'recvar ' + ArgNode.Text + #10
+      else if IsSupportedOwnedStringReturnArgument(ACallNode, ArgNode,
+        ArgIndex - 1) and StringReturnFunctionNameFromNode(ArgNode, SourceName) then
+      begin
+        Inc(FBlockLabelCounter);
+        TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
+        RegisterRuntimeVar(TempName);
+        RegisterRuntimeStrVar(TempName);
+        FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
+          0, 0, TempName);
+        FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
+          0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
+          'ptr len owner alloc_size');
+        FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
+          ACallNode.Text, 0, 0, 'strvar ' + TempName + #10);
+        QueuePendingStringTempRelease(TempName, SourceName);
+        Blob := 'strvar ' + TempName + #10;
+      end
+      else if (ArgNode.NodeKind = gnkIdentifier) and
+        EvaluateStringConstant(ArgNode, LitValue) then
+      begin
+        Blob := EmitStrConcatOperand(ArgNode, ADestVar);
+        if Blob <> '' then
+          Blob := 'strvar ' + Blob + #10
+        else
+          Blob := '';
+      end
+      else if ArgNode.NodeKind = gnkStringLiteral then
+      begin
+        LitValue := DecodePascalStringLiteral(ArgNode.Text);
+        Blob := EmitStrConcatOperand(ArgNode, ADestVar);
+        if Blob <> '' then
+          Blob := 'strvar ' + Blob + #10
+        else
+          Blob := '';
+      end
+      else if EncodeRuntimeIntExprFold(ArgNode, Blob) then
+      else
+        Blob := '';
+      if Blob <> '' then
+      begin
+        if not LFirst then
+          LBuilder.AppendChar(#9)
+        else
+          LFirst := False;
+        LBuilder.AppendStr(Blob);
+      end;
       Inc(ArgIndex);
-      Continue;
     end;
-    if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeStrVar(ArgNode.Text) then
-      Blob := 'strvar ' + ArgNode.Text + #10
-    else if (ArgNode.NodeKind = gnkIdentifier) and IsRuntimeArrVar(ArgNode.Text) then
-      { open-array / array of const formal → (ptr,len) like strvar }
-      Blob := 'arrvar ' + ArgNode.Text + #10
-    else if (ArgNode.NodeKind = gnkIdentifier) and IsRecordVar(ArgNode.Text) then
-      { const/var record formal (Batch 25 Length(GetS(R))). }
-      Blob := 'recvar ' + ArgNode.Text + #10
-    else if IsSupportedOwnedStringReturnArgument(ACallNode, ArgNode,
-      ArgIndex - 1) and StringReturnFunctionNameFromNode(ArgNode, SourceName) then
-    begin
-      Inc(FBlockLabelCounter);
-      TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
-      RegisterRuntimeVar(TempName);
-      RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
-        0, 0, TempName);
-      FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
-        'ptr len owner alloc_size');
-      FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
-        ACallNode.Text, 0, 0, 'strvar ' + TempName + #10);
-      QueuePendingStringTempRelease(TempName, SourceName);
-      Blob := 'strvar ' + TempName + #10;
-    end
-    else if (ArgNode.NodeKind = gnkIdentifier) and
-      EvaluateStringConstant(ArgNode, LitValue) then
-    begin
-      { String const identifier formal (PATH_ENV_PREFIX='PATH='): materialize
-        as literal temp, not residual call @CONST() (M2 const-upper). }
-      Blob := EmitStrConcatOperand(ArgNode, ADestVar);
-      if Blob <> '' then
-        Blob := 'strvar ' + Blob + #10
-      else
-        Blob := '';
-    end
-    else if ArgNode.NodeKind = gnkStringLiteral then
-    begin
-      LitValue := DecodePascalStringLiteral(ArgNode.Text);
-      Blob := EmitStrConcatOperand(ArgNode, ADestVar);
-      if Blob <> '' then
-        Blob := 'strvar ' + Blob + #10
-      else
-        Blob := '';
-    end
-    else if EncodeRuntimeIntExprFold(ArgNode, Blob) then
-      { Blob already set }
-    else
-      Blob := '';
-    if Blob <> '' then
-    begin
-      if Result <> '' then
-        Result := Result + #9 + Blob
-      else
-        Result := Blob;
-    end;
-    Inc(ArgIndex);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
@@ -954,101 +958,123 @@ var
   Decoded, SourceName, TempName: string;
   ConstOrdinal: Int64;
   FieldIdx: LongInt;
+  LBuilder: TBufStringBuilder;
 begin
-  Result := ACallName;
-  FLastCallArgsUsedExcMember := False;
-  ClearPendingStringTempReleases;
-  if ACallNode = nil then
-    Exit;
-  if ACallNode.NodeKind = gnkFunctionCall then
-    ArgIndex := 1
-  else
-    ArgIndex := 0;
-  ParamIndex := 0;
-  while ArgIndex < ACallNode.ChildCount do
-  begin
-    ArgNode := ACallNode.ChildAt(ArgIndex);
-    if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsVarParamAtPosition(ADeclNode, ParamIndex) and
-      (IsRuntimeVar(ArgNode.Text) or
-        (SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') and
-          IsRuntimeVar(FCurrentRetVarName))) then
+  LBuilder.Init(256);
+  try
+    LBuilder.AppendStr(ACallName);
+    FLastCallArgsUsedExcMember := False;
+    ClearPendingStringTempReleases;
+    if ACallNode = nil then
     begin
-      { By-ref formal + identifier arg → address channel. Result aliases its
-        sret retvar alloca; every other name passes its own alloca or
-        var-param pointer (v2.28 campaign, tree-exit139 family). }
-      if SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') then
-        Result := Result + #9 + 'varref ' + FCurrentRetVarName + #10
-      else
-        Result := Result + #9 + 'varref ' + ArgNode.Text + #10;
-    end
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsVarParamAtPosition(ADeclNode, ParamIndex) and
-      (FCurrentMethodClass <> '') and
-      (TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text) >= 0) then
+      Result := LBuilder.ToString;
+      Exit;
+    end;
+    if ACallNode.NodeKind = gnkFunctionCall then
+      ArgIndex := 1
+    else
+      ArgIndex := 0;
+    ParamIndex := 0;
+    while ArgIndex < ACallNode.ChildCount do
     begin
-      { By-ref field arg: implicit-self field has no runtime-var alloca —
-        pass the field address via self+field_ref (v2.28 campaign). }
-      FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text);
-      Result := Result + #9 + 'var self' + #10 + 'field_ref ' +
-        IntToStr(FieldIdx) + #10;
-    end
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsRuntimeStrVar(ArgNode.Text) then
-      Result := Result + #9 + 'strvar ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      IsRuntimeArrVar(ArgNode.Text) then
-      Result := Result + #9 + 'arrvar ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and IsSupportedOwnedStringReturnArgument(
-      ACallNode, ArgNode, ParamIndex) and
-      StringReturnFunctionNameFromNode(ArgNode, SourceName) then
-    begin
-      Inc(FBlockLabelCounter);
-      TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
-      RegisterRuntimeVar(TempName);
-      RegisterRuntimeStrVar(TempName);
-      FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
-        0, 0, TempName);
-      FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
-        0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
-        'ptr len owner alloc_size');
-      FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
-        ACallName, 0, 0, 'strvar ' + TempName + #10);
-      QueuePendingStringTempRelease(TempName, SourceName);
-      Result := Result + #9 + 'strvar ' + TempName + #10;
-    end
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      EvaluateStringConstant(ArgNode, Decoded) then
-      { String const identifier formal: fold to strlit, not residual
-        call @CONST() (M2 const-upper). }
-      Result := Result + #9 + 'strlit ' +
-        EncodePascalStringLiteral(Decoded) + #10
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkStringLiteral) then
-      Result := Result + #9 + 'strlit ' + ArgNode.Text + #10
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkDotAccess) and
-      (ArgNode.ChildCount >= 2) and
-      (ArgNode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (ArgNode.ChildAt(1).NodeKind = gnkIdentifier) and
-      IsExceptionHandlerVar(ArgNode.ChildAt(0).Text) and
-      EncodeExceptionMemberStrTemp(
-        ArgNode.ChildAt(0).Text, ArgNode.ChildAt(1).Text, TempName) then
-      Result := Result + #9 + 'strvar ' + TempName + #10
-    else if (ArgNode <> nil) and IsVarParamAtPosition(ADeclNode, ParamIndex) and
-      TryByRefFieldAddressBlob(ArgNode, Decoded) then
-      { By-ref formal + field-access arg → field address (gep, no load);
-        the int-fold fallback below emits a value load against a ptr formal,
-        which opt folds to unreachable (tree-exit139 family). }
-      Result := Result + #9 + Decoded
-    else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
-      FModel.LookupConstValue(ArgNode.Text, ConstOrdinal) then
-      { Enum/const identifier folds here at the source: the FoldCore fallback
-        emits 'expr N' tokens that push nothing in cond-br consumption —
-        the call then underflows its declared arity (v2.28 campaign). }
-      Result := Result + #9 + 'int ' + IntToStr(ConstOrdinal) + #10
-    else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then
-      Result := Result + #9 + Decoded;
-    Inc(ArgIndex);
-    Inc(ParamIndex);
+      ArgNode := ACallNode.ChildAt(ArgIndex);
+      if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        IsVarParamAtPosition(ADeclNode, ParamIndex) and
+        (IsRuntimeVar(ArgNode.Text) or
+          (SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') and
+            IsRuntimeVar(FCurrentRetVarName))) then
+      begin
+        LBuilder.AppendChar(#9);
+        if SameText(ArgNode.Text, 'Result') and (FCurrentRetVarName <> '') then
+          LBuilder.AppendStr('varref ' + FCurrentRetVarName + #10)
+        else
+          LBuilder.AppendStr('varref ' + ArgNode.Text + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        IsVarParamAtPosition(ADeclNode, ParamIndex) and
+        (FCurrentMethodClass <> '') and
+        (TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text) >= 0) then
+      begin
+        FieldIdx := TypeMetaFieldIndex(FCurrentMethodClass, ArgNode.Text);
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('var self' + #10 + 'field_ref ' + IntToStr(FieldIdx) + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        IsRuntimeStrVar(ArgNode.Text) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('strvar ' + ArgNode.Text + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        IsRuntimeArrVar(ArgNode.Text) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('arrvar ' + ArgNode.Text + #10);
+      end
+      else if (ArgNode <> nil) and IsSupportedOwnedStringReturnArgument(
+        ACallNode, ArgNode, ParamIndex) and
+        StringReturnFunctionNameFromNode(ArgNode, SourceName) then
+      begin
+        Inc(FBlockLabelCounter);
+        TempName := '$str_arg_tmp_' + IntToStr(FBlockLabelCounter);
+        RegisterRuntimeVar(TempName);
+        RegisterRuntimeStrVar(TempName);
+        FModel.AddTypedHirNode('var-decl-tstring-runtime', TempName,
+          0, 0, TempName);
+        FModel.AddTypedHirNode('string-temp-owned-runtime', SourceName,
+          0, 0, TempName + #9 + 'callee ' + EffectiveRuntimeCalleeName(SourceName, nil) + #9 +
+          'ptr len owner alloc_size');
+        FModel.AddTypedHirNode('string-temp-borrow-arg-runtime',
+          ACallName, 0, 0, 'strvar ' + TempName + #10);
+        QueuePendingStringTempRelease(TempName, SourceName);
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('strvar ' + TempName + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        EvaluateStringConstant(ArgNode, Decoded) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('strlit ' + EncodePascalStringLiteral(Decoded) + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkStringLiteral) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('strlit ' + ArgNode.Text + #10);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkDotAccess) and
+        (ArgNode.ChildCount >= 2) and
+        (ArgNode.ChildAt(0).NodeKind = gnkIdentifier) and
+        (ArgNode.ChildAt(1).NodeKind = gnkIdentifier) and
+        IsExceptionHandlerVar(ArgNode.ChildAt(0).Text) and
+        EncodeExceptionMemberStrTemp(
+          ArgNode.ChildAt(0).Text, ArgNode.ChildAt(1).Text, TempName) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('strvar ' + TempName + #10);
+      end
+      else if (ArgNode <> nil) and IsVarParamAtPosition(ADeclNode, ParamIndex) and
+        TryByRefFieldAddressBlob(ArgNode, Decoded) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr(Decoded);
+      end
+      else if (ArgNode <> nil) and (ArgNode.NodeKind = gnkIdentifier) and
+        FModel.LookupConstValue(ArgNode.Text, ConstOrdinal) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr('int ' + IntToStr(ConstOrdinal) + #10);
+      end
+      else if (ArgNode <> nil) and EncodeRuntimeIntExprFold(ArgNode, Decoded) then
+      begin
+        LBuilder.AppendChar(#9);
+        LBuilder.AppendStr(Decoded);
+      end;
+      Inc(ArgIndex);
+      Inc(ParamIndex);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
@@ -1105,6 +1131,14 @@ begin
   FProcedureBodyNameNext := nil;
   FProcedureBodyNameFirst.Free;
   FProcedureBodyNameFirst := nil;
+  if FImportedUnitCache <> nil then
+  begin
+    for Index := 0 to LongInt(FImportedUnitCache.Count) - 1 do
+      FImportedUnitCache[Index].Symbols.Free;
+    FImportedUnitCache.Free;
+  end;
+  FImportedUnitCacheIndex.Free;
+  FDiskCache.Free;
   FBuiltinRegistry.Free;
   FRuntimeVars.Free;
   FModel.Free;

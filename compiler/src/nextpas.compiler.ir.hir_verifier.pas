@@ -5,13 +5,13 @@ unit nextpas.compiler.ir.hir_verifier;
 interface
 
 uses
-  np_hir_verifier;
+  nextpas.compiler.ir.hir.verifier;
 
 type
-  THIRVerifyError = np_hir_verifier.THIRVerifyError;
-  THirVerifyErrorVec = np_hir_verifier.THirVerifyErrorVec;
-  THirValueIdVec = np_hir_verifier.THirValueIdVec;
-  THIRVerifier = np_hir_verifier.THIRVerifier;
+  THIRVerifyError = nextpas.compiler.ir.hir.verifier.THIRVerifyError;
+  THirVerifyErrorVec = nextpas.compiler.ir.hir.verifier.THirVerifyErrorVec;
+  THirValueIdVec = nextpas.compiler.ir.hir.verifier.THirValueIdVec;
+  THIRVerifier = nextpas.compiler.ir.hir.verifier.THIRVerifier;
 
 implementation
 

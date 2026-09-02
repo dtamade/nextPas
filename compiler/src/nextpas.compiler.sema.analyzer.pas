@@ -13,6 +13,7 @@ uses
   nextpas.compiler.syntax.ast_facade, np_base_types, nextpas.compiler.diagnostics.sink, nextpas.compiler.syntax.preprocessor,
   nextpas.compiler.frontend.source_database, nextpas.compiler.frontend.unit_graph, nextpas.compiler.sema.semantic_model, nextpas.compiler.syntax.green_tree, nextpas.compiler.syntax.lexer,
   nextpas.compiler.frontend.phase_timing,
+  nextpas.compiler.frontend.symbol_cache,
   nextpas.compiler.ir.hir.types, nextpas.compiler.sema.name_set, nextpas.compiler.sema.builtins, nextpas.compiler.sema.overload,
   nextpas.compiler.sema.type_check, nextpas.compiler.ir.hir.lowering, nextpas.compiler.sema.runtime_vars,
   nextpas.compiler.sema.string_ownership,
@@ -20,18 +21,7 @@ uses
   nextpas.core.collections.vec,
   nextpas.core.collections.hashmap;
 
-{$I np_sema_analyzer_types.inc}
-
-implementation
-
-uses
-  nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.util,
-  nextpas.core.os.env,
-  nextpas.core.system.contracts, nextpas.compiler.frontend.symbol_cache, nextpas.compiler.diagnostics.enhanced;
-
 type
-  TStringArray = array of string;
-
   TCachedSymbolEntry = record
     Name: string;
     Kind: string;
@@ -44,7 +34,6 @@ type
     ByteOffset: LongInt;
   end;
   TCachedSymbolEntryVec = specialize TVec<TCachedSymbolEntry>;
-
   TCachedUnitSymbols = record
     SourcePath: string;
     FileAge: Int64;
@@ -52,10 +41,20 @@ type
   end;
   PCachedUnitSymbols = ^TCachedUnitSymbols;
   TCachedUnitSymbolsVec = specialize TVec<TCachedUnitSymbols>;
+  TImportedUnitCacheIndex = specialize THashMap<string, LongInt>;
 
-var
-  GImportedUnitCache: TCachedUnitSymbolsVec = nil;
-  GDiskCache: TDiskSymbolCache = nil;
+{$I np_sema_analyzer_types.inc}
+
+implementation
+
+uses
+  SysUtils,
+  nextpas.core.text.conv, nextpas.core.text.builder, nextpas.core.path, nextpas.core.fs.util,
+  nextpas.core.os.env,
+  nextpas.core.system.contracts, nextpas.compiler.diagnostics.enhanced;
+
+type
+  TStringArray = array of string;
 
 { === Ownership bridge callbacks === }
 
@@ -260,32 +259,42 @@ begin
   Ctx.EmitSemaError := @OwnershipBridge_EmitSemaError;
 end;
 
-procedure EnsureImportedUnitCache;
+function TSemanticAnalyzer.BuildCacheKey(const APath: string; AAge: Int64): string;
 begin
-  if GImportedUnitCache = nil then
-    GImportedUnitCache := TCachedUnitSymbolsVec.Create;
+  FImportedUnitCacheKeyScratch := LowerCase(APath) + '#' + IntToStr(AAge);
+  Result := FImportedUnitCacheKeyScratch;
 end;
 
-function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
+procedure TSemanticAnalyzer.EnsureImportedUnitCache;
+begin
+  if FImportedUnitCache = nil then
+    FImportedUnitCache := TCachedUnitSymbolsVec.Create;
+  if FImportedUnitCacheIndex = nil then
+    FImportedUnitCacheIndex := specialize THashMap<string, LongInt>.Create;
+end;
+
+function TSemanticAnalyzer.FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
   I: LongInt;
 begin
   Result := -1;
-  if GImportedUnitCache = nil then
+  if FImportedUnitCache = nil then
     Exit;
-  for I := 0 to LongInt(GImportedUnitCache.Count) - 1 do
-    if SameText(GImportedUnitCache[I].SourcePath, APath) and
-      (GImportedUnitCache[I].FileAge = AAge) then
+  for I := 0 to LongInt(FImportedUnitCache.Count) - 1 do
+    if SameText(FImportedUnitCache[I].SourcePath, APath) and
+      (FImportedUnitCache[I].FileAge = AAge) then
       Exit(I);
 end;
 
-function AppendImportedUnitCacheEntry(
+function TSemanticAnalyzer.AppendImportedUnitCacheEntry(
   const ASourcePath: string;
   const AAge: Int64;
   const ASymbolCount: LongInt
 ): PCachedUnitSymbols;
 var
   Entry: TCachedUnitSymbols;
+  Key: string;
+  NewIdx: LongInt;
 begin
   EnsureImportedUnitCache;
   Entry := Default(TCachedUnitSymbols);
@@ -295,8 +304,15 @@ begin
     Entry.Symbols := TCachedSymbolEntryVec.Create(SizeUInt(ASymbolCount))
   else
     Entry.Symbols := TCachedSymbolEntryVec.Create;
-  GImportedUnitCache.Push(Entry);
-  Result := GImportedUnitCache.GetPtr(GImportedUnitCache.Count - 1);
+  FImportedUnitCache.Push(Entry);
+  Result := FImportedUnitCache.GetPtr(FImportedUnitCache.Count - 1);
+end;
+
+function TSemanticAnalyzer.GetDiskCache: TDiskSymbolCache;
+begin
+  if FDiskCache = nil then
+    FDiskCache := TDiskSymbolCache.Create('.nextpas/cache');
+  Result := FDiskCache;
 end;
 
 function ContainsString(
@@ -402,6 +418,10 @@ begin
     FImportedUnitTrees := TSemaImportedTreeVec.Create;
   end;
   FProcedureBodyNameFirst := TProcedureBodyNameFirstMap.Create;
+  FImportedUnitCache := nil;
+  FImportedUnitCacheIndex := nil;
+  FImportedUnitCacheKeyScratch := '';
+  FDiskCache := nil;
   FBuiltinRegistry := TBuiltinRegistry.Create;
   FRuntimeVars := TSemaRuntimeVarRegistry.Create(FAllocator);
 end;

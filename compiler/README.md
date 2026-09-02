@@ -29,38 +29,47 @@
 
 ## 当前已经落地的最小 skeleton
 
-**生产代码生成路径（M2 L3 / gen-B 正确性）**：Typed HIR → LLVM IR（`compiler/ir/np_hir_llvm_emitter*`）→ `opt` / `llc` / `ld`。
+**生产代码生成路径（M2 L3 / gen-B 正确性）**：Typed HIR → LLVM IR（`compiler/src/nextpas.compiler.ir.hir.llvm_emitter*` + `np_hir_llvm_emitter*.inc`）→ `opt` / `llc` / `ld`。
 **MIR + backend plan 为 experimental skeleton**：会话里会创建并投影计数，**不**作为 A→B closed 或优化正确性证据；在显式开关 + golden 之前不得把 gen-B 正确性绑到 MIR pass 族（见 findings F-012 / Wave0 冻结）。
 
-`Batch 3/4/5/6/7` 已经把最小但真实的 compiler session、syntax front、unit resolution、
-semantic model，以及 `Typed HIR -> MIR -> backend plan` skeleton 落进仓库：
+`Batch 3/4/5/6/7` 的最小 skeleton 已通过 **P1-1 命名单轨** 全量收敛至 `compiler/src` 点分扁平单轨 `nextpas.compiler.<area>.<topic>`（66 生产单元收口至 121 pas 含 thin-alias + 80 inc，原 9 散布目录清空；旧 `np_*` 仅留兼容门面，`scripts/compiler-flat-contract.sh` 断言零残留；见 `docs/plans/compiler-modernization-refactor.md` N1-N6），并经 **P1-4 去全局 ActiveExpressionTree (threadvar)** 与 **P3 性能收口** 完成分层与文件清单收口（下列为当前 `compiler/src` 真相清单，目录即真相）：
 
-- `frontend/np_source_database.pas`
+- `src/nextpas.compiler.frontend.source_database.pas`
   - 提供 `TSourceDatabase`，统一 root source 与 resolved unit source 的 `FileId`、canonical path、source text 与 line-index state
-- `frontend/np_compilation_session.pas`
-  - 提供 `TCompilationSession`，统一拥有 source db、target facts、diagnostics sink、compilation options、syntax / resolution / semantic / MIR / backend artifacts
-- `frontend/np_unit_graph.pas`
+- `src/nextpas.compiler.frontend.compilation_session.pas`
+  - 提供 `TCompilationSession`，统一拥有 source db、target facts、diagnostics sink、compilation options、syntax / resolution / semantic / MIR / backend artifacts；经 `lower` 桥接不再直连 sema/ir（P1-1 分层收口，L2 frontend 不依赖 L3 ir）
+- `src/nextpas.compiler.frontend.unit_graph.pas`
   - 提供 `TSearchPathSet`、`TResolvedUnit`、`TUnitGraph`，把 root/interface/implementation/implicit-runtime edge 收成显式对象
-- `frontend/np_unit_resolver.pas`
+- `src/nextpas.compiler.frontend.unit_resolver.pas`
   - 提供 `TUnitResolver`，把最小 search path、name resolution、cycle detection 与 resolution diagnostics 接回 compiler session
+- `src/nextpas.compiler.frontend.workspace_model.pas` / `package_manifest` / `package_lock` / `package_workflow` / `incremental_cache` / `file_change_detector` / `parallel_scheduler` / `symbol_cache` / `query_database` / `compiler_phase` / `phase_timing`
+  - 补齐 workspace / package / 增量 / 并行 / 符号缓存与阶段计时等前端外延（P1-1 扩展清单，前端 L2）
 - `src/nextpas.compiler.targets.facts.pas`
-  - 提供 `TTargetFactsView`，承接 target id、config path、host facts、compiler executable，以及 object format / assembler flavor / linker flavor / LLVM triple / toolchain binding / backend family
-- `src/nextpas.compiler.diagnostics.sink.pas`
-  - 提供 `TDiagnosticsSink`，承接 diagnostics policy、structured compile/toolchain diagnostics 与会话级计数
-- `syntax/np_lexer.pas`
-  - 提供最小 `TLexerResult`，把 root source 切成 token 流
-- `syntax/np_green_tree.pas`
-  - 提供最小 immutable `TGreenTree`，固定 root kind、declared name 与 node count
-- `syntax/np_ast_facade.pas`
-  - 提供最小 `TAstFacade`，从 green tree 暴露 typed syntax view
-- `sema/np_semantic_model.pas`
-  - 提供最小 `TSemanticModel`，统一 symbol/type/typed-hir/runtime-contract count、root name、semantic status 与 typed-hir iteration
-- `sema/np_semantic_analyzer.pas`
-  - 提供最小 `TSemanticAnalyzer`，把 builtin type、unit symbol、runtime contract seed 与 duplicate import semantic failure 接回 session
-- `ir/np_mir_model.pas`
-  - 提供最小 `TMirModel` 与 `TMirLowerer`，把 typed-hir nodes 下沉成 one-entry-block、target-neutral op list 与显式 `return`
-- `backend/np_backend_plan.pas`
-  - 提供最小 `TBackendPlan` 与 `TBackendPlanner`，把 `MIR + TargetFacts + SourcePath` 下沉成 output intent、primary artifact 与 host-compiler invocation plan
+  - 提供 `TTargetFactsView`，承接 target id、config path、host facts、compiler executable，以及 object format / assembler flavor / linker flavor / LLVM triple / toolchain binding / backend family（L0 targets）
+- `src/nextpas.compiler.diagnostics.sink.pas` / `enhanced` / `json` / `json_helpers`
+  - 提供 `TDiagnosticsSink` 家族，承接 diagnostics policy、structured compile/toolchain diagnostics 与会话级计数（L0 diagnostics）
+- `src/nextpas.compiler.syntax.lexer.pas`
+  - 提供 `TLexerResult`，把 root source 切成 token 流（L1 syntax）
+- `src/nextpas.compiler.syntax.green_tree.pas` + `green_tree.base` + `green_tree.core` + 7 `np_green_tree_*.inc`
+  - 提供 immutable `TGreenTree` / `TGreenNode` 四件套；**P1-4 去全局**：`ActiveExpressionTree: TGreenTree` 全局/threadvar 已收口至 `green_tree.core` 单一真源，`TGreenNode.Create(ATree, ...)` 为显式单源 overload，旧 `Create(Kind...)` 仅作兼容委托（`ActiveExpressionTree` 转发）；解析入口 `ParseAnonymousRoutineExpression` / `ParseTypeReference` / `clone_type` 全量显式 `ATree` 透传，`FNodeCount` 等可变状态收口至 `ATree` 实例，语法层零全局竞态（`compiler/syntax/np_green_tree_core.pas:116` 与 `compiler/src/np_green_tree_core.inc:125`）
+- `src/nextpas.compiler.syntax.ast_facade.pas` / `preprocessor` / `error_recovery`
+  - `TAstFacade` typed view、预处理与错误恢复（L1 syntax）
+- `src/nextpas.compiler.sema.semantic_model.pas`
+  - 提供 `TSemanticModel`，统一 symbol/type/typed-hir/runtime-contract count、root name、semantic status 与 typed-hir iteration（L2 sema）
+- `src/nextpas.compiler.sema.analyzer.pas` + `type_check` / `overload` / `builtins` / `name_set` / `runtime_vars` / `string_ownership` + 4 `vec` 家族
+  - 提供 `TSemanticAnalyzer` 家族，把 builtin type、unit symbol、runtime contract seed 与 duplicate import semantic failure 接回 session；`np_sema_validation.inc` 经 **P3 性能收口** 缓存化（`HandlerVarCache`/`MethodSuffixCache` 单次构建替代逐 ident 全量扫描，`Ensure*` 惰性初始化、try/finally 释放，消除 `O(ident*symbols)` 热点；`ir.hir.builder` `TExprStack.Pop/PopTyped` 原子双栈对齐防 Values/Types 失步，`ownership_detect` 回退 `False` 收紧）
+- `src/nextpas.compiler.lower.hir_lowering.pas` / `lower_query.pas` + 3 `hir_lowering` inc
+  - `lower` 桥接层，承接 `TCompilationSession` 去直连，AST→HIR 下沉外延（L3 lower 仅依赖 sema/ir）
+- `src/nextpas.compiler.ir.hir.types/model/builder/printer/verifier/to_mir/llvm_emitter/system_contracts` + `llvm_utils` + 15 `hir_*` inc
+  - Typed HIR 完整链路（L3 ir）
+- `src/nextpas.compiler.ir.mir.model/optimize/opt_level/to_llvm` + 12 `mir.pass.*`（`registry/constfold/cse/dce/deadarg/devirt/escape/inline_heuristic/inline/licm/strength_red/tailcall/vectorize`）
+  - MIR 与优化 pass 族（L3 ir，skeleton 实验态，生产仍为 HIR→LLVM 直通）
+- `src/nextpas.compiler.backend.plan.pas`
+  - 提供 `TBackendPlan` 与 `TBackendPlanner`，把 `MIR + TargetFacts + SourcePath` 下沉成 output intent、primary artifact 与 host-compiler invocation plan（L3 backend）
+- `src/nextpas.compiler.toolchain.plan/profiles/runner.pas` + 8 `np_toolchain_*.inc`
+  - 工具链规划与执行（L4 toolchain）
+
+分层契约：`compiler Ln` 仅依赖 `≤Ln`（0 base/diagnostics/targets → 1 syntax → 2 frontend/sema → 3 ir/lower/backend → 4 toolchain），`core` 能力天花板 L2 I/O 族（fs/json/io/process）仅 frontend/driver 或显式例外（见 `scripts/compiler-flat-contract.sh` 轴 A/B/C 与 `compiler/CLAUDE.md` 边界规则）；`P3` 后验证 `rebuild 434k lines` + `compiler-pass 59/59` + `hygiene pass` 保持。
 
 这套 skeleton 现在已经被 `tools/stage0/nextpas.pas` 在 `build` 成功路径上实际创建，
 并通过 `session-id`、`source-db-file-count`、`diagnostics-count`、`syntax-status`、

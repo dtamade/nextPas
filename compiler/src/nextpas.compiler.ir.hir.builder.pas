@@ -9,6 +9,7 @@ interface
 uses
   Generics.Collections, SysUtils,
   nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model, nextpas.compiler.frontend.source_database,
+  nextpas.compiler.diagnostics.sink,
   nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
@@ -53,6 +54,7 @@ type
   private
     FSemaModel: TSemanticModel;
     FModule: THIRModule;
+    FDiagnosticsSink: TDiagnosticsSink;
     { Optional phase scratch for working TVecs (cleanup/blocks/allocas/globals). }
     FAllocator: IAllocator;
     FCurrentFuncId: THIRFuncId;
@@ -88,6 +90,7 @@ type
 
     FBlockNames: THirBlockNameVec;
     FBlockIds: THirBlockIdVec;
+    FBlockIndex: specialize TDictionary<string, THIRBlockId>;
 
     FFwdFuncNames: THirNameVec;
     FFwdFuncRetTypes: THirTypeIdVec;
@@ -112,6 +115,7 @@ type
     procedure ClearWorkAllocas;
     procedure RestoreWorkAllocas(AEntries: THirAllocaVec);
     procedure RebuildAllocaIndex;
+    procedure RebuildBlockIndex;
     function CreateAllocaVec: THirAllocaVec;
     function CreateNameVec: THirNameVec;
     function CreateBlockIdVec: THirBlockIdVec;
@@ -145,6 +149,9 @@ type
       out ANoOp: Boolean): Boolean;
 
     procedure EmitInstr(const AInstr: THIRInstr);
+    procedure EmitHirDiagnostic(const ACode, AMessage: string);
+    function TryNormalizeScalarValueToType(const AValueId: THIRValueId; const ASourceTypeId, ATargetTypeId: THIRTypeId; out AResult: THIRValueId): Boolean;
+    function GetDynArrayElemSizeValue(const AArrayName: string; out ATypeId: THIRTypeId): THIRValueId;
     function EmitBinOp(AKind: THIRInstrKind; AType: THIRTypeId;
       ALhs, ARhs: THIRValueId): THIRValueId;
     function EmitCmpOp(AKind: THIRInstrKind; AType: THIRTypeId;
@@ -338,7 +345,7 @@ type
     destructor Destroy; override;
     function LowerExpr(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
-    procedure Build;
+    function Build: Boolean;
     function Module: THIRModule;
   end;
 
@@ -385,23 +392,24 @@ function TExprStack.Pop: THIRValueId;
 var
   Dummy: THIRTypeId;
 begin
+  Result := 0;
+  Dummy := 0;
   if Values.Count = 0 then
-    Exit(0);
-  if not Values.TryPop(Result) then
-    Exit(0);
-  if not Types.TryPop(Dummy) then
-    ; { keep Values/Types lengths aligned }
+    Exit;
+  // keep Values/Types lengths aligned — pop both atomically
+  Values.TryPop(Result);
+  Types.TryPop(Dummy);
 end;
 
 function TExprStack.PopTyped(out AType: THIRTypeId): THIRValueId;
 begin
   AType := 0;
+  Result := 0;
   if Values.Count = 0 then
-    Exit(0);
-  if not Values.TryPop(Result) then
-    Exit(0);
-  if not Types.TryPop(AType) then
-    AType := 0;
+    Exit;
+  // keep Values/Types lengths aligned — pop both atomically
+  Values.TryPop(Result);
+  Types.TryPop(AType);
 end;
 
 function TExprStack.PeekType: THIRTypeId;
@@ -502,6 +510,7 @@ begin
     FFwdFuncRetTypes := THirTypeIdVec.Create;
   end;
   FAllocaIndex := specialize TDictionary<string, LongInt>.Create;
+  FBlockIndex := specialize TDictionary<string, THIRBlockId>.Create;
   FLegacyIntType := 0;
   FBoolType := 0;
   FStringType := 0;
@@ -527,6 +536,7 @@ begin
   FSavedAllocas.Free;
   FAllocas.Free;
   FAllocaIndex.Free;
+  FBlockIndex.Free;
   FBlockIds.Free;
   FBlockNames.Free;
   FPendingCleanupNodes.Free;
@@ -561,6 +571,8 @@ procedure THIRBuilder.ClearWorkBlocks;
 begin
   FBlockNames.Clear;
   FBlockIds.Clear;
+  if FBlockIndex <> nil then
+    FBlockIndex.Clear;
 end;
 
 procedure THIRBuilder.SnapshotWorkTables(AAllocas: THirAllocaVec;
@@ -593,6 +605,7 @@ begin
     else
       FBlockIds.Push(0);
   end;
+  RebuildBlockIndex;
 end;
 
 procedure THIRBuilder.ClearWorkAllocas;
@@ -611,6 +624,17 @@ begin
   FAllocaIndex.Clear;
   for I := 0 to LongInt(FAllocas.Count) - 1 do
     FAllocaIndex.AddOrSetValue(LowerCase(FAllocas[I].Name), I);
+end;
+
+procedure THIRBuilder.RebuildBlockIndex;
+var
+  I: LongInt;
+begin
+  if FBlockIndex = nil then
+    Exit;
+  FBlockIndex.Clear;
+  for I := 0 to LongInt(FBlockNames.Count) - 1 do
+    FBlockIndex.AddOrSetValue(FBlockNames[I], FBlockIds[I]);
 end;
 
 procedure THIRBuilder.RestoreWorkAllocas(AEntries: THirAllocaVec);
@@ -642,13 +666,10 @@ begin
 end;
 
 function THIRBuilder.FindBlock(const AName: string): THIRBlockId;
-var
-  I: SizeUInt;
 begin
-  if FBlockNames.Count > 0 then
-    for I := 0 to FBlockNames.Count - 1 do
-      if FBlockNames[I] = AName then
-        Exit(FBlockIds[I]);
+  // O(1) hash cache — zero-copy key reference, no linear scan
+  if (FBlockIndex <> nil) and FBlockIndex.TryGetValue(AName, Result) then
+    Exit;
   Result := 0;
 end;
 
@@ -656,11 +677,14 @@ function THIRBuilder.EnsureBlock(const AName: string): THIRBlockId;
 begin
   Result := FindBlock(AName);
   if Result <> 0 then Exit;
-  if FCurrentFuncId = 0 then Exit(0);
+  if FCurrentFuncId = 0 then
+    raise Exception.CreateFmt('hir.builder: EnsureBlock missing function context block="%s" funcId=0', [AName]);
 
   Result := FModule.AddBlock(FCurrentFuncId, AName);
   FBlockNames.Push(AName);
   FBlockIds.Push(Result);
+  if FBlockIndex <> nil then
+    FBlockIndex.AddOrSetValue(AName, Result);
 end;
 
 function THIRBuilder.Module: THIRModule;
