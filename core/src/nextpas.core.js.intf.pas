@@ -24,10 +24,10 @@ type
   public
     // core
     function Kind: TJsValueKind; inline;
-    // validity dual-track per INV-7: bulk zero barrier vs strong acquire
-    function IsValid: Boolean; inline; // bulk: FValid only, zero atomic, thread-affine hot bulk
-    function IsAlive: Boolean; // strong: FValid + acquire GPureClosed via lifecycle, not inline per red-line 2
-    function IsClosed: Boolean; // strong explicit closed via acquire, not inline per red-line 2
+    // INV-7 dual-track: IsValid bulk zero barrier (FValid only, inline) vs IsAlive/IsClosed strong acquire via js.lifecycle; bulk may stay true after Close/cross-thread — use IsAlive/IsClosed for strong check
+    function IsValid: Boolean; inline; // bulk zero barrier
+    function IsAlive: Boolean; // strong acquire, not inline
+    function IsClosed: Boolean; // strong acquire, not inline
     // type checks: thin via IsKind single source, inline
     function IsUndefined: Boolean; inline;
     function IsNull: Boolean; inline;
@@ -42,16 +42,16 @@ type
     function IsPromise: Boolean; inline;
     function IsSymbol: Boolean; inline;
     function IsBigInt: Boolean; inline;
-    // accessors: inline zero-copy via hosted FStrVal / view single source (bytes.ops)
+    // accessors: inline via hosted FStrVal / view single source (bytes.ops)
     function AsBool: Boolean; inline;
     function AsInt: Int64; inline;
     function AsDouble: Double; inline;
-    function AsString: string; // not inline per red-line 2 (branch+SpanToString alloc), lazy cache B/op=0 repeat
+    function AsString: string; // not inline, lazy cache via bytes.ops SpanToString
     function AsJson: string; inline;
     function TryAsBool(out V: Boolean): Boolean;
     function TryAsDouble(out V: Double): Boolean;
     function TryAsString(out V: string): Boolean;
-    // view — zero-copy extent via bytes.ops TByteSpan single source, inline, B/op=0 at view creation
+    // view — zero-copy via bytes.ops TByteSpan; borrows caller buffer until materialized
     function IsStringView: Boolean; inline;
     function AsViewLen: SizeUInt; inline;
     function TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
@@ -120,10 +120,7 @@ function JsDoubleValue(AValue: Double): TJsValue; inline; begin Result:=JsUndefi
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // perf: inline zero-copy view via bytes.ops TByteSpan single source, B/op=0 at creation (no heap alloc, no Move), AsString materializes lazily via SpanToString single source
-  // single source: view extent via TByteSpan.Create(PByte+Len) zero-copy, owner bytes.ops, L0-L3 kept, four-piece intact
-  // stability: view borrows caller's buffer (Eval/Host hot path zero-copy pass-through); caller must keep buffer alive until AsString/TryAsString materializes; empty nil/0 fast path via JsStringValue('')
-  // resource: no allocation, no try-finally, FStrVal stays '' until lazy materialize, heaptrc 0 for NewStringView creation
+  // zero-copy view via bytes.ops TByteSpan, B/op=0; borrows caller buffer until AsString/TryAsString materializes — caller must keep buffer alive
   if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
   else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=''; Result.FViewData:=AData; Result.FViewLen:=ALen; end;
 end;
@@ -138,7 +135,6 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7 dual-track: bulk IsValid zero barrier vs strong IsAlive/IsClosed via lifecycle acquire per CONTRACT §6
 { TJsValue - core }
 
 function TJsValue.Kind: TJsValueKind; inline;
@@ -156,26 +152,18 @@ begin
   Result := (FKind = A) or (FKind = B);
 end;
 
-{ TJsValue - validity dual-track per INV-7 }
-
 function TJsValue.IsValid: Boolean; inline;
 begin
-  // bulk zero barrier: FValid only, zero atomic, thread-affine hot bulk (zero fence, no cache coherence miss)
-  // perf: inline single branch, no atomic_load, B/op=0 bulk
   Result := FValid;
 end;
 
 function TJsValue.IsAlive: Boolean;
 begin
-  // not inline per red-line 2 (branch+atomic acquire via js.lifecycle single source, I-Cache avoid)
-  // perf: single acquire via GPureClosed compact 4B epoch*2+closed (atomic_load mo_acquire) single source via js.lifecycle, bulk IsValid zero barrier kept, inline zero-copy acquire
   Result := FValid and not JsPureContextIsClosed(FContextId);
 end;
 
 function TJsValue.IsClosed: Boolean;
 begin
-  // not inline per red-line 2 (branch+atomic acquire, I-Cache avoid)
-  // perf: single acquire via js.lifecycle single source, generation mismatch => closed, inline zero-copy
   Result := FValid and JsPureContextIsClosed(FContextId);
 end;
 
@@ -248,14 +236,13 @@ function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger)
 function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string;
 begin
-  // not inline per red-line 2 (branch+SpanToString alloc would bloat I-Cache if inlined)
-  // perf: single source via bytes.ops SpanToString (SetString+Move single source), zero-copy view extent, bytes.ops single source, L0-L3 kept
-  // cache: first materialize lazily via SpanToString single Move, repeat B/op=0 via FStrVal cache (hosted path), view borrow zero-copy, resource not丢
+  // lazy cache via bytes.ops SpanToString single source; view checks IsAlive before deref to avoid wild pointer after Close
   if FKind=jskSymbol then Exit(FStrVal);
   if FKind<>jskString then Exit('');
   if FViewLen > 0 then
   begin
     if Length(FStrVal) <> 0 then Exit(FStrVal);
+    if not IsAlive then Exit(FStrVal);
     FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
     Result := FStrVal;
     Exit;
@@ -265,7 +252,6 @@ end;
 
 function TJsValue.IsStringView: Boolean; inline;
 begin
-  // perf: inline single branch, zero-copy view check, B/op=0
   Result := (FKind = jskString) and (FViewLen > 0) and (FViewData <> nil);
 end;
 
@@ -276,7 +262,6 @@ end;
 
 function TJsValue.TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
 begin
-  // perf: inline zero-copy view extent, bytes.ops single source via TByteSpan, no alloc, B/op=0
   if (FKind <> jskString) then begin AData:=nil; ALen:=0; Exit(False); end;
   if FViewLen > 0 then begin AData:=FViewData; ALen:=FViewLen; Exit(True); end;
   if Length(FStrVal) > 0 then begin AData:=PAnsiChar(FStrVal); ALen:=SizeUInt(Length(FStrVal)); Exit(True); end;
@@ -290,14 +275,14 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin
-  // not inline per red-line 2 (branch+SpanToString alloc, I-Cache avoid); cache B/op=0 repeat via FStrVal single source
-  // perf: single source via bytes.ops SpanToString, zero-copy view extent, lazy cache into FStrVal for AsString/TryAsString shared B/op=0 repeat, resource not丢
+  // lazy cache via bytes.ops SpanToString single source; checks IsAlive before deref
   Result:=FKind=jskString;
   if Result then
   begin
     if FViewLen > 0 then
     begin
       if Length(FStrVal) <> 0 then V:=FStrVal
+      else if not IsAlive then V:=FStrVal
       else begin V:=SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)); FStrVal:=V; end;
     end else V:=FStrVal;
   end else V:='';

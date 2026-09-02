@@ -93,12 +93,26 @@ begin
 end;
 
 function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-var Idx: Integer;
+var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt;
 begin
   BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
   case AVal.Kind of
-    jskString: if Assigned(JS_NewStringPtr) then Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+    jskString:
+      if Assigned(JS_NewStringPtr) then
+      begin
+        // perf: zero-copy TStringView直通 via TJsValue.TryGetView single source (bytes.ops TByteSpan zero-copy, inline, B/op=0) — hot path eliminates PAnsiChar(AVal.AsString) one heap alloc+Move; slice non-terminated fallback to AsString materializes single alloc to preserve C-string contract, exactly-once JS_NewString, inline thin-forward, decorator single source
+        if AVal.TryGetView(LData, LLen) and (LData <> nil) then
+        begin
+          // stability: guard slice view not NUL-terminated at Len (Data[Len] != #0) — fallback to AsString single alloc preserves binary slice correctness, resource exactly-once, bytes.ops single source kept
+          if (LLen = 0) or (LData[LLen] = #0) then
+            Result := JS_NewStringPtr(ACtx, LData)
+          else
+            Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+        end
+        else
+          Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+      end;
     jskInteger:
       begin
         // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip Int64(Trunc(...)) extra FPU + 2^53 loss), inline single Kind branch, zero FPU overhead, owner base Kind single source via byte ops single source

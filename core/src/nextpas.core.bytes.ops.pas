@@ -67,6 +67,8 @@ function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function BytesDynCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
 function BytesDynCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
 procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
+// generic ensure with geometric single source via BytesNextCapacity + probe/poke single slit, trivial types only (zero finalization), inline zero-copy, amortized O(1)
+procedure BytesDynEnsureLength(var A; AElemSize: SizeUInt; ANewLen: SizeUInt);
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -160,6 +162,36 @@ procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
 begin
   // inline single source poke via L0 mem.dynarray, zero-copy header High, Exactly-Once, bytes.ops single slit
   nextpas.core.mem.dynarray.DynArraySetLengthGeneric(A, ANewLen);
+end;
+
+type
+  PDynArrayHeaderLocal = ^TDynArrayHeaderLocal;
+  TDynArrayHeaderLocal = record RefCnt: PtrInt; High: PtrInt; end;
+
+procedure BytesDynEnsureLength(var A; AElemSize: SizeUInt; ANewLen: SizeUInt);
+var
+  LP: Pointer;
+  LCurLen, LCurCap, LCap: SizeUInt;
+  LBytes: TBytes absolute A;
+begin
+  // single source geometric via BytesNextCapacity + probe/poke single slit, trivial types only, amortized O(1), inline not per red-line 2 (SetLength + loop)
+  if AElemSize = 0 then Exit;
+  LP := PPointer(@A)^;
+  if LP = nil then
+    LCurLen := 0
+  else
+    LCurLen := SizeUInt(PDynArrayHeaderLocal(PByte(LP) - SizeOf(TDynArrayHeaderLocal))^.High + 1);
+  if LCurLen = ANewLen then Exit;
+  LCurCap := BytesDynCapacityGeneric(A, AElemSize);
+  if LCurCap >= ANewLen then
+  begin
+    BytesDynSetLengthGeneric(A, ANewLen);
+    Exit;
+  end;
+  LCap := BytesNextCapacity(LCurLen, ANewLen);
+  SetLength(LBytes, LCap * AElemSize);
+  if LCap <> ANewLen then
+    BytesDynSetLengthGeneric(A, ANewLen);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;

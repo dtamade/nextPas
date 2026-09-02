@@ -1,5 +1,5 @@
 unit nextpas.core.js.lifecycle;
-{ lifecycle owner — single source for pure Context registry: GPureClosed compact 4B }
+{ lifecycle owner — single source for pure Context registry: GPureClosed compact 4B, 64B isolated }
 {$I nextpas.core.settings.inc}
 interface
 function JsPureContextRegister: UInt64;
@@ -19,22 +19,18 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.sync.spinlock;
+type
+  TCacheLinePad = array[0..7] of Int64; // 64B isolation, false-sharing free
 var
   GPureClosed: array of UInt32; // compact 4B per Context: epoch*2+closed
-  GPureNextId: Int64 = 1; // atomic monotonic, plain, bytes.ops single source for growth not needed
-  GPureClosedLen: PtrUInt = 0; // atomic Len, release/acquire, plain
-  GPureClosedLock: Int32 = 0; // spinlock single source, plain
-  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric
-function GPureClosedCapacity: SizeUInt; inline;
-begin
-  // inline zero-copy via bytes.ops single source (probe via mem.dynarray single slit)
-  Result := BytesDynCapacityElem(Pointer(GPureClosed), SizeUInt(Length(GPureClosed)), SizeOf(UInt32));
-end;
-procedure PokePureClosedLen(const ANewLen: SizeUInt); inline;
-begin
-  // inline Exactly-Once poke via bytes.ops single source (header High, zero-copy)
-  BytesDynSetLengthGeneric(GPureClosed, ANewLen);
-end;
+  GPureClosedPad: TCacheLinePad; // 64B isolation from NextId
+  GPureNextId: Int64 = 1; // atomic monotonic, 64B isolated
+  GPureNextIdPad: TCacheLinePad; // 64B isolation from Len
+  GPureClosedLen: PtrUInt = 0; // atomic Len, release/acquire, 64B isolated
+  GPureClosedLenPad: TCacheLinePad; // 64B isolation from Lock
+  GPureClosedLock: Int32 = 0; // spinlock single source, 64B isolated
+  GPureClosedLockPad: TCacheLinePad; // 64B isolation from Free
+  GPureFree: array of UInt64; // freelist bounded, bytes.ops geometric, 64B tail
 function GPureFreeCapacity: SizeUInt; inline;
 begin
   Result := BytesDynCapacityElem(Pointer(GPureFree), SizeUInt(Length(GPureFree)), SizeOf(UInt64));
@@ -65,8 +61,19 @@ begin
   if (LCap > 64) and (LLen * 4 < LCap) then
     SetLength(GPureFree, Integer(LLen));
 end;
+// heap growth single source via bytes.ops geometric (BytesDynEnsureLength) single slit, inline zero-copy, amortized O(1)
+procedure GPureClosedEnsure(const ANewLen: SizeUInt); inline;
+begin
+  // perf: inline thin-forward to bytes.ops single source geometric via BytesDynEnsureLength (BytesNextCapacity + probe/poke), zero-copy, amortized O(1), trivial U32
+  BytesDynEnsureLength(GPureClosed, SizeOf(UInt32), ANewLen);
+end;
+procedure GPureFreeEnsure(const ANewLen: SizeUInt); inline;
+begin
+  // perf: inline thin-forward to bytes.ops single source geometric via BytesDynEnsureLength, zero-copy, amortized O(1), trivial U64
+  BytesDynEnsureLength(GPureFree, SizeOf(UInt64), ANewLen);
+end;
 function JsPureContextRegister: UInt64;
-var LNeed, LCap, LCurCap: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;
+var LNeed: SizeUInt; LId: Int64; LIdx, LEpoch, LStored: UInt32;
 begin
   // freelist recycle bounded, generation-tagged INV-7, sync.spinlock single source
   RawSpinAcquire(GPureClosedLock);
@@ -96,26 +103,13 @@ begin
   Result := GPureMakeId(LIdx, 0);
   if PtrUInt(LIdx) >= atomic_load(GPureClosedLen, mo_acquire) then
   begin
-    // resize rare, sync.spinlock single source, compact 4B, bytes.ops geometric single source
+    // resize rare, sync.spinlock single source, compact 4B, bytes.ops geometric single source via GPureClosedEnsure
     RawSpinAcquire(GPureClosedLock);
     try
       if LIdx >= UInt32(Length(GPureClosed)) then
       begin
         LNeed := SizeUInt(LIdx) + 1;
-        LCurCap := GPureClosedCapacity;
-        if LCurCap >= LNeed then
-        begin
-          if SizeUInt(Length(GPureClosed)) <> LNeed then
-            PokePureClosedLen(LNeed);
-        end
-        else
-        begin
-          LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
-          SetLength(GPureClosed, Integer(LCap));
-          if LCap <> LNeed then
-            PokePureClosedLen(LNeed);
-          // Exactly-Once capacity reservation via bytes.ops single source + poke, amortized O(1), zero-fill jitter avoided (first 64-slot only LNeed zeroed logically)
-        end;
+        GPureClosedEnsure(LNeed);
         atomic_store(GPureClosedLen, PtrUInt(Length(GPureClosed)), mo_release);
       end;
     finally
@@ -125,7 +119,7 @@ begin
   atomic_store(GPureClosed[LIdx], UInt32(0), mo_release); // epoch 0 alive
 end;
 procedure JsPureContextClose(AId: UInt64);
-var LCap, LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
+var LNeed: SizeUInt; LIdx, LEpoch, LStored, LExpected, LDesired: UInt32;
 begin
   LIdx := GPureIndexOf(AId);
   LEpoch := GPureEpochOf(AId);
@@ -137,20 +131,11 @@ begin
   LExpected := LStored;
   LDesired := (LEpoch shl 1) or 1; // epoch*2+1 closed
   if not atomic_compare_exchange_strong(GPureClosed[LIdx], LExpected, LDesired) then Exit;
-  // freelist bounded recycling, sync.spinlock single source
+  // freelist bounded recycling, sync.spinlock single source, bytes.ops geometric single source via GPureFreeEnsure
   RawSpinAcquire(GPureClosedLock);
   try
     LNeed := SizeUInt(Length(GPureFree)) + 1;
-    if GPureFreeCapacity < LNeed then
-    begin
-      LCap := BytesNextCapacity(SizeUInt(Length(GPureFree)), LNeed);
-      SetLength(GPureFree, Integer(LCap));
-      if LCap <> LNeed then
-        BytesDynSetLengthGeneric(GPureFree, LNeed);
-      // Exactly-Once capacity reservation via bytes.ops single source + poke, amortized O(1), geometric 0→64→2×
-    end;
-    if SizeUInt(Length(GPureFree)) <> LNeed then
-      BytesDynSetLengthGeneric(GPureFree, LNeed);
+    GPureFreeEnsure(LNeed);
     GPureFree[High(GPureFree)] := UInt64(LIdx);
   finally
     RawSpinRelease(GPureClosedLock);
@@ -200,7 +185,7 @@ begin
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;
 initialization
-  // atomic only, GPureClosed compact 4B, plain vars, GPureClosed 4B compact without 64B pad luxury (10k~40KB L2 friendly)
+  // 64B isolated state: GPureClosed 4B compact + 64B pads between NextId/Len/Lock/Free (false-sharing free)
 finalization
   SetLength(GPureClosed, 0);
   SetLength(GPureFree, 0);

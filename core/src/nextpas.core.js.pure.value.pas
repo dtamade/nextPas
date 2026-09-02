@@ -310,11 +310,10 @@ begin
   else if Length(Heap[Idx].PropsBuckets)>0 then PropBucketsInvalidate(Heap[Idx]);
 end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
-var I, J: Integer;
+var I: Integer;
 begin
   for I := 0 to High(Heap) do
   begin
-    for J := 0 to High(Heap[I].Props) do begin Heap[I].Props[J].Name := ''; Heap[I].Props[J].Hash:=0; end;
     SetLength(Heap[I].Props, 0);
     PropBucketsInvalidate(Heap[I]);
   end;
