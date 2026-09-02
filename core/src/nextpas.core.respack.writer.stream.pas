@@ -88,6 +88,13 @@ var
     Rem, CopyNow: SizeUInt;
   begin
     if (ASrc = nil) or (ALen = 0) then Exit;
+    if ALen <= ChunkCap - ChunkPos then
+    begin
+      BytesCopy(@HeadBuf[ChunkPos], ASrc, ALen);
+      Inc(ChunkPos, ALen);
+      if ChunkPos = ChunkCap then FlushHead;
+      Exit;
+    end;
     Src := PByte(ASrc);
     Rem := ALen;
     while Rem > 0 do
