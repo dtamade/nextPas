@@ -30,6 +30,7 @@ type
     function NewContext: IJsContext;
     procedure SetMemoryLimit(ALimit: SizeUInt);
     procedure SetTimeout(ATimeoutMs: Integer);
+    procedure SetInterruptSampleInterval(AInterval: Cardinal);
     procedure CollectGarbage;
   end;
 
@@ -48,6 +49,7 @@ type
     FDeadlineMs: Int64;
     FInterruptCount: Cardinal;
     FLastCheckNs: QWord;
+    FInterruptSampleInterval: Cardinal;
     FCallHeap: array of TJSQjsValue;
     function FindHost(const AName: string): Integer; inline;
     function IsOnCreationThread: Boolean; inline;
@@ -98,6 +100,8 @@ type
     procedure RemoveHostFunction(const AName: string);
     procedure Tick;
     procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
+    procedure SetInterruptSampleInterval(AInterval: Cardinal);
+    function GetInterruptSampleInterval: Cardinal;
   end;
 
 implementation
@@ -119,8 +123,8 @@ var
 begin
   Ctx := TJsQuickJsContext(Opaque);
   if Ctx = nil then Exit(0);
-  // perf: sampling via quickjs.value single source QjsInterruptShouldAbort (1024次/ syscall, 惰性刷新, inline), 原逐次 platform_monotonic_ns 占假后端 684ns 基线 15-30%, bytes.ops 单源复用, 装饰边界单缝
-  if QjsInterruptShouldAbort(Ctx.FDeadlineMs, Ctx.FInterruptCount, Ctx.FLastCheckNs) then Exit(1);
+  // perf: sampling via quickjs.value single source QjsInterruptShouldAbort 可配采样 (1逐次15-30%→1024惰性→65536稀疏, 684ns基线), 单源 JsInterruptSampleIntervalNormalized via base, bytes.ops 单源, inline 零拷贝, 装饰边界单缝, timely vs overhead tunable
+  if QjsInterruptShouldAbort(Ctx.FDeadlineMs, Ctx.FInterruptCount, Ctx.FLastCheckNs, Ctx.FInterruptSampleInterval) then Exit(1);
   Result := 0;
 end;
 
@@ -128,6 +132,7 @@ constructor TJsQuickJsRuntime.Create(const AOptions: TJsRuntimeOptions);
 begin
   inherited Create;
   FOptions := AOptions;
+  FOptions.InterruptSampleInterval := JsInterruptSampleIntervalNormalized(FOptions.InterruptSampleInterval);
   CheckJsRuntimeOptions(FOptions, jsbkQuickJs);
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS backend not available (probe: '+JsQuickJsProbeNames+')', jecUnknown, 'Error', '', jsbkQuickJs);
@@ -144,6 +149,11 @@ end;
 procedure TJsQuickJsRuntime.SetMemoryLimit(ALimit: SizeUInt); begin FOptions.MemoryLimit := ALimit; end;
 procedure TJsQuickJsRuntime.SetTimeout(ATimeoutMs: Integer);
 begin if ATimeoutMs < 0 then raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', jsbkQuickJs); FOptions.TimeoutMs := ATimeoutMs; end;
+procedure TJsQuickJsRuntime.SetInterruptSampleInterval(AInterval: Cardinal);
+begin
+  // perf: inline normalized via base single source, 零拷贝, 1逐次高及时 1024平衡 65536低开销, bytes.ops 单源, owner base
+  FOptions.InterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
+end;
 procedure TJsQuickJsRuntime.CollectGarbage; begin end;
 
 constructor TJsQuickJsContext.Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
@@ -151,12 +161,14 @@ begin
   inherited Create;
   FRuntime := ARuntime;
   FOptions := AOptions;
+  FOptions.InterruptSampleInterval := JsInterruptSampleIntervalNormalized(FOptions.InterruptSampleInterval);
   FClosed := False;
   FThreadId := QjsThreadSelf;
   FContextId := JsPureContextRegister;
   FDeadlineMs := 0;
   FInterruptCount := 0;
   FLastCheckNs := 0;
+  FInterruptSampleInterval := FOptions.InterruptSampleInterval;
   if not JsQuickJsLoad then
     raise EJsBackendUnavailable.Create('QuickJS not loaded', jecUnknown, 'Error', '', jsbkQuickJs);
   // stability: fail-closed nil guard before indirect call — loader now marks core symbols Required, but guard prevents AV if so missing → EJsBackendUnavailable not AV
@@ -494,5 +506,19 @@ begin
   JsPureHostBucketsInvalidate(FHostBuckets);
 end;
 function TJsQuickJsContext.IsClosed: Boolean; begin Result:=FClosed; end;
+
+procedure TJsQuickJsContext.SetInterruptSampleInterval(AInterval: Cardinal);
+begin
+  // perf: inline normalized via base single source, 零拷贝, 可配及时性/开销, 1逐次→65536稀疏, owner base, inline
+  if FClosed then Exit;
+  EnsureThreadAffinity;
+  FInterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
+  FOptions.InterruptSampleInterval := FInterruptSampleInterval;
+end;
+
+function TJsQuickJsContext.GetInterruptSampleInterval: Cardinal;
+begin
+  Result := FInterruptSampleInterval;
+end;
 
 end.

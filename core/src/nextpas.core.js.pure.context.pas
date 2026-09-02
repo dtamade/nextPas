@@ -32,6 +32,7 @@ type
     FBackend: TJsBackendKind;
     FHost: TJsPureHostState;
     FValue: TJsPureValueState;
+    FInterruptSampleInterval: Cardinal;
     function FindHost(const AName: string): Integer; inline;
     function FindHostView(const AName: TStringView): Integer; inline;
     function IsOnCreationThread: Boolean; inline;
@@ -48,6 +49,8 @@ type
     function IsClosed: Boolean;
     procedure Tick;
     procedure CollectGarbage;
+    procedure SetInterruptSampleInterval(AInterval: Cardinal);
+    function GetInterruptSampleInterval: Cardinal;
     function Eval(const ACode: string; const AFileName: string = ''): TJsValue;
     function TryEval(const ACode: string; out AValue: TJsValue): Boolean;
     function Global: TJsValue;
@@ -95,6 +98,7 @@ begin
   FClosed := False;
   FThreadId := JsPureThreadSelf;
   FContextId := JsPureContextRegister;
+  FInterruptSampleInterval := JsInterruptSampleIntervalNormalized(FOptions.InterruptSampleInterval);
   JsPureValueStateInit(FValue, FContextId);
 end;
 
@@ -356,6 +360,20 @@ end;
 function TJsPureContext.IsClosed: Boolean;
 begin
   Result := FClosed;
+end;
+
+procedure TJsPureContext.SetInterruptSampleInterval(AInterval: Cardinal);
+begin
+  // perf: inline normalized via base single source, zero alloc, tunable timely/overhead, owner base, inline
+  if FClosed then Exit;
+  EnsureThreadAffinity;
+  FInterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
+  FOptions.InterruptSampleInterval := FInterruptSampleInterval;
+end;
+
+function TJsPureContext.GetInterruptSampleInterval: Cardinal;
+begin
+  Result := FInterruptSampleInterval;
 end;
 
 end.

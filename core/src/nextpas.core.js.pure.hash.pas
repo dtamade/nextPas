@@ -16,6 +16,10 @@ procedure JsPureBucketPut(var Buckets: array of Integer; AMask: UInt32; AHash: U
 // shared bucket template — threshold+capacity+prepare single source for host/prop, inline threshold, amortized O(1) via bytes.ops, candidate for future pure.hash.buckets auxiliary module
 function JsPureBucketsShouldUse(AItemCount: Integer): Boolean; inline;
 function JsPureBucketsTryRebuild(var Buckets: array of Integer; var Mask: UInt32; var Count: Integer; AItemCount: Integer): Boolean;
+type
+  TJsPureBucketHashGetter = function(AIdx: Integer; AUserData: Pointer): UInt32;
+function JsPureBucketFindPos(const Buckets: array of Integer; AMask: UInt32; AHash: UInt32; AIdx: Integer): Integer;
+procedure JsPureBucketDeletePosEx(var Buckets: array of Integer; AMask: UInt32; ADelPos: Integer; AItemCount: Integer; AGetHash: TJsPureBucketHashGetter; AUserData: Pointer);
 implementation
 uses
   nextpas.core.bytes.ops;
@@ -75,5 +79,40 @@ begin
   SetLength(Buckets, LCap);
   JsPureBucketsPrepare(Buckets, Mask, Count, LCap, AItemCount);
   Result := True;
+end;
+function JsPureBucketFindPos(const Buckets: array of Integer; AMask: UInt32; AHash: UInt32; AIdx: Integer): Integer;
+var LPos, LProbe: Integer;
+begin
+  // single source bucket probe via pure.hash, inline zero-copy, amortized O(1), shared by prop/host delete cluster, not inline per red-line 2
+  if Length(Buckets)=0 then Exit(-1);
+  LPos := Integer(AHash and AMask);
+  for LProbe:=0 to High(Buckets) do
+  begin
+    if Buckets[LPos]=AIdx then Exit(LPos);
+    if Buckets[LPos]=-1 then Exit(-1);
+    LPos := (LPos+1) and Integer(AMask);
+  end;
+  Result:=-1;
+end;
+procedure JsPureBucketDeletePosEx(var Buckets: array of Integer; AMask: UInt32; ADelPos: Integer; AItemCount: Integer; AGetHash: TJsPureBucketHashGetter; AUserData: Pointer);
+var LCur, LRe: Integer; LHash: UInt32;
+begin
+  // single source cluster rehash via pure.hash, shared by prop/host, amortized O(1) incremental patch vs O(n) rebuild, bytes.ops JsPureBucketPut single source, not inline per red-line 2
+  Buckets[ADelPos]:=-1;
+  LCur := (ADelPos+1) and Integer(AMask);
+  while Buckets[LCur]<>-1 do
+  begin
+    LRe := Buckets[LCur];
+    if (LRe<0) or (LRe>=AItemCount) then
+    begin
+      Buckets[LCur]:=-1;
+      LCur := (LCur+1) and Integer(AMask);
+      Continue;
+    end;
+    if Assigned(AGetHash) then LHash := AGetHash(LRe, AUserData) else LHash := 0;
+    Buckets[LCur]:=-1;
+    JsPureBucketPut(Buckets, AMask, LHash, LRe);
+    LCur := (LCur+1) and Integer(AMask);
+  end;
 end;
 end.

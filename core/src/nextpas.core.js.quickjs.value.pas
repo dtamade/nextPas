@@ -58,7 +58,8 @@ function QjsThreadSelf: UInt64; inline;
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 function QjsMonotonicNs: QWord; inline;
 procedure QjsDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
-function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline; overload;
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline; overload;
 
 implementation
 
@@ -516,8 +517,14 @@ end;
 
 function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort, 采样 1024次/syscall cache-line友好, 惰性刷新, 零拷贝 inline, exactly-once timeout语义 via lifecycle single slit
+  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort 默认 1024, 采样可配 via interval overload, bytes.ops 单源, inline 零拷贝, exactly-once
   Result := nextpas.core.js.lifecycle.JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs);
+end;
+
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline;
+begin
+  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort 可配采样 (1逐次→1024惰性→65536稀疏), bytes.ops 单源, inline 零拷贝, 惰性刷新 exactly-once via lifecycle
+  Result := nextpas.core.js.lifecycle.JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs, ASampleInterval);
 end;
 
 end.

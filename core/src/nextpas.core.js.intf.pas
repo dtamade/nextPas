@@ -17,8 +17,8 @@ type
     FDoubleVal: Double;
     FStrVal: string;
     FContextId: UInt64;
-    FViewData: PAnsiChar;
-    FViewLen: SizeUInt;
+    FViewData: PAnsiChar; // zero-copy view borrow: lifetime bound to FContextId via lifecycle IsAlive acquire; UAF throws EJsError explicit (not silent ''), B/op=0 via bytes.ops
+    FViewLen: SizeUInt; // view len; cache FStrVal after single alloc SpanToString, hot loops prefer TryGetView B/op=0 zero-copy inline
     function IsKind(AKind: TJsValueKind): Boolean; inline;
     function IsKindIn(A, B: TJsValueKind): Boolean; inline;
     function MaterializeViewString: string; // not inline: alloc via bytes.ops single source SpanToString, hot loops prefer TryGetView B/op=0
@@ -63,7 +63,8 @@ type
   TJsHostProc = function(ACtx: IJsContext; AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
   IJsRuntime = interface ['{B1C2D3E4-F5A6-7890-ABCD-EF1234567890}']
     function Kind: TJsBackendKind; function Options: TJsRuntimeOptions; function NewContext: IJsContext;
-    procedure SetMemoryLimit(ALimit: SizeUInt); procedure SetTimeout(ATimeoutMs: Integer); procedure CollectGarbage;
+    procedure SetMemoryLimit(ALimit: SizeUInt); procedure SetTimeout(ATimeoutMs: Integer);
+    procedure SetInterruptSampleInterval(AInterval: Cardinal); procedure CollectGarbage;
   end;
   IJsContext = interface ['{C2D3E4F5-A6B7-8901-BCDE-F12345678901}']
     function Runtime: IJsRuntime;
@@ -90,6 +91,8 @@ type
     procedure SetHostFunction(const AName: string; AHandler: TJsHostProc); overload;
     procedure RemoveHostFunction(const AName: string);
     procedure Tick; procedure CollectGarbage; procedure Close; function IsClosed: Boolean;
+    procedure SetInterruptSampleInterval(AInterval: Cardinal);
+    function GetInterruptSampleInterval: Cardinal;
   end;
 function JsUndefinedValue: TJsValue; inline; function JsNullValue: TJsValue; inline; function JsBoolValue(AValue: Boolean): TJsValue; inline;
 function JsIntValue(AValue: Int64): TJsValue; inline; function JsDoubleValue(AValue: Double): TJsValue; inline; function JsStringValue(const AValue: string): TJsValue; inline;
@@ -163,7 +166,7 @@ end;
 
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
-  // zero-copy view via bytes.ops TByteSpan, B/op=0; borrows caller buffer until AsString/TryAsString materializes — caller must keep buffer alive
+  // zero-copy view via bytes.ops TByteSpan, B/op=0; borrows caller buffer until AsString materializes (TryGetView B/op=0 preferred); UAF after Close throws EJsError via IsAlive acquire (not silent ''), caller must keep buffer alive until materialized
   if (AData = nil) or (ALen = 0) then
     Result := JsStringValue('')
   else
@@ -375,13 +378,13 @@ end;
 
 function TJsValue.MaterializeViewString: string;
 begin
-  // not inline: single alloc view物化 via bytes.ops SpanToString single source BytesCopy zero-copy inline — AsString/TryAsString cache FStrVal zero alloc (INV-7 IsAlive acquire), first call single alloc+single acquire, hot loops prefer TryGetView B/op=0; lifecycle single source not inline to avoid hot-loop inline bloat+alloc
+  // not inline: single alloc view物化 via bytes.ops SpanToString single source BytesCopy zero-copy inline — AsString cache FStrVal zero alloc (INV-7 IsAlive acquire single source via lifecycle), first call single alloc+single acquire, hot loops prefer TryGetView B/op=0; lifecycle single source not inline to avoid hot-loop inline bloat+alloc; dangling view after Close throws EJsError explicit (UAF not silent ''), cache hit still zero alloc
   if FViewLen = 0 then
     Exit(FStrVal);
-  if not IsAlive then
-    Exit('');
   if Length(FStrVal) <> 0 then
     Exit(FStrVal);
+  if not IsAlive then
+    raise EJsError.Create('TJsValue view use-after-free: Context is closed', jecUnknown, 'Error', '', jsbkFake);
   FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
   Result := FStrVal;
 end;
@@ -466,11 +469,19 @@ end;
 
 function TJsValue.TryAsString(out V: string): Boolean;
 begin
-  // thin-forward to MaterializeViewString single source (not inline alloc), cache zero alloc INV-7 IsAlive acquire, bytes.ops single source, hot loops prefer TryGetView B/op=0
+  // thin-forward to MaterializeViewString single source (not inline alloc), cache zero alloc INV-7 IsAlive acquire single source via lifecycle, bytes.ops single source, hot loops prefer TryGetView B/op=0 zero-copy inline; dangling view => False without throw (Try* branch), not silent '' via Materialize throw
   Result := FKind = jskString;
-  if Result then
-    V := MaterializeViewString
-  else
+  if not Result then
+  begin
     V := '';
+    Exit;
+  end;
+  if (FViewLen > 0) and (Length(FStrVal) = 0) and not IsAlive then
+  begin
+    V := '';
+    Result := False;
+    Exit;
+  end;
+  V := MaterializeViewString;
 end;
 end.

@@ -625,40 +625,21 @@ begin
   Hosts[LCount - 1].Proc := nil;
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
 end;
-function HostBucketFindPos(const Buckets: TJsPureHostBuckets; AHash: UInt32; AIdx: Integer): Integer;
-var LPos, LProbe: Integer;
+function HostHashGetter(AIdx: Integer; AUserData: Pointer): UInt32;
+var P: ^TJsPureHostArray;
 begin
-  // not inline per red-line 2 (loop probe, I-Cache) — single source probe via Mask, bytes.ops single source
-  LPos := Integer(AHash and Buckets.Mask);
-  for LProbe := 0 to High(Buckets.Buckets) do
-  begin
-    if Buckets.Buckets[LPos] = AIdx then Exit(LPos);
-    if Buckets.Buckets[LPos] = -1 then Exit(-1);
-    LPos := (LPos + 1) and Integer(Buckets.Mask);
-  end;
-  Result := -1;
+  P := AUserData;
+  Result := P^[AIdx].Hash;
 end;
-
-procedure HostBucketDeletePos(var Buckets: TJsPureHostBuckets; ADelPos: Integer; const Hosts: TJsPureHostArray);
-var LCur, LRe: Integer; LHash: UInt32;
+function HostBucketFindPos(const Buckets: TJsPureHostBuckets; AHash: UInt32; AIdx: Integer): Integer; inline;
 begin
-  // not inline per red-line 2 (loop cluster rehash) — single source linear-probing delete with tail reinsert via pure.hash Put, bytes.ops single source
-  Buckets.Buckets[ADelPos] := -1;
-  LCur := (ADelPos + 1) and Integer(Buckets.Mask);
-  while Buckets.Buckets[LCur] <> -1 do
-  begin
-    LRe := Buckets.Buckets[LCur];
-    if (LRe < 0) or (LRe >= Length(Hosts)) then
-    begin
-      Buckets.Buckets[LCur] := -1;
-      LCur := (LCur + 1) and Integer(Buckets.Mask);
-      Continue;
-    end;
-    LHash := Hosts[LRe].Hash;
-    Buckets.Buckets[LCur] := -1;
-    JsPureBucketPut(Buckets.Buckets, Buckets.Mask, LHash, LRe);
-    LCur := (LCur + 1) and Integer(Buckets.Mask);
-  end;
+  // single source via pure.hash JsPureBucketFindPos, inline zero-copy, amortized O(1), host/prop converged, bytes.ops single source, not inline loop per red-line 2 via pure.hash
+  Result := JsPureBucketFindPos(Buckets.Buckets, Buckets.Mask, AHash, AIdx);
+end;
+procedure HostBucketDeletePos(var Buckets: TJsPureHostBuckets; ADelPos: Integer; const Hosts: TJsPureHostArray); inline;
+begin
+  // single source via pure.hash JsPureBucketDeletePosEx cluster rehash, host/prop converged, amortized O(1) vs O(n) rebuild, bytes.ops single source
+  JsPureBucketDeletePosEx(Buckets.Buckets, Buckets.Mask, ADelPos, Length(Hosts), @HostHashGetter, @Hosts);
 end;
 
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);

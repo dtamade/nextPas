@@ -21,7 +21,7 @@ function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapNewArray(var Heap: TJsPureHeap): TJsValue;
 function JsPureHeapHasProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
 function JsPureHeapDeleteProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): Boolean;
-function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray;
+function JsPureHeapGetKeys(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringArray; deprecated 'Use JsPureHeapGetKeysView zero-copy (B/op=0, TStringView borrow) for hot loops; GetKeys materialized O(n) alloc is compat only';
 function JsPureHeapGetKeysView(const Heap: TJsPureHeap; const Obj: TJsValue): TJsStringViewArray; inline;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
@@ -179,38 +179,21 @@ begin
 end;
 procedure PropBucketsInvalidate(var Obj: TJsPureObject); inline;
 begin SetLength(Obj.PropsBuckets,0); Obj.PropsMask:=0; end;
-function PropBucketFindPos(const Obj: TJsPureObject; AHash: UInt32; AIdx: Integer): Integer;
-var LPos, LProbe: Integer;
+function PropHashGetter(AIdx: Integer; AUserData: Pointer): UInt32;
+var P: ^TJsPurePropArray;
 begin
-  if Length(Obj.PropsBuckets)=0 then Exit(-1);
-  LPos := Integer(AHash and Obj.PropsMask);
-  for LProbe:=0 to High(Obj.PropsBuckets) do
-  begin
-    if Obj.PropsBuckets[LPos]=AIdx then Exit(LPos);
-    if Obj.PropsBuckets[LPos]=-1 then Exit(-1);
-    LPos := (LPos+1) and Integer(Obj.PropsMask);
-  end;
-  Result:=-1;
+  P := AUserData;
+  Result := P^[AIdx].Hash;
 end;
-procedure PropBucketDeletePos(var Obj: TJsPureObject; ADelPos: Integer);
-var LCur, LRe: Integer; LHash: UInt32;
+function PropBucketFindPos(const Obj: TJsPureObject; AHash: UInt32; AIdx: Integer): Integer; inline;
 begin
-  Obj.PropsBuckets[ADelPos]:=-1;
-  LCur := (ADelPos+1) and Integer(Obj.PropsMask);
-  while Obj.PropsBuckets[LCur]<>-1 do
-  begin
-    LRe := Obj.PropsBuckets[LCur];
-    if (LRe<0) or (LRe>=Length(Obj.Props)) then
-    begin
-      Obj.PropsBuckets[LCur]:=-1;
-      LCur := (LCur+1) and Integer(Obj.PropsMask);
-      Continue;
-    end;
-    LHash := Obj.Props[LRe].Hash;
-    Obj.PropsBuckets[LCur]:=-1;
-    JsPureBucketPut(Obj.PropsBuckets, Obj.PropsMask, LHash, LRe);
-    LCur := (LCur+1) and Integer(Obj.PropsMask);
-  end;
+  // single source via pure.hash JsPureBucketFindPos, inline zero-copy, amortized O(1), host/prop converged, bytes.ops single source
+  Result := JsPureBucketFindPos(Obj.PropsBuckets, Obj.PropsMask, AHash, AIdx);
+end;
+procedure PropBucketDeletePos(var Obj: TJsPureObject; ADelPos: Integer); inline;
+begin
+  // single source via pure.hash JsPureBucketDeletePosEx cluster rehash, host/prop converged, amortized O(1) vs O(n) rebuild, bytes.ops single source
+  JsPureBucketDeletePosEx(Obj.PropsBuckets, Obj.PropsMask, ADelPos, Length(Obj.Props), @PropHashGetter, @Obj.Props);
 end;
 procedure PropBucketsRebuild(var Obj: TJsPureObject);
 var LCount, I, LDummy: Integer; LHash: UInt32;
@@ -476,19 +459,24 @@ function JsPureStripOuterQuotesView(const AView: TStringView): TStringView; inli
 begin
   Result := TextStripOuterQuotesView(AView);
 end;
+function JsPureJsonBufToStr(const ABuf: array of AnsiChar; ALen: Int32): string; inline;
+begin
+  // single source number→string: SetLength+BytesCopy zero-copy single alloc single Move, shared by Int/Double via text.number buffers, bytes.ops single source, inline
+  SetLength(Result, ALen); if ALen>0 then BytesCopy(PAnsiChar(Result), @ABuf[0], SizeUInt(ALen));
+end;
 function JsPureJsonIntToStr(AValue: Int64): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
-  // perf: inline zero-copy via text.number single source + bytes.ops.BytesCopy single source, single alloc SetLength+single Move, no SetString magic duplicate
+  // perf: inline zero-copy via JsPureJsonBufToStr single source + text.number IntToBuffer single source, single alloc single Move, no duplicate SetLength+BytesCopy
   LLen := IntToBuffer(AValue, @LBuf[0]);
-  SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
+  Result := JsPureJsonBufToStr(LBuf, LLen);
 end;
 function JsPureJsonDoubleToStr(AValue: Double): string; inline;
 var LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
-  // perf: inline zero-copy via text.number single source + bytes.ops.BytesCopy single source, single alloc SetLength+single Move, no SetString magic duplicate
+  // perf: inline zero-copy via JsPureJsonBufToStr single source + text.number FloatToBuffer single source, single alloc single Move, no duplicate SetLength+BytesCopy
   LLen := FloatToBuffer(AValue, @LBuf[0]);
-  SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen));
+  Result := JsPureJsonBufToStr(LBuf, LLen);
 end;
 function JsPureJsonFastClean(const S: string; out AOut: string): Boolean; inline;
 var B: TStringBuilder; LLen: SizeUInt; LP: PAnsiChar;

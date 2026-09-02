@@ -19,17 +19,27 @@ type
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
     jecTimeout, jecNotSupported, jecUnknown);
 
+const
+  JS_INTERRUPT_SAMPLE_DEFAULT = 1024; // 2^10, 684ns 基线 15-30%→惰性, 可配权衡及时性/开销
+  JS_INTERRUPT_SAMPLE_MIN = 1;
+  JS_INTERRUPT_SAMPLE_MAX = 65536;
+
   TJsRuntimeOptions = record
   private
     FMemoryLimit: SizeUInt;
     FTimeoutMs: Integer;
+    FInterruptSampleInterval: Cardinal;
   public
     property MemoryLimit: SizeUInt read FMemoryLimit write FMemoryLimit;
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+    property InterruptSampleInterval: Cardinal read FInterruptSampleInterval write FInterruptSampleInterval;
     class function Default: TJsRuntimeOptions; static; inline;
     class function WithMemoryLimit(ALimit: SizeUInt): TJsRuntimeOptions; static; inline;
     class function WithTimeout(ATimeoutMs: Integer): TJsRuntimeOptions; static; inline;
+    class function WithInterruptSampleInterval(AInterval: Cardinal): TJsRuntimeOptions; static; inline;
   end;
+
+function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
 
   EJsError = class(ENextPasError)
   private
@@ -54,7 +64,7 @@ function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
 function JsTrimEquals(const S, Lit: string): Boolean;
-procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind = jsbkFake);
+procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 
 implementation
 
@@ -65,6 +75,7 @@ class function TJsRuntimeOptions.Default: TJsRuntimeOptions;
 begin
   Result.FMemoryLimit := 0;
   Result.FTimeoutMs := 0;
+  Result.FInterruptSampleInterval := JS_INTERRUPT_SAMPLE_DEFAULT;
 end;
 
 class function TJsRuntimeOptions.WithMemoryLimit(ALimit: SizeUInt): TJsRuntimeOptions;
@@ -77,6 +88,21 @@ class function TJsRuntimeOptions.WithTimeout(ATimeoutMs: Integer): TJsRuntimeOpt
 begin
   Result := Default;
   Result.FTimeoutMs := ATimeoutMs;
+end;
+
+class function TJsRuntimeOptions.WithInterruptSampleInterval(AInterval: Cardinal): TJsRuntimeOptions; inline;
+begin
+  Result := Default;
+  Result.FInterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
+end;
+
+function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
+begin
+  // perf: inline branch, zero alloc, single source via base constant JS_INTERRUPT_SAMPLE_DEFAULT, owner base single source bytes.ops 复用, 幂等不丢, L0-L3 守
+  if AInterval = 0 then Exit(JS_INTERRUPT_SAMPLE_DEFAULT);
+  if AInterval < JS_INTERRUPT_SAMPLE_MIN then Exit(JS_INTERRUPT_SAMPLE_MIN);
+  if AInterval > JS_INTERRUPT_SAMPLE_MAX then Exit(JS_INTERRUPT_SAMPLE_MAX);
+  Result := AInterval;
 end;
 
 constructor EJsError.Create(const AMessage: string; ACategory: TJsErrorCategory;
@@ -144,9 +170,11 @@ end;
 
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 begin
-  // perf: thin check, zero alloc, single branch; stability: backend attribution via ABackend (default jsbkFake for back-compat), callers pass real jsbkQuickJs/jsbkV8 to preserve diagnostic ownership, fail-closed without resource
+  // perf: thin check, zero alloc, single branch; stability: backend attribution via ABackend (no default, caller must pass real jsbkQuickJs/jsbkV8/jsbkFake explicitly to preserve diagnostic ownership), fail-closed without resource
   if AOptions.TimeoutMs < 0 then
     raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', ABackend);
+  if AOptions.InterruptSampleInterval > JS_INTERRUPT_SAMPLE_MAX then
+    raise EJsError.Create('InterruptSampleInterval must be <= 65536', jecUnknown, 'Error', '', ABackend);
 end;
 
 end.

@@ -20,7 +20,7 @@
 
 | 单元 | 职责 | 允许 uses | 禁止 |
 |------|------|-----------|------|
-| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 + `JsTrimEquals`（零拷贝 `StringTrimEquals` 薄转发，`bytes.ops` 单源 `SpanTrim/SpanEqual`，`text.view` 同源复用，循环体留 owner，去 `inline` 解耦）+ `CheckJsRuntimeOptions(ABackend: TJsBackendKind = jsbkFake)`（负 Timeout 抛 `EJsError` 时 `Backend` 归因真实 `AKind`，`jsbkQuickJs/jsbkV8` 诊断不失真，`jsbkFake` 默认零破环，`bytes.ops` 零拷贝视图单源，fail-closed 无泄漏） | `exception`、`base`（`interface` 仅 `base`/`exception` 纯 L0 类型载体零 L1 透出，无 `JS_QUICKJS_PROBE_NAMES` 后端探针混入，纯类型载体 INV-1 零 `quickjs/v8`，探针 8 名单源下沉至 `js.quickjs.loader`；`implementation` 单缝 `bytes.ops` `StringTrimEquals/SpanTrim*` 零拷贝视图单源，`L0-L1` 向下，`text.view` 同源复用，`CONTRACT §1` 单源下沉，不 `inline` 避 I-Cache/跨单元耦合，零拷贝 O(n) 单遍） | 任何 `js.*`、`platform`、`json`、`text.view`（禁止直引 `text.view`，经 `bytes.ops` 单源转发） |
+| `js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 族 + `JsTrimEquals`（零拷贝 `StringTrimEquals` 薄转发，`bytes.ops` 单源 `SpanTrim/SpanEqual`，`text.view` 同源复用，循环体留 owner，去 `inline` 解耦）+ `CheckJsRuntimeOptions(ABackend: TJsBackendKind)`（负 Timeout 抛 `EJsError` 时 `Backend` 归因真实 `AKind`，调用方必须显式传 `jsbkQuickJs/jsbkV8/jsbkFake` 诊断不失真无默认，`bytes.ops` 零拷贝视图单源，fail-closed 无泄漏） | `exception`、`base`（`interface` 仅 `base`/`exception` 纯 L0 类型载体零 L1 透出，无 `JS_QUICKJS_PROBE_NAMES` 后端探针混入，纯类型载体 INV-1 零 `quickjs/v8`，探针 8 名单源下沉至 `js.quickjs.loader`；`implementation` 单缝 `bytes.ops` `StringTrimEquals/SpanTrim*` 零拷贝视图单源，`L0-L1` 向下，`text.view` 同源复用，`CONTRACT §1` 单源下沉，不 `inline` 避 I-Cache/跨单元耦合，零拷贝 O(n) 单遍） | 任何 `js.*`、`platform`、`json`、`text.view`（禁止直引 `text.view`，经 `bytes.ops` 单源转发） |
 | `js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` / `IJsValueRef` / `TJsHostFunction` 三形态（**后端无关**，不暴露 `JSValue`）| `js.base`、`json.types`（仅 `TJsonValue` 类型引用，interface 窄缝；implementation 经 `bytes.ops`+`js.pure.value` 单源单缝 `json.writer`/`text.*` single source via `pure.value`，L2→L2 单向 `js→json` 单点、cycle-gated、无反向 `json`→`js`，`bytes.ops` `SpanToString`/`BytesCopy` inline 零拷贝，`try..finally`/`Done` 不丢，见 module-registry allowlist） | `js.fake`/`js.quickjs.*`/`js.js888`、`platform.dl` |
 | `js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑，确定性语义） | `js.base`、`js.intf`、`json` | `platform.dl`、`*.ffi` |
 | `js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`，无逻辑） | RTL + `js.base` 类型（若需） | `platform.dl`、逻辑、helper |
@@ -36,7 +36,7 @@
 | `js.v8` | 纯 Pascal V8 占位（`jsbkV8`，零 FFI/零 dl，恒可用，S3 可演进为真 V8） | `js.base/intf`、`js.pure.base`、`js.pure`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.chakra` | 纯 Pascal Chakra 占位（`jsbkChakra`，零 FFI/零 dl，恒可用，S3 可演进为真 Chakra） | `js.base/intf`、`js.pure.base`、`js.pure`、`json`、`mem` | `platform.dl`、`*.ffi`、`webview.*` |
 | `js.registry` | 后端注册表：L2 唯一扇出 owner，5 后端工厂与探测单源（`O(1)` 枚举索引 `JsRegisterBackend` 扩展优雅，`CreateJsRuntime`/`JsBackendAvailable` 单源分发，内置 `fake/js888/v8/chakra=恒可用` + `jsbkQuickJs=JsQuickJsIsAvailable/Load 含探针名表 via loader `JsQuickJsProbeNames` 单源 `js.quickjs.loader`（`js.base` 纯类型载体零探针，探针单源已下沉 loader），`bytes.ops` 单源 inline 零拷贝 SpanTrim/SpanEqual+BytesCopy + `pure.base` 几何 BytesNextCapacity，资源幂等 `JsPureClose/StoreClear` exactly-once，守 `base←registry` 零循环；**线程安全 vault 单 owner 模块化隔离（非裸全局，经 VaultRef inline 单源访问，`sync.vault SyncVaultEnsureLock` 单源 lazy Exactly-Once out-of-line loop per §2，GVaultInit 原子 Exactly-Once，IMutex→platform.sync acquire/release 原子保护 O(1) 快照零锁外派发，64B 友好，热点 inline+atomic_thread_fence 零拷贝，资源 try-finally/IMutex 不丢，loader/registry 共用 vault 单源消除克隆）**） | `js.base/intf` + `fake/js888/v8/chakra/quickjs/loader` + `sync.mutex/sync.vault→platform.sync`/`atomic`/`bytes.ops`（唯一扇出点 vault 单缝显式收敛，`sync.vault` 懒初始化单源，工厂传递扇出经 registry 单缝，L2→L1/L0 单向，非掩盖） | `json` 直接依赖（仅经 intf/pure.base 间接）、`platform.dl`（仅经 loader） |
-| `js.factory` | 工厂：`CreateJsRuntime / JsBackendAvailable` 薄转发至 `registry` 单源（`CheckJsRuntimeOptions(ABackend)` 透传归因，默认 `jsbkFake`） | `js.base/intf` + `js.registry` | `json` 直接依赖、`platform.dl`、直引后端 |
+| `js.factory` | 工厂：`CreateJsRuntime / JsBackendAvailable` 薄转发至 `registry` 单源（`CheckJsRuntimeOptions(ABackend)` 显式透传归因，无默认，要求调用方显式传真实 `AKind`） | `js.base/intf` + `js.registry` | `json` 直接依赖、`platform.dl`、直引后端 |
 | `js.pas` | 门面：纯 re-export（`inline` 薄转发至 `js.factory`，零分支零探测） | `js.base/intf/factory` | 逻辑 |
 
 ```
@@ -70,9 +70,11 @@ TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory, jecTi
 TJsRuntimeOptions = record
   MemoryLimit: SizeUInt; // 0=不限；QuickJS JS_SetMemoryLimit / JS_SetGCThreshold
   TimeoutMs: Integer;    // 0=不限；经 JS_SetInterruptHandler 异步中断
+  InterruptSampleInterval: Cardinal; // 0=默认1024，可配1..65536 采样间隔，1逐次高及时 15-30%→1024惰性→65536稀疏，权衡长循环超时及时性/开销
   class function Default: TJsRuntimeOptions; static;
   class function WithMemoryLimit(ALimit: SizeUInt): TJsRuntimeOptions; static; inline;
   class function WithTimeout(ATimeoutMs: Integer): TJsRuntimeOptions; static; inline;
+  class function WithInterruptSampleInterval(AInterval: Cardinal): TJsRuntimeOptions; static; inline;
 end;
 
 EJsError = class(ENextPasError)
@@ -90,7 +92,8 @@ EJsMemoryLimit        = class(EJsError); // 内存限
 |--------|------|
 | `MemoryLimit` | `>0` 时经底层 `SetMemoryLimit`，超限抛 `EJsMemoryLimit(jecMemory)`，fail-closed |
 | `TimeoutMs` | `>0` 时装 `InterruptHandler` + 原子 `DeadlineMs`，超时抛 `EJsTimeout(jecTimeout)`，`Tick` 后可恢复或需重建 `Context` |
-| `CheckJsRuntimeOptions(ABackend)` | 负值（若经有符号 API 误传）抛 `EJsError(jecUnknown, Backend=ABackend)`，`ABackend` 透传调用方真实 `AKind`（`jsbkQuickJs/jsbkV8` 诊断归因不失真，默认 `jsbkFake` 零破环），不静默截断 |
+| `InterruptSampleInterval` | `0=1024` 默认，`1..65536` 可配采样阈值，`QjsInterruptShouldAbort` 采样 `N` 次/syscall，`1` 逐次高及时 `15-30%` 开销，`1024` 惰性平衡，`65536` 低开销长尾延迟，`JsInterruptSampleIntervalNormalized` 单源归一，`SetInterruptSampleInterval` 运行时/上下文可动态调参 |
+| `CheckJsRuntimeOptions(ABackend)` | 负值（若经有符号 API 误传）抛 `EJsError(jecUnknown, Backend=ABackend)`，`ABackend` 显式透传调用方真实 `AKind`（无默认，`jsbkQuickJs/jsbkV8/jsbkFake` 必须显式传，诊断归因不失真），不静默截断 |
 
 ---
 
@@ -352,6 +355,7 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | 2026-09-02 | 2.3 | base 强耦合修复：`js.base` interface 去 `bytes.ops` 直引，能力反哺 `bytes.ops` 单源 | codex/core-js |
 | 2026-09-02 | 2.4 | lifecycle 紧凑与强一致：`GPureClosed` 4B + generation-tagged + freelist 半缩 | codex/core-js |
 | 2026-09-02 | 2.5 | base 双痛：探针下沉 `loader` 单源 + `CheckJsRuntimeOptions(ABackend)` 归因透传 | codex/core-js |
+| 2026-09-02 | 2.6 | base 归因失真修复：`CheckJsRuntimeOptions` 去默认 `jsbkFake`，强制显式 `ABackend` 归因 | codex/core-js |
 
 ## 附录：极简契约（可抽取候选，≤80 行）
 
@@ -362,7 +366,7 @@ make -C core/tests/nextpas.core.js/test_js_fake clean test
 | `js.base` | 类型载体 | 零 `quickjs/v8`，`bytes.ops` 单缝 via impl |
 | `js.intf` | `IJsRuntime/Context/TJsValue` | 后端无关，不暴露 `JSValue` |
 | `js.pure.base` | 纯类型载体 | base 零依赖（仅 `js.base`，`TJsValue` 去耦 raw `Kind+StrVal` via `pure.value`） |
-| `js.registry/factory/门面` | 单源扇出 + 薄转发 | vault 隔离，`CheckJsRuntimeOptions` 归因透传 |
+| `js.registry/factory/门面` | 单源扇出 + 薄转发 | vault 隔离，`CheckJsRuntimeOptions` 显式归因透传（无默认） |
 | 不变量 | INV-1..7 | 见 §6，§1–§5 为实现证据 |
 
 守四件套 `base←intf←impl←门面` 与 L0–L3，`bytes.ops` 单源。

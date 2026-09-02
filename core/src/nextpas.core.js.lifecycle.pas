@@ -10,7 +10,8 @@ function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 // L0 time single slit via platform.time, inline zero-copy
 function JsPureMonotonicNs: QWord; inline;
 procedure JsPureDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
-function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline; overload;
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline; overload;
 implementation
 uses
   nextpas.core.base,
@@ -20,7 +21,8 @@ uses
   nextpas.core.mem.base,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
-  nextpas.core.sync.spinlock;
+  nextpas.core.sync.spinlock,
+  nextpas.core.js.base;
 type
   TCacheLinePad = array[0..MEM_CACHE_LINE_SIZE div SizeOf(Int64) - 1] of Int64; // 64B pad via MEM_CACHE_LINE_SIZE single source
 var
@@ -176,10 +178,24 @@ begin
 end;
 function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // inline sampling 1024 via JsPureMonotonicNs single source
+  // perf: thin-forward to interval-aware single source via JsInterruptSampleIntervalNormalized + interval 1024 default, sampling 可配, bytes.ops 单源, inline 零拷贝
+  Result := JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs, JS_INTERRUPT_SAMPLE_DEFAULT);
+end;
+
+function JsPureInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline;
+var LInterval: Cardinal;
+begin
+  // perf: inline sampling 可配 via JsInterruptSampleIntervalNormalized single source (base owner, bytes.ops 单源), 1→逐次 15-30% 开销, 1024→15-30%降为惰性, 65536→更低开销但最长65536次延迟, power-of-two 快路径 and mask else mod 分支, 惰性刷新 single source, inline 零拷贝, exactly-once
   if ADeadlineNs = 0 then Exit(False);
   Inc(ACounter);
-  if (ACounter and 1023) <> 0 then Exit(False);
+  LInterval := JsInterruptSampleIntervalNormalized(ASampleInterval);
+  if (LInterval and (LInterval - 1)) = 0 then
+  begin
+    if (ACounter and (LInterval - 1)) <> 0 then Exit(False);
+  end else
+  begin
+    if (ACounter mod LInterval) <> 0 then Exit(False);
+  end;
   ALastNs := JsPureMonotonicNs;
   Result := QWord(ALastNs) >= QWord(ADeadlineNs);
 end;

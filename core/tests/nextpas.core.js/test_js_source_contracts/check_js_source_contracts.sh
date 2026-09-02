@@ -300,6 +300,63 @@ for suffix in "pure.base" "pure" "pure.impl" "pure.host" "pure.value" "lifecycle
   fi
 done
 
+# 14) pure.hash bucket single source + pure.value number→string single source + GetKeysView hot-path gate (匠心修复: Prop/Host bucket双份克隆收敛至pure.hash, number→string统一, GetKeysView零拷贝门禁非仅文档)
+PURE_HASH="$ROOT/core/src/nextpas.core.js.pure.hash.pas"
+PURE_VALUE="$ROOT/core/src/nextpas.core.js.pure.value.pas"
+PURE_HOST="$ROOT/core/src/nextpas.core.js.pure.host.pas"
+if grep -q "function JsPureBucketFindPos" "$PURE_HASH" && grep -q "procedure JsPureBucketDeletePosEx" "$PURE_HASH" && grep -q "TJsPureBucketHashGetter" "$PURE_HASH"; then
+  say_ok "pure.hash bucket single source owns FindPos+DeletePosEx+Getter"
+else
+  say_fail "pure.hash must own JsPureBucketFindPos+JsPureBucketDeletePosEx+TJsPureBucketHashGetter single source (host/prop converged)"
+fi
+if grep -q "JsPureBucketFindPos" "$PURE_VALUE" && grep -q "JsPureBucketDeletePosEx" "$PURE_VALUE" && grep -q "PropHashGetter" "$PURE_VALUE"; then
+  say_ok "pure.value bucket thin-forward via pure.hash single source"
+else
+  say_fail "pure.value must thin-forward PropBucketFindPos/DeletePos via pure.hash JsPureBucketFindPos/DeletePosEx (PropHashGetter)"
+fi
+if grep -q "JsPureBucketFindPos" "$PURE_HOST" && grep -q "JsPureBucketDeletePosEx" "$PURE_HOST" && grep -q "HostHashGetter" "$PURE_HOST"; then
+  say_ok "pure.host bucket thin-forward via pure.hash single source"
+else
+  say_fail "pure.host must thin-forward HostBucketFindPos/DeletePos via pure.hash JsPureBucketFindPos/DeletePosEx (HostHashGetter)"
+fi
+# forbid duplicated loop bodies in prop/host (cluster rehash must be single source via pure.hash)
+if grep -q "Buckets\.Buckets\[ADelPos\].*:=-1" "$PURE_HOST" && grep -q "while Buckets\.Buckets\[LCur\] <> -1" "$PURE_HOST"; then
+  say_fail "pure.host still contains cloned delete loop (must be via pure.hash DeletePosEx single source)"
+else
+  say_ok "pure.host delete loop converged to pure.hash single source"
+fi
+if grep -q "Obj\.PropsBuckets\[ADelPos\].*:=-1" "$PURE_VALUE" && grep -q "while Obj\.PropsBuckets\[LCur\]<>-1" "$PURE_VALUE"; then
+  say_fail "pure.value still contains cloned delete loop (must be via pure.hash DeletePosEx single source)"
+else
+  say_ok "pure.value delete loop converged to pure.hash single source"
+fi
+if grep -q "function JsPureJsonBufToStr" "$PURE_VALUE" && grep -q "JsPureJsonBufToStr" "$PURE_VALUE"; then
+  say_ok "pure.value number→string single source owns JsPureJsonBufToStr"
+else
+  say_fail "pure.value must own JsPureJsonBufToStr single source for number→string"
+fi
+if grep -q "function JsPureJsonIntToStr" "$PURE_VALUE" && grep -A6 "function JsPureJsonIntToStr" "$PURE_VALUE" | grep -q "JsPureJsonBufToStr"; then
+  say_ok "pure.value IntToStr delegates to JsPureJsonBufToStr"
+else
+  say_fail "pure.value JsPureJsonIntToStr must delegate to JsPureJsonBufToStr single source (not duplicate SetLength+BytesCopy)"
+fi
+if grep -q "function JsPureJsonDoubleToStr" "$PURE_VALUE" && grep -A6 "function JsPureJsonDoubleToStr" "$PURE_VALUE" | grep -q "JsPureJsonBufToStr"; then
+  say_ok "pure.value DoubleToStr delegates to JsPureJsonBufToStr"
+else
+  say_fail "pure.value JsPureJsonDoubleToStr must delegate to JsPureJsonBufToStr single source"
+fi
+# GetKeysView hot-path gate: GetKeys deprecated + GetKeysView inline zero-copy
+if grep -q "JsPureHeapGetKeys.*deprecated" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView.*inline;" "$PURE_VALUE"; then
+  say_ok "GetKeys deprecated + GetKeysView inline zero-copy gate (hot loops B/op=0, GetKeys compat O(n) alloc)"
+else
+  say_fail "pure.value must mark JsPureHeapGetKeys deprecated and keep JsPureHeapGetKeysView inline zero-copy (hot path gate, not doc-only)"
+fi
+if grep -q "TStringView\.FromStr" "$PURE_VALUE" && grep -q "JsPureHeapGetKeysView" "$PURE_VALUE"; then
+  say_ok "GetKeysView zero-copy via TStringView.FromStr borrow shared via bytes.ops single source"
+else
+  say_fail "GetKeysView must be zero-copy via TStringView.FromStr borrow (bytes.ops single source)"
+fi
+
 if [[ $fail -ne 0 ]]; then
   echo "[js-source-contract] FAIL" >&2
   exit 1

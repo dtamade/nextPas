@@ -23,6 +23,7 @@ type
     function NewContext: IJsContext;
     procedure SetMemoryLimit(ALimit: SizeUInt);
     procedure SetTimeout(ATimeoutMs: Integer);
+    procedure SetInterruptSampleInterval(AInterval: Cardinal);
     procedure CollectGarbage;
   end;
 
@@ -35,6 +36,7 @@ begin
   inherited Create;
   FKind := AKind;
   FOptions := AOptions;
+  FOptions.InterruptSampleInterval := JsInterruptSampleIntervalNormalized(FOptions.InterruptSampleInterval);
   CheckJsRuntimeOptions(FOptions, AKind);
 end;
 
@@ -63,6 +65,12 @@ begin
   if ATimeoutMs < 0 then
     raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', FKind);
   FOptions.TimeoutMs := ATimeoutMs;
+end;
+
+procedure TJsPureRuntime.SetInterruptSampleInterval(AInterval: Cardinal);
+begin
+  // perf: inline normalized via base single source, zero alloc, 1逐次↔65536稀疏, 1024默认惰性, timely vs overhead tunable, owner base
+  FOptions.InterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
 end;
 
 procedure TJsPureRuntime.CollectGarbage;
