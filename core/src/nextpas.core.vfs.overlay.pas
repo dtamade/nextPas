@@ -5,8 +5,9 @@ unit nextpas.core.vfs.overlay;
   （同一虚拟路径多层，首命中胜出）。INV-O1：列表按传入优先级有序，Exists/Stat/
   OpenRead 按序首命中；List('.') 去重合并按首层优先保留。
   INV-V2 不可变快照+热点缓存：发布后只读，SwissTable 16槽 RWLock 读并发零争用/
-  TryAcquireWrite 非阻塞写热点 List 缓存（对齐 mount §6），首击 O(k log k) Sort+
-  Unique 后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops VfsNameCompare SpanCompare 零拷贝单源，Sort/Unique 单源。 }
+  阻塞 AcquireWrite 热点 List 缓存单源 helper via vfs.cache（对齐 mount §6，防 TryAcquireWrite 丢弃致重复 O(k log k)），首击流式增量哈希去重 O(k)+O(k log k)
+  VfsSortEntries 去重后排序后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops
+  VfsNameCompare SpanCompare 零拷贝单源，VfsSortEntries 单源。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -16,6 +17,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
+  nextpas.core.vfs.cache,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
 
@@ -26,17 +28,13 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
-  nextpas.core.collections.algorithms,
-  nextpas.core.collections.hashmap.swiss.str,
-  nextpas.core.sync;
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
-  TOverlayListCache = specialize TSwissTableStr<TEntryArray>;
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs; { 不可变快照：构造期冻结只读，发布后热点 List SwissTable 16槽 RWLock 缓存对齐 mount §6，读并发零争用 }
-    FListCache: TObject; { 热点目录缓存：SwissTable 单源，RWLock 读并发零争用/TryAcquireWrite 非阻塞写，热点 List 免重复 O(k log k) Sort/Dedup，对齐 mount 单源 }
-    FListLock: IRWLock;
+    FListCache: TVfsListCache; { 热点目录缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + Copy隔离（mount/overlay 单源 via vfs.cache） }
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
     function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
@@ -73,54 +71,30 @@ begin
       raise EVfsError.CreateCtx('overlay', '', 'overlay fs must not be nil');
     FList[I] := AList[I];
   end;
-  FListCache := TOverlayListCache.Create(16);
-  FListLock := RWLock;
+  FListCache := TVfsListCache.Create;
 end;
 
 destructor TOverlayVfs.Destroy;
 begin
   if FListCache <> nil then
   begin
-    TOverlayListCache(FListCache).Free;
+    FListCache.Free;
     FListCache := nil;
   end;
-  FListLock := nil;
   SetLength(FList, 0);
   inherited Destroy;
 end;
 
-{ 热点缓存：SwissTable 单源，RWLock 读并发零争用，inline 热路径，mount 同源模板 }
+{ 热点缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + Copy隔离（mount/overlay 单源 via vfs.cache），inline 热路径 }
 function TOverlayVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
-var
-  LCached: TEntryArray;
 begin
-  AEntries := nil;
-  Result := False;
-  if (FListCache = nil) or (FListLock = nil) then Exit;
-  FListLock.AcquireRead;
-  try
-    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LCached) then
-    begin
-      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，防调用方篡改共享缓存 }
-      Result := True;
-    end;
-  finally
-    FListLock.ReleaseRead;
-  end;
+  Result := (FListCache <> nil) and FListCache.TryGet(ADirPath, AEntries);
 end;
 
 procedure TOverlayVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
-var
-  LDummy: TEntryArray;
 begin
-  if (FListCache = nil) or (FListLock = nil) then Exit;
-  if not FListLock.TryAcquireWrite then Exit;
-  try
-    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
-    TOverlayListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离，TryAcquireWrite 非阻塞防惊群 }
-  finally
-    FListLock.ReleaseWrite;
-  end;
+  if FListCache = nil then Exit;
+  FListCache.Put(ADirPath, AEntries); { 阻塞写单源 helper，抢锁不丢弃防重复 O(k log k) Sort/Dedup }
 end;
 
 { 首命中直达：O(m) 层线性探测，零缓存/零锁，命中层单次 Stat 直达；
@@ -183,29 +157,8 @@ begin
   raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
-type
-  TOverlayTemp = record
-    Entry: TEntryInfo;
-    Prio: Integer;
-  end;
-  TOverlayTempArray = array of TOverlayTemp;
-
-{ 单源排序比较：Name 字节序 + Prio 优先级；复用 bytes.ops 零拷贝 VfsNameCompare inline }
-function CompareOverlayTemp(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
-begin
-  Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
-  if Result = 0 then
-    Result := SizeInt(A.Prio) - SizeInt(B.Prio);
-end;
-
-{ Name-only 去重比较：单源 Unique（VfsNameCompare），保留首层优先级；inline 零拷贝 }
-function CompareOverlayTempNameOnly(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
-begin
-  Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
-end;
-
-{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；资源释放不丢（Temp 局部托管异常自动释放） }
-procedure OverlayEnsureCap(var AArr: TOverlayTempArray; const ANeed: SizeInt); inline;
+{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；资源释放不丢（Seen 哈希表 try-finally 托管异常自动释放，Result/Cur 局部托管） }
+procedure OverlayEnsureCapEntries(var AArr: TEntryArray; const ANeed: SizeInt); inline;
 var
   LCap: SizeUInt;
 begin
@@ -214,16 +167,18 @@ begin
   SetLength(AArr, SizeInt(LCap));
 end;
 
+{ 流式增量去重 List：优先级顺序 O(k) 哈希去重 + 去重后 O(k log k) VfsSortEntries 单源排序，避免全量 Temp 物化后 Sort+Unique+Copy 双重拷贝；bytes.ops VfsNameCompare SpanCompare 零拷贝单源 via VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline。 }
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J, TempN: Integer;
+  I, J: Integer;
+  OutN: SizeInt;
   Cur: TEntryArray;
   LStat: TStatInfo;
-  Temp: TOverlayTempArray;
+  Seen: specialize TSwissTableStr<Byte>;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
-  { 热点目录缓存：SwissTable 16槽 RWLock 读并发零争用/TryAcquireWrite 非阻塞写，首击 O(k log k) Sort+Unique 后续 O(1) 哈希+O(k) Copy 隔离，对齐 mount §6，零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline }
+  { 热点目录缓存：SwissTable 16槽 RWLock 读并发零争用/阻塞 AcquireWrite 单源 helper，首击流式增量哈希去重+去重后排序 后续 O(1) 哈希+O(k) Copy 隔离，对齐 mount §6，零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline via VfsSortEntries }
   if TryGetListCached(ADirPath, Result) then Exit;
   if not VfsIsRoot(ADirPath) then
   begin
@@ -232,35 +187,38 @@ begin
     if not LStat.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
-  TempN := 0;
-  for I := 0 to High(FList) do
-  begin
-    try Cur := FList[I].List(ADirPath);
-    except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
-    if Length(Cur) = 0 then Continue;
-    { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1)；扇出限界 Cap≤N  via mount 同款模板，inline 零拷贝单 Move，消多层 O(n²) realloc }
-    OverlayEnsureCap(Temp, TempN + Length(Cur));
-    for J := 0 to High(Cur) do
+  Result := nil;
+  OutN := 0;
+  Seen := specialize TSwissTableStr<Byte>.Create(16);
+  try
+    for I := 0 to High(FList) do
     begin
-      Temp[TempN].Entry := Cur[J];
-      Temp[TempN].Prio := I;
-      Inc(TempN);
+      try Cur := FList[I].List(ADirPath);
+      except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
+      if Length(Cur) = 0 then Continue;
+      for J := 0 to High(Cur) do
+      begin
+        if Seen.ContainsKey(Cur[J].Name) then Continue;
+        Seen.Put(Cur[J].Name, 0);
+        { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1) inline+Move 零拷贝，单源复用 mount 模板 via OverlayEnsureCapEntries }
+        OverlayEnsureCapEntries(Result, OutN + 1);
+        Result[OutN] := Cur[J];
+        Inc(OutN);
+      end;
     end;
-  end;
-  if TempN = 0 then
-  begin
-    Result := nil;
+    if OutN = 0 then
+    begin
+      SetLength(Result, 0);
+      Result := nil;
+      CacheList(ADirPath, Result);
+      Exit(nil);
+    end;
+    SetLength(Result, SizeInt(OutN));
+    VfsSortEntries(Result);
     CacheList(ADirPath, Result);
-    Exit(nil);
+  finally
+    Seen.Free;
   end;
-  SetLength(Temp, TempN);
-  specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
-  TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
-  SetLength(Temp, TempN);
-  SetLength(Result, TempN);
-  for I := 0 to TempN - 1 do
-    Result[I] := Temp[I].Entry;
-  CacheList(ADirPath, Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;

@@ -13,6 +13,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
+  nextpas.core.vfs.cache,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
 
@@ -35,20 +36,17 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
-  nextpas.core.collections.hashmap.swiss.str,
-  nextpas.core.sync;
+  nextpas.core.collections.hashmap.swiss.str;
 
 type
   TStrVfsMap = specialize TSwissTableStr<IVfs>;
-  TMountListCache = specialize TSwissTableStr<TEntryArray>;
   TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FMounts: TVfsMountArray;
     FMountMap: TStrVfsMap; { O(1) exact-hit 索引：IsMountPoint/FindMount 热路径单源哈希，零线性扫描 }
     FHasRoot: Boolean;
     FRootFs: IVfs;
-    FListCache: TObject; { 热点目录缓存：Swisstable 单源，RWLock 读并发零争用/TryAcquireWrite 非阻塞写，热点 List 免重复 O(n log n) Sort/Dedup，对齐 overlay 单源 }
-    FListLock: IRWLock;
+    FListCache: TVfsListCache; { 热点目录缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + Copy隔离（mount/overlay 单源 via vfs.cache） }
     function FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
     function IsMountPoint(const APath: string): Boolean; inline;
     function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
@@ -142,54 +140,30 @@ begin
   FMountMap := TStrVfsMap.Create(Length(FMounts));
   for I := 0 to High(FMounts) do
     FMountMap.Put(FMounts[I].Prefix, FMounts[I].Fs);
-  FListCache := TMountListCache.Create(16);
-  FListLock := RWLock;
+  FListCache := TVfsListCache.Create;
 end;
 
 destructor TMountedVfs.Destroy;
 begin
   if FListCache <> nil then
   begin
-    TMountListCache(FListCache).Free;
+    FListCache.Free;
     FListCache := nil;
   end;
-  FListLock := nil;
   if Assigned(FMountMap) then FMountMap.Free;
   inherited Destroy;
 end;
 
-{ 热点缓存：Swisstable 单源，RWLock 读并发零争用，inline 热路径，Overlay 同源模板 }
+{ 热点缓存单源 helper：SwissTable 16槽 + RWLock 读并发零争用 + 阻塞写 + Copy隔离（mount/overlay 单源 via vfs.cache），inline 热路径 }
 function TMountedVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
-var
-  LCached: TEntryArray;
 begin
-  AEntries := nil;
-  Result := False;
-  if (FListCache = nil) or (FListLock = nil) then Exit;
-  FListLock.AcquireRead;
-  try
-    if TMountListCache(FListCache).TryGetValue(ADirPath, LCached) then
-    begin
-      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，防调用方篡改共享缓存 }
-      Result := True;
-    end;
-  finally
-    FListLock.ReleaseRead;
-  end;
+  Result := (FListCache <> nil) and FListCache.TryGet(ADirPath, AEntries);
 end;
 
 procedure TMountedVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
-var
-  LDummy: TEntryArray;
 begin
-  if (FListCache = nil) or (FListLock = nil) then Exit;
-  if not FListLock.TryAcquireWrite then Exit;
-  try
-    if TMountListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
-    TMountListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离，TryAcquireWrite 非阻塞防惊群 }
-  finally
-    FListLock.ReleaseWrite;
-  end;
+  if FListCache = nil then Exit;
+  FListCache.Put(ADirPath, AEntries); { 阻塞写单源 helper，抢锁不丢弃防重复 O(k log k) Sort/Dedup }
 end;
 
 { 单源容量模板：derive 通用 16 倍增 Cap≤N via bytes.ops BytesNextCapacity，inline 零拷贝单源，复用 base VfsDerive* 同款策略 }
@@ -364,7 +338,7 @@ var
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
-  { 热点目录缓存：高基数目录重复 List O(n log n) Sort/Dedup → O(1) 哈希 + O(k) Copy，RWLock 读并发零争用，对齐 overlay 单源 }
+  { 热点目录缓存：高基数目录重复 List O(n log n) Sort/Dedup → O(1) 哈希 + O(k) Copy，SwissTable 16槽 RWLock 读并发零争用/阻塞 AcquireWrite 单源 helper via vfs.cache 对齐 overlay，inline 热路径 }
   if TryGetListCached(ADirPath, Result) then Exit;
   if VfsIsRoot(ADirPath) then
   begin

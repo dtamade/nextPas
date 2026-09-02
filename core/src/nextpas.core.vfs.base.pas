@@ -1,11 +1,6 @@
 unit nextpas.core.vfs.base;
 
-{** @desc vfs 基座：条目 record、规范路径语法（Go io/fs.ValidPath 对等语义，
-  权威文本见 core/docs/respack/FORMAT.md「路径规范」）。路径校验委托
-  nextpas.core.bytes.pathvalid 单一事实源，不再本地重复实现。L2 仅依赖
-  L0-L1（bytes.ops/base.utils），解压上限 canonical 单源为
-  compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB)，base 接口层以字面量 32*1024*1024 守 L0 纯度与无 L2→L2
-  为唯一字面量，compressed 薄门面经 vfs.base 单源别名复用不再二次双写，漂移由 source-contract 字面量+单源别名双重锁定。 }
+{** @desc vfs 基座：TEntryInfo/TStatInfo 与路径语法（ValidPath 单源 bytes.pathvalid）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -35,10 +30,7 @@ type
   TVfsNameArray = array of string;
 
 const
-  { 数值对齐：与 compress.base GZIP_MAX_DECOMPRESS_BYTES (32MiB) 同值，
-    canonical 单源为 compress.base；base 接口层以字面量 32*1024*1024 守 L0 纯度与无 L2→L2
-    为唯一字面量（四件套底座仅 L0-L1，无直接 compress 依赖），compressed 薄门面经本单元单源别名复用，
-    漂移由 source-contract 字面量+别名双重锁定。 }
+  { 单源对齐 compress.base GZIP_MAX (32MiB)，base 唯一字面量。 }
   VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
@@ -202,19 +194,29 @@ type
     OutN: SizeInt;
     N: SizeInt;
   end;
+  { 统一 Span 视图工厂：单一 getter 经 Kind 分发，收口双适配层，零拷贝 inline }
+  TDeriveSrcKind = (dskSpans, dskStrs);
+  PDeriveSrc = ^TDeriveSrc;
+  TDeriveSrc = record
+    Kind: TDeriveSrcKind;
+    Spans: PSpanArray;
+    Strs: PStrArray;
+  end;
 
-function DeriveGetterSpans(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
-begin
-  Result := PSpanArray(AUserData)^[AIdx];
-end;
-
-function DeriveGetterStrs(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
+function DeriveGetterUnified(AIdx: SizeInt; AUserData: Pointer): TByteSpan; inline;
 var
+  Src: PDeriveSrc;
   PS: ^string;
 begin
-  PS := @PStrArray(AUserData)^[AIdx];
-  if Length(PS^) = 0 then Result := TByteSpan.Empty
-  else Result := TByteSpan.Create(PByte(@PS^[1]), SizeUInt(Length(PS^)));
+  Src := PDeriveSrc(AUserData);
+  if Src^.Kind = dskSpans then
+    Result := Src^.Spans^[AIdx]
+  else
+  begin
+    PS := @Src^.Strs^[AIdx];
+    if Length(PS^) = 0 then Result := TByteSpan.Empty
+    else Result := TByteSpan.Create(PByte(@PS^[1]), SizeUInt(Length(PS^)));
+  end;
 end;
 
 procedure DeriveCollectHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
@@ -236,13 +238,15 @@ begin
   Inc(Ctx^.OutN);
 end;
 
-{ 单源：LowerBound + 前缀扫描 + '/' 分段 + 去重；资源释放不丢。 }
+{ 单源：LowerBound + UpperBound + '/' 分段 + 去重；O(log n + k) 有序区间，资源释放不丢。 }
 procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
   AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
   AHandlerData: Pointer);
 var
   PrefixLen, Lo, Hi, Mid, I, SegPos, J: SizeInt;
-  PrefixSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
+  PrefixSpan, UpperSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
+  Successor: string;
+  UpperLo, UpperHi: SizeInt;
   IsFirst: Boolean;
 begin
   if ACount <= 0 then Exit;
@@ -265,15 +269,33 @@ begin
       else
         Hi := Mid;
     end;
+    // 上界截断：prefix 以 '/' 结尾，successor 将 '/' 递增为 '0'，区间 [Lo, HiUpper) 即 prefix 子树
+    Successor := Copy(ADirPrefix, 1, PrefixLen - 1) + Chr(Ord('/') + 1);
+    if Length(Successor) > 0 then
+      UpperSpan := TByteSpan.Create(PByte(@Successor[1]), SizeUInt(Length(Successor)))
+    else
+      UpperSpan := TByteSpan.Empty;
+    UpperLo := Lo;
+    UpperHi := ACount;
+    while UpperLo < UpperHi do
+    begin
+      Mid := UpperLo + (UpperHi - UpperLo) div 2;
+      CurSpan := AGetter(Mid, AGetterData);
+      if SpanCompare(CurSpan, UpperSpan) < 0 then
+        UpperLo := Mid + 1
+      else
+        UpperHi := Mid;
+    end;
+    Hi := UpperLo;
   end;
   IsFirst := True;
   PrevSpan := TByteSpan.Empty;
-  for I := Lo to ACount - 1 do
+  for I := Lo to Hi - 1 do
   begin
     CurSpan := AGetter(I, AGetterData);
     if SizeInt(CurSpan.Len) <= PrefixLen then Continue;
     if PrefixLen > 0 then
-      if not SpanStartsWith(CurSpan, PrefixSpan) then Break;
+      if not SpanStartsWith(CurSpan, PrefixSpan) then Continue;
     SegPos := 0;
     for J := PrefixLen to SizeInt(CurSpan.Len) - 1 do
       if CurSpan.Data[J] = Ord('/') then
@@ -297,6 +319,7 @@ function VfsDeriveChildNamesFromSpans(const ASpans: array of TByteSpan;
   const ADirPrefix: string): TVfsNameArray;
 var
   Ctx: TDeriveCollectCtx;
+  Src: TDeriveSrc;
 begin
   Result := nil;
   if Length(ASpans) = 0 then Exit;
@@ -304,7 +327,10 @@ begin
   Ctx.OutN := 0;
   Ctx.N := Length(ASpans);
   SetLength(Result, 0);
-  VfsEnumerateChildSpans(Ctx.N, @DeriveGetterSpans, @ASpans[0], ADirPrefix, @DeriveCollectHandler, @Ctx);
+  Src.Kind := dskSpans;
+  Src.Spans := PSpanArray(@ASpans[0]);
+  Src.Strs := nil;
+  VfsEnumerateChildSpans(Ctx.N, @DeriveGetterUnified, @Src, ADirPrefix, @DeriveCollectHandler, @Ctx);
   SetLength(Result, Ctx.OutN);
 end;
 
@@ -312,6 +338,7 @@ function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 var
   Ctx: TDeriveCollectCtx;
+  Src: TDeriveSrc;
 begin
   Result := nil;
   if Length(ASortedPaths) = 0 then Exit;
@@ -319,7 +346,10 @@ begin
   Ctx.OutN := 0;
   Ctx.N := Length(ASortedPaths);
   SetLength(Result, 0);
-  VfsEnumerateChildSpans(Ctx.N, @DeriveGetterStrs, @ASortedPaths[0], ADirPrefix, @DeriveCollectHandler, @Ctx);
+  Src.Kind := dskStrs;
+  Src.Strs := PStrArray(@ASortedPaths[0]);
+  Src.Spans := nil;
+  VfsEnumerateChildSpans(Ctx.N, @DeriveGetterUnified, @Src, ADirPrefix, @DeriveCollectHandler, @Ctx);
   SetLength(Result, Ctx.OutN);
 end;
 

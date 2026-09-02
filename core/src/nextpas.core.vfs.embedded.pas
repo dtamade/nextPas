@@ -65,8 +65,7 @@ type
   { 池化包装：IStream/IReaderAt 的接口壳，析构时把 Slice 归还池
     FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂
     契约：FOwner 弱引用仅在 FKeep 存活窗口内有效；析构先擒 LKeep 再推导 LOwner，
-    TryPushPool 在 LKeep 保活期内完成，Owner 析构或 FKeep=nil 时二次校验回退 Free，无悬垂
-    单源：EMBEDDED_POOL_SIZE 64 与 CONTRACT 一致，SpinLock 零分配+inline；池逻辑收口至 TEmbeddedSlicePool，百并发阈值覆盖 }
+    TryPushPool 在 LKeep 保活期内完成，Owner 析构或 FKeep=nil 时二次校验回退 Free，无悬垂 }
   TEmbeddedSliceStream = class(TInterfacedObject, IStream, IReaderAt)
   private
     FSlice: TEmbeddedSlice;
@@ -89,11 +88,10 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 64; { SpinLock 池 64 槽零分配复用，CONTRACT 单源 64，163ms/10k 实测闭环；4×扩容覆盖百并发阈值（16→64，百并发饱和率 75%↓），SpinLock零分配+inline热路径 }
+  EMBEDDED_POOL_SIZE = 64; { 池容量，CONTRACT 单源 }
 
 type
-  { 切片池单源：64 槽 SpinLock 零分配，二次校验 FLock=nil 安全回退；抽离至独立对象降低 TEmbeddedVfs 心智负担
-    性能：inline热路径+零拷贝切片复用，百并发下溢出率 4×降低（16槽高并发饱和回退Free/Create→64槽缓冲），溢出仍 Free 不丢 }
+  { 切片池：64 槽 SpinLock，二次校验 FLock=nil 安全回退 }
   TEmbeddedSlicePool = class
   private
     FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
@@ -120,8 +118,8 @@ type
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean; inline;
     function IndexOfPath(const APath: string): SizeInt; inline;
-    function GetOrCreateETag(const AIdx: SizeInt): string;
-    function GetOrCreateLastMod(const AIdx: SizeInt): string;
+    function GetOrCreateETag(const AIdx: SizeInt): string; inline;
+    function GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
     function TryPopPool(out ASlice: TEmbeddedSlice): Boolean; inline;
     function TryPushPool(ASlice: TEmbeddedSlice): Boolean; inline;
   public
@@ -134,7 +132,7 @@ type
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
-    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean; inline;
   end;
 
 type
@@ -397,7 +395,7 @@ begin
   if (FLock = nil) or (ASlice = nil) then Exit;
   FLock.Acquire;
   try
-    // 二次校验：Acquire 后重判 FLock=nil（Owner 析构并发），否则归还落 Free，无悬垂；64槽缓冲百并发，饱和仍 Free 不丢
+    // 二次校验 FLock=nil 安全回退
     if FLock = nil then Exit(False);
     if FCount < EMBEDDED_POOL_SIZE then
     begin
@@ -466,7 +464,7 @@ begin
   Result := FSlicePool.TryPush(ASlice);
 end;
 
-function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string;
+function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string; inline;
 var
   E: TResPackEntry;
   LTag: string;
@@ -478,7 +476,7 @@ begin
     LTag := VfsETagFNV(E.Hash)
   else
     LTag := VfsETagStrong(E.Size, E.ModTime);
-  FMetaLock.Acquire; // decoupled from FPoolLock: lazy ETag publish no longer contends with slice pool hotspot
+  FMetaLock.Acquire;
   try
     if FETags[AIdx] = '' then
       FETags[AIdx] := LTag;
@@ -488,7 +486,7 @@ begin
   end;
 end;
 
-function TEmbeddedVfs.GetOrCreateLastMod(const AIdx: SizeInt): string;
+function TEmbeddedVfs.GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
 var
   LMod: string;
 begin
@@ -496,7 +494,7 @@ begin
   if Result <> '' then Exit;
   if FEntries[AIdx].ModTime = 0 then Exit;
   LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
-  FMetaLock.Acquire; // non-inline: FormatHttpDate+lock 避免热路径 I-Cache 膨胀
+  FMetaLock.Acquire;
   try
     if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
       FLastMods[AIdx] := LMod;
@@ -594,16 +592,45 @@ begin
   Result := False;
 end;
 
-function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean; inline;
 var
   Idx: SizeInt;
+  LTag, LMod: string;
+  NeedTag, NeedMod: Boolean;
 begin
-  // 单次二分同时取双值，ServeVfs 三连击 3×→1×，ETag/LastMod 惰性首击 SpinLock 发布
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    AETag := GetOrCreateETag(Idx);
-    ALastModified := GetOrCreateLastMod(Idx);
+    // 快路径：已缓存则零锁返回；首击单次 FMetaLock 发布双值，降低 ServeVfs 热点争用
+    AETag := FETags[Idx];
+    ALastModified := FLastMods[Idx];
+    NeedTag := AETag = '';
+    NeedMod := (ALastModified = '') and (FEntries[Idx].ModTime <> 0);
+    if NeedTag or NeedMod then
+    begin
+      if NeedTag then
+      begin
+        if (FEntries[Idx].Flags and RESPACK_EFLAG_HASHED) <> 0 then
+          LTag := VfsETagFNV(FEntries[Idx].Hash)
+        else
+          LTag := VfsETagStrong(FEntries[Idx].Size, FEntries[Idx].ModTime);
+      end;
+      if NeedMod then
+        LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[Idx].ModTime);
+      FMetaLock.Acquire;
+      try
+        if NeedTag and (FETags[Idx] = '') then
+          FETags[Idx] := LTag;
+        if NeedMod and (FLastMods[Idx] = '') then
+          FLastMods[Idx] := LMod;
+        AETag := FETags[Idx];
+        if (AETag = '') and NeedTag then AETag := LTag;
+        ALastModified := FLastMods[Idx];
+        if (ALastModified = '') and NeedMod then ALastModified := LMod;
+      finally
+        FMetaLock.Release;
+      end;
+    end;
     Exit(True);
   end;
   AETag := '';
