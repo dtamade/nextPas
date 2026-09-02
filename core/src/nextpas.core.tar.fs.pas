@@ -49,7 +49,7 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；批量小文件惰性按需扩容+bytes.builder几何池化复用 I/O 块（200×512B 仅1次 Reserve，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，几何 2× O(1)复用无预扫max、无零填充，IBytesBuilder 接口自动释资源不丢、零GetMem/FreeMem手管、零拷贝直传），bytes.ops/builder 双单源，try..finally 不丢 }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，inline 零拷贝；惰性按需扩容+bytes.builder几何池化复用 I/O 块（TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，几何 2×），IBytesBuilder 接口自动释资源不丢，bytes.ops/builder 双单源 }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
 var
   LI: Integer;
@@ -87,7 +87,7 @@ begin
           AWriter.AddEntry(LHdr, nil);
           Continue;
         end;
-        // perf: 惰性按需扩容 — 仅当 LHdr.Size>0 且 LCap < TarIOBufCapacityFor 时经 IBytesBuilder 几何池化 Reserve 扩容（bytes.builder 单源 2×，AlignUp4K 单源 4K 对齐，O(1)复用），200×512B 仅1次分配、无预扫 O(N) max、自适应大文件 8192/16K 几何增长，接口自动释资源不丢句柄
+        // perf: 惰性按需扩容 — 仅当需 I/O 时经 IBytesBuilder 几何 Reserve（bytes.builder 单源 2× / AlignUp4K 单源），接口自动释资源不丢
         LNeed := TarIOBufCapacityFor(LHdr.Size);
         if LSharedCap < LNeed then
         begin
@@ -121,6 +121,15 @@ begin
   end;
 end;
 
+{ Walk 收集前奏单源：消除 TarPackDir/TarPackDirInto 同构 SetLength/ArchiveCollectWalk/SetLength 重复，inline 薄转发 ArchiveCollectWalk 单源，几何扩容复用，零额外分配 }
+procedure CollectTarWalks(const ADir: string; var AWalks: TArchiveWalkArray; var ACount: Integer); inline;
+begin
+  SetLength(AWalks, 0);
+  ACount := 0;
+  ArchiveCollectWalk(ADir, '', AWalks, ACount);
+  SetLength(AWalks, ACount);
+end;
+
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
   LRoot: TArchiveFileInfo;
@@ -132,10 +141,7 @@ begin
   LRoot := ArchiveStat(ADir);
   if not LRoot.IsDir then
     raise EArgumentError.Create('tar pack: not a directory: ' + ADir);
-  SetLength(LWalks, 0);
-  LWalksCount := 0;
-  ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
-  SetLength(LWalks, LWalksCount);
+  CollectTarWalks(ADir, LWalks, LWalksCount);
   try
     // 复用已Stat FSize，PackWalks inline 零拷贝
     PackWalks(LWalks, AWriter);
@@ -152,15 +158,25 @@ var
   LWalks: TArchiveWalkArray;
   LWalksCount: Integer;
   LCap: SizeUInt;
+  LI: Integer;
+  LEst: UInt64;
 begin
   Result := nil;
-  SetLength(LWalks, 0);
-  LWalksCount := 0;
-  ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
-  SetLength(LWalks, LWalksCount);
+  CollectTarWalks(ADir, LWalks, LWalksCount);
   try
-    // perf: 单遍内联预估 — 消除 LAccum 逐项 AlignUp 预扫的 O(N) 第二遍，PackWalks 单遍 inline 零拷贝直写；按基础量 TarBuilderCapacityFor 4K 对齐预扩容（bytes.ops AlignUp4K 单源，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝），200×512B 等批量小文件经 PackWalks 内惰性 I/O 池化已单遍覆盖，无预扫 max、无零填充，接口自动释资源不丢
-    LCap := TarBuilderCapacityFor(UInt64(LWalksCount) * SizeUInt(C_TAR_BLOCK_SIZE));
+    // perf: 按实际载荷预估 — header 512 + AlignUp(FSize,512) 单遍累加（bytes.ops AlignUp 单源 512 对齐），经 TarBuilderCapacityFor 4K 对齐预扩容，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝，接口自动释资源不丢
+    LEst := 0;
+    for LI := 0 to LWalksCount - 1 do
+    begin
+      if LWalks[LI].FSize > 0 then
+        LEst := LEst + UInt64(C_TAR_BLOCK_SIZE) + UInt64(AlignUp(SizeUInt(LWalks[LI].FSize), SizeUInt(C_TAR_BLOCK_SIZE)))
+      else
+        LEst := LEst + UInt64(C_TAR_BLOCK_SIZE);
+    end;
+    if LEst > High(SizeUInt) then
+      LCap := TarBuilderCapacityFor(High(SizeUInt))
+    else
+      LCap := TarBuilderCapacityFor(SizeUInt(LEst));
     CreateArchiveBuilder(LCap, LBuilder, LSink);
     W := TTarWriter.Create(LSink);
     try

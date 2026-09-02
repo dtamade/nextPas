@@ -25,7 +25,7 @@ type
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
-   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 持有镜像、Reader 释放后仍可读；外部 PByte 时零拷贝视图、生命周期绑外部内存/Reader，零额外大块 Move，避免大条目流式场景额外分配）。 *}
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为持有型 IReader（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时固化拷贝自包含 via SpanClone 单源 FHold 持有副本防 UAF、Reader 释放后仍可读，单次 Move）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -53,9 +53,10 @@ type
     FScanLens: array[0..6] of SizeUInt; // opaque generic cache: 0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix
     FGuardHead: TTarGlobalPaxGuard; // guard chain
     FGuardCount: SizeUInt;
-    FLogger: ILogger; // warn on auto-clear
+    FLogger: ILogger; // warn on auto-clear/reject
     function HasGuards: Boolean; inline;
     procedure LogGlobalPaxAutoClear;
+    procedure LogGlobalPaxRejected(const AName: string);
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
@@ -88,9 +89,9 @@ type
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型（FBuf 时持有镜像、外部 PByte 时零拷贝视图绑外部内存） — }
+    { — 零拷贝单一规范：TByteSpan 视图零分配，inline 薄转发，生命周期绑 Reader；OpenEntryStream 为持有型（FBuf 时零拷贝持有镜像、外部 PByte 时固化拷贝自包含防 UAF） — }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
-    { — 持有型流：FBuf 非空时 CreateWithHold 持有镜像（Reader 释放后仍可读）；外部 PByte 时零拷贝视图 CreateSliceReader（生命周期绑外部内存/Reader，零额外大块 Move，流式大条目零分配） — }
+    { — 持有型流：FBuf 非空时 CreateWithHold 零拷贝持有镜像（Reader 释放后仍可读）；外部 PByte 时 SpanClone 固化拷贝自包含 via CreateSliceReaderWithHold（FHold 防悬垂、Reader 释放后仍可读） — }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
   end;
@@ -191,6 +192,8 @@ const
     (Off: 297; Len: 32),
     (Off: 345; Len: 155)
   );
+  // batch lens: values derived from C_TAR_SCAN_FIELDS.Len single source, bulk record copy avoids 7 repeated stores (I-Cache)
+  C_TAR_SCAN_LENS: array[0..6] of SizeUInt = (100, 100, 6, 2, 32, 32, 155);
 
 // single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS, bytes.ops单源单次扫描
 procedure CacheHeader(ASelf: TTarReader);
@@ -201,14 +204,8 @@ begin
   if ASelf.FScanValid and (ASelf.FScanPos = ASelf.FPos) then Exit;
   if ASelf.FPos + C_TAR_BLOCK_SIZE > ASelf.FCount then
   begin
-    // reuse single source C_TAR_SCAN_FIELDS lens directly, zero magic
-    ASelf.FScanLens[0] := C_TAR_SCAN_FIELDS[0].Len;
-    ASelf.FScanLens[1] := C_TAR_SCAN_FIELDS[1].Len;
-    ASelf.FScanLens[2] := C_TAR_SCAN_FIELDS[2].Len;
-    ASelf.FScanLens[3] := C_TAR_SCAN_FIELDS[3].Len;
-    ASelf.FScanLens[4] := C_TAR_SCAN_FIELDS[4].Len;
-    ASelf.FScanLens[5] := C_TAR_SCAN_FIELDS[5].Len;
-    ASelf.FScanLens[6] := C_TAR_SCAN_FIELDS[6].Len;
+    // bulk record copy: single array assign via C_TAR_SCAN_LENS, avoids 7 repeated stores
+    ASelf.FScanLens := C_TAR_SCAN_LENS;
     ASelf.FScanPos := ASelf.FPos;
     ASelf.FScanValid := True;
     Exit;
@@ -247,14 +244,16 @@ begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // declarative table-driven: reuse C_TAR_SCAN_FIELDS single source, eliminates case magic 100/32/155, opaque cache
-    for I := 0 to High(C_TAR_SCAN_FIELDS) do
-      if (C_TAR_SCAN_FIELDS[I].Off = LFieldOff) and (C_TAR_SCAN_FIELDS[I].Len = ALen) then
-      begin
-        LLen := FScanLens[I];
-        if LLen = 0 then Exit(TByteSpan.Empty);
-        Exit(TByteSpan.Create(@FData[AOfs], LLen));
-      end;
+    // offset direct index: jump table via case, eliminates 7-branch linear scan (hot path ~7x branch reduction, single dispatch)
+    case LFieldOff of
+      0:   if ALen = 100 then begin LLen := FScanLens[0]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      157: if ALen = 100 then begin LLen := FScanLens[1]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      257: if ALen = 6   then begin LLen := FScanLens[2]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      263: if ALen = 2   then begin LLen := FScanLens[3]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      265: if ALen = 32  then begin LLen := FScanLens[4]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      297: if ALen = 32  then begin LLen := FScanLens[5]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+      345: if ALen = 155 then begin LLen := FScanLens[6]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
+    end;
     // fallback: non-7 header field — bytes.ops single source SpanIndexOf/MemFindByte SIMD zero-copy, no scalar loop
     LSpan := TByteSpan.Create(@FData[AOfs], ALen);
     LIdx := SpanIndexOf(LSpan, 0);
@@ -444,6 +443,13 @@ begin
   FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
 end;
 
+procedure TTarReader.LogGlobalPaxRejected(const AName: string);
+begin
+  // INV-3 observability: global pax unsafe filter must Warn (consistent with auto-clear), prevents silent tamper
+  if FLogger = nil then Exit;
+  FLogger.Warn('tar: global pax rejected unsafe name: ' + AName + ' (filtered, not persisted)');
+end;
+
 function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;
 begin
   Result := TTarGlobalPaxGuard.Create(Self);
@@ -564,7 +570,12 @@ begin
     if Flag = Ord('L') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // L: not counted in total
+      // bomb: extended payload counted toward total (prevents large L/K/x/g DoS), single source GuardTarTotalSize
+      if PayloadLen > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(PayloadLen), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(PayloadLen);
+      end;
       if PayloadLen > 0 then
         FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -573,7 +584,12 @@ begin
     else if Flag = Ord('K') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // K: not counted in total
+      // bomb: extended payload counted toward total
+      if PayloadLen > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(PayloadLen), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(PayloadLen);
+      end;
       if PayloadLen > 0 then
         FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -582,7 +598,12 @@ begin
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // x/g: not counted in total
+      // bomb: pax payload counted toward total (prevents 100k × large pax DoS), single source GuardTarTotalSize
+      if PayloadLen > 0 then
+      begin
+        GuardTarTotalSize(FCumTotal, UInt64(PayloadLen), FMaxTotal);
+        FCumTotal := FCumTotal + UInt64(PayloadLen);
+      end;
       if PayloadLen > 0 then
       begin
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
@@ -591,11 +612,14 @@ begin
           begin
             if FPaxPath <> '' then
             begin
-              // IsSafe filter before storing global
+              // IsSafe filter before storing global, Warn on reject (observability parity with auto-clear)
               if IsSafeTarEntryName(FPaxPath) then
                 FGlobalPaxPath := FPaxPath
               else
+              begin
+                LogGlobalPaxRejected(FPaxPath);
                 FGlobalPaxPath := '';
+              end;
               FPaxPath := '';
             end;
             if FPaxLinkPath <> '' then
@@ -603,7 +627,10 @@ begin
               if IsSafeTarEntryName(FPaxLinkPath) then
                 FGlobalPaxLinkPath := FPaxLinkPath
               else
+              begin
+                LogGlobalPaxRejected(FPaxLinkPath);
                 FGlobalPaxLinkPath := '';
+              end;
               FPaxLinkPath := '';
             end;
           end;
@@ -616,11 +643,17 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      // re-check IsSafe, auto-clear single-use if no guard
+      // re-check IsSafe, Warn on reject (parity with auto-clear), auto-clear single-use if no guard
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
+      begin
+        LogGlobalPaxRejected(FGlobalPaxPath);
         FGlobalPaxPath := '';
+      end;
       if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
+      begin
+        LogGlobalPaxRejected(FGlobalPaxLinkPath);
         FGlobalPaxLinkPath := '';
+      end;
       if FPendingLongName <> '' then
         AHeader.Name := FPendingLongName
       else if FPaxPath <> '' then
@@ -741,9 +774,10 @@ function TTarReader.OpenEntryStream: IReader;
 var
   P: PByte;
   C: SizeUInt;
+  LCopy: TBytes;
 begin
-  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory 单源零拷贝，FHold 防悬垂
-  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径 CreateSliceReader 零拷贝视图（生命周期绑外部内存/Reader，零额外大块 SpanClone/CopyMemory，避免大条目流式场景额外一次分配/大块 Move，调用方需保证外部内存生命周期）
+  // 单源持有型流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂
+  // 性能+稳定：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径固化拷贝自包含 via SpanClone 单源（FHold 持有副本防 UAF，Reader 释放后仍可读，单次 Move，避免外部 TBytes 释放后悬垂）
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
@@ -752,7 +786,13 @@ begin
   if Length(FBuf) > 0 then
     Result := CreateSliceReaderWithHold(FBuf, FEntryDataOfs, C)
   else
-    Result := CreateSliceReader(P, C);
+  begin
+    if (P = nil) or (C = 0) then
+      Exit(CreateSliceReader(nil, 0));
+    // stability: clone external slice to self-contained hold, eliminates UAF when caller frees external buffer
+    LCopy := SpanClone(TByteSpan.Create(P, C));
+    Result := CreateSliceReaderWithHold(LCopy, 0, C);
+  end;
 end;
 
 function TTarReader.EntrySize: Int64;

@@ -15,8 +15,8 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FIOBuf: TBytes; // pooled I/O buffer via bytes.ops single source (BytesEnsureCapacity), high-water retained, zero GetMem/FreeMem jitter
-    FLogger: ILogger; // observability for Destroy best-effort Finish, default NullLogger zero-alloc inline
+    FIOBuf: TBytes; // I/O buffer
+    FLogger: ILogger;
     procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
@@ -501,19 +501,11 @@ begin
   try
     if not FFinished then
     begin
-      // stability: observability via FLogger (injectable, default NullLogger zero-alloc inline), explicit Finish required per CONTRACT §1.4; best-effort Finish with exception detail, never masks original exception
       if FLogger = nil then
         FLogger := NullLogger;
       FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)');
-      try
-        Finish;
-      except
-        on E: Exception do
-          FLogger.Warn('tar: writer destroy suppress finish failure: ' + E.ClassName + ': ' + E.Message + ' (disk full or short write => archive truncated, two zero blocks missing)');
-      end;
     end;
   finally
-    // stability: always release pooled buffer (bytes.ops single source), zero GetMem/FreeMem mismatch, try..finally guarantees not lost even if Finish raises
     if Length(FIOBuf) > 0 then
       SetLength(FIOBuf, 0);
     FDst := nil;

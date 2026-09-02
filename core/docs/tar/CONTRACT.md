@@ -37,11 +37,11 @@
 
 - **[INV-1]** USTAR 写入：`magic "ustar\0"` @257 + `version "00"` @263 固定；>100 字符名自动 `prefix/name` 分割，否则以 `pax x` 扩展头承载。
 - **[INV-2]** 数值字段八进制为主，超限自动 `base-256`（`$80` + big-endian），读端双路径兼容。
-- **[INV-3]** 读写对称：读端支持 `GNU L/K` 与 `pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 需 guard 持久否则单次消费自动清理），pax 记录严格校验、畸形抛 `EIOError`。
+- **[INV-3]** 读写对称：读端支持 `GNU L/K` 与 `pax x/g` 的 `path/linkpath` 覆盖（per-entry 优于 global，`g` 需 guard 持久否则单次消费自动清理并 `ILogger.Warn`；`g` 恶意路堨经 `IsSafeTarEntryName` 过滤置空同步 `Warn` 可观测，防静默篡改），pax 记录严格校验、畸形抛 `EIOError`。
 - **[INV-4]** 校验和双算（unsigned/signed）任一匹配即过，否则 `EIOError: header checksum mismatch`。
 - **[INV-5]** 名安全：`IsSafeTarEntryName` 拒绝空名/绝对路径/盘符/反斜杠/`//`/`./`/`..`；写端 `EArgumentError`，读端/落盘前 `EParseError`，落盘二次拒绝；落盘前拒绝路径含符号链接段。
-- **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 总量在 `common.Guard*` 单点 fail-closed，`TrySlice`/`OpenEntryStream` 中途同受；`pax x/g` 元数据不计入总量。
-- **[INV-7]** 帧与视图：双零块收尾、单零块后非零即 `truncated stream`；`TrySlice` 为零拷贝 `TByteSpan` 单一规范（`inline`、生命周期绑 `Reader`），`EntryDataSlice` 薄转发同源；`OpenEntryStream` 为持有型 `IReader`（镜像时持有引用、外部 `PByte` 时视图绑外部内存），`Reader` 释放后视图失效。确定性：未显式 mtime 取 `0`，同输入同字节（除 pax 长名外）。
+- **[INV-6]** Bomb 守卫：`MaxEntrySize` 单条目与 `MaxTotalSize` 总量在 `common.Guard*` 单点 fail-closed，`TrySlice`/`OpenEntryStream` 中途同受；`pax x/g` 与 `GNU L/K` 扩展载荷计入总量（防 100k×超大 pax DoS，`GuardTarTotalSize` 单源）。
+- **[INV-7]** 帧与视图：双零块收尾、单零块后非零即 `truncated stream`；`TrySlice` 为零拷贝 `TByteSpan` 单一规范（`inline`、生命周期绑 `Reader`），`EntryDataSlice` 薄转发同源；`OpenEntryStream` 为持有型 `IReader`（`FBuf` 时零拷贝持有镜像、`Reader` 释放后仍可读；外部 `PByte` 时 `SpanClone` 固化拷贝自包含 via `CreateSliceReaderWithHold` 防 UAF、`Reader` 释放后仍可读），`bytes.ops` 单源 `CopyMemory/SpanClone`。确定性：未显式 mtime 取 `0`，同输入同字节（除 pax 长名外）。
 
 ## 3. 错误模型
 
