@@ -2,7 +2,7 @@
 """
 Tar bench 回归门：对比 BASELINE.json 与当前 build/bench-tar.json。
 以 allocs 为硬预算（+2 抖动）、bytes 强一致、ns/op ≤1.50×、MB/s ≥0.65× 均为硬门（CI 红）；
-status=ok 强一致。Go/Rust 对照（若存在 compare 基准）同口径 Pascal ns/op ≤1.50× 且 MB/s ≥0.70× 为硬门。
+status=ok 强一致。Go/Rust 对照同口径 Pascal ns/op ≤1.50× 且 MB/s ≥0.70× 为硬门（CI 硬红，缺失即硬红）。
 任一硬门失败即非零退出，CI 红。
 """
 import json
@@ -127,11 +127,9 @@ def main():
     compare_failed = 0
     for label, cpath in [("Go", go_path), ("Rust", rust_path)]:
         if cpath is None or not cpath.exists():
-            if want_compare:
-                print(f"  FAIL compare {label}: missing artifact {cpath} (hard gate)", file=sys.stderr)
-                compare_failed += 1
-            else:
-                print(f"  WARN compare {label}: no artifact found, skip (warn not fail, run `make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare`)", file=sys.stderr)
+            print(f"  FAIL compare {label}: missing artifact {cpath} (hard gate, CI 硬红)", file=sys.stderr)
+            print(f"       hint: run `make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` to generate", file=sys.stderr)
+            compare_failed += 1
             continue
         try:
             cdata = load(cpath)
@@ -165,20 +163,17 @@ def main():
         for b in cmap.values():
             if b.get("status") != "ok":
                 print(f"  WARN compare {label} {b.get('name')}: status {b.get('status')} != ok", file=sys.stderr)
-    if want_compare and compare_failed:
-        print(f"[regression] compare gate {compare_failed} failure(s)", file=sys.stderr)
+    if compare_failed:
+        print(f"[regression] compare gate {compare_failed} failure(s) (CI 硬红)", file=sys.stderr)
         failed += compare_failed
-    elif compare_failed and want_compare:
-        failed += compare_failed
-    # if not want_compare, compare failures are warnings only (warn not fail) to keep loop closed when artifacts absent
     if failed:
         print(f"[regression] {failed} check(s) failed", file=sys.stderr)
         sys.exit(1)
     print("[regression] all checks passed (allocs/bytes/ns/MB/s hard gate, status ok)")
     if go_path or rust_path:
-        print("[regression] compare guard: Go/Rust artifacts checked (CONTRACT §6 closed)")
+        print("[regression] compare guard: Go/Rust artifacts checked (CONTRACT §6 closed, CI 硬红)")
     else:
-        print("[regression] compare guard: no artifacts, warn-only (closed via conditional hard gate)")
+        print("[regression] compare guard: no artifacts checked (unexpected, should be hard gate)")
     sys.exit(0)
 
 if __name__ == "__main__":

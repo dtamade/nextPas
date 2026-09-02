@@ -23,6 +23,7 @@ uses
   nextpas.core.archive.fs, // 联邦单缝：唯一入口 archive.fs（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出）
   nextpas.core.tar.capacity, // 容量单源已下沉 capacity 专用内核，单源 inline 零拷贝
   nextpas.core.tar.writer,
+  nextpas.core.tar.log,
   nextpas.core.log.intf;
 
 type

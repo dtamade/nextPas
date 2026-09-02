@@ -240,10 +240,10 @@ end;
 
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 begin
-  // 薄转发至 TByteSpan 视图
+  // 外联：复用 bytes.ops.StringAsSpan 单源零拷贝视图，单点 PAnsiChar，避 inline+Move[AValue[1]] 常量传播拷栈垃圾（FPC 3.3.1 红线1）
   if (ABlock = nil) or (ALen = 0) or (Length(AValue) = 0) then
     Exit;
-  TarPutHeaderField(ABlock, AOff, ALen, TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue))));
+  TarPutHeaderField(ABlock, AOff, ALen, StringAsSpan(AValue));
 end;
 
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);

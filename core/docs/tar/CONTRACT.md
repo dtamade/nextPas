@@ -14,7 +14,7 @@
 | `TTarReadOptions` | `MaxEntrySize` 单条目上限（0 取 `C_TAR_DEFAULT_MAX_ENTRY=1GiB`）、`MaxTotalSize` 跨条目总量（0=不限） |
 | `TTarExtractOptions` | `RestoreMode/SkipSpecial/MaxEntrySize/MaxTotalSize` |
 | `TTarReader` | `Create(PByte,Count)` / `WithOptions` 双形态；`Next(out H):Boolean` 迭代；`TrySlice(out TByteSpan):Boolean` 零拷贝视图（单一规范，生命周期绑 Reader）/ `EntryDataSlice` 薄转发；`OpenEntryStream:IReader` 零拷贝持有流（FBuf 时持有型零拷贝、外部 PByte 时按需 SpanClone 自包含持有防 UAF，inline/零拷贝，bytes.ops 单源）；`EntryDataOfs:SizeUInt`；`ClearGlobalPax` / `AcquireGlobalPaxGuard:IInterface` RAII 隔离 |
-| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，推荐显式 `Finish`；析构自动补写两零块幂等 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测、永不抛异常 `try..finally` 必释） |
+| `TTarWriter` | `AddEntry(Hdr,Data)` / `AddFile/AddDir/AddEntryWithOptions/AddEntryFromReader` / `Finish`（两零块，推荐显式 `Finish`；析构自动补写两零块幂等 `ILogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH)` 可观测（文案单源 `nextpas.core.tar.log`，不驻留 `base` 类型层）、永不抛异常 `try..finally` 必释） |
 
 ### 1.2 常量与谓词
 
@@ -60,7 +60,7 @@
 
 生产单元（`src/nextpas.core.tar*.pas`）不得 `uses` 非 `nextpas.*`，经 `test_tar_contract` 机械执行。门面仅 `re-export` + `inline` 委托，无控制流。
 
-- 四件套 `base←intf←实现←门面`（`base` 零依赖同模块文件，守纯度；阈值常量与 `TarCapacityAlign4K/Builder/IOBuf` 单源于 `nextpas.core.tar.base` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，阈值分叉固化于 `base` 常量）；`nextpas.core.tar.common` 为内部共享内核（类型级隔离：门面零 re-export，仅 `reader/writer/fs` 受信实现 `implementation uses` 可见，辅以本契约机械门禁双重收敛）仅供 `reader/writer/fs` 复用，`nextpas.core.tar.capacity` 为容量与对齐专用内核（`TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝单源、`TarBuilderCapacityFor` floor 4K+两零块 4K 对齐（修复 64K 对 512B 128倍过度预分配）、`TarIOBufCapacityFor` 4K~1M clamp 单源，阈值分叉固化于 `base` 常量（`capacity` 无常量薄别名，函数经 `capacity→base` 薄转发 `inline` 零拷贝单源，无双路径），门面零 re-export，仅 `builder/writer/fs` 受信实现 `implementation uses` 可见，`base` 不直引 `capacity` 守纯度）仅供 `builder/writer/fs` 容量预估与对齐单源复用，`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
+- 四件套 `base←intf←实现←门面`（`base` 零依赖同模块文件，守纯度；阈值常量与 `TarCapacityAlign4K/Builder/IOBuf` 单源于 `nextpas.core.tar.base` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，阈值分叉固化于 `base` 常量，Warn 文案不驻留 `base`（已下沉 `nextpas.core.tar.log` 单源））；`nextpas.core.tar.common` 为内部共享内核（类型级隔离：门面零 re-export，仅 `reader/writer/fs` 受信实现 `implementation uses` 可见，辅以本契约机械门禁双重收敛）仅供 `reader/writer/fs` 复用，`nextpas.core.tar.capacity` 为容量与对齐专用内核（`TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝单源、`TarBuilderCapacityFor` floor 4K+两零块 4K 对齐（修复 64K 对 512B 128倍过度预分配）、`TarIOBufCapacityFor` 4K~1M clamp 单源，阈值分叉固化于 `base` 常量（`capacity` 无常量薄别名，函数经 `capacity→base` 薄转发 `inline` 零拷贝单源，无双路径），门面零 re-export，仅 `builder/writer/fs` 受信实现 `implementation uses` 可见，`base` 不直引 `capacity` 守纯度）仅供 `builder/writer/fs` 容量预估与对齐单源复用，`nextpas.core.tar.log` 为日志文案单源（`C_TAR_WARN_GLOBAL_PAX_*` / `C_TAR_WARN_WRITER/BUILDER_DESTROYED_WITHOUT_FINISH` 5 常量，行为层 Warn 文案不侵入 `base` 类型层，`reader/writer/builder` 经 `tar.log` 单源复用，门面零 re-export，仅行为层受信 `implementation uses` 可见，`base` 零依赖 `tar.log` 守纯度），`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
 
 ## 5. 测试入口
 
@@ -76,10 +76,50 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 
 ## 6. 性能目标与回归门限
 
-数值单源于 `core/benchmarks/nextpas.core.tar/bench_tar/BASELINE.json`（`build/bench-tar.json` 人工审查固化，`make baseline` 刷新）。
+数值真源：`core/benchmarks/nextpas.core.tar/bench_tar/BASELINE.json`。
+该文件由 `build/bench-tar.json` 人工审查后固化。`make baseline` 刷新。CONTRACT 仅定义公式，不重复数值。
 
-- 口径：`bench_tar` `TBenchSuite` 承载，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现（`GOMAXPROCS=1` 降噪，`SetMinDuration 300ms/MinSamples 7/Warmup 1`，`ACtx.SetBytes` 换算吞吐，双路归档 `build/bench-tar.json`）。
-- 门限（CI 硬红）：`allocs` 硬预算 `baseline+2` / `bytes` 强一致（`!=` 即红）与 `ns/op ≤1.50×` / `MB/s ≥0.65×` 均为硬门（`status=ok` 强一致，任一超限 `check_regression.py` 非零退出，CI 红）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 判定。
-- 对照（CI 硬红，若对照产物存在；缺失时 warn 非硬红闭环）：Go `archive/tar` (`core/benchmarks/nextpas.core.tar/bench_tar/compare_go/main.go`, `go.mod` 已落地，`GOMAXPROCS=1` 降噪) / Rust `tar` (`compare_rust/Cargo.toml` + `main.rs` `tar="0.4"` 已落地) 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（连续双机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成对照 JSON（`build/bench-tar-compare-*.json`），`check_regression.py --with-compare` 比对判定，缺失时 warn 非硬红闭环；零拷贝 `TrySlice` inline 视图与 `bytes.ops CopyMemory/SpanClone` 单源（FBuf 持有型零拷贝、外部 PByte 按需 SpanClone 自包含持有防 UAF，`try..finally` 必释）证据见 `reader.pas:TrySlice inline` 与 `common.pas:CopyMemory` 单源。
-- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 零拷贝持有（FBuf 持有型零拷贝、外部 PByte 按需 SpanClone 自包含持有防 UAF，`inline` 薄转发，按需单次 Move）；`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需）+ `bytes.ops.AlignUp4K` 容量对齐单源（`base` 单源常量与 `TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，`capacity` 仅函数薄转发 `builder/writer/fs` 单源无常量双路径，`base` 零依赖同模块）、`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀，TrimmedSlice/SliceUntilNul 外联、FieldSlice case 跳表、Cache 单表驱动）。
-- 确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序定稿 + 未显式 `mtime=0` 同输入同字节（除 pax 长名外），跨机复现高级感。
+### 6.1 口径
+
+- 套件：`bench_tar` 承载于 `TBenchSuite`。
+- 复现：`make -C core/benchmarks/nextpas.core.tar/bench_tar run`。
+- 降噪：`GOMAXPROCS=1`。`SetMinDuration 300ms`，`MinSamples 7`，`Warmup 1`。
+- 吞吐：`ACtx.SetBytes` 换算。
+- 归档：双路落盘 `build/bench-tar.json`。
+
+### 6.2 门限（CI 硬红）
+
+- `allocs`：`baseline + 2` 硬预算。
+- `bytes`：强一致，`!=` 即红。
+- `ns/op`：`≤ 1.50×`。
+- `MB/s`：`≥ 0.65×`。
+- `status`：`ok` 强一致。
+- 任一超限，`check_regression.py` 非零退出，CI 红。
+- 入口：`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json`。
+
+### 6.3 对照（CI 硬红，缺失即硬红）
+
+- 对象：Go `archive/tar` 与 Rust `tar 0.4`。
+- 位置：`bench_tar/compare_go/main.go`（含 `go.mod`）与 `bench_tar/compare_rust/`（`Cargo.toml` + `src/main.rs`）。
+- 同口径守卫：`Pascal ns/op ≤ 1.50×` 且 `MB/s ≥ 0.70×`。
+- 产物：`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成 `build/bench-tar-compare-*.json`。
+- 判定：`check_regression.py --with-compare` 比对；缺失产物即硬红。
+- 复现：连续双机复现可升硬门。
+- 实现：`GOMAXPROCS=1` 降噪，同机同档对比。
+
+### 6.4 实现证据
+
+- 零拷贝视图：`TrySlice` 单一规范 `inline`，`EntryDataSlice` 薄转发。
+- 持有型流：`OpenEntryStream` 零拷贝持有。`FBuf` 持有型，外部 `PByte` 按需 `SpanClone` 自包含防 UAF。`inline` 薄转发，按需单次 `Move`。
+- 单源：`bytes.ops CopyMemory/SpanClone`，`bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝。
+- 容量：`base` 单源常量，`capacity` 函数薄转发。`base` 零依赖同模块。
+- 扩容：`bytes.builder` 几何扩容。
+- 外联：循环体外联遵 `design-conventions`。薄转发 `inline`，循环体/回退外联避 I-Cache 膨胀。
+
+### 6.5 确定性
+
+- `archive.fs` 确定性排序。
+- `deferred dir` 逆序定稿。
+- 未显式 `mtime` 取 `0`，同输入同字节（除 pax 长名外），跨机复现。
+
+证据锚点：`reader.pas:TrySlice inline`，`common.pas:CopyMemory` 单源。

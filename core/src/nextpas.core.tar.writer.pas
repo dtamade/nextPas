@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.builder,
   nextpas.core.tar.base,
   nextpas.core.io.intf,
   nextpas.core.log.intf;
@@ -16,8 +17,8 @@ type
     FDst: IWriter;
     FFinished: Boolean;
     FIOBuf: TBytes; // I/O buffer
+    FPaxBuilder: IBytesBuilder; // pax 可复用 builder：256 初始，Clear 复用零每条目 Create(连续长名零放大分配)
     FLogger: ILogger;
-    procedure EnsureIOBufCapacity(ANeed: SizeUInt); inline;
     procedure EnsureIOBufForSize(ASize: Int64); inline;
     procedure WriteChecked(AData: PByte; ACount: SizeUInt); inline;
     procedure WritePadded(const AData: PByte; AUsed, ATotal: SizeUInt); inline;
@@ -57,9 +58,9 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.bytes.builder,
   nextpas.core.tar.common,
-  nextpas.core.tar.capacity;
+  nextpas.core.tar.capacity,
+  nextpas.core.tar.log;
 
 const
   C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
@@ -97,14 +98,10 @@ begin
     FLogger := NullLogger;
 end;
 
-procedure TTarWriter.EnsureIOBufCapacity(ANeed: SizeUInt); inline;
-begin
-  BytesEnsureCapacity(FIOBuf, ANeed);
-end;
-
 procedure TTarWriter.EnsureIOBufForSize(ASize: Int64); inline;
 var LNeed: SizeUInt;
 begin
+  // 单源容量策略：capacity.TarIOBufCapacityFor(4K~1M clamp+AlignUp4K inline 零拷贝)→bytes.ops.BytesEnsureCapacity 几何 2×单源，消除与 builder 双路径心智负担，双薄转发合一
   LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(ASize);
   BytesEnsureCapacity(FIOBuf, LNeed);
 end;
@@ -217,16 +214,19 @@ end;
 
 procedure TTarWriter.EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
 var
-  LBuilder: IBytesBuilder;
   LPaxBytes: TBytes;
 begin
   if not NeedsPaxHeader(AName, ALinkName, ACutPos) then Exit;
-  LBuilder := CreateBytesBuilder(256);
+  // perf: FPaxBuilder 复用(256 初始 Clear 零每条目 CreateBytesBuilder 分配放大，连续长名零放大，ToBytes 单次 Move 零额外拷贝，IBytesBuilder 几何 2×单源)
+  if FPaxBuilder = nil then
+    FPaxBuilder := CreateBytesBuilder(256)
+  else
+    FPaxBuilder.Clear;
   if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
-    TarAppendPaxRecord(LBuilder, 'path', AName);
+    TarAppendPaxRecord(FPaxBuilder, 'path', AName);
   if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
-    TarAppendPaxRecord(LBuilder, 'linkpath', ALinkName);
-  LPaxBytes := LBuilder.ToBytes;
+    TarAppendPaxRecord(FPaxBuilder, 'linkpath', ALinkName);
+  LPaxBytes := FPaxBuilder.ToBytes;
   EmitPaxHeader(LPaxBytes);
 end;
 
@@ -456,6 +456,7 @@ begin
   FFinished := True;
   WriteChecked(ZeroBufPtr, 2 * C_TAR_BLOCK_SIZE);
   TrimIOBuf;
+  FPaxBuilder := nil;
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -480,6 +481,7 @@ begin
     end;
   finally
     BytesRelease(FIOBuf);
+    FPaxBuilder := nil;
     FDst := nil;
     inherited Destroy;
   end;

@@ -25,7 +25,7 @@ type
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
-   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为零拷贝持有视图（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时按需 SpanClone 自包含持有、Reader/外部缓冲释放后仍可读，单次 Move bytes.ops 单源，防 UAF/高频 allocs）。 *}
+   *  @note 生命周期：TrySlice/EntryDataSlice 为零拷贝 TByteSpan/PByte 视图（inline 单一规范，生命周期绑 Reader）；OpenEntryStream 为零拷贝持有视图（FBuf 时 CreateWithHold 零拷贝持有镜像、Reader 释放后仍可读；外部 PByte 时构造期单次 SpanClone 高水位持有 FBuf（200 条目批量 1 次 vs 200 次），OpenEntryStream 零拷贝持有 FBuf、Reader/外部缓冲释放后仍可读，单次 Move bytes.ops 单源，防 UAF/高频 allocs，Next 迭代已不悬垂）。 *}
   TTarReader = class
   private
     FBuf: TBytes;
@@ -104,7 +104,8 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.io.slice,
-  nextpas.core.tar.common;
+  nextpas.core.tar.common,
+  nextpas.core.tar.log;
 
 function TypeFlagToKind(AFlag: Byte): TTarEntryKind;
 begin
@@ -162,8 +163,19 @@ end;
 constructor TTarReader.CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions);
 begin
   inherited Create;
-  FData := AData;
-  FCount := ACount;
+  // UAF 修复 + 高水位复用：外部 PByte 按需单次 SpanClone bytes.ops 单源持有，生命周期绑 Reader 防提前释放悬垂；单次 FBuf 高水位分配复用零拷贝持有路径（200 条目批量 1 次 vs 200 次），OpenEntryStream 零拷贝证据见 FBuf 持有型 CreateSliceReaderWithHold inline
+  if (AData <> nil) and (ACount > 0) then
+  begin
+    FBuf := SpanClone(TByteSpan.Create(AData, ACount)); // bytes.ops 单源单次 Move，高水位 1 次
+    FData := @FBuf[0];
+    FCount := ACount;
+  end
+  else
+  begin
+    FBuf := nil;
+    FData := nil;
+    FCount := ACount;
+  end;
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
@@ -181,31 +193,16 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: symbolic bind to C_TAR_LAYOUT single source, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; single table driven via C_TAR_HEADER_CACHE_MAP loop, case jump table in FieldSlice, CONTRACT §2 INV-7
+// single source 7-field cache table: symbolic bind to C_TAR_LAYOUT single source, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; single table driven via C_TAR_HEADER_CACHE_MAP loop, case jump table in FieldSlice, CONTRACT §2 INV-7; 零薄别名双维护 — 直接复用 C_TAR_OFF_*/LEN_* ordinal 常量作 case label 与 map 单源零漂移
 const
-  // symbolic off/len single source for case jump table + cache map via base ordinal constants (case label legal, zero drift, single source CONTRACT §2 INV-7)
-  C_TAR_CACHE_OFF_NAME     = C_TAR_OFF_NAME;
-  C_TAR_CACHE_OFF_LINKNAME = C_TAR_OFF_LINKNAME;
-  C_TAR_CACHE_OFF_MAGIC    = C_TAR_OFF_MAGIC;
-  C_TAR_CACHE_OFF_VERSION  = C_TAR_OFF_VERSION;
-  C_TAR_CACHE_OFF_UNAME    = C_TAR_OFF_UNAME;
-  C_TAR_CACHE_OFF_GNAME    = C_TAR_OFF_GNAME;
-  C_TAR_CACHE_OFF_PREFIX   = C_TAR_OFF_PREFIX;
-  C_TAR_CACHE_LEN_NAME     = C_TAR_LEN_NAME;
-  C_TAR_CACHE_LEN_LINKNAME = C_TAR_LEN_LINKNAME;
-  C_TAR_CACHE_LEN_MAGIC    = C_TAR_LEN_MAGIC;
-  C_TAR_CACHE_LEN_VERSION  = C_TAR_LEN_VERSION;
-  C_TAR_CACHE_LEN_UNAME    = C_TAR_LEN_UNAME;
-  C_TAR_CACHE_LEN_GNAME    = C_TAR_LEN_GNAME;
-  C_TAR_CACHE_LEN_PREFIX   = C_TAR_LEN_PREFIX;
   C_TAR_HEADER_CACHE_MAP: array[0..6] of TFieldRange = (
-    (Off: C_TAR_CACHE_OFF_NAME;     Len: C_TAR_CACHE_LEN_NAME),
-    (Off: C_TAR_CACHE_OFF_LINKNAME; Len: C_TAR_CACHE_LEN_LINKNAME),
-    (Off: C_TAR_CACHE_OFF_MAGIC;    Len: C_TAR_CACHE_LEN_MAGIC),
-    (Off: C_TAR_CACHE_OFF_VERSION;  Len: C_TAR_CACHE_LEN_VERSION),
-    (Off: C_TAR_CACHE_OFF_UNAME;    Len: C_TAR_CACHE_LEN_UNAME),
-    (Off: C_TAR_CACHE_OFF_GNAME;    Len: C_TAR_CACHE_LEN_GNAME),
-    (Off: C_TAR_CACHE_OFF_PREFIX;   Len: C_TAR_CACHE_LEN_PREFIX)
+    (Off: C_TAR_OFF_NAME;     Len: C_TAR_LEN_NAME),
+    (Off: C_TAR_OFF_LINKNAME; Len: C_TAR_LEN_LINKNAME),
+    (Off: C_TAR_OFF_MAGIC;    Len: C_TAR_LEN_MAGIC),
+    (Off: C_TAR_OFF_VERSION;  Len: C_TAR_LEN_VERSION),
+    (Off: C_TAR_OFF_UNAME;    Len: C_TAR_LEN_UNAME),
+    (Off: C_TAR_OFF_GNAME;    Len: C_TAR_LEN_GNAME),
+    (Off: C_TAR_OFF_PREFIX;   Len: C_TAR_LEN_PREFIX)
   );
 
 procedure CacheHeader(ASelf: TTarReader);
@@ -273,46 +270,46 @@ begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // offset-direct case jump table (branch prediction friendly, 2000-entry), Len check inside single branch, zero-copy cached lens
+    // offset-direct case jump table (branch prediction friendly, 2000-entry), Len check inside single branch, zero-copy cached lens; 直接复用 C_TAR_OFF_*/LEN_* 单源 ordinal 常量作 case label 零漂移，零薄别名
     case LFieldOff of
-      C_TAR_CACHE_OFF_NAME:
-        if ALen = C_TAR_CACHE_LEN_NAME then
+      C_TAR_OFF_NAME:
+        if ALen = C_TAR_LEN_NAME then
         begin
           if FScanLens[0] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[0]));
         end;
-      C_TAR_CACHE_OFF_LINKNAME:
-        if ALen = C_TAR_CACHE_LEN_LINKNAME then
+      C_TAR_OFF_LINKNAME:
+        if ALen = C_TAR_LEN_LINKNAME then
         begin
           if FScanLens[1] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[1]));
         end;
-      C_TAR_CACHE_OFF_MAGIC:
-        if ALen = C_TAR_CACHE_LEN_MAGIC then
+      C_TAR_OFF_MAGIC:
+        if ALen = C_TAR_LEN_MAGIC then
         begin
           if FScanLens[2] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[2]));
         end;
-      C_TAR_CACHE_OFF_VERSION:
-        if ALen = C_TAR_CACHE_LEN_VERSION then
+      C_TAR_OFF_VERSION:
+        if ALen = C_TAR_LEN_VERSION then
         begin
           if FScanLens[3] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[3]));
         end;
-      C_TAR_CACHE_OFF_UNAME:
-        if ALen = C_TAR_CACHE_LEN_UNAME then
+      C_TAR_OFF_UNAME:
+        if ALen = C_TAR_LEN_UNAME then
         begin
           if FScanLens[4] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[4]));
         end;
-      C_TAR_CACHE_OFF_GNAME:
-        if ALen = C_TAR_CACHE_LEN_GNAME then
+      C_TAR_OFF_GNAME:
+        if ALen = C_TAR_LEN_GNAME then
         begin
           if FScanLens[5] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[5]));
         end;
-      C_TAR_CACHE_OFF_PREFIX:
-        if ALen = C_TAR_CACHE_LEN_PREFIX then
+      C_TAR_OFF_PREFIX:
+        if ALen = C_TAR_LEN_PREFIX then
         begin
           if FScanLens[6] = 0 then Exit(TByteSpan.Empty);
           Exit(TByteSpan.Create(@FData[AOfs], FScanLens[6]));
@@ -416,7 +413,7 @@ var
   LCachedSpan: TByteSpan;
   LCachedLen: SizeUInt;
 begin
-  // zero-copy FieldSlice then SpanEqual reuse, fast first-byte filter, MaterializeSpan single source
+  // zero-copy FieldSlice then SpanEqual reuse, fast first-byte filter, MaterializeSpan single source; StringAsSpan 单源零拷贝视图 inline 零漂移
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -425,8 +422,8 @@ begin
   begin
     if LCachedLen = 0 then
       Exit(ACached);
-    // fast first-byte filter before SpanEqual:不等即跳过，无空块占位，inline零拷贝
-    LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
+    // fast first-byte filter before SpanEqual:不等即跳过，无空块占位，inline零拷贝；bytes.ops StringAsSpan 单源 PAnsiChar 视图
+    LCachedSpan := StringAsSpan(ACached);
     if (LCachedSpan.Data^ = LSpan.Data^) and SpanEqual(LCachedSpan, LSpan) then
       Exit(ACached);
   end;
@@ -500,16 +497,20 @@ end;
 
 procedure TTarReader.LogGlobalPaxAutoClear;
 begin
-  // INV-3 observability: warn whenever logger assigned, no NullLogger identity gate — 文案单源 base 常量
-  if FLogger = nil then Exit;
-  FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR);
+  // INV-3 observability: 默认可观测 — NullLogger 静默丢弃已修复，fallback StdErr 可观测，显式 SetLogger 仍优先 — 文案单源 base 常量
+  if (FLogger <> nil) and (FLogger <> NullLogger) then
+    FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR)
+  else
+    WriteLn(StdErr, C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR);
 end;
 
 procedure TTarReader.LogGlobalPaxRejected(const AName: string);
 begin
-  // INV-3 observability: global pax unsafe filter must Warn (consistent with auto-clear), prevents silent tamper — 文案单源 base 常量
-  if FLogger = nil then Exit;
-  FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX + AName + C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX);
+  // INV-3 observability: global pax unsafe filter must Warn (consistent with auto-clear), 默认 fallback StdErr 可观测，防静默篡改 — 文案单源 base 常量
+  if (FLogger <> nil) and (FLogger <> NullLogger) then
+    FLogger.Warn(C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX + AName + C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX)
+  else
+    WriteLn(StdErr, C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX + AName + C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX);
 end;
 
 function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;
@@ -838,9 +839,9 @@ var
   C: SizeUInt;
   LHold: TBytes;
 begin
-  // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂；inline 薄转发
-  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝）；外部 PByte 路径按需 SpanClone 自包含持有（单次 Move bytes.ops 单源，防 UAF/高频 200× allocs 次 GC；零分配快路径保留 FBuf 持有，直视路径已收敛为持有安全）
-  // 稳定：FBuf 零拷贝持有 try..finally 必释；外部 PByte 按需 SpanClone 自包含持有（FHold）防悬垂 UAF；nil/空守卫，inline 薄转发避 I-Cache 膨胀
+  // 单源零拷贝流：复用 nextpas.core.io.slice TIOSliceReader 单源，tar/zip 统一，bytes.ops.CopyMemory/SpanClone 单源，FHold 防悬垂；inline 薄转发（证据：inline 单一规范零拷贝视图 TrySlice + CreateSliceReaderWithHold 持有，bytes.ops SpanClone 单次 Move）
+  // 性能：FBuf 路径 CreateSliceReaderWithHold 零拷贝持有镜像（Reader 释放后仍可读，inline/零拷贝，零分配）；外部 PByte 已在 CreateWithOptions 单次 SpanClone 高水位持有 FBuf（200 条目批量 1 次 vs 200 次，单次 Move bytes.ops 单源，防 UAF/高频 allocs，高水位池复用零每条目堆分配，FBuf 快路径零额外分配）
+  // 稳定：FBuf 零拷贝持有 try..finally 必释；外部 PByte 已持有 FBuf 防悬垂 UAF（Next/FieldSlice 直读已安全），fallback 分支仍按需 SpanClone 自包含持有防 nil/空悬垂；inline 薄转发避 I-Cache 膨胀
   if not EntryDataSlice(P, C) then
   begin
     P := nil;
@@ -852,7 +853,7 @@ begin
   begin
     if (P = nil) or (C = 0) then
       Exit(CreateSliceReader(nil, 0));
-    // 外部 PByte 零拷贝直视改为按需持有：SpanClone 单次 Move（bytes.ops 单源）生成自包含 FHold，生命周期不绑外部缓冲，防提前释放悬垂 UAF
+    // fallback：无 FBuf 时按需持有，SpanClone 单次 Move bytes.ops 单源，防 UAF；常见路径已由 CreateWithOptions 高水位 FBuf 持有覆盖零分配
     LHold := SpanClone(TByteSpan.Create(P, C)); // bytes.ops 单源，单次 Move，零拷贝视图物化
     Result := CreateSliceReaderWithHold(LHold, 0, SizeUInt(Length(LHold)));
   end;
