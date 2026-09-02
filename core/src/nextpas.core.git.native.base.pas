@@ -27,6 +27,13 @@ const
   GitOidHexLen = 40;
   GitOidRawLen = 20;
 
+const
+  GIT_MODE_DIR     = $4000;
+  GIT_MODE_REGULAR = $81A4;
+  GIT_MODE_EXEC    = $81ED;
+  GIT_MODE_SYMLINK = $A000;
+  GIT_MODE_GITLINK = $E000;
+
 function GitOidFromHex(const AHex: string): TGitOid;
   { not inline: HexDecode alloc+table lookup (20 bytes), loop exceeds inline I-Cache benefit }
 function GitOidToHex(const AOid: TGitOid): string;
@@ -140,11 +147,9 @@ end;
 
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 begin
-  // Directory entries (040000) point at trees, gitlinks (160000) at commits,
-  // everything else (100644/100755/120000 regular/symlink) is blob content.
-  if AMode = $4000 then
+  if AMode = GIT_MODE_DIR then
     Exit(gokTree);
-  if AMode = $E000 then
+  if AMode = GIT_MODE_GITLINK then
     Exit(gokCommit);
   Result := gokBlob;
 end;
