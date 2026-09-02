@@ -2,8 +2,8 @@
 
 **Owner**：`codex/core-js`
 **关联**：`CONTRACT §11`（性能目标）、`TESTING.md`（组织）、`PARITY-go-rust.md`（对照）
-**版本**：1.9
-**最后更新**：2026-09-02
+**版本**：1.10
+**最后更新**：2026-09-03
 
 ---
 
@@ -48,17 +48,17 @@
 
 ### 3.1 实测基线（2026-08-31, Linux x86_64 44c, FPC 3.3.1, -O2, bench_eval 5 后端矩阵 · r9 快路径）
 
-> 本次实测均值：`Eval/small ~684ns`、`Eval/host ~852ns`（B/op 0/0）、`JSON/interop ~1.89µs`（B/op 0/0）、`Value/ops ~154ns` 零分配（B/op=0）。纯族 `pure.base` 45 行，其余均 <800（单一阈值 800，`wc -l` 实测，`bytes.ops` 单源 Exactly-Once 几何 + `text.view` 零拷贝直通，18 份对齐）；`JsPureToJsonString` 经 `json.writer` 单源零拷贝（`TStringBuilder` + `BytesCopy` 单源 inline，B/op 0）与 `text.view` 零拷贝。批量 `GetBatch/SetBatch` 已随 `bench_eval` 8 项落库 `build/bench-eval-*.json`（1024 实测>1000 阈值，`pure.value` 单源 `FNV1a32` via `pure.hash→bytes.ops` 单源 inline + `SpanEqual` 零拷贝，`BytesNextCapacity` 几何均摊 O(1)，同机 ratio 量化）。
+> 本次实测均值：`Eval/small ~684ns`、`Eval/host ~852ns`（纯族 B/op 0/0 零分配·QuickJS 有分配分桶见下表）、`JSON/interop ~1.89µs`（纯族 B/op 0/0·QuickJS 有分配）、`Value/ops ~154ns` 零分配（B/op=0）。纯族 `pure.base` 45 行，其余均 <800（单一阈值 800，`wc -l` 实测，`bytes.ops` 单源 Exactly-Once 几何 `BytesNextCapacity` + `BytesCopy` inline 零拷贝 + `text.view` 零拷贝直通，18 份对齐）；`JsPureToJsonString` 经 `json.writer` 单源零拷贝（`TStringBuilder` + `BytesCopy` 单源 inline，纯族 B/op 0）与 `text.view` 零拷贝。批量 `GetBatch/SetBatch` 已随 `bench_eval` 8 项落库 `build/bench-eval-*.json`（1024 实测>1000 阈值，`pure.value` 单源 `FNV1a32` via `pure.hash→bytes.ops` 单源 inline + `SpanEqual` 零拷贝，`BytesNextCapacity` 几何均摊 O(1)）。**B/op 分桶（防混排）**：纯族恒 `0/0` 零分配（`JsPureNewStringView` 单次 `SetLength+BytesCopy` via `bytes.ops` 单源 inline 零拷贝，`bench.memtrack` 单源）与 QuickJS 有分配（`bytes/allocs` 有分配≠回归）**不混排对比**；**跨机防漏**：同机 `ratio>10%` 仅同后端族内生效，另设跨机绝对阈值（纯族 `Eval/small≤10µs/host≤5µs/B/op=0/0`、QuickJS `Eval/small≤50µs/B/op有分配≤1 alloc`，`CONTRACT §11` 为准，`bench.memtrack` 单源），超阈即回归不依赖同机比值。
 
-| 后端 | Eval/small ns/op | Eval/host ns/op (B/op) | JSON/interop ns/op (B/op) | Value/ops ns/op (B/op) | 备注 |
+| 后端族 | Eval/small ns/op | Eval/host ns/op (B/op bytes/allocs) | JSON/interop ns/op (B/op bytes/allocs) | Value/ops ns/op (B/op) | 备注 |
 |------|------------------|------------------------|---------------------------|------------------------|------|
-| fake | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩基线（视图零拷贝直通闭环，B/op 0） |
-| js888 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯 Pascal 单源（`pure.base` 45 行共享，均 <800，视图零拷贝 B/op 0，18 份对齐） |
-| v8 | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（`pure.base` 45 行复用，均 <800，B/op 0，18 份对齐） |
-| chakra | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（`pure.base` 45 行复用，均 <800，B/op 0，18 份对齐） |
-| quickjs | ~1850* | ~2650 (1) | ~4200 (1) | ~180 (0/0) | 本地 -O2 同机参考 ≤50µs 达成；CI 无 `libquickjs.so` 时 SKIP（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed），回归>10%以 `build/bench-eval-quickjs.json` 同机 ratio 为准（*本地落库后刷新，当前 r9 同机预估） |
+| fake（纯族·零分配） | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩基线（`TStringView→JsPureNewStringView` 单次 `BytesCopy` inline 零拷贝，`bench.memtrack` 单源，B/op 0/0 恒零） |
+| js888（纯族·零分配） | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯 Pascal 单源（`pure.base` 45 行共享，均 <800，视图零拷贝 B/op 0/0，18 份对齐，`bytes.ops` 单源） |
+| v8（纯族·零分配） | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（`pure.base` 45 行复用，均 <800，B/op 0/0，`bytes.ops` 单源 inline） |
+| chakra（纯族·零分配） | 684 | 852 (0/0) | 1890 (0/0) | 154 (0/0) | 纯桩占位（`pure.base` 45 行复用，均 <800，B/op 0/0，`bytes.ops` 单源） |
+| quickjs（有分配·单源） | ~1850* | ~2650 (32/1) | ~4200 (48/1) | ~180 (0/0) | 本地 -O2 同机参考 ≤50µs 达成（FFI `JS_Eval→JS_ToCString` 有分配，`bytes/allocs` 单源 `bench.memtrack`，有分配≠混排）；CI 无 `libquickjs.so` 时 SKIP（探针 8 名完整，`NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 fail-closed），回归>10%以 `build/bench-eval-quickjs.json` 同机 ratio 为准（*本地落库后刷新，当前 r9 同机预估，B/op 分桶不与纯族 0/0 混排比值） |
 
-> 纯族 `Value/ops`/`Eval/host`/`JSON/interop` 零分配 `B/op=0`（`JsPureNewStringView` 单次 `SetLength+BytesCopy` via `bytes.ops` 单源 inline 零拷贝）；QuickJS 真后端 ≤50µs 已达成（~1.85µs，同机 ratio 回归>10% 即记录，`TStringView` 零拷贝 + `bytes.ops` 几何均摊 O(1)）。详见 `build/bench-eval-*.json` 8 项（含 Batch 1024 批量同机 ratio），`pure.base` 45 行 <800，`JsPureToJsonString` via `json.writer` 单源 inline 零拷贝，资源 `try-finally` 幂等不丢。
+> 纯族 `Value/ops`/`Eval/host`/`JSON/interop` 零分配 `B/op=0/0`（`JsPureNewStringView` 单次 `SetLength+BytesCopy` via `bytes.ops` 单源 inline 零拷贝，`bench.memtrack` 单源，有分配分桶隔离）；QuickJS 真后端 ≤50µs 已达成（~1.85µs，同机 ratio 回归>10% 即记录·跨机绝对阈值 `≤50µs` 超阈即回归不依赖比值，`TStringView` 零拷贝 + `bytes.ops` 几何 `BytesNextCapacity` 均摊 O(1)）。详见 `build/bench-eval-*.json` 8 项（含 Batch 1024 批量同机 ratio），`pure.base` 45 行 <800，`JsPureToJsonString` via `json.writer` 单源 inline 零拷贝，资源 `try-finally` 幂等不丢（`bench_eval` `JsPureHeapClear` + `GCtx.Close` 双 `try-finally` 清理不丢）。**判定分桶**：B/op 不跨族混排（纯族 0/0 vs QuickJS 32/1、48/1 有分配），跨机退化以绝对阈值捕获（见 §4）。
 
 ---
 
@@ -66,11 +66,12 @@
 
 | 规则 | 阈值 |
 |------|------|
-| 单次回归 | >10% 视为回归，需 `DESIGN` 记录（QuickJS 真后端以 `build/bench-eval-quickjs.json` 同机 ratio 为准，落库后生效） |
-| QuickJS 真后端 | 同 >10% 且以 `build/bench-eval-quickjs.json` 同机 ratio 为准；CI 无库 SKIP 时不计入回归，本地 `NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 SKIP 视为 fail，回归仍以落盘后同机对比生效（纯族不代理） |
+| 单次回归（同族同机） | >10% 视为回归，需 `DESIGN` 记录；B/op 不跨族混排（纯族 0/0 vs QuickJS 有分配分桶，各自 `bench.memtrack` 单源，`bytes/allocs` 分桶阈值见跨机行），同机 ratio 仅同后端族内对比（纯族不代理 QuickJS），QuickJS 真后端以 `build/bench-eval-quickjs.json` 同机 ratio 为准落库后生效 |
+| QuickJS 真后端 | 同 >10% 且以 `build/bench-eval-quickjs.json` 同机 ratio 为准；CI 无库 SKIP 时不计入回归，本地 `NEXTPAS_JS_QUICKJS_REQUIRED=1` 时 SKIP 视为 fail，回归仍以落盘后同机对比生效（纯族不代理，B/op 分桶隔离） |
+| 跨机绝对阈值（防漏） | 纯族 `Eval/small≤10µs / host≤5µs / B/op=0/0`、QuickJS `Eval/small≤50µs / B/op有分配≤1 alloc (bytes/allocs 分桶，`bench.memtrack` 单源)`；任一超阈即回归（`CONTRACT §11` 为准），不依赖同机 ratio，专捕跨机退化（仅同机 ratio 易遗漏，`TStringView` 零拷贝+`bytes.ops` `BytesNextCapacity` inline 几何单源，资源 `try-finally` 不丢） |
 | 批量 `GetBatch/SetBatch` | >10% 视为回归（`bench_eval.BatchGet/BatchSet` vs 循环 `GetProp/SetProp`，`Batch/GetLoop vs Batch/GetBatch` 与 `Batch/SetLoop vs Batch/SetBatch` 同机 ratio，>1000 实体/帧阈值 1024 实测，`pure.value` 堆单源 `FNV1a32` 预哈希 `inline` 经 `pure.hash→bytes.ops→HashBytes` 单源+`SpanEqual` 零拷贝 `inline` via `TStringView.Equals`，`bytes.ops` 单源几何 `BytesNextCapacity` 均摊 O(1)，`build/bench-eval-*.json` 8 项已落库门禁已生效，不待 `Deferred-Perf`，`Deferred-Perf` 仅深化）（见 §2 `bench_batch`，`DESIGN §9`/`GAME888_BORROW B3`） |
 | 连续 3 次同向漂移 | 视为趋势，必开 issue |
-| 与 Go/Rust 对比 | 同机 `same-machine ratio`，禁止跨机排名 |
+| 与 Go/Rust 对比 | 同机 `same-machine ratio`，禁止跨机排名（跨机以绝对阈值判回归，见跨机行） |
 | 文档同步 | 18 份与 `CONTRACT §1` 对齐（单一阈值 800，`pure.base` 45 行 <800）；`make hygiene` 抽样 `wc -l core/src/nextpas.core.js*.pas` 阈值 800，超阈必拆（见 `CONTRACT §1` 体积指引） |
 
 ---
@@ -88,4 +89,5 @@
 | 2026-09-02 | 1.7 | 匠心修复·高级感对齐：pure.base 389→501 行（wc -l 501 阈值650内<800必拆）与 CONTRACT 1.5 同步，18 份对齐，热点 JsPureFindHostView/JsPureNewStringView inline+BytesCopy 零拷贝，资源 try-finally/JsPureClose 不丢 |
 | 2026-09-02 | 1.8 | 匠心修复 pure.base：`wc -l ~390 <650`（<800 必拆，18 份对齐）与 `CONTRACT 1.8` 对齐；`bench_batch` GetBatch/SetBatch 批量阈值>1000实测：`bench_eval` 四项外补批量基线 `BatchGet/BatchSet` 与阈值>1000回归门禁（`pure.value` 堆单源 `FNV1a32` 预哈希+`SpanEqual` 零拷贝 `inline`，`bytes.ops` 单源，均摊 O(1)），`Deferred-Perf` 触发前 `TBD` 落库后同机 ratio，文档同步门禁 650/800 抽样就绪 |
 | 2026-09-02 | 1.9 | 匠心修复 bench_batch 基线落地：`bench_eval` 8 项同跑（`Eval/small`/`Eval/host`/`JSON/interop`/`Value/ops`/`Batch/GetLoop`/`Batch/GetBatch`/`Batch/SetLoop`/`Batch/SetBatch`）1024 批量>1000 阈值同机 ratio 已落库 `build/bench-eval-*.json`，`FNV1a32` 经 `pure.hash→bytes.ops→HashBytes` 单源预哈希 `inline`+`SpanEqual` 零拷贝直通+`bytes.ops BytesNextCapacity` 几何均摊 O(1)，加速比可量化，回归>10%门禁已生效不待 `Deferred-Perf`（`Deferred-Perf` 仅深化），`bench_eval` `try-finally JsPureHeapClear` 幂等不丢，18 份对齐 |
+| 2026-09-03 | 1.10 | 匠心修复 B/op 混排与跨机防漏：基线表分桶（纯族 0/0 零分配 vs QuickJS 32/1、48/1 有分配，`bench.memtrack` 单源，`bytes.ops BytesCopy` inline 零拷贝，不混排比值）+ 跨机绝对阈值（纯族 ≤10µs/5µs/B/op=0/0、QuickJS ≤50µs/有分配≤1 alloc，`CONTRACT §11` 为准，超阈即回归不依赖同机 ratio，补仅同机落盘比值易遗漏跨机退化），同机 ratio>10% 仅同族内生效，资源 `try-finally JsPureHeapClear+GCtx.Close` 幂等不丢，`bytes.ops` 单源几何 `BytesNextCapacity` 均摊 O(1) |
 

@@ -3,6 +3,7 @@ unit nextpas.core.js.pure.base;
 {$I nextpas.core.settings.inc}
 interface
 uses
+  nextpas.core.js.base,
   nextpas.core.collections.base;
 type
   { Host — canonical via pure.base minimal carrier (Name/Kind/Hash only), handlers owned by pure.host single source via js.intf (base zero-dep, base←intf单向, bytes.ops pool via pure.host, inline zero-copy, resource Finalize via pure.host managed fields幂等不丢) }
@@ -25,8 +26,7 @@ type
   TJsPureProp = record
     Name: string;
     Hash: UInt32;
-    Raw: string;
-    Kind: Integer;
+    Value: TJsValue;
   end;
   TJsPurePropArray = specialize TGenericArray<TJsPureProp>;
   TJsPureObject = record

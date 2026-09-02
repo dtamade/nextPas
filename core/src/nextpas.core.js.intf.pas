@@ -113,29 +113,142 @@ begin
   Result := AValue;
   Result.FContextId := AContextId;
 end;
-function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; Result.FViewData:=nil; Result.FViewLen:=0; end;
-function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
-function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
-function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskInteger; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
-function JsDoubleValue(AValue: Double): TJsValue; inline; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FDoubleVal:=AValue; end;
-function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
+function JsUndefinedValue: TJsValue;
+begin
+  Result.FKind := jskUndefined;
+  Result.FValid := True;
+  Result.FBoolVal := False;
+  Result.FIntVal := 0;
+  Result.FDoubleVal := 0.0;
+  Result.FStrVal := '';
+  Result.FContextId := 0;
+  Result.FViewData := nil;
+  Result.FViewLen := 0;
+end;
+
+function JsNullValue: TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskNull;
+end;
+
+function JsBoolValue(AValue: Boolean): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskBoolean;
+  Result.FBoolVal := AValue;
+end;
+
+function JsIntValue(AValue: Int64): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskInteger;
+  Result.FIntVal := AValue;
+  Result.FDoubleVal := Double(AValue);
+end;
+
+function JsDoubleValue(AValue: Double): TJsValue; inline;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskNumber;
+  Result.FDoubleVal := AValue;
+end;
+
+function JsStringValue(const AValue: string): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskString;
+  Result.FStrVal := AValue;
+end;
+
 function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 begin
   // zero-copy view via bytes.ops TByteSpan, B/op=0; borrows caller buffer until AsString/TryAsString materializes — caller must keep buffer alive
-  if (AData=nil) or (ALen=0) then Result:=JsStringValue('')
-  else begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=''; Result.FViewData:=AData; Result.FViewLen:=ALen; end;
+  if (AData = nil) or (ALen = 0) then
+    Result := JsStringValue('')
+  else
+  begin
+    Result := JsUndefinedValue;
+    Result.FKind := jskString;
+    Result.FStrVal := '';
+    Result.FViewData := AData;
+    Result.FViewLen := ALen;
+  end;
 end;
-function JsObjectValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; end;
-function JsArrayValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskArray; end;
-function JsHeapObjectValue(AId: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; Result.FIntVal:=AId; end;
-function JsHeapArrayValue(AId: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskArray; Result.FIntVal:=AId; end;
-function JsObjectId(const V: TJsValue): Int64; begin Result:=V.FIntVal; end;
-function JsSymbolValue(const ADesc: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskSymbol; Result.FStrVal:=ADesc; end;
-function JsBigIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBigInt; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
-function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskError; Result.FStrVal:=AMessage; end;
-function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
-function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
-function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
+
+function JsObjectValue: TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskObject;
+end;
+
+function JsArrayValue: TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskArray;
+end;
+
+function JsHeapObjectValue(AId: Int64): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskObject;
+  Result.FIntVal := AId;
+end;
+
+function JsHeapArrayValue(AId: Int64): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskArray;
+  Result.FIntVal := AId;
+end;
+
+function JsObjectId(const V: TJsValue): Int64;
+begin
+  Result := V.FIntVal;
+end;
+
+function JsSymbolValue(const ADesc: string): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskSymbol;
+  Result.FStrVal := ADesc;
+end;
+
+function JsBigIntValue(AValue: Int64): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskBigInt;
+  Result.FIntVal := AValue;
+  Result.FDoubleVal := Double(AValue);
+end;
+
+function JsErrorValue(const AMessage: string): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskError;
+  Result.FStrVal := AMessage;
+end;
+
+function JsFunctionValue(const AName: string = ''): TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskFunction;
+  Result.FStrVal := AName;
+end;
+
+function JsPromiseValue: TJsValue;
+begin
+  Result := JsUndefinedValue;
+  Result.FKind := jskPromise;
+end;
+
+function JsFunctionName(const V: TJsValue): string;
+begin
+  if V.IsFunction then
+    Result := V.FStrVal
+  else
+    Result := '';
+end;
 { TJsValue - core }
 
 function TJsValue.Kind: TJsValueKind; inline;
@@ -232,23 +345,54 @@ function TJsValue.IsBigInt: Boolean; inline;
 begin
   Result := IsKind(jskBigInt);
 end;
-function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
-function TJsValue.AsInt: Int64; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FIntVal) else if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
-function TJsValue.AsDouble: Double; begin if (FKind=jskNumber) or (FKind=jskInteger) then Exit(FDoubleVal) else Exit(0.0); Result:=FDoubleVal; end;
+
+function TJsValue.AsBool: Boolean;
+begin
+  if FKind <> jskBoolean then
+    Exit(False);
+  Result := FBoolVal;
+end;
+
+function TJsValue.AsInt: Int64;
+begin
+  if (FKind = jskNumber) or (FKind = jskInteger) then
+    Exit(FIntVal)
+  else if FKind = jskBigInt then
+    Exit(FIntVal)
+  else
+    Exit(0);
+  Result := FIntVal;
+end;
+
+function TJsValue.AsDouble: Double;
+begin
+  if (FKind = jskNumber) or (FKind = jskInteger) then
+    Exit(FDoubleVal)
+  else
+    Exit(0.0);
+  Result := FDoubleVal;
+end;
+
 function TJsValue.MaterializeViewString: string; inline;
 begin
-  // single source view物化 helper via bytes.ops SpanToString (single alloc BytesCopy零拷贝inline) — AsString/TryAsString双写收敛，缓存FStrVal实现B/op摊还0(首调单次分配+单次IsAlive acquire，后续缓存命中零acquire零分配)，热循环优先TryGetView B/op=0；IsAlive强一致acquire via lifecycle single source INV-7悬垂安全
-  if FViewLen = 0 then Exit(FStrVal);
-  if Length(FStrVal) <> 0 then Exit(FStrVal);
-  if not IsAlive then Exit('');
+  // single source view物化 helper via bytes.ops SpanToString (single alloc BytesCopy零拷贝inline) — AsString/TryAsString双写收敛，缓存FStrVal零分配(强一致 IsAlive acquire per INV-7 dual-track)，首调单次分配+单次IsAlive acquire，热循环优先TryGetView B/op=0；IsAlive强一致acquire via lifecycle single source INV-7悬垂安全
+  if FViewLen = 0 then
+    Exit(FStrVal);
+  if not IsAlive then
+    Exit('');
+  if Length(FStrVal) <> 0 then
+    Exit(FStrVal);
   FStrVal := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen));
   Result := FStrVal;
 end;
+
 function TJsValue.AsString: string; inline;
 begin
-  // hosted viewed缓存B/op摊还0+inline薄转发至MaterializeViewString单源(bytes.ops SpanToString单次分配+BytesCopy零拷贝)，首调单次IsAlive acquire，后续缓存零acquire零分配；热循环优先TryGetView B/op=0；INV-7悬垂安全
-  if FKind=jskSymbol then Exit(FStrVal);
-  if FKind<>jskString then Exit('');
+  // hosted viewed缓存零分配+inline薄转发至MaterializeViewString单源(bytes.ops SpanToString单次分配+BytesCopy零拷贝)，强一致 IsAlive acquire per INV-7，热循环优先TryGetView B/op=0；INV-7悬垂安全
+  if FKind = jskSymbol then
+    Exit(FStrVal);
+  if FKind <> jskString then
+    Exit('');
   Result := MaterializeViewString;
 end;
 
@@ -259,26 +403,74 @@ end;
 
 function TJsValue.AsViewLen: SizeUInt; inline;
 begin
-  if FViewLen > 0 then Result := FViewLen else Result := SizeUInt(Length(FStrVal));
+  if FViewLen > 0 then
+    Result := FViewLen
+  else
+    Result := SizeUInt(Length(FStrVal));
 end;
 
 function TJsValue.TryGetView(out AData: PAnsiChar; out ALen: SizeUInt): Boolean; inline;
 begin
-  if (FKind <> jskString) then begin AData:=nil; ALen:=0; Exit(False); end;
-  if FViewLen > 0 then begin if not IsAlive then begin AData:=nil; ALen:=0; Exit(False); end; AData:=FViewData; ALen:=FViewLen; Exit(True); end;
-  if Length(FStrVal) > 0 then begin AData:=PAnsiChar(FStrVal); ALen:=SizeUInt(Length(FStrVal)); Exit(True); end;
-  AData:=nil; ALen:=0; Result:=False;
+  if FKind <> jskString then
+  begin
+    AData := nil;
+    ALen := 0;
+    Exit(False);
+  end;
+  if FViewLen > 0 then
+  begin
+    if not IsAlive then
+    begin
+      AData := nil;
+      ALen := 0;
+      Exit(False);
+    end;
+    AData := FViewData;
+    ALen := FViewLen;
+    Exit(True);
+  end;
+  if Length(FStrVal) > 0 then
+  begin
+    AData := PAnsiChar(FStrVal);
+    ALen := SizeUInt(Length(FStrVal));
+    Exit(True);
+  end;
+  AData := nil;
+  ALen := 0;
+  Result := False;
 end;
+
 function TJsValue.AsJson: string; inline;
 begin
   // inline thin-forward to pure.value single source via BytesCopy
   Result := JsPureToJsonString(Self);
 end;
-function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
-function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=(FKind=jskNumber) or (FKind=jskInteger); if Result then V:=FDoubleVal else V:=0.0; end;
-function TJsValue.TryAsString(out V: string): Boolean; begin
-  // inline薄转发至MaterializeViewString单源，B/op摊还0(缓存命中零acquire零分配)，bytes.ops零拷贝单源，INV-7强一致
-  Result := FKind=jskString;
-  if Result then V := MaterializeViewString else V := '';
+
+function TJsValue.TryAsBool(out V: Boolean): Boolean;
+begin
+  Result := FKind = jskBoolean;
+  if Result then
+    V := FBoolVal
+  else
+    V := False;
+end;
+
+function TJsValue.TryAsDouble(out V: Double): Boolean;
+begin
+  Result := (FKind = jskNumber) or (FKind = jskInteger);
+  if Result then
+    V := FDoubleVal
+  else
+    V := 0.0;
+end;
+
+function TJsValue.TryAsString(out V: string): Boolean;
+begin
+  // inline薄转发至MaterializeViewString单源，缓存零分配(强一致 IsAlive acquire per INV-7)，bytes.ops零拷贝单源，热循环优先TryGetView
+  Result := FKind = jskString;
+  if Result then
+    V := MaterializeViewString
+  else
+    V := '';
 end;
 end.

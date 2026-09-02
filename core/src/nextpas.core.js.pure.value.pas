@@ -64,7 +64,6 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.mem.dynarray,
   nextpas.core.text.builder, // L2→L2 single-point via pure.value only — cycle-gated, only pure.value may use text.builder/json.writer/text.escape (see check_js_source_contracts.sh)
   nextpas.core.json.writer, // L2→L2 single-point via pure.value only — cycle-gated
   nextpas.core.text.number,
@@ -105,69 +104,18 @@ procedure EnsureHeapCapacityOne(var Heap: TJsPureHeap); inline;
 begin
   nextpas.core.bytes.ops.BytesDynEnsureLength(Heap, SizeOf(TJsPureObject), SizeUInt(Length(Heap))+1);
 end;
-// helpers to keep base zero-dep: value stored as Raw+Kind string, owner pure.value converts via TJsValue single source, text.number single source via IntToBuffer/FloatToBuffer zero-copy inline locale-independent (no SysUtils), bytes.ops single source via BytesCopy
-type
-  TJsValueRawBuf = array[0..63] of AnsiChar; // luxury: encapsulated bounded buffer via text.number single source, 64 ≥ 21 int / 25 float max, boundary Assert, stack batch reuse
-const JS_VALUE_RAW_BUF_CAP = SizeUInt(SizeOf(TJsValueRawBuf));
-function ValueRawOf(const V: TJsValue): string; inline;
-var LBuf: TJsValueRawBuf; LLen: Int32;
-begin
-  // perf: inline thin-forward zero-copy single source via bytes.ops.BytesCopy + text.number IntToBuffer/FloatToBuffer single source, single alloc SetLength+single Move, no generic copy, locale-independent
-  // perf: encapsulated stack buffer TJsValueRawBuf batch reuse via text.number unified, boundary Assert(LLen <= SizeOf(LBuf)), BytesCopy single source inline zero-copy, inline
-  // stability: Assert boundary, SetLength single alloc, BytesCopy zero-copy, try-finally not needed (no builder), resource not leaked
-  case V.Kind of
-    jskString, jskSymbol: Result := V.AsString;
-    jskInteger, jskBigInt: begin LLen := IntToBuffer(V.AsInt, @LBuf[0]); Assert((LLen>=0) and (SizeUInt(LLen)<=JS_VALUE_RAW_BUF_CAP)); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
-    jskNumber: begin LLen := FloatToBuffer(V.AsDouble, @LBuf[0]); Assert((LLen>=0) and (SizeUInt(LLen)<=JS_VALUE_RAW_BUF_CAP)); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
-    jskBoolean: if V.AsBool then Result := 'true' else Result := 'false';
-    jskNull: Result := 'null';
-    jskUndefined: Result := 'undefined';
-    jskObject, jskArray: begin LLen := IntToBuffer(JsObjectId(V), @LBuf[0]); Assert((LLen>=0) and (SizeUInt(LLen)<=JS_VALUE_RAW_BUF_CAP)); SetLength(Result, LLen); if LLen>0 then BytesCopy(PAnsiChar(Result), @LBuf[0], SizeUInt(LLen)); end;
-    jskFunction: Result := JsFunctionName(V);
-    jskError: Result := V.AsString;
-    jskPromise: Result := '';
-    else Result := V.AsString;
-  end;
-end;
-function ValueKindOf(const V: TJsValue): Integer; inline;
-begin
-  Result := Ord(V.Kind);
-end;
-function RawToValue(const Raw: string; AKind: Integer): TJsValue; inline;
-var K: TJsValueKind; LView: TStringView; VInt: Int64; VDouble: Double;
-begin
-  K := TJsValueKind(AKind);
-  LView := TStringView.FromStr(Raw);
-  case K of
-    jskString: Result := JsStringValue(Raw);
-    jskSymbol: Result := JsSymbolValue(Raw);
-    jskInteger: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsIntValue(VInt); end;
-    jskBigInt: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsBigIntValue(VInt); end;
-    jskNumber: begin if not ViewToDouble(LView, VDouble) then VDouble:=0; Result := JsDoubleValue(VDouble); end;
-    jskBoolean: Result := JsBoolValue(Raw='true');
-    jskNull: Result := JsNullValue;
-    jskUndefined: Result := JsUndefinedValue;
-    jskObject: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsHeapObjectValue(VInt); end;
-    jskArray: begin if not ViewToInt64(LView, VInt) then VInt:=0; Result := JsHeapArrayValue(VInt); end;
-    jskFunction: Result := JsFunctionValue(Raw);
-    jskError: Result := JsErrorValue(Raw);
-    jskPromise: Result := JsPromiseValue;
-    else Result := JsStringValue(Raw);
-  end;
-end;
-// batch reserved single source — assume BytesDynReserve(1) already done per deduped Idx, poke via mem.dynarray single source without second BytesDynEnsureLength probe, amortized O(1) halved 2048→1024 probes for 1024 batch
+// heap prop value stored as native TJsValue single source via js.intf/js.base (inline zero-copy, no Raw+Kind+IntToBuffer/FloatToBuffer roundtrip), bytes.ops single source for expansion, json.value type mapping consolidated via TJsValue single source (no duplicate case V.Kind branch)
 procedure JsPureHeapSetPropHashedReserved(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
 var Idx, P: Integer; LOld: SizeUInt;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then begin Heap[Idx].Props[P].Raw := ValueRawOf(Val); Heap[Idx].Props[P].Kind := ValueKindOf(Val); Exit; end;
+  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LOld := SizeUInt(Length(Heap[Idx].Props));
-  // capacity guaranteed by prior JsPurePropsReserve(1) via bytes.ops → mem.dynarray probe, poke without second probe
-  nextpas.core.mem.dynarray.DynArraySetLengthGeneric(Heap[Idx].Props, LOld + 1);
+  // perf: capacity guaranteed by prior JsPurePropsReserve(1) via bytes.ops single source → mem.dynarray probe single slit, poke via bytes.ops single source without second probe, amortized O(1), inline zero-copy, bytes.ops single source
+  nextpas.core.bytes.ops.BytesDynSetLengthGeneric(Heap[Idx].Props, LOld + 1);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Raw := ValueRawOf(Val);
-  Heap[Idx].Props[High(Heap[Idx].Props)].Kind := ValueKindOf(Val);
+  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
@@ -284,18 +232,17 @@ begin
   Idx := JsPureHeapFind(Heap, Obj);
   if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then Result := RawToValue(Heap[Idx].Props[P].Raw, Heap[Idx].Props[P].Kind);
+  if P >= 0 then Result := Heap[Idx].Props[P].Value;
 end;
 procedure JsPureHeapSetPropHashed(var Heap: TJsPureHeap; const Obj: TJsValue; const AName: string; const AHash: UInt32; const Val: TJsValue); inline;
 var Idx, P: Integer;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindPropHashed(Heap[Idx], AName, AHash);
-  if P >= 0 then begin Heap[Idx].Props[P].Raw := ValueRawOf(Val); Heap[Idx].Props[P].Kind := ValueKindOf(Val); Exit; end;
+  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := AName;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Raw := ValueRawOf(Val);
-  Heap[Idx].Props[High(Heap[Idx].Props)].Kind := ValueKindOf(Val);
+  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := AHash;
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
@@ -340,11 +287,10 @@ begin
   // O(1) swap-last, single assign
   if I <> LLen - 1 then
     Heap[Idx].Props[I] := Heap[Idx].Props[LLen - 1];
-  // clear last to release refs
+  // stability: clear last to release refs, managed TJsValue via JsUndefinedValue (string refcounted, FViewData not owned), resource not丢, bytes.ops single source
   Heap[Idx].Props[LLen - 1].Name := '';
   Heap[Idx].Props[LLen - 1].Hash := 0;
-  Heap[Idx].Props[LLen - 1].Raw := '';
-  Heap[Idx].Props[LLen - 1].Kind := 0;
+  Heap[Idx].Props[LLen - 1].Value := JsUndefinedValue;
   SetLength(Heap[Idx].Props, LLen - 1);
   LNew := LLen-1;
   if not LWasValid then
@@ -403,19 +349,18 @@ end;
 function JsPureHeapGetProp(const Heap: TJsPureHeap; const Obj: TJsValue; const Name: string): TJsValue;
 var Idx, P: Integer; begin Result := JsUndefinedValue; Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
-  if P >= 0 then Result := RawToValue(Heap[Idx].Props[P].Raw, Heap[Idx].Props[P].Kind);
+  if P >= 0 then Result := Heap[Idx].Props[P].Value;
 end;
 procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Name: string; const Val: TJsValue);
 var Idx, P: Integer; LHash: UInt32;
 begin
   Idx := JsPureHeapFind(Heap, Obj); if Idx < 0 then Exit;
   P := JsPureHeapFindProp(Heap[Idx], Name);
-  if P >= 0 then begin Heap[Idx].Props[P].Raw := ValueRawOf(Val); Heap[Idx].Props[P].Kind := ValueKindOf(Val); Exit; end;
+  if P >= 0 then begin Heap[Idx].Props[P].Value := Val; Exit; end;
   LHash := PropHashStr(Name);
   EnsurePropsCapacityOne(Heap[Idx].Props);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name := Name;
-  Heap[Idx].Props[High(Heap[Idx].Props)].Raw := ValueRawOf(Val);
-  Heap[Idx].Props[High(Heap[Idx].Props)].Kind := ValueKindOf(Val);
+  Heap[Idx].Props[High(Heap[Idx].Props)].Value := Val;
   Heap[Idx].Props[High(Heap[Idx].Props)].Hash := LHash;
   if Length(Heap[Idx].Props) > JS_PURE_HASH_THRESHOLD then
   begin
@@ -588,49 +533,37 @@ begin
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
 procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
-var I, Idx: Integer; LHash: UInt32; LCap: Integer; LMask: UInt32; LDummy: Integer; Buckets: array of Integer; LProbe, LPos: Integer; LIdxHash: UInt32; LFound: Boolean;
-    Distinct: array of Integer; DistinctNeed: array of SizeUInt; DCnt, DPos: Integer;
+var I, Idx, DPos, DCnt, J: Integer; LHash: UInt32; Distinct: array of Integer; LFound: Boolean;
 begin
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
   LHash := PropHashStr(AName);
-  LCap := JsPureBucketCapacity(Length(Objs));
-  SetLength(Buckets, LCap);
-  LDummy := 0;
-  JsPureBucketsPrepare(Buckets, LMask, LDummy, LCap, 0);
-  SetLength(Distinct, Length(Objs));
-  SetLength(DistinctNeed, Length(Objs));
+  // perf: eliminate per-batch LCap bucket (2*batch) + Distinct/DistinctNeed=Length(Objs) heap allocs — zero large temp alloc per batch, distinct dedup via small linear scan O(DCnt) with geometric BytesDynEnsureLength 0→64→2× amortized O(1) via bytes.ops single source, inline zero-copy, only DCnt distinct Props reserve (typically 1), 1024 batch 1024→DCnt probes without LCap bucket, no extra heap for Get/Set batch loop
+  // perf: bytes.ops single source geometric via BytesDynReserve/BytesDynEnsureLength inline zero-copy, single slit via mem.dynarray probe/poke, BYTES_BUILDER_MIN_GROW 64→2× amortized O(1), contiguous capacity poke single source, no generic copy
+  // stability: Distinct freed on exit, TJsValue assignment managed string refcounted not丢, capacity poke via bytes.ops single source resource not leaked
+  Distinct := nil;
   DCnt := 0;
   for I:=0 to High(Objs) do
   begin
     Idx:=JsPureHeapFind(Heap, Objs[I]);
     if (Idx<0) or (JsPureHeapFindPropHashed(Heap[Idx], AName, LHash)>=0) then Continue;
-    LIdxHash := UInt32(Idx) * 2654435761;
-    LPos := Integer(LIdxHash and LMask);
     LFound := False;
-    for LProbe:=0 to High(Buckets) do
-    begin
-      if Buckets[LPos] = -1 then Break;
-      if Buckets[LPos] = Idx then begin LFound := True; Break; end;
-      LPos := (LPos + 1) and Integer(LMask);
-    end;
+    for J:=0 to DCnt-1 do if Distinct[J]=Idx then begin LFound:=True; Break; end;
     if LFound then Continue;
-    Buckets[LPos] := Idx;
+    if DCnt >= Length(Distinct) then
+      nextpas.core.bytes.ops.BytesDynEnsureLength(Distinct, SizeOf(Integer), SizeUInt(DCnt+1));
     Distinct[DCnt] := Idx;
-    DistinctNeed[DCnt] := 1;
     Inc(DCnt);
   end;
-  // perf: single continuous preallocation per distinct Props via BytesDynReserve geometric 0→64→2× amortized O(1), contiguous capacity poke single slit via bytes.ops→mem.dynarray, halved 2048→DCnt probes, zero-copy inline, batch reuse — 1024 batch single reserve per distinct Heap not 1024 DynArraySetLength probes, single slit
-  // stability: Buckets/Distinct freed on exit, string assignment refcounted not丢, capacity poke via mem.dynarray single source resource not leaked
+  // perf: single continuous preallocation per distinct Props via BytesDynReserve geometric 0→64→2× amortized O(1), contiguous capacity poke single slit via bytes.ops→mem.dynarray, zero-copy inline, batch reuse — 1024 batch single reserve per distinct Heap
+  // stability: Distinct freed on exit, TJsValue assignment managed not丢, capacity poke via bytes.ops single source resource not leaked
   for DPos:=0 to DCnt-1 do
-    JsPurePropsReserve(Heap[Distinct[DPos]].Props, DistinctNeed[DPos]);
-  // perf: second loop uses reserved poke without second BytesDynEnsureLength probe — single continuous preallocation already done, amortized O(1) via BYTES_BUILDER_MIN_GROW, zero-copy, inline
-  // stability: Buckets stack freed on exit, string Value assignment refcounted not丢, capacity poke via mem.dynarray single source resource not leaked
+    JsPurePropsReserve(Heap[Distinct[DPos]].Props, 1);
+  // perf: second loop uses reserved poke via bytes.ops single source without second BytesDynEnsureLength probe — single continuous preallocation already done, amortized O(1) via BYTES_BUILDER_MIN_GROW, zero-copy, inline
+  // stability: Distinct freed on exit, TJsValue assignment managed not丢, capacity poke via bytes.ops single source resource not leaked
   for I := 0 to High(Objs) do
     JsPureHeapSetPropHashedReserved(Heap, Objs[I], AName, LHash, Vals[I]);
-  SetLength(Buckets, 0);
   SetLength(Distinct, 0);
-  SetLength(DistinctNeed, 0);
 end;
 function JsPureValueStateGetBatch(const S: TJsPureValueState; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
 begin Result := JsPureHeapGetBatch(S.Heap, Objs, AName); end;

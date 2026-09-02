@@ -34,6 +34,7 @@ type
     Factories: array[TJsBackendKind] of TJsRuntimeFactory;
     Avail: array[TJsBackendKind] of TJsAvailableFunc;
     Registered: array[TJsBackendKind] of Boolean;
+    AvailCache: array[TJsBackendKind] of Int32; // 0=unknown 1=unavailable 2=available, 长期缓存负向/正向防重复探测, 零初值利用 zero-init unknown, 64B 友好
   end;
   PTJsRegistryVault = ^TJsRegistryVault;
 var
@@ -62,6 +63,8 @@ begin
     VaultRef^.Factories[AKind] := AFactory;
     VaultRef^.Avail[AKind] := AAvail;
     VaultRef^.Registered[AKind] := True;
+    // stability: cache invalidation exactly-once under lock, 长期缓存失效重探测, 可变闭包新值下轮锁内调用
+    VaultRef^.AvailCache[AKind] := 0; // unknown → force reprobe, 复用 zero-init 语义
     atomic_thread_fence(mo_release);
   finally
     VaultRef^.Lock.Release;
@@ -90,35 +93,36 @@ function JsRegistryAvailable(AKind: TJsBackendKind): Boolean; inline;
 var
   LReg: Boolean;
   LAvail: TJsAvailableFunc;
+  LCached: Int32;
   LAvailRes: Boolean;
 begin
-  // perf: if atomic_load(GVaultInit, mo_acquire) = 2 then LReg/Avail 零锁快照 64B 友好 inline 零拷贝 O(1) 索引，Avail 锁外调用
-  if atomic_load(GVaultInit, mo_acquire) = 2 then
-  begin
+  // perf: inline O(1) enum-index, 零拷贝 vault ref, 单次 lock 批探测缓存 B/op=0 热命中, bytes.ops 单源探针, 64B 友好, 长期缓存负向/正向零重复探测
+  // stability: 可变闭包 Avail 锁内调用, never 锁外派发, 长期缓存负向不再重复探测, try-finally 不丢, IMutex→platform.sync 原子保护
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
+  try
+    atomic_thread_fence(mo_acquire);
     LReg := VaultRef^.Registered[AKind];
+    if not LReg then Exit(False);
+    LCached := VaultRef^.AvailCache[AKind];
+    if LCached = 2 then Exit(True);
+    if LCached = 1 then Exit(False);
     LAvail := VaultRef^.Avail[AKind];
-  end
-  else
-  begin
-    if not Assigned(VaultRef^.Lock) then
-      Exit(False);
-    VaultRef^.Lock.Acquire;
-    try
-      atomic_thread_fence(mo_acquire);
-      LReg := VaultRef^.Registered[AKind];
-      LAvail := VaultRef^.Avail[AKind];
-    finally
-      VaultRef^.Lock.Release;
+    if not Assigned(LAvail) then
+    begin
+      VaultRef^.AvailCache[AKind] := 2;
+      Exit(True);
     end;
-  end;
-  if not LReg then
-    Exit(False);
-  if Assigned(LAvail) then
-  begin
+    // 可变闭包锁内调用：快照后立即在同一临界区执行, 防止并发篡改与并发重复探测
     LAvailRes := LAvail();
-    Exit(LAvailRes);
+    if LAvailRes then
+      VaultRef^.AvailCache[AKind] := 2
+    else
+      VaultRef^.AvailCache[AKind] := 1;
+    Result := LAvailRes;
+  finally
+    VaultRef^.Lock.Release;
   end;
-  Result := True;
 end;
 function CreateFake(const AOptions: TJsRuntimeOptions): IJsRuntime; inline;
 begin
@@ -156,37 +160,52 @@ var
   LFactory: TJsRuntimeFactory;
   LAvail: TJsAvailableFunc;
   LReg: Boolean;
+  LCached: Int32;
+  LAvailRes: Boolean;
 begin
   // perf: O(1) enum-index dispatch via registry vault snapshot via VaultRef, no case-branch duplication, platform.sync 快照零拷贝 + BytesCopy 单源 inline, extension via JsRegisterBackend
-  // stability: CheckJsRuntimeOptions by caller (factory) fail-closed before dispatch, no resource on throw; creation exactly-once, lock 快照+外部派发防死锁, pure.base JsPureClose / quickjs StoreClear幂等不丢 via callee ctor/clear, try-finally 不丢
-  // perf: init==2 无锁快照复用 JsRegistryAvailable 模式，64B 友好 O(1) 零锁零额外栅栏（单次 acquire load），多线程批量 CreateJsRuntime 零锁竞争，inline 零拷贝
-  if atomic_load(GVaultInit, mo_acquire) = 2 then
-  begin
+  // stability: CheckJsRuntimeOptions by caller (factory) fail-closed before dispatch, no resource on throw; creation exactly-once, lock 批探测缓存+外部派发防死锁持有期最小, pure.base JsPureClose / quickjs StoreClear幂等不丢 via callee ctor/clear, try-finally 不丢
+  // perf: 长期缓存 AvailCache B/op=0 热命中 inline 零拷贝, 64B 友好, 批量 Create 零重复探测, 可变闭包锁内单次探针
+  EnsureVaultLock;
+  VaultRef^.Lock.Acquire;
+  try
+    atomic_thread_fence(mo_acquire);
     LReg := VaultRef^.Registered[AKind];
-    LAvail := VaultRef^.Avail[AKind];
-    LFactory := VaultRef^.Factories[AKind];
-  end
-  else
-  begin
-    EnsureVaultLock;
-    VaultRef^.Lock.Acquire;
-    try
-      atomic_thread_fence(mo_acquire);
-      LReg := VaultRef^.Registered[AKind];
-      LAvail := VaultRef^.Avail[AKind];
-      LFactory := VaultRef^.Factories[AKind];
-    finally
-      VaultRef^.Lock.Release;
+    if not LReg then
+      raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
+    LCached := VaultRef^.AvailCache[AKind];
+    if LCached = 1 then
+    begin
+      if AKind = jsbkQuickJs then
+        raise EJsBackendUnavailable.Create('QuickJS not available (probe: ' + JsQuickJsProbeNames + ')', jecUnknown, 'Error', '', jsbkQuickJs)
+      else
+        raise EJsBackendUnavailable.Create('Backend not available', jecUnknown, 'Error', '', AKind);
     end;
-  end;
-  if not LReg then
-    raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
-  if Assigned(LAvail) and not LAvail() then
-  begin
-    if AKind = jsbkQuickJs then
-      raise EJsBackendUnavailable.Create('QuickJS not available (probe: ' + JsQuickJsProbeNames + ')', jecUnknown, 'Error', '', jsbkQuickJs)
-    else
-      raise EJsBackendUnavailable.Create('Backend not available', jecUnknown, 'Error', '', AKind);
+    if LCached = 0 then
+    begin
+      LAvail := VaultRef^.Avail[AKind];
+      if Assigned(LAvail) then
+      begin
+        // 可变闭包锁内调用, 长期缓存正/负向结果防并发重复探测, 单次探针 Exactly-Once per kind
+        LAvailRes := LAvail();
+        if LAvailRes then
+          VaultRef^.AvailCache[AKind] := 2
+        else
+          VaultRef^.AvailCache[AKind] := 1;
+        if not LAvailRes then
+        begin
+          if AKind = jsbkQuickJs then
+            raise EJsBackendUnavailable.Create('QuickJS not available (probe: ' + JsQuickJsProbeNames + ')', jecUnknown, 'Error', '', jsbkQuickJs)
+          else
+            raise EJsBackendUnavailable.Create('Backend not available', jecUnknown, 'Error', '', AKind);
+        end;
+      end
+      else
+        VaultRef^.AvailCache[AKind] := 2;
+    end;
+    LFactory := VaultRef^.Factories[AKind];
+  finally
+    VaultRef^.Lock.Release;
   end;
   Result := LFactory(AOptions);
 end;

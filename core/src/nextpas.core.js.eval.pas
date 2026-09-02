@@ -1,6 +1,6 @@
 unit nextpas.core.js.eval;
-{ gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic + ScanFindByte3 single-pass float marker O(n) vs O(3n), ScanTryJsLiteral/Sentinels merged EVAL_* single source via text.scan SCAN_JS_*), zero-copy via bytes.ops SIMD (Slice.Equals/TStringView/SpanEqual), resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
-  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2) + hoisted EvalJsonView/EvalWhileView constant views (once at unit init vs per Eval FromStr), EvalTryPureNumber single-pass via ScanHasFloatMarker/ScanFindByte3 VecWidth O(n) vs 3×IndexOf O(3n), EvalTryLiteralTable/EvalEnforceSentinel via text.scan ScanTryJs* single source, TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view. }
+{ gated scan + strategy table — scan semantics via text.scan single source (VecWidth predicate+literal table generic + ScanFindByte3 single-pass float marker O(n) vs O(3n), ScanTryJsLiteral/Sentinels merged EVAL_* single source via text.scan SCAN_JS_*, TryHostDispatch via text.scan ScanFindMatchingParen/ScanCountJsArgs+ScanFindAny5/ScanFindByte2 SIMD single source), zero-copy via bytes.ops SIMD (Slice.Equals/TStringView/SpanEqual, single bulk BytesDynEnsureLength via bytes.ops geometric 0→64→2× amortized O(1) vs per-arg, BytesDynReserve single source), resource try-finally not丢, L0-L3 守分层, table-driven literals/sentinels.
+  Perf: ScanEvalPredicates delegates to text.scan ScanPredicateTable single-pass SIMD (O(n) single scan vs O(k*n), not inline per red-line 2) + hoisted EvalJsonView/EvalWhileView constant views (once at unit init vs per Eval FromStr), EvalTryPureNumber single-pass via ScanHasFloatMarker/ScanFindByte3 VecWidth O(n) vs 3×IndexOf O(3n), EvalTryLiteralTable/EvalEnforceSentinel via text.scan ScanTryJs* single source, TryHostDispatch not inline, thin forwards inline, bytes.ops single source via text.view/text.scan. }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -193,15 +193,15 @@ var
   LNameView, LInner: TStringView;
   LHostIdx: Integer;
   LThis: TJsValue;
-  RPos: PtrInt;
+  RPos: SizeUInt;
+  LArgs: array of TJsValue;
+  Upper, LArgCount: SizeUInt;
+  LStart, Pos, LLen: SizeUInt;
   Depth: Integer;
   InQuote: AnsiChar;
   Escaped: Boolean;
-  I: SizeUInt;
+  N: PtrInt;
   C: AnsiChar;
-  LArgs: array of TJsValue;
-  LStart: SizeUInt;
-  LArgCount: Integer;
   LView: TStringView;
 begin
   Result := False;
@@ -214,30 +214,11 @@ begin
   else
     LHostIdx := JsPureFindHostView(Hosts, LNameView);
   if LHostIdx < 0 then Exit;
-  Depth := 1; InQuote := #0; Escaped := False; RPos := -1;
-  for I := SizeUInt(LIdxPos) + 1 to AView.Len - 1 do
-  begin
-    C := AView.Data[I];
-    if Escaped then begin Escaped := False; Continue; end;
-    if InQuote <> #0 then
-    begin
-      if C = '\' then Escaped := True
-      else if C = InQuote then InQuote := #0;
-      Continue;
-    end;
-    if (C = '"') or (C = '''') then InQuote := C
-    else if C = '(' then Inc(Depth)
-    else if C = ')' then
-    begin
-      Dec(Depth);
-      if Depth = 0 then begin RPos := PtrInt(I); Break; end;
-      if Depth < 0 then Exit;
-    end;
-  end;
-  if RPos < 0 then Exit;
-  if SizeUInt(RPos) + 1 < AView.Len then
-    if not AView.Slice(SizeUInt(RPos) + 1, AView.Len - SizeUInt(RPos) - 1).Trim.IsEmpty then Exit;
-  LInner := AView.Slice(SizeUInt(LIdxPos) + 1, SizeUInt(RPos - LIdxPos - 1)).Trim;
+  // outer matching via L1 owner text.scan single source SIMD VecWidth skip (ScanFindMatchingParen via ScanFindByte2+ScanFindAny4, O(n/VecWidth) vs per-char), zero-copy TStringView, not inline per red-line 2, bytes.ops single source not duplicated, L0-L3 keep
+  if not nextpas.core.text.scan.ScanFindMatchingParen(AView, SizeUInt(LIdxPos), RPos) then Exit;
+  if RPos + 1 < AView.Len then
+    if not AView.Slice(RPos + 1, AView.Len - RPos - 1).Trim.IsEmpty then Exit;
+  LInner := AView.Slice(SizeUInt(LIdxPos) + 1, RPos - SizeUInt(LIdxPos) - 1).Trim;
   LThis := AGlobal;
   if LInner.IsEmpty then
   begin
@@ -245,38 +226,60 @@ begin
     OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
     Exit(True);
   end;
-  // multi-arg split respecting quotes/escapes/nested ()
-  SetLength(LArgs, 0);
-  LStart := 0; Depth := 0; InQuote := #0; Escaped := False; LArgCount := 0;
-  for I := 0 to LInner.Len - 1 do
+  // single bulk allocation via bytes.ops single source geometric 0→64→2× amortized O(1) (BytesDynEnsureLength once vs per-arg), zero-copy views, not per-arg geometric thrash, inline not per red-line 2
+  Upper := nextpas.core.text.scan.ScanCountJsArgs(LInner);
+  if Upper = 0 then Upper := 1;
+  nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), Upper);
+  // multi-arg split via L1 owner text.scan single source SIMD (ScanFindByte2+ScanFindAny5 VecWidth skip, O(n/VecWidth) vs per-char, zero-copy Slice/Trim), resource managed not丢 (dynamic array, no leak)
+  LStart := 0; Depth := 0; InQuote := #0; Escaped := False; LArgCount := 0; Pos := 0; LLen := LInner.Len;
+  while Pos < LLen do
   begin
-    C := LInner.Data[I];
-    if Escaped then begin Escaped := False; Continue; end;
+    if Escaped then begin Escaped := False; Inc(Pos); Continue; end;
     if InQuote <> #0 then
     begin
-      if C = '\' then Escaped := True
-      else if C = InQuote then InQuote := #0;
+      N := nextpas.core.text.scan.ScanFindByte2(@LInner.Data[Pos], LLen - Pos, Byte('\'), Byte(InQuote));
+      if N < 0 then Break;
+      Pos := Pos + SizeUInt(N);
+      C := LInner.Data[Pos];
+      if C = '\' then begin Escaped := True; Inc(Pos); Continue; end;
+      InQuote := #0;
+      Inc(Pos);
       Continue;
-    end;
-    if (C = '"') or (C = '''') then InQuote := C
-    else if C = '(' then Inc(Depth)
-    else if C = ')' then begin if Depth > 0 then Dec(Depth); end
-    else if (C = ',') and (Depth = 0) then
+    end else
     begin
-      LView := LInner.Slice(LStart, I - LStart).Trim;
-      nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), SizeUInt(LArgCount + 1));
-      LArgs[LArgCount] := EvalArgValue(LView);
-      Inc(LArgCount);
-      LStart := I + 1;
+      N := nextpas.core.text.scan.ScanFindAny5(@LInner.Data[Pos], LLen - Pos, Byte('"'), Byte(''''), Byte('('), Byte(')'), Byte(','));
+      if N < 0 then Break;
+      Pos := Pos + SizeUInt(N);
+      C := LInner.Data[Pos];
+      if C = '"' then InQuote := '"'
+      else if C = '''' then InQuote := ''''
+      else if C = '(' then Inc(Depth)
+      else if C = ')' then begin if Depth > 0 then Dec(Depth); end
+      else if (C = ',') and (Depth = 0) then
+      begin
+        LView := LInner.Slice(LStart, Pos - LStart).Trim;
+        // zero-copy via TStringView.Slice/Trim + EvalArgValue single source via text.escape, single bulk alloc not per-arg
+        LArgs[LArgCount] := EvalArgValue(LView);
+        Inc(LArgCount);
+        LStart := Pos + 1;
+      end;
+      Inc(Pos);
     end;
   end;
-  // tail — single source via EvalArgValue, text.view zero-copy, geometric via bytes.ops BytesDynEnsureLength amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), not inline
-  LView := LInner.Slice(LStart, LInner.Len - LStart).Trim;
+  // tail — zero-copy via text.view Slice/Trim, single source EvalArgValue, no per-arg EnsureLength, shrink if overestimated (trailing comma)
+  LView := LInner.Slice(LStart, LLen - LStart).Trim;
   if not LView.IsEmpty then
   begin
-    nextpas.core.bytes.ops.BytesDynEnsureLength(LArgs, SizeOf(TJsValue), SizeUInt(LArgCount + 1));
-    LArgs[LArgCount] := EvalArgValue(LView);
-    Inc(LArgCount);
+    if LArgCount < Upper then
+    begin
+      LArgs[LArgCount] := EvalArgValue(LView);
+      Inc(LArgCount);
+    end;
+  end;
+  if LArgCount <> Upper then
+  begin
+    if LArgCount = 0 then SetLength(LArgs, 0)
+    else nextpas.core.bytes.ops.BytesDynSetLengthGeneric(LArgs, LArgCount);
   end;
   OutVal := nextpas.core.js.pure.host.JsPureHostInvoke(Hosts[LHostIdx], ACtx, LThis, LArgs, ABackend);
   Result := True;

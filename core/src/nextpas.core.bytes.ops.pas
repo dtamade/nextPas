@@ -69,6 +69,7 @@ function BytesDynCapacityGeneric(var A; AElemSize: SizeUInt): SizeUInt; inline;
 procedure BytesDynSetLengthGeneric(var A; const ANewLen: SizeUInt); inline;
 // generic ensure with geometric single source via BytesNextCapacity + probe/poke single slit, trivial types only (zero finalization), inline zero-copy, amortized O(1)
 procedure BytesDynEnsureLength(var A; AElemSize: SizeUInt; ANewLen: SizeUInt);
+procedure BytesDynReserve(var A; AElemSize: SizeUInt; AAdditional: SizeUInt); inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;

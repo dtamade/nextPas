@@ -67,6 +67,88 @@ begin
   end;
 end;
 type TQuickJsBindRec = record Name: PAnsiChar; Dest: PPointer; Required: Boolean; end;
+type TQuickJsBindDef = record Name: PAnsiChar; Required: Boolean; end;
+const
+  // const-driven single source for 35 binds: name+required table drives TryLoad loop, dest via inline single-source mapping, no 35-line hand assignment,維護單源
+  CQuickJsBindDefs: array[0..34] of TQuickJsBindDef = (
+    (Name: 'JS_NewRuntime'; Required: True),
+    (Name: 'JS_Eval'; Required: True),
+    (Name: 'JS_FreeRuntime'; Required: True),
+    (Name: 'JS_NewContext'; Required: True),
+    (Name: 'JS_FreeContext'; Required: True),
+    (Name: 'JS_GetGlobalObject'; Required: True),
+    (Name: 'JS_FreeValue'; Required: True),
+    (Name: 'JS_DupValue'; Required: True),
+    (Name: 'JS_ToCString'; Required: False),
+    (Name: 'JS_ToCStringLen'; Required: False),
+    (Name: 'JS_FreeCString'; Required: False),
+    (Name: 'JS_IsException'; Required: True),
+    (Name: 'JS_GetException'; Required: True),
+    (Name: 'JS_NewString'; Required: False),
+    (Name: 'JS_NewInt64'; Required: False),
+    (Name: 'JS_NewFloat64'; Required: False),
+    (Name: 'JS_NewBool'; Required: False),
+    (Name: 'JS_NewObject'; Required: False),
+    (Name: 'JS_NewArray'; Required: False),
+    (Name: 'JS_SetPropertyStr'; Required: False),
+    (Name: 'JS_GetPropertyStr'; Required: False),
+    (Name: 'JS_SetMemoryLimit'; Required: False),
+    (Name: 'JS_SetGCThreshold'; Required: False),
+    (Name: 'JS_RunGC'; Required: False),
+    (Name: 'JS_SetInterruptHandler'; Required: False),
+    (Name: 'JS_NewCFunction'; Required: False),
+    (Name: 'JS_Call'; Required: False),
+    (Name: 'JS_IsArray'; Required: False),
+    (Name: 'JS_GetOwnPropertyNames'; Required: False),
+    (Name: 'JS_FreePropertyEnum'; Required: False),
+    (Name: 'JS_AtomToString'; Required: False),
+    (Name: 'JS_FreeAtom'; Required: False),
+    (Name: 'JS_NewStringLen'; Required: False),
+    (Name: 'JS_NewAtom'; Required: False),
+    (Name: 'JS_DeleteProperty'; Required: False)
+  );
+function QuickJsBindDest(const AIdx: Integer): PPointer; inline;
+begin
+  // perf: inline single-source dest mapping, zero-copy PPointer, O(1) case, single source for 35 dests, no duplicate table
+  case AIdx of
+    0: Result := PPointer(@JS_NewRuntimePtr);
+    1: Result := PPointer(@JS_EvalPtr);
+    2: Result := PPointer(@JS_FreeRuntimePtr);
+    3: Result := PPointer(@JS_NewContextPtr);
+    4: Result := PPointer(@JS_FreeContextPtr);
+    5: Result := PPointer(@JS_GetGlobalObjectPtr);
+    6: Result := PPointer(@JS_FreeValuePtr);
+    7: Result := PPointer(@JS_DupValuePtr);
+    8: Result := PPointer(@JS_ToCStringPtr);
+    9: Result := PPointer(@JS_ToCStringLenPtr);
+    10: Result := PPointer(@JS_FreeCStringPtr);
+    11: Result := PPointer(@JS_IsExceptionPtr);
+    12: Result := PPointer(@JS_GetExceptionPtr);
+    13: Result := PPointer(@JS_NewStringPtr);
+    14: Result := PPointer(@JS_NewInt64Ptr);
+    15: Result := PPointer(@JS_NewFloat64Ptr);
+    16: Result := PPointer(@JS_NewBoolPtr);
+    17: Result := PPointer(@JS_NewObjectPtr);
+    18: Result := PPointer(@JS_NewArrayPtr);
+    19: Result := PPointer(@JS_SetPropertyStrPtr);
+    20: Result := PPointer(@JS_GetPropertyStrPtr);
+    21: Result := PPointer(@JS_SetMemoryLimitPtr);
+    22: Result := PPointer(@JS_SetGCThresholdPtr);
+    23: Result := PPointer(@JS_RunGCPtr);
+    24: Result := PPointer(@JS_SetInterruptHandlerPtr);
+    25: Result := PPointer(@JS_NewCFunctionPtr);
+    26: Result := PPointer(@JS_CallPtr);
+    27: Result := PPointer(@JS_IsArrayPtr);
+    28: Result := PPointer(@JS_GetOwnPropertyNamesPtr);
+    29: Result := PPointer(@JS_FreePropertyEnumPtr);
+    30: Result := PPointer(@JS_AtomToStringPtr);
+    31: Result := PPointer(@JS_FreeAtomPtr);
+    32: Result := PPointer(@JS_NewStringLenPtr);
+    33: Result := PPointer(@JS_NewAtomPtr);
+    34: Result := PPointer(@JS_DeletePropertyPtr);
+  else Result := nil;
+  end;
+end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer; I: Integer;
   Binds: array[0..34] of TQuickJsBindRec;
@@ -78,48 +160,18 @@ begin
   BytesZero(@Lib, SizeUInt(SizeOf(Lib)));
   if platform_dl_open(PAnsiChar(AName), PLATFORM_DL_NOW, Lib) <> 0 then Exit;
   // stability: table-driven single loop, single source for Bind, required fail-closed with exactly-once close, optional nil-safe, resource not丢
-  // perf: single table loop, inline Bind, zero-copy PPointer dest, no 20+ duplicate Bind pattern, O(1) dispatch, bytes.ops single source
-  // perf: PAnsiChar literals zero-copy (no AnsiString heap 32× alloc), single source table, inline Bind via platform.dl single source, zero per-probe string alloc
-  Binds[0].Name := 'JS_NewRuntime'; Binds[0].Dest := PPointer(@JS_NewRuntimePtr); Binds[0].Required := True;
-  Binds[1].Name := 'JS_Eval'; Binds[1].Dest := PPointer(@JS_EvalPtr); Binds[1].Required := True;
-  Binds[2].Name := 'JS_FreeRuntime'; Binds[2].Dest := PPointer(@JS_FreeRuntimePtr); Binds[2].Required := True;
-  Binds[3].Name := 'JS_NewContext'; Binds[3].Dest := PPointer(@JS_NewContextPtr); Binds[3].Required := True;
-  Binds[4].Name := 'JS_FreeContext'; Binds[4].Dest := PPointer(@JS_FreeContextPtr); Binds[4].Required := True;
-  Binds[5].Name := 'JS_GetGlobalObject'; Binds[5].Dest := PPointer(@JS_GetGlobalObjectPtr); Binds[5].Required := True;
-  Binds[6].Name := 'JS_FreeValue'; Binds[6].Dest := PPointer(@JS_FreeValuePtr); Binds[6].Required := True;
-  Binds[7].Name := 'JS_DupValue'; Binds[7].Dest := PPointer(@JS_DupValuePtr); Binds[7].Required := True;
-  Binds[8].Name := 'JS_ToCString'; Binds[8].Dest := PPointer(@JS_ToCStringPtr); Binds[8].Required := False;
-  Binds[9].Name := 'JS_ToCStringLen'; Binds[9].Dest := PPointer(@JS_ToCStringLenPtr); Binds[9].Required := False;
-  Binds[10].Name := 'JS_FreeCString'; Binds[10].Dest := PPointer(@JS_FreeCStringPtr); Binds[10].Required := False;
-  Binds[11].Name := 'JS_IsException'; Binds[11].Dest := PPointer(@JS_IsExceptionPtr); Binds[11].Required := True;
-  Binds[12].Name := 'JS_GetException'; Binds[12].Dest := PPointer(@JS_GetExceptionPtr); Binds[12].Required := True;
-  Binds[13].Name := 'JS_NewString'; Binds[13].Dest := PPointer(@JS_NewStringPtr); Binds[13].Required := False;
-  Binds[14].Name := 'JS_NewInt64'; Binds[14].Dest := PPointer(@JS_NewInt64Ptr); Binds[14].Required := False;
-  Binds[15].Name := 'JS_NewFloat64'; Binds[15].Dest := PPointer(@JS_NewFloat64Ptr); Binds[15].Required := False;
-  Binds[16].Name := 'JS_NewBool'; Binds[16].Dest := PPointer(@JS_NewBoolPtr); Binds[16].Required := False;
-  Binds[17].Name := 'JS_NewObject'; Binds[17].Dest := PPointer(@JS_NewObjectPtr); Binds[17].Required := False;
-  Binds[18].Name := 'JS_NewArray'; Binds[18].Dest := PPointer(@JS_NewArrayPtr); Binds[18].Required := False;
-  Binds[19].Name := 'JS_SetPropertyStr'; Binds[19].Dest := PPointer(@JS_SetPropertyStrPtr); Binds[19].Required := False;
-  Binds[20].Name := 'JS_GetPropertyStr'; Binds[20].Dest := PPointer(@JS_GetPropertyStrPtr); Binds[20].Required := False;
-  Binds[21].Name := 'JS_SetMemoryLimit'; Binds[21].Dest := PPointer(@JS_SetMemoryLimitPtr); Binds[21].Required := False;
-  Binds[22].Name := 'JS_SetGCThreshold'; Binds[22].Dest := PPointer(@JS_SetGCThresholdPtr); Binds[22].Required := False;
-  Binds[23].Name := 'JS_RunGC'; Binds[23].Dest := PPointer(@JS_RunGCPtr); Binds[23].Required := False;
-  Binds[24].Name := 'JS_SetInterruptHandler'; Binds[24].Dest := PPointer(@JS_SetInterruptHandlerPtr); Binds[24].Required := False;
-  Binds[25].Name := 'JS_NewCFunction'; Binds[25].Dest := PPointer(@JS_NewCFunctionPtr); Binds[25].Required := False;
-  Binds[26].Name := 'JS_Call'; Binds[26].Dest := PPointer(@JS_CallPtr); Binds[26].Required := False;
-  Binds[27].Name := 'JS_IsArray'; Binds[27].Dest := PPointer(@JS_IsArrayPtr); Binds[27].Required := False;
-  Binds[28].Name := 'JS_GetOwnPropertyNames'; Binds[28].Dest := PPointer(@JS_GetOwnPropertyNamesPtr); Binds[28].Required := False;
-  Binds[29].Name := 'JS_FreePropertyEnum'; Binds[29].Dest := PPointer(@JS_FreePropertyEnumPtr); Binds[29].Required := False;
-  Binds[30].Name := 'JS_AtomToString'; Binds[30].Dest := PPointer(@JS_AtomToStringPtr); Binds[30].Required := False;
-  Binds[31].Name := 'JS_FreeAtom'; Binds[31].Dest := PPointer(@JS_FreeAtomPtr); Binds[31].Required := False;
-  Binds[32].Name := 'JS_NewStringLen'; Binds[32].Dest := PPointer(@JS_NewStringLenPtr); Binds[32].Required := False;
-  Binds[33].Name := 'JS_NewAtom'; Binds[33].Dest := PPointer(@JS_NewAtomPtr); Binds[33].Required := False;
-  Binds[34].Name := 'JS_DeleteProperty'; Binds[34].Dest := PPointer(@JS_DeletePropertyPtr); Binds[34].Required := False;
+  // perf: const-driven CQuickJsBindDefs single source (PAnsiChar zero-copy, bytes.ops inline), single loop O(n) drives Binds via QuickJsBindDest inline, no 35-line hand boilerplate,維護單源
+  for I := 0 to High(CQuickJsBindDefs) do
+  begin
+    Binds[I].Name := CQuickJsBindDefs[I].Name;
+    Binds[I].Dest := QuickJsBindDest(I);
+    Binds[I].Required := CQuickJsBindDefs[I].Required;
+  end;
   // stability: two-phase required-first fail-fast — required symbols (10) bound first, optional (22) only if required OK; cold fail up to 10 lookups not 32 (8×10=80 vs 256), success single 32
   // perf: inline Bind PAnsiChar zero-copy, no AnsiString heap, early exit avoids 22 optional dl_sym on probe miss, bytes.ops single source for zero
   for I := 0 to High(Binds) do if Binds[I].Required then
   begin
-    if not Bind(Binds[I].Name, P) then begin platform_dl_close(Lib); Exit; end;
+    if not Bind(Binds[I].Name, P) then begin platform_dl_close(Lib); ClearQuickJsPtrs; Exit; end;
     PPointer(Binds[I].Dest)^ := P;
   end;
   for I := 0 to High(Binds) do if not Binds[I].Required then
@@ -136,7 +188,7 @@ function DoProbeAvailableLocked: Boolean;
 var I: Integer; Lib: TPlatformLibrary;
 begin
   // caller holds VaultRef^.Lock (Owner: nextpas.core.sync.mutex TMutex → platform.sync); probes 8 names, closes handle immediately on probe success, sets Available/ProbeIndex canonical
-  // perf: ProbeIndex single source cache reuses hit index, but negative not permanently cached — reprobe allowed on next call without restart, zero-copy single build inline
+  // perf: IsAvailable negative cached zero-syscall via atomic fast path avoids 8× dlopen linear amplification (cold); ProbeIndex single source cache reuses hit index for Load single-probe fast path, negative reprobe only via Load, zero-copy single build inline
   for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
   begin
     // perf: inline single source via bytes.ops.BytesZero (FillChar single source, SIMD), zero extra call, L1+ reuse
@@ -151,15 +203,19 @@ begin
   VaultRef^.Available := 0; VaultRef^.ProbeIndex := -1; Result := False;
 end;
 function JsQuickJsIsAvailable: Boolean;
+var LAvail: Int32;
 begin
-  // perf: positive fast path via atomic acquire load, zero syscall when cached available, hot path inline single compare, negative reprobes under lock (dynamic so appearance without restart)
-  if atomic_load(VaultRef^.Available, mo_acquire) = 1 then Exit(True);
+  // perf: positive fast path via atomic acquire load, zero syscall when cached available, hot path inline single compare; negative cached fast path zero syscall avoids 8× dlopen linear amplification on cold unavailable path (L139-145), dynamic recovery via JsQuickJsLoad reprobe still allowed, bytes.ops single source, inline zero-copy
+  LAvail := atomic_load(VaultRef^.Available, mo_acquire);
+  if LAvail = 1 then Exit(True);
+  if LAvail = 0 then Exit(False);
   // Owner boundary: nextpas.core.sync.mutex TMutex → platform.sync (L1→L0)
   EnsureVaultLock;
   VaultRef^.Lock.Acquire;
   try
-    if VaultRef^.Available = 1 then Exit(True);
-    // stability: if Available=0 (negative) still reprobe to handle so dynamically appearing; not permanently cached, no restart needed
+    LAvail := VaultRef^.Available;
+    if LAvail = 1 then Exit(True);
+    if LAvail = 0 then Exit(False);
     Result := DoProbeAvailableLocked;
   finally
     VaultRef^.Lock.Release;
