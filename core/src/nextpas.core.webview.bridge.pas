@@ -55,30 +55,26 @@ type
     PayloadJson: string;
   end;
 
-{ 帧长可观测性：调用方可先用此 helper 判断超限；TryDecodeFrame 超限
-  返回 False 并递增背压计数（UI 线程亲和，plain UInt64，无 Support 层 atomic 全局，caller 通过 WebviewOversizedCount 轮询可观测，日志由 caller 自持 ILogger 决定；计数 Owner 已抽离至 nextpas.core.webview.metrics 单源，bridge 仅 inline 薄转发，复用 bench/log 通用可观测 Owner 候选，零重复全局）。 }
+{ 帧超限判定与计数（Owner: webview.metrics，UI 线程亲和）。 }
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 function IsWebviewFrameOversizedView(const AView: TStringView): Boolean; inline;
-{ 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；Owner 为 nextpas.core.webview.metrics 单源，bridge inline 薄转发，L3 独立指标模块候选，bench/log 可观测复用） }
+{ 背压计数（Owner: webview.metrics）。 }
 function WebviewOversizedCount: UInt64; inline;
 procedure WebviewResetOversizedCount; inline;
 procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 { deprecated no-op：L3 不再持有 log.intf 全局原子指针，caller 自持 ILogger 生命周期，test 隔离零成本；保留签名兼容旧调用。 }
 procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
-{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise.
-  perf: hot View path zero alloc via internal cached TJsonDocument Arena reuse (FNodeCount/FStrArenaUsed reset, no per-frame Init/Done heap alloc), TStringView zero-copy via bytes.ops single source, single reserve; string overload inline zero-copy View forwarding single source bytes.ops; no var ADoc lifecycle exposed — caller mental load O(1), test isolation via Parse reset without global pool leakage. }
+{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid. }
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
 
-{ 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
-  合法 JSON 文本（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，
-  内部经 json owner 转义为 JS 字符串字面量。 }
-function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
-function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
+{ 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 须为合法 JSON（空串按 'null'）；ACode/AMessage/AEvent 为普通文本，经 json owner 转义。 }
+function BuildResolveScript(AId: Int64; const AResultJson: string): string;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
+function BuildEmitScript(const AEvent, APayloadJson: string): string;
 
 { handler 错误码归一化：EWebviewInvokeError 空 Code 补默认 npw.bad_request，
   非空（含 app.* 自定义码）原样透传（§5 规则）。 }
@@ -187,10 +183,10 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils,
-  nextpas.core.webview.metrics;
+  nextpas.core.webview.metrics,
+  nextpas.core.sync;
 
-{ JsStringLit: JSON Str subset, reuse json owner, no manual scan. }
-{ perf: inline, TJsonWriter zero-copy Move, single reserve. }
+{ JsStringLit: JSON Str subset via json owner. }
 function JsStringLit(const AValue: string): string; inline;
 var
   LB: TStringBuilder;
@@ -208,7 +204,6 @@ end;
 
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
 begin
-  { perf: inline single source via TStringView zero-copy (L1 text.view) + bytes.ops view semantics, single threshold branch eliminates duplicate Length/Len check, zero extra alloc or copy }
   Result := IsWebviewFrameOversizedView(TStringView.FromStr(AFrameJson));
 end;
 
@@ -288,7 +283,7 @@ function BridgeNormalizePayload(const APayload: TJsonValue): string; inline;
 var
   LView: TStringView;
 begin
-  { perf: inline + zero-copy RawSlice reuse (single Move via ToString), zero extra O(n) scan; JsonStringify fallback only when RawSlice empty (missing/diagnostic). Single source via json owner (RawSlice/JsonStringify) and bytes.ops view semantics; eliminates per-frame SIMD scan for compact JSON. }
+  { zero-copy RawSlice; fallback JsonStringify only when empty. }
   if APayload.IsNull then
     Exit('null');
   LView := APayload.RawSlice;
@@ -299,7 +294,7 @@ end;
 
 var
   GDecodeDoc: TJsonDocument;
-  GDecodeDocInited: Boolean = False;
+  GDecodeOnce: IOnce;
 
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
@@ -307,14 +302,10 @@ var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { perf: hot View path zero alloc — internal cached Arena reuse (Parse resets FNodeCount/FStrArenaUsed/Oversized, no per-frame Init/Done heap alloc), TStringView zero-copy via bytes.ops single source, single Parse→Validate→Normalize zero extra copy; inline thin wrapper not required, caller zero lifecycle }
+  { hot View: Arena reuse, TStringView zero-copy (bytes.ops single source). }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  if not GDecodeDocInited then
-  begin
-    GDecodeDoc.Init(nil);
-    GDecodeDocInited := True;
-  end;
+  GDecodeOnce.DoOnce(procedure begin GDecodeDoc.Init(nil); end);
   if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
     Exit;
   if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
@@ -329,12 +320,12 @@ function TryDecodeFrame(const AFrameJson: string;
 var
   LView: TStringView;
 begin
-  { perf: inline zero-copy View forwarding single source bytes.ops — no duplicate Init/Done/Oversized, zero extra alloc, hot View path Arena reuse guarantees default string entry also zero alloc }
+  { inline zero-copy View forwarding (bytes.ops single source). }
   LView := TStringView.FromStr(AFrameJson);
   Result := TryDecodeFrame(LView, AFrame);
 end;
 
-function BuildResolveScript(AId: Int64; const AResultJson: string): string; inline;
+function BuildResolveScript(AId: Int64; const AResultJson: string): string;
 var
   LJson: string;
   LB: TStringBuilder;
@@ -343,7 +334,6 @@ begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  { perf: inline+单次 TBufStringBuilder 预留+零拷贝 AppendInt/AppendBytes/W.Str View 零拷贝单次转义；单 Builder 复用零二次分配，无 IJsonBuilder 接口堆分配，无 IntToStr 临时串与 '+' 串拼接二次拷贝，try-finally Done 释放不丢，bytes.ops view single source }
   LB.Init(SizeUInt(16 + 20 + Length(LJson) + 8));
   try
     LB.AppendBytes('__npw.__resolve(', 16);
@@ -358,13 +348,12 @@ begin
   end;
 end;
 
-function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string; inline;
+function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
   LB, LInner: TStringBuilder;
   W: TJsonWriter;
 begin
-  { perf: inline single source reuse text.escape SIMD via TJsonWriter; inner builder view zero-copy (LInner.AsView→W.Str View) eliminates intermediate LInnerJson string alloc+copy, single reserve each stage, outer reuses inner Len*2 capacity via view Len, W.Str View zero-copy escape, nested try-finally keeps view valid until outer escape done, bytes.ops view single source, stability try-finally Done not lost }
   LCode := NormalizeInvokeCode(ACode);
   LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2 + 16));
   try
@@ -390,7 +379,7 @@ begin
   end;
 end;
 
-function BuildEmitScript(const AEvent, APayloadJson: string): string; inline;
+function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
   LB: TStringBuilder;
@@ -400,7 +389,6 @@ begin
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
-  { perf: inline 单 builder 复用+双 W.Str View 零拷贝转义，AppendBytes 零拷贝，W.Init 两次重置 RootWritten 复用同一 Builder 零二次分配，避免 IJsonBuilder 与 '+' 拼接，try-finally Done 释放不丢，bytes.ops view single source }
   LB.Init(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
   try
     LB.AppendBytes('__npw.__emit(', 13);
@@ -424,10 +412,7 @@ begin
     Result := ACode;
 end;
 
-{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 + 单哈希 O(1) ---- }
-
-{ ---- TWebviewInvokeRegistry：六形态归一 + 命名空间校验 + 单哈希 O(1) ---- }
-{ perf: 容器单源 L1 collections.hashmap（WyHash/HashMix32/NextPow2/Bitmap 单源，0.75 负载），零私有桶分叉；inline 薄转零额外调用 }
+{ ---- TWebviewInvokeRegistry: 六形态归一，单哈希 O(1) ---- }
 
 constructor TWebviewInvokeRegistry.Create;
 begin
@@ -506,7 +491,6 @@ end;
 
 destructor TWebviewInvokeRegistry.Destroy;
 begin
-  { stability: FMap.Free 释放全量托管串/接口（Clear→Finalize），nil 释放不丢，无 FillChar 绕过托管语义，inline 薄转 }
   if FMap <> nil then
     FMap.Free;
   FMap := nil;
@@ -515,14 +499,12 @@ end;
 
 procedure TWebviewInvokeRegistry.Unregister(const ACmd: string);
 begin
-  { perf: O(1) 平均哈希探测（hashmap 单源 WyHash/HashMix32），tombstone 链路保持，静默 no-op }
   if FMap = nil then Exit;
   FMap.Remove(ACmd);
 end;
 
 function TWebviewInvokeRegistry.Count: Integer; inline;
 begin
-  { perf: inline O(1) 读，零额外调用 }
   if FMap = nil then Exit(0);
   Result := Integer(FMap.GetCount);
 end;
@@ -533,7 +515,6 @@ function TWebviewInvokeRegistry.Find(const ACmd: string; out AIsAsync: Boolean;
 var
   LEntry: TInvokeEntry;
 begin
-  { perf: O(1) 平均哈希探测（WyHash 单源零拷贝 via HashOfAnsiString/HashMix32），hash 相等再字符串相等双筛，inline 热分发零额外调用 }
   if (FMap = nil) or (FMap.GetCount = 0) then Exit(False);
   if not FMap.TryGetValue(ACmd, LEntry) then
     Exit(False);
@@ -570,17 +551,12 @@ begin
   if AProvider = nil then
     raise EWebviewInvalidState.Create('asset provider must not be nil');
   LNormPrefix := NormalizeWebviewAssetPath(APrefix);
-  { 单哈希+Trie 单源承载：首个同前缀胜（CONTRACT §3.4），归一时序外层先 Normalize 再入索引单源；
-    零 DistinctLens 双写；索引内部 WyHash + VecGrowCapacity 单源 O(1) 平均，Trie O(m) 零哈希最长前缀，零线性放大。 }
   FIndex.Add(LNormPrefix, AProvider);
 end;
 
 procedure TWebviewAssetsImpl.MountDirectory(const APrefix, ARootDir: string);
 begin
-  { CONTRACT §3.4：文件系统支撑归 fs owner，W1 显式不支持抛
-    ENotSupportedError(ecNotSupported)，消息稳定可断言；门禁
-    test_webview_bridge 覆盖 FInert/非惰性双路径与 Category 校验。
-    开发模式 no-op 优先于不支持错误——保持两模式观感一致，无资源泄漏。 }
+  { 不支持的目录挂载：抛 ENotSupportedError（CONTRACT §3.4）。 }
   if FInert then
     Exit;
   raise ENotSupportedError.Create('directory asset mounts are not supported yet');
@@ -589,7 +565,6 @@ end;
 function TWebviewAssetsImpl.TryResolve(const ASchemeRelativePath: string;
   out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
-  // perf: thin forward to View overload single source — zero duplicate Normalize/Trie logic; string→view zero-copy (TStringView.FromStr) single source bytes.ops
   Result := TryResolveView(TStringView.FromStr(ASchemeRelativePath), ABytes, AMimeType);
 end;
 
@@ -605,8 +580,7 @@ begin
   AMimeType := '';
   if FInert then
     Exit;
-  // perf: view zero-copy, ToString deferred until provider hit (404/zero-match zero alloc); Trie O(m) 单遍零拷贝 view 遍历零哈希（m=路径长，单次字符 256 直跳，独立于挂载数 d），零 distinctLens 双轨
-  // 单挂载根前缀(Count=1 且 '' 存在) inline O(1) 零 Trie 遍历快路径：单源哈希 TryGetByStr('') 探测，零 DistinctLens 去重/排序开销（assets 单源 WyHash + Trie，归一时序外层 Normalize 已完成）
+  // view zero-copy; ToString deferred until provider hit
   LNormView := NormalizeWebviewAssetView(AView);
   if LNormView.Len = 0 then
     Exit;
@@ -623,11 +597,11 @@ begin
   Result := FIndex.Count;
 end;
 
+initialization
+  GDecodeOnce := Once;
+
 finalization
-  if GDecodeDocInited then
-  begin
+  if (GDecodeOnce <> nil) and GDecodeOnce.Done then
     GDecodeDoc.Done;
-    GDecodeDocInited := False;
-  end;
 
 end.

@@ -4,7 +4,8 @@ unit nextpas.core.mime.types;
   O(1) 开放寻址哈希（128 槽，FNV-1a 小写归一，1-2 探测命中 65 项）；
   零分配切片：Hash 直接哈 PChar 段，CompareBytesIgnoreCase 直比，
   HttpMimeFromPath/GuessWebviewMime 均零 Copy，无堆分配；
-  供 L3 http.mime / webview.mime 薄门面 inline 复用，消除 L3 同层依赖。
+  供 L3 http.mime 薄门面 inline 复用（webview.mime 薄门面已 S107 物理删除，
+  单源收敛，不再参与 L3 家族 glob），消除 L3 同层依赖。
   单源复用 L0 base.utils HashFNV1aLower/CompareBytesIgnoreCase
   （bytes.ops 同源，零重复）；无句柄/无分配，资源零泄漏。
   性能：LookupBySlice/FromExt/FromPath 全 inline，热路径零额外调用；

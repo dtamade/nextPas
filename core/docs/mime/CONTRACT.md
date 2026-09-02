@@ -44,7 +44,7 @@
 ### 2.1a types（静态资源 Content-Type 猜测，L2 单一事实源）
 
 - O(1) 开放寻址哈希（128 槽，FNV-1a 小写归一，1-2 探测命中 65 项）；零分配切片（PChar 段直哈，无 `Copy`），`MimeTypeFromExt/Path` 全 `inline`。
-- 复用 L0 `base.utils HashFNV1aLower/CompareBytesIgnoreCase` 单源（`bytes.ops` 同源），供 L3 `http.mime` 与 `webview.mime` 薄门面 `inline` 复用，消除 L3 同层依赖。
+- 复用 L0 `base.utils HashFNV1aLower/CompareBytesIgnoreCase` 单源（`bytes.ops` 同源），供 L3 `http.mime` 薄门面 `inline` 复用，消除 L3 同层依赖；`webview.mime` 薄门面已于 S107 物理删除（`core/src/nextpas.core.webview.mime.pas` 不再参与家族 glob，单源收敛至 L2 `mime.types` 65 项 O(1) 哈希 128 槽 1-2 探测，LookupBySlice 直哈 PChar 段无 Copy，inline 零拷贝 View 直通，零分配）。
 
 ```pascal
 function MimeTypeFromExt(const AExt: string): string; inline;

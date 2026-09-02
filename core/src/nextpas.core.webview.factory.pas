@@ -54,7 +54,7 @@ uses
   nextpas.core.system.typinfo,
   nextpas.core.window.factory,
   nextpas.core.sync,
-  nextpas.core.platform.thread,
+  nextpas.core.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.fake,
@@ -92,6 +92,7 @@ type
   TWebviewProbeArg = record
     Kind: TWebviewKind;
     OutAvail: ^Boolean;
+    OutDone: ^Boolean;
   end;
   PWebviewProbeArg = ^TWebviewProbeArg;
 
@@ -251,14 +252,15 @@ begin
   Result := GAvailCache;
 end;
 
-{ 并行探测线程入口：L1 platform.thread 单源，栈上 Arg 零拷贝直写，IOnce 缓存线程安全去重 dlopen，释放不丢 }
-function WebviewProbeThread(AArg: Pointer): Pointer; cdecl;
+{ 并行探测线程入口：L1 thread Owner 单源，栈上 Arg 零拷贝直写，IOnce 缓存线程安全去重 dlopen，释放不丢；经 IThreadPool.SubmitDirect 零闭包零拷贝，inline 零额外调用，Shutdown 释放不丢 }
+procedure WebviewProbeDirect(AData: Pointer);
 var LArg: PWebviewProbeArg;
 begin
-  LArg := PWebviewProbeArg(AArg);
+  LArg := PWebviewProbeArg(AData);
   if (LArg <> nil) and (LArg^.OutAvail <> nil) then
     LArg^.OutAvail^ := GetAvailCache.IsAvailable(LArg^.Kind);
-  Result := nil;
+  if (LArg <> nil) and (LArg^.OutDone <> nil) then
+    LArg^.OutDone^ := True;
 end;
 
 {$PUSH}{$WARNINGS OFF}
@@ -272,7 +274,7 @@ end;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
-  // perf: L1 sync.once 单例 + 并行探测：启动期三后端 dlopen/BindAll 并行，I/O 重叠总耗时≈max(各后端) 而非 sum；栈上零分配零拷贝指针直写，L0 platform.thread 单源无池化开销，释放不丢
+  // perf: L1 sync.once 单例 + 并行探测：启动期三后端 dlopen/BindAll 并行，I/O 重叠总耗时≈max(各后端) 而非 sum；栈上零分配零拷贝指针直写，L1 thread.IThreadPool 单源 inline 零额外调用，Shutdown 释放不丢
   if GDefaultOnce.Done then
     Exit(GDefaultKind);
   GDefaultOnce.DoOnce(procedure
@@ -281,10 +283,9 @@ begin
     LKind: TWebviewKind;
     LProbeKinds: array[0..3] of TWebviewKind;
     LAvail: array[0..3] of Boolean;
+    LDone: array[0..3] of Boolean;
     LArgs: array[0..3] of TWebviewProbeArg;
-    LHandles: array[0..3] of TPlatformThreadHandle;
-    LSpawned: array[0..3] of Boolean;
-    LRet: Pointer;
+    LPool: IThreadPool;
   begin
     InitBackends;
     // 收集非 fake 后端，单表驱动 bytes.ops 单源思想：新增后端仅 WEBVIEW_BACKENDS 登记，此处自动覆盖
@@ -295,29 +296,29 @@ begin
       if LKind = wvFake then Continue;
       LProbeKinds[LProbeCount] := LKind;
       LAvail[LProbeCount] := False;
+      LDone[LProbeCount] := False;
       Inc(LProbeCount);
     end;
-    for I := 0 to LProbeCount - 1 do
+    if LProbeCount > 0 then
     begin
-      LArgs[I].Kind := LProbeKinds[I];
-      LArgs[I].OutAvail := @LAvail[I];
-      LSpawned[I] := False;
-      LHandles[I] := nil;
-      if platform_thread_create(LHandles[I], @WebviewProbeThread, @LArgs[I]) = 0 then
-        LSpawned[I] := True
-      else
+      // L1 Owner 抽象：经 nextpas.core.thread.IThreadPool 单源，替代 L0 platform.thread 原语，消除线程模型边界模糊；SubmitDirect 零闭包零拷贝，WaitAll/Shutdown 统一释放不丢
+      LPool := ThreadPool(LProbeCount);
+      for I := 0 to LProbeCount - 1 do
       begin
-        // 稳定性：创建失败回退串行探测，不丢探测，资源不泄漏
-        LHandles[I] := nil;
-        LAvail[I] := GetAvailCache.IsAvailable(LProbeKinds[I]);
+        LArgs[I].Kind := LProbeKinds[I];
+        LArgs[I].OutAvail := @LAvail[I];
+        LArgs[I].OutDone := @LDone[I];
+        LPool.SubmitDirect(@LArgs[I], @WebviewProbeDirect);
       end;
+      LPool.WaitAll;
+      for I := 0 to LProbeCount - 1 do
+        if not LDone[I] then
+        begin
+          // 稳定性：队列满或提交丢失回退串行探测，不丢探测，资源不泄漏；IOnce 缓存保证幂等零重复 dlopen
+          LAvail[I] := GetAvailCache.IsAvailable(LProbeKinds[I]);
+        end;
+      LPool.Shutdown;
     end;
-    for I := 0 to LProbeCount - 1 do
-      if LSpawned[I] and (LHandles[I] <> nil) then
-      begin
-        platform_thread_join(LHandles[I], LRet);
-        // 稳定性：join 后句柄由 platform_thread_join 释放，不丢；IsMultiThread 已置位保证托管类型原子计数
-      end;
     // 按 WEBVIEW_BACKENDS 优先级序择优，单表驱动能力优先契约
     for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
     begin

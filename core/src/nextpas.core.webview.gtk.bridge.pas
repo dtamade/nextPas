@@ -46,7 +46,8 @@ function BridgeBuildEmitScript(const AEvent, APayloadJson: string): string; inli
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.sync.mutex,
   nextpas.core.webview.bridge,
   nextpas.core.mime.types,
