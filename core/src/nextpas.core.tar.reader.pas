@@ -244,16 +244,14 @@ begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
     LFieldOff := AOfs - FPos;
-    // offset direct index: jump table via case, eliminates 7-branch linear scan (hot path ~7x branch reduction, single dispatch)
-    case LFieldOff of
-      0:   if ALen = 100 then begin LLen := FScanLens[0]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      157: if ALen = 100 then begin LLen := FScanLens[1]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      257: if ALen = 6   then begin LLen := FScanLens[2]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      263: if ALen = 2   then begin LLen := FScanLens[3]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      265: if ALen = 32  then begin LLen := FScanLens[4]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      297: if ALen = 32  then begin LLen := FScanLens[5]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-      345: if ALen = 155 then begin LLen := FScanLens[6]; if LLen = 0 then Exit(TByteSpan.Empty); Exit(TByteSpan.Create(@FData[AOfs], LLen)); end;
-    end;
+    // header cache: table-driven via C_TAR_SCAN_FIELDS single source, bytes.ops cached lens, inline zero-copy
+    for I := Low(C_TAR_SCAN_FIELDS) to High(C_TAR_SCAN_FIELDS) do
+      if (LFieldOff = C_TAR_SCAN_FIELDS[I].Off) and (ALen = C_TAR_SCAN_FIELDS[I].Len) then
+      begin
+        LLen := FScanLens[I];
+        if LLen = 0 then Exit(TByteSpan.Empty);
+        Exit(TByteSpan.Create(@FData[AOfs], LLen));
+      end;
     // fallback: non-7 header field — bytes.ops single source SpanIndexOf/MemFindByte SIMD zero-copy, no scalar loop
     LSpan := TByteSpan.Create(@FData[AOfs], ALen);
     LIdx := SpanIndexOf(LSpan, 0);

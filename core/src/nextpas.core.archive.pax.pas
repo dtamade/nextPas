@@ -19,12 +19,16 @@ uses
 type
   {** @desc pax 键值处理器：零拷贝视图回调，生命周期绑解析缓冲 *}
   TArchivePaxKVHandler = reference to procedure(const AKey, AValue: TByteSpan);
+  {** @desc 零分配 pax 键值处理器：plain procedural + UserData，无 reference 捕获堆分配，供热路径单源复用 *}
+  TArchivePaxKVHandlerRaw = procedure(const AKey, AValue: TByteSpan; AUserData: Pointer);
 
 {** @desc 通用 pax 记录解析：零拷贝 PByte 切片，严格 length-prefix 校验，畸形抛 EIOError
  *  @note 回调对每条 key=value 零拷贝分发，仅命中时物化；空缓冲返回 False；无分配
  *  @perf 外联（真实循环体禁 inline），单源复用 bytes.ops 视图
  *}
-function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean;
+function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; overload;
+{** @desc 零分配重载：plain procedural + UserData，零堆分配，归一 per-pax 闭包消除；热路径单源复用 *}
+function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean; overload;
 {** @desc pax 记录格式化/追加单源：length-prefix 自洽，builder 零拷贝最优路径单源，供 tar/zip 复用；含循环/分配，外联禁 inline *}
 function ArchivePaxCalcRecordLen(const AKey, AValue: string): Integer;
 procedure ArchivePaxAppendRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
@@ -95,6 +99,68 @@ begin
       ValSpan := TByteSpan.Empty;
     if Assigned(AHandler) then
       AHandler(KeySpan, ValSpan);
+    Result := True;
+    P := RecEnd;
+  end;
+end;
+
+function ArchivePaxParseRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean;
+var
+  P, Sp, Eq, RecEnd: SizeInt;
+  LenVal: SizeInt;
+  I: SizeInt;
+  B: Byte;
+  KeySpan, ValSpan: TByteSpan;
+  KeyLen, ValLen: SizeInt;
+begin
+  // 零分配重载：plain procedural + UserData，无匿名闭包堆分配，归一 per-pax 闭包消除，零拷贝 PByte 切片单源
+  Result := False;
+  if (ABase = nil) or (ALen = 0) then
+    Exit(False);
+  P := 0;
+  while P < SizeInt(ALen) do
+  begin
+    Sp := P;
+    while (Sp < SizeInt(ALen)) and (ABase[Sp] <> Ord(' ')) do
+      Inc(Sp);
+    if Sp >= SizeInt(ALen) then
+      raise EIOError.CreateFmt('pax: missing length separator at offset %d (need space)', [P]);
+    LenVal := 0;
+    for I := P to Sp - 1 do
+    begin
+      B := ABase[I];
+      if (B < Ord('0')) or (B > Ord('9')) then
+        raise EIOError.CreateFmt('pax: invalid length digit %d at offset %d', [B, I]);
+      if LenVal > (High(SizeInt) - (B - Ord('0'))) div 10 then
+        raise EIOError.CreateFmt('pax: length overflow at offset %d', [P]);
+      LenVal := LenVal * 10 + (B - Ord('0'));
+      if LenVal > SizeInt(ALen) then
+        raise EIOError.CreateFmt('pax: length %d exceeds total %d at offset %d', [LenVal, ALen, P]);
+    end;
+    if LenVal <= 0 then
+      raise EIOError.CreateFmt('pax: invalid length %d at offset %d', [LenVal, P]);
+    RecEnd := P + LenVal;
+    if (RecEnd <= P) or (RecEnd > SizeInt(ALen)) then
+      raise EIOError.CreateFmt('pax: record end %d out of range at offset %d (total %d)', [RecEnd, P, ALen]);
+    if ABase[RecEnd - 1] <> 10 then
+      raise EIOError.CreateFmt('pax: missing trailing newline at offset %d', [RecEnd - 1]);
+    Eq := Sp + 1;
+    while (Eq < RecEnd - 1) and (ABase[Eq] <> Ord('=')) do
+      Inc(Eq);
+    if Eq >= RecEnd - 1 then
+      raise EIOError.CreateFmt('pax: missing key-value separator at offset %d (need ''='')', [Eq]);
+    KeyLen := Eq - Sp - 1;
+    ValLen := RecEnd - 1 - (Eq + 1);
+    if KeyLen > 0 then
+      KeySpan := TByteSpan.Create(@ABase[Sp + 1], SizeUInt(KeyLen))
+    else
+      KeySpan := TByteSpan.Empty;
+    if ValLen > 0 then
+      ValSpan := TByteSpan.Create(@ABase[Eq + 1], SizeUInt(ValLen))
+    else
+      ValSpan := TByteSpan.Empty;
+    if Assigned(AHandler) then
+      AHandler(KeySpan, ValSpan, AUserData);
     Result := True;
     P := RecEnd;
   end;

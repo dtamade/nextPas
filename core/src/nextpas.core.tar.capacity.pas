@@ -38,7 +38,7 @@ begin
   if AEstimatedTotal = 0 then
     Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
   if AEstimatedTotal > High(SizeUInt) - 2 * 512 then
-    Exit(High(SizeUInt) and not SizeUInt(4095));
+    Exit(High(SizeUInt));
   Result := AEstimatedTotal + 2 * 512;
   if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
     Result := C_TAR_BUILDER_INITIAL_CAPACITY;

@@ -124,6 +124,11 @@ procedure ArchiveRestoreDeferredDirs(const ADirs: TArchiveDeferredArray; ARestor
 
 { 统一目录递归收集：ReadDir 批量名 + 单次 Stat/Entry 补齐 mtime/mode，几何扩容与排序在 archive 单源 }
 procedure ArchiveCollectWalk(const AAbsDir, ARelPrefix: string; var AOut: TArchiveWalkArray; var ACount: Integer);
+{ Walk收集薄转发单源：消除 TarPackDir/TarPackDirInto 同构 SetLength/ArchiveCollectWalk/SetLength 重复，inline 零额外分配，复用 bytes.ops 单源思想 }
+procedure ArchiveCollectWalks(const ADir: string; var AWalks: TArchiveWalkArray; var ACount: Integer); inline;
+{ 容量预估单源：消除 TarPackDir 按实际载荷预估循环样板（header 512 + AlignUp(FSize,512) 单遍累加），复用 bytes.ops.AlignUp 单源位掩码零除法 inline 零拷贝，归档族单源 }
+function ArchiveEstimatePaddedSize(const AWalks: TArchiveWalkArray; ACount: Integer; ABlockSize: SizeUInt): UInt64; inline;
+function ArchiveEstimateTarSize(const AWalks: TArchiveWalkArray; ACount: Integer): UInt64; inline;
 
 implementation
 
@@ -764,6 +769,36 @@ begin
       ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF, LInfo.Size);
     { symlink/device/FIFO/socket 跳过，防劫持由外层 EnsureNoSymlinkInPath 保障 }
   end;
+end;
+
+procedure ArchiveCollectWalks(const ADir: string; var AWalks: TArchiveWalkArray; var ACount: Integer); inline;
+begin
+  // 单源薄转发：消除 TarPackDir/TarPackDirInto 同构 SetLength/ArchiveCollectWalk/SetLength 模板，复用 ArchiveCollectWalk 单源几何扩容，inline 零额外分配
+  SetLength(AWalks, 0);
+  ACount := 0;
+  ArchiveCollectWalk(ADir, '', AWalks, ACount);
+  SetLength(AWalks, ACount);
+end;
+
+function ArchiveEstimatePaddedSize(const AWalks: TArchiveWalkArray; ACount: Integer; ABlockSize: SizeUInt): UInt64; inline;
+var
+  LI: Integer;
+begin
+  // 单源容量预估：header ABlockSize + AlignUp(FSize,ABlockSize) 单遍累加，复用 bytes.ops.AlignUp 单源位掩码零除法 inline 零拷贝，tar 512 零额外拷贝分支，L2 联邦单缝
+  Result := 0;
+  for LI := 0 to ACount - 1 do
+  begin
+    if AWalks[LI].FSize > 0 then
+      Result := Result + UInt64(ABlockSize) + UInt64(AlignUp(SizeUInt(AWalks[LI].FSize), ABlockSize))
+    else
+      Result := Result + UInt64(ABlockSize);
+  end;
+end;
+
+function ArchiveEstimateTarSize(const AWalks: TArchiveWalkArray; ACount: Integer): UInt64; inline;
+begin
+  // tar 便捷薄转发：复用 ArchiveEstimatePaddedSize 单源，512 对齐零额外分支，bytes.ops 单源复用
+  Result := ArchiveEstimatePaddedSize(AWalks, ACount, 512);
 end;
 
 end.

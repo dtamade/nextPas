@@ -227,22 +227,30 @@ begin
 end;
 
 procedure TTarWriter.FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
+var LSpan: TByteSpan;
 begin
+  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, single dispatch
+  LSpan := StringAsSpan(AName);
   if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
-    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(AName)), SizeUInt(C_TAR_LAYOUT.Name.Len))
+    TarPutHeaderField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, LSpan.Slice(0, SizeUInt(C_TAR_LAYOUT.Name.Len)))
   else if ACutPos <> 0 then
   begin
-    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, PByte(PAnsiChar(AName)), SizeUInt(ACutPos));
-    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(AName) + ACutPos + 1), SizeUInt(Length(AName) - ACutPos - 1));
+    TarPutHeaderField(ABlock, C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, LSpan.Slice(0, SizeUInt(ACutPos)));
+    TarPutHeaderField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, LSpan.Slice(SizeUInt(ACutPos + 1), SizeUInt(Length(AName) - ACutPos - 1)));
   end
   else
     TarPutHeaderString(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, AName);
 end;
 
 procedure TTarWriter.FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
+var LSpan: TByteSpan;
 begin
+  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, single dispatch
   if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
-    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, PByte(PAnsiChar(ALinkName)), SizeUInt(C_TAR_LAYOUT.LinkName.Len))
+  begin
+    LSpan := StringAsSpan(ALinkName);
+    TarPutHeaderField(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, LSpan.Slice(0, SizeUInt(C_TAR_LAYOUT.LinkName.Len)));
+  end
   else
     TarPutHeaderString(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, ALinkName);
 end;
@@ -418,25 +426,23 @@ end;
 
 procedure TTarWriter.TrimIOBuf; inline;
 begin
-  // perf+stability: explicit reclaim — pools via bytes.ops single source, SetLength nil frees high-water when caller explicitly requests trim; not per-entry
-  if Length(FIOBuf) > 0 then
-    SetLength(FIOBuf, 0);
+  // perf+stability: explicit reclaim via bytes.ops.BytesRelease single source inline, high-water 1M pooled per writer, explicit Trim frees otherwise resident
+  BytesRelease(FIOBuf);
 end;
 
 procedure TTarWriter.TrimIOBufTo(const AHintSize: Int64); inline;
 var
   LNeed: SizeUInt;
 begin
-  // perf: explicit high-water reclaim to hint — 单源已下沉 capacity.TarIOBufCapacityFor inline 零拷贝，统一池化无抖动
+  // perf: explicit high-water reclaim to hint via bytes.ops single source inline, capacity.TarIOBufCapacityFor AlignUp4K zero-copy, pools 1M clamp without jitter
   if Length(FIOBuf) = 0 then Exit;
   if AHintSize <= 0 then
   begin
-    SetLength(FIOBuf, 0);
+    BytesRelease(FIOBuf);
     Exit;
   end;
   LNeed := nextpas.core.tar.capacity.TarIOBufCapacityFor(AHintSize);
-  if SizeUInt(Length(FIOBuf)) > LNeed then
-    SetLength(FIOBuf, LNeed);
+  BytesShrinkTo(FIOBuf, LNeed);
 end;
 
 procedure TTarWriter.Finish;
@@ -445,9 +451,8 @@ begin
   FFinished := True;
   // zero-copy via bytes.ops ZeroBufPtr single source, single dispatch 1024
   WriteChecked(ZeroBufPtr, 2 * C_TAR_BLOCK_SIZE);
-  // pooled TBytes freed via SetLength nil
-  if Length(FIOBuf) > 0 then
-    SetLength(FIOBuf, 0);
+  // stability: explicit high-water release via bytes.ops single source, large packet 1M pooled per instance reclaimed, SetLength nil single source inline
+  TrimIOBuf;
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -465,8 +470,8 @@ begin
       FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)');
     end;
   finally
-    if Length(FIOBuf) > 0 then
-      SetLength(FIOBuf, 0);
+    // stability: explicit release via bytes.ops single source, guarantees no 1M resident leak, resource ownership clear, try..finally never leaks
+    BytesRelease(FIOBuf);
     FDst := nil;
     inherited Destroy;
   end;

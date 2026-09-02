@@ -85,6 +85,9 @@ function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function SpanToString(const ASpan: TByteSpan): string; inline;
+function StringAsSpan(const AValue: string): TByteSpan; inline; { string->TByteSpan 零拷贝视图单源，PAnsiChar 单点，inline }
+procedure BytesRelease(var ABuffer: TBytes); inline; { 单源显式归还：SetLength 0 高水位释放，inline }
+procedure BytesShrinkTo(var ABuffer: TBytes; ANewSize: SizeUInt); inline; { 单源显式缩容：仅缩不扩，inline }
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
 { 单源 Move：string/PByte 零拷贝单次 Move，tar/header 等复用此单源避免分散 Move；外联避免 Move[AValue[1]] inline 膨胀与 FPC 3.3.1 inline+Move 单字节缺陷（PAnsiChar 解引用） }
 procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
@@ -891,6 +894,28 @@ begin
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Result[1], ASpan.Len);
+end;
+
+function StringAsSpan(const AValue: string): TByteSpan; inline;
+begin
+  // 单源：string->TByteSpan 零拷贝视图，PAnsiChar 单点 inline，避免 PByte(PAnsiChar) 重复样板
+  if Length(AValue) = 0 then
+    Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+end;
+
+procedure BytesRelease(var ABuffer: TBytes); inline;
+begin
+  // 单源显式归还：SetLength 0 释放高水位，需显式调用，inline
+  if Length(ABuffer) > 0 then
+    SetLength(ABuffer, 0);
+end;
+
+procedure BytesShrinkTo(var ABuffer: TBytes; ANewSize: SizeUInt); inline;
+begin
+  // 单源显式缩容：仅当当前>目标时 SetLength 缩容，inline 零拷贝
+  if SizeUInt(Length(ABuffer)) > ANewSize then
+    SetLength(ABuffer, ANewSize);
 end;
 
 function StringLowerAsciiAware(const S: string): string; inline;

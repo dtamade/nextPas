@@ -2,7 +2,7 @@ unit nextpas.core.tar.fs;
 {**
  * @desc Tar 与文件系统之间的便捷层：递归打包目录、解包归档到目录。
  * 委托 nextpas.core.archive.fs 的排序、几何扩容、symlink 拒绝、零拷贝落盘、
- * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalk 单源），打包经 bytes.builder
+ * deferred-dir 逆序定稿与统一目录 Walk（ArchiveCollectWalks/ArchiveEstimateTarSize 单源：Walk 收集 SetLength/ArchiveCollectWalk/SetLength 模板与容量预估 header+AlignUp 循环样板均收敛至 archive.fs 联邦单源，复用 bytes.ops AlignUp 单源 inline 零拷贝），打包经 bytes.builder
  * IBytesBuilder 直写切片单次 ToBytes 交付（消除 CreateBytesStream+ArchiveSnapshotStream 二次
  * SetLength+Seek+Read 大块 Move），消除与 zip.fs 的 150+ 行拷贝，保持确定性与 fail-closed；
  * L2 单 seam：fs 仅经 archive.fs 联邦单缝（archive.fs 为 L2 同层唯一显式依赖，tar.fs 禁直引 nextpas.core.fs），复用 bytes.ops 单源零拷贝，注册层级见 module-registry archive/tar 联邦 via archive.fs。
@@ -42,7 +42,7 @@ uses
 
 { 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
 
-{ Walk 递归已完全下沉至 archive.fs: ArchiveCollectWalk 单源，tar 仅薄委托，无重复实现 }
+{ Walk 递归与容量预估已完全下沉至 archive.fs: ArchiveCollectWalks/ArchiveEstimateTarSize 单源（几何扩容+AlignUp 512 单源 inline 零拷贝），tar 零模板 }
 
 { symlink/hardlink target 安全校验：参数化复用 bytes.pathvalid.IsSafeArchiveEntryNameEx 单源（阈值 C_TAR_MAX_LINK_BYTES/禁尾斜杠），inline 薄转发、零拷贝段扫描（原串索引无Copy/分配），复用 bytes.ops 单源思想，消除与 IsSafeArchiveEntryName 的80%重复 }
 function IsSafeTarLinkTarget(const ATarget: string): Boolean; inline;
@@ -94,15 +94,6 @@ begin
   end;
 end;
 
-{ Walk 收集前奏单源：消除 TarPackDir/TarPackDirInto 同构 SetLength/ArchiveCollectWalk/SetLength 重复，inline 薄转发 ArchiveCollectWalk 单源，几何扩容复用，零额外分配 }
-procedure CollectTarWalks(const ADir: string; var AWalks: TArchiveWalkArray; var ACount: Integer); inline;
-begin
-  SetLength(AWalks, 0);
-  ACount := 0;
-  ArchiveCollectWalk(ADir, '', AWalks, ACount);
-  SetLength(AWalks, ACount);
-end;
-
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
   LRoot: TArchiveFileInfo;
@@ -114,7 +105,7 @@ begin
   LRoot := ArchiveStat(ADir);
   if not LRoot.IsDir then
     raise EArgumentError.Create('tar pack: not a directory: ' + ADir);
-  CollectTarWalks(ADir, LWalks, LWalksCount);
+  ArchiveCollectWalks(ADir, LWalks, LWalksCount);
   try
     // 复用已Stat FSize，PackWalks 零拷贝（外联遵红线2，循环/IO分发不inline）
     PackWalks(LWalks, AWriter);
@@ -131,21 +122,13 @@ var
   LWalks: TArchiveWalkArray;
   LWalksCount: Integer;
   LCap: SizeUInt;
-  LI: Integer;
   LEst: UInt64;
 begin
   Result := nil;
-  CollectTarWalks(ADir, LWalks, LWalksCount);
+  ArchiveCollectWalks(ADir, LWalks, LWalksCount);
   try
-    // perf: 按实际载荷预估 — header 512 + AlignUp(FSize,512) 单遍累加（bytes.ops AlignUp 单源 512 对齐），经 capacity.TarBuilderCapacityFor 4K 对齐预扩容，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝，接口自动释资源不丢
-    LEst := 0;
-    for LI := 0 to LWalksCount - 1 do
-    begin
-      if LWalks[LI].FSize > 0 then
-        LEst := LEst + UInt64(C_TAR_BLOCK_SIZE) + UInt64(AlignUp(SizeUInt(LWalks[LI].FSize), SizeUInt(C_TAR_BLOCK_SIZE)))
-      else
-        LEst := LEst + UInt64(C_TAR_BLOCK_SIZE);
-    end;
+    // perf: 按实际载荷预估 — header 512 + AlignUp(FSize,512) 单遍累加已下沉 archive.fs ArchiveEstimateTarSize 单源（bytes.ops AlignUp 位掩码 inline 零拷贝），经 capacity.TarBuilderCapacityFor 4K 对齐预扩容，几何 2× 按需 Reserve，单次 ToBytes 零额外拷贝，接口自动释资源不丢
+    LEst := ArchiveEstimateTarSize(LWalks, LWalksCount);
     if LEst > High(SizeUInt) then
       LCap := nextpas.core.tar.capacity.TarBuilderCapacityFor(High(SizeUInt))
     else

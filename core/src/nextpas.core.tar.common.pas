@@ -44,8 +44,10 @@ procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
-{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂 *}
-function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
+{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂
+ *  @perf 零分配：提供 Raw 重载（plain procedural + UserData）消除 per-pax 匿名闭包堆分配，归一 bytes.ops SpanEqual/SpanToString 单源零拷贝视图 *}
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline; overload;
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean; inline; overload;
 {** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，inline 薄转发，零拷贝 Reserve+AppendBytes 单源 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
 
@@ -56,6 +58,10 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.text.number;
+
+type
+  PTarPaxCtx = ^TTarPaxCtx;
+  TTarPaxCtx = record Path: PString; LinkPath: PString; Found: PBoolean; end;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -282,16 +288,41 @@ begin
 end;
 
 { — pax 解析：委托 archive.pax 单源，strict 校验 — }
+procedure TarPaxPathHandler(const AKey, AValue: TByteSpan; AUserData: Pointer);
+var
+  Ctx: PTarPaxCtx;
+begin
+  // 零分配回调：plain procedural + UserData，无闭包捕获堆分配，复用 bytes.ops 单源零拷贝视图
+  Ctx := PTarPaxCtx(AUserData);
+  if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
+  begin
+    if AValue.Len > 0 then Ctx^.Path^ := SpanToString(AValue) else Ctx^.Path^ := '';
+    Ctx^.Found^ := True;
+  end
+  else if (AKey.Len = 8) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
+  begin
+    if AValue.Len > 0 then Ctx^.LinkPath^ := SpanToString(AValue) else Ctx^.LinkPath^ := '';
+    Ctx^.Found^ := True;
+  end;
+end;
+
 function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
 begin
   // inline 零拷贝薄转发至 archive.pax 单源，零拷贝 PByte 切片单源
   Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
 end;
 
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; AHandler: TArchivePaxKVHandlerRaw; AUserData: Pointer): Boolean; inline;
+begin
+  // inline 零分配薄转发至 archive.pax Raw 重载，零拷贝 PByte 切片单源，无闭包
+  Result := ArchivePaxParseRecords(ABase, ALen, AHandler, AUserData);
+end;
+
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
   LFound: Boolean;
   LPathTmp, LLinkTmp: string;
+  LCtx: TTarPaxCtx;
 begin
   APath := '';
   ALinkPath := '';
@@ -300,28 +331,11 @@ begin
   LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  // 零拷贝回调仅 path/linkpath 物化；扩展键由调用方经 TarParsePaxKVRecords 单源零拷贝迭代复用，无二次全量解析割裂
-  TarParsePaxKVRecords(ABase, ALen,
-    procedure(const AKey, AValue: TByteSpan)
-    begin
-      if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
-      begin
-        if AValue.Len > 0 then
-          LPathTmp := SpanToString(AValue)
-        else
-          LPathTmp := '';
-        LFound := True;
-      end
-      else if (AKey.Len = 8) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('linkpath')), 8)) then
-      begin
-        if AValue.Len > 0 then
-          LLinkTmp := SpanToString(AValue)
-        else
-          LLinkTmp := '';
-        LFound := True;
-      end;
-      // 扩展键（atime/mtime/...）由调用方经 TarParsePaxKVRecords 单源零拷贝迭代处理，复用 bytes.ops 视图，无 else 空语句分支
-    end);
+  // 零分配：plain procedural + UserData，无匿名闭包 per-pax 堆分配；仅 path/linkpath 物化，其余扩展键由调用方经 TarParsePaxKVRecords Raw 单源零拷贝迭代无二次全量解析
+  LCtx.Path := @LPathTmp;
+  LCtx.LinkPath := @LLinkTmp;
+  LCtx.Found := @LFound;
+  ArchivePaxParseRecords(ABase, ALen, @TarPaxPathHandler, @LCtx);
   APath := LPathTmp;
   ALinkPath := LLinkTmp;
   Result := LFound;
