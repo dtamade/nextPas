@@ -1,8 +1,9 @@
 {**
  * nextpas.core.graphics.svg - 最小 SvgImport (S3 预留闭环)
- * 仅解析 SVG path data (d="M x y L x y C ... Z")，M/L/H/V/C/Q/Z 子集，单精度 Single 外部。
+ * 仅解析 SVG path data (d="M x y L x y C ... Z")，M/L/H/V/C/S/Q/T/Z 子集，单精度 Single 外部。
  * L2，仅依 graphics.base/path + text 扫描，不依赖 xml/html/dom，避免 L2→L2 循环。
- * 完整性：后续可扩展 arc(A) 与 transform，在此薄层上增量；当前满足 directui 图标矢量导入最小闭环。
+ * 完整性：S/s 为 C 的平滑延续（反射前一 C/S 第二控制点），T/t 为 Q 的平滑延续；
+ *   arc(A) 仍预留，后续在薄层增量；当前已满足 directui 图标矢量导入闭环。
  * 稳定性：空串/非法字符抛 EVectorError，数值溢出/NaN 守卫，cap 16384 点防爆。
  * 复用：复用 TPathBuilder 批量 O(N)，不自研字符串扫描，复用 text.conv TryStrToFloat 单源。
  *}
@@ -63,6 +64,9 @@ var
   HasCur: Boolean;
   X, Y, X1, Y1, X2, Y2: Single;
   Need: Integer;
+  LastCubicX, LastCubicY: Single;
+  LastQuadX, LastQuadY: Single;
+  HasLastCubic, HasLastQuad: Boolean;
 begin
   if Trim(AData) = '' then
     raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: empty data');
@@ -73,6 +77,8 @@ begin
   Start := TVec2.Create(0, 0);
   Cur := Start;
   LastCmd := #0;
+  LastCubicX := 0; LastCubicY := 0; HasLastCubic := False;
+  LastQuadX := 0; LastQuadY := 0; HasLastQuad := False;
   while P <= L do
   begin
     if not SkipWs(AData, P) then Break;
@@ -95,6 +101,7 @@ begin
           if Cmd = 'm' then begin X := Cur.X + X; Y := Cur.Y + Y; end;
           B.MoveTo(X, Y);
           Cur := TVec2.Create(X, Y); Start := Cur; HasCur := True;
+          HasLastCubic := False; HasLastQuad := False;
           // 后续隐式 L
           LastCmd := 'L';
           if Cmd = 'm' then LastCmd := 'l';
@@ -106,6 +113,7 @@ begin
           if Cmd = 'l' then begin X := Cur.X + X; Y := Cur.Y + Y; end;
           B.LineTo(X, Y);
           Cur := TVec2.Create(X, Y);
+          HasLastCubic := False; HasLastQuad := False;
         end;
       'H', 'h':
         begin
@@ -113,6 +121,7 @@ begin
           if Cmd = 'h' then X := Cur.X + X;
           B.LineTo(X, Cur.Y);
           Cur := TVec2.Create(X, Cur.Y);
+          HasLastCubic := False; HasLastQuad := False;
         end;
       'V', 'v':
         begin
@@ -120,6 +129,7 @@ begin
           if Cmd = 'v' then Y := Cur.Y + Y;
           B.LineTo(Cur.X, Y);
           Cur := TVec2.Create(Cur.X, Y);
+          HasLastCubic := False; HasLastQuad := False;
         end;
       'C', 'c':
         begin
@@ -132,6 +142,20 @@ begin
           if Cmd = 'c' then begin X1:=Cur.X+X1; Y1:=Cur.Y+Y1; X2:=Cur.X+X2; Y2:=Cur.Y+Y2; X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.CubicTo(X1, Y1, X2, Y2, X, Y);
           Cur := TVec2.Create(X, Y);
+          LastCubicX := X2; LastCubicY := Y2; HasLastCubic := True; HasLastQuad := False;
+        end;
+      'S', 's':
+        begin
+          if HasLastCubic then begin X1 := Cur.X * 2 - LastCubicX; Y1 := Cur.Y * 2 - LastCubicY; end
+          else begin X1 := Cur.X; Y1 := Cur.Y; end;
+          if not TryParseFloat(AData, P, X2) then raise EVectorError.Create('S x2 missing');
+          if not TryParseFloat(AData, P, Y2) then raise EVectorError.Create('S y2 missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('S x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('S y missing');
+          if Cmd = 's' then begin X2:=Cur.X+X2; Y2:=Cur.Y+Y2; X:=Cur.X+X; Y:=Cur.Y+Y; end;
+          B.CubicTo(X1, Y1, X2, Y2, X, Y);
+          Cur := TVec2.Create(X, Y);
+          LastCubicX := X2; LastCubicY := Y2; HasLastCubic := True; HasLastQuad := False;
         end;
       'Q', 'q':
         begin
@@ -142,14 +166,27 @@ begin
           if Cmd = 'q' then begin X1:=Cur.X+X1; Y1:=Cur.Y+Y1; X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.QuadTo(X1, Y1, X, Y);
           Cur := TVec2.Create(X, Y);
+          LastQuadX := X1; LastQuadY := Y1; HasLastQuad := True; HasLastCubic := False;
+        end;
+      'T', 't':
+        begin
+          if HasLastQuad then begin X1 := Cur.X * 2 - LastQuadX; Y1 := Cur.Y * 2 - LastQuadY; end
+          else begin X1 := Cur.X; Y1 := Cur.Y; end;
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('T x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('T y missing');
+          if Cmd = 't' then begin X:=Cur.X+X; Y:=Cur.Y+Y; end;
+          B.QuadTo(X1, Y1, X, Y);
+          Cur := TVec2.Create(X, Y);
+          LastQuadX := X1; LastQuadY := Y1; HasLastQuad := True; HasLastCubic := False;
         end;
       'Z', 'z':
         begin
           B.Close;
           Cur := Start;
+          HasLastCubic := False; HasLastQuad := False;
         end;
     else
-      raise EVectorError.Create('SvgPathFromData: unsupported command '+Cmd+' (only M/L/H/V/C/Q/Z)');
+      raise EVectorError.Create('SvgPathFromData: unsupported command '+Cmd+' (only M/L/H/V/C/S/Q/T/Z)');
     end;
     // 防爆：点数 cap
     Need := B.PointCount;
