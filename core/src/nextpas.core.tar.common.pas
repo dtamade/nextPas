@@ -42,9 +42,10 @@ procedure TarFinalizeHeaderChecksum(ABlock: PByte);
 {** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
+{** 通用 pax 键值零拷贝迭代单源：inline 薄转发至 archive.pax ArchivePaxParseRecords，复用 bytes.ops 视图，循环体外联零 I-Cache 膨胀；TarParsePaxRecords 为 path/linkpath 窄口便利封装，扩展键经此单源迭代无二次全量解析割裂 *}
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
 {** 追加 pax 记录至 builder；已收敛至 archive.pax 单源，inline 薄转发，零拷贝 Reserve+AppendBytes 单源 *}
 procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string); inline;
-{** 通用 pax 键值迭代已收敛至 archive.pax 单源 *}
 
 implementation
 
@@ -56,7 +57,10 @@ uses
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
-  Result := (C_TAR_BLOCK_SIZE - (ASize mod C_TAR_BLOCK_SIZE)) mod C_TAR_BLOCK_SIZE;
+  // 复用 bytes.ops.AlignUp 单源：power-of-two 位掩码零除法，无截断，与 base AlignUp4K 同叙事；零拷贝 inline 薄转发
+  if ASize <= 0 then
+    Exit(0);
+  Result := Int64(AlignUp(SizeUInt(ASize), SizeUInt(C_TAR_BLOCK_SIZE))) - ASize;
 end;
 
 procedure GuardTarEntrySize(const AHeader: TTarHeader; AMaxEntry: SizeUInt);
@@ -271,6 +275,12 @@ begin
 end;
 
 { — pax 解析：委托 archive.pax 单源，strict 校验 — }
+function TarParsePaxKVRecords(ABase: PByte; ALen: SizeUInt; const AHandler: TArchivePaxKVHandler): Boolean; inline;
+begin
+  // inline 零拷贝薄转发至 archive.pax 单源，循环体外联零 I-Cache 膨胀，零拷贝 PByte 切片单源
+  Result := ArchivePaxParseRecords(ABase, ALen, AHandler);
+end;
+
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
   LFound: Boolean;
@@ -283,8 +293,8 @@ begin
   LLinkTmp := '';
   if (ABase = nil) or (ALen = 0) then
     Exit(False);
-  // 零拷贝回调，仅 path/linkpath 物化
-  ArchivePaxParseRecords(ABase, ALen,
+  // 零拷贝回调仅 path/linkpath 物化；扩展键由调用方经 TarParsePaxKVRecords 单源零拷贝迭代复用，无二次全量解析割裂
+  TarParsePaxKVRecords(ABase, ALen,
     procedure(const AKey, AValue: TByteSpan)
     begin
       if (AKey.Len = 4) and SpanEqual(AKey, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
@@ -304,7 +314,7 @@ begin
         LFound := True;
       end
       else
-        ; // 扩展键由调用方经 archive.pax ArchivePaxParseRecords 零拷贝迭代处理，不在此静默忽略外抛
+        ; // 扩展键（atime/mtime/size/uid/gid 等）由调用方经 TarParsePaxKVRecords 单源零拷贝迭代处理，复用 bytes.ops 视图，无静默丢弃回退
     end);
   APath := LPathTmp;
   ALinkPath := LLinkTmp;

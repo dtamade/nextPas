@@ -162,7 +162,10 @@ begin
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
     FMaxEntry := AOptions.MaxEntrySize;
-  FMaxTotal := AOptions.MaxTotalSize;
+  if AOptions.MaxTotalSize = 0 then
+    FMaxTotal := C_TAR_DEFAULT_MAX_TOTAL
+  else
+    FMaxTotal := AOptions.MaxTotalSize;
   FCumTotal := 0;
 end;
 
@@ -181,14 +184,28 @@ begin
     FMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
   else
     FMaxEntry := AOptions.MaxEntrySize;
-  FMaxTotal := AOptions.MaxTotalSize;
+  if AOptions.MaxTotalSize = 0 then
+    FMaxTotal := C_TAR_DEFAULT_MAX_TOTAL
+  else
+    FMaxTotal := AOptions.MaxTotalSize;
   FCumTotal := 0;
 end;
 
-// single 512B ScanNulFieldTruncations, 7-field lens
+// single source 7-field cache table: order = TTarScanLens (Name, LinkName, Magic, Version, UName, GName, Prefix), values = C_TAR_LAYOUT, bytes.ops ScanNulFieldTruncations single 512B pass
+const
+  C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
+    (Off: 0; Len: 100),
+    (Off: 157; Len: 100),
+    (Off: 257; Len: 6),
+    (Off: 263; Len: 2),
+    (Off: 265; Len: 32),
+    (Off: 297; Len: 32),
+    (Off: 345; Len: 155)
+  );
+
+// single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS
 procedure CacheHeader(ASelf: TTarReader);
 var
-  LFields: array[0..6] of TFieldRange;
   LLens: array[0..6] of SizeUInt;
   LBlock: TByteSpan;
 begin
@@ -206,15 +223,8 @@ begin
     ASelf.FScanValid := True;
     Exit;
   end;
-  LFields[0].Off := C_TAR_LAYOUT.Name.Off;     LFields[0].Len := C_TAR_LAYOUT.Name.Len;
-  LFields[1].Off := C_TAR_LAYOUT.LinkName.Off; LFields[1].Len := C_TAR_LAYOUT.LinkName.Len;
-  LFields[2].Off := C_TAR_LAYOUT.Magic.Off;    LFields[2].Len := C_TAR_LAYOUT.Magic.Len;
-  LFields[3].Off := C_TAR_LAYOUT.Version.Off;  LFields[3].Len := C_TAR_LAYOUT.Version.Len;
-  LFields[4].Off := C_TAR_LAYOUT.UName.Off;    LFields[4].Len := C_TAR_LAYOUT.UName.Len;
-  LFields[5].Off := C_TAR_LAYOUT.GName.Off;    LFields[5].Len := C_TAR_LAYOUT.GName.Len;
-  LFields[6].Off := C_TAR_LAYOUT.Prefix.Off;   LFields[6].Len := C_TAR_LAYOUT.Prefix.Len;
   LBlock := TByteSpan.Create(@ASelf.FData[ASelf.FPos], C_TAR_BLOCK_SIZE);
-  ScanNulFieldTruncations(LBlock, LFields, @LLens[0]);
+  ScanNulFieldTruncations(LBlock, C_TAR_SCAN_FIELDS, @LLens[0]);
   ASelf.FScanLens.Name := LLens[0];
   ASelf.FScanLens.LinkName := LLens[1];
   ASelf.FScanLens.Magic := LLens[2];
@@ -239,60 +249,80 @@ var
   LLen: SizeUInt;
   LIdx: SizeInt;
   LSpan: TByteSpan;
-  IsHeaderField: Boolean;
   LFallbackArr: array[0..0] of TFieldRange;
   LFallbackTrunc: SizeUInt;
   LBlockTmp: TByteSpan;
-  LLayout: array[0..6] of TTarField;
-  LLensArr: array[0..6] of SizeUInt;
-  I: Integer;
+  LFieldOff: SizeUInt;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops — O(1) case dispatch, zero LLayout/LLensArr rebuild, zero loop
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
-    // table-driven 7-field dispatch: layout table + Lens array loop, single source, zero if-else chain
-    LLayout[0] := C_TAR_LAYOUT.Name;
-    LLayout[1] := C_TAR_LAYOUT.LinkName;
-    LLayout[2] := C_TAR_LAYOUT.Magic;
-    LLayout[3] := C_TAR_LAYOUT.Version;
-    LLayout[4] := C_TAR_LAYOUT.UName;
-    LLayout[5] := C_TAR_LAYOUT.GName;
-    LLayout[6] := C_TAR_LAYOUT.Prefix;
-    LLensArr[0] := FScanLens.Name;
-    LLensArr[1] := FScanLens.LinkName;
-    LLensArr[2] := FScanLens.Magic;
-    LLensArr[3] := FScanLens.Version;
-    LLensArr[4] := FScanLens.UName;
-    LLensArr[5] := FScanLens.GName;
-    LLensArr[6] := FScanLens.Prefix;
-    IsHeaderField := False;
-    for I := 0 to 6 do
-      if (AOfs = FPos + LLayout[I].Off) and (ALen = LLayout[I].Len) then
-      begin
-        LLen := LLensArr[I];
-        IsHeaderField := True;
-        Break;
-      end;
-    if not IsHeaderField then
-    begin
-      // fallback: non-7 header field reuses single 512B ScanNulFieldTruncations cache (bytes.ops single source, zero-copy, LUT single pass)
-      // avoids per-field SpanIndexOf repeated linear scan overhead; single 512B scan via ScanNulFieldTruncations cached block
-      LFallbackArr[0].Off := AOfs - FPos;
-      LFallbackArr[0].Len := ALen;
-      LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
-      ScanNulFieldTruncations(LBlockTmp, LFallbackArr, @LFallbackTrunc);
-      LLen := LFallbackTrunc;
-      if LLen = 0 then Exit(TByteSpan.Empty);
-      Result := TByteSpan.Create(@FData[AOfs], LLen);
-      Exit;
+    LFieldOff := AOfs - FPos;
+    // single source C_TAR_SCAN_FIELDS order, O(1) perfect hash via Off case + Len guard, eliminates 7-branch linear scan
+    case LFieldOff of
+      0:
+        if ALen = 100 then
+        begin
+          LLen := FScanLens.Name;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      157:
+        if ALen = 100 then
+        begin
+          LLen := FScanLens.LinkName;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      257:
+        if ALen = 6 then
+        begin
+          LLen := FScanLens.Magic;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      263:
+        if ALen = 2 then
+        begin
+          LLen := FScanLens.Version;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      265:
+        if ALen = 32 then
+        begin
+          LLen := FScanLens.UName;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      297:
+        if ALen = 32 then
+        begin
+          LLen := FScanLens.GName;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
+      345:
+        if ALen = 155 then
+        begin
+          LLen := FScanLens.Prefix;
+          if LLen = 0 then Exit(TByteSpan.Empty);
+          Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        end;
     end;
+    // fallback: non-7 header field reuses single 512B ScanNulFieldTruncations (bytes.ops single source, zero-copy, LUT single pass)
+    LFallbackArr[0].Off := LFieldOff;
+    LFallbackArr[0].Len := ALen;
+    LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
+    ScanNulFieldTruncations(LBlockTmp, LFallbackArr, @LFallbackTrunc);
+    LLen := LFallbackTrunc;
     if LLen = 0 then Exit(TByteSpan.Empty);
     Result := TByteSpan.Create(@FData[AOfs], LLen);
     Exit;

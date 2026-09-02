@@ -78,7 +78,7 @@ const
 type
   {** @desc ustar 字段描述：Off/Len 合一，单点零拷贝 *}
   TTarField = record Off: SizeUInt; Len: SizeUInt; end;
-  {** @desc ustar 头部布局记录表：16字段单源收敛（含 devmajor/devminor），生成器校验连续性，读写一致零错位 *}
+  {** @desc ustar 头部布局记录表：16字段单点收敛（含 devmajor/devminor），读写经 C_TAR_LAYOUT 单源 inline 零拷贝访问零错位 *}
   TTarUstarLayout = record
     Name: TTarField;
     Mode: TTarField;
@@ -99,7 +99,7 @@ type
   end;
 
 const
-  {** @desc ustar 单源记录表：16 字段 Off/Len 单点收敛，生成器单点派生，零拷贝 inline 访问；散列常量已归一消除，读写经 C_TAR_LAYOUT 单源 inline 访问零错位 *}
+  {** @desc ustar 单源记录表：16 字段 Off/Len 单点收敛，零拷贝 inline 单源访问；散列常量已归一消除，读写经 C_TAR_LAYOUT 单源 inline 访问零错位 *}
   C_TAR_LAYOUT: TTarUstarLayout = (
     Name: (Off: 0; Len: 100);
     Mode: (Off: 100; Len: 8);

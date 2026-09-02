@@ -34,7 +34,7 @@ type
   private
     FBuilder: IArchiveBuilder; // 联邦单源直写切片，bytes.builder 几何扩容单源 inline 零拷贝
     FWriter: TTarWriter; // 薄委托唯一写器，持有 Sink 单缝，IsFinished 单源
-    procedure InitBuilder(const ACap: SizeUInt); inline; // 薄门面单源：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）—— 构造器双入口共用，零 QueryInterface 直达
+    procedure InitBuilder(const ACap: SizeUInt); inline; // inline 薄转发：联邦单缝，详见 CONTRACT §1.4
   public
     constructor Create; overload;
     constructor CreateWithCapacity(const AEstimatedTotal: SizeUInt); overload;
@@ -51,7 +51,6 @@ type
 procedure TTarBuilder.InitBuilder(const ACap: SizeUInt); inline;
 var LSink: IWriter;
 begin
-  // 薄门面单源：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）—— bytes.builder 几何扩容单源 inline 零拷贝，ITarBuilder 单口直达零 QueryInterface 仪式
   CreateArchiveBuilder(ACap, FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
 end;

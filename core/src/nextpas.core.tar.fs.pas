@@ -49,16 +49,19 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，批量小文件单次分配合并缓冲复用 I/O 块（200×512B 仅1次 SetLength，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，跨条目共享 LShared 复用、O(1)内存，inline 零拷贝），bytes.ops单源，稳定性try..finally不丢句柄 }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 间30+行重复粘贴，inline零拷贝分块搬运，复用 ArchiveCollectWalk 已Stat FSize 零二次Stat，批量小文件单次分配合并缓冲复用 I/O 块（200×512B 仅1次 GetMem，经 TarIOBufCapacityFor+bytes.ops AlignUp4K 单源 4K 对齐，跨条目共享 LShared 复用、O(1)内存，inline 零拷贝，GetMem无零填充避免4K无效写带宽），bytes.ops单源，稳定性try..finally不丢句柄 FreeMem }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter); inline;
 var
   LI: Integer;
   LHdr: TTarHeader;
   LFile: TArchiveFile;
-  LShared: TBytes;
+  LShared: PByte;
+  LSharedCap: SizeUInt;
   LMaxSize: Int64;
   LNeed: SizeUInt;
 begin
+  LShared := nil;
+  LSharedCap := 0;
   LMaxSize := 0;
   for LI := 0 to High(AWalks) do
     if not AWalks[LI].FIsDir and (AWalks[LI].FSize > LMaxSize) then
@@ -66,7 +69,8 @@ begin
   if LMaxSize > 0 then
   begin
     LNeed := TarIOBufCapacityFor(LMaxSize);
-    SetLength(LShared, LNeed);
+    GetMem(LShared, LNeed);
+    LSharedCap := LNeed;
   end;
   try
     for LI := 0 to High(AWalks) do
@@ -95,7 +99,10 @@ begin
         LFile := nil;
         LFile := ArchiveOpenRead(AWalks[LI].FFull);
         try
-          AWriter.AddEntryFromReaderWithSharedBuf(LHdr, LFile as IReader, LShared);
+          if (LShared <> nil) and (LSharedCap > 0) then
+            AWriter.AddEntryFromReaderWithRawBuf(LHdr, LFile as IReader, LShared, LSharedCap)
+          else
+            AWriter.AddEntryFromReader(LHdr, LFile as IReader);
         finally
           try
             LFile.Close;
@@ -106,7 +113,8 @@ begin
       end;
     end;
   finally
-    SetLength(LShared, 0);
+    if LShared <> nil then
+      FreeMem(LShared, LSharedCap);
   end;
 end;
 
@@ -180,6 +188,29 @@ begin
   end;
 end;
 
+{ 同父缓存 helper：抽取 TarExtractToDirWithOptions 中55行手工 CopyMemory+CompareMem 双重 if 展开，inline 薄转发、复用 bytes.ops.CopyMemory / base.utils.CompareMem 单源零拷贝，门面薄而优雅，避免内联膨胀，保持 L0-L3 单缝 }
+procedure SyncTarParentCache(const AFull: string; var ALastParent: string; var AParentLen: SizeUInt); inline;
+var
+  LSep: SizeInt;
+begin
+  LSep := StringLastIndexOf(AFull, '/');
+  if LSep <= 0 then Exit;
+  AParentLen := SizeUInt(LSep - 1);
+  if AParentLen <> SizeUInt(Length(ALastParent)) then
+  begin
+    ArchivePrepareParentDir(AFull, AParentLen);
+    SetLength(ALastParent, AParentLen);
+    if AParentLen > 0 then
+      CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
+  end
+  else if (AParentLen > 0) and not CompareMem(Pointer(@AFull[1]), Pointer(@ALastParent[1]), AParentLen) then
+  begin
+    ArchivePrepareParentDir(AFull, AParentLen);
+    SetLength(ALastParent, AParentLen);
+    CopyMemory(PByte(@AFull[1]), PByte(@ALastParent[1]), AParentLen);
+  end;
+end;
+
 procedure TarExtractToDirWithOptions(const AData: TBytes; const ADestDir: string; const AOptions: TTarExtractOptions);
 var
   ROpts: TTarReadOptions;
@@ -231,7 +262,7 @@ begin
             if not IsSafeTarLinkTarget(H.LinkName) then
               raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
         end;
-        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝；预分区快速路径：同父连续条目经前缀‘/’命中+小后缀‘/’扫描（仅basename长度）跳过全路径逆扫，200 同父文件由 200 次 StringLastIndexOf 全扫降至 1 次全扫+199 次前缀命中，复用 bytes.ops 单源零拷贝，inline 热路径
+        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝；预分区快速路径：同父连续条目经前缀‘/’命中+小后缀‘/’扫描（仅basename长度）跳过全路径逆扫，200 同父文件由 200 次 StringLastIndexOf 全扫降至 1 次全扫+199 次前缀命中，复用 bytes.ops 单源零拷贝，inline 热路径；门面薄而优雅：55行手工 CopyMemory+CompareMem 双重 if 展开已抽 SyncTarParentCache inline helper 复用 bytes.ops 单源零拷贝，消除内联膨胀
         LFull := ArchiveJoinPath(ADestDir, H.Name);
         if (LLastParent <> '') and (Length(LFull) > Length(LLastParent)) and (LFull[Length(LLastParent) + 1] = '/') then
         begin
@@ -242,53 +273,12 @@ begin
               LHasSlash := True;
               Break;
             end;
-          if not LHasSlash then
-          begin
-            // fast hit: same parent, skip StringLastIndexOf+CompareMem, zero full scan
-          end
-          else
-          begin
-            LSep := StringLastIndexOf(LFull, '/');
-            if LSep > 0 then
-            begin
-              LParentLen := SizeUInt(LSep - 1);
-              if LParentLen <> SizeUInt(Length(LLastParent)) then
-              begin
-                ArchivePrepareParentDir(LFull, LParentLen);
-                SetLength(LLastParent, LParentLen);
-                if LParentLen > 0 then
-                  CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
-              end
-              else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
-              begin
-                ArchivePrepareParentDir(LFull, LParentLen);
-                SetLength(LLastParent, LParentLen);
-                CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
-              end;
-            end;
-          end;
+          if LHasSlash then
+            SyncTarParentCache(LFull, LLastParent, LParentLen);
+          // else fast hit: same parent, skip via helper no-op, zero full scan
         end
         else
-        begin
-          LSep := StringLastIndexOf(LFull, '/');
-          if LSep > 0 then
-          begin
-            LParentLen := SizeUInt(LSep - 1);
-            if LParentLen <> SizeUInt(Length(LLastParent)) then
-            begin
-              ArchivePrepareParentDir(LFull, LParentLen);
-              SetLength(LLastParent, LParentLen);
-              if LParentLen > 0 then
-                CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
-            end
-            else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
-            begin
-              ArchivePrepareParentDir(LFull, LParentLen);
-              SetLength(LLastParent, LParentLen);
-              CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
-            end;
-          end;
-        end;
+          SyncTarParentCache(LFull, LLastParent, LParentLen);
         LMode := Word(H.Mode and $0FFF);
         case H.Kind of
           tekDirectory:
