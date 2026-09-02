@@ -62,6 +62,8 @@ const
   C_ZIP_DEFAULT_MAX_DESCRIPTOR = nextpas.core.zip.base.C_ZIP_DEFAULT_MAX_DESCRIPTOR;
 
 function ZipPumpReader(const AReader: IDecompressReader; const ADst: IWriter): SizeUInt;
+function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
+  const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
 
@@ -341,6 +343,33 @@ begin
   finally
     AReader.Close;
   end;
+end;
+
+function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
+  const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
+var
+  LInner: IReader;
+  LInflate: IDecompressReader;
+begin
+  if APayload = nil then
+    raise EArgumentError.Create('zip: nil payload reader');
+  LInner := APayload;
+  if AInfo.IsEncrypted and (AInfo.AesVersion > 0) then
+    LInner := NewWinZipAesReader(LInner, APassword, AInfo.AesStrengthCode,
+      AInfo.CompressedSize - WinZipAesFrameOverhead(AInfo.AesStrengthCode),
+      AInfo.Name);
+  LInflate := nil;
+  if AInfo.MethodCode = C_ZIP_METHOD_DEFLATE then
+  begin
+    LInflate := RawDeflateReaderWithMaxOutputSize(LInner, AMaxOutput);
+    LInner := LInflate;
+  end
+  else if AInfo.MethodCode <> C_ZIP_METHOD_STORE then
+    raise ENotSupportedError.Create('zip: unsupported compression method ' +
+      IntToStr(AInfo.MethodCode) + ': ' + AInfo.Name);
+  Result := TZipVerifyReader.Create(LInner, LInflate, AInfo.Name, AInfo.Crc32,
+    AInfo.UncompressedSize, AMaxOutput,
+    AInfo.AesVersion <> C_WINZIP_AES_VERSION_2);
 end;
 
 { 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
@@ -665,33 +694,13 @@ var
   LE: TZipEntryInfo;
   LOfs: Int64;
   LSlice: TSliceReader;
-  LInflate: IDecompressReader;
-  LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
   GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSlice := TSliceReader.Create(FData, SizeUInt(LOfs),
     SizeUInt(LE.CompressedSize));
-  { 加密条目：解封装层夹在切片与解压之间（构造即强校验口令校验值） }
-  LInner := LSlice;
-  if LE.IsEncrypted and (LE.AesVersion > 0) then
-    LInner := NewWinZipAesReader(LSlice, FPassword, LE.AesStrengthCode,
-      LE.CompressedSize - WinZipAesFrameOverhead(LE.AesStrengthCode),
-      LE.Name);
-  LInflate := nil;
-  if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
-  begin
-    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
-      FMaxOutputSize);
-    LInner := LInflate;
-  end
-  else if LE.MethodCode <> C_ZIP_METHOD_STORE then
-    raise ENotSupportedError.Create('zip: unsupported compression method ' +
-      IntToStr(LE.MethodCode) + ': ' + LE.Name);
-  Result := TZipVerifyReader.Create(LInner, LInflate, LE.Name, LE.Crc32,
-    LE.UncompressedSize, FMaxOutputSize,
-    LE.AesVersion <> C_WINZIP_AES_VERSION_2);
+  Result := ZipWrapEntryReader(LSlice, LE, FPassword, FMaxOutputSize);
 end;
 
 function TZipReaderImpl.OpenEntryByName(const AName: string): IDecompressReader;
@@ -978,32 +987,12 @@ var
   LE: TZipEntryInfo;
   LOfs: Int64;
   LSpan: TSourceSpanReader;
-  LInflate: IDecompressReader;
-  LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
   GuardEntryPassword(LE, FPassword);
   LOfs := LocatePayload(AIndex);
   LSpan := TSourceSpanReader.Create(FAt, LOfs, SizeUInt(LE.CompressedSize));
-  { 加密条目：解封装层夹在区间读与解压之间（构造即强校验口令校验值） }
-  LInner := LSpan;
-  if LE.IsEncrypted and (LE.AesVersion > 0) then
-    LInner := NewWinZipAesReader(LSpan, FPassword, LE.AesStrengthCode,
-      LE.CompressedSize - WinZipAesFrameOverhead(LE.AesStrengthCode),
-      LE.Name);
-  LInflate := nil;
-  if LE.MethodCode = C_ZIP_METHOD_DEFLATE then
-  begin
-    LInflate := RawDeflateReaderWithMaxOutputSize(LInner,
-      FMaxOutputSize);
-    LInner := LInflate;
-  end
-  else if LE.MethodCode <> C_ZIP_METHOD_STORE then
-    raise ENotSupportedError.Create('zip: unsupported compression method ' +
-      IntToStr(LE.MethodCode) + ': ' + LE.Name);
-  Result := TZipVerifyReader.Create(LInner, LInflate, LE.Name, LE.Crc32,
-    LE.UncompressedSize, FMaxOutputSize,
-    LE.AesVersion <> C_WINZIP_AES_VERSION_2);
+  Result := ZipWrapEntryReader(LSpan, LE, FPassword, FMaxOutputSize);
 end;
 
 function TZipSourceReader.OpenEntryByName(const AName: string): IDecompressReader;
