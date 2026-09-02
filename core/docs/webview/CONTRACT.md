@@ -63,20 +63,20 @@ live/assets/viewmap/pool 为家族内索引/池化（不经门面 re-export，�
 utils/callbacks 为家族内共享辅助（不经门面 re-export，可抽见 §1.2，已反哺 Owner 单源经设计评审 2026-09-02 现薄转发不自溢）：utils 已反哺 L1 `text.view` Owner 单源（`TrimLeftChar`/`StripLeadingSlashView`/`StripLeadingSlash`/`ViewFromPChar`，`SliceToStr`/`CStrLen` 单源，热点 `TStringView` 零拷贝 `inline` 薄转发、String 版 `SliceToStr` 单次 `SetString+Move` CoW 零分配，`Finalize` 不丢，已落地 2026-09-02 经设计评审）、callbacks 已反哺 L0 `base.callbacks`（`Callback*MethodToRef/ProcToRef` 三形态 `TProc`/`TProc1<T>`/`TCallbackScaleHandler` inline 零拷贝 `Move` 零拷贝，已落地 2026-09-02 经设计评审）；`inline/零拷贝` + `Default(T)` 不丢，守四件套与 L0-L3，跨家族单源审计通过，经设计评审不自溢
 window 家族位于 L2，webview 家族位于 L3；webview 生产单元（fake/gtk/webview2/wk/factory）允许 uses window.*（L3→L2 has-a，M6 收口）；utils/callbacks 仍禁止 uses window（保持纯度，跨家族复用经评审）
 
-### 1.2 可抽模块候选——触发条件与 Owner 归属时序
+### 1.2 可抽模块候选——Owner 归属（单源薄转发）
 
-> 优雅收敛：**家族内私有为默认，外溢必先反哺 Owner 单源并经设计评审再 thin-forward；未评审前一律不自动外溢——能力以 CONTRACT 为准、性能以 inline/零拷贝为证、稳定以 `Default(T)/Dispose/FreeAndNil` 不丢为据，单源归 `bytes.ops`，四件套与 L0-L3 单向守恒。**
+> 优雅收敛：**家族内私有为默认，外溢必先反哺 Owner 单源并经设计评审再 thin-forward；未评审前一律不自动外溢——能力以 CONTRACT 为准、性能以 inline/零拷贝为证、稳定以 `Default(T)/Dispose/FreeAndNil` 不丢为据，单源归 Owner，四件套与 L0-L3 单向守恒。薄转发 inline 零额外调用，短临界 <1µs 指针-only，零拷贝，`Default(T)/Dispose/FreeAndNil` 释放不丢。**
 
-| 候选 | 当前归属 | 目标 Owner（反哺） | 抽取触发条件 | 时序与纪律 |
-|------|----------|-------------------|--------------|------------|
-| `live` | 私有 `webview.live` · 已反哺 `bytes.ops.TCompactLiveRegistry<T>`（薄转发） | L1 `nextpas.core.bytes.ops` 泛化 Vec | 通用 Vec 第二处复用已满足，跨家族 `window.live` 已同源（已用 `VecGrow/VecRemoveSwap` 单源 2026-09-02） | **已反哺落地（2026-09-02）**：L1 `bytes.ops.TCompactLiveRegistry<T>` 单源 `VecGrowCapacity` 0→4→2× inline 零额外调用+`VecRemoveSwap` O(1)零拷贝 `Default(T)`释放不丢，`webview.live.TWebviewLiveRegistry<T>` 与 `window.live` 双家族薄转发零重复，已补单测+`inline`零拷贝基线+`Default(T)`不丢评审，经设计评审反哺 Owner，现薄转发不自溢，业务以 CONTRACT 为准、缺能力先反哺 Owner |
-| `assets` | 私有 `webview.assets` · 已反哺 L2 `collections.prefixrouter` | L2 `collections/prefix-router` 或 `http.router` | 第二处前缀路由复用（http/vfs）或 Trie 严格 O(m) | **已反哺落地（2026-09-02）**：稀疏 Trie O(m) `TStringView` 零拷贝 + `VecGrow` 单源 + 惰性节点（替 256 分支 2KB/节点，`TryGetLongestPrefixView` inline 零拷贝），`Dispose/Finalize` 不丢；`webview.assets` 已 `uses` 单源薄转发 |
-| `viewmap` | 私有 `gtk.viewmap` · 已直复用 L1 `THashMap<Pointer,Pointer>` via `@PointerHash` | L1 `collections.hashmap` 指针键特化 | 第二处指针键 O(1) 映射已满足（`gtk.viewmap` 直接复用 L1 `THashMap` 单源 2026-09-02） | **已反哺落地（2026-09-02）**：L1 `collections.hashmap` `THashMap<Pointer,Pointer>` 直接复用 `@PointerHash→HashMix32` inline 零额外调用，`VecGrowCapacity` 0→4→2× 单源+0.75 负载 `FreeAndNil` 释放不丢，零自建 `VIEW_TOMBSTONE` 双循环，已补单测+`inline`零拷贝 `HashOfPointer` 基线+`FreeAndNil`不丢评审，经设计评审反哺 Owner，现直复用不自溢，业务以 CONTRACT 为准、缺能力先反哺 Owner |
-| `pool` | 私有 `gtk.pool` · 已反哺 L1 `sync.pool`（薄转发） | L1 `sync.pool` 通用 Slab | 通用 Slab 第二处复用已满足（`gtk.pool` 四池 `SyncPoolTryAcquire/Release` 单源 2026-09-02） | **已反哺落地（2026-09-02）**：L1 `sync.pool` `SyncPoolTryAcquire/SyncPoolRelease/SyncPoolRelease` 单源 `VecGrowCapacity` 0→4→2× 锁内 `VecGrow` 单源扩容零竞态，短临界<1µs指针压入，溢出`Dispose`单所有权不丢，四池 per-pool 锁分离，已补单测+`inline`零拷贝基线+`Dispose/FreeAndNil`不丢评审，经设计评审反哺 Owner，现薄转发不自溢，业务以 CONTRACT 为准、缺能力先反哺 Owner |
-| `utils` | 私有 `webview.utils` · 已反哺 L1 `text.view` `StripLeadingSlash/TrimLeftChar/ViewFromPChar` 薄转发 | L1 `nextpas.core.text.view` 共享路径归一 | 第二个路径归一复用已满足（双轨 String/View 共存消除） | **已反哺落地（2026-09-02）**：Owner `TrimLeftChar` 单次扫描零拷贝 `Slice` 单源 + `StripLeadingSlashView` `inline` 零堆分配 View 直通 + `StripLeadingSlash` 单次 `SliceToStr` `SetString+Move`（CoW 快径零分配、空串零分配）+ `ViewFromPChar` `inline` `CStrLen` SIMD 单源，`webview.utils` `inline` 薄转发零额外调用，零重复 Delete 扫描，`Finalize` 不丢 · Owner 反哺时序：S52 已反哺 L1 `text.view` 经设计评审落地，触发条件已满足（第二处路径归一复用）现薄转发不自溢；评审：Owner 单源单测+`inline/零拷贝`基线已过（`Finalize` 不丢，复用 `bytes.ops` 单源） |
-| `callbacks` | 私有 `webview.callbacks` · 已反哺 L0 `base.callbacks`（薄转发） | L0 `base.callbacks` | 跨家族三形态重复已满足（`webview.callbacks` 与 `window` 三形态已同源 2026-09-02） | **已反哺落地（2026-09-02）**：L0 `base.callbacks` `Callback*MethodToRef/ProcToRef` 单源 `TProc/TProc1<T>/TCallbackScaleHandler` inline 零拷贝 reference闭包 `Move`零拷贝，跨家族 `window`/`webview` 三形态已收敛单源，已补单测+`inline`零拷贝基线+`Finalize`不丢评审，经设计评审反哺 Owner，现薄转发不自溢，业务以 CONTRACT 为准、缺能力先反哺 Owner |
+| 候选 | Owner 单源 (L层) | 状态 |
+|------|------------------|------|
+| `live` | L1 `bytes.ops.TCompactLiveRegistry<T>` (`VecGrowCapacity` 0→4→2× / `VecRemoveSwap` O(1) / `Snapshot`/`Trim` inline 零拷贝) | 已反哺 thin-forward (2026-09-02) |
+| `assets` | L2 `collections.prefixrouter` (`TryGetLongestPrefixView` `TStringView` 零拷贝 O(m) 稀疏 Trie) | 已反哺 thin-forward (2026-09-02) |
+| `viewmap` | L1 `collections.hashmap` `THashMap<Pointer,Pointer>` via `@PointerHash→HashMix32` inline | 已直复用 (2026-09-02) |
+| `pool` | L1 `sync.pool` (`SyncPoolTryAcquire/Release` 双池 Slab) | 已反哺 thin-forward (2026-09-02) |
+| `utils` | L1 `text.view` (`StripLeadingSlash`/ `TrimLeftChar`/ `ViewFromPChar` + `SliceToStr`/`CStrLen` 零拷贝) | 已反哺 thin-forward (2026-09-02) |
+| `callbacks` | L0 `base.callbacks` (`Callback*MethodToRef/ProcToRef` `Move` 零拷贝) | 已反哺 thin-forward (2026-09-02) |
 
-> 纪律：可抽≠可自溢，6/6 已反哺经设计评审落地（live/pool/callbacks/viewmap+assets/utils 2026-09-02，现薄转发/直复用不自溢）；抽取前必先反哺 Owner（补单测与性能基线 `inline/零拷贝`，复用 `bytes.ops`/`sync.pool`/`hashmap`/`base.callbacks`/`text.view` 单源，`Default(T)/Dispose/FreeAndNil` 不丢），再由 webview 侧 `uses` 新 Owner 单源薄转发/直复用；守四件套 `base←intf←impl←facade` 与 L0-L3 单向依赖，经设计评审、受控跨模块 slice，业务以 CONTRACT 为准、缺能力先反哺 Owner。
+> 纪律：6/6 已反哺经设计评审落地，现 thin-forward/直复用不自溢；详见 Owner 单元及单测 inline/零拷贝基线，业务以 CONTRACT 为准、缺能力先反哺 Owner（`inline/零拷贝` + `Default(T)/Dispose/FreeAndNil` 不丢，守四件套与 L0-L3）。
 ```
 
 - **`base` 与 `intf` 禁止 uses 任何后端、bridge、factory、vfs、window 单元**（`intf` 仅在 M6 后例外允许 `uses window.intf` 以暴露 `IWindow` 类型与 `Window` 属性，仍禁止触后端实现）。

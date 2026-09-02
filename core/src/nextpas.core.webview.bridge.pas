@@ -182,26 +182,62 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.utils,
-  nextpas.core.webview.metrics;
+  nextpas.core.webview.metrics,
+  nextpas.core.platform.thread;
 
 threadvar
   GWebviewBridgeDoc: TJsonDocument;
   GWebviewBridgeDocInited: Boolean;
+  GWebviewBridgeBuilder: TStringBuilder;
+  GWebviewBridgeBuilderInited: Boolean;
 
-{ JsStringLit: JSON Str subset via json owner. }
+var
+  GWebviewBridgeTlsKey: TPlatformTLSKey;
+  GWebviewBridgeTlsKeyInited: Boolean;
+
+{$IFDEF NEXTPAS_WINDOWS}
+procedure WebviewBridgeThreadCleanup(AData: Pointer); stdcall;
+{$ELSE}
+procedure WebviewBridgeThreadCleanup(AData: Pointer); cdecl;
+{$ENDIF}
+begin
+  if GWebviewBridgeDocInited then
+  begin
+    GWebviewBridgeDoc.Done;
+    GWebviewBridgeDocInited := False;
+  end;
+  if GWebviewBridgeBuilderInited then
+  begin
+    GWebviewBridgeBuilder.Done;
+    GWebviewBridgeBuilderInited := False;
+  end;
+end;
+
+function BridgeBuilder: ^TStringBuilder; inline;
+begin
+  if not GWebviewBridgeBuilderInited then
+  begin
+    GWebviewBridgeBuilder.Init(256);
+    GWebviewBridgeBuilderInited := True;
+    if GWebviewBridgeTlsKeyInited then
+      platform_tls_set(GWebviewBridgeTlsKey, Pointer(1));
+  end
+  else
+    GWebviewBridgeBuilder.Clear;
+  Result := @GWebviewBridgeBuilder;
+end;
+
+{ JsStringLit: JSON Str via json owner, threadvar Builder slab reuse, inline zero-copy. }
 function JsStringLit(const AValue: string): string; inline;
 var
-  LB: TStringBuilder;
+  LB: ^TStringBuilder;
   W: TJsonWriter;
 begin
-  LB.Init(SizeUInt(Length(AValue)) + 8);
-  try
-    W.Init(LB);
-    W.Str(AValue);
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  LB := BridgeBuilder();
+  LB^.Reserve(SizeUInt(Length(AValue)) + 8);
+  W.Init(LB^);
+  W.Str(AValue);
+  Result := LB^.ToString;
 end;
 
 function IsWebviewFrameOversized(const AFrameJson: string): Boolean; inline;
@@ -229,13 +265,7 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{ Slab 复用编解码（CONTRACT INV-3）：threadvar TJsonDocument 单例 Slab 复用，
-  bounded by NPW_MAX_FRAME_BYTES 1 MiB（1K+32 节点初容，Parse 内 bytes.ops 单源
-  容量生长，溢出表 sized 析构）；高频 invoke 零重复 Init/Done 堆分配，Parse 复用
-  已分配 Slab（cap 保留，indices/overflow 每帧 sized 清理），避免每帧哈希表与
-  索引重建；Arena 无上界单调增长由 Parse 的按需生长+finalization Trim 阈值有界
-  （1MiB 帧内，cap 收敛后不再生长）；heaptrc0 纯净（finalization Done 定点释放，
-  无共享可变状态跨帧污染）；TStringView 零拷贝，inline 零额外调用。 }
+{ Slab reuse: threadvar Doc/Builder bounded 1 MiB, bytes.ops single source, indices/overflow sized clear, TStringView zero-copy, inline. }
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
 
@@ -301,15 +331,15 @@ var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { Slab 复用：threadvar Doc Init 一次，Parse 复用 Slab 零重复分配；bounded 1MiB 帧内按需生长(bytes.ops 单源)，
-    indices/overflow 每 Parse sized 清理，cap 保留复用，避免每帧哈希表与索引重建及重复堆分配；
-    finalization Done 保证 sized 释放不丢，heaptrc0 纯净；TStringView 零拷贝，inline 零额外调用。 }
+  { Reuse threadvar Doc slab; Parse reuses cap, sized clear indices/overflow. }
   Result := False;
   AFrame := Default(TWebviewFrame);
   if not GWebviewBridgeDocInited then
   begin
     GWebviewBridgeDoc.Init(nil);
     GWebviewBridgeDocInited := True;
+    if GWebviewBridgeTlsKeyInited then
+      platform_tls_set(GWebviewBridgeTlsKey, Pointer(1));
   end;
   if not BridgeParseFrame(AView, GWebviewBridgeDoc, LRoot) then
     Exit;
@@ -333,24 +363,21 @@ end;
 function BuildResolveScript(AId: Int64; const AResultJson: string): string;
 var
   LJson: string;
-  LB: TStringBuilder;
+  LB: ^TStringBuilder;
   W: TJsonWriter;
 begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  LB.Init(SizeUInt(16 + 20 + Length(LJson) + 8));
-  try
-    LB.AppendBytes('__npw.__resolve(', 16);
-    LB.AppendInt(AId);
-    LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LJson);
-    LB.AppendChar(')');
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  LB := BridgeBuilder();
+  LB^.Reserve(SizeUInt(16 + 20 + Length(LJson) + 8));
+  LB^.AppendBytes('__npw.__resolve(', 16);
+  LB^.AppendInt(AId);
+  LB^.AppendChar(',');
+  W.Init(LB^);
+  W.Str(LJson);
+  LB^.AppendChar(')');
+  Result := LB^.ToString;
 end;
 
 { JsonDoubleEscapeToBuilder 薄转发 L1 text.escape Owner 单源（复用 VecWidth SIMD 单源 inline 零拷贝，bytes.ops 单源）；桥侧零重复循环，inline 薄转发零额外调用。 }
@@ -363,52 +390,46 @@ end;
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
-  LB: TStringBuilder;
+  LB: ^TStringBuilder;
   LCodeView, LMsgView: TStringView;
 begin
   LCode := NormalizeInvokeCode(ACode);
   LCodeView := TStringView.FromStr(LCode);
   LMsgView := TStringView.FromStr(AMessage);
-  LB.Init(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
-  try
-    LB.AppendBytes('__npw.__reject(', 15);
-    LB.AppendInt(AId);
-    LB.AppendBytes(',"', 2);
-    LB.AppendBytes('{\"code\":\"', 12);
-    JsonDoubleEscapeToBuilder(LCodeView, LB);
-    LB.AppendBytes('\",\"message\":\"', 17);
-    JsonDoubleEscapeToBuilder(LMsgView, LB);
-    LB.AppendBytes('\"}"', 4);
-    LB.AppendChar(')');
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  LB := BridgeBuilder();
+  LB^.Reserve(SizeUInt(32 + LCodeView.Len * 4 + LMsgView.Len * 4 + 64));
+  LB^.AppendBytes('__npw.__reject(', 15);
+  LB^.AppendInt(AId);
+  LB^.AppendBytes(',"', 2);
+  LB^.AppendBytes('{\"code\":\"', 12);
+  JsonDoubleEscapeToBuilder(LCodeView, LB^);
+  LB^.AppendBytes('\",\"message\":\"', 17);
+  JsonDoubleEscapeToBuilder(LMsgView, LB^);
+  LB^.AppendBytes('\"}"', 4);
+  LB^.AppendChar(')');
+  Result := LB^.ToString;
 end;
 
 function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
-  LB: TStringBuilder;
+  LB: ^TStringBuilder;
   W: TJsonWriter;
 begin
   CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
-  LB.Init(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
-  try
-    LB.AppendBytes('__npw.__emit(', 13);
-    W.Init(LB);
-    W.Str(AEvent);
-    LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LJson);
-    LB.AppendChar(')');
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  LB := BridgeBuilder();
+  LB^.Reserve(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
+  LB^.AppendBytes('__npw.__emit(', 13);
+  W.Init(LB^);
+  W.Str(AEvent);
+  LB^.AppendChar(',');
+  W.Init(LB^);
+  W.Str(LJson);
+  LB^.AppendChar(')');
+  Result := LB^.ToString;
 end;
 
 function NormalizeInvokeCode(const ACode: string): string; inline;
@@ -601,11 +622,26 @@ begin
   Result := FIndex.Count;
 end;
 
+initialization
+  GWebviewBridgeTlsKeyInited :=
+    platform_tls_create_with_destructor(GWebviewBridgeTlsKey,
+      @WebviewBridgeThreadCleanup) = 0;
+
 finalization
   if GWebviewBridgeDocInited then
   begin
     GWebviewBridgeDoc.Done;
     GWebviewBridgeDocInited := False;
+  end;
+  if GWebviewBridgeBuilderInited then
+  begin
+    GWebviewBridgeBuilder.Done;
+    GWebviewBridgeBuilderInited := False;
+  end;
+  if GWebviewBridgeTlsKeyInited then
+  begin
+    platform_tls_destroy_dtor(GWebviewBridgeTlsKey);
+    GWebviewBridgeTlsKeyInited := False;
   end;
 
 end.

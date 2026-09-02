@@ -6,8 +6,8 @@ unit nextpas.core.webview.gtk.shell;
        - 窗口几何 → nextpas.core.window.gtk3 WindowGtkRaw* 12 项 inline 零拷贝单源（见 window.gtk3）
        - 容量/注册表 → bytes.ops VecGrowCapacity 0→4→2× / TCompactLiveRegistry(live窗)+THashSet<Pointer> scheme O(1)哈希 单源 inline 零拷贝（HashOfPointer→HashMix32 单源，与 viewmap 同源，零线性扫描）
        - 日志 → log.intf ILogger 单源分级，NullLogger 零开销
-       性能：inline 薄转发 + 零拷贝 Move，短临界 <1µs，SchemeHash→HashMix32 单源 O(1) 哈希探针（and Mask+线性探测，零除法），ViewHash→HashMix32 单源
-       稳定性：Mutex/RWLock 单所有权，try-finally 释放不丢，keep-alive 与 destroy 回调同构 *}
+       性能：inline 薄转发 + 零拷贝 Move，短临界 <1µs，SchemeHash→HashMix32 单源 O(1) 哈希探针（and Mask+线性探测，零除法）读多写少 RWLock 读并发零单锁热点，ViewHash→HashMix32 单源
+       稳定性：RWLock 单所有权（scheme+live 双 RWLock），try-finally 释放不丢，keep-alive 与 destroy 回调同构 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -40,7 +40,7 @@ procedure ShellLogInit; inline;
 function ShellDebugEnabled: Boolean; inline;
 procedure ShellTrace(const AMsg: string);
 
-function ShellSchemeContextRegistered(ACtx: Pointer): Boolean;
+function ShellSchemeContextRegistered(ACtx: Pointer): Boolean; inline;
 procedure ShellRememberSchemeContext(ACtx: Pointer);
 procedure ShellForgetSchemeContext(ACtx: Pointer);
 
@@ -61,7 +61,7 @@ implementation
 uses
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset,
-  nextpas.core.os.env,
+  nextpas.core.platform.env,
   nextpas.core.webview.live,
   nextpas.core.webview.gtk.viewmap;
 
@@ -76,7 +76,7 @@ var
   GShellLiveWindows: specialize TWebviewLiveRegistry<Pointer> = nil;
   GShellLiveCount: Integer = 0;
   GShellLatestLive: Pointer = nil;
-  GShellSchemeLock: TMutex = nil;
+  GShellSchemeLock: TRWLock = nil;
   GShellLiveLock: TRWLock = nil;
   GShellDebugChecked: Boolean = False;
   GShellDebugEnabled: Boolean = False;
@@ -124,7 +124,7 @@ begin
   if not GShellDebugChecked then
   begin
     GShellDebugChecked := True;
-    GShellDebugEnabled := GetEnv('NPW_GTK_DEBUG') = '1';
+    GShellDebugEnabled := platform_env_get_str('NPW_GTK_DEBUG') = '1';
     if GShellDebugEnabled then
       GShellLogger := TGtkDebugLogger.Create
     else
@@ -147,46 +147,47 @@ begin
     GShellLogger.Debug(AMsg);
 end;
 
-function ShellSchemeContextRegistered(ACtx: Pointer): Boolean;
+function ShellSchemeContextRegistered(ACtx: Pointer): Boolean; inline;
 begin
   // perf: O(1) 哈希探针 via THashSet<Pointer>.Contains(HashOfPointer→HashMix32 单源) inline 零额外调用，and Mask 线性探测零除法，短临界 <1µs 零扫描；热点 SchemeRequest 探测由 O(n) 线性退化恢复 O(1)
-  // 稳定性：Mutex 单所有权 try-finally 释放不丢，nil 守卫保并发安全
-  if GShellSchemeLock <> nil then GShellSchemeLock.Acquire;
+  // perf: 读多写少 → RWLock 读锁并发，突发小文件 scheme 命中零单锁热点，inline 零拷贝短临界 <1µs（零阻塞写锁仅注册路径）；HashOfPointer 单源零二次哈希
+  // 稳定性：RWLock 读单所有权 try-finally ReleaseRead 释放不丢，nil 守卫保并发安全
+  if GShellSchemeLock <> nil then GShellSchemeLock.AcquireRead;
   try
     if (GShellSchemeCtxs <> nil) and (ACtx <> nil) then
       Result := GShellSchemeCtxs.Contains(ACtx)
     else
       Result := False;
   finally
-    if GShellSchemeLock <> nil then GShellSchemeLock.Release;
+    if GShellSchemeLock <> nil then GShellSchemeLock.ReleaseRead;
   end;
 end;
 
 procedure ShellRememberSchemeContext(ACtx: Pointer);
 begin
   // perf: O(1) 哈希插入 via THashSet.Add(HashOfPointer→HashMix32 单源) inline 零额外调用，0.75 负载单源阈值，短临界指针-only
-  // 稳定性：Mutex try-finally 释放不丢，nil 守卫 + 去重 Add 保幂等
+  // 稳定性：RWLock Write 单所有权 try-finally ReleaseWrite 释放不丢，nil 守卫 + 去重 Add 保幂等
   if ACtx = nil then Exit;
-  if GShellSchemeLock <> nil then GShellSchemeLock.Acquire;
+  if GShellSchemeLock <> nil then GShellSchemeLock.AcquireWrite;
   try
     if GShellSchemeCtxs <> nil then
       GShellSchemeCtxs.Add(ACtx);
   finally
-    if GShellSchemeLock <> nil then GShellSchemeLock.Release;
+    if GShellSchemeLock <> nil then GShellSchemeLock.ReleaseWrite;
   end;
 end;
 
 procedure ShellForgetSchemeContext(ACtx: Pointer);
 begin
   // perf: O(1) 哈希删除 via THashSet.Remove(HashOfPointer→HashMix32 单源) 墓碑保探链完整，短临界指针-only
-  // 稳定性：Mutex try-finally 释放不丢，nil 守卫 + 去重 Remove 保幂等，bsTombstone 单哨兵保探链完整
+  // 稳定性：RWLock Write 单所有权 try-finally ReleaseWrite 释放不丢，nil 守卫 + 去重 Remove 保幂等，bsTombstone 单哨兵保探链完整
   if ACtx = nil then Exit;
-  if GShellSchemeLock <> nil then GShellSchemeLock.Acquire;
+  if GShellSchemeLock <> nil then GShellSchemeLock.AcquireWrite;
   try
     if GShellSchemeCtxs <> nil then
       GShellSchemeCtxs.Remove(ACtx);
   finally
-    if GShellSchemeLock <> nil then GShellSchemeLock.Release;
+    if GShellSchemeLock <> nil then GShellSchemeLock.ReleaseWrite;
   end;
 end;
 
@@ -261,7 +262,7 @@ end;
 
 procedure ShellInitLocks; inline;
 var
-  LTmpScheme: TMutex;
+  LTmpScheme: TRWLock;
   LTmpLive: TRWLock;
 begin
   if (GShellSchemeLock <> nil) and (GShellLiveLock <> nil) then Exit;
@@ -271,7 +272,7 @@ begin
     // perf: inline two-phase create-then-publish, zero extra alloc on success, exception-safe publish single point
     // stability: temp guards close leak window if second Create raises after first succeeded, FreeAndNil not lost
     if GShellSchemeLock = nil then
-      LTmpScheme := TMutex.Create;
+      LTmpScheme := TRWLock.Create;
     if GShellLiveLock = nil then
       LTmpLive := TRWLock.Create;
     if LTmpScheme <> nil then

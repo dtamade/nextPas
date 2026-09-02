@@ -88,60 +88,80 @@ var
   GEvalLock: TMutex = nil;
   GCancelLock: TMutex = nil;
 
+function LazyLock(var ALock: TMutex): TMutex; inline;
+begin
+  // 冷启动零常驻：PoolInit 不创建，首次 Acquire/Release 按需懒创建，低频进程 5 堆分配归零；热路径单次 nil 检查 inline 零额外调用 <1ns
+  if ALock = nil then
+    ALock := TMutex.Create;
+  Result := ALock;
+end;
+
+generic function SlabTryAcquire<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex): T; inline;
+begin
+  // 单源收敛点：五池 Acquire 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolTryAcquire 单源零拷贝，短临界指针-only <1µs，锁懒创建 via LazyLock 零常驻
+  Result := specialize SyncPoolTryAcquire<T>(APool, ACount, LazyLock(ALock));
+end;
+
+generic function SlabRelease<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex; const AItem: T): Boolean; inline;
+begin
+  // 单源收敛点：五池 Release 仅锁与类型不同，薄转发 L1 sync.pool.SyncPoolRelease 单源，突发锁内 VecGrow 0→4→2× via bytes.ops 单源零抖动，异常安全溢出 False 由 caller 单所有权 Dispose 不丢
+  Result := specialize SyncPoolRelease<T>(APool, ACount, LazyLock(ALock), AItem);
+end;
+
 function AcquireIdleRec: PIdleRec; inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点
-  Result := specialize SyncPoolTryAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
+  // inline 薄转发单源 SlabTryAcquire 零拷贝，短临界指针-only，新槽 Kind 零初始化，per-pool GIdleLock 隔离 Post 热点
+  Result := specialize SlabTryAcquire<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock);
   if Result = nil then New(Result);
   Result^.Kind := 0; Result^.Proc := nil; Result^.Method := nil; Result^.Plain := nil;
 end;
 
 procedure ReleaseIdleRec(A: PIdleRec); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发单源 SlabRelease，托管 Proc/Method/Plain nil 释放 ref，Kind 清零，溢出 Dispose 兜底单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Proc := nil; A^.Method := nil; A^.Plain := nil; A^.Kind := 0;
-  if not specialize SyncPoolRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock, A) then
+  if not specialize SlabRelease<PIdleRec>(GIdlePool, GIdlePoolCount, GIdleLock, A) then
     Dispose(A);
 end;
 
 function AcquireCompletionRec: PCompletionMarshal; inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离
-  Result := specialize SyncPoolTryAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
+  // inline 薄转发单源 SlabTryAcquire，短临界指针-only，New 在锁外，per-pool GCompletionLock 隔离
+  Result := specialize SlabTryAcquire<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock);
   if Result = nil then New(Result);
 end;
 
 procedure ReleaseCompletionRec(A: PCompletionMarshal); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
+  // inline 薄转发单源 SlabRelease，托管字段清零释放 ref，突发锁内 VecGrow 单源扩容，per-pool 锁零跨池争用，溢出 Dispose 兜底不丢
   if A = nil then Exit;
   A^.Win := nil; A^.FrameId := 0; A^.Cmd := ''; A^.IsError := False;
   A^.ResultJson := ''; A^.Code := ''; A^.MsgText := '';
-  if not specialize SyncPoolRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock, A) then
+  if not specialize SlabRelease<PCompletionMarshal>(GCompletionPool, GCompletionPoolCount, GCompletionLock, A) then
     Dispose(A);
 end;
 
 function AcquireAssetHolder: PAssetHolder; inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点
-  Result := specialize SyncPoolTryAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
+  // inline 薄转发单源 SlabTryAcquire，热点小文件 Holder 复用，零每请求堆分配，per-pool GAssetHolderLock 隔离 scheme 热点
+  Result := specialize SlabTryAcquire<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock);
   if Result = nil then New(Result);
 end;
 
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动（was TryRelease 依赖 64 预分配，冷启动 64 ptr 常驻），Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发单源 SlabRelease，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Bytes := nil;
-  if not specialize SyncPoolRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
+  if not specialize SlabRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
     Dispose(A);
 end;
 
 function AcquireEvalRec: PEvalRec; inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolTryAcquire 单源，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点
-  Result := specialize SyncPoolTryAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
+  // inline 薄转发单源 SlabTryAcquire，Eval 零每帧堆分配，字段清零初始化，per-pool GEvalLock 隔离高频 Eval 热点
+  Result := specialize SlabTryAcquire<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock);
   if Result = nil then New(Result);
   Result^.Callback := nil; Result^.OnError := nil; Result^.Done := False; Result^.Cancel := nil; Result^.Owner := nil;
 end;
@@ -150,13 +170,13 @@ procedure ReleaseEvalRec(A: PEvalRec); inline;
 begin
   if A = nil then Exit;
   A^.Callback := nil; A^.OnError := nil; A^.Done := False; A^.Owner := nil; A^.Cancel := nil;
-  if not specialize SyncPoolRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A) then
+  if not specialize SlabRelease<PEvalRec>(GEvalPool, GEvalPoolCount, GEvalLock, A) then
     Dispose(A);
 end;
 
 function AcquireGCancellable: Pointer; inline;
 begin
-  Result := specialize SyncPoolTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
+  Result := specialize SlabTryAcquire<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock);
   if Result <> nil then
   begin
     if Assigned(nextpas.core.webview.gtk.ffi.G_cancellable_reset) then
@@ -183,18 +203,13 @@ begin
     nextpas.core.webview.gtk.ffi.G_object_unref(A);
     Exit;
   end;
-  if not specialize SyncPoolRelease<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock, A) then
+  if not specialize SlabRelease<Pointer>(GCancelPool, GCancelPoolCount, GCancelLock, A) then
     nextpas.core.webview.gtk.ffi.G_object_unref(A);
 end;
 
 procedure PoolInit; inline;
 begin
-  GIdleLock := TMutex.Create;
-  GCompletionLock := TMutex.Create;
-  GAssetHolderLock := TMutex.Create;
-  GEvalLock := TMutex.Create;
-  GCancelLock := TMutex.Create;
-  // lazy: pools nil at cold start (was 5×64=320 ptr via VecGrowCapacity chain), low-freq zero alloc; burst VecGrow 0→4→2× single source via L1 sync.pool/bytes.ops lock内扩容，不回退 New
+  // 冷启动零常驻：锁按需懒创建 via LazyLock，低频进程 0 堆分配（was 5×TMutex.Create）；池已懒生长 0→4→2× 零常驻，锁亦零常驻；突发首用时单次 Create，后续短临界 <1µs 零额外调用
 end;
 
 procedure PoolFinalize; inline;

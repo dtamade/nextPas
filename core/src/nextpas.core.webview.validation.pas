@@ -55,6 +55,8 @@ procedure CheckWebviewDevServerUrl(const AUrl: string);
 implementation
 
 uses
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.text.view,
   nextpas.core.validation;
@@ -87,24 +89,28 @@ begin
     raise EWebviewInvalidState.Create('Width/Height must be >= 0');
 end;
 
+{ 单源尺寸互斥校验：max>=min 镜像重复收敛至此，L1 bytes.ops 思想同源（零重复分支），inline 薄转发零额外调用 }
+procedure CheckWebviewMinMaxRange(AMinWidth, AMinHeight, AMaxWidth, AMaxHeight: Integer); inline;
+begin
+  // perf: inline 薄转发单源，零重复分支，零额外调用；无堆资源、释放不丢
+  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMaxWidth < AMinWidth) then
+    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
+  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMaxHeight < AMinHeight) then
+    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+end;
+
 procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer); inline;
 begin
   if (AMinWidth < 0) or (AMinHeight < 0) then
     raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMinWidth > AMaxWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMinHeight > AMaxHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewMinMaxRange(AMinWidth, AMinHeight, AMaxWidth, AMaxHeight);
 end;
 
 procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer); inline;
 begin
   if (AMaxWidth < 0) or (AMaxHeight < 0) then
     raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMaxWidth < AMinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMaxHeight < AMinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
+  CheckWebviewMinMaxRange(AMinWidth, AMinHeight, AMaxWidth, AMaxHeight);
 end;
 
 procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string); inline;
@@ -115,8 +121,15 @@ begin
 end;
 
 procedure CheckWebviewInitScript(const AScript: string); inline;
+var
+  LHay: TByteSpan;
+  LNeedle: TByteSpan;
 begin
-  if Pos('__npw', AScript) > 0 then
+  // perf: inline + L1 bytes.ops.TByteSpan single source zero-copy view (PAnsiChar→TByteSpan 无 SetString+Move 分配，常量针 5 字节零拷贝) + L1 bytes.ops.SpanIndexOfSpan 单源 SIMD dispatch (SSE2/AVX2/NEON via nextpas.core.simd.BytesIndexOf, VecWidth 并行, O(n) vs Pos O(n*m) 标量逐字节)，批量 InitScripts 场景零拷贝零分配；stability: 无堆资源，仅抛异常，释放不丢
+  if AScript = '' then Exit;
+  LHay := TByteSpan.Create(PByte(PAnsiChar(AScript)), SizeUInt(Length(AScript)));
+  LNeedle := TByteSpan.Create(PByte(PAnsiChar('__npw')), 5);
+  if SpanIndexOfSpan(LHay, LNeedle) >= 0 then
     raise EWebviewInvalidState.Create(
       'InitScripts must not touch __npw (bridge owns that namespace)');
 end;
