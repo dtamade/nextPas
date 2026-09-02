@@ -1018,6 +1018,10 @@ This still does not represent async Rust such as Hyper/Tokio. Treat it as a
 std-only comparator snapshot and a workload-routing guide for the next
 optimization batch.
 
+## Static file / Range — honest residual (2026-09-06)
+
+`ServeFile` / `ServeDir` / `ServeVfs` use **user-space streaming** (`static.pas:CopyRange` 4K buffer for Range segments, `io.Copy` for whole file; `VFS` embedded slices are zero-copy, file path is buffered copy — **not** kernel `CopyFileRange` zero-copy) with `Accept-Ranges: bytes`, single-range `206` + `Content-Range`, `416` on invalid/multi-range, and `304` conditional precedence. `source-contract` locks `IFile` + `io.Copy` / `CopyRange` and forbids `ReadFile`/`ReadAll` whole-file buffering. `test_http_static` (304/Range/416/smoke) is **functional smoke only** (`heaptrc 0 unfreed`); **no** Go/Rust comparator `bench_static` with frozen `req/s` / `p99` thresholds exists yet. Scale continuous gate remains `bench_server` keepalive `≥0.80× Go` (`run_server_comparison.sh`), **not** static-file throughput. Cross-machine leaderboard claims are forbidden. Planned closure: add `bench_static` + Go `net/http.ServeFile` / Rust `hyper_static` same-harness rows and freeze median thresholds in `ROADMAP.md` before any static scale claim.
+
 ## Optimization Evidence: H1 Fast Path Explicit Keep-Alive
 
 On 2026-06-05 local time, H1 server ingress stopped treating explicit

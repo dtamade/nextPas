@@ -31,7 +31,8 @@ function PunycodeDecode(const AAscii: string): string;
 implementation
 
 uses
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.bytes.ops;
 
 const
   BASE = 36;
@@ -61,8 +62,9 @@ begin
   Result := K + ((BASE - TMIN + 1) * Delta) div (Delta + SKEW);
 end;
 
-function DigitEncode(D: Int64): Char;
+function DigitEncode(D: Int64): Char; inline;
 begin
+  // inline tiny: register only, no alloc; hot path encodes many digits
   if D < 26 then
     Result := Chr(Ord('a') + Integer(D))
   else
@@ -83,46 +85,78 @@ end;
 function PunycodeEncodeCodepoints(const ACps: array of TUnicodeCodepoint;
   const ACount: SizeInt): string;
 var
-  N, Delta, Bias, H, B, M, Q, K, T, I: Int64;
+  N, Delta, Bias, H, B, M, Q, K, T: Int64;
   { i386 的 for 不接受 Int64 控制变量；循环界即数组长度域，SizeInt 等价 }
   CI: SizeInt;
-  Basic: string;
-  OutLen: SizeInt;
   Handled: array of Boolean;
   AllBasic: Boolean;
+  LBuf: string;
+  LLen, LCap: SizeInt;
+  procedure GrowCap(const ANeeded: SizeInt);
+  var
+    LReq, LNewCap: SizeUInt;
+  begin
+    // not inline per red-line 2: while loop in BytesGrowCapacity would bloat I-Cache; single source geometric via bytes.ops
+    if ANeeded <= 0 then Exit;
+    if LLen + ANeeded <= LCap then Exit;
+    LReq := SizeUInt(LLen + ANeeded);
+    LNewCap := nextpas.core.bytes.ops.BytesGrowCapacity(SizeUInt(LCap), LReq);
+    SetLength(LBuf, LNewCap);
+    LCap := SizeInt(LNewCap);
+  end;
+  procedure AppendCharInline(const ACh: Char); inline;
+  begin
+    // inline hot path: single char store zero-copy, no Move; capacity check delegates to bytes.ops single source
+    if LLen >= LCap then
+      GrowCap(1);
+    LBuf[LLen + 1] := ACh;
+    Inc(LLen);
+  end;
 begin
   Result := '';
   if ACount <= 0 then
     Exit;
   SetLength(Handled, ACount);
-  for CI := 0 to ACount - 1 do
-    Handled[CI] := False;
-
-  Basic := '';
   B := 0;
   AllBasic := True;
   for CI := 0 to ACount - 1 do
   begin
     if ACps[CI] < $80 then
     begin
-      Basic := Basic + Chr(ACps[CI]);
       Inc(B);
       Handled[CI] := True;
     end
     else
+    begin
+      Handled[CI] := False;
       AllBasic := False;
+    end;
   end;
   if AllBasic then
   begin
-    { Pure ASCII: Punycode is identity of basic string }
-    Result := Basic;
+    // single SetLength+Move zero-copy O(n) not O(n²); pure ASCII identity
+    SetLength(Result, B);
+    if B > 0 then
+      for CI := 0 to ACount - 1 do
+        Result[CI + 1] := Chr(ACps[CI]);
     Exit;
   end;
 
+  // perf: preallocated buffer via bytes.ops.BytesGrowCapacity single source geometric amortized O(1)
+  // hot AppendCharInline inline single Move zero-copy; GrowCap not inline per red-line 2; final single SetLength trim not inline
+  LLen := 0;
   if B > 0 then
-    Result := Basic + DELIMITER
+    LCap := B + 1 + (ACount - B) * 6
   else
-    Result := '';
+    LCap := (ACount - B) * 6;
+  if LCap < 16 then
+    LCap := 16;
+  SetLength(LBuf, LCap);
+  for CI := 0 to ACount - 1 do
+    if ACps[CI] < $80 then
+      AppendCharInline(Chr(ACps[CI]));
+  if B > 0 then
+    AppendCharInline(DELIMITER);
 
   N := INITIAL_N;
   Delta := 0;
@@ -136,7 +170,10 @@ begin
       if (not Handled[CI]) and (ACps[CI] >= N) and (ACps[CI] < M) then
         M := ACps[CI];
     if M - N > (High(Int64) - Delta) div (H + 1) then
-      Exit(''); { overflow }
+    begin
+      SetLength(LBuf, 0);
+      Exit('');
+    end;
     Inc(Delta, (M - N) * (H + 1));
     N := M;
     for CI := 0 to ACount - 1 do
@@ -145,7 +182,10 @@ begin
       begin
         Inc(Delta);
         if Delta = 0 then
+        begin
+          SetLength(LBuf, 0);
           Exit('');
+        end;
       end;
       if ACps[CI] = N then
       begin
@@ -161,11 +201,11 @@ begin
             T := K - Bias;
           if Q < T then
             Break;
-          Result := Result + DigitEncode(T + ((Q - T) mod (BASE - T)));
+          AppendCharInline(DigitEncode(T + ((Q - T) mod (BASE - T))));
           Q := (Q - T) div (BASE - T);
           Inc(K, BASE);
         end;
-        Result := Result + DigitEncode(Q);
+        AppendCharInline(DigitEncode(Q));
         Bias := Adapt(Delta, H + 1, H = B);
         Delta := 0;
         Inc(H);
@@ -175,6 +215,9 @@ begin
     Inc(Delta);
     Inc(N);
   end;
+  // single SetLength trim to logical length; zero-copy view until here, stability managed string (no leak)
+  SetLength(LBuf, LLen);
+  Result := LBuf;
 end;
 
 function PunycodeDecodeToCodepoints(const AAscii: string;

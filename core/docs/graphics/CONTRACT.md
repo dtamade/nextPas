@@ -143,6 +143,7 @@ end;
 
 - `graphics` L1：仅 `base/math`（+ `mem` 分配器间接），零 `bytes/font` 依赖（`TPath` 不用 `TBytes`）
 - `image/vector/canvas/effect` L2：仅 L0-L1，同层仅 `effect` 单向依赖 `image.base TBitmap`（Stride 64B 承载，已在 `core-module-registry.md` 显式 allowlist `L0-L1 plus same-layer one-way image`，禁止循环），`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
+- `image/vector/canvas/effect` L2：默认仅 L0-L1；`canvas.raster → vector.tess/vector.path + image.base` 为 Registry allowlist 单向缝（`canvas→vector/image`，cycle-gated，bytes.ops 单源 inline/零拷贝，source-contract 门禁），不依赖 `gpu`
 - `gpu.canvas` L3：唯一允许依赖 `gpu.gl` + `platform.dl`
 
 ## 4.1 FPC RTL 零直接依赖（双编译器架构）

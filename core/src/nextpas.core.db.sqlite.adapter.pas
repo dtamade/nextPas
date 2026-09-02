@@ -243,6 +243,12 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
     function ServerVersion: Integer;
@@ -762,6 +768,36 @@ end;
 function TDbSqliteConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := False;   { busy_timeout 是锁等待上限；语句超时被诚实忽略 }
+end;
+
+function TDbSqliteConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbSqliteConnection.CaseSensitiveIdentifiers: Boolean;

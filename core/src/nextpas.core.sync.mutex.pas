@@ -63,7 +63,9 @@ type
 implementation
 
 uses
-  nextpas.core.sync.errors;
+  nextpas.core.sync.errors,
+  nextpas.core.atomic,
+  nextpas.core.platform.thread;
 
 type
   TLockGuardImpl = class(TInterfacedObject, ILockGuard)
@@ -161,25 +163,29 @@ end;
 procedure TFutexMutex.Acquire;
 var
   LOld: Int32;
-  LSpins: Int32;
+  LIter: Int32;
+  LDelay: Int32;
+  LPause: Int32;
 begin
   LOld := InterlockedCompareExchange(FState, STATE_LOCKED, STATE_UNLOCKED);
   if LOld = STATE_UNLOCKED then
     Exit;
-
-  for LSpins := 0 to 39 do
+  // 指数退避 + 自适应让步：避免固定 40 次 PAUSE 的高争用饥饿
+  LDelay := 1;
+  for LIter := 0 to 7 do
   begin
+    for LPause := 1 to LDelay do
+      cpu_pause;
     if FState = STATE_UNLOCKED then
     begin
       LOld := InterlockedCompareExchange(FState, STATE_LOCKED, STATE_UNLOCKED);
       if LOld = STATE_UNLOCKED then
         Exit;
     end;
-    {$IFDEF CPUX86_64}
-    asm
-      pause
-    end;
-    {$ENDIF}
+    if LIter >= 2 then
+      platform_thread_yield;
+    if LDelay < 32 then
+      LDelay := LDelay shl 1;
   end;
 
   while True do

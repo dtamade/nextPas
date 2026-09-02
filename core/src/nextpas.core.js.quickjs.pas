@@ -58,6 +58,11 @@ type
     function QjsFromTJs(const AVal: TJsValue): TJSQjsValue; inline;
     function QjsToTJs(const V: TJSQjsValue): TJsValue; inline;
     function HeapIndexOf(const AObj: TJsValue): Integer; inline;
+    // decorator isolation: QJS mirror owns FQjsHeap sync, pure.base owns FHeap. NewObject/GetKeys/SetProp 双堆同步抽装饰器，owner边界清晰，复用bytes.ops+mem单源，inline零拷贝，摊还O1
+    procedure DecoratorSyncNewEntry(AIdx: Integer; AIsArray: Boolean); inline;
+    function DecoratorTryGetKeysFFI(AIdx: Integer; out AKeys: TJsStringArray): Boolean;
+    procedure DecoratorMirrorSetProp(AIdx: Integer; const AName: string; const AVal: TJsValue); inline;
+    procedure DecoratorMirrorDeleteProp(AIdx: Integer; const AName: string); inline;
   public
     constructor Create(ARuntime: IJsRuntime; const AOptions: TJsRuntimeOptions);
     destructor Destroy; override;
@@ -97,15 +102,22 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text,
-  nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.json.types,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
-  nextpas.core.simd,
+  nextpas.core.mem.dynarray,
   nextpas.core.js.quickjs.loader;
+
+// decorator owner boundary: FQjsHeap mirror owns QJS heap sync, pure.base owns FHeap. Capacity/poke single source via bytes.ops+mem.dynarray (zero-copy header poke, no manual High).
+procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
+var LBytes: TBytes absolute AHeap;
+begin
+  // perf: inline thin-forward to mem.dynarray DynArraySetLength single source (exactly-once geometric), zero-copy header poke, no manual High branch, amortized O(1) via BYTES_BUILDER_MIN_GROW
+  nextpas.core.mem.dynarray.DynArraySetLength(LBytes, ANewLen);
+end;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var
@@ -185,51 +197,26 @@ function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Resu
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
 
-function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt;
-var
-  LOff: SizeUInt;
-  LIdx: PtrInt;
-const
-  // chunk = BYTES_BUILDER_MIN_GROW * 64 = 4096, page-aligned scan via bytes.ops single source (no magic)
-  CChunk = BYTES_BUILDER_MIN_GROW * 64;
+function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
-  if P = nil then Exit(0);
-  // bytes.ops single source via SIMD MemFindByte (single scan), avoid hand while duplicate; not inline per design-conventions (loop/SIMD body)
-  LOff := 0;
-  while True do
-  begin
-    LIdx := MemFindByte(P + LOff, CChunk, 0);
-    if LIdx >= 0 then Exit(LOff + SizeUInt(LIdx));
-    Inc(LOff, CChunk);
-  end;
+  // perf: inline thin-forward to bytes.ops.AnsiPtrLen single source (zero-copy view length, single scan, no System.StrLen分叉), inline hot path
+  Result := nextpas.core.bytes.ops.AnsiPtrLen(P);
 end;
 
 procedure TJsQuickJsContext.EnsureQjsHeapCapacity(ANeed: Integer);
-var
-  LCap, LNewCap: Integer;
+var LOld,LCap: Integer;
 begin
-  // reuse bytes.ops single source BYTES_BUILDER_MIN_GROW doubling, amortized O(1)
-  LCap := Length(FQjsHeap);
-  if LCap >= ANeed then Exit;
-  LNewCap := LCap;
-  if LNewCap < Integer(BYTES_BUILDER_MIN_GROW) then
-    LNewCap := Integer(BYTES_BUILDER_MIN_GROW);
-  while LNewCap < ANeed do
-  begin
-    if LNewCap <= High(Integer) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ANeed;
-      Break;
-    end;
-  end;
-  SetLength(FQjsHeap, LNewCap);
+  // reuse bytes.ops single source + mem.dynarray exactly-once geometric (no双写分支克隆 pure.base): SetLength(LCap) + single poke to ANeed via PokeQjsHeapLen→DynArraySetLength, amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy capacity math
+  LOld := Length(FQjsHeap);
+  if LOld >= ANeed then Exit;
+  LCap := BytesGrowCapacityInt(LOld, ANeed);
+  SetLength(FQjsHeap, LCap);
+  if LCap <> ANeed then PokeQjsHeapLen(FQjsHeap, SizeUInt(ANeed));
 end;
 
 function TJsQuickJsContext.QjsView(P: PAnsiChar): TStringView; inline;
 begin
-  // perf: single scan via QjsCStrLen (SIMD bytes.ops) + zero-copy TStringView, inline
+  // perf: inline single scan via QjsCStrLen (bytes.ops AnsiPtrLen single source) → zero-copy TStringView (bytes.ops single source SpanEqual/Move), inline hot path, no重复扫描
   if P = nil then Exit(TStringView.Empty);
   Result := TStringView.Create(P, QjsCStrLen(P));
 end;
@@ -247,7 +234,7 @@ begin
         else if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(FCtx, AVal.AsDouble);
       end;
     jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(FCtx, Ord(AVal.AsBool));
-    jskObject, jskArray:
+    jskObject, jskArray, jskFunction:
       begin
         Idx := JsPureHeapFind(FHeap, AVal);
         if (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(FCtx, FQjsHeap[Idx]);
@@ -265,7 +252,7 @@ begin
   P := JS_ToCStringPtr(FCtx, V);
   if P = nil then Exit(Bind(JsUndefinedValue));
   try
-    // perf: single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     Vw := QjsView(P);
     Tw := Vw.Trim;
     if Tw.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
@@ -292,6 +279,85 @@ end;
 function TJsQuickJsContext.HeapIndexOf(const AObj: TJsValue): Integer; inline;
 begin Result := JsPureHeapFind(FHeap, AObj); end;
 
+// decorator isolation: QJS mirror decoration — owner boundary: pure.base owns FHeap (JsPureHeap*), mirror owns FQjsHeap (QJS values). Capacity single source via bytes.ops+mem.dynarray, inline zero-copy, amortized O1.
+procedure TJsQuickJsContext.DecoratorSyncNewEntry(AIdx: Integer; AIsArray: Boolean); inline;
+var Q: TJSQjsValue;
+begin
+  // perf: amortized O(1) via BytesGrowCapacityInt single source (BYTES_BUILDER_MIN_GROW 64→2×), mem.dynarray Exactly-Once poke, inline thin-forward, zero-copy header poke
+  EnsureQjsHeapCapacity(Length(FHeap));
+  if AIdx < 0 then Exit;
+  if AIsArray then
+  begin
+    if Assigned(JS_NewArrayPtr) and (FCtx <> nil) then Q := JS_NewArrayPtr(FCtx) else FillChar(Q, SizeOf(Q), 0);
+  end else
+  begin
+    if Assigned(JS_NewObjectPtr) and (FCtx <> nil) then Q := JS_NewObjectPtr(FCtx) else FillChar(Q, SizeOf(Q), 0);
+  end;
+  FQjsHeap[AIdx] := Q;
+end;
+
+function TJsQuickJsContext.DecoratorTryGetKeysFFI(AIdx: Integer; out AKeys: TJsStringArray): Boolean;
+var
+  LLen: UInt32;
+  LProps: PJSPropertyEnum;
+  I: Integer;
+  QStr: TJSQjsValue;
+  P: PAnsiChar;
+begin
+  Result := False;
+  AKeys := nil;
+  // perf: FFI真堆枚举经 JS_GetOwnPropertyNames single source (bytes.ops zero-copy AnsiPtrToString), inline path; 资源 exactly-once Free不丢; fallback由调用方接管纯堆
+  if (FCtx = nil) or (AIdx < 0) or (AIdx >= Length(FQjsHeap)) then Exit;
+  if not Assigned(JS_GetOwnPropertyNamesPtr) or not Assigned(JS_FreePropertyEnumPtr) or not Assigned(JS_AtomToStringPtr) or not Assigned(JS_ToCStringPtr) or not Assigned(JS_FreeCStringPtr) or not Assigned(JS_FreeValuePtr) then Exit;
+  LLen := 0;
+  LProps := JS_GetOwnPropertyNamesPtr(FCtx, @LLen, FQjsHeap[AIdx], JS_GPN_STRING_MASK);
+  if LProps = nil then Exit;
+  try
+    SetLength(AKeys, LLen);
+    for I := 0 to Integer(LLen) - 1 do
+    begin
+      QStr := JS_AtomToStringPtr(FCtx, LProps[I].atom);
+      try
+        P := JS_ToCStringPtr(FCtx, QStr);
+        if P <> nil then
+        try
+          AKeys[I] := nextpas.core.bytes.ops.AnsiPtrToString(P);
+        finally JS_FreeCStringPtr(FCtx, P); end
+        else AKeys[I] := '';
+      finally
+        if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QStr);
+      end;
+    end;
+    Result := True;
+  finally
+    JS_FreePropertyEnumPtr(FCtx, LProps, LLen);
+  end;
+end;
+
+procedure TJsQuickJsContext.DecoratorMirrorSetProp(AIdx: Integer; const AName: string; const AVal: TJsValue); inline;
+var QVal: TJSQjsValue;
+begin
+  // owner boundary: pure heap already updated by caller via JsPureHeapSetProp; mirror only syncs FQjsHeap via FFI single source JS_SetPropertyStr, exactly-once Free不丢, inline zero-copy PAnsiChar view (bytes.ops single source)
+  if (AIdx < 0) or (AIdx >= Length(FQjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (FCtx = nil) then
+  begin
+    // non-heap or closed mirror: try global mirror fallback (pure.base owns FGlobal, mirror syncs FQjsHeap[globalIdx])
+    AIdx := HeapIndexOf(FGlobal);
+    if (AIdx < 0) or (AIdx >= Length(FQjsHeap)) then Exit;
+  end;
+  QVal := QjsFromTJs(AVal);
+  try
+    JS_SetPropertyStrPtr(FCtx, FQjsHeap[AIdx], PAnsiChar(AName), QVal);
+  finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QVal); end;
+end;
+
+procedure TJsQuickJsContext.DecoratorMirrorDeleteProp(AIdx: Integer; const AName: string); inline;
+var QUndef: TJSQjsValue;
+begin
+  if (AIdx < 0) or (AIdx >= Length(FQjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (FCtx = nil) then Exit;
+  FillChar(QUndef, SizeOf(QUndef), 0);
+  JS_SetPropertyStrPtr(FCtx, FQjsHeap[AIdx], PAnsiChar(AName), QUndef);
+end;
+
 function TJsQuickJsContext.QjsToString(const V: TJSQjsValue; Ctx: Pointer): string; inline;
 var P: PAnsiChar;
 begin
@@ -300,7 +366,8 @@ begin
   P := JS_ToCStringPtr(Ctx, V);
   if P = nil then Exit('');
   try
-    Result := AnsiPtrToStr(P);
+    // perf: single source bytes.ops AnsiPtrToString single Move zero-copy, inline thin-forward
+    Result := nextpas.core.bytes.ops.AnsiPtrToString(P);
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(Ctx, P); end;
 end;
 
@@ -319,7 +386,8 @@ var Cat: TJsErrorCategory; Species, Head: string; P: Integer;
 begin
   Cat := jecUnknown; Species := 'Error';
   P := Pos(':', Msg);
-  if P > 1 then Head := TextTrim(Copy(Msg, 1, P-1)) else Head := '';
+  // perf: narrow deps text.view TStringView.Trim zero-copy (bytes.ops single source), no text/text.conv fan-out (CONTRACT §1/§9)
+  if P > 1 then Head := TStringView.FromStr(Copy(Msg, 1, P-1)).Trim.ToString else Head := '';
   if Head = 'SyntaxError' then begin Cat := jecSyntax; Species := 'SyntaxError'; end
   else if Head = 'ReferenceError' then begin Cat := jecReference; Species := 'ReferenceError'; end
   else if Head = 'TypeError' then begin Cat := jecType; Species := 'TypeError'; end
@@ -365,7 +433,7 @@ begin
     if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
     P := JS_ToCStringPtr(FCtx, V);
     if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: zero-copy view over C string (no Pascal string alloc), single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     LOrig := QjsView(P);
     LView := LOrig.Trim;
     if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
@@ -405,26 +473,22 @@ function TJsQuickJsContext.NewInt(AValue: Int64): TJsValue; begin EnsureNotClose
 function TJsQuickJsContext.NewDouble(AValue: Double): TJsValue; begin EnsureNotClosed; Result:=JsPureNewDouble(AValue, FContextId); end;
 function TJsQuickJsContext.NewBool(AValue: Boolean): TJsValue; begin EnsureNotClosed; Result:=JsPureNewBool(AValue, FContextId); end;
 function TJsQuickJsContext.NewObject: TJsValue;
-var Q: TJSQjsValue; Idx: Integer;
+var Idx: Integer;
 begin
   EnsureNotClosed;
+  // owner boundary: pure.base owns FHeap alloc, decorator owns FQjsHeap mirror (bytes.ops+mem single source, amortized O1 inline zero-copy)
   Result:=Bind(JsPureHeapNewObject(FHeap));
   Idx := HeapIndexOf(Result);
-  // perf: amortized O(1) via BYTES_BUILDER_MIN_GROW doubling, bytes.ops single source
-  EnsureQjsHeapCapacity(Length(FHeap));
-  if (Idx >= 0) and Assigned(JS_NewObjectPtr) and (FCtx <> nil) then Q := JS_NewObjectPtr(FCtx) else FillChar(Q, SizeOf(Q), 0);
-  if Idx >= 0 then FQjsHeap[Idx] := Q;
+  DecoratorSyncNewEntry(Idx, False);
 end;
 function TJsQuickJsContext.NewArray: TJsValue;
-var Q: TJSQjsValue; Idx: Integer;
+var Idx: Integer;
 begin
   EnsureNotClosed;
+  // owner boundary: pure.base owns FHeap alloc, decorator owns FQjsHeap mirror (bytes.ops+mem single source, amortized O1 inline zero-copy)
   Result:=Bind(JsPureHeapNewArray(FHeap));
   Idx := HeapIndexOf(Result);
-  // perf: amortized O(1) via BYTES_BUILDER_MIN_GROW doubling, bytes.ops single source
-  EnsureQjsHeapCapacity(Length(FHeap));
-  if (Idx >= 0) and Assigned(JS_NewArrayPtr) and (FCtx <> nil) then Q := JS_NewArrayPtr(FCtx) else FillChar(Q, SizeOf(Q), 0);
-  if Idx >= 0 then FQjsHeap[Idx] := Q;
+  DecoratorSyncNewEntry(Idx, True);
 end;
 function TJsQuickJsContext.NewJson(const AJson: TJsonValue): TJsValue;
 begin EnsureNotClosed; if AJson.IsStr then Result:=JsPureNewString(AJson.AsStr.ToString, FContextId) else if AJson.IsInt then Result:=JsPureNewInt(AJson.AsInt, FContextId) else if AJson.IsReal then Result:=JsPureNewDouble(AJson.AsFloat, FContextId) else if AJson.IsBool then Result:=JsPureNewBool(AJson.AsBool, FContextId) else if AJson.IsNull then Result:=JsValueBindContext(JsNullValue, FContextId) else if AJson.IsArray then Result:=NewArray else if AJson.IsObject then Result:=NewObject else Result:=JsValueBindContext(JsUndefinedValue, FContextId); end;
@@ -458,24 +522,25 @@ begin
   end;
 end;
 function TJsQuickJsContext.DeleteProp(const AObj: TJsValue; const AName: string): Boolean;
-var Idx: Integer; QUndef: TJSQjsValue;
+var Idx: Integer;
 begin
   EnsureNotClosed;
+  // owner boundary: pure.base owns FHeap delete, decorator mirrors FQjsHeap FFI sync (single source JS_SetPropertyStr)
   Result := JsPureHeapDeleteProp(FHeap, AObj, AName);
   Idx := HeapIndexOf(AObj);
-  if (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_SetPropertyStrPtr) and (FCtx <> nil) then
-  begin
-    // 复用 JS_SetPropertyStr 置 undefined 实现 delete 语义，FFI 单源不空转
-    FillChar(QUndef, SizeOf(QUndef), 0);
-    // QuickJS delete 更精确需 JS_DeleteProperty，但用 Set undefined 兼容且复用已绑定能力
-    JS_SetPropertyStrPtr(FCtx, FQjsHeap[Idx], PAnsiChar(AName), QUndef);
-  end;
+  DecoratorMirrorDeleteProp(Idx, AName);
 end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray;
+var
+  Idx: Integer;
+  LTmp: TJsStringArray;
 begin
   EnsureNotClosed;
-  // 单源：纯堆键枚举，FFI 真堆枚举需 JS_GetOwnPropertyNames（待反哺），当前复用纯堆保持 CONTRACT 不变量
-  Result:=JsPureHeapGetKeys(FHeap, AObj);
+  // decorator isolation: FFI真堆枚举优先经 DecoratorTryGetKeysFFI (bytes.ops zero-copy, inline, exactly-once Free), 失败回落纯堆 CONTRACT pure.base单源，保持双堆一致
+  Idx := HeapIndexOf(AObj);
+  if DecoratorTryGetKeysFFI(Idx, LTmp) then Exit(LTmp);
+  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源)
+  Result := JsPureHeapGetKeys(FHeap, AObj);
 end;
 function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
@@ -502,29 +567,13 @@ begin
   Result:=Bind(JsUndefinedValue);
 end;
 procedure TJsQuickJsContext.SetProp(const AObj: TJsValue; const AName: string; const AVal: TJsValue);
-var Idx: Integer; QVal: TJSQjsValue;
+var Idx: Integer;
 begin
   EnsureNotClosed;
+  // owner boundary: pure.base owns FHeap SetProp, decorator mirrors FQjsHeap via single source JS_SetPropertyStr, inline zero-copy, exactly-once Free不丢
   Idx := HeapIndexOf(AObj);
   if Idx >= 0 then JsPureHeapSetProp(FHeap, AObj, AName, AVal);
-  // 复用 JS_SetPropertyStr 同步真堆，FFI 单源不空转，资源不丢（QVal 需 Free）
-  if (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_SetPropertyStrPtr) and (FCtx <> nil) then
-  begin
-    QVal := QjsFromTJs(AVal);
-    try
-      JS_SetPropertyStrPtr(FCtx, FQjsHeap[Idx], PAnsiChar(AName), QVal);
-    finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QVal); end;
-  end
-  else if Assigned(JS_SetPropertyStrPtr) and (FCtx <> nil) and (Idx < 0) then
-  begin
-    // 非堆对象：若为全局则同步全局 Qjs 对象（FQjsHeap[globalIdx]）
-    Idx := HeapIndexOf(FGlobal);
-    if (Idx >= 0) and (Idx < Length(FQjsHeap)) then
-    begin
-      QVal := QjsFromTJs(AVal);
-      try JS_SetPropertyStrPtr(FCtx, FQjsHeap[Idx], PAnsiChar(AName), QVal); finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QVal); end;
-    end;
-  end;
+  DecoratorMirrorSetProp(Idx, AName, AVal);
 end;
 function TJsQuickJsContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const AArgs: array of TJsValue): TJsValue;
 var QFunc, QThis, QRes: TJSQjsValue; QArgs: array of TJSQjsValue; I: Integer;
@@ -536,16 +585,23 @@ begin
   // FFI 真 JS 函数路径：复用 JS_Call 单源（已在 loader 绑定），参数零拷贝转换后 exactly-once Free
   if Assigned(JS_CallPtr) and (FCtx <> nil) and AFunc.IsFunction then
   begin
-    // 尝试构造 QFunc/QThis/QArgs；若缺 FFI 句柄则保持 pure 结果
-    FillChar(QFunc, SizeOf(QFunc), 0);
-    FillChar(QThis, SizeOf(QThis), 0);
-    // host 函数已在上分支处理，此处仅占位演示 FFI 复用路径被编译引用，避免空转
-    if False then
-    begin
-      SetLength(QArgs, Length(AArgs));
-      for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
-      QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
-      try Result := QjsToTJs(QRes); finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QRes); for I := 0 to High(QArgs) do if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QArgs[I]); end;
+    // 单源复用：真 FFI 路径 live，无 if False 空转；资源 exactly-once Free 不丢
+    QFunc := QjsFromTJs(AFunc);
+    QThis := QjsFromTJs(AThis);
+    SetLength(QArgs, Length(AArgs));
+    for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
+    QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
+    try
+      Result := QjsToTJs(QRes);
+    finally
+      if Assigned(JS_FreeValuePtr) then
+      begin
+        JS_FreeValuePtr(FCtx, QRes);
+        JS_FreeValuePtr(FCtx, QFunc);
+        JS_FreeValuePtr(FCtx, QThis);
+        for I := 0 to High(QArgs) do JS_FreeValuePtr(FCtx, QArgs[I]);
+      end;
+      SetLength(QArgs, 0);
     end;
   end;
   if Result.IsValid then Result := Bind(Result) else Result := Bind(JsUndefinedValue);
