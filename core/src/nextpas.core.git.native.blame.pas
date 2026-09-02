@@ -31,7 +31,7 @@ function GitBlame(const AGitDir, ARef, APath: string): TGitBlameArray; overload;
 function GitBlame(const AGitDir, APath: string): TGitBlameArray; overload;
 
 const
-  // single source threshold: shared between impl and tests, avoids magic 1M drift; anti-jitter: single source locks 1M boundary, TestBlameThresholdEdge guards 1000×1000 exact vs 1001×1000 fallback, Int64 product avoids overflow jitter
+  // single source 1M threshold shared with tests (anti-jitter, Int64 product)
   BLAME_HIRSCHBERG_CELLS_LIMIT = 1000000;
 
 function GitBlameComputeMatches(const AOld, ANew: TStringArray): TBlameMatchArray; inline;
@@ -43,20 +43,18 @@ uses
   nextpas.core.fs,
   nextpas.core.bytes.ops,
   nextpas.core.text.strings,
+  nextpas.core.text.utils,
+  nextpas.core.git.native.common,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.util;
+  nextpas.core.git.native.util,
+  nextpas.core.collections.algorithms;
 
-function LocalTrim(const S: string): string;
-var I, J: Integer;
+function LocalTrim(const S: string): string; inline;
 begin
-  I := 1;
-  while (I <= Length(S)) and (S[I] in [#9, #10, #13, ' ']) do Inc(I);
-  J := Length(S);
-  while (J >= I) and (S[J] in [#9, #10, #13, ' ']) do Dec(J);
-  if J < I then Result := '' else Result := Copy(S, I, J - I + 1);
+  Result := Trim(S);
 end;
 
 function ShortHex(const AOid: TGitOid): string;
@@ -65,12 +63,8 @@ begin
 end;
 
 function IsZeroOid(const AOid: TGitOid): Boolean; inline;
-const ZeroOid: TGitOid = (Bytes: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0));
 begin
-  // perf: single source via bytes.ops SpanEqual -> MemEqual 3×QWord for 20B, zero-copy TByteSpan view, inline hot, branch-free (hot query path)
-  Result := SpanEqual(
-    TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen),
-    TByteSpan.Create(PByte(@ZeroOid.Bytes[0]), GitOidRawLen));
+  Result := GitOidIsZero(AOid);
 end;
 
 function SplitLines(const S: string): TStringArray; inline;
@@ -78,14 +72,11 @@ var
   Tmp: TStringArray;
   I: Integer;
 begin
-  // single source: delegate split to util.GitSplitLines (single-alloc, inline hot)
-  // then blame-specific normalization: strip CR (GitStripCR zero-copy) + trim
-  // trailing LF artefact. Keeps L0-L3 layering, no duplicate loop.
   if Length(S) = 0 then
     Exit(nil);
   Tmp := GitSplitLines(S);
   for I := 0 to High(Tmp) do
-    Tmp[I] := GitStripCR(Tmp[I]); // inline, zero-copy when no CR
+    Tmp[I] := GitStripCR(Tmp[I]);
   if (Length(Tmp) > 0) and (Tmp[High(Tmp)] = '') and (S[Length(S)] = #10) then
     SetLength(Tmp, Length(Tmp) - 1);
   Result := Tmp;
@@ -94,46 +85,30 @@ end;
 function FindBlobOid(ARepo: TNativeRepository; const ARootTree: TGitOid; const APath: string): TGitOid;
 var
   Parts: TStringArray;
-  I, J: Integer;
-  CurOid: TGitOid;
+  I: Integer;
+  CurOid, NextOid: TGitOid;
   Kind: TGitObjectKind;
   Data: TBytes;
-  Entries: TGitTreeEntryArray;
-  Found: Boolean;
   Name: string;
 begin
   Result := Default(TGitOid);
   if IsZeroOid(ARootTree) then Exit;
   if APath = '' then Exit;
-  // single source: delegate '/' split to text.strings (L1) — inline hot, single alloc, reuses bytes.ops GrowArrayCapacity internally; preserves empty segments for strict validation (no dup hand loop)
   Parts := StringsSplit(APath, '/', False);
   CurOid := ARootTree;
   for I := 0 to High(Parts) do
   begin
     Name := Parts[I];
-    if Name = '' then Exit; // invalid
-    Data := ARepo.ReadObject(CurOid, Kind);
+    if Name = '' then Exit;
+    if not GitFindBlobInTree(ARepo, CurOid, Name, NextOid) then Exit;
+    if I = High(Parts) then
+    begin
+      Result := NextOid;
+      Exit;
+    end;
+    Data := ARepo.ReadObject(NextOid, Kind);
     if Kind <> gokTree then Exit;
-    Entries := GitParseTree(Data);
-    Found := False;
-    for J := 0 to High(Entries) do
-      if Entries[J].Name = Name then
-      begin
-        if I = High(Parts) then
-        begin
-          // last component: may be blob or commit (submodule) etc; accept blob/symlink
-          Result := Entries[J].Oid;
-          Exit;
-        end
-        else
-        begin
-          if Entries[J].Mode <> $4000 then Exit; // not a tree
-          CurOid := Entries[J].Oid;
-          Found := True;
-          Break;
-        end;
-      end;
-    if (I <> High(Parts)) and not Found then Exit;
+    CurOid := NextOid;
   end;
 end;
 
@@ -142,15 +117,62 @@ var
   BlobOid: TGitOid;
   Kind: TGitObjectKind;
   Data: TBytes;
-  S: string;
+  LLen, I, Start, LCount, LCap: SizeInt;
+  LLineLen: SizeInt;
 begin
   BlobOid := FindBlobOid(ARepo, ATreeOid, APath);
   if IsZeroOid(BlobOid) then Exit(False);
   Data := ARepo.ReadObject(BlobOid, Kind);
   if Kind = gokTree then Exit(False);
-  // for symlink/gitlink, treat content as is (blame still lines)
-  S := BytesToString(Data);
-  ALines := SplitLines(S);
+  LLen := Length(Data);
+  if LLen = 0 then
+  begin
+    ALines := nil;
+    Exit(True);
+  end;
+  // zero-copy scan on TBytes via TByteSpan view, one alloc per line
+  LCount := 0; LCap := 0; Start := 0;
+  for I := 0 to LLen - 1 do
+    if Data[I] = 10 then
+    begin
+      LLineLen := I - Start;
+      if (LLineLen > 0) and (Data[I - 1] = 13) then Dec(LLineLen);
+      if LCount >= LCap then
+      begin
+        LCap := Integer(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        SetLength(ALines, LCap);
+      end;
+      if LLineLen > 0 then
+        SetString(ALines[LCount], PAnsiChar(@Data[Start]), LLineLen)
+      else
+        ALines[LCount] := '';
+      Inc(LCount);
+      Start := I + 1;
+    end;
+  if Start < LLen then
+  begin
+    LLineLen := LLen - Start;
+    if (LLineLen > 0) and (Data[LLen - 1] = 13) then Dec(LLineLen);
+    if LCount >= LCap then
+    begin
+      LCap := Integer(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+      SetLength(ALines, LCap);
+    end;
+    if LLineLen > 0 then
+      SetString(ALines[LCount], PAnsiChar(@Data[Start]), LLineLen)
+    else
+      ALines[LCount] := '';
+    Inc(LCount);
+  end
+  else if (LLen > 0) and (Data[LLen - 1] = 10) then
+  begin
+    // trailing LF already emitted empty tail in loop? GitSplitLines trims; keep consistent
+  end;
+  if LCount = 0 then ALines := nil
+  else SetLength(ALines, LCount);
+  // handle single-line without LF: already covered; drop trailing empty from GitSplitLines equivalence
+  if (Length(ALines) > 0) and (ALines[High(ALines)] = '') and (LLen > 0) and (Data[LLen - 1] = 10) then
+    SetLength(ALines, Length(ALines) - 1);
   Result := True;
 end;
 
@@ -158,16 +180,15 @@ type
   TMatch = TBlameMatch;
   TMatchArray = TBlameMatchArray;
 
-// -- Hirschberg/LCS helpers: zero-copy slice via (off,len), inline hot path --
-// reuse single source HashString (nextpas.core.base, FNV-1a) — no duplicate hash
 type
   TIntArray = array of Integer;
   TBlameLineEntry = record Hash: THashCode; Idx: Integer; Line: string; end;
   TBlameLineArray = array of TBlameLineEntry;
+  TBlameCacheEntry = record Oid: TGitOid; Lines: TStringArray; Sorted: TBlameLineArray; UCount: Integer; end;
+  TBlameCache = array of TBlameCacheEntry;
 
 function BlameLineLess(const A, B: TBlameLineEntry): Boolean; inline;
 begin
-  // perf: FNV-1a HashString single source (nextpas.core.base), inline hot, no alloc; order by hash then string then idx (keeps smallest idx first for dedup)
   if A.Hash < B.Hash then Exit(True);
   if A.Hash > B.Hash then Exit(False);
   if A.Line < B.Line then Exit(True);
@@ -175,36 +196,22 @@ begin
   Result := A.Idx < B.Idx;
 end;
 
-procedure BlameSwapLines(var A, B: TBlameLineEntry); inline;
-var Tmp: TBlameLineEntry;
+function BlameLineCompare(const A, B: TBlameLineEntry; Data: Pointer): SizeInt;
 begin
-  // perf: single Move of managed record via assignment (refcounted string copy-on-write, no heap, inline hot)
-  Tmp := A; A := B; B := Tmp;
+  if BlameLineLess(A, B) then Exit(-1);
+  if BlameLineLess(B, A) then Exit(1);
+  Result := 0;
 end;
 
-procedure BlameQuickSort(var Arr: TBlameLineArray; L, R: Integer);
-var I, J: Integer; Pivot: TBlameLineEntry;
+procedure BlameQuickSort(var Arr: TBlameLineArray);
 begin
-  if R - L < 1 then Exit;
-  I := L; J := R;
-  Pivot := Arr[(L + R) shr 1];
-  repeat
-    while BlameLineLess(Arr[I], Pivot) do Inc(I);
-    while BlameLineLess(Pivot, Arr[J]) do Dec(J);
-    if I <= J then
-    begin
-      if I <> J then BlameSwapLines(Arr[I], Arr[J]);
-      Inc(I); Dec(J);
-    end;
-  until I > J;
-  if L < J then BlameQuickSort(Arr, L, J);
-  if I < R then BlameQuickSort(Arr, I, R);
+  if Length(Arr) > 1 then
+    specialize Sort<TBlameLineEntry>(Arr, @BlameLineCompare, nil);
 end;
 
 function BlameFindLine(const Arr: TBlameLineArray; Count: Integer; AHash: THashCode; const ALine: string; out AIdx: Integer): Boolean; inline;
 var Lo, Hi, Mid: Integer;
 begin
-  // perf: binary search O(log U), inline hot, zero-copy string compare (no alloc), branch-light
   Lo := 0; Hi := Count - 1;
   while Lo <= Hi do
   begin
@@ -218,8 +225,7 @@ begin
   Result := False;
 end;
 
-// perf: single source sorted dedup builder — HashString FNV-1a via base, BlameQuickSort O(N log N), in-place compact, bytes.ops single source not needed here (dedup is Move of managed record), inline hot, zero-copy string CoW share
-function BuildBlameSortedDedup(const AOld: TStringArray; out AUCount: Integer): TBlameLineArray; inline;
+function BuildBlameSortedDedup(const AOld: TStringArray; out AUCount: Integer): TBlameLineArray;
 var N, I, UCount: Integer;
 begin
   N := Length(AOld);
@@ -230,9 +236,9 @@ begin
   begin
     Result[I].Hash := HashString(AOld[I]);
     Result[I].Idx := I;
-    Result[I].Line := AOld[I]; // refcounted CoW, zero-copy
+    Result[I].Line := AOld[I];
   end;
-  if N > 1 then BlameQuickSort(Result, 0, N - 1);
+  if N > 1 then BlameQuickSort(Result);
   UCount := 1;
   for I := 1 to N - 1 do
     if (Result[I].Hash <> Result[UCount - 1].Hash) or (Result[I].Line <> Result[UCount - 1].Line) then
@@ -244,8 +250,7 @@ begin
   AUCount := UCount;
 end;
 
-// perf: probe via binary search O(M log U), single source GrowArrayCapacity for amortized O(1) append, inline hot, zero-copy hash via HashString FNV-1a, no alloc per probe
-function MatchesFromSortedDedup(const ASorted: TBlameLineArray; AUCount: Integer; const ANew: TStringArray): TMatchArray; inline;
+function MatchesFromSortedDedup(const ASorted: TBlameLineArray; AUCount: Integer; const ANew: TStringArray): TMatchArray;
 var J, FoundIdx: Integer; H: THashCode; LCount, LCap: SizeUInt;
 begin
   Result := nil;
@@ -269,23 +274,13 @@ begin
   if SizeUInt(Length(Result)) <> LCount then SetLength(Result, LCount);
 end;
 
-function NextPow2(AValue: Integer): Integer; inline;
-begin
-  Result := 1;
-  while Result < AValue do Result := Result shl 1;
-end;
-
-// perf: EnsureIntCapacity single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2),
-// amortized O(1) ensure, zero-copy Move in callers, inline hot.
 procedure EnsureIntCapacity(var Arr: TIntArray; Need: Integer); inline;
 begin
   if Length(Arr) < Need then
     SetLength(Arr, Integer(GrowArrayCapacity(SizeUInt(Length(Arr)), SizeUInt(Need))));
 end;
 
-// LCS forward row: O(bLen) memory, zero-copy via offsets, reuse buffers (no per-layer alloc)
-// not inline: O(n*m) double loop would bloat I-Cache if inlined per design-conventions red line 2
-// perf: zero-copy swap (BufPrev<->OutRow) via refcounted assignment O(1), single source bytes.ops GrowArrayCapacity, inline hot ensures capacity, zero bulk Move; Move eliminated, bench baseline covers threshold 1M (see ComputeMatches).
+// O(bLen) memory, reuse buffers
 procedure LcsForwardReuse(const AOld: TStringArray; aOff, aLen: Integer;
   const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
@@ -308,13 +303,9 @@ begin
         BufCur[J] := BufCur[J - 1];
     Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  // perf: zero-copy swap OutRow<->BufPrev O(1) via assignment (refcounted, no heap, no Move), reuses bytes.ops single source capacity, inline hot; eliminates O(m) bulk Move double-buffer copy at 1M threshold, keeps Hirschberg O(bLen) memory
   Tmp := OutRow; OutRow := BufPrev; BufPrev := Tmp;
 end;
 
-// LCS on reversed slices — same O(bLen) memory, zero-copy, reuse buffers
-// not inline: O(n*m) double loop would bloat I-Cache if inlined per design-conventions red line 2
-// perf: zero-copy swap (BufPrev<->OutRow) via refcounted assignment O(1), single source bytes.ops GrowArrayCapacity, inline hot, zero Move; mirrors LcsForwardReuse.
 procedure LcsForwardRevReuse(const AOld: TStringArray; aOff, aLen: Integer;
   const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
@@ -337,7 +328,6 @@ begin
         BufCur[J] := BufCur[J - 1];
     Tmp := BufPrev; BufPrev := BufCur; BufCur := Tmp;
   end;
-  // perf: zero-copy swap OutRow<->BufPrev O(1) via assignment (refcounted, no heap, no Move), reuses bytes.ops single source; eliminates O(m) bulk Move, bench threshold 1M coverage via ComputeMatches fallback path.
   Tmp := OutRow; OutRow := BufPrev; BufPrev := Tmp;
 end;
 
@@ -357,7 +347,6 @@ begin
     for J := 0 to bLen - 1 do
       if AOld[aOff] = ANew[bOff + J] then
       begin
-        // perf: amortized doubling via bytes.ops GrowArrayCapacity single source, amortized O(1), inline hot
         if AccCnt >= AccCap then
         begin
           AccCap := GrowArrayCapacity(AccCap, AccCnt + 1);
@@ -388,8 +377,6 @@ begin
     Exit;
   end;
   Mid := aLen div 2;
-  // perf: reuse buffers (zero-copy slice via off,len) — LcsForwardReuse ensures capacity via GrowArrayCapacity,
-  // single Move bulk copy into BufL1/BufLRev, no per-layer double SetLength allocation
   LcsForwardReuse(AOld, aOff, Mid, ANew, bOff, bLen, BufL1, BufPrev, BufCur);
   LcsForwardRevReuse(AOld, aOff + Mid, aLen - Mid, ANew, bOff, bLen, BufLRev, BufPrev, BufCur);
   BestK := 0; BestVal := -1;
@@ -406,30 +393,24 @@ begin
   HirschbergCollect(AOld, ANew, aOff + Mid, aLen - Mid, bOff + BestK, bLen - BestK, Acc, AccCnt, AccCap, BufPrev, BufCur, BufL1, BufLRev);
 end;
 
-function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray; inline;
+function ComputeMatchesFallback(const AOld, ANew: TStringArray): TMatchArray;
 var
   Entries: TBlameLineArray;
   UCount: Integer;
 begin
-  // perf: single source via BuildBlameSortedDedup + MatchesFromSortedDedup — O(N log N+M log U), single compacted array, no N*2 Table spike, HashString FNV-1a via base, bytes.ops GrowArrayCapacity single source, inline hot, zero-copy CoW
-  // stability: managed arrays auto-released on exception, no manual free, zero-copy string view via refcounted copy; thin wrapper keeps threshold tests single source
   Result := nil;
   if (Length(AOld) = 0) or (Length(ANew) = 0) then Exit;
   Entries := BuildBlameSortedDedup(AOld, UCount);
   Result := MatchesFromSortedDedup(Entries, UCount, ANew);
 end;
 
-// threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M defined in interface (single source, was 10M in native-reference-map.md).
-// Tuning via bench_git Blame/* + test_git_native regression baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×) and 3000×3000=9M fallback ~6-8ms vs Hirschberg ~27ms (3-4×, O(N log N) sort overhead bounded, see TestBlameLargeFileFallback in test_git_native); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; regression baseline: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + test_git_native blame golden (threshold edge 1000×1000 exact vs 1001×1000 fallback) + large-file 3000×3000 fallback perf guard. Threshold edge anti-jitter: single-source const + deterministic sorted dedup (HashString FNV-1a + BlameQuickSort/BlameFindLine O(N log N+M log U), Idx tie-break stable) locks 1M boundary; 1000×1000 Hirschberg vs 1001×1000 fallback cross-checked in TestBlameThresholdEdge, 3000×3000 large-file fallback perf guard <500ms in TestBlameLargeFileFallback prevents O(N log N) sort jitter; Int64(n)*Int64(m) avoids overflow jitter for large m*n.
-
-function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray; inline;
+function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray;
 var
   n, m: Integer;
   Acc: TMatchArray;
   AccCnt, AccCap: SizeUInt;
   BufPrev, BufCur, BufL1, BufLRev: TIntArray;
 begin
-  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source; bench baseline covers threshold edge (1k×1k Hirschberg vs 2k×2k fallback, large-file 3k×3k), zero-copy swap eliminates O(m) Move double-buffer copy at threshold. Threshold edge anti-jitter: Int64 product avoids overflow, single-source const prevents drift, deterministic hash+sort+binary search keeps 1M boundary stable; regression locked via TestBlameThresholdEdge (1000×1000 exact vs 1001×1000 fallback) + TestBlameLargeFileFallback (3000×3000 <500ms).
   Result := nil;
   n := Length(AOld);
   m := Length(ANew);
@@ -441,8 +422,6 @@ begin
   end;
   Acc := nil; AccCnt := 0; AccCap := 0;
   BufPrev := nil; BufCur := nil; BufL1 := nil; BufLRev := nil;
-  // stability: SetLength is exception-safe; managed arrays auto-released on exception, no leak;
-  // final shrink ensures logical length = count, Buffers released via managed refcount on exit
   HirschbergCollect(AOld, ANew, 0, n, 0, m, Acc, AccCnt, AccCap, BufPrev, BufCur, BufL1, BufLRev);
   if SizeUInt(Length(Acc)) <> AccCnt then
     SetLength(Acc, AccCnt);
@@ -451,7 +430,6 @@ end;
 
 function GitBlameComputeMatches(const AOld, ANew: TStringArray): TBlameMatchArray; inline;
 begin
-  // thin test helper: single source via ComputeMatches, inline, zero-copy forwarding via TStringArray (refcounted)
   Result := TBlameMatchArray(ComputeMatches(AOld, ANew));
 end;
 
@@ -484,6 +462,48 @@ begin
     except Result := GitResolveRef(AGitDir, R); end;
 end;
 
+function BytesToLines(const AData: TBytes): TStringArray;
+var LLen, I, Start, LCount, LCap: SizeInt; LLineLen: SizeInt;
+begin
+  Result := nil;
+  LLen := Length(AData);
+  if LLen = 0 then Exit(nil);
+  LCount := 0; LCap := 0; Start := 0;
+  for I := 0 to LLen - 1 do
+    if AData[I] = 10 then
+    begin
+      LLineLen := I - Start;
+      if (LLineLen > 0) and (AData[I - 1] = 13) then Dec(LLineLen);
+      if LCount >= LCap then
+      begin
+        LCap := Integer(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+        SetLength(Result, LCap);
+      end;
+      if LLineLen > 0 then
+        SetString(Result[LCount], PAnsiChar(@AData[Start]), LLineLen)
+      else
+        Result[LCount] := '';
+      Inc(LCount);
+      Start := I + 1;
+    end;
+  if Start < LLen then
+  begin
+    LLineLen := LLen - Start;
+    if LCount >= LCap then
+    begin
+      LCap := Integer(GrowArrayCapacity(SizeUInt(LCap), SizeUInt(LCount + 1)));
+      SetLength(Result, LCap);
+    end;
+    SetString(Result[LCount], PAnsiChar(@AData[Start]), LLineLen);
+    if (LLineLen > 0) and (Result[LCount][Length(Result[LCount])]=#13) then
+      SetLength(Result[LCount], Length(Result[LCount])-1);
+    Inc(LCount);
+  end;
+  if LCount = 0 then Result := nil else SetLength(Result, LCount);
+  if (Length(Result)>0) and (Result[High(Result)]='') and (LLen>0) and (AData[LLen-1]=10) then
+    SetLength(Result, Length(Result)-1);
+end;
+
 function GitBlameInternal(const AGitDir, ARef, APath: string): TGitBlameArray;
 var
   Repo: TNativeRepository;
@@ -494,11 +514,9 @@ var
   HeadLines: TStringArray;
   HeadBlobOid, CurBlobOid: TGitOid;
   BlameOids: array of TGitOid;
-  CacheOids: TGitOidArray;
-  CacheLines: array of TStringArray;
-  CacheEntries: array of TBlameLineArray;
-  CacheUCounts: array of Integer;
+  Cache: TBlameCache;
   CacheCap, CacheCnt: SizeUInt;
+  CacheMap: TOidIndexMap;
   I, J, K: Integer;
   Kind: TGitObjectKind;
   Data: TBytes;
@@ -506,20 +524,18 @@ var
   PrevLines: TStringArray;
   Matches: TMatchArray;
   Entry: TGitBlameEntry;
-  FoundCache: Boolean;
-  S: string;
 begin
   Result := nil;
   if AGitDir = '' then raise EGitError.Create('blame: gitdir empty');
   if LocalTrim(APath) = '' then raise EGitError.Create('blame: path empty');
   if Pos('/', APath) = 1 then raise EGitError.Create('blame: absolute path');
   Repo := TNativeRepository.Create(AGitDir);
+  CacheMap := TOidIndexMap.Create;
   try
     StartOid := ResolveStartOid(AGitDir, ARef);
     Peeled := PeelToCommit(Repo, StartOid);
     Oids := GitCollectCommits(Repo, [Peeled], -1);
     if Length(Oids) = 0 then raise EGitError.Create('blame: no commits');
-    // cache commit infos and trees
     SetLength(Infos, Length(Oids));
     for I := 0 to High(Oids) do
     begin
@@ -530,87 +546,67 @@ begin
     HeadTree := Infos[0].Tree;
     if not ReadFileLines(Repo, HeadTree, APath, HeadLines) then
       raise EGitError.CreateFmt('path not in HEAD: %s', [APath]);
-    if Length(HeadLines) = 0 then Exit(nil); // empty file
+    if Length(HeadLines) = 0 then Exit(nil);
     HeadBlobOid := FindBlobOid(Repo, HeadTree, APath);
     SetLength(BlameOids, Length(HeadLines));
     for I := 0 to High(BlameOids) do BlameOids[I] := Oids[0];
-    // blob cache: maps blob Oid -> lines + sorted dedup, single source text.strings split, avoids duplicate Read+Split for unchanged file; sorted dedup cache eliminates C×O(N log N) repeated QuickSort for 500+ commit large-file blame (one sort per distinct blob, then O(M log U) probe via MatchesFromSortedDedup)
-    // commit-graph reuse: Infos[] already caches one-parse-per-commit via Repo.Read+GitParseCommit (mirrors revwalk TCommitParseCache discipline, commit-graph when available via GitCollectCommits)
-    CacheOids := nil; CacheLines := nil; CacheEntries := nil; CacheUCounts := nil; CacheCap := 0; CacheCnt := 0;
-    // seed cache with HEAD blob to avoid re-read on equality fast path
+    Cache := nil; CacheCap := 0; CacheCnt := 0;
     if not IsZeroOid(HeadBlobOid) then
     begin
-      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per distinct blob, avoids O(n²) SetLength(Length+1) churn on 500+ commit blame; zero-copy CoW share for HeadLines, parallel Oid+Lines+Entries arrays share Cap/Cnt
       CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
-      SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap); SetLength(CacheEntries, CacheCap); SetLength(CacheUCounts, CacheCap);
-      CacheOids[CacheCnt] := HeadBlobOid; CacheLines[CacheCnt] := HeadLines; // CoW share, zero-copy
-      CacheEntries[CacheCnt] := nil; CacheUCounts[CacheCnt] := 0; // lazy sorted dedup, built on first fallback need (zero-copy until then)
+      SetLength(Cache, CacheCap);
+      Cache[CacheCnt].Oid := HeadBlobOid;
+      Cache[CacheCnt].Lines := HeadLines;
+      Cache[CacheCnt].Sorted := nil;
+      Cache[CacheCnt].UCount := 0;
+      CacheMap.Add(HeadBlobOid, Integer(CacheCnt));
       Inc(CacheCnt);
     end;
-
-    // walk older commits: head vs each older (newest->oldest, so first matches -> newer, later overwrites -> oldest)
-    // perf: blob-Oid equality fast path (no LCS when identical) + blob-cache reuse avoids C*O(n*m) duplicate work; ComputeMatches threshold 1M + zero-copy slice + bytes.ops GrowArrayCapacity single source; Hirschberg -> fallback O(N log N+M log U); stability: Repo.Free in finally, managed arrays auto-released
     for I := 1 to High(Oids) do
     begin
       CurBlobOid := FindBlobOid(Repo, Infos[I].Tree, APath);
-      if IsZeroOid(CurBlobOid) then Continue; // file not in this commit
-      // fast path: blob identical to HEAD => every line matches, attribute all without O(n*m)
+      if IsZeroOid(CurBlobOid) then Continue;
       if GitOidSame(CurBlobOid, HeadBlobOid) then
       begin
         for J := 0 to High(BlameOids) do BlameOids[J] := Oids[I];
         Continue;
       end;
-      // cache lookup (linear probe over distinct blobs, typically small; avoids re-inflate+SplitLines + repeated QuickSort)
-      FoundCache := False;
-      for K := 0 to Integer(CacheCnt) - 1 do
-        if GitOidSame(CacheOids[K], CurBlobOid) then
-        begin
-          PrevLines := CacheLines[K]; // CoW share, zero-copy
-          FoundCache := True;
-          Break;
-        end;
-      if not FoundCache then
+      if not CacheMap.TryGet(CurBlobOid, K) then
       begin
         Data := Repo.ReadObject(CurBlobOid, Kind);
         if Kind = gokTree then Continue;
-        S := BytesToString(Data);
-        PrevLines := SplitLines(S);
-        // add to cache (CoW share, managed, bounded by distinct blobs <= C)
-        // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline hot, O(1) amortized, zero-copy TGitOid Move (20B) + CoW TStringArray share, avoids O(n²) SetLength(Length+1) reallocation on 500+ commits; parallel arrays share Cap/Cnt, capacity stored in array Length single source, stability: managed, Repo.Free in finally
+        PrevLines := BytesToLines(Data);
         if CacheCnt >= CacheCap then
         begin
           CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
-          SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap); SetLength(CacheEntries, CacheCap); SetLength(CacheUCounts, CacheCap);
+          SetLength(Cache, CacheCap);
         end;
-        CacheOids[CacheCnt] := CurBlobOid;
-        CacheLines[CacheCnt] := PrevLines; // CoW share, zero-copy
-        CacheEntries[CacheCnt] := nil; CacheUCounts[CacheCnt] := 0; // lazy, built on fallback
-        K := Integer(CacheCnt); // K points to newly inserted index for fallback build below
+        Cache[CacheCnt].Oid := CurBlobOid;
+        Cache[CacheCnt].Lines := PrevLines;
+        Cache[CacheCnt].Sorted := nil;
+        Cache[CacheCnt].UCount := 0;
+        K := Integer(CacheCnt);
+        CacheMap.Add(CurBlobOid, K);
         Inc(CacheCnt);
-      end;
-      // perf: threshold-gated fallback uses cached sorted dedup O(N log N) once per distinct blob + O(M log U) probe per commit; Hirschberg path stays exact LCS inline hot, zero-copy slice, bytes.ops GrowArrayCapacity reuse; eliminates C× repeated QuickSort for 500+ large-file commits, single source BuildBlameSortedDedup/HashString FNV-1a + BlameQuickSort/BinarySearch, bytes.ops GrowArrayCapacity, inline, zero-copy CoW, stable managed release
+      end
+      else
+        PrevLines := Cache[K].Lines;
       if Int64(Length(PrevLines)) * Int64(Length(HeadLines)) > BLAME_HIRSCHBERG_CELLS_LIMIT then
       begin
-        // fallback path: reuse or build sorted dedup cache for this distinct blob
-        if (K >= 0) and (K < Length(CacheEntries)) and (CacheEntries[K] = nil) then
-        begin
-          CacheEntries[K] := BuildBlameSortedDedup(PrevLines, CacheUCounts[K]);
-        end
-        else if (K >= 0) and (K < Length(CacheEntries)) and (CacheEntries[K] <> nil) and (CacheUCounts[K] = 0) then
-          CacheUCounts[K] := Length(CacheEntries[K]);
-        Matches := MatchesFromSortedDedup(CacheEntries[K], CacheUCounts[K], HeadLines);
+        if Cache[K].Sorted = nil then
+          Cache[K].Sorted := BuildBlameSortedDedup(PrevLines, Cache[K].UCount)
+        else if Cache[K].UCount = 0 then
+          Cache[K].UCount := Length(Cache[K].Sorted);
+        Matches := MatchesFromSortedDedup(Cache[K].Sorted, Cache[K].UCount, HeadLines);
       end
       else
         Matches := ComputeMatches(PrevLines, HeadLines);
       for J := 0 to High(Matches) do
         BlameOids[Matches[J].NewIdx] := Oids[I];
     end;
-
-    // build result with author info
     SetLength(Result, Length(HeadLines));
     for I := 0 to High(HeadLines) do
     begin
-      // find info index for BlameOids[I]
       Info := Infos[0];
       for J := 0 to High(Oids) do
         if GitOidSame(Oids[J], BlameOids[I]) then
@@ -628,6 +624,7 @@ begin
       Result[I] := Entry;
     end;
   finally
+    CacheMap.Free;
     Repo.Free;
   end;
 end;

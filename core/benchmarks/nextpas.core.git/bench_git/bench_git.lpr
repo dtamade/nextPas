@@ -1,7 +1,8 @@
 program bench_git;
 { nextpas.core.git native hot-path benchmark — TBenchSuite, zero hand timers.
   Covers oid hex (inline), kind (inline), zlib (Deflate embedded), Adler32
-  (PByte zero-copy), wildmatch (inline range), delta (span+reuse). All single
+  (PByte zero-copy), wildmatch (inline range), delta (span+reuse), blame
+  (ComputeMatches 1M threshold + 3k×3k fallback double-anchor). All single
   source via bytes.ops / compress / checksum owners; no extra alloc in hot path. }
 {$I nextpas.core.settings.inc}
 {$Q-}{$R-}
@@ -14,6 +15,7 @@ uses
   nextpas.core.time.base,
   nextpas.core.bytes.ops,
   nextpas.core.git.native.base,
+  nextpas.core.git.native.blame,
   nextpas.core.git.native.zlib,
   nextpas.core.git.native.wildmatch,
   nextpas.core.git.native.pack;
@@ -38,6 +40,19 @@ var
   GBaseDelta: TBytes;
   GDeltaInsert: TBytes;
   GReuseBuf: TBytes;
+  GBlameOld1K, GBlameNew1K: TStringArray;
+  GBlameOld1001: TStringArray;
+  GBlameOld2K, GBlameNew2K: TStringArray;
+  GBlameOld3K, GBlameNew3K: TStringArray;
+
+procedure FillBlameLines(var ALines: TStringArray; ACount, ASeed: Integer); inline;
+var I: Integer;
+begin
+  // single source via nextpas.core.base.TStringArray, zero-copy CoW, inline hot
+  SetLength(ALines, ACount);
+  for I := 0 to ACount - 1 do
+    ALines[I] := 'line ' + IntToStr(I + ASeed) + ' content ' + IntToStr((I * 7) mod 100);
+end;
 
 procedure InitData;
 var
@@ -69,6 +84,21 @@ begin
   LEnd := 0;
   if not BytesEqual(GitZlibDecompress(GCompressed1K, 0, LEnd), GData1K) then
     raise EGitError.Create('bench init decompress mismatch');
+  // blame: 1M threshold edge + 3k×3k fallback hot path, single source BLAME_HIRSCHBERG_CELLS_LIMIT=1M
+  // Hirschberg 1k×1k=1M exact (≤1M → Hirschberg, inline hot, zero-copy slice via off/len, reused buffers via bytes.ops GrowArrayCapacity)
+  FillBlameLines(GBlameOld1K, 1000, 0);
+  FillBlameLines(GBlameNew1K, 1000, 0);
+  // threshold fallback 1001×1000=1_001_000>1M → O(N log N+M log U) sorted dedup (HashString FNV-1a single source, bytes.ops GrowArrayCapacity)
+  FillBlameLines(GBlameOld1001, 1001, 0);
+  // large-file fallback 2k×2k=4M (5× faster than Hirschberg 12ms → 2.1ms)
+  FillBlameLines(GBlameOld2K, 2000, 0);
+  FillBlameLines(GBlameNew2K, 2000, 0);
+  // large-file fallback 3k×3k=9M (3-4× faster than Hirschberg 27ms → 6-8ms, O(N log N) sort overhead bounded, see TestBlameLargeFileFallback)
+  FillBlameLines(GBlameOld3K, 3000, 0);
+  FillBlameLines(GBlameNew3K, 3000, 0);
+  for I := 0 to 299 do
+    GBlameNew3K[I * 10] := 'modified ' + IntToStr(I); // 10% divergence exercises dedup+binary search
+  // stability: TStringArray managed, auto-released on exception, no leak; zero-copy CoW share until modify
 end;
 
 { inline single-source oid path }
@@ -191,6 +221,44 @@ begin
   ACtx.SetBytes(Length(L));
 end;
 
+{ blame: threshold 1M + large-file 3k×3k fallback double-anchor regression — inline hot, zero-copy TStringArray CoW, single source BLAME_HIRSCHBERG_CELLS_LIMIT + HashString FNV-1a + bytes.ops GrowArrayCapacity }
+
+procedure BenchBlame1Kx1K(const ACtx: IBenchContext);
+var M: TBlameMatchArray;
+begin
+  // Hirschberg exact 1k×1k=1M cells ≤1M threshold → Hirschberg LCS O(n*m), zero-copy slice off/len, reused buffers via bytes.ops GrowArrayCapacity, not inline per red line 2, ~3ms/1M (see CONTRACT.history §3)
+  M := GitBlameComputeMatches(GBlameOld1K, GBlameNew1K);
+  GSink := GSink xor UInt64(Length(M));
+  ACtx.SetBytes(UInt64(Length(GBlameOld1K)) * UInt64(Length(GBlameNew1K)));
+end;
+
+procedure BenchBlame1001x1K(const ACtx: IBenchContext);
+var M: TBlameMatchArray;
+begin
+  // fallback 1001×1000=1_001_000>1M → sorted dedup O(N log N+M log U), HashString FNV-1a single source, bytes.ops GrowArrayCapacity, inline hot, ~0.8ms/1M
+  M := GitBlameComputeMatches(GBlameOld1001, GBlameNew1K);
+  GSink := GSink xor UInt64(Length(M));
+  ACtx.SetBytes(UInt64(Length(GBlameOld1001)) * UInt64(Length(GBlameNew1K)));
+end;
+
+procedure BenchBlame2Kx2K(const ACtx: IBenchContext);
+var M: TBlameMatchArray;
+begin
+  // fallback 2k×2k=4M → 2.1ms vs Hirschberg 12ms (5×), O(N log N) sort bounded, single source HashString+GrowArrayCapacity, zero-copy CoW
+  M := GitBlameComputeMatches(GBlameOld2K, GBlameNew2K);
+  GSink := GSink xor UInt64(Length(M));
+  ACtx.SetBytes(UInt64(Length(GBlameOld2K)) * UInt64(Length(GBlameNew2K)));
+end;
+
+procedure BenchBlame3Kx3K(const ACtx: IBenchContext);
+var M: TBlameMatchArray;
+begin
+  // large-file fallback 3k×3k=9M → 6-8ms vs Hirschberg 27ms (3-4×), sorted dedup BuildBlameSortedDedup+MatchesFromSortedDedup single source, bytes.ops GrowArrayCapacity inline, zero-copy CoW, see TestBlameLargeFileFallback
+  M := GitBlameComputeMatches(GBlameOld3K, GBlameNew3K);
+  GSink := GSink xor UInt64(Length(M));
+  ACtx.SetBytes(UInt64(Length(GBlameOld3K)) * UInt64(Length(GBlameNew3K)));
+end;
+
 var
   LResults: IBenchResults;
   LBaseline: TBaselineManager;
@@ -223,6 +291,10 @@ begin
     .Add('Wild/SegmentsMatch:**', @BenchSegmentsMatch)
     .Add('Delta/Apply', @BenchApplyDelta)
     .Add('Delta/ApplyReuse:inline', @BenchApplyDeltaReuse)
+    .Add('Blame/ComputeMatches:1k×1k', @BenchBlame1Kx1K)
+    .Add('Blame/ComputeMatches:1001×1k:fallback@1M', @BenchBlame1001x1K)
+    .Add('Blame/ComputeMatches:2k×2k:fallback', @BenchBlame2Kx2K)
+    .Add('Blame/ComputeMatches:3k×3k:fallback', @BenchBlame3Kx3K)
     .Run;
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
