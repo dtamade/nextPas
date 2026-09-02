@@ -11,7 +11,8 @@ uses
   nextpas.core.base,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
-  nextpas.core.audio.codec.intf;
+  nextpas.core.audio.codec.intf,
+  nextpas.core.io.intf;
 
 type
   IWavDecoder = nextpas.core.audio.codec.wav.intf.IWavDecoder;
