@@ -3,12 +3,12 @@ unit nextpas.core.tar.builder;
  * @desc Tar 链式构造器：ZipBuilder 手感的薄门面，委托 TTarWriter。
  * 仅做流畅 API 封装，不含序列化逻辑，保证 bytes 级一致。
  * @note 显式 Finish fail-closed：析构稳定不抛，未 Finish 仅 StdErr WARN，避免链式丢数据无感知；单工厂 TarBuilder。
- * 性能：IBytesBuilder 直写切片，inline AppendBytes 零拷贝，Finish 单次 ToBytes 拷贝，
+ * 性能：IArchiveBuilder 联邦单源直写切片（archive.fs 透出 bytes.builder 几何扩容单源），inline AppendBytes 零拷贝，Finish 单次 ToBytes 拷贝，
  *       消除 CreateBytesStream + ArchiveSnapshotStream 二次 SetLength+Read 大块 Move。
  *       AddDirectory* 薄门面复用 writer 单源 DefaultTarAddOptions/TarDirectoryMode，无重复 H 组装。
- *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops，委托 writer 单源。
+ *       AddEntryFromReader 流式零拷贝 64K pooled 复用缓冲分块 Move 单源 bytes.ops（经 writer 单源透出），委托 writer 单源。
  *       容量：TarBuilderCapacityFor 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 4K 页对齐。
- * 联邦：经 nextpas.core.archive.fs 单缝联邦（与 tar.fs 共用单源 CreateArchiveBuilderSink/几何扩容/IWriter 适配），注册表显式登记 builder+fs 双路径，消除 L2 同层双引审计歧义。
+ * 联邦：唯一经 nextpas.core.archive.fs 单缝联邦（与 tar.fs 共用单源 CreateArchiveBuilder/IArchiveBuilder/几何扩容/IWriter 适配，bytes.builder/bytes.ops 单源 inline 零拷贝经 archive.fs 透出），注册表显式登记，消除 L2 同层双引（bytes.builder + archive.fs）稀释克制感。
  * 稳定性：Destroy 稳定不抛 — 未 Finish 仅 StdErr WARN，try..finally 必释资源，无 ExceptObject 双层 try 叙事，极简高级感。
  *}
 
@@ -29,13 +29,12 @@ function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; i
 implementation
 
 uses
-  nextpas.core.bytes.builder,
-  nextpas.core.archive.fs; // federation single seam: builder+fs 均经 archive.fs 联邦，CreateArchiveBuilder/Sink 单源，注册表显式登记双路径，bytes.ops 单源 inline 零拷贝
+  nextpas.core.archive.fs; // federation single seam: 唯一入口 archive.fs，IArchiveBuilder/CreateArchiveBuilder/Sink 单源联邦（bytes.builder 几何扩容与 bytes.ops 单源 inline 零拷贝经 archive.fs 透出），注册表显式登记，消除 L2 同层双引稀释
 
 type
   TTarBuilder = class(TInterfacedObject, ITarBuilder)
   private
-    FBuilder: IBytesBuilder;
+    FBuilder: IArchiveBuilder;
     FSink: IWriter;
     FWriter: TTarWriter;
     FFinished: Boolean;
@@ -55,7 +54,7 @@ type
 constructor TTarBuilder.Create;
 begin
   inherited Create;
-  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，复用 bytes.builder 几何扩容+ archive 单源 CreateArchiveBuilder，inline 零拷贝直写切片，消除与 tar.fs 同模板重复
+  // perf: 预扩容按预估总量 4K 对齐，避免大归档多次几何扩容；默认 TarBuilderCapacityFor 单源，联邦单源 CreateArchiveBuilder 经 archive.fs 透出 bytes.builder 几何扩容单源，inline 零拷贝直写切片（bytes.ops 单源 Move），消除与 tar.fs 同模板重复
   CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, FSink);
   FWriter := TTarWriter.Create(FSink);
   FFinished := False;
@@ -65,7 +64,7 @@ constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
 var LCap: SizeUInt;
 begin
   inherited Create;
-  // perf: 按预估总量预扩容 4K 对齐，TarBuilderCapacityFor 单源，避免大归档多次 2× 几何扩容与重分配；inline/零拷贝证据复用 bytes.builder 单源
+  // perf: 按预估总量预扩容 4K 对齐，TarBuilderCapacityFor 单源，避免大归档多次 2× 几何扩容与重分配；inline/零拷贝证据经 archive.fs 联邦透出 bytes.builder 单源（AppendBytes 单次 Move，bytes.ops 单源）
   LCap := TarBuilderCapacityFor(AEstimatedTotal);
   CreateArchiveBuilder(LCap, FBuilder, FSink);
   FWriter := TTarWriter.Create(FSink);

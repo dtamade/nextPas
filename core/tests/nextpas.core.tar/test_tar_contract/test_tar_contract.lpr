@@ -200,7 +200,7 @@ begin
   Check(Pos('ensureheaderscanned', Low) > 0, 'reader has EnsureHeaderScanned fusion entry');
   Check((Pos('fscanvalid', Low) > 0) or (Pos('fscan.valid', Low) > 0) or (Pos('ttarscancache', Low) > 0), 'reader has FScanValid cache flag (flat or record TTarScanCache.Valid)');
   Check((Pos('fnamelen', Low) > 0) or (Pos('namelen', Low) > 0), 'reader caches FNameLen via single pass');
-  Check(Pos('for i := 0 to cblocksize - 1', Low) > 0, 'single 512 loop exists');
+  Check((Pos('for i := 0 to cblocksize - 1', Low) > 0) or (Pos('spanindexof', Low) > 0), 'single 512 loop or 7×SpanIndexOf fusion exists');
   // FieldSlice 必须含缓存分发，避免8次 SIMD；单源 C_TAR_LAYOUT 零错位
   Check(Pos('c_tar_layout', Low) > 0, 'reader references tar layout single source');
   // 确保 FieldSlice 内仅一次 fallback SpanIndexOf（非头块），而非8次 per entry naive

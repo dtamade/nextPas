@@ -10,7 +10,7 @@ uses
   nextpas.core.io.intf;
 
 type
-  { — 头扫描记录表：8字段NUL截断缓存收敛为记录，单遍512循环表驱动（bytes.ops 单源、零拷贝 SIMD）— }
+  { — 头扫描记录表：7字段NUL截断缓存收敛为记录，SpanIndexOf 单源 SIMD 替代 512×7 循环 — }
   TTarScanCache = record
     Pos: SizeUInt;
     Valid: Boolean;
@@ -37,7 +37,7 @@ type
     FPendingLongLink: string;
     FPaxPath: string;
     FPaxLinkPath: string;
-    { g 全局持久至下一 g 覆盖，未自动失效；恶意路径由 IsSafe 拒绝，需显式 ClearGlobalPax 防静默劫持 }
+    { g 全局 pax：持久至下一 g 覆盖（CONTRACT INV-3），写入时即 IsSafe 丢弃恶意值且不落盘，Next 时二次 IsSafe 防御；未显式 ClearGlobalPax 前静默继承，调用方需按需显式清理防跨条目污染 }
     FGlobalPaxPath: string;
     FGlobalPaxLinkPath: string;
     FMaxEntry: SizeUInt;
@@ -46,7 +46,7 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { — 记录表收敛：单遍512头扫描8字段缓存，表驱动解耦扁平变量与循环（bytes.ops 单源）— }
+    { — 缓存收敛：7字段 NUL 截断，SpanIndexOf 单源 SIMD 替代 512 扫描 — }
     FScan: TTarScanCache;
     procedure EnsureHeaderScanned;
     { — 热路径外联禁 inline，薄转发可 inline；Move 单源 bytes.ops — }
@@ -98,9 +98,6 @@ uses
   nextpas.core.exception,
   nextpas.core.tar.common,
   nextpas.core.text.conv;
-
-const
-  CBlockSize = C_TAR_BLOCK_SIZE;
 
 function TypeFlagToKind(AFlag: Byte): TTarEntryKind;
 begin
@@ -168,13 +165,12 @@ end;
 procedure TTarReader.EnsureHeaderScanned;
 var
   B: PByte;
-  I, J: SizeUInt;
-  // 记录表驱动：Off/Len/缓存指针三元组，解耦7字段扁平if-else与单遍512循环，可维护性+质感
-  LTable: array[0..6] of record Off, Len: SizeUInt; PLen: ^SizeUInt; end;
+  LSpan: TByteSpan;
+  LIdx: SizeInt;
 begin
   if FScan.Valid and (FScan.Pos = FPos) then
     Exit;
-  // 融合：单遍512块扫描求7字段NUL截断（Name/LinkName/Magic/Version/UName/GName/Prefix），零拷贝视图，单源 bytes.ops
+  // init 7字段 NUL 截断缓存为全长，未截断时保持原长，bytes.ops 单源
   FScan.NameLen := C_TAR_LAYOUT.Name.Len;
   FScan.PrefixLen := C_TAR_LAYOUT.Prefix.Len;
   FScan.LinkLen := C_TAR_LAYOUT.LinkName.Len;
@@ -182,33 +178,35 @@ begin
   FScan.GNameLen := C_TAR_LAYOUT.GName.Len;
   FScan.MagicLen := C_TAR_LAYOUT.Magic.Len;
   FScan.VersionLen := C_TAR_LAYOUT.Version.Len;
-  if FPos + CBlockSize > FCount then
+  if FPos + C_TAR_BLOCK_SIZE > FCount then
   begin
     FScan.Pos := FPos;
     FScan.Valid := True;
     Exit;
   end;
-  // 记录表：字段描述与缓存指针一一映射，表驱动消除扁平if-else耦合
-  LTable[0].Off := C_TAR_LAYOUT.Name.Off;     LTable[0].Len := C_TAR_LAYOUT.Name.Len;     LTable[0].PLen := @FScan.NameLen;
-  LTable[1].Off := C_TAR_LAYOUT.LinkName.Off; LTable[1].Len := C_TAR_LAYOUT.LinkName.Len; LTable[1].PLen := @FScan.LinkLen;
-  LTable[2].Off := C_TAR_LAYOUT.Magic.Off;    LTable[2].Len := C_TAR_LAYOUT.Magic.Len;    LTable[2].PLen := @FScan.MagicLen;
-  LTable[3].Off := C_TAR_LAYOUT.Version.Off;  LTable[3].Len := C_TAR_LAYOUT.Version.Len;  LTable[3].PLen := @FScan.VersionLen;
-  LTable[4].Off := C_TAR_LAYOUT.UName.Off;    LTable[4].Len := C_TAR_LAYOUT.UName.Len;    LTable[4].PLen := @FScan.UNameLen;
-  LTable[5].Off := C_TAR_LAYOUT.GName.Off;    LTable[5].Len := C_TAR_LAYOUT.GName.Len;    LTable[5].PLen := @FScan.GNameLen;
-  LTable[6].Off := C_TAR_LAYOUT.Prefix.Off;   LTable[6].Len := C_TAR_LAYOUT.Prefix.Len;   LTable[6].PLen := @FScan.PrefixLen;
   B := @FData[FPos];
-  for I := 0 to CBlockSize - 1 do
-  begin
-    if B[I] <> 0 then
-      Continue;
-    for J := 0 to High(LTable) do
-      if (I >= LTable[J].Off) and (I < LTable[J].Off + LTable[J].Len) then
-      begin
-        if LTable[J].PLen^ = LTable[J].Len then
-          LTable[J].PLen^ := I - LTable[J].Off;
-        Break;
-      end;
-  end;
+  // 单源收敛：每字段独立 SpanIndexOf(NUL) SIMD 求截断，替代 512×7 双层循环；7×小Span 零拷贝，万级条目降分支
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Name.Off], C_TAR_LAYOUT.Name.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.NameLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.LinkName.Off], C_TAR_LAYOUT.LinkName.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.LinkLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Magic.Off], C_TAR_LAYOUT.Magic.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.MagicLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Version.Off], C_TAR_LAYOUT.Version.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.VersionLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.UName.Off], C_TAR_LAYOUT.UName.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.UNameLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.GName.Off], C_TAR_LAYOUT.GName.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.GNameLen := SizeUInt(LIdx);
+  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Prefix.Off], C_TAR_LAYOUT.Prefix.Len);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx >= 0 then FScan.PrefixLen := SizeUInt(LIdx);
   FScan.Pos := FPos;
   FScan.Valid := True;
 end;
@@ -226,49 +224,50 @@ var
   LLen: SizeUInt;
   LIdx: SizeInt;
   LSpan: TByteSpan;
-  LCached: Boolean;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // 融合：头块内字段复用单遍512扫描缓存，避免每字段 SpanIndexOf SIMD；非头块 fallback 单次 SpanIndexOf（bytes.ops 单源）
-  if (AOfs >= FPos) and (EndOfs <= FPos + CBlockSize) then
+  // 头块内 7 字段命中缓存零额外 SpanIndexOf，cache miss 缓存失效时仅首字段触发单次 Ensure（后续字段 inline Valid 命中零调用），非头块单次 SpanIndexOf 单源
+  if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
-    EnsureHeaderScanned;
-    LCached := False;
+    if not (FScan.Valid and (FScan.Pos = FPos)) then
+      EnsureHeaderScanned;
     if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
-    begin LLen := FScan.NameLen; LCached := True; end
+      LLen := FScan.NameLen
     else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
-    begin LLen := FScan.PrefixLen; LCached := True; end
+      LLen := FScan.PrefixLen
     else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
-    begin LLen := FScan.LinkLen; LCached := True; end
+      LLen := FScan.LinkLen
     else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
-    begin LLen := FScan.UNameLen; LCached := True; end
+      LLen := FScan.UNameLen
     else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
-    begin LLen := FScan.GNameLen; LCached := True; end
+      LLen := FScan.GNameLen
     else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
-    begin LLen := FScan.MagicLen; LCached := True; end
+      LLen := FScan.MagicLen
     else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
-    begin LLen := FScan.VersionLen; LCached := True; end;
-    if LCached then
+      LLen := FScan.VersionLen
+    else
     begin
-      if LLen = 0 then
-        Exit(TByteSpan.Empty);
+      // 非 7 缓存字段且位于头块内（防御分支，正常不命中）：单次 SpanIndexOf 单源，避免回退链多分支
+      LSpan := TByteSpan.Create(@FData[AOfs], ALen);
+      LIdx := SpanIndexOf(LSpan, 0);
+      if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+      if LLen = 0 then Exit(TByteSpan.Empty);
       Result := TByteSpan.Create(@FData[AOfs], LLen);
       Exit;
     end;
+    if LLen = 0 then Exit(TByteSpan.Empty);
+    Result := TByteSpan.Create(@FData[AOfs], LLen);
+    Exit;
   end;
-  // 非头块或未缓存字段：零拷贝视图单次 SpanIndexOf（bytes.ops 单源 SIMD）
+  // 非头块字段：单次 SpanIndexOf 单源 SIMD
   LSpan := TByteSpan.Create(@FData[AOfs], ALen);
   LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx < 0 then
-    LLen := ALen
-  else
-    LLen := SizeUInt(LIdx);
-  if LLen = 0 then
-    Exit(TByteSpan.Empty);
+  if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+  if LLen = 0 then Exit(TByteSpan.Empty);
   Result := TByteSpan.Create(@FData[AOfs], LLen);
 end;
 
@@ -314,14 +313,14 @@ end;
 
 procedure TTarReader.VerifyChecksum;
 begin
-  if FPos + CBlockSize > FCount then
-    raise EIOError.CreateFmt('tar: truncated stream at offset %d (need %d, have %d)', [FPos, CBlockSize, FCount - FPos]);
+  if FPos + C_TAR_BLOCK_SIZE > FCount then
+    raise EIOError.CreateFmt('tar: truncated stream at offset %d (need %d, have %d)', [FPos, C_TAR_BLOCK_SIZE, FCount - FPos]);
   TarVerifyBlockChecksum(@FData[FPos], FPos);
 end;
 
 function TTarReader.HeaderIsZeroOrValid(APos: SizeUInt): Boolean;
 begin
-  if APos + CBlockSize > FCount then
+  if APos + C_TAR_BLOCK_SIZE > FCount then
     Exit(False);
   Result := TarHeaderIsZeroOrValid(@FData[APos], APos);
 end;
@@ -391,9 +390,9 @@ begin
     Exit(True);
   if UInt64(ASize) > UInt64(FMaxEntry) then
     raise EIOError.CreateFmt('tar: entry size %d exceeds limit %d at offset %d', [ASize, Int64(FMaxEntry), FPos]);
-  if FPos + CBlockSize + SizeUInt(ASize) > FCount then
-    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FPos + CBlockSize, ASize, Int64(FCount) - Int64(FPos + CBlockSize)]);
-  APtr := @FData[FPos + CBlockSize];
+  if FPos + C_TAR_BLOCK_SIZE + SizeUInt(ASize) > FCount then
+    raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FPos + C_TAR_BLOCK_SIZE, ASize, Int64(FCount) - Int64(FPos + C_TAR_BLOCK_SIZE)]);
+  APtr := @FData[FPos + C_TAR_BLOCK_SIZE];
   ALen := SizeUInt(ASize);
   Result := True;
 end;
@@ -441,15 +440,15 @@ begin
   begin
     if FPos >= FCount then
       Exit(False);
-    if FCount - FPos < CBlockSize then
-      raise EIOError.CreateFmt('tar: trailing partial block at offset %d (need %d, have %d)', [FPos, CBlockSize, FCount - FPos]);
+    if FCount - FPos < C_TAR_BLOCK_SIZE then
+      raise EIOError.CreateFmt('tar: trailing partial block at offset %d (need %d, have %d)', [FPos, C_TAR_BLOCK_SIZE, FCount - FPos]);
     if HeaderIsZeroOrValid(FPos) then
     begin
-      if FPos + CBlockSize = FCount then
+      if FPos + C_TAR_BLOCK_SIZE = FCount then
         Exit(False);
-      if FPos + 2 * CBlockSize > FCount then
+      if FPos + 2 * C_TAR_BLOCK_SIZE > FCount then
         raise EIOError.CreateFmt('tar: truncated stream at offset %d (single zero block, need two)', [FPos]);
-      if not TarHeaderIsZeroBlock(@FData[FPos + CBlockSize]) then
+      if not TarHeaderIsZeroBlock(@FData[FPos + C_TAR_BLOCK_SIZE]) then
         raise EIOError.CreateFmt('tar: truncated stream at offset %d (single zero block followed by non-zero data)', [FPos]);
       Exit(False);
     end;
@@ -499,12 +498,19 @@ begin
           begin
             if FPaxPath <> '' then
             begin
-              FGlobalPaxPath := FPaxPath;
+              // 单源早丢弃：写入时即 IsSafe 校验，恶意路径不落全局，fail-closed 避免静默继承污染
+              if IsSafeTarEntryName(FPaxPath) then
+                FGlobalPaxPath := FPaxPath
+              else
+                FGlobalPaxPath := '';
               FPaxPath := '';
             end;
             if FPaxLinkPath <> '' then
             begin
-              FGlobalPaxLinkPath := FPaxLinkPath;
+              if IsSafeTarEntryName(FPaxLinkPath) then
+                FGlobalPaxLinkPath := FPaxLinkPath
+              else
+                FGlobalPaxLinkPath := '';
               FPaxLinkPath := '';
             end;
           end;
@@ -518,7 +524,7 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      // g 全局持久至下一 g 覆盖，未自动失效；恶意路径显式 Clear 前静默劫持，此处 IsSafe 丢弃防污染
+      // 二次防御：g 早丢弃后仍 IsSafe 复核，显式 ClearGlobalPax 前静默继承，调用方可按需清理防跨条目污染
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
         FGlobalPaxPath := '';
       if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
@@ -578,15 +584,15 @@ begin
       end
       else
         FEntrySize := 0;
-      FEntryDataOfs := FPos + CBlockSize;
+      FEntryDataOfs := FPos + C_TAR_BLOCK_SIZE;
       if FEntryDataOfs + SizeUInt(Size) > FCount then
         raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, Size, Int64(FCount) - Int64(FEntryDataOfs)]);
-      FPos := FPos + CBlockSize + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
+      FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(TarPadToBlock(Size));
       Result := True;
       Exit;
     end;
     Pad := TarPadToBlock(Size);
-    FPos := FPos + CBlockSize + SizeUInt(Size) + SizeUInt(Pad);
+    FPos := FPos + C_TAR_BLOCK_SIZE + SizeUInt(Size) + SizeUInt(Pad);
   end;
 end;
 

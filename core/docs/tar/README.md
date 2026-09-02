@@ -13,9 +13,9 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出 + `devmajor/devminor` 设备号（`C_TAR_LAYOUT.DevMajor/DevMinor` 单源），需显式 `Finish`（`Destroy` best-effort `Finish`，`IsExceptionUnwinding` 判 unwind 期抑制 `EIOError/short-write` 二次逃逸以保原始异常上下文，非 unwind 期则透传，`try..finally` 必释资源） |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
 | `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed，`AddEntryFromReader` 流式零拷贝 64K pooled 复用 via `FIOBuf` 无缩容） |
-| `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
+| `nextpas.core.compress.tar` | 兼容转发（deprecated，经 `nextpas.core.tar` 门面单源薄转发，新增请直接 uses `nextpas.core.tar`，待迁移后移除） |
 
-> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用。
+> 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarFormatPaxRecord`（`CreateBytesBuilder+TarAppendPaxRecord+SpanToString` 薄包装单源，`TarAppendPaxRecord` 为 `Reserve+AppendBytes` 零拷贝最优路径）/`TarParsePaxRecords`/`TarParsePaxKVRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源，`archive.pax ArchivePaxParseRecords` 通用 pax-kv 严格校验供归档族复用，畸形抛 `EIOError`；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用；`nextpas.core.archive.pax` 为通用 pax-kv 解析共享内核（内部核例外，归档族 `tar.common → archive.pax` 联邦复用，零拷贝迭代 `atime/mtime/size` 等扩展键）。
 
 ## Supported Features
 
@@ -27,7 +27,7 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | USTAR prefix splitting | Yes | Yes | >100 字符名自动 `prefix/name` 分割，无 prefix 切分时写端以 `pax x` 承载 |
 | GNU base-256 numeric | Yes (overflow) | Yes | 超 octal 容量自动 `$80` + big-endian |
 | GNU longname `L/K` | — | Yes | 读端 `FPendingLongName/Link` 覆盖 |
-| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`bytes.ops` 单源 `StringToBytes` 一次 Move），读端 per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由 `IsSafeTarEntryName` 自动 Guard 丢弃、`ClearGlobalPax` 显式可选 |
+| PAX `x/g` `path/linkpath` | Yes (x 回退) | Yes | 写端>100 无切分或 `linkpath>100` 前置 `x` 扩展头（`TarAppendPaxRecord` builder 零拷贝 `Reserve+AppendBytes` 最优路径单源，`TarFormatPaxRecord` 薄包装 `SpanToString` 单次 Move），读端 per-entry 优于 global，`g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由 `IsSafeTarEntryName` 自动 Guard 丢弃、`ClearGlobalPax` 显式可选；通用 `TarParsePaxKVRecords`/`ArchivePaxParseRecords` 零拷贝迭代 `atime/mtime/size` 等扩展键，长度前缀缺空格/非数字/越界/缺换行即抛 `EIOError` 禁回退截断名 |
 | Block alignment | Yes | Yes | 512 对齐 + 两零块收尾 |
 | Zero-copy slice/stream | — | Yes | `TrySlice` 单一规范 `TByteSpan` 零拷贝视图 + `EntryDataSlice` 薄转发(`PByte`) + `OpenEntryStream` 持有型 `IReader`（`bytes.ops.CopyMemory` 单源，Reader 释放后仍可读，外部裸指针固化拷贝） |
 
@@ -117,7 +117,7 @@ Reader ── TrySlice ──► 零拷贝视图（绑 Reader）
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 单次 `SpanIndexOf` 单源视图；`EntryData` 为 `SpanClone` 单源拷贝，`OpenEntryStream` 持有型 `FHold` 防悬垂，`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 全局持久至下一 `g` 覆盖，`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WriteBlock` 去 inline 避 512 栈 I-Cache 复制膨胀、out-of-line 单拷贝，`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` 64K pooled 复用 `FIOBuf` 无缩容 amortized 1 alloc 零拷贝，`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` SafeFail 抑制二次逃逸），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联）。
+- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 单次 `SpanIndexOf` 单源视图；`EntryData` 为 `SpanClone` 单源拷贝，`OpenEntryStream` 持有型 `FHold` 防悬垂，`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 全局持久至下一 `g` 覆盖，`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WriteBlock` 去 inline 避 512 栈 I-Cache 复制膨胀、out-of-line 单拷贝，`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` 64K pooled 复用 `FIOBuf` 无缩容 amortized 1 alloc 零拷贝，`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` SafeFail 抑制二次逃逸），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarAppendPaxRecord` builder 零拷贝最优路径（`TarFormatPaxRecord` 薄包装单源 `SpanToString`）及 `ArchivePaxParseRecords` 通用 pax-kv 严格校验零拷贝 `PByte` 复用 `bytes.ops` 单源（畸形 `pax: ...` 即抛 `EIOError` 禁回退，`TarParsePaxKVRecords` 供归档族复用；薄守卫 inline，热循环外联）。
 - **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
 - **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 红），`ns/op` `1.5×` WARN 与 `MB/s` `0.65×` WARN；Go/Rust 对照同口径 `compare_go`/`compare_rust` 守卫 `Pascal ns/op ≤1.5×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续两机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门。
 
