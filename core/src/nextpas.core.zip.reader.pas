@@ -359,6 +359,20 @@ begin
   end;
 end;
 
+procedure ZipDecodeEocd(const AC: IByteCursor; out ADiskNum, ACdStartDisk,
+  ACount16, ACommentLen: Word; out ACdSize, ACdOffset: UInt64);
+begin
+  if AC.ReadU32LE <> C_ZIP_EOCD_SIG then
+    raise EParseError.Create('zip: bad end of central directory signature');
+  ADiskNum := AC.ReadU16LE;
+  ACdStartDisk := AC.ReadU16LE;
+  AC.ReadU16LE;
+  ACount16 := AC.ReadU16LE;
+  ACdSize := AC.ReadU32LE;
+  ACdOffset := AC.ReadU32LE;
+  ACommentLen := AC.ReadU16LE;
+end;
+
 function ZipWrapEntryReader(const APayload: IReader; const AInfo: TZipEntryInfo;
   const APassword: TBytes; AMaxOutput: SizeUInt): IDecompressReader;
 var
@@ -541,14 +555,7 @@ begin
     raise EParseError.Create('zip: end of central directory not found');
 
   FC.Seek(SizeUInt(LEocdPos));
-  FC.ReadU32LE;                       { EOCD 签名 }
-  LDiskNum := FC.ReadU16LE;
-  LCdStartDisk := FC.ReadU16LE;
-  FC.ReadU16LE;                       { 本盘条目数（多盘不支持，看总数即可） }
-  LCount16 := FC.ReadU16LE;
-  LCdSize := FC.ReadU32LE;
-  LCdOffset := FC.ReadU32LE;
-  LCommentLen := FC.ReadU16LE;
+  ZipDecodeEocd(FC, LDiskNum, LCdStartDisk, LCount16, LCommentLen, LCdSize, LCdOffset);
   if LEocdPos + C_EOCD_MIN_LEN + LCommentLen > Int64(FC.Length) then
     raise EParseError.Create('zip: truncated archive comment');
   if (LDiskNum <> 0) or (LCdStartDisk <> 0) then
@@ -816,14 +823,7 @@ begin
 
   Fetch(LEocdAbs, C_EOCD_MIN_LEN, LBuf, 'end of central directory');
   LC := NewByteCursor(LBuf);
-  LC.ReadU32LE;                       { EOCD 签名 }
-  LDiskNum := LC.ReadU16LE;
-  LCdStartDisk := LC.ReadU16LE;
-  LC.ReadU16LE;                       { 本盘条目数（多盘不支持，看总数即可） }
-  LCount16 := LC.ReadU16LE;
-  LCdSize := LC.ReadU32LE;
-  LCdOffset := LC.ReadU32LE;
-  LCommentLen := LC.ReadU16LE;
+  ZipDecodeEocd(LC, LDiskNum, LCdStartDisk, LCount16, LCommentLen, LCdSize, LCdOffset);
   if LEocdAbs + C_EOCD_MIN_LEN + LCommentLen > FSize then
     raise EParseError.Create('zip: truncated archive comment');
   if (LDiskNum <> 0) or (LCdStartDisk <> 0) then
