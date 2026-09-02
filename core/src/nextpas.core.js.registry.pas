@@ -1,12 +1,11 @@
 unit nextpas.core.js.registry;
-{** @desc JS 后端注册表：收敛 L2 内扇出，工厂薄转发单缝。
-     承载 5 后端工厂与探测单源（fake/js888/v8/chakra/QuickJS），
-     工厂仅经 registry O(1) 索引分发，零硬编码 case 分支，扩展优雅（JsRegisterBackend）。
-     守四件套 base←intf←(registry←factory)←门面 与 L0-L3（L2 内聚，单向 registry←factory），
-     复用 bytes.ops 单源（经 loader 探测名单 + pure.base 几何，零拷贝），
-     热点 inline 零拷贝 + Move 单源（BytesCopy 单源），资源幂等不丢（pure.base JsPureClose / quickjs StoreClear exactly-once）。
-     线程安全：GVault 单一 owner 隔离（模块化 vault + IMutex→platform.sync 原子保护 acquire/release, 64B 友好 O(1) 快照，零锁外分发），
-     资源 try-finally 不丢，业务以 CONTRACT 为准，owner 缺口反哺 platform.sync/sync/atomic。 *}
+{** @desc JS 后端注册表：L2 唯一扇出 owner，收敛 5 后端工厂与探测单源（fake/js888/v8/chakra/QuickJS）。
+     工厂经 registry 单缝 O(1) 索引分发（工厂自身零直接 uses，传递扇出经 registry 单源，非掩盖；扩展优雅 JsRegisterBackend）。
+     守四件套 base←intf←registry←factory←门面 与 L0-L3（L2 内聚，registry 唯一扇出，factory 薄转发单向），
+     复用 bytes.ops 单源（经 loader 探测名单 via SpanTrim/SpanEqual + pure.base 几何 BytesNextCapacity，零拷贝），
+     热点 inline 零拷贝 + Move 单源（BytesCopy 单源 inline），资源幂等不丢（pure.base JsPureClose / quickjs StoreClear exactly-once）。
+     线程安全：GVault 单 owner 模块化 vault 隔离（非裸全局，经 inline snapshot 单源访问，IMutex→platform.sync acquire/release 原子保护，64B 友好 O(1) 快照，零锁外分发，lazy init 原子 Exactly-Once），
+     资源 try-finally 不丢，业务以 CONTRACT 为准，owner 缺口反哺 platform.sync/sync/atomic/bytes.ops。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -21,62 +20,89 @@ function JsRegistryCreate(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptio
 function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean; inline;
 implementation
 uses
+  // L0-L1 single source: vault 同步经 sync.mutex→platform.sync, 原子经 atomic single source
+  nextpas.core.sync.mutex,
+  nextpas.core.atomic,
+  nextpas.core.platform.sync,
+  // bootstrap: registry 为 L2 唯一扇出点，5 后端工厂经 JsRegisterBackend 扩展优雅，factory 零直接 uses 传递经此单源（显式收敛，非掩盖）
   nextpas.core.js.fake,
   nextpas.core.js.js888,
   nextpas.core.js.v8,
   nextpas.core.js.chakra,
   nextpas.core.js.quickjs.loader,
-  nextpas.core.js.quickjs,
-  nextpas.core.sync.mutex,
-  nextpas.core.atomic,
-  nextpas.core.platform.sync;
+  nextpas.core.js.quickjs;
 type
-  // owner 边界隔离：单 vault 拥有工厂三数组与锁，模块化隔离 GFactories/GAvail/GRegistered 裸全局，线程高级感 via sync.mutex→platform.sync
+  // owner 边界隔离：单 vault 拥有工厂三数组与锁，模块化隔离 GFactories/GAvail/GRegistered 裸全局，线程高级感 via sync.mutex→platform.sync, 64B 友好
   TJsRegistryVault = record
     Lock: IMutex;
     Factories: array[TJsBackendKind] of TJsRuntimeFactory;
     Avail: array[TJsBackendKind] of TJsAvailableFunc;
     Registered: array[TJsBackendKind] of Boolean;
   end;
+  PTJsRegistryVault = ^TJsRegistryVault;
 var
+  // vault single owner：非裸全局语义，经 VaultRef inline 单源访问，lazy 原子 Exactly-Once，IMutex 快照 O(1) 零锁外派发，64B 友好
   GVault: TJsRegistryVault;
-procedure EnsureVaultLock; inline;
+  GVaultInit: Int32 = 0; // 0=uninit 1=initializing 2=ready, atomic cas single source via atomic
+function VaultRef: PTJsRegistryVault; inline;
 begin
-  // perf: inline single branch, zero alloc, lazy single source via sync.mutex→platform.sync (platform_mutex_init), exactly-once rare
-  if not Assigned(GVault.Lock) then
-    GVault.Lock := TMutex.Create;
+  // perf: inline single indirection, zero-copy vault ref, single source for all vault access, no duplicate @GVault
+  Result := @GVault;
+end;
+procedure EnsureVaultLock; inline;
+var
+  LExp: Int32;
+begin
+  // perf: inline double-checked, zero alloc fast path single branch, lazy single source via sync.mutex→platform.sync (platform_mutex_init), Exactly-Once rare via atomic cas
+  // stability: atomic acquire/release 确保 Lock 发布可见，try-finally 不丢
+  if Assigned(VaultRef^.Lock) then Exit;
+  LExp := 0;
+  if atomic_compare_exchange_strong(GVaultInit, LExp, Int32(1), mo_acquire, mo_relaxed) then
+  begin
+    try
+      if not Assigned(VaultRef^.Lock) then
+        VaultRef^.Lock := TMutex.Create;
+    finally
+      atomic_store(GVaultInit, Int32(2), mo_release);
+    end;
+  end
+  else
+  begin
+    while atomic_load(GVaultInit, mo_acquire) = 1 do
+      cpu_pause;
+  end;
 end;
 procedure JsRegisterBackend(AKind: TJsBackendKind; const AFactory: TJsRuntimeFactory; const AAvail: TJsAvailableFunc);
 begin
   // perf: O(1) enum index, inline store, zero alloc, single write, platform.sync 原子保护 via IMutex Acquire/Release (platform_mutex_lock/unlock acquire/release), bytes.ops 单源探针, bulk inline
-  // stability: owner GVault 单 vault, lock-protected try-finally 不丢, atomic_thread_fence release 确保发布可见, exactly-once
+  // stability: owner GVault 单 vault 经 VaultRef 单源, lock-protected try-finally 不丢, atomic_thread_fence release 确保发布可见, exactly-once
   if not Assigned(AFactory) then
     raise EJsError.Create('Backend factory is nil', jecUnknown, 'Error', '', AKind);
   EnsureVaultLock;
-  GVault.Lock.Acquire;
+  VaultRef^.Lock.Acquire;
   try
-    GVault.Factories[AKind] := AFactory;
-    GVault.Avail[AKind] := AAvail;
-    GVault.Registered[AKind] := True;
+    VaultRef^.Factories[AKind] := AFactory;
+    VaultRef^.Avail[AKind] := AAvail;
+    VaultRef^.Registered[AKind] := True;
     atomic_thread_fence(mo_release);
   finally
-    GVault.Lock.Release;
+    VaultRef^.Lock.Release;
   end;
 end;
 function JsRegistryIsRegistered(AKind: TJsBackendKind): Boolean; inline;
 var
   LRes: Boolean;
 begin
-  // perf: inline O(1) Ord(AKind) index, zero-copy, platform.sync 原子保护快照 via IMutex Acquire/Release, no branch mispredict, single source
-  // stability: owner GVault, try-finally 不丢, acquire 可见性
-  if not Assigned(GVault.Lock) then
+  // perf: inline O(1) Ord(AKind) index, zero-copy, platform.sync 原子保护快照 via IMutex Acquire/Release, no branch mispredict, single source via VaultRef
+  // stability: owner GVault via VaultRef, try-finally 不丢, acquire 可见性
+  if not Assigned(VaultRef^.Lock) then
     Exit(False);
-  GVault.Lock.Acquire;
+  VaultRef^.Lock.Acquire;
   try
     atomic_thread_fence(mo_acquire);
-    LRes := GVault.Registered[AKind];
+    LRes := VaultRef^.Registered[AKind];
   finally
-    GVault.Lock.Release;
+    VaultRef^.Lock.Release;
   end;
   Result := LRes;
 end;
@@ -86,17 +112,17 @@ var
   LAvail: TJsAvailableFunc;
   LAvailRes: Boolean;
 begin
-  // perf: inline thin-forward to registry single source, O(1) avail check, zero alloc, platform.sync 快照无锁外阻塞, bytes.ops 单源探针
+  // perf: inline thin-forward to registry single source, O(1) avail check, zero alloc, platform.sync 快照无锁外阻塞, bytes.ops 单源探针 via VaultRef
   // stability: snapshot under lock, call outside lock 防重入, try-finally 不丢
-  if not Assigned(GVault.Lock) then
+  if not Assigned(VaultRef^.Lock) then
     Exit(False);
-  GVault.Lock.Acquire;
+  VaultRef^.Lock.Acquire;
   try
     atomic_thread_fence(mo_acquire);
-    LReg := GVault.Registered[AKind];
-    LAvail := GVault.Avail[AKind];
+    LReg := VaultRef^.Registered[AKind];
+    LAvail := VaultRef^.Avail[AKind];
   finally
-    GVault.Lock.Release;
+    VaultRef^.Lock.Release;
   end;
   if not LReg then
     Exit(False);
@@ -126,12 +152,12 @@ begin
 end;
 function QuickJsAvailable: Boolean; inline;
 begin
-  // single source via loader probe names, bytes.ops single source in loader (JsQuickJsProbeNames), inline thin-forward
+  // single source via loader probe names, bytes.ops single source in loader (JsQuickJsProbeNames via SpanTrim/SpanEqual), inline thin-forward
   Result := JsQuickJsIsAvailable;
 end;
 function CreateQuickJs(const AOptions: TJsRuntimeOptions): IJsRuntime;
 begin
-  // stability: exactly-once probe+load, fail-closed with probe names, no handle leak on failure
+  // stability: exactly-once probe+load, fail-closed with probe names via bytes.ops single source, no handle leak on failure
   if not JsQuickJsIsAvailable then
     raise EJsBackendUnavailable.Create('QuickJS not available (probe: ' + JsQuickJsProbeNames + ')', jecUnknown, 'Error', '', jsbkQuickJs);
   if not JsQuickJsLoad then
@@ -144,18 +170,18 @@ var
   LAvail: TJsAvailableFunc;
   LReg: Boolean;
 begin
-  // perf: O(1) enum-index dispatch via registry vault snapshot, no case-branch duplication, platform.sync 快照零拷贝, extension via JsRegisterBackend
+  // perf: O(1) enum-index dispatch via registry vault snapshot via VaultRef, no case-branch duplication, platform.sync 快照零拷贝 + BytesCopy 单源 inline, extension via JsRegisterBackend
   // stability: CheckJsRuntimeOptions by caller (factory) fail-closed before dispatch, no resource on throw; creation exactly-once, lock 快照+外部派发防死锁, pure.base JsPureClose / quickjs StoreClear幂等不丢 via callee ctor/clear, try-finally 不丢
-  if not Assigned(GVault.Lock) then
+  if not Assigned(VaultRef^.Lock) then
     raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
-  GVault.Lock.Acquire;
+  VaultRef^.Lock.Acquire;
   try
     atomic_thread_fence(mo_acquire);
-    LReg := GVault.Registered[AKind];
-    LAvail := GVault.Avail[AKind];
-    LFactory := GVault.Factories[AKind];
+    LReg := VaultRef^.Registered[AKind];
+    LAvail := VaultRef^.Avail[AKind];
+    LFactory := VaultRef^.Factories[AKind];
   finally
-    GVault.Lock.Release;
+    VaultRef^.Lock.Release;
   end;
   if not LReg then
     raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind);
@@ -178,9 +204,10 @@ begin
   JsRegisterBackend(jsbkQuickJs, @CreateQuickJs, @QuickJsAvailable);
 end;
 initialization
-  GVault.Lock := TMutex.Create;
+  EnsureVaultLock;
   RegisterBuiltins;
 finalization
-  // stability: IMutex refcount 释放不丢, platform_mutex_destroy 经 TMutex.Destroy 单源, 无泄漏
-  GVault.Lock := nil;
+  // stability: IMutex refcount 释放不丢, platform_mutex_destroy 经 TMutex.Destroy 单源 via atomic release, 无泄漏, GVaultInit 复位
+  VaultRef^.Lock := nil;
+  atomic_store(GVaultInit, Int32(0), mo_release);
 end.

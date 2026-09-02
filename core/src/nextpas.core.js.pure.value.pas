@@ -58,7 +58,10 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.js.value;
+  nextpas.core.text.builder,
+  nextpas.core.json.writer,
+  nextpas.core.text.escape,
+  nextpas.core.text.number;
 var
   GPureHeapMetrics: TJsPureHeapMetrics;
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
@@ -280,13 +283,15 @@ begin
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 begin
-  // zero-copy view straight-through via text.view.ToString single source (SetString single alloc, owner text.view, bytes.ops semantic single Move), inline, no duplicate SetLength+BytesCopy
-  Result := JsValueBindContext(JsStringValue(AView.ToString), AContextId);
+  // perf: inline zero-copy view via JsStringViewValue (PAnsiChar+Len) single source, B/op=0 hot path (host dispatch), bytes.ops single source deferred to AsString materialize, no heap alloc, owner intf
+  if AView.IsEmpty then Result := JsValueBindContext(JsStringValue(''), AContextId)
+  else Result := JsValueBindContext(JsStringViewValue(AView.Data, AView.Len), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 begin
-  // zero-copy view straight-through via text.view single source, inline
-  Result := JsStringValue(AView.ToString);
+  // perf: inline zero-copy view via JsStringViewValue single source, B/op=0, no ToString alloc, bytes.ops single source on AsString
+  if AView.IsEmpty then Result := JsStringValue('')
+  else Result := JsStringViewValue(AView.Data, AView.Len);
 end;
 function JsPureNewString(const AStr: string; AContextId: UInt64): TJsValue; inline;
 begin Result := JsValueBindContext(JsStringValue(AStr), AContextId); end;
@@ -308,9 +313,50 @@ begin
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
 end;
 function JsPureToJsonString(const AValue: TJsValue): string;
+var B: TStringBuilder; W: TJsonWriter; S: string; LBuf: array[0..63] of AnsiChar; LLen: Int32;
 begin
-  // single source convergent to js.value.JsValueToJsonString (json.writer seam, bytes.ops geometric, zero-copy inline)
-  Result := JsValueToJsonString(AValue);
+  // single source owner pure.value via json.writer TJsonWriter seam + text.builder geometric via bytes.ops BytesNextCapacity single source, zero-copy BytesCopy single source, text.view zero-copy, text.escape SIMD single source
+  // perf: number path zero builder via text.number IntToBuffer/FloatToBuffer stack single source single alloc, string clean fast path via JsonNeedsEscapeStr SIMD single source zero builder single alloc ('"'+S+'"' inline), escaped path single alloc + try-finally Done not lost, not inline per red-line (branch+builder), bytes.ops single source, resource try-finally Done 不丢
+  case AValue.Kind of
+    jskUndefined: Exit('undefined');
+    jskNull: Exit('null');
+    jskBoolean: if AValue.AsBool then Exit('true') else Exit('false');
+    jskNumber:
+      begin
+        if Double(AValue.AsInt) = AValue.AsDouble then
+          LLen := IntToBuffer(AValue.AsInt, @LBuf[0])
+        else
+          LLen := FloatToBuffer(AValue.AsDouble, @LBuf[0]);
+        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+        Exit;
+      end;
+    jskString:
+      begin
+        S := AValue.AsString;
+        if not JsonNeedsEscapeStr(S) then
+        begin
+          Result := '"' + S + '"';
+          Exit;
+        end;
+        B.Init(SizeUInt(Length(S)) + 2);
+        try
+          W.Init(B);
+          W.Str(S);
+          Result := B.ToString;
+        finally B.Done; end;
+        Exit;
+      end;
+    jskSymbol: Exit('Symbol(' + AValue.AsString + ')');
+    jskBigInt:
+      begin
+        LLen := IntToBuffer(AValue.AsInt, @LBuf[0]);
+        SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+        Result := Result + 'n';
+        Exit;
+      end;
+  else
+    Result := '';
+  end;
 end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
 begin

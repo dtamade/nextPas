@@ -1,5 +1,5 @@
 unit nextpas.core.js.host;
-{ Host facade — independent L2 host owner (复用下沉): thin re-export pure.host single source, per-Context buckets instance-isolated, inline zero-copy via text.view, bytes.ops FNV1a single source. Threshold >800时 pure.base Host职责可彻底迁至本单元，当前pure.host为单源owner，本单元为js.host独立门面 alias, 守 L0-L3, 四件套 base←intf←impl←门面. }
+{ Host facade — deprecated compat alias: canonical single source is nextpas.core.js.pure.host (Owner pure.host, L2). Thin re-export pure.host inline zero-copy via text.view + bytes.ops FNV1a single source, per-Context buckets instance-isolated. New code import via pure.host or pure.base aggregated; do not add new js.host entry. Threshold >800时 Host职责可迁至 js.host 届时 pure.host 转薄转发, 当前 pure.host 单源 owner. 守 L0-L3, 四件套 base←intf←impl←门面, 资源幂等不丢. }
 {$I nextpas.core.settings.inc}
 interface
 uses

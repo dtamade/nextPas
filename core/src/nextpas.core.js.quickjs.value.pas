@@ -42,7 +42,7 @@ function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: T
 function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
-{ L0 single source thread/time/deadline helpers — quickjs.value 唯一持有 platform.thread/time 单缝, inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops 单源 }
+{ L0 single source thread/time/deadline helpers — thread 单缝经 js.lifecycle JsPureThreadSelf 唯一持有 platform.thread (L0 single slit via lifecycle→pure.base), time/deadline 单缝仍经 quickjs.value platform.time, inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops 单源 }
 function QjsThreadSelf: UInt64; inline;
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 function QjsMonotonicNs: QWord; inline;
@@ -55,7 +55,7 @@ uses
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.platform.thread,
+  nextpas.core.js.lifecycle,
   nextpas.core.platform.time;
 
 procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
@@ -112,7 +112,7 @@ begin
     JS_TAG_NULL: Exit(JsValueBindContext(JsNullValue, ACtxtId));
     JS_TAG_BOOL: Exit(JsPureNewBool(V.Data[0] <> 0, ACtxtId));
     JS_TAG_INT: begin LInt := Int64(Int32(V.Data[0] and $FFFFFFFF)); Exit(JsPureNewInt(LInt, ACtxtId)); end;
-    JS_TAG_FLOAT64: begin Move(V.Data[0], LDouble, SizeOf(Double)); Exit(JsPureNewDouble(LDouble, ACtxtId)); end;
+    JS_TAG_FLOAT64: begin nextpas.core.bytes.ops.BytesCopy(@LDouble, @V.Data[0], SizeOf(Double)); Exit(JsPureNewDouble(LDouble, ACtxtId)); end; // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy), L1 single source, inline hot tag unpack
     JS_TAG_STRING:
       begin
         if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
@@ -298,14 +298,14 @@ end;
 
 function QjsThreadSelf: UInt64; inline;
 begin
-  // perf: inline thin-forward to platform.thread single source (L0 single slit), zero-copy token, decorator reuse
-  Result := UInt64(platform_thread_self);
+  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle→pure.base), zero-copy token, decorator reuse, single syscall via lifecycle
+  Result := JsPureThreadSelf;
 end;
 
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 begin
-  // perf: inline single compare via QjsThreadSelf single source, zero syscall beyond one, no duplication
-  Result := QjsThreadSelf = ACreationId;
+  // perf: inline single compare via js.lifecycle single source JsPureIsOnCreationThread, zero syscall beyond one, no duplication, L0 platform.thread 单缝收敛至 lifecycle
+  Result := JsPureIsOnCreationThread(ACreationId);
 end;
 
 function QjsMonotonicNs: QWord; inline;

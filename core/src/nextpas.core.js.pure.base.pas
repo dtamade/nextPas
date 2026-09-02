@@ -33,11 +33,13 @@ const
   JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
   JS_PURE_EVAL_BAD = nextpas.core.js.eval.JS_PURE_EVAL_BAD;
   JS_PURE_EVAL_FOO = nextpas.core.js.eval.JS_PURE_EVAL_FOO;
-// lifecycle — owner js.lifecycle single source: GPureClosed 64B padded atomic (acquire/release, cache-line isolated, write-once rare, atomic_fetch_add id), intf零可变全局, bulk IsValid零原子 via FValid; pure.base thin-forward inline
+// lifecycle — owner js.lifecycle single source: GPureClosed 64B padded atomic (acquire/release, cache-line isolated, write-once rare, atomic_fetch_add id), thread affinity JsPureThreadSelf via lifecycle platform.thread single slit; intf零可变全局, bulk IsValid零原子 via FValid; pure.base thin-forward inline zero-copy
 function JsPureContextRegister: UInt64; inline;
 procedure JsPureContextClose(AId: UInt64); inline;
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
 function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
+function JsPureThreadSelf: UInt64; inline;
+function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 // Host — owner pure.host (future js.host) — inline thin-forward, bytes.ops FNV1a single source, per-Context buckets instance-isolated
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
@@ -151,6 +153,16 @@ begin
   // perf: inline zero-alloc, thread-affine bulk 零原子 via FValid；跨线程强一致时走 acquire 检查 js.lifecycle GPureClosed，单分支
   // note: V.IsValid 本体已改为 FValid 零屏障，此为显式强一致封装供需要跨线程可见性的调用方
   Result := V.IsValid and not nextpas.core.js.lifecycle.JsPureContextIsClosed(V.FContextId);
+end;
+function JsPureThreadSelf: UInt64; inline;
+begin
+  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle), zero-copy token, inline hot path, bytes.ops 单源几何同保持
+  Result := nextpas.core.js.lifecycle.JsPureThreadSelf;
+end;
+function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
+begin
+  // perf: inline single compare via js.lifecycle single source, zero syscall beyond one, no duplication, thread-affine single source via pure.base
+  Result := nextpas.core.js.lifecycle.JsPureIsOnCreationThread(ACreationId);
 end;
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureValidateHostName(AName); end;

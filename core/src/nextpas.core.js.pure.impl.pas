@@ -109,8 +109,7 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text,
-  nextpas.core.platform.thread;
+  nextpas.core.text;
 
 { TJsPureRuntime — Lifecycle }
 
@@ -162,7 +161,7 @@ begin
   FOptions := AOptions;
   FBackend := ABackend;
   FClosed := False;
-  FThreadId := UInt64(platform_thread_self);
+  FThreadId := JsPureThreadSelf;
   FContextId := JsPureContextRegister;
   // ValueState per-Context隔离 via pure.value单源, FHost zero-init per-Context隔离, 无全局共享, 线程高级感
   JsPureValueStateInit(FValue, FContextId);
@@ -182,7 +181,8 @@ end;
 
 function TJsPureContext.IsOnCreationThread: Boolean; inline;
 begin
-  Result := UInt64(platform_thread_self) = FThreadId;
+  // perf: inline thin-forward to js.lifecycle/pure.base single source JsPureIsOnCreationThread (L0 platform.thread single slit via lifecycle), zero-copy token, single syscall inline, bytes.ops 单源同保持
+  Result := JsPureIsOnCreationThread(FThreadId);
 end;
 
 procedure TJsPureContext.EnsureNotClosed; inline;

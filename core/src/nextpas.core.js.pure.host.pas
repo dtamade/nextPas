@@ -133,15 +133,15 @@ begin
     Buckets.Buckets[LIdx] := I;
   end;
 end;
-function HostFindCoreLinear(const Hosts: TJsPureHostArray; AHash: UInt32; const AView: TStringView): Integer; inline;
+function HostFindCoreLinear(const Hosts: TJsPureHostArray; AHash: UInt32; const AView: TStringView): Integer;
 var I: Integer;
 begin
-  // perf: inline + zero-copy view + HostEquals single source (hash filter + SpanEqual), O(n) for <=64, no extra HostCount scan
+  // perf: not inline per design-conventions §2 red-line 2 (loop body禁inline, I-Cache不膨胀) — zero-copy view + HostEquals single source (hash filter + SpanEqual), O(n) for <=64, no extra HostCount scan
   for I := 0 to High(Hosts) do
     if HostEquals(Hosts[I], AHash, AView) then Exit(I);
   Result := -1;
 end;
-function HostFindCoreBucketed(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; AHash: UInt32; const AView: TStringView): Integer; inline;
+function HostFindCoreBucketed(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; AHash: UInt32; const AView: TStringView): Integer;
 var I, LIdx, LProbe, LCount: Integer;
 begin
   // perf: unified template — O(1) count via Length, single-branch bucket valid check, inline hash via bytes.ops single source
@@ -348,49 +348,31 @@ begin
   JsPureHostSet(Hosts, Buckets, AName, AHandler, 2);
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string);
-var LIdx, LCount: Integer; LMoveBytes: SizeUInt;
+var LIdx, LCount, I: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, AName);
   if LIdx < 0 then Exit;
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // perf: single Move via bytes.ops BytesCopy single source, inline zero-copy, O(n) memmove instead of O(n) per-element ref-churn, bulk delete O(n) not O(n²)
-  // stability: release deleted slot before bulk move, zero tail raw via BytesZero to avoid double finalize, poke amortized O(1)
-  Hosts[LIdx].Name := '';
-  Hosts[LIdx].Func := nil;
-  Hosts[LIdx].Method := nil;
-  Hosts[LIdx].Proc := nil;
-  Hosts[LIdx].Kind := 0;
-  Hosts[LIdx].Hash := 0;
-  if LIdx < LCount - 1 then
-  begin
-    LMoveBytes := SizeUInt(LCount - LIdx - 1) * SizeOf(TJsPureHostRec);
-    BytesCopy(@Hosts[LIdx], @Hosts[LIdx + 1], LMoveBytes);
-    BytesZero(@Hosts[LCount - 1], SizeOf(TJsPureHostRec));
-  end;
+  // stability: managed assignment semantics — for managed record (string/interface) use per-element assignment, avoids raw BytesCopy/BytesZero double-free/leak and handmade zero fragility, resource not丢 via assignment refcount
+  // perf: O(n) assignment shift, bulk delete O(n) not O(n²), inline zero-copy view via HostFind, poke amortized O(1) via mem.dynarray single source
+  for I := LIdx to LCount - 2 do
+    Hosts[I] := Hosts[I + 1];
+  Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
 end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string);
-var LIdx, LCount: Integer; LMoveBytes: SizeUInt;
+var LIdx, LCount, I: Integer;
 begin
   LIdx := JsPureFindHost(Hosts, Buckets, AName);
   if LIdx < 0 then Exit;
   LCount := Length(Hosts);
   if LCount = 0 then Exit;
-  // perf: single Move via bytes.ops BytesCopy single source, inline zero-copy, O(n) memmove, bulk delete O(n) not O(n²)
-  // stability: release deleted slot before bulk move, zero tail raw via BytesZero to avoid double finalize, poke amortized O(1)
-  Hosts[LIdx].Name := '';
-  Hosts[LIdx].Func := nil;
-  Hosts[LIdx].Method := nil;
-  Hosts[LIdx].Proc := nil;
-  Hosts[LIdx].Kind := 0;
-  Hosts[LIdx].Hash := 0;
-  if LIdx < LCount - 1 then
-  begin
-    LMoveBytes := SizeUInt(LCount - LIdx - 1) * SizeOf(TJsPureHostRec);
-    BytesCopy(@Hosts[LIdx], @Hosts[LIdx + 1], LMoveBytes);
-    BytesZero(@Hosts[LCount - 1], SizeOf(TJsPureHostRec));
-  end;
+  // stability: managed assignment semantics — per-element assignment for string/interface, avoids raw BytesCopy/BytesZero fragility, resource not丢
+  // perf: O(n) assignment shift bulk delete O(n) not O(n²), bucket invalidate single source, poke amortized O(1)
+  for I := LIdx to LCount - 2 do
+    Hosts[I] := Hosts[I + 1];
+  Hosts[LCount - 1] := Default(TJsPureHostRec);
   PokeHostLen(Hosts, SizeUInt(LCount - 1));
   JsPureHostBucketsInvalidate(Buckets);
 end;

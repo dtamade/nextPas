@@ -7,14 +7,14 @@ type
   IJsRuntime = interface; IJsContext = interface;
   TJsStringArray = array of string;
   TJsValue = record
-  private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64;
+  private FKind: TJsValueKind; FValid: Boolean; FBoolVal: Boolean; FIntVal: Int64; FDoubleVal: Double; FStrVal: string; FContextId: UInt64; FViewData: PAnsiChar; FViewLen: SizeUInt;
   public
     function Kind: TJsValueKind; inline; function IsValid: Boolean; inline;
     function IsUndefined: Boolean; inline; function IsNull: Boolean; inline;
     function IsBool: Boolean; inline; function IsNumber: Boolean; inline; function IsString: Boolean; inline;
     function IsObject: Boolean; inline; function IsArray: Boolean; inline; function IsFunction: Boolean; inline;
     function IsError: Boolean; inline; function IsPromise: Boolean; inline; function IsSymbol: Boolean; inline; function IsBigInt: Boolean; inline;
-    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; inline; function AsJson: string;
+    function AsBool: Boolean; inline; function AsInt: Int64; inline; function AsDouble: Double; inline; function AsString: string; function AsJson: string;
     function TryAsBool(out V: Boolean): Boolean; function TryAsDouble(out V: Double): Boolean; function TryAsString(out V: string): Boolean;
   end;
   IJsValueRef = interface ['{A7B2C9E1-4F8D-4A1E-9C3B-5D7E8F1A2B3C}'] function Value: TJsValue; end;
@@ -53,6 +53,7 @@ type
   end;
 function JsUndefinedValue: TJsValue; inline; function JsNullValue: TJsValue; inline; function JsBoolValue(AValue: Boolean): TJsValue; inline;
 function JsIntValue(AValue: Int64): TJsValue; inline; function JsDoubleValue(AValue: Double): TJsValue; inline; function JsStringValue(const AValue: string): TJsValue; inline;
+function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
 function JsObjectValue: TJsValue; inline; function JsArrayValue: TJsValue; inline;
 function JsHeapObjectValue(AId: Int64): TJsValue; inline;
 function JsHeapArrayValue(AId: Int64): TJsValue; inline;
@@ -64,18 +65,24 @@ function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValu
 implementation
 // intf 奢华薄：零可变全局，守四件套 base←intf←(js.lifecycle 单源 owner via pure.base thin-forward)→pure.impl←factory←门面，L0-L3 单向，热点 inline 零拷贝，状态下沉 owner js.lifecycle (THREAD-AFFINE, bulk 零原子)
 uses
-  nextpas.core.js.value;
+  nextpas.core.js.value,
+  nextpas.core.bytes.ops;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
   Result := AValue;
   Result.FContextId := AContextId;
 end;
-function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; end;
+function JsUndefinedValue: TJsValue; begin Result.FKind:=jskUndefined; Result.FValid:=True; Result.FBoolVal:=False; Result.FIntVal:=0; Result.FDoubleVal:=0.0; Result.FStrVal:=''; Result.FContextId:=0; Result.FViewData:=nil; Result.FViewLen:=0; end;
 function JsNullValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNull; end;
 function JsBoolValue(AValue: Boolean): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskBoolean; Result.FBoolVal:=AValue; end;
 function JsIntValue(AValue: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FIntVal:=AValue; Result.FDoubleVal:=Double(AValue); end;
 function JsDoubleValue(AValue: Double): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskNumber; Result.FDoubleVal:=AValue; Result.FIntVal:=Int64(Trunc(AValue)); end;
 function JsStringValue(const AValue: string): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FStrVal:=AValue; end;
+function JsStringViewValue(const AData: PAnsiChar; ALen: SizeUInt): TJsValue; inline;
+begin
+  // perf: inline zero-copy view via PAnsiChar+Len, no heap, owner intf, bytes.ops not needed until AsString materializes via single source SpanToString, B/op=0 hot path when host discards args
+  Result:=JsUndefinedValue; Result.FKind:=jskString; Result.FViewData:=AData; Result.FViewLen:=ALen; Result.FStrVal:='';
+end;
 function JsObjectValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; end;
 function JsArrayValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskArray; end;
 function JsHeapObjectValue(AId: Int64): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskObject; Result.FIntVal:=AId; end;
@@ -105,7 +112,17 @@ function TJsValue.IsBigInt: Boolean; begin Result:=FKind=jskBigInt; end;
 function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); Result:=FBoolVal; end;
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
-function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
+function TJsValue.AsString: string; begin
+  if FKind=jskSymbol then Exit(FStrVal);
+  if FKind<>jskString then Exit('');
+  if Length(FStrVal)>0 then Exit(FStrVal);
+  if FViewLen>0 then begin
+    // single source materialize via bytes.ops SpanToString (SetString+BytesCopy single source, owner bytes.ops), inline zero-copy deferred, resource not丢
+    if FViewData<>nil then Result := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)) else Result:='';
+    Exit;
+  end;
+  Result:='';
+end;
 function TJsValue.AsJson: string;
 begin
   // single source via js.value single seam (json.writer TJsonWriter via bytes.ops geometric + text.escape SIMD + text.view zero-copy + text.number single source), thin-forward zero-copy, single alloc fast path, resource try-finally in js.value not lost, not inline per red-line (branch+builder)
@@ -114,5 +131,14 @@ begin
 end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
-function TJsValue.TryAsString(out V: string): Boolean; begin Result:=FKind=jskString; if Result then V:=FStrVal else V:=''; end;
+function TJsValue.TryAsString(out V: string): Boolean; begin
+  Result:=FKind=jskString;
+  if Result then begin
+    if Length(FStrVal)>0 then V:=FStrVal
+    else if FViewLen>0 then begin
+      // single source via bytes.ops SpanToString, deferred materialize, B/op=0 until called
+      if FViewData<>nil then V := SpanToString(TByteSpan.Create(PByte(FViewData), FViewLen)) else V:='';
+    end else V:='';
+  end else V:='';
+end;
 end.

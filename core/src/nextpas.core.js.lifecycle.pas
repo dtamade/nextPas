@@ -5,12 +5,15 @@ interface
 function JsPureContextRegister: UInt64;
 procedure JsPureContextClose(AId: UInt64);
 function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
+function JsPureThreadSelf: UInt64; inline;
+function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 implementation
 uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.platform.thread;
 type
   TPureClosedSlot = record Value: Int32; _Pad: array[0..59] of Byte; end; // 64B cache-line padded, instance-isolated atomic slot, false-sharing free, write-once rare
 var
@@ -74,6 +77,16 @@ begin
   if AId >= UInt64(Length(GPureClosed)) then Exit(False);
   LVal := atomic_load(GPureClosed[AId].Value, mo_acquire);
   Result := LVal <> 0;
+end;
+function JsPureThreadSelf: UInt64; inline;
+begin
+  // perf: inline thin-forward to platform.thread single source (L0 single slit), zero-copy token, single syscall via pthread_self/GetCurrentThreadId, inline hot path, bytes.ops 单源几何同保持
+  Result := UInt64(platform_thread_self);
+end;
+function JsPureIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
+begin
+  // perf: inline single compare via JsPureThreadSelf single source, zero syscall beyond one, no duplication, thread-affine single source via lifecycle
+  Result := JsPureThreadSelf = ACreationId;
 end;
 initialization
   // no mutex init, atomic only

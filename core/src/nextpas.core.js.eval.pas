@@ -96,7 +96,7 @@ begin
   Result := V.Equals(TStringView.FromStr(Lit));
 end;
 // Layer 5 — host dispatch single source via pure.host/pure.value (Owner sinking)
-// perf: inline thin-forward to pure.host JsPureFindHostView O(1) bucketed + pure.value BytesCopy zero-copy view, no heap alloc per call
+// perf: inline thin-forward to pure.host JsPureFindHostView O(1) bucketed + pure.value JsStringViewValue zero-copy view, B/op=0 (no ToString alloc), bytes.ops single source deferred to AsString, no heap alloc per call
 function TryHostDispatch(const AView: TStringView; ACtx: IJsContext; const Hosts: TJsPureHostArray; ABuckets: PJsPureHostBuckets; const AGlobal: TJsValue; ABackend: TJsBackendKind; out OutVal: TJsValue): Boolean; inline;
 var
   LIdxPos: PtrInt;
@@ -120,7 +120,7 @@ begin
   else
     LHostIdx := JsPureFindHostView(Hosts, LNameView);
   if LHostIdx < 0 then Exit;
-  // arg view — zero-copy slice, single alloc only for string host arg via pure.value
+  // arg view — zero-copy slice, B/op=0 via JsStringViewValue view (no ToString alloc), bytes.ops single source deferred to AsString, inline thin-forward
   if SizeUInt(LIdxPos) + 1 < AView.Len then
   begin
     if AView.Len >= 2 then LArgView := AView.Slice(SizeUInt(LIdxPos) + 1, AView.Len - SizeUInt(LIdxPos) - 2).Trim else LArgView := TStringView.Empty;
@@ -128,7 +128,7 @@ begin
   if (LArgView.Len >= 2) and ((LArgView.Data[0] = '"') or (LArgView.Data[0] = '''')) then LArgView := LArgView.Slice(1, LArgView.Len - 2);
   if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then LArgView := TStringView.Empty;
   LHasArg := not LArgView.IsEmpty;
-  if LHasArg then LSingle[0] := JsPureNewStringView(LArgView);
+  if LHasArg then LSingle[0] := JsPureNewStringView(LArgView); // inline zero-copy view via JsStringViewValue, B/op=0 hot path, no heap
   LThis := AGlobal;
   LNoArgs := nil;
   try
@@ -170,8 +170,8 @@ begin
   if TryPureIntAdd(AView, LAdd) then Exit(LAdd);
   // Layer 5: host dispatch — Owner pure.host/value thin-forward, per-Context bucket O(1), try-except not丢
   if TryHostDispatch(AView, ACtx, Hosts, ABuckets, AGlobal, ABackend, LDisp) then Exit(LDisp);
-  // Layer 6: fallback — zero-copy view via pure.value BytesCopy single source, inline
-  Result := JsPureNewStringView(AView);
+  // Layer 6: fallback — escaping copy via JsStringValue+ToString single source, safety for returned value (host path already B/op=0 via view), bytes.ops single source, inline
+  Result := JsStringValue(AView.ToString);
 end;
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 var LView: TStringView;
