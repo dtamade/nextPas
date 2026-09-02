@@ -139,20 +139,6 @@ begin
   Result := UIntToStr(AVal);
 end;
 
-function UInt64ToHex12(AVal: QWord): string;
-const
-  HD: array[0..15] of Char = '0123456789ABCDEF';
-var
-  LI: Integer;
-begin
-  SetLength(Result, 12);
-  for LI := 11 downto 0 do
-  begin
-    Result[LI + 1] := HD[AVal and $F];
-    AVal := AVal shr 4;
-  end;
-end;
-
 { Deflate 解码：7z 容器中的 Deflate 可能为 zlib 包裹或 raw 流（p7zip 用 -15），
   依次尝试 zlib 与 raw per-message 路径，AOutSize 用作输出上限以防炸弹。
   raw 路径的 inflate 实现对精确上限需 +1 探测字节（否则恰好填满时误判越界），
