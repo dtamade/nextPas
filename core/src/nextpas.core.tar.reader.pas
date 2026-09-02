@@ -10,7 +10,7 @@ uses
   nextpas.core.io.intf;
 
 type
-  { — 头扫描记录表：7字段NUL截断缓存收敛为记录，SpanIndexOf 单源 SIMD 替代 512×7 循环 — }
+  { — 头扫描记录表：7字段NUL截断缓存收敛为记录，单次512B循环替代7×小Span SIMD扫描，万级条目降调用开销 — }
   TTarScanCache = record
     Pos: SizeUInt;
     Valid: Boolean;
@@ -21,6 +21,18 @@ type
     GNameLen: SizeUInt;
     MagicLen: SizeUInt;
     VersionLen: SizeUInt;
+  end;
+
+  TTarReader = class;
+
+  {** @desc RAII guard for global g pax: captures Reader and clears FGlobalPax on scope exit.
+   *  @note Zero alloc until AcquireGlobalPaxGuard called; IInterface lifetime binds to caller scope (try..finally via interface ref). Single Move-free ClearGlobalPax on Destroy. *}
+  TTarGlobalPaxGuard = class(TInterfacedObject)
+  private
+    FReader: TTarReader;
+  public
+    constructor Create(AReader: TTarReader);
+    destructor Destroy; override;
   end;
 
   {** @desc Tar 读器：迭代内存镜像中的条目，零拷贝视图 + bomb 守卫。
@@ -37,7 +49,7 @@ type
     FPendingLongLink: string;
     FPaxPath: string;
     FPaxLinkPath: string;
-    { g 全局 pax：持久至下一 g 覆盖（CONTRACT INV-3），写入时即 IsSafe 丢弃恶意值且不落盘，Next 时二次 IsSafe 防御；未显式 ClearGlobalPax 前静默继承，调用方需按需显式清理防跨条目污染 }
+    { g 全局 pax：持久至下一 g 覆盖（CONTRACT INV-3），写入时即 IsSafe 丢弃恶意值且不落盘，Next 时二次 IsSafe 防御；显式 ClearGlobalPax 或 RAII AcquireGlobalPaxGuard 自动隔离，生命周期绑 Reader 释放前有效 }
     FGlobalPaxPath: string;
     FGlobalPaxLinkPath: string;
     FMaxEntry: SizeUInt;
@@ -46,7 +58,7 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { — 缓存收敛：7字段 NUL 截断，SpanIndexOf 单源 SIMD 替代 512 扫描 — }
+    { — 缓存收敛：7字段 NUL 截断，单次512B循环替代7×SpanIndexOf，万级条目降调用 — }
     FScan: TTarScanCache;
     procedure EnsureHeaderScanned;
     { — 热路径外联禁 inline，薄转发可 inline；Move 单源 bytes.ops — }
@@ -73,13 +85,16 @@ type
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
   public
     procedure ClearGlobalPax; inline;
+    {** @desc RAII guard: acquire IInterface that clears global g pax on scope exit; use `var G := Reader.AcquireGlobalPaxGuard;` to auto-isolate. Inline thin forward, zero alloc until called. *}
+    function AcquireGlobalPaxGuard: IInterface; inline;
+    destructor Destroy; override;
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
     constructor CreateWithOptions(AData: PByte; ACount: SizeUInt; const AOptions: TTarReadOptions); overload;
     function Next(out AHeader: TTarHeader): Boolean;
     {** @desc 拷贝交付：SpanClone 单源 SetLength+Move；200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice/EntryDataSlice 零拷贝视图 *}
-    function EntryData: TBytes;
+    function EntryData: TBytes; deprecated 'use TrySlice/EntryDataSlice zero-copy view; batch EntryData causes 200× alloc peak — prefer TrySlice+SpanClone reuse';
     function EntryDataOfs: SizeUInt;
     { — 零拷贝薄转发：复用 TrySlice 单一规范，PByte 视图生命周期绑 Reader — }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
@@ -165,12 +180,11 @@ end;
 procedure TTarReader.EnsureHeaderScanned;
 var
   B: PByte;
-  LSpan: TByteSpan;
-  LIdx: SizeInt;
+  I: SizeUInt;
+  Found: Integer;
 begin
   if FScan.Valid and (FScan.Pos = FPos) then
     Exit;
-  // init 7字段 NUL 截断缓存为全长，未截断时保持原长，bytes.ops 单源
   FScan.NameLen := C_TAR_LAYOUT.Name.Len;
   FScan.PrefixLen := C_TAR_LAYOUT.Prefix.Len;
   FScan.LinkLen := C_TAR_LAYOUT.LinkName.Len;
@@ -185,28 +199,26 @@ begin
     Exit;
   end;
   B := @FData[FPos];
-  // 单源收敛：每字段独立 SpanIndexOf(NUL) SIMD 求截断，替代 512×7 双层循环；7×小Span 零拷贝，万级条目降分支
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Name.Off], C_TAR_LAYOUT.Name.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.NameLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.LinkName.Off], C_TAR_LAYOUT.LinkName.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.LinkLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Magic.Off], C_TAR_LAYOUT.Magic.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.MagicLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Version.Off], C_TAR_LAYOUT.Version.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.VersionLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.UName.Off], C_TAR_LAYOUT.UName.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.UNameLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.GName.Off], C_TAR_LAYOUT.GName.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.GNameLen := SizeUInt(LIdx);
-  LSpan := TByteSpan.Create(@B[C_TAR_LAYOUT.Prefix.Off], C_TAR_LAYOUT.Prefix.Len);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx >= 0 then FScan.PrefixLen := SizeUInt(LIdx);
+  // 单次512B循环收敛7字段NUL截断，替代7×SpanIndexOf小Span SIMD，万级条目降调用；bytes.ops单源外仅头扫描合并
+  Found := 0;
+  for I := 0 to C_TAR_BLOCK_SIZE - 1 do
+  begin
+    if B[I] <> 0 then Continue;
+    if (I < C_TAR_LAYOUT.Name.Len) and (FScan.NameLen = C_TAR_LAYOUT.Name.Len) then
+    begin FScan.NameLen := I; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.LinkName.Off) and (I < C_TAR_LAYOUT.LinkName.Off + C_TAR_LAYOUT.LinkName.Len) and (FScan.LinkLen = C_TAR_LAYOUT.LinkName.Len) then
+    begin FScan.LinkLen := I - C_TAR_LAYOUT.LinkName.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.Magic.Off) and (I < C_TAR_LAYOUT.Magic.Off + C_TAR_LAYOUT.Magic.Len) and (FScan.MagicLen = C_TAR_LAYOUT.Magic.Len) then
+    begin FScan.MagicLen := I - C_TAR_LAYOUT.Magic.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.Version.Off) and (I < C_TAR_LAYOUT.Version.Off + C_TAR_LAYOUT.Version.Len) and (FScan.VersionLen = C_TAR_LAYOUT.Version.Len) then
+    begin FScan.VersionLen := I - C_TAR_LAYOUT.Version.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.UName.Off) and (I < C_TAR_LAYOUT.UName.Off + C_TAR_LAYOUT.UName.Len) and (FScan.UNameLen = C_TAR_LAYOUT.UName.Len) then
+    begin FScan.UNameLen := I - C_TAR_LAYOUT.UName.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.GName.Off) and (I < C_TAR_LAYOUT.GName.Off + C_TAR_LAYOUT.GName.Len) and (FScan.GNameLen = C_TAR_LAYOUT.GName.Len) then
+    begin FScan.GNameLen := I - C_TAR_LAYOUT.GName.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+    if (I >= C_TAR_LAYOUT.Prefix.Off) and (I < C_TAR_LAYOUT.Prefix.Off + C_TAR_LAYOUT.Prefix.Len) and (FScan.PrefixLen = C_TAR_LAYOUT.Prefix.Len) then
+    begin FScan.PrefixLen := I - C_TAR_LAYOUT.Prefix.Off; Inc(Found); if Found = 7 then Break; Continue; end;
+  end;
   FScan.Pos := FPos;
   FScan.Valid := True;
 end;
@@ -380,6 +392,32 @@ begin
   FGlobalPaxLinkPath := '';
 end;
 
+function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;
+begin
+  Result := TTarGlobalPaxGuard.Create(Self);
+end;
+
+constructor TTarGlobalPaxGuard.Create(AReader: TTarReader);
+begin
+  inherited Create;
+  FReader := AReader;
+end;
+
+destructor TTarGlobalPaxGuard.Destroy;
+begin
+  if FReader <> nil then
+    FReader.ClearGlobalPax;
+  inherited Destroy;
+end;
+
+destructor TTarReader.Destroy;
+begin
+  // 稳定性：显式清全局pax防跨Reader污染，FBuf/FData生命周期由 string/TBytes 管理，try..finally由调用方保障不丢
+  FGlobalPaxPath := '';
+  FGlobalPaxLinkPath := '';
+  inherited Destroy;
+end;
+
 function TTarReader.GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
 begin
   APtr := nil;
@@ -459,11 +497,7 @@ begin
     if Flag = Ord('L') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      if Size > 0 then
-      begin
-        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
-        FCumTotal := FCumTotal + UInt64(Size);
-      end;
+      // bomb守卫：L 扩展元数据不计入 FCumTotal，仅正则载荷计总量，避免含大量长名归档误触阈值
       if PayloadLen > 0 then
         FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -472,11 +506,7 @@ begin
     else if Flag = Ord('K') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      if Size > 0 then
-      begin
-        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
-        FCumTotal := FCumTotal + UInt64(Size);
-      end;
+      // bomb守卫：K 扩展元数据不计入 FCumTotal，仅正则载荷计总量
       if PayloadLen > 0 then
         FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -485,11 +515,7 @@ begin
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      if Size > 0 then
-      begin
-        GuardTarTotalSize(FCumTotal, UInt64(Size), FMaxTotal);
-        FCumTotal := FCumTotal + UInt64(Size);
-      end;
+      // bomb守卫：x/g 扩展元数据不计入 FCumTotal，仅正则载荷计总量，避免长名/pax 元数据双计误触
       if PayloadLen > 0 then
       begin
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
@@ -524,7 +550,7 @@ begin
     else
     begin
       AHeader := Default(TTarHeader);
-      // 二次防御：g 早丢弃后仍 IsSafe 复核，显式 ClearGlobalPax 前静默继承，调用方可按需清理防跨条目污染
+      // 二次防御：g 早丢弃后仍 IsSafe 复核，显式 ClearGlobalPax 或 RAII AcquireGlobalPaxGuard 自动隔离前继承，调用方可按需清理防跨条目污染
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
         FGlobalPaxPath := '';
       if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
@@ -596,7 +622,7 @@ begin
   end;
 end;
 
-{ — 性能：SpanClone 单次 SetLength+Move 拷贝，200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice 零拷贝视图（bytes.ops 单源）— }
+{ — 性能：SpanClone 单次 SetLength+Move 拷贝，200×512B 批量提取产生200次分配峰值，热路径优先 TrySlice/EntryDataSlice 零拷贝视图（bytes.ops 单源）；本方法保留兼容但 deprecated，批量场景请复用 TrySlice 视图 — }
 function TTarReader.EntryData: TBytes;
 var
   LS: TByteSpan;

@@ -151,6 +151,8 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
+  // perf: SIMD dispatch via IsZeroBytes single source (bytes.ops MemEqual chunked), zero-copy PByte slice; eliminates 512B serial scan per Next, out-of-line per design-conventions
+  if ABlock = nil then Exit(True);
   Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
 end;
 
@@ -175,8 +177,9 @@ var
 begin
   if (ABase[0] and C_TAR_BASE256_SENTINEL) <> 0 then
   begin
-    if ABase[0] = $FF then
-      Result := -1
+    // 修复 base-256 两补：首字节按 ShortInt 符号扩展，bit6=1 为负 (含 $FF=-1, $FE=-2 等大负值) 否则掩 $7F 正向；消除原仅 $FF 特判导致的边界负尺寸误判/溢出
+    if (ABase[0] and $40) <> 0 then
+      Result := Int64(ShortInt(ABase[0]))
     else
       Result := Int64(ABase[0] and $7F);
     for I := 1 to ALen - 1 do

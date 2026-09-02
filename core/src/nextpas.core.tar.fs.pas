@@ -165,11 +165,9 @@ begin
             if not IsSafeTarLinkTarget(H.LinkName) then
               raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
         end;
-        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝 NUL 截断单遍扫描，千级小文件零额外分配，inline 热路径
+        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf/SpanLastIndexOf 单遍逆序扫描无Copy/分配 inline 热路径，复用 bytes.ops/platform.path 单源消除手写 '/' 反向轮子，千级小文件零额外分配
         LFull := ArchiveJoinPath(ADestDir, H.Name);
-        LSep := Length(LFull);
-        while (LSep > 0) and (LFull[LSep] <> '/') do
-          Dec(LSep);
+        LSep := StringLastIndexOf(LFull, '/');
         if LSep > 0 then
           ArchivePrepareParentDir(LFull, SizeUInt(LSep - 1));
         LMode := Word(H.Mode and $0FFF);

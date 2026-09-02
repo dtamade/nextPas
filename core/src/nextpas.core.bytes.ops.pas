@@ -15,6 +15,9 @@ function SpanEqualIgnoreCase(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+function SpanLastIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+function BytesLastIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
+function StringLastIndexOf(const S: string; const ANeedle: Char): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
@@ -89,6 +92,28 @@ implementation
 uses
   nextpas.core.simd,
   nextpas.core.text.unicode.utils;
+
+var
+  GZeroBuf4K: array[0..4095] of Byte; // zero-initialized SIMD zero source, single source for IsZero via chunked MemEqual
+
+function IsZeroMem(const AData: PByte; ALen: SizeUInt): Boolean;
+var
+  LOff, LChunk: SizeUInt;
+begin
+  // perf: chunked MemEqual vs zero buffer single source, SIMD dispatch, zero-copy PByte+Len, out-of-line loop per design-conventions
+  if (AData = nil) or (ALen = 0) then Exit(True);
+  LOff := 0;
+  while LOff < ALen do
+  begin
+    LChunk := ALen - LOff;
+    if LChunk > SizeUInt(Length(GZeroBuf4K)) then
+      LChunk := SizeUInt(Length(GZeroBuf4K));
+    if not MemEqual(AData + LOff, @GZeroBuf4K[0], LChunk) then
+      Exit(False);
+    Inc(LOff, LChunk);
+  end;
+  Result := True;
+end;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
   Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
@@ -181,6 +206,32 @@ begin
     Exit(-1);
   LResult := nextpas.core.simd.BytesIndexOf(AHaystack.Data, AHaystack.Len, ANeedle.Data, ANeedle.Len);
   Result := SizeInt(LResult);
+end;
+
+function SpanLastIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
+var I: SizeUInt;
+begin
+  // perf: inline + zero-copy reverse scan PByte+Len (bytes.ops single source for LastDelimiter/parent-dir split), single pass, no alloc/Copy, O(n)
+  if (AHaystack.Len = 0) or (AHaystack.Data = nil) then Exit(-1);
+  for I := AHaystack.Len downto 1 do
+    if AHaystack.Data[I-1] = ANeedle then Exit(SizeInt(I-1));
+  Result := -1;
+end;
+
+function BytesLastIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
+begin
+  // perf: inline thin-forward to SpanLastIndexOf, zero-copy TByteSpan view single source
+  Result := SpanLastIndexOf(TByteSpan.FromBytes(AData), ANeedle);
+end;
+
+function StringLastIndexOf(const S: string; const ANeedle: Char): SizeInt; inline;
+var L: SizeUInt;
+begin
+  // perf: inline + zero-copy PByte view (no Copy), single source SpanLastIndexOf, 1-based (0 if not found) for LastDelimiter/PathDir parity, platform.path single-source thought
+  L := SizeUInt(Length(S));
+  if L = 0 then Exit(0);
+  Result := SpanLastIndexOf(TByteSpan.Create(PByte(@S[1]), L), Byte(ANeedle));
+  if Result >= 0 then Inc(Result) else Result := 0;
 end;
 
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean;
@@ -564,17 +615,22 @@ end;
 
 function IsZeroBytes(const AData: TBytes): Boolean; inline; overload;
 begin
-  // perf: single-source zero check via StripLeadingZeroView (O(n) scan with early exit,
-  // reuses existing view; empty => Len=0 => zero). Avoids duplicate byte loops and
-  // keeps crypto/tls callers on one implementation; SIMD MemEqual could be used for
-  // bulk zero compares but view already short-circuits on first non-zero.
-  Result := StripLeadingZeroView(AData).Len = 0;
+  // perf: SIMD MemEqual chunked via IsZeroMem/GZeroBuf4K single source, zero-copy TByteSpan view, inline thin forward; <32 serial early exit retains thin path; bulk 512B zero via single dispatch eliminates StripLeadingZero serial scan
+  if Length(AData) = 0 then Exit(True);
+  if SizeUInt(Length(AData)) < 32 then
+    Result := StripLeadingZeroView(AData).Len = 0
+  else
+    Result := IsZeroMem(@AData[0], SizeUInt(Length(AData)));
 end;
 
 function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 begin
-  // perf: same single source as TBytes overload via StripLeadingZeroSpan.
-  Result := StripLeadingZeroSpan(ASpan).Len = 0;
+  // perf: same SIMD dispatch as TBytes overload via IsZeroMem chunked MemEqual, zero-copy PByte+Len view single source, inline thin forward; small <32 via StripLeadingZeroSpan preserves early exit without dispatch
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then Exit(True);
+  if ASpan.Len < 32 then
+    Result := StripLeadingZeroSpan(ASpan).Len = 0
+  else
+    Result := IsZeroMem(ASpan.Data, ASpan.Len);
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;

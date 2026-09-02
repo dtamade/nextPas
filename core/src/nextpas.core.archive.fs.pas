@@ -67,7 +67,7 @@ procedure CreateArchiveBuilder(const AInitialCapacity: SizeUInt; out ABuilder: I
 { 路径拼接：单次 SetLength+零拷贝单源 Move 去 Delete 抖动，bytes.ops 单源（Move[AName[1]/ABase[1]] 禁 inline，外联可静态校验，守 design-conventions 红线1） }
 function ArchiveJoinPath(const ABase, AName: string): string;
 
-{ 单文件元数据定稿：Chmod/Chtimes best-effort 带可观测性（StdErr WARN），与 ArchiveRestoreDeferredDirs 一致 }
+{ 单文件元数据定稿：Chmod/Chtimes best-effort 带可观测性（log.intf WARN via NullLogger, 无StdErr直触），与 ArchiveRestoreDeferredDirs 一致 }
 procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int64; ARestoreMode: Boolean);
 
 { 几何扩容（复用 EnsureWalkCapacity 语义，2倍扩容，初始16） }
@@ -112,7 +112,7 @@ function ArchiveSnapshotStream(const S: IStream; const AContext: string): TBytes
 procedure ArchiveWriteFileSlice(const APath: string; AData: PByte; ACount: SizeUInt;
   const APerm: TFilePermission);
 
-{ 目录定稿：逆序 Chmod/Chtimes，best-effort 带可观测性（StdErr WARN），不静默吞 }
+{ 目录定稿：逆序 Chmod/Chtimes，best-effort 带可观测性（log.intf WARN via NullLogger, 无StdErr直触），不静默吞 }
 procedure ArchiveRestoreDeferredDirs(const ADirs: TArchiveDeferredArray; ARestoreMode: Boolean);
 
 { 统一目录递归收集：ReadDir 批量名 + 单次 Stat/Entry 补齐 mtime/mode，几何扩容与排序在 archive 单源 }
@@ -130,9 +130,8 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.platform.fs,
   nextpas.core.platform.files,
-  nextpas.core.platform.posix.errno,
-  nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.error;
+  nextpas.core.platform.error,
+  nextpas.core.log.intf;
 
 // perf: inline单源几何扩容（初始16、2倍）复用 bytes.builder 思想，零额外拷贝，单源于 ArchiveNextCapacity
 function ArchiveNextCapacity(const ACurrent, ARequired: Integer): Integer; inline;
@@ -386,7 +385,7 @@ begin
         begin
           // EAlreadyExists 视为成功，其余需二次 IsDir 校验防并发
           if not platform_fs_is_dir(P) then
-            RaiseFsError(platform_get_errno, 'mkdir', StrPas(P));
+            RaiseFsError(platform_get_last_error, 'mkdir', StrPas(P));
         end;
       finally
         P[I-1] := Saved;
@@ -408,7 +407,7 @@ begin
       if platform_file_mkdir(P, UInt32(PermDirDefault)) <> 0 then
       begin
         if not platform_fs_is_dir(P) then
-          RaiseFsError(platform_get_errno, 'mkdir', StrPas(P));
+          RaiseFsError(platform_get_last_error, 'mkdir', StrPas(P));
       end;
     finally
       P[LClamped] := Saved;
@@ -608,20 +607,15 @@ begin
       nextpas.core.fs.Chmod(APath, TFilePermission(AMode and $0FFF));
     except
       on E: Exception do
-      begin
-        System.WriteLn(StdErr, '[WARN] archive: Chmod failed for "', APath, '": ', E.Message);
-        System.Flush(StdErr);
-      end;
+        // observability via log.intf single seam (L0), NullLogger default zero-alloc inline, no StdErr direct touch, L2克制
+        NullLogger.Warn('archive: Chmod failed for "' + APath + '": ' + E.Message);
     end;
   end;
   try
     nextpas.core.fs.Chtimes(APath, AMtimeNs, AMtimeNs);
   except
     on E: Exception do
-    begin
-      System.WriteLn(StdErr, '[WARN] archive: Chtimes failed for "', APath, '": ', E.Message);
-      System.Flush(StdErr);
-    end;
+      NullLogger.Warn('archive: Chtimes failed for "' + APath + '": ' + E.Message);
   end;
 end;
 
@@ -636,20 +630,14 @@ begin
         nextpas.core.fs.Chmod(ADirs[I].FFull, TFilePermission(ADirs[I].FMode and $0FFF));
       except
         on E: Exception do
-        begin
-          System.WriteLn(StdErr, '[WARN] archive: Chmod failed for "', ADirs[I].FFull, '": ', E.Message);
-          System.Flush(StdErr);
-        end;
+          NullLogger.Warn('archive: Chmod failed for "' + ADirs[I].FFull + '": ' + E.Message);
       end;
     end;
     try
       nextpas.core.fs.Chtimes(ADirs[I].FFull, ADirs[I].FMtimeNs, ADirs[I].FMtimeNs);
     except
       on E: Exception do
-      begin
-        System.WriteLn(StdErr, '[WARN] archive: Chtimes failed for "', ADirs[I].FFull, '": ', E.Message);
-        System.Flush(StdErr);
-      end;
+        NullLogger.Warn('archive: Chtimes failed for "' + ADirs[I].FFull + '": ' + E.Message);
     end;
   end;
 end;

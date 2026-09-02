@@ -29,7 +29,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
 | `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
-| `compress` | L2 | compression formats | yes | L0-L1 plus provider FFI plus L2 thin forward via nextpas.core.tar single source (deprecated, to be removed, bytes.ops 单源 inline/零拷贝) | focused-runtime |
+| `compress` | L2 | compression formats | yes | L0-L1 plus provider FFI (tar single source 已收敛至 nextpas.core.tar，compress.tar 已删除) | focused-runtime |
 | `checksum` | L1 | checksums (CRC-32, FNV-1a 32) | yes | L0 | focused-runtime |
 | `config` | L3 | configuration framework | yes | L0-L2 | focused-runtime |
 | `contracts` | L0 support | assertions/contracts | yes | L0 root | source-contract |

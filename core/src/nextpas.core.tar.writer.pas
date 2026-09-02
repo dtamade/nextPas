@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.tar.base,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.log.intf;
 
 type
   {** @desc Tar 写器：以 IWriter 为目标产出 ustar 流（两零块收尾，可对接 gzip）。 *}
@@ -15,7 +16,8 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FIOBuf: TBytes; // pooled 64K, bytes.ops single source
+    FIOBuf: TBytes; // pooled 64K, bytes.ops single source, released on Finish
+    FLogger: ILogger; // L0 single seam可观测（NullLogger默认零分配），不直触System.StdErr，平台抽象克制，复用builder同款
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -70,6 +72,7 @@ begin
   if ADst = nil then
     raise EArgumentError.Create('tar: destination writer is nil');
   FDst := ADst;
+  FLogger := NullLogger(); // L2经log.intf单缝可观测，默认no-op零分配inline薄转发，无StdErr直触，复用builder单源
 end;
 
 procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
@@ -337,8 +340,8 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // pooled 64K FIOBuf, bytes.ops single source; lifecycle bound to writer
-  // exception-safe, no leak
+  // pooled 64K FIOBuf, bytes.ops single source; lifecycle bound to Finish (released on Finish, amortized 1 alloc)
+  // perf: pooled reuse via CopyMemory zero-copy (bytes.ops single source), inline thin forwarding; exception-safe, no leak
   LBufSize := SizeUInt(AHdr.Size);
   if LBufSize > C_STREAM_BUF_SIZE then
     LBufSize := C_STREAM_BUF_SIZE;
@@ -373,9 +376,14 @@ begin
   if FFinished then
     Exit;
   FFinished := True;
-  FillChar(Zero[0], SizeOf(Zero), 0);
-  WriteBlock(Zero);
-  WriteBlock(Zero);
+  try
+    FillChar(Zero[0], SizeOf(Zero), 0);
+    WriteBlock(Zero);
+    WriteBlock(Zero);
+  finally
+    // release pooled 64K immediately, avoid linger peak Finish->Free (continuous reuse saves 64K)
+    FIOBuf := nil;
+  end;
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -387,22 +395,29 @@ destructor TTarWriter.Destroy;
 var
   LUnwinding: Boolean;
 begin
-  // Best-effort Finish: preserve original exception context during unwind
-  // LUnwinding captured before Finish to avoid ExceptObject shadowing by secondary
-  // bytes.ops single source retained; FIOBuf lifecycle bound to writer, no linger peak
-  LUnwinding := nextpas.core.exception.IsExceptionUnwinding;
+  // fail-closed: IsExceptionUnwinding判unwind期抑制次生以保原始异常上下文并经log.intf ILogger.Warn单源薄转发（NullLogger no-op零拷贝inline），非unwind期硬失败透传Finish异常防缺两零块截断静默丢数据（EIOError/short-write透传）；bytes.ops单源retained；FIOBuf于Finish即释+析构finally双保险无linger峰值；try..finally必释，复用builder同款LUnwinding单源
+  LUnwinding := IsExceptionUnwinding;
   try
     if not FFinished then
     begin
-      try
-        Finish;
-      except
-        if not LUnwinding then
-          raise;
-        // else suppress secondary EIOError/short-write to preserve original exception context
-      end;
+      if LUnwinding then
+      begin
+        try
+          Finish;
+        except
+          // unwind期抑制次生以保原始异常上下文，不透传
+        end;
+        // unwind期仅可观测，不抛次生覆盖原始异常；L2经log.intf单缝，无RTL控制台直触，NullLogger零分配inline薄转发
+        if FLogger <> nil then
+          FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated)');
+      end
+      else
+        Finish; // 非unwind硬失败：透传EIOError/short-write，fail-closed防截断
     end;
   finally
+    FIOBuf := nil;
+    FDst := nil;
+    FLogger := nil;
     inherited Destroy;
   end;
 end;
