@@ -1,8 +1,6 @@
 unit nextpas.core.respack.base;
 
-{** @desc respack 线格式 v1 基座：常量、record、LE 编解码、路径语法、FNV-1a、错误。
-  权威定义见 FORMAT.md；双编译器：FPC 经 RTL 自然解析，nextPas 经
-  units/<target>/ stub 桥接。 }
+{** @desc respack 线格式 v1 基座：常量/record/LE/路径/FNV/错误，见 FORMAT.md。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -38,13 +36,13 @@ const
   { codecId 登记表（FORMAT.md）；未知值 reader 整包拒绝 }
   RESPACK_CODEC_STORE = 0;
 
-  { writer 输入上限（CONTRACT INV-R10）：超出显式 raise，绝不静默产出坏包 }
+  { 输入上限 INV-R10：超限显式 raise }
   RESPACK_MAX_INPUT_BYTES = SizeUInt(512) * 1024 * 1024;
-  { dirsource 废弃便捷路径限额（ResPackEntriesFromDir 小包便捷 ≤64MiB，峰值 ~2×  controlled；大包走流式mmap ~1×+头；与 512MiB 上限家族同源，单源常量防魔数分散，inline 零拷贝） }
+  { 小包便捷 ≤64MiB（INV-R10 家族，流式 ~1×+头） }
   RESPACK_DIRSOURCE_LEGACY_LIMIT = SizeUInt(64) * 1024 * 1024;
-  { reader 熔断：entryCount 上界（INV-R10 防御深度，512M/40≈12.8M），SetLength 前硬熔断防恶意包 OOM }
+  { 熔断：entryCount ≤12.8M（512M/40） }
   RESPACK_MAX_ENTRY_COUNT = RESPACK_MAX_INPUT_BYTES div RESPACK_ENTRY_SIZE;
-  { writer 流式头块分片阈值（INV-R10 家族单源，64K chunk 零双驻留，峰值 ~1×+头） }
+  { 头块 64K 分片 }
   RESPACK_WRITER_HEAD_CHUNK = SizeUInt(64) * 1024;
 
 type
@@ -99,9 +97,7 @@ type
     Owned: Boolean;
   end;
 
-  { 错误层级：全部挂在 exception 根上，不触碰 SysUtils。
-    对齐 vfs EVfsError(Op/Path) 范式：Op/Path 结构化定位，message 保留
-    详情后缀 (op=…, path=…) 质感；CreateStep 补充 Op/Path 重载。 }
+  { 错误：挂 exception 根，Op/Path 结构化；CreateStep 重载 }
   EResPackError = class(Exception)
   private
     FOp: string;
@@ -128,9 +124,7 @@ type
   EResPackTooLarge = class(EResPackError);
   EResPackDirSourceFailed = class(EResPackError);
 
-{ Dedup/overlap arena 单源底座：由 base 统一拥有，供 writer.layout 与 reader 共享，消除 reader→writer.layout 反向依赖
-  base←impl←facade 单向；BucketCountFor via bytes.ops.BytesNextCapacity inline 零拷贝，ResPackOverlapInit 单 slab
-  TLocalArena 零三堆 churn，(BucketCount+N)*SizeInt+N*Distinct 单块，try..finally ResPackDedupDone 稳定释放。 }
+{ Dedup/overlap arena：base 统一拥有，writer.layout/reader 共享，单 slab。 }
 type
   PSizeInt = ^SizeInt;
   TResPackDistinct = record Off: UInt64; Size: UInt64; end;
@@ -146,7 +140,7 @@ procedure ResPackDedupInit(const AN: SizeUInt; out AArena: TLocalArena; out ABuc
 procedure ResPackOverlapInit(const AN: SizeUInt; out AArena: TLocalArena; out ABucketsHead: PSizeInt; out ASlotNext: PSizeInt; out ADistinct: PResPackDistinct; out ABucketCount: SizeUInt);
 procedure ResPackDedupDone(var AArena: TLocalArena); inline;
 
-{ LE 编解码单源于 bytes.binary，inline 转发 }
+{ LE：转发 bytes.binary，inline }
 function RdU16LE(AData: PByte): Word; inline;
 function RdU32LE(AData: PByte): UInt32; inline;
 function RdU64LE(AData: PByte): UInt64; inline;
@@ -154,22 +148,16 @@ procedure WrU16LE(AData: PByte; const AValue: Word); inline;
 procedure WrU32LE(AData: PByte; const AValue: UInt32); inline;
 procedure WrU64LE(AData: PByte; const AValue: UInt64); inline;
 
-{ FNV-1a 32 单源于 checksum.fnv32，inline 转发 }
+{ FNV-1a：转发 checksum.fnv32，inline }
 function ResPackFnv1a32(const AData: PByte; const ASize: SizeUInt): UInt32; inline;
 
-{ Go io/fs.ValidPath 语义（FORMAT.md 路径规范）：UTF-8、unrooted、'/'
-  分隔、段非空非'.'非'..'、反斜杠为普通字符；特例 '.' 表根。
-  文件条目场景 AFileEntry=True 时拒绝根。
-  perf: 热路径（writer/reader 批量校验 10k 条目）inline 消除调用开销，对齐
-  ResPackFnv1a32 单源转发，零拷贝视图经 bytes.pathvalid。 }
+{ ValidPath：Go io/fs 语义，热路径 inline，零拷贝 bytes.pathvalid }
 function ResPackValidPath(const APath: string;
   const AFileEntry: Boolean): Boolean; inline;
-{ 零拷贝视图版：10k 条目校验零堆分配，单源复用 bytes.pathvalid.BytesValidSpan，
-  inline 薄转发零额外拷贝；与 ResPackValidPath 同语义，AFileEntry=True 拒绝 '.' }
 function ResPackValidSpan(const ASpan: TByteSpan;
   const AFileEntry: Boolean): Boolean; inline;
 
-{ 路径字节比较单源：writer/reader 共用，零拷贝 SpanCompare 转发，inline 零开销，owner bytes.ops }
+{ CmpPath：SpanCompare 转发，inline，owner bytes.ops }
 function ResPackCmpPath(const PA: PByte; const LA: SizeUInt; const PB: PByte; const LB: SizeUInt): Integer; inline;
 
 { 默认构建选项 }
