@@ -17,7 +17,13 @@ uses
   nextpas.core.base, nextpas.core.text.conv, nextpas.core.time,
   nextpas.core.exception, nextpas.core.fs, nextpas.core.path,
   nextpas.core.system.classes,
-  nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
+  nextpas.core.git.libgit2.base,
+  nextpas.core.git.libgit2.ffi.types,
+  nextpas.core.git.libgit2.ffi.structs,
+  nextpas.core.git.libgit2.ffi.callbacks,
+  nextpas.core.git.libgit2.ffi.options,
+  nextpas.core.git.libgit2.ffi.consts,
+  nextpas.core.git.libgit2.binding,
   nextpas.core.git.base,
   nextpas.core.text.format;
 

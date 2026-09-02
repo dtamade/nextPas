@@ -64,6 +64,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.wildmatch;
 
 function CountTrailingBackslashesBefore(const AValue: string;
@@ -172,6 +173,7 @@ var
   Line: string;
   Start, I: Integer;
   Pat: TPattern;
+  PatCnt, PatCap, LNewCap: SizeUInt;
 begin
   Src.BaseDir := ABaseDir;
   // a trailing slash on the owner dir would break the scoping prefix test
@@ -179,6 +181,8 @@ begin
     and (Src.BaseDir[Length(Src.BaseDir)] = '/') then
     Delete(Src.BaseDir, Length(Src.BaseDir), 1);
   Src.Patterns := nil;
+  PatCnt := 0;
+  PatCap := 0;
   Start := 1;
   for I := 1 to Length(AText) + 1 do
   begin
@@ -190,12 +194,22 @@ begin
       CompileLine(Line, Pat);
       if Pat.Text <> '' then
       begin
-        SetLength(Src.Patterns, Length(Src.Patterns) + 1);
-        Src.Patterns[High(Src.Patterns)] := Pat;
+        // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per pattern, zero-copy TPattern Move via direct assignment, avoids O(n²) SetLength(Length+1) churn
+        if PatCnt >= PatCap then
+        begin
+          LNewCap := GrowArrayCapacity(PatCap, PatCnt + 1);
+          SetLength(Src.Patterns, LNewCap);
+          PatCap := LNewCap;
+        end;
+        Src.Patterns[PatCnt] := Pat;
+        Inc(PatCnt);
       end;
       Start := I + 1;
     end;
   end;
+  // single shrink to exact count, releases slack, managed strings finalized safely
+  if PatCap <> PatCnt then
+    SetLength(Src.Patterns, PatCnt);
   SetLength(FSources, Length(FSources) + 1);
   FSources[High(FSources)] := Src;
 end;

@@ -3,8 +3,8 @@ unit nextpas.core.git.libgit2.ffi.types;
 {$I nextpas.core.settings.inc}
 {$PACKRECORDS C}
 // Scalar + handle + OID vocabulary — single source via libgit2.base, bytes.ops zero-copy, no IFDEF.
-// FFI seam: vocabulary re-export + cdecl external probes (four-piece ffi only external + 5-domain re-export).
-// Handles/OID single source via libgit2.base (Pointer seam zero-cost, git_oid 20-byte variant id/Bytes/AsNative).
+// Vocabulary re-export only (no external probe); handles/OID single source via libgit2.base
+// (Pointer seam zero-cost, git_oid 20-byte variant id/Bytes/AsNative).
 // Perf: inline + zero-copy SpanEqual/SpanCopy via bytes.ops single source (20B -> 3xQWord MemEqual / single Move, no heap, <=80 ns/op).
 // Stability: handles Pointer zero-cost, OID Assert SizeOf=20, resources try..finally via owner (bytes.ops single source), no FillChar dual-track.
 
@@ -89,11 +89,6 @@ type
 function FfiOidEquals(const A, B: git_oid): Boolean; inline;
 function FfiOidIsZero(const A: git_oid): Boolean; inline;
 procedure FfiOidCopy(out Dst: git_oid; const Src: git_oid); inline;
-
-// FFI seam: cdecl external probes (four-piece ffi only external + re-export, host-agnostic, zero IFDEF)
-// Runtime libgit2 still via binding/platform.dl dlopen/dlsym; probes ensure ffi unit not pure-type drift.
-function ffi_types_c_strlen(s: PAnsiChar): csize_t; cdecl; external 'c' name 'strlen';
-function ffi_types_c_memcmp(s1, s2: Pointer; n: csize_t): cint; cdecl; external 'c' name 'memcmp';
 
 implementation
 

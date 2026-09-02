@@ -729,11 +729,11 @@ procedure TGitRevWalker.HeapPush(const AEntry: TWalkEntry);
 var
   I, Parent: Integer;
 begin
-  // geometric growth: 64 -> *2; amortized O(1) push via bytes.ops-style doubling (no fixed +4096)
-  // not inline: loop body + setlength growth would bloat I-Cache per design rule
+  // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move
+  // not inline: loop body + SetLength growth would bloat I-Cache
   if FHeapLen >= FHeapCap then
   begin
-    if FHeapCap = 0 then FHeapCap := 64 else FHeapCap := FHeapCap * 2;
+    FHeapCap := SizeInt(GrowArrayCapacity(SizeUInt(FHeapCap), SizeUInt(FHeapLen + 1)));
     SetLength(FHeap, FHeapCap);
   end;
   I := FHeapLen;
@@ -1140,10 +1140,10 @@ var
   var
     I, Parent: Integer;
   begin
-    // geometric growth: 64 -> *2; amortized O(1) push (no fixed +4096, keeps O(log n) SetLength)
+    // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move
     if HeapLen >= HeapCap then
     begin
-      if HeapCap = 0 then HeapCap := 64 else HeapCap := HeapCap * 2;
+      HeapCap := SizeInt(GrowArrayCapacity(SizeUInt(HeapCap), SizeUInt(HeapLen + 1)));
       SetLength(Heap, HeapCap);
     end;
     I := HeapLen;

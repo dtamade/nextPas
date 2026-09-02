@@ -18,7 +18,7 @@
 | git.base | TGitStatusEntry, TGitStatusFilter 基础类型 |
 | git.intf | IGitManager, IGitRepository, IGitCommit 等接口定义 |
 | git.libgit2 | libgit2 集成门面 |
-| git.libgit2.ffi | libgit2 C FFI 缝隙（仅含 cdecl external ‘c’ 探针 + 5 域词汇 re-export，满足四件套 FFI 仅含 external 约束；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym） |
+| git.libgit2.ffi | libgit2 C FFI 缝隙（极简占位 <30 行，四件套仅含 external 约束下零 re-export 聚合、零 libc 探针；词汇单源 libgit2.base/ffi.*直引、bytes.ops 单源 inline 零拷贝；运行时仍经 binding/platform.dl 候选表 dlopen/dlsym，零 IFDEF） |
 | git.libgit2.binding | libgit2 函数指针绑定（dlopen/dlsym 运行时加载） |
 | git.libgit2.backend | libgit2 后端实现 |
 | git.libgit2.bindings | libgit2 门面（<150 行，re-export 10 域分片，零重复） |

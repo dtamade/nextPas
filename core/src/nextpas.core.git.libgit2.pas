@@ -4,7 +4,10 @@ unit nextpas.core.git.libgit2;
 
 interface
 
-uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base, nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
+uses nextpas.core.base, nextpas.core.fs, nextpas.core.git.intf, nextpas.core.git.base,
+  nextpas.core.git.libgit2.base,
+  nextpas.core.git.libgit2.ffi.types, nextpas.core.git.libgit2.ffi.consts,
+  nextpas.core.git.libgit2.backend, nextpas.core.git.libgit2.binding;
 
 type
   EGitError = nextpas.core.git.libgit2.backend.EGitError;

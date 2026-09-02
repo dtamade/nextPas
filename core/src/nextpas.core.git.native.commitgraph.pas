@@ -27,6 +27,10 @@ uses
   Perf: mmap zero-copy via io.mapped + bytes.ops single source
     (SpanCopy/SpanCompare, PByte window); inline O(1) touch.
   Stability: IMappedFile refcount + managed TBytes, no leak on fallback.
+  Concurrency: GGraphCache is not locked; single-threaded git lane / external
+    sync required, swap-with-last O(1) keeps refcount safe.
+  Evolution: 1320→1500 threshold monitor per CONTRACT.history §6; split
+    when shards fan-in or cache ownership dilutes auditability.
 
   File layout honours the spec consumed by git's commit-graph.c and
   libgit2's commit_graph.c: header "CGPH" v1 oid_version 1, chunk TOC
@@ -137,14 +141,16 @@ type
 const
   // LRU 16-cap bounds fd/page-cache vs heap; MRU via Seq max, LRU via min Seq
   // perf: mmap-backed IMappedFile zero-copy PByte via io.mapped owner,
-  //   no heap TBytes dup, OS page-reclaimable; 16 halves thrash vs 8 for
-  //   8-repo fan-out, O(1) touch/invalidate, single Move per op via
-  //   bytes.ops single source; bench gate CommitGraph/CacheHit|Miss
-  //   10@200ms + 2×CV + 10-15% jitter dual-anchor (see CONTRACT.history §3)
+  //   no heap TBytes dup, OS page-reclaimable; Cap=16 design intent to halve
+  //   thrash vs 8 for 8-repo fan-out, bench dual-anchor gated (CommitGraph/
+  //   CacheHit|Miss 10@200ms + 2×CV + 10-15% jitter, see CONTRACT.history §3),
+  //   no independent hit-rate baseline yet; O(1) touch/invalidate, single Move
+  //   per op via bytes.ops single source
   // stability: IMappedFile refcount auto releases on eviction/swap; no leak
+  // concurrency: global cache not locked, caller sync required
   GGraphCacheCap = 16;
 
-{ ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns) ── }
+{ ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns, bench-gated) ── }
 
 var
   GGraphCache: array of TGraphCacheEntry;
@@ -754,8 +760,10 @@ type
 
 function CompareRawOid(const AA, AB: TRawCommit): Integer; inline;
 begin
-  // single-source zero-copy via base.utils.CompareBytesOrdered (bytes.ops single-source underlying): PByte+Len inline, no temp copy
-  Result := CompareBytesOrdered(@AA.Oid.Bytes[0], @AB.Oid.Bytes[0], GitOidRawLen, GitOidRawLen);
+  // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered single source, 20B ≈ 3×QWord), no temp copy, no dual track
+  Result := SpanCompare(
+    TByteSpan.Create(@AA.Oid.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Oid.Bytes[0], GitOidRawLen));
 end;
 
 procedure SortRawByOidInsertion(var A: TRawCommitArray; L, R: Integer); inline;
@@ -795,8 +803,9 @@ begin
     begin T := A[L]; A[L] := A[(L + R) shr 1]; A[(L + R) shr 1] := T; end;
     Pivot := A[(L + R) shr 1].Oid; // pivot by value (20B), zero-copy via stack
     repeat
-      while CompareBytesOrdered(@A[I].Oid.Bytes[0], @Pivot.Bytes[0], GitOidRawLen, GitOidRawLen) < 0 do Inc(I);
-      while CompareBytesOrdered(@A[J].Oid.Bytes[0], @Pivot.Bytes[0], GitOidRawLen, GitOidRawLen) > 0 do Dec(J);
+      // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered, 20B ≈ 3×QWord), no dual track
+      while SpanCompare(TByteSpan.Create(@A[I].Oid.Bytes[0], GitOidRawLen), TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) < 0 do Inc(I);
+      while SpanCompare(TByteSpan.Create(@A[J].Oid.Bytes[0], GitOidRawLen), TByteSpan.Create(@Pivot.Bytes[0], GitOidRawLen)) > 0 do Dec(J);
       if I <= J then
       begin
         T := A[I]; A[I] := A[J]; A[J] := T; // ref-counted swap, exception-safe (EGitError preserved)

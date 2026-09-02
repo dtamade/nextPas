@@ -1,8 +1,8 @@
 unit nextpas.core.git.libgit2.binding;
 {** @desc libgit2 运行时加载层：通过 platform.dl 动态绑定 FFI 符号。
        职责：仅做 dlopen/dlsym 与符号转发，不定义类型词汇；类型词汇
-       复用 nextpas.core.git.libgit2.base → nextpas.core.git.libgit2.ffi，
-       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi 分工）。
+       复用 nextpas.core.git.libgit2.base + libgit2.ffi.* 5 域（types/structs/callbacks/options/consts），
+       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi.* 分工，libgit2.ffi 中央零聚合）。
        单一 FFI 缝隙：本单元唯一绑定缝隙为 platform.dl 运行时加载，无
        external LIBGIT2_LIB 静态链路（静态链路由 bindings.* via external 'c' 承担），
        inline 零拷贝经 bytes.ops 单源，资源释放经 critical section + try..finally 不丢。 *}
@@ -12,7 +12,13 @@ unit nextpas.core.git.libgit2.binding;
 
 interface
 
-uses nextpas.core.base, nextpas.core.exception, nextpas.core.git.libgit2.ffi;
+uses nextpas.core.base, nextpas.core.exception,
+  nextpas.core.git.libgit2.base,
+  nextpas.core.git.libgit2.ffi.types,
+  nextpas.core.git.libgit2.ffi.structs,
+  nextpas.core.git.libgit2.ffi.callbacks,
+  nextpas.core.git.libgit2.ffi.options,
+  nextpas.core.git.libgit2.ffi.consts;
 
 // Basic library functions
 // Runtime loader contract

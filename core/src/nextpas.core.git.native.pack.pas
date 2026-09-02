@@ -41,14 +41,14 @@ type
     function TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
     procedure PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
     function TryGetObjectSizeAtOffset(AOff: Int64; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+    function TryGetObjectSizeAtOffsetDepth(AOff: Int64; ADepth: Integer; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
-    // delta target size cache: 64-entry fully associative FIFO (bytes.ops single source, zero-copy, inline)
+    // delta target size: 64-entry direct-mapped O(1) mask 63 (bytes.ops single source, zero-copy, inline)
     FPeekKeys: array[0..63] of SizeUInt;
     FPeekVals: array[0..63] of Int64;
     FPeekValid: array[0..63] of Boolean;
-    FPeekNext: SizeUInt;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -182,9 +182,7 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
-  // cache zero-init: bytes.ops single source SpanFill (zero-copy view, inline MemSet) over FPeekValid; FIFO cursor zero
   SpanFill(TByteSpan.Create(PByte(@FPeekValid[0]), SizeOf(FPeekValid)), 0);
-  FPeekNext := 0;
   LoadIndex(AIdxPath);
 end;
 
@@ -402,36 +400,25 @@ end;
 
 function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
 var
-  I: Integer;
+  Idx: SizeUInt;
 begin
-  // perf: inline + fully associative linear scan (64 entries, no hash) avoids Knuth direct-map collisions; hot path avoids repeated 32B prefix inflate, zero-copy via regs, single source bytes.ops still owns 32B inflate in caller
-  for I := 0 to High(FPeekValid) do
-    if FPeekValid[I] and (FPeekKeys[I] = APos) then
-    begin
-      ATargetSize := FPeekVals[I];
-      Exit(True);
-    end;
+  Idx := APos and 63;
+  if FPeekValid[Idx] and (FPeekKeys[Idx] = APos) then
+  begin
+    ATargetSize := FPeekVals[Idx];
+    Exit(True);
+  end;
   Result := False;
 end;
 
 procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
 var
-  I: Integer;
+  Idx: SizeUInt;
 begin
-  // perf: inline + FIFO fully associative (no jitter thrash), scans for empty slot first then round-robin; avoids repeated 32B prefix inflate on large-pack Revwalk, stable FIFO eviction, single source bytes.ops in caller inflate
-  for I := 0 to High(FPeekValid) do
-    if not FPeekValid[I] then
-    begin
-      FPeekKeys[I] := APos;
-      FPeekVals[I] := ATargetSize;
-      FPeekValid[I] := True;
-      Exit;
-    end;
-  I := Integer(FPeekNext and 63);
-  FPeekKeys[I] := APos;
-  FPeekVals[I] := ATargetSize;
-  FPeekValid[I] := True;
-  FPeekNext := (FPeekNext + 1) and 63;
+  Idx := APos and 63;
+  FPeekKeys[Idx] := APos;
+  FPeekVals[Idx] := ATargetSize;
+  FPeekValid[Idx] := True;
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
@@ -463,12 +450,13 @@ var
 begin
   if ADepth > GitMaxDeltaDepth then
     raise EGitError.Create('delta chain too deep');
-  // iteratively collect delta chain, avoid recursion and per-level stack allocs
   ChainLen := 0;
   CurOff := AOffset;
   while True do
   begin
     if ChainLen > GitMaxDeltaDepth - ADepth then
+      raise EGitError.Create('delta chain too deep');
+    if ChainLen > High(Chain) then
       raise EGitError.Create('delta chain too deep');
     P := CurOff;
     B := ByteAt(P);
@@ -614,6 +602,11 @@ begin
 end;
 
 function TPackFile.TryGetObjectSizeAtOffset(AOff: Int64; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+begin
+  Result := TryGetObjectSizeAtOffsetDepth(AOff, 0, AKind, ASize);
+end;
+
+function TPackFile.TryGetObjectSizeAtOffsetDepth(AOff: Int64; ADepth: Integer; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
 var
   BaseOff: Int64;
   P, DeltaStart: SizeUInt;
@@ -626,7 +619,7 @@ var
   BaseSize: Int64;
   Rel: Int64;
 
-  function WalkKind(AStart: Int64; out AFound: TGitObjectKind): Boolean;
+  function WalkKind(AStart: Int64; ARemain: Integer; out AFound: TGitObjectKind): Boolean;
   var
     LOff: Int64;
     LPos: SizeUInt;
@@ -636,9 +629,10 @@ var
     LTmpOid: TGitOid;
   begin
     Result := False;
+    if ARemain < 0 then Exit;
     LOff := AStart;
     LDepth := 0;
-    while LDepth <= GitMaxDeltaDepth do
+    while LDepth <= ARemain do
     begin
       if (LOff < 0) or (LOff >= Int64(FDataSize)) then Exit;
       LPos := SizeUInt(LOff);
@@ -692,6 +686,7 @@ begin
   Result := False;
   AKind := gokBlob;
   ASize := 0;
+  if ADepth > GitMaxDeltaDepth then Exit;
   if (AOff < 0) or (AOff >= Int64(FDataSize)) then
     Exit;
   P := SizeUInt(AOff);
@@ -717,6 +712,7 @@ begin
     4: begin AKind := gokTag; ASize := Sz; Exit(True); end;
     6, 7:
       begin
+        if ADepth >= GitMaxDeltaDepth then Exit;
         if Typ = 6 then
         begin
           if P >= FDataSize then Exit;
@@ -742,22 +738,20 @@ begin
           DeltaStart := P;
           BaseOff := FindOffset(BaseOid);
         end;
-        // hot path O(1) cache probe, only miss does 32B prefix inflate
         if TryPeekCacheHit(DeltaStart, TgtSize) then
           ASize := TgtSize
         else if not TryPeekDeltaTargetSize(DeltaStart, TgtSize) then Exit
         else ASize := TgtSize;
         if Typ = 7 then
         begin
-          // memo: reuse already resolved BaseOff, avoid duplicate FindOffset(BaseOid) O(logN) inside recursive call
-          if (BaseOff >= 0) and TryGetObjectSizeAtOffset(BaseOff, BaseKind, BaseSize) then
+          if (BaseOff >= 0) and TryGetObjectSizeAtOffsetDepth(BaseOff, ADepth + 1, BaseKind, BaseSize) then
             AKind := BaseKind
-          else if (BaseOff >= 0) and WalkKind(BaseOff, BaseKind) then
+          else if (BaseOff >= 0) and WalkKind(BaseOff, GitMaxDeltaDepth - ADepth - 1, BaseKind) then
             AKind := BaseKind;
         end
         else
         begin
-          if WalkKind(BaseOff, BaseKind) then
+          if WalkKind(BaseOff, GitMaxDeltaDepth - ADepth - 1, BaseKind) then
             AKind := BaseKind;
         end;
         Result := True;

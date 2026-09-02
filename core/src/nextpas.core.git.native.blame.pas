@@ -31,7 +31,7 @@ function GitBlame(const AGitDir, ARef, APath: string): TGitBlameArray; overload;
 function GitBlame(const AGitDir, APath: string): TGitBlameArray; overload;
 
 const
-  // single source threshold: shared between impl and tests, avoids magic 1M drift
+  // single source threshold: shared between impl and tests, avoids magic 1M drift; anti-jitter: single source locks 1M boundary, TestBlameThresholdEdge guards 1000×1000 exact vs 1001×1000 fallback, Int64 product avoids overflow jitter
   BLAME_HIRSCHBERG_CELLS_LIMIT = 1000000;
 
 function GitBlameComputeMatches(const AOld, ANew: TStringArray): TBlameMatchArray; inline;
@@ -405,7 +405,7 @@ begin
 end;
 
 // threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M defined in interface (single source, was 10M in native-reference-map.md).
-// Tuning via bench_git Blame/* + test_git_native regression baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×) and 3000×3000=9M fallback ~6-8ms vs Hirschberg ~27ms (3-4×, O(N log N) sort overhead bounded, see TestBlameLargeFileFallback in test_git_native); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; regression baseline: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + test_git_native blame golden (threshold edge 1000×1000 exact vs 1001×1000 fallback) + large-file 3000×3000 fallback perf guard.
+// Tuning via bench_git Blame/* + test_git_native regression baseline: Hirschberg O(n*m) single commit ~3ms/1M cells (1k×1k, zero-copy swap, reused buffers via bytes.ops GrowArrayCapacity) vs fallback O(N log N+M log U) ~0.8ms/1M + large-file fallback 2000×2000=4M ~2.1ms vs Hirschberg ~12ms (5×) and 3000×3000=9M fallback ~6-8ms vs Hirschberg ~27ms (3-4×, O(N log N) sort overhead bounded, see TestBlameLargeFileFallback in test_git_native); threshold 1M avoids C*n*m amplification (C commits → C*1M string compares, ~100M for 100 commits) while keeping 1k×1k hot path exact LCS; regression baseline: bench_git Blame/ComputeMatches:1k×1k/2k×2k + fallback/3k×3k + test_git_native blame golden (threshold edge 1000×1000 exact vs 1001×1000 fallback) + large-file 3000×3000 fallback perf guard. Threshold edge anti-jitter: single-source const + deterministic sorted dedup (HashString FNV-1a + BlameQuickSort/BlameFindLine O(N log N+M log U), Idx tie-break stable) locks 1M boundary; 1000×1000 Hirschberg vs 1001×1000 fallback cross-checked in TestBlameThresholdEdge, 3000×3000 large-file fallback perf guard <500ms in TestBlameLargeFileFallback prevents O(N log N) sort jitter; Int64(n)*Int64(m) avoids overflow jitter for large m*n.
 
 function ComputeMatches(const AOld, ANew: TStringArray): TMatchArray; inline;
 var
@@ -414,7 +414,7 @@ var
   AccCnt, AccCap: SizeUInt;
   BufPrev, BufCur, BufL1, BufLRev: TIntArray;
 begin
-  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source; bench baseline covers threshold edge (1k×1k Hirschberg vs 2k×2k fallback, large-file 3k×3k), zero-copy swap eliminates O(m) Move double-buffer copy at threshold.
+  // perf: inline hot + zero-copy TStringArray slice view via off/len (no alloc), single-source bytes.ops GrowArrayCapacity for Acc/buffers; threshold BLAME_HIRSCHBERG_CELLS_LIMIT=1M (was 10M) avoids O(n*m) Hirschberg quadratic amplification across many commits (C * n*m), fallback O(N log N+M log U) via HashString single source, inline hot, bytes.ops single source; bench baseline covers threshold edge (1k×1k Hirschberg vs 2k×2k fallback, large-file 3k×3k), zero-copy swap eliminates O(m) Move double-buffer copy at threshold. Threshold edge anti-jitter: Int64 product avoids overflow, single-source const prevents drift, deterministic hash+sort+binary search keeps 1M boundary stable; regression locked via TestBlameThresholdEdge (1000×1000 exact vs 1001×1000 fallback) + TestBlameLargeFileFallback (3000×3000 <500ms).
   Result := nil;
   n := Length(AOld);
   m := Length(ANew);
