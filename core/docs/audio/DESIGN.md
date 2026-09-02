@@ -99,7 +99,7 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许)
 
 ## 10. 验证
 
-`268 tests HEAPTRC OK` + `84文件无ffi/vendor`（核心 29+扩展 55 四件套完整，unique 82+2 bus 门面，codec.flac/mp3/vorbis/opus 各 `base/intf/impl/pas` 四件套 1.5.2，wav四件套L2化）+ `23 GUID`（11 核心+12 扩展含 B 前缀 bus 异形）+ `实时纪律` + `hygiene` + `test_automation` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6/§8` 与 `README.md` 测试矩阵）。
+`268 tests HEAPTRC OK` + `85文件无ffi/vendor`（核心 29+扩展 56 四件套完整，unique 83+2 bus 门面，codec.flac/mp3/vorbis/opus 各 `base/intf/impl/pas` 四件套 1.5.2，wav四件套L2化）+ `23 GUID`（11 核心+12 扩展含 B 前缀 bus 异形）+ `实时纪律` + `hygiene` + `test_automation` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6/§8` 与 `README.md` 测试矩阵）。
 
 ## 11. 独立族演进（S10 预研）
 

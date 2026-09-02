@@ -47,13 +47,13 @@
 
 ## 里程碑 S9 验收（1.5.2 实盘对齐）
 
-- **文件**：84 文件 = 核心 29（+wav四件套 3）+ 扩展 55（含 `audio.bank/resource/event/spatial/playlist/bus` 各四件套 + `codec.flac/mp3/vorbis/opus` 各 `base/intf/impl/pas` 四件套 12 文件 + `codec.*.decoder/.sse` 6 + `studio.*(4)/simd/pcm.simd` + `studio.base/studio.pas`，unique 82+2 bus facade），`26+58` 独立族待抽后 audio 仅留 26 core 冻结
+- **文件**：85 文件 = 核心 29（+wav四件套 3）+ 扩展 56（含 `audio.bank/resource/event/spatial/playlist/bus` 各四件套 + `codec.flac/mp3/vorbis/opus` 各 `base/intf/impl/pas` 四件套 12 文件 + `codec.*.decoder/.sse` 6 + `studio.*(4)/simd/pcm.simd` + `studio.base/studio.pas`，unique 83+2 bus facade），`26+59` 独立族待抽后 audio 仅留 26 core 冻结
 - **GUID**：23 枚 = 11 核心 + 12 扩展（B 前缀 bus 异形 C00001/02），opus 复用 0001/02 无新增 GUID，gate 单独校验
 - **测试**：268 tests / 24 门，含 `test_automation`（8）+ `test_bus`（8）+ `opus` 占位，全量 `HEAPTRC OK` + `hygiene` 绿为晋升 `focused-runtime` 必要条件
 - **Bench**：`bench_pcm_wav` 已扩 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K` 五项 `ns/op+MB/s -O2`
 
 ## 里程碑 S10 预研（独立族拆分）
 
-- **目标**：`nextpas.core.audio 84 provisional` → `26 core 冻结` + `58 ext` 抽独立 L2：`nextpas.core.audio.codec.flac/mp3/vorbis/opus`（各四件套，L0 only base + Probe≤4KB + bytes.ops 单源）、`nextpas.core.audio.spatial`/`bus`/`bank`/`resource`/`playlist`/`event`/`studio`、`nextpas.core.simd`（audio.simd/pcm.simd 薄封装复用）
+- **目标**：`nextpas.core.audio 85 provisional` → `26 core 冻结` + `59 ext` 抽独立 L2：`nextpas.core.audio.codec.flac/mp3/vorbis/opus`（各四件套，L0 only base + Probe≤4KB + bytes.ops 单源）、`nextpas.core.audio.spatial`/`bus`/`bank`/`resource`/`playlist`/`event`/`studio`、`nextpas.core.simd`（audio.simd/pcm.simd 薄封装复用）
 - **约束**：`L2→L2` 禁依赖，受控 seam 需 `module-registry` 登记 + gate，白名单后 `audio` 内禁止继续堆叠新域
 

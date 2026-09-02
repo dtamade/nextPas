@@ -54,6 +54,7 @@ type
     FScratch: TAudioBuffer;
     FSnapshotBuses: array of IAudioBus;
     FLock: IMutex;
+    FViolations: Int64;
     procedure EnsureScratch(ANeeded: Integer); inline;
     procedure EnsureSnapshotCapacity(ANeeded: Integer); inline;
   public
@@ -141,10 +142,9 @@ begin
   LNeeded := Integer(AudioBytesForFrames(FFormat, AFrames));
   if Length(ABuffer.Data) < LNeeded then Exit(0);
   AudioSilentFill(ABuffer, FFormat, AFrames);
-  // two-phase snapshot: copy source/gain under lock, mixing lock-free
+  // two-phase snapshot: copy source/gain under lock, mixing lock-free — realtime no alloc
   FLock.Acquire; try LSrc := FSource; LGain := FGain; finally FLock.Release; end;
   if not Assigned(LSrc) then Exit(AFrames);
-  EnsureScratch(LNeeded);
   if Length(FScratch.Data) < LNeeded then Exit(AFrames);
   FScratch.FrameCount := AFrames;
   try
@@ -247,11 +247,19 @@ begin
   LNeeded := Integer(AudioBytesForFrames(LFmt, AFrames));
   if Length(ABuffer.Data) < LNeeded then Exit(0);
   AudioSilentFill(ABuffer, LFmt, AFrames);
-  // scratch preallocated at Create (CAudioBusMixerScratchBytes), realtime grow is violation -> still via AudioEnsureCapacity but steady no alloc
-  if Length(FScratch.Data) < LNeeded then EnsureScratch(LNeeded);
-  if Length(FScratch.Data) < LNeeded then Exit(AFrames);
+  // INV-6: realtime no alloc — scratch/snapshot preallocated at CreateBus (geometric), violation counted
+  if Length(FScratch.Data) < LNeeded then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    Exit(AFrames);
+  end;
   // snapshot buses lock-free mixing — guard nil + local ref (B-prefix异形, zero-alloc steady, avoid double fetch)
-  if Length(FSnapshotBuses) < LCount then EnsureSnapshotCapacity(LCount);
+  if Length(FSnapshotBuses) < LCount then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    EnsureSnapshotCapacity(LCount);
+    if Length(FSnapshotBuses) < LCount then Exit(AFrames);
+  end;
   FLock.Acquire; try for I:=0 to LCount-1 do if I < FBusCount then FSnapshotBuses[I] := FBuses[I]; finally FLock.Release; end;
   for I := 0 to LCount - 1 do
   begin
@@ -259,7 +267,13 @@ begin
     LBus := FSnapshotBuses[I];
     if not Assigned(LBus) then Continue;
     if not LBus.GetFormat.IsValid then Continue;
-    if Length(FScratch.Data) < LNeeded then Continue;
+    // per-bus byte check (heterogeneous Channels/BlockAlign) — violation counted, no alloc
+    if AudioBytesForFrames(LBus.GetFormat, AFrames) > High(Integer) then Continue;
+    if Length(FScratch.Data) < Integer(AudioBytesForFrames(LBus.GetFormat, AFrames)) then
+    begin
+      InterlockedExchangeAdd64(FViolations, 1);
+      Continue;
+    end;
     AudioSilentFill(FScratch, LBus.GetFormat, AFrames);
     try
       (LBus as IRealtimeAudioSource).FillRealtime(FScratch, AFrames);

@@ -76,9 +76,21 @@ var
   LFmt: TAudioFormat;
   LFrames: Integer;
   LBytes: Integer;
+  LSize: Int64;
 begin
   if AStream = nil then
     raise EAudioDecodeError.Create('opus DecodeWhole: nil stream');
+  // 8MB 守卫 + 27 字节 Ogg 最小头显式消费常量，避免桩遗漏限幅（与 wav MAX_WAV_PAYLOAD_BYTES 对称）
+  try
+    LSize := AStream.Size;
+    if (LSize >= 0) and (LSize > COpusMaxDecodeBytes) then
+      raise EAudioDecodeError.CreateFmt('opus DecodeWhole: payload %d exceeds %d', [LSize, COpusMaxDecodeBytes]);
+    if LSize >= 0 then
+      Assert(COpusOggMinHeader = 27, 'COpusOggMinHeader');
+  except
+    on E: EAudioDecodeError do raise;
+    else ; // ignore Size not supported
+  end;
   // stub: 1024帧静音桩, bytes.ops single source, L0 only, inline zero-copy via BytesZero, no foreign binding
   LFmt := AudioFormatCreate(COpusDefaultSampleRate, COpusDefaultChannels, sfF32);
   LFrames := 1024;
