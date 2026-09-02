@@ -106,6 +106,18 @@ type
     FConfig: TMailSmtpServerConfig;
   end;
 
+  { MAIL 策略钩子 mock：可切换放行/拒绝，记录调用与入参 }
+  TTestMailPolicy = class(TInterfacedObject, ISmtpMailPolicyHook)
+  public
+    RejectReply: string;   { '' = 放行; 非空 = 完整拒绝行(含 CRLF) }
+    Calls: Int32;
+    LastFrom: string;
+    LastIP: string;
+    constructor Create;
+    function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+  end;
+
 { 服务器线程：ListenAndServe 阻塞运行，退出时释放引用 }
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
@@ -415,6 +427,21 @@ begin
   Result := TMailSmtpServerSession.Create(AConn, FSink, FConfig);
 end;
 
+constructor TTestMailPolicy.Create;
+begin
+  inherited Create;
+  RejectReply := '';
+end;
+
+function TTestMailPolicy.EvaluateMailFrom(const AFrom: TMailAddress;
+  const AClientIP: string): string;
+begin
+  Inc(Calls);
+  LastFrom := AFrom.Full;
+  LastIP := AClientIP;
+  Result := RejectReply;
+end;
+
 { ── 测试用例 ──────────────────────────────────────────────────────── }
 
 function MakeConfig(APort: UInt16; AIoMs, AConnectMs: Int64): TSmtpClientConfig;
@@ -574,6 +601,80 @@ begin
 
   StopSmtpServer(LServer, LH);
   LSink := nil;
+end;
+
+{ MAIL 阶段同步策略钩子：放行路径（250 + 信封正常）与拒绝路径
+  （452 + 信封未定值 → RCPT 503 + 策略放开后重发成功） }
+procedure TestMailPolicyHook;
+var
+  LH: TPlatformThreadHandle;
+  LServer: ITcpServer;
+  LHandler: TTestSmtpHandler;
+  LSink: TTestSmtpSink;
+  LConfig: TMailSmtpServerConfig;
+  LPort: UInt16;
+  C: TRawClient;
+  LPolicy: TTestMailPolicy;
+  LPolicyRef: ISmtpMailPolicyHook;
+begin
+  { 放行路径：钩子被调用并拿到 From + 对端 IP }
+  LSink := TTestSmtpSink.Create;
+  LPolicy := TTestMailPolicy.Create;
+  LPolicyRef := LPolicy;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.MailPolicy := LPolicyRef;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'mail ok (policy allow)');
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '250', 'rcpt ok after policy allow');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+  { 250 回复已读回 ⇒ EvaluateMailFrom 必已完成（回复在回调后入队） }
+  CheckEqual(1, LPolicy.Calls, 'policy called once on allow');
+  CheckEqual('a@b.com', LPolicy.LastFrom, 'policy sees from');
+  CheckEqual('127.0.0.1', LPolicy.LastIP, 'policy sees peer ip');
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+  LPolicyRef := nil;
+
+  { 拒绝路径：452；信封未定值（RCPT → 503）；策略放开后重发成功 }
+  LSink := TTestSmtpSink.Create;
+  LPolicy := TTestMailPolicy.Create;
+  LPolicy.RejectReply := '452 4.7.1 Too many messages' + #13#10;
+  LPolicyRef := LPolicy;
+  LConfig := TMailSmtpServerConfig.Default;
+  LConfig.MailPolicy := LPolicyRef;
+  StartFixture(LConfig, LSink, LServer, LHandler, LH, LPort);
+
+  C.Open(LPort);
+  ExpectBanner(C, 2000);
+  C.SendLine('EHLO test.example');
+  ExpectMultiLine(C, 2000, '250', 'PIPELINING', 'EHLO');
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '452', 'mail rejected by policy');
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '503', 'rcpt after policy reject');
+  LPolicy.RejectReply := '';
+  C.SendLine('MAIL FROM:<a@b.com>');
+  ExpectReply(C, 2000, '250', 'mail ok after policy release');
+  C.SendLine('RCPT TO:<x@y.com>');
+  ExpectReply(C, 2000, '250', 'rcpt ok after policy release');
+  C.SendLine('QUIT');
+  ExpectReply(C, 2000, '221', 'QUIT');
+  C.Close;
+  CheckEqual(2, LPolicy.Calls, 'policy called twice (reject + allow)');
+
+  StopSmtpServer(LServer, LH);
+  LSink := nil;
+  LPolicyRef := nil;
 end;
 
 procedure TestOrderAndSyntax;
@@ -1170,6 +1271,7 @@ begin
   T.Test('EhloCapabilities', @Test_Full);
   T.Test('MailRcptDataFlow', @TestMailRcptDataFlow);
   T.Test('SizeReject', @TestSizeReject);
+  T.Test('MailPolicyHook', @TestMailPolicyHook);
   T.Test('OrderAndSyntax', @TestOrderAndSyntax);
   T.Test('RequireAuth', @TestRequireAuth);
   T.Test('MaxRecipients', @TestMaxRecipients);

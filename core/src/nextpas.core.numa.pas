@@ -71,7 +71,6 @@ uses
   {$IFDEF WINDOWS}
   nextpas.core.numa.windows,
   {$ENDIF}
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.mem;
 
@@ -169,6 +168,10 @@ end;
 initialization
 
 finalization
-  FreeAndNil(GPlatform);
+  if GPlatform <> nil then
+  begin
+    GPlatform.Free;
+    GPlatform := nil;
+  end;
 
 end.

@@ -2,8 +2,8 @@
 
 **模块路径**：`core/src/nextpas.core.mem*.pas`（77 个源文件；以 `core/src/nextpas.core.mem*.pas` glob 为准）
 **层级**：仓库 L0；mem 内部分层见 ARCHITECTURE（M0–M3）
-**最后更新**：2026-08-23
-**版本**：1.9
+**最后更新**：2026-08-31
+**版本**：1.10
 **堆后端**：`System.*` 堆原语仅允许在 `nextpas.core.system.heap`；mem 使用 `NpSystem*`（见 [HEAP-BACKEND-OWNER.md](HEAP-BACKEND-OWNER.md)）
 
 **关联冻结策略**：[ERROR-POLICY.md](ERROR-POLICY.md)（nil vs raise）
@@ -383,3 +383,4 @@ test_zeroed_allocator
 | 2026-07-08 | 1.5 | 演化路线图完成：106 源文件 / 58 测试目录 / 688 测试，新增 IBatchAllocator 接口 | Claude |
 | 2026-07-12 | 1.6 | 契约门禁修复：IAllocator 精简为 5 方法、IArena 移除 RemainingSize、测试清单同步 143 目录、源文件数 105 | Claude |
 | 2026-08-23 | 1.9 | 门禁对账同步：源文件精确计数 77（glob 口径）、测试目录 113（补声明 test_cross_thread_free ← 2e5b63742 / test_mt_fuzz ← 08bda5710）；mem-contract-check C2/C6 警告清零 | Grok |
+| 2026-08-31 | 1.10 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

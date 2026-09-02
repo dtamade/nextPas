@@ -200,7 +200,7 @@ ed25519 签名实现另有 RFC 8032 向量与跨长度签验回归
 | 解压上限 | 1 MiB | `SSH_COMP_MAX_DECOMPRESSED` 防 bomb |
 | 有状态增益 | 第 2 包 1 KiB `A*` 压缩后显著小于首包 | `Z_SYNC_FLUSH` 保留滑动窗口 |
 
-**ProxyJump**（`MemPipe` 双跳, `bench_ssh_proxyjump` 50 次, `-O3`, `HEAPTRC_GATE=0`, `TLoopThread` 轮询转发）：
+**ProxyJump**（`MemPipe` 双跳, `bench_ssh_proxyjump` 50 次, `-O3`, `heaptrc 0`, `BeginThread` 同步转发）：
 
 | 路径 | p50 | p95 | avg | 备注 |
 | --- | --- | --- | --- | --- |

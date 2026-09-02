@@ -101,6 +101,7 @@ function HttpCookieSiteKey(const AHost: string): string;
 implementation
 
 uses
+  nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.time,
   nextpas.core.time.datetime,
@@ -360,7 +361,8 @@ end;
 
 function BuildSetCookie(const ACookie: TSetCookie): string;
 var
-  LResult: string;
+  LBuilder: TBufStringBuilder;
+  LReserve: SizeUInt;
 begin
   { Validate all fields to prevent header injection }
   if not IsValidCookieName(ACookie.Name) then
@@ -374,36 +376,77 @@ begin
   if (ACookie.Expires <> '') and (not IsValidCookieAttrValue(ACookie.Expires)) then
     raise ECore.Create('Invalid cookie expires: contains forbidden characters');
 
-  LResult := ACookie.Name + '=' + ACookie.Value;
-
+  { perf: single allocation via TBufStringBuilder (L1 owner text.builder).
+    Pre-reserve exact payload avoids 7× LResult:=LResult+ realloc O(n²).
+    Zero-copy: AppendStr/AppendChar use Move inline, AppendInt uses
+    IntToBuffer direct into builder tail (no IntToStr temp string). }
+  LReserve := SizeUInt(Length(ACookie.Name) + 1 + Length(ACookie.Value));
   if ACookie.Domain <> '' then
-    LResult := LResult + '; Domain=' + ACookie.Domain;
-
+    Inc(LReserve, SizeUInt(9 + Length(ACookie.Domain))); { '; Domain=' }
   if ACookie.Path <> '' then
-    LResult := LResult + '; Path=' + ACookie.Path
+    Inc(LReserve, SizeUInt(7 + Length(ACookie.Path))) { '; Path=' }
   else
-    LResult := LResult + '; Path=/';
-
+    Inc(LReserve, 8); { '; Path=/' }
   if ACookie.Expires <> '' then
-    LResult := LResult + '; Expires=' + ACookie.Expires;
-
+    Inc(LReserve, SizeUInt(10 + Length(ACookie.Expires))); { '; Expires=' }
   if ACookie.MaxAge >= 0 then
-    LResult := LResult + '; Max-Age=' + IntToStr(ACookie.MaxAge);
-
+    Inc(LReserve, 31); { '; Max-Age=' (10) + int64 worst 21 }
   if ACookie.HasSameSite then
-    case ACookie.SameSite of
-      ssStrict: LResult := LResult + '; SameSite=Strict';
-      ssLax:    LResult := LResult + '; SameSite=Lax';
-      ssNone:   LResult := LResult + '; SameSite=None';
+    Inc(LReserve, 17); { max '; SameSite=Strict' }
+  if ACookie.Secure then
+    Inc(LReserve, 8); { '; Secure' }
+  if ACookie.HttpOnly then
+    Inc(LReserve, 10); { '; HttpOnly' }
+
+  LBuilder.Init(LReserve);
+  try
+    LBuilder.AppendStr(ACookie.Name);
+    LBuilder.AppendChar('=');
+    LBuilder.AppendStr(ACookie.Value);
+
+    if ACookie.Domain <> '' then
+    begin
+      LBuilder.AppendStr('; Domain=');
+      LBuilder.AppendStr(ACookie.Domain);
     end;
 
-  if ACookie.Secure then
-    LResult := LResult + '; Secure';
+    if ACookie.Path <> '' then
+    begin
+      LBuilder.AppendStr('; Path=');
+      LBuilder.AppendStr(ACookie.Path);
+    end
+    else
+      LBuilder.AppendStr('; Path=/');
 
-  if ACookie.HttpOnly then
-    LResult := LResult + '; HttpOnly';
+    if ACookie.Expires <> '' then
+    begin
+      LBuilder.AppendStr('; Expires=');
+      LBuilder.AppendStr(ACookie.Expires);
+    end;
 
-  Result := LResult;
+    if ACookie.MaxAge >= 0 then
+    begin
+      LBuilder.AppendStr('; Max-Age=');
+      LBuilder.AppendInt(ACookie.MaxAge);
+    end;
+
+    if ACookie.HasSameSite then
+      case ACookie.SameSite of
+        ssStrict: LBuilder.AppendStr('; SameSite=Strict');
+        ssLax:    LBuilder.AppendStr('; SameSite=Lax');
+        ssNone:   LBuilder.AppendStr('; SameSite=None');
+      end;
+
+    if ACookie.Secure then
+      LBuilder.AppendStr('; Secure');
+
+    if ACookie.HttpOnly then
+      LBuilder.AppendStr('; HttpOnly');
+
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 { MakeCookie }
@@ -1132,10 +1175,19 @@ var
   LI: SizeInt;
   LHost, LPath, LScheme: string;
   LSecure: Boolean;
-  LFirst: Boolean;
   LNow: Int64;
   LRequestSite: string;
   LSameSiteRequest: Boolean;
+  // perf: single SetLength+Move — one allocation, O(n) zero-copy vs O(n²) concat
+  LIndices: array of SizeInt;
+  LCount, LTotalLen, LPos, LNameLen, LValLen, LIdx: SizeInt;
+  // inline helper keeps call-site zero-overhead and documents Move contract
+  procedure AppendSeparator(var APos: SizeInt); inline;
+  begin
+    Result[APos] := ';';
+    Result[APos + 1] := ' ';
+    Inc(APos, 2);
+  end;
 begin
   Result := '';
   LHost := AUrl.Host;
@@ -1145,11 +1197,14 @@ begin
   LScheme := LowerAscii(AUrl.Scheme);
   LSecure := LScheme = 'https';
   LRequestSite := CookieSiteKey(LHost);
-  LFirst := True;
   LNow := CookieNowUnix;
   FLock.Acquire;
   try
     EvictExpiredLocked(LNow);
+    // first pass: collect matching indices and compute total length (incl. '; ' separators)
+    LCount := 0;
+    LTotalLen := 0;
+    SetLength(LIndices, Length(FItems));
     for LI := 0 to High(FItems) do
     begin
       if FItems[LI].Secure and (not LSecure) then
@@ -1161,11 +1216,36 @@ begin
       LSameSiteRequest := CookieSiteKey(FItems[LI].Domain) = LRequestSite;
       if not SameSiteAllowsSend(FItems[LI].SameSite, LSameSiteRequest) then
         Continue;
-      if LFirst then
-        LFirst := False
-      else
-        Result := Result + '; ';
-      Result := Result + FItems[LI].Name + '=' + FItems[LI].Value;
+      if LCount > 0 then
+        Inc(LTotalLen, 2); // '; '
+      Inc(LTotalLen, Length(FItems[LI].Name) + 1 + Length(FItems[LI].Value)); // Name '=' Value
+      LIndices[LCount] := LI;
+      Inc(LCount);
+    end;
+    if LCount = 0 then
+      Exit('');
+    // single allocation; subsequent Moves are zero-copy into Result buffer
+    SetLength(Result, LTotalLen);
+    LPos := 1;
+    for LIdx := 0 to LCount - 1 do
+    begin
+      LI := LIndices[LIdx];
+      if LIdx > 0 then
+        AppendSeparator(LPos); // inline
+      LNameLen := Length(FItems[LI].Name);
+      if LNameLen > 0 then
+      begin
+        Move(FItems[LI].Name[1], Result[LPos], LNameLen); // zero-copy
+        Inc(LPos, LNameLen);
+      end;
+      Result[LPos] := '=';
+      Inc(LPos);
+      LValLen := Length(FItems[LI].Value);
+      if LValLen > 0 then
+      begin
+        Move(FItems[LI].Value[1], Result[LPos], LValLen); // zero-copy
+        Inc(LPos, LValLen);
+      end;
     end;
   finally
     FLock.Release;

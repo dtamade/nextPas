@@ -445,122 +445,6 @@ begin
   end;
 end;
 
-var GCachedExporter: TAsyncTlsPasCachedPrometheusExporter;
-
-procedure BenchPrometheusAppend(aIters: Int64);
-var I: Int64; M: TTlsPasAdaptiveMetrics; Buf: string;
-begin
-  M := GAdaptiveObserver.GetAdaptiveMetrics;
-  for I := 1 to aIters do
-  begin
-    Buf := '';
-    TlsPasAppendPrometheusMetrics(Buf, M);
-  end;
-end;
-
-procedure BenchCachedExporterHit(aIters: Int64);
-var I: Int64; F: string;
-begin
-  for I := 1 to aIters do F := GCachedExporter.Format;
-end;
-
-procedure BenchCachedExporterMiss(aIters: Int64);
-var I: Int64; F: string; M: TTlsPasAdaptiveMetrics;
-begin
-  for I := 1 to aIters do
-  begin
-    // force miss by invalidating each iter (worst case)
-    GCachedExporter.Invalidate;
-    F := GCachedExporter.Format;
-  end;
-end;
-
-procedure BenchRegistryCachedHit(aIters: Int64);
-var I: Int64; F: string;
-begin
-  for I := 1 to aIters do F := GPromRegistry.FormatAllMetricsCached;
-end;
-
-procedure BenchRegistryCachedMiss(aIters: Int64);
-var I: Int64; F: string;
-begin
-  for I := 1 to aIters do
-  begin
-    GPromRegistry.InvalidateCache;
-    F := GPromRegistry.FormatAllMetricsCached;
-  end;
-end;
-
-procedure BenchMetricsHandler(aIters: Int64);
-var I: Int64; Hdl: IHttpHandler; Req: IHttpRequest; W: IHttpResponseWriter;
-begin
-  Hdl := HttpMetricsHandler(GPromRegistry);
-  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
-  for I := 1 to aIters do
-  begin
-    W := TCaptureWriterBenchHack.Get;
-    Hdl.ServeHTTP(Req, W);
-  end;
-end;
-
-var GTraceCtx: TTlsPasTraceContext; GTraceTracer: ITlsPasTracer; GTracerConcrete: TAsyncTlsPasSamplingTracer; GTraceMwHandler: IHttpHandler; GTraceReq: IHttpRequest;
-
-procedure BenchTraceParse(aIters: Int64);
-var I: Int64; Ctx: TTlsPasTraceContext; LOk: Boolean;
-begin for I := 1 to aIters do LOk := TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); end;
-
-procedure BenchTraceFormat(aIters: Int64);
-var I: Int64; S: string;
-begin for I := 1 to aIters do S := TlsPasFormatTraceParent(GTraceCtx); end;
-
-procedure BenchTraceShouldSample(aIters: Int64);
-var I: Int64; L: Boolean;
-begin for I := 1 to aIters do L := GTraceTracer.ShouldSample(GTraceCtx); end;
-
-procedure BenchTraceMiddleware(aIters: Int64);
-var I: Int64;
-begin for I := 1 to aIters do GTraceMwHandler.ServeHTTP(GTraceReq, TCaptureWriterBenchHack.Get); end;
-
-var GSpanExporter: ITlsPasSpanExporter; GSpanTraceCtx: TTlsPasTraceContext; GTracezHdl: IHttpHandler; GTracezReq: IHttpRequest;
-
-procedure BenchSpanExport(aIters: Int64);
-var I: Int64; Sp: TTlsPasSpan;
-begin Sp := Default(TTlsPasSpan); Sp.Trace := GSpanTraceCtx; Sp.Name := 'tlspas.early_data'; for I := 1 to aIters do GSpanExporter.ExportSpan(Sp); end;
-
-procedure BenchSpanJSON(aIters: Int64);
-var I: Int64; S: string;
-begin for I := 1 to aIters do S := TlsPasSpansToJSON(GSpanExporter); end;
-
-procedure BenchTracezHandler(aIters: Int64);
-var I: Int64;
-begin for I := 1 to aIters do GTracezHdl.ServeHTTP(GTracezReq, TCaptureWriterBenchHack.Get); end;
-
-var GAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
-
-procedure BenchAdaptiveSampling(aIters: Int64);
-var I: Int64; R: Double; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; C: TTlsPasSamplingConfig;
-begin C := DefaultTlsPasSamplingConfig; M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); for I := 1 to aIters do R := TlsPasComputeAdaptiveSamplingRate(M, H, C); end;
-
-procedure BenchAdaptiveTracer(aIters: Int64);
-var I: Int64; L: Boolean;
-begin for I := 1 to aIters do L := GAdaptiveTracer.ShouldSample(GSpanTraceCtx); end;
-
-procedure BenchOTLPJSON(aIters: Int64);
-var I: Int64; S: string;
-begin for I := 1 to aIters do S := TlsPasSpansToOTLPJSON(GSpanExporter); end;
-
-procedure BenchPrometheusGauge(aIters: Int64);
-var I: Int64; S: string;
-begin for I := 1 to aIters do S := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, 'nextpas_tlspas'); end;
-
-procedure BenchTracerSetRate(aIters: Int64);
-var I: Int64;
-begin for I := 1 to aIters do GTracerConcrete.SetRate(0.02); end;
-
-procedure BenchSnapshot(aIters: Int64);
-var I: Int64; S: TTlsPasAdaptiveSnapshot;
-begin for I := 1 to aIters do S := GAdaptiveObserver.GetSnapshot; end;
-
 var
   GClientEarlyReq: IHttpRequest;
   GClientEarlyResp425, GClientEarlyRespOkEarly0: IHttpResponse;
@@ -655,7 +539,6 @@ begin
   GPromRegistry := TAsyncTlsPasPrometheusRegistry.Create;
   GPromRegistry.Register('api', GAdaptiveObserver);
   GPromRegistry.Register('internal', GAdaptiveObserver);
-  GCachedExporter := TAsyncTlsPasCachedPrometheusExporter.Create(GAdaptiveObserver);
   // HTTP middleware fixtures
   GHttpReqEarly := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
   (GHttpReqEarly as IHttpRequestWithEarlyData).SetWasEarlyData(True);
@@ -672,18 +555,6 @@ begin
   GClientEarlyResp425 := NewResponse(HTTP_STATUS_TOO_EARLY, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0 := NewResponse(HTTP_STATUS_OK, NewHttpHeaders, nil);
   GClientEarlyRespOkEarly0.Headers.SetHeader(HTTP_HEADER_X_EARLY_DATA, '0');
-  GTracerConcrete := TAsyncTlsPasSamplingTracer.Create(0.01);
-  GTraceTracer := GTracerConcrete as ITlsPasTracer;
-  GTraceCtx := TlsPasGenerateTraceContext(False);
-  GTraceReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/'), hvHttp11, NewHttpHeaders, nil, 0);
-  GTraceReq.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
-  GTraceMwHandler := HttpTraceParentMiddleware(GTraceTracer).Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin end));
-  GSpanTraceCtx := TlsPasGenerateTraceContext(True);
-  GSpanExporter := TAsyncTlsPasMemorySpanExporter.Create(128) as ITlsPasSpanExporter;
-  GSpanExporter.ExportSpan(Default(TTlsPasSpan));
-  GTracezReq := THttpRequest.Create(hmGet, TUrl.Parse('http://bench.local/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
-  GTracezHdl := HttpTracezHandler(GSpanExporter);
-  GAdaptiveTracer := TAsyncTlsPasAdaptiveTracer.Create(GAdaptiveObserver);
 end;
 
 var
@@ -738,25 +609,6 @@ begin
     .AddLoop('AdaptiveConfig FromEnv', @BenchAdaptiveConfigLoad)
     .AddLoop('AdaptiveHealth', @BenchAdaptiveHealth)
     .AddLoop('HealthPrometheus', @BenchHealthPrometheus)
-    .AddLoop('Prometheus Append (zero-alloc)', @BenchPrometheusAppend)
-    .AddLoop('CachedExporter hit', @BenchCachedExporterHit)
-    .AddLoop('CachedExporter miss', @BenchCachedExporterMiss)
-    .AddLoop('RegistryCached hit', @BenchRegistryCachedHit)
-    .AddLoop('RegistryCached miss', @BenchRegistryCachedMiss)
-    .AddLoop('MetricsHandler', @BenchMetricsHandler)
-    .AddLoop('Trace Parse', @BenchTraceParse)
-    .AddLoop('Trace Format', @BenchTraceFormat)
-    .AddLoop('Trace ShouldSample', @BenchTraceShouldSample)
-    .AddLoop('Trace Middleware', @BenchTraceMiddleware)
-    .AddLoop('Span Export', @BenchSpanExport)
-    .AddLoop('Span JSON', @BenchSpanJSON)
-    .AddLoop('Tracez Handler', @BenchTracezHandler)
-    .AddLoop('Adaptive Sampling', @BenchAdaptiveSampling)
-    .AddLoop('Adaptive Tracer', @BenchAdaptiveTracer)
-    .AddLoop('OTLP JSON', @BenchOTLPJSON)
-    .AddLoop('Prometheus Gauge', @BenchPrometheusGauge)
-    .AddLoop('Tracer SetRate', @BenchTracerSetRate)
-    .AddLoop('Snapshot', @BenchSnapshot)
     .AddLoop('ClientEarly IsIdempotent', @BenchClientEarlyIsIdempotent)
     .AddLoop('ClientEarly IsEarly', @BenchClientEarlyIsEarly)
     .AddLoop('ClientEarly ShouldRetry', @BenchClientEarlyShouldRetry)

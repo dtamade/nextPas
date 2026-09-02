@@ -167,7 +167,8 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.utils,
+  nextpas.core.bytes.ops;
 
 function DefaultWebviewOptions: TWebviewOptions;
 begin
@@ -296,10 +297,8 @@ end;
 
 function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
 begin
-  if ACurrent = 0 then
-    Result := 4
-  else
-    Result := ACurrent * 2;
+  // perf: inline thin-forward reuse bytes.ops single source geometric via BYTES_BUILDER_MIN_GROW (via WithMin 0→4→2×) — zero extra call, amortized O(1), owner bytes.ops
+  Result := nextpas.core.bytes.ops.WebviewGrowCapacityForReuse(ACurrent);
 end;
 
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);

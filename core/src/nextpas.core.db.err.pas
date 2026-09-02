@@ -14,67 +14,68 @@ unit nextpas.core.db.err;
 interface
 
 uses
-  nextpas.core.db.base;
+  nextpas.core.db.base,
+  nextpas.core.db.sqlite.base,
+  nextpas.core.db.mysql.base;
 
 const
-  { sqlite3.h 结果码（映射输入；与 db.sqlite.base 数值一致，
-    此处自带常量以保持 db.err 无后端依赖） }
-  DB_SQLITE_BUSY        = 5;
-  DB_SQLITE_LOCKED      = 6;
-  DB_SQLITE_INTERRUPT   = 9;   { V3-B6：progress handler/中断触发 }
-  DB_SQLITE_CANTOPEN    = 14;
-  DB_SQLITE_AUTH        = 23;
-  DB_SQLITE_NOMEM       = 7;
-  DB_SQLITE_IOERR       = 10;
-  DB_SQLITE_CORRUPT     = 11;
-  DB_SQLITE_FULL        = 13;
-  DB_SQLITE_CONSTRAINT  = 19;
+  { 单源化：词汇表唯一真实来源为各后端 base (sqlite.base / mysql.base)，
+    本单元仅作别名透传，供分类表与对外 API 复用，避免双源漂移。 }
+  DB_SQLITE_BUSY        = SQLITE_BUSY;
+  DB_SQLITE_LOCKED      = SQLITE_LOCKED;
+  DB_SQLITE_INTERRUPT   = SQLITE_INTERRUPT;   { V3-B6：progress handler/中断触发 }
+  DB_SQLITE_CANTOPEN    = SQLITE_CANTOPEN;
+  DB_SQLITE_AUTH        = SQLITE_AUTH;
+  DB_SQLITE_NOMEM       = SQLITE_NOMEM;
+  DB_SQLITE_IOERR       = SQLITE_IOERR;
+  DB_SQLITE_CORRUPT     = SQLITE_CORRUPT;
+  DB_SQLITE_FULL        = SQLITE_FULL;
+  DB_SQLITE_CONSTRAINT  = SQLITE_CONSTRAINT;
 
-  { sqlite3.h SQLITE_CONSTRAINT 扩展子码 }
-  DB_SQLITE_CONSTRAINT_CHECK        = 275;
-  DB_SQLITE_CONSTRAINT_FOREIGNKEY   = 787;
-  DB_SQLITE_CONSTRAINT_NOTNULL      = 1299;
-  DB_SQLITE_CONSTRAINT_PRIMARYKEY   = 1555;
-  DB_SQLITE_CONSTRAINT_UNIQUE       = 2067;
+  { sqlite3.h SQLITE_CONSTRAINT 扩展子码 — 单源透传 }
+  DB_SQLITE_CONSTRAINT_CHECK        = SQLITE_CONSTRAINT_CHECK;
+  DB_SQLITE_CONSTRAINT_FOREIGNKEY   = SQLITE_CONSTRAINT_FOREIGNKEY;
+  DB_SQLITE_CONSTRAINT_NOTNULL      = SQLITE_CONSTRAINT_NOTNULL;
+  DB_SQLITE_CONSTRAINT_PRIMARYKEY   = SQLITE_CONSTRAINT_PRIMARYKEY;
+  DB_SQLITE_CONSTRAINT_UNIQUE       = SQLITE_CONSTRAINT_UNIQUE;
 
-  { mysql_er.h / mysqld_error.h 错误码（映射输入；与 db.mysql.base
-    数值一致，此处自带常量保持 db.err 无后端依赖） }
-  DB_MYSQL_ER_BAD_FIELD_ERROR       = 1054;  { unknown column }
-  DB_MYSQL_ER_TABLE_EXISTS_ERROR    = 1050;
-  DB_MYSQL_ER_BAD_TABLE_ERROR       = 1051;
-  DB_MYSQL_ER_DUP_KEY               = 1022;
-  DB_MYSQL_ER_DUP_ENTRY             = 1062;
-  DB_MYSQL_ER_PARSE_ERROR           = 1064;
-  DB_MYSQL_ER_EMPTY_QUERY           = 1065;
-  DB_MYSQL_ER_NO_SUCH_TABLE         = 1146;
-  DB_MYSQL_ER_LOCK_DEADLOCK         = 1213;
-  DB_MYSQL_ER_LOCK_TABLE_FULL       = 1206;
-  DB_MYSQL_ER_LOCK_WAIT_TIMEOUT     = 1205;
-  DB_MYSQL_ER_NOT_SUPPORTED_YET     = 1235;
-  DB_MYSQL_ER_OPTION_PREVENTS_STATEMENT = 1290;
-  DB_MYSQL_ER_NO_REFERENCED_ROW     = 1216;
-  DB_MYSQL_ER_ROW_IS_REFERENCED     = 1217;
-  DB_MYSQL_ER_NO_REFERENCED_ROW_2   = 1452;
-  DB_MYSQL_ER_ROW_IS_REFERENCED_2   = 1451;
-  DB_MYSQL_ER_CANT_CREATE_TABLE     = 1005;
-  DB_MYSQL_ER_DB_CREATE_EXISTS      = 1007;
-  DB_MYSQL_ER_BAD_DB_ERROR          = 1049;
-  DB_MYSQL_ER_UNKNOWN_ERROR         = 1105;
-  DB_MYSQL_ER_TRUNCATED_WRONG_VALUE = 1366;
-  DB_MYSQL_ER_DATA_TOO_LONG         = 1406;
-  DB_MYSQL_ER_DBACCESS_DENIED_ERROR = 1044;
-  DB_MYSQL_ER_ACCESS_DENIED_ERROR   = 1045;
-  DB_MYSQL_ER_BAD_NULL_ERROR        = 1048;  { Column cannot be null }
-  DB_MYSQL_ER_CHECK_CONSTRAINT_VIOLATED = 3819;  { 8.0.16+ CHECK }
-  DB_MYSQL_ER_CONSTRAINT_FAILED     = 4025;      { MariaDB CHECK }
-  DB_MYSQL_ER_QUERY_TIMEOUT         = 3024;  { 8.0 MAX_EXECUTION_TIME }
-  DB_MYSQL_ER_STATEMENT_TIMEOUT     = 1969;  { MariaDB max_statement_time }
+  { mysql_er.h / mysqld_error.h 错误码 — 单源透传自 mysql.base }
+  DB_MYSQL_ER_BAD_FIELD_ERROR       = ER_BAD_FIELD_ERROR;  { unknown column }
+  DB_MYSQL_ER_TABLE_EXISTS_ERROR    = ER_TABLE_EXISTS_ERROR;
+  DB_MYSQL_ER_BAD_TABLE_ERROR       = ER_BAD_TABLE_ERROR;
+  DB_MYSQL_ER_DUP_KEY               = ER_DUP_KEY;
+  DB_MYSQL_ER_DUP_ENTRY             = ER_DUP_ENTRY;
+  DB_MYSQL_ER_PARSE_ERROR           = ER_PARSE_ERROR;
+  DB_MYSQL_ER_EMPTY_QUERY           = ER_EMPTY_QUERY;
+  DB_MYSQL_ER_NO_SUCH_TABLE         = ER_NO_SUCH_TABLE;
+  DB_MYSQL_ER_LOCK_DEADLOCK         = ER_LOCK_DEADLOCK;
+  DB_MYSQL_ER_LOCK_TABLE_FULL       = ER_LOCK_TABLE_FULL;
+  DB_MYSQL_ER_LOCK_WAIT_TIMEOUT     = ER_LOCK_WAIT_TIMEOUT;
+  DB_MYSQL_ER_NOT_SUPPORTED_YET     = ER_NOT_SUPPORTED_YET;
+  DB_MYSQL_ER_OPTION_PREVENTS_STATEMENT = ER_OPTION_PREVENTS_STATEMENT;
+  DB_MYSQL_ER_NO_REFERENCED_ROW     = ER_NO_REFERENCED_ROW;
+  DB_MYSQL_ER_ROW_IS_REFERENCED     = ER_ROW_IS_REFERENCED;
+  DB_MYSQL_ER_NO_REFERENCED_ROW_2   = ER_NO_REFERENCED_ROW_2;
+  DB_MYSQL_ER_ROW_IS_REFERENCED_2   = ER_ROW_IS_REFERENCED_2;
+  DB_MYSQL_ER_CANT_CREATE_TABLE     = ER_CANT_CREATE_TABLE;
+  DB_MYSQL_ER_DB_CREATE_EXISTS      = ER_DB_CREATE_EXISTS;
+  DB_MYSQL_ER_BAD_DB_ERROR          = ER_BAD_DB_ERROR;
+  DB_MYSQL_ER_UNKNOWN_ERROR         = ER_UNKNOWN_ERROR;
+  DB_MYSQL_ER_TRUNCATED_WRONG_VALUE = ER_TRUNCATED_WRONG_VALUE;
+  DB_MYSQL_ER_DATA_TOO_LONG         = ER_DATA_TOO_LONG;
+  DB_MYSQL_ER_DBACCESS_DENIED_ERROR = ER_DBACCESS_DENIED_ERROR;
+  DB_MYSQL_ER_ACCESS_DENIED_ERROR   = ER_ACCESS_DENIED_ERROR;
+  DB_MYSQL_ER_BAD_NULL_ERROR        = ER_BAD_NULL_ERROR;  { Column cannot be null }
+  DB_MYSQL_ER_CHECK_CONSTRAINT_VIOLATED = ER_CHECK_CONSTRAINT_VIOLATED;  { 8.0.16+ CHECK }
+  DB_MYSQL_ER_CONSTRAINT_FAILED     = ER_CONSTRAINT_FAILED;      { MariaDB CHECK }
+  DB_MYSQL_ER_QUERY_TIMEOUT         = ER_QUERY_TIMEOUT;  { 8.0 MAX_EXECUTION_TIME }
+  DB_MYSQL_ER_STATEMENT_TIMEOUT     = ER_STATEMENT_TIMEOUT;  { MariaDB max_statement_time }
 
-  { errmsg.h 客户端错误码族（CR_*，2000..2999）与特例 }
-  DB_MYSQL_CR_MIN                   = 2000;
-  DB_MYSQL_CR_MAX                   = 2999;
-  DB_MYSQL_CR_OUT_OF_MEMORY         = 2008;
-  DB_MYSQL_CR_COMMANDS_OUT_OF_SYNC  = 2014;
+  { errmsg.h 客户端错误码族（CR_*，2000..2999）与特例 — 单源透传 }
+  DB_MYSQL_CR_MIN                   = CR_MIN_ERROR;
+  DB_MYSQL_CR_MAX                   = CR_MAX_ERROR;
+  DB_MYSQL_CR_OUT_OF_MEMORY         = CR_OUT_OF_MEMORY;
+  DB_MYSQL_CR_COMMANDS_OUT_OF_SYNC  = CR_COMMANDS_OUT_OF_SYNC;
 
 { sqlite：结果码 + extended 子码 → 类目/约束细分 }
 procedure ClassifySqlite(const ACode, AExtended: Integer;
@@ -123,8 +124,14 @@ procedure ClassifyOdbcEx(const ASqlState: string;
 procedure ClassifyRedis(const AErrType: string;
   out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
 
+{ dm：DM 原生码位 → 类目/约束细分（V3-DM）。码位优先，SQLSTATE 兜底；
+  未识别 decUnknown。 }
+procedure ClassifyDm(const ACode: Integer; const ASqlState: string;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+
 { IDbSavepointControl 契约输入守卫：名字必须 [A-Za-z0-9_]+
   （会被内插进 SAVEPOINT 语句），违规 fail-closed 抛 EDbError。 }
+
 procedure ValidateDbSavepointName(const ABackend: TDbKind; const AName: string);
 
 implementation
@@ -292,11 +299,11 @@ begin
     DB_MYSQL_ER_NOT_SUPPORTED_YET, DB_MYSQL_ER_OPTION_PREVENTS_STATEMENT:
       ACategory := decNotSupported;
     DB_MYSQL_ER_CANT_CREATE_TABLE, DB_MYSQL_ER_UNKNOWN_ERROR:
-      ACategory := decCapacity;
+      ACategory := decConstraint;        { 1005/1105 容量过度归一修正：约束失败细分（外键/表定义），非资源容量 }
     DB_MYSQL_ER_BAD_DB_ERROR, DB_MYSQL_ER_DB_CREATE_EXISTS:
       ACategory := decConnection;
     DB_MYSQL_CR_OUT_OF_MEMORY:
-      ACategory := decCapacity;
+      ACategory := decCapacity;          { 全量容量：仅 OOM 归容量，其余容量误判已收敛 }
   else
     { CR_* 客户端族整体落 decConnection；协议乱序(2014)是编程错误，欠归一 }
     if (ACode >= DB_MYSQL_CR_MIN) and (ACode <= DB_MYSQL_CR_MAX) and
@@ -443,6 +450,32 @@ begin
   else if AErrType = 'WRONGTYPE' then
   begin
     ACategory := decConstraint;         { 类型不匹配视为约束 }
+  end;
+end;
+
+procedure ClassifyDm(const ACode: Integer; const ASqlState: string;
+  out ACategory: TDbErrorCategory; out AConstraint: TDbConstraintKind);
+begin
+  ACategory := decUnknown;
+  AConstraint := dckNone;
+  case ACode of
+    -1007: begin ACategory := decConstraint; AConstraint := dckUnique; Exit; end;
+    -1048: begin ACategory := decConstraint; AConstraint := dckNotNull; Exit; end;
+    -1216, -1217, -1451, -1452: begin ACategory := decConstraint; AConstraint := dckForeignKey; Exit; end;
+    -3819: begin ACategory := decConstraint; AConstraint := dckCheck; Exit; end;
+    -2007, -2106, -2105: begin ACategory := decSyntax; Exit; end;
+    -1213: begin ACategory := decTransaction; Exit; end;
+    -1205: begin ACategory := decTimeout; Exit; end;
+    -2003, -11011, -6001: begin ACategory := decConnection; Exit; end;
+    -11000: begin ACategory := decNotSupported; Exit; end;
+    -11007, -11012: begin ACategory := decCapacity; Exit; end;
+  end;
+  if Length(ASqlState) >= 2 then
+  begin
+    if Copy(ASqlState, 1, 2) = '23' then ACategory := decConstraint
+    else if Copy(ASqlState, 1, 2) = '08' then ACategory := decConnection
+    else if Copy(ASqlState, 1, 2) = '28' then ACategory := decAuth
+    else if Copy(ASqlState, 1, 2) = '42' then ACategory := decSyntax;
   end;
 end;
 

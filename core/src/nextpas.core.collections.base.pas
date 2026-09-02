@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.system.typinfo,
-  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.intf,

@@ -110,34 +110,8 @@ implementation
 
 uses
   nextpas.core.base,
-  nextpas.core.errors,
   nextpas.core.math.scalar,
   nextpas.core.math.vec.batch.simd;
-
-{ Length policy (usability Wave-2): same as math.batch.simd ResolveEqualOrMin. }
-
-function ResolveEqualOrMin(const A, B: SizeInt): SizeInt; inline;
-begin
-  if (A = 0) or (B = 0) then
-    Exit(0);
-  if A = B then
-    Exit(A);
-{$IFDEF NEXTPAS_MATH_BATCH_TRUNCATE_MIN}
-  if A < B then
-    Result := A
-  else
-    Result := B;
-{$ELSE}
-  raise EArgumentError.Create(
-    'Batch: array lengths must match (got ' + IntToStr(Int64(A)) +
-    ' vs ' + IntToStr(Int64(B)) + ')');
-{$ENDIF}
-end;
-
-function ResolveEqualOrMin3(const A, B, C: SizeInt): SizeInt; inline;
-begin
-  Result := ResolveEqualOrMin(ResolveEqualOrMin(A, B), C);
-end;
 
 { BatchDot - TVec2f }
 function BatchDot(const ALeft, ARight: array of TVec2f;

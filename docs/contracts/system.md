@@ -39,8 +39,8 @@ const
 
 | 单元 | 职责 |
 |------|------|
-| `system.classes` | TStream/THandleStream/TMemoryStream/TStringStream/TSeekOrigin |
-| `system.sysutils` | S4 兼容薄门面：SameText/Format/IntToStr/Trim 等 **仅 re-export**；文本实现 owner 为 `nextpas.core.text.conv`；Exception 别名 owner 为 `nextpas.core.exception` |
+| `system.classes` | **live 10-type shim**：`TSeekOrigin`, `TStream`, `THandleStream`, `TMemoryStream`, `TFileStream`, `TList`, `TInterfaceList`, `TStringList`, `TDuplicates`, `TThread` + `fmCreate`/`fmOpen*`/`fmShare*`（窄门面，非 `TComponent`/`TPersistent`） |
+| `system.sysutils` | **live 40+ 函数** S4 兼容薄门面：`Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`StrToInt64`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep`/`SysErrorMessage` 等 **仅 re-export/委托**；文本 owner `nextpas.core.text.conv`，`path`/`fs`/`platform` 分担；Exception 别名 owner `nextpas.core.exception` |
 | `system.typinfo` | PTypeInfo/TTypeKind/InitializeArray/FinalizeArray/CopyArray |
 | `system.memmanager` | 内存管理器接口 |
 | `system.contracts` | 契约断言（条件编译） |

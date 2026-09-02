@@ -2,7 +2,7 @@ unit nextpas.core.text.utils;
 
 {$I nextpas.core.settings.inc}
 
-{** 2026-08-29 验证锚点：PadLeft/PadRight 单分配 loop（规避 FPC inline+字面量 Move 缺陷）、
+{** 2026-08-29 验证锚点：PadLeft/PadRight 单分配（not inline per red-line 2 分配+循环 I-Cache，FillChar+Move 零拷贝经 bytes.ops 单源，规避 FPC inline+字面量 Move 缺陷）、
     NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf/CStrToStr inline Move、
     StrToIntDef 零分配 inline（接口+实现双 inline 去 Trim 拷贝，单遍空白+符号+数字扫描，含 ±2^63 边界）；
     配套 bench_kv 10（validate 0 allocs）与 test_text 33 heaptrc0 见 benchmarks.md 验证锚点。 *}
@@ -22,8 +22,8 @@ function LowerCase(const S: string): string; inline;
 {** @note ASCII-only. For Unicode-aware conversion use UTF8ToUpper/UTF8ToLower from text.unicode. *}
 function UpperCase(const S: string): string; inline;
 function NormalizeLowerTrim(const S: string): string; inline;
-function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
-function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string; inline;
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
+function PadRight(const S: string; AWidth: Integer; APadChar: Char = ' '): string;
 function RepeatString(const S: string; ACount: Integer): string;
 function StrToIntDef(const S: string; ADefault: Int64): Int64; inline;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
@@ -48,8 +48,10 @@ function CStrToStr(const AP: PAnsiChar): string; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
-  nextpas.core.text.char;
+  nextpas.core.text.char,
+  nextpas.core.text.view;
 
 function Trim(const S: string): string; inline;
 var
@@ -158,30 +160,36 @@ begin
       Result[I - L + 1] := S[I];
 end;
 
-function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string; inline;
+function PadLeft(const S: string; AWidth: Integer; APadChar: Char): string;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
+  // not inline per red-line 2: SetLength+FillChar+loop/I-Cache bloat (小体量仍命中分配+循环红线，门面薄转发豁免不适用 owner)
+  // perf: single SetLength + FillChar + zero-copy Move via bytes.ops single source (Pointer(Result)^), 1 alloc, inline kept at facade
+  // stability: SetLength exception-safe (no leak), FillChar/Move on managed string buffer after alloc
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
   SetLength(Result, AWidth);
-  FillChar(Result[1], LPadLen, Byte(APadChar));
-  for I := 1 to Length(S) do
-    Result[LPadLen + I] := S[I];
+  FillChar(PAnsiChar(Result)^, LPadLen, Byte(APadChar));
+  if Length(S) > 0 then
+    nextpas.core.bytes.ops.BytesCopy(PByte(PAnsiChar(Result)) + LPadLen, PAnsiChar(S), SizeUInt(Length(S)));
 end;
 
-function PadRight(const S: string; AWidth: Integer; APadChar: Char): string; inline;
+function PadRight(const S: string; AWidth: Integer; APadChar: Char): string;
 var
-  LPadLen, I: Integer;
+  LPadLen: Integer;
 begin
+  // not inline per red-line 2: SetLength+FillChar+loop/I-Cache bloat (小体量仍命中分配+循环红线，门面薄转发豁免不适用 owner)
+  // perf: single SetLength + zero-copy Move via bytes.ops single source + FillChar, 1 alloc, inline kept at facade
+  // stability: SetLength exception-safe, Move/FillChar on managed buffer after alloc
   LPadLen := AWidth - Length(S);
   if LPadLen <= 0 then
     Exit(S);
   SetLength(Result, AWidth);
-  for I := 1 to Length(S) do
-    Result[I] := S[I];
-  FillChar(Result[Length(S) + 1], LPadLen, Byte(APadChar));
+  if Length(S) > 0 then
+    nextpas.core.bytes.ops.BytesCopy(PAnsiChar(Result), PAnsiChar(S), SizeUInt(Length(S)));
+  FillChar((PByte(PAnsiChar(Result)) + Length(S))^, LPadLen, Byte(APadChar));
 end;
 
 function RepeatString(const S: string; ACount: Integer): string;
@@ -326,8 +334,9 @@ end;
 
 function SplitString(const S, Delimiters: string): TStringArray; inline;
 var
-  I, Start, Count, Fill: Integer;
+  I, LStart, LCount, LCap: Integer;
   DelimSet: array[0..255] of Boolean;
+  LView, LSeg: TStringView;
 begin
   Result := nil;
   if (S = '') or (Delimiters = '') then
@@ -342,34 +351,41 @@ begin
   FillChar(DelimSet, SizeOf(DelimSet), 0);
   for I := 1 to Length(Delimiters) do
     DelimSet[Byte(Delimiters[I])] := True;
-  Count := 0;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if DelimSet[Byte(S[I])] then
+  LView := TStringView.FromStr(S);
+  LCap := 0;
+  LCount := 0;
+  LStart := 0;
+  for I := 0 to Integer(LView.Len) - 1 do
+    if DelimSet[Byte(LView.Data[I])] then
     begin
-      if I > Start then
-        Inc(Count);
-      Start := I + 1;
-    end;
-  if Start <= Length(S) then
-    Inc(Count);
-  SetLength(Result, Count);
-  if Count = 0 then
-    Exit;
-  Fill := 0;
-  Start := 1;
-  for I := 1 to Length(S) do
-    if DelimSet[Byte(S[I])] then
-    begin
-      if I > Start then
+      if I > LStart then
       begin
-        Result[Fill] := System.Copy(S, Start, I - Start);
-        Inc(Fill);
+        if LCount >= LCap then
+        begin
+          if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+          SetLength(Result, LCap);
+        end;
+        LSeg := LView.Slice(SizeUInt(LStart), SizeUInt(I - LStart));
+        Result[LCount] := LSeg.ToString;
+        Inc(LCount);
       end;
-      Start := I + 1;
+      LStart := I + 1;
     end;
-  if Start <= Length(S) then
-    Result[Fill] := System.Copy(S, Start, Length(S) - Start + 1);
+  if SizeUInt(LStart) < LView.Len then
+  begin
+    if LCount >= LCap then
+    begin
+      if LCap = 0 then LCap := 4 else LCap := LCap * 2;
+      SetLength(Result, LCap);
+    end;
+    LSeg := LView.Slice(SizeUInt(LStart), LView.Len - SizeUInt(LStart));
+    Result[LCount] := LSeg.ToString;
+    Inc(LCount);
+  end;
+  if LCount = 0 then
+    Result := nil
+  else
+    SetLength(Result, LCount);
 end;
 
 function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;

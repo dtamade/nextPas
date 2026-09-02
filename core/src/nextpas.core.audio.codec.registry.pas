@@ -26,31 +26,31 @@ function AudioOpenFileStreaming(const APath: string): IAudioSource;
 
 implementation
 
-// L2 explicit allow: codec.registry is the sole audio unit that touches L2 fs.
-// L1 io provides IStream seam; fs.Open is the container-I/O entry point.
-// Same-layer L2->L2 is exempt here and registered in DESIGN.md s2 and
-// core/docs/core-module-registry.md (audio: L0-L1 plus io/fs). No ffi.
 uses
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.aiff,
+  nextpas.core.audio.codec.flac,
+  nextpas.core.audio.codec.mp3,
+  nextpas.core.audio.codec.vorbis,
   nextpas.core.audio.errors,
   nextpas.core.exception,
-  nextpas.core.fs,
-  nextpas.core.sync.mutex;
+  nextpas.core.fs;
 
 var
   GFactories: array of TDecoderFactory;
-  GLock: TRecursiveMutex;
+  GLock: TRTLCriticalSection;
   GInited: Boolean;
 
 procedure EnsureInited;
 begin
   if GInited then Exit;
-  if not Assigned(GLock) then
-    GLock := TRecursiveMutex.Create;
+  InitCriticalSection(GLock);
   GInited := True;
   AudioRegisterDecoder(@CreateWavDecoder);
   AudioRegisterDecoder(@CreateAiffDecoder);
+  AudioRegisterDecoder(@CreateFlacDecoder);
+  AudioRegisterDecoder(@CreateMp3Decoder);
+  AudioRegisterDecoder(@CreateVorbisDecoder);
 end;
 
 procedure AudioRegisterDecoder(AFactory: TDecoderFactory);
@@ -60,7 +60,7 @@ begin
   if not Assigned(AFactory) then
     raise EInvalidArgument.Create('AudioRegisterDecoder: factory is nil');
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     L := Length(GFactories);
     SetLength(GFactories, L + 1);
@@ -68,18 +68,18 @@ begin
       Move(GFactories[0], GFactories[1], L * SizeOf(TDecoderFactory));
     GFactories[0] := AFactory;
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
 function SnapshotFactories: TDecoderFactoryArray;
 begin
   EnsureInited;
-  GLock.Acquire;
+  EnterCriticalSection(GLock);
   try
     Result := Copy(GFactories);
   finally
-    GLock.Release;
+    LeaveCriticalSection(GLock);
   end;
 end;
 
@@ -148,7 +148,7 @@ begin
     on E: EAudioDecodeError do
       Result := False;
     else
-      Result := False;
+      raise;
   end;
 end;
 
@@ -192,7 +192,7 @@ begin
       Exit;
     except
       on E: EAudioDecodeError do Continue;
-      else Continue;
+      else raise;
     end;
   end;
 end;
@@ -211,10 +211,10 @@ begin
   try
     LStream := nextpas.core.fs.Open(APath, [fmRead]);
   except
-    on E: EAudioError do
+    on E: EAudioDecodeError do
       raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: cannot open %s: %s', [APath, E.Message]);
     else
-      raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: cannot open %s', [APath]);
+      raise;
   end;
   if LStream = nil then
     raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: nil stream for %s', [APath]);
@@ -237,7 +237,7 @@ begin
       if Assigned(Result) then Exit;
     except
       on E: EAudioDecodeError do Continue;
-      else Continue;
+      else raise;
     end;
   end;
   raise EAudioDecodeError.CreateFmt('AudioOpenFileStreaming: no decoder succeeded for %s', [APath]);
@@ -247,7 +247,7 @@ initialization
   GInited := False;
 
 finalization
-  if Assigned(GLock) then
-    GLock.Free;
+  if GInited then
+    DoneCriticalSection(GLock);
 
 end.

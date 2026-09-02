@@ -431,49 +431,14 @@ function StringOf
 function CompareMem
 function Supports
 function Supports
+function HexStr
+function HexStr
 function Trim
 function TrimLeft
 function TrimRight
 function UpperCase
 function LowerCase
 function Pos
-function Now
-function Date
-function Time
-function DateTimeToStr
-function DateToStr
-function TimeToStr
-function FormatDateTime
-function EncodeDate
-function FileExists
-function DirectoryExists
-function CreateDir
-function RemoveDir
-function ForceDirectories
-function DeleteFile
-function RenameFile
-function CopyFile
-const PathDelim
-function ExtractFilePath
-function ExtractFileName
-function ExtractFileExt
-function ExtractFileDir
-function ExtractFileDrive
-function ChangeFileExt
-function IncludeTrailingPathDelimiter
-function ExcludeTrailingPathDelimiter
-function ExpandFileName
-function GetTempDir
-function GetTempDir
-function GetCurrentDir
-function SetCurrentDir
-function ParamCount
-function ParamStr
-function GetEnvironmentVariable
-function GetProcessID
-procedure Sleep
-function SysErrorMessage
-function GetLastOSError
 function ExceptAddr
 function ExceptFrameCount
 function ExceptFrameAt
@@ -1283,7 +1248,7 @@ require_system_unit_filename_allowlist() {
   while IFS= read -r file_path; do
     filename="$(basename "$file_path")"
     case "$filename" in
-      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas|nextpas.core.system.heap.pas)
+      nextpas.core.system.pas|nextpas.core.system.sysutils.pas|nextpas.core.system.typinfo.pas|nextpas.core.system.contracts.pas|nextpas.core.system.classes.pas|nextpas.core.system.classes.impl.pas|nextpas.core.system.memmanager.pas|nextpas.core.system.errors.pas|nextpas.core.system.heap.pas)
         ;;
       nextpas.core.system*.pas)
         fail "unreviewed system unit filename: src/$filename"

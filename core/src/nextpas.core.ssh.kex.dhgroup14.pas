@@ -12,7 +12,6 @@ unit nextpas.core.ssh.kex.dhgroup14;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.buffer,
@@ -63,11 +62,11 @@ type
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.crypto.random,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.bigint,
-  nextpas.core.mem.secure;
+  nextpas.core.mem.secure,
+  nextpas.core.bytes.ops;
 
 function SshDHGroup14Prime: TBytes;
 const
@@ -206,8 +205,8 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  if (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Generator)) <= 0)
-    or (CompareUnsignedSpan(StripLeadingZeroView(LServerF), StripLeadingZeroView(SshDHGroup14Prime)) >= 0) then
+  if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
+    or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
   if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
@@ -216,7 +215,7 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
   if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
-  if CompareUnsignedSpan(StripLeadingZeroView(LShared), StripLeadingZeroView(SshDHGroup14Prime)) >= 0 then
+  if nextpas.core.bytes.ops.CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');
 
   Result.SharedSecret := LShared;

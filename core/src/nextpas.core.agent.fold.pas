@@ -14,6 +14,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.builder,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors;
 
@@ -31,7 +32,12 @@ type
     TToolSlotArray = array of TToolSlot;
   private
     FParts: TPartArray;              { 到达序；tool 占位在 Start 时插入 }
+    FPartsCap: Integer;
+    FPartsLen: Integer;
     FSlots: TToolSlotArray;
+    FSlotsCap: Integer;
+    FSlotsLen: Integer;
+    FReg: TAgentSlotRegistry;     { 统一注册表：O(1) 直映 + 稀疏回退，256 阈值（base 单一真源）}
     FCurKind: TBuildTextKind;
     FCurBuilder: IStringBuilder;
     FCurSignature: string;
@@ -42,6 +48,7 @@ type
     FUnmapped: array of TJsonText;   { delta 旁路捕获（未映射枚举等），收口并入 }
     procedure ProtocolError(const AMsg: string);
     function FindSlot(AToolIndex: Integer): Integer;
+    procedure RegisterSlot(AToolIndex: Integer);
     procedure EnsureCurrentKind(AKind: TBuildTextKind);
     procedure FlushCurrentPart;
     procedure CloseAllSlots;
@@ -58,15 +65,15 @@ procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);
 
 implementation
 
+uses
+  nextpas.core.text.conv;
+
 constructor TAssistantBuild.Create;
 begin
   inherited Create;
+  FReg.Init;
   { usage 全未知起步：未收到 sdkUsage 的流不得被读成全零用量 }
-  FUsage.InputTokens := CUsageUnknown;
-  FUsage.OutputTokens := CUsageUnknown;
-  FUsage.CacheReadInputTokens := CUsageUnknown;
-  FUsage.CacheWriteInputTokens := CUsageUnknown;
-  FUsage.ReasoningTokens := CUsageUnknown;
+  AgentInitUsageUnknown(FUsage);
 end;
 
 procedure TAssistantBuild.ProtocolError(const AMsg: string);
@@ -76,15 +83,19 @@ end;
 
 function TAssistantBuild.FindSlot(AToolIndex: Integer): Integer;
 var
-  I: Integer;
+  LPos: Integer;
 begin
+  if FReg.TryFind(AToolIndex, LPos) then
+    Exit(LPos);
   Result := -1;
-  for I := 0 to High(FSlots) do
-    if FSlots[I].ToolIndex = AToolIndex then
-    begin
-      Result := I;
-      Break;
-    end;
+end;
+
+procedure TAssistantBuild.RegisterSlot(AToolIndex: Integer);
+var
+  LDummy: Integer;
+begin
+  // 统一经 Registry：稀疏大索引自动走线性回退，≤256 走直映；失败静默由上层计数守卫处理
+  FReg.Register(AToolIndex, LDummy);
 end;
 
 procedure TAssistantBuild.EnsureCurrentKind(AKind: TBuildTextKind);
@@ -108,8 +119,16 @@ begin
   { 全空段不产出：无内容且无签名的思考/正文块没有消费语义 }
   if (LText <> '') or (FCurSignature <> '') then
   begin
-    LPos := Length(FParts);
-    SetLength(FParts, LPos + 1);
+    if FPartsLen >= FPartsCap then
+    begin
+      if FPartsCap = 0 then
+        FPartsCap := 8
+      else
+        FPartsCap := FPartsCap * 2;
+      SetLength(FParts, FPartsCap);
+    end;
+    LPos := FPartsLen;
+    Inc(FPartsLen);
     if FCurKind = btkText then
       FParts[LPos].Kind := pkText
     else
@@ -126,7 +145,7 @@ procedure TAssistantBuild.CloseAllSlots;
 var
   I: Integer;
 begin
-  for I := 0 to High(FSlots) do
+  for I := 0 to FSlotsLen - 1 do
     FSlots[I].Open := False;
 end;
 
@@ -162,19 +181,39 @@ begin
           ProtocolError('tool call start missing index');
         if FindSlot(ADelta.ToolIndex) >= 0 then
           ProtocolError('duplicate tool call start index '
-            + IntToStr(ADelta.ToolIndex));
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex));
+        if FReg.Count > CAgentMaxSlotMap then
+          ProtocolError('tool slot count exceeds '
+            + nextpas.core.text.conv.IntToStr(CAgentMaxSlotMap));
         FlushCurrentPart;
-        LPos := Length(FParts);
-        SetLength(FParts, LPos + 1);
+        if FPartsLen >= FPartsCap then
+        begin
+          if FPartsCap = 0 then
+            FPartsCap := 8
+          else
+            FPartsCap := FPartsCap * 2;
+          SetLength(FParts, FPartsCap);
+        end;
+        LPos := FPartsLen;
+        Inc(FPartsLen);
         FParts[LPos].Kind := pkToolCall;
         FParts[LPos].ToolCallId := ADelta.ToolCallId;
         FParts[LPos].ToolName := ADelta.ToolName;
-        LSlot := Length(FSlots);
-        SetLength(FSlots, LSlot + 1);
+        if FSlotsLen >= FSlotsCap then
+        begin
+          if FSlotsCap = 0 then
+            FSlotsCap := 8
+          else
+            FSlotsCap := FSlotsCap * 2;
+          SetLength(FSlots, FSlotsCap);
+        end;
+        LSlot := FSlotsLen;
+        Inc(FSlotsLen);
         FSlots[LSlot].ToolIndex := ADelta.ToolIndex;
         FSlots[LSlot].PartPos := LPos;
-        FSlots[LSlot].Args := MakeStringBuilder;
+        FSlots[LSlot].Args := MakeStringBuilder(CAgentToolArgsInitialCap);
         FSlots[LSlot].Open := True;
+        RegisterSlot(ADelta.ToolIndex);
       end;
     sdkToolCallDelta:
       begin
@@ -183,10 +222,10 @@ begin
         LSlot := FindSlot(ADelta.ToolIndex);
         if LSlot < 0 then
           ProtocolError('tool call delta before start (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         if not FSlots[LSlot].Open then
           ProtocolError('tool call delta after end (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         FSlots[LSlot].Args.AppendStr(ADelta.ArgumentsDelta);
       end;
     sdkToolCallEnd:
@@ -196,7 +235,7 @@ begin
         LSlot := FindSlot(ADelta.ToolIndex);
         if LSlot < 0 then
           ProtocolError('tool call end for unknown slot (index '
-            + IntToStr(ADelta.ToolIndex) + ')');
+            + nextpas.core.text.conv.IntToStr(ADelta.ToolIndex) + ')');
         { End 是建议性事件：重复 End 宽容忽略（幂等）}
         FSlots[LSlot].Open := False;
       end;
@@ -225,8 +264,12 @@ var
 begin
   FlushCurrentPart;
   CloseAllSlots;
-  for I := 0 to High(FSlots) do
+  for I := 0 to FSlotsLen - 1 do
     FParts[FSlots[I].PartPos].ArgumentsJson := FSlots[I].Args.ToString;
+  SetLength(FParts, FPartsLen);
+  FPartsCap := FPartsLen;
+  SetLength(FSlots, FSlotsLen);
+  FSlotsCap := FSlotsLen;
   Result := Default(TMessage);
   Result.Id := FMessageId;
   Result.Role := mrAssistant;
@@ -240,16 +283,57 @@ end;
 
 function TAssistantBuild.PartialText: string;
 var
-  I: Integer;
-  SB: IStringBuilder;
+  I, LFirst, LCount, LTotal, LPos, LLen, LCursLen: Integer;
+  LCurs: string;
+  LHasCur: Boolean;
 begin
-  SB := MakeStringBuilder;
-  for I := 0 to High(FParts) do
+  LCount := 0;
+  LFirst := -1;
+  LTotal := 0;
+  for I := 0 to FPartsLen - 1 do
     if FParts[I].Kind = pkText then
-      SB.AppendStr(FParts[I].Text);
-  if (FCurKind = btkText) and (FCurBuilder <> nil) then
-    SB.AppendStr(FCurBuilder.ToString);
-  Result := SB.ToString;
+    begin
+      if LFirst = -1 then
+        LFirst := I;
+      Inc(LCount);
+      Inc(LTotal, Length(FParts[I].Text));
+    end;
+  LHasCur := (FCurKind = btkText) and (FCurBuilder <> nil) and (FCurBuilder.Len > 0);
+  if LHasCur then
+  begin
+    LCursLen := FCurBuilder.Len;
+    Inc(LTotal, LCursLen);
+    Inc(LCount);
+  end
+  else
+    LCursLen := 0;
+  if LCount = 0 then
+    Exit('');
+  if LCount = 1 then
+  begin
+    if LHasCur then
+      Exit(FCurBuilder.ToString);
+    Exit(FParts[LFirst].Text);
+  end;
+  SetLength(Result, LTotal);
+  LPos := 1;
+  for I := 0 to FPartsLen - 1 do
+    if FParts[I].Kind = pkText then
+    begin
+      LLen := Length(FParts[I].Text);
+      if LLen > 0 then
+      begin
+        Move(FParts[I].Text[1], Result[LPos], LLen);
+        Inc(LPos, LLen);
+      end;
+    end;
+  if LHasCur then
+  begin
+    LCurs := FCurBuilder.ToString;
+    LLen := Length(LCurs);
+    if LLen > 0 then
+      Move(LCurs[1], Result[LPos], LLen);
+  end;
 end;
 
 procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);

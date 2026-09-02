@@ -12,7 +12,14 @@ uses
   nextpas.core.test;
 
 { W5 会话转录 JSONL 存储门：SESSION.md §10 测试计划落 CI。
-  全部离线；临时根目录取 OS temp，try/finally RemoveAll。}
+  全部离线；临时根目录取 OS temp，try/finally RemoveAll。
+  边界/Cancel/超时/并发：
+  - Cancel 边界：不涉取消，文件 IO 异常转为 aecProtocol/Storage，调用方按重试白名单处置。
+  - 超时边界：不涉网络超时；Write+Sync+Close 每行 fsync，FORK 经 WriteAtomic 保证原子性（F-L03）。
+  - 并发边界：单线程门；跨实例并发由 fs 原子改名保障，torn tail 末段无换行丢弃已验证。
+  悬挂指针：TJsonlTranscriptStore 接口持有，ThreadPath 字符串托管；LoadFile 仅在 Exists 后解析，未置 nil 前无悬挂；
+  全局 GRoot 仅测试进程期存活。
+  泄漏标注：common.mk -gh 全量 HEAPTRC 门 0 unfreed；Fork 对不存在源线程走空快照分支（F-H13 已注），无 fs 句柄泄漏。 }
 
 var
   GRoot: string;                     { 每用例独立子目录的父目录 }

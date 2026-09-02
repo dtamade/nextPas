@@ -14,8 +14,9 @@ unit nextpas.core.ssh.channel;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.time.stopwatch,
   nextpas.core.ssh.base,
@@ -144,9 +145,12 @@ function EofPayload(ARemoteId: UInt32): TBytes;
 function ClosePayload(ARemoteId: UInt32): TBytes;
 function ChannelReplyPayload(ARemoteId: UInt32; AOk: Boolean): TBytes;
 function GlobalReplyPayload(AOk: Boolean): TBytes;
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes);
+procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
 
 implementation
+
+uses
+  nextpas.core.base.utils;
 
 procedure TraceStr(const ALine: string);
 begin
@@ -181,6 +185,7 @@ end;
 
 const
   WINDOW_LOW_WATER_DIVISOR = 2;  { 消费过半即回补 }
+  SSH_CHANNEL_INBOX_MAX = 1024;  { 信箱上限：防对端洪泛 DATA 导致无界内存 }
 
 var
   { 本地通道号进程级单调递增（RFC 4254 §5：号按方向独立命名）。
@@ -190,15 +195,9 @@ var
 
 { ---- 载荷构造 ---- }
 
-procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes);
-var
-  LOld: SizeUInt;
+procedure AppendChunk(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
-  if Length(ASrc) = 0 then
-    Exit;
-  LOld := SizeUInt(Length(ADst));
-  SetLength(ADst, LOld + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADst[LOld], SizeUInt(Length(ASrc)));
+  BytesAppend(ADst, ASrc);
 end;
 
 function SingleIdPayload(AMsg: Byte; ARemoteId: UInt32): TBytes;
@@ -576,6 +575,11 @@ begin
     Inc(LGiveBack, SizeUInt(FInitWindow) - FOurWindow);
     FOurWindow := FInitWindow;
   end;
+  while LGiveBack > High(UInt32) do
+  begin
+    SendWindowAdjust(High(UInt32));
+    Dec(LGiveBack, High(UInt32));
+  end;
   if LGiveBack > 0 then
     SendWindowAdjust(UInt32(LGiveBack));
 end;
@@ -616,6 +620,8 @@ function TSshChannel.PumpFiltered: TBytes;
 var
   LR: TsshReader;
   LRid: UInt32;
+  LAdd: UInt32;
+  LNew: SizeUInt;
 begin
   while True do
   begin
@@ -647,7 +653,10 @@ begin
       try
         LR.ReadByte;
         LR.ReadUInt32;
-        FPeerWindow := FPeerWindow + LR.ReadUInt32;
+        LAdd := LR.ReadUInt32;
+        if not TryAddSizeUInt(FPeerWindow, SizeUInt(LAdd), LNew) then
+          raise ESSHError.Create(sekProtocol, 'ssh channel: peer window overflow');
+        FPeerWindow := LNew;
       finally
         LR.Free;
       end;
@@ -698,6 +707,8 @@ procedure TSshChannel.InboxPush(const AChunk: TBytes; AExtended: Boolean);
 var
   LN: Integer;
 begin
+  if Length(FInbox) >= SSH_CHANNEL_INBOX_MAX then
+    raise ESSHError.Create(sekProtocol, 'ssh channel: inbox overflow');
   LN := Length(FInbox);
   SetLength(FInbox, LN + 1);
   FInbox[LN].Data := AChunk;

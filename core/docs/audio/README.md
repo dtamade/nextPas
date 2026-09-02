@@ -1,9 +1,9 @@
 # nextpas.core.audio
 
-L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域+扩展（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发；`spatial/event/bank/resource` 为 P5 扩展，当前 36 files，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收），纯 Pascal 可替换，实时路径零分配。
+L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSource` 为统一货币，覆盖**容器编解码 / PCM / DSP / 设备 / 图 / SFX / 时间线**七域（`SFX` 为 canonical，`game` 仅作 deprecated 薄转发），纯 Pascal 可替换，实时路径零分配。
 
-> 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3.2 — SFX canonical + spatial/event/bank/resource 七域+扩展）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
-> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源（当前 36 files，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收）。
+> 设计权威：[`DESIGN.md`](./DESIGN.md)（Draft v3）—— 分层、双平面线程模型、域级 `intf` 冻结、PR Plan 与线程纪律见该文档。
+> 运行时契约：`core/tests/nextpas.core.audio/test_base/check_source_contract.sh` 为 gate 真值源。
 
 ## 模块定位与分层
 
@@ -22,7 +22,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 | **errors** | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | errors |
 | **门面** | `audio.pas` | 仅 `type` 别名 + `inline` 转发，零逻辑 | 聚合以上 |
 
-> L2 约束：只依赖 `L0-L1` plus `io/fs`（`L2` 显式允许；container I/O seam via `IStream`，仅 `codec.registry` 使用，已在 `core/docs/core-module-registry.md` 与 `DESIGN.md §2` 登记），禁止 `ffi/vendor/miniaudio`（由 source-contract 冻结）。
+> L2 约束：只依赖 `L0-L1`，禁止 `ffi/vendor/miniaudio`（由 source-contract 冻结）。
 
 ## 实时纪律（双平面线程模型）
 
@@ -120,14 +120,14 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-16 门合计 **218 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`bank/resource` 为 P5 扩展）：
+14 门合计 **195 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`game` 为 deprecated 兼容）：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline test_event test_bank test_resource; do
+         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 36 文件无 ffi/vendor（当前 36，理想态 45 — 9 files 预留 flac/mp3/vorbis/studio/playlist 等由 music888 以 Probe≤4KB 可插拔吸收） + 17 GUID (unique; 15 realtime domain) + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 28 文件无 ffi/vendor + 11 GUID + 实时纪律
 make hygiene && git diff --check
 ```
 
@@ -147,9 +147,6 @@ make hygiene && git diff --check
 | test_sfx 15 | SFX 池与窃取（canonical 0050） |
 | test_game 15 | SFX 池与窃取（deprecated 兼容，薄转发） |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
-| test_event 10 | 事件注册/空间衰减/参数/窃取 |
-| test_bank 15 | Bank 预加载/引用计数/混音/pan/pitch/loop |
-| test_resource 13 | Resource 异步加载/去重/Probe/Release |
 
 ## 基准
 
@@ -157,7 +154,7 @@ make hygiene && git diff --check
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s -O2, HEAPTRC 关
 ```
 
-`bench_pcm_wav` 10 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs / Bank/1K 15µs / Resource/TryGet 8µs`（`GWrite*` 预分配，`Graph/Timeline/Bank/Resource` 零分配快照）。
+`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）。
 
 ## 演进与复用
 

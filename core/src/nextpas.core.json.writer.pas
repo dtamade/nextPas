@@ -32,44 +32,43 @@ type
     FContainers: array[1..JSON_WRITER_MAX_DEPTH] of Byte;
     FElementCounts: array[1..JSON_WRITER_MAX_DEPTH] of UInt32;
     FObjectAwaitingKey: array[1..JSON_WRITER_MAX_DEPTH] of Boolean;
-    procedure ValidateValue;
-    procedure WriteValuePrefix;
-    procedure BeginValue;
-    procedure BeginContainerValue;
-    procedure EndValue;
-    procedure BeginKey;
-    procedure RequireContainerCapacity;
-    procedure PushContainer(const AContainer: Byte);
+    procedure ValidateValue; inline;
+    procedure WriteValuePrefix; inline;
+    procedure BeginValue; inline;
+    procedure BeginContainerValue; inline;
+    procedure EndValue; inline;
+    procedure BeginKey; inline;
+    procedure RequireContainerCapacity; inline;
+    procedure PushContainer(const AContainer: Byte); inline;
     procedure RequireContainer(const AOperation: string;
-      const AContainer: Byte);
+      const AContainer: Byte); inline;
   public
-    procedure Init(var ABuilder: TStringBuilder);
-    procedure BeginObject;
-    procedure EndObject;
-    procedure BeginArray;
-    procedure EndArray;
+    procedure Init(var ABuilder: TStringBuilder); inline;
+    procedure BeginObject; inline;
+    procedure EndObject; inline;
+    procedure BeginArray; inline;
+    procedure EndArray; inline;
     procedure Key(const AKey: PAnsiChar; const ALen: SizeUInt); overload;
-    procedure Key(const AKey: TStringView); overload;
-    procedure Key(const AKey: string); overload;
-    procedure Null;
-    procedure Bool(const AValue: Boolean);
-    procedure Int(const AValue: Int64);
-    procedure UInt(const AValue: UInt64);
-    procedure Float(const AValue: Double);
+    procedure Key(const AKey: TStringView); overload; inline;
+    procedure Key(const AKey: string); overload; inline;
+    procedure Null; inline;
+    procedure Bool(const AValue: Boolean); inline;
+    procedure Int(const AValue: Int64); inline;
+    procedure UInt(const AValue: UInt64); inline;
+    procedure Float(const AValue: Double); inline;
     procedure Str(const AValue: PAnsiChar; const ALen: SizeUInt); overload;
-    procedure Str(const AValue: TStringView); overload;
-    procedure Str(const AValue: string); overload;
+    procedure Str(const AValue: TStringView); overload; inline;
+    procedure Str(const AValue: string); overload; inline;
     procedure StrClean(const AValue: PAnsiChar; const ALen: SizeUInt);
     procedure KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
-    procedure RawValue(const AJson: PAnsiChar; const ALen: SizeUInt);
+    procedure RawValue(const AJson: PAnsiChar; const ALen: SizeUInt); inline;
   end;
 
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
-  nextpas.core.simd.base,
-  nextpas.core.simd.vec,
   nextpas.core.text.escape,
   nextpas.core.text.number;
 
@@ -207,40 +206,12 @@ begin
 end;
 
 procedure TJsonWriter.Key(const AKey: PAnsiChar; const ALen: SizeUInt);
-var
-  LNeedsEscape: Boolean;
-  LPos: SizeUInt;
-  LMask: TVecMask;
 begin
   BeginKey;
   FBuilder^.AppendChar('"');
-  LNeedsEscape := False;
-  LPos := 0;
-  while LPos + VecWidth <= ALen do
-  begin
-    LMask := VecCmpEq(@AKey[LPos], Ord('"')) or VecCmpEq(@AKey[LPos], Ord('\')) or
-             VecCmpLtU(@AKey[LPos], $20);
-    if LMask <> TVecMask(0) then
-    begin
-      LNeedsEscape := True;
-      Break;
-    end;
-    Inc(LPos, VecWidth);
-  end;
-  if not LNeedsEscape then
-    while LPos < ALen do
-    begin
-      if (Byte(AKey[LPos]) < $20) or (AKey[LPos] = '"') or (AKey[LPos] = '\') then
-      begin
-        LNeedsEscape := True;
-        Break;
-      end;
-      Inc(LPos);
-    end;
-  if LNeedsEscape then
-    JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^)
-  else
-    FBuilder^.AppendBytes(AKey, ALen);
+  // perf: single-pass VecWidth inline via owner text.escape.JsonEscapeToBuilder — zero-copy AppendBytes chunked, inline Reserve/Grow, single source; eliminates double SIMD scan (pre-scan + second scan)
+  if ALen > 0 then
+    JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^);
   FBuilder^.AppendBytes('":', 2);
 end;
 
@@ -288,41 +259,12 @@ begin
 end;
 
 procedure TJsonWriter.Str(const AValue: PAnsiChar; const ALen: SizeUInt);
-var
-  LNeedsEscape: Boolean;
-  LPos: SizeUInt;
-  LMask: TVecMask;
 begin
   BeginValue;
   FBuilder^.AppendChar('"');
-  LNeedsEscape := False;
-  LPos := 0;
-  while LPos + VecWidth <= ALen do
-  begin
-    LMask := VecCmpEq(@AValue[LPos], Ord('"')) or
-             VecCmpEq(@AValue[LPos], Ord('\')) or
-             VecCmpLtU(@AValue[LPos], $20);
-    if LMask <> TVecMask(0) then
-    begin
-      LNeedsEscape := True;
-      Break;
-    end;
-    Inc(LPos, VecWidth);
-  end;
-  if not LNeedsEscape then
-    while LPos < ALen do
-    begin
-      if (Byte(AValue[LPos]) < $20) or (AValue[LPos] = '"') or (AValue[LPos] = '\') then
-      begin
-        LNeedsEscape := True;
-        Break;
-      end;
-      Inc(LPos);
-    end;
-  if LNeedsEscape then
-    JsonEscapeToBuilder(TStringView.Create(AValue, ALen), FBuilder^)
-  else
-    FBuilder^.AppendBytes(AValue, ALen);
+  // perf: single-pass VecWidth inline via owner text.escape.JsonEscapeToBuilder — zero-copy AppendBytes chunked, inline Reserve/Grow, single source; eliminates double SIMD scan (pre-scan + second scan)
+  if ALen > 0 then
+    JsonEscapeToBuilder(TStringView.Create(AValue, ALen), FBuilder^);
   FBuilder^.AppendChar('"');
   EndValue;
 end;
@@ -352,7 +294,8 @@ begin
   FBuilder^.Reserve(LNeed);
   LP := FBuilder^.Tail;
   LP^ := '"'; Inc(LP);
-  Move(AValue^, LP^, ALen); Inc(LP, ALen);
+  // perf: zero-copy single Move via bytes.ops single source (BytesCopy inline), Reserve+Tail+AdvanceLen evidence
+  if ALen > 0 then begin BytesCopy(LP, AValue, ALen); Inc(LP, ALen); end;
   LP^ := '"'; Inc(LP);
   FBuilder^.AdvanceLen(LNeed);
   EndValue;
@@ -368,7 +311,8 @@ begin
   FBuilder^.Reserve(LNeed);
   LP := FBuilder^.Tail;
   LP^ := '"'; Inc(LP);
-  Move(AKey^, LP^, ALen); Inc(LP, ALen);
+  // perf: zero-copy single Move via bytes.ops single source (BytesCopy inline), Reserve+Tail+AdvanceLen evidence
+  if ALen > 0 then begin BytesCopy(LP, AKey, ALen); Inc(LP, ALen); end;
   LP^ := '"'; Inc(LP);
   LP^ := ':'; Inc(LP);
   FBuilder^.AdvanceLen(LNeed);

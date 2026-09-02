@@ -5,7 +5,7 @@ unit nextpas.core.audio.resource;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -99,23 +99,14 @@ begin
     except
       on E: EAudioDecodeError do
       begin
-        LTags := Default(TAudioTags);
-        SetLength(LTags.Extra, 1);
-        LTags.Extra[0].Key := 'error';
-        LTags.Extra[0].Value := E.Message;
-        FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), LTags);
+        FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
         Exit;
       end;
-      on E: EAudioError do
+      else
       begin
-        LTags := Default(TAudioTags);
-        SetLength(LTags.Extra, 1);
-        LTags.Extra[0].Key := 'error';
-        LTags.Extra[0].Value := E.Message;
-        FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), LTags);
+        FManager.SetStateById(FId, arsFailed, Default(TAudioBuffer), Default(TAudioTags));
         Exit;
       end;
-      else raise;
     end;
     if LStream <> nil then
     begin
@@ -270,13 +261,10 @@ var
   Idx, FreeIdx: Integer;
   I: Integer;
   LThread: TResourceLoadThread;
-  LOldThread: TThread;
   LCapNeeded: Integer;
 begin
-  LOldThread := nil;
-  LThread := nil;
   if APath = '' then
-    raise EInvalidArgument.Create('AsyncLoad: empty path'); // EInvalidArgument is intentional for programming error, not EAudioError category
+    raise EInvalidArgument.Create('AsyncLoad: empty path');
   // Deduplication: Bank协同 — 同路径复用已加载或加载中资源
   FLock.Acquire;
   try
@@ -286,23 +274,25 @@ begin
       // If previously failed, allow retry by releasing and reloading
       if FItems[Idx].State = arsFailed then
       begin
-        // reset to loading for retry — collect old thread outside lock to avoid WaitFor deadlock
+        // reset to loading for retry
         FItems[Idx].State := arsLoading;
         FItems[Idx].Buffer := Default(TAudioBuffer);
         FItems[Idx].Tags := Default(TAudioTags);
-        LOldThread := FItems[Idx].Thread;
-        FItems[Idx].Thread := nil;
+        // restart thread
+        if Assigned(FItems[Idx].Thread) then
+        begin
+          try FItems[Idx].Thread.WaitFor; FItems[Idx].Thread.Free; except end;
+          FItems[Idx].Thread := nil;
+        end;
         LThread := TResourceLoadThread.Create(Self, FItems[Idx].Id, APath);
         FItems[Idx].Thread := LThread;
         Result := FItems[Idx].Id;
-        // Start and WaitFor deferred until after lock (see below)
-      end else
-      begin
-        Result := FItems[Idx].Id;
+        LThread.Start;
         Exit;
       end;
-    end else
-    begin
+      Result := FItems[Idx].Id;
+      Exit;
+    end;
     // Allocate slot (geometric growth, no alloc inside critical section beyond SetLength)
     FreeIdx := -1;
     for I := 0 to High(FItems) do
@@ -329,14 +319,10 @@ begin
     FItems[FreeIdx].Thread := nil;
     LThread := TResourceLoadThread.Create(Self, Result, APath);
     FItems[FreeIdx].Thread := LThread;
-    end;
   finally
     FLock.Release;
   end;
-  if Assigned(LOldThread) then
-    try LOldThread.WaitFor; LOldThread.Free; except end;
-  if Assigned(LThread) then
-    LThread.Start;
+  LThread.Start;
 end;
 
 function TAudioResourceManagerImpl.TryGetBuffer(AId: TAudioResourceId; out ABuffer: TAudioBuffer): Boolean;
@@ -445,14 +431,16 @@ begin
   try
     LStream := nextpas.core.fs.Open(APath, [fmRead]);
   except
-    on E: Exception do Exit(prUnknown); // Probe: unknown on any error is intentional — missing/unreadable → prUnknown
+    on E: EAudioDecodeError do Exit(prUnknown);
+    else Exit(prUnknown);
   end;
   if LStream = nil then Exit(prUnknown);
   SetLength(LPrefix, 4096);
   try
     LRead := Integer(LStream.Read(LPrefix[0], 4096));
   except
-    on E: Exception do Exit(prUnknown); // Probe: unknown on any error is intentional — unreadable → prUnknown
+    on E: EAudioDecodeError do Exit(prUnknown);
+    else Exit(prUnknown);
   end;
   SetLength(LPrefix, LRead);
   // Reuse AudioDetectProbe (≤4KB)

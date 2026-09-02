@@ -766,10 +766,13 @@ begin
   Result := True;
   if (AOutBuffer.cbBuffer > 0) and (AOutBuffer.pvBuffer <> nil) then
   begin
-    cbData := SendData(AOutBuffer.pvBuffer^, AOutBuffer.cbBuffer);
-    FreeContextBuffer(AOutBuffer.pvBuffer);
-    if cbData <= 0 then
-      Result := False;
+    try
+      cbData := SendData(AOutBuffer.pvBuffer^, AOutBuffer.cbBuffer);
+      if cbData <= 0 then
+        Result := False;
+    finally
+      FreeContextBuffer(AOutBuffer.pvBuffer);
+    end;
   end;
 end;
 
@@ -778,6 +781,8 @@ var
   LProtocols: TStringArray;
   LTotalSize, LListSize, LOffset, I: Integer;
   LProtoLen: Byte;
+  LStart, LPos, LCount: Integer;
+  LToken: string;
 begin
   Result := False;
   SetLength(ABuffer, 0);
@@ -785,7 +790,23 @@ begin
   if AProtocols = '' then
     Exit;
   try
-
+    LCount := 0;
+    SetLength(LProtocols, 0);
+    LStart := 1;
+    for LPos := 1 to Length(AProtocols) + 1 do
+      if (LPos > Length(AProtocols)) or (AProtocols[LPos] = ',') then
+      begin
+        LToken := Copy(AProtocols, LStart, LPos - LStart);
+        while (Length(LToken) > 0) and (LToken[1] = ' ') do Delete(LToken, 1, 1);
+        while (Length(LToken) > 0) and (LToken[Length(LToken)] = ' ') do Delete(LToken, Length(LToken), 1);
+        if (LToken <> '') and (Length(LToken) <= 255) then
+        begin
+          SetLength(LProtocols, LCount + 1);
+          LProtocols[LCount] := LToken;
+          Inc(LCount);
+        end;
+        LStart := LPos + 1;
+      end;
     if Length(LProtocols) = 0 then
       Exit;
 

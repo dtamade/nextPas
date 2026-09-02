@@ -1,8 +1,38 @@
 # Changelog
 
+## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
+
+`1.0.0` 后 20 期巡检收敛（S64—S84），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+
+### Highlights (S80—S84)
+- **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
+- **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
+- **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
+- **S83 复用收口**：`TryZipMethodFromCode` 单源化 `zmStore/zmDeflate` 映射，`CONTRACT`/`README`/`ROADMAP` 文档同步
+- **S84 文档与零堆栈验证**：`CONTRACT §1.2` 补 `TryMethod` 入约、`README S0—S83` 同步，`writer` AES extra `Encode 栈上 7B` + `FScratch 64B` 零堆栈确认，12 门回归
+
+## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
+
+`1.0.0` 后 12 期巡检收敛（S64—S75），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用` 多维打磨，`12 门+bench+hygiene` 全绿。
+
+### Highlights (S64—S76)
+- **S64 复用收敛 II**：`TryDescriptor` 单点 `VerifyParsedValues` 与 `GuardRange` 单点 `GuardCursorRange/GuardRange` 收口
+- **S65 性能攻坚**：`checksum.crc32` slice-by-8（8 表并行，`1MiB` 5× 提升）
+- **S66 TOCTOU 双校验**：`ADestDir/LParent/MkdirAll/WriteFile` 前后双 `EnsureNoSymlinkInPath` + `IsSymlink` 后验
+- **S67 原子落盘**：`ZipExtractToDirAtomic*` 同文件系统 `TempDir+Rename` 原子提交，`Exists` 拒绝覆盖，`RemoveAll` 清理
+- **S68 文档一致性**：`CONTRACT 1.38→1.39`/`README`/`SECURITY` 四文档同步原子与双校验，门面透出 `Atomic*` 三 API
+- **S69 原子硬化**：`Rename EXDEV` 回退 `CopyTree+RemoveAll`，`test_zip_fs` 10 门
+- **S70 性能收敛**：`LDirs` 几何预留 `O(n²)→O(n)`，`LDirsCount` 分离容量与计数
+- **S71 示例完整性**：`README` Cookbook 第7式原子，`zip_roundtrip` 增 `ok/refuse/bomb clean` 三演示
+- **S72 复用收敛**：`CalcGrowCapacity` 单源，双 `Ensure*Capacity` 薄委托
+- **S73 稳定性纵深**：原子落盘后 `IsSymlink+EnsureNoSymlinkInPath` 二次校验
+- **S74 完整性**：`test_zip_fs` 10→12 门，`Atomic permission/symlink` 透传验证
+- **S75 复用收敛**：`ParentDirOf` 单源，双路径复用，`LSep` 清零
+- **S76 版本封版**：`VERSION 1.0.0→1.0.1`，`ROADMAP` 当前状态同步 `1.0.1`
+
 ## 1.0.0 (2026-08-29) — nextpas.core.zip 1.0.0 领头羊 Final
 
-基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 四模型就绪，`VERSION` 冻结为 `1.0.0`。
+基于 `1.0.0-rc.1` 零代码变更封版，`12门+bench 16项+hygiene` 全绿，`ci-matrix`（`linux-x86_64`/`win64` 交叉编译通过，`darwin` 源码级可移植）与 `SECURITY` 五模型就绪，`VERSION` 冻结为 `1.0.0`。
 
 ## 1.0.0-rc.1 (2026-08-29) — nextpas.core.zip 领头羊封版 RC
 
@@ -16,10 +46,10 @@ Pascal AI 时代 ZIP 容器领头羊实现，以 `nextpas.core.bench` 为唯一�
 - **S47 100+ fuzz与no-sig**：`test_zip_fuzz 450组` 与 `Go 7门` 含 `12/16/20/24` 四形态与 unicode 双锚点一致
 - **S48 Cookbook定版**：`README` 6式与 `Migration` 表，`zip_roundtrip` 增 `PByte/AES-desc` 两小节 `all demos ok`
 - **S49 方差治理**：`TBenchSuite 300ms/7/25` 使 `aes-*` CV `<5%`，回归无 `WARN`
-- **S50 安全审计**：`SECURITY.md` 四项威胁模型（`zip-slip/bomb/CPU bomb/AES oracle`），`INV-18/19` 入约，`VERSION` 冻结
+- **S50 安全审计**：`SECURITY.md` 五项威胁模型（`zip-slip/bomb/CPU bomb/AES oracle/symlink traversal`），`INV-18/19` 入约，`VERSION` 冻结
 
 ### Security
-- 见 `core/docs/zip/SECURITY.md` 四项 fail-closed 模型与 `CONTRACT INV-16/17/18/19`
+- 见 `core/docs/zip/SECURITY.md` 五项 fail-closed 模型与 `CONTRACT INV-16/17/18/19`
 
 ### Testing
 - 12门 `nextpas.core.zip.*` 全绿 `[HEAPTRC] OK`（27/27/22/7/5/6/9/3/13/7/5/4），`bench regression allocs+2/bytes` 硬门，`zip_roundtrip all demos ok`，`make hygiene/diff --check` 通过，`ci-matrix` 四靶标复跑通过

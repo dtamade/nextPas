@@ -93,22 +93,31 @@ begin
   end;
 end;
 
-{ 回滚并清计数；回滚失败吞掉（原异常由调用方重抛）。 }
+{ 回滚并清计数；回滚失败吞掉（原异常由调用方重抛）。
+  锁仅保护簿记，Exec 在锁外，避免全局锁持有 SQL。 }
 procedure DropAfterRollback(const ADb: TSqliteDb);
 var
   I: Integer;
+  LFound: Boolean;
 begin
   TxLock.Acquire;
   try
     I := FindEntryIndex(ADb);
+    LFound := I >= 0;
+  finally
+    TxLock.Release;
+  end;
+  if not LFound then
+    Exit;
+  try
+    ADb.Exec('ROLLBACK');
+  except
+  end;
+  TxLock.Acquire;
+  try
+    I := FindEntryIndex(ADb);
     if I >= 0 then
-    begin
-      try
-        ADb.Exec('ROLLBACK');
-      except
-      end;
       RemoveEntry(I);
-    end;
   finally
     TxLock.Release;
   end;
@@ -129,18 +138,30 @@ begin
   try
     I := FindEntryIndex(ADb);
     if I >= 0 then
+    begin
+      Inc(TxEntries[I].Depth);
+      Exit;
+    end;
+    { autocommit=0 且无助手记录 ⇒ 有裸 Exec('BEGIN') 的事务悬着，拒绝混用。 }
+    if sqlite3_get_autocommit(ADb.Handle) = 0 then
+      raise ESqliteTxError.Create(
+        'a transaction is already open on this connection outside the tx helper; ' +
+        'route all transaction control through BeginTxn/WithTransaction');
+  finally
+    TxLock.Release;
+  end;
+  { Exec 在锁外：避免全局锁持有 SQL 执行 }
+  if AImmediate then
+    ADb.Exec('BEGIN IMMEDIATE')
+  else
+    ADb.Exec('BEGIN');
+  TxLock.Acquire;
+  try
+    I := FindEntryIndex(ADb);
+    if I >= 0 then
       Inc(TxEntries[I].Depth)
     else
     begin
-      { autocommit=0 且无助手记录 ⇒ 有裸 Exec('BEGIN') 的事务悬着，拒绝混用。 }
-      if sqlite3_get_autocommit(ADb.Handle) = 0 then
-        raise ESqliteTxError.Create(
-          'a transaction is already open on this connection outside the tx helper; ' +
-          'route all transaction control through BeginTxn/WithTransaction');
-      if AImmediate then
-        ADb.Exec('BEGIN IMMEDIATE')
-      else
-        ADb.Exec('BEGIN');
       SetLength(TxEntries, Length(TxEntries) + 1);
       TxEntries[High(TxEntries)].Db := ADb;
       TxEntries[High(TxEntries)].Depth := 1;
@@ -171,8 +192,16 @@ begin
     if sqlite3_get_autocommit(ADb.Handle) <> 0 then
       raise ESqliteTxError.Create(
         'transaction was closed outside the tx helper; commit aborted');
-    ADb.Exec('COMMIT');       { 失败 ⇒ 异常；计数保留，调用方可 RollbackTxn 收拾 }
-    RemoveEntry(I);
+  finally
+    TxLock.Release;
+  end;
+  { Exec 在锁外 }
+  ADb.Exec('COMMIT');       { 失败 ⇒ 异常；计数保留，调用方可 RollbackTxn 收拾 }
+  TxLock.Acquire;
+  try
+    I := FindEntryIndex(ADb);
+    if I >= 0 then
+      RemoveEntry(I);
   finally
     TxLock.Release;
   end;
@@ -195,8 +224,16 @@ begin
       RemoveEntry(I);
       Exit;
     end;
-    ADb.Exec('ROLLBACK');
-    RemoveEntry(I);
+  finally
+    TxLock.Release;
+  end;
+  { Exec 在锁外 }
+  ADb.Exec('ROLLBACK');
+  TxLock.Acquire;
+  try
+    I := FindEntryIndex(ADb);
+    if I >= 0 then
+      RemoveEntry(I);
   finally
     TxLock.Release;
   end;

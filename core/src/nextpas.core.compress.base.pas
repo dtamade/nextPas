@@ -1,11 +1,14 @@
 unit nextpas.core.compress.base;
 
+{** @desc 压缩基座：语义类型与单源常量/容量辅助，L0 纯度实现。
+  FFI 边界隔离：zlib 的 Z_* 常量与 z_stream/deflate/inflate 声明收口在
+  nextpas.core.compress.zlib.ffi（.lz4/.bzip2 同理），本单元仅映射
+  TCompressionLevel → level 数值与提供 GZIP_MAX/COMPRESS_BUF 单源，复用
+  limits/GZIP_MAX/ValidPath 单源纪律，不新增重复，守住 L0 与 FPC RTL 隔离。 }
+
 {$I nextpas.core.settings.inc}
 
 interface
-
-uses
-  zlib;
 
 type
   TCompressionLevel = (
@@ -30,6 +33,12 @@ function CompressInitialDecompressCapacity(const AInputLen, AMaxOutputSize: Size
 function CompressInitialInflateCapacity(const AInputLen, AMaxOutputSize: SizeUInt; const AHint: SizeUInt = 0): SizeUInt; inline;
 
 implementation
+
+const
+  Z_NO_COMPRESSION = 0;
+  Z_BEST_SPEED = 1;
+  Z_BEST_COMPRESSION = 9;
+  Z_DEFAULT_COMPRESSION = -1;
 
 function LevelToZlib(const ALevel: TCompressionLevel): Int32;
 begin

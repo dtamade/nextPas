@@ -12,7 +12,6 @@ unit nextpas.core.ssh.kex;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.buffer,

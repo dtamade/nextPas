@@ -1,9 +1,7 @@
 # S4 Compatibility Matrix
 
 This matrix turns current S4 pressure into concrete review inputs. TypInfo has
-a minimal live unit, SysUtils has a minimal live exception-formatting plus
-`SameText`, `IntToStr`, and `Trim` facade, and Classes has a minimal live stream shim;
-broader reflection remains deferred.
+a minimal live unit, SysUtils has a minimal live **40+ functions** facade (`Format`/`SameText`/`IntToStr`/`Trim` + `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep` …), and Classes has a minimal live **10-type** facade (`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`/`TSeekOrigin`/`TList`/`TInterfaceList`/`TStringList`/`TDuplicates`/`TThread`); broader reflection remains deferred.
 
 | Capability | Live evidence | Current provider | Recommended nextPas stance | Current S4 decision | Future unlock gate |
 | --- | --- | --- | --- | --- | --- |
@@ -21,9 +19,9 @@ broader reflection remains deferred.
 | TypInfo collections consumer gate | `core/tests/nextpas.core.system/test_system_typinfo_collections_consumer/test_system_typinfo_collections_consumer.lpr` | `nextpas.core.collections.element_manager` consuming minimal live `nextpas.core.system.typinfo` | prove managed-array helpers through `TElementManager<string>` allocation, copy, grow, shrink, zero, and free paths | live consumer proof; no new API | system TypInfo collections consumer gate with heaptrc proof |
 | `GetTypeKind` | `core/src/nextpas.core.collections.hashmap.swiss.pas`, `core/src/nextpas.core.collections.btree.pas`, `core/src/nextpas.core.collections.concurrent.hashmap.pas` | compiler/System compile-truth imported with the minimal facade | keep tied to compiler/runtime type truth; do not fake a wrapper | minimal live compile-truth contract | collection contract gate proving stable type-kind semantics |
 | TypInfo minimal pressure audit | `core/docs/system/typinfo-minimal-pressure.md` | minimal live unit plus source-contract guard | seven-symbol set only; no property reflection | accepted by minimal live unlock | compiler TypInfo contract + collections managed-lifetime + heaptrc gate |
-| `TFileStream` | `compiler/toolchain/np_toolchain_runner.pas`, multiple TLS/context units | minimal live `nextpas.core.system.classes` shim + bootstrap `Classes` | treat as IO-facing compatibility shim (stream subset) | live shim: TStream/TFileStream/THandleStream/TMemoryStream/TStringStream | toolchain + file IO consumer gate with leak proof |
-| `TStringList` | `rtl/core/classes/np_classes.pas`, compiler/tooling and TLS helpers | minimal live `nextpas.core.system.classes` shim + bootstrap `Classes` | narrow compatibility subset, not container ownership | live shim: TStringList/TList/TInterfaceList | focused consumer gate proving exact subset |
-| file mode constants | `fmCreate`, `fmOpenRead`, `fmShareDenyNone` in stream users | minimal live `nextpas.core.system.classes` shim + bootstrap `Classes` | keep coupled to stream shim, not standalone expansion | live shim: fmCreate/fmOpenRead/fmShareDenyNone | same gate as `TFileStream` |
+| `TFileStream` | `compiler/toolchain/np_toolchain_runner.pas`, multiple TLS/context units | **live** `nextpas.core.system.classes` (10-type shim: `TSeekOrigin`/`TStream`/`THandleStream`/`TMemoryStream`/`TFileStream`…) | IO-facing compatibility seam only; `TComponent`/`TPersistent` remain deferred | **live** 10-type shim (2026-08-31) | toolchain + file IO consumer gate with leak proof (heaptrc 0) |
+| `TStringList` | `rtl/core/classes/np_classes.pas`, compiler/tooling and TLS helpers | **live** `nextpas.core.system.classes` (10-type shim) | narrow compatibility subset, not container ownership | **live** 10-type shim | focused consumer gate proving exact subset |
+| file mode constants | `fmCreate`, `fmOpenRead`, `fmShareDenyNone` (+ `fmShareDenyWrite`/`fmShareExclusive` etc.) in stream users | **live** `nextpas.core.system.classes` (10-type shim) | keep coupled to 10-type `TFileStream` shim, not standalone expansion | **live** 10-type shim | same gate as `TFileStream` |
 | `TObject.Free` compatibility | compiler semantic model around object/class truth | compiler/runtime System truth, not core facade | keep under compiler/runtime and `nextpas.core.system` root contract | already documented at root; not a `classes` starter API | compiler/runtime integration gate |
 | property reflection helpers | no focused consumer pressure in this lane | historical `TypInfo` surface | out of scope until compiler-backed RTTI model exists | do not add | dedicated reflection design review |
 | `TComponent` / `TPersistent` / streaming framework | no focused consumer pressure in this lane | historical `Classes` surface | explicitly out of scope | do not add | separate architecture plan required |
@@ -32,11 +30,8 @@ broader reflection remains deferred.
 
 - Real pressure exists today for bootstrap `SysUtils`, `TypInfo`, and a small
   `Classes` subset.
-- SysUtils pressure is enough for a minimal exception-formatting plus
-  `SameText`, `IntToStr`, and `Trim` unit, but not for path, file,
-  environment, time, parsing, case conversion, or broad string-helper
-  compatibility.
-- `nextpas.core.system.classes` now exists as a minimal live stream shim (TStream/TFileStream/TStringList etc.); broader Classes surface remains deferred.
+- SysUtils pressure is enough for a minimal live **40+ functions** unit (`Format`/`SameText`/`IntToStr`/`Trim` plus `StrToInt`/`FloatToStr`/`FileExists`/`ExtractFile*`/`Now`/`Sleep` delegating to `text.conv`/`path`/`fs`/`platform`), but not for broader path, file, environment, time, parsing, case conversion sprawl.
+- The 10-type `nextpas.core.system.classes` shim is the current live proof that a narrow public `system.classes` subset can exist without owning `TComponent`/`TPersistent`.
 - `TypInfo` has the strongest architectural pressure, so it now has a minimal
   live unit, but it also has the highest ABI risk.
 - The TypInfo candidate is narrowed in `typinfo-minimal-pressure.md`; the live
@@ -44,7 +39,8 @@ broader reflection remains deferred.
   metadata layout guarantees.
 - `SysUtils` has the broadest consumer count, but most of that pressure still
   belongs to owner modules or bootstrap RTL rather than `system` ownership.
-- `Classes` pressure is narrow and concrete, now satisfied by a minimal live shim; broader Classes ownership stays deferred.
+- `Classes` pressure is narrow and concrete, but narrow pressure is exactly why
+  the future unit must stay narrow if it is ever approved.
 
 ## Recommendation
 
@@ -52,5 +48,6 @@ Keep the current TypInfo live surface narrow. If future S4 pressure appears,
 prefer:
 
 1. broader `system.typinfo` only after a dedicated RTTI metadata review
-2. `system.classes` broader subset only if a named consumer needs a new namespace path beyond the live stream shim
+2. `system.classes` file/stream subset only if a named consumer needs
+   the namespace path
 3. broader `system.sysutils` last, and only as a tiny delegating compatibility layer

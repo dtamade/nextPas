@@ -140,6 +140,7 @@ type
   TPlatformAlignedAllocHeader = record
     RawPtr: Pointer;
     Size: SizeUInt;
+    RawSize: SizeUInt;
     Alignment: SizeUInt;
     Magic: UInt32;
   end;
@@ -198,9 +199,6 @@ function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := paabWindowsCRT;
-{$ELSEIF defined(NEXTPAS_MACOS)}
-  { See platform_aligned_alloc_is_native — Darwin uses SysGetMem path. }
-  Result := paabFallback;
 {$ELSEIF defined(NEXTPAS_UNIX)}
   Result := paabPosix;
 {$ELSE}
@@ -209,20 +207,14 @@ begin
 end;
 
 function platform_aligned_alloc_is_native: Boolean;
-{ On Windows, returns True (uses _aligned_malloc from CRT). On POSIX,
-  returns True (uses posix_memalign). On unsupported platforms,
-  returns False (uses SysGetMem fallback). There is no runtime
-  detection of _aligned_malloc availability on Windows; if the CRT
-  does not provide it, the call will fail at link time. }
+{ On Windows, returns True (uses _aligned_malloc from CRT). On POSIX
+  (including Darwin via mmap backend), returns True (uses posix_memalign
+  or mmap-aligned). On unsupported platforms, returns False (uses
+  SysGetMem fallback). There is no runtime detection of _aligned_malloc
+  availability on Windows; if the CRT does not provide it, the call
+  will fail at link time. }
 begin
-{$IFDEF NEXTPAS_MACOS}
-  { Darwin aarch64 GHA: posix_memalign/free mixed with virtual mmap and
-    the test harness Abort-traps (signal 6) near suite end. Prefer the
-    SysGetMem-backed path until the libc mix is isolated. }
-  Result := False;
-{$ELSE}
   Result := platform_aligned_alloc_backend <> paabFallback;
-{$ENDIF}
 end;
 
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
@@ -298,7 +290,10 @@ begin
 end;
 
 function platform_native_aligned_raw_alloc(ARawSize, AAlignment: SizeUInt): Pointer;
-{$IF defined(NEXTPAS_UNIX)}
+{$IF defined(NEXTPAS_MACOS)}
+var
+  LBase: Pointer;
+{$ELSEIF defined(NEXTPAS_UNIX)}
 var
   LRaw: Pointer;
 {$ENDIF}
@@ -306,6 +301,17 @@ begin
   Result := nil;
 {$IFDEF NEXTPAS_WINDOWS}
   Result := nextpas.core.platform.windows.ffi._aligned_malloc(ARawSize, AAlignment);
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { Darwin native: mmap anonymous to avoid posix_memalign/free heap mixed with
+    virtual mmap under heaptrc (Abort trap 6 on aarch64 GHA). mmap path is
+    heaptrc-agnostic and consistent with platform_virtual_* (inline, zero-copy
+    header carve, no extra copy). }
+  LBase := nextpas.core.platform.posix.ffi.mmap(
+    nil, PtrUInt(ARawSize),
+    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE,
+    PLATFORM_POSIX_MAP_PRIVATE or PLATFORM_POSIX_MAP_ANONYMOUS, -1, 0);
+  if (LBase <> nil) and (LBase <> Pointer(PLATFORM_POSIX_MAP_FAILED)) then
+    Result := LBase;
 {$ELSEIF defined(NEXTPAS_UNIX)}
   LRaw := nil;
   if nextpas.core.platform.posix.ffi.posix_memalign(@LRaw, size_t(AAlignment), size_t(ARawSize)) = 0 then
@@ -321,6 +327,9 @@ begin
     Exit;
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.ffi._aligned_free(APtr);
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { Darwin mmap path freed in platform_aligned_free via header RawSize;
+    this raw-free is a no-op fallback (stability: no double munmap). }
 {$ELSEIF defined(NEXTPAS_UNIX)}
   nextpas.core.platform.posix.ffi.free(APtr);
 {$ELSE}
@@ -367,6 +376,7 @@ begin
   LHeader := HeaderOf(LAligned);
   LHeader^.RawPtr := LRaw;
   LHeader^.Size := ASize;
+  LHeader^.RawSize := LRawSize;
   LHeader^.Alignment := AAlignment;
   LHeader^.Magic := PLATFORM_ALIGNED_ALLOC_MAGIC;
   Result := LAligned;
@@ -385,7 +395,17 @@ begin
     'platform_aligned_free: invalid magic (possible double-free or wrong pointer)');
 {$ELSE}
   if LHeader^.Magic <> PLATFORM_ALIGNED_ALLOC_MAGIC then
+    RunError(204);
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  if platform_aligned_alloc_backend <> paabFallback then
+  begin
+    { Darwin mmap backend: munmap with stored RawSize (stability: exact size,
+      no double-free, heaptrc-agnostic). Zero-copy header preserved. }
+    if LHeader^.RawSize <> 0 then
+      nextpas.core.platform.posix.ffi.munmap(LHeader^.RawPtr, PtrUInt(LHeader^.RawSize));
     Exit;
+  end;
 {$ENDIF}
   platform_aligned_raw_free(LHeader^.RawPtr);
 end;

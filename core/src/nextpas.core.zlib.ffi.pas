@@ -53,11 +53,9 @@ function ZlibFfiDecodeWithLimit(const AData: TBytes; const AMaxOutputSize: SizeU
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.exception,
-  nextpas.core.platform.dl,
-  nextpas.core.zlib.pure;
+  nextpas.core.platform.dl;
 
 const
   Z_OK = 0;
@@ -183,6 +181,8 @@ var
   LLevel: Integer;
   LRet: Integer;
   LBound: LongWord;
+  LHeader: Word;
+  LCmf, LFLevel, LFlg: Byte;
 begin
   Result := nil;
   if ARaw then
@@ -191,9 +191,23 @@ begin
     RaiseFfi(zecUnsupported, 'libz not available');
   if Length(AData) = 0 then
   begin
-    // 空输入仍需输出合法 zlib 流（header+empty block+adler）
-    // 复用纯实现的空编码，避免 FFI 对零长边界差异
-    Result := ZlibPureEncodeWithLevel(AData, ALevel);
+    // 空输入内联生成 header+stored+adler，不依赖 pure/zlib888
+    LCmf := $78;
+    case ALevel of
+      zlNone:    LFLevel := 0;
+      zlFastest: LFLevel := 0;
+      zlBest:    LFLevel := 3;
+    else
+      LFLevel := 2;
+    end;
+    LFlg := LFLevel shl 6;
+    LFlg := LFlg or Byte((31 - ((Word(LCmf) shl 8 or LFlg) mod 31)) mod 31);
+    LHeader := (Word(LCmf) shl 8) or Word(LFlg);
+    SetLength(Result, 11);
+    Result[0] := Byte(LHeader shr 8);
+    Result[1] := Byte(LHeader and $FF);
+    Result[2] := 1; Result[3] := 0; Result[4] := 0; Result[5] := $FF; Result[6] := $FF;
+    Result[7] := 0; Result[8] := 0; Result[9] := 0; Result[10] := 1;
     Exit;
   end;
   LSrcLen := LongWord(Length(AData));
@@ -205,7 +219,7 @@ begin
   LDstLen := LBound;
   LRet := GCompress2(@Result[0], LDstLen, @AData[0], LSrcLen, LLevel);
   if LRet <> Z_OK then
-    RaiseFfi(zecInternal, 'zlib ffi: compress2 failed (' + IntToStr(LRet) + ')');
+    RaiseFfi(zecInternal, 'zlib ffi: compress2 failed (' + IntToStr(Int64(LRet)) + ')');
   SetLength(Result, LDstLen);
 end;
 
@@ -266,7 +280,7 @@ begin
       RaiseFfi(zecCorruptStream, 'zlib: corrupt stream');
     if LRet = Z_MEM_ERROR then
       RaiseFfi(zecInternal, 'zlib: mem error');
-    RaiseFfi(zecCorruptStream, 'zlib ffi: uncompress failed (' + IntToStr(LRet) + ')');
+    RaiseFfi(zecCorruptStream, 'zlib ffi: uncompress failed (' + IntToStr(Int64(LRet)) + ')');
   end;
 end;
 

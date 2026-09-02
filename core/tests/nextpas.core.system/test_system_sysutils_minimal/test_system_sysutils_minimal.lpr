@@ -5,8 +5,7 @@ program test_system_sysutils_minimal;
 uses
   nextpas.core.test,
   nextpas.core.system.sysutils,
-  nextpas.core.exception,
-  SysUtils;  { RTL reference only: proves fallback parity for extended specifiers }
+  nextpas.core.exception;
 
 type
   IProbe = interface
@@ -42,23 +41,42 @@ begin
     'width/precision flags should stay on TextFormat');
 end;
 
-procedure TestFormatExtendedSpecifiersFallbackToRtl;
+procedure TestFormatExtendedSpecifiersRejectedByOwner;
+var
+  LFailed: Boolean;
 begin
-  CheckEqual(SysUtils.Format('%g', [3.14159]),
-    nextpas.core.system.sysutils.Format('%g', [3.14159]),
-    '%g should fall back to RTL SysUtils formatting');
-  CheckEqual(SysUtils.Format('%.3g', [3.14159]),
-    nextpas.core.system.sysutils.Format('%.3g', [3.14159]),
-    '%.3g should honor precision through RTL fallback');
-  CheckEqual(SysUtils.Format('%.2e', [12345.678]),
-    nextpas.core.system.sysutils.Format('%.2e', [12345.678]),
-    '%.2e should fall back to RTL SysUtils formatting');
-  CheckEqual(SysUtils.Format('%c', ['A']),
-    nextpas.core.system.sysutils.Format('%c', ['A']),
-    '%c should fall back to RTL SysUtils formatting');
-  CheckEqual(SysUtils.Format('v=%g tag=%s', [0.5, 'x']),
-    nextpas.core.system.sysutils.Format('v=%g tag=%s', [0.5, 'x']),
-    'mixed %g/%s should fall back to RTL via one scan');
+  { After removing SysUtils fallback, unsupported specifiers must be rejected
+    by the text.format owner (single source, stub elegance, INV-5). If business
+    later needs %g/%e/%c,反哺 owner in nextpas.core.text.format, not fallback. }
+  LFailed := False;
+  try
+    nextpas.core.system.sysutils.Format('%g', [3.14159]);
+  except on E: EInvalidArgument do LFailed := True; end;
+  Check(LFailed, '%g should be rejected by owner (no SysUtils fallback)');
+
+  LFailed := False;
+  try
+    nextpas.core.system.sysutils.Format('%.3g', [3.14159]);
+  except on E: EInvalidArgument do LFailed := True; end;
+  Check(LFailed, '%.3g should be rejected by owner');
+
+  LFailed := False;
+  try
+    nextpas.core.system.sysutils.Format('%.2e', [12345.678]);
+  except on E: EInvalidArgument do LFailed := True; end;
+  Check(LFailed, '%.2e should be rejected by owner');
+
+  LFailed := False;
+  try
+    nextpas.core.system.sysutils.Format('%c', ['A']);
+  except on E: EInvalidArgument do LFailed := True; end;
+  Check(LFailed, '%c should be rejected by owner');
+
+  LFailed := False;
+  try
+    nextpas.core.system.sysutils.Format('v=%g tag=%s', [0.5, 'x']);
+  except on E: EInvalidArgument do LFailed := True; end;
+  Check(LFailed, 'mixed %g/%s should be rejected via single scan path');
 end;
 
 procedure TestExceptionFormattingAliasesCanonicalRoot;
@@ -246,11 +264,30 @@ begin
     'whole-day difference should span leap years');
 end;
 
+procedure TestBytesOfConstantArgumentContent;
+var
+  A, B: TBytes;
+  I: Integer;
+begin
+  { 回归防护：BytesOf 直收常量串实参。若实现恢复 inline，
+    FPC 常量传播会把 AStr[1] 折叠成单字符值，Move 拷出栈上垃圾。
+    内容必须逐字节等于字面量，不能只对长度和首字节成立。 }
+  A := nextpas.core.system.sysutils.BytesOf('-----BEGIN TEST KEY-----' + LineEnding + 'AQID');
+  Check(Length(A) = Length('-----BEGIN TEST KEY-----' + LineEnding + 'AQID'),
+    'BytesOf should preserve constant argument length');
+  for I := 0 to High(A) do
+    Check(A[I] = Ord(('-----BEGIN TEST KEY-----' + LineEnding + 'AQID')[I + 1]),
+      'BytesOf should copy every byte of a constant argument');
+  B := nextpas.core.system.sysutils.BytesOf(StringOf(A));
+  Check((Length(B) = Length(A)) and CompareMem(@B[0], @A[0], Length(A)),
+    'StringOf/BytesOf round trip should preserve bytes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.system.sysutils minimal');
   T.Test('Format delegates to text contract', @TestFormatDelegatesToTextContract);
   T.Test('Format safe set stays on TextFormat', @TestFormatSafeSetStaysOnTextFormat);
-  T.Test('Format extended specifiers fall back to RTL', @TestFormatExtendedSpecifiersFallbackToRtl);
+  T.Test('Format extended specifiers rejected by owner (no SysUtils fallback)', @TestFormatExtendedSpecifiersRejectedByOwner);
   T.Test('exception formatting aliases canonical root', @TestExceptionFormattingAliasesCanonicalRoot);
   T.Test('convert error alias canonical root', @TestConvertErrorAliasCanonicalRoot);
   T.Test('SameText delegates to text conversion owner', @TestSameTextDelegatesToTextConvOwner);
@@ -261,6 +298,7 @@ begin
   T.Test('BoolToStr follows SysUtils semantics', @TestBoolToStrSysUtilsSemantics);
   T.Test('CompareStr is case-sensitive', @TestCompareStrCaseSensitive);
   T.Test('TStringArray alias is usable', @TestTStringArrayAliasUsable);
+  T.Test('BytesOf copies constant argument content', @TestBytesOfConstantArgumentContent);
   T.Test('Supports queries interfaces', @TestSupportsInterfaceQuery);
   T.Test('EncodeDate matches RTL epoch values', @TestEncodeDateMatchesRtlEpoch);
   T.Test('EncodeDate rejects invalid dates', @TestEncodeDateInvalidRaises);

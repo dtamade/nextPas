@@ -33,10 +33,11 @@ TTriState = (tsUnset, tsFalse, tsTrue);   { 三态布尔：unset 即不上送 }
   wire 映射：openai §1.1 / anthropic §2.1（required→any、none→省略 tools）}
 TToolChoiceMode = (tcmUnset, tcmAuto, tcmNone, tcmRequired, tcmNamed);
 
-{ 推理力度旋钮（W7）：reUnset 不上送。openai → reasoning_effort；
+{ 推理力度旋钮（W7/W7b）：reUnset 不上送。openai → reasoning_effort；
   anthropic 无对应参数 → 忽略 + warn（Q-A5 同规则），推理力度走本侧
-  Thinking/Budget }
-TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh);
+  Thinking/Budget。部分高阶模型支持 max/xhigh 档（WIRE-MAPPINGS §1.1b）：
+  reXHigh→"xhigh"、reMax→"max" 为最大档（reMax 封顶，reXHigh 次之）}
+TReasoningEffort = (reUnset, reMinimal, reLow, reMedium, reHigh, reXHigh, reMax);
 
 { 提示缓存断点策略（W10）：ccmUnset 不上送。ccmAuto=anthropic 显式
   cache_control 自动打点（WIRE-MAPPINGS §2.6：tools 尾/system/末条消息
@@ -168,7 +169,9 @@ TCompletionRequest = record
   CacheControl: TCacheControlMode; { ccmUnset 不上送；anthropic §2.6 自动打点（W10）}
   Thinking: TTriState;             { 扩展思考开关；tsUnset 不上送 }
   ThinkingBudgetTokens: Int64;     { CMaxTokensUnset；Thinking=tsTrue 时语义生效 }
-  ExtraJson: TJsonText;            { 逃生舱：合并进请求根对象（厂商私有参数）}
+  IdempotencyKey: string;          { T1.5：空=不启用，非空透传 Idempotency-Key 头 }
+  ExtraJson: TJsonText;            { 逃生舱：合并进请求根对象（厂商私有参数）；
+                                     非空须为合法 JSON object 否则编码期 aecConfig }
 
   class function New(const AModel: string): TCompletionRequest; static;
 end;
@@ -179,6 +182,8 @@ end;
     function WithUserText(const AText: string): TCompletionRequest;
     function WithMaxTokens(AN: Int64): TCompletionRequest;
     function WithTemperature(AValue: Double): TCompletionRequest;
+    function WithTopP(AValue: Double): TCompletionRequest;
+    function WithSeed(AValue: Int64): TCompletionRequest;
     function WithStop(const ASeq: TStringArray): TCompletionRequest;
     function WithTools(const ASpecs: TToolSpecArray): TCompletionRequest;
     function WithResponseSchema(const ASchemaJson: string): TCompletionRequest;
@@ -186,6 +191,15 @@ end;
       const AName: string): TCompletionRequest;
     function WithReasoningEffort(AEffort: TReasoningEffort): TCompletionRequest;
     function WithCacheControl(AMode: TCacheControlMode): TCompletionRequest;
+    function WithParallelToolCalls(AVal: TTriState): TCompletionRequest;
+    function WithThinking(AThinking: TTriState; ABudget: Int64 = CMaxTokensUnset): TCompletionRequest;
+    function WithModel(const AModel: string): TCompletionRequest;
+      { 克隆/回退场景改模型不断链 }
+    function WithMessages(const AMsgs: TMessageArray): TCompletionRequest;
+      { 批量覆盖 Messages（Copy 语义）；与 WithUserText/WithMessage 附加语义互补 }
+    function WithMessage(const AMsg: TMessage): TCompletionRequest;
+    function WithExtraJson(const AJson: TJsonText): TCompletionRequest;
+      { 逃生舱：多次调用按 MergeExtraJson 后者胜合并，便于 gateway 侧 service_tier/user 等厂商私有键的渐进注入；空串跳过，非 object 编码期 aecConfig }
     { WithTools(array of IAgentTool) 第二形态落位在 tools 层自由函数
       （base 不依赖 intf 的分层约束，ARCHITECTURE §1），提取各工具的 Spec——
       builder 链经其不断裂；随 W3 tools 落地 }
@@ -195,8 +209,13 @@ end;
 ### 1.4 工具词表
 
 ```pascal
-{ v1 仅保留有明确消费语义的标志；其余候选（Idempotent/ReadOnly/NeedsConfirm）
-  进 inbox 等语义立项（纪律：不暴露未测试的兼容 API）}
+{ v1 仅保留有明确消费语义的标志。tcParallel = W13 分组调度声明：
+  相邻 tcParallel 调用段整段并行，非 tcParallel 调用独占执行——工具的
+  并发声明永不被违反（LIFECYCLE §5）。Idempotent/ReadOnly/NeedsConfirm
+  经评估不设词表位：NeedsConfirm 的确认门由 PreHook 同步回调表达
+  （提交前运行、可阻塞等外部批准）；前两者在模块内无消费者（loop 重试
+  哲学 = 模型驱动，不做工具级自动重试）——防死词表，触发条件见 ROADMAP
+  Inbox}
 TToolCapability = (tcParallel);
 TToolCapabilities = set of TToolCapability;
 
@@ -311,6 +330,7 @@ TWireRequest = record
                                       物理头由 transport/http client 补全 }
   ConnectTimeoutMs: Int64;          { CTimeoutDefault }
   TotalTimeoutMs: Int64;            { CTimeoutDefault }
+  ReadIdleTimeoutMs: Int64;         { CTimeoutDefault=0 禁用；流式块间空闲超时（W7，WIRE-MAPPINGS §0）}
 end;
 
 TWireResponse = record
@@ -390,6 +410,12 @@ IAgentTranscriptStore = interface
   procedure Append(const AThreadId: string; const AMsg: TMessage);
   function Load(const AThreadId: string): TMessageArray;
   procedure Delete(const AThreadId: string);
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
+end;
+
+IAgentTranscriptFork = interface
+  ['{7A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D}']
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
 end;
 ```
 
@@ -449,10 +475,11 @@ function NewJsonlTranscriptStore(const ARootDir: string;
 type
   { JSONL 落地 store：一线程一文件 <RootDir>/<ThreadId>.jsonl；torn-tail
     崩溃恢复、SyncEachAppend fsync 节奏选项（默认每追加落盘）。
-    Fork 为实例方法——接口 Append/Load/Delete 三方法面保持冻结不变。
+    Fork 为接口第四方法（2026-09-01 起纳入 IAgentTranscriptStore），同时以
+    独立能力接口 IAgentTranscriptFork 暴露——存量三方法实现向四方法平滑过渡。
     ETranscriptCorrupt（aecProtocol 固定码，消息含行号）为损坏 fail-closed
     异常；ThreadId 非法抛 EAgentMisuse }
-  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore)
+  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore, IAgentTranscriptFork)
   public
     procedure Fork(const ASrcThreadId, ADstThreadId: string);
     property RootDir: string read FRootDir;
@@ -562,6 +589,31 @@ end;
 
 纯编解码器同批公开（D13）：`EncodeAnthropicCountTokensRequest(AReq)` 与
 `BuildAnthropicCountTokensUrl(ABaseUrl)`，见 §8 Anthropic 段。
+
+### 3.4 用量汇 IAgentUsageSink（nextpas.core.agent.intf，T1.4）
+
+```pascal
+IAgentUsageSink = interface
+  ['{C3D4E5F6-A7B8-90AB-CDEF-555555000015}']
+  procedure RecordUsage(const AProvider: string; const AReq: TCompletionRequest;
+    const AUsage: TTokenUsage; ACostUsd6: Int64);
+end;
+```
+
+- **nil 退化/线程安全不 raise**（tk888 `IUsageSink` 同契约，contracts:609）：loop 侧 `Assigned` 守卫 + `try..except` 吞掉；实现方须线程安全且不抛异常（数据面热路径直调）。
+- **cost 口径**：loop 每轮 `AccumulateUsage` 后以 `pricing.EstimateCost` 估算（未知 token 按 `AgentEstimateTokens(MessageText) ~4字符/token` 粗估，F-M16 同口径；已知按实际 usage），`ACostUsd6` 为 μUSD 整数。
+
+### 3.5 幂等键（nextpas.core.agent.base，T1.5）
+
+```pascal
+TCompletionRequest = record
+  IdempotencyKey: string;  // 空=不启用，非空透传 wire 头 Idempotency-Key
+  function WithIdempotencyKey(const AKey: string): TCompletionRequest;
+end;
+```
+
+- 非空时 provider `BuildWireRequest` 透传 `Idempotency-Key: <key>`（`X-Request-Id` 语义，contracts:554）；空值不上送。
+- 透传经 `AgentWireApplyIdempotency` 单一真源，三适配器（openai/anthropic/responses）共用；`WithRetry`/`NewFallbackProvider` 按值转发不改语义（重试/降级可见性由外层 trace 自然产生）。
 
 ## 4. 协议域纯函数（nextpas.core.agent.fold）
 
@@ -678,11 +730,13 @@ NewFallbackProvider 语义：
 - Complete/Stream 的请求对象按值传给每一家——各 provider 自行编码互不干扰。
 
 NewThrottledProvider 语义：
-- 每次 Complete/Stream 先 gate.TryAcquire；拒绝→在 AClock.SleepMs 上取消感知
-  等待 RetryAfterMs 后重取；累计等待 > MaxWaitMs 或重取次数 > MaxAcquires →
-  本地抛 aecRateLimited（RetryAfterMs=最近 gate 建议值）。归因分离：本地整形
-  与上游 429 都落 aecRateLimited，但本地路径 Message 带 'throttled: ' 前缀、
-  从未触网。取消打断等待立即以 EAgentCancelled 上抛。
+- 每次 Complete / Stream 先 `gate.TryAcquire`；拒绝 → 在 `AClock.SleepMs` 上
+  取消感知等待 `RetryAfterMs` 后重取；累计等待 > `MaxWaitMs` 或重取次数 >
+  `MaxAcquires` → 本地抛 `aecRateLimited`（`RetryAfterMs` = 最近 gate 建议值）。
+  归因分离：本地整形与上游 429 都落 `aecRateLimited`，但本地路径 `Message`
+  带 `'throttled: '` 前缀 — 从未触网、零计费，文案为
+  `'throttled: local rate gate — wait budget exceeded (client-side, no upstream request)'`。
+  取消打断等待立即以 `EAgentCancelled` 上抛。
 
 { ---- W9 对冲装饰器（可靠性四象限收官：retry 败后重试/fallback 败后
   换家/throttle 事前整形/hedge 慢时对冲）---- }
@@ -754,6 +808,7 @@ TAgentLoopOptions = record
   Clock: IAgentClock;              { 注入；默认真实时钟 }
   Logger: ILogger;                 { 同 C15：nil → NullLogger }
   Cancel: IAsyncCancellationToken; { 可选运行令牌 }
+  UsageSink: IAgentUsageSink;      { T1.4：可选用量汇，nil 退化，线程安全不 raise }
 end;
 { 回调不在 Options 里：SetXxx 是唯一注入通道，避免双通道绕过归一化 }
 
@@ -903,30 +958,73 @@ end;
 - 网关型客户的入站侧解析（server 方向）不属于本模块范围（README 非目标），
   词表可直接复用。
 
+## 8.5 有界快照与流式盒（Phase4 复用面，`snapshot`/`streambox`）
+
+> 经 `nextpas.core.agent` 门面一站式透出，零直接依赖 FPC RTL（`StringOfChar/SyncObjs` 已反哺 `nextpas.core`）。
+
+```pascal
+// 有界快照：6000 B 预算的合并去重 + 簇安全截断 + 成本联动（PROMPT-BUDGET.md §2/§5）
+const CBoundedSnapshotBudget = 6000; // `nextpas.core.agent.snapshot` 单一真源
+function BuildBoundedSnapshot(const ASystem: string;
+  const AMessages: TMessageArray; ABudget: Integer = CBoundedSnapshotBudget): string;
+function BoundedSnapshotTokens(const ASnapshot: string): Int64; // AgentEstimateTokens 单一真源
+function BoundedSnapshotCost(const ASnapshot: string; ACompletionTokens: Int64 = 0): Int64; // pricing.EstimateCost
+
+// 流式盒：Lock+Done+id 迟到丢弃（PERFORMANCE.md §7.2，经 platform.sync TPlatformMutex）
+type TAgentStreamBox = class
+  constructor Create(AId: UInt64);
+  destructor Destroy; override;
+  procedure Push(const ADelta: TStreamDelta; AId: UInt64); // 失配或已 Done 即丢弃
+  function TryPop(out ADelta: TStreamDelta): Boolean; // FIFO 顺序消费
+  procedure MarkDone;
+  function IsDone: Boolean;
+  property Id: UInt64 read FId;
+end;
+```
+
+- `BuildBoundedSnapshot` 语义：`AgentBuildSystemText` 全量 → `≤ABudget` 原样返回；越限则 `AgentUtf8SafeCutLen` 后向回退到合法 UTF-8 边界，再以前向 `GraphemeNext` 遍历找 ≤预算 的最大簇边界（`👨‍👩‍👧/🇨🇳/1️⃣` 不半切，`PERFORMANCE.md §7.1`），零中间分配。
+- `TAgentStreamBox` 对应 `ARCHITECTURE.md §4`“取消后资源由拥有线程独占收尾”：`Push` 在 `Id` 失配或 `Done=True` 时丢弃迟到增量，与 `fold.TAssistantBuild`/`tools.WriteGuard` 同源；消费侧 `TryPop` 单线程 `Lock` 保护，`MarkDone` 后不再接收。
+
 ## 9. 版本与稳定性
 
 - v1 全部公共表面标注 draft；首个 landing 后进入 registry truth-level 演进流程。
 - 语义版本化随 core 模块纪律；破坏性词表变更必须先改本文档并更新 ROADMAP inbox。
 
-## 10. 默认值总表（单一事实源）
+## 10. 默认值总表（单一事实源 — 与 `nextpas.core.agent.base` 常量表对齐）
 
 | 项 | 默认值 | 定义处 |
 |----|--------|--------|
-| OpenAI BaseUrl | `https://api.openai.com`（拼 `/v1/chat/completions`）| provider 常量 |
-| Anthropic BaseUrl | `https://api.anthropic.com`（拼 `/v1/messages`）| provider 常量 |
-| Anthropic-Version | `2023-06-01`（CANTHROPIC_VERSION_DEFAULT）| provider 常量 |
-| ConnectTimeoutMs | 10_000 | TProviderOptions |
-| TotalTimeoutMs | 300_000 | TProviderOptions |
-| TRetryPolicy.Default | attempts=3, initial=1000ms, max=30_000ms, ×2.0, jitter=0.1, 白名单四码, RespectRetryAfter=True, 总上限 120_000ms | retry 单元 |
+| OpenAI BaseUrl | `https://api.openai.com`（拼 `/v1/chat/completions`） | provider 常量 |
+| Anthropic BaseUrl | `https://api.anthropic.com`（拼 `/v1/messages`） | provider 常量 |
+| Anthropic-Version | `2023-06-01`（`CANTHROPIC_VERSION_DEFAULT`） | provider 常量 |
+| ConnectTimeoutMs | 10_000 | `TProviderOptions` |
+| TotalTimeoutMs | 300_000 | `TProviderOptions` |
+| ReadIdleTimeoutMs | `CTimeoutDefault = 0` 禁用；> 0 生效（W7） | `TProviderOptions` / transport |
+| TRetryPolicy.Default | attempts=3 · initial=1_000 ms · max=30_000 ms · ×2.0 · jitter=0.1 · 白名单四码 · RespectRetryAfter=True · 总上限 120_000 ms | retry 单元 |
 | TAgentLoopOptions.MaxRounds | 10 | loop |
 | DoomLoopThreshold | 3 | loop |
-| TruncateLines / TruncateBytes | 2000 / 65536 | loop |
-| 读 chunk / 行缓冲上限 | 32 KiB / 1 MiB | PERFORMANCE §2 |
-| SSE 单事件 data 上限 | 8 MiB | SECURITY §3 |
-| 工具参数预检上限 | 256 KiB（超限合成 error result） | SECURITY §3 |
-| Extra 未知键捕获上限 | 单消息/part 64 个，超出丢弃并 warn | SECURITY §3 |
-| RawBodySnippet 上限 | 8 KiB | ERRORS §6 |
-| Logger 缺省 | nil → NullLogger（log.intf，零开销） | SELECTION C15 |
+| TruncateLines / TruncateBytes | 2_000 / 65_536 | loop |
+| 读 chunk | 32 KiB（IReader 单次 Read 步长） | transport.http `CReadChunkBytes` |
+| SSE 行缓冲上限 | 1 MiB（单行，`sse.CSSEMaxLineBytes`） | sse 单元 |
+| SSE 单事件 data 上限 | 8 MiB（`sse.CSSEMaxEventDataByte`） | sse 单元 |
+| 成功体累积上限 | 8 MiB（超限 `aecProtocol`，`base.CAgentMaxSuccessBodyBytes` — 单一真源） | `nextpas.core.agent.base` |
+| wire 单头上限 | 8 KiB（名+值，`base.CAgentMaxWireHeaderValueBytes` — 单一真源） | `nextpas.core.agent.base` |
+| wire 总头上限 | 64 KiB（累计，`base.CAgentMaxWireTotalHeaderBytes` — 单一真源） | `nextpas.core.agent.base` |
+| 槽位总数 / 索引上限 | 256（`base.CAgentMaxSlotMap` — 单一真源，稀疏大索引回退） | `nextpas.core.agent.base` |
+| 工具参数预检上限 | 256 KiB（超限合成 error result，`base.CAgentMaxToolArgsBytes`） | `nextpas.core.agent.base` |
+| Extra 未知键捕获上限 | 单消息 / part 64 个（`base.CAgentMaxExtraKeys` — 单一真源），超出丢弃并 `warn` | `nextpas.core.agent.base` |
+| ExtraJson 合法性 | 非空必为 JSON object，否则编码期 `aecConfig` | provider.common `AgentValidateExtraJson` |
+| RawBodySnippet 上限 | 8 KiB（`base.CAgentMaxRawBodySnippetBytes` — 单一真源） | `nextpas.core.agent.base` |
+| 初始容量 · 工具参数 builder | 1_024（`base.CAgentToolArgsInitialCap`） | `nextpas.core.agent.base` |
+| 初始容量 · System 去重拼接 | 512（`base.CAgentSystemTextInitialCap`） | `nextpas.core.agent.base` |
+| 初始容量 · Session Fork | 1_024（`base.CAgentSessionForkInitialCap`） | `nextpas.core.agent.base` |
+| Logger 缺省 | `nil` → `NullLogger`（`log.intf`，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
+| 定价 · RateDenominator / ARateMultiplier 默认 | 10_000（1.0x；`TModelPricing.RateDenominator` 缺省，`EstimateCost` 的 `ARateMultiplier` 默认 10_000，`<=0` 按 1.0x） | pricing 单元 |
+| 定价 · EstimateCost 舍入 | `(prompt*per1kPrompt+500) div 1000 + (completion*per1kCompletion*rate+5000) div 10000` μUSD（整数微元，四舍五入同源 `tk888.billing.pas:22,212`） | pricing 单元 |
+| 定价 · ImageTier 档位 | max-edge ≤1024→1000 · ≤2048→2000 · else 4000（含 `2048x2048→2000` 特判 `billing:470`） | pricing 单元 |
+| 定价 · TPassthroughPricing.FlatCostUsd6 缺省 | 0（未定价不计费） | pricing 单元 |
+| 有界快照预算 `CBoundedSnapshotBudget` | 6000 | `nextpas.core.agent.snapshot` 单一真源（门面 `CBoundedSnapshotBudget` 透出，`PROMPT-BUDGET.md` 有界管线） |
+| 流式盒 `TAgentStreamBox` 初始态 | `Done=False, Id=AId, Pending=[]` | `nextpas.core.agent.streambox`（`TPlatformMutex` 零 `SyncObjs`） |
 
-修改任何默认值必须同步本表并跑受影响 gate。
+> 修改任何默认值必须同步本表与 `nextpas.core.agent.base` 常量定义，并跑受影响 gate。

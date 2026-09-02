@@ -1,6 +1,6 @@
 unit nextpas.core.db.pg.adapter;
 
-{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 *}
+{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 体积注记：本单元约1310行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -11,6 +11,7 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
+  nextpas.core.db.capprobe,
   nextpas.core.db.pg.base,
   nextpas.core.db.pg.conn;
 
@@ -375,6 +376,11 @@ type
     function SupportsStatementTimeout: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
 
     { IDbCancelControl（V3-B6）：Arm/Disarm 为无操作（PQcancel 无需
       武装），RequestCancel 经 PQcancel 尽力中断 }
@@ -815,7 +821,7 @@ end;
 
 function TDbPgConnection.SupportsArrayBinding: Boolean;
 begin
-  Result := True;   { unnest 数组展开路径，V3-C2 }
+  Result := True;   { unnest 数组展开路径，V3-C2 } // 静态按 pg 协议系声明，openGauss 等衍生库运行时方言缺口由消费方探测后降级（见 national-db-guide §2.1）
 end;
 
 { ---- IDbCancelControl（V3-B6）---- }
@@ -864,6 +870,31 @@ end;
 function TDbPgConnection.MaxPlaceholders: Integer;
 begin
   Result := 65535;  { 扩展协议参数上限 }
+end;
+
+function TDbPgConnection.ServerVersion: Integer;
+begin
+  Result := FConn.ServerVersion;
+end;
+
+function TDbPgConnection.SupportsNativeVector: Boolean;
+begin
+  Result := ProbeNativeVector(ServerVersion, False);
+end;
+
+function TDbPgConnection.SupportsJsonPath: Boolean;
+begin
+  Result := ProbeJsonPath(ServerVersion);
+end;
+
+function TDbPgConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := ProbeRangeTypes(ServerVersion);
+end;
+
+function TDbPgConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkPostgres, ServerVersion);
 end;
 
 destructor TDbPgConnection.Destroy;

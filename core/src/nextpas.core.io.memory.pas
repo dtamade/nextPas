@@ -9,13 +9,14 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf;
 
-function CreateBytesStream(const AInitialCapacity: SizeUInt = 256): IStream;
+function CreateBytesStream(const AInitialCapacity: SizeUInt = 4096): IStream;
 function CreateBytesStreamFrom(const AData: TBytes): IStream;
 
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.mem.base;
 
 type
   TBytesStream = class(TInterfacedObject, IReader, IWriter, IStream, IReaderAt, IWriterAt, IByteReader, IByteWriter, IStringWriter)
@@ -50,6 +51,37 @@ end;
 function CreateBytesStreamFrom(const AData: TBytes): IStream;
 begin
   Result := TBytesStream.CreateFrom(AData);
+end;
+
+{ 4K 页对齐几何扩容：复用 MEM_PAGE_SIZE 单源，单次页系统调用最优，避免大写多次重分配 }
+function BytesStreamNextCapacity(const ACurrent, ANeeded: SizeUInt): SizeUInt; inline;
+var
+  LNext: SizeUInt;
+  LAligned: SizeUInt;
+begin
+  if ANeeded <= ACurrent then Exit(ACurrent);
+  if ACurrent = 0 then
+  begin
+    LAligned := AlignUp(ANeeded, MEM_PAGE_SIZE);
+    if LAligned = 0 then Exit(ANeeded);
+    Exit(LAligned);
+  end;
+  if ACurrent > High(SizeUInt) div 2 then
+  begin
+    LAligned := AlignUp(ANeeded, MEM_PAGE_SIZE);
+    if LAligned = 0 then Exit(ANeeded);
+    Exit(LAligned);
+  end;
+  LNext := ACurrent shl 1;
+  LAligned := AlignUp(LNext, MEM_PAGE_SIZE);
+  if LAligned = 0 then LAligned := LNext;
+  if LAligned < ANeeded then
+  begin
+    LAligned := AlignUp(ANeeded, MEM_PAGE_SIZE);
+    if LAligned = 0 then Exit(ANeeded);
+    Exit(LAligned);
+  end;
+  Result := LAligned;
 end;
 
 { TBytesStream }
@@ -107,14 +139,11 @@ begin
     Result := 0;
     Exit;
   end;
+  if FPosition > High(SizeUInt) - ACount then
+    raise EArgumentError.Create('TBytesStream.Write: size overflow');
   LNewSize := FPosition + ACount;
   if LNewSize > SizeUInt(Length(FData)) then
-  begin
-    if LNewSize < SizeUInt(Length(FData)) * 2 then
-      SetLength(FData, Length(FData) * 2)
-    else
-      SetLength(FData, LNewSize);
-  end;
+    SetLength(FData, BytesStreamNextCapacity(SizeUInt(Length(FData)), LNewSize));
   Move(ABuf, FData[FPosition], ACount);
   Inc(FPosition, ACount);
   if FPosition > FSize then
@@ -194,14 +223,11 @@ begin
     raise EArgumentError.Create('TBytesStream.WriteAt: negative offset');
   if ACount = 0 then
     Exit(0);
+  if SizeUInt(AOffset) > High(SizeUInt) - ACount then
+    raise EArgumentError.Create('TBytesStream.WriteAt: size overflow');
   LEnd := SizeUInt(AOffset) + ACount;
   if LEnd > SizeUInt(Length(FData)) then
-  begin
-    if LEnd < SizeUInt(Length(FData)) * 2 then
-      SetLength(FData, Length(FData) * 2)
-    else
-      SetLength(FData, LEnd);
-  end;
+    SetLength(FData, BytesStreamNextCapacity(SizeUInt(Length(FData)), LEnd));
   Move(ABuf, FData[SizeUInt(AOffset)], ACount);
   if LEnd > FSize then
     FSize := LEnd;

@@ -40,6 +40,10 @@ function SevenZDecodeFolder(const AFolder: TSevenZFolder;
   const APackStreams: array of TBytes;
   const APassword: string): TBytes;
 
+{ BZip2 可用性探针：门面 SevenZBZip2Available 的 owner 归属落地，
+  代理 nextpas.core.compress.bzip2 的 FFI 可用性判定，门面仅 inline forward，
+  保持 facade 纯 re-export 职责与 L2→L2 聚合收口 }
+function SevenZBZip2Available: Boolean; inline;
 { Deflate 解码测试钩子：直通内部分支，供回归测试验证 zlib/raw 双路径 }
 function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
 { BZip2 解码测试钩子 }
@@ -48,14 +52,17 @@ function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TByte
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.compress,
+  nextpas.core.compress.bzip2,
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.lzma.decoder,
   nextpas.core.sevenz.lzma.encoder,
-  nextpas.core.sevenz.lzma.ffi;
+  nextpas.core.sevenz.lzma.ffi.decoder;
 
 var
   GRequestedBackend: TSevenZLzmaBackend = szlbAuto;
@@ -116,22 +123,16 @@ begin
   Result := GPascalEncoder;
 end;
 
-function CopyOfBytes(const ASrc: TBytes): TBytes;
+function CopyOfBytes(const ASrc: TBytes): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(ASrc));
-  if Length(ASrc) > 0 then
-    Move(ASrc[0], Result[0], Length(ASrc));
+  // perf: single source via bytes.ops.SpanClone; inline single SetLength+Move, zero-copy view reused, no duplicate Move logic
+  Result := SpanClone(TByteSpan.FromBytes(ASrc));
 end;
 
-{ 无 SysUtils 的 UInt64 十进制转字符串；用于错误消息拼接——
-  本工具链 CreateFmt 对 %d 传 UInt64 实参会渲染为 0 }
-function UIntToDecStr(AVal: UInt64): string;
-var
-  LTmp: string;
+function UIntToDecStr(AVal: UInt64): string; inline;
 begin
-  Str(AVal, LTmp);
-  Result := LTmp;
+  // perf: single source via text.conv.UIntToStr; inline keeps call site zero overhead, no Str temp alloc
+  Result := UIntToStr(AVal);
 end;
 
 function UInt64ToHex12(AVal: QWord): string;
@@ -235,6 +236,11 @@ end;
 function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
 begin
   Result := BZip2DecodeSevenZ(AInput, AOutSize);
+end;
+
+function SevenZBZip2Available: Boolean;
+begin
+  Result := BZip2FfiIsAvailable;
 end;
 {$POP}
 

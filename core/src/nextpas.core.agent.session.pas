@@ -12,11 +12,14 @@ unit nextpas.core.agent.session;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text,
+  nextpas.core.text.format,
   nextpas.core.fs,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf;
@@ -67,6 +70,10 @@ function IsValidThreadId(const AThreadId: string): Boolean;
 
 implementation
 
+uses
+  nextpas.core.json.value,
+  nextpas.core.bytes.ops;
+
 const
   ROLE_NAMES: array[TMessageRole] of string =
     ('system', 'user', 'assistant', 'tool');
@@ -78,7 +85,7 @@ const
 function Corrupt(ALineNo: Integer; const AWhy: string): ETranscriptCorrupt;
 begin
   Result := ETranscriptCorrupt.CreateLocal(aecProtocol,
-    Format('transcript line %d: %s', [ALineNo, AWhy]));
+    TextFormat('transcript line %d: %s', [ALineNo, AWhy]));
 end;
 
 procedure Misuse(const AWhy: string);
@@ -90,15 +97,6 @@ procedure ValidateThreadId(const AThreadId: string);
 begin
   if not IsValidThreadId(AThreadId) then
     Misuse('thread id violates charset policy');   { 不回显原值 }
-end;
-
-{ 字节保真拷贝：H+ 模式下 string 即 UTF-8 字节序列（config.export 同款惯用法）}
-function TextToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(PAnsiChar(S)^, Result[0], Length(S));
 end;
 
 function IsValidThreadId(const AThreadId: string): Boolean;
@@ -460,10 +458,12 @@ begin
     if LText[LPos] = #10 then
     begin
       Inc(LLineNo);
-      LLine := Copy(LText, LSegStart, LPos - LSegStart);
+      LLine := nextpas.core.text.TextSlice(LText,
+        SizeUInt(LSegStart - 1), SizeUInt(LPos - LSegStart));
       LN := Length(LLine);
       if (LN > 0) and (LLine[LN] = #13) then
-        System.Delete(LLine, LN, 1);   { Windows CRLF 兼容；类方法 Delete 遮蔽需限定 }
+        LLine := nextpas.core.text.TextSlice(LLine, 0, SizeUInt(LN - 1));
+      { Windows CRLF 兼容；切片即时拷贝语义与 Copy 等价 }
       if LLine <> '' then
       begin
         LM := TranscriptMessageFromJson(LLine, LLineNo);
@@ -477,6 +477,9 @@ begin
   { 末段无换行 = torn tail：丢弃不计（SESSION.md §4）}
 end;
 
+{ 正例(F-L03)：Write → Sync → Close 每行落盘，SyncEachAppend=true 时
+  崩溃最多丢 torn tail（末段无 \n 丢弃，LoadFile 已实现）；False 模式
+  窗口扩大属显式权衡，行内无裸换行由 builder 转义保证 }
 procedure TJsonlTranscriptStore.Append(const AThreadId: string;
   const AMsg: TMessage);
 var
@@ -527,14 +530,17 @@ begin
   if Exists(LDstPath) then
     Misuse('fork target already exists');
 
-  LoadFile(ThreadPath(ASrcThreadId), LMsgs);
-  LSB := MakeStringBuilder(1024);
+  if Exists(ThreadPath(ASrcThreadId)) then
+    LoadFile(ThreadPath(ASrcThreadId), LMsgs)
+  else
+    LMsgs := nil;
+  LSB := MakeStringBuilder(CAgentSessionForkInitialCap);
   for I := 0 to High(LMsgs) do
   begin
     LSB.AppendStr(TranscriptMessageToJson(LMsgs[I]));
     LSB.AppendChar(#10);
   end;
-  WriteAtomic(LDstPath, TextToBytes(LSB.ToString));
+  WriteAtomic(LDstPath, StringToBytes(LSB.ToString));
 end;
 
 function NewJsonlTranscriptStore(const ARootDir: string;

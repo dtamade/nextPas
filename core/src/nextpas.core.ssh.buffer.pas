@@ -14,8 +14,9 @@ unit nextpas.core.ssh.buffer;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.text.utf8,
   nextpas.core.ssh.base,
@@ -35,11 +36,11 @@ type
     function Count: SizeUInt;
     function ToBytes: TBytes;
 
-    procedure PutByte(AValue: Byte);
-    procedure PutBoolean(AValue: Boolean);
-    procedure PutUInt32(AValue: UInt32);
-    procedure PutUInt64(AValue: UInt64);
-    procedure PutStringBytes(const AValue: TBytes);
+    procedure PutByte(AValue: Byte); inline;
+    procedure PutBoolean(AValue: Boolean); inline;
+    procedure PutUInt32(AValue: UInt32); inline;
+    procedure PutUInt64(AValue: UInt64); inline;
+    procedure PutStringBytes(const AValue: TBytes); inline;
     procedure PutStringText(const AText: string);
     { 无符号大端 magnitude → RFC 4251 mpint（补符号位前导零；0 编码为空串）}
     procedure PutMPInt(const AMagnitude: TBytes);
@@ -74,28 +75,21 @@ type
     function ReadNameList: TStringArray;
   end;
 
-function SshTextFromBytes(const ABytes: TBytes): string;
-function SshBytesFromText(const AText: string): TBytes;
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
+function SshBytesFromText(const AText: string): TBytes; inline;
 
 implementation
 
-function SshTextFromBytes(const ABytes: TBytes): string;
+function SshTextFromBytes(const ABytes: TBytes): string; inline;
 begin
-  Result := '';
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], PByte(PChar(Result))^, Length(ABytes));
+  // single source bytes.ops — zero-copy single SetLength+Move via BytesToString
+  Result := BytesToString(ABytes);
 end;
 
-function SshBytesFromText(const AText: string): TBytes;
-var
-  LLen: SizeUInt;
+function SshBytesFromText(const AText: string): TBytes; inline;
 begin
-  Result := nil;
-  LLen := SizeUInt(Length(AText));
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(PByte(PChar(AText))^, Result[0], LLen);
+  // single source bytes.ops — zero-copy single SetLength+Move via StringToBytes
+  Result := StringToBytes(AText);
 end;
 
 { TsshWriter }
@@ -148,19 +142,19 @@ begin
     Move(FBuf[0], Result[0], FLen);
 end;
 
-procedure TsshWriter.PutByte(AValue: Byte);
+procedure TsshWriter.PutByte(AValue: Byte); inline;
 begin
   Ensure(1);
   FBuf[FLen] := AValue;
   Inc(FLen);
 end;
 
-procedure TsshWriter.PutBoolean(AValue: Boolean);
+procedure TsshWriter.PutBoolean(AValue: Boolean); inline;
 begin
   PutByte(Ord(AValue));
 end;
 
-procedure TsshWriter.PutUInt32(AValue: UInt32);
+procedure TsshWriter.PutUInt32(AValue: UInt32); inline;
 begin
   Ensure(4);
   FBuf[FLen] := Byte(AValue shr 24);
@@ -170,7 +164,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TsshWriter.PutStringBytes(const AValue: TBytes);
+procedure TsshWriter.PutStringBytes(const AValue: TBytes); inline;
 begin
   PutUInt32(UInt32(Length(AValue)));
   PutRaw(AValue);
@@ -182,54 +176,81 @@ begin
     raise ESSHError.Create(sekProtocol, 'ssh buffer: PutStringText requires UTF-8');
   PutUInt32(UInt32(Length(AText)));
   if Length(AText) > 0 then
-    PutRaw(PByte(Pointer(AText)), SizeUInt(Length(AText)));
+    PutRaw(PByte(PChar(AText)), SizeUInt(Length(AText)));
 end;
 
 procedure TsshWriter.PutMPInt(const AMagnitude: TBytes);
 var
-  LStart: SizeUInt;
-  LMagLen: SizeUInt;
+  LView: TByteSpan;
 begin
-  LStart := 0;
-  while (LStart < SizeUInt(Length(AMagnitude))) and (AMagnitude[LStart] = 0) do
-    Inc(LStart);
-  LMagLen := SizeUInt(Length(AMagnitude)) - LStart;
-  if LMagLen = 0 then
+  LView := StripLeadingZeroView(AMagnitude);
+  if IsZeroBytes(AMagnitude) then
   begin
     PutUInt32(0);
     Exit;
   end;
-  if (AMagnitude[LStart] and $80) <> 0 then
+  if (LView.Data^ and $80) <> 0 then
   begin
-    PutUInt32(UInt32(LMagLen + 1));
+    PutUInt32(UInt32(LView.Len + 1));
     PutByte(0);
-    PutRaw(@AMagnitude[LStart], LMagLen);
+    PutRaw(LView.Data, LView.Len);
   end
   else
   begin
-    PutUInt32(UInt32(LMagLen));
-    PutRaw(@AMagnitude[LStart], LMagLen);
+    PutUInt32(UInt32(LView.Len));
+    PutRaw(LView.Data, LView.Len);
   end;
 end;
 
 procedure TsshWriter.PutNameList(const ANames: array of string);
 var
-  I: Integer;
-  LJoined: string;
+  I: SizeInt;
+  LTotal: SizeUInt;
 begin
-  LJoined := '';
+  if Length(ANames) = 0 then
+  begin
+    PutStringText('');
+    Exit;
+  end;
+  if Length(ANames) = 1 then
+  begin
+    PutStringText(ANames[0]);
+    Exit;
+  end;
+  // perf: single-pass LTotal + UTF-8 guard, then single Ensure + direct zero-copy Move into FBuf (no LJoined temp, no double Move)
+  // single source bytes.ops style Move (PAnsiChar deref) — unified with SshTextFromBytes/SshBytesFromText via BytesToString/StringToBytes
+  LTotal := 0;
   for I := 0 to High(ANames) do
   begin
-    if I > 0 then
-      LJoined := LJoined + ',';
-    LJoined := LJoined + ANames[I];
+    if (Length(ANames[I]) > 0) and (not UTF8IsValid(PByte(PChar(ANames[I])), SizeUInt(Length(ANames[I])))) then
+      raise ESSHError.Create(sekProtocol, 'ssh buffer: PutNameList requires UTF-8');
+    Inc(LTotal, SizeUInt(Length(ANames[I])));
   end;
-  PutStringText(LJoined);
+  Inc(LTotal, SizeUInt(High(ANames))); // commas
+  PutUInt32(UInt32(LTotal));
+  if LTotal = 0 then
+    Exit;
+  Ensure(LTotal);
+  if Length(ANames[0]) > 0 then
+  begin
+    Move(PByte(PChar(ANames[0]))^, FBuf[FLen], Length(ANames[0]));
+    Inc(FLen, SizeUInt(Length(ANames[0])));
+  end;
+  for I := 1 to High(ANames) do
+  begin
+    FBuf[FLen] := Byte(',');
+    Inc(FLen);
+    if Length(ANames[I]) > 0 then
+    begin
+      Move(PByte(PChar(ANames[I]))^, FBuf[FLen], Length(ANames[I]));
+      Inc(FLen, SizeUInt(Length(ANames[I])));
+    end;
+  end;
 end;
 
 procedure TsshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt);
 begin
-  if ALen = 0 then
+  if (ALen = 0) or (APtr = nil) then
     Exit;
   Ensure(ALen);
   Move(APtr^, FBuf[FLen], ALen);
@@ -308,7 +329,7 @@ begin
   Inc(FPos, 4);
 end;
 
-procedure TsshWriter.PutUInt64(AValue: UInt64);
+procedure TsshWriter.PutUInt64(AValue: UInt64); inline;
 begin
   PutUInt32(UInt32(AValue shr 32));
   PutUInt32(UInt32(AValue and $FFFFFFFF));
@@ -340,18 +361,16 @@ end;
 function TsshReader.ReadMPInt: TBytes;
 var
   LBlob: TBytes;
-  LO: SizeUInt;
+  LView: TByteSpan;
 begin
   LBlob := ReadStringBytes;
   if (Length(LBlob) > 0) and ((LBlob[0] and $80) <> 0) then
     raise ESSHError.Create(sekProtocol, 'ssh buffer: mpint negative');
+  LView := StripLeadingZeroView(LBlob);
   Result := nil;
-  LO := 0;
-  while (LO < SizeUInt(Length(LBlob))) and (LBlob[LO] = 0) do
-    Inc(LO);
-  SetLength(Result, SizeUInt(Length(LBlob)) - LO);
-  if SizeUInt(Length(LBlob)) > LO then
-    Move(LBlob[LO], Result[0], SizeUInt(Length(LBlob)) - LO);
+  SetLength(Result, LView.Len);
+  if LView.Len > 0 then
+    Move(LView.Data^, Result[0], LView.Len);
 end;
 
 function TsshReader.ReadNameList: TStringArray;

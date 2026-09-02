@@ -298,7 +298,7 @@ begin
     SpanInit(APool.FEntries[LIdx].FSpan, LMem, APool.FSlotSize, CENTRAL_SPAN_SLOTS);
     APool.FEntries[LIdx].FMemorySize := LMemSize;
     APool.FEntries[LIdx].FLastFreeTick := 0;
-    APool.FEntries[LIdx].FOwnerThreadId := QWord(platform_thread_id);
+    APool.FEntries[LIdx].FOwnerThreadId := QWord(PtrUInt(platform_thread_id));
     APool.FEntries[LIdx].FDecommitted := False;
     atomic_store(APool.FEntries[LIdx].FMemory, LMem, mo_release);
     APool.FPartialNext[LIdx] := APool.FPartialHead;

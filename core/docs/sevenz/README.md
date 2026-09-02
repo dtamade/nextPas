@@ -34,16 +34,17 @@ plus the encoded header via `SetPassword`.
 | `nextpas.core.compress.deflate` | Deflate coder: zlib-wrapped and raw per-message (`-15`) decode via `zlib` |
 | `nextpas.core.compress.bzip2` | BZip2 coder: pure Pascal `bzip2stream` decode via zero-copy `TBytesViewStream` with combined-CRC tail tolerance, `BZip2Compress` via libbz2 `9`/`30` |
 | `nextpas.core.compress.bzip2.ffi` | optional libbz2 dynamic binding (`libbz2.so.1.0`/`so`) |
-| `nextpas.core.sevenz.filters` | filter registry (unifies BCJ full-family and Delta `MethodId`/`Props`/convert dispatch, table-driven, zero-alloc Delta in-place, reverse `MethodId→Filter`, `SevenZIsSupportedMethod`) |
+| `nextpas.core.sevenz.filters` | filter registry (unifies BCJ full-family and Delta `MethodId`/`Props`/convert dispatch, table-driven, `DeltaApply` 外联栈历史零堆 `FillChar+for`, reverse `MethodId→Filter`, `SevenZIsSupportedMethod`) |
 | `nextpas.core.sevenz.aes` | AES-256 coder: props parse/build, SHA-256 key derivation (password as UTF-16LE), CBC no-padding data path |
 | `nextpas.core.sevenz.lzma.rc` | range coder pair; decoder has ClipTo/RestoreLimit for LZMA2 chunk isolation |
 | `nextpas.core.sevenz.lzma.decoder` | pure Pascal LZMA1/LZMA2 decoding |
 | `nextpas.core.sevenz.lzma.encoder` | pure Pascal hash-chain LZMA2 encoding |
-| `nextpas.core.sevenz.lzma.ffi` | optional liblzma dynamic binding (`liblzma.so.5`) |
-| `nextpas.core.sevenz.reader` | signature header validation, 2-entry LRU folder decode cache, O(1) name hash index (`TSwissTableStr`, 1M entries) + dual sorted indexes (lexicographic for `EntriesByPrefix`/`FindByPrefix` and reversed for `EntriesBySuffix`/`FindBySuffix` O(log N+M) via zero-alloc `CompareReversed` `LowerBoundSuffix`) + `EntriesByGlob`/`FindByGlob` (`*`/`?` wildcard, `prefix*`/`*suffix`/`prefix*suffix` star fast-path via sorted indexes, exact via hash) + bulk `ExtractAll`/`ExtractByPrefix`/`ExtractBySuffix`/`ExtractByGlob` (grouped `ExtractIndicesGrouped` single decode per solid) + full `IgnoreCase` family (`EntriesByPrefixIgnoreCase`/`FindBy*IgnoreCase`/`EntriesByGlobIgnoreCase` O(log N) fast dispatch via `FLowerNames` + dual `SortedIdxIgnoreCase`/`RevIgnoreCase` + `prefix*`/`*suffix`/`prefix*suffix` via `LowerBoundPrefix/SuffixIgnoreCase`, `ExtractBy*IgnoreCase` grouped) (`Try*` + `Try*WithError`) , zero-alloc ASCII `FindIgnoreCase` fast path, CRC checks, `ESevenZLimitError` bomb gates (header 64MiB, pack 64MiB, `SEVENZ_MAX_*` via `limits`) |
-| `nextpas.core.sevenz.writer` | archive serialization (single or multi-folder, parallel folder encode when `IsMultiThread`), zip-style entry-name safety, single-pass `Move+CRC` |
+| `nextpas.core.sevenz.lzma.ffi` | liblzma ABI seam (pure cdecl types/consts, no logic) |
+| `nextpas.core.sevenz.lzma.ffi.decoder` | liblzma dynamic backend (`liblzma.so.5` via `platform.dl`, lazy `lzma_raw_buffer_decode`, `TSevenZLzmaDecoderFfi`, `SevenZLzmaFfiAvailable`, handle `Close` in `finalization`) |
+| `nextpas.core.sevenz.reader` | signature header validation, 2-entry LRU folder decode cache, O(1) name hash index (`TSwissTableStr`, 1M entries) + dual sorted indexes via `collections.algorithms.Sort` 单源（`TSevenZSortCtx` 统一 `UseLower/Rev`，外联 `ReverseStr` 避热点膨胀） + `EntriesByGlob`/`FindByGlob` (`*`/`?`, `prefix*`/`*suffix`/`prefix*suffix` via `LowerBoundPrefix/Suffix`) + bulk `ExtractAll/ByPrefix/Suffix/Glob` 单 decode + full `IgnoreCase` 家族 `FLowerNames/FRev*` + `Try*`/`Try*WithError`, 零拷 `FindIgnoreCase`，CRC 与 `SEVENZ_MAX_*` 炸弹门限 |
+| `nextpas.core.sevenz.writer` | archive serialization (single/multi-folder `IsMultiThread` 并行), `ValidateEntryName` 复用 `bytes.pathvalid.BytesValidPath` 单源 (零拷 `UTF8IsValid`), `AddFile` 单源 `SpanClone`, 单遍 `Move+CRC` |
 | `nextpas.core.sevenz.levels` | pure `SevenZLevelOrdToDeflateLevel`/`SevenZLevelOrdToBZip2BlockSize` mapping (`1`/`9`) reused by writer/bench/facade |
-| `nextpas.core.sevenz.limits` | pure `SEVENZ_MAX_*` bomb/header constants (`64 MiB header/pack, 8 GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64 KiB name, 256 KiB extract window`) shared by reader/writer/bench/test |
+| `nextpas.core.sevenz.limits` | deprecated compatibility shim re-exporting `SEVENZ_MAX_*` from `base` (do not use directly; `base` is single source for `64 MiB header/pack, 8 GiB total/unpack, 1M files/folders/pack streams/CRC, 1M coder props, 64 KiB name, 256 KiB extract window`) |
 | `nextpas.core.sevenz.fs` | filesystem federation: `SevenZAddTree`/`SevenZAddFileFromFs` and `SevenZExtractAllToFs` (grouped `ExtractAll` single decode per folder) + bulk `SevenZExtractByPrefix/Suffix/GlobToFs` + `IgnoreCase` bulk `SevenZExtractByPrefix/Suffix/GlobIgnoreCaseToFs` (`SevenZTryExtractByGlobToFs`/`SevenZTryExtractByGlobIgnoreCaseToFs` + `SevenZTryExtractByPrefix/SuffixIgnoreCaseToFs`, shared `FlushExtractedToFs` dedup) |
 | `nextpas.core.sevenz` | facade (explicit forwarding, plus `SevenZFilterMethodId`/`SevenZFilterFromMethodId`/`SevenZIsSupportedMethod`/`SevenZMethodName` helpers, `SevenZCreateWriterBuilder`, `SevenZLevelToDeflateLevel`/`SevenZLevelToBZip2BlockSize`) |
 
@@ -321,8 +322,8 @@ The encoder side is always pure Pascal today.
   extracting them byte-identically to the source tree.
 - Throughput baseline: `make -C core/benchmarks/nextpas.core.sevenz/bench_sevenz run`
   measures pure-Pascal LZMA2 encode/decode against a block-mixed corpus
-  (`encode pure ~6 MB/s / decode pure ~17 MB/s / ffi ~42 MB/s` on 1 MiB mixed),
-  BCJ x86 `~200 MB/s` / Delta `~80 MB/s` (zero-alloc in-place), and warm-cache container extraction `~300 MB/s`
-  (`container create multi(st)` ~10 MB/s raw, `extract multi` ~100-130 MB/s; with `cthreads` linked `multi(mt)` shows batched parallel folder speedup capped at 8 threads; `scripts/sevenz-interop.sh` covers BZip2/Deflate/BCJ+Password/Multi)
-  plus `glob IgnoreCase` index bench on 2k entries (`prefix*` ~35k ops/s, `*suffix` ~1.8k, `p*s` ~0.8k, `exact` ~3M via hash, all O(log N) fast paths)
+  (`encode pure ~8.6 MB/s / decode pure ~17.6 MB/s / ffi ~50.8 MB/s` on 1 MiB mixed),
+  BCJ x86 `~325 MB/s` / Delta `~86 MB/s` (zero-alloc in-place), and warm-cache container extraction `~333 MB/s`
+  (`container create multi(st)` ~15.2 MB/s raw, `extract multi` ~132 MB/s; with `cthreads` linked `multi(mt)` shows batched parallel folder speedup capped at 8 threads; `scripts/sevenz-interop.sh` covers BZip2/Deflate/BCJ+Password/Multi + `BZip2+IgnoreCase` 200-entry hybrid)
+  plus `glob IgnoreCase` index bench on 2k entries (`prefix*` ~137k ops/s, `*suffix` ~5.2k, `p*s` ~4k, `exact` ~2.4M via hash) and 10k entries (`prefix*` ~129k, `*suffix` ~625, `p*s` ~649, `exact` ~1.9M, redlines `1000/500/300/100k`固化, all O(log N) fast paths)
   (decode also cross-checked with liblzma when loadable).

@@ -704,6 +704,7 @@ var
 begin
   LResult := nil;
   try
+  LResult := nil;
     LResult.Add('Performance Profile Report');
     LResult.Add(StringOfChar('=', 80));
     LResult.Add(TextFormat(

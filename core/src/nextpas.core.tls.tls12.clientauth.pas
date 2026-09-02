@@ -23,6 +23,7 @@ begin
   LCertLen := Length(AConfig.CertificateDER);
   LTotalLen := 3 + 3 + LCertLen;
 
+  Result := nil;
   SetLength(Result, 4 + LTotalLen);
   Result[0] := TLS12_HANDSHAKE_CERTIFICATE;
   Result[1] := Byte(LTotalLen shr 16);
@@ -48,6 +49,7 @@ var
   LSigLen: Integer;
 begin
   AError := '';
+  Result := nil;
   SetLength(Result, 0);
 
   if AConfig.Certificate.PublicKeyInfo.KeyType = 'ECDSA' then

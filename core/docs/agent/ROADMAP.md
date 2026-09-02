@@ -23,6 +23,7 @@ http.sse 文本行域），合并经审计判定不立项 |
 | **W10 提示缓存断点（v1.1 第五批，2026-08-26 立项）** | 词表 `TCacheControlMode` + `WithCacheControl`；anthropic 编码器 ccmAuto 三断点放置（tools 尾/system 数组形态/末条消息尾块，≤4 厂商预算，空载体跳过）；openai/grok/responses 族自动缓存零差异声明；PERFORMANCE §6 标记元数据条款；loop 以请求模板透传零改动消费 | test_provider_anthropic / test_provider_openai / test_provider_responses 扩测全绿（含 HEAPTRC 泄漏门）/ test_loop 跨轮标记移动+内容字节稳定断言 / test_e2e_live 扩 anthropic 缓存往返真网测（二级 opt-in `NEXTPAS_AGENT_ANTHROPIC_CACHE=1`，端点需缓存权限）+ 三基准 A/B 无回归 + Ready 报告 |
 | **W11 请求级追踪（v1.1 第六批，2026-08-26 立项）** | 词表 `TTraceRequestInfo`/`TTraceResponseInfo`/`IAgentTraceSink`；`NewTracedTransport` 装饰器——IAgentTransport 一处包装三适配器全覆盖，RoundTrip/OpenStream 前后事件对、异常路径 Status=-1 配对后原样上抛、与 WithRetry 叠装自然 N 对事件可见、IAgentClock 注入零睡眠 | 新门 `test_transport_trace` 全绿（含 HEAPTRC 泄漏门）+ 三基准无回归 + Ready 报告 |
 | **W12 Token 预估能力接口（v1.1 第七批，2026-08-26 立项）** | 接缝接口 `IAgentTokenCounter`（`CountTokens`，Supports 探测，仅 anthropic 实现）；anthropic count_tokens 端点映射——POST {base}/v1/messages/count_tokens，请求体与 §2.1 同构但减 max_tokens/stream 两键，响应 `{"input_tokens":N}` 缺键即 aecProtocol；纯编解码器 `EncodeAnthropicCountTokensRequest`/`BuildAnthropicCountTokensUrl` 公开直测（D13）；openai/grok/responses 族无厂商端点诚实不实现该接口 | test_provider_anthropic 扩测全绿（含 HEAPTRC 泄漏门）+ 四基准 A/B 无回归 + Ready 报告 |
+| **W13 批内混合调度精化（v1.1 第八批，2026-08-26 立项）** | `tcParallel` 分组调度——按调用序贪心分组：相邻 tcParallel 段整段并行（RunToolBatch 一次提交），非 tcParallel 调用独占执行（单元素批）；修复旧"全有全无"规则下一个非并行调用把整批拖成全串行的并行度塌缩；声明语义严格保持（任一时刻要么恰好一个非并行任务独占，要么只有 tcParallel 任务在跑）；全并行/全串行特例与旧行为一致，超时/取消/合成管线不变；同波诚实评估能力标志词表回归——NeedsConfirm 经 PreHook 已可表达不设标志防死词表，Idempotent/ReadOnly 无模块内消费者维持裁撤 | test_loop 扩混合批测全绿（P,P,N 会合证组内并发+独占探针 / P,N,P 孤立完成不饿死 / N,N 保序回归）含 HEAPTRC 泄漏门 + 四基准 A/B 无回归 + Ready 报告 |
 
 ## Wave 内顺序约束
 
@@ -101,59 +102,44 @@ http.sse 文本行域），合并经审计判定不立项 |
 
 ### 组 A：装饰器/接口扩展位已预留，落地即插即用
 
-- **ReadIdleTimeoutMs（流式块间空闲超时）**【v1.1 承诺位】——冷读评审判定这是
-  传输卫生而非策略题：上游僵死时消费方挂满 TotalTimeout 300s 不可接受。
-  【已立项 2026-08-25 → W7 落地】
-- **WithFallback 装饰器**（多 provider 容灾链：主路错误码命中白名单→次路重放）——
-  纯组合 `IAgentProvider` 即可实现，~百行级。触发：任一客户表达多供应商容灾需求。
-  【已立项 2026-08-25 → W8 落地】
-- **WithThrottle 装饰器**（客户端限流防 429，消费 core.ratelimit 令牌桶）——
-  与 ratelimit 模块的标准库协同故事。触发：客户出现持续 429 场景。
-  【已立项 2026-08-25 → W8 落地】
 - **IdleGuard 装饰器**（code888 空闲超时 408 语义）——待 code888 Phase 1 接入时
   评估上移为通用 transport 装饰器。
-- **WithHedge 对冲装饰器**（延迟敏感场景 T 毫秒后并发第二请求取先达）——
-  双倍 token 成本必须显式 opt-in。触发：交互式 agent 产品提出 p95 延迟诉求。
-  【已立项 2026-08-25 → W9 落地（用户连续波次以"性能"为首位关键词，视为
-  p95 延迟诉求成立）】
-- **Provider 级 tracing 钩子**（onRequest/onResponse/onRetry 观测事件，
-  loop OnEvent 的 provider 层对位）——触发：首个生产接入方要求请求级追踪。
-  【已立项 2026-08-26 → W11（用户自营网关调试与 code888 接入预备场景连续
-  推进诉求成立；定形为 transport 装饰器——一处接线三适配器全覆盖，
-  重试可见性由叠装自然产生）】
 
-### 组 B：能力面扩张（含 v1.1 承诺位）
+### 组 B：能力面扩张（待触发）
 
-v1.1 第一批立项顺序：**Structured Output → tool_choice**（余项按触发评估）。
-
-- **Structured Output**【v1.1 承诺位 #1】——词表保留位 `ResponseSchemaJson`
-  已立（v1 置非空即 aecConfig，防破坏性变更）；立项 = WIRE-MAPPINGS 立 strict
-  模式节 + 三方编码实现。行业已把它当核心能力而非可选件。
-  【已立项 2026-08-25 → W6 落地】
-- **tool_choice 控制**【v1.1 候选 #2】——auto/none/required/具名强制是 agent
-  工作流基础控制（冷读评审判定）；词表加 `ToolChoice` 字段成本极低。
-  【已立项 2026-08-25 → W6 落地】
-- **ReasoningEffort 旋钮**【v1.1 候选 #3】——OpenAI 系 reasoning_effort 无落点、
-  与 anthropic Thinking 待遇失衡（冷读评审指认）；anthropic 侧忽略+warn 有
-  ParallelToolCalls 先例。【已立项 2026-08-25 → W7 落地】
-- **CountTokens API**（Anthropic /count_tokens 先例；精确计数不入约束路径，
-  仅观测）——计费精度诉求出现时立项。
-- **Prompt-cache 断点策略**（loop 自动放置 cache_control 断点；agent 循环每轮全量
-  重发历史，缓存命中可省 ~90% 输入费用）——与 §W3 前缀稳定不变量配套。
-  触发：W3 落地后按真实账单数据评估。
-  【已立项 2026-08-26 → W10（W3 不变量早已落地并经 test_loop 钉死；用户自营
-  网关运营场景下成本/延迟为持续性诉求，账单数据前置放宽为结构性成本论证
-  成立——循环全量重发形态下断点命中收益为数量级）】
 - **增量 JSON 参数校验**（工具参数片段边到边校验，坏参数流中即败而非执行时败）
   ——底座已核实：json.parser/scanner 为整输入 token 化，无 feed 式增量；
   立项前置条件是先向 json 域提出 feed 式解析反哺 slice。
-- **Gemini / Responses 协议编解码器**——不押注单一客户需求；任一多模态/兼容系
+- **Gemini 协议编解码器**——不押注单一客户需求；任一多模态/兼容系
   客户接入即可立项（D13 公开 codec 使追加成本低）。
-  【Responses 半边已立项 2026-08-25 → W9 落地（E2E 测试端点原生支持
-  /v1/responses，真网验证条件成立）；Gemini 半边仍留本项待触发】
+  【Responses 半边已立项 2026-08-25 → W9 落地；本项仅 Gemini 半边待触发】
 - **工具能力标志回归**：tcIdempotent/tcReadOnly/tcNeedsConfirm 消费语义立项后
   回归 TToolCapability 词表（v1 已裁撤至仅 tcParallel——冷读评审指认死词表）。
+  【评估结论 2026-08-26（W13 同波）：NeedsConfirm 确认门语义 PreHook 已完备
+  表达——同步回调在提交前运行、可阻塞等外部批准，设标志属重复表达面；
+  Idempotent/ReadOnly 无模块内消费者（loop 重试哲学=模型驱动，不做工具级
+  自动重试）维持裁撤。重新触发条件=出现真实消费者（审计分类/会话级确认
+  状态机），届时先立消费语义节再回归词表】
 - **loop 全局工具并发上限**（D14 明确 v1 不做）——出现跨批资源争用证据时立项。
+
+### 已归档（Inbox→Wave 已落地，不再占待触发池）
+
+> 契约时效：下表项已于对应 Wave 落地并经 gate 验收，移出 Inbox 待触发池以保
+> 持输入池纯净；Wave 表为落地权威。
+
+| 能力项 | Wave | 立项→落地 | 备注 |
+|--------|------|-----------|------|
+| ReadIdleTimeoutMs（流式块间空闲超时） | W7 | 2026-08-25 → W7 | 传输卫生，aecTimeout 合成不污染取消标志 |
+| WithFallback 装饰器 | W8 | 2026-08-25 → W8 | 多 provider 容灾链，白名单切换/首 delta 门 |
+| WithThrottle 装饰器 | W8 | 2026-08-25 → W8 | 客户端限流，core.lockfree.ratelimit 细接口 |
+| WithHedge 对冲装饰器 | W9 | 2026-08-25 → W9 | p95 对冲，双倍 token 成本显式 opt-in |
+| Provider 级 tracing 钩子 | W11 | 2026-08-26 → W11 | NewTracedTransport 一处接线三适配器全覆盖 |
+| Structured Output | W6 | 2026-08-25 → W6 | ResponseSchemaJson strict 模式 |
+| tool_choice 控制 | W6 | 2026-08-25 → W6 | auto/none/required/具名四形态 |
+| ReasoningEffort 旋钮 | W7 | 2026-08-25 → W7 | openai reasoning_effort，anthropic 忽略+warn |
+| Prompt-cache 断点策略 | W10 | 2026-08-26 → W10 | anthropic cache_control 三断点 ≤4 预算 |
+| Responses 协议编解码器 | W9 | 2026-08-25 → W9 | OpenAI Responses 独立单元 provider.openai.responses |
+| CountTokens API | W12 | 2026-08-26 → W12 | anthropic /count_tokens，IAgentTokenCounter |
 
 ## 明确不做（v1 冻结）
 

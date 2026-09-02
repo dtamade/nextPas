@@ -18,7 +18,7 @@ unit nextpas.core.tls.winssl.context;
 interface
 
 uses
-  {$IFDEF WINDOWS} Windows, {$ENDIF}
+  {$IFDEF WINDOWS} nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi, {$ENDIF}
   nextpas.core.base,
   nextpas.core.io.intf, nextpas.core.fs.stream,
   nextpas.core.base.utils,

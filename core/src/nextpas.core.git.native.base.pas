@@ -5,6 +5,7 @@ unit nextpas.core.git.native.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception;
 
 type
@@ -27,15 +28,12 @@ function GitOidFromHex(const AHex: string): TGitOid;
 function GitOidToHex(const AOid: TGitOid): string;
 function GitOidIsValidHex(const AHex: string): Boolean; inline;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
 function GitKindFromString(const AName: string): TGitObjectKind;
-function GitKindFromMode(AMode: Cardinal): TGitObjectKind;
+function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
-{ Shared helpers single-sourced for git native subfamily: suffix test and
-  worktree-dir derivation. Zero-copy scan, inline. }
-function GitEndsWith(const S, Suffix: string): Boolean; inline;
-function GitWorktreeDir(const AGitDir: string): string; inline;
+function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
@@ -97,16 +95,6 @@ begin
   Result := True;
 end;
 
-function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
-var
-  I: Integer;
-begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AOid.Bytes[I] <> 0 then
-      Exit(False);
-  Result := True;
-end;
-
 function GitKindToString(AKind: TGitObjectKind): string;
 begin
   case AKind of
@@ -143,27 +131,18 @@ begin
   Result := gokBlob;
 end;
 
-function GitEndsWith(const S, Suffix: string): Boolean; inline;
-var LS, LSu, I: Integer;
+function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
-  LS:=Length(S); LSu:=Length(Suffix);
-  if LSu=0 then Exit(True);
-  if LS<LSu then Exit(False);
-  // zero-copy: compare suffix in place, no Copy allocation
-  for I:=1 to LSu do if S[LS-LSu+I]<>Suffix[I] then Exit(False);
-  Result:=True;
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
-function GitWorktreeDir(const AGitDir: string): string; inline;
-var P: Integer;
+function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  if GitEndsWith(AGitDir,'/.git') then Result:=Copy(AGitDir,1,Length(AGitDir)-5)
-  else if GitEndsWith(AGitDir,'.git') then
-  begin
-    P:=Length(AGitDir);
-    while (P>0) and (AGitDir[P]<>'/') do Dec(P);
-    if P>0 then Result:=Copy(AGitDir,1,P-1) else Result:='.';
-  end else Result:=AGitDir;
+  SetLength(Result, Length(AText));
+  if Length(AText) > 0 then
+    Move(PAnsiChar(AText)^, Result[0], Length(AText));
 end;
 
 end.

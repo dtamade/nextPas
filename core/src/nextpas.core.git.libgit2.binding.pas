@@ -1,15 +1,13 @@
 unit nextpas.core.git.libgit2.binding;
+{** @desc libgit2 运行时加载层：通过 platform.dl 动态绑定 FFI 符号。
+       职责：仅做 dlopen/dlsym 与符号转发，不定义类型词汇；类型词汇
+       复用 nextpas.core.git.libgit2.base → nextpas.core.git.libgit2.ffi，
+       与静态轨道 nextpas.core.git.libgit2.bindings 互补（base/ffi 分工）。 *}
 
 {$I nextpas.core.settings.inc}
 // acq:allow-style-file
 
 interface
-
-{$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
-  {$IFDEF DARWIN}
-  {$linklib git2}
-  {$ENDIF}
-{$ENDIF}
 
 uses nextpas.core.base, nextpas.core.exception, nextpas.core.git.libgit2.ffi;
 
@@ -227,6 +225,7 @@ procedure git_worktree_free(wt: git_worktree); cdecl;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.platform.dl,
   nextpas.core.os.env;
 
@@ -239,14 +238,26 @@ begin
   {$ENDIF}
 end;
 
-function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer;
+function GetProcSymbol(const ALib: TPlatformLibrary; const AName: PAnsiChar): Pointer; inline;
 var
   LAddr: Pointer;
 begin
+  // Zero-copy symbol lookup; no heap, no SysUtils.
   if platform_dl_sym(ALib, AName, LAddr) = 0 then
     Result := LAddr
   else
     Result := nil;
+end;
+
+// Inline zero-copy OID helpers (performance: Move/CompareMem, no allocation)
+procedure BindingCopyOid(out Dst: git_oid; const Src: git_oid); inline;
+begin
+  Move(Src.id[0], Dst.id[0], SizeOf(Src.id));
+end;
+
+function BindingOidEquals(const A, B: git_oid): Boolean; inline;
+begin
+  Result := CompareMem(@A.id[0], @B.id[0], SizeOf(A.id));
 end;
 
 const
@@ -397,12 +408,13 @@ type
     opts: Pgit_worktree_prune_options; version: cuint): cint; cdecl;
   TLibGit2_git_worktree_free = procedure(wt: git_worktree); cdecl;
 
-{$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
-function static_git_libgit2_init: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_init';
-function static_git_libgit2_shutdown: cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_shutdown';
-function static_git_libgit2_version(major, minor, rev: Pcint): cint; cdecl; external LIBGIT2_LIB name 'git_libgit2_version';
-function static_git_repository_open(out repo: git_repository; const path: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_open';
-function static_git_repository_init(out repo: git_repository; const path: PChar; is_bare: cuint): cint; cdecl; external LIBGIT2_LIB name 'git_repository_init';
+var
+  GLibGit2Handle: TPlatformLibrary;
+  GLibGit2Loaded: Boolean = False;
+  GLibGit2LoadedPath: string = '';
+  GLibGit2Lock: TRTLCriticalSection;
+  dyn_git_libgit2_init: TLibGit2_git_libgit2_init = nil;
+  dyn_git_libgit2_shutdown: TLibGit2_git_libgit2_shutdown = nil;
 function static_git_repository_discover(out out_buf: git_buf; const start_path: PChar; across_fs: cint; const ceiling_dirs: PChar): cint; cdecl; external LIBGIT2_LIB name 'git_repository_discover';
 function static_git_repository_head(out head_ref: git_reference; repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_head';
 function static_git_repository_is_bare(repo: git_repository): cint; cdecl; external LIBGIT2_LIB name 'git_repository_is_bare';

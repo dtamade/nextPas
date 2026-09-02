@@ -4,18 +4,18 @@ program test_hir_string_ownership_contract;
 
 uses
   SysUtils,
-  np_ast_facade,
-  np_diagnostics_sink,
-  np_green_tree,
-  np_hir_builder,
-  np_hir_llvm_emitter,
-  np_hir_model,
-  np_hir_types,
-  np_lexer,
-  np_semantic_analyzer,
-  np_semantic_model,
-  np_system_contracts,
-  np_unit_graph;
+  nextpas.compiler.syntax.ast_facade,
+  nextpas.compiler.diagnostics.sink,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.ir.hir.builder,
+  nextpas.compiler.ir.hir.llvm_emitter,
+  nextpas.compiler.ir.hir.model,
+  nextpas.compiler.ir.hir.types,
+  nextpas.compiler.syntax.lexer,
+  nextpas.compiler.sema.analyzer,
+  nextpas.compiler.sema.semantic_model,
+  nextpas.compiler.ir.system_contracts,
+  nextpas.compiler.frontend.unit_graph;
 
 const
   OwnedBorrowedSource =

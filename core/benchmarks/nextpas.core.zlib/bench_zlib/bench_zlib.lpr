@@ -7,7 +7,7 @@ uses
   nextpas.core.text.format,
   nextpas.core.exception,
   nextpas.core.zlib.base,
-  nextpas.core.zlib.zlib888,
+  nextpas.core.zlib.pure,
   nextpas.core.zlib.ffi,
   nextpas.core.zlib;
 

@@ -627,22 +627,13 @@ begin
   Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytes);
   ABuffer.Format := FBuffer.Format;
   ABuffer.FrameCount := LToCopy;
-  SetLength(ABuffer.Data, LBytes);
   FPos := FPos + LToCopy;
   Result := LToCopy;
 end;
 
 function TMemoryWavSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 begin
-  Result := Fill(ABuffer, AFrames);
-  if Result < AFrames then
-  begin
-    if Length(ABuffer.Data) < AFrames * FBuffer.Format.BlockAlign then
-      SetLength(ABuffer.Data, AFrames * FBuffer.Format.BlockAlign);
-    FillChar(ABuffer.Data[Result * FBuffer.Format.BlockAlign], (AFrames - Result) * FBuffer.Format.BlockAlign, 0);
-    ABuffer.FrameCount := AFrames;
-    Result := AFrames;
-  end;
+  Result := AudioFillMemoryRealtime(FBuffer, FPos, ABuffer, AFrames);
 end;
 
 function TMemoryWavSource.SeekTo(AFrame: UInt64): Boolean;
@@ -700,20 +691,11 @@ begin
   Result := Integer(LToRead div Int64(FFormat.BlockAlign));
   ABuffer.Format := FFormat;
   ABuffer.FrameCount := Result;
-  SetLength(ABuffer.Data, LToRead);
 end;
 
 function TWavStreamingSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 begin
-  Result := Fill(ABuffer, AFrames);
-  if Result < AFrames then
-  begin
-    { Pad with silence }
-    if Length(ABuffer.Data) < Int64(AFrames) * Int64(FFormat.BlockAlign) then
-      SetLength(ABuffer.Data, Int64(AFrames) * Int64(FFormat.BlockAlign));
-    FillChar(ABuffer.Data[Result * FFormat.BlockAlign], (AFrames - Result) * FFormat.BlockAlign, 0);
-    Result := AFrames;
-  end;
+  Result := AudioSilentFill(ABuffer, FFormat, AFrames);
 end;
 
 function TWavStreamingSource.SeekTo(AFrame: UInt64): Boolean;

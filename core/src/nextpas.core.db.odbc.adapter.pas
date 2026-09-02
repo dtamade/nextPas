@@ -51,7 +51,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.db.base,
-  nextpas.core.db.sqlscan,
   nextpas.core.db.intf,
   nextpas.core.db.odbc.base;
 
@@ -80,11 +79,9 @@ function TranslatePlaceholdersOdbc(const ASql: string;
 implementation
 
 uses
-  nextpas.core.exception,
-  nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.text.format,
-  nextpas.core.text.kv,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -163,14 +160,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := TextFormat('odbc: %s failed [%s/%d]',
+      LMsg := Format('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   ClassifyOdbcEx(LSs, LNative, AMyFlavor, LCategory, LConstraint);
@@ -194,14 +191,14 @@ begin
     LNative := LDiag[0].NativeError;
     LMsg := LDiag[0].Message;
     if LMsg = '' then
-      LMsg := TextFormat('odbc: %s failed [%s/%d]',
+      LMsg := Format('odbc: %s failed [%s/%d]',
         [AContext, LSs, LNative]);
   end
   else
   begin
     LSs := '';
     LNative := 0;
-    LMsg := TextFormat('odbc: %s failed [retcode %d, no diagnostics]',
+    LMsg := Format('odbc: %s failed [retcode %d, no diagnostics]',
       [AContext, ARetCode]);
   end;
   sql_freeHandle(SQL_HANDLE_STMT, AStmt);
@@ -214,12 +211,152 @@ end;
 function TranslatePlaceholdersOdbc(const ASql: string;
   out ARewritten: string; out ASlots: TIntArray): Integer;
 var
-  LSlots: TDbSqlSlotArray;
+  LB: IStringBuilder;
+  I: Integer;
+  C: Char;
+  InStr, InDq, InBrk, InLineC, InBlockC: Boolean;
+  N, Seq, LCount, LCap: Integer;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanTranslateQuestion(ASql, DBSQLSCAN_ODBC,
-    ARewritten, LSlots);
-  ASlots := LSlots;
+  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
+  ARewritten := '';
+  LCap := 8;
+  SetLength(ASlots, LCap);
+  LCount := 0;
+  Seq := 0;
+  InStr := False;
+  InDq := False;
+  InBrk := False;
+  InLineC := False;
+  InBlockC := False;
+  I := 1;
+  while I <= Length(ASql) do
+  begin
+    C := ASql[I];
+    if InLineC then
+    begin
+      LB.AppendChar(C);
+      if C = #10 then
+        InLineC := False;
+    end
+    else if InBlockC then
+    begin
+      LB.AppendChar(C);
+      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
+      begin
+        LB.AppendChar('/');
+        InBlockC := False;
+        Inc(I);
+      end;
+    end
+    else if InStr then
+    begin
+      LB.AppendChar(C);
+      if C = '''' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
+        begin
+          LB.AppendChar('''');
+          Inc(I);
+        end
+        else
+          InStr := False;
+      end;
+    end
+    else if InDq then
+    begin
+      LB.AppendChar(C);
+      if C = '"' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = '"') then
+        begin
+          LB.AppendChar('"');
+          Inc(I);
+        end
+        else
+          InDq := False;
+      end;
+    end
+    else if InBrk then
+    begin
+      LB.AppendChar(C);
+      if C = ']' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = ']') then
+        begin
+          LB.AppendChar(']');
+          Inc(I);
+        end
+        else
+          InBrk := False;
+      end;
+    end
+    else
+    begin
+      case C of
+        '''' :
+          begin
+            InStr := True;
+            LB.AppendChar(C);
+          end;
+        '"' :
+          begin
+            InDq := True;
+            LB.AppendChar(C);
+          end;
+        '[' :
+          begin
+            InBrk := True;
+            LB.AppendChar(C);
+          end;
+        '-' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
+              InLineC := True;
+            LB.AppendChar(C);
+          end;
+        '/' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
+            begin
+              InBlockC := True;
+              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
+              Continue;
+            end;
+            LB.AppendChar(C);
+          end;
+        '?' :
+          begin
+            Inc(I);
+            N := 0;
+            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
+            begin
+              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
+              Inc(I);
+            end;
+            if N = 0 then
+            begin
+              Inc(Seq);
+              N := Seq;
+            end;
+            LB.AppendChar('?');
+            if LCount >= LCap then
+            begin
+              LCap := LCap * 2;
+              SetLength(ASlots, LCap);
+            end;
+            ASlots[LCount] := N;
+            Inc(LCount);
+            Continue;
+          end;
+      else
+        LB.AppendChar(C);
+      end;
+    end;
+    Inc(I);
+  end;
+  SetLength(ASlots, LCount);
+  ARewritten := LB.ToString;
+  Result := LCount;
 end;
 
 { ---- TOdbcQuery ---- }
@@ -946,10 +1083,15 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
-    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -1327,11 +1469,6 @@ begin
   Result := False;  { 统一层无 LO 面（网关无跨驱动 LO 语义）}
 end;
 
-function TDbOdbcConnection.SupportsArrayBinding: Boolean;
-begin
-  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
-end;
-
 function TDbOdbcConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;  { 异构网关无法静态断言后端布尔类型；欠归一 }
@@ -1346,6 +1483,36 @@ function TDbOdbcConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := True;   { SQL_ATTR_QUERY_TIMEOUT 逐语句应用（秒粒度）；
     个别驱动拒绝属环境降级 }
+end;
+
+function TDbOdbcConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbOdbcConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbOdbcConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbOdbcConnection.CaseSensitiveIdentifiers: Boolean;
@@ -1366,14 +1533,6 @@ begin
   Result := ConnectOdbc(ADsn, TDbConnectOptions.Default);
 end;
 
-procedure ValidateOdbcConnStr(const AConnStr: string);
-var
-  LErr: string;
-begin
-  if not ValidateKV(AConnStr, LErr) then
-    raise EDbError.CreateSimple(dbkOdbc, LErr);
-end;
-
 function ConnectOdbc(const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection;
 var
@@ -1382,8 +1541,9 @@ var
   LOut: array[0..C_OUT_CONN_STR - 1] of AnsiChar;
   LOutLen: SmallInt;
 begin
-  ValidateOdbcConnStr(ADsn);
   OdbcEnsureLoaded;
+  if Trim(ADsn) = '' then
+    raise EDbError.CreateSimple(dbkOdbc, 'empty dsn');
   LEnv := nil;
   LDbc := nil;
   LRc := sql_allocHandle(SQL_HANDLE_ENV, nil, LEnv);

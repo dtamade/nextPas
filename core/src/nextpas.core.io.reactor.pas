@@ -14,6 +14,7 @@ type
     Context: Pointer;
     NextFree: Int32;
     Active: Boolean;
+    Fd: Int32;
   end;
 
   TIoReactor = record
@@ -25,7 +26,7 @@ type
     FPendingCount: UInt32;
     FFreeHead: Int32;
     FRunning: Int32;
-    function AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+    function AllocEntry(ACallback: TIoCompletion; AContext: Pointer; AFd: Int32 = -1): UInt64;
     procedure FreeEntry(AId: UInt64);
     procedure ReleasePendingEntries(AResult: Int32);
     procedure DispatchCqe(ACqe: PIoUringCqe);
@@ -66,6 +67,9 @@ type
     { Best-effort cancel of one Active entry with matching Context.
       io_uring: IORING_OP_ASYNC_CANCEL (target CQE still arrives). }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    { Best-effort cancel of all Active entries with matching fd.
+      Same io_uring semantics as TryCancelByContext, per entry. }
+    function CancelByFd(AFd: Int32): Boolean;
   end;
 
 implementation
@@ -120,7 +124,7 @@ begin
   Result := FRing.IsValid;
 end;
 
-function TIoReactor.AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+function TIoReactor.AllocEntry(ACallback: TIoCompletion; AContext: Pointer; AFd: Int32): UInt64;
 var
   LIdx: UInt32;
 begin
@@ -143,6 +147,7 @@ begin
   FEntries[LIdx].Context := AContext;
   FEntries[LIdx].NextFree := -1;
   FEntries[LIdx].Active := True;
+  FEntries[LIdx].Fd := AFd;
   Inc(FPendingCount);
   Result := LIdx;
 end;
@@ -157,6 +162,7 @@ begin
   FEntries[AId].Callback := nil;
   FEntries[AId].Context := nil;
   FEntries[AId].Active := False;
+  FEntries[AId].Fd := -1;
   FEntries[AId].NextFree := FFreeHead;
   FFreeHead := Int32(AId);
 end;
@@ -285,6 +291,30 @@ begin
   Result := True;
 end;
 
+function TIoReactor.CancelByFd(AFd: Int32): Boolean;
+var
+  LI: UInt32;
+  LContexts: array of Pointer;
+  LCount, LJ: UInt32;
+begin
+  Result := False;
+  if (AFd < 0) or (not IsValid) then
+    Exit;
+  if FEntryCount = 0 then
+    Exit;
+  SetLength(LContexts, FEntryCount);
+  LCount := 0;
+  for LI := 0 to FEntryCount - 1 do
+    if FEntries[LI].Active and (FEntries[LI].Fd = AFd) then
+    begin
+      LContexts[LCount] := FEntries[LI].Context;
+      Inc(LCount);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LJ]) then
+      Result := True;
+end;
+
 function TIoReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
@@ -293,7 +323,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepRead(LSqe, AFd, ABuf, ALen, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -307,7 +337,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepWrite(LSqe, AFd, ABuf, ALen, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -321,7 +351,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepAccept(LSqe, AFd, AAddr, AAddrLen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -335,7 +365,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepConnect(LSqe, AFd, AAddr, AAddrLen);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -349,7 +379,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepSend(LSqe, AFd, ABuf, ALen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -363,7 +393,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepRecv(LSqe, AFd, ABuf, ALen, AFlags);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -371,13 +401,42 @@ end;
 
 function TIoReactor.AsyncClose(AFd: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
+const
+  IOSQE_IO_LINK = 1;
 var
   LSqe: PIoUringSqe;
   LId: UInt64;
+  LI, LCount, LJ: UInt32;
+  LTargets: array of UInt64;
+  LCancelSqe: PIoUringSqe;
+  LCancelId: UInt64;
 begin
+  { io_uring AsyncClose 同步化：扫描 FEntries 经 TryCancelByContext 语义摘除同 fd 挂起 accept，
+    再以 IOSQE_IO_LINK 链式 prep CLOSE（取消→关闭原子序，防 fd 复用误关 fail-closed）。 }
+  if (AFd >= 0) and IsValid and (FEntryCount > 0) then
+  begin
+    SetLength(LTargets, FEntryCount);
+    LCount := 0;
+    for LI := 0 to FEntryCount - 1 do
+      if FEntries[LI].Active and (FEntries[LI].Fd = AFd) then
+      begin
+        LTargets[LCount] := UInt64(LI);
+        Inc(LCount);
+      end;
+    for LJ := 0 to LCount - 1 do
+    begin
+      LCancelSqe := FRing.GetSqe;
+      if LCancelSqe = nil then
+        Break;
+      LCancelId := AllocEntry(nil, nil);
+      IoUringPrepCancel(LCancelSqe, LTargets[LJ], 0);
+      LCancelSqe^.flags := LCancelSqe^.flags or IOSQE_IO_LINK;
+      IoUringSqeSetData(LCancelSqe, LCancelId);
+    end;
+  end;
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepClose(LSqe, AFd);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -404,7 +463,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepReadv(LSqe, AFd, AIovecs, ANrVecs, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;
@@ -418,7 +477,7 @@ var
 begin
   LSqe := FRing.GetSqe;
   if LSqe = nil then begin Result := False; Exit; end;
-  LId := AllocEntry(ACallback, AContext);
+  LId := AllocEntry(ACallback, AContext, AFd);
   IoUringPrepWritev(LSqe, AFd, AIovecs, ANrVecs, AOffset);
   IoUringSqeSetData(LSqe, LId);
   Result := True;

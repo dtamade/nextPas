@@ -36,6 +36,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.aesgcm,
@@ -187,7 +188,7 @@ type
     function SuiteFromTls(ATlsSuite: Word;
       out ASuite: TQuicCipherSuite): Boolean;
     function BuildTransportParamsExt: TBytes;
-    procedure AppendTail(var ABuf: TBytes; const ATail: TBytes);
+    procedure AppendTail(var ABuf: TBytes; const ATail: TBytes); inline;
     function PatchChExtraExtension(const ACh, AExtra: TBytes): TBytes;
     function AppendClientHello: Boolean;
     function SendSpacePacket(ASpace: TQuicSpace; const AFrames: TBytes;
@@ -523,16 +524,9 @@ begin
 end;
 
 procedure TQuicClientConnection.AppendTail(var ABuf: TBytes;
-  const ATail: TBytes);
-var
-  LN, LI: Integer;
+  const ATail: TBytes); inline;
 begin
-  if Length(ATail) = 0 then
-    Exit;
-  LN := Length(ABuf);
-  SetLength(ABuf, LN + Length(ATail));
-  for LI := 0 to Length(ATail) - 1 do
-    ABuf[LN + LI] := ATail[LI];
+  BytesAppend(ABuf, ATail);
 end;
 
 { 在已构建的 CH handshake 上追加一个扩展：改 extensions_length(u16)、
@@ -556,12 +550,8 @@ begin
   LOldLen := (ACh[LExtLenPos] shl 8) or ACh[LExtLenPos + 1];
 
   Result := nil;
-  AppendTail(Result, ACh);
-  if Length(AExtra) > 0 then
-  begin
-    SetLength(Result, Length(Result) + Length(AExtra));
-    Move(AExtra[0], Result[Length(Result) - Length(AExtra)], Length(AExtra));
-  end;
+  BytesAppend(Result, ACh);
+  BytesAppend(Result, AExtra);
   LNewLen := LOldLen + Length(AExtra);
   Result[LExtLenPos] := Byte(LNewLen shr 8);
   Result[LExtLenPos + 1] := Byte(LNewLen);

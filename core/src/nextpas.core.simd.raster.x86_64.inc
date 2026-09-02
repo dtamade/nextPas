@@ -22,7 +22,7 @@ begin
   Result := nextpas.core.simd.cpuinfo.HasAVX2;
 end;
 
-procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   LE: LongWord;
   UseAVX2: Boolean;
@@ -80,6 +80,7 @@ begin
       dec r8
       jnz @RFS_AVX_TAIL_LOOP
     @RFS_AVX_DONE:
+      vzeroupper
     end;
     Exit;
   end;
@@ -118,10 +119,11 @@ begin
     dec r8
     jnz @RFS_TAIL_LOOP
   @RFS_DONE:
+      vzeroupper
   end;
 end;
 
-procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   InvA: Integer;
   SrcLE: LongWord;
@@ -230,6 +232,7 @@ begin
       dec r8
       jnz @RB_AVX_LOOP8
     @RB_AVX_TAIL:
+      vzeroupper
     end;
     if (PixelCount and 7) <> 0 then
     begin
@@ -291,6 +294,7 @@ begin
     dec r8
     jnz @RB_LOOP4
   @RB_DONE:
+      vzeroupper
   end;
   if (PixelCount and 3) <> 0 then
   begin
@@ -306,7 +310,7 @@ begin
   end;
 end;
 
-procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
+procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer);
 var
   P: PByte;
   Tail: Integer;
@@ -349,6 +353,7 @@ begin
         dec r8
         jnz @RTR_AVX_LOOP4
       @RTR_AVX_TAIL:
+        vzeroupper
       end;
       Tail := PixelCount and 3;
       if Tail <> 0 then
@@ -380,6 +385,7 @@ begin
       dec r8
       jnz @RTR_LOOP4
     @RTR_TAIL:
+      vzeroupper
     end;
     Tail := PixelCount and 3;
     if Tail <> 0 then
@@ -417,7 +423,7 @@ begin
   end;
 end;
 
-procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte); inline;
+procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte);
 var
   P: PByte;
   N8, N4, Tail: Integer;

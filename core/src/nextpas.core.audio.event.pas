@@ -5,7 +5,6 @@ unit nextpas.core.audio.event;
 interface
 
 uses
-  SysUtils, Math,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -61,7 +60,6 @@ type
     // capacity polish: geometric growth, call outside lock alloc region
     procedure EnsureEventCapacity(ANeeded: Integer); inline;
     procedure EnsureInstanceCapacity(ANeeded: Integer); inline;
-    procedure EnsureSnapshotVoices(ANeeded: Integer); inline;
     function FindEvent(AId: TAudioEventId): Integer;
     function FindInstance(AId: TAudioEventInstanceId): Integer;
     procedure ReapFinished;
@@ -124,17 +122,11 @@ procedure TEventVoice.SetPitch(APitch: Single); begin if APitch < 0.25 then APit
 procedure TEventVoice.SetPosition(const APos: TAudioVec3); begin FSpatial.Position := APos; end;
 
 function TEventVoice.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single; Needed: Integer; Needed64: Int64;
+var OutPtr, SrcPtr: PSingle; I, Ch, Idx0, Idx1: Integer; Frac, V0, V1, V: Single; LG: TAudioPanGains; LGain, LPan: Single; LAtt: Single; Needed: Integer;
 begin
-  Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  if (Needed64 < 0) or (Needed64 > High(Integer)) then
-  begin
-    if Needed64 < 0 then Needed64 := 0 else Needed64 := High(Integer);
-    AFrames := Integer(Needed64 div Int64(FFormat.BlockAlign));
-    if AFrames <= 0 then Exit(0);
-    Needed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  end;
-  Needed := Integer(Needed64);
+  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
+  if Needed < 0 then
+    Needed := 0;
   if Length(ABuffer.Data) < Needed then
   begin
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
@@ -249,14 +241,6 @@ begin
   if Length(FScratch) <> LCap then SetLength(FScratch, LCap);
 end;
 
-procedure TAudioEventSystemImpl.EnsureSnapshotVoices(ANeeded: Integer);
-var LCap: Integer;
-begin
-  LCap := Length(FSnapshotVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSnapshotVoices) <> LCap then SetLength(FSnapshotVoices, LCap);
-end;
-
 function TAudioEventSystemImpl.GetFormat: TAudioFormat; begin Result := FFormat; end;
 function TAudioEventSystemImpl.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer; begin Result := FillRealtime(ABuffer, AFrames); end;
 function TAudioEventSystemImpl.SeekTo(AFrame: UInt64): Boolean; begin Result := False; end;
@@ -269,18 +253,9 @@ var
   LCount: Integer;
   LGlobalGain: Single;
   LListenerSnap: TAudioListener;
-  LNeed64: Int64;
 begin
   if AFrames <=0 then Exit(0);
-  LNeed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  if (LNeed64 < 0) or (LNeed64 > High(Integer)) then
-  begin
-    if LNeed64 < 0 then LNeed64 := 0 else LNeed64 := High(Integer);
-    AFrames := Integer(LNeed64 div Int64(FFormat.BlockAlign));
-    if AFrames <=0 then Exit(0);
-    LNeed64 := Int64(AFrames) * Int64(FFormat.BlockAlign);
-  end;
-  LNeed := Integer(LNeed64);
+  LNeed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < LNeed then
   begin
     LFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
@@ -301,8 +276,9 @@ begin
     LGlobalGain := FGlobalParams[0];
     LListenerSnap := FListener;
   finally FLock.Release; end;
-  // snapshot scratch reuse: geometric EnsureSnapshotVoices, steady zero alloc
-  EnsureSnapshotVoices(LCount);
+  // snapshot scratch reuse: preallocated FSnapshotVoices reuse, steady zero alloc
+  if Length(FSnapshotVoices) < LCount then
+    SetLength(FSnapshotVoices, LCount);
   if LCount > 0 then
   begin
     FLock.Acquire;

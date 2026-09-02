@@ -126,7 +126,8 @@ implementation
 
 uses
   nextpas.core.mem,
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.platform.thread;
 
 function TLockFreeMsQueueImpl.Pack(AIdx, ATag: Int32): Int64;
 begin
@@ -209,11 +210,11 @@ end;
 {$PUSH} {$Q-} {$R-} { hash multiply wraps mod 2^N by design }
 class function TLockFreeMsQueueImpl.OpStripeIndex: PtrUInt;
 begin
-  { Thread ids on Linux are pthread descriptor addresses, often exactly 8MB
-    apart (stack-top allocation) — a bare shift would collide systematically.
-    Multiplying by an odd constant is a bijection mod 2^N and spreads any
-    fixed stride across the high bits; take bits 24.. for the stripe. }
-  Result := (PtrUInt(GetCurrentThreadId) * PtrUInt($9E3779B9)) shr 24
+  { Thread ids (gettid) start at 1 and grow slowly, so a bare low-bit
+    shift would collide across threads. Multiplying by an odd constant
+    is a bijection mod 2^N and spreads any small stride across the high
+    bits; take bits 24.. for the stripe. }
+  Result := (PtrUInt(platform_thread_id) * PtrUInt($9E3779B9)) shr 24
     and (MSQUEUE_OP_STRIPES - 1);
 end;
 {$POP}

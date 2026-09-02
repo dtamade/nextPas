@@ -31,7 +31,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.async.loop,
   nextpas.core.async.cancellation,
-  nextpas.core.time.deadline;
+  nextpas.core.time.deadline,
+  nextpas.core.bytes.ops;
 
 type
   { 复用 net.quic.h3 已有类型 }
@@ -412,18 +413,17 @@ begin
     Exit(0);
   if UInt32(LN) < ALen then
     ALen := UInt32(LN);
-  Move(FRxBuf[0], ABuf^, ALen);
+  nextpas.core.bytes.ops.BytesCopy(ABuf, @FRxBuf[0], SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   LRemain := LN - Integer(ALen);
   if LRemain > 0 then
-    Move(FRxBuf[ALen], FRxBuf[0], LRemain);
+    nextpas.core.bytes.ops.BytesCopy(@FRxBuf[0], @FRxBuf[ALen], SizeUInt(LRemain)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   SetLength(FRxBuf, LRemain);
   Result := Integer(ALen);
 end;
 
 procedure TH3Stream.DeliverData(const AData: TBytes); inline;
 var
-  LOld: Integer;
-  LLen: Integer;
+  LOld, LLen: Integer;
 begin
   LLen := Length(AData);
   if FClosed or (LLen = 0) then
@@ -435,9 +435,7 @@ begin
     FailPendingRead(-1);
     Exit;
   end;
-  SetLength(FRxBuf, LOld + LLen);
-  if LLen > 0 then
-    Move(AData[0], FRxBuf[LOld], LLen);
+  nextpas.core.bytes.ops.BytesAppend(FRxBuf, AData);
   TryCompletePendingRead;
 end;
 
@@ -527,7 +525,7 @@ begin
   if (FConn = nil) or (FConn.Phase = qcpClosed) then
     Exit;
   SetLength(LData, ALen);
-  Move(PByte(ABuf)^, LData[0], ALen);
+  nextpas.core.bytes.ops.BytesCopy(@LData[0], ABuf, SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   if not FConn.StreamWrite(FId, LData, False) then
     Exit;
   ACallback(UInt64(ALen), Integer(ALen), AContext);

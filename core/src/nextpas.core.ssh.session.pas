@@ -331,7 +331,12 @@ begin Result := SendKeepAlive(nil); end;
 procedure TSshSession.EnsureRekeyIfNeeded;
 begin
   if ShouldRekey then
-    try DoRekey; except end;
+    try
+      DoRekey;
+    except
+      on E: Exception do
+        raise;
+    end;
 end;
 
 function TSshSession.ExpectOneOf(const AAcceptable: array of Byte): TBytes;

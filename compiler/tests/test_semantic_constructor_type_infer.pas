@@ -4,13 +4,13 @@ program test_semantic_constructor_type_infer;
 
 uses
   SysUtils,
-  np_ast_facade,
-  np_diagnostics_sink,
-  np_green_tree,
-  np_lexer,
-  np_semantic_analyzer,
-  np_semantic_model,
-  np_unit_graph;
+  nextpas.compiler.syntax.ast_facade,
+  nextpas.compiler.diagnostics.sink,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer,
+  nextpas.compiler.sema.analyzer,
+  nextpas.compiler.sema.semantic_model,
+  nextpas.compiler.frontend.unit_graph;
 
 procedure Fail(const AMessage: string);
 begin

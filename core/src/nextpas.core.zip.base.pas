@@ -97,6 +97,10 @@ const
   { unix 文件类型位（外部属性高字内） }
   C_ZIP_UNIX_MODE_SYMLINK = $A000;
 
+  { DOS 纪元 unix 边界常量（1980-01-01 00:00:00Z / 2107-12-31 23:59:59Z），单源常量化去 TDate 构造 }
+  C_DOS_MIN_UNIX = Int64(315532800);
+  C_DOS_MAX_UNIX = Int64(4354819199);
+
   { 单条目解压默认上限与描述符扫描缓冲上限 }
   C_ZIP_DEFAULT_MAX_OUTPUT     = SizeUInt(1) shl 30;
   C_ZIP_DEFAULT_MAX_DESCRIPTOR = SizeUInt(512) * 1024 * 1024;
@@ -112,7 +116,7 @@ type
 
 {** 名称安全谓词：非空、非绝对路径、无盘符前缀、无反斜杠、无 '..' 段。
     尾随 '/'（目录条目）合法。 *}
-function IsSafeZipEntryName(const AName: string): Boolean; inline;
+function IsSafeZipEntryName(const AName: string): Boolean;
 
 {** 同 IsSafeZipEntryName，不满足时 raise EArgumentError（写端入参校验用）。 *}
 procedure ValidateZipEntryName(const AName: string);
@@ -139,6 +143,8 @@ function ZipDirectoryMode(APermissionBits: Word): Word; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions; inline;
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean; inline;
 
 implementation
 
@@ -162,7 +168,7 @@ begin
   inherited Create(AMessage);
 end;
 
-function IsSafeZipEntryName(const AName: string): Boolean; inline;
+function IsSafeZipEntryName(const AName: string): Boolean;
 var
   LI, LSegStart: Integer;
 begin
@@ -217,15 +223,13 @@ end;
 
 procedure DosDateTimeFromUnix(AUnixSec: Int64; out ADosDate, ADosTime: Word);
 var
-  LMinSec, LMaxSec, LRem: Int64;
+  LRem: Int64;
   LD: TDate;
 begin
-  LMinSec := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
-  LMaxSec := Int64(TDate.Create(C_DOS_MAX_YEAR, 12, 31).ToUnixDays) * 86400 + 86399;
-  if AUnixSec < LMinSec then
-    AUnixSec := LMinSec
-  else if AUnixSec > LMaxSec then
-    AUnixSec := LMaxSec;
+  if AUnixSec < C_DOS_MIN_UNIX then
+    AUnixSec := C_DOS_MIN_UNIX
+  else if AUnixSec > C_DOS_MAX_UNIX then
+    AUnixSec := C_DOS_MAX_UNIX;
   LD := TDate.FromUnixDays(Integer(AUnixSec div 86400));
   LRem := AUnixSec mod 86400;
   ADosDate := Word(((LD.GetYear - C_DOS_MIN_YEAR) shl 9) or
@@ -234,12 +238,12 @@ begin
     (((LRem mod 3600) div 60) shl 5) or ((LRem mod 60) div 2));
 end;
 
-function DosMinUnixSec: Int64;
+function DosMinUnixSec: Int64; inline;
 begin
-  Result := Int64(TDate.Create(C_DOS_MIN_YEAR, 1, 1).ToUnixDays) * 86400;
+  Result := C_DOS_MIN_UNIX;
 end;
 
-function DosMaxUnixSec: Int64;
+function DosMaxUnixSec: Int64; inline;
 begin
   Result := C_DOS_MAX_UNIX;
 end;
@@ -272,9 +276,9 @@ begin
   LHour := Integer(ADosTime shr 11);
   LMin := Integer((ADosTime shr 5) and $3F);
   LSec := Integer((ADosTime and $1F) shl 1);
-  { 越界钳制：非法年/月/日回落到 DOS 纪元下限，避免 TDate raise }
+  { 越界钳制：非法年/月/日回落到 DOS 纪元下限，避免 TDate raise（零 Create 验证） }
   if not TDate.TryCreate(LYear, LMonth, LDay, LD) then
-    LD := TDate.Create(C_DOS_MIN_YEAR, 1, 1);
+    LD := TDate.FromUnixDays(Integer(C_DOS_MIN_UNIX div 86400));
   Result := Int64(LD.ToUnixDays) * 86400 + LHour * 3600 + LMin * 60 + LSec;
 end;
 
@@ -284,6 +288,30 @@ begin
   Result.MaxTotalOutputSize := 0;
   Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
   Result.Password := nil;
+end;
+
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions;
+begin
+  Result := AOptions;
+  if Result.MaxOutputSize = 0 then
+    Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
+  if Result.MaxDescriptorBuffer = 0 then
+    Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
+end;
+
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean;
+begin
+  if ACode = C_ZIP_METHOD_STORE then
+  begin
+    AMethod := zmStore;
+    Exit(True);
+  end;
+  if ACode = C_ZIP_METHOD_DEFLATE then
+  begin
+    AMethod := zmDeflate;
+    Exit(True);
+  end;
+  Result := False;
 end;
 
 end.

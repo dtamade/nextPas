@@ -31,7 +31,10 @@ function AiffProbe(const APrefix: TBytes): TAudioProbeResult;
 implementation
 
 uses
-  Math;
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig,
+  nextpas.core.audio.pcm;
 
 const
   MAX_AIFF_PAYLOAD_BYTES = 1024 * 1024 * 1024;
@@ -557,22 +560,13 @@ begin
   Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytes);
   ABuffer.Format := FBuffer.Format;
   ABuffer.FrameCount := LToCopy;
-  SetLength(ABuffer.Data, LBytes);
   FPos := FPos + LToCopy;
   Result := LToCopy;
 end;
 
 function TMemoryAiffSource.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 begin
-  Result := Fill(ABuffer, AFrames);
-  if Result < AFrames then
-  begin
-    if Length(ABuffer.Data) < AFrames * FBuffer.Format.BlockAlign then
-      SetLength(ABuffer.Data, AFrames * FBuffer.Format.BlockAlign);
-    FillChar(ABuffer.Data[Result * FBuffer.Format.BlockAlign], (AFrames - Result) * FBuffer.Format.BlockAlign, 0);
-    ABuffer.FrameCount := AFrames;
-    Result := AFrames;
-  end;
+  Result := AudioFillMemoryRealtime(FBuffer, FPos, ABuffer, AFrames);
 end;
 
 function TMemoryAiffSource.SeekTo(AFrame: UInt64): Boolean;

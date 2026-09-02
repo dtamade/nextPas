@@ -15,7 +15,8 @@ unit nextpas.core.net.quic.pn;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.bytes.binary;
 
 {** @desc 无确认基线形态：num_unacked = pn + 1，返回字节数 1..4 *}
 function QuicPnEncodedLen(APn: UInt64): Integer;
@@ -90,14 +91,32 @@ end;
 
 procedure QuicPnAppend(var ABuf: TBytes; APn: UInt64; ALen: Integer);
 var
-  LN, LI: Integer;
+  LN: Integer;
+  LBytes: array[0..3] of Byte;
 begin
   if (ALen < 1) or (ALen > 4) then
     Exit;
   LN := Length(ABuf);
   SetLength(ABuf, LN + ALen);
-  for LI := 0 to ALen - 1 do
-    ABuf[LN + LI] := Byte(APn shr (8 * (ALen - 1 - LI)));
+  case ALen of
+    4:
+      begin
+        WriteUInt32BE(PByte(@ABuf[LN]), UInt32(APn));
+      end;
+    3:
+      begin
+        LBytes[0] := Byte(APn shr 16);
+        LBytes[1] := Byte(APn shr 8);
+        LBytes[2] := Byte(APn);
+        Move(LBytes[0], ABuf[LN], 3);
+      end;
+    2:
+      begin
+        WriteUInt16BE(PByte(@ABuf[LN]), UInt16(APn));
+      end;
+    1:
+      ABuf[LN] := Byte(APn);
+  end;
 end;
 
 function QuicPnDecode(ALargestPn, ATruncatedPn: UInt64;

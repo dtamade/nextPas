@@ -1,5 +1,7 @@
 # nextpas.core.math API
 
+> **最后更新**：2026-08-31（同步 `CONTRACT.md` v1.5.2；证据链刷新：`2026-08-31 17 PROJECTS ~273 tests 0 fail heaptrc 0`）
+
 Use `nextpas.core.math` as the default import for application code:
 
 ```pascal

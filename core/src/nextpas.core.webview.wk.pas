@@ -17,7 +17,9 @@ interface
 
 uses
   nextpas.core.webview.base,
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.window.base,
+  nextpas.core.window.intf;
 
 type
   PEvalRec = ^TEvalRec;
@@ -32,6 +34,8 @@ type
     FOptions: TWebviewOptions;
     FClosed: Boolean;
     FOwnerThread: UInt64;
+    FWindow: IWindow;
+    FOwnsWindow: Boolean;
     FUserAgent: string;
     FZoom: Double;
     FScaleHandlersRef: array of TWebviewScaleHandler;
@@ -63,8 +67,13 @@ type
     procedure GrowPendingEvals; inline;
     procedure RemovePending(ARec: PEvalRec);
     procedure DoScaleChanged(ANewScale: Double);
+    procedure HandleWindowEvent(const AEvent: TWindowEvent);
+    procedure UpdateChildBounds;
+    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
   public
     constructor Create(const AOptions: TWebviewOptions);
+    constructor CreateOn(AWindow: IWindow; const AOptions: TWebviewOptions);
+    function GetWindow: IWindow;
     procedure Close; function IsClosed: Boolean;
     procedure Show; procedure Hide; function IsVisible: Boolean;
     procedure Focus;
@@ -117,12 +126,15 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-  nextpas.core.webview.wk.loader;
+  nextpas.core.webview.wk.loader,
+  nextpas.core.window.factory;
 
 var
   GLive: Integer = 0;
   GLiveList: array of TWkWebview;
   GLiveListCount: Integer = 0;
+  GWkEmptyInvokes: IWebviewInvokeRegistry = nil;
+  GWkEmptyAssets: IWebviewAssets = nil;
 
 procedure GrowLiveList; inline;
 begin
@@ -164,22 +176,60 @@ begin
   Result := LCnt;
 end;
 
+function TWkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+begin
+  Result := DefaultWindowOptions;
+  Result.Title := AOptions.Title;
+  Result.Width := AOptions.Width;
+  Result.Height := AOptions.Height;
+  Result.Resizable := AOptions.Resizable;
+  Result.Maximized := AOptions.Maximized;
+end;
+
+procedure TWkWebview.HandleWindowEvent(const AEvent: TWindowEvent);
+begin
+  if FClosed then Exit;
+  case AEvent.Kind of
+    weResized: UpdateChildBounds;
+    weScaleChanged, weDpiChanged: DoScaleChanged(AEvent.NewScale);
+    weClosed, weCloseRequested: Close;
+  end;
+end;
+
+procedure TWkWebview.UpdateChildBounds;
+begin
+  // WKWebView as child addSubview would be resized here (Darwin impl)
+end;
+
 constructor TWkWebview.Create(const AOptions: TWebviewOptions);
-var
-  LInfo: TWkLoadInfo;
+var LInfo: TWkLoadInfo;
 begin
   CheckWebviewOptions(AOptions);
   if not TryLoadWk(LInfo) then
     raise EWebviewBackendUnavailable.Create('WKWebView runtime not available on this platform (requires macOS)');
-  // 桩：loader 可用时最小回显（当前分支不可达）
   FOptions := AOptions;
   FOwnerThread := platform_thread_id;
-  FUserAgent := '';
-  FZoom := 1.0;
-  FClosed := False;
+  FUserAgent := ''; FZoom := 1.0; FClosed := False;
+  FWindow := CreateWindowOf(wkFake, WindowOptionsOf(AOptions));
+  FOwnsWindow := True;
+  FWindow.OnEvent(@HandleWindowEvent);
   Inc(GLive);
   RegisterLive(Self);
 end;
+
+constructor TWkWebview.CreateOn(AWindow: IWindow; const AOptions: TWebviewOptions);
+var LInfo: TWkLoadInfo;
+begin
+  if AWindow=nil then raise EWebviewInvalidState.Create('Parent window is nil');
+  CheckWebviewOptions(AOptions);
+  if not TryLoadWk(LInfo) then raise EWebviewBackendUnavailable.Create('WKWebView runtime not available');
+  FOptions:=AOptions; FOwnerThread:=platform_thread_id; FUserAgent:=''; FZoom:=1.0; FClosed:=False;
+  FWindow:=AWindow; FOwnsWindow:=False; FWindow.OnEvent(@HandleWindowEvent);
+  Inc(GLive); RegisterLive(Self);
+end;
+
+function TWkWebview.GetWindow: IWindow;
+begin Result:=FWindow; end;
 
 procedure TWkWebview.Close;
 var
@@ -212,10 +262,9 @@ begin
   FPendingCount := 0;
   for I := 0 to FOnWindowClosedCount - 1 do
     if Assigned(FOnWindowClosed[I]) then
-      try
-        FOnWindowClosed[I]();
-      except
-      end;
+      try FOnWindowClosed[I](); except end;
+  if FOwnsWindow and (FWindow<>nil) then FWindow.Close;
+  FWindow:=nil;
 end;
 
 function TWkWebview.IsClosed: Boolean;
@@ -224,27 +273,27 @@ begin
 end;
 
 {$PUSH}{$HINTS OFF}
-procedure TWkWebview.Show; begin end;
-procedure TWkWebview.Hide; begin end;
-function TWkWebview.IsVisible: Boolean; begin Result := not FClosed; end;
-procedure TWkWebview.Focus; begin end;
-procedure TWkWebview.SetTitle(const ATitle: string); begin FOptions.Title := ATitle; end;
-function TWkWebview.GetTitle: string; begin Result := FOptions.Title; end;
-procedure TWkWebview.SetBounds(AWidth, AHeight: Integer); begin FOptions.Width := AWidth; FOptions.Height := AHeight; end;
-function TWkWebview.GetWidth: Integer; begin Result := FOptions.Width; end;
-function TWkWebview.GetHeight: Integer; begin Result := FOptions.Height; end;
-procedure TWkWebview.SetResizable(AResizable: Boolean); begin FOptions.Resizable := AResizable; end;
-procedure TWkWebview.Maximize; begin end;
-procedure TWkWebview.Unmaximize; begin end;
-function TWkWebview.IsMaximized: Boolean; begin Result := False; end;
-procedure TWkWebview.Minimize; begin end;
-procedure TWkWebview.Restore; begin end;
-function TWkWebview.IsMinimized: Boolean; begin Result := False; end;
+procedure TWkWebview.Show; begin if FClosed then Exit; if FWindow<>nil then FWindow.Show; end;
+procedure TWkWebview.Hide; begin if FClosed then Exit; if FWindow<>nil then FWindow.Hide; end;
+function TWkWebview.IsVisible: Boolean; begin if FClosed then Exit(False); if FWindow<>nil then Result:=FWindow.IsVisible else Result:=not FClosed; end;
+procedure TWkWebview.Focus; begin if not FClosed and (FWindow<>nil) then FWindow.Focus; end;
+procedure TWkWebview.SetTitle(const ATitle: string); begin FOptions.Title := ATitle; if not FClosed and (FWindow<>nil) then FWindow.SetTitle(ATitle); end;
+function TWkWebview.GetTitle: string; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.GetTitle else Result:=FOptions.Title; end;
+procedure TWkWebview.SetBounds(AWidth, AHeight: Integer); begin FOptions.Width := AWidth; FOptions.Height := AHeight; if not FClosed and (FWindow<>nil) then FWindow.SetBounds(AWidth,AHeight); UpdateChildBounds; end;
+function TWkWebview.GetWidth: Integer; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.GetWidth else Result:=FOptions.Width; end;
+function TWkWebview.GetHeight: Integer; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.GetHeight else Result:=FOptions.Height; end;
+procedure TWkWebview.SetResizable(AResizable: Boolean); begin FOptions.Resizable := AResizable; if not FClosed and (FWindow<>nil) then FWindow.SetResizable(AResizable); end;
+procedure TWkWebview.Maximize; begin if not FClosed and (FWindow<>nil) then FWindow.Maximize; end;
+procedure TWkWebview.Unmaximize; begin if not FClosed and (FWindow<>nil) then FWindow.Unmaximize; end;
+function TWkWebview.IsMaximized: Boolean; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.IsMaximized else Result:=False; end;
+procedure TWkWebview.Minimize; begin if not FClosed and (FWindow<>nil) then FWindow.Minimize; end;
+procedure TWkWebview.Restore; begin if not FClosed and (FWindow<>nil) then FWindow.Restore; end;
+function TWkWebview.IsMinimized: Boolean; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.IsMinimized else Result:=False; end;
 procedure TWkWebview.SetZoom(AFactor: Double); begin FZoom := AFactor; end;
 function TWkWebview.GetZoom: Double; begin Result := FZoom; end;
 procedure TWkWebview.SetUserAgent(const AUserAgent: string); begin FUserAgent := AUserAgent; end;
 function TWkWebview.GetUserAgent: string; begin Result := FUserAgent; end;
-function TWkWebview.GetScaleFactor: Double; begin Result := 1.0; end;
+function TWkWebview.GetScaleFactor: Double; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.GetScaleFactor else Result:=1.0; end;
 procedure TWkWebview.GrowScaleRef; inline;
 begin
   if FScaleHandlersRefCount = Length(FScaleHandlersRef) then
@@ -391,8 +440,6 @@ begin
   Dispose(LRec);
 end;
 procedure TWkWebview.Emit(const AEvent, APayloadJson: string); begin end;
-function TWkWebview.GetDispatcher: IWebviewDispatcher; begin Result := Self as IWebviewDispatcher; end;
-function TWkWebview.NativeHandle: TWebviewNativeHandle; begin Result := nil; end;
 procedure TWkWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler); overload;
 begin
   if not Assigned(AHandler) then Exit;
@@ -520,10 +567,12 @@ begin
 end;
 function TWkWebview.GetInvokes: IWebviewInvokeRegistry; begin Result := nil; end;
 function TWkWebview.GetAssets: IWebviewAssets; begin Result := nil; end;
+function TWkWebview.NativeHandle: TWebviewNativeHandle; begin if (FWindow<>nil) and not FClosed then Result:=FWindow.NativeHandle else Result:=nil; end;
+function TWkWebview.GetDispatcher: IWebviewDispatcher; begin if FWindow<>nil then Result:=FWindow.Dispatcher as IWebviewDispatcher else Result:=nil; end;
 {$POP}
-procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
-procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
-procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then Exit; if Assigned(AProc) then AProc(); end;
-function TWkWebview.IsOnMainThread: Boolean; begin Result := platform_thread_id = FOwnerThread; end;
+procedure TWkWebview.Post(AProc: TWebviewProcRef); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
+procedure TWkWebview.Post(AProc: TWebviewProcMethod); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
+procedure TWkWebview.Post(AProc: TWebviewProc); overload; begin if FClosed then Exit; if FWindow<>nil then FWindow.Dispatcher.Post(AProc) else if Assigned(AProc) then AProc(); end;
+function TWkWebview.IsOnMainThread: Boolean; begin if FWindow<>nil then Result:=FWindow.Dispatcher.IsOnMainThread else Result:= platform_thread_id = FOwnerThread; end;
 
 end.

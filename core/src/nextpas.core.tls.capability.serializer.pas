@@ -44,6 +44,7 @@ var
   I, LStart, LCount: Integer;
   LPart: string;
 begin
+  Result := nil;
   SetLength(Result, 0);
   LStart := 1;
   for I := 1 to Length(AStr) do

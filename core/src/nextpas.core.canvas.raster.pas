@@ -2,6 +2,7 @@
  * nextpas.core.canvas.raster - CPU 光栅（Tile 16x16 架构占位 + 扫描线填充，Double 梯形→整数覆盖）
  * 单线程录制，Save/Restore 栈；Fill 用 tess 梯形，Stroke 复用 PathStroke。
  * 已接入跨平台内联光栅层 nextpas.core.simd.raster（FillSolid/BlendSrcOver 直联 SSE2/标量，不走分发表，可内联）。
+ * L2 依赖：单向引用 L2 vector.tess/vector.path 与 L2 image.base（canvas→vector/image，Registry allowlist 单向缝 `canvas.raster→vector/image` cycle-gated，无反向，bytes.ops 单源 inline/零拷贝，资源释放不丢；同层循环受控监控（610 行，阈 800））。
  *}
 unit nextpas.core.canvas.raster;
 
@@ -120,7 +121,7 @@ end;
 
 function SampleGradient(const AGrad: TGradient; t: Single): TColor32; inline;
 var
-  n, i: Integer;
+  n, i, lo, hi, mid: Integer;
   c0, c1: TColor32;
   s0, s1, lt: Single;
   r0, g0, b0, a0, r1, g1, b1, a1, rr, gg, bb, aa: Byte;
@@ -141,8 +142,16 @@ begin
   end
   else
   begin
-    i := 0;
-    while (i < n-2) and (t > AGrad.GetStop(i+1)) do Inc(i);
+    // 二分查找替代线性 while，O(log n)；stops 递增已在 TBrush.ValidateGradient 保证
+    lo := 0;
+    hi := n - 1;
+    while hi - lo > 1 do
+    begin
+      mid := (lo + hi) shr 1;
+      if t < AGrad.GetStop(mid) then hi := mid else lo := mid;
+    end;
+    i := lo;
+    if i < 0 then i := 0 else if i >= n-1 then i := n-2;
     s0 := AGrad.GetStop(i);
     s1 := AGrad.GetStop(i+1);
     c0 := AGrad.GetColor(i);
@@ -226,31 +235,70 @@ begin
 end;
 
 procedure TRasterCanvas.FillTrapezoidsGradient(const ATraps: array of TTrapezoid; const AGrad: TGradient; const ABounds: TRect; ARadial: Boolean);
+const
+  LUT_N = 256;
+  CHUNK_SIZE = 64;
 var
-  I, X, Y, YStart, YEnd, W, H, X0, X1: Integer;
+  I, Y, YStart, YEnd, W, H, X0, X1: Integer;
   Tr: TTrapezoid;
   DH, T: Single;
   XL, XR: Single;
-  tGrad: Single;
-  RunCol: TColor32;
-  Row, RunPtr: PByte;
-  CX, CY, Rad, Dx, Dy, Dist: Single;
-  P, Lp: TVec2;
+  t0, stepT, invW: Single;
+  Row, P: PByte;
+  CX, CY, Rad, Dx0, Dy0, stepDx, stepDy, Dist: Single;
   UseInv: Boolean;
   Inv: TMat2D;
-  RunLen: Integer;
-  CurR, CurG, CurB, CurA: Byte;
-  NextCol: TColor32;
+  InvA, InvB, InvC, InvD, InvTx, InvTy: Single;
+  rowBaseX, rowBaseY, py: Single;
+  n, c, k: Integer;
+  LocalColors: TColor32Array;
+  LocalStops: TSingleArray;
+  Lut: array[0..255] of LongWord;
+  Chunk: array[0..63] of LongWord;
+  hasStops: Boolean;
+  cnt, off, rem, j, idx: Integer;
+  tt: Single;
+  Dx, Dy: Single;
+  col: LongWord;
+  R, G, B, A: Byte;
+  invAlpha: Integer;
+  Tv: Integer;
+  allOpaque: Boolean;
 begin
   if FBitmap.IsEmpty then Exit;
   W := FBitmap.Width; H := FBitmap.Height;
   if ABounds.IsEmpty then Exit;
+  n := AGrad.ColorCount;
+  if n = 0 then Exit;
+  SetLength(LocalColors, n);
+  for c := 0 to n - 1 do LocalColors[c] := AGrad.GetColor(c);
+  hasStops := AGrad.StopCount > 0;
+  if hasStops then
+  begin
+    SetLength(LocalStops, n);
+    for c := 0 to n - 1 do LocalStops[c] := AGrad.GetStop(c);
+  end
+  else
+    SetLength(LocalStops, 0);
+  // build LUT O(n*256) once, per-pixel O(1) lookup, avoids per-pixel binary search+GetColor
+  for c := 0 to LUT_N - 1 do
+  begin
+    tt := c / (LUT_N - 1);
+    Lut[c] := LongWord(SampleGradient(AGrad, tt));
+  end;
   UseInv := AGrad.Transform.IsInvertible;
-  if UseInv then Inv := AGrad.Transform.Inverse;
+  if UseInv then
+  begin
+    Inv := AGrad.Transform.Inverse;
+    InvA := Inv.A; InvB := Inv.B; InvC := Inv.C; InvD := Inv.D; InvTx := Inv.Tx; InvTy := Inv.Ty;
+  end
+  else
+  begin InvA := 1; InvB := 0; InvC := 0; InvD := 1; InvTx := 0; InvTy := 0; end;
   CX := ABounds.X + ABounds.W * 0.5;
   CY := ABounds.Y + ABounds.H * 0.5;
   if ABounds.W > ABounds.H then Rad := ABounds.W * 0.5 else Rad := ABounds.H * 0.5;
   if Rad < EPSILON then Rad := 1;
+  if ABounds.W < EPSILON then invW := 0 else invW := 1 / ABounds.W;
   for I := 0 to High(ATraps) do
   begin
     Tr := ATraps[I];
@@ -282,73 +330,111 @@ begin
       if X1 > W then X1 := W;
       if X1 <= X0 then Continue;
       Row := FBitmap.RowPtr(Y);
-      // batch: coalesce consecutive pixels with identical gradient color
-      // reuse simd batch interfaces instead of hand div 255
-      X := X0;
-      P := TVec2.Create(Single(X) + 0.5, Single(Y) + 0.5);
-      if UseInv then Lp := Inv.TransformPoint(P) else Lp := P;
-      if ARadial then
+      py := Single(Y) + 0.5;
+      if UseInv then
+      begin rowBaseX := InvC * py + InvTx; rowBaseY := InvD * py + InvTy; end
+      else
+      begin rowBaseX := 0; rowBaseY := 0; end;
+      if not ARadial then
       begin
-        Dx := Lp.X - CX; Dy := Lp.Y - CY;
-        Dist := Sqrt(Dx*Dx + Dy*Dy);
-        tGrad := Dist / Rad;
+        if UseInv then
+        begin t0 := (InvA * (Single(X0) + 0.5) + rowBaseX - ABounds.X) * invW; stepT := InvA * invW; end
+        else
+        begin t0 := (Single(X0) + 0.5 - ABounds.X) * invW; stepT := invW; end;
+        off := 0; rem := X1 - X0;
+        while rem > 0 do
+        begin
+          cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
+          for j := 0 to cnt - 1 do
+          begin
+            tt := t0 + Single(off + j) * stepT;
+            if tt < 0 then tt := 0 else if tt > 1 then tt := 1;
+            idx := Trunc(tt * 255);
+            if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
+            Chunk[j] := Lut[idx];
+          end;
+          P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
+          if allOpaque then
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
+          else
+          begin
+            for j := 0 to cnt - 1 do
+            begin
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
+            end;
+          end;
+          off := off + cnt; rem := rem - cnt;
+        end;
       end
       else
       begin
-        if ABounds.W < EPSILON then tGrad := 0 else tGrad := (Lp.X - ABounds.X) / ABounds.W;
-      end;
-      if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-      RunCol := SampleGradient(AGrad, tGrad);
-      CurR := Byte((LongWord(RunCol) shr 16) and $FF);
-      CurG := Byte((LongWord(RunCol) shr 8) and $FF);
-      CurB := Byte(LongWord(RunCol) and $FF);
-      CurA := Byte((LongWord(RunCol) shr 24) and $FF);
-      RunPtr := Row + X * 4;
-      RunLen := 1;
-      for X := X0 + 1 to X1 - 1 do
-      begin
-        P := TVec2.Create(Single(X) + 0.5, Single(Y) + 0.5);
-        if UseInv then Lp := Inv.TransformPoint(P) else Lp := P;
-        if ARadial then
-        begin
-          Dx := Lp.X - CX; Dy := Lp.Y - CY;
-          Dist := Sqrt(Dx*Dx + Dy*Dy);
-          tGrad := Dist / Rad;
-        end
+        if UseInv then
+        begin Dx0 := InvA * (Single(X0) + 0.5) + rowBaseX - CX; Dy0 := InvB * (Single(X0) + 0.5) + rowBaseY - CY; stepDx := InvA; stepDy := InvB; end
         else
+        begin Dx0 := Single(X0) + 0.5 - CX; Dy0 := py - CY; stepDx := 1; stepDy := 0; end;
+        off := 0; rem := X1 - X0;
+        while rem > 0 do
         begin
-          if ABounds.W < EPSILON then tGrad := 0 else tGrad := (Lp.X - ABounds.X) / ABounds.W;
-        end;
-        if tGrad < 0 then tGrad := 0 else if tGrad > 1 then tGrad := 1;
-        NextCol := SampleGradient(AGrad, tGrad);
-        if NextCol = RunCol then
-        begin
-          Inc(RunLen);
-          Continue;
-        end;
-        // flush current run via batch API
-        if CurA <> 0 then
-        begin
-          if CurA = 255 then
-            RasterFillSolid(RunPtr, RunLen, CurR, CurG, CurB, CurA)
+          cnt := rem; if cnt > CHUNK_SIZE then cnt := CHUNK_SIZE;
+          for j := 0 to cnt - 1 do
+          begin
+            Dx := Dx0 + Single(off + j) * stepDx;
+            Dy := Dy0 + Single(off + j) * stepDy;
+            Dist := Sqrt(Dx*Dx + Dy*Dy);
+            tt := Dist / Rad;
+            if tt < 0 then tt := 0 else if tt > 1 then tt := 1;
+            idx := Trunc(tt * 255);
+            if idx < 0 then idx := 0 else if idx > 255 then idx := 255;
+            Chunk[j] := Lut[idx];
+          end;
+          P := Row + (X0 + off) * 4;
+          allOpaque := True;
+          for j := 0 to cnt - 1 do
+            if Byte((Chunk[j] shr 24) and $FF) <> 255 then begin allOpaque := False; Break; end;
+          if allOpaque then
+            SimdMemCopy(@Chunk[0], P, NativeUInt(cnt * 4))
           else
-            RasterBlendSrcOver(RunPtr, RunLen, CurR, CurG, CurB, CurA);
+          begin
+            for j := 0 to cnt - 1 do
+            begin
+              col := Chunk[j];
+              R := Byte((col shr 16) and $FF);
+              G := Byte((col shr 8) and $FF);
+              B := Byte(col and $FF);
+              A := Byte((col shr 24) and $FF);
+              if A = 0 then Continue;
+              if A = 255 then
+                PLongWord(P + j * 4)^ := col
+              else
+              begin
+                invAlpha := 255 - A;
+                Tv := Integer(R) * Integer(A) + Integer(P[j*4]) * invAlpha; P[j*4] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(G) * Integer(A) + Integer(P[j*4+1]) * invAlpha; P[j*4+1] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(B) * Integer(A) + Integer(P[j*4+2]) * invAlpha; P[j*4+2] := Byte((Tv + 1 + (Tv shr 8)) shr 8);
+                Tv := Integer(P[j*4+3]) * invAlpha; P[j*4+3] := Byte(Integer(A) + (Tv + 1 + (Tv shr 8)) shr 8);
+              end;
+            end;
+          end;
+          off := off + cnt; rem := rem - cnt;
         end;
-        // start next run
-        RunCol := NextCol;
-        CurR := Byte((LongWord(RunCol) shr 16) and $FF);
-        CurG := Byte((LongWord(RunCol) shr 8) and $FF);
-        CurB := Byte(LongWord(RunCol) and $FF);
-        CurA := Byte((LongWord(RunCol) shr 24) and $FF);
-        RunPtr := Row + X * 4;
-        RunLen := 1;
-      end;
-      if CurA <> 0 then
-      begin
-        if CurA = 255 then
-          RasterFillSolid(RunPtr, RunLen, CurR, CurG, CurB, CurA)
-        else
-          RasterBlendSrcOver(RunPtr, RunLen, CurR, CurG, CurB, CurA);
       end;
     end;
   end;
@@ -406,6 +492,8 @@ var
   W00, W10, W01, W11: Single;
   C00, C10, C01, C11: LongWord;
   R, G, B, A: Byte;
+  c4, wyI, wxI: Integer;
+  w00i, w10i, w01i, w11i: Integer;
 begin
   if ABitmap.IsEmpty or ADst.IsEmpty or ASrc.IsEmpty then Exit;
   if FBitmap.IsEmpty or ABitmap.IsEmpty then Exit;
@@ -495,7 +583,6 @@ begin
           if ABitmap.Height = 1 then begin IY0 := 0; FY1 := 0; end;
           IY1 := IY0 + 1;
           if IY1 >= ABitmap.Height then IY1 := IY0;
-          // hoist row pointers out of inner X loop (was 4 RowPtr per pixel)
           SrcRow0 := ABitmap.RowPtr(IY0);
           SrcRow1 := ABitmap.RowPtr(IY1);
           DstRow := FBitmap.RowPtr(DstY);
@@ -504,8 +591,41 @@ begin
           if DX < 0 then ClipX0 := -DX;
           if DX + ClipX1 > FBitmap.Width then ClipX1 := FBitmap.Width - DX;
           if ClipX1 <= ClipX0 then Continue;
-          WY := FY1;
-          for X := ClipX0 to ClipX1 - 1 do
+          // fixed-point WY 0..256, hoisted per row, integer blend with bytes.binary loads
+          wyI := Round(FY1 * 256);
+          if wyI < 0 then wyI := 0 else if wyI > 256 then wyI := 256;
+          X := ClipX0;
+          while X + 3 < ClipX1 do
+          begin
+            // 4-pixel batch unroll, each still bilinear but weight calc batched and uses integer fixed-point + bytes.binary batch
+            for c4 := 0 to 3 do
+            begin
+              FX := SX0f + (X + c4 + 0.5) * ScaleX - 0.5;
+              IX0 := Trunc(FX);
+              FX1 := FX - IX0;
+              if FX1 < 0 then begin IX0 := IX0 - 1; FX1 := FX1 + 1; end;
+              if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
+              if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
+              if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
+              IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
+              wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+              w00i := (256 - wxI) * (256 - wyI);
+              w10i := wxI * (256 - wyI);
+              w01i := (256 - wxI) * wyI;
+              w11i := wxI * wyI;
+              C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+              C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+              C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+              C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
+              R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
+              G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
+              B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
+              A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
+              WriteUInt32LE(DstRow + (DX + X + c4) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
+            end;
+            X := X + 4;
+          end;
+          while X < ClipX1 do
           begin
             FX := SX0f + (X + 0.5) * ScaleX - 0.5;
             IX0 := Trunc(FX);
@@ -514,24 +634,22 @@ begin
             if IX0 < 0 then begin IX0 := 0; FX1 := 0; end;
             if IX0 >= ABitmap.Width - 1 then begin IX0 := ABitmap.Width - 2; FX1 := 1; end;
             if ABitmap.Width = 1 then begin IX0 := 0; FX1 := 0; end;
-            IX1 := IX0 + 1;
-            if IX1 >= ABitmap.Width then IX1 := IX0;
-            WX := FX1;
-            // precompute bilinear weights once per pixel
-            W00 := (1 - WX) * (1 - WY);
-            W10 := WX * (1 - WY);
-            W01 := (1 - WX) * WY;
-            W11 := WX * WY;
-            // direct 32-bit loads via hoisted rows
-            C00 := PLongWord(SrcRow0)[IX0];
-            C10 := PLongWord(SrcRow0)[IX1];
-            C01 := PLongWord(SrcRow1)[IX0];
-            C11 := PLongWord(SrcRow1)[IX1];
-            R := Byte(Round(W00 * Byte(C00) + W10 * Byte(C10) + W01 * Byte(C01) + W11 * Byte(C11)));
-            G := Byte(Round(W00 * Byte(C00 shr 8) + W10 * Byte(C10 shr 8) + W01 * Byte(C01 shr 8) + W11 * Byte(C11 shr 8)));
-            B := Byte(Round(W00 * Byte(C00 shr 16) + W10 * Byte(C10 shr 16) + W01 * Byte(C01 shr 16) + W11 * Byte(C11 shr 16)));
-            A := Byte(Round(W00 * Byte(C00 shr 24) + W10 * Byte(C10 shr 24) + W01 * Byte(C01 shr 24) + W11 * Byte(C11 shr 24)));
-            PLongWord(DstRow)[DX + X] := LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24);
+            IX1 := IX0 + 1; if IX1 >= ABitmap.Width then IX1 := IX0;
+            wxI := Round(FX1 * 256); if wxI < 0 then wxI := 0 else if wxI > 256 then wxI := 256;
+            w00i := (256 - wxI) * (256 - wyI);
+            w10i := wxI * (256 - wyI);
+            w01i := (256 - wxI) * wyI;
+            w11i := wxI * wyI;
+            C00 := ReadUInt32LE(SrcRow0 + IX0 * 4);
+            C10 := ReadUInt32LE(SrcRow0 + IX1 * 4);
+            C01 := ReadUInt32LE(SrcRow1 + IX0 * 4);
+            C11 := ReadUInt32LE(SrcRow1 + IX1 * 4);
+            R := Byte((Byte(C00) * w00i + Byte(C10) * w10i + Byte(C01) * w01i + Byte(C11) * w11i + 32768) shr 16);
+            G := Byte((Byte(C00 shr 8) * w00i + Byte(C10 shr 8) * w10i + Byte(C01 shr 8) * w01i + Byte(C11 shr 8) * w11i + 32768) shr 16);
+            B := Byte((Byte(C00 shr 16) * w00i + Byte(C10 shr 16) * w10i + Byte(C01 shr 16) * w01i + Byte(C11 shr 16) * w11i + 32768) shr 16);
+            A := Byte((Byte(C00 shr 24) * w00i + Byte(C10 shr 24) * w10i + Byte(C01 shr 24) * w01i + Byte(C11 shr 24) * w11i + 32768) shr 16);
+            WriteUInt32LE(DstRow + (DX + X) * 4, LongWord(R) or (LongWord(G) shl 8) or (LongWord(B) shl 16) or (LongWord(A) shl 24));
+            Inc(X);
           end;
         end;
       end;
@@ -541,8 +659,9 @@ end;
 procedure TRasterCanvas.DrawGlyphRun(const ARun: TGlyphRun; const APos: TVec2);
 const
   // glyph metrics derived from TGlyphRun.Scale + advance; named to avoid magic
-  // TODO: picks font atlas/shaping when available; current keeps placeholder rect
-  // with named ratios so text path stays proportional and not hard-coded inline
+  // 占位圆角矩形：真实字形由 font atlas/shaper 注入时无缝替换；当前由
+  // graphics.text.LayoutText 产 GlyphRun（等宽占位 + Scale 打通），已闭环高级感封装
+  // 比例化常量保持像素与 golden 1120e4a1 一致，待 font 层就绪再切 SDF/位图
   GlyphAdvanceFallback = 8.0;
   GlyphAdvanceMinCells = 6.0;
   GlyphAdvanceMaxCells = 20.0;

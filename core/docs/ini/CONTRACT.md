@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.ini.pas`（1 个源文件）
 **层级**：配置文本格式（依赖 L0：`text.conv`、`errors`、`mem`）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
-**最后更新**：2026-07-20
-**版本**：1.1（+ `TIniError` 结构化诊断）
+**最后更新**：2026-08-31
+**版本**：1.2（+ `TIniError` 结构化诊断）
 
 ---
 
@@ -137,3 +137,4 @@ Config 侧另有 `test_config_ini_export`。
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-20 | 1.0 | 首次契约，对齐 TIniFile 真实 API | config-formats lane |
+| 2026-08-31 | 1.2 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

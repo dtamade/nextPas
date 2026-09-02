@@ -36,30 +36,19 @@ const
     $F3, $B9, $CA, $C2, $FC, $63, $25, $51
   );
 
-function BytesEqual(const A, B: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.BytesEqual(A, B);
-end;
 
-function IsZeroBytes(const A: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.IsZeroBytes(A);
-end;
 
-function CompareBigEndian(const A, B: TBytes): Integer; inline;
-begin
-  Result := nextpas.core.bytes.ops.CompareUnsigned(A, B);
-end;
+
 
 function IsValidPrivateScalar(const A: TBytes): Boolean;
 var
   LOrder: TBytes;
 begin
   if Length(A) <> 32 then Exit(False);
-  if IsZeroBytes(A) then Exit(False);
+  if nextpas.core.bytes.ops.IsZeroBytes(A) then Exit(False);
   SetLength(LOrder, 32);
   Move(P256_ORDER_N[0], LOrder[0], 32);
-  if CompareBigEndian(A, LOrder) >= 0 then Exit(False);
+  if nextpas.core.bytes.ops.CompareUnsigned(A, LOrder) >= 0 then Exit(False);
   Result := True;
 end;
 

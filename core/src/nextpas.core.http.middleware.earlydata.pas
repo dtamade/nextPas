@@ -26,7 +26,6 @@ function HttpEarlyDataHeaderValue(const AReq: IHttpRequest): string;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.http.middleware,
   nextpas.core.http.middleware.context,
   nextpas.core.http.earlydata;
@@ -37,7 +36,7 @@ var
 begin
   Result := False;
   if AReq = nil then Exit;
-  if Supports(AReq, IHttpRequestWithEarlyData, LEarly) then
+  if ((AReq) <> nil) and ((AReq).QueryInterface(IHttpRequestWithEarlyData, LEarly) = 0) then
     Result := LEarly.GetWasEarlyData;
 end;
 

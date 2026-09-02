@@ -17,6 +17,7 @@ type
 function IsAsciiString(const AValue: string): Boolean; inline;
 function AsciiLowerChar(const C: Char): Char; inline;
 function AsciiLowerStr(const S: string): string; inline;
+function ToLowerAsciiAware(const S: string): string; inline; { 单源 ignore-case helper：ASCII  fast-path IsAsciiString+AsciiLowerStr，非 ASCII 走 System.LowerCase；表演：inline+Ascii 8 字节并行预检+零拷贝原串返回；复用 bytes.ops 同级单源纪律 }
 function StrHasPrefix(const S, Prefix: string): Boolean; inline;
 function StrHasSuffix(const S, Suffix: string): Boolean; inline;
 procedure EnsureOutputCapacity(var AValue: string; const ARequired: SizeInt); inline;
@@ -78,6 +79,11 @@ begin
   for LI := 1 to Length(Result) do
     if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
       Result[LI] := Chr(Ord(Result[LI]) + 32);
+end;
+
+function ToLowerAsciiAware(const S: string): string; inline;
+begin
+  if IsAsciiString(S) then Result := AsciiLowerStr(S) else Result := LowerCase(S);
 end;
 
 function StrHasPrefix(const S, Prefix: string): Boolean; inline;

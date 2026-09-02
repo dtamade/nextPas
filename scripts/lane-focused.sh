@@ -16,7 +16,7 @@ LIST_LANES=0
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  scripts/lane-focused.sh --lane <platform|mem|system|config|http|test> [--print-command]
+  scripts/lane-focused.sh --lane <platform|mem|system|config|http|test|agent> [--print-command]
   scripts/lane-focused.sh --list
 
 Compiler has no default lane-focused gate. Name the narrow compiler fixture or smoke command,
@@ -59,6 +59,10 @@ set_lane_defaults() {
       TRUTH_KIND="source-contract"
       FOCUS_PATH="core/tests/nextpas.core.test/lane_gate"
       ;;
+    agent)
+      TRUTH_KIND="runtime"
+      FOCUS_PATH="core/tests/nextpas.core.agent/test_compile_skeleton"
+      ;;
     compiler)
       printf 'compiler has no default lane-focused gate\n' >&2
       printf 'name the narrow compiler fixture or smoke command, then use bash build/verify_local.sh only as a verify exception\n' >&2
@@ -73,7 +77,7 @@ set_lane_defaults() {
 }
 
 print_lane_list() {
-  for lane_name in platform mem system config http test; do
+  for lane_name in platform mem system config http test agent; do
     set_lane_defaults "$lane_name"
     printf '%s\t%s\t%s\n' "$lane_name" "$TRUTH_KIND" "$FOCUS_PATH"
   done

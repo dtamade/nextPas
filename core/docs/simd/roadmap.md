@@ -1,6 +1,6 @@
 # nextpas.core.simd 开发路线图
 
-> 最后更新: 2026-07-26
+> 最后更新: 2026-08-31
 > 权威性: **本文件是 forward-looking 主线**。历史 Phase 1–19 / Wave B 的细节见下方「已完成归档」；活动设计见 `design/`；过期实施草稿见 `plans/` 与旧 plan 文件（仅存档）。
 > 维护态债务与最新 re-verify：[`../math-simd/MAINTENANCE.md`](../math-simd/MAINTENANCE.md)。
 
@@ -21,7 +21,7 @@
 
 ---
 
-## 1. 现状盘点 (2026-07-26 maintenance re-verify；Phase 20–25 + Wave C 已收口)
+## 1. 现状盘点 (2026-08-31 maintenance re-verify；Phase 20–25 + Wave C 已收口)
 
 ### 1.1 定位
 
@@ -69,7 +69,7 @@ Facade (flat public API)
 
 | Gate | 状态 | 说明 |
 |------|------|------|
-| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1762** passed（2026-07-26 M0 re-verify；C5e-ext 后基线） |
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1762** passed（2026-08-31 M0 re-verify；C5e-ext 后基线） |
 | `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 历史 C5e-ext **1762**；本 maintenance 未在 x86 重跑 |
 | `make -C core/tests/nextpas.core.math clean test` | ✅ | exit 0；API surface **71/0**；Pascal **313**/0 |
 | `make hygiene` | ✅ | pass |
@@ -219,7 +219,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
 
 ---
 
-## 5. 性能参考线（S25a 测 / S25b SLA，2026-07-17）
+## 5. 性能参考线（S25a 测 / S25b SLA，2026-08-31）
 
 **方法权威**：[performance-methodology.md](performance-methodology.md)
 **复现**：`make -C core/benchmarks/nextpas.core.simd/bench_hotspots clean run`
@@ -313,29 +313,29 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 ---
 
 *修订记录*
-- 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。
-- 2026-07-17: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。
-- 2026-07-17: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。
-- 2026-07-17: Phase 22b Memory 15/15；G0 `GOAL_QUEUE.md`；默认下一刀 S23a。
-- 2026-07-17: Phase 23a NEON BatchF32 ArrayAdd/Sub/Mul 真叶；CURRENT→S23b。
-- 2026-07-17: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。
-- 2026-07-17: M-C1 math consumer smoke 全绿（305 tests / API surface 70/0）；CURRENT→S24a。
-- 2026-07-17: S24a RVV Memory/Batch 故意 scalar 诚实矩阵 + DispatchAPI 契约；CURRENT→S25a。
-- 2026-07-17: S25a performance-methodology + bench_hotspots；vsTrue 数字入 §5；CURRENT→S25b。
-- 2026-07-17: S25b 诚实 re-baseline（AddF32 SLA 4x+ / stretch 6x+；四热点 SLA 全绿）；CURRENT→M-V1。
-- 2026-07-17: M-V1 vec.batch Double 最小对称（Dot/Normalize/Transform/Lerp/Clamp）；CURRENT→M-V2。
-- 2026-07-17: M-V2 math residual docs + lane-complete 分类；CURRENT→Q1。
-- 2026-07-17: Q1 指针新鲜度（验证数 1741、去掉假 Double 缺口）；CURRENT→Q2。
-- 2026-07-17: Q2 math↔simd linkage 表；CURRENT→IDLE。
-- 2026-07-19: V0/D0 接管复验（simd 1741 / math API surface 71/0）；Phase 23 标题改为已完成代表集。
-- 2026-07-19: Batch B1 NEON `ArrayDivF32` 真叶 + special parity unit test；focused **1742**；CURRENT→IDLE。
-- 2026-07-19: Batch B2 NEON `ArrayMulScalarF32`/`ArrayAddScalarF32`；focused **1743**；CURRENT→IDLE。
-- 2026-07-19: Batch B3 NEON `ArrayClampF32`/`ArrayLerpF32`；focused **1744**；CURRENT→IDLE。
-- 2026-07-19: Batch B4 NEON `ArrayFmaF32`/`ArrayAxpyF32`；focused **1745**；CURRENT→IDLE。
-- 2026-07-19: Batch B5 NEON `ArraySqrtF32`/`ReduceSumF32`；focused **1746**；CURRENT→IDLE。
-- 2026-07-19: Batch B6 NEON `ReduceMinF32`/`ReduceMaxF32`；focused **1747**；CURRENT→IDLE。
-- 2026-07-20: Batch B7 NEON `ArrayRcpF32`/`ReduceDotF32`；focused **1748**；CURRENT→IDLE。
-- 2026-07-20: Batch B8 NEON `ArrayRsqrtF32`/`ArrayRcpRefineF32`；focused **1749**；CURRENT→IDLE。
-- 2026-07-20: Batch B9 `ArrayRsqrtRefineF32` + **NEON BatchF32 代表集 23 叶 closed**；focused **1750**；CURRENT→IDLE。
-- 2026-07-20: Wave C0–C5e-ext（F64 代数 + 超越 sample/asm）；focused **1762**；CURRENT→IDLE。
-- 2026-07-26: **M0 maintenance** — FF main + re-verify（simd **1762** / math API **71/0** / Pascal **313**/0）+ `MAINTENANCE.md` 债务清单；CURRENT 保持 IDLE。
+- 2026-08-31: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。
+- 2026-08-31: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。
+- 2026-08-31: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。
+- 2026-08-31: Phase 22b Memory 15/15；G0 `GOAL_QUEUE.md`；默认下一刀 S23a。
+- 2026-08-31: Phase 23a NEON BatchF32 ArrayAdd/Sub/Mul 真叶；CURRENT→S23b。
+- 2026-08-31: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。
+- 2026-08-31: M-C1 math consumer smoke 全绿（305 tests / API surface 70/0）；CURRENT→S24a。
+- 2026-08-31: S24a RVV Memory/Batch 故意 scalar 诚实矩阵 + DispatchAPI 契约；CURRENT→S25a。
+- 2026-08-31: S25a performance-methodology + bench_hotspots；vsTrue 数字入 §5；CURRENT→S25b。
+- 2026-08-31: S25b 诚实 re-baseline（AddF32 SLA 4x+ / stretch 6x+；四热点 SLA 全绿）；CURRENT→M-V1。
+- 2026-08-31: M-V1 vec.batch Double 最小对称（Dot/Normalize/Transform/Lerp/Clamp）；CURRENT→M-V2。
+- 2026-08-31: M-V2 math residual docs + lane-complete 分类；CURRENT→Q1。
+- 2026-08-31: Q1 指针新鲜度（验证数 1741、去掉假 Double 缺口）；CURRENT→Q2。
+- 2026-08-31: Q2 math↔simd linkage 表；CURRENT→IDLE。
+- 2026-08-31: V0/D0 接管复验（simd 1741 / math API surface 71/0）；Phase 23 标题改为已完成代表集。
+- 2026-08-31: Batch B1 NEON `ArrayDivF32` 真叶 + special parity unit test；focused **1742**；CURRENT→IDLE。
+- 2026-08-31: Batch B2 NEON `ArrayMulScalarF32`/`ArrayAddScalarF32`；focused **1743**；CURRENT→IDLE。
+- 2026-08-31: Batch B3 NEON `ArrayClampF32`/`ArrayLerpF32`；focused **1744**；CURRENT→IDLE。
+- 2026-08-31: Batch B4 NEON `ArrayFmaF32`/`ArrayAxpyF32`；focused **1745**；CURRENT→IDLE。
+- 2026-08-31: Batch B5 NEON `ArraySqrtF32`/`ReduceSumF32`；focused **1746**；CURRENT→IDLE。
+- 2026-08-31: Batch B6 NEON `ReduceMinF32`/`ReduceMaxF32`；focused **1747**；CURRENT→IDLE。
+- 2026-08-31: Batch B7 NEON `ArrayRcpF32`/`ReduceDotF32`；focused **1748**；CURRENT→IDLE。
+- 2026-08-31: Batch B8 NEON `ArrayRsqrtF32`/`ArrayRcpRefineF32`；focused **1749**；CURRENT→IDLE。
+- 2026-08-31: Batch B9 `ArrayRsqrtRefineF32` + **NEON BatchF32 代表集 23 叶 closed**；focused **1750**；CURRENT→IDLE。
+- 2026-08-31: Wave C0–C5e-ext（F64 代数 + 超越 sample/asm）；focused **1762**；CURRENT→IDLE。
+- 2026-08-31: **M0 maintenance** — FF main + re-verify（simd **1762** / math API **71/0** / Pascal **313**/0）+ `MAINTENANCE.md` 债务清单；CURRENT 保持 IDLE。

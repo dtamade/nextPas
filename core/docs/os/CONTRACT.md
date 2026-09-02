@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`、`core/src/nextpas.core.os.procinfo.pas`
 **层级**：L2（依赖 L0: base, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-22
-**版本**：1.1
+**最后更新**：2026-08-31
+**版本**：1.2
 
 ---
 

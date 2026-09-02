@@ -6,27 +6,43 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
-  nextpas.core.git.native.base;
+  nextpas.core.git.native.base,
+  nextpas.core.git.native.repo,
+  nextpas.core.git.native.objmodel;
 
-{ Shared string/path helpers for the native git subfamily.
-  Single source for StripCR / TrimSpaces / SplitLines / EndsWith /
-  WorktreeDir — avoids 3+ copies (trailer/attributes/mailmap etc).
-  Inline where hot (StripCR/Trim/EndsWith/IsZero) to keep call site
-  zero-copy when no allocation is needed. Reuses bytes.ops single
-  source directly via GitBytesToString / GitStringToBytes (no adler32
-  duplication here). }
-
-function GitStripCR(const S: string): string; inline;
+function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
+// shared string helpers (single source for Trim/EndsWith/SplitLines/StripCR)
 function GitTrimSpaces(const S: string): string; inline;
-function GitLocalEndsWith(const S, Suffix: string): Boolean; inline;
+function GitEndsWith(const S, Suffix: string): Boolean; inline;
 function GitSplitLines(const S: string): TStringArray; inline;
+function GitStripCR(const S: string): string; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
-function GitIsZeroOidInline(const AOid: TGitOid): Boolean; inline;
-function GitBytesToString(const ABytes: TBytes): string; inline;
-function GitStringToBytes(const AText: string): TBytes; inline;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
 
 implementation
+
+uses
+  nextpas.core.exception,
+  nextpas.core.text.utils;
+
+function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
+var I: Integer;
+begin
+  for I := 0 to GitOidRawLen - 1 do
+    if AOid.Bytes[I] <> 0 then Exit(False);
+  Result := True;
+end;
+
+function GitTrimSpaces(const S: string): string; inline;
+begin
+  Result := Trim(S);
+end;
+
+function GitEndsWith(const S, Suffix: string): Boolean; inline;
+begin
+  Result := (Length(S) >= Length(Suffix)) and (Copy(S, Length(S) - Length(Suffix) + 1, Length(Suffix)) = Suffix);
+end;
 
 function GitStripCR(const S: string): string; inline;
 begin
@@ -36,71 +52,73 @@ begin
     Result := S;
 end;
 
-function GitTrimSpaces(const S: string): string; inline;
-var
-  A, B: Integer;
-begin
-  A := 1;
-  B := Length(S);
-  while (A <= B) and (S[A] in [' ', #9, #10, #13]) do
-    Inc(A);
-  while (B >= A) and (S[B] in [' ', #9, #10, #13]) do
-    Dec(B);
-  if B < A then
-    Exit('');
-  if (A = 1) and (B = Length(S)) then
-    Exit(S); // zero-copy when already trimmed
-  Result := Copy(S, A, B - A + 1);
-end;
-
-function GitLocalEndsWith(const S, Suffix: string): Boolean; inline;
-begin Result:=GitEndsWith(S, Suffix); end;
-
 function GitSplitLines(const S: string): TStringArray; inline;
-var
-  Cnt, P, Start, Fill: Integer;
+var I, Start, Idx, Cnt: Integer;
 begin
-  // single-alloc, zero-copy per line via Copy; inline hot path
-  if Length(S) = 0 then
+  if S = '' then
   begin
     SetLength(Result, 1);
     Result[0] := '';
     Exit;
   end;
-  Cnt := 0;
-  for P := 1 to Length(S) do
-    if S[P] = #10 then Inc(Cnt);
-  SetLength(Result, Cnt + 1);
+  Cnt := 1;
+  for I := 1 to Length(S) do
+    if S[I] = #10 then Inc(Cnt);
+  SetLength(Result, Cnt);
   Start := 1;
-  Fill := 0;
-  for P := 1 to Length(S) do
-    if S[P] = #10 then
+  Idx := 0;
+  for I := 1 to Length(S) + 1 do
+    if (I > Length(S)) or (S[I] = #10) then
     begin
-      Result[Fill] := Copy(S, Start, P - Start);
-      Inc(Fill);
-      Start := P + 1;
+      Result[Idx] := Copy(S, Start, I - Start);
+      Inc(Idx);
+      Start := I + 1;
     end;
-  Result[Fill] := Copy(S, Start, Length(S) - Start + 1);
 end;
 
 function GitWorktreeDir(const AGitDir: string): string; inline;
-begin Result:=nextpas.core.git.native.base.GitWorktreeDir(AGitDir); end;
-
-function GitIsZeroOidInline(const AOid: TGitOid): Boolean; inline;
+var P: Integer;
 begin
-  Result := GitOidIsZero(AOid);
+  if GitEndsWith(AGitDir, '/.git') then
+    Result := Copy(AGitDir, 1, Length(AGitDir) - 5)
+  else if GitEndsWith(AGitDir, '.git') then
+  begin
+    P := Length(AGitDir);
+    while (P > 0) and (AGitDir[P] <> '/') do Dec(P);
+    if P > 0 then Result := Copy(AGitDir, 1, P - 1) else Result := '.';
+  end
+  else
+    Result := AGitDir;
 end;
 
-function GitBytesToString(const ABytes: TBytes): string; inline;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
+var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
 begin
-  // single-source: bytes.ops.BytesToString = one Move, inline keeps call site zero-copy
-  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
+  Result := False;
+  if GitIsZeroOid(ATreeOid) then Exit;
+  Data := ARepo.ReadObject(ATreeOid, Kind);
+  if Kind <> gokTree then Exit;
+  Entries := GitParseTree(Data);
+  for I := 0 to High(Entries) do
+    if Entries[I].Name = AName then
+    begin AOid := Entries[I].Oid; Result := True; Exit; end;
 end;
 
-function GitStringToBytes(const AText: string): TBytes; inline;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
+var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
 begin
-  // single-source: bytes.ops.StringToBytes = one Move, inline keeps call site zero-copy
-  Result := nextpas.core.bytes.ops.StringToBytes(AText);
+  Result := AOid; Depth := 0;
+  while Depth < 16 do
+  begin
+    Data := ARepo.ReadObject(Result, Kind);
+    case Kind of
+      gokCommit: begin CInfo := GitParseCommit(Data); Result := CInfo.Tree; Exit; end;
+      gokTree: Exit;
+      gokTag: begin TInfo := GitParseTag(Data); Result := TInfo.Target; Inc(Depth); end;
+    else raise EGitError.CreateFmt('object %s is not a tree/commit/tag', [GitOidToHex(AOid)]);
+    end;
+  end;
+  raise EGitError.Create('tag peel too deep');
 end;
 
 end.

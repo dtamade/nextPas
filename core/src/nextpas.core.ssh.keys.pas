@@ -11,7 +11,6 @@ unit nextpas.core.ssh.keys;
 interface
 
 uses
-  nextpas.core.system.sysutils,
   nextpas.core.base,
   nextpas.core.text.strings,
   nextpas.core.ssh.base,
@@ -43,6 +42,7 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.text.utils,
   nextpas.core.encoding.base64,
   nextpas.core.crypto.bcrypt_pbkdf,
   nextpas.core.crypto.bigint,

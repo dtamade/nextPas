@@ -27,8 +27,11 @@
 | `NewZipReaderFrom` / `NewZipReaderFromWithOptions` | 从可定位流打开：经 IReaderAt 定位读按需取数（EOCD/central/条目载荷），不整体载入、不改写调用方流位置；源须同时实现 IStream 与 IReaderAt，否则 ENotSupportedError；多条目流可并发打开 |
 | `NewZipSequentialReader` / `NewZipSequentialReaderWithOptions` | 从纯顺序流打开：仅靠 local header + data descriptor 前进，不整载、不要求 seek，与七期描述符写端对偶；源为任意 IReader（HTTP body/管道）；一次仅一流，MaxOutputSize/MaxTotal/MaxDescriptorBuffer 与口令语义与读端一致 |
 | `DefaultZipWriteOptions` / `DefaultZipAddOptions` / `DefaultZipReadOptions` / `DefaultZipExtractOptions` | 各选项默认值 |
+| `NormalizeZipReadOptions` | 读选项归一（`0→默认`，`MaxOutput/MaxDescriptor` 单源，S81） |
+| `TryZipMethodFromCode` | 方法码→`TZipMethod` 归一（`0/8` 映射，`reader/sequential` 单源，S83） |
 | `ZipPackDirInto` / `ZipPackDir` | 目录递归打包（携带 mtime 与 posix 权限位） |
-| `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录 |
+| `ZipExtractToDirWithOptions` / `ZipExtractToDir` | 解包到目录（非原子，见 §6） |
+| `ZipExtractToDirAtomicWithOptions` / `ZipExtractToDirAtomic` | 原子解包到目录：同文件系统 `TempDir`+`Rename` 原子提交，`Exists`拒绝覆盖，异常自动清理（S67） |
 | `ZipBuilder` / `ZipBuilderForceZip64` / `NewZipBuilder*` | 链式构造器工厂（委托 `NewZipWriter*`，字节级一致，高级感 API） |
 | `ZipUnixModeOf` / `ZipRegularMode` / `ZipDirectoryMode` | unix 模式字助手（zip.base） |
 
@@ -219,3 +222,5 @@ store/deflate、unicode、空/目录、20×混合、1MiB 吞吐与 30 随机 fuz
 
 - 顺序读目录判定仅认尾随 `/`，随机读另认 `S_IFDIR`/`S_IFLNK`（external attrs 高位）；见 INV-16。
 - `extra` 的 `LE*` 已收口至 `nextpas.core.zip.common`，`WriteLE*` 栈直写与 `PByte`/`TBytes` 双形态保留；`Build*` 为堆便捷包装，写端一律走 `Encode*` 零分配路径（`aes.EncodeWinZipAesExtraBody` 同为栈上 7 字节零堆，`BuildWinZipAesExtraBody` 为其堆包装）。
+- `ZipExtractToDir*` 默认非原子：已落盘文件不回滚，`LDirs` 逆序定稿在 `try..finally` 尽力 `Chmod/Chtimes`，异常需外层整体清理；原子语义请用 `ZipExtractToDirAtomic*`（S67：同文件系统 `TempDir(LParent,'.zip-atomic-')`+`Rename` 原子提交，`Exists`拒绝覆盖，异常 `RemoveAll` 清理）。`EnsureNoSymlinkInPath` 已为落盘前/后双校验 + 落盘结果 `IsSymlink(LFull)` 校验（S66），残余 TOCTOU 需 `openat(O_NOFOLLOW)` 彻底消除，见 SECURITY §5。
+- `MaxDescriptorBuffer`（默认 512MiB）与 `MaxTotalOutputSize` 正交，顺序读 `CollectDescriptorPayload` 先缓冲后 `CheckTotalLimit`，极端小 `MaxTotal` 配大缓冲时内存先分配后 fail-closed（已知取舍，见 INV-16/17）。

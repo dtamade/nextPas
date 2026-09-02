@@ -1,20 +1,50 @@
 unit nextpas.core.db.redis.adapter;
 
-{** @desc IDbConnection 的 Redis 原生适配器（RESP2 流水线/MULTI 直映，惰性 Query/Reset，单列 'reply'）。 *}
-{** 能力降级与观测同构见 CONTRACT §2.12/§2.13；命令分词/回复映射/事务语义详实现（单源以 CONTRACT 为准）。 *}
+{** @desc IDbConnection/IDbQuery 的 Redis 原生适配器（V3-A5）。
+
+       缝位：L2 同层单向 allowlist 轻量缝 `db.redis.adapter → net`（transport 侧承载 `net.tcp`/`tls.dialer` 主缝，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image 范式），bytes.ops 单源 inline/零拷贝（StringToBytes 薄转发，视图零分配），资源 FreeAndNil/try-finally 不丢。
+       定位：RESP2 协议原生客户端（无 C 库依赖），键值面映射到统
+       一层。命令文本 = 空白分词的命令行（GET key / SET key val），
+       ?/?N 占位符替换为独立 bulk 参数——RESP 长度前缀天然二进制
+       安全，注入安全由协议构造保证（无转义路径）。
+
+       执行模型：IDbQuery 惰性执行（首个 Step 发命令并解析完整回
+       复；后续 Step 只遍历已解析行，无 IO）；Reset 重臂（下次
+       Step 重发命令，对齐 odbc Reset 语义）。
+
+       回复 → 行映射（诚实最小面）：array 回复每元素一行；
+       simple/bulk/integer 标量一行；null 零行；error 回复在执行点
+       抛 EDbError（db.err ClassifyRedis 归一）。单列列名 'reply'。
+
+       事务控制面：MULTI/EXEC/DISCARD 直映。MULTI 期间命令被服务
+       端排队，本层透明收到 +QUEUED（消费方读到的是排队标记而非
+       结果——Redis 固有语义）；CommitTxn 校验 EXEC 数组内错误元素
+       后丢弃载荷（排队命令的实际结果不经统一层暴露）；EXECABORT
+       → decTransaction。AImmediate 无对应语义接受为 no-op。
+
+       能力降级矩阵（诚实契约，CONTRACT §2.13 同文）：
+         - Savepoints / StmtCacheControl / LargeObjects /
+           NativeBool / MultiStatementExec / StatementTimeout：False。
+         - BatchExecutor：True——真流水线（一次写 burst + N 读），
+           sqlite 式精确到步的错误定位。
+         - CaseSensitiveIdentifiers：True（键二进制敏感）。
+         - MaxPlaceholders：999 保守下界。
+
+       观测钩子：§2.12 四后端同构接线（attach-catch-up、首个执行窗
+       口计时一次、错误类目透传）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.base.utils,
+  nextpas.core.exception,
+  nextpas.core.base,
   nextpas.core.sync,
   nextpas.core.errors,
-  nextpas.core.text.utils,
-  nextpas.core.text.conv,
-  nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
@@ -52,12 +82,10 @@ implementation
 const
   C_READ_CHUNK = 4096;
 
-function BytesFromText(const AStr: string): TBytes;
+function BytesFromText(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  // INV-5 single source: delegate to bytes.ops.StringToBytes (zero-copy PAnsiChar(AText)^ deref + single SetLength+Move, inline thin forward — Move stays in owner)
+  Result := StringToBytes(AStr);
 end;
 
 function RedisCategory(const AErrType: string): TDbErrorCategory;
@@ -98,15 +126,13 @@ begin
   begin
     LTail := Copy(LHostPart, LColon + 1, MaxInt);
     LHostPart := Copy(LHostPart, 1, LColon - 1);
+    Val(LTail, LCode, LCode);
     Val(LTail, AOpts.Port, LCode);
     if (LCode <> 0) or (AOpts.Port = 0) then
       raise EDbError.CreateSimple(dbkRedis,
         'invalid port ":' + LTail + '"');
   end;
-  begin
-    LHostPart := Trim(LHostPart);
-    AOpts.Host := LHostPart;
-  end;
+  AOpts.Host := Trim(LHostPart);
   if AOpts.Host = '' then
     raise EDbError.CreateSimple(dbkRedis, 'empty host');
   { 统一层连接选项映射（advisory）：StatementTimeoutMs 作为 IO
@@ -168,10 +194,15 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
-    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -562,8 +593,15 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径：预求和单分配直写（已收敛至 bytes.ops 单源） }
-  LFrames := BytesConcatMany(LStepFrames);
+  { 单次写 burst = 流水线关键路径 }
+  SetLength(LFrames, 0);
+  for I := 0 to High(LStepFrames) do
+  begin
+    SetLength(LFrames, Length(LFrames) + Length(LStepFrames[I]));
+    if Length(LStepFrames[I]) > 0 then
+      Move(LStepFrames[I][0], LFrames[Length(LFrames) -
+        Length(LStepFrames[I])], Length(LStepFrames[I]));
+  end;
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
   try
@@ -620,11 +658,6 @@ begin
   Result := False;
 end;
 
-function TDbRedisConnection.SupportsArrayBinding: Boolean;
-begin
-  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
-end;
-
 function TDbRedisConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;
@@ -638,6 +671,36 @@ end;
 function TDbRedisConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := False;   { v1：TimeoutMs 忽略，如实登记 }
+end;
+
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbRedisConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbRedisConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbRedisConnection.CaseSensitiveIdentifiers: Boolean;

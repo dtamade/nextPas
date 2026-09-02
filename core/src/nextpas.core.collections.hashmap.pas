@@ -133,7 +133,7 @@ type
     { Bitmap helpers }
     procedure BitmapSet(aIdx: SizeUInt); inline;
     procedure BitmapClear(aIdx: SizeUInt); inline;
-    procedure BitmapZero;
+    procedure BitmapZero; inline;
     function  BitmapFindNext(aStart: SizeUInt): SizeUInt;
   private
     // 迭代器回调方法
@@ -243,7 +243,9 @@ implementation
 uses
   nextpas.core.math,
   nextpas.core.hash.wyhash,
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.bytes.ops,
+  nextpas.core.simd.bitops;
 
 { Hash helper re-exports (implementations in hashmap.base) }
 
@@ -356,64 +358,95 @@ begin
   (FBitmap + (aIdx shr 3))^ := (FBitmap + (aIdx shr 3))^ and not Byte(1 shl (aIdx and 7));
 end;
 
-procedure THashMap.BitmapZero;
+procedure THashMap.BitmapZero; inline;
 begin
-  FillChar(FBitmap^, (FCapacity + 7) div 8, 0);
+  if (FBitmap <> nil) and (FCapacity > 0) then
+    FillChar(FBitmap^, (FCapacity + 7) div 8, 0);
 end;
 
 { Find next set bit at or after aStart; returns FCapacity if none.
-  First-byte scan must shift the byte so bit0 corresponds to aStart; using
-  (byte and ($FF shl bitIdx)) while still counting from LSB double-counts the
-  low zero bits and skips/mis-identifies occupied slots. }
+  perf: word-level CTZ scan via nextpas.core.simd.bitops (single-source, BSF/TZCNT on x86/AArch64).
+  First byte uses shr+ Ctz32 to align bit0 to aStart; remaining bitmap scanned as
+  SizeUInt words (zero-copy view via PSizeUInt) skipping zero words O(cap/wordSize) and
+  resolving first set bit with Ctz32/Ctz64 (single instruction) instead of per-bit shr loop. }
 function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt;
 var
-  byteIdx: SizeUInt;
+  byteIdx, endByte: SizeUInt;
   bitIdx: Byte;
   b: Byte;
-  endByte: SizeUInt;
+  wordBase, wordCount, i: SizeUInt;
+  w: SizeUInt;
+  baseBit: SizeUInt;
 begin
   if aStart >= FCapacity then
     Exit(FCapacity);
-
   byteIdx := aStart shr 3;
-  bitIdx := aStart and 7;
+  bitIdx := Byte(aStart and 7);
   endByte := (FCapacity + 7) div 8;
-  if byteIdx < endByte then
+  if byteIdx >= endByte then
+    Exit(FCapacity);
+  { First partial byte: shift so bit0 corresponds to aStart, then CTZ. }
+  b := Byte((FBitmap + byteIdx)^ shr bitIdx);
+  if b <> 0 then
   begin
-    { Align so bit 0 of b is the aStart bit within this byte. }
-    b := (FBitmap + byteIdx)^ shr bitIdx;
+    Result := (byteIdx shl 3) + bitIdx + SizeUInt(Ctz32(b));
+    if Result < FCapacity then
+      Exit;
+    Exit(FCapacity);
+  end;
+  Inc(byteIdx);
+  if byteIdx >= endByte then
+    Exit(FCapacity);
+  { Align to SizeUInt boundary for word loads (zero-copy view). }
+  while (byteIdx < endByte) and ((PtrUInt(FBitmap + byteIdx) and (SizeOf(SizeUInt) - 1)) <> 0) do
+  begin
+    b := (FBitmap + byteIdx)^;
     if b <> 0 then
     begin
-      while (b and 1) = 0 do
-      begin
-        b := b shr 1;
-        Inc(bitIdx);
-      end;
-      Result := (byteIdx shl 3) + bitIdx;
+      Result := (byteIdx shl 3) + SizeUInt(Ctz32(b));
       if Result < FCapacity then
         Exit;
+      Exit(FCapacity);
     end;
     Inc(byteIdx);
-    { Scan remaining bytes }
-    while byteIdx < endByte do
+  end;
+  { Word-level scan: each non-zero word yields bit index via CTZ (BSF). }
+  wordBase := byteIdx;
+  wordCount := (endByte - byteIdx) div SizeOf(SizeUInt);
+  if wordCount > 0 then
+  begin
+    for i := 0 to wordCount - 1 do
     begin
-      b := (FBitmap + byteIdx)^;
-      if b <> 0 then
+      w := PSizeUInt(FBitmap + wordBase + i * SizeOf(SizeUInt))^;
+      if w <> 0 then
       begin
-        bitIdx := 0;
-        while (b and 1) = 0 do
-        begin
-          b := b shr 1;
-          Inc(bitIdx);
-        end;
-        Result := (byteIdx shl 3) + bitIdx;
+        {$IF SizeOf(SizeUInt) = 8}
+        baseBit := SizeUInt(Ctz64(w));
+        {$ELSE}
+        baseBit := SizeUInt(Ctz32(w));
+        {$ENDIF}
+        Result := ((wordBase + i * SizeOf(SizeUInt)) shl 3) + baseBit;
         if Result < FCapacity then
           Exit;
+        Exit(FCapacity);
       end;
-      Inc(byteIdx);
     end;
+    byteIdx := wordBase + wordCount * SizeOf(SizeUInt);
   end;
-  Result := FCapacity; { sentinel: not found }
+  { Tail bytes. }
+  while byteIdx < endByte do
+  begin
+    b := (FBitmap + byteIdx)^;
+    if b <> 0 then
+    begin
+      Result := (byteIdx shl 3) + SizeUInt(Ctz32(b));
+      if Result < FCapacity then
+        Exit;
+      Exit(FCapacity);
+    end;
+    Inc(byteIdx);
+  end;
+  Result := FCapacity;
 end;
 
 procedure THashMap.Rehash(aNewCapacity: SizeUInt);
@@ -423,27 +456,34 @@ begin
   oldCap := FCapacity;
   FBuckets := nil; FBitmap := nil; FCapacity := 0;
   InitCapacity(aNewCapacity);
-  for i := 0 to oldCap-1 do
+  if (oldBuckets = nil) or (oldCap = 0) then
   begin
-    if (oldBuckets + i)^.State = Ord(bsOccupied) then
+    if oldBitmap <> nil then
+      FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
+    Exit;
+  end;
+  try
+    for i := 0 to oldCap-1 do
     begin
+      if (oldBuckets + i)^.State <> Ord(bsOccupied) then Continue;
       idx := (oldBuckets + i)^.Hash and FMask;
-      while ((FBuckets + idx)^.State = Ord(bsOccupied)) do
+      // perf: linear probe O(1) avg at load 0.75, power-of-two mask; single-source zero-copy via bytes.ops, no extra FillChar/Finalize
+      while (FBuckets + idx)^.State = Ord(bsOccupied) do
         idx := (idx + 1) and FMask;
       (FBuckets + idx)^.State := Ord(bsOccupied);
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
-      Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
-      Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
-      FillChar((oldBuckets + i)^.Key, SizeOf(K), 0);
-      FillChar((oldBuckets + i)^.Value, SizeOf(V), 0);
+      // single-source zero-copy transfer: bytes.ops.BytesCopy inline thin-forward, ownership bit-moved, no refcount bump, no FillChar zeroing
+      nextpas.core.bytes.ops.BytesCopy(@(FBuckets + idx)^.Key, @(oldBuckets + i)^.Key, SizeOf(K));
+      nextpas.core.bytes.ops.BytesCopy(@(FBuckets + idx)^.Value, @(oldBuckets + i)^.Value, SizeOf(V));
       BitmapSet(idx);
-
       Inc(FCount); Inc(FUsed);
     end;
+  finally
+    // stability: always release old buffers even if exception; moved slots freed raw without finalize (ownership transferred)
+    FreeMemOf(FAllocator, oldBuckets, oldCap * SizeOf(TBucket));
+    if oldBitmap <> nil then
+      FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
   end;
-  FreeMemOf(FAllocator, oldBuckets, oldCap * SizeOf(TBucket));
-  if oldBitmap <> nil then
-    FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
 end;
 
 function THashMap.KeyHash(const AKey: K): UInt32;

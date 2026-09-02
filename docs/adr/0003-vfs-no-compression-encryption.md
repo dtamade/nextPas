@@ -55,10 +55,11 @@ respack(STORE) → vfs.embedded(零拷贝) ─┬─→ http.static(ETag/Range)
 - **内置**：`vfs` 内 `if Codec != STORE then 查 LRU → 解压 → 入池`，优点是调用方零改动，代价是所有 `STORE` 也付分支与常驻 `LRU`，`List` 需回答逻辑名/物理名、`ContentHash` 取明文/密文、`ETag` 漂移，`INV-V6/P8` 零拷贝断言被破坏。否决。
 - **块级 solid**：压缩率最优但随机访问 `O(block)`，`Stat` 热路径回归 10~50×。否决。
 
-## 后续
+## 后续（2026-08-30 S6-B落地更新）
 
-- S6-A `codec` 仅在 `respack.FORMAT` 预留 `CodecId`，`vfs` 仍 `STORE`。
-- S6-B/C 在新 lane 提供 `vfs.compressed / vfs.encrypted` 装饰器（`16槽 32MB LRU + SpinLock` 复用现有池思想，明文 `ZeroMem` 淘汰），`main` 不回退完美基线。
+- S6-A `codec` 仅在 `respack.FORMAT` 预留 `CodecId`，`vfs` 仍 `STORE`（不变）。
+- S6-B 已落地（本 worktree `core-respack-vfs-perfect`）：`vfs.transform` 通用模板（L3，压缩/加密共用，`TVfsTransformFunc`注入，单次读取复用，Op/Path完整）+ `vfs.compressed` 薄门面（经transform承载gzip，`VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX`单源32MiB，`daAuto` 4096头预判HeaderPred，ETag禁用），模板复用度消除120+行样板，12门全绿（respack5+vfs5+2）+ bench_transform 4场景阈值，heaptrc 0，完美基线不回退。
+- S6-C `vfs.encrypted` 装饰器（`16槽 32MB LRU + SpinLock` 复用池思想，明文 `ZeroMem` 淘汰）仍在新 lane 预研，复用 `transform` 模板即可（`CreateDecryptingVfs` 同构），`main` 不回退。
 
 ## 约束
 

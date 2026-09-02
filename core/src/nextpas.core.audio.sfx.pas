@@ -5,7 +5,7 @@ unit nextpas.core.audio.sfx;
 interface
 
 uses
-  SysUtils, Math,
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -46,7 +46,7 @@ type
     FGraph: IAudioGraph;
     FDevice: IAudioDevice;
     FFormat: TAudioFormat;
-    FLock: TRecursiveMutex; // 锁序：SFX lock -> Graph lock，控制面可分配，实时路径零锁
+    FLock: TRecursiveMutex;
     FMasterGain: Single;
     FMaxVoices: Integer;
     FSfx: array of record Id: Integer; Buffer: TAudioBuffer; Alive: Boolean; end;
@@ -56,8 +56,6 @@ type
     function FindSfx(AId: Integer): Integer;
     function FindVoice(AVoice: Integer): Integer;
     procedure ReapFinished;
-    procedure EnsureSfxCapacity(ANeeded: Integer); inline;
-    procedure EnsureVoiceCapacity(ANeeded: Integer); inline;
   public
     constructor Create(const ADevice: IAudioDevice; const AGraph: IAudioGraph; AMaxVoices: Integer = 32);
     destructor Destroy; override;
@@ -118,16 +116,12 @@ var
   LG: TAudioPanGains;
   Needed: Integer;
 begin
-  Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-  if Needed < 0 then
-    Needed := 0;
+  Needed := AFrames * FFormat.BlockAlign;
   if Length(ABuffer.Data) < Needed then
   begin
     AFrames := Length(ABuffer.Data) div FFormat.BlockAlign;
     if AFrames <= 0 then Exit(0);
-    Needed := Integer(Int64(AFrames) * Int64(FFormat.BlockAlign));
-    if Needed < 0 then
-      Needed := 0;
+    Needed := AFrames * FFormat.BlockAlign;
   end;
   if FEof and not FLoop then
   begin
@@ -205,34 +199,8 @@ begin
 end;
 
 destructor TSfxAudio.Destroy;
-var I: Integer;
 begin
-  if Assigned(FLock) then
-  begin
-    FLock.Acquire;
-    try
-      // SFX lock -> Graph lock 顺序：持 SFX 锁期间 RemoveSource（Graph 锁）解绑 Voice/Graph 节点
-      for I := 0 to High(FVoices) do
-        if FVoices[I].Alive then
-        begin
-          try if Assigned(FGraph) then FGraph.RemoveSource(FVoices[I].NodeId); except end;
-          FVoices[I].Alive := False;
-          FVoices[I].Source := nil;
-        end;
-      for I := 0 to High(FSfx) do
-        if FSfx[I].Alive then
-        begin
-          SetLength(FSfx[I].Buffer.Data, 0);
-          FSfx[I].Buffer := Default(TAudioBuffer);
-          FSfx[I].Alive := False;
-        end;
-    finally
-      FLock.Release;
-    end;
-    FLock.Free;
-  end;
-  FGraph := nil;
-  FDevice := nil;
+  FLock.Free;
   inherited;
 end;
 
@@ -264,24 +232,8 @@ begin
     end;
 end;
 
-procedure TSfxAudio.EnsureSfxCapacity(ANeeded: Integer);
-var LCap: Integer;
-begin
-  LCap := Length(FSfx);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
-  if Length(FSfx) <> LCap then SetLength(FSfx, LCap);
-end;
-
-procedure TSfxAudio.EnsureVoiceCapacity(ANeeded: Integer);
-var LCap: Integer;
-begin
-  LCap := Length(FVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 8);
-  if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
-end;
-
 function TSfxAudio.Load(const ABuffer: TAudioBuffer): TSfxId;
-var Idx, I: Integer;
+var Idx: Integer;
 begin
   if not ABuffer.Format.IsValid then raise EAudioGraphError.Create('Load: invalid buffer format');
   if ABuffer.Format.SampleFormat <> sfF32 then raise EAudioGraphError.Create('Load: buffer must be sfF32');
@@ -290,13 +242,8 @@ begin
   FLock.Acquire;
   try
     Result := FNextSfx; Inc(FNextSfx);
-    Idx := -1;
-    for I := 0 to High(FSfx) do if not FSfx[I].Alive then begin Idx := I; Break; end;
-    if Idx < 0 then
-    begin
-      Idx := Length(FSfx);
-      EnsureSfxCapacity(Idx + 1);
-    end;
+    Idx := Length(FSfx);
+    SetLength(FSfx, Idx+1);
     FSfx[Idx].Id := Result;
     FSfx[Idx].Buffer := ABuffer;
     FSfx[Idx].Buffer.Data := Copy(ABuffer.Data, 0, Length(ABuffer.Data));
@@ -361,13 +308,8 @@ begin
     Src := TSfxVoiceSource.Create(FSfx[SIdx].Buffer, AParams);
     NodeId := FGraph.AddSource(Src as IRealtimeAudioSource, 1.0);
     Result := FNextVoice; Inc(FNextVoice);
-    VIdx := -1;
-    for I := 0 to High(FVoices) do if not FVoices[I].Alive then begin VIdx := I; Break; end;
-    if VIdx < 0 then
-    begin
-      VIdx := Length(FVoices);
-      EnsureVoiceCapacity(VIdx + 1);
-    end;
+    VIdx := Length(FVoices);
+    SetLength(FVoices, VIdx+1);
     FVoices[VIdx].VoiceId := Result;
     FVoices[VIdx].SfxId := AId;
     FVoices[VIdx].NodeId := NodeId;

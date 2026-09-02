@@ -3,7 +3,8 @@
 **家族**：`graphics(L1) + image/vector/canvas/effect(L2) + gpu.canvas(L3)`
 **层级**：见 `core/docs/core-module-registry.md` 拟新增行
 **Owner**：graphics lane（`codex/core-graphics`）
-**版本**：S0 0.1.0-draft（文档定版，源码未落地，`SemVer`；`draft → focused-runtime` 需 source-contract + bench 门禁，见 `ROADMAP`）
+**最后更新**：2026-08-31
+**版本**：S0 0.1.0-draft（AL1 Skeleton，文档定版，源码未落地，`SemVer`；`draft → focused-runtime` 需 source-contract + bench 门禁，见 `ROADMAP`）
 
 ---
 
@@ -124,7 +125,7 @@ end;
 ## 4. 依赖边界
 
 - `graphics` L1：仅 `base/math`（+ `mem` 分配器间接），零 `bytes/font` 依赖（`TPath` 不用 `TBytes`）
-- `image/vector/canvas/effect` L2：仅 L0-L1，`canvas.raster` 依赖 `vector.tess`，不依赖 `gpu`
+- `image/vector/canvas/effect` L2：默认仅 L0-L1；`canvas.raster → vector.tess/vector.path + image.base` 为 Registry allowlist 单向缝（`canvas→vector/image`，cycle-gated，bytes.ops 单源 inline/零拷贝，source-contract 门禁），不依赖 `gpu`
 - `gpu.canvas` L3：唯一允许依赖 `gpu.gl` + `platform.dl`
 
 ## 4.1 FPC RTL 零直接依赖（双编译器架构）

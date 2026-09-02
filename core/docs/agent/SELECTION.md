@@ -112,8 +112,9 @@ IAgentClock ✅：退避测试零睡眠（code888 TFakeLLMClock.Advance 先例�
 接口先行 ✅（DESIGN D10）。LangGraph checkpoint 与 code888 event-sourcing 各证明
 了持久化的价值与体量——后者 fork/crash 恢复/fsync 节奏是独立工程，塞进 v1 必然
 挤压协议层质量。内存实现 W4 交付最小可用；JSONL 版 W5 按需。
-（2026-08-25 审计注：内存实现未随 W4 落地——当前仅 intf 词表接口先行，
-无任何 store 实现；补齐与否随 W5 session 立项一并定。）
+（2026-08-25 审计注：内存实现未随 W4 落地（SESSION.md §1 明确不立项）；W5 已以
+JSONL event-sourced 实现落地 `nextpas.core.agent.session`（SESSION.md 设计权威，
+`test_session` 门已绿）——见 ARCHITECTURE §1 注与单元表、ROADMAP W5 记录。）
 
 ## C12 编解码器公开度：公开 vs 私有
 

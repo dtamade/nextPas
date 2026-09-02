@@ -27,7 +27,7 @@ uses
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.reader,
   nextpas.core.sevenz.writer,
-  nextpas.core.compress.bzip2;
+  nextpas.core.sevenz.coders;
 
 type
   TSevenZEntryKind = nextpas.core.sevenz.base.TSevenZEntryKind;
@@ -147,7 +147,7 @@ end;
 
 function SevenZBZip2Available: Boolean;
 begin
-  Result := BZip2FfiIsAvailable;
+  Result := nextpas.core.sevenz.coders.SevenZBZip2Available;
 end;
 
 function SevenZCreateWriter: ISevenZWriter;

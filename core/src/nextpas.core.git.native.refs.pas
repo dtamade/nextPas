@@ -17,22 +17,78 @@ uses
 function GitTryDiscoverGitDir(const AStartDir: string;
   out AGitDir: string): Boolean;
 function GitDiscoverGitDir(const AStartDir: string): string;
-{ True when APath itself has the git directory shape (HEAD/objects/refs) }
-function IsGitDirShape(const APath: string): Boolean;
-function GitHeadRefName(const AGitDir: string): string;
+{ True when APath itself has the git directory shape (HEAD/objects/refs).
+  Unborn repos (HEAD symref with missing target) are not considered shape-valid;
+  that prevents GitResolveHead throwing on every consumer. }
+function IsGitDirShape(const APath: string): Boolean; inline;
+function GitHeadRefName(const AGitDir: string): string; inline;
 function GitResolveHead(const AGitDir: string): TGitOid;
 function GitResolveRef(const AGitDir: string; const ARefName: string): TGitOid;
+function GitTryResolveHead(const AGitDir: string; out AOid: TGitOid): Boolean; inline;
+function GitTryResolveRef(const AGitDir: string; const ARefName: string; out AOid: TGitOid): Boolean; inline;
 
 implementation
 
 const
   CMaxSymDepth = 8;
 
-function IsGitDirShape(const APath: string): Boolean;
+function PackedRefExistsInline(const AGitDir, ARefName: string): Boolean; inline;
+var
+  Lines: TStringArray;
+  I, Sp: Integer;
+  Line, Name: string;
 begin
-  Result := DirectoryExists(PathJoin2(APath, 'objects'))
-    and DirectoryExists(PathJoin2(APath, 'refs'))
-    and FileExists(PathJoin2(APath, 'HEAD'));
+  Result := False;
+  if not FileExists(PathJoin2(AGitDir, 'packed-refs')) then
+    Exit(False);
+  try
+    Lines := ReadFileLines(PathJoin2(AGitDir, 'packed-refs'));
+  except
+    Exit(False);
+  end;
+  for I := 0 to Length(Lines) - 1 do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line = '') or (Line[1] = '#') or (Line[1] = '^') then
+      Continue;
+    Sp := Pos(' ', Line);
+    if Sp < 41 then
+      Continue;
+    Name := Trim(Copy(Line, Sp + 1, MaxInt));
+    if Name = ARefName then
+      Exit(True);
+  end;
+end;
+
+function IsGitDirShape(const APath: string): Boolean; inline;
+var
+  LHead: string;
+  LText: string;
+begin
+  if not DirectoryExists(PathJoin2(APath, 'objects')) then
+    Exit(False);
+  if not DirectoryExists(PathJoin2(APath, 'refs')) then
+    Exit(False);
+  if not FileExists(PathJoin2(APath, 'HEAD')) then
+    Exit(False);
+  try
+    LText := Trim(ReadFileText(PathJoin2(APath, 'HEAD')));
+  except
+    Exit(False);
+  end;
+  if LText = '' then
+    Exit(False);
+  if Copy(LText, 1, 5) = 'ref: ' then
+  begin
+    LHead := Trim(Copy(LText, 6, MaxInt));
+    if LHead = '' then
+      Exit(False);
+    if FileExists(PathJoin2(APath, LHead)) then
+      Exit(True);
+    Result := PackedRefExistsInline(APath, LHead);
+    Exit;
+  end;
+  Result := GitOidIsValidHex(LText);
 end;
 
 // Resolves a ".git" entry that may be a real directory or a gitfile pointer
@@ -125,7 +181,7 @@ begin
   end;
 end;
 
-function GitHeadRefName(const AGitDir: string): string;
+function GitHeadRefName(const AGitDir: string): string; inline;
 var
   Text: string;
 begin
@@ -178,6 +234,28 @@ begin
     Exit;
   end;
   Result := GitResolveRef(AGitDir, RefName);
+end;
+
+function GitTryResolveHead(const AGitDir: string; out AOid: TGitOid): Boolean; inline;
+begin
+  try
+    AOid := GitResolveHead(AGitDir);
+    Result := True;
+  except
+    on E: EGitError do
+      Result := False;
+  end;
+end;
+
+function GitTryResolveRef(const AGitDir: string; const ARefName: string; out AOid: TGitOid): Boolean; inline;
+begin
+  try
+    AOid := GitResolveRef(AGitDir, ARefName);
+    Result := True;
+  except
+    on E: EGitError do
+      Result := False;
+  end;
 end;
 
 end.

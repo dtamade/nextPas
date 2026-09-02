@@ -38,24 +38,13 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.fs,
-  nextpas.core.text.utils,
-  nextpas.core.bytes.ops,
-  nextpas.core.git.native.util,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.revparse,
-  nextpas.core.git.native.common;
-
-function TrimSpaces(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
+  nextpas.core.git.native.util;
 
 function LowerEmail(const S: string): string; inline;
-begin Result:=nextpas.core.text.utils.LowerCase(S); end;
-
-function StripCr(const S: string): string; inline;
-begin Result:=GitStripCR(S); end;
+begin Result:=LowerCase(S); end;
 
 // Parse one mailmap line into entry. Returns False if empty/comment/invalid.
 function TryParseMailmapLine(const ALine: string; out AEntry: TGitMailmapEntry): Boolean;
@@ -64,7 +53,7 @@ var L: string; Emails: array of string; EmailPos: array of Integer; EmailEnd: ar
     ProperName, ProperEmail, CommitName, CommitEmail: string;
 begin
   AEntry.ProperName:=''; AEntry.ProperEmail:=''; AEntry.CommitName:=''; AEntry.CommitEmail:='';
-  L:=TrimSpaces(ALine);
+  L:=GitTrimSpaces(ALine);
   if L='' then Exit(False);
   if (L[1]='#') or (L[1]=';') then Exit(False);
   // extract emails inside <>
@@ -91,10 +80,10 @@ begin
   for I:=0 to High(Emails) do
   begin
     if I=0 then SegStart:=1 else SegStart:=EmailEnd[I-1]+1;
-    NameSegs[I]:=TrimSpaces(Copy(L, SegStart, EmailPos[I]-SegStart));
+    NameSegs[I]:=GitTrimSpaces(Copy(L, SegStart, EmailPos[I]-SegStart));
   end;
   // after last email
-  NameSegs[High(NameSegs)]:=TrimSpaces(Copy(L, EmailEnd[High(EmailEnd)]+1, MaxInt));
+  NameSegs[High(NameSegs)]:=GitTrimSpaces(Copy(L, EmailEnd[High(EmailEnd)]+1, MaxInt));
   // extra commit name is the segment between emails (if 2 emails) or after email (if 1 email with trailing name?)
   // git spec: proper-name <proper-email> commit-name <commit-email>
   // So: properName = seg0, properEmail = email0, commitName = seg1, commitEmail = email1 (if 2)
@@ -104,7 +93,7 @@ begin
   if Length(Emails)=1 then
   begin
     ProperName:=NameSegs[0];
-    ProperEmail:=TrimSpaces(Emails[0]);
+    ProperEmail:=GitTrimSpaces(Emails[0]);
     CommitName:=NameSegs[1];
     // If CommitName empty, then commitEmail is same as properEmail (canonical alias)
     // Keep commitEmail = ProperEmail so matching on email works
@@ -115,9 +104,9 @@ begin
   end else
   begin
     ProperName:=NameSegs[0];
-    ProperEmail:=TrimSpaces(Emails[0]);
+    ProperEmail:=GitTrimSpaces(Emails[0]);
     CommitName:=NameSegs[1];
-    CommitEmail:=TrimSpaces(Emails[1]);
+    CommitEmail:=GitTrimSpaces(Emails[1]);
   end;
   // validation: at least proper email or proper name
   if (ProperEmail='') and (ProperName='') then Exit(False);
@@ -135,21 +124,22 @@ begin
   Lines:=GitSplitLines(AText);
   for I:=0 to High(Lines) do
   begin
-    L:=StripCr(Lines[I]);
+    L:=GitStripCR(Lines[I]);
     if TryParseMailmapLine(L, E) then
     begin SetLength(Result, Length(Result)+1); Result[High(Result)]:=E; end;
   end;
 end;
 
-function GitParseMailmap(const AData: TBytes): TGitMailmap; inline;
+function GitParseMailmap(const AData: TBytes): TGitMailmap;
 var S: string;
 begin
   if Length(AData)=0 then Exit(nil);
-  S:=nextpas.core.bytes.ops.BytesToString(AData);
+  SetLength(S, Length(AData));
+  Move(AData[0], S[1], Length(AData));
   Result:=GitParseMailmap(S);
 end;
 
-// FindBlobInTree / PeelToTree reused from nextpas.core.git.native.common (single source)
+
 
 function GitLoadMailmap(const AGitDir: string): TGitMailmap;
 var WDir, F: string; Data: TBytes; Repo: TNativeRepository; Oid, TreeOid, BlobOid: TGitOid; Kind: TGitObjectKind;

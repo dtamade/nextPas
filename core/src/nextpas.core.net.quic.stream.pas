@@ -182,26 +182,21 @@ type
 
 implementation
 
-procedure CopyTailInto(var ADst: TBytes; const ASrc: TBytes);
-var
-  LN, LI: Integer;
+uses
+  nextpas.core.bytes.ops;
+
+procedure CopyTailInto(var ADst: TBytes; const ASrc: TBytes); inline;
 begin
-  LN := Length(ADst);
-  SetLength(ADst, LN + Length(ASrc));
-  for LI := 0 to Length(ASrc) - 1 do
-    ADst[LN + LI] := ASrc[LI];
+  nextpas.core.bytes.ops.BytesAppend(ADst, ASrc);
 end;
 
-function SliceCopy(const ABuf: TBytes; AStart, ACount: Integer): TBytes;
-var
-  LI: Integer;
+function SliceCopy(const ABuf: TBytes; AStart, ACount: Integer): TBytes; inline;
 begin
   Result := nil;
   if (ACount <= 0) or (AStart < 0) or (AStart + ACount > Length(ABuf)) then
     Exit;
-  SetLength(Result, ACount);
-  for LI := 0 to ACount - 1 do
-    Result[LI] := ABuf[AStart + LI];
+  Result := nextpas.core.bytes.ops.SpanCopySlice(
+    TByteSpan.FromBytes(ABuf), SizeUInt(AStart), SizeUInt(ACount));
 end;
 
 function TQuicStreamMux.GetStreamCount: Integer;

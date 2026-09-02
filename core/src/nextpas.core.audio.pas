@@ -25,22 +25,14 @@ uses
   nextpas.core.audio.device.intf,
   nextpas.core.audio.device.null,
   nextpas.core.audio.timeline.intf,
-  nextpas.core.audio.spatial.intf,
-  nextpas.core.audio.event.intf,
   nextpas.core.audio.sfx.intf,
   nextpas.core.audio.game.intf,
   nextpas.core.audio.graph.intf,
-  nextpas.core.audio.resource.intf,
-  nextpas.core.audio.bank.intf,
   nextpas.core.audio.timeline,
-  nextpas.core.audio.spatial,
-  nextpas.core.audio.event,
   nextpas.core.audio.sfx,
   nextpas.core.audio.game,
   nextpas.core.audio.graph,
-  nextpas.core.audio.player,
-  nextpas.core.audio.resource,
-  nextpas.core.audio.bank;
+  nextpas.core.audio.player;
 
 type
   TAudioSampleFormat = nextpas.core.audio.base.TAudioSampleFormat;
@@ -79,18 +71,6 @@ type
   TSingleArray = nextpas.core.audio.dsp.fft.TSingleArray;
   TAudioPanGains = nextpas.core.audio.mix.TAudioPanGains;
 
-  TAudioVec3 = nextpas.core.audio.spatial.intf.TAudioVec3;
-  TAudioListener = nextpas.core.audio.spatial.intf.TAudioListener;
-  TAudioDistanceModel = nextpas.core.audio.spatial.intf.TAudioDistanceModel;
-  TAudioSpatialParams = nextpas.core.audio.spatial.intf.TAudioSpatialParams;
-  IAudioSpatialSource = nextpas.core.audio.spatial.intf.IAudioSpatialSource;
-
-  TAudioEventId = nextpas.core.audio.event.intf.TAudioEventId;
-  TAudioEventInstanceId = nextpas.core.audio.event.intf.TAudioEventInstanceId;
-  TAudioEventParamId = nextpas.core.audio.event.intf.TAudioEventParamId;
-  TAudioEventDesc = nextpas.core.audio.event.intf.TAudioEventDesc;
-  IAudioEventSystem = nextpas.core.audio.event.intf.IAudioEventSystem;
-
   TDeviceState = nextpas.core.audio.device.intf.TDeviceState;
   TDeviceEvent = nextpas.core.audio.device.intf.TDeviceEvent;
   TAudioDeviceInfoArray = nextpas.core.audio.device.intf.TAudioDeviceInfoArray;
@@ -109,14 +89,6 @@ type
   TGraphState = nextpas.core.audio.graph.intf.TGraphState;
   IAudioGraph = nextpas.core.audio.graph.intf.IAudioGraph;
   IAudioPlayer = nextpas.core.audio.graph.intf.IAudioPlayer;
-
-  TAudioResourceState = nextpas.core.audio.resource.intf.TAudioResourceState;
-  TAudioResourceId = nextpas.core.audio.resource.intf.TAudioResourceId;
-  IAudioResourceManager = nextpas.core.audio.resource.intf.IAudioResourceManager;
-  TAudioBankId = nextpas.core.audio.bank.intf.TAudioBankId;
-  TBankVoiceId = nextpas.core.audio.bank.intf.TBankVoiceId;
-  TBankPlayParams = nextpas.core.audio.bank.intf.TBankPlayParams;
-  IAudioBank = nextpas.core.audio.bank.intf.IAudioBank;
 
 { ---- base forwarding ---- }
 
@@ -176,21 +148,6 @@ function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single; inline;
 function PanLawGains(APan: Single): TAudioPanGains; inline; overload;
 function PanLawGains(APan: Single; ALawDB: Single): TAudioPanGains; inline; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
 function PanLawGains0dB(APan: Single): TAudioPanGains; inline;
-
-function AudioVec3Create(AX, AY, AZ: Single): TAudioVec3; inline;
-function AudioVec3Zero: TAudioVec3; inline;
-function AudioVec3Length(const A: TAudioVec3): Single; inline;
-function AudioVec3Distance(const A, B: TAudioVec3): Single; inline;
-function AudioListenerDefault: TAudioListener; inline;
-function AudioSpatialParamsDefault: TAudioSpatialParams; inline;
-function AudioComputeAttenuation(const AListener: TAudioListener; const ASource: TAudioSpatialParams): Single; inline;
-function AudioComputePan(const AListener: TAudioListener; const ASourcePos: TAudioVec3): Single; inline;
-function AudioComputeDoppler(const AListener: TAudioListener; const ASource: TAudioSpatialParams): Single; inline;
-procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudioSpatialParams; out AGain, APan, ADoppler: Single); inline;
-function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListener: TAudioListener; const AParams: TAudioSpatialParams): IAudioSpatialSource; inline;
-function CreateAudioEventSystem(const AFormat: TAudioFormat; AMaxVoices: Integer = 32): IAudioEventSystem; inline;
-function CreateAudioResourceManager: IAudioResourceManager; inline;
-function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank; inline;
 
 function WindowHann(N, I: Integer): Single; inline;
 procedure FFT(var ARe, AIm: array of Single); inline;
@@ -436,47 +393,5 @@ begin Result := CreateSfxAudioForFormat(AProvider, AFormat, AMaxVoices); end;
 
 function CreateAudioTimeline(const AFormat: TAudioFormat): IAudioTimeline;
 begin Result := nextpas.core.audio.timeline.CreateAudioTimeline(AFormat); end;
-
-function AudioVec3Create(AX, AY, AZ: Single): TAudioVec3;
-begin Result := nextpas.core.audio.spatial.intf.AudioVec3Create(AX, AY, AZ); end;
-
-function AudioVec3Zero: TAudioVec3;
-begin Result := nextpas.core.audio.spatial.intf.AudioVec3Zero; end;
-
-function AudioVec3Length(const A: TAudioVec3): Single;
-begin Result := nextpas.core.audio.spatial.intf.AudioVec3Length(A); end;
-
-function AudioVec3Distance(const A, B: TAudioVec3): Single;
-begin Result := nextpas.core.audio.spatial.intf.AudioVec3Distance(A, B); end;
-
-function AudioListenerDefault: TAudioListener;
-begin Result := nextpas.core.audio.spatial.intf.AudioListenerDefault; end;
-
-function AudioSpatialParamsDefault: TAudioSpatialParams;
-begin Result := nextpas.core.audio.spatial.intf.AudioSpatialParamsDefault; end;
-
-function AudioComputeAttenuation(const AListener: TAudioListener; const ASource: TAudioSpatialParams): Single;
-begin Result := nextpas.core.audio.spatial.intf.AudioComputeAttenuation(AListener, ASource); end;
-
-function AudioComputePan(const AListener: TAudioListener; const ASourcePos: TAudioVec3): Single;
-begin Result := nextpas.core.audio.spatial.intf.AudioComputePan(AListener, ASourcePos); end;
-
-function AudioComputeDoppler(const AListener: TAudioListener; const ASource: TAudioSpatialParams): Single;
-begin Result := nextpas.core.audio.spatial.intf.AudioComputeDoppler(AListener, ASource); end;
-
-procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudioSpatialParams; out AGain, APan, ADoppler: Single);
-begin nextpas.core.audio.spatial.intf.AudioSpatialize(AListener, ASource, AGain, APan, ADoppler); end;
-
-function CreateSpatialSource(const ASource: IRealtimeAudioSource; const AListener: TAudioListener; const AParams: TAudioSpatialParams): IAudioSpatialSource;
-begin Result := nextpas.core.audio.spatial.CreateSpatialSource(ASource, AListener, AParams); end;
-
-function CreateAudioEventSystem(const AFormat: TAudioFormat; AMaxVoices: Integer): IAudioEventSystem;
-begin Result := nextpas.core.audio.event.CreateAudioEventSystem(AFormat, AMaxVoices); end;
-
-function CreateAudioResourceManager: IAudioResourceManager;
-begin Result := nextpas.core.audio.resource.CreateAudioResourceManager; end;
-
-function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank;
-begin Result := nextpas.core.audio.bank.CreateAudioBank(AFormat); end;
 
 end.

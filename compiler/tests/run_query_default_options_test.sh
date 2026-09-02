@@ -19,6 +19,7 @@ trap 'rm -rf "$CACHE_ROOT"' EXIT
 # -gt makes omitted local-option initialization deterministic instead of
 # depending on whatever bytes happen to be on the stack.
 if ! fpc -B -gt \
+  -Fu"$REPO_ROOT/compiler/src" \
   -Fu"$REPO_ROOT/compiler/frontend" \
   -Fu"$REPO_ROOT/compiler/diagnostics" \
   -Fu"$REPO_ROOT/compiler/targets" \

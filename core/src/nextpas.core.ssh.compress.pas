@@ -39,7 +39,7 @@ implementation
 uses
   nextpas.core.compress.zlib.ffi,
   nextpas.core.compress.base,
-  nextpas.core.system.sysutils;
+  nextpas.core.text.conv;
 
 function SshCompressionIsZlib(const AName: string): Boolean;
 begin

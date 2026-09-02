@@ -40,6 +40,7 @@ const
 
 function BuildGCMNonce(const AImplicitNonce: TBytes; ASeqNum: UInt64): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 12);
   Move(AImplicitNonce[0], Result[0], 4);
   Result[4] := Byte(ASeqNum shr 56);
@@ -54,6 +55,7 @@ end;
 
 function BuildGCMExplicitNonce(ASeqNum: UInt64): TBytes;
 begin
+  Result := nil;
   SetLength(Result, GCM_EXPLICIT_NONCE_LEN);
   Result[0] := Byte(ASeqNum shr 56);
   Result[1] := Byte(ASeqNum shr 48);
@@ -67,6 +69,7 @@ end;
 
 function BuildAAD(ASeqNum: UInt64; AContentType: Byte; APlaintextLen: Integer): TBytes;
 begin
+  Result := nil;
   SetLength(Result, 13);
   Result[0] := Byte(ASeqNum shr 56);
   Result[1] := Byte(ASeqNum shr 48);

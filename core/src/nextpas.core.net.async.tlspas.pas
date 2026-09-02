@@ -322,13 +322,6 @@ function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics): 
 function TlsPasFormatPrometheusMetrics(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): string; overload;
 function TlsPasFormatPrometheusMetricsWithLabels(const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): string;
 type TTlsPasAdaptiveHealth = record Healthy: Boolean; Reason: string; RejectRate: Double; Current: Integer; AdaptiveMax: Cardinal; end;
-type TTlsPasAdaptiveSnapshot = record Metrics: TTlsPasAdaptiveMetrics; Health: TTlsPasAdaptiveHealth; end;
-function TlsPasMetricsEqual(const A, B: TTlsPasAdaptiveMetrics): Boolean;
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics): Integer; overload;
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): Integer; overload;
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): Integer; overload;
-function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): Integer; overload;
-function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): Integer; overload;
 function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
 function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
 function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string; overload;
@@ -354,7 +347,6 @@ type
     function GetReplayStats: TAsyncTlsPasReplayStats;
     function GetAdaptiveMetrics: TTlsPasAdaptiveMetrics;
     function GetAdaptiveHealth: TTlsPasAdaptiveHealth;
-    function GetSnapshot: TTlsPasAdaptiveSnapshot;
     procedure Clear;
     procedure UpdateConfig(const AConfig: TTlsPasAdaptiveLimitConfig);
     property Config: TTlsPasAdaptiveLimitConfig read FConfig;
@@ -374,13 +366,6 @@ type
     FMutex: TPlatformMutex;
     FNames: array of string;
     FObservers: array of TAsyncTlsPasAdaptiveObserver;
-    FCachedAll: string;
-    FCachedSnapshot: array of TTlsPasAdaptiveMetrics;
-    FCachedPrefix: string;
-    FCacheValid: Boolean;
-    FHitCount: Cardinal;
-    FMissCount: Cardinal;
-    procedure InvalidateCacheLocked;
   public
     constructor Create;
     destructor Destroy; override;
@@ -389,11 +374,6 @@ type
     function FormatAllMetrics: string; overload;
     function FormatAllMetrics(const APrefix: string): string; overload;
     function FormatAllMetricsWithLabels(const APrefix: string): string;
-    function FormatAllMetricsCached: string; overload;
-    function FormatAllMetricsCached(const APrefix: string): string; overload;
-    procedure InvalidateCache;
-    function CacheHitCount: Cardinal;
-    function CacheMissCount: Cardinal;
     function Count: Integer;
     procedure Clear;
   end;
@@ -401,184 +381,6 @@ type
 function TlsPasTryLoadAdaptiveConfigFromEnv(out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
 function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
 function TlsPasAdaptiveConfigFromEnvOrDefault: TTlsPasAdaptiveLimitConfig;
-
-{ S28: 零分配缓冲 + 缓存导出器 — 复用 Format* 的纯函数，Append 零 Format 拷贝直拼；Cached 仅在指标变化时重算 }
-type
-  TAsyncTlsPasCachedPrometheusExporter = class
-  private
-    FMutex: TPlatformMutex;
-    FObserver: TAsyncTlsPasAdaptiveObserver;
-    FPrefix: string;
-    FLabels: string;
-    FCached: string;
-    FCachedMetrics: TTlsPasAdaptiveMetrics;
-    FHasCache: Boolean;
-    FHitCount: Cardinal;
-    FMissCount: Cardinal;
-  public
-    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver); overload;
-    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string); overload;
-    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix, ALabels: string); overload;
-    destructor Destroy; override;
-    function Format: string;
-    function AppendTo(var ABuf: string): Integer;
-    procedure Invalidate;
-    function HitCount: Cardinal;
-    function MissCount: Cardinal;
-    property Observer: TAsyncTlsPasAdaptiveObserver read FObserver;
-    property Prefix: string read FPrefix;
-    property Labels: string read FLabels;
-  end;
-
-{ S30: W3C traceparent + 采样 + 结构化事件 — 零堆解析/格式化，FNV 采样，Noop/Sampling 双实现 }
-type
-  TTlsPasTraceContext = record
-    TraceId: TBytes;
-    ParentId: TBytes;
-    Sampled: Boolean;
-    Valid: Boolean;
-  end;
-
-  TTlsPasTraceEventKind = (tekHRR, tekEarlyDataDecide, tekHealth);
-
-  TTlsPasTraceEvent = record
-    Kind: TTlsPasTraceEventKind;
-    TimestampMs: Int64;
-    Decision: TTlsPasEarlyDataDecision;
-    AdaptiveMax: Cardinal;
-    Trace: TTlsPasTraceContext;
-    Healthy: Boolean;
-  end;
-
-  ITlsPasTracer = interface
-    ['{B1C2D3E4-F5A6-4B7C-8D9E-0F1A2B3C4D5E}']
-    procedure Trace(const AEvent: TTlsPasTraceEvent);
-    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-    function SampleCount: Int64;
-    function TotalCount: Int64;
-  end;
-
-  TAsyncTlsPasNoopTracer = class(TInterfacedObject, ITlsPasTracer)
-  public
-    procedure Trace(const AEvent: TTlsPasTraceEvent);
-    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-    function SampleCount: Int64;
-    function TotalCount: Int64;
-  end;
-
-  TAsyncTlsPasSamplingTracer = class(TInterfacedObject, ITlsPasTracer)
-  private
-    FRate: Double;
-    FMutex: TPlatformMutex;
-    FSampled: Int64;
-    FTotal: Int64;
-    function HashTraceId(const ATrace: TTlsPasTraceContext): QWord;
-  public
-    constructor Create(ARate: Double = 0.01);
-    destructor Destroy; override;
-    procedure Trace(const AEvent: TTlsPasTraceEvent);
-    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-    function SampleCount: Int64;
-    function TotalCount: Int64;
-    procedure SetRate(ARate: Double);
-    property Rate: Double read FRate;
-  end;
-
-function TlsPasTraceContextEquals(const A, B: TTlsPasTraceContext): Boolean;
-function TlsPasParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
-function TlsPasFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
-function TlsPasGenerateTraceContext(ASampled: Boolean = False): TTlsPasTraceContext;
-function TlsPasShouldSample(const Ctx: TTlsPasTraceContext; ARate: Double): Boolean;
-function TlsPasFormatTraceEvent(const AEvent: TTlsPasTraceEvent): string;
-function TlsPasTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
-  const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
-  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
-
-{ S31: OTEL Span 导出 + /tracez + Span Prometheus — 环形缓冲 128，零堆 JSON/Prometheus，直连 Tracer }
-type
-  TTlsPasSpan = record
-    Trace: TTlsPasTraceContext;
-    Name: string;
-    StartMs: Int64;
-    EndMs: Int64;
-    Decision: TTlsPasEarlyDataDecision;
-    AdaptiveMax: Cardinal;
-    Healthy: Boolean;
-    DurationMs: Int64;
-  end;
-
-  TTlsPasSpanArray = array of TTlsPasSpan;
-  ITlsPasSpanExporter = interface
-    ['{C2D3E4F5-A6B7-4C8D-9E0F-1A2B3C4D5E6F}']
-    procedure ExportSpan(const ASpan: TTlsPasSpan);
-    function Count: Integer;
-    function GetSpans: TTlsPasSpanArray;
-    procedure Clear;
-  end;
-
-  TAsyncTlsPasMemorySpanExporter = class(TInterfacedObject, ITlsPasSpanExporter)
-  private
-    FMutex: TPlatformMutex;
-    FSpans: array of TTlsPasSpan;
-    FCap: Integer;
-    FHead: Integer;
-    FCount: Integer;
-  public
-    constructor Create(ACap: Integer = 128);
-    destructor Destroy; override;
-    procedure ExportSpan(const ASpan: TTlsPasSpan);
-    function Count: Integer;
-    function GetSpans: TTlsPasSpanArray;
-    procedure Clear;
-  end;
-
-function TlsPasSpanToJSON(const ASpan: TTlsPasSpan): string;
-function TlsPasSpansToJSON(const AExporter: ITlsPasSpanExporter): string;
-function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter; const APrefix: string): string; overload;
-function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter): string; overload;
-function TlsPasTraceSpanDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
-  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext;
-  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession;
-  AAllowEarlyData: Boolean; const AName: string = 'tlspas.early_data'): TTlsPasEarlyDataDecision;
-
-{ S32: 自适应采样 + OTLP JSON + 采样 Prometheus — 零堆自适应率，环形直出 OTLP，rate gauge }
-type
-  TTlsPasSamplingConfig = record
-    BaseRate: Double;
-    MinRate: Double;
-    MaxRate: Double;
-  end;
-
-  TAsyncTlsPasAdaptiveTracer = class(TInterfacedObject, ITlsPasTracer)
-  private
-    FInner: TAsyncTlsPasSamplingTracer;
-    FObserver: TAsyncTlsPasAdaptiveObserver;
-    FConfig: TTlsPasSamplingConfig;
-    FMutex: TPlatformMutex;
-  public
-    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const AConfig: TTlsPasSamplingConfig); overload;
-    constructor Create(const AObserver: TAsyncTlsPasAdaptiveObserver); overload;
-    destructor Destroy; override;
-    procedure Trace(const AEvent: TTlsPasTraceEvent);
-    function ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-    function SampleCount: Int64;
-    function TotalCount: Int64;
-    function GetAdaptiveRate: Double;
-    procedure UpdateConfig(const AConfig: TTlsPasSamplingConfig);
-    property Config: TTlsPasSamplingConfig read FConfig;
-    property Inner: TAsyncTlsPasSamplingTracer read FInner;
-  end;
-
-function TlsPasPrometheusGauge(const AMetric, AHelp: string; AValue: Double; const APrefix: string): string;
-function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
-function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
-function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string; overload;
-function TlsPasSamplingRateToPrometheus(ARate: Double): string; overload;
-function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
-function TlsPasTryExportSpansToFile(const AExporter: ITlsPasSpanExporter; const APath: string): Boolean;
-function TlsPasAdaptiveTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
-  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
-  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean; const AName: string = 'tlspas.early_data'): TTlsPasEarlyDataDecision;
 
 type
   { 异步纯 Pas TLS 客户端选项。VerifyPeer=True 走 tls.x509verify
@@ -667,11 +469,13 @@ procedure TlsPasClearEarlyDataSecrets(var ASecrets: TTlsPasEarlyDataSecrets);
 implementation
 
 uses
-  nextpas.core.bytes.ops,
-  SysUtils, Classes,
   nextpas.core.errors,
-  nextpas.core.system.sysutils,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.encoding.base64,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.text.utils,
   nextpas.core.os.env,
   nextpas.core.atomic,
   nextpas.core.bytes,
@@ -1229,6 +1033,17 @@ begin
   Result := SHA256(AT);
 end;
 
+procedure AppendBytesTo(var ADest: TBytes; const ASrc: TBytes);
+var
+  LBase: Integer;
+begin
+  if Length(ASrc) = 0 then
+    Exit;
+  LBase := Length(ADest);
+  SetLength(ADest, LBase + Length(ASrc));
+  Move(ASrc[0], ADest[LBase], Length(ASrc));
+end;
+
 { ======== 0-RTT 策略与重放窗口 ======== }
 
 function TlsPasIsEarlyDataAllowed(const ASession: TTlsPasResumptionSession;
@@ -1249,8 +1064,8 @@ var
   LBuf: TBytes;
 begin
   SetLength(LBuf, 0);
-  BytesAppend(LBuf, ATicketIdentity);
-  BytesAppend(LBuf, AEarlyData);
+  AppendBytesTo(LBuf, ATicketIdentity);
+  AppendBytesTo(LBuf, AEarlyData);
   Result := SHA256(LBuf);
   SecureZeroBytes(LBuf);
 end;
@@ -1313,13 +1128,13 @@ end;
 
 function TlsPasFormatReplayStats(const AStats: TAsyncTlsPasReplayStats): string;
 begin
-  Result := Format('hits=%d misses=%d evictions=%d expiries=%d current=%d',
+  Result := TextFormat('hits=%d misses=%d evictions=%d expiries=%d current=%d',
     [AStats.Hits, AStats.Misses, AStats.Evictions, AStats.Expiries, AStats.Current]);
 end;
 
 function TlsPasFormatServerStats(const AStats: TTlsPasServerStats): string;
 begin
-  Result := Format('accepts=%d reject_policy=%d reject_replay=%d',
+  Result := TextFormat('accepts=%d reject_policy=%d reject_replay=%d',
     [AStats.Accepts, AStats.RejectPolicy, AStats.RejectReplay]);
 end;
 
@@ -1478,7 +1293,7 @@ end;
 destructor TAsyncTlsPasAdaptiveObserver.Destroy;
 begin
   platform_mutex_destroy(FConfigMutex);
-  FreeAndNil(FInner);
+  nextpas.core.base.utils.FreeAndNil(FInner);
   inherited Destroy;
 end;
 
@@ -1531,7 +1346,7 @@ end;
 
 function TlsPasFormatAdaptiveMetrics(const AMetrics: TTlsPasAdaptiveMetrics): string;
 begin
-  Result := Format('adaptive max=%d %s %s', [
+  Result := TextFormat('adaptive max=%d %s %s', [
     Integer(AMetrics.AdaptiveMax),
     TlsPasFormatServerStats(AMetrics.Server),
     TlsPasFormatReplayStats(AMetrics.Replay)
@@ -1548,7 +1363,7 @@ var P: string;
 begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   Result :=
-    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+    TextFormat('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
            '# TYPE %s_adaptive_max gauge'#10 +
            '%s_adaptive_max %d'#10 +
            '# HELP %s_server_accepts Total accepted early_data'#10 +
@@ -1594,7 +1409,7 @@ begin
     Exit(TlsPasFormatPrometheusMetrics(AMetrics, P));
   L := ALabels;
   Result :=
-    Format('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
+    TextFormat('# HELP %s_adaptive_max Maximum allowed early_data bytes (adaptive)'#10 +
            '# TYPE %s_adaptive_max gauge'#10 +
            '%s_adaptive_max{%s} %d'#10 +
            '# HELP %s_server_accepts Total accepted early_data'#10 +
@@ -1632,53 +1447,6 @@ begin
      P,P,P,L,AMetrics.Replay.Current]);
 end;
 
-function TlsPasMetricsEqual(const A, B: TTlsPasAdaptiveMetrics): Boolean;
-begin
-  Result := (A.AdaptiveMax = B.AdaptiveMax) and (A.Server.Accepts = B.Server.Accepts) and
-    (A.Server.RejectPolicy = B.Server.RejectPolicy) and (A.Server.RejectReplay = B.Server.RejectReplay) and
-    (A.Replay.Hits = B.Replay.Hits) and (A.Replay.Misses = B.Replay.Misses) and
-    (A.Replay.Evictions = B.Replay.Evictions) and (A.Replay.Expiries = B.Replay.Expiries) and
-    (A.Replay.Current = B.Replay.Current);
-end;
-
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics): Integer;
-begin
-  Result := TlsPasAppendPrometheusMetrics(ABuf, AMetrics, 'nextpas_tlspas');
-end;
-
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix: string): Integer;
-var P: string; S: string;
-begin
-  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
-  S := TlsPasFormatPrometheusMetrics(AMetrics, P);
-  ABuf := ABuf + S;
-  Result := Length(S);
-end;
-
-function TlsPasAppendPrometheusMetrics(var ABuf: string; const AMetrics: TTlsPasAdaptiveMetrics; const APrefix, ALabels: string): Integer;
-var S: string;
-begin
-  S := TlsPasFormatPrometheusMetricsWithLabels(AMetrics, APrefix, ALabels);
-  ABuf := ABuf + S;
-  Result := Length(S);
-end;
-
-function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): Integer;
-var S: string;
-begin
-  S := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix);
-  ABuf := ABuf + S;
-  Result := Length(S);
-end;
-
-function TlsPasAppendAdaptiveHealth(var ABuf: string; const AHealth: TTlsPasAdaptiveHealth; const APrefix, ALabels: string): Integer;
-var S: string;
-begin
-  S := TlsPasAdaptiveHealthToPrometheus(AHealth, APrefix, ALabels);
-  ABuf := ABuf + S;
-  Result := Length(S);
-end;
-
 function TlsPasComputeAdaptiveHealth(const AMetrics: TTlsPasAdaptiveMetrics; const AConfig: TTlsPasAdaptiveLimitConfig): TTlsPasAdaptiveHealth;
 var Total, Rejects: Int64; Rate: Double;
 begin
@@ -1691,17 +1459,17 @@ begin
   if (Rate > AConfig.RejectRateThreshold) and (Total >= 10) then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
+    Result.Reason := TextFormat('reject_rate %.2f > %.2f', [Rate, AConfig.RejectRateThreshold]);
   end
   else if AMetrics.Replay.Current > 80 then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('current %d > 80', [AMetrics.Replay.Current]);
+    Result.Reason := TextFormat('current %d > 80', [AMetrics.Replay.Current]);
   end
   else if AMetrics.AdaptiveMax <= AConfig.MinLimit then
   begin
     Result.Healthy := False;
-    Result.Reason := Format('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
+    Result.Reason := TextFormat('adaptive_max %d at min %d', [Integer(AMetrics.AdaptiveMax), Integer(AConfig.MinLimit)]);
   end
   else
   begin
@@ -1713,9 +1481,9 @@ end;
 function TlsPasFormatAdaptiveHealth(const AHealth: TTlsPasAdaptiveHealth): string;
 begin
   if AHealth.Healthy then
-    Result := Format('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
+    Result := TextFormat('healthy reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)])
   else
-    Result := Format('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
+    Result := TextFormat('degraded reason=%s reject=%.2f current=%d max=%d', [AHealth.Reason, AHealth.RejectRate, AHealth.Current, Integer(AHealth.AdaptiveMax)]);
 end;
 
 function TlsPasAdaptiveHealthToPrometheus(const AHealth: TTlsPasAdaptiveHealth; const APrefix: string): string;
@@ -1729,11 +1497,11 @@ begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   V := Ord(AHealth.Healthy);
   if ALabels = '' then
-    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+    Result := TextFormat('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
                      '# TYPE %s_health_status gauge'#10 +
                      '%s_health_status %d'#10, [P,P,P,V])
   else
-    Result := Format('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
+    Result := TextFormat('# HELP %s_health_status Health status 1=healthy 0=degraded'#10 +
                      '# TYPE %s_health_status gauge'#10 +
                      '%s_health_status{%s} %d'#10, [P,P,P,ALabels,V]);
 end;
@@ -1745,16 +1513,6 @@ begin
   platform_mutex_lock(FConfigMutex);
   try C := FConfig; finally platform_mutex_unlock(FConfigMutex); end;
   Result := TlsPasComputeAdaptiveHealth(M, C);
-end;
-
-function TAsyncTlsPasAdaptiveObserver.GetSnapshot: TTlsPasAdaptiveSnapshot;
-var C: TTlsPasAdaptiveLimitConfig; S: TTlsPasServerStats; R: TAsyncTlsPasReplayStats;
-begin
-  platform_mutex_lock(FConfigMutex); try C := FConfig; finally platform_mutex_unlock(FConfigMutex); end;
-  S := FInner.GetServerStats; R := FInner.GetReplayStats;
-  Result.Metrics.AdaptiveMax := TlsPasComputeAdaptiveMaxEarlyData(S, R, C);
-  Result.Metrics.Server := S; Result.Metrics.Replay := R;
-  Result.Health := TlsPasComputeAdaptiveHealth(Result.Metrics, C);
 end;
 
 procedure TAsyncTlsPasAdaptiveObserver.Clear;
@@ -1784,14 +1542,6 @@ begin
   inherited Destroy;
 end;
 
-procedure TAsyncTlsPasPrometheusRegistry.InvalidateCacheLocked;
-begin
-  FCacheValid := False;
-  FCachedAll := '';
-  SetLength(FCachedSnapshot, 0);
-  FCachedPrefix := '';
-end;
-
 procedure TAsyncTlsPasPrometheusRegistry.Register(const AName: string; AObserver: TAsyncTlsPasAdaptiveObserver);
 var I: Integer;
 begin
@@ -1802,14 +1552,12 @@ begin
       if FNames[I] = AName then
       begin
         FObservers[I] := AObserver;
-        InvalidateCacheLocked;
         Exit;
       end;
     SetLength(FNames, Length(FNames)+1);
     SetLength(FObservers, Length(FObservers)+1);
     FNames[High(FNames)] := AName;
     FObservers[High(FObservers)] := AObserver;
-    InvalidateCacheLocked;
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -1831,7 +1579,6 @@ begin
         end;
         SetLength(FNames, Length(FNames)-1);
         SetLength(FObservers, Length(FObservers)-1);
-        InvalidateCacheLocked;
         Exit;
       end;
   finally
@@ -1855,28 +1602,9 @@ begin
   try
     SetLength(FNames, 0);
     SetLength(FObservers, 0);
-    InvalidateCacheLocked;
   finally
     platform_mutex_unlock(FMutex);
   end;
-end;
-
-procedure TAsyncTlsPasPrometheusRegistry.InvalidateCache;
-begin
-  platform_mutex_lock(FMutex);
-  try InvalidateCacheLocked; finally platform_mutex_unlock(FMutex); end;
-end;
-
-function TAsyncTlsPasPrometheusRegistry.CacheHitCount: Cardinal;
-begin
-  platform_mutex_lock(FMutex);
-  try Result := FHitCount; finally platform_mutex_unlock(FMutex); end;
-end;
-
-function TAsyncTlsPasPrometheusRegistry.CacheMissCount: Cardinal;
-begin
-  platform_mutex_lock(FMutex);
-  try Result := FMissCount; finally platform_mutex_unlock(FMutex); end;
 end;
 
 function TAsyncTlsPasPrometheusRegistry.FormatAllMetrics: string;
@@ -1895,8 +1623,8 @@ begin
   if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
   platform_mutex_lock(FMutex);
   try
-    LNames := System.Copy(FNames, 0, Length(FNames));
-    LObs := System.Copy(FObservers, 0, Length(FObservers));
+    LNames := Copy(FNames, 0, Length(FNames));
+    LObs := Copy(FObservers, 0, Length(FObservers));
   finally
     platform_mutex_unlock(FMutex);
   end;
@@ -1904,57 +1632,8 @@ begin
   for I := 0 to High(LNames) do
   begin
     if LObs[I] = nil then Continue;
-    L := Format('observer="%s"', [LNames[I]]);
+    L := TextFormat('observer="%s"', [LNames[I]]);
     Result := Result + TlsPasFormatPrometheusMetricsWithLabels(LObs[I].GetAdaptiveMetrics, P, L) + #10;
-  end;
-end;
-
-function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached: string;
-begin
-  Result := FormatAllMetricsCached('nextpas_tlspas');
-end;
-
-function TAsyncTlsPasPrometheusRegistry.FormatAllMetricsCached(const APrefix: string): string;
-var I: Integer; LNames: array of string; LObs: array of TAsyncTlsPasAdaptiveObserver;
-  LMetrics: array of TTlsPasAdaptiveMetrics; P: string; S: string; Hit: Boolean;
-begin
-  if APrefix = '' then P := 'nextpas_tlspas' else P := APrefix;
-  platform_mutex_lock(FMutex);
-  try
-    LNames := System.Copy(FNames, 0, Length(FNames));
-    LObs := System.Copy(FObservers, 0, Length(FObservers));
-  finally
-    platform_mutex_unlock(FMutex);
-  end;
-  SetLength(LMetrics, Length(LObs));
-  for I := 0 to High(LObs) do
-    if LObs[I] <> nil then LMetrics[I] := LObs[I].GetAdaptiveMetrics else LMetrics[I] := Default(TTlsPasAdaptiveMetrics);
-  platform_mutex_lock(FMutex);
-  try
-    Hit := FCacheValid and (FCachedPrefix = P) and (Length(FCachedSnapshot) = Length(LMetrics));
-    if Hit then
-      for I := 0 to High(LMetrics) do
-        if not TlsPasMetricsEqual(LMetrics[I], FCachedSnapshot[I]) then begin Hit := False; Break; end;
-    if Hit then
-    begin
-      Inc(FHitCount);
-      Result := FCachedAll;
-      Exit;
-    end;
-    Inc(FMissCount);
-    S := '';
-    for I := 0 to High(LNames) do
-    begin
-      if LObs[I] = nil then Continue;
-      S := S + TlsPasFormatPrometheusMetricsWithLabels(LMetrics[I], P, Format('observer="%s"', [LNames[I]])) + #10;
-    end;
-    FCachedAll := S;
-    FCachedSnapshot := System.Copy(LMetrics, 0, Length(LMetrics));
-    FCachedPrefix := P;
-    FCacheValid := True;
-    Result := S;
-  finally
-    platform_mutex_unlock(FMutex);
   end;
 end;
 
@@ -1987,7 +1666,7 @@ begin
   if TryGetEnv('NEXTPAS_TLSPAS_REJECT_RATE', S) and (S <> '') then
   begin
     // invariant '.' parser to avoid locale comma issue
-    S := StringReplace(S, ',', '.', [rfReplaceAll]);
+    S := StringReplace(S, ',', '.', True);
     D := StrToFloatDef(S, -1);
     if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end;
   end;
@@ -2001,38 +1680,35 @@ begin
 end;
 
 function TlsPasTryLoadAdaptiveConfigFromFile(const APath: string; out AConfig: TTlsPasAdaptiveLimitConfig): Boolean;
-var F: TextFile; Line, Key, Val: string; P: Integer; Has: Boolean; V: Integer; D: Double;
+var Content: string; Lines: TStringArray; Line, Key, Val: string; P, I: Integer; Has: Boolean; V: Integer; D: Double;
 begin
   AConfig := DefaultTlsPasAdaptiveLimitConfig;
   Result := False;
   Has := False;
-  if (APath = '') or not FileExists(APath) then Exit;
-  AssignFile(F, APath);
+  if (APath = '') or not IsFile(APath) then Exit;
   try
-    Reset(F);
-    while not Eof(F) do
-    begin
-      ReadLn(F, Line);
-      Line := Trim(Line);
-      if (Line = '') or (Line[1] = '#') then Continue;
-      P := Pos('=', Line);
-      if P = 0 then Continue;
-      Key := Trim(System.Copy(Line, 1, P-1));
-      Val := Trim(System.Copy(Line, P+1, MaxInt));
-      if Key = '' then Continue;
-      if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
-      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
-      else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
-      begin Val := StringReplace(Val, ',', '.', [rfReplaceAll]); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
-    end;
-    CloseFile(F);
+    Content := ReadFileText(APath);
   except
-    try CloseFile(F); except end;
     Exit(False);
+  end;
+  Lines := SplitString(Content, #10);
+  for I := 0 to High(Lines) do
+  begin
+    Line := Trim(Lines[I]);
+    if (Line = '') or (Line[1] = '#') then Continue;
+    P := Pos('=', Line);
+    if P = 0 then Continue;
+    Key := Trim(Copy(Line, 1, P-1));
+    Val := Trim(Copy(Line, P+1, MaxInt));
+    if Key = '' then Continue;
+    if (Key = 'base') or (Key = 'BaseLimit') or (Key = 'NEXTPAS_TLSPAS_BASE_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.BaseLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'min') or (Key = 'MinLimit') or (Key = 'NEXTPAS_TLSPAS_MIN_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MinLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'max') or (Key = 'MaxLimit') or (Key = 'NEXTPAS_TLSPAS_MAX_LIMIT') then
+      begin V := StrToIntDef(Val, -1); if V > 0 then begin AConfig.MaxLimit := Cardinal(V); Has := True; end; end
+    else if (Key = 'threshold') or (Key = 'RejectRateThreshold') or (Key = 'NEXTPAS_TLSPAS_REJECT_RATE') then
+      begin Val := nextpas.core.text.utils.StringReplace(Val, ',', '.', True); D := StrToFloatDef(Val, -1); if (D >= 0) and (D <= 1) then begin AConfig.RejectRateThreshold := D; Has := True; end; end;
   end;
   if Has then
   begin
@@ -2041,445 +1717,6 @@ begin
     if AConfig.BaseLimit > AConfig.MaxLimit then AConfig.BaseLimit := AConfig.MaxLimit;
   end;
   Result := Has;
-end;
-
-{ S28 Cached Exporter — 命中时零 Format，直接返回缓存串，线程安全，惰性失效 }
-
-constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver);
-begin
-  Create(AObserver, 'nextpas_tlspas', '');
-end;
-
-constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix: string);
-begin
-  Create(AObserver, APrefix, '');
-end;
-
-constructor TAsyncTlsPasCachedPrometheusExporter.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const APrefix, ALabels: string);
-begin
-  inherited Create;
-  if AObserver = nil then
-    raise EInvalidOperationError.Create('tlspas: cached exporter observer nil');
-  FObserver := AObserver;
-  if APrefix = '' then FPrefix := 'nextpas_tlspas' else FPrefix := APrefix;
-  FLabels := ALabels;
-  FHasCache := False;
-  FHitCount := 0;
-  FMissCount := 0;
-  if platform_mutex_init(FMutex) <> 0 then
-    raise EInvalidOperationError.Create('tlspas: cached exporter mutex');
-end;
-
-destructor TAsyncTlsPasCachedPrometheusExporter.Destroy;
-begin
-  platform_mutex_destroy(FMutex);
-  inherited Destroy;
-end;
-
-function TAsyncTlsPasCachedPrometheusExporter.Format: string;
-var M: TTlsPasAdaptiveMetrics; S: string;
-begin
-  if FObserver = nil then Exit('');
-  M := FObserver.GetAdaptiveMetrics;
-  platform_mutex_lock(FMutex);
-  try
-    if FHasCache and TlsPasMetricsEqual(M, FCachedMetrics) then
-    begin
-      Inc(FHitCount);
-      Result := FCached;
-      Exit;
-    end;
-    Inc(FMissCount);
-    if FLabels = '' then
-      S := TlsPasFormatPrometheusMetrics(M, FPrefix)
-    else
-      S := TlsPasFormatPrometheusMetricsWithLabels(M, FPrefix, FLabels);
-    FCached := S;
-    FCachedMetrics := M;
-    FHasCache := True;
-    Result := S;
-  finally
-    platform_mutex_unlock(FMutex);
-  end;
-end;
-
-function TAsyncTlsPasCachedPrometheusExporter.AppendTo(var ABuf: string): Integer;
-var S: string;
-begin
-  S := Format;
-  ABuf := ABuf + S;
-  Result := Length(S);
-end;
-
-procedure TAsyncTlsPasCachedPrometheusExporter.Invalidate;
-begin
-  platform_mutex_lock(FMutex);
-  try
-    FHasCache := False;
-    FCached := '';
-  finally
-    platform_mutex_unlock(FMutex);
-  end;
-end;
-
-function TAsyncTlsPasCachedPrometheusExporter.HitCount: Cardinal;
-begin
-  platform_mutex_lock(FMutex);
-  try Result := FHitCount; finally platform_mutex_unlock(FMutex); end;
-end;
-
-function TAsyncTlsPasCachedPrometheusExporter.MissCount: Cardinal;
-begin
-  platform_mutex_lock(FMutex);
-  try Result := FMissCount; finally platform_mutex_unlock(FMutex); end;
-end;
-
-{ ======== S30 Trace ======== }
-
-function TlsPasTraceContextEquals(const A, B: TTlsPasTraceContext): Boolean;
-begin
-  if (not A.Valid) or (not B.Valid) then Exit((not A.Valid) and (not B.Valid) and (A.Sampled = B.Sampled));
-  if A.Sampled <> B.Sampled then Exit(False);
-  if Length(A.TraceId) <> Length(B.TraceId) then Exit(False);
-  if Length(A.ParentId) <> Length(B.ParentId) then Exit(False);
-  if (Length(A.TraceId) = 16) and (not CompareMem(@A.TraceId[0], @B.TraceId[0], 16)) then Exit(False);
-  if (Length(A.ParentId) = 8) and (not CompareMem(@A.ParentId[0], @B.ParentId[0], 8)) then Exit(False);
-  Result := True;
-end;
-
-function HexVal(C: Char): Integer; inline;
-begin
-  if (C >= '0') and (C <= '9') then Result := Ord(C) - Ord('0')
-  else if (C >= 'a') and (C <= 'f') then Result := Ord(C) - Ord('a') + 10
-  else if (C >= 'A') and (C <= 'F') then Result := Ord(C) - Ord('A') + 10
-  else Result := -1;
-end;
-
-function HexByte(Hi, Lo: Char; out B: Byte): Boolean;
-var H, L: Integer;
-begin
-  H := HexVal(Hi); L := HexVal(Lo);
-  if (H < 0) or (L < 0) then Exit(False);
-  B := Byte((H shl 4) or L); Result := True;
-end;
-
-function TlsPasParseTraceParent(const S: string; out Ctx: TTlsPasTraceContext): Boolean;
-var i: Integer; B: Byte;
-begin
-  Ctx := Default(TTlsPasTraceContext); Result := False;
-  // 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  (55)
-  if Length(S) <> 55 then Exit;
-  if (S[3] <> '-') or (S[36] <> '-') or (S[53] <> '-') then Exit;
-  if (S[1] <> '0') or (S[2] <> '0') then Exit; // version 00 only
-  SetLength(Ctx.TraceId, 16); SetLength(Ctx.ParentId, 8);
-  for i := 0 to 15 do
-    if not HexByte(S[4 + i*2], S[5 + i*2], B) then Exit
-    else Ctx.TraceId[i] := B;
-  for i := 0 to 7 do
-    if not HexByte(S[37 + i*2], S[38 + i*2], B) then Exit
-    else Ctx.ParentId[i] := B;
-  if not HexByte(S[54], S[55], B) then Exit;
-  Ctx.Sampled := (B and $01) <> 0;
-  Ctx.Valid := True; Result := True;
-end;
-
-function ByteToHex(B: Byte): string; inline;
-const H: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f');
-begin Result := H[B shr 4] + H[B and $0F]; end;
-
-function TlsPasFormatTraceParent(const Ctx: TTlsPasTraceContext): string;
-var i: Integer;
-begin
-  if (not Ctx.Valid) or (Length(Ctx.TraceId) <> 16) or (Length(Ctx.ParentId) <> 8) then Exit('');
-  Result := '00-';
-  for i := 0 to 15 do Result := Result + ByteToHex(Ctx.TraceId[i]);
-  Result := Result + '-';
-  for i := 0 to 7 do Result := Result + ByteToHex(Ctx.ParentId[i]);
-  Result := Result + '-';
-  if Ctx.Sampled then Result := Result + '01' else Result := Result + '00';
-end;
-
-var GTraceSeq: Int64 = 0;
-
-function TlsPasGenerateTraceContext(ASampled: Boolean): TTlsPasTraceContext;
-var i: Integer; V: QWord;
-begin
-  Result := Default(TTlsPasTraceContext);
-  SetLength(Result.TraceId, 16); SetLength(Result.ParentId, 8);
-  // light PRNG: tick + seq + Random
-  V := QWord(TlsPasMonoMs) xor QWord(AtomicFetchAdd64(GTraceSeq, 1) + 1);
-  for i := 0 to 15 do begin V := V * 6364136223846793005 + 1442695040888963407; Result.TraceId[i] := Byte(V shr (i mod 8 * 8)); end;
-  for i := 0 to 7 do begin V := V * 6364136223846793005 + 1442695040888963407; Result.ParentId[i] := Byte(V shr (i mod 8 * 8)); end;
-  // mix in Random for demo entropy
-  for i := 0 to 15 do Result.TraceId[i] := Result.TraceId[i] xor Byte(Random(256));
-  for i := 0 to 7 do Result.ParentId[i] := Result.ParentId[i] xor Byte(Random(256));
-  // avoid all-zero (invalid per spec)
-  if (Result.TraceId[0]=0) and (Result.TraceId[1]=0) then Result.TraceId[0] := $01;
-  if (Result.ParentId[0]=0) and (Result.ParentId[1]=0) then Result.ParentId[0] := $01;
-  Result.Sampled := ASampled; Result.Valid := True;
-end;
-
-function TlsPasShouldSample(const Ctx: TTlsPasTraceContext; ARate: Double): Boolean;
-var H: QWord; i: Integer; Thr: QWord;
-begin
-  if not Ctx.Valid then Exit(False);
-  if ARate <= 0 then Exit(False);
-  if ARate >= 1 then Exit(True);
-  if Ctx.Sampled then Exit(True); // parent decided
-  H := 14695981039346656037;
-  for i := 0 to High(Ctx.TraceId) do begin H := H xor Ctx.TraceId[i]; H := H * 1099511628211; end;
-  for i := 0 to High(Ctx.ParentId) do begin H := H xor Ctx.ParentId[i]; H := H * 1099511628211; end;
-  Thr := QWord(Trunc(ARate * 18446744073709551615.0));
-  Result := H < Thr;
-end;
-
-function TlsPasFormatTraceEvent(const AEvent: TTlsPasTraceEvent): string;
-var Tp: string;
-begin
-  Tp := '';
-  if AEvent.Trace.Valid then Tp := TlsPasFormatTraceParent(AEvent.Trace);
-  Result := Format('trace=%s kind=%d decision=%s max=%d healthy=%d ts=%d', [Tp, Ord(AEvent.Kind), TlsPasEarlyDataDecisionToStr(AEvent.Decision), Integer(AEvent.AdaptiveMax), Ord(AEvent.Healthy), AEvent.TimestampMs]);
-end;
-
-{ ITlsPasTracer impl }
-
-procedure TAsyncTlsPasNoopTracer.Trace(const AEvent: TTlsPasTraceEvent); begin end;
-function TAsyncTlsPasNoopTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean; begin Result := False; end;
-function TAsyncTlsPasNoopTracer.SampleCount: Int64; begin Result := 0; end;
-function TAsyncTlsPasNoopTracer.TotalCount: Int64; begin Result := 0; end;
-
-constructor TAsyncTlsPasSamplingTracer.Create(ARate: Double);
-begin
-  inherited Create; if ARate < 0 then ARate := 0 else if ARate > 1 then ARate := 1; FRate := ARate;
-  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: tracer mutex');
-end;
-procedure TAsyncTlsPasSamplingTracer.SetRate(ARate: Double);
-begin if ARate < 0 then ARate := 0 else if ARate > 1 then ARate := 1; platform_mutex_lock(FMutex); try FRate := ARate; finally platform_mutex_unlock(FMutex); end; end;
-destructor TAsyncTlsPasSamplingTracer.Destroy; begin platform_mutex_destroy(FMutex); inherited Destroy; end;
-function TAsyncTlsPasSamplingTracer.HashTraceId(const ATrace: TTlsPasTraceContext): QWord;
-var i: Integer; H: QWord;
-begin H := 14695981039346656037; for i := 0 to High(ATrace.TraceId) do begin H := H xor ATrace.TraceId[i]; H := H * 1099511628211; end; Result := H; end;
-procedure TAsyncTlsPasSamplingTracer.Trace(const AEvent: TTlsPasTraceEvent);
-begin
-  platform_mutex_lock(FMutex); try Inc(FTotal); if ShouldSample(AEvent.Trace) then Inc(FSampled); finally platform_mutex_unlock(FMutex); end;
-end;
-function TAsyncTlsPasSamplingTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-var Thr: QWord;
-begin
-  if not ATrace.Valid then Exit(False);
-  if ATrace.Sampled then Exit(True);
-  if FRate <= 0 then Exit(False);
-  if FRate >= 1 then Exit(True);
-  Thr := QWord(Trunc(FRate * 18446744073709551615.0));
-  Result := HashTraceId(ATrace) < Thr;
-end;
-function TAsyncTlsPasSamplingTracer.SampleCount: Int64; begin platform_mutex_lock(FMutex); try Result := FSampled; finally platform_mutex_unlock(FMutex); end; end;
-function TAsyncTlsPasSamplingTracer.TotalCount: Int64; begin platform_mutex_lock(FMutex); try Result := FTotal; finally platform_mutex_unlock(FMutex); end; end;
-
-function TlsPasTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
-  const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
-  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean): TTlsPasEarlyDataDecision;
-var Ev: TTlsPasTraceEvent;
-begin
-  if AObserver = nil then Exit(edRejectPolicy);
-  Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
-  if ATracer <> nil then
-  begin
-    Ev := Default(TTlsPasTraceEvent);
-    Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := TlsPasMonoMs;
-    Ev.Decision := Result; Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData;
-    Ev.Trace := ATrace; Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy;
-    ATracer.Trace(Ev);
-  end;
-end;
-
-{ ======== S31 Span ======== }
-
-constructor TAsyncTlsPasMemorySpanExporter.Create(ACap: Integer);
-begin
-  inherited Create; if ACap <= 0 then ACap := 128; FCap := ACap; SetLength(FSpans, FCap);
-  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: span exporter mutex');
-end;
-destructor TAsyncTlsPasMemorySpanExporter.Destroy; begin platform_mutex_destroy(FMutex); inherited Destroy; end;
-procedure TAsyncTlsPasMemorySpanExporter.ExportSpan(const ASpan: TTlsPasSpan);
-begin
-  platform_mutex_lock(FMutex);
-  try
-    FSpans[FHead] := ASpan;
-    FHead := (FHead + 1) mod FCap;
-    if FCount < FCap then Inc(FCount);
-  finally platform_mutex_unlock(FMutex); end;
-end;
-function TAsyncTlsPasMemorySpanExporter.Count: Integer; begin platform_mutex_lock(FMutex); try Result := FCount; finally platform_mutex_unlock(FMutex); end; end;
-function TAsyncTlsPasMemorySpanExporter.GetSpans: TTlsPasSpanArray;
-var i, idx: Integer;
-begin
-  platform_mutex_lock(FMutex);
-  try
-    SetLength(Result, FCount);
-    for i := 0 to FCount - 1 do begin idx := (FHead - FCount + i + FCap) mod FCap; Result[i] := FSpans[idx]; end;
-  finally platform_mutex_unlock(FMutex); end;
-end;
-procedure TAsyncTlsPasMemorySpanExporter.Clear; begin platform_mutex_lock(FMutex); try FCount := 0; FHead := 0; finally platform_mutex_unlock(FMutex); end; end;
-
-function TlsPasSpanToJSON(const ASpan: TTlsPasSpan): string;
-var Tp: string;
-begin
-  Tp := TlsPasFormatTraceParent(ASpan.Trace);
-  Result := Format('{"traceparent":"%s","name":"%s","start_ms":%d,"end_ms":%d,"duration_ms":%d,"decision":"%s","adaptive_max":%d,"healthy":%s}', [Tp, ASpan.Name, ASpan.StartMs, ASpan.EndMs, ASpan.DurationMs, TlsPasEarlyDataDecisionToStr(ASpan.Decision), Integer(ASpan.AdaptiveMax), LowerCase(BoolToStr(ASpan.Healthy, True))]);
-end;
-
-function TlsPasSpansToJSON(const AExporter: ITlsPasSpanExporter): string;
-var Spans: TTlsPasSpanArray; i: Integer;
-begin
-  if AExporter = nil then Exit('[]');
-  Spans := AExporter.GetSpans; Result := '[';
-  for i := 0 to High(Spans) do begin if i > 0 then Result := Result + ','; Result := Result + TlsPasSpanToJSON(Spans[i]); end;
-  Result := Result + ']';
-end;
-
-function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter; const APrefix: string): string;
-var Spans: TTlsPasSpanArray; C, S: Integer; i: Integer; P: string;
-begin
-  P := APrefix; if P = '' then P := 'nextpas_tlspas';
-  if AExporter = nil then C := 0 else C := AExporter.Count;
-  Spans := nil; if AExporter <> nil then Spans := AExporter.GetSpans;
-  S := 0; for i := 0 to High(Spans) do if Spans[i].Trace.Sampled then Inc(S);
-  Result := Format('# HELP %s_spans_total Total spans exported'#10'# TYPE %s_spans_total counter'#10'%s_spans_total %d'#10'# HELP %s_spans_sampled_total Sampled spans'#10'# TYPE %s_spans_sampled_total counter'#10'%s_spans_sampled_total %d'#10, [P,P,P,C, P,P,P,S]);
-end;
-function TlsPasSpansToPrometheus(const AExporter: ITlsPasSpanExporter): string; begin Result := TlsPasSpansToPrometheus(AExporter, 'nextpas_tlspas'); end;
-
-function TlsPasTraceSpanDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const ATracer: ITlsPasTracer;
-  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext;
-  const ATicketIdentity, AEarlyData: TBytes; const ASession: TTlsPasResumptionSession;
-  AAllowEarlyData: Boolean; const AName: string): TTlsPasEarlyDataDecision;
-var T0, T1: Int64; Sp: TTlsPasSpan; Ev: TTlsPasTraceEvent;
-begin
-  T0 := TlsPasMonoMs;
-  if AObserver = nil then Result := edRejectPolicy else Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
-  T1 := TlsPasMonoMs;
-  if (AExporter <> nil) and ((ATracer = nil) or ATracer.ShouldSample(ATrace) or ATrace.Sampled) then
-  begin
-    Sp := Default(TTlsPasSpan);
-    Sp.Trace := ATrace; Sp.Name := AName; Sp.StartMs := T0; Sp.EndMs := T1; Sp.DurationMs := T1 - T0;
-    Sp.Decision := Result;
-    if AObserver <> nil then begin Sp.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Sp.Healthy := AObserver.GetAdaptiveHealth.Healthy; end;
-    AExporter.ExportSpan(Sp);
-  end;
-  if ATracer <> nil then begin Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := T1; Ev.Decision := Result; if AObserver <> nil then Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Ev.Trace := ATrace; if AObserver <> nil then Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy; ATracer.Trace(Ev); end;
-end;
-
-{ ======== S32 Adaptive Sampling + OTLP ======== }
-
-function DefaultTlsPasSamplingConfig: TTlsPasSamplingConfig;
-begin Result.BaseRate := 0.01; Result.MinRate := 0.001; Result.MaxRate := 0.5; end;
-
-const C_TLSPAS_PROM_PREFIX = 'nextpas_tlspas';
-
-function TlsPasComputeAdaptiveSamplingRate(const AMetrics: TTlsPasAdaptiveMetrics; const AHealth: TTlsPasAdaptiveHealth; const AConfig: TTlsPasSamplingConfig): Double;
-var R, Thr: Double;
-begin
-  R := AConfig.BaseRate;
-  if not AHealth.Healthy then R := R * 5.0;
-  if AMetrics.Replay.Current > 50 then R := R * 2.0;
-  if AMetrics.Server.RejectPolicy + AMetrics.Server.RejectReplay > 0 then
-  begin
-    Thr := AConfig.BaseRate * 10; if Thr < 0.05 then Thr := 0.05;
-    if AHealth.RejectRate > Thr then R := R * 3.0;
-  end;
-  if R < AConfig.MinRate then R := AConfig.MinRate;
-  if R > AConfig.MaxRate then R := AConfig.MaxRate;
-  if R < 0 then R := 0;
-  if R > 1 then R := 1;
-  Result := R;
-end;
-
-function TlsPasPrometheusGauge(const AMetric, AHelp: string; AValue: Double; const APrefix: string): string;
-var P: string;
-begin
-  P := APrefix; if P = '' then P := C_TLSPAS_PROM_PREFIX;
-  Result := Format('# HELP %s_%s %s'#10'# TYPE %s_%s gauge'#10'%s_%s %.4f'#10, [P,AMetric,AHelp,P,AMetric,P,AMetric,AValue]);
-end;
-
-function TlsPasSamplingRateToPrometheus(ARate: Double; const APrefix: string): string;
-begin Result := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', ARate, APrefix); end;
-function TlsPasSamplingRateToPrometheus(ARate: Double): string; begin Result := TlsPasSamplingRateToPrometheus(ARate, C_TLSPAS_PROM_PREFIX); end;
-
-function TlsPasSpansToOTLPJSON(const AExporter: ITlsPasSpanExporter): string;
-var Spans: TTlsPasSpanArray; i: Integer; Tp: string;
-begin
-  if AExporter = nil then Exit('{"resourceSpans":[]}');
-  Spans := AExporter.GetSpans;
-  Result := '{"resourceSpans":[{"resource":{"attributes":{"service.name":"nextpas"}},"scopeSpans":[{"spans":[';
-  for i := 0 to High(Spans) do
-  begin
-    if i > 0 then Result := Result + ',';
-    Tp := TlsPasFormatTraceParent(Spans[i].Trace);
-    Result := Result + Format('{"traceId":"%s","name":"%s","startTimeUnixNano":%d,"endTimeUnixNano":%d,"attributes":{"decision":"%s","adaptive_max":%d,"healthy":%s}}', [Tp, Spans[i].Name, Spans[i].StartMs*1000000, Spans[i].EndMs*1000000, TlsPasEarlyDataDecisionToStr(Spans[i].Decision), Integer(Spans[i].AdaptiveMax), LowerCase(BoolToStr(Spans[i].Healthy, True))]);
-  end;
-  Result := Result + ']}}]}';
-end;
-
-function TlsPasTryExportSpansToFile(const AExporter: ITlsPasSpanExporter; const APath: string): Boolean;
-var J, Tmp: string; FS: TFileStream;
-begin
-  Result := False; if (AExporter = nil) or (APath = '') then Exit;
-  J := TlsPasSpansToOTLPJSON(AExporter);
-  Tmp := APath + '.tmp';
-  try
-    FS := TFileStream.Create(Tmp, fmCreate);
-    try if Length(J) > 0 then FS.WriteBuffer(J[1], Length(J)); finally FS.Free; end;
-    if FileExists(APath) then DeleteFile(APath);
-    Result := RenameFile(Tmp, APath);
-  except Result := False; end;
-  if not Result then if FileExists(Tmp) then DeleteFile(Tmp);
-end;
-
-constructor TAsyncTlsPasAdaptiveTracer.Create(const AObserver: TAsyncTlsPasAdaptiveObserver; const AConfig: TTlsPasSamplingConfig);
-begin
-  inherited Create; FObserver := AObserver; FConfig := AConfig;
-  FInner := TAsyncTlsPasSamplingTracer.Create(AConfig.BaseRate);
-  if platform_mutex_init(FMutex) <> 0 then raise EInvalidOperationError.Create('tlspas: adaptive tracer mutex');
-end;
-constructor TAsyncTlsPasAdaptiveTracer.Create(const AObserver: TAsyncTlsPasAdaptiveObserver);
-begin Create(AObserver, DefaultTlsPasSamplingConfig); end;
-destructor TAsyncTlsPasAdaptiveTracer.Destroy; begin platform_mutex_destroy(FMutex); FInner.Free; inherited Destroy; end;
-procedure TAsyncTlsPasAdaptiveTracer.Trace(const AEvent: TTlsPasTraceEvent); begin FInner.Trace(AEvent); end;
-function TAsyncTlsPasAdaptiveTracer.SampleCount: Int64; begin Result := FInner.SampleCount; end;
-function TAsyncTlsPasAdaptiveTracer.TotalCount: Int64; begin Result := FInner.TotalCount; end;
-function TAsyncTlsPasAdaptiveTracer.GetAdaptiveRate: Double;
-var Snap: TTlsPasAdaptiveSnapshot;
-begin
-  if FObserver = nil then Exit(FConfig.BaseRate);
-  Snap := FObserver.GetSnapshot;
-  platform_mutex_lock(FMutex); try Result := TlsPasComputeAdaptiveSamplingRate(Snap.Metrics, Snap.Health, FConfig); finally platform_mutex_unlock(FMutex); end;
-end;
-function TAsyncTlsPasAdaptiveTracer.ShouldSample(const ATrace: TTlsPasTraceContext): Boolean;
-var R: Double;
-begin
-  if not ATrace.Valid then Exit(False);
-  if ATrace.Sampled then Exit(True);
-  R := GetAdaptiveRate; Result := TlsPasShouldSample(ATrace, R);
-end;
-procedure TAsyncTlsPasAdaptiveTracer.UpdateConfig(const AConfig: TTlsPasSamplingConfig);
-begin platform_mutex_lock(FMutex); try FConfig := AConfig; if FInner <> nil then FInner.SetRate(AConfig.BaseRate); finally platform_mutex_unlock(FMutex); end; end;
-
-function TlsPasAdaptiveTraceDecide(const AObserver: TAsyncTlsPasAdaptiveObserver; const AAdaptiveTracer: TAsyncTlsPasAdaptiveTracer;
-  const AExporter: ITlsPasSpanExporter; const ATrace: TTlsPasTraceContext; const ATicketIdentity, AEarlyData: TBytes;
-  const ASession: TTlsPasResumptionSession; AAllowEarlyData: Boolean; const AName: string): TTlsPasEarlyDataDecision;
-var T0, T1: Int64; Sp: TTlsPasSpan; Ev: TTlsPasTraceEvent; R: Double;
-begin
-  T0 := TlsPasMonoMs;
-  if AObserver = nil then Result := edRejectPolicy else Result := AObserver.Decide(ATicketIdentity, AEarlyData, ASession, AAllowEarlyData);
-  T1 := TlsPasMonoMs;
-  R := 0.01; if AAdaptiveTracer <> nil then R := AAdaptiveTracer.GetAdaptiveRate;
-  if (AExporter <> nil) and ((AAdaptiveTracer = nil) or AAdaptiveTracer.ShouldSample(ATrace) or ATrace.Sampled) then
-  begin
-    Sp := Default(TTlsPasSpan); Sp.Trace := ATrace; Sp.Name := AName; Sp.StartMs := T0; Sp.EndMs := T1; Sp.DurationMs := T1 - T0; Sp.Decision := Result;
-    if AObserver <> nil then begin Sp.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Sp.Healthy := AObserver.GetAdaptiveHealth.Healthy; end;
-    AExporter.ExportSpan(Sp);
-  end;
-  if AAdaptiveTracer <> nil then begin Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.TimestampMs := T1; Ev.Decision := Result; if AObserver <> nil then Ev.AdaptiveMax := AObserver.GetAdaptiveMaxEarlyData; Ev.Trace := ATrace; if AObserver <> nil then Ev.Healthy := AObserver.GetAdaptiveHealth.Healthy; AAdaptiveTracer.Trace(Ev); end;
 end;
 
 constructor TAsyncTlsPasReplayCache.Create;
@@ -2540,7 +1777,7 @@ begin
         Inc(I);
     end;
     for I := 0 to High(FHashes) do
-      if (Length(FHashes[I]) = 32) and CompareMem(@FHashes[I][0], @AFingerprint[0], 32) then
+      if (Length(FHashes[I]) = 32) and BytesEqual(FHashes[I], AFingerprint) then
       begin
         IsReplay := True;
         Inc(FHits);
@@ -2646,81 +1883,72 @@ end;
 
 procedure TAsyncTlsPasReplayFileStore.LoadFromFile;
 var
-  FS: TFileStream;
+  LData: TBytes;
   LSize: Int64;
   LCount, I: Integer;
   LHash: TBytes;
   LTime: Int64;
   LNow: Int64;
-  LBuf: TBytes;
   LIsReplay: Boolean;
 begin
   if FPath = '' then Exit;
-  if not FileExists(FPath) then Exit;
+  if not IsFile(FPath) then Exit;
   try
-    FS := TFileStream.Create(FPath, fmOpenRead or fmShareDenyWrite);
-    try
-      LSize := FS.Size;
-      if (LSize = 0) or (LSize mod 40 <> 0) then Exit; // corruption -> ignore
-      LCount := Integer(LSize div 40);
-      SetLength(LBuf, 40);
-      LNow := TlsPasMonoMs;
-      for I := 0 to LCount - 1 do
+    LData := ReadFile(FPath);
+    LSize := Length(LData);
+    if (LSize = 0) or (LSize mod 40 <> 0) then Exit;
+    LCount := Integer(LSize div 40);
+    LNow := TlsPasMonoMs;
+    for I := 0 to LCount - 1 do
+    begin
+      SetLength(LHash, 32);
+      Move(LData[I*40], LHash[0], 32);
+      Move(LData[I*40+32], LTime, 8);
+      if LTime + FInner.FWindowMs <= LNow then
       begin
-        FS.ReadBuffer(LBuf[0], 40);
-        SetLength(LHash, 32);
-        Move(LBuf[0], LHash[0], 32);
-        Move(LBuf[32], LTime, 8);
-        if LTime + FInner.FWindowMs <= LNow then
-        begin
-          SecureZeroBytes(LHash);
-          Continue;
-        end;
-        FInner.CheckAndAdd(LHash, LIsReplay);
         SecureZeroBytes(LHash);
+        Continue;
       end;
-    finally
-      FS.Free;
+      FInner.CheckAndAdd(LHash, LIsReplay);
+      SecureZeroBytes(LHash);
     end;
   except
-    // 腐败或 IO 错：忽略，视为空存储
   end;
 end;
 
 procedure TAsyncTlsPasReplayFileStore.SaveToFile;
 var
-  FS: TFileStream;
   I: Integer;
   LTmp: string;
   LHash: TBytes;
   LTime: Int64;
+  LOut: TBytes;
+  LPos: Integer;
 begin
   if FPath = '' then Exit;
   LTmp := FPath + '.tmp';
   try
-    FS := TFileStream.Create(LTmp, fmCreate);
+    platform_mutex_lock(FInner.FMutex);
     try
-      platform_mutex_lock(FInner.FMutex);
-      try
-        for I := 0 to High(FInner.FHashes) do
-        begin
-          LHash := FInner.FHashes[I];
-          LTime := FInner.FTimes[I];
-          if Length(LHash) <> 32 then Continue;
-          FS.WriteBuffer(LHash[0], 32);
-          FS.WriteBuffer(LTime, 8);
-        end;
-      finally
-        platform_mutex_unlock(FInner.FMutex);
+      SetLength(LOut, 0);
+      for I := 0 to High(FInner.FHashes) do
+      begin
+        LHash := FInner.FHashes[I];
+        LTime := FInner.FTimes[I];
+        if Length(LHash) <> 32 then Continue;
+        LPos := Length(LOut);
+        SetLength(LOut, LPos + 40);
+        Move(LHash[0], LOut[LPos], 32);
+        Move(LTime, LOut[LPos+32], 8);
       end;
     finally
-      FS.Free;
+      platform_mutex_unlock(FInner.FMutex);
     end;
-    if FileExists(FPath) then DeleteFile(FPath);
-    RenameFile(LTmp, FPath);
+    WriteFile(LTmp, LOut);
+    if IsFile(FPath) then DeleteFile(FPath);
+    Rename(LTmp, FPath);
   except
-    // 落盘失败不影响内存去重
-    try if FileExists(LTmp) then DeleteFile(LTmp); except end;
+    try if IsFile(LTmp) then DeleteFile(LTmp); except end;
   end;
 end;
 
@@ -3121,7 +2349,7 @@ begin
   if ACtx^.EarlyDataAccepted then
   begin
     LEoed := BuildTLS13EndOfEarlyDataHandshake;
-    BytesAppend(LTranscriptForFin, LEoed);
+    AppendBytesTo(LTranscriptForFin, LEoed);
   end
   else
     SetLength(LEoed, 0);
@@ -3141,26 +2369,26 @@ begin
     同一 handshake IV 下一同加密为单记录，降低往返与分片。 }
   SetLength(LFlight, 0);
   if Length(LEoed) > 0 then
-    BytesAppend(LFlight, LEoed);
+    AppendBytesTo(LFlight, LEoed);
   if ACtx^.CertRequested then
-    BytesAppend(LFlight, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+    AppendBytesTo(LFlight, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
       0, 0, 0, 0));
-  BytesAppend(LFlight, LFinished);
+  AppendBytesTo(LFlight, LFinished);
 
   SetLength(ACtx^.TxBytes, 0);
   LRecord := TlsPasSealClientHandshakeRecord(ACtx, LFlight,
     TLS_CONTENT_TYPE_HANDSHAKE);
-  BytesAppend(ACtx^.TxBytes, LRecord);
+  AppendBytesTo(ACtx^.TxBytes, LRecord);
   ACtx^.TxOff := 0;
 
   { resumption_master_secret 输入 = Hash(CH..EOED..CF)；v1 不恢复会话，
     保留正确派生供后续批次扩展 }
   if Length(LEoed) > 0 then
-    BytesAppend(LTranscript, LEoed);
+    AppendBytesTo(LTranscript, LEoed);
   if ACtx^.CertRequested then
-    BytesAppend(LTranscript, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
+    AppendBytesTo(LTranscript, TBytes.Create(TLS_HANDSHAKE_TYPE_CERTIFICATE, 0, 0, 4,
       0, 0, 0, 0));
-  BytesAppend(LTranscript, LFinished);
+  AppendBytesTo(LTranscript, LFinished);
   ACtx^.AppSecrets.ResumptionTranscriptHash :=
     TlsPasTranscriptHash(ACtx^.Suite, LTranscript);
 end;
@@ -3281,9 +2509,9 @@ var
 begin
   LMsgHash := TlsPasBuildMessageHash(ACH1, ACipherSuite);
   SetLength(LTranscript, 0);
-  BytesAppend(LTranscript, LMsgHash);
-  BytesAppend(LTranscript, AHRR);
-  BytesAppend(LTranscript, ATruncatedCH2);
+  AppendBytesTo(LTranscript, LMsgHash);
+  AppendBytesTo(LTranscript, AHRR);
+  AppendBytesTo(LTranscript, ATruncatedCH2);
   if TLS13CipherSuiteIsSHA384(ACipherSuite) then
     LHash := SHA384(LTranscript)
   else
@@ -3663,9 +2891,9 @@ begin
     end;
     LMsgHash := TlsPasBuildMessageHash(ACtx^.CH1Body, LInfo.SelectedCipherSuite);
     SetLength(ACtx^.HRRTranscript, 0);
-    BytesAppend(ACtx^.HRRTranscript, LMsgHash);
-    BytesAppend(ACtx^.HRRTranscript, AMsg);
-    BytesAppend(ACtx^.HRRTranscript, LCH2);
+    AppendBytesTo(ACtx^.HRRTranscript, LMsgHash);
+    AppendBytesTo(ACtx^.HRRTranscript, AMsg);
+    AppendBytesTo(ACtx^.HRRTranscript, LCH2);
     ACtx^.CHBody := LCH2;
     ACtx^.HRRSeen := True;
     ACtx^.HsBuf := nil;
@@ -3723,13 +2951,13 @@ begin
   SetLength(ACtx^.Transcript, 0);
   if ACtx^.HRRSeen then
   begin
-    BytesAppend(ACtx^.Transcript, ACtx^.HRRTranscript);
-    BytesAppend(ACtx^.Transcript, AMsg);
+    AppendBytesTo(ACtx^.Transcript, ACtx^.HRRTranscript);
+    AppendBytesTo(ACtx^.Transcript, AMsg);
   end
   else
   begin
-    BytesAppend(ACtx^.Transcript, ACtx^.CHBody);
-    BytesAppend(ACtx^.Transcript, AMsg);
+    AppendBytesTo(ACtx^.Transcript, ACtx^.CHBody);
+    AppendBytesTo(ACtx^.Transcript, AMsg);
   end;
   if LInfo.HasPreSharedKey then
   begin
@@ -3894,7 +3122,7 @@ begin
   case LInnerCt of
     TLS_CONTENT_TYPE_HANDSHAKE:
       begin
-        BytesAppend(ACtx^.EncBuf, LFrag);
+        AppendBytesTo(ACtx^.EncBuf, LFrag);
         while TlsPasTryPopHandshake(ACtx^.EncBuf, LMsg) = 1 do
         begin
           LMsgType := LMsg[0];
@@ -3925,7 +3153,7 @@ begin
             else if ACtx^.SentEarlyData then
               ACtx^.EarlyDataAccepted := False;
             ACtx^.SeenEncryptedExtensions := True;
-            BytesAppend(ACtx^.Transcript, LMsg);
+            AppendBytesTo(ACtx^.Transcript, LMsg);
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_CERTIFICATE then
           begin
@@ -3942,7 +3170,7 @@ begin
               Exit;
             end;
             ACtx^.SeenCert := True;
-            BytesAppend(ACtx^.Transcript, LMsg);
+            AppendBytesTo(ACtx^.Transcript, LMsg);
             { VerifyPeer：全链验证（日期/签名/CA 约束/信任锚/主机名）。
               失败即握手终止——绝不降级为不校验继续。 }
             if ACtx^.VerifyPeer then
@@ -3976,7 +3204,7 @@ begin
               if not TlsPasVerifyCertVerifySignature(ACtx, LScheme, LSig) then
                 Exit;
             ACtx^.SeenCertVerify := True;
-            BytesAppend(ACtx^.Transcript, LMsg);
+            AppendBytesTo(ACtx^.Transcript, LMsg);
           end
           else if LMsgType = TLS_HANDSHAKE_TYPE_FINISHED then
           begin
@@ -4014,7 +3242,7 @@ begin
               TlsPasFail(ACtx, ASYNC_TLSPAS_ERR_HANDSHAKE);
               Exit;
             end;
-            BytesAppend(ACtx^.Transcript, LMsg);
+            AppendBytesTo(ACtx^.Transcript, LMsg);
 
             { 应用密钥派生输入 = Hash(CH..SF)，不含客户端 Finished }
             if not TryDeriveTLS13ApplicationSecrets(ACtx^.Suite,
@@ -4098,7 +3326,7 @@ begin
             end;
           TLS_CONTENT_TYPE_HANDSHAKE:
             begin
-              BytesAppend(ACtx^.HsBuf, LPayload);
+              AppendBytesTo(ACtx^.HsBuf, LPayload);
               while TlsPasTryPopHandshake(ACtx^.HsBuf, LMsg) = 1 do
               begin
                 if LMsg[0] <> TLS_HANDSHAKE_TYPE_SERVER_HELLO then
@@ -4625,7 +3853,7 @@ var
   LSess: TTlsPasResumptionSession;
 begin
   AFatal := False;
-  BytesAppend(FPostHs, AFragment);
+  AppendBytesTo(FPostHs, AFragment);
   while TlsPasTryPopHandshake(FPostHs, LMsg) = 1 do
   begin
     LMsgType := LMsg[0];
@@ -4691,7 +3919,7 @@ begin
   case LInnerCt of
     TLS_CONTENT_TYPE_APPLICATION_DATA:
       begin
-        BytesAppend(FPlainOut, LFrag);
+        AppendBytesTo(FPlainOut, LFrag);
         Result := Length(LFrag);
       end;
     TLS_CONTENT_TYPE_HANDSHAKE:

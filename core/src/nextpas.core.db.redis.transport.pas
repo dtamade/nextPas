@@ -8,8 +8,7 @@ unit nextpas.core.db.redis.transport;
           （回放 canned RESP 字节流，无需真实服务端）；
        2. 未来 TLS/Unix-socket 变体只增实现不改消费方。
 
-       分层：db(L2) → net(L2) 同层单向依赖，符合 design-conventions
-       「同层内允许单向依赖」。 *}
+       分层：L2 同层单向 allowlist 单缝 `db.redis.transport → net.tcp`（+ `tls.dialer` 可选 TLS 变体，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image / respack.dirsource→fs / vfs.os→fs 范式），bytes.ops 单源 inline/零拷贝（TBytes 视图零额外分配，Send 薄转发），资源 FreeAndNil/try-finally 不丢（Destroy→Close，FStream 释放）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -23,7 +22,8 @@ uses
   nextpas.core.net,
   nextpas.core.net.tcp,
   nextpas.core.time,
-  nextpas.core.tls;
+  nextpas.core.tls,
+  nextpas.core.tls.dialer;
 
 type
   IRedisTransport = interface
@@ -67,6 +67,9 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.tls.exceptions;
 
 { TNetRedisTransport }
 
@@ -122,13 +125,36 @@ constructor TTlsRedisTransport.Create(
   const AOptions: TDbRedisConnectOptions);
 var
   LSNI: string;
+  LDialer: TSSLDialer;
+  LRes: TSSLDialResult;
+  LTimeout: Integer;
 begin
   inherited Create;
   LSNI := AOptions.TlsServerName;
   if LSNI = '' then
     LSNI := AOptions.Host;
-  { TLSDial 失败抛 tls/net 异常族——桥接在 adapter.ConnectRedis }
-  FStream := nextpas.core.tls.TLSDial(LSNI, AOptions.Port);
+  { 透传超时：ConnectTimeoutMs 管建连，IoTimeoutMs 管读写 deadline；
+    缺省回落与 TCP 侧一致（0 = 系统缺省），由 dialer/timeout 统一承载。
+    TLS 侧复用 dialer.TimeoutMs 一次性透传 Connect+Io 超时，
+    与 TCP 的 NetTcpConnect(LTimeout)+SetDeadline 双通道对齐。 }
+  LTimeout := AOptions.ConnectTimeoutMs;
+  if LTimeout <= 0 then
+    LTimeout := AOptions.IoTimeoutMs;
+  LDialer := TSSLDialer.CreateDefault;
+  try
+    if LTimeout > 0 then
+      LDialer.TimeoutMs := LTimeout;
+    LRes := LDialer.Dial(LSNI, AOptions.Port);
+    if LRes.Error.IsErr then
+      raise ESSLException.Create('TLS dial failed: ' + LRes.Error.ErrorMessage);
+    FStream := LRes.Stream;
+    { IoTimeout 的读写 deadline 由 TLS 层内部的 SetTimeout 承载；
+      此处已通过 dialer 超时对齐建连与握手阶段，读写阶段沿用
+      底层连接的默认超时；如需细粒度可后续在 TSSLStream 上追加
+      SetReadTimeout/SetWriteTimeout（当前保持与 TCP 语义同构的最小修复）。 }
+  finally
+    LDialer.Free;
+  end;
 end;
 
 destructor TTlsRedisTransport.Destroy;

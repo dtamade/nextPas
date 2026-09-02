@@ -1,4 +1,3 @@
-// debt: event.intf uses spatial.intf for TAudioSpatialParams (to be promoted to audio.base)
 unit nextpas.core.audio.event.intf;
 
 {$I nextpas.core.settings.inc}

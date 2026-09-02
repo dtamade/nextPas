@@ -30,6 +30,7 @@ uses
   nextpas.core.json,
   { 显式选后端时引 base（门面只 re-export 类型别名，不带枚举值） }
   nextpas.core.webview.base,
+  nextpas.core.window.base,
   nextpas.core.webview;
 
 const
@@ -343,7 +344,7 @@ begin
   Inc(FSeq);
   LSeq := FSeq;
   { 不就地完成：投递回主循环下一拍，证明异步 completion 路径 }
-  FWindow.Dispatcher.Post(procedure
+  FWindow.Window.Dispatcher.Post(procedure
     begin
       if not FWindow.IsClosed then
         ACompletion.Ok(Format('{"deferred":true,"seq":%d}', [LSeq]));
@@ -360,7 +361,7 @@ begin
   RequireJsonObject(APayloadJson, LDoc, R);
   Inc(FSeq);
   LSeq := FSeq;
-  FWindow.Dispatcher.Post(procedure
+  FWindow.Window.Dispatcher.Post(procedure
     begin
       if FWindow.IsClosed then Exit;
       { 先 ack 后 emit：WebKit 同视图按序执行 eval，页面回报次序确定，
@@ -585,13 +586,14 @@ begin
       else
         Log('navigation failed: ' + AEvent.Url);
     end);
-  FWindow.OnWindowClosed(
-    procedure
+  FWindow.Window.OnEvent(
+    procedure(const AEvent: TWindowEvent)
     begin
-      WebviewExitLoop;
+      if AEvent.Kind = weCloseRequested then
+        WebviewExitLoop;
     end);
 
-  FWindow.Show;
+  FWindow.Window.Show;
   if FSelftest then
     Log('selftest window up, driving matrix...')
   else

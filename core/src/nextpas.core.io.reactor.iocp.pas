@@ -91,6 +91,7 @@ type
     { Best-effort CancelIoEx for pending ops matching AContext.
       Does not free OVERLAPPED; completion still arrives via GQCS. }
     function TryCancelByContext(AContext: Pointer): Boolean;
+    function CancelByFd(AFd: PtrInt): Boolean;
   end;
 
 implementation
@@ -395,7 +396,9 @@ begin
           begin
             LHasException := True;
             LExceptionMessage := E.Message;
-          end;
+          end
+          else
+            LExceptionMessage := LExceptionMessage + LineEnding + E.Message;
         end;
       end;
     finally
@@ -607,8 +610,6 @@ begin
   LPort := FPort;
   if LPort <> 0 then
     PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
-  FPort := 0;
-  FMaxEvents := 0;
   try
     if atomic_load(FPendingCount, mo_acquire) > 0 then
     begin
@@ -617,6 +618,8 @@ begin
     end;
     IocpReleasePendingOps(Self, ERROR_OPERATION_ABORTED);
   finally
+    FPort := 0;
+    FMaxEvents := 0;
     if LPort <> 0 then
       CloseHandle(HANDLE(LPort));
   end;
@@ -971,6 +974,37 @@ begin
     end;
     LOp := LOp^.Next;
   end;
+end;
+
+function TIocpReactor.CancelByFd(AFd: PtrInt): Boolean;
+var
+  LOp: PIocpPendingOp;
+  LHandle: HANDLE;
+  LContexts: array of Pointer;
+  LCount, LI: UInt32;
+begin
+  Result := False;
+  if (AFd = 0) or (not IsValid) then
+    Exit;
+  LHandle := IocpHandleFromFd(AFd);
+  if FPendingHead = nil then
+    Exit;
+  // collect contexts for matching fd first
+  SetLength(LContexts, 0);
+  LOp := PIocpPendingOp(FPendingHead);
+  while LOp <> nil do
+  begin
+    if LOp^.Handle = LHandle then
+    begin
+      SetLength(LContexts, Length(LContexts)+1);
+      LContexts[High(LContexts)] := LOp^.Context;
+    end;
+    LOp := LOp^.Next;
+  end;
+  LCount := Length(LContexts);
+  for LI := 0 to LCount - 1 do
+    if TryCancelByContext(LContexts[LI]) then
+      Result := True;
 end;
 
 function TIocpReactor.PollOne: Boolean;

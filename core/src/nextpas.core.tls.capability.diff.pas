@@ -559,6 +559,7 @@ var
   i: Integer;
   LevelClass, LevelText: string;
 begin
+  HTML := nil;
   try
     // 差异级别样式
     case ADiff.DifferenceLevel of

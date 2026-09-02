@@ -43,9 +43,9 @@ semantic model，以及 `Typed HIR -> MIR -> backend plan` skeleton 落进仓库
   - 提供 `TSearchPathSet`、`TResolvedUnit`、`TUnitGraph`，把 root/interface/implementation/implicit-runtime edge 收成显式对象
 - `frontend/np_unit_resolver.pas`
   - 提供 `TUnitResolver`，把最小 search path、name resolution、cycle detection 与 resolution diagnostics 接回 compiler session
-- `targets/np_target_facts.pas`
+- `src/nextpas.compiler.targets.facts.pas`
   - 提供 `TTargetFactsView`，承接 target id、config path、host facts、compiler executable，以及 object format / assembler flavor / linker flavor / LLVM triple / toolchain binding / backend family
-- `diagnostics/np_diagnostics_sink.pas`
+- `src/nextpas.compiler.diagnostics.sink.pas`
   - 提供 `TDiagnosticsSink`，承接 diagnostics policy、structured compile/toolchain diagnostics 与会话级计数
 - `syntax/np_lexer.pas`
   - 提供最小 `TLexerResult`，把 root source 切成 token 流

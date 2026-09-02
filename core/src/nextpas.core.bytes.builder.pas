@@ -1,6 +1,9 @@
 unit nextpas.core.bytes.builder;
 
 {$I nextpas.core.settings.inc}
+{ Single-source: growth via bytes.ops.BytesGrowCapacity (INV-2) amortized O(1) geometric; owner bytes.ops.
+  perf: WrittenSpan zero-copy view (single TByteSpan.Create, no alloc), AppendByte/AppendUInt* inline tiny stores (no Move) hot path; AppendBytes/AppendFill/ToBytes not inline per red-line 1/2 (Move/FillChar/SetLength + Grow loop I-Cache); Grow not inline per red-line 2 (while); stability: sized FreeMemOf on Destroy, Clear/Reserve/Truncate keep capacity. }
+{ CONTRACT: core/docs/bytes/CONTRACT.md 1.1 — L1 bytes, four-piece base→builder→facade, no intf/ffi (on-demand). }
 
 interface
 
@@ -17,21 +20,20 @@ type
     function GetCapacity: SizeUInt;
     function GetData: PByte;
 
-    procedure AppendByte(const AValue: Byte);
+    procedure AppendByte(const AValue: Byte); inline;
     procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
-    procedure AppendSpan(const ASpan: TByteSpan);
-    procedure AppendUInt16LE(const AValue: UInt16);
-    procedure AppendUInt16BE(const AValue: UInt16);
-    procedure AppendUInt32LE(const AValue: UInt32);
-    procedure AppendUInt32BE(const AValue: UInt32);
-    procedure AppendUInt64LE(const AValue: UInt64);
-    procedure AppendUInt64BE(const AValue: UInt64);
+    procedure AppendSpan(const ASpan: TByteSpan); inline;
+    procedure AppendUInt16LE(const AValue: UInt16); inline;
+    procedure AppendUInt16BE(const AValue: UInt16); inline;
+    procedure AppendUInt32LE(const AValue: UInt32); inline;
+    procedure AppendUInt32BE(const AValue: UInt32); inline;
+    procedure AppendUInt64LE(const AValue: UInt64); inline;
+    procedure AppendUInt64BE(const AValue: UInt64); inline;
     procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
 
-    { perf: WrittenSpan is zero-copy view into builder buffer (no allocation);
-      ToBytes copies with one allocation for ownership transfer. }
+    { perf: WrittenSpan zero-copy view (no alloc, single TByteSpan.Create); ToBytes single SetLength+Move not inline per red-line 1/2 }
     function WrittenSpan: TByteSpan; inline;
-    function ToBytes: TBytes; inline;
+    function ToBytes: TBytes;
 
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
@@ -48,10 +50,11 @@ function CreateBytesBuilderWith(const AAllocator: TMemAllocator; const AInitialC
 implementation
 
 uses
-  nextpas.core.mem;
+  nextpas.core.mem,
+  nextpas.core.bytes.ops;
 
 type
-  TBytesBuilderImpl = class(TInterfacedObject, IBytesBuilder)
+  TBytesBuilderImpl = class(TRefCountedObject, IBytesBuilder)
   private
     FPtr: PByte;
     FLen: SizeUInt;
@@ -66,18 +69,18 @@ type
     function GetCapacity: SizeUInt;
     function GetData: PByte;
 
-    procedure AppendByte(const AValue: Byte);
+    procedure AppendByte(const AValue: Byte); inline;
     procedure AppendBytes(const AData: PByte; const ACount: SizeUInt);
-    procedure AppendSpan(const ASpan: TByteSpan);
-    procedure AppendUInt16LE(const AValue: UInt16);
-    procedure AppendUInt16BE(const AValue: UInt16);
-    procedure AppendUInt32LE(const AValue: UInt32);
-    procedure AppendUInt32BE(const AValue: UInt32);
-    procedure AppendUInt64LE(const AValue: UInt64);
-    procedure AppendUInt64BE(const AValue: UInt64);
+    procedure AppendSpan(const ASpan: TByteSpan); inline;
+    procedure AppendUInt16LE(const AValue: UInt16); inline;
+    procedure AppendUInt16BE(const AValue: UInt16); inline;
+    procedure AppendUInt32LE(const AValue: UInt32); inline;
+    procedure AppendUInt32BE(const AValue: UInt32); inline;
+    procedure AppendUInt64LE(const AValue: UInt64); inline;
+    procedure AppendUInt64BE(const AValue: UInt64); inline;
     procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
 
-    function WrittenSpan: TByteSpan;
+    function WrittenSpan: TByteSpan; inline;
     function ToBytes: TBytes;
 
     procedure Clear;
@@ -124,21 +127,10 @@ procedure TBytesBuilderImpl.Grow(const ANeeded: SizeUInt);
 var
   LNewCap: SizeUInt;
 begin
+  // not inline per red-line 2: while loop I-Cache bloat; single source via bytes.ops.BytesGrowCapacity (INV-2, amortized O(1) geometric)
   if FLen + ANeeded <= FCap then
     Exit;
-  LNewCap := FCap;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < FLen + ANeeded do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := FLen + ANeeded;
-      Break;
-    end;
-  end;
+  LNewCap := nextpas.core.bytes.ops.BytesGrowCapacity(FCap, FLen + ANeeded);
   FPtr := ReallocMemOf(FAllocator, FPtr, FCap, LNewCap);
   FCap := LNewCap;
 end;
@@ -158,7 +150,7 @@ begin
   Result := FPtr;
 end;
 
-procedure TBytesBuilderImpl.AppendByte(const AValue: Byte);
+procedure TBytesBuilderImpl.AppendByte(const AValue: Byte); inline;
 begin
   Grow(1);
   FPtr[FLen] := AValue;
@@ -167,18 +159,19 @@ end;
 
 procedure TBytesBuilderImpl.AppendBytes(const AData: PByte; const ACount: SizeUInt);
 begin
+  // not inline per red-line 1/2: Move (untyped) + Grow loop I-Cache bloat; single Move zero-copy
   if ACount = 0 then Exit;
   Grow(ACount);
   Move(AData^, FPtr[FLen], ACount);
   Inc(FLen, ACount);
 end;
 
-procedure TBytesBuilderImpl.AppendSpan(const ASpan: TByteSpan);
+procedure TBytesBuilderImpl.AppendSpan(const ASpan: TByteSpan); inline;
 begin
   AppendBytes(ASpan.Data, ASpan.Len);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt16LE(const AValue: UInt16);
+procedure TBytesBuilderImpl.AppendUInt16LE(const AValue: UInt16); inline;
 begin
   Grow(2);
   FPtr[FLen]     := Byte(AValue);
@@ -186,7 +179,7 @@ begin
   Inc(FLen, 2);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt16BE(const AValue: UInt16);
+procedure TBytesBuilderImpl.AppendUInt16BE(const AValue: UInt16); inline;
 begin
   Grow(2);
   FPtr[FLen]     := Byte(AValue shr 8);
@@ -194,7 +187,7 @@ begin
   Inc(FLen, 2);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt32LE(const AValue: UInt32);
+procedure TBytesBuilderImpl.AppendUInt32LE(const AValue: UInt32); inline;
 begin
   Grow(4);
   FPtr[FLen]     := Byte(AValue);
@@ -204,7 +197,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt32BE(const AValue: UInt32);
+procedure TBytesBuilderImpl.AppendUInt32BE(const AValue: UInt32); inline;
 begin
   Grow(4);
   FPtr[FLen]     := Byte(AValue shr 24);
@@ -214,7 +207,7 @@ begin
   Inc(FLen, 4);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt64LE(const AValue: UInt64);
+procedure TBytesBuilderImpl.AppendUInt64LE(const AValue: UInt64); inline;
 begin
   Grow(8);
   FPtr[FLen]     := Byte(AValue);
@@ -228,7 +221,7 @@ begin
   Inc(FLen, 8);
 end;
 
-procedure TBytesBuilderImpl.AppendUInt64BE(const AValue: UInt64);
+procedure TBytesBuilderImpl.AppendUInt64BE(const AValue: UInt64); inline;
 begin
   Grow(8);
   FPtr[FLen]     := Byte(AValue shr 56);
@@ -244,6 +237,7 @@ end;
 
 procedure TBytesBuilderImpl.AppendFill(const AValue: Byte; const ACount: SizeUInt);
 begin
+  // not inline per red-line 1/2: FillChar (untyped) + Grow loop I-Cache bloat
   if ACount = 0 then Exit;
   Grow(ACount);
   FillChar(FPtr[FLen], ACount, AValue);
@@ -256,9 +250,9 @@ begin
   Result := TByteSpan.Create(FPtr, FLen);
 end;
 
-function TBytesBuilderImpl.ToBytes: TBytes; inline;
+function TBytesBuilderImpl.ToBytes: TBytes;
 begin
-  // perf: single allocation copy for ownership; for zero-copy hot path use WrittenSpan
+  // not inline per red-line 1/2: SetLength+Move batch I-Cache; single alloc copy for ownership; zero-copy hot path is WrittenSpan
   Result := nil;
   SetLength(Result, FLen);
   if FLen > 0 then

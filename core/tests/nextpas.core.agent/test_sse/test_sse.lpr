@@ -258,6 +258,62 @@ begin
   P.Free;
 end;
 
+procedure TestLineLimitExactBoundary;
+var
+  P: TSSEParser;
+  Payload: string;
+  Events: TWireSSEEventArray;
+begin
+  Payload := StringOfChar('x', CSSEMaxLineBytes - Length('data: '));
+  P := TSSEParser.Create;
+  try
+    FeedStr(P, 'data: ' + Payload + #10);
+    Check(Length(PopAll(P)) = 0, 'exact limit line accepted');
+    try
+      FeedStr(P, 'data: ' + Payload + 'y' + #10);
+      Check(False, 'line limit +1 must raise');
+    except
+      on E: EAgentError do
+        Check(E.ErrorCode = aecProtocol, 'exact+1 is protocol error');
+    end;
+  finally
+    P.Free;
+  end;
+  P := TSSEParser.Create;
+  try
+    FeedStr(P, 'data: ' + Payload + #10#10);
+    Events := PopAll(P);
+    Check(Length(Events) = 1, 'exact limit dispatches');
+    Check(Events[0].Data = Payload, 'exact payload intact');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TestEventDataLimit;
+var
+  P: TSSEParser;
+  Chunk: string;
+  I: Integer;
+begin
+  P := TSSEParser.Create;
+  try
+    Chunk := StringOfChar('a', CSSEMaxLineBytes - 20);
+    try
+      for I := 1 to 9 do
+        FeedStr(P, 'data: ' + Chunk + #10);
+      FeedStr(P, 'data: ' + StringOfChar('b', 1024) + #10);
+      Check(False, 'event data limit must raise');
+    except
+      on E: EAgentError do
+        Check(E.ErrorCode = aecProtocol, 'event data overflow is protocol error');
+    end;
+  finally
+    P.Free;
+  end;
+end;
+
+
 procedure TestSpaceStripAndEmptyData;
 var
   P: TSSEParser;
@@ -297,6 +353,8 @@ begin
   T.Test('utf8 split across feeds', @TestUtf8SplitAcrossFeeds);
   T.Test('eof finalize', @TestEofFinalize);
   T.Test('overlong line limit', @TestOverlongLineLimit);
+  T.Test('line limit exact boundary', @TestLineLimitExactBoundary);
+  T.Test('event data limit', @TestEventDataLimit);
   T.Test('space strip and empty data', @TestSpaceStripAndEmptyData);
   if not T.Run then Halt(1);
 end.

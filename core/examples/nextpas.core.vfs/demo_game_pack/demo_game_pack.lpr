@@ -73,36 +73,28 @@ begin
 
   FsGame := CreateOverlayVfs([FsPatch, FsDlc, FsBase]);
 
-  WriteLn('┌─ backend: overlay [patch » dlc » base]  priority first wins');
-  WriteLn('│  case-sensitive: ', FsGame.CaseSensitive);
-  WriteLn('└─');
+  WriteLn('backend: overlay [patch, dlc, base]  (priority first wins)');
+  WriteLn('case-sensitive: ', FsGame.CaseSensitive);
 
-  WriteLn('▶ walk (VfsWalk 字典序确定性):');
+  WriteLn('walk:');
   VfsWalk(FsGame, '.',
     procedure(const APath: string; const AInfo: TEntryInfo; var AStop: Boolean)
     begin
-      if AInfo.IsDir then
-        WriteLn('  📁 /', APath, '/')
-      else
-        WriteLn('  📄 /', APath, '  (', AInfo.Size, ' bytes)');
+      WriteLn('  /', APath, '  isDir=', AInfo.IsDir, ' size=', AInfo.Size);
     end);
 
-  WriteLn('▶ reads (首命中优先级):');
+  WriteLn('reads:');
   AssertText(FsGame, 'textures/hero.png', 'hero-2.1-fix');
   AssertText(FsGame, 'levels/desert.json', 'desert');
   AssertText(FsGame, 'levels/forest.json', 'forest');
   AssertText(FsGame, 'common.txt', 'base');
 
-  WriteLn('▶ list .  (去重合并 O(n log n)):');
+  WriteLn('list . :');
   L := FsGame.List('.');
   for I := 0 to High(L) do
-    if L[I].IsDir then
-      WriteLn('  📁 ', L[I].Name, '/')
-    else
-      WriteLn('  📄 ', L[I].Name);
+    WriteLn('  ', L[I].Name, ' isDir=', L[I].IsDir);
+  // 期望 textures, levels, common.txt（textures/levels 为推导目录）
   if Length(L) <> 3 then begin WriteLn('FAIL list . length ', Length(L)); Halt(1); end;
 
-  WriteLn('');
-  WriteLn('✓ demo_game_pack: all OK — mount 聚合(异前缀) + overlay 叠加(同根) 双视图演示');
-  WriteLn('  tip: 大包用 TMemoryMap + CreateEmbeddedVfsBorrowed(mmap) 再 overlay，零驻留');
+  WriteLn('demo_game_pack: all OK (mount 聚合 + overlay 叠加双视图演示)');
 end.

@@ -22,18 +22,8 @@ uses
 type
   TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
   TJsonError = nextpas.core.json.types.TJsonError;
-  TJsonValue = nextpas.core.json.value.TJsonValue;
-
-  { Parsed JSON document with automatic lifetime management.
-    All values remain valid as long as the document is alive. }
-  IJsonDocument = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function Root: TJsonValue;
-    function HasError: Boolean;
-    function Error: TJsonError;
-    function Stringify: string;
-    function StringifyPretty(const AIndent: Int32 = 2): string;
-  end;
+  TJsonValue = nextpas.core.json.types.TJsonValue;
+  IJsonDocument = nextpas.core.json.types.IJsonDocument;
 
 { Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
@@ -64,18 +54,11 @@ function JsonBoolField(const AValue: TJsonValue; const AKey: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.mem.default,
   nextpas.core.errors,
   nextpas.core.format.limits,
-  nextpas.core.io.util,
   nextpas.core.text.escape;
-
-function JsonBytesToString(const ABytes: TBytes): string;
-begin
-  if Length(ABytes) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
-end;
 
 type
   TJsonDocumentImpl = class(TInterfacedObject, IJsonDocument)
@@ -353,13 +336,42 @@ end;
 
 function JsonParse(const AReader: IReader): IJsonDocument;
 var
-  LBytes: TBytes;
+  LStr: string;
+  LLen, LCap, LRead: SizeUInt;
+  LBuf: array[0..32767] of Byte;
 begin
   if AReader = nil then
     raise EArgumentError.Create('JsonParse: reader must not be nil');
-  LBytes := IoReadAll(AReader);
-  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'JsonParse');
-  Result := JsonParse(JsonBytesToString(LBytes));
+  // perf: single string alloc via bytes.ops BytesGrowCapacity (single source, exponential amortized O(1))
+  // zero-copy: Move(PAnsiChar(LStr)[LLen]) + TStringView.FromStr share (Create does FInputCopy:=AInput refcount share, no BytesToString copy)
+  // stability: SetLength exception-safe (no manual FreeMem), final SetLength(LLen) trims capacity exactly; avoids TBytes+LStr double peak 2x
+  // not inline per red-line 2: loop+I-Cache, capacity math delegates to bytes.ops single source
+  LStr := '';
+  LLen := 0;
+  LCap := 0;
+  repeat
+    LRead := AReader.Read(LBuf[0], SizeOf(LBuf));
+    if LRead = 0 then
+      Break;
+    if LLen + LRead > LCap then
+    begin
+      if LCap = 0 then
+        LCap := SizeUInt(Length(LBuf))
+      else
+        LCap := BytesGrowCapacity(LCap, LLen + LRead);
+      if LCap < LLen + LRead then
+        LCap := LLen + LRead;
+      SetLength(LStr, LCap);
+    end;
+    if LRead > 0 then
+      Move(LBuf[0], (PAnsiChar(LStr) + LLen)^, LRead);
+    Inc(LLen, LRead);
+    if LLen > FORMAT_BULK_PARSE_MAX_BYTES then
+      RequireFormatBulkByteCount(LLen, 'JsonParse');
+  until False;
+  SetLength(LStr, LLen);
+  RequireFormatBulkByteCount(SizeUInt(Length(LStr)), 'JsonParse');
+  Result := JsonParse(LStr);
 end;
 
 function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;
@@ -391,14 +403,14 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
-  if (AValue.FDoc <> nil) and AValue.FDoc^.HasError then
+  if (AValue.FDoc <> nil) and PJsonDocument(AValue.FDoc)^.HasError then
     raise EInvalidOperationError.Create(
       'JsonStringify: diagnostic document cannot be stringified');
 
   LBuilder.Init(256);
   try
     LWriter.Init(LBuilder);
-    StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
+    StringifyNode(PJsonDocument(AValue.FDoc)^, AValue.FIdx, LWriter);
     Result := LBuilder.ToString;
   finally
     LBuilder.Done;

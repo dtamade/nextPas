@@ -217,11 +217,6 @@ type
     FSignalDelete: gulong;
     FSignalConfigure: gulong;
     FSignalFocusIn: gulong;
-    FSignalKeyPress: gulong;
-    FSignalKeyRelease: gulong;
-    FSignalButtonPress: gulong;
-    FSignalButtonRelease: gulong;
-    FSignalMotion: gulong;
     FSignalFocusOut: gulong;
     FSignalScale: gulong;
     FSignalDestroy: gulong;
@@ -270,7 +265,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weCloseRequested;
+  E.Kind := weCloseRequested;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 1;
@@ -287,7 +282,7 @@ begin
   H := gtk_widget_get_allocated_height(Self.FHandle);
   Self.FWidth := W;
   Self.FHeight := H;
-  E := Default(TWindowEvent); E.Kind := weResized;
+  E.Kind := weResized;
   E.Width := W; E.Height := H; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -299,7 +294,7 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weFocusIn;
+  E.Kind := weFocusIn;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
   Self.DoDispatch(E);
   Result := 0;
@@ -311,69 +306,8 @@ var
   E: TWindowEvent;
 begin
   Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weFocusOut;
+  E.Kind := weFocusOut;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0; E.NewScale := 0;
-  Self.DoDispatch(E);
-  Result := 0;
-end;
-
-function CbKeyPress(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  E: TWindowEvent;
-begin
-  Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weKeyDown;
-  // GdkEventKey keyval/state parsing deferred: emit 0, honest minimal
-  E.KeyCode := 0; E.Modifiers := 0;
-  Self.DoDispatch(E);
-  Result := 0;
-end;
-
-function CbKeyRelease(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  E: TWindowEvent;
-begin
-  Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weKeyUp;
-  E.KeyCode := 0; E.Modifiers := 0;
-  Self.DoDispatch(E);
-  Result := 0;
-end;
-
-function CbButtonPress(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  E: TWindowEvent;
-begin
-  Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weMouseDown;
-  E.X := 0; E.Y := 0; E.Button := 1;
-  Self.DoDispatch(E);
-  Result := 0;
-end;
-
-function CbButtonRelease(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  E: TWindowEvent;
-begin
-  Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weMouseUp;
-  E.X := 0; E.Y := 0; E.Button := 1;
-  Self.DoDispatch(E);
-  Result := 0;
-end;
-
-function CbMotion(AWidget: Pointer; AEvent: Pointer; AData: Pointer): gboolean; cdecl;
-var
-  Self: TWindowGtk;
-  E: TWindowEvent;
-begin
-  Self := TWindowGtk(AData);
-  E := Default(TWindowEvent); E.Kind := weMouseMove;
-  E.X := 0; E.Y := 0; E.Button := 0;
   Self.DoDispatch(E);
   Result := 0;
 end;
@@ -387,7 +321,7 @@ begin
   Self := TWindowGtk(AData);
   S := gtk_widget_get_scale_factor(Self.FHandle);
   if S <= 0 then S := 1;
-  E := Default(TWindowEvent); E.Kind := weScaleChanged;
+  E.Kind := weScaleChanged;
   E.Width := 0; E.Height := 0; E.X := 0; E.Y := 0;
   E.NewScale := S;
   Self.DoDispatch(E);
@@ -476,11 +410,6 @@ begin
   FSignalConfigure:= g_signal_connect_data(FHandle, 'configure-event', Pointer(@CbConfigure), Self, nil, 0);
   FSignalFocusIn  := g_signal_connect_data(FHandle, 'focus-in-event', Pointer(@CbFocusIn), Self, nil, 0);
   FSignalFocusOut := g_signal_connect_data(FHandle, 'focus-out-event', Pointer(@CbFocusOut), Self, nil, 0);
-  FSignalKeyPress := g_signal_connect_data(FHandle, 'key-press-event', Pointer(@CbKeyPress), Self, nil, 0);
-  FSignalKeyRelease := g_signal_connect_data(FHandle, 'key-release-event', Pointer(@CbKeyRelease), Self, nil, 0);
-  FSignalButtonPress := g_signal_connect_data(FHandle, 'button-press-event', Pointer(@CbButtonPress), Self, nil, 0);
-  FSignalButtonRelease := g_signal_connect_data(FHandle, 'button-release-event', Pointer(@CbButtonRelease), Self, nil, 0);
-  FSignalMotion := g_signal_connect_data(FHandle, 'motion-notify-event', Pointer(@CbMotion), Self, nil, 0);
   FSignalScale    := g_signal_connect_data(FHandle, 'notify::scale-factor', Pointer(@CbScaleNotify), Self, nil, 0);
   FSignalDestroy  := g_signal_connect_data(FHandle, 'destroy', Pointer(@CbDestroy), Self, nil, 0);
   FSignalState    := g_signal_connect_data(FHandle, 'window-state-event', Pointer(@CbWindowState), Self, nil, 0);
@@ -493,16 +422,10 @@ begin
   if FSignalConfigure <> 0 then g_signal_handler_disconnect(FHandle, FSignalConfigure);
   if FSignalFocusIn <> 0 then g_signal_handler_disconnect(FHandle, FSignalFocusIn);
   if FSignalFocusOut <> 0 then g_signal_handler_disconnect(FHandle, FSignalFocusOut);
-  if FSignalKeyPress <> 0 then g_signal_handler_disconnect(FHandle, FSignalKeyPress);
-  if FSignalKeyRelease <> 0 then g_signal_handler_disconnect(FHandle, FSignalKeyRelease);
-  if FSignalButtonPress <> 0 then g_signal_handler_disconnect(FHandle, FSignalButtonPress);
-  if FSignalButtonRelease <> 0 then g_signal_handler_disconnect(FHandle, FSignalButtonRelease);
-  if FSignalMotion <> 0 then g_signal_handler_disconnect(FHandle, FSignalMotion);
   if FSignalScale <> 0 then g_signal_handler_disconnect(FHandle, FSignalScale);
   if FSignalDestroy <> 0 then g_signal_handler_disconnect(FHandle, FSignalDestroy);
   if FSignalState <> 0 then g_signal_handler_disconnect(FHandle, FSignalState);
   FSignalDelete := 0; FSignalConfigure := 0; FSignalFocusIn := 0; FSignalFocusOut := 0;
-  FSignalKeyPress := 0; FSignalKeyRelease := 0; FSignalButtonPress := 0; FSignalButtonRelease := 0; FSignalMotion := 0;
   FSignalScale := 0; FSignalDestroy := 0; FSignalState := 0;
 end;
 
@@ -624,7 +547,7 @@ begin
   FHeight := AHeight;
   if FHandle <> nil then
     gtk_window_resize(FHandle, AWidth, AHeight);
-  E := Default(TWindowEvent); E.Kind := weResized;
+  E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;
@@ -664,7 +587,7 @@ begin
   FMinimized := False;
   if FHandle <> nil then
     gtk_window_maximize(FHandle);
-  E := Default(TWindowEvent); E.Kind := weResized;
+  E.Kind := weResized;
   E.Width := FWidth; E.Height := FHeight; E.X := 0; E.Y := 0; E.NewScale := 0;
   DoDispatch(E);
 end;

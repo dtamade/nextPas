@@ -396,6 +396,7 @@ end;
 procedure TimeoutTokenNotify(AContext: Pointer);
 var
   LCtx: PTimeoutCtx;
+  LLoop: TAsyncLoop;
 begin
   LCtx := PTimeoutCtx(AContext);
   if LCtx = nil then
@@ -404,13 +405,21 @@ begin
     Exit;
   if atomic_load(LCtx^.CompletionState, mo_acquire) <> TIMEOUT_COMPLETION_PENDING then
     Exit;
-  if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
+  LLoop := LCtx^.Loop;
+  if (LLoop = nil) or (not LLoop.IsValid) then
     Exit;
+  // 稳定性：先 pin 再校验，避免 Loop 已销毁后的 Post 竞态（等价于先 Post 再 fetch_add 的加锁顺序）
   atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
+  if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
+  begin
+    TimeoutCtxRelease(LCtx);
+    Exit;
+  end;
   try
-    LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+    LLoop.Post(@TimeoutTokenCallback, LCtx);
   except
     TimeoutCtxRelease(LCtx);
+    raise;
   end;
 end;
 
@@ -525,7 +534,7 @@ begin
   end;
 end;
 
-function TAsyncLoop.IsValid: Boolean;
+function TAsyncLoop.IsValid: Boolean; inline;
 begin
   Result := (not FClosed) and FPoller.IsValid and FWakeReady and FPendingReady;
 end;
@@ -643,7 +652,7 @@ begin
       else if Assigned(LItem.Method) then
         LItem.Method(LItem.Context);
     except
-      { Isolate per-item failure: keep draining so remaining Posts are not stranded. }
+      // 异常安全：Callback 异常不泄漏，继续排空
     end;
     Inc(Result);
   end;
@@ -949,7 +958,7 @@ begin
   Wake;
 end;
 
-function TAsyncLoop.HasPendingIo: Boolean;
+function TAsyncLoop.HasPendingIo: Boolean; inline;
 begin
   Result := FPoller.HasPending;
 end;

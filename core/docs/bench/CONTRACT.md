@@ -2,7 +2,7 @@
 
 **模块路径**：`core/src/nextpas.core.bench*.pas`
 **层级**：tooling harness（registry `tooling`）；**非**「纯 L1→L0」。真实依赖见 [ARCHITECTURE.md](ARCHITECTURE.md)（fs/json/atomic/platform.thread/system.memmanager 等）。
-**最后更新**：2026-07-26（audit 闭环：统计诚实、timeout 采样中断、platform parallel、memtrack）
+**最后更新**：2026-08-31（audit 闭环：统计诚实、timeout 采样中断、platform parallel、memtrack）
 **权威状态**：`goal-tree.md`；API 冻结见 README；truth = focused-runtime
 
 ### 0.0 统计与超时契约（2026-07-26）

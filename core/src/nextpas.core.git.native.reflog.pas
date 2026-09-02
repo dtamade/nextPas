@@ -59,11 +59,6 @@ begin
   Result := FileExists(GitReflogPath(AGitDir, ARefName));
 end;
 
-function TrimSpaces(const S: string): string; inline;
-begin
-  Result := GitTrimSpaces(S);
-end;
-
 function GitParseReflogLine(const ALine: string): TGitReflogEntry;
 var
   OldHex, NewHex, SigStr, Msg: string;
@@ -94,7 +89,7 @@ begin
     SigStr := Copy(ALine, 83, MaxInt);
     Msg := '';
   end;
-  SigStr := TrimSpaces(SigStr);
+  SigStr := GitTrimSpaces(SigStr);
   if SigStr = '' then
     raise EGitError.CreateFmt('reflog missing signature "%s"', [ALine]);
   Result.Committer := GitParseSignature(SigStr);

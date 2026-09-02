@@ -1,0 +1,742 @@
+procedure TCompilationSession.ResetSyntaxState;
+begin
+  ResetResolutionState;
+  FreeAndNil(FAstFacade);
+  FreeAndNil(FGreenTree);
+  FreeAndNil(FLexerResult);
+  { Drop AST arena slabs after trees freed (buffers may no-op FreeMem). }
+  if FAstAllocator <> nil then
+    (FAstAllocator as TVirtualArenaAllocator).Reset;
+end;
+
+procedure TCompilationSession.ResetResolutionState;
+begin
+  ResetSemanticState;
+  FreeAndNil(FUnitGraph);
+  FreeAndNil(FSearchPathSet);
+  FResolutionStatus := 'deferred';
+  FSearchIndexStatus := 'deferred';
+  FIndexedSearchRootCount := 0;
+  FSearchIndexScanCount := 0;
+end;
+
+procedure TCompilationSession.ResetSemanticState;
+begin
+  ResetIrState;
+  FreeAndNil(FSemanticModel);
+  FSemanticStatus := 'deferred';
+end;
+
+procedure TCompilationSession.ResetIrState;
+begin
+  ResetBackendState;
+  FreeAndNil(FMirModule);
+  FMirStatus := 'deferred';
+end;
+
+procedure TCompilationSession.ResetBackendState;
+begin
+  ResetToolchainState;
+  FreeAndNil(FBackendPlan);
+  FBackendStatus := 'deferred';
+end;
+
+procedure TCompilationSession.ResetToolchainState;
+begin
+  FreeAndNil(FToolchainPlan);
+  FToolchainStatus := 'deferred';
+  ClearToolRunState;
+  ClearToolStatusEvents;
+  ClearBuildTrace;
+end;
+
+procedure TCompilationSession.ClearToolRunState;
+begin
+  FToolRunStatus := '';
+  FToolRunStepCount := 0;
+  FPrimaryToolRunStatus := '';
+end;
+
+procedure TCompilationSession.ClearBuildTrace;
+begin
+  FBuildTraceRef := '';
+  FBuildTraceJson := '';
+end;
+
+procedure TCompilationSession.ClearToolStatusEvents;
+begin
+  if FToolStatusEvents <> nil then
+    FToolStatusEvents.Clear;
+end;
+
+procedure TCompilationSession.AppendToolStatusEvent(
+  const AEventKind: string;
+  const AStepId: string;
+  const AToolRole: string;
+  const AProfileId: string;
+  const ALogicalExecutable: string;
+  const ASysrootRef: string;
+  const AResolvedPath: string;
+  const AStatus: string;
+  const AResultValue: string;
+  const ASummary: string;
+  const AHasExitCode: Boolean;
+  const AExitCode: LongInt
+);
+var
+  Event: TToolStatusEventRecord;
+begin
+  if FToolStatusEvents = nil then
+    FToolStatusEvents := TToolStatusEventVec.Create;
+  Event.EventKind := AEventKind;
+  Event.StepId := AStepId;
+  Event.ToolRole := AToolRole;
+  Event.ProfileId := AProfileId;
+  Event.LogicalExecutable := ALogicalExecutable;
+  Event.SysrootRef := ASysrootRef;
+  Event.ResolvedPath := AResolvedPath;
+  Event.Status := AStatus;
+  Event.ResultValue := AResultValue;
+  Event.Summary := ASummary;
+  Event.HasExitCode := AHasExitCode;
+  Event.ExitCode := AExitCode;
+  FToolStatusEvents.Push(Event);
+end;
+
+function TCompilationSession.BuildTracePlanId: string;
+begin
+  Result := 'plan-' + FSessionId + '-primary-tool';
+end;
+
+function TCompilationSession.BuildTraceDocumentRef: string;
+begin
+  Result := 'trace-' + FSessionId + '-toolchain-plan';
+end;
+
+function TCompilationSession.PrimaryToolResolvedPath: string;
+var
+  Index: LongInt;
+  Event: ^TToolStatusEventRecord;
+begin
+  if FToolStatusEvents <> nil then
+    for Index := LongInt(FToolStatusEvents.Count) - 1 downto 0 do
+    begin
+      { Prefer GetPtr: full record Items[] copy of multi-string events is fragile. }
+      Event := FToolStatusEvents.GetPtr(SizeUInt(Index));
+      if (Event^.ResolvedPath <> '') and
+        nextpas.core.text.conv.SameText(Event^.StepId, PrimaryToolStepId) then
+        Exit(Event^.ResolvedPath);
+    end;
+
+  if FToolchainPlan <> nil then
+    Exit(FToolchainPlan.PrimaryToolExecutableRef);
+
+  Result := '';
+end;
+
+function TCompilationSession.BuildStepOutputsJson(
+  const AToolStep: TToolInvocationStep
+): string;
+begin
+  Result := BuildToolArtifactVecJson(AToolStep.Outputs);
+end;
+
+function TCompilationSession.CollectAdditionalAssemblyBaseNames: TStringArray;
+var
+  CandidateBaseName: string;
+  Index: LongInt;
+  ResolvedSourcePath: string;
+  ResolvedUnit: TResolvedUnit;
+
+  procedure AddUniqueBaseName(const ABaseName: string);
+  var
+    ExistingIndex: LongInt;
+    NextIndex: SizeInt;
+  begin
+    if Trim(ABaseName) = '' then
+      Exit;
+    for ExistingIndex := 0 to Length(Result) - 1 do
+      if nextpas.core.text.conv.SameText(Result[ExistingIndex], ABaseName) then
+        Exit;
+    NextIndex := Length(Result);
+    SetLength(Result, NextIndex + 1);
+    Result[NextIndex] := ABaseName;
+  end;
+begin
+  SetLength(Result, 0);
+  if FUnitGraph = nil then
+    Exit;
+  if nextpas.core.text.conv.SameText(AstRootKindName, 'unit') then
+    Exit;
+
+  ResolvedSourcePath := ExpandFileName(FOptions.BuildContext.ResolvedSourcePath);
+  for Index := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+  begin
+    ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
+    if Trim(ResolvedUnit.SourcePath) = '' then
+      Continue;
+    if nextpas.core.text.conv.SameText(ResolvedUnit.OriginClass, 'implicit-runtime') then
+      Continue;
+    if nextpas.core.text.conv.SameText(ExpandFileName(ResolvedUnit.SourcePath), ResolvedSourcePath) then
+      Continue;
+    CandidateBaseName := ChangeFileExt(
+      ExtractFileName(ResolvedUnit.SourcePath),
+      ''
+    );
+    AddUniqueBaseName(CandidateBaseName);
+  end;
+end;
+
+function TCompilationSession.FindToolInvocationStep(
+  const AStepId: string
+): TToolInvocationStep;
+var
+  Index: LongInt;
+begin
+  ClearToolInvocationStepView(Result);
+
+  if FToolchainPlan = nil then
+    Exit;
+
+  for Index := 0 to FToolchainPlan.ToolInvocationCount - 1 do
+    if nextpas.core.text.conv.SameText(FToolchainPlan.StepAt(Index).StepId, AStepId) then
+      Exit(FToolchainPlan.StepAt(Index));
+end;
+
+function TCompilationSession.BuildDiagnosticRefsJson(
+  const ADiagnosticId: string
+): string;
+begin
+  if ADiagnosticId = '' then
+    Exit('[]');
+
+  Result := '[' + JsonString(ADiagnosticId) + ']';
+end;
+
+function TCompilationSession.BuildToolchainBuildTraceJson(
+  const ARunResult: TToolchainRunResult;
+  const AResultValue: string;
+  const AFailedStepId: string;
+  const ADiagnosticId: string
+): string;
+var
+  ExecutedStep: TToolchainExecutedStep;
+  PrimaryToolStep: TToolInvocationStep;
+  StepFields: string;
+  StepJson: string;
+  ToolStep: TToolInvocationStep;
+  TraceFields: string;
+  StepIndex: LongInt;
+begin
+  if (ARunResult = nil) or (ARunResult.StepCount = 0) then
+    Exit('');
+
+  PrimaryToolStep := FindToolInvocationStep(ARunResult.StepAt(0).StepId);
+  StepJson := '';
+  for StepIndex := 0 to ARunResult.StepCount - 1 do
+  begin
+    ExecutedStep := ARunResult.StepAt(StepIndex);
+    ToolStep := FindToolInvocationStep(ExecutedStep.StepId);
+    if StepJson <> '' then
+      StepJson := StepJson + ',';
+
+    StepFields := '';
+    AppendJsonField(StepFields, 'stepId', JsonString(ExecutedStep.StepId));
+    AppendJsonField(StepFields, 'profileId', JsonString(ToolStep.ProfileId));
+    AppendJsonField(StepFields, 'toolRole', JsonString(ToolStep.ToolRole));
+    AppendJsonField(StepFields, 'status', JsonString(ExecutedStep.Status));
+    AppendJsonField(
+      StepFields,
+      'logicalExecutable',
+      JsonString(ToolStep.LogicalExecutable)
+    );
+    AppendJsonField(StepFields, 'sysrootRef', JsonString(ToolStep.SysrootRef));
+    if ExecutedStep.ResolvedPath <> '' then
+      AppendJsonField(
+        StepFields,
+        'resolvedPath',
+        JsonString(ExecutedStep.ResolvedPath)
+      );
+    AppendJsonField(
+      StepFields,
+      'primaryOutputs',
+      BuildStepOutputsJson(ToolStep)
+    );
+    AppendJsonField(
+      StepFields,
+      'sidecars',
+      BuildExecutedSidecarArrayJson(ExecutedStep.Sidecars)
+    );
+    if nextpas.core.text.conv.SameText(ExecutedStep.StepId, AFailedStepId) then
+      AppendJsonField(
+        StepFields,
+        'diagnosticRefs',
+        BuildDiagnosticRefsJson(ADiagnosticId)
+      )
+    else
+      AppendJsonField(StepFields, 'diagnosticRefs', '[]');
+    if ExecutedStep.HasExitCode then
+      AppendJsonField(StepFields, 'exitCode', IntToStr(ExecutedStep.ExitCode));
+    StepJson := StepJson + '{' + StepFields + '}';
+  end;
+
+  TraceFields := '';
+  AppendJsonField(
+    TraceFields,
+    'traceKind',
+    JsonString('toolchain-build-trace')
+  );
+  AppendJsonField(TraceFields, 'sessionId', JsonString(FSessionId));
+  AppendJsonField(TraceFields, 'planId', JsonString(BuildTracePlanId));
+  AppendJsonField(TraceFields, 'bindingId', JsonString(ToolchainBindingId));
+  AppendJsonField(TraceFields, 'hostId', JsonString(HostId));
+  AppendJsonField(TraceFields, 'targetId', JsonString(FTargetFacts.TargetId));
+  AppendJsonField(
+    TraceFields,
+    'profileId',
+    JsonString(PrimaryToolStep.ProfileId)
+  );
+  AppendJsonField(
+    TraceFields,
+    'toolRole',
+    JsonString(PrimaryToolStep.ToolRole)
+  );
+  AppendJsonField(
+    TraceFields,
+    'sysrootRef',
+    JsonString(PrimaryToolStep.SysrootRef)
+  );
+  AppendJsonField(TraceFields, 'result', JsonString(AResultValue));
+  AppendJsonField(TraceFields, 'steps', '[' + StepJson + ']');
+  Result := '{' + TraceFields + '}';
+end;
+
+function TCompilationSession.GetScheduler: TParallelScheduler;
+begin
+  if FScheduler = nil then
+    FScheduler := TParallelScheduler.Create;
+  Result := FScheduler;
+end;
+
+function TCompilationSession.PrepareIncrementalBuild: Boolean;
+var
+  RootPath: string;
+  Changed: TStringArray;
+  I: LongInt;
+begin
+  Result := True;
+  RootPath := FSourceDatabase.RootSourceCanonicalPath;
+
+  { First build: no snapshots yet }
+  if FFileDetector.SnapshotCount = 0 then
+    Exit;
+
+  { Check if any tracked file changed }
+  if not FFileDetector.AnyChanged then
+  begin
+    { Nothing changed — all queries still valid }
+    Exit;
+  end;
+
+  { Something changed — invalidate affected queries }
+  Changed := FFileDetector.ChangedFiles;
+  for I := 0 to Length(Changed) - 1 do
+  begin
+    FQueryDB.InvalidatePrefix('parse:' + Changed[I]);
+    FQueryDB.InvalidatePrefix('semantic:' + Changed[I]);
+  end;
+
+  { Reset state for recompilation }
+  Result := True;
+end;
+
+procedure TCompilationSession.FinalizeIncrementalBuild;
+var
+  RootPath: string;
+begin
+  RootPath := FSourceDatabase.RootSourceCanonicalPath;
+  FFileDetector.TakeSnapshot(RootPath, []);
+end;
+
+procedure TCompilationSession.AnalyzeSyntax;
+var
+  RawLexer: TLexerResult;
+  PP: TPreprocessor;
+  Defines: TDefineTable;
+  IncResolver: TFileIncludeResolver;
+  SourceDir: string;
+  CanonPath: string;
+  PathScratch: PAnsiChar;
+  PathLen: SizeUInt;
+  ScratchSize: SizeUInt;
+begin
+  PhaseBegin('syntax');
+  { Unit phase over session VirtualArena: MemAlloc scratch, UnitEnd bulk-reclaims. }
+  FMemScope.UnitBegin;
+  try
+    ResetSyntaxState;
+
+    { Phase scratch: canonical path bytes + work region for include path setup.
+      Owned by FMemScope; do not FreeMem. Falls back to string path if OOM. }
+    CanonPath := FSourceDatabase.RootSourceCanonicalPath;
+    PathLen := SizeUInt(Length(CanonPath));
+    ScratchSize := PathLen + 1 + 256;
+    PathScratch := PAnsiChar(MemAlloc(ScratchSize));
+    if PathScratch <> nil then
+    begin
+      if PathLen > 0 then
+        Move(CanonPath[1], PathScratch^, PathLen);
+      PathScratch[PathLen] := #0;
+      SetString(SourceDir, PathScratch, SizeInt(PathLen));
+      SourceDir := ExtractFileDir(SourceDir);
+    end
+    else
+      SourceDir := ExtractFileDir(CanonPath);
+
+    RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
+      FDiagnosticsSink, FRootFileId);
+    Defines := TDefineTable.Create(FScratchAllocator);
+    Defines.SeedFPCDefines;
+    IncResolver := TFileIncludeResolver.Create(SourceDir, FScratchAllocator);
+    IncResolver.AddSearchPath(SourceDir);
+    PP := TPreprocessor.Create(Defines, True, IncResolver, FScratchAllocator);
+    PP.Process(RawLexer);
+    FLexerResult := PP.ToLexerResult;
+    PP.Free;
+    RawLexer.Free;
+    FGreenTree := ParseGreenTree(
+      FLexerResult, FDiagnosticsSink, FRootFileId, FAstAllocator);
+    FAstFacade := TAstFacade.Create(FGreenTree);
+
+    if FDiagnosticsSink.HasErrors or (FGreenTree = nil) or not FGreenTree.IsValid then
+      FSyntaxStatus := 'failure'
+    else
+      FSyntaxStatus := 'ready';
+  finally
+    FMemScope.UnitEnd;
+    PhaseEnd('syntax');
+  end;
+end;
+
+procedure TCompilationSession.ResolveUnits;
+var
+  Resolver: TUnitResolver;
+  PathScratch: PAnsiChar;
+  RootPath: string;
+  PathLen: SizeUInt;
+  ScratchUsed: SizeUInt;
+begin
+  PhaseBegin('resolution');
+  { Unit phase: resolution scratch on session arena; UnitEnd records peak. }
+  FMemScope.UnitBegin;
+  try
+    ResetResolutionState;
+    if (FAstFacade = nil) or not FAstFacade.IsValid then
+    begin
+      FResolutionStatus := 'failure';
+      Exit;
+    end;
+
+    { Phase scratch: root path bytes + work region (no FreeMem; UnitEnd reclaims). }
+    RootPath := FSourceDatabase.RootSourceCanonicalPath;
+    PathLen := SizeUInt(Length(RootPath));
+    PathScratch := PAnsiChar(MemAlloc(PathLen + 1 + 64));
+    ScratchUsed := 0;
+    if PathScratch <> nil then
+    begin
+      if PathLen > 0 then
+        Move(RootPath[1], PathScratch^, PathLen);
+      PathScratch[PathLen] := #0;
+      ScratchUsed := PathLen + 1;
+    end;
+
+    { FScratchAllocator only for phase-local resolver work (stack/indexes/dep PP).
+      DetachUnitGraph/DetachSearchPaths own default-heap TVecs for session use. }
+    Resolver := TUnitResolver.Create(
+      FSourceDatabase,
+      FTargetFacts,
+      FDiagnosticsSink,
+      FRootFileId,
+      FOptions.WorkspaceModel.ProjectUnitRootInfos,
+      FOptions.ExplicitUnitRoots,
+      FScratchAllocator
+    );
+    try
+      Resolver.ResolveRoot(FAstFacade);
+      FSearchIndexStatus := Resolver.SearchIndexStatus;
+      FIndexedSearchRootCount := Resolver.IndexedRootCount;
+      FSearchIndexScanCount := Resolver.SearchIndexScanCount;
+      FSearchPathSet := Resolver.DetachSearchPaths;
+      FUnitGraph := Resolver.DetachUnitGraph;
+      FResolutionStatus := Resolver.ResolutionStatus;
+    finally
+      Resolver.Free;
+    end;
+
+    if (FUnitGraph <> nil) and (FUnitGraph.ResolvedUnitCount > FUnitStateCount) then
+      FUnitStateCount := FUnitGraph.ResolvedUnitCount;
+    { ScratchUsed documents phase path seed size; MemSessionPeak tracks peak. }
+    if (ScratchUsed > 0) and (PathScratch <> nil) and (PathScratch[0] = #0) and
+       (PathLen > 0) then
+      ScratchUsed := 0; { inconsistent seed — ignore }
+    ResetScratchAllocator;
+  finally
+    FMemScope.UnitEnd;
+    PhaseEnd('resolution');
+  end;
+end;
+
+procedure TCompilationSession.AnalyzeSemantics;
+var
+  Analyzer: TSemanticAnalyzer;
+  CacheKey: string;
+  CachedModel: TObject;
+  DiskModel: TSemanticModel;
+  PhaseScratch: Pointer;
+begin
+  PhaseBegin('sema');
+  { Query cache: if we already analyzed this file, skip }
+  CacheKey := 'semantic:' + FSourceDatabase.RootSourceCanonicalPath;
+  CachedModel := FQueryDB.Get(CacheKey, nil);
+  if (CachedModel <> nil) and (CachedModel is TSemanticModel) then
+  begin
+    FSemanticModel := TSemanticModel(CachedModel);
+    FSemanticStatus := FSemanticModel.Status;
+    { Do NOT call ResetSemanticState — it would free the cached model }
+    Exit;
+  end;
+
+  { Check persistent disk cache }
+  if FIncrementalCache.HasCache(
+    FSourceDatabase.RootSourceCanonicalPath,
+    FSourceDatabase.RootSourceText,
+    []) then
+  begin
+    if FIncrementalCache.Load(
+      FSourceDatabase.RootSourceCanonicalPath,
+      FSourceDatabase.RootSourceText,
+      [],
+      DiskModel) then
+    begin
+      FSemanticModel := DiskModel;
+      FSemanticStatus := FSemanticModel.Status;
+      { Store in-memory cache too }
+      if FSemanticStatus = 'ready' then
+        FQueryDB.Store(CacheKey, FSemanticModel);
+      Exit;
+    end;
+  end;
+
+  FMemScope.UnitBegin;
+  try
+    ResetSemanticState;
+    if (FAstFacade = nil) or (FUnitGraph = nil) or (FResolutionStatus <> 'ready') then
+    begin
+      FSemanticStatus := 'failure';
+      Exit;
+    end;
+
+    { Phase scratch header + analyzer working storage on FScratchAllocator. }
+    PhaseScratch := MemAlloc(256);
+    if PhaseScratch = nil then
+      ; { OOM soft: analyzer still runs on default heap if scratch nil }
+
+    Analyzer := TSemanticAnalyzer.Create(
+      FAstFacade,
+      FUnitGraph,
+      FDiagnosticsSink,
+      FRootFileId,
+      FOptions.NoFold,
+      FScratchAllocator
+    );
+    try
+      Analyzer.Analyze;
+      WriteLn(StdErr, '[pipe] after Analyze');
+      Flush(StdErr);
+      FSemanticModel := Analyzer.DetachModel;
+      if FSemanticModel = nil then
+        WriteLn(StdErr, '[pipe] after DetachModel status=nil')
+      else
+        WriteLn(StdErr, '[pipe] after DetachModel status=', FSemanticModel.Status);
+      Flush(StdErr);
+      if FSemanticModel = nil then
+        FSemanticStatus := 'deferred'
+      else
+      begin
+        FSemanticStatus := FSemanticModel.Status;
+        { Cache for incremental compilation — query DB owns the reference }
+        if FSemanticStatus = 'ready' then
+        begin
+          WriteLn(StdErr, '[pipe] before QueryDB.Store');
+          Flush(StdErr);
+          FQueryDB.Store(CacheKey, FSemanticModel);
+          WriteLn(StdErr, '[pipe] after QueryDB.Store before IncrementalCache.Save');
+          Flush(StdErr);
+          { Save to persistent disk cache }
+          FIncrementalCache.Save(
+            FSourceDatabase.RootSourceCanonicalPath,
+            FSourceDatabase.RootSourceText,
+            [],
+            FSemanticModel);
+          WriteLn(StdErr, '[pipe] after IncrementalCache.Save');
+          Flush(StdErr);
+        end;
+      end;
+    finally
+      WriteLn(StdErr, '[pipe] before Analyzer.Free');
+      Flush(StdErr);
+      Analyzer.Free;
+      WriteLn(StdErr, '[pipe] after Analyzer.Free before ResetScratch');
+      Flush(StdErr);
+      ResetScratchAllocator;
+      WriteLn(StdErr, '[pipe] after ResetScratch');
+      Flush(StdErr);
+    end;
+    WriteLn(StdErr, '[pipe] after Analyzer try model=',
+      PtrUInt(Pointer(FSemanticModel)), ' status=', FSemanticStatus);
+    Flush(StdErr);
+  finally
+    WriteLn(StdErr, '[pipe] before UnitEnd');
+    Flush(StdErr);
+    FMemScope.UnitEnd;
+    WriteLn(StdErr, '[pipe] after UnitEnd');
+    Flush(StdErr);
+    PhaseEnd('sema');
+  end;
+  WriteLn(StdErr, '[pipe] AnalyzeSemantics return');
+  Flush(StdErr);
+end;
+
+procedure TCompilationSession.LowerToMir;
+var
+  HirBuilder: THIRBuilder;
+  HirPrinter: THIRPrinter;
+  HirPath: string;
+  Lowering: THirToMirLowering;
+  LlvmTranslator: TMirToLlvmTranslator;
+  LlvmOutput: string;
+  PhaseScratch: Pointer;
+begin
+  PhaseBegin('mir');
+  WriteLn(StdErr, '[pipe] LowerToMir begin');
+  Flush(StdErr);
+  FMemScope.UnitBegin;
+  try
+    ResetIrState;
+    if (FSemanticModel = nil) or (FSemanticStatus <> 'ready') then
+    begin
+      FMirStatus := 'failure';
+      Exit;
+    end;
+
+    FMirStatus := 'ready';
+    PhaseScratch := MemAlloc(128);
+    if PhaseScratch = nil then
+      ; { soft OOM }
+
+    // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
+    if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
+    begin
+      { HIR/MIR working storage on FScratchAllocator; MIR module detaches to heap. }
+      HirBuilder := THIRBuilder.Create(
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
+      try
+        HirBuilder.Build;
+
+        Lowering := THirToMirLowering.Create(HirBuilder.Module, FScratchAllocator);
+        try
+          Lowering.Lower;
+          FMirModule := Lowering.DetachModule;
+        finally
+          Lowering.Free;
+        end;
+
+        if GetEnvironmentVariable('NEXTPAS_MIR_DUMP') = '1' then
+        begin
+          { MIR→LLVM output lines on FScratchAllocator TVec }
+          LlvmTranslator := TMirToLlvmTranslator.Create(FMirModule, FScratchAllocator);
+          try
+            LlvmOutput := LlvmTranslator.Translate;
+          finally
+            LlvmTranslator.Free;
+          end;
+        end;
+      finally
+        HirBuilder.Free;
+        ResetScratchAllocator;
+      end;
+    end
+    else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
+    begin
+      HirBuilder := THIRBuilder.Create(
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
+      try
+        HirBuilder.Build;
+        HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
+        { HIR dump lines on FScratchAllocator TVec }
+        HirPrinter := THIRPrinter.Create(HirBuilder.Module, FScratchAllocator);
+        try
+          HirPrinter.Print;
+          HirPrinter.SaveToFile(HirPath);
+        finally
+          HirPrinter.Free;
+        end;
+      finally
+        HirBuilder.Free;
+        ResetScratchAllocator;
+      end;
+    end;
+  finally
+    FMemScope.UnitEnd;
+    PhaseEnd('mir');
+  end;
+  WriteLn(StdErr, '[pipe] LowerToMir end status=', FMirStatus);
+  Flush(StdErr);
+end;
+
+procedure TCompilationSession.PlanBackend;
+var
+  Planner: TBackendPlanner;
+begin
+  WriteLn(StdErr, '[pipe] PlanBackend begin');
+  Flush(StdErr);
+  ResetBackendState;
+  if (FSemanticModel = nil) or (FMirStatus <> 'ready') then
+  begin
+    FBackendStatus := 'failure';
+    WriteLn(StdErr, '[pipe] PlanBackend skip failure');
+    Flush(StdErr);
+    Exit;
+  end;
+
+  Planner := TBackendPlanner.Create(
+    FSemanticModel,
+    FTargetFacts,
+    FOptions.BuildContext.RequestedSourcePath,
+    ArtifactRootPath,
+    OutputDirPath,
+    AstRootKindName,
+    FOptions.NoFold,
+    FOptions.OptLevel
+  );
+  try
+    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan...');
+    Flush(StdErr);
+    Planner.Plan;
+    WriteLn(StdErr, '[pipe] PlanBackend Planner.Plan done');
+    Flush(StdErr);
+    FBackendPlan := Planner.DetachPlan;
+    if FBackendPlan = nil then
+      FBackendStatus := 'deferred'
+    else
+      FBackendStatus := FBackendPlan.Status;
+  finally
+    Planner.Free;
+  end;
+
+  if FBackendStatus = 'ready' then
+    PropagateSemanticLibraryRequestsToBackendPlan;
+  WriteLn(StdErr, '[pipe] PlanBackend end status=', FBackendStatus);
+  Flush(StdErr);
+end;
+

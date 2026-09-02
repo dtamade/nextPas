@@ -7,14 +7,14 @@ uses
   nextpas.core.fs,
   nextpas.core.path,
   nextpas.core.text.conv,
-  np_ast_facade,
-  np_diagnostics_sink,
-  np_green_tree,
-  np_lexer,
-  np_package_manifest,
-  np_source_database,
-  np_target_facts,
-  np_unit_resolver;
+  nextpas.compiler.syntax.ast_facade,
+  nextpas.compiler.diagnostics.sink,
+  nextpas.compiler.syntax.green_tree,
+  nextpas.compiler.syntax.lexer,
+  nextpas.compiler.frontend.package_manifest,
+  nextpas.compiler.frontend.source_database,
+  nextpas.compiler.targets.facts,
+  nextpas.compiler.frontend.unit_resolver;
 
 procedure WriteTextFile(const APath: string; const AText: string);
 var

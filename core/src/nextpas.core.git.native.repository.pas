@@ -82,7 +82,8 @@ uses
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
   nextpas.core.bytes.ops,
-  SysUtils;
+  nextpas.core.text.utils,
+  nextpas.core.platform.env;
 
 type
   TNativeReference = class(TInterfacedObject, IGitReference)
@@ -801,7 +802,7 @@ begin
     // include.path expansion — pure, single-source via GitParseConfig / bytes.ops, inline zero-copy Home handling
     for I:=0 to High(Cfg.Entries) do if Cfg.Entries[I].Key='include.path' then begin
       IncPath:=Cfg.Entries[I].Value;
-      if (Length(IncPath)>0) and (IncPath[1]='~') then begin Home:=GetEnvironmentVariable('HOME'); if Home<>'' then IncPath:=Home+Copy(IncPath,2,MaxInt); end
+      if (Length(IncPath)>0) and (IncPath[1]='~') then begin Home:=platform_env_get_str('HOME'); if Home<>'' then IncPath:=Home+Copy(IncPath,2,MaxInt); end
       else if not PathIsAbsolute(IncPath) then IncPath:=PathJoin([PathDir(FGitDir),IncPath]);
       if FileExists(IncPath) then try IncData:=ReadFile(IncPath); IncCfg:=GitParseConfig(IncData); for J:=0 to High(IncCfg.Entries) do begin SetLength(Result,Length(Result)+1); Result[High(Result)].Name:=IncCfg.Entries[J].Key; Result[High(Result)].Value:=IncCfg.Entries[J].Value; end; except end;
     end;

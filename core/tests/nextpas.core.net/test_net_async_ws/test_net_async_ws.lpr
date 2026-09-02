@@ -26,6 +26,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -154,16 +155,6 @@ begin
   GSrvHead := 0;
   GSrvPartOff := 0;
   GSrvSendArmed := False;
-end;
-
-function ConcatBytes(const A, B: TBytes): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(A) + Length(B));
-  if Length(A) > 0 then
-    Move(A[0], Result[0], SizeUInt(Length(A)));
-  if Length(B) > 0 then
-    Move(B[0], Result[Length(A)], SizeUInt(Length(B)));
 end;
 
 { ======== 前向声明 ======== }
@@ -507,7 +498,7 @@ var
 begin
   SrvBuildRawHeader(Byte(WS_OPCODE_TEXT), False, UInt64(Length(cFragA)),
     LWire);
-  LWire := ConcatBytes(LWire, StrToBytes(cFragA));
+  BytesAppend(LWire, StrToBytes(cFragA));
   SrvAppendOut(LWire);
 end;
 
@@ -517,7 +508,7 @@ var
 begin
   SrvBuildRawHeader(Byte(WS_OPCODE_CONTINUATION), True,
     UInt64(Length(cFragB)), LWire);
-  LWire := ConcatBytes(LWire, StrToBytes(cFragB));
+  BytesAppend(LWire, StrToBytes(cFragB));
   SrvAppendOut(LWire);
 end;
 

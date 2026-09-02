@@ -1,6 +1,22 @@
 unit nextpas.core.db.factory;
 
-{** @desc 统一驱动注册工厂，对标 Go sql.Register/Open。内建五驱动自注册，第三方 via IDbDriver 注入；Open 即池复用 V3-C3；详见 CONTRACT §2.10/§2.14。 *}
+{** @desc 统一驱动注册工厂，对标 Go sql.Register/Open。
+       模块化（High 修复）：
+       - 本单元为窄依赖注册表：零 L2 适配器导入（0 SysUtils），仅提供
+         IDbDriver 抽象、注册表、DbOpen(name|kind) 查找与 DbOpenPool
+         池化装配。适配层零耦合，独立后端 lane 可独立构建与测试。
+       - 内建后端的开箱自注册已抽离至
+         nextpas.core.db.factory.builtin（side-effect import 聚合），
+         等价 Go driver 自注册：`uses nextpas.core.db.factory.builtin`
+         即得六驱动字典序快照与全覆盖 DbOpen；定制裁剪改直用
+         nextpas.core.db.{sqlite|pg|mysql|odbc|redis|dm}.adapter 的
+         Connect* 或按需单 backend 注册单元。
+       - 可插拔：第三方驱动经 DbRegisterDriver 动态注入，零改本单元；
+         内建 Kind 诚实返回 dbkUnknown 亦可占位。
+       - Open 即池复用 V3-C3；详见 CONTRACT §2.10/§2.14。
+       零 SysUtils（text.conv/text.format/base.utils）；Bulk 复用
+       DbBulkEscape/TDbBulkBuffer 单源（契约不变）；InTransaction
+       分支由适配器自管，本层不介入事务；heaptrc0。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -32,6 +48,22 @@ type
   { 驱动打开闭包：内建驱动装配用 }
   TDbDriverOpenFunc = reference to function(const ADsn: string;
     const AOptions: TDbConnectOptions): IDbConnection;
+
+  { 内建驱动装配：名字 + 枚举 + 打开函数三件套（公开以供
+    nextpas.core.db.factory.builtin 聚合单元复用，零 SysUtils）。 }
+  TBuiltinDriver = class(TInterfacedObject, IDbDriver)
+  private
+    FName: string;
+    FKind: TDbKind;
+    FOpen: TDbDriverOpenFunc;
+  public
+    constructor Create(const AName: string; AKind: TDbKind;
+      const AOpen: TDbDriverOpenFunc);
+    function Name: string;
+    function Kind: TDbKind;
+    function Open(const ADsn: string;
+      const AOptions: TDbConnectOptions): IDbConnection;
+  end;
 
 { 注册驱动。nil/空名/重复名一律抛 EDbError(dbkUnknown) fail-closed。
   名字大小写不敏感（注册时归一小写）。 }
@@ -67,12 +99,7 @@ implementation
 
 uses
   nextpas.core.sync.intf,
-  nextpas.core.sync.mutex,
-  nextpas.core.db.sqlite.adapter,
-  nextpas.core.db.pg.adapter,
-  nextpas.core.db.mysql.adapter,
-  nextpas.core.db.odbc.adapter,
-  nextpas.core.db.redis.adapter;
+  nextpas.core.sync.mutex;
 
 type
   TDbDriverEntry = record
@@ -80,26 +107,11 @@ type
     Driver: IDbDriver;
   end;
 
-  { 内建驱动装配：名字 + 枚举 + 打开函数三件套 }
-  TBuiltinDriver = class(TInterfacedObject, IDbDriver)
-  private
-    FName: string;
-    FKind: TDbKind;
-    FOpen: TDbDriverOpenFunc;
-  public
-    constructor Create(const AName: string; AKind: TDbKind;
-      const AOpen: TDbDriverOpenFunc);
-    function Name: string;
-    function Kind: TDbKind;
-    function Open(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection;
-  end;
-
 var
   GDrivers: array of TDbDriverEntry;
   GLock: ILock = nil;
 
-function NormalizeName(const AName: string): string;
+function NormalizeName(const AName: string): string; inline;
 begin
   Result := NormalizeLowerTrim(AName);
 end;
@@ -223,21 +235,27 @@ end;
 function DbOpen(AKind: TDbKind; const ADsn: string;
   const AOptions: TDbConnectOptions): IDbConnection; overload;
 var
-  I: Integer;
+  I, LIdx: Integer;
   LDriver: IDbDriver;
 begin
   LDriver := nil;
   GLock.Acquire;
   try
-    { 先按内建规范名命中，再按第三方声明的 Kind 兜底扫描 }
+    { 内建规范名优先（无需 L2 导入，仅串匹配，零 fan-in），
+      缺席则按 Kind 扫描兜底（第三方占位亦可命中）；
+      查找均在锁内无异常路径完成，Open 在锁外执行。 }
+    LIdx := -1;
     case AKind of
-      dbkSqlite:   LDriver := DriverByNameLocked('sqlite');
-      dbkPostgres: LDriver := DriverByNameLocked('postgres');
-      dbkMysql:    LDriver := DriverByNameLocked('mysql');
-      dbkOdbc:     LDriver := DriverByNameLocked('odbc');
-      dbkRedis:    LDriver := DriverByNameLocked('redis');
+      dbkSqlite:   LIdx := FindEntryLocked('sqlite');
+      dbkPostgres: LIdx := FindEntryLocked('postgres');
+      dbkMysql:    LIdx := FindEntryLocked('mysql');
+      dbkOdbc:     LIdx := FindEntryLocked('odbc');
+      dbkRedis:    LIdx := FindEntryLocked('redis');
+      dbkDm:       LIdx := FindEntryLocked('dm');
     end;
-    if LDriver = nil then
+    if LIdx >= 0 then
+      LDriver := GDrivers[LIdx].Driver
+    else
       for I := 0 to High(GDrivers) do
         if GDrivers[I].Driver.Kind = AKind then
         begin
@@ -302,36 +320,6 @@ end;
 
 initialization
   GLock := TMutex.Create;
-  DbRegisterDriver(TBuiltinDriver.Create('sqlite', dbkSqlite,
-    function(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection
-    begin
-      Result := ConnectSqlite(ADsn, AOptions);
-    end));
-  DbRegisterDriver(TBuiltinDriver.Create('postgres', dbkPostgres,
-    function(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection
-    begin
-      Result := ConnectPostgres(ADsn, AOptions);
-    end));
-  DbRegisterDriver(TBuiltinDriver.Create('mysql', dbkMysql,
-    function(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection
-    begin
-      Result := ConnectMysql(ADsn, AOptions);
-    end));
-  DbRegisterDriver(TBuiltinDriver.Create('odbc', dbkOdbc,
-    function(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection
-    begin
-      Result := ConnectOdbc(ADsn, AOptions);
-    end));
-  DbRegisterDriver(TBuiltinDriver.Create('redis', dbkRedis,
-    function(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection
-    begin
-      Result := ConnectRedis(ADsn, '', 0, AOptions);
-    end));
 
 finalization
   GDrivers := nil;

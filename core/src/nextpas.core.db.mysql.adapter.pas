@@ -1,6 +1,30 @@
 unit nextpas.core.db.mysql.adapter;
 
-{** @desc IDbConnection 的 MySQL/MariaDB 适配器（二进制 prepared statement，惰性 Step）。能力与契约见 CONTRACT §2.3/§2.11，双方言 BIND 布局单点见实现。 *}
+{** @desc IDbConnection/IDbQuery 的 MySQL/MariaDB 适配器（V3-A2）。
+
+       执行模型：IDbQuery 走 prepared statement 二进制协议
+       （mysql_stmt_*），与 pg 侧 execParams 同级——参数化即注入安全。
+       执行惰性触发（首个 Step），列元数据在 Step 后可读，与统一层
+       消费时序一致。
+
+       结果绑定按声明类型请求：整数族绑 LONGLONG、浮点族绑 DOUBLE、
+       其余（文本/blob/DECIMAL/日期/JSON/BIT）一律 VAR_STRING——
+       DECIMAL 在二进制协议里本就是 length-prefixed 文本，日期族由
+       客户端库转连接字符集文本；截断时按实际长度扩缓冲经
+       mysql_stmt_fetch_column 重取。
+
+       双方言 MYSQL_BIND 编组（Oracle 72B / MariaDB 120B，buffer_type
+       偏移与宽度不同）在本单元单点实现——A1 ffi 镜像钉死布局，此处
+       按 loader 探测的 flavor 选择写法，别处不得触碰原生布局。
+
+       占位符：MySQL 原生 ?。统一契约的 ?N 显式编号经槽位计划重写为
+       顺序 ? 并携带物理槽→逻辑号映射；扫描跳过字符串字面量、反引号
+       标识符、-- 与 # 行注释、块注释。
+
+       事务控制面：连接内计数式簿记（互斥锁保护），语义对齐 pg/sqlite
+       适配器；SAVEPOINT 原生支持（RELEASE 需带 SAVEPOINT 关键字，
+       与 pg 方言差异）。BEGIN IMMEDIATE 无对应语义，标志接受但为
+       no-op（契约差异登记 CONTRACT §2.3）。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -9,7 +33,6 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.db.base,
-  nextpas.core.db.sqlscan,
   nextpas.core.db.intf,
   nextpas.core.db.mysql.base;
 
@@ -54,19 +77,18 @@ function TranslatePlaceholdersMy(const ASql: string;
 
 { 把单个物理槽的绑定写入零填充原生块（双方言布局单点实现；
   AError 为截断检测出参指针，参数侧传 nil）。偏移常量来自 A1
-  门禁钉死的镜像布局；`inline` 消除批量绑定循环的调用开销（热路径）。 }
+  门禁钉死的镜像布局。 }
 procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
   ABufferType: Cardinal; ABuffer: Pointer; ABufferLength: QWord;
   AIsNull: PBoolean; AError: Pointer; ALength: PQWord;
-  const AIsUnsigned: Boolean); inline;
+  const AIsUnsigned: Boolean);
 
 implementation
 
 uses
-  nextpas.core.exception,
-  nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.text.kv,
+  nextpas.core.base.utils,
+  nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.db.trace,
   nextpas.core.db.tx,
@@ -85,9 +107,6 @@ const
   MY_BINARY_CHARSET = 63;
   { 结果缓冲起始容量（截断后按实际长度翻倍扩取） }
   MY_BUF_INITIAL = 256;
-  { DSN 缺省值（与 ParseMySqlDsn 初始化一致，单点常量防漂移） }
-  MYSQL_DEFAULT_HOST = '127.0.0.1';
-  MYSQL_DEFAULT_PORT = 3306;
 
 type
   { 绑定值逻辑形态 }
@@ -113,8 +132,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_errno(AConnH));
-  LMsg := AnsiPtrToStr(my_error(AConnH));
-  LSs := AnsiPtrToStr(my_sqlstate(AConnH));
+  LMsg := string(AnsiString(my_error(AConnH)));
+  LSs := string(AnsiString(my_sqlstate(AConnH)));
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
 end;
@@ -128,8 +147,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_stmtErrno(AStmt));
-  LMsg := AnsiPtrToStr(my_stmtError(AStmt));
-  LSs := AnsiPtrToStr(my_stmtSqlstate(AStmt));
+  LMsg := string(AnsiString(my_stmtError(AStmt)));
+  LSs := string(AnsiString(my_stmtSqlstate(AStmt)));
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
 end;
@@ -143,8 +162,8 @@ var
   LMsg, LSs: string;
 begin
   LCode := Integer(my_stmtErrno(AStmt));
-  LMsg := AnsiPtrToStr(my_stmtError(AStmt));
-  LSs := AnsiPtrToStr(my_stmtSqlstate(AStmt));
+  LMsg := string(AnsiString(my_stmtError(AStmt)));
+  LSs := string(AnsiString(my_stmtSqlstate(AStmt)));
   my_stmtClose(AStmt);
   ClassifyMy(LCode, LSs, LCategory, LConstraint);
   raise EDbError.CreateFullMy(LCode, LSs, LMsg, LCategory, LConstraint);
@@ -153,60 +172,78 @@ end;
 { ---- DSN 解析 ---- }
 
 procedure AssignDsnKey(var ADsn: TDbMysqlDsnParts; const AKey,
-  AValue: string); inline;
-var
-  LPort: Int64;
+  AValue: string);
 begin
-  if SameText(AKey, 'host') then
+  if AKey = 'host' then
     ADsn.Host := AValue
-  else if SameText(AKey, 'port') then
-  begin
-    LPort := StrToIntDef(AValue, -1);
-    if (LPort < 1) or (LPort > 65535) then
-      raise EDbError.CreateSimple(dbkMysql,
-        'invalid port "' + AValue + '" (expected 1..65535)');
-    ADsn.Port := Integer(LPort);
-  end
-  else if SameText(AKey, 'user') then
+  else if AKey = 'port' then
+    ADsn.Port := StrToIntDef(AValue, 0)
+  else if AKey = 'user' then
     ADsn.User := AValue
-  else if SameText(AKey, 'password') then
+  else if AKey = 'password' then
     ADsn.Password := AValue
-  else if SameText(AKey, 'db') or SameText(AKey, 'database') then
+  else if (AKey = 'db') or (AKey = 'database') then
     ADsn.Database := AValue
-  else if SameText(AKey, 'socket') then
+  else if AKey = 'socket' then
     ADsn.Socket := AValue
   else
-    raise EDbError.CreateSimple(dbkMysql,
-      'unknown dsn key "' + AKey + '" (expected host/port/user/password/db/database/socket)');
+    raise EDbError.CreateSimple(dbkMysql, 'unknown dsn key "' + AKey + '"');
 end;
 
 function ParseMySqlDsn(const ADsn: string): TDbMysqlDsnParts;
 var
-  LErr: string;
-  LTmp: TDbMysqlDsnParts;
-  PLTmp: ^TDbMysqlDsnParts;
+  I, LLen, LQuote: Integer;
+  LKey, LVal: string;
 begin
-  LTmp.Host := MYSQL_DEFAULT_HOST;
-  LTmp.Port := MYSQL_DEFAULT_PORT;
-  LTmp.User := '';
-  LTmp.Password := '';
-  LTmp.Database := '';
-  LTmp.Socket := '';
-  if not ValidateKV(ADsn, LErr) then
-    if LErr <> 'empty dsn' then
-      raise EDbError.CreateSimple(dbkMysql, LErr);
-  PLTmp := @LTmp;
-  try
-    ScanKV(ADsn, procedure(const AKey, AValue: string)
+  Result.Host := '127.0.0.1';
+  Result.Port := 3306;
+  Result.User := '';
+  Result.Password := '';
+  Result.Database := '';
+  Result.Socket := '';
+  LLen := Length(ADsn);
+  I := 1;
+  while I <= LLen do
+  begin
+    while (I <= LLen) and (ADsn[I] = ' ') do
+      Inc(I);
+    if I > LLen then
+      Break;
+    LKey := '';
+    while (I <= LLen) and (ADsn[I] <> '=') do
+    begin
+      LKey := LKey + LowerCase(ADsn[I]);
+      Inc(I);
+    end;
+    if (LKey = '') or (I > LLen) then
+      raise EDbError.CreateSimple(dbkMysql,
+        'malformed dsn near offset ' + IntToStr(I));
+    Inc(I);  { skip '=' }
+    LVal := '';
+    if (I <= LLen) and ((ADsn[I] = '''') or (ADsn[I] = '"')) then
+    begin
+      LQuote := Ord(ADsn[I]);
+      Inc(I);
+      while (I <= LLen) and (Ord(ADsn[I]) <> LQuote) do
       begin
-        AssignDsnKey(PLTmp^, AKey, AValue);
-      end);
-  except
-    on E: EDbError do raise;
-    on E: Exception do
-      raise EDbError.CreateSimple(dbkMysql, E.Message);
+        LVal := LVal + ADsn[I];
+        Inc(I);
+      end;
+      if I > LLen then
+        raise EDbError.CreateSimple(dbkMysql,
+          'unterminated quoted dsn value for "' + LKey + '"');
+      Inc(I);  { closing quote }
+    end
+    else
+    begin
+      while (I <= LLen) and (ADsn[I] <> ' ') do
+      begin
+        LVal := LVal + ADsn[I];
+        Inc(I);
+      end;
+    end;
+    AssignDsnKey(Result, LKey, LVal);
   end;
-  Result := LTmp;
 end;
 
 { ---- 占位符槽位计划 ---- }
@@ -214,12 +251,133 @@ end;
 function TranslatePlaceholdersMy(const ASql: string;
   out ARewritten: string; out ASlots: TIntArray): Integer;
 var
-  LSlots: TDbSqlSlotArray;
+  LB: IStringBuilder;
+  I: Integer;
+  C: Char;
+  InStr, InBq, InLineC, InHashC, InBlockC: Boolean;
+  N, Seq, LCount, LCap: Integer;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanTranslateQuestion(ASql, DBSQLSCAN_MYSQL,
-    ARewritten, LSlots);
-  ASlots := LSlots;
+  LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
+  ARewritten := '';
+  LCap := 8;
+  SetLength(ASlots, LCap);
+  LCount := 0;
+  Seq := 0;
+  InStr := False;
+  InBq := False;
+  InLineC := False;
+  InHashC := False;
+  InBlockC := False;
+  I := 1;
+  while I <= Length(ASql) do
+  begin
+    C := ASql[I];
+    if InLineC or InHashC then
+    begin
+      LB.AppendChar(C);
+      if C = #10 then
+      begin
+        InLineC := False;
+        InHashC := False;
+      end;
+    end
+    else if InBlockC then
+    begin
+      LB.AppendChar(C);
+      if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
+      begin
+        LB.AppendChar('/');
+        InBlockC := False;
+        Inc(I);
+      end;
+    end
+    else if InStr then
+    begin
+      LB.AppendChar(C);
+      if C = '''' then
+      begin
+        if (I < Length(ASql)) and (ASql[I + 1] = '''') then
+        begin
+          LB.AppendChar('''');
+          Inc(I);
+        end
+        else
+          InStr := False;
+      end;
+    end
+    else if InBq then
+    begin
+      LB.AppendChar(C);
+      if C = '`' then
+        InBq := False;
+    end
+    else
+    begin
+      case C of
+        '''' :
+          begin
+            InStr := True;
+            LB.AppendChar(C);
+          end;
+        '`' :
+          begin
+            InBq := True;
+            LB.AppendChar(C);
+          end;
+        '-' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '-') then
+              InLineC := True;
+            LB.AppendChar(C);
+          end;
+        '#' :
+          begin
+            InHashC := True;
+            LB.AppendChar(C);
+          end;
+        '/' :
+          begin
+            if (I < Length(ASql)) and (ASql[I + 1] = '*') then
+            begin
+              InBlockC := True;
+              Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
+              Continue;
+            end;
+            LB.AppendChar(C);
+          end;
+        '?' :
+          begin
+            Inc(I);
+            N := 0;
+            while (I <= Length(ASql)) and (ASql[I] in ['0'..'9']) do
+            begin
+              N := N * 10 + (Ord(ASql[I]) - Ord('0'));
+              Inc(I);
+            end;
+            if N = 0 then
+            begin
+              Inc(Seq);
+              N := Seq;
+            end;
+            LB.AppendChar('?');
+            if LCount >= LCap then
+            begin
+              LCap := LCap * 2;
+              SetLength(ASlots, LCap);
+            end;
+            ASlots[LCount] := N;
+            Inc(LCount);
+            Continue;
+          end;
+      else
+        LB.AppendChar(C);
+      end;
+    end;
+    Inc(I);
+  end;
+  SetLength(ASlots, LCount);
+  ARewritten := LB.ToString;
+  Result := LCount;
 end;
 
 { ---- MYSQL_BIND 双方言编组（唯一允许触碰原生布局的位置） ---- }
@@ -227,30 +385,30 @@ end;
 procedure WriteBindSlot(ABase: Pointer; const AIndex, ANativeSize: Integer;
   ABufferType: Cardinal; ABuffer: Pointer; ABufferLength: QWord;
   AIsNull: PBoolean; AError: Pointer; ALength: PQWord;
-  const AIsUnsigned: Boolean); inline;
+  const AIsUnsigned: Boolean);
 var
   P: PByte;
 begin
   P := PByte(ABase) + PtrUInt(AIndex * ANativeSize);
   { 公共前四指针两家一致：length@0 / is_null@8 / buffer@16 / error@24 }
-  PPointer(P + MYSQL_BIND_MYSQL_OFF_LENGTH)^ := ALength;
-  PPointer(P + MYSQL_BIND_MYSQL_OFF_IS_NULL)^ := AIsNull;
-  PPointer(P + MYSQL_BIND_MYSQL_OFF_BUFFER)^ := ABuffer;
-  PPointer(P + MYSQL_BIND_MYSQL_OFF_ERROR)^ := AError;
+  PPointer(P)^ := ALength;
+  PPointer(P + 8)^ := AIsNull;
+  PPointer(P + 16)^ := ABuffer;
+  PPointer(P + 24)^ := AError;
   case ANativeSize of
     SIZE_MYSQL_BIND_MYSQL:
       begin
-        PQWord(P + MYSQL_BIND_MYSQL_OFF_BUFFERLENGTH)^ := ABufferLength;
-        (P + MYSQL_BIND_MYSQL_OFF_BUFFERTYPE)^ := Byte(ABufferType);      { 1 字节 enum }
+        PQWord(P + 40)^ := ABufferLength;
+        (P + 68)^ := Byte(ABufferType);      { 1 字节 enum }
         if AIsUnsigned then
-          (P + MYSQL_BIND_MYSQL_OFF_IS_UNSIGNED)^ := 1;
+          (P + 70)^ := 1;
       end;
     SIZE_MYSQL_BIND_MARIADB:
       begin
-        PQWord(P + MYSQL_BIND_MARIADB_OFF_BUFFERLENGTH)^ := ABufferLength;
-        PCardinal(P + MYSQL_BIND_MARIADB_OFF_BUFFERTYPE)^ := ABufferType;   { 4 字节 enum，实测 96（非 100） }
+        PQWord(P + 72)^ := ABufferLength;
+        PCardinal(P + 100)^ := ABufferType;  { 4 字节 enum }
         if AIsUnsigned then
-          (P + MYSQL_BIND_MARIADB_OFF_IS_UNSIGNED)^ := 1;
+          (P + 105)^ := 1;
       end;
   else
     raise EDbError.CreateSimple(dbkMysql,
@@ -388,10 +546,15 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
-    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
   end;
@@ -633,7 +796,7 @@ begin
           end;
       end;
     end;
-    if my_stmtBindParam(FStmt, FParamNative) then
+    if not my_stmtBindParam(FStmt, FParamNative) then
       RaiseMyStmt(FStmt);
   end;
   if my_stmtExecute(FStmt) <> 0 then
@@ -670,27 +833,28 @@ begin
     begin
       FResBufs[I] := nil;
       LF := my_fetchFieldDirect(LMetaRes, Cardinal(I));
-      FColMeta[I].Name := AnsiPtrToStr(LF^.Name);
+      FColMeta[I].Name := string(AnsiString(LF^.Name));
       FColMeta[I].Typ := LF^.Typ;
       FColMeta[I].CharsetNr := LF^.CharsetNr;
       case LF^.Typ of
-        MYSQL_TYPE_TINY:
-          begin FColMeta[I].BindType := MYSQL_TYPE_TINY; FResCap[I] := 1; end;
-        MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
-          begin FColMeta[I].BindType := MYSQL_TYPE_SHORT; FResCap[I] := 2; end;
-        MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
-          begin FColMeta[I].BindType := MYSQL_TYPE_LONG; FResCap[I] := 4; end;
-        MYSQL_TYPE_LONGLONG:
-          begin FColMeta[I].BindType := MY_PT_LONGLONG; FResCap[I] := 8; end;
-        MYSQL_TYPE_FLOAT:
-          begin FColMeta[I].BindType := MYSQL_TYPE_FLOAT; FResCap[I] := 4; end;
-        MYSQL_TYPE_DOUBLE:
-          begin FColMeta[I].BindType := MY_PT_DOUBLE; FResCap[I] := 8; end;
+        MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
+        MYSQL_TYPE_LONGLONG, MYSQL_TYPE_INT24:
+          FColMeta[I].BindType := MY_PT_LONGLONG;
+        MYSQL_TYPE_FLOAT, MYSQL_TYPE_DOUBLE:
+          FColMeta[I].BindType := MY_PT_DOUBLE;
         MYSQL_TYPE_DECIMAL, MYSQL_TYPE_NEWDECIMAL:
-          begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
+          FColMeta[I].BindType := MY_PT_STRING;  { 协议即 length-prefixed 文本 }
+        MYSQL_TYPE_YEAR:
+          FColMeta[I].BindType := MY_PT_LONGLONG;
       else
-        begin FColMeta[I].BindType := MY_PT_STRING; FResCap[I] := MY_BUF_INITIAL; end;
+        FColMeta[I].BindType := MY_PT_STRING;    { 文本/blob/日期/JSON/BIT }
       end;
+      if FColMeta[I].BindType = MY_PT_LONGLONG then
+        FResCap[I] := SizeOf(Int64)
+      else if FColMeta[I].BindType = MY_PT_DOUBLE then
+        FResCap[I] := SizeOf(Double)
+      else
+        FResCap[I] := MY_BUF_INITIAL;
       GetMem(FResBufs[I], SizeUInt(FResCap[I]));
       WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
         FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
@@ -699,7 +863,7 @@ begin
   finally
     my_freeResult(LMetaRes);   { 元数据复制完即释放 }
   end;
-  if my_stmtBindResult(FStmt, FResultNative) then
+  if not my_stmtBindResult(FStmt, FResultNative) then
     RaiseMyStmt(FStmt);
   if my_stmtStoreResult(FStmt) <> 0 then
     RaiseMyStmt(FStmt);
@@ -724,7 +888,7 @@ begin
     WriteBindSlot(FResultNative, I, FNativeSize, FColMeta[I].BindType,
       FResBufs[I], QWord(FResCap[I]), @FResNulls[I], @FResErrs[I],
       @FResLens[I], False);
-    if my_stmtFetchColumn(FStmt,
+    if not my_stmtFetchColumn(FStmt,
       Pointer(PByte(FResultNative) + PtrUInt(I * FNativeSize)),
       Cardinal(I), 0) then
       RaiseMyStmt(FStmt);
@@ -826,13 +990,14 @@ end;
 function TDbMyQuery.ColumnType(AIndex: Integer): TDbColumnType;
 begin
   RequireOpenRow(AIndex);
+  { NULL 是行级信号（与 sqlite/pg 同契约）：值空一律 dbcNull，
+    非空才回落列声明类型 }
   if FResNulls[AIndex] then
     Exit(dbcNull);
   case FColMeta[AIndex].BindType of
-    MYSQL_TYPE_TINY, MYSQL_TYPE_SHORT, MYSQL_TYPE_LONG,
-    MY_PT_LONGLONG, MYSQL_TYPE_INT24, MYSQL_TYPE_YEAR:
+    MY_PT_LONGLONG:
       Result := dbcInteger;
-    MYSQL_TYPE_FLOAT, MY_PT_DOUBLE:
+    MY_PT_DOUBLE:
       Result := dbcFloat;
   else
     if FColMeta[AIndex].CharsetNr = MY_BINARY_CHARSET then
@@ -867,28 +1032,13 @@ var
   LS: string;
   LCode: Integer;
   LD: Double;
-  LSg: Single;
 begin
   RequireOpenRow(AIndex);
   if FResNulls[AIndex] then
     Exit(0);
   case FColMeta[AIndex].BindType of
-    MYSQL_TYPE_TINY:
-      Result := ShortInt(PByte(FResBufs[AIndex])^);
-    MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
-      Result := PSmallInt(FResBufs[AIndex])^;
-    MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
-      Result := PInteger(FResBufs[AIndex])^;
     MY_PT_LONGLONG:
       Result := PInt64(FResBufs[AIndex])^;
-    MYSQL_TYPE_FLOAT:
-      begin
-        LSg := PSingle(FResBufs[AIndex])^;
-        if (LSg >= 9.3e18) or (LSg <= -9.3e18) then
-          raise EDbError.CreateSimple(dbkMysql,
-            'float value out of int64 range');
-        Result := Trunc(LSg);
-      end;
     MY_PT_DOUBLE:
       begin
         LD := PDouble(FResBufs[AIndex])^;
@@ -915,18 +1065,10 @@ begin
   if FResNulls[AIndex] then
     Exit(0.0);
   case FColMeta[AIndex].BindType of
-    MYSQL_TYPE_TINY:
-      Result := ShortInt(PByte(FResBufs[AIndex])^);
-    MYSQL_TYPE_SHORT, MYSQL_TYPE_YEAR:
-      Result := PSmallInt(FResBufs[AIndex])^;
-    MYSQL_TYPE_LONG, MYSQL_TYPE_INT24:
-      Result := PInteger(FResBufs[AIndex])^;
-    MY_PT_LONGLONG:
-      Result := PInt64(FResBufs[AIndex])^;
-    MYSQL_TYPE_FLOAT:
-      Result := PSingle(FResBufs[AIndex])^;
     MY_PT_DOUBLE:
       Result := PDouble(FResBufs[AIndex])^;
+    MY_PT_LONGLONG:
+      Result := PInt64(FResBufs[AIndex])^;
   else
     begin
       LS := ColAsString(AIndex);
@@ -1074,7 +1216,7 @@ begin
     begin
       LRow := my_fetchRow(LRes);
       if (LRow <> nil) and ((LRow + 0)^ <> nil) then
-        Result := StrToInt64Def(AnsiPtrToStr((LRow + 0)^), 0);
+        Result := StrToInt64Def(string(AnsiString((LRow + 0)^)), 0);
     end;
   finally
     my_freeResult(LRes);
@@ -1317,11 +1459,6 @@ begin
   Result := False;  { 统一层无 LO 面（协议无 lo_* 对应物） }
 end;
 
-function TDbMyConnection.SupportsArrayBinding: Boolean;
-begin
-  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
-end;
-
 function TDbMyConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;  { TINYINT(1) 约定，非原生类型（§2.6） }
@@ -1335,6 +1472,36 @@ end;
 function TDbMyConnection.SupportsStatementTimeout: Boolean;
 begin
   Result := FSupportsStmtTimeout;
+end;
+
+function TDbMyConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbMyConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbMyConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
 end;
 
 function TDbMyConnection.CaseSensitiveIdentifiers: Boolean;

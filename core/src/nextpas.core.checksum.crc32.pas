@@ -4,9 +4,6 @@
  * 反射算法，多项式 0xEDB88320。对外语义为标准 CRC 值：
  * 初始 0、可按任意分段增量更新、结果即标准校验值（已做 init/xorout 位翻转）。
  * 标准向量："123456789" → $CBF43926。
- *
- * 实现：slice-by-8（8 表 × 8 字节/轮），纯 Pascal 无硬件依赖；
- * 短尾部与 ALen<8 回落逐字节查表。分段更新语义与逐字节实现完全一致。
  *}
 
 unit nextpas.core.checksum.crc32;
@@ -38,35 +35,34 @@ function Crc32OfBytes(const AData: TBytes): LongWord;
 implementation
 
 var
-  { TAB[0] 为经典反射表；TAB[k] 由 TAB[k-1] 推导，见 BuildCrcTable }
-  TAB: array[0..7, 0..255] of LongWord;
+  CRC_TABLE: array[0..255] of LongWord;
+  CRC_TABLES: array[0..7, 0..255] of LongWord;
 
 function Crc32Update(ACrc: LongWord; const AData: Pointer; ALen: SizeUInt): LongWord;
 var
   P: PByte;
-  LX, LY: LongWord;
+  LCrcLo, LCrcHi: LongWord;
 begin
   { 标准值语义 ↔ 内部状态: 内部以 0xFFFFFFFF 为初值, 终值取反 }
   ACrc := ACrc xor $FFFFFFFF;
   P := PByte(AData);
-  { 显式 while 而非 for 0..ALen-1: ALen=0 时无符号下溢会退化为巨大循环 }
+  { slice-by-8：每次 8 字节用 8 表并行查表，余下尾字节回退单字节路径 }
   while ALen >= 8 do
   begin
-    { LE 四字节组装在 LE 目标上由编译器折叠为单次载入；保持可移植写法 }
-    LX := (LongWord(P[0]) or (LongWord(P[1]) shl 8) or
-           (LongWord(P[2]) shl 16) or (LongWord(P[3]) shl 24)) xor ACrc;
-    LY := LongWord(P[4]) or (LongWord(P[5]) shl 8) or
-          (LongWord(P[6]) shl 16) or (LongWord(P[7]) shl 24);
-    ACrc := TAB[7][LX and $FF] xor TAB[6][(LX shr 8) and $FF] xor
-            TAB[5][(LX shr 16) and $FF] xor TAB[4][LX shr 24] xor
-            TAB[3][LY and $FF] xor TAB[2][(LY shr 8) and $FF] xor
-            TAB[1][(LY shr 16) and $FF] xor TAB[0][LY shr 24];
+    LCrcLo := ACrc xor (LongWord(P[0]) or (LongWord(P[1]) shl 8) or (LongWord(P[2]) shl 16) or (LongWord(P[3]) shl 24));
+    LCrcHi := LongWord(P[4]) or (LongWord(P[5]) shl 8) or (LongWord(P[6]) shl 16) or (LongWord(P[7]) shl 24);
+    ACrc :=
+      CRC_TABLES[7, LCrcLo and $FF] xor CRC_TABLES[6, (LCrcLo shr 8) and $FF] xor
+      CRC_TABLES[5, (LCrcLo shr 16) and $FF] xor CRC_TABLES[4, (LCrcLo shr 24) and $FF] xor
+      CRC_TABLES[3, LCrcHi and $FF] xor CRC_TABLES[2, (LCrcHi shr 8) and $FF] xor
+      CRC_TABLES[1, (LCrcHi shr 16) and $FF] xor CRC_TABLES[0, (LCrcHi shr 24) and $FF];
     Inc(P, 8);
     Dec(ALen, 8);
   end;
+  { 显式 while 而非 for 0..ALen-1: ALen=0 时无符号下溢会退化为巨大循环 }
   while ALen > 0 do
   begin
-    ACrc := TAB[0][(ACrc xor P^) and $FF] xor (ACrc shr 8);
+    ACrc := CRC_TABLE[(ACrc xor P^) and $FF] xor (ACrc shr 8);
     Inc(P);
     Dec(ALen);
   end;
@@ -96,11 +92,15 @@ begin
         C := (C shr 1) xor CRC32_POLY
       else
         C := C shr 1;
-    TAB[0][I] := C;
+    CRC_TABLE[I] := C;
+    CRC_TABLES[0, I] := C;
   end;
   for K := 1 to 7 do
     for I := 0 to 255 do
-      TAB[K][I] := (TAB[K - 1][I] shr 8) xor TAB[0][TAB[K - 1][I] and $FF];
+    begin
+      C := CRC_TABLES[K - 1, I];
+      CRC_TABLES[K, I] := (C shr 8) xor CRC_TABLES[0, C and $FF];
+    end;
 end;
 
 initialization

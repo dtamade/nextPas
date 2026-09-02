@@ -12,6 +12,14 @@ uses
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
 function SwapUInt32(const AValue: UInt32): UInt32; inline;
 function SwapUInt64(const AValue: UInt64): UInt64; inline;
+{ FPC Swap semantics word swap for DWord (HTonN/NToHs LongWord single source) }
+function SwapUInt32Words(const AValue: UInt32): UInt32; inline;
+
+{ Network order single source helpers for bytes.ops HTonN/NToHs (FPC Swap semantics, zero-copy inline) }
+function HostToNetwork16(const AValue: UInt16): UInt16; inline;
+function NetworkToHost16(const AValue: UInt16): UInt16; inline;
+function HostToNetwork32Words(const AValue: UInt32): UInt32; inline;
+function NetworkToHost32Words(const AValue: UInt32): UInt32; inline;
 
 { Conditional swap to/from native endian }
 function ToEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16; inline;
@@ -39,21 +47,21 @@ procedure WriteUInt64BE(const ADst: PByte; const AValue: UInt64); inline;
 
 { Advancing cursor reads (span shrinks on success) }
 function TryReadUInt8(var ASpan: TByteSpan; out AValue: Byte): Boolean; inline;
-function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
-function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
-function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
-function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
-function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
-function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
+function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
+function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
+function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
+function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
+function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
+function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 
 { Advancing cursor writes (span shrinks on success) }
 function TryWriteUInt8(var ASpan: TByteSpan; const AValue: Byte): Boolean; inline;
-function TryWriteUInt16LE(var ASpan: TByteSpan; const AValue: UInt16): Boolean;
-function TryWriteUInt16BE(var ASpan: TByteSpan; const AValue: UInt16): Boolean;
-function TryWriteUInt32LE(var ASpan: TByteSpan; const AValue: UInt32): Boolean;
-function TryWriteUInt32BE(var ASpan: TByteSpan; const AValue: UInt32): Boolean;
-function TryWriteUInt64LE(var ASpan: TByteSpan; const AValue: UInt64): Boolean;
-function TryWriteUInt64BE(var ASpan: TByteSpan; const AValue: UInt64): Boolean;
+function TryWriteUInt16LE(var ASpan: TByteSpan; const AValue: UInt16): Boolean; inline;
+function TryWriteUInt16BE(var ASpan: TByteSpan; const AValue: UInt16): Boolean; inline;
+function TryWriteUInt32LE(var ASpan: TByteSpan; const AValue: UInt32): Boolean; inline;
+function TryWriteUInt32BE(var ASpan: TByteSpan; const AValue: UInt32): Boolean; inline;
+function TryWriteUInt64LE(var ASpan: TByteSpan; const AValue: UInt64): Boolean; inline;
+function TryWriteUInt64BE(var ASpan: TByteSpan; const AValue: UInt64): Boolean; inline;
 
 implementation
 
@@ -61,27 +69,51 @@ implementation
 
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
 begin
-  Result := ((AValue shr 8) and $FF) or ((AValue and $FF) shl 8);
+  { perf: BSWAP/REV hardware via System.SwapEndian — single HW instruction, inline zero-copy register shuffle }
+  Result := System.SwapEndian(AValue);
 end;
 
 function SwapUInt32(const AValue: UInt32): UInt32; inline;
 begin
-  Result := ((AValue shr 24) and $000000FF) or
-            ((AValue shr 8)  and $0000FF00) or
-            ((AValue shl 8)  and $00FF0000) or
-            ((AValue shl 24) and $FF000000);
+  { perf: BSWAP hardware via System.SwapEndian — single bswap/rev instruction, inline zero-copy }
+  Result := System.SwapEndian(AValue);
 end;
 
 function SwapUInt64(const AValue: UInt64): UInt64; inline;
 begin
-  Result := ((AValue shr 56) and $00000000000000FF) or
-            ((AValue shr 40) and $000000000000FF00) or
-            ((AValue shr 24) and $0000000000FF0000) or
-            ((AValue shr 8)  and $00000000FF000000) or
-            ((AValue shl 8)  and $000000FF00000000) or
-            ((AValue shl 24) and $0000FF0000000000) or
-            ((AValue shl 40) and $00FF000000000000) or
-            ((AValue shl 56) and $FF00000000000000);
+  { perf: BSWAP hardware via System.SwapEndian — single bswapq/rev instruction, inline zero-copy }
+  Result := System.SwapEndian(QWord(AValue));
+end;
+
+function SwapUInt32Words(const AValue: UInt32): UInt32; inline;
+begin
+  Result := ((AValue shr 16) and $FFFF) or ((AValue shl 16) and $FFFF0000);
+end;
+
+function HostToNetwork16(const AValue: UInt16): UInt16; inline;
+begin
+  if NATIVE_ENDIAN = endBig then
+    Result := AValue
+  else
+    Result := SwapUInt16(AValue);
+end;
+
+function NetworkToHost16(const AValue: UInt16): UInt16; inline;
+begin
+  Result := HostToNetwork16(AValue);
+end;
+
+function HostToNetwork32Words(const AValue: UInt32): UInt32; inline;
+begin
+  if NATIVE_ENDIAN = endBig then
+    Result := AValue
+  else
+    Result := SwapUInt32Words(AValue);
+end;
+
+function NetworkToHost32Words(const AValue: UInt32): UInt32; inline;
+begin
+  Result := HostToNetwork32Words(AValue);
 end;
 
 { Conditional swap }
@@ -231,7 +263,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
+function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
 begin
   if ASpan.Len < 2 then
     Exit(False);
@@ -241,7 +273,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean;
+function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
 begin
   if ASpan.Len < 2 then
     Exit(False);
@@ -251,7 +283,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
+function TryReadUInt32LE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
 begin
   if ASpan.Len < 4 then
     Exit(False);
@@ -261,7 +293,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean;
+function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inline;
 begin
   if ASpan.Len < 4 then
     Exit(False);
@@ -271,7 +303,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
+function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 begin
   if ASpan.Len < 8 then
     Exit(False);
@@ -281,7 +313,7 @@ begin
   Result := True;
 end;
 
-function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean;
+function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 begin
   if ASpan.Len < 8 then
     Exit(False);

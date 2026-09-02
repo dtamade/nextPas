@@ -48,6 +48,7 @@ function TryParseTLS12Finished(const AData: TBytes; AOffset: Integer; ALength: I
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,
   nextpas.core.tls.tls12.wire;
 
@@ -59,13 +60,6 @@ end;
 function ReadUInt24(const AData: TBytes; AOffset: Integer): Integer; inline;
 begin
   Result := (Integer(AData[AOffset]) shl 16) or (Integer(AData[AOffset+1]) shl 8) or Integer(AData[AOffset+2]);
-end;
-
-function BytesToString(const AData: TBytes; AOffset, ALength: Integer): string;
-begin
-  SetLength(Result, ALength);
-  if ALength > 0 then
-    Move(AData[AOffset], Result[1], ALength);
 end;
 
 function TryParseTLS12ServerHello(const AData: TBytes; AOffset: Integer;
@@ -174,7 +168,8 @@ begin
             LProtoLen := AData[LPos];
             Inc(LPos);
             if LPos + LProtoLen <= AOffset + Integer(LExtDataLen) then
-              AServerHello.ALPNProtocol := BytesToString(AData, LPos, LProtoLen);
+              // single-source: bytes.ops.BytesToString(slice) = one Move, inline zero-copy
+              AServerHello.ALPNProtocol := nextpas.core.bytes.ops.BytesSliceToString(AData, LPos, LProtoLen);
           end;
         end;
     end;

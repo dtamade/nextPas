@@ -31,7 +31,9 @@ function CreateSincResampler(AQuality: TResampleQuality = rsGood): IAudioResampl
 implementation
 
 uses
-  Math,
+  nextpas.core.math.base,
+  nextpas.core.math.scalar,
+  nextpas.core.math.trig,
   nextpas.core.audio.pcm,
   nextpas.core.audio.errors;
 
@@ -91,7 +93,7 @@ end;
 function TSincResampler.Sinc(AX: Double): Double;
 begin
   if Abs(AX) < 1e-12 then Exit(1.0);
-  Result := Sin(Pi * AX) / (Pi * AX);
+  Result := Sin(PI_VALUE * AX) / (PI_VALUE * AX);
 end;
 
 function TSincResampler.Resample(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer;
@@ -118,12 +120,19 @@ begin
     Exit;
   end;
   LRatio := AInput.Format.SampleRate / ANewRate;
-  LOutFrames := Integer(Round(AInput.FrameCount * ANewRate / AInput.Format.SampleRate));
+  // Int64 guard for Frame*Rate overflow (INV-8)
+  if Int64(AInput.FrameCount) * Int64(ANewRate) > Int64(High(Integer)) * Int64(AInput.Format.SampleRate) then
+    LOutFrames := High(Integer)
+  else
+    LOutFrames := Integer(Int64(AInput.FrameCount) * Int64(ANewRate) div Int64(AInput.Format.SampleRate));
   if LOutFrames < 0 then LOutFrames := 0;
   Result.Format := AudioFormatCreate(ANewRate, AInput.Format.Channels, sfF32);
   Result.Format.ChannelMask := AInput.Format.ChannelMask;
   Result.Format.ChannelLayout := AInput.Format.ChannelLayout;
   Result.FrameCount := LOutFrames;
+  // output buffer guard: 16MiB limit (INV-8 style)
+  if Int64(LOutFrames) * Int64(Result.Format.BlockAlign) > 16*1024*1024 then
+    raise EInvalidArgument.CreateFmt('SincResample: output %d bytes exceeds 16MiB limit', [Int64(LOutFrames) * Int64(Result.Format.BlockAlign)]);
   SetLength(Result.Data, LOutFrames * Result.Format.BlockAlign);
   if LOutFrames = 0 then Exit;
 

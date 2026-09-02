@@ -143,7 +143,6 @@ function IsRequestReadFailure(const E: Exception): Boolean;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.base, nextpas.core.base.utils,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time,
@@ -186,7 +185,7 @@ end;
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
-    Exit(EmptyH1RequestMetadata);
+    Exit(Default(TH1RequestMetadata));
   Result := AParser.GetRequestMetadata;
 end;
 

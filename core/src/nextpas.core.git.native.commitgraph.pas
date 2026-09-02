@@ -110,7 +110,7 @@ var
     Data: TBytes;
   end;
 
-function FindGraphCache(const ADir: string): Integer;
+function FindGraphCache(const ADir: string): Integer; inline;
 var I: Integer;
 begin
   for I := 0 to High(GGraphCache) do
@@ -568,7 +568,7 @@ begin
     GGraphCache[Idx].Path := Path;
     GGraphCache[Idx].MTime := Info.ModTime;
     GGraphCache[Idx].Size := Info.Size;
-    GGraphCache[Idx].Data := Copy(Data);
+    GGraphCache[Idx].Data := Data; // zero-copy: Data already owns heap block from ReadFile/cache hit
   end;
   AGraph := TCommitGraph.Create(Data);
   Result := True;

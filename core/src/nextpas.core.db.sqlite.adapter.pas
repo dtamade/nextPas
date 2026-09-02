@@ -18,6 +18,7 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.trace,
+  nextpas.core.db.capprobe,
   nextpas.core.db.sqlite.base,
   nextpas.core.db.sqlite.conn;
 
@@ -34,23 +35,12 @@ function ConnectSqlite(const APath: string;
 function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
   IDbConnection;
-{ C5 调优预设：连接级 PRAGMA 受控面（journal/sync/fk/cache/mmap）。
-  语义：unset 字段不设置；:memory: 库过滤 journal_mode（WAL 对内存
-  库无意义）；journal_mode 应用后回读校验——文件系统不支持 WAL 时
-  sqlite 会静默保持原模式，此处 fail-closed 抛 decNotSupported，
-  绝不静默降级（静默降级 = 消费方误信并发安全）。 }
-function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
-  const APragmas: TDbSqlitePragmas;
-  const AStmtCacheCapacity: Integer = DEFAULT_SQLITE_STMT_CACHE_CAPACITY):
-  IDbConnection;
 
 implementation
 
 uses
-  nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.text.scan,
-  nextpas.core.atomic,
+  nextpas.core.base.utils,
   nextpas.core.db.err,
   { 直接用 lrucache 子单元：collections 门面对泛型接口名不可透传
     （实证），且本处需具名特化类型作字段类型 }
@@ -143,7 +133,7 @@ begin
   ClassifySqlite(ARC, sqlite3_extended_errcode(AHandle),
     LCategory, LConstraint);
   raise EDbError.CreateFullSqlite(ARC, sqlite3_extended_errcode(AHandle),
-    LCategory, LConstraint, AnsiPtrToStr(sqlite3_errmsg(AHandle)));
+    LCategory, LConstraint, string(AnsiString(sqlite3_errmsg(AHandle))));
 end;
 
 function MapColumnType(const ASqliteType: Integer): TDbColumnType;
@@ -193,13 +183,9 @@ type
 
   TDbSqliteConnection = class(TInterfacedObject, IDbConnection, IDbTxControl,
     IDbSavepointControl, IDbBatchExecutor, IDbStmtCacheControl,
-    IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome,
-    IDbCancelControl)
+    IDbRowBlobControl, IDbCapabilities, IDbTraceControl, ISqliteStmtHome)
   private
     FDb: TSqliteDb;
-    { V3-B6 取消标志：0 = 无取消；1 = RequestCancel 已请求。原子访问
-      （跨线程写、progress handler 在 sqlite 工作线程读）。 }
-    FCancelFlag: Integer;
     { 空闲预编译语句池：键 = 原始 SQL，借出即移除（同 SQL 并发活动
       查询各持独立实例），归还回插；LRU 只管空闲驱逐。
       nil = 缓存关闭直通。单连接单逻辑线程（CONTRACT §2.1），
@@ -257,8 +243,19 @@ type
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
 
     { ISqliteStmtHome：查询析构的归还通道（实现区接口，单元内可见） }
     procedure ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
@@ -266,13 +263,6 @@ type
     { IDbRowBlobControl：行内 blob 单元流（INC-8） }
     function OpenRowBlob(const ATable, AColumn: string;
       const ARowId: Int64; const AReadWrite: Boolean): IDbBlobStream;
-
-    { IDbCancelControl（V3-B6）：db.async 取消映射面。
-      FCancelFlag 由任意线程经 RequestCancel 原子置位；progress
-      handler（Arm 期间安装）读到非零即中断在途 step。 }
-    function ArmCancel: Boolean;
-    procedure DisarmCancel;
-    procedure RequestCancel;
   end;
 
 { ---- TSqliteStmtHolder ---- }
@@ -506,15 +496,13 @@ end;
 function TDbSqliteQuery.ColumnType(AIndex: Integer): TDbColumnType;
 var
   LT: Integer;
-  LDecl: string;
 begin
   try
     { 四层规则：无声明（表达式/聚合）→ 行值类型；有声明且值为 NULL →
       dbcNull（行级信号，Is* 契约）；声明含 BOOL → dbcBool（INC-6，
       亲和规则把 BOOLEAN 归 INTEGER 前的显式拦截）；否则声明亲和
       （静态、空结果集可读） }
-    LDecl := FQuery.ColumnDeclaredTypeName(AIndex);
-    if ScanFindSubstringCI(PChar(LDecl), Length(LDecl), 'BOOL', 4) >= 0 then
+    if Pos('BOOL', FQuery.ColumnDeclaredTypeName(AIndex)) > 0 then
     begin
       if FQuery.ColumnType(AIndex) = SQLITE_NULL then
         Exit(dbcNull);
@@ -593,7 +581,6 @@ end;
 
 destructor TDbSqliteConnection.Destroy;
 begin
-  DisarmCancel;                        { handler 指向本对象，先于 close 卸载 }
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
   FCache := nil;                       { Clear：空闲 holder 全部释放 }
@@ -740,7 +727,7 @@ end;
 
 function TDbSqliteConnection.ProductVersion: string;
 begin
-  Result := AnsiPtrToStr(sqlite3_libversion);
+  Result := string(AnsiString(sqlite3_libversion));
 end;
 
 function TDbSqliteConnection.SupportsSavepoints: Boolean;
@@ -765,38 +752,7 @@ end;
 
 function TDbSqliteConnection.SupportsArrayBinding: Boolean;
 begin
-  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
-end;
-
-{ ---- IDbCancelControl（V3-B6）---- }
-
-{ progress handler 桩：探测连接的原子取消标志（非零 = 中断）。
-  sqlite 在执行线程回调；RequestCancel 可从任意线程写标志。 }
-function SqliteCancelProbe(AUser: Pointer): Integer; cdecl;
-begin
-  Result := Ord(atomic_load(PInteger(AUser)^, mo_acquire) <> 0);
-end;
-
-function TDbSqliteConnection.ArmCancel: Boolean;
-begin
-  FCancelFlag := 0;
-  sqlite3_progress_handler(FDb.Handle, 10000,
-    @SqliteCancelProbe, @FCancelFlag);
-  Result := True;
-end;
-
-procedure TDbSqliteConnection.DisarmCancel;
-begin
-  atomic_exchange(FCancelFlag, 0, mo_acq_rel);
-  sqlite3_progress_handler(FDb.Handle, 0, nil, nil);
-end;
-
-procedure TDbSqliteConnection.RequestCancel;
-begin
-  { 线程安全：仅原子置位；handler 未武装时置位无害（Arm 会先清零，
-    但消费方须保证 Arm→在途→RequestCancel→Disarm 的窗口纪律，见
-    db.intf 注记）。已武装时下一次 VM 计数到期即中断。 }
-  atomic_exchange(FCancelFlag, 1, mo_acq_rel);
+  Result := False;
 end;
 
 function TDbSqliteConnection.SupportsNativeBool: Boolean;
@@ -814,6 +770,36 @@ begin
   Result := False;   { busy_timeout 是锁等待上限；语句超时被诚实忽略 }
 end;
 
+function TDbSqliteConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
+end;
+
 function TDbSqliteConnection.CaseSensitiveIdentifiers: Boolean;
 begin
   Result := True;    { 保留声明形式（§2.6） }
@@ -824,6 +810,31 @@ begin
   { SQLITE_MAX_VARIABLE_NUMBER 跨版本保守下界：999 自古保证；
     libsqlite3 ≥3.32 实际默认 32766。消费方按 ≤999 编码全后端安全。 }
   Result := 999;
+end;
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  Result := ParseServerVersion(ProductVersion);
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkSqlite);
 end;
 
 { ---- IDbRowBlobControl ---- }
@@ -928,67 +939,13 @@ end;
 
 { ---- 工厂 ---- }
 
-{ C5 全不设置形态：旧重载经此保持 sqlite 原生缺省，行为零变化 }
-function SqlitePragmasUnset: TDbSqlitePragmas;
+function ConnectSqlite(const APath: string;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 begin
-  Result.JournalMode := sjmUnset;
-  Result.Synchronous := sysUnset;
-  Result.ForeignKeys := fkUnset;
-  Result.CacheSize := 0;      { 0 = 不设置 }
-  Result.MmapSize := -1;      { <0 = 不设置；0 = 显式禁用 mmap }
+  Result := ConnectSqlite(APath, TDbConnectOptions.Default, AStmtCacheCapacity);
 end;
 
-{ C5：应用调优 PRAGMA。journal_mode 应用后回读校验——文件系统不支持
-  WAL 时 sqlite 静默保持原模式，此处 fail-closed 抛 decNotSupported，
-  绝不静默降级（静默降级 = 消费方误信读写并发安全）。:memory: 库
-  过滤 journal_mode（WAL 对内存库无意义，其余 PRAGMA 照常）。 }
-procedure ApplySqlitePragmas(Db: TSqliteDb; const APath: string;
-  const AP: TDbSqlitePragmas);
-const
-  JStr: array[TDbSqliteJournalMode] of string = ('', 'delete', 'truncate',
-    'persist', 'memory', 'wal');
-  SStr: array[TDbSqliteSync] of string = ('', 'off', 'normal', 'full');
-var
-  LMem: Boolean;
-  LQ: TSqliteQuery;
-  LGot: string;
-begin
-  LMem := (APath = ':memory:') or
-    (ScanFindSubstringCI(PChar(APath), Length(APath),
-      'mode=memory', 11) >= 0);
-  if (AP.JournalMode <> sjmUnset) and (not LMem) then
-  begin
-    Db.Exec('PRAGMA journal_mode = ' + JStr[AP.JournalMode]);
-    LGot := '';
-    LQ := Db.Query('PRAGMA journal_mode');
-    try
-      if LQ.Step then
-        LGot := LowerCase(LQ.GetText(0));
-    finally
-      LQ.Free;
-    end;
-    if LGot <> JStr[AP.JournalMode] then
-      raise EDbError.CreateFullSqlite(SQLITE_ERROR, SQLITE_ERROR,
-        decNotSupported, dckNone,
-        'sqlite journal_mode=' + JStr[AP.JournalMode] +
-        ' rejected (got "' + LGot + '"); filesystem may not support WAL');
-  end;
-  case AP.Synchronous of
-    sysOff, sysNormal, sysFull:
-      Db.Exec('PRAGMA synchronous = ' + SStr[AP.Synchronous]);
-  end;
-  case AP.ForeignKeys of
-    fkOff: Db.Exec('PRAGMA foreign_keys = off');
-    fkOn:  Db.Exec('PRAGMA foreign_keys = on');
-  end;
-  if AP.CacheSize <> 0 then
-    Db.Exec('PRAGMA cache_size = ' + IntToStr(AP.CacheSize));
-  if AP.MmapSize >= 0 then
-    Db.Exec('PRAGMA mmap_size = ' + IntToStr(AP.MmapSize));
-end;
-
-function InternalConnectSqlite(const APath: string;
-  const AOptions: TDbConnectOptions; const APragmas: TDbSqlitePragmas;
+function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
   const AStmtCacheCapacity: Integer): IDbConnection;
 var
   Db: TSqliteDb;
@@ -998,33 +955,10 @@ begin
     { 锁等待上限（INC-7）：非语句执行超时，语义见 db.base 注释 }
     if AOptions.BusyTimeoutMs > 0 then
       Db.Exec('PRAGMA busy_timeout = ' + IntToStr(AOptions.BusyTimeoutMs));
-    ApplySqlitePragmas(Db, APath, APragmas);
   except
     on E: ESqliteError do RaiseSqliteAsDb(E);
   end;
   Result := TDbSqliteConnection.Create(Db, AStmtCacheCapacity);
-end;
-
-function ConnectSqlite(const APath: string;
-  const AStmtCacheCapacity: Integer): IDbConnection;
-begin
-  Result := ConnectSqlite(APath, TDbConnectOptions.Default, AStmtCacheCapacity);
-end;
-
-function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
-  const AStmtCacheCapacity: Integer): IDbConnection;
-begin
-  { 不带 pragmas 的旧入口保持 sqlite 原生缺省（全 unset），行为零变化 }
-  Result := InternalConnectSqlite(APath, AOptions, SqlitePragmasUnset,
-    AStmtCacheCapacity);
-end;
-
-function ConnectSqlite(const APath: string; const AOptions: TDbConnectOptions;
-  const APragmas: TDbSqlitePragmas;
-  const AStmtCacheCapacity: Integer): IDbConnection;
-begin
-  Result := InternalConnectSqlite(APath, AOptions, APragmas,
-    AStmtCacheCapacity);
 end;
 
 end.

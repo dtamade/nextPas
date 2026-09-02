@@ -3,7 +3,7 @@ program test_hir_node_kind;
 {$mode objfpc}{$H+}
 
 uses
-  np_hir_types;
+  nextpas.compiler.ir.hir.types;
 
 procedure Fail(const AMsg: string);
 begin

@@ -12,6 +12,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 if ! fpc -B \
+  -Fu"$REPO_ROOT/compiler/src" \
   -Fu"$REPO_ROOT/compiler/frontend" \
   -Fu"$REPO_ROOT/compiler/diagnostics" \
   -Fu"$REPO_ROOT/compiler/targets" \

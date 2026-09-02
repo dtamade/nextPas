@@ -340,11 +340,39 @@ begin
   Result := 0;
 end;
 
+type
+  PPtrUIntLocal = ^PtrUInt;
+
+const
+  PLATFORM_FS_BUF_HDR = SizeOf(PtrUInt);
+
+{ payload = raw + header; header stores allocation size for sized FreeMem }
+function PlatformFsRawToPayload(ARaw: Pointer): Pointer; inline;
+begin
+  Result := Pointer(PtrUInt(ARaw) + PLATFORM_FS_BUF_HDR);
+end;
+
+function PlatformFsPayloadToRaw(AData: Pointer): Pointer; inline;
+begin
+  Result := Pointer(PtrUInt(AData) - PLATFORM_FS_BUF_HDR);
+end;
+
+procedure PlatformFsFreePayload(AData: Pointer); inline;
+var
+  LRaw: Pointer;
+  LSize: PtrUInt;
+begin
+  if AData = nil then Exit;
+  LRaw := PlatformFsPayloadToRaw(AData);
+  LSize := PPtrUIntLocal(LRaw)^;
+  FreeMem(LRaw, LSize + PLATFORM_FS_BUF_HDR);
+end;
+
 {**
  * platform_fs_read_until_eof - Read file until EOF with dynamic buffer
  *
  * Eliminates TOCTOU race: no stat() before read(), buffer grows as needed.
- * Caller must FreeMem the returned buffer on success.
+ * Caller must FreeMem the returned buffer on success via platform_fs_free_buf.
  * L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform).
  *
  * @param AHandle  Open file handle (read-only)
@@ -355,6 +383,7 @@ end;
 function platform_fs_read_until_eof(const AHandle: TPlatformFileHandle;
   out AData: Pointer; out ALen: PtrUInt): Int32;
 var
+  LRaw, LNewRaw: Pointer;
   LBuf: Pointer;
   LBufSize, LTotal, LChunk: PtrUInt;
   LNewBuf: Pointer;
@@ -363,49 +392,51 @@ begin
   AData := nil;
   ALen := 0;
 
-  { Start with a reasonable chunk size }
   LBufSize := PLATFORM_FS_READ_CHUNK_SIZE;
-  GetMem(LBuf, LBufSize);
-  if LBuf = nil then
+  GetMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
+  if LRaw = nil then
     Exit(PLATFORM_ERR_INVALID);
+  PPtrUIntLocal(LRaw)^ := LBufSize;
+  LBuf := PlatformFsRawToPayload(LRaw);
 
   LTotal := 0;
   repeat
-    { Grow buffer if nearly full (leave room for NUL terminator) }
     if LBufSize - LTotal < 4096 then
     begin
       LNewSize := LBufSize * 2;
-      if LNewSize < LBufSize then { overflow check }
+      if LNewSize < LBufSize then
       begin
-        FreeMem(LBuf, LBufSize);
+        FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
         Exit(PLATFORM_ERR_INVALID);
       end;
-      GetMem(LNewBuf, LNewSize);
-      if LNewBuf = nil then
+      GetMem(LNewRaw, LNewSize + PLATFORM_FS_BUF_HDR);
+      if LNewRaw = nil then
       begin
-        FreeMem(LBuf, LBufSize);
+        FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
         Exit(PLATFORM_ERR_INVALID);
       end;
-      Move(LBuf^, LNewBuf^, LTotal);
-      FreeMem(LBuf, LBufSize);
+      PPtrUIntLocal(LNewRaw)^ := LNewSize;
+      LNewBuf := PlatformFsRawToPayload(LNewRaw);
+      if LTotal > 0 then
+        Move(LBuf^, LNewBuf^, LTotal);
+      FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
+      LRaw := LNewRaw;
       LBuf := LNewBuf;
       LBufSize := LNewSize;
     end;
 
-    { Read chunk }
     Result := platform_file_read(AHandle,
       Pointer(PtrUInt(LBuf) + LTotal), LBufSize - LTotal - 1, LChunk);
     if Result <> 0 then
     begin
-      FreeMem(LBuf, LBufSize);
+      FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
       Exit;
     end;
     if LChunk = 0 then
-      Break; { EOF }
+      Break;
     Inc(LTotal, LChunk);
   until False;
 
-  { NUL-terminate }
   PAnsiChar(LBuf)[LTotal] := #0;
   AData := LBuf;
   ALen := LTotal;
@@ -978,7 +1009,7 @@ begin
   if LR <> 0 then
   begin
     if AData <> nil then
-      FreeMem(AData); { size unknown at free site }
+      PlatformFsFreePayload(AData);
     AData := nil;
     ALen := 0;
   end;
@@ -1029,8 +1060,7 @@ end;
 
 procedure platform_fs_free_buf(AData: Pointer);
 begin
-  if AData <> nil then
-    FreeMem(AData);
+  PlatformFsFreePayload(AData);
 end;
 
 function WalkResolveType(APathBuf: PAnsiChar; ADirType: TPlatformFileType;

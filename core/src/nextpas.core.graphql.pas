@@ -39,6 +39,7 @@ function GraphqlFetch(const AClient: IHttpClient; const AUrl: string;
 implementation
 
 uses
+  nextpas.core.json.value,
   nextpas.core.text.conv,
   nextpas.core.http.message,
   nextpas.core.http.client.helpers,

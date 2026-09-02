@@ -4,7 +4,7 @@ unit nextpas.core.tls.dane.pure;
 
 interface
 
-uses nextpas.core.base, nextpas.core.crypto.hash, nextpas.core.tls.x509, sysutils;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.exception, nextpas.core.crypto.hash, nextpas.core.tls.x509;
 
 type
   TDANECertUsage = (cuCAConstraint = 0, cuServiceCert = 1, cuTrustAnchor = 2, cuDomainEE = 3);
@@ -36,12 +36,17 @@ var
 begin
   if ASelector = selFullCert then
     Exit(Copy(ACertDER));
-
-  // selSubjectPublicKeyInfo: extract raw SPKI from DER
+  if Length(ACertDER) = 0 then
+    Exit(nil);
+  // selSubjectPublicKeyInfo: extract raw SPKI from DER — fail-closed on invalid DER
   LCert := TX509Certificate.Create;
   try
-    LCert.LoadFromDER(ACertDER);
-    Result := LCert.PublicKeyInfo.PublicKey;
+    try
+      LCert.LoadFromDER(ACertDER);
+      Result := Copy(LCert.PublicKeyInfo.PublicKey);
+    except
+      Result := nil;
+    end;
   finally
     LCert.Free;
   end;
@@ -69,40 +74,59 @@ var
 begin
   AError := '';
   Result := False;
-
-  if Length(ATLSARecords) = 0 then
-  begin
-    AError := 'No TLSA records provided';
-    Exit;
-  end;
-
-  for I := 0 to High(ATLSARecords) do
-  begin
-    if not (ATLSARecords[I].Usage in [cuServiceCert, cuDomainEE]) then
-      Continue;
-
-    LMatchData := ExtractMatchData(ACertificateDER, ATLSARecords[I].Selector);
-    if Length(LMatchData) = 0 then
-      Continue;
-
-    LHashed := HashMatchData(LMatchData, ATLSARecords[I].MatchingType);
-    if Length(LHashed) = 0 then
-      Continue;
-
-    if (Length(LHashed) = Length(ATLSARecords[I].CertificateAssociationData)) and
-       CompareMem(@LHashed[0], @ATLSARecords[I].CertificateAssociationData[0], Length(LHashed)) then
+  try
+    if Length(ATLSARecords) = 0 then
     begin
-      Result := True;
-      Exit;
+      AError := 'No TLSA records provided';
+      Exit(False);
+    end;
+    if Length(ACertificateDER) = 0 then
+    begin
+      AError := 'Empty certificate';
+      Exit(False);
+    end;
+    for I := 0 to High(ATLSARecords) do
+    begin
+      if not (ATLSARecords[I].Usage in [cuServiceCert, cuDomainEE]) then
+        Continue;
+      LMatchData := ExtractMatchData(ACertificateDER, ATLSARecords[I].Selector);
+      if Length(LMatchData) = 0 then
+        Continue;
+      LHashed := HashMatchData(LMatchData, ATLSARecords[I].MatchingType);
+      if Length(LHashed) = 0 then
+      begin
+        AError := 'unsupported matching_type';
+        Exit(False);
+      end;
+      if (Length(LHashed) = Length(ATLSARecords[I].CertificateAssociationData)) and
+         (Length(LHashed) > 0) and
+         CompareMem(@LHashed[0], @ATLSARecords[I].CertificateAssociationData[0], Length(LHashed)) then
+      begin
+        AError := '';
+        Result := True;
+        Exit(True);
+      end;
+    end;
+    AError := 'No TLSA record matched the certificate';
+    Result := False;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
     end;
   end;
-
-  AError := 'No TLSA record matched the certificate';
 end;
 
 function BuildTLSARecord(AUsage, ASelector, AMatchingType: Byte;
   const AData: TBytes): TTLSARecord;
 begin
+  if AUsage > Ord(High(TDANECertUsage)) then
+    raise Exception.CreateFmt('Invalid cert usage %d', [AUsage]);
+  if ASelector > Ord(High(TDANESelector)) then
+    raise Exception.CreateFmt('Invalid selector %d', [ASelector]);
+  if AMatchingType > Ord(High(TDANEMatchingType)) then
+    raise Exception.CreateFmt('Invalid matching_type %d', [AMatchingType]);
   Result.Usage := TDANECertUsage(AUsage);
   Result.Selector := TDANESelector(ASelector);
   Result.MatchingType := TDANEMatchingType(AMatchingType);

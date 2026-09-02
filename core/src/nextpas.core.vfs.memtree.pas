@@ -271,8 +271,10 @@ var
   Prefix: string;
   DirIdx: SizeUInt;
   I: SizeUInt;
-  Names, Seen: TVfsNameArray;
+  K: SizeUInt;
+  Seen: TVfsNameArray;
   Info: TStatInfo;
+  Paths: array of string;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -288,15 +290,22 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  { 子项推导统一走 vfs.base 共享例程（与 embedded 后端同一实现） }
+  { 单源模板收敛：委托 base.VfsDeriveChildNames 的 LowerBound+SpanStartsWith+Early-Break 零拷贝模板
+    扇出限界分配消除 Hi-Lo 全量预分配与重复 LowerBound 手写分支，与 embedded 同构单源 }
   Result := nil;
-  SetLength(Names, SizeUInt(Length(FFiles)));
-  if SizeUInt(Length(FFiles)) > 0 then
-    for I := 0 to SizeUInt(Length(FFiles)) - 1 do
-    begin
-      Names[I] := FFiles[I].Name;
-    end;
-  Seen := VfsDeriveChildNames(Names, Prefix);
+  if Length(FFiles) = 0 then
+  begin
+    Seen := nil;
+  end
+  else
+  begin
+    // 零拷贝单源路径数组：利用有序 FFiles 名称视图委托基座扫描模板，避免三处同构重复
+    SetLength(Paths, Length(FFiles));
+    for K := 0 to SizeUInt(Length(FFiles)) - 1 do
+      Paths[K] := FFiles[K].Name;
+    Seen := VfsDeriveChildNames(Paths, Prefix);
+    SetLength(Paths, 0);
+  end;
 
   SetLength(Result, SizeUInt(Length(Seen)));
   for I := 0 to SizeUInt(Length(Seen)) - 1 do
@@ -358,7 +367,12 @@ end;
 procedure TMemStream.SetPosition(const AValue: Int64);
 begin
   CheckOpen;
-  FPos := AValue;
+  if AValue < 0 then
+    FPos := 0
+  else if AValue > Length(FData) then
+    FPos := Length(FData)
+  else
+    FPos := AValue;
 end;
 
 function TMemStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -366,6 +380,8 @@ var
   Avail: SizeUInt;
 begin
   CheckOpen;
+  if FPos < 0 then
+    FPos := 0;
   if FPos >= Length(FData) then
     Exit(0);
   Avail := SizeUInt(Length(FData)) - SizeUInt(FPos);
@@ -391,6 +407,10 @@ begin
     soCurrent:   FPos := FPos + AOffset;
     soEnd:       FPos := Length(FData) + AOffset;
   end;
+  if FPos < 0 then
+    FPos := 0
+  else if FPos > Length(FData) then
+    FPos := Length(FData);
   Result := FPos;
 end;
 

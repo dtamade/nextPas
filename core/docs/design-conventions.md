@@ -121,6 +121,18 @@ end;
 end.
 ```
 
+### inline 标记的两条红线
+
+1. **索引元素喂 untyped 参数的函数禁 inline**。实现形如 `Move(AStr[1], Result[0], Length(AStr))`
+   的函数一旦标记 inline，FPC 会把常量串实参的 `AStr[1]` 经常量传播折叠成单字符值，
+   Move 从栈上临时拷出首字节之后的垃圾（valgrind + 反汇编实证，曾致 tls13 门红）。
+   `BytesOf`/`StringOf` 即因此去 inline。同类 sink：`FillChar`、`CompareMem`。
+   **门面薄转发豁免**：`nextpas.core.<module>.pas` 门面对单源实现（如 `nextpas.core.bytes` → `nextpas.core.bytes.ops:25/89`）的 `inline` 薄转发仅转发调用、门面内不含 `Move` 体，不触发此禁令；`Move` 零拷贝体仍驻留单源（单次 `Move`/`SetLength`、视图零分配，`bytes.ops` 已注释固化），保持单源与性能证据。
+2. **真实循环体 / SIMD 体 / 路由体禁 inline**。含扫描循环、回退路由、批量编码的函数
+   （如 Format 路由、json writer 的 Key/Str SIMD 扫描重载）保持外联，避免 I-Cache 复制膨胀。
+
+薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。门面薄转发即属此类薄转发豁免。
+
 ### 消费方引用粒度
 
 - 只需类型定义 → 引 `*.base.pas`
@@ -137,6 +149,7 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
+- `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`，阈值 550 内，见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
   `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
@@ -171,7 +184,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
-     ↑ 只依赖 L0-L1
+     ↑ 默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁（例 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls），禁止循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -180,8 +193,9 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls（+ adapter→net；time/sync 为 L1 下沉非 L2 缝），未列入者视为违规
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝且 `canvas.raster` 唯一 vector/image 缝且 `db.redis.transport` 唯一 net/tls 缝（+ `db.redis.adapter` 轻量 net 缝；time/sync 为 L1 下沉，base/resp 纯 L0/L1）均为单向 allowlist 并经门禁防循环，reverse `net/tls→db.redis` 禁止，bytes.ops 单源 inline/零拷贝，资源 FreeAndNil/try-finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -196,7 +210,7 @@ text  (implementation 部分 uses encoding，提供便利方法)
 
 ### 层级归属管理
 
-- 每个模块的层级归属在 `docs/module-registry.md` 中声明
+- 每个模块的层级归属在 `docs/core-module-registry.md` 中声明（单一事实源；`docs/module-registry.md` 为已废弃的兼容别名，镜像本表）
 - 后期通过构建脚本自动校验依赖合规性
 
 ---
@@ -361,7 +375,7 @@ nextpas.core.crypto.ossl.ffi.pas     ← 纯 cdecl external 声明
 
 ## 7. 稳定性分级
 
-- 稳定性分级在 `docs/module-registry.md` 中标注
+- 稳定性分级在 `docs/core-module-registry.md` 中标注（单一事实源；`docs/module-registry.md` 为已废弃别名）
 - 具体分级规则和晋升条件见单独文档
 
 ---
@@ -585,7 +599,7 @@ end.
 每个模块完成后必须提供基准测试，覆盖核心热路径操作：
 
 - **基准测试框架**：所有框架内基准测试必须使用 `nextpas.core.bench` 模块，禁止使用自定义计时或外部基准测试框架
-- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据
+- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据（同机 `AddBaseline` 对照，参考实现 `nextpas.core.respack` 三基准 + `benchmarks/nextpas.core.respack/RESULTS.md` 已落地 FPC `TFileStream`/`TMemoryStream` 与 Go `embed.FS`/Rust `include_dir` 量化基线）
 - 基准项目放在 `benchmarks/nextpas.core.<module>/bench_<name>/bench_<name>.lpr`
 - 每个基准输出：操作名、迭代次数、总耗时、单次耗时（ns/op）、吞吐量（MB/s，如适用）
 - 基准必须在优化编译（`-O2`）下运行，禁止 debug 模式
@@ -810,7 +824,7 @@ build/
 ### 分层规则补充
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环
 
 ### L0: 内核（只依赖 FPC RTL）
 
@@ -846,7 +860,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（只依赖 L0-L1）
+### L2: 系统能力（默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |
@@ -868,14 +882,17 @@ build/
 | `args`       | 命令行解析                         |
 | `validation` | 数据校验（类型、范围、格式、嵌套） |
 | `mime`       | MIME 格式（RFC 2045/2046/2047/2231；mail 依赖） |
+| `respack`    | 资源打包格式（v1 线格式、writer/reader、embed 工具链） |
+| `vfs`        | 只读虚拟文件树（memtree/embedded/os/sub + ETag/Decompress 装饰器门面） |
 
 ### L3: 框架（只依赖 L0-L2）
 
 | 模块        | 职责                                                       |
 | ----------- | ---------------------------------------------------------- |
+| `db`        | 数据库家族（6 后端 sqlite/pg/mysql/odbc/redis/dm + Bulk/CapProbe/sqlscan，L3 家族详 `core/docs/db/CONTRACT.md`） |
 | `log`       | 完整日志实现（格式化、输出、异步）                         |
 | `config`    | 配置管理（多源、热加载）                                   |
-| `redis`     | Redis 客户端                                               |
+| `redis`     | Redis 客户端（L2 能力，L3 框架面经 db.redis 统一）          |
 | `http`      | HTTP 服务器/客户端（路由、中间件、静态文件、SSE、OpenAPI） |
 | `websocket` | WebSocket（帧协议、Room、广播）                            |
 | `mail`      | 消息模型/RFC5322 地址/MIME 桥接（依赖 mime）/SMTP 客户端 + 事件驱动 SMTP 服务器（net.server poll-driven 会话）；IMAP/POP3 后续批次 |

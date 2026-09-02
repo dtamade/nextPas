@@ -45,11 +45,14 @@ function SplitHostPort(const AText: string; ADefaultPort: UInt16;
 { 必须带端口（1..65535）。 }
 function SplitHostPort(const AText: string; out AHost: string;
   out APort: UInt16): Boolean;
-function IsValidPort(const APort: Int64): Boolean;
-function IsValidPortU16(const APort: UInt16): Boolean;
-function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean;
-function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean;
+{ 1..65535 端口范围校验（proxy888 ValidPort 反哺）。 }
+function IsValidPort(const APort: Int64): Boolean; inline;
+function IsValidPortU16(const APort: UInt16): Boolean; inline;
+function TryValidatePort(const APort: Int64; out AOut: UInt16): Boolean; inline;
+function TryValidatePortInt(const APort: Int64; out AOut: Integer): Boolean; inline;
+{ 字符串端口出参的重载（proxy888 SplitHostPort 字符串版反哺）。 }
 function SplitHostPort(const AText: string; out AHost, APort: string): Boolean;
+
 { IPv6 自动加括号。 }
 function JoinHostPort(const AHost: string; APort: UInt16): string;
 

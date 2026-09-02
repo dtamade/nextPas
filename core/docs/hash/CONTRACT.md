@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.hash*.pas`
 **层级**：L2（可被 crypto 单向依赖；不得依赖 crypto/tls）
 **Owner**：hash / crypto / tls lane
-**最后更新**：2026-08-24
-**版本**：1.5
+**最后更新**：2026-08-31
+**版本**：1.6
 
 ---
 
@@ -86,3 +86,4 @@ make focused FOCUS=core/tests/nextpas.core.hash/test_facade
 | 2026-08-24 | 1.2 | 纯 Pascal BLAKE2b-256（RFC 7693 无密钥；hysteria2 Salamander） |
 | 2026-07-20 | 1.1 | 层级修正为 L2；明确唯一实现 owner |
 | 2026-07-01 | 1.0 | 初始版本 |
+| 2026-08-31 | 1.6 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

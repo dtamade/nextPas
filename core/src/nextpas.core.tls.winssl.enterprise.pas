@@ -7,7 +7,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, {$IFDEF WINDOWS} Windows, {$ENDIF} Registry,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, {$IFDEF WINDOWS} nextpas.core.platform.windows.base, nextpas.core.platform.windows.ffi, {$ENDIF} Registry,
   nextpas.core.tls.logging,
   nextpas.core.tls.collections,
   nextpas.core.tls.winssl.base,

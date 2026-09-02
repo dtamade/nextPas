@@ -19,6 +19,7 @@ interface
 
 uses
   nextpas.core.async.cancellation,
+  nextpas.core.agent.base.types,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
@@ -184,9 +185,21 @@ begin
       Exit;
     except
       on E: EAgentCancelled do
+      begin
+        if LComp <> nil then
+          try
+            LComp.Cancel;
+          except
+          end;
         raise;
+      end;
       on E: EAgentError do
       begin
+        if LComp <> nil then
+          try
+            LComp.Cancel;
+          except
+          end;
         LFail.Capture(E);
         if (I = High(FChain)) or (not ShouldFailover(E)) then
           raise;

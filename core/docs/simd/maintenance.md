@@ -1,6 +1,6 @@
 # nextpas.core.simd 维护指南
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-08-31
 
 ## 概述
 
@@ -313,9 +313,9 @@ docs/simd/
 | 债项 | 状态 | 约束 |
 |------|------|------|
 | LoongArch/SVE/SVE2 | experimental/stub intrinsics only；仅作为 opt-in qualification surface；not stable backend；有源码、有 fail-close guard、有环境变量守卫，但缺 release-grade runtime proof | 不可在生产路径激活；已标注为 experimental stub |
-| 并发 suite heaptrc | opt-in：`make concurrent-heaptrc`（共享 `x86-heaptrc-build`，5 个并发 suite / 30 tests，`Suites:` 计数 pin + HEAPTRC 环境通道 + dump-file pin）；2026-07-26 落地，M4.1 换到诚实通道，M4.3 进入 `test-all` | 新增并发 suite 必须同步 Makefile `CONCURRENT_SUITES` 与 `CONCURRENT_SUITE_COUNT`，否则计数 pin fail-close |
-| ~~TTestCase_DirectDispatch 无调度~~ | **已解决（M4.3, 2026-07-26）**：`make direct-dispatch-focused` 调度大 parity suite（32 tests，`Suites: 1` pin + heaptrc pins），与 `concurrent-heaptrc` 共享 `x86-heaptrc-build`，均已进入 `test-all` | `--suite=` 为精确匹配（实测 `TTestCase_DirectDispatch` 不连带 `...Concurrent`）|
-| runner 未知参数静默忽略 | `nextpas.core.simd.test.lpr` 的 `ParseCustomArgs` 跳过不认识的参数（历史上 `--suite=` 因此被吞、`neon-optin-focused` 静默全量跑）；`--suite=` 已于 2026-07-26 实装并 fail-close | 传给 runner 的新参数必须实测生效（看 Summary 计数），不能只看退出码 |
+| 并发 suite heaptrc | opt-in：`make concurrent-heaptrc`（共享 `x86-heaptrc-build`，5 个并发 suite / 30 tests，`Suites:` 计数 pin + HEAPTRC 环境通道 + dump-file pin）；2026-08-31 落地，M4.1 换到诚实通道，M4.3 进入 `test-all` | 新增并发 suite 必须同步 Makefile `CONCURRENT_SUITES` 与 `CONCURRENT_SUITE_COUNT`，否则计数 pin fail-close |
+| ~~TTestCase_DirectDispatch 无调度~~ | **已解决（M4.3, 2026-08-31）**：`make direct-dispatch-focused` 调度大 parity suite（32 tests，`Suites: 1` pin + heaptrc pins），与 `concurrent-heaptrc` 共享 `x86-heaptrc-build`，均已进入 `test-all` | `--suite=` 为精确匹配（实测 `TTestCase_DirectDispatch` 不连带 `...Concurrent`）|
+| runner 未知参数静默忽略 | `nextpas.core.simd.test.lpr` 的 `ParseCustomArgs` 跳过不认识的参数（历史上 `--suite=` 因此被吞、`neon-optin-focused` 静默全量跑）；`--suite=` 已于 2026-08-31 实装并 fail-close | 传给 runner 的新参数必须实测生效（看 Summary 计数），不能只看退出码 |
 | **FPC trunk heaptrc 控制台 dump 丢失** | FPC 3.3.1-19195（2026-01-07 安装）退出期 heap dump 永不到达 stdout/stderr（连泄漏程序也静默）；环境变量通道正常：`HEAPTRC=haltonnotreleased` → 泄漏时退出码 203，`log=<file>` → dump 落文件。M4.1 已把本 lane 全部 -gh 门换到 `HEAPTRC='haltonnotreleased,log=…'` + `HEAPTRC_PINS`（dump 存在 + `0 unfreed` 双 pin，防真空）；`common.mk` 增加 `HEAPTRC_GATE=1` opt-in（math 全家 16 个可执行项目已挂） | **规则：任何泄漏门禁止 grep 程序输出找 heaptrc 行——必须走环境变量通道**；跨模块影响（全仓 output-grep 泄漏证据可疑）已上报总控 |
 | test_api_coverage.pas 死文件贡献覆盖信用 | fpcunit 时代老单体，无任何 Makefile/脚本执行它，但 `check_public_api_test_coverage.py` rglob 扫其文本计覆盖（720 符号中部分仅靠它计数）| 「执行层死、合同层活」：删除会打红覆盖门，需专项卡评估（补真测试或迁移计数）；文内 Single 字面量陷阱已修（M4.2）|
 | FPC Single-重载字面量陷阱 | `uses nextpas.core.math` 后，裸实数/整数字面量（`Exp(1.0)`、`Ln(2)`）绑定 Single 重载（2⁻²⁵ 舍入）；f9bc1d94e 由此弄坏 batch_math；生产侧 `SIMD_PI: Single` 曾毒化 F64 atan2/Jacobi（M4.2 以 `SIMD_PI_F64` 修复） | **规则：Double 语境的字面量实参必须 `Double(…)` 显式定型或用 Double 变量**；紧容差断言的期望值表达式尤其要查；`Power` 等值精确用例（0.25/±Inf/±0）侥幸常绿属脆弱面 |

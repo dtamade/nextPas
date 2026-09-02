@@ -186,6 +186,7 @@ type
 implementation
 
 uses
+  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.text.strings,
   nextpas.core.tls.factory,
@@ -193,7 +194,7 @@ uses
   nextpas.core.tls.freepascal.context.material,
   nextpas.core.tls.base64,
   nextpas.core.tls.logging,
-  nextpas.core.json, nextpas.core.json.builder;
+  nextpas.core.json, nextpas.core.json.builder, nextpas.core.json.value;
 
 procedure LogBuilderContextLevelServerNameCompatibilityWarning(
   const ACallSite: string;
@@ -2216,6 +2217,7 @@ var
 begin
   LLines := nil;
   try
+  LLines := nil;
     LLines.Add('[SSL Context Configuration]');
     LLines.Add('');
 

@@ -153,6 +153,7 @@ begin
   // RFC 6962 §3.2: signed struct for x509_entry
   LCertLen := Length(ALeafCertDER);
   LExtLen := Length(ASCT.Extensions);
+  Result := nil;
   SetLength(Result, 1 + 1 + 8 + 2 + 3 + LCertLen + 2 + LExtLen);
   LPos := 0;
 
@@ -223,6 +224,7 @@ var
   I: Integer;
   LLog: TCTLogEntry;
 begin
+  Result := nil;
   SetLength(Result, 0);
 
   if not TryParseSCTList(ASCTListData, LSCTs, LSCTCount, LError) then

@@ -13,6 +13,12 @@ function HexEncode(const AData: TBytes; const ACase: THexCase = hcLower): string
 function HexDecode(const AHex: string): TBytes;
 function HexVal(C: Char): Integer; inline;
 function UuidHexToBytes(const AUUIDHex: string): TBytes;
+{ respack.embed 单源复用：上层 $XX 发射 inline 零拷贝直通此表，不再手写 HEX 常量 }
+function HexNibbleUpper(const ANibble: Byte): Char; inline;
+procedure HexEncodeByteUpper(const AByte: Byte; const ADst: PChar); inline;
+{ 批量向量化：上层 respack.embed $XX / $XX, 发射 4-wide 展开，inline 零拷贝直通 HEX_UPPER 单源，单次大块写入，避免逐字节调用开销 }
+procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
+procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
 
 implementation
 
@@ -158,6 +164,57 @@ begin
     'A'..'F': Result := Ord(C) - Ord('A') + 10;
   else
     Result := -1;
+  end;
+end;
+
+function HexNibbleUpper(const ANibble: Byte): Char; inline;
+begin
+  Result := HEX_UPPER[ANibble and $0F];
+end;
+
+procedure HexEncodeByteUpper(const AByte: Byte; const ADst: PChar); inline;
+begin
+  ADst[0] := HEX_UPPER[AByte shr 4];
+  ADst[1] := HEX_UPPER[AByte and $0F];
+end;
+
+procedure HexEncodeDollarBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
+var I: SizeUInt; S: PByte; D: PByte;
+begin
+  if ACount = 0 then Exit;
+  S := ASrc; D := ADst; I := 0;
+  while I + 4 <= ACount do
+  begin
+    D[0] := Byte('$'); D[1] := Byte(HEX_UPPER[S[0] shr 4]); D[2] := Byte(HEX_UPPER[S[0] and $0F]);
+    D[3] := Byte('$'); D[4] := Byte(HEX_UPPER[S[1] shr 4]); D[5] := Byte(HEX_UPPER[S[1] and $0F]);
+    D[6] := Byte('$'); D[7] := Byte(HEX_UPPER[S[2] shr 4]); D[8] := Byte(HEX_UPPER[S[2] and $0F]);
+    D[9] := Byte('$'); D[10] := Byte(HEX_UPPER[S[3] shr 4]); D[11] := Byte(HEX_UPPER[S[3] and $0F]);
+    Inc(S, 4); Inc(D, 12); Inc(I, 4);
+  end;
+  while I < ACount do
+  begin
+    D[0] := Byte('$'); D[1] := Byte(HEX_UPPER[S^ shr 4]); D[2] := Byte(HEX_UPPER[S^ and $0F]);
+    Inc(S); Inc(D, 3); Inc(I);
+  end;
+end;
+
+procedure HexEncodeDollarCommaBulkUpper(const ASrc: PByte; const ACount: SizeUInt; const ADst: PByte); inline;
+var I: SizeUInt; S: PByte; D: PByte;
+begin
+  if ACount = 0 then Exit;
+  S := ASrc; D := ADst; I := 0;
+  while I + 4 <= ACount do
+  begin
+    D[0] := Byte('$'); D[1] := Byte(HEX_UPPER[S[0] shr 4]); D[2] := Byte(HEX_UPPER[S[0] and $0F]); D[3] := Byte(',');
+    D[4] := Byte('$'); D[5] := Byte(HEX_UPPER[S[1] shr 4]); D[6] := Byte(HEX_UPPER[S[1] and $0F]); D[7] := Byte(',');
+    D[8] := Byte('$'); D[9] := Byte(HEX_UPPER[S[2] shr 4]); D[10] := Byte(HEX_UPPER[S[2] and $0F]); D[11] := Byte(',');
+    D[12] := Byte('$'); D[13] := Byte(HEX_UPPER[S[3] shr 4]); D[14] := Byte(HEX_UPPER[S[3] and $0F]); D[15] := Byte(',');
+    Inc(S, 4); Inc(D, 16); Inc(I, 4);
+  end;
+  while I < ACount do
+  begin
+    D[0] := Byte('$'); D[1] := Byte(HEX_UPPER[S^ shr 4]); D[2] := Byte(HEX_UPPER[S^ and $0F]); D[3] := Byte(',');
+    Inc(S); Inc(D, 4); Inc(I);
   end;
 end;
 

@@ -159,7 +159,7 @@ begin
   if LCopyLen >= ABufSize then
     LCopyLen := ABufSize - 1;
   if LCopyLen > 0 then
-    Move(AText[1], ABuf^, LCopyLen);
+    Move(PAnsiChar(AText)^, ABuf^, LCopyLen);
   ABuf[LCopyLen] := #0;
 end;
 

@@ -47,6 +47,7 @@ uses
   nextpas.core.errors,
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex,
   nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.random;
@@ -70,13 +71,10 @@ var
   GP384BaseTable: array[0..15] of TJac384;
   GP384BaseTableReady: Boolean;
 
-function HexToBytes(const AHex: string): TBytes;
-var
-  I: Integer;
+function HexToBytes(const AHex: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AHex) div 2);
-  for I := 0 to High(Result) do
-    Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
+  { perf: inline thin-forward to encoding.hex single source (single SetLength+Move zero-copy, table lookup single pass); owner HexDecode not inline per red-line 2; reuse bytes.ops single-source Move semantics }
+  Result := nextpas.core.encoding.hex.HexDecode(AHex);
 end;
 
 function P384ModP: TBytes;
@@ -135,29 +133,9 @@ begin
   Result := LAllZero;
 end;
 
-function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
-begin
-  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
-end;
-
-function IsZeroBytes(const AData: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.IsZeroBytes(AData);
-end;
-
-function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
-begin
-  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
-end;
-
-function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
-begin
-  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
-end;
-
 function TryFixedLength48(const AValue: TBytes; out AResult: TBytes; out AError: string): Boolean;
 begin
-  Result := TryBigIntToFixedLengthFromUnsignedBytes(StripLeadingZeroBytes(AValue), 48, AResult, AError);
+  Result := TryBigIntToFixedLengthFromUnsignedBytes(nextpas.core.bytes.ops.StripLeadingZero(AValue), 48, AResult, AError);
 end;
 
 function TryP384PointDouble(const AP: TP384Point; out AResult: TP384Point;
@@ -185,14 +163,14 @@ begin
 
   LP := P384ModP;
 
-  if UnsignedBytesEqual(AP.X, AQ.X) then
+  if nextpas.core.bytes.ops.UnsignedEqual(AP.X, AQ.X) then
   begin
-    if UnsignedBytesEqual(AP.Y, AQ.Y) then
+    if nextpas.core.bytes.ops.UnsignedEqual(AP.Y, AQ.Y) then
       Exit(TryP384PointDouble(AP, AResult, AError));
 
     if not TryBigIntAddFromUnsignedBytes(AP.Y, AQ.Y, LSumY, AError) then Exit;
     if not TryBigIntModFromUnsignedBytes(LSumY, LP, LTmp, AError) then Exit;
-    if IsZeroBytes(LTmp) then
+    if nextpas.core.bytes.ops.IsZeroBytes(LTmp) then
     begin
       AResult := P384InfinityPoint;
       Exit(True);
@@ -239,7 +217,7 @@ begin
     Exit(True);
   end;
 
-  if IsZeroBytes(AP.Y) then
+  if nextpas.core.bytes.ops.IsZeroBytes(AP.Y) then
   begin
     AResult := P384InfinityPoint;
     Exit(True);
@@ -279,7 +257,7 @@ end;
 
 { Jacobian 384 — single inversion per scalar mult (S40) }
 function JacIsInfinity384(const P: TJac384): Boolean;
-begin Result := IsZeroBytes(P.Z); end;
+begin Result := nextpas.core.bytes.ops.IsZeroBytes(P.Z); end;
 
 function JacFromAffine384(const AP: TP384Point; out JP: TJac384; out AError: string): Boolean;
 var One: TBytes;
@@ -298,7 +276,7 @@ var LP, Y2, Y4, Z2, Z4, X2, S, M, M2, X3, Y3, Z3, Tmp, Tmp2, Three, Four, Eight,
 begin
   Result := False; R := Default(TJac384); AError := '';
   if JacIsInfinity384(P) then begin R := P; Exit(True); end;
-  if IsZeroBytes(P.Y) then begin SetLength(R.X,0); SetLength(R.Y,0); SetLength(R.Z,0); Exit(True); end;
+  if nextpas.core.bytes.ops.IsZeroBytes(P.Y) then begin SetLength(R.X,0); SetLength(R.Y,0); SetLength(R.Z,0); Exit(True); end;
   LP := P384ModP;
   Three := HexToBytes('03'); Four := HexToBytes('04'); Eight := HexToBytes('08'); Two := HexToBytes('02');
   if not TryBigIntModMulFromUnsignedBytes(P.Y, P.Y, LP, Y2, AError) then Exit;
@@ -340,7 +318,7 @@ begin
   if not TryBigIntModMulFromUnsignedBytes(Q.X, Z1_2, LP, U2, AError) then Exit;
   if not TryBigIntModMulFromUnsignedBytes(P.Y, Z2_3, LP, S1, AError) then Exit;
   if not TryBigIntModMulFromUnsignedBytes(Q.Y, Z1_3, LP, S2, AError) then Exit;
-  if UnsignedBytesEqual(U1, U2) then begin if UnsignedBytesEqual(S1, S2) then Exit(TryJacDouble384(P, R, AError)) else begin SetLength(R.X,0); SetLength(R.Y,0); SetLength(R.Z,0); Exit(True); end; end;
+  if nextpas.core.bytes.ops.UnsignedEqual(U1, U2) then begin if nextpas.core.bytes.ops.UnsignedEqual(S1, S2) then Exit(TryJacDouble384(P, R, AError)) else begin SetLength(R.X,0); SetLength(R.Y,0); SetLength(R.Z,0); Exit(True); end; end;
   if not TryBigIntSubtractModuloFromUnsignedBytes(U2, U1, LP, H, AError) then Exit;
   if not TryBigIntSubtractModuloFromUnsignedBytes(S2, S1, LP, Rr, AError) then Exit;
   if not TryBigIntModMulFromUnsignedBytes(H, H, LP, H2, AError) then Exit;
@@ -455,7 +433,7 @@ function IsP384BasePoint(const AP: TP384Point): Boolean;
 var LG: TP384Point;
 begin
   LG := P384Generator;
-  Result := UnsignedBytesEqual(AP.X, LG.X) and UnsignedBytesEqual(AP.Y, LG.Y);
+  Result := nextpas.core.bytes.ops.UnsignedEqual(AP.X, LG.X) and nextpas.core.bytes.ops.UnsignedEqual(AP.Y, LG.Y);
 end;
 
 function EnsureP384BaseTable(out AError: string): Boolean;
@@ -560,7 +538,7 @@ begin
   LP := P384ModP;
   LB := HexToBytes(P384_B_HEX);
 
-  if IsZeroBytes(LX) and IsZeroBytes(LY) then
+  if nextpas.core.bytes.ops.IsZeroBytes(LX) and nextpas.core.bytes.ops.IsZeroBytes(LY) then
   begin
     AError := 'P-384 public key is point at infinity';
     Exit;
@@ -657,13 +635,13 @@ begin
     Exit;
   end;
 
-  if IsZeroBytes(LR) or IsZeroBytes(LS) then
+  if nextpas.core.bytes.ops.IsZeroBytes(LR) or nextpas.core.bytes.ops.IsZeroBytes(LS) then
   begin
     AError := 'P-384 ECDSA r/s must be non-zero';
     Exit;
   end;
 
-  if (CompareUnsignedBytes(LR, LN) >= 0) or (CompareUnsignedBytes(LS, LN) >= 0) then
+  if (nextpas.core.bytes.ops.CompareUnsigned(LR, LN) >= 0) or (nextpas.core.bytes.ops.CompareUnsigned(LS, LN) >= 0) then
   begin
     AError := 'P-384 ECDSA r/s must be less than curve order';
     Exit;
@@ -767,16 +745,16 @@ begin
     Exit;
   end;
 
-  LR := StripLeadingZeroBytes(LR);
-  LS := StripLeadingZeroBytes(LS);
+  LR := nextpas.core.bytes.ops.StripLeadingZero(LR);
+  LS := nextpas.core.bytes.ops.StripLeadingZero(LS);
 
-  if IsZeroBytes(LR) or IsZeroBytes(LS) then
+  if nextpas.core.bytes.ops.IsZeroBytes(LR) or nextpas.core.bytes.ops.IsZeroBytes(LS) then
   begin
     AError := 'P-384 ECDSA DER r/s must be non-zero';
     Exit;
   end;
 
-  if (CompareUnsignedBytes(LR, P384Order) >= 0) or (CompareUnsignedBytes(LS, P384Order) >= 0) then
+  if (nextpas.core.bytes.ops.CompareUnsigned(LR, P384Order) >= 0) or (nextpas.core.bytes.ops.CompareUnsigned(LS, P384Order) >= 0) then
   begin
     AError := 'P-384 ECDSA DER r/s must be less than curve order';
     Exit;

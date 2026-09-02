@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.lockfree*.pas`（约 100+ 源文件；默认门面仅 T1）
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
-**版本**：2.9
+**最后更新**：2026-08-31
+**版本**：2.10
 
 **Audit follow-ups（2026-07-26）**：见 [`findings.md`](findings.md)。要点：T2 freeze（F-004）；`-dLOCKFREE_DEBUG` owner 检查（F-005）；`verify-t2-smoke` + 测试 RTL isolation（F-001/F-006）。
 

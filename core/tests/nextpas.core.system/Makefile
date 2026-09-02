@@ -57,7 +57,7 @@ STAGE0_SYSTEM_OBJECT_FREE_QUERY_PASS_MARKER := stage0-query-system-object-free-c
 STAGE0_SYSTEM_OBJECT_FREE_IMPLICIT_QUERY_PASS_MARKER := stage0-query-system-object-free-implicit-check=pass
 STAGE0_SYSTEM_OBJECT_FREE_QUERY_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend -Fu$(ROOT_DIR)/compiler/diagnostics -Fu$(ROOT_DIR)/compiler/targets -Fu$(ROOT_DIR)/compiler/syntax -Fu$(ROOT_DIR)/compiler/sema -Fu$(ROOT_DIR)/compiler/lower -Fu$(ROOT_DIR)/compiler/ir -Fu$(ROOT_DIR)/compiler/backend -Fu$(ROOT_DIR)/compiler/toolchain -Fu$(ROOT_DIR)/tools/stage0 -Fu$(ROOT_DIR)/rtl/core/base -Fu$(ROOT_DIR)/rtl/core/text -Fu$(ROOT_DIR)/core/src
 
-test: test-source-contracts test-facade test-kernel test-contracts test-typinfo-minimal test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-heap-contract test-exception-contract test-object-alloc-contract test-managed-record-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query
+test: test-source-contracts test-facade test-kernel test-contracts test-typinfo-minimal test-typinfo-collections-consumer test-sysutils-minimal test-process-runtime-contract-seed test-object-free-runtime-contract test-interface-contract test-halt-contract test-heap-contract test-exception-contract test-object-alloc-contract test-managed-record-contract test-field-dynarray-contract test-field-dynarray-runtime-smoke test-large-alloc-runtime-smoke test-stage0-system-object-free-query
 
 test-source-contracts:
 	$(MAKE) -C test_system_source_contracts test

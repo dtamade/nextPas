@@ -2,8 +2,9 @@
 
 > **Status: active(W5)**。2026-08-25 总控立项。本文档是
 > `nextpas.core.agent.session` 的设计权威；实现与本文冲突时先改本文。
-> 接口 `IAgentTranscriptStore`（intf 词表，Append/Load/Delete 三方法）
-> 此前已冻结；本文只设计其 JSONL 落地实现与崩溃恢复语义。
+> 接口 `IAgentTranscriptStore`（intf 词表，Append/Load/Delete/Fork 四方法，
+> 2026-09-01 起 Fork 纳入接口；同时以独立能力接口 `IAgentTranscriptFork`
+> 暴露，便于存量实现平滑过渡）；本文设计其 JSONL 落地实现与崩溃恢复语义。
 
 ## 1. 目标与非目标
 
@@ -134,9 +135,9 @@ part 对象字段：`kind`（text/thinking/tool_call/tool_result/image）+
 ```pascal
 function NewJsonlTranscriptStore(const ARootDir: string;
   ASyncEachAppend: Boolean = True): IAgentTranscriptStore;
-{ 门面同时转发类型 TJsonlTranscriptStore / ETranscriptCorrupt；
-  Fork 为类实例方法（接口三方法面不变）}
-procedure Fork(const ASrcThreadId, ADstThreadId: string);  { TJsonlTranscriptStore }
+{ 门面同时转发类型 TJsonlTranscriptStore / ETranscriptCorrupt / IAgentTranscriptFork；
+  Fork 为接口第四方法（亦以独立能力接口暴露，便于存量三方法实现通过 Supports 探测过渡）}
+procedure Fork(const ASrcThreadId, ADstThreadId: string);  { IAgentTranscriptStore + IAgentTranscriptFork }
 function TranscriptMessageToJson(const AMsg: TMessage): TJsonText;    { 存储编码 }
 function TranscriptMessageFromJson(const AJson: TJsonText): TMessage; { 存储解码 }
 ```

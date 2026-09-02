@@ -180,6 +180,8 @@ MaxReadConnections=4，IdleTimeout/Lifetime 关闭）；writer 相位
 
 > 在册数字：2026-08-28 19:30 复采（400对 super=43048B，shared box）；后续新增 DSN 复用方（DM/ODBC）以此为线性度基线。
 
+> BENCHES仅聚合前8项，text_kv在 core/benchmarks/nextpas.core.text/bench_kv。回归以 benchmarks.md 四档表为单源，db bench 不含 text_kv。
+
 | workload | bytes | median | mean | p95 | thr(median) | allocs |
 |---|---|---|---|---|---|---|
 | kv/parse_small~80B | 610 | 825 ns | 1021 ns | 1791 ns | 739 MB/s | 15 |

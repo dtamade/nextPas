@@ -11,8 +11,6 @@ uses
   nextpas.core.http.intf,
   nextpas.core.http.client_earlydata,
   nextpas.core.http.earlydata,
-  nextpas.core.http.middleware,
-  nextpas.core.http.middleware.context,
   nextpas.core.http.middleware.earlydata.adaptive,
   nextpas.core.net.async.tlspas,
   nextpas.core.io;
@@ -281,182 +279,9 @@ begin
   finally Obs.Free; end;
 end;
 
-type TDemoCapture = class(TInterfacedObject, IHttpResponseWriter)
-  private FHeaders: IHttpHeaders; FStatus: THttpStatus;
-  public constructor Create; procedure WriteHeader(const AStatus: THttpStatus); function GetStatus: THttpStatus; function GetHeaders: IHttpHeaders; function Write(const ABuf; const ACount: SizeUInt): SizeUInt; procedure Flush;
-end;
-constructor TDemoCapture.Create; begin inherited Create; FHeaders := NewHttpHeaders; FStatus := HTTP_STATUS_OK; end;
-procedure TDemoCapture.WriteHeader(const AStatus: THttpStatus); begin FStatus := AStatus; end;
-function TDemoCapture.GetStatus: THttpStatus; begin Result := FStatus; end;
-function TDemoCapture.GetHeaders: IHttpHeaders; begin Result := FHeaders; end;
-function TDemoCapture.Write(const ABuf; const ACount: SizeUInt): SizeUInt; begin Result := ACount; end;
-procedure TDemoCapture.Flush; begin end;
-
-procedure DemoCachedExporter;
-var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Exp: TAsyncTlsPasCachedPrometheusExporter; Buf: string; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
 begin
-  WriteLn('--- Cached Exporter S28 (zero-alloc Append + hit/miss) ---');
-  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'nextpas_tlspas', 'observer="api"');
-  try
-    WriteLn('First Format miss=', Exp.MissCount, ' hit=', Exp.HitCount, ' len=', Length(Exp.Format));
-    WriteLn('Second Format (hit) hit=', Exp.HitCount+1, ' -> hit cache');
-    Exp.Format; WriteLn('After 2nd hit=', Exp.HitCount, ' miss=', Exp.MissCount);
-    Buf := 'prefix|'; TlsPasAppendPrometheusMetrics(Buf, Obs.GetAdaptiveMetrics, 'nextpas_tlspas', 'observer="api"');
-    WriteLn('Append zero-alloc buf len=', Length(Buf), ' contains observer=', Pos('observer="api"', Buf)>0);
-    Buf := ''; TlsPasAppendAdaptiveHealth(Buf, Obs.GetAdaptiveHealth, 'nextpas_tlspas');
-    WriteLn('Append health len=', Length(Buf), ' contains health_status=', Pos('health_status', Buf)>0);
-    Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
-    SetLength(Id, 4); FillChar(Id[0], 4, $11); SetLength(Early, 10); FillChar(Early[0], 10, $99);
-    Obs.Decide(Id, Early, Sess, True);
-    WriteLn('After decide miss len=', Length(Exp.Format), ' hit=', Exp.HitCount, ' miss=', Exp.MissCount);
-    WriteLn('HttpCached wrapper len=', Length(HttpCachedPrometheusText(Exp)), ' health=', Length(HttpCachedHealthText(Exp)));
-    Exp.Invalidate; WriteLn('After Invalidate miss=', Exp.MissCount, ' len=', Length(Exp.Format));
-  finally Exp.Free; Obs.Free; end;
-end;
-
-procedure DemoMetricsHandler;
-var Reg: TAsyncTlsPasPrometheusRegistry; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter; Sess: TTlsPasResumptionSession; Id, Early: TBytes; Exp: TAsyncTlsPasCachedPrometheusExporter;
-begin
-  WriteLn('--- Metrics Handler S29 (Registry Cached + /metrics) ---');
-  Store := TAsyncTlsPasReplayStoreFactory.CreateMemory(8, 600000);
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  Reg := TAsyncTlsPasPrometheusRegistry.Create;
-  Reg.Register('api', Obs); Reg.Register('internal', Obs);
-  Hdl := HttpMetricsHandler(Reg);
-  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/metrics'), hvHttp11, NewHttpHeaders, nil, 0);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
-  Hdl.ServeHTTP(Req, W);
-  WriteLn('Registry handler CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus), ' cached hit=', Reg.CacheHitCount, ' miss=', Reg.CacheMissCount);
-  WriteLn('Registry cached text len=', Length(HttpRegistryMetricsTextCached(Reg)), ' contains api=', Pos('observer="api"', HttpRegistryMetricsTextCached(Reg))>0);
-  Sess := Default(TTlsPasResumptionSession); Sess.HasMaxEarlyData:=True; Sess.MaxEarlyDataSize:=16384;
-  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
-  Obs.Decide(Id, Early, Sess, True);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
-  Hdl.ServeHTTP(Req, W);
-  WriteLn('After mutate miss=', Reg.CacheMissCount, ' hit=', Reg.CacheHitCount, ' len=', Length(HttpRegistryMetricsTextCached(Reg)));
-  Exp := TAsyncTlsPasCachedPrometheusExporter.Create(Obs, 'myapp');
-  Hdl := HttpMetricsHandler(Exp);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
-  Hdl.ServeHTTP(Req, W);
-  WriteLn('Single exporter handler CT=', W.GetHeaders.Get('Content-Type'), ' contains myapp=', Pos('myapp_adaptive_max', HttpCachedPrometheusText(Exp))>0);
-  Exp.Free; Reg.Free; Obs.Free;
-end;
-
-procedure DemoTrace;
-var Ctx, Ctx2: TTlsPasTraceContext; S: string; Tracer: ITlsPasTracer; Ev: TTlsPasTraceEvent;
-  Mw: IHttpMiddleware; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter;
-begin
-  WriteLn('--- Trace S30 (W3C traceparent + Sampling + 结构化事件) ---');
-  Ctx := TlsPasGenerateTraceContext(True);
-  S := TlsPasFormatTraceParent(Ctx);
-  WriteLn('Generated traceparent len=', Length(S), ' valid=', TlsPasParseTraceParent(S, Ctx2) and TlsPasTraceContextEquals(Ctx, Ctx2), ' sampled=', Ctx.Sampled);
-  WriteLn('Parse W3C sampled=', TlsPasParseTraceParent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx) and Ctx.Sampled, ' format=', TlsPasFormatTraceParent(Ctx));
-  WriteLn('ShouldSample 0.01=', TlsPasShouldSample(Ctx, 0.01), ' 1.0=', TlsPasShouldSample(Ctx, 1.0));
-  Tracer := TAsyncTlsPasSamplingTracer.Create(0.01) as ITlsPasTracer;
-  Ev := Default(TTlsPasTraceEvent); Ev.Kind := tekEarlyDataDecide; Ev.Trace := Ctx; Ev.Decision := edAccept; Ev.AdaptiveMax := 8192;
-  Tracer.Trace(Ev); WriteLn('Noop vs Sampling tracer total=', Tracer.TotalCount, ' sampled=', Tracer.SampleCount);
-  Mw := HttpTraceParentMiddleware(Tracer);
-  Hdl := Mw.Wrap(HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter) begin AW.WriteHeader(HTTP_STATUS_OK); end));
-  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/'), hvHttp11, NewHttpHeaders, nil, 0);
-  Req.Headers.SetHeader('traceparent', '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01');
-  (Req as IHttpRequestWithContext).SetContext(NewHttpContext);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter;
-  Hdl.ServeHTTP(Req, W);
-  WriteLn('Middleware traceparent resp=', W.GetHeaders.Get('traceparent'), ' ctx=', HttpContextGetString(HttpContextOf(Req), CONTEXT_TRACEPARENT));
-  WriteLn('TraceLogLine=', HttpTraceLogLine(Req, nil, Tracer));
-  WriteLn('FormatTraceEvent=', TlsPasFormatTraceEvent(Ev));
-end;
-
-procedure DemoSpan;
-var Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; J, P: string; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter; Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: ITlsPasTracer; Sess: TTlsPasResumptionSession; Id, Early: TBytes;
-begin
-  WriteLn('--- Span S31 (Memory Ring 128 + /tracez + Span Prometheus) ---');
-  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
-  Ctx := TlsPasGenerateTraceContext(True);
-  Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.StartMs := 100; Sp.EndMs := 105; Sp.DurationMs := 5; Sp.Decision := edAccept; Sp.AdaptiveMax := 8192; Sp.Healthy := True;
-  Exp.ExportSpan(Sp); Sp.Name := 'tlspas.hrr'; Sp.Decision := edRejectReplay; Exp.ExportSpan(Sp);
-  WriteLn('Span count=', Exp.Count, ' json len=', Length(TlsPasSpansToJSON(Exp)), ' prom=', System.Copy(TlsPasSpansToPrometheus(Exp),1,60), '...');
-  J := TlsPasSpanToJSON(Sp); WriteLn('Single span JSON contains traceparent=', Pos('traceparent', J)>0, ' decision=', Pos('reject_replay', J)>0);
-  Hdl := HttpTracezHandler(Exp);
-  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez'), hvHttp11, NewHttpHeaders, nil, 0);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
-  WriteLn('Tracez JSON CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus), ' body contains early_data=', Pos('early_data', HttpTracezJSON(Exp))>0);
-  Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/tracez?prom'), hvHttp11, NewHttpHeaders, nil, 0);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
-  WriteLn('Tracez Prom CT=', W.GetHeaders.Get('Content-Type'), ' contains spans_total=', Pos('spans_total', HttpSpansPrometheusText(Exp))>0);
-  // span decide integration
-  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  Tracer := TAsyncTlsPasSamplingTracer.Create(1.0) as ITlsPasTracer;
-  Exp.Clear; Ctx := TlsPasGenerateTraceContext(True);
-  Sess := Default(TTlsPasResumptionSession);
-  Sess.HasMaxEarlyData := True; Sess.MaxEarlyDataSize := 16384;
-  SetLength(Id,4); FillChar(Id[0],4,$11); SetLength(Early,10); FillChar(Early[0],10,$22);
-  WriteLn('SpanDecide accept=', TlsPasEarlyDataDecisionToStr(TlsPasTraceSpanDecide(Obs, Tracer, Exp, Ctx, Id, Early, Sess, True)), ' count=', Exp.Count);
-  Obs.Free;
-end;
-
-procedure DemoAdaptiveSampling;
-var Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double; Exp: ITlsPasSpanExporter; Sp: TTlsPasSpan; Ctx: TTlsPasTraceContext; LPath: string; Hdl: IHttpHandler; Req: IHttpRequest; Cap: TDemoCapture; W: IHttpResponseWriter;
-begin
-  WriteLn('--- Adaptive Sampling S32 (自适应采样 + OTLP + rate Prometheus) ---');
-  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  C := DefaultTlsPasSamplingConfig;
-  M := Obs.GetAdaptiveMetrics; H := Obs.GetAdaptiveHealth;
-  R := TlsPasComputeAdaptiveSamplingRate(M, H, C);
-  WriteLn('Initial rate healthy=', R:0:4, ' prom=', System.Copy(TlsPasSamplingRateToPrometheus(R),1,60), '...');
-  H.Healthy := False; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Degraded rate boost=', R:0:4, ' > base');
-  M.Replay.Current := 60; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Pressure rate boost=', R:0:4, ' max clamp=', C.MaxRate:0:2);
-  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
-  WriteLn('AdaptiveTracer initial rate=', Tracer.GetAdaptiveRate:0:4, ' sample=', Tracer.ShouldSample(TlsPasGenerateTraceContext(False)));
-  C.BaseRate := 0.05; Tracer.UpdateConfig(C); WriteLn('After UpdateConfig base 0.05 rate=', Tracer.GetAdaptiveRate:0:4);
-  Exp := TAsyncTlsPasMemorySpanExporter.Create(8) as ITlsPasSpanExporter;
-  Ctx := TlsPasGenerateTraceContext(True); Sp := Default(TTlsPasSpan); Sp.Trace := Ctx; Sp.Name := 'tlspas.early_data'; Sp.Decision := edAccept; Exp.ExportSpan(Sp);
-  WriteLn('OTLP JSON contains resourceSpans=', Pos('resourceSpans', TlsPasSpansToOTLPJSON(Exp))>0, ' HttpOTLP len=', Length(HttpOTLPJSON(Exp)));
-  LPath := '/tmp/tlspas_otlp_demo.json'; if FileExists(LPath) then DeleteFile(LPath);
-  WriteLn('Export to file ', LPath, ' ok=', TlsPasTryExportSpansToFile(Exp, LPath), ' exists=', FileExists(LPath)); if FileExists(LPath) then DeleteFile(LPath);
-  Hdl := HttpOTLPHandler(Exp); Req := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/otlp'), hvHttp11, NewHttpHeaders, nil, 0);
-  Cap := TDemoCapture.Create; W := Cap as IHttpResponseWriter; Hdl.ServeHTTP(Req, W);
-  WriteLn('OTLP Handler CT=', W.GetHeaders.Get('Content-Type'), ' status=', Ord(W.GetStatus));
-  WriteLn('Sampling Prom Text=', System.Copy(HttpSamplingRatePrometheusText(Tracer.GetAdaptiveRate),1,60), '...');
-  WriteLn('AdaptiveSampling Prom=', System.Copy(HttpAdaptiveSamplingRateText(Tracer),1,60), '...');
-  Tracer.Free; Obs.Free;
-end;
-
-procedure DemoPolishAndSnapshot;
-var G: string; C: TTlsPasSamplingConfig; M: TTlsPasAdaptiveMetrics; H: TTlsPasAdaptiveHealth; R: Double;
-    Store: ITlsPasReplayStore; Obs: TAsyncTlsPasAdaptiveObserver; Tracer: TAsyncTlsPasAdaptiveTracer;
-    Exp: ITlsPasSpanExporter; J, LPath: string; Snap: TTlsPasAdaptiveSnapshot; Ctx: TTlsPasTraceContext; Ok: Boolean;
-begin
-  WriteLn('--- Polish S33 + Consistent S34 + Snapshot S35 (收敛自证) ---');
-  G := TlsPasPrometheusGauge('sampling_rate', 'Adaptive trace sampling rate', 0.02, '');
-  WriteLn('Gauge empty prefix defaults nextpas_tlspas=', Pos('nextpas_tlspas_sampling_rate', G)>0, ' len=', Length(G));
-  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.0001; C.MinRate := 0.00005; C.MaxRate := 1.0;
-  M := Default(TTlsPasAdaptiveMetrics); H := Default(TTlsPasAdaptiveHealth); H.Healthy := True; H.RejectRate := 0.02; M.Server.RejectPolicy := 1;
-  R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Thr floor 0.05 prevents 3x at 0.02 rate=', R:0:6);
-  H.RejectRate := 0.06; R := TlsPasComputeAdaptiveSamplingRate(M, H, C); WriteLn('Thr floor allows 3x at 0.06 rate=', R:0:6);
-  Exp := TAsyncTlsPasMemorySpanExporter.Create(4) as ITlsPasSpanExporter;
-  J := TlsPasSpansToOTLPJSON(Exp); WriteLn('OTLP empty resource service.name=', Pos('service.name', J)>0, ' spans []=', Pos('"spans":[]', J)>0);
-  LPath := '/tmp/tlspas_demo_polish.json'; if FileExists(LPath) then DeleteFile(LPath); if FileExists(LPath+'.tmp') then DeleteFile(LPath+'.tmp');
-  WriteLn('Export nil/empty guard nil=', not TlsPasTryExportSpansToFile(nil, LPath), ' emptyPath=', not TlsPasTryExportSpansToFile(Exp, ''), ' okEmpty=', TlsPasTryExportSpansToFile(Exp, LPath));
-  if FileExists(LPath) then DeleteFile(LPath); WriteLn('No tmp leak=', not FileExists(LPath+'.tmp'));
-  Store := TAsyncTlsPasReplayCache.Create(8, 600000) as ITlsPasReplayStore;
-  Obs := TAsyncTlsPasAdaptiveObserver.Create(Store);
-  Tracer := TAsyncTlsPasAdaptiveTracer.Create(Obs);
-  C := DefaultTlsPasSamplingConfig; C.BaseRate := 0.2; Tracer.UpdateConfig(C);
-  WriteLn('UpdateConfig sync Inner.Rate 0.2=', (Tracer.Inner.Rate>0.19)and(Tracer.Inner.Rate<0.21), ' GetAdaptiveRate 0.2=', (Tracer.GetAdaptiveRate>0.19)and(Tracer.GetAdaptiveRate<0.21));
-  Snap := Obs.GetSnapshot; WriteLn('Snapshot metrics vs live equal=', Snap.Metrics.AdaptiveMax = Obs.GetAdaptiveMetrics.AdaptiveMax, ' health=', Snap.Health.Healthy);
-  Ok := TlsPasParseTraceParent('00-zzzz', Ctx); WriteLn('Fuzz short invalid=', not Ok);
-  Ok := TlsPasParseTraceParent('01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01', Ctx); WriteLn('Fuzz version 01 invalid=', not Ok);
-  Tracer.Free; Obs.Free;
-end;
-
-begin
-  WriteLn('=== tlspas 0-RTT Early Data Demo (S35 snapshot) ===');
-  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health | CachedExporter+Append | MetricsHandler | Trace | Span | AdaptiveSampling | Polish+Consistent+Snapshot');
+  WriteLn('=== tlspas 0-RTT Early Data Demo (S27 final) ===');
+  WriteLn('L2 async TLS 1.3 | X25519/P-256/P-384 | HRR 0xFE | 0-RTT EarlyData | Replay LRU/KV | ServerDecide | Observer | Adaptive | Client Auto | AdaptiveObserver | Prometheus | Registry+Config | Health');
   WriteLn;
   DemoPolicyAndFingerprint;
   WriteLn;
@@ -478,17 +303,5 @@ begin
   WriteLn;
   DemoAdaptiveHealth;
   WriteLn;
-  DemoCachedExporter;
-  WriteLn;
-  DemoMetricsHandler;
-  WriteLn;
-  DemoTrace;
-  WriteLn;
-  DemoSpan;
-  WriteLn;
-  DemoAdaptiveSampling;
-  WriteLn;
-  DemoPolishAndSnapshot;
-  WriteLn;
-  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S35 snapshot self-proof.');
+  WriteLn('Demo done: all paths 0 warnings, 5 dimensions verified. S27 health self-proof.');
 end.

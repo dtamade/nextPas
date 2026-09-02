@@ -2,9 +2,10 @@ unit nextpas.core.system;
 {**
  * @desc Root RTL facade for the nextPas system module family.
  *
- * This unit provides the compiler kernel contract layer.
- * Under FPC, it re-exports FPC System types via fpc.inc.
- * Under nextPas, it provides the full kernel via kernel.inc.
+ * Compiler kernel contract layer — single source via kernel.inc (INV-5),
+ * no in-unit compiler fork. Both compilers share the same kernel
+ * definition; FPC SysUtils/Classes bridging is via units/<target>/ stubs,
+ * not an in-unit IFDEF (dual-compiler no-fork constraint).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,13 +15,11 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
-  nextpas.core.system.errors;
+  nextpas.core.bytes.ops,
+  nextpas.core.system.errors,
+  nextpas.core.text.conv;
 
-{$IFDEF FPC}
-{$I nextpas.core.system.fpc.inc}
-{$ELSE}
 {$I nextpas.core.system.kernel.inc}
-{$ENDIF}
 
 const
   NEXTPAS_SYSTEM_NAME = 'nextpas.core.system';
@@ -116,10 +115,10 @@ function HTonN(AValue: LongWord): LongWord; overload; inline;
 function NToHs(AValue: Word): Word; overload; inline;
 function NToHs(AValue: LongWord): LongWord; overload; inline;
 
-function VarType(const V: Variant): TVarType;
-function VarIsNull(const V: Variant): Boolean;
-function VarIsEmpty(const V: Variant): Boolean;
-function VarIsClear(const V: Variant): Boolean;
+function VarType(const V: Variant): TVarType; inline;
+function VarIsNull(const V: Variant): Boolean; inline;
+function VarIsEmpty(const V: Variant): Boolean; inline;
+function VarIsClear(const V: Variant): Boolean; inline;
 
 implementation
 
@@ -163,44 +162,50 @@ begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 
-function HTonN(AValue: Word): Word;
+function HTonN(AValue: Word): Word; inline;
 begin
-  Result := nextpas.core.base.utils.HTonN(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.HTonN(AValue);
 end;
 
-function HTonN(AValue: LongWord): LongWord;
+function HTonN(AValue: LongWord): LongWord; inline;
 begin
-  Result := nextpas.core.base.utils.HTonN(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.HTonN(AValue);
 end;
 
-function NToHs(AValue: Word): Word;
+function NToHs(AValue: Word): Word; inline;
 begin
-  Result := nextpas.core.base.utils.NToHs(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.NToHs(AValue);
 end;
 
-function NToHs(AValue: LongWord): LongWord;
+function NToHs(AValue: LongWord): LongWord; inline;
 begin
-  Result := nextpas.core.base.utils.NToHs(AValue);
+  { perf: inline thin forward to bytes.ops single source (INV-5) — zero-copy register shuffle, no alloc }
+  Result := nextpas.core.bytes.ops.NToHs(AValue);
 end;
 
-function VarType(const V: Variant): TVarType;
+function VarType(const V: Variant): TVarType; inline;
 begin
-  Result := TVarData(V).VType;
+  { perf: inline thin forward to text.conv single source (normalized via bytes.ops zero-copy TVarData view, masked varTypeMask), no alloc }
+  Result := nextpas.core.text.conv.VarType(V);
 end;
 
-function VarIsNull(const V: Variant): Boolean;
+function VarIsNull(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType = varNull;
+  { perf: inline thin forward to text.conv single source (zero-copy view, masked), no alloc }
+  Result := nextpas.core.text.conv.VarIsNull(V);
 end;
 
-function VarIsEmpty(const V: Variant): Boolean;
+function VarIsEmpty(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType = varEmpty;
+  Result := nextpas.core.text.conv.VarIsEmpty(V);
 end;
 
-function VarIsClear(const V: Variant): Boolean;
+function VarIsClear(const V: Variant): Boolean; inline;
 begin
-  Result := TVarData(V).VType in [varEmpty, varNull];
+  Result := nextpas.core.text.conv.VarIsClear(V);
 end;
 
 end.

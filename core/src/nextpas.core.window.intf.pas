@@ -97,6 +97,11 @@ type
     procedure HostCloseRequested;
   end;
 
+  IWindowPrivateHandle = interface
+    ['{A1B2C3D4-E5F6-47AA-B123-456789ABC001}']
+    function GetHandle: Pointer;
+  end;
+
 function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
 function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
 function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef; inline;

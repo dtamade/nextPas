@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.atomic*.pas`（4 个源文件）
 **层级**：L0（依赖 base；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-26
-**版本**：1.6
+**最后更新**：2026-08-31
+**版本**：1.7
 
 ---
 
@@ -171,3 +171,4 @@ Weak CAS 例外：`_backend_cmpxchg_weak_*` 返回 Boolean、参数序 `(target,
 | 2026-07-26 | 1.4 | §2.2 F-002 backend seam 落地：atomic.core `_backend_*` 为唯一 host intrinsic 面；atomic.pas/types 0 直调 | Claude |
 | 2026-07-26 | 1.5 | §2.2 seam 补完：LL/SC weak CAS asm + compiler barrier 移入 atomic.core；新增 `cross-riscv64` 真交叉编译门；残留仅 i386 CMPXCHG8B/cpuid | Claude |
 | 2026-07-26 | 1.6 | `cpu_prefetch_nta` 入 seam（FPC `Prefetch` intrinsic，可内联）：修复 lockfree.base 原 asm 预取参数栈槽且不可内联的双重缺陷；lockfree 生产面 0 asm 行级钉在 `test_lockfree` | Claude |
+| 2026-08-31 | 1.7 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |

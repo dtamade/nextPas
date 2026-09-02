@@ -71,6 +71,7 @@ type
     UserContext: Pointer;
     Group: Pointer; { TAsyncTaskGroup 指针，避免循环依赖 }
     Done: Int32; { 0 pending; 1 finished (invoke or discard) }
+    Generation: UInt32;
   end;
 
   TAsyncTaskGroup = class
@@ -81,11 +82,12 @@ type
     FActiveCount: UInt32;
     FCompletedCount: UInt32;
     FTotalCount: UInt32;
+    FGeneration: UInt32;
     FOnAllComplete: TAsyncCallbackStorage;
     FLock: TPlatformMutex;
     FToken: IAsyncCancellationToken;
     procedure CheckCompletion;
-    procedure TaskDone;
+    procedure TaskDone(AGeneration: UInt32);
   public
     constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions;
       AToken: IAsyncCancellationToken);
@@ -127,6 +129,7 @@ var
   LCtx: PTaskWrapCtx;
   LGroup: TAsyncTaskGroup;
   LExpected: Int32;
+  LGene: UInt32;
 begin
   LCtx := PTaskWrapCtx(AContext);
   if LCtx = nil then
@@ -134,6 +137,7 @@ begin
   LExpected := 0;
   if not atomic_compare_exchange_strong(LCtx^.Done, LExpected, 1, mo_acq_rel, mo_acquire) then
     Exit;
+  LGene := LCtx^.Generation;
   LGroup := TAsyncTaskGroup(LCtx^.Group);
   try
     if ARunUser then
@@ -143,7 +147,7 @@ begin
       else if Assigned(LCtx^.UserRef) then
         LCtx^.UserRef(LCtx^.UserContext);
       if LGroup <> nil then
-        LGroup.TaskDone;
+        LGroup.TaskDone(LGene);
     end;
   finally
     Dispose(LCtx);
@@ -193,6 +197,7 @@ begin
   FActiveCount := 0;
   FCompletedCount := 0;
   FTotalCount := 0;
+  FGeneration := 0;
   FToken := AToken;
   platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
   if FToken <> nil then
@@ -200,28 +205,19 @@ begin
 end;
 
 destructor TAsyncTaskGroup.Destroy;
-var
-  LToken: IAsyncCancellationToken;
 begin
-  LToken := FToken;
-  if LToken <> nil then
-  begin
-    try
-      LToken.RemoveOnCancel(@TaskGroupTokenNotify, Self);
-    except
-    end;
-  end;
   FToken := nil;
   platform_mutex_destroy(FLock);
   inherited Destroy;
 end;
 
-procedure TAsyncTaskGroup.TaskDone;
+procedure TAsyncTaskGroup.TaskDone(AGeneration: UInt32);
 begin
   platform_mutex_lock(FLock);
   try
-    if FActiveCount > 0 then
-      Dec(FActiveCount);
+    if AGeneration <> FGeneration then
+      Exit;
+    Dec(FActiveCount);
     Inc(FCompletedCount);
   finally
     platform_mutex_unlock(FLock);
@@ -260,6 +256,7 @@ end;
 procedure TAsyncTaskGroup.RunTask(ACallback: TAsyncCallback; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -268,6 +265,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -278,12 +276,14 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskCallback, LCtx, @DiscardTaskWrap);
 end;
 
 procedure TAsyncTaskGroup.RunTaskRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
 var
   LCtx: PTaskWrapCtx;
+  LGene: UInt32;
 begin
   platform_mutex_lock(FLock);
   try
@@ -292,6 +292,7 @@ begin
     FState := agsRunning;
     Inc(FActiveCount);
     Inc(FTotalCount);
+    LGene := FGeneration;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -302,6 +303,7 @@ begin
   LCtx^.UserContext := AContext;
   LCtx^.Group := Pointer(Self);
   LCtx^.Done := 0;
+  LCtx^.Generation := LGene;
   FLoop.PostEx(@WrappedTaskRefCallback, LCtx, @DiscardTaskWrap);
 end;
 
@@ -312,7 +314,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -333,7 +335,7 @@ begin
   LImmediate := False;
   platform_mutex_lock(FLock);
   try
-    if FActiveCount = 0 then
+    if (FActiveCount = 0) or (FState = agsCancelled) then
       LImmediate := True
     else
     begin
@@ -352,7 +354,7 @@ begin
   platform_mutex_lock(FLock);
   try
     FState := agsCancelled;
-    FActiveCount := 0;
+    Inc(FGeneration);
   finally
     platform_mutex_unlock(FLock);
   end;

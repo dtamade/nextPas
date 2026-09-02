@@ -30,6 +30,7 @@ type
     procedure TestAudioClock_ToDurationNs;
     procedure TestAudioClock_ZeroRate;
     procedure TestBuffer_IsEmpty_SampleCount;
+    procedure TestBufferCreateSilence_Clone;
     procedure TestPcm_Conversions_RoundTrip;
     procedure TestPcm_Clamp;
     procedure TestPcm_Interleave_Deinterleave;
@@ -311,6 +312,33 @@ begin
   CheckTrue(LBuf.IsEmpty, 'data len 0 empty even if FrameCount 1');
 end;
 
+procedure T.TestBufferCreateSilence_Clone;
+var
+  LFmt: TAudioFormat; LSil, LClone: TAudioBuffer; I: Integer; LOk: Boolean;
+begin
+  LFmt := AudioFormatCreate(48000, 2, sfF32);
+  LSil := AudioBufferCreateSilence(LFmt, 4);
+  CheckEqual(4, LSil.FrameCount, 'silence frames');
+  CheckTrue(LSil.Format.Equals(LFmt), 'silence format');
+  CheckEqual(4 * LFmt.BlockAlign, Length(LSil.Data), 'silence bytes');
+  for I := 0 to High(LSil.Data) do CheckEqual(0, LSil.Data[I], 'silence zero ' + IntToStr(I));
+  // facade 同源
+  LSil := nextpas.core.audio.AudioBufferCreateSilence(LFmt, 2);
+  CheckEqual(2, LSil.FrameCount, 'facade silence');
+  LSil.Data[0] := 99;
+  LClone := AudioBufferClone(LSil);
+  CheckEqual(LSil.FrameCount, LClone.FrameCount, 'clone frames');
+  CheckTrue(LClone.Format.Equals(LSil.Format), 'clone format');
+  CheckEqual(Length(LSil.Data), Length(LClone.Data), 'clone bytes');
+  CheckEqual(99, LClone.Data[0], 'clone deep copy');
+  LClone.Data[0] := 11; CheckEqual(99, LSil.Data[0], 'clone independence');
+  // 非法路径
+  LOk := False; try AudioBufferCreateSilence(LFmt, -1); except on E: Exception do LOk := True; end;
+  CheckTrue(LOk, 'negative frames throws');
+  LFmt.SampleRate := 0; LOk := False; try AudioBufferCreateSilence(LFmt, 1); except on E: Exception do LOk := True; end;
+  CheckTrue(LOk, 'invalid format throws');
+end;
+
 procedure T.TestPcm_Conversions_RoundTrip;
 var
   LF: Single;
@@ -477,6 +505,7 @@ begin
   LSuite.Test('AudioClock ToDurationNs', @LCase.TestAudioClock_ToDurationNs);
   LSuite.Test('AudioClock zero rate', @LCase.TestAudioClock_ZeroRate);
   LSuite.Test('Buffer IsEmpty/SampleCount', @LCase.TestBuffer_IsEmpty_SampleCount);
+  LSuite.Test('Buffer Silence/Clone', @LCase.TestBufferCreateSilence_Clone);
   LSuite.Test('PCM conversions round-trip', @LCase.TestPcm_Conversions_RoundTrip);
   LSuite.Test('PCM clamp', @LCase.TestPcm_Clamp);
   LSuite.Test('PCM interleave/deinterleave', @LCase.TestPcm_Interleave_Deinterleave);

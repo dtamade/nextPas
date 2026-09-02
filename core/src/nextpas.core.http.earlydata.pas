@@ -27,8 +27,7 @@ function HttpEarlyDataDecisionToLog(const ADecision: TTlsPasEarlyDataDecision): 
 
 implementation
 
-uses
-  SysUtils;
+
 
 function HttpEarlyDataHeaderValueFromDecision(ADecision: TTlsPasEarlyDataDecision): string;
 begin
@@ -40,7 +39,7 @@ var Info: ITlsPasEarlyDataInfo;
 begin
   Result := '';
   if not Assigned(AStream) then Exit;
-  if Supports(AStream, ITlsPasEarlyDataInfo, Info) then
+  if ((AStream) <> nil) and ((AStream).QueryInterface(ITlsPasEarlyDataInfo, Info) = 0) then
   begin
     if Info.GetWasEarlyDataAccepted then
       Result := HTTP_HEADER_X_EARLY_DATA_EARLY
@@ -54,7 +53,7 @@ var Info: ITlsPasEarlyDataInfo;
 begin
   Result := False;
   if not Assigned(AStream) then Exit;
-  if Supports(AStream, ITlsPasEarlyDataInfo, Info) then
+  if ((AStream) <> nil) and ((AStream).QueryInterface(ITlsPasEarlyDataInfo, Info) = 0) then
     Result := Info.GetWasEarlyDataAccepted;
 end;
 

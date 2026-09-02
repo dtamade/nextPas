@@ -17,7 +17,6 @@ unit nextpas.core.webview.gtk.loader;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.platform.dl,
@@ -170,6 +169,7 @@ var
         'gtk_widget_get_allocated_width') and
       BindReq(@GTK_widget_get_allocated_height,
         'gtk_widget_get_allocated_height') and
+      BindReq(@GTK_widget_set_size_request, 'gtk_widget_set_size_request') and
       BindReq(@GDK_window_get_state, 'gdk_window_get_state') and
       BindReq(@GTK_container_add, 'gtk_container_add') and
       BindReq(@GTK_main, 'gtk_main') and

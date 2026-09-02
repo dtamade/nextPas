@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.async*.pas`（17 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：3.2
+**最后更新**：2026-08-31
+**版本**：3.3
 
 ---
 
@@ -177,6 +177,7 @@ end;
 | 2026-07-11 | 3.0 | 添加 Combinators/Retry/SyncPrimitives | Claude |
 | 2026-07-11 | 2.0 | 添加 TaskGroup/Shutdown/Timeout 高级模式 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-08-31 | 3.3 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
 
 
 ### Close discard contract

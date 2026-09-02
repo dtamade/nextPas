@@ -186,7 +186,7 @@ begin
   LLen := Length(AText);
   SetLength(LBytes, LLen);
   if LLen > 0 then
-    Move(AText[1], LBytes[0], LLen);
+    Move(PAnsiChar(AText)^, LBytes[0], LLen);
   FsWriteFile(APath, LBytes, APerm);
 end;
 
@@ -227,7 +227,7 @@ begin
   LLen := Length(AText);
   SetLength(LBytes, LLen);
   if LLen > 0 then
-    Move(AText[1], LBytes[0], LLen);
+    Move(PAnsiChar(AText)^, LBytes[0], LLen);
   FsAppendFile(APath, LBytes);
 end;
 

@@ -46,7 +46,7 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.hash.intf,
   nextpas.core.text.conv,
-  nextpas.core.git.native.util,
+  nextpas.core.text.builder,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -140,12 +140,25 @@ function BuildPackFromRevs(const AGitDir: string; const AWants: array of TGitOid
 var RevInput: string;
     I: Integer;
     Out_: TProcessOutput;
+    LBuilder: TBufStringBuilder;
 begin
-  RevInput := '';
-  for I := 0 to High(AWants) do
-    RevInput := RevInput + GitOidToHex(AWants[I]) + #10;
-  for I := 0 to High(AExcludes) do
-    RevInput := RevInput + '^' + GitOidToHex(AExcludes[I]) + #10;
+  LBuilder.Init(256);
+  try
+    for I := 0 to High(AWants) do
+    begin
+      LBuilder.AppendStr(GitOidToHex(AWants[I]));
+      LBuilder.AppendChar(#10);
+    end;
+    for I := 0 to High(AExcludes) do
+    begin
+      LBuilder.AppendChar('^');
+      LBuilder.AppendStr(GitOidToHex(AExcludes[I]));
+      LBuilder.AppendChar(#10);
+    end;
+    RevInput := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
   if TrimLocal(RevInput) = '' then
     raise EGitError.Create('bundle: empty rev list');
   Out_ := RunWithInput('git', ['--git-dir=' + AGitDir, 'pack-objects', '--stdout', '--revs', '--delta-base-offset'],
@@ -157,6 +170,27 @@ begin
     raise EGitError.Create('bundle: pack-objects produced empty pack');
   if (Length(Result) < 12) or (Result[0] <> Ord('P')) then
     raise EGitError.Create('bundle: invalid pack header from pack-objects');
+end;
+
+function LocalSplitLines(const S: string): TStringArray;
+var I, Start, L: Integer;
+    Cnt: Integer;
+begin
+  Result := nil;
+  Start := 1; L := Length(S); Cnt := 0;
+  for I := 1 to L do
+    if S[I] = #10 then
+    begin
+      SetLength(Result, Cnt+1);
+      Result[Cnt] := Copy(S, Start, I - Start);
+      Inc(Cnt);
+      Start := I + 1;
+    end;
+  if Start <= L + 1 then
+  begin
+    SetLength(Result, Cnt+1);
+    Result[Cnt] := Copy(S, Start, L - Start + 1);
+  end;
 end;
 
 function ParseBundleHeaderBytesInternal(const AData: TBytes; out APackOff: SizeInt): TGitBundleHeader;
@@ -185,7 +219,7 @@ begin
   // header bytes [0, P] inclusive first \n, but pack starts at P+2
   SetLength(HeaderStr, P+1);
   if P+1 > 0 then Move(AData[0], HeaderStr[1], P+1);
-  Lines := GitSplitLines(HeaderStr);
+  Lines := LocalSplitLines(HeaderStr);
   Cnt := Length(Lines);
   // SplitString includes last empty after trailing \n? Our header ends with \n before blank, so split yields last '' for the blank? Actually header ends with "ref\n" then we consumed up to P which is first \n of "\n\n", so headerStr ends with "\n", split yields last ''.
   // first line must be "# v2 git bundle"
@@ -312,8 +346,10 @@ var Wants: array of TGitOid;
     Oid: TGitOid;
     Pack: TBytes;
     HeaderText: string;
-    OutBytes, PackBytes: TBytes;
+    OutBytes: TBytes;
     Comment: string;
+    LHeader: TBufStringBuilder;
+    LHeaderBytes: TBytes;
 begin
   if ABundlePath = '' then
     raise EGitError.Create('bundle: empty bundle path');
@@ -387,15 +423,32 @@ begin
   if Length(Wants) = 0 then
     raise EGitError.Create('bundle: no want refs resolved');
   Pack := BuildPackFromRevs(AGitDir, Wants, Excludes);
-  HeaderText := '# v2 git bundle' + #10;
-  for I := 0 to High(Excludes) do
-    HeaderText := HeaderText + '-' + GitOidToHex(Excludes[I]) + ' ' + PrereqComments[I] + #10;
-  for I := 0 to High(Wants) do
-    HeaderText := HeaderText + GitOidToHex(Wants[I]) + ' ' + WantNames[I] + #10;
-  HeaderText := HeaderText + #10;
-  OutBytes := GitStringToBytes(HeaderText);
-  PackBytes := Pack;
-  OutBytes := BytesConcat(OutBytes, PackBytes);
+  LHeader.Init(256);
+  try
+    LHeader.AppendStr('# v2 git bundle'#10);
+    for I := 0 to High(Excludes) do
+    begin
+      LHeader.AppendChar('-');
+      LHeader.AppendStr(GitOidToHex(Excludes[I]));
+      LHeader.AppendChar(' ');
+      LHeader.AppendStr(PrereqComments[I]);
+      LHeader.AppendChar(#10);
+    end;
+    for I := 0 to High(Wants) do
+    begin
+      LHeader.AppendStr(GitOidToHex(Wants[I]));
+      LHeader.AppendChar(' ');
+      LHeader.AppendStr(WantNames[I]);
+      LHeader.AppendChar(#10);
+    end;
+    LHeader.AppendChar(#10);
+    HeaderText := LHeader.ToString;
+  finally
+    LHeader.Done;
+  end;
+  LHeaderBytes := GitStringToBytes(HeaderText);
+  // bytes.ops 单源流式一次分配，替代临拼 BytesConcat(OutBytes, PackBytes)
+  OutBytes := BytesConcatMany([LHeaderBytes, Pack]);
   // ensure parent dir
   if PathDir(ABundlePath) <> '' then
     MkdirAll(PathDir(ABundlePath), PermDirDefault);

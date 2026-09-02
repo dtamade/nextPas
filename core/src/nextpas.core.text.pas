@@ -83,6 +83,8 @@ function TextIsBlank(const AValue: string): Boolean; inline;
 
 function TextUTF8Length(const AValue: string): Integer; inline;
 function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32; inline;
+function TextUTF8SafeCutLen(const AValue: string; AMaxBytes: Integer): Integer; inline;
+function TextUTF8SafeTruncate(const AValue: string; AMaxBytes: Integer): string; inline;
 function MakeStringBuilder(const AInitialCap: SizeUInt = 256): IStringBuilder; inline;
 
 { Builder / escape / display width / grapheme helpers }
@@ -253,6 +255,16 @@ end;
 function TextUTF8CodePointAt(const AValue: string; const AIndex: Integer): UInt32;
 begin
   Result := nextpas.core.text.utf8.UTF8CodePointAt(AValue, AIndex);
+end;
+
+function TextUTF8SafeCutLen(const AValue: string; AMaxBytes: Integer): Integer;
+begin
+  Result := nextpas.core.text.utf8.UTF8SafeCutLen(AValue, AMaxBytes);
+end;
+
+function TextUTF8SafeTruncate(const AValue: string; AMaxBytes: Integer): string;
+begin
+  Result := nextpas.core.text.utf8.UTF8SafeTruncate(AValue, AMaxBytes);
 end;
 
 function MakeStringBuilder(const AInitialCap: SizeUInt): IStringBuilder;

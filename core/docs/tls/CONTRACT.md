@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tls*.pas`
 **层级**：L2（依赖 L0–L1、hash、crypto、net/platform 后端 FFI）
 **Owner**：hash / crypto / tls lane
-**最后更新**：2026-08-23
-**版本**：1.2
+**最后更新**：2026-08-31
+**版本**：1.3
 
 ---
 
@@ -132,3 +132,4 @@ make focused FOCUS=core/tests/nextpas.core.tls/test_dialer
 | 2026-08-23 | 1.2 | 测试环境变量 NEXTPAS_* 更名映射；离线边界说明 |
 | 2026-07-20 | 1.1 | IStream 门面；分层边界；shim 说明 |
 | 2026-07-01 | 1.0 | 初始版本 |
+| 2026-08-31 | 1.3 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
