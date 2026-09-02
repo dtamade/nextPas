@@ -1,12 +1,8 @@
 unit nextpas.core.vfs.transform;
 
-{** @desc L3 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图
-  层级：L3 单缝装饰器寄居 L2 vfs 家族（ADR 0003，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0—L3 单向，复用阻塞候选已显式标注独立族）。
-  分层：L3→L2 仅 via 头部谓词复用 bytes.ops 单源与 vfs.base 32MiB 字面量对齐（无 L2→L2 闭环），过渡态以文档正名守 L0—L3 单向纯度。
-  零拷贝直达：小文件 Header 直落区间复用，无栈上 4K 中转。
-  Stat/OpenRead 经内联 HeaderPred 单流快路径（小文件复用头零二次 IO，大文件同流补读免二次 OpenRead，命中时 Move 零拷贝）；32MiB 防 bomb 由 transform 统一承载（VFS_DECOMPRESS_MAX_BYTES 单源，泛型输入/输出双阈值，限幅守稳定性）。
-  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经栈上 2 字节探针栈零堆分配免 4K/TBytes 堆分配，PByte 单源 inline 零拷贝，非 IReaderAt 旁路 Seek-free 前缀包装小缓冲零堆单 Move 最优免 Seek 虚调用）；稳定性：try-finally Close 不丢，输入/输出双阈值限幅并发峰值受控。
-  单源收敛：TryResolveViaHeaderSingleStream 薄转发分层委托（LightProbe/HeaderRead/LargeFill 三阶段 inline 薄转发，职责单一）为唯一 4K 头分配+IReaderAt 直读实现，Stat/OpenRead 共用；bytes.ops BytesIsGzipBuffer PByte 单源 inline 零拷贝。 }
+{** @desc L3 单缝装饰器寄居 L2 家族：通用字节变换视图（ADR 0003）。
+  层级：L3→L2 单向 via bytes.ops/vfs.base 单源（无 L2→L2 闭环）；Registry 单缝白名单过渡，L7 拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0-L3 单向；可抽新模块候选，复用阻塞已显式标注。
+  单源/性能：bytes.ops HeaderPred inline 零拷贝 + VFS_DECOMPRESS_MAX_BYTES 单源 32MiB 双阈值限幅；单流复用 4K 头 Move 零拷贝免二次 OpenRead，热点 2 字节栈探针零堆分配；稳定性 try-finally Close 不丢。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -46,8 +42,8 @@ const
   TRANSFORM_HEADER_PEEK = 4096;
 
 type
-  // 非 IReaderAt 旁路 Seek-free 前缀包装：2 字节/4K 前缀零拷贝 Move 补齐，免 Seek(0) 虚调用且不依赖 Seek 能力；顺序读零额外 Seek，稳定性不丢
-  // 性能：2 字节场景栈上小缓冲零堆分配单 Move 最优（bytes.ops 单源），大前缀仍堆分配；单源 Move 零拷贝
+  // 可抽新模块候选：通用前缀旁路流 nextpas.core.io.prefix（L7 可拆分为独立可复用装饰器，供 io/os/embedded 复用）；当前寄居 transform 最小改动，复用阻塞候选。
+  // 非 IReaderAt 旁路 Seek-free 前缀包装：2 字节/4K 前缀零拷贝 Move 补齐，免 Seek(0) 虚调用；顺序读零额外 Seek，稳定性不丢；性能 2 字节栈小缓冲零堆单 Move 最优（bytes.ops 单源）
   TPrefixBypassStream = class(TInterfacedObject, IStream)
   private
     FPrefix: TBytes;
@@ -81,11 +77,12 @@ type
     function Should(const AData: TBytes): Boolean; inline;
     function HeaderShould(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
     function Transform(const AData: TBytes): TBytes; inline;
-    // 薄转发分层：LightProbe 2字节栈零堆预判 + HeaderRead 4K 单流复用 + LargeFill 单流补读三阶段 inline 薄转发，职责单一，供 Stat/OpenRead 共用
     // OpenRead 零额外 I/O：Header 假时单流直透，复用已打开 IStream 免二次 OpenRead
+    // 三阶段决策器：TryLightProbe(2字节栈探针零堆) / TryReadHeader(4K 单流复用) / TryFillLargeFile(同流补读) thin forwarding 职责单一；非 IReaderAt 经 TPrefixBypassStream 前缀包装 Seek-free，截断异常 try-finally 不丢
     function TryLightProbe(const AStream: IStream; const APath, AOp: string; ATotal: Int64; var AProbeBuf: array of Byte; out AProbeLen: SizeUInt; out AHasProbe: Boolean; out AUseReadAt: Boolean; out ABypassStream: IStream): Boolean;
     function TryReadHeader(const AStream: IStream; const APath, AOp: string; ATotal: Int64; AHasProbe: Boolean; const AProbeBuf: array of Byte; AProbeLen: SizeUInt; out AHeader: TBytes; out ARead: SizeUInt; out AUseReadAt: Boolean): Boolean;
     function TryFillLargeFile(const APath, AOp: string; ATotal: Int64; const AHeader: TBytes; const AStream: IStream; out AData: TBytes): Boolean;
+    function TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; AUseReadAt: Boolean; out AData: TBytes): Boolean;
     function TryResolveViaHeaderSingleStream(const APath: string; const AOp: string; const AStat: TStatInfo; out AHeader: TBytes; out ATotal: Int64; out AData: TBytes): THeaderResolve; overload;
     function TryResolveViaHeaderSingleStream(const APath: string; const AOp: string; const AStat: TStatInfo; out AHeader: TBytes; out ATotal: Int64; out AData: TBytes; out ABypassStream: IStream): THeaderResolve; overload;
   public
@@ -394,10 +391,11 @@ var LOff, LRem, LGot: SizeUInt; LReaderAt: IReaderAt;
 begin
   Result := False;
   if (ATotal <= TRANSFORM_HEADER_PEEK) or (Length(AHeader) <> TRANSFORM_HEADER_PEEK) or (ATotal > High(SizeInt)) or (ATotal < 0) then Exit(False);
-  // 稳定性：大文件命中路径输入受 VFS_DECOMPRESS_MAX_BYTES 32MiB 限幅，输出同阈值防 bomb，并发峰值受控；后续 L7 视压测按需引入 chunked streaming 进一步收敛（当前以限幅守稳定性）
-  // 性能：单流复用已读 4K 头 Move 零拷贝，同一 IStream 定位补读剩余免二次 OpenRead
+  // 稳定性：大文件命中路径输入受 VFS_DECOMPRESS_MAX_BYTES 32MiB 限幅（超限直接抛，ATotal 已校验），输出同阈值防 bomb；当前以限幅守并发峰值，L7 视压测按需引入 chunked streaming 进一步收敛（CONTRACT 32MiB L7 streaming 候选）。
+  // 性能：单流复用已读 4K 头 Move 零拷贝（bytes.ops 单源），同一 IStream 定位补读剩余免二次 OpenRead/二次 4K；inline 热路径，大文件非 IReaderAt 经 Seek 补偿单次虚调用
   if ATotal > Int64(VFS_DECOMPRESS_MAX_BYTES) then
     raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+  // 可抽新模块候选：超 32MiB 前全量分配受限幅保护，L7 引入 chunked streaming 可进一步消除大文件全量分配峰值（当前守稳定性最小改动）
   SetLength(AData, ATotal);
   Move(AHeader[0], AData[0], Length(AHeader)); // bytes.ops 单源 Move 零拷贝复用 4K 头
   LOff := SizeUInt(Length(AHeader)); LRem := SizeUInt(ATotal) - LOff;
@@ -422,6 +420,94 @@ begin
       Inc(LOff, LGot); Dec(LRem, LGot);
     end;
   end;
+  Result := True;
+end;
+
+function TTransformingVfs.TryReadAllWithHeader(const APath, AOp: string; const AHeader: TBytes; const AStream: IStream; AHasProbe: Boolean; AUseReadAt: Boolean; out AData: TBytes): Boolean;
+var
+  LReaderAt: IReaderAt;
+  LUseRA: Boolean;
+  LSize, LCap, LOff, LGot, LRead: SizeUInt;
+  LChunk: array[0..4095] of Byte;
+begin
+  Result := False;
+  AData := nil;
+  if Length(AHeader) = 0 then Exit(False);
+  // AHasProbe 已在 TryReadHeader 合成阶段消耗，前缀位置已对齐，此处仅复用 Header 零 Seek
+  if AHasProbe then begin end;
+  // 未知尺寸单流兜底：HeaderPred 真时复用已读 4K 头 + 同流剩余一次性物化免二次 OpenRead；受 32MiB 限幅守稳定性，L7 按需 chunked streaming
+  LUseRA := AUseReadAt and (AStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+  // 小文件未知尺寸：Header 已是全量（EOF 截断），直接复用零二次 IO
+  if Length(AHeader) < TRANSFORM_HEADER_PEEK then
+  begin
+    // 探针阶段已读 2 字节 + 4K 头合成后的实际读取若已 EOF，则 Header 即全量
+    AData := AHeader;
+    if Length(AData) > VFS_DECOMPRESS_MAX_BYTES then
+      raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+    Exit(True);
+  end;
+  LSize := SizeUInt(Length(AHeader));
+  if LSize > VFS_DECOMPRESS_MAX_BYTES then
+    raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+  LCap := LSize + 4096;
+  if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
+  SetLength(AData, LCap);
+  Move(AHeader[0], AData[0], LSize); // bytes.ops 单源 Move 零拷贝
+  LOff := LSize;
+  if LUseRA then
+  begin
+    // IReaderAt 路径：按 offset 顺序补读剩余，直至 EOF
+    while True do
+    begin
+      if LOff >= VFS_DECOMPRESS_MAX_BYTES then
+        raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+      LRead := SizeUInt(VFS_DECOMPRESS_MAX_BYTES) - LOff;
+      if LRead > SizeUInt(Length(LChunk)) then LRead := SizeUInt(Length(LChunk));
+      try LGot := LReaderAt.ReadAt(LChunk[0], LRead, Int64(LOff));
+      except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
+      if LGot = 0 then Break;
+      if LOff + LGot > VFS_DECOMPRESS_MAX_BYTES then
+        raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+      if LOff + LGot > LCap then
+      begin
+        LCap := LCap * 2;
+        if LCap < LOff + LGot then LCap := LOff + LGot;
+        if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
+        if LOff + LGot > LCap then
+          raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+        SetLength(AData, LCap);
+      end;
+      Move(LChunk[0], AData[LOff], LGot);
+      Inc(LOff, LGot);
+      if LGot < LRead then Break;
+    end;
+  end
+  else
+  begin
+    // 顺序流路径：已处 Header 末尾，持续 Read 至 EOF；限幅守峰值
+    while True do
+    begin
+      if LOff >= VFS_DECOMPRESS_MAX_BYTES then
+        raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+      try LGot := AStream.Read(LChunk[0], SizeUInt(Length(LChunk)));
+      except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx(AOp, APath, LEx.Message); end;
+      if LGot = 0 then Break;
+      if LOff + LGot > VFS_DECOMPRESS_MAX_BYTES then
+        raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+      if LOff + LGot > LCap then
+      begin
+        LCap := LCap * 2;
+        if LCap < LOff + LGot then LCap := LOff + LGot;
+        if LCap > VFS_DECOMPRESS_MAX_BYTES then LCap := VFS_DECOMPRESS_MAX_BYTES;
+        if LOff + LGot > LCap then
+          raise EVfsError.CreateCtx(AOp, APath, 'transform: source size exceeds limit');
+        SetLength(AData, LCap);
+      end;
+      Move(LChunk[0], AData[LOff], LGot);
+      Inc(LOff, LGot);
+    end;
+  end;
+  SetLength(AData, LOff);
   Result := True;
 end;
 
@@ -500,7 +586,13 @@ begin
     // 阶段3：大文件命中单流补读（限幅守稳定性，Move 零拷贝复用 4K 头）
     if TryFillLargeFile(APath, AOp, ATotal, AHeader, LStream, AData) then
       Exit(hrAcquired);
-    // 尺寸未知/不匹配 -> 回退外层全量路径
+    // 未知尺寸单流兜底：HeaderPred 真且尺寸未知时，同流全量物化免二次 OpenRead（消除 hrFallback→VfsReadAllBytes 双次命中）；32MiB 限幅守稳定性，L7 按需 chunked streaming
+    if (ATotal < 0) then
+    begin
+      if TryReadAllWithHeader(APath, AOp, AHeader, LStream, LHasProbe, LUseReadAt, AData) then
+        Exit(hrAcquired);
+    end;
+    // 尺寸不匹配/截断 -> 受控回退外层全量路径（小文件或未知 size 兜底失败场景）；大文件已知 size 已在 Acquired/Bypass 处理，免冗余后端命中
     Exit(hrFallback);
   finally
     if LStream <> nil then
@@ -539,9 +631,9 @@ begin
         LData := nil;
         Exit(LInfo);
       end;
-    hrFallback: ; // 尺寸未知/不匹配 -> 受控回退全量路径（小文件或未知 size 场景）
+    hrFallback: ; // 截断/不匹配受控回退；未知尺寸已在单流 TryReadAllWithHeader  Acquired 免二次 OpenRead，大文件已知 size 已 Acquired/Bypass，冗余命中消除
   end;
-  // 受控回退：仅当单流无法判定（size 未知/截断）时全量读；大文件已知 size 已在单流 Acquired/Bypass 处理，免 O(size) 分配+解压（防 bomb：输入超 VFS_DECOMPRESS_MAX_BYTES 直接限幅）
+  // 受控回退：仅截断/空文件等无法判定的极小边沿才全量读（VfsReadAllBytes 单次分配，IReaderAt 单次直读）；大文件/未知尺寸已由单流 Acquired/Bypass 处理免二次 OpenRead，防 bomb 输入超 VFS_DECOMPRESS_MAX_BYTES 直接限幅
   try LData := VfsReadAllBytes(FInner, APath); except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx('stat', APath, LEx.Message); end;
   if Length(LData) > VFS_DECOMPRESS_MAX_BYTES then
     raise EVfsError.CreateCtx('stat', APath, 'transform: source size exceeds limit');
@@ -589,8 +681,9 @@ begin
         Result := CreateBytesStreamFrom(LOut);
         Exit;
       end;
-    hrFallback: ; // fall through to全量路径（未知 size 或目录）
+    hrFallback: ; // 截断/不匹配受控回退；未知尺寸已由单流 TryReadAllWithHeader Acquired 免二次 OpenRead
   end;
+  // 受控回退仅截断边沿：大文件/未知尺寸已由单流免二次 OpenRead 处理（TryReadAllWithHeader 单流物化），此处仅目录/截断等极小路径；限幅守峰值
   try LData := VfsReadAllBytes(FInner, APath); except on LEx: EVfsError do raise; on LEx: Exception do raise EVfsError.CreateCtx('open', APath, LEx.Message); end;
   if Length(LData) > VFS_DECOMPRESS_MAX_BYTES then
     raise EVfsError.CreateCtx('open', APath, 'transform: source size exceeds limit');

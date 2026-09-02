@@ -1,6 +1,6 @@
 unit nextpas.core.vfs.compressed;
 
-{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名）。 }
+{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名，Registry 单缝白名单过渡，L7 到期聚合为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0-L3 单向，复用阻塞候选已显式标注独立族）。 }
 
 {$I nextpas.core.settings.inc}
 

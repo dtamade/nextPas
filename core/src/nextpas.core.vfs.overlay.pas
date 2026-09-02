@@ -157,22 +157,28 @@ begin
   raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
-{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；资源释放不丢（Seen 哈希表 try-finally 托管异常自动释放，Result/Cur 局部托管） }
-procedure OverlayEnsureCapEntries(var AArr: TEntryArray; const ANeed: SizeInt); inline;
+{ 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增（BYTES_BUILDER_MIN_GROW 起步×2，均摊 O(1)），单源防漂移；inline 零拷贝，单次 SetLength+Move，避免多层叠加时 O(n²) realloc+Move；ALimit 回缩守零浪费（小目录<64 按限界裁剪不对齐 BYTES_BUILDER_MIN_GROW 预分配，复用 mount 同款模板 vialimit）；资源释放不丢（Seen 哈希表 try-finally 托管异常自动释放，Result/Cur 局部托管） }
+procedure OverlayEnsureCapEntries(var AArr: TEntryArray; const ANeed: SizeInt; const ALimit: SizeInt); inline;
 var
   LCap: SizeUInt;
 begin
   if ANeed <= Length(AArr) then Exit;
   LCap := BytesNextCapacity(SizeUInt(Length(AArr)), SizeUInt(ANeed));
+  { BytesNextCapacity 最小 64，小目录(<64)按 ALimit 回缩以守零浪费；derive/mount 模板 16 起步，此处以限界对齐 bytes.ops 单源 }
+  if (ALimit > 0) and (SizeInt(LCap) > ALimit) then LCap := SizeUInt(ALimit);
+  if SizeInt(LCap) < ANeed then LCap := SizeUInt(ANeed);
+  if LCap = 0 then LCap := SizeUInt(ANeed);
   SetLength(AArr, SizeInt(LCap));
 end;
 
-{ 流式增量去重 List：优先级顺序 O(k) 哈希去重 + 去重后 O(k log k) VfsSortEntries 单源排序，避免全量 Temp 物化后 Sort+Unique+Copy 双重拷贝；bytes.ops VfsNameCompare SpanCompare 零拷贝单源 via VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline。 }
+{ 流式增量去重 List：优先级顺序 O(k) 哈希去重 + 去重后 O(k log k) VfsSortEntries 单源排序，避免全量 Temp 物化后 Sort+Unique+Copy 双重拷贝；bytes.ops VfsNameCompare SpanCompare 零拷贝单源 via VfsSortEntries，BytesNextCapacity 指数扩容均摊 O(1) 复用 mount 同款模板 inline（ALimit 回缩小目录<64 零浪费）。 }
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
   I, J: Integer;
   OutN: SizeInt;
   Cur: TEntryArray;
+  LCurs: array of TEntryArray;
+  LTotal: SizeInt;
   LStat: TStatInfo;
   Seen: specialize TSwissTableStr<Byte>;
 begin
@@ -187,21 +193,29 @@ begin
     if not LStat.Info.IsDir then
       raise EVfsNotADirectory.CreateCtx('list', ADirPath, 'target is a file');
   end;
+  { 预取各层 List 以得精确 ALimit 上界：sum Length(Cur) 为去重前最大扇出，bytes.ops BytesNextCapacity 按此限界回缩，小目录<64 避免 BYTES_BUILDER_MIN_GROW=64 预分配浪费；零拷贝 Move 单源 }
+  SetLength(LCurs, Length(FList));
+  LTotal := 0;
+  for I := 0 to High(FList) do
+  begin
+    try LCurs[I] := FList[I].List(ADirPath);
+    except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
+    Inc(LTotal, Length(LCurs[I]));
+  end;
   Result := nil;
   OutN := 0;
   Seen := specialize TSwissTableStr<Byte>.Create(16);
   try
-    for I := 0 to High(FList) do
+    for I := 0 to High(LCurs) do
     begin
-      try Cur := FList[I].List(ADirPath);
-      except on E: EVfsNotFound do Continue; on E: EVfsNotADirectory do Continue; end;
+      Cur := LCurs[I];
       if Length(Cur) = 0 then Continue;
       for J := 0 to High(Cur) do
       begin
         if Seen.ContainsKey(Cur[J].Name) then Continue;
         Seen.Put(Cur[J].Name, 0);
-        { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1) inline+Move 零拷贝，单源复用 mount 模板 via OverlayEnsureCapEntries }
-        OverlayEnsureCapEntries(Result, OutN + 1);
+        { 指数扩容单源：bytes.ops BytesNextCapacity 几何倍增×2，均摊 O(1) inline+Move 零拷贝，按 LTotal 回缩（小目录<64 零浪费），单源复用 mount/derive 模板 via OverlayEnsureCapEntries }
+        OverlayEnsureCapEntries(Result, OutN + 1, LTotal);
         Result[OutN] := Cur[J];
         Inc(OutN);
       end;

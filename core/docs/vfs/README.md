@@ -113,10 +113,10 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名，Re
 |------|----------|------|
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
-| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
+| `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader` L2→L2 second seam, Registry line 106 extra whitelist beyond single-seam ideal, source-contract gated, 14→ respack.reader, bytes.ops 单源 inline 零拷贝） | |
 | `transform` | `intf/base` + `bytes.ops` + `io.memory` + `vfs.base` + `vfs.util` + `exception`（L0-L1；bytes.ops HeaderPred 单源 inline 零拷贝，vfs.base 32MiB 字面量对齐，exception EVfsError 根） | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0—L3 单向；impl 私有 4K 常量接口不暴露封装收口，HeaderPred PByte 单源零堆 inline 零拷贝，OpenRead 免前置 Stat 单流直达已修复二分翻倍，大文件输入/输出双 32MiB 限幅防 bomb 并发峰值受控（L7 视压测按需 chunked streaming 进一步收敛，不公开债务））：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream 薄转发分层（LightProbe/HeaderRead/LargeFill 三阶段 inline 单一职责，Stat/OpenRead 共用，Move 零拷贝，大文件栈上 2 字节探针栈零堆 PByte 单源免 4K/TBytes 堆分配，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead，Stat/OpenRead 大文件解压一致性，泛型路径输入/输出双 32MiB 防 bomb 统一），零 `SysUtils` 直引（`QueryInterface`） |
 | `compressed` | `transform` + `compress.gzip` + `bytes.ops` + `vfs.base` | L3 薄门面（单缝寄居正名，Registry 白名单过渡，L7 聚合拆分为 decorator，经 vfs.base 单源别名复用 VFS_DECOMPRESS_MAX_BYTES 无二次字面量双写，L3→L2 合法）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` inline 零拷贝单源、4K HeaderPred 统一（impl 私有 4096 单源，接口不暴露，compressed 数值对齐无别名）、`VFS_DECOMPRESS_MAX_BYTES` 单源别名复用 vfs.base 32MiB canonical 单源），模板复用 `transform` 单源决策器，32MiB 防 bomb 由 transform 统一承载（泛型/压缩一致，输入/输出双阈值） |
-| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
+| `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | L2→L2 seam whitelisted (Registry line 106 extra whitelist beyond single-seam ideal, source-contract gated; double seam with embedded→respack.reader, 14→ respack.reader) |
 
 ## 核心契约
 
@@ -274,17 +274,24 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
   行为断言（P1-P8、Sub、CaseSensitive、错误映射）在电池里以真实目录夹具覆盖，
   独立门只会复制同一套夹具。os 实现细节（如 ns→s 时间换算）由 conformance 的
   modTime 一致性属性间接锁定
-- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os` 外禁止
-  出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
+- `test_vfs_source_contract`：源码契约检查，锁定依赖白名单（`vfs.*` 中除 `os`(fs seam) 与 `embedded`(respack.reader second seam, Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, source-contract 强门禁, bytes.ops inline 零拷贝) 外禁止出现对 `fs`/`respack` 的 uses；全模块禁止 OS 单元），照 system 模块 source-contract 先例
 - 全部 gate 要求 heaptrc 零泄漏
 
-## 基准（`bench_transform` 固化）
+## 基准（`bench_transform` + `bench_hotspots` 双阈值固化）
 
 `core/benchmarks/nextpas.core.vfs/bench_transform` 固化 `daAuto` 关键路径（`make -C bench_transform build && ./bench_transform`）：
 - `Stat/large-non-gzip/header-peek` 1MiB 非 gzip 经 4K 头部小读 ~972 ns/op（1.0 Mops/s）
 - `Stat/gz/decompress` 64KiB 解压 ~51 µs/op，对比头部预判慢 ~50×
 - `Open/large-non-gzip/passthrough` 单次读取复用 ~2.26 ms/op，`Open/gz/decompress` ~107 µs/op
 头部预判与单次读取优化由 `test_vfs_compressed` 7/7（含 1MiB 头部预判固化用例）锁定为功能契约，基准用于回归防劣化。
+
+`core/benchmarks/nextpas.core.vfs/bench_hotspots` 固化 memtree/embedded/os 三后端热路径（`make -C bench_hotspots build && ./bench_hotspots`），补充 design-conventions 每模块热路径基准覆盖要求：
+- `Exists/*` / `Stat/*/file` 三后端二分/Stat 单次查找，inline 零拷贝 bytes.ops 单源（VfsValidPath/SpanStartsWith/CompareBytesOrdered）
+- `List/*/root` `List/*/assets` `List/sub/*` 三后端有序区间扫描扇出限界（VfsEnumerateChildSpans 单源，初值16，O(k)直取 FEntries/FRp 并行缓存，无二次二分），天然有序免 Sort/Dedup
+- `OpenRead/*/4k` / `OpenRead/sub/*/4k` 三后端 O(1) 切片/Move 零拷贝（embedded TEmbeddedSlice 零内容复制池化、memtree TMemStream Move 单源、os fs seam 句柄），VfsReadAllBytes 单次分配 + IReaderAt 单次直读（VfsFillFromStream 单源复用）
+- `Walk/*/full` `Walk/sub/*/full` O(n) 批量 List 字典序确定性，零冗余 List 调用
+- `Sub` 视图 O(1) 包装无树复制，独立 `List/sub` `OpenRead/sub` 阈值锁定
+三后端独立基准项 24 项（Exists/Stat/List×3 + List/assets×3 + SubList×3 + OpenRead×3 + OpenRead/sub×2 + Walk×3 + Walk/sub），与 bench_transform 互补覆盖 CONTRACT §6 全部性能契约行。
 
 ## Consumer 展望（跨模块 slice，另行立项）
 
@@ -303,7 +310,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract     # us
 | `nextpas.core.settings.inc` | `SysUtils`、`Classes` |
 | `nextpas.core.base` / `io.intf` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
 | `nextpas.core.exception` / `errors`（异常根桥接） | 任何其他 FPC RTL 单元 |
-| `os` 后端另加 `fs`/`path`；`embedded` 另加 `respack.reader` | |
+| `os` 后端另加 `fs`/`path` (L2→L2 single seam)；`embedded` 另加 `respack.reader` (L2→L2 second seam, Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, source-contract gated, bytes.ops 单源 inline 零拷贝, SpinLock try-finally 资源不丢) | |
 
 - `EVfsError` 继承 `nextpas.core.exception.Exception`——异常词汇的桥接点收敛在
   exception 根模块（FPC 下桥接、nextPas 下原生实现）；仓库对 FPC RTL 直引的整体豁免面

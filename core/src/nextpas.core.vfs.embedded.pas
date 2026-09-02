@@ -1,8 +1,10 @@
 unit nextpas.core.vfs.embedded;
 
 {** @desc embedded 后端：respack blob 上的只读 IVfs 视图——资产嵌入主路径。
+  L2→L2 seam whitelisted: nextpas.core.respack.reader (Registry Allowed dependencies line 106 extra whitelist beyond single-seam ideal, source-contract gated, line 14).
   零拷贝：Stat/Find 直通 respack 二分索引；读取窗口直接落在 blob 区间内
-  （INV-V6/P8）。EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
+  （INV-V6/P8，bytes.ops 单源 inline 零拷贝，SpinLock池化 try-finally 资源不丢）。
+  EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
   （设计决策记录见 core/docs/vfs/README.md）。 }
 
 {$I nextpas.core.settings.inc}
@@ -14,7 +16,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack.base,
-  nextpas.core.respack.reader,
+  nextpas.core.respack.reader, // L2→L2 seam whitelisted (Registry line 106 extra whitelist beyond single-seam ideal, source-contract gated, bytes.ops single-source inline zero-copy)
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;

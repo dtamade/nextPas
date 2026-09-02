@@ -8,8 +8,8 @@ uses
 { 源契约门禁：respack(5 单元) + vfs(9 单元) 的 uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_path 同机制，不自造）
-  2) L2→L2 seam 唯一性：除 vfs.os / respack.dirsource 外，
-     任何模块单元不得引用 nextpas.core.fs
+  2) L2→L2 seam 唯一性：除 vfs.os / respack.dirsource (fs seam) 外，
+     任何模块单元不得引用 nextpas.core.fs；额外 whitelisted second seam: vfs.embedded → nextpas.core.respack.reader (Registry line 106 extra whitelist beyond single-seam ideal, 14→ respack.reader, bytes.ops 单源 inline 零拷贝, source-contract 强门禁)
   3) 异常根纪律：全部异常类挂在 nextpas.core.exception }
 
 {$I ../../fpc_rtl_uses_scan.inc}
@@ -50,6 +50,13 @@ procedure AssertNoFsSeam(const ALabel, ASource: string);
 begin
   Check(Pos('nextpas.core.fs', ASource) = 0,
     ALabel + ' — must not reference nextpas.core.fs');
+end;
+
+{ L2→L2 respack seam 变体：仅 vfs.embedded 允许 respack.reader，其余 vfs 单元禁（Registry line 106 extra whitelist, 14→ respack.reader, bytes.ops 单源 inline 零拷贝，source-contract 强门禁，超出单点 seam 理想的额外白名单） }
+procedure AssertNoRespackSeam(const ALabel, ASource: string);
+begin
+  Check(Pos('nextpas.core.respack.reader', ASource) = 0,
+    ALabel + ' — must not reference nextpas.core.respack.reader (only vfs.embedded whitelisted)');
 end;
 
 { embed 变体：允许 fs.glob（纯字符串匹配，非 IO），其余 fs 单元仍禁。
@@ -194,6 +201,30 @@ begin
     'compressed declares compress.gzip dependency for GzipDecompress');
   Check(Pos('COMPRESSED_HEADER_PEEK', Src) = 0,
     'compressed must not define COMPRESSED_HEADER_PEEK alias (single source via transform.TRANSFORM_HEADER_PEEK)');
+
+  { L2→L2 double seam gate: embedded → respack.reader (Registry line 106 extra whitelist beyond single-seam ideal, 14→ nextpas.core.respack.reader, bytes.ops 单源 inline 零拷贝，SpinLock try-finally 资源不丢, source-contract 强门禁) }
+  Src := LoadSourceText('src/nextpas.core.vfs.embedded.pas');
+  Check(Pos('nextpas.core.respack.reader', Src) > 0,
+    'embedded declares respack.reader seam (L2→L2 whitelisted, source-contract gated, bytes.ops single-source inline zero-copy, line 14)');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0,
+    'embedded reuses bytes.ops single source (inline zero-copy)');
+  Check(Pos('inline;', Src) > 0,
+    'embedded has inline hot paths (perf evidence)');
+  Check(Pos('try', Src) > 0,
+    'embedded has try-finally resource release (stability, not lost)');
+  { Only embedded may reference respack.reader among vfs family; others must not (strict gate, beyond fs/path single-seam ideal) }
+  AssertNoRespackSeam('vfs.base', LoadSourceText('src/nextpas.core.vfs.base.pas'));
+  AssertNoRespackSeam('vfs.intf', LoadSourceText('src/nextpas.core.vfs.intf.pas'));
+  AssertNoRespackSeam('vfs.errors', LoadSourceText('src/nextpas.core.vfs.errors.pas'));
+  AssertNoRespackSeam('vfs.memtree', LoadSourceText('src/nextpas.core.vfs.memtree.pas'));
+  AssertNoRespackSeam('vfs.util', LoadSourceText('src/nextpas.core.vfs.util.pas'));
+  AssertNoRespackSeam('vfs.os', LoadSourceText('src/nextpas.core.vfs.os.pas'));
+  AssertNoRespackSeam('vfs.sub', LoadSourceText('src/nextpas.core.vfs.sub.pas'));
+  AssertNoRespackSeam('vfs.mount', LoadSourceText('src/nextpas.core.vfs.mount.pas'));
+  AssertNoRespackSeam('vfs.overlay', LoadSourceText('src/nextpas.core.vfs.overlay.pas'));
+  AssertNoRespackSeam('vfs.transform', LoadSourceText('src/nextpas.core.vfs.transform.pas'));
+  AssertNoRespackSeam('vfs.compressed', LoadSourceText('src/nextpas.core.vfs.compressed.pas'));
+  AssertNoRespackSeam('vfs facade', LoadSourceText('src/nextpas.core.vfs.pas'));
 end;
 
 procedure TestExceptionRootDiscipline;

@@ -49,7 +49,7 @@ function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 function VfsNameCompare(const AA, AB: string): Integer; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
-  避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度。
+  避免两处字面量漂移；bytes.ops BytesHexUInt64 单源 inline 零拷贝 HEX_UPPER 保证大小写/位宽一致，base 保持 L0 纯度。
   非 inline 权衡：前缀/比较族已 inline（见上），ETag 含堆分配主导开销不 inline 以稳尺寸。 }
 function VfsETagStrong(const ASize, AModTime: Int64): string;
 function VfsETagFNV(const AHash: UInt32): string;
@@ -127,21 +127,9 @@ begin
   Result := SpanCompare(SA, SB);
 end;
 
-const
-  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-
 function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
-var
-  I: Integer;
-  V: UInt64;
 begin
-  SetLength(Result, ADigits);
-  V := AValue;
-  for I := ADigits - 1 downto 0 do
-  begin
-    Result[I + 1] := HEX_DIGITS[V and $F];
-    V := V shr 4;
-  end;
+  Result := BytesHexUInt64(AValue, ADigits); { bytes.ops HEX_UPPER 单源 inline 零拷贝，消除 HEX_DIGITS 本地重复 }
 end;
 
 function VfsETagStrong(const ASize, AModTime: Int64): string;
@@ -238,14 +226,41 @@ begin
   Inc(Ctx^.OutN);
 end;
 
+{ 零堆 Successor 判定：Succ = prefix[1..len-1]+'0'，inline 字节序比较免 Copy/Chr 堆分配，热点重复 List 零 GC。 }
+function SpanLessThanSuccessor(const ACur: TByteSpan; const APrefix: string; APrefixLen: SizeInt): Boolean; inline;
+var P: PByte; I: SizeInt; SuccB: Byte;
+begin
+  if ACur.Len = 0 then Exit(True);
+  P := PByte(@APrefix[1]);
+  if SizeInt(ACur.Len) < APrefixLen then
+  begin
+    for I := 0 to SizeInt(ACur.Len) - 1 do
+    begin
+      if I = APrefixLen - 1 then SuccB := Byte(Ord('/') + 1) else SuccB := P[I];
+      if ACur.Data[I] < SuccB then Exit(True);
+      if ACur.Data[I] > SuccB then Exit(False);
+    end;
+    Exit(True);
+  end
+  else
+  begin
+    for I := 0 to APrefixLen - 1 do
+    begin
+      if I = APrefixLen - 1 then SuccB := Byte(Ord('/') + 1) else SuccB := P[I];
+      if ACur.Data[I] < SuccB then Exit(True);
+      if ACur.Data[I] > SuccB then Exit(False);
+    end;
+    Exit(False);
+  end;
+end;
+
 { 单源：LowerBound + UpperBound + '/' 分段 + 去重；O(log n + k) 有序区间，资源释放不丢。 }
 procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
   AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
   AHandlerData: Pointer);
 var
   PrefixLen, Lo, Hi, Mid, I, SegPos, J: SizeInt;
-  PrefixSpan, UpperSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
-  Successor: string;
+  PrefixSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
   UpperLo, UpperHi: SizeInt;
   IsFirst: Boolean;
 begin
@@ -269,19 +284,14 @@ begin
       else
         Hi := Mid;
     end;
-    // 上界截断：prefix 以 '/' 结尾，successor 将 '/' 递增为 '0'，区间 [Lo, HiUpper) 即 prefix 子树
-    Successor := Copy(ADirPrefix, 1, PrefixLen - 1) + Chr(Ord('/') + 1);
-    if Length(Successor) > 0 then
-      UpperSpan := TByteSpan.Create(PByte(@Successor[1]), SizeUInt(Length(Successor)))
-    else
-      UpperSpan := TByteSpan.Empty;
+    // 上界截断：succ = prefix[1..len-1]+'0'，零堆 inline 比较免 Copy/Chr 堆分配，热点 List 零 GC
     UpperLo := Lo;
     UpperHi := ACount;
     while UpperLo < UpperHi do
     begin
       Mid := UpperLo + (UpperHi - UpperLo) div 2;
       CurSpan := AGetter(Mid, AGetterData);
-      if SpanCompare(CurSpan, UpperSpan) < 0 then
+      if SpanLessThanSuccessor(CurSpan, ADirPrefix, PrefixLen) then
         UpperLo := Mid + 1
       else
         UpperHi := Mid;

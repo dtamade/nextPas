@@ -1,7 +1,7 @@
 # nextpas.core.vfs 代码契约
 
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3单缝装饰器 + 门面）
-**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 实现侧单向使用 compress.gzip + 接口层 compressed 经 vfs.base 单源别名复用 VFS_DECOMPRESS_MAX_BYTES（无 L2→L2 compress.base 直连）+ bytes.ops 单源，base 为唯一字面量 32MiB 对齐 canonical，长期聚合为独立 L3 族 nextpas.core.vfs.decorator、L7 到期移除白名单固化 L0-L3 单向依赖，现阶段以单缝+文档正名守层级高级感统一性）
+**层级**：L2 基座（依赖 L0-L1；L2→L2 seams whitelisted double seam beyond single-seam ideal, Registry line 106 extra whitelist source-contract gated: `os` → fs/path single seam, `embedded` → respack.reader second seam line 14 bytes.ops 单源 inline 零拷贝 SpinLock try-finally 资源不丢；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 实现侧单向使用 compress.gzip + 接口层 compressed 经 vfs.base 单源别名复用 VFS_DECOMPRESS_MAX_BYTES（无 L2→L2 compress.base 直连）+ bytes.ops 单源，base 为唯一字面量 32MiB 对齐 canonical，长期聚合为独立 L3 族 nextpas.core.vfs.decorator、L7 到期移除白名单固化 L0-L3 单向依赖，现阶段以单缝+文档正名守层级高级感统一性）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
 **版本**：1.8（匠心修复：compressed 薄门面 VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 消除接口层字面量双写（base 唯一字面量 32MiB 对齐 canonical，漂移由 source-contract 别名单源锁定）+ bytes.ops inline 零拷贝，13门闭环保）
@@ -126,12 +126,15 @@ end;
 
 | 操作 | 目标 | 证据 |
 |------|------|------|
-| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire，HasSubtreePath SpanStartsWith bytes.ops单源 inline 零拷贝 |
-| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；64槽SpinLock池化10k 163ms 4.9×预算（百并发阈值覆盖，饱和率4×↓），heaptrc0，FKeep强保活+FOwner弱归还契约显式（LKeep先于LOwner，FPoolLock=nil 安全回退Free，inline热路径） |
-| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 O(k) | LowerBound(O(log n))+SpanStartsWith/SpanEqual 单源 bytes.ops 零拷贝 inline，FEntries 并行缓存 O(k) 直取 Size/ModTime 无 IndexOfPath 二分（Spans O(n) 分配已移除），扇出限界初值16 Cap≤N-Lo，天然有序免 Sort/Dedup |
-| OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
-| Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
-| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |
+| Exists/Stat（embedded） | 二分查找，无分配 | LowerBoundPath+CompareBytesOrdered直通base.utils，FPaths/Entries平行缓存零DecodeWire，HasSubtreePath SpanStartsWith bytes.ops单源 inline 零拷贝；bench_hotspots `Exists/embedded` `Stat/embedded/file` 阈值锁定 |
+| OpenRead（embedded） | O(1) 切片构造，零内容复制 | TEmbeddedSlice直接落在blob区间，P8地址断言；64槽SpinLock池化10k 163ms 4.9×预算（百并发阈值覆盖，饱和率4×↓），heaptrc0，FKeep强保活+FOwner弱归还契约显式（LKeep先于LOwner，FPoolLock=nil 安全回退Free，inline热路径）；bench_hotspots `OpenRead/embedded/4k` 阈值锁定 |
+| List（embedded） | 有序区间扫描扇出限界，一次扇出数组 O(k) | LowerBound(O(log n))+SpanStartsWith/SpanEqual 单源 bytes.ops 零拷贝 inline，FEntries 并行缓存 O(k) 直取 Size/ModTime 无 IndexOfPath 二分（Spans O(n) 分配已移除），扇出限界初值16 Cap≤N-Lo，天然有序免 Sort/Dedup；bench_hotspots `List/embedded/*` 阈值锁定 |
+| List（memtree） | 有序区间扫描扇出限界，一次扇出数组 O(k) | VfsEnumerateChildSpans 单源 bytes.ops 零拷贝 inline，FItems 并行缓存 O(k) 直取，扇出限界初值16；bench_hotspots `List/memtree/*` 阈值锁定 |
+| OpenRead（memtree） | O(1) TBytes 防御拷贝 + IReaderAt 零拷贝视图 | TMemStream.Move 单源零拷贝，IReaderAt 单次直读；bench_hotspots `OpenRead/memtree/4k` 阈值锁定 |
+| OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一；bench_hotspots `OpenRead/os/4k` 阈值锁定 |
+| Exists/Stat（os） | 二分/一次 Stat，无分配（memtree/embedded同理） | VfsValidPath inline + LowerBound/HasSubtree bytes.ops 单源零拷贝；bench_hotspots `Exists/os` `Stat/os/file` 阈值锁定 |
+| Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制；bench_hotspots `List/sub/*` `OpenRead/sub/*` 独立阈值锁定 |
+| VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性；bench_hotspots `Walk/*`（memtree/embedded/os/sub）阈值锁定 |
 | Stat(large非gzip) | 轻量 2 字节栈缓冲零堆分配预判免 4K 分配+全量读 | `TTransformingVfs.TryResolveViaHeaderSingleStream` 单源决策器（大文件先栈上 2 字节轻量 peek + `HeaderShould` bytes.ops inline 非变换直接回 `FInner.Stat` 免 4K 堆分配，小文件复用 Header 零二次 IO，大文件命中同流 IReaderAt/Seek 补读免二次 OpenRead），`TAuto` 亦轻量透传；TargetL 1MiB非gzip Stat ~972ns 零解压，bench_transform `Stat/large-non-gzip/header-peek` 阈值锁定 |
 | OpenRead(非gzip) | 轻量 2 字节栈缓冲零物化直透免 VfsReadAllBytes/4K | `TTransformingVfs.OpenRead` 单源决策器 HeaderPred 假时栈上 2 字节 peek 后零物化直透 `FInner.OpenRead`（零拷贝无 `VfsReadAllBytes` materialize，栈缓冲零堆分配 2 字节 peek ~数百 ns，免 4K 分配），命中时 4K 单流复用；bench_transform `Open/large-non-gzip/passthrough` 阈值锁定 |
 | OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb统一（transform 承载，泛型/压缩一致），大小文件 Stat/OpenRead 一致 | `GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 32MiB（canonical 寄居 compress.base GZIP_MAX，base 唯一字面量、漂移由 source-contract 别名单源锁定） + bytes.ops 单源魔数 inline 零拷贝)` + 泛型 Transform 输入/输出双 32MiB 限幅，`ContentHash=0/ETag` 禁用，HeaderPred真时小文件复用 Header（≤4K）& 大文件栈上 2 字节轻量预判后单流 Move 4K 头+同流补读避免二次全量读（HeaderPred 4K HeaderPred 统一（impl 私有常量 4096 单源，接口不暴露封装收口，compressed 数值对齐无别名）），Stat 与 OpenRead 大文件解压后尺寸一致 |
@@ -151,7 +154,7 @@ end;
 | test_vfs_compressed | 7 | 解压薄门面（L3 单缝正名，L7 到期拆分，单源别名复用 vfs.base 不再字面量双写）：daAuto/gzip Stat Size/ContentHash 校正/ETag禁用/daGzip 强制失败/空包/大文件栈上 2 字节轻量预判零堆分配+单流 4K 头预判 HeaderPred（VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 32MiB，canonical 寄居 compress.base GZIP_MAX，base 唯一字面量 + bytes.ops 魔数 inline 零拷贝单源，4K HeaderPred 统一（impl 私有常量 4096 单源，接口不暴露封装收口，compressed 数值对齐无别名），复用 transform 单源决策器，防 bomb 由 transform 统一承载，Stat/OpenRead 大文件一致） |
 | test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含 transform/compressed 单缝寄居白名单：L3→L2 单缝过渡，L7 到期拆分为 decorator，文档正名+拆分路线） |
 
-合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform 1基准阈值，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
+合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform + bench_hotspots 2基准阈值锁定，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
 
 - 原设计的独立 `test_vfs_os` 门折叠进 conformance：os 行为断言在电池里以真实目录
   夹具全覆盖，独立门只会复制夹具（README 测试计划节有记录）
@@ -173,3 +176,4 @@ end;
 | 2026-09-02 | 1.6 | 匠心修复：transform 大文件 2 字节轻量预判免 4K（Stat/OpenRead 大文件解压一致性 via 单源，OpenRead 大文件非 gzip 免 4K 分配与单流读）+ L7 单缝正名（L7 到期拆分为 nextpas.core.vfs.decorator 后移除白名单）+ bytes.ops 单源魔数 inline 零拷贝 | AI |
 | 2026-09-02 | 1.7 | 匠心修复：transform 栈上 2 字节零堆分配（热点非 gzip 路径栈缓冲免 SetLength(AHeader,2) 堆分配）+ 泛型路径 32MiB 防 bomb 统一（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，输入/输出双阈值防 OOM，压缩/非压缩一致）+ L7 单缝寄居文档正名固化（现阶段以单缝+文档正名守层级高级感，L7 到期拆分为 decorator 固化 L0-L3） | AI |
 | 2026-09-02 | 1.8 | 匠心修复：compressed 薄门面 VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 消除接口层字面量双写（base 唯一字面量 32MiB 对齐 canonical，drift 由 source-contract 别名单源锁定）+ bytes.ops inline 零拷贝，消除数值双写漂移转嫁契约测试风险 | AI |
+| 2026-09-02 | 1.9 | 匠心修复：热路径基准覆盖补齐（design-conventions 每模块热路径基准覆盖）：新增 bench_hotspots 24项（memtree/embedded/os × Exists/Stat/List/OpenRead/Walk/Sub 全热路径，inline 零拷贝 bytes.ops 单源 VfsEnumerateChildSpans/Span* 单源，扇出限界16，try-finally Close不丢）+ bench_memtree/bench_embedded/bench_os 三独立 per-backend 基准，perf CONTRACT §6 逐行阈值锁定，业务以 CONTRACT 为准，缺能力反哺 owner（os→fs，embedded→respack） | AI |

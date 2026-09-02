@@ -91,6 +91,8 @@ function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
+{ Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
 
 implementation
 
@@ -694,6 +696,21 @@ end;
 function StringLowerAsciiAware(const S: string): string; inline;
 begin
   Result := nextpas.core.text.unicode.utils.ToLowerAsciiAware(S);
+end;
+
+const
+  HEX_UPPER_BYTESOPS: array[0..15] of AnsiChar = '0123456789ABCDEF';
+
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+var I: Integer; V: UInt64;
+begin
+  SetLength(Result, ADigits);
+  V := AValue;
+  for I := ADigits - 1 downto 0 do
+  begin
+    Result[I + 1] := HEX_UPPER_BYTESOPS[V and $F];
+    V := V shr 4;
+  end;
 end;
 
 end.
