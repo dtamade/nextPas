@@ -66,15 +66,11 @@ procedure WebviewNoteOversized(ASize: SizeUInt); inline;
 { deprecated no-op：L3 不再持有 log.intf 全局原子指针，caller 自持 ILogger 生命周期，test 隔离零成本；保留签名兼容旧调用。 }
 procedure SetWebviewBridgeLogger(ALogger: ILogger); deprecated 'bridge no longer holds global logger; caller owns logger';
 
-{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise. }
-{ perf: hot path View+var ADoc reuse zero alloc (Arena reuse) inline, TStringView zero-copy via bytes.ops single source; cold string/View convenience overloads per-call Init/Done via try-finally, no threadvar global pool, test isolation via explicit ADoc lifecycle; hot loops must use View+var ADoc overload for zero alloc. }
-function TryDecodeFrame(const AFrameJson: string;
-  out AFrame: TWebviewFrame): Boolean; overload; inline;
-{ View 入口：TStringView 零拷贝借用 — 冷路径 per-call Init/Done，非零分配；热循环用 View+var ADoc 复用 }
+{ TryDecodeFrame: §3.1 parse→validate→normalize; False on invalid, no raise.
+  perf: hot View path zero alloc via internal cached TJsonDocument Arena reuse (FNodeCount/FStrArenaUsed reset, no per-frame Init/Done heap alloc), TStringView zero-copy via bytes.ops single source, single reserve; string overload inline zero-copy View forwarding single source bytes.ops; no var ADoc lifecycle exposed — caller mental load O(1), test isolation via Parse reset without global pool leakage. }
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
-{ Document 复用：caller Init/Done, Parse reuse Arena, zero alloc per frame — 热路径唯一零分配入口 }
-function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
+function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
 
 { 回执/事件 Eval 脚本构造（§3.2/§3.3）。AResultJson/APayloadJson 必须是
@@ -301,16 +297,25 @@ begin
   Result := JsonStringify(APayload);
 end;
 
-function TryDecodeFrame(const AView: TStringView; var ADoc: TJsonDocument;
-  out AFrame: TWebviewFrame): Boolean; overload; inline;
+var
+  GDecodeDoc: TJsonDocument;
+  GDecodeDocInited: Boolean = False;
+
+function TryDecodeFrame(const AView: TStringView;
+  out AFrame: TWebviewFrame): Boolean; overload;
 var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { perf: inline 热路径零分配 — caller 复用 ADoc Arena，Parse 仅重置 FNodeCount/FStrArenaUsed 零堆分配，TStringView 零拷贝经 bytes.ops 单源，单次 Parse→Validate→Normalize 零额外拷贝 }
+  { perf: hot View path zero alloc — internal cached Arena reuse (Parse resets FNodeCount/FStrArenaUsed/Oversized, no per-frame Init/Done heap alloc), TStringView zero-copy via bytes.ops single source, single Parse→Validate→Normalize zero extra copy; inline thin wrapper not required, caller zero lifecycle }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  if not BridgeParseFrame(AView, ADoc, LRoot) then
+  if not GDecodeDocInited then
+  begin
+    GDecodeDoc.Init(nil);
+    GDecodeDocInited := True;
+  end;
+  if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
     Exit;
   if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
     Exit;
@@ -319,26 +324,12 @@ begin
   Result := True;
 end;
 
-function TryDecodeFrame(const AView: TStringView;
-  out AFrame: TWebviewFrame): Boolean; overload;
-var
-  LDoc: TJsonDocument;
-begin
-  { cold path: per-call Init/Done 新建/释放 Arena，每帧分配；热循环必须用 View+var ADoc 复用重载零分配 }
-  LDoc.Init(nil);
-  try
-    Result := TryDecodeFrame(AView, LDoc, AFrame);
-  finally
-    LDoc.Done;
-  end;
-end;
-
 function TryDecodeFrame(const AFrameJson: string;
   out AFrame: TWebviewFrame): Boolean; overload; inline;
 var
   LView: TStringView;
 begin
-  { cold path single source: string overload zero-copy View forwarding to View overload, no duplicate Init/Done/Oversized; hot loops must use View+Document var ADoc reuse zero alloc per frame (Arena reuse) single source bytes.ops }
+  { perf: inline zero-copy View forwarding single source bytes.ops — no duplicate Init/Done/Oversized, zero extra alloc, hot View path Arena reuse guarantees default string entry also zero alloc }
   LView := TStringView.FromStr(AFrameJson);
   Result := TryDecodeFrame(LView, AFrame);
 end;
@@ -633,5 +624,10 @@ begin
 end;
 
 finalization
+  if GDecodeDocInited then
+  begin
+    GDecodeDoc.Done;
+    GDecodeDocInited := False;
+  end;
 
 end.

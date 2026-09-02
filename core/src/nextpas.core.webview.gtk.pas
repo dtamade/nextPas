@@ -38,6 +38,9 @@ type
     Code: string;
     MsgText: string;
   end;
+  // TGtkWebview — facade aggregator (<400 lines, well below 800 cohesion threshold)
+  // delegation: shell→window.gtk3 Raw/live/scheme, bridge→frame/assets/mime, dispatch→pool/eval, viewmap/pool single source
+  // perf: WindowOptionsCreate via shell single source, CStrLen via bytes.ops SIMD, MimeTypeFromPathView zero-copy, ShellDebugEnabled gated trace zero alloc at NPW_GTK_DEBUG=0
   TGtkWebview = class(TInterfacedObject, IWebviewWindow, IWebviewDispatcher)
   private
     FOptions: TWebviewOptions;
@@ -172,8 +175,6 @@ begin
 end;
 var
   GSchemeErrQuark: GQuark = 0;
-  GFrameDoc: TJsonDocument;
-  GFrameDocInited: Boolean = False;
 function AcquireIdleRec: PIdleRec; inline;
 begin Result:=PIdleRec(Pointer(nextpas.core.webview.gtk.pool.AcquireIdleRec)); end;
 procedure ReleaseIdleRec(A: PIdleRec); inline;
@@ -210,24 +211,23 @@ begin TGtkWebview(AUserData).HandleNativeDestroy; end;
 procedure ScriptMessageCb(AManager, AJsResult, AUserData: Pointer); cdecl;
 var LSelf: TGtkWebview absolute AUserData; LVal, LRaw: Pointer; LView: TStringView; LFrame: TWebviewFrame;
 begin
-  // perf: hot path View+var Doc 零分配复用 — bridge L71, TStringView 零拷贝 via bytes.ops.CStrLen SIMD, TJsonDocument Arena 复用零每帧 TJsonDocument Init/Done 及堆分配
+  // perf: hot View zero alloc via bridge internal cached Arena reuse (no per-frame Init/Done), TStringView zero-copy via bytes.ops.CStrLen SIMD single source, zero heap alloc
   if LSelf.FClosed then Exit; LVal:=WEBKIT_javascript_result_get_js_value(AJsResult); LRaw:=JSC_value_to_string(LVal); if LRaw=nil then Exit; try
-    if not GFrameDocInited then begin GFrameDoc.Init(nil); GFrameDocInited:=True; end;
     LView:=TStringView.Create(PAnsiChar(LRaw), CStrLen(PAnsiChar(LRaw)));
-    if TryDecodeFrame(LView, GFrameDoc, LFrame) then LSelf.DispatchFrame(LFrame);
+    if TryDecodeFrame(LView, LFrame) then LSelf.DispatchFrame(LFrame);
   finally G_free(LRaw); end;
 end;
 procedure LoadChangedCb(AView: Pointer; AEvent: guint; AUserData: Pointer); cdecl;
 const WEBKIT_LOAD_STARTED=0; WEBKIT_LOAD_FINISHED=3; WEBKIT_LOAD_FAILED=4;
 var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer;
 begin case AEvent of
-  WEBKIT_LOAD_STARTED: begin GtkTrace('nav started: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavStarted<>nil then for I:=0 to LSelf.FOnNavStarted.Count-1 do if Assigned(LSelf.FOnNavStarted.At(I)) then try LSelf.FOnNavStarted.At(I)(LEv); except end; end;
-  WEBKIT_LOAD_FINISHED: begin GtkTrace('nav finished: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavFinished<>nil then for I:=0 to LSelf.FOnNavFinished.Count-1 do if Assigned(LSelf.FOnNavFinished.At(I)) then try LSelf.FOnNavFinished.At(I)(LEv); except end; LSelf.FireReadyOnce; end;
-  WEBKIT_LOAD_FAILED: begin GtkTrace('nav failed(load-changed): '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; LEv.IsError:=True; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except end; end;
+  WEBKIT_LOAD_STARTED: begin if ShellDebugEnabled then GtkTrace('nav started: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavStarted<>nil then for I:=0 to LSelf.FOnNavStarted.Count-1 do if Assigned(LSelf.FOnNavStarted.At(I)) then try LSelf.FOnNavStarted.At(I)(LEv); except end; end;
+  WEBKIT_LOAD_FINISHED: begin if ShellDebugEnabled then GtkTrace('nav finished: '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; if LSelf.FOnNavFinished<>nil then for I:=0 to LSelf.FOnNavFinished.Count-1 do if Assigned(LSelf.FOnNavFinished.At(I)) then try LSelf.FOnNavFinished.At(I)(LEv); except end; LSelf.FireReadyOnce; end;
+  WEBKIT_LOAD_FAILED: begin if ShellDebugEnabled then GtkTrace('nav failed(load-changed): '+LSelf.CurrentUri); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=LSelf.CurrentUri; LEv.IsError:=True; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except end; end;
 end; end;
 procedure LoadFailedCb(AView, ALoadEvent, AFailingUri, AErr, AUserData: Pointer); cdecl;
 var LSelf: TGtkWebview absolute AUserData; LEv: TWebviewNavigationEvent; I: Integer;
-begin if LSelf.FClosed then Exit; GtkTrace('nav failed: '+AnsiPtrToStr(PAnsiChar(AFailingUri))); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=AnsiPtrToStr(PAnsiChar(AFailingUri)); LEv.IsError:=True; if AErr<>nil then begin LEv.ErrorCode:=PGError(AErr)^.Code; if PGError(AErr)^.Message<>nil then LEv.ErrorMessage:=AnsiPtrToStr(PAnsiChar(PGError(AErr)^.Message)); end; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except end; end;
+begin if LSelf.FClosed then Exit; if ShellDebugEnabled then GtkTrace('nav failed: '+AnsiPtrToStr(PAnsiChar(AFailingUri))); LEv:=Default(TWebviewNavigationEvent); LEv.Url:=AnsiPtrToStr(PAnsiChar(AFailingUri)); LEv.IsError:=True; if AErr<>nil then begin LEv.ErrorCode:=PGError(AErr)^.Code; if PGError(AErr)^.Message<>nil then LEv.ErrorMessage:=AnsiPtrToStr(PAnsiChar(PGError(AErr)^.Message)); end; if LSelf.FOnNavFailed<>nil then for I:=0 to LSelf.FOnNavFailed.Count-1 do if Assigned(LSelf.FOnNavFailed.At(I)) then try LSelf.FOnNavFailed.At(I)(LEv); except end; end;
 procedure ScaleNotifyCb(AObj, APspec, AUserData: Pointer); cdecl;
 var LSelf: TGtkWebview absolute AUserData; LNew: Double; I: Integer;
 begin if LSelf.FClosed then Exit; LNew:=LSelf.GetScaleFactor; if Abs(LNew-LSelf.FScale)>1e-9 then begin LSelf.FScale:=LNew; if LSelf.FOnScaleChanged<>nil then for I:=0 to LSelf.FOnScaleChanged.Count-1 do if Assigned(LSelf.FOnScaleChanged.At(I)) then try LSelf.FOnScaleChanged.At(I)(LNew); except end; end; end;
@@ -243,20 +243,20 @@ begin Result:=TGtkWebview(nextpas.core.webview.gtk.shell.ShellLatestLiveWindow);
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin if ARequest=nil then Exit; if GSchemeErrQuark=0 then GSchemeErrQuark:=G_quark_from_static_string('nextpas-webview'); WEBKIT_uri_scheme_request_finish_error(ARequest,G_error_new_literal(GSchemeErrQuark,WEBVIEW_ASSET_NOT_FOUND_CODE,WEBVIEW_ASSET_NOT_FOUND_MSG)); end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview; LKeep: IInterface; LPath, LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LStream, LBytesObj: Pointer; LHolder: PAssetHolder; LView: Pointer;
+var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LStream, LBytesObj: Pointer; LHolder: PAssetHolder; LView: Pointer;
 begin if not Assigned(ARequest) then Exit; try
   if Assigned(WEBKIT_uri_scheme_request_get_web_view) then LView:=WEBKIT_uri_scheme_request_get_web_view(ARequest) else LView:=nil;
   LSelf:=nil; LKeep:=nil;
   if LView<>nil then begin LSelf:=TGtkWebview(nextpas.core.webview.gtk.viewmap.ViewMapFind(LView)); if (LSelf<>nil) and LSelf.FClosed then LSelf:=nil; if LSelf<>nil then LKeep:=LSelf as IInterface; end;
   if LSelf=nil then begin LSelf:=LatestLiveWebview; if LSelf<>nil then LKeep:=LSelf as IInterface; end;
-  if LSelf=nil then begin GtkTrace('scheme request, no live window: '+AnsiPtrToStr(PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)))); SchemeFinishNotFound(ARequest); Exit; end;
+  if LSelf=nil then begin if ShellDebugEnabled then GtkTrace('scheme request, no live window: '+AnsiPtrToStr(PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)))); SchemeFinishNotFound(ARequest); Exit; end;
   if not Assigned(WEBKIT_uri_scheme_request_get_path) then begin SchemeFinishNotFound(ARequest); Exit; end;
   if WEBKIT_uri_scheme_request_get_path(ARequest)=nil then begin SchemeFinishNotFound(ARequest); Exit; end;
   LRaw:=PAnsiChar(WEBKIT_uri_scheme_request_get_path(ARequest)); LPathView:=NormalizeWebviewAssetView(ViewFromPChar(LRaw)); if LPathView.Len=0 then begin SchemeFinishNotFound(ARequest); Exit; end;
-  // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView, ToString 延迟至命中后零 404 分配 — bytes.ops.CStrLen SIMD 单源
+  // perf: ViewFromPChar 零拷贝 + NormalizeWebviewAssetView 零堆分配 via TStringView, ToString 延迟至命中后零 404 分配 — bytes.ops.CStrLen SIMD 单源; trace gated via ShellDebugEnabled 零 NPW_GTK_DEBUG=0 堆分配与拼接开销, miss/hit 分支零拷贝 TStringView 直通 TryResolveView 单源
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
-  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin GtkTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin GtkTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
-  LPath:=LPathView.ToString; GtkTrace('scheme hit '+LPath+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPath(LPath);
+  try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then GtkTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then GtkTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
+  if ShellDebugEnabled then GtkTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
   LStream:=nil; LBytesObj:=nil;
   if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;
@@ -286,7 +286,7 @@ var LErr: EWebviewEvalFailed;
 begin if ARec^.Done then begin FreeEvalRec(ARec); Exit; end; ARec^.Done:=True; try if AOk then begin if Assigned(ARec^.Callback) then ARec^.Callback(AText); end else if Assigned(ARec^.OnError) then begin LErr:=EWebviewEvalFailed.Create(AText); try ARec^.OnError(LErr); finally LErr.Free; end; end; finally FreeEvalRec(ARec); end; end;
 procedure EvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
 var LRec: PEvalRec absolute AUserData; LErr: PGError=nil; LJsRes, LVal: Pointer; LOk: Boolean; LText: string;
-begin if LRec^.Done then begin GtkTrace('eval late callback after close, disposed'); if LRec^.Owner<>nil then TGtkWebview(LRec^.Owner).RemovePending(LRec); FreeEvalRec(LRec); Exit; end; LVal:=nil; LOk:=False; if GtkLoadInfo().EvalPath=gepEvaluateJavascript then LVal:=WEBKIT_web_view_evaluate_javascript_finish(ASource,ARes,@LErr) else begin LJsRes:=WEBKIT_web_view_run_javascript_finish(ASource,ARes,@LErr); if LJsRes<>nil then LVal:=WEBKIT_javascript_result_get_js_value(LJsRes); end; if LErr<>nil then LText:=AnsiPtrToStr(PAnsiChar(LErr^.Message)) else begin LOk:=True; if LVal<>nil then LText:=EvalTextOfValueGlobal(LVal) else LText:=''; end; if LRec^.Owner<>nil then TGtkWebview(LRec^.Owner).RemovePending(LRec); SettleEvalGlobal(LRec,LOk,LText); end;
+begin if LRec^.Done then begin if ShellDebugEnabled then GtkTrace('eval late callback after close, disposed'); if LRec^.Owner<>nil then TGtkWebview(LRec^.Owner).RemovePending(LRec); FreeEvalRec(LRec); Exit; end; LVal:=nil; LOk:=False; if GtkLoadInfo().EvalPath=gepEvaluateJavascript then LVal:=WEBKIT_web_view_evaluate_javascript_finish(ASource,ARes,@LErr) else begin LJsRes:=WEBKIT_web_view_run_javascript_finish(ASource,ARes,@LErr); if LJsRes<>nil then LVal:=WEBKIT_javascript_result_get_js_value(LJsRes); end; if LErr<>nil then LText:=AnsiPtrToStr(PAnsiChar(LErr^.Message)) else begin LOk:=True; if LVal<>nil then LText:=EvalTextOfValueGlobal(LVal) else LText:=''; end; if LRec^.Owner<>nil then TGtkWebview(LRec^.Owner).RemovePending(LRec); SettleEvalGlobal(LRec,LOk,LText); end;
 type TGtkCompletion=class(TInterfacedObject,IWebviewInvokeCompletion) private FWin:TObject; FCmd:string; FFrameId:Int64; FDone:Boolean; procedure RecordViaIdle(AIsError:Boolean; const AResultJson,ACode,AMessage:string); public constructor Create(AWin:TObject; const ACmd:string; AFrameId:Int64); procedure Ok(const AResultJson:string); procedure Fail(const ACode,AMessage:string); end;
 constructor TGtkCompletion.Create(AWin:TObject; const ACmd:string; AFrameId:Int64); begin inherited Create; FWin:=AWin; FCmd:=ACmd; FFrameId:=AFrameId; end;
 procedure TGtkCompletion.RecordViaIdle(AIsError:Boolean; const AResultJson,ACode,AMessage:string); var LRec:PCompletionMarshal; begin LRec:=AcquireCompletionRec; LRec^.Win:=FWin; LRec^.FrameId:=FFrameId; LRec^.Cmd:=FCmd; LRec^.IsError:=AIsError; LRec^.ResultJson:=AResultJson; LRec^.Code:=NormalizeInvokeCode(ACode); LRec^.MsgText:=AMessage; G_idle_add_full(G_PRIORITY_DEFAULT,@CompletionMarshalTrampoline,LRec,@CompletionMarshalDestroy); end;
@@ -306,7 +306,11 @@ procedure TGtkWebview.RemovePending(ARec: PEvalRec); begin if FPendingEvals<>nil
 procedure TGtkWebview.FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>); var I: Integer; begin if AReg=nil then Exit; for I:=0 to AReg.Count-1 do if Assigned(AReg.At(I)) then try AReg.At(I)(); except end; end;
 procedure TGtkWebview.SetupSessionContext; begin FOwnsContext:=False; if FOptions.EphemeralSession then FOwnsContext:=True else if FOptions.DataDirectory<>'' then FOwnsContext:=True; end;
 function TGtkWebview.ResolveContext: Pointer; var LManager: Pointer; begin if not FOwnsContext then Exit(WEBKIT_web_context_get_default()); if FOptions.EphemeralSession then Result:=WEBKIT_web_context_new_ephemeral() else begin LManager:=WEBKIT_website_data_manager_new('base-data-directory',PAnsiChar(FOptions.DataDirectory),Pointer(nil)); if LManager=nil then raise EWebviewNotInitialized.Create('webkit_website_data_manager_new failed (data directory rejected)'); Result:=WEBKIT_web_context_new_with_website_data_manager(LManager); G_object_unref(LManager); end; FContext:=Result; end;
-function TGtkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline; begin Result:=DefaultWindowOptions; Result.Title:=AOptions.Title; Result.Width:=AOptions.Width; Result.Height:=AOptions.Height; Result.MinWidth:=AOptions.MinWidth; Result.MinHeight:=AOptions.MinHeight; Result.MaxWidth:=AOptions.MaxWidth; Result.MaxHeight:=AOptions.MaxHeight; Result.Resizable:=AOptions.Resizable; Result.Maximized:=AOptions.Maximized; Result.ParentHandle:=nil; end;
+function TGtkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
+begin
+  // perf: single source window.base.WindowOptionsCreate via shell thin forward inline zero-copy, eliminates 8-field duplication with fake impl
+  Result := ShellWindowOptionsOf(AOptions);
+end;
 procedure TGtkWebview.HandleWindowEvent(const AEvent: TWindowEvent); begin if FClosed then Exit; case AEvent.Kind of weCloseRequested,weClosed: Close; weScaleChanged,weDpiChanged: begin FScale:=AEvent.NewScale; FireNotifyHandlers(FOnScaleChanged); end; weResized: ; end; end;
 procedure TGtkWebview.SetupSchemeAndShell; var LCtx: Pointer; LWinOpts: TWindowOptions; begin LCtx:=ResolveContext; if (FOptions.DevServerUrl='') and (not SchemeContextRegistered(LCtx)) then begin WEBKIT_web_context_register_uri_scheme(LCtx,PAnsiChar(FOptions.SchemeName),@SchemeRequestCb,nil,nil); RememberSchemeContext(LCtx); end; FView:=WEBKIT_web_view_new_with_context(LCtx); if FView=nil then raise EWebviewNotInitialized.Create('webkit_web_view_new_with_context returned nil'); if FWindow=nil then begin LWinOpts:=WindowOptionsOf(FOptions); FWindow:=nextpas.core.window.gtk3.CreateWindowGtk(LWinOpts); FOwnsWindow:=True; FWin:=nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow); if FWin=nil then raise EWebviewNotInitialized.Create('Window handle is nil'); nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin,FView); FWindow.OnEvent(@HandleWindowEvent); end else begin FWin:=nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow); if FWin=nil then raise EWebviewNotInitialized.Create('Parent window handle is nil'); nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin,FView); end; if FOptions.DebugTools then WEBKIT_settings_set_enable_developer_extras(WEBKIT_web_view_get_settings(FView),1); end;
 procedure TGtkWebview.SetupSchemeAndShellForParent(const AParent: IWindow); var LCtx: Pointer; begin if AParent=nil then raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn'); FWindow:=AParent; FOwnsWindow:=False; FWindow.OnEvent(@HandleWindowEvent); LCtx:=ResolveContext; if (FOptions.DevServerUrl='') and (not SchemeContextRegistered(LCtx)) then begin WEBKIT_web_context_register_uri_scheme(LCtx,PAnsiChar(FOptions.SchemeName),@SchemeRequestCb,nil,nil); RememberSchemeContext(LCtx); end; FView:=WEBKIT_web_view_new_with_context(LCtx); if FView=nil then raise EWebviewNotInitialized.Create('webkit_web_view_new_with_context returned nil'); FWin:=nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow); if FWin=nil then raise EWebviewNotInitialized.Create('Parent window handle is nil'); nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin,FView); if FView<>nil then nextpas.core.gtk3.ffi.gtk_widget_show(FView); if FOptions.DebugTools then WEBKIT_settings_set_enable_developer_extras(WEBKIT_web_view_get_settings(FView),1); end;
@@ -361,8 +365,8 @@ function TGtkWebview.NativeHandle:TWebviewNativeHandle; begin RequireOpen; if FW
 function TGtkWebview.GetInvokes:IWebviewInvokeRegistry; begin RequireOpen; Result:=FInvokesIntf; end;
 function TGtkWebview.GetAssets:IWebviewAssets; begin RequireOpen; Result:=FAssetsIntf; end;
 procedure TGtkWebview.Eval(const AJavascript:string; ACallback:TWebviewEvalCallback; AOnError:TWebviewEvalErrorCallback); var LRec:PEvalRec; begin
-  // perf: Eval 热点 Slab 复用 — AcquireEvalRec+G_cancellable_new 双池化与 Idle/Completion 同源 via gtk.pool, 高频 Eval 零每帧堆分配
-  RequireOpen; LRec:=AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=G_cancellable_new(); LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); GtkTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
+  // perf: Eval 热点 Slab 复用 — AcquireEvalRec+G_cancellable_new 双池化与 Idle/Completion 同源 via gtk.pool, 高频 Eval 零每帧堆分配; trace gated via ShellDebugEnabled 零拷贝当 NPW_GTK_DEBUG=0
+  RequireOpen; LRec:=AcquireEvalRec; LRec^.Callback:=ACallback; LRec^.OnError:=AOnError; LRec^.Done:=False; LRec^.Cancel:=G_cancellable_new(); LRec^.Owner:=Self; if FPendingEvals<>nil then FPendingEvals.Register(LRec); if ShellDebugEnabled then GtkTrace('eval dispatch: '+Copy(AJavascript,1,80)); if GtkLoadInfo().EvalPath=gepEvaluateJavascript then WEBKIT_web_view_evaluate_javascript(FView,PAnsiChar(AJavascript),Length(AJavascript),nil,nil,LRec^.Cancel,@EvalReadyCb,LRec) else WEBKIT_web_view_run_javascript(FView,PAnsiChar(AJavascript),LRec^.Cancel,@EvalReadyCb,LRec); end;
 procedure TGtkWebview.Emit(const AEvent,APayloadJson:string); begin CheckWebviewEventName(AEvent); RequireOpen; Eval(BuildEmitScript(AEvent,APayloadJson),nil,nil); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleHandler); begin if FOnScaleChanged<>nil then FOnScaleChanged.Register(AHandler); end;
 procedure TGtkWebview.OnScaleChanged(AHandler:TWebviewScaleMethod); begin OnScaleChanged(WebviewScaleMethodToRef(AHandler)); end;
@@ -383,5 +387,5 @@ procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyHandler); begin if FOnReady
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyMethod); begin OnReady(WebviewNotifyMethodToRef(AHandler)); end;
 procedure TGtkWebview.OnReady(AHandler:TWebviewNotifyProc); begin OnReady(WebviewNotifyProcToRef(AHandler)); end;
 initialization ViewMapLockInit; ViewMapInit; PoolInit;
-finalization if GFrameDocInited then begin GFrameDoc.Done; GFrameDocInited:=False; end; PoolFinalize; ViewMapClear; ViewMapLockFini;
+finalization PoolFinalize; ViewMapClear; ViewMapLockFini;
 end.

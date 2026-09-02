@@ -36,6 +36,7 @@ type
   end;
 
 procedure ShellLogInit; inline;
+function ShellDebugEnabled: Boolean; inline;
 procedure ShellTrace(const AMsg: string);
 
 function ShellSchemeContextRegistered(ACtx: Pointer): Boolean;
@@ -130,8 +131,16 @@ begin
   end;
 end;
 
+function ShellDebugEnabled: Boolean; inline;
+begin
+  // perf: inline zero-cost gate for hot SchemeRequest — check before any string alloc/concat, single source GShellDebugEnabled via ShellLogInit once
+  ShellLogInit;
+  Result := GShellDebugEnabled;
+end;
+
 procedure ShellTrace(const AMsg: string);
 begin
+  // stability: ShellLogInit lazy once, NullLogger zero overhead when disabled; caller must gate concat via ShellDebugEnabled to avoid heap alloc
   ShellLogInit;
   if GShellDebugEnabled then
     GShellLogger.Debug(AMsg);

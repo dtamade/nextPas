@@ -54,6 +54,7 @@ uses
   nextpas.core.system.typinfo,
   nextpas.core.window.factory,
   nextpas.core.sync,
+  nextpas.core.platform.thread,
   nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.fake,
@@ -86,6 +87,13 @@ type
     destructor Destroy; override;
     function IsAvailable(AKind: TWebviewKind): Boolean; inline;
   end;
+
+  { 并行探测上下文：栈上零分配，指针零拷贝直写结果；复用 WEBVIEW_BACKENDS 单表驱动，与 bytes.ops 单源思想一致 }
+  TWebviewProbeArg = record
+    Kind: TWebviewKind;
+    OutAvail: ^Boolean;
+  end;
+  PWebviewProbeArg = ^TWebviewProbeArg;
 
 var
   GDefaultKind: TWebviewKind = wvFake;
@@ -243,6 +251,16 @@ begin
   Result := GAvailCache;
 end;
 
+{ 并行探测线程入口：L1 platform.thread 单源，栈上 Arg 零拷贝直写，IOnce 缓存线程安全去重 dlopen，释放不丢 }
+function WebviewProbeThread(AArg: Pointer): Pointer; cdecl;
+var LArg: PWebviewProbeArg;
+begin
+  LArg := PWebviewProbeArg(AArg);
+  if (LArg <> nil) and (LArg^.OutAvail <> nil) then
+    LArg^.OutAvail^ := GetAvailCache.IsAvailable(LArg^.Kind);
+  Result := nil;
+end;
+
 {$PUSH}{$WARNINGS OFF}
 function WebviewBackendAvailable(AKind: TWebviewKind): Boolean; inline;
 begin
@@ -254,24 +272,67 @@ end;
 
 function DefaultWebviewKind: TWebviewKind;
 begin
-  // perf: L1 sync.once 单例注册表抽象，inline 零额外调用，单泵探测优先级序单表驱动，零重复分支
+  // perf: L1 sync.once 单例 + 并行探测：启动期三后端 dlopen/BindAll 并行，I/O 重叠总耗时≈max(各后端) 而非 sum；栈上零分配零拷贝指针直写，L0 platform.thread 单源无池化开销，释放不丢
   if GDefaultOnce.Done then
     Exit(GDefaultKind);
   GDefaultOnce.DoOnce(procedure
   var
-    I: Integer;
+    I, J, LProbeCount: Integer;
     LKind: TWebviewKind;
+    LProbeKinds: array[0..3] of TWebviewKind;
+    LAvail: array[0..3] of Boolean;
+    LArgs: array[0..3] of TWebviewProbeArg;
+    LHandles: array[0..3] of TPlatformThreadHandle;
+    LSpawned: array[0..3] of Boolean;
+    LRet: Pointer;
   begin
     InitBackends;
+    // 收集非 fake 后端，单表驱动 bytes.ops 单源思想：新增后端仅 WEBVIEW_BACKENDS 登记，此处自动覆盖
+    LProbeCount := 0;
     for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
     begin
       LKind := WEBVIEW_BACKENDS[I].Kind;
       if LKind = wvFake then Continue;
-      if WebviewBackendAvailable(LKind) then
+      LProbeKinds[LProbeCount] := LKind;
+      LAvail[LProbeCount] := False;
+      Inc(LProbeCount);
+    end;
+    for I := 0 to LProbeCount - 1 do
+    begin
+      LArgs[I].Kind := LProbeKinds[I];
+      LArgs[I].OutAvail := @LAvail[I];
+      LSpawned[I] := False;
+      LHandles[I] := nil;
+      if platform_thread_create(LHandles[I], @WebviewProbeThread, @LArgs[I]) = 0 then
+        LSpawned[I] := True
+      else
       begin
-        GDefaultKind := LKind;
-        Exit;
+        // 稳定性：创建失败回退串行探测，不丢探测，资源不泄漏
+        LHandles[I] := nil;
+        LAvail[I] := GetAvailCache.IsAvailable(LProbeKinds[I]);
       end;
+    end;
+    for I := 0 to LProbeCount - 1 do
+      if LSpawned[I] and (LHandles[I] <> nil) then
+      begin
+        platform_thread_join(LHandles[I], LRet);
+        // 稳定性：join 后句柄由 platform_thread_join 释放，不丢；IsMultiThread 已置位保证托管类型原子计数
+      end;
+    // 按 WEBVIEW_BACKENDS 优先级序择优，单表驱动能力优先契约
+    for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
+    begin
+      LKind := WEBVIEW_BACKENDS[I].Kind;
+      if LKind = wvFake then Continue;
+      for J := 0 to LProbeCount - 1 do
+        if LProbeKinds[J] = LKind then
+        begin
+          if LAvail[J] then
+          begin
+            GDefaultKind := LKind;
+            Exit;
+          end;
+          Break;
+        end;
     end;
     GDefaultKind := wvFake;
   end);

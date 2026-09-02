@@ -20,17 +20,17 @@
 '    return null;'#10 +
 '  })();'#10 +
 '  const post = (frame) => {'#10 +
-'    if (!send) throw new Error('#39'npw: no transport'#39');'#10 +
+'    if (!send) throw new Error(''npw: no transport'');'#10 +
 '    send(JSON.stringify(frame));'#10 +
 '  };'#10 +
 '  const pending = new Map();'#10 +
 '  let nextId = 1;'#10 +
 '  const listeners = new Map();'#10 +
 '  const invoke = (cmd, payload) => {'#10 +
-'    if (typeof cmd !== '#39'string'#39' || cmd.length === 0)'#10 +
-'      return Promise.reject(new Error('#39'npw: cmd required'#39'));'#10 +
+'    if (typeof cmd !== ''string'' || cmd.length === 0)'#10 +
+'      return Promise.reject(new Error(''npw: cmd required''));'#10 +
 '    if (nextId > 9007199254740991)'#10 +
-'      return Promise.reject(new Error('#39'npw: id space exhausted'#39'));'#10 +
+'      return Promise.reject(new Error(''npw: id space exhausted''));'#10 +
 '    const id = nextId++;'#10 +
 '    post({ v: 1, id: id,'#10 +
 '          cmd: cmd,'#10 +
