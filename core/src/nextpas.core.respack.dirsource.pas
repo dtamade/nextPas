@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped + path/mmap via mem.memory_map）。 }
+{** @desc 目录 → 打包条目适配。respack 唯一 L2→L2 IO seam（fs + io.mapped mmap零拷贝 via mem.memory_map）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -74,7 +74,9 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.respack.reader,
-  nextpas.core.respack.writer;
+  nextpas.core.respack.writer,
+  nextpas.core.respack.writer.builder,
+  nextpas.core.respack.writer.layout;
 
 type
   TRespackBytesArray = array of TBytes;
@@ -288,6 +290,7 @@ begin
     管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
     大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
     （deprecated 兼容，Stream 为统一抽象，硬性 64MiB 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
+（deprecated 兼容，Stream 为统一抽象）。
     已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
     Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
     单源证据：RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发。 }

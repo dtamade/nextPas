@@ -40,6 +40,7 @@ procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
 var
   N: UInt64;
   L: SizeUInt;
+  S: TByteSpan;
 begin
   if ACount = 0 then Exit;
   { perf: inline消除调用开销 + 零拷贝 BYTES_ZERO_PAGE 单源；小间隙(对齐16/4典型≤15)单次AWrite快道避免while开销，大间隙4K切片复用同页零拷贝，碎片化布局小粒度回调不放大为多页切片 }
@@ -51,8 +52,10 @@ begin
   N := ACount;
   while N > 0 do
   begin
-    if N >= BYTES_ZERO_PAGE_SIZE then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
-    AWrite(@BYTES_ZERO_PAGE[0], L);
+    // INV-5 单源: 零页切片阈值 — 小间隙按需 slice 为 L=SizeUInt(N) (<4096) 避免 4K memset，阈值即 BYTES_ZERO_PAGE_SLICE_THRESHOLD；零拷贝分段直写
+    if N >= BYTES_ZERO_PAGE_SLICE_THRESHOLD then L := BYTES_ZERO_PAGE_SIZE else L := SizeUInt(N);
+    S := ZeroPageSlice(L);
+    AWrite(S.Data, S.Len);
     Dec(N, L);
   end;
 end;

@@ -28,6 +28,8 @@ function ResPackEffectiveIncLimit(const AConfigured: SizeUInt): SizeUInt; inline
 
 { 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；纯转发至 embed.limits 单源，try..except EEmbedTooLarge→EResPackTooLarge owner 边界收敛，CONTRACT 独立命名（外联守 inline+except 符号冲突，FPC trunk bug） }
 procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt);
+{ 阈值前置拒绝单源：>Limit 即 EResPackTooLarge，避免超大临时分配；inline 零拷贝转发至 embed.limits 单源 }
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
 
 implementation
 
@@ -44,6 +46,9 @@ begin
     on LRespackWrapEx: EEmbedTooLarge do
       raise EResPackTooLarge.Create(LRespackWrapEx.Message);
   end;
+procedure ResPackRequireIncSize(const ASize, ALimit: SizeUInt); inline;
+begin
+  nextpas.core.embed.limits.EmbedRequireIncSize(ASize, ALimit);
 end;
 
 end.

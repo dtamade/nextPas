@@ -73,6 +73,51 @@ implementation
 
 type
   TResPackEntries = array of TResPackEntry;
+  TResPackEntryArr = array[0..(High(SizeInt) div SizeOf(TResPackEntry)) - 1] of TResPackEntry;
+  PResPackEntryArr = ^TResPackEntryArr;
+
+type
+  TIdxSortCtx = record
+    Entries: PResPackEntryArr;
+  end;
+  PIdxSortCtx = ^TIdxSortCtx;
+
+function CompareIdxByOffset(const A, B: SizeUInt; Data: Pointer): SizeInt; inline;
+var
+  Ctx: PIdxSortCtx;
+  EA, EB: ^TResPackEntry;
+begin
+  Ctx := PIdxSortCtx(Data);
+  EA := @Ctx^.Entries^[A];
+  EB := @Ctx^.Entries^[B];
+  if EA^.DataOffset < EB^.DataOffset then Exit(-1);
+  if EA^.DataOffset > EB^.DataOffset then Exit(1);
+  if EA^.Size < EB^.Size then Exit(-1);
+  if EA^.Size > EB^.Size then Exit(1);
+function CompareIdxByOffset(const A, B: SizeUInt; Data: Pointer): SizeInt;
+var
+  Ctx: PIdxSortCtx;
+  EA, EB: TResPackEntry;
+begin
+  Ctx := PIdxSortCtx(Data);
+  EA := Ctx^.Entries^[A];
+  EB := Ctx^.Entries^[B];
+  if EA.DataOffset < EB.DataOffset then Exit(-1);
+  if EA.DataOffset > EB.DataOffset then Exit(1);
+  if EA.Size < EB.Size then Exit(-1);
+  if EA.Size > EB.Size then Exit(1);
+  Result := 0;
+end;
+
+procedure SortIdxByOffset(var AIdx: array of SizeUInt; const AEntries: array of TResPackEntry);
+var
+  Ctx: TIdxSortCtx;
+begin
+  if Length(AIdx) <= 1 then Exit;
+  if Length(AEntries) = 0 then Exit;
+  Ctx.Entries := PResPackEntryArr(@AEntries[0]);
+  specialize Sort<SizeUInt>(AIdx, @CompareIdxByOffset, @Ctx);
+end;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -500,6 +545,12 @@ begin
   Query := TByteSpan.FromStr(APath);
   { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造 via PathSpanRaw，零分配），
     复用 bytes.ops.SpanCompare 单源与 TByteSpan.FromStr 单源（零拷贝视图工厂 inline 零分配）；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
+if Length(APath) > 0 then
+    Query := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)))
+  else
+    Query := TByteSpan.Empty;
+  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造 via PathSpanRaw，零分配），
+    复用 bytes.ops.SpanCompare 单源；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;

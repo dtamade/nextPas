@@ -90,10 +90,10 @@ begin
 
   Result := nil;
   SetLength(Result, 8);
-  Move(PNG_SIGNATURE, Result[0], 8);
+  nextpas.core.bytes.ops.BytesCopy(@Result[0], @PNG_SIGNATURE[0], 8); { perf: inline single Move via bytes.ops single source, zero-copy }
 
   { IHDR: 宽/高 BE32 + 位深 8 + 颜色类型 6(RGBA) + 压缩 0 + 滤波 0 + 隔行 0 }
-  FillChar(Ihdr, SizeOf(Ihdr), 0);
+  nextpas.core.bytes.ops.BytesZero(@Ihdr[0], SizeOf(Ihdr)); { perf: inline FillChar single source via bytes.ops }
   PutBe32(@Ihdr[0], LongWord(AWidth));
   PutBe32(@Ihdr[4], LongWord(AHeight));
   Ihdr[8] := 8;
@@ -107,7 +107,7 @@ begin
   for I := 0 to SizeUInt(AHeight) - 1 do
   begin
     P[0] := 0;
-    Move(APixels[I * RowLen], P[1], RowLen);
+    nextpas.core.bytes.ops.BytesCopy(P + 1, @APixels[I * RowLen], RowLen); { perf: zero-copy single Move inline via bytes.ops single source }
     Inc(P, RowLen + 1);
   end;
   Raw := DeflateCompress(Raw);

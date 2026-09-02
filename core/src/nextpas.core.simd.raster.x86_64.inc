@@ -45,7 +45,7 @@ begin
   Result := GRasterAVX2Cache;
 end;
 
-procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   LE: LongWord;
   UseAVX2: Boolean;
@@ -155,7 +155,7 @@ begin
   end;
 end;
 
-procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   InvA: Integer;
   SrcLE: LongWord;
@@ -388,7 +388,7 @@ begin
   end;
 end;
 
-procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
+procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer);
 var
   P: PByte;
   Tail: Integer;
@@ -501,7 +501,7 @@ begin
   end;
 end;
 
-procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte); inline;
+procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte);
 var
   P: PByte;
   N8, N4, Tail: Integer;

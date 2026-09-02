@@ -127,10 +127,11 @@ end.
    的函数一旦标记 inline，FPC 会把常量串实参的 `AStr[1]` 经常量传播折叠成单字符值，
    Move 从栈上临时拷出首字节之后的垃圾（valgrind + 反汇编实证，曾致 tls13 门红）。
    `BytesOf`/`StringOf` 即因此去 inline。同类 sink：`FillChar`、`CompareMem`。
+   **门面薄转发豁免**：`nextpas.core.<module>.pas` 门面对单源实现（如 `nextpas.core.bytes` → `nextpas.core.bytes.ops:25/89`）的 `inline` 薄转发仅转发调用、门面内不含 `Move` 体，不触发此禁令；`Move` 零拷贝体仍驻留单源（单次 `Move`/`SetLength`、视图零分配，`bytes.ops` 已注释固化），保持单源与性能证据。
 2. **真实循环体 / SIMD 体 / 路由体禁 inline**。含扫描循环、回退路由、批量编码的函数
    （如 Format 路由、json writer 的 Key/Str SIMD 扫描重载）保持外联，避免 I-Cache 复制膨胀。
 
-薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。
+薄转发、状态翻转、冷抛守卫（`Require` 类）、小访问器适合 inline。门面薄转发即属此类薄转发豁免。
 
 ### 消费方引用粒度
 
@@ -184,6 +185,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation)
      ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`），其余同层依赖仍禁止
+     ↑ 默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁（例 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls），禁止循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -192,9 +194,9 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
+- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam 如 js→json、respack.dirsource→fs+io.mapped、vfs.os→fs/path、vfs.embedded→respack.reader、canvas.raster→vector/image、db.redis.transport→net/tls（+ adapter→net；time/sync 为 L1 下沉非 L2 缝），未列入者视为违规
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
-- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
+- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝且 `vfs.embedded` 唯一 respack.reader 缝且 `canvas.raster` 唯一 vector/image 缝且 `db.redis.transport` 唯一 net/tls 缝（+ `db.redis.adapter` 轻量 net 缝；time/sync 为 L1 下沉，base/resp 纯 L0/L1）均为单向 allowlist 并经门禁防循环，reverse `net/tls→db.redis` 禁止，bytes.ops 单源 inline/零拷贝，资源 FreeAndNil/try-finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -209,7 +211,7 @@ text  (implementation 部分 uses encoding，提供便利方法)
 
 ### 层级归属管理
 
-- 每个模块的层级归属在 `docs/module-registry.md` 中声明
+- 每个模块的层级归属在 `docs/core-module-registry.md` 中声明（单一事实源；`docs/module-registry.md` 为已废弃的兼容别名，镜像本表）
 - 后期通过构建脚本自动校验依赖合规性
 
 ---
@@ -374,7 +376,7 @@ nextpas.core.crypto.ossl.ffi.pas     ← 纯 cdecl external 声明
 
 ## 7. 稳定性分级
 
-- 稳定性分级在 `docs/module-registry.md` 中标注
+- 稳定性分级在 `docs/core-module-registry.md` 中标注（单一事实源；`docs/module-registry.md` 为已废弃别名）
 - 具体分级规则和晋升条件见单独文档
 
 ---
@@ -823,7 +825,7 @@ build/
 ### 分层规则补充
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环
 
 ### L0: 内核（只依赖 FPC RTL）
 
@@ -859,7 +861,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（只依赖 L0-L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环）
+### L2: 系统能力（默认只依赖 L0-L1；同层单向依赖仅限 docs/core-module-registry.md 显式 allowlist 且 source-contract 门禁，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |

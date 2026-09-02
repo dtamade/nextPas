@@ -69,6 +69,9 @@ begin
   if Result > MAX then Result := MAX;
   if Result < MIN then Result := MIN;
 end;
+  BUCKET_MIN = 256;
+  BUCKET_MAX = 65536; { 去重桶上限 64K：BucketsHead 64K*SizeInt≈256KB + SlotNext N*SizeInt，峰值受控；原 4M 桶双数组最高 32MB(4M*8)，大去重集热点 SpanEqual 逐字节回验叠加 O(n) 期望外最坏拷贝开销，收敛至 64K 控热点 }
+BUCKET_MAX = 4194304;
 
 function CmpPath(const AEntries: array of TResPackInputEntry;
   const ALens: array of Word; AI, AJ: SizeUInt): Integer; inline;
