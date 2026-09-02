@@ -90,96 +90,11 @@ begin
   end);
 end;
 
-procedure InitGtkBindTable;
+procedure InitGtkBindTable; inline;
 begin
-  { 单源表驱动初始化：87 必需符号单表，新增仅此一处登记，bytes.ops 单源思想，零双表漂移 }
-  GGtkBindTable[0].VarAddr := @G_idle_add_full; GGtkBindTable[0].Name := 'g_idle_add_full';
-  GGtkBindTable[1].VarAddr := @G_source_remove; GGtkBindTable[1].Name := 'g_source_remove';
-  GGtkBindTable[2].VarAddr := @G_signal_connect_data; GGtkBindTable[2].Name := 'g_signal_connect_data';
-  GGtkBindTable[3].VarAddr := @G_memory_input_stream_new_from_data; GGtkBindTable[3].Name := 'g_memory_input_stream_new_from_data';
-  GGtkBindTable[4].VarAddr := @G_memory_input_stream_new_from_bytes; GGtkBindTable[4].Name := 'g_memory_input_stream_new_from_bytes';
-  GGtkBindTable[5].VarAddr := @G_bytes_new_with_free_func; GGtkBindTable[5].Name := 'g_bytes_new_with_free_func';
-  GGtkBindTable[6].VarAddr := @G_bytes_unref; GGtkBindTable[6].Name := 'g_bytes_unref';
-  GGtkBindTable[7].VarAddr := @G_malloc; GGtkBindTable[7].Name := 'g_malloc';
-  GGtkBindTable[8].VarAddr := @G_free; GGtkBindTable[8].Name := 'g_free';
-  GGtkBindTable[9].VarAddr := @G_quark_from_static_string; GGtkBindTable[9].Name := 'g_quark_from_static_string';
-  GGtkBindTable[10].VarAddr := @G_cancellable_new; GGtkBindTable[10].Name := 'g_cancellable_new';
-  GGtkBindTable[11].VarAddr := @G_cancellable_cancel; GGtkBindTable[11].Name := 'g_cancellable_cancel';
-  GGtkBindTable[12].VarAddr := @G_error_new_literal; GGtkBindTable[12].Name := 'g_error_new_literal';
-  GGtkBindTable[13].VarAddr := @G_main_loop_new; GGtkBindTable[13].Name := 'g_main_loop_new';
-  GGtkBindTable[14].VarAddr := @G_main_loop_run; GGtkBindTable[14].Name := 'g_main_loop_run';
-  GGtkBindTable[15].VarAddr := @G_main_loop_quit; GGtkBindTable[15].Name := 'g_main_loop_quit';
-  GGtkBindTable[16].VarAddr := @G_main_loop_unref; GGtkBindTable[16].Name := 'g_main_loop_unref';
-  GGtkBindTable[17].VarAddr := @G_timeout_add; GGtkBindTable[17].Name := 'g_timeout_add';
-  GGtkBindTable[18].VarAddr := @G_main_context_default; GGtkBindTable[18].Name := 'g_main_context_default';
-  GGtkBindTable[19].VarAddr := @G_main_context_find_source_by_id; GGtkBindTable[19].Name := 'g_main_context_find_source_by_id';
-  GGtkBindTable[20].VarAddr := @G_object_unref; GGtkBindTable[20].Name := 'g_object_unref';
-  GGtkBindTable[21].VarAddr := @G_object_set; GGtkBindTable[21].Name := 'g_object_set';
-  GGtkBindTable[22].VarAddr := @G_object_get; GGtkBindTable[22].Name := 'g_object_get';
-  GGtkBindTable[23].VarAddr := @GTK_init_check; GGtkBindTable[23].Name := 'gtk_init_check';
-  GGtkBindTable[24].VarAddr := @GTK_window_new; GGtkBindTable[24].Name := 'gtk_window_new';
-  GGtkBindTable[25].VarAddr := @GTK_window_set_title; GGtkBindTable[25].Name := 'gtk_window_set_title';
-  GGtkBindTable[26].VarAddr := @GTK_window_get_title; GGtkBindTable[26].Name := 'gtk_window_get_title';
-  GGtkBindTable[27].VarAddr := @GTK_window_set_default_size; GGtkBindTable[27].Name := 'gtk_window_set_default_size';
-  GGtkBindTable[28].VarAddr := @GTK_window_set_resizable; GGtkBindTable[28].Name := 'gtk_window_set_resizable';
-  GGtkBindTable[29].VarAddr := @GTK_window_resize; GGtkBindTable[29].Name := 'gtk_window_resize';
-  GGtkBindTable[30].VarAddr := @GTK_window_maximize; GGtkBindTable[30].Name := 'gtk_window_maximize';
-  GGtkBindTable[31].VarAddr := @GTK_window_unmaximize; GGtkBindTable[31].Name := 'gtk_window_unmaximize';
-  GGtkBindTable[32].VarAddr := @GTK_window_iconify; GGtkBindTable[32].Name := 'gtk_window_iconify';
-  GGtkBindTable[33].VarAddr := @GTK_window_deiconify; GGtkBindTable[33].Name := 'gtk_window_deiconify';
-  GGtkBindTable[34].VarAddr := @GTK_window_is_maximized; GGtkBindTable[34].Name := 'gtk_window_is_maximized';
-  GGtkBindTable[35].VarAddr := @GTK_widget_show_all; GGtkBindTable[35].Name := 'gtk_widget_show_all';
-  GGtkBindTable[36].VarAddr := @GTK_widget_hide; GGtkBindTable[36].Name := 'gtk_widget_hide';
-  GGtkBindTable[37].VarAddr := @GTK_widget_get_visible; GGtkBindTable[37].Name := 'gtk_widget_get_visible';
-  GGtkBindTable[38].VarAddr := @GTK_widget_get_scale_factor; GGtkBindTable[38].Name := 'gtk_widget_get_scale_factor';
-  GGtkBindTable[39].VarAddr := @GTK_widget_grab_focus; GGtkBindTable[39].Name := 'gtk_widget_grab_focus';
-  GGtkBindTable[40].VarAddr := @GTK_widget_get_window; GGtkBindTable[40].Name := 'gtk_widget_get_window';
-  GGtkBindTable[41].VarAddr := @GTK_widget_destroy; GGtkBindTable[41].Name := 'gtk_widget_destroy';
-  GGtkBindTable[42].VarAddr := @GTK_widget_get_allocated_width; GGtkBindTable[42].Name := 'gtk_widget_get_allocated_width';
-  GGtkBindTable[43].VarAddr := @GTK_widget_get_allocated_height; GGtkBindTable[43].Name := 'gtk_widget_get_allocated_height';
-  GGtkBindTable[44].VarAddr := @GTK_widget_set_size_request; GGtkBindTable[44].Name := 'gtk_widget_set_size_request';
-  GGtkBindTable[45].VarAddr := @GDK_window_get_state; GGtkBindTable[45].Name := 'gdk_window_get_state';
-  GGtkBindTable[46].VarAddr := @GTK_container_add; GGtkBindTable[46].Name := 'gtk_container_add';
-  GGtkBindTable[47].VarAddr := @GTK_main; GGtkBindTable[47].Name := 'gtk_main';
-  GGtkBindTable[48].VarAddr := @GTK_main_quit; GGtkBindTable[48].Name := 'gtk_main_quit';
-  GGtkBindTable[49].VarAddr := @GTK_main_iteration_do; GGtkBindTable[49].Name := 'gtk_main_iteration_do';
-  GGtkBindTable[50].VarAddr := @WEBKIT_web_context_get_default; GGtkBindTable[50].Name := 'webkit_web_context_get_default';
-  GGtkBindTable[51].VarAddr := @WEBKIT_web_view_new_with_context; GGtkBindTable[51].Name := 'webkit_web_view_new_with_context';
-  GGtkBindTable[52].VarAddr := @WEBKIT_web_view_get_user_content_manager; GGtkBindTable[52].Name := 'webkit_web_view_get_user_content_manager';
-  GGtkBindTable[53].VarAddr := @WEBKIT_web_view_get_uri; GGtkBindTable[53].Name := 'webkit_web_view_get_uri';
-  GGtkBindTable[54].VarAddr := @WEBKIT_web_view_new_with_user_content_manager; GGtkBindTable[54].Name := 'webkit_web_view_new_with_user_content_manager';
-  GGtkBindTable[55].VarAddr := @WEBKIT_web_view_load_uri; GGtkBindTable[55].Name := 'webkit_web_view_load_uri';
-  GGtkBindTable[56].VarAddr := @WEBKIT_web_view_load_html; GGtkBindTable[56].Name := 'webkit_web_view_load_html';
-  GGtkBindTable[57].VarAddr := @WEBKIT_web_view_reload; GGtkBindTable[57].Name := 'webkit_web_view_reload';
-  GGtkBindTable[58].VarAddr := @WEBKIT_web_view_stop_loading; GGtkBindTable[58].Name := 'webkit_web_view_stop_loading';
-  GGtkBindTable[59].VarAddr := @WEBKIT_web_view_go_back; GGtkBindTable[59].Name := 'webkit_web_view_go_back';
-  GGtkBindTable[60].VarAddr := @WEBKIT_web_view_go_forward; GGtkBindTable[60].Name := 'webkit_web_view_go_forward';
-  GGtkBindTable[61].VarAddr := @WEBKIT_web_view_can_go_back; GGtkBindTable[61].Name := 'webkit_web_view_can_go_back';
-  GGtkBindTable[62].VarAddr := @WEBKIT_web_view_can_go_forward; GGtkBindTable[62].Name := 'webkit_web_view_can_go_forward';
-  GGtkBindTable[63].VarAddr := @WEBKIT_web_view_set_zoom_level; GGtkBindTable[63].Name := 'webkit_web_view_set_zoom_level';
-  GGtkBindTable[64].VarAddr := @WEBKIT_web_view_get_zoom_level; GGtkBindTable[64].Name := 'webkit_web_view_get_zoom_level';
-  GGtkBindTable[65].VarAddr := @WEBKIT_web_view_get_inspector; GGtkBindTable[65].Name := 'webkit_web_view_get_inspector';
-  GGtkBindTable[66].VarAddr := @WEBKIT_web_view_get_settings; GGtkBindTable[66].Name := 'webkit_web_view_get_settings';
-  GGtkBindTable[67].VarAddr := @WEBKIT_settings_set_enable_developer_extras; GGtkBindTable[67].Name := 'webkit_settings_set_enable_developer_extras';
-  GGtkBindTable[68].VarAddr := @WEBKIT_web_context_new_ephemeral; GGtkBindTable[68].Name := 'webkit_web_context_new_ephemeral';
-  GGtkBindTable[69].VarAddr := @WEBKIT_web_context_new_with_website_data_manager; GGtkBindTable[69].Name := 'webkit_web_context_new_with_website_data_manager';
-  GGtkBindTable[70].VarAddr := @WEBKIT_website_data_manager_new; GGtkBindTable[70].Name := 'webkit_website_data_manager_new';
-  GGtkBindTable[71].VarAddr := @WEBKIT_web_context_register_uri_scheme; GGtkBindTable[71].Name := 'webkit_web_context_register_uri_scheme';
-  GGtkBindTable[72].VarAddr := @WEBKIT_user_content_manager_new; GGtkBindTable[72].Name := 'webkit_user_content_manager_new';
-  GGtkBindTable[73].VarAddr := @WEBKIT_user_content_manager_add_script; GGtkBindTable[73].Name := 'webkit_user_content_manager_add_script';
-  GGtkBindTable[74].VarAddr := @WEBKIT_user_content_manager_register_script_message_handler; GGtkBindTable[74].Name := 'webkit_user_content_manager_register_script_message_handler';
-  GGtkBindTable[75].VarAddr := @WEBKIT_user_script_new; GGtkBindTable[75].Name := 'webkit_user_script_new';
-  GGtkBindTable[76].VarAddr := @WEBKIT_user_script_unref; GGtkBindTable[76].Name := 'webkit_user_script_unref';
-  GGtkBindTable[77].VarAddr := @WEBKIT_javascript_result_get_js_value; GGtkBindTable[77].Name := 'webkit_javascript_result_get_js_value';
-  GGtkBindTable[78].VarAddr := @WEBKIT_uri_scheme_request_get_uri; GGtkBindTable[78].Name := 'webkit_uri_scheme_request_get_uri';
-  GGtkBindTable[79].VarAddr := @WEBKIT_uri_scheme_request_get_path; GGtkBindTable[79].Name := 'webkit_uri_scheme_request_get_path';
-  GGtkBindTable[80].VarAddr := @WEBKIT_uri_scheme_request_get_web_view; GGtkBindTable[80].Name := 'webkit_uri_scheme_request_get_web_view';
-  GGtkBindTable[81].VarAddr := @WEBKIT_uri_scheme_request_finish; GGtkBindTable[81].Name := 'webkit_uri_scheme_request_finish';
-  GGtkBindTable[82].VarAddr := @WEBKIT_uri_scheme_request_finish_error; GGtkBindTable[82].Name := 'webkit_uri_scheme_request_finish_error';
-  GGtkBindTable[83].VarAddr := @JSC_value_is_null; GGtkBindTable[83].Name := 'jsc_value_is_null';
-  GGtkBindTable[84].VarAddr := @JSC_value_is_undefined; GGtkBindTable[84].Name := 'jsc_value_is_undefined';
-  GGtkBindTable[85].VarAddr := @JSC_value_to_json; GGtkBindTable[85].Name := 'jsc_value_to_json';
-  GGtkBindTable[86].VarAddr := @JSC_value_to_string; GGtkBindTable[86].Name := 'jsc_value_to_string';
+  { 单源生成式：87 必需符号单表由 generated/nextpas.core.webview.gtk.bind.inc 单源承载，
+    新增仅此一处 .inc 登记，bytes.ops 单源思想零双表漂移；inline 零额外调用，PAnsiChar 零拷贝。 }
+{$I generated/nextpas.core.webview.gtk.bind.inc}
 end;
 
 function TryDlOpen(var ALib: TPlatformLibrary; const ASonames: array of string;
@@ -256,18 +171,25 @@ var
   end;
 
 begin
-  { atomic acquire 零撕裂可见性，弱内存下防重复探测 }
+  { atomic acquire 零撕裂快路径探针；GInfo 含托管 string，拷贝必须持锁，零撕裂零悬垂 }
   if atomic_load(GProbed, mo_acquire) <> 0 then
   begin
-    AInfo := GInfo;
-    Exit(GLoaded);
+    EnsureGtkLock;
+    GGtkLock.Acquire;
+    try
+      AInfo := GInfo; { lock-protected managed copy，零撕裂，mo_acquire 可见性 + mutex 守托管 refcnt }
+      Result := GLoaded;
+    finally
+      GGtkLock.Release;
+    end;
+    Exit;
   end;
   EnsureGtkLock;
   GGtkLock.Acquire;
   try
     if atomic_load(GProbed, mo_acquire) <> 0 then
     begin
-      AInfo := GInfo;
+      AInfo := GInfo; { 已持锁，安全拷贝，零撕裂 }
       Exit(GLoaded);
     end;
     if GLoading then
@@ -368,7 +290,14 @@ end;
 
 function GtkLoadInfo: TGtkLoadInfo; inline;
 begin
-  Result := GInfo;
+  { perf: inline 薄转发，托管 string 拷贝持锁零撕裂零悬垂；短临界 <1µs，仅复制快照，无堆分配，热点零拷贝 }
+  EnsureGtkLock;
+  GGtkLock.Acquire;
+  try
+    Result := GInfo;
+  finally
+    GGtkLock.Release;
+  end;
 end;
 
 initialization

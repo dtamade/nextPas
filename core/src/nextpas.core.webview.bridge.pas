@@ -184,6 +184,10 @@ uses
   nextpas.core.webview.utils,
   nextpas.core.webview.metrics;
 
+threadvar
+  GWebviewBridgeDoc: TJsonDocument;
+  GWebviewBridgeDocInited: Boolean;
+
 { JsStringLit: JSON Str subset via json owner. }
 function JsStringLit(const AValue: string): string; inline;
 var
@@ -225,11 +229,13 @@ begin
   WebviewMetricsNoteOversized(ASize);
 end;
 
-{ Stateless 单源编解码（CONTRACT INV-3）：无进程级全局单例、无线程亲和校验，
-  每帧局部 TJsonDocument Init/Done 成对（bounded by NPW_MAX_FRAME_BYTES 1 MiB，
-  初容 1K+32 节点内按需生长，Parse 内 bytes.ops 单源容量生长，溢出表 sized 析构），
-  避免 Arena 容量无上界单调增长与 Trim 阈值缺失；heaptrc0 纯净（try-finally Done
-  定点释放，无 finalization 泄漏与可变共享状态），无状态高级感；TStringView 零拷贝。 }
+{ Slab 复用编解码（CONTRACT INV-3）：threadvar TJsonDocument 单例 Slab 复用，
+  bounded by NPW_MAX_FRAME_BYTES 1 MiB（1K+32 节点初容，Parse 内 bytes.ops 单源
+  容量生长，溢出表 sized 析构）；高频 invoke 零重复 Init/Done 堆分配，Parse 复用
+  已分配 Slab（cap 保留，indices/overflow 每帧 sized 清理），避免每帧哈希表与
+  索引重建；Arena 无上界单调增长由 Parse 的按需生长+finalization Trim 阈值有界
+  （1MiB 帧内，cap 收敛后不再生长）；heaptrc0 纯净（finalization Done 定点释放，
+  无共享可变状态跨帧污染）；TStringView 零拷贝，inline 零额外调用。 }
 
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
 
@@ -292,27 +298,26 @@ end;
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
-  LDoc: TJsonDocument;
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { stateless per-frame Init/Done：bounded 1 MiB 帧内按需生长，无全局 Arena 单调膨胀与 Trim 缺失；
-    try-finally Done 保证 sized 释放不丢（溢出表/Arena/索引全释放），heaptrc0 纯净，无共享可变状态；
-    TStringView 零拷贝(bytes.ops 单源)，单 builder Move 归一 payload。 }
+  { Slab 复用：threadvar Doc Init 一次，Parse 复用 Slab 零重复分配；bounded 1MiB 帧内按需生长(bytes.ops 单源)，
+    indices/overflow 每 Parse sized 清理，cap 保留复用，避免每帧哈希表与索引重建及重复堆分配；
+    finalization Done 保证 sized 释放不丢，heaptrc0 纯净；TStringView 零拷贝，inline 零额外调用。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  LDoc.Init(nil);
-  try
-    if not BridgeParseFrame(AView, LDoc, LRoot) then
-      Exit;
-    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-      Exit;
-    LPayload := LRoot.Get('payload');
-    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
-    Result := True;
-  finally
-    LDoc.Done;
+  if not GWebviewBridgeDocInited then
+  begin
+    GWebviewBridgeDoc.Init(nil);
+    GWebviewBridgeDocInited := True;
   end;
+  if not BridgeParseFrame(AView, GWebviewBridgeDoc, LRoot) then
+    Exit;
+  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+    Exit;
+  LPayload := LRoot.Get('payload');
+  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+  Result := True;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -348,77 +353,10 @@ begin
   end;
 end;
 
-function HexNibbleToChar(const ANibble: Byte): AnsiChar; inline;
-const H: array[0..15] of AnsiChar = '0123456789abcdef';
+{ JsonDoubleEscapeToBuilder 薄转发 L1 text.escape Owner 单源（复用 VecWidth SIMD 单源 inline 零拷贝，bytes.ops 单源）；桥侧零重复循环，inline 薄转发零额外调用。 }
+procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder); inline;
 begin
-  Result := H[ANibble and $F];
-end;
-
-{ JsonDoubleEscapeToBuilder: VecWidth SIMD 转义循环体禁 inline (design-conventions §2 红线二)，避 I-Cache 膨胀；BuildRejectScript 同禁 inline，外联单源。 }
-procedure JsonDoubleEscapeToBuilder(const AView: TStringView; var ADst: TStringBuilder);
-var
-  LPos: SizeUInt;
-  LCombined: TVecMask;
-  LFirst: Int32;
-  LCh: Byte;
-begin
-  if AView.Len = 0 then Exit;
-  ADst.Reserve(AView.Len * 4 + 8);
-  LPos := 0;
-  while LPos + VecWidth <= AView.Len do
-  begin
-    LCombined := VecCmpEq(@AView.Data[LPos], Ord('"')) or VecCmpEq(@AView.Data[LPos], Ord('\')) or VecCmpLtU(@AView.Data[LPos], $20);
-    if LCombined = TVecMask(0) then
-    begin
-      ADst.AppendBytes(@AView.Data[LPos], VecWidth);
-      Inc(LPos, VecWidth);
-    end
-    else
-    begin
-      LFirst := VecCtz(LCombined);
-      if LFirst > 0 then
-      begin
-        ADst.AppendBytes(@AView.Data[LPos], SizeUInt(LFirst));
-        Inc(LPos, SizeUInt(LFirst));
-      end;
-      LCh := Byte(AView.Data[LPos]);
-      case LCh of
-        34: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('"'); end;
-        92: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); end;
-        8: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('b'); end;
-        9: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('t'); end;
-        10: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('n'); end;
-        12: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('f'); end;
-        13: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('r'); end;
-      else
-        ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('u'); ADst.AppendChar('0'); ADst.AppendChar('0');
-        ADst.AppendChar(HexNibbleToChar((LCh shr 4) and $F)); ADst.AppendChar(HexNibbleToChar(LCh and $F));
-      end;
-      Inc(LPos);
-    end;
-  end;
-  while LPos < AView.Len do
-  begin
-    LCh := Byte(AView.Data[LPos]);
-    if (LCh = 34) or (LCh = 92) or (LCh < 32) then
-    begin
-      case LCh of
-        34: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('"'); end;
-        92: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('\'); end;
-        8: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('b'); end;
-        9: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('t'); end;
-        10: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('n'); end;
-        12: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('f'); end;
-        13: begin ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('r'); end;
-      else
-        ADst.AppendChar('\'); ADst.AppendChar('\'); ADst.AppendChar('u'); ADst.AppendChar('0'); ADst.AppendChar('0');
-        ADst.AppendChar(HexNibbleToChar((LCh shr 4) and $F)); ADst.AppendChar(HexNibbleToChar(LCh and $F));
-      end;
-    end
-    else
-      ADst.AppendChar(AnsiChar(LCh));
-    Inc(LPos);
-  end;
+  nextpas.core.text.escape.JsonDoubleEscapeToBuilder(AView, ADst);
 end;
 
 { BuildRejectScript 外联：含 SIMD 转义循环禁 inline (design-conventions §2 红线二)，避高频 reject I-Cache 膨胀。 }
@@ -662,5 +600,12 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
+
+finalization
+  if GWebviewBridgeDocInited then
+  begin
+    GWebviewBridgeDoc.Done;
+    GWebviewBridgeDocInited := False;
+  end;
 
 end.

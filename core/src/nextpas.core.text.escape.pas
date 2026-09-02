@@ -14,6 +14,7 @@ type
 function JsonEscapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar): SizeUInt;
 procedure JsonEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
+procedure JsonDoubleEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
 function JsonUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
@@ -145,6 +146,80 @@ begin
     end
     else
       ADst.AppendChar(ASrc.Data[LPos]);
+    Inc(LPos);
+  end;
+end;
+
+procedure JsonDoubleEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder);
+var
+  LBuf: array[0..7] of AnsiChar;
+  LPos: SizeUInt;
+  LCombined: TVecMask;
+  LFirst: Int32;
+  LEscLen: SizeUInt;
+  LCh: Byte;
+begin
+  if ASrc.Len = 0 then Exit;
+  ADst.Reserve(ASrc.Len * 4 + 8);
+  LPos := 0;
+  while LPos + VecWidth <= ASrc.Len do
+  begin
+    LCombined := VecCmpEq(@ASrc.Data[LPos], Ord('"')) or
+                 VecCmpEq(@ASrc.Data[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc.Data[LPos], $20);
+    if LCombined = TVecMask(0) then
+    begin
+      ADst.AppendBytes(@ASrc.Data[LPos], VecWidth);
+      Inc(LPos, VecWidth);
+    end
+    else
+    begin
+      LFirst := VecCtz(LCombined);
+      if LFirst > 0 then
+      begin
+        ADst.AppendBytes(@ASrc.Data[LPos], SizeUInt(LFirst));
+        Inc(LPos, SizeUInt(LFirst));
+      end;
+      LCh := Byte(ASrc.Data[LPos]);
+      LEscLen := 0;
+      case LCh of
+        34: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '"'; LEscLen := 4; end;
+        92: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '\'; LEscLen := 4; end;
+        8: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'b'; LEscLen := 3; end;
+        9: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 't'; LEscLen := 3; end;
+        10: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'n'; LEscLen := 3; end;
+        12: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'f'; LEscLen := 3; end;
+        13: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'r'; LEscLen := 3; end;
+      else
+        begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'u'; LBuf[3] := '0'; LBuf[4] := '0';
+              LBuf[5] := HexChar((LCh shr 4) and $F); LBuf[6] := HexChar(LCh and $F); LEscLen := 7; end;
+      end;
+      ADst.AppendBytes(@LBuf[0], LEscLen);
+      Inc(LPos);
+    end;
+  end;
+  while LPos < ASrc.Len do
+  begin
+    LCh := Byte(ASrc.Data[LPos]);
+    if (LCh = 34) or (LCh = 92) or (LCh < 32) then
+    begin
+      LEscLen := 0;
+      case LCh of
+        34: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '"'; LEscLen := 4; end;
+        92: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := '\'; LBuf[3] := '\'; LEscLen := 4; end;
+        8: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'b'; LEscLen := 3; end;
+        9: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 't'; LEscLen := 3; end;
+        10: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'n'; LEscLen := 3; end;
+        12: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'f'; LEscLen := 3; end;
+        13: begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'r'; LEscLen := 3; end;
+      else
+        begin LBuf[0] := '\'; LBuf[1] := '\'; LBuf[2] := 'u'; LBuf[3] := '0'; LBuf[4] := '0';
+              LBuf[5] := HexChar((LCh shr 4) and $F); LBuf[6] := HexChar(LCh and $F); LEscLen := 7; end;
+      end;
+      ADst.AppendBytes(@LBuf[0], LEscLen);
+    end
+    else
+      ADst.AppendChar(AnsiChar(LCh));
     Inc(LPos);
   end;
 end;

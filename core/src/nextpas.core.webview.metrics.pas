@@ -13,7 +13,7 @@ interface
 { 背压可观测：超限帧计数（单调递增，UI 线程亲和，plain 全局，跨线程需外层同步；L3 metrics Owner 单源承载，复用 bench/log 可观测 Owner 候选） }
 function WebviewMetricsOversizedCount: UInt64; inline;
 procedure WebviewMetricsResetOversizedCount; inline;
-procedure WebviewMetricsNoteOversized(ASize: SizeUInt); inline;
+procedure WebviewMetricsNoteOversized({%H-}ASize: SizeUInt); inline;
 
 implementation
 
@@ -30,10 +30,9 @@ begin
   GWebviewOversizedFrames := 0;
 end;
 
-procedure WebviewMetricsNoteOversized(ASize: SizeUInt); inline;
+procedure WebviewMetricsNoteOversized({%H-}ASize: SizeUInt); inline;
 begin
   Inc(GWebviewOversizedFrames);
-  if ASize = 0 then ;
 end;
 
 end.

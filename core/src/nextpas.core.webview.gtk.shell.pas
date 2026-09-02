@@ -260,37 +260,97 @@ begin
 end;
 
 procedure ShellInitLocks; inline;
+var
+  LTmpScheme: TMutex;
+  LTmpLive: TRWLock;
 begin
-  if GShellSchemeLock = nil then GShellSchemeLock := TMutex.Create;
-  if GShellLiveLock = nil then GShellLiveLock := TRWLock.Create;
+  if (GShellSchemeLock <> nil) and (GShellLiveLock <> nil) then Exit;
+  LTmpScheme := nil;
+  LTmpLive := nil;
+  try
+    // perf: inline two-phase create-then-publish, zero extra alloc on success, exception-safe publish single point
+    // stability: temp guards close leak window if second Create raises after first succeeded, FreeAndNil not lost
+    if GShellSchemeLock = nil then
+      LTmpScheme := TMutex.Create;
+    if GShellLiveLock = nil then
+      LTmpLive := TRWLock.Create;
+    if LTmpScheme <> nil then
+    begin
+      GShellSchemeLock := LTmpScheme;
+      LTmpScheme := nil;
+    end;
+    if LTmpLive <> nil then
+    begin
+      GShellLiveLock := LTmpLive;
+      LTmpLive := nil;
+    end;
+  except
+    FreeAndNil(LTmpScheme);
+    FreeAndNil(LTmpLive);
+    raise;
+  end;
 end;
 
 procedure ShellFiniLocks; inline;
 begin
+  // stability: FreeAndNil idempotent nil guard, reverse init order, not lost, inline zero-cost
   FreeAndNil(GShellLiveLock);
   FreeAndNil(GShellSchemeLock);
 end;
 
 procedure ShellInitRegistries; inline;
+var
+  LTmpLive: specialize TWebviewLiveRegistry<Pointer>;
+  LTmpScheme: specialize THashSet<Pointer>;
 begin
   // 单源初建：VecGrowCapacity(0)=4 与 bytes.ops 单源一致，inline 零额外调用；THashSet 懒构造经 @SchemePointerHash 专化单源哈希 0.75 负载
-  if GShellLiveWindows = nil then
-    GShellLiveWindows := specialize TWebviewLiveRegistry<Pointer>.Create;
-  if GShellSchemeCtxs = nil then
-    GShellSchemeCtxs := specialize THashSet<Pointer>.Create(VecGrowCapacity(0), @SchemePointerHash);
+  if (GShellLiveWindows <> nil) and (GShellSchemeCtxs <> nil) then Exit;
+  LTmpLive := nil;
+  LTmpScheme := nil;
+  try
+    // perf: inline two-phase create-then-publish, VecGrowCapacity single source, zero leak window
+    // stability: temps hold refs until both succeed, except frees partial, FreeAndNil not lost
+    if GShellLiveWindows = nil then
+      LTmpLive := specialize TWebviewLiveRegistry<Pointer>.Create;
+    if GShellSchemeCtxs = nil then
+      LTmpScheme := specialize THashSet<Pointer>.Create(VecGrowCapacity(0), @SchemePointerHash);
+    if LTmpLive <> nil then
+    begin
+      GShellLiveWindows := LTmpLive;
+      LTmpLive := nil;
+    end;
+    if LTmpScheme <> nil then
+    begin
+      GShellSchemeCtxs := LTmpScheme;
+      LTmpScheme := nil;
+    end;
+  except
+    FreeAndNil(LTmpLive);
+    FreeAndNil(LTmpScheme);
+    raise;
+  end;
 end;
 
 procedure ShellFiniRegistries; inline;
 begin
+  // stability: nil guard + FreeAndNil idempotent, latest nil first, count zero, logger nil, not lost
   GShellLatestLive := nil;
+  GShellLiveCount := 0;
   FreeAndNil(GShellSchemeCtxs);
   FreeAndNil(GShellLiveWindows);
   GShellLogger := nil;
 end;
 
 initialization
-  ShellInitLocks;
-  ShellInitRegistries;
+  try
+    ShellInitLocks;
+    ShellInitRegistries;
+  except
+    // stability: init failure path rollback closes bare-pointer leak window, FreeAndNil not lost, no reliance on finalization order
+    ShellFiniRegistries;
+    ShellFiniLocks;
+    raise;
+  end;
 
 finalization
   ShellFiniRegistries;

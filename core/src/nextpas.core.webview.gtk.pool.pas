@@ -3,7 +3,7 @@ unit nextpas.core.webview.gtk.pool;
 {** @desc GTK dispatcher Slab 池化：Idle / Completion / AssetHolder / Eval / GCancellable 五池私有复用，dispatcher 专用。
 
        契约：容量/操作单源 L1 bytes.ops / sync.pool，类型单源 webview.intf，私于 gtk 不经门面（CONTRACT §1）。
-       性能：inline 薄转发零拷贝，热路径短临界 <1µs，Slab 零每 Post/Eval 堆分配，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池 <1µs 临界外热点串行化。
+       性能：inline 薄转发零拷贝，冷启动懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源零常驻（was 5×64=320 ptr），热路径短临界 <1µs 零拷贝，Slab 零每 Post/Eval 堆分配，突发锁内 VecGrow 单源倍增零回退抖动，五池 per-pool 锁分离（GIdleLock/GCompletionLock/GAssetHolderLock/GEvalLock/GCancelLock）消除跨池热点串行化。
        稳定性：锁外 New / 锁内 VecGrow 扩容异常安全，溢出 Dispose/G_object_unref 兜底单所有权不丢，Finalize 逐槽释放。 *}
 
 {$I nextpas.core.settings.inc}
@@ -131,10 +131,10 @@ end;
 
 procedure ReleaseAssetHolder(A: PAssetHolder); inline;
 begin
-  // inline 薄转发 L1 sync.pool.SyncPoolTryRelease 单源零锁内 VecGrow，热点单槽复用零扩容抖动，Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
+  // inline 薄转发 L1 sync.pool.SyncPoolRelease 单源，懒生长 0→4→2× via bytes.ops VecGrowCapacity 单源锁内扩容零抖动（was TryRelease 依赖 64 预分配，冷启动 64 ptr 常驻），Bytes nil 释放 ref，溢出 Dispose 单所有权不丢，per-pool 锁零跨池争用
   if A = nil then Exit;
   A^.Bytes := nil;
-  if not specialize SyncPoolTryRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
+  if not specialize SyncPoolRelease<PAssetHolder>(GAssetHolderPool, GAssetHolderCount, GAssetHolderLock, A) then
     Dispose(A);
 end;
 
@@ -188,20 +188,13 @@ begin
 end;
 
 procedure PoolInit; inline;
-var
-  LCap: Integer;
 begin
   GIdleLock := TMutex.Create;
   GCompletionLock := TMutex.Create;
   GAssetHolderLock := TMutex.Create;
   GEvalLock := TMutex.Create;
   GCancelLock := TMutex.Create;
-  LCap := VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(VecGrowCapacity(0)))));
-  SetLength(GIdlePool, LCap);
-  SetLength(GCompletionPool, LCap);
-  SetLength(GAssetHolderPool, LCap);
-  SetLength(GEvalPool, LCap);
-  SetLength(GCancelPool, LCap);
+  // lazy: pools nil at cold start (was 5×64=320 ptr via VecGrowCapacity chain), low-freq zero alloc; burst VecGrow 0→4→2× single source via L1 sync.pool/bytes.ops lock内扩容，不回退 New
 end;
 
 procedure PoolFinalize; inline;
