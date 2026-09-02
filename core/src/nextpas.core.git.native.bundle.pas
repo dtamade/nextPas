@@ -331,7 +331,8 @@ begin
     raise EGitError.Create('bundle: invalid pack signature');
   // trailer check
   SetLength(Trail, GitOidRawLen);
-  Move(Pack[Length(Pack)-GitOidRawLen], Trail[0], GitOidRawLen);
+  // perf: single source OID trailer via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move), replaces scattered Move 20B, CONTRACT.objects inline zero-copy invariant
+  SpanCopy(TByteSpan.Create(@Trail[0], GitOidRawLen), TByteSpan.Create(@Pack[Length(Pack)-GitOidRawLen], GitOidRawLen));
   Hasher := NewSHA1;
   Hasher.Write(Pack[0], SizeUInt(Length(Pack)-GitOidRawLen));
   Computed := Hasher.SumBytes;
@@ -574,7 +575,8 @@ begin
   Move(Data[Off], Pack[0], Length(Pack));
   // validate pack trailer quickly
   SetLength(Trail, GitOidRawLen);
-  Move(Pack[Length(Pack)-GitOidRawLen], Trail[0], GitOidRawLen);
+  // perf: single source OID trailer via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move), replaces scattered Move 20B, CONTRACT.objects inline zero-copy invariant
+  SpanCopy(TByteSpan.Create(@Trail[0], GitOidRawLen), TByteSpan.Create(@Pack[Length(Pack)-GitOidRawLen], GitOidRawLen));
   PackHash := BytesToHexLower(Trail);
   EnsureGitDirShape(ATargetGitDir);
   MkdirAll(PathJoin([ATargetGitDir, 'objects', 'pack']), PermDirDefault);

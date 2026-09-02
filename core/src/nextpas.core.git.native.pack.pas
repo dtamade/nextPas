@@ -60,6 +60,7 @@ type
 
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes;
 function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes;
+procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes);
 
 const
   GitMaxDeltaDepth = 64;

@@ -201,14 +201,15 @@ function AsciiBytes(const AText: string): TBytes;
 begin
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
-    Move(PAnsiChar(AText)^, Result[0], Length(AText));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)), SizeUInt(Length(AText))),
+      TByteSpan.Create(PByte(PAnsiChar(AText)), SizeUInt(Length(AText))));
 end;
 
 function AppendPart(const ABuf: TBytes; const APart: TBytes): TBytes; inline;
 var
   LOld, LNeed, LCap: SizeUInt;
 begin
-  // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, zero-copy Move via PByte^, avoids O(n²) SetLength+Move*2 churn
+  // perf: amortized geometric growth single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), inline, zero-copy SpanCopy via TByteSpan single source, avoids O(n²) SetLength+Move*2 churn
   LOld := SizeUInt(Length(ABuf));
   if Length(APart) = 0 then
     Exit(ABuf);
@@ -216,14 +217,18 @@ begin
   begin
     SetLength(Result, Length(APart));
     if Length(APart) > 0 then
-      Move(PByte(Pointer(APart))^, PByte(Pointer(Result))^, Length(APart));
+      SpanCopy(TByteSpan.Create(PByte(Pointer(Result)), SizeUInt(Length(APart))),
+        TByteSpan.Create(PByte(Pointer(APart)), SizeUInt(Length(APart))));
     Exit;
   end;
   LNeed := LOld + SizeUInt(Length(APart));
   LCap := GrowArrayCapacity(LOld, LNeed);
   SetLength(Result, LCap);
-  Move(PByte(Pointer(ABuf))^, PByte(Pointer(Result))^, LOld);
-  Move(PByte(Pointer(APart))^, (PByte(Pointer(Result)) + LOld)^, SizeUInt(Length(APart)));
+  if LOld > 0 then
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)), LOld),
+      TByteSpan.Create(PByte(Pointer(ABuf)), LOld));
+  SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + LOld, SizeUInt(Length(APart))),
+    TByteSpan.Create(PByte(Pointer(APart)), SizeUInt(Length(APart))));
   if LCap <> LNeed then
     SetLength(Result, LNeed);
 end;
@@ -248,10 +253,13 @@ begin
     ModeName := GitModeToString(AEntries[I].Mode) + ' ' + AEntries[I].Name;
     SegLen := Length(ModeName);
     if SegLen > 0 then
-      Move(ModeName[1], Result[Total], SegLen);
+      SpanCopy(TByteSpan.Create(PByte(@Result[Total]), SizeUInt(SegLen)),
+        TByteSpan.Create(PByte(PAnsiChar(ModeName)), SizeUInt(SegLen)));
     Result[Total + SegLen] := 0;
     Total := Total + SegLen + 1;
-    Move(AEntries[I].Oid.Bytes[0], Result[Total], GitOidRawLen);
+    // perf: single source OID 20B via bytes.ops SpanCopy inline zero-copy TByteSpan, single Move, converges with base SpanEqual/SpanCopy
+    SpanCopy(TByteSpan.Create(PByte(@Result[Total]), GitOidRawLen),
+      TByteSpan.Create(@AEntries[I].Oid.Bytes[0], GitOidRawLen));
     Total := Total + GitOidRawLen;
   end;
 end;
@@ -300,7 +308,7 @@ var
   Total, Pos: SizeInt;
   I: Integer;
 begin
-  // perf: single allocation O(n) exact size pass + single fill, avoids O(n²) string+= reallocation per parent (S:=S+'parent '+Hex loop), inline, zero-copy Move via PByte/PAnsiChar^ single source bytes.ops
+  // perf: single allocation O(n) exact size pass + single fill, avoids O(n²) string+= reallocation per parent (S:=S+'parent '+Hex loop), inline, zero-copy SpanCopy via TByteSpan single source bytes.ops
   TreeHex := GitOidToHex(ABuilder.Tree);
   AuthorLine := SignatureLine('author ', ABuilder.AuthorName, ABuilder.AuthorEmail, ABuilder.AuthorUnixTime, ABuilder.AuthorTzMinutes);
   CommitterLine := SignatureLine('committer ', ABuilder.CommitterName, ABuilder.CommitterEmail, ABuilder.CommitterUnixTime, ABuilder.CommitterTzMinutes);
@@ -312,41 +320,48 @@ begin
   Pos := 0;
   if Length('tree ') > 0 then
   begin
-    Move(PAnsiChar('tree ')^, (PByte(Pointer(Result)) + Pos)^, Length('tree '));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length('tree '))),
+      TByteSpan.Create(PByte(PAnsiChar('tree ')), SizeUInt(Length('tree '))));
     Inc(Pos, Length('tree '));
   end;
   if Length(TreeHex) > 0 then
   begin
-    Move(PAnsiChar(TreeHex)^, (PByte(Pointer(Result)) + Pos)^, Length(TreeHex));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length(TreeHex))),
+      TByteSpan.Create(PByte(PAnsiChar(TreeHex)), SizeUInt(Length(TreeHex))));
     Inc(Pos, Length(TreeHex));
   end;
   Result[Pos] := Byte(#10);
   Inc(Pos);
   for I := 0 to High(ABuilder.Parents) do
   begin
-    Move(PAnsiChar('parent ')^, (PByte(Pointer(Result)) + Pos)^, Length('parent '));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length('parent '))),
+      TByteSpan.Create(PByte(PAnsiChar('parent ')), SizeUInt(Length('parent '))));
     Inc(Pos, Length('parent '));
     Hex := GitOidToHex(ABuilder.Parents[I]);
-    Move(PAnsiChar(Hex)^, (PByte(Pointer(Result)) + Pos)^, Length(Hex));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length(Hex))),
+      TByteSpan.Create(PByte(PAnsiChar(Hex)), SizeUInt(Length(Hex))));
     Inc(Pos, Length(Hex));
     Result[Pos] := Byte(#10);
     Inc(Pos);
   end;
   if Length(AuthorLine) > 0 then
   begin
-    Move(PAnsiChar(AuthorLine)^, (PByte(Pointer(Result)) + Pos)^, Length(AuthorLine));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length(AuthorLine))),
+      TByteSpan.Create(PByte(PAnsiChar(AuthorLine)), SizeUInt(Length(AuthorLine))));
     Inc(Pos, Length(AuthorLine));
   end;
   if Length(CommitterLine) > 0 then
   begin
-    Move(PAnsiChar(CommitterLine)^, (PByte(Pointer(Result)) + Pos)^, Length(CommitterLine));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length(CommitterLine))),
+      TByteSpan.Create(PByte(PAnsiChar(CommitterLine)), SizeUInt(Length(CommitterLine))));
     Inc(Pos, Length(CommitterLine));
   end;
   Result[Pos] := Byte(#10);
   Inc(Pos);
   if Length(ABuilder.Message) > 0 then
   begin
-    Move(PAnsiChar(ABuilder.Message)^, (PByte(Pointer(Result)) + Pos)^, Length(ABuilder.Message));
+    SpanCopy(TByteSpan.Create(PByte(Pointer(Result)) + Pos, SizeUInt(Length(ABuilder.Message))),
+      TByteSpan.Create(PByte(PAnsiChar(ABuilder.Message)), SizeUInt(Length(ABuilder.Message))));
     Inc(Pos, Length(ABuilder.Message));
   end;
   // stability: TBytes refcounted, SetLength exception-safe, no header poke, managed strings auto released

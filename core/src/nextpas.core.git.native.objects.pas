@@ -8,6 +8,15 @@ unit nextpas.core.git.native.objects;
  * Single source: this is the sole inline gateway for object-layer; `native.pas`
  *   is a collapsed empty BC shim (zero type/const/function, @deprecated) to avoid double
  *   thin gateway and I-Cache duplication (fan-in collapses to objects→owners).
+ * Layer: L2 (L0-L1: base, bytes, text, fs, io; same-layer one-way
+ *   compress/hash/zlib/checksum via git-native-zlib-l2-exempt).
+ * L2 exempt: git-native-zlib-l2-exempt — same-layer one-way L2
+ *   git→compress/checksum/hash/zlib single-source passthrough, limited to
+ *   Deflate* + Adler32Update + bytes.ops.SpanCopy, zero handwritten
+ *   deflate/adler loop and zero direct Move (Move only via SpanCopy inline
+ *   zero-copy TByteSpan; pack delta GitApplyDeltaInto via SpanCopy);
+ *   registry core/docs/core-module-registry.md git row, C5
+ *   scripts/git-contract-check.sh.
  * Fan-in: interface imports type-bearing shards only (base/pack/repo/objmodel/write);
  *   func-only shards (zlib/loose/refs) in implementation (6 vs 9).
  * Perf: all forwards `inline`; zero-copy via bytes.ops single source
@@ -48,15 +57,25 @@ function GitOidFromHex(const AHex: string): TGitOid; inline;
 function GitOidToHex(const AOid: TGitOid): string; inline;
 function GitOidIsValidHex(const AHex: string): Boolean; inline;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+function GitOidZero: TGitOid; inline;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
 function GitKindToString(AKind: TGitObjectKind): string; inline;
 function GitKindFromString(const AName: string): TGitObjectKind; inline;
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
 { Zlib — inline forward to compress.Deflate* via git.native.zlib, PByte+Len zero-copy }
-function GitZlibAdler32(const AData: TBytes): UInt32; inline;
+function GitZlibAdler32(const AData: TBytes): UInt32; inline; overload;
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline; overload;
 function GitZlibCompress(const AData: TBytes): TBytes; inline;
 function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
   out AEndPos: SizeUInt): TBytes; inline;
+function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes; inline;
+function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt; inline;
+function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt; inline;
 
 { Loose objects — inline forward to git.native.loose via bytes.ops single source }
 function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
@@ -70,9 +89,13 @@ function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
   const AData: TBytes): TGitOid; inline;
 function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
   out AKind: TGitObjectKind): TBytes; inline;
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean; inline;
 
 { Pack delta — inline TByteSpan zero-copy via git.native.pack }
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
+procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes); inline;
 
 { Refs/discovery — inline forward to git.native.refs }
 function IsGitDirShape(const APath: string): Boolean; inline;
@@ -83,6 +106,9 @@ function GitHeadRefName(const AGitDir: string): string; inline;
 function GitResolveHead(const AGitDir: string): TGitOid; inline;
 function GitResolveRef(const AGitDir: string;
   const ARefName: string): TGitOid; inline;
+function GitTryResolveHead(const AGitDir: string; out AOid: TGitOid): Boolean; inline;
+function GitTryResolveRef(const AGitDir: string; const ARefName: string;
+  out AOid: TGitOid): Boolean; inline;
 
 { Object model parsers — via git.native.objmodel, TByteSpan zero-copy }
 function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
@@ -134,6 +160,21 @@ begin
   Result := nextpas.core.git.native.base.GitOidSame(AA, AB);
 end;
 
+function GitOidZero: TGitOid; inline;
+begin
+  Result := nextpas.core.git.native.base.GitOidZero;
+end;
+
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+begin
+  Result := nextpas.core.git.native.base.GitOidIsZero(AOid);
+end;
+
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
+begin
+  Result := nextpas.core.git.native.base.GitOidHash(AOid);
+end;
+
 function GitKindToString(AKind: TGitObjectKind): string; inline;
 begin
   Result := nextpas.core.git.native.base.GitKindToString(AKind);
@@ -154,6 +195,11 @@ begin
   Result := nextpas.core.git.native.zlib.GitZlibAdler32(AData);
 end;
 
+function GitZlibAdler32(AData: PByte; ACount: SizeUInt): UInt32; inline;
+begin
+  Result := nextpas.core.git.native.zlib.GitZlibAdler32(AData, ACount);
+end;
+
 function GitZlibCompress(const AData: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.zlib.GitZlibCompress(AData);
@@ -164,6 +210,24 @@ function GitZlibDecompress(const AData: TBytes; AStart: SizeUInt;
 begin
   Result := nextpas.core.git.native.zlib.GitZlibDecompress(
     AData, AStart, AEndPos);
+end;
+
+function GitZlibDecompressPtr(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt): TBytes; inline;
+begin
+  Result := nextpas.core.git.native.zlib.GitZlibDecompressPtr(AData, ACount, AStart, AEndPos);
+end;
+
+function GitZlibDecompressPtrToBuffer(AData: PByte; ACount, AStart: SizeUInt;
+  out AEndPos: SizeUInt; ADst: PByte; ADstLen: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.git.native.zlib.GitZlibDecompressPtrToBuffer(AData, ACount, AStart, AEndPos, ADst, ADstLen);
+end;
+
+function GitZlibDecompressPrefix(AData: PByte; ACount, AStart: SizeUInt;
+  ADst: PByte; ADstLen: SizeUInt; out AEndPos: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.git.native.zlib.GitZlibDecompressPrefix(AData, ACount, AStart, ADst, ADstLen, AEndPos);
 end;
 
 function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
@@ -199,9 +263,25 @@ begin
   Result := nextpas.core.git.native.loose.GitLooseRead(AGitDir, AOid, AKind);
 end;
 
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean; inline;
+begin
+  Result := nextpas.core.git.native.loose.GitLooseGetSize(AGitDir, AOid, AKind, ASize);
+end;
+
 function GitApplyDelta(const ABase, ADelta: TBytes): TBytes; inline;
 begin
   Result := nextpas.core.git.native.pack.GitApplyDelta(ABase, ADelta);
+end;
+
+function GitApplyDeltaReuse(const ABase, ADelta: TBytes; var AReuse: TBytes): TBytes; inline;
+begin
+  Result := nextpas.core.git.native.pack.GitApplyDeltaReuse(ABase, ADelta, AReuse);
+end;
+
+procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes); inline;
+begin
+  nextpas.core.git.native.pack.GitApplyDeltaInto(ABase, ADelta, AOut);
 end;
 
 function IsGitDirShape(const APath: string): Boolean; inline;
@@ -235,6 +315,17 @@ function GitResolveRef(const AGitDir: string;
   const ARefName: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.refs.GitResolveRef(AGitDir, ARefName);
+end;
+
+function GitTryResolveHead(const AGitDir: string; out AOid: TGitOid): Boolean; inline;
+begin
+  Result := nextpas.core.git.native.refs.GitTryResolveHead(AGitDir, AOid);
+end;
+
+function GitTryResolveRef(const AGitDir: string; const ARefName: string;
+  out AOid: TGitOid): Boolean; inline;
+begin
+  Result := nextpas.core.git.native.refs.GitTryResolveRef(AGitDir, ARefName, AOid);
 end;
 
 function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
