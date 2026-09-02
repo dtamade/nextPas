@@ -1,6 +1,6 @@
 unit nextpas.core.respack.dirsource;
 
-{** @desc 目录 → 打包适配：唯一 L2→L2 IO seam，流式mmap 零双驻留 ~1×+头，generic Walk 单源。 }
+{** @desc 目录 → 打包适配：唯一 L2→L2 IO seam，流式mmap 零双驻留 ~1×+头，generic TWalkCtx/EnsureWalkCapacity/WalkPrePlain/WalkPreEmbed 单源。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -326,17 +326,7 @@ begin
   begin
     if Ctx^.Failed then Exit(False) else Exit(True);
   end;
-  { 热路径说明（万文件场景）：当前回调内同步 Stat+ReadFile 并以 TBytes 锚点驻留至
-    Build 结束，峰值 ≈2×输入+~14MB（512MB→~1038MB，parity: FPC ~1050MiB/Go ~1060MiB/Rust ~1055MiB）
-    为 v1 纯内存设计预期（CONTRACT INV-R10、FORMAT.md §Data Section、writer.pas 流式两遍候选
-    nextpas.core.respack.writer.stream 可降至 ~1×+头；CONTRACT 业务为准，缺能力先反哺 owner
-    nextpas.core.mem.memory_map/nextpas.core.io.mapped，已落地 ResPackBuildStreamFromDir 流式mmap
-    管线（MmapOpen 零拷贝 + ResPackBuildStream 分段写，峰值 ~1×+头，接口锚点 try..finally 释放不丢）；
-    大包请优先流式mmap 管线（ResPackBuildStreamFromDir/ResPackBuildFromDir），本函数保留作小包便捷
-    （deprecated 兼容，Stream 为统一抽象，硬性 RESPACK_DIRSOURCE_LEGACY_LIMIT 限额防 2× 堆 OOM，超限显式 EResPackTooLarge）。
-    已做指数扩容单源 EnsureDirCapacity→WalkGrowCap 消 O(n²)，Data 指针零拷贝 BytesCopy 单源于 bytes.ops。
-    Stat/Read 失败经受控 try/except 归一为 EResPackDirSourceFailed 且不丢资源（Failed 标志 + Walk 提前终止 + 调用方 raise 前局部托管自动释放）。
-    单源证据：WalkPrePlain→RelativizePath→PathStripPrefix / TryReserveTotal→TryAddSizeUInt / WalkGrowCap / WalkFail 均为 inline 零拷贝转发，通用 Walk 单源 TWalkCtx<T> + EnsureWalkCapacity<T> 模板化。 }
+  { 小包便捷：同步 ReadFile 驻留 ~2×+头；大包走流式mmap ~1×+头，限 64MiB 防 OOM。 }
   if LSum > RESPACK_DIRSOURCE_LEGACY_LIMIT then
   begin
     WalkFail(Ctx^.Failed, Ctx^.FailMsg, 'deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
@@ -379,10 +369,7 @@ begin
   begin
     if Ctx^.Failed then Exit(False) else Exit(True);
   end;
-  { 流式mmap 热路径：Stat 取 ModTime/Size，上限校验复用 TryReserveTotal/TryAddSizeUInt 单源（inline 零开销），
-    随后 MmapOpen 零拷贝视图（owner: mem.memory_map/io.mapped，接口托管，零 heap 拷贝，inline 零开销）；
-    空文件 Size=0 时 Mmap Size 0 合法；mmap 失败按受控 EResPackDirSourceFailed 上抛且不丢已映射资源。
-    指数扩容单源 EnsureStreamCapacity→WalkGrowCap。泛型上下文单源：与 WalkProc 共用 WalkPrePlain/WalkTryStat/WalkTryReserve/WalkGrowCap/WalkFail，锚点分叉仅在 Data 加载 (MmapOpen) 处，模板化 TWalkCtx<IMappedFile> + EnsureWalkCapacity<IMappedFile>。 }
+  { 流式mmap：MmapOpen 零拷贝 ~1×+头；复用 Walk 单源，仅 Data 加载分叉。 }
   Idx := Ctx^.Count;
   EnsureStreamCapacity(Ctx^, Idx + 1);
   if not TryMmapRequire(APath, St.Size, LMap, LErr) then
@@ -415,12 +402,7 @@ var
 begin
   Result.Entries := nil;
   Result.Contents := nil;
-  { 单源收口：尾斜杠归一复用 nextpas.core.path.ExcludeTrailingPathDelimiter
-    （内部 FsPathTrimSep → platform_path_trim_sep 单源，原地去重 '\\'/'/'，保留根 '/'，
-    inline 零额外分配，替代手写 while Delete O(n) 多次移动）。
-    收敛：本函数仅保留 TBytes 小包便捷路径（ReadFile + EnsureDirCapacity→BytesNextCapacity 单源，inline 零拷贝，峰值 ~1×+头≤64MiB）；
-    大包流式mmap 零拷贝路径已收口至 ResPackBuildStreamFromDir/WalkProcStream/MmapOpen 单源（峰值 ~1×+头，无 TBytes 全量驻留），
-    消除此前 mmap→TBytes BytesCopy 双驻留 2× 峰值；64MiB 硬限额防堆 OOM，超限显式 EResPackTooLarge 引导流式。 }
+  { 尾斜杠归一 + 小包 ≤64MiB；流式 ~1×+头，无双驻留。 }
   RootClean := ExcludeTrailingPathDelimiter(ARoot);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
     raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
