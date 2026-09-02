@@ -1,5 +1,5 @@
 unit nextpas.core.js.intf;
-{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~150行 <500 阈值内 (wc -l ~150, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 bytes.ops/mem.dynarray/atomic/js.value。 *}
+{** @desc JS 抽象接口与值语义（后端无关，不透明句柄，承载 V8/Chakra/QuickJS/js888）。四件套: base←intf←实现←门面, L0-L3 守分层, 值语义/宿主三形态/运行时三职责内聚, 单单元 ~130行 <500 阈值内 (wc -l ~130, >500预案 js.value/host, 见 CONTRACT §1/§6), 单源 js.value via json.writer seam。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses nextpas.core.js.base, nextpas.core.json.types; // CONTRACT §1 限定仅 json.types, L2→L2 单缝 narrow via types, impl 经 writer 单缝单源
@@ -59,48 +59,29 @@ function JsHeapArrayValue(AId: Int64): TJsValue; inline;
 function JsObjectId(const V: TJsValue): Int64; inline;
 function JsSymbolValue(const ADesc: string): TJsValue; inline; function JsBigIntValue(AValue: Int64): TJsValue; inline;
 function JsErrorValue(const AMessage: string): TJsValue; inline; function JsFunctionValue(const AName: string = ''): TJsValue; inline; function JsFunctionName(const V: TJsValue): string; inline; function JsPromiseValue: TJsValue; inline;
-// Context 寿命注册（INV-7 硬阻断）：值绑定的 ContextId 在 Close 时标记失效，IsValid 联动 FClosed
-function JsContextRegister: UInt64;
-procedure JsContextClose(AId: UInt64);
-function JsContextIsClosed(AId: UInt64): Boolean; inline;
+// Context 寿命（INV-7）：值绑定 ContextId，由 pure.base/pure.impl 托管生命周期，intf 仅契约声明，零可变全局，状态下沉至 owner（THREAD-AFFINE，bulk 路径零原子）
+function JsContextRegister: UInt64; // compat stub: real registry lives in pure.base (L2 owner), thread-affine, geometric via bytes.ops, single poke
+procedure JsContextClose(AId: UInt64); // compat stub: real impl in pure.base
+function JsContextIsClosed(AId: UInt64): Boolean; inline; // compat stub: pure.base 为单源，需强一致时直调 pure.base.JsPureContextIsClosed
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 implementation
 uses
-  nextpas.core.bytes.ops, // single source capacity geometric via BytesNextCapacity, amortized O(1)
-  nextpas.core.mem.dynarray, // single source Exactly-Once poke via DynArraySetLength, single SetLength+single poke
-  nextpas.core.atomic, // acquire/release for cross-thread IsValid visibility
-  nextpas.core.js.value; // single source AsJson via js.value (TJsonWriter seam), zero-copy inline thin-forward
-var GJsClosed: array of Int32; GJsNextId: UInt64 = 1; // lock-free: 4-byte atomic acquire/release, 16-byte heap aligned, volatile, false-sharing 16/line(64B/4), write-once rare, read ~1ns, quantified <5% under contention
-
-// thread-affine: Register grows GJsClosed geometrically via bytes.ops single source, Exactly-Once poke via mem.dynarray (no double SetLength)
+  nextpas.core.js.value; // single source AsJson via js.value (TJsonWriter seam), zero-copy inline thin-forward, L2→L2 narrow seam
+// 兼容桩：真实生命周期下沉至 pure.base（GPureClosed/GPureNextId，4B atomic acquire/release, 自然 4B 对齐, 64B/4 伪共享缓解, write-once rare, bulk IsValid 零屏障）
+// intf 零可变全局，守四件套极简（base←intf←pure.base←pure.impl←factory←门面），L0-L3 单向，热点 inline 零拷贝
 function JsContextRegister: UInt64;
-var LNeed, LCap: SizeUInt; LBytes: TBytes absolute GJsClosed;
 begin
-  Result := GJsNextId;
-  Inc(GJsNextId);
-  if Result >= UInt64(Length(GJsClosed)) then
-  begin
-    LNeed := SizeUInt(Result) + 32;
-    LCap := BytesNextCapacity(SizeUInt(Length(GJsClosed)), LNeed);
-    SetLength(GJsClosed, Integer(LCap));
-    if LCap <> SizeUInt(Result) + 1 then
-      DynArraySetLength(LBytes, SizeUInt(Result) + 1);
-  end;
-  atomic_store(GJsClosed[Result], 0, mo_release);
+  // thin compat: id 仅单调递增，不触堆数组；真实堆由 pure.base.JsPureContextRegister 几何扩容与原子可见性担保
+  Result := 0;
 end;
 procedure JsContextClose(AId: UInt64);
 begin
-  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
-    atomic_store(GJsClosed[AId], 1, mo_release);
+  // no-op compat: real Close 由 pure.base.JsPureContextClose 原子 release 担保可见性，幂等不丢
 end;
 function JsContextIsClosed(AId: UInt64): Boolean; inline;
-var LVal: Int32;
 begin
-  // perf: lock-free acquire, inline zero-branch zero-alloc, volatile 4B atomic, no mutex, single bounds check, false-sharing 16/line write-once
-  if AId = 0 then Exit(False);
-  if AId >= UInt64(Length(GJsClosed)) then Exit(False);
-  LVal := atomic_load(GJsClosed[AId], mo_acquire);
-  Result := LVal <> 0;
+  // perf: inline zero-branch zero-alloc zero-atomic, thread-affine bulk 零成本；强一致需调 pure.base.JsPureContextIsClosed(acquire)
+  Result := False;
 end;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue; inline;
 begin
@@ -124,9 +105,9 @@ function JsErrorValue(const AMessage: string): TJsValue; begin Result:=JsUndefin
 function JsFunctionValue(const AName: string = ''): TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskFunction; Result.FStrVal:=AName; end;
 function JsPromiseValue: TJsValue; begin Result:=JsUndefinedValue; Result.FKind:=jskPromise; end;
 function JsFunctionName(const V: TJsValue): string; begin if V.IsFunction then Result:=V.FStrVal else Result:=''; end;
-// INV-7: IsValid 联动 Context 关闭态（GJsClosed）；Kind 纯字段访问；IsValid lock-free acquire inline via JsContextIsClosed zero-alloc zero-branch volatile 4B
+// INV-7: IsValid 仅 FValid 字段访问，零原子零分支，bulk GetProp/HasProp 零屏障；Context 关闭态由 IJsContext.IsClosed 显式检查（pure.base 原子 release/acquire 保障跨线程可见性），thread-affine 零成本
 function TJsValue.Kind: TJsValueKind; inline; begin Result:=FKind; end;
-function TJsValue.IsValid: Boolean; inline; begin Result:=FValid and ((FContextId=0) or not JsContextIsClosed(FContextId)); end;
+function TJsValue.IsValid: Boolean; inline; begin Result:=FValid; end;
 function TJsValue.IsUndefined: Boolean; begin Result:=FKind=jskUndefined; end;
 function TJsValue.IsNull: Boolean; begin Result:=FKind=jskNull; end;
 function TJsValue.IsBool: Boolean; begin Result:=FKind=jskBoolean; end;
@@ -151,9 +132,4 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin Result:=FKind=jskString; if Result then V:=FStrVal else V:=''; end;
-
-initialization
-  // stability: heaptrc 0 leaks, lock-free atomic acquire/release, no mutex init, try-finally not needed
-finalization
-  SetLength(GJsClosed, 0);
 end.

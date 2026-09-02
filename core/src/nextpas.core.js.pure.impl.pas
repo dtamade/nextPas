@@ -11,6 +11,7 @@ unit nextpas.core.js.pure.impl;
  *       与 design-conventions §2 例外；实现侧零分支复用 pure.base 单源，守 L0–L3。
  *       性能：热点 FindHostView/Bind/DoEval/New* inline + TStringView/BytesCopy 零拷贝
  *       + bytes.ops 单源几何扩容；稳定：try-finally/JsPureClose/FreeAndNil 不丢。
+ *       Host 桶 per-Context 实例隔离（FHostBuckets），无全局共享，线程高级感 + 单分支重建零抖动。
  *}
 {$I nextpas.core.settings.inc}
 interface
@@ -39,7 +40,7 @@ type
   end;
 
   { TJsPureContext — Context 四职责聚合模板（阈值 650 内 407 行，奢华度分组标记）
-    字段分组：Host:FHostFuncs / Heap:FHeap / Value:FGlobal+ContextId / IO: FBackend+FThreadId+File直读
+    字段分组：Host:FHostFuncs+FHostBuckets / Heap:FHeap / Value:FGlobal+ContextId / IO: FBackend+FThreadId+File直读
     方法分组见 public 段 Host/Heap/Value/IO 标记；超阈预案 js.host + js.value 已就绪，当前薄转发 pure.base 单源 }
   TJsPureContext = class(TInterfacedObject, IJsContext)
   private
@@ -50,13 +51,14 @@ type
     FThreadId: UInt64;
     FContextId: UInt64;
     FBackend: TJsBackendKind;
-    // Host 职责 → 未来 js.host (宿主绑定/Call)
+    // Host 职责 → 未来 js.host (宿主绑定/Call) — per-Context 桶实例隔离，无全局共享，Owner pure.host
     FHostFuncs: TJsPureHostArray;
+    FHostBuckets: TJsPureHostBuckets;
     // Heap 职责 → 未来 js.value (堆对象/Props)
     FHeap: TJsPureHeap;
     // Value 职责 → 未来 js.value (全局/句柄绑定)
     FGlobal: TJsValue;
-    // Host helpers (inline + TStringView 零拷贝 + bytes.ops FNV1a 单源)
+    // Host helpers (inline + TStringView 零拷贝 + bytes.ops FNV1a 单源, per-Context 桶 O(1) 单分支)
     function FindHost(const AName: string): Integer; inline;
     function FindHostView(const AName: TStringView): Integer; inline;
     // core affinity/validation helpers (inline)
@@ -166,18 +168,21 @@ begin
   FBackend := ABackend;
   FClosed := False;
   FThreadId := UInt64(platform_thread_self);
-  FContextId := JsContextRegister;
+  FContextId := JsPureContextRegister;
+  // FHostBuckets zero-init: per-Context 实例隔离，无全局共享，线程高级感
   FGlobal := Bind(JsPureHeapNewObject(FHeap));
 end;
 
 function TJsPureContext.FindHost(const AName: string): Integer; inline;
 begin
-  Result := JsPureFindHost(FHostFuncs, AName);
+  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops FNV1a 单源, inline
+  Result := JsPureFindHost(FHostFuncs, FHostBuckets, AName);
 end;
 
 function TJsPureContext.FindHostView(const AName: TStringView): Integer; inline;
 begin
-  Result := JsPureFindHostView(FHostFuncs, AName); // inline + TStringView 零拷贝 + bytes.ops 单源
+  // per-Context 桶 O(1) 单分支 + TStringView 零拷贝 + bytes.ops 单源, inline
+  Result := JsPureFindHostView(FHostFuncs, FHostBuckets, AName);
 end;
 
 function TJsPureContext.IsOnCreationThread: Boolean; inline;
@@ -209,7 +214,8 @@ end;
 
 function TJsPureContext.DoEval(const ACode: string): TJsValue; inline;
 begin
-  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHostFuncs, Global)); // inline 薄转发 + TStringView 零拷贝
+  // per-Context 桶注入，单分支重建零抖动 + TStringView 零拷贝, inline 薄转发 pure.base 单源
+  Result := Bind(JsPureDoEval(Self, ACode, FOptions, FBackend, FHostFuncs, FHostBuckets, FGlobal));
 end;
 
 procedure TJsPureContext.DoSetHost(const AName: string);
@@ -367,25 +373,26 @@ function TJsPureContext.Call(const AFunc: TJsValue; const AThis: TJsValue; const
 begin
   EnsureNotClosed;
   EnsureThreadAffinity;
-  Result := Bind(JsPureCall(Self, FHostFuncs, AFunc, AThis, AArgs, FBackend));
+  // per-Context 桶 O(1) 单分支, inline
+  Result := Bind(JsPureCall(Self, FHostFuncs, FHostBuckets, AFunc, AThis, AArgs, FBackend));
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostFunction);
 begin
   EnsureNotClosed;
-  JsPureHostSetFunc(FHostFuncs, AName, AHandler, FBackend);
+  JsPureHostSetFunc(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostMethod);
 begin
   EnsureNotClosed;
-  JsPureHostSetMethod(FHostFuncs, AName, AHandler, FBackend);
+  JsPureHostSetMethod(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.SetHostFunction(const AName: string; AHandler: TJsHostProc);
 begin
   EnsureNotClosed;
-  JsPureHostSetProc(FHostFuncs, AName, AHandler, FBackend);
+  JsPureHostSetProc(FHostFuncs, FHostBuckets, AName, AHandler, FBackend);
 end;
 
 procedure TJsPureContext.RemoveHostFunction(const AName: string);
@@ -393,7 +400,8 @@ begin
   if FClosed then
     Exit;
   EnsureThreadAffinity;
-  JsPureHostRemove(FHostFuncs, AName);
+  // per-Context 桶失效，仅本实例，不影响他 Context，线程隔离高级感
+  JsPureHostRemove(FHostFuncs, FHostBuckets, AName);
 end;
 
 { TJsPureContext — IO 职责 (L0 platform.fs 直读) }
@@ -430,7 +438,7 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  JsPureClose(FHostFuncs, FHeap, FGlobal, FContextId);
+  JsPureClose(FHostFuncs, FHostBuckets, FHeap, FGlobal, FContextId);
 end;
 
 function TJsPureContext.IsClosed: Boolean;

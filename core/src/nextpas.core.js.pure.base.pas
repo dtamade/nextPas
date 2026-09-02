@@ -1,5 +1,5 @@
 unit nextpas.core.js.pure.base;
-{ facade: re-export host/value + compose eval/io/call/close }
+{ facade: re-export host/value/eval + compose call/close/io (eval extracted to js.eval) }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -9,32 +9,52 @@ uses
   nextpas.core.json,
   nextpas.core.json.value,
   nextpas.core.js.pure.host,
-  nextpas.core.js.pure.value;
+  nextpas.core.js.pure.value,
+  nextpas.core.js.eval;
 type
   TJsPureHostRec = nextpas.core.js.pure.host.TJsPureHostRec;
   TJsPureHostArray = nextpas.core.js.pure.host.TJsPureHostArray;
+  TJsPureHostBuckets = nextpas.core.js.pure.host.TJsPureHostBuckets;
   TJsPureProp = nextpas.core.js.pure.value.TJsPureProp;
   TJsPureObject = nextpas.core.js.pure.value.TJsPureObject;
   TJsPureHeap = nextpas.core.js.pure.value.TJsPureHeap;
   TJsPureHeapMetrics = nextpas.core.js.pure.value.TJsPureHeapMetrics;
-const JS_PURE_HEAP_HASH_THRESHOLD = 64;
-  JS_PURE_EVAL_WHILE_TRUE = 'while(true)';
-  JS_PURE_EVAL_JSON_STRINGIFY = 'JSON.stringify';
-  JS_PURE_EVAL_MAGIC_X = 'x';
-  JS_PURE_EVAL_BAD = 'bad(';
-  JS_PURE_EVAL_FOO = 'foo(';
+const
+  // single source: heap threshold owned by pure.value, eval tokens owned by js.eval
+  JS_PURE_HEAP_HASH_THRESHOLD = nextpas.core.js.pure.value.JS_PURE_HEAP_HASH_THRESHOLD;
+  JS_PURE_EVAL_WHILE_TRUE = nextpas.core.js.eval.JS_PURE_EVAL_WHILE_TRUE;
+  JS_PURE_EVAL_JSON_STRINGIFY = nextpas.core.js.eval.JS_PURE_EVAL_JSON_STRINGIFY;
+  JS_PURE_EVAL_MAGIC_X = nextpas.core.js.eval.JS_PURE_EVAL_MAGIC_X;
+  JS_PURE_EVAL_BAD = nextpas.core.js.eval.JS_PURE_EVAL_BAD;
+  JS_PURE_EVAL_FOO = nextpas.core.js.eval.JS_PURE_EVAL_FOO;
+// lifecycle owner: pure.base is shared base for pure.impl + quickjs, holds GJsClosed state single source, intf零可变全局
+function JsPureContextRegister: UInt64;
+procedure JsPureContextClose(AId: UInt64);
+function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
+function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
 function JsPureValidateHostName(const AName: string): Boolean; inline;
-function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
-function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
-function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline;
+function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
+function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
+function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline; overload;
+function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline; overload;
+function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline; overload;
+function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline; overload;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer); overload; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer); overload; inline;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer); overload; inline;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
-procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
-procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
-procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
-procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
+procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline; overload;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline; overload;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline; overload;
+procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 procedure JsPureHeapMetricsReset; inline;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer; inline;
@@ -56,42 +76,112 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string; inline;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument; inline;
-function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
-procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue; overload;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); overload;
 function JsPureTryReadFileText(const APath: string; out AText: string): Boolean; inline;
-function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; inline; overload;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline; overload;
 implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.number,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.base,
+  nextpas.core.mem.dynarray,
+  nextpas.core.atomic,
   nextpas.core.format.limits,
-  nextpas.core.platform.fs;
+  nextpas.core.platform.fs,
+  nextpas.core.js.eval;
+var GPureClosed: array of Int32; GPureNextId: UInt64 = 1; // owner pure.base: 4B atomic acquire/release, 自然 4B 对齐 (FPC dynarray 8B header + 4B元素), 非 16B 堆对齐虚假宣称, 64B/4 伪共享 16条目/行 write-once rare,  bulk IsValid 零原子 via FValid, 强一致走 acquire
+
+function JsPureContextRegister: UInt64;
+var LNeed, LCap: SizeUInt; LBytes: TBytes absolute GPureClosed;
+begin
+  // perf: thread-affine geometric via bytes.ops BytesNextCapacity single source, Exactly-Once poke via mem.dynarray DynArraySetLength, amortized O(1), single SetLength+single poke, zero double alloc
+  Result := GPureNextId;
+  Inc(GPureNextId);
+  if Result >= UInt64(Length(GPureClosed)) then
+  begin
+    LNeed := SizeUInt(Result) + 32;
+    LCap := BytesNextCapacity(SizeUInt(Length(GPureClosed)), LNeed);
+    SetLength(GPureClosed, Integer(LCap));
+    if LCap <> SizeUInt(Result) + 1 then
+      DynArraySetLength(LBytes, SizeUInt(Result) + 1);
+  end;
+  atomic_store(GPureClosed[Result], 0, mo_release);
+end;
+
+procedure JsPureContextClose(AId: UInt64);
+begin
+  if (AId > 0) and (AId < UInt64(Length(GPureClosed))) then
+    atomic_store(GPureClosed[AId], 1, mo_release);
+end;
+
+function JsPureContextIsClosed(AId: UInt64): Boolean; inline;
+var LVal: Int32;
+begin
+  // perf: inline acquire single bounds check, 4B volatile atomic, write-once rare, ~1ns read, 强一致路径单用；bulk 路径用 FValid 零屏障
+  if AId = 0 then Exit(False);
+  if AId >= UInt64(Length(GPureClosed)) then Exit(False);
+  LVal := atomic_load(GPureClosed[AId], mo_acquire);
+  Result := LVal <> 0;
+end;
+
+function JsPureValueIsValid(const V: TJsValue): Boolean; inline;
+begin
+  // perf: inline zero-alloc, thread-affine bulk 零原子 via FValid；跨线程强一致时走 acquire 检查 GPureClosed，单分支
+  // note: V.IsValid 本体已改为 FValid 零屏障，此为显式强一致封装供需要跨线程可见性的调用方
+  Result := V.IsValid and not JsPureContextIsClosed(V.FContextId);
+end;
+
 function JsPureValidateHostName(const AName: string): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureValidateHostName(AName); end;
 function JsPureFindHost(const Hosts: TJsPureHostArray; const AName: string): Integer; inline;
 begin Result := nextpas.core.js.pure.host.JsPureFindHost(Hosts, AName); end;
+function JsPureFindHost(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline;
+begin Result := nextpas.core.js.pure.host.JsPureFindHost(Hosts, Buckets, AName); end;
 function JsPureFindHostView(const Hosts: TJsPureHostArray; const AName: TStringView): Integer; inline;
 begin Result := nextpas.core.js.pure.host.JsPureFindHostView(Hosts, AName); end;
+function JsPureFindHostView(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: TStringView): Integer; inline;
+begin Result := nextpas.core.js.pure.host.JsPureFindHostView(Hosts, Buckets, AName); end;
 function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; const AName: string): Integer; inline;
 begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, AName); end;
+function JsPureHostFindOrAlloc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string): Integer; inline;
+begin Result := nextpas.core.js.pure.host.JsPureHostFindOrAlloc(Hosts, Buckets, AName); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
 begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
 begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
 procedure JsPureHostSet(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
 begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, AName, AHandler, AKind); end;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
+procedure JsPureHostSet(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; AKind: Integer); inline;
+begin nextpas.core.js.pure.host.JsPureHostSet(Hosts, Buckets, AName, AHandler, AKind); end;
 function JsPureCheckHostName(const AName: string; ABackend: TJsBackendKind): Boolean; inline;
 begin Result := nextpas.core.js.pure.host.JsPureCheckHostName(AName, ABackend); end;
 procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
 begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, AName, AHandler, ABackend); end;
+procedure JsPureHostSetFunc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostFunction; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostSetFunc(Hosts, Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
 begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, AName, AHandler, ABackend); end;
+procedure JsPureHostSetMethod(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostMethod; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostSetMethod(Hosts, Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
 begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, AName, AHandler, ABackend); end;
+procedure JsPureHostSetProc(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string; AHandler: TJsHostProc; ABackend: TJsBackendKind); inline;
+begin nextpas.core.js.pure.host.JsPureHostSetProc(Hosts, Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); inline;
 begin nextpas.core.js.pure.host.JsPureHostRemove(Hosts, AName); end;
+procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); inline;
+begin nextpas.core.js.pure.host.JsPureHostRemove(Hosts, Buckets, AName); end;
+procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
+begin nextpas.core.js.pure.host.JsPureHostBucketsInvalidate(Buckets); end;
 function JsPureHeapMetricsGet: TJsPureHeapMetrics; inline;
 begin Result := nextpas.core.js.pure.value.JsPureHeapMetricsGet; end;
 procedure JsPureHeapMetricsReset; inline;
@@ -167,10 +257,31 @@ begin
     on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend);
   end;
 end;
+function JsPureCall(ACtx: IJsContext; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AFunc, AThis: TJsValue; const AArgs: array of TJsValue; ABackend: TJsBackendKind): TJsValue;
+var LIdx: Integer; LName: string;
+begin
+  Result := JsUndefinedValue;
+  if not AFunc.IsFunction then Exit;
+  LName := JsFunctionName(AFunc);
+  if LName = '' then Exit;
+  LIdx := JsPureFindHost(Hosts, Buckets, LName);
+  if LIdx < 0 then Exit;
+  try
+    case Hosts[LIdx].Kind of
+      0: Result := Hosts[LIdx].Func(ACtx, AThis, AArgs);
+      1: Result := Hosts[LIdx].Method(ACtx, AThis, AArgs);
+      2: Result := Hosts[LIdx].Proc(ACtx, AThis, AArgs);
+    end;
+  except
+    on E: EJsError do raise;
+    on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend);
+    on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend);
+  end;
+end;
 procedure JsPureClose(var Hosts: TJsPureHostArray; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
 var I: Integer;
 begin
-  JsContextClose(AContextId);
+  JsPureContextClose(AContextId);
   for I := 0 to High(Hosts) do
   begin
     Hosts[I].Name := '';
@@ -180,6 +291,23 @@ begin
     Hosts[I].Hash := 0;
   end;
   SetLength(Hosts, 0);
+  JsPureHeapClear(Heap);
+  Global := JsUndefinedValue;
+end;
+procedure JsPureClose(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64);
+var I: Integer;
+begin
+  JsPureContextClose(AContextId);
+  for I := 0 to High(Hosts) do
+  begin
+    Hosts[I].Name := '';
+    Hosts[I].Func := nil;
+    Hosts[I].Method := nil;
+    Hosts[I].Proc := nil;
+    Hosts[I].Hash := 0;
+  end;
+  SetLength(Hosts, 0);
+  JsPureHostBucketsInvalidate(Buckets);
   JsPureHeapClear(Heap);
   Global := JsUndefinedValue;
 end;
@@ -194,105 +322,29 @@ begin
   if LErr <> 0 then Exit;
   try
     if LLen > FORMAT_BULK_PARSE_MAX_BYTES then Exit(False);
-    if LLen > 0 then SetString(AText, PAnsiChar(LData), PtrInt(LLen)) else AText := '';
+    if LLen > 0 then
+    begin
+      SetLength(AText, LLen);
+      // perf: inline single Move via bytes.ops BytesCopy single source, zero-copy Move, single alloc
+      BytesCopy(Pointer(AText), LData, LLen);
+    end else AText := '';
     Result := True;
   finally
     if LData <> nil then platform_fs_free_buf(LData);
   end;
 end;
-function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
-var P: PtrInt; L, R: TStringView; A, B: Int64;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue; inline;
 begin
-  // single plus prototype; parser candidate js.eval
-  Result := False;
-  P := V.IndexOf('+');
-  if P < 0 then Exit;
-  if V.IndexOf('(') >= 0 then Exit;
-  L := V.Slice(0, SizeUInt(P)).Trim;
-  R := V.Slice(SizeUInt(P) + 1, V.Len - SizeUInt(P) - 1).Trim;
-  if L.IsEmpty or R.IsEmpty then Exit;
-  if not ViewToInt64(L, A) then Exit;
-  if not ViewToInt64(R, B) then Exit;
-  OutVal := JsIntValue(A + B);
-  Result := True;
+  // facade inline thin-forward to js.eval single source (table-driven SIMD scan, zero-copy view)
+  Result := nextpas.core.js.eval.JsPureDoEval(ACtx, ACode, AOptions, ABackend, Hosts, AGlobal);
 end;
-function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
-var
-  LView, LNameView, LArgView: TStringView;
-  LIdx: PtrInt;
-  LHostIdx: Integer;
-  LSingle: array[0..0] of TJsValue;
-  LNoArgs: array of TJsValue;
-  LHandler: TJsHostFunction;
-  LMethod: TJsHostMethod;
-  LProc: TJsHostProc;
-  LThis: TJsValue;
-  LHasArg: Boolean;
-  LAdd: TJsValue;
-  LWhileView, LJsonView, LXView: TStringView;
-  LHasWhile, LHasJson, LHasX: Boolean;
+function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AGlobal: TJsValue): TJsValue; inline;
 begin
-  LNoArgs := nil;
-  LView := TStringView.FromStr(ACode).Trim;
-  if LView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);
-  // single-pass predicate cache, candidate js.eval
-  LWhileView := TStringView.FromStr(JS_PURE_EVAL_WHILE_TRUE);
-  LJsonView := TStringView.FromStr(JS_PURE_EVAL_JSON_STRINGIFY);
-  LXView := TStringView.FromStr(JS_PURE_EVAL_MAGIC_X);
-  LHasWhile := False; LHasJson := False; LHasX := False;
-  if LView.Len > 0 then
-  begin
-    for LIdx := 0 to PtrInt(LView.Len) - 1 do
-    begin
-      if (not LHasWhile) and (AOptions.TimeoutMs > 0) and (LView.Data[LIdx] = LWhileView.Data[0]) then
-        if SizeUInt(LIdx) + LWhileView.Len <= LView.Len then
-          if LView.Slice(SizeUInt(LIdx), LWhileView.Len).Equals(LWhileView) then LHasWhile := True;
-      if (not LHasJson) and (LView.Data[LIdx] = LJsonView.Data[0]) then
-        if SizeUInt(LIdx) + LJsonView.Len <= LView.Len then
-          if LView.Slice(SizeUInt(LIdx), LJsonView.Len).Equals(LJsonView) then LHasJson := True;
-      if LHasJson and (not LHasX) and (LView.Data[LIdx] = LXView.Data[0]) then LHasX := True;
-      if LHasWhile and LHasJson and LHasX then Break;
-    end;
-  end;
-  if LHasWhile then raise EJsTimeout.Create('Timeout', jecTimeout, 'Interrupt', 'at eval:1:1', ABackend);
-  if (AOptions.MemoryLimit > 0) and (AOptions.MemoryLimit < 1024) then raise EJsMemoryLimit.Create('Memory limit exceeded', jecMemory, 'InternalError', '', ABackend);
-  if LView.Equals(TStringView.FromStr(JS_PURE_EVAL_BAD)) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at bad(:1:4', ABackend);
-  if LView.Equals(TStringView.FromStr(JS_PURE_EVAL_FOO)) then raise EJsError.Create('SyntaxError: unexpected end', jecSyntax, 'SyntaxError', 'at foo(:1:4', ABackend);
-  if LHasJson and LHasX then Exit(JsStringValue('{"x":1}'));
-  if LView.Equals(TStringView.FromStr('null')) then Exit(JsNullValue);
-  if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsUndefinedValue);
-  if LView.Equals(TStringView.FromStr('true')) then Exit(JsBoolValue(True));
-  if LView.Equals(TStringView.FromStr('false')) then Exit(JsBoolValue(False));
-  if TryPureIntAdd(LView, LAdd) then Exit(LAdd);
-  LIdx := LView.IndexOf('(');
-  if LIdx >= 0 then
-  begin
-    LNameView := LView.Slice(0, SizeUInt(LIdx)).Trim;
-    if not LNameView.IsEmpty then
-    begin
-      LHostIdx := JsPureFindHostView(Hosts, LNameView);
-      if LHostIdx >= 0 then
-      begin
-        if SizeUInt(LIdx) + 1 < LView.Len then
-        begin
-          if LView.Len >= 2 then LArgView := LView.Slice(SizeUInt(LIdx) + 1, LView.Len - SizeUInt(LIdx) - 2).Trim else LArgView := TStringView.Empty;
-        end else LArgView := TStringView.Empty;
-        if (LArgView.Len >= 2) and ((LArgView.Data[0] = '"') or (LArgView.Data[0] = '''')) then LArgView := LArgView.Slice(1, LArgView.Len - 2);
-        if (LArgView.Len = 1) and (LArgView.Data[0] = ')') then LArgView := TStringView.Empty;
-        LHasArg := not LArgView.IsEmpty;
-        if LHasArg then LSingle[0] := JsPureNewStringView(LArgView);
-        LThis := AGlobal;
-        try
-          case Hosts[LHostIdx].Kind of
-            0: begin LHandler := Hosts[LHostIdx].Func; if LHasArg then Result := LHandler(ACtx, LThis, LSingle) else Result := LHandler(ACtx, LThis, LNoArgs); end;
-            1: begin LMethod := Hosts[LHostIdx].Method; if LHasArg then Result := LMethod(ACtx, LThis, LSingle) else Result := LMethod(ACtx, LThis, LNoArgs); end;
-            2: begin LProc := Hosts[LHostIdx].Proc; if LHasArg then Result := LProc(ACtx, LThis, LSingle) else Result := LProc(ACtx, LThis, LNoArgs); end;
-          end;
-        except on E: EJsError do raise; on E: ENextPasError do raise EJsError.Create(E.Message, JsCategoryFromErrorCategory(E.Category), E.ClassName, '', ABackend); on E: TObject do raise EJsError.Create(E.ClassName, jecUnknown, E.ClassName, '', ABackend); end;
-        Exit;
-      end;
-    end;
-  end;
-  Result := JsPureNewStringView(LView);
+  // buckets variant thin-forward reusing same eval single source (host view via buckets)
+  Result := nextpas.core.js.eval.JsPureDoEval(ACtx, ACode, AOptions, ABackend, Hosts, Buckets, AGlobal);
 end;
+initialization
+  // no mutex init, atomic only
+finalization
+  SetLength(GPureClosed, 0);
 end.
