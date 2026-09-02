@@ -100,7 +100,7 @@ nextpas.core.vfs.os.pas         ← nextpas.core.fs → IVfs 适配（类型转�
 nextpas.core.vfs.sub.pas        ← CreateSubVfs：任意 IVfs 的重定根包装
 nextpas.core.vfs.mount.pas      ← CreateMountedVfs：多 IVfs 前缀最长匹配挂载复合（P2 完整性， surpass Go fs）
 nextpas.core.vfs.overlay.pas    ← CreateOverlayVfs：多 IVfs 同根优先级叠加（游戏 patch>dlc>base 热更，去重合并，ETag优先透传）
-nextpas.core.vfs.transform.pas  ← L3 单缝通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` 单源决策器（单流 4K peek，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO），压缩/加密共用模板，inline+try-finally 零拷贝（L3 单缝寄居正名，Registry 单缝白名单过渡，长期聚合为 nextpas.core.vfs.decorator 独立 L3 族到期移除白名单）
+nextpas.core.vfs.transform.pas  ← L3 单缝通用字节变换装饰器：`TVfsTransformFunc/TVfsShouldTransformFunc/TVfsHeaderPredicateFunc` 三谓词 + `TRANSFORM_HEADER_PEEK=4K` 单源决策器（单流 4K peek，大文件 2 字节轻量预判免 4K 分配，Header假回 FInner.Stat/零物化直透，命中则单流 Move 复用 4K 头+同流 IReaderAt/Seek 补读免二次 OpenRead，小文件零二次 IO，Stat/OpenRead 大文件解压一致性 via 单源），压缩/加密共用模板，inline+try-finally 零拷贝（L3 单缝寄居正名，Registry 单缝白名单过渡，L7 到期聚合为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单）
 nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）：经 transform 单源决策器承载 gzip（策略仅留 `VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX_DECOMPRESS_BYTES` 单源与 `daAuto/daGzip` 语义，复用 `TRANSFORM_HEADER_PEEK` + `bytes.ops` 单源魔数，STORE 零拷贝与 32MiB 防 bomb 由 transform 承载）
 ```
 
@@ -114,7 +114,7 @@ nextpas.core.vfs.compressed.pas ← L3 解压薄门面（单缝寄居正名）�
 | `base` | L0 | 自有 `TEntryInfo/TStatInfo`，**不复用 `fs.base` 类型** |
 | `intf` | `base` + `io.intf`（IStream） | 流词汇唯一来源是 io |
 | `memtree`/`embedded`/`sub` | `intf/base`（`embedded` 另加 `respack.reader`） | |
-| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead），零 `SysUtils` 直引（`QueryInterface`） |
+| `transform` | `intf/base` + `io.memory` + `vfs.util` | L3 单缝通用装饰器（单缝寄居 L2 家族，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单，长期待 L3 族聚合拆分）：任意 `TBytes→TBytes` + `HeaderPred(4K)` 单源决策器 TryResolveViaHeaderSingleStream（Stat/OpenRead 共用，inline 单流 Move 零拷贝，大文件 2 字节轻量预判免 4K 分配，Header假回 FInner.Stat/零物化直透，命中大文件同流补读免二次 OpenRead，Stat/OpenRead 大文件解压一致性），零 `SysUtils` 直引（`QueryInterface`） |
 | `compressed` | `transform` + `compress` (`compress.base` + `compress.gzip`) + `bytes.ops` | L3 薄门面（单缝寄居正名，长期待拆分）：仅策略（`daAuto/daGzip`、`IsGzipHeaderPred` 4K 头部谓词 `bytes.ops` 单源、`GZIP_MAX` 单源），模板复用 `transform` 单源决策器承载 32MiB 防 bomb |
 | `os` | `intf/base` + `nextpas.core.fs` + `nextpas.core.path` | **唯一的 L2→L2 seam**，registry 记录 |
 

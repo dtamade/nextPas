@@ -23,18 +23,18 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.collections.algorithms,
-  nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.str,
   nextpas.core.sync;
 
 type
-  TOverlayIndex = specialize THashMap<string, Integer>;
+  TOverlayIndex = specialize TSwissTableStr<Integer>;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
-    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；SpinLock守并发，inline热路径，零拷贝 SpanCompare 单源 }
-    FIndexLock: ISpinLock;
+    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；RWLock读写分离守并发，读并发零争用，inline热路径，零拷贝 SpanCompare 单源 via bytes.ops }
+    FIndexLock: IRWLock;
     function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
     procedure CacheResult(const APath: string; const AIdx: Integer); inline;
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
@@ -72,7 +72,7 @@ begin
     FList[I] := AList[I];
   end;
   FIndex := TOverlayIndex.Create(16);
-  FIndexLock := SpinLock;
+  FIndexLock := RWLock;
 end;
 
 destructor TOverlayVfs.Destroy;
@@ -92,27 +92,27 @@ begin
   AIdx := -2;
   Result := False;
   if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.Acquire;
+  FIndexLock.AcquireRead;
   try
     Result := TOverlayIndex(FIndex).TryGetValue(APath, AIdx);
   finally
-    FIndexLock.Release;
+    FIndexLock.ReleaseRead;
   end;
 end;
 
 procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer); inline;
 begin
   if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.Acquire;
+  FIndexLock.AcquireWrite;
   try
-    TOverlayIndex(FIndex).AddOrAssign(APath, AIdx);
+    TOverlayIndex(FIndex).Put(APath, AIdx);
   finally
-    FIndexLock.Release;
+    FIndexLock.ReleaseWrite;
   end;
 end;
 
 { 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
-  命中层单次 Stat 直达（零二次二分），SpinLock零分配，inline热路径，bytes.ops零拷贝单源 }
+  命中层单次 Stat 直达（零二次二分），RWLock读并发零争用/写互斥，inline热路径，bytes.ops零拷贝单源 }
 function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
 var
   I, LCached: Integer;
@@ -285,53 +285,38 @@ function TOverlayVfs.TryGetETag(const APath: string; out AETag: string): Boolean
 var
   LInfo: TStatInfo;
   LFs: IVfs;
-  Intf: IVfsETag;
 begin
+  // 单源 VfsETagHelper：复用 mount 同源 Supports 级联 via bytes.ops 外零分配
   AETag := '';
   if VfsIsRoot(APath) then Exit(False);
   if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
   if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsETag, Intf) then
-    Exit(Intf.TryGetETag(APath, AETag));
-  Result := False;
+  Result := VfsETagHelperTryGetETag(LFs, APath, AETag);
 end;
 
 function TOverlayVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
 var
   LInfo: TStatInfo;
   LFs: IVfs;
-  Intf: IVfsETag;
 begin
   ALastModified := '';
   if VfsIsRoot(APath) then Exit(False);
   if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
   if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsETag, Intf) then
-    Exit(Intf.TryGetLastModified(APath, ALastModified));
-  Result := False;
+  Result := VfsETagHelperTryGetLastModified(LFs, APath, ALastModified);
 end;
 
 function TOverlayVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
 var
   LInfo: TStatInfo;
   LFs: IVfs;
-  Intf: IVfsServeMeta;
-  ETagIntf: IVfsETag;
 begin
   AETag := '';
   ALastModified := '';
   if VfsIsRoot(APath) then Exit(False);
   if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
   if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsServeMeta, Intf) then
-    Exit(Intf.TryGetServeMeta(APath, AETag, ALastModified));
-  if Supports(LFs, IVfsETag, ETagIntf) then
-  begin
-    Result := ETagIntf.TryGetETag(APath, AETag);
-    if Result then ETagIntf.TryGetLastModified(APath, ALastModified);
-    Exit;
-  end;
-  Result := False;
+  Result := VfsETagHelperTryGetServeMeta(LFs, APath, AETag, ALastModified);
 end;
 
 end.

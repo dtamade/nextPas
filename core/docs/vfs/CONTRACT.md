@@ -1,10 +1,10 @@
 # nextpas.core.vfs 代码契约
 
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（13 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/util + transform/compressed L3单缝装饰器 + 门面）
-**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期聚合为独立 L3 族 nextpas.core.vfs.decorator 到期移除白名单固化跨层依赖，现阶段以单缝+文档正名守层级高级感统一性）
+**层级**：L2 基座（依赖 L0-L1；`os` 单元例外依赖 fs/path；`embedded` 另依赖 respack.reader；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed`  via Registry 单缝白名单过渡，L3→L2 仅依赖 compress.base GZIP_MAX单源 + bytes.ops 单源，长期聚合为独立 L3 族 nextpas.core.vfs.decorator、L7 到期移除白名单固化 L0-L3 单向依赖，现阶段以单缝+文档正名守层级高级感统一性）
 **Owner**：AI（respack/vfs lane）
 **最后更新**：2026-09-02
-**版本**：1.5（匠心修复：transform 单流复用+单源决策器+ L3 单缝正名，13门闭环保）
+**版本**：1.6（匠心修复：transform 大文件 2 字节轻量预判免 4K + Stat/OpenRead 大文件解压一致性 + L7 单缝正名，13门闭环保）
 
 ---
 
@@ -132,9 +132,9 @@ end;
 | OpenRead（os） | 经 fs.Open，句柄级开销 | fs seam唯一 |
 | Sub 视图转发 | O(1) 包装，无树复制 | 包装器无树复制 |
 | VfsWalk 全树 | O(n) 路径构造主导；零冗余 List 调用 | WalkLevel批量List，字典序确定性 |
-| Stat(large非gzip) | 单流 4K 头预判免全量读 | `TTransformingVfs.TryResolveViaHeaderSingleStream` 单源决策器（单流 4096 + `HeaderShould` inline，非变换直接回 `FInner.Stat`，小文件复用 Header 零二次 IO，大文件同流 IReaderAt/Seek 补读免二次 OpenRead），`TAuto` 亦 4K 透传；TargetL 1MiB非gzip Stat ~972ns 零解压，bench_transform `Stat/large-non-gzip/header-peek` 阈值锁定 |
-| OpenRead(非gzip) | 单流零物化直透免 VfsReadAllBytes | `TTransformingVfs.OpenRead` 单源决策器 HeaderPred 假时零物化直透 `FInner.OpenRead`（零拷贝无 `VfsReadAllBytes` materialize，单流 4K peek ~972ns），省全量拷贝+分配；bench_transform `Open/large-non-gzip/passthrough` 阈值锁定 |
-| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb | `GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源 + bytes.ops 单源魔数)`，`ContentHash=0/ETag` 禁用，HeaderPred真时小文件复用 Header（≤4K）& 大文件单流 Move 4K 头+同流补读避免二次全量读 |
+| Stat(large非gzip) | 轻量 2 字节头预判免 4K 分配+全量读 | `TTransformingVfs.TryResolveViaHeaderSingleStream` 单源决策器（大文件先 2 字节轻量 peek + `HeaderShould` bytes.ops inline 非变换直接回 `FInner.Stat` 免 4K，小文件复用 Header 零二次 IO，大文件命中同流 IReaderAt/Seek 补读免二次 OpenRead），`TAuto` 亦轻量透传；TargetL 1MiB非gzip Stat ~972ns 零解压，bench_transform `Stat/large-non-gzip/header-peek` 阈值锁定 |
+| OpenRead(非gzip) | 轻量 2 字节零物化直透免 VfsReadAllBytes/4K | `TTransformingVfs.OpenRead` 单源决策器 HeaderPred 假时轻量 2 字节 peek 后零物化直透 `FInner.OpenRead`（零拷贝无 `VfsReadAllBytes` materialize，2 字节 peek ~数百 ns，免 4K 分配），命中时 4K 单流复用；bench_transform `Open/large-non-gzip/passthrough` 阈值锁定 |
+| OpenRead/Stat(gzip) | 按需GzipTransform，32MiB防bomb，大小文件 Stat/OpenRead 一致 | `GzipDecompressWithMaxOutputSize(VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX单源 + bytes.ops 单源魔数)`，`ContentHash=0/ETag` 禁用，HeaderPred真时小文件复用 Header（≤4K）& 大文件 2 字节轻量预判后单流 Move 4K 头+同流补读避免二次全量读，Stat 与 OpenRead 大文件解压后尺寸一致 |
 
 ---
 
@@ -147,9 +147,9 @@ end;
 | test_vfs_conformance | 7 | 属性电池 P1–P8+INV-V12 × {3 后端} × {整树, Sub}（一个用例跑满矩阵） |
 | test_vfs_facade | 6 | 便利函数 + 开发态/发布态工厂切换 + Walk 早停 + Decompress/ETag 重导出签名 |
 | test_vfs_mount | 10 | 挂载+叠加双视图：basic/longest/duplicate/etag/case/notfound/nested + overlay priority/list dedup/etag priority（P2+游戏热更完整性，最长匹配+优先级叠加双模型） |
-| test_vfs_transform | 6 | 通用变换装饰器：单源决策器 TryResolveViaHeaderSingleStream（单流 4K + Move 复用 inline 零拷贝，Header假直透/小复用/大同流补读三态），upper/谓词/错误' transform failed' Op/Path/ETag禁用/CaseSensitive（L3 单缝模板，`inline`+`try-finally`不丢） |
-| test_vfs_compressed | 7 | 解压薄门面（L3 单缝正名）：daAuto/gzip Stat Size/ContentHash 校正/ETag禁用/daGzip 强制失败/空包/大文件单流 4K 头预判 HeaderPred（GZIP_MAX单源32MiB + bytes.ops 魔数单源，复用 transform 单源决策器） |
-| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含 transform/compressed 单缝寄居白名单：L3→L2 单缝过渡，文档正名+拆分路线待 L3 族聚合） |
+| test_vfs_transform | 6 | 通用变换装饰器：单源决策器 TryResolveViaHeaderSingleStream（单流 4K + 大文件 2 字节轻量预判免 4K + Move 复用 inline 零拷贝，Header假直透/小复用/大同流补读三态，Stat/OpenRead 大文件解压一致性），upper/谓词/错误' transform failed' Op/Path/ETag禁用/CaseSensitive（L3 单缝模板，`inline`+`try-finally`不丢） |
+| test_vfs_compressed | 7 | 解压薄门面（L3 单缝正名，L7 到期拆分）：daAuto/gzip Stat Size/ContentHash 校正/ETag禁用/daGzip 强制失败/空包/大文件 2 字节轻量预判+单流 4K 头预判 HeaderPred（GZIP_MAX单源32MiB + bytes.ops 魔数单源，复用 transform 单源决策器，Stat/OpenRead 大文件一致） |
+| test_vfs_source_contract | 5 | uses 白名单断言（复用 `core/tests/fpc_rtl_uses_scan.inc`，含 transform/compressed 单缝寄居白名单：L3→L2 单缝过渡，L7 到期拆分为 decorator，文档正名+拆分路线） |
 
 合计 8 门（vfs侧含mount10）；respack侧5门（writer/reader/roundtrip/dirsource/embed），合计 **13 门**闭环（respack5+vfs8；另bench_transform 1基准阈值，source-contract并入vfs8）。heaptrc 0 leak为所有gate门禁。
 
@@ -170,3 +170,4 @@ end;
 | 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
 | 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
 | 2026-09-02 | 1.5 | 匠心修复：transform 单流复用+单源决策器（Stat/OpenRead 共用 TryResolveViaHeaderSingleStream，单流 Move 零拷贝 50 行去重，小/大/回退三态 inline+try-finally）+ L3 单缝寄居正名（L3→L2 单缝白名单过渡，长期待 L3 族聚合拆分）+ bytes.ops 单源魔数 + 性能/稳定性证据 | AI |
+| 2026-09-02 | 1.6 | 匠心修复：transform 大文件 2 字节轻量预判免 4K（Stat/OpenRead 大文件解压一致性 via 单源，OpenRead 大文件非 gzip 免 4K 分配与单流读）+ L7 单缝正名（L7 到期拆分为 nextpas.core.vfs.decorator 后移除白名单）+ bytes.ops 单源魔数 inline 零拷贝 | AI |

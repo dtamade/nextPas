@@ -1,14 +1,14 @@
 unit nextpas.core.vfs.transform;
 
 {** @desc L3 通用字节变换装饰器：任意 IVfs 的零拷贝按需变换视图
-  层级：L3 单缝装饰器寄居 L2 vfs 家族（ADR 0003，Registry 单缝白名单过渡）。
+  层级：L3 单缝装饰器寄居 L2 vfs 家族（ADR 0003，Registry 单缝白名单过渡，L7 到期拆分为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单）。
   分层正名：L3→L2 仅 via 头部谓词复用 compress.base 单源，不新增 L2→L2 闭环；
   白名单为过渡形态（分层纯度破缺拼缝以文档正名过渡），长期拆分路线：聚合为独立 L3 族
-  nextpas.core.vfs.decorator（transform/compressed 同族，vfs 侧仅保留 L2 基座），到期移除白名单固化 L0-L3 单向依赖。
+  nextpas.core.vfs.decorator（transform/compressed 同族，vfs 侧仅保留 L2 基座），L7 到期移除白名单固化 L0-L3 单向依赖。
   零拷贝直达：小文件 Header 直落 respack 区间复用，无栈上 4K 中转。
-  Stat 小文件经 4K HeaderPred 单流快路径、大文件 HeaderPred 场景 Stat 零额外 I/O 直返 FInner.Stat（免 OpenRead+4K，OpenRead 仍单流精确）；32MiB 防 bomb 由 compressed 薄门面承载。
-  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读）；稳定性：try-finally Close 不丢。
-  单源收敛：TryResolveViaHeaderSingleStream 为唯一 4K 头分配+IReaderAt 直读实现，Stat/OpenRead 共用，消除 TryPeekHeaderWithStat/ReadAllReusingHeader 120行样板漂移。 }
+  Stat/OpenRead 经 4K HeaderPred 单流快路径（小文件复用头零二次 IO，大文件同流补读免二次 OpenRead，命中时 Move 零拷贝）；32MiB 防 bomb 由 compressed 薄门面承载。
+  性能：inline 热路径 + 单流复用 Move 零拷贝已读 4K 头（大文件命中免二次 OpenRead/二次 4K 读，大文件非变换经 2 字节轻量预判免 4K 分配）；稳定性：try-finally Close 不丢。
+  单源收敛：TryResolveViaHeaderSingleStream 为唯一 4K 头分配+IReaderAt 直读实现，Stat/OpenRead 共用，消除 TryPeekHeaderWithStat/ReadAllReusingHeader 120行样板漂移；bytes.ops 单源魔数 inline 零拷贝。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -140,6 +140,7 @@ begin
   ABypassStream := nil;
   if AStat.Info.IsDir then Exit(hrBypass);
   // 单流：OpenRead 一次，peek 4K 后若命中变换则同一流内补读剩余，免二次 OpenRead/二次 4K；OpenRead bypass 时复用已打开流免二次 OpenRead
+  // 性能：大文件 HeaderPred 场景先以 2 字节轻量头预判（bytes.ops 单源魔数 inline），非变换则免 4K 分配与后续读，命中 gzip 则回退至 4K 单流精确路径（保证大文件解压一致性）
   try
     LStream := FInner.OpenRead(APath);
   except
@@ -147,6 +148,59 @@ begin
     on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
   end;
   try
+    // 大文件轻量预判：Size>4K 且含 HeaderPred 时先以 2 字节检查，非变换直接 bypass，省 4K 分配与 I/O
+    if (ATotal > Int64(TRANSFORM_HEADER_PEEK)) and Assigned(FHeaderPred) then
+    begin
+      SetLength(AHeader, 2);
+      LUseReadAt := (LStream.QueryInterface(IReaderAt, LReaderAt) = 0) and (LReaderAt <> nil);
+      try
+        if LUseReadAt then
+          LRead := LReaderAt.ReadAt(AHeader[0], 2, 0)
+        else
+          LRead := LStream.Read(AHeader[0], 2);
+      except
+        on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+      end;
+      if LRead < 2 then
+        SetLength(AHeader, LRead);
+      if LRead = 0 then
+        AHeader := nil;
+      if not HeaderShould(AHeader, ATotal) then
+      begin
+        if (AOp = 'open') and (LUseReadAt or (LRead = 0)) then
+        begin
+          ABypassStream := LStream;
+          LStream := nil;
+          Exit(hrBypass);
+        end;
+        if (AOp = 'open') and not LUseReadAt and (LRead > 0) then
+        begin
+          try
+            if LStream.Seek(0, soBeginning) <> 0 then
+              raise EVfsError.CreateCtx(AOp, APath, 'seek failed for bypass reuse');
+          except
+            on E: EVfsError do raise;
+            on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+          end;
+          ABypassStream := LStream;
+          LStream := nil;
+          Exit(hrBypass);
+        end;
+        Exit(hrBypass);
+      end;
+      // 命中变换（gzip）：需完整 4K 头以单流 Move 零拷贝复用，重置流位置后继续 4K 路径
+      if not LUseReadAt and (LRead > 0) then
+      begin
+        try
+          if LStream.Seek(0, soBeginning) <> 0 then
+            raise EVfsError.CreateCtx(AOp, APath, 'seek failed for header reuse');
+        except
+          on E: EVfsError do raise;
+          on E: Exception do raise EVfsError.CreateCtx(AOp, APath, E.Message);
+        end;
+      end;
+      AHeader := nil;
+    end;
     if (ATotal >= 0) and (ATotal < TRANSFORM_HEADER_PEEK) then
       LPeek := SizeUInt(ATotal)
     else
@@ -272,12 +326,9 @@ begin
     on E: Exception do raise EVfsError.CreateCtx('stat', APath, E.Message);
   end;
   if LInfo.Info.IsDir then Exit(LInfo);
-  // 性能：Stat 大文件非变换场景零额外 I/O 优化（HeaderPred 假时免 OpenRead+4K）
-  // 小文件（<=4K）Header 即全量，单流复用 Header 零二次 IO 保留；大文件（>4K）且存在 HeaderPred 时直接回 FInner.Stat，免一次 OpenRead/4K 读
-  // 大 gzip 精确 Stat 由 OpenRead 承载（压缩场景 Stat 大文件返回压缩尺寸为性能权衡，符合静态资源快速 Stat 语义；小 gzip 仍经单流精确校正）
-  if (LInfo.Info.Size > TRANSFORM_HEADER_PEEK) and Assigned(FHeaderPred) then
-    Exit(LInfo);
-  // 单源决策器：Stat 经 4K 单流快路径（小文件/无 HeaderPred），HeaderPred 假时回 FInner.Stat、命中时复用头/同流补读；无 HeaderPred 时亦走单流避免 VfsReadAllBytes 双重 OpenRead
+  // 性能+正确性：Stat 经单源决策器 4K 单流复用（小文件复用头零二次 IO，大文件轻量 2 字节预判免 4K 分配，命中 gzip 则同流补读免二次 OpenRead）；
+  // 正确性修复：大文件不再直接回源尺寸，经 TryResolve 2 字节轻量预判+4K 单流校正解压后尺寸，与 OpenRead 解压后尺寸一致（非 gzip 大文件经轻量预判免 4K 直返，gzip 大文件经单流精确校正）
+  // 单源决策器：HeaderPred 假时回 FInner.Stat、命中时复用头/同流补读；无 HeaderPred 时亦走单流避免 VfsReadAllBytes 双重 OpenRead
   LResolve := TryResolveViaHeaderSingleStream(APath, 'stat', LInfo, LHeader, LTotal, LData);
   case LResolve of
     hrBypass: Exit(LInfo);
@@ -312,7 +363,7 @@ var
   LResolve: THeaderResolve;
   LBypassStream: IStream;
 begin
-  // 单源决策器：OpenRead HeaderPred 快路径，假时零物化直透（单流复用 bypass 流免二次 OpenRead），命中时单流复用（无 HeaderPred 时亦走单流避免双重 VfsReadAllBytes）
+  // 单源决策器：OpenRead HeaderPred 快路径，假时零物化直透（单流复用 bypass 流免二次 OpenRead，大文件经 2 字节轻量预判免 4K 分配），命中时单流 Move 复用 4K 头+同流补读（无 HeaderPred 时亦走单流避免双重 VfsReadAllBytes）
   try LInfo := FInner.Stat(APath); except on E: EVfsError do raise; on E: Exception do raise EVfsError.CreateCtx('open', APath, E.Message); end;
   if not LInfo.Info.IsDir then
   begin

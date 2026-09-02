@@ -268,15 +268,17 @@ var
   SL: SizeInt;
   BaseList: TEntryArray;
   K: Integer;
+  Cap: SizeInt;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
   if VfsIsRoot(ADirPath) then
   begin
     // 根：合并所有挂载点的顶层 List（O(n log n) Sort+线性去重，零拷贝前缀扫描）
+    // 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops，复用 base VfsDeriveChildNamesFromSpans 同款
     if FHasRoot and (Length(FMounts) = 1) then
       Exit(FRootFs.List('.'));
-    SetLength(Result, Length(FMounts));
+    Result := nil;
     OutN := 0;
     for I := 0 to High(FMounts) do
       if not VfsIsRoot(FMounts[I].Prefix) then
@@ -287,6 +289,14 @@ begin
           if FMounts[I].Prefix[K] = '/' then begin SL := K; Break; end;
         if SL > 0 then Child := Copy(FMounts[I].Prefix, 1, SL - 1)
         else Child := FMounts[I].Prefix;
+        if OutN >= Length(Result) then
+        begin
+          Cap := Length(Result);
+          if Cap = 0 then Cap := 16;
+          while Cap <= OutN do Cap := Cap * 2;
+          if Cap > Length(FMounts) then Cap := Length(FMounts);
+          SetLength(Result, Cap);
+        end;
         Result[OutN].Name := Child;
         Result[OutN].Size := 0;
         Result[OutN].ModTime := 0;
@@ -297,15 +307,19 @@ begin
     if FHasRoot then
     begin
       BaseList := FRootFs.List('.');
-      if Length(BaseList) > 0 then
+      for I := 0 to High(BaseList) do
       begin
-        if OutN + Length(BaseList) > Length(Result) then
-          SetLength(Result, OutN + Length(BaseList));
-        for I := 0 to High(BaseList) do
+        if OutN >= Length(Result) then
         begin
-          Result[OutN] := BaseList[I];
-          Inc(OutN);
+          Cap := Length(Result);
+          if Cap = 0 then Cap := 16;
+          while Cap <= OutN do Cap := Cap * 2;
+          if Cap > Length(FMounts) + Length(BaseList) then Cap := Length(FMounts) + Length(BaseList);
+          if Cap > OutN + (Length(BaseList) - I) then Cap := OutN + (Length(BaseList) - I);
+          SetLength(Result, Cap);
         end;
+        Result[OutN] := BaseList[I];
+        Inc(OutN);
       end;
     end;
     SetLength(Result, OutN);
@@ -322,8 +336,9 @@ begin
     Exit(Fs.List(Rem));
   // 若是前缀的父目录，需聚合子挂载点（复用 VfsIsParentPath 单源，单次 Copy）
   // 例如 mounts: a/b, a/c  => List('a') 应返回 b,c
+  // 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops，复用 base 同款
+  Result := nil;
   OutN := 0;
-  SetLength(Result, Length(FMounts));
   for I := 0 to High(FMounts) do
   begin
     if VfsIsRoot(FMounts[I].Prefix) then Continue;
@@ -336,6 +351,14 @@ begin
       Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, SL - (Length(ADirPath) + 2))
     else
       Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, MaxInt);
+    if OutN >= Length(Result) then
+    begin
+      Cap := Length(Result);
+      if Cap = 0 then Cap := 16;
+      while Cap <= OutN do Cap := Cap * 2;
+      if Cap > Length(FMounts) then Cap := Length(FMounts);
+      SetLength(Result, Cap);
+    end;
     Result[OutN].Name := Child;
     Result[OutN].Size := 0;
     Result[OutN].ModTime := 0;
@@ -382,48 +405,32 @@ function TMountedVfs.TryGetETag(const APath: string; out AETag: string): Boolean
 var
   Rem: string;
   Fs: IVfs;
-  Intf: IVfsETag;
 begin
+  // 单源 VfsETagHelper via bytes.ops 外零分配，Supports 级联同构收口（overlay 同源）
   AETag := '';
   if not FindMount(APath, Rem, Fs) then Exit(False);
-  if Supports(Fs, IVfsETag, Intf) then
-    Exit(Intf.TryGetETag(Rem, AETag));
-  Result := False;
+  Result := VfsETagHelperTryGetETag(Fs, Rem, AETag);
 end;
 
 function TMountedVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
 var
   Rem: string;
   Fs: IVfs;
-  Intf: IVfsETag;
 begin
   ALastModified := '';
   if not FindMount(APath, Rem, Fs) then Exit(False);
-  if Supports(Fs, IVfsETag, Intf) then
-    Exit(Intf.TryGetLastModified(Rem, ALastModified));
-  Result := False;
+  Result := VfsETagHelperTryGetLastModified(Fs, Rem, ALastModified);
 end;
 
 function TMountedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
 var
   Rem: string;
   Fs: IVfs;
-  Intf: IVfsServeMeta;
-  ETagIntf: IVfsETag;
 begin
   AETag := '';
   ALastModified := '';
   if not FindMount(APath, Rem, Fs) then Exit(False);
-  if Supports(Fs, IVfsServeMeta, Intf) then
-    Exit(Intf.TryGetServeMeta(Rem, AETag, ALastModified));
-  if Supports(Fs, IVfsETag, ETagIntf) then
-  begin
-    Result := ETagIntf.TryGetETag(Rem, AETag);
-    if Result then
-      ETagIntf.TryGetLastModified(Rem, ALastModified);
-    Exit;
-  end;
-  Result := False;
+  Result := VfsETagHelperTryGetServeMeta(Fs, Rem, AETag, ALastModified);
 end;
 
 end.
