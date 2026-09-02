@@ -4,13 +4,16 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 SRC="$ROOT/core/src"
 fail=0
 check_no_ffi() { local file="$1"; if grep -qiE "uses.*\.ffi|vendor|miniaudio|mpg123|opusfile" "$file"; then if grep -E "^\s*uses" "$file" | grep -qiE "\.ffi|vendor"; then echo "[FAIL] $file contains forbidden ffi/vendor in uses"; fail=1; fi; fi; if grep -E "uses" "$file" | grep -q "\.ffi"; then echo "[FAIL] $file uses .ffi"; fail=1; fi; if grep -q "\.ffi" "$file"; then echo "[FAIL] $file contains '.ffi' token"; grep -n "\.ffi" "$file" || true; fail=1; fi; if grep -qi "vendor" "$file"; then echo "[FAIL] $file contains 'vendor' token"; grep -n -i "vendor" "$file" || true; fail=1; fi; }
-# audio source-contract gate — 78 files (core 26 + extension 52, unique 76+2 bus facade) — 契约 1.5
-# Header: 56→78 sync — enumeration includes bank/resource/event/spatial.impl + 5 base + playlist 4件套 + codec flac/mp3/vorbis 四件套 (各 base/intf/impl) + mp3/vorbis 3×3 decoder/sse, for loop must include test_automation
-echo "== audio source-contract gate (78 files: core 26 + extension 52) =="
+# audio source-contract gate — 81 files (core 29 + extension 52, unique 79+2 bus facade) — 契约 1.5.1 (wav 四件套完整)
+# Header: 56→81 sync — enumeration includes wav 四件套 (base/intf/impl/pas) + bank/resource/event/spatial.impl + 5 base + playlist 4件套 + codec flac/mp3/vorbis 四件套 (各 base/intf/impl) + mp3/vorbis 3×3 decoder/sse, for loop must include test_automation
+echo "== audio source-contract gate (81 files: core 29 + extension 52) =="
 for f in \
   "$SRC/nextpas.core.audio.base.pas" \
   "$SRC/nextpas.core.audio.intf.pas" \
   "$SRC/nextpas.core.audio.codec.intf.pas" \
+  "$SRC/nextpas.core.audio.codec.wav.base.pas" \
+  "$SRC/nextpas.core.audio.codec.wav.intf.pas" \
+  "$SRC/nextpas.core.audio.codec.wav.impl.pas" \
   "$SRC/nextpas.core.audio.codec.wav.pas" \
   "$SRC/nextpas.core.audio.codec.aiff.pas" \
   "$SRC/nextpas.core.audio.codec.meta.pas" \
@@ -86,7 +89,7 @@ for f in \
   "$SRC/nextpas.core.audio.studio.sequencer.pas" \
   "$SRC/nextpas.core.audio.studio.pas" \
   "$SRC/nextpas.core.audio.pas"; do if [ ! -f "$f" ]; then echo "[FAIL] missing $f"; fail=1; continue; fi; check_no_ffi "$f"; echo "[OK] no ffi/vendor in $(basename "$f")"; done
-echo "[OK] 78 files (core 26 + candidate 52) no ffi/vendor — 契约 1.5 已对齐实盘（unique 76+2 bus facade, flac/mp3/vorbis 四件套）"
+echo "[OK] 81 files (core 29 + candidate 52) no ffi/vendor — 契约 1.5.1 已对齐实盘（unique 79+2 bus facade, wav/flac/mp3/vorbis 四件套）"
 if ! grep -q "实时路径仅调 FillRealtime" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] missing realtime comment"; fail=1; else echo "[OK] realtime discipline comment present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000010" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IAudioSource GUID missing"; fail=1; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000011" "$SRC/nextpas.core.audio.intf.pas"; then echo "[FAIL] IRealtimeAudioSource GUID missing"; fail=1; fi
@@ -136,7 +139,8 @@ if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000080" "$SRC/nextpas.core.audio.pla
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000070" "$SRC/nextpas.core.audio.studio.intf.pas"; then echo "[FAIL] IAudioStudio GUID 0070 missing"; fail=1; else echo "[OK] studio GUID 0070 present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000071" "$SRC/nextpas.core.audio.studio.intf.pas"; then echo "[FAIL] IStudioProject GUID 0071 missing"; fail=1; else echo "[OK] studio project GUID 0071 present"; fi
 if ! grep -q "F1A2B3C4-D5E6-7890-ABCD-A00000000072" "$SRC/nextpas.core.audio.studio.sequencer.pas"; then echo "[FAIL] IAudioSequencer GUID 0072 missing"; fail=1; else echo "[OK] sequencer GUID 0072 present"; fi
-# Probe≤4KB 纪律：flac/mp3/vorbis 必须在 Probe 中显式 4096 守卫（实盘审计：缺失即 FAIL）
+# Probe≤4KB 纪律：wav/flac/mp3/vorbis 必须在 Probe 中显式 4096 守卫（实盘审计：缺失即 FAIL）
+if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.wav.pas"; then echo "[FAIL] wav Probe lacks 4096 guard (Probe≤4KB)"; fail=1; else echo "[OK] wav Probe≤4KB guard present"; fi
 if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.flac.pas"; then echo "[FAIL] flac Probe lacks 4096 guard (Probe≤4KB)"; fail=1; else echo "[OK] flac Probe≤4KB guard present"; fi
 if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.mp3.pas"; then echo "[FAIL] mp3 Probe lacks 4096 guard"; fail=1; else echo "[OK] mp3 Probe≤4KB guard present"; fi
 if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.vorbis.pas"; then echo "[FAIL] vorbis Probe lacks 4096 guard"; fail=1; else echo "[OK] vorbis Probe≤4KB guard present"; fi
@@ -159,9 +163,11 @@ for codec in flac mp3 vorbis; do
     fi
   done
 done
-# flac 四件套 Probe≤4KB：facade 与 impl 均需 4096 守卫可见（facade inline 转发仍保留 4096 字面量便于审计）
+# flac/wav 四件套 Probe≤4KB：facade 与 impl 均需 4096 守卫可见（facade inline 转发仍保留 4096 字面量便于审计）
 if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.flac.base.pas"; then echo "[FAIL] flac.base lacks 4096 (CFlacProbeLimit)"; fail=1; else echo "[OK] flac.base Probe limit 4096 present"; fi
 if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.flac.impl.pas"; then echo "[FAIL] flac.impl Probe lacks 4096 guard"; fail=1; else echo "[OK] flac.impl Probe≤4KB guard present"; fi
+if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.wav.base.pas"; then echo "[FAIL] wav.base lacks 4096 (CWavProbeLimit)"; fail=1; else echo "[OK] wav.base Probe limit 4096 present"; fi
+if ! grep -q "4096" "$SRC/nextpas.core.audio.codec.wav.impl.pas"; then echo "[FAIL] wav.impl Probe lacks 4096 guard"; fail=1; else echo "[OK] wav.impl Probe≤4KB guard present"; fi
 # sfx resample todo 必须已收敛为显式分支，禁止裸 todo
 if grep -q "resample todo" "$SRC/nextpas.core.audio.sfx.pas"; then
   if ! grep -q "EAudio" "$SRC/nextpas.core.audio.sfx.pas"; then echo "[FAIL] sfx resample todo not converged to EAudio branch"; fail=1; else echo "[OK] sfx resample todo converged (EAudio branch)"; fi
@@ -169,7 +175,10 @@ fi
 # bus.base/bus.impl豁免：bus.base 为 base 无 GUID 正常，bus.impl 无独立 GUID 复用 bus.intf 已在上方豁免注释
 if [ ! -f "$SRC/nextpas.core.audio.bus.base.pas" ]; then echo "[FAIL] bus.base missing (72 enumeration)"; fail=1; else echo "[OK] bus.base present (base豁免 GUID)"; fi
 if [ ! -f "$SRC/nextpas.core.audio.bus.impl.pas" ]; then echo "[FAIL] bus.impl missing (72 enumeration)"; fail=1; else echo "[OK] bus.impl present (impl复用 intf GUID豁免)"; fi
-# flac 四件套存在性校验（对标 bus 四件套）
+# wav/flac 四件套存在性校验（对标 bus 四件套）
+if [ ! -f "$SRC/nextpas.core.audio.codec.wav.base.pas" ]; then echo "[FAIL] wav.base missing (81 enumeration, L0 only)"; fail=1; else echo "[OK] wav.base present (L0 only)"; fi
+if [ ! -f "$SRC/nextpas.core.audio.codec.wav.intf.pas" ]; then echo "[FAIL] wav.intf missing (81 enumeration)"; fail=1; else echo "[OK] wav.intf present"; fi
+if [ ! -f "$SRC/nextpas.core.audio.codec.wav.impl.pas" ]; then echo "[FAIL] wav.impl missing (81 enumeration)"; fail=1; else echo "[OK] wav.impl present"; fi
 if [ ! -f "$SRC/nextpas.core.audio.codec.flac.base.pas" ]; then echo "[FAIL] flac.base missing (72 enumeration, L0 only)"; fail=1; else echo "[OK] flac.base present (L0 only)"; fi
 if [ ! -f "$SRC/nextpas.core.audio.codec.flac.intf.pas" ]; then echo "[FAIL] flac.intf missing (72 enumeration)"; fail=1; else echo "[OK] flac.intf present"; fi
 if [ ! -f "$SRC/nextpas.core.audio.codec.flac.impl.pas" ]; then echo "[FAIL] flac.impl missing (78 enumeration)"; fail=1; else echo "[OK] flac.impl present"; fi
@@ -182,4 +191,4 @@ if [ ! -f "$SRC/nextpas.core.audio.codec.vorbis.impl.pas" ]; then echo "[FAIL] v
 # test_automation gate 存活校验（for loop 同步）
 if [ ! -f "$SRC/../tests/nextpas.core.audio/test_automation/test_automation.lpr" ] && [ ! -f "$ROOT/core/tests/nextpas.core.audio/test_automation/test_automation.lpr" ]; then echo "[FAIL] test_automation gate missing"; fail=1; else echo "[OK] test_automation gate present"; fi
 if [ "$fail" -ne 0 ]; then echo "source-contract gate FAILED"; exit 1; fi
-echo "source-contract gate PASSED — 78 files (core 26 + extension 52, unique 76+2 bus facade) + 23 GUID + test_automation — 契约 1.5 (codec.flac/mp3/vorbis 四件套完整)"
+echo "source-contract gate PASSED — 81 files (core 29 + extension 52, unique 79+2 bus facade) + 23 GUID + test_automation — 契约 1.5.1 (codec.wav/flac/mp3/vorbis 四件套完整)"

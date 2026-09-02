@@ -13,7 +13,8 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.simd;
 
 type
   TGraphNode = record
@@ -99,8 +100,9 @@ begin
   FVolume := 1.0;
   FUnderruns := 0;
   FViolations := 0;
-  SetLength(FScratchTmp, 0);
-  SetLength(FScratchOut, 0);
+  // INV-6 steady zero heap growth: preallocate scratch for realtime FillRealtime reuse (geometric, bytes.ops single source via AudioEnsureCapacity), control-plane snapshot pre-grows elsewhere
+  SetLength(FScratchTmp, 8192 * FFormat.BlockAlign);
+  SetLength(FScratchOut, 8192 * FFormat.BlockAlign);
   SetLength(FSnapshotNodes, 0);
   SetLength(FSnapshotProcs, 0);
   SetLength(FNodeFree, 0);
@@ -111,6 +113,15 @@ end;
 
 destructor TAudioGraph.Destroy;
 begin
+  // stability: resource release not lost, HEAPTRC zero leak
+  SetLength(FScratchTmp, 0);
+  SetLength(FScratchOut, 0);
+  SetLength(FSnapshotNodes, 0);
+  SetLength(FSnapshotProcs, 0);
+  SetLength(FNodes, 0);
+  SetLength(FProcessors, 0);
+  SetLength(FNodeFree, 0);
+  SetLength(FProcFree, 0);
   FLock.Free;
   inherited;
 end;
@@ -153,7 +164,7 @@ end;
 procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
 var LCap: Integer;
 begin
-  // perf: inline + single source via audio.base AudioEnsureCapacity geometric doubling, steady zero heap growth
+  // perf: inline + single source via audio.base AudioEnsureCapacity geometric doubling, control-plane prealloc; realtime FillRealtime reuses without heap growth (INV-6)
   if Length(AScratch) >= ANeeded then Exit;
   LCap := Length(AScratch);
   AudioEnsureCapacity(LCap, ANeeded, 64);
@@ -163,7 +174,7 @@ end;
 procedure TAudioGraph.EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
 var LCap: Integer;
 begin
-  // control-plane growth only (AddSource/AddProcessor), realtime FillRealtime reuses, steady zero alloc per INV-6
+  // control-plane growth only (AddSource/AddProcessor), realtime FillRealtime reuses snapshot scratch steady zero alloc per INV-6 via AudioEnsureCapacity single source
   if ANodes > 0 then
   begin
     LCap := Length(FSnapshotNodes);
@@ -364,7 +375,7 @@ end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, I, J, AliveN, AliveP, FillIdx: Integer;
+  Needed, I, J, AliveN, AliveP, FillIdx, NSamples: Integer;
   NodesSnap: array of TGraphNode;
   ProcsSnap: array of TProcessorSlot;
   Tmp: TAudioBuffer;
@@ -395,11 +406,10 @@ begin
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
     SnapVol := FVolume;
   finally FLock.Release; end;
-  // snapshot scratch reuse: preallocated via control-plane EnsureSnapshotCapacity, steady zero alloc after warmup (INV-6); realtime grow via AudioEnsureCapacity single source, counted as violation
+  // snapshot scratch reuse: preallocated via control-plane EnsureSnapshotCapacity, steady zero alloc after warmup (INV-6); realtime never allocates, truncate to available capacity (violation counted)
   if (Length(FSnapshotNodes) < AliveN) or (Length(FSnapshotProcs) < AliveP) then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
-    EnsureSnapshotCapacity(AliveN, AliveP);
     if Length(FSnapshotNodes) < AliveN then AliveN := Length(FSnapshotNodes);
     if Length(FSnapshotProcs) < AliveP then AliveP := Length(FSnapshotProcs);
   end;
@@ -435,7 +445,22 @@ begin
   FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
-  EnsureScratch(FScratchTmp, Needed);
+  // INV-6 steady zero heap growth: realtime reuses preallocated FScratchTmp (constructor 8192 frames, control-plane geometric), never SetLength here; violation truncates
+  if Length(FScratchTmp) < Needed then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    if Length(FScratchTmp) >= FFormat.BlockAlign then
+    begin
+      AFrames := Length(FScratchTmp) div FFormat.BlockAlign;
+      Needed := AFrames * FFormat.BlockAlign;
+    end else
+    begin
+      ABuffer.FrameCount := AFrames;
+      ABuffer.Format := FFormat;
+      InterlockedExchangeAdd64(FPosition, Int64(AFrames));
+      Exit(AFrames);
+    end;
+  end;
   Tmp.Data := FScratchTmp;
   Tmp.Format := FFormat;
   Tmp.FrameCount := AFrames;
@@ -472,12 +497,9 @@ begin
     end;
     HasData := True;
     TmpPtr := PSingle(@Tmp.Data[0]);
-    if Gain = 1.0 then
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J]
-    else
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J] * Gain;
+    NSamples := AFrames * FFormat.Channels;
+    // perf: inline SIMD Owner audio.simd SimdAddF32 (AVX2 8-wide / SSE2 4-wide, scalar fallback), single source, zero alloc, replaces scalar weighted loop
+    SimdAddF32(TmpPtr, MixPtr, NSamples, Gain);
   end;
 
   if not HasData then
@@ -490,16 +512,24 @@ begin
     Exit;
   end;
 
-  for I := 0 to AFrames * FFormat.Channels - 1 do
-  begin
-    if MixPtr[I] > 1.0 then MixPtr[I] := 1.0
-    else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
-  end;
+  NSamples := AFrames * FFormat.Channels;
+  // perf: inline SIMD Owner audio.simd SimdClampF32 (SSE2/AVX2, scalar fallback), single source, replaces scalar clamp loop
+  SimdClampF32(MixPtr, NSamples, -1.0, 1.0);
 
   if AliveP > 0 then
   begin
-    EnsureScratch(FScratchOut, Needed);
-    EnsureScratch(FScratchTmp, Needed);
+    // INV-6 steady zero heap growth: realtime reuses preallocated FScratchOut/FScratchTmp, never SetLength; violation counted, no heap growth
+    if Length(FScratchOut) < Needed then InterlockedExchangeAdd64(FViolations, 1);
+    if Length(FScratchTmp) < Needed then InterlockedExchangeAdd64(FViolations, 1);
+    if (Length(FScratchOut) < Needed) or (Length(FScratchTmp) < Needed) then
+    begin
+      // insufficient scratch for processor chain, keep clamped mix and exit without processing (zero alloc)
+      ABuffer.FrameCount := AFrames;
+      ABuffer.Format := FFormat;
+      InterlockedExchangeAdd64(FPosition, Int64(AFrames));
+      Result := AFrames;
+      Exit;
+    end;
     // single source: base.utils CopyMem → bytes.ops (also single source via AudioFillMemoryRealtime/AudioEnsureCapacity), SizeUInt(Needed) boundary, non-overlapping
     CopyMem(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
     OutBuf.Format := FFormat;
