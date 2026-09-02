@@ -3607,6 +3607,29 @@ begin
   LW.AddFile(LName, BytesOf([$02]));
 end;
 
+procedure TestReaderTruncatedArchive;
+var LW: ISevenZWriter; LArc, LTrunc: TBytes;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LW.AddFile('a.txt', BytesOf([$01,$02,$03]));
+  LW.AddFile('b.txt', Randomish(5000, 777));
+  LArc := LW.Finish;
+  SetLength(LTrunc, Length(LArc) - 10);
+  if Length(LTrunc) > 0 then
+    Move(LArc[0], LTrunc[0], Length(LTrunc));
+  try
+    TSevenZReaderImpl.Create(LTrunc);
+    Fail('truncated archive should raise');
+  except on E: ESevenZError do ; on E: ESevenZLimitError do ; on E: EIOError do ; end;
+  SetLength(LTrunc, 10);
+  if Length(LTrunc) > 0 then
+    Move(LArc[0], LTrunc[0], Length(LTrunc));
+  try
+    TSevenZReaderImpl.Create(LTrunc);
+    Fail('severely truncated should raise');
+  except on E: ESevenZError do ; on E: ESevenZLimitError do ; on E: EIOError do ; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3803,6 +3826,7 @@ begin
   T.Test('backend consistency pure vs ffi', @TestBackendConsistencyPureVsFfi);
   T.Test('writer bomb pack size reject', @TestWriterBombPackSizeReject);
   T.Test('writer name too long reject', @TestWriterNameTooLongReject);
+  T.Test('reader truncated archive', @TestReaderTruncatedArchive);
 
   if not T.Run then Halt(1);
 end.
