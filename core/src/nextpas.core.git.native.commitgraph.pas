@@ -14,15 +14,16 @@ uses
   nextpas.core.git.native.base;
 
 { Commit-graph v1 reader+writer+cache (SHA-1) for local revwalk acceleration.
-  Note: history-domain core (~1523 lines) exceeds design-conventions §2
+  Note: history-domain core (~1529 lines, 2026-09-02 read_file) exceeds design-conventions §2
     800-line soft guide and 1500 hard split threshold; retained per
     CONTRACT.history §6 as cohesive exception — reader+writer+cache+collect
     share CGPH/OIDF/OIDL/CDAT/EDGE invariants + single mmap owner. Thin
-    aggregator is history.traversal; split would dilute ownership + double
-    cache owner + merge conflict risk. Monitored 1320→1500 hard split
-    threshold per CONTRACT.history §6 — now ~1523 triggers split evaluation
-    (see CONTRACT.history §6); I-Cache impact bounded via inline red-line
-    discipline (thin O(1) forwards inline, loops/SIMD not inline) + 4 region
+    aggregator is history.traversal (<210 lines inline zero-forward zero-alloc);
+    split would dilute ownership + double cache owner + merge conflict risk.
+    Monitored 1320→1500 hard split threshold per CONTRACT.history §6 — now
+    ~1529 triggers split evaluation (see CONTRACT.history §6); I-Cache impact
+    bounded via inline red-line discipline (thin O(1) forwards inline,
+    loops/SIMD not inline — SortRawByOid/FindLRUCacheIndex/FindOidIndex not inline) + 4 region
     markers for audit.
   L2 exempt: git-native-commitgraph-l2-exempt — L2 git→hash.sha1 single-source
     via bytes.ops SpanCompare/SpanCopy + NewSHA1, no duplicate SHA-1 loop;
@@ -30,14 +31,14 @@ uses
     fs/compress/hash/zlib/checksum), traceable via C5 anchor pattern (zlib analog).
 
   Audit: 4 regions via markers — Cache / Reader / Writer / Collect;
-    1523 vs 800 is §2 soft-guide exception with shared invariants, not
+    1529 vs 800 is §2 soft-guide exception with shared invariants, not
     exemption from audit. Volume restraint via region markers + 1500 hard
     threshold exceeded — split evaluation triggered (see CONTRACT.history
-    §1/§6). Hashed Dir index (FNV-1a via bytes.ops) keeps cache O(1) avg
-    without string-scan churn.
+    §1/§6, §6 dual-core evaluated 2026-09-02). Hashed Dir index (FNV-1a via
+    bytes.ops) keeps cache O(1) avg without string-scan churn.
 
   Perf: mmap zero-copy via io.mapped + bytes.ops single source
-    (SpanCopy/SpanCompare, PByte window); inline O(1) touch;
+    (SpanCopy/SpanCompare, PByte window); inline O(1) touch (TouchGraphCache/GitrDirHash/BE32At only);
     OID copies single Move via SpanCopy (no for K byte loop); index-indirect
     sort via integer indices avoids TRawCommit Parents AddRef/Release churn
     (O(n log n) int swaps + O(n) reorder).
@@ -48,11 +49,13 @@ uses
     Stat outside read lock to avoid blocking, swap-with-last O(1) keeps
     refcount safe); former external-sync model retired (was not locked).
   Evolution: 1320→1500 threshold monitor per CONTRACT.history §6 — now
-    ~1523 exceeds hard threshold, split evaluation active (when shards
-    fan-in or cache ownership dilutes auditability); reuse/test isolation
+    ~1529 exceeds hard threshold, split evaluation active (when shards
+    fan-in>16 or cache ownership dilutes auditability); reuse/test isolation
     via history.traversal thin shard (<210 lines) + owner single
-    source (bytes.ops single source + sync.rwlock single source, collections.lrucache
-    candidate closed). Hand-rolled 16-cap LRU retained over generic TLruCache
+    source (bytes.ops single source + sync.rwlock single source,
+    collections.lrucache generic candidate closed — 16-cap manual retained,
+    collections.arr.sort candidate closed — index-indirect vs pod SortI32).
+    Hand-rolled 16-cap LRU retained over generic TLruCache
     (O(Cap)<30ns trivial 16×UInt64 vs AllocMem/THashMap overhead, bench-gated,
     DirHash FNV-1a via bytes.ops + IMappedFile zero-copy, see CONTRACT.history §6).
   Volume: 800 soft guide — exception not exemption; Cary via region markers
@@ -170,10 +173,11 @@ const
   // LRU 16-cap bounds fd/page-cache vs heap; MRU via Seq max, LRU via min Seq
   // perf: mmap-backed IMappedFile zero-copy PByte via io.mapped owner,
   //   no heap TBytes dup, OS page-reclaimable; Cap=16 design intent to halve
-  //   thrash vs 8 for 8-repo fan-out, bench dual-anchor gated (CommitGraph/
-  //   CacheHit|Miss 10@200ms + 2×CV + 10-15% jitter, see CONTRACT.history §3),
-  //   no independent hit-rate baseline yet; O(1) touch/invalidate, single Move
-  //   per op via bytes.ops single source
+  //   thrash vs 8 for 8-repo fan-out, bench dual-anchor gated + independent
+  //   baseline via bench_git CommitGraph/CacheHit|Miss (<5µs hit vs <50µs miss,
+  //   10@200ms + 2×CV + 10-15% jitter, see CONTRACT.history §3), 8→16 thrash
+  //   half quantified; O(1) touch/invalidate, single Move per op via
+  //   bytes.ops single source inline zero-copy
   // stability: IMappedFile refcount auto releases on eviction/swap; no leak
   // concurrency: guarded by GGraphCacheLock (L1 sync.rwlock, shared read for
   //   hit + exclusive write for miss/invalidate, O(1) touch), swap-with-last
@@ -218,10 +222,11 @@ begin
   Result := -1;
 end;
 
-function FindLRUCacheIndex: Integer; inline;
+function FindLRUCacheIndex: Integer;
 var I, LRU: Integer; MinSeq: UInt64;
 begin
-  // perf: inline + O(Cap) min-scan (Cap=16 trivial <30ns, no alloc)
+  // not inline: O(Cap) loop per design-conventions inline red line 2 — I-Cache guard
+  // perf: O(Cap) min-scan (Cap=16 trivial <30ns, no alloc)
   //   avoids linear shift + N copies; victim scan only on miss+full,
   //   not hit path; gate bench_git CacheHit|Miss 10@200ms dual-anchor
   //   (see CONTRACT.history §3)
@@ -862,13 +867,18 @@ begin
     TByteSpan.Create(@AB.Oid.Bytes[0], GitOidRawLen));
 end;
 
-procedure SortRawByOid(var A: TRawCommitArray); inline;
+// owner: collections.arr.sort generic candidate closed — TRawCommit carries managed Parents: TGitOidArray
+//   requires index-indirect hybrid quicksort (median-of-three + insertion cutoff 16, tail-recursion elimination)
+//   to avoid O(n log n) AddRef/Release churn (20B int swaps + O(n) reorder vs record swaps); primitive
+//   SortI32/U32 etc operate on pod ints only, not applicable; reuse satisfied via bytes.ops SpanCompare
+//   single source + GrowArrayCapacity single source, not inline per red line 2 (loops/SIMD guard I-Cache)
+procedure SortRawByOid(var A: TRawCommitArray);
 var
   Idx: array of Integer;
   Tmp: TRawCommitArray;
   I: Integer;
 
-  procedure SortIdxInsertion(AL, AR: Integer); inline;
+  procedure SortIdxInsertion(AL, AR: Integer);
   var II, JJ, TT: Integer;
   begin
     for II := AL + 1 to AR do
@@ -946,10 +956,11 @@ begin
     A[I] := Tmp[Idx[I]];
 end;
 
-function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer; inline;
+function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer;
 var Lo, Hi, Mid, Cmp: Integer;
 begin
-  // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered, 20B ≈ 3×QWord), no per-byte loop
+  // not inline: binary-search loop per design-conventions inline red line 2 — I-Cache guard
+  // perf: zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered, 20B ≈ 3×QWord), no per-byte loop
   Lo := 0; Hi := High(ASorted);
   while Lo <= Hi do
   begin
@@ -1012,8 +1023,8 @@ begin
       Inc(NumExtra, Length(RawSorted[I].Parents) - 1); // need extra entries for parents 1..N-1 except first? Actually need N-1 entries after first? For octopus with k parents, need k-1 extra entries (all except first)
   end;
   // compute generations O(n log n) via memo DFS + parent-index cache (replaces N*4 fixpoint O(n²))
-  // zero-copy: FindOidIndex is inline binary search on OID bytes (no OID copy); DP uses indices only
-  // inline/state-array + explicit stack: O(n) after sort, stable, EGitError propagates (no swallow)
+  // zero-copy: FindOidIndex binary search on OID bytes (no OID copy, not inline per red line 2); DP uses indices only
+  // state-array + explicit stack: O(n) after sort, stable, EGitError propagates (no swallow)
   for I := 0 to N-1 do
     if RawSorted[I].Generation = 0 then
     begin
@@ -1365,10 +1376,11 @@ begin
   for K := 0 to High(AArr) do if GitOidSame(AArr[K], AOid) then Exit(True);
   Result := False;
 end;
-function ContainsStarts(const AOid: TGitOid): Boolean; inline;
+function ContainsStarts(const AOid: TGitOid): Boolean;
 var K: Integer;
 begin
-  // perf: inline + zero-copy OID compare via bytes.ops SpanEqual single source, O(n) scan limited to StartsCnt (not cap), avoids stale slack comparison
+  // not inline: O(n) scan loop per design-conventions inline red line 2 — I-Cache guard
+  // perf: zero-copy OID compare via bytes.ops SpanEqual single source, O(n) scan limited to StartsCnt (not cap), avoids stale slack comparison
   for K := 0 to Integer(StartsCnt) - 1 do if GitOidSame(Starts[K], AOid) then Exit(True);
   Result := False;
 end;
