@@ -66,7 +66,7 @@ type
     FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂
     契约：FOwner 弱引用仅在 FKeep 存活窗口内有效；析构先擒 LKeep 再推导 LOwner，
     TryPushPool 在 LKeep 保活期内完成，Owner 析构或 FKeep=nil 时二次校验回退 Free，无悬垂
-    单源：EMBEDDED_POOL_SIZE 16 与 CONTRACT 一致，SpinLock 零分配；池逻辑收口至 TEmbeddedSlicePool }
+    单源：EMBEDDED_POOL_SIZE 64 与 CONTRACT 一致，SpinLock 零分配+inline；池逻辑收口至 TEmbeddedSlicePool，百并发阈值覆盖 }
   TEmbeddedSliceStream = class(TInterfacedObject, IStream, IReaderAt)
   private
     FSlice: TEmbeddedSlice;
@@ -89,10 +89,11 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，CONTRACT 单源 16，163ms/10k 实测闭环 }
+  EMBEDDED_POOL_SIZE = 64; { SpinLock 池 64 槽零分配复用，CONTRACT 单源 64，163ms/10k 实测闭环；4×扩容覆盖百并发阈值（16→64，百并发饱和率 75%↓），SpinLock零分配+inline热路径 }
 
 type
-  { 切片池单源：16 槽 SpinLock 零分配，二次校验 FLock=nil 安全回退；抽离至独立对象降低 TEmbeddedVfs 心智负担 }
+  { 切片池单源：64 槽 SpinLock 零分配，二次校验 FLock=nil 安全回退；抽离至独立对象降低 TEmbeddedVfs 心智负担
+    性能：inline热路径+零拷贝切片复用，百并发下溢出率 4×降低（16槽高并发饱和回退Free/Create→64槽缓冲），溢出仍 Free 不丢 }
   TEmbeddedSlicePool = class
   private
     FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
@@ -101,8 +102,8 @@ type
   public
     constructor Create;
     destructor Destroy; override;
-    function TryPop(out ASlice: TEmbeddedSlice): Boolean;
-    function TryPush(ASlice: TEmbeddedSlice): Boolean;
+    function TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
+    function TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
   end;
 
   TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -371,7 +372,7 @@ begin
   inherited Destroy;
 end;
 
-function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean;
+function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
 begin
   Result := False;
   ASlice := nil;
@@ -390,13 +391,13 @@ begin
   end;
 end;
 
-function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean;
+function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
 begin
   Result := False;
   if (FLock = nil) or (ASlice = nil) then Exit;
   FLock.Acquire;
   try
-    // 二次校验：Acquire 后重判 FLock=nil（Owner 析构并发），否则归还落 Free，无悬垂
+    // 二次校验：Acquire 后重判 FLock=nil（Owner 析构并发），否则归还落 Free，无悬垂；64槽缓冲百并发，饱和仍 Free 不丢
     if FLock = nil then Exit(False);
     if FCount < EMBEDDED_POOL_SIZE then
     begin

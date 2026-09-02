@@ -1,6 +1,6 @@
 unit nextpas.core.vfs;
 
-{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2，182 行≈22% 800 阈值，13 子模块聚合为族完整性，inline 零拷贝复用 bytes.ops 单源，CONTRACT 单源，try-finally 不丢）。 }
+{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2，182 行≈22% 800 阈值，13 子模块聚合为族完整性，扇出度高但阈值内；后续decorator独立族L7拆分可降门面耦合与阈值压力，inline 零拷贝复用 bytes.ops 单源，CONTRACT 单源，try-finally 不丢）。 }
 
 {$I nextpas.core.settings.inc}
 

@@ -4,8 +4,9 @@ unit nextpas.core.vfs.overlay;
   与 mount 互补：mount 是异前缀聚合（a→FsA, b→FsB），overlay 是同根覆盖
   （同一虚拟路径多层，首命中胜出）。INV-O1：列表按传入优先级有序，Exists/Stat/
   OpenRead 按序首命中；List('.') 去重合并按首层优先保留。
-  INV-V2 不可变快照零锁并发：发布后只读，无 RWLock/可变缓存，热路径零争用；
-  bytes.ops VfsNameCompare SpanCompare 零拷贝单源，Sort/Unique 单源。 }
+  INV-V2 不可变快照+热点缓存：发布后只读，SwissTable 16槽 RWLock 读并发零争用/
+  TryAcquireWrite 非阻塞写热点 List 缓存（对齐 mount §6），首击 O(k log k) Sort+
+  Unique 后续 O(1) 哈希+O(k) Copy 隔离；bytes.ops VfsNameCompare SpanCompare 零拷贝单源，Sort/Unique 单源。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -25,14 +26,21 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
-  nextpas.core.collections.algorithms;
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.hashmap.swiss.str,
+  nextpas.core.sync;
 
 type
+  TOverlayListCache = specialize TSwissTableStr<TEntryArray>;
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
-    FList: array of IVfs; { 不可变快照：构造期冻结只读，发布后零锁并发；无 RWLock/可变缓存 }
+    FList: array of IVfs; { 不可变快照：构造期冻结只读，发布后热点 List SwissTable 16槽 RWLock 缓存对齐 mount §6，读并发零争用 }
+    FListCache: TObject; { 热点目录缓存：SwissTable 单源，RWLock 读并发零争用/TryAcquireWrite 非阻塞写，热点 List 免重复 O(k log k) Sort/Dedup，对齐 mount 单源 }
+    FListLock: IRWLock;
     function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
+    function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+    procedure CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
   public
     constructor Create(const AList: array of IVfs);
     destructor Destroy; override;
@@ -65,12 +73,54 @@ begin
       raise EVfsError.CreateCtx('overlay', '', 'overlay fs must not be nil');
     FList[I] := AList[I];
   end;
+  FListCache := TOverlayListCache.Create(16);
+  FListLock := RWLock;
 end;
 
 destructor TOverlayVfs.Destroy;
 begin
+  if FListCache <> nil then
+  begin
+    TOverlayListCache(FListCache).Free;
+    FListCache := nil;
+  end;
+  FListLock := nil;
   SetLength(FList, 0);
   inherited Destroy;
+end;
+
+{ 热点缓存：SwissTable 单源，RWLock 读并发零争用，inline 热路径，mount 同源模板 }
+function TOverlayVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+var
+  LCached: TEntryArray;
+begin
+  AEntries := nil;
+  Result := False;
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  FListLock.AcquireRead;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LCached) then
+    begin
+      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，防调用方篡改共享缓存 }
+      Result := True;
+    end;
+  finally
+    FListLock.ReleaseRead;
+  end;
+end;
+
+procedure TOverlayVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
+var
+  LDummy: TEntryArray;
+begin
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  if not FListLock.TryAcquireWrite then Exit;
+  try
+    if TOverlayListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
+    TOverlayListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离，TryAcquireWrite 非阻塞防惊群 }
+  finally
+    FListLock.ReleaseWrite;
+  end;
 end;
 
 { 首命中直达：O(m) 层线性探测，零缓存/零锁，命中层单次 Stat 直达；
@@ -173,8 +223,8 @@ var
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
-  { 不可变快照零锁：无 RWLock/可变缓存，热点目录每次聚合 O(k log k) Sort+Unique 去重，
-    零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline，扇出 Copy 仅聚合期一次 }
+  { 热点目录缓存：SwissTable 16槽 RWLock 读并发零争用/TryAcquireWrite 非阻塞写，首击 O(k log k) Sort+Unique 后续 O(1) 哈希+O(k) Copy 隔离，对齐 mount §6，零拷贝 VfsNameCompare via bytes.ops SpanCompare 单源 inline }
+  if TryGetListCached(ADirPath, Result) then Exit;
   if not VfsIsRoot(ADirPath) then
   begin
     if not FindStat(ADirPath, LStat) then
@@ -198,7 +248,11 @@ begin
     end;
   end;
   if TempN = 0 then
+  begin
+    Result := nil;
+    CacheList(ADirPath, Result);
     Exit(nil);
+  end;
   SetLength(Temp, TempN);
   specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
   TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
@@ -206,6 +260,7 @@ begin
   SetLength(Result, TempN);
   for I := 0 to TempN - 1 do
     Result[I] := Temp[I].Entry;
+  CacheList(ADirPath, Result);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;

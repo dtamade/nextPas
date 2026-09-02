@@ -70,7 +70,7 @@ procedure VfsDedupSortedEntries(var AItems: TEntryArray);
 
 { 从字节序有序的完整路径清单推导某目录的直接子项完整路径（有序、去重）。
   输入只含文件路径；ADirPrefix 为 'dir/' 形式，根传 ''。O(log n + k) 有序区间扫描。
-  单源 VfsEnumerateChildSpans（derive.inc 仅历史兼容），VfsDeriveChildNames* 为适配薄壳。 }
+  单源 VfsEnumerateChildSpans，VfsDeriveChildNames* 为适配薄壳。 }
 function VfsDeriveChildNames(const ASortedPaths: array of string;
   const ADirPrefix: string): TVfsNameArray;
 { 零拷贝 Span 版本：ASpans 有序直指存储，ADirPrefix 同上；单源 VfsEnumerateChildSpans。 }
