@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖；`bytes.ops` 为字节操作单源，禁止各 codec 自写重复 Move/SetLength；`inline/零拷贝`：热点 `inline` + `bytes.ops.Move/BytesEnsureCapacity` 零拷贝，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配稳态零堆增长；`稳定性`：`Clear/Destroy` 必 `SetLength(Data,0)+FreeAndNil/WaitFor`，`HEAPTRC` 零泄漏）
 **Owner**：audio lane（仅 26 核心；56 候选 Owner 待迁移至新模块 lane，audio 仅 provisional 托管）
 **最后更新**：2026-09-02
-**版本**：1.5.3（匠心修复：56 扩展候选 provisional 债务对齐 85=29+56，L2 臃肿高级感回归；口径 58→56、84→85 统一于 `check_source_contract.sh` 85 files，债务 provisional 寄生标注保留、已登记独立 L2 `audio.codec.flac/mp3/vorbis/opus` / `spatial/bus` / `bank/resource/playlist/event/studio` / `simd` 待抽，`bytes.ops` 单源 + `inline/零拷贝` + `稳定性`证据保留，守四件套与 L0-L3）
+**版本**：1.5.6（匠心 perf：`dsp.dynamics` LUT 9-bit 512-entry `FastGainApprox` 去 `Exp/Ln` 每采样超越、`EnsureScratch` 几何预分配；`codec.aiff` `BytesCopy` 单源；`pcm_wav` `TryDecodeWholeFile` 薄封装 + `BytesCopy/BytesZero` 单源 + 零直引 `fs`；`timeline` `INV-6` 稳态零堆预分配纪守 85=29+56，`bytes.ops` 单源 + `inline/零拷贝` 沿用）
 
 ---
 
@@ -391,3 +391,6 @@ make hygiene && git diff --check
 | 2026-09-02 | 1.5.1 | 匠心修复：52 扩展候选仍寄生 audio、L2 臃肿失高级感，违反 Owner 边界与四件套独立演进不变量；头图重写为 26 冻结 + 52 候选 provisional，78 全量堆叠标注待抽独立 L2 模块（`audio.codec.flac/mp3/vorbis` / `spatial` / `bus` / `bank`/`resource`/`playlist`/`event`/`studio` / `simd`），抽离后 audio 回归 26 核心；补 `bytes.ops` 单源 + `inline/零拷贝`（`EnsureScratch/FSnap/SimdAddF32`）+ `稳定性`（`SetLength+FreeAndNil/WaitFor/try..finally`）证据，业务以 CONTRACT 为准、缺能力先反哺 owner；门禁 78 provisional 标注，无新增堆叠 |
 | 2026-09-02 | 1.5.2 | opus 占位：78→84 文件（新增 `codec.opus` 四件套 `base/intf/impl/pas` 占位桩，`base` L0 only `COpusProbeLimit=4096` + `intf` 仅 `IOpusDecoder=IAudioDecoder` 别名 + `impl` 含 `OpusProbe≤4KB 4096/DecodeWhole 1024帧静音桩/OpenStreaming STUB: 直接raise` + `facade` 仅 `type` 别名 + `inline` 转发 + `initialization AudioRegisterDecoder`），守 `bytes.ops` 单源 + `Probe≤4KB` 零分配 + `STUB` 白名单，不引 `ffi/vendor`，不新增 GUID，`registry` 保持薄封装（不硬 `uses opus.impl`，靠 `facade` 初始化自注册），实盘 84 = 26 core + 58 ext（unique 82+2 bus facade），23 GUID 不变 |
 | 2026-09-02 | 1.5.3 | 匠心修复：56 扩展候选 provisional 债务对齐 85=29(26+3)+56，L2 臃肿口径 58→56、84→85 统一于 `check_source_contract.sh` 85 files（unique 83+2 bus facade）；债务仍 provisional 寄生待抽独立 L2 `audio.codec.flac/mp3/vorbis/opus` / `spatial/bus` / `bank/resource/playlist/event/studio` / `simd`，高级感回归标注保留，`bytes.ops` 单源 + `inline/零拷贝` + `稳定性`证据沿用，守四件套与 L0-L3，最小改动对齐门禁 |
+| 2026-09-02 | 1.5.4 | 匠心 perf：`wav` `DWord` 截断 `Int64` 守卫 + `base` OOB 整型、`pcm_wav` 薄封装预研 |
+| 2026-09-02 | 1.5.5 | 匠心 perf：`dynamics` `EnsureScratch` 几何预分配 + `resample` `LStep` 预算去每帧除法 + `pcm` 平面批量 `Move` + `simd` `AVX2 8-wide` 向量核 + `opus` `COpusProbeLimit` 单源（85 对齐） |
+| 2026-09-02 | 1.5.6 | 匠心 perf：`dsp.dynamics` LUT 9-bit 512-entry `FastLog2/Exp2` lerp 去 `Exp/Ln` 每采样（`FastGainApprox` `inline` 零分配，`InitGainLUT` 预热），`codec.aiff` `BytesCopy` 单源零拷贝，`pcm_wav` `TryDecodeWholeFile` 注册薄封装 + `BytesCopy/BytesZero` 单源，`timeline` `INV-6` 稳态零堆预分配纪守 85=29+56，`bytes.ops` 单源 + `inline/零拷贝` + `HEAPTRC` 沿用 |
