@@ -60,6 +60,11 @@ procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -94,6 +99,7 @@ implementation
 
 uses
   nextpas.core.simd,
+  nextpas.core.bytes.ops.capacity,
   nextpas.core.text.unicode.utils;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
@@ -155,6 +161,31 @@ begin
   while LCap < ANeed do
     if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
   Result := LCap;
+end;
+
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacity(ACurrent, ARequired);
+end;
+
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityInt(ACurrent, ARequired);
+end;
+
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityWithMin(ACurrent, ARequired, AMinGrow);
+end;
+
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityIntWithMin(ACurrent, ARequired, AMinGrow);
+end;
+
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.WebviewGrowCapacityForReuse(ACurrent);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
