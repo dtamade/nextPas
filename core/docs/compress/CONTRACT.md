@@ -1,7 +1,7 @@
 # nextpas.core.compress 代码契约
 
-**模块路径**：`core/src/nextpas.core.compress*.pas`（11 个源文件，含 `compress.tar` 兼容转发 → 独立 `nextpas.core.tar`）
-**层级**：L2（依赖 L0-L1: base, io）
+**模块路径**：`core/src/nextpas.core.compress*.pas`（11 个源文件，含 `compress.tar` 兼容转发 → 独立 `nextpas.core.tar` 经 archive.fs 单缝联邦）
+**层级**：L2（门面 `nextpas.core.compress` 依赖 L0-L1: base/io；兼容转发 `compress.tar` 为 L2 同层显式 one-way 经 archive.fs 单源联邦至 tar.base/reader/writer，bytes.ops 单源 inline/零拷贝，待移除）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-02
 **版本**：1.3
@@ -23,7 +23,7 @@
 | compress.lz4.ffi | LZ4 FFI 绑定 |
 | compress.zstd | Zstd 压缩/解压（libzstd FFI） |
 | compress.zstd.ffi | Zstd FFI 绑定 |
-| compress.tar | Tar 容器（ustar/pax，已晋升独立 L2 `nextpas.core.tar` 兼容转发，零拷贝视图 `EntryDataSlice/OpenEntryStream` + `bytes.ops` 单源 `Move`） |
+| compress.tar | Tar 容器兼容转发（deprecated，已晋升独立 L2 `nextpas.core.tar`，经 `archive.fs` 单缝联邦至 `tar.base/reader/writer` 薄别名，零拷贝视图 `EntryDataSlice/OpenEntryStream` + `bytes.ops` 单源 `Move` + `inline` 薄转发 + `try-finally` 资源不丢） |
 | compress.pas | 门面 |
 
 ### 1.2 接口

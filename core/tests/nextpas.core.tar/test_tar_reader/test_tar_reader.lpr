@@ -273,8 +273,9 @@ begin
   R := TTarReader.Create(Tar);
   try
     CheckTrue(R.Next(H), 'evil first');
-    CheckEqual('../evil.txt', H.Name, 'malicious g pollutes first');
-    CheckTrue(not IsSafeTarEntryName(H.Name), 'unsafe detected');
+    // 修复：恶意 g 由 Reader 自动 IsSafe 丢弃并 Guard 防静默劫持，显式 Clear 可选
+    CheckEqual('ok.txt', H.Name, 'malicious g discarded fallback');
+    CheckTrue(IsSafeTarEntryName(H.Name), 'safe after discard');
     R.ClearGlobalPax;
     CheckTrue(R.Next(H), 'after clear');
     CheckEqual('ok2.txt', H.Name, 'explicit clear prevents pollution, fail-closed optional');

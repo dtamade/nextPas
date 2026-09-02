@@ -26,7 +26,7 @@
 
 ### 1.4 链式构造器
 
-`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/AddEntryFromReader/Finish` 链式，遵循 `base←intf←实现←门面`；薄门面委托 `TTarWriter` + `CreateArchiveBuilder`（`CreateBytesBuilder` 直写切片 + `CreateArchiveBuilderSink` 联邦单源，经 `archive.fs` 单缝，`IBytesBuilder` 几何扩容、inline `AppendBytes` 零拷贝，复用 `bytes.ops`/`bytes.builder` 单源）+ `TarBuilderCapacityFor` 预扩容按预估总量 4K 对齐避免大归档多次几何扩容（`TarBuilderWithCapacity` 显式预估总量），`Finish` 经 `ToBytes` 单次分配+Move 交付，消除 `CreateBytesStream` + `ArchiveSnapshotStream` 二次 `SetLength+Seek+Read` 大块 `Move`；`AddDirectory/AddDirectoryWithOptions` 复用 `TTarWriter.AddDir/AddDirWithOptions` 单源，`AddDirWithOptions` 内部以 `DefaultTarAddOptions` 判零、`TarDirectoryMode` 换算默认权限，薄门面无重复 `TTarHeader` 手写；`AddEntryFromReader` 流式零拷贝（64K pooled 复用分块 Move 单源 `bytes.ops` via `FIOBuf` 无缩容——首分配 ≤64K 后 200 文件串行复用、amortized 1 alloc、零 `TBytes` 全量拷贝，委托 `TTarWriter.AddEntryFromReader` 单源，无 2×阈值缩容/4K 底 thrash，消除 `TarPackDirInto` 重复分配峰值）；门面导出 `TarBuilder`/`TarBuilderWithCapacity`/`TarBuilderCapacityFor` inline 工厂（`NewTarBuilder` 已移除），需显式 `Finish`（未 `Finish` 析构 fail-closed 抛 `EInvalidOperationError('tar: builder destroyed without Finish')`，析构期 `ExceptObject<>nil` 时 SafeFail 抑制二次异常逃逸、StdErr WARN 后 `FWriter.Free` 释资源；`TTarWriter` 析构 SafeFail——`ExceptObject` 判 unwind 期抑制 `Finish` 的 `EIOError/short-write` 二次逃逸、StdErr WARN 后释资源，`FIOBuf` 随 writer 生命周期释放、无 linger 峰值），零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
+`ITarBuilder`（`nextpas.core.tar.intf` 定义，`nextpas.core.tar.builder` 实现）：`Add/AddWithOptions/AddDirectory/AddDirectoryWithOptions/AddEntry/AddEntryFromReader/Finish` 链式，遵循 `base←intf←实现←门面`；薄门面委托 `TTarWriter` + `CreateArchiveBuilder`（`CreateBytesBuilder` 直写切片 + `CreateArchiveBuilderSink` 联邦单源，经 `archive.fs` 单缝，`IBytesBuilder` 几何扩容、inline `AppendBytes` 零拷贝，复用 `bytes.ops`/`bytes.builder` 单源）+ `TarBuilderCapacityFor` 预扩容按预估总量 4K 对齐避免大归档多次几何扩容（`TarBuilderWithCapacity` 显式预估总量），`Finish` 经 `ToBytes` 单次分配+Move 交付，消除 `CreateBytesStream` + `ArchiveSnapshotStream` 二次 `SetLength+Seek+Read` 大块 `Move`；`AddDirectory/AddDirectoryWithOptions` 复用 `TTarWriter.AddDir/AddDirWithOptions` 单源，`AddDirWithOptions` 内部以 `DefaultTarAddOptions` 判零、`TarDirectoryMode` 换算默认权限，薄门面无重复 `TTarHeader` 手写；`AddEntryFromReader` 流式零拷贝（64K pooled 复用分块 Move 单源 `bytes.ops` via `FIOBuf` 无缩容——首分配 ≤64K 后 200 文件串行复用、amortized 1 alloc、零 `TBytes` 全量拷贝，委托 `TTarWriter.AddEntryFromReader` 单源，无 2×阈值缩容/4K 底 thrash，消除 `TarPackDirInto` 重复分配峰值）；门面导出 `TarBuilder`/`TarBuilderWithCapacity`/`TarBuilderCapacityFor` inline 工厂（`NewTarBuilder` 已移除），需显式 `Finish`（未 `Finish` 析构 `try..finally` 必释 `FWriter`，`IsExceptionUnwinding` 判 unwind——unwind 期抑制二次逃逸以保原始异常上下文，非 unwind 期透传，避免覆盖；`TTarWriter.Destroy` 同策略：`IsExceptionUnwinding` 捕获于 `Finish` 前，unwind 期抑制 `EIOError/short-write` 二次逃逸（无 StdErr 覆盖），非 unwind 期透传，`FIOBuf` 随 writer 生命周期释放、无 linger 峰值，`try..finally` 必释资源），零额外序列化逻辑，bytes 级与 `TTarWriter` 一致。
 
 ## 2. 不变量
 
@@ -48,7 +48,7 @@
 | 名不安全（读端/落盘） | `EParseError('tar: refusing unsafe entry name: ...')` |
 | 落盘路径含符号链接段 | `EParseError('tar extract: symlink in path: ...')` |
 | 目标 writer 为 nil / 已 Finish 后再写入 | `EArgumentError` / `EInvalidOperationError('tar: writer already finished')` |
-| `ITarBuilder` 未 `Finish` 即析构 | `EInvalidOperationError('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')` — fail-closed 避免静默丢数据；析构期若 `ExceptObject<>nil` 则 SafeFail 抑制二次异常、StdErr WARN 后释资源 |
+| `ITarBuilder` 未 `Finish` 即析构 | `StdErr WARN('tar: builder destroyed without Finish (missing two zero blocks, data truncated)')` — 稳定析构不抛，`try..finally` 必释资源，极简 fail-closed（无 `ExceptObject` 双层 `try` 叙事） |
 | 单条目/总量超限 | `EIOError('tar: entry size exceeds limit for "%s" (%d > %d)' / 'total ... exceeds limit (%d + %d > %d)')` — 总量分支携带 `ACum/ANext/AMaxTotal` 上下文便于定位 |
 | Short write | `EIOError('tar: short write')` |
 
@@ -83,3 +83,21 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression       # 回归门�
 - **硬门**：`allocs ≤ baseline+2` 且 `bytes/op` 一致且 `status=ok`（超限 CI 红）。
 - **软门**：`ns/op >1.5× baseline` WARN；`MB/s <0.65× baseline` WARN。
 - **判定**：`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 与 `build/bench-tar.json`。
+
+## 附录 B · 零拷贝与持有型生命周期
+
+> 单一规范：`TrySlice` 为零拷贝 `TByteSpan` 视图唯一入口（inline 薄转发，生命周期绑 `TTarReader`）；`EntryDataSlice` 为 `PByte/Count` 薄转发复用 `TrySlice` 单源；`EntryData` 为 `SpanClone` 单源拷贝（一次 `SetLength+Move`），200×512B 批量提取产生200次分配峰值，热路径优先视图。
+
+```
+Reader.Create(Bytes|PByte) ── FBuf/FData 持有镜像
+  │
+  ├─ TrySlice(out Span) ──► TByteSpan{Data=PByte, Len} 零拷贝视图，inline，Reader 释放后失效
+  ├─ EntryDataSlice(out PByte, Count) ──► 同上薄转发
+  ├─ EntryData ──► SpanClone(Slice) 单次分配+Move 拷贝，独立生命周期
+  └─ OpenEntryStream ──► IReader 持有型
+        ├─ FBuf 非空：TTarSliceReader.CreateWithHold(FBuf, Ofs, Size) 持有镜像引用，Reader 释放后仍可读
+        └─ 外部 PByte：SpanClone 固化拷贝自包含（FHold 独立），Reader 释放后仍可读
+```
+
+- 视图失效：`Reader.Free` 后 `Span.Data` 悬垂，禁止再访；流持有型则安全（`FHold` 自包含）。
+- 单源：`SpanClone/CopyMemory/CopyStringToBuffer` 均经 `bytes.ops` 单源 `Move`，`TTarSliceReader.Read` 经 `CopyMemory` 单源零拷贝。

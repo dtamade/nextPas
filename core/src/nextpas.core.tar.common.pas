@@ -1,8 +1,9 @@
 unit nextpas.core.tar.common;
 {**
- * @desc Tar 共享内核：reader/writer 单点复用（@internal）。
+ * @desc Tar 共享内核：reader/writer 单点复用（@internal，四件套外内部核例外形态）。
  * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
+ * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
  * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline。
  *}
 
@@ -395,6 +396,7 @@ begin
     else
       ValSpan := TByteSpan.Empty;
     // 零拷贝：SpanEqual 比对 key，仅命中时物化 value，降 O(n) 分配峰值
+    // CONTRACT：仅 path/linkpath 落盘，其余 pax 键静默忽略；扩展解析候选：atime/mtime/ctime/size/uid/gid/charset/comment 等按需接入
     if (KeyLen = 4) and SpanEqual(KeySpan, TByteSpan.Create(PByte(PAnsiChar('path')), 4)) then
     begin
       if ValLen > 0 then
@@ -410,7 +412,9 @@ begin
       else
         ALinkPath := '';
       Result := True;
-    end;
+    end
+    else
+      ; // 扩展候选：其余 pax 键静默忽略，保留零拷贝切片可扩展性
     P := RecEnd;
   end;
 end;

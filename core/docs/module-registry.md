@@ -27,7 +27,7 @@ completion claim.
 | `bytes` | L1 | byte containers | `nextpas.core.bytes` | L0, documented text/encoding seam | focused-runtime |
 | `cbor` | L2 | CBOR format (RFC 8949 deterministic subset) | `nextpas.core.cbor` | L0-L1 | focused-runtime |
 | `collections` | L1 | data structures | `nextpas.core.collections` | L0 | focused-runtime |
-| `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB` 单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES` 已收敛为薄别名/薄门面经 `transform` 承载） |
+| `compress` | L2 | compression formats | `nextpas.core.compress` | L0-L1, provider FFI, plus L2 via archive.fs single seam (tar compat deprecated explicit one-way via nextpas.core.compress.tar → nextpas.core.tar.base/reader/writer, 兼容转发经 archive.fs 单缝联邦, bytes.ops 单源 inline/零拷贝, to be removed) | focused-runtime — `compress.base GZIP_MAX_DECOMPRESS_BYTES=32MiB` 单源（门面重导出，`vfs.compressed VFS_DECOMPRESS_MAX_BYTES` 已收敛为薄别名/薄门面经 `transform` 承载）；`compress.tar` 薄转发联邦 via archive.fs 单源（tar 已晋升独立 L2 nextpas.core.tar，本地 re-export 经 archive.fs+tar.base/reader/writer，bytes.ops 单源 inline/零拷贝，资源 try-finally 不丢） |
 | `config` | L3 | config facade | `nextpas.core.config` | L0-L2 formats | focused-runtime |
 | `contracts` | L0 | assertion helpers | `nextpas.core.contracts` | base/errors | focused-runtime |
 | `cookie` | L2 | cookie grammar | `nextpas.core.cookie` | L0-L1 | focused-runtime — `test_cookie` 17/17 `heaptrc 0`, `IsValidCookieName/Value` + `Build/Parse` inline, 零拷贝 `TryFindCookie`, `base.utils CompareBytesIgnoreCase` 单源复用 |

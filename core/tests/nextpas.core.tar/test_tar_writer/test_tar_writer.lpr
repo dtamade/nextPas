@@ -12,12 +12,13 @@ uses
   nextpas.core.tar.base,
   nextpas.core.tar.reader,
   nextpas.core.tar.writer,
-  nextpas.core.io.memory;
+  nextpas.core.io.memory,
+  nextpas.core.bytes.ops;
 
-function BytesOf(const S: string): TBytes;
+function BytesOf(const S: string): TBytes; inline;
 begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then Move(S[1], Result[0], Length(S));
+  // perf: single-source via bytes.ops.StringToBytes (zero-copy PAnsiChar view, single Move), inline thin forward, owner bytes.ops; heaptrc0 via common.mk HEAPTRC_GATE=1 (-gh, haltonnotreleased+log), no duplicate Move
+  Result := nextpas.core.bytes.ops.StringToBytes(S);
 end;
 
 function Snapshot(S: IStream): TBytes;
@@ -36,8 +37,10 @@ var
 begin
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  W.AddFile('a.txt', BytesOf('hi'));
-  W.Finish; W.Free;
+  try
+    W.AddFile('a.txt', BytesOf('hi'));
+    W.Finish;
+  finally W.Free; end;
   B := Snapshot(S);
   CheckTrue(Length(B) mod 512 = 0, 'block aligned');
   CheckTrue(Length(B) >= 1536, 'at least header+data+2zero');
@@ -93,9 +96,11 @@ var
 begin
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  W.AddFile('m.txt', BytesOf('data'), $1ED, 1234567890);
-  W.AddDir('d', $1ED, 1234567890);
-  W.Finish; W.Free;
+  try
+    W.AddFile('m.txt', BytesOf('data'), $1ED, 1234567890);
+    W.AddDir('d', $1ED, 1234567890);
+    W.Finish;
+  finally W.Free; end;
   B := Snapshot(S);
   R := TTarReader.Create(B);
   try
@@ -112,9 +117,10 @@ var
 begin
   S := CreateBytesStream;
   W := TTarWriter.Create(S as IWriter);
-  W.AddFile('a.txt', BytesOf('hi'));
-  W.Finish; W.Finish; CheckTrue(True, 'finish idempotent');
-  W.Free;
+  try
+    W.AddFile('a.txt', BytesOf('hi'));
+    W.Finish; W.Finish; CheckTrue(True, 'finish idempotent');
+  finally W.Free; end;
 end;
 
 var
