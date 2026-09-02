@@ -201,13 +201,7 @@ end;
 
 procedure TSequentialZipReader.CheckTotalLimit;
 begin
-  if FMaxTotalOutput = 0 then
-    Exit;
-  if FCurrent.UncompressedSize > FMaxTotalOutput then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  if FCumulative > FMaxTotalOutput - FCurrent.UncompressedSize then
-    raise EIOError.Create('zip: total uncompressed size exceeds limit');
-  Inc(FCumulative, FCurrent.UncompressedSize);
+  GuardTotalOutputAdvance(FCumulative, FCurrent.UncompressedSize, FMaxTotalOutput);
 end;
 
 function TSequentialZipReader.HasPushBack: Boolean;
