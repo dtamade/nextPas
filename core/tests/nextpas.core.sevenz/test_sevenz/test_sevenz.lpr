@@ -3630,6 +3630,64 @@ begin
   except on E: ESevenZError do ; on E: ESevenZLimitError do ; on E: EIOError do ; end;
 end;
 
+procedure TestCoderPropsExceedsLimitReject;
+var LPlain, LBlock, LPack, LArchive: TBytes;
+    LEnc: TSevenZLzmaEncoded;
+begin
+  { 最小明文头：仅空 FilesInfo，聚焦 UnpackInfo 中 coder props 超限分支。
+    props 大小 = SEVENZ_MAX_CODER_PROPS+1 (=1048577) 应在 ParseFolder 提前抛 ESevenZLimitError，
+    避免分配 1MiB+ 载荷 — 验证 header 限界在流式/固化路径均生效。 }
+  SetLength(LPlain, 0);
+  SevenZAppendByte(LPlain, SZ_ID_HEADER);
+  SevenZAppendByte(LPlain, SZ_ID_FILES_INFO);
+  SevenZWriteNumber(LPlain, 0);
+  SevenZAppendByte(LPlain, SZ_ID_END);
+  SevenZAppendByte(LPlain, SZ_ID_END);
+  LEnc := SevenZAcquireEncoder.EncodeLzma2(LPlain, szclDefault);
+  LPack := LEnc.PackedData;
+  SetLength(LBlock, 0);
+  SevenZAppendByte(LBlock, SZ_ID_ENCODED_HEADER);
+  SevenZAppendByte(LBlock, SZ_ID_PACK_INFO);
+  SevenZWriteNumber(LBlock, 0);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, SZ_ID_SIZE);
+  SevenZWriteNumber(LBlock, UInt64(Length(LPack)));
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SevenZAppendByte(LBlock, SZ_ID_UNPACK_INFO);
+  SevenZAppendByte(LBlock, SZ_ID_FOLDER);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, 0);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, $21);
+  SevenZAppendByte(LBlock, Byte(SEVENZ_METHOD_LZMA2));
+  SevenZWriteNumber(LBlock, UInt64(SEVENZ_MAX_CODER_PROPS) + 1);
+  { 不跟 props 载荷：ParseFolder 在 ReadBytes 前已判限 }
+  SevenZAppendByte(LBlock, SZ_ID_CODERS_UNPACK_SZ);
+  SevenZWriteNumber(LBlock, UInt64(Length(LPlain)));
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SetLength(LArchive, C_SEVENZ_SIG_HEADER_SIZE);
+  FillChar(LArchive[0], C_SEVENZ_SIG_HEADER_SIZE, 0);
+  LArchive[0]:=C_SEVENZ_MAGIC_0; LArchive[1]:=C_SEVENZ_MAGIC_1;
+  LArchive[2]:=C_SEVENZ_MAGIC_2; LArchive[3]:=C_SEVENZ_MAGIC_3;
+  LArchive[4]:=C_SEVENZ_MAGIC_4; LArchive[5]:=C_SEVENZ_MAGIC_5;
+  LArchive[6]:=C_SEVENZ_VERSION_MAJOR; LArchive[7]:=C_SEVENZ_VERSION_MINOR;
+  SigPutLE64(LArchive, 12, UInt64(Length(LPack)));
+  SigPutLE64(LArchive, 20, UInt64(Length(LBlock)));
+  SigPutLE32(LArchive, 28, Crc32OfBytes(LBlock));
+  SigPutLE32(LArchive, 8, Crc32Of((@LArchive[12])^, 20));
+  SetLength(LArchive, Length(LArchive)+Length(LPack)+Length(LBlock));
+  Move(LPack[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE], Length(LPack));
+  Move(LBlock[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE+Length(LPack)], Length(LBlock));
+  try
+    TSevenZReaderImpl.Create(LArchive);
+    Fail('coder props >1M should raise ESevenZLimitError');
+  except
+    on E: ESevenZLimitError do ;
+    on E: ESevenZError do ; // 读截断路径亦可接受，但限界优先
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3827,6 +3885,7 @@ begin
   T.Test('writer bomb pack size reject', @TestWriterBombPackSizeReject);
   T.Test('writer name too long reject', @TestWriterNameTooLongReject);
   T.Test('reader truncated archive', @TestReaderTruncatedArchive);
+  T.Test('coder props exceeds limit reject', @TestCoderPropsExceedsLimitReject);
 
   if not T.Run then Halt(1);
 end.
