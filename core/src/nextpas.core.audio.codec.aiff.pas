@@ -34,6 +34,7 @@ uses
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
+  nextpas.core.bytes.ops,
   nextpas.core.audio.pcm;
 
 const
@@ -557,7 +558,8 @@ begin
   LToCopy := AFrames;
   if LToCopy > LAvail then LToCopy := LAvail;
   LBytes := LToCopy * FBuffer.Format.BlockAlign;
-  Move(FBuffer.Data[FPos * FBuffer.Format.BlockAlign], ABuffer.Data[0], LBytes);
+  // perf: zero-copy single source via bytes.ops BytesCopy inline (single Move), no duplicate impl, steady zero alloc
+  BytesCopy(@ABuffer.Data[0], @FBuffer.Data[FPos * FBuffer.Format.BlockAlign], SizeUInt(LBytes));
   ABuffer.Format := FBuffer.Format;
   ABuffer.FrameCount := LToCopy;
   FPos := FPos + LToCopy;

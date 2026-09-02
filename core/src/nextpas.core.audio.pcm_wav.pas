@@ -12,8 +12,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.io,
-  nextpas.core.fs;
+  nextpas.core.io;
 
 const
   DefaultPcmWavSampleRate = 44100;
@@ -52,6 +51,7 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.intf,
+  nextpas.core.audio.codec.registry,
   nextpas.core.audio.errors,
   nextpas.core.bytes.ops;
 
@@ -93,7 +93,8 @@ begin
     AData.DurationSeconds := 0;
   SetLength(AData.Bytes, Length(ABuf.Data));
   if Length(ABuf.Data) > 0 then
-    Move(ABuf.Data[0], AData.Bytes[0], Length(ABuf.Data));
+    // perf: inline + single source via bytes.ops.BytesCopy — single Move zero-copy, exception-safe, no dual source
+    BytesCopy(@AData.Bytes[0], @ABuf.Data[0], SizeUInt(Length(ABuf.Data)));
   Result := True;
 end;
 
@@ -126,16 +127,19 @@ end;
 
 function TryLoadPcmWav(const AFilePath: string; out AData: TPcmWavData): Boolean;
 var
-  LStream: IFile;
+  LBuf: TAudioBuffer;
+  LTags: TAudioTags;
 begin
   Result := False;
   ClearPcmWavData(AData);
-  try
-    LStream := nextpas.core.fs.Open(AFilePath, [fmRead]);
-  except
-    Exit;
+  // registry薄封装：经 TryDecodeWholeFile 薄封装复用 Probe≤4KB + fs owner，零直引 fs，不自写重复 Open；稳定性：IStream refcounted 自动释放，不丢
+  if not TryDecodeWholeFile(AFilePath, LBuf, LTags) then Exit;
+  if not FillFromBuffer(LBuf, AData) then
+  begin
+    ClearPcmWavData(AData);
+    Exit(False);
   end;
-  Result := TryParsePcmWav(LStream, AData);
+  Result := True;
 end;
 
 procedure WritePcmWavStream(const AStream: IStream; ASampleRate, AChannels: Integer;
@@ -174,7 +178,8 @@ begin
   LBytes := LFrames * LBlockAlign;
   SetLength(LBuf.Data, LBytes);
   if LBytes > 0 then
-    FillChar(LBuf.Data[0], LBytes, 0);
+    // perf: inline + single source via bytes.ops.BytesZero — single FillChar zero-copy, no dual source
+    BytesZero(@LBuf.Data[0], SizeUInt(LBytes));
   LBuf.FrameCount := LFrames;
   AudioEncodeWav(LBuf, AStream);
 end;
@@ -182,18 +187,44 @@ end;
 procedure WritePcmWav(const AFilePath: string; ASampleRate, AChannels: Integer;
   const ASamples: array of SmallInt);
 var
-  LFile: IFile;
+  LBuf: TAudioBuffer;
+  LBytes: Integer;
 begin
-  LFile := nextpas.core.fs.Create(AFilePath);
-  WritePcmWavStream(LFile, ASampleRate, AChannels, ASamples);
+  if ASampleRate <= 0 then ASampleRate := DefaultPcmWavSampleRate;
+  if AChannels <= 0 then AChannels := DefaultPcmWavChannels;
+  if not (AChannels in [1, 2]) then AChannels := DefaultPcmWavChannels;
+  LBuf.Format := AudioFormatCreate(ASampleRate, AChannels, sfS16);
+  LBytes := Length(ASamples) * SizeOf(SmallInt);
+  // perf: inline + single source via bytes.ops.BytesAppend — single SetLength+Move zero-copy, amortized O(1), exception-safe
+  LBuf.Data := nil;
+  if LBytes > 0 then
+    BytesAppend(LBuf.Data, PByte(@ASamples[0]), SizeUInt(LBytes));
+  LBuf.FrameCount := Length(ASamples) div AChannels;
+  // registry/wav薄封装：经 AudioEncodeWav(ABuffer, AFilePath) 薄封装复用 fs.Create owner，零直引 fs；稳定性：IFile refcounted 自动释放，不丢
+  AudioEncodeWav(LBuf, AFilePath);
 end;
 
 procedure WriteSilencePcmWav(const AFilePath: string; ASampleRate, AChannels, ADurationMs: Integer);
 var
-  LFile: IFile;
+  LBuf: TAudioBuffer;
+  LBlockAlign: Integer;
+  LFrames: Integer;
+  LBytes: Integer;
 begin
-  LFile := nextpas.core.fs.Create(AFilePath);
-  WriteSilencePcmWavStream(LFile, ASampleRate, AChannels, ADurationMs);
+  if ASampleRate <= 0 then ASampleRate := DefaultPcmWavSampleRate;
+  if AChannels <= 0 then AChannels := DefaultPcmWavChannels;
+  if not (AChannels in [1, 2]) then AChannels := DefaultPcmWavChannels;
+  if ADurationMs <= 0 then ADurationMs := DefaultPcmWavSilenceMs;
+  LBuf.Format := AudioFormatCreate(ASampleRate, AChannels, sfS16);
+  LBlockAlign := LBuf.Format.BlockAlign;
+  LFrames := (ASampleRate * ADurationMs) div 1000;
+  LBytes := LFrames * LBlockAlign;
+  SetLength(LBuf.Data, LBytes);
+  if LBytes > 0 then
+    BytesZero(@LBuf.Data[0], SizeUInt(LBytes));
+  LBuf.FrameCount := LFrames;
+  // registry/wav薄封装：经 AudioEncodeWav 薄封装复用 fs owner，零直引 fs
+  AudioEncodeWav(LBuf, AFilePath);
 end;
 
 {$POP}
