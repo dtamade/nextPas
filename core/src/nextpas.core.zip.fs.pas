@@ -140,7 +140,10 @@ begin
       SetLength(LPrefix, LLen);
       Move(APath[1], LPrefix[1], LLen);
       if IsSymlink(LPrefix) then
+      begin
+        if IsDir(LPrefix) then Continue;
         raise EParseError.Create('zip extract: symlink in path: ' + LPrefix);
+      end;
     end;
   end;
 end;
