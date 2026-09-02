@@ -11,6 +11,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.text.number;
 
@@ -73,11 +74,12 @@ var
     end;
   end;
 
-  function BufferToString(const ABuffer: PAnsiChar; const ALen: Int32): string;
+  function BufferToString(const ABuffer: PAnsiChar; const ALen: Int32): string; inline;
   begin
-    SetLength(Result, ALen);
-    if ALen > 0 then
-      Move(ABuffer^, Result[1], ALen);
+    if ALen <= 0 then
+      Exit('');
+    // perf: inline thin-forward via bytes.ops.SpanToString single source zero-copy TByteSpan view single Move in owner (INV-5); no duplicate SetLength+Move
+    Result := SpanToString(TByteSpan.Create(PByte(ABuffer), SizeUInt(ALen)));
   end;
 
   function FormatInt(const AVal: Int64): string;
@@ -108,7 +110,8 @@ var
     LV: UInt64;
   begin
     Result := '';
-    FillChar(LBuf, SizeOf(LBuf), 0);
+    // perf: single source via bytes.ops.BytesZero inline zero-copy FillChar single source (INV-5)
+    BytesZero(@LBuf[0], SizeOf(LBuf));
     LV := AVal;
     LBufIdx := 15;
     if LV = 0 then
@@ -127,7 +130,9 @@ var
         Dec(LBufIdx);
       end;
     SetLength(Result, 15 - LBufIdx);
-    Move(LBuf[LBufIdx + 1], Result[1], 15 - LBufIdx);
+    // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5) — single SetLength+Move discipline
+    if Length(Result) > 0 then
+      BytesCopy(Pointer(Result), @LBuf[LBufIdx + 1], SizeUInt(15 - LBufIdx));
   end;
 
   function FormatFloat(const AVal: Double; const ADigits: Integer): string;
@@ -155,9 +160,8 @@ var
     LAbs := LAbs + LRound;
     LInt := Trunc(LAbs);
     LFrac := LAbs - LInt;
-    // perf: single SetLength + zero-copy Move(s), O(n) vs O(n²) Result+ concat.
-    // bytes.ops single source: 指数扩容单次拷贝纪律 — 单次分配 + 直接写入小数位，
-    // 零拷贝 PAnsiChar Move / 尾部直写 Char，不 inline 循环体避免 I-Cache 膨胀。
+    // perf: single SetLength + zero-copy Move(s) via bytes.ops.BytesCopy/SpanToString single source (INV-5), O(n) vs O(n²) Result+concat.
+    // bytes.ops single source: 指数扩容单次拷贝纪律 — 单次分配 + BytesCopy inline 零拷贝直接写入小数位，尾部直写 Char，不 inline 循环体避免 I-Cache 膨胀。
     LIntLen := IntToBuffer(LInt, @LBuf[0]);
     if ADigits <= 0 then
     begin
@@ -165,7 +169,8 @@ var
       begin
         SetLength(Result, LIntLen + 1);
         Result[1] := '-';
-        if LIntLen > 0 then Move(LBuf[0], Result[2], LIntLen);
+        // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5)
+        if LIntLen > 0 then BytesCopy(Pointer(@Result[2]), @LBuf[0], SizeUInt(LIntLen));
       end
       else
         Result := BufferToString(@LBuf[0], LIntLen);
@@ -182,7 +187,8 @@ var
     end;
     if LIntLen > 0 then
     begin
-      Move(LBuf[0], Result[LPos], LIntLen);
+      // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5)
+      BytesCopy(Pointer(@Result[LPos]), @LBuf[0], SizeUInt(LIntLen));
       Inc(LPos, LIntLen);
     end;
     Result[LPos] := '.';

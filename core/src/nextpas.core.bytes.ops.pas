@@ -19,6 +19,7 @@ function SpanCompare(const A, B: TByteSpan): Integer; inline;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
@@ -312,6 +313,31 @@ begin
     Exit(-1);
   LResult := nextpas.core.simd.BytesIndexOf(AHaystack.Data, AHaystack.Len, ANeedle.Data, ANeedle.Len);
   Result := SizeInt(LResult);
+end;
+
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
+var
+  LPos, LFound, LLast: SizeInt;
+  LSlice: TByteSpan;
+begin
+  // single source: reuse SpanIndexOfSpan SIMD/Bounds (owner bytes.ops), forward-iterative keeps last hit; O(n) SIMD fast path vs naive O(n*m) Slice.Equals
+  if (ANeedle.Len = 0) or (ANeedle.Len > AHaystack.Len) then
+    Exit(-1);
+  LLast := -1;
+  LPos := 0;
+  while SizeUInt(LPos) <= AHaystack.Len - ANeedle.Len do
+  begin
+    LSlice := TByteSpan.Create(AHaystack.Data + SizeUInt(LPos), AHaystack.Len - SizeUInt(LPos));
+    LFound := SpanIndexOfSpan(LSlice, ANeedle);
+    if LFound < 0 then
+      Break;
+    LLast := LPos + LFound;
+    // overlapping allowed: step by 1
+    LPos := LLast + 1;
+    if SizeUInt(LPos) > AHaystack.Len then
+      Break;
+  end;
+  Result := LLast;
 end;
 
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean;

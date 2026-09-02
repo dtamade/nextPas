@@ -20,7 +20,7 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - 推荐请求构造入口是 `THttpRequestBuilder`；公开工厂白名单仅
   `NewRequest(Method, TUrl|string)` 与 `NewGetRequest`；多参 `NewRequest` 与
   `NewStreamingRequest` 已物理删除（Wave K surface freeze）。
-- 三入口（门面瘦身节奏）：`nextpas.core.http`（完整 umbrella，1914 行 >800 软阈但纯 re-export，见 `http.pas:1-60` 聚合注释与 CONTRACT §1.1 rhythm，`bytes.ops` 单源在 owner，热点 inline 薄转发 + 零拷贝视图，资源释放经 owner `Close`/`PoolClear`/`try/finally` 全路径）与 `nextpas.core.http.minimal`（薄门面；不拉产品 middleware 全家桶，~240 行）与 `nextpas.core.http.middlewares`（middleware 产品族子facade，~500 行，`bytes.ops` 单源直通 owner）；后续可按 `message/client/server/static/websocket/sse/cookie/stream/form` 再拆，守行为冻结+双绿+heaptrc。
+- 三入口→五facade节奏（门面瘦身）：`nextpas.core.http`（完整 umbrella，1914 行 >800 软阈但纯 re-export，见 `http.pas:1-65` 聚合注释与 CONTRACT §1.1 rhythm，实现经五子facade委托 `minimal/messages/transports/extensions/middlewares`，`bytes.ops` 单源在 owner，热点 inline 薄转发 + 零拷贝视图，资源释放经 owner `Close`/`PoolClear`/`try/finally` 全路径）与 `nextpas.core.http.minimal`（~201 行）与 `http.middlewares`（~500 行）以及 `http.messages`/`transports`/`extensions`（~420/~520/~520 行）；后续可按更细产品面再拆，守行为冻结+双绿+heaptrc。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。

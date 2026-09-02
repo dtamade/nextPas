@@ -40,6 +40,7 @@ function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean; inline;
@@ -166,6 +167,11 @@ end;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
 begin
   Result := nextpas.core.bytes.ops.SpanIndexOfSpan(AHaystack, ANeedle);
+end;
+
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.SpanLastIndexOfSpan(AHaystack, ANeedle);
 end;
 
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;

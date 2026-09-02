@@ -77,7 +77,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `log` | L3 | logging runtime | yes | L0-L2; `log.intf` is L0 seam | focused-runtime |
 | `mail` | L3 | mail/SMTP domain | yes | L0-L2 | focused-runtime |
 | `math` | L0 | scalar/math contracts | yes | L0 only | focused-runtime |
-| `mem` | L0 with debt | allocators/pools | yes | L0 only; explicit debt allowlist | source-contract |
+| `mem` | L0 | allocators/pools | yes | L0 only | source-contract, focused-runtime — debt zero closed (check_mem_l0_dependencies.sh KNOWN_DEBT=0; zero fs/text/os/path; base.utils CompareMem/Move/FillChar/CompareBytesOrdered via System.CompareByte/Move inline zero-copy single source, AlignUp/MulHash64/Log2UInt inline; FreeAndNil/try-finally not lost) |
 | `mime` | L2 | MIME format layer | yes | L0-L1 | focused-runtime |
 | `multipart` | L2 | multipart format | yes | L0-L1 | focused-runtime |
 | `net` | L2 | networking | yes | L0-L1 | focused-runtime |

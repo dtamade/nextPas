@@ -112,7 +112,7 @@ begin
   LLen := nextpas.core.text.number.FloatToBuffer(AValue, @LBuf[0]);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf[0], Pointer(Result)^, LLen);
+    nextpas.core.bytes.ops.BytesCopy(Pointer(Result), @LBuf[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy), single SetLength+BytesCopy, no locale
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
@@ -120,12 +120,12 @@ var
   LBuf: array[0..31] of AnsiChar;
   LLen: Int32;
 begin
-  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no locale scan }
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single BytesCopy via bytes.ops single source, no locale scan }
   if ADecimals < 0 then ADecimals := 0 else if ADecimals > 18 then ADecimals := 18;
   LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(ADecimals), @LBuf[0]);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf[0], Pointer(Result)^, LLen);
+    nextpas.core.bytes.ops.BytesCopy(Pointer(Result), @LBuf[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 function FormatFloat(const AFmt: string; const AValue: Double): string;
@@ -140,14 +140,14 @@ begin
     while (LI + LDecimals + 1 <= Length(AFmt)) and
           (AFmt[LI + LDecimals + 1] in ['0', '#']) do
       Inc(LDecimals);
-  { perf: owner text.number FloatToFixedBuffer zero-alloc, single Move, no Delete O(n²), no locale ',' scan }
+  { perf: owner text.number FloatToFixedBuffer zero-alloc, single BytesCopy via bytes.ops single source, no Delete O(n²), no locale ',' scan }
   if LDecimals > 0 then
     LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, Int32(LDecimals), @LBuf[0])
   else
     LLen := nextpas.core.text.number.FloatToFixedBuffer(AValue, 2, @LBuf[0]);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf[0], Pointer(Result)^, LLen);
+    nextpas.core.bytes.ops.BytesCopy(Pointer(Result), @LBuf[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 function BoolToStr(const AValue: Boolean): string;
@@ -330,11 +330,11 @@ end;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string; inline;
 var LBuf: array[0..31] of AnsiChar; LLen: Int32;
 begin
-  { perf: direct uppercase HEX_CHARS_UPPER via IntToHexBufferUpper, single Move, O(n) without second branch scan }
+  { perf: direct uppercase HEX_CHARS_UPPER via IntToHexBufferUpper, single BytesCopy via bytes.ops single source (zero-copy), O(n) without second branch scan }
   LLen := nextpas.core.text.number.IntToHexBufferUpper(AValue, @LBuf[0], ADigits);
   SetLength(Result, LLen);
   if LLen > 0 then
-    Move(LBuf[0], Pointer(Result)^, LLen);
+    nextpas.core.bytes.ops.BytesCopy(Pointer(Result), @LBuf[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;

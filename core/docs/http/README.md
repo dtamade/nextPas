@@ -41,7 +41,7 @@ middleware chaining, and a centralized internal transport registry.
 
 ```
 Facade:
-  nextpas.core.http              — full surface (stable umbrella; >800 行纯聚合，认知负荷已按子facade分流)
+  nextpas.core.http              — full surface (stable umbrella; 1914 行 `wc -l` >800 纯聚合豁免 `design-conventions.md:163`，实现经五子facade委托 `minimal/messages/transports/extensions/middlewares`，`bytes.ops:25/89` 单源 out-of-line，inline 仅薄转发 `design-conventions.md:125-131` 豁免，两层 inline 合并为单 owner 调用无 I-Cache 复制，认知负荷已按子facade分流)
   nextpas.core.http.minimal      — thin surface (types + router + server/client + chain, ~201 行)
   nextpas.core.http.messages     — messages facade (request/response + writers + redirects + errors + body readers, ~420 行)
   nextpas.core.http.transports   — transports facade (server/client factories + fetch helpers + TCP backend, ~520 行)
