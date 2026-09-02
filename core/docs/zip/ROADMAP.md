@@ -238,6 +238,9 @@
 ### S99 — 解压与口令单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
 - `reader.ZipExtractToBytesViaPayload/ZipExtractToBufferViaPayload/ZipOpenViaPayload` 单源化双 `ExtractIndex/ExtractToBuffer/OpenEntry` 的解压与口令守卫重复（`DecompressEntryVerified/DecompressEntryToBuffer` 与 `GuardPassword+ZipWrapEntryReader` 3×2 行 → 3×1 行），`IsDirectory` 与 `EInvalidOperationError` 语义守恒，`reader` 双形态共享解压内核（`Copy/Fetch` 载荷后统一 `common` 解压），12 门 + `bench_zip 221802` 可编译回归，`S85—S99` 十五单源平台期
 
+### S100 — FS 路径单次分配与平台期（1.0.1 巡检）· 性能/复用度 — 已落地
+- `fs.JoinZipPath/TrimTrailingSlash` 单源化 `ZipExtractToDirWithOptions` 的路径拼接热点（`ADestDir 2×Delete+concat+2×Delete 5分配 → JoinZipPath 1分配`，`LDestTrim` 预裁剪 + `SetLength+Move` 单次分配），目录 `IsDirectory` 语义守恒，`fs` 为打包/解包共享路径内核，12 门 + `bench_zip 221832` 可编译回归，`S85—S100` 十五单源+一性能平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -270,4 +273,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S99 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main eae251a` 已落地（S98→S99 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload` 十六单源（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S100 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 4b75d11` 已落地（S99→S100 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload` 十六单源 + `fs.JoinZipPath` 一性能（三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+FS路径） + AES 零堆栈。
