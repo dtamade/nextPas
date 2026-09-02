@@ -50,7 +50,8 @@ uses
   nextpas.core.git.native.revwalk,
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.util,
-  nextpas.core.collections.algorithms;
+  nextpas.core.collections.algorithms,
+  nextpas.core.collections.hashmap.swiss;
 
 function LocalTrim(const S: string): string; inline;
 begin
@@ -186,6 +187,20 @@ type
   TBlameLineArray = array of TBlameLineEntry;
   TBlameCacheEntry = record Oid: TGitOid; Lines: TStringArray; Sorted: TBlameLineArray; UCount: Integer; end;
   TBlameCache = array of TBlameCacheEntry;
+
+{ blame Oid→index map via L1 swiss: decouples from revwalk private TOidIndexMap }
+function BlameOidHash(const AOid: TGitOid): UInt32; inline;
+begin
+  Result := GitOidHash(AOid); // bytes.ops SpanHashFNV1a single source, zero-copy
+end;
+
+function BlameOidEqual(const A, B: TGitOid): Boolean; inline;
+begin
+  Result := GitOidSame(A, B); // bytes.ops SpanEqual single source, zero-copy
+end;
+
+type
+  TBlameOidMap = specialize TSwissTable<TGitOid, Integer>;
 
 function BlameLineLess(const A, B: TBlameLineEntry): Boolean; inline;
 begin
@@ -516,7 +531,7 @@ var
   BlameOids: array of TGitOid;
   Cache: TBlameCache;
   CacheCap, CacheCnt: SizeUInt;
-  CacheMap: TOidIndexMap;
+  CacheMap: TBlameOidMap;
   I, J, K: Integer;
   Kind: TGitObjectKind;
   Data: TBytes;
@@ -530,7 +545,7 @@ begin
   if LocalTrim(APath) = '' then raise EGitError.Create('blame: path empty');
   if Pos('/', APath) = 1 then raise EGitError.Create('blame: absolute path');
   Repo := TNativeRepository.Create(AGitDir);
-  CacheMap := TOidIndexMap.Create;
+  CacheMap := TBlameOidMap.Create(0, @BlameOidHash, @BlameOidEqual);
   try
     StartOid := ResolveStartOid(AGitDir, ARef);
     Peeled := PeelToCommit(Repo, StartOid);
@@ -559,7 +574,7 @@ begin
       Cache[CacheCnt].Lines := HeadLines;
       Cache[CacheCnt].Sorted := nil;
       Cache[CacheCnt].UCount := 0;
-      CacheMap.Add(HeadBlobOid, Integer(CacheCnt));
+      CacheMap.Put(HeadBlobOid, Integer(CacheCnt));
       Inc(CacheCnt);
     end;
     for I := 1 to High(Oids) do
@@ -571,7 +586,7 @@ begin
         for J := 0 to High(BlameOids) do BlameOids[J] := Oids[I];
         Continue;
       end;
-      if not CacheMap.TryGet(CurBlobOid, K) then
+      if not CacheMap.TryGetValue(CurBlobOid, K) then
       begin
         Data := Repo.ReadObject(CurBlobOid, Kind);
         if Kind = gokTree then Continue;
@@ -586,7 +601,7 @@ begin
         Cache[CacheCnt].Sorted := nil;
         Cache[CacheCnt].UCount := 0;
         K := Integer(CacheCnt);
-        CacheMap.Add(CurBlobOid, K);
+        CacheMap.Put(CurBlobOid, K);
         Inc(CacheCnt);
       end
       else

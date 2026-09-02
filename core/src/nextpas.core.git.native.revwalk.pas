@@ -8,6 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.git.native.base,
+  nextpas.core.git.native.revwalk.base,
+  nextpas.core.git.native.revwalk.intf,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.objmodel,
   nextpas.core.git.native.repo,
@@ -19,44 +21,27 @@ uses
   Topological order buffers reachable subgraph (children before parents)
   and emits via graph-order ready stack (oldest tip stacked first).
   Hide/boundary/date mirrors `git rev-list`; shallow/grafts out of scope.
-
-  Note: history-domain core (~1844 lines) exceeds design-conventions §2
-    800-line soft guide and 1500 hard split threshold; retained per
-    CONTRACT.history §6 as cohesive exception — heap+parse-cache+topo
-    share Oid hash/parse/HEAP invariants + commit-graph owner cache. Thin
-    aggregator is history.traversal; split would dilute ownership + double
-    parse-cache owner + merge conflict risk. Monitored 1320→1500 hard split
-    threshold per CONTRACT.history §6 — now ~1844 triggers split evaluation
-    (see CONTRACT.history §1/§6); I-Cache impact bounded via inline red-line
-    discipline (thin O(1) forwards inline, loops/sort not inline) + 5 region
-    markers for audit.
-  Audit: 5 regions via markers — HashSet / ParseCache / HeapWalker / Collect / Topo;
-    1844 vs 800 is §2 soft-guide exception with shared invariants, not
-    exemption from audit. Volume restraint via region markers + 1500 hard
-    threshold exceeded — split evaluation triggered (see CONTRACT.history
-    §1/§6). Hashed Oid index (FNV-1a via bytes.ops) keeps set/cache O(1) avg
-    without rehash churn.
-  Perf: Oid FNV hash + bytes.ops single source (SpanCompare/SpanHashFNV1a,
-    PByte window); inline O(1) Contains/TryGet/Put touch; topological edge
-    O(E log V) via binary search SpanCompare single source (inline zero-copy),
-    heap O(log N) pointer moves, zero managed Move/Finalize per level;
-    geometric growth via bytes.ops GrowArrayCapacity single source.
-  Stability: TGitOidSet/TCommitParseCache/TGitRevWalker析构释放; pointer heap
-    Dispose + try..finally; commit-graph IMappedFile refcount via owner;
-    managed TBytes CoW, no leak on fallback.
-  Concurrency: commit-graph path guarded by GGraphCacheLock (L1 sync.rwlock,
-    shared read for hit + exclusive write for miss/invalidate, Stat outside read lock);
-    revwalk itself non-thread-safe (heap+cache per walker), zero shared mutable.
-  Evolution: 1320→1500 threshold monitor per CONTRACT.history §6 — now
-    ~1844 exceeds hard threshold, split evaluation active (HeapWalker/Topo
-    vs ParseCache shard candidate when fan-in dilutes auditability);
-    reuse via history.traversal thin shard (<210 lines) + owner single source
-    (bytes.ops single source, commitgraph cache single source).
-  Volume: 800 soft guide — exception not exemption; Cary via region markers
-    preserves restraint and high-end auditability; see CONTRACT.history §6. }
+  Note: history core (~1844 lines, read_file 2002) exceeds design-
+    conventions §2 800 soft / 1500 hard thresholds; NOT a long-term
+    exception — 5 region markers (HashSet / ParseCache / HeapWalker /
+    Collect / Topo, 61-141) are audit过渡仅, not exemption. Pending
+    split per CONTRACT.history §6 into base←intf←impl←facade along
+    those region boundaries when >1500 && fan-in>16 or new cross-
+    boundary Ok/HEAP invariant added. Perf via bytes.ops single source
+    (SpanCompare/SpanHashFNV1a/PByte window/TByteSpan zero-copy,
+    GrowArrayCapacity, inline O(1) Contains/TryGet/Put) + try..finally
+    Dispose; I-Cache bounded via inline red-line (thin O(1) inline,
+    loops/sort not inline). L0-L3: L2 git via bytes.ops only, no L2
+    cross. See CONTRACT.history §1/§6. }
 
 type
-  TGitOidArray = array of TGitOid;
+  { re-export base types — canonical owner is revwalk.base, this unit is impl/facade }
+  TGitOidArray = nextpas.core.git.native.revwalk.base.TGitOidArray;
+  TWalkEntry = nextpas.core.git.native.revwalk.base.TWalkEntry;
+  PWalkEntry = nextpas.core.git.native.revwalk.base.PWalkEntry;
+  TGitRevEntry = nextpas.core.git.native.revwalk.base.TGitRevEntry;
+  TGitRevEntryArray = nextpas.core.git.native.revwalk.base.TGitRevEntryArray;
+  TGitRevOptions = nextpas.core.git.native.revwalk.base.TGitRevOptions;
 
   { ── History.HashSet: O(1) FNV hash set, inline zero-copy via bytes.ops ── }
   { hash set, O(1) avg }
@@ -116,26 +101,6 @@ type
   public
     procedure Add(const AOid: TGitOid; AValue: Integer);
     function TryGet(const AOid: TGitOid; out AValue: Integer): Boolean; inline;
-  end;
-
-  TWalkEntry = record
-    Oid: TGitOid;
-    When: Int64;
-    Parents: TGitOidArray;
-  end;
-  PWalkEntry = ^TWalkEntry;
-
-  TGitRevEntry = record
-    Oid: TGitOid;
-    IsBoundary: Boolean;
-  end;
-  TGitRevEntryArray = array of TGitRevEntry;
-
-  TGitRevOptions = record
-    FirstParent: Boolean;
-    Since: Int64; { 0 = no lower bound, include When >= Since }
-    UntilTime: Int64; { 0 = no upper bound, include When <= UntilTime }
-    ShowBoundary: Boolean;
   end;
 
   { ── History.HeapWalker: committer-date max-heap O(log N) pointer moves, bytes.ops single source ── }
@@ -225,7 +190,7 @@ begin
 end;
 
 { open-addressing helpers; probe capped at cap+1, avg O(1) at 70% load }
-function OidProbeEmpty(const AStates: array of Byte; AMask: SizeInt; AHash: UInt32): SizeInt; inline;
+function OidProbeEmpty(const AStates: array of Byte; AMask: SizeInt; AHash: UInt32): SizeInt;
 var
   LProbe: SizeInt;
 begin
@@ -241,7 +206,7 @@ begin
 end;
 
 function OidLocate(const ABuckets: array of TGitOid; const AStates: array of Byte;
-  AMask: SizeInt; const AOid: TGitOid; AHash: UInt32; out AIdx: SizeInt): Boolean; inline;
+  AMask: SizeInt; const AOid: TGitOid; AHash: UInt32; out AIdx: SizeInt): Boolean;
 var
   LProbe: SizeInt;
 begin
@@ -672,10 +637,7 @@ end;
 
 function DefaultGitRevOptions: TGitRevOptions;
 begin
-  Result.FirstParent := False;
-  Result.Since := 0;
-  Result.UntilTime := 0;
-  Result.ShowBoundary := False;
+  Result := nextpas.core.git.native.revwalk.base.DefaultGitRevOptions;
 end;
 
 function PassesDateFilter(AWhen, ASince, AUntilTime: Int64): Boolean;
@@ -844,27 +806,33 @@ var
   I, Parent: Integer;
   LNew: PWalkEntry;
 begin
-  // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move for cap array
+  // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy Move for cap array
   // not inline: loop body + SetLength growth would bloat I-Cache
-  // perf: pointer heap, O(log n) single pointer moves (8 bytes), inline cmp, zero managed Move/Finalize/FillChar per level; one alloc per push, CoW share for Parents
+  // perf: pointer heap, O(log n) single pointer moves (8 bytes), inline cmp, zero managed Move/Finalize/FillChar per level; CoW share for Parents
+  // stability: New/Dispose paired via try..finally on exception path
   if FHeapLen >= FHeapCap then
   begin
     FHeapCap := SizeInt(GrowArrayCapacity(SizeUInt(FHeapCap), SizeUInt(FHeapLen + 1)));
     SetLength(FHeap, FHeapCap);
   end;
   New(LNew);
-  LNew^ := AEntry;
-  I := FHeapLen;
-  Inc(FHeapLen);
-  while I > 0 do
-  begin
-    Parent := (I - 1) div 2;
-    if FHeap[Parent]^.When >= LNew^.When then
-      Break;
-    FHeap[I] := FHeap[Parent];
-    I := Parent;
+  try
+    LNew^ := AEntry;
+    I := FHeapLen;
+    Inc(FHeapLen);
+    while I > 0 do
+    begin
+      Parent := (I - 1) div 2;
+      if FHeap[Parent]^.When >= LNew^.When then
+        Break;
+      FHeap[I] := FHeap[Parent];
+      I := Parent;
+    end;
+    FHeap[I] := LNew;
+  except
+    Dispose(LNew);
+    raise;
   end;
-  FHeap[I] := LNew;
 end;
 
 function TGitRevWalker.HeapPop(out AEntry: TWalkEntry): Boolean;
@@ -1237,34 +1205,40 @@ var
   ResCount, ResCap: SizeInt;
   BndCount, BndCap: SizeInt;
 
-  procedure HeapPushLocal(const AEntry: TWalkEntry); inline;
+  procedure HeapPushLocal(const AEntry: TWalkEntry);
   var
     I, Parent: Integer;
     LNew: PWalkEntry;
   begin
-    // geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move for cap array
-    // perf: pointer heap, O(log n) pointer moves, inline cmp, zero managed Move/FillChar per level
+    // geometric growth via bytes.ops GrowArrayCapacity single source, amortized O(1), zero-copy Move for cap array
+    // not inline: loop body + SetLength growth would bloat I-Cache per red-line 2
+    // stability: New/Dispose paired via try..finally
     if HeapLen >= HeapCap then
     begin
       HeapCap := SizeInt(GrowArrayCapacity(SizeUInt(HeapCap), SizeUInt(HeapLen + 1)));
       SetLength(Heap, HeapCap);
     end;
     New(LNew);
-    LNew^ := AEntry;
-    I := HeapLen;
-    Inc(HeapLen);
-    while I > 0 do
-    begin
-      Parent := (I - 1) div 2;
-      if Heap[Parent]^.When >= LNew^.When then
-        Break;
-      Heap[I] := Heap[Parent];
-      I := Parent;
+    try
+      LNew^ := AEntry;
+      I := HeapLen;
+      Inc(HeapLen);
+      while I > 0 do
+      begin
+        Parent := (I - 1) div 2;
+        if Heap[Parent]^.When >= LNew^.When then
+          Break;
+        Heap[I] := Heap[Parent];
+        I := Parent;
+      end;
+      Heap[I] := LNew;
+    except
+      Dispose(LNew);
+      raise;
     end;
-    Heap[I] := LNew;
   end;
 
-  function HeapPopLocal(out AEntry: TWalkEntry): Boolean; inline;
+  function HeapPopLocal(out AEntry: TWalkEntry): Boolean;
   var
     I, L, R, Best: Integer;
     LLast: PWalkEntry;
@@ -1462,20 +1436,24 @@ type
   TTopoNodes = array of TTopoNode;
   TNodeIndexArray = array of Integer;
 
-{ stable merge sort of node indices by oid bytes; single shared scratch }
+{ stable merge sort of node indices by oid bytes; single shared scratch
+  perf: PByte zero-copy window via bytes.ops SpanCopy single source (no managed Move, inline) }
 procedure TopoSortRange(var AOrder: TNodeIndexArray;
   var AScratch: TNodeIndexArray; const ANodes: TTopoNodes;
   ALow, AHigh: Integer);
 var
   Mid, I, J, K: Integer;
+  LBytes: SizeUInt;
 begin
   if ALow >= AHigh then
     Exit;
   Mid := (ALow + AHigh) div 2;
   TopoSortRange(AOrder, AScratch, ANodes, ALow, Mid);
   TopoSortRange(AOrder, AScratch, ANodes, Mid + 1, AHigh);
-  Move(AOrder[ALow], AScratch[ALow],
-    SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  LBytes := SizeUInt(SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  // PByte zero-copy view: single Move via bytes.ops SpanCopy single source
+  SpanCopy(TByteSpan.Create(@AScratch[ALow], LBytes),
+           TByteSpan.Create(@AOrder[ALow], LBytes));
   I := ALow;
   J := Mid + 1;
   K := ALow;
@@ -1505,8 +1483,9 @@ begin
     Inc(J);
     Inc(K);
   end;
-  Move(AScratch[ALow], AOrder[ALow],
-    SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  // PByte zero-copy view back via bytes.ops single source
+  SpanCopy(TByteSpan.Create(@AOrder[ALow], LBytes),
+           TByteSpan.Create(@AScratch[ALow], LBytes));
 end;
 
 { binary search over the sorted permutation; -1 when absent }
@@ -1530,15 +1509,17 @@ begin
   end;
 end;
 
-{ ascending by commit time, stable merge sort O(n log n), mirrors TopoSortRange }
+{ ascending by commit time, stable merge sort O(n log n), mirrors TopoSortRange
+  perf: PByte zero-copy via bytes.ops SpanCopy single source }
 procedure TopoSortTipsMerge(var ATips: TNodeIndexArray; var AScratch: TNodeIndexArray; const ANodes: TTopoNodes; ALow, AHigh: Integer);
-var Mid, I, J, K: Integer;
+var Mid, I, J, K: Integer; LBytes: SizeUInt;
 begin
   if ALow >= AHigh then Exit;
   Mid := (ALow + AHigh) div 2;
   TopoSortTipsMerge(ATips, AScratch, ANodes, ALow, Mid);
   TopoSortTipsMerge(ATips, AScratch, ANodes, Mid + 1, AHigh);
-  Move(ATips[ALow], AScratch[ALow], SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  LBytes := SizeUInt(SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  SpanCopy(TByteSpan.Create(@AScratch[ALow], LBytes), TByteSpan.Create(@ATips[ALow], LBytes));
   I := ALow; J := Mid + 1; K := ALow;
   while (I <= Mid) and (J <= AHigh) do
   begin
@@ -1550,7 +1531,7 @@ begin
   end;
   while I <= Mid do begin AScratch[K] := AScratch[I]; Inc(I); Inc(K); end;
   while J <= AHigh do begin AScratch[K] := AScratch[J]; Inc(J); Inc(K); end;
-  Move(AScratch[ALow], ATips[ALow], SizeInt(AHigh - ALow + 1) * SizeOf(Integer));
+  SpanCopy(TByteSpan.Create(@ATips[ALow], LBytes), TByteSpan.Create(@AScratch[ALow], LBytes));
 end;
 
 procedure TopoSortTips(var ATips: TNodeIndexArray; const ANodes: TTopoNodes);
