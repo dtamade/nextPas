@@ -19,7 +19,10 @@ uses
   nextpas.core.git.native.clone,
   nextpas.core.git.native.checkout,
   nextpas.core.git.native.push,
-  nextpas.core.git.native.reset;
+  nextpas.core.git.native.reset,
+  nextpas.core.git.native.prune,
+  nextpas.core.git.native.clean,
+  nextpas.core.git.native.revparse;
 
 type
   TGitOid = nextpas.core.git.native.base.TGitOid;
@@ -127,6 +130,16 @@ function GitPushBranch(const ALocalGitDir, ARemoteGitDir, ABranchName: string): 
 
 function GitResetHard(const AGitDir, AWorkTree: string; const ATargetOid: TGitOid): TGitOid; overload; inline;
 function GitResetHard(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; overload; inline;
+
+function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
+
+function GitClean(const AGitDir, AWorkTree: string): TStringArray; overload; inline;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs: Boolean): TStringArray; overload; inline;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored: Boolean): TStringArray; overload; inline;
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; overload; inline;
+
+function GitRevParse(const AGitDir, ARev: string): TGitOid; inline;
+function GitRevParseCommit(const AGitDir, ARev: string): TGitOid; inline;
 
 implementation
 
@@ -433,6 +446,44 @@ end;
 function GitResetHard(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.reset.GitResetHard(AGitDir, AWorkTree, ATargetRef);
+end;
+
+function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
+begin
+  { perf: inline thin forward to owner prune; zero-copy TStringArray CoW, bytes.ops not needed, single-source owner via nextpas.core.git.native.prune }
+  Result := nextpas.core.git.native.prune.GitRemotePrune(ALocalGitDir, ARemoteName);
+end;
+
+function GitClean(const AGitDir, AWorkTree: string): TStringArray; inline;
+begin
+  { inline + zero-copy TStringArray CoW; single-source owner clean via bytes.ops scan, no alloc until delete }
+  Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree);
+end;
+
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs: Boolean): TStringArray; inline;
+begin
+  Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs);
+end;
+
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored: Boolean): TStringArray; inline;
+begin
+  Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs, ARemoveIgnored);
+end;
+
+function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; inline;
+begin
+  Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs, ARemoveIgnored, ADryRun);
+end;
+
+function GitRevParse(const AGitDir, ARev: string): TGitOid; inline;
+begin
+  { perf: inline + zero-copy TGitOid 20B Move via bytes.ops SpanCopy single source, owner revparse }
+  Result := nextpas.core.git.native.revparse.GitRevParse(AGitDir, ARev);
+end;
+
+function GitRevParseCommit(const AGitDir, ARev: string): TGitOid; inline;
+begin
+  Result := nextpas.core.git.native.revparse.GitRevParseCommit(AGitDir, ARev);
 end;
 
 end.

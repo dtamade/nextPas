@@ -16,7 +16,6 @@ uses
   nextpas.core.git.native,
   nextpas.core.git.native.objects,
   nextpas.core.git.native.staging,
-  nextpas.core.git.native.history,
   nextpas.core.git.native.history.traversal,
   nextpas.core.git.native.history.query,
   nextpas.core.git.native.history.ops,

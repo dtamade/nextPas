@@ -62,7 +62,7 @@ core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/
 core/src/nextpas.core.git.native.history.traversal.pas ← 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元，<210 行，inline 零拷贝 via bytes.ops）
 core/src/nextpas.core.git.native.history.query.pas      ← 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元，<260 行）
 core/src/nextpas.core.git.native.history.ops.pas        ← 历史·操作分片（shortlog/catfile/cherrypick/revert，4 单元，<180 行）
-core/src/nextpas.core.git.native.history.pas  ← 历史 umbrella 薄索引（<80 行，<380 阈，零转发仅 BC TGitOid，新代码一律分片直引 traversal/query/ops；预拆前 14 单元/464 行已按不变量域：revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert）
+core/src/nextpas.core.git.native.history.pas  ← **已移除**（umbrella 空壳已删除，新代码一律分片直引 traversal/query/ops；预拆前 14 单元/464 行已按域分片）
 core/src/nextpas.core.git.native.branches.pas ← 分支门面分片（branch/tag/stash/notes）
 core/src/nextpas.core.git.native.transport.pas ← 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset）
 core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect）

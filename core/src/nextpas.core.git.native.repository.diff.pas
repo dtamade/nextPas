@@ -714,8 +714,11 @@ var
   Line, APath, BPath, CurPath: string;
   OldLines, NewLines: nextpas.core.base.TStringArray;
   Hunks: THunkArray;
+  HunksCount, HunksCap: SizeUInt;
   CurHunk: TGitDiffHunk;
+  CurLinesCount, CurLinesCap: SizeUInt;
   InHunk: Boolean;
+  IsBin: Boolean;
   FullPath: string;
   NewContent: string;
   J, K, OldIdx, NewCount, NewCap, TotalHunkLines: Integer;
@@ -740,8 +743,12 @@ begin
   CurPath:='';
   CurHunk.Header:='';
   CurHunk.Lines:=nil;
+  CurLinesCount:=0;
+  CurLinesCap:=0;
   InHunk:=False;
   Hunks:=nil;
+  HunksCount:=0;
+  HunksCap:=0;
   for I:=0 to High(Lines) do
   begin
     Line:=Lines[I];
@@ -751,10 +758,19 @@ begin
       begin
         if InHunk then
         begin
-          SetLength(Hunks,Length(Hunks)+1);
-          Hunks[High(Hunks)]:=CurHunk;
+          // perf: DiffFlat preallocation single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), amortized O(1) append, zero-copy record Move, avoids O(n²) SetLength(Length+1) per hunk (10k hunk copy jitter); trim Lines to count before Move
+          SetLength(CurHunk.Lines, CurLinesCount);
+          if HunksCount>=HunksCap then
+          begin
+            HunksCap:=GrowArrayCapacity(HunksCap, HunksCount+1);
+            SetLength(Hunks, HunksCap);
+          end;
+          Hunks[HunksCount]:=CurHunk;
+          Inc(HunksCount);
+          CurHunk.Lines:=nil; CurLinesCount:=0; CurLinesCap:=0;
         end;
-        if Length(Hunks)>0 then
+        SetLength(Hunks, HunksCount);
+        if HunksCount>0 then
         begin
           FullPath:=PathJoin([Work,CurPath]);
           OldLines:=WorkTreeLinesOf(Work,CurPath);
@@ -808,9 +824,9 @@ begin
             on Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+CurrentExceptionMessage);
           end;
         end;
-        Hunks:=nil;
+        Hunks:=nil; HunksCount:=0; HunksCap:=0;
         CurHunk.Header:='';
-        CurHunk.Lines:=nil;
+        CurHunk.Lines:=nil; CurLinesCount:=0; CurLinesCap:=0;
         InHunk:=False;
       end;
       SPos:=Pos(' b/',Line);
@@ -825,29 +841,55 @@ begin
     begin
       if InHunk then
       begin
-        SetLength(Hunks,Length(Hunks)+1);
-        Hunks[High(Hunks)]:=CurHunk;
+        // perf: DiffFlat single source via bytes.ops GrowArrayCapacity, amortized O(1) per hunk, no O(n²) Length+1 (10k hunks)
+        SetLength(CurHunk.Lines, CurLinesCount);
+        if HunksCount>=HunksCap then
+        begin
+          HunksCap:=GrowArrayCapacity(HunksCap, HunksCount+1);
+          SetLength(Hunks, HunksCap);
+        end;
+        Hunks[HunksCount]:=CurHunk;
+        Inc(HunksCount);
       end;
       CurHunk.Header:=Line;
-      CurHunk.Lines:=nil;
+      CurHunk.Lines:=nil; CurLinesCount:=0; CurLinesCap:=0;
       InHunk:=True;
     end
     else if InHunk and (Length(Line)>0) and (Line[1] in [' ','+','-']) then
     begin
-      if IsBinaryHunk(CurHunk) then
+      // perf: binary guard bounded to CurLinesCount (actual) vs capacity Length(CurHunk.Lines) to avoid O(n²) slack scan; inline, zero-copy Pos
+      IsBin:=False;
+      for K:=0 to Integer(CurLinesCount)-1 do
+        if Pos('Binary', CurHunk.Lines[K])>0 then
+        begin IsBin:=True; Break; end;
+      if IsBin then
         Continue;
-      SetLength(CurHunk.Lines,Length(CurHunk.Lines)+1);
-      CurHunk.Lines[High(CurHunk.Lines)]:=Line;
+      // perf: DiffFlat single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), amortized O(1) per line, zero-copy string CoW, avoids O(n²) SetLength(Length+1) per hunk line (10k lines copy jitter); inline hot
+      if CurLinesCount>=CurLinesCap then
+      begin
+        CurLinesCap:=GrowArrayCapacity(CurLinesCap, CurLinesCount+1);
+        SetLength(CurHunk.Lines, CurLinesCap);
+      end;
+      CurHunk.Lines[CurLinesCount]:=Line;
+      Inc(CurLinesCount);
     end;
   end;
   if CurPath<>'' then
   begin
     if InHunk then
     begin
-      SetLength(Hunks,Length(Hunks)+1);
-      Hunks[High(Hunks)]:=CurHunk;
+      // perf: DiffFlat single source via bytes.ops GrowArrayCapacity, amortized O(1) per hunk, trim Lines to count
+      SetLength(CurHunk.Lines, CurLinesCount);
+      if HunksCount>=HunksCap then
+      begin
+        HunksCap:=GrowArrayCapacity(HunksCap, HunksCount+1);
+        SetLength(Hunks, HunksCap);
+      end;
+      Hunks[HunksCount]:=CurHunk;
+      Inc(HunksCount);
     end;
-    if Length(Hunks)>0 then
+    SetLength(Hunks, HunksCount);
+    if HunksCount>0 then
     begin
       FullPath:=PathJoin([Work,CurPath]);
       OldLines:=WorkTreeLinesOf(Work,CurPath);

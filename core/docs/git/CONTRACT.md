@@ -1,11 +1,11 @@
 # nextpas.core.git 代码契约
 
-**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片；双编译器 stub：源码 `uses SysUtils` 等经 `units/<target>/` 名称桥接，无 `{$IFDEF}` 分叉，stub 仅过渡、随 `nextpas.core` 自有类型落地自然废弃）
-**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免；88 源/40+ 能力聚合已按不变量域拆 6 shard（`design-conventions.md §2` 单单元 >800 必拆），各 shard 行阈与 umbrella 索引由 `scripts/git-contract-check.sh` C5 自动门禁——非人工巡检）
-**拆分生效**：2026-09-02（按业务不变量域独立契约，umbrella 仅索引与跨域不变量；分域不变量、门面阈值与 SLO 归各 shard 权威）
+**模块路径**：`core/src/nextpas.core.git*.pas`（88 个源文件，含 6 个 native 门面 + 10 个 bindings 域分片 + `scripts/git-contract-check.sh` C5 自动门禁；双编译器 stub：源码 `uses SysUtils` 等经 `units/<target>/` 名称桥接，无 `{$IFDEF}` 分叉，stub 仅过渡、随 `nextpas.core` 自有类型落地自然废弃）
+**层级**：L2（依赖 L0-L1: base, text, bytes, io；native 子家族另用同层单向 fs/compress/hash/zlib/checksum owner，经 core/docs/core-module-registry.md 显式豁免；88 源/40+ 能力聚合已按不变量域拆 6 shard（`design-conventions.md §2` 单单元 >800 必拆），各 shard 行阈与 umbrella 索引由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值——非人工巡检，属演进监控点；1→88 源演进经 C5 固化）
+**拆分生效**：2026-09-02（按业务不变量域独立契约，umbrella 仅索引与跨域不变量；分域不变量、门面阈值与 SLO 归各 shard 权威；总索引阈值由 C5 硬门禁维持，属演进监控点）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-29
-**版本**: 2.0
+**最后更新**：2026-09-02
+**版本**: 2.1
 
 ---
 
@@ -100,7 +100,7 @@
 | git.native.history.traversal | 历史·遍历分片（revwalk/commitgraph/reflog/revparse，4 单元 <210 行，inline 零拷贝 via bytes.ops） |
 | git.native.history.query | 历史·查询分片（log/describe/diff/blame/mergebase/show，6 单元 <260 行） |
 | git.native.history.ops | 历史·操作分片（shortlog/catfile/cherrypick/revert，4 单元 <180 行） |
-| git.native.history | 历史 umbrella 薄索引（<80 行，<380 阈，零转发仅 BC `TGitOid`；分片直引 `traversal/query/ops` 各 <260 行，总门面<600 指 umbrella 档位；预拆前 14 单元/464 行已按不变量域 revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert 分片，新代码禁 `uses history` 全量聚合） |
+| git.native.history | **已移除**（umbrella 空壳已删除，零聚合；历史能力经 `history.{traversal,query,ops}` 3 分片直引，各 <260 行，预拆前 14 单元/464 行已按域分片，新代码禁 `uses history`） |
 | git.native.branches | 分支门面分片（branch/tag/stash/notes） |
 | git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
 | git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect） |
@@ -160,18 +160,19 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 
 ### 1.1.3 按不变量域独立合约拆分（2026-09-02 起）
 
-88 源/40+ 能力聚合已超越单 CONTRACT 可审计阈（`design-conventions.md §2` 800 行软阈），按业务不变量域独立契约拆分，本文件仅作总索引与跨域不变量权威；门禁由 `scripts/git-contract-check.sh` C5 固化（各 shard 单单元 ≤800 行，门面 shard 按域分档 <250-600 行，umbrella 仅索引，超阈即红）：
+88 源/40+ 能力聚合已超越单 CONTRACT 可审计阈（`design-conventions.md §2` 800 行软阈），按业务不变量域独立契约拆分，本文件仅作总索引与跨域不变量权威；门禁由 `scripts/git-contract-check.sh` C5 硬门禁维持阈值（各 shard 单单元 ≤800 行，门面 shard 按域分档 <250-600 行，umbrella 仅索引，超阈即红），属演进监控点（1→88 源含 6 native 门面 + C5 自动门禁固化）：
 
 | 不变量域 | 权威 CONTRACT | 门面 shard | 行阈 | 能力 |
 |---|---|---|---|---|
 | 对象层 | `CONTRACT.objects.md` | `git.native.objects` | <400 行 | oid/zlib/loose/pack/refs/objmodel/repo/write，零拷贝 via `bytes.ops`/`checksum.adler32`/`compress` |
 | 暂存区 | `CONTRACT.staging.md` | `git.native.staging` | <500 行 | index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch 薄委派至 `text.wildmatch` |
-| 历史 | `CONTRACT.history.md` | `git.native.history.{traversal,query,ops}` + `history` umbrella | 各 <260 行 / umbrella <380 行 / 总 <600 行 | revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert 等，20+类型/40+inline，预拆前 14 单元/464 行已按 traversal/query/ops 域拆分 |
+| 历史 | `CONTRACT.history.md` | `git.native.history.{traversal,query,ops}`（`history` umbrella 已移除） | 各 <260 行 / 总 <650 行 | revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert 等，20+类型/40+inline，预拆前 14 单元/464 行已按 traversal/query/ops 域拆分 |
 | 分支 | `CONTRACT.branches.md` | `git.native.branches` | <300 行 | branch/tag/stash/notes |
 | 传输 | `CONTRACT.transport.md` | `git.native.transport` | <600 行 | config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset |
 | 扩展 | `CONTRACT.extensions.md` | `git.native.extensions` | <400 行 | archive/submodule/mailmap/trailer/bundle/grep/bisect + attributes |
 
 > **权威规则**：分域内不变量、阈值与门面规模以各 shard CONTRACT 为准；跨域不变量、选择层与总体 88 源清单以本 umbrella 为准。新增能力先反哺 owner（bytes/compress/checksum/wildmatch），分域仅薄编排。
+> **演进监控点**：总索引 1→88 源（含 6 native 门面 + 10 bindings 域分片）及各 shard 行阈（objects <400 / staging <500 / history 各 <260 & umbrella <80 & 总 <650 / branches <300 / transport <600 / extensions <400 / native <250 / bindings 门面 <150 & 分片 <800）均由 `scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检；阈值接近 800 软阈或 fan-in 显著时再评估拆分（见各 shard §6 与本 umbrella §8）。
 
 ### 1.2 核心接口
 
@@ -278,7 +279,7 @@ end;
 | `test_git_native` | native 子家族 118 用例（零 libgit2，覆盖 loose/pack/refs/objmodel/repo/write/index/cachetree/status/ignore/revwalk/commitgraph/reflog/stash/worktree/config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset/prune/clean/revparse/notes/branch/tag/log/describe/diff/blame/mergebase/show/shortlog/catfile/lsfiles/cherrypick/revert/archive/submodule/mailmap/trailer/attributes/bundle/grep/bisect/common/util/wildmatch，对齐 git 黄金） | 同上，118 用例零 libgit2 + 双 pin 零泄漏（`make -C core/tests/nextpas.core.git/test_git_native clean test` 经 `common.mk HEAPTRC_GATE=1` 审） |
 | `test_git_pure_manager` | 纯门面 10 用例，零 `libgit2`（Init/StatusEmpty/StatusWithFile/HeadAndLookup/FactoryGbAutoCompat/Discover/Clone/CommitOnHead/AddWorktree/SetVerifySSL，经 `factory.NewGitManager(gbNative)` 运行时零 `libgit2` + 直连 `native.manager.TNativeGitManager.Create` 三零（`fpc -va Loading libgit2` 零命中，`inline` 值类型枚举零拷贝，`bytes.ops` 单源，`try..finally` 资源不丢），C4 门禁：`grep` 零命中 + `fpc -va Loading` 双重实检） | 同上，双 pin 零泄漏 + C4 双重闭环（`grep` + `fpc -va Loading`），`core/tests/common.mk:75-78` `haltonnotreleased+log` |
 
-门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中，双重）；`core/tests/common.mk HEAPTRC_GATE=1` → `HEAPTRC='haltonnotreleased,log=*.heaptrc'` 双 pin（`grep '^Heap dump by heaptrc unit'` 存在性防真空 + `grep '^0 unfreed memory blocks : 0$'` 零泄漏 + `haltonnotreleased` `exit 203`，FPC trunk `FlushFunc` 设备语义：`pipe/tty` 逐写刷新、`file` 缓冲丢失，故走环境变量双通道）自动化，全量 `20+5+118+10=153` 用例 `0 unfreed`；`make hygiene` + `git diff --check` 必要门禁；`build/verify_local.sh` 聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。
+门禁：`scripts/git-contract-check.sh` C4 已闭环（`fpc -va Loading.*libgit2` 实检 + `grep` 零命中，双重）+ C5 硬门禁已闭环（88 源/6 native 门面/10 bindings 分片阈值自动维持，属演进监控点，超阈即红——非人工巡检）；`core/tests/common.mk HEAPTRC_GATE=1` → `HEAPTRC='haltonnotreleased,log=*.heaptrc'` 双 pin（`grep '^Heap dump by heaptrc unit'` 存在性防真空 + `grep '^0 unfreed memory blocks : 0$'` 零泄漏 + `haltonnotreleased` `exit 203`，FPC trunk `FlushFunc` 设备语义：`pipe/tty` 逐写刷新、`file` 缓冲丢失，故走环境变量双通道）自动化，全量 `20+5+118+10=153` 用例 `0 unfreed`；`make hygiene` + `git diff --check` 必要门禁；`build/verify_local.sh` 聚合 `git-contract-check`，以 `CONTRACT.md` 本节与 `PURE-BACKEND.md` §5 为准。
 
 ---
 
@@ -292,3 +293,12 @@ end;
 - **门禁（可回归，双锚+噪声感知防漂移）**：基线锚为提交态 `core/benchmarks/nextpas.core.git/bench_git/baseline.json`（`TBaselineManager.SaveToFile/LoadFromFile`，`build/bench-git.json` 仅本地落盘，不为唯一真源），`COMPARE-GO-RUST` 同机 A/B 归一（Pascal vs Go `hash/adler32` vs Rust `adler` crate 同 `64K` 零拷贝 `PByte` 路径，`xlang` 解析差值归一）；判定为 `ratio>1.10` 且超出 `2×CV (StdDev/NsPerOp)`，不稳定样本 `CV>10%` 需 `ratio>1.15`，样本配置 `10@200ms + 3 warmup + adaptive warmup CV<5%`（原 `5@50ms` 易受噪声误判，已加倍）；再叠加绝对 SLO 红线，双重收敛（本地 JSON 漂移由提交态基线 + 绝对 SLO 双锚校正，单侧失真不掩回归），`make -C core/benchmarks/nextpas.core.git/bench_git run` 可复现。
 - **稳定性**：`IMappedFile` 资源由接口引用计数拥有，`TPackFile` 析构释放；`bench` 初始化往返校验异常 `raise EGitError` 不泄漏（`TBytes` 受控，`try..finally` 不丢，`GReuseBuf` 复用不丢）
 - **层级复核**：L2（依赖 L0: base, text, fs；native 子家族另用 compress/hash/io L1 owner）—— 与 §1 首部一致，`bench_git` 仅复用 owner 能力，不自建压缩/哈希实现；校验见 `bench_git/compare_go` 与 `compare_rust` 同机 A/B 报告（`bench-compare` 汇总 `SaveToJSON` + `xlang` 对比）
+
+---
+
+## 8. 演进监控（C5 硬门禁，阈值自动维持）
+
+- **总索引**：1→88 源演进已固化（88 `nextpas.core.git*.pas`，含 6 native 门面 shard + 10 bindings 域分片 + `native` 薄网关 `<250` 行 + `git.pas` 门面）；`scripts/git-contract-check.sh` C5 硬门禁自动维持，超阈即红，非人工巡检。
+- **分片阈值（硬门禁，`wc -l` 行阈）**：`objects <400` / `staging <500` / `history.traversal|query|ops` 各 `<260` & `history` umbrella `<80` & 总 `<650` / `branches <300` / `transport <600` / `extensions <400` / `bindings` 门面 `<150` & 各分片 `<800`（含 `types/structs/consts/c/oid/odb/refs/commit/repo/diff/extra` 各 `<800`）；单源 `bytes.ops`/`checksum.adler32`/`compress`/`text.wildmatch` 零拷贝 `inline` 约束同步门禁。
+- **触发与处置**：任一 shard 单单元 `>800` 或门面超域分档阈值即 C5 失败；接近阈值（>85%）即评估再拆分（按不变量域薄编排，复用 owner，不自建压缩/哈希/通配）；`commitgraph.pas` 约 1320 行已标记为历史域内聚例外（见 `CONTRACT.history.md §6`），不计入 800 阈但受 region 标记与独立门禁约束。
+- **资源与性能同门禁**：`IMappedFile`/`TPackFile`/`TBytes` 零泄漏（`try..finally` + 接口计数，`HEAPTRC` 双 pin）、`inline` 零拷贝 `PByte+Len/TByteSpan`（`bytes.ops` 单源）与 SLO 双锚（§7）同 C5 聚合于 `build/verify_local.sh`。

@@ -13,8 +13,7 @@ uses
   nextpas.core.git.native.ignore,
   nextpas.core.git.native.worktree,
   nextpas.core.git.native.lsfiles,
-  nextpas.core.git.native.clean,
-  nextpas.core.git.native.prune;
+  nextpas.core.git.native.clean;
 
 type
   TGitIndexEntry = nextpas.core.git.native.index.TGitIndexEntry;
@@ -89,8 +88,6 @@ function GitClean(const AGitDir, AWorkTree: string): TStringArray; overload; inl
 function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs: Boolean): TStringArray; overload; inline;
 function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored: Boolean): TStringArray; overload; inline;
 function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; overload; inline;
-
-function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
 
 implementation
 
@@ -258,11 +255,6 @@ end;
 function GitClean(const AGitDir, AWorkTree: string; ARemoveDirs, ARemoveIgnored, ADryRun: Boolean): TStringArray; inline;
 begin
   Result := nextpas.core.git.native.clean.GitClean(AGitDir, AWorkTree, ARemoveDirs, ARemoveIgnored, ADryRun);
-end;
-
-function GitRemotePrune(const ALocalGitDir, ARemoteName: string): TStringArray; inline;
-begin
-  Result := nextpas.core.git.native.prune.GitRemotePrune(ALocalGitDir, ARemoteName);
 end;
 
 end.

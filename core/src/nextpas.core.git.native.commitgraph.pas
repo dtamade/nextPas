@@ -13,16 +13,20 @@ uses
   nextpas.core.hash.sha1,
   nextpas.core.git.native.base;
 
-{ Commit-graph v1 reader+writer+cache (SHA-1, single file) for local revwalk acceleration.
-  Note: cohesive history-domain core (~1320 lines, reader+writer+cache+collection)
-  exceeds design-conventions §2 800-line soft guide; retained per CONTRACT history shard
-  umbrella — thin aggregator is history.traversal, split would dilute ownership/double-cache.
-  Audit: internal sections Cache/Reader/Writer/Collect via region markers; 1320 vs 800 is
-  §2 soft-guide exception (cohesive history invariants CGPH/OIDF/OIDL/CDAT/EDGE shared) —
-  shard split would double mmap cache ownership + duplicate mmap owner & merge-conflict risk
-  (see CONTRACT.history.md §1/§6).
-  Perf: mmap zero-copy via io.mapped + bytes.ops single source (SpanCopy/SpanCompare, PByte window);
-  Stability: IMappedFile refcount + managed TBytes, no leak on validate fallback.
+{ Commit-graph v1 reader+writer+cache (SHA-1) for local revwalk acceleration.
+  Note: history-domain core (~1320 lines) exceeds design-conventions §2
+    800-line soft guide; retained per CONTRACT history shard as cohesive
+    exception — reader+writer+cache+collect share CGPH/OIDF/OIDL/CDAT/EDGE.
+    Thin aggregator is history.traversal; split would dilute ownership.
+
+  Audit: regions Cache/Reader/Writer/Collect via markers; 1320 vs 800 is
+    §2 soft-guide exception (shared invariants). Shard split would double
+    mmap cache owner + merge conflict risk (see CONTRACT.history §1/§6).
+    Hashed Dir index (FNV-1a via bytes.ops) keeps cache O(1) avg.
+
+  Perf: mmap zero-copy via io.mapped + bytes.ops single source
+    (SpanCopy/SpanCompare, PByte window); inline O(1) touch.
+  Stability: IMappedFile refcount + managed TBytes, no leak on fallback.
 
   File layout honours the spec consumed by git's commit-graph.c and
   libgit2's commit_graph.c: header "CGPH" v1 oid_version 1, chunk TOC
@@ -122,6 +126,7 @@ type
 type
   TGraphCacheEntry = record
     Dir: string;
+    DirHash: UInt32; // FNV-1a via bytes.ops single source, pre-filters string compare
     Path: string;
     MTime: Int64;
     Size: Int64;
@@ -130,9 +135,13 @@ type
   end;
 
 const
-  // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU via Seq max, LRU via min Seq scan
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 16 bounds fd/page-cache vs 16xheap (multi-tenant, multi-repo concurrent reuse avoids frequent mmap rebuild — 8→16 halves thrash for 8-repo fan-out, O(Cap) scan trivial 16 vs 8), O(1) touch/invalidate (no linear shift), single interface Move per op via bytes.ops single source; bench gate bench_git CommitGraph/CacheHit|Miss (10@200ms + 2×CV + 10-15% jitter dual-anchor, see CONTRACT.history.md §3)
-  // stability: IMappedFile interface refcount auto releases on eviction/swap (managed), no leak; large files not duplicated via TBytes refcount
+  // LRU 16-cap bounds fd/page-cache vs heap; MRU via Seq max, LRU via min Seq
+  // perf: mmap-backed IMappedFile zero-copy PByte via io.mapped owner,
+  //   no heap TBytes dup, OS page-reclaimable; 16 halves thrash vs 8 for
+  //   8-repo fan-out, O(1) touch/invalidate, single Move per op via
+  //   bytes.ops single source; bench gate CommitGraph/CacheHit|Miss
+  //   10@200ms + 2×CV + 10-15% jitter dual-anchor (see CONTRACT.history §3)
+  // stability: IMappedFile refcount auto releases on eviction/swap; no leak
   GGraphCacheCap = 16;
 
 { ── History.Cache: LRU 16-cap, O(1) touch, O(Cap) victim scan trivial (16×UInt64 <30ns) ── }
@@ -141,19 +150,35 @@ var
   GGraphCache: array of TGraphCacheEntry;
   GGraphCacheSeq: UInt64;
 
-function FindGraphCache(const ADir: string): Integer;
-var I: Integer;
+function GitDirHash(const ADir: string): UInt32; inline;
 begin
-  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=16 keeps O(Cap) trivial (16 vs 8 halves multi-repo thrash, 16*Dir compare still <1µs)
+  // perf: inline + zero-copy single-source via bytes.ops SpanHashFNV1a
+  //   (FNV-1a via base.utils HashFNV1a, batch-8, no alloc), hashed
+  //   pre-filter avoids O(Cap) string compares on miss
+  if Length(ADir) = 0 then
+    Exit(UInt32(2166136261));
+  Result := SpanHashFNV1a(TByteSpan.Create(PByte(@ADir[1]), SizeUInt(Length(ADir))));
+end;
+
+function FindGraphCache(const ADir: string): Integer;
+var I: Integer; LHash: UInt32;
+begin
+  // not inline: scan loop per design-conventions § inline red line 2
+  // hashed pre-filter via bytes.ops SpanHashFNV1a single source: O(Cap)
+  // UInt32 compare first, string equality only on hash hit (avg O(1))
+  LHash := GitDirHash(ADir);
   for I := 0 to High(GGraphCache) do
-    if GGraphCache[I].Dir = ADir then Exit(I);
+    if (GGraphCache[I].DirHash = LHash) and (GGraphCache[I].Dir = ADir) then Exit(I);
   Result := -1;
 end;
 
 function FindLRUCacheIndex: Integer; inline;
 var I, LRU: Integer; MinSeq: UInt64;
 begin
-  // perf: inline + O(Cap) min-scan (Cap=16 trivial, 16*UInt64 compare <30ns, no allocation); avoids linear shift + N interface copies (single overwrite); O(Cap) scan is LRU victim selection only on miss+full, not hit path; volatility gate via bench_git CacheHit/Miss 10@200ms dual-anchor (see CONTRACT.history.md §3)
+  // perf: inline + O(Cap) min-scan (Cap=16 trivial <30ns, no alloc)
+  //   avoids linear shift + N copies; victim scan only on miss+full,
+  //   not hit path; gate bench_git CacheHit|Miss 10@200ms dual-anchor
+  //   (see CONTRACT.history §3)
   Result := -1;
   if Length(GGraphCache) = 0 then Exit;
   LRU := 0;
@@ -169,8 +194,9 @@ end;
 
 procedure TouchGraphCache(const AIdx: Integer); inline;
 begin
-  // perf: inline + O(1) LRU tick bump, zero-copy Seq update, no array shift, no N interface AddRef/Release jitter (single tick vs Cap copies); O(1) hit promotion, no scan
-  // stability: keeps IMappedFile alive via interface refcount, no leak; zero-copy PByte view via io.mapped owner
+  // perf: inline + O(1) LRU tick bump, zero-copy Seq update, no shift,
+  //   no N AddRef/Release jitter; O(1) hit promotion
+  // stability: keeps IMappedFile alive via refcount; zero-copy PByte view
   if (AIdx < 0) or (AIdx >= Length(GGraphCache)) then Exit;
   Inc(GGraphCacheSeq);
   if GGraphCacheSeq = 0 then GGraphCacheSeq := 1; // avoid 0 wrap
@@ -182,8 +208,8 @@ var Idx: Integer;
 begin
   Idx := FindGraphCache(AGitDir);
   if Idx < 0 then Exit;
-  // perf: O(1) swap-with-last, single interface Move (one AddRef/Release), no linear shift + N copies; zero-copy via refcount
-  // stability: managed record swap releases evicted Mapped via refcount on overwrite + Finalize on shrink, no leak
+  // perf: O(1) swap-with-last, single Move (one AddRef/Release); zero-copy
+  // stability: swap releases evicted Mapped via refcount + Finalize; no leak
   if Idx <> High(GGraphCache) then
     GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
   SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
@@ -670,16 +696,18 @@ begin
   end;
   if Idx < 0 then
   begin
-    // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1) no shift, single interface Move
-    // perf: O(Cap) min-scan (Cap=16 trivial, <30ns) + single overwrite via bytes.ops GrowArrayCapacity single source, avoids N interface copies jitter; bench volatility gate CommitGraph/CacheHit|Miss 10@200ms + 2×CV guard
-    // stability: overwritten slot's old Mapped released via assignment, no leak
+    // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1)
+    // perf: O(Cap) min-scan (Cap=16 trivial <30ns) + single overwrite via
+    //   bytes.ops GrowArrayCapacity single source; bench gate 10@200ms + 2×CV
+    // stability: overwritten slot old Mapped released via assignment, no leak
     if Length(GGraphCache) >= GGraphCacheCap then
     begin
       Idx := FindLRUCacheIndex; // O(Cap) scan (16 trivial), single overwrite
     end
     else
     begin
-      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=16 — clamp overshoot and keep logical len
+      // perf: geometric growth via bytes.ops GrowArrayCapacity single source
+      //   (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), bounded Cap=16
       Idx := Length(GGraphCache);
       SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
       if Length(GGraphCache) > GGraphCacheCap then
@@ -688,11 +716,15 @@ begin
         SetLength(GGraphCache, Idx + 1);
     end;
     GGraphCache[Idx].Dir := AGitDir;
-  end;
+    GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
+  end
+  else
+    // keep hash coherent if Dir reused (swap-with-last may have moved entry)
+    GGraphCache[Idx].DirHash := GitDirHash(AGitDir);
   GGraphCache[Idx].Path := Path;
   GGraphCache[Idx].MTime := Info.ModTime;
   GGraphCache[Idx].Size := Info.Size;
-  GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap duplication, OS reclaimable
+  GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap dup
   // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies)
   TouchGraphCache(Idx);
   AGraph := TCommitGraph.CreateFromMapped(Mapped);

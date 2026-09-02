@@ -481,6 +481,7 @@ var
   BlameOids: array of TGitOid;
   CacheOids: TGitOidArray;
   CacheLines: array of TStringArray;
+  CacheCap, CacheCnt: SizeUInt;
   I, J, K: Integer;
   Kind: TGitObjectKind;
   Data: TBytes;
@@ -518,12 +519,15 @@ begin
     for I := 0 to High(BlameOids) do BlameOids[I] := Oids[0];
     // blob cache: maps blob Oid -> lines, single source text.strings split, avoids duplicate Read+Split for unchanged file
     // commit-graph reuse: Infos[] already caches one-parse-per-commit via Repo.Read+GitParseCommit (mirrors revwalk TCommitParseCache discipline, commit-graph when available via GitCollectCommits)
-    CacheOids := nil; CacheLines := nil;
+    CacheOids := nil; CacheLines := nil; CacheCap := 0; CacheCnt := 0;
     // seed cache with HEAD blob to avoid re-read on equality fast path
     if not IsZeroOid(HeadBlobOid) then
     begin
-      SetLength(CacheOids, 1); SetLength(CacheLines, 1);
-      CacheOids[0] := HeadBlobOid; CacheLines[0] := HeadLines; // CoW share, zero-copy
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per distinct blob, avoids O(n²) SetLength(Length+1) churn on 500+ commit blame; zero-copy CoW share for HeadLines, parallel Oid+Lines arrays share Cap/Cnt
+      CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
+      SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap);
+      CacheOids[CacheCnt] := HeadBlobOid; CacheLines[CacheCnt] := HeadLines; // CoW share, zero-copy
+      Inc(CacheCnt);
     end;
 
     // walk older commits: head vs each older (newest->oldest, so first matches -> newer, later overwrites -> oldest)
@@ -540,10 +544,10 @@ begin
       end;
       // cache lookup (linear probe over distinct blobs, typically small; avoids re-inflate+SplitLines)
       FoundCache := False;
-      for K := 0 to High(CacheOids) do
+      for K := 0 to Integer(CacheCnt) - 1 do
         if GitOidSame(CacheOids[K], CurBlobOid) then
         begin
-          PrevLines := CacheLines[K]; // CoW share
+          PrevLines := CacheLines[K]; // CoW share, zero-copy
           FoundCache := True;
           Break;
         end;
@@ -554,10 +558,15 @@ begin
         S := BytesToString(Data);
         PrevLines := SplitLines(S);
         // add to cache (CoW share, managed, bounded by distinct blobs <= C)
-        SetLength(CacheOids, Length(CacheOids) + 1);
-        SetLength(CacheLines, Length(CacheLines) + 1);
-        CacheOids[High(CacheOids)] := CurBlobOid;
-        CacheLines[High(CacheLines)] := PrevLines;
+        // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline hot, O(1) amortized, zero-copy TGitOid Move (20B) + CoW TStringArray share, avoids O(n²) SetLength(Length+1) reallocation on 500+ commits; parallel arrays share Cap/Cnt, capacity stored in array Length single source, stability: managed, Repo.Free in finally
+        if CacheCnt >= CacheCap then
+        begin
+          CacheCap := GrowArrayCapacity(CacheCap, CacheCnt + 1);
+          SetLength(CacheOids, CacheCap); SetLength(CacheLines, CacheCap);
+        end;
+        CacheOids[CacheCnt] := CurBlobOid;
+        CacheLines[CacheCnt] := PrevLines; // CoW share, zero-copy
+        Inc(CacheCnt);
       end;
       Matches := ComputeMatches(PrevLines, HeadLines);
       for J := 0 to High(Matches) do

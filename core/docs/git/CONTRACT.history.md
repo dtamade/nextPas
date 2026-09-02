@@ -1,12 +1,12 @@
 # nextpas.core.git — 历史契约（history）
 
-**模块路径**：`core/src/nextpas.core.git.native.{revwalk,commitgraph,reflog,revparse,log,describe,diff,blame,mergebase,show,shortlog,catfile,cherrypick,revert}.pas` + `nextpas.core.git.native.history.{traversal,query,ops}.pas` 3 分片 + `nextpas.core.git.native.history.pas` umbrella
+**模块路径**：`core/src/nextpas.core.git.native.{revwalk,commitgraph,reflog,revparse,log,describe,diff,blame,mergebase,show,shortlog,catfile,cherrypick,revert}.pas` + `nextpas.core.git.native.history.{traversal,query,ops}.pas` 3 分片（`nextpas.core.git.native.history.pas` umbrella 已移除）
 **层级**：L2（L0-L1: base, bytes, text, fs, io；依赖 objects 域 `repo/objmodel/pack`）
 **Owner**：git lane
 **不变量域**：历史遍历与查询（revwalk / commit-graph / 日志 / 差异 / 归因 / 合并基）
 
 ## 1. 范围与阈值
-- 源聚合：14 单元 + 3 分片 + 1 umbrella（`native.history`），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；umbrella 为薄索引 <80 行（总 CONTRACT 阈 <380 行，umbrella 自身零转发仅 `deprecated TGitOid` BC 别名，总门面指 umbrella 档位 <600，已移除 46 inline 全量转发）；新代码一律分片直引（`history.traversal / query / ops`）以维持复用度与极简网关，umbrella 仅 BC 索引；历史层不自建对象/压缩，仅复用 owner（bytes.ops 单源）。
+- 源聚合：14 单元 + 3 分片（`native.history` umbrella 已移除，零聚合），按不变量域预拆：`traversal`（revwalk/commitgraph/reflog/revparse，4 单元，<210 行）`query`（log/describe/diff/blame/mergebase/show，6 单元，<260 行）`ops`（shortlog/catfile/cherrypick/revert，4 单元，<180 行）；历史伞已删除（原 <80 行/总门面<600，已移除 46 inline 转发），新代码一律分片直引（`history.traversal / query / ops`）零转发零分配；历史层不自建对象/压缩，仅复用 owner（bytes.ops 单源）。
 - Commit-graph 单文件 `nextpas.core.git.native.commitgraph.pas` 约 1320 行超 `design-conventions §2` 800 行软阈，属**历史域内聚例外**（reader+writer+cache+collect 共享 CGPH/OIDF/OIDL/CDAT/EDGE 不变量与 mmap owner）；已加内部 region 标记 Cache/Reader/Writer/Collect 以保分层可审计性，拆分会稀释 ownership 并引入 double-cache / 合入冲突，故保留单文件，演进见 §6。
 
 ## 2. 不变量
@@ -28,9 +28,9 @@
 ## 5. 与总约关系
 - 本域权威：遍历/差异/归因语义以本文件为准；跨域仍以总 CONTRACT 为准。
 - 缺能力先反哺 owner：树扁平/delta 能力归 `bytes.ops` 与 `native.objects`，历史仅聚合。
-- 薄网关约束：`history` umbrella 已去聚合化（46 forwards 移除），fan-in 经分片直引度量；持续监控阈值（umbrella <380 / shards 各 <260，`scripts/git-contract-check.sh` C5）接近 800 软阈即再拆分。
+- 薄网关约束：`history` umbrella 已移除（46 forwards 移除后空壳删除），fan-in 经分片直引度量；持续监控阈值（shards 各 <260，`scripts/git-contract-check.sh` C5）接近 800 软阈即再拆分。
 
 ## 6. 演进监控
-- 600 行阈为 umbrella 单文件软阈（非 shards 累加），当前 shards 210+260+180=~650 为不变量域自然分片；umbrella 薄至 <80 行后总聚合度稀释消除。
+- 600 行阈为 umbrella 单文件软阈（非 shards 累加），当前 shards 210+260+180=~650 为不变量域自然分片；umbrella 已移除（原 <80 行）后总聚合度稀释消除。
 - `commitgraph.pas` 1320 行超 800 软阈为已评审例外（Cache/Reader/Writer/Collect 内聚共享 CGPH 解析与 mmap owner，region 标记保可审计性）；拆分前需权衡稀释 ownership 与合入冲突风险（double-cache/重复 mmap owner），阈值接近 1500 或分片直引 fan-in 显著时再行拆分。
-- 新增历史能力先归 owner（bytes/compress/checksum），分片仅薄编排 inline 零拷贝；超 80 行即告警review。Commit-graph 多仓缓存波动由 §3 `CommitGraph/CacheHit|Miss` bench 双锚门禁覆盖。
+- 新增历史能力先归 owner（bytes/compress/checksum），分片仅薄编排 inline 零拷贝；分片超 260 行即告警 review。Commit-graph 多仓缓存波动由 §3 `CommitGraph/CacheHit|Miss` bench 双锚门禁覆盖。
