@@ -52,6 +52,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
+  nextpas.core.mem.arena.local,
   nextpas.core.mem.base;
 
 const
@@ -87,6 +88,7 @@ type
     Lens: PWordArr;
   end;
   POrderSortData = ^TOrderSortData;
+  PSizeInt = ^SizeInt;
 
 function CompareOrder(const A, B: SizeUInt; Data: Pointer): SizeInt;
 var
@@ -124,9 +126,11 @@ var
   N, I, J: SizeUInt;
   K: SizeUInt;
   BucketIdx, BucketCount: SizeUInt;
-  BucketsHead: array of SizeInt;
-  SlotNext: array of SizeInt;
+  BucketsHead: PSizeInt;
+  SlotNext: PSizeInt;
   Probe: SizeInt;
+  DedupArena: TLocalArena;
+  NeedArena: SizeUInt;
   TotalInput: SizeUInt;
   StrLen: UInt64;
   StrTabBase, DataStart, Cur, EndData: UInt64;
@@ -216,50 +220,65 @@ begin
       Target := High(SizeUInt);
     { 容量策略单源：TResPackDedupBuckets.BucketCountFor via BytesNextCapacity inline 零拷贝，MIN256 MAX65536 控热点，单源防漂移 }
     BucketCount := TResPackDedupBuckets.BucketCountFor(Target);
-    { 去重分桶：单次扁平分配，无逐桶 SetLength*2 小堆 churn。
-      BucketsHead[BucketIdx] 为链头(-1=空)，SlotNext 串链(slot 索引)，平均 0.5 槽/桶，O(1) 期望。 }
-    SetLength(BucketsHead, BucketCount);
-    SetLength(SlotNext, N);
-    for I := 0 to BucketCount - 1 do BucketsHead[I] := -1;
-    for I := 0 to N - 1 do SlotNext[I] := -1;
+    { 去重分桶：arena 单 slab 双数组复用，零双堆分配(原 BucketsHead 256KB+SlotNext N*8 双 SetLength 重复堆 churn)，
+      单次 TLocalArena 分配(BucketCount+N)*SizeOf(SizeInt)，两视图零拷贝 inline 索引，平均 0.5 槽/桶 O(1)期望，
+      10k 条目峰值 256KB+80KB 合一 336KB 单块，复用 arena 免重复堆分配，try..finally 稳定释放不丢资源。 }
+    BucketsHead := nil;
+    SlotNext := nil;
+    DedupArena := nil;
     if N > 0 then
-      for I := 0 to N - 1 do
-      begin
-        J := ALayout.Order[I];
-        ALayout.EntrySlots[J] := SizeUInt(-1);
-        BucketIdx := SizeUInt(ALayout.FnvBuf[J]) and (BucketCount - 1);
-        Probe := BucketsHead[BucketIdx];
-        while Probe <> -1 do
+    begin
+      if not TryMulSizeUInt(BucketCount + N, SizeUInt(SizeOf(SizeInt)), NeedArena) then
+        raise EResPackTooLarge.Create('respack: dedup arena size overflow');
+      DedupArena := TLocalArena.Create(NeedArena);
+      try
+        BucketsHead := PSizeInt(DedupArena.Alloc(BucketCount * SizeUInt(SizeOf(SizeInt))));
+        SlotNext := PSizeInt(DedupArena.Alloc(N * SizeUInt(SizeOf(SizeInt))));
+        if (BucketsHead = nil) or (SlotNext = nil) then
+          raise EResPackTooLarge.Create('respack: dedup arena alloc failed');
+        for I := 0 to BucketCount - 1 do BucketsHead[I] := -1;
+        for I := 0 to N - 1 do SlotNext[I] := -1;
+        for I := 0 to N - 1 do
         begin
-          K := SizeUInt(Probe);
-          { 去重回验：bytes.ops.SpanEqual inline 零拷贝 TByteSpan 视图→MemEqual SIMD 单源，fnv+size 双重预滤后才逐字节比对，O(1) 期望；零堆拷贝，无最坏 O(n) 拷贝开销 }
-          if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
-            and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
-            and ((AEntries[J].DataSize = 0)
-              or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
-                TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+          J := ALayout.Order[I];
+          ALayout.EntrySlots[J] := SizeUInt(-1);
+          BucketIdx := SizeUInt(ALayout.FnvBuf[J]) and (BucketCount - 1);
+          Probe := BucketsHead[BucketIdx];
+          while Probe <> -1 do
           begin
-            ALayout.EntrySlots[J] := K;
-            Break;
+            K := SizeUInt(Probe);
+            { 去重回验：bytes.ops.SpanEqual inline 零拷贝 TByteSpan 视图→MemEqual SIMD 单源，fnv+size 双重预滤后才逐字节比对，O(1) 期望；零堆拷贝，无最坏 O(n) 拷贝开销 }
+            if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
+              and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
+              and ((AEntries[J].DataSize = 0)
+                or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
+                  TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+            begin
+              ALayout.EntrySlots[J] := K;
+              Break;
+            end;
+            Probe := SlotNext[K];
           end;
-          Probe := SlotNext[K];
+          if ALayout.EntrySlots[J] = SizeUInt(-1) then
+          begin
+            Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
+            ALayout.Slots[SlotCount].Offset := Cur;
+            ALayout.Slots[SlotCount].SrcIdx := J;
+            if NeedFnv then
+              ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
+            else
+              ALayout.Slots[SlotCount].Fnv := 0;
+            SlotNext[SlotCount] := BucketsHead[BucketIdx];
+            BucketsHead[BucketIdx] := SizeInt(SlotCount);
+            ALayout.EntrySlots[J] := SlotCount;
+            Cur := Cur + UInt64(AEntries[J].DataSize);
+            Inc(SlotCount);
+          end;
         end;
-        if ALayout.EntrySlots[J] = SizeUInt(-1) then
-        begin
-          Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
-          ALayout.Slots[SlotCount].Offset := Cur;
-          ALayout.Slots[SlotCount].SrcIdx := J;
-          if NeedFnv then
-            ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
-          else
-            ALayout.Slots[SlotCount].Fnv := 0;
-          SlotNext[SlotCount] := BucketsHead[BucketIdx];
-          BucketsHead[BucketIdx] := SizeInt(SlotCount);
-          ALayout.EntrySlots[J] := SlotCount;
-          Cur := Cur + UInt64(AEntries[J].DataSize);
-          Inc(SlotCount);
-        end;
+      finally
+        DedupArena.Free;
       end;
+    end;
   end
   else if N > 0 then
     for I := 0 to N - 1 do

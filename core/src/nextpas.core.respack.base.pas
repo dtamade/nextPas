@@ -280,7 +280,6 @@ end;
 constructor EResPackCorrupted.CreateStep(const AStep: Integer; const AOp,
   APath, ADetail: string);
 begin
-  FStep := AStep;
   inherited CreateCtx(AOp, APath, 'respack: validation step '
     + ResPackUIntToStr(UInt32(AStep)) + ' failed: ' + ADetail);
   FStep := AStep;

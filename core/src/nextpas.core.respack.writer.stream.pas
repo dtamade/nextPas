@@ -1,8 +1,8 @@
 unit nextpas.core.respack.writer.stream;
 
-{** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+头。
+{** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+头(阈值守卫 8MiB)。
   首遍复用 writer.layout 单源计算 Total/槽位/去重（INV-R5 确定性同 ResPackBuild），
-  次遍分段经 AWrite 回调：头/index/string 合批(TBytes RAII托管自动释放) → 槽间隙零填(WriteZeros inline小间隙单回调快道/4K零页零拷贝) → data 零拷贝 Move 分段 → digest，
+  次遍分段经 AWrite 回调：头/index/string 合批(TBytes RAII托管自动释放，超 8MiB 阈值守卫防数百 MB 头对峰值冲击) → 槽间隙零填(WriteZeros 小间隙 inline 快道/4K零页零拷贝 + 大间隙外联 Loop 守 §2 红线2) → data 零拷贝 Move 分段 → digest，
   零额外 Total 缓冲；ResPackBuildStreamSize 仅首遍取 Total 零分配。 }
 
 {$I nextpas.core.settings.inc}
@@ -30,24 +30,23 @@ uses
   nextpas.core.respack.writer.builder,
   nextpas.core.respack.writer.layout;
 
+const
+  { 头块 inline 阈值：8 MiB。12.8M 条目时 HeadSize=40+N*40+StrLen 可达数百 MB，单次 SetLength 会推高峰值至 500MB+失 KB 级承诺；
+    阈值守卫显式 EResPackTooLarge 拒绝超限头，保持流式峰值 ~1×+头(≤8MiB) 稳定；超阈需头分段能力，反哺 mem.memory_map/io.mapped owner，不私自引入 FS/mmap。 }
+  RESPACK_STREAM_MAX_HEAD: SizeUInt = 8 * 1024 * 1024;
+
 { 零填充分段写入：复用 bytes.ops 全局零页单源(.bss 4K)，无栈分配/无重复 FillChar，零拷贝分段直写；inline 热路径 + 小间隙单回调快道(≤4K)，大间隙4K切片控单次syscall尺寸；外联守 design-conventions §2 红线2 }
 function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
 begin
   Result := Assigned(AOpts.DigestFunc);
 end;
 
-procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+{ 大间隙零填外联体：含 while 循环，禁 inline 守 §2 红线2，控 I-Cache 复制膨胀；由 inline 快道 delegat }
+procedure WriteZerosLoop(const AWrite: TResPackWriteProc; ACount: UInt64);
 var
   N: UInt64;
   L: SizeUInt;
 begin
-  if ACount = 0 then Exit;
-  { perf: inline消除调用开销 + 零拷贝 BYTES_ZERO_PAGE 单源；小间隙(对齐16/4典型≤15)单次AWrite快道避免while开销，大间隙4K切片复用同页零拷贝，碎片化布局小粒度回调不放大为多页切片 }
-  if ACount <= BYTES_ZERO_PAGE_SIZE then
-  begin
-    AWrite(@BYTES_ZERO_PAGE[0], SizeUInt(ACount));
-    Exit;
-  end;
   N := ACount;
   while N > 0 do
   begin
@@ -55,6 +54,19 @@ begin
     AWrite(@BYTES_ZERO_PAGE[0], L);
     Dec(N, L);
   end;
+end;
+
+{ 小间隙快道 inline：≤4K 单次 AWrite 零拷贝，热点对齐 16/4 典型≤15 消除调用开销；>4K 外联 Loop 守红线2 }
+procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+begin
+  if ACount = 0 then Exit;
+  { perf: inline消除调用开销 + 零拷贝 BYTES_ZERO_PAGE 单源；小间隙单回调快道避免while开销，大间隙委托外联 Loop 复用同页零拷贝 }
+  if ACount <= BYTES_ZERO_PAGE_SIZE then
+  begin
+    AWrite(@BYTES_ZERO_PAGE[0], SizeUInt(ACount));
+    Exit;
+  end;
+  WriteZerosLoop(AWrite, ACount);
 end;
 
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
@@ -76,8 +88,11 @@ begin
     N := L.N;
     HeadSize := L.DataStart;
     { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。
-      RAII托管：TBytes接口式托管自动释放，异常安全无GetMem/FreeMem手动路径；inline零拷贝证据见bytes.ops/builder。 }
+      峰值仅 ~头（KB 级，阈值守卫 8MiB），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。
+      RAII托管：TBytes接口式托管自动释放，异常安全无GetMem/FreeMem手动路径；inline零拷贝证据见bytes.ops/builder。
+      阈值守卫：12.8M 上限时头部可达数百 MB，超 8MiB 时拒绝以保峰值稳定，需头分段时反哺 mem.memory_map/io.mapped owner。 }
+    if HeadSize > UInt64(RESPACK_STREAM_MAX_HEAD) then
+      raise EResPackTooLarge.Create('respack.stream: head too large (>8MiB) – threshold guard for peak stability; head chunking required for extreme scales');
     SetLength(HeadBuf, SizeUInt(HeadSize));
     if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
     ResPackWriterFillHead(Head, AEntries, AOpts, L);

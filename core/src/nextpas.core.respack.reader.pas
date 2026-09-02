@@ -1,11 +1,9 @@
 unit nextpas.core.respack.reader;
 
-{** @desc respack 解析器：八步校验清单 + 索引二分查找。
-  校验步骤号对应 FORMAT.md「Reader 校验清单」；不变量见 CONTRACT INV-R2/R3/R4/R7。
-  string table 边界为推导值：基址 = IndexOffset+Count×40，上界 = min(DataOffset)。
-  零拷贝视图：FData/FDigests 为外部 blob 零拷贝指针，不拥有所有权；
-  调用方须保证 blob 生命期覆盖 TResPack (至 Close)，堆场景以 TBytes 持有或转交
-  vfs.embedded AOwnsBlob，见 CONTRACT §5；提前释放导致悬垂访问属调用方违规。 }
+{** @desc respack reader: 8-step validation + binary search.
+  Steps per FORMAT.md reader checklist; invariants CONTRACT INV-R2/R3/R4/R7.
+  String table: base = IndexOffset+Count*40, upper = min(DataOffset).
+  Non-owning view: see CONTRACT §5. }
 
 {$I nextpas.core.settings.inc}
 
@@ -17,11 +15,10 @@ uses
   nextpas.core.bytes.ops;
 
 type
-  { 零拷贝只读视图：FData 为外部 blob 零拷贝指针（非拥有），调用方保活至 Close；
-    悬垂防护见 CONTRACT §5。 }
+  { Non-owning view — caller keeps blob alive until Close (CONTRACT §5). }
   TResPack = record
   private
-    FData: PByte;
+    FData: PByte; // non-owning; do not free
     FSize: SizeUInt;
     FOpen: Boolean;
     FHdr: TResPackHeader;
@@ -37,9 +34,9 @@ type
     function CompareStoredToStored(const AA, AB: SizeUInt): Integer;
     function CompareCachedEntries(const AA, AB: TResPackEntry): Integer;
     function Search(const APath: string; out AIdx: SizeUInt): Boolean;
-    { 零拷贝视图单源 helper：LE 解码已在上层完成，此处仅做 PByte+Len 零拷贝构造；
-      StoredPathSpan/StoredPathSpanOf 唯一收敛点，inline 零分配，复用 bytes.ops 单源。 }
+    { Path view helper via bytes.ops (inline, zero-copy). }
     function PathSpanRaw(const AOff: UInt32; const ALen: Word): TByteSpan; inline;
+    procedure RequireOpen; inline;
 
   public
     { 八步校验后可用；任一失败 raise EResPackCorrupted }
@@ -61,9 +58,7 @@ type
     function ContentPtr(const AEntry: TResPackEntry): PByte; inline;
     function DigestPtr(const AIdx: SizeUInt): PByte;
     function HasDigests: Boolean; inline;
-    { 零拷贝路径视图单源：TByteSpan 唯一视图（PByte+Len 零拷贝），复用 bytes.ops.SpanCompare/SpanToString 单源；
-      二分缓存查询视图，单次 LE 解码+视图构造（StoredPathSpan 单源 DRY via PathSpanRaw），inline 零拷贝零分配；供 embedded 零分配二分/前缀复用
-      LowerBound 含 while 二分循环，守 design-conventions 红线 2 禁 inline，避 I-Cache 复制膨胀 }
+    { Path span view via bytes.ops; LowerBound not inline (loop). }
     function StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
     function LowerBound(const APath: string): SizeUInt;
     function ComparePathAt(const AIdx: SizeUInt; const APath: string): Integer;
@@ -71,8 +66,12 @@ type
 
 implementation
 
+uses
+  nextpas.core.respack.writer.layout;
+
 type
   TResPackEntries = array of TResPackEntry;
+  TDistinct = record Off: UInt64; Size: UInt64; end;
 
 function TResPack.GetCount: SizeUInt;
 begin
@@ -84,15 +83,27 @@ begin
   Result := FDigests <> nil;
 end;
 
+procedure TResPack.RequireOpen; inline;
+begin
+  if not FOpen or (FData = nil) then
+    raise EResPackCorrupted.CreateCtx('open', '', 'respack: not open or blob released (CONTRACT §5)');
+end;
+
 function TResPack.ContentPtr(const AEntry: TResPackEntry): PByte;
 begin
+  RequireOpen;
+  if AEntry.DataOffset + AEntry.Size > FSize then
+    raise EResPackCorrupted.CreateCtx('content', '', 'respack: data range beyond blob');
   Result := FData + SizeUInt(AEntry.DataOffset);
 end;
 
 function TResPack.DigestPtr(const AIdx: SizeUInt): PByte;
 begin
+  RequireOpen;
   if FDigests = nil then
     raise EResPackCorrupted.CreateCtx('digest', '', 'respack: pack has no digest section');
+  if AIdx >= Count then
+    raise EResPackCorrupted.CreateCtx('digest', '', 'respack: digest index out of range');
   Result := FDigests + AIdx * RESPACK_DIGEST_SIZE;
 end;
 
@@ -122,6 +133,8 @@ function TResPack.StoredPathSpan(const AIdx: SizeUInt): TByteSpan; inline;
 var
   Base: PByte;
 begin
+  if AIdx >= Count then
+    raise EResPackCorrupted.CreateCtx('path', '', 'respack: index out of range');
   Base := FData + SizeUInt(FHdr.IndexOffset) + AIdx * RESPACK_ENTRY_SIZE;
   Result := PathSpanRaw(RdU32LE(Base), RdU16LE(Base + 4));
 end;
@@ -207,10 +220,7 @@ begin
     raise EResPackCorrupted.CreateStep(4, 'buffer truncated versus blobTotal');
 end;
 
-{ O(n) data 区间重叠校验：单遍扫描，零排序，CONTRACT §6 O(n) 兑现。
-  writer 布局按 path 排序顺序分配槽位，distinct 区间按首次出现单调递增；
-  dedup 共享槽位（同 offset+size）经哈希去重免检，零拷贝 TByteSpan 单源不变。
-  10k 条目省 IntroSort O(n log n) 比较与 SortedIdx 分配，单次线性零额外拷贝。 }
+{ Data overlap — O(n) hash, CONTRACT §6; distinct intervals monotonic. }
 procedure CheckDataOverlapON(const ACached: array of TResPackEntry;
   const AStrTabEnd: UInt64);
 var
@@ -218,8 +228,7 @@ var
   BucketCount: SizeUInt;
   BucketsHead: array of SizeInt;
   SlotNext: array of SizeInt;
-  DistinctOff: array of UInt64;
-  DistinctSize: array of UInt64;
+  Distinct: array of TDistinct;
   DistinctCount: SizeUInt;
   LastEnd: UInt64;
   BucketIdx: SizeUInt;
@@ -228,41 +237,44 @@ var
   E: TResPackEntry;
 begin
   if Length(ACached) <= 1 then Exit;
-  { 桶容量：2×N 幂次，复用 bytes.ops.BytesNextCapacity 单源，封顶 64K 控 256KB 头 }
-  BucketCount := 256;
-  if SizeUInt(Length(ACached)) * 2 > BucketCount then
-    BucketCount := BytesNextCapacity(BucketCount, SizeUInt(Length(ACached)) * 2);
-  if BucketCount > 65536 then BucketCount := 65536;
+  BucketCount := TResPackDedupBuckets.BucketCountFor(SizeUInt(Length(ACached)) * 2);
   SetLength(BucketsHead, BucketCount);
   SetLength(SlotNext, Length(ACached));
-  SetLength(DistinctOff, Length(ACached));
-  SetLength(DistinctSize, Length(ACached));
-  for I := 0 to BucketCount - 1 do BucketsHead[I] := -1;
-  for I := 0 to SizeUInt(High(SlotNext)) do SlotNext[I] := -1;
-  DistinctCount := 0;
-  LastEnd := AStrTabEnd;
-  for I := 0 to SizeUInt(High(ACached)) do
-  begin
-    E := ACached[I];
-    if E.Size = 0 then Continue;
-    BucketIdx := (SizeUInt(E.DataOffset) xor SizeUInt(E.DataOffset shr 32) xor SizeUInt(E.Size)) and (BucketCount - 1);
-    Probe := BucketsHead[BucketIdx];
-    IsDup := False;
-    while Probe <> -1 do
+  SetLength(Distinct, Length(ACached));
+  try
+    if BucketCount > 0 then
+      FillChar(BucketsHead[0], BucketCount * SizeOf(SizeInt), $FF);
+    if Length(SlotNext) > 0 then
+      FillChar(SlotNext[0], Length(SlotNext) * SizeOf(SizeInt), $FF);
+    DistinctCount := 0;
+    LastEnd := AStrTabEnd;
+    for I := 0 to SizeUInt(High(ACached)) do
     begin
-      if (DistinctOff[SizeUInt(Probe)] = E.DataOffset) and (DistinctSize[SizeUInt(Probe)] = E.Size) then
-      begin IsDup := True; Break; end;
-      Probe := SlotNext[SizeUInt(Probe)];
+      E := ACached[I];
+      if E.Size = 0 then Continue;
+      BucketIdx := (SizeUInt(E.DataOffset) xor SizeUInt(E.DataOffset shr 32) xor SizeUInt(E.Size)) and (BucketCount - 1);
+      Probe := BucketsHead[BucketIdx];
+      IsDup := False;
+      while Probe <> -1 do
+      begin
+        if (Distinct[SizeUInt(Probe)].Off = E.DataOffset) and (Distinct[SizeUInt(Probe)].Size = E.Size) then
+        begin IsDup := True; Break; end;
+        Probe := SlotNext[SizeUInt(Probe)];
+      end;
+      if IsDup then Continue;
+      if E.DataOffset < LastEnd then
+        raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
+      Distinct[DistinctCount].Off := E.DataOffset;
+      Distinct[DistinctCount].Size := E.Size;
+      SlotNext[DistinctCount] := BucketsHead[BucketIdx];
+      BucketsHead[BucketIdx] := SizeInt(DistinctCount);
+      Inc(DistinctCount);
+      LastEnd := E.DataOffset + E.Size;
     end;
-    if IsDup then Continue;
-    if E.DataOffset < LastEnd then
-      raise EResPackCorrupted.CreateStep(5, 'data sections overlap');
-    DistinctOff[DistinctCount] := E.DataOffset;
-    DistinctSize[DistinctCount] := E.Size;
-    SlotNext[DistinctCount] := BucketsHead[BucketIdx];
-    BucketsHead[BucketIdx] := SizeInt(DistinctCount);
-    Inc(DistinctCount);
-    LastEnd := E.DataOffset + E.Size;
+  finally
+    SetLength(BucketsHead, 0);
+    SetLength(SlotNext, 0);
+    SetLength(Distinct, 0);
   end;
 end;
 
@@ -485,6 +497,7 @@ end;
 
 function TResPack.PathOf(const AEntry: TResPackEntry): string; inline;
 begin
+  RequireOpen;
   Result := SpanToString(StoredPathSpanOf(AEntry));
 end;
 
@@ -494,12 +507,12 @@ var
   C: Integer;
   Query: TByteSpan;
 begin
+  RequireOpen;
   Lo := 0;
   Hi := Count;
   if Hi = 0 then Exit(0);
   Query := TByteSpan.FromStr(APath);
-  { 零拷贝单源 DRY：复用 StoredPathSpan 唯一视图（PByte+Len，单次 LE 解码+Span 构造 via PathSpanRaw，零分配），
-    复用 bytes.ops.SpanCompare 单源与 TByteSpan.FromStr 单源（零拷贝视图工厂 inline 零分配）；二分 14 次比较≈14 次视图构造；外联守红线 2（while 二分循环禁 inline，避 I-Cache 膨胀） }
+  { Binary search via StoredPathSpan + SpanCompare (bytes.ops); not inline. }
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
@@ -517,6 +530,7 @@ var
   Query: TByteSpan;
   S: TByteSpan;
 begin
+  RequireOpen;
   Query := TByteSpan.FromStr(APath);
   S := StoredPathSpan(AIdx);
   Result := SpanCompare(S, Query);

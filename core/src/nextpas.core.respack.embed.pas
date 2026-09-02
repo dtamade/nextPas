@@ -271,9 +271,21 @@ end;
 function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions; const AUnitName: string): TBytes;
 var
-  Body, Head, Tail: TBytes;
+  Body: TBytes;
   Total: SizeUInt;
   Dst: PByte;
+
+  procedure WriteStr(const S: string); inline;
+  var
+    L: SizeInt;
+  begin
+    L := Length(S);
+    if L = 0 then
+      Exit;
+    BytesCopy(Dst, PAnsiChar(S), SizeUInt(L)); // bytes.ops 单源 inline 零拷贝
+    Inc(Dst, L);
+  end;
+
 begin
   if not ResPackValidIdent(AUnitName) then
     raise EResPackError.Create('respack.embed: UnitName must be a Pascal ' +
@@ -284,29 +296,25 @@ begin
   // 阈值前置单源于 embed.limits 独立模块（同 IncSource，同策略 0 取默认 4MiB，早拒避免三段分配超大临时分配）
   ResPackRequireIncSize(ABlob.Size, ResPackEffectiveIncLimit(AOpts.MaxBlobBytes));
   Body := ResPackEmbedIncSource(ABlob, AOpts);
-  Head := StringToBytes('unit ' + AUnitName + ';' + #10 +
-    '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
-  Tail := StringToBytes(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
-  // 通用文本组装单源：与 writer.builder GetMem(Total)+分段 BytesCopy 单源收敛，
-  // 单次 SetLength(Total)+分段 BytesCopy inline 零拷贝（bytes.ops 单源，无额外分配），
-  // 替代多段二次分配拼接，确定性一致且无双驻留
-  Total := SizeUInt(Length(Head)) + SizeUInt(Length(Body)) + SizeUInt(Length(Tail));
+  // 单次精确预分配直写：消除 Head/Tail 经 StringToBytes 的3次临时堆分配（中间字符串拼接+两段 TBytes），仅一次 SetLength(Total) 后分段 BytesCopy 直写，bytes.ops 单源 inline 零拷贝，与 writer.builder 单源收敛
+  Total := SizeUInt(Length(Body))
+    + SizeUInt(Length('unit '))
+    + SizeUInt(Length(AUnitName))
+    + SizeUInt(Length(';' + #10 + '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10))
+    + SizeUInt(Length(#10 + 'implementation' + #10 + #10 + 'end.' + #10));
   SetLength(Result, Total);
   if Total = 0 then
     Exit;
   Dst := @Result[0];
-  if Length(Head) > 0 then
-  begin
-    BytesCopy(Dst, @Head[0], SizeUInt(Length(Head)));
-    Inc(Dst, Length(Head));
-  end;
+  WriteStr('unit ');
+  WriteStr(AUnitName);
+  WriteStr(';' + #10 + '{$mode objfpc}{$H+}' + #10 + #10 + 'interface' + #10 + #10);
   if Length(Body) > 0 then
   begin
     BytesCopy(Dst, @Body[0], SizeUInt(Length(Body)));
     Inc(Dst, Length(Body));
   end;
-  if Length(Tail) > 0 then
-    BytesCopy(Dst, @Tail[0], SizeUInt(Length(Tail)));
+  WriteStr(#10 + 'implementation' + #10 + #10 + 'end.' + #10);
 end;
 
 end.

@@ -62,6 +62,11 @@ procedure ResPackExtractToDir(const ABlob: TResPackBlob;
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 
+{** 流式嵌入打包：目录 → 分段 AWrite 回调，峰值 ~1×+头（mmap 零堆拷贝 + writer.stream 两遍零双驻留）。
+  与 ResPackEmbedBuild 同确定性，抽取为独立流式候选供大资产目录复用；ResPackEmbedBuild 为其内存 sink 薄封装。 }
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc);
+
 implementation
 
 uses
@@ -77,15 +82,15 @@ uses
   nextpas.core.respack.writer;
 
 type
-  TRespackBytesArray = array of TBytes;
-  TRespackMapsArray = array of IMappedFile;
+  TResPackBytesArray = array of TBytes;
+  TResPackMapsArray = array of IMappedFile;
   PDirContext = ^TDirContext;
   TDirContext = record
     Root: string;             { 归一前缀单源：供 PathStripPrefix 复用，零拷贝视图 }
     RootPrefixLen: Integer;   { 兼容长度，保留用于调试；主路径剥离走 PathStripPrefix 单源 }
     Include: TResPackIncludeFunc;
     Entries: TResPackInputArray;
-    Bytes: TRespackBytesArray;   { 内容生命期锚点 }
+    Bytes: TResPackBytesArray;   { 内容生命期锚点 }
     Count: SizeUInt;          { 已用条目数；Length 为容量 }
     Cap: SizeUInt;            { 已分配容量，指数增长消 O(n²) }
     Total: SizeUInt;
@@ -98,7 +103,7 @@ type
     Root: string;
     Include: TResPackIncludeFunc;
     Entries: TResPackInputArray;
-    Maps: TRespackMapsArray; { mmap 生命期锚点，接口引用计数的零拷贝视图 }
+    Maps: TResPackMapsArray; { mmap 生命期锚点，接口引用计数的零拷贝视图 }
     Count: SizeUInt;
     Cap: SizeUInt;
     Total: SizeUInt;
@@ -144,7 +149,7 @@ begin
 end;
 
 { 公共双数组扩容 helper：EnsureDual 双重载（TBytes / IMappedFile），复用 bytes.ops 单源，inline 零拷贝 }
-procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackBytesArray); overload; inline;
+procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TResPackBytesArray); overload; inline;
 begin
   if ACount < ACap then Exit;
   ACap := BytesNextCapacity(ACap, ANeeded);
@@ -152,7 +157,7 @@ begin
   SetLength(ASecond, ACap);
 end;
 
-procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TRespackMapsArray); overload; inline;
+procedure EnsureDual(var ACap: SizeUInt; const ACount, ANeeded: SizeUInt; var AEntries: TResPackInputArray; var ASecond: TResPackMapsArray); overload; inline;
 begin
   if ACount < ACap then Exit;
   ACap := BytesNextCapacity(ACap, ANeeded);
@@ -176,7 +181,7 @@ type
     Root: string;
     EmbedOpts: TResPackEmbedOptions;
     Entries: TResPackInputArray;
-    Maps: TRespackMapsArray;
+    Maps: TResPackMapsArray;
     Count: SizeUInt;
     Cap: SizeUInt;
     Total: SizeUInt;
@@ -369,16 +374,17 @@ end;
 function ResPackEntriesFromDir(const ARoot: string;
   const AInclude: TResPackIncludeFunc): TResPackDirEntries;
 var
-  Ctx: TStreamContext;
+  Ctx: TDirContext;
   RootClean: string;
-  I: SizeUInt;
 begin
   Result.Entries := nil;
   Result.Contents := nil;
   { 单源收口：尾斜杠归一复用 nextpas.core.path.ExcludeTrailingPathDelimiter
     （内部 FsPathTrimSep → platform_path_trim_sep 单源，原地去重 '\\'/'/'，保留根 '/'，
     inline 零额外分配，替代手写 while Delete O(n) 多次移动）。
-    流式mmap 单源：WalkProcStream/MmapOpen 零拷贝，64MiB 限额防 2× 堆 OOM，BytesCopy 至 Contents 锚点。 }
+    收敛：本函数仅保留 TBytes 小包便捷路径（ReadFile + EnsureDirCapacity→BytesNextCapacity 单源，inline 零拷贝，峰值 ~1×+头≤64MiB）；
+    大包流式mmap 零拷贝路径已收口至 ResPackBuildStreamFromDir/WalkProcStream/MmapOpen 单源（峰值 ~1×+头，无 TBytes 全量驻留），
+    消除此前 mmap→TBytes BytesCopy 双驻留 2× 峰值；64MiB 硬限额防堆 OOM，超限显式 EResPackTooLarge 引导流式。 }
   RootClean := ExcludeTrailingPathDelimiter(ARoot);
   if (not Exists(RootClean)) or (not IsDir(RootClean)) then
     raise EResPackDirSourceFailed.CreateCtx('opendir', ARoot, 'respack.dirsource: not a directory "'
@@ -387,43 +393,24 @@ begin
   Ctx.Root := RootClean;
   Ctx.Include := AInclude;
   Ctx.Entries := nil;
-  Ctx.Maps := nil;
+  Ctx.Bytes := nil;
   Ctx.Count := 0;
   Ctx.Cap := 0;
   Ctx.Total := 0;
   Ctx.Failed := False;
   Ctx.FailMsg := '';
-  try
-    WalkEx(RootClean, @WalkProcStream, @Ctx);
-    if Ctx.Failed then
-      raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
-    if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
-    begin
-      SetLength(Ctx.Entries, Ctx.Count);
-      SetLength(Ctx.Maps, Ctx.Count);
-    end;
-    if Ctx.Total > SizeUInt(64) * 1024 * 1024 then
-      raise EResPackTooLarge.Create('deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
-    SetLength(Result.Entries, Ctx.Count);
-    SetLength(Result.Contents, Ctx.Count);
-    for I := 0 to Ctx.Count - 1 do
-    begin
-      Result.Entries[I].Path := Ctx.Entries[I].Path;
-      Result.Entries[I].DataSize := Ctx.Entries[I].DataSize;
-      Result.Entries[I].ModTime := Ctx.Entries[I].ModTime;
-      SetLength(Result.Contents[I], SizeInt(Ctx.Entries[I].DataSize));
-      if Ctx.Entries[I].DataSize > 0 then
-      begin
-        BytesCopy(@Result.Contents[I][0], Ctx.Entries[I].Data, Ctx.Entries[I].DataSize);
-        Result.Entries[I].Data := @Result.Contents[I][0];
-      end
-      else
-        Result.Entries[I].Data := nil;
-    end;
-  finally
-    SetLength(Ctx.Maps, 0);
-    SetLength(Ctx.Entries, 0);
+  WalkEx(RootClean, @WalkProc, @Ctx);
+  if Ctx.Failed then
+    raise EResPackDirSourceFailed.CreateCtx('walk', ARoot, 'respack.dirsource: ' + Ctx.FailMsg);
+  if SizeUInt(Length(Ctx.Entries)) <> Ctx.Count then
+  begin
+    SetLength(Ctx.Entries, Ctx.Count);
+    SetLength(Ctx.Bytes, Ctx.Count);
   end;
+  if Ctx.Total > SizeUInt(64) * 1024 * 1024 then
+    raise EResPackTooLarge.Create('deprecated ResPackEntriesFromDir exceeds 64MiB (2× peak ~128MiB+头), use ResPackBuildStreamFromDir/ResPackBuildFromDir streaming mmap');
+  Result.Entries := Ctx.Entries;
+  Result.Contents := Ctx.Bytes;
 end;
 
 procedure ResPackBuildStreamFromDir(const ARoot: string;
@@ -682,12 +669,14 @@ begin
   Ctx^.Total := LSum;
 end;
 
-function ResPackEmbedBuild(const ASourceDir: string;
-  const AOpts: TResPackEmbedOptions): TResPackBlob;
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc);
 var
   Ctx: TEmbedStreamContext;
   RootClean: string;
 begin
+  if not Assigned(AWrite) then
+    raise EResPackError.Create('respack.dirsource: Write proc is nil');
   if (AOpts.StripPrefix <> '') and (not StartsSlash(AOpts.StripPrefix)) then
     raise EResPackError.Create('respack.embed: StripPrefix must be empty or ' +
       'end with "/" ("' + AOpts.StripPrefix + '")');
@@ -721,12 +710,47 @@ begin
     if Ctx.Count = 0 then
       raise EResPackError.Create('respack.embed: no entries matched after ' +
         'filter/mapping (source "' + ASourceDir + '")');
-    { 流式mmap 零拷贝：maps 持有视图至 Build 完成，堆峰值 ~1×+头（mmap 虚存零堆拷贝） }
-    Result := ResPackBuild(Ctx.Entries, AOpts.Build);
+    { 流式mmap 零拷贝 + writer.stream 两遍零双驻留：峰值 ~1×+头（mmap 虚存零堆拷贝 + 头块 KB 级分段 AWrite），稳定性 try..finally 释放不丢；单源 ResPackBuildStream 复用 writer.layout }
+    ResPackBuildStream(Ctx.Entries, AOpts.Build, AWrite);
   finally
     SetLength(Ctx.Maps, 0);
     SetLength(Ctx.Entries, 0);
   end;
+end;
+
+function ResPackEmbedBuild(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions): TResPackBlob;
+var
+  SinkBuf: TBytes;
+  SinkLen: SizeUInt;
+  SinkCap: SizeUInt;
+  SinkProc: TResPackWriteProc;
+begin
+  Result.Data := nil;
+  Result.Size := 0;
+  Result.Owned := False;
+  { 单源复用：委托 ResPackEmbedBuildStream 流式mmap 管线 + BytesNextCapacity/BytesCopy sink 收集；峰值 ~1×+头，接口锚点由 stream 内层 try..finally 释放不丢 }
+  SinkBuf := nil;
+  SinkLen := 0;
+  SinkCap := 0;
+  SinkProc :=
+    procedure(const AData: PByte; const ASize: SizeUInt)
+    begin
+      if ASize = 0 then Exit;
+      if SinkLen + ASize > SinkCap then
+      begin
+        SinkCap := BytesNextCapacity(SinkCap, SinkLen + ASize);
+        SetLength(SinkBuf, SinkCap);
+      end;
+      BytesCopy(@SinkBuf[SinkLen], AData, ASize);
+      Inc(SinkLen, ASize);
+    end;
+  ResPackEmbedBuildStream(ASourceDir, AOpts, SinkProc);
+  if SinkLen = 0 then Exit;
+  GetMem(Result.Data, SinkLen);
+  Result.Size := SinkLen;
+  Result.Owned := True;
+  BytesCopy(Result.Data, @SinkBuf[0], SinkLen);
 end;
 
 end.

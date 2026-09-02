@@ -80,6 +80,8 @@ function ResPackDefaultIncOptions: TResPackIncOptions; inline;
 function ResPackValidIdent(const AName: string): Boolean; inline;
 function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob; inline;
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc); inline;
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;
   const AOpts: TResPackIncOptions): TBytes; inline;
 function ResPackEmbedIncUnitSource(const ABlob: TResPackBlob;
@@ -177,6 +179,12 @@ function ResPackEmbedBuild(const ASourceDir: string;
   const AOpts: TResPackEmbedOptions): TResPackBlob;
 begin
   Result := nextpas.core.respack.dirsource.ResPackEmbedBuild(ASourceDir, AOpts);
+end;
+
+procedure ResPackEmbedBuildStream(const ASourceDir: string;
+  const AOpts: TResPackEmbedOptions; const AWrite: TResPackWriteProc);
+begin
+  nextpas.core.respack.dirsource.ResPackEmbedBuildStream(ASourceDir, AOpts, AWrite);
 end;
 
 function ResPackEmbedIncSource(const ABlob: TResPackBlob;
