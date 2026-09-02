@@ -6,8 +6,8 @@ unit nextpas.core.tar.intf;
  *  消除 ITarStreamBuilder+AsStreamBuilder+TarBuilderAddFromReader 四入口与
  *  QueryInterface 仪式分发，调用 TarBuilder.Add(...).AddEntryFromReader(...).Finish
  *  一链直达；L2→L1 单向依赖 nextpas.core.io.intf(IReader)，复用 bytes.ops 单源
- *  CopyMemory/Move inline 零拷贝、64K pooled FIOBuf 于 Finish 即释 + try..finally
- *  必释资源不丢，性能/稳定性证据见 builder/writer。
+ *  CopyMemory/Move inline 零拷贝、per-entry 局域缓冲 try..finally 必释无滞留，
+ *  性能/稳定性证据见 builder/writer。
  *}
 
 {$I nextpas.core.settings.inc}

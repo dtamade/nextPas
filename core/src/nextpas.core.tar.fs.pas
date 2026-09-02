@@ -136,6 +136,7 @@ var
   LWalks: TArchiveWalkArray;
   LI, LWalksCount: Integer;
   LEstimated, LCap: SizeUInt;
+  LAccum: UInt64;
 begin
   Result := nil;
   // perf: 按预估总量经 TarBuilderCapacityFor 4K 对齐预扩容（复用 bytes.ops.AlignUp4K 单源，bytes.builder 几何扩容 inline 零拷贝），大目录避免多次几何扩容（200×512B 仅1次 vs 固定64K多次重分配），小目录保持64K覆盖；预估=512×条目+文件pad512+长名pax近似(1024)，2零块由单点追加，溢出守卫clamp至High，零额外拷贝
@@ -144,31 +145,20 @@ begin
   ArchiveCollectWalk(ADir, '', LWalks, LWalksCount);
   SetLength(LWalks, LWalksCount);
   try
-    LEstimated := 0;
+    // perf: 批量 UInt64 累加 + bytes.ops.AlignUp(...,512) 单源 inline 零拷贝对齐，消除逐项 High(SizeUInt) 守卫分支与手写 (Size+511)&~511 掩码；头块批量 LWalksCount*512，长名 pax 1024 近似批量累加，单点溢出 clamp 至 High，终经 TarBuilderCapacityFor 复用 bytes.ops.AlignUp4K 单源 4K 对齐（零除法位掩码，32/64位安全），与 bytes.builder 几何扩容 inline 零拷贝共道，大目录 200×512B 仅1次扩容，小目录 64K 覆盖，零额外拷贝
+    LAccum := UInt64(LWalksCount) * SizeUInt(C_TAR_BLOCK_SIZE);
     for LI := 0 to High(LWalks) do
-    begin
-      if LEstimated > High(SizeUInt) - SizeUInt(C_TAR_BLOCK_SIZE) then
-        LEstimated := High(SizeUInt)
-      else
-        Inc(LEstimated, SizeUInt(C_TAR_BLOCK_SIZE));
       if not LWalks[LI].FIsDir then
       begin
         if LWalks[LI].FSize > 0 then
-        begin
-          if SizeUInt(LWalks[LI].FSize) > High(SizeUInt) - 511 then
-            LEstimated := High(SizeUInt)
-          else
-            Inc(LEstimated, (SizeUInt(LWalks[LI].FSize) + 511) and not SizeUInt(511));
-        end;
+          LAccum := LAccum + AlignUp(SizeUInt(LWalks[LI].FSize), 512);
         if Length(LWalks[LI].FRel) > C_TAR_NAME_FIELD then
-        begin
-          if LEstimated > High(SizeUInt) - 1024 then
-            LEstimated := High(SizeUInt)
-          else
-            Inc(LEstimated, 1024);
-        end;
+          LAccum := LAccum + 1024;
       end;
-    end;
+    if LAccum > High(SizeUInt) then
+      LEstimated := High(SizeUInt)
+    else
+      LEstimated := SizeUInt(LAccum);
     LCap := TarBuilderCapacityFor(LEstimated);
     CreateArchiveBuilder(LCap, LBuilder, LSink);
     W := TTarWriter.Create(LSink);

@@ -87,26 +87,20 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和：单遍融合双累加（外联，真实循环体禁 inline） — }
-procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
+{ — 校验和：单遍融合双累加（inline 薄转发，循环/SWAR 体下沉 bytes.ops 单源外联禁 inline，零拷贝 PByte 切片，nil 守卫 + chksum 空洞单遍排除无外联循环分支） — }
+procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64); inline;
 var
   LSum: UInt64;
   LHigh: SizeUInt;
-  I: SizeUInt;
 begin
-  // 单遍融合 via bytes.ops 单源，外联；nil 守卫保 fail-closed
+  // inline 零拷贝薄转发：nil 守卫 fail-closed（热路径外联无分支，单次 inline 分支），SWAR 融合 + chksum 8 字节空洞排除下沉 bytes.ops 单源两段 SWAR，无外联 8 字节 post 循环分支
   if ABlock = nil then
   begin
     AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
     ASig := AU;
     Exit;
   end;
-  BytesSumAndCountHighBit(ABlock, C_TAR_BLOCK_SIZE, LSum, LHigh);
-  for I := 0 to C_TAR_LAYOUT.Chksum.Len - 1 do
-  begin
-    LSum := LSum - ABlock[C_TAR_LAYOUT.Chksum.Off + I];
-    LHigh := LHigh - SizeUInt((ABlock[C_TAR_LAYOUT.Chksum.Off + I] shr 7) and 1);
-  end;
+  BytesSumAndCountHighBitExclude(ABlock, C_TAR_BLOCK_SIZE, C_TAR_LAYOUT.Chksum.Off, C_TAR_LAYOUT.Chksum.Len, LSum, LHigh);
   AU := Int64(LSum + UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
   ASig := AU - Int64(LHigh) * 256;
 end;

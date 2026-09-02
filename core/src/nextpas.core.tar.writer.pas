@@ -15,7 +15,6 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FIOBuf: TBytes; // pooled 64K, bytes.ops single source, released on Finish
     procedure WriteBlock(const ABlock: array of Byte);
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
@@ -371,6 +370,7 @@ end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
 var
+  LBuf: TBytes;
   LRead, LToRead: SizeUInt;
   LRemaining: Int64;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
@@ -392,22 +392,25 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // pooled FIOBuf 64K, bytes.ops single source AlignUp4K via TarIOBufCapacityFor capacity helper single source (DRY inline, zero-copy); lifecycle Finish即释+Destroy finally双保险无linger峰值，IsExceptionUnwinding分叉防次生掩盖原异常（见 Finish/Destroy）；perf: single helper收敛两分支重复AlignUp4K+阈值判断，单次 SetLength 摊销 1 alloc pooled 复用（4K 初始省 512B 小文件 2000×~60K+syscall，64K 复用避递增序列二次重分配+syscall dominance）
+  // bytes.ops single source via TarIOBufCapacityFor (AlignUp4K), per-entry local buf, zero-copy
   LNeed := TarIOBufCapacityFor(AHdr.Size);
-  if SizeUInt(Length(FIOBuf)) < LNeed then
-    SetLength(FIOBuf, LNeed);
-  LRemaining := AHdr.Size;
-  while LRemaining > 0 do
-  begin
-    LToRead := SizeUInt(LRemaining);
-    if LToRead > SizeUInt(Length(FIOBuf)) then
-      LToRead := SizeUInt(Length(FIOBuf));
-    LRead := AReader.Read(FIOBuf[0], LToRead);
-    if LRead = 0 then
-      raise EIOError.Create('tar: short read');
-    if FDst.Write(FIOBuf[0], LRead) <> LRead then
-      raise EIOError.Create('tar: short write');
-    Dec(LRemaining, Int64(LRead));
+  SetLength(LBuf, LNeed);
+  try
+    LRemaining := AHdr.Size;
+    while LRemaining > 0 do
+    begin
+      LToRead := SizeUInt(LRemaining);
+      if LToRead > SizeUInt(Length(LBuf)) then
+        LToRead := SizeUInt(Length(LBuf));
+      LRead := AReader.Read(LBuf[0], LToRead);
+      if LRead = 0 then
+        raise EIOError.Create('tar: short read');
+      if FDst.Write(LBuf[0], LRead) <> LRead then
+        raise EIOError.Create('tar: short write');
+      Dec(LRemaining, Int64(LRead));
+    end;
+  finally
+    LBuf := nil;
   end;
   PadLen := TarPadToBlock(AHdr.Size);
   if PadLen > 0 then
@@ -425,14 +428,9 @@ begin
   if FFinished then
     Exit;
   FFinished := True;
-  try
-    FillChar(Zero[0], SizeOf(Zero), 0);
-    WriteBlock(Zero);
-    WriteBlock(Zero);
-  finally
-    // release pooled 64K immediately, avoid linger peak Finish->Free (continuous reuse saves 64K)
-    FIOBuf := nil;
-  end;
+  FillChar(Zero[0], SizeOf(Zero), 0);
+  WriteBlock(Zero);
+  WriteBlock(Zero);
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -441,25 +439,17 @@ begin
 end;
 
 destructor TTarWriter.Destroy;
-var
-  LUnwinding: Boolean;
 begin
-  // 复用 builder IsExceptionUnwinding 显式分叉：捕获于 Finish 前；unwind 期抑制次生并经 log.intf Warn 可观测（NullLogger 默认零分配 inline，无 StdErr 直触），非 unwind 期透传保链式 Finish fail-closed 一致；bytes.ops 单源 zero-copy（WriteBlock/WritePaddedPayload 直接 Write 切片，FillChar 仅 PadLen，inline EmitEntry）；FIOBuf 于 Finish 即释+析构 finally 双保险无 linger 峰值，try..finally 必释资源
-  LUnwinding := IsExceptionUnwinding;
+  // best-effort Finish 失败 Warn 抑制次生；bytes.ops 单源 zero-copy, try..finally 必释
   try
     if not FFinished then
       try
         Finish;
       except
         on E: Exception do
-        begin
-          if not LUnwinding then
-            raise;
           NullLogger.Warn('tar: writer destroy suppress finish failure (short write): ' + E.Message);
-        end;
       end;
   finally
-    FIOBuf := nil;
     FDst := nil;
     inherited Destroy;
   end;

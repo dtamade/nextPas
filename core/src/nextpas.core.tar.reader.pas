@@ -24,12 +24,11 @@ type
 
   TTarReader = class;
 
-  {** @desc RAII guard for global g pax: weak ref to Reader, clears FGlobalPax on scope exit.
-   *  @note Zero alloc until AcquireGlobalPaxGuard called; IInterface bound to caller scope. Weak ref avoids prolonging Reader/FBuf large mirror (batch peak safe); Reader.Destroy invalidates guard, no double free. *}
+  {** @desc RAII guard for global pax: clears global pax on scope exit. *}
   TTarGlobalPaxGuard = class(TInterfacedObject)
   private
-    FReader: TTarReader; // weak: not prolong Reader/FBuf, nilled on Reader.Destroy / Destroy
-    FNext: TTarGlobalPaxGuard; // linked list next, weak
+    FReader: TTarReader;
+    FNext: TTarGlobalPaxGuard;
     procedure Invalidate;
   public
     constructor Create(AReader: TTarReader);
@@ -63,8 +62,8 @@ type
     FScanValid: Boolean;
     FScanPos: SizeUInt;
     FScanLens: TTarScanLens;
-    FGuardHead: TTarGlobalPaxGuard; // weak linked list head, no array, no geometric
-    FGuardCount: SizeUInt; // simple counter without capacity
+    FGuardHead: TTarGlobalPaxGuard; // guard chain
+    FGuardCount: SizeUInt;
     FLogger: ILogger; // warn on auto-clear
     function HasGuards: Boolean; inline;
     procedure LogGlobalPaxAutoClear;
@@ -88,7 +87,7 @@ type
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; // out-of-line, SpanEqual reuse via MaterializeSpan
   public
     procedure ClearGlobalPax; inline;
-    {** @desc RAII guard: acquire IInterface that clears global g pax on scope exit; use `var G := Reader.AcquireGlobalPaxGuard;` to auto-isolate. Inline thin forward, zero alloc until called. *}
+    {** @desc Acquires guard that clears global pax on scope exit. *}
     function AcquireGlobalPaxGuard: IInterface; inline;
     procedure SetLogger(const ALogger: ILogger); inline;
     destructor Destroy; override;
@@ -239,9 +238,6 @@ var
   LLen: SizeUInt;
   LIdx: SizeInt;
   LSpan: TByteSpan;
-  LOneField: array[0..0] of TFieldRange;
-  LOneLen: array[0..0] of SizeUInt;
-  LBlockTmp: TByteSpan;
   IsHeaderField: Boolean;
 begin
   EndOfs := AOfs + ALen;
@@ -274,12 +270,10 @@ begin
       IsHeaderField := False;
     if not IsHeaderField then
     begin
-      // fallback: non-cached header field via single-field scan
-      LOneField[0].Off := AOfs - FPos;
-      LOneField[0].Len := ALen;
-      LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
-      ScanNulFieldTruncations(LBlockTmp, LOneField, @LOneLen[0]);
-      LLen := LOneLen[0];
+      // fallback: non-7 header field reuses 512B cached block via SpanIndexOf single source (bytes.ops, zero-copy, inline)
+      LSpan := TByteSpan.Create(@FData[AOfs], ALen);
+      LIdx := SpanIndexOf(LSpan, 0);
+      if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
       if LLen = 0 then Exit(TByteSpan.Empty);
       Result := TByteSpan.Create(@FData[AOfs], LLen);
       Exit;
@@ -419,7 +413,6 @@ end;
 procedure TTarReader.RegisterGuard(AGuard: TTarGlobalPaxGuard);
 begin
   if AGuard = nil then Exit;
-  // simple linked list, no geometric array, zero alloc per guard beyond object
   AGuard.FNext := FGuardHead;
   FGuardHead := AGuard;
   Inc(FGuardCount);
@@ -479,7 +472,7 @@ end;
 constructor TTarGlobalPaxGuard.Create(AReader: TTarReader);
 begin
   inherited Create;
-  FReader := AReader; // weak: no FBuf retention, batch peak safe
+  FReader := AReader;
   if FReader <> nil then
     FReader.RegisterGuard(Self);
 end;
@@ -505,7 +498,7 @@ end;
 
 destructor TTarReader.Destroy;
 begin
-  // stability: invalidate weak guards first to avoid use-after-free and release FBuf peak even if guard held
+  // stability: invalidate guards before releasing state
   InvalidateGuards;
   FGlobalPaxPath := '';
   FGlobalPaxLinkPath := '';

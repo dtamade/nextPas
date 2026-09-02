@@ -5,7 +5,7 @@ unit nextpas.core.tar.builder;
  *  联邦/容量/性能/稳定性详见 CONTRACT §1.4/§3，源码仅保留单缝与单源证据。
  *  精简：单口 ITarBuilder 直达 AddEntryFromReader，零 QueryInterface 仪式，
  *  链式 TarBuilder.Add(...).AddEntryFromReader(...).Finish；复用 bytes.ops
- *  单源 inline 零拷贝 + 64K pooled FIOBuf 于 Finish 即释 + try..finally 必释。
+ *  单源 inline 零拷贝 + per-entry 局域缓冲 try..finally 必释无滞留。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -51,7 +51,7 @@ constructor TTarBuilder.Create;
 var LSink: IWriter;
 begin
   inherited Create;
-  // perf: TarBuilderCapacityFor 4K 对齐预扩容，CreateArchiveBuilder 经 archive.fs 联邦透出 bytes.builder 单源 inline 零拷贝（bytes.ops Move）；LSink 局域经 FWriter 单缝持有
+  // 薄门面：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）
   CreateArchiveBuilder(TarBuilderCapacityFor(0), FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
 end;
@@ -60,25 +60,18 @@ constructor TTarBuilder.CreateWithCapacity(const AEstimatedTotal: SizeUInt);
 var LCap: SizeUInt; LSink: IWriter;
 begin
   inherited Create;
-  // perf: TarBuilderCapacityFor 按预估量 4K 对齐，复用 bytes.builder 单源 inline 零拷贝（AppendBytes 单次 Move via bytes.ops）
+  // 薄门面：经 archive.fs 联邦单缝创建 builder/sink（容量由 TarBuilderCapacityFor 单源预扩容，详见 CONTRACT §1.4）
   LCap := TarBuilderCapacityFor(AEstimatedTotal);
   CreateArchiveBuilder(LCap, FBuilder, LSink);
   FWriter := TTarWriter.Create(LSink);
 end;
 
 destructor TTarBuilder.Destroy;
-var
-  LUnwinding: Boolean;
 begin
-  // fail-closed 单源 IsFinished；非 unwind 硬失败防截断，unwind 经 log.intf Warn 可观测并抑制次生；try..finally 必释 FWriter
-  LUnwinding := IsExceptionUnwinding;
+  // 稳定性：析构永不抛异常，Warn 可观测并 try..finally 必释 FWriter，避免 IsExceptionUnwinding 分叉掩盖原始异常
   try
     if (FWriter <> nil) and (not FWriter.IsFinished) then
-    begin
-      if not LUnwinding then
-        raise EInvalidOperationError.Create('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
       NullLogger.Warn('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
-    end;
   finally
     FWriter.Free;
     inherited Destroy;
@@ -119,7 +112,7 @@ end;
 
 function TTarBuilder.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
 begin
-  // 流式零拷贝：64K pooled 复用缓冲分块 Move 单源 bytes.ops，无 TBytes 全量拷贝，委托 writer 单源
+  // 流式零拷贝：per-entry 局域缓冲 via TarIOBufCapacityFor (AlignUp4K), bytes.ops 单源
   FWriter.AddEntryFromReader(AHdr, AReader);
   Result := Self;
 end;

@@ -99,6 +99,9 @@ function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
 { 单源融合：一次 SWAR 遍历同时计算字节和与高位计数，零拷贝 PByte 切片，外联禁 inline；tar 校验和 dual 单遍单源，消除 BytesSum×2+BytesCountHighBit×2 四分发 → 单分发 SWAR 8 字节 QWord + 尾部无分支 }
 procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
 function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+{ 单源融合空洞排除：tar 校验和 chksum 8 字节空洞单遍排除，零拷贝 PByte 切片，外联禁 inline；两段 SWAR（hole 前/后）复用 BytesSumAndCountHighBit 单源，无外联 8 字节循环分支，nil/越界守卫 fail-closed }
+procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
 
 implementation
 
@@ -790,6 +793,46 @@ begin
     Exit(False);
   end;
   BytesSumAndCountHighBit(ASpan.Data, ASpan.Len, ASum, AHigh);
+  Result := True;
+end;
+
+procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+var
+  LSum1, LSum2: UInt64;
+  LHigh1, LHigh2: SizeUInt;
+  LSecondOff, LSecondLen: SizeUInt;
+begin
+  // perf: 两段 SWAR 复用 BytesSumAndCountHighBit 单源，零拷贝 PByte 切片，外联禁 inline；hole 前/后各一次 SWAR，消除 8 字节 post 循环分支，nil/越界守卫 fail-closed
+  ASum := 0;
+  AHigh := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  if (AExcludeLen = 0) or (AExcludeOff >= ALen) then
+  begin
+    BytesSumAndCountHighBit(AData, ALen, ASum, AHigh);
+    Exit;
+  end;
+  if AExcludeOff + AExcludeLen > ALen then
+    AExcludeLen := ALen - AExcludeOff;
+  LSum1 := 0; LHigh1 := 0; LSum2 := 0; LHigh2 := 0;
+  if AExcludeOff > 0 then
+    BytesSumAndCountHighBit(AData, AExcludeOff, LSum1, LHigh1);
+  LSecondOff := AExcludeOff + AExcludeLen;
+  LSecondLen := ALen - LSecondOff;
+  if LSecondLen > 0 then
+    BytesSumAndCountHighBit(AData + LSecondOff, LSecondLen, LSum2, LHigh2);
+  ASum := LSum1 + LSum2;
+  AHigh := LHigh1 + LHigh2;
+end;
+
+function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+begin
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then
+  begin
+    ASum := 0;
+    AHigh := 0;
+    Exit(False);
+  end;
+  BytesSumAndCountHighBitExclude(ASpan.Data, ASpan.Len, AExcludeOff, AExcludeLen, ASum, AHigh);
   Result := True;
 end;
 
