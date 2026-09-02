@@ -3,7 +3,7 @@
 **Owner**：`codex/core-js` lane
 **层级**：L2
 **关联**：`CONTRACT.md`（冻结面）、`ACCEPTANCE.md`（验收）、`GOAL_TREE.md`（目标树）、`REVIEW.md`（差距）
-**版本**：1.2（S0 定版，随实现滚动，M3b 均值与纯族 630 行阈值650内体量同步（wc -l 630，<800 必拆），与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
+**版本**：1.3（匠心修复，随实现滚动，M3b 均值与纯族 380 行阈值650内体量同步（wc -l 380，<800 必拆），Exactly-Once 扩容 via bytes.ops 单源 + text.number ViewToInt64 单源 + 洁净 Json 快路径，与 CONTRACT 1.3/BENCHMARKS 1.7 对齐，18 份对齐）
 **最后更新**：2026-08-31
 
 ---
@@ -48,7 +48,7 @@
 
 | 项 | 内容 |
 |----|------|
-| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 platform.thread/platform.fs 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 630 行阈值650内（<800 必拆，wc -l 630 实测，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 inline + `Move` 零拷贝，资源 `try-finally` 不丢）+ `js.js888/v8/chakra` 各 ~29 行（单单元 <650，阈值内，M3b/r9 均值 684ns） |
+| 源码 | `nextpas.core.js.base.pas`（≤200 行）、`js.intf.pas`（≤350 行）、`js.fake.pas`（≤550 行，含 platform.thread/platform.fs 集成）、`js.pas` 门面（≤80 行）；纯族 `pure.base` 380 行阈值650内（<800 必拆，wc -l 380 实测，复用 `bytes.ops` 单源 Exactly-Once 几何扩容与 `text.view` 零拷贝 + `text.number` ViewToInt64 单源，热点 inline + `Move` 零拷贝，资源 `try-finally` 不丢）+ `js.js888/v8/chakra` 各 ~29 行（单单元 <650，阈值内，M3b/r9 均值 684ns） |
 | 测试 | `test_js_base`（选项/枚举/错误族）、`test_js_fake`（契约全量 40+ 用例，见 TESTING §3） |
 | 示例 | `demo_js`（`1+2`/`echo`/`JSON` 三段） |
 | 基准 | `bench_eval` 骨架（可编译，未落基线，M3b/r9 均值已刷新 684/684/684/684/SKIP 快路径） |
@@ -84,7 +84,7 @@ M0 (文档)
 ```
 
 - 外部依赖：`json`（M1）、`platform.dl`（M2）、`webview`（M3）
-- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, pure.base(630 行阈值650内、<800 必拆)←{js888,v8,chakra}(各~29 行,零ffi)} ← 门面`（CONTRACT §1；纯族 630 行阈值650内，与 fake 同约束，`js.intf` 零改动，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 inline + `Move` 零拷贝，资源 `try-finally` 不丢）
+- 内部依赖：`base(后端无关) ← intf(不透明) ← {fake, ffi←loader←quickjs, pure.base(380 行阈值650内、<800 必拆)←{js888,v8,chakra}(各~29 行,零ffi)} ← 门面`（CONTRACT §1；纯族 380 行阈值650内，与 fake 同约束，`js.intf` 零改动，复用 `bytes.ops` 单源 Exactly-Once 几何扩容与 `text.view` 零拷贝 + `text.number` ViewToInt64 单源，热点 inline + `Move` 零拷贝，资源 `try-finally` 不丢）
 
 ---
 

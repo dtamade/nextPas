@@ -59,6 +59,10 @@ begin
   if Bind('JS_SetInterruptHandler', P) then JS_SetInterruptHandlerPtr := TJS_SetInterruptHandler(P);
   if Bind('JS_NewCFunction', P) then JS_NewCFunctionPtr := TJS_NewCFunction(P);
   if Bind('JS_Call', P) then JS_CallPtr := TJS_Call(P);
+  if Bind('JS_GetOwnPropertyNames', P) then JS_GetOwnPropertyNamesPtr := TJS_GetOwnPropertyNames(P);
+  if Bind('JS_FreePropertyEnum', P) then JS_FreePropertyEnumPtr := TJS_FreePropertyEnum(P);
+  if Bind('JS_AtomToString', P) then JS_AtomToStringPtr := TJS_AtomToString(P);
+  if Bind('JS_FreeAtom', P) then JS_FreeAtomPtr := TJS_FreeAtom(P);
   GLib := Lib; GLoaded := True; Result := True;
 end;
 function JsQuickJsIsAvailable: Boolean;
@@ -85,6 +89,6 @@ end;
 procedure JsQuickJsUnload;
 begin
   if GLoaded then
-  begin platform_dl_close(GLib); FillChar(GLib, SizeOf(GLib), 0); GLoaded := False; GAvailable := -1; JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; end;
+  begin platform_dl_close(GLib); FillChar(GLib, SizeOf(GLib), 0); GLoaded := False; GAvailable := -1; JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; JS_GetOwnPropertyNamesPtr := nil; JS_FreePropertyEnumPtr := nil; JS_AtomToStringPtr := nil; JS_FreeAtomPtr := nil; end;
 end;
 end.

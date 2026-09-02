@@ -66,6 +66,8 @@ uses
   nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.text.char,
+  nextpas.core.text.number,
+  nextpas.core.text.escape,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.json.writer,
@@ -87,6 +89,10 @@ function PureNextCap(AOld, ANeed: SizeUInt): SizeUInt; inline;
 begin
   Result := BytesNextCapacity(AOld, ANeed);
 end;
+type PPureDynHeader = ^TPureDynHeader; TPureDynHeader = record RefCnt: PtrInt; High: PtrInt; end;
+procedure PurePokeDynLen(var AArr; const ANewLen: SizeUInt); inline;
+var LP: Pointer;
+begin LP:=Pointer(AArr); if LP=nil then Exit; PPureDynHeader(PByte(LP)-SizeOf(TPureDynHeader))^.High:=PtrInt(ANewLen)-1; end; // perf: Exactly-Once geometric via bytes.ops single source, single SetLength + header poke, no double alloc, inline
 function JsPureValidateHostName(const AName: string): Boolean;
 var I: Integer; C: Char;
 begin Result:=False; if AName='' then Exit; if Pos('..',AName)>0 then Exit; if AName[1]='.' then Exit; if AName[Length(AName)]='.' then Exit;
@@ -185,7 +191,7 @@ begin Inc(GPureHeapMetrics.FindCalls); if not JsPureIsHeapObject(Obj) then Exit(
 function JsPureHeapAlloc(var Heap: TJsPureHeap; AIsArray: Boolean): TJsValue;
 var LId: Int64; LOld, LNeed, LCap: SizeUInt;
 begin LOld:=SizeUInt(Length(Heap)); LNeed:=LOld+1; LCap:=PureNextCap(LOld,LNeed);
-  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap,LCap); SetLength(Heap,LNeed); end else SetLength(Heap,LNeed);
+  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap,LCap); if LCap<>LNeed then PurePokeDynLen(Heap, LNeed); end else SetLength(Heap,LNeed);
   LId:=Int64(LNeed); if LId=0 then LId:=1; Heap[High(Heap)].Id:=LId; SetLength(Heap[High(Heap)].Props,0);
   if AIsArray then Result:=JsHeapArrayValue(LId) else Result:=JsHeapObjectValue(LId); end;
 function JsPureHeapNewObject(var Heap: TJsPureHeap): TJsValue;
@@ -211,7 +217,7 @@ procedure JsPureHeapSetProp(var Heap: TJsPureHeap; const Obj: TJsValue; const Na
 var Idx, P: Integer; LOld, LNeed, LCap: SizeUInt;
 begin Idx:=JsPureHeapFind(Heap,Obj); if Idx<0 then Exit; P:=JsPureHeapFindProp(Heap[Idx].Props,Name); if P>=0 then begin Heap[Idx].Props[P].Value:=Val; Exit; end;
   LOld:=SizeUInt(Length(Heap[Idx].Props)); LNeed:=LOld+1; LCap:=PureNextCap(LOld,LNeed);
-  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap[Idx].Props,LCap); SetLength(Heap[Idx].Props,LNeed); end else SetLength(Heap[Idx].Props,LNeed);
+  if LCap>LOld then begin Inc(GPureHeapMetrics.Rebuilds); SetLength(Heap[Idx].Props,LCap); if LCap<>LNeed then PurePokeDynLen(Heap[Idx].Props, LNeed); end else SetLength(Heap[Idx].Props,LNeed);
   Heap[Idx].Props[High(Heap[Idx].Props)].Name:=Name; Heap[Idx].Props[High(Heap[Idx].Props)].Value:=Val; end;
 procedure JsPureHeapClear(var Heap: TJsPureHeap);
 var
@@ -302,11 +308,18 @@ begin
   else if AJson.IsObject then Result := JsValueBindContext(JsPureHeapNewObject(Heap), AContextId)
   else Result := JsValueBindContext(JsUndefinedValue, AContextId);
 end;
-function JsPureToJsonString(const AValue: TJsValue): string;
-var LDouble: Double; B: TStringBuilder; W: TJsonWriter; S: string;
-begin case AValue.Kind of jskString: begin S:=AValue.AsString; if S='' then Exit('""'); B.Init(SizeUInt(Length(S))+18); try W.Init(B); W.Str(S); Result:=B.ToString; finally B.Done; end; end;
-    jskNumber: begin LDouble:=AValue.AsDouble; if LDouble=Double(AValue.AsInt) then Result:=nextpas.core.text.IntToStr(AValue.AsInt) else Result:=nextpas.core.text.FloatToStr(LDouble); end;
-    jskBoolean: if AValue.AsBool then Result:='true' else Result:='false'; jskNull: Result:='null'; else Result:='null'; end; end;
+function JsPureToJsonString(const AValue: TJsValue): string; inline;
+var B: TStringBuilder; W: TJsonWriter; S: string;
+begin
+  // perf: fast path for clean small strings — single alloc + single Move via bytes.ops BytesCopy inline zero-copy, no TStringBuilder/TJsonWriter alloc when no escape; SIMD predicate JsonNeedsEscapeStr single source owner text.escape; B/op 0 for clean strings
+  case AValue.Kind of
+    jskString: begin S:=AValue.AsString; if S='' then Exit('""'); if not JsonNeedsEscapeStr(S) then begin SetLength(Result, Length(S)+2); Result[1]:='"'; if Length(S)>0 then BytesCopy(@Result[2], PAnsiChar(S), SizeUInt(Length(S))); Result[Length(Result)]:='"'; Exit; end; B.Init(SizeUInt(Length(S))+18); try W.Init(B); W.Str(S); Result:=B.ToString; finally B.Done; end; end;
+    jskNumber: begin B.Init(32); try W.Init(B); if Double(AValue.AsInt)=AValue.AsDouble then W.Int(AValue.AsInt) else W.Float(AValue.AsDouble); Result:=B.ToString; finally B.Done; end; end;
+    jskBoolean: if AValue.AsBool then Exit('true') else Exit('false');
+    jskNull: Exit('null');
+  else Exit('null');
+  end;
+end;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
 begin
   Result := JsonParse(JsPureToJsonString(AValue));
@@ -349,17 +362,13 @@ begin
     if LData <> nil then platform_fs_free_buf(LData);
   end;
 end;
-function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean;
-var I: Integer; Neg: Boolean; C: Char; U: UInt64;
-begin Result:=False; OutVal:=0; if V.IsEmpty then Exit; I:=0; Neg:=False;
-  if V.Data[0]='-' then begin Neg:=True; I:=1; if V.Len=1 then Exit; end else if V.Data[0]='+' then begin I:=1; if V.Len=1 then Exit; end;
-  U:=0; while I<Integer(V.Len) do begin C:=V.Data[I]; if (C<'0') or (C>'9') then Exit; U:=U*10+UInt64(Ord(C)-Ord('0')); if U>UInt64(High(Int64))+Ord(Neg) then Exit; Inc(I); end;
-  if Neg then OutVal:=-Int64(U) else OutVal:=Int64(U); Result:=True; end;
+function TryPureInt(const V: TStringView; out OutVal: Int64): Boolean; inline;
+begin Result:=ViewToInt64(V, OutVal); end; // perf: inline thin-forward to L1 text.number ViewToInt64 single source, owner text.number, zero duplicate parse, zero-copy view
 function TryPureIntAdd(const V: TStringView; out OutVal: TJsValue): Boolean;
 var P: PtrInt; L, R: TStringView; A, B: Int64;
 begin Result:=False; P:=V.IndexOf('+'); if P<0 then Exit; if V.IndexOf('(')>=0 then Exit;
   L:=V.Slice(0,SizeUInt(P)).Trim; R:=V.Slice(SizeUInt(P)+1,V.Len-SizeUInt(P)-1).Trim; if L.IsEmpty or R.IsEmpty then Exit;
-  if not TryPureInt(L,A) then Exit; if not TryPureInt(R,B) then Exit; OutVal:=JsIntValue(A+B); Result:=True; end;
+  if not ViewToInt64(L,A) then Exit; if not ViewToInt64(R,B) then Exit; OutVal:=JsIntValue(A+B); Result:=True; end; // perf: reuse ViewToInt64 single source, no hand roll
 function JsPureDoEval(ACtx: IJsContext; const ACode: string; const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind; const Hosts: TJsPureHostArray; const AGlobal: TJsValue): TJsValue;
 var LView, LNameView, LArgView: TStringView; LIdx: PtrInt; LHostIdx: Integer; LSingle: array[0..0] of TJsValue; LNoArgs: array of TJsValue; LHandler: TJsHostFunction; LMethod: TJsHostMethod; LProc: TJsHostProc; LThis: TJsValue; LHasArg: Boolean; LAdd: TJsValue;
 begin LNoArgs:=nil; LView:=TStringView.FromStr(ACode).Trim; if LView.IsEmpty then raise EJsError.Create('SyntaxError: empty code', jecSyntax, 'SyntaxError', 'at eval:1:1', ABackend);

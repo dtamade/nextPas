@@ -99,13 +99,11 @@ uses
   nextpas.core.exception,
   nextpas.core.text,
   nextpas.core.text.conv,
-  nextpas.core.text.number,
   nextpas.core.json.types,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
-  nextpas.core.simd,
   nextpas.core.js.quickjs.loader;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
@@ -234,22 +232,20 @@ begin
 end;
 
 function TJsQuickJsContext.QjsToTJs(const V: TJSQjsValue): TJsValue; inline;
-var P: PAnsiChar; Vw, Tw: TStringView; Doc: IJsonDocument; Root: TJsonValue; LInt: Int64; LDbl: Double;
+var P: PAnsiChar; Vw, Tw: TStringView; Doc: IJsonDocument; Root: TJsonValue;
 begin
   Result := Bind(JsUndefinedValue);
   if not Assigned(JS_ToCStringPtr) or (FCtx = nil) then Exit(Bind(JsUndefinedValue));
   P := JS_ToCStringPtr(FCtx, V);
   if P = nil then Exit(Bind(JsUndefinedValue));
   try
-    // perf: single scan via QjsView (SIMD single source, inline, zero-copy) + TryPureInt fast path (zero alloc) before JsonParse
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     Vw := QjsView(P);
     Tw := Vw.Trim;
     if Tw.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
     if Tw.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
     if Tw.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
     if Tw.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
-    if ViewToInt64(Tw, LInt) then Exit(JsPureNewInt(LInt, FContextId));
-    if ViewToDouble(Tw, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
     Doc := JsonParse(Tw);
     if not Doc.HasError then
     begin
@@ -324,8 +320,6 @@ var
   LOrig, LView: TStringView;
   LDoc: IJsonDocument;
   LRoot: TJsonValue;
-  LInt: Int64;
-  LDbl: Double;
   P: PAnsiChar;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
@@ -345,15 +339,13 @@ begin
     if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
     P := JS_ToCStringPtr(FCtx, V);
     if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: zero-copy view over C string (no Pascal string alloc), single scan via QjsView (SIMD single source, inline, zero-copy) + TryPureInt/Double fast path (zero alloc) before JsonParse
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     LOrig := QjsView(P);
     LView := LOrig.Trim;
     if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
     if LView.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
     if LView.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
     if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
-    if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
-    if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
     // 统一编解码：走 json owner 单源（JsonParse+TJsonValue），消双份拷贝，视图零拷贝入参，保持 CONTRACT INV-5
     LDoc := JsonParse(LView);
     if not LDoc.HasError then
@@ -454,10 +446,45 @@ begin
   end;
 end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray;
+var
+  Idx: Integer;
+  LLen: UInt32;
+  LProps: PJSPropertyEnum;
+  I: Integer;
+  QStr: TJSQjsValue;
+  P: PAnsiChar;
 begin
   EnsureNotClosed;
-  // 单源：纯堆键枚举，FFI 真堆枚举需 JS_GetOwnPropertyNames（待反哺），当前复用纯堆保持 CONTRACT 不变量
-  Result:=JsPureHeapGetKeys(FHeap, AObj);
+  // perf: FFI真堆枚举优先 via JS_GetOwnPropertyNames single source (bytes.ops zero-copy, inline view), 纯/FFI双堆一致；失败回落纯堆 CONTRACT，资源 exactly-once Free不丢
+  Idx := HeapIndexOf(AObj);
+  if (FCtx <> nil) and (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_GetOwnPropertyNamesPtr) and Assigned(JS_FreePropertyEnumPtr) and Assigned(JS_AtomToStringPtr) and Assigned(JS_ToCStringPtr) and Assigned(JS_FreeCStringPtr) and Assigned(JS_FreeValuePtr) then
+  begin
+    LLen := 0;
+    LProps := JS_GetOwnPropertyNamesPtr(FCtx, @LLen, FQjsHeap[Idx], JS_GPN_STRING_MASK);
+    if LProps <> nil then
+    try
+      SetLength(Result, LLen);
+      for I := 0 to Integer(LLen) - 1 do
+      begin
+        QStr := JS_AtomToStringPtr(FCtx, LProps[I].atom);
+        try
+          P := JS_ToCStringPtr(FCtx, QStr);
+          if P <> nil then
+          try
+            Result[I] := AnsiPtrToStr(P);
+          finally JS_FreeCStringPtr(FCtx, P); end
+          else Result[I] := '';
+        finally
+          if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QStr);
+        end;
+      end;
+      Exit;
+    finally
+      JS_FreePropertyEnumPtr(FCtx, LProps, LLen);
+    end;
+  end;
+  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源，保持双堆一致)
+  Result := JsPureHeapGetKeys(FHeap, AObj);
 end;
 function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
