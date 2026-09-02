@@ -99,6 +99,7 @@ uses
   nextpas.core.exception,
   nextpas.core.text,
   nextpas.core.text.conv,
+  nextpas.core.text.number,
   nextpas.core.json.types,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
@@ -186,45 +187,20 @@ procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreat
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
 
 function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt;
-var
-  LOff: SizeUInt;
-  LIdx: PtrInt;
-const
-  // chunk = BYTES_BUILDER_MIN_GROW * 64 = 4096, page-aligned scan via bytes.ops single source (no magic)
-  CChunk = BYTES_BUILDER_MIN_GROW * 64;
 begin
   if P = nil then Exit(0);
-  // bytes.ops single source via SIMD MemFindByte (single scan), avoid hand while duplicate; not inline per design-conventions (loop/SIMD body)
-  LOff := 0;
-  while True do
-  begin
-    LIdx := MemFindByte(P + LOff, CChunk, 0);
-    if LIdx >= 0 then Exit(LOff + SizeUInt(LIdx));
-    Inc(LOff, CChunk);
-  end;
+  // perf: single scan via System.StrLen (single source, no CChunk 4096 chunk loop, SIMD in RTL), not inline per design-conventions (loop body)
+  Result := SizeUInt(System.StrLen(P));
 end;
 
 procedure TJsQuickJsContext.EnsureQjsHeapCapacity(ANeed: Integer);
 var
-  LCap, LNewCap: Integer;
+  LCap: Integer;
 begin
-  // reuse bytes.ops single source BYTES_BUILDER_MIN_GROW doubling, amortized O(1)
+  // bytes.ops single source via BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW 64→2×, amortized O1), reuse pure.base PureNextCap 同源
   LCap := Length(FQjsHeap);
   if LCap >= ANeed then Exit;
-  LNewCap := LCap;
-  if LNewCap < Integer(BYTES_BUILDER_MIN_GROW) then
-    LNewCap := Integer(BYTES_BUILDER_MIN_GROW);
-  while LNewCap < ANeed do
-  begin
-    if LNewCap <= High(Integer) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ANeed;
-      Break;
-    end;
-  end;
-  SetLength(FQjsHeap, LNewCap);
+  SetLength(FQjsHeap, BytesGrowCapacityInt(LCap, ANeed));
 end;
 
 function TJsQuickJsContext.QjsView(P: PAnsiChar): TStringView; inline;
@@ -247,7 +223,7 @@ begin
         else if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(FCtx, AVal.AsDouble);
       end;
     jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(FCtx, Ord(AVal.AsBool));
-    jskObject, jskArray:
+    jskObject, jskArray, jskFunction:
       begin
         Idx := JsPureHeapFind(FHeap, AVal);
         if (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(FCtx, FQjsHeap[Idx]);
@@ -258,20 +234,22 @@ begin
 end;
 
 function TJsQuickJsContext.QjsToTJs(const V: TJSQjsValue): TJsValue; inline;
-var P: PAnsiChar; Vw, Tw: TStringView; Doc: IJsonDocument; Root: TJsonValue;
+var P: PAnsiChar; Vw, Tw: TStringView; Doc: IJsonDocument; Root: TJsonValue; LInt: Int64; LDbl: Double;
 begin
   Result := Bind(JsUndefinedValue);
   if not Assigned(JS_ToCStringPtr) or (FCtx = nil) then Exit(Bind(JsUndefinedValue));
   P := JS_ToCStringPtr(FCtx, V);
   if P = nil then Exit(Bind(JsUndefinedValue));
   try
-    // perf: single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: single scan via QjsView (SIMD single source, inline, zero-copy) + TryPureInt fast path (zero alloc) before JsonParse
     Vw := QjsView(P);
     Tw := Vw.Trim;
     if Tw.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
     if Tw.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
     if Tw.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
     if Tw.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
+    if ViewToInt64(Tw, LInt) then Exit(JsPureNewInt(LInt, FContextId));
+    if ViewToDouble(Tw, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
     Doc := JsonParse(Tw);
     if not Doc.HasError then
     begin
@@ -346,6 +324,8 @@ var
   LOrig, LView: TStringView;
   LDoc: IJsonDocument;
   LRoot: TJsonValue;
+  LInt: Int64;
+  LDbl: Double;
   P: PAnsiChar;
 begin
   EnsureNotClosed; EnsureThreadAffinity;
@@ -365,13 +345,15 @@ begin
     if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
     P := JS_ToCStringPtr(FCtx, V);
     if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: zero-copy view over C string (no Pascal string alloc), single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: zero-copy view over C string (no Pascal string alloc), single scan via QjsView (SIMD single source, inline, zero-copy) + TryPureInt/Double fast path (zero alloc) before JsonParse
     LOrig := QjsView(P);
     LView := LOrig.Trim;
     if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
     if LView.Equals(TStringView.FromStr('true')) then Exit(JsPureNewBool(True, FContextId));
     if LView.Equals(TStringView.FromStr('false')) then Exit(JsPureNewBool(False, FContextId));
     if LView.Equals(TStringView.FromStr('undefined')) then Exit(JsValueBindContext(JsUndefinedValue, FContextId));
+    if ViewToInt64(LView, LInt) then Exit(JsPureNewInt(LInt, FContextId));
+    if ViewToDouble(LView, LDbl) then Exit(JsPureNewDouble(LDbl, FContextId));
     // 统一编解码：走 json owner 单源（JsonParse+TJsonValue），消双份拷贝，视图零拷贝入参，保持 CONTRACT INV-5
     LDoc := JsonParse(LView);
     if not LDoc.HasError then
@@ -536,16 +518,23 @@ begin
   // FFI 真 JS 函数路径：复用 JS_Call 单源（已在 loader 绑定），参数零拷贝转换后 exactly-once Free
   if Assigned(JS_CallPtr) and (FCtx <> nil) and AFunc.IsFunction then
   begin
-    // 尝试构造 QFunc/QThis/QArgs；若缺 FFI 句柄则保持 pure 结果
-    FillChar(QFunc, SizeOf(QFunc), 0);
-    FillChar(QThis, SizeOf(QThis), 0);
-    // host 函数已在上分支处理，此处仅占位演示 FFI 复用路径被编译引用，避免空转
-    if False then
-    begin
-      SetLength(QArgs, Length(AArgs));
-      for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
-      QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
-      try Result := QjsToTJs(QRes); finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QRes); for I := 0 to High(QArgs) do if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QArgs[I]); end;
+    // 单源复用：真 FFI 路径 live，无 if False 空转；资源 exactly-once Free 不丢
+    QFunc := QjsFromTJs(AFunc);
+    QThis := QjsFromTJs(AThis);
+    SetLength(QArgs, Length(AArgs));
+    for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
+    QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
+    try
+      Result := QjsToTJs(QRes);
+    finally
+      if Assigned(JS_FreeValuePtr) then
+      begin
+        JS_FreeValuePtr(FCtx, QRes);
+        JS_FreeValuePtr(FCtx, QFunc);
+        JS_FreeValuePtr(FCtx, QThis);
+        for I := 0 to High(QArgs) do JS_FreeValuePtr(FCtx, QArgs[I]);
+      end;
+      SetLength(QArgs, 0);
     end;
   end;
   if Result.IsValid then Result := Bind(Result) else Result := Bind(JsUndefinedValue);

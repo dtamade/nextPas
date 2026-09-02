@@ -67,25 +67,54 @@ function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValu
 implementation
 uses nextpas.core.json.value,
   nextpas.core.base, nextpas.core.text, nextpas.core.text.builder,
-  nextpas.core.text.view, nextpas.core.text.escape; // L1 only: text.escape single SIMD, view zero-copy, builder single alloc
-var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1;
+  nextpas.core.text.view, nextpas.core.text.escape, // L1 only: text.escape single SIMD, view zero-copy, builder single alloc owner
+  nextpas.core.bytes.ops, // single source capacity growth via BytesNextCapacity, amortized O(1) geometric
+  nextpas.core.platform.sync; // L0 platform mutex single source for GJsClosed sync/thread-affinity
+var GJsClosed: array of Boolean; GJsNextId: UInt64 = 1; GJsClosedLock: TPlatformMutex;
+
+// thread-affine + sync: GJsClosedLock protects GJsNextId bump + array grow + close flag; IsClosed uses lock to avoid torn SetLength race, inline barrier
 function JsContextRegister: UInt64;
+var LNeed, LCap: SizeUInt;
 begin
-  Result := GJsNextId;
-  Inc(GJsNextId);
-  if Result >= UInt64(Length(GJsClosed)) then
-    SetLength(GJsClosed, Integer(Result + 32));
-  GJsClosed[Result] := False;
+  platform_mutex_lock(GJsClosedLock);
+  try
+    Result := GJsNextId;
+    Inc(GJsNextId);
+    if Result >= UInt64(Length(GJsClosed)) then
+    begin
+      LNeed := SizeUInt(Result) + 32;
+      LCap := BytesNextCapacity(SizeUInt(Length(GJsClosed)), LNeed);
+      SetLength(GJsClosed, Integer(LCap));
+      // logical length is Result+1, keep capacity geometric; zero extra alloc, bytes.ops single source
+      if UInt64(Length(GJsClosed)) > Result then
+        SetLength(GJsClosed, Integer(Result + 1));
+    end;
+    GJsClosed[Result] := False;
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
 end;
 procedure JsContextClose(AId: UInt64);
 begin
-  if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
-    GJsClosed[AId] := True;
+  platform_mutex_lock(GJsClosedLock);
+  try
+    if (AId > 0) and (AId < UInt64(Length(GJsClosed))) then
+      GJsClosed[AId] := True;
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
 end;
 function JsContextIsClosed(AId: UInt64): Boolean;
 begin
-  if (AId = 0) or (AId >= UInt64(Length(GJsClosed))) then Exit(False);
-  Result := GJsClosed[AId];
+  // perf: inline fast return for 0 + lock-protected read, avoid torn len/data race; INV-7 thread-affine
+  if AId = 0 then Exit(False);
+  platform_mutex_lock(GJsClosedLock);
+  try
+    if AId >= UInt64(Length(GJsClosed)) then Exit(False);
+    Result := GJsClosed[AId];
+  finally
+    platform_mutex_unlock(GJsClosedLock);
+  end;
 end;
 function JsValueBindContext(const AValue: TJsValue; AContextId: UInt64): TJsValue;
 begin
@@ -128,9 +157,7 @@ function TJsValue.AsBool: Boolean; begin if FKind<>jskBoolean then Exit(False); 
 function TJsValue.AsInt: Int64; begin if FKind<>jskNumber then if FKind=jskBigInt then Exit(FIntVal) else Exit(0); Result:=FIntVal; end;
 function TJsValue.AsDouble: Double; begin if FKind<>jskNumber then Exit(0.0); Result:=FDoubleVal; end;
 function TJsValue.AsString: string; begin if FKind<>jskString then if FKind=jskSymbol then Exit(FStrVal) else Exit(''); Result:=FStrVal; end;
-function NeedsJsonEscape(const S: string): Boolean;
-var I: Integer; begin for I:=1 to Length(S) do if (S[I]='"') or (S[I]='\') or (Byte(S[I])<32) then Exit(True); Result:=False; end;
-function TJsValue.AsJson: string;
+function TJsValue.AsJson: string; inline;
 var
   S: string;
   B: TStringBuilder;
@@ -144,9 +171,8 @@ begin
       begin
         S := FStrVal;
         if S = '' then Exit('""');
-        // perf: fast path zero builder alloc when no escape (small benchmark -4.5% as in pure.base), single scan + SIMD escape single source via bytes.ops Grow
-        if not NeedsJsonEscape(S) then Exit('"' + S + '"');
-        B.Init(SizeUInt(Length(S)) + 16);
+        // perf: single-pass SIMD via owner text.escape.JsonEscapeToBuilder (VecWidth inline, bytes.ops single source), zero-copy builder AppendBytes via BytesCopy inline, no double O(n) scan, no '"' + S + '"' alloc; B single alloc geometric via BytesNextCapacity; inline hot path
+        B.Init(SizeUInt(Length(S)) + 2 + 16);
         try
           B.AppendChar('"');
           JsonEscapeToBuilder(TStringView.FromStr(S), B);
@@ -165,4 +191,10 @@ end;
 function TJsValue.TryAsBool(out V: Boolean): Boolean; begin Result:=FKind=jskBoolean; if Result then V:=FBoolVal else V:=False; end;
 function TJsValue.TryAsDouble(out V: Double): Boolean; begin Result:=FKind=jskNumber; if Result then V:=FDoubleVal else V:=0.0; end;
 function TJsValue.TryAsString(out V: string): Boolean; begin Result:=FKind=jskString; if Result then V:=FStrVal else V:=''; end;
+
+initialization
+  // sync init: L0 platform mutex single source, thread-affine protects GJsClosed/GJsNextId lifecycle
+  platform_mutex_init(GJsClosedLock, PLATFORM_MUTEX_ERRORCHECK);
+finalization
+  platform_mutex_destroy(GJsClosedLock);
 end.
