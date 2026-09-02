@@ -112,32 +112,32 @@ function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; 
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
 function GetEastAsianWidth(const ACp: TUnicodeCodepoint): TEastAsianWidth; inline;
 function IsEastAsianFWH(const ACp: TUnicodeCodepoint): Boolean; inline;
-function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult;
 function ResolveBidiClasses(const AClasses: array of TBidiClass;
-  const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
-function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray; inline;
+  const AParagraphDir: Integer = 2): TBidiResolveResult;
+function ReorderBidiVisually(const ALevels: array of TBidiLevel): TBidiIndexArray;
 function InvertBidiIndexMap(const AVisualToLogical: array of SizeInt;
-  const ALogicalCount: SizeInt): TBidiIndexArray; inline;
+  const ALogicalCount: SizeInt): TBidiIndexArray;
 function ApplyBidiVisualOrder(const AText: string;
-  const AParagraphDir: Integer = 2): string; inline;
+  const AParagraphDir: Integer = 2): string;
 
-function PunycodeEncode(const ALabel: string): string; inline;
-function PunycodeDecode(const AAscii: string): string; inline;
-function IDNAToASCII(const ADomain: string): string; overload; inline;
-function IDNAToUnicode(const ADomain: string): string; overload; inline;
-function IDNAToASCII(const ADomain: string; out AError: string): string; overload; inline;
-function IDNAToUnicode(const ADomain: string; out AError: string): string; overload; inline;
-function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
-function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string; overload; inline;
+function PunycodeEncode(const ALabel: string): string;
+function PunycodeDecode(const AAscii: string): string;
+function IDNAToASCII(const ADomain: string): string; overload;
+function IDNAToUnicode(const ADomain: string): string; overload;
+function IDNAToASCII(const ADomain: string; out AError: string): string; overload;
+function IDNAToUnicode(const ADomain: string; out AError: string): string; overload;
+function IDNAToASCII(const ADomain: string; out AKind: TIDNAErrorKind): string; overload;
+function IDNAToUnicode(const ADomain: string; out AKind: TIDNAErrorKind): string; overload;
 function IDNAErrorKindName(const AKind: TIDNAErrorKind): string; inline;
 function GetIdnaMapStatus(const ACp: TUnicodeCodepoint;
   out AMap: array of TUnicodeCodepoint; out AMapLen: Byte): TIDNAMapStatus; inline;
-function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string; inline;
+function ApplyIdnaMap(const AText: string; out AKind: TIDNAErrorKind): string;
 
 function GetConfusablePrototype(const ACp: TUnicodeCodepoint;
-  out ADst: array of TUnicodeCodepoint; out ALen: Byte): Boolean; inline;
-function ConfusableSkeleton(const AText: string): string; inline;
-function AreConfusable(const A, B: string): Boolean; inline;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte): Boolean;
+function ConfusableSkeleton(const AText: string): string;
+function AreConfusable(const A, B: string): Boolean;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -180,66 +180,66 @@ function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap): Byt
 function CaseFoldSimple(const ACp: TUnicodeCodepoint; const AOptions: TCaseOptions): TUnicodeCodepoint; overload; inline;
 function CaseFoldFull(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap;
   const AOptions: TCaseOptions): Byte; overload; inline;
-function UTF8ToUpper(const AValue: string): string; overload; inline;
-function UTF8ToLower(const AValue: string): string; overload; inline;
-function UTF8ToTitle(const AValue: string): string; overload; inline;
-function UTF8CaseFold(const AValue: string): string; overload; inline;
-function UTF8CaseFoldSimple(const AValue: string): string; overload; inline;
-function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
-function UTF8ToLower(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
-function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
-function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
-function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
-function UTF8ToTitleWords(const AValue: string): string; overload; inline;
-function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8ToUpper(const AValue: string): string; overload;
+function UTF8ToLower(const AValue: string): string; overload;
+function UTF8ToTitle(const AValue: string): string; overload;
+function UTF8CaseFold(const AValue: string): string; overload;
+function UTF8CaseFoldSimple(const AValue: string): string; overload;
+function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string; overload;
+function UTF8ToLower(const AValue: string; const AOptions: TCaseOptions): string; overload;
+function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string; overload;
+function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string; overload;
+function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string; overload;
+function UTF8ToTitleWords(const AValue: string): string; overload;
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string; overload;
 function DefaultCaseOptions: TCaseOptions; inline;
 
-// 规范化函数
-function NFD(const AText: string): string; inline;
-function NFC(const AText: string): string; inline;
-function NFKD(const AText: string): string; inline;
-function NFKC(const AText: string): string; inline;
-function IsNormalizedNFD(const AText: string): Boolean; inline;
-function IsNormalizedNFC(const AText: string): Boolean; inline;
-function IsNormalizedNFKD(const AText: string): Boolean; inline;
-function IsNormalizedNFKC(const AText: string): Boolean; inline;
-function QuickCheckNFD(const AText: string): Boolean; inline;
-function QuickCheckNFKD(const AText: string): Boolean; inline;
-function QuickCheckNFC(const AText: string): Boolean; inline;
-function QuickCheckNFKC(const AText: string): Boolean; inline;
+// 规范化函数 — 重逻辑（分解/组合/QuickCheck 全串扫描）按红线2外联，避免门面 inline 膨胀
+function NFD(const AText: string): string;
+function NFC(const AText: string): string;
+function NFKD(const AText: string): string;
+function NFKC(const AText: string): string;
+function IsNormalizedNFD(const AText: string): Boolean;
+function IsNormalizedNFC(const AText: string): Boolean;
+function IsNormalizedNFKD(const AText: string): Boolean;
+function IsNormalizedNFKC(const AText: string): Boolean;
+function QuickCheckNFD(const AText: string): Boolean;
+function QuickCheckNFKD(const AText: string): Boolean;
+function QuickCheckNFC(const AText: string): Boolean;
+function QuickCheckNFKC(const AText: string): Boolean;
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
 function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
   out ADst: array of TUnicodeCodepoint; out ALen: Byte;
   out AIsCompatibility: Boolean): Boolean; inline;
 function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean; inline;
 
-// 文本分割函数
+// 文本分割函数 — 重逻辑（全串扫描/循环）外联；单例获取器保持 inline
 function UnicodeSegmenter: IUnicodeSegmenter; inline;
-function SegmentGraphemeClusters(const AText: string): TSegmentResultArray; inline;
-function SegmentWords(const AText: string): TSegmentResultArray; inline;
-function SegmentLines(const AText: string): TSegmentResultArray; inline;
-function SegmentSentences(const AText: string): TSegmentResultArray; inline;
-function SegmentLineBreaks(const AText: string): TSegmentResultArray; inline;
-{ Shared UAX #29 grapheme-cluster core (byte-oriented). }
-function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
-function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
-function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
-function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
-function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt; inline;
+function SegmentGraphemeClusters(const AText: string): TSegmentResultArray;
+function SegmentWords(const AText: string): TSegmentResultArray;
+function SegmentLines(const AText: string): TSegmentResultArray;
+function SegmentSentences(const AText: string): TSegmentResultArray;
+function SegmentLineBreaks(const AText: string): TSegmentResultArray;
+{ Shared UAX #29 grapheme-cluster core (byte-oriented). — 循环体禁 inline }
+function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
 
-// 排序规则函数
-function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
+// 排序规则函数 — 重逻辑（CollectElements/排序）外联；小访问器/选项构造保持 inline
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
 function UnpackPrimary(const AWeight: UInt32): UInt16; inline;
 function UnpackSecondary(const AWeight: UInt32): Byte; inline;
 function UnpackTertiary(const AWeight: UInt32): Byte; inline;
-function UnicodeCollator: IUnicodeCollator; inline;
-function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
+function UnicodeCollator: IUnicodeCollator;
+function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator;
 function DefaultCollationOptions: TCollationOptions; inline;
 function UCACollationOptions(const AVariable: TCollationVariableWeighting): TCollationOptions; inline;
 
-// 便利函数
-function CompareText(const A, B: string): Integer; inline;
-function GetSortKey(const AText: string): TCollationKey; inline;
+// 便利函数 — 委派 collator Compare/GetSortKey，重逻辑外联
+function CompareText(const A, B: string): Integer;
+function GetSortKey(const AText: string): TCollationKey;
 procedure SortStrings(var AStrings: array of string);
 
 // 数据管理器

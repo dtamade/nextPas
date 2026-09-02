@@ -42,7 +42,7 @@ unit nextpas.core.tls.encoding;
 
 interface
 
-uses nextpas.core.base, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.bio;
+uses nextpas.core.base, nextpas.core.exception, nextpas.core.bytes.ops, nextpas.core.text.conv, nextpas.core.tls.base, nextpas.core.tls.exceptions, nextpas.core.tls.errors, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.bio;
 
 type
   {**
@@ -476,7 +476,7 @@ begin
     if LLen > 0 then
     begin
       SetLength(Result, LLen);
-      Move(LBuffer[0], Result[0], LLen);
+      BytesCopy(@Result[0], @LBuffer[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy), L1+ reuse gate
     end
     else if LLen < 0 then
       raise ESSLCryptoError.Create('Failed to decode Base64 data');

@@ -229,17 +229,63 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 { Internal format helper — used by ENextPasError constructors under both compilers.
   Supports %s (string), %d (integer), %% (literal percent).
-  Uses Result := Result + Ch/S pattern (no nested procedures, no SetString). }
+  perf: single-source growth via bytes.ops.BytesGrowCapacityInt (INV-5, amortized O(1) geometric, BYTES_BUILDER_MIN_GROW) + zero-copy Move Pointer(Result)^; Not inline per red-line 2 (loop/I-Cache), inline helpers for Append; single SetLength shrink at end; stability: exception-safe, no resource leak. }
 function FormatStr(const AFmt: string; const AArgs: array of const): string;
 var
   LI, LArgIdx: Integer;
   LIntBuf: string;
   LVal: Int64;
   LTmpStr: string;
+  LCap, LLen: Integer;
+  procedure Ensure(const AAdd: Integer); inline;
+  var
+    LNewCap: Integer;
+  begin
+    if AAdd <= 0 then
+      Exit;
+    if LLen + AAdd <= LCap then
+      Exit;
+    LNewCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LLen + AAdd);
+    SetLength(Result, LNewCap);
+    LCap := LNewCap;
+  end;
+  procedure AppendStr(const S: string); inline;
+  var
+    LSLen: Integer;
+  begin
+    LSLen := Length(S);
+    if LSLen = 0 then
+      Exit;
+    Ensure(LSLen);
+    Move(PAnsiChar(S)^, (PByte(Pointer(Result)) + LLen)^, LSLen);
+    Inc(LLen, LSLen);
+  end;
+  procedure AppendChar(const C: Char); inline;
+  begin
+    Ensure(1);
+    PAnsiChar(Pointer(Result))[LLen] := AnsiChar(C);
+    Inc(LLen);
+  end;
+  procedure AppendShort(const S: ShortString); inline;
+  var
+    LSLen: Integer;
+  begin
+    LSLen := Length(S);
+    if LSLen = 0 then
+      Exit;
+    Ensure(LSLen);
+    Move(S[1], (PByte(Pointer(Result)) + LLen)^, LSLen);
+    Inc(LLen, LSLen);
+  end;
 begin
   Result := '';
+  LCap := 0;
+  LLen := 0;
   LArgIdx := 0;
   LI := 1;
   while LI <= Length(AFmt) do
@@ -253,22 +299,28 @@ begin
             raise EConvertError.Create('FormatStr: not enough arguments for %s');
           case AArgs[LArgIdx].VType of
             vtAnsiString: begin
-              LTmpStr := string(AArgs[LArgIdx].VAnsiString);
-              Result := Result + LTmpStr;
+              if AArgs[LArgIdx].VAnsiString <> nil then
+              begin
+                LTmpStr := string(AArgs[LArgIdx].VAnsiString);
+                AppendStr(LTmpStr);
+              end;
             end;
             vtUnicodeString: begin
               LTmpStr := string(AArgs[LArgIdx].VUnicodeString);
-              Result := Result + LTmpStr;
+              AppendStr(LTmpStr);
             end;
-            vtString: Result := Result + AArgs[LArgIdx].VString^;
-            vtChar: Result := Result + AArgs[LArgIdx].VChar;
+            vtString: AppendShort(AArgs[LArgIdx].VString^);
+            vtChar: AppendChar(AArgs[LArgIdx].VChar);
             vtPChar: begin
-              LTmpStr := string(AArgs[LArgIdx].VPChar);
-              Result := Result + LTmpStr;
+              if AArgs[LArgIdx].VPChar <> nil then
+              begin
+                LTmpStr := string(AArgs[LArgIdx].VPChar);
+                AppendStr(LTmpStr);
+              end;
             end;
-            vtWideChar: Result := Result + Char(AArgs[LArgIdx].VWideChar);
+            vtWideChar: AppendChar(Char(AArgs[LArgIdx].VWideChar));
           else
-            Result := Result + '???';
+            AppendStr('???');
           end;
           Inc(LArgIdx);
         end;
@@ -283,18 +335,20 @@ begin
             LVal := 0;
           end;
           Str(LVal, LIntBuf);
-          Result := Result + LIntBuf;
+          AppendStr(LIntBuf);
           Inc(LArgIdx);
         end;
-        '%': Result := Result + '%';
+        '%': AppendChar('%');
       else
-        Result := Result + '%' + AFmt[LI];
+        AppendChar('%');
+        AppendChar(AFmt[LI]);
       end;
     end
     else
-      Result := Result + AFmt[LI];
+      AppendChar(AFmt[LI]);
     Inc(LI);
   end;
+  SetLength(Result, LLen);
 end;
 
 {$IFNDEF FPC}

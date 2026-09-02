@@ -374,12 +374,12 @@ end;
 
 procedure TSevenZWriterImpl.EnsureEntriesCapacity; inline;
 var
-  LNewCap: Integer;
+  LNewCap: SizeUInt;
 begin
   if FCount < Length(FEntries) then Exit;
-  LNewCap := Length(FEntries);
-  if LNewCap < 8 then LNewCap := 8 else LNewCap := LNewCap * 2;
-  SetLength(FEntries, LNewCap);
+  // 单源复用 bytes.ops：BytesNextCapacity 均摊 O(1)（BYTES_BUILDER_MIN_GROW 起步 ×2），与 IBytesBuilder 同源，消除 writer 私有魔数
+  LNewCap := BytesNextCapacity(SizeUInt(Length(FEntries)), SizeUInt(FCount + 1));
+  SetLength(FEntries, SizeInt(LNewCap));
 end;
 
 procedure TSevenZWriterImpl.SetEncodeHeader(AEnabled: Boolean);

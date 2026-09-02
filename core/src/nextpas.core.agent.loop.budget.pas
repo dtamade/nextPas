@@ -104,19 +104,41 @@ end;
 
 function LoopAddOutUsed(AOutUsed: Int64; const AMsg: TMessage;
   const AProvider: IAgentProvider): Int64;
+var
+  LText, LSyn: string;
+  I: Integer;
 begin
   if AMsg.Usage.Known and (AMsg.Usage.OutputTokens <> CUsageUnknown) then
-    Result := AOutUsed + AMsg.Usage.OutputTokens
-  else
-    Result := AOutUsed + LoopEstimateTokensFallback(AProvider, MessageText(AMsg));
+    Exit(AOutUsed + AMsg.Usage.OutputTokens);
+  LText := MessageText(AMsg);
+  if LText <> '' then
+    Exit(AOutUsed + LoopEstimateTokensFallback(AProvider, LText));
+  LSyn := '';
+  for I := 0 to High(AMsg.Parts) do
+    if AMsg.Parts[I].Kind = pkToolCall then
+      LSyn := LSyn + AMsg.Parts[I].ToolName + AMsg.Parts[I].ArgumentsJson;
+  if LSyn = '' then
+    LSyn := 'tool_call';
+  Result := AOutUsed + LoopEstimateTokensFallback(AProvider, LSyn);
 end;
 
 function LoopCostForMessage(const AMsg: TMessage): Int64;
+var
+  LText, LSyn: string;
+  I: Integer;
 begin
   if AMsg.Usage.Known then
-    Result := EstimateCost(AMsg.Usage)
-  else
-    Result := EstimateCost(0, AgentEstimateTokens(MessageText(AMsg)));
+    Exit(EstimateCost(AMsg.Usage));
+  LText := MessageText(AMsg);
+  if LText <> '' then
+    Exit(EstimateCost(0, AgentEstimateTokens(LText)));
+  LSyn := '';
+  for I := 0 to High(AMsg.Parts) do
+    if AMsg.Parts[I].Kind = pkToolCall then
+      LSyn := LSyn + AMsg.Parts[I].ToolName + AMsg.Parts[I].ArgumentsJson;
+  if LSyn = '' then
+    LSyn := 'tool_call';
+  Result := EstimateCost(0, AgentEstimateTokens(LSyn));
 end;
 
 end.

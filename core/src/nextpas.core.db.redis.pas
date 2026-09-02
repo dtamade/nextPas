@@ -1,7 +1,8 @@
 unit nextpas.core.db.redis;
 
 {** @desc Redis 后端门面（V3-A5）。纯 re-export——连接入口
-       ConnectRedis + 基本类型；统一层接口经 nextpas.core.db 获取。 *}
+       ConnectRedis + 基本类型；统一层接口经 nextpas.core.db 获取。
+       门面零缝（缝仅在 db.redis.transport→net/tls 单点 + adapter→net 轻量，Registry allowlist + source-contract 门禁，cycle-gated 无 reverse），门面 inline 薄转发，bytes.ops 单源零拷贝视图，资源由 adapter/transport 承载不丢。 *}
 
 {$I nextpas.core.settings.inc}
 

@@ -104,11 +104,17 @@ begin
     Exit;                            { 注释/keep-alive 行 }
   LColon := nextpas.core.text.TextIndexOf(ALine, ':');
   if LColon < 0 then
-    Exit;                            { 无冒号行按 SSE 规范忽略 }
-  LField := nextpas.core.text.TextSlice(ALine, 0, SizeUInt(LColon));
-  LValue := nextpas.core.text.TextSlice(ALine, SizeUInt(LColon) + 1, MaxInt);
-  if (LValue <> '') and (LValue[1] = ' ') then
-    LValue := nextpas.core.text.TextSlice(LValue, 1, MaxInt);   { 规范：冒号后单个空格剥离 }
+  begin
+    LField := ALine;
+    LValue := '';
+  end
+  else
+  begin
+    LField := nextpas.core.text.TextSlice(ALine, 0, SizeUInt(LColon));
+    LValue := nextpas.core.text.TextSlice(ALine, SizeUInt(LColon) + 1, MaxInt);
+    if (LValue <> '') and (LValue[1] = ' ') then
+      LValue := nextpas.core.text.TextSlice(LValue, 1, MaxInt);   { 规范：冒号后单个空格剥离 }
+  end;
   if LField = 'data' then
   begin
     if FHasData then

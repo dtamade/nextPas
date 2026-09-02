@@ -1,8 +1,10 @@
 PROGRAM := bench_ssh_cipher
 # Leak gate opt-out（common.mk 默认开的文档化退出路径，须在 include 之前）：
-# 基准不链 heaptrc——分配检测会扭曲吞吐数据；泄漏纪律由 ssh 其余 8 门与
-# e2e_ssh_live 的 heaptrc 门禁覆盖。先例：test_lockfree_cowarray、
-# test_boundary_cases。
+# 基准不链 heaptrc——分配检测会扭曲吞吐数据；泄漏纪律由 ssh 其余
+# production gates 与 HEAPTRC_GATE=1 覆盖（bytes.ops 单源 Move/TByteSpan
+# inline/零拷贝，O3 -Xs）+ e2e_ssh_live。bench 保持 HEAPTRC_GATE=0 防吞吐
+# 失真由其余门覆盖泄漏（common.mk HEAPTRC_GATE=1 unified gate，±5% env
+# noise）。先例：test_lockfree_cowarray、test_boundary_cases。
 HEAPTRC_GATE = 0
 include ../../common.mk
 

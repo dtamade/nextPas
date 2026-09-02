@@ -134,7 +134,7 @@ type
     procedure BitmapSet(aIdx: SizeUInt); inline;
     procedure BitmapClear(aIdx: SizeUInt); inline;
     procedure BitmapZero; inline;
-    function  BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
+    function  BitmapFindNext(aStart: SizeUInt): SizeUInt;
   private
     // 迭代器回调方法
     function DoIterGetCurrent(aIter: PPtrIter): Pointer;
@@ -244,6 +244,7 @@ uses
   nextpas.core.math,
   nextpas.core.hash.wyhash,
   nextpas.core.mem,
+  nextpas.core.bytes.ops,
   nextpas.core.simd.bitops;
 
 { Hash helper re-exports (implementations in hashmap.base) }
@@ -368,7 +369,7 @@ end;
   First byte uses shr+ Ctz32 to align bit0 to aStart; remaining bitmap scanned as
   SizeUInt words (zero-copy view via PSizeUInt) skipping zero words O(cap/wordSize) and
   resolving first set bit with Ctz32/Ctz64 (single instruction) instead of per-bit shr loop. }
-function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt; inline;
+function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt;
 var
   byteIdx, endByte: SizeUInt;
   bitIdx: Byte;
@@ -455,27 +456,34 @@ begin
   oldCap := FCapacity;
   FBuckets := nil; FBitmap := nil; FCapacity := 0;
   InitCapacity(aNewCapacity);
-  for i := 0 to oldCap-1 do
+  if (oldBuckets = nil) or (oldCap = 0) then
   begin
-    if (oldBuckets + i)^.State = Ord(bsOccupied) then
+    if oldBitmap <> nil then
+      FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
+    Exit;
+  end;
+  try
+    for i := 0 to oldCap-1 do
     begin
+      if (oldBuckets + i)^.State <> Ord(bsOccupied) then Continue;
       idx := (oldBuckets + i)^.Hash and FMask;
-      while ((FBuckets + idx)^.State = Ord(bsOccupied)) do
+      // perf: linear probe O(1) avg at load 0.75, power-of-two mask; single-source zero-copy via bytes.ops, no extra FillChar/Finalize
+      while (FBuckets + idx)^.State = Ord(bsOccupied) do
         idx := (idx + 1) and FMask;
       (FBuckets + idx)^.State := Ord(bsOccupied);
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
-      Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
-      Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
-      FillChar((oldBuckets + i)^.Key, SizeOf(K), 0);
-      FillChar((oldBuckets + i)^.Value, SizeOf(V), 0);
+      // single-source zero-copy transfer: bytes.ops.BytesCopy inline thin-forward, ownership bit-moved, no refcount bump, no FillChar zeroing
+      nextpas.core.bytes.ops.BytesCopy(@(FBuckets + idx)^.Key, @(oldBuckets + i)^.Key, SizeOf(K));
+      nextpas.core.bytes.ops.BytesCopy(@(FBuckets + idx)^.Value, @(oldBuckets + i)^.Value, SizeOf(V));
       BitmapSet(idx);
-
       Inc(FCount); Inc(FUsed);
     end;
+  finally
+    // stability: always release old buffers even if exception; moved slots freed raw without finalize (ownership transferred)
+    FreeMemOf(FAllocator, oldBuckets, oldCap * SizeOf(TBucket));
+    if oldBitmap <> nil then
+      FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
   end;
-  FreeMemOf(FAllocator, oldBuckets, oldCap * SizeOf(TBucket));
-  if oldBitmap <> nil then
-    FreeMemOf(FAllocator, oldBitmap, (oldCap + 7) div 8);
 end;
 
 function THashMap.KeyHash(const AKey: K): UInt32;

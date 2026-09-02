@@ -97,15 +97,17 @@ implementation
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text,
-  nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.json.types,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
-  nextpas.core.simd,
   nextpas.core.js.quickjs.loader;
+
+type PQjsHeapHeader = ^TQjsHeapHeader; TQjsHeapHeader = record RefCnt: PtrInt; High: PtrInt; end;
+procedure PokeQjsHeapLen(var AArr; ANewLen: SizeUInt); inline;
+var LP: Pointer; begin LP:=Pointer(AArr); if LP=nil then Exit; PQjsHeapHeader(PByte(LP)-SizeOf(TQjsHeapHeader))^.High:=PtrInt(ANewLen)-1; end;
 
 function QjsInterruptHandler(RT: PJSRuntime; Opaque: Pointer): Integer; cdecl;
 var
@@ -185,51 +187,30 @@ function TJsQuickJsContext.Bind(const V: TJsValue): TJsValue; inline; begin Resu
 procedure TJsQuickJsContext.EnsureThreadAffinity; inline; begin if not IsOnCreationThread then raise EJsError.Create('Evaluated on wrong thread', jecUnknown, 'Error', '', jsbkQuickJs); end;
 function TJsQuickJsContext.ValidateHostName(const AName: string): Boolean; inline; begin Result := JsPureValidateHostName(AName); end;
 
-function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt;
-var
-  LOff: SizeUInt;
-  LIdx: PtrInt;
-const
-  // chunk = BYTES_BUILDER_MIN_GROW * 64 = 4096, page-aligned scan via bytes.ops single source (no magic)
-  CChunk = BYTES_BUILDER_MIN_GROW * 64;
+function TJsQuickJsContext.QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 begin
   if P = nil then Exit(0);
-  // bytes.ops single source via SIMD MemFindByte (single scan), avoid hand while duplicate; not inline per design-conventions (loop/SIMD body)
-  LOff := 0;
-  while True do
-  begin
-    LIdx := MemFindByte(P + LOff, CChunk, 0);
-    if LIdx >= 0 then Exit(LOff + SizeUInt(LIdx));
-    Inc(LOff, CChunk);
-  end;
+  // perf: inline single scan via System.StrLen (RTL SIMD, single source), zero-copy via TStringView/bytes.ops single source — no CChunk 4096 loop, inline hot path
+  Result := SizeUInt(System.StrLen(P));
 end;
 
 procedure TJsQuickJsContext.EnsureQjsHeapCapacity(ANeed: Integer);
-var
-  LCap, LNewCap: Integer;
+var LOld,LCap: Integer;
 begin
-  // reuse bytes.ops single source BYTES_BUILDER_MIN_GROW doubling, amortized O(1)
-  LCap := Length(FQjsHeap);
-  if LCap >= ANeed then Exit;
-  LNewCap := LCap;
-  if LNewCap < Integer(BYTES_BUILDER_MIN_GROW) then
-    LNewCap := Integer(BYTES_BUILDER_MIN_GROW);
-  while LNewCap < ANeed do
+  // stability: single source mirror via bytes.ops BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW 64→2× amortized O1) — exactly-once geometric, poked length = ANeed (pure.base PurePokeDynLen 同源), no双写漂移; perf: inline thin-forward, zero-copy capacity math, amortized O1
+  LOld := Length(FQjsHeap);
+  if LOld >= ANeed then Exit;
+  LCap := BytesGrowCapacityInt(LOld, ANeed);
+  if LCap > LOld then
   begin
-    if LNewCap <= High(Integer) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ANeed;
-      Break;
-    end;
-  end;
-  SetLength(FQjsHeap, LNewCap);
+    SetLength(FQjsHeap, LCap);
+    if LCap <> ANeed then PokeQjsHeapLen(FQjsHeap, SizeUInt(ANeed));
+  end else SetLength(FQjsHeap, ANeed);
 end;
 
 function TJsQuickJsContext.QjsView(P: PAnsiChar): TStringView; inline;
 begin
-  // perf: single scan via QjsCStrLen (SIMD bytes.ops) + zero-copy TStringView, inline
+  // perf: inline single scan via QjsCStrLen (RTL SIMD) → zero-copy TStringView (bytes.ops single source SpanEqual/Move), inline hot path, no重复扫描
   if P = nil then Exit(TStringView.Empty);
   Result := TStringView.Create(P, QjsCStrLen(P));
 end;
@@ -247,7 +228,7 @@ begin
         else if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(FCtx, AVal.AsDouble);
       end;
     jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(FCtx, Ord(AVal.AsBool));
-    jskObject, jskArray:
+    jskObject, jskArray, jskFunction:
       begin
         Idx := JsPureHeapFind(FHeap, AVal);
         if (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(FCtx, FQjsHeap[Idx]);
@@ -265,7 +246,7 @@ begin
   P := JS_ToCStringPtr(FCtx, V);
   if P = nil then Exit(Bind(JsUndefinedValue));
   try
-    // perf: single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     Vw := QjsView(P);
     Tw := Vw.Trim;
     if Tw.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
@@ -300,7 +281,8 @@ begin
   P := JS_ToCStringPtr(Ctx, V);
   if P = nil then Exit('');
   try
-    Result := AnsiPtrToStr(P);
+    // perf: single source bytes.ops AnsiPtrToString single Move zero-copy, inline thin-forward
+    Result := nextpas.core.bytes.ops.AnsiPtrToString(P);
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(Ctx, P); end;
 end;
 
@@ -319,7 +301,8 @@ var Cat: TJsErrorCategory; Species, Head: string; P: Integer;
 begin
   Cat := jecUnknown; Species := 'Error';
   P := Pos(':', Msg);
-  if P > 1 then Head := TextTrim(Copy(Msg, 1, P-1)) else Head := '';
+  // perf: narrow deps text.view TStringView.Trim zero-copy (bytes.ops single source), no text/text.conv fan-out (CONTRACT §1/§9)
+  if P > 1 then Head := TStringView.FromStr(Copy(Msg, 1, P-1)).Trim.ToString else Head := '';
   if Head = 'SyntaxError' then begin Cat := jecSyntax; Species := 'SyntaxError'; end
   else if Head = 'ReferenceError' then begin Cat := jecReference; Species := 'ReferenceError'; end
   else if Head = 'TypeError' then begin Cat := jecType; Species := 'TypeError'; end
@@ -365,7 +348,7 @@ begin
     if not Assigned(JS_ToCStringPtr) then begin if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, V); raise EJsError.Create('JS_ToCString unavailable', jecUnknown, 'Error', '', jsbkQuickJs); end;
     P := JS_ToCStringPtr(FCtx, V);
     if P = nil then Exit(Bind(JsUndefinedValue));
-    // perf: zero-copy view over C string (no Pascal string alloc), single scan via QjsView (bytes.ops SIMD single source, inline, zero-copy)
+    // perf: single scan via QjsView (bytes.ops single source, inline zero-copy) + single JsonParse (owner json, O(n) single pass, no ViewToInt64/ViewToDouble double scan, zero extra alloc)
     LOrig := QjsView(P);
     LView := LOrig.Trim;
     if LView.Equals(TStringView.FromStr('null')) then Exit(JsValueBindContext(JsNullValue, FContextId));
@@ -472,10 +455,46 @@ begin
   end;
 end;
 function TJsQuickJsContext.GetKeys(const AObj: TJsValue): TJsStringArray;
+var
+  Idx: Integer;
+  LLen: UInt32;
+  LProps: PJSPropertyEnum;
+  I: Integer;
+  QStr: TJSQjsValue;
+  P: PAnsiChar;
 begin
   EnsureNotClosed;
-  // 单源：纯堆键枚举，FFI 真堆枚举需 JS_GetOwnPropertyNames（待反哺），当前复用纯堆保持 CONTRACT 不变量
-  Result:=JsPureHeapGetKeys(FHeap, AObj);
+  // perf: FFI真堆枚举优先 via JS_GetOwnPropertyNames single source (bytes.ops zero-copy, inline view), 纯/FFI双堆一致；失败回落纯堆 CONTRACT，资源 exactly-once Free不丢
+  Idx := HeapIndexOf(AObj);
+  if (FCtx <> nil) and (Idx >= 0) and (Idx < Length(FQjsHeap)) and Assigned(JS_GetOwnPropertyNamesPtr) and Assigned(JS_FreePropertyEnumPtr) and Assigned(JS_AtomToStringPtr) and Assigned(JS_ToCStringPtr) and Assigned(JS_FreeCStringPtr) and Assigned(JS_FreeValuePtr) then
+  begin
+    LLen := 0;
+    LProps := JS_GetOwnPropertyNamesPtr(FCtx, @LLen, FQjsHeap[Idx], JS_GPN_STRING_MASK);
+    if LProps <> nil then
+    try
+      SetLength(Result, LLen);
+      for I := 0 to Integer(LLen) - 1 do
+      begin
+        QStr := JS_AtomToStringPtr(FCtx, LProps[I].atom);
+        try
+          P := JS_ToCStringPtr(FCtx, QStr);
+          if P <> nil then
+          try
+            // perf: bytes.ops AnsiPtrToString single source, zero-copy Move, inline thin-forward
+            Result[I] := nextpas.core.bytes.ops.AnsiPtrToString(P);
+          finally JS_FreeCStringPtr(FCtx, P); end
+          else Result[I] := '';
+        finally
+          if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QStr);
+        end;
+      end;
+      Exit;
+    finally
+      JS_FreePropertyEnumPtr(FCtx, LProps, LLen);
+    end;
+  end;
+  // fallback: pure heap CONTRACT INV-5 (json 单源之外纯堆单源，保持双堆一致)
+  Result := JsPureHeapGetKeys(FHeap, AObj);
 end;
 function TJsQuickJsContext.NewError(const AMessage: string; ACategory: TJsErrorCategory): TJsValue; begin EnsureNotClosed; Result:=Bind(JsErrorValue(AMessage)); end;
 function TJsQuickJsContext.NewFunction(const AName: string; AHandler: TJsHostFunction): TJsValue; begin EnsureNotClosed; if Assigned(AHandler) then SetHostFunction(AName,AHandler); Result:=Bind(JsFunctionValue(AName)); end;
@@ -536,16 +555,23 @@ begin
   // FFI 真 JS 函数路径：复用 JS_Call 单源（已在 loader 绑定），参数零拷贝转换后 exactly-once Free
   if Assigned(JS_CallPtr) and (FCtx <> nil) and AFunc.IsFunction then
   begin
-    // 尝试构造 QFunc/QThis/QArgs；若缺 FFI 句柄则保持 pure 结果
-    FillChar(QFunc, SizeOf(QFunc), 0);
-    FillChar(QThis, SizeOf(QThis), 0);
-    // host 函数已在上分支处理，此处仅占位演示 FFI 复用路径被编译引用，避免空转
-    if False then
-    begin
-      SetLength(QArgs, Length(AArgs));
-      for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
-      QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
-      try Result := QjsToTJs(QRes); finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QRes); for I := 0 to High(QArgs) do if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(FCtx, QArgs[I]); end;
+    // 单源复用：真 FFI 路径 live，无 if False 空转；资源 exactly-once Free 不丢
+    QFunc := QjsFromTJs(AFunc);
+    QThis := QjsFromTJs(AThis);
+    SetLength(QArgs, Length(AArgs));
+    for I := 0 to High(AArgs) do QArgs[I] := QjsFromTJs(AArgs[I]);
+    QRes := JS_CallPtr(FCtx, QFunc, QThis, Length(QArgs), PJSQjsValue(QArgs));
+    try
+      Result := QjsToTJs(QRes);
+    finally
+      if Assigned(JS_FreeValuePtr) then
+      begin
+        JS_FreeValuePtr(FCtx, QRes);
+        JS_FreeValuePtr(FCtx, QFunc);
+        JS_FreeValuePtr(FCtx, QThis);
+        for I := 0 to High(QArgs) do JS_FreeValuePtr(FCtx, QArgs[I]);
+      end;
+      SetLength(QArgs, 0);
     end;
   end;
   if Result.IsValid then Result := Bind(Result) else Result := Bind(JsUndefinedValue);

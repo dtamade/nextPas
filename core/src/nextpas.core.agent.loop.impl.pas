@@ -301,7 +301,7 @@ var
   RunStartMs: Int64;
   Req: TCompletionRequest;
   M, Asst: TMessage;
-  Round, RoundsDone, I, N, CI: Integer;
+  Round, RoundsDone, I, N, CI, LIdx: Integer;
   BatchSig, PrevSig: string;
   Streak: Integer;
   OutUsed: Int64;
@@ -309,13 +309,12 @@ var
   CalledCount: Integer;
   GuidedReason: TLoopOutcome;
   DoGuided, LStopped, PostStopped: Boolean;
-  Allowance, JCount, SCount: Integer;
+  Allowance, JCount: Integer;
   Slots: array of TSlot;
   Jobs: array of TToolJob;
   SlotJob: array of Integer;
   Verdict: THookVerdict;
   ChildTok: IAsyncCancellationToken;
-  Env: TToolResult;
   TM: TMessage;
   LOpt: TAgentLoopOptions;
   LCost: Int64;
@@ -581,7 +580,6 @@ begin
       Slots[I].Spec := LoopFindSpec(FSpecs, Asst.Parts[Calls[I]].ToolName);
       LoopSynthErr(Slots[I], 'tool budget exceeded (MaxToolCalls=' + nextpas.core.text.conv.IntToStr(LOpt.MaxToolCalls) + ')');
     end;
-    SCount := Length(Calls);
     JCount := 0;
     LStopped := False;
     try
@@ -612,7 +610,15 @@ begin
             hvStop:
               begin
                 LStopped := True;
-                SCount := CI;
+                Slots[CI].Kind := skBlocked;
+                LoopSynthErr(Slots[CI], 'stopped by pre-tool-call hook');
+                for LIdx := CI + 1 to Allowance - 1 do
+                begin
+                  Slots[LIdx].Kind := skBlocked;
+                  Slots[LIdx].CallPartIdx := Calls[LIdx];
+                  Slots[LIdx].Spec := LoopFindSpec(FSpecs, Asst.Parts[Calls[LIdx]].ToolName);
+                  LoopSynthErr(Slots[LIdx], 'stopped by pre-tool-call hook');
+                end;
                 Break;
               end;
             hvProceed:
@@ -638,11 +644,6 @@ begin
               end;
           end;
         end;
-      end;
-      if LStopped then
-      begin
-        SetLength(Slots, SCount);
-        SetLength(SlotJob, SCount);
       end;
       SetLength(Jobs, JCount);
       if Length(Jobs) > 0 then
