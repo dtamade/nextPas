@@ -222,26 +222,14 @@ uses
   nextpas.core.webview.utils,
   nextpas.core.platform.thread;
 
-{ 文档池化 STA 亲和显式约束 (CONTRACT §4)：高频 invoke 单帧约 4µs 热路径
-  复用线程局域 arena 零每帧堆分配；Parse 复用局部容量零重建。GBridgeDoc
-  为 per-thread 池化 TJsonDocument，线程退出由 L0 platform.thread Owner
-  的 TLS 析构统一 Done（委派 L0 内存/线程 Owner 统一清理，零 heaptrc 泄漏），
-  仅 STA UI 线程允许触碰（隐式共享隐患已在类型层面显式约束，见
+{ STA 亲和显式约束 (CONTRACT §4)：无状态纯函数零 heaptrc 泄漏
+  局部 TJsonDocument 按需 Init/Done，零 threadvar/TLS 手工治理负担；
+  仅 STA UI 线程允许触碰（隐式共享隐患在类型层面显式约束，见
   BridgeRequireSTA inline 零额外调用，复用 bytes.ops 单源思想）。 }
-threadvar
-  GBridgeDoc: TJsonDocument;
-  GBridgeDocInited: Boolean;
 
 var
   GBridgeOwnerThread: UInt64 = 0;
   GBridgeOwnerInited: Boolean = False;
-  GBridgeTLSKey: TPlatformTLSKey = 0;
-  GBridgeTLSKeyInited: Boolean = False;
-
-procedure BridgeThreadCleanup(AData: Pointer); cdecl; forward;
-{$IFDEF NEXTPAS_WINDOWS}
-procedure BridgeThreadCleanupFls(AData: Pointer); stdcall; forward;
-{$ENDIF}
 
 procedure BridgeRequireSTA; inline;
 begin
@@ -250,32 +238,16 @@ begin
     raise EWebviewInvalidState.Create('webview bridge STA violation: call only on UI thread');
 end;
 
-procedure BridgeCleanupTLS; inline;
-begin
-  if GBridgeDocInited then
-  begin
-    GBridgeDoc.Done;
-    GBridgeDocInited := False;
-  end;
-end;
-
-procedure EnsureBridgeDoc; inline;
+procedure BridgeEnsureOwner; inline;
 begin
   if not GBridgeOwnerInited then
   begin
     GBridgeOwnerThread := platform_thread_id;
     GBridgeOwnerInited := True;
   end;
-  if not GBridgeDocInited then
-  begin
-    GBridgeDoc.Init(nil);
-    GBridgeDocInited := True;
-    if GBridgeTLSKeyInited then
-      platform_tls_set(GBridgeTLSKey, Pointer(1));
-  end;
 end;
 
-{ BridgeTryExtractId: 超限路径 id 提取单源，复用 BridgeParseFrame 的 Parse+Get('id') 逻辑零重复；零拷贝视图，Parse 复用池化 arena 零每帧堆分配。 }
+{ BridgeTryExtractId: 超限路径 id 提取单源，复用 BridgeParseFrame 的 Parse+Get('id') 逻辑零重复；零拷贝视图，局部 Doc 按需 Init/Done 零 threadvar 泄漏。 }
 function BridgeTryExtractId(const AView: TStringView; var ADoc: TJsonDocument; out AId: Int64): Boolean;
 var
   LRoot: TJsonValue;
@@ -420,28 +392,34 @@ end;
 function TryDecodeFrame(const AView: TStringView;
   out AFrame: TWebviewFrame): Boolean; overload;
 var
+  LDoc: TJsonDocument;
   LRoot: TJsonValue;
   LPayload: TJsonValue;
 begin
-  { 池化 Doc 复用 arena，零每帧堆分配，高频 invoke 单帧约 4µs 仍付堆分配消除；Parse 复用局部容量，inline 零拷贝视图，复用 bytes.ops 单源。STA 亲和显式约束见 BridgeRequireSTA。 }
+  { 无状态纯函数：局部 TJsonDocument Init/Done 零 threadvar/TLS 手工治理，Payload RawSlice 零拷贝视图指向 AView 输入（非 arena），Done 后仍有效；STD 释放不丢。STA 见 BridgeRequireSTA。 }
   BridgeRequireSTA;
+  BridgeEnsureOwner;
   Result := False;
   AFrame := Default(TWebviewFrame);
-  EnsureBridgeDoc;
-  if not BridgeParseFrame(AView, GBridgeDoc, LRoot) then
-    Exit;
-  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-    Exit;
-  LPayload := LRoot.Get('payload');
-  { 解析后规范化膨胀：计入 payload 视图 + 节点/arena 水位，单一 Len 水位偏差闭环；
-    零拷贝 RawSlice 视图判定，inline 薄转发，复用 bytes.ops 单源思想 }
-  if WebviewMetricsIsOversizedExpandedView(AView, LPayload.RawSlice) then
-  begin
-    WebviewMetricsNoteOversized(WebviewMetricsExpandedSize(AView, LPayload.RawSlice.Len));
-    Exit(False);
+  LDoc.Init(nil);
+  try
+    if not BridgeParseFrame(AView, LDoc, LRoot) then
+      Exit;
+    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+      Exit;
+    LPayload := LRoot.Get('payload');
+    { 解析后规范化膨胀：计入 payload 视图 + 节点/arena 水位，单一 Len 水位偏差闭环；
+      零拷贝 RawSlice 视图判定，inline 薄转发，复用 bytes.ops 单源思想 }
+    if WebviewMetricsIsOversizedExpandedView(AView, LPayload.RawSlice) then
+    begin
+      WebviewMetricsNoteOversized(WebviewMetricsExpandedSize(AView, LPayload.RawSlice.Len));
+      Exit(False);
+    end;
+    AFrame.Payload := BridgeNormalizePayload(LPayload);
+    Result := True;
+  finally
+    LDoc.Done;
   end;
-  AFrame.Payload := BridgeNormalizePayload(LPayload);
-  Result := True;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -457,19 +435,28 @@ end;
 function TryBuildOversizedReject(const AView: TStringView; out ARejectScript: string): Boolean;
 var
   LId: Int64;
+  LDoc: TJsonDocument;
 begin
-  { 池化 Doc 复用 arena，超限路径零每帧堆分配；id 提取单源复用 BridgeTryExtractId，消除与 BridgeParseFrame 的 Parse+Get('id') 重复，inline 零拷贝视图。STA 亲和见 BridgeRequireSTA。 }
+  { 无状态纯函数：局部 TJsonDocument Init/Done 零 threadvar/TLS，id 提取单源复用 BridgeTryExtractId，inline 零拷贝视图。STA 见 BridgeRequireSTA。 }
   BridgeRequireSTA;
+  BridgeEnsureOwner;
   Result := False;
   ARejectScript := '';
   if not WebviewMetricsIsOversized(AView) then
     Exit;
   WebviewMetricsNoteOversized(AView.Len);
-  EnsureBridgeDoc;
-  if not BridgeTryExtractId(AView, GBridgeDoc, LId) then
-    Exit(True);
-  ARejectScript := BuildRejectScript(LId, NPW_CODE_BAD_REQUEST, 'frame oversized');
-  Result := True;
+  LDoc.Init(nil);
+  try
+    if not BridgeTryExtractId(AView, LDoc, LId) then
+    begin
+      Result := True;
+      Exit;
+    end;
+    ARejectScript := BuildRejectScript(LId, NPW_CODE_BAD_REQUEST, 'frame oversized');
+    Result := True;
+  finally
+    LDoc.Done;
+  end;
 end;
 
 function TryBuildOversizedReject(const AFrameJson: string; out ARejectScript: string): Boolean; inline;
@@ -540,21 +527,27 @@ function BuildEmitScript(const AEvent, APayloadJson: string): string;
 var
   LJson: string;
   LB: TStringBuilder;
-  W: TJsonWriter;
+  LEventView, LJsonView: TStringView;
 begin
+  { 单 Init + 双 JsonEscapeToBuilder 直写，消除同一 Builder 上重复 W.Init 覆盖与 Writer 分支开销；
+    单 Reserve + inline 零拷贝视图，复用 bytes.ops 单源思想；性能零额外转义分支。 }
   CheckWebviewEventName(AEvent);
   LJson := APayloadJson;
   if LJson = '' then
     LJson := 'null';
+  LEventView := TStringView.FromStr(AEvent);
+  LJsonView := TStringView.FromStr(LJson);
   LB.Init(256);
   try
-    LB.Reserve(SizeUInt(13 + Length(AEvent) * 2 + Length(LJson) * 2 + 16));
+    LB.Reserve(SizeUInt(13 + LEventView.Len * 4 + LJsonView.Len * 4 + 16));
     LB.AppendBytes('__npw.__emit(', 13);
-    W.Init(LB);
-    W.Str(AEvent);
+    LB.AppendChar('"');
+    JsonEscapeToBuilder(LEventView, LB);
+    LB.AppendChar('"');
     LB.AppendChar(',');
-    W.Init(LB);
-    W.Str(LJson);
+    LB.AppendChar('"');
+    JsonEscapeToBuilder(LJsonView, LB);
+    LB.AppendChar('"');
     LB.AppendChar(')');
     Result := LB.ToString;
   finally
@@ -843,35 +836,5 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
-
-{ L0 委派清理：TLS 线程退出析构统一 Done，per-thread arena 零 heaptrc 泄漏，复用 bytes.ops 单源思想；主线程 finalization 兜底 }
-
-procedure BridgeThreadCleanup(AData: Pointer); cdecl;
-begin
-  BridgeCleanupTLS;
-end;
-
-{$IFDEF NEXTPAS_WINDOWS}
-procedure BridgeThreadCleanupFls(AData: Pointer); stdcall;
-begin
-  BridgeCleanupTLS;
-end;
-{$ENDIF}
-
-initialization
-{$IFDEF NEXTPAS_UNIX}
-  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, @BridgeThreadCleanup) = 0;
-{$ELSE}
-{$IFDEF NEXTPAS_WINDOWS}
-  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, @BridgeThreadCleanupFls) = 0;
-{$ELSE}
-  GBridgeTLSKeyInited := platform_tls_create_with_destructor(GBridgeTLSKey, nil) = 0;
-{$ENDIF}
-{$ENDIF}
-
-finalization
-  BridgeCleanupTLS;
-  if GBridgeTLSKeyInited then
-    platform_tls_destroy_dtor(GBridgeTLSKey);
 
 end.

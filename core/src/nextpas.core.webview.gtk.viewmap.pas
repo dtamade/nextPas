@@ -12,7 +12,7 @@ unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1 THashMap 已直接�
 
        性能：
        - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）经 THashMap.TryGetValue O(1) 线性探测 + and Mask + Bitmap CTZ 单指令，与 assets FMask 单源一致零除法；ViewMapFind 单窗无锁快径 seqlock 乐观读（偶数 seq + 单窗缓存 Pointer 直比 inline，零 RWLock/零 futex，单窗 SchemeRequest 每请求省一次 rdlock/rdunlock 快路径），多窗回退 RWLock 读并发短临界 <1µs 零单锁热点
-       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增由 THashMap.Rehash 单源承载，Reserve 单次 NextPow2 零额外循环；ViewMapAdd 写锁短临界仅指针拷贝与 THashMap 内部 O(n) 桶迁移（n<=窗口数<=8，无额外堆分配于调用侧，零阻塞读并发）
+       - 惰性重哈希：ViewMapRehashLocked/ViewMapAddLocked/ViewMapRemoveLocked 均为 out-of-line（真实循环体禁 inline，design-conventions 红线二），0.75 触发倍增由 THashMap.Rehash 单源承载，Reserve 单次 NextPow2 零额外循环；ViewMapAdd 写锁短临界仅指针拷贝与 THashMap 内部 O(n) 桶迁移（n<=窗口数<=8，无额外堆分配于调用侧，零阻塞读并发）；ViewMapRemoveLocked 2→1 单窗重建零堆分配（PtrIter/BitmapFindNext 单次 CTZ 零拷直取首条目，无 GetKeys 堆分配，写锁短临界 <1µs 单窗切多窗零尾延迟放大）
        - 容量预分配：初始化经 VecGrowCapacity(0) 4槽，稳态零每请求分配；扩容经 THashMap.NextPow2 内容纳 VecGrowCapacity 预判单源
 
        稳定性：析构 Free 清零释放不丢，THashMap bsTombstone 单哨兵保探链完整；锁外 nil 守卫保并发安全；seqlock 奇偶 seq + release/acquire 保证单窗缓存发布可见性，写锁内刷新单窗缓存，读侧双次 seq 校验丢弃并发写撕裂 *}
@@ -23,6 +23,7 @@ interface
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.collections.base,
   nextpas.core.collections.hashmap,
   nextpas.core.collections.hashmap.base,
   nextpas.core.sync.rwlock,
@@ -147,8 +148,8 @@ end;
 
 function ViewMapRemoveLocked(AView: Pointer): Boolean;
 var
-  LKeys: specialize THashMap<Pointer, Pointer>.TKeyArray;
-  LTmp: Pointer;
+  LIter: TPtrIter;
+  LEntry: ^specialize TMapEntry<Pointer, Pointer>;
 begin
   // 非 inline：委托 L1 THashMap.Remove 单源墓碑单哈希探查，禁 inline；零重复 TryGetValue/Remove 双哈希，bsTombstone 保探链完整零 VIEW_TOMBSTONE 手写分叉，单次 FindIndex O(1) 零额外哈希
   if (GViewMap = nil) or (AView = nil) then Exit(False);
@@ -156,14 +157,15 @@ begin
   try
     Result := GViewMap.Remove(AView);
     if not Result then Exit(False);
-    // 单窗缓存刷新：count=1 时重建剩余唯一条目（稀有路径 2→1，GetKeys 单次分配可接受，短临界仍 <1µs），否则清零；release 发布保证读侧 acquire 可见
+    // 单窗缓存刷新：count=1 时重建剩余唯一条目（稀有路径 2→1，零堆分配零拷贝：PtrIter/BitmapFindNext 单次 CTZ 指令直取首条目，无 GetKeys/SetLength 堆分配，写锁短临界 <1µs），否则清零；release 发布保证读侧 acquire 可见
     if GViewMap.GetCount = 1 then
     begin
-      LKeys := GViewMap.GetKeys;
-      if (Length(LKeys) = 1) and GViewMap.TryGetValue(LKeys[0], LTmp) then
+      LIter := GViewMap.PtrIter;
+      if LIter.MoveNext then
       begin
-        atomic_store(GViewMapSingleKey, LKeys[0], mo_release);
-        atomic_store(GViewMapSingleVal, LTmp, mo_release);
+        LEntry := LIter.Current;
+        atomic_store(GViewMapSingleKey, LEntry^.Key, mo_release);
+        atomic_store(GViewMapSingleVal, LEntry^.Value, mo_release);
       end else
       begin
         atomic_store(GViewMapSingleKey, nil, mo_release);

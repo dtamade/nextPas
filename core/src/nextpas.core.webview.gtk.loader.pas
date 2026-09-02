@@ -29,10 +29,10 @@ type
   { eval 结果取回路径选择 }
   TGtkEvalPath = (gepEvaluateJavascript, gepRunJavascript);
 
-  { 装载结果快照（诊断/测试断言用） }
+  { 装载结果快照（诊断/测试断言用；blittable ShortString 零托管，热点快照零堆分配/零 refcnt 抖动） }
   TGtkLoadInfo = record
     Loaded: Boolean;
-    WebkitSoname: string;      { 实际命中的 webkit 库 soname }
+    WebkitSoname: ShortString; { 实际命中的 webkit 库 soname；ShortString blittable，单次 Move 零堆分配，热点零额外锁 }
     EvalPath: TGtkEvalPath;
   end;
 
@@ -74,7 +74,7 @@ var
   GProbed: Int32 = 0; { atomic 0/1, mo_acquire/mo_release 保证弱内存可见性，零撕裂 }
   GInfo: TGtkLoadInfo;
   GWebkitLib, GGtkLib, GGobjectLib, GGlibLib, GJscLib: TPlatformLibrary;
-  GWebkitSoname, GJscSoname: string;
+  GWebkitSoname, GJscSoname: ShortString; { blittable ShortString 零托管，发布后不可变，热点快照零堆分配 }
   GGtkLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
   GGtkLockOnce: IOnce; { L1 sync.once 单源：EnsureGtkLock 惰性创建零双分配零泄漏 }
   GGtkBindOnce: IOnce; { L1 sync.once 单源：Bind 表单次初始化，热点零分配 }
@@ -179,17 +179,11 @@ var
   end;
 
 begin
-  { atomic acquire 零撕裂快路径探针；GInfo 含托管 string，拷贝必须持锁，零撕裂零悬垂 }
+  { perf: atomic acquire 热点快照零额外双检锁/零堆分配；GInfo/WebkitSoname 已为 blittable ShortString，发布后不可变，lock-free 单次 Move 零堆分配，mo_acquire 可见性，bytes.ops 单源思想 }
   if atomic_load(GProbed, mo_acquire) <> 0 then
   begin
-    EnsureGtkLock;
-    GGtkLock.Acquire;
-    try
-      AInfo := GInfo; { lock-protected managed copy，零撕裂，mo_acquire 可见性 + mutex 守托管 refcnt }
-      Result := GLoaded;
-    finally
-      GGtkLock.Release;
-    end;
+    AInfo := GInfo; { blittable ShortString 直接 Copy，无托管 refcnt、无堆分配、零撕裂，发布后不可变，无需持锁 }
+    Result := GLoaded;
     Exit;
   end;
   EnsureGtkLock;
@@ -197,7 +191,7 @@ begin
   try
     if atomic_load(GProbed, mo_acquire) <> 0 then
     begin
-      AInfo := GInfo; { 已持锁，安全拷贝，零撕裂 }
+      AInfo := GInfo; { 已持锁二次校验，直接拷贝，零撕裂 }
       Exit(GLoaded);
     end;
     if GLoading then
@@ -205,15 +199,16 @@ begin
     AInfo := Default(TGtkLoadInfo);
     GLoading := True;
     try
-      { webkit 主库按 soname 探测序命中其一 }
+      { webkit 主库按 soname 探测序命中其一；ShortString blittable 零堆分配，LHit 临时 string 桥接后 Move 零分配 }
       if not TryDlOpen(GWebkitLib,
           ['libwebkit2gtk-4.1.so.0', 'libwebkit2gtk-4.0.so.0'],
-          GWebkitSoname) then
+          LHit) then
       begin
         GInfo.Loaded := False;
         atomic_store(GProbed, 1, mo_release);
         Exit(False);
       end;
+      GWebkitSoname := ShortString(LHit);
       { GTK3 栈并列必需 }
       if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0'], LHit) and
           TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0'], LHit) and
@@ -229,7 +224,7 @@ begin
         GJscSoname := 'libjavascriptcoregtk-4.0.so.0'
       else
         GJscSoname := 'libjavascriptcoregtk-4.1.so.0';
-      if not TryDlOpen(GJscLib, [GJscSoname], LHit) then
+      if not TryDlOpen(GJscLib, [string(GJscSoname)], LHit) then
       begin
         ReleaseAll;
         GInfo.Loaded := False;
@@ -298,14 +293,14 @@ end;
 
 function GtkLoadInfo: TGtkLoadInfo; inline;
 begin
-  { perf: inline 薄转发，托管 string 拷贝持锁零撕裂零悬垂；短临界 <1µs，仅复制快照，无堆分配，热点零拷贝 }
-  EnsureGtkLock;
-  GGtkLock.Acquire;
-  try
-    Result := GInfo;
-  finally
-    GGtkLock.Release;
+  { perf: inline + atomic acquire 热点快照零额外双检锁/零堆分配；GInfo/WebkitSoname 已为 blittable ShortString，发布后不可变，热点 lock-free 单次 Move 零堆分配/零 refcnt，短临界零锁；bytes.ops 单源思想 }
+  if atomic_load(GProbed, mo_acquire) <> 0 then
+  begin
+    Result := GInfo; { blittable ShortString lock-free 快照，零堆分配 }
+    Exit;
   end;
+  { 未探测前返回空快照，不触发装载，零锁零分配 }
+  Result := Default(TGtkLoadInfo);
 end;
 
 function GtkCancellableHasReset: Boolean; inline;

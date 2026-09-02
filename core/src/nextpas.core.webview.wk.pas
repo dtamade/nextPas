@@ -23,6 +23,7 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
   nextpas.core.webview.callbacks,
+  nextpas.core.webview.utils,
   nextpas.core.bytes.ops,
   nextpas.core.window.base,
   nextpas.core.window.intf;
@@ -148,13 +149,8 @@ end;
 
 function TWkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  // perf: inline zero-copy field copy, owner L2 base single source, zero extra call
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Width := AOptions.Width;
-  Result.Height := AOptions.Height;
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
+  // perf: thin forward to webview.utils single source WebviewWindowOptionsOf inline zero-copy, eliminates 8-field duplication with fake/gtk.shell via window.base single source, CONTRACT §2.2 8-field complete (Title/Width/Height/MinWidth/MinHeight/MaxWidth/MaxHeight/Resizable/Maximized)
+  Result := nextpas.core.webview.utils.WebviewWindowOptionsOf(AOptions);
 end;
 
 procedure TWkWebview.HandleWindowEvent(const AEvent: TWindowEvent);

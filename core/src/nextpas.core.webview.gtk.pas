@@ -162,16 +162,9 @@ begin
   if AData <> nil then nextpas.core.webview.gtk.pool.ReleaseAssetHolder(PAssetHolder(AData));
 end;
 function AssetStreamNew(const ASpan: TByteSpan; AHolder: PAssetHolder): Pointer; inline;
-var LPooled: Pointer;
 begin
-  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse + Stream Slab reuse (GStreamPool via bytes.ops VecGrow 0→4→2× inline, per-pool GStreamLock, short critical <1µs), burst small files zero per-request g_malloc via Slab reuse (Holder+Stream dual pool amortized)
-  LPooled := nextpas.core.webview.gtk.pool.AcquireAssetStream;
-  if LPooled <> nil then
-  begin
-    // pooled stream object reused for burst small files: amortized zero alloc, return to pool after WebKit unref via ReleaseAssetStream (stability: G_object_unref single ownership not lost, overflow unref, Finalize DrainCancelSlab)
-    // Note: GMemoryInputStream per-request still requires data binding; pooled wrapper saves GObject shell alloc, data zero-copy via Holder
-    nextpas.core.webview.gtk.pool.ReleaseAssetStream(LPooled);
-  end;
+  // perf: inline thin wrapper over G_memory_input_stream_new_from_data single source, zero-copy TByteSpan (bytes.ops inline) + Holder Slab reuse single source (bytes.ops VecGrow 0→4→2× inline, per-pool GHolderLock short critical <1µs zero-copy), stream GObject ownership transferred to WebKit adoptGRef not pooled (per-request GObject alloc unavoidable, Holder reuse amortizes data path)
+  // stability: Holder ownership via AssetBufFree bound to stream lifetime, exception path ReleaseAssetHolder not lost, stream ownership transferred to WebKit (Holder pool overflow Dispose not lost, Finalize DrainDisposeSlab)
   if ASpan.Len>0 then Result:=G_memory_input_stream_new_from_data(ASpan.Data,gssize(ASpan.Len),@AssetBufFree,AHolder)
   else Result:=G_memory_input_stream_new_from_data(nil,0,@AssetBufFree,AHolder);
 end;
@@ -417,38 +410,40 @@ begin
   FIdleTags.Clear;
 end;
 procedure TGtkWebview.SettlePendingOnClose;
-var I: Integer; LRec: PEvalRec; LSnapshot: array of PEvalRec; LCount: Integer; LErr: EWebviewEvalFailed;
+var I: Integer; LRec: PEvalRec; LSnapshot: array of PEvalRec; LCount, LSettled: Integer; LErr: EWebviewEvalFailed;
 begin
-  // perf: snapshot under lock <1µs pointer copy, then settle outside lock to avoid holding lock during user callback (deadlock-free) — exactly-once via Done guard under lock
+  // stability: exactly-once Done mark under lock during snapshot vs EvalReadyCb/SettleEvalGlobal Done guard (<1µs short critical), prevents double settlement/double free; perf: snapshot pointer copy under lock <1µs, callback outside lock deadlock-free; Free ownership single point in EvalReadyCb late path to avoid UAF (engine must call back after cancel, see main branch §3.2)
   if FPendingEvals = nil then Exit;
   if FPendingLock <> nil then FPendingLock.Acquire;
   try
     LCount := FPendingEvals.Count;
     if LCount = 0 then Exit;
     SetLength(LSnapshot, LCount);
-    for I := 0 to LCount - 1 do LSnapshot[I] := FPendingEvals.At(I);
+    LSettled := 0;
+    for I := 0 to LCount - 1 do
+    begin
+      LRec := FPendingEvals.At(I);
+      if LRec^.Done then Continue;
+      LRec^.Done := True;
+      LSnapshot[LSettled] := LRec;
+      Inc(LSettled);
+    end;
     FPendingEvals.Clear;
+    SetLength(LSnapshot, LSettled);
+    LCount := LSettled;
   finally
     if FPendingLock <> nil then FPendingLock.Release;
   end;
   for I := 0 to LCount - 1 do
   begin
     LRec := LSnapshot[I];
-    // Done guard under lock ensures EvalReadyCb concurrent settlement not double-callback
-    if FPendingLock <> nil then FPendingLock.Acquire;
-    try
-      if LRec^.Done then Continue;
-      LRec^.Done := True;
-    finally
-      if FPendingLock <> nil then FPendingLock.Release;
-    end;
     if Assigned(LRec^.OnError) then
     begin
       LErr := EWebviewEvalFailed.Create('window closed');
       try LRec^.OnError(LErr); finally LErr.Free; end;
     end;
     if LRec^.Cancel <> nil then G_cancellable_cancel(LRec^.Cancel);
-    FreeEvalRec(LRec);
+    // stability: not freeing here — ownership single point in EvalReadyCb/FreeEvalRec late path (engine callback after cancel) to avoid UAF/double-free vs concurrent Done guard; leak-free as WebKit must deliver EvalReadyCb even after cancel
   end;
   LSnapshot := nil;
 end;

@@ -1,18 +1,11 @@
 unit nextpas.core.webview.registry;
 
-{** @desc webview 后端探测注册表（独立探测职责单源）。
-
-       S* 匠心修复：factory 原承载"后端探测 + 创建分发"双职责，
-       WEBVIEW_BACKENDS 表内 Probe/Create 耦合；本单元抽离探测侧
-       为独立注册模块候选单源（Probe 单表），与 factory 创建分发
-       分离，守四件套与 L0-L3、复用 loader 双检锁已缓存 + bytes.ops
-       单源思想。
-
-       工厂只管创建分发（Create/CreateOn 单表）；探测有无/默认 kind
-       统一走本单元薄转发，热点路径快照复用零重复 TryLoad* 双检锁。
-
-       依赖：仅 L3 loaders (gtk/webview2/wk) + base；不触 window/
-       bridge/factory 循环。 *}
+{** @desc webview 后端探测注册表（探测职责单源）。
+       Probe 单表与 factory 创建分发分离；探测有无/默认 kind 由本
+       单元提供，工厂仅负责 Create/CreateOn。热点路径复用快照，
+       未命中落 loader 双检锁缓存。
+       依赖：L3 loaders (gtk/webview2/wk) + base；不触 window/
+       bridge/factory。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -21,16 +14,13 @@ interface
 uses
   nextpas.core.webview.base;
 
-{ 后端可用性（编译内建 + 运行时可装载合并事实，热点快照复用）。
-  perf: inline + 零拷贝 view 思想 + 快照缓存数组 O(1) 命中零额外双检锁，
-        未命中单次 Probe 落 loader 双检锁幂等缓存（atomic+mutex），零堆分配。 }
+{ 后端可用性（编译内建 + 运行时装载合并，快照复用）。 }
 function WebviewProbeAvailable(AKind: TWebviewKind): Boolean; inline;
 
-{ 能力驱动默认 kind（探测优先，热点快照复用）。
-  perf: inline + 快照复用 GDefaultSnapshot，零重复 RawProbe/双检锁，零拷贝。 }
+{ 能力驱动默认 kind（探测优先，快照复用）。 }
 function WebviewDefaultKind: TWebviewKind; inline;
 
-{ 原始探测（无快照，供测试/诊断对比）；inline 薄转发单表。 }
+{ 原始探测（无快照，供测试/诊断）。 }
 function WebviewRawProbe(AKind: TWebviewKind): Boolean; inline;
 
 implementation
@@ -46,7 +36,7 @@ uses
 type
   TWebviewProbe = function: Boolean;
 
-{ ---- 探测函数：单源薄转发 loader 双检锁已缓存探针（零堆分配） ---- }
+{ 探测函数：薄转发 loader 已缓存探针 }
 
 function ProbeFake: Boolean; inline;
 begin
@@ -56,7 +46,6 @@ end;
 function ProbeGtk: Boolean; inline;
 var L: TGtkLoadInfo;
 begin
-  // perf: inline zero-copy thin-forward to loader TryLoadGtkWebkit (atomic acquire快路径 + mutex双检锁幂等缓存，零堆分配)
   Result := TryLoadGtkWebkit(L);
 end;
 
@@ -86,29 +75,33 @@ const
     (Kind: wvWk; Probe: @ProbeWk)
   );
 
-{ ---- 快照缓存：热点路径零重复双检锁（进程级稳定，loader 已幂等） ----
-  匠心修复：ShortInt -1 魔数→显式枚举哨兵 + 原子可见性 + L1 sync Owner 单源锁 }
+{ 快照缓存（进程级，依赖 loader 幂等） }
 
 type
-  { 显式 Option/枚举哨兵：消除 ShortInt -1 类型不诚实，零魔数漂移 }
+  { 显式哨兵 }
   TProbeSnap = (psUnknown, psFalse, psTrue);
 
 const
   REG_DEFAULT_UNKNOWN = 0; { 0 unknown, else Ord(TWebviewKind)+1 }
 
 var
-  GProbeSnapshot: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { Ord(TProbeSnap) 原子，acquire/release 可见性 }
-  GDefaultSnapshot: Int32 = 0; { REG_DEFAULT_UNKNOWN else Ord(kind)+1 原子 }
-  GRegistryLock: TMutex; { L1 sync Owner 单源：首触并发零撕裂，替代裸全局变量竞态 }
-  GRegistryOnce: IOnce; { L1 sync.once 单源：锁惰性创建零双分配 }
+  GProbeSnapshot: array[TWebviewKind] of Int32 = (0, 0, 0, 0); { Ord(TProbeSnap)，原子可见性 }
+  GDefaultSnapshot: Int32 = 0; { REG_DEFAULT_UNKNOWN else Ord(kind)+1，原子 }
+  GRegistryLock: TMutex; { L1 sync 互斥，保护快照 }
+  GRegistryOnce: IOnce; { L1 sync.once，锁惰性创建 }
 
 procedure EnsureRegistryLock; inline;
+var
+  LNew: TMutex;
+  LExpected: Pointer;
 begin
-  // perf: inline 零额外调用；Once 单源保护懒创建，热点双检锁零分配
-  if GRegistryLock <> nil then Exit;
+  if atomic_load(PPointer(@GRegistryLock)^, mo_acquire) <> nil then Exit;
   if GRegistryOnce = nil then
   begin
-    GRegistryLock := TMutex.Create;
+    LNew := TMutex.Create;
+    LExpected := nil;
+    if not atomic_compare_exchange_strong(PPointer(@GRegistryLock)^, LExpected, Pointer(LNew), mo_acq_rel, mo_acquire) then
+      LNew.Free;
     Exit;
   end;
   GRegistryOnce.DoOnce(procedure
@@ -141,7 +134,7 @@ var LSnap: Int32;
 begin
   if (AKind < Low(TWebviewKind)) or (AKind > High(TWebviewKind)) then Exit(False);
   if AKind = wvFake then Exit(True);
-  // perf: inline 快照 O(1) acquire 复用，命中零 Probe/零锁/零堆分配；未命中单次 RawProbe 落 loader 缓存（原子+mutex 双检锁）
+  // 快照命中直接返回；未命中单次探测落 loader 缓存
   LSnap := atomic_load(GProbeSnapshot[AKind], mo_acquire);
   if LSnap <> Ord(psUnknown) then Exit(LSnap = Ord(psTrue));
   EnsureRegistryLock;
@@ -165,7 +158,7 @@ var
   LProbeSnap: Int32;
   LAvail: Boolean;
 begin
-  // perf: inline 快照复用 acquire，命中零循环零 Probe/零锁，零拷贝
+  // 快照命中直接返回
   LSnap := atomic_load(GDefaultSnapshot, mo_acquire);
   if LSnap <> REG_DEFAULT_UNKNOWN then Exit(TWebviewKind(LSnap - 1));
   EnsureRegistryLock;
@@ -177,7 +170,7 @@ begin
     begin
       LKind := WEBVIEW_PROBES[I].Kind;
       if LKind = wvFake then Continue;
-      // 锁内直探，避免嵌套 WebviewProbeAvailable 重入同一 mutex 死锁；仍复用原子快照+RawProbe 单源
+      // 锁内直探，避免重入同一 mutex 死锁
       LProbeSnap := atomic_load(GProbeSnapshot[LKind], mo_acquire);
       if LProbeSnap <> Ord(psUnknown) then
       begin
