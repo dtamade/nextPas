@@ -31,6 +31,7 @@ type
   TCompressorProcessor = class(TInterfacedObject, IAudioProcessor)
   private
     FComp: TCompressor;
+    procedure EnsureScratch(var ADest: TBytes; ARequired: SizeUInt); inline;
   public
     constructor Create(AThresholdDB, ARatio, AAttackMs, AReleaseMs, AMakeupDB: Single; ASampleRate, AChannels: Integer);
     function LatencyFrames: Integer; inline;
@@ -43,7 +44,17 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.math.trig;
+
+procedure TCompressorProcessor.EnsureScratch(var ADest: TBytes; ARequired: SizeUInt); inline;
+begin
+  // perf: inline geometric doubling via bytes.ops single source, steady zero alloc per INV-6
+  if SizeUInt(Length(ADest)) >= ARequired then Exit;
+  BytesEnsureCapacity(ADest, ARequired);
+end;
+
 
 class function TCompressor.Create(AThresholdDB, ARatio, AAttackMs, AReleaseMs, AMakeupDB: Single; ASampleRate: Integer): TCompressor;
 var
@@ -156,8 +167,12 @@ procedure TCompressorProcessor.Process(const AInput: TAudioBuffer; out AOutput: 
 var LCopy: Integer;
 begin
   AOutput.Format := AInput.Format; AOutput.FrameCount := AInput.FrameCount;
-  LCopy := Length(AInput.Data); SetLength(AOutput.Data, LCopy);
-  if LCopy > 0 then Move(AInput.Data[0], AOutput.Data[0], LCopy);
+  LCopy := Length(AInput.Data);
+  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/BytesEnsureCapacity single source, single CopyMem non-overlapping SizeUInt guard
+  EnsureScratch(AOutput.Data, SizeUInt(LCopy));
+  if LCopy > 0 then
+    // single source: base.utils CopyMem → bytes.ops, SizeUInt(LCopy) guard, non-overlapping
+    CopyMem(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
   FComp.ProcessBuffer(AOutput);
 end;
 

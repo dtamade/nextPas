@@ -7,11 +7,13 @@ interface
 uses
   nextpas.core.base;
 
-{ Single source: audio SIMD dispatch Owner is nextpas.core.audio.simd via AudioSimdCaps
+{ Single source: SIMD dispatch Owner is nextpas.core.simd via nextpas.core.simd.cpuinfo
   (x86_64 SSE2 128-bit 4-wide + AVX2 256-bit 8-wide, aarch64 NEON baseline).
-  pcm.simd PcmConvertBlock* is thin inline forwarding single source to SimdConvert*,
-  no duplicate 4-way loop and no secondary caps dispatch; raw F32 block
-  zero-copy single source via nextpas.core.base.utils CopyMem → bytes.ops. }
+  nextpas.core.audio.simd is thin adapter over simd owner (AudioSimdCaps delegates to
+  simd.cpuinfo.HasSSE2/HasAVX2/HasNEON, no parasitic CPUID); Simd* are single-source
+  vector kernels. pcm.simd PcmConvertBlock* is thin inline forwarding single source
+  via audio.simd → simd owner, no duplicate 4-way loop and no secondary caps dispatch;
+  raw F32 block zero-copy single source via nextpas.core.base.utils CopyMem → bytes.ops. }
 
 type
   TSimdCaps = record
@@ -33,6 +35,9 @@ procedure SimdConvertF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integ
 
 implementation
 
+uses
+  nextpas.core.simd.cpuinfo;
+
 {$IFDEF CPUX86_64}
   {$ASMMODE INTEL}
 {$ENDIF}
@@ -41,85 +46,15 @@ var
   GCaps: TSimdCaps;
   GInit: Boolean;
 
-function AudioSimdCaps: TSimdCaps;
-{$IFDEF CPUX86_64}
-var LHasSSE2, LHasAVX2: LongBool;
-    LEAX, LEBX, LECX, LEDX: LongWord;
-    LMaxLeaf: LongWord;
-    LLeaf1ECX: LongWord;
-    LXCR0Lo, LXCR0Hi: LongWord;
-{$ENDIF}
+function AudioSimdCaps: TSimdCaps; inline;
 begin
+  // Owner delegation: single source via nextpas.core.simd.cpuinfo (no parasitic CPUID/XGETBV)
+  // inline + cached, zero extra branch beyond GInit, reuses simd owner caps
   if not GInit then
   begin
-    GCaps.HasSSE2 := False;
-    GCaps.HasAVX2 := False;
-    GCaps.HasNEON := False;
-{$IFDEF CPUX86_64}
-    LHasSSE2 := False; LHasAVX2 := False;
-    LMaxLeaf := 0; LLeaf1ECX := 0; LXCR0Lo := 0; LXCR0Hi := 0;
-    asm
-      xor eax, eax
-      cpuid
-      mov LEAX, eax
-      mov LEBX, ebx
-      mov LECX, ecx
-      mov LEDX, edx
-    end;
-    LMaxLeaf := LEAX;
-    asm
-      mov eax, 1
-      cpuid
-      mov LEAX, eax
-      mov LEBX, ebx
-      mov LECX, ecx
-      mov LEDX, edx
-    end;
-    LHasSSE2 := (LEDX and (1 shl 26)) <> 0;
-    LLeaf1ECX := LECX;
-    if LMaxLeaf >= 7 then
-    begin
-      asm
-        mov eax, 7
-        xor ecx, ecx
-        cpuid
-        mov LEAX, eax
-        mov LEBX, ebx
-        mov LECX, ecx
-        mov LEDX, edx
-      end;
-      LHasAVX2 := (LEBX and (1 shl 5)) <> 0;
-      if LHasAVX2 and ((LLeaf1ECX and (1 shl 27)) <> 0) then
-      begin
-        asm
-          xor ecx, ecx
-          XGETBV
-          mov LXCR0Lo, eax
-          mov LXCR0Hi, edx
-        end;
-        if (LXCR0Lo and 6) <> 6 then
-          LHasAVX2 := False;
-      end else if LHasAVX2 then
-        LHasAVX2 := False;
-    end else
-      LHasAVX2 := False;
-    GCaps.HasSSE2 := LHasSSE2;
-    GCaps.HasAVX2 := LHasAVX2;
-{$ELSE}
-{$IFDEF CPUAARCH64}
-    GCaps.HasSSE2 := False;
-    GCaps.HasAVX2 := False;
-    GCaps.HasNEON := True;
-{$ELSEIF defined(CPUARM)}
-    GCaps.HasSSE2 := False;
-    GCaps.HasAVX2 := False;
-    GCaps.HasNEON := False;
-{$ELSE}
-    GCaps.HasSSE2 := True;
-    GCaps.HasAVX2 := False;
-    GCaps.HasNEON := False;
-{$ENDIF}
-{$ENDIF}
+    GCaps.HasSSE2 := nextpas.core.simd.cpuinfo.HasSSE2;
+    GCaps.HasAVX2 := nextpas.core.simd.cpuinfo.HasAVX2;
+    GCaps.HasNEON := nextpas.core.simd.cpuinfo.HasNEON;
     GInit := True;
   end;
   Result := GCaps;
@@ -550,11 +485,52 @@ begin
 end;
 
 procedure SimdConvertS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer);
-var I, N4: Integer;
+var I, N4, N8: Integer;
+{$IFDEF CPUX86_64}
+var LCaps: TSimdCaps; LIter: Integer; LScale, LNegOne: Single; LNeg32768: LongInt;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // single source scalar 4-way unrolled; vector widening deferred to Owner nextpas.core.simd
-  // thin reuse via bytes.ops single source is not needed for per-sample scale, but pcm.simd forwards here
+  // single source vector: AVX2 256-bit 8-wide single source Owner nextpas.core.simd, SSE2 4-wide fallback scalar
+  // perf: inline caps delegate to simd.cpuinfo, zero-copy pointers, no alloc, vzeroupper
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      LIter := N8 shr 3;
+      LScale := 1.0 / 32767.0;
+      LNegOne := -1.0;
+      LNeg32768 := -32768;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [ASrc]
+        mov rdx, qword ptr [ADst]
+        vbroadcastss ymm2, dword ptr [LScale]
+        vbroadcastss ymm3, dword ptr [LNegOne]
+        vpbroadcastd ymm4, dword ptr [LNeg32768]
+      @S16ToF328Loop:
+        vmovdqu xmm0, dqword ptr [rcx]
+        vpmovsxwd ymm0, xmm0
+        vpcmpeqd ymm5, ymm0, ymm4
+        vcvtdq2ps ymm0, ymm0
+        vmulps ymm0, ymm0, ymm2
+        vblendvps ymm0, ymm0, ymm3, ymm5
+        vmovups yword ptr [rdx], ymm0
+        add rcx, 16
+        add rdx, 32
+        dec eax
+        jnz @S16ToF328Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin if ASrc[I] = -32768 then ADst[I] := -1.0 else ADst[I] := ASrc[I] / 32767.0; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
   N4 := ACount and not 3;
   I := 0;
   while I < N4 do
@@ -570,10 +546,54 @@ begin
 end;
 
 procedure SimdConvertF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
-var I, N4: Integer; V: Single; LScaled: Integer;
+var I, N4, N8: Integer; V: Single; LScaled: Integer;
+{$IFDEF CPUX86_64}
+var LCaps: TSimdCaps; LIter: Integer; LLo, LHi, LScale: Single; LNeg32768: LongInt;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // single source scalar 4-way; vector dispatch owned by nextpas.core.simd when widened
+  // single source vector: AVX2 256-bit 8-wide Owner nextpas.core.simd, clamp+mul+cvt+pack
+  // perf: inline caps via simd.cpuinfo, zero-copy, vzeroupper, single source 8-wide
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      LIter := N8 shr 3;
+      LLo := -1.0; LHi := 1.0; LScale := 32767.0; LNeg32768 := -32768;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [ASrc]
+        mov rdx, qword ptr [ADst]
+        vbroadcastss ymm2, dword ptr [LLo]
+        vbroadcastss ymm3, dword ptr [LHi]
+        vbroadcastss ymm4, dword ptr [LScale]
+        vpbroadcastd ymm6, dword ptr [LNeg32768]
+      @F32ToS168Loop:
+        vmovups ymm0, yword ptr [rcx]
+        vmaxps ymm0, ymm0, ymm2
+        vminps ymm0, ymm0, ymm3
+        vcmpps ymm5, ymm0, ymm2, 1
+        vmulps ymm0, ymm0, ymm4
+        vcvtps2dq ymm0, ymm0
+        vpblendvb ymm0, ymm0, ymm6, ymm5
+        vextractf128 xmm1, ymm0, 1
+        vpackssdw xmm0, xmm0, xmm1
+        vmovdqu dqword ptr [rdx], xmm0
+        add rcx, 32
+        add rdx, 16
+        dec eax
+        jnz @F32ToS168Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin V := ASrc[I]; if V < -1.0 then V := -1.0 else if V > 1.0 then V := 1.0; if V <= -1.0 then ADst[I] := -32768 else begin LScaled := Round(V * 32767.0); if LScaled < -32768 then LScaled := -32768 else if LScaled > 32767 then LScaled := 32767; ADst[I] := SmallInt(LScaled); end; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
   N4 := ACount and not 3;
   I := 0;
   while I < N4 do
@@ -593,10 +613,51 @@ begin
 end;
 
 procedure SimdConvertS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
-var I, N4: Integer;
+var I, N4, N8: Integer;
+{$IFDEF CPUX86_64}
+var LCaps: TSimdCaps; LIter: Integer; LScale, LNegOne: Single; LNegMin: LongInt;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // single source scalar 4-way; Owner nextpas.core.simd will widen to AVX2/NEON when needed
+  // single source vector: AVX2 256-bit 8-wide Owner nextpas.core.simd, scalar fallback
+  // perf: inline caps via simd.cpuinfo, zero-copy, vzeroupper, single source 8-wide
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      LIter := N8 shr 3;
+      LScale := 1.0 / 2147483647.0;
+      LNegOne := -1.0;
+      LNegMin := Low(LongInt);
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [ASrc]
+        mov rdx, qword ptr [ADst]
+        vbroadcastss ymm2, dword ptr [LScale]
+        vbroadcastss ymm3, dword ptr [LNegOne]
+        vpbroadcastd ymm4, dword ptr [LNegMin]
+      @S32ToF328Loop:
+        vmovups ymm0, yword ptr [rcx]
+        vpcmpeqd ymm5, ymm0, ymm4
+        vcvtdq2ps ymm0, ymm0
+        vmulps ymm0, ymm0, ymm2
+        vblendvps ymm0, ymm0, ymm3, ymm5
+        vmovups yword ptr [rdx], ymm0
+        add rcx, 32
+        add rdx, 32
+        dec eax
+        jnz @S32ToF328Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin if ASrc[I] = Low(LongInt) then ADst[I] := -1.0 else ADst[I] := ASrc[I] / 2147483647.0; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
   N4 := ACount and not 3;
   I := 0;
   while I < N4 do
@@ -612,10 +673,52 @@ begin
 end;
 
 procedure SimdConvertF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
-var I, N4: Integer; V: Single; LScaled: Int64;
+var I, N4, N8: Integer; V: Single; LScaled: Int64;
+{$IFDEF CPUX86_64}
+var LCaps: TSimdCaps; LIter: Integer; LLo, LHi, LScale: Single; LNegMin: LongInt;
+{$ENDIF}
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // single source scalar 4-way; Owner nextpas.core.simd widening point
+  // single source vector: AVX2 256-bit 8-wide Owner nextpas.core.simd, clamp+mul+cvt
+  // perf: inline caps via simd.cpuinfo, zero-copy, vzeroupper, single source 8-wide
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      LIter := N8 shr 3;
+      LLo := -1.0; LHi := 1.0; LScale := 2147483647.0; LNegMin := Low(LongInt);
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [ASrc]
+        mov rdx, qword ptr [ADst]
+        vbroadcastss ymm2, dword ptr [LLo]
+        vbroadcastss ymm3, dword ptr [LHi]
+        vbroadcastss ymm4, dword ptr [LScale]
+        vpbroadcastd ymm6, dword ptr [LNegMin]
+      @F32ToS328Loop:
+        vmovups ymm0, yword ptr [rcx]
+        vmaxps ymm0, ymm0, ymm2
+        vminps ymm0, ymm0, ymm3
+        vcmpps ymm5, ymm0, ymm2, 1
+        vmulps ymm0, ymm0, ymm4
+        vcvtps2dq ymm0, ymm0
+        vpblendvb ymm0, ymm0, ymm6, ymm5
+        vmovups yword ptr [rdx], ymm0
+        add rcx, 32
+        add rdx, 32
+        dec eax
+        jnz @F32ToS328Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin V := ASrc[I]; if V < -1.0 then V := -1.0 else if V > 1.0 then V := 1.0; if V <= -1.0 then ADst[I] := Low(LongInt) else begin LScaled := Round(V * 2147483647.0); if LScaled < Low(LongInt) then LScaled := Low(LongInt) else if LScaled > High(LongInt) then LScaled := High(LongInt); ADst[I] := LongInt(LScaled); end; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
   N4 := ACount and not 3;
   I := 0;
   while I < N4 do
