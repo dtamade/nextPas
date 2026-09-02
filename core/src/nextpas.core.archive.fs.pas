@@ -107,7 +107,13 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.fs.stream,
-  nextpas.core.bytes.ops;
+  nextpas.core.fs.errors,
+  nextpas.core.bytes.ops,
+  nextpas.core.platform.fs,
+  nextpas.core.platform.files,
+  nextpas.core.platform.posix.errno,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.error;
 
 // perf: inline单源几何扩容（初始16、2倍）复用 bytes.builder 思想，零额外拷贝，单源于 ArchiveNextCapacity
 function ArchiveNextCapacity(const ACurrent, ARequired: Integer): Integer; inline;
@@ -324,62 +330,83 @@ end;
 
 procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
 var
-  LPos, LStart, LSegLen: Integer;
-  LPrefix: string;
   LClamped: SizeUInt;
+  P: PAnsiChar;
+  I: Integer;
+  Saved: AnsiChar;
+  LCopy: string;
 begin
   if (AFull = '') or (AParentLen = 0) then Exit;
   LClamped := AParentLen;
   if LClamped > SizeUInt(Length(AFull)) then LClamped := SizeUInt(Length(AFull));
-  LPrefix := '';
-  LStart := 1;
-  if (Length(AFull) > 0) and (AFull[1] = '/') then
-  begin
-    LPrefix := '/';
-    LStart := 2;
-    if IsSymlink('/') then
+  // perf: 零拷贝 NUL 截断单遍扫描，单次 LFull 分配复用 bytes.ops 单源，零 Copy/ArchiveJoinPath 堆抖动；inline 扫描，千级小文件 O(depth) 叠加消除
+  // stability: UniqueString 保障写时复制不污染共享串，临时 NUL 恢复不丢，platform 直调零分配
+  LCopy := AFull;
+  UniqueString(LCopy);
+  P := PAnsiChar(LCopy);
+  if (Length(LCopy) > 0) and (P[0] = '/') then
+    if platform_fs_is_symlink('/') then
       raise EParseError.Create('tar extract: symlink in path: /');
-  end;
-  for LPos := 1 to Integer(LClamped) + 1 do
+  // 逐 '/' 建前级目录，零额外串分配：每段临时 NUL 隔离前缀，platform 直接判定 symlink/mkdir
+  for I := 2 to Integer(LClamped) do
   begin
-    if (LPos > Integer(LClamped)) or (AFull[LPos] = '/') then
+    if P[I-1] = '/' then
     begin
-      LSegLen := LPos - LStart;
-      if LSegLen > 0 then
-      begin
-        // perf: 单遍增量前缀，零外层 Copy，单次 ArchiveJoinPath+IsSymlink+Mkdir，消除 200 次短串
-        LPrefix := ArchiveJoinPath(LPrefix, Copy(AFull, LStart, LSegLen));
-        if IsSymlink(LPrefix) then
+      if (I > 2) and (P[I-2] = '/') then Continue; // 空段 // 已由 IsSafe 拒绝，仅容错
+      Saved := P[I-1];
+      P[I-1] := #0;
+      try
+        if platform_fs_is_symlink(P) then
         begin
-          if LPrefix <> '/tmp' then
-            raise EParseError.Create('tar extract: symlink in path: ' + LPrefix);
+          if StrPas(P) <> '/tmp' then
+            raise EParseError.Create('tar extract: symlink in path: ' + StrPas(P));
         end;
-        try
-          Mkdir(LPrefix, PermDirDefault);
-        except
-          on E: EAlreadyExistsError do ;
-          on E: Exception do
-            if not IsDir(LPrefix) then raise;
+        if platform_file_mkdir(P, UInt32(PermDirDefault)) <> 0 then
+        begin
+          // EAlreadyExists 视为成功，其余需二次 IsDir 校验防并发
+          if not platform_fs_is_dir(P) then
+            RaiseFsError(platform_get_errno, 'mkdir', StrPas(P));
         end;
+      finally
+        P[I-1] := Saved;
       end;
-      LStart := LPos + 1;
+    end;
+  end;
+  // 末级父目录（无尾 '/'）：如 /a/b 中的 b
+  if (LClamped > 0) and (P[LClamped-1] <> '/') then
+  begin
+    Saved := P[LClamped];
+    P[LClamped] := #0;
+    try
+      if platform_fs_is_symlink(P) then
+      begin
+        if StrPas(P) <> '/tmp' then
+          raise EParseError.Create('tar extract: symlink in path: ' + StrPas(P));
+      end;
+      if platform_file_mkdir(P, UInt32(PermDirDefault)) <> 0 then
+      begin
+        if not platform_fs_is_dir(P) then
+          RaiseFsError(platform_get_errno, 'mkdir', StrPas(P));
+      end;
+    finally
+      P[LClamped] := Saved;
     end;
   end;
 end;
 
 function ArchiveStat(const APath: string): TFileInfo; inline;
 begin
-  Result := Stat(APath);
+  Result := nextpas.core.fs.Stat(APath);
 end;
 
 function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
 begin
-  Result := Open(APath, AMode);
+  Result := nextpas.core.fs.Open(APath, AMode);
 end;
 
 procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
 begin
-  MkdirAll(APath, APerm);
+  nextpas.core.fs.MkdirAll(APath, APerm);
 end;
 
 function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
@@ -495,7 +522,7 @@ begin
   if ARestoreMode and (AMode <> 0) then
   begin
     try
-      Chmod(APath, TFilePermission(AMode and $0FFF));
+      nextpas.core.fs.Chmod(APath, TFilePermission(AMode and $0FFF));
     except
       on E: Exception do
       begin
@@ -505,7 +532,7 @@ begin
     end;
   end;
   try
-    Chtimes(APath, AMtimeNs, AMtimeNs);
+    nextpas.core.fs.Chtimes(APath, AMtimeNs, AMtimeNs);
   except
     on E: Exception do
     begin
@@ -523,7 +550,7 @@ begin
     if ARestoreMode and (ADirs[I].FMode <> 0) then
     begin
       try
-        Chmod(ADirs[I].FFull, TFilePermission(ADirs[I].FMode and $0FFF));
+        nextpas.core.fs.Chmod(ADirs[I].FFull, TFilePermission(ADirs[I].FMode and $0FFF));
       except
         on E: Exception do
         begin
@@ -533,7 +560,7 @@ begin
       end;
     end;
     try
-      Chtimes(ADirs[I].FFull, ADirs[I].FMtimeNs, ADirs[I].FMtimeNs);
+      nextpas.core.fs.Chtimes(ADirs[I].FFull, ADirs[I].FMtimeNs, ADirs[I].FMtimeNs);
     except
       on E: Exception do
       begin
@@ -554,7 +581,7 @@ begin
   { ReadDir 已批量缓存目录项（platform 4K buf + 迭代句柄），仅含 Name/Type；
     mtime/mode 需 Stat 补齐，每条目一次 Stat 为必要 O(N)，非 N+1 冗余；
     路径拼接复用 LChildAbs，几何扩容 inline，资源经迭代器 Close 不丢 }
-  LEntries := ReadDir(AAbsDir);
+  LEntries := nextpas.core.fs.ReadDir(AAbsDir);
   ArchiveSortDirEntries(LEntries);
   for LI := 0 to High(LEntries) do
   begin
@@ -566,7 +593,7 @@ begin
     else
       LChildRel := ARelPrefix + '/' + LName;
     LChildAbs := AAbsDir + '/' + LName;
-    LInfo := Stat(LChildAbs);
+    LInfo := nextpas.core.fs.Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
       ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);

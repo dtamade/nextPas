@@ -14,20 +14,19 @@ uses
   nextpas.core.tar.writer,
   nextpas.core.tar.reader,
   nextpas.core.fs,
-  nextpas.core.io.memory;
+  nextpas.core.io.memory,
+  nextpas.core.bytes.ops;
 
-function BytesOf(const S: string): TBytes;
+function BytesOf(const S: string): TBytes; inline;
 begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then Move(S[1], Result[0], Length(S));
+  { single-source: bytes.ops.StringToBytes 零拷贝单次 Move 联邦收敛，inline 薄转发避免手写 Move 分散 }
+  Result := StringToBytes(S);
 end;
 
-function SameBytes(const A, B: TBytes): Boolean;
-var I: Integer;
+function SameBytes(const A, B: TBytes): Boolean; inline;
 begin
-  if Length(A) <> Length(B) then Exit(False);
-  for I := 0 to High(A) do if A[I] <> B[I] then Exit(False);
-  Result := True;
+  { single-source: bytes.ops.BytesEqual 零拷贝 MemEqual 单源，inline 薄转发 }
+  Result := BytesEqual(A, B);
 end;
 
 procedure TestPackAndExtract;

@@ -43,6 +43,9 @@ uses
 
 const
   CBlockSize = C_TAR_BLOCK_SIZE;
+  C_STREAM_BUF_SIZE = 65536;
+  C_STREAM_BUF_SHRINK_FLOOR = C_TAR_BUILDER_INITIAL_CAPACITY;
+  C_STREAM_BUF_SHRINK_FACTOR = 2;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -70,33 +73,37 @@ begin
   FDst := ADst;
 end;
 
-procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
+procedure TTarWriter.WriteBlock(const ABlock: array of Byte); inline;
 var
-  Zero: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
+  Buf: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Len: SizeInt;
 begin
   Len := Length(ABlock);
   // stability: 超 512 抛错而非静默截断，暴露上游头构造越界；资源释放由调用方/caller 兜底，无泄漏
   if Len > CBlockSize then
     raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, CBlockSize]);
-  if Len > 0 then
+  if Len = CBlockSize then
   begin
     if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
       raise EIOError.Create('tar: short write');
-  end;
-  if Len < CBlockSize then
+  end
+  else
   begin
-    FillChar(Zero[0], SizeOf(Zero), 0);
-    if FDst.Write(Zero[0], SizeUInt(CBlockSize - Len)) <> SizeUInt(CBlockSize - Len) then
+    // perf: single IWriter.Write 512 via stacked zero-pad + CopyMemory single source, merge header+pad double virtual dispatch (200x512B per-entry 2->1), inline + zero-copy Move via bytes.ops single source
+    FillChar(Buf[0], SizeOf(Buf), 0);
+    if Len > 0 then
+      CopyMemory(PByte(@ABlock[0]), PByte(@Buf[0]), SizeUInt(Len));
+    if FDst.Write(Buf[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
       raise EIOError.Create('tar: short write');
   end;
 end;
 
-procedure TTarWriter.EmitPaxHeader(const APayload: TBytes);
+procedure TTarWriter.EmitPaxHeader(const APayload: TBytes); inline;
 var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
+  TailLen, BulkLen: SizeUInt;
 begin
   FillChar(Block[0], SizeOf(Block), 0);
   TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, C_TAR_PAX_HEADER_NAME);
@@ -112,13 +119,32 @@ begin
   WriteBlock(Block);
   if Length(APayload) > 0 then
   begin
-    if FDst.Write(APayload[0], SizeUInt(Length(APayload))) <> SizeUInt(Length(APayload)) then
-      raise EIOError.Create('tar: short write');
     PadLen := TarPadToBlock(Length(APayload));
-    if PadLen > 0 then
+    if PadLen = 0 then
     begin
+      if FDst.Write(APayload[0], SizeUInt(Length(APayload))) <> SizeUInt(Length(APayload)) then
+        raise EIOError.Create('tar: short write');
+    end
+    else if SizeUInt(Length(APayload)) <= CBlockSize then
+    begin
+      // perf: batch payload+pad single dispach via stacked 512 + CopyMemory single source, merge small-pax tail double Write (PadLen二次Write -> AppendBytes single Move), inline + zero-copy
       FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      if FDst.Write(PadBlock[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
+      CopyMemory(PByte(@APayload[0]), PByte(@PadBlock[0]), SizeUInt(Length(APayload)));
+      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+        raise EIOError.Create('tar: short write');
+    end
+    else
+    begin
+      // perf: bulk aligned Move single source + tail+pad coalesced single 512 dispach via builder-AppendBytes semantic (stack Buf + CopyMemory), reduce virtual dispath jitter
+      BulkLen := (SizeUInt(Length(APayload)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
+      TailLen := SizeUInt(Length(APayload)) - BulkLen;
+      if BulkLen > 0 then
+        if FDst.Write(APayload[0], BulkLen) <> BulkLen then
+          raise EIOError.Create('tar: short write');
+      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
+      if TailLen > 0 then
+        CopyMemory(PByte(@APayload[BulkLen]), PByte(@PadBlock[0]), TailLen);
+      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
         raise EIOError.Create('tar: short write');
     end;
   end;
@@ -210,22 +236,42 @@ begin
   WriteBlock(Block);
 end;
 
-procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
+procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes); inline;
 var
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
+  TailLen, BulkLen: SizeUInt;
 begin
   // perf: header 单源复用 WriteHeader inline，零拷贝 Move 经 bytes.ops 单源
   WriteHeader(AHdr, Length(AData));
   if (AHdr.Kind = tekRegular) and (Length(AData) > 0) then
   begin
-    if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
-      raise EIOError.Create('tar: short write');
     PadLen := TarPadToBlock(Length(AData));
-    if PadLen > 0 then
+    if PadLen = 0 then
     begin
+      if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
+        raise EIOError.Create('tar: short write');
+    end
+    else if SizeUInt(Length(AData)) <= CBlockSize then
+    begin
+      // perf: batch payload+pad single dispach via stacked 512 + CopyMemory single source, merge data+pad double Write (PadLen二次Write -> AppendBytes single Move), inline + zero-copy
       FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      if FDst.Write(PadBlock[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
+      CopyMemory(PByte(@AData[0]), PByte(@PadBlock[0]), SizeUInt(Length(AData)));
+      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+        raise EIOError.Create('tar: short write');
+    end
+    else
+    begin
+      // perf: bulk aligned Move single source + tail+pad coalesced single 512 dispach, AppendBytes batch semantic via stack Buf + CopyMemory, reduce small-file burst jitter
+      BulkLen := (SizeUInt(Length(AData)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
+      TailLen := SizeUInt(Length(AData)) - BulkLen;
+      if BulkLen > 0 then
+        if FDst.Write(AData[0], BulkLen) <> BulkLen then
+          raise EIOError.Create('tar: short write');
+      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
+      if TailLen > 0 then
+        CopyMemory(PByte(@AData[BulkLen]), PByte(@PadBlock[0]), TailLen);
+      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
         raise EIOError.Create('tar: short write');
     end;
   end;
@@ -303,8 +349,6 @@ begin
 end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
-const
-  C_STREAM_BUF = 65536;
 var
   LRead, LToRead, LNeeded: SizeUInt;
   LRemaining: Int64;
@@ -326,14 +370,14 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand + 4x-threshold shrink (avoid 64K peak retention for small-file burst), no per-entry SetLength/Free churn
-  // stability: threshold shrink retains reuse for nearby sizes, 8K floor avoids thrash, exception-safe, freed on Finish/Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
+  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand + 2x-threshold shrink (4K floor aligned to C_TAR_BUILDER_INITIAL_CAPACITY single source, avoid 64K peak retention for mixed-load burst), no per-entry SetLength/Free churn
+  // stability: threshold shrink retains reuse for nearby sizes, 4K floor avoids thrash, exception-safe, freed on Finish/Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
   LNeeded := SizeUInt(AHdr.Size);
-  if LNeeded > C_STREAM_BUF then
-    LNeeded := C_STREAM_BUF;
+  if LNeeded > C_STREAM_BUF_SIZE then
+    LNeeded := C_STREAM_BUF_SIZE;
   if SizeUInt(Length(FStreamBuf)) < LNeeded then
     SetLength(FStreamBuf, LNeeded)
-  else if (SizeUInt(Length(FStreamBuf)) > 8192) and (SizeUInt(Length(FStreamBuf)) > LNeeded * 4) then
+  else if (SizeUInt(Length(FStreamBuf)) > C_STREAM_BUF_SHRINK_FLOOR) and (SizeUInt(Length(FStreamBuf)) > LNeeded * C_STREAM_BUF_SHRINK_FACTOR) then
     SetLength(FStreamBuf, LNeeded);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do

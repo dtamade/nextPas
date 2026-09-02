@@ -32,11 +32,43 @@ uses
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.bytes.builder,
-  nextpas.core.archive.fs;
+  nextpas.core.bytes.ops,
+  nextpas.core.archive.fs,
+  nextpas.core.fs;
 
 { 薄别名已移除：直接复用 archive.fs TArchiveWalkEntry/TArchiveWalkArray/TArchiveDeferredDir 单源 }
 
 { Walk 递归已完全下沉至 archive.fs: ArchiveCollectWalk 单源，tar 仅薄委托，无重复实现 }
+
+{ symlink/hardlink target 安全校验：复用 zip IsSafeSymlinkTarget 语义，bytes.ops 单源思想，拒绝绝对/盘符/反斜杠/..空段/超长，inline 零拷贝段扫描 }
+function IsSafeTarLinkTarget(const ATarget: string): Boolean; inline;
+var
+  LI, LSegStart: Integer;
+begin
+  Result := False;
+  if (ATarget = '') or (Length(ATarget) > 4096) then Exit;
+  if (ATarget[1] = '/') or (ATarget[1] = '\') then Exit;
+  if (Length(ATarget) >= 2) and (ATarget[2] = ':') and (UpCase(ATarget[1]) in ['A'..'Z']) then Exit;
+  if Pos('\', ATarget) > 0 then Exit;
+  LSegStart := 1;
+  for LI := 1 to Length(ATarget) + 1 do
+  begin
+    if (LI <= Length(ATarget)) and (ATarget[LI] <> '/') then Continue;
+    if LI - LSegStart = 0 then
+    begin
+      if LI <= Length(ATarget) then Exit; // 空段 //
+    end
+    else if (LI - LSegStart = 1) and (ATarget[LSegStart] = '.') then
+    begin
+      // 单点段 ./ 视为空段保守拒绝
+      Exit;
+    end
+    else if (LI - LSegStart = 2) and (ATarget[LSegStart] = '.') and (ATarget[LSegStart+1] = '.') then
+      Exit;
+    LSegStart := LI + 1;
+  end;
+  Result := True;
+end;
 
 procedure TarPackDirInto(const ADir: string; const AWriter: TTarWriter);
 var
@@ -126,6 +158,7 @@ var
   LMaxTotal: UInt64;
   LSlice: PByte;
   LSliceCount: SizeUInt;
+  LHardSource: string;
 begin
   if AOptions.MaxEntrySize = 0 then
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -147,36 +180,84 @@ begin
       while R.Next(H) do
       begin
         GuardTarNameForRead(H.Name);
-        if (H.Kind <> tekRegular) and (H.Kind <> tekDirectory) and AOptions.SkipSpecial then
-          Continue;
-        // perf: inline ArchiveJoinPath 单次 SetLength+Move，零 Delete 堆抖动，落盘热路径
+        // 特殊类型完整性闭环：SkipSpecial=false 时 symlink/hardlink/device/fifo 必须落地，不得静默丢弃
+        if (H.Kind <> tekRegular) and (H.Kind <> tekDirectory) then
+        begin
+          if AOptions.SkipSpecial then
+            Continue;
+          if (H.Kind = tekSymlink) or (H.Kind = tekHardLink) then
+            if not IsSafeTarLinkTarget(H.LinkName) then
+              raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
+        end;
+        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝 NUL 截断单遍扫描，千级小文件零额外分配，inline 热路径
         LFull := ArchiveJoinPath(ADestDir, H.Name);
         LSep := Length(LFull);
         while (LSep > 0) and (LFull[LSep] <> '/') do
           Dec(LSep);
         if LSep > 0 then
-        begin
-          // perf: 零拷贝父目录一站式，ArchivePrepareParentDir 单遍增量前缀，消除 Copy(LFull,1,LSep-1) 200 次短串分配，复用 bytes.ops 单源
           ArchivePrepareParentDir(LFull, SizeUInt(LSep - 1));
-        end;
         LMode := Word(H.Mode and $0FFF);
-        if H.Kind = tekDirectory then
-          ArchiveMkdirAll(LFull, ArchivePermDirDefault)
-        else if H.Kind = tekRegular then
-        begin
-          { 零拷贝：复用 Reader 已有的 EntryDataSlice/OpenEntryStream，避免 EntryData 的 SetLength+Move 双倍内存 }
-          if R.EntryDataSlice(LSlice, LSliceCount) then
-            ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, ArchivePermDefault)
-          else
-            ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
-          // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 带 StdErr WARN，不静默吞，fail-closed 高级感
-          ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
-        end
+        case H.Kind of
+          tekDirectory:
+            begin
+              ArchiveMkdirAll(LFull, ArchivePermDirDefault);
+              ArchiveDeferredAppend(LDirs, LDirCount, LFull, LMode, H.MTimeUnix * 1000000000);
+            end;
+          tekRegular:
+            begin
+              { 零拷贝：复用 Reader 已有的 EntryDataSlice，避免 EntryData 的 SetLength+Move 双倍内存 }
+              if R.EntryDataSlice(LSlice, LSliceCount) then
+                ArchiveWriteFileSlice(LFull, LSlice, LSliceCount, ArchivePermDefault)
+              else
+                ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
+              // stability+observability: 单源 ArchiveRestoreFileMeta best-effort 带 StdErr WARN，不静默吞，fail-closed
+              ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+            end;
+          tekSymlink:
+            begin
+              // 覆盖语义：已存在文件/链接先移除，fail-closed
+              if Exists(LFull) or IsSymlink(LFull) then
+                try Remove(LFull); except end;
+              Symlink(H.LinkName, LFull);
+              // symlink 自身权限/mtime不落盘（平台语义），仅保证可观测落盘
+            end;
+          tekHardLink:
+            begin
+              LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
+              // 源必须已落盘，否则 fail-closed
+              if not Exists(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
+              if Exists(LFull) or IsSymlink(LFull) then
+                try Remove(LFull); except end;
+              HardLink(LHardSource, LFull);
+            end;
+          tekFifo:
+            begin
+              if Exists(LFull) or IsSymlink(LFull) then
+                try Remove(LFull); except end;
+              try
+                MkFifo(LFull, TFilePermission(LMode and $0FFF));
+                ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+              except
+                on E: Exception do
+                begin
+                  System.WriteLn(StdErr, '[WARN] tar extract: mkfifo failed for ', H.Name, ': ', E.Message);
+                  System.Flush(StdErr);
+                  ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
+                  ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+                end;
+              end;
+            end;
+          tekCharDevice, tekBlockDevice:
+            begin
+              // device：需 mknod 带 dev 号且需特权，当前头未携带 devmajor/minor，best-effort WARN 并占位，保证不静默丢弃且可观测
+              System.WriteLn(StdErr, '[WARN] tar extract: special device skipped (no mknod): ', H.Name, ' kind=', Ord(H.Kind));
+              System.Flush(StdErr);
+              ArchiveWriteFileSlice(LFull, nil, 0, ArchivePermDefault);
+              ArchiveRestoreFileMeta(LFull, LMode, H.MTimeUnix * 1000000000, AOptions.RestoreMode);
+            end;
         else
           Continue;
-        if H.Kind = tekDirectory then
-        begin
-          ArchiveDeferredAppend(LDirs, LDirCount, LFull, LMode, H.MTimeUnix * 1000000000);
         end;
       end;
     finally

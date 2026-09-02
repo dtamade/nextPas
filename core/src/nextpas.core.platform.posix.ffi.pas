@@ -546,6 +546,12 @@ function utimensat(dirfd: cint; pathname: PAnsiChar; times: PTimeSpec;
 
 { Permission }
 
+{** @desc 创建 FIFO 特殊文件
+    @param path 路径
+    @param mode 权限
+    @return 0 成功 *}
+function mkfifo(path: PAnsiChar; mode: mode_t): cint; cdecl; external 'c' name 'mkfifo';
+
 {** @desc 设置文件权限
     @param path 文件路径
     @param mode 权限模式

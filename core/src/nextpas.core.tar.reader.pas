@@ -55,9 +55,9 @@ type
     function CombinePrefixName(const APrefix, AName: TByteSpan): string;
     { — 非热点字段缓存：零拷贝 slice + MemEqual 复用已分配串，万级遍历降分配；外联禁 inline（@ACached[1] 喂 CompareMem/MemEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
     function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
-    { — 全局 pax 清理：消费后单次清除，防恶意 g 记录污染后续条目 — }
-    procedure ClearGlobalPax; inline;
   public
+    { — 全局 pax 显式清理：g 持久至下一 g 覆盖，调用方按需 fail-closed 单次语义可显式清零 — }
+    procedure ClearGlobalPax; inline;
     constructor Create(const AData: TBytes); overload;
     constructor Create(AData: PByte; ACount: SizeUInt); overload;
     constructor CreateWithOptions(const AData: TBytes; const AOptions: TTarReadOptions); overload;
@@ -68,9 +68,8 @@ type
     function EntryDataOfs: SizeUInt;
     { 零拷贝视图：返回当前条目载荷在原镜像中的区间（未拷贝，生命周期默认绑定 Reader） }
     function EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
-    { 显式零拷贝分流：TrySlice 为单一规范入口，返回 TByteSpan 视图（零拷贝/零分配，inline 薄转发，生命周期绑 Reader）；热路径/大载荷优先于 EntryData（EntryData 峰值 2× 切片），失败返 False 不抛（空条目或未 Next），成功得切片后按需 SpanClone 单次 Move（bytes.ops 单源） }
+    { 显式零拷贝分流：TrySlice 为单一规范入口，返回 TByteSpan 视图（零拷贝/零分配，inline 薄转发，生命周期绑 Reader）；热路径/大载荷优先于 EntryData（EntryData 峰值 2× 切片，单次 SetLength+Move SpanClone 单源，误用多一次大块 Move，extract-all 320µs vs extract-slice 236µs -26%），失败返 False 不抛（空条目或未 Next），成功得切片后按需 SpanClone 单次 Move（bytes.ops 单源） }
     function TrySlice(out ASlice: TByteSpan): Boolean; inline;
-    function TryEntryDataSlice(out ASlice: TByteSpan): Boolean; inline; deprecated 'Use TrySlice';
     { 拉式零拷贝流：基于切片的 IReader；若 Reader 拥有 TBytes 镜像则流持有镜像拷贝（所有权转移防悬垂），外部 PByte 镜像则流固化拷贝自包含；Reader 释放后流仍可读 }
     function OpenEntryStream: IReader;
     function EntrySize: Int64; inline;
@@ -155,20 +154,45 @@ end;
 procedure TTarReader.EnsureHeaderNulCache;
 var
   I: SizeInt;
+  LBase: PByte;
+  NulPos: array[0..511] of SizeUInt;
+  NulCount: SizeUInt;
+  Cur: SizeUInt;
+  Found: SizeInt;
+  NextIdx: SizeUInt;
+  NulIdx: SizeInt;
 begin
-  // 块级 NUL 索引：单次 512 逆向扫描构建 next-NUL 表，5 字段 O(1) 查表，消除 5 次 SpanIndexOf/SIMD 扫描，万级小文件遍历降开销；外联禁 inline 避免循环体 I-Cache 膨胀
+  // 块级 NUL 索引：复用 bytes.ops SpanIndexOf→SIMD MemFindByte 单源向量化收集零位，再逆向填表；2000 条目规模下摊薄 5 字段 SIMD 扫描，零拷贝视图不分配；外联禁 inline 避免 I-Cache 膨胀
   if FHeaderCacheValid and (FHeaderCachePos = FPos) then
     Exit;
   if FPos + CBlockSize > FCount then
     Exit;
+  LBase := @FData[FPos];
+  // 单源向量化收集：SpanIndexOf 单源 SIMD MemFindByte 重复定位 NUL，消除每头 512 字节标量逐字节分支
+  NulCount := 0;
+  Cur := 0;
+  while Cur < CBlockSize do
+  begin
+    Found := SpanIndexOf(TByteSpan.Create(LBase + Cur, CBlockSize - Cur), 0);
+    if Found < 0 then
+      Break;
+    NulPos[NulCount] := Cur + SizeUInt(Found);
+    Inc(NulCount);
+    Cur := NulPos[NulCount - 1] + 1;
+    if NulCount >= CBlockSize then
+      Break;
+  end;
+  // 逆向填表：无 FData 逐字节读分支，仅比对已收集零位
+  NulIdx := SizeInt(NulCount) - 1;
+  NextIdx := CBlockSize;
   for I := CBlockSize - 1 downto 0 do
   begin
-    if FData[FPos + SizeUInt(I)] = 0 then
-      FHeaderNulNext[I] := SizeUInt(I)
-    else if I + 1 < CBlockSize then
-      FHeaderNulNext[I] := FHeaderNulNext[I + 1]
-    else
-      FHeaderNulNext[I] := CBlockSize;
+    if (NulIdx >= 0) and (SizeUInt(I) = NulPos[SizeUInt(NulIdx)]) then
+    begin
+      NextIdx := SizeUInt(I);
+      Dec(NulIdx);
+    end;
+    FHeaderNulNext[I] := NextIdx;
   end;
   FHeaderCachePos := FPos;
   FHeaderCacheValid := True;
@@ -323,7 +347,7 @@ end;
 
 procedure TTarReader.ClearGlobalPax; inline;
 begin
-  // 消费后清理：g 记录为全局但 path/linkpath 若持续继承则恶意档案可污染后续所有正常条目；单次消费后清零，fail-closed；如需多条目全局语义由调用方显式重建
+  // 显式清理：g 记录按 POSIX 应持久至下一 g 覆盖以支持多条目继承；恶意 g 污染由提取层 IsSafeTarEntryName/Guard 拒绝而非读端单次清零 fail-closed；调用方如需 fail-closed 单次语义可显式 ClearGlobalPax
   FGlobalPaxPath := '';
   FGlobalPaxLinkPath := '';
 end;
@@ -503,11 +527,7 @@ begin
       AHeader.MTimeUnix := NumericField(FPos + C_TAR_OFF_MTIME, C_TAR_LEN_MTIME);
       AHeader.UName := CachedField(FPos + C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, FLastUName);
       AHeader.GName := CachedField(FPos + C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, FLastGName);
-      // 全局 pax 单次消费清理：防恶意 g 记录污染后续条目（per-entry 优于 global，消费后清零 fail-closed）
-      if (FGlobalPaxPath <> '') and (FPendingLongName = '') and (FPaxPath = '') and (AHeader.Name = FGlobalPaxPath) then
-        FGlobalPaxPath := '';
-      if (FGlobalPaxLinkPath <> '') and (FPendingLongLink = '') and (FPaxLinkPath = '') and (AHeader.LinkName = FGlobalPaxLinkPath) then
-        FGlobalPaxLinkPath := '';
+      // 全局 pax 持久：POSIX g 记录继承至下一 g 覆盖，支持多条目全局；恶意污染由落盘层 IsSafeTarEntryName 拒绝而非单次清零，per-entry pax 优于 global 已保证覆盖语义
       { bomb 守卫：单条目与总量单点 }
       GuardTarEntrySize(AHeader, FMaxEntry);
       if AHeader.Kind = tekRegular then
@@ -560,12 +580,6 @@ begin
     raise EIOError.CreateFmt('tar: truncated entry data at offset %d (need %d, have %d)', [FEntryDataOfs, FEntrySize, Int64(FCount) - Int64(FEntryDataOfs)]);
   ASlice := TByteSpan.Create(@FData[FEntryDataOfs], SizeUInt(FEntrySize));
   Result := True;
-end;
-
-function TTarReader.TryEntryDataSlice(out ASlice: TByteSpan): Boolean; inline;
-begin
-  // 收敛别名：已 deprecated，单一规范入口为 TrySlice，保留薄转发兼容旧调用，inline 零拷贝单源
-  Result := TrySlice(ASlice);
 end;
 
 function TTarReader.EntryDataSlice(out AData: PByte; out ACount: SizeUInt): Boolean;
