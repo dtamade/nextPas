@@ -12,7 +12,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.tar.base;
+  nextpas.core.tar.base,
+  nextpas.core.bytes.builder;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 
@@ -23,7 +24,7 @@ procedure GuardTarTotalSize(ACum, ANext: UInt64; AMaxTotal: UInt64);
 {** 名安全守卫（写端 EArgumentError，读端/落盘 EParseError 由调用方选） *}
 procedure GuardTarNameForRead(const AName: string);
 
-{** 校验和单点：512 块校验和计算与验证（unsigned/signed 双算，零拷贝 PByte 切片；循环体外联） *}
+{** 512 块校验和计算与验证 *}
 function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
 function TarComputeChecksumSigned(ABlock: PByte): Int64;
 function TarStoredChecksum(ABlock: PByte): Int64; inline;
@@ -31,26 +32,29 @@ procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 function TarHeaderIsZeroOrValid(ABlock: PByte; APos: SizeUInt): Boolean;
 
-{** 数值字段单点：八进制/base-256 双路径编解码（零拷贝 PByte 切片；循环体外联） *}
+{** 数值字段：八进制/base-256 双路径编解码 *}
 function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 procedure TarFormatNumericField(ABlock: PByte; AOff, ALen: SizeUInt; AValue: Int64);
 
-{** 头字段单点：文本/校验和构造收敛至 common，机械委托 bytes.ops.CopyStringToBuffer/CopyMemory 单源 Move，零拷贝 PByte 切片（Move 索引禁 inline，外联可静态校验） *}
+{** 头字段写入，委托 bytes.ops 单源；Move 索引禁 inline *}
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; ACount: SizeUInt);
 procedure TarFinalizeHeaderChecksum(ABlock: PByte);
-{** ustar 魔数/版本单点：收敛 EmitPaxHeader/WriteHeader 逐字节拼装，复用 C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 常量与 TarPutHeaderString 单源 Move，inline 薄转发零拷贝 *}
+{** 写入 ustar 魔数/版本 *}
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
-{** pax 记录单点：长度前缀十进制自洽与拼接收敛至 common，复用 bytes.ops CopyStringToBuffer 单源 Move 单次 SetLength 分配，零拷贝 PAnsiChar 视图，外联禁 inline（含循环/分配） *}
+{** 生成 pax 记录；含循环/分配，外联 *}
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
+{** 追加 pax 记录至 builder，合并双超限单次构建；外联 *}
+procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
 
 implementation
 
 uses
   nextpas.core.exception,
   nextpas.core.bytes.ops,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.number;
 
 function TarPadToBlock(ASize: Int64): Int64; inline;
 begin
@@ -82,7 +86,7 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和单源：单次扫描双累加，分段无分支，chksum 字段视为空格，循环体外联 — }
+{ — 校验和：单次扫描双累加 — }
 procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
   I: SizeUInt;
@@ -106,7 +110,7 @@ begin
   end;
 end;
 
-{ — 校验和单点：单遍 512，chksum 字段视为空格，双算兼容历史 tar 实现（循环体外联） — }
+{ — 校验和：单遍 512 — }
 function TarComputeChecksumUnsigned(ABlock: PByte): Int64;
 var
   U, S: Int64;
@@ -140,7 +144,6 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
-  // 单源：复用 bytes.ops.IsZeroBytes 零拷贝 TByteSpan 判零，无逐字节分支扩散，外联守 design-conventions 真实循环体禁 inline
   Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
 end;
 
@@ -149,7 +152,6 @@ var
   Stored, U, S: Int64;
 begin
   Stored := TarStoredChecksum(ABlock);
-  // 单源复用：零块复用 bytes.ops.IsZeroBytes via TarHeaderIsZeroBlock（TByteSpan 零拷贝视图，外联），校验和复用 TarComputeChecksumsDual 单次 512 双累加（分段无分支，外联，薄守卫 inline 零拷贝）；消除双扫描重复，循环体外联守 design-conventions
   if TarHeaderIsZeroBlock(ABlock) then
     Exit(True);
   TarComputeChecksumsDual(ABlock, U, S);
@@ -158,7 +160,7 @@ begin
   Result := False;
 end;
 
-{ — 数值字段单点：读端 octal/base-256 解码，写端编码（循环体外联） — }
+{ — 数值字段：octal/base-256 编解码 — }
 function TarParseNumericField(ABase: PByte; ALen: SizeUInt; APos: SizeUInt): Int64;
 var
   I: SizeUInt;
@@ -225,12 +227,10 @@ begin
   end;
 end;
 
-{ — 头字段单点：文本与校验和构造收敛至 common，消除 writer 双嵌 PutText/PutOctal/校验和分散（Move[AValue[1]] 禁 inline，外联单源） — }
 procedure TarPutHeaderString(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string);
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：机械委托 bytes.ops.CopyStringToBuffer 单源 Move 语义
   CopyLen := SizeUInt(Length(AValue));
   if CopyLen > ALen then
     CopyLen := ALen;
@@ -242,7 +242,6 @@ procedure TarPutHeaderSlice(ABlock: PByte; AOff, ALen: SizeUInt; AData: PByte; A
 var
   CopyLen: SizeUInt;
 begin
-  // 单源：机械委托 bytes.ops.CopyMemory 单源 Move 语义
   CopyLen := ACount;
   if CopyLen > ALen then
     CopyLen := ALen;
@@ -255,7 +254,6 @@ var
   Sum: Int64;
   I: SizeUInt;
 begin
-  // 单点：校验和计算与八进制格式化收敛至 common，零拷贝 PByte 切片；循环体外联
   Sum := TarComputeChecksumUnsigned(ABlock);
   for I := 0 to 5 do
     ABlock[C_TAR_OFF_CHKSUM + I] := Byte(Ord('0') + ((Sum shr ((5 - I) * 3)) and 7));
@@ -265,45 +263,31 @@ end;
 
 procedure TarWriteUStarMagic(ABlock: PByte); inline;
 begin
-  // 单源：复用 TarPutHeaderString 单源 Move，C_TAR_MAGIC_USTAR/C_TAR_VERSION_00 单点
   TarPutHeaderString(ABlock, C_TAR_OFF_MAGIC, C_TAR_LEN_MAGIC, C_TAR_MAGIC_USTAR);
   TarPutHeaderString(ABlock, C_TAR_OFF_VERSION, C_TAR_LEN_VERSION, C_TAR_VERSION_00);
 end;
 
-{ — pax 单点：长度前缀十进制自洽与拼接收敛至 common，复用 bytes.ops CopyStringToBuffer 单源 Move 单次 SetLength 分配，零拷贝 PAnsiChar 视图，外联禁 inline（含循环/分配） — }
 function TarFormatPaxRecord(const AKey, AValue: string): string;
 var
   LBase, LLen, LDigits, LNeed: Integer;
-  SLen: string;
   LPos: SizeInt;
+  LBuf: array[0..20] of AnsiChar;
+  LNumLen: Int32;
 begin
   LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
   LDigits := 1;
   LLen := LBase + LDigits;
   while True do
   begin
-    if LLen < 10 then LNeed := 1
-    else if LLen < 100 then LNeed := 2
-    else if LLen < 1000 then LNeed := 3
-    else if LLen < 10000 then LNeed := 4
-    else if LLen < 100000 then LNeed := 5
-    else if LLen < 1000000 then LNeed := 6
-    else if LLen < 10000000 then LNeed := 7
-    else if LLen < 100000000 then LNeed := 8
-    else if LLen < 1000000000 then LNeed := 9
-    else LNeed := 10;
+    LNeed := UInt64DecimalDigits(UInt64(LLen));
     if LNeed = LDigits then Break;
     LDigits := LNeed;
     LLen := LBase + LDigits;
   end;
-  SLen := nextpas.core.text.conv.IntToStr(LLen);
   SetLength(Result, LLen);
-  LPos := 1;
-  if Length(SLen) > 0 then
-  begin
-    CopyStringToBuffer(SLen, PByte(PAnsiChar(Result) + LPos - 1), SizeUInt(Length(SLen)));
-    Inc(LPos, Length(SLen));
-  end;
+  LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
+  Move(LBuf[0], Result[1], SizeUInt(LNumLen));
+  LPos := LNumLen + 1;
   Result[LPos] := ' ';
   Inc(LPos);
   if Length(AKey) > 0 then
@@ -321,7 +305,37 @@ begin
   Result[LPos] := #10;
 end;
 
-{ — pax 单点：零拷贝 PByte 切片解析，复用 bytes.ops TByteSpan 零拷贝思想，无 Copy 分配 — }
+procedure TarAppendPaxRecord(const ABuilder: IBytesBuilder; const AKey, AValue: string);
+var
+  LBase, LLen, LDigits, LNeed: Integer;
+  LBuf: array[0..20] of AnsiChar;
+  LNumLen: Int32;
+begin
+  if ABuilder = nil then
+    Exit;
+  LBase := 1 + Length(AKey) + 1 + Length(AValue) + 1;
+  LDigits := 1;
+  LLen := LBase + LDigits;
+  while True do
+  begin
+    LNeed := UInt64DecimalDigits(UInt64(LLen));
+    if LNeed = LDigits then Break;
+    LDigits := LNeed;
+    LLen := LBase + LDigits;
+  end;
+  LNumLen := UIntToBuffer(UInt64(LLen), @LBuf[0]);
+  ABuilder.Reserve(SizeUInt(LLen));
+  ABuilder.AppendBytes(PByte(@LBuf[0]), SizeUInt(LNumLen));
+  ABuilder.AppendByte(Ord(' '));
+  if Length(AKey) > 0 then
+    ABuilder.AppendBytes(PByte(PAnsiChar(AKey)), SizeUInt(Length(AKey)));
+  ABuilder.AppendByte(Ord('='));
+  if Length(AValue) > 0 then
+    ABuilder.AppendBytes(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
+  ABuilder.AppendByte(10);
+end;
+
+{ — pax 解析：零拷贝 PByte 切片 — }
 function TarParsePaxRecords(ABase: PByte; ALen: SizeUInt; out APath, ALinkPath: string): Boolean;
 var
   P, Sp, Eq, RecEnd: SizeInt;

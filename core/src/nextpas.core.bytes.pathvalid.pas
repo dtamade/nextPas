@@ -17,6 +17,10 @@ function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 { 归档名安全谓词单源（tar/zip 共用，L1）：非空、≤AMaxBytes、非'/'开头、无盘符、无'\'、
   无'//'/'.'/'..'段，尾随'/'合法。inline+零拷贝：原串索引扫描，无Copy/分配。 }
 function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
+{ 参数化单源：阈值/尾斜杠差异收敛（复用 bytes.ops 单源段扫描、零拷贝原串索引，无Copy/分配）；
+  AAllowTrailingSlash=False 时尾随'/'拒绝（tar link target 4096 语义），True 时允许（归档名 tar/zip）。
+  IsSafeArchiveEntryName 为 True 薄转发，IsSafeTarLinkTarget 经此 Ex 薄转发，消除 80% 重复。inline 薄转发。 }
+function IsSafeArchiveEntryNameEx(const AName: string; const AMaxBytes: SizeInt; const AAllowTrailingSlash: Boolean): Boolean; inline;
 
 implementation
 
@@ -67,7 +71,7 @@ begin
   Result := BytesValidPath(APath, AAllowRoot);
 end;
 
-function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
+function IsSafeArchiveEntryNameEx(const AName: string; const AMaxBytes: SizeInt; const AAllowTrailingSlash: Boolean): Boolean; inline;
 var
   LI, LSegStart: Integer;
 begin
@@ -76,7 +80,7 @@ begin
     Exit;
   if Length(AName) > AMaxBytes then
     Exit;
-  if AName[1] = '/' then
+  if (AName[1] = '/') or (AName[1] = '\') then
     Exit;
   if (Length(AName) >= 2) and (AName[2] = ':') and
      (UpCase(AName[1]) in ['A'..'Z']) then
@@ -93,7 +97,9 @@ begin
     if LI - LSegStart = 0 then
     begin
       if LI <= Length(AName) then
-        Exit;
+        Exit; // '//' 空段
+      if not AAllowTrailingSlash then
+        Exit; // 尾随 '/' 仅归档名允许，link target 拒绝
     end
     else if LI - LSegStart = 1 then
     begin
@@ -106,6 +112,11 @@ begin
     LSegStart := LI + 1;
   end;
   Result := True;
+end;
+
+function IsSafeArchiveEntryName(const AName: string; const AMaxBytes: SizeInt): Boolean; inline;
+begin
+  Result := IsSafeArchiveEntryNameEx(AName, AMaxBytes, True);
 end;
 
 end.

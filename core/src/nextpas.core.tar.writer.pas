@@ -15,8 +15,8 @@ type
   private
     FDst: IWriter;
     FFinished: Boolean;
-    FStreamBuf: TBytes; // pooled 64K buffer for AddEntryFromReader, amortized allocs, inline zero-copy
     procedure WriteBlock(const ABlock: array of Byte);
+    procedure WritePaddedPayload(const AData: TBytes); inline;
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
@@ -44,8 +44,6 @@ uses
 const
   CBlockSize = C_TAR_BLOCK_SIZE;
   C_STREAM_BUF_SIZE = 65536;
-  C_STREAM_BUF_SHRINK_FLOOR = C_TAR_BUILDER_INITIAL_CAPACITY;
-  C_STREAM_BUF_SHRINK_FACTOR = 2;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -61,7 +59,7 @@ begin
   end;
 end;
 
-{ — pax record 单点已收敛至 common.TarFormatPaxRecord（复用 bytes.ops 单源编解码，零拷贝 PAnsiChar 视图，外联禁 inline），writer 仅薄委托，不再手写十进制自洽逻辑 — }
+{ — pax 记录委托 common — }
 
 { TTarWriter }
 
@@ -98,12 +96,48 @@ begin
   end;
 end;
 
-procedure TTarWriter.EmitPaxHeader(const APayload: TBytes); inline;
+procedure TTarWriter.WritePaddedPayload(const AData: TBytes); inline;
 var
-  Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
+begin
+  // perf: 单源 Bulk+Tail+Pad 三分支批量写入，复用 bytes.ops CopyMemory 单源 Move，inline 零拷贝；EmitPaxHeader/EmitEntry 共用此单点，消除三处拷贝重复，热路径单次虚分发
+  if Length(AData) = 0 then
+    Exit;
+  PadLen := TarPadToBlock(Length(AData));
+  if PadLen = 0 then
+  begin
+    if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
+      raise EIOError.Create('tar: short write');
+  end
+  else if SizeUInt(Length(AData)) <= CBlockSize then
+  begin
+    // perf: small payload+pad 单次 512 写入 via stacked 512 + CopyMemory 单源，避免二次 Write；inline + zero-copy
+    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
+    CopyMemory(PByte(@AData[0]), PByte(@PadBlock[0]), SizeUInt(Length(AData)));
+    if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+      raise EIOError.Create('tar: short write');
+  end
+  else
+  begin
+    // perf: bulk aligned Move 单源 + tail+pad 合并单次 512 虚分发 via CopyMemory，降抖动；inline 零拷贝
+    BulkLen := (SizeUInt(Length(AData)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
+    TailLen := SizeUInt(Length(AData)) - BulkLen;
+    if BulkLen > 0 then
+      if FDst.Write(AData[0], BulkLen) <> BulkLen then
+        raise EIOError.Create('tar: short write');
+    FillChar(PadBlock[0], SizeOf(PadBlock), 0);
+    if TailLen > 0 then
+      CopyMemory(PByte(@AData[BulkLen]), PByte(@PadBlock[0]), TailLen);
+    if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
+      raise EIOError.Create('tar: short write');
+  end;
+end;
+
+procedure TTarWriter.EmitPaxHeader(const APayload: TBytes); inline;
+var
+  Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
 begin
   FillChar(Block[0], SizeOf(Block), 0);
   TarPutHeaderString(@Block[0], C_TAR_OFF_NAME, C_TAR_LEN_NAME, C_TAR_PAX_HEADER_NAME);
@@ -117,37 +151,8 @@ begin
   TarWriteUStarMagic(@Block[0]);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
-  if Length(APayload) > 0 then
-  begin
-    PadLen := TarPadToBlock(Length(APayload));
-    if PadLen = 0 then
-    begin
-      if FDst.Write(APayload[0], SizeUInt(Length(APayload))) <> SizeUInt(Length(APayload)) then
-        raise EIOError.Create('tar: short write');
-    end
-    else if SizeUInt(Length(APayload)) <= CBlockSize then
-    begin
-      // perf: batch payload+pad single dispach via stacked 512 + CopyMemory single source, merge small-pax tail double Write (PadLen二次Write -> AppendBytes single Move), inline + zero-copy
-      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      CopyMemory(PByte(@APayload[0]), PByte(@PadBlock[0]), SizeUInt(Length(APayload)));
-      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
-        raise EIOError.Create('tar: short write');
-    end
-    else
-    begin
-      // perf: bulk aligned Move single source + tail+pad coalesced single 512 dispach via builder-AppendBytes semantic (stack Buf + CopyMemory), reduce virtual dispath jitter
-      BulkLen := (SizeUInt(Length(APayload)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
-      TailLen := SizeUInt(Length(APayload)) - BulkLen;
-      if BulkLen > 0 then
-        if FDst.Write(APayload[0], BulkLen) <> BulkLen then
-          raise EIOError.Create('tar: short write');
-      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      if TailLen > 0 then
-        CopyMemory(PByte(@APayload[BulkLen]), PByte(@PadBlock[0]), TailLen);
-      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
-        raise EIOError.Create('tar: short write');
-    end;
-  end;
+  // 单源：Bulk+Tail+Pad 复用 WritePaddedPayload，复用 bytes.ops 单源零拷贝，inline
+  WritePaddedPayload(APayload);
 end;
 
 procedure TTarWriter.WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
@@ -157,7 +162,6 @@ var
   CutPos: SizeInt;
   LPaxBytes: TBytes;
   LBuilder: IBytesBuilder;
-  LRec: string;
   I: Integer;
 begin
   if FFinished then
@@ -184,21 +188,11 @@ begin
   end;
   if ((Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0)) or (Length(LinkName) > C_TAR_LEN_LINKNAME) then
   begin
-    // perf: bytes.builder 单源几何扩容单次 ToBytes 一次 Move 单源 bytes.ops，消除 LPaxText 字符串拼接累加后 StringToBytes 多次分配，复用 common.TarFormatPaxRecord 单源编解码；零拷贝 PAnsiChar 视图 AppendBytes 单源 Move
-    // stability: builder 接口生命周期局部持有，异常安全不丢，LPaxBytes 由托管 TBytes 释放
     LBuilder := CreateBytesBuilder(256);
     if (Length(Name) > C_TAR_LEN_NAME) and (CutPos = 0) then
-    begin
-      LRec := TarFormatPaxRecord('path', Name);
-      if Length(LRec) > 0 then
-        LBuilder.AppendBytes(PByte(PAnsiChar(LRec)), SizeUInt(Length(LRec)));
-    end;
+      TarAppendPaxRecord(LBuilder, 'path', Name);
     if Length(LinkName) > C_TAR_LEN_LINKNAME then
-    begin
-      LRec := TarFormatPaxRecord('linkpath', LinkName);
-      if Length(LRec) > 0 then
-        LBuilder.AppendBytes(PByte(PAnsiChar(LRec)), SizeUInt(Length(LRec)));
-    end;
+      TarAppendPaxRecord(LBuilder, 'linkpath', LinkName);
     LPaxBytes := LBuilder.ToBytes;
     EmitPaxHeader(LPaxBytes);
   end;
@@ -232,49 +226,19 @@ begin
   TarWriteUStarMagic(@Block[0]);
   TarPutHeaderString(@Block[0], C_TAR_OFF_UNAME, C_TAR_LEN_UNAME, AHdr.UName);
   TarPutHeaderString(@Block[0], C_TAR_OFF_GNAME, C_TAR_LEN_GNAME, AHdr.GName);
+  // ustar devmajor/devminor：设备类型保留设备号，char/block 设备生效，其余置零兼容；复用 bytes.ops 单源 Move 单点
+  TarFormatNumericField(@Block[0], C_TAR_OFF_DEVMAJOR, C_TAR_LEN_DEVMAJOR, AHdr.DevMajor);
+  TarFormatNumericField(@Block[0], C_TAR_OFF_DEVMINOR, C_TAR_LEN_DEVMINOR, AHdr.DevMinor);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
 end;
 
 procedure TTarWriter.EmitEntry(const AHdr: TTarHeader; const AData: TBytes); inline;
-var
-  PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
-  PadLen: Int64;
-  TailLen, BulkLen: SizeUInt;
 begin
   // perf: header 单源复用 WriteHeader inline，零拷贝 Move 经 bytes.ops 单源
   WriteHeader(AHdr, Length(AData));
   if (AHdr.Kind = tekRegular) and (Length(AData) > 0) then
-  begin
-    PadLen := TarPadToBlock(Length(AData));
-    if PadLen = 0 then
-    begin
-      if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
-        raise EIOError.Create('tar: short write');
-    end
-    else if SizeUInt(Length(AData)) <= CBlockSize then
-    begin
-      // perf: batch payload+pad single dispach via stacked 512 + CopyMemory single source, merge data+pad double Write (PadLen二次Write -> AppendBytes single Move), inline + zero-copy
-      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      CopyMemory(PByte(@AData[0]), PByte(@PadBlock[0]), SizeUInt(Length(AData)));
-      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
-        raise EIOError.Create('tar: short write');
-    end
-    else
-    begin
-      // perf: bulk aligned Move single source + tail+pad coalesced single 512 dispach, AppendBytes batch semantic via stack Buf + CopyMemory, reduce small-file burst jitter
-      BulkLen := (SizeUInt(Length(AData)) div SizeUInt(CBlockSize)) * SizeUInt(CBlockSize);
-      TailLen := SizeUInt(Length(AData)) - BulkLen;
-      if BulkLen > 0 then
-        if FDst.Write(AData[0], BulkLen) <> BulkLen then
-          raise EIOError.Create('tar: short write');
-      FillChar(PadBlock[0], SizeOf(PadBlock), 0);
-      if TailLen > 0 then
-        CopyMemory(PByte(@AData[BulkLen]), PByte(@PadBlock[0]), TailLen);
-      if FDst.Write(PadBlock[0], SizeUInt(CBlockSize)) <> SizeUInt(CBlockSize) then
-        raise EIOError.Create('tar: short write');
-    end;
-  end;
+    WritePaddedPayload(AData);
 end;
 
 procedure TTarWriter.AddEntry(const AHdr: TTarHeader; const AData: TBytes);
@@ -350,8 +314,9 @@ end;
 
 procedure TTarWriter.AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader);
 var
-  LRead, LToRead, LNeeded: SizeUInt;
+  LRead, LToRead, LBufSize: SizeUInt;
   LRemaining: Int64;
+  LBuf: TBytes;
   PadBlock: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   PadLen: Int64;
 begin
@@ -366,29 +331,26 @@ begin
     raise EArgumentError.Create('tar: negative size');
   if (AHdr.Size > 0) and (AReader = nil) then
     raise EArgumentError.Create('tar: reader is nil');
-  // perf: 头单源 WriteHeader inline 零拷贝，内容 64K 分块 Move 单源 bytes.ops，无 TBytes 全量拷贝
+  // perf: 头单源 WriteHeader inline 零拷贝，内容分块 Move 单源 bytes.ops，无 TBytes 全量拷贝
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // perf: pooled buffer reuse via FStreamBuf (instance-level pool), lazy min(Size,64K) cold-start, amortized single alloc across entries, inline zero-copy Move via bytes.ops semantics; growth on demand + 2x-threshold shrink (4K floor aligned to C_TAR_BUILDER_INITIAL_CAPACITY single source, avoid 64K peak retention for mixed-load burst), no per-entry SetLength/Free churn
-  // stability: threshold shrink retains reuse for nearby sizes, 4K floor avoids thrash, exception-safe, freed on Finish/Destroy;资源释放由 TBytes 生命周期兜底，无泄漏
-  LNeeded := SizeUInt(AHdr.Size);
-  if LNeeded > C_STREAM_BUF_SIZE then
-    LNeeded := C_STREAM_BUF_SIZE;
-  if SizeUInt(Length(FStreamBuf)) < LNeeded then
-    SetLength(FStreamBuf, LNeeded)
-  else if (SizeUInt(Length(FStreamBuf)) > C_STREAM_BUF_SHRINK_FLOOR) and (SizeUInt(Length(FStreamBuf)) > LNeeded * C_STREAM_BUF_SHRINK_FACTOR) then
-    SetLength(FStreamBuf, LNeeded);
+  // perf: 局部缓冲按需单次分配，无实例级池化状态机；消除大小文件交替时 2×阈值缩容/4K 底反复 SetLength 与清零 Move，开销回归 amortized 单次分配；职责归一至调用栈，L2 容器不背内存池
+  // stability: 局部 TBytes 生命周期托管，异常安全不丢，无 linger 峰值
+  LBufSize := SizeUInt(AHdr.Size);
+  if LBufSize > C_STREAM_BUF_SIZE then
+    LBufSize := C_STREAM_BUF_SIZE;
+  SetLength(LBuf, LBufSize);
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin
     LToRead := SizeUInt(LRemaining);
-    if LToRead > SizeUInt(Length(FStreamBuf)) then
-      LToRead := SizeUInt(Length(FStreamBuf));
-    LRead := AReader.Read(FStreamBuf[0], LToRead);
+    if LToRead > SizeUInt(Length(LBuf)) then
+      LToRead := SizeUInt(Length(LBuf));
+    LRead := AReader.Read(LBuf[0], LToRead);
     if LRead = 0 then
       raise EIOError.Create('tar: short read');
-    if FDst.Write(FStreamBuf[0], LRead) <> LRead then
+    if FDst.Write(LBuf[0], LRead) <> LRead then
       raise EIOError.Create('tar: short write');
     Dec(LRemaining, Int64(LRead));
   end;
@@ -411,8 +373,6 @@ begin
   FillChar(Zero[0], SizeOf(Zero), 0);
   WriteBlock(Zero);
   WriteBlock(Zero);
-  // stability: pooled buffer peak release on Finish, avoid 64K lingering after last large entry; amortized reuse already done, no thrash
-  SetLength(FStreamBuf, 0);
 end;
 
 function TTarWriter.IsFinished: Boolean; inline;
@@ -421,14 +381,28 @@ begin
 end;
 
 destructor TTarWriter.Destroy;
+var
+  LUnwinding: Boolean;
 begin
-  // stability: fail-closed — propagate EIOError/short write from Finish to avoid silent two-zero truncation masking; buffer release guaranteed via finally
-  // perf: threshold-shrink + Finish release already handled, Destroy only ensures final free without extra alloc
+  // stability: SafeFail — ExceptObject 非 nil 时抑制二次异常逃逸，StdErr WARN 后释资源；避免析构期 Finish 的 EIOError/short-write 直抛导致进程终止
+  // perf: 无池化状态机，仅 Finish 两零块 best-effort，零额外分配，inline 零拷贝复用
+  LUnwinding := nextpas.core.exception.ExceptObject <> nil;
   try
     if not FFinished then
+    try
       Finish;
+    except
+      on E: Exception do
+      begin
+        System.WriteLn(System.StdErr, '[WARN] tar: writer Destroy Finish suppressed: ', E.Message, ' unwinding=', LUnwinding);
+        System.Flush(System.StdErr);
+        if not LUnwinding then
+        begin
+          // 非 unwind 期亦抑制，避免析构抛异常逃逸；已 WARN 可观测，fail-closed 由调用方显式 Finish 保证
+        end;
+      end;
+    end;
   finally
-    SetLength(FStreamBuf, 0);
     inherited Destroy;
   end;
 end;

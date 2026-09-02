@@ -10,9 +10,9 @@ USTAR/PAX tar 容器：读、写、文件系统打包/解包，标准 `tar` 可�
 | `nextpas.core.tar.base` | 种类枚举、头记录、选项、常量 `C_TAR_BLOCK_SIZE=512`、名安全谓词、模式助手 |
 | `nextpas.core.tar.intf` | `ITarBuilder` 接口契约（`base←intf←实现←门面`） |
 | `nextpas.core.tar.reader` | `TTarReader`：迭代内存镜像，pax/x/g + GNU L/K + base-256 全兼容 |
-| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出，需显式 `Finish` |
+| `nextpas.core.tar.writer` | `TTarWriter`：以 `IWriter` 为目标的 ustar 写入，prefix 自动分割 + pax `x` 长名回退（>100 无 prefix 切分或 `linkpath>100` 时） + base-256 溢出 + `devmajor/devminor` 设备号（`C_TAR_OFF_DEVMAJOR/MINOR`），需显式 `Finish`（`Destroy` SafeFail 抑制 `EIOError` 二次逃逸） |
 | `nextpas.core.tar.fs` | 目录打包/解包便捷层 |
-| `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed，`AddEntryFromReader` 流式零拷贝） |
+| `nextpas.core.tar.builder` | `ITarBuilder` 实现：链式薄门面，委托 `TTarWriter`，单一 `TarBuilder` 入口（显式 `Finish` fail-closed，`AddEntryFromReader` 流式零拷贝 64K 局部缓冲无 pooled  thrash） |
 | `nextpas.core.compress.tar` | 兼容转发（deprecated，委托 `nextpas.core.tar`） |
 
 > 内部实现（不属于公共 API，禁止门面外直引）：`nextpas.core.tar.common` — 共享内核 `TarPadToBlock`/`Guard*`（`EntrySize/TotalSize/NameForRead`）+ 校验和单点 `TarComputeChecksum*`/`TarVerifyBlockChecksum`/`TarHeaderIsZeroOrValid` + 数值单点 `TarParseNumericField`/`TarFormatNumericField` + pax 单点 `TarParsePaxRecords`（零拷贝 PByte 切片、复用 `bytes.ops` 单源；薄守卫 inline，含循环体外联以遵 design-conventions 禁 inline、避 I-Cache 膨胀），仅供 `reader/writer/fs` 实现内复用。
@@ -43,8 +43,8 @@ S := CreateBytesStream;
 W := TTarWriter.Create(S as IWriter);
 W.AddFile('hello.txt', BytesOfString('hello'), $1A4, 1700000000);
 W.AddDir('assets');
-W.AddEntry(Hdr, Data); // Hdr.Name/Kind/Mode/UID/GID/MTime/UName/GName
-W.Finish; // 两零块，需显式调用，析构兜底 best-effort
+W.AddEntry(Hdr, Data); // Hdr.Name/Kind/Mode/UID/GID/MTime/UName/GName/DevMajor/DevMinor
+W.Finish; // 两零块，需显式调用，析构 SafeFail 抑制 EIOError 二次逃逸
 ```
 
 ### Read
@@ -55,11 +55,11 @@ R := TTarReader.Create(Bytes); // 或 Create(PByte, Count) + WithOptions(bomb �
 while R.Next(H) do
 begin
   WriteLn(H.Name, ' ', H.Size, ' ', Ord(H.Kind));
-  Data := R.EntryData; // 拷贝分流：峰值 2× TrySlice 切片，热路径优先 TrySlice（extract-all 320µs vs extract-slice 236µs 约 -26%）
-  if R.TrySlice(S) then // 单一规范零拷贝 TByteSpan 视图（inline 薄转发，生命周期绑 Reader）
-    ; // 按需 SpanClone(S) 单次 Move（bytes.ops 单源）或零拷贝处理
-  if R.EntryDataSlice(P, C) then // PByte 薄转发（复用 TrySlice 单源，inline）
-    RS := R.OpenEntryStream; // 持有型拉式流：拥有镜像时引用计数持有，外部 PByte 时固化拷贝，Reader 释放后仍可读（bytes.ops.CopyMemory 单源）
+  Data := R.EntryData; // 拷贝（SpanClone 单源）
+  if R.TrySlice(S) then // 单一规范零拷贝视图（inline，生命周期绑 Reader）
+    ; // 按需 SpanClone(S) 单次 Move（bytes.ops 单源）
+  if R.EntryDataSlice(P, C) then // 薄转发复用 TrySlice
+    RS := R.OpenEntryStream; // 持有型流，Reader 释放后仍可读
 end;
 ```
 
@@ -92,7 +92,7 @@ Opts := DefaultTarAddOptions; Opts.Mode := $1A4; Opts.MTimeUnix := 1700000000;
 TarBuilder.AddWithOptions('hello.txt', Data, Opts)
           .AddDirectoryWithOptions('assets', Opts)
           .AddEntry(Hdr, Data)
-          .AddEntryFromReader(Hdr2, Reader) // 流式零拷贝 64K pooled 复用缓冲，无 TBytes 全量拷贝
+          .AddEntryFromReader(Hdr2, Reader) // 流式零拷贝 64K 局部缓冲（无 pooled thrash），无 TBytes 全量拷贝，抽取 WritePaddedPayload 单源
           .Finish; // 显式 Finish 必需，未调即析构抛 EInvalidOperationError
 ```
 
@@ -104,7 +104,7 @@ TarBuilder.AddWithOptions('hello.txt', Data, Opts)
 
 ## Performance
 
-- **inline/零拷贝/单源**：`reader` 零拷贝切片与外部 `PByte` 视图（无 `Copy`，`FEntryDataOfs/Size` 与 `EntryData` 一致；`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，已移除 `TryEntryDataSlice` 冗余分流噪声；`FieldSlice` 块级 NUL 索引复用 `bytes.ops SpanIndexOf→SIMD MemFindByte` 单源向量化收集再逆向填表、2000 条目可向量化；`CombinePrefixName/ArchiveJoinPath` 经 `bytes.ops.SpanJoinWithSeparator` 单次 `SetLength+两Move` 同构收敛；`TTarSliceReader.Read` 统一收敛至 `bytes.ops.CopyMemory` 单源 `Move`；`EntryData` 拷贝分流峰值 2× 单次 `SpanClone` Move 误用多一次大块 Move、热路径 `TrySlice` 零拷贝 `extract-all 320µs vs extract-slice 236µs -26%`；`OpenEntryStream` 持有型 `FHold` 防悬垂，`pax g` 全局持久至下一 `g` 覆盖支持多条目继承、恶意污染由落盘 `IsSafeTarEntryName` 拒绝、`ClearGlobalPax` 显式可选），`writer` 单块 `Move` 直写（`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`AddDirectoryWithOptions` 复用 `writer.AddDirWithOptions` 单源），`TarPackDirInto` 同层排序+`deferred dir` 逆序定稿，`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联，详见 `CONTRACT.md §6`）。
+- **inline/零拷贝/单源**：`reader` 零拷贝切片（`TrySlice` 单一规范 `TByteSpan` 视图 + `EntryDataSlice` 薄转发，`FieldSlice` 单次 `SpanIndexOf` 单源视图；`EntryData` 为 `SpanClone` 单源拷贝，`OpenEntryStream` 持有型 `FHold` 防悬垂，`Next` 对 `H.Name` 自动 `GuardTarNameForRead`，`pax g` 全局持久至下一 `g` 覆盖，`ClearGlobalPax` 显式可选；设备 `DevMajor/DevMinor` 解析/回写完整），`writer` 单块 `Move` 直写（`WritePaddedPayload` 单源 Bulk+Tail+Pad 抽取 `bytes.ops CopyMemory` inline 零拷贝，`AddEntryFromReader` 局部 64K 缓冲无 pooled thrash，`builder` 经 `IBytesBuilder` 直写切片、inline `AppendBytes` 几何扩容、单次 `ToBytes`，`Destroy` SafeFail 抑制二次逃逸），`common.TarHeaderIsZeroOrValid` 单遍 512 融合校验和/零块与 `TarParsePaxRecords` 零拷贝 `PByte` 复用 `bytes.ops` 单源（薄守卫 inline，热循环外联）。
 - **量化基线**：`core/benchmarks/nextpas.core.tar/bench_tar` 7 项 `TBenchSuite` 300ms/7样，数值单源于 `BASELINE.json`（`build/bench-tar.json` 人工审查固化），`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现，`TAR_BENCH_FULL=1` 追加 `2000×512B` 档；详见 `CONTRACT.md §6`。
 - **回归门限（CONTRACT §6）**：`allocs` 硬预算 `baseline+2`/`bytes` 强一致（CI 红），`ns/op` `1.5×` WARN 与 `MB/s` `0.65×` WARN；Go/Rust 对照同口径 `compare_go`/`compare_rust` 守卫 `Pascal ns/op ≤1.5×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续两机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 经 `check_regression.py` 比对 `BASELINE.json` 一键门。
 
