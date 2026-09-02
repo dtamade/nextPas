@@ -113,7 +113,7 @@ type
     procedure RecalcMaxLoad; inline;
     procedure InitCapacity(ACap: SizeUInt);
     procedure Rehash(ANewCap: SizeUInt);
-    function FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean; inline;
+    function FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean;
     function IndexOf(const ACmd: string): Integer;
     procedure AddEntry(const ACmd: string; AIsAsync: Boolean;
       const ASync: TWebviewInvokeSyncHandler;
@@ -370,60 +370,34 @@ function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LB: TStringBuilder;
   LCode: string;
-  procedure AppendDoubleEscaped(const S: string); inline;
-  var
-    V: TStringView;
-    I: SizeUInt;
-    B: Byte;
-    LHex: array[0..6] of AnsiChar;
-  begin
-    V := TStringView.FromStr(S);
-    for I := 0 to V.Len - 1 do
-    begin
-      if V.Data = nil then Break;
-      B := Byte(V.Data[I]);
-      case B of
-        Ord('"'): LB.AppendBytes('\\\"', 4);
-        Ord('\'): LB.AppendBytes('\\\\', 4);
-        8: LB.AppendBytes('\\b', 3);
-        9: LB.AppendBytes('\\t', 3);
-        10: LB.AppendBytes('\\n', 3);
-        12: LB.AppendBytes('\\f', 3);
-        13: LB.AppendBytes('\\r', 3);
-      else
-        if B < 32 then
-        begin
-          LHex[0] := '\';
-          LHex[1] := '\';
-          LHex[2] := 'u';
-          LHex[3] := '0';
-          LHex[4] := '0';
-          if (B shr 4) < 10 then LHex[5] := AnsiChar(Ord('0') + (B shr 4))
-          else LHex[5] := AnsiChar(Ord('a') + (B shr 4) - 10);
-          if (B and $F) < 10 then LHex[6] := AnsiChar(Ord('0') + (B and $F))
-          else LHex[6] := AnsiChar(Ord('a') + (B and $F) - 10);
-          LB.AppendBytes(@LHex[0], 7);
-        end
-        else
-          LB.AppendChar(AnsiChar(B));
-      end;
-    end;
-  end;
+  LInner: TStringBuilder;
+  LInnerStr: string;
+  W: TJsonWriter;
 begin
-  { perf: 单预留单Builder零拷贝：单次 Init 预留 (worst 4x for \" / \\ double escape, 7x for control \\u00xx), AppendBytes/AppendInt/JsonEscape 双层转义单遍零拷贝 inline，bytes.ops 单源思想，无 ToString+Clear 双次分配与二次转义抖动；stability: try/finally Done 不丢 }
+  { 双层转义复用 json.writer/text.escape 单源：内层 {"code":...,"message":...} 经 TJsonWriter 单源转义，外层经 W.Str 二次转义为 JS 串字面量；零手写 hex/双层分支，转义语义与 BuildResolveScript/BuildEmitScript 同源 }
   LCode := NormalizeInvokeCode(ACode);
-  LB.Init(SizeUInt(32 + Length(LCode) * 4 + Length(AMessage) * 4 + 15 + 20 + 32 + 8));
+  { perf: 内层 worst 6x（\u00xx），bytes.ops 单源预留单次 Init，零二次扩容与 Move；外层基于已求 inner 长度 *2 预留（" / \ 二次 2x，上界覆盖 \u00xx 7 字节总展开），零二次 Grow }
+  LInner.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 6 + SizeUInt(Length(AMessage)) * 6));
+  try
+    W.Init(LInner);
+    W.BeginObject;
+    W.Key('code');
+    W.Str(LCode);
+    W.Key('message');
+    W.Str(AMessage);
+    W.EndObject;
+    LInnerStr := LInner.ToString;
+  finally
+    LInner.Done;
+  end;
+  { stability: 单 outer builder，try/finally Done 不丢，与 BuildResolveScript 同纪律 }
+  LB.Init(SizeUInt(15 + 20 + 1 + SizeUInt(Length(LInnerStr)) * 2 + 4));
   try
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
     LB.AppendChar(',');
-    LB.AppendChar('"');
-    LB.AppendBytes('{\"code\":\"', 12);
-    AppendDoubleEscaped(LCode);
-    LB.AppendBytes('\",\"message\":\"', 17);
-    AppendDoubleEscaped(AMessage);
-    LB.AppendBytes('\"}', 3);
-    LB.AppendChar('"');
+    W.Init(LB);
+    W.Str(LInnerStr);
     LB.AppendChar(')');
     Result := LB.ToString;
   finally
@@ -544,12 +518,12 @@ begin
   SetLength(LOld, 0);
 end;
 
-function TWebviewInvokeRegistry.FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean; inline;
+function TWebviewInvokeRegistry.FindSlot(const ACmd: string; AHash: UInt32; out AIdx: SizeUInt): Boolean;
 var
   LIdx, LStart: SizeUInt;
   LFirstDel: SizeInt;
 begin
-  { perf: inline O(1) 平均线性探测，WyHash32 视图哈希直算，SpanEqual 前已 hash 预筛，Deleted 链路保持，首 Deleted 记位作插入点，零堆分配 }
+  { perf: O(1) 平均线性探测（非 inline：含 while 循环体禁 inline，避 I-Cache 复制膨胀），WyHash32 视图哈希直算，Deleted 链路保持，零堆分配 }
   Result := False;
   if FCapacity = 0 then begin AIdx := 0; Exit(False); end;
   LIdx := AHash and FMask;

@@ -186,6 +186,7 @@ implementation
 uses
   nextpas.core.window.gtk3,
   nextpas.core.sync.mutex,
+  nextpas.core.sync.rwlock,
   nextpas.core.webview.mime,
   nextpas.core.webview.utils;
 
@@ -196,6 +197,10 @@ type
   PAssetHolder = ^TAssetHolder;
   TAssetHolder = record
     Bytes: TBytes;
+  end;
+  TViewMapEntry = record
+    Key: Pointer;
+    Value: TGtkWebview;
   end;
 
   TGtkDebugLogger = class(TInterfacedObject, ILogger)
@@ -264,6 +269,9 @@ var
   GGtkLogger: ILogger = nil;
   GSchemeLock: TMutex = nil;
   GPoolLock: TMutex = nil;
+  GLiveLock: TRWLock = nil;
+  GViewMap: array of TViewMapEntry;
+  GViewMapCount: Integer = 0;
   { Dispatcher 池化：Slab 复用 PIdleRec / PCompletionMarshal，零每 Post 堆分配
     性能：独立 GPoolLock 与 GSchemeLock 分离，避免高频 Post/mareshal 与 scheme
     注册/窗口登记抢同一全局锁；池操作为短临界区 inline + 零拷贝复用，复用 live 通用池抽象单源，SetLength 仅初始化预分配、运行期不持锁堆分配 }
@@ -374,36 +382,43 @@ end;
 
 function GtkLiveWindowCount: Integer; inline;
 begin
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  // perf: O(1) inline read under RW read lock, zero alloc, pointer-only, avoids GSchemeLock serialization with scheme ctx
+  if GLiveLock <> nil then GLiveLock.AcquireRead;
   try
     Result := GLiveCount;
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseRead;
   end;
 end;
 
 procedure RegisterLive(AWin: TGtkWebview);
 begin
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
     // single source: live generic registry -> bytes.ops VecGrow 0→4→2× inline, zero-copy
     if GLiveWindows <> nil then
       GLiveWindows.Register(AWin);
+    // perf: O(1) hash view->window via VecGrowCapacity single source 0→4→8 inline, zero-copy, write path only, read hot path zero alloc
+    if AWin.FView <> nil then
+      ViewMapAddLocked(AWin.FView, AWin);
     Inc(GLiveCount);
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
 end;
 
 procedure UnregisterLive(AWin: TGtkWebview);
 begin
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
+    // stability: remove view index before registry to avoid stale pointer window
+    if AWin.FView <> nil then
+      ViewMapRemoveLocked(AWin.FView);
     // single source: live generic registry Unregister inline O(1) swap, bytes.ops VecRemoveSwap single source, hot close avoids O(n²), zero-copy
     if GLiveWindows <> nil then
       GLiveWindows.Unregister(AWin);
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
 end;
 
@@ -563,6 +578,131 @@ begin
   end;
 end;
 
+const
+  VIEW_TOMBSTONE = Pointer(1);
+
+{ ---- view->window O(1) 索引：开地址 hash，零分配热读 ---- }
+function ViewHash(AKey: Pointer): SizeUInt; inline;
+begin
+  Result := (PtrUInt(AKey) shr 4) xor (PtrUInt(AKey) shr 11);
+end;
+
+function ViewMapFindLocked(AView: Pointer): TGtkWebview; inline;
+var
+  I, Cap, Start: Integer;
+begin
+  Result := nil;
+  Cap := Length(GViewMap);
+  if (Cap = 0) or (AView = nil) then Exit;
+  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
+  for I := 0 to Cap - 1 do
+  begin
+    if GViewMap[(Start + I) mod Cap].Key = AView then
+      Exit(GViewMap[(Start + I) mod Cap].Value);
+    if GViewMap[(Start + I) mod Cap].Key = nil then
+      Exit(nil);
+  end;
+end;
+
+procedure ViewMapRehashLocked(ANewCap: Integer); inline;
+var
+  LOld: array of TViewMapEntry;
+  I, OldCap, Start, J: Integer;
+begin
+  LOld := GViewMap;
+  OldCap := Length(LOld);
+  SetLength(GViewMap, ANewCap);
+  for I := 0 to ANewCap - 1 do
+  begin
+    GViewMap[I].Key := nil;
+    GViewMap[I].Value := nil;
+  end;
+  GViewMapCount := 0;
+  for I := 0 to OldCap - 1 do
+    if (LOld[I].Key <> nil) and (LOld[I].Key <> VIEW_TOMBSTONE) then
+    begin
+      Start := Integer(ViewHash(LOld[I].Key) mod SizeUInt(ANewCap));
+      for J := 0 to ANewCap - 1 do
+        if GViewMap[(Start + J) mod ANewCap].Key = nil then
+        begin
+          GViewMap[(Start + J) mod ANewCap].Key := LOld[I].Key;
+          GViewMap[(Start + J) mod ANewCap].Value := LOld[I].Value;
+          Inc(GViewMapCount);
+          Break;
+        end;
+    end;
+end;
+
+procedure ViewMapAddLocked(AView: Pointer; AWin: TGtkWebview); inline;
+var
+  I, Cap, Start, FirstTomb: Integer;
+begin
+  if (AView = nil) or (AWin = nil) then Exit;
+  Cap := Length(GViewMap);
+  if Cap = 0 then
+  begin
+    SetLength(GViewMap, VecGrowCapacity(0));
+    Cap := Length(GViewMap);
+  end;
+  if (GViewMapCount * 4 >= Cap * 3) then
+  begin
+    Cap := VecGrowCapacity(Cap);
+    ViewMapRehashLocked(Cap);
+    Cap := Length(GViewMap);
+  end;
+  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
+  FirstTomb := -1;
+  for I := 0 to Cap - 1 do
+  begin
+    if GViewMap[(Start + I) mod Cap].Key = AView then
+    begin
+      GViewMap[(Start + I) mod Cap].Value := AWin;
+      Exit;
+    end;
+    if GViewMap[(Start + I) mod Cap].Key = VIEW_TOMBSTONE then
+    begin
+      if FirstTomb = -1 then FirstTomb := (Start + I) mod Cap;
+    end
+    else if GViewMap[(Start + I) mod Cap].Key = nil then
+    begin
+      if FirstTomb <> -1 then
+      begin
+        GViewMap[FirstTomb].Key := AView;
+        GViewMap[FirstTomb].Value := AWin;
+      end
+      else
+      begin
+        GViewMap[(Start + I) mod Cap].Key := AView;
+        GViewMap[(Start + I) mod Cap].Value := AWin;
+      end;
+      Inc(GViewMapCount);
+      Exit;
+    end;
+  end;
+end;
+
+procedure ViewMapRemoveLocked(AView: Pointer); inline;
+var
+  I, Cap, Start: Integer;
+begin
+  Cap := Length(GViewMap);
+  if (Cap = 0) or (AView = nil) then Exit;
+  Start := Integer(ViewHash(AView) mod SizeUInt(Cap));
+  for I := 0 to Cap - 1 do
+  begin
+    if GViewMap[(Start + I) mod Cap].Key = AView then
+    begin
+      GViewMap[(Start + I) mod Cap].Key := VIEW_TOMBSTONE;
+      GViewMap[(Start + I) mod Cap].Value := nil;
+      Dec(GViewMapCount);
+      if GViewMapCount < 0 then GViewMapCount := 0;
+      Exit;
+    end;
+    if GViewMap[(Start + I) mod Cap].Key = nil then
+      Exit;
+  end;
+end;
+
 var
   GSchemeErrQuark: GQuark = 0;
 
@@ -570,27 +710,22 @@ var
   但请求可精确归属发起视图——webkit_uri_scheme_request_get_web_view
   对回 GLiveWindows 的 FView 指针即得所属窗口，多窗口资产命名空间
   硬隔离。service worker 等无视图请求回落"最新活跃窗口"。
-  perf: zero-alloc hot path — scan under short lock via live registry Count/At (bytes.ops Vec single source inline zero-copy), no VecSnapshot heap alloc, short critical section pointer-only, 95% single-window fast path inline }
+  perf: zero-alloc hot path — O(1) hash view->window via VecGrowCapacity single source inline zero-copy, no linear scan, no VecSnapshot heap alloc, short RW read critical section pointer-only, 95% single-window fast path inline }
 function LiveWindowForView(AView: Pointer): TGtkWebview; inline;
 var
-  I: Integer;
   LCandidate: TGtkWebview;
 begin
   Result := nil;
   if AView = nil then
     Exit(nil);
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireRead;
   try
-    // perf: inline zero-alloc scan via live registry Count/At single source (bytes.ops Vec inline), no SetLength/heap, short lock holds pointer reads only, zero-copy At
-    if GLiveWindows <> nil then
-      for I := 0 to GLiveWindows.Count - 1 do
-      begin
-        LCandidate := GLiveWindows.At(I);
-        if (not LCandidate.FClosed) and (LCandidate.FView = AView) then
-          Exit(LCandidate);
-      end;
+    // perf: inline zero-alloc O(1) hash probe under RW read lock via bytes.ops VecGrowCapacity single source, no linear scan, no SetLength/heap, zero-copy, concurrent reads scale
+    LCandidate := ViewMapFindLocked(AView);
+    if (LCandidate <> nil) and (not LCandidate.FClosed) then
+      Exit(LCandidate);
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseRead;
   end;
 end;
 
@@ -598,16 +733,16 @@ function LatestLiveWebview: TGtkWebview; inline;
 var
   I: Integer;
 begin
-  // perf: zero-alloc reverse scan under short lock via live registry Count/At single source (bytes.ops Vec inline), no VecSnapshot heap alloc, short critical section pointer-only, inline zero-copy
+  // perf: zero-alloc reverse scan under RW read lock via live registry Count/At single source (bytes.ops Vec inline), no VecSnapshot heap alloc, short critical section pointer-only, inline zero-copy; fallback path only for service-worker nil view, cold
   Result := nil;
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireRead;
   try
     if GLiveWindows <> nil then
       for I := GLiveWindows.Count - 1 downto 0 do
         if not GLiveWindows.At(I).FClosed then
           Exit(GLiveWindows.At(I));
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseRead;
   end;
 end;
 
@@ -644,25 +779,31 @@ begin
     LView := nil;
   LSelf := nil;
   LKeep := nil;
-  // perf: zero-alloc hot path — single short lock scan via live registry Count/At (bytes.ops Vec single source inline zero-copy), no VecSnapshot heap alloc, pointer-only critical section, keep-alive via IInterface after lock release; no 8-window truncation
-    if GSchemeLock <> nil then GSchemeLock.Acquire;
+  // perf: zero-alloc hot path — O(1) hash view->window via RW read lock + bytes.ops VecGrowCapacity single source inline zero-copy, no linear scan, pointer-only critical section, keep-alive AddRef inside lock, concurrent reads scale with RWLock
+    if GLiveLock <> nil then GLiveLock.AcquireRead;
     try
-      if GLiveWindows <> nil then
+      if LView <> nil then
       begin
-        if LView <> nil then
-          for I := 0 to GLiveWindows.Count - 1 do
-            if (not GLiveWindows.At(I).FClosed) and (GLiveWindows.At(I).FView = LView) then
-            begin LSelf := GLiveWindows.At(I); Break; end;
-        if LSelf = nil then
+        LSelf := ViewMapFindLocked(LView);
+        if (LSelf <> nil) and LSelf.FClosed then
+          LSelf := nil;
+        if LSelf <> nil then
+          LKeep := LSelf as IInterface;
+      end;
+      if LSelf = nil then
+      begin
+        if GLiveWindows <> nil then
           for I := GLiveWindows.Count - 1 downto 0 do
             if not GLiveWindows.At(I).FClosed then
-            begin LSelf := GLiveWindows.At(I); Break; end;
+            begin
+              LSelf := GLiveWindows.At(I);
+              LKeep := LSelf as IInterface;
+              Break;
+            end;
       end;
     finally
-      if GSchemeLock <> nil then GSchemeLock.Release;
+      if GLiveLock <> nil then GLiveLock.ReleaseRead;
     end;
-  if LSelf <> nil then
-    LKeep := LSelf as IInterface;
   if LSelf = nil then
   begin
     GtkTrace('scheme request, no live window: ' +
@@ -1338,11 +1479,11 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
     if GLiveCount > 0 then Dec(GLiveCount);
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
   SettlePendingOnClose;
   DropIdlePendings;
@@ -1359,11 +1500,11 @@ begin
   if FClosed then
     Exit;
   FClosed := True;
-  if GSchemeLock <> nil then GSchemeLock.Acquire;
+  if GLiveLock <> nil then GLiveLock.AcquireWrite;
   try
     if GLiveCount > 0 then Dec(GLiveCount);
   finally
-    if GSchemeLock <> nil then GSchemeLock.Release;
+    if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
   { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
     所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
@@ -1768,9 +1909,12 @@ end;
 initialization
   GSchemeLock := TMutex.Create;
   GPoolLock := TMutex.Create;
+  GLiveLock := TRWLock.Create;
   // single source: live generic registry for GLiveWindows / GRegisteredSchemeCtxs -> bytes.ops VecGrow inline, zero-copy
   GLiveWindows := specialize TWebviewLiveRegistry<TGtkWebview>.Create;
   GRegisteredSchemeCtxs := specialize TWebviewLiveRegistry<Pointer>.Create;
+  // perf: preallocate view hash to VecGrowCapacity(0) via bytes.ops single source 0→4 inline, zero-copy; read hot path zero alloc, write rehash single source
+  SetLength(GViewMap, VecGrowCapacity(0));
   // perf: preallocate slab pools to bounded cap (bytes.ops VecGrowCapacity single source 0→4→8) — steady-state Release never SetLength inside lock, zero heap jitter
   SetLength(GIdlePool, VecGrowCapacity(VecGrowCapacity(0)));
   SetLength(GCompletionPool, VecGrowCapacity(VecGrowCapacity(0)));
@@ -1790,8 +1934,12 @@ finalization
   SetLength(GCompletionPool, 0);
   GGtkLogger := nil;
   // stability: registry Free releases Vec, zero leak, unblocks finalization
+  // stability: view map Clear nils refs, zero leak, resource release not lost
+  SetLength(GViewMap, 0);
+  GViewMapCount := 0;
   FreeAndNil(GRegisteredSchemeCtxs);
   FreeAndNil(GLiveWindows);
+  FreeAndNil(GLiveLock);
   FreeAndNil(GPoolLock);
   FreeAndNil(GSchemeLock);
 

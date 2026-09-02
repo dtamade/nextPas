@@ -128,17 +128,7 @@ type
     FOnReady: array of TWebviewNotifyHandler;
     FOnReadyCount: Integer;
     procedure RequireOpen;
-    procedure GrowPendingEvals; inline;
-    procedure GrowOutcomes; inline;
-    procedure GrowEvalScripts; inline;
-    procedure GrowEmits; inline;
-    procedure GrowCaptured; inline;
-    procedure GrowOnNavStarted; inline;
-    procedure GrowOnNavFinished; inline;
-    procedure GrowOnNavFailed; inline;
-    procedure GrowOnReady; inline;
     procedure GrowQueue; inline;
-    procedure GrowHistory; inline;
     procedure RecordOutcome(const ACmd: string; AIsError: Boolean;
       const AResultJson, ACode, AMessage: string);
     { 回执 Eval 脚本捕获队列（DeliverFrame 协议路径专用） }
@@ -411,7 +401,7 @@ procedure TFakeDispatcher.PostRef(AProc: TWebviewProcRef); inline;
 var
   LNew: TFakeDispatcherRing;
   LOldRing: TFakeDispatcherRing;
-  LHead, LCount, LOldLen, LNewCap: Integer;
+  LHead, LCount, LOldLen, LNewCap, I, LTail: Integer;
 begin
   // perf: fast path under lock without alloc
   FLck.Acquire;
@@ -424,43 +414,17 @@ begin
     end;
     LOldLen := Length(FRing);
     LNewCap := VecGrowCapacity(LOldLen);
+    LOldRing := FRing;
+    LHead := FHead;
+    LCount := FCount;
   finally
     FLck.Release;
   end;
   // perf: heap allocation (SetLength zero-init) outside lock, avoids O(n) lock amplification, single source bytes.ops VecGrowCapacity inline
   SetLength(LNew, LNewCap);
-  while True do
-  begin
-    // perf: short snapshot under lock — only pointer/length/head/count copy, O(1), zero alloc
-    FLck.Acquire;
-    try
-      if FCount < Length(FRing) then
-      begin
-        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-        Inc(FCount);
-        Exit;
-      end;
-      if Length(FRing) <> LOldLen then
-      begin
-        LOldLen := Length(FRing);
-        LNewCap := VecGrowCapacity(LOldLen);
-      end
-      else
-      begin
-        LOldRing := FRing;
-        LHead := FHead;
-        LCount := FCount;
-        Break;
-      end;
-    finally
-      FLck.Release;
-    end;
-    if Length(LNew) <> LNewCap then
-      SetLength(LNew, LNewCap);
-  end;
   // perf: O(n) two-segment linearize outside lock — zero lock hold, inline zero extra call, single source LinearizeCopy, bytes.ops capacity single source
   LinearizeCopy(LOldRing, LHead, LCount, LNew);
-  // perf: short install under lock — only pointer swap + one slot write, O(1), stale check via length/head/count
+  // perf: short install under lock — only pointer swap + one slot write, O(1), stale check via length/head/count, single attempt no spin
   FLck.Acquire;
   try
     if FCount < Length(FRing) then
@@ -471,63 +435,32 @@ begin
     end;
     if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
     begin
-      // stability: concurrent Pump/Post mutated queue — discard stale linearized copy, retry with fresh snapshot outside lock
-      // release lock before retry to avoid spin under lock
-    end
-    else
-    begin
-      // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef), zero leak
-      FRing := LNew;
-      FHead := 0;
-      FRing[LCount] := AProc;
-      Inc(FCount);
-      Exit;
+      // contention: stale snapshot — fallback to single in-lock relinearize without extra alloc/spin
+      // perf: at most one extra SetLength inside lock on contention, no outside retry loop, avoids extra SetLength + spin under storm
+      if Length(LNew) <> VecGrowCapacity(Length(FRing)) then
+        SetLength(LNew, VecGrowCapacity(Length(FRing)));
+      if FCount > 0 then
+      begin
+        if FHead + FCount <= Length(FRing) then
+          for I := 0 to FCount - 1 do
+            LNew[I] := FRing[FHead + I]
+        else
+        begin
+          LTail := Length(FRing) - FHead;
+          for I := 0 to LTail - 1 do
+            LNew[I] := FRing[FHead + I];
+          for I := 0 to FCount - LTail - 1 do
+            LNew[LTail + I] := FRing[I];
+        end;
+      end;
     end;
+    // stability: FRing:=LNew releases old ring refs via finalization, LNew retains refs (AddRef), zero leak
+    FRing := LNew;
+    FHead := 0;
+    FRing[FCount] := AProc;
+    Inc(FCount);
   finally
     FLck.Release;
-  end;
-  // contention fallback: stale — retry via slow path that re-snapshots outside lock
-  // to avoid recursion depth, loop with fresh alloc if needed
-  // perf: heap realloc outside lock if still full
-  while True do
-  begin
-    FLck.Acquire;
-    try
-      if FCount < Length(FRing) then
-      begin
-        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-        Inc(FCount);
-        Exit;
-      end;
-      LOldRing := FRing;
-      LHead := FHead;
-      LCount := FCount;
-      LOldLen := Length(FRing);
-      LNewCap := VecGrowCapacity(LOldLen);
-    finally
-      FLck.Release;
-    end;
-    if Length(LNew) <> LNewCap then
-      SetLength(LNew, LNewCap);
-    LinearizeCopy(LOldRing, LHead, LCount, LNew);
-    FLck.Acquire;
-    try
-      if FCount < Length(FRing) then
-      begin
-        FRing[(FHead + FCount) mod Length(FRing)] := AProc;
-        Inc(FCount);
-        Exit;
-      end;
-      if (Length(FRing) <> LOldLen) or (FHead <> LHead) or (FCount <> LCount) then
-        Continue;
-      FRing := LNew;
-      FHead := 0;
-      FRing[LCount] := AProc;
-      Inc(FCount);
-      Exit;
-    finally
-      FLck.Release;
-    end;
   end;
 end;
 
@@ -840,51 +773,6 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
-procedure TFakeWebview.GrowPendingEvals; inline;
-begin
-  specialize VecGrow<TFakePendingEval>(FPendingEvals, FPendingCount);
-end;
-
-procedure TFakeWebview.GrowOutcomes; inline;
-begin
-  specialize VecGrow<TFakeInvokeOutcome>(FOutcomes, FOutcomesCount);
-end;
-
-procedure TFakeWebview.GrowEvalScripts; inline;
-begin
-  specialize VecGrow<TFakeEvalRecord>(FEvalScripts, FEvalScriptsCount);
-end;
-
-procedure TFakeWebview.GrowEmits; inline;
-begin
-  specialize VecGrow<TFakeEmit>(FEmits, FEmitsCount);
-end;
-
-procedure TFakeWebview.GrowCaptured; inline;
-begin
-  specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
-end;
-
-procedure TFakeWebview.GrowOnNavStarted; inline;
-begin
-  specialize VecGrow<TWebviewNavEventHandler>(FOnNavStarted, FOnNavStartedCount);
-end;
-
-procedure TFakeWebview.GrowOnNavFinished; inline;
-begin
-  specialize VecGrow<TWebviewNavEventHandler>(FOnNavFinished, FOnNavFinishedCount);
-end;
-
-procedure TFakeWebview.GrowOnNavFailed; inline;
-begin
-  specialize VecGrow<TWebviewNavFailedHandler>(FOnNavFailed, FOnNavFailedCount);
-end;
-
-procedure TFakeWebview.GrowOnReady; inline;
-begin
-  specialize VecGrow<TWebviewNotifyHandler>(FOnReady, FOnReadyCount);
-end;
-
 procedure TFakeWebview.GrowQueue; inline;
 begin
   if FEvalQueueCount = Length(FEvalQueue) then
@@ -892,11 +780,6 @@ begin
     specialize VecGrow<Boolean>(FEvalQueue, FEvalQueueCount);
     specialize VecGrow<string>(FEvalResults, FEvalQueueCount);
   end;
-end;
-
-procedure TFakeWebview.GrowHistory; inline;
-begin
-  specialize VecGrow<string>(FHistory, FHistoryCount);
 end;
 
 procedure TFakeWebview.RecordOutcome(const ACmd: string; AIsError: Boolean;
@@ -964,7 +847,8 @@ begin
       FHistory[I] := '';
     FHistoryCount := FHistIdx + 1;
   end;
-  GrowHistory;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<string>(FHistory, FHistoryCount);
   FHistory[FHistoryCount] := AUrl;
   Inc(FHistoryCount);
   FHistIdx := FHistoryCount - 1;
@@ -980,7 +864,8 @@ end;
 
 procedure TFakeWebview.AppendEvalScript(const AScript: string);
 begin
-  GrowEvalScripts;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TFakeEvalRecord>(FEvalScripts, FEvalScriptsCount);
   FEvalScripts[FEvalScriptsCount].Script := AScript;
   FEvalScripts[FEvalScriptsCount].Answered := False;
   Inc(FEvalScriptsCount);
@@ -1171,7 +1056,8 @@ begin
     end
     else
     begin
-      GrowPendingEvals;
+      // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+      specialize VecGrow<TFakePendingEval>(FPendingEvals, FPendingCount);
       FPendingEvals[FPendingCount].ScriptIdx := LIdx;
       FPendingEvals[FPendingCount].Callback := ACallback;
       FPendingEvals[FPendingCount].OnError := AOnError;
@@ -1240,7 +1126,8 @@ begin
     FDroppedEmits := FDroppedEmits + 1;
     Exit;
   end;
-  GrowEmits;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TFakeEmit>(FEmits, FEmitsCount);
   FEmits[FEmitsCount].Event := AEvent;
   FEmits[FEmitsCount].PayloadJson := APayloadJson;
   Inc(FEmitsCount);
@@ -1251,7 +1138,8 @@ end;
 procedure TFakeWebview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  GrowOnNavStarted;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavStarted, FOnNavStartedCount);
   FOnNavStarted[FOnNavStartedCount] := AHandler;
   Inc(FOnNavStartedCount);
 end;
@@ -1269,7 +1157,8 @@ end;
 procedure TFakeWebview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
   RequireOpen;
-  GrowOnNavFinished;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TWebviewNavEventHandler>(FOnNavFinished, FOnNavFinishedCount);
   FOnNavFinished[FOnNavFinishedCount] := AHandler;
   Inc(FOnNavFinishedCount);
 end;
@@ -1287,7 +1176,8 @@ end;
 procedure TFakeWebview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
   RequireOpen;
-  GrowOnNavFailed;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TWebviewNavFailedHandler>(FOnNavFailed, FOnNavFailedCount);
   FOnNavFailed[FOnNavFailedCount] := AHandler;
   Inc(FOnNavFailedCount);
 end;
@@ -1305,7 +1195,8 @@ end;
 procedure TFakeWebview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
   RequireOpen;
-  GrowOnReady;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<TWebviewNotifyHandler>(FOnReady, FOnReadyCount);
   FOnReady[FOnReadyCount] := AHandler;
   Inc(FOnReadyCount);
 end;
@@ -1486,7 +1377,8 @@ end;
 procedure TFakeWebview.EnqueueReceipt(AFrameId: Int64; AIsError: Boolean;
   const AResultJson, ACode, AMessage: string);
 begin
-  GrowCaptured;
+  // perf: single source bytes.ops VecGrow inline (0→4→2×) zero extra call, live registry single source
+  specialize VecGrow<string>(FCapturedEvals, FCapturedCount);
   if AIsError then
     FCapturedEvals[FCapturedCount] :=
       BuildRejectScript(AFrameId, ACode, AMessage)

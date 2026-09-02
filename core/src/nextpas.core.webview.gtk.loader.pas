@@ -264,7 +264,7 @@ begin
     end;
     if GLoading then
       Exit(False);
-    FillChar(AInfo, SizeOf(AInfo), 0);
+    AInfo := Default(TGtkLoadInfo);
     GLoading := True;
     try
       { webkit 主库按 soname 探测序命中其一 }

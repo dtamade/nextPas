@@ -4,7 +4,7 @@ unit nextpas.core.webview.base;
        后端种类、窗口选项、事件 record、原生句柄别名与错误族。
        仅依赖 L0 errors owner；工具能力（容量生长/路径归一/哈希）由各 owner 单源承载，
        base 不承载实现职责（四件套纯度）；
-       依赖 text.utils.Trim 单源 inline 零拷贝校验 DevServerUrl；L3→L1 复用允许；
+       依赖 text.view.TStringView.Trim 单源 inline 零拷贝 + validation.URL L2 单源校验 DevServerUrl；L3→L1/L2 复用允许；
        禁止 uses 本家族任何后端/bridge/factory 单元
        （INV-4，source-contract 门禁冻结）。
 
@@ -172,15 +172,8 @@ type
 implementation
 
 uses
-  nextpas.core.text.utils;
-
-{ WebviewTrim — L3→L1 薄转发：复用 nextpas.core.text.utils.Trim 单源
-  （inline 零额外调用，零拷贝 fast path 原串返回，单次 Copy），避免自建重复；
-  与 nextpas.core.text.view.TStringView.Trim 同源。 }
-function WebviewTrim(const S: string): string; inline;
-begin
-  Result := nextpas.core.text.utils.Trim(S);
-end;
+  nextpas.core.text.view,
+  nextpas.core.validation;
 
 function DefaultWebviewOptions: TWebviewOptions;
 begin
@@ -271,27 +264,21 @@ end;
 
 procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
 var
-  L: string;
+  LView: TStringView;
+  LTrimmed: string;
 begin
-  L := WebviewTrim(AUrl);
-  if L = '' then Exit;
-  if Pos(' ', L) <> 0 then
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  if Copy(L, 1, 7) = 'http://' then
-  begin
-    if Length(L) > 7 then Exit;
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  end;
-  if Copy(L, 1, 8) = 'https://' then
-  begin
-    if Length(L) > 8 then Exit;
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  end;
-  raise EWebviewInvalidState.CreateFmt(
-    'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+  // perf: inline + TStringView zero-copy view (L1 text.view single source, VecWidth SIMD scan, zero alloc fast path) + validation.URL L2 single source http(s) scheme, single allocation only when trimmed
+  LView := TStringView.FromStr(AUrl).Trim;
+  if LView.IsEmpty then Exit;
+  if LView.Contains(' ') then
+    raise EWebviewInvalidState.CreateFmt('DevServerUrl "%s" must be an http(s) URL', [AUrl]);
+  if LView.Len = SizeUInt(Length(AUrl)) then
+    LTrimmed := AUrl
+  else
+    LTrimmed := LView.ToString; // single SetString+Move when trimmed, zero extra copy
+  // reuse L2 validation owner single source for http(s) URL semantics (http:// / https:// + non-empty rest), avoids Pos/Copy hand prefix drift, keeps net/uri owner single source
+  if not TValidator.Create('DevServerUrl').URL(LTrimmed).IsValid then
+    raise EWebviewInvalidState.CreateFmt('DevServerUrl "%s" must be an http(s) URL', [AUrl]);
 end;
 
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
