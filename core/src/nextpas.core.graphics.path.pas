@@ -2,8 +2,8 @@
  * nextpas.core.graphics.path - TPath 值类型 COW + TGradient 不可变
  * 指数扩容 AlignUp(mem.base 单源 8) + BytesCopy(bytes.ops 单源)；L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现。
  * COW 写时 RC<>1 判别（复用 TBitmap.EnsureUnique 模式，Unique 时零拷贝）；TPath 链式 fluent 不可变值语义，
- * 小路径(<64)链式 O(N²) 常数小可直接用；Reserve 预分配后链式仍 O(N²)（1K 链式≈500K 拷贝，因 Result:=Self 共享 RC=2 需逐次 COW），
- * 大路径必须用 TPathBuilder 批量 O(N) 约 1K 拷贝（热点显著，链式>64 抛 EVectorError 强制 Builder）；Builder fluent 链式
+ * 小路径(<64)链式 O(N²) 常数小可直接用；Reserve 预分配后链式 O(N) share-tail 快道（Unique 时共享尾写不拷前缀，RC=2 线性链零拷，分支回退 COW），
+ * 大路径必须用 TPathBuilder 批量 O(N) 约 1K 拷贝（链式>64 抛 EVectorError 强制 Builder）；Builder fluent 链式
  * (MoveTo/LineTo→TPathBuilder) 与 TPath 风格统一，Append* 为同构别名；PathToBuilder 一次拷贝转批量；EnsureUnique 仅拷贝已用前缀非全容量。
  * TGradient 防御性 Copy 冷路径，热路径零分配；Colors/Stops 为防御性 Copy（不可变冷路径一次堆分配），
  * 高频循环用 GetColor/GetStop+Count inline 零堆分配；拒绝 ColorsView/StopsView 零拷贝别名外泄可变引用。
@@ -24,7 +24,7 @@ type
   TColor32Array = array of TColor32;
   TSingleArray = array of Single;
 
-  { TPath 不可变链 fluent：小路径(<64)链式可用 O(N²) 常数小；大路径必须用 TPathBuilder 批量 O(N)（热点>64 抛错，Reserve 后链式仍 O(N²)，COW RC=2 逐次拷贝） }
+  { TPath 不可变链 fluent：小路径(<64)链式可用 O(N²) 常数小；大路径必须用 TPathBuilder 批量 O(N)（热点>64 抛错，Reserve 后链式 O(N) share-tail 快道） }
   TPath = record
   private
     FVerbs: array of TPathVerb;
@@ -144,7 +144,25 @@ uses
   nextpas.core.math;
 
 { TPath helpers — EnsureCap 复用 mem.base AlignUp 单源，EnsureUnique 查 RC<>1 零拷贝，BytesCopy 单源(bytes.ops)；保持 L1 graphics.base 零 bytes 依赖，无重复 AlignUp/bytes 实现
-  EnsureUnique/EnsureCap 共享时仅拷贝已用前缀 (FVerbCount/FPointCount) 非全容量，减少 Reserve 后链式尾部垃圾拷贝；大路径仍 O(N²)，须用 Builder 批量 O(N) }
+  EnsureUnique/EnsureCap 共享时仅拷贝已用前缀 (FVerbCount/FPointCount) 非全容量；Reserve 后链式 share-tail 快道 Unique 时共享尾写 O(N)，分支回退 COW }
+
+function VerbsAreUnique(const A: array of TPathVerb): Boolean; inline;
+var P: PByte; PRC: ^SizeInt;
+begin
+  if Length(A) = 0 then Exit(True);
+  P := PByte(@A[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  Result := PRC^ = 1;
+end;
+
+function PointsAreUnique(const A: array of TVec2): Boolean; inline;
+var P: PByte; PRC: ^SizeInt;
+begin
+  if Length(A) = 0 then Exit(True);
+  P := PByte(@A[0]);
+  PRC := Pointer(NativeUInt(P) - SizeOf(SizeInt) * 2);
+  Result := PRC^ = 1;
+end;
 
 procedure TPath.EnsureVerbCap(ANeeded: Integer);
 var
@@ -279,6 +297,14 @@ begin
   end;
   if FVerbCount >= 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.MoveTo: fluent chain limited to 64 verbs, use TPathBuilder for bulk O(N)');
+  if (SizeUInt(Length(FVerbs)) >= SizeUInt(FVerbCount + 1)) and (SizeUInt(Length(FPoints)) >= SizeUInt(FPointCount + 1))
+     and VerbsAreUnique(FVerbs) and PointsAreUnique(FPoints) then
+  begin
+    Result := Self;
+    Result.FVerbs[Result.FVerbCount] := pvMove; Inc(Result.FVerbCount);
+    Result.FPoints[Result.FPointCount] := TVec2.Create(X, Y); Inc(Result.FPointCount);
+    Exit;
+  end;
   Result := Self;
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(Result.FVerbCount + 1) then Result.EnsureVerbCap(Result.FVerbCount + 1)
   else Result.EnsureVerbUnique;
@@ -294,6 +320,14 @@ begin
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.LineTo: X/Y must be finite');
   if FVerbCount >= 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.LineTo: fluent chain limited to 64 verbs, use TPathBuilder for bulk O(N)');
+  if (SizeUInt(Length(FVerbs)) >= SizeUInt(FVerbCount + 1)) and (SizeUInt(Length(FPoints)) >= SizeUInt(FPointCount + 1))
+     and VerbsAreUnique(FVerbs) and PointsAreUnique(FPoints) then
+  begin
+    Result := Self;
+    Result.FVerbs[Result.FVerbCount] := pvLine; Inc(Result.FVerbCount);
+    Result.FPoints[Result.FPointCount] := TVec2.Create(X, Y); Inc(Result.FPointCount);
+    Exit;
+  end;
   Result := Self;
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(Result.FVerbCount + 1) then Result.EnsureVerbCap(Result.FVerbCount + 1)
   else Result.EnsureVerbUnique;
@@ -309,6 +343,15 @@ begin
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.QuadTo: CX/CY/X/Y must be finite');
   if FVerbCount >= 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.QuadTo: fluent chain limited to 64 verbs, use TPathBuilder for bulk O(N)');
+  if (SizeUInt(Length(FVerbs)) >= SizeUInt(FVerbCount + 1)) and (SizeUInt(Length(FPoints)) >= SizeUInt(FPointCount + 2))
+     and VerbsAreUnique(FVerbs) and PointsAreUnique(FPoints) then
+  begin
+    Result := Self;
+    Result.FVerbs[Result.FVerbCount] := pvQuad; Inc(Result.FVerbCount);
+    Result.FPoints[Result.FPointCount] := TVec2.Create(CX, CY);
+    Result.FPoints[Result.FPointCount + 1] := TVec2.Create(X, Y); Inc(Result.FPointCount, 2);
+    Exit;
+  end;
   Result := Self;
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(Result.FVerbCount + 1) then Result.EnsureVerbCap(Result.FVerbCount + 1)
   else Result.EnsureVerbUnique;
@@ -325,6 +368,16 @@ begin
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.CubicTo: C1X/C1Y/C2X/C2Y/X/Y must be finite');
   if FVerbCount >= 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.CubicTo: fluent chain limited to 64 verbs, use TPathBuilder for bulk O(N)');
+  if (SizeUInt(Length(FVerbs)) >= SizeUInt(FVerbCount + 1)) and (SizeUInt(Length(FPoints)) >= SizeUInt(FPointCount + 3))
+     and VerbsAreUnique(FVerbs) and PointsAreUnique(FPoints) then
+  begin
+    Result := Self;
+    Result.FVerbs[Result.FVerbCount] := pvCubic; Inc(Result.FVerbCount);
+    Result.FPoints[Result.FPointCount] := TVec2.Create(C1X, C1Y);
+    Result.FPoints[Result.FPointCount + 1] := TVec2.Create(C2X, C2Y);
+    Result.FPoints[Result.FPointCount + 2] := TVec2.Create(X, Y); Inc(Result.FPointCount, 3);
+    Exit;
+  end;
   Result := Self;
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(Result.FVerbCount + 1) then Result.EnsureVerbCap(Result.FVerbCount + 1)
   else Result.EnsureVerbUnique;
@@ -341,6 +394,12 @@ begin
   if (FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvClose) then Exit(Self);
   if FVerbCount >= 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.Close: fluent chain limited to 64 verbs, use TPathBuilder for bulk O(N)');
+  if (SizeUInt(Length(FVerbs)) >= SizeUInt(FVerbCount + 1)) and VerbsAreUnique(FVerbs) then
+  begin
+    Result := Self;
+    Result.FVerbs[Result.FVerbCount] := pvClose; Inc(Result.FVerbCount);
+    Exit;
+  end;
   Result := Self;
   if SizeUInt(Length(Result.FVerbs)) < SizeUInt(Result.FVerbCount + 1) then Result.EnsureVerbCap(Result.FVerbCount + 1)
   else Result.EnsureVerbUnique;
@@ -348,11 +407,25 @@ begin
 end;
 
 function TPath.Append(const AOther: TPath): TPath;
-var LNeedV, LNeedP: Integer;
+var LNeedV, LNeedP: Integer; LFold: Boolean;
 begin
   if AOther.FVerbCount = 0 then Exit(Self);
   if FVerbCount + AOther.FVerbCount > 64 then
     raise EVectorError.Create('nextpas.core.graphics.path.pas: TPath.Append: fluent chain >64 verbs, use TPathBuilder.AppendPath for bulk O(N)');
+  LFold := (FVerbCount > 0) and (AOther.FVerbCount > 0) and (FVerbs[FVerbCount - 1] = pvMove) and (AOther.FVerbs[0] = pvMove);
+  LNeedV := FVerbCount + AOther.FVerbCount;
+  LNeedP := FPointCount + AOther.FPointCount;
+  if LFold then begin Dec(LNeedV); Dec(LNeedP); end;
+  // share-tail 快道：Unique 且容量足时共享尾写 O(N) 不拷前缀；折叠分支回退 COW
+  if not LFold and (SizeUInt(Length(FVerbs)) >= SizeUInt(LNeedV)) and (SizeUInt(Length(FPoints)) >= SizeUInt(LNeedP))
+     and VerbsAreUnique(FVerbs) and PointsAreUnique(FPoints) then
+  begin
+    Result := Self;
+    BytesCopy(@Result.FVerbs[Result.FVerbCount], @AOther.FVerbs[0], AOther.FVerbCount * SizeOf(TPathVerb));
+    BytesCopy(@Result.FPoints[Result.FPointCount], @AOther.FPoints[0], AOther.FPointCount * SizeOf(TVec2));
+    Inc(Result.FVerbCount, AOther.FVerbCount); Inc(Result.FPointCount, AOther.FPointCount);
+    Exit;
+  end;
   Result := Self;
   LNeedV := Result.FVerbCount + AOther.FVerbCount;
   LNeedP := Result.FPointCount + AOther.FPointCount;

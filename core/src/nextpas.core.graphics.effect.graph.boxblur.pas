@@ -29,6 +29,7 @@ uses
   nextpas.core.thread.intf,
   nextpas.core.mem.base,
   nextpas.core.mem.arena,
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv;
 
 var
@@ -285,6 +286,8 @@ var
   Halo_R, Halo_G, Halo_B, Halo_A: PInteger;
   HaloBytes: SizeUInt;
   PersistBytes: SizeUInt;
+  CntPoolBase: PByte;
+  CntBytes: SizeUInt;
 begin
   if ASrc.IsEmpty then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: src empty');
   if ASrc.Width * ASrc.Height > BOXBLUR_MAX_PIXELS then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: image too large (limit 16M pixels, got ' + IntToStr(Int64(ASrc.Width) * Int64(ASrc.Height)) + ' W=' + IntToStr(ASrc.Width) + ' H=' + IntToStr(ASrc.Height) + ' radius=' + IntToStr(ARadius) + ')');
@@ -294,6 +297,7 @@ begin
   HH_Base := nil; HH_R := nil; HH_G := nil; HH_B := nil; HH_A := nil;
   CntH := nil; CntInv := nil; ScratchBase := nil; PersistBase := nil; HaloBase := nil; PrevHHBase := nil;
   Halo_R := nil; Halo_G := nil; Halo_B := nil; Halo_A := nil;
+  CntPoolBase := nil; CntBytes := 0;
   Arena := nil;
   SetLength(VCInvTab, 2 * ARadius + 2);
   for Ti := 1 to 2 * ARadius + 1 do VCInvTab[Ti] := Cardinal((QWord(1) shl 32) div QWord(Cardinal(Ti)));
@@ -405,10 +409,12 @@ begin
   else
   begin
     try
-      GetMem(CntH, AlignUp(SizeUInt(W) * SizeOf(Integer), BOXBLUR_ALIGN));
-      if CntH = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: cnt alloc failed (W=' + IntToStr(W) + ')');
-      GetMem(CntInv, AlignUp(SizeUInt(W) * SizeOf(Cardinal), BOXBLUR_ALIGN));
-      if CntInv = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: cntinv alloc failed (W=' + IntToStr(W) + ')');
+      CntBytes := AlignUp(SizeUInt(W) * SizeOf(Integer), BOXBLUR_ALIGN);
+      // pool CntH+CntInv: single AlignUp GetMem avoids repeat allocation per large Bake
+      GetMem(CntPoolBase, CntBytes * 2);
+      if CntPoolBase = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: cnt alloc failed (W=' + IntToStr(W) + ')');
+      CntH := PInteger(CntPoolBase);
+      CntInv := PCardinal(CntPoolBase + CntBytes);
       GetMem(ScratchBase, ScratchBytes);
       if ScratchBase = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: scratch alloc failed (scratch=' + IntToStr(Int64(ScratchBytes)) + ')');
       BuildCntHAndInv(CntH, CntInv, W, ARadius);
@@ -446,10 +452,11 @@ begin
                 SrcOff := CY0 - PrevCY0;
                 if (SrcOff >= 0) and (SrcOff + Overlap <= MaxCH) then
                 begin
-                  Move((HH_R + SrcOff * W)^, HH_R^, Overlap * W * SizeOf(Integer));
-                  Move((HH_G + SrcOff * W)^, HH_G^, Overlap * W * SizeOf(Integer));
-                  Move((HH_B + SrcOff * W)^, HH_B^, Overlap * W * SizeOf(Integer));
-                  Move((HH_A + SrcOff * W)^, HH_A^, Overlap * W * SizeOf(Integer));
+                  // Halo 2*R rows: BytesCopy single source (bytes.ops) replaces Move, pooled AlignUp
+                  BytesCopy(HH_R, HH_R + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer)));
+                  BytesCopy(HH_G, HH_G + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer)));
+                  BytesCopy(HH_B, HH_B + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer)));
+                  BytesCopy(HH_A, HH_A + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer)));
                 end;
                 NewRows := CH - Overlap;
                 if NewRows > 0 then
@@ -471,21 +478,18 @@ begin
         MaxCH := Tile + 2 * ARadius; if MaxCH > H then MaxCH := H; if MaxCH < 1 then MaxCH := 1;
         ChunkBytes := AlignUp(SizeUInt(MaxCH) * SizeUInt(W) * 4 * SizeOf(Integer), BOXBLUR_ALIGN);
         PersistBytes := AlignUp(ChunkBytes * SizeUInt(NumWorkers), BOXBLUR_ALIGN);
-        GetMem(PersistBase, PersistBytes);
-        if PersistBase = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: chunk alloc failed (persist=' + IntToStr(Int64(PersistBytes)) + ')');
-        HaloBytes := 0; HaloBase := nil; PrevHHBase := nil;
-        if (ARadius > 0) and (W > 0) then
+        HaloBytes := 0;
+        if (ARadius > 0) and (W > 0) then HaloBytes := AlignUp(SizeUInt(2 * ARadius) * SizeUInt(W) * 4 * SizeOf(Integer), BOXBLUR_ALIGN);
+        // pool Persist+Halo: single AlignUp GetMem avoids repeat allocation per large Bake tile
+        GetMem(PersistBase, PersistBytes + HaloBytes);
+        if PersistBase = nil then raise EEffectError.Create('nextpas.core.graphics.effect.graph.boxblur.pas: BoxBlur: chunk alloc failed (persist=' + IntToStr(Int64(PersistBytes + HaloBytes)) + ')');
+        HaloBase := nil; PrevHHBase := nil;
+        Halo_R := nil; Halo_G := nil; Halo_B := nil; Halo_A := nil;
+        if HaloBytes > 0 then
         begin
-          HaloBytes := AlignUp(SizeUInt(2 * ARadius) * SizeUInt(W) * 4 * SizeOf(Integer), BOXBLUR_ALIGN);
-          if HaloBytes > 0 then
-          begin
-            GetMem(HaloBase, HaloBytes);
-            if HaloBase <> nil then
-            begin
-              Halo_R := HaloBase; Halo_G := HaloBase + 2 * ARadius * W;
-              Halo_B := HaloBase + 2 * ARadius * W * 2; Halo_A := HaloBase + 2 * ARadius * W * 3;
-            end else HaloBase := nil;
-          end;
+          HaloBase := PInteger(PByte(PersistBase) + PersistBytes);
+          Halo_R := HaloBase; Halo_G := HaloBase + 2 * ARadius * W;
+          Halo_B := HaloBase + 2 * ARadius * W * 2; Halo_A := HaloBase + 2 * ARadius * W * 3;
         end;
         try
           SetLength(Tasks, NumStrips);
@@ -507,15 +511,15 @@ begin
               begin Overlap := PrevCY1 - CY0;
                 if (Overlap > 0) and (Overlap <= 2 * ARadius) and (Overlap <= CH) then
                 begin
-                  if HaloBase <> nil then begin Move(Halo_R^, HH_R^, Overlap * W * SizeOf(Integer)); Move(Halo_G^, HH_G^, Overlap * W * SizeOf(Integer)); Move(Halo_B^, HH_B^, Overlap * W * SizeOf(Integer)); Move(Halo_A^, HH_A^, Overlap * W * SizeOf(Integer)); NewRows := CH - Overlap; if NewRows > 0 then BuildHorzSumsRange(ASrc, ARadius, PrevCY1, NewRows, HH_R + Overlap * W, HH_G + Overlap * W, HH_B + Overlap * W, HH_A + Overlap * W); end
-                  else if PrevHHBase <> nil then begin SrcOff := CY0 - PrevCY0; Move((PrevHHBase + SrcOff * W)^, HH_R^, Overlap * W * SizeOf(Integer)); Move((PrevHHBase + MaxCH * W + SrcOff * W)^, HH_G^, Overlap * W * SizeOf(Integer)); Move((PrevHHBase + MaxCH * W * 2 + SrcOff * W)^, HH_B^, Overlap * W * SizeOf(Integer)); Move((PrevHHBase + MaxCH * W * 3 + SrcOff * W)^, HH_A^, Overlap * W * SizeOf(Integer)); NewRows := CH - Overlap; if NewRows > 0 then BuildHorzSumsRange(ASrc, ARadius, PrevCY1, NewRows, HH_R + Overlap * W, HH_G + Overlap * W, HH_B + Overlap * W, HH_A + Overlap * W); end
+                  if HaloBase <> nil then begin BytesCopy(HH_R, Halo_R, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_G, Halo_G, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_B, Halo_B, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_A, Halo_A, SizeUInt(Overlap * W * SizeOf(Integer))); NewRows := CH - Overlap; if NewRows > 0 then BuildHorzSumsRange(ASrc, ARadius, PrevCY1, NewRows, HH_R + Overlap * W, HH_G + Overlap * W, HH_B + Overlap * W, HH_A + Overlap * W); end
+                  else if PrevHHBase <> nil then begin SrcOff := CY0 - PrevCY0; BytesCopy(HH_R, PrevHHBase + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_G, PrevHHBase + MaxCH * W + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_B, PrevHHBase + MaxCH * W * 2 + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer))); BytesCopy(HH_A, PrevHHBase + MaxCH * W * 3 + SrcOff * W, SizeUInt(Overlap * W * SizeOf(Integer))); NewRows := CH - Overlap; if NewRows > 0 then BuildHorzSumsRange(ASrc, ARadius, PrevCY1, NewRows, HH_R + Overlap * W, HH_G + Overlap * W, HH_B + Overlap * W, HH_A + Overlap * W); end
                   else BuildHorzSumsRange(ASrc, ARadius, CY0, CH, HH_R, HH_G, HH_B, HH_A);
                 end else BuildHorzSumsRange(ASrc, ARadius, CY0, CH, HH_R, HH_G, HH_B, HH_A);
               end else BuildHorzSumsRange(ASrc, ARadius, CY0, CH, HH_R, HH_G, HH_B, HH_A);
               Tasks[Batch].Y0 := Y0; Tasks[Batch].Y1 := Y1; Tasks[Batch].W := W; Tasks[Batch].H := H; Tasks[Batch].R := ARadius; Tasks[Batch].Dst := @Result; Tasks[Batch].HH_R := HH_R; Tasks[Batch].HH_G := HH_G; Tasks[Batch].HH_B := HH_B; Tasks[Batch].HH_A := HH_A;
               Tasks[Batch].CntH := CntH; Tasks[Batch].CntInv := CntInv; Tasks[Batch].VCInvTab := VCInvPtr; Tasks[Batch].VCInvLen := VCInvLen; Tasks[Batch].ChunkY0 := CY0; Tasks[Batch].ChunkH := CH;
               Tasks[Batch].VSumR := ScratchBase + J * W * 4; Tasks[Batch].VSumG := ScratchBase + J * W * 4 + W; Tasks[Batch].VSumB := ScratchBase + J * W * 4 + W * 2; Tasks[Batch].VSumA := ScratchBase + J * W * 4 + W * 3;
-              if HaloBase <> nil then begin Ti := 2 * ARadius; if Ti > CH then Ti := CH; if Ti > 0 then begin Move((HH_R + (CH - Ti) * W)^, Halo_R^, Ti * W * SizeOf(Integer)); Move((HH_G + (CH - Ti) * W)^, Halo_G^, Ti * W * SizeOf(Integer)); Move((HH_B + (CH - Ti) * W)^, Halo_B^, Ti * W * SizeOf(Integer)); Move((HH_A + (CH - Ti) * W)^, Halo_A^, Ti * W * SizeOf(Integer)); end; end;
+              if HaloBase <> nil then begin Ti := 2 * ARadius; if Ti > CH then Ti := CH; if Ti > 0 then begin BytesCopy(Halo_R, HH_R + (CH - Ti) * W, SizeUInt(Ti * W * SizeOf(Integer))); BytesCopy(Halo_G, HH_G + (CH - Ti) * W, SizeUInt(Ti * W * SizeOf(Integer))); BytesCopy(Halo_B, HH_B + (CH - Ti) * W, SizeUInt(Ti * W * SizeOf(Integer))); BytesCopy(Halo_A, HH_A + (CH - Ti) * W, SizeUInt(Ti * W * SizeOf(Integer))); end; end;
               PrevHHBase := HH_Base; PrevCY0 := CY0; PrevCY1 := CY1;
             end;
             for J := 0 to BatchCount - 1 do Pool.SubmitDirect(@Tasks[I + J], @BlurStripTaskProc);
@@ -523,17 +527,16 @@ begin
             I += BatchCount;
           end;
         finally
-          if HaloBase <> nil then FreeMem(HaloBase);
-          HaloBase := nil;
-          FreeMem(PersistBase);
+          // pooled Persist+Halo: single FreeMem, HaloBase is interior slice
+          HaloBase := nil; Halo_R := nil; Halo_G := nil; Halo_B := nil; Halo_A := nil;
+          if PersistBase <> nil then FreeMem(PersistBase);
           PersistBase := nil;
         end;
       end;
     finally
       if ScratchBase <> nil then FreeMem(ScratchBase);
-      if CntInv <> nil then FreeMem(CntInv);
-      if CntH <> nil then FreeMem(CntH);
-      ScratchBase := nil; CntInv := nil; CntH := nil;
+      if CntPoolBase <> nil then FreeMem(CntPoolBase);
+      ScratchBase := nil; CntPoolBase := nil; CntInv := nil; CntH := nil;
     end;
   end;
 end;
