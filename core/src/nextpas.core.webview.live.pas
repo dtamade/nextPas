@@ -17,12 +17,12 @@ unit nextpas.core.webview.live;
        - 与 collections.slotregistry 互补：slotregistry 适用于稀疏槽复用
          （-1 sentinel + Free 栈），此处为紧凑 Vec 语义；选型依据：webview
          活窗列表为短小紧凑迭代（FindByView / PumpAll），无需稀疏槽。
-       - 抽取评估（CONTRACT §1/§50 可抽模块候选显式登记）：utils/callbacks
+       - 抽取评估（CONTRACT §1.2/§50 可抽模块候选显式登记）：utils/callbacks
          与 live/pool（含本单元 WebviewPoolTryAcquire/Release）已评估为通用
          辅助/池模块抽取候选，当前仍滞留家族内；结论：与 window.live 紧凑 Vec
          的跨家族重复已收敛至 bytes.ops 单源（VecGrowCapacity 0→4→2× inline
          零额外调用、VecRemoveSwap/Ordered 零拷贝、Default(T) 释放不丢），无
-         跨家族重复实现；通用辅助/池若独立需反哺 L1 collections/通用池 owner
+         跨家族重复实现，保留 bytes.ops 单源但未统一为通用模块；通用辅助/池若独立需反哺 L1 collections/bytes.ops 通用池 owner
          并经设计评审，不在当前 slice 自行外溢（守四件套纯度、L0-L3 守恒）。
        - 性能：全部 inline 薄转发零额外调用，Swap O(1) 零拷贝末尾换位热关闭默认，
          Snapshot/Trim 单次 SetLength、Pool 短临界区仅指针存取堆分配在外（<1µs）。
@@ -41,12 +41,12 @@ uses
 generic procedure WebviewLiveAdd<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemove<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
 generic procedure WebviewLiveRemoveSwap<T>(var AList: array of T; var ACount: Integer; const AInst: T); inline;
-{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline — 可抽模块候选显式登记（待反哺 L1 通用池 owner sync.pool/collections 并经设计评审，当前家族内私有不经门面 re-export，CONTRACT §1/§50） }
+{ 池化 Slab 通用抽象：GIdlePool/GCompletionPool 双池复用单源，避免各自手写 Acquire/Release 与 SetLength 扩容重复；短临界区仅指针存取，堆分配在外，零拷贝 inline — 可抽模块候选显式登记（待反哺 L1 通用池 owner sync.pool/collections/bytes.ops 并经设计评审，当前家族内私有不经门面 re-export，CONTRACT §1.2/§50） }
 generic function WebviewPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
 generic function WebviewPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 
 type
-  { 可抽模块候选显式登记：紧凑 Vec 泛型封装 TWebviewLiveRegistry<T> 待反哺 L1 通用数组辅助 owner bytes.ops/collections，当前家族内私有不经门面 re-export，CONTRACT §1/§50；与 window.live 同复用 bytes.ops 单源思想，零重复实现 }
+  { 可抽模块候选显式登记：紧凑 Vec 泛型封装 TWebviewLiveRegistry<T> 待反哺 L1 通用数组辅助 owner bytes.ops/collections，当前家族内私有不经门面 re-export，CONTRACT §1.2/§50；与 window.live 同复用 bytes.ops 单源思想（紧凑 Vec 注册表与 window.live 同构重复未抽至 L1，仅靠 bytes.ops VecGrow/VecRemoveSwap 单源缓解，属可抽通用 Vec 候选），零重复实现 }
   generic TWebviewLiveRegistry<T> = class
   private
     FList: array of T;

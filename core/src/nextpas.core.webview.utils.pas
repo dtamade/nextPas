@@ -16,8 +16,9 @@ uses
   perf: out-of-line + TStringView zero-copy view (L1 text.view single source) + SliceToStr single SetString+Move;
   fast path zero alloc (CoW share) when no leading '/', single alloc+Move when trimmed; zero Delete scan; non-inline avoids bloat at 2 hot call sites (bridge/vfs/gtk) }
 function NormalizeWebviewAssetPath(const APath: string): string;
-{ 零拷贝视图版：TStringView 输入→输出，无堆分配，供 scheme/bridge 热点复用 TStringView 零拷贝直通（L1 text.view 单源，inline 零额外调用，PAnsiChar→view 无 AnsiPtrToStr 中间串） }
-function NormalizeWebviewAssetView(const AView: TStringView): TStringView; inline;
+{ 零拷贝视图版：TStringView 输入→输出，无堆分配，供 scheme/bridge 热点复用 TStringView 零拷贝直通（L1 text.view 单源，零堆分配，PAnsiChar→view 无 AnsiPtrToStr 中间串）。
+  perf: out-of-line + TStringView.Slice 零拷贝 view (L1 text.view 单源) 零堆分配；non-inline avoids I-Cache bloat at 2 hot call sites (bridge/gtk) per design-conventions §2 真实循环体禁 inline }
+function NormalizeWebviewAssetView(const AView: TStringView): TStringView;
 function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
 
 implementation
@@ -44,11 +45,11 @@ begin
   Result := SliceToStr(APath, LPos, V.Len - LPos);
 end;
 
-function NormalizeWebviewAssetView(const AView: TStringView): TStringView; inline;
+function NormalizeWebviewAssetView(const AView: TStringView): TStringView;
 var
   LPos: SizeUInt;
 begin
-  // perf: inline zero-copy view trim via TStringView.Slice (L1 text.view single source), 无堆分配，热点 scheme/bridge 直通 ViewFromPChar 零 AnsiPtrToStr 中间串
+  // perf: out-of-line zero-copy view trim via TStringView.Slice (L1 text.view single source), 无堆分配，热点 scheme/bridge 直通 ViewFromPChar 零 AnsiPtrToStr 中间串；non-inline avoids I-Cache bloat per design-conventions §2 真实循环体禁 inline
   LPos := 0;
   while (LPos < AView.Len) and (AView.Data[LPos] = '/') do
     Inc(LPos);

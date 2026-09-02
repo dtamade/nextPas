@@ -38,6 +38,8 @@ uses
   nextpas.core.collections.skiplist.intf,
   nextpas.core.collections.trie.base,
   nextpas.core.collections.trie.intf,
+  nextpas.core.collections.prefixrouter.base,
+  nextpas.core.collections.prefixrouter.intf,
   nextpas.core.collections.lrucache.intf,
   nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,

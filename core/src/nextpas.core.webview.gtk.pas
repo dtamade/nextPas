@@ -41,7 +41,9 @@ uses
   nextpas.core.webview.gtk.ffi,
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk.viewmap,
-  nextpas.core.webview.gtk.pool;
+  nextpas.core.webview.gtk.pool,
+  nextpas.core.window.base,
+  nextpas.core.window.intf;
 
 type
   PEvalRec = ^TEvalRec;
@@ -76,6 +78,8 @@ type
     FOptions: TWebviewOptions;
     FWin, FView, FContext: Pointer;
     FOwnsContext: Boolean;
+    FWindow: IWindow;
+    FOwnsWindow: Boolean;
     FClosed: Boolean;
     FScale: Double;
     FReadyFired: Boolean;
@@ -98,7 +102,10 @@ type
     procedure RemovePending(ARec: PEvalRec);
     procedure SetupSessionContext;
     function ResolveContext: Pointer;
-    procedure SetupSchemeAndShell;
+    procedure SetupSchemeAndShell; overload;
+    procedure SetupSchemeAndShellForParent(const AParent: IWindow); overload;
+    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
+    procedure HandleWindowEvent(const AEvent: TWindowEvent);
     procedure FireNotifyHandlers(AReg: specialize TWebviewLiveRegistry<TWebviewNotifyHandler>);
     procedure WireSignals;
     procedure AddUserScript(const ASource: string);
@@ -177,8 +184,10 @@ type
     procedure OnReady(AHandler: TWebviewNotifyProc); overload; virtual;
     function GetInvokes: IWebviewInvokeRegistry;
     function GetAssets: IWebviewAssets;
+    function GetWindow: IWindow;
   public
     constructor Create(const AOptions: TWebviewOptions); virtual;
+    constructor CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions); virtual;
     destructor Destroy; override;
   end;
 
@@ -1010,11 +1019,59 @@ begin
     NavigateToString(FOptions.InitialHtml);
 end;
 
+constructor TGtkWebview.CreateOn(const AParent: IWindow; const AOptions: TWebviewOptions);
+var
+  LInfo: TGtkLoadInfo;
+  LResolved: TWebviewOptions;
+begin
+  inherited Create;
+  if AParent = nil then
+    raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn');
+  LResolved := AOptions;
+  if LResolved.SchemeName = '' then
+    LResolved.SchemeName := DEFAULT_WEBVIEW_SCHEME;
+  CheckWebviewOptions(LResolved);
+  FOptions := LResolved;
+
+  if not TryLoadGtkWebkit(LInfo) then
+    raise EWebviewBackendUnavailable.Create(
+      'WebKitGTK runtime not found (probed libwebkit2gtk-4.1.so.0 / 4.0.so.0)');
+  if not WindowGtkRawInit then
+    raise EWebviewBackendUnavailable.Create('gtk_init_check failed (no display?)');
+
+  FOwnerThread := platform_thread_id;
+  FScale := 1.0;
+  FInvokesIntf := TWebviewInvokeRegistry.Create;
+  FInvokes := FInvokesIntf as TObject;
+  FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
+  FAssets := FAssetsIntf as TObject;
+  FIdleTags := specialize TWebviewLiveRegistry<guint>.Create;
+  FPendingEvals := specialize TWebviewLiveRegistry<PEvalRec>.Create;
+  FOnNavStarted := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TWebviewLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TWebviewLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TWebviewLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnScaleChanged := specialize TWebviewLiveRegistry<TWebviewScaleHandler>.Create;
+  if FOptions.DevServerUrl <> '' then
+    GtkTrace('dev mode: assets inert, scheme deferred (' +
+      FOptions.DevServerUrl + ')');
+
+  SetupSessionContext;
+  SetupSchemeAndShellForParent(AParent);
+  WireSignals;
+
+  RegisterLive(Self);
+  FSelfKeepAlive := Self;
+
+  if FOptions.InitialUrl <> '' then
+    Navigate(FOptions.InitialUrl)
+  else if FOptions.InitialHtml <> '' then
+    NavigateToString(FOptions.InitialHtml);
+end;
+
 destructor TGtkWebview.Destroy;
 begin
-  { context 生命周期收口：自有 context 先摘 scheme 注册表再 unref——
-    顺序不可反，unref 后地址可能被新分配复用，后摘会误删他人条目
-    （注册表按指针地址判重）。共享默认 context 不持有不摘除。 }
   if FOwnsContext and (FContext <> nil) then
   begin
     ForgetSchemeContext(FContext);
@@ -1022,7 +1079,10 @@ begin
     FContext := nil;
   end;
   UnregisterLive(Self);
-  // stability: registry Free releases Vec and nil string/interface refs, resource release not lost
+  // stability: window has-a COM release guarantees Close idempotence, resource release not lost
+  FWindow := nil;
+  FWin := nil;
+  FView := nil;
   FreeAndNil(FOnScaleChanged);
   FreeAndNil(FOnReady);
   FreeAndNil(FOnWindowClosed);
@@ -1104,39 +1164,115 @@ begin
   FContext := Result;
 end;
 
+function TGtkWebview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
+begin
+  // perf: inline zero-copy field copy, bytes.ops single source style, owner L2 base single source
+  Result := DefaultWindowOptions;
+  Result.Title := AOptions.Title;
+  Result.Width := AOptions.Width;
+  Result.Height := AOptions.Height;
+  Result.MinWidth := AOptions.MinWidth;
+  Result.MinHeight := AOptions.MinHeight;
+  Result.MaxWidth := AOptions.MaxWidth;
+  Result.MaxHeight := AOptions.MaxHeight;
+  Result.Resizable := AOptions.Resizable;
+  Result.Maximized := AOptions.Maximized;
+  Result.ParentHandle := nil;
+end;
+
+procedure TGtkWebview.HandleWindowEvent(const AEvent: TWindowEvent);
+begin
+  if FClosed then Exit;
+  case AEvent.Kind of
+    weCloseRequested, weClosed: Close;
+    weScaleChanged, weDpiChanged:
+      begin
+        FScale := AEvent.NewScale;
+        FireNotifyHandlers(FOnScaleChanged);
+      end;
+    weResized: ; // GTK container auto-layout; placeholder for bounds sync
+  end;
+end;
+
 procedure TGtkWebview.SetupSchemeAndShell;
 var
   LCtx: Pointer;
+  LWinOpts: TWindowOptions;
 begin
   LCtx := ResolveContext;
-  { scheme 注册必须先于该 context 首个 web view 创建（BACKENDS §2.2）；
-    同 context 只注册一次（GLib 拒绝重复注册）。handler 不绑定任何
-    窗口实例——请求按发起视图精确归属（见 SchemeRequestCb），context
-    销毁时经 ForgetSchemeContext 摘除，防地址复用误判已注册。
-    DevServerUrl 开发模式不注册（§3.4 直连 http）；同 context 的后续
-    非 dev 窗口按需补注册——注册发生在其构造期，仍先于它的首次导航 }
   if (FOptions.DevServerUrl = '') and (not SchemeContextRegistered(LCtx)) then
   begin
     WEBKIT_web_context_register_uri_scheme(LCtx,
       PAnsiChar(FOptions.SchemeName), @SchemeRequestCb, nil, nil);
     RememberSchemeContext(LCtx);
   end;
-
   FView := WEBKIT_web_view_new_with_context(LCtx);
   if FView = nil then
     raise EWebviewNotInitialized.Create(
       'webkit_web_view_new_with_context returned nil');
-
-  { 单源：窗口壳经 window.gtk3 Raw 薄转发，零拷贝 inline，复用已绑定 gtk_* }
-  FWin := WindowGtkRawCreate(FOptions.Title, FOptions.Width, FOptions.Height,
-    FOptions.Resizable, FOptions.Maximized);
-  if FWin = nil then
-    raise EWebviewNotInitialized.Create('WindowGtkRawCreate returned nil');
-  GTK_container_add(FWin, FView);
-
+  // L3→L2 has-a: owned window via window.gtk3 Raw + IWindow composition, single source bytes.ops style
+  if FWindow = nil then
+  begin
+    LWinOpts := WindowOptionsOf(FOptions);
+    // owner 反哺：window.gtk3 提供 Raw + IWindow，零拷贝 inline
+    FWindow := nextpas.core.window.gtk3.CreateWindowGtk(LWinOpts);
+    FOwnsWindow := True;
+    FWin := nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow);
+    if FWin = nil then
+      raise EWebviewNotInitialized.Create('Window handle is nil');
+    // embed view into owned window container
+    nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin, FView);
+    FWindow.OnEvent(@HandleWindowEvent);
+  end
+  else
+  begin
+    // already has parent window (CreateOn path handled elsewhere)
+    FWin := nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow);
+    if FWin = nil then
+      raise EWebviewNotInitialized.Create('Parent window handle is nil');
+    nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin, FView);
+  end;
   if FOptions.DebugTools then
     WEBKIT_settings_set_enable_developer_extras(
       WEBKIT_web_view_get_settings(FView), 1);
+end;
+
+procedure TGtkWebview.SetupSchemeAndShellForParent(const AParent: IWindow);
+var
+  LCtx: Pointer;
+begin
+  if AParent = nil then
+    raise EWebviewInvalidState.Create('Parent window must not be nil for CreateOn');
+  FWindow := AParent;
+  FOwnsWindow := False;
+  FWindow.OnEvent(@HandleWindowEvent);
+  LCtx := ResolveContext;
+  if (FOptions.DevServerUrl = '') and (not SchemeContextRegistered(LCtx)) then
+  begin
+    WEBKIT_web_context_register_uri_scheme(LCtx,
+      PAnsiChar(FOptions.SchemeName), @SchemeRequestCb, nil, nil);
+    RememberSchemeContext(LCtx);
+  end;
+  FView := WEBKIT_web_view_new_with_context(LCtx);
+  if FView = nil then
+    raise EWebviewNotInitialized.Create(
+      'webkit_web_view_new_with_context returned nil');
+  FWin := nextpas.core.window.gtk3.WindowGtkRawHandleOf(FWindow);
+  if FWin = nil then
+    raise EWebviewNotInitialized.Create('Parent window handle is nil');
+  // perf: inline zero-copy embed via L2 Raw single source, true parent-aware embedding, no new window
+  nextpas.core.window.gtk3.WindowGtkRawContainerAdd(FWin, FView);
+  // show child immediately within already realized parent
+  if FView <> nil then
+    nextpas.core.gtk3.ffi.gtk_widget_show(FView);
+  if FOptions.DebugTools then
+    WEBKIT_settings_set_enable_developer_extras(
+      WEBKIT_web_view_get_settings(FView), 1);
+end;
+
+function TGtkWebview.GetWindow: IWindow; inline;
+begin
+  Result := FWindow;
 end;
 
 procedure TGtkWebview.AddUserScript(const ASource: string);
@@ -1354,13 +1490,14 @@ begin
   FireNotifyHandlers(FOnWindowClosed);
   if GtkLiveWindowCount = 0 then
     WindowGtkRawQuitMainLoop;
+  FView := nil;
+  FWin := nil;
+  FWindow := nil;
   FSelfKeepAlive := nil;   { 引用计数归零 → Destroy → UnregisterLive }
 end;
 
 procedure TGtkWebview.Close;
 begin
-  { 幂等（CONTRACT §3 intf 承诺，与 fake 一致）；二次 Close 直接返回，
-    避免对已销毁 widget 重复 destroy }
   if FClosed then
     Exit;
   FClosed := True;
@@ -1370,16 +1507,40 @@ begin
   finally
     if GLiveLock <> nil then GLiveLock.ReleaseWrite;
   end;
-  { 在途 eval 立即以 onerr 收尾（exactly-one）。记录不在此处释放：
-    所有权单点在引擎必然到达的完成回调——迟到回执读 Done 后仅释放。
-    异常实例由框架创建/触发/释放（§3.2 所有权语义）。 }
   SettlePendingOnClose;
   DropIdlePendings;
   FireNotifyHandlers(FOnWindowClosed);
-  GTK_widget_destroy(FWin);
+  // L3→L2 has-a 真嵌入：owned 时关 Window，attach 时仅毁 WebView 不毁 Parent
+  if FOwnsWindow then
+  begin
+    if FWindow <> nil then
+      try FWindow.Close; except end;
+    if (FView <> nil) and (FWindow = nil) and (FWin <> nil) then
+      GTK_widget_destroy(FWin);
+  end
+  else
+  begin
+    if FView <> nil then
+      GTK_widget_destroy(FView);
+  end;
+  FView := nil;
+  // FWin 为 Parent 复用句柄，attach 时不置 nil 直到 HandleNativeDestroy
+  if FOwnsWindow then
+  begin
+    FWin := nil;
+    FWindow := nil;
+  end
+  else
+  begin
+    // retain parent reference until Destroy clears, but view detached
+    FView := nil;
+  end;
   if GtkLiveWindowCount = 0 then
     WindowGtkRawQuitMainLoop;
-  FSelfKeepAlive := nil;
+  if not FOwnsWindow then
+    FSelfKeepAlive := nil
+  else
+    FSelfKeepAlive := nil;
 end;
 
 { ---- dispatcher 身份 — inline 薄转发保留接口 ---- }
@@ -1422,31 +1583,35 @@ end;
 procedure TGtkWebview.Show;
 begin
   RequireOpen;
-  WindowGtkRawShow(FWin);
+  // perf: inline delegate via L2 has-a single source zero-copy, window owns shell
+  if FWindow <> nil then FWindow.Show else WindowGtkRawShow(FWin);
 end;
 
 procedure TGtkWebview.Hide;
 begin
   RequireOpen;
-  WindowGtkRawHide(FWin);
+  if FWindow <> nil then FWindow.Hide else WindowGtkRawHide(FWin);
 end;
 
 function TGtkWebview.IsVisible: Boolean;
 begin
   RequireOpen;
+  if FWindow <> nil then Exit(FWindow.IsVisible);
   Result := GTK_widget_get_visible(FWin) <> 0;
 end;
 
 procedure TGtkWebview.Focus;
 begin
   RequireOpen;
-  WindowGtkRawFocus(FView);
+  // focus view directly if available, otherwise window
+  if FView <> nil then WindowGtkRawFocus(FView)
+  else if FWindow <> nil then FWindow.Focus;
 end;
 
 procedure TGtkWebview.SetTitle(const ATitle: string);
 begin
   RequireOpen;
-  WindowGtkRawSetTitle(FWin, ATitle);
+  if FWindow <> nil then FWindow.SetTitle(ATitle) else WindowGtkRawSetTitle(FWin, ATitle);
 end;
 
 function TGtkWebview.GetTitle: string;
@@ -1454,7 +1619,7 @@ var
   LRaw: PAnsiChar;
 begin
   RequireOpen;
-  { WM 级标题同步读：未显式设置过为空串（诚实表，见 BACKENDS §2） }
+  if FWindow <> nil then Exit(FWindow.GetTitle);
   LRaw := GTK_window_get_title(FWin);
   if LRaw <> nil then
     Result := AnsiPtrToStr(LRaw)
@@ -1465,55 +1630,58 @@ end;
 procedure TGtkWebview.SetBounds(AWidth, AHeight: Integer);
 begin
   RequireOpen;
-  WindowGtkRawResize(FWin, AWidth, AHeight);
+  if FWindow <> nil then FWindow.SetBounds(AWidth, AHeight) else WindowGtkRawResize(FWin, AWidth, AHeight);
 end;
 
 function TGtkWebview.GetWidth: Integer;
 begin
   RequireOpen;
+  if FWindow <> nil then Exit(FWindow.GetWidth);
   Result := GTK_widget_get_allocated_width(FView);
 end;
 
 function TGtkWebview.GetHeight: Integer;
 begin
   RequireOpen;
+  if FWindow <> nil then Exit(FWindow.GetHeight);
   Result := GTK_widget_get_allocated_height(FView);
 end;
 
 procedure TGtkWebview.SetResizable(AResizable: Boolean);
 begin
   RequireOpen;
-  GTK_window_set_resizable(FWin, Ord(AResizable));
+  if FWindow <> nil then FWindow.SetResizable(AResizable) else GTK_window_set_resizable(FWin, Ord(AResizable));
 end;
 
 procedure TGtkWebview.Maximize;
 begin
   RequireOpen;
-  WindowGtkRawMaximize(FWin);
+  if FWindow <> nil then FWindow.Maximize else WindowGtkRawMaximize(FWin);
 end;
 
 procedure TGtkWebview.Unmaximize;
 begin
   RequireOpen;
-  WindowGtkRawUnmaximize(FWin);
+  if FWindow <> nil then FWindow.Unmaximize else WindowGtkRawUnmaximize(FWin);
 end;
 
 function TGtkWebview.IsMaximized: Boolean;
 begin
   RequireOpen;
+  if FWindow <> nil then Exit(FWindow.IsMaximized);
   Result := WindowGtkRawIsMaximized(FWin);
 end;
 
 procedure TGtkWebview.Minimize;
 begin
   RequireOpen;
-  GTK_window_iconify(FWin);
+  if FWindow <> nil then FWindow.Minimize else GTK_window_iconify(FWin);
 end;
 
 procedure TGtkWebview.Restore;
 begin
   RequireOpen;
-  GTK_window_deiconify(FWin);
+  if FWindow <> nil then FWindow.Restore else GTK_window_deiconify(FWin);
 end;
 
 function TGtkWebview.IsMinimized: Boolean;
@@ -1521,8 +1689,8 @@ var
   LGdkWin: Pointer;
 begin
   RequireOpen;
+  if FWindow <> nil then Exit(FWindow.IsMinimized);
   LGdkWin := GTK_widget_get_window(FWin);
-  { 查询式真值：未 realize 时 gdk window 为 nil 视作非最小化 }
   Result := (LGdkWin <> nil) and
     ((GDK_window_get_state(LGdkWin) and GDK_WINDOW_STATE_ICONIFIED) <> 0);
 end;
@@ -1566,6 +1734,8 @@ end;
 function TGtkWebview.GetScaleFactor: Double;
 begin
   RequireOpen;
+  // perf: inline delegate via has-a single source, zero copy, window owns DPI truth
+  if FWindow <> nil then Exit(FWindow.GetScaleFactor);
   Result := WindowGtkRawScaleFactor(FView);
 end;
 
@@ -1624,6 +1794,8 @@ end;
 function TGtkWebview.NativeHandle: TWebviewNativeHandle;
 begin
   RequireOpen;
+  // stability: has-a composition returns window's native handle, single source L2, zero copy
+  if FWindow <> nil then Exit(TWebviewNativeHandle(FWindow.NativeHandle));
   Result := WindowGtkRawNativeHandle(FWin);
 end;
 

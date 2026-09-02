@@ -1,13 +1,13 @@
-unit nextpas.core.webview.gtk.viewmap;
+unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses — L1候选未提升：私为gtk后端专用，CONTRACT §1.2可抽L1 hashmap指针特化
 
-{** @desc GTK 指针键 view→window O(1) 索引：开地址 hash 薄封装。
+{** @desc GTK 指针键 view→window O(1) 索引：开地址 hash 薄封装。私为gtk后端专用，未提升通用 — CONTRACT §1.2登记可抽L1 hashmap指针特化候选（L1: unit nextpas.core.webview.gtk.viewmap; // 仅gtk uses），当前滞留家族内私有。
 
        单源复用（零容器重复）：
        - 哈希：hashmap.base.HashOfPointer (HashMix32 单源) — 与 THashMap/ webview.assets.WyHash 单源一致，消除 shr4 xor shr11 私有分叉，分布经 HashMix32 avalanche 保证
        - 容量：bytes.ops.VecGrowCapacity (0→4→2× inline 单源) — 与 webview.live/assetIndex 单源一致
        - 负载：0.75 (hashmap.base.DEFAULT_MAX_LOAD_FACTOR) — 单源阈值，零阈值漂移
        - 比较：指针等值直比，零 SpanEqual 额外开销
-       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，抽取需反哺 L1 collections/hashmap.base 通用指针哈希 owner 并经设计评审不自行外溢（CONTRACT §1/§50 登记，L0-L3 守恒）
+       可抽通用指针哈希模块候选：与 window.live/通用指针哈希重复已评估—当前自建开地址桶仍滞留家族内私有；哈希/容量/负载全量单源（HashOfPointer→HashMix32 / VecGrowCapacity 0→4→2× inline / 0.75 阈值）已零重复，抽取需反哺 L1 collections/hashmap.base 通用指针哈希 owner 并经设计评审不自行外溢（CONTRACT §1.2 登记，L0-L3 守恒）
 
        性能：
        - 零分配热读：ViewHash inline 单哈希零额外调用，ViewMapFindLocked 非 inline 短探（禁 inline 零 I-Cache 膨胀）、ViewMapFind 自锁短临界 <1µs 零阻塞 GLiveLock 读，探测 and Mask 位掩码与 assets FMask 单源一致热读零除法

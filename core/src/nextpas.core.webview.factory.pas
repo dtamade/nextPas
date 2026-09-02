@@ -65,11 +65,6 @@ uses
   nextpas.core.webview.wk.loader,
   nextpas.core.webview.wk;
 
-const
-  { 策略表单源：平台优先序 Webview2→Gtk→Wk→Fake，DefaultWebviewKind 与
-    CreateWebviewEx 对称回退共用此表，零重复分支，提升高级感。 }
-  CWebviewProbeOrder: array[0..2] of TWebviewKind = (wvWebview2, wvGtk, wvWk);
-
 type
   TWebviewProbe = function: Boolean;
   TWebviewCreate = function(const AOptions: TWebviewOptions): IWebviewWindow;
@@ -119,8 +114,11 @@ end;
 
 function CreateGtkOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 begin
-  // gtk 后端暂无 Parent-aware CreateOn，期纳入 window.gtk3 Raw 嵌入后补真实现；当前忽略 Parent 保编译与 owner 纯净（fake 回退已覆盖测试路径）
-  Result := TGtkWebview.Create(AOptions);
+  // perf: inline zero-copy真嵌入 via window.gtk3 Raw has-a, L3→L2 single source, Parent nil fallback保持owner纯净
+  if AParent = nil then
+    Result := TGtkWebview.Create(AOptions)
+  else
+    Result := TGtkWebview.CreateOn(AParent, AOptions);
 end;
 
 function ProbeWebView2: Boolean;
@@ -162,9 +160,10 @@ var
 procedure InitBackends; inline;
 begin
   if BACKENDS_INITED then Exit;
+  // bytes.ops 单源：WEBVIEW_BACKENDS 唯一真相单表驱动，新增后端仅此一处登记，零双表漂移；顺序 Fake首位 + 探测优先 Webview2→Gtk→Wk与window.factory同构高级感极简
   WEBVIEW_BACKENDS[0].Kind := wvFake;     WEBVIEW_BACKENDS[0].Probe := @ProbeFake;     WEBVIEW_BACKENDS[0].Create := @CreateFake;     WEBVIEW_BACKENDS[0].CreateOn := @CreateFakeOn;
-  WEBVIEW_BACKENDS[1].Kind := wvGtk;      WEBVIEW_BACKENDS[1].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[1].Create := @CreateGtk;      WEBVIEW_BACKENDS[1].CreateOn := @CreateGtkOn;
-  WEBVIEW_BACKENDS[2].Kind := wvWebview2; WEBVIEW_BACKENDS[2].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[2].Create := @CreateWebView2; WEBVIEW_BACKENDS[2].CreateOn := @CreateWebView2On;
+  WEBVIEW_BACKENDS[1].Kind := wvWebview2; WEBVIEW_BACKENDS[1].Probe := @ProbeWebView2; WEBVIEW_BACKENDS[1].Create := @CreateWebView2; WEBVIEW_BACKENDS[1].CreateOn := @CreateWebView2On;
+  WEBVIEW_BACKENDS[2].Kind := wvGtk;      WEBVIEW_BACKENDS[2].Probe := @ProbeGtk;      WEBVIEW_BACKENDS[2].Create := @CreateGtk;      WEBVIEW_BACKENDS[2].CreateOn := @CreateGtkOn;
   WEBVIEW_BACKENDS[3].Kind := wvWk;       WEBVIEW_BACKENDS[3].Probe := @ProbeWk;       WEBVIEW_BACKENDS[3].Create := @CreateWk;       WEBVIEW_BACKENDS[3].CreateOn := @CreateWkOn;
   BACKENDS_INITED := True;
 end;
@@ -243,9 +242,12 @@ begin
   finally
     GFactoryLock.Release;
   end;
-  for I := 0 to High(CWebviewProbeOrder) do
+  // 单源单表驱动：遍历 WEBVIEW_BACKENDS 优先级序（含Fake跳过）零重复分支，bytes.ops Vec单源思想 inline零额外调用
+  InitBackends;
+  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
   begin
-    LKind := CWebviewProbeOrder[I];
+    LKind := WEBVIEW_BACKENDS[I].Kind;
+    if LKind = wvFake then Continue;
     if WebviewBackendAvailable(LKind) then
     begin
       GFactoryLock.Acquire;
@@ -325,12 +327,13 @@ begin
   if AParent = nil then
     Exit(CreateWebviewOf(AKind, AOptions));
   CheckWebviewOptions(AOptions);
-  // 表驱动：优先 AKind，回退按 CWebviewProbeOrder 单表零重复分支（性能：外联避 I-Cache 复制，O(n) n≤3 线性回退零分配）
+  // 单源单表驱动：优先 AKind，回退按 WEBVIEW_BACKENDS 优先级序（含Fake跳过）零重复分支，bytes.ops单源 inline零拷贝 O(n) n≤3
   if TryCreateForKind(AKind, AParent, AOptions, Result) then Exit;
-  for I := 0 to High(CWebviewProbeOrder) do
+  InitBackends;
+  for I := Low(WEBVIEW_BACKENDS) to High(WEBVIEW_BACKENDS) do
   begin
-    LCand := CWebviewProbeOrder[I];
-    if LCand = AKind then Continue;
+    LCand := WEBVIEW_BACKENDS[I].Kind;
+    if (LCand = AKind) or (LCand = wvFake) then Continue;
     if TryCreateForKind(LCand, AParent, AOptions, Result) then Exit;
   end;
   Result := TFakeWebview.CreateOn(AParent, AOptions);

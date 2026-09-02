@@ -200,7 +200,7 @@ end;
 { ---- TWindowGtk ---- }
 
 type
-  TWindowGtk = class(TInterfacedObject, IWindow)
+  TWindowGtk = class(TInterfacedObject, IWindow, IWindowPrivateHandle)
   private
     FHandle: Pointer;
     FClosed: Boolean;
@@ -252,6 +252,7 @@ type
     procedure OnEvent(AHandler: TWindowEventHandler); overload;
     procedure OnEvent(AHandler: TWindowEventMethod); overload;
     procedure OnEvent(AHandler: TWindowEventProc); overload;
+    function GetHandle: Pointer;
   public
     constructor Create(const AOptions: TWindowOptions);
     destructor Destroy; override;
@@ -674,6 +675,15 @@ end;
 function TWindowGtk.GetDispatcher: IWindowDispatcher; inline;
 begin
   Result := FDispatcher;
+end;
+
+function TWindowGtk.GetHandle: Pointer; inline;
+begin
+  // perf: inline zero-copy O(1) handle extraction, L2 owner single source for L3 embedding, no syscall
+  if FClosed or (FHandle = nil) then
+    Result := nil
+  else
+    Result := FHandle;
 end;
 
 procedure TWindowGtk.OnEvent(AHandler: TWindowEventHandler);
