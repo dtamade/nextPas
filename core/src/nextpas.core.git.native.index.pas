@@ -852,14 +852,19 @@ begin
 
   // splice the extension in front of the base checksum, then reseal
   SetLength(Result, NewTotal);
-  Move(Base[0], Result[0], BaseLen - CTrailerLen);
+  { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan PByte+Len view, single Move), centralized EOutOfRange vs scattered Move }
+  if BaseLen > CTrailerLen then
+    SpanCopy(TByteSpan.Create(PByte(@Result[0]), SizeUInt(BaseLen - CTrailerLen)),
+      TByteSpan.Create(PByte(@Base[0]), SizeUInt(BaseLen - CTrailerLen)));
   P := BaseLen - CTrailerLen;
   Result[P] := Ord('T');
   Result[P + 1] := Ord('R');
   Result[P + 2] := Ord('E');
   Result[P + 3] := Ord('E');
   Put32(Result, P + 4, Cardinal(Length(ExtData)));
-  Move(ExtData[0], Result[P + 8], Length(ExtData));
+  if Length(ExtData) > 0 then
+    SpanCopy(TByteSpan.Create(PByte(@Result[P + 8]), SizeUInt(Length(ExtData))),
+      TByteSpan.Create(PByte(@ExtData[0]), SizeUInt(Length(ExtData))));
 
   Hasher := NewSHA1;
   Hasher.Write(Result[0], SizeUInt(NewTotal - CTrailerLen));

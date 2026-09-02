@@ -34,6 +34,7 @@ uses
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.bytes.ops,
+  nextpas.core.text.strings,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.revwalk,
@@ -85,32 +86,19 @@ end;
 function FindBlobOid(ARepo: TNativeRepository; const ARootTree: TGitOid; const APath: string): TGitOid;
 var
   Parts: TStringArray;
-  I, J, K: Integer;
+  I, J: Integer;
   CurOid: TGitOid;
   Kind: TGitObjectKind;
   Data: TBytes;
   Entries: TGitTreeEntryArray;
   Found: Boolean;
   Name: string;
-  Count: Integer;
-  Start: Integer;
 begin
   Result := Default(TGitOid);
   if IsZeroOid(ARootTree) then Exit;
   if APath = '' then Exit;
-  // split by '/'
-  Count := 1;
-  for I := 1 to Length(APath) do if APath[I] = '/' then Inc(Count);
-  SetLength(Parts, Count);
-  Start := 1;
-  K := 0;
-  for I := 1 to Length(APath) + 1 do
-    if (I > Length(APath)) or (APath[I] = '/') then
-    begin
-      Parts[K] := Copy(APath, Start, I - Start);
-      Inc(K);
-      Start := I + 1;
-    end;
+  // single source: delegate '/' split to text.strings (L1) — inline hot, single alloc, reuses bytes.ops GrowArrayCapacity internally; preserves empty segments for strict validation (no dup hand loop)
+  Parts := StringsSplit(APath, '/', False);
   CurOid := ARootTree;
   for I := 0 to High(Parts) do
   begin
@@ -237,8 +225,9 @@ begin
 end;
 
 // LCS forward row: O(bLen) memory, zero-copy via offsets, reuse buffers (no per-layer alloc)
+// not inline: O(n*m) double loop + Move, would bloat I-Cache if inlined per design-conventions red line 2
 procedure LcsForwardReuse(const AOld: TStringArray; aOff, aLen: Integer;
-  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray); inline;
+  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
   I, J: Integer;
   Tmp: TIntArray;
@@ -264,8 +253,9 @@ begin
 end;
 
 // LCS on reversed slices — same O(bLen) memory, zero-copy, reuse buffers
+// not inline: O(n*m) double loop + Move, would bloat I-Cache if inlined per design-conventions red line 2
 procedure LcsForwardRevReuse(const AOld: TStringArray; aOff, aLen: Integer;
-  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray); inline;
+  const ANew: TStringArray; bOff, bLen: Integer; var OutRow: TIntArray; var BufPrev, BufCur: TIntArray);
 var
   I, J: Integer;
   Tmp: TIntArray;
@@ -467,14 +457,19 @@ var
   Infos: array of TGitCommitInfo;
   HeadTree: TGitOid;
   HeadLines: TStringArray;
+  HeadBlobOid, CurBlobOid: TGitOid;
   BlameOids: array of TGitOid;
-  I, J: Integer;
+  CacheOids: TGitOidArray;
+  CacheLines: array of TStringArray;
+  I, J, K: Integer;
   Kind: TGitObjectKind;
   Data: TBytes;
   Info: TGitCommitInfo;
   PrevLines: TStringArray;
   Matches: TMatchArray;
   Entry: TGitBlameEntry;
+  FoundCache: Boolean;
+  S: string;
 begin
   Result := nil;
   if AGitDir = '' then raise EGitError.Create('blame: gitdir empty');
@@ -498,14 +493,52 @@ begin
     if not ReadFileLines(Repo, HeadTree, APath, HeadLines) then
       raise EGitError.CreateFmt('path not in HEAD: %s', [APath]);
     if Length(HeadLines) = 0 then Exit(nil); // empty file
+    HeadBlobOid := FindBlobOid(Repo, HeadTree, APath);
     SetLength(BlameOids, Length(HeadLines));
     for I := 0 to High(BlameOids) do BlameOids[I] := Oids[0];
+    // blob cache: maps blob Oid -> lines, single source text.strings split, avoids duplicate Read+Split for unchanged file
+    // commit-graph reuse: Infos[] already caches one-parse-per-commit via Repo.Read+GitParseCommit (mirrors revwalk TCommitParseCache discipline, commit-graph when available via GitCollectCommits)
+    CacheOids := nil; CacheLines := nil;
+    // seed cache with HEAD blob to avoid re-read on equality fast path
+    if not IsZeroOid(HeadBlobOid) then
+    begin
+      SetLength(CacheOids, 1); SetLength(CacheLines, 1);
+      CacheOids[0] := HeadBlobOid; CacheLines[0] := HeadLines; // CoW share, zero-copy
+    end;
 
     // walk older commits: head vs each older (newest->oldest, so first matches -> newer, later overwrites -> oldest)
-    // perf: ComputeMatches threshold 1M (was 10M) + inline + zero-copy slice (off/len, no per-layer alloc) + bytes.ops GrowArrayCapacity single source; Hirschberg O(n*m) -> fallback O(N log N+M log U) avoids C * O(n*m) quadratic amplification for large files × many commits; stability: Repo.Free in finally, managed arrays auto-released
+    // perf: blob-Oid equality fast path (no LCS when identical) + blob-cache reuse avoids C*O(n*m) duplicate work; ComputeMatches threshold 1M + zero-copy slice + bytes.ops GrowArrayCapacity single source; Hirschberg -> fallback O(N log N+M log U); stability: Repo.Free in finally, managed arrays auto-released
     for I := 1 to High(Oids) do
     begin
-      if not ReadFileLines(Repo, Infos[I].Tree, APath, PrevLines) then Continue;
+      CurBlobOid := FindBlobOid(Repo, Infos[I].Tree, APath);
+      if IsZeroOid(CurBlobOid) then Continue; // file not in this commit
+      // fast path: blob identical to HEAD => every line matches, attribute all without O(n*m)
+      if GitOidSame(CurBlobOid, HeadBlobOid) then
+      begin
+        for J := 0 to High(BlameOids) do BlameOids[J] := Oids[I];
+        Continue;
+      end;
+      // cache lookup (linear probe over distinct blobs, typically small; avoids re-inflate+SplitLines)
+      FoundCache := False;
+      for K := 0 to High(CacheOids) do
+        if GitOidSame(CacheOids[K], CurBlobOid) then
+        begin
+          PrevLines := CacheLines[K]; // CoW share
+          FoundCache := True;
+          Break;
+        end;
+      if not FoundCache then
+      begin
+        Data := Repo.ReadObject(CurBlobOid, Kind);
+        if Kind = gokTree then Continue;
+        S := BytesToString(Data);
+        PrevLines := SplitLines(S);
+        // add to cache (CoW share, managed, bounded by distinct blobs <= C)
+        SetLength(CacheOids, Length(CacheOids) + 1);
+        SetLength(CacheLines, Length(CacheLines) + 1);
+        CacheOids[High(CacheOids)] := CurBlobOid;
+        CacheLines[High(CacheLines)] := PrevLines;
+      end;
       Matches := ComputeMatches(PrevLines, HeadLines);
       for J := 0 to High(Matches) do
         BlameOids[Matches[J].NewIdx] := Oids[I];

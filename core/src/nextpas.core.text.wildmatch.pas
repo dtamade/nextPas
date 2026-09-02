@@ -16,9 +16,9 @@ uses
   - '\' escapes next pattern char
 
   Owner: L1 text (re-usable via bytes.ops single source, inline hot path, zero-copy range scan).
-  Former git shim `nextpas.core.git.native.wildmatch` is now deprecated residual thin shim
-  (inline deprecated forward) and will be removed; new code must use this L1 owner directly
-  (WildSegment/WildSegmentRange/WildSegmentsMatch/HasUnescapedSlash via bytes.ops). }
+  Former git shim `nextpas.core.git.native.wildmatch` has been removed; this L1 owner
+  is the single source (WildSegment/WildSegmentRange/WildSegmentsMatch/HasUnescapedSlash
+  via bytes.ops GrowArrayCapacity, inline, zero-copy range scan, no alloc). }
 
 function WildSegment(const APattern, AName: string): Boolean; inline;
 function WildSegmentRange(const APattern: string; APatPos, APatLen: Integer;

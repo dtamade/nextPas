@@ -40,6 +40,7 @@ type
     function TryPeekDeltaTargetSize(APos: SizeUInt; out ATargetSize: Int64): Boolean;
     function TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
     procedure PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
+    function TryGetObjectSizeAtOffset(AOff: Int64; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
   private
@@ -381,12 +382,8 @@ begin
     Exit;
   if TryPeekCacheHit(APos, ATargetSize) then
     Exit(True);
-  try
-    Got := GitZlibDecompressPrefix(FData, FDataSize, APos, @Buf[0], SizeUInt(Length(Buf)), EndPos);
-  except
-    on E: EGitError do Exit;
-    on E: Exception do Exit;
-  end;
+  // corrupt prefix propagates EGitError (no silent swallow) for caller to distinguish missing->False vs corrupt->raise
+  Got := GitZlibDecompressPrefix(FData, FDataSize, APos, @Buf[0], SizeUInt(Length(Buf)), EndPos);
   if Got = 0 then
     Exit;
   LSpan := TByteSpan.Create(@Buf[0], Got);
@@ -601,7 +598,18 @@ end;
 function TPackFile.TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKind;
   out ASize: Int64): Boolean;
 var
-  Off, BaseOff: Int64;
+  Off: Int64;
+begin
+  // memo: single FindOffset per OID, delegate to offset-based helper to avoid duplicate O(logN) for ref-delta base
+  Off := FindOffset(AOid);
+  if Off < 0 then
+    Exit(False);
+  Result := TryGetObjectSizeAtOffset(Off, AKind, ASize);
+end;
+
+function TPackFile.TryGetObjectSizeAtOffset(AOff: Int64; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+var
+  BaseOff: Int64;
   P, DeltaStart: SizeUInt;
   B, Typ: Byte;
   Sz: Int64;
@@ -678,10 +686,9 @@ begin
   Result := False;
   AKind := gokBlob;
   ASize := 0;
-  Off := FindOffset(AOid);
-  if Off < 0 then
+  if (AOff < 0) or (AOff >= Int64(FDataSize)) then
     Exit;
-  P := SizeUInt(Off);
+  P := SizeUInt(AOff);
   if P >= FDataSize then Exit;
   B := FData[P]; Inc(P);
   Typ := (B shr 4) and $07;
@@ -716,8 +723,8 @@ begin
             B := FData[P]; Inc(P);
             Rel := ((Rel + 1) shl 7) or (B and $7F);
           end;
-          BaseOff := Off - Rel;
-          if (BaseOff < 0) or (BaseOff >= Off) then Exit;
+          BaseOff := AOff - Rel;
+          if (BaseOff < 0) or (BaseOff >= AOff) then Exit;
           DeltaStart := P;
         end
         else
@@ -736,7 +743,8 @@ begin
         else ASize := TgtSize;
         if Typ = 7 then
         begin
-          if (BaseOff >= 0) and TryGetObjectSize(BaseOid, BaseKind, BaseSize) then
+          // memo: reuse already resolved BaseOff, avoid duplicate FindOffset(BaseOid) O(logN) inside recursive call
+          if (BaseOff >= 0) and TryGetObjectSizeAtOffset(BaseOff, BaseKind, BaseSize) then
             AKind := BaseKind
           else if (BaseOff >= 0) and WalkKind(BaseOff, BaseKind) then
             AKind := BaseKind;

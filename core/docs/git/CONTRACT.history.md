@@ -10,7 +10,7 @@
 
 ## 2. 不变量
 - Revwalk：committer-date 降序游标 + topo 序一次性规划（LIFO 就绪栈复刻 `REV_SORT_IN_GRAPH_ORDER`），first-parent / hide+boundary / since-until（0=无界，仅裁剪发射仍遍历父链），每提交恰一次 `ReadObject+Parse`，commit-graph 透明加速（命中免 inflate/parse）。
-- Commit-graph v1：`CGPH + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1`，fanout 累积 + OID 排序 + 36B/CDAT + EDGE 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合；`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 Verify + Invalidate；`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=2`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline`）；`WriteAll` 聚合 `refs/heads+HEAD+tags` 起止；对齐 `git commit-graph write/verify`。
+- Commit-graph v1：`CGPH + OIDF/OIDL/CDAT/EDGE + 尾 SHA-1`，fanout 累积 + OID 排序 + 36B/CDAT + EDGE 溢出，`Build/Write/WriteAll/Verify/Invalidate` 3 块无 GDA2 最小闭合；`Write*` 经 `WriteAtomic` 原子落盘 + 内存/文件双重 Verify + Invalidate；`TryLoad` 经 `Stat.mtime+size` 缓存 `IMappedFile` 零堆复制 `MmapOpen`（`Cap=8`，`PByte` 零拷贝 via `io.mapped`，`bytes.ops` 单源，OS page-reclaimable，`inline` O(1) Seq LRU 无线性搬移/接口拷贝抖动）；`WriteAll` 聚合 `refs/heads+HEAD+tags` 起止；对齐 `git commit-graph write/verify`。
 - Diff/Blame：扁平化递归 + 字典排序 + 归并（Added/Modified/Deleted/TypeChanged，零重命名，peel 16 层）；blame 经 LCS 行 diff + head-vs-each 最老匹配，线性史，对齐 `git blame --porcelain`；`Delta/Apply|ApplyReuse:inline` 复用 `bytes.ops` `GitApplyDeltaInto` + `GReuseBuf` 单源（`TByteSpan` 零拷贝）。
 - Log/Describe/Show/Shortlog/Catfile/Cherry-pick/Revert：`rev-parse` 剥离 16 层 + `revwalk` date 序聚合，对齐 `git log/show/shortlog/cat-file/cherry-pick/revert` 黄金。
 

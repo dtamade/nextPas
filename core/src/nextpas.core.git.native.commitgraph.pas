@@ -122,45 +122,65 @@ type
     MTime: Int64;
     Size: Int64;
     Mapped: IMappedFile;
+    Seq: UInt64; // LRU tick: larger = more recent, O(1) touch vs linear shift
   end;
 
 const
-  // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU at High, LRU at 0
-  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 2 bounds fd/page-cache vs 8xheap (multi-tenant), LRU via bytes.ops single source
-  // stability: IMappedFile interface refcount auto releases on eviction/shift (managed), no leak; large files not duplicated via TBytes refcount
-  GGraphCacheCap = 2;
+  // bounded LRU: caps resident mappings to prevent multi-repo heap amplification; MRU via Seq max, LRU via min Seq scan
+  // perf: mmap-backed IMappedFile zero-copy PByte view via io.mapped owner (no heap TBytes duplication, OS page-reclaimable); cap 8 bounds fd/page-cache vs 8xheap (multi-tenant, multi-repo concurrent reuse avoids frequent mmap rebuild), O(1) touch/invalidate (no linear shift), single interface Move per op via bytes.ops single source
+  // stability: IMappedFile interface refcount auto releases on eviction/swap (managed), no leak; large files not duplicated via TBytes refcount
+  GGraphCacheCap = 8;
 
 var
   GGraphCache: array of TGraphCacheEntry;
+  GGraphCacheSeq: UInt64;
 
 function FindGraphCache(const ADir: string): Integer;
 var I: Integer;
 begin
-  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=2 keeps O(Cap) trivial
+  // not inline: scan loop + routing body per design-conventions § inline red line 2 (real loop body forbids inline, avoids I-Cache bloat); Cap=8 keeps O(Cap) trivial (8 vs 2 reduces multi-repo thrash)
   for I := 0 to High(GGraphCache) do
     if GGraphCache[I].Dir = ADir then Exit(I);
   Result := -1;
 end;
 
-procedure TouchGraphCache(const AIdx: Integer);
-var I: Integer; Tmp: TGraphCacheEntry;
+function FindLRUCacheIndex: Integer; inline;
+var I, LRU: Integer; MinSeq: UInt64;
 begin
-  // not inline: array shift loop is routing body per design-conventions § inline red line 2 (no inline on real loops); Cap=2 O(Cap) trivial, zero-copy record Move via refcount
-  if (AIdx < 0) or (AIdx >= Length(GGraphCache)) or (AIdx = High(GGraphCache)) then Exit;
-  Tmp := GGraphCache[AIdx];
-  for I := AIdx to High(GGraphCache)-1 do
-    GGraphCache[I] := GGraphCache[I+1];
-  GGraphCache[High(GGraphCache)] := Tmp;
+  // perf: inline + O(Cap) min-scan (Cap=8 trivial), no allocation, UInt64 compare; avoids linear shift + N interface copies (single overwrite)
+  Result := -1;
+  if Length(GGraphCache) = 0 then Exit;
+  LRU := 0;
+  MinSeq := GGraphCache[0].Seq;
+  for I := 1 to High(GGraphCache) do
+    if GGraphCache[I].Seq < MinSeq then
+    begin
+      MinSeq := GGraphCache[I].Seq;
+      LRU := I;
+    end;
+  Result := LRU;
+end;
+
+procedure TouchGraphCache(const AIdx: Integer); inline;
+begin
+  // perf: inline + O(1) LRU tick bump, zero-copy Seq update, no array shift, no N interface AddRef/Release jitter (single tick vs Cap copies)
+  // stability: keeps IMappedFile alive via interface refcount, no leak; zero-copy PByte view via io.mapped owner
+  if (AIdx < 0) or (AIdx >= Length(GGraphCache)) then Exit;
+  Inc(GGraphCacheSeq);
+  if GGraphCacheSeq = 0 then GGraphCacheSeq := 1; // avoid 0 wrap
+  GGraphCache[AIdx].Seq := GGraphCacheSeq;
 end;
 
 procedure InvalidateCommitGraphCache(const AGitDir: string);
-var Idx: Integer; I: Integer;
+var Idx: Integer;
 begin
   Idx := FindGraphCache(AGitDir);
   if Idx < 0 then Exit;
-  for I := Idx to High(GGraphCache)-1 do
-    GGraphCache[I] := GGraphCache[I+1];
-  SetLength(GGraphCache, Length(GGraphCache)-1);
+  // perf: O(1) swap-with-last, single interface Move (one AddRef/Release), no linear shift + N copies; zero-copy via refcount
+  // stability: managed record swap releases evicted Mapped via refcount on overwrite + Finalize on shrink, no leak
+  if Idx <> High(GGraphCache) then
+    GGraphCache[Idx] := GGraphCache[High(GGraphCache)]; // single Move, old Idx Mapped released, High AddRef
+  SetLength(GGraphCache, Length(GGraphCache)-1); // releases duplicate High slot
 end;
 
 function Sha1OfBytes(const AData: TBytes): TBytes;
@@ -642,16 +662,16 @@ begin
   end;
   if Idx < 0 then
   begin
-    // bounded insert: evict LRU at 0 if at capacity, else grow; keeps residency O(Cap)
+    // bounded insert: evict LRU (min Seq) if at capacity, else grow; O(1) no shift, single interface Move
+    // perf: O(Cap) min-scan (Cap=8) + single overwrite via bytes.ops GrowArrayCapacity single source, avoids N interface copies jitter
+    // stability: overwritten slot's old Mapped released via assignment, no leak
     if Length(GGraphCache) >= GGraphCacheCap then
     begin
-      for I := 0 to High(GGraphCache)-1 do
-        GGraphCache[I] := GGraphCache[I+1]; // managed copy releases evicted Mapped via interface refcount, stability preserved
-      Idx := High(GGraphCache);
+      Idx := FindLRUCacheIndex; // O(Cap) scan, single overwrite
     end
     else
     begin
-      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=2 — clamp overshoot and keep logical len
+      // perf: geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), zero-copy record Move, bounded Cap=8 — clamp overshoot and keep logical len
       Idx := Length(GGraphCache);
       SetLength(GGraphCache, Integer(GrowArrayCapacity(SizeUInt(Length(GGraphCache)), SizeUInt(Idx + 1))));
       if Length(GGraphCache) > GGraphCacheCap then
@@ -665,9 +685,8 @@ begin
   GGraphCache[Idx].MTime := Info.ModTime;
   GGraphCache[Idx].Size := Info.Size;
   GGraphCache[Idx].Mapped := Mapped; // zero-copy: interface share, no heap duplication, OS reclaimable
-  // stale hit slot updated: promote to MRU if not already tail (LRU age refresh)
-  if Idx <> High(GGraphCache) then
-    TouchGraphCache(Idx);
+  // perf: O(1) LRU tick bump, no linear shift (was O(Cap) shift with N copies)
+  TouchGraphCache(Idx);
   AGraph := TCommitGraph.CreateFromMapped(Mapped);
   Result := True;
 end;
@@ -1328,8 +1347,10 @@ end;
 
 initialization
   SetLength(GGraphCache, 0);
+  GGraphCacheSeq := 0;
 
 finalization
   SetLength(GGraphCache, 0);
+  GGraphCacheSeq := 0;
 
 end.
