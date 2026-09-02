@@ -200,7 +200,19 @@ if [ ! -f "$SRC/nextpas.core.audio.codec.vorbis.impl.pas" ]; then echo "[FAIL] v
 if [ ! -f "$SRC/nextpas.core.audio.codec.opus.base.pas" ]; then echo "[FAIL] opus.base missing (84 enumeration, L0 only)"; fail=1; else echo "[OK] opus.base present (L0 only)"; fi
 if [ ! -f "$SRC/nextpas.core.audio.codec.opus.intf.pas" ]; then echo "[FAIL] opus.intf missing (84 enumeration)"; fail=1; else echo "[OK] opus.intf present"; fi
 if [ ! -f "$SRC/nextpas.core.audio.codec.opus.impl.pas" ]; then echo "[FAIL] opus.impl missing (84 enumeration)"; fail=1; else echo "[OK] opus.impl present"; fi
+# s10-2 audio.bus 独立化 gate: module-registry 登记 + L2→L2 去直引 + 四件套/bytes.ops单源/inline零拷贝/Simd复用
+if ! grep -q "audio.bus" "$ROOT/core/docs/core-module-registry.md"; then echo "[FAIL] core-module-registry missing audio.bus (s10-2)"; fail=1; else echo "[OK] core-module-registry audio.bus present (s10-2)"; fi
+if ! grep -q "audio.bus" "$ROOT/core/docs/module-registry.md"; then echo "[FAIL] module-registry missing audio.bus (s10-2)"; fail=1; else echo "[OK] module-registry audio.bus present (s10-2)"; fi
+if grep -q "audio\.bus" "$SRC/nextpas.core.audio.pas"; then echo "[FAIL] audio facade L2→L2 direct uses bus (must remove s10-2)"; fail=1; else echo "[OK] audio facade no L2→L2 bus direct (s10-2)"; fi
+if ! grep -q "SimdAddF32" "$SRC/nextpas.core.audio.bus.impl.pas"; then echo "[FAIL] bus.impl missing SimdAddF32 reuse (s10-2)"; fail=1; else echo "[OK] bus.impl SimdAddF32 reuse present (s10-2)"; fi
+if ! grep -q "AudioEnsureCapacity" "$SRC/nextpas.core.audio.bus.impl.pas"; then echo "[FAIL] bus.impl missing AudioEnsureCapacity single source (s10-2)"; fail=1; else echo "[OK] bus.impl AudioEnsureCapacity single source present (s10-2)"; fi
+if ! grep -q "inline;" "$SRC/nextpas.core.audio.bus.impl.pas"; then echo "[FAIL] bus.impl missing inline evidence (s10-2)"; fail=1; else echo "[OK] bus.impl inline present (s10-2)"; fi
+# 四件套 base←intf←impl←facade: bus.base L0 only 无intf/impl依赖, bus.intf 仅base, bus.impl 含实现, bus facade 仅别名+inline转发
+if grep -q "uses" "$SRC/nextpas.core.audio.bus.base.pas"; then if ! grep -q "uses" "$SRC/nextpas.core.audio.bus.base.pas" | grep -qi "base\|exception"; then echo "[WARN] bus.base uses non-L0 (check)"; fi; fi
+if ! grep -q "nextpas.core.audio.bus.base" "$SRC/nextpas.core.audio.bus.intf.pas"; then echo "[FAIL] bus.intf missing base←intf dependency (s10-2)"; fail=1; else echo "[OK] bus.intf base←intf present"; fi
+if ! grep -q "nextpas.core.audio.bus.intf" "$SRC/nextpas.core.audio.bus.pas"; then echo "[FAIL] bus facade missing intf re-export (s10-2)"; fail=1; else echo "[OK] bus facade intf re-export present"; fi
+if ! grep -q "inline;" "$SRC/nextpas.core.audio.bus.pas"; then echo "[FAIL] bus facade missing inline forwarding (s10-2)"; fail=1; else echo "[OK] bus facade inline forwarding present"; fi
 # test_automation gate 存活校验（for loop 同步）
 if [ ! -f "$SRC/../tests/nextpas.core.audio/test_automation/test_automation.lpr" ] && [ ! -f "$ROOT/core/tests/nextpas.core.audio/test_automation/test_automation.lpr" ]; then echo "[FAIL] test_automation gate missing"; fail=1; else echo "[OK] test_automation gate present"; fi
 if [ "$fail" -ne 0 ]; then echo "source-contract gate FAILED"; exit 1; fi
-echo "source-contract gate PASSED — 87 files (core 31 + extension 56, unique 85+2 bus facade) + 23 GUID + test_automation — 契约 1.5.8 (wav/pcm_wav四件套+codec.flac/mp3/vorbis/opus 四件套完整)"
+echo "source-contract gate PASSED — 87 files (core 31 + extension 56, unique 85+2 bus facade) + 23 GUID + test_automation — 契约 1.6.0 (wav/pcm_wav四件套+codec.flac/mp3/vorbis/opus 四件套完整, audio.bus独立化 s10-2)"
