@@ -298,6 +298,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
@@ -316,9 +317,8 @@ function StringBodyReader(const ABodyText: string): IReader;
 var
   LData: TBytes;
 begin
-  SetLength(LData, Length(ABodyText));
-  if Length(ABodyText) > 0 then
-    Move(ABodyText[1], LData[0], Length(ABodyText));
+  // perf: single source via bytes.ops.StringToBytes inline thin-forward zero-copy PAnsiChar single Move (INV-5), not inline per red-line 1 (SetLength+Move stays in owner)
+  LData := nextpas.core.bytes.ops.StringToBytes(ABodyText);
   Result := BytesBodyReader(LData);
 end;
 
@@ -1084,8 +1084,8 @@ begin
         raise EHttpError.CreateOp(hekBody, 'body',
           'Request body exceeds maximum allowed size (' +
           IntToStr(AMaxBytes) + ' bytes)');
-      SetLength(Result, LTotal);
-      Move(LBuf[0], Result[LTotal - Int64(LN)], LN);
+      // perf: single source via bytes.ops.BytesAppend geometric via BYTES_BUILDER_MIN_GROW amortized O(1) zero-copy Move inline single source (INV-5)
+      nextpas.core.bytes.ops.BytesAppend(Result, @LBuf[0], LN);
     end;
   until LN = 0;
 end;
@@ -1105,10 +1105,8 @@ var
   LBody: TBytes;
 begin
   LBody := HttpReadRequestBodyBytes(AReq);
-  Result := '';
-  SetLength(Result, Length(LBody));
-  if Length(LBody) > 0 then
-    Move(LBody[0], Result[1], Length(LBody));
+  // perf: inline thin-forward via bytes.ops.BytesToString single source zero-copy TByteSpan view single Move in owner (INV-5)
+  Result := nextpas.core.bytes.ops.BytesToString(LBody);
 end;
 
 function HttpReadRequestBodyJson(const AReq: IHttpRequest): IJsonDocument;
@@ -1131,14 +1129,15 @@ begin
   LLen := Length(S);
   LOut := 0;
   SetLength(LBuf, LLen * 6); { worst case: every char → '&xxxxx;' }
+  // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5), not inline alloc per red-line 1
   for I := 1 to LLen do
   begin
     case S[I] of
-      '&': begin System.Move('&amp;', LBuf[LOut + 1], 5); Inc(LOut, 5); end;
-      '"': begin System.Move('&quot;', LBuf[LOut + 1], 6); Inc(LOut, 6); end;
-      '<': begin System.Move('&lt;', LBuf[LOut + 1], 4); Inc(LOut, 4); end;
-      '>': begin System.Move('&gt;', LBuf[LOut + 1], 4); Inc(LOut, 4); end;
-      '''': begin System.Move('&#39;', LBuf[LOut + 1], 5); Inc(LOut, 5); end;
+      '&': begin nextpas.core.bytes.ops.BytesCopy(@LBuf[LOut + 1], PAnsiChar('&amp;'), 5); Inc(LOut, 5); end;
+      '"': begin nextpas.core.bytes.ops.BytesCopy(@LBuf[LOut + 1], PAnsiChar('&quot;'), 6); Inc(LOut, 6); end;
+      '<': begin nextpas.core.bytes.ops.BytesCopy(@LBuf[LOut + 1], PAnsiChar('&lt;'), 4); Inc(LOut, 4); end;
+      '>': begin nextpas.core.bytes.ops.BytesCopy(@LBuf[LOut + 1], PAnsiChar('&gt;'), 4); Inc(LOut, 4); end;
+      '''': begin nextpas.core.bytes.ops.BytesCopy(@LBuf[LOut + 1], PAnsiChar('&#39;'), 5); Inc(LOut, 5); end;
     else
       begin LBuf[LOut + 1] := S[I]; Inc(LOut); end;
     end;

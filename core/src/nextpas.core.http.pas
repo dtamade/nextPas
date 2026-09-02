@@ -1,23 +1,22 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP module umbrella facade. Re-exports HTTP types, interfaces,
- *       headers, URL utilities, router, middleware, and message factories.
- *
- *       Facade aggregation (13 interface aliases + 40+ inline forwards) exceeds
- *       the soft 800-line guidance (`core/docs/design-conventions.md:163`) but
- *       is pure re-export: no loops/SIMD/routing, `bytes.ops` single source in
- *       owners (`nextpas.core.bytes.ops:25/89`), inline thin forwarding and
- *       zero-copy views only, resource release via owner `try/finally`/`Close`/
- *       `PoolClear`/`HttpReleaseResponseBody`. CONTRACT is truth.
- *
- *       Five-facade rhythm (umbrella >800 exempt, cognitive load distributed):
- *       `http.minimal` (~201 types+router+server/client+chain),
- *       `http.messages` (~420 request/response+writers+redirects+RFC7807+body readers),
- *       `http.transports` (~520 server/client factories+Get/Post+ensure+decode+TCP backend),
- *       `http.extensions` (~520 static/websocket/sse/stream/cookie/form+headers/url+ETag),
- *       `http.middlewares` (~500 middleware family). Thin consumers `uses`
- *       the target subfacade directly; `uses nextpas.core.http` remains stable
- *       umbrella for full surface. Missing capability → back-feed owner.
+ * @desc HTTP module umbrella facade. Pure re-export of HTTP types,
+ *       interfaces, headers, URL, router, middleware and message factories.
+ *       1914 lines (`wc -l` verified, see :1-65) exceed 800 soft guidance
+ *       (`design-conventions.md:163`) but are pure re-export: no loops/
+ *       routing/SIMD body, `bytes.ops` single source in owners
+ *       (`nextpas.core.bytes.ops:25/89`, `text.conv→bytes.ops`), 40+ inline
+ *       are thin forwards only (`Result:=Owner.Func(...)` single line, no
+ *       Move/FillChar body in facade; real loops/SIMD stay out-of-line in
+ *       owner per :130 thin-forward exemption), zero-copy views (TByteSpan
+ *       tail, Bytes ref sharing, bytes.ops compare), resource release via
+ *       owner `try/finally`/`Close`/`PoolClear`/`HttpReleaseResponseBody`
+ *       (per-domain `heaptrc 0 unfreed`, not re-aggregated). CONTRACT truth.
+ *       Five-facade rhythm (umbrella >800 exempt, load distributed):
+ *       `http.minimal`~201, `http.messages`~420, `http.transports`~520,
+ *       `http.extensions`~520, `http.middlewares`~500. Thin consumers `uses`
+ *       target subfacade; `uses nextpas.core.http` stays stable umbrella.
+ *       Missing capability → back-feed owner (errors/bytes/platform).
  *}
 
 {$I nextpas.core.settings.inc}

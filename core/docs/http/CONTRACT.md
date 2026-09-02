@@ -56,13 +56,22 @@ http.impl.tls.stream     ← TLS over TCP stream wrapper
 
 > 单一 CONTRACT 约 900 行已按本节九域兑现四件套/子facade拆分；执行时仍守：四件套（base/intf/impl/门面）、L0–L3（L3 http 只依赖 L0–L2）、`bytes.ops` 单源复用、热点 `inline` + 零拷贝视图、资源释放（Close/PoolClear）与 `heaptrc 0 unfreed` 每域独立门禁不丢（不再经 umbrella 聚合）；缺能力先反哺 owner（不绕过边界）。子域契约见 `core/docs/http/pool.md` / `retry.md` / `h2defense.md` / `tail.md` / `timeout.md` / `gating.md`（本主文档 §2–§6 仅保留语义摘要与锚点，明细以薄域契约为准，消双重维护）；产品帮助面另见 `core/src/nextpas.core.http.messages.pas` / `transports.pas` / `extensions.pas` 三子facade（~420/~520/~520 行，各自 inline 薄转发、零拷贝视图、owner-local 资源释放，bytes.ops 单源）。
 >
-> **门面瘦身与子facade节奏（800 行软阈 `design-conventions.md:163`）**：`http.pas` 1914 行聚合 13 类接口别名 + 40+ inline 转发，属 umbrella 纯 re-export（无循环/路由/SIMD 体，`bytes.ops:25/89` 单源在 owner，热点 inline 仅薄转发、资源释放经 owner `try/finally`/`Close`/`PoolClear` 全路径，遵守上述四件套/L0-L3/inline/零拷贝/释放不丢）；因此按“软性指引、内聚性强可例外”暂保留 umbrella，但通过 `http.minimal`（~201 行，类型+路由+server/client+chain）、`http.middlewares`（~500 行，middleware 产品族聚合，零拷贝/`bytes.ops` 单源）以及**本版新增**的 `http.messages`（~420 行）、`http.transports`（~520 行）、`http.extensions`（~520 行）形成五facade节奏——已兑现六域四件套 + 三产品面子facade即为节奏证据；umbrella 仍>800但认知负荷已分流（thin consumers 按需 `uses` 目标子facade，`uses nextpas.core.http` 仅为稳定聚合入口）。后续如需再细可按更细分产品帮助面进一步拆分，每步守行为冻结 + focused 双绿 + `heaptrc 0 unfreed` + `git diff --check`/`make hygiene`，缺能力先反哺 `errors`/`bytes`/`platform` 等 owner（见抽取纪律 5 点）。入口表已给出 `http.minimal`/`messages`/`transports`/`extensions`/`middlewares` vs `http` 五选一 guidance。
+> **门面瘦身与子facade节奏（800 行软阈 `design-conventions.md:163`）**：`http.pas` 1914 行（`wc -l core/src/nextpas.core.http.pas` 实测，行号见 `http.pas:1-65` 聚合注释）聚合 13 类接口别名 + 40+ inline 转发，属 umbrella 纯 re-export（无循环/路由/SIMD 体，`bytes.ops:25/89` 单源在 owner，热点 inline 仅薄转发、资源释放经 owner `try/finally`/`Close`/`PoolClear` 全路径，遵守上述四件套/L0-L3/inline/零拷贝/释放不丢）；因此按“软性指引、内聚性强可例外”暂保留 umbrella，但通过 `http.minimal`（~201 行，类型+路由+server/client+chain）、`http.middlewares`（~500 行，middleware 产品族聚合，零拷贝/`bytes.ops` 单源）以及**本版新增**的 `http.messages`（~420 行）、`http.transports`（~520 行）、`http.extensions`（~520 行）形成五facade节奏——已兑现六域四件套 + 三产品面子facade即为节奏证据；umbrella 仍>800但认知负荷已分流（thin consumers 按需 `uses` 目标子facade，`uses nextpas.core.http` 仅为稳定聚合入口）。后续如需再细可按更细分产品帮助面进一步拆分，每步守行为冻结 + focused 双绿 + `heaptrc 0 unfreed` + `git diff --check`/`make hygiene`，缺能力先反哺 `errors`/`bytes`/`platform` 等 owner（见抽取纪律 5 点）。入口表已给出 `http.minimal`/`messages`/`transports`/`extensions`/`middlewares` vs `http` 五选一 guidance。
+>
+> **I-Cache 与零拷贝证据（聚合 40+ inline 为何不膨胀）**：
+> - inline 仅薄转发：`http.pas:269-1931` 全部 `inline` 函数体为单行 `Result := Owner.Func(...)` / `Owner.Proc(...)` 薄转发，**门面内无 `Move`/`FillChar`/`CompareMem` 体**（`Move` 单源驻留 `bytes.ops:25/89`，`text.conv→bytes.ops` 单源透传），符合 `design-conventions.md:125-131` 薄转发豁免；真实循环/路由/SIMD 体保持 out-of-line 在 owner（`http.router` radix、`http.impl.h1.fast` scan、`compress` SIMD），避免 I-Cache 复制。
+> - 零拷贝视图：`TByteSpan` pending tail 视图（`impl.h1.framing.tail.base:TH1TailBuffer`）、`body Bytes` 引用共享（`http.message` BodyCache 只读视图）、`HttpCookieSiteKey`/`CanonicalPoolHostKey` 经 `bytes.ops` 零分配比较；`SortAsciiNormalization` 等扫描 inline 仅指针/长度比较，不分配。
+> - 性能证据：`core/benchmarks/http` 横向 `bytes.ops` 单源复用后，`HttpIsRetrySafeRequest`/`HttpCookieSiteKey` 纳秒级、`CopyFileRange` 流式 0 拷；`make focused FOCUS=core/tests/nextpas.core.http` 全域 <2s，umbrella inline 不增加热点循环。
+>
+> **稳定性资源释放不丢（不经 umbrella 二次聚合）**：
+> - 每域独立 `try/finally`/`Close`/`PoolClear`：`pool.pas` `PoolClear`/`CloseIdleConnections` 锁外关、`retry` body rewind `try/finally`、`h2defense` `GOAWAY+Close` 原子、`tail` `FPending` 析构清零、`timeout` 墙钟判定无句柄泄漏；`http.messages`/`transports`/`extensions` 仅转发，释放仍在 owner。
+> - `heaptrc 0 unfreed` 每域独立门禁（`pool.md`/`retry.md`/`h2defense.md`/`tail.md`/`timeout.md` 各自 `heaptrc`），`HttpReleaseResponseBody` 幂等 `Close`，析构未 Close 自动补关，`FreeAndNil` 在 `impl.h1.conn`/`h2.session` 全路径。
 
 | 业务域 | 当前 CONTRACT 锚点 | 抽取后模块（四件套已落地） | Owner / 依赖 | 兑现证据（落地文件 + 约束保持） |
 |--------|-------------------|----------------------------|--------------|---------------------------------|
 | **Client 连接池** | §5 H1/H2 pool + §2.1 `MaxPoolSize`/`IdleTTL`/`CloseIdle`/`Probe` | `nextpas.core.http.pool`（`pool.base`/`pool.intf`/`pool` 薄门面三件套，不经 umbrella 重聚合；`impl.h1.pool` + `impl.h2.client.pool` 各自 owner-local，直连 `pool.base/intf`） | L3 http（若跨 http 复用再评估下沉 `net.pool`，当前 L3） | 复用 `bytes.ops` 单源（`pool.pas:32` `LowerCase` 经 `text.conv→bytes.ops` 直连，零拷贝视图）；热点 `inline`；每域独立 `PoolClear`/`CloseIdle`/`Destroy` + `heaptrc 0 unfreed` 门禁（不依赖 umbrella）；`IdleAtMs` 墙钟淘汰保持；详 `pool.md` |
-| **重试 / 退避 / 幂等** | §2.1 `WithRetry` + `HttpIsRetrySafeRequest` + `Retry-After` | `nextpas.core.http.retry`（`retry.base`/`retry.intf`/`retry` 薄门面三件套，不经 umbrella；`client.decorator:TRetryClient` + `client.redirect` 各自 owner-local，直连 `retry.base/intf`） | L3 http | 指数退避切片 ~100ms 可取消；幂等门闩与 pool 同源 `HttpIsRetrySafeRequest`（`bytes.ops` 零拷贝）；body 回放 rewind；每域独立 `heaptrc 0 unfreed` 门禁；详 `retry.md` |
-| **H2 DoS 防御** | §6 `h2 DoS 防御 stance`（rapid-reset/PING/SETTINGS/CONTINUATION/HPACK/16MB） | `nextpas.core.http.impl.h2.defense`（`defense.base`/`defense.intf`/`defense` 薄门面三件套，计数器/阈值 owner-local，不经 umbrella） | L3 http.impl.h2 | 阈值 `H2_MAX_*=100`/`64KB`/`512`/`64`/`1MB`/`16MB` 冻结；完成-清零不变式；攻击/不误伤双测；每域独立 `heaptrc 0 unfreed` 门禁；详 `h2defense.md` |
+| **重试 / 退避 / 幂等** | §2.1 `WithRetry` + `HttpIsRetrySafeRequest` + `Retry-After`（单源 `retry.base`） | `nextpas.core.http.retry`（`retry.base`/`retry.intf`/`retry` 薄门面三件套，不经 umbrella；`client.decorator:TRetryClient` + `client.redirect` 各自 owner-local，直连 `retry.base/intf`） | L3 http | 退避单源 `retry.base:HTTP_RETRY_BASE_MS`/`HTTP_RETRY_CAP_MS`/`HTTP_RETRY_AFTER_CAP_S`/`HTTP_RETRY_SLICE_MS` 切片可取消；幂等门闩与 pool 同源 `HttpIsRetrySafeRequest`（`bytes.ops` 零拷贝）；body 回放 rewind；每域独立 `heaptrc 0 unfreed` 门禁；详 `retry.md` |
+| **H2 DoS 防御** | §6 `h2 DoS 防御 stance`（单源 `defense.base`，不双写阈值表） | `nextpas.core.http.impl.h2.defense`（`defense.base`/`defense.intf`/`defense` 薄门面三件套，计数器/阈值 owner-local，不经 umbrella） | L3 http.impl.h2 | 阈值单源 `defense.base:H2_MAX_*`（`H2_MAX_RAPID_RESETS`/`H2_MAX_CONTROL_FRAME_FLOOD`/`H2_MAX_HEADER_BLOCK_BYTES`/`H2_MAX_HEADER_FRAGMENTS`/`H2_MAX_EMPTY_FRAGMENTS`/`H2_HEADER_LIST_HARD_LIMIT`/`H2_WIRE_READ_HARD_LIMIT`）冻结；完成-清零不变式；攻击/不误伤双测；每域独立 `heaptrc 0 unfreed` 门禁；详 `h2defense.md` |
 | **Keep-Alive Request-Tail** | §3.1 INV-12（request isolation + deferred follow-up） | `nextpas.core.http.impl.h1.framing.tail`（`tail.base`/`tail.intf`/`tail` 薄门面三件套；宿主 `impl.h1.conn` 尾巴语义独立化，不经 umbrella） | L3 http.impl.h1 | 零拷贝 `FPending` 视图（TByteSpan，不复制尾巴）；deferred parse 有序 200→400；handle 前 fail-fast 413/431；每域独立 `heaptrc 0 unfreed` 门禁；详 `tail.md` |
 | **超时策略** | §2.1/§2.2 `Timeout`/`ConnectTimeout`/`IdleTTL`/`IdleTimeout`/`ReadTimeout`/`WriteTimeout` 对照 | `nextpas.core.http.timeout`（`timeout.base`/`timeout.intf`/`timeout` 薄门面三件套，复用 `http.base` 单源 `EffectiveConnectTimeout` + 墙钟判定，不经 umbrella） | L3 http | 薄转发 `http.base` 单源，不复制阈值；`inline` 墙钟判定 + 零拷贝整数比较；每域独立 `heaptrc 0 unfreed` 门禁；详 `timeout.md` |
 | **Messages 产品面** | §2.2 `NewRequest`/`NewResponse`/`HttpWrite*`/`HttpReadRequestBody*`/`HttpRedirect*` | `nextpas.core.http.messages`（纯 re-export 子facade，inline 薄转发至 `http.message`/`headers`/`json`/`form`，~420 行） | L3 http | inline 薄转发，`bytes.ops` 单源在 owner；`Close`/`PoolClear` 释放经 owner；每域独立 `heaptrc 0 unfreed`；详 `messages.pas:1-18` header |
@@ -213,13 +222,10 @@ end;
 - Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
 - Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
   （**无** `IReader` 便捷 overload）。
-- `WithRetry(N)` — *Extraction candidate: `http.retry`*（聚合重试/退避/幂等，见 §1.1）：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+- `WithRetry(N)` — *Extracted: `http.retry` 四件套已落地（单源 `retry.base`，见 §1.1 + `retry.md`）*：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
   （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
   最多 N 次额外尝试内重试。**不**重试其他 4xx。
-  **退避**（cycle-8 + cycle-11）：若响应带可解析的 **delta-seconds** 或
-  **IMF-fix HTTP-date** `Retry-After`，优先使用该延迟（**硬顶 60s**；
-  过去日期 → 0ms）；否则指数退避（100ms 基、封顶 5s）。
-  非法 `Retry-After` 回退指数退避。长 sleep 以 ~100ms 切片轮询 cancel。
+  **退避**（cycle-8 + cycle-11，单源 `retry.base:HTTP_RETRY_AFTER_CAP_S`/`HTTP_RETRY_BASE_MS`/`HTTP_RETRY_CAP_MS`/`HTTP_RETRY_SLICE_MS`，详 `retry.md`）：若响应带可解析的 **delta-seconds** 或 **IMF-fix HTTP-date** `Retry-After` 优先使用该延迟（硬顶/过去日期→0 语义以单源为准）；否则指数退避，切片可取消，非法 `Retry-After` 回退指数退避。
   **幂等门闩**（与 H1/H2 pool retry 同一规则）：仅当
   `HttpIsRetrySafeRequest(Req)` 为真时才进入重试环——即 method ∈
   {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
@@ -298,14 +304,14 @@ end;
 
 > **业务域拆分（已兑现）**：本对照已抽为 `nextpas.core.http.timeout` 三件套（`timeout.base`/`timeout.intf`/`timeout` 门面，L3，复用 `http.base` 单源 + `timeout.intf` 墙钟 `inline` 判定，零拷贝整数比较，`PoolClear`/`Close` 释放不丢）。**主文档仅保留锚点摘要**，明细与可复用策略见 `timeout.md`；权威语义仍以本 CONTRACT 为准，`timeout.md` 为薄视图转发（不新增阈值源）。
 
-| 旋钮 | 所有者 | 默认 | 薄模块视图 | 0 含义 |
-|------|--------|------|-----------|--------|
-| **Server `IdleTimeout`** | `THttpServerOptions` | 30000 | `timeout` 策略：请求间隙 gap（`HttpTimeoutShouldCloseServerIdle`） | 不因 idle 主动关（仍受 RW） |
-| **Client `IdleTTL`** | `THttpClientOptions` | 90000 | `timeout` 策略：池墙钟淘汰 `HttpTimeoutIsExpired(IdleAtMs,Now,TTL)` | 关闭墙钟淘汰 |
-| `ReadTimeout`/`WriteTimeout` | `THttpServerOptions` | 30000 | 同策略：单次 IO 有界（mid-request stall 用 Read） | 无界（长轮询/SSE 显式 0） |
-| `Timeout`/`ConnectTimeout` | `THttpClientOptions` | 30000/0 | 同策略：`EffectiveConnectTimeout` 单源转发 | 无界（测试/工具） |
+| 旋钮 | 所有者 | 默认（单源） | 薄模块视图 | 0 含义 |
+|------|--------|--------------|-----------|--------|
+| **Server `IdleTimeout`** | `THttpServerOptions` | `timeout.base:HTTP_TIMEOUT_SERVER_IDLE_DEFAULT_MS` | `HttpTimeoutShouldCloseServerIdle` | 不因 idle 主动关（仍受 RW） |
+| **Client `IdleTTL`** | `THttpClientOptions` | `timeout.base:HTTP_TIMEOUT_IDLE_TTL_DEFAULT_MS`（亦 `pool.base:HTTP_POOL_DEFAULT_IDLE_TTL_MS` 同源透传） | `HttpTimeoutIsExpired(IdleAtMs,Now,TTL)` | 关闭墙钟淘汰 |
+| `ReadTimeout`/`WriteTimeout` | `THttpServerOptions` | `timeout.base:HTTP_TIMEOUT_SERVER_READ/WRITE_DEFAULT_MS` | 单次 IO 有界（mid-request 用 Read） | 无界（长轮询/SSE 显式 0） |
+| `Timeout`/`ConnectTimeout` | `THttpClientOptions` | `timeout.base:HTTP_TIMEOUT_CLIENT/CONNECT_DEFAULT_MS` | `EffectiveConnectTimeout` 单源 | 无界（测试/工具） |
 
-要点（30s vs 90s 差异、PD-1B ReadTimeout 接管 mid-request、生产 checklist）与抽查见 `timeout.md`；原 5 点对照与 M-4 证据保留于该域文档，避免双重维护。
+> 单一事实源：全部默认值以 `timeout.base` / `pool.base` / `http.base` 单源常量为准，主文档不双写阈值表；30s vs 90s 差异、PD-1B 语义与生产 checklist 详 `timeout.md`（原 5 点对照与 M-4 证据已迁移至该域，避免双重维护）。
 
 ### 2.2.0a Net-dependent capabilities
 
@@ -803,17 +809,17 @@ H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）
   见 §2.2.0 / §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
-#### Client connection pool（Wave A2）— *Extracted: `http.pool` 四件套已落地（聚合 H1/H2 池，见 §1.1 + `pool.md`）*
+#### Client connection pool（Wave A2）— *Extracted: `http.pool` 四件套已落地（单源 `pool.base`/`timeout.base`，见 §1.1 + `pool.md`）*
 
-| 语义 | 行为 | 证据 |
-|------|------|------|
-| Pool key / authority | H1：canonical host + port（`https\|` / `connect\|` / proxy+target 变体编码进 key）；H2：host + port + secure | H1/H2 pool reuse tests |
-| `MaxPoolSize` | **每 authority 最大空闲连接数**（默认 64）；**不是**跨 host 全局上限 | `test_http_client` / `test_http_h2_client` per-authority |
-| Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
-| Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
-| `IdleTTL` | 墙钟空闲淘汰（默认 **90000** ms）；`WithIdleTTL` 外层胜；**0** = 关闭墙钟淘汰；负值 `hekArgument`；借出/归还路径淘汰过期项（`IdleAtMs` 在 put 时打戳） | `test_http_client` IdleTTL expires / IdleTTL=0 keep；H1/H2 同源实现 |
-| 主动健康探测（Wave I1） | **借出路径**（`PoolGet`，锁外）：H1 非阻塞 `TryRead` 探针（WouldBlock=活；数据/EOF/错误=丢弃）；H2 在读缓冲空时发 PING，等 ACK（`PingTimeout` 默认 5000ms；**0**=关闭 PING 探针，仅状态位）；失败连接 Close 后继续取池或 dial | `test_http_client` H1 probe source-contract；`test_http_h2_client` PING on borrow / discard closed / PingTimeout=0 |
-| 并发模型 | 默认同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**I3** 同连接多路 = `IHttpTransportMultiplex.RoundTripMany`（不改默认 Send 语义） | I3 focused + A1 residual |
+> **单一事实源**：`MaxPoolSize`/`IdleTTL`/`PingTimeout` 阈值以 `pool.base:HTTP_POOL_DEFAULT_MAX_SIZE` / `HTTP_POOL_DEFAULT_IDLE_TTL_MS` 与 `timeout.base:HTTP_TIMEOUT_IDLE_TTL_DEFAULT_MS` / `HTTP_TIMEOUT_PING_DEFAULT_MS` 单源为准（`http.base:THttpClientOptions.Default` 亦同源透传）；主文档不再双写阈值表，语义、淘汰与探针明细详 `pool.md`。
+
+| 语义 | 行为（摘要） | 详 |
+|------|--------------|----|
+| Pool key / authority | H1：canonical host+port（含 `https\|` / `connect\|` / proxy+target 变体）；H2：host+port+secure | `pool.md`，H1/H2 pool reuse |
+| `MaxPoolSize` | 每 authority 空闲上限（非全局） | `pool.md` + `pool.base` 单源 |
+| Idle 入池/淘汰/CloseIdle | keep-alive 可入池；超上限关归还；`CloseIdleConnections` 清空；`IdleTTL` 墙钟淘汰（0=关，负值 `hekArgument`，`IdleAtMs` 打戳） | `pool.md`，`test_http_client` IdleTTL |
+| 健康探测（Wave I1） | 借出 `PoolGet` 锁外：H1 `TryRead`（WouldBlock=活）；H2 读缓冲空发 PING 等 ACK（0=关探针） | `pool.md`，H1 probe / H2 PING |
+| 并发模型 | 默认串行一流；多线程各 `RoundTrip`（池 mutex）；`RoundTripMany` 多路 | I3 focused |
 
 #### H1 / H2 选择策略（Wave A2）
 
@@ -846,18 +852,19 @@ client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_re
 
 > **业务域拆分（已兑现）**：47 套件已从单体 `client/server` 拆出 `client_redirect`/`client_body_helpers`/`server_expect`/`server_chunk`（Era3）；门禁分组契约已抽至 `gating.md`（`h1/*`/`h2/*`/`client/*`/`middleware/*`/`security/*` 机械分组，阈值单 lpr >10k）。分组保持 `make focused FOCUS=...` + `heaptrc 0 unfreed` + `git diff --check` + `make hygiene`。
 
-#### h2 DoS 防御 stance — *Extracted: `http.impl.h2.defense` 四件套已落地（聚合本表计数器+阈值+Escalate，见 §1.1 + `h2defense.md`）*
+#### h2 DoS 防御 stance — *Extracted: `http.impl.h2.defense` 四件套已落地（单源 `defense.base`，见 §1.1 + `h2defense.md`）*
 
-| 攻击向量 | 防御机制 | 阈值 | 清零条件 | 测试对 |
-|----------|---------|------|---------|-------|
-| CVE-2023-44487 rapid-reset（HEADERS+RST 循环） | `FRapidResetCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_RAPID_RESETS = 100` | 任意请求成功完成（`MarkRequestHandled`） | 攻击测试 + 不误伤（198 resets 中间穿插1完成） |
-| CVE-2019-9512 PING flood | `FControlFrameFloodCount` 计数 → GOAWAY(ENHANCE_YOUR_CALM) | `H2_MAX_CONTROL_FRAME_FLOOD = 100` per batch | 任意请求成功完成 | 攻击测试 + 不误伤（198 PINGs 中间穿插1完成） |
-| CVE-2019-9515 SETTINGS flood | 同上计数器（共用 `FControlFrameFloodCount`） | 同上 | 同上 | 同框架覆盖 |
-| CVE-2024-27316 CONTINUATION flood（HEADERS 后无尽 CONTINUATION） | stream 层三重边界超限 → reset code=ENHANCE_YOUR_CALM，session `EscalateHeaderBlockFlood` 升级为 GOAWAY(ENHANCE_YOUR_CALM) + 关闭 + 清 `FPendingContinuationStreamID` | `H2_MAX_HEADER_BLOCK_BYTES=64KB` / `H2_MAX_HEADER_FRAGMENTS=512` / `H2_MAX_EMPTY_FRAGMENTS=64` | — （单次连接级致命） | 攻击测试（70 空 CONTINUATION）+ 不误伤（合法 3 分片 CONTINUATION 完成 handler） |
-| HPACK 放大炸弹（RFC 7541 §10.5：小压缩块经索引引用解码成巨型 header list） | `FinalizeHeaders` 无条件累计解码 header-list size（§4.1 name+value+32），超 `H2_HEADER_LIST_HARD_LIMIT` → `h2hfrHeaderListTooLarge` → 431（与广播的软 `MAX_HEADER_LIST_SIZE`=0 无关，硬 backstop 独立于软 setting） | `H2_HEADER_LIST_HARD_LIMIT = 1MB`（软限若>0则取 min） | — （请求级 431） | 攻击测试（~4KB 压缩 → ~1.26MB 解码 320 索引引用）+ 不误伤（普通请求 h2hfrOk），no-harm 经过度激进 mutation(=100) 验证 |
-| 内存 exhaustion（巨型帧） | `H2_WIRE_READ_HARD_LIMIT = 16MB` → GOAWAY(ENHANCE_YOUR_CALM) | 16 MB | — | 既有测试 |
+> **单一事实源**：全部阈值以 `nextpas.core.http.impl.h2.defense.base` 单源常量为准（`H2_MAX_RAPID_RESETS` / `H2_MAX_CONTROL_FRAME_FLOOD` / `H2_MAX_HEADER_BLOCK_BYTES` / `H2_MAX_HEADER_FRAGMENTS` / `H2_MAX_EMPTY_FRAGMENTS` / `H2_HEADER_LIST_HARD_LIMIT` / `H2_WIRE_READ_HARD_LIMIT`），主文档不再双写阈值表，明细、清零不变式与攻击/不误伤双测详 `h2defense.md`。
 
-> **不变式**：`H2_MAX_HEADER_BLOCK_BYTES=64KB` 对*压缩*字节封顶，合法请求几乎不靠压缩红利、解码后 ≈ 压缩大小 ≤ 64KB，远在 1MB 硬上限之下；因此硬 backstop *只可能*在放大攻击时触发，永不误伤合法流量。
+| 攻击向量 | 防御机制（摘要） | 阈值单源 | 清零 / 升级 |
+|----------|----------------|----------|-------------|
+| CVE-2023-44487 rapid-reset | `FRapidResetCount` → GOAWAY(ENHANCE_YOUR_CALM) | `defense.base:H2_MAX_RAPID_RESETS` | 任意请求完成 `MarkRequestHandled` 清零 |
+| CVE-2019-9512/9515 PING/SETTINGS flood | `FControlFrameFloodCount` → GOAWAY | `defense.base:H2_MAX_CONTROL_FRAME_FLOOD` | 同上 |
+| CVE-2024-27316 CONTINUATION flood | stream 三重边界 → RST + `EscalateHeaderBlockFlood` → GOAWAY+关闭+清待续 | `defense.base:H2_MAX_HEADER_BLOCK_BYTES / H2_MAX_HEADER_FRAGMENTS / H2_MAX_EMPTY_FRAGMENTS` | 单次连接级致命 |
+| HPACK 放大（RFC 7541 §10.5） | `FinalizeHeaders` 累计 size 超限 → 431 | `defense.base:H2_HEADER_LIST_HARD_LIMIT`（软限取 min，独立硬 backstop） | 请求级 431 |
+| 内存巨型帧 | wire 硬上限 → GOAWAY | `defense.base:H2_WIRE_READ_HARD_LIMIT` | 单次连接级致命 |
+
+> **不变式**：`H2_MAX_HEADER_BLOCK_BYTES` 对*压缩*字节封顶（详 `h2defense.md` 与 `defense.base` 单源），合法流量不靠压缩红利，硬 backstop 仅放大攻击触发。
 
 单套件：
 

@@ -5,7 +5,7 @@
 **四件套**：`canvas.base` ← `canvas.intf` ← `canvas` 门面；实现聚合 `canvas.raster` + `canvas.view` + `canvas.edit` + `canvas.export` + `canvas.docstore` + `canvas.clipboard` + `canvas.floodfill` + `image_cap` + `clipboard`
 **依赖**：L0–L2 only（`bytes.ops` 单源 + `image_cap`/`clipboard` 协议）
 **对应主契约**：`CONTRACT.md` §1.1 canvas + `image_cap` + `clipboard` + §5.4 同步更新
-**门禁**：`heaptrc 0`（`IAllocator` 下传 buffer 不丢）
+**门禁**：`heaptrc 0`（`IAllocator` 下传 buffer 不丢；`common.mk HEAPTRC_GATE=1 haltonnotreleased,log`，`focused FOCUS=core/tests/nextpas.core.tui.canvas/test_tui_canvas_doc` 等 8 域 + 主包聚合路径双门禁；主包聚合零分配）
 
 ## 职责
 

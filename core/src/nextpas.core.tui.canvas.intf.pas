@@ -3,7 +3,9 @@ unit nextpas.core.tui.canvas.intf;
 {**
  * @desc tui.canvas 四件套 intf — 画布接口契约。
  *       依赖 canvas.base；实现为 canvas.raster/edit/view 等，门面聚合。
- *       性能：零拷贝 TByteSpan 像素视图；raster 判定 inline；IAllocator 下传不丢。
+ *       性能：零拷贝 `TByteSpan` 像素视图；raster 判定 `inline`；`CanvasIsEmptyCell`/
+ *       `CanvasCellSpan` inline 薄转发复用 `bytes.ops` 单源（`Span*`/`BytesCopy` 单源
+ *       Move，不复制像素）；`IAllocator` 下传零泄漏（heaptrc0 双路径门禁）。
  *}
 
 {$I nextpas.core.settings.inc}

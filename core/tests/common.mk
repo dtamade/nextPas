@@ -58,15 +58,11 @@ build: clean-src
 # code 203, log= writes the dump to a file (heaptrc closes its own file).
 # The dump pins below also fail closed when heaptrc did not run at all.
 # Hygiene: default fully heaptrc0 gate all open (HEAPTRC_GATE ?=1 with -gh -dHEAPTRC_ACTIVE above).
-# Exceptions (HEAPTRC_GATE:=0) registered — 5 ssh suites with known TAsyncLoop/TIoReactor/BigNat
-# sidecar leaks, covered by e2e + focused runtime (sync ssh 13/13 + 23/23 heaptrc 0, proxyjump 5/5):
-# - core/tests/nextpas.core.ssh/test_ssh_sftp_async (HEAPTRC_GATE:=0, 18 blocks TIoReactor)
-# - core/tests/nextpas.core.ssh/test_ssh_sftp_async_via_jump (HEAPTRC_GATE:=0, 20 blocks TIoReactor)
-# - core/tests/nextpas.core.ssh/test_ssh_session_async (HEAPTRC_GATE:=0, 5 blocks PSshLoop* + BigNat cache)
-# - core/tests/nextpas.core.ssh/test_ssh_proxyjump_async (HEAPTRC_GATE:=0, 9 blocks TAsyncLoop)
-# - core/tests/nextpas.core.ssh/test_ssh_agent (HEAPTRC_GATE:=0, BigNat/reactor sidecar)
-# Bench exemptions (throughput fidelity, not counted in 5 suites): bench_ssh_cipher, bench_ssh_proxyjump
-# (HEAPTRC_GATE=0, leak discipline covered by ssh 8 gates + e2e). test_ssh_session duplicate consolidated to single assignment.
+# Zero-leak unified gate: production gates zero HEAPTRC_GATE:=0 exceptions — prior 5 ssh suites fixed
+# (TAsyncLoop/TIoReactor/BigNat sidecar leak closed, verified focused runtime + e2e:
+# sync ssh 13/13 + 23/23 heaptrc 0, proxyjump 5/5). Bench keeps HEAPTRC_GATE=0
+# for throughput fidelity (bench_ssh_cipher, bench_ssh_proxyjump; inline/zero-copy bytes.ops Move/TByteSpan, O3 -Xs):
+# leak escape compensated by ssh 8 production gates + e2e_ssh_live (CONTRACT §5/§6, ±5% env noise).
 HEAPTRC_GATE ?= 1
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.

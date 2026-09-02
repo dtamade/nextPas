@@ -82,7 +82,7 @@ ssh.window                 ← 通道窗口可复用策略（WINDOW_LOW_WATER_DI
 | **INV-10** | **ProxyJump**：`direct-tcpip` 单通道隧道复用跳板加密传输；`TChannelStream`（同步 `FBuf`+`PumpData/SendData`）/`TAsyncChannelStream`（异步 `FReadBuf+AccountConsume+ArmRead/OnPacket+PeerWindow+AsyncRead/Write`，`FQueuedPayload/P/Active+TryFlushQueued 5ms` 单飞）；`TProxyJumpSession/ TAsyncProxyConnector` 持有 `jump+target` 双生命周期（`Keeper:IInterface` 保活，`GProxyNextChan atomic`），第二跳 `KEX→认证→通道` 在字节流上重跑。 | `test_ssh_proxyjump` 5/5 + `test_ssh_proxyjump_async` 3/3 |
 | **INV-11** | **SFTP v3**：`INIT` 握手 + `open/read/write/close/opendir/readdir/realpath/stat/lstat/remove/mkdir/rmdir`；`TSftpAttrs` 编解码与 `transport` 窗口同构；`ISftpWire` 抽象 + `TSshChannelWire` 适配（4B 前缀流重组）；异步 `TAsyncSftpChannel` 单 `pendingId` 串行 + `SftpRoundTripAsync` + `Busy→sekProtocol`；`WINDOW_LOW_WATER_DIVISOR=2` 回补。 | `test_ssh_sftp` 12/12 + `test_ssh_sftp_async` 7/7 + `test_ssh_sftp_async_via_jump` 4/4 |
 | **INV-12** | **错误分类**：`TSshErrorKind = sekProtocol/sekDisconnect/sekNegotiation/sekHostKey/sekAuth/sekKeyFormat/sekCrypto/sekTimeout/sekIO/sekSftp/sekBusy/sekUnsupported`，`ESSHError.Kind` 携带；`sekCrypto` 仅用于 AEAD/EtM 校验失败等密码学失败，不与 `sekProtocol` 混用。 | 全门面 `ESSHError` 携带 Kind 断言 |
-| **INV-13** | **资源释放不丢**：`TAesCtrStream/TSshChacha*/TSshGcm*/TSshCtrEtm*` `Destroy` 中 `SecureZeroBytes`；`TSshZlibCompressor.Destroy` 配对 `deflateEnd/inflateEnd`（`Reset` 亦配对重建）；`TSshClientTransport/TAsyncSshTransport` `FreeAndNil` + `FWriteBuf` 保活；`TChannelStream.Close` 幂等；`TAsyncLoop+RTLEvent` 侧线仅 `HEAPTRC_GATE=0` 显式豁免，其余门 `heaptrc 0`。 | `heaptrc 0` 门禁（见 §5） |
+| **INV-13** | **资源释放不丢**：`TAesCtrStream/TSshChacha*/TSshGcm*/TSshCtrEtm*` `Destroy` 中 `SecureZeroBytes`；`TSshZlibCompressor.Destroy` 配对 `deflateEnd/inflateEnd`（`Reset` 亦配对重建）；`TSshClientTransport/TAsyncSshTransport` `FreeAndNil` + `FWriteBuf` 保活；`TChannelStream.Close` 幂等；`TAsyncLoop+TPoller+TIoReactor+RTLEvent` 全路径 `Close` 释放环/队列/事件（零 `HEAPTRC_GATE=0` 豁免，`heaptrc 0` 统一门禁）。 | `heaptrc 0` 统一门禁（见 §5） |
 | **INV-14** | **性能零拷贝/inline**：`PutU32BE/U32BEOf/SeqBytes/ChachaNonce/GcmNonce` 等小访问器 `inline`；`SpanEqual/Compare/IndexOf` 经 `bytes.ops` + `Move` 直拷零编码转换；`TByteSpan` 非拥有视图仅 `Concat/Clone/CopySlice` 分配；`SshAesCtrCrypt` 复用 `TAesCtrStream` 零额外拷贝；`none`/`Compress=False` 零 `z_stream` 开销。 | `bench_ssh_cipher`/`bench_ssh_proxyjump` 基线（见 §4） |
 
 ---
@@ -145,7 +145,7 @@ ssh.window                 ← 通道窗口可复用策略（WINDOW_LOW_WATER_DI
 回环测试（`TLoopServer` 最小服务端在内存管道上走独立服务端逻辑路径）为默认门禁；`e2e_ssh_live` 为 opt-in 真实互操作，不进默认 gate。
 
 ```bash
-# 单元回环（focused-runtime，heaptrc 0 除显式 HEAPTRC_GATE=0 外）
+# 单元回环（focused-runtime，heaptrc 0 统一门禁，零 HEAPTRC_GATE=0 豁免；bench 保持吞吐豁免）
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_buffer
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_cipher
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_kex

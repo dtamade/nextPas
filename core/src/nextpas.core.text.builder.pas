@@ -268,7 +268,11 @@ begin
   if ACount = 0 then Exit;
   if FLen + ACount > FCap then
     Grow(ACount);
-  FillChar(FBuf[FLen], ACount, Byte(ACh));
+  // perf: single source Fill via bytes.ops (BytesZero for 0, SpanFill for arbitrary) inline zero-copy, no raw FillChar — L1 single source, red-line 1/2
+  if Byte(ACh) = 0 then
+    nextpas.core.bytes.ops.BytesZero(FBuf + FLen, ACount)
+  else
+    nextpas.core.bytes.ops.SpanFill(TByteSpan.Create(PByte(FBuf + FLen), ACount), Byte(ACh));
   Inc(FLen, ACount);
 end;
 
@@ -279,7 +283,8 @@ begin
     raise EInvalidArgument.Create('string builder view data is nil');
   if FLen + AView.Len > FCap then
     Grow(AView.Len);
-  Move(AView.Data^, FBuf[FLen], AView.Len);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, AView.Data, AView.Len);
   Inc(FLen, AView.Len);
 end;
 
@@ -291,7 +296,8 @@ begin
   if L = 0 then Exit;
   if FLen + L > FCap then
     Grow(L);
-  Move(PAnsiChar(AStr)^, FBuf[FLen], L);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, PAnsiChar(AStr), L);
   Inc(FLen, L);
 end;
 
@@ -302,7 +308,8 @@ begin
     raise EInvalidArgument.Create('string builder byte source is nil');
   if FLen + ALen > FCap then
     Grow(ALen);
-  Move(AData^, FBuf[FLen], ALen);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, AData, ALen);
   Inc(FLen, ALen);
 end;
 

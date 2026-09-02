@@ -162,6 +162,9 @@ var
   LCount: SizeInt;
   LCap: SizeUInt;
   LSegLen: SizeInt;
+  LIdx: SizeInt;
+  LNeed: TByteSpan;
+  LHays: TByteSpan;
 begin
   Result := nil;
   LDelimLen := Length(ADelimiter);
@@ -171,11 +174,23 @@ begin
     Result[0] := AValue;
     Exit;
   end;
-
+  // single source needle view — zero-copy TByteSpan (PByte+Len), inline Create
+  LNeed := TByteSpan.Create(PByte(PAnsiChar(ADelimiter)), SizeUInt(LDelimLen));
   LCount := 0;
   LStart := 1;
   repeat
-    LPos := Pos(ADelimiter, AValue, LStart);
+    // perf: reuse bytes.ops.SpanIndexOfSpan SIMD single source (INV-5) — zero-copy TByteSpan suffix view, inline, avoids Pos repeated scan and duplicate SIMD impl; single source stays in bytes.ops/simd
+    if LStart <= Length(AValue) then
+    begin
+      LHays := TByteSpan.Create(PByte(PAnsiChar(AValue) + LStart - 1), SizeUInt(Length(AValue) - LStart + 1));
+      LIdx := nextpas.core.bytes.ops.SpanIndexOfSpan(LHays, LNeed);
+      if LIdx >= 0 then
+        LPos := LStart + LIdx
+      else
+        LPos := 0;
+    end
+    else
+      LPos := 0;
     if LPos = 0 then
       LPos := Length(AValue) + 1;
     // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
