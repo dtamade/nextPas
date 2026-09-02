@@ -57,6 +57,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.builder,
   np_llvm_utils;
 
 constructor TMirToLlvmTranslator.Create(const AModule: TMirModule;
@@ -98,13 +99,27 @@ end;
 function TMirToLlvmTranslator.BuildOutput: string;
 var
   I: LongInt;
+  LBuilder: TBufStringBuilder;
+  LTotal: SizeUInt;
 begin
   if FCurrentLine <> '' then
     FlushLine;
-  Result := '';
-  if FLines.Count > 0 then
+  if FLines.Count = 0 then
+    Exit('');
+  LTotal := 0;
+  for I := 0 to FLines.Count - 1 do
+    Inc(LTotal, SizeUInt(Length(FLines[I])) + 1);
+  LBuilder.Init(LTotal);
+  try
     for I := 0 to FLines.Count - 1 do
-      Result := Result + FLines[I] + #10;
+    begin
+      LBuilder.AppendStr(FLines[I]);
+      LBuilder.AppendChar(#10);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TMirToLlvmTranslator.LlvmTypeName(ABitWidth: LongInt;

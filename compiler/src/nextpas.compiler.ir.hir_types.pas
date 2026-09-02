@@ -5,24 +5,24 @@ unit nextpas.compiler.ir.hir_types;
 interface
 
 uses
-  np_hir_types;
+  nextpas.compiler.ir.hir.types;
 
 type
-  THIRTypeId = np_hir_types.THIRTypeId;
-  THIRTypeKind = np_hir_types.THIRTypeKind;
-  THIRIntWidth = np_hir_types.THIRIntWidth;
-  THIRFloatWidth = np_hir_types.THIRFloatWidth;
-  THIRStringKind = np_hir_types.THIRStringKind;
-  THIRCallConv = np_hir_types.THIRCallConv;
-  THirNodeKind = np_hir_types.THirNodeKind;
-  THIRFieldEntry = np_hir_types.THIRFieldEntry;
-  THIRParamEntry = np_hir_types.THIRParamEntry;
-  THirFieldEntryVec = np_hir_types.THirFieldEntryVec;
-  THirParamEntryVec = np_hir_types.THirParamEntryVec;
-  THirTypeIdVec = np_hir_types.THirTypeIdVec;
-  THIRTypeRec = np_hir_types.THIRTypeRec;
-  THirTypeRecVec = np_hir_types.THirTypeRecVec;
-  THIRTypeTable = np_hir_types.THIRTypeTable;
+  THIRTypeId = nextpas.compiler.ir.hir.types.THIRTypeId;
+  THIRTypeKind = nextpas.compiler.ir.hir.types.THIRTypeKind;
+  THIRIntWidth = nextpas.compiler.ir.hir.types.THIRIntWidth;
+  THIRFloatWidth = nextpas.compiler.ir.hir.types.THIRFloatWidth;
+  THIRStringKind = nextpas.compiler.ir.hir.types.THIRStringKind;
+  THIRCallConv = nextpas.compiler.ir.hir.types.THIRCallConv;
+  THirNodeKind = nextpas.compiler.ir.hir.types.THirNodeKind;
+  THIRFieldEntry = nextpas.compiler.ir.hir.types.THIRFieldEntry;
+  THIRParamEntry = nextpas.compiler.ir.hir.types.THIRParamEntry;
+  THirFieldEntryVec = nextpas.compiler.ir.hir.types.THirFieldEntryVec;
+  THirParamEntryVec = nextpas.compiler.ir.hir.types.THirParamEntryVec;
+  THirTypeIdVec = nextpas.compiler.ir.hir.types.THirTypeIdVec;
+  THIRTypeRec = nextpas.compiler.ir.hir.types.THIRTypeRec;
+  THirTypeRecVec = nextpas.compiler.ir.hir.types.THirTypeRecVec;
+  THIRTypeTable = nextpas.compiler.ir.hir.types.THIRTypeTable;
 
 implementation
 

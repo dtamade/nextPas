@@ -1,11 +1,11 @@
-unit np_hir_lowering;
+unit nextpas.compiler.ir.hir.lowering;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  np_green_tree,
+  nextpas.compiler.syntax.green_tree,
   nextpas.compiler.lower.hir_lowering;
 
 type

@@ -1,6 +1,6 @@
 
 uses
-  SysUtils, nextpas.core.text.conv, nextpas.compiler.ir.system_contracts;
+  SysUtils, nextpas.core.text.conv, nextpas.core.text.builder, nextpas.compiler.ir.system_contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;

@@ -5,14 +5,14 @@ unit nextpas.compiler.frontend.session;
 interface
 
 uses
-  np_compilation_session;
+  nextpas.compiler.frontend.compilation_session;
 
 type
-  TBuildContext = np_compilation_session.TBuildContext;
-  TCompilationOptions = np_compilation_session.TCompilationOptions;
-  TToolStatusEventRecord = np_compilation_session.TToolStatusEventRecord;
-  TToolStatusEventVec = np_compilation_session.TToolStatusEventVec;
-  TCompilationSession = np_compilation_session.TCompilationSession;
+  TBuildContext = nextpas.compiler.frontend.compilation_session.TBuildContext;
+  TCompilationOptions = nextpas.compiler.frontend.compilation_session.TCompilationOptions;
+  TToolStatusEventRecord = nextpas.compiler.frontend.compilation_session.TToolStatusEventRecord;
+  TToolStatusEventVec = nextpas.compiler.frontend.compilation_session.TToolStatusEventVec;
+  TCompilationSession = nextpas.compiler.frontend.compilation_session.TCompilationSession;
 
 implementation
 
