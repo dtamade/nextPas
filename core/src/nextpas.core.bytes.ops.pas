@@ -81,6 +81,8 @@ function IsZeroBytes(const ASpan: TByteSpan): Boolean; inline; overload;
 function IsAllZero(const AData: TBytes): Boolean; inline;
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;
+function BytesIsGzipBuffer(AData: PByte; const ALength: SizeUInt): Boolean; inline;
+function BytesIsGzipSpan(const ASpan: TByteSpan): Boolean; inline;
 function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
@@ -624,10 +626,22 @@ begin
   Result := IsZeroBytes(AData);
 end;
 
+function BytesIsGzipBuffer(AData: PByte; const ALength: SizeUInt): Boolean; inline;
+begin
+  // perf: inline + zero-copy PByte 单源 gzip 魔数 ($1F $8B)，compress.base GZIP_MAGIC 字面量对齐 canonical，无 TBytes 分配，供 transform 栈上 2 字节探针零堆复用
+  Result := (ALength >= 2) and (AData <> nil) and (AData[0] = $1F) and (AData[1] = $8B);
+end;
+
+function BytesIsGzipSpan(const ASpan: TByteSpan): Boolean; inline;
+begin
+  Result := BytesIsGzipBuffer(ASpan.Data, ASpan.Len);
+end;
+
 function BytesIsGzip(const AData: TBytes): Boolean; inline;
 begin
-  // perf: inline + zero-copy single source gzip magic ($1F $8B), compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
-  Result := (Length(AData) >= 2) and (AData[0] = $1F) and (AData[1] = $8B);
+  // perf: inline + zero-copy single source via BytesIsGzipBuffer PByte 单源，compress.base canonical; reused by vfs.compressed IsGzipPred/HeaderPred
+  if Length(AData) < 2 then Exit(False);
+  Result := BytesIsGzipBuffer(@AData[0], SizeUInt(Length(AData)));
 end;
 
 function BytesIsGzipHeader(const AHeader: TBytes; const ATotalSize: Int64): Boolean; inline;

@@ -35,18 +35,24 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms,
-  nextpas.core.collections.hashmap.swiss.str;
+  nextpas.core.collections.hashmap.swiss.str,
+  nextpas.core.sync;
 
 type
   TStrVfsMap = specialize TSwissTableStr<IVfs>;
+  TMountListCache = specialize TSwissTableStr<TEntryArray>;
   TMountedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FMounts: TVfsMountArray;
     FMountMap: TStrVfsMap; { O(1) exact-hit 索引：IsMountPoint/FindMount 热路径单源哈希，零线性扫描 }
     FHasRoot: Boolean;
     FRootFs: IVfs;
+    FListCache: TObject; { 热点目录缓存：Swisstable 单源，RWLock 读并发零争用/TryAcquireWrite 非阻塞写，热点 List 免重复 O(n log n) Sort/Dedup，对齐 overlay 单源 }
+    FListLock: IRWLock;
     function FindMount(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
     function IsMountPoint(const APath: string): Boolean; inline;
+    function TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+    procedure CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
   public
     constructor Create(const AMounts: array of TVfsMountEntry);
     destructor Destroy; override;
@@ -136,12 +142,101 @@ begin
   FMountMap := TStrVfsMap.Create(Length(FMounts));
   for I := 0 to High(FMounts) do
     FMountMap.Put(FMounts[I].Prefix, FMounts[I].Fs);
+  FListCache := TMountListCache.Create(16);
+  FListLock := RWLock;
 end;
 
 destructor TMountedVfs.Destroy;
 begin
+  if FListCache <> nil then
+  begin
+    TMountListCache(FListCache).Free;
+    FListCache := nil;
+  end;
+  FListLock := nil;
   if Assigned(FMountMap) then FMountMap.Free;
   inherited Destroy;
+end;
+
+{ 热点缓存：Swisstable 单源，RWLock 读并发零争用，inline 热路径，Overlay 同源模板 }
+function TMountedVfs.TryGetListCached(const ADirPath: string; out AEntries: TEntryArray): Boolean; inline;
+var
+  LCached: TEntryArray;
+begin
+  AEntries := nil;
+  Result := False;
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  FListLock.AcquireRead;
+  try
+    if TMountListCache(FListCache).TryGetValue(ADirPath, LCached) then
+    begin
+      AEntries := Copy(LCached); { 隔离拷贝 O(k) Move，防调用方篡改共享缓存 }
+      Result := True;
+    end;
+  finally
+    FListLock.ReleaseRead;
+  end;
+end;
+
+procedure TMountedVfs.CacheList(const ADirPath: string; const AEntries: TEntryArray); inline;
+var
+  LDummy: TEntryArray;
+begin
+  if (FListCache = nil) or (FListLock = nil) then Exit;
+  if not FListLock.TryAcquireWrite then Exit;
+  try
+    if TMountListCache(FListCache).TryGetValue(ADirPath, LDummy) then Exit;
+    TMountListCache(FListCache).Put(ADirPath, Copy(AEntries)); { Copy 隔离，TryAcquireWrite 非阻塞防惊群 }
+  finally
+    FListLock.ReleaseWrite;
+  end;
+end;
+
+{ 单源容量模板：derive 通用 16 倍增 Cap≤N via bytes.ops BytesNextCapacity，inline 零拷贝单源，复用 base VfsDerive* 同款策略 }
+procedure MountEnsureListCap(var AArr: TEntryArray; const ANeed: SizeInt; const ALimit: SizeInt); inline;
+var
+  LCap: SizeUInt;
+begin
+  if ANeed <= Length(AArr) then Exit;
+  LCap := BytesNextCapacity(SizeUInt(Length(AArr)), SizeUInt(ANeed));
+  { BytesNextCapacity 最小 64，mount 热点目录扇出通常 <64，需按 ALimit 回缩以守零浪费；derive 模板 16 起步，此处以限界对齐 }
+  if (ALimit > 0) and (SizeInt(LCap) > ALimit) then LCap := SizeUInt(ALimit);
+  if SizeInt(LCap) < ANeed then LCap := SizeUInt(ANeed);
+  if LCap = 0 then LCap := SizeUInt(ANeed);
+  SetLength(AArr, SizeInt(LCap));
+end;
+
+{ 零拷贝 Top 段提取：bytes.ops TByteSpan 单源，SpanToString 单 Move，复用 derive 通用模板 }
+function MountTopSegment(const APrefix: string): string; inline;
+var
+  S: TByteSpan;
+  P: SizeInt;
+begin
+  if Length(APrefix) = 0 then Exit('');
+  S := TByteSpan.Create(PByte(@APrefix[1]), SizeUInt(Length(APrefix)));
+  P := SpanIndexOf(S, Byte(Ord('/')));
+  if P >= 0 then
+    Result := SpanToString(S.Slice(0, SizeUInt(P)))
+  else
+    Result := APrefix;
+end;
+
+function MountChildSegment(const APrefix, AParent: string): string; inline;
+var
+  SPrefix, SParent: TByteSpan;
+  SRem: TByteSpan;
+  P: SizeInt;
+begin
+  { AParent 已校验为 APrefix 父路径；零拷贝 Slice 提取直接子段 }
+  SPrefix := TByteSpan.Create(PByte(@APrefix[1]), SizeUInt(Length(APrefix)));
+  SParent := TByteSpan.Create(PByte(@AParent[1]), SizeUInt(Length(AParent)));
+  { 跳过 parent + '/' }
+  SRem := SPrefix.Slice(SParent.Len + 1, SPrefix.Len - (SParent.Len + 1));
+  P := SpanIndexOf(SRem, Byte(Ord('/')));
+  if P >= 0 then
+    Result := SpanToString(SRem.Slice(0, SizeUInt(P)))
+  else
+    Result := SpanToString(SRem);
 end;
 
 function TMountedVfs.IsMountPoint(const APath: string): Boolean; inline;
@@ -265,59 +360,45 @@ var
   Fs: IVfs;
   I, OutN: Integer;
   Child: string;
-  SL: SizeInt;
   BaseList: TEntryArray;
-  K: Integer;
-  Cap: SizeInt;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
+  { 热点目录缓存：高基数目录重复 List O(n log n) Sort/Dedup → O(1) 哈希 + O(k) Copy，RWLock 读并发零争用，对齐 overlay 单源 }
+  if TryGetListCached(ADirPath, Result) then Exit;
   if VfsIsRoot(ADirPath) then
   begin
-    // 根：合并所有挂载点的顶层 List（O(n log n) Sort+线性去重，零拷贝前缀扫描）
-    // 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops，复用 base VfsDeriveChildNamesFromSpans 同款
+    { 根：合并所有挂载点的顶层 List（O(n log n) Sort+线性去重，零拷贝前缀扫描） }
+    { 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops BytesNextCapacity，复用 derive 通用模板，零 Copy 切片 via MountTopSegment }
     if FHasRoot and (Length(FMounts) = 1) then
-      Exit(FRootFs.List('.'));
+    begin
+      Result := FRootFs.List('.');
+      CacheList(ADirPath, Result);
+      Exit;
+    end;
     Result := nil;
     OutN := 0;
     for I := 0 to High(FMounts) do
       if not VfsIsRoot(FMounts[I].Prefix) then
       begin
-        // 顶层名 = Prefix 的首段；零分配扫描替代 Pos/Copy 双分配
-        SL := 0;
-        for K := 1 to Length(FMounts[I].Prefix) do
-          if FMounts[I].Prefix[K] = '/' then begin SL := K; Break; end;
-        if SL > 0 then Child := Copy(FMounts[I].Prefix, 1, SL - 1)
-        else Child := FMounts[I].Prefix;
-        if OutN >= Length(Result) then
-        begin
-          Cap := Length(Result);
-          if Cap = 0 then Cap := 16;
-          while Cap <= OutN do Cap := Cap * 2;
-          if Cap > Length(FMounts) then Cap := Length(FMounts);
-          SetLength(Result, Cap);
-        end;
+        Child := MountTopSegment(FMounts[I].Prefix); { 零拷贝 TByteSpan+SpanToString 单 Move，bytes.ops 单源 }
+        MountEnsureListCap(Result, OutN + 1, Length(FMounts));
         Result[OutN].Name := Child;
         Result[OutN].Size := 0;
         Result[OutN].ModTime := 0;
         Result[OutN].IsDir := True;
         Inc(OutN);
       end;
-    // 若有根挂载，合并其根 List（延迟去重，单次 Sort）
+    { 若有根挂载，合并其根 List（延迟去重，单次 Sort） }
     if FHasRoot then
     begin
       BaseList := FRootFs.List('.');
       for I := 0 to High(BaseList) do
       begin
-        if OutN >= Length(Result) then
-        begin
-          Cap := Length(Result);
-          if Cap = 0 then Cap := 16;
-          while Cap <= OutN do Cap := Cap * 2;
-          if Cap > Length(FMounts) + Length(BaseList) then Cap := Length(FMounts) + Length(BaseList);
-          if Cap > OutN + (Length(BaseList) - I) then Cap := OutN + (Length(BaseList) - I);
-          SetLength(Result, Cap);
-        end;
+        MountEnsureListCap(Result, OutN + 1, Length(FMounts) + Length(BaseList));
+        { 精确限界：避免尾部过度预分配，剩余量校正 }
+        if Length(Result) > OutN + (Length(BaseList) - I) then
+          SetLength(Result, OutN + (Length(BaseList) - I));
         Result[OutN] := BaseList[I];
         Inc(OutN);
       end;
@@ -325,40 +406,35 @@ begin
     SetLength(Result, OutN);
     VfsSortEntries(Result);
     VfsDedupSortedEntries(Result);
+    CacheList(ADirPath, Result);
     Exit;
   end;
   if IsMountPoint(ADirPath) then
   begin
     if FMountMap.TryGetValue(ADirPath, Fs) then
-      Exit(Fs.List('.'));
+    begin
+      Result := Fs.List('.');
+      CacheList(ADirPath, Result);
+      Exit;
+    end;
   end;
   if FindMount(ADirPath, Rem, Fs) then
-    Exit(Fs.List(Rem));
-  // 若是前缀的父目录，需聚合子挂载点（复用 VfsIsParentPath 单源，单次 Copy）
-  // 例如 mounts: a/b, a/c  => List('a') 应返回 b,c
-  // 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops，复用 base 同款
+  begin
+    Result := Fs.List(Rem);
+    CacheList(ADirPath, Result);
+    Exit;
+  end;
+  { 若是前缀的父目录，需聚合子挂载点（复用 VfsIsParentPath 单源，bytes.ops 零拷贝） }
+  { 例如 mounts: a/b, a/c  => List('a') 应返回 b,c }
+  { 单源模板：扇出限界 16 倍增 Cap≤N via bytes.ops MountEnsureListCap，复用 derive 通用模板 }
   Result := nil;
   OutN := 0;
   for I := 0 to High(FMounts) do
   begin
     if VfsIsRoot(FMounts[I].Prefix) then Continue;
     if not VfsIsParentPath(ADirPath, FMounts[I].Prefix) then Continue;
-    // 单次 Copy 提取直接子段：扫描 '/' 零分配
-    SL := 0;
-    for K := Length(ADirPath) + 2 to Length(FMounts[I].Prefix) do
-      if FMounts[I].Prefix[K] = '/' then begin SL := K; Break; end;
-    if SL > 0 then
-      Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, SL - (Length(ADirPath) + 2))
-    else
-      Child := Copy(FMounts[I].Prefix, Length(ADirPath) + 2, MaxInt);
-    if OutN >= Length(Result) then
-    begin
-      Cap := Length(Result);
-      if Cap = 0 then Cap := 16;
-      while Cap <= OutN do Cap := Cap * 2;
-      if Cap > Length(FMounts) then Cap := Length(FMounts);
-      SetLength(Result, Cap);
-    end;
+    Child := MountChildSegment(FMounts[I].Prefix, ADirPath); { 零拷贝 Span Slice + 单 Move，bytes.ops 单源 }
+    MountEnsureListCap(Result, OutN + 1, Length(FMounts));
     Result[OutN].Name := Child;
     Result[OutN].Size := 0;
     Result[OutN].ModTime := 0;
@@ -370,6 +446,7 @@ begin
     SetLength(Result, OutN);
     VfsSortEntries(Result);
     VfsDedupSortedEntries(Result);
+    CacheList(ADirPath, Result);
     Exit;
   end;
   raise EVfsNotFound.CreateCtx('list', ADirPath, 'not found');

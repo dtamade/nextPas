@@ -182,12 +182,14 @@ begin
     'vfs.base must not reference compress (L0 purity, no L2→L2)');
   Check(Pos('32 * 1024 * 1024', Src) > 0,
     'vfs.base VFS_DECOMPRESS_MAX_BYTES must be literal 32MiB aligned with compress GZIP_MAX');
-  { 数值一致性：compressed 与 base 均以字面量数值对齐 canonical GZIP_MAX，接口层无 L2→L2 直连 compress.base，漂移由字面量一致性锁定 }
+  { 单源收敛：base 为唯一字面量 32MiB 对齐 canonical GZIP_MAX，compressed 经 vfs.base 单源别名复用消除二次字面量双写，接口层无 L2→L2 直连 compress.base }
   Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
-  Check(Pos('32 * 1024 * 1024', Src) > 0,
-    'compressed VFS_DECOMPRESS_MAX_BYTES must be literal 32MiB aligned with compress GZIP_MAX (no L2→L2 alias)');
+  Check(Pos('32 * 1024 * 1024', Src) = 0,
+    'compressed must not duplicate literal 32MiB (single source via vfs.base alias)');
+  Check(Pos('nextpas.core.vfs.base.VFS_DECOMPRESS_MAX_BYTES', Src) > 0,
+    'compressed VFS_DECOMPRESS_MAX_BYTES must alias vfs.base single source');
   Check(Pos('nextpas.core.compress.base', Src) = 0,
-    'compressed must not directly reference compress.base (L2→L2 decoupled, literal aligned via source-contract)');
+    'compressed must not directly reference compress.base (L2→L2 decoupled, alias via vfs.base)');
   Check(Pos('nextpas.core.compress.gzip', Src) > 0,
     'compressed declares compress.gzip dependency for GzipDecompress');
   Check(Pos('COMPRESSED_HEADER_PEEK', Src) = 0,
