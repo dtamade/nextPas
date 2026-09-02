@@ -164,3 +164,14 @@
 | `234f3ce4c` | fix | `loop.impl` 清理残留 `SCount` 赋值（`ARCHITECTURE` loop.impl 684→682 行，体积 13724→13722） |
 
 **Gates**: `lane-focused --lane agent` 全绿（`555508 lines, 22.5 sec, 9 passed skeleton`，`build-hygiene=pass`，`make hygiene` 绿，`landing-check` path-limited 清零 `io.uring` debt）。
+
+## agent-stage-review-p0-2026-09-05 — Stage Review P0/P1 深度收口（2 commits）
+
+**Scope**: 编译门/预算同源/对冲链路/排水看门狗/配额回拨与溢出 + 体积/CHANGELOG 同步。
+
+| Hash | Type | Summary |
+|------|------|---------|
+| `98e6ce2a6` | fix | P0/P1 6 项：`test_pricing/protocol/quota` 补 `base/json.value` uses（15 门全绿） + `loop.budget` LoopCostForMessage 增 provider 重载走 Fallback（与 LoopAddOutUsed 同源） + `hedge` 双路 CreateChildToken(LOuter) 链路化取消 + `tools` 排水 5s 看门狗 + `loop.impl` GuidedFinish 回滚污染 + `quota` 回拨过期+溢出钳制 |
+| `c612fbbbe` | docs | `ARCHITECTURE §2` 体积 13722→13776（loop 152/690 hedge 581 tools 523 quota 186） |
+
+**Gates**: `test_pricing 6` / `test_protocol 10` / `test_quota 5` / `lane-focused 9 skeleton` 全 `HEAPTRC OK`，`landing-check` 绿，完成 `for d in test_*; make test` 全量绿。
