@@ -49,7 +49,7 @@ type
     FPendingLongLink: string;
     FPaxPath: string;
     FPaxLinkPath: string;
-    { g 全局 pax：持久至下一 g 覆盖（CONTRACT INV-3），写入时即 IsSafe 丢弃恶意值且不落盘，Next 时二次 IsSafe 防御；显式 ClearGlobalPax 或 RAII AcquireGlobalPaxGuard 自动隔离，生命周期绑 Reader 释放前有效 }
+    // g pax: guard-scoped persistence, else single-use auto-clear, IsSafe filtered
     FGlobalPaxPath: string;
     FGlobalPaxLinkPath: string;
     FMaxEntry: SizeUInt;
@@ -58,38 +58,30 @@ type
     FLastUName: string;
     FLastGName: string;
     FLastLinkName: string;
-    { header cache: opaque named 7-field NUL truncation via bytes.ops single 512B scan — internal, not exposed }
+    // header cache: 7-field NUL lens, single 512B scan
     FScanValid: Boolean;
     FScanPos: SizeUInt;
-    FScanLens: TTarScanLens; // named: Name/LinkName/Magic/Version/UName/GName/Prefix explicit, single 512B scan
-    FGuards: array of TTarGlobalPaxGuard; // weak list for invalidation, no FBuf retention
-    FLogger: ILogger; // explicit warn on global pax auto-clear (silent pollution window)
-    procedure LogGlobalPaxAutoClear; // out-of-line warn via FLogger, zero alloc on hot path
+    FScanLens: TTarScanLens;
+    FGuards: array of TTarGlobalPaxGuard; // weak, no FBuf retention
+    FLogger: ILogger; // warn on auto-clear if explicit logger
+    procedure LogGlobalPaxAutoClear;
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
-    { — 热路径外联禁 inline，薄转发可 inline；Move 单源 bytes.ops — }
     function ByteAt(AOfs: SizeUInt): Byte;
-    { — 零拷贝视图：字段切片不分配，按需 SpanToString 单次 Move（bytes.ops 单源）— }
-    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
+    function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
     function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
-    { — 零拷贝薄转发：外联避 Move(Result[1]) inline 膨胀（design-conventions 红线1），单源 SpanToString — }
-    function StringField(AOfs, ALen: SizeUInt): string;
+    function StringField(AOfs, ALen: SizeUInt): string; // out-of-line
     function NumericField(AOfs, ALen: SizeUInt): Int64;
     function MagicHasUStar: Boolean; inline;
     procedure VerifyChecksum;
     function HeaderIsZeroOrValid(APos: SizeUInt): Boolean;
-    { — pax/扩展：零拷贝 slice 解析，消除每记录 Copy+BytesToText 分配 — }
     function ParsePaxRecordsSlice(ABase: PByte; ALen: SizeUInt): Boolean;
     function ParsePaxRecords(const AData: TBytes): Boolean;
-    { — 扩展载荷：去重 GNU L/K 与 pax 三分支的单源拷贝 — }
     function GetExtendedPayload(ASize: Int64; out APtr: PByte; out ALen: SizeUInt): Boolean;
-    { — 零拷贝薄转发：外联避 Move(Result[1]) inline 膨胀（红线1），单源 SpanToString — }
-    function SliceToString(ABase: PByte; ALen: SizeUInt): string;
-    { — 合并：prefix/name 单次SetLength+两Move零拷贝（bytes.ops单源Move语义），禁inline避免Result[1]双喂膨胀 — }
-    function CombinePrefixName(const APrefix, AName: TByteSpan): string;
-    { — 非热点字段缓存：零拷贝 slice 后单次 SpanEqual 复用已分配串（长度不等直接跳 MemEqual，首字节快滤与 SpanEqual 同源 TByteSpan 视图内聚：LCachedSpan/LSpan.Data^ 单源快路径，零拷贝 inline 复用，低命中率零额外 MemEqual），bytes.ops 单源 SIMD，万级遍历降分配；外联禁 inline（@ACached[1] 喂 SpanEqual 违反 design-conventions 红线1，FPC 3.3.1 常量传播拷栈垃圾）— }
-    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string;
+    function SliceToString(ABase: PByte; ALen: SizeUInt): string; // out-of-line
+    function CombinePrefixName(const APrefix, AName: TByteSpan): string; // out-of-line
+    function CachedField(AOfs, ALen: SizeUInt; var ACached: string): string; // out-of-line, SpanEqual reuse
   public
     procedure ClearGlobalPax; inline;
     {** @desc RAII guard: acquire IInterface that clears global g pax on scope exit; use `var G := Reader.AcquireGlobalPaxGuard;` to auto-isolate. Inline thin forward, zero alloc until called. *}
@@ -185,7 +177,7 @@ begin
   FCumTotal := 0;
 end;
 
-// opaque header scan: single 512B ScanNulFieldTruncations via bytes.ops, named 7-field lens — impl only, not exposed
+// single 512B ScanNulFieldTruncations, 7-field lens
 procedure CacheHeader(ASelf: TTarReader);
 var
   LFields: array[0..6] of TFieldRange;
@@ -248,7 +240,7 @@ begin
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // 头块内 7 字段命中命名缓存零额外扫描，cache miss 时单次 512B ScanNulFieldTruncations 填充（后续字段 Valid 命中），非头块单次 SpanIndexOf 单源
+  // header: cached 7 fields, miss fills single 512B scan
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
@@ -269,7 +261,7 @@ begin
       LLen := FScanLens.Version
     else
     begin
-      // 防御：头块内非 7 命名缓存字段（正常不命中，仅防御）— 复用 bytes.ops ScanNulFieldTruncations 单字段零分配路径，完全纳入单次 512B 缓存语义，无独立 SpanIndexOf 分支
+      // fallback: non-cached header field via single-field scan
       LOneField[0].Off := AOfs - FPos;
       LOneField[0].Len := ALen;
       LBlockTmp := TByteSpan.Create(@FData[FPos], C_TAR_BLOCK_SIZE);
@@ -283,7 +275,7 @@ begin
     Result := TByteSpan.Create(@FData[AOfs], LLen);
     Exit;
   end;
-  // 非头块字段：单次 SpanIndexOf 单源 SIMD
+  // non-header: single SpanIndexOf
   LSpan := TByteSpan.Create(@FData[AOfs], ALen);
   LIdx := SpanIndexOf(LSpan, 0);
   if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
@@ -307,7 +299,7 @@ function TTarReader.StringField(AOfs, ALen: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin
-  // 外联：避 Move(Result[1]) inline 膨胀（红线1），零拷贝 SpanToString 单源 Move
+  // out-of-line: avoid Move(Result[1]) inline bloat
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -349,7 +341,7 @@ function TTarReader.SliceToString(ABase: PByte; ALen: SizeUInt): string;
 var
   LSpan: TByteSpan;
 begin
-  // 外联：避 Move(Result[1]) inline 膨胀（红线1），零拷贝 TrimmedSlice+SpanToString 单源
+  // out-of-line: avoid Move(Result[1]) inline bloat
   LSpan := TrimmedSlice(ABase, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -367,7 +359,7 @@ var
   LCachedSpan: TByteSpan;
   LCachedLen: SizeUInt;
 begin
-  // 单源收敛：零拷贝视图后单次 SpanEqual（bytes.ops SIMD MemEqual）复用已分配串，长度不等直接跳过 MemEqual；首字节快滤与 SpanEqual 同源 TByteSpan 视图内聚（LCachedSpan/LSpan 单源快路径，复用 Span.Data^ 零拷贝 inline 视图，低命中率零额外 MemEqual，无 PByte(PAnsiChar)^ / FData[] 手写双层解引用错位）；外联禁 inline
+  // zero-copy then SpanEqual reuse, fast first-byte filter
   LSpan := FieldSlice(AOfs, ALen);
   if LSpan.Len = 0 then
     Exit('');
@@ -376,11 +368,10 @@ begin
   begin
     if LCachedLen = 0 then
       Exit(ACached);
-    // single-source fast first-byte filter via TByteSpan.Data^ cohesion before SIMD dispatch, low hit rate avoids MemEqual
+    // fast first-byte filter before SpanEqual
     LCachedSpan := TByteSpan.Create(PByte(PAnsiChar(ACached)), LCachedLen);
     if LCachedSpan.Data^ <> LSpan.Data^ then
     begin
-      // miss fast path: single-source TByteSpan.Data^ cohesion, no SpanEqual dispatch
     end
     else if SpanEqual(LCachedSpan, LSpan) then
       Exit(ACached);
@@ -439,9 +430,9 @@ end;
 
 procedure TTarReader.LogGlobalPaxAutoClear;
 begin
-  // explicit warn: single-use auto-clear without guard — if caller did AcquireGlobalPaxGuard without holding, it degrades to single-use; cross Next/image reuse must hold guard, else silent pollution window
-  if FLogger <> nil then
-    FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
+  // warn only if explicit logger set, else silent auto-clear
+  if (FLogger = nil) or (FLogger = NullLogger) then Exit;
+  FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
 end;
 
 function TTarReader.AcquireGlobalPaxGuard: IInterface; inline;
@@ -564,7 +555,7 @@ begin
     if Flag = Ord('L') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // bomb守卫：L 扩展元数据不计入 FCumTotal，仅正则载荷计总量，避免含大量长名归档误触阈值
+      // L: not counted in total
       if PayloadLen > 0 then
         FPendingLongName := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -573,7 +564,7 @@ begin
     else if Flag = Ord('K') then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // bomb守卫：K 扩展元数据不计入 FCumTotal，仅正则载荷计总量
+      // K: not counted in total
       if PayloadLen > 0 then
         FPendingLongLink := SliceToString(PayloadPtr, PayloadLen)
       else
@@ -582,7 +573,7 @@ begin
     else if (Flag = Ord('x')) or (Flag = Ord('g')) then
     begin
       GetExtendedPayload(Size, PayloadPtr, PayloadLen);
-      // bomb守卫：x/g 扩展元数据不计入 FCumTotal，仅正则载荷计总量，避免长名/pax 元数据双计误触
+      // x/g: not counted in total
       if PayloadLen > 0 then
       begin
         if ParsePaxRecordsSlice(PayloadPtr, PayloadLen) then
@@ -591,7 +582,7 @@ begin
           begin
             if FPaxPath <> '' then
             begin
-              // 单源早丢弃：写入时即 IsSafe 校验，恶意路径不落全局，fail-closed 避免静默继承污染
+              // IsSafe filter before storing global
               if IsSafeTarEntryName(FPaxPath) then
                 FGlobalPaxPath := FPaxPath
               else
@@ -611,13 +602,12 @@ begin
       end
       else
       begin
-        // 空 pax 块，无记录
       end;
     end
     else
     begin
       AHeader := Default(TTarHeader);
-      // 二次防御：g 早丢弃后仍 IsSafe 复核；无 guard 时单次消费自动清理防跨条目/跨镜像污染，持久需 AcquireGlobalPaxGuard
+      // re-check IsSafe, auto-clear single-use if no guard
       if (FGlobalPaxPath <> '') and not IsSafeTarEntryName(FGlobalPaxPath) then
         FGlobalPaxPath := '';
       if (FGlobalPaxLinkPath <> '') and not IsSafeTarEntryName(FGlobalPaxLinkPath) then
@@ -631,7 +621,7 @@ begin
         AHeader.Name := FGlobalPaxPath;
         if Length(FGuards) = 0 then
         begin
-          LogGlobalPaxAutoClear; // explicit warn: no guard held, single-use cleared (hold AcquireGlobalPaxGuard to persist)
+          LogGlobalPaxAutoClear;
           FGlobalPaxPath := '';
         end;
       end

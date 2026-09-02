@@ -26,6 +26,7 @@ type
     FIsDir: Boolean;
     FMtime: Int64;
     FMode: Word;
+    FSize: Int64;
   end;
   TArchiveWalkArray = array of TArchiveWalkEntry;
 
@@ -73,7 +74,7 @@ procedure ArchiveRestoreFileMeta(const APath: string; AMode: Word; AMtimeNs: Int
 { 几何扩容（复用 EnsureWalkCapacity 语义，2倍扩容，初始16） }
 procedure ArchiveEnsureWalkCapacity(var A: TArchiveWalkArray; AMin: Integer); inline;
 procedure ArchiveWalkAppend(var A: TArchiveWalkArray; var ACount: Integer;
-  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word); inline;
+  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word; ASize: Int64 = 0); inline;
 procedure ArchiveEnsureDeferredCapacity(var A: TArchiveDeferredArray; AMin: Integer); inline;
 procedure ArchiveDeferredAppend(var A: TArchiveDeferredArray; var ACount: Integer;
   const AFull: string; AMode: Word; AMtimeNs: Int64); inline;
@@ -89,11 +90,13 @@ procedure ArchiveEnsureNoSymlinkInPathLen(const APath: string; ALen: SizeUInt);
 procedure ArchivePrepareParentDir(const AFull: string; AParentLen: SizeUInt);
 { fs 单缝转发：tar/zip 经 archive 联邦，消除直接 uses nextpas.core.fs 张力；inline 薄转发单源 }
 function ArchiveStat(const APath: string): TFileInfo; inline;
+function ArchiveLstat(const APath: string): TFileInfo; inline;
 function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
 function ArchiveOpenRead(const APath: string): TArchiveFile; inline;
 procedure ArchiveMkdirAll(const APath: string; const APerm: TFilePermission); inline;
 function ArchiveExists(const APath: string): Boolean; inline;
 function ArchiveIsSymlink(const APath: string): Boolean; inline;
+function ArchiveIsRegularFile(const APath: string): Boolean; inline;
 procedure ArchiveRemove(const APath: string); inline;
 procedure ArchiveRemoveIfExists(const APath: string); inline;
 procedure ArchiveSymlink(const ATarget, ALinkPath: string); inline;
@@ -162,7 +165,7 @@ begin
 end;
 
 procedure ArchiveWalkAppend(var A: TArchiveWalkArray; var ACount: Integer;
-  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word);
+  const ARel, AFull: string; AIsDir: Boolean; AMtime: Int64; AMode: Word; ASize: Int64 = 0);
 begin
   ArchiveEnsureWalkCapacity(A, ACount + 1);
   A[ACount].FRel := ARel;
@@ -170,6 +173,7 @@ begin
   A[ACount].FIsDir := AIsDir;
   A[ACount].FMtime := AMtime;
   A[ACount].FMode := AMode;
+  A[ACount].FSize := ASize;
   Inc(ACount);
 end;
 
@@ -196,10 +200,23 @@ procedure ArchiveSortDirEntries(var A: TDirEntryArray);
 var
   LStackLo, LStackHi: array[0..63] of Integer;
   LSp, LLo, LHi, LI, LJ: Integer;
-  LPivotIdx: Integer;
   LTmp: TDirEntry;
+  LPtrs: array of PByte;
+  LLens: array of SizeUInt;
+  LPivotPtr: PByte;
+  LPivotLen: SizeUInt;
+  LTmpPtr: PByte;
+  LTmpLen: SizeUInt;
 begin
   if Length(A) < 2 then Exit;
+  // perf: 零键缓存 — 单次预计算 PByte+Len 视图，O(n) 建表，O(n log n) 比较零 Length/@Name[1] 重算与零 ArchiveStrCompare 逐比较开销；复用 bytes.ops 单源 CompareBytesOrdered/SIMD 零拷贝，排序放大在大目录消除
+  SetLength(LPtrs, Length(A));
+  SetLength(LLens, Length(A));
+  for LI := 0 to High(A) do
+  begin
+    LLens[LI] := SizeUInt(Length(A[LI].Name));
+    if LLens[LI] = 0 then LPtrs[LI] := nil else LPtrs[LI] := PByte(@A[LI].Name[1]);
+  end;
   LSp := 0;
   LStackLo[LSp] := 0;
   LStackHi[LSp] := High(A);
@@ -212,19 +229,20 @@ begin
     if LLo >= LHi then Continue;
     LI := LLo;
     LJ := LHi;
-    LPivotIdx := (LLo + LHi) shr 1;
+    // snapshot pivot 零键视图 — 单次取值，后续比较零索引修正与零 ArchiveStrCompare 重建视图
+    LPivotPtr := LPtrs[(LLo + LHi) shr 1];
+    LPivotLen := LLens[(LLo + LHi) shr 1];
     repeat
-      // perf: inline + SpanCompare零拷贝（bytes.ops单源，PByte+Len视图，万级目录零分配）
-      while ArchiveStrCompare(A[LI].Name, A[LPivotIdx].Name) < 0 do Inc(LI);
-      while ArchiveStrCompare(A[LJ].Name, A[LPivotIdx].Name) > 0 do Dec(LJ);
+      // perf: inline CompareBytesOrdered 零拷贝 PByte+Len 缓存视图，复用 bytes.ops 单源，SIMD 直通，无 TByteSpan 构造
+      while CompareBytesOrdered(LPtrs[LI], LPivotPtr, LLens[LI], LPivotLen) < 0 do Inc(LI);
+      while CompareBytesOrdered(LPtrs[LJ], LPivotPtr, LLens[LJ], LPivotLen) > 0 do Dec(LJ);
       if LI <= LJ then
       begin
         LTmp := A[LI];
         A[LI] := A[LJ];
         A[LJ] := LTmp;
-        { pivot 移动后修正索引，避免失效比较 }
-        if LPivotIdx = LI then LPivotIdx := LJ
-        else if LPivotIdx = LJ then LPivotIdx := LI;
+        LTmpPtr := LPtrs[LI]; LPtrs[LI] := LPtrs[LJ]; LPtrs[LJ] := LTmpPtr;
+        LTmpLen := LLens[LI]; LLens[LI] := LLens[LJ]; LLens[LJ] := LTmpLen;
         Inc(LI);
         Dec(LJ);
       end;
@@ -420,6 +438,11 @@ begin
   Result := nextpas.core.fs.Stat(APath);
 end;
 
+function ArchiveLstat(const APath: string): TFileInfo; inline;
+begin
+  Result := nextpas.core.fs.Lstat(APath);
+end;
+
 function ArchiveOpen(const APath: string; const AMode: TFileMode): IFile; inline;
 begin
   Result := nextpas.core.fs.Open(APath, AMode);
@@ -443,6 +466,17 @@ end;
 function ArchiveIsSymlink(const APath: string): Boolean; inline;
 begin
   Result := nextpas.core.fs.IsSymlink(APath);
+end;
+
+function ArchiveIsRegularFile(const APath: string): Boolean; inline;
+var L: TFileInfo;
+begin
+  try
+    L := ArchiveLstat(APath);
+  except
+    Exit(False);
+  end;
+  Result := (not L.IsDir) and (not L.IsSymlink) and (L.FileType = ftRegular);
 end;
 
 procedure ArchiveRemove(const APath: string); inline;
@@ -652,6 +686,7 @@ var
 begin
   { ReadDir 已批量缓存目录项（platform 4K buf + 迭代句柄），仅含 Name/Type；
     mtime/mode 需 Stat 补齐，每条目一次 Stat 为必要 O(N)，非 N+1 冗余；
+    排序经 ArchiveSortDirEntries 零键缓存（PByte+Len 单次预计算，O(n log n) 比较零重建视图，bytes.ops 单源 CompareBytesOrdered/SIMD）；
     路径拼接复用 LChildAbs，几何扩容 inline，资源经迭代器 Close 不丢 }
   LEntries := nextpas.core.fs.ReadDir(AAbsDir);
   ArchiveSortDirEntries(LEntries);
@@ -669,11 +704,11 @@ begin
     LInfo := nextpas.core.fs.Stat(LChildAbs);
     if LEntries[LI].IsDir then
     begin
-      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, True, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF, 0);
       ArchiveCollectWalk(LChildAbs, LChildRel, AOut, ACount);
     end
     else if LEntries[LI].FileType = ftRegular then
-      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF);
+      ArchiveWalkAppend(AOut, ACount, LChildRel, LChildAbs, False, LInfo.ModTime div 1000000000, Word(LInfo.Permission) and $0FFF, LInfo.Size);
     { symlink/device/FIFO/socket 跳过，防劫持由外层 EnsureNoSymlinkInPath 保障 }
   end;
 end;

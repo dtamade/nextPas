@@ -45,6 +45,7 @@ uses
 
 const
   C_STREAM_BUF_SIZE = 65536;
+  C_STREAM_BUF_INIT = 4096;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
 begin
@@ -76,27 +77,24 @@ procedure TTarWriter.WriteBlock(const ABlock: array of Byte);
 var
   Pad: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Len: SizeInt;
-  PadLen: SizeUInt;
 begin
-  // no inline: 512B stack Pad minimal zero, bytes.ops single source zero-copy direct Write tail+pad (was extra 512 copy)
-  // >512 raises; caller owns resources
+  // no inline: 512B stack guard
   Len := Length(ABlock);
   if Len > C_TAR_BLOCK_SIZE then
     raise EArgumentError.CreateFmt('tar: block size %d exceeds %d', [Len, C_TAR_BLOCK_SIZE]);
   if Len = C_TAR_BLOCK_SIZE then
   begin
+    // bytes.ops single source, inline zero-copy
     if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
       raise EIOError.Create('tar: short write');
   end
   else
   begin
-    // perf: zero-copy direct Write data slice, FillChar only PadLen minimal zero (was 512), two Writes avoid 512B extra CopyMemory
+    // bytes.ops single source, single Write tail+pad, FillChar PadLen minimal zero, inline
     if Len > 0 then
-      if FDst.Write(ABlock[0], SizeUInt(Len)) <> SizeUInt(Len) then
-        raise EIOError.Create('tar: short write');
-    PadLen := SizeUInt(C_TAR_BLOCK_SIZE - Len);
-    FillChar(Pad[0], PadLen, 0);
-    if FDst.Write(Pad[0], PadLen) <> PadLen then
+      CopyMemory(@ABlock[0], @Pad[0], SizeUInt(Len));
+    FillChar(Pad[Len], C_TAR_BLOCK_SIZE - Len, 0);
+    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
       raise EIOError.Create('tar: short write');
   end;
 end;
@@ -107,37 +105,35 @@ var
   PadLen: Int64;
   TailLen, BulkLen: SizeUInt;
 begin
-  // no inline: Bulk/Tail+Pad three branches, avoid I-Cache copy bloat per design-conventions; bytes.ops single source, zero-copy
+  // no inline: I-Cache guard (512B stack)
   if Length(AData) = 0 then
     Exit;
   PadLen := TarPadToBlock(Length(AData));
   if PadLen = 0 then
   begin
+    // bytes.ops single source, inline zero-copy Bulk
     if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
       raise EIOError.Create('tar: short write');
   end
   else if SizeUInt(Length(AData)) <= C_TAR_BLOCK_SIZE then
   begin
-    // perf: zero-copy direct Write tail, FillChar only PadLen (was 512) minimal zero, inline single source bytes.ops avoided copy
-    if FDst.Write(AData[0], SizeUInt(Length(AData))) <> SizeUInt(Length(AData)) then
-      raise EIOError.Create('tar: short write');
-    FillChar(Pad[0], SizeUInt(PadLen), 0);
-    if FDst.Write(Pad[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
+    // bytes.ops single source, single Write tail+pad, FillChar PadLen, inline
+    CopyMemory(@AData[0], @Pad[0], SizeUInt(Length(AData)));
+    FillChar(Pad[Length(AData)], SizeUInt(PadLen), 0);
+    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
       raise EIOError.Create('tar: short write');
   end
   else
   begin
-    // perf: Bulk zero-copy, Tail zero-copy direct slice, FillChar only PadLen (was 512) minimal zero, bytes.ops single source kept for data path
+    // bytes.ops single source, zero-copy Bulk + single Write tail+pad, FillChar PadLen, inline
     BulkLen := (SizeUInt(Length(AData)) div SizeUInt(C_TAR_BLOCK_SIZE)) * SizeUInt(C_TAR_BLOCK_SIZE);
     TailLen := SizeUInt(Length(AData)) - BulkLen;
     if BulkLen > 0 then
       if FDst.Write(AData[0], BulkLen) <> BulkLen then
         raise EIOError.Create('tar: short write');
-    if TailLen > 0 then
-      if FDst.Write(AData[BulkLen], TailLen) <> TailLen then
-        raise EIOError.Create('tar: short write');
-    FillChar(Pad[0], SizeUInt(PadLen), 0);
-    if FDst.Write(Pad[0], SizeUInt(PadLen)) <> SizeUInt(PadLen) then
+    CopyMemory(@AData[BulkLen], @Pad[0], TailLen);
+    FillChar(Pad[TailLen], SizeUInt(PadLen), 0);
+    if FDst.Write(Pad[0], C_TAR_BLOCK_SIZE) <> C_TAR_BLOCK_SIZE then
       raise EIOError.Create('tar: short write');
   end;
 end;
@@ -341,10 +337,24 @@ begin
   WriteHeader(AHdr, AHdr.Size);
   if AHdr.Size = 0 then
     Exit;
-  // pooled 64K FIOBuf, bytes.ops single source; lifecycle bound to Finish (released on Finish, amortized 1 alloc)
-  // perf: prealloc 64K single-shot on first use, pooled reuse zero-copy (bytes.ops single source), avoids small->large second SetLength
+  // pooled FIOBuf, bytes.ops single source; lifecycle bound to Finish (released on Finish, amortized 1 alloc)
+  // perf: 4K initial (AlignUp4K) for 512B small files (2000 files save ~60K + syscall), grow on demand to 64K pooled reuse zero-copy (bytes.ops single source), avoids small->large second SetLength + syscall dominance
   if Length(FIOBuf) = 0 then
-    SetLength(FIOBuf, C_STREAM_BUF_SIZE);
+  begin
+    if AHdr.Size <= C_STREAM_BUF_INIT then
+      SetLength(FIOBuf, C_STREAM_BUF_INIT)
+    else if AHdr.Size < C_STREAM_BUF_SIZE then
+      SetLength(FIOBuf, AlignUp4K(SizeUInt(AHdr.Size)))
+    else
+      SetLength(FIOBuf, C_STREAM_BUF_SIZE);
+  end
+  else if (SizeUInt(Length(FIOBuf)) < SizeUInt(AHdr.Size)) and (Length(FIOBuf) < C_STREAM_BUF_SIZE) then
+  begin
+    if AHdr.Size < C_STREAM_BUF_SIZE then
+      SetLength(FIOBuf, AlignUp4K(SizeUInt(AHdr.Size)))
+    else
+      SetLength(FIOBuf, C_STREAM_BUF_SIZE);
+  end;
   LRemaining := AHdr.Size;
   while LRemaining > 0 do
   begin

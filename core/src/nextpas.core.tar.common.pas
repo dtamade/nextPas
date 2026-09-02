@@ -4,7 +4,12 @@ unit nextpas.core.tar.common;
  * 校验和 / 数值 / 文本与 pax / 守卫单点，消除两端重复，保证 fail-closed 一致。
  * 内部单元：仅供 nextpas.core.tar.* 实现内复用，禁止门面外直引；不属于公共 API。
  * 范式：已在 core/docs/design-conventions.md §2 范式例外备案，CONTRACT 约定内部不 re-export 且门面禁引，由 test_tar_contract 机械门禁。
- * 性能：薄守卫 inline + 零拷贝 PByte 切片；循环体外联守 design-conventions 真实循环体禁 inline，Checksum 经 bytes.ops SpanSumBytes/SumBytes/BytesCountHighBit SWAR 单源向量化，pax 经 archive.pax 单源。
+ * 性能：
+ * - 薄守卫 inline
+ * - 零拷贝 PByte 切片
+ * - 循环体外联守 design-conventions 真实循环体禁 inline
+ * - Checksum 经 bytes.ops BytesSumAndCountHighBit SWAR 单源向量化（单遍融合，1 分发 vs 旧 4 分发）
+ * - pax 经 archive.pax 单源
  *}
 
 {$I nextpas.core.settings.inc}
@@ -90,21 +95,29 @@ begin
     raise EParseError.Create('tar: refusing unsafe entry name: ' + AName);
 end;
 
-{ — 校验和：SIMD 单源双累加 — }
+{ — 校验和：单遍融合双累加（外联，真实循环体禁 inline） — }
 procedure TarComputeChecksumsDual(ABlock: PByte; out AU, ASig: Int64);
 var
-  LSumHead, LSumTail: UInt64;
+  LSum: UInt64;
   LHigh: SizeUInt;
+  I: SizeUInt;
 begin
-  // perf: SIMD dispatch via bytes.ops BytesSum/BytesCountHighBit SWAR 单源（nextpas.core.simd SumBytes + bytes.ops 高位 SWAR 向量化），零拷贝 PByte 切片，外联；dual accumulation fused via AU + signed correction，消除 512B 双循环分支（→ 2×QWord 64-bit/8 + SIMD dispatch）
-  LSumHead := BytesSum(ABlock, C_TAR_LAYOUT.Chksum.Off);
-  LSumTail := BytesSum(ABlock + C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len,
-    C_TAR_BLOCK_SIZE - (C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len));
-  AU := Int64(LSumHead + LSumTail + UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
-  // signed correction: ASig = AU -256*highCount (high bit set) — 向量化 via bytes.ops BytesCountHighBit 单源 SWAR，无分支
-  LHigh := BytesCountHighBit(ABlock, C_TAR_LAYOUT.Chksum.Off)
-         + BytesCountHighBit(ABlock + C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len,
-            C_TAR_BLOCK_SIZE - (C_TAR_LAYOUT.Chksum.Off + C_TAR_LAYOUT.Chksum.Len));
+  // perf: fused single-pass via bytes.ops BytesSumAndCountHighBit SWAR 单源，零拷贝 PByte 切片，外联（design-conventions 真实循环体禁 inline，避 I-Cache 膨胀）；dual via AU + signed correction，消除 512B 双循环分支 + 4 次 SIMD 分发 → 单遍 QWord 64-bit/8 单分发
+  // evidence: single BytesSumAndCountHighBit dispatch over 512B whole block + 8-byte scalar hole fix, vs old BytesSum×2+BytesCountHighBit×2=4 dispatches；2000 条目 8000→2000 调度
+  // stability: nil guard keeps fail-closed identical to old BytesSum nil-early-exit; no AV on hole deref
+  if ABlock = nil then
+  begin
+    AU := Int64(UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
+    ASig := AU;
+    Exit;
+  end;
+  BytesSumAndCountHighBit(ABlock, C_TAR_BLOCK_SIZE, LSum, LHigh);
+  for I := 0 to C_TAR_LAYOUT.Chksum.Len - 1 do
+  begin
+    LSum := LSum - ABlock[C_TAR_LAYOUT.Chksum.Off + I];
+    LHigh := LHigh - SizeUInt((ABlock[C_TAR_LAYOUT.Chksum.Off + I] shr 7) and 1);
+  end;
+  AU := Int64(LSum + UInt64(C_TAR_LAYOUT.Chksum.Len) * Ord(' '));
   ASig := AU - Int64(LHigh) * 256;
 end;
 
@@ -134,6 +147,7 @@ procedure TarVerifyBlockChecksum(ABlock: PByte; APos: SizeUInt); inline;
 var
   Stored, U, S: Int64;
 begin
+  // perf: thin guard inline + zero-copy PByte slice, single dispatch via dual (old 4→1), fail-closed
   Stored := TarStoredChecksum(ABlock);
   TarComputeChecksumsDual(ABlock, U, S);
   if (Stored <> U) and (Stored <> S) then
@@ -142,8 +156,9 @@ end;
 
 function TarHeaderIsZeroBlock(ABlock: PByte): Boolean;
 begin
-  // perf: SIMD dispatch via IsZeroBytes single source (bytes.ops MemEqual chunked), zero-copy PByte slice; eliminates 512B serial scan per Next, out-of-line per design-conventions
+  // perf: fast qword reject + SIMD dispatch via IsZeroBytes single source (bytes.ops MemEqual chunked), zero-copy PByte slice; out-of-line loop per design-conventions, single dispatch vs 512B serial scan
   if ABlock = nil then Exit(True);
+  if PQWord(ABlock)^ <> 0 then Exit(False);
   Result := IsZeroBytes(TByteSpan.Create(ABlock, C_TAR_BLOCK_SIZE));
 end;
 

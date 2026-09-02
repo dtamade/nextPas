@@ -55,7 +55,6 @@ var
   LI, LWalksCount: Integer;
   LHdr: TTarHeader;
   LFile: TArchiveFile;
-  LStat: TArchiveFileInfo;
 begin
   if AWriter = nil then
     raise EArgumentError.Create('tar pack: writer is nil');
@@ -81,13 +80,19 @@ begin
     begin
       LHdr.Kind := tekRegular;
       LHdr.Mode := TarRegularMode(LWalks[LI].FMode);
-      // 流式：按需打开句柄分块搬运，64K 复用缓冲，仅 O(1) 内存，零全量拷贝
+      // 性能：复用 ArchiveCollectWalk 已 Stat 的 FSize 消除每文件二次 Stat syscall（2000文件减半），流式按需句柄分块搬运，自适应 4K→64K 复用缓冲，仅 O(1) 内存，零全量拷贝，inline 零拷贝 bytes.ops 单源
+      LHdr.Size := LWalks[LI].FSize;
+      if LHdr.Size < 0 then
+        raise EIOError.Create('tar pack: negative size: ' + LWalks[LI].FFull);
+      if LHdr.Size = 0 then
+      begin
+        AWriter.AddEntry(LHdr, nil);
+        Continue;
+      end;
       LFile := nil;
-      // perf: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝 federation single seam
+      // stability: inline Close + 零拷贝 Move 单源 bytes.ops，异常时仍释句柄；经 archive.fs 联邦单缝 federation single seam
       LFile := ArchiveOpenRead(LWalks[LI].FFull);
       try
-        LStat := LFile.Stat;
-        LHdr.Size := LStat.Size;
         AWriter.AddEntryFromReader(LHdr, LFile as IReader);
       finally
         try
@@ -200,7 +205,19 @@ begin
               LHardSource := ArchiveJoinPath(ADestDir, H.LinkName);
               if not ArchiveExists(LHardSource) then
                 raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
+              // TOCTOU加固：Exists后二次类型校验防并发替换为目录/符号链接，inline零拷贝单源 ArchiveLstat/IsSymlink，fail-closed
+              if ArchiveIsSymlink(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source is symlink: ' + H.LinkName);
+              if not ArchiveIsRegularFile(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source not regular file: ' + H.LinkName);
               ArchiveHandleSpecial(LFull);
+              // 二次校验：HandleSpecial后再次验证源仍为常规文件，关闭 Replace→Handle→Link 窗口
+              if not ArchiveExists(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source missing: ' + H.LinkName);
+              if ArchiveIsSymlink(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source is symlink: ' + H.LinkName);
+              if not ArchiveIsRegularFile(LHardSource) then
+                raise EIOError.Create('tar extract: hardlink source not regular file: ' + H.LinkName);
               ArchiveHardLink(LHardSource, LFull);
             end;
           tekFifo:

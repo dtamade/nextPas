@@ -96,6 +96,9 @@ function AlignUp4K(const AValue: SizeUInt): SizeUInt; inline;
 { 单源高位计数：统计 >=128 字节数（bit7=1），SWAR 64-bit 单源 + 尾部无分支，复用 simd 单源思想；tar 校验和 signed 校正单源，避免 512B 双循环分支开销，零拷贝 PByte 切片，外联禁 inline }
 function BytesCountHighBit(const AData: PByte; ALen: SizeUInt): SizeUInt;
 function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
+{ 单源融合：一次 SWAR 遍历同时计算字节和与高位计数，零拷贝 PByte 切片，外联禁 inline；tar 校验和 dual 单遍单源，消除 BytesSum×2+BytesCountHighBit×2 四分发 → 单分发 SWAR 8 字节 QWord + 尾部无分支 }
+procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
 
 implementation
 
@@ -281,28 +284,55 @@ end;
 
 procedure ScanNulFieldTruncations(const ABlock: TByteSpan; const AFields: array of TFieldRange; ATruncs: PSizeUInt);
 var
-  I, J, N: SizeUInt;
+  N, I, LCap: SizeUInt;
   Found: SizeUInt;
+  LOff, LLen: SizeUInt;
+  LIdx: SmallInt;
+  LMap: array[0..511] of SmallInt; // stack LUT: off -> field index, -1 = none, FillChar $FF = -1; eliminates inner J loop
+  K: SizeUInt;
+  LFnd: SizeInt;
 begin
-  // single-source: one pass truncates N fields at first NUL, out-of-line, zero-alloc
+  // perf: single 512B pass truncates N fields at first NUL via offset->field LUT (stack, zero-alloc, zero-copy PByte view, out-of-line per design-conventions loop ban). Branch 3584->512/Next (~7x, 2000条目 7M->1M), single source Span/bytes.ops for tar 7-field cache; early exit when Found=N.
   N := SizeUInt(Length(AFields));
-  for J := 0 to N - 1 do
-    ATruncs[J] := AFields[J].Len;
+  for I := 0 to N - 1 do
+    ATruncs[I] := AFields[I].Len;
   if (ABlock.Len = 0) or (ABlock.Data = nil) or (N = 0) then Exit;
+  // fast path: tar header 512B fits stack LUT 512; longer blocks fallback to per-field SpanIndexOf SIMD single source (still O(N*fieldLen) zero-copy, no 512*N double loop)
+  if ABlock.Len > 512 then
+  begin
+    for I := 0 to N - 1 do
+    begin
+      LOff := AFields[I].Off;
+      LLen := AFields[I].Len;
+      if (LOff >= ABlock.Len) or (LLen = 0) then Continue;
+      if LOff + LLen > ABlock.Len then LLen := ABlock.Len - LOff;
+      LFnd := SpanIndexOf(TByteSpan.Create(ABlock.Data + LOff, LLen), 0);
+      if LFnd >= 0 then
+        ATruncs[I] := SizeUInt(LFnd);
+    end;
+    Exit;
+  end;
+  LCap := ABlock.Len;
+  FillChar(LMap, SizeOf(LMap), $FF); // -1
+  for I := 0 to N - 1 do
+  begin
+    LOff := AFields[I].Off;
+    LLen := AFields[I].Len;
+    if LOff >= LCap then Continue;
+    if LOff + LLen > LCap then LLen := LCap - LOff;
+    for K := 0 to LLen - 1 do
+      LMap[LOff + K] := SmallInt(I);
+  end;
   Found := 0;
-  for I := 0 to ABlock.Len - 1 do
+  for I := 0 to LCap - 1 do
   begin
     if ABlock.Data[I] <> 0 then Continue;
-    for J := 0 to N - 1 do
-    begin
-      if (ATruncs[J] <> AFields[J].Len) then Continue;
-      if (I >= AFields[J].Off) and (I < AFields[J].Off + AFields[J].Len) then
-      begin
-        ATruncs[J] := I - AFields[J].Off;
-        Inc(Found);
-        if Found = N then Exit;
-      end;
-    end;
+    LIdx := LMap[I];
+    if LIdx < 0 then Continue;
+    if ATruncs[SizeUInt(LIdx)] <> AFields[SizeUInt(LIdx)].Len then Continue;
+    ATruncs[SizeUInt(LIdx)] := I - AFields[SizeUInt(LIdx)].Off;
+    Inc(Found);
+    if Found = N then Exit;
   end;
 end;
 
@@ -716,6 +746,51 @@ end;
 function SpanCountHighBit(const ASpan: TByteSpan): SizeUInt; inline;
 begin
   Result := BytesCountHighBit(ASpan.Data, ASpan.Len);
+end;
+
+procedure BytesSumAndCountHighBit(const AData: PByte; ALen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
+var
+  QC: SizeUInt;
+  PQ: PQWord;
+  V, M: QWord;
+  I: SizeUInt;
+const
+  C_HighMask = QWord($8080808080808080);
+  C_SumMask = QWord($0101010101010101);
+begin
+  ASum := 0;
+  AHigh := 0;
+  if (AData = nil) or (ALen = 0) then Exit;
+  QC := ALen div 8;
+  if QC > 0 then
+  begin
+    PQ := PQWord(AData);
+    for I := 0 to QC - 1 do
+    begin
+      V := PQ[I];
+      M := (V and C_HighMask) shr 7;
+      AHigh := AHigh + SizeUInt((M * C_SumMask) shr 56);
+      ASum := ASum + QWord(Byte(V)) + QWord(Byte(V shr 8)) + QWord(Byte(V shr 16)) + QWord(Byte(V shr 24))
+            + QWord(Byte(V shr 32)) + QWord(Byte(V shr 40)) + QWord(Byte(V shr 48)) + QWord(Byte(V shr 56));
+    end;
+  end;
+  for I := QC * 8 to ALen - 1 do
+  begin
+    ASum := ASum + AData[I];
+    AHigh := AHigh + SizeUInt((AData[I] shr 7) and 1);
+  end;
+end;
+
+function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
+begin
+  if (ASpan.Len = 0) or (ASpan.Data = nil) then
+  begin
+    ASum := 0;
+    AHigh := 0;
+    Exit(False);
+  end;
+  BytesSumAndCountHighBit(ASpan.Data, ASpan.Len, ASum, AHigh);
+  Result := True;
 end;
 
 function BytesIsZero(const AData: TBytes): Boolean; inline;
