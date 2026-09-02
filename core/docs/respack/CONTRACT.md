@@ -106,6 +106,7 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 耗时+8%内，最坏同桶全 miss +15%内 均≤1.3× Go/Rust（`bench_writer_dedup`） |
 
 > 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。`Build(Dedup on)` 零拷贝证据 `ContentPtr inline+bytes.ops.Move`。
+> CI 建议：bench_writer_dedup / bench_servevfs 固化为 nightly，对照 FPC/Go/Rust 同机跑
 
 ---
 

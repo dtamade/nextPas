@@ -246,32 +246,25 @@ begin
   Cur := DataStart;
   if AOpts.Deduplicate then
   begin
-    BucketsHead := nil;
-    SlotNext := nil;
-    DedupArena := nil;
-    ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
-    try
+    // tiny N<=4 线性免 arena
+    if N <= 4 then
+    begin
       if N > 0 then
         for I := 0 to N - 1 do
         begin
           J := ALayout.Order[I];
           ALayout.EntrySlots[J] := SizeUInt(-1);
-          BucketIdx := SizeUInt(ALayout.FnvBuf[J]) and (BucketCount - 1);
-          Probe := BucketsHead[BucketIdx];
-          while Probe <> -1 do
-          begin
-            K := SizeUInt(Probe);
-            if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
-              and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
-              and ((AEntries[J].DataSize = 0)
-                or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
-                  TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
-            begin
-              ALayout.EntrySlots[J] := K;
-              Break;
-            end;
-            Probe := SlotNext[K];
-          end;
+          if SlotCount > 0 then
+            for K := 0 to SlotCount - 1 do
+              if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
+                and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
+                and ((AEntries[J].DataSize = 0)
+                  or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
+                    TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+              begin
+                ALayout.EntrySlots[J] := K;
+                Break;
+              end;
           if ALayout.EntrySlots[J] = SizeUInt(-1) then
           begin
             Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
@@ -281,16 +274,60 @@ begin
               ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
             else
               ALayout.Slots[SlotCount].Fnv := 0;
-            SlotNext[SlotCount] := BucketsHead[BucketIdx];
-            BucketsHead[BucketIdx] := SizeInt(SlotCount);
             ALayout.EntrySlots[J] := SlotCount;
             Cur := Cur + UInt64(AEntries[J].DataSize);
             Inc(SlotCount);
           end;
         end;
-      finally
-        ResPackDedupDone(DedupArena);
-      end;
+    end
+    else
+    begin
+      BucketsHead := nil;
+      SlotNext := nil;
+      DedupArena := nil;
+      ResPackDedupInit(N, DedupArena, BucketsHead, SlotNext, BucketCount);
+      try
+        if N > 0 then
+          for I := 0 to N - 1 do
+          begin
+            J := ALayout.Order[I];
+            ALayout.EntrySlots[J] := SizeUInt(-1);
+            BucketIdx := SizeUInt(ALayout.FnvBuf[J]) and (BucketCount - 1);
+            Probe := BucketsHead[BucketIdx];
+            while Probe <> -1 do
+            begin
+              K := SizeUInt(Probe);
+              if (ALayout.Slots[K].Fnv = ALayout.FnvBuf[J])
+                and (AEntries[J].DataSize = AEntries[ALayout.Slots[K].SrcIdx].DataSize)
+                and ((AEntries[J].DataSize = 0)
+                  or nextpas.core.bytes.ops.SpanEqual(TByteSpan.Create(AEntries[J].Data, AEntries[J].DataSize),
+                    TByteSpan.Create(AEntries[ALayout.Slots[K].SrcIdx].Data, AEntries[J].DataSize))) then
+              begin
+                ALayout.EntrySlots[J] := K;
+                Break;
+              end;
+              Probe := SlotNext[K];
+            end;
+            if ALayout.EntrySlots[J] = SizeUInt(-1) then
+            begin
+              Cur := AlignUpU64(Cur, RESPACK_DATA_ALIGN);
+              ALayout.Slots[SlotCount].Offset := Cur;
+              ALayout.Slots[SlotCount].SrcIdx := J;
+              if NeedFnv then
+                ALayout.Slots[SlotCount].Fnv := ALayout.FnvBuf[J]
+              else
+                ALayout.Slots[SlotCount].Fnv := 0;
+              SlotNext[SlotCount] := BucketsHead[BucketIdx];
+              BucketsHead[BucketIdx] := SizeInt(SlotCount);
+              ALayout.EntrySlots[J] := SlotCount;
+              Cur := Cur + UInt64(AEntries[J].DataSize);
+              Inc(SlotCount);
+            end;
+          end;
+        finally
+          ResPackDedupDone(DedupArena);
+        end;
+    end;
   end
   else if N > 0 then
     for I := 0 to N - 1 do

@@ -24,7 +24,7 @@ procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
 { perf: LZ-dict overlapping replicate — inline + block Move via doubling, single source for CopyMatch, zero-copy, O(log n) Moves, overlap-safe }
 procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
-{ respack/writer 单源：路径/内容零拷贝搬运与零填，inline 单 Move/Fill，无额外分配，显式标注 bytes.ops 单源防漂移 }
+{ 零拷贝搬运/零填，单 Move/Fill，bytes.ops 单源 }
 procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
 procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
 procedure SpanZero(const ASpan: TByteSpan); inline;
