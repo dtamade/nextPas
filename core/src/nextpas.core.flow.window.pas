@@ -44,9 +44,6 @@ type
     property InitWindow: UInt32 read FInitWindow;
   end;
 
-  { 兼容别名：ssh 侧历史名称，转发至通用窗口，零成本 alias }
-  TChannelWindow = TFlowWindow;
-
 implementation
 
 procedure TFlowWindow.Init(AInitWindow, APeerWindow, APeerMaxPacket: UInt32); inline;

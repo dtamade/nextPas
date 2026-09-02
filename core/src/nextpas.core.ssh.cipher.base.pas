@@ -38,9 +38,6 @@ procedure RequireLen(const ABuf: TBytes; ANeeded: Integer; const AWhat: string);
 
 implementation
 
-uses
-  nextpas.core.hash.base;
-
 function IsChachaName(const AName: string): Boolean;
 begin
   Result := AName = 'chacha20-poly1305@openssh.com';
@@ -107,9 +104,9 @@ end;
 function SshMacKeySize(const AMac: string): Integer;
 begin
   if AMac = 'hmac-sha2-256-etm@openssh.com' then
-    Result := SHA256_DIGEST_SIZE
+    Result := 32 // SHA256_DIGEST_SIZE, avoid hash.base same-layer dep; base keeps pure constants
   else if AMac = 'hmac-sha2-512-etm@openssh.com' then
-    Result := SHA512_DIGEST_SIZE
+    Result := 64 // SHA512_DIGEST_SIZE
   else
     Result := 0;
 end;

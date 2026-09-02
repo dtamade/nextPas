@@ -15,7 +15,6 @@ uses
 
 type
   TKeepAliveScheduler = nextpas.core.net.maintenance.scheduler.TKeepAliveScheduler;
-  TNetKeepAliveScheduler = TKeepAliveScheduler;
 
 implementation
 

@@ -53,6 +53,7 @@ type
     FCtr: TAesCtrStream;
     FMacKey: TBytes;
     FMacAlgo: THashAlgorithm;
+    FHasher: IHasher; // reused HMAC instance: Reset per packet, avoids per-packet alloc+zero
     FWriteBuf: TBytes;
   public
     constructor Create(const ACipher, AMac: string; const AKey, AIV, AMacKey: TBytes);
@@ -69,6 +70,7 @@ type
     FMacKey: TBytes;
     FMacAlgo: THashAlgorithm;
     FMacTagSize: Integer;
+    FHasher: IHasher; // reused HMAC instance: Reset per packet
   public
     constructor Create(const ACipher, AMac: string; const AKey, AIV, AMacKey: TBytes);
     destructor Destroy; override;
@@ -87,11 +89,16 @@ begin
   FCtr.Init(AKey, AIV);
   FMacKey := Copy(AMacKey, 0, SshMacKeySize(AMac));
   FMacAlgo := MacAlgoOf(AMac);
+  if Length(FMacKey) > 0 then
+    FHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)))
+  else
+    FHasher := NewHMAC(FMacAlgo, FMacKey, 0);
 end;
 
 destructor TSshCtrEtmSender.Destroy;
 begin
   FCtr.Done;
+  FHasher := nil;
   SecureZeroBytes(FMacKey);
   SecureZeroBytes(FWriteBuf);
   inherited Destroy;
@@ -109,13 +116,12 @@ end;
 
 function TSshCtrEtmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LTag: TBytes;
   LBodyLen, LTagLen: SizeUInt;
-  LHasher: IHasher;
   LSeqBE: array[0..3] of Byte;
 begin
   LBodyLen := SizeUInt(Length(ABodyPlain));
   LTagLen := SizeUInt(Length(FMacKey));
+  // perf: single-source BytesEnsureCapacity (bytes.ops) + inline PutU32BE/WriteUInt32BE, reused HMAC+buf
   BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + LTagLen);
   SetLength(FWriteBuf, 4 + LBodyLen + LTagLen);
   PutU32BE(FWriteBuf, 0, UInt32(LBodyLen));
@@ -123,14 +129,13 @@ begin
     Move(ABodyPlain[0], FWriteBuf[4], LBodyLen);
   FCtr.XorInto(FWriteBuf, 4, LBodyLen);
   WriteUInt32BE(@LSeqBE[0], ASeq);
-  LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
-  LHasher.Write(LSeqBE[0], 4);
-  LHasher.Write(FWriteBuf[0], 4);
+  // reuse HMAC instance: Reset avoids per-packet NewHMAC alloc/clear; Sum directly into tail avoids LTag alloc+Move
+  FHasher.Reset;
+  FHasher.Write(LSeqBE[0], 4);
+  FHasher.Write(FWriteBuf[0], 4);
   if LBodyLen > 0 then
-    LHasher.Write(FWriteBuf[4], LBodyLen);
-  LTag := LHasher.SumBytes;
-  Move(LTag[0], FWriteBuf[4 + LBodyLen], LTagLen);
-  SecureZeroBytes(LTag);
+    FHasher.Write(FWriteBuf[4], LBodyLen);
+  FHasher.Sum(FWriteBuf[4 + LBodyLen], LTagLen);
   SecureZeroMemory(@LSeqBE[0], SizeOf(LSeqBE));
   Result := FWriteBuf;
   FWriteBuf := nil; // move ownership single alloc zero-copy
@@ -138,9 +143,7 @@ end;
 
 function TSshCtrEtmSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
 var
-  LTag: TBytes;
   LPayloadLen, LBodyLen, LTagLen: SizeUInt;
-  LHasher: IHasher;
   LSeqBE: array[0..3] of Byte;
 begin
   LPayloadLen := SizeUInt(Length(APayload));
@@ -157,14 +160,12 @@ begin
       raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
   FCtr.XorInto(FWriteBuf, 4, LBodyLen);
   WriteUInt32BE(@LSeqBE[0], ASeq);
-  LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
-  LHasher.Write(LSeqBE[0], 4);
-  LHasher.Write(FWriteBuf[0], 4);
+  FHasher.Reset;
+  FHasher.Write(LSeqBE[0], 4);
+  FHasher.Write(FWriteBuf[0], 4);
   if LBodyLen > 0 then
-    LHasher.Write(FWriteBuf[4], LBodyLen);
-  LTag := LHasher.SumBytes;
-  Move(LTag[0], FWriteBuf[4 + LBodyLen], LTagLen);
-  SecureZeroBytes(LTag);
+    FHasher.Write(FWriteBuf[4], LBodyLen);
+  FHasher.Sum(FWriteBuf[4 + LBodyLen], LTagLen);
   SecureZeroMemory(@LSeqBE[0], SizeOf(LSeqBE));
   Result := FWriteBuf;
   FWriteBuf := nil;
@@ -181,11 +182,16 @@ begin
   FMacKey := Copy(AMacKey, 0, SshMacKeySize(AMac));
   FMacAlgo := MacAlgoOf(AMac);
   FMacTagSize := MacTagSizeOf(AMac);
+  if Length(FMacKey) > 0 then
+    FHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)))
+  else
+    FHasher := NewHMAC(FMacAlgo, FMacKey, 0);
 end;
 
 destructor TSshCtrEtmReceiver.Destroy;
 begin
   FCtr.Done;
+  FHasher := nil;
   SecureZeroBytes(FMacKey);
   inherited Destroy;
 end;
@@ -203,8 +209,7 @@ end;
 function TSshCtrEtmReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
   LBodyLen: UInt32;
-  LExpect: TBytes;
-  LHasher: IHasher;
+  LExpect: array[0..63] of Byte; // stack buffer max SHA512 64, no heap alloc
   LSeqBE: array[0..3] of Byte;
   LWireLen: SizeUInt;
 begin
@@ -215,24 +220,22 @@ begin
   if LWireLen < 4 + SizeUInt(LBodyLen) + SizeUInt(FMacTagSize) then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: ctr packet truncated');
   WriteUInt32BE(@LSeqBE[0], ASeq);
-  LHasher := NewHMAC(FMacAlgo, FMacKey[0], SizeUInt(Length(FMacKey)));
   try
-    LHasher.Write(LSeqBE[0], 4);
-    LHasher.Write(AWire[0], 4);
+    // reuse HMAC: Reset + stack Sum avoids per-packet IHasher+LExpect alloc
+    FHasher.Reset;
+    FHasher.Write(LSeqBE[0], 4);
+    FHasher.Write(AWire[0], 4);
     if LBodyLen > 0 then
-      LHasher.Write(AWire[4], LBodyLen);
-    LExpect := LHasher.SumBytes;
-    try
-      if TConstantTime.CompareBuffer(@LExpect[0], @AWire[4 + LBodyLen], UInt32(FMacTagSize)) <> 1 then
-        raise ESSHError.Create(sekCrypto, 'ssh cipher: etm mac mismatch');
-      SetLength(Result, LBodyLen);
-      if LBodyLen > 0 then
-        Move(AWire[4], Result[0], LBodyLen);
-      FCtr.XorInto(Result, 0, SizeUInt(LBodyLen));
-    finally
-      SecureZeroBytes(LExpect);
-    end;
+      FHasher.Write(AWire[4], LBodyLen);
+    FHasher.Sum(LExpect[0], SizeUInt(FMacTagSize));
+    if TConstantTime.CompareBuffer(@LExpect[0], @AWire[4 + LBodyLen], UInt32(FMacTagSize)) <> 1 then
+      raise ESSHError.Create(sekCrypto, 'ssh cipher: etm mac mismatch');
+    SetLength(Result, LBodyLen);
+    if LBodyLen > 0 then
+      Move(AWire[4], Result[0], LBodyLen);
+    FCtr.XorInto(Result, 0, SizeUInt(LBodyLen));
   finally
+    SecureZeroMemory(@LExpect[0], SizeOf(LExpect));
     SecureZeroMemory(@LSeqBE[0], SizeOf(LSeqBE));
   end;
 end;

@@ -16,7 +16,6 @@ uses
 
 type
   TFlowWindow = nextpas.core.flow.window.TFlowWindow;
-  TChannelWindow = nextpas.core.flow.window.TChannelWindow;
 
 const
   FLOW_WINDOW_LOW_WATER_DIVISOR = nextpas.core.flow.window.base.FLOW_WINDOW_LOW_WATER_DIVISOR;

@@ -88,6 +88,7 @@ function SshExec(const AHost: string; APort: Word;
 implementation
 
 uses
+  nextpas.core.mem.secure,
   nextpas.core.ssh.proxyjump;
 
 function DefaultSshOptions(const AHost: string): TSshConnectOptions;
@@ -125,11 +126,18 @@ begin
   LOpts.Port := APort;
   LOpts.User := AUser;
   LOpts.Password := APassword;
-  LSession := nextpas.core.ssh.session.SshConnect(LOpts);
   try
-    Result := LSession.Exec(ACommand);
+    LSession := nextpas.core.ssh.session.SshConnect(LOpts);
+    try
+      Result := LSession.Exec(ACommand);
+    finally
+      LSession.Close;
+    end;
   finally
-    LSession.Close;
+    SecureZeroString(LOpts.Password);
+    LOpts.Password := '';
+    SecureZeroString(LOpts.PrivateKeyPassphrase);
+    LOpts.PrivateKeyPassphrase := '';
   end;
 end;
 

@@ -38,8 +38,6 @@ type
     property Handle: TAsyncTimerHandle read FHandle;
   end;
 
-  TNetKeepAliveScheduler = TKeepAliveScheduler;
-
 implementation
 
 procedure TKeepAliveScheduler.Init(AIntervalMs: Integer; ALoop: TAsyncLoop); inline;

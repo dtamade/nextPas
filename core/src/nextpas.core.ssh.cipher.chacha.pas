@@ -96,43 +96,43 @@ end;
 
 function TSshChachaSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LPolyKey, LTag: TBytes;
+  LNonce: array[0..11] of Byte;
+  LHeaderBlock: array[0..63] of Byte;
+  LPolyBlock: array[0..63] of Byte;
   LBodyLen: SizeUInt;
   LEncLenBE: UInt32;
 begin
   LBodyLen := SizeUInt(Length(ABodyPlain));
   BytesEnsureCapacity(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
   SetLength(FWriteBuf, 4 + LBodyLen + CHACHA_TAG);
-  LNonce := ChachaNonce(ASeq);
-  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  FillChar(LNonce, SizeOf(LNonce), 0);
+  WriteUInt32BE(PByte(@LNonce[8]), ASeq);
+  ChaCha20BlockToBuf(FHeaderKey, @LNonce[0], 0, @LHeaderBlock[0]);
   try
-    LEncLenBE := UInt32(LBodyLen) xor U32BEOf(LMask, 0);
+    LEncLenBE := UInt32(LBodyLen) xor ReadUInt32BE(PByte(@LHeaderBlock[0]));
     PutU32BE(FWriteBuf, 0, LEncLenBE);
     if LBodyLen > 0 then
-    begin
-      if not ChaCha20XorTo(FMainKey, LNonce, 1, @ABodyPlain[0], Integer(LBodyLen), @FWriteBuf[4]) then
+      if not ChaCha20XorToBuf(FMainKey, @LNonce[0], 1, @ABodyPlain[0], Integer(LBodyLen), @FWriteBuf[4]) then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
-    end;
-    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-    SetLength(LPolyKey, 32);
+    ChaCha20BlockToBuf(FMainKey, @LNonce[0], 0, @LPolyBlock[0]);
     try
-      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)]);
-      Move(LTag[0], FWriteBuf[4 + LBodyLen], CHACHA_TAG);
+      Poly1305RawSpansDirect(@LPolyBlock[0], [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)], PByte(@FWriteBuf[4 + LBodyLen]));
       Result := FWriteBuf;
       FWriteBuf := nil; // move ownership single alloc zero-copy; prevent next BytesEnsureCapacity COW full copy
     finally
-      SecureZeroBytes(LPolyKey);
-      SecureZeroBytes(LTag);
+      SecureZeroMemory(@LPolyBlock[0], SizeOf(LPolyBlock));
     end;
   finally
-    SecureZeroBytes(LMask);
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LHeaderBlock[0], SizeOf(LHeaderBlock));
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 
 function TSshChachaSender.ProtectPayload(const APayload: TBytes; APadLen: SizeUInt; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LPolyKey, LTag: TBytes;
+  LNonce: array[0..11] of Byte;
+  LHeaderBlock: array[0..63] of Byte;
+  LPolyBlock: array[0..63] of Byte;
   LPayloadLen, LBodyLen: SizeUInt;
   LEncLenBE: UInt32;
 begin
@@ -146,28 +146,26 @@ begin
   if APadLen > 0 then
     if not SecureRandomBytes(@FWriteBuf[5 + LPayloadLen], Integer(APadLen)) then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: SecureRandom failed');
-  LNonce := ChachaNonce(ASeq);
-  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  FillChar(LNonce, SizeOf(LNonce), 0);
+  WriteUInt32BE(PByte(@LNonce[8]), ASeq);
+  ChaCha20BlockToBuf(FHeaderKey, @LNonce[0], 0, @LHeaderBlock[0]);
   try
-    LEncLenBE := UInt32(LBodyLen) xor U32BEOf(LMask, 0);
+    LEncLenBE := UInt32(LBodyLen) xor ReadUInt32BE(PByte(@LHeaderBlock[0]));
     PutU32BE(FWriteBuf, 0, LEncLenBE);
     if LBodyLen > 0 then
-      if not ChaCha20XorTo(FMainKey, LNonce, 1, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[4]) then
+      if not ChaCha20XorToBuf(FMainKey, @LNonce[0], 1, @FWriteBuf[4], Integer(LBodyLen), @FWriteBuf[4]) then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
-    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-    SetLength(LPolyKey, 32);
+    ChaCha20BlockToBuf(FMainKey, @LNonce[0], 0, @LPolyBlock[0]);
     try
-      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)]);
-      Move(LTag[0], FWriteBuf[4 + LBodyLen], CHACHA_TAG);
+      Poly1305RawSpansDirect(@LPolyBlock[0], [TByteSpan.Create(@FWriteBuf[0], 4), TByteSpan.Create(@FWriteBuf[4], LBodyLen)], PByte(@FWriteBuf[4 + LBodyLen]));
       Result := FWriteBuf;
       FWriteBuf := nil; // move ownership single alloc
     finally
-      SecureZeroBytes(LPolyKey);
-      SecureZeroBytes(LTag);
+      SecureZeroMemory(@LPolyBlock[0], SizeOf(LPolyBlock));
     end;
   finally
-    SecureZeroBytes(LMask);
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LHeaderBlock[0], SizeOf(LHeaderBlock));
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 
@@ -188,15 +186,17 @@ end;
 
 function TSshChachaReceiver.BodyLengthFromHeader(ASeq: UInt32; const AHeader: TBytes): UInt32;
 var
-  LMask, LNonce: TBytes;
+  LNonce: array[0..11] of Byte;
+  LBlock: array[0..63] of Byte;
 begin
-  LNonce := ChachaNonce(ASeq);
-  LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
+  FillChar(LNonce, SizeOf(LNonce), 0);
+  WriteUInt32BE(PByte(@LNonce[8]), ASeq);
+  ChaCha20BlockToBuf(FHeaderKey, @LNonce[0], 0, @LBlock[0]);
   try
-    Result := U32BEOf(AHeader, 0) xor U32BEOf(LMask, 0);
+    Result := ReadUInt32BE(PByte(@AHeader[0])) xor ReadUInt32BE(PByte(@LBlock[0]));
   finally
-    SecureZeroBytes(LMask);
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LBlock[0], SizeOf(LBlock));
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 
@@ -207,32 +207,34 @@ end;
 
 function TSshChachaReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LNonce, LPolyKey, LExpect: TBytes;
+  LNonce: array[0..11] of Byte;
+  LPolyBlock: array[0..63] of Byte;
+  LExpected: array[0..15] of Byte;
   LWireLen, LCtLen: SizeUInt;
 begin
   LWireLen := SizeUInt(Length(AWire));
   if LWireLen < 4 + CHACHA_TAG then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: chacha packet truncated');
   LCtLen := LWireLen - 4 - CHACHA_TAG;
-  LNonce := ChachaNonce(ASeq);
+  FillChar(LNonce, SizeOf(LNonce), 0);
+  WriteUInt32BE(PByte(@LNonce[8]), ASeq);
   try
-    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-    SetLength(LPolyKey, 32);
+    ChaCha20BlockToBuf(FMainKey, @LNonce[0], 0, @LPolyBlock[0]);
     try
-      LExpect := Poly1305RawSpans(LPolyKey,
-        [TByteSpan.Create(@AWire[0], 4), TByteSpan.Create(@AWire[4], LCtLen)]);
-      if TConstantTime.CompareBuffer(@LExpect[0], @AWire[LWireLen - CHACHA_TAG], CHACHA_TAG) <> 1 then
+      Poly1305RawSpansDirect(@LPolyBlock[0],
+        [TByteSpan.Create(@AWire[0], 4), TByteSpan.Create(@AWire[4], LCtLen)], @LExpected[0]);
+      if TConstantTime.CompareBuffer(@LExpected[0], @AWire[LWireLen - CHACHA_TAG], CHACHA_TAG) <> 1 then
         raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
       SetLength(Result, LCtLen);
       if LCtLen > 0 then
-        if not ChaCha20XorTo(FMainKey, LNonce, 1, @AWire[4], Integer(LCtLen), @Result[0]) then
+        if not ChaCha20XorToBuf(FMainKey, @LNonce[0], 1, @AWire[4], Integer(LCtLen), @Result[0]) then
           raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha decrypt failed');
     finally
-      SecureZeroBytes(LExpect);
-      SecureZeroBytes(LPolyKey);
+      SecureZeroMemory(@LExpected[0], SizeOf(LExpected));
+      SecureZeroMemory(@LPolyBlock[0], SizeOf(LPolyBlock));
     end;
   finally
-    SecureZeroBytes(LNonce);
+    SecureZeroMemory(@LNonce[0], SizeOf(LNonce));
   end;
 end;
 

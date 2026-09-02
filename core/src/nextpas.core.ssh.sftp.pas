@@ -4,6 +4,8 @@ unit nextpas.core.ssh.sftp;
  *
  * 纯 re-export：聚合 base 常量/类型、intf 接口与 fs/conn/wire 实现
  * 的公共 API，不含业务逻辑；所有逻辑委托子模块。
+ * 奢华简洁：SFTP: TSftpConstants 单源 record const 为唯一常量缝隙，
+ * 逐项别名薄转发于 base 单源，门面仅 re-export SFTP 单点。
  * 性能/稳定性语义由子模块保证（IBytesBuilder 倍增、零拷贝偏移）。 *}
 
 {$I nextpas.core.settings.inc}
@@ -12,7 +14,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.text.conv,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer,
@@ -21,7 +22,11 @@ uses
   nextpas.core.ssh.sftp.intf,
   nextpas.core.ssh.transport;
 
+var
+  SFTP: nextpas.core.ssh.sftp.base.TSftpConstants absolute nextpas.core.ssh.sftp.base.SFTP;
+
 const
+  { 兼容薄别名（单源于 base 真常量，SFTP 为类型化集合单源）}
   SSH_FXP_INIT = nextpas.core.ssh.sftp.base.SSH_FXP_INIT;
   SSH_FXP_VERSION = nextpas.core.ssh.sftp.base.SSH_FXP_VERSION;
   SSH_FXP_OPEN = nextpas.core.ssh.sftp.base.SSH_FXP_OPEN;
@@ -59,6 +64,8 @@ const
   SSH_FILEXFER_ATTR_ACMODTIME = nextpas.core.ssh.sftp.base.SSH_FILEXFER_ATTR_ACMODTIME;
   SSH_FILEXFER_ATTR_EXTENDED = nextpas.core.ssh.sftp.base.SSH_FILEXFER_ATTR_EXTENDED;
   SFTP_CHUNK_SIZE = nextpas.core.ssh.sftp.base.SFTP_CHUNK_SIZE;
+  SFTP_PROTOCOL_VERSION = nextpas.core.ssh.sftp.base.SFTP_PROTOCOL_VERSION;
+  SFTP_MAX_PACKET_SIZE = nextpas.core.ssh.sftp.base.SFTP_MAX_PACKET_SIZE;
   SFTP_PIPELINE_WINDOW = nextpas.core.ssh.sftp.base.SFTP_PIPELINE_WINDOW;
 
 type

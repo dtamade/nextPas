@@ -68,6 +68,7 @@ type
     FPatterns: TStringArray;   { 每条目的 pattern 字段原样保留 }
     FBlobs: TBlobArray;
     FCount: Integer;
+    FCap: SizeUInt;
     procedure AddEntry(const APatterns: string; const ABlob: TBytes);
   public
     constructor Create;
@@ -93,6 +94,7 @@ function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.bigint,
@@ -294,10 +296,13 @@ end;
 function SshFingerprintSHA256(const ABlob: TBytes): string;
 var
   LB64: string;
+  LLen: Integer;
 begin
   LB64 := Base64Encode(SHA256(ABlob));
-  while (Length(LB64) > 0) and (LB64[Length(LB64)] = '=') do
-    Delete(LB64, Length(LB64), 1);
+  LLen := Length(LB64);
+  while (LLen > 0) and (LB64[LLen] = '=') do
+    Dec(LLen);
+  SetLength(LB64, LLen);
   Result := 'SHA256:' + LB64;
 end;
 
@@ -315,13 +320,18 @@ constructor TSshKnownHosts.Create;
 begin
   inherited Create;
   FCount := 0;
+  FCap := 0;
 end;
 
 procedure TSshKnownHosts.AddEntry(const APatterns: string; const ABlob: TBytes);
 begin
   Inc(FCount);
-  SetLength(FPatterns, FCount);
-  SetLength(FBlobs, FCount);
+  if SizeUInt(FCount) > FCap then
+  begin
+    BytesEnsureCapacity(FCap, SizeUInt(FCount));
+    SetLength(FPatterns, FCap);
+    SetLength(FBlobs, FCap);
+  end;
   FPatterns[FCount - 1] := APatterns;
   FBlobs[FCount - 1] := ABlob;
 end;
@@ -475,18 +485,26 @@ end;
 function TSshKnownHosts.BlobsForHost(const AHostName: string; APort: Word): TBlobArray;
 var
   I, LOut: Integer;
+  LCap: SizeUInt;
 begin
   Result := nil;
   LOut := 0;
+  LCap := 0;
   for I := 0 to FCount - 1 do
   begin
     if PatternMatches(FPatterns[I], AHostName, APort) then
     begin
+      if SizeUInt(LOut + 1) > LCap then
+      begin
+        BytesEnsureCapacity(LCap, SizeUInt(LOut + 1));
+        SetLength(Result, LCap);
+      end;
+      Result[LOut] := FBlobs[I];
       Inc(LOut);
-      SetLength(Result, LOut);
-      Result[LOut - 1] := FBlobs[I];
     end;
   end;
+  if SizeUInt(LOut) <> LCap then
+    SetLength(Result, LOut);
 end;
 
 function TSshKnownHosts.ContainsKey(const AHostName: string; APort: Word;

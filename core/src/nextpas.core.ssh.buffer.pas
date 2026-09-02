@@ -241,50 +241,20 @@ end;
 procedure TSshWriter.PutNameList(const ANames: array of string);
 var
   I: Integer;
-  LTotal: SizeUInt;
-  LOff: SizeUInt;
+  LArr: TStringArray;
+  LJoined: string;
 begin
   if Length(ANames) = 0 then
   begin
     PutStringText('');
     Exit;
   end;
-  { perf: zero intermediate TStringArray/StringsJoin heap alloc; single PutUInt32+single Ensure
-    (2x doubling single source bytes.builder/bytes.ops BYTES_BUILDER_MIN_GROW, amortized O(1)) +
-    bulk batch single allocation — O(n) single buffer growth, no temp string churn. High-freq
-    KEXINIT 10 name-lists/handshake: 10 heap allocs → zero heap, single FLen bump, inline candidate.
-    single source: reuses bytes.ops.StringToBytes zero-copy Move semantics via PAnsiChar^ (no
-    text.strings indirection), FBuf direct copy zero-copy payload, bytes.builder single batch.
-    stability: per-element UTF8IsValid mirrors PutStringText; overflow guarded via Ensure/packet-limit;
-    resource release unchanged (no alloc to leak). }
-  LTotal := 0;
+  { single source: comma join via text.strings.StringsJoin, UTF-8 via PutStringText }
+  SetLength(LArr, Length(ANames));
   for I := 0 to High(ANames) do
-  begin
-    if (Length(ANames[I]) > 0) and (not UTF8IsValid(PByte(PChar(ANames[I])), SizeUInt(Length(ANames[I])))) then
-      raise ESSHError.Create(sekProtocol, 'ssh buffer: PutNameList requires UTF-8');
-    Inc(LTotal, SizeUInt(Length(ANames[I])));
-  end;
-  if Length(ANames) > 1 then
-    Inc(LTotal, SizeUInt(Length(ANames) - 1));
-  PutUInt32(UInt32(LTotal));
-  if LTotal = 0 then
-    Exit;
-  Ensure(LTotal);
-  LOff := FLen;
-  for I := 0 to High(ANames) do
-  begin
-    if Length(ANames[I]) > 0 then
-    begin
-      Move(PAnsiChar(ANames[I])^, FBuf[LOff], Length(ANames[I]));
-      Inc(LOff, SizeUInt(Length(ANames[I])));
-    end;
-    if I < High(ANames) then
-    begin
-      FBuf[LOff] := Byte(',');
-      Inc(LOff);
-    end;
-  end;
-  FLen := LOff;
+    LArr[I] := ANames[I];
+  LJoined := StringsJoin(LArr, ',');
+  PutStringText(LJoined);
 end;
 
 procedure TSshWriter.PutRaw(const APtr: PByte; ALen: SizeUInt); inline;
@@ -439,26 +409,12 @@ end;
 function TSshReader.ReadNameList: TStringArray;
 var
   LJoined: string;
-  LParts: TStringArray;
-  I, LOut: Integer;
 begin
   LJoined := ReadStringText;
-  Result := nil;
-  SetLength(Result, 0);
   if LJoined = '' then
-    Exit;
-  LParts := StringsSplit(LJoined, ',');
-  LOut := 0;
-  SetLength(Result, Length(LParts));
-  for I := 0 to High(LParts) do
-  begin
-    if LParts[I] <> '' then
-    begin
-      Result[LOut] := LParts[I];
-      Inc(LOut);
-    end;
-  end;
-  SetLength(Result, LOut);
+    Exit(nil);
+  { single source: one scan with RemoveEmpty, no second allocation }
+  Result := StringsSplit(LJoined, ',', True);
 end;
 
 end.

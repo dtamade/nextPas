@@ -16,7 +16,6 @@ uses
 
 type
   TSshRekeyPolicy = nextpas.core.net.maintenance.rekey.TRekeyPolicy;
-  TRekeyPolicy = TSshRekeyPolicy;
 
 implementation
 

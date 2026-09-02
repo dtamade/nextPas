@@ -27,8 +27,6 @@ type
     property IntervalMs: Integer read FIntervalMs;
   end;
 
-  TNetKeepAlivePolicy = TKeepAlivePolicy;
-
 implementation
 
 procedure TKeepAlivePolicy.Init(AIntervalMs: Integer); inline;

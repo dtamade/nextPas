@@ -15,7 +15,6 @@ uses
 
 type
   TKeepAlivePolicy = nextpas.core.net.maintenance.keepalive.TKeepAlivePolicy;
-  TNetKeepAlivePolicy = TKeepAlivePolicy;
 
 implementation
 

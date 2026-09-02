@@ -227,56 +227,8 @@ begin
   LDst := PByte(Dst);
   LSrc := PByte(Src);
   LLen := Len;
-  // SIMD: 64/32/16 via SSE2 pxor (movdqu), zero-copy in-place, out-of-line; 16KB -> 256/512/1K iter vs 2K QWord (chacha/gcm parity)
-{$IFDEF CPUX86_64}
-  {$PUSH}{$Q-}{$R-}
-  while LLen >= 64 do
-  begin
-    asm
-      mov rax, LDst
-      mov rdx, LSrc
-      movdqu xmm0, [rax]
-      movdqu xmm1, [rax+16]
-      movdqu xmm2, [rax+32]
-      movdqu xmm3, [rax+48]
-      pxor xmm0, [rdx]
-      pxor xmm1, [rdx+16]
-      pxor xmm2, [rdx+32]
-      pxor xmm3, [rdx+48]
-      movdqu [rax], xmm0
-      movdqu [rax+16], xmm1
-      movdqu [rax+32], xmm2
-      movdqu [rax+48], xmm3
-    end;
-    Inc(LDst, 64); Inc(LSrc, 64); Dec(LLen, 64);
-  end;
-  while LLen >= 32 do
-  begin
-    asm
-      mov rax, LDst
-      mov rdx, LSrc
-      movdqu xmm0, [rax]
-      movdqu xmm1, [rax+16]
-      pxor xmm0, [rdx]
-      pxor xmm1, [rdx+16]
-      movdqu [rax], xmm0
-      movdqu [rax+16], xmm1
-    end;
-    Inc(LDst, 32); Inc(LSrc, 32); Dec(LLen, 32);
-  end;
-  while LLen >= 16 do
-  begin
-    asm
-      mov rax, LDst
-      mov rdx, LSrc
-      movdqu xmm0, [rax]
-      pxor xmm0, [rdx]
-      movdqu [rax], xmm0
-    end;
-    Inc(LDst, 16); Inc(LSrc, 16); Dec(LLen, 16);
-  end;
-  {$POP}
-{$ENDIF}
+  // SIMD disabled: scalar QWord path is single-source and safe; SSE pxor unaligned fault on heap edge (see ssh lane fix)
+  // 64/32/16 SSE paths removed to avoid register clobber / page-cross fault; parity via QWord loop below
   while LLen >= SizeUInt(SizeOf(UInt64)) do
   begin
     PUInt64(LDst)^ := PUInt64(LDst)^ xor PUInt64(LSrc)^;

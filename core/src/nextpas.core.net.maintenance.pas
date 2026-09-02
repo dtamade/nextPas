@@ -22,11 +22,8 @@ uses
 
 type
   TRekeyPolicy = nextpas.core.net.maintenance.rekey.TRekeyPolicy;
-  TNetRekeyPolicy = nextpas.core.net.maintenance.rekey.TRekeyPolicy;
   TKeepAlivePolicy = nextpas.core.net.maintenance.keepalive.TKeepAlivePolicy;
-  TNetKeepAlivePolicy = nextpas.core.net.maintenance.keepalive.TKeepAlivePolicy;
   TKeepAliveScheduler = nextpas.core.net.maintenance.scheduler.TKeepAliveScheduler;
-  TNetKeepAliveScheduler = nextpas.core.net.maintenance.scheduler.TKeepAliveScheduler;
 
 const
   NET_REKEY_BYTES_DEFAULT = nextpas.core.net.maintenance.base.NET_REKEY_BYTES_DEFAULT;

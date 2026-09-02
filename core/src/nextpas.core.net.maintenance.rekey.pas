@@ -34,8 +34,6 @@ type
     property BytesSince: UInt64 read FBytesSince;
   end;
 
-  TNetRekeyPolicy = TRekeyPolicy;
-
 implementation
 
 procedure TRekeyPolicy.Init(ABeBytes: UInt64; AIntervalMs: Integer); inline;
