@@ -1011,7 +1011,29 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
     LProbe: Byte;
     LExtra: SizeUInt;
     LSpans: array of TByteSpan;
+    LTotalUnpack: UInt64;
   begin
+    { 全局门限（稳定性）：在任何分配前与 limits 单源对齐，防 1M 文件/8GiB 炸弹直达 OOM，reader 已有同源校验，writer 侧提前拒绝 }
+    if FCount > SizeInt(SEVENZ_MAX_FILE_COUNT) then
+      raise ESevenZLimitError.CreateFmt(
+        'file count %d exceeds limit %d', [FCount, SEVENZ_MAX_FILE_COUNT]);
+    begin
+      LTotalUnpack := 0;
+      for LAcc := 0 to FCount - 1 do
+        if not FEntries[LAcc].IsDir then
+        begin
+          if EntrySize(FEntries[LAcc]) > SEVENZ_MAX_UNPACK_SIZE then
+            raise ESevenZLimitError.CreateFmt(
+              'entry "%s" size %d exceeds limit %d',
+              [FEntries[LAcc].Name, EntrySize(FEntries[LAcc]), SEVENZ_MAX_UNPACK_SIZE]);
+          if LTotalUnpack > High(UInt64) - EntrySize(FEntries[LAcc]) then
+            raise ESevenZLimitError.Create('total unpack size overflow');
+          LTotalUnpack := LTotalUnpack + EntrySize(FEntries[LAcc]);
+          if LTotalUnpack > SEVENZ_MAX_UNPACK_SIZE then
+            raise ESevenZLimitError.CreateFmt(
+              'total unpack size %d exceeds limit %d', [LTotalUnpack, SEVENZ_MAX_UNPACK_SIZE]);
+        end;
+    end;
     { 统计非空文件并建立索引 }
     LNonEmpty := 0;
     for LAcc := 0 to FCount - 1 do
@@ -1225,6 +1247,22 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           SetLength(LFolders[LFolderIdx].Specs, Length(LFolders[LFolderIdx].Specs) + 1);
           LFolders[LFolderIdx].Specs[High(LFolders[LFolderIdx].Specs)] := MakeAesSpec(LFolders[LFolderIdx].PackedData);
         end;
+      { 全局 pack/folder 门限（写侧炸弹对等校验） }
+      if Length(LFolders) > SizeInt(SEVENZ_MAX_FOLDERS) then
+        raise ESevenZLimitError.CreateFmt('folder count %d exceeds limit %d', [Length(LFolders), SEVENZ_MAX_FOLDERS]);
+      if Length(LFolders) > SizeInt(SEVENZ_MAX_PACK_STREAMS) then
+        raise ESevenZLimitError.CreateFmt('pack stream count %d exceeds limit %d', [Length(LFolders), SEVENZ_MAX_PACK_STREAMS]);
+      begin
+        LTotalUnpack := 0;
+        for LFolderIdx := 0 to High(LFolders) do
+        begin
+          if LTotalUnpack > High(UInt64) - UInt64(Length(LFolders[LFolderIdx].PackedData)) then
+            raise ESevenZLimitError.Create('total pack size overflow');
+          LTotalUnpack := LTotalUnpack + UInt64(Length(LFolders[LFolderIdx].PackedData));
+          if LTotalUnpack > SEVENZ_MAX_PACK_SIZE then
+            raise ESevenZLimitError.CreateFmt('total pack size %d exceeds limit %d', [LTotalUnpack, SEVENZ_MAX_PACK_SIZE]);
+        end;
+      end;
       { 拼接全部 pack 流为连续载荷：单次分配 SpanConcatMany 复用 bytes.ops 单源（零额外 Move 循环，单遍分配+拷贝），bench_sevenz 吞吐锚点无回归，I-Cache 友好 }
       SetLength(LSpans, Length(LFolders));
       for LFolderIdx := 0 to High(LFolders) do
