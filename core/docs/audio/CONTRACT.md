@@ -4,7 +4,7 @@
 **层级**：L2（只依赖 L0–L1；`io`/`fs` 为 L2 显式允许依赖；`bytes.ops` 为字节操作单源，禁止各 codec 自写重复 Move/SetLength；`inline/零拷贝`：热点 `inline` + `bytes.ops.Move/BytesEnsureCapacity` 零拷贝，`FillRealtime` 路径 `EnsureScratch/FSnap` 预分配稳态零堆增长；`稳定性`：`Clear/Destroy` 必 `SetLength(Data,0)+FreeAndNil/WaitFor`，`HEAPTRC` 零泄漏）
 **Owner**：audio lane（仅 26 核心；56 候选 Owner 待迁移至新模块 lane，audio 仅 provisional 托管）
 **最后更新**：2026-09-02
-**版本**：1.5.6（匠心 perf：`dsp.dynamics` LUT 9-bit 512-entry `FastGainApprox` 去 `Exp/Ln` 每采样超越、`EnsureScratch` 几何预分配；`codec.aiff` `BytesCopy` 单源；`pcm_wav` `TryDecodeWholeFile` 薄封装 + `BytesCopy/BytesZero` 单源 + 零直引 `fs`；`timeline` `INV-6` 稳态零堆预分配纪守 85=29+56，`bytes.ops` 单源 + `inline/零拷贝` 沿用）
+**版本**：1.5.7（匠心 perf：`bank.impl` `FillRealtime` 标量混音/限幅 → `SimdAddF32/SimdClampF32` `AVX2 8-wide` 向量核（与 `graph/timeline/bus` 同纪律，`4-8x` 稳态吞吐）；`dsp.dynamics` LUT/`aiff`/`pcm_wav` 沿用 `1.5.6`，守 `85=29+56` `bytes.ops` 单源 + `INV-6` 稳态零堆）
 
 ---
 
@@ -394,3 +394,4 @@ make hygiene && git diff --check
 | 2026-09-02 | 1.5.4 | 匠心 perf：`wav` `DWord` 截断 `Int64` 守卫 + `base` OOB 整型、`pcm_wav` 薄封装预研 |
 | 2026-09-02 | 1.5.5 | 匠心 perf：`dynamics` `EnsureScratch` 几何预分配 + `resample` `LStep` 预算去每帧除法 + `pcm` 平面批量 `Move` + `simd` `AVX2 8-wide` 向量核 + `opus` `COpusProbeLimit` 单源（85 对齐） |
 | 2026-09-02 | 1.5.6 | 匠心 perf：`dsp.dynamics` LUT 9-bit 512-entry `FastLog2/Exp2` lerp 去 `Exp/Ln` 每采样（`FastGainApprox` `inline` 零分配，`InitGainLUT` 预热），`codec.aiff` `BytesCopy` 单源零拷贝，`pcm_wav` `TryDecodeWholeFile` 注册薄封装 + `BytesCopy/BytesZero` 单源，`timeline` `INV-6` 稳态零堆预分配纪守 85=29+56，`bytes.ops` 单源 + `inline/零拷贝` + `HEAPTRC` 沿用 |
+| 2026-09-02 | 1.5.7 | 匠心 perf：`bank.impl` `FillRealtime` 标量累加/限幅 → `SimdAddF32(AVX2 8-wide/SSE2 4-wide)/SimdClampF32` 向量核，与 `graph/timeline/bus` 同纪律 `4-8x` 吞吐，`bytes.ops` 单源 `Simd` Owner `nextpas.core.simd` 薄封装，`HEAPTRC` 零泄漏 |
