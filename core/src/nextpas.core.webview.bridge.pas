@@ -233,6 +233,22 @@ begin
 end;
 {$POP}
 
+{ Arena 复用（CONTRACT INV-3 单源编解码）：threadvar 局部 Document/Arena 复用，
+  消除 per-frame Init/Done 重建与 1K+32 节点堆分配；UI 线程亲和、零锁竞争、
+  复用 bytes.ops 单源容量生长，Parse 内部重用节点/Arena/溢出表。 }
+threadvar
+  GDecodeDoc: TJsonDocument;
+  GDecodeDocInited: Boolean;
+
+procedure EnsureDecodeDoc; inline;
+begin
+  if not GDecodeDocInited then
+  begin
+    GDecodeDoc.Init(nil);
+    GDecodeDocInited := True;
+  end;
+end;
+
 { Parse→Validate→Normalize: three-layer split, zero-copy View, single builder Move. }
 
 function BridgeParseFrame(const AView: TStringView; var ADoc: TJsonDocument;
@@ -296,23 +312,19 @@ function TryDecodeFrame(const AView: TStringView;
 var
   LRoot: TJsonValue;
   LPayload: TJsonValue;
-  LDoc: TJsonDocument;
 begin
-  { UI 线程亲和严谨：栈上局部 Arena，零全局共享、无锁竞争；TStringView 零拷贝 (bytes.ops 单源)，inline 薄转发。 }
+  { UI 线程亲和 + Arena 复用：threadvar Document 零锁、Parse 内重用节点/Arena；
+    消除 per-frame Init(1K+32节点)/Done 重建开销，TStringView 零拷贝(bytes.ops 单源)。 }
   Result := False;
   AFrame := Default(TWebviewFrame);
-  LDoc.Init(nil);
-  try
-    if not BridgeParseFrame(AView, LDoc, LRoot) then
-      Exit;
-    if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
-      Exit;
-    LPayload := LRoot.Get('payload');
-    AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
-    Result := True;
-  finally
-    LDoc.Done;
-  end;
+  EnsureDecodeDoc;
+  if not BridgeParseFrame(AView, GDecodeDoc, LRoot) then
+    Exit;
+  if not BridgeValidateFrame(LRoot, AFrame.Id, AFrame.Cmd) then
+    Exit;
+  LPayload := LRoot.Get('payload');
+  AFrame.PayloadJson := BridgeNormalizePayload(LPayload);
+  Result := True;
 end;
 
 function TryDecodeFrame(const AFrameJson: string;
@@ -351,62 +363,37 @@ end;
 function BuildRejectScript(AId: Int64; const ACode, AMessage: string): string;
 var
   LCode: string;
+  LInner: string;
+  LInnerBuilder: TStringBuilder;
+  WInner: TJsonWriter;
   LB: TStringBuilder;
-  // single-builder zero-copy: avoids LInner heap alloc + second JSON escaping pass;
-  // structural chars are single-escaped, payload bytes double-escaped (inner+outer),
-  // matching nested W.Str semantics with one path (text.escape single source logic reused)
-  procedure AppendDoubleEscaped(const AView: TStringView);
-  var
-    I: SizeUInt;
-    B: Byte;
-    NHi, NLo: Byte;
-  begin
-    for I := 0 to AView.Len - 1 do
-    begin
-      B := Byte(AView.Data[I]);
-      case B of
-        34: LB.AppendBytes('\\\"', 4); // " -> \\\" (inner \" then outer \\ \")
-        92: LB.AppendBytes('\\\\', 4); // \ -> \\\\ (inner \\ then outer \\\\ )
-        8:  LB.AppendBytes('\\b', 3);
-        9:  LB.AppendBytes('\\t', 3);
-        10: LB.AppendBytes('\\n', 3);
-        12: LB.AppendBytes('\\f', 3);
-        13: LB.AppendBytes('\\r', 3);
-      else
-        if B < 32 then
-        begin
-          LB.AppendBytes('\\u00', 5);
-          NHi := (B shr 4) and $F;
-          NLo := B and $F;
-          if NHi < 10 then LB.AppendChar(AnsiChar(Ord('0') + NHi))
-          else LB.AppendChar(AnsiChar(Ord('a') + NHi - 10));
-          if NLo < 10 then LB.AppendChar(AnsiChar(Ord('0') + NLo))
-          else LB.AppendChar(AnsiChar(Ord('a') + NLo - 10));
-        end
-        else
-          LB.AppendChar(AnsiChar(B));
-      end;
-    end;
-  end;
+  WOuter: TJsonWriter;
 begin
   LCode := NormalizeInvokeCode(ACode);
-  // worst 6x expansion for \u00XX -> \\u00XX plus structural overhead
-  LB.Init(SizeUInt(64 + SizeUInt(Length(LCode)) * 6 + SizeUInt(Length(AMessage)) * 6 + 32));
+  // single-source double escape via json/text.escape SIMD (L1 Owner):
+  // inner object {"code":..,"message":..} via TJsonWriter/JsonEscapeToBuilder SIMD,
+  // outer string literal via second TJsonWriter/JsonEscapeToBuilder SIMD —
+  // replaces per-byte case 34/92/8..13 scalar loop, large messages use VecWidth SIMD.
+  LInnerBuilder.Init(SizeUInt(32 + SizeUInt(Length(LCode)) * 2 + SizeUInt(Length(AMessage)) * 2));
+  try
+    WInner.Init(LInnerBuilder);
+    WInner.BeginObject;
+    WInner.Key('code');
+    WInner.Str(LCode);
+    WInner.Key('message');
+    WInner.Str(AMessage);
+    WInner.EndObject;
+    LInner := LInnerBuilder.ToString;
+  finally
+    LInnerBuilder.Done;
+  end;
+  LB.Init(SizeUInt(32 + SizeUInt(Length(LInner)) * 2));
   try
     LB.AppendBytes('__npw.__reject(', 15);
     LB.AppendInt(AId);
     LB.AppendChar(',');
-    LB.AppendChar('"'); // outer JSON string open
-    LB.AppendChar('{');
-    LB.AppendBytes('\"code\":\"', 11);
-    AppendDoubleEscaped(TStringView.FromStr(LCode));
-    LB.AppendBytes('\"', 2);
-    LB.AppendChar(',');
-    LB.AppendBytes('\"message\":\"', 14);
-    AppendDoubleEscaped(TStringView.FromStr(AMessage));
-    LB.AppendBytes('\"', 2);
-    LB.AppendChar('}');
-    LB.AppendChar('"'); // outer JSON string close
+    WOuter.Init(LB);
+    WOuter.Str(LInner);
     LB.AppendChar(')');
     Result := LB.ToString;
   finally
@@ -609,23 +596,17 @@ var
   LPath: string;
   LNormView: TStringView;
   LProvider: IWebviewAssetProvider;
-  LFound: Boolean;
 begin
   Result := False;
   ABytes := nil;
   AMimeType := '';
   if FInert then
     Exit;
-  // view zero-copy; ToString single-point on provider hit (eliminates duplicated ToString)
+  // single Trie source: longest-prefix O(m) zero-copy view covers root '' and multi-mount; fast-path converged
   LNormView := NormalizeWebviewAssetView(AView);
   if LNormView.Len = 0 then
     Exit;
-  LFound := False;
-  if (FIndex.Count = 1) and FIndex.TryGetByStr('', LProvider) then
-    LFound := True
-  else if FIndex.TryGetLongestPrefixByView(LNormView, LProvider) then
-    LFound := True;
-  if not LFound then
+  if not FIndex.TryGetLongestPrefixByView(LNormView, LProvider) then
     Exit(False);
   LPath := LNormView.ToString; // single conversion point, zero extra alloc, inline thin-forward
   Result := LProvider.TryResolve(LPath, ABytes, AMimeType);
@@ -635,5 +616,9 @@ function TWebviewAssetsImpl.MountCount: Integer; inline;
 begin
   Result := FIndex.Count;
 end;
+
+finalization
+  if GDecodeDocInited then
+    GDecodeDoc.Done;
 
 end.

@@ -17,7 +17,6 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.validation,
-  nextpas.core.mime.types,
   nextpas.core.webview.factory,
   nextpas.core.webview.builder,
   nextpas.core.webview.vfs,
@@ -102,7 +101,6 @@ function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider; inline;
-function GuessWebviewMime(const APath: string): string; inline;
 
 procedure WebviewRunLoop; inline;
 procedure WebviewExitLoop; inline;
@@ -158,12 +156,6 @@ end;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
 begin
   Result := nextpas.core.webview.vfs.CreateVfsAssetProvider(AVfs);
-end;
-
-function GuessWebviewMime(const APath: string): string;
-begin
-  { perf: inline 直通 L2 mime.types MimeTypeFromPath O(1) 哈希零分配，复用 bytes.ops HashFNV1aLower 单源；门面保留兼容，家族内已直连 L2 单源 }
-  Result := MimeTypeFromPath(APath);
 end;
 
 procedure WebviewRunLoop;

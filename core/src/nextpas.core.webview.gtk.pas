@@ -213,7 +213,7 @@ begin Result:=TGtkWebview(nextpas.core.webview.gtk.shell.ShellLatestLiveWindow);
 procedure SchemeFinishNotFound(ARequest: Pointer); inline;
 begin if ARequest=nil then Exit; if GSchemeErrQuark=0 then GSchemeErrQuark:=G_quark_from_static_string('nextpas-webview'); WEBKIT_uri_scheme_request_finish_error(ARequest,G_error_new_literal(GSchemeErrQuark,WEBVIEW_ASSET_NOT_FOUND_CODE,WEBVIEW_ASSET_NOT_FOUND_MSG)); end;
 procedure SchemeRequestCb(ARequest, AUserData: Pointer); cdecl;
-var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LStream, LBytesObj: Pointer; LHolder: PAssetHolder; LView: Pointer;
+var LSelf: TGtkWebview; LKeep: IInterface; LMime: string; LPathView: TStringView; LRaw: PAnsiChar; LBytes: TBytes; LStream: Pointer; LHolder: PAssetHolder; LView: Pointer; LData: Pointer; LLen: gssize;
 begin if not Assigned(ARequest) then Exit; try
   if Assigned(WEBKIT_uri_scheme_request_get_web_view) then LView:=WEBKIT_uri_scheme_request_get_web_view(ARequest) else LView:=nil;
   LSelf:=nil; LKeep:=nil;
@@ -227,12 +227,11 @@ begin if not Assigned(ARequest) then Exit; try
   if not Assigned(LSelf.FAssetsIntf) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try if not LSelf.FAssetsIntf.TryResolveView(LPathView,LBytes,LMime) then begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme miss '+LPathView.ToString+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; except on E:Exception do begin if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme resolve ex '+LPathView.ToString+': '+E.Message+' -> 404'); SchemeFinishNotFound(ARequest); Exit; end; end;
   if ShellDebugEnabled then nextpas.core.webview.gtk.shell.ShellTrace('scheme hit '+LPathView.ToString+' ('+IntToStr(Length(LBytes))+'B)'); if LMime='' then LMime:=MimeTypeFromPathView(LPathView);
-  LStream:=nil; LBytesObj:=nil;
-  if not Assigned(G_bytes_new_with_free_func) or not Assigned(G_memory_input_stream_new_from_bytes) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
+  LStream:=nil;
+  if not Assigned(G_memory_input_stream_new_from_data) or not Assigned(WEBKIT_uri_scheme_request_finish) then begin SchemeFinishNotFound(ARequest); Exit; end;
+  // perf: 单 Holder Slab 复用 + G_memory_input_stream_new_from_data 零拷贝直通，零 GBytes 中间对象，COW 共享 bytes.ops 单源零 Move，Threshold 已 retire 统一单路径，inline 零堆抖动 via gtk.pool/bridge 单源
   LHolder:=nextpas.core.webview.gtk.pool.AcquireAssetHolder; LHolder^.Bytes:=LBytes;
-  try if Length(LHolder^.Bytes)>0 then LBytesObj:=G_bytes_new_with_free_func(@LHolder^.Bytes[0],Length(LHolder^.Bytes),@AssetBufFree,LHolder) else LBytesObj:=G_bytes_new_with_free_func(nil,0,@AssetBufFree,LHolder); except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
-  if Assigned(LBytesObj) and Assigned(G_memory_input_stream_new_from_bytes) then try LStream:=G_memory_input_stream_new_from_bytes(LBytesObj); except LStream:=nil; end;
-  if Assigned(LBytesObj) and Assigned(G_bytes_unref) then try G_bytes_unref(LBytesObj); except end;
+  try if Length(LHolder^.Bytes)>0 then begin LData:=@LHolder^.Bytes[0]; LLen:=Length(LHolder^.Bytes); end else begin LData:=nil; LLen:=0; end; LStream:=G_memory_input_stream_new_from_data(LData,LLen,@AssetBufFree,LHolder); if not Assigned(LStream) then begin nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); SchemeFinishNotFound(ARequest); Exit; end; except nextpas.core.webview.gtk.pool.ReleaseAssetHolder(LHolder); raise; end;
   if not Assigned(LStream) then begin SchemeFinishNotFound(ARequest); Exit; end;
   try WEBKIT_uri_scheme_request_finish(ARequest,LStream,Length(LBytes),PAnsiChar(LMime)); except try SchemeFinishNotFound(ARequest); except end; end;
   except on E:Exception do try if Assigned(ARequest) then SchemeFinishNotFound(ARequest); except end; end;
@@ -298,7 +297,7 @@ procedure TGtkWebview.PostIdle(AProc: TWebviewProcRef); var LRec:PIdleRec; LTag:
   LTag:=G_idle_add_full(G_PRIORITY_DEFAULT,@IdleTrampoline,LRec,@IdleDestroy); if FIdleTags<>nil then FIdleTags.Register(LTag);
 end;
 procedure TGtkWebview.DropIdlePendings; var I:Integer; LCtx,LSrc:Pointer; begin if FIdleTags=nil then Exit; LCtx:=G_main_context_default(); for I:=0 to FIdleTags.Count-1 do begin if LCtx=nil then Break; LSrc:=G_main_context_find_source_by_id(LCtx,FIdleTags.At(I)); if LSrc<>nil then G_source_remove(FIdleTags.At(I)); end; FIdleTags.Clear; end;
-procedure TGtkWebview.SettlePendingOnClose; var I:Integer; LRec:PEvalRec; LErr:EWebviewEvalFailed; begin if FPendingEvals=nil then Exit; for I:=0 to FPendingEvals.Count-1 do begin LRec:=FPendingEvals.At(I); if not LRec^.Done then begin LRec^.Done:=True; if Assigned(LRec^.OnError) then begin LErr:=EWebviewEvalFailed.Create('window closed'); try LRec^.OnError(LErr); finally LErr.Free; end; end; if LRec^.Cancel<>nil then begin G_cancellable_cancel(LRec^.Cancel); LRec^.Cancel:=nil; end; end; end; FPendingEvals.Clear; end;
+procedure TGtkWebview.SettlePendingOnClose; var I:Integer; LRec:PEvalRec; LErr:EWebviewEvalFailed; begin if FPendingEvals=nil then Exit; for I:=0 to FPendingEvals.Count-1 do begin LRec:=FPendingEvals.At(I); if not LRec^.Done then begin LRec^.Done:=True; if Assigned(LRec^.OnError) then begin LErr:=EWebviewEvalFailed.Create('window closed'); try LRec^.OnError(LErr); finally LErr.Free; end; end; end; if LRec^.Cancel<>nil then G_cancellable_cancel(LRec^.Cancel); FreeEvalRec(LRec); end; FPendingEvals.Clear; end;
 procedure TGtkWebview.HandleNativeDestroy; begin if FClosed then Exit; FClosed:=True; UnregisterLive(Self); SettlePendingOnClose; DropIdlePendings; FireNotifyHandlers(FOnWindowClosed); if GtkLiveWindowCount=0 then WindowGtkRawQuitMainLoop; FView:=nil; FWin:=nil; FWindow:=nil; FSelfKeepAlive:=nil; end;
 procedure TGtkWebview.Close; begin if FClosed then Exit; FClosed:=True; UnregisterLive(Self); SettlePendingOnClose; DropIdlePendings; FireNotifyHandlers(FOnWindowClosed); if FOwnsWindow then begin if FWindow<>nil then try FWindow.Close; except end; if (FView<>nil) and (FWindow=nil) and (FWin<>nil) then GTK_widget_destroy(FWin); end else begin if FView<>nil then GTK_widget_destroy(FView); end; FView:=nil; if FOwnsWindow then begin FWin:=nil; FWindow:=nil; end; if GtkLiveWindowCount=0 then WindowGtkRawQuitMainLoop; FSelfKeepAlive:=nil; end;
 procedure TGtkWebview.Post(AProc: TWebviewProcRef); inline; begin PostIdle(AProc); end;
