@@ -3535,6 +3535,51 @@ begin
   CheckEqual(Int64(0), Int64(Length(Arr2)), 'glob ic non-ascii upper not folded 0');
 end;
 
+procedure TestWriterBombEarlyViaReader;
+var LW: ISevenZWriter; LR1, LR2: IReader;
+begin
+  LW := TSevenZWriterImpl.Create;
+  LR1 := CreateBytesStreamFrom(TBytes.Create(0)) as IReader;
+  LW.AddFileFromReader('big.bin', LR1, UInt64(9) * 1024 * 1024 * 1024);
+  try
+    LW.Finish;
+    Fail('single huge entry should raise ESevenZLimitError');
+  except on E: ESevenZLimitError do ; end;
+  LW := TSevenZWriterImpl.Create;
+  LR1 := CreateBytesStreamFrom(TBytes.Create(0)) as IReader;
+  LR2 := CreateBytesStreamFrom(TBytes.Create(1)) as IReader;
+  LW.AddFileFromReader('a.bin', LR1, UInt64(5) * 1024 * 1024 * 1024);
+  LW.AddFileFromReader('b.bin', LR2, UInt64(5) * 1024 * 1024 * 1024);
+  try
+    LW.Finish;
+    Fail('total unpack overflow should raise ESevenZLimitError');
+  except on E: ESevenZLimitError do ; end;
+end;
+
+procedure TestBackendConsistencyPureVsFfi;
+var LW: ISevenZWriter; LR1, LR2: ISevenZReader; LArc, LGot1, LGot2: TBytes; LData: TBytes;
+begin
+  if not SevenZLzmaFfiAvailable then Exit;
+  LData := ExeLikeCorpus(80000);
+  LW := TSevenZWriterImpl.Create;
+  LW.SetFilters([szfBcjX86]);
+  LW.AddFile('app.exe', LData);
+  LArc := LW.Finish;
+  SevenZSetLzmaBackend(szlbPurePascal);
+  try
+    LR1 := TSevenZReaderImpl.Create(LArc);
+    LGot1 := LR1.Extract(0);
+  finally SevenZSetLzmaBackend(szlbAuto); end;
+  SevenZSetLzmaBackend(szlbFfi);
+  try
+    LR2 := TSevenZReaderImpl.Create(LArc);
+    LGot2 := LR2.Extract(0);
+  finally SevenZSetLzmaBackend(szlbAuto); end;
+  CheckEqual(Int64(Length(LGot1)), Int64(Length(LGot2)), 'backend consistency len');
+  Check(SameBytes(LGot1, LGot2), 'backend consistency bytes');
+  Check(SameBytes(LData, LGot1), 'backend original bytes');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sevenz');
   T.Test('utf16 bmp round trip', @TestUtf16BmpRoundTrip);
@@ -3727,6 +3772,8 @@ begin
   T.Test('glob classify unified', @TestGlobClassifyUnified);
   T.Test('buildsorted unified + sameignore zeroalloc', @TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc);
   T.Test('glob ignorecase complex ascii zeroalloc', @TestGlobIgnoreCaseComplexAsciiZeroAlloc);
+  T.Test('writer bomb early via reader huge size', @TestWriterBombEarlyViaReader);
+  T.Test('backend consistency pure vs ffi', @TestBackendConsistencyPureVsFfi);
 
   if not T.Run then Halt(1);
 end.
