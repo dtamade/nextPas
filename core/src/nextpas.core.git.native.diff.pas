@@ -39,6 +39,7 @@ implementation
 uses
   nextpas.core.bytes.ops,
   nextpas.core.base.utils,
+  nextpas.core.collections.algorithms,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -78,45 +79,18 @@ begin
   Result := CompareBytesOrdered(PA, PB, SizeUInt(Length(A)), SizeUInt(Length(B)));
 end;
 
-{ SortFlat: O(n log n) quicksort (median-of-3 + tail recursion).
-  Replaces prior insertion O(n²). Zero-copy: swaps records, compares
-  via inline LocalCompareStr single source base.utils CompareBytesOrdered (same as bytes.ops SpanCompare) on existing string storage (PByte+Len view, no alloc). }
-procedure QuickSortFlat(var A: TFlatArray; L, R: Integer);
-var I, J, M: Integer; Pivot: string; Tmp: TFlatEntry;
+function CompareFlat(const A, B: TFlatEntry; AData: Pointer): SizeInt; inline;
 begin
-  while L < R do
-  begin
-    M := (L + R) shr 1;
-    if LocalCompareStr(A[L].Path, A[M].Path) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
-    if LocalCompareStr(A[M].Path, A[R].Path) > 0 then begin Tmp := A[M]; A[M] := A[R]; A[R] := Tmp; end;
-    if LocalCompareStr(A[L].Path, A[M].Path) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
-    Pivot := A[M].Path;
-    I := L; J := R;
-    repeat
-      while LocalCompareStr(A[I].Path, Pivot) < 0 do Inc(I);
-      while LocalCompareStr(A[J].Path, Pivot) > 0 do Dec(J);
-      if I <= J then
-      begin
-        if I <> J then begin Tmp := A[I]; A[I] := A[J]; A[J] := Tmp; end;
-        Inc(I); Dec(J);
-      end;
-    until I > J;
-    if (J - L) < (R - I) then
-    begin
-      if L < J then QuickSortFlat(A, L, J);
-      L := I;
-    end else
-    begin
-      if I < R then QuickSortFlat(A, I, R);
-      R := J;
-    end;
-  end;
+  // single source compare: LocalCompareStr -> base.utils CompareBytesOrdered (PByte+Len zero-copy, inline) == bytes.ops SpanCompare; unified with DiffFlat merge path
+  Result := SizeInt(LocalCompareStr(A.Path, B.Path));
 end;
 
+{ SortFlat: single-source dispatch via collections.algorithms Sort<TFlatEntry> (IntroSort+HeapSort fallback).
+  Replaces hand-rolled QuickSortFlat I-Cache copy; zero-copy compare via inline CompareFlat/LocalCompareStr on existing string storage (PByte+Len view, no alloc); inline forwarder ensures no extra call overhead; shares I-Cache with status path sorts (SortPathOids/SortStrings) and SortU32 via collections.arr.sort single family, merge path also uses same LocalCompareStr. }
 procedure SortFlat(var A: TFlatArray); inline;
 begin
   if Length(A) < 2 then Exit;
-  QuickSortFlat(A, 0, High(A));
+  specialize Sort<TFlatEntry>(A, @CompareFlat, nil);
 end;
 
 { CollectFlat: amortized O(n) via bytes.ops GrowArrayCapacity single source.

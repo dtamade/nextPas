@@ -3,18 +3,15 @@ unit nextpas.core.git.native;
 {$I nextpas.core.settings.inc}
 
 {**
- * @desc Pure-Pascal git subfamily thin gateway — core object layer only.
- *  Fan-in control: aggregates only the object-layer shard
- *  (`nextpas.core.git.native.objects` = oid/zlib/loose/pack/refs/objmodel/write)
- *  to keep base←intf←impl←facade traceability (fan-in = 1 + base). Extended
- *  domains are shard facades (staging/history/branches/transport/extensions)
- *  and must be used directly (`uses nextpas.core.git.native.staging` etc.);
- *  legacy `uses nextpas.core.git.native` for those domains is deprecated.
- *  Two-level thin-aggregator nesting (native→6 shards, objects→6 subdomains)
- *  that diluted ownership is eliminated; native now re-exports only object
- *  types/consts for BC and keeps the object-layer inline gateway (<350 lines)
- *  with zero-copy inline forwards via nextpas.core.bytes.ops single source.
- *  Perf: all forwards are `inline` thin wrappers; zero-copy via Move/PByte+Len
+ * @desc Pure-Pascal git subfamily object-layer facade — stable gateway.
+ *  Owner boundary: `nextpas.core.git.native.objects` owns 6 subdomains
+ *  (oid/zlib/loose/pack/refs/objmodel/write); `native` re-exports only
+ *  object types/consts for BC and inline gateway (<350 lines, fan-in = 1 + base)
+ *  keeping base←intf←impl←facade traceability. Extended domains are shard
+ *  facades (staging/history/branches/transport/extensions) and must be used
+ *  directly (`uses nextpas.core.git.native.staging` etc.); legacy
+ *  `uses nextpas.core.git.native` for those domains is deprecated.
+ *  Perf: all forwards `inline` thin wrappers; zero-copy via Move/PByte+Len
  *  /TByteSpan single source bytes.ops (oid hex 20B Move, zlib PByte+Len
  *  Deflate*, loose/pack/objmodel/write via TByteSpan). Stability:
  *  TNativeRepository/TPackFile are classes; TPackFile owns IMappedFile

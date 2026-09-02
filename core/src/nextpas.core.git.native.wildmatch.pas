@@ -25,6 +25,9 @@ function GitHasUnescapedSlash(const AValue: string): Boolean; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function OpensClass(const AValue: string; APos: Integer): Boolean; inline;
 var
   I: Integer;
@@ -256,6 +259,8 @@ var
   PathStarts, PathLens: array of Integer;
   P, Q, PLen: Integer;
   PatCnt, PathCnt: Integer;
+  PatCap, PathCap: SizeUInt;
+  LNewCap: SizeUInt;
   I, J, StarIdx, MatchIdx, Iter: Integer;
   Guard: Int64;
 begin
@@ -264,6 +269,10 @@ begin
   if APattern = '' then
     Exit(False);
   // zero-copy segment scan: build start/len views, inline helpers, no segment string alloc
+  PatCnt := 0;
+  PathCnt := 0;
+  PatCap := 0;
+  PathCap := 0;
   SetLength(PatStarts, 0);
   SetLength(PatLens, 0);
   SetLength(PatIsStar, 0);
@@ -277,13 +286,27 @@ begin
       Break;
     Q := NextSegEnd(APattern, P);
     PLen := Q - P + 1;
-    SetLength(PatStarts, Length(PatStarts) + 1);
-    PatStarts[High(PatStarts)] := P;
-    SetLength(PatLens, Length(PatLens) + 1);
-    PatLens[High(PatLens)] := PLen;
-    SetLength(PatIsStar, Length(PatIsStar) + 1);
-    PatIsStar[High(PatIsStar)] := (PLen = 2) and (APattern[P] = '*') and (APattern[P + 1] = '*');
+    // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per segment, avoids O(n²) SetLength(Length+1) churn, zero-copy start/len views
+    if SizeUInt(PatCnt) >= PatCap then
+    begin
+      LNewCap := GrowArrayCapacity(PatCap, SizeUInt(PatCnt + 1));
+      PatCap := LNewCap;
+      SetLength(PatStarts, PatCap);
+      SetLength(PatLens, PatCap);
+      SetLength(PatIsStar, PatCap);
+    end;
+    PatStarts[PatCnt] := P;
+    PatLens[PatCnt] := PLen;
+    PatIsStar[PatCnt] := (PLen = 2) and (APattern[P] = '*') and (APattern[P + 1] = '*');
+    Inc(PatCnt);
     P := Q + 1;
+  end;
+  // single shrink to exact after geometric growth (bytes.ops discipline)
+  if SizeUInt(Length(PatStarts)) <> SizeUInt(PatCnt) then
+  begin
+    SetLength(PatStarts, PatCnt);
+    SetLength(PatLens, PatCnt);
+    SetLength(PatIsStar, PatCnt);
   end;
   P := 1;
   while True do
@@ -293,14 +316,24 @@ begin
       Break;
     Q := NextSegEnd(APath, P);
     PLen := Q - P + 1;
-    SetLength(PathStarts, Length(PathStarts) + 1);
-    PathStarts[High(PathStarts)] := P;
-    SetLength(PathLens, Length(PathLens) + 1);
-    PathLens[High(PathLens)] := PLen;
+    // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized per segment, zero-copy views
+    if SizeUInt(PathCnt) >= PathCap then
+    begin
+      LNewCap := GrowArrayCapacity(PathCap, SizeUInt(PathCnt + 1));
+      PathCap := LNewCap;
+      SetLength(PathStarts, PathCap);
+      SetLength(PathLens, PathCap);
+    end;
+    PathStarts[PathCnt] := P;
+    PathLens[PathCnt] := PLen;
+    Inc(PathCnt);
     P := Q + 1;
   end;
-  PatCnt := Length(PatStarts);
-  PathCnt := Length(PathStarts);
+  if SizeUInt(Length(PathStarts)) <> SizeUInt(PathCnt) then
+  begin
+    SetLength(PathStarts, PathCnt);
+    SetLength(PathLens, PathCnt);
+  end;
   // linear star backtracking: ** matches zero or more whole segments, O(n*m) bounded, no recursion
   I := 0;
   J := 0;

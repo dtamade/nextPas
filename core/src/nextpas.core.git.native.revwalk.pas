@@ -370,6 +370,8 @@ var
   LIdx: SizeInt;
   LHash: UInt32;
   LSorted: array of Integer;
+  LSortedLen: SizeInt;
+  LSortedCap: SizeInt;
   // not inline: loop body quicksort, avoids I-Cache bloat per design rule
   procedure QuickSort(AL, AR: Integer);
   var
@@ -416,13 +418,23 @@ begin
   SetLength(FTicks, FCap);
   FCount := 0;
   // collect active indices, sort by recency descending (LRU: keep newest)
+  // perf: geometric growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy Integer Move, avoids O(k²) SetLength(Length+1) copy at 4096 cap jitter
+  LSorted := nil;
+  LSortedLen := 0;
+  LSortedCap := 0;
   SetLength(LSorted, 0);
   for I := 0 to LOldCap - 1 do
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      SetLength(LSorted, Length(LSorted) + 1);
-      LSorted[High(LSorted)] := I;
+      if LSortedLen >= LSortedCap then
+      begin
+        LSortedCap := SizeInt(GrowArrayCapacity(SizeUInt(LSortedCap), SizeUInt(LSortedLen + 1)));
+        SetLength(LSorted, LSortedCap);
+      end;
+      LSorted[LSortedLen] := I;
+      Inc(LSortedLen);
     end;
+  SetLength(LSorted, LSortedLen);
   // perf: quicksort descending by LOldTicks O(n log n) replaces insertion O(k²); 4096 cap rare eviction but hotspot deterministic, zero-copy index Move, not inline
   if Length(LSorted) > 1 then
     QuickSort(0, High(LSorted));
@@ -1481,7 +1493,10 @@ begin
         raise EGitError.Create('topo walk start points at a non-commit object');
       Seen.Add(Oid);
       if NodesLen >= Length(Nodes) then
-        SetLength(Nodes, NodesLen+1);
+      begin
+        // perf: geometric Nodes growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy record Move, avoids O(n²) SetLength(NodesLen+1) churn
+        SetLength(Nodes, SizeInt(GrowArrayCapacity(SizeUInt(Length(Nodes)), SizeUInt(NodesLen + 1))));
+      end;
       NodeIdx := NodesLen;
       Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
@@ -1623,6 +1638,7 @@ var
   ParseCache: TCommitParseCache;
   StackCap, StackLen: SizeInt;
   BndCount, BndCap, ResCount, ResCap, ReadyCap, ReadyLen: SizeInt;
+  NodesLen: SizeInt;
   procedure PushStack(const AOid: TGitOid); inline;
   begin
     if StackLen >= StackCap then
@@ -1644,7 +1660,7 @@ var
     Result[ResCount].Oid := AOid; Result[ResCount].IsBoundary := AIsBoundary; Inc(ResCount);
   end;
 begin
-  Result := nil; ResCount:=0; ResCap:=0; BndCount:=0; BndCap:=0; BoundaryList:=nil; StackCap:=0; StackLen:=0; ReadyCap:=0; ReadyLen:=0; Ready:=nil;
+  Result := nil; ResCount:=0; ResCap:=0; BndCount:=0; BndCap:=0; BoundaryList:=nil; StackCap:=0; StackLen:=0; ReadyCap:=0; ReadyLen:=0; Ready:=nil; Nodes:=nil; NodesLen:=0;
   Graph := nil;
   ParseCache := TCommitParseCache.Create;
   try
@@ -1689,8 +1705,13 @@ begin
         end;
       end;
       Seen.Add(Oid);
-      NodeIdx := Length(Nodes);
-      SetLength(Nodes, NodeIdx + 1);
+      if NodesLen >= Length(Nodes) then
+      begin
+        // perf: geometric Nodes growth via bytes.ops GrowArrayCapacity single source, inline, amortized O(1) push, zero-copy record Move, avoids O(n²) SetLength(NodesLen+1) churn
+        SetLength(Nodes, SizeInt(GrowArrayCapacity(SizeUInt(Length(Nodes)), SizeUInt(NodesLen + 1))));
+      end;
+      NodeIdx := NodesLen;
+      Inc(NodesLen);
       Nodes[NodeIdx].Oid := Oid;
       Nodes[NodeIdx].When := GWhen;
       // store parents respecting first-parent flag for graph edges
@@ -1724,6 +1745,7 @@ begin
     end;
     SetLength(Stack, StackLen);
     SetLength(BoundaryList, BndCount);
+    SetLength(Nodes, NodesLen);
     if Length(Nodes) = 0 then
     begin
       // only boundaries

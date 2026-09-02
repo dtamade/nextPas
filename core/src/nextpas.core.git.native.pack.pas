@@ -48,7 +48,6 @@ type
     FPeekKeys: array[0..31] of SizeUInt;
     FPeekVals: array[0..31] of Int64;
     FPeekValid: array[0..31] of Boolean;
-    FPeekNext: Byte; // retained for ABI compat, unused after hash store (direct-mapped)
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -188,9 +187,8 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
-  // cache zero-init: FPeekValid false via class zero-fill, next 0; explicit for stability
+  // cache zero-init: FPeekValid false via class zero-fill; direct-mapped hash, no round-robin state
   FillChar(FPeekValid, SizeOf(FPeekValid), 0);
-  FPeekNext := 0;
   LoadIndex(AIdxPath);
 end;
 
@@ -360,11 +358,19 @@ begin
   // inflate directly into caller buffer to avoid O(depth) alloc/copy jitter on delta depth 64
   if (AExpectSize < 0) or (AExpectSize > MaxInt) then
     raise EGitError.Create('pack entry inflated size out of range');
-  // bytes.ops single source: SizeUInt capacity check, grow-only to keep buffer for jitter
+  // bytes.ops single source: grow-only capacity reuse, no shrink realloc — keeps max capacity for delta depth 64 ping-pong, zero-copy via PByte view
+  // inline header-poke shrink (no heap) keeps logical Length = Expect while retaining capacity; stability via refcount check
   if SizeUInt(Length(AReuse)) < SizeUInt(AExpectSize) then
     SetLength(AReuse, SizeUInt(AExpectSize))
-  else if SizeUInt(Length(AReuse)) <> SizeUInt(AExpectSize) then
-    SetLength(AReuse, SizeUInt(AExpectSize));
+  else if SizeUInt(Length(AReuse)) > SizeUInt(AExpectSize) then
+  begin
+    if AExpectSize = 0 then
+      SetLength(AReuse, 0)
+    else if (Pointer(AReuse) <> nil) and (PSizeInt(PByte(Pointer(AReuse)) - 2*SizeOf(SizeInt))^ = 1) then
+      PSizeInt(PByte(Pointer(AReuse)) - SizeOf(SizeInt))^ := SizeInt(AExpectSize) - 1
+    else
+      SetLength(AReuse, SizeUInt(AExpectSize));
+  end;
   if AExpectSize = 0 then
     PDst := nil
   else
