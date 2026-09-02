@@ -29,6 +29,7 @@ type
     function NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
     procedure ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
     procedure EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
+    procedure FillHeaderStringField(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string); inline; // 单源：StringAsSpan切片截断+TarPutHeaderField落盘样板收敛，bytes.ops零拷贝单源inline单分发
     procedure FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
     procedure FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
     procedure FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
@@ -226,15 +227,29 @@ begin
   EmitPaxHeader(LPaxBytes);
 end;
 
+procedure TTarWriter.FillHeaderStringField(ABlock: PByte; AOff, ALen: SizeUInt; const AValue: string); inline;
+var LSpan: TByteSpan;
+begin
+  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, trunc via Slice(0,ALen) single dispatch, reuse for name/prefix/linkname
+  if Length(AValue) = 0 then Exit;
+  if Length(AValue) > Integer(ALen) then
+  begin
+    LSpan := StringAsSpan(AValue);
+    TarPutHeaderField(ABlock, AOff, ALen, LSpan.Slice(0, ALen));
+  end
+  else
+    TarPutHeaderString(ABlock, AOff, ALen, AValue);
+end;
+
 procedure TTarWriter.FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
 var LSpan: TByteSpan;
 begin
-  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, single dispatch
-  LSpan := StringAsSpan(AName);
-  if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
-    TarPutHeaderField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, LSpan.Slice(0, SizeUInt(C_TAR_LAYOUT.Name.Len)))
+  // perf: inline zero-copy single source via FillHeaderStringField (bytes.ops StringAsSpan+TarPutHeaderField trunc single dispatch), prefix/name slices reuse TarPutHeaderField zero-copy
+  if (Length(AName) > Integer(C_TAR_LAYOUT.Name.Len)) and (ACutPos = 0) then
+    FillHeaderStringField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, AName)
   else if ACutPos <> 0 then
   begin
+    LSpan := StringAsSpan(AName);
     TarPutHeaderField(ABlock, C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, LSpan.Slice(0, SizeUInt(ACutPos)));
     TarPutHeaderField(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, LSpan.Slice(SizeUInt(ACutPos + 1), SizeUInt(Length(AName) - ACutPos - 1)));
   end
@@ -243,16 +258,9 @@ begin
 end;
 
 procedure TTarWriter.FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
-var LSpan: TByteSpan;
 begin
-  // perf: inline zero-copy single source via bytes.ops StringAsSpan, eliminates PByte(PAnsiChar) cast boilerplate, single dispatch
-  if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
-  begin
-    LSpan := StringAsSpan(ALinkName);
-    TarPutHeaderField(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, LSpan.Slice(0, SizeUInt(C_TAR_LAYOUT.LinkName.Len)));
-  end
-  else
-    TarPutHeaderString(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, ALinkName);
+  // perf: inline zero-copy single source via FillHeaderStringField reuse, eliminates duplicate StringAsSpan/Length阈值/TarPutHeaderField样板
+  FillHeaderStringField(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, ALinkName);
 end;
 
 procedure TTarWriter.FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
@@ -467,7 +475,7 @@ begin
     begin
       if FLogger = nil then
         FLogger := NullLogger;
-      FLogger.Warn('tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)');
+      FLogger.Warn(C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH);
     end;
   finally
     // stability: explicit release via bytes.ops single source, guarantees no 1M resident leak, resource ownership clear, try..finally never leaks

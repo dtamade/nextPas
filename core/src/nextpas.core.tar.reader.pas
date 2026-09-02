@@ -61,6 +61,7 @@ type
     procedure UnregisterGuard(AGuard: TTarGlobalPaxGuard);
     procedure InvalidateGuards;
     function ByteAt(AOfs: SizeUInt): Byte;
+    function SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; inline; // single source NUL truncation, bytes.ops SpanIndexOf, zero-copy, inline
     function FieldSlice(AOfs, ALen: SizeUInt): TByteSpan; // zero-copy view
     function TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;
     function MaterializeSpan(const ASpan: TByteSpan): string; // single source SpanToString, empty guard, out-of-line per design-conventions red line 1 (Move Result[1])
@@ -181,7 +182,7 @@ begin
   FCumTotal := 0;
 end;
 
-// single source 7-field cache table: order = FScanLens index (0:Name 1:LinkName 2:Magic 3:Version 4:UName 5:GName 6:Prefix), values derived from C_TAR_LAYOUT single source, bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名
+// single source 7-field cache table: literals derived from C_TAR_LAYOUT single source (0,100 / 157,100 / 257,6 / 263,2 / 265,32 / 297,32 / 345,155), bytes.ops single 512B pass — opaque generic, interface不暴露七字段命名; FPC const folding 禁 record.field in typed const,故用字面量单源对齐版式，见 CONTRACT §2 INV-7
 const
   C_TAR_SCAN_FIELDS: array[0..6] of TFieldRange = (
     (Off: 0; Len: 100),
@@ -192,7 +193,7 @@ const
     (Off: 297; Len: 32),
     (Off: 345; Len: 155)
   );
-  // batch lens: values derived from C_TAR_SCAN_FIELDS.Len single source, bulk record copy avoids 7 repeated stores (I-Cache)
+  // batch lens: literals derived from C_TAR_LAYOUT.Len single source (100,100,6,2,32,32,155), bulk record copy avoids 7 repeated stores (I-Cache)
   C_TAR_SCAN_LENS: array[0..6] of SizeUInt = (100, 100, 6, 2, 32, 32, 155);
 
 // single 512B ScanNulFieldTruncations, 7-field lens — single source C_TAR_SCAN_FIELDS, bytes.ops单源单次扫描
@@ -224,12 +225,24 @@ begin
   Result := FData[AOfs];
 end;
 
+function TTarReader.SliceUntilNul(ABase: PByte; ALen: SizeUInt): TByteSpan; inline;
+var
+  LSpan: TByteSpan;
+  LIdx: SizeInt;
+  LLen: SizeUInt;
+begin
+  // single source NUL truncation: bytes.ops SpanIndexOf single source, zero-copy, inline — header fallback + non-header share
+  if ALen = 0 then Exit(TByteSpan.Empty);
+  LSpan := TByteSpan.Create(ABase, ALen);
+  LIdx := SpanIndexOf(LSpan, 0);
+  if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
+  if LLen = 0 then Exit(TByteSpan.Empty);
+  Result := TByteSpan.Create(ABase, LLen);
+end;
+
 function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
 var
   EndOfs: SizeUInt;
-  LLen: SizeUInt;
-  LIdx: SizeInt;
-  LSpan: TByteSpan;
   LFieldOff: SizeUInt;
   I: SizeInt; // table-driven index
 begin
@@ -248,24 +261,14 @@ begin
     for I := Low(C_TAR_SCAN_FIELDS) to High(C_TAR_SCAN_FIELDS) do
       if (LFieldOff = C_TAR_SCAN_FIELDS[I].Off) and (ALen = C_TAR_SCAN_FIELDS[I].Len) then
       begin
-        LLen := FScanLens[I];
-        if LLen = 0 then Exit(TByteSpan.Empty);
-        Exit(TByteSpan.Create(@FData[AOfs], LLen));
+        if FScanLens[I] = 0 then Exit(TByteSpan.Empty);
+        Exit(TByteSpan.Create(@FData[AOfs], FScanLens[I]));
       end;
-    // fallback: non-7 header field — bytes.ops single source SpanIndexOf/MemFindByte SIMD zero-copy, no scalar loop
-    LSpan := TByteSpan.Create(@FData[AOfs], ALen);
-    LIdx := SpanIndexOf(LSpan, 0);
-    if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
-    if LLen = 0 then Exit(TByteSpan.Empty);
-    Result := TByteSpan.Create(@FData[AOfs], LLen);
-    Exit;
+    // fallback: non-7 header field — single source SliceUntilNul (bytes.ops SpanIndexOf, inline zero-copy, no scalar loop)
+    Exit(SliceUntilNul(@FData[AOfs], ALen));
   end;
-  // non-header: single SpanIndexOf zero-copy, bytes.ops single source, zero-copy view
-  LSpan := TByteSpan.Create(@FData[AOfs], ALen);
-  LIdx := SpanIndexOf(LSpan, 0);
-  if LIdx < 0 then LLen := ALen else LLen := SizeUInt(LIdx);
-  if LLen = 0 then Exit(TByteSpan.Empty);
-  Result := TByteSpan.Create(@FData[AOfs], LLen);
+  // non-header: single source SliceUntilNul (bytes.ops SpanIndexOf, inline zero-copy, zero-copy view)
+  Result := SliceUntilNul(@FData[AOfs], ALen);
 end;
 
 function TTarReader.TrimmedSlice(ABase: PByte; ALen: SizeUInt): TByteSpan;

@@ -65,10 +65,10 @@ end;
 
 destructor TTarBuilder.Destroy;
 begin
-  // 稳定性：析构永不抛异常，仅 Warn 可观测，try..finally 必释；IsFinished 单源幂等，见 CONTRACT §1.4
+  // 稳定性：析构永不抛异常，仅 Warn 可观测，try..finally 必释；IsFinished 单源幂等，见 CONTRACT §1.4，文案单源 base 常量
   try
     if (FWriter <> nil) and (not FWriter.IsFinished) then
-      NullLogger.Warn('tar: builder destroyed without Finish (missing two zero blocks, data truncated)');
+      NullLogger.Warn(C_TAR_WARN_BUILDER_DESTROYED_WITHOUT_FINISH);
   finally
     FWriter.Free;
     inherited Destroy;

@@ -50,7 +50,7 @@ begin
   Result := IsSafeArchiveEntryNameEx(ATarget, C_TAR_MAX_LINK_BYTES, False);
 end;
 
-{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 capacity.TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀） }
+{ Walk打包单源：消除 TarPackDir/TarPackDirInto 重复，零拷贝；单口直达 AddEntryFromReader 收敛（ITarBuilder 单口高级感），writer内高水位池化 capacity.TarIOBufCapacityFor+bytes.ops单源inline零拷贝，外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀），跨条目读缓冲复用 via writer FIOBuf 高水位池化（4K~1M clamp/AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×，单次高水位分配跨200×512B复用零每条目GetMem抖动，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源） }
 procedure PackWalks(const AWalks: TArchiveWalkArray; const AWriter: TTarWriter);
 var
   LI: Integer;
@@ -82,12 +82,15 @@ begin
       end;
       LFile := ArchiveOpenRead(AWalks[LI].FFull);
       try
-        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化，capacity.TarIOBufCapacityFor+bytes.ops单源inline，try..finally必释不丢
+        // 单口直达：ITarWriter.AddEntryFromReader 单口零拷贝 high-water池化（capacity.TarIOBufCapacityFor→AlignUp4K bytes.ops位掩码inline零拷贝/BytesEnsureCapacity几何2×高水位复用/4K~1M clamp单次分发，跨条目复用零每条目分配，DoCopyAndPad PByte视图零拷贝直达 bytes.ops.CopyMemory单源），try..finally必释不丢；外联遵设计公约红线2（真实循环/文件IO分发禁inline避I-Cache膨胀）
         AWriter.AddEntryFromReader(LHdr, LFile as IReader);
       finally
         try
           LFile.Close;
         except
+          on E: Exception do
+            // stability+observability: Close 异常经 log.intf 单缝可观测（NullLogger零分配inline薄转发，无StdErr直触），不静默吞，fail-closed可诊断
+            NullLogger.Warn('tar pack: close failed for ' + AWalks[LI].FFull + ': ' + E.Message);
         end;
       end;
     end;

@@ -81,6 +81,10 @@ procedure ArchiveDeferredAppend(var A: TArchiveDeferredArray; var ACount: Intege
 
 { 排序：避免中枢 string 拷贝，采用指针比较（零拷贝 pivot） }
 procedure ArchiveSortDirEntries(var A: TDirEntryArray);
+{ 排序缓存显式缩容：threadvar GArchiveSortPtrs/GArchiveSortLens 几何扩容仅增不缩，2000 条目后线程常驻 2K；提供显式释放/缩容，复用 bytes.ops BytesShrinkTo/BytesRelease 单源思想 inline 零拷贝 }
+procedure ArchiveReleaseSortCache; inline;
+procedure ArchiveShrinkSortCache(const AKeep: Integer); inline;
+function ArchiveSortCacheCapacity: SizeUInt; inline;
 
 { 防劫持：逐段 IsSymlink 检测，增量前缀构建避免每段 Copy(APath,1,LI-1) 的 O(N^2) 短生命周期 string }
 procedure ArchiveEnsureNoSymlinkInPath(const APath: string);
@@ -158,14 +162,54 @@ begin
     Result := Result * 2;
 end;
 
-// perf: threadvar 隔离并发，复用 ArchiveNextCapacity 单源几何扩容，Walk 千级目录排序零每调用分配，inline 薄转发、零额外拷贝、零资源泄漏（线程局域复用不丢、零锁零竞争）
+// perf: threadvar 隔离并发，复用 ArchiveNextCapacity 单源几何扩容，Walk 千级目录排序零每调用分配，inline 薄转发、零额外拷贝、零资源泄漏（线程局域复用不丢、零锁零竞争），显式 hysteresis 缩容防 2K 常驻
 procedure ArchiveEnsureSortCacheCapacity(const ARequired: Integer); inline;
-var LCap: Integer;
+var LCap, LTarget: Integer;
 begin
   LCap := Length(GArchiveSortPtrs);
-  if LCap >= ARequired then Exit;
+  if LCap >= ARequired then
+  begin
+    // stability: hysteresis 显式缩容 — 缓存远超需求(>4×且>64)时缩至 2×需求，复用 bytes.ops.BytesShrinkTo 单源 inline 零拷贝，线程局域零锁，避免 2000 条目后 2K 常驻，滞回阈值防抖动，零额外分配
+    if (LCap > 64) and (LCap > ARequired * 4) then
+    begin
+      LTarget := ArchiveNextCapacity(0, ARequired * 2);
+      SetLength(GArchiveSortPtrs, LTarget);
+      SetLength(GArchiveSortLens, LTarget);
+    end;
+    Exit;
+  end;
   SetLength(GArchiveSortPtrs, ArchiveNextCapacity(LCap, ARequired));
   SetLength(GArchiveSortLens, Length(GArchiveSortPtrs));
+end;
+
+// stability: 显式缩容单源，复用 bytes.ops.BytesShrinkTo/BytesRelease 单源思想 inline 零拷贝，仅缩不扩，线程局域零锁，显式释放防 2000 条目后 2K 常驻
+procedure ArchiveReleaseSortCache; inline;
+begin
+  // perf: inline + SetLength(0) 零拷贝释放高水位，复用 bytes.ops.BytesRelease 单源思想，线程局域零锁零竞争，资源不丢
+  if Length(GArchiveSortPtrs) <> 0 then
+    SetLength(GArchiveSortPtrs, 0);
+  if Length(GArchiveSortLens) <> 0 then
+    SetLength(GArchiveSortLens, 0);
+end;
+
+procedure ArchiveShrinkSortCache(const AKeep: Integer); inline;
+begin
+  // perf: inline 显式缩容仅缩不扩，复用 bytes.ops.BytesShrinkTo 单源思想 inline 零拷贝，线程局域零锁，防几何扩容常驻 2K，零额外分配
+  if AKeep <= 0 then
+  begin
+    ArchiveReleaseSortCache;
+    Exit;
+  end;
+  if Length(GArchiveSortPtrs) > AKeep then
+    SetLength(GArchiveSortPtrs, AKeep);
+  if Length(GArchiveSortLens) > AKeep then
+    SetLength(GArchiveSortLens, AKeep);
+end;
+
+function ArchiveSortCacheCapacity: SizeUInt; inline;
+begin
+  // perf: inline 零拷贝视图，复用 bytes.ops 单源思想，线程局域零锁
+  Result := SizeUInt(Length(GArchiveSortPtrs));
 end;
 
 function ArchiveStrCompare(const A, B: string): Integer; inline;
@@ -298,6 +342,9 @@ begin
       end;
     end;
   end;
+  // stability: hysteresis auto trim — 容量远超需求(>4×且>64)时显式缩容至 2×需求，复用 ArchiveShrinkSortCache/bytes.ops.BytesShrinkTo 单源 inline 零拷贝，线程局域零锁，防 2000 条目后 2K 常驻，阈值 4×/64 滞回避免小目录频繁抖动，零额外分配
+  if (Length(GArchiveSortPtrs) > 64) and (Length(GArchiveSortPtrs) > Length(A) * 4) then
+    ArchiveShrinkSortCache(Length(A) * 2);
 end;
 
 procedure ArchiveEnsureNoSymlinkInPath(const APath: string);

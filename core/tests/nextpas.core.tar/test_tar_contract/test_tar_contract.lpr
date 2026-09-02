@@ -148,7 +148,6 @@ begin
     AllowedCap.Sorted := True;
     AllowedCap.Duplicates := dupIgnore;
     AllowedCap.Add('nextpas.core.tar.capacity.pas');
-    AllowedCap.Add('nextpas.core.tar.base.pas');
     AllowedCap.Add('nextpas.core.tar.builder.pas');
     AllowedCap.Add('nextpas.core.tar.writer.pas');
     AllowedCap.Add('nextpas.core.tar.fs.pas');
@@ -294,11 +293,19 @@ begin
   Check(Pos('function tarbuildercapacityfor', Low) > 0, 'capacity has TarBuilderCapacityFor');
   Check(Pos('function tarbuildercapacityfor(const aestimatedtotal: sizeuint): sizeuint; inline', Low) > 0, 'TarBuilderCapacityFor inline');
   Check(Pos('function tariobufcapacityfor', Low) > 0, 'capacity has TarIOBufCapacityFor');
-  // base must be thin forward to capacity
+  // base must be pure: zero dependency on same-module capacity, single source via bytes.ops.AlignUp4K inline zero-copy
   S := ReadText('src/nextpas.core.tar.base.pas');
   Low := LowerCase(S);
-  Check(Pos('nextpas.core.tar.capacity', Low) > 0, 'base implementation uses capacity single source');
-  Check(Pos('tarcapacityalign4k(avalue)', Low) > 0, 'base thin forward Align4K');
+  Check(Pos('nextpas.core.tar.capacity', Low) = 0, 'base must not uses tar.capacity (four-piece base purity, zero dependency on same-module)');
+  Check(Pos('nextpas.core.bytes.ops', Low) > 0, 'base uses bytes.ops AlignUp4K single source');
+  Check(Pos('tarcapacityalign4k', Low) > 0, 'base has TarCapacityAlign4K inline AlignUp4K');
+  Check(Pos('c_tar_builder_initial_capacity = 4096', Low) > 0, 'base defines builder capacity 4K literal single source');
+  Check(Pos('c_tar_iobuf_max = 1048576', Low) > 0, 'base defines iobuf max 1M literal');
+  // capacity now thin aliases base (capacity->base single source, base zero dependency)
+  S := ReadText('src/nextpas.core.tar.capacity.pas');
+  Low := LowerCase(S);
+  Check(Pos('nextpas.core.tar.base', Low) > 0, 'capacity aliases base constants (capacity->base single source, no drift)');
+  Check(Pos('nextpas.core.tar.base.tarcapacityalign4k', Low) > 0, 'capacity thin forward to base Align4K');
   // builder/writer/fs must directly use capacity single source in implementation
   S := ReadText('src/nextpas.core.tar.writer.pas');
   Low := LowerCase(S);

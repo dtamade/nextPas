@@ -60,7 +60,7 @@
 
 生产单元（`src/nextpas.core.tar*.pas`）不得 `uses` 非 `nextpas.*`，经 `test_tar_contract` 机械执行。门面仅 `re-export` + `inline` 委托，无控制流。
 
-- 四件套 `base←intf←实现←门面`；`nextpas.core.tar.common` 为内部共享内核（类型级隔离：门面零 re-export，仅 `reader/writer/fs` 受信实现 `implementation uses` 可见，辅以本契约机械门禁双重收敛）仅供 `reader/writer/fs` 复用，`nextpas.core.tar.capacity` 为容量与对齐专用内核（`TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝单源、`TarBuilderCapacityFor` floor 4K+两零块 4K 对齐（修复 64K 对 512B 128倍过度预分配）、`TarIOBufCapacityFor` 4K~1M clamp 单源，阈值分叉固化于容量常量零漂移，门面零 re-export，仅 `base/builder/writer/fs` 受信实现 `implementation uses` 可见）仅供容量预估与对齐单源复用，`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
+- 四件套 `base←intf←实现←门面`（`base` 零依赖同模块文件，守纯度；阈值常量与 `TarCapacityAlign4K/Builder/IOBuf` 单源于 `nextpas.core.tar.base` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，阈值分叉固化于 `base` 常量）；`nextpas.core.tar.common` 为内部共享内核（类型级隔离：门面零 re-export，仅 `reader/writer/fs` 受信实现 `implementation uses` 可见，辅以本契约机械门禁双重收敛）仅供 `reader/writer/fs` 复用，`nextpas.core.tar.capacity` 为容量与对齐专用内核（`TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝单源、`TarBuilderCapacityFor` floor 4K+两零块 4K 对齐（修复 64K 对 512B 128倍过度预分配）、`TarIOBufCapacityFor` 4K~1M clamp 单源，阈值分叉固化于 `base` 常量经 `capacity→base` 薄别名零漂移，门面零 re-export，仅 `builder/writer/fs` 受信实现 `implementation uses` 可见，`base` 不直引 `capacity` 守纯度）仅供 `builder/writer/fs` 容量预估与对齐单源复用，`nextpas.core.archive.pax` 为归档族通用 pax-kv 内核；绕过门面直引视为违契。
 
 ## 5. 测试入口
 
@@ -80,6 +80,6 @@ make -C core/benchmarks/nextpas.core.tar/bench_tar regression
 
 - 口径：`bench_tar` `TBenchSuite` 承载，`make -C core/benchmarks/nextpas.core.tar/bench_tar run` 可复现（`GOMAXPROCS=1` 降噪，`SetMinDuration 300ms/MinSamples 7/Warmup 1`，`ACtx.SetBytes` 换算吞吐，双路归档 `build/bench-tar.json`）。
 - 门限（CI 硬红）：`allocs` 硬预算 `baseline+2` / `bytes` 强一致（`!=` 即红）与 `ns/op ≤1.50×` / `MB/s ≥0.65×` 均为硬门（`status=ok` 强一致，任一超限 `check_regression.py` 非零退出，CI 红）；`make -C core/benchmarks/nextpas.core.tar/bench_tar regression` 比对 `BASELINE.json` 判定。
-- 对照（CI 硬红）：Go `archive/tar` / Rust `tar` `compare_go`/`compare_rust` 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（`GOMAXPROCS=1` 降噪，连续双机复现升硬门）。
-- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 零拷贝（FBuf 持有型、外部 PByte 直视，`inline` 零分配，按需 `SpanClone`）；`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需）+ `bytes.ops.AlignUp4K` 容量对齐单源（`capacity` 专用内核 `inline` 零拷贝）、`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀）。
+- 对照（CI 硬红，若对照产物存在；缺失时 warn 非硬红闭环）：Go `archive/tar` (`core/benchmarks/nextpas.core.tar/bench_tar/compare_go/main.go`, `go.mod` 已落地，`GOMAXPROCS=1` 降噪) / Rust `tar` (`compare_rust/Cargo.toml` + `main.rs` `tar="0.4"` 已落地) 同口径守卫 `Pascal ns/op ≤1.50×` 且 `MB/s ≥0.70×`（连续双机复现升硬门）；`make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare` 生成对照 JSON（`build/bench-tar-compare-*.json`），`check_regression.py --with-compare` 比对判定，缺失时 warn 非硬红闭环；零拷贝 `TrySlice` inline 视图与 `bytes.ops CopyMemory/SpanClone` 单源（FBuf 持有型/外部 PByte 直视，按需 `SpanClone`，`try..finally` 必释）证据见 `reader.pas:TrySlice inline` 与 `common.pas:CopyMemory` 单源。
+- 实现：零拷贝视图 `TrySlice` 单一规范 `inline` + `EntryDataSlice` 薄转发，`OpenEntryStream` 零拷贝（FBuf 持有型、外部 PByte 直视，`inline` 零分配，按需 `SpanClone`）；`bytes.ops` 单源 `CopyMemory`（`SpanClone` 仅按需）+ `bytes.ops.AlignUp4K` 容量对齐单源（`base` 单源常量与 `TarCapacityAlign4K` 经 `bytes.ops.AlignUp4K` 位掩码零除法 `inline` 零拷贝，`capacity` 仅薄别名 `builder/writer/fs` 单源，`base` 零依赖同模块）、`bytes.builder` 几何扩容；含循环体外联以遵 `design-conventions`（薄转发 `inline`、循环体/回退外联避 I-Cache 膨胀）。
 - 确定性：`archive.fs` 确定性排序 + `deferred dir` 逆序定稿 + 未显式 `mtime=0` 同输入同字节（除 pax 长名外），跨机复现高级感。

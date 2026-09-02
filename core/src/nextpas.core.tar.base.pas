@@ -1,7 +1,7 @@
 unit nextpas.core.tar.base;
 {**
  * @desc Tar 基座：类型、常量与名安全谓词，L2 单点。
- * 依赖 nextpas.core.base / exception + nextpas.core.tar.capacity（容量与对齐单源 4K 位掩码零除法 inline 零拷贝，阈值固化）+ nextpas.core.bytes.pathvalid（复用 bytes.ops 单源、inline/零拷贝原串索引，无 FPC RTL 直引）。
+ * 依赖 nextpas.core.base / exception + nextpas.core.bytes.ops 单源 AlignUp4K 位掩码零除法 inline 零拷贝 + nextpas.core.bytes.pathvalid（复用 bytes.ops 单源、inline/零拷贝原串索引，无 FPC RTL 直引）。零依赖同模块文件，守四件套 base 纯度（base←intf←实现←门面）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -10,8 +10,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception,
-  nextpas.core.tar.capacity;
+  nextpas.core.exception;
 
 type
   TTarEntryKind = (
@@ -135,17 +134,21 @@ const
   C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
-  { 容量：单源经 nextpas.core.tar.capacity（4K 对齐复用 bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉固化于容量常量，零漂移） }
-  C_TAR_BUILDER_INITIAL_CAPACITY = nextpas.core.tar.capacity.C_TAR_BUILDER_INITIAL_CAPACITY;
-  C_TAR_IOBUF_INIT = nextpas.core.tar.capacity.C_TAR_IOBUF_INIT;
-  C_TAR_IOBUF_MAX = nextpas.core.tar.capacity.C_TAR_IOBUF_MAX;
+  { 容量：单源经 nextpas.core.bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉固化于本 base 常量零漂移（base 纯度：零依赖同模块文件，不直引 capacity 内核） }
+  C_TAR_BUILDER_INITIAL_CAPACITY = 4096; // 4K floor，单条目 512B 仅 8倍，按需 4K 对齐零拷贝，修复 64K 128倍驻留
+  C_TAR_IOBUF_INIT = 4096;
+  C_TAR_IOBUF_MAX = 1048576; // 1M clamp，单分发 high-water，消除 1M 拆 16次 WriteChecked 抖动
+  C_TAR_CAP_ALIGN = 4096;
 
   { 全局 pax 可观测 Warn 文案单源（reader 日志复用，防硬编码分散） }
   C_TAR_WARN_GLOBAL_PAX_AUTO_CLEAR = 'tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)';
   C_TAR_WARN_GLOBAL_PAX_REJECTED_PREFIX = 'tar: global pax rejected unsafe name: ';
   C_TAR_WARN_GLOBAL_PAX_REJECTED_SUFFIX = ' (filtered, not persisted)';
+  { 析构可观测 Warn 文案单源（writer/builder 双处析构收敛，防硬编码分立） }
+  C_TAR_WARN_WRITER_DESTROYED_WITHOUT_FINISH = 'tar: writer destroyed without Finish (missing two zero blocks, data truncated; call Finish explicitly)';
+  C_TAR_WARN_BUILDER_DESTROYED_WITHOUT_FINISH = 'tar: builder destroyed without Finish (missing two zero blocks, data truncated)';
 
-{ 容量策略薄转发：单源 nextpas.core.tar.capacity，4K 对齐 inline 零拷贝，阈值分叉已固化（builder 4K floor / IOBuf 4K~1M clamp），零漂移 }
+{ 容量策略：单源 nextpas.core.bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，阈值分叉已固化（builder 4K floor / IOBuf 4K~1M clamp），零漂移，base 纯度零依赖同模块 }
 function TarCapacityAlign4K(const AValue: SizeUInt): SizeUInt; inline;
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
@@ -214,20 +217,31 @@ end;
 
 function TarCapacityAlign4K(const AValue: SizeUInt): SizeUInt; inline;
 begin
-  // 薄转发单源：capacity inline 零拷贝，经 bytes.ops.AlignUp4K 位掩码零除法单源
-  Result := nextpas.core.tar.capacity.TarCapacityAlign4K(AValue);
+  // 单源 4K 对齐经 bytes.ops.AlignUp4K 位掩码零除法 inline 零拷贝，无截断，32/64位安全，base 纯度零依赖 capacity
+  Result := AlignUp4K(AValue);
 end;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
-  // 薄转发单源：capacity 专用模块，预估+两零块 4K floor 4K 对齐单源 inline 零拷贝，修复 64K 小包 128倍驻留
-  Result := nextpas.core.tar.capacity.TarBuilderCapacityFor(AEstimatedTotal);
+  // 单源容量策略：预估+两零块 1024，floor 4K，4K 对齐经 AlignUp4K inline 零拷贝（阈值分叉固化于本 base 常量），修复 64K 小包 128倍驻留
+  if AEstimatedTotal = 0 then
+    Exit(C_TAR_BUILDER_INITIAL_CAPACITY);
+  if AEstimatedTotal > High(SizeUInt) - 2 * 512 then
+    Exit(High(SizeUInt));
+  Result := AEstimatedTotal + 2 * 512;
+  if Result < C_TAR_BUILDER_INITIAL_CAPACITY then
+    Result := C_TAR_BUILDER_INITIAL_CAPACITY;
+  Result := TarCapacityAlign4K(Result);
 end;
 
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
 begin
-  // 薄转发单源：capacity 阈值分叉+对齐单源 inline 零拷贝，4K~1M clamp 高水位池化
-  Result := nextpas.core.tar.capacity.TarIOBufCapacityFor(ASize);
+  // 单源 I/O 缓冲策略：4K~1M clamp + AlignUp4K inline 零拷贝，高水位 1M 单分发，消除 1M 拆 16次抖动，base 纯度
+  if ASize <= Int64(C_TAR_IOBUF_INIT) then
+    Exit(C_TAR_IOBUF_INIT);
+  if ASize <= Int64(C_TAR_IOBUF_MAX) then
+    Exit(TarCapacityAlign4K(SizeUInt(ASize)));
+  Result := C_TAR_IOBUF_MAX;
 end;
 
 end.

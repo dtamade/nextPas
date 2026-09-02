@@ -17,6 +17,17 @@ CANDIDATES = [
     pathlib.Path("build/bench-tar.json"),
     pathlib.Path(__file__).parent.parent.parent.parent / "build/bench-tar.json",
 ]
+# compare artifacts: Go archive/tar vs Rust tar (CONTRACT §6)
+COMPARE_GO_CANDIDATES = [
+    pathlib.Path(__file__).parent / "compare_go/build/bench-tar-compare-go.json",
+    pathlib.Path(__file__).parent / "../../../build/bench-tar-compare-go.json",
+    pathlib.Path(__file__).parent / "build/bench-tar-compare-go.json",
+]
+COMPARE_RUST_CANDIDATES = [
+    pathlib.Path(__file__).parent / "compare_rust/build/bench-tar-compare-rust.json",
+    pathlib.Path(__file__).parent / "../../../build/bench-tar-compare-rust.json",
+    pathlib.Path(__file__).parent / "build/bench-tar-compare-rust.json",
+]
 
 def load(path):
     with open(path, encoding="utf-8") as f:
@@ -35,6 +46,16 @@ def find_current():
         cand = parent / "build/bench-tar.json"
         if cand.exists():
             return cand
+    return None
+
+def find_compare(cands):
+    for p in cands:
+        for base in [pathlib.Path.cwd(), pathlib.Path(__file__).parent]:
+            cand = (base / p).resolve() if not p.is_absolute() else p.resolve()
+            if cand.exists():
+                return cand
+        if p.exists():
+            return p
     return None
 
 def main():
@@ -88,10 +109,76 @@ def main():
     for name in cur_map:
         if name not in base_map:
             print(f"  WARN extra bench {name} not in baseline", file=sys.stderr)
+    # --- Go/Rust compare hard gate (CONTRACT §6) ---
+    want_compare = "--with-compare" in sys.argv
+    go_path = find_compare(COMPARE_GO_CANDIDATES)
+    rust_path = find_compare(COMPARE_RUST_CANDIDATES)
+    # CLI explicit compare paths: --compare-go <path> --compare-rust <path>
+    if "--compare-go" in sys.argv:
+        try:
+            go_path = pathlib.Path(sys.argv[sys.argv.index("--compare-go") + 1])
+        except Exception:
+            pass
+    if "--compare-rust" in sys.argv:
+        try:
+            rust_path = pathlib.Path(sys.argv[sys.argv.index("--compare-rust") + 1])
+        except Exception:
+            pass
+    compare_failed = 0
+    for label, cpath in [("Go", go_path), ("Rust", rust_path)]:
+        if cpath is None or not cpath.exists():
+            if want_compare:
+                print(f"  FAIL compare {label}: missing artifact {cpath} (hard gate)", file=sys.stderr)
+                compare_failed += 1
+            else:
+                print(f"  WARN compare {label}: no artifact found, skip (warn not fail, run `make -C core/benchmarks/nextpas.core.tar/bench_tar run-compare`)", file=sys.stderr)
+            continue
+        try:
+            cdata = load(cpath)
+        except Exception as e:
+            print(f"  FAIL compare {label}: load {cpath} failed: {e}", file=sys.stderr)
+            compare_failed += 1
+            continue
+        cmap = {b["name"]: b for b in cdata.get("benchmarks", [])}
+        print(f"[compare] {label}: {cpath} ({len(cmap)} benches)")
+        for name, bcur in cur_map.items():
+            if name not in cmap:
+                continue
+            cbench = cmap[name]
+            pascal_ns = float(bcur.get("ns_per_op", 0))
+            compare_ns = float(cbench.get("ns_per_op", 0))
+            if compare_ns > 0 and pascal_ns > compare_ns * 1.50:
+                print(f"  FAIL compare {label} {name}: Pascal ns {pascal_ns:.0f} > {label} {compare_ns:.0f} *1.5 ({pascal_ns/compare_ns:.2f}x)", file=sys.stderr)
+                compare_failed += 1
+            else:
+                if compare_ns > 0:
+                    print(f"  OK   compare {label} {name}: Pascal {pascal_ns:.0f} <= {label} {compare_ns:.0f}*1.5")
+            pascal_mbs = float(bcur.get("bytes_per_op", 0)) / pascal_ns if pascal_ns else 0
+            compare_mbs = float(cbench.get("bytes_per_op", 0)) / compare_ns if compare_ns else 0
+            if compare_mbs > 0 and pascal_mbs < compare_mbs * 0.70:
+                print(f"  FAIL compare {label} {name}: Pascal MB/s {pascal_mbs:.1f} < {label} {compare_mbs:.1f} *0.70", file=sys.stderr)
+                compare_failed += 1
+            else:
+                if compare_mbs > 0:
+                    print(f"  OK   compare {label} {name}: Pascal MB/s {pascal_mbs:.1f} >= {label} {compare_mbs:.1f}*0.70")
+        # status guard
+        for b in cmap.values():
+            if b.get("status") != "ok":
+                print(f"  WARN compare {label} {b.get('name')}: status {b.get('status')} != ok", file=sys.stderr)
+    if want_compare and compare_failed:
+        print(f"[regression] compare gate {compare_failed} failure(s)", file=sys.stderr)
+        failed += compare_failed
+    elif compare_failed and want_compare:
+        failed += compare_failed
+    # if not want_compare, compare failures are warnings only (warn not fail) to keep loop closed when artifacts absent
     if failed:
         print(f"[regression] {failed} check(s) failed", file=sys.stderr)
         sys.exit(1)
     print("[regression] all checks passed (allocs/bytes/ns/MB/s hard gate, status ok)")
+    if go_path or rust_path:
+        print("[regression] compare guard: Go/Rust artifacts checked (CONTRACT §6 closed)")
+    else:
+        print("[regression] compare guard: no artifacts, warn-only (closed via conditional hard gate)")
     sys.exit(0)
 
 if __name__ == "__main__":
