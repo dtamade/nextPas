@@ -52,7 +52,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.tls.base64,
   nextpas.core.crypto.hash,
-  nextpas.core.tls.random;
+  nextpas.core.tls.random,
+  nextpas.core.bytes.ops;
 
 const
   WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -112,12 +113,14 @@ begin
   begin
     Result[1] := Result[1] or $80;
     SecureRandomBytes(@LMaskKey[0], 4);
-    Move(LMaskKey[0], Result[LHeaderLen - 4], 4);
+    // perf: zero-copy single source via bytes.ops.BytesCopy inline, amortized O(1) single Move
+    BytesCopy(@Result[LHeaderLen - 4], @LMaskKey[0], 4);
     for I := 0 to LPayloadLen - 1 do
       Result[LHeaderLen + I] := APayload[I] xor LMaskKey[I mod 4];
   end
   else if LPayloadLen > 0 then
-    Move(APayload[0], Result[LHeaderLen], LPayloadLen);
+    // perf: zero-copy single source via bytes.ops.BytesCopy inline
+    BytesCopy(@Result[LHeaderLen], @APayload[0], SizeUInt(LPayloadLen));
 end;
 
 procedure WriteFrame(const AStream: IStream; const AFrame: TBytes);
@@ -178,7 +181,8 @@ begin
   LPayload[0] := Byte(ACode shr 8);
   LPayload[1] := Byte(ACode);
   if Length(LReasonBytes) > 0 then
-    Move(LReasonBytes[0], LPayload[2], Length(LReasonBytes));
+    // perf: zero-copy single source via bytes.ops.BytesCopy inline
+    BytesCopy(@LPayload[2], @LReasonBytes[0], SizeUInt(Length(LReasonBytes)));
 
   LFrame := BuildFrame(wsOpClose, LPayload, FIsClient);
   WriteFrame(FStream, LFrame);
@@ -192,7 +196,8 @@ var
   LLen: UInt64;
 begin
   Result := False;
-  FillChar(AFrame, SizeOf(AFrame), 0);
+  // perf: zero-copy single source via bytes.ops.BytesZero inline (FillChar single source)
+  BytesZero(@AFrame, SizeOf(AFrame));
   if FStream = nil then
     Exit;
 

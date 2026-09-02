@@ -728,24 +728,74 @@ end;
 
 function TEffectGraph.Bake(const ASrc: TBitmap): TBitmap;
 var
-  I, Y: Integer;
-  Cur: TBitmap;
+  I, Y, Steps, S: Integer;
+  Cur, Shadow, OutBmp: TBitmap;
   H: Single;
+  SrcRow, DstRow: PByte;
+  SC: TColor32;
+  SR, SG, SB, SA: Byte;
 begin
   if ASrc.IsEmpty then raise EEffectError.Create('nextpas.core.graphics.effect.graph.pas: TEffectGraph.Bake: src empty');
   Cur := ASrc.Clone;
   for I := 0 to High(FNodes) do
     case FNodes[I].Kind of
       ekBlur: Cur := BoxBlur(Cur, Trunc(FNodes[I].Radius));
-      ekDropShadow: Cur := BoxBlur(Cur, Trunc(FNodes[I].Radius));
+      ekDropShadow:
+        begin
+          Shadow := BoxBlur(Cur, Trunc(FNodes[I].Radius));
+          // tint blurred alpha with ShadowColor RGB, keep blurred alpha * Shadow alpha
+          SC := FNodes[I].ShadowColor;
+          SR := Byte((SC shr 16) and $FF); SG := Byte((SC shr 8) and $FF); SB := Byte(SC and $FF); SA := Byte((SC shr 24) and $FF);
+          for Y := 0 to Shadow.Height - 1 do
+          begin
+            DstRow := Shadow.RowPtr(Y);
+            for S := 0 to Shadow.Width - 1 do
+            begin
+              SrcRow := DstRow + S * 4;
+              // premultiply shadow color by blurred alpha
+              SrcRow[0] := Byte((Integer(SB) * Integer(SrcRow[3]) * Integer(SA) + 127) div (255 * 255));
+              SrcRow[1] := Byte((Integer(SG) * Integer(SrcRow[3]) * Integer(SA) + 127) div (255 * 255));
+              SrcRow[2] := Byte((Integer(SR) * Integer(SrcRow[3]) * Integer(SA) + 127) div (255 * 255));
+              // alpha already blurred, modulate by shadow alpha
+              SrcRow[3] := Byte((Integer(SrcRow[3]) * Integer(SA) + 127) div 255);
+            end;
+          end;
+          // composite offset shadow + original over transparent out
+          OutBmp := TBitmap.Create(Cur.Width, Cur.Height, Cur.Format);
+          // out is transparent (Create zeroes), blit shadow offset then blit cur over it via src-over per row
+          for Y := 0 to OutBmp.Height - 1 do
+          begin
+            DstRow := OutBmp.RowPtr(Y);
+            // copy shadow offset
+            if (Y - Trunc(FNodes[I].Dy) >= 0) and (Y - Trunc(FNodes[I].Dy) < Shadow.Height) then
+            begin
+              SrcRow := Shadow.ConstRowPtr(Y - Trunc(FNodes[I].Dy));
+              for S := 0 to OutBmp.Width - 1 do
+                if (S - Trunc(FNodes[I].Dx) >= 0) and (S - Trunc(FNodes[I].Dx) < Shadow.Width) then
+                begin
+                  Move((SrcRow + (S - Trunc(FNodes[I].Dx)) * 4)^, (DstRow + S * 4)^, 4);
+                end;
+            end;
+          end;
+          // src-over original on top of shadow
+          for Y := 0 to Cur.Height - 1 do
+            RasterBlendVaried(OutBmp.RowPtr(Y), PLongWord(Cur.ConstRowPtr(Y)), Cur.Width);
+          Cur := OutBmp;
+        end;
       ekHue:
         begin
           H := FNodes[I].HueShift;
+          // degrees -> 120° steps (R->G->B rotation), respect contract
+          Steps := 0;
           if Abs(H) > 0.5 then
           begin
+            Steps := (Trunc(Abs(H)) div 120) mod 3;
+            if Steps = 0 then Steps := 1;
+            if H < 0 then Steps := (3 - Steps) mod 3;
+          end;
+          for S := 0 to Steps - 1 do
             for Y := 0 to Cur.Height - 1 do
               RasterRotateRGB(Cur.RowPtr(Y), Cur.Width);
-          end;
         end;
       ekLUT:
         begin

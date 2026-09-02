@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.args.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.text.number;
 
@@ -34,6 +35,8 @@ type
     ValueInt: Int64;
     ValueBool: Boolean;
     ValueList: TStringArray;
+    ValueListCap: Integer;
+    ValueListLen: Integer;
     Present: Boolean;
   end;
 
@@ -43,11 +46,23 @@ type
     FDescription: string;
     FVersion: string;
     FOptions: array of TArgOption;
+    FOptionsLen: Integer;
+    FOptionsCap: Integer;
     FPositionals: array of string;
+    FPositionalsLen: Integer;
+    FPositionalsCap: Integer;
     FPositionalSpecs: array of TArgPositionalSpec;
+    FPositionalSpecsLen: Integer;
+    FPositionalSpecsCap: Integer;
     FParsed: Boolean;
     FAutoHelp: Boolean;
     FAutoVersion: Boolean;
+    // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy Move for ValueList append, not inline per red-line 2
+    procedure EnsureOptionsCapacity(const ARequired: Integer);
+    procedure EnsurePositionalsCapacity(const ARequired: Integer);
+    procedure EnsurePositionalSpecsCapacity(const ARequired: Integer);
+    procedure AppendPositional(const AValue: string); inline;
+    procedure AppendValueList(const AOptIdx: Integer; const AValue: string);
     function FindOption(const AName: string): Int32;
     function FindShort(const AShort: AnsiChar): Int32;
     procedure CheckDuplicate(const AName: string; const AShort: AnsiChar);
@@ -115,10 +130,19 @@ type
     FVersion: string;
     FGlobalParser: TArgParser;
     FCommands: array of TArgCommand;
+    FCommandsLen: Integer;
+    FCommandsCap: Integer;
     FTrailingArgs: TStringArray;
+    FTrailingLen: Integer;
+    FTrailingCap: Integer;
     function FindCommand(const AName: string): Int32;
     function SuggestCommand(const AName: string): string;
     function AppHelpText: string;
+    // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1), not inline per red-line 2
+    procedure EnsureCommandsCapacity(const ARequired: Integer);
+    procedure EnsureTrailingCapacity(const ARequired: Integer);
+    procedure AppendTrailing(const AValue: string); inline;
+    procedure AppendGlobalArg(var AList: TStringArray; var ACap, ALen: Integer; const AValue: string);
   public
     constructor Create(const AAppName, ADescription, AVersion: string);
     destructor Destroy; override;
@@ -150,11 +174,65 @@ begin
   FDescription := ADescription;
   FVersion := '';
   SetLength(FOptions, 0);
+  FOptionsLen := 0;
+  FOptionsCap := 0;
   SetLength(FPositionals, 0);
+  FPositionalsLen := 0;
+  FPositionalsCap := 0;
   SetLength(FPositionalSpecs, 0);
+  FPositionalSpecsLen := 0;
+  FPositionalSpecsCap := 0;
   FParsed := False;
   FAutoHelp := True;
   FAutoVersion := True;
+end;
+
+procedure TArgParser.EnsureOptionsCapacity(const ARequired: Integer);
+begin
+  // not inline per red-line 2: while loop in BytesGrowCapacityInt would bloat I-Cache; single source geometric via bytes.ops
+  if ARequired <= FOptionsCap then Exit;
+  FOptionsCap := BytesGrowCapacityInt(FOptionsCap, ARequired);
+  SetLength(FOptions, FOptionsCap);
+end;
+
+procedure TArgParser.EnsurePositionalsCapacity(const ARequired: Integer);
+begin
+  if ARequired <= FPositionalsCap then Exit;
+  FPositionalsCap := BytesGrowCapacityInt(FPositionalsCap, ARequired);
+  SetLength(FPositionals, FPositionalsCap);
+end;
+
+procedure TArgParser.EnsurePositionalSpecsCapacity(const ARequired: Integer);
+begin
+  if ARequired <= FPositionalSpecsCap then Exit;
+  FPositionalSpecsCap := BytesGrowCapacityInt(FPositionalSpecsCap, ARequired);
+  SetLength(FPositionalSpecs, FPositionalSpecsCap);
+end;
+
+procedure TArgParser.AppendPositional(const AValue: string); inline;
+begin
+  // perf: inline thin append, capacity check delegates to bytes.ops single source, amortized O(1), zero-copy via string refcount copy
+  EnsurePositionalsCapacity(FPositionalsLen + 1);
+  FPositionals[FPositionalsLen] := AValue;
+  Inc(FPositionalsLen);
+end;
+
+procedure TArgParser.AppendValueList(const AOptIdx: Integer; const AValue: string);
+var
+  LCap, LLen: Integer;
+begin
+  // not inline per red-line 2: growth path contains SetLength + BytesGrowCapacityInt loop
+  // perf: geometric via BytesGrowCapacityInt single source amortized O(1), zero-copy string assign (refcount), stability: SetLength exception-safe
+  LCap := FOptions[AOptIdx].ValueListCap;
+  LLen := FOptions[AOptIdx].ValueListLen;
+  if LLen >= LCap then
+  begin
+    LCap := BytesGrowCapacityInt(LCap, LLen + 1);
+    SetLength(FOptions[AOptIdx].ValueList, LCap);
+    FOptions[AOptIdx].ValueListCap := LCap;
+  end;
+  FOptions[AOptIdx].ValueList[LLen] := AValue;
+  FOptions[AOptIdx].ValueListLen := LLen + 1;
 end;
 
 procedure TArgParser.SetVersion(const AVersion: string);
@@ -185,14 +263,18 @@ var
   LIdx: Int32;
 begin
   CheckDuplicate(AName, AShort);
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
   FOptions[LIdx].Kind := akFlag;
   FOptions[LIdx].Required := False;
   FOptions[LIdx].ValueBool := False;
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
+  SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
 
@@ -201,8 +283,9 @@ var
   LIdx: Int32;
 begin
   CheckDuplicate(AName, AShort);
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
@@ -210,6 +293,9 @@ begin
   FOptions[LIdx].Required := False;
   FOptions[LIdx].DefaultStr := ADefault;
   FOptions[LIdx].ValueStr := ADefault;
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
+  SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
 
@@ -218,8 +304,9 @@ var
   LIdx: Int32;
 begin
   CheckDuplicate(AName, AShort);
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
@@ -227,6 +314,9 @@ begin
   FOptions[LIdx].Required := True;
   FOptions[LIdx].DefaultStr := '';
   FOptions[LIdx].ValueStr := '';
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
+  SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
 
@@ -235,8 +325,9 @@ var
   LIdx: Int32;
 begin
   CheckDuplicate(AName, AShort);
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
@@ -244,6 +335,9 @@ begin
   FOptions[LIdx].Required := False;
   FOptions[LIdx].DefaultInt := ADefault;
   FOptions[LIdx].ValueInt := ADefault;
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
+  SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
 
@@ -252,13 +346,16 @@ var
   LIdx: Int32;
 begin
   CheckDuplicate(AName, AShort);
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
   FOptions[LIdx].Kind := akStringList;
   FOptions[LIdx].Required := False;
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
   SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
@@ -278,13 +375,17 @@ begin
     if not LValid then
       raise EArgParseError.Create('invalid default "' + ADefault + '" for choice option: ' + AName);
   end;
-  LIdx := Length(FOptions);
-  SetLength(FOptions, LIdx + 1);
+  EnsureOptionsCapacity(FOptionsLen + 1);
+  LIdx := FOptionsLen;
+  Inc(FOptionsLen);
   FOptions[LIdx].Name := AName;
   FOptions[LIdx].Short := AShort;
   FOptions[LIdx].Help := AHelp;
   FOptions[LIdx].Kind := akChoice;
   FOptions[LIdx].Required := False;
+  FOptions[LIdx].ValueListCap := 0;
+  FOptions[LIdx].ValueListLen := 0;
+  SetLength(FOptions[LIdx].ValueList, 0);
   SetLength(FOptions[LIdx].Choices, Length(AChoices));
   for LI := 0 to High(AChoices) do
     FOptions[LIdx].Choices[LI] := AChoices[LI];
@@ -297,8 +398,9 @@ procedure TArgParser.AddPositional(const AName, AHelp: string; const ARequired: 
 var
   LIdx: Int32;
 begin
-  LIdx := Length(FPositionalSpecs);
-  SetLength(FPositionalSpecs, LIdx + 1);
+  EnsurePositionalSpecsCapacity(FPositionalSpecsLen + 1);
+  LIdx := FPositionalSpecsLen;
+  Inc(FPositionalSpecsLen);
   FPositionalSpecs[LIdx].Name := AName;
   FPositionalSpecs[LIdx].Help := AHelp;
   FPositionalSpecs[LIdx].Required := ARequired;
@@ -308,7 +410,7 @@ function TArgParser.FindOption(const AName: string): Int32;
 var
   LI: Int32;
 begin
-  for LI := 0 to Length(FOptions) - 1 do
+  for LI := 0 to FOptionsLen - 1 do
     if FOptions[LI].Name = AName then Exit(LI);
   Result := -1;
 end;
@@ -317,7 +419,7 @@ function TArgParser.FindShort(const AShort: AnsiChar): Int32;
 var
   LI: Int32;
 begin
-  for LI := 0 to Length(FOptions) - 1 do
+  for LI := 0 to FOptionsLen - 1 do
     if FOptions[LI].Short = AShort then Exit(LI);
   Result := -1;
 end;
@@ -338,7 +440,6 @@ var
   LEqPos: Int32;
   LOptIdx: Int32;
   LIntVal: Int64;
-  LListLen: Int32;
 begin
   LEqPos := Pos('=', AArg);
   if LEqPos > 0 then
@@ -402,9 +503,7 @@ begin
         Inc(AIdx);
         LValue := AArgs[AIdx];
       end;
-      LListLen := Length(FOptions[LOptIdx].ValueList);
-      SetLength(FOptions[LOptIdx].ValueList, LListLen + 1);
-      FOptions[LOptIdx].ValueList[LListLen] := LValue;
+      AppendValueList(LOptIdx, LValue);
     end;
     akChoice:
     begin
@@ -429,7 +528,6 @@ var
   LOptIdx: Int32;
   LValue: string;
   LIntVal: Int64;
-  LListLen: Int32;
 begin
   if Length(AArg) < 2 then
     raise EArgParseError.Create('invalid short option: ' + AArg);
@@ -474,9 +572,7 @@ begin
         end
         else if FOptions[LOptIdx].Kind = akStringList then
         begin
-          LListLen := Length(FOptions[LOptIdx].ValueList);
-          SetLength(FOptions[LOptIdx].ValueList, LListLen + 1);
-          FOptions[LOptIdx].ValueList[LListLen] := LValue;
+          AppendValueList(LOptIdx, LValue);
         end
         else
           FOptions[LOptIdx].ValueStr := LValue;
@@ -506,7 +602,7 @@ procedure TArgParser.ValidateRequired;
 var
   LI: Int32;
 begin
-  for LI := 0 to Length(FOptions) - 1 do
+  for LI := 0 to FOptionsLen - 1 do
     if FOptions[LI].Required and (not FOptions[LI].Present) then
       raise EArgParseError.Create('missing required option: --' + FOptions[LI].Name);
 end;
@@ -515,26 +611,32 @@ procedure TArgParser.ValidatePositionals;
 var
   LI: Int32;
 begin
-  for LI := 0 to Length(FPositionalSpecs) - 1 do
-    if FPositionalSpecs[LI].Required and (LI >= Length(FPositionals)) then
+  for LI := 0 to FPositionalSpecsLen - 1 do
+    if FPositionalSpecs[LI].Required and (LI >= FPositionalsLen) then
       raise EArgParseError.Create('missing required argument: ' + FPositionalSpecs[LI].Name);
 end;
 
 procedure TArgParser.DoParseArgs(const AArgs: array of string);
 var
-  LI: Int32;
+  LI, LJ: Int32;
   LArg: string;
   LDoubleDash: Boolean;
 begin
   FParsed := True;
-  SetLength(FPositionals, 0);
-  for LI := 0 to Length(FOptions) - 1 do
+  // stability: clear positionals keep capacity, finalize strings to avoid leak
+  for LI := 0 to FPositionalsLen - 1 do
+    FPositionals[LI] := '';
+  FPositionalsLen := 0;
+  for LI := 0 to FOptionsLen - 1 do
   begin
     FOptions[LI].Present := False;
     FOptions[LI].ValueBool := False;
     FOptions[LI].ValueStr := FOptions[LI].DefaultStr;
     FOptions[LI].ValueInt := FOptions[LI].DefaultInt;
-    SetLength(FOptions[LI].ValueList, 0);
+    // stability: finalize previous ValueList strings but keep capacity for reuse
+    for LJ := 0 to FOptions[LI].ValueListLen - 1 do
+      FOptions[LI].ValueList[LJ] := '';
+    FOptions[LI].ValueListLen := 0;
   end;
   LDoubleDash := False;
   LI := 0;
@@ -543,8 +645,7 @@ begin
     LArg := AArgs[LI];
     if LDoubleDash then
     begin
-      SetLength(FPositionals, Length(FPositionals) + 1);
-      FPositionals[High(FPositionals)] := LArg;
+      AppendPositional(LArg);
     end
     else if LArg = '--' then
       LDoubleDash := True
@@ -554,8 +655,7 @@ begin
       ParseShort(LArg, AArgs, LI)
     else
     begin
-      SetLength(FPositionals, Length(FPositionals) + 1);
-      FPositionals[High(FPositionals)] := LArg;
+      AppendPositional(LArg);
     end;
     Inc(LI);
   end;
@@ -637,7 +737,7 @@ end;
 
 function TArgParser.GetStringList(const AName: string): TStringArray;
 var
-  LIdx: Int32;
+  LIdx, LI: Int32;
 begin
   Result := nil;
   LIdx := FindOption(AName);
@@ -645,7 +745,10 @@ begin
     raise EArgParseError.Create('unknown option: ' + AName);
   if FOptions[LIdx].Kind <> akStringList then
     raise EArgParseError.Create('option ' + AName + ' is not a string list');
-  Result := FOptions[LIdx].ValueList;
+  // perf: trimmed copy via single allocation, zero-copy string refcount, single source geometric via ValueListLen/Cap
+  SetLength(Result, FOptions[LIdx].ValueListLen);
+  for LI := 0 to FOptions[LIdx].ValueListLen - 1 do
+    Result[LI] := FOptions[LIdx].ValueList[LI];
 end;
 
 function TArgParser.IsPresent(const AName: string): Boolean;
@@ -659,13 +762,13 @@ end;
 
 function TArgParser.Positional(const AIndex: Int32): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FPositionals)) then Exit('');
+  if (AIndex < 0) or (AIndex >= FPositionalsLen) then Exit('');
   Result := FPositionals[AIndex];
 end;
 
 function TArgParser.PositionalCount: Int32;
 begin
-  Result := Length(FPositionals);
+  Result := FPositionalsLen;
 end;
 
 function TArgParser.HelpText: string;
@@ -675,11 +778,11 @@ var
   LBuilder: IStringBuilder;
 begin
   // zero-copy single allocation: IStringBuilder O(n) vs O(n²) Result+; inline AppendStr/AppendInt avoids intermediate strings.
-  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + Length(FOptions) * 96 + Length(FPositionalSpecs) * 32);
+  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + FOptionsLen * 96 + FPositionalSpecsLen * 32);
   LBuilder.AppendStr('Usage: ');
   LBuilder.AppendStr(FAppName);
   LBuilder.AppendStr(' [options]');
-  for LI := 0 to Length(FPositionalSpecs) - 1 do
+  for LI := 0 to FPositionalSpecsLen - 1 do
   begin
     if FPositionalSpecs[LI].Required then
     begin
@@ -704,7 +807,7 @@ begin
   LBuilder.AppendStr(LineEnding);
   LBuilder.AppendStr('Options:');
   LBuilder.AppendStr(LineEnding);
-  for LI := 0 to Length(FOptions) - 1 do
+  for LI := 0 to FOptionsLen - 1 do
   begin
     LBuilder.AppendStr('  ');
     if FOptions[LI].Short <> #0 then
@@ -797,7 +900,11 @@ begin
   FGlobalParser.SetAutoHelp(False);
   FGlobalParser.SetAutoVersion(False);
   SetLength(FCommands, 0);
+  FCommandsLen := 0;
+  FCommandsCap := 0;
   SetLength(FTrailingArgs, 0);
+  FTrailingLen := 0;
+  FTrailingCap := 0;
 end;
 
 destructor TArgApp.Destroy;
@@ -805,9 +912,42 @@ var
   LI: Int32;
 begin
   FGlobalParser.Free;
-  for LI := 0 to Length(FCommands) - 1 do
+  for LI := 0 to FCommandsLen - 1 do
     FCommands[LI].Parser.Free;
   inherited Destroy;
+end;
+
+procedure TArgApp.EnsureCommandsCapacity(const ARequired: Integer);
+begin
+  if ARequired <= FCommandsCap then Exit;
+  FCommandsCap := BytesGrowCapacityInt(FCommandsCap, ARequired);
+  SetLength(FCommands, FCommandsCap);
+end;
+
+procedure TArgApp.EnsureTrailingCapacity(const ARequired: Integer);
+begin
+  if ARequired <= FTrailingCap then Exit;
+  FTrailingCap := BytesGrowCapacityInt(FTrailingCap, ARequired);
+  SetLength(FTrailingArgs, FTrailingCap);
+end;
+
+procedure TArgApp.AppendTrailing(const AValue: string); inline;
+begin
+  EnsureTrailingCapacity(FTrailingLen + 1);
+  FTrailingArgs[FTrailingLen] := AValue;
+  Inc(FTrailingLen);
+end;
+
+procedure TArgApp.AppendGlobalArg(var AList: TStringArray; var ACap, ALen: Integer; const AValue: string);
+begin
+  // not inline per red-line 2: growth path; single source geometric via bytes.ops
+  if ALen >= ACap then
+  begin
+    ACap := BytesGrowCapacityInt(ACap, ALen + 1);
+    SetLength(AList, ACap);
+  end;
+  AList[ALen] := AValue;
+  Inc(ALen);
 end;
 
 procedure TArgApp.AddGlobalFlag(const AName: string; const AShort: AnsiChar; const AHelp: string);
@@ -829,8 +969,9 @@ function TArgApp.AddCommand(const AName, ADescription: string): TArgParser;
 var
   LIdx: Int32;
 begin
-  LIdx := Length(FCommands);
-  SetLength(FCommands, LIdx + 1);
+  EnsureCommandsCapacity(FCommandsLen + 1);
+  LIdx := FCommandsLen;
+  Inc(FCommandsLen);
   FCommands[LIdx].Name := AName;
   FCommands[LIdx].Description := ADescription;
   FCommands[LIdx].Parser := TArgParser.Create(FAppName + ' ' + AName, ADescription);
@@ -863,7 +1004,7 @@ function TArgApp.FindCommand(const AName: string): Int32;
 var
   LI: Int32;
 begin
-  for LI := 0 to Length(FCommands) - 1 do
+  for LI := 0 to FCommandsLen - 1 do
     if FCommands[LI].Name = AName then Exit(LI);
   Result := -1;
 end;
@@ -879,7 +1020,7 @@ begin
   FillChar(LPrev, SizeOf(LPrev), 0);
   Result := '';
   LBest := MaxInt;
-  for LI := 0 to Length(FCommands) - 1 do
+  for LI := 0 to FCommandsLen - 1 do
   begin
     LS := FCommands[LI].Name;
     if (Length(AName) > 64) or (Length(LS) > 64) then Continue;
@@ -918,7 +1059,7 @@ var
   LBuilder: IStringBuilder;
 begin
   // zero-copy single allocation: IStringBuilder O(n) vs O(n²) Result+; interface refcount ensures resource release on exception.
-  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + Length(FVersion) * 2 + Length(FCommands) * 64);
+  LBuilder := MakeStringBuilder(512 + Length(FAppName) * 2 + Length(FDescription) + Length(FVersion) * 2 + FCommandsLen * 64);
   LBuilder.AppendStr(FAppName);
   if FVersion <> '' then
   begin
@@ -941,7 +1082,7 @@ begin
   LBuilder.AppendStr(LineEnding);
   LBuilder.AppendStr('Commands:');
   LBuilder.AppendStr(LineEnding);
-  for LI := 0 to Length(FCommands) - 1 do
+  for LI := 0 to FCommandsLen - 1 do
   begin
     LBuilder.AppendStr('  ');
     LBuilder.AppendStr(FCommands[LI].Name);
@@ -976,18 +1117,24 @@ end;
 
 procedure TArgApp.RunFrom(const AArgs: array of string);
 var
-  LI: Int32;
+  LI, LJ: Int32;
   LGlobalArgs: array of string;
+  LGlobalCap, LGlobalLen: Integer;
   LCmdArgs: array of string;
+  LCmdCap, LCmdLen: Integer;
   LCmdIdx: Int32;
   LCmdName: string;
   LSuggestion: string;
   LDoubleDash: Boolean;
   LFoundCmd: Boolean;
 begin
-  SetLength(LGlobalArgs, 0);
-  SetLength(LCmdArgs, 0);
-  SetLength(FTrailingArgs, 0);
+  // perf: local builders geometric via bytes.ops.BytesGrowCapacityInt amortized O(1), zero-copy via AppendGlobalArg, stability: SetLength exception-safe
+  LGlobalCap := 0; LGlobalLen := 0; SetLength(LGlobalArgs, 0);
+  LCmdCap := 0; LCmdLen := 0; SetLength(LCmdArgs, 0);
+  // stability: clear previous trailing strings but keep capacity for reuse
+  for LJ := 0 to FTrailingLen - 1 do
+    FTrailingArgs[LJ] := '';
+  FTrailingLen := 0;
   LFoundCmd := False;
   LCmdIdx := -1;
   LDoubleDash := False;
@@ -1006,15 +1153,13 @@ begin
 
       if (Length(AArgs[LI]) > 0) and (AArgs[LI][1] = '-') then
       begin
-        SetLength(LGlobalArgs, Length(LGlobalArgs) + 1);
-        LGlobalArgs[High(LGlobalArgs)] := AArgs[LI];
+        AppendGlobalArg(LGlobalArgs, LGlobalCap, LGlobalLen, AArgs[LI]);
         if (Pos('=', AArgs[LI]) = 0) and (LI + 1 <= High(AArgs)) then
         begin
           if FGlobalParser.OptionNeedsValue(AArgs[LI]) then
           begin
             Inc(LI);
-            SetLength(LGlobalArgs, Length(LGlobalArgs) + 1);
-            LGlobalArgs[High(LGlobalArgs)] := AArgs[LI];
+            AppendGlobalArg(LGlobalArgs, LGlobalCap, LGlobalLen, AArgs[LI]);
           end;
         end;
       end
@@ -1041,13 +1186,11 @@ begin
       end
       else if LDoubleDash then
       begin
-        SetLength(FTrailingArgs, Length(FTrailingArgs) + 1);
-        FTrailingArgs[High(FTrailingArgs)] := AArgs[LI];
+        AppendTrailing(AArgs[LI]);
       end
       else
       begin
-        SetLength(LCmdArgs, Length(LCmdArgs) + 1);
-        LCmdArgs[High(LCmdArgs)] := AArgs[LI];
+        AppendGlobalArg(LCmdArgs, LCmdCap, LCmdLen, AArgs[LI]);
       end;
     end;
     Inc(LI);
@@ -1056,6 +1199,10 @@ begin
   if not LFoundCmd then
     raise EArgHelp.Create(AppHelpText);
 
+  // trim local builders to logical len for ParseFrom (single SetLength shrink, zero-copy logical view)
+  SetLength(LGlobalArgs, LGlobalLen);
+  SetLength(LCmdArgs, LCmdLen);
+  // keep FTrailingArgs capacity retained; logical len already tracked via FTrailingLen
   FGlobalParser.ParseFrom(LGlobalArgs);
   FCommands[LCmdIdx].Parser.ParseFrom(LCmdArgs);
 
@@ -1069,8 +1216,14 @@ begin
 end;
 
 function TArgApp.TrailingArgs: TStringArray;
+var
+  LI: Integer;
 begin
-  Result := FTrailingArgs;
+  // perf: trimmed copy via single allocation, zero-copy string refcount, geometric cap retained in FTrailingArgs
+  Result := nil;
+  SetLength(Result, FTrailingLen);
+  for LI := 0 to FTrailingLen - 1 do
+    Result[LI] := FTrailingArgs[LI];
 end;
 
 end.

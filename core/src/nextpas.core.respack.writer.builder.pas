@@ -3,7 +3,7 @@ unit nextpas.core.respack.writer.builder;
 {** @desc respack writer 头/index/string 单源 builder：消除 writer/stream 30 行重复（WrU*LE/Move）。
   由 writer（纯内存 GetMem）与 writer.stream（分段 Head）共用；布局单源于 writer.layout。
   零拷贝与性能：路径/内容搬运经 bytes.ops.BytesCopy inline 单 Move，零填经 BytesZero inline FillChar 单源，无额外分配；
-  循环体外联守设计红线2，热点 Move/LE 编解码保持 inline。 }
+  循环体外联守设计红线2，热点 Move/LE 编解码保持 inline。 registry 明示 + source-contract 门禁（内部单源模块，同 writer.layout 范式）。 }
 
 {$I nextpas.core.settings.inc}
 

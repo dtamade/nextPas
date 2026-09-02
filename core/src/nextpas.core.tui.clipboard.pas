@@ -63,7 +63,8 @@ uses
   nextpas.core.platform.env,
   nextpas.core.platform.which,
   nextpas.core.platform.process,
-  nextpas.core.platform.process.base
+  nextpas.core.platform.process.base,
+  nextpas.core.text.builder                  { TBufStringBuilder: 几何增长单源 bytes.ops, 替 O(n²) 逐块 SetLength+Move }
   {$IFDEF NEXTPAS_UNIX}
     , nextpas.core.platform.posix.base       { TPollFd/POLLIN:限时捕获管道轮询 }
     , nextpas.core.platform.posix.ffi        { host poll:dual-IO owner-only 后的合规通道 }
@@ -269,6 +270,7 @@ var
   LResult: TPlatformProcessResult;
   LDeadline, LNow: UInt64;
   LRemainMs: Int32;
+  LBuilder: TBufStringBuilder;
 begin
   Result := '';
   // Build nil-terminated argv
@@ -278,49 +280,55 @@ begin
     LArgv[LI] := AArgs[LI];
   LArgv[LCount] := nil;
 
-  if platform_process_create_piped(
-    PAnsiChar(AToolPath), @LArgv[0], nil,
-    [poCaptureStdout, poCaptureStderr],
-    LProc, LPipes) <> 0 then Exit;
+  LBuilder.Init(1024);
   try
-    LDeadline := platform_monotonic_ns +
-      UInt64(CLIP_CLI_TIMEOUT_MS) * 1000000;
-    while True do
-    begin
-      LNow := platform_monotonic_ns;
-      if LNow >= LDeadline then
+    if platform_process_create_piped(
+      PAnsiChar(AToolPath), @LArgv[0], nil,
+      [poCaptureStdout, poCaptureStderr],
+      LProc, LPipes) <> 0 then Exit;
+    try
+      LDeadline := platform_monotonic_ns +
+        UInt64(CLIP_CLI_TIMEOUT_MS) * 1000000;
+      while True do
+      begin
+        LNow := platform_monotonic_ns;
+        if LNow >= LDeadline then
+        begin
+          platform_process_kill(LProc);
+          platform_process_wait(LProc, LResult, 200);
+          Exit('');
+        end;
+        LRemainMs := (LDeadline - LNow) div 1000000;
+        if LRemainMs < 1 then LRemainMs := 1;
+        LFd.fd := LPipes.StdoutRead;
+        LFd.events := POLLIN;
+        LFd.revents := 0;
+        { 就绪数 0=本段超时(下轮循环判截止),<0=poll 错误(放弃) }
+        if ClipboardPoll(@LFd, 1, LRemainMs) <= 0 then Continue;
+        LErr := platform_process_read_stdout_ex(LPipes.StdoutRead,
+          @LChunk[0], SizeOf(LChunk), LN);
+        if LErr <> 0 then Break;
+        if LN <= 0 then Break;                    { EOF:子进程输出完毕 }
+        // perf: TBufStringBuilder 几何增长单源 bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW, amortized O(1)) 替 O(n²) SetLength+Move 逐块线性扩容; 零拷贝 BytesCopy inline 单次 Move, 非 inline per red-line 1/2 (Grow 含 while); 单次 ToString SetLength+Move
+        LBuilder.AppendBytes(@LChunk[0], SizeUInt(LN));
+      end;
+      { 输出收完等退出码:同样限时 }
+      if platform_process_wait(LProc, LResult, CLIP_CLI_TIMEOUT_MS) <> 0 then
       begin
         platform_process_kill(LProc);
         platform_process_wait(LProc, LResult, 200);
         Exit('');
       end;
-      LRemainMs := (LDeadline - LNow) div 1000000;
-      if LRemainMs < 1 then LRemainMs := 1;
-      LFd.fd := LPipes.StdoutRead;
-      LFd.events := POLLIN;
-      LFd.revents := 0;
-      { 就绪数 0=本段超时(下轮循环判截止),<0=poll 错误(放弃) }
-      if ClipboardPoll(@LFd, 1, LRemainMs) <= 0 then Continue;
-      LErr := platform_process_read_stdout_ex(LPipes.StdoutRead,
-        @LChunk[0], SizeOf(LChunk), LN);
-      if LErr <> 0 then Break;
-      if LN <= 0 then Break;                    { EOF:子进程输出完毕 }
-      SetLength(Result, Length(Result) + LN);
-      Move(LChunk[0], Result[Length(Result) - LN + 1], LN);
+      if (not LResult.IsSuccess) or (LBuilder.Len = 0) then
+        Exit('');
+      Result := LBuilder.ToString;
+    finally
+      platform_process_close_handle(LPipes.StdinWrite);
+      platform_process_close_handle(LPipes.StdoutRead);
+      platform_process_close_handle(LPipes.StderrRead);
     end;
-    { 输出收完等退出码:同样限时 }
-    if platform_process_wait(LProc, LResult, CLIP_CLI_TIMEOUT_MS) <> 0 then
-    begin
-      platform_process_kill(LProc);
-      platform_process_wait(LProc, LResult, 200);
-      Exit('');
-    end;
-    if (not LResult.IsSuccess) or (Length(Result) = 0) then
-      Result := '';
   finally
-    platform_process_close_handle(LPipes.StdinWrite);
-    platform_process_close_handle(LPipes.StdoutRead);
-    platform_process_close_handle(LPipes.StderrRead);
+    LBuilder.Done;
   end;
 end;
 {$ENDIF}

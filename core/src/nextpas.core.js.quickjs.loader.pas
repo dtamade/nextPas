@@ -11,18 +11,24 @@ implementation
 uses nextpas.core.platform.dl, nextpas.core.js.quickjs.ffi;
 var GLib: TPlatformLibrary; GAvailable: Integer = -1; GLoaded: Boolean = False;
 const JS_QUICKJS_PROBE_NAMES: array[0..7] of string = (
-    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so',
-    'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
-  );
-function JsQuickJsProbeNames: string;
-begin
   {$IFDEF NEXTPAS_WINDOWS}
-  Result := 'quickjs.dll, libquickjs.dll, libquickjs.so.1, libquickjs.so.0, libquickjs.so, libquickjs.dylib, libquickjs.1.dylib, quickjs';
+    'quickjs.dll', 'libquickjs.dll', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs'
   {$ELSEIF defined(NEXTPAS_MACOS)}
-  Result := 'libquickjs.dylib, libquickjs.1.dylib, libquickjs.so.1, libquickjs.so.0, libquickjs.so, quickjs.dll, libquickjs.dll, quickjs';
+    'libquickjs.dylib', 'libquickjs.1.dylib', 'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
   {$ELSE}
-  Result := 'libquickjs.so.1, libquickjs.so.0, libquickjs.so, libquickjs.dylib, libquickjs.1.dylib, quickjs.dll, libquickjs.dll, quickjs';
+    'libquickjs.so.1', 'libquickjs.so.0', 'libquickjs.so', 'libquickjs.dylib', 'libquickjs.1.dylib', 'quickjs.dll', 'libquickjs.dll', 'quickjs'
   {$ENDIF}
+  );
+function JsQuickJsProbeNames: string; inline;
+var I: Integer;
+begin
+  // perf: single source via JS_QUICKJS_PROBE_NAMES — inline thin loop, zero-copy view reuse of constant array, single build (8 entries, comma-join), no literal duplication; owner bytes.ops single-source discipline (probe list canonical in constant)
+  Result := '';
+  for I := 0 to High(JS_QUICKJS_PROBE_NAMES) do
+  begin
+    if I > 0 then Result := Result + ', ';
+    Result := Result + JS_QUICKJS_PROBE_NAMES[I];
+  end;
 end;
 function TryLoad(const AName: AnsiString): Boolean;
 var Lib: TPlatformLibrary; P: Pointer;
@@ -59,6 +65,10 @@ begin
   if Bind('JS_SetInterruptHandler', P) then JS_SetInterruptHandlerPtr := TJS_SetInterruptHandler(P);
   if Bind('JS_NewCFunction', P) then JS_NewCFunctionPtr := TJS_NewCFunction(P);
   if Bind('JS_Call', P) then JS_CallPtr := TJS_Call(P);
+  if Bind('JS_GetOwnPropertyNames', P) then JS_GetOwnPropertyNamesPtr := TJS_GetOwnPropertyNames(P);
+  if Bind('JS_FreePropertyEnum', P) then JS_FreePropertyEnumPtr := TJS_FreePropertyEnum(P);
+  if Bind('JS_AtomToString', P) then JS_AtomToStringPtr := TJS_AtomToString(P);
+  if Bind('JS_FreeAtom', P) then JS_FreeAtomPtr := TJS_FreeAtom(P);
   GLib := Lib; GLoaded := True; Result := True;
 end;
 function JsQuickJsIsAvailable: Boolean;
@@ -85,6 +95,6 @@ end;
 procedure JsQuickJsUnload;
 begin
   if GLoaded then
-  begin platform_dl_close(GLib); FillChar(GLib, SizeOf(GLib), 0); GLoaded := False; GAvailable := -1; JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; end;
+  begin platform_dl_close(GLib); FillChar(GLib, SizeOf(GLib), 0); GLoaded := False; GAvailable := -1; JS_NewRuntimePtr := nil; JS_EvalPtr := nil; JS_CallPtr := nil; JS_GetOwnPropertyNamesPtr := nil; JS_FreePropertyEnumPtr := nil; JS_AtomToStringPtr := nil; JS_FreeAtomPtr := nil; end;
 end;
 end.

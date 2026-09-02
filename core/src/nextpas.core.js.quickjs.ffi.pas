@@ -49,10 +49,19 @@ type
   TJS_SetInterruptHandler = procedure(RT: PJSRuntime; Handler: TJSInterruptHandler; Opaque: Pointer); cdecl;
   TJS_NewCFunction = function(Ctx: PJSContext; Func: Pointer; Name: PAnsiChar; Length: Integer): TJSQjsValue; cdecl;
   TJS_Call = function(Ctx: PJSContext; FuncObj: TJSQjsValue; ThisVal: TJSQjsValue; Argc: Integer; Argv: PJSQjsValue): TJSQjsValue; cdecl;
+  TJSPropertyEnum = record atom: UInt32; is_enumerable: Integer; end;
+  PJSPropertyEnum = ^TJSPropertyEnum;
+  TJS_GetOwnPropertyNames = function(Ctx: PJSContext; plen: PUInt32; obj: TJSQjsValue; flags: Integer): PJSPropertyEnum; cdecl;
+  TJS_FreePropertyEnum = procedure(Ctx: PJSContext; tab: PJSPropertyEnum; len: UInt32); cdecl;
+  TJS_AtomToString = function(Ctx: PJSContext; atom: UInt32): TJSQjsValue; cdecl;
+  TJS_FreeAtom = procedure(Ctx: PJSContext; atom: UInt32); cdecl;
 
 const
   JS_EVAL_TYPE_GLOBAL = 0;
   JS_EVAL_FLAG_STRICT = 1 shl 3;
+  JS_GPN_STRING_MASK = 1 shl 0;
+  JS_GPN_SYMBOL_MASK = 1 shl 1;
+  JS_GPN_PRIVATE_MASK = 1 shl 2;
 
 var
   JS_NewRuntimePtr: TJS_NewRuntime = nil;
@@ -81,6 +90,10 @@ var
   JS_SetInterruptHandlerPtr: TJS_SetInterruptHandler = nil;
   JS_NewCFunctionPtr: TJS_NewCFunction = nil;
   JS_CallPtr: TJS_Call = nil;
+  JS_GetOwnPropertyNamesPtr: TJS_GetOwnPropertyNames = nil;
+  JS_FreePropertyEnumPtr: TJS_FreePropertyEnum = nil;
+  JS_AtomToStringPtr: TJS_AtomToString = nil;
+  JS_FreeAtomPtr: TJS_FreeAtom = nil;
 
 implementation
 

@@ -1,10 +1,11 @@
 unit nextpas.core.js;
-{** @desc JS 门面：re-export + 工厂（零摩擦可插拔）。 *}
+{** @desc JS 门面：纯 re-export（零逻辑，工厂分支已下沉至 js.factory）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.fake, nextpas.core.js.js888,
-  nextpas.core.js.v8, nextpas.core.js.chakra,
-  nextpas.core.json, nextpas.core.js.quickjs.loader, nextpas.core.js.quickjs;
+uses
+  nextpas.core.js.base,
+  nextpas.core.js.intf,
+  nextpas.core.js.factory;
 type
   TJsBackendKind = nextpas.core.js.base.TJsBackendKind;
   TJsValueKind = nextpas.core.js.base.TJsValueKind;
@@ -21,9 +22,9 @@ type
   EJsBackendUnavailable = nextpas.core.js.base.EJsBackendUnavailable;
   EJsTimeout = nextpas.core.js.base.EJsTimeout;
   EJsMemoryLimit = nextpas.core.js.base.EJsMemoryLimit;
-function CreateJsRuntime(AKind: TJsBackendKind = jsbkFake): IJsRuntime; overload;
-function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; overload;
-function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
+function CreateJsRuntime(AKind: TJsBackendKind = jsbkFake): IJsRuntime; overload; inline;
+function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; overload; inline;
+function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
   jsbkFake = nextpas.core.js.base.jsbkFake;
@@ -31,27 +32,24 @@ const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
   jsbkV8 = nextpas.core.js.base.jsbkV8;
   jsbkChakra = nextpas.core.js.base.jsbkChakra;
 implementation
-function DefaultJsRuntimeOptions: TJsRuntimeOptions; begin Result := TJsRuntimeOptions.Default; end;
-function JsBackendAvailable(AKind: TJsBackendKind): Boolean;
-begin case AKind of jsbkFake, jsbkJs888, jsbkV8, jsbkChakra: Result := True; jsbkQuickJs: Result := JsQuickJsIsAvailable; else Result := False; end; end;
-function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime;
-begin Result := CreateJsRuntime(AKind, DefaultJsRuntimeOptions); end;
-function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
+function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime; inline;
 begin
-  CheckJsRuntimeOptions(AOptions);
-  case AKind of
-    jsbkFake: Result := TJsFakeRuntime.Create(jsbkFake, AOptions);
-    jsbkJs888: Result := TJsJs888Runtime.Create(AOptions);
-    jsbkV8: Result := TJsV8Runtime.Create(AOptions);
-    jsbkChakra: Result := TJsChakraRuntime.Create(AOptions);
-    jsbkQuickJs:
-      begin
-        if not JsQuickJsIsAvailable then
-          raise EJsBackendUnavailable.Create('QuickJS not available (probe: '+JsQuickJsProbeNames+')', jecUnknown, 'Error', '', jsbkQuickJs);
-        if not JsQuickJsLoad then
-          raise EJsBackendUnavailable.Create('QuickJS load failed', jecUnknown, 'Error', '', jsbkQuickJs);
-        Result := TJsQuickJsRuntime.Create(AOptions);
-      end;
-  else raise EJsError.Create('Unsupported backend', jecNotSupported, 'Error', '', AKind); end;
+  // perf: inline thin-forward to factory single source, zero-copy IJsRuntime refcnt, no branching
+  Result := nextpas.core.js.factory.CreateJsRuntime(AKind);
+end;
+function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; inline;
+begin
+  // perf: inline thin-forward to factory single source, zero-copy record const, no duplicate CheckJsRuntimeOptions
+  Result := nextpas.core.js.factory.CreateJsRuntime(AKind, AOptions);
+end;
+function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
+begin
+  // perf: inline thin-forward to factory probe single source, no duplicate case
+  Result := nextpas.core.js.factory.JsBackendAvailable(AKind);
+end;
+function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
+begin
+  // perf: inline thin-forward to factory single source (TJsRuntimeOptions.Default), zero-copy record
+  Result := nextpas.core.js.factory.DefaultJsRuntimeOptions;
 end;
 end.

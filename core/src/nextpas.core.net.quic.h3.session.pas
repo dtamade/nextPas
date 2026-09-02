@@ -413,10 +413,10 @@ begin
     Exit(0);
   if UInt32(LN) < ALen then
     ALen := UInt32(LN);
-  Move(FRxBuf[0], ABuf^, ALen);
+  nextpas.core.bytes.ops.BytesCopy(ABuf, @FRxBuf[0], SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   LRemain := LN - Integer(ALen);
   if LRemain > 0 then
-    Move(FRxBuf[ALen], FRxBuf[0], LRemain);
+    nextpas.core.bytes.ops.BytesCopy(@FRxBuf[0], @FRxBuf[ALen], SizeUInt(LRemain)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   SetLength(FRxBuf, LRemain);
   Result := Integer(ALen);
 end;
@@ -525,7 +525,7 @@ begin
   if (FConn = nil) or (FConn.Phase = qcpClosed) then
     Exit;
   SetLength(LData, ALen);
-  Move(PByte(ABuf)^, LData[0], ALen);
+  nextpas.core.bytes.ops.BytesCopy(@LData[0], ABuf, SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
   if not FConn.StreamWrite(FId, LData, False) then
     Exit;
   ACallback(UInt64(ALen), Integer(ALen), AContext);

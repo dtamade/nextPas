@@ -699,6 +699,7 @@ var
   LBase: SizeInt;
   LSum: UInt64;
   LHaveSizes: Boolean;
+  LCnt: SizeInt;
   LUnknownIndices: array of SizeInt;
   LCrcDefinedVec: array of Boolean;
 begin
@@ -758,14 +759,20 @@ begin
         begin
           if not LHaveSizes then
             AssignSubSizesFromFolders(AInfo);
-          { 收集尚无 CRC 的子流全局索引 }
-          SetLength(LUnknownIndices, 0);
-          for LI := 0 to Length(AInfo.Substreams) - 1 do
-            if not AInfo.Substreams[LI].HasCrc then
-            begin
-              SetLength(LUnknownIndices, Length(LUnknownIndices) + 1);
-              LUnknownIndices[High(LUnknownIndices)] := LI;
-            end;
+          { 收集尚无 CRC 的子流全局索引 — 预计数单分配 O(n) 替代逐次 SetLength O(n²) }
+          begin
+            LCnt := 0;
+            for LI := 0 to Length(AInfo.Substreams) - 1 do
+              if not AInfo.Substreams[LI].HasCrc then Inc(LCnt);
+            SetLength(LUnknownIndices, LCnt);
+            LCnt := 0;
+            for LI := 0 to Length(AInfo.Substreams) - 1 do
+              if not AInfo.Substreams[LI].HasCrc then
+              begin
+                LUnknownIndices[LCnt] := LI;
+                Inc(LCnt);
+              end;
+          end;
           if Length(LUnknownIndices) > SEVENZ_MAX_CRC_COUNT then
             raise ESevenZLimitError.Create('crc count out of range');
           SetLength(LCrcDefinedVec, Length(LUnknownIndices));
