@@ -97,7 +97,7 @@
 | git.native.repository | TNativeRepositoryAdapter 适配（IGitRepository/IGitRepositoryExt 纯实现，未实现方法抛 EGitError('not implemented for native backend: <Method>')） |
 | git.native.objects | 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝，<400 行） |
 | git.native.staging | 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops） |
-| git.native.history | 历史门面分片（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show，单次交付） |
+| git.native.history | 历史门面分片（revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert，20+类型/40+inline，<600阈值内单 shard 单次交付，超阈按不变量域再分片） |
 | git.native.branches | 分支门面分片（branch/tag/stash/notes） |
 | git.native.transport | 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset） |
 | git.native.extensions | 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect） |
@@ -159,7 +159,7 @@ libgit2 声明层是**两条互补轨道**，不是竞争关系：
 |---|---|---|---|---|
 | 对象层 | `CONTRACT.objects.md` | `git.native.objects` | <400 行 | oid/zlib/loose/pack/refs/objmodel/repo/write，零拷贝 via `bytes.ops`/`checksum.adler32`/`compress` |
 | 暂存区 | `CONTRACT.staging.md` | `git.native.staging` | <500 行 | index/cachetree/status/ignore/worktree/lsfiles/clean + wildmatch 单源 |
-| 历史 | `CONTRACT.history.md` | `git.native.history` | <600 行 | revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show 等，单次交付 |
+| 历史 | `CONTRACT.history.md` | `git.native.history` | <600 行 | revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert 等，20+类型/40+inline，单次交付 |
 | 分支 | `CONTRACT.branches.md` | `git.native.branches` | <300 行 | branch/tag/stash/notes |
 | 传输 | `CONTRACT.transport.md` | `git.native.transport` | <600 行 | config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset |
 | 扩展 | `CONTRACT.extensions.md` | `git.native.extensions` | <400 行 | archive/submodule/mailmap/trailer/bundle/grep/bisect + attributes |

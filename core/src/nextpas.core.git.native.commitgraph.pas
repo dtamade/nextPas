@@ -167,34 +167,23 @@ begin
     Cardinal(FData[APos + 3]);
 end;
 
-function OidRawCompare(const AA, AB: TGitOid): Integer;
-var
-  I: Integer;
+function OidRawCompare(const AA, AB: TGitOid): Integer; inline;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    if AA.Bytes[I] < AB.Bytes[I] then
-      Exit(-1);
-    if AA.Bytes[I] > AB.Bytes[I] then
-      Exit(1);
-  end;
-  Result := 0;
+  // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered → System.CompareByte, 20B ≈ 3×QWord), no 20× byte loop
+  Result := SpanCompare(
+    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
 end;
 
-function TCommitGraph.CompareOidAt(AIdx: Cardinal; const AOid: TGitOid): Integer;
+function TCommitGraph.CompareOidAt(AIdx: Cardinal; const AOid: TGitOid): Integer; inline;
 var
-  I: Integer;
-  B: Byte;
+  P: PByte;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    B := FData[FOidLookupOff + SizeInt(AIdx) * GitOidRawLen + I];
-    if B < AOid.Bytes[I] then
-      Exit(-1);
-    if B > AOid.Bytes[I] then
-      Exit(1);
-  end;
-  Result := 0;
+  // perf: inline + zero-copy PByte view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered/SIMD, 20B ≈ 3×QWord), no per-byte loop
+  P := @FData[FOidLookupOff + SizeInt(AIdx) * GitOidRawLen];
+  Result := SpanCompare(
+    TByteSpan.Create(P, GitOidRawLen),
+    TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
 end;
 
 function TCommitGraph.FindPos(const AOid: TGitOid): Integer;
@@ -238,6 +227,7 @@ var
   FanoutLen, LookupLen, CDataLen, ExtraLen: SizeInt;
   BIdxOff, BDatOff, Gda2Off, Gdo2Off: SizeInt;
   Computed: TBytes;
+  H: IHasher;
   Prev, Curr: TGitOid;
   TmpOid: TGitOid;
   ChunksPresent: array of TChunkRec;
@@ -266,10 +256,11 @@ begin
   TrailerOff := DataLen - GitOidRawLen;
   if TrailerOff < DataStart then
     raise EGitError.Create('commit-graph wrong size');
-  SetLength(Computed, TrailerOff);
+  // perf: zero-copy PByte view direct to hasher (no TrailerOff allocation nor Move), inline SHA-1; stability: managed TBytes/IHasher auto released on exception
+  H := NewSHA1;
   if TrailerOff > 0 then
-    Move(FData[0], Computed[0], TrailerOff);
-  Computed := Sha1OfBytes(Computed);
+    H.Write(FData[0], SizeUInt(TrailerOff));
+  Computed := H.SumBytes;
   for I := 0 to GitOidRawLen - 1 do
     if Computed[I] <> FData[TrailerOff + I] then
       raise EGitError.Create('commit-graph checksum mismatch');
@@ -700,18 +691,16 @@ begin
 end;
 
 function FindOidIndex(const ASorted: TRawCommitArray; const AOid: TGitOid): Integer; inline;
-var Lo, Hi, Mid, Cmp, I: Integer;
+var Lo, Hi, Mid, Cmp: Integer;
 begin
+  // perf: inline + zero-copy TByteSpan view single-source via bytes.ops SpanCompare (→ CompareBytesOrdered, 20B ≈ 3×QWord), no per-byte loop
   Lo := 0; Hi := High(ASorted);
   while Lo <= Hi do
   begin
     Mid := (Lo + Hi) div 2;
-    Cmp := 0;
-    for I := 0 to GitOidRawLen - 1 do
-    begin
-      if ASorted[Mid].Oid.Bytes[I] < AOid.Bytes[I] then begin Cmp := -1; Break; end;
-      if ASorted[Mid].Oid.Bytes[I] > AOid.Bytes[I] then begin Cmp := 1; Break; end;
-    end;
+    Cmp := SpanCompare(
+      TByteSpan.Create(@ASorted[Mid].Oid.Bytes[0], GitOidRawLen),
+      TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
     if Cmp = 0 then Exit(Mid);
     if Cmp < 0 then Lo := Mid + 1 else Hi := Mid - 1;
   end;

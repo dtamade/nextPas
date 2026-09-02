@@ -59,7 +59,7 @@ core/src/nextpas.core.git.libgit2.bindings.extra.pas ← filter/attr/checkout/co
 core/src/nextpas.core.git.native.pas          ← native 子家族薄网关（<250 行，仅聚合 objects 核心对象层 + inline gateway 零拷贝 via bytes.ops，fan-in=1+base）
 core/src/nextpas.core.git.native.objects.pas  ← 对象层门面分片（oid/zlib/loose/pack/refs/objmodel/write，inline 零拷贝）
 core/src/nextpas.core.git.native.staging.pas  ← 暂存区门面分片（index/cachetree/status/worktree/lsfiles/clean，委托 bytes.ops）
-core/src/nextpas.core.git.native.history.pas  ← 历史门面分片（revwalk/commitgraph/reflog/revparse/log/diff/blame/mergebase/show）
+core/src/nextpas.core.git.native.history.pas  ← 历史门面分片（revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert，20+类型/40+inline，<600阈值内单 shard 单次交付，超阈按不变量域再分片）
 core/src/nextpas.core.git.native.branches.pas ← 分支门面分片（branch/tag/stash/notes）
 core/src/nextpas.core.git.native.transport.pas ← 传输门面分片（config/pktline/remote/advertise/negotiate/sideband/indexer/fetch/clone/checkout/push/reset）
 core/src/nextpas.core.git.native.extensions.pas← 扩展门面分片（archive/submodule/mailmap/trailer/bundle/grep/bisect）

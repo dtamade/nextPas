@@ -2,6 +2,14 @@ unit nextpas.core.git.native.history;
 
 {$I nextpas.core.settings.inc}
 
+{**
+ * @desc History shard facade (revwalk/commitgraph/reflog/revparse/log/describe/diff/blame/mergebase/show/shortlog/catfile/cherrypick/revert)
+ * Single-shard single-delivery gateway: 20+ type aliases (26-49) + 40+ inline forwards (58-140), <600 lines (464), no logic duplication.
+ * Fan-out note: aggregates 14 units — approaching overweight threshold, monitor split; over-threshold split by invariant domain (revwalk/commitgraph vs log/describe vs diff/blame vs mergebase/show vs shortlog/catfile/cherrypick/revert).
+ * Perf: all forwards `inline`; zero-copy via bytes.ops single source (TGitOid 20B Move, TByteSpan, PByte+Len) + owner single-parse/cached (revwalk once, commitgraph mtime+size cache).
+ * Stability: ownership in owners (TCommitGraph/TPackFile IMappedFile refcounted, revwalk queues try..finally, cherrypick/revert checkout try..finally index); facade zero alloc/zero leak.
+ *}
+
 interface
 
 uses

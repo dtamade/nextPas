@@ -37,6 +37,7 @@ function GitDiffStatSummary(const AGitDir: string; const AOldTree, ANewTree: TGi
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -68,18 +69,17 @@ begin
 end;
 
 function LocalCompareStr(const A, B: string): Integer; inline;
-var I, L: Integer;
+var PA, PB: Pointer;
 begin
-  L := Length(A);
-  if Length(B) < L then L := Length(B);
-  for I := 1 to L do
-    if A[I] <> B[I] then Exit(Ord(A[I]) - Ord(B[I]));
-  Result := Length(A) - Length(B);
+  // single source: base.utils CompareBytesOrdered (PByte+Len zero-copy, inline) — same source as bytes.ops SpanCompare, sorting/merge unified dispatch
+  if Length(A) = 0 then PA := nil else PA := @A[1];
+  if Length(B) = 0 then PB := nil else PB := @B[1];
+  Result := CompareBytesOrdered(PA, PB, SizeUInt(Length(A)), SizeUInt(Length(B)));
 end;
 
 { SortFlat: O(n log n) quicksort (median-of-3 + tail recursion).
   Replaces prior insertion O(n²). Zero-copy: swaps records, compares
-  via inline LocalCompareStr on existing string storage (no alloc). }
+  via inline LocalCompareStr single source base.utils CompareBytesOrdered (same as bytes.ops SpanCompare) on existing string storage (PByte+Len view, no alloc). }
 procedure QuickSortFlat(var A: TFlatArray; L, R: Integer);
 var I, J, M: Integer; Pivot: string; Tmp: TFlatEntry;
 begin

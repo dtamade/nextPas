@@ -23,12 +23,15 @@ type
     FMapped: IMappedFile;
     FData: PByte;
     FDataSize: SizeUInt;
+    FIdxMapped: IMappedFile;
+    FIdxData: PByte;
+    FIdxSize: SizeUInt;
     FOids: array of TGitOid;
     FOffsets: array of Int64;
     function GetCount: Integer; inline;
-    function IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte; inline;
-    function IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal; inline;
-    function IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64; inline;
+    function IdxByteAt(APos: SizeUInt): Byte; inline;
+    function IdxBE32(APos: SizeUInt): Cardinal; inline;
+    function IdxBE64(APos: SizeUInt): Int64; inline;
     procedure LoadIndex(const AIdxPath: string);
     function FindOffset(const AOid: TGitOid): Int64;
     function ByteAt(APos: SizeUInt): Byte; inline;
@@ -178,69 +181,109 @@ begin
   Result := Length(FOids);
 end;
 
-function TPackFile.IdxByteAt(const AIdx: TBytes; APos: SizeUInt): Byte; inline;
+function TPackFile.IdxByteAt(APos: SizeUInt): Byte; inline;
 begin
-  if APos >= SizeUInt(Length(AIdx)) then
+  if APos >= FIdxSize then
     raise EGitError.Create('truncated pack index');
-  Result := AIdx[APos];
+  Result := FIdxData[APos];
 end;
 
-function TPackFile.IdxBE32(const AIdx: TBytes; APos: SizeUInt): Cardinal; inline;
+function TPackFile.IdxBE32(APos: SizeUInt): Cardinal; inline;
 begin
-  // single source via bytes.binary (zero-copy, bounds checked)
-  if APos + 4 > SizeUInt(Length(AIdx)) then
+  // single source via bytes.binary (zero-copy mmap view, bounds checked)
+  if APos + 4 > FIdxSize then
     raise EGitError.Create('truncated pack index');
-  Result := ReadUInt32BE(PByte(@AIdx[APos]));
+  Result := ReadUInt32BE(FIdxData + APos);
 end;
 
-function TPackFile.IdxBE64(const AIdx: TBytes; APos: SizeUInt): Int64; inline;
+function TPackFile.IdxBE64(APos: SizeUInt): Int64; inline;
 var
   Hi, Lo: Cardinal;
 begin
-  Hi := IdxBE32(AIdx, APos);
-  Lo := IdxBE32(AIdx, APos + 4);
+  Hi := IdxBE32(APos);
+  Lo := IdxBE32(APos + 4);
   Result := (Int64(Hi) shl 32) or Int64(Lo);
 end;
 
 procedure TPackFile.LoadIndex(const AIdxPath: string);
 var
-  Idx: TBytes;
   N, I, J: Integer;
   Off32: Cardinal;
-  LargeBase: SizeUInt;
+  LargeBase, LOff: SizeUInt;
   LargeCount: Cardinal;
+  LOidBase, LCrcBase, LOff32Base, LLargeCountPos: SizeUInt;
+  Tmp: SizeUInt;
 begin
-  Idx := ReadFile(AIdxPath);
-  if SizeUInt(Length(Idx)) < 8 then
+  // mmap zero-copy view: no TBytes alloc/copy, single page-backed span; resource held via FIdxMapped interface
+  FIdxMapped := MmapOpen(AIdxPath);
+  FIdxData := FIdxMapped.Data;
+  FIdxSize := SizeUInt(FIdxMapped.Size);
+  if FIdxSize < 8 then
     raise EGitError.Create('truncated pack index');
-  if (Idx[0] <> $FF) or (Idx[1] <> Ord('t')) or (Idx[2] <> Ord('O'))
-    or (Idx[3] <> Ord('c')) then
+  if (FIdxData[0] <> $FF) or (FIdxData[1] <> Ord('t')) or (FIdxData[2] <> Ord('O'))
+    or (FIdxData[3] <> Ord('c')) then
     raise EGitError.Create('unsupported pack index format (need v2)');
-  if IdxBE32(Idx, 4) <> 2 then
+  if IdxBE32(4) <> 2 then
     raise EGitError.Create('unsupported pack index version');
-  N := Integer(IdxBE32(Idx, 8 + 255 * 4));
+  N := Integer(IdxBE32(8 + 255 * 4));
+  if N < 0 then
+    raise EGitError.Create('corrupt pack index object count');
+  // overflow guards before any size-derived allocation or offset calc
+  if (N > 0) and (SizeUInt(N) > High(SizeUInt) div 20) then
+    raise EGitError.Create('pack index too large');
+  if (N > 0) and (SizeUInt(N) > High(SizeUInt) div 4) then
+    raise EGitError.Create('pack index too large');
+  LOidBase := 8 + 256 * 4;
+  if (N > 0) and (LOidBase > High(SizeUInt) - SizeUInt(N) * 20) then
+    raise EGitError.Create('pack index offset overflow');
+  LCrcBase := LOidBase + SizeUInt(N) * 20;
+  if (N > 0) and (LCrcBase > High(SizeUInt) - SizeUInt(N) * 4) then
+    raise EGitError.Create('pack index offset overflow');
+  LOff32Base := LCrcBase + SizeUInt(N) * 4;
+  if (N > 0) and (LOff32Base > High(SizeUInt) - SizeUInt(N) * 4) then
+    raise EGitError.Create('pack index offset overflow');
+  LLargeCountPos := LOff32Base + SizeUInt(N) * 4;
   SetLength(FOids, N);
   SetLength(FOffsets, N);
   for I := 0 to N - 1 do
   begin
-    // bytes.ops single source: SpanCopy via TByteSpan (zero-copy, inline, single Move)
+    // overflow-safe oid slice: LOidBase + I*20
+    if SizeUInt(I) > (High(SizeUInt) - LOidBase) div 20 then
+      raise EGitError.Create('pack index offset overflow');
+    Tmp := LOidBase + SizeUInt(I) * 20;
+    if Tmp + GitOidRawLen > FIdxSize then
+      raise EGitError.Create('truncated pack index');
+    // bytes.ops single source: SpanCopy via TByteSpan (zero-copy mmap view, inline, single Move)
     SpanCopy(TByteSpan.Create(@FOids[I].Bytes[0], GitOidRawLen),
-      TByteSpan.FromBytes(Idx).Slice(8 + 256 * 4 + SizeUInt(I) * 20, GitOidRawLen));
+      TByteSpan.Create(FIdxData + Tmp, GitOidRawLen));
   end;
   for I := 0 to N - 1 do
   begin
-    Off32 := IdxBE32(Idx, 8 + 256 * 4 + SizeUInt(N) * 20 + SizeUInt(N) * 4
-      + SizeUInt(I) * 4);
+    if SizeUInt(I) > (High(SizeUInt) - LOff32Base) div 4 then
+      raise EGitError.Create('pack index offset overflow');
+    Tmp := LOff32Base + SizeUInt(I) * 4;
+    Off32 := IdxBE32(Tmp);
     if (Off32 and $80000000) <> 0 then
     begin
       J := Integer(Off32 and $7FFFFFFF);
-      LargeCount := IdxBE32(Idx, 8 + 256 * 4 + SizeUInt(N) * 20
-        + SizeUInt(N) * 4 + SizeUInt(N) * 4);
+      if LLargeCountPos > High(SizeUInt) - 4 then
+        raise EGitError.Create('pack index offset overflow');
+      if LLargeCountPos + 4 > FIdxSize then
+        raise EGitError.Create('truncated pack index');
+      LargeCount := IdxBE32(LLargeCountPos);
       if (J < 0) or (Cardinal(J) >= LargeCount) then
         raise EGitError.Create('large offset index out of range');
-      LargeBase := 8 + 256 * 4 + SizeUInt(N) * 20 + SizeUInt(N) * 4
-        + SizeUInt(N) * 4 + 4;
-      FOffsets[I] := IdxBE64(Idx, LargeBase + SizeUInt(J) * 8);
+      if LLargeCountPos > High(SizeUInt) - 4 then
+        raise EGitError.Create('pack index offset overflow');
+      LargeBase := LLargeCountPos + 4;
+      if SizeUInt(J) > (High(SizeUInt) - LargeBase) div 8 then
+        raise EGitError.Create('pack index offset overflow');
+      LOff := LargeBase + SizeUInt(J) * 8;
+      if LOff > High(SizeUInt) - 8 then
+        raise EGitError.Create('pack index offset overflow');
+      if LOff + 8 > FIdxSize then
+        raise EGitError.Create('truncated pack index');
+      FOffsets[I] := IdxBE64(LOff);
     end
     else
       FOffsets[I] := Int64(Off32);
@@ -385,8 +428,6 @@ begin
   begin
     if ChainLen > GitMaxDeltaDepth - ADepth then
       raise EGitError.Create('delta chain too deep');
-    if ChainLen > GitMaxDeltaDepth then
-      raise EGitError.Create('delta chain too deep');
     P := CurOff;
     B := ByteAt(P);
     Inc(P);
@@ -395,11 +436,17 @@ begin
     Shift := 4;
     while (B and $80) <> 0 do
     begin
+      if Shift > 63 then
+        raise EGitError.Create('pack entry size varint overflow');
       B := ByteAt(P);
       Inc(P);
       Sz := Sz or (Int64(B and $7F) shl Shift);
+      if Sz < 0 then
+        raise EGitError.Create('pack entry size out of range');
       Inc(Shift, 7);
     end;
+    if (Sz < 0) or (Sz > MaxInt) then
+      raise EGitError.Create('pack entry size out of range');
     Chain[ChainLen].Typ := Typ;
     Chain[ChainLen].Sz := Sz;
     Chain[ChainLen].IsOfs := False;
@@ -417,6 +464,8 @@ begin
       Rel := B and $7F;
       while (B and $80) <> 0 do
       begin
+        if Rel > (High(Int64) shr 7) then
+          raise EGitError.Create('ofs_delta offset out of range');
         B := ByteAt(P);
         Inc(P);
         Rel := ((Rel + 1) shl 7) or (B and $7F);
@@ -548,6 +597,7 @@ var
             LRel := LB and $7F;
             while (LB and $80) <> 0 do
             begin
+              if LRel > (High(Int64) shr 7) then Exit;
               if LPos >= FDataSize then Exit;
               LB := FData[LPos]; Inc(LPos);
               LRel := ((LRel + 1) shl 7) or (LB and $7F);
@@ -589,12 +639,14 @@ begin
   Shift := 4;
   while (B and $80) <> 0 do
   begin
+    if Shift > 63 then Exit;
     if P >= FDataSize then Exit;
     B := FData[P]; Inc(P);
     Sz := Sz or (Int64(B and $7F) shl Shift);
+    if Sz < 0 then Exit;
     Inc(Shift, 7);
-    if Shift > 64 then Exit;
   end;
+  if (Sz < 0) or (Sz > MaxInt) then Exit;
   case Typ of
     1: begin AKind := gokCommit; ASize := Sz; Exit(True); end;
     2: begin AKind := gokTree; ASize := Sz; Exit(True); end;
@@ -611,6 +663,7 @@ begin
           Rel := B and $7F;
           while (B and $80) <> 0 do
           begin
+            if Rel > (High(Int64) shr 7) then Exit;
             if P >= FDataSize then Exit;
             B := FData[P]; Inc(P);
             Rel := ((Rel + 1) shl 7) or (B and $7F);

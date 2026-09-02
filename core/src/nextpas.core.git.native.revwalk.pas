@@ -61,13 +61,15 @@ type
     FWhens: array of Int64;
     FParents: array of TGitOidArray;
     FStates: array of Byte;
+    FTicks: array of UInt64; { LRU recency ticks, monotonic }
+    FTick: UInt64;
     FCount: SizeInt;
     FCap: SizeInt;
     FMask: SizeInt;
     procedure EnsureCapacity; inline;
     procedure Rehash(ANewCap: SizeInt);
     procedure Clear; inline;
-    procedure CompactEvict; // bounded eviction keeps 2048 at 4096 cap, avoids full clear jitter
+    procedure CompactEvict; // LRU bounded eviction keeps 2048 newest at 4096 cap, avoids full clear jitter
   public
     destructor Destroy; override;
     function TryGet(const AOid: TGitOid; out AWhen: Int64; out AParents: TGitOidArray): Boolean; inline;
@@ -169,18 +171,12 @@ implementation
 uses
   nextpas.core.bytes.ops;
 
-function OidLess(const AA, AB: TGitOid): Boolean;
-var
-  I: Integer;
+function OidLess(const AA, AB: TGitOid): Boolean; inline;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    if AA.Bytes[I] < AB.Bytes[I] then
-      Exit(True);
-    if AA.Bytes[I] > AB.Bytes[I] then
-      Exit(False);
-  end;
-  Result := False;
+  { perf: inline + zero-copy TByteSpan view single-source bytes.ops SpanCompare via CompareBytesOrdered (Simd MemEqual fast path, ~3×QWord), replaces 20× byte loop + duplicate branches in heap/topo sort hotspot; bytes.ops single source inline }
+  Result := SpanCompare(
+    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen)) < 0;
 end;
 
 function GitOidHash(const AOid: TGitOid): UInt32; inline;
@@ -299,9 +295,11 @@ begin
   SetLength(FWhens, 0);
   SetLength(FParents, 0);
   SetLength(FStates, 0);
+  SetLength(FTicks, 0);
   FCap := 0;
   FMask := 0;
   FCount := 0;
+  FTick := 0;
 end;
 
 procedure TCommitParseCache.EnsureCapacity;
@@ -325,10 +323,12 @@ var
   LOldWhens: array of Int64;
   LOldParents: array of TGitOidArray;
   LOldStates: array of Byte;
+  LOldTicks: array of UInt64;
   LOldCap: SizeInt;
-  I: Integer;
+  I, J, K: Integer;
   LIdx: SizeInt;
   LHash: UInt32;
+  LSorted: array of Integer;
 begin
   if FCount <= CKeep then
     Exit;
@@ -336,32 +336,56 @@ begin
   LOldWhens := FWhens;
   LOldParents := FParents;
   LOldStates := FStates;
+  LOldTicks := FTicks;
   LOldCap := FCap;
   SetLength(FBuckets, 0);
   SetLength(FWhens, 0);
   SetLength(FParents, 0);
   SetLength(FStates, 0);
+  SetLength(FTicks, 0);
   SetLength(FBuckets, FCap);
   SetLength(FWhens, FCap);
   SetLength(FParents, FCap);
   SetLength(FStates, FCap);
+  SetLength(FTicks, FCap);
   FCount := 0;
+  // collect active indices, sort by recency descending (LRU: keep newest)
+  SetLength(LSorted, 0);
   for I := 0 to LOldCap - 1 do
     if (I < Length(LOldStates)) and (LOldStates[I] = 1) then
     begin
-      if FCount >= CKeep then
-      begin
-        SetLength(LOldParents[I], 0); // release evicted, stable free
-        Continue;
-      end;
-      LHash := GitOidHash(LOldBuckets[I]);
+      SetLength(LSorted, Length(LSorted) + 1);
+      LSorted[High(LSorted)] := I;
+    end;
+  // insertion sort descending by LOldTicks (4096 * log approx, eviction rare, deterministic)
+  for I := 1 to High(LSorted) do
+  begin
+    K := LSorted[I];
+    J := I - 1;
+    while (J >= 0) and (LOldTicks[LSorted[J]] < LOldTicks[K]) do
+    begin
+      LSorted[J + 1] := LSorted[J];
+      Dec(J);
+    end;
+    LSorted[J + 1] := K;
+  end;
+  for I := 0 to High(LSorted) do
+  begin
+    J := LSorted[I];
+    if I < CKeep then
+    begin
+      LHash := GitOidHash(LOldBuckets[J]);
       LIdx := OidProbeEmpty(FStates, FMask, LHash);
-      FBuckets[LIdx] := LOldBuckets[I]; // zero-copy 20B inline
-      FWhens[LIdx] := LOldWhens[I];
-      FParents[LIdx] := LOldParents[I]; // zero-copy CoW share, bytes.ops single source
+      FBuckets[LIdx] := LOldBuckets[J]; // zero-copy 20B inline
+      FWhens[LIdx] := LOldWhens[J];
+      FParents[LIdx] := LOldParents[J]; // zero-copy CoW share, bytes.ops single source
+      FTicks[LIdx] := LOldTicks[J];
       FStates[LIdx] := 1;
       Inc(FCount);
-    end;
+    end
+    else
+      SetLength(LOldParents[J], 0); // release evicted, stable free
+  end;
 end;
 
 procedure TCommitParseCache.Rehash(ANewCap: SizeInt);
@@ -370,6 +394,7 @@ var
   LOldWhens: array of Int64;
   LOldParents: array of TGitOidArray;
   LOldStates: array of Byte;
+  LOldTicks: array of UInt64;
   LOldCap: SizeInt;
   I: Integer;
   LIdx: SizeInt;
@@ -379,11 +404,13 @@ begin
   LOldWhens := FWhens;
   LOldParents := FParents;
   LOldStates := FStates;
+  LOldTicks := FTicks;
   LOldCap := FCap;
   SetLength(FBuckets, ANewCap);
   SetLength(FWhens, ANewCap);
   SetLength(FParents, ANewCap);
   SetLength(FStates, ANewCap);
+  SetLength(FTicks, ANewCap);
   FCap := ANewCap;
   FMask := ANewCap - 1;
   FCount := 0;
@@ -395,6 +422,7 @@ begin
       FBuckets[LIdx] := LOldBuckets[I];
       FWhens[LIdx] := LOldWhens[I];
       FParents[LIdx] := LOldParents[I];
+      FTicks[LIdx] := LOldTicks[I];
       FStates[LIdx] := 1;
       Inc(FCount);
     end;
@@ -409,6 +437,8 @@ begin
   if not OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then Exit;
   AWhen := FWhens[LIdx];
   AParents := FParents[LIdx]; { zero-copy CoW share, bytes.ops single source discipline, inline }
+  Inc(FTick);
+  FTicks[LIdx] := FTick; // LRU touch, inline fast path
   Result := True;
 end;
 
@@ -419,11 +449,18 @@ begin
   if FCap = 0 then
     Rehash(16);
   LHash := GitOidHash(AOid);
-  if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then Exit;
+  if OidLocate(FBuckets, FStates, FMask, AOid, LHash, LIdx) then
+  begin
+    Inc(FTick);
+    FTicks[LIdx] := FTick; // LRU refresh on duplicate, avoids stale eviction
+    Exit;
+  end;
   FBuckets[LIdx] := AOid;
   FWhens[LIdx] := AWhen;
   FParents[LIdx] := AParents; { zero-copy CoW share, bytes.ops single source discipline, no Copy alloc }
   FStates[LIdx] := 1;
+  Inc(FTick);
+  FTicks[LIdx] := FTick;
   Inc(FCount);
 end;
 
