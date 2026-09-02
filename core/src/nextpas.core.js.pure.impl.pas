@@ -5,7 +5,7 @@ unit nextpas.core.js.pure.impl;
  *       薄转发 inline + TStringView 零拷贝 + bytes.ops 单源（经 text.view）。
  *       资源释放幂等：Close → JsPureClose 统一清 HostState/ValueState + ContextId 失效。
  *       四职责已落地组合收敛：Runtime(lifecycle) + Context{HostState via pure.host, ValueState via pure.value, IO via pure.base直读} 分层聚合，
- *       单单元 ~360 行 <650 阈值内（<800 必拆，wc -l ~360 实测），奢华度已收敛（Host→pure.host.TJsPureHostState per-Context隔离 inline零拷贝 + Value→pure.value.TJsPureValueState Heap/Global via bytes.ops+mem.dynarray, IO 直读 pure.base单源），守 L0–L3。
+ *       单单元 ~360 行 <800 阈值内（800 必拆，wc -l ~360 实测），奢华度已收敛（Host→pure.host.TJsPureHostState per-Context隔离 inline零拷贝 + Value→pure.value.TJsPureValueState Heap/Global via bytes.ops+mem.dynarray, IO 直读 pure.base单源），守 L0–L3。
  *       性能：热点 FindHostView/Bind/DoEval/New* inline + TStringView/BytesCopy 零拷贝 + bytes.ops 单源几何扩容；稳定：try-finally/JsPureClose/FreeAndNil 不丢。
  *       Host 桶 per-Context 实例隔离（FHost.Buckets），无全局共享，线程高级感 + 单分支重建零抖动；ValueState Heap per-Context隔离 via pure.value单源，资源幂等不丢。
  *}
@@ -37,7 +37,7 @@ type
     procedure CollectGarbage;
   end;
 
-  { TJsPureContext — Context 职责组合收敛（阈值 650 内 ~360 行，奢华度已收敛）
+  { TJsPureContext — Context 职责组合收敛（阈值 800 内 ~360 行，奢华度已收敛）
     字段组合：Lifecycle:FRuntime/FOptions/FClosed/FThreadId/FContextId/FBackend + Host:FHost(TJsPureHostState pure.host) + Value:FValue(TJsPureValueState pure.value) + IO:File直读 pure.base
     已落地 pure.host(TJsPureHostState per-Context隔离, bytes.ops FNV1a+BytesCopy单源 inline零拷贝, 幂等不丢) + pure.value(TJsPureValueState Heap/Global via bytes.ops+mem.dynarray inline零拷贝) 组合，薄转发 pure.base单源，守 L0-L3 }
   TJsPureContext = class(TInterfacedObject, IJsContext)

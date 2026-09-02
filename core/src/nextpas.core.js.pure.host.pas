@@ -46,6 +46,9 @@ procedure JsPureHostRemove(var Hosts: TJsPureHostArray; const AName: string); ov
 procedure JsPureHostRemove(var Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets; const AName: string); overload;
 procedure JsPureHostBucketsInvalidate(var Buckets: TJsPureHostBuckets); inline;
 procedure JsPureHostBucketsRebuild(const Hosts: TJsPureHostArray; var Buckets: TJsPureHostBuckets);
+const JS_PURE_FILE_MAX_BYTES = SizeUInt(64) * 1024 * 1024; // 64MiB local L0-aligned, numerically aligned with FORMAT_BULK_PARSE_MAX_BYTES canonical (owner format.limits), no L2→L2, bytes.ops single source via BytesCopy
+procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
+function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;
 // HostState — per-Context聚合态收敛 (奢华度收敛, 守bytes.ops单源, inline+零拷贝, 资源幂等不丢, Owner pure.host)
 type
   TJsPureHostState = record
@@ -62,10 +65,12 @@ procedure JsPureHostStateSetProc(var S: TJsPureHostState; const AName: string; A
 procedure JsPureHostStateRemove(var S: TJsPureHostState; const AName: string); inline;
 implementation
 uses
+  nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.ops.text,
-  nextpas.core.mem.dynarray;
+  nextpas.core.mem.dynarray,
+  nextpas.core.platform.fs;
 function HostCapacity(const Hosts: TJsPureHostArray): SizeUInt; inline;
 begin
   // single source via mem.dynarray DynArrayCapacityElem, heap probe converged via HeapCapacity, inline zero-copy header, amortized O(1)
@@ -397,4 +402,39 @@ procedure JsPureHostStateSetProc(var S: TJsPureHostState; const AName: string; A
 begin JsPureHostSetProc(S.Hosts, S.Buckets, AName, AHandler, ABackend); end;
 procedure JsPureHostStateRemove(var S: TJsPureHostState; const AName: string); inline;
 begin JsPureHostRemove(S.Hosts, S.Buckets, AName); end;
+procedure JsPureHostsClear(var Hosts: TJsPureHostArray);
+var I: Integer;
+begin
+  // thin single source for JsPureClose dual overloads, resource not丢, string managed ref release per slot, no duplicate code
+  for I := 0 to High(Hosts) do
+  begin
+    Hosts[I].Name := '';
+    Hosts[I].Func := nil;
+    Hosts[I].Method := nil;
+    Hosts[I].Proc := nil;
+    Hosts[I].Hash := 0;
+  end;
+  SetLength(Hosts, 0);
+end;
+function JsPureTryReadFileText(const APath: string; out AText: string): Boolean;
+var LData: Pointer; LLen: PtrUInt; LErr: Int32;
+begin
+  AText := '';
+  Result := False;
+  if APath = '' then Exit;
+  LData := nil; LLen := 0;
+  LErr := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  if LErr <> 0 then Exit;
+  try
+    if LLen > JS_PURE_FILE_MAX_BYTES then Exit(False);
+    if LLen > 0 then
+    begin
+      SetLength(AText, LLen);
+      BytesCopy(Pointer(AText), LData, LLen);
+    end else AText := '';
+    Result := True;
+  finally
+    if LData <> nil then platform_fs_free_buf(LData);
+  end;
+end;
 end.

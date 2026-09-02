@@ -34,10 +34,10 @@ function JsPureNewBool(AValue: Boolean; AContextId: UInt64): TJsValue; inline;
 function JsPureNewJson(const AJson: TJsonValue; var Heap: TJsPureHeap; AContextId: UInt64): TJsValue; inline;
 function JsPureToJsonString(const AValue: TJsValue): string;
 function JsPureToJson(const AValue: TJsValue): IJsonDocument;
-// Batch — owner pure.value, threshold >1000 batch vs loop single source via bytes.ops FNV1a32 pre-hash + SpanEqual zero-copy inline, amortized O(1), resource幂等不丢, SIXDIM P-4
+// Batch — owner pure.value, threshold >1000 batch vs loop single source via bytes.ops FNV1a32 pre-hash + SpanEqual zero-copy, amortized O(1), resource幂等不丢, SIXDIM P-4 — not inline per red-line (loop)
 type TJsValueArray = array of TJsValue;
-function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
-procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
+function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
+procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 // ValueState — per-Context值聚合态收敛 (奢华度收敛, 守bytes.ops单源+mem.dynarray, inline+零拷贝, 资源幂等不丢, Owner pure.value)
 type
   TJsPureValueState = record
@@ -75,27 +75,17 @@ end;
 function JsPureIsHeapObject(const V: TJsValue): Boolean; inline;
 begin Result := V.IsObject or V.IsArray; end;
 function JsPureHeapFind(const Heap: TJsPureHeap; const Obj: TJsValue): Integer;
-var I, LLo, LHi, LMid, LIdx: Integer; LId: Int64;
+var I, LIdx: Integer; LId: Int64;
 begin
   Inc(GPureHeapMetrics.FindCalls);
   if not JsPureIsHeapObject(Obj) then Exit(-1);
   LId := JsObjectId(Obj);
-  if (LId > 0) and (SizeUInt(Length(Heap)) > JS_PURE_HEAP_HASH_THRESHOLD) then
+  if LId <= 0 then Exit(-1);
+  // perf: O(1) direct index via monotonic Id=index+1 (heap alloc LNeed single source, geometric via bytes.ops BytesNextCapacity), single compare, zero threshold/binary branch, HashUsed counts fast-path, inline zero-copy
+  if LId <= Int64(Length(Heap)) then
   begin
-    if LId <= Int64(Length(Heap)) then
-    begin
-      LIdx := Integer(LId - 1);
-      if (LIdx <= High(Heap)) and (Heap[LIdx].Id = LId) then
-      begin Inc(GPureHeapMetrics.HashUsed); Exit(LIdx); end;
-    end;
-    LLo := 0; LHi := High(Heap);
-    while LLo <= LHi do
-    begin
-      LMid := (LLo + LHi) shr 1;
-      if Heap[LMid].Id = LId then begin Inc(GPureHeapMetrics.HashUsed); Exit(LMid); end
-      else if Heap[LMid].Id < LId then LLo := LMid + 1 else LHi := LMid - 1;
-    end;
-    Exit(-1);
+    LIdx := Integer(LId - 1);
+    if Heap[LIdx].Id = LId then begin Inc(GPureHeapMetrics.HashUsed); Exit(LIdx); end;
   end;
   for I := 0 to High(Heap) do if Heap[I].Id = LId then Exit(I);
   Result := -1;
@@ -181,8 +171,8 @@ begin
   for LPos:=0 to High(Obj.Props) do if Obj.Props[LPos].Name=AName then Exit(LPos);
   Result:=-1;
 end;
-{ hashed fast-path — single source FNV1a32 pre-hash reuse, closed-loop, zero-copy, inline, amortized O(1) for >1000 batch, owner pure.value via bytes.ops }
-function JsPureHeapFindPropHashed(const AProps: array of TJsPureProp; const AName: string; const AHash: UInt32): Integer; overload; inline;
+{ hashed fast-path — single source FNV1a32 pre-hash reuse, closed-loop, zero-copy, amortized O(1) for >1000 batch, owner pure.value via bytes.ops — not inline per red-line (loop/bucket probe) }
+function JsPureHeapFindPropHashed(const AProps: array of TJsPureProp; const AName: string; const AHash: UInt32): Integer; overload;
 var I: Integer;
 begin
   if Length(AProps) > JS_PURE_HEAP_HASH_THRESHOLD then
@@ -198,7 +188,7 @@ begin
   for I:=0 to High(AProps) do if AProps[I].Name=AName then Exit(I);
   Result:=-1;
 end;
-function JsPureHeapFindPropHashed(const Obj: TJsPureObject; const AName: string; const AHash: UInt32): Integer; overload; inline;
+function JsPureHeapFindPropHashed(const Obj: TJsPureObject; const AName: string; const AHash: UInt32): Integer; overload;
 var LIdx, LProbe, LPos: Integer;
 begin
   if Length(Obj.Props) > JS_PURE_HEAP_HASH_THRESHOLD then
@@ -358,13 +348,13 @@ begin
 end;
 function JsPureNewStringView(const AView: TStringView; AContextId: UInt64): TJsValue; inline; overload;
 begin
-  // perf: inline eager hosted via JsStringViewValue single source (bytes.ops SpanToString single source), B/op=1 alloc single-state lifecycle, owner intf bytes.ops single source, zero dangling view
+  // perf: inline eager hosted via JsStringViewValue single source (bytes.ops.text SpanToString single source single Move via BytesCopy, B/op=1 alloc single-state lifecycle, TStringView Data+Len zero-copy view, zero dangling, owner intf bytes.ops single source)
   if AView.IsEmpty then Result := JsValueBindContext(JsStringValue(''), AContextId)
   else Result := JsValueBindContext(JsStringViewValue(AView.Data, AView.Len), AContextId);
 end;
 function JsPureNewStringView(const AView: TStringView): TJsValue; inline; overload;
 begin
-  // perf: inline eager hosted via JsStringViewValue single source, B/op=1 alloc single-state, bytes.ops single source at creation, no deferred cache complexity
+  // perf: inline eager hosted via JsStringViewValue single source (bytes.ops.text SpanToString single Move, B/op=1 alloc single-state, TStringView zero-copy view, bytes.ops single source at creation, no deferred cache/dangling)
   if AView.IsEmpty then Result := JsStringValue('')
   else Result := JsStringViewValue(AView.Data, AView.Len);
 end;
@@ -468,21 +458,21 @@ function JsPureValueStateGetProp(const S: TJsPureValueState; const AObj: TJsValu
 begin Result := JsPureHeapGetProp(S.Heap, AObj, AName); end;
 procedure JsPureValueStateSetProp(var S: TJsPureValueState; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 begin JsPureHeapSetProp(S.Heap, AObj, AName, AVal); end;
-{ Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy inline, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 }
-function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray; inline;
+{ Batch — single source via bytes.ops FNV1a32 pre-hash single source closed-loop, SpanEqual zero-copy, threshold >1000, amortized O(1) single pre-hash vs per-iteration recompute, resource不丢 — not inline per red-line (loop) }
+function JsPureHeapGetBatch(const Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string): TJsValueArray;
 var I: Integer; LHash: UInt32;
 begin
-  // perf: inline single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, no per-iteration PropHashStr
+  // perf: single FNV1a32 via bytes.ops single source (PropHashStr) for >1000 batch, zero-copy, amortized O(1) closed-loop reuse via Hashed path, bucket O(1) when >64, pure.value single source, no per-iteration PropHashStr — not inline per red-line (loop)
   SetLength(Result, Length(Objs));
   if Length(Objs)=0 then Exit;
   LHash := PropHashStr(AName); // single source pre-hash, closed-loop reuse via Hashed path
   for I := 0 to High(Objs) do
     Result[I] := JsPureHeapGetPropHashed(Heap, Objs[I], AName, LHash);
 end;
-procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue); inline;
+procedure JsPureHeapSetBatch(var Heap: TJsPureHeap; const Objs: array of TJsValue; const AName: string; const Vals: array of TJsValue);
 var I: Integer; LHash: UInt32;
 begin
-  // perf: inline single FNV1a32 pre-hash single source closed-loop, zero-copy, amortized O(1) vs per-iteration recompute, bytes.ops single source, threshold >1000 batch, no per-iteration PropHashStr
+  // perf: single FNV1a32 pre-hash single source closed-loop, zero-copy, amortized O(1) vs per-iteration recompute, bytes.ops single source, threshold >1000 batch, no per-iteration PropHashStr — not inline per red-line (loop)
   // stability: per-iteration SetPropHashed single source via bytes.ops+mem.dynarray geometric Exactly-Once via BytesNextCapacity,幂等不丢, try-finally not needed for batch loop
   if Length(Objs)=0 then Exit;
   if Length(Vals)<>Length(Objs) then Exit;
