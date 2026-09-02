@@ -54,6 +54,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.git.native.util,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.loose,
@@ -102,25 +103,14 @@ end;
 
 { ── helpers for stash push ─────────────────────────────────────────────── }
 
-function TwoDigits(AValue: Integer): string;
+function TwoDigits(AValue: Integer): string; inline;
 begin
-  if AValue < 10 then Exit('0' + IntToStr(AValue));
-  Result := IntToStr(AValue);
+  Result := GitTwoDigits(AValue);
 end;
 
-function FormatTz(AOffsetMin: Integer): string;
-var
-  SignCh: Char;
-  AbsMin: Integer;
+function FormatTz(AOffsetMin: Integer): string; inline;
 begin
-  SignCh := '+';
-  AbsMin := AOffsetMin;
-  if AbsMin < 0 then
-  begin
-    SignCh := '-';
-    AbsMin := -AbsMin;
-  end;
-  Result := SignCh + TwoDigits(AbsMin div 60) + TwoDigits(AbsMin mod 60);
+  Result := GitFormatTz(AOffsetMin);
 end;
 
 function SignatureToString(const ASig: TGitSignature): string;

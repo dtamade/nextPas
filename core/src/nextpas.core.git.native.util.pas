@@ -18,6 +18,8 @@ function GitStripCR(const S: string): string; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
 function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
+function GitTwoDigits(AValue: Integer): string; inline;
+function GitFormatTz(AOffsetMin: Integer): string; inline;
 
 implementation
 
@@ -98,6 +100,29 @@ end;
 function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
 begin
   Result := nextpas.core.git.native.common.GitPeelToTree(ARepo, AOid);
+end;
+
+function GitTwoDigits(AValue: Integer): string; inline;
+begin
+  if AValue < 10 then
+    Result := '0' + IntToStr(AValue)
+  else
+    Result := IntToStr(AValue);
+end;
+
+function GitFormatTz(AOffsetMin: Integer): string; inline;
+var
+  LSign: Char;
+  LAbs: Integer;
+begin
+  LSign := '+';
+  LAbs := AOffsetMin;
+  if LAbs < 0 then
+  begin
+    LSign := '-';
+    LAbs := -LAbs;
+  end;
+  Result := LSign + GitTwoDigits(LAbs div 60) + GitTwoDigits(LAbs mod 60);
 end;
 
 end.

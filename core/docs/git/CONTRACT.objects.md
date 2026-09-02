@@ -20,7 +20,8 @@
 - `GitOidSame:inline` ≤80 ns/op；`GitOidIsValidHex/FromHex/ToHex` ≤150 ns/op (not inline per red line 2, 40× loop/alloc exceeds I-Cache, HexVal/HexDecode via `encoding.hex` + `bytes.ops` SpanCopy single source)；`GitOidZero:inline` via `bytes.ops` SpanFill single source；`GitKindFromMode:inline` ≤30 ns/op
 - `GitZlibAdler32(PByte,Len):inline` 零拷贝（`Adler32Update(PByte,Len)` 单源，`ADLER32_MOD/NMAX` 单源，不自建循环）
 - `GitZlibCompress/DecompressPtr: PByte+Len` 零拷贝透传 `compress` owner；`MapDeflateError` 纯 `TDeflateErrorCode` 分发，无 `E.Message` 拼接，热错路径零非定长分配
-- 门禁：`bench_git: Oid/*, Kind/*, Zlib/*, Adler32/*` 详见总 CONTRACT §7 的 Go/Rust 同机 A/B 归一双锚。
+- 写路径独立 SLO 候选（待抽 `bench_git Write/*` 微基准，当前经 `test_git_native` 黄金覆盖，阈值待实测标定后晋升正式 SLO）：`GitSortTreeEntries`/`GitEntryCompare:inline`/`GitSerializeTree`/`GitBuildCommitBytes:inline`/`GitBuildTagBytes` 均 `TByteSpan` 零拷贝 via `bytes.ops.SpanCopy` 单源 + `GrowArrayCapacity` 几何扩容单源，`inline` 热路径（`GitBuildCommitBytes:inline` 单次精确尺寸预分配+单填避免 `string+=` O(n²)；`GitSerializeTree` 两遍精确尺寸+单填 `SpanCopy` 20B OID；`GitSortTreeEntries` MergeSort `O(n log n)` 经 `GitEntryCompare:inline` 字节序/`'/'` tie, `not inline` 守 I-Cache 红线）；候选基线 `Sort:≤2µs/100-entries`/`Serialize:≤5µs/100-entries`/`BuildCommit:inline≤3µs/op`/`BuildTag≤2µs/op`（同机 `-O3 -Xs` 无 heaptrc 中位数，10-15% 抖动余量，待 `bench_git Write/Sort:100|Serialize:100|BuildCommit|BuildTag` 实测标定），`TBytes` 受控 `try..finally` 资源不丢，缺能力先反哺 `bytes.ops`/`compress` owner，对象层仅薄转发
+- 门禁：`bench_git: Oid/*, Kind/*, Zlib/*, Adler32/*` 详见总 CONTRACT §7 的 Go/Rust 同机 A/B 归一双锚；`Write/*` 独立候选，阈值实测后双锚（提交态 baseline.json + 绝对 SLO）晋升正式门禁。
 
 ## 4. 稳定性
 - `WriteAtomic` 临时句柄 `try..finally` 原子落盘；`TPackFile` 析构释放 `IMappedFile`；`EIOError→EGitError` 映射，`EGitError` 不丢。
