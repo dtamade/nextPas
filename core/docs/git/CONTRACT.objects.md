@@ -8,7 +8,7 @@
 ## 1. 范围与阈值
 - 源聚合：8 单元 + 1 门面 shard（`native.objects` <400 行，唯一 inline 零拷贝网关 via `bytes.ops`/`compress`/`checksum`）；`native.pas` <30 行已折叠空 BC shim（零类型/常量/函数转发 `@deprecated`，对象层唯一门面为 `objects`，消除与 objects 的类型/常量双重薄网关与 I-Cache 复制，fan-in 收敛至 objects→owners）；单 shard <800 行软阈，满足 `design-conventions.md §2` 必拆阈。
 - 禁止在对象层手写压缩/哈希：zlib 透传 `compress.Deflate*`，Adler-32 单源 `checksum.adler32`，oid 比对单源 `bytes.ops.SpanEqual`（20-byte 权威 `native.base.TGitOid`）。
-- 同层单向豁免：`git-native-zlib-l2-exempt` 锚点由 `scripts/git-contract-check.sh` C5 校验，限定 `Deflate*` + `Adler32Update` 单源透传，零手写 deflate/adler 循环与零 `Move` 重复。
+- 同层单向豁免：`git-native-zlib-l2-exempt` 锚点由 `scripts/git-contract-check.sh` C5 校验，限定 `Deflate*` + `Adler32Update` + `bytes.ops.SpanCopy` 单源透传，零手写 deflate/adler 循环与零 `Move` 直调（`Move` 仅经 `bytes.ops.SpanCopy` 内联单源，pack delta `GitApplyDeltaInto` 零散 `Move` 已归口 `SpanCopy`，`inline` 零拷贝 `TByteSpan` 视图）；
 
 ## 2. 不变量
 - Oid 20-byte 原子：`GitOidIsValidHex/FromHex/ToHex/Same` 单源 `bytes.ops`，`Same` = `SpanEqual(TByteSpan(20),TByteSpan(20))` 零分配；`TGitOid`（`bindings.structs`）已单源化为 20-byte `libgit2.base.git_oid` 别名（33-byte `TGitOid33` 及其桥接已于 Phase7 (2026-09-02) 彻底移除，`grep -R TGitOid33` 零命中，SHA256 泛型候选改经 `bytes.ops` `Len` 参化 `TByteSpan`），新模块一律经 `native.base.TGitOid` / `libgit2.base.git_oid` 20-byte 权威，`scripts/git-contract-check.sh` C5 硬门禁，Phase 7 双轨已彻底清理。

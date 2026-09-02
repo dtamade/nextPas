@@ -7,24 +7,12 @@ interface
 uses
   nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.fs,
   nextpas.core.io.mapped,
+  nextpas.core.collections.smallcache,
   nextpas.core.git.native.base,
   nextpas.core.git.native.zlib;
 
-{ Read-only access to git packfiles (.pack + .idx v2). The pack is mmapped;
-  delta chains (ofs/ref) are resolved on demand with a depth cap.
-  Index CRC verification and index v1 are out of scope for this slice. }
-
-const
-  // peek cache geometry: 4-way set-assoc 64 sets *4 =256, hash-mix avoids low-bit aliasing
-  // perf: micro-cache 256×(SizeUInt+Int64+Bool)+64×Byte ≈ 5KB fits L1; zero-alloc, inline O(1) hit + round-robin eviction;
-  // single source via bytes.ops PByte view idea but hand-rolled (no TLruCache/heap/SwissMap): generic ILruCache owns hashmap+alloc+linked list unsuitable for hot delta varint peek (≤32B prefix).
-  // candidate for nextpas.core.collections.smallcache if extracted as generic 4-way fixed-cap micro-cache; reuse still via bytes.ops zero-copy Slabs, not heap lru.
-  PeekCacheSets = 64;
-  PeekCacheWays = 4;
-  PeekCacheMask = PeekCacheSets - 1;
-  PeekCacheTotal = PeekCacheSets * PeekCacheWays;
+{ Packfile reader: mmapped .pack + .idx v2; delta chains capped at 64. }
 
 type
   TPackFile = class
@@ -54,13 +42,10 @@ type
     function TryGetObjectSizeAtOffsetDepth(AOff: Int64; ADepth: Integer; out AKind: TGitObjectKind; out ASize: Int64): Boolean;
     procedure ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
       out AData: TBytes; ADepth: Integer);
+    function TryParsePackHeader(var APos: SizeUInt; out ATyp: Byte; out ASz: Int64): Boolean; inline;
+    function TryParseOfsDelta(var APos: SizeUInt; out ARel: Int64): Boolean; inline;
   private
-    // delta target size: 4-way set-assoc 64*4=256, hash-mix (xor shr) avoids direct-mapped aliasing
-    // perf: zero-alloc inline micro-cache (bytes.ops zero-copy PByte view idea, no TLruCache heap); candidate for collections.smallcache
-    FPeekKeys: array[0..PeekCacheTotal - 1] of SizeUInt;
-    FPeekVals: array[0..PeekCacheTotal - 1] of Int64;
-    FPeekValid: array[0..PeekCacheTotal - 1] of Boolean;
-    FPeekNext: array[0..PeekCacheSets - 1] of Byte;
+    FPeekCache: TPeekSmallCache;
   public
     constructor Create(const AIdxPath, APackPath: string);
     function Contains(const AOid: TGitOid): Boolean;
@@ -104,11 +89,10 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
-  nextpas.core.encoding.varint;
+  nextpas.core.encoding.varint,
+  nextpas.core.collections.algorithms;
 
-{ delta apply: bytes.ops single source, zero-copy PByte views, buffer reuse
-  perf: hot copy/insert use bare Move after explicit bounds check (bytes.ops SpanCopy inner Move single source, zero alloc, inline);
-  avoids SpanCopy's extra nil/len branch per op (micro-cost × many ops), keeps single-source ownership via bytes.ops comment. }
+{ Delta apply: bytes.ops SpanCopy single source. }
 procedure GitApplyDeltaInto(const ABase, ADelta: TBytes; var AOut: TBytes);
 var
   P: SizeInt;
@@ -136,7 +120,7 @@ begin
     raise EGitError.Create('delta target size exceeds limit');
   TgtSize := Int64(UTgt);
   if Int64(Length(AOut)) <> TgtSize then
-    SetLength(AOut, TgtSize); // single alloc: SetLength exact, no BytesEnsureCapacity double alloc; depth 64 keeps O(n) not O(n*realloc), zero-copy PByte view via bytes.ops idea
+    SetLength(AOut, TgtSize); // single SetLength exact
   if TgtSize = 0 then
     Exit;
   LOutSpan := TByteSpan.FromBytes(AOut);
@@ -166,16 +150,18 @@ begin
       if (CopyOff < 0) or (CopySize <= 0) or (CopyOff > Int64(LBaseSpan.Len) - CopySize)
         or (OutPos > TgtSize - CopySize) or (P > Length(ADelta)) then
         raise EGitError.Create('delta copy instruction out of bounds');
-      // perf: bare Move after bounds check; bytes.ops SpanCopy single source inner Move, zero-copy PByte view, inline, no extra nil/len branch per op
-      Move((LBaseSpan.Data + SizeUInt(CopyOff))^, (LOutSpan.Data + SizeUInt(OutPos))^, SizeUInt(CopySize));
+      // bytes.ops single source
+      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(CopySize)),
+        TByteSpan.Create(LBaseSpan.Data + SizeUInt(CopyOff), SizeUInt(CopySize)));
       OutPos := OutPos + CopySize;
     end
     else if Op > 0 then
     begin
       if (P > Length(ADelta) - Op) or (OutPos > TgtSize - Op) then
         raise EGitError.Create('delta insert instruction out of bounds');
-      // perf: bare Move after bounds check; bytes.ops single source inner Move, zero-copy, inline, no Span abstraction per insert
-      Move((LDeltaSpan.Data + SizeUInt(P))^, (LOutSpan.Data + SizeUInt(OutPos))^, SizeUInt(Op));
+      // bytes.ops single source
+      SpanCopy(TByteSpan.Create(LOutSpan.Data + SizeUInt(OutPos), SizeUInt(Op)),
+        TByteSpan.Create(LDeltaSpan.Data + SizeUInt(P), SizeUInt(Op)));
       OutPos := OutPos + Op;
       Inc(P, Op);
     end
@@ -210,8 +196,7 @@ begin
   FMapped := MmapOpen(APackPath);
   FData := FMapped.Data;
   FDataSize := SizeUInt(FMapped.Size);
-  SpanFill(TByteSpan.Create(PByte(@FPeekValid[0]), SizeOf(FPeekValid)), 0);
-  SpanFill(TByteSpan.Create(PByte(@FPeekNext[0]), SizeOf(FPeekNext)), 0);
+  FPeekCache.Init;
   LoadIndex(AIdxPath);
 end;
 
@@ -328,24 +313,19 @@ begin
   end;
 end;
 
+function PackOidCompare(const A, B: TGitOid; AData: Pointer): SizeInt;
+begin
+  Result := CompareBytesOrdered(@A.Bytes[0], @B.Bytes[0], GitOidRawLen, GitOidRawLen);
+end;
+
 function TPackFile.FindOffset(const AOid: TGitOid): Int64;
 var
-  Lo, Hi, Mid, Cmp: Integer;
+  LIdx: SizeInt;
 begin
-  Result := -1;
-  Lo := 0;
-  Hi := Length(FOids) - 1;
-  while Lo <= Hi do
-  begin
-    Mid := (Lo + Hi) div 2;
-    Cmp := CompareBytesOrdered(@FOids[Mid].Bytes[0], @AOid.Bytes[0], GitOidRawLen, GitOidRawLen);
-    if Cmp = 0 then
-      Exit(FOffsets[Mid]);
-    if Cmp < 0 then
-      Lo := Mid + 1
-    else
-      Hi := Mid - 1;
-  end;
+  if specialize BinarySearch<TGitOid>(FOids, AOid, @PackOidCompare, nil, LIdx) then
+    Result := FOffsets[LIdx]
+  else
+    Result := -1;
 end;
 
 function TPackFile.Contains(const AOid: TGitOid): Boolean;
@@ -360,11 +340,52 @@ begin
   Result := FData[APos];
 end;
 
+function TPackFile.TryParsePackHeader(var APos: SizeUInt; out ATyp: Byte; out ASz: Int64): Boolean; inline;
+var
+  B: Byte;
+  Shift: Integer;
+begin
+  Result := False;
+  if APos >= FDataSize then Exit;
+  B := FData[APos]; Inc(APos);
+  ATyp := (B shr PackHdrTypeShift) and PackHdrTypeMask;
+  ASz := B and PackHdrSizeLowMask;
+  Shift := PackHdrSizeLowBits;
+  while (B and PackHdrContBit) <> 0 do
+  begin
+    if Shift > 63 then Exit;
+    if APos >= FDataSize then Exit;
+    B := FData[APos]; Inc(APos);
+    ASz := ASz or (Int64(B and PackHdrSizeContMask) shl Shift);
+    if ASz < 0 then Exit;
+    Inc(Shift, PackHdrSizeContBits);
+  end;
+  Result := (ASz >= 0) and (ASz <= MaxInt);
+end;
+
+function TPackFile.TryParseOfsDelta(var APos: SizeUInt; out ARel: Int64): Boolean; inline;
+var
+  B: Byte;
+begin
+  Result := False;
+  if APos >= FDataSize then Exit;
+  B := FData[APos]; Inc(APos);
+  ARel := B and OfsDeltaPayloadMask;
+  while (B and OfsDeltaContBit) <> 0 do
+  begin
+    if ARel > (High(Int64) shr OfsDeltaPayloadBits) then Exit;
+    if APos >= FDataSize then Exit;
+    B := FData[APos]; Inc(APos);
+    ARel := ((ARel + 1) shl OfsDeltaPayloadBits) or (B and OfsDeltaPayloadMask);
+  end;
+  Result := True;
+end;
+
 function TPackFile.InflateAt(APos: SizeUInt; AExpectSize: Int64): TBytes;
 var
   LReuse: TBytes;
 begin
-  // not inline — heavy zlib path; single source via InflateInto (bytes.ops reuse, zero-copy ToBuffer)
+  // Heavy zlib path.
   LReuse := nil;
   InflateInto(APos, AExpectSize, LReuse);
   Result := LReuse;
@@ -376,15 +397,11 @@ var
   Got: SizeUInt;
   PDst: PByte;
 begin
-  // bytes.ops single source, zero-copy PByte view
+  // bytes.ops single source: single SetLength exact
   if (AExpectSize < 0) or (AExpectSize > MaxInt) then
     raise EGitError.Create('pack entry inflated size out of range');
   if SizeUInt(Length(AReuse)) <> SizeUInt(AExpectSize) then
-  begin
-    if SizeUInt(Length(AReuse)) < SizeUInt(AExpectSize) then
-      BytesEnsureCapacity(AReuse, SizeUInt(AExpectSize));
     SetLength(AReuse, SizeUInt(AExpectSize));
-  end;
   if AExpectSize = 0 then
     PDst := nil
   else
@@ -428,41 +445,13 @@ begin
 end;
 
 function TPackFile.TryPeekCacheHit(APos: SizeUInt; out ATargetSize: Int64): Boolean; inline;
-var
-  SetIdx, Base, I: SizeUInt;
 begin
-  // 4-way set-assoc + hash-mix (xor shr) spreads low-bit aliasing; inline + zero-copy keys, no zlib
-  // perf: hand-rolled vs generic TLruCache (heap+SwissMap) unsuitable for hot 32B peek; O(Ways)=4 linear scan inlined, zero alloc
-  SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
-  Base := SetIdx * PeekCacheWays;
-  for I := 0 to PeekCacheWays - 1 do
-    if FPeekValid[Base + I] and (FPeekKeys[Base + I] = APos) then
-    begin
-      ATargetSize := FPeekVals[Base + I];
-      Exit(True);
-    end;
-  Result := False;
+  Result := FPeekCache.TryGet(APos, ATargetSize);
 end;
 
 procedure TPackFile.PeekCacheStore(APos: SizeUInt; ATargetSize: Int64); inline;
-var
-  SetIdx, Base, I, Victim: SizeUInt;
 begin
-  // hash-mix set selection + 4-way round-robin eviction; single-source inline, no alloc
-  // perf: hand-rolled vs generic TLruCache heap unsuitable; round-robin victim O(1) inline, zero alloc, fits L1 micro-cache
-  SetIdx := (APos xor (APos shr 6) xor (APos shr 10)) and PeekCacheMask;
-  Base := SetIdx * PeekCacheWays;
-  for I := 0 to PeekCacheWays - 1 do
-    if FPeekValid[Base + I] and (FPeekKeys[Base + I] = APos) then
-    begin
-      FPeekVals[Base + I] := ATargetSize;
-      Exit;
-    end;
-  Victim := Base + FPeekNext[SetIdx];
-  FPeekKeys[Victim] := APos;
-  FPeekVals[Victim] := ATargetSize;
-  FPeekValid[Victim] := True;
-  FPeekNext[SetIdx] := (FPeekNext[SetIdx] + 1) and (PeekCacheWays - 1);
+  FPeekCache.Put(APos, ATargetSize);
 end;
 
 procedure TPackFile.ReadEntry(AOffset: SizeUInt; out AKind: TGitObjectKind;
@@ -481,9 +470,8 @@ var
   Chain: array[0..GitMaxDeltaDepth] of TChainEnt;
   ChainLen: Integer;
   CurOff: SizeUInt;
-  B, Typ: Byte;
+  Typ: Byte;
   Sz: Int64;
-  Shift: Integer;
   P: SizeUInt;
   Rel: Int64;
   BaseOffSigned: Int64;
@@ -503,24 +491,8 @@ begin
     if ChainLen > High(Chain) then
       raise EGitError.Create('delta chain too deep');
     P := CurOff;
-    B := ByteAt(P);
-    Inc(P);
-    Typ := (B shr PackHdrTypeShift) and PackHdrTypeMask;
-    Sz := B and PackHdrSizeLowMask;
-    Shift := PackHdrSizeLowBits;
-    while (B and PackHdrContBit) <> 0 do
-    begin
-      if Shift > 63 then
-        raise EGitError.Create('pack entry size varint overflow');
-      B := ByteAt(P);
-      Inc(P);
-      Sz := Sz or (Int64(B and PackHdrSizeContMask) shl Shift);
-      if Sz < 0 then
-        raise EGitError.Create('pack entry size out of range');
-      Inc(Shift, PackHdrSizeContBits);
-    end;
-    if (Sz < 0) or (Sz > MaxInt) then
-      raise EGitError.Create('pack entry size out of range');
+    if not TryParsePackHeader(P, Typ, Sz) then
+      raise EGitError.Create('truncated pack entry header');
     Chain[ChainLen].Typ := Typ;
     Chain[ChainLen].Sz := Sz;
     Chain[ChainLen].IsOfs := False;
@@ -533,17 +505,8 @@ begin
     end
     else if Typ = 6 then
     begin
-      B := ByteAt(P);
-      Inc(P);
-      Rel := B and OfsDeltaPayloadMask;
-      while (B and OfsDeltaContBit) <> 0 do
-      begin
-        if Rel > (High(Int64) shr OfsDeltaPayloadBits) then
-          raise EGitError.Create('ofs_delta offset out of range');
-        B := ByteAt(P);
-        Inc(P);
-        Rel := ((Rel + 1) shl OfsDeltaPayloadBits) or (B and OfsDeltaPayloadMask);
-      end;
+      if not TryParseOfsDelta(P, Rel) then
+        raise EGitError.Create('truncated ofs_delta header');
       BaseOffSigned := Int64(CurOff) - Rel;
       if (BaseOffSigned < 0) or (BaseOffSigned >= Int64(CurOff)) then
         raise EGitError.Create('corrupt ofs_delta base offset');
@@ -622,10 +585,7 @@ function TPackFile.TryReadObject(const AOid: TGitOid; out AKind: TGitObjectKind;
 var
   Off: Int64;
 begin
-  // perf: single FindOffset per OID; owner owns binary search via CompareBytesOrdered (bytes.ops single source, ~logN)
-  // stability: missing -> False, corrupt -> raise EGitError (caller distinguishes), no resource leak (TBytes refcount)
-  // zero-copy: offset from mmap index, payload inflated via bytes.ops Span paths
-  // not inline: heavy inflate/delta path
+  // Binary search single source; missing->False, corrupt->raise.
   Off := FindOffset(AOid);
   if Off < 0 then
     Exit(False);
@@ -638,7 +598,7 @@ function TPackFile.TryGetObjectSize(const AOid: TGitOid; out AKind: TGitObjectKi
 var
   Off: Int64;
 begin
-  // memo: single FindOffset per OID, delegate to offset-based helper to avoid duplicate O(logN) for ref-delta base
+  // Single FindOffset per OID.
   Off := FindOffset(AOid);
   if Off < 0 then
     Exit(False);
@@ -654,9 +614,8 @@ function TPackFile.TryGetObjectSizeAtOffsetDepth(AOff: Int64; ADepth: Integer; o
 var
   BaseOff: Int64;
   P, DeltaStart: SizeUInt;
-  B, Typ: Byte;
+  Typ: Byte;
   Sz: Int64;
-  Shift: Integer;
   TgtSize: Int64;
   BaseOid: TGitOid;
   BaseKind: TGitObjectKind;
@@ -667,9 +626,10 @@ var
   var
     LOff: Int64;
     LPos: SizeUInt;
-    LB, LTyp: Byte;
+    LTyp: Byte;
     LDepth: Integer;
     LRel: Int64;
+    LSz: Int64;
     LTmpOid: TGitOid;
   begin
     Result := False;
@@ -680,14 +640,7 @@ var
     begin
       if (LOff < 0) or (LOff >= Int64(FDataSize)) then Exit;
       LPos := SizeUInt(LOff);
-      if LPos >= FDataSize then Exit;
-      LB := FData[LPos]; Inc(LPos);
-      LTyp := (LB shr PackHdrTypeShift) and PackHdrTypeMask;
-      while (LB and PackHdrContBit) <> 0 do
-      begin
-        if LPos >= FDataSize then Exit;
-        LB := FData[LPos]; Inc(LPos);
-      end;
+      if not TryParsePackHeader(LPos, LTyp, LSz) then Exit;
       case LTyp of
         1: begin AFound := gokCommit; Exit(True); end;
         2: begin AFound := gokTree; Exit(True); end;
@@ -695,16 +648,7 @@ var
         4: begin AFound := gokTag; Exit(True); end;
         6:
           begin
-            if LPos >= FDataSize then Exit;
-            LB := FData[LPos]; Inc(LPos);
-            LRel := LB and OfsDeltaPayloadMask;
-            while (LB and OfsDeltaContBit) <> 0 do
-            begin
-              if LRel > (High(Int64) shr OfsDeltaPayloadBits) then Exit;
-              if LPos >= FDataSize then Exit;
-              LB := FData[LPos]; Inc(LPos);
-              LRel := ((LRel + 1) shl OfsDeltaPayloadBits) or (LB and OfsDeltaPayloadMask);
-            end;
+            if not TryParseOfsDelta(LPos, LRel) then Exit;
             LOff := LOff - LRel;
             if LOff < 0 then Exit;
             Inc(LDepth);
@@ -734,21 +678,7 @@ begin
   if (AOff < 0) or (AOff >= Int64(FDataSize)) then
     Exit;
   P := SizeUInt(AOff);
-  if P >= FDataSize then Exit;
-  B := FData[P]; Inc(P);
-  Typ := (B shr PackHdrTypeShift) and PackHdrTypeMask;
-  Sz := Int64(B and PackHdrSizeLowMask);
-  Shift := PackHdrSizeLowBits;
-  while (B and PackHdrContBit) <> 0 do
-  begin
-    if Shift > 63 then Exit;
-    if P >= FDataSize then Exit;
-    B := FData[P]; Inc(P);
-    Sz := Sz or (Int64(B and PackHdrSizeContMask) shl Shift);
-    if Sz < 0 then Exit;
-    Inc(Shift, PackHdrSizeContBits);
-  end;
-  if (Sz < 0) or (Sz > MaxInt) then Exit;
+  if not TryParsePackHeader(P, Typ, Sz) then Exit;
   case Typ of
     1: begin AKind := gokCommit; ASize := Sz; Exit(True); end;
     2: begin AKind := gokTree; ASize := Sz; Exit(True); end;
@@ -759,16 +689,7 @@ begin
         if ADepth >= GitMaxDeltaDepth then Exit;
         if Typ = 6 then
         begin
-          if P >= FDataSize then Exit;
-          B := FData[P]; Inc(P);
-          Rel := B and OfsDeltaPayloadMask;
-          while (B and OfsDeltaContBit) <> 0 do
-          begin
-            if Rel > (High(Int64) shr OfsDeltaPayloadBits) then Exit;
-            if P >= FDataSize then Exit;
-            B := FData[P]; Inc(P);
-            Rel := ((Rel + 1) shl OfsDeltaPayloadBits) or (B and OfsDeltaPayloadMask);
-          end;
+          if not TryParseOfsDelta(P, Rel) then Exit;
           BaseOff := AOff - Rel;
           if (BaseOff < 0) or (BaseOff >= AOff) then Exit;
           DeltaStart := P;
