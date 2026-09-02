@@ -45,7 +45,6 @@ function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 implementation
 
 uses
-  nextpas.core.bytes.ops,
   nextpas.core.collections.algorithms;
 
 type
@@ -271,11 +270,12 @@ function TMemVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
   DirIdx: SizeUInt;
-  I: SizeUInt;
+  I, J: SizeUInt;
   Seen: TVfsNameArray;
   Info: TStatInfo;
-  Spans: array of TByteSpan;
-  J: SizeInt;
+  Lo, Hi, OutN: SizeUInt;
+  PrefixLen, SegPos: SizeInt;
+  Child: string;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -291,22 +291,40 @@ begin
     Prefix := ADirPath + '/';
   end;
 
-  // 单源收敛：委托 base.VfsDeriveChildNamesFromSpans 零拷贝模板（LowerBound+SpanStartsWith+Early-Break+Move 单源，无并行维护），与 embedded 同路径
-  // perf: TByteSpan 直指 FFiles Name 存储零拷贝，bytes.ops SpanStartsWith/SpanEqual 单源 inline 热路径；扇出限界由基座统一（16 倍增 Cap≤N-Lo）
+  { 零分配直扫：LowerBound 定位前缀区间，零 Names 中间分配，Seen 仅按扇出分配
+    与 embedded 零拷贝扫描同构，规模化无 O(n) 双分配张力。 }
   Result := nil;
-  if Length(FFiles) = 0 then
-    Seen := nil
+  PrefixLen := Length(Prefix);
+  if PrefixLen = 0 then
+    Lo := 0
   else
+    Lo := LowerBound(Prefix);
+  Hi := SizeUInt(Length(FFiles));
+  SetLength(Seen, Hi - Lo);
+  OutN := 0;
+  for I := Lo to Hi - 1 do
   begin
-    SetLength(Spans, Length(FFiles));
-    for J := 0 to High(FFiles) do
-      if Length(FFiles[J].Name) = 0 then
-        Spans[J] := TByteSpan.Empty
-      else
-        Spans[J] := TByteSpan.Create(PByte(@FFiles[J].Name[1]), SizeUInt(Length(FFiles[J].Name)));
-    Seen := VfsDeriveChildNamesFromSpans(Spans, Prefix);
-    SetLength(Spans, 0);
+    if Length(FFiles[I].Name) <= PrefixLen then Continue;
+    if PrefixLen > 0 then
+      if not VfsPathHasPrefix(FFiles[I].Name, Prefix) then Break;
+    SegPos := 0;
+    for J := SizeUInt(PrefixLen + 1) to SizeUInt(Length(FFiles[I].Name)) do
+      if FFiles[I].Name[J] = '/' then
+      begin
+        SegPos := J;
+        Break;
+      end;
+    if SegPos > 0 then
+      Child := Copy(FFiles[I].Name, 1, SegPos - 1)
+    else
+      Child := FFiles[I].Name;
+    if (OutN = 0) or (Seen[OutN - 1] <> Child) then
+    begin
+      Seen[OutN] := Child;
+      Inc(OutN);
+    end;
   end;
+  SetLength(Seen, OutN);
 
   SetLength(Result, SizeUInt(Length(Seen)));
   for I := 0 to SizeUInt(Length(Seen)) - 1 do

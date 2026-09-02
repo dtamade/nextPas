@@ -55,17 +55,12 @@ function PcmTpdfNoise(var AState: UInt32): Single; inline;
 
 implementation
 
-uses
-  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
-  nextpas.core.bytes.ops;
-
 {$PUSH}
 {$WARNINGS OFF}
 {$HINTS OFF}
 
-threadvar
+var
   GPcmScratch: TBytes;
-  // threadvar per-thread scratch — PcmConvert F32 中间缓冲，几何倍增 EnsurePcmScratch，稳态零分配 (steady zero alloc after warmup)，caller-scratch 备选路径为外置缓冲传入，线程隔离无锁
 
 procedure EnsurePcmScratch(ANeeded: Integer); inline;
 var LCap: Integer;
@@ -268,8 +263,7 @@ begin
   begin
     if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
       raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
-    // perf: exact slice AFrames*AChannels*LBytesPerSrc, zero-copy view via bytes.ops.SpanCopySlice single source, no tail copy, single alloc
-    Result := SpanCopySlice(TByteSpan.FromBytes(ASrc), 0, SizeUInt(Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)));
+    Result := Copy(ASrc, 0, Length(ASrc));
     Exit;
   end;
   LSampleCount := AFrames * AChannels;
@@ -277,7 +271,7 @@ begin
     raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
   if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
     raise EInvalidArgument.CreateFmt('PcmConvert: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
-  // EnsureScratch 预分配：复用 threadvar F32 中间缓冲，几何倍增 AudioEnsureCapacity，稳态零分配 (steady zero alloc after warmup)
+  // EnsureScratch 预分配：复用全局 F32 中间缓冲，稳态零分配
   EnsurePcmScratch(LSampleCount * SizeOf(Single));
   LF32 := PSingle(@GPcmScratch[0]);
   // 批处理分支：按 src 格式分发，外层分支内层紧凑循环，避免逐采样 case
@@ -305,9 +299,8 @@ begin
         LF32[LI] := PcmS32ToF32(LS32);
       end;
     sfF32:
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
       for LI := 0 to LSampleCount - 1 do
-        CopyMem(@LF32[LI], @ASrc[LI*4], SizeUInt(SizeOf(Single)));
+        Move(ASrc[LI*4], LF32[LI], SizeOf(Single));
   else
     for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
   end;
@@ -364,9 +357,8 @@ begin
         LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
       end;
     sfF32:
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
       for LI := 0 to LSampleCount - 1 do
-        CopyMem(@LDstPtr[LI*4], @LF32[LI], SizeUInt(SizeOf(Single)));
+        Move(LF32[LI], LDstPtr[LI*4], SizeOf(Single));
   end;
 end;
 
@@ -386,14 +378,7 @@ begin
       LSrcOffset := LFrame * ABytesPerSample;
       LDstOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(APlanes[LCh])) then Continue;
-      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping interleave
-      case ABytesPerSample of
-        4: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(4));
-        3: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(3));
-        2: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(2));
-        1: CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(1));
-      else CopyMem(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(ABytesPerSample));
-      end;
+      Move(APlanes[LCh][LSrcOffset], ADst[LDstOffset], ABytesPerSample);
     end;
 end;
 
@@ -414,14 +399,7 @@ begin
       LSrcOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
       LDstOffset := LFrame * ABytesPerSample;
       if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
-      // single source: base.utils CopyMem → bytes.ops, variable length — CopyMem single source, no Move; explicit branch avoids Move semantics, non-overlapping deinterleave
-      case ABytesPerSample of
-        4: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(4));
-        3: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(3));
-        2: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(2));
-        1: CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(1));
-      else CopyMem(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(ABytesPerSample));
-      end;
+      Move(AInterleaved[LSrcOffset], APlanes[LCh][LDstOffset], ABytesPerSample);
     end;
 end;
 

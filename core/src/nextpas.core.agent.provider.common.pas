@@ -20,7 +20,6 @@ unit nextpas.core.agent.provider.common;
 interface
 
 uses
-  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.async.cancellation,

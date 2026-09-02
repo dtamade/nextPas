@@ -51,6 +51,26 @@ uses
   nextpas.core.zip.aes,
   nextpas.core.zip.common;
 
+procedure WriteLE16(var ADst: TBytes; AOff: SizeUInt; AValue: Word); inline;
+begin
+  ADst[AOff] := Byte(AValue and $FF);
+  ADst[AOff + 1] := Byte((AValue shr 8) and $FF);
+end;
+
+procedure WriteLE32(var ADst: TBytes; AOff: SizeUInt; AValue: LongWord); inline;
+begin
+  ADst[AOff] := Byte(AValue and $FF);
+  ADst[AOff + 1] := Byte((AValue shr 8) and $FF);
+  ADst[AOff + 2] := Byte((AValue shr 16) and $FF);
+  ADst[AOff + 3] := Byte((AValue shr 24) and $FF);
+end;
+
+procedure WriteLE64(var ADst: TBytes; AOff: SizeUInt; AValue: UInt64); inline;
+begin
+  WriteLE32(ADst, AOff, LongWord(AValue and $FFFFFFFF));
+  WriteLE32(ADst, AOff + 4, LongWord((AValue shr 32) and $FFFFFFFF));
+end;
+
 procedure WriteLE16Buf(AOut: PByte; AOff: SizeUInt; AValue: Word); inline;
 begin
   AOut[AOff] := Byte(AValue and $FF);
@@ -69,21 +89,6 @@ procedure WriteLE64Buf(AOut: PByte; AOff: SizeUInt; AValue: UInt64); inline;
 begin
   WriteLE32Buf(AOut, AOff, LongWord(AValue and $FFFFFFFF));
   WriteLE32Buf(AOut, AOff + 4, LongWord((AValue shr 32) and $FFFFFFFF));
-end;
-
-procedure WriteLE16(var ADst: TBytes; AOff: SizeUInt; AValue: Word); inline;
-begin
-  WriteLE16Buf(PByte(@ADst[0]), AOff, AValue);
-end;
-
-procedure WriteLE32(var ADst: TBytes; AOff: SizeUInt; AValue: LongWord); inline;
-begin
-  WriteLE32Buf(PByte(@ADst[0]), AOff, AValue);
-end;
-
-procedure WriteLE64(var ADst: TBytes; AOff: SizeUInt; AValue: UInt64); inline;
-begin
-  WriteLE64Buf(PByte(@ADst[0]), AOff, AValue);
 end;
 
 procedure DecodeCentralExtra(const AExtra: TBytes; var AUSize, ACSize,

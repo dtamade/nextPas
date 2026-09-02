@@ -18,7 +18,6 @@ unit nextpas.core.webview.bridge;
 interface
 
 uses
-  nextpas.core.json.value,
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,

@@ -6,17 +6,14 @@ interface
 
 uses
   nextpas.core.audio.base,
-  nextpas.core.audio.spatial.base,
   nextpas.core.audio.intf;
 
 type
   TAudioVec3 = record
     X, Y, Z: Single;
-    class function Create(AX, AY, AZ: Single): TAudioVec3; static;
   end;
 
-  TAudioVector3 = TAudioVec3;
-  TAudioDistanceModel = nextpas.core.audio.spatial.base.TAudioDistanceModel;
+  TAudioDistanceModel = (dmInverse, dmLinear, dmExponent);
 
   TAudioListener = record
     Position: TAudioVec3;
@@ -37,14 +34,8 @@ type
     ConeInnerAngle: Single; // degrees, not used v1
     ConeOuterAngle: Single;
     ConeOuterGain: Single;
-    Distance: Single; // legacy alias for test_spatial compat (mirrors Position distance, unused)
-    Doppler: Single; // legacy alias for DopplerFactor
   end;
 
-  TSpatialParams = TAudioSpatialParams;
-
-  // legacy aliases for test_spatial compat
-  // (TAudioVector3/TSpatialParams/Spatial* alias deprecated, prefer TAudioVec3/AudioCompute*)
   // Spatialized source — 3D panner wrapping a mono/stereo source (pure 3D, zero-alloc FillRealtime)
   IAudioSpatialSource = interface(IRealtimeAudioSource)
     ['{F1A2B3C4-D5E6-7890-ABCD-A00000000051}']
@@ -74,10 +65,6 @@ function AudioComputeDoppler(const AListener: TAudioListener; const ASource: TAu
 
 // Combined: out AGain (distance * listener gain), APan (-1..1), ADoppler (pitch)
 procedure AudioSpatialize(const AListener: TAudioListener; const ASource: TAudioSpatialParams; out AGain, APan, ADoppler: Single); inline;
-
-function SpatialPanFromPosition(const APos: TAudioVec3): Single; inline;
-function SpatialGainFromDistance(ADist, AMin, AMax, ARolloff: Single): Single; inline;
-function SpatialApply(const ABuffer: TAudioBuffer; const AParams: TSpatialParams): TAudioBuffer; inline;
 
 implementation
 
@@ -138,8 +125,6 @@ begin
   Result.ConeInnerAngle := 360;
   Result.ConeOuterAngle := 360;
   Result.ConeOuterGain := 0;
-  Result.Distance := 0;
-  Result.Doppler := 0;
 end;
 
 function AudioComputeAttenuation(const AListener: TAudioListener; const ASource: TAudioSpatialParams): Single; inline;
@@ -216,43 +201,6 @@ begin
   AGain := AudioComputeAttenuation(AListener, ASource) * AListener.Gain;
   APan := AudioComputePan(AListener, ASource.Position);
   ADoppler := AudioComputeDoppler(AListener, ASource);
-end;
-
-class function TAudioVec3.Create(AX, AY, AZ: Single): TAudioVec3;
-begin
-  Result.X := AX; Result.Y := AY; Result.Z := AZ;
-end;
-
-function SpatialPanFromPosition(const APos: TAudioVec3): Single; inline;
-var L: TAudioListener;
-begin
-  L := AudioListenerDefault;
-  Result := AudioComputePan(L, APos);
-end;
-
-function SpatialGainFromDistance(ADist, AMin, AMax, ARolloff: Single): Single; inline;
-var L: TAudioListener; S: TAudioSpatialParams;
-begin
-  if ADist <= AMin then Exit(1.0);
-  if ADist >= AMax then Exit(0);
-  L := AudioListenerDefault;
-  S := AudioSpatialParamsDefault;
-  S.Position := AudioVec3Create(ADist, 0, 0);
-  S.MinDistance := AMin;
-  S.MaxDistance := AMax;
-  S.Rolloff := ARolloff;
-  Result := AudioComputeAttenuation(L, S);
-end;
-
-function SpatialApply(const ABuffer: TAudioBuffer; const AParams: TSpatialParams): TAudioBuffer; inline;
-var L: TAudioListener; Gain, Pan, Doppler: Single; I: Integer;
-begin
-  L := AudioListenerDefault;
-  AudioSpatialize(L, AParams, Gain, Pan, Doppler);
-  Result := ABuffer;
-  if Length(Result.Data) > 0 then
-    for I := 0 to (Length(Result.Data) div 4) - 1 do
-      PSingle(@Result.Data[I*4])^ := PSingle(@Result.Data[I*4])^ * Gain;
 end;
 
 end.

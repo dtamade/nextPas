@@ -5,42 +5,74 @@ unit nextpas.core.audio.codec.flac;
 interface
 
 uses
-  nextpas.core.audio.codec.flac.base,
-  nextpas.core.audio.codec.flac.intf,
-  nextpas.core.audio.codec.flac.impl,
   nextpas.core.base,
+  nextpas.core.io.intf,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.codec.intf;
 
-type
-  IFlacDecoder = nextpas.core.audio.codec.flac.intf.IFlacDecoder;
-
-const
-  CFlacProbeLimit = nextpas.core.audio.codec.flac.base.CFlacProbeLimit;
-
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
-function CreateFlacDecoder: IAudioDecoder; inline;
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
+function CreateFlacDecoder: IAudioDecoder;
 
 implementation
 
 uses
-  nextpas.core.audio.codec.registry;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.codec.flac.decoder;
 
-// Probe≤4KB guard: 4096 — facade inline forwarding to impl (zero-alloc)
+type
+  TFlacDecoder = class(TInterfacedObject, IAudioDecoder)
+  private
+    FTags: TAudioTags;
+  public
+    function Probe(const APrefix: TBytes): TAudioProbeResult;
+    function DecodeWhole(const AStream: IStream): TAudioBuffer;
+    function OpenStreaming(const AStream: IStream): IAudioSource;
+    function Tags: TAudioTags;
+  end;
 
-function FlacProbe(const APrefix: TBytes): TAudioProbeResult; inline;
+function FlacProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  Result := nextpas.core.audio.codec.flac.impl.FlacProbe(APrefix);
+  Result := FlacProbeBytes(APrefix);
 end;
 
-function CreateFlacDecoder: IAudioDecoder; inline;
+function TFlacDecoder.Probe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  Result := nextpas.core.audio.codec.flac.impl.CreateFlacDecoder;
+  if Length(APrefix) > 4096 then
+    Result := FlacProbeBytes(Copy(APrefix, 0, 4096))
+  else
+    Result := FlacProbeBytes(APrefix);
 end;
 
-initialization
-  // thin facade auto-registration: registry remains thin (no hard uses impl), impl registers via facade initialization (plugin)
-  AudioRegisterDecoder(@CreateFlacDecoder);
+function TFlacDecoder.DecodeWhole(const AStream: IStream): TAudioBuffer;
+var LCursor: IByteCursor;
+begin
+  if AStream = nil then
+    raise EAudioDecodeError.Create('flac DecodeWhole: nil stream');
+  LCursor := nil;
+  Result := FlacDecodeWholeViaCursor(LCursor, AStream);
+  FTags := Default(TAudioTags);
+end;
+
+function TFlacDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
+var LBuf: TAudioBuffer;
+begin
+  LBuf := DecodeWhole(AStream);
+  Result := nil;
+  // minimal streaming via buffer source will be provided by registry fallback - return nil for now and let registry use DecodeWhole path
+  // create simple memory source
+  Result := nil;
+  raise EAudioDecodeError.Create('flac OpenStreaming: not implemented - use DecodeWhole');
+end;
+
+function TFlacDecoder.Tags: TAudioTags;
+begin
+  Result := FTags;
+end;
+
+function CreateFlacDecoder: IAudioDecoder;
+begin
+  Result := TFlacDecoder.Create;
+end;
 
 end.

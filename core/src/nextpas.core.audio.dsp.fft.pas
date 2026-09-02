@@ -21,34 +21,23 @@ function IsPowerOfTwo(N: Integer): Boolean; inline;
 
 implementation
 
-uses
-  nextpas.core.simd, // reused dispatch for bulk zero/fill (no new dep)
-  nextpas.core.sync.mutex;
+uses nextpas.core.simd; // reused dispatch for bulk zero/fill (no new dep)
 
 type
   THannCache = record N: Integer; Data: TSingleArray; end;
 
 var
   GHannCache: array[0..7] of THannCache;
-  GHannLock: TRecursiveMutex;
+  GHannLock: TRTLCriticalSection;
   GHannInit: Boolean = False;
 
 procedure EnsureHannInit; inline;
 begin
   if not GHannInit then
   begin
-    GHannLock := TRecursiveMutex.Create;
+    InitCriticalSection(GHannLock);
     GHannInit := True;
   end;
-end;
-
-function TryGetHannNoLock(N: Integer): PSingle; inline;
-var I: Integer;
-begin
-  // lock-free fast read: peek cache without lock for realtime zero-lock hit path
-  for I := 0 to High(GHannCache) do
-    if GHannCache[I].N = N then Exit(PSingle(@GHannCache[I].Data[0]));
-  Result := nil;
 end;
 
 function GetHannTable(N: Integer): PSingle;
@@ -58,10 +47,7 @@ var
 begin
   if N <= 1 then Exit(nil);
   EnsureHannInit;
-  // double-checked: lock-free peek first, only miss acquires GHannLock, re-check under lock
-  Result := TryGetHannNoLock(N);
-  if Result <> nil then Exit;
-  GHannLock.Acquire;
+  EnterCriticalSection(GHannLock);
   try
     for I := 0 to High(GHannCache) do
       if GHannCache[I].N = N then Exit(PSingle(@GHannCache[I].Data[0]));
@@ -82,7 +68,7 @@ begin
     GHannCache[Slot].N := N;
     Result := PSingle(@GHannCache[Slot].Data[0]);
   finally
-    GHannLock.Release;
+    LeaveCriticalSection(GHannLock);
   end;
 end;
 
@@ -95,16 +81,12 @@ function WindowHann(N, I: Integer): Single; inline;
 var
   LAng: Double;
   P: PSingle;
-  Idx: Integer;
 begin
   if N <= 1 then Exit(1.0);
   if (I < 0) or (I >= N) then Exit(0.0);
   // Fast LUT path for repeated windowing of same N
-  // hot path: lock-free fast read — peek GHannCache without acquiring GHannLock; only cache miss takes GHannLock (double-checked) via GetHannTable
   if (N >= 16) and (N <= 65536) then
   begin
-    for Idx := 0 to High(GHannCache) do
-      if GHannCache[Idx].N = N then Exit(PSingle(@GHannCache[Idx].Data[0])[I]);
     P := GetHannTable(N);
     if P <> nil then Exit(P[I]);
   end;
@@ -306,6 +288,6 @@ initialization
   EnsureHannInit;
 
 finalization
-  if GHannInit and Assigned(GHannLock) then GHannLock.Free;
+  if GHannInit then DoneCriticalsection(GHannLock);
 
 end.

@@ -13,7 +13,6 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.cursor,
   nextpas.core.zip.base;
 
 function LE16At(const AData: TBytes; AOff: SizeUInt): Word; inline;
@@ -28,13 +27,7 @@ function DosMinUnixSec: Int64; inline;
 function DosMaxUnixSec: Int64; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 
-procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
-procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
-
-procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
-
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
-procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
@@ -88,42 +81,9 @@ begin
   Result := nextpas.core.zip.base.DosMinUnixSec;
 end;
 
-function DosMaxUnixSec: Int64; inline;
-begin
-  Result := nextpas.core.zip.base.DosMaxUnixSec;
-end;
-
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64; inline;
 begin
   Result := nextpas.core.zip.base.UnixFromDosDateTime(ADosDate, ADosTime);
-end;
-
-procedure GuardCursorRange(const AC: IByteCursor; APos, ALen: Int64; const AWhat: string);
-begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-procedure GuardRange(ASize: Int64; APos, ALen: Int64; const AWhat: string);
-begin
-  if (APos < 0) or (ALen < 0) or (APos + ALen > ASize) then
-    raise EParseError.Create('zip: truncated ' + AWhat);
-end;
-
-procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word);
-begin
-  if AC.ReadU32LE <> C_ZIP_LOCAL_SIG then
-    raise EParseError.Create('zip: bad local header signature');
-  AC.ReadU16LE;                    { version needed }
-  AC.ReadU16LE;                    { flags }
-  AC.ReadU16LE;                    { method }
-  AC.ReadU16LE;                    { DOS time }
-  AC.ReadU16LE;                    { DOS date }
-  AC.ReadU32LE;                    { local crc }
-  AC.ReadU32LE;                    { local compressed size }
-  AC.ReadU32LE;                    { local uncompressed size }
-  ANameLen := AC.ReadU16LE;
-  AExtraLen := AC.ReadU16LE;
 end;
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
@@ -133,13 +93,6 @@ begin
       'zip: legacy ZipCrypto encryption not supported: ' + AE.Name);
   if not IsSafeZipEntryName(AE.Name) then
     raise EParseError.Create('zip: refusing unsafe entry name: ' + AE.Name);
-end;
-
-procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
-begin
-  if AE.IsEncrypted and (Length(APassword) = 0) then
-    raise EInvalidOperationError.Create(
-      'zip: entry is encrypted, no password configured: ' + AE.Name);
 end;
 
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;

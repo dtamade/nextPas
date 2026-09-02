@@ -575,12 +575,7 @@ begin
         if platform_file_lstat(@LBuf[0], LSt) = 0 then
         begin
           if LSt.FileType = ftSymlink then
-          begin
-            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
-              Exit(0)
-            else
-              Exit(PLATFORM_ERR_ENOTDIR);
-          end;
+            Exit(PLATFORM_ERR_ENOTDIR);
           if LSt.FileType = ftDirectory then
             Exit(0);
           Exit(PLATFORM_ERR_ENOTDIR);
@@ -592,8 +587,7 @@ begin
         begin
           if platform_file_lstat(@LBuf[0], LSt) = 0 then
             if LSt.FileType = ftSymlink then
-              if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
-                Exit(PLATFORM_ERR_ENOTDIR);
+              Exit(PLATFORM_ERR_ENOTDIR);
         end;
         if LR <> 0 then Exit(LR);
       end
@@ -604,16 +598,9 @@ begin
         begin
           if LSt.FileType = ftSymlink then
           begin
-            if (platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory) then
-            begin
-              LBuf[I] := '/';
-            end
-            else
-            begin
-              LBuf[I] := '/';
-              Exit(PLATFORM_ERR_ENOTDIR);
-            end;
-          end else
+            LBuf[I] := '/';
+            Exit(PLATFORM_ERR_ENOTDIR);
+          end;
           if LSt.FileType <> ftDirectory then
           begin
             LBuf[I] := '/';
@@ -632,11 +619,10 @@ begin
           end;
           if platform_file_lstat(@LBuf[0], LSt) = 0 then
             if LSt.FileType = ftSymlink then
-              if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
-              begin
-                LBuf[I] := '/';
-                Exit(PLATFORM_ERR_ENOTDIR);
-              end;
+            begin
+              LBuf[I] := '/';
+              Exit(PLATFORM_ERR_ENOTDIR);
+            end;
         end;
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';

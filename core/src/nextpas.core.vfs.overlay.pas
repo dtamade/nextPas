@@ -22,31 +22,21 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.collections.algorithms,
-  nextpas.core.collections.hashmap,
-  nextpas.core.sync;
-
-type
-  TOverlayIndex = specialize THashMap<string, Integer>;
+  nextpas.core.collections.algorithms;
 
 type
   TOverlayVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
   private
     FList: array of IVfs;
-    FIndex: TObject; { lazy hash 索引：path->winning层(-1=miss)；SpinLock守并发，inline热路径，零拷贝 SpanCompare 单源 }
-    FIndexLock: ISpinLock;
-    function TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
-    procedure CacheResult(const APath: string; const AIdx: Integer); inline;
-    function FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
     function FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
+    function FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
   public
     constructor Create(const AList: array of IVfs);
-    destructor Destroy; override;
     function Exists(const APath: string): Boolean;
     function Stat(const APath: string): TStatInfo;
     function List(const ADirPath: string): TEntryArray;
     function OpenRead(const APath: string): IStream;
-    function CaseSensitive: Boolean; inline;
+    function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
     function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
@@ -71,105 +61,49 @@ begin
       raise EVfsError.CreateCtx('overlay', '', 'overlay fs must not be nil');
     FList[I] := AList[I];
   end;
-  FIndex := TOverlayIndex.Create(16);
-  FIndexLock := SpinLock;
 end;
 
-destructor TOverlayVfs.Destroy;
-begin
-  if FIndex <> nil then
-  begin
-    TOverlayIndex(FIndex).Free;
-    FIndex := nil;
-  end;
-  FIndexLock := nil;
-  SetLength(FList, 0);
-  inherited Destroy;
-end;
-
-function TOverlayVfs.TryGetCached(const APath: string; out AIdx: Integer): Boolean; inline;
-begin
-  AIdx := -2;
-  Result := False;
-  if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.Acquire;
-  try
-    Result := TOverlayIndex(FIndex).TryGetValue(APath, AIdx);
-  finally
-    FIndexLock.Release;
-  end;
-end;
-
-procedure TOverlayVfs.CacheResult(const APath: string; const AIdx: Integer); inline;
-begin
-  if (FIndex = nil) or (FIndexLock = nil) then Exit;
-  FIndexLock.Acquire;
-  try
-    TOverlayIndex(FIndex).AddOrAssign(APath, AIdx);
-  finally
-    FIndexLock.Release;
-  end;
-end;
-
-{ 索引加速首命中：hash O(1) 首命中避 m 次二分；miss/layer负缓存防穿透；
-  命中层单次 Stat 直达（零二次二分），SpinLock零分配，inline热路径，bytes.ops零拷贝单源 }
-function TOverlayVfs.FindFirstStat(const APath: string; out AInfo: TStatInfo; out AFs: IVfs): Boolean; inline;
+function TOverlayVfs.FindFsForPath(const APath: string; out ARemain: string; out AFs: IVfs): Boolean; inline;
 var
-  I, LCached: Integer;
+  I: Integer;
 begin
-  if TryGetCached(APath, LCached) then
-  begin
-    if LCached = -1 then begin AFs := nil; Exit(False); end;
-    if (LCached >= 0) and (LCached <= High(FList)) then
-    begin
-      try
-        AInfo := FList[LCached].Stat(APath);
-        AFs := FList[LCached];
-        Exit(True);
-      except
-        on E: EVfsNotFound do
-        begin
-          CacheResult(APath, -1);
-          AFs := nil;
-          Exit(False);
-        end;
-        on E: EVfsInvalidPath do raise;
-      end;
-    end;
-  end;
+  ARemain := APath;
   for I := 0 to High(FList) do
-  begin
-    try
-      AInfo := FList[I].Stat(APath);
+    if FList[I].Exists(APath) then
+    begin
       AFs := FList[I];
-      CacheResult(APath, I);
       Exit(True);
-    except
-      on E: EVfsNotFound do Continue;
-      on E: EVfsInvalidPath do raise;
     end;
-  end;
-  CacheResult(APath, -1);
   AFs := nil;
   Result := False;
 end;
 
 function TOverlayVfs.FindStat(const APath: string; out AInfo: TStatInfo): Boolean; inline;
 var
-  LFs: IVfs;
+  I: Integer;
 begin
-  Result := FindFirstStat(APath, AInfo, LFs);
+  for I := 0 to High(FList) do
+  begin
+    try
+      AInfo := FList[I].Stat(APath);
+      Exit(True);
+    except
+      on E: EVfsNotFound do Continue;
+      on E: EVfsInvalidPath do raise;
+    end;
+  end;
+  Result := False;
 end;
 
 function TOverlayVfs.Exists(const APath: string): Boolean; inline;
 var
-  LInfo: TStatInfo;
-  LFs: IVfs;
+  I: Integer;
 begin
   if not VfsValidPath(APath, True) then Exit(False);
   if VfsIsRoot(APath) then Exit(True);
-  { 单次 Stat 探测替代 Exists 循环，避免层数多时重复二分；inline }
-  Result := FindFirstStat(APath, LInfo, LFs);
+  for I := 0 to High(FList) do
+    if FList[I].Exists(APath) then Exit(True);
+  Result := False;
 end;
 
 function TOverlayVfs.Stat(const APath: string): TStatInfo;
@@ -207,15 +141,9 @@ begin
     Result := SizeInt(A.Prio) - SizeInt(B.Prio);
 end;
 
-{ Name-only 去重比较：单源 Unique（VfsNameCompare），保留首层优先级 }
-function CompareOverlayTempNameOnly(const A, B: TOverlayTemp; Data: Pointer): SizeInt; inline;
-begin
-  Result := VfsNameCompare(A.Entry.Name, B.Entry.Name);
-end;
-
 function TOverlayVfs.List(const ADirPath: string): TEntryArray;
 var
-  I, J, TempN: Integer;
+  I, J, OutN, TempN: Integer;
   Cur: TEntryArray;
   LStat: TStatInfo;
   Temp: array of TOverlayTemp;
@@ -247,90 +175,107 @@ begin
   if TempN = 0 then Exit(nil);
   SetLength(Temp, TempN);
   specialize Sort<TOverlayTemp>(Temp, @CompareOverlayTemp, nil);
-  TempN := specialize Unique<TOverlayTemp>(Temp, @CompareOverlayTempNameOnly, nil);
-  SetLength(Temp, TempN);
   SetLength(Result, TempN);
+  OutN := 0;
   for I := 0 to TempN - 1 do
-    Result[I] := Temp[I].Entry;
+  begin
+    if (OutN > 0) and (Result[OutN - 1].Name = Temp[I].Entry.Name) then Continue;
+    Result[OutN] := Temp[I].Entry;
+    Inc(OutN);
+  end;
+  SetLength(Result, OutN);
 end;
 
 function TOverlayVfs.OpenRead(const APath: string): IStream;
 var
-  LInfo: TStatInfo;
-  LFs: IVfs;
+  I: Integer;
+  FirstIsDir: Boolean;
 begin
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('open', APath, 'invalid virtual path');
   if VfsIsRoot(APath) then
     raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
-  { 单次 Stat 首命中替代 Exists+Stat 双探测；IsDir 即抛 IsADirectory，否则直透 OpenRead，inline 热路径，零重复二分 }
-  if FindFirstStat(APath, LInfo, LFs) then
+  FirstIsDir := False;
+  for I := 0 to High(FList) do
   begin
-    if LInfo.Info.IsDir then
-      raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
-    Exit(LFs.OpenRead(APath));
+    if FList[I].Exists(APath) then
+      Exit(FList[I].OpenRead(APath));
+    // 若某层认定为目录，记忆
+    try
+      if FList[I].Stat(APath).Info.IsDir then FirstIsDir := True;
+    except
+    end;
   end;
+  if FirstIsDir then
+    raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
   raise EVfsNotFound.CreateCtx('open', APath, 'not found');
 end;
 
-{ 同根优先级：CaseSensitive 取首层优先，与 Exists/Stat/OpenRead 首命中一致；
-  异构时不再保守退 True，避免与 List 字节序去重（VfsNameCompare via bytes.ops SpanCompare 零拷贝）产生大小写同名异壳歧义 }
-function TOverlayVfs.CaseSensitive: Boolean; inline;
+function TOverlayVfs.CaseSensitive: Boolean;
+var
+  I: Integer;
+  First: Boolean;
 begin
   if Length(FList) = 0 then Exit(True);
-  Result := FList[0].CaseSensitive;
+  First := FList[0].CaseSensitive;
+  for I := 1 to High(FList) do
+    if FList[I].CaseSensitive <> First then Exit(True);
+  Result := First;
 end;
 
 function TOverlayVfs.TryGetETag(const APath: string; out AETag: string): Boolean;
 var
-  LInfo: TStatInfo;
-  LFs: IVfs;
+  I: Integer;
   Intf: IVfsETag;
 begin
   AETag := '';
-  if VfsIsRoot(APath) then Exit(False);
-  if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
-  if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsETag, Intf) then
-    Exit(Intf.TryGetETag(APath, AETag));
+  for I := 0 to High(FList) do
+    if FList[I].Exists(APath) then
+    begin
+      if Supports(FList[I], IVfsETag, Intf) then
+        Exit(Intf.TryGetETag(APath, AETag));
+      Exit(False);
+    end;
   Result := False;
 end;
 
 function TOverlayVfs.TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
 var
-  LInfo: TStatInfo;
-  LFs: IVfs;
+  I: Integer;
   Intf: IVfsETag;
 begin
   ALastModified := '';
-  if VfsIsRoot(APath) then Exit(False);
-  if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
-  if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsETag, Intf) then
-    Exit(Intf.TryGetLastModified(APath, ALastModified));
+  for I := 0 to High(FList) do
+    if FList[I].Exists(APath) then
+    begin
+      if Supports(FList[I], IVfsETag, Intf) then
+        Exit(Intf.TryGetLastModified(APath, ALastModified));
+      Exit(False);
+    end;
   Result := False;
 end;
 
 function TOverlayVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
 var
-  LInfo: TStatInfo;
-  LFs: IVfs;
+  I: Integer;
   Intf: IVfsServeMeta;
   ETagIntf: IVfsETag;
 begin
   AETag := '';
   ALastModified := '';
-  if VfsIsRoot(APath) then Exit(False);
-  if not FindFirstStat(APath, LInfo, LFs) then Exit(False);
-  if LInfo.Info.IsDir then Exit(False);
-  if Supports(LFs, IVfsServeMeta, Intf) then
-    Exit(Intf.TryGetServeMeta(APath, AETag, ALastModified));
-  if Supports(LFs, IVfsETag, ETagIntf) then
-  begin
-    Result := ETagIntf.TryGetETag(APath, AETag);
-    if Result then ETagIntf.TryGetLastModified(APath, ALastModified);
-    Exit;
-  end;
+  for I := 0 to High(FList) do
+    if FList[I].Exists(APath) then
+    begin
+      if Supports(FList[I], IVfsServeMeta, Intf) then
+        Exit(Intf.TryGetServeMeta(APath, AETag, ALastModified));
+      if Supports(FList[I], IVfsETag, ETagIntf) then
+      begin
+        Result := ETagIntf.TryGetETag(APath, AETag);
+        if Result then ETagIntf.TryGetLastModified(APath, ALastModified);
+        Exit;
+      end;
+      Exit(False);
+    end;
   Result := False;
 end;
 

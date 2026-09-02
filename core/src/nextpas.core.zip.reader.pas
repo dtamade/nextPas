@@ -311,7 +311,8 @@ end;
 procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
   const AWhat: string);
 begin
-  nextpas.core.zip.common.GuardCursorRange(AC, APos, ALen, AWhat);
+  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(AC.Length)) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
 { 解析单个 central 条目（游标须已对齐签名处，签名由调用方校验并消费）：
@@ -371,11 +372,35 @@ begin
   end;
 
   { 加密条目：wire 方法 99，真实压缩方法与强度取自 0x9901 extra。
-    AE-2 头部 CRC 恒为 0（写端契约）；AE-1 保留真实 CRC 走常规校验 — S85 单源 via aes.Resolve }
+    AE-2 头部 CRC 恒为 0（写端契约）；AE-1 保留真实 CRC 走常规校验 }
   AE.IsEncrypted := (AFlags and C_ZIP_FLAG_ENCRYPTED) <> 0;
-  ResolveZipMethodWithAes(LMethodCode, AE.IsEncrypted, LHasAes,
-    LAesVersion, LAesVendor, LAesRealMethod, LAesStrength, AE.Name,
-    AE.Method, AE.MethodCode, AE.AesVersion, AE.AesStrengthCode);
+  AE.AesVersion := 0;
+  AE.AesStrengthCode := 0;
+  if LMethodCode = C_ZIP_METHOD_WINZIP_AES then
+  begin
+    if not AE.IsEncrypted then
+      raise EParseError.Create(
+        'zip: method 99 without encryption flag: ' + AE.Name);
+    if not LHasAes then
+      raise EParseError.Create(
+        'zip: missing WinZip AES extra field: ' + AE.Name);
+    if (LAesVersion <> C_WINZIP_AES_VERSION_1) and
+       (LAesVersion <> C_WINZIP_AES_VERSION_2) then
+      raise ENotSupportedError.CreateFmt(
+        'zip: unsupported WinZip AES version %d: %s',
+        [LAesVersion, AE.Name]);
+    if (LAesStrength < 1) or (LAesStrength > 3) then
+      raise EParseError.Create('zip: invalid WinZip AES strength code');
+    AE.AesVersion := LAesVersion;
+    AE.AesStrengthCode := LAesStrength;
+    LMethodCode := LAesRealMethod;
+  end;
+
+  if LMethodCode = C_ZIP_METHOD_DEFLATE then
+    AE.Method := zmDeflate
+  else
+    AE.Method := zmStore;
+  AE.MethodCode := LMethodCode;
   AE.Crc32 := LCrc;
   AE.CompressedSize := LCSize;
   AE.UncompressedSize := LUSize;
@@ -402,11 +427,13 @@ end;
 function NewZipReaderWithOptions(const AData: TBytes;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LOpt: TZipReadOptions;
+  LMax: SizeUInt;
 begin
-  LOpt := NormalizeZipReadOptions(AOptions);
-  Result := TZipReaderImpl.Create(AData, LOpt.MaxOutputSize,
-    LOpt.MaxTotalOutputSize, LOpt.Password);
+  LMax := AOptions.MaxOutputSize;
+  if LMax = 0 then
+    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
+  Result := TZipReaderImpl.Create(AData, LMax, AOptions.MaxTotalOutputSize,
+    AOptions.Password);
 end;
 
 constructor TZipReaderImpl.Create(const AData: TBytes; AMaxOutput: SizeUInt;
@@ -446,7 +473,8 @@ end;
 { 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
 procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  nextpas.core.zip.common.GuardCursorRange(FC, APos, ALen, AWhat);
+  if (APos < 0) or (ALen < 0) or (APos + ALen > Int64(FC.Length)) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
 procedure TZipReaderImpl.ParseCentralDirectory;
@@ -585,7 +613,18 @@ begin
   LLho := Int64(LE.LocalHeaderOffset);
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   FC.Seek(SizeUInt(LLho));
-  ParseLocalHeader(FC, LNameLen, LExtraLen);
+  if FC.ReadU32LE <> C_ZIP_LOCAL_SIG then
+    raise EParseError.Create('zip: bad local header signature');
+  FC.ReadU16LE;                    { version needed }
+  FC.ReadU16LE;                    { flags }
+  FC.ReadU16LE;                    { method }
+  FC.ReadU16LE;                    { DOS time }
+  FC.ReadU16LE;                    { DOS date }
+  FC.ReadU32LE;                    { local crc }
+  FC.ReadU32LE;                    { local compressed size（描述符时为占位） }
+  FC.ReadU32LE;                    { local uncompressed size（同上） }
+  LNameLen := FC.ReadU16LE;
+  LExtraLen := FC.ReadU16LE;
   Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
   NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
 end;
@@ -648,7 +687,10 @@ var
   LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryPassword(LE, FPassword);
+  { 缺口令在进入解封层前拒绝：避免异常穿越持有接口实参的调用帧 }
+  if LE.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + LE.Name);
   LOfs := LocatePayload(AIndex);
   LSlice := TSliceReader.Create(FData, SizeUInt(LOfs),
     SizeUInt(LE.CompressedSize));
@@ -774,7 +816,8 @@ end;
 { 区间 [APos, APos+ALen) 必须落在源长度内，否则结构视为截断损坏 }
 procedure TZipSourceReader.NeedRange(APos, ALen: Int64; const AWhat: string);
 begin
-  nextpas.core.zip.common.GuardRange(FSize, APos, ALen, AWhat);
+  if (APos < 0) or (ALen < 0) or (APos + ALen > FSize) then
+    raise EParseError.Create('zip: truncated ' + AWhat);
 end;
 
 procedure TZipSourceReader.ParseCentralDirectory;
@@ -927,7 +970,18 @@ begin
   NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
   Fetch(LLho, C_LOCAL_HEADER_LEN, LHeader, 'local header');
   LC := NewByteCursor(LHeader);
-  ParseLocalHeader(LC, LNameLen, LExtraLen);
+  if LC.ReadU32LE <> C_ZIP_LOCAL_SIG then
+    raise EParseError.Create('zip: bad local header signature');
+  LC.ReadU16LE;                    { version needed }
+  LC.ReadU16LE;                    { flags }
+  LC.ReadU16LE;                    { method }
+  LC.ReadU16LE;                    { DOS time }
+  LC.ReadU16LE;                    { DOS date }
+  LC.ReadU32LE;                    { local crc }
+  LC.ReadU32LE;                    { local compressed size（描述符时为占位） }
+  LC.ReadU32LE;                    { local uncompressed size（同上） }
+  LNameLen := LC.ReadU16LE;
+  LExtraLen := LC.ReadU16LE;
   Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
   NeedRange(Result, Int64(LE.CompressedSize), 'entry payload');
 end;
@@ -991,7 +1045,10 @@ var
   LInner: IReader;
 begin
   LE := FEntries[CheckIndex(AIndex)];
-  GuardEntryPassword(LE, FPassword);
+  { 缺口令在进入解封层前拒绝：避免异常穿越持有接口实参的调用帧 }
+  if LE.IsEncrypted and (Length(FPassword) = 0) then
+    raise EInvalidOperationError.Create(
+      'zip: entry is encrypted, no password configured: ' + LE.Name);
   LOfs := LocatePayload(AIndex);
   LSpan := TSourceSpanReader.Create(FAt, LOfs, SizeUInt(LE.CompressedSize));
   { 加密条目：解封装层夹在区间读与解压之间（构造即强校验口令校验值） }
@@ -1063,11 +1120,13 @@ end;
 function NewZipReaderFromWithOptions(const ASource: IStream;
   const AOptions: nextpas.core.zip.base.TZipReadOptions): IZipReader;
 var
-  LOpt: TZipReadOptions;
+  LMax: SizeUInt;
 begin
-  LOpt := NormalizeZipReadOptions(AOptions);
-  Result := TZipSourceReader.Create(ASource, LOpt.MaxOutputSize,
-    LOpt.MaxTotalOutputSize, LOpt.Password);
+  LMax := AOptions.MaxOutputSize;
+  if LMax = 0 then
+    LMax := C_ZIP_DEFAULT_MAX_OUTPUT;
+  Result := TZipSourceReader.Create(ASource, LMax,
+    AOptions.MaxTotalOutputSize, AOptions.Password);
 end;
 
 end.

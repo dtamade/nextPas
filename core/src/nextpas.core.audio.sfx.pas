@@ -5,6 +5,7 @@ unit nextpas.core.audio.sfx;
 interface
 
 uses
+  Classes,
   nextpas.core.base,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -261,9 +262,7 @@ begin
     Buf.Format.SampleFormat := sfF32;
   end;
   if (Buf.Format.SampleRate <> FFormat.SampleRate) or (Buf.Format.Channels <> FFormat.Channels) then
-    // resample 分支收敛：当前不支持自动重采样，显式抛 EAudioGraphError（非 EAudioDeviceError 跨域借用）
-    // 后续可抽 resample 分支：LoadFromFile 前由调用方经 AudioResampleLinear/PcmConvert 预转换，或在此补 EAudioCodecError 分支
-    raise EAudioGraphError.Create('LoadFromFile: file format mismatch graph (resample not implemented — convert SampleRate/Channels to graph format before Load)');
+    raise EAudioGraphError.Create('LoadFromFile: file format mismatch graph (resample todo)');
   Result := Load(Buf);
 end;
 

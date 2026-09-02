@@ -26,8 +26,8 @@ function CreateOsVfs(const ARoot: string): IVfs;
 
 implementation
 
-{ 根目录子项名 = 子项名本身；其余 = 目录虚拟路径 + '/' + 名; inline 熱路徑 }
-function FullVirtualName(const ADirPath, AName: string): string; inline;
+{ 根目录子项名 = 子项名本身；其余 = 目录虚拟路径 + '/' + 名 }
+function FullVirtualName(const ADirPath, AName: string): string;
 begin
   if VfsIsRoot(ADirPath) then
     Result := AName
@@ -62,8 +62,8 @@ type
   TOsVfs = class(TInterfacedObject, IVfs)
   private
     FRoot: string;
-    function FullPath(const APath: string): string; inline;
-    function MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo; inline;
+    function FullPath(const APath: string): string;
+    function MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo;
   public
     constructor Create(const ARoot: string);
     function Exists(const APath: string): Boolean;
@@ -179,14 +179,14 @@ begin
   FRoot := nextpas.core.fs.PathTrimSep(ARoot);
 end;
 
-function TOsVfs.FullPath(const APath: string): string; inline;
+function TOsVfs.FullPath(const APath: string): string;
 begin
   if VfsIsRoot(APath) then
     Exit(FRoot);
   Result := nextpas.core.fs.PathJoin2(FRoot, APath);
 end;
 
-function TOsVfs.MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo; inline;
+function TOsVfs.MapInfo(const AName: string; const AFi: TFileInfo): TEntryInfo;
 begin
   Result.Name := AName;
   Result.Size := AFi.Size;
@@ -257,9 +257,6 @@ begin
         'readdir failed: ' + E.Message);
   end;
 
-  { 性能：ReadDir 已在 owner 侧富化 Size/ModTime，List 零额外 Stat。
-    旧实现 N+1 syscall（ReadDir + N*Stat(PathJoin)）线性放大；现 1 次 ReadDir + 直接映射，
-    零 PathJoin 分配，inline 展开，无资源泄漏（IDirIterator.Close 由 FsReadDir 保障）。 }
   Result := nil;
   SetLength(Result, SizeUInt(Length(Entries)));
   OutN := 0;
@@ -268,10 +265,14 @@ begin
     { symlink 跳过：与 dirsource/memtree 模型一致——视图里没有链接条目 }
     if Entries[I].FileType = ftSymlink then
       Continue;
-    Result[OutN].Name := FullVirtualName(ADirPath, Entries[I].Name);
-    Result[OutN].Size := Entries[I].Size;
-    Result[OutN].ModTime := Entries[I].ModTime div 1000000000;
-    Result[OutN].IsDir := Entries[I].IsDir;
+    try
+      FI := nextpas.core.fs.Stat(nextpas.core.fs.PathJoin2(FullPath(ADirPath), Entries[I].Name));
+    except
+      on E: Exception do
+        raise EVfsError.CreateCtx('list', ADirPath,
+          'stat failed for child ' + Entries[I].Name + ': ' + E.Message);
+    end;
+    Result[OutN] := MapInfo(FullVirtualName(ADirPath, Entries[I].Name), FI);
     Inc(OutN);
   end;
   SetLength(Result, OutN);

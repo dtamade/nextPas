@@ -103,7 +103,6 @@ function GraphGetMessage(const AClient: IHttpClient; const ABaseUrl,
 implementation
 
 uses
-  nextpas.core.json.value,
   nextpas.core.encoding.url,
   nextpas.core.http.client.helpers,
   nextpas.core.json;
