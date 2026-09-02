@@ -238,12 +238,13 @@ var
 begin
   S := ReadText('src/nextpas.core.tar.reader.pas');
   Low := LowerCase(S);
-  // pax g 全局持久需 guard 作用域，无 guard 单次消费自动清理防跨条目/跨镜像污染
+  // pax g 全局持久需 guard 作用域，无 guard 单次消费自动清理防跨条目/跨镜像污染，简易链表无几何扩容
   Check(Pos('acquireglobalpaxguard', Low) > 0, 'reader has AcquireGlobalPaxGuard RAII');
   Check(Pos('clearglobalpax', Low) > 0, 'reader has ClearGlobalPax');
   Check(Pos('fglobalpaxpath', Low) > 0, 'reader has FGlobalPaxPath guard state');
-  Check(Pos('length(fguards) = 0', Low) > 0, 'reader auto-clears global when no guard (single-use)');
+  Check((Pos('fguardcount = 0', Low) > 0) or (Pos('hasguards', Low) > 0), 'reader auto-clears global when no guard (single-use)');
   Check(Pos('fglobalpaxpath := ''''', Low) > 0, 'auto-clear assigns empty to prevent pollution');
+  Check(Pos('fguardhead', Low) > 0, 'reader uses simple linked list guard without array geometric');
 end;
 
 begin

@@ -3,8 +3,9 @@ unit nextpas.core.tar.builder;
  * @desc Tar 链式构造器：薄门面委托 TTarWriter + archive.fs 联邦单缝。
  *  需显式 Finish（两零块）；未 Finish 析构 fail-closed（IsFinished 单源）。
  *  联邦/容量/性能/稳定性详见 CONTRACT §1.4/§3，源码仅保留单缝与单源证据。
- *  收敛：流式 AddEntryFromReader 已收敛至实现层 ITarStreamBuilder（L2→L1 单向，
- *  intf 保持纯 base←intf），复用 bytes.ops 单源 inline 零拷贝 + 64K pooled FIOBuf。
+ *  精简：单口 ITarBuilder 直达 AddEntryFromReader，零 QueryInterface 仪式，
+ *  链式 TarBuilder.Add(...).AddEntryFromReader(...).Finish；复用 bytes.ops
+ *  单源 inline 零拷贝 + 64K pooled FIOBuf 于 Finish 即释 + try..finally 必释。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -21,16 +22,6 @@ uses
 function TarBuilder: ITarBuilder; inline;
 function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
 
-type
-  {** @desc 流式扩展：实现层承接 L1 IReader，intf 保持纯数据最小依赖。 *}
-  ITarStreamBuilder = interface(ITarBuilder)
-    ['{B2C3D4E5-F6A7-8901-BCDE-222222222223}']
-    function AddEntryFromReader(const AHdr: TTarHeader; const AReader: IReader): ITarBuilder;
-  end;
-
-function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
-function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
-
 implementation
 
 uses
@@ -39,7 +30,7 @@ uses
   nextpas.core.log.intf;
 
 type
-  TTarBuilder = class(TInterfacedObject, ITarBuilder, ITarStreamBuilder)
+  TTarBuilder = class(TInterfacedObject, ITarBuilder)
   private
     FBuilder: IArchiveBuilder; // 联邦单源直写切片，bytes.builder 几何扩容单源 inline 零拷贝
     FWriter: TTarWriter; // 薄委托唯一写器，持有 Sink 单缝，IsFinished 单源
@@ -139,20 +130,6 @@ begin
   FWriter.Finish;
   // 零拷贝直写切片：复用 builder.ToBytes 单次分配+Move，消除 ArchiveSnapshotStream 二次 SetLength+Seek+Read 大块 Move
   Result := FBuilder.ToBytes;
-end;
-
-function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
-begin
-  // thin QI: zero-copy, inline, reuse existing TTarBuilder instance; non-stream consumers never QI; QueryInterface single source without SysUtils Supports
-  Result := nil;
-  if (ABuilder = nil) or (ABuilder.QueryInterface(ITarStreamBuilder, Result) <> 0) or (Result = nil) then
-    raise EInvalidOperationError.Create('tar: builder does not support streaming (unexpected)');
-end;
-
-function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
-begin
-  // zero-copy streaming via writer single source (64K pooled FIOBuf, bytes.ops Move), Finish 即释
-  Result := AsStreamBuilder(ABuilder).AddEntryFromReader(AHdr, AReader);
 end;
 
 function TarBuilder: ITarBuilder; inline;

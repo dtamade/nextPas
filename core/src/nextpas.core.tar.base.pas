@@ -134,12 +134,9 @@ const
   C_TAR_UNIX_IFLNK    = $A000; // S_IFLNK
   C_TAR_UNIX_PERM_MASK = $0FFF; // 低 12 位权限位
 
-  { builder 初始容量：64K（16×4K 页）对齐，几何扩容单源；小归档覆盖 ~60×(512 header+512 data) 无扩容，200×512B 仅需 2 次 2× 扩容 vs 旧 4K 的 6 次重分配；大归档必须用 TarBuilderWithCapacity 显式预估（TarBuilderCapacityFor 单点 4K 对齐），调优单点 }
+  { 初始容量：单源 64K }
   C_TAR_BUILDER_INITIAL_CAPACITY = 65536;
-
-  { IOBuf 容量策略：流式 AddEntryFromReader pooled 复用 FIOBuf 4K→64K，复用 bytes.ops.AlignUp4K 单源，与 TarBuilderCapacityFor 统一 AlignUp4K 单源，消除两处硬编码重复 }
   C_TAR_IOBUF_INIT = 4096;
-  C_TAR_IOBUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
 
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
@@ -221,12 +218,12 @@ end;
 
 function TarIOBufCapacityFor(const ASize: Int64): SizeUInt; inline;
 begin
-  // 容量策略 helper 单点：复用 bytes.ops.AlignUp4K 单源，统一 TarBuilderCapacityFor 的 4K 对齐阈值，DRY 收敛两分支重复；4K 初始省小文件 ~60K/2000 文件及 syscall，64K pooled 复用避免递增序列多次 SetLength 重分配（单次扩容摊销）
+  // 复用 bytes.ops.AlignUp4K 单源，与 TarBuilderCapacityFor 同阈值
   if ASize <= Int64(C_TAR_IOBUF_INIT) then
     Exit(C_TAR_IOBUF_INIT);
-  if ASize < Int64(C_TAR_IOBUF_SIZE) then
+  if ASize < Int64(C_TAR_BUILDER_INITIAL_CAPACITY) then
     Exit(AlignUp4K(SizeUInt(ASize)));
-  Result := C_TAR_IOBUF_SIZE;
+  Result := C_TAR_BUILDER_INITIAL_CAPACITY;
 end;
 
 end.

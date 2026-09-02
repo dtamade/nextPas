@@ -29,7 +29,6 @@ type
   TTarReader = nextpas.core.tar.reader.TTarReader;
   TTarWriter = nextpas.core.tar.writer.TTarWriter;
   ITarBuilder = nextpas.core.tar.intf.ITarBuilder;
-  ITarStreamBuilder = nextpas.core.tar.builder.ITarStreamBuilder;
 
 const
   tekRegular = nextpas.core.tar.base.tekRegular;
@@ -59,8 +58,6 @@ procedure TarExtractToDir(const AData: TBytes; const ADestDir: string); inline;
 function TarBuilder: ITarBuilder; inline;
 function TarBuilderWithCapacity(const AEstimatedTotal: SizeUInt): ITarBuilder; inline;
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
-function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
-function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
 
 implementation
 
@@ -132,16 +129,6 @@ end;
 function TarBuilderCapacityFor(const AEstimatedTotal: SizeUInt): SizeUInt; inline;
 begin
   Result := nextpas.core.tar.base.TarBuilderCapacityFor(AEstimatedTotal);
-end;
-
-function AsStreamBuilder(const ABuilder: ITarBuilder): ITarStreamBuilder; inline;
-begin
-  Result := nextpas.core.tar.builder.AsStreamBuilder(ABuilder);
-end;
-
-function TarBuilderAddFromReader(const ABuilder: ITarBuilder; const AHdr: TTarHeader; const AReader: IReader): ITarBuilder; inline;
-begin
-  Result := nextpas.core.tar.builder.TarBuilderAddFromReader(ABuilder, AHdr, AReader);
 end;
 
 end.

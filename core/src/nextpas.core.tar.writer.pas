@@ -20,6 +20,15 @@ type
     procedure WritePaddedPayload(const AData: TBytes);
     procedure EmitPaxHeader(const APayload: TBytes);
     procedure EmitEntry(const AHdr: TTarHeader; const AData: TBytes);
+    // WriteHeader 优雅拆分：单职责小函数，复用 bytes.ops 单源，薄路径 inline 零拷贝
+    function FindPrefixCut(const AName: string): SizeInt;
+    function NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
+    procedure ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
+    procedure EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
+    procedure FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
+    procedure FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
+    procedure FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
+    procedure FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
     procedure WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
   public
     constructor Create(const ADst: IWriter);
@@ -44,7 +53,7 @@ uses
   nextpas.core.log.intf;
 
 const
-  C_STREAM_BUF_SIZE = C_TAR_IOBUF_SIZE;
+  C_STREAM_BUF_SIZE = C_TAR_BUILDER_INITIAL_CAPACITY;
   C_STREAM_BUF_INIT = C_TAR_IOBUF_INIT;
 
 function KindToTypeFlag(AKind: TTarEntryKind): Byte;
@@ -158,80 +167,125 @@ begin
   WritePaddedPayload(APayload);
 end;
 
+function TTarWriter.FindPrefixCut(const AName: string): SizeInt;
+var
+  I: Integer;
+begin
+  // no inline: loop body (design-conventions), bytes.ops single source is caller via TarPutHeaderSlice zero-copy
+  Result := 0;
+  if Length(AName) <= C_TAR_LAYOUT.Name.Len then
+    Exit;
+  I := C_TAR_LAYOUT.Prefix.Len;
+  while (I >= 1) and (Result = 0) do
+  begin
+    if (I < Length(AName)) and (AName[I + 1] = '/') and (Length(AName) - I - 1 <= C_TAR_LAYOUT.Name.Len) then
+      Result := I;
+    Dec(I);
+  end;
+end;
+
+function TTarWriter.NeedsPaxHeader(const AName, ALinkName: string; ACutPos: SizeInt): Boolean; inline;
+begin
+  // inline: thin predicate, no alloc
+  Result := ((Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0)) or (Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len);
+end;
+
+procedure TTarWriter.ValidateAndCanonicalizeNames(var AName, ALinkName: string; AKind: TTarEntryKind);
+begin
+  // no inline: validation branches + exception paths, fail-closed
+  if (AKind = tekDirectory) and (AName <> '') and (AName[Length(AName)] <> '/') then
+    AName := AName + '/';
+  ValidateTarEntryName(AName);
+  if (ALinkName <> '') and (Pos(#0, ALinkName) > 0) then
+    raise EArgumentError.Create('tar: linkname contains NUL');
+end;
+
+procedure TTarWriter.EmitPaxIfNeeded(const AName, ALinkName: string; ACutPos: SizeInt);
+var
+  LBuilder: IBytesBuilder;
+  LPaxBytes: TBytes;
+begin
+  // out-of-line: builder alloc path
+  if not NeedsPaxHeader(AName, ALinkName, ACutPos) then
+    Exit;
+  LBuilder := CreateBytesBuilder(256);
+  if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
+    TarAppendPaxRecord(LBuilder, 'path', AName);
+  if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
+    TarAppendPaxRecord(LBuilder, 'linkpath', ALinkName);
+  LPaxBytes := LBuilder.ToBytes;
+  EmitPaxHeader(LPaxBytes);
+end;
+
+procedure TTarWriter.FillNameFields(ABlock: PByte; const AName: string; ACutPos: SizeInt); inline;
+begin
+  // bytes.ops single source, inline zero-copy slice
+  if (Length(AName) > C_TAR_LAYOUT.Name.Len) and (ACutPos = 0) then
+    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(AName)), SizeUInt(C_TAR_LAYOUT.Name.Len))
+  else if ACutPos <> 0 then
+  begin
+    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, PByte(PAnsiChar(AName)), SizeUInt(ACutPos));
+    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(AName) + ACutPos + 1), SizeUInt(Length(AName) - ACutPos - 1));
+  end
+  else
+    TarPutHeaderString(ABlock, C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, AName);
+end;
+
+procedure TTarWriter.FillLinkNameField(ABlock: PByte; const ALinkName: string); inline;
+begin
+  // bytes.ops single source, inline zero-copy slice
+  if Length(ALinkName) > C_TAR_LAYOUT.LinkName.Len then
+    TarPutHeaderSlice(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, PByte(PAnsiChar(ALinkName)), SizeUInt(C_TAR_LAYOUT.LinkName.Len))
+  else
+    TarPutHeaderString(ABlock, C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, ALinkName);
+end;
+
+procedure TTarWriter.FillNumericFields(ABlock: PByte; const AHdr: TTarHeader; ADataSize: Int64); inline;
+begin
+  // bytes.ops single source, inline numeric single point TarFormatNumericField
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, AHdr.Mode);
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, AHdr.UID);
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, AHdr.GID);
+  if AHdr.Kind = tekRegular then
+    TarFormatNumericField(ABlock, C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, ADataSize)
+  else
+    TarFormatNumericField(ABlock, C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, 0);
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len, AHdr.MTimeUnix);
+end;
+
+procedure TTarWriter.FillTrailerFields(ABlock: PByte; const AHdr: TTarHeader); inline;
+begin
+  // bytes.ops single source, inline
+  TarWriteUStarMagic(ABlock);
+  TarPutHeaderString(ABlock, C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, AHdr.UName);
+  TarPutHeaderString(ABlock, C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, AHdr.GName);
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len, AHdr.DevMajor);
+  TarFormatNumericField(ABlock, C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len, AHdr.DevMinor);
+end;
+
 procedure TTarWriter.WriteHeader(const AHdr: TTarHeader; ADataSize: Int64);
 var
   Block: array[0..C_TAR_BLOCK_SIZE - 1] of Byte;
   Name, LinkName: string;
   CutPos: SizeInt;
-  LPaxBytes: TBytes;
-  LBuilder: IBytesBuilder;
-  I: Integer;
 begin
+  // orchestration only: validate -> prefix cut -> pax -> fill -> checksum, each step single-responsibility
   if FFinished then
     raise EInvalidOperationError.Create('tar: writer already finished');
   if ADataSize < 0 then
     raise EArgumentError.Create('tar: negative size');
   Name := AHdr.Name;
   LinkName := AHdr.LinkName;
-  if (AHdr.Kind = tekDirectory) and (Name <> '') and (Name[Length(Name)] <> '/') then
-    Name := Name + '/';
-  ValidateTarEntryName(Name);
-  if (LinkName <> '') and (Pos(#0, LinkName) > 0) then
-    raise EArgumentError.Create('tar: linkname contains NUL');
-  CutPos := 0;
-  if Length(Name) > C_TAR_LAYOUT.Name.Len then
-  begin
-    I := C_TAR_LAYOUT.Prefix.Len;
-    while (I >= 1) and (CutPos = 0) do
-    begin
-      if (I < Length(Name)) and (Name[I + 1] = '/') and (Length(Name) - I - 1 <= C_TAR_LAYOUT.Name.Len) then
-        CutPos := I;
-      Dec(I);
-    end;
-  end;
-  if ((Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0)) or (Length(LinkName) > C_TAR_LAYOUT.LinkName.Len) then
-  begin
-    LBuilder := CreateBytesBuilder(256);
-    if (Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0) then
-      TarAppendPaxRecord(LBuilder, 'path', Name);
-    if Length(LinkName) > C_TAR_LAYOUT.LinkName.Len then
-      TarAppendPaxRecord(LBuilder, 'linkpath', LinkName);
-    LPaxBytes := LBuilder.ToBytes;
-    EmitPaxHeader(LPaxBytes);
-  end;
+  ValidateAndCanonicalizeNames(Name, LinkName, AHdr.Kind);
+  CutPos := FindPrefixCut(Name);
+  EmitPaxIfNeeded(Name, LinkName, CutPos);
   FillChar(Block[0], SizeOf(Block), 0);
-  if (Length(Name) > C_TAR_LAYOUT.Name.Len) and (CutPos = 0) then
-    // bytes.ops single source, zero-copy slice
-    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(Name)), SizeUInt(C_TAR_LAYOUT.Name.Len))
-  else if CutPos <> 0 then
-  begin
-    // bytes.ops single source, zero-copy slice
-    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Prefix.Off, C_TAR_LAYOUT.Prefix.Len, PByte(PAnsiChar(Name)), SizeUInt(CutPos));
-    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, PByte(PAnsiChar(Name) + CutPos + 1), SizeUInt(Length(Name) - CutPos - 1));
-  end
-  else
-    TarPutHeaderString(@Block[0], C_TAR_LAYOUT.Name.Off, C_TAR_LAYOUT.Name.Len, Name);
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Mode.Off, C_TAR_LAYOUT.Mode.Len, AHdr.Mode);
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.UID.Off, C_TAR_LAYOUT.UID.Len, AHdr.UID);
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.GID.Off, C_TAR_LAYOUT.GID.Len, AHdr.GID);
-  if AHdr.Kind = tekRegular then
-    TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, ADataSize)
-  else
-    TarFormatNumericField(@Block[0], C_TAR_LAYOUT.Size.Off, C_TAR_LAYOUT.Size.Len, 0);
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.MTime.Off, C_TAR_LAYOUT.MTime.Len, AHdr.MTimeUnix);
+  FillNameFields(@Block[0], Name, CutPos);
+  FillNumericFields(@Block[0], AHdr, ADataSize);
   FillChar(Block[C_TAR_LAYOUT.Chksum.Off], C_TAR_LAYOUT.Chksum.Len, Ord(' '));
   Block[C_TAR_LAYOUT.TypeFlag.Off] := Byte(KindToTypeFlag(AHdr.Kind));
-  if Length(LinkName) > C_TAR_LAYOUT.LinkName.Len then
-    // bytes.ops single source, zero-copy slice
-    TarPutHeaderSlice(@Block[0], C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, PByte(PAnsiChar(LinkName)), SizeUInt(C_TAR_LAYOUT.LinkName.Len))
-  else
-    TarPutHeaderString(@Block[0], C_TAR_LAYOUT.LinkName.Off, C_TAR_LAYOUT.LinkName.Len, LinkName);
-  TarWriteUStarMagic(@Block[0]);
-  TarPutHeaderString(@Block[0], C_TAR_LAYOUT.UName.Off, C_TAR_LAYOUT.UName.Len, AHdr.UName);
-  TarPutHeaderString(@Block[0], C_TAR_LAYOUT.GName.Off, C_TAR_LAYOUT.GName.Len, AHdr.GName);
-  // bytes.ops single source
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.DevMajor.Off, C_TAR_LAYOUT.DevMajor.Len, AHdr.DevMajor);
-  TarFormatNumericField(@Block[0], C_TAR_LAYOUT.DevMinor.Off, C_TAR_LAYOUT.DevMinor.Len, AHdr.DevMinor);
+  FillLinkNameField(@Block[0], LinkName);
+  FillTrailerFields(@Block[0], AHdr);
   TarFinalizeHeaderChecksum(@Block[0]);
   WriteBlock(Block);
 end;

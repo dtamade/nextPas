@@ -27,6 +27,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.base.utils,
   nextpas.core.tar.common,
   nextpas.core.tar.reader,
   nextpas.core.io.intf,
@@ -199,6 +200,8 @@ var
   LSlice: PByte;
   LSliceCount: SizeUInt;
   LHardSource: string;
+  LLastParent: string;
+  LParentLen: SizeUInt;
 begin
   if AOptions.MaxEntrySize = 0 then
     LMaxEntry := C_TAR_DEFAULT_MAX_ENTRY
@@ -216,6 +219,8 @@ begin
     ArchiveEnsureNoSymlinkInPath(ADestDir);
     SetLength(LDirs, 0);
     LDirCount := 0;
+    LLastParent := '';
+    LParentLen := 0;
     try
       while R.Next(H) do
       begin
@@ -229,11 +234,26 @@ begin
             if not IsSafeTarLinkTarget(H.LinkName) then
               raise EParseError.Create('tar extract: refusing unsafe link target: ' + H.Name + ' -> ' + H.LinkName);
         end;
-        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf/SpanLastIndexOf 单遍逆序扫描无Copy/分配 inline 热路径，复用 bytes.ops/platform.path 单源消除手写 '/' 反向轮子，千级小文件零额外分配
+        // perf: 单次 ArchiveJoinPath SetLength+Move 复用 bytes.ops 单源 CopyMemory，零 Delete 堆抖动；父目录零拷贝单源 bytes.ops StringLastIndexOf 单遍逆序扫描无Copy inline 热路径；同父目录缓存 LLastParent 命中时跳过 UniqueString+逐段 NUL 截断与 symlink/mkdir 系统调用，千文件同目录由 N 次 UniqueString+O(depth) 段扫描降至 1 次分配+1 次扫描，零拷贝 CompareMem 复用 base.utils 单源，平台克制 L0-L3 守联邦单缝
         LFull := ArchiveJoinPath(ADestDir, H.Name);
         LSep := StringLastIndexOf(LFull, '/');
         if LSep > 0 then
-          ArchivePrepareParentDir(LFull, SizeUInt(LSep - 1));
+        begin
+          LParentLen := SizeUInt(LSep - 1);
+          if LParentLen <> SizeUInt(Length(LLastParent)) then
+          begin
+            ArchivePrepareParentDir(LFull, LParentLen);
+            SetLength(LLastParent, LParentLen);
+            if LParentLen > 0 then
+              CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+          end
+          else if (LParentLen > 0) and not CompareMem(Pointer(@LFull[1]), Pointer(@LLastParent[1]), LParentLen) then
+          begin
+            ArchivePrepareParentDir(LFull, LParentLen);
+            SetLength(LLastParent, LParentLen);
+            CopyMemory(PByte(@LFull[1]), PByte(@LLastParent[1]), LParentLen);
+          end;
+        end;
         LMode := Word(H.Mode and $0FFF);
         case H.Kind of
           tekDirectory:

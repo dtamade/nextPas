@@ -29,6 +29,7 @@ type
   TTarGlobalPaxGuard = class(TInterfacedObject)
   private
     FReader: TTarReader; // weak: not prolong Reader/FBuf, nilled on Reader.Destroy / Destroy
+    FNext: TTarGlobalPaxGuard; // linked list next, weak
     procedure Invalidate;
   public
     constructor Create(AReader: TTarReader);
@@ -62,9 +63,9 @@ type
     FScanValid: Boolean;
     FScanPos: SizeUInt;
     FScanLens: TTarScanLens;
-    FGuards: array of TTarGlobalPaxGuard; // weak, no FBuf retention, geometric 2× capacity: Length=cap, FGuardCount=logical
-    FGuardCount: SizeUInt; // logical guard count, geometric growth single source bytes.ops (BytesEnsureCapacity/IBytesBuilder.Grow)
-    FLogger: ILogger; // warn on auto-clear if explicit logger
+    FGuardHead: TTarGlobalPaxGuard; // weak linked list head, no array, no geometric
+    FGuardCount: SizeUInt; // simple counter without capacity
+    FLogger: ILogger; // warn on auto-clear
     function HasGuards: Boolean; inline;
     procedure LogGlobalPaxAutoClear;
     procedure RegisterGuard(AGuard: TTarGlobalPaxGuard);
@@ -154,6 +155,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FGuardHead := nil;
   FGuardCount := 0;
   FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
@@ -172,6 +174,7 @@ begin
   FPos := 0;
   FScanValid := False;
   FScanPos := 0;
+  FGuardHead := nil;
   FGuardCount := 0;
   FLogger := NullLogger;
   if AOptions.MaxEntrySize = 0 then
@@ -231,8 +234,6 @@ begin
 end;
 
 function TTarReader.FieldSlice(AOfs, ALen: SizeUInt): TByteSpan;
-type
-  TFieldMap = record Off, Len: SizeUInt; PLen: PSizeUInt; end;
 var
   EndOfs: SizeUInt;
   LLen: SizeUInt;
@@ -241,37 +242,37 @@ var
   LOneField: array[0..0] of TFieldRange;
   LOneLen: array[0..0] of SizeUInt;
   LBlockTmp: TByteSpan;
-  LMap: array[0..6] of TFieldMap;
-  I: Integer;
-  Found: Boolean;
+  IsHeaderField: Boolean;
 begin
   EndOfs := AOfs + ALen;
   if EndOfs > FCount then
     raise EIOError.CreateFmt('tar: truncated stream at offset %d (field %d+%d > %d)', [AOfs, AOfs, ALen, FCount]);
   if ALen = 0 then
     Exit(TByteSpan.Empty);
-  // header: cached 7 fields, miss fills single 512B scan
+  // header: cached 7 fields, single 512B ScanNulFieldTruncations via bytes.ops
   if (AOfs >= FPos) and (EndOfs <= FPos + C_TAR_BLOCK_SIZE) then
   begin
     if not (FScanValid and (FScanPos = FPos)) then
       CacheHeader(Self);
-    // table-driven 7-field index map: single stack table, loop dispatch, zero-alloc, reuses C_TAR_LAYOUT single source
-    LMap[0].Off := C_TAR_LAYOUT.Name.Off;     LMap[0].Len := C_TAR_LAYOUT.Name.Len;     LMap[0].PLen := @FScanLens.Name;
-    LMap[1].Off := C_TAR_LAYOUT.LinkName.Off; LMap[1].Len := C_TAR_LAYOUT.LinkName.Len; LMap[1].PLen := @FScanLens.LinkName;
-    LMap[2].Off := C_TAR_LAYOUT.Magic.Off;    LMap[2].Len := C_TAR_LAYOUT.Magic.Len;    LMap[2].PLen := @FScanLens.Magic;
-    LMap[3].Off := C_TAR_LAYOUT.Version.Off;  LMap[3].Len := C_TAR_LAYOUT.Version.Len;  LMap[3].PLen := @FScanLens.Version;
-    LMap[4].Off := C_TAR_LAYOUT.UName.Off;    LMap[4].Len := C_TAR_LAYOUT.UName.Len;    LMap[4].PLen := @FScanLens.UName;
-    LMap[5].Off := C_TAR_LAYOUT.GName.Off;    LMap[5].Len := C_TAR_LAYOUT.GName.Len;    LMap[5].PLen := @FScanLens.GName;
-    LMap[6].Off := C_TAR_LAYOUT.Prefix.Off;   LMap[6].Len := C_TAR_LAYOUT.Prefix.Len;   LMap[6].PLen := @FScanLens.Prefix;
-    Found := False;
-    for I := 0 to High(LMap) do
-      if (AOfs = FPos + LMap[I].Off) and (ALen = LMap[I].Len) then
-      begin
-        LLen := LMap[I].PLen^;
-        Found := True;
-        Break;
-      end;
-    if not Found then
+    // explicit 7-field dispatch, readable, no table loop
+    IsHeaderField := True;
+    if (AOfs = FPos + C_TAR_LAYOUT.Name.Off) and (ALen = C_TAR_LAYOUT.Name.Len) then
+      LLen := FScanLens.Name
+    else if (AOfs = FPos + C_TAR_LAYOUT.LinkName.Off) and (ALen = C_TAR_LAYOUT.LinkName.Len) then
+      LLen := FScanLens.LinkName
+    else if (AOfs = FPos + C_TAR_LAYOUT.Magic.Off) and (ALen = C_TAR_LAYOUT.Magic.Len) then
+      LLen := FScanLens.Magic
+    else if (AOfs = FPos + C_TAR_LAYOUT.Version.Off) and (ALen = C_TAR_LAYOUT.Version.Len) then
+      LLen := FScanLens.Version
+    else if (AOfs = FPos + C_TAR_LAYOUT.UName.Off) and (ALen = C_TAR_LAYOUT.UName.Len) then
+      LLen := FScanLens.UName
+    else if (AOfs = FPos + C_TAR_LAYOUT.GName.Off) and (ALen = C_TAR_LAYOUT.GName.Len) then
+      LLen := FScanLens.GName
+    else if (AOfs = FPos + C_TAR_LAYOUT.Prefix.Off) and (ALen = C_TAR_LAYOUT.Prefix.Len) then
+      LLen := FScanLens.Prefix
+    else
+      IsHeaderField := False;
+    if not IsHeaderField then
     begin
       // fallback: non-cached header field via single-field scan
       LOneField[0].Off := AOfs - FPos;
@@ -416,54 +417,57 @@ begin
 end;
 
 procedure TTarReader.RegisterGuard(AGuard: TTarGlobalPaxGuard);
-var
-  NewCap: SizeUInt;
 begin
   if AGuard = nil then Exit;
-  // geometric 2× amortized O(1), single source with bytes.ops BytesEnsureCapacity / IBytesBuilder.Grow (BYTES_BUILDER_MIN_GROW doubling, no header poke)
-  if FGuardCount >= SizeUInt(Length(FGuards)) then
-  begin
-    if Length(FGuards) = 0 then
-      NewCap := 4
-    else
-      NewCap := SizeUInt(Length(FGuards)) * 2;
-    if NewCap < FGuardCount + 1 then
-      NewCap := FGuardCount + 1;
-    SetLength(FGuards, NewCap);
-  end;
-  FGuards[FGuardCount] := AGuard;
+  // simple linked list, no geometric array, zero alloc per guard beyond object
+  AGuard.FNext := FGuardHead;
+  FGuardHead := AGuard;
   Inc(FGuardCount);
 end;
 
 procedure TTarReader.UnregisterGuard(AGuard: TTarGlobalPaxGuard);
 var
-  I: SizeInt;
+  Prev, Cur: TTarGlobalPaxGuard;
 begin
-  for I := 0 to SizeInt(FGuardCount) - 1 do
-    if FGuards[I] = AGuard then
+  Prev := nil;
+  Cur := FGuardHead;
+  while Cur <> nil do
+  begin
+    if Cur = AGuard then
     begin
-      FGuards[I] := FGuards[FGuardCount - 1];
-      FGuards[FGuardCount - 1] := nil;
-      Dec(FGuardCount);
+      if Prev = nil then
+        FGuardHead := Cur.FNext
+      else
+        Prev.FNext := Cur.FNext;
+      Cur.FNext := nil;
+      if FGuardCount > 0 then Dec(FGuardCount);
       Exit;
     end;
+    Prev := Cur;
+    Cur := Cur.FNext;
+  end;
 end;
 
 procedure TTarReader.InvalidateGuards;
 var
-  I: SizeInt;
+  Cur, LNext: TTarGlobalPaxGuard;
 begin
-  for I := 0 to SizeInt(FGuardCount) - 1 do
-    if FGuards[I] <> nil then
-      FGuards[I].Invalidate;
+  Cur := FGuardHead;
+  while Cur <> nil do
+  begin
+    LNext := Cur.FNext;
+    Cur.Invalidate;
+    Cur.FNext := nil;
+    Cur := LNext;
+  end;
+  FGuardHead := nil;
   FGuardCount := 0;
-  SetLength(FGuards, 0);
 end;
 
 procedure TTarReader.LogGlobalPaxAutoClear;
 begin
-  // warn only if explicit logger set, else silent auto-clear
-  if (FLogger = nil) or (FLogger = NullLogger) then Exit;
+  // INV-3 observability: warn whenever logger assigned, no NullLogger identity gate
+  if FLogger = nil then Exit;
   FLogger.Warn('tar: global pax auto-cleared after single use (no guard held; hold AcquireGlobalPaxGuard IInterface to persist across Next/image, or call ClearGlobalPax explicitly)');
 end;
 
