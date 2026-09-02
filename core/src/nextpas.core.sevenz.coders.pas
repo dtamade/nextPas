@@ -378,8 +378,7 @@ begin
   if Length(APackStreams) <> Length(AFolder.PackedInIndices) then
     raise ESevenZError.Create('pack stream count mismatch');
   SetLength(LResolved, Length(AFolder.Coders));
-  SetLength(LDone, Length(AFolder.Coders));
-  FillChar(LDone[0], Length(LDone) * SizeOf(Boolean), 0);
+  SetLength(LDone, Length(AFolder.Coders)); // SetLength zero-initializes Boolean array, no FillChar double-zero nor OOB when empty
   repeat
     LProgress := False;
     for LI := 0 to High(AFolder.Coders) do
