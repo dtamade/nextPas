@@ -20,10 +20,14 @@ function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
 function PanLawGains(APan: Single): TPointF; overload;
 function PanLawGains(APan: Single; ALawDB: Single): TPointF; overload; deprecated 'PanLaw fixed to -3dB equal-power; prefer single-arg overload';
+function PanLawGains0dB(APan: Single): TPointF;
 
 implementation
 
 uses
+  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
+  nextpas.core.bytes.ops,
+  nextpas.core.audio.simd, // Owner dispatch for Peak/SumSquares/Mul
   nextpas.core.math.base,
   nextpas.core.math.trig;
 
@@ -115,16 +119,19 @@ begin
     if LAlias then
     begin
       // F-36 overlapping alias: copy to temp to avoid read-after-write hazard
+      // single source: base.utils CopyMem → bytes.ops, SizeUInt boundary, stack/heap temp non-overlapping
       if LUseStack then
       begin
-        Move(ASrc.Data[0], LStack[0], LSamples * SizeOf(Single));
+        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping stack copy
+        CopyMem(@LStack[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
         LSrcPtr := @LStack[0];
         LSrcData := nil;
       end
       else
       begin
         SetLength(LSrcF32, LSamples * SizeOf(Single));
-        Move(ASrc.Data[0], LSrcF32[0], LSamples * SizeOf(Single));
+        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping heap copy
+        CopyMem(@LSrcF32[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
         LSrcData := LSrcF32;
         LSrcPtr := PSingle(@LSrcData[0]);
       end;
@@ -156,13 +163,14 @@ begin
 end;
 
 procedure ApplyGain(var ABuf: TAudioBuffer; AGain: Single);
-var NSamples, LI: Integer; P: PSingle;
+var NSamples: Integer; P: PSingle;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGain: data too small');
   P := PSingle(@ABuf.Data[0]);
-  for LI := 0 to NSamples - 1 do P[LI] := P[LI] * AGain;
+  // single source via audio.simd Owner: SimdMulF32 replaces scalar for-loop, single pass
+  SimdMulF32(P, P, NSamples, AGain);
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
@@ -178,29 +186,31 @@ begin
 end;
 
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LPeak, LAbs, LGain: Single;
+var NSamples: Integer; P: PSingle; LPeak, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizePeak: data too small');
-  P := PSingle(@ABuf.Data[0]); LPeak := 0;
-  for LI := 0 to NSamples - 1 do begin LAbs := P[LI]; if LAbs < 0 then LAbs := -LAbs; if LAbs > LPeak then LPeak := LAbs; end;
+  P := PSingle(@ABuf.Data[0]);
+  // Owner dispatch single source: SimdPeakF32 via audio.simd — single pass, no bare for double scan
+  LPeak := SimdPeakF32(P, NSamples);
   Result := LPeak;
   if LPeak = 0 then LGain := 1 else LGain := ATarget / LPeak;
-  ApplyGain(ABuf, LGain);
+  if LGain <> 1 then SimdMulF32(P, P, NSamples, LGain);
 end;
 
 function NormalizeRMS(var ABuf: TAudioBuffer; ATarget: Single): Single;
-var NSamples, LI: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
+var NSamples: Integer; P: PSingle; LSum: Double; LRms, LGain: Single;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit(0);
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('NormalizeRMS: data too small');
-  P := PSingle(@ABuf.Data[0]); LSum := 0;
-  for LI := 0 to NSamples - 1 do LSum := LSum + P[LI] * P[LI];
+  P := PSingle(@ABuf.Data[0]);
+  // Owner dispatch single source: SimdSumSquaresF32 via audio.simd — single pass, no bare for double scan
+  LSum := SimdSumSquaresF32(P, NSamples);
   LRms := Single(Sqrt(LSum / NSamples)); Result := LRms;
   if LRms = 0 then LGain := 1 else LGain := ATarget / LRms;
-  ApplyGain(ABuf, LGain);
+  if LGain <> 1 then SimdMulF32(P, P, NSamples, LGain);
 end;
 
 function PanLawGains(APan: Single): TPointF;
@@ -227,6 +237,14 @@ begin
     Result.X := Cos(LAngle);
     Result.Y := Sin(LAngle);
   end;
+end;
+
+function PanLawGains0dB(APan: Single): TPointF;
+var LG, RG: Single;
+begin
+  AudioPanLawGains(APan, LG, RG);
+  Result.X := LG;
+  Result.Y := RG;
 end;
 
 end.

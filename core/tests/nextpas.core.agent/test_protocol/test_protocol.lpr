@@ -5,6 +5,7 @@ program test_protocol;
 uses
   nextpas.core.base,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.fold,

@@ -26,6 +26,7 @@ procedure DecodeOpenAIResponse(const ABody: TJsonText;
 implementation
 
 uses
+  nextpas.core.json.value,
   nextpas.core.json,
   nextpas.core.json.builder,
   nextpas.core.text.builder,

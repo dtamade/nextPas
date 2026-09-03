@@ -101,6 +101,7 @@ function HttpCookieSiteKey(const AHost: string): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.time,
@@ -1178,10 +1179,10 @@ var
   LNow: Int64;
   LRequestSite: string;
   LSameSiteRequest: Boolean;
-  // perf: single SetLength+Move — one allocation, O(n) zero-copy vs O(n²) concat
+  // perf: single SetLength+BytesCopy — one allocation, O(n) zero-copy via bytes.ops.BytesCopy inline single source vs O(n²) concat
   LIndices: array of SizeInt;
   LCount, LTotalLen, LPos, LNameLen, LValLen, LIdx: SizeInt;
-  // inline helper keeps call-site zero-overhead and documents Move contract
+  // inline helper keeps call-site zero-overhead and documents BytesCopy contract
   procedure AppendSeparator(var APos: SizeInt); inline;
   begin
     Result[APos] := ';';
@@ -1224,7 +1225,7 @@ begin
     end;
     if LCount = 0 then
       Exit('');
-    // single allocation; subsequent Moves are zero-copy into Result buffer
+    // single allocation; subsequent BytesCopy are zero-copy via bytes.ops single source into Result buffer
     SetLength(Result, LTotalLen);
     LPos := 1;
     for LIdx := 0 to LCount - 1 do
@@ -1235,7 +1236,7 @@ begin
       LNameLen := Length(FItems[LI].Name);
       if LNameLen > 0 then
       begin
-        Move(FItems[LI].Name[1], Result[LPos], LNameLen); // zero-copy
+        BytesCopy(@Result[LPos], @FItems[LI].Name[1], SizeUInt(LNameLen)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
         Inc(LPos, LNameLen);
       end;
       Result[LPos] := '=';
@@ -1243,7 +1244,7 @@ begin
       LValLen := Length(FItems[LI].Value);
       if LValLen > 0 then
       begin
-        Move(FItems[LI].Value[1], Result[LPos], LValLen); // zero-copy
+        BytesCopy(@Result[LPos], @FItems[LI].Value[1], SizeUInt(LValLen)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
         Inc(LPos, LValLen);
       end;
     end;

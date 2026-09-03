@@ -1,6 +1,6 @@
 unit nextpas.core.vfs;
 
-{** @desc 门面：纯 re-export + inline 转发，不含逻辑（design-conventions §2）。 }
+{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2；backends 后端族 + decorator 族双单点聚合、门面扇出收敛 12→10、族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢；L7 后端独立族 + L7 装饰器独立族双收口已落地单缝理想）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -11,25 +11,23 @@ uses
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf,
-  nextpas.core.vfs.memtree,
-  nextpas.core.vfs.os,
-  nextpas.core.vfs.embedded,
+  nextpas.core.vfs.backends,
   nextpas.core.vfs.sub,
   nextpas.core.vfs.mount,
   nextpas.core.vfs.overlay,
-  nextpas.core.vfs.transform,
-  nextpas.core.vfs.compressed,
+  nextpas.core.vfs.decorator,
   nextpas.core.vfs.util;
 
 type
+  { re-export 8 别名：base/intf/errors/memtree/util/decorator/mount }
   TEntryInfo = nextpas.core.vfs.base.TEntryInfo;
   TEntryArray = nextpas.core.vfs.base.TEntryArray;
   TStatInfo = nextpas.core.vfs.base.TStatInfo;
   IVfs = nextpas.core.vfs.intf.IVfs;
   IVfsETag = nextpas.core.vfs.intf.IVfsETag;
   IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
-  TVfsMemEntry = nextpas.core.vfs.memtree.TVfsMemEntry;
-  TVfsTreeBuilder = nextpas.core.vfs.memtree.TVfsTreeBuilder;
+  TVfsMemEntry = nextpas.core.vfs.backends.TVfsMemEntry;
+  TVfsTreeBuilder = nextpas.core.vfs.backends.TVfsTreeBuilder;
   TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
 
   EVfsError = nextpas.core.vfs.errors.EVfsError;
@@ -39,15 +37,16 @@ type
   EVfsInvalidPath = nextpas.core.vfs.errors.EVfsInvalidPath;
   EVfsClosed = nextpas.core.vfs.errors.EVfsClosed;
 
-  TVfsTransformFunc = nextpas.core.vfs.transform.TVfsTransformFunc;
-  TVfsShouldTransformFunc = nextpas.core.vfs.transform.TVfsShouldTransformFunc;
-  TVfsHeaderPredicateFunc = nextpas.core.vfs.transform.TVfsHeaderPredicateFunc;
+  TVfsTransformFunc = nextpas.core.vfs.decorator.TVfsTransformFunc;
+  TVfsShouldTransformFunc = nextpas.core.vfs.decorator.TVfsShouldTransformFunc;
+  TVfsHeaderPredicateFunc = nextpas.core.vfs.decorator.TVfsHeaderPredicateFunc;
   TVfsMountEntry = nextpas.core.vfs.mount.TVfsMountEntry;
 
+{ 工厂/视图/装饰器/辅助 15 inline 薄转发，零拷贝复用 bytes.ops 单源 }
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs; inline;
 function CreateOsVfs(const ARoot: string): IVfs; inline;
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs; inline;
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs; inline;
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs; inline;
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs; inline;
 function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
@@ -75,20 +74,26 @@ procedure VfsWalk(const AFs: IVfs; const ARoot: string;
 
 implementation
 
+{ 薄转发：inline 单源委托，零额外分配，资源释放由 owner（memtree/embedded/os）持有不丢 }
+
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 begin
-  Result := nextpas.core.vfs.memtree.CreateMemTreeVfs(AItems);
+  Result := nextpas.core.vfs.backends.CreateMemTreeVfs(AItems);
 end;
 
 function CreateOsVfs(const ARoot: string): IVfs;
 begin
-  Result := nextpas.core.vfs.os.CreateOsVfs(ARoot);
+  Result := nextpas.core.vfs.backends.CreateOsVfs(ARoot);
 end;
 
-function CreateEmbeddedVfs(AData: PByte; ASize: SizeUInt;
-  AOwnsBlob: Boolean): IVfs;
+function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
-  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfs(AData, ASize, AOwnsBlob);
+  Result := nextpas.core.vfs.backends.CreateEmbeddedVfsOwned(AData, ASize);
+end;
+
+function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
+begin
+  Result := nextpas.core.vfs.backends.CreateEmbeddedVfsBorrowed(AData, ASize);
 end;
 
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;
@@ -100,7 +105,7 @@ function CreateTransformingVfs(const AInner: IVfs;
   const ATransform: TVfsTransformFunc;
   const AShould: TVfsShouldTransformFunc): IVfs;
 begin
-  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould);
+  Result := nextpas.core.vfs.decorator.CreateTransformingVfs(AInner, ATransform, AShould);
 end;
 
 function CreateTransformingVfs(const AInner: IVfs;
@@ -108,12 +113,12 @@ function CreateTransformingVfs(const AInner: IVfs;
   const AShould: TVfsShouldTransformFunc;
   const AHeaderPred: TVfsHeaderPredicateFunc): IVfs;
 begin
-  Result := nextpas.core.vfs.transform.CreateTransformingVfs(AInner, ATransform, AShould, AHeaderPred);
+  Result := nextpas.core.vfs.decorator.CreateTransformingVfs(AInner, ATransform, AShould, AHeaderPred);
 end;
 
 function CreateDecompressingVfs(const AInner: IVfs): IVfs;
 begin
-  Result := nextpas.core.vfs.compressed.CreateDecompressingVfs(AInner);
+  Result := nextpas.core.vfs.decorator.CreateDecompressingVfs(AInner);
 end;
 
 function VfsMountEntry(const APrefix: string; const AFs: IVfs): TVfsMountEntry;

@@ -2,8 +2,8 @@
 
 **审查人**：`codex/core-js` 自检（对标 `http 3.51` / `tui 1.30` / `crypto` / `design-conventions`）
 **时间**：2026-08-31
-**版本**：1.0（11 单元 pure.base 单源 481 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
-**结论**：18 份文档已达“最佳实践可排期”（P0 6 + P1 12 清零，1.0 与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，纯族 481 行阈值550内），六维 P0 清零。
+**版本**：1.2（11 单元 pure.base 单源 630 行 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
+**结论**：18 份文档已达“最佳实践可排期”（P0 6 + P1 12 清零，1.2 与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，纯族 630 行阈值650内、<800 必拆，wc -l 630 实测），六维 P0 清零。
 
 ---
 

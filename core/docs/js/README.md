@@ -6,7 +6,7 @@
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 六维冻结 P0 清零（18 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
 **最后更新**：2026-08-31
-**版本**：1.1（11 单元 pure.base 单源 517 行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.1/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.2（11 单元 pure.base 单源 630 行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
 
 ## 1. 模块定位
 
@@ -35,10 +35,11 @@
 | `nextpas.core.js.js888` | **纯 Pascal 后端**（`jsbkJs888` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
 | `nextpas.core.js.v8` | **纯 Pascal V8 占位**（`jsbkV8` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
 | `nextpas.core.js.chakra` | **纯 Pascal Chakra 占位**（`jsbkChakra` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
-| `nextpas.core.js.pas` | 门面 re-export + 工厂 `CreateJsRuntime / JsBackendAvailable` | 纯聚合，不含逻辑 |
+| `nextpas.core.js.factory` | 工厂：`CreateJsRuntime / JsBackendAvailable` 分支与探测抛异常 | 单源分支/探测，门面零逻辑 |
+| `nextpas.core.js.pas` | 门面：纯 re-export（`inline` 薄转发至 `js.factory`） | 纯聚合，零分支零探测 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 517+29×3 阈值550内)} ← 门面
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 630+29×3≈717 阈值650内、<800 必拆，wc -l 630 实测)} ← factory(分支/探测单源) ← 门面(纯 re-export inline 薄转发)
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。
@@ -139,7 +140,7 @@ end.
 ## 4. 架构速览
 
 ```
-L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, pure(零FFI)} → 门面(js.pas)
+L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, pure(零FFI)} → factory(分支/探测) → 门面(js.pas 纯 re-export inline)
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
               适配活在 webview 家族，js 永不 uses webview
 ```

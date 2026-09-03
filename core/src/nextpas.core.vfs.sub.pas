@@ -12,6 +12,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
@@ -36,7 +37,7 @@ type
     FSubPrefix: string;   { FSubRoot + '/' 缓存，identity 时为空，零重复分配 }
     FIdentity: Boolean;   { SubRoot='.' 时直通 }
     function ToBase(const APath: string): string;
-    function ToSubView(const APath: string): string;
+    function ToSubView(const APath: string): string; inline;
     procedure ReraiseSub(E: EVfsError);
   public
     constructor Create(const ABase: IVfs; const ASubRoot: string);
@@ -95,7 +96,9 @@ begin
   Result := FSubPrefix + APath;
 end;
 
-function TSubVfs.ToSubView(const APath: string): string;
+function TSubVfs.ToSubView(const APath: string): string; inline;
+var
+  SPath, SPrefix: TByteSpan;
 begin
   Result := APath;
   if FIdentity then
@@ -104,7 +107,10 @@ begin
     Exit('.');
   if Length(APath) <= Length(FSubPrefix) then
     Exit;
-  if CompareMem(@APath[1], @FSubPrefix[1], SizeUInt(Length(FSubPrefix))) then
+  // perf: zero-copy TByteSpan view single-source via VfsSpanFromString->TByteSpan.FromStr inline, bytes.ops SpanStartsWith->MemEqual hot path, no alloc
+  SPath := VfsSpanFromString(APath);
+  SPrefix := VfsSpanFromString(FSubPrefix);
+  if SpanStartsWith(SPath, SPrefix) then
     Result := Copy(APath, Length(FSubPrefix) + 1, MaxInt);
 end;
 

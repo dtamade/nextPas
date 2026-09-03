@@ -1,9 +1,6 @@
 unit nextpas.core.vfs.compressed;
 
-{** @desc L3 解压薄门面：经通用 transform 装饰器承载 gzip 解压（ADR 0003）。
-  本单元仅保留策略（VFS_DECOMPRESS_MAX_BYTES、Gzip 魔数、daAuto/daGzip 语义），
-  模板复用 nextpas.core.vfs.transform，消除 120+ 行样板重复（复用度）。
-  STORE 零拷贝与 32MiB 防 bomb 约束由 transform 承载；daAuto 经 4K HeaderPred（复用 transform TRANSFORM_HEADER_PEEK）免 Stat 全量读取，薄门面仅策略。 }
+{** @desc L3 解压薄门面：经通用 transform 单缝装饰器承载 gzip 解压（ADR 0003，L3 单缝寄居 L2 家族正名，Registry 单缝白名单过渡，L7 到期聚合为 nextpas.core.vfs.decorator 独立 L3 族后移除白名单固化 L0-L3 单向，复用阻塞候选已显式标注独立族）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -11,14 +8,14 @@ interface
 
 uses
   nextpas.core.vfs.base,
-  nextpas.core.vfs.intf,
-  nextpas.core.compress.base;
+  nextpas.core.vfs.intf;
 
 type
   TDecompressAlgo = (daAuto, daGzip);
 
 const
-  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
+  { 单源别名：复用 vfs.base 32MiB（canonical 为 compress.base GZIP_MAX）。 }
+  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.vfs.base.VFS_DECOMPRESS_MAX_BYTES;
 
 function CreateDecompressingVfs(const AInner: IVfs;
   const AAlgo: TDecompressAlgo = daAuto): IVfs;
@@ -35,9 +32,6 @@ uses
   nextpas.core.vfs.transform,
   nextpas.core.vfs.util,
   nextpas.core.compress.gzip;
-
-const
-  COMPRESSED_HEADER_PEEK = TRANSFORM_HEADER_PEEK;
 
 function GzipTransform(const AData: TBytes): TBytes; inline;
 begin
@@ -122,10 +116,10 @@ function CreateDecompressingVfs(const AInner: IVfs; const AAlgo: TDecompressAlgo
 begin
   if AInner = nil then raise EVfsError.CreateCtx('wrap', '', 'inner VFS is nil');
   case AAlgo of
-    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    daGzip: Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
     daAuto: Result := TAutoDecompressingVfs.Create(AInner);
   else
-    Result := CreateTransformingVfs(AInner, @GzipTransform, nil);
+    Result := CreateTransformingVfs(AInner, @GzipTransform, nil, nil);
   end;
 end;
 

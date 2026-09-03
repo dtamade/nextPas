@@ -8,6 +8,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.io.mapped;
 
 function TryMmapRequire(const APath: string; const AStatSize: Int64; out AMap: IMappedFile; out AErrMsg: string): Boolean;

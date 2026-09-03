@@ -7,6 +7,7 @@ program test_pricing;
   5 cases：边界舍入 + 费率 + 分档（含 2048x2048→2000 特判） }
 
 uses
+  nextpas.core.agent.base,
   nextpas.core.agent.pricing,
   nextpas.core.agent,
   nextpas.core.test;
@@ -95,6 +96,29 @@ begin
   CheckEqual(Int64(1000), ImageTierOf(1, 1024), '1x1024 ->1k');
 end;
 
+procedure TestEstimateCostNegativeClamp;
+var
+  LPricing: TModelPricing;
+  LU: TTokenUsage;
+begin
+  LPricing.Per1kPromptUsd := 2000;
+  LPricing.Per1kCompletionUsd := 4000;
+  LPricing.RateDenominator := 10000;
+  CheckEqual(Int64(0), EstimateCost(LPricing, -5, -10), 'negative prompt/completion clamped to 0');
+  CheckEqual(Int64(0), EstimateCost(-5, -10), 'pricing scalar negative clamped');
+  CheckEqual(Int64(40), EstimateCost(-5, 10, 2000, 4000), 'one side negative per-side clamped (prompt 0 + 10*4000/1000=40)');
+  LU := Default(TTokenUsage);
+  LU.InputTokens := -5;
+  LU.OutputTokens := -10;
+  LU.CacheReadInputTokens := -1;
+  LU.CacheWriteInputTokens := -1;
+  LU.ReasoningTokens := -1;
+  CheckEqual(Int64(0), EstimateCost(LU), 'usage negative ->0');
+  LU.InputTokens := 100;
+  LU.OutputTokens := -5;
+  Check(EstimateCost(LU) > 0, 'partial negative still positive cost');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -104,6 +128,7 @@ begin
   T.Test('estimate cost rate', @TestEstimateCostRate);
   T.Test('image tier boundaries', @TestImageTierBoundaries);
   T.Test('image tier large', @TestImageTierLarge);
+  T.Test('estimate cost negative clamp', @TestEstimateCostNegativeClamp);
   if not T.Run then
     Halt(1);
 end.
