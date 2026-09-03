@@ -45,7 +45,6 @@ begin
         weScaleChanged: WriteLn('[event] scale ', AEvent.NewScale.Factor:0:2);
         weMoved: WriteLn('[event] moved ', AEvent.X, ',', AEvent.Y);
         weFocusChanged: WriteLn('[event] focus changed');
-        weDpiChanged: WriteLn('[event] dpi changed');
         weClosed: WriteLn('[event] closed');
       end;
     end);

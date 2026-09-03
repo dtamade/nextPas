@@ -10,6 +10,7 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.queue,
+  nextpas.core.window.live,
   nextpas.core.sync.intf,
   nextpas.core.window.registry.types;
 

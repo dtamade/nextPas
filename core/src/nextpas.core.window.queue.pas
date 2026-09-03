@@ -21,6 +21,7 @@ uses
 type
   TWindowWorkKind = nextpas.core.window.queue.base.TWindowWorkKind;
   TWindowWorkItem = nextpas.core.window.queue.base.TWindowWorkItem;
+  TWindowWorkItems = nextpas.core.window.queue.base.TWindowWorkItems;
   TWindowCowCtx = nextpas.core.window.queue.base.TWindowCowCtx;
   PWindowWorkItem = nextpas.core.window.queue.base.PWindowWorkItem;
   PWindowProcRef = nextpas.core.window.queue.base.PWindowProcRef;
@@ -30,35 +31,36 @@ type
 
   TWindowQueue = class
   private
-    FRing: array of TWindowWorkItem;
+    FRing: TWindowWorkItems;
     FHead: Integer;
     FCount: Int32;
     FRefCount: Int32;
     FLock: TMutex;
-    FSnap: array of TWindowWorkItem;
+    FSnap: TWindowWorkItems;
     FOwnerThread: UInt64;
     FBackpressure: TWindowQueueBackpressure;
     procedure Grow;
     function Enqueue(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc): Boolean;
     function TryEnqueue(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; out AWasEmpty: Boolean): Boolean;
     function TryEnqueueFastLocked(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; out AWasEmpty: Boolean): Boolean; inline;
-    procedure PrepareCowCopy(var ANew: array of TWindowWorkItem; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer);
+    procedure PrepareCowCopy(var ANew: TWindowWorkItems; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer);
     function CalcGrowCapacity(AOldCap, AOldCount: Integer; out ANewCap: Integer): Boolean;
     function TryCowInstall(var ACtx: TWindowCowCtx): Boolean;
-    function TryReuseBufferLocked(var ANew: array of TWindowWorkItem; AOldCount: Integer; out AWasEmpty: Boolean; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc): Boolean;
-    function HandleOverflow(var ANew: array of TWindowWorkItem; AOldCount: Integer): Boolean; inline;
-    function AllocGrowBufferOutsideLock(var ANew: array of TWindowWorkItem; AOldCount, ACap: Integer): Boolean; inline;
-    function FallbackEnqueueShared(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
-    function EnqueueFallbackLocked(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer): Boolean;
-    function TryEnqueueFallbackLocked(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
+    function TryReuseBufferLocked(var ANew: TWindowWorkItems; AOldCount: Integer; out AWasEmpty: Boolean; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc): Boolean;
+    function HandleOverflow(var ANew: TWindowWorkItems; AOldCount: Integer): Boolean; inline;
+    { 非 inline：含 try..except on E + SetLength 堆分配冷路径，inline 跨模块触发 FPC 符号注册错误 }
+    function AllocGrowBufferOutsideLock(var ANew: TWindowWorkItems; AOldCount, ACap: Integer): Boolean;
+    function FallbackEnqueueShared(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
+    function EnqueueFallbackLocked(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer): Boolean;
+    function TryEnqueueFallbackLocked(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
     function EnqueueCore(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; out AWasEmpty: Boolean): Boolean;
     function DoTryPopLocked(out AItem: TWindowWorkItem; AKind: TWindowWorkKind; ACheckKind: Boolean): Boolean;
     function TryPopFiltered(AKind: TWindowWorkKind; out AItem: TWindowWorkItem): Boolean;
     function SnapGrowCapacity(ACount: Integer): Integer;
     procedure EnsureSnapCapacity(ACount: Integer);
-    function TryStealRing(var ADest: array of TWindowWorkItem; out ACount: Integer): Boolean;
-    procedure TransferWithGrow(var ADest: array of TWindowWorkItem; var ARing: array of TWindowWorkItem; AHead, ACap, ACount: Integer);
-    procedure TryRecycleRing(var ARing: array of TWindowWorkItem);
+    function TryStealRing(var ADest: TWindowWorkItems; out ACount: Integer): Boolean;
+    procedure TransferWithGrow(var ADest: TWindowWorkItems; var ARing: TWindowWorkItems; AHead, ACap, ACount: Integer);
+    procedure TryRecycleRing(var ARing: TWindowWorkItems);
     procedure DispatchSnap(ACount: Integer);
     procedure MaybeShrinkSnap(ACount: Integer);
     procedure ClearWorkItem(var AItem: TWindowWorkItem);
@@ -82,7 +84,7 @@ type
     procedure Drain;
     function DrainCount: Integer;
     function TryDrainCount(out ACount: Integer): Boolean;
-    function TryStealBatch(var ADest: array of TWindowWorkItem; out ACount: Integer): Boolean;
+    function TryStealBatch(var ADest: TWindowWorkItems; out ACount: Integer): Boolean;
     function IsEmpty: Boolean; inline;
     function Count: Integer; inline;
     function DroppedCount: Integer; inline;
@@ -95,14 +97,14 @@ implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.log.intf,
   nextpas.core.platform.thread,
   nextpas.core.sync.cow,
-  nextpas.core.sync.mutex,
-  nextpas.core.window.base,
-  nextpas.core.window.impl;
+  nextpas.core.window.base;
 
 procedure WindowQueueDispatchRef(AItem: PWindowWorkItem); inline;
 begin
@@ -146,7 +148,7 @@ var
   LNewCap, LCap, LCount, LHead, LOldCap, LOldCount, LOldHead: Integer;
   LArena: TQueueRingArena;
   LPooled: Boolean;
-  LOldRing: array of TWindowWorkItem;
+  LOldRing: TWindowWorkItems;
   LOldPtr, LCurPtr: Pointer;
   LOldArena: TQueueRingArena;
 begin
@@ -198,7 +200,7 @@ begin
   Result := True;
 end;
 
-procedure TWindowQueue.PrepareCowCopy(var ANew: array of TWindowWorkItem; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
+procedure TWindowQueue.PrepareCowCopy(var ANew: TWindowWorkItems; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
 begin
   // 分治委派至 cow shard 单源 inline 零拷贝 O(1)，门面仅编排
   QueueCowPrepareCopy(ANew, AOldRing, AOldHead, AOldCap, AOldCount, ANewCap);
@@ -245,7 +247,7 @@ begin
   end;
 end;
 
-function TWindowQueue.TryReuseBufferLocked(var ANew: array of TWindowWorkItem; AOldCount: Integer; out AWasEmpty: Boolean; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc): Boolean;
+function TWindowQueue.TryReuseBufferLocked(var ANew: TWindowWorkItems; AOldCount: Integer; out AWasEmpty: Boolean; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc): Boolean;
 var LIdx, LNeedCap: Integer;
 begin
   Result := False;
@@ -265,7 +267,7 @@ begin
   Result := True;
 end;
 
-function TWindowQueue.HandleOverflow(var ANew: array of TWindowWorkItem; AOldCount: Integer): Boolean; inline;
+function TWindowQueue.HandleOverflow(var ANew: TWindowWorkItems; AOldCount: Integer): Boolean; inline;
 var LArena: TQueueRingArena;
 begin
   if AOldCount > 0 then specialize CowDiscard<TWindowWorkItem>(ANew, AOldCount);
@@ -279,7 +281,7 @@ begin
   Result := False;
 end;
 
-function TWindowQueue.AllocGrowBufferOutsideLock(var ANew: array of TWindowWorkItem; AOldCount, ACap: Integer): Boolean; inline;
+function TWindowQueue.AllocGrowBufferOutsideLock(var ANew: TWindowWorkItems; AOldCount, ACap: Integer): Boolean;
 var LArena: TQueueRingArena; LPooled: Boolean;
 begin
   if Length(ANew) >= ACap then
@@ -317,7 +319,7 @@ begin
   Result := True;
 end;
 
-function TWindowQueue.FallbackEnqueueShared(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
+function TWindowQueue.FallbackEnqueueShared(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
 var LNeedCap: Integer; LWasEmpty: Boolean; LCurCap, LCurCount: Integer; LArena: TQueueRingArena;
 begin
   Result := False;
@@ -361,14 +363,14 @@ begin
   end;
 end;
 
-function TWindowQueue.EnqueueFallbackLocked(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer): Boolean;
+function TWindowQueue.EnqueueFallbackLocked(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer): Boolean;
 var LWasEmpty: Boolean;
 begin
   Result := FallbackEnqueueShared(ANew, AKind, ARef, AMethod, AProc, AOldCount, LWasEmpty);
   if Result then Result := LWasEmpty;
 end;
 
-function TWindowQueue.TryEnqueueFallbackLocked(var ANew: array of TWindowWorkItem; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
+function TWindowQueue.TryEnqueueFallbackLocked(var ANew: TWindowWorkItems; AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; AOldCount: Integer; out AWasEmpty: Boolean): Boolean;
 begin
   Result := FallbackEnqueueShared(ANew, AKind, ARef, AMethod, AProc, AOldCount, AWasEmpty);
 end;
@@ -420,10 +422,21 @@ begin
   Result := False;
   AProc := Default(T);
   if not DoTryPopLocked(LItem, AKind, True) then Exit;
+  { 经 PWindow* 具名指针赋值走托管引用计数（AddRef/Release），不用硬直转左值；
+    SizeOf 守卫防调用方错配种类与槽位。调用点仅 3 处具体特化。 }
   case AKind of
-    wwkRef: begin TWindowProcRef(AProc) := LItem.Ref; LAssigned := Assigned(LItem.Ref); end;
-    wwkMethod: begin TWindowProcMethod(AProc) := LItem.Method; LAssigned := Assigned(LItem.Method); end;
-    wwkProc: begin TWindowProc(AProc) := LItem.Proc; LAssigned := Assigned(LItem.Proc); end;
+    wwkRef: begin
+      if SizeOf(T) <> SizeOf(TWindowProcRef) then Exit(False);
+      PWindowProcRef(@AProc)^ := LItem.Ref; LAssigned := Assigned(LItem.Ref);
+    end;
+    wwkMethod: begin
+      if SizeOf(T) <> SizeOf(TWindowProcMethod) then Exit(False);
+      PWindowProcMethod(@AProc)^ := LItem.Method; LAssigned := Assigned(LItem.Method);
+    end;
+    wwkProc: begin
+      if SizeOf(T) <> SizeOf(TWindowProc) then Exit(False);
+      PWindowProc(@AProc)^ := LItem.Proc; LAssigned := Assigned(LItem.Proc);
+    end;
   else LAssigned := False;
   end;
   ClearWorkItem(LItem);
@@ -431,7 +444,7 @@ begin
 end;
 
 function TWindowQueue.EnqueueCore(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc; out AWasEmpty: Boolean): Boolean;
-var LNewCap, LOldCap, LOldCount, LOldHead: Integer; LNew, LOldRing: array of TWindowWorkItem; LCow: TWindowCowCtx; LArena: TQueueRingArena; LPooled: Boolean;
+var LNewCap, LOldCap, LOldCount, LOldHead: Integer; LNew, LOldRing: TWindowWorkItems; LCow: TWindowCowCtx; LArena: TQueueRingArena; LPooled: Boolean;
 begin
   Result := False;
   AWasEmpty := False;
@@ -560,7 +573,7 @@ begin
   SetLength(FSnap, SnapGrowCapacity(ACount));
 end;
 
-procedure TWindowQueue.TransferWithGrow(var ADest: array of TWindowWorkItem; var ARing: array of TWindowWorkItem; AHead, ACap, ACount: Integer);
+procedure TWindowQueue.TransferWithGrow(var ADest: TWindowWorkItems; var ARing: TWindowWorkItems; AHead, ACap, ACount: Integer);
 begin
   if ACount <= 0 then Exit;
   if ACount > Length(ADest) then
@@ -568,7 +581,7 @@ begin
   specialize ManagedRingTransfer<TWindowWorkItem>(ADest, ARing, AHead, ACap, ACount);
 end;
 
-procedure TWindowQueue.TryRecycleRing(var ARing: array of TWindowWorkItem);
+procedure TWindowQueue.TryRecycleRing(var ARing: TWindowWorkItems);
 begin
   FLock.Acquire;
   try
@@ -624,9 +637,9 @@ begin
 end;
 
 { TWindowQueue - Steal }
-function TWindowQueue.TryStealRing(var ADest: array of TWindowWorkItem; out ACount: Integer): Boolean;
+function TWindowQueue.TryStealRing(var ADest: TWindowWorkItems; out ACount: Integer): Boolean;
 var
-  LRing: array of TWindowWorkItem;
+  LRing: TWindowWorkItems;
   LHead, LCount, LCap, LRefCount: Integer;
 begin
   ACount := 0;
@@ -695,7 +708,7 @@ begin
   Result := True;
 end;
 
-function TWindowQueue.TryStealBatch(var ADest: array of TWindowWorkItem; out ACount: Integer): Boolean;
+function TWindowQueue.TryStealBatch(var ADest: TWindowWorkItems; out ACount: Integer): Boolean;
 begin
   Result := TryStealRing(ADest, ACount);
 end;
@@ -729,7 +742,7 @@ end;
 
 procedure TWindowQueue.Clear;
 var
-  LRing: array of TWindowWorkItem;
+  LRing: TWindowWorkItems;
   LHead, LCap, LCount: Integer;
 begin
   if FLock = nil then

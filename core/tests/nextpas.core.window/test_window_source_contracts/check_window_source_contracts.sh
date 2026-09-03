@@ -145,9 +145,14 @@ if ! grep -Eq "HashFind|FHKeys|FHVals" "$SRC/nextpas.core.window.live.pas" 2>/de
   echo "FAIL: window.live sdl FindByID must use hash (FHKeys/FHVals/HashFind)"
   fail=1
 fi
-# live/queue/hash 的 grows/阈值必须单源复用 window.impl.WindowGrowCapacity → bytes.ops（hash 负载≤0.5 阈值与 0→32→2× 幂二对齐，strip_comments 避免注释误判）
+# live/queue/hash 的 grows/阈值必须单源复用 window.impl.WindowGrowCapacity → bytes.ops（hash 负载≤0.5 阈值与 0→32→2× 幂二对齐，strip_comments 避免注释误判；queue 门面分治委派至 queue.cow shard，接受 QueueCow* 委派证据——链 queue.pas→queue.cow QueueCowCalcGrowCapacity/QueueCowSnapGrowCapacity→window.impl WindowGrowCapacity→bytes.ops，queue.cow 自身仍须命中主模式，门面禁本地增长算术）
 for shard in live queue hash live.arena queue.cow; do
-  if ! strip_comments "$SRC/nextpas.core.window.$shard.pas" | grep -Eq "WindowGrowCapacity|LiveArenaEnsureBatch|ManagedEnsure|HashRebuildArena" 2>/dev/null; then
+  if [ "$shard" = "queue" ]; then
+    pat="WindowGrowCapacity|LiveArenaEnsureBatch|ManagedEnsure|HashRebuildArena|QueueCowCalcGrowCapacity|QueueCowSnapGrowCapacity"
+  else
+    pat="WindowGrowCapacity|LiveArenaEnsureBatch|ManagedEnsure|HashRebuildArena"
+  fi
+  if ! strip_comments "$SRC/nextpas.core.window.$shard.pas" | grep -Eq "$pat" 2>/dev/null; then
     echo "FAIL: window.$shard must reuse WindowGrowCapacity/LiveArenaEnsureBatch/ManagedEnsure/HashRebuildArena single source (window.impl → bytes.ops)"
     fail=1
   fi

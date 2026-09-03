@@ -19,7 +19,7 @@ uses
 type
   TFakeDispatcher = class(TWindowDispatcherBase)
   private
-    FBatch: array of TWindowWorkItem;
+    FBatch: TWindowWorkItems;
     FBatchPos: Integer;
     FBatchLen: Integer;
     procedure DoFakeEnqueue(AKind: TWindowWorkKind; ARef: TWindowProcRef; AMethod: TWindowProcMethod; AProc: TWindowProc);

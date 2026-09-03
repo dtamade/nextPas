@@ -11,11 +11,11 @@ uses
 type
   TWindowKind = (wkGtk2, wkGtk3, wkGtk4, wkQt, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
 
+  TWindowNativeHandle = type Pointer;
+
 const
   { wkGtk 聚合别名（deprecated）：gtk 智能回退收口至 wkGtk3 载体，与 registry 注释一致，不单列枚举 }
   wkGtk = wkGtk3;
-
-  TWindowNativeHandle = type Pointer;
 
 type
   TWindowEventKind =

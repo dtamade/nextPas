@@ -14,7 +14,7 @@ uses
   nextpas.core.bytes.ops;
 
 function QueueCowCalcGrowCapacity(AOldCap, AOldCount: Integer; out ANewCap: Integer): Boolean; inline;
-procedure QueueCowPrepareCopy(var ANew: array of TWindowWorkItem; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
+procedure QueueCowPrepareCopy(var ANew: TWindowWorkItems; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
 function QueueCowSnapGrowCapacity(ACount: Integer): Integer; inline;
 procedure RequireQueueCowToken(const AToken: TWindowFamilyToken); inline;
 
@@ -33,7 +33,7 @@ begin
   Result := True;
 end;
 
-procedure QueueCowPrepareCopy(var ANew: array of TWindowWorkItem; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
+procedure QueueCowPrepareCopy(var ANew: TWindowWorkItems; const AOldRing: array of TWindowWorkItem; AOldHead, AOldCap, AOldCount, ANewCap: Integer); inline;
 begin
   // 单源 via sync.cow CowRingPrepareCopy + bytes.ops inline 零拷贝 O(n) 均摊 0→32→2×
   specialize CowRingPrepareCopy<TWindowWorkItem>(ANew, AOldRing, AOldHead, AOldCap, AOldCount, ANewCap);

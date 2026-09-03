@@ -31,11 +31,11 @@ uses
 
 type
   { 回调命名类型全集 —— FPC 不支持内联过程类型作参数；
-    三形式范式见 docs/design-conventions.md §8 }
-
-  TWindowProcRef    = reference to procedure;
-  TWindowProcMethod = procedure of object;
-  TWindowProc       = procedure;
+    三形式范式见 docs/design-conventions.md §8。
+    单源于 window.base（守 base←intf），此处仅 alias，防双源漂移。 }
+  TWindowProcRef    = nextpas.core.window.base.TWindowProcRef;
+  TWindowProcMethod = nextpas.core.window.base.TWindowProcMethod;
+  TWindowProc       = nextpas.core.window.base.TWindowProc;
 
   { IWindowDispatcher — 主线程投递；任意线程可 Post，UI 主线程执行；见 CONTRACT §5 }
   { 单源锚点：显式关联 L0 base.callbacks 单源，守 L0-L3 单向，inline 零成本 }
@@ -115,10 +115,51 @@ type
     procedure OnEvent(AHandler: TWindowEventProc); overload;
   end;
 
-  { IWindow — 小接口组合门面：继承 9 小接口，单一 GUID 002 兼容存量 W.Show 直调；
-    新代码可按需依赖 IWindowTitle/IWindowGeometry 等小口径，Supports 探测轻量。 }
-  IWindow = interface(IWindowLifecycle, IWindowVisibility, IWindowTitle, IWindowGeometry, IWindowState, IWindowScale, IWindowNativeHandle, IWindowDispatcherProvider, IWindowEvents)
+  { IWindow — 小接口组合门面：FPC 仅支持单祖先接口，此处平铺 9 小接口全部方法（与各小接口声明同签名），单一 GUID 002 兼容存量 W.Show 直调；
+    新代码可按需依赖 IWindowTitle/IWindowGeometry 等小口径（类声明中并列即可 Supports 探测），轻量零耦合。 }
+  IWindow = interface
     ['{8F1A2B3C-4D5E-4F60-9A8B-C0D1E2F3A002}']
+
+    { 生命周期 }
+    procedure Close;
+    function IsClosed: Boolean;
+
+    { 可见性与焦点 }
+    procedure Show;
+    procedure Hide;
+    function IsVisible: Boolean;
+    procedure Focus;
+
+    { 标题与几何（物理像素口径） }
+    procedure SetTitle(const ATitle: string);
+    function GetTitle: string;
+    procedure SetBounds(AWidth, AHeight: Integer);
+    function GetWidth: Integer;
+    function GetHeight: Integer;
+    procedure SetResizable(AResizable: Boolean);
+
+    { 状态 }
+    procedure Maximize;
+    procedure Unmaximize;
+    function IsMaximized: Boolean;
+    procedure Minimize;
+    procedure Restore;
+    function IsMinimized: Boolean;
+
+    { DPI 只读最小集 }
+    function GetScaleFactor: Double;
+
+    { 平台原生句柄（Close 后返回 nil） }
+    function NativeHandle: TWindowNativeHandle;
+
+    { 主线程投递（转发到本窗所属后端的 dispatcher） }
+    function GetDispatcher: IWindowDispatcher;
+    property Dispatcher: IWindowDispatcher read GetDispatcher;
+
+    { 事件注册：唯一事件入口；重复注册覆盖旧 handler（最后注册者生效） }
+    procedure OnEvent(AHandler: TWindowEventHandler); overload;
+    procedure OnEvent(AHandler: TWindowEventMethod); overload;
+    procedure OnEvent(AHandler: TWindowEventProc); overload;
   end;
 
   {** 宿主驱动扩展：仅 attach 后端（wasm/android/uikit）与 fake 暴露。
@@ -133,6 +174,11 @@ type
     procedure HostResized(AWidth, AHeight: Integer);
     procedure HostScaleChanged(ANewScale: Double);
     procedure HostCloseRequested;
+  end;
+
+  IWindowPrivateHandle = interface
+    ['{A1B2C3D4-E5F6-47AA-B123-456789ABC001}']
+    function GetHandle: Pointer;
   end;
 
 { OnEvent 变体分发：Method/Proc 直存 wedkMethod/wedkProc 零拷贝 inline，Ref 托管；业务以 CONTRACT 为准 }

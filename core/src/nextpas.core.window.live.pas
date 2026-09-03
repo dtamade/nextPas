@@ -87,7 +87,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.sync.cow,
   nextpas.core.sync.rwlock,
-  nextpas.core.window.hash,
   nextpas.core.window.live.arena,
   nextpas.core.window.live.table;
 

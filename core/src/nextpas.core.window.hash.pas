@@ -22,13 +22,58 @@ procedure WindowHashInsertPtr(const AToken: TWindowFamilyToken; var AKeys: array
 procedure WindowHashRemovePtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; APtr: Pointer); inline;
 function WindowHashFindPtr(const AToken: TWindowFamilyToken; const AKeys: array of Pointer; const AIdx: array of Integer; const AUsed: array of Boolean; APtr: Pointer): Integer; inline;
 procedure WindowHashRebuildPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; const AList: array of Pointer; ACount: Integer);
-procedure WindowHashEnsureCapacityPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; ANewCap: Integer; const AList: array of Pointer; ACount: Integer);
 
 procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32; APtr: Pointer); inline;
 procedure WindowHashRemoveU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32); inline;
 function WindowHashFindU32(const AToken: TWindowFamilyToken; const AKeys: array of UInt32; const AVals: array of Pointer; const AUsed: array of Boolean; AID: UInt32): Pointer; inline;
 procedure WindowHashRebuildU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
-procedure WindowHashEnsureCapacityU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
+
+// ---- generic open-hash record (single source for Ptr/U32) ----
+// Live registry operates record directly; raw arrays only via Adopt/Extract.
+
+type
+  generic TWindowOpenHash<TKey, TVal> = record
+  private
+    FKeys: array of TKey;
+    FVals: array of TVal;
+    FUsed: array of Boolean;
+  public
+    procedure Clear; inline;
+    procedure Insert(const AToken: TWindowFamilyToken; const AKey: TKey; const AVal: TVal); inline;
+    procedure Remove(const AToken: TWindowFamilyToken; const AKey: TKey); inline;
+    function FindPos(const AToken: TWindowFamilyToken; const AKey: TKey): Integer; inline;
+    function Find(const AToken: TWindowFamilyToken; const AKey: TKey): TVal; inline;
+    function NeedsGrow(const AToken: TWindowFamilyToken; ACount: Integer): Boolean; inline;
+    function Cap: Integer; inline;
+    procedure Resize(const AToken: TWindowFamilyToken; ANewCap: Integer); inline;
+    procedure ExtractBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+    procedure AdoptBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+    function ValueAt(APos: Integer): TVal; inline;
+  end;
+
+type
+  TWindowPtrHash = specialize TWindowOpenHash<Pointer, Integer>;
+  TWindowU32Hash = specialize TWindowOpenHash<UInt32, Pointer>;
+
+procedure WindowHashRebuild(var AHash: TWindowPtrHash; const AToken: TWindowFamilyToken; const AList: array of Pointer; ACount: Integer); overload; inline;
+procedure WindowHashRebuild(var AHash: TWindowU32Hash; const AToken: TWindowFamilyToken; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer); overload; inline;
+procedure WindowHashEnsureCapacity(var AHash: TWindowPtrHash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AList: array of Pointer; ACount: Integer); overload; inline;
+procedure WindowHashEnsureCapacity(var AHash: TWindowU32Hash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer); overload; inline;
+procedure WindowHashEnsureCapacityPtr(const AToken: TWindowFamilyToken; var AHash: TWindowPtrHash; ANewCap: Integer; const AList: array of Pointer; ACount: Integer);
+procedure WindowHashEnsureCapacityU32(const AToken: TWindowFamilyToken; var AHash: TWindowU32Hash; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
+
+{ 通用内核前向声明：接口泛型记录方法体仅可引用接口符号，单源实现仍在 implementation }
+generic procedure GenClearRaw<TKey, TVal>(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+generic procedure GenClearManaged<TKey, TVal>(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+generic procedure GenClear<TKey, TVal>(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+generic procedure GenInsertUnchecked<TKey, TVal>(const AToken: TWindowFamilyToken; var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; const AKey: TKey; const AVal: TVal);
+generic procedure GenInsert<TKey, TVal>(const AToken: TWindowFamilyToken; var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; const AKey: TKey; const AVal: TVal); inline;
+generic procedure GenRemoveRaw<TKey, TVal>(const AToken: TWindowFamilyToken; var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; const AKey: TKey);
+generic procedure GenRemoveManaged<TKey, TVal>(const AToken: TWindowFamilyToken; var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; const AKey: TKey);
+generic procedure GenRemove<TKey, TVal>(const AToken: TWindowFamilyToken; var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; const AKey: TKey); inline;
+generic function GenFindPos<TKey>(const AToken: TWindowFamilyToken; const AKeys: array of TKey; const AUsed: array of Boolean; const AKey: TKey): Integer;
+function HashIdx(const AToken: TWindowFamilyToken; AKey: Pointer; AMask: Integer): Integer; inline; overload;
+function HashIdx(const AToken: TWindowFamilyToken; AKey: UInt32; AMask: Integer): Integer; inline; overload;
 
 implementation
 
@@ -57,37 +102,6 @@ begin
   RequireWindowFamilyToken(AToken);
   Result := Integer(AID and UInt32(AMask));
 end;
-
-// ---- generic open-hash record (single source for Ptr/U32) ----
-// Live registry operates record directly; raw arrays only via Adopt/Extract.
-
-generic TWindowOpenHash<TKey, TVal> = record
-private
-  FKeys: array of TKey;
-  FVals: array of TVal;
-  FUsed: array of Boolean;
-public
-  procedure Clear; inline;
-  procedure Insert(const AToken: TWindowFamilyToken; const AKey: TKey; const AVal: TVal); inline;
-  procedure Remove(const AToken: TWindowFamilyToken; const AKey: TKey); inline;
-  function FindPos(const AToken: TWindowFamilyToken; const AKey: TKey): Integer; inline;
-  function Find(const AToken: TWindowFamilyToken; const AKey: TKey): TVal; inline;
-  function NeedsGrow(const AToken: TWindowFamilyToken; ACount: Integer): Boolean; inline;
-  function Cap: Integer; inline;
-  procedure Resize(const AToken: TWindowFamilyToken; ANewCap: Integer); inline;
-  procedure ExtractBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
-  procedure AdoptBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
-  function ValueAt(APos: Integer): TVal; inline;
-end;
-
-type
-  TWindowPtrHash = specialize TWindowOpenHash<Pointer, Integer>;
-  TWindowU32Hash = specialize TWindowOpenHash<UInt32, Pointer>;
-
-procedure WindowHashRebuild(var AHash: TWindowPtrHash; const AToken: TWindowFamilyToken; const AList: array of Pointer; ACount: Integer); overload; inline;
-procedure WindowHashRebuild(var AHash: TWindowU32Hash; const AToken: TWindowFamilyToken; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer); overload; inline;
-procedure WindowHashEnsureCapacity(var AHash: TWindowPtrHash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AList: array of Pointer; ACount: Integer); overload; inline;
-procedure WindowHashEnsureCapacity(var AHash: TWindowU32Hash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer); overload; inline;
 
 // ---- hash dispatch for generic kernels ----
 
@@ -335,22 +349,18 @@ end;
 
 procedure TWindowOpenHash.ExtractBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
 begin
-  AKeys := Self.FKeys;
-  AVals := Self.FVals;
-  AUsed := Self.FUsed;
-  Self.FKeys := nil;
-  Self.FVals := nil;
-  Self.FUsed := nil;
+  // open 数组形参禁直接赋值，指针交换单源 ManagedArrayMove 语义等价（AKeys 需 nil/已托管释放）
+  specialize ManagedArrayMove<TKey>(AKeys, Self.FKeys);
+  specialize ManagedArrayMove<TVal>(AVals, Self.FVals);
+  specialize ManagedArrayMove<Boolean>(AUsed, Self.FUsed);
 end;
 
 procedure TWindowOpenHash.AdoptBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
 begin
-  Self.FKeys := AKeys;
-  Self.FVals := AVals;
-  Self.FUsed := AUsed;
-  AKeys := nil;
-  AVals := nil;
-  AUsed := nil;
+  // 同上，记录侧 F* 需 nil（fresh/刚 Extract），调用方缓冲移交后置 nil
+  specialize ManagedArrayMove<TKey>(Self.FKeys, AKeys);
+  specialize ManagedArrayMove<TVal>(Self.FVals, AVals);
+  specialize ManagedArrayMove<Boolean>(Self.FUsed, AUsed);
 end;
 
 function TWindowOpenHash.ValueAt(APos: Integer): TVal; inline;
@@ -375,12 +385,12 @@ end;
 
 procedure WindowHashEnsureCapacity(var AHash: TWindowPtrHash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AList: array of Pointer; ACount: Integer); overload; inline;
 begin
-  WindowHashEnsureCapacityPtr(AToken, AHash.FKeys, AHash.FVals, AHash.FUsed, ANewCap, AList, ACount);
+  WindowHashEnsureCapacityPtr(AToken, AHash, ANewCap, AList, ACount);
 end;
 
 procedure WindowHashEnsureCapacity(var AHash: TWindowU32Hash; const AToken: TWindowFamilyToken; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer); overload; inline;
 begin
-  WindowHashEnsureCapacityU32(AToken, AHash.FKeys, AHash.FVals, AHash.FUsed, ANewCap, AIDs, AList, ACount);
+  WindowHashEnsureCapacityU32(AToken, AHash, ANewCap, AIDs, AList, ACount);
 end;
 
 // ---- raw-array wrappers via record Adopt/Extract (single source) ----
@@ -519,16 +529,16 @@ begin
   Result := nextpas.core.window.impl.WindowHashAlignCapacity(ANewCap);
 end;
 
-procedure WindowHashEnsureCapacityPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; ANewCap: Integer; const AList: array of Pointer; ACount: Integer);
+procedure WindowHashEnsureCapacityPtr(const AToken: TWindowFamilyToken; var AHash: TWindowPtrHash; ANewCap: Integer; const AList: array of Pointer; ACount: Integer);
 var LCap: Integer;
 begin
   RequireWindowFamilyToken(AToken);
-  if ANewCap <= Length(AKeys) then Exit;
+  if ANewCap <= Length(AHash.FKeys) then Exit;
   LCap := WindowHashAlignCapacity(AToken, ANewCap);
-  SetLength(AKeys, LCap);
-  SetLength(AIdx, LCap);
-  SetLength(AUsed, LCap);
-  WindowHashRebuildPtr(AToken, AKeys, AIdx, AUsed, AList, ACount);
+  SetLength(AHash.FKeys, LCap);
+  SetLength(AHash.FVals, LCap);
+  SetLength(AHash.FUsed, LCap);
+  WindowHashRebuildPtr(AToken, AHash.FKeys, AHash.FVals, AHash.FUsed, AList, ACount);
 end;
 
 procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32; APtr: Pointer); inline;
@@ -597,16 +607,16 @@ begin
   end;
 end;
 
-procedure WindowHashEnsureCapacityU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
+procedure WindowHashEnsureCapacityU32(const AToken: TWindowFamilyToken; var AHash: TWindowU32Hash; ANewCap: Integer; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
 var LCap: Integer;
 begin
   RequireWindowFamilyToken(AToken);
-  if ANewCap <= Length(AKeys) then Exit;
+  if ANewCap <= Length(AHash.FKeys) then Exit;
   LCap := WindowHashAlignCapacity(AToken, ANewCap);
-  SetLength(AKeys, LCap);
-  SetLength(AVals, LCap);
-  SetLength(AUsed, LCap);
-  WindowHashRebuildU32(AToken, AKeys, AVals, AUsed, AIDs, AList, ACount);
+  SetLength(AHash.FKeys, LCap);
+  SetLength(AHash.FVals, LCap);
+  SetLength(AHash.FUsed, LCap);
+  WindowHashRebuildU32(AToken, AHash.FKeys, AHash.FVals, AHash.FUsed, AIDs, AList, ACount);
 end;
 
 end.
