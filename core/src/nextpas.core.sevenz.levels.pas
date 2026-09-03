@@ -30,7 +30,7 @@ const
   CSevenZDeflateLevelMap: array[0..3] of TCompressionLevel = (clNone, clFastest, clDefault, clBest);
   CSevenZBZip2BlockSizeMap: array[0..3] of Integer = (1, 1, 9, 9);
 
-function SevenZLevelOrdToDeflateLevel(AOrd: Integer): TCompressionLevel;
+function SevenZLevelOrdToDeflateLevel(AOrd: Integer): TCompressionLevel; inline;
 begin
   if (AOrd >= Low(CSevenZDeflateLevelMap)) and (AOrd <= High(CSevenZDeflateLevelMap)) then
     Result := CSevenZDeflateLevelMap[AOrd]
@@ -38,7 +38,7 @@ begin
     Result := clDefault;
 end;
 
-function SevenZLevelOrdToBZip2BlockSize(AOrd: Integer): Integer;
+function SevenZLevelOrdToBZip2BlockSize(AOrd: Integer): Integer; inline;
 begin
   if (AOrd >= Low(CSevenZBZip2BlockSizeMap)) and (AOrd <= High(CSevenZBZip2BlockSizeMap)) then
     Result := CSevenZBZip2BlockSizeMap[AOrd]
@@ -46,12 +46,12 @@ begin
     Result := 9;
 end;
 
-function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel;
+function SevenZLevelToDeflateLevel(ALevel: TSevenZCompressionLevel): TCompressionLevel; inline;
 begin
   Result := SevenZLevelOrdToDeflateLevel(Ord(ALevel));
 end;
 
-function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer;
+function SevenZLevelToBZip2BlockSize(ALevel: TSevenZCompressionLevel): Integer; inline;
 begin
   Result := SevenZLevelOrdToBZip2BlockSize(Ord(ALevel));
 end;
