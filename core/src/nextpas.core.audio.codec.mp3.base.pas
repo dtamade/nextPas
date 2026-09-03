@@ -4,6 +4,7 @@ unit nextpas.core.audio.codec.mp3.base;
 
 interface
 
+// L0 only: pure constants, no L1+ uses — four-piece base (aligned with wav.base/flac.base/opus.base)
 const
   CMp3ProbeLimit = 4096;
   CMp3MaxStreamBytes = 8 * 1024 * 1024;

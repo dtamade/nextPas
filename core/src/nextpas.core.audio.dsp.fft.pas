@@ -32,6 +32,7 @@ var
   GHannCache: array[0..7] of THannCache;
   GHannLock: TRecursiveMutex;
   GHannInit: Boolean = False;
+  GHannNext: Integer = 0;
 
 procedure EnsureHannInit; inline;
 begin
@@ -65,10 +66,10 @@ begin
   try
     for I := 0 to High(GHannCache) do
       if GHannCache[I].N = N then Exit(PSingle(@GHannCache[I].Data[0]));
-    Slot := -1; Oldest := 0;
+    Slot := -1; Oldest := GHannNext;
     for I := 0 to High(GHannCache) do
       if GHannCache[I].N = 0 then begin Slot := I; Break; end;
-    if Slot < 0 then Slot := Oldest;
+    if Slot < 0 then begin Slot := Oldest; GHannNext := (GHannNext + 1) and 7; end;
     SetLength(GHannCache[Slot].Data, N);
     for I := 0 to N - 1 do
     begin

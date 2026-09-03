@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesZero/BytesCopy inline zero-copy, no base.utils dual source
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
@@ -242,7 +241,7 @@ begin
   except
     InterlockedExchangeAdd64(FViolations, 1);
     if Length(LBuf.Data) > 0 then
-      FillMem(@LBuf.Data[0], SizeUInt(Length(LBuf.Data)), 0);
+      BytesZero(@LBuf.Data[0], SizeUInt(Length(LBuf.Data)));
     LRet := AFrames;
     // exception path no alloc — counting only, avoids PushEvent heap alloc
     FLock.Acquire;

@@ -196,7 +196,7 @@ end;
 procedure T.TestFacade;
 var Bank: IAudioBank;
 begin
-  Bank:=nextpas.core.audio.CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
+  Bank:=nextpas.core.audio.bank.CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
   CheckTrue(Assigned(Bank),'facade bank');
   CheckTrue(Bank.GetFormat.IsValid,'format valid');
 end;
