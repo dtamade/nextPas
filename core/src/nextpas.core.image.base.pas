@@ -13,7 +13,7 @@
  * 只读约束：Const* 返回只读视图，禁止写入；需紧凑数据用 ToCompact。
  * L2，仅 L0-L1，零 RTL；Premultiply 复用 simd.raster 批量接口。
  * 性能：AlignUp64/IsEmpty/BytePerPixel/Clone/Const* 为 inline；ToCompact/FromCompact
- *   逐行 Move 零拷贝复用 bytes.ops 单源语义（Stride 64B 已对齐时整块 Move，否则逐行）。
+ *   逐行 BytesCopy 零拷贝复用 bytes.ops 单源语义（Stride 64B 已对齐时整块 BytesCopy，否则逐行，inline）。
  *   512×256 海报固化 md5 27b73e0d9a765c491bee8c85b367cef2 依赖此确定性紧凑化。
  *}
 unit nextpas.core.image.base;
@@ -46,7 +46,7 @@ type
   public
     class function Create(AWidth, AHeight: Integer; AFormat: TBitmapFormat = bfRGBA): TBitmap; static;
     class function Empty: TBitmap; static;
-    class function FromCompact(const AData: TBytes; AWidth, AHeight: Integer; AFormat: TBitmapFormat = bfRGBA): TBitmap; static;
+    class function FromCompact(const AData: TBytes; AWidth, AHeight: Integer; AFormat: TBitmapFormat = bfRGBA): TBitmap; static; inline;
     procedure Clear;
     function IsEmpty: Boolean; inline;
     function BytePerPixel: Integer; inline;
@@ -60,8 +60,8 @@ type
     function ConstRowPtr(Y: Integer): PByte; inline;
     // 可写行指针（不触发 COW）：仅在已 EnsureUnique 后调用，供批量写复用，避免 Const* 语义模糊
     function UnsafeMutableRowPtr(Y: Integer): PByte; inline;
-    // 去 pad 紧凑拷贝（Width*Bpp 紧凑），避免绕过 ToCompact 直接野指针写
-    function ToCompact: TBytes;
+    // 去 pad 紧凑拷贝（Width*Bpp 紧凑），避免绕过 ToCompact 直接野指针写；inline 零拷贝 BytesCopy 单源
+    function ToCompact: TBytes; inline;
     procedure Premultiply;
     procedure Unpremultiply;
     function Clone: TBitmap; inline;
@@ -80,6 +80,7 @@ implementation
 
 uses
   nextpas.core.mem.base,
+  nextpas.core.bytes.ops,
   nextpas.core.simd.raster;
 
 function AlignUp64(AValue: Integer): Integer;
@@ -256,7 +257,7 @@ begin
   Result := @FPixels[Off];
 end;
 
-function TBitmap.ToCompact: TBytes;
+function TBitmap.ToCompact: TBytes; inline;
 var
   ByRow, Y: Integer;
   Src: PByte;
@@ -269,16 +270,16 @@ begin
     raise EArgumentError.Create('nextpas.core.image.base.pas: ToCompact overflow');
   SetLength(Result, ByRow * FHeight);
   if FStride = ByRow then
-    Move(FPixels[0], Result[0], NativeUInt(ByRow) * NativeUInt(FHeight))
+    BytesCopy(@Result[0], @FPixels[0], NativeUInt(ByRow) * NativeUInt(FHeight))
   else
     for Y := 0 to FHeight - 1 do
     begin
       Src := @FPixels[Y * FStride];
-      Move(Src^, Result[Y * ByRow], ByRow);
+      BytesCopy(@Result[Y * ByRow], Src, SizeUInt(ByRow));
     end;
 end;
 
-class function TBitmap.FromCompact(const AData: TBytes; AWidth, AHeight: Integer; AFormat: TBitmapFormat): TBitmap;
+class function TBitmap.FromCompact(const AData: TBytes; AWidth, AHeight: Integer; AFormat: TBitmapFormat): TBitmap; inline;
 var
   Bpp, RowLen, Y: Integer;
   Dst: PByte;
@@ -302,12 +303,12 @@ begin
     raise EArgumentError.Create('nextpas.core.image.base.pas: FromCompact data length mismatch');
   Result := TBitmap.Create(AWidth, AHeight, AFormat);
   if Result.FStride = RowLen then
-    Move(AData[0], Result.FPixels[0], NativeUInt(RowLen) * NativeUInt(AHeight))
+    BytesCopy(@Result.FPixels[0], @AData[0], NativeUInt(RowLen) * NativeUInt(AHeight))
   else
     for Y := 0 to AHeight - 1 do
     begin
       Dst := @Result.FPixels[Y * Result.FStride];
-      Move(AData[Y * RowLen], Dst^, RowLen);
+      BytesCopy(Dst, @AData[Y * RowLen], SizeUInt(RowLen));
     end;
 end;
 

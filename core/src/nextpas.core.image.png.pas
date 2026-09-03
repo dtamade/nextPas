@@ -42,6 +42,7 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.compress,
   nextpas.core.checksum.crc32,
+  nextpas.core.bytes.ops,
   nextpas.core.image.base,
   nextpas.core.image.dispatch;
 
@@ -49,7 +50,7 @@ const
   PNG_SIGNATURE: array[0..7] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A);
 
-procedure PutBe32(ADst: PByte; AValue: LongWord);
+procedure PutBe32(ADst: PByte; AValue: LongWord); inline;
 begin
   ADst[0] := Byte(AValue shr 24);
   ADst[1] := Byte(AValue shr 16);
@@ -57,9 +58,9 @@ begin
   ADst[3] := Byte(AValue);
 end;
 
-{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) }
+{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) — BytesCopy 单源 inline 零拷贝 }
 procedure AppendChunk(var ADst: TBytes; const AType: AnsiString;
-  const AData: PByte; ADataLen: SizeUInt);
+  const AData: PByte; ADataLen: SizeUInt); inline;
 var
   Base: SizeUInt;
   Crc: LongWord;
@@ -67,9 +68,9 @@ begin
   Base := Length(ADst);
   SetLength(ADst, Base + 12 + ADataLen);
   PutBe32(@ADst[Base], LongWord(ADataLen));
-  Move(AType[1], ADst[Base + 4], 4);
+  BytesCopy(@ADst[Base + 4], @AType[1], 4);
   if ADataLen > 0 then
-    Move(AData^, ADst[Base + 8], ADataLen);
+    BytesCopy(@ADst[Base + 8], AData, SizeUInt(ADataLen));
   Crc := Crc32Update(0, @ADst[Base + 4], 4);
   Crc := Crc32Update(Crc, AData, ADataLen);
   PutBe32(@ADst[Base + 8 + ADataLen], Crc);
@@ -90,7 +91,7 @@ begin
 
   Result := nil;
   SetLength(Result, 8);
-  Move(PNG_SIGNATURE, Result[0], 8);
+  BytesCopy(@Result[0], @PNG_SIGNATURE[0], 8);
 
   { IHDR: 宽/高 BE32 + 位深 8 + 颜色类型 6(RGBA) + 压缩 0 + 滤波 0 + 隔行 0 }
   FillChar(Ihdr, SizeOf(Ihdr), 0);
@@ -107,7 +108,7 @@ begin
   for I := 0 to SizeUInt(AHeight) - 1 do
   begin
     P[0] := 0;
-    Move(APixels[I * RowLen], P[1], RowLen);
+    BytesCopy(@P[1], @APixels[I * RowLen], SizeUInt(RowLen));
     Inc(P, RowLen + 1);
   end;
   Raw := DeflateCompress(Raw);
@@ -194,7 +195,7 @@ begin
     begin
       SetLength(LIdat, Length(LIdat) + Integer(LLen));
       if LLen > 0 then
-        Move(AData[LPos + 8], LIdat[Length(LIdat) - Integer(LLen)], LLen);
+        BytesCopy(@LIdat[Length(LIdat) - Integer(LLen)], @AData[LPos + 8], SizeUInt(LLen));
     end
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('E')) and
             (AData[LPos + 6] = Ord('N')) and (AData[LPos + 7] = Ord('D')) then
@@ -284,7 +285,7 @@ begin
           Result[(Y * AWidth + X) * 4 + C] := LRow[X * 4 + C];
       end;
     end;
-    Move(LRow[0], LPrev[0], RowLen);
+    BytesCopy(@LPrev[0], @LRow[0], SizeUInt(RowLen));
   end;
 end;
 
