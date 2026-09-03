@@ -1603,7 +1603,7 @@ begin
       ADest[I] := ASrc[I];
   end
   else if ACount > 0 then
-    Move(ASrc[0], ADest[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+    BytesCopy(@ADest[0], @ASrc[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
 end;
 
 generic procedure VecTrim<T>(var AArr: specialize TVecArray<T>; ACount: Integer);
@@ -1659,7 +1659,7 @@ begin
       ADst[I] := ASrc[I];
   end
   else if ACount > 0 then
-    Move(ASrc[0], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+    BytesCopy(@ADst[0], @ASrc[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
 end;
 
 { 生长分配+拷贝单源：预校验后按需 SetLength(LCap) 零化 + VecCopy 线性化，inline 单源复用 VecGrowCapacity/VecCopy 零额外调用，短临界 <1µs；SetLength 零化 O(Cap) 经 0→4→2× 倍增摊销为 O(1)/push 且复用 LNew 缓冲 Length 判定避免重复零化——突发并发下 stale 重试零重复分配不放大尾延迟，尾零 spare 经复用逐步兑现，managed 逐元素保 refcnt、blittable 单 Move 零拷贝，stale 重试零重复拷贝（复用 LNew 缓冲判定 Length) }
@@ -1677,7 +1677,7 @@ begin
       ADst[I] := ASrc[I];
   end
   else if ACount > 0 then
-    Move(ASrc[0], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+    BytesCopy(@ADst[0], @ASrc[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
 end;
 
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
@@ -1694,7 +1694,7 @@ begin
         ADst[I] := ASrc[AHead + I];
     end
     else if ACount > 0 then
-      Move(ASrc[AHead], ADst[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
+      BytesCopy(@ADst[0], @ASrc[AHead], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
   end
   else
   begin
@@ -1709,9 +1709,9 @@ begin
     else
     begin
       if LTail > 0 then
-        Move(ASrc[AHead], ADst[0], SizeUInt(LTail) * SizeUInt(SizeOf(T)));
+        BytesCopy(@ADst[0], @ASrc[AHead], SizeUInt(LTail) * SizeUInt(SizeOf(T)));
       if ACount - LTail > 0 then
-        Move(ASrc[0], ADst[LTail], SizeUInt(ACount - LTail) * SizeUInt(SizeOf(T)));
+        BytesCopy(@ADst[LTail], @ASrc[0], SizeUInt(ACount - LTail) * SizeUInt(SizeOf(T)));
     end;
   end;
 end;

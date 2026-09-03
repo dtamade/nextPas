@@ -57,7 +57,7 @@ def parse_inline_names_in_section(lines: list[str], start: int, end: int) -> set
     i = start
     while i < end:
         line = lines[i]
-        if re.match(r"^\s*(function|procedure)\s+", line, re.I):
+        if re.match(r"^\s*(?:generic\s+)?(function|procedure)\s+", line, re.I):
             header = ""
             header_start = i
             # collect header until ';' appears (could span multiple lines)
@@ -174,7 +174,7 @@ def check_ops(core_root: Path) -> list[str]:
     n = len(ops_lines)
     while i < n:
         line = ops_lines[i]
-        m = re.match(r"^\s*(function|procedure)\s+([A-Za-z_][A-Za-z0-9_\.]*)", line, re.I)
+        m = re.match(r"^\s*(?:generic\s+)?(function|procedure)\s+([A-Za-z_][A-Za-z0-9_\.]*)", line, re.I)
         if not m:
             i += 1
             continue
@@ -201,7 +201,7 @@ def check_ops(core_root: Path) -> list[str]:
         body_end = body_start
         while body_end < n:
             nxt = ops_lines[body_end]
-            if re.match(r"^\s*(function|procedure)\s+[A-Za-z_]", nxt, re.I):
+            if re.match(r"^\s*(?:generic\s+)?(function|procedure)\s+[A-Za-z_]", nxt, re.I):
                 break
             if re.match(r"^\s*end\.\s*$", nxt):
                 break
