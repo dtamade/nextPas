@@ -1,5 +1,12 @@
 # nextPas Agent Rules
 
+> **铁律（lane 会话必守，违反停工上报）：**
+> 1. 只待在分给你的 worktree 和分支里干活，不新建分支，不碰别人的 worktree。
+> 2. **永远不碰 main**：不 checkout main、不 merge 进 main、不 push main。
+>    你只报 `Ready`，合由总控在 main 的 worktree 里串行做。
+> 3. 开工模板见 `docs/plans/LANE_TASK_TEMPLATE.md`，提示词里没给就按它要。
+> 4. 报 `Ready` 前：worktree clean、`make hygiene` 过、focused gate 绿。
+
 本文件是 AI 同事进入仓库后的第一入口。开始任何任务前先读这里，再读与任务相关的
 `docs/architecture/`、`docs/plans/`、模块 README 和测试目录。
 
