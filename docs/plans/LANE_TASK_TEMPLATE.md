@@ -47,6 +47,40 @@ make hygiene
 
 ---
 
+## Main 侧提示词（在 main 的 worktree 开 AI 会话用，每次只换 lane 名）
+
+```text
+你在 main 分支的 worktree 里（项目根目录）。你是 landing 助手，不是开发。
+
+## 本次任务（二选一，删掉不用的）
+A. 预审 lane：<lane分支名>，只读审查 + 跑验证，给我 merge 建议，不合不推。
+B. 执行 landing：把 <lane分支名> 报 Ready 的 commits 按下面清单合进 main。
+
+先用 git rev-parse 取 lane 分支顶端并报出来确认，HEAD 不用我填。
+
+## 铁律
+1. main 上不写任何新功能、不改任何模块代码。允许的只有：landing 候选分支操作、
+   文档归档、删已吸收的分支和 worktree。
+2. 不许 --force，不许 push main，除非我明确说了"推"。
+3. B 任务严格按下面"总控 Landing 清单"一步步来，
+   landing-check 红了就停，把报错原样给我，不要修 lane 的代码。
+4. cherry-pick 有冲突就停，把冲突摆出来等我定，不要自己选边。
+5. 开始先跑：git status --short --branch、git worktree list --porcelain、
+   scripts/worktree-audit.sh，确认起点干净再动手。
+
+## 汇报
+每做完一步说一声。结束给：合了哪些 commits、验证证据、是否已 push、
+worktree/分支清理状态、archive 标签名。
+```
+
+最简用法（日常 90% 情况，铁律已在 AGENTS.md 顶部，AI 自动会读）：
+
+```text
+在 main 里预审 <lane分支名>，只读，不合不推，给 merge 建议。
+```
+
+---
+
 ## 总控 Landing 清单（只在 main 的 worktree 执行，一次一个）
 
 ```bash
