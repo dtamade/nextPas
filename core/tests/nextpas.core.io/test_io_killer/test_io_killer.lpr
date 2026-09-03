@@ -3,7 +3,7 @@ program test_io_killer;
 {$R+}{$Q+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,

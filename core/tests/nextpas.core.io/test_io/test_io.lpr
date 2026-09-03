@@ -3,7 +3,8 @@ program test_io;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.base,

@@ -3,10 +3,12 @@ program test_stream_adapter;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   Classes,
+  nextpas.core.base,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.exception,
+  nextpas.core.text.format,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -170,7 +172,7 @@ var
   LReader: INextPasByteReader;
 begin
   Inc(ReadByteCalls);
-  if Supports(FInner, INextPasByteReader, LReader) then
+  if FInner.QueryInterface(INextPasByteReader, LReader) = 0 then
     Exit(LReader.ReadByte);
   Result := 0;
 end;
@@ -180,7 +182,7 @@ var
   LWriter: INextPasByteWriter;
 begin
   Inc(WriteByteCalls);
-  if Supports(FInner, INextPasByteWriter, LWriter) then
+  if FInner.QueryInterface(INextPasByteWriter, LWriter) = 0 then
     LWriter.WriteByte(AValue);
 end;
 
@@ -198,7 +200,7 @@ begin
     AMessage + ': length');
   for LI := 0 to High(AExpected) do
     if AExpected[LI] <> AActual[LI] then
-      Fail(Format('%s: byte %d expected %d got %d',
+      Fail(TextFormat('%s: byte %d expected %d got %d',
         [AMessage, LI, AExpected[LI], AActual[LI]]));
 end;
 
@@ -445,7 +447,7 @@ begin
     try
       LWrapped.Seek(0, Word(Ord(Classes.soEnd)));
     except
-      on E: Exception do
+      on E: nextpas.core.exception.Exception do
         LRaised := Pos('32-bit range', E.Message) > 0;
     end;
     Check(LRaised, '32-bit Seek must reject Int64 overflow');

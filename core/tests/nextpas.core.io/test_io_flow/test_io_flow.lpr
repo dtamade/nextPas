@@ -3,7 +3,8 @@ program test_io_flow;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, nextpas.core.fs,
+  nextpas.core.base,
+  nextpas.core.text.conv, nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.view,
@@ -18,6 +19,15 @@ uses
 
 var
   T: TTestSuite;
+
+var
+  GUniq: Integer = 0;
+
+function UniqTag: string;
+begin
+  Inc(GUniq);
+  Result := IntToStr(GetProcessID) + '_' + IntToStr(GUniq);
+end;
 
 type
   TZeroProgressWriter = class(TInterfacedObject, IWriter)
@@ -314,7 +324,7 @@ var
   LPath: string;
   LF: IMappedFile;
 begin
-  LPath := '/tmp/test_mmap_' + IntToStr(Random(99999)) + '.txt';
+  LPath := '/tmp/test_mmap_' + UniqTag + '.txt';
   WriteFileText(LPath, 'hello mmap');
   LF := MmapOpen(LPath);
   CheckEqual(Int64(10), LF.Size, 'mmap size');
@@ -329,7 +339,7 @@ var
   LPath: string;
   LM: IMappedLines;
 begin
-  LPath := '/tmp/test_mmap_lines_' + IntToStr(Random(99999)) + '.txt';
+  LPath := '/tmp/test_mmap_lines_' + UniqTag + '.txt';
   WriteFileText(LPath, 'line1' + #10 + 'line2' + #10 + 'line3');
   LM := MmapLines(LPath);
   CheckEqual(Int64(3), Int64(LM.Count), 'mmap 3 lines');
@@ -345,7 +355,7 @@ var
   LPath: string;
   LM: IMappedLines;
 begin
-  LPath := '/tmp/test_mmap_search_' + IntToStr(Random(99999)) + '.txt';
+  LPath := '/tmp/test_mmap_search_' + UniqTag + '.txt';
   WriteFileText(LPath, 'info: ok' + #10 + 'error: fail' + #10 + 'info: done');
   LM := MmapLines(LPath);
   Check(LM.Contains('error'), 'contains error');
@@ -361,7 +371,7 @@ var
   LPath: string;
   LM: IMappedLines;
 begin
-  LPath := '/tmp/test_mmap_empty_' + IntToStr(Random(99999)) + '.txt';
+  LPath := '/tmp/test_mmap_empty_' + UniqTag + '.txt';
   WriteFileText(LPath, '');
   LM := MmapLines(LPath);
   CheckEqual(Int64(0), Int64(LM.Count), 'mmap empty = 0 lines');
@@ -374,7 +384,7 @@ var
   LPath: string;
   LM: IMappedLines;
 begin
-  LPath := '/tmp/test_mmap_crlf_' + IntToStr(Random(99999)) + '.txt';
+  LPath := '/tmp/test_mmap_crlf_' + UniqTag + '.txt';
   WriteFileText(LPath, 'win' + #13#10 + 'line');
   LM := MmapLines(LPath);
   CheckEqual(Int64(2), Int64(LM.Count), 'crlf 2 lines');
