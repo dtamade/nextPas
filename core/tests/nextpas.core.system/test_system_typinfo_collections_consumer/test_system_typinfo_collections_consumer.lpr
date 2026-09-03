@@ -4,7 +4,9 @@ program test_system_typinfo_collections_consumer;
 
 uses
   nextpas.core.test,
-  nextpas.core.system.typinfo,
+  nextpas.core.base,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.collections.element_manager,
   nextpas.core.bytes.ops;
 
@@ -21,11 +23,13 @@ begin
   LManager := TStringManager.Create;
   try
     Check(LManager.IsManagedType, 'TElementManager<string> should detect managed storage');
-    Check(LManager.ElementTypeInfo <> nil, 'TElementManager<string> should expose PTypeInfo');
-    Check(LManager.ElementTypeInfo = TypeInfo(string),
+    Check(LManager.ElementTypeHandle <> nil, 'TElementManager<string> should expose a type handle');
+    Check(LManager.ElementTypeHandle = TNPTypeHandle(TypeInfo(string)),
       'TElementManager<string> should use compiler TypeInfo(string) truth');
-    Check(LManager.ElementTypeInfo^.Kind = nextpas.core.system.typinfo.tkAString,
-      'TElementManager<string> should classify string as tkAString');
+    { R1 kind mapping (FPC TTypeKind -> TNPTypeKind, see reflect.base/reflect.fpc):
+      tkAString -> nkString; tkBool/tkEnumeration -> nkEnumeration. }
+    Check(NPTypeKindOf(LManager.ElementTypeHandle) = nkString,
+      'TElementManager<string> should classify string as nkString (was tkAString)');
     CheckEqual(Int64(SizeOf(string)), Int64(LManager.ElementSize),
       'TElementManager<string> should preserve element sizing');
   finally
@@ -37,14 +41,16 @@ procedure TestTypeKindNameSpanZeroCopy;
 var
   LManager: TStringManager;
   LNameSpan, LExpectSpan: TByteSpan;
+  LName: string;
   LExpect: RawByteString;
 begin
   LManager := TStringManager.Create;
   try
-    // TypeInfo name is ShortString; use zero-copy TByteSpan (inline SpanEqual) — single source bytes.ops
+    // Declared type name via reflect owner (NPTypeNameOf); zero-copy TByteSpan (inline SpanEqual) — single source bytes.ops
+    LName := NPTypeNameOf(LManager.ElementTypeHandle);
     LExpect := 'AnsiString';
-    if Length(LManager.ElementTypeInfo^.Name) > 0 then
-      LNameSpan := TByteSpan.Create(PByte(@LManager.ElementTypeInfo^.Name[1]), SizeUInt(Length(LManager.ElementTypeInfo^.Name)))
+    if Length(LName) > 0 then
+      LNameSpan := TByteSpan.Create(PByte(@LName[1]), SizeUInt(Length(LName)))
     else
       LNameSpan := TByteSpan.Empty;
     if Length(LExpect) > 0 then
@@ -54,8 +60,8 @@ begin
     // Inline, zero-copy, single-source bytes.ops; no heap alloc in comparison path
     Check(SpanEqual(LNameSpan, LExpectSpan) or (LNameSpan.Len > 0),
       'TypeInfo(string) name span should be non-empty and comparable via bytes.ops');
-    Check(LManager.ElementTypeInfo^.Kind = nextpas.core.system.typinfo.tkAString,
-      'span check must agree with tkAString kind (drift would diverge)');
+    Check(NPTypeKindOf(LManager.ElementTypeHandle) = nkString,
+      'span check must agree with nkString kind (drift would diverge)');
   finally
     LManager.Free; // resource release not lost
   end;
@@ -125,7 +131,7 @@ begin
 end;
 
 begin
-  T := TTestSuite.Create('nextpas.core.system.typinfo collections consumer');
+  T := TTestSuite.Create('nextpas.core.reflect collections consumer');
   T.Test('element manager TypeInfo truth', @TestElementManagerTypeInfoTruth);
   T.Test('TypeInfo name span zero-copy bytes.ops', @TestTypeKindNameSpanZeroCopy);
   T.Test('managed string lifecycle consumer path', @TestManagedStringLifecycleConsumerPath);
