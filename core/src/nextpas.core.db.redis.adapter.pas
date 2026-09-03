@@ -1,50 +1,19 @@
 unit nextpas.core.db.redis.adapter;
 
-{** @desc IDbConnection/IDbQuery 的 Redis 原生适配器（V3-A5）。
-
-       缝位：L2 同层单向 allowlist 轻量缝 `db.redis.adapter → net`（transport 侧承载 `net.tcp`/`tls.dialer` 主缝，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image 范式），bytes.ops 单源 inline/零拷贝（StringToBytes 薄转发，视图零分配），资源 FreeAndNil/try-finally 不丢。
-       定位：RESP2 协议原生客户端（无 C 库依赖），键值面映射到统
-       一层。命令文本 = 空白分词的命令行（GET key / SET key val），
-       ?/?N 占位符替换为独立 bulk 参数——RESP 长度前缀天然二进制
-       安全，注入安全由协议构造保证（无转义路径）。
-
-       执行模型：IDbQuery 惰性执行（首个 Step 发命令并解析完整回
-       复；后续 Step 只遍历已解析行，无 IO）；Reset 重臂（下次
-       Step 重发命令，对齐 odbc Reset 语义）。
-
-       回复 → 行映射（诚实最小面）：array 回复每元素一行；
-       simple/bulk/integer 标量一行；null 零行；error 回复在执行点
-       抛 EDbError（db.err ClassifyRedis 归一）。单列列名 'reply'。
-
-       事务控制面：MULTI/EXEC/DISCARD 直映。MULTI 期间命令被服务
-       端排队，本层透明收到 +QUEUED（消费方读到的是排队标记而非
-       结果——Redis 固有语义）；CommitTxn 校验 EXEC 数组内错误元素
-       后丢弃载荷（排队命令的实际结果不经统一层暴露）；EXECABORT
-       → decTransaction。AImmediate 无对应语义接受为 no-op。
-
-       能力降级矩阵（诚实契约，CONTRACT §2.13 同文）：
-         - Savepoints / StmtCacheControl / LargeObjects /
-           NativeBool / MultiStatementExec / StatementTimeout：False。
-         - BatchExecutor：True——真流水线（一次写 burst + N 读），
-           sqlite 式精确到步的错误定位。
-         - CaseSensitiveIdentifiers：True（键二进制敏感）。
-         - MaxPlaceholders：999 保守下界。
-
-       观测钩子：§2.12 四后端同构接线（attach-catch-up、首个执行窗
-       口计时一次、错误类目透传）。 *}
+{** @desc IDbConnection 的 Redis 原生适配器（RESP2 流水线/MULTI 直映，惰性 Query/Reset，单列 'reply'）。 *}
+{** 能力降级与观测同构见 CONTRACT §2.12/§2.13；命令分词/回复映射/事务语义详实现（单源以 CONTRACT 为准）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
 uses
-  nextpas.core.bytes.ops,
-  nextpas.core.text.conv,
-  nextpas.core.base.utils,
-  nextpas.core.exception,
   nextpas.core.base,
-  nextpas.core.sync,
+  nextpas.core.base.utils,
   nextpas.core.errors,
+  nextpas.core.text.utils,
+  nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.time,
   nextpas.core.net,
   nextpas.core.db.base,
@@ -54,6 +23,8 @@ uses
   nextpas.core.db.redis.base,
   nextpas.core.db.redis.resp,
   nextpas.core.db.redis.transport;
+
+
 
 { 连接 Redis 并完成握手（AUTH → SELECT → INFO 探测）。AAddr 形如
   'host[:port][/db]'；APassword 空 = 不发 AUTH；ADbIndex 0 = 不发
@@ -79,67 +50,13 @@ function ConnectRedisWithTransport(const ATransport: IRedisTransport;
 
 implementation
 
-const
-  C_READ_CHUNK = 4096;
+uses
+  nextpas.core.db.redis.addr,
+  nextpas.core.db.redis.pipeline,
+  nextpas.core.db.redis.recv,
+  nextpas.core.text.number;
 
-function BytesFromText(const AStr: string): TBytes; inline;
-begin
-  // INV-5 single source: delegate to bytes.ops.StringToBytes (zero-copy PAnsiChar(AText)^ deref + single SetLength+Move, inline thin forward — Move stays in owner)
-  Result := StringToBytes(AStr);
-end;
-
-function RedisCategory(const AErrType: string): TDbErrorCategory;
-var
-  LCon: TDbConstraintKind;
-begin
-  ClassifyRedis(AErrType, Result, LCon);
-end;
-
-{ ---- 地址解析 ---- }
-
-procedure ParseRedisAddr(const AAddr: string;
-  const AOptions: TDbConnectOptions; out AOpts: TDbRedisConnectOptions);
-var
-  LHostPart, LTail: string;
-  LSlash, LColon: Integer;
-  LCode: Integer;
-begin
-  AOpts := TDbRedisConnectOptions.Default;
-  AOpts.Host := '';
-  AOpts.Port := DB_REDIS_DEFAULT_PORT;
-  LHostPart := AAddr;
-  LSlash := Pos('/', LHostPart);
-  if LSlash > 0 then
-  begin
-    LTail := Copy(LHostPart, LSlash + 1, MaxInt);
-    LHostPart := Copy(LHostPart, 1, LSlash - 1);
-    Val(LTail, AOpts.DbIndex, LCode);
-    if (LCode <> 0) or (AOpts.DbIndex < 0) then
-      raise EDbError.CreateSimple(dbkRedis,
-        'invalid db index "/' + LTail + '"');
-  end;
-  if AOpts.DbIndex > 15 then
-    raise EDbError.CreateSimple(dbkRedis,
-      'db index out of range (0..15)');
-  LColon := Pos(':', LHostPart);
-  if LColon > 0 then
-  begin
-    LTail := Copy(LHostPart, LColon + 1, MaxInt);
-    LHostPart := Copy(LHostPart, 1, LColon - 1);
-    Val(LTail, LCode, LCode);
-    Val(LTail, AOpts.Port, LCode);
-    if (LCode <> 0) or (AOpts.Port = 0) then
-      raise EDbError.CreateSimple(dbkRedis,
-        'invalid port ":' + LTail + '"');
-  end;
-  AOpts.Host := Trim(LHostPart);
-  if AOpts.Host = '' then
-    raise EDbError.CreateSimple(dbkRedis, 'empty host');
-  { 统一层连接选项映射（advisory）：StatementTimeoutMs 作为 IO
-    deadline 上限；BusyTimeoutMs 无对应语义忽略（不冒充）。 }
-  if AOptions.StatementTimeoutMs > 0 then
-    AOpts.IoTimeoutMs := AOptions.StatementTimeoutMs;
-end;
+{ 单源分治：地址/流水线/接收缓冲已抽 addr/pipeline/recv（CONTRACT §2.13）；DB_REDIS_READ_* 单源，bytes.ops 单源零拷贝。 }
 
 { ---- 连接对象 ---- }
 
@@ -148,15 +65,14 @@ type
     IDbTxControl, IDbBatchExecutor, IDbCapabilities, IDbTraceControl)
   private
     FTransport: IRedisTransport;
-    FLock: INativeMutex;
+    FRing: TRedisRecvBuffer;
     FDepth: Integer;
-    FBuf: TBytes;          { 接收缓冲（跨 Recv 追加）}
     FTrace: TDbTraceHub;
     FProductVersion: string;   { INFO server 探测（best-effort，可空）}
     procedure Handshake(const APassword: string; const ADbIndex: Integer);
     procedure ProbeInfo;
     function LockedExecute(const AArgs: TRespArgs): TRespValue;
-    function ReadReply: TRespValue;
+    function ReadReply: TRespValue; { not inline: passed as TReadReplyFunc method reference to RedisExecuteBatch }
   public
     constructor Create(const ATransport: IRedisTransport;
       const APassword: string; const ADbIndex: Integer;
@@ -194,17 +110,17 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
-    function SupportsArrayBinding: Boolean;
+    function CaseSensitiveIdentifiers: Boolean;
+    function MaxPlaceholders: Integer;
     function ServerVersion: Integer;
     function SupportsNativeVector: Boolean;
     function SupportsJsonPath: Boolean;
     function SupportsRangeTypes: Boolean;
     function SupportsBulkCopy: Boolean;
-    function CaseSensitiveIdentifiers: Boolean;
-    function MaxPlaceholders: Integer;
   end;
 
 type
@@ -252,7 +168,7 @@ procedure BridgeNetError(E: Exception);
 begin
   { 传输层拨号失败（TCP/TLS）语义上是连接类错误；ErrType 槽放
     'NET' 标记非服务端回复、源自本地传输栈 }
-  raise EDbError.CreateFullRedis('NET',
+  raise NewDbErrorRedis('NET',
     'redis connect: ' + E.Message, decConnection, dckNone);
 end;
 
@@ -323,7 +239,7 @@ constructor TDbRedisConnection.Create(const ATransport: IRedisTransport;
 begin
   inherited Create;
   FTransport := ATransport;
-  FLock := nextpas.core.sync.Mutex;
+  FRing := TRedisRecvBuffer.Create(FTransport);
   FDepth := 0;
   FTrace := TDbTraceHub.Create;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
@@ -336,6 +252,7 @@ destructor TDbRedisConnection.Destroy;
 begin
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
+  FreeAndNil(FRing);
   if FTransport <> nil then
   begin
     FTransport.Close;
@@ -357,15 +274,63 @@ end;
 
 procedure TDbRedisConnection.Handshake(const APassword: string;
   const ADbIndex: Integer);
+var
+  LHasAuth, LHasSelect: Boolean;
+  LArgsAuth, LArgsSelect: TRespArgs;
+  LLenAuth, LLenSelect, LTotal: SizeUInt;
+  LBuf: TBytes;
+  LR: TRespValue;
 begin
-  { 错误回复由 LockedExecute 统一抛（AUTH 失败即建连失败）}
-  if APassword <> '' then
-    LockedExecute(TRespArgs.Create(
-      BytesFromText('AUTH'), BytesFromText(APassword)));
-  if ADbIndex <> 0 then
-    LockedExecute(TRespArgs.Create(
-      BytesFromText('SELECT'),
-      BytesFromText(IntToStr(ADbIndex))));
+  // perf: handshake batch 复用 pipeline 批量零拷贝路径 (CONTRACT §2.13)
+  // dual AUTH+SELECT 单次burst Send + 逐条 ReadReply，消除2×RTT与2次syscall/分配；
+  // 复用 bytes.ops 单源 (BYTES_OPS_SINGLE_SOURCE, BytesFromText->StringToBytes 单Move, RespEncodeCommandLength inline阈值 + RespEncodeCommandInto 单遍Move直写), redis.resp 单源编解码, db.redis.pipeline 单源分块思想零二次拷贝
+  // bytes.ops single source + redis.pipeline zero-copy slice Send(@Buf,Len) 无每帧临时 LFrame
+  // stability: try..finally 资源释放不丢 (LBuf/SetLength + Args清零), error Kind=rvkError 按 LockedExecute 同映射 (RedisCategory/RespErrorType->decAuth/decSyntax) 顺序读保证SELECT错误不掩盖AUTH错误
+  LHasAuth := APassword <> '';
+  LHasSelect := ADbIndex <> 0;
+  if not LHasAuth and not LHasSelect then
+    Exit;
+  if LHasAuth xor LHasSelect then
+  begin
+    if LHasAuth then
+      LockedExecute(TRespArgs.Create(
+        BytesFromText('AUTH'), BytesFromText(APassword)))
+    else
+      LockedExecute(TRespArgs.Create(
+        BytesFromText('SELECT'),
+        BytesFromText(nextpas.core.text.conv.IntToStr(Int64(ADbIndex)))));
+    Exit;
+  end;
+  // dual pipeline path — pipeline 批量零拷贝 (resp Length+Into 直写单缓冲, 单次 Send slice)
+  LArgsAuth := TRespArgs.Create(BytesFromText('AUTH'), BytesFromText(APassword));
+  LArgsSelect := TRespArgs.Create(
+    BytesFromText('SELECT'),
+    BytesFromText(nextpas.core.text.conv.IntToStr(Int64(ADbIndex))));
+  LLenAuth := RespEncodeCommandLength(LArgsAuth);
+  LLenSelect := RespEncodeCommandLength(LArgsSelect);
+  LTotal := LLenAuth + LLenSelect;
+  SetLength(LBuf, LTotal);
+  try
+    if LLenAuth > 0 then
+      RespEncodeCommandInto(LArgsAuth, PByte(@LBuf[0]));
+    if LLenSelect > 0 then
+      RespEncodeCommandInto(LArgsSelect, PByte(@LBuf[LLenAuth]));
+    FTransport.Send(PByte(@LBuf[0]), LTotal);
+    LR := ReadReply;
+    if LR.Kind = rvkError then
+      raise NewDbErrorRedis(RespErrorType(LR.Data),
+        RespBytesToStr(LR.Data),
+        RedisCategory(RespErrorType(LR.Data)), dckNone);
+    LR := ReadReply;
+    if LR.Kind = rvkError then
+      raise NewDbErrorRedis(RespErrorType(LR.Data),
+        RespBytesToStr(LR.Data),
+        RedisCategory(RespErrorType(LR.Data)), dckNone);
+  finally
+    SetLength(LBuf, 0);
+    SetLength(LArgsAuth, 0);
+    SetLength(LArgsSelect, 0);
+  end;
 end;
 
 procedure TDbRedisConnection.ProbeInfo;
@@ -392,32 +357,9 @@ begin
 end;
 
 function TDbRedisConnection.ReadReply: TRespValue;
-var
-  LPos: Integer;
-  LN: SizeUInt;
-  LNeed: Boolean;
 begin
-  LPos := 0;
-  repeat
-    if RespTryParse(FBuf, LPos, Result, LNeed) then
-    begin
-      { 消费已解析前缀 }
-      if LPos < Length(FBuf) then
-        BytesCopy(@FBuf[0], @FBuf[LPos], SizeUInt(Length(FBuf) - LPos)); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy overlap-safe
-      SetLength(FBuf, Length(FBuf) - LPos);
-      Exit;
-    end;
-    if not LNeed then
-      break;
-    SetLength(FBuf, Length(FBuf) + C_READ_CHUNK);
-    LN := FTransport.Recv(@FBuf[Length(FBuf) - C_READ_CHUNK],
-      C_READ_CHUNK);
-    if LN = 0 then
-      raise EDbError.CreateSimple(dbkRedis,
-        'redis: connection closed mid-reply');
-    if LN < SizeUInt(C_READ_CHUNK) then
-      SetLength(FBuf, Length(FBuf) - (C_READ_CHUNK - Integer(LN)));
-  until False;
+  // delegate to recv ring buffer single source (bytes.ops zero-copy, amortized Move)
+  Result := FRing.ReadReply;
 end;
 
 function TDbRedisConnection.LockedExecute(
@@ -429,7 +371,7 @@ begin
   FTransport.Send(LFrame);
   Result := ReadReply;
   if Result.Kind = rvkError then
-    raise EDbError.CreateFullRedis(RespErrorType(Result.Data),
+    raise NewDbErrorRedis(RespErrorType(Result.Data),
       RespBytesToStr(Result.Data),
       RedisCategory(RespErrorType(Result.Data)), dckNone);
 end;
@@ -536,7 +478,7 @@ begin
     if LR.Kind = rvkArray then
       for I := 0 to High(LR.Items) do
         if LR.Items[I].Kind = rvkError then
-          raise EDbError.CreateFullRedis(
+          raise NewDbErrorRedis(
             RespErrorType(LR.Items[I].Data),
             RespBytesToStr(LR.Items[I].Data),
             RedisCategory(RespErrorType(LR.Items[I].Data)),
@@ -575,51 +517,9 @@ begin
 end;
 
 procedure TDbRedisConnection.ExecuteBatch(const ASteps: TDbSqlSteps);
-var
-  I: Integer;
-  LArgs: TRespArgs;
-  LFrames: TBytes;
-  LStepFrames: array of TBytes;
-  LR: TRespValue;
-  LT0: QWord;
-  LTimed: Boolean;
 begin
-  if Length(ASteps) = 0 then
-    raise EDbError.CreateSimple(dbkRedis, 'empty batch');
-  SetLength(LStepFrames, Length(ASteps));
-  for I := 0 to High(ASteps) do
-  begin
-    RespPlanCommand(ASteps[I], [], LArgs);
-    RespEncodeCommand(LArgs, LFrames);
-    LStepFrames[I] := LFrames;
-  end;
-  { 单次写 burst = 流水线关键路径
-    perf: BytesConcatMany 单源单次 SetLength(Total)+分段 Move 零拷贝，几何单源，替代逐帧 SetLength 累加 O(n²) 搬运；inline 证据见 bytes.ops.BytesConcatMany/BytesCopy 单 Move 单源 }
-  LFrames := BytesConcatMany(LStepFrames);
-  LT0 := 0;
-  LTimed := FTrace.BeginOp(LT0);
-  try
-    FTransport.Send(LFrames);
-    for I := 0 to High(ASteps) do
-    begin
-      LR := ReadReply;
-      if LR.Kind = rvkError then
-        raise EDbError.CreateFullRedis(
-          RespErrorType(LR.Data),
-          'batch step ' + IntToStr(I + 1) + ': ' +
-          RespBytesToStr(LR.Data),
-          RedisCategory(RespErrorType(LR.Data)), dckNone);
-    end;
-    if LTimed then
-      FTrace.NotifyQuery(LT0, 'BATCH x' + IntToStr(Length(ASteps)));
-  except
-    on E: EDbError do
-    begin
-      if LTimed then
-        FTrace.NotifyError(E.Category, 'BATCH');
-      raise;
-    end;
-  end;
+  // 体积分治：流水线见 pipeline 单源 bytes.ops/text.conv 零拷贝（CONTRACT §2.13）
+  RedisExecuteBatch(FTransport, ASteps, FTrace, @Self.ReadReply);
 end;
 
 function TDbRedisConnection.ProductName: string;
@@ -652,6 +552,11 @@ begin
   Result := False;
 end;
 
+function TDbRedisConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;   { v1 未实现参数级批量绑定（诚实契约） }
+end;
+
 function TDbRedisConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;
@@ -667,9 +572,14 @@ begin
   Result := False;   { v1：TimeoutMs 忽略，如实登记 }
 end;
 
-function TDbRedisConnection.SupportsArrayBinding: Boolean;
+function TDbRedisConnection.CaseSensitiveIdentifiers: Boolean;
 begin
-  Result := False;
+  Result := True;   { 键二进制敏感 }
+end;
+
+function TDbRedisConnection.MaxPlaceholders: Integer;
+begin
+  Result := 999;   { 保守下界，与家族一致 }
 end;
 
 function TDbRedisConnection.ServerVersion: Integer;
@@ -695,16 +605,6 @@ end;
 function TDbRedisConnection.SupportsBulkCopy: Boolean;
 begin
   Result := False;
-end;
-
-function TDbRedisConnection.CaseSensitiveIdentifiers: Boolean;
-begin
-  Result := True;   { 键二进制敏感 }
-end;
-
-function TDbRedisConnection.MaxPlaceholders: Integer;
-begin
-  Result := 999;   { 保守下界，与家族一致 }
 end;
 
 { ---- TDbRedisQuery ---- }
@@ -738,13 +638,29 @@ begin
 end;
 
 procedure TDbRedisQuery.BindInt64(AIndex: Integer; const AValue: Int64);
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  BindText(AIndex, IntToStr(AValue));
+  // not inline per red line 1+2: stack buffer + SetLength+Move single alloc must not be inline (I-Cache copy bloat); single Move zero-copy via bytes.ops single source shape (BYTES_OPS_SINGLE_SOURCE), no intermediate string
+  LLen := nextpas.core.text.number.IntToBuffer(AValue, @LBuf[0]);
+  EnsurePlanBounds(AIndex);
+  SetLength(FBound[AIndex - 1], LLen);
+  if LLen > 0 then
+    Move(LBuf[0], FBound[AIndex - 1][0], LLen);
 end;
 
 procedure TDbRedisQuery.BindDouble(AIndex: Integer; const AValue: Double);
+var
+  LBuf: array[0..31] of AnsiChar;
+  LLen: Int32;
 begin
-  BindText(AIndex, FloatToStr(AValue));
+  // not inline per red line 1+2: FloatToBuffer stack buffer + single alloc Move must not be inline; single Move zero-copy via bytes.ops single source shape (BYTES_OPS_SINGLE_SOURCE), no intermediate string/SetString
+  LLen := nextpas.core.text.number.FloatToBuffer(AValue, @LBuf[0]);
+  EnsurePlanBounds(AIndex);
+  SetLength(FBound[AIndex - 1], LLen);
+  if LLen > 0 then
+    Move(LBuf[0], FBound[AIndex - 1][0], LLen);
 end;
 
 procedure TDbRedisQuery.BindBlob(AIndex: Integer; const AValue: TBytes);

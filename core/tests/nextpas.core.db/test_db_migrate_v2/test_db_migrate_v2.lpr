@@ -26,7 +26,9 @@ uses
   nextpas.core.db,
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.checksum.crc32;
+  nextpas.core.checksum.crc32,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 const
   { 单一事实源：SQL 常量在迁移列表与期望 checksum 间共享。
@@ -466,6 +468,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.migrate_v2');
   T.Test('fresh apply records checksums', @TestFreshApplyRecordsChecksums);

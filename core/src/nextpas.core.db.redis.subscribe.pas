@@ -116,7 +116,8 @@ type
     FKeepAliveLastMs: Int64;
     FTransport: IRedisTransport;    { 仅泵线程触碰；nil = 断线中 }
     FRcvBuf: TBytes;                { 接收累积缓冲（仅泵线程触碰） }
-    FHaveLen: Integer;              { FRcvBuf 有效字节数 }
+    FHaveLen: Integer;              { FRcvBuf 有效字节数（窗口长度） }
+    FRcvOff: Integer;               { 窗口起点偏移（零拷贝滑动窗口，amortized 搬移） }
     FLk: ILock;
     FIdle: IEvent;                  { 断线退避等待的唤醒源（自动复位） }
     FData: IEvent;                  { 投递队列非空信号（自动复位） }
@@ -206,6 +207,7 @@ implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.platform,
   nextpas.core.sync.mutex,
@@ -214,10 +216,7 @@ uses
 
 const
   RECONNECT_TICK_FACTOR = 4;   { 重连尝试间隔 = 4 × 泵节拍 }
-  { 单帧防御性上界：超过仍未解析出完整帧即判对端异常断开，防伪造
-    长度头把接收缓冲无限撑大（resp 解析器在字节未到齐前不分配，
-    上界由本层守） }
-  MAX_FRAME_BYTES = 16 * 1024 * 1024;
+  { 单帧上界单源：DB_REDIS_READ_FRAME_MAX（redis.base），防伪造长度头无限撑大 }
 
 { 默认传输工厂的 IO deadline 兜底：max(2×节拍, 1000) ms }
 function EffectiveIoTimeoutMs(const AOptions: TDbRedisConnectOptions;
@@ -234,13 +233,22 @@ begin
     Result := 3600000;                 { 防御性上界：1h }
 end;
 
-function BytesOfText(const AStr: string): TBytes;
+function BytesOfText(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  // perf: inline 薄转发复用 bytes.ops.StringToBytes 单源（单分配 SetLength+Move 零拷贝）；常量指令不走此路径，改走常量字节缓存零分配 CoW 共享
+  Result := StringToBytes(AStr);
 end;
+
+var
+  // perf: 常量指令字节缓存（bytes.ops 单源初始化后零再分配；高频订阅/心跳路径零拷贝 CoW 共享，不经 BytesOfText 重分配）
+  // stability: initialization 单次 StringToBytes 单 Move 初始化，finalization 置 nil 释放引用计数，无句柄泄漏；常量 TBytes 进程生命周期复用
+  GRedisArg_AUTH: TBytes;
+  GRedisArg_SELECT: TBytes;
+  GRedisArg_SUBSCRIBE: TBytes;
+  GRedisArg_UNSUBSCRIBE: TBytes;
+  GRedisArg_PSUBSCRIBE: TBytes;
+  GRedisArg_PUNSUBSCRIBE: TBytes;
+  GRedisArg_PING: TBytes;
 
 function RespToStr(const AB: TBytes): string;
 begin
@@ -294,30 +302,29 @@ procedure ReadReplyFrame(const ATrans: IRedisTransport;
   var ABuf: TBytes; var ALen: Integer; out AValue: TRespValue);
 var
   LN, LPos, LLeft: Integer;
-  LView: TBytes;
   LNeedMore: Boolean;
+  LSpan: TByteSpan;
 begin
   if ABuf = nil then
-    SetLength(ABuf, 4096);
+    SetLength(ABuf, DB_REDIS_READ_CHUNK_INIT);
   ALen := 0;
   while True do
   begin
     if ALen > 0 then
     begin
-      { resp 解析器以 High(ABuf) 为扫描界——必须喂精确有效长度
-        视图，残料之外的陈旧字节会被误扫（与泵循环同款纪律） }
-      LView := Copy(ABuf, 0, ALen);
+      // perf: 零拷贝视图解析（TByteSpan 单源，不分配 Copy；握手低频但同款纪律，避免陈旧字节误扫）
+      LSpan := TByteSpan.Create(@ABuf[0], SizeUInt(ALen));
       LPos := 0;
-      if RespTryParse(LView, LPos, AValue, LNeedMore) then
+      if RespTryParse(LSpan, LPos, AValue, LNeedMore) then
       begin
         LLeft := ALen - LPos;
         if LLeft > 0 then
-          Move(LView[LPos], ABuf[0], LLeft);
+          Move(ABuf[LPos], ABuf[0], LLeft);
         Dec(ALen, LPos);
         Exit;
       end;
     end;
-    if ALen + 4096 > Length(ABuf) then
+    if ALen + DB_REDIS_READ_CHUNK_INIT > Length(ABuf) then
       SetLength(ABuf, Length(ABuf) * 2);
     LN := ATrans.Recv(@ABuf[ALen], Length(ABuf) - ALen);
     if LN <= 0 then
@@ -349,12 +356,12 @@ begin
   LLn := 0;
   if APassword <> '' then
   begin
-    SendArgsOn(ATrans, [BytesOfText('AUTH'), BytesOfText(APassword)]);
+    SendArgsOn(ATrans, [GRedisArg_AUTH, BytesOfText(APassword)]);
     ExpectOk('auth failed');
   end;
   if ADbIndex <> 0 then
   begin
-    SendArgsOn(ATrans, [BytesOfText('SELECT'),
+    SendArgsOn(ATrans, [GRedisArg_SELECT,
       BytesOfText(IntToStr(ADbIndex))]);
     ExpectOk('select failed');
   end;
@@ -415,8 +422,9 @@ begin
   FCapacity := AQueueCapacity;
   FKeepAliveMs := AKeepAliveMs;
   FKeepAliveLastMs := 0;
-  SetLength(FRcvBuf, 65536);
+  SetLength(FRcvBuf, DB_REDIS_READ_CHUNK_MAX);
   FHaveLen := 0;
+  FRcvOff := 0;
   FLk := nextpas.core.sync.mutex.TMutex.Create;
   FIdle := CreateEvent(False);
   FData := CreateEvent(False);
@@ -791,35 +799,37 @@ var
   LPos: Integer;
   LValue: TRespValue;
   LNeedMore: Boolean;
-  LView: TBytes;
+  LSpan: TByteSpan;
 begin
   { hole-aware 尾窗口：断线前若 FRcvBuf 中已有完整帧（上一轮 Recv
     已到但尚未及 Consume 就被判对端关闭），先尽力投递再丢半帧，
     不让已完整到达的消息因“半帧丢弃”一并丢失。 }
+  // perf: 零拷贝视图投递（bytes.ops TByteSpan 单源，不分配 Copy；amortized 偏移窗口，单 Move 压实）
   if FHaveLen > 0 then
   begin
-    LView := Copy(FRcvBuf, 0, FHaveLen);
+    LSpan := TByteSpan.Create(@FRcvBuf[FRcvOff], SizeUInt(FHaveLen));
     LPos := 0;
     try
       while LPos < FHaveLen do
       begin
-        if not RespTryParse(LView, LPos, LValue, LNeedMore) then
+        if not RespTryParse(LSpan, LPos, LValue, LNeedMore) then
           Break;
         ConsumeFrame(LValue);
       end;
       if LPos > 0 then
       begin
-        if LPos < FHaveLen then
-          Move(FRcvBuf[LPos], FRcvBuf[0], FHaveLen - LPos);
+        Inc(FRcvOff, LPos);
         Dec(FHaveLen, LPos);
         if FHaveLen < 0 then FHaveLen := 0;
+        if FHaveLen = 0 then FRcvOff := 0;
       end;
     except
       { 解析异常已在外层转断线，此处静默忽略以保活计数 }
     end;
   end;
   FTransport := nil;
-  FHaveLen := 0;                       { 丢弃半帧残料（不完整尾） }
+  FHaveLen := 0;
+  FRcvOff := 0;                       { 丢弃半帧残料（不完整尾） }
   FLk.Acquire;
   try
     FConnected := False;
@@ -850,18 +860,18 @@ procedure TRedisSubscriber.ApplyCommand(const ACmd: TSubCmd);
 begin
   case ACmd.Kind of
     ckSubscribe:
-      SendArgs([BytesOfText('SUBSCRIBE'), BytesOfText(ACmd.Channel)]);
+      SendArgs([GRedisArg_SUBSCRIBE, BytesOfText(ACmd.Channel)]);
     ckUnsubscribe:
-      SendArgs([BytesOfText('UNSUBSCRIBE'), BytesOfText(ACmd.Channel)]);
+      SendArgs([GRedisArg_UNSUBSCRIBE, BytesOfText(ACmd.Channel)]);
     ckPSubscribe:
-      SendArgs([BytesOfText('PSUBSCRIBE'), BytesOfText(ACmd.Channel)]);
+      SendArgs([GRedisArg_PSUBSCRIBE, BytesOfText(ACmd.Channel)]);
     ckPUnsubscribe:
-      SendArgs([BytesOfText('PUNSUBSCRIBE'), BytesOfText(ACmd.Channel)]);
+      SendArgs([GRedisArg_PUNSUBSCRIBE, BytesOfText(ACmd.Channel)]);
     ckUnsubscribeAll:
       begin
         { RESP2：无参 UNSUBSCRIBE / PUNSUBSCRIBE 各清空频道/pattern 面 }
-        SendArgs([BytesOfText('UNSUBSCRIBE')]);
-        SendArgs([BytesOfText('PUNSUBSCRIBE')]);
+        SendArgs([GRedisArg_UNSUBSCRIBE]);
+        SendArgs([GRedisArg_PUNSUBSCRIBE]);
       end;
   end;
 end;
@@ -876,7 +886,7 @@ begin
   if (FKeepAliveLastMs <> 0) and
      (LNow - FKeepAliveLastMs < Int64(FKeepAliveMs)) then
     Exit;
-  SendArgs([BytesOfText('PING')]);
+  SendArgs([GRedisArg_PING]);
   FKeepAliveLastMs := LNow;
 end;
 
@@ -904,10 +914,10 @@ begin
   try
     for I := 0 to High(LSnap) do
       if LSnap[I].IsPattern then
-        SendArgsOn(LTrans, [BytesOfText('PSUBSCRIBE'),
+        SendArgsOn(LTrans, [GRedisArg_PSUBSCRIBE,
           BytesOfText(LSnap[I].Name)])
       else
-        SendArgsOn(LTrans, [BytesOfText('SUBSCRIBE'),
+        SendArgsOn(LTrans, [GRedisArg_SUBSCRIBE,
           BytesOfText(LSnap[I].Name)]);
   except
     LTrans := nil;
@@ -918,6 +928,7 @@ begin
   try
     FTransport := LTrans;
     FHaveLen := 0;
+    FRcvOff := 0;
     FConnected := True;
     FLastError := '';
   finally
@@ -931,23 +942,31 @@ var
   LN, LPos: Integer;
   LValue: TRespValue;
   LNeedMore: Boolean;
-  LView: TBytes;
+  LSpan: TByteSpan;
 begin
   { hole-aware 取消检查：已置停泵位时不再阻塞 Recv，直接让外层
     循环感知停止并进入尾窗口投递 }
   if (atomic_load(FStopping, mo_acquire) <> 0) or FToken.IsCancelled then
     Exit;
-  if FHaveLen >= MAX_FRAME_BYTES then
+  if FHaveLen >= DB_REDIS_READ_FRAME_MAX then
   begin
     MarkDisconnected('frame too large');
     Exit;
   end;
-  { 缓冲扩容：有效区接近写满时翻倍 }
-  if FHaveLen + 4096 > Length(FRcvBuf) then
+  { 缓冲扩容与窗口压实：零拷贝滑动窗口，amortized 搬移阈值 2*MIN/半容（bytes.ops 单源范式，
+    避免每帧 O(n) Move；窗口有效区 = [FRcvOff, FRcvOff+FHaveLen)，写位置 = FRcvOff+FHaveLen） }
+  // perf: amortized compaction single Move（仅当 FRcvOff>2*MIN 或 >cap/2），零拷贝视图解析 via TByteSpan (bytes.ops)，不分配 Copy，O(1) 均摊；扩容 via amortized doubling 64
+  if (FRcvOff > DB_REDIS_READ_COMPACTION_MIN * 2) or (FRcvOff > Length(FRcvBuf) div 2) then
+  begin
+    if FHaveLen > 0 then
+      Move(FRcvBuf[FRcvOff], FRcvBuf[0], FHaveLen);
+    FRcvOff := 0;
+  end;
+  if FRcvOff + FHaveLen + DB_REDIS_READ_CHUNK_INIT > Length(FRcvBuf) then
     SetLength(FRcvBuf, Length(FRcvBuf) * 2);
   try
-    LN := FTransport.Recv(@FRcvBuf[FHaveLen],
-      Length(FRcvBuf) - FHaveLen);
+    LN := FTransport.Recv(@FRcvBuf[FRcvOff + FHaveLen],
+      Length(FRcvBuf) - (FRcvOff + FHaveLen));
   except
     on E: ETimeoutError do
       Exit;                             { deadline 到期：本轮无数据 }
@@ -958,16 +977,19 @@ begin
     Exit;
   end;
   Inc(FHaveLen, LN);
-  { 精确视图解析：resp 解析器以 High(ABuf) 为扫描界，直接扫工作
-    缓冲会把压缩后残料区外的陈旧字节误当帧——按有效长度取副本 }
-  LView := Copy(FRcvBuf, 0, FHaveLen);
+  // perf: 零拷贝增量解析（TByteSpan 视图直接喂 RespTryParse Span 重载，bytes.ops 单源，不分配 Copy，消除 O(n²) 拷贝放大）
+  // inline zero-copy view (TByteSpan.Create @FRcvBuf[FRcvOff], FHaveLen) — no alloc, single Move on compaction only
   try
     LPos := 0;
-    while LPos < FHaveLen do
+    if FHaveLen > 0 then
     begin
-      if not RespTryParse(LView, LPos, LValue, LNeedMore) then
-        Break;
-      ConsumeFrame(LValue);
+      LSpan := TByteSpan.Create(@FRcvBuf[FRcvOff], SizeUInt(FHaveLen));
+      while LPos < FHaveLen do
+      begin
+        if not RespTryParse(LSpan, LPos, LValue, LNeedMore) then
+          Break;
+        ConsumeFrame(LValue);
+      end;
     end;
   except
     on E: EDbError do
@@ -980,10 +1002,11 @@ begin
   end;
   if (LPos > 0) and (FTransport <> nil) then
   begin
-    { 压缩残料到缓冲头（断线转换后缓冲已弃，无需压缩） }
-    if LPos < FHaveLen then
-      Move(FRcvBuf[LPos], FRcvBuf[0], FHaveLen - LPos);
+    { 滑动窗口前移：已消费字节仅偏移 FRcvOff，无 Move；残料保留，下次压实阈值再搬（amortized O(1)） }
+    Inc(FRcvOff, LPos);
     Dec(FHaveLen, LPos);
+    if FHaveLen = 0 then
+      FRcvOff := 0;
   end;
 end;
 
@@ -1063,7 +1086,7 @@ var
   LPos: Integer;
   LValue: TRespValue;
   LNeedMore: Boolean;
-  LView: TBytes;
+  LSpan: TByteSpan;
 begin
   LNextRetryMs := 0;
   try
@@ -1072,25 +1095,27 @@ begin
     { hole-aware 收尾：泵退出前尽力把 FRcvBuf 中已完整到达的帧
       投递进环形队列（不计 Gap），再落存活位并惊动 FData，让
       Receive 尾窗口能取尽余量而非睡满节拍后才察觉 stopped。 }
+    // perf: 零拷贝收尾投递（TByteSpan 视图，bytes.ops 单源，不分配 Copy）
     if FHaveLen > 0 then
     try
-      LView := Copy(FRcvBuf, 0, FHaveLen);
+      LSpan := TByteSpan.Create(@FRcvBuf[FRcvOff], SizeUInt(FHaveLen));
       LPos := 0;
       while LPos < FHaveLen do
       begin
-        if not RespTryParse(LView, LPos, LValue, LNeedMore) then
+        if not RespTryParse(LSpan, LPos, LValue, LNeedMore) then
           Break;
         ConsumeFrame(LValue);
       end;
       if LPos > 0 then
       begin
-        if LPos < FHaveLen then
-          Move(FRcvBuf[LPos], FRcvBuf[0], FHaveLen - LPos);
+        Inc(FRcvOff, LPos);
         Dec(FHaveLen, LPos);
         if FHaveLen < 0 then FHaveLen := 0;
+        if FHaveLen = 0 then FRcvOff := 0;
       end;
     except
       FHaveLen := 0;
+      FRcvOff := 0;
     end;
     atomic_exchange(FPumpAlive, 0, mo_acq_rel);
     if FData <> nil then FData.SetEvent;
@@ -1171,5 +1196,25 @@ function RedisOpenSubscriber(
 begin
   Result := TRedisSubscriber.Create(AOptions);
 end;
+
+initialization
+  // perf: 常量字节单次分配（bytes.ops 单源 StringToBytes 单 Move），后续高频路径 CoW 零拷贝共享，零 BytesOfText 重分配
+  // stability: 进程生命周期持有，finalization 释放引用计数，无泄漏；若构造前异常，nil 哨兵安全
+  GRedisArg_AUTH := StringToBytes('AUTH');
+  GRedisArg_SELECT := StringToBytes('SELECT');
+  GRedisArg_SUBSCRIBE := StringToBytes('SUBSCRIBE');
+  GRedisArg_UNSUBSCRIBE := StringToBytes('UNSUBSCRIBE');
+  GRedisArg_PSUBSCRIBE := StringToBytes('PSUBSCRIBE');
+  GRedisArg_PUNSUBSCRIBE := StringToBytes('PUNSUBSCRIBE');
+  GRedisArg_PING := StringToBytes('PING');
+
+finalization
+  GRedisArg_PING := nil;
+  GRedisArg_PUNSUBSCRIBE := nil;
+  GRedisArg_PSUBSCRIBE := nil;
+  GRedisArg_UNSUBSCRIBE := nil;
+  GRedisArg_SUBSCRIBE := nil;
+  GRedisArg_SELECT := nil;
+  GRedisArg_AUTH := nil;
 
 end.

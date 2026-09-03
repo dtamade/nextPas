@@ -16,7 +16,8 @@ unit nextpas.core.db.tx;
          内层 Begin 加深、内层 Commit 只降计数、任意深度 Rollback
          回滚整个事务。两个入口的分工在 CONTRACT.md 写清。
        - B13 池化租约纪律：捕获式 TDbTxProc 若引用连接，租约随闭包
-         存活可迟至外层例程退出（单写者池上即 writer 槽位滞留）；
+         存活可迟至外层例程退出（单写者池上即 writer 槽位滞留，heaptrc 未覆盖闭包捕获非堆泄漏，
+         source-contract 硬门禁见 core/tests/nextpas.core.db/test_db_factory/check_pool_lease_source_contract.sh）；
          参数化重载 WithTransaction(conn, TDbConnProc) 由框架传连接
          作实参，回调零捕获——池化连接一律优先该形态。 *}
 
@@ -31,11 +32,8 @@ uses
 type
   TDbTxProc = reference to procedure;
 
-  { 参数化事务体（B13）：连接由框架作实参传入，回调体不捕获连接。
-    池化租约纪律——捕获式闭包（TDbTxProc）会把对连接的引用保持到
-    闭包自身销毁（实测可迟至外层例程退出），单写者池上即写槽位
-    滞留超时；参数化形态从结构上杜绝该滞留。新代码一律用本形态。 }
-  TDbConnProc = reference to procedure(const AConn: IDbConnection);
+  { 参数化连接回调 owner 已下沉至 db.intf（B13 租约纪律）：本单元 thin alias 单源于 db.intf，L2 pool 直连 intf 零 L2→L3 上向；语义见 db.intf 注记。 }
+  TDbConnProc = nextpas.core.db.intf.TDbConnProc;
 
   { 瞬时错误判定（V3-B5）。nil = DbRetryableDefault 缺省段位。 }
   TDbRetryShouldRetry = reference to function(const AE: EDbError): Boolean;
@@ -58,10 +56,11 @@ type
 
     ⚠ 捕获形态（B13 契约注记）：AProc 若捕获了连接本身（常见于
     直接引用外层局部连接变量），该租约引用将存活至闭包销毁——
-    实测可迟至外层例程退出，期间单写者池的 writer 槽位被滞留。
+    实测可迟至外层例程退出，期间单写者池的 writer 槽位被滞留
+    （并发超时）；heaptrc 硬门禁未覆盖该误用（闭包捕获非堆泄漏，source-contract 硬门禁见 check_pool_lease_source_contract.sh），
     池化连接一律改用参数化重载（TDbConnProc）：连接由框架作实参
     传入，回调体零捕获、语句结束即归还。 }
-  procedure WithTransaction(const AConn: IDbConnection; const AProc: TDbTxProc); overload;
+  procedure WithTransaction(const AConn: IDbConnection; const AProc: TDbTxProc); overload; deprecated 'pooled: use TDbConnProc overload (B13 lease linger; heaptrc not covering)';
 
   { 参数化形态（B13）：ABody 经实参拿连接，零捕获。池化租约在
     本调用语句结束即归还，嵌套/顺序借 writer 不受滞留影响。
@@ -75,10 +74,11 @@ type
 
   { 原子执行 + 瞬时错误自动重试（V3-B5）：仅整事务重跑，绝不部分
     重试——幂等责任在回调（同一副作用可能被执行多次），文档纪律。
-    非 EDbError 异常（业务异常）不重试直接穿出。 }
-  procedure WithTransactionRetry(const AConn: IDbConnection; const AProc: TDbTxProc); overload;
+    非 EDbError 异常（业务异常）不重试直接穿出。
+    捕获形态同 WithTransaction B13 租约滞留 heaptrc 未覆盖 source-contract 硬门禁，池化一律参数化。 }
+  procedure WithTransactionRetry(const AConn: IDbConnection; const AProc: TDbTxProc); overload; deprecated 'pooled: use TDbConnProc overload (B13 lease linger; heaptrc not covering)';
   procedure WithTransactionRetry(const AConn: IDbConnection; const AProc: TDbTxProc;
-    const APolicy: TDbRetryPolicy); overload;
+    const APolicy: TDbRetryPolicy); overload; deprecated 'pooled: use TDbConnProc overload (B13 lease linger; heaptrc not covering)';
 
   { 参数化重试形态（B13）：零捕获纪律 × 瞬时错误整事务重跑，
     池化写租约在重试结束（成功或最终失败）后即归还。 }
@@ -166,6 +166,12 @@ end;
 
 procedure WithTransaction(const AConn: IDbConnection; const ABody: TDbConnProc);
 begin
+  { nil 先判：包装闭包恒非 nil，延后会绕过 RunTransaction 的回调守卫致 AV。判序与 RunTransaction 一致（先连接后回调）。 }
+  if AConn = nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'WithTransaction on a nil connection');
+  if ABody = nil then
+    raise EDbError.CreateSimple(AConn.Kind, 'nil transaction callback');
   { 包装闭包只捕获 ABody（调用方所给参数体），不捕获连接——租约
     随本语句结束归还（B13）。 }
   RunTransaction(AConn,
@@ -216,6 +222,12 @@ end;
 procedure WithTransactionRetry(const AConn: IDbConnection;
   const ABody: TDbConnProc; const APolicy: TDbRetryPolicy);
 begin
+  { nil 先判：同 WithTransaction/ABody 重载，包装闭包恒非 nil 会绕过守卫致 AV。 }
+  if AConn = nil then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'WithTransaction on a nil connection');
+  if ABody = nil then
+    raise EDbError.CreateSimple(AConn.Kind, 'nil transaction callback');
   { 包装闭包生命周期 = 本例程 = 重试循环全程：租约最迟在重试结束
     归还，语义正确（B13）。零参字面量只匹配 TDbTxProc 重载。 }
   WithTransactionRetry(AConn,

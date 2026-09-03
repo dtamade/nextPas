@@ -18,7 +18,8 @@ uses
   nextpas.core.base,
   nextpas.core.db,
   nextpas.core.db.bulk,
-  nextpas.core.db.intf;
+  nextpas.core.db.intf,
+  nextpas.core.db.pg.base;
 
 const
   N_POINT = 50000;                       { 单行查找轮数 }

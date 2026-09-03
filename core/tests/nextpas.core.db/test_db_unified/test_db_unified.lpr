@@ -14,10 +14,43 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.db.base,
-  nextpas.core.db;
+  nextpas.core.db,
+  nextpas.core.db.factory,
+  nextpas.core.db.sqlite.adapter,
+  nextpas.core.db.pg.adapter,
+  nextpas.core.db.mysql.adapter,
+  nextpas.core.db.odbc.adapter,
+  nextpas.core.db.redis.adapter,
+  nextpas.core.db.dm.adapter;
 
 var
+  GBuiltinEnsured: Boolean = False;
   T: TTestSuite;
+
+function OpenSqliteU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.sqlite.adapter.ConnectSqlite(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenPgU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.pg.adapter.ConnectPostgres(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenMysqlU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.mysql.adapter.ConnectMysql(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenOdbcU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.odbc.adapter.ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenRedisU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.redis.adapter.ConnectRedis(ADsn, '', 0, AOptions); end;
+function OpenDmU(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := nextpas.core.db.dm.adapter.ConnectDm(ADsn, AOptions, AStmtCacheCapacity); end;
+
+procedure EnsureBuiltinDrivers; inline;
+begin
+  if GBuiltinEnsured then Exit;
+  if not DbDriverExists('sqlite') then DbRegisterDriver(TBuiltinDriver.Create('sqlite', dbkSqlite, @OpenSqliteU));
+  if not DbDriverExists('postgres') then DbRegisterDriver(TBuiltinDriver.Create('postgres', dbkPostgres, @OpenPgU));
+  if not DbDriverExists('mysql') then DbRegisterDriver(TBuiltinDriver.Create('mysql', dbkMysql, @OpenMysqlU));
+  if not DbDriverExists('odbc') then DbRegisterDriver(TBuiltinDriver.Create('odbc', dbkOdbc, @OpenOdbcU));
+  if not DbDriverExists('redis') then DbRegisterDriver(TBuiltinDriver.Create('redis', dbkRedis, @OpenRedisU));
+  if not DbDriverExists('dm') then DbRegisterDriver(TBuiltinDriver.Create('dm', dbkDm, @OpenDmU));
+  GBuiltinEnsured := True;
+end;
 
 const
   { sqlite3.h SQLITE_CONSTRAINT }
@@ -194,7 +227,7 @@ var
 begin
   Conn := ConnectSqlite(':memory:');
   Conn.Exec('CREATE TABLE t (v INTEGER)');
-  WithTransaction(Conn, procedure
+  WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       Conn.Exec('INSERT INTO t VALUES (1)');
       Conn.Exec('INSERT INTO t VALUES (2)');
@@ -214,7 +247,7 @@ begin
   Conn.Exec('CREATE TABLE t (v INTEGER)');
   LRolledBack := False;
   try
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t VALUES (1)');
         raise ENextPasError.Create('boom');
@@ -236,11 +269,11 @@ begin
     回调内捕获内层异常后，外层可继续提交自己的写入。 }
   Conn := ConnectSqlite(':memory:');
   Conn.Exec('CREATE TABLE t (v INTEGER)');
-  WithTransaction(Conn, procedure
+  WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       Conn.Exec('INSERT INTO t VALUES (1)');
       try
-        WithTransaction(Conn, procedure
+        WithTransaction(Conn, procedure(const C: IDbConnection)
           begin
             Conn.Exec('INSERT INTO t VALUES (2)');
             raise ENextPasError.Create('inner boom');
@@ -261,10 +294,10 @@ begin
   Conn := ConnectSqlite(':memory:');
   Conn.Exec('CREATE TABLE t (v INTEGER)');
   try
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t VALUES (1)');
-        WithTransaction(Conn, procedure
+        WithTransaction(Conn, procedure(const C: IDbConnection)
           begin
             Conn.Exec('INSERT INTO t VALUES (2)');
           end);
@@ -294,7 +327,7 @@ begin
     end, 'rollback without begin raises');
   ExpectDbError(procedure
     begin
-      WithTransaction(Conn, TDbTxProc(nil));
+      WithTransaction(Conn, TDbConnProc(nil));
     end, 'nil callback raises');
 end;
 
@@ -405,6 +438,7 @@ begin
 end;
 
 begin
+  EnsureBuiltinDrivers;
   T := TTestSuite.Create('nextpas.core.db');
   T.Test('kind and raw handle', @TestKindAndRaw);
   T.Test('exec/changes roundtrip', @TestExecChangesRoundtrip);

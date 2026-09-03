@@ -113,7 +113,7 @@ begin
   begin
     Dec(FFailCommitsLeft);
     FPending := 0;                       { 提交失败 = 未提交副作用全灭 }
-    raise EDbError.CreateFullPg('40P01', 'ERROR', '',
+    raise NewDbErrorPg('40P01', 'ERROR', '',
       'deadlock detected', decTransaction, dckNone);
   end;
   FCommitted := FCommitted + FPending;
@@ -147,7 +147,7 @@ begin
   LObj := TFakeFlakyConn.Create;
   Conn := LObj;
   try
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       LObj.Pending := LObj.Pending + 1;
     end);
@@ -176,7 +176,7 @@ begin
     Policy.MaxDelayMs := 1000;
 
     T0 := GetTickCount64;
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       LObj.Pending := LObj.Pending + 1;
     end, Policy);
@@ -203,7 +203,7 @@ begin
   try
     Raised := False;
     try
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         LObj.Pending := LObj.Pending + 1;
         raise Exception.Create('business boom');
@@ -225,28 +225,28 @@ procedure TestDefaultPredicateClassification;
 var
   E: EDbError;
 begin
-  E := EDbError.CreateFullPg('40P01', 'ERROR', '', 'deadlock',
+  E := NewDbErrorPg('40P01', 'ERROR', '', 'deadlock',
     decTransaction, dckNone);
   try
     Check(DbRetryableDefault(E), 'pred: deadlock retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullPg('40001', 'ERROR', '', 'serialization failure',
+  E := NewDbErrorPg('40001', 'ERROR', '', 'serialization failure',
     decTransaction, dckNone);
   try
     Check(DbRetryableDefault(E), 'pred: serialization retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullSqlite(DB_SQLITE_BUSY, 0, decTimeout, dckNone,
+  E := NewDbErrorSqlite(DB_SQLITE_BUSY, 0, decTimeout, dckNone,
     'database is locked');
   try
     Check(DbRetryableDefault(E), 'pred: sqlite busy retryable');
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullPg('57014', 'ERROR', '', 'statement timeout',
+  E := NewDbErrorPg('57014', 'ERROR', '', 'statement timeout',
     decTimeout, dckNone);
   try
     Check(not DbRetryableDefault(E),
@@ -261,7 +261,7 @@ begin
   finally
     E.Free;
   end;
-  E := EDbError.CreateFullSqlite(2067, 0, decConstraint, dckUnique,
+  E := NewDbErrorSqlite(2067, 0, decConstraint, dckUnique,
     'unique violation');
   try
     Check(not DbRetryableDefault(E), 'pred: constraint is not transient');
@@ -292,12 +292,12 @@ begin
     end;
 
     { 谓词生效路径验证：回调内首次抛约束错误一次，重试后成功 }
-    WithTransactionRetry(Conn, procedure
+    WithTransactionRetry(Conn, procedure(const C: IDbConnection)
     begin
       if FailLeft > 0 then
       begin
         Dec(FailLeft);
-        raise EDbError.CreateFullSqlite(2067, 0, decConstraint, dckUnique,
+        raise NewDbErrorSqlite(2067, 0, decConstraint, dckUnique,
           'unique race');
       end;
       LObj.Pending := LObj.Pending + 1;
@@ -326,7 +326,7 @@ begin
 
     Raised := False;
     try
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         LObj.Pending := LObj.Pending + 1;
       end, Policy);
@@ -350,10 +350,10 @@ begin
   Conn := ConnectSqlite(':memory:');
   try
     Conn.Exec('CREATE TABLE t_r (v INTEGER)');
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       { 外层内嵌套：助手走 savepoint 路径，重试包装透明 }
-      WithTransactionRetry(Conn, procedure
+      WithTransactionRetry(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t_r VALUES (42)');
       end);

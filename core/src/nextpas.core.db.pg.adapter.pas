@@ -1,6 +1,6 @@
 unit nextpas.core.db.pg.adapter;
 
-{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 体积注记：本单元约1310行超 800 行软阈值，内聚性强（适配器单职责），暂不拆分，拆分预留见 roadmap。 *}
+{** @desc IDbConnection 的 PostgreSQL 适配器（libpq 类表面统一错误/事务簿记）。能力与契约见 CONTRACT §2.3/§2.6/§2.11，事务/池语义同 sqlite 家族。 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -11,9 +11,9 @@ uses
   nextpas.core.exception,
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.db.capprobe,
   nextpas.core.db.pg.base,
-  nextpas.core.db.pg.conn;
+  nextpas.core.db.pg.conn,
+  nextpas.core.db.savepoint;
 
 { 创建 postgres 连接并返回统一接口（libpq key=value 连接串）。
   失败抛 EDbError（SqlState 等字段携带 libpq 诊断）。 }
@@ -32,16 +32,39 @@ function ConnectPostgres(const AConnInfo: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.base.utils,
   nextpas.core.text.conv,
   nextpas.core.text.kv,
+  nextpas.core.text.sql,
   nextpas.core.db.err,
-  nextpas.core.db.sqlscan,
+  nextpas.core.db.capprobe,
+  nextpas.core.text.sqlscan,
   nextpas.core.db.trace,
   nextpas.core.db.pg.ffi,
   nextpas.core.db.tx,
   nextpas.core.sync,
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.text.view,
+  nextpas.core.collections.lrucache,
+  nextpas.core.collections.lrucache.intf,
+  nextpas.core.collections.lrucache.base;
+
+
+
+type
+  TPgTranslateEntry = record { legacy: 保留类型兼容，实际已由 O(1) LRU (IPgTranslateCache) 替代，避免 O(Cap) 搬移 }
+    Orig: string;
+    Translated: string;
+    Hash: THashCode;
+  end;
+
+  IPgTranslateCache = specialize ILruCache<string, string>;
+
+const
+  PG_TRANSLATE_CACHE_CAP = DEFAULT_PG_STMT_CACHE_CAPACITY;
+  PG_TRANSLATE_CACHE_BYTES_CAP = 512 * 1024; // 512KB 字节上限，防 2M*64=128MB堆放大（计数+字节双限）
+  PG_TRANSLATE_CACHE_ENTRY_MAX = 32 * 1024; // 32KB 单条上限，超限不入缓存零拷贝跳过
 
 procedure RaisePgAsDb(const AE: EPgError);
 var
@@ -49,7 +72,7 @@ var
   LConstraint: TDbConstraintKind;
 begin
   ClassifyPg(AE.SqlState, LCategory, LConstraint);
-  raise EDbError.CreateFullPg(AE.SqlState, AE.Severity, AE.Detail,
+  raise NewDbErrorPgEx(AE.SqlState, AE.Severity, AE.Detail,
     AE.Message, LCategory, LConstraint,
     AE.SchemaName, AE.TableName, AE.ColumnName);
 end;
@@ -62,21 +85,39 @@ begin
   ClassifyPg(AE.SqlState, Result, LConstraint);
 end;
 
-{** @desc 统一占位符翻译：把统一契约的 ?（或显式编号 ?N）翻译为
-       libpq 的 $N 形态。扫描状态机跳过字符串字面量（'' 转义）、
-       双引号标识符、行注释与块注释；dollar-quote 体不识别——与
-       nextpas.core.db.pg.conn 的参数计数扫描同一受控边界。
-       - ?  -> 下一个顺序编号 $k（1 起，逐个递增）
-       - ?N -> 直接映射 $N（不扰动顺序计数） *}
-function TranslatePlaceholders(const ASql: string): string;
+function TranslatePlaceholders(const ASql: string): string; inline;
 begin
-  { V3-C6：词法扫描收敛至 db.sqlscan 共享引擎（行为逐字节兼容） }
-  Result := SqlScanRenderDollar(ASql, DBSQLSCAN_PG);
+  // L1 single source via text.sqlscan single pass, inline zero-copy thin forward, bytes.ops single source
+  Result := nextpas.core.text.sqlscan.SqlScanRenderDollar(ASql, nextpas.core.text.sqlscan.SQLSCAN_PG);
+end;
+
+function PgTranslateGrowCap(const AOld, ARequired: SizeUInt): SizeUInt; inline;
+begin
+  // perf: inline 指数扩容单源（MIN_GROW 4, *2，经 bytes.ops 单源 BytesGrowCapacityWithMin），64 容量下摊还 O(1) 零搬移放大，单 Move 零拷贝；legacy 保留（O(1) LRU 后不再用于翻译缓存）
+  Result := BytesGrowCapacityWithMin(AOld, ARequired, 4);
+end;
+
+function PgTransHash(const AKey: string; AData: Pointer): UInt64; inline;
+begin
+  // perf: inline 薄包装单源 HashString(FNV-1a, bytes.ops 单源) 内容哈希，非指针哈希，O(n) 单遍零拷贝，适配 TLruCache 内容寻址
+  Result := UInt64(HashString(AKey));
+end;
+
+function PgTransEquals(const ALeft, ARight: string; AData: Pointer): Boolean; inline;
+begin
+  // perf: inline 零拷贝内容比对（managed string refcount 浅比对，命中快路径），适配 TLruCache
+  Result := ALeft = ARight;
+end;
+
+function PgTransEntryBytes(const AKey, AValue: string): SizeUInt; inline;
+begin
+  // perf: inline 零拷贝字节计量（Length 1字节/char + 64开销 via bytes.ops单源思想），O(1)无分配；用于字节双限
+  Result := SizeUInt(Length(AKey)) + SizeUInt(Length(AValue)) + 64;
 end;
 
 { 结果列类型：按 PQftype OID 归入统一列类型；未知类型一律 dbcText
   （文本协议下取值即文本，安全兜底）。 }
-function MapColumnType(const AOid: Cardinal): TDbColumnType;
+function MapColumnType(const AOid: Cardinal): TDbColumnType; inline;
 begin
   case AOid of
     16:                       Result := dbcBool;     { bool（INC-6） }
@@ -95,118 +136,50 @@ end;
   字符由文本协议原样承载。双精度经 core.text.number Schubfach 最短
   往返格式化（区域设置无关，NaN/Inf 原生输出，pg float8 输入均接受）。 }
 
-procedure PgRejectNul(const AElem: string);
-var
-  I: Integer;
+procedure PgRejectNul(const AElem: string); inline;
 begin
-  for I := 1 to Length(AElem) do
-    if AElem[I] = #0 then
+  // perf: inline 零拷贝薄转发至 L1 single source text.sql.SqlCheckNul（bytes.ops 单源，零二层重复扫描，单源 FNV 复用点）；stability: ESqlError→EDbError 翻译不丢，I-Cache 零复制膨胀（循环体留在 owner）
+  try
+    SqlCheckNul(AElem);
+  except
+    on E: ESqlError do
       raise EDbError.CreateSimple(dbkPostgres,
         'array bind: text 元素含 NUL(#0)——文本协议在 NUL 处截断，拒绝静默损坏');
+  end;
 end;
 
 function PgTextArrayLiteral(const AValues: TDbStringArray;
-  const ANullMask: TDbBoolArray): string;
-var
-  LB: IStringBuilder;
-  K, I: Integer;
-  LCap: Integer;
+  const ANullMask: TDbBoolArray): string; inline;
 begin
-  { 容量精确预估：括号 + 逗号 + 每元素两引号与原文长度（转义只增不减） }
-  LCap := 2;
-  if Length(AValues) > 1 then
-    Inc(LCap, Length(AValues) - 1);
-  for K := 0 to High(AValues) do
-    Inc(LCap, Length(AValues[K]) + 2);
-  LB := MakeStringBuilder(SizeUInt(LCap));
-  LB.AppendChar('{');
-  for K := 0 to High(AValues) do
-  begin
-    if K > 0 then
-      LB.AppendChar(',');
-    if (ANullMask <> nil) and ANullMask[K] then
-      LB.AppendStr('NULL')
-    else
-    begin
-      PgRejectNul(AValues[K]);
-      LB.AppendChar('"');
-      for I := 1 to Length(AValues[K]) do
-        case AValues[K][I] of
-          '\': LB.AppendStr('\\');
-          '"': LB.AppendStr('\"');
-        else
-          LB.AppendChar(AValues[K][I]);
-        end;
-      LB.AppendChar('"');
-    end;
+  // perf: inline 零拷贝薄转发至 L1 single source text.sql.SqlPgTextArrayLiteral (bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE, SqlStitch overestimate Length*2+2 Grow-free for 10K-row multi-col, sparse Move per segment); stability: single alloc Commit poke shrink, NUL via ESqlError→EDbError 不丢
+  try
+    Result := nextpas.core.text.sql.SqlPgTextArrayLiteral(AValues, ANullMask);
+  except
+    on E: ESqlError do
+      raise EDbError.CreateSimple(dbkPostgres,
+        'array bind: text 元素含 NUL(#0)——文本协议在 NUL 处截断，拒绝静默损坏');
   end;
-  LB.AppendChar('}');
-  Result := LB.ToString;
 end;
 
 function PgInt64ArrayLiteral(const AValues: TDbInt64Array;
-  const ANullMask: TDbBoolArray): string;
-var
-  LB: IStringBuilder;
-  K: Integer;
+  const ANullMask: TDbBoolArray): string; inline;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 21 + 4);
-  LB.AppendChar('{');
-  for K := 0 to High(AValues) do
-  begin
-    if K > 0 then
-      LB.AppendChar(',');
-    if (ANullMask <> nil) and ANullMask[K] then
-      LB.AppendStr('NULL')
-    else
-      LB.AppendInt(AValues[K]);
-  end;
-  LB.AppendChar('}');
-  Result := LB.ToString;
+  // perf: inline 零拷贝薄转发至 L1 single source text.sql.SqlPgInt64ArrayLiteral (bytes.ops 单源, 单分配 overestimate 21/cell Grow-free, AppendInt 零临时 via IntToBuffer direct tail)
+  Result := nextpas.core.text.sql.SqlPgInt64ArrayLiteral(AValues, ANullMask);
 end;
 
 function PgDoubleArrayLiteral(const AValues: TDbDoubleArray;
-  const ANullMask: TDbBoolArray): string;
-var
-  LB: IStringBuilder;
-  K: Integer;
+  const ANullMask: TDbBoolArray): string; inline;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 25 + 4);
-  LB.AppendChar('{');
-  for K := 0 to High(AValues) do
-  begin
-    if K > 0 then
-      LB.AppendChar(',');
-    if (ANullMask <> nil) and ANullMask[K] then
-      LB.AppendStr('NULL')
-    else
-      LB.AppendFloat(AValues[K]);
-  end;
-  LB.AppendChar('}');
-  Result := LB.ToString;
+  // perf: inline 零拷贝薄转发至 L1 single source text.sql.SqlPgDoubleArrayLiteral (bytes.ops 单源, 单分配 overestimate 25/cell Schubfach最短往返无区域分配 via FloatToBuffer direct tail)
+  Result := nextpas.core.text.sql.SqlPgDoubleArrayLiteral(AValues, ANullMask);
 end;
 
 function PgBoolArrayLiteral(const AValues: TDbBoolArray;
-  const ANullMask: TDbBoolArray): string;
-var
-  LB: IStringBuilder;
-  K: Integer;
+  const ANullMask: TDbBoolArray): string; inline;
 begin
-  LB := MakeStringBuilder(SizeUInt(Length(AValues)) * 6 + 4);
-  LB.AppendChar('{');
-  for K := 0 to High(AValues) do
-  begin
-    if K > 0 then
-      LB.AppendChar(',');
-    if (ANullMask <> nil) and ANullMask[K] then
-      LB.AppendStr('NULL')
-    else if AValues[K] then
-      LB.AppendStr('t')
-    else
-      LB.AppendStr('f');
-  end;
-  LB.AppendChar('}');
-  Result := LB.ToString;
+  // perf: inline 零拷贝薄转发至 L1 single source text.sql.SqlPgBoolArrayLiteral (bytes.ops 单源, 单分配 overestimate 6/cell, 定长 't'/'f' 零临时 via direct tail)
+  Result := nextpas.core.text.sql.SqlPgBoolArrayLiteral(AValues, ANullMask);
 end;
 
 type
@@ -313,6 +286,12 @@ type
     FPGCancel: PGcancel;
     { 观测钩子枢纽（V3-B3）：监听器存取/摘要/计时/分发统一委托 }
     FTrace: TDbTraceHub;
+    { 翻译结果缓存（V3-C1联动修复）：?→$N 单遍翻译结果 O(1) LRU（hashmap+DLL via collections.lrucache，内容哈希），命中零分配零拷贝（哈希预筛+MRU O(1) 无搬移），bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE；字节双限 512KB+32KB条限防2M高基数128MB堆放大 }
+    FTransCache: IPgTranslateCache;
+    FTransCacheBytes: SizeUInt; // 当前缓存字节数（key+value+64开销），O(1)均摊
+    function TryGetCachedTranslation(const ASql: string; out ATranslated: string): Boolean; inline;
+    procedure PutCachedTranslation(const ASql, ATranslated: string); inline;
+    function GetTranslatedSql(const ASql: string): string; inline;
     procedure PgExec(const ASql: string);
     { SHOW 会话变量原文（EPgError → EDbError 归一）；B2 超时恢复用 }
     function PgShowVar(const AName: string): string;
@@ -546,6 +525,8 @@ end;
 procedure TDbPgQuery.SetParamLiteral(const AIndex: Integer;
   const ALiteral: string);
 begin
+  // 非 inline 薄转发：inline + except on 变量作实参（RaisePgAsDb(E)）触发 FPC trunk
+  // 内部错误（Symbol E 跨模块注册）；直连 TPgQuery.BindText 单源，无二次拷贝
   try
     FQuery.BindText(AIndex, ALiteral);
   except
@@ -754,6 +735,12 @@ begin
   else
     FPGCancel := nil;
   FTrace := TDbTraceHub.Create;
+  // perf: O(1) LRU 翻译缓存（hashmap+DLL，内容哈希 via PgTransHash），零 O(Cap) 搬移，热路径 O(1) 命中；bytes.ops 单源；stability: 接口托管自动释放；字节双限512KB+32KB条限防2M高基数128MB堆放大
+  if PG_TRANSLATE_CACHE_CAP > 0 then
+    FTransCache := specialize TLruCache<string, string>.Create(SizeUInt(PG_TRANSLATE_CACHE_CAP), nil, @PgTransHash, @PgTransEquals)
+  else
+    FTransCache := nil;
+  FTransCacheBytes := 0;
   { OnAcquire 由 SetListener 挂载时补发（§2.12），ctor 不预发 }
 end;
 
@@ -821,7 +808,7 @@ end;
 
 function TDbPgConnection.SupportsArrayBinding: Boolean;
 begin
-  Result := True;   { unnest 数组展开路径，V3-C2 } // 静态按 pg 协议系声明，openGauss 等衍生库运行时方言缺口由消费方探测后降级（见 national-db-guide §2.1）
+  Result := True;   { unnest 数组展开路径，V3-C2 }
 end;
 
 { ---- IDbCancelControl（V3-B6）---- }
@@ -907,8 +894,80 @@ begin
   end;
   FTrace.NotifyRelease;   { OnRelease = 连接关闭 }
   FreeAndNil(FTrace);
+  // stability: O(1) LRU 接口托管自动释放（Clear 释放节点托管串），无滞留；资源释放不丢；字节双限清零
+  if FTransCache <> nil then
+  begin
+    FTransCache.Clear; // 显式清托管串，防滞留
+    FTransCacheBytes := 0;
+    FTransCache := nil;
+  end;
   FConn.Free;
   inherited Destroy;
+end;
+
+{ 翻译结果缓存：O(1) LRU via collections.lrucache（hashmap+DLL，内容哈希），命中零分配（refcount浅拷贝）+O(1) MRU，失配单遍翻译单分配；bytes.ops 单源；稳定性：接口托管释放不丢，Clear 防滞留；字节双限512KB/32KB防2M*64=128MB堆放大 }
+function TDbPgConnection.TryGetCachedTranslation(const ASql: string; out ATranslated: string): Boolean; inline;
+begin
+  // perf: inline 零拷贝 O(1) LRU 命中（TLruCache Get 内容哈希预筛+MRU O(1) 无搬移），单次串比对+refcount浅拷贝零分配，热路径无 O(Cap) 放大；L1单源翻译复用 bytes.ops 单源
+  if FTransCache = nil then
+    Exit(False);
+  Result := FTransCache.Get(ASql, ATranslated);
+end;
+
+procedure TDbPgConnection.PutCachedTranslation(const ASql, ATranslated: string); inline;
+var
+  LEntryBytes, LOldBytes: SizeUInt;
+  LOldValue: string;
+  LTailKey, LTailValue: string;
+  LExists: Boolean;
+begin
+  // perf: inline 零拷贝 O(1) LRU 插入 + 字节双限驱逐（PeekLeastRecent O(1)尾 peek 零哈希，单哈希Put，bytes.ops单源计量，64条计+512KB字节双限，单条>32KB零拷贝跳过防2M常驻128MB堆放大）；stability: 接口托管不丢，清零防滞留
+  if FTransCache = nil then
+    Exit;
+  LEntryBytes := PgTransEntryBytes(ASql, ATranslated);
+  if LEntryBytes > PG_TRANSLATE_CACHE_ENTRY_MAX then
+    Exit; // 大SQL零拷贝跳过，不入缓存，零常驻
+  if LEntryBytes > PG_TRANSLATE_CACHE_BYTES_CAP then
+    Exit;
+  LExists := FTransCache.Peek(ASql, LOldValue);
+  if LExists then
+  begin
+    LOldBytes := PgTransEntryBytes(ASql, LOldValue);
+    if LOldBytes = LEntryBytes then
+    begin
+      FTransCache.Put(ASql, ATranslated);
+      Exit;
+    end;
+    if FTransCacheBytes >= LOldBytes then
+      Dec(FTransCacheBytes, LOldBytes)
+    else
+      FTransCacheBytes := 0;
+  end;
+  while (FTransCache.GetSize >= PG_TRANSLATE_CACHE_CAP) or (FTransCacheBytes + LEntryBytes > PG_TRANSLATE_CACHE_BYTES_CAP) do
+  begin
+    if FTransCache.GetSize = 0 then
+      Break;
+    if not FTransCache.PeekLeastRecent(LTailKey, LTailValue) then
+      Break;
+    LOldBytes := PgTransEntryBytes(LTailKey, LTailValue);
+    if not FTransCache.Evict then
+      Break;
+    if FTransCacheBytes >= LOldBytes then
+      Dec(FTransCacheBytes, LOldBytes)
+    else
+      FTransCacheBytes := 0;
+  end;
+  FTransCache.Put(ASql, ATranslated);
+  Inc(FTransCacheBytes, LEntryBytes);
+end;
+
+function TDbPgConnection.GetTranslatedSql(const ASql: string): string; inline;
+begin
+  // perf: inline 薄转发命中零分配（refcount浅拷贝），失配单遍翻译单分配后入缓存；bytes.ops 单源，零二层重复扫描 O(n) 重复分配已消除
+  if TryGetCachedTranslation(ASql, Result) then
+    Exit;
+  Result := TranslatePlaceholders(ASql);
+  PutCachedTranslation(ASql, Result);
 end;
 
 procedure TDbPgConnection.PgExec(const ASql: string);
@@ -1002,7 +1061,7 @@ var
   Q: TPgQuery;
 begin
   try
-    Q := FConn.Query(TranslatePlaceholders(ASql));
+    Q := FConn.Query(GetTranslatedSql(ASql)); // perf: 翻译结果缓存命中零分配（refcount浅拷贝），命中prepared缓存时不再重复 O(n) 单遍分配；bytes.ops 单源
   except
     on E: EPgError do RaisePgAsDb(E);
   end;
@@ -1026,7 +1085,7 @@ begin
   try
     PgExec('SET statement_timeout = ' + IntToStr(AOptions.TimeoutMs));
     LSet := True;
-    Q := FConn.Query(TranslatePlaceholders(ASql));
+    Q := FConn.Query(GetTranslatedSql(ASql)); // perf: 翻译结果缓存命中零分配，命中prepared缓存时不再重复 O(n) 分配；bytes.ops 单源
   except
     on E: EPgError do
     begin
@@ -1129,43 +1188,54 @@ end;
 
 procedure TDbPgConnection.Savepoint(const AName: string);
 begin
-  ValidateDbSavepointName(dbkPostgres, AName);
-  PgExec('SAVEPOINT ' + AName);
+  // 收敛至 db.savepoint 单源：Validate+单分配单 Move 零拷贝 inline 薄转发，bytes.ops 单源
+  PgExec(DbValidatedSavepointSql(dbkPostgres, AName));
 end;
 
 procedure TDbPgConnection.RollbackTo(const AName: string);
 begin
-  ValidateDbSavepointName(dbkPostgres, AName);
-  PgExec('ROLLBACK TO ' + AName);
+  PgExec(DbValidatedRollbackToSql(dbkPostgres, AName));
 end;
 
 procedure TDbPgConnection.ReleaseTo(const AName: string);
 begin
-  ValidateDbSavepointName(dbkPostgres, AName);
-  PgExec('RELEASE ' + AName);
+  PgExec(DbValidatedReleaseSql(dbkPostgres, AName));
 end;
 
 procedure TDbPgConnection.ExecuteBatch(const ASteps: TDbSqlSteps);
 var
   K: Integer;
-  LJoined: IStringBuilder;
+  LJoined: TBufStringBuilder;
+  LSql: string;
+  LCap: SizeUInt;
 begin
   if Length(ASteps) = 0 then
     Exit;
   { 网络协议按往返计价：合并为单次 Exec（libpq 原生多语句），
     N 步 = 1 往返。步骤契约是完整独立语句，';' 连接不改语义 }
-  LJoined := MakeStringBuilder(256);
-  K := 0;
-  while K <= High(ASteps) do
-  begin
-    if K > 0 then
-      LJoined.AppendStr(';'#10);
-    LJoined.AppendStr(ASteps[K]);
-    Inc(K);
+  // perf: TBufStringBuilder 栈记录 inline 零拷贝单分配单 Move（AppendStr inline 单 Move，零 IStringBuilder 接口堆对象与虚分发），预估总长经统一辅助 TBufEstimateForJoin/TBufEstimateWithMin 单源（bytes.ops BuilderCap* 单源 inline 零拷贝，消除分散 Length 累加+delim*2 手写），bytes.ops 单源 BYTES_OPS_SINGLE_SOURCE；stability: try..finally Done 不丢
+  LCap := 0;
+  for K := 0 to High(ASteps) do
+    LCap := BuilderCapAdd(LCap, SizeUInt(Length(ASteps[K])));
+  LCap := TBufEstimateForJoin(LCap, SizeUInt(Length(ASteps)), 2);
+  LCap := TBufEstimateWithMin(LCap, 256);
+  LJoined.Init(LCap);
+  try
+    K := 0;
+    while K <= High(ASteps) do
+    begin
+      if K > 0 then
+        LJoined.AppendStr(';'#10);
+      LJoined.AppendStr(ASteps[K]);
+      Inc(K);
+    end;
+    LSql := LJoined.ToString;
+  finally
+    LJoined.Done;
   end;
   WithTransaction(Self, procedure
   begin
-    Exec(LJoined.ToString);
+    Exec(LSql);
   end);
 end;
 

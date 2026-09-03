@@ -22,7 +22,9 @@ uses
   nextpas.core.db,
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.db.migrate;
+  nextpas.core.db.migrate,
+  nextpas.core.db.factory.register.sqlite,
+  nextpas.core.db.factory.register.pg;
 
 var
   T: TTestSuite;
@@ -428,7 +430,7 @@ begin
       服务端 prepared statement 一并被撤销 }
     Raised := False;
     try
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Q := Conn.Query('UPDATE t_sc_heal SET v = v + ? WHERE id = ?');
         Q.BindInt64(1, 5); Q.BindInt64(2, 1);
@@ -496,6 +498,7 @@ begin
 end;
 
 begin
+  RegisterSqliteDriver;
   GPgConn := GetEnvironmentVariable('NEXTPAS_PG_TEST_CONN');
   T := TTestSuite.Create('nextpas.core.db.stmt.cache');
   T.Test('transparency parity', @TestTransparencyParity);

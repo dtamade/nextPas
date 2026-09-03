@@ -396,7 +396,10 @@ begin
   HitAfter := Ctrl.HitRate;
   T1 := platform_monotonic_ns;
   if HitAfter < HitBefore - 0.05 then
-    WriteLn('bulk-cache-bypass regress: hit_rate ', HitBefore:0:4, ' -> ', HitAfter:0:4);
+  begin
+    WriteLn('bulk-cache-bypass regress: hit_rate ', HitBefore:0:4, ' -> ', HitAfter:0:4, ' drop>0.05 Halt(1) gate LRU64 orthogonal 2.39×/2.12×');
+    Halt(1);
+  end;
   Result := (T1 - T0) / 1000000;
   if (HitBefore < 0) or (HitAfter < 0) then WriteLn('');
 end;

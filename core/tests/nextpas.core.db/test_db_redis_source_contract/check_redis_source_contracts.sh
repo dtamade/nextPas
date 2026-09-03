@@ -19,9 +19,12 @@ if has "$SRC/nextpas.core.db.redis.transport.pas" "nextpas.core.net.tcp"; then s
 if has "$SRC/nextpas.core.db.redis.transport.pas" "nextpas.core.tls"; then say_ok "transport declares tls seam (optional)"; else say_fail "transport must reference tls (dialer) seam"; fi
 if has "$SRC/nextpas.core.db.redis.transport.pas" "NetTcpConnect"; then say_ok "transport uses NetTcpConnect single-point"; else say_fail "transport must call NetTcpConnect"; fi
 
-# 2) adapter light seam net (not tls direct), and declares sync/time as L1 (downward)
+# 2) adapter light seam net (not tls direct), and declares time as L1 (downward);
+#    sync (L1) lives in subscribe (mutex/event, real TMutex.Create) — adapter
+#    is lockless (LockedExecute = sequential send/recv, no FLock), so the
+#    sync-downward check targets the unit that actually uses it.
 if has "$SRC/nextpas.core.db.redis.adapter.pas" "nextpas.core.net"; then say_ok "adapter declares net light seam"; else say_fail "adapter must uses nextpas.core.net"; fi
-if has "$SRC/nextpas.core.db.redis.adapter.pas" "nextpas.core.sync"; then say_ok "adapter uses sync L1 downward"; else say_fail "adapter must reference sync (L1)"; fi
+if has "$SRC/nextpas.core.db.redis.subscribe.pas" "nextpas.core.sync"; then say_ok "subscribe uses sync L1 downward"; else say_fail "subscribe must reference sync (L1)"; fi
 if has "$SRC/nextpas.core.db.redis.adapter.pas" "nextpas.core.time"; then say_ok "adapter uses time L1 downward"; else say_fail "adapter must reference time (L1)"; fi
 
 # 3) base/resp purity — must NOT reference net/tls (single-point isolation)

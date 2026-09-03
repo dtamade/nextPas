@@ -54,7 +54,8 @@ type
     destructor Destroy; override;
     procedure ScriptFrame(const ARespText: string);
     procedure ScriptClose;
-    procedure Send(const ABuf: TBytes);
+    procedure Send(const ABuf: TBytes); overload;
+    procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
     procedure Close;
     property Sent: TStringList read FSent;
@@ -110,6 +111,20 @@ begin
   begin
     SetLength(LTxt, 0);
     SetString(LTxt, PAnsiChar(@ABuf[0]), Length(ABuf));
+    FSent.Add(LTxt);
+  end;
+end;
+
+procedure TScriptedPushTransport.Send(AData: Pointer; ACount: SizeUInt);
+var
+  LTxt: string;
+begin
+  if FFailSend then
+    raise EDbError.CreateSimple(dbkRedis, 'scripted: send failed');
+  if (AData <> nil) and (ACount > 0) then
+  begin
+    SetLength(LTxt, 0);
+    SetString(LTxt, PAnsiChar(AData), ACount);
     FSent.Add(LTxt);
   end;
 end;

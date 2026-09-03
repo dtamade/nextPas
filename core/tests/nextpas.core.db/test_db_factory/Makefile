@@ -8,13 +8,17 @@ RUN_LOG ?= $(BUILD_DIR)/run.log
 HEAPTRC_ENV ?= HEAPTRC=log=$(HEAPTRC_LOG)
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
-.PHONY: build run test heaptrc clean
+SCRIPT := check_pool_lease_source_contract.sh
+.PHONY: build run test heaptrc source-contract clean
 build:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 run: build
 	$(BUILD_DIR)/$(PROGRAM)
-test: run heaptrc
+test: run heaptrc source-contract
+source-contract: build
+	bash $(SCRIPT)
+	@printf '\ntest_db_factory-pool-lease-source-contract=pass\n'
 heaptrc: build
 	@rm -f $(RUN_LOG) $(HEAPTRC_LOG)
 	@$(HEAPTRC_ENV) $(BUILD_DIR)/$(PROGRAM) > $(RUN_LOG) 2>&1 || { cat $(RUN_LOG); test ! -f $(HEAPTRC_LOG) || cat $(HEAPTRC_LOG); exit 1; }

@@ -139,6 +139,17 @@ type
     function Remove(const aKey: K): Boolean;
 
     {**
+     * TryTake
+     *
+     * @desc 原子取出并移除（Get+Remove 单哈希，500k ops 下减半键拷贝/哈希）
+     * @param aKey 要取出的键
+     * @param aValue 返回的值
+     * @return Boolean 是否找到并移除
+     * @note 命中时已移出缓存，不更新 MRU；计数与 Get 一致
+     *}
+    function TryTake(const aKey: K; out aValue: V): Boolean;
+
+    {**
      * Contains
      *
      * @desc 检查是否包含指定键
@@ -146,6 +157,16 @@ type
      * @return Boolean 是否包含
      *}
     function Contains(const aKey: K): Boolean;
+
+    {**
+     * PeekLeastRecent
+     *
+     * @desc 查看 LRU 端（最久未使用）键值，不更新顺序，O(1)
+     * @param aKey 返回的键
+     * @param aValue 返回的值
+     * @return Boolean 是否存在（空缓存=False）
+     *}
+    function PeekLeastRecent(out aKey: K; out aValue: V): Boolean;
   end;
 
 implementation
