@@ -1,5 +1,8 @@
 {**
  * nextpas.core.canvas.raster.bitmap - bitmap blit three-way nearest/linear/cubic
+ * COW: ADst.EnsureUnique once before any write, ASrc via ConstRowPtr zero-copy read.
+ * BytesCopy single source (bytes.ops) for fast aligned row copy, inline CubicW.
+ * Resource: no alloc, no leak; alias-safe via EnsureUnique copy-on-write isolation.
  *}
 unit nextpas.core.canvas.raster.bitmap;
 {$I nextpas.core.settings.inc}

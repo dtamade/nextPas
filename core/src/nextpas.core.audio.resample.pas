@@ -25,8 +25,8 @@ function CreateLinearResampler: IAudioResampler;
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.simd;
 
 function AudioResampleLinear(const AInput: TAudioBuffer; ANewRate: Integer): TAudioBuffer;
 var
@@ -34,7 +34,6 @@ var
   LSrcFrames: Integer;
   LSrcRate: Integer;
   LSrcFormat: TAudioSampleFormat;
-  LSrcBytes: Integer;
   LDstFrames: Integer;
   LNum: Int64;
   LTmp: Double;
@@ -42,13 +41,18 @@ var
   LDstPlanes: TAudioPlaneArray;
   LDstFormat: TAudioFormat;
   LCh, LFrame: Integer;
-  LSrcOff: Integer;
-  LF: Single;
-  LS24: Integer;
   LPos: Double;
+  LStep: Single;
   LS0Idx: Integer;
-  LFrac: Double;
-  LS0, LS1, LOut: Single;
+  LFrac: Single;
+  LF32Interleaved: TBytes;
+  LSrcPtr: PSingle;
+  LDstPtr: PSingle;
+  LChunk: Integer;
+  LJ: Integer;
+  LS0Buf: array[0..7] of Single;
+  LS1Buf: array[0..7] of Single;
+  LFracBuf: array[0..7] of Single;
 begin
   Result := Default(TAudioBuffer);
   if (ANewRate < MinAudioSampleRate) or (ANewRate > MaxAudioSampleRate) then
@@ -71,7 +75,6 @@ begin
   LSrcFrames := AInput.FrameCount;
   LSrcRate := AInput.Format.SampleRate;
   LSrcFormat := AInput.Format.SampleFormat;
-  LSrcBytes := AudioBytesPerSample(LSrcFormat);
 
   // dstFrames = Round(srcFrames * dstRate / srcRate) using Int64
   LNum := Int64(LSrcFrames) * Int64(ANewRate);
@@ -91,48 +94,14 @@ begin
     Exit;
   end;
 
-  // convert to F32 planar
+  // convert to F32 planar — reuse pcm.pas PcmConvert bulk F32 intermediate (single source, batched outer-branch)
+  // perf: PcmConvert bulk converts interleaved -> interleaved F32 via batched loops + threadvar scratch; PcmDeinterleave then splits planar with bytes.ops single-source BytesCopy (inline, zero-copy)
   if LSrcFormat = sfF32 then
-  begin
-    PcmDeinterleave(AInput.Data, LSrcFrames, LChannels, 4, LPlanes);
-  end
+    PcmDeinterleave(AInput.Data, LSrcFrames, LChannels, 4, LPlanes)
   else
   begin
-    SetLength(LPlanes, LChannels);
-    for LCh := 0 to LChannels - 1 do
-      SetLength(LPlanes[LCh], LSrcFrames * SizeOf(Single));
-    for LFrame := 0 to LSrcFrames - 1 do
-      for LCh := 0 to LChannels - 1 do
-      begin
-        LSrcOff := (LFrame * LChannels + LCh) * LSrcBytes;
-        if (LSrcOff < 0) or (LSrcOff + LSrcBytes > Length(AInput.Data)) then
-          LF := 0
-        else
-        begin
-          case LSrcFormat of
-            sfU8:
-              LF := PcmU8ToF32(AInput.Data[LSrcOff]);
-            sfS16:
-              LF := PcmS16ToF32(SmallInt(AInput.Data[LSrcOff] or (AInput.Data[LSrcOff + 1] shl 8)));
-            sfS24:
-              begin
-                LS24 := PcmReadS24LE(AInput.Data, LSrcOff);
-                LF := PcmS24ToF32(LS24);
-              end;
-            sfS32:
-              LF := PcmS32ToF32(LongInt(AInput.Data[LSrcOff] or (AInput.Data[LSrcOff + 1] shl 8) or (AInput.Data[LSrcOff + 2] shl 16) or (AInput.Data[LSrcOff + 3] shl 24)));
-            sfF32:
-              begin
-                // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-                CopyMem(@LF, @AInput.Data[LSrcOff], SizeUInt(SizeOf(Single)));
-              end;
-          else
-            LF := 0;
-          end;
-        end;
-        // single source: base.utils CopyMem → bytes.ops, SizeUInt(SizeOf(Single)) fixed 4, non-overlapping
-        CopyMem(@LPlanes[LCh][LFrame * SizeOf(Single)], @LF, SizeUInt(SizeOf(Single)));
-      end;
+    LF32Interleaved := PcmConvert(AInput.Data, LSrcFormat, sfF32, LSrcFrames, LChannels, False);
+    PcmDeinterleave(LF32Interleaved, LSrcFrames, LChannels, 4, LPlanes);
   end;
 
   // per-channel linear interpolation
@@ -140,24 +109,41 @@ begin
   for LCh := 0 to LChannels - 1 do
     SetLength(LDstPlanes[LCh], LDstFrames * SizeOf(Single));
 
+  // perf: precomputed Single LStep avoids per-frame float division in hotspot; typed PSingle window zero-copy, no per-sample CopyMem/PSingle(@bytes)^
+  // perf: 8-wide SIMD batch via audio.simd SimdLerpF32 (AVX2 8-wide + SSE2 4-wide, single source owner dispatch, inline, vzeroupper); gather S0/S1/Frac scalar, lerp vectorized, no per-frame branch/div
+  LStep := Single(LSrcRate) / Single(ANewRate);
   for LCh := 0 to LChannels - 1 do
   begin
-    // incremental LPos avoids per-frame division; direct PSingle avoids Move
+    if (Length(LPlanes[LCh]) < LSrcFrames * SizeOf(Single)) or (Length(LDstPlanes[LCh]) < LDstFrames * SizeOf(Single)) then
+      Continue;
+    if (LSrcFrames = 0) or (LDstFrames = 0) then
+      Continue;
+    LSrcPtr := PSingle(@LPlanes[LCh][0]);
+    LDstPtr := PSingle(@LDstPlanes[LCh][0]);
     LPos := 0;
-    for LFrame := 0 to LDstFrames - 1 do
+    LFrame := 0;
+    while LFrame < LDstFrames do
     begin
-      LS0Idx := Trunc(LPos);
-      LFrac := LPos - LS0Idx;
-      if LFrac < 0 then LFrac := 0 else if LFrac > 1 then LFrac := 1;
-      if (LS0Idx >= 0) and (LS0Idx < LSrcFrames) then
-        LS0 := PSingle(@LPlanes[LCh][LS0Idx * SizeOf(Single)])^
-      else LS0 := 0;
-      if (LS0Idx + 1 >= 0) and (LS0Idx + 1 < LSrcFrames) then
-        LS1 := PSingle(@LPlanes[LCh][(LS0Idx + 1) * SizeOf(Single)])^
-      else LS1 := 0;
-      LOut := LS0 * Single(1.0 - LFrac) + LS1 * Single(LFrac);
-      PSingle(@LDstPlanes[LCh][LFrame * SizeOf(Single)])^ := LOut;
-      LPos := LPos + LSrcRate / ANewRate;
+      if LDstFrames - LFrame >= 8 then LChunk := 8
+      else LChunk := LDstFrames - LFrame;
+      for LJ := 0 to LChunk - 1 do
+      begin
+        LS0Idx := Trunc(LPos);
+        LFrac := Single(LPos - LS0Idx);
+        // branchless frac already in [0,1) by construction; no clamp branch
+        if (LS0Idx >= 0) and (LS0Idx < LSrcFrames) then
+          LS0Buf[LJ] := LSrcPtr[LS0Idx]
+        else
+          LS0Buf[LJ] := 0;
+        if (LS0Idx + 1 >= 0) and (LS0Idx + 1 < LSrcFrames) then
+          LS1Buf[LJ] := LSrcPtr[LS0Idx + 1]
+        else
+          LS1Buf[LJ] := 0;
+        LFracBuf[LJ] := LFrac;
+        LPos := LPos + LStep;
+      end;
+      SimdLerpF32(@LS0Buf[0], @LS1Buf[0], @LFracBuf[0], @LDstPtr[LFrame], LChunk);
+      Inc(LFrame, LChunk);
     end;
   end;
 

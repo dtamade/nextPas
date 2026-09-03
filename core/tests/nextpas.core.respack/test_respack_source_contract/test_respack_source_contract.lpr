@@ -184,9 +184,19 @@ begin
   Check(Pos('EnsureStreamCapacity', Src) > 0, 'dirsource DRY EnsureStreamCapacity');
   Check(Pos('EnsureEmbedCapacity', Src) > 0, 'dirsource DRY EnsureEmbedCapacity');
   Check(Pos('ResPackEntriesFromDir', Src) > 0, 'dirsource ResPackEntriesFromDir small-pack guidance');
+  Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'dirsource extracts 64MiB to RESPACK_DIRSOURCE_LEGACY_LIMIT (no magic)');
+  Check(Pos('SizeUInt(64) * 1024 * 1024', Src) = 0, 'dirsource must not have bare 64MiB magic (use constant)');
+  Check(Pos('TWalkCtx', Src) > 0, 'dirsource generic TWalkCtx<T> templated context single source');
+  Check(Pos('EnsureWalkCapacity', Src) > 0, 'dirsource generic EnsureWalkCapacity<T> single source');
+  Check(Pos('WalkPrePlain', Src) > 0, 'dirsource generic WalkPrePlain single source');
+  Check(Pos('WalkPreEmbed', Src) > 0, 'dirsource generic WalkPreEmbed single source');
+  Check(Pos('generic', Src) > 0, 'dirsource uses generics for Walk templating');
   { 依赖白名单：reader/writer 仅依赖 base/bytes；唯一 fs 缝隙已锁定（uses graph 校验） }
   Src := LoadSourceText('src/nextpas.core.respack.base.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'base must not reference fs (uses graph)');
+  Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'base declares RESPACK_DIRSOURCE_LEGACY_LIMIT family with RESPACK_MAX_INPUT_BYTES');
+  Check(Pos('RESPACK_MAX_INPUT_BYTES', Src) > 0, 'base declares RESPACK_MAX_INPUT_BYTES');
+  Check(Pos('64) * 1024 * 1024', Src) > 0, 'base defines 64MiB legacy limit inline zero-copy');
   Src := LoadSourceText('src/nextpas.core.respack.reader.pas');
   Check(not FindUsesUnit(Src, 'nextpas.core.fs'), 'reader must not reference fs (uses graph)');
   Src := LoadSourceText('src/nextpas.core.respack.writer.pas');
@@ -212,6 +222,9 @@ begin
   Check(Pos('inline', Src) > 0, 'writer.stream inline zero-copy evidence');
   Check(Pos('WriteZeros', Src) > 0, 'writer.stream WriteZeros inline fast-path');
   Check(Pos('BYTES_ZERO_PAGE', Src) > 0, 'writer.stream reuses bytes.ops BYTES_ZERO_PAGE single source');
+  Src := LoadSourceText('src/nextpas.core.respack.pas');
+  Check(Pos('RESPACK_DIRSOURCE_LEGACY_LIMIT', Src) > 0, 'facade re-exports RESPACK_DIRSOURCE_LEGACY_LIMIT family');
+  Check(Pos('RESPACK_MAX_INPUT_BYTES', Src) > 0, 'facade re-exports RESPACK_MAX_INPUT_BYTES');
 end;
 
 procedure TestExceptionRootDiscipline;
