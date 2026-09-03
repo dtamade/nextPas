@@ -2,11 +2,24 @@ unit nextpas.core.audio.pcm.simd;
 
 {$I nextpas.core.settings.inc}
 
+{ Facade — pure re-export, zero logic; base←intf←impl←facade four-piece.
+  Owner single source is nextpas.core.simd via audio.simd; pcm.simd is thin
+  inline forwarding to Owner, no duplicate unroll, no secondary caps,
+  inline + zero-copy, bytes.ops single source for raw F32. Ready to extract
+  to nextpas.core.audio.simd unified module (phase s10-5). }
+
 interface
 
 uses
   nextpas.core.base,
-  nextpas.core.audio.base;
+  nextpas.core.audio.base,
+  nextpas.core.audio.pcm.simd.base,
+  nextpas.core.audio.pcm.simd.intf,
+  nextpas.core.audio.pcm.simd.impl;
+
+type
+  TPcmSimdCaps = nextpas.core.audio.pcm.simd.base.TPcmSimdCaps;
+  IPcmSimdConverter = nextpas.core.audio.pcm.simd.intf.IPcmSimdConverter;
 
 procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
 procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
@@ -15,38 +28,24 @@ procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: I
 
 implementation
 
-uses
-  nextpas.core.audio.simd;
-
-// Single source Owner is nextpas.core.simd via nextpas.core.simd.cpuinfo → audio.simd dispatch
-// (AudioSimdCaps delegates to simd.cpuinfo, AVX2 8-wide + SSE2 4-wide single source).
-// pcm.simd is thin inline forwarding single source to simd owner via audio.simd SimdConvert*,
-// no duplicate 4-way unroll, no secondary caps dispatch, zero extra branch, inline + zero-copy.
-// Raw F32 block copy stays single source via nextpas.core.base.utils CopyMem → bytes.ops (see audio.pcm).
-
 procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
 begin
-  if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  // thin inline forward single source to Owner simd; inline + no extra caps branch
-  SimdConvertS16ToF32(ASrc, ADst, ACount);
+  nextpas.core.audio.pcm.simd.impl.PcmConvertBlockS16ToF32(ASrc, ADst, ACount);
 end;
 
 procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
 begin
-  if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  SimdConvertF32ToS16(ASrc, ADst, ACount);
+  nextpas.core.audio.pcm.simd.impl.PcmConvertBlockF32ToS16(ASrc, ADst, ACount);
 end;
 
 procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer); inline;
 begin
-  if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  SimdConvertS32ToF32(ASrc, ADst, ACount);
+  nextpas.core.audio.pcm.simd.impl.PcmConvertBlockS32ToF32(ASrc, ADst, ACount);
 end;
 
 procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer); inline;
 begin
-  if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  SimdConvertF32ToS32(ASrc, ADst, ACount);
+  nextpas.core.audio.pcm.simd.impl.PcmConvertBlockF32ToS32(ASrc, ADst, ACount);
 end;
 
 end.

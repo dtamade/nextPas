@@ -13,7 +13,7 @@ uses
   simd.cpuinfo.HasSSE2/HasAVX2/HasNEON, no parasitic CPUID); Simd* are single-source
   vector kernels. pcm.simd PcmConvertBlock* is thin inline forwarding single source
   via audio.simd → simd owner, no duplicate 4-way loop and no secondary caps dispatch;
-  raw F32 block zero-copy single source via nextpas.core.base.utils CopyMem → bytes.ops. }
+  raw F32 block zero-copy single source via bytes.ops BytesCopy. }
 
 type
   TSimdCaps = record
@@ -32,6 +32,8 @@ procedure SimdConvertS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Inte
 procedure SimdConvertF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
 procedure SimdConvertS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
 procedure SimdConvertF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
+procedure SimdLerpF32(const AS0, AS1, AFrac, ADst: PSingle; ACount: Integer);
+procedure SimdApplyGainRampF32(AData: PSingle; ACount: Integer; AStartGain, AEndGain: Single);
 
 implementation
 
@@ -735,6 +737,188 @@ begin
   end;
   while I < ACount do
   begin V := ASrc[I]; if V < -1.0 then V := -1.0 else if V > 1.0 then V := 1.0; if V <= -1.0 then ADst[I] := Low(LongInt) else begin LScaled := Round(V * 2147483647.0); if LScaled < Low(LongInt) then LScaled := Low(LongInt) else if LScaled > High(LongInt) then LScaled := High(LongInt); ADst[I] := LongInt(LScaled); end; Inc(I); end;
+end;
+
+procedure SimdLerpF32(const AS0, AS1, AFrac, ADst: PSingle; ACount: Integer);
+var I, N4, N8: Integer; V0: Single;
+{$IFDEF CPUX86_64}
+var LIter: Integer; LCaps: TSimdCaps; LOne: Single;
+{$ENDIF}
+begin
+  if (AS0 = nil) or (AS1 = nil) or (AFrac = nil) or (ADst = nil) or (ACount <= 0) then Exit;
+  // perf: inline caps via simd.cpuinfo, zero-copy PSingle windows, single source vector lerp per-element frac: dst = s0*(1-frac)+s1*frac; AVX2 8-wide + SSE2 4-wide + 4-unroll scalar; vzeroupper
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      LIter := N8 shr 3;
+      LOne := 1.0;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [AS0]
+        mov rdx, qword ptr [AS1]
+        mov r8, qword ptr [AFrac]
+        mov r9, qword ptr [ADst]
+        vbroadcastss ymm3, dword ptr [LOne]
+      @Lerp8Loop:
+        vmovups ymm0, yword ptr [rcx]
+        vmovups ymm1, yword ptr [rdx]
+        vmovups ymm2, yword ptr [r8]
+        vsubps ymm4, ymm3, ymm2
+        vmulps ymm0, ymm0, ymm4
+        vmulps ymm1, ymm1, ymm2
+        vaddps ymm0, ymm0, ymm1
+        vmovups yword ptr [r9], ymm0
+        add rcx, 32
+        add rdx, 32
+        add r8, 32
+        add r9, 32
+        dec eax
+        jnz @Lerp8Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin V0 := AFrac[I]; ADst[I] := AS0[I] * (1.0 - V0) + AS1[I] * V0; Inc(I); end;
+    Exit;
+  end;
+  if LCaps.HasSSE2 then
+  begin
+    N4 := ACount and not 3;
+    if N4 > 0 then
+    begin
+      LIter := N4 shr 2;
+      LOne := 1.0;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [AS0]
+        mov rdx, qword ptr [AS1]
+        mov r8, qword ptr [AFrac]
+        mov r9, qword ptr [ADst]
+        movss xmm3, dword ptr [LOne]
+        shufps xmm3, xmm3, 0
+      @Lerp4Loop:
+        movups xmm0, dqword ptr [rcx]
+        movups xmm1, dqword ptr [rdx]
+        movups xmm2, dqword ptr [r8]
+        movaps xmm4, xmm3
+        subps xmm4, xmm2
+        mulps xmm0, xmm4
+        mulps xmm1, xmm2
+        addps xmm0, xmm1
+        movups dqword ptr [r9], xmm0
+        add rcx, 16
+        add rdx, 16
+        add r8, 16
+        add r9, 16
+        dec eax
+        jnz @Lerp4Loop
+      end;
+    end;
+    I := N4;
+    while I < ACount do begin V0 := AFrac[I]; ADst[I] := AS0[I] * (1.0 - V0) + AS1[I] * V0; Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
+  N4 := ACount and not 3;
+  I := 0;
+  while I < N4 do
+  begin
+    V0 := AFrac[I]; ADst[I] := AS0[I] * (1.0 - V0) + AS1[I] * V0;
+    V0 := AFrac[I+1]; ADst[I+1] := AS0[I+1] * (1.0 - V0) + AS1[I+1] * V0;
+    V0 := AFrac[I+2]; ADst[I+2] := AS0[I+2] * (1.0 - V0) + AS1[I+2] * V0;
+    V0 := AFrac[I+3]; ADst[I+3] := AS0[I+3] * (1.0 - V0) + AS1[I+3] * V0;
+    Inc(I, 4);
+  end;
+  while I < ACount do
+  begin V0 := AFrac[I]; ADst[I] := AS0[I] * (1.0 - V0) + AS1[I] * V0; Inc(I); end;
+end;
+
+procedure SimdApplyGainRampF32(AData: PSingle; ACount: Integer; AStartGain, AEndGain: Single);
+var I, N4, N8: Integer; LStep, LStep8: Single; LGains: array[0..7] of Single;
+{$IFDEF CPUX86_64}
+var LIter: Integer; LCaps: TSimdCaps;
+{$ENDIF}
+begin
+  if (AData = nil) or (ACount <= 0) then Exit;
+  if ACount = 1 then begin AData[0] := AData[0] * AStartGain; Exit; end;
+  LStep := (AEndGain - AStartGain) / (ACount - 1);
+  // perf: vector ramp via AVX2 8-wide / SSE2 4-wide single source, inline zero-copy PSingle, reuse SimdMul path, scalar tail
+{$IFDEF CPUX86_64}
+  LCaps := AudioSimdCaps;
+  if LCaps.HasAVX2 then
+  begin
+    N8 := ACount and not 7;
+    if N8 > 0 then
+    begin
+      for I := 0 to 7 do LGains[I] := AStartGain + I * LStep;
+      LStep8 := LStep * 8;
+      LIter := N8 shr 3;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [AData]
+        lea rdx, qword ptr [LGains]
+        vmovups ymm1, yword ptr [rdx]
+        vbroadcastss ymm2, dword ptr [LStep8]
+      @Ramp8Loop:
+        vmovups ymm0, yword ptr [rcx]
+        vmulps ymm0, ymm0, ymm1
+        vmovups yword ptr [rcx], ymm0
+        vaddps ymm1, ymm1, ymm2
+        add rcx, 32
+        dec eax
+        jnz @Ramp8Loop
+        vzeroupper
+      end;
+    end;
+    I := N8;
+    while I < ACount do begin AData[I] := AData[I] * (AStartGain + I * LStep); Inc(I); end;
+    Exit;
+  end;
+  if LCaps.HasSSE2 then
+  begin
+    N4 := ACount and not 3;
+    if N4 > 0 then
+    begin
+      for I := 0 to 3 do LGains[I] := AStartGain + I * LStep;
+      LStep8 := LStep * 4;
+      LIter := N4 shr 2;
+      asm
+        mov eax, dword ptr [LIter]
+        mov rcx, qword ptr [AData]
+        lea rdx, qword ptr [LGains]
+        movups xmm1, dqword ptr [rdx]
+        movss xmm2, dword ptr [LStep8]
+        shufps xmm2, xmm2, 0
+      @Ramp4Loop:
+        movups xmm0, dqword ptr [rcx]
+        mulps xmm0, xmm1
+        movups dqword ptr [rcx], xmm0
+        addps xmm1, xmm2
+        add rcx, 16
+        dec eax
+        jnz @Ramp4Loop
+      end;
+    end;
+    I := N4;
+    while I < ACount do begin AData[I] := AData[I] * (AStartGain + I * LStep); Inc(I); end;
+    Exit;
+  end;
+{$ENDIF}
+  N4 := ACount and not 3;
+  I := 0;
+  while I < N4 do
+  begin
+    AData[I] := AData[I] * (AStartGain + I * LStep);
+    AData[I+1] := AData[I+1] * (AStartGain + (I+1) * LStep);
+    AData[I+2] := AData[I+2] * (AStartGain + (I+2) * LStep);
+    AData[I+3] := AData[I+3] * (AStartGain + (I+3) * LStep);
+    Inc(I, 4);
+  end;
+  while I < ACount do begin AData[I] := AData[I] * (AStartGain + I * LStep); Inc(I); end;
 end;
 
 end.

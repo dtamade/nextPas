@@ -25,9 +25,8 @@ function PanLawGains0dB(APan: Single): TPointF;
 implementation
 
 uses
-  nextpas.core.base.utils, // single source: base.utils CopyMem → bytes.ops
-  nextpas.core.bytes.ops,
-  nextpas.core.audio.simd, // Owner dispatch for Peak/SumSquares/Mul
+  nextpas.core.bytes.ops, // single source: bytes.ops BytesCopy/BytesZero inline zero-copy, no base.utils dual source
+  nextpas.core.audio.simd, // Owner dispatch for Peak/SumSquares/Mul/Ramp
   nextpas.core.math.base,
   nextpas.core.math.trig;
 
@@ -139,24 +138,24 @@ begin
     if LAlias then
     begin
       // F-36 overlapping alias: copy to temp to avoid read-after-write hazard
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt boundary, stack/heap temp non-overlapping
+      // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt boundary, stack/heap temp non-overlapping
       if LUseStack then
       begin
-        // single source: base.utils CopyMem → bytes.ops, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping stack copy
-        CopyMem(@LStack[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
+        // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(LSamples*SizeOf(Single)) boundary, non-overlapping stack copy
+        BytesCopy(@LStack[0], @ASrc.Data[0], SizeUInt(LSamples) * SizeUInt(SizeOf(Single)));
         LSrcPtr := @LStack[0];
         LSrcData := nil;
       end
       else
       begin
-        // perf: large alias zero-alloc chunked copy+mix — reuse LStack per chunk, no heap, inline BytesCopy single source via base.utils CopyMem → bytes.ops, vector SimdAddF32
+        // perf: large alias zero-alloc chunked copy+mix — reuse LStack per chunk, no heap, inline BytesCopy single source, vector SimdAddF32
         LDstPtr := PSingle(@ADst.Data[0]);
         if Int64(Length(ADst.Data)) < Int64(LDstOffset + LSamples) * SizeOf(Single) then raise EInvalidArgument.Create('MixInto: dst F32 data too small');
         LI := 0;
         while LI < LSamples do
         begin
           if LSamples - LI > Length(LStack) then LChunk := Length(LStack) else LChunk := LSamples - LI;
-          CopyMem(@LStack[0], @ASrc.Data[LI*SizeOf(Single)], SizeUInt(LChunk) * SizeUInt(SizeOf(Single)));
+          BytesCopy(@LStack[0], @ASrc.Data[LI*SizeOf(Single)], SizeUInt(LChunk) * SizeUInt(SizeOf(Single)));
           SimdAddF32(@LStack[0], @LDstPtr[LDstOffset + LI], LChunk, AGain);
           Inc(LI, LChunk);
         end;
@@ -201,18 +200,14 @@ begin
 end;
 
 procedure ApplyGainRamp(var ABuf: TAudioBuffer; AStartGain, AEndGain: Single);
-var NSamples, LI: Integer; P: PSingle; LDelta, LStep, LGain: Single;
+var NSamples: Integer; P: PSingle;
 begin
   EnsureF32(ABuf); NSamples := ABuf.FrameCount * ABuf.Format.Channels;
   if NSamples <= 0 then Exit;
   if Length(ABuf.Data) < NSamples * SizeOf(Single) then raise EInvalidArgument.Create('ApplyGainRamp: data too small');
   P := PSingle(@ABuf.Data[0]);
-  if NSamples = 1 then begin P[0] := P[0] * AStartGain; Exit; end;
-  LDelta := AEndGain - AStartGain;
-  // single division outside hot loop: precompute step, zero-copy PSingle scan, scalar incremental ramp (4-wide unroll/vector dispatch owned by audio.simd when widened)
-  LStep := LDelta / (NSamples - 1);
-  LGain := AStartGain;
-  for LI := 0 to NSamples - 1 do begin P[LI] := P[LI] * LGain; LGain := LGain + LStep; end;
+  // single source via audio.simd Owner: SimdApplyGainRampF32 reuses SimdMul vector path (AVX2 8-wide / SSE2 4-wide, single pass, inline zero-copy PSingle, scalar tail)
+  SimdApplyGainRampF32(P, NSamples, AStartGain, AEndGain);
 end;
 
 function NormalizePeak(var ABuf: TAudioBuffer; ATarget: Single): Single;

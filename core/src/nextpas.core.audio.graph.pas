@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy/BytesZero inline zero-copy, no base.utils dual source
   nextpas.core.math.scalar,
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
@@ -435,14 +434,14 @@ begin
 
   if AliveN = 0 then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
     Exit(AFrames);
   end;
 
-  FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+  BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
   // INV-6 steady zero heap growth: realtime reuses preallocated FScratchTmp (constructor 8192 frames, control-plane geometric), never SetLength here; violation truncates
@@ -474,8 +473,8 @@ begin
       Continue;
     end;
     Gain := FSnapshotNodes[I].Gain * SnapVol;
-    // zero tmp tail guard before fill — FillMem single source
-    FillMem(@Tmp.Data[0], SizeUInt(Needed), 0);
+    // zero tmp tail guard before fill — BytesZero single source inline zero-copy
+    BytesZero(@Tmp.Data[0], SizeUInt(Needed));
     try
       J := FSnapshotNodes[I].Source.FillRealtime(Tmp, AFrames);
     except
@@ -491,8 +490,8 @@ begin
     if J < AFrames then
     begin
       InterlockedExchangeAdd64(FUnderruns, 1);
-      // source contract: should have zero-filled tail, but ensure — FillMem single source
-      FillMem(PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign, SizeUInt((AFrames - J) * FFormat.BlockAlign), 0);
+      // source contract: should have zero-filled tail, but ensure — BytesZero single source inline zero-copy
+      BytesZero(PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign, SizeUInt((AFrames - J) * FFormat.BlockAlign));
       J := AFrames;
     end;
     HasData := True;
@@ -504,7 +503,7 @@ begin
 
   if not HasData then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
@@ -530,8 +529,8 @@ begin
       Result := AFrames;
       Exit;
     end;
-    // single source: base.utils CopyMem → bytes.ops (also single source via AudioFillMemoryRealtime/AudioEnsureCapacity), SizeUInt(Needed) boundary, non-overlapping
-    CopyMem(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
+    // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Needed) boundary, non-overlapping
+    BytesCopy(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
     OutBuf.Format := FFormat;
     OutBuf.FrameCount := AFrames;
     OutBuf.Data := FScratchOut;
@@ -550,13 +549,13 @@ begin
       end;
     end;
     if Length(OutBuf.Data) >= Needed then
-      // single source: base.utils CopyMem → bytes.ops (single source AudioFillMemoryRealtime path), SizeUInt(Needed) boundary, non-overlapping final blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Needed))
+      // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Needed) boundary, non-overlapping final blit
+      BytesCopy(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Needed))
     else if Length(OutBuf.Data) > 0 then
     begin
-      FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(Min(Needed,Length)) variable boundary, non-overlapping partial blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Min(Needed, Length(OutBuf.Data))));
+      BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
+      // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Min(Needed,Length)) variable boundary, non-overlapping partial blit
+      BytesCopy(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Min(Needed, Length(OutBuf.Data))));
     end;
   end;
 

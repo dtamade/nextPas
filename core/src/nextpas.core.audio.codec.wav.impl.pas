@@ -22,8 +22,7 @@ procedure WavEncode(const ABuffer: TAudioBuffer; const ADest: IStream;
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy inline zero-copy, no base.utils dual source
   nextpas.core.audio.errors;
 
 const
@@ -604,8 +603,8 @@ begin
   LToCopy := AFrames;
   if LToCopy > LAvail then LToCopy := LAvail;
   LBytes := LToCopy * FBuffer.Format.BlockAlign;
-  // perf: zero-copy single Move via base.utils CopyMem (bytes.ops single source)
-  CopyMem(@ABuffer.Data[0], @FBuffer.Data[FPos * FBuffer.Format.BlockAlign], SizeUInt(LBytes));
+  // perf: zero-copy single Move via bytes.ops BytesCopy inline zero-copy
+  BytesCopy(@ABuffer.Data[0], @FBuffer.Data[FPos * FBuffer.Format.BlockAlign], SizeUInt(LBytes));
   ABuffer.Format := FBuffer.Format;
   ABuffer.FrameCount := LToCopy;
   FPos := FPos + LToCopy;

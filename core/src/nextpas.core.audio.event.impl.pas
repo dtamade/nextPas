@@ -6,8 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.ops,
-  nextpas.core.base.utils,
+  nextpas.core.bytes.ops, // single source BytesZero/SpanClone inline zero-copy, no base.utils CopyMem dual
+  nextpas.core.base.utils, // lifecycle FreeAndNil only
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,

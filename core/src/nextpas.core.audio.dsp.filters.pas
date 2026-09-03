@@ -37,8 +37,7 @@ type
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops; // single source for BytesCopy inline zero-copy, no base.utils dual source
 
 procedure TBiquadProcessor.EnsureScratch(var ADest: TBytes; ARequired: SizeUInt); inline;
 begin
@@ -148,12 +147,12 @@ begin
   AOutput.Format := AInput.Format;
   AOutput.FrameCount := AInput.FrameCount;
   LCopy := Length(AInput.Data);
-  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/AudioEnsureBytesCapacity single source, single CopyMem non-overlapping SizeUInt guard
+  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/AudioEnsureBytesCapacity single source, single BytesCopy non-overlapping SizeUInt guard
   EnsureScratch(AOutput.Data, SizeUInt(LCopy));
   // two-phase snapshot semantics: copy input snapshot before in-place biquad processing, zero extra alloc after warmup
   if LCopy > 0 then
-    // single source: base.utils CopyMem → bytes.ops, SizeUInt(LCopy) guard, non-overlapping
-    CopyMem(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
+    // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(LCopy) guard, non-overlapping
+    BytesCopy(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
   if (AInput.FrameCount <= 0) or (Length(AInput.Data) = 0) then Exit;
   if AInput.Format.SampleFormat <> sfF32 then Exit;
   LFrames := AInput.FrameCount; LChannels := AInput.Format.Channels;

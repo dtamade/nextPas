@@ -59,7 +59,8 @@ function PcmTpdfNoise(var AState: UInt32): Single; inline;
 implementation
 
 uses
-  nextpas.core.bytes.ops; // single source: bytes.ops BytesCopy/SpanCopySlice inline zero-copy — no Move/CopyMem bypass, owns all byte ops
+  nextpas.core.bytes.ops, // single source: bytes.ops BytesCopy/SpanCopySlice inline zero-copy — no Move/CopyMem bypass, owns all byte ops
+  nextpas.core.audio.pcm.simd; // single source: pcm.simd thin forward to audio.simd SimdConvert* AVX2 8-wide, no duplicate scalar loop
 
 {$PUSH}
 {$WARNINGS OFF}
@@ -67,17 +68,9 @@ uses
 
 threadvar
   GPcmScratch: TBytes;
-  // threadvar per-thread scratch — PcmConvert F32 中间缓冲，几何倍增 EnsurePcmScratch，稳态零分配 (steady zero alloc after warmup)，caller-scratch 备选路径为外置缓冲传入，线程隔离无锁
+  // threadvar per-thread scratch — PcmConvert F32 中间缓冲，几何倍增 AudioEnsureCapacity 单源，稳态零分配 (steady zero alloc after warmup)，与 PcmConvertWithScratch 统一经 EnsurePcmScratchUnified，零拷贝纪律一致：PcmConvert 以 threadvar 作为 caller-owned 传入内核，无双轨分叉
 
-procedure EnsurePcmScratch(ANeeded: Integer); inline;
-var LCap: Integer;
-begin
-  LCap := Length(GPcmScratch);
-  AudioEnsureCapacity(LCap, ANeeded, 256);
-  if Length(GPcmScratch) <> LCap then SetLength(GPcmScratch, LCap);
-end;
-
-procedure EnsurePcmScratchVar(var AScratch: TBytes; ANeeded: Integer); inline;
+procedure EnsurePcmScratchUnified(var AScratch: TBytes; ANeeded: Integer); inline;
 var LCap: Integer;
 begin
   LCap := Length(AScratch);
@@ -123,7 +116,7 @@ begin
   Result := Byte(LScaled);
 end;
 
-function PcmTpdfNoise(var AState: UInt32): Single;
+function PcmTpdfNoise(var AState: UInt32): Single; inline;
 var
   LR1, LR2: Single;
 begin
@@ -135,7 +128,7 @@ begin
   Result := (LR1 - LR2);
 end;
 
-function PcmF32ToU8Dithered(AValue: Single; var AState: UInt32): Byte;
+function PcmF32ToU8Dithered(AValue: Single; var AState: UInt32): Byte; inline;
 var
   LNoise: Single;
 begin
@@ -162,7 +155,7 @@ begin
   Result := PcmClampS16(LScaled);
 end;
 
-function PcmF32ToS16Dithered(AValue: Single; var AState: UInt32): SmallInt;
+function PcmF32ToS16Dithered(AValue: Single; var AState: UInt32): SmallInt; inline;
 var
   LNoise: Single;
 begin
@@ -194,7 +187,7 @@ begin
   if Result < -8388608 then Result := -8388608;
 end;
 
-function PcmF32ToS24Dithered(AValue: Single; var AState: UInt32): Integer;
+function PcmF32ToS24Dithered(AValue: Single; var AState: UInt32): Integer; inline;
 var
   LNoise: Single;
 begin
@@ -244,24 +237,23 @@ begin
   ABytes[AOffset + 2] := Byte((AValue shr 16) and $FF);
 end;
 
-function PcmConvert(const ASrc: TBytes; ASrcFormat, ADstFormat: TAudioSampleFormat;
-  AFrames, AChannels: Integer; AApplyDither: Boolean): TBytes;
+{ ---- common kernel: single source for PcmConvert / PcmConvertWithScratch ---- }
+function PcmConvertKernel(const ASrc: TBytes; ASrcFormat, ADstFormat: TAudioSampleFormat;
+  AFrames, AChannels: Integer; AApplyDither: Boolean; var AScratch: TBytes): TBytes; inline;
 var
   LSampleCount: Integer;
   LI: Integer;
   LBytesPerSrc, LBytesPerDst: Integer;
   LDitherState: UInt32;
-  LSrcPtr: PByte;
   LDstPtr: PByte;
   LF32: PSingle;
   LU8: Byte;
   LS16: SmallInt;
   LS24: Integer;
   LS32: LongInt;
-  LF: Single;
 begin
-  if (AFrames <= 0) or (AChannels <= 0) then
-  begin SetLength(Result, 0); Exit; end;
+  Result := nil;
+  if (AFrames <= 0) or (AChannels <= 0) then Exit;
   if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
     raise EInvalidArgument.Create('PcmConvert: invalid src format');
   if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
@@ -278,7 +270,6 @@ begin
   begin
     if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
       raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
-    // perf: exact slice AFrames*AChannels*LBytesPerSrc, zero-copy view via bytes.ops.SpanCopySlice single source, no tail copy, single alloc
     Result := SpanCopySlice(TByteSpan.FromBytes(ASrc), 0, SizeUInt(Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)));
     Exit;
   end;
@@ -287,20 +278,16 @@ begin
     raise EInvalidArgument.CreateFmt('PcmConvert: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
   if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
     raise EInvalidArgument.CreateFmt('PcmConvert: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
-  // EnsureScratch 预分配：复用 threadvar F32 中间缓冲，几何倍增 AudioEnsureCapacity，稳态零分配 (steady zero alloc after warmup)
-  EnsurePcmScratch(LSampleCount * SizeOf(Single));
-  LF32 := PSingle(@GPcmScratch[0]);
-  // 批处理分支：按 src 格式分发，外层分支内层紧凑循环，避免逐采样 case
+  // perf: EnsureScratchUnified geometric via bytes.ops AudioEnsureCapacity single source, steady zero alloc after warmup, inline zero-copy, unified caller-owned/threadvar discipline
+  EnsurePcmScratchUnified(AScratch, LSampleCount * SizeOf(Single));
+  LF32 := PSingle(@AScratch[0]);
+  // perf: src batch outer-branch, S16/S32 unified via PcmConvertBlock* AVX2 8-wide single source (audio.simd -> simd owner), U8/S24 scalar 3-byte packed scalar tail
   case ASrcFormat of
     sfU8:
       for LI := 0 to LSampleCount - 1 do
         LF32[LI] := PcmU8ToF32(ASrc[LI]);
     sfS16:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS16 := SmallInt(ASrc[LI*2] or (ASrc[LI*2 + 1] shl 8));
-        LF32[LI] := PcmS16ToF32(LS16);
-      end;
+      PcmConvertBlockS16ToF32(PSmallInt(@ASrc[0]), LF32, LSampleCount);
     sfS24:
       for LI := 0 to LSampleCount - 1 do
       begin
@@ -308,23 +295,18 @@ begin
         LF32[LI] := PcmS24ToF32(LS24);
       end;
     sfS32:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS32 := LongInt(ASrc[LI*4] or (ASrc[LI*4 + 1] shl 8) or
-          (ASrc[LI*4 + 2] shl 16) or (ASrc[LI*4 + 3] shl 24));
-        LF32[LI] := PcmS32ToF32(LS32);
-      end;
+      PcmConvertBlockS32ToF32(PLongInt(@ASrc[0]), LF32, LSampleCount);
     sfF32:
-      // perf: bulk single BytesCopy via bytes.ops single source (inline, zero-copy, one Move vs LSampleCount CopyMem), non-overlapping, SizeUInt guard
       if LSampleCount > 0 then
         BytesCopy(LF32, @ASrc[0], SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
   else
     for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
   end;
   SetLength(Result, LSampleCount * LBytesPerDst);
+  if LSampleCount * LBytesPerDst = 0 then Exit;
   LDitherState := 12345;
   LDstPtr := PByte(@Result[0]);
-  // 批处理分支：按 dst 格式分发，抖动分支亦外提
+  // perf: dst batch outer-branch, S16/S32 non-dither unified via PcmConvertBlockF32* AVX2 8-wide, dither/s24 scalar tail, F32 bulk BytesCopy single source
   case ADstFormat of
     sfU8:
       if AApplyDither then
@@ -345,12 +327,7 @@ begin
           LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
         end
       else
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LS16 := PcmF32ToS16(LF32[LI]);
-          LDstPtr[LI*2] := Byte(LS16 and $FF);
-          LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
-        end;
+        PcmConvertBlockF32ToS16(LF32, PSmallInt(LDstPtr), LSampleCount);
     sfS24:
       if AApplyDither then
         for LI := 0 to LSampleCount - 1 do
@@ -365,181 +342,98 @@ begin
           PcmWriteS24LE(LS24, Result, LI*3);
         end;
     sfS32:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS32 := PcmF32ToS32(LF32[LI]);
-        LDstPtr[LI*4] := Byte(LS32 and $FF);
-        LDstPtr[LI*4 + 1] := Byte((LS32 shr 8) and $FF);
-        LDstPtr[LI*4 + 2] := Byte((LS32 shr 16) and $FF);
-        LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
-      end;
+      if AApplyDither then
+        // S32 dither path not vectorized (no Simd dither), keep scalar
+        for LI := 0 to LSampleCount - 1 do
+        begin
+          LS32 := PcmF32ToS32(LF32[LI]);
+          LDstPtr[LI*4] := Byte(LS32 and $FF);
+          LDstPtr[LI*4 + 1] := Byte((LS32 shr 8) and $FF);
+          LDstPtr[LI*4 + 2] := Byte((LS32 shr 16) and $FF);
+          LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
+        end
+      else
+        PcmConvertBlockF32ToS32(LF32, PLongInt(LDstPtr), LSampleCount);
     sfF32:
-      // perf: bulk single BytesCopy via bytes.ops single source (inline, zero-copy, one Move vs LSampleCount CopyMem), non-overlapping, SizeUInt guard
       if LSampleCount > 0 then
         BytesCopy(LDstPtr, LF32, SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
   end;
 end;
 
+function PcmConvert(const ASrc: TBytes; ASrcFormat, ADstFormat: TAudioSampleFormat;
+  AFrames, AChannels: Integer; AApplyDither: Boolean): TBytes;
+begin
+  // unified kernel via threadvar as caller-owned scratch — zero-copy discipline consistent with WithScratch, single source, no duplication
+  Result := PcmConvertKernel(ASrc, ASrcFormat, ADstFormat, AFrames, AChannels, AApplyDither, GPcmScratch);
+end;
+
 function PcmConvertWithScratch(const ASrc: TBytes; ASrcFormat, ADstFormat: TAudioSampleFormat;
   AFrames, AChannels: Integer; AApplyDither: Boolean; var AScratch: TBytes): TBytes;
-var
-  LSampleCount: Integer;
-  LI: Integer;
-  LBytesPerSrc, LBytesPerDst: Integer;
-  LDitherState: UInt32;
-  LDstPtr: PByte;
-  LF32: PSingle;
-  LU8: Byte;
-  LS16: SmallInt;
-  LS24: Integer;
-  LS32: LongInt;
 begin
-  if (AFrames <= 0) or (AChannels <= 0) then
-  begin SetLength(Result, 0); Exit; end;
-  if (Ord(ASrcFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ASrcFormat) > Ord(High(TAudioSampleFormat))) then
-    raise EInvalidArgument.Create('PcmConvertWithScratch: invalid src format');
-  if (Ord(ADstFormat) < Ord(Low(TAudioSampleFormat))) or (Ord(ADstFormat) > Ord(High(TAudioSampleFormat))) then
-    raise EInvalidArgument.Create('PcmConvertWithScratch: invalid dst format');
-  LBytesPerSrc := AudioBytesPerSample(ASrcFormat);
-  LBytesPerDst := AudioBytesPerSample(ADstFormat);
-  if LBytesPerSrc <= 0 then
-    raise EInvalidArgument.Create('PcmConvertWithScratch: unsupported src bytes per sample');
-  if LBytesPerDst <= 0 then
-    raise EInvalidArgument.Create('PcmConvertWithScratch: unsupported dst bytes per sample');
-  if Int64(AFrames) * Int64(AChannels) > High(Integer) then
-    raise EInvalidArgument.Create('PcmConvertWithScratch: frames*channels overflow');
-  if ASrcFormat = ADstFormat then
-  begin
-    if Int64(Length(ASrc)) < Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc) then
-      raise EInvalidArgument.CreateFmt('PcmConvertWithScratch: src too short %d < %d', [Length(ASrc), Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)]);
-    Result := SpanCopySlice(TByteSpan.FromBytes(ASrc), 0, SizeUInt(Int64(AFrames) * Int64(AChannels) * Int64(LBytesPerSrc)));
-    Exit;
-  end;
-  LSampleCount := AFrames * AChannels;
-  if Int64(Length(ASrc)) < Int64(LSampleCount) * Int64(LBytesPerSrc) then
-    raise EInvalidArgument.CreateFmt('PcmConvertWithScratch: src too short %d < %d', [Length(ASrc), Int64(LSampleCount) * Int64(LBytesPerSrc)]);
-  if Int64(LSampleCount) * Int64(LBytesPerDst) > 16*1024*1024 then
-    raise EInvalidArgument.CreateFmt('PcmConvertWithScratch: dst %d bytes exceeds 16MiB limit', [Int64(LSampleCount) * Int64(LBytesPerDst)]);
-  EnsurePcmScratchVar(AScratch, LSampleCount * SizeOf(Single));
-  LF32 := PSingle(@AScratch[0]);
-  case ASrcFormat of
-    sfU8:
-      for LI := 0 to LSampleCount - 1 do
-        LF32[LI] := PcmU8ToF32(ASrc[LI]);
-    sfS16:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS16 := SmallInt(ASrc[LI*2] or (ASrc[LI*2 + 1] shl 8));
-        LF32[LI] := PcmS16ToF32(LS16);
-      end;
-    sfS24:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS24 := PcmReadS24LE(ASrc, LI*3);
-        LF32[LI] := PcmS24ToF32(LS24);
-      end;
-    sfS32:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS32 := LongInt(ASrc[LI*4] or (ASrc[LI*4 + 1] shl 8) or
-          (ASrc[LI*4 + 2] shl 16) or (ASrc[LI*4 + 3] shl 24));
-        LF32[LI] := PcmS32ToF32(LS32);
-      end;
-    sfF32:
-      if LSampleCount > 0 then
-        BytesCopy(LF32, @ASrc[0], SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
-  else
-    for LI := 0 to LSampleCount - 1 do LF32[LI] := 0;
-  end;
-  SetLength(Result, LSampleCount * LBytesPerDst);
-  LDitherState := 12345;
-  LDstPtr := PByte(@Result[0]);
-  case ADstFormat of
-    sfU8:
-      if AApplyDither then
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LU8 := PcmF32ToU8Dithered(LF32[LI], LDitherState);
-          LDstPtr[LI] := LU8;
-        end
-      else
-        for LI := 0 to LSampleCount - 1 do
-          LDstPtr[LI] := PcmF32ToU8(LF32[LI]);
-    sfS16:
-      if AApplyDither then
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LS16 := PcmF32ToS16Dithered(LF32[LI], LDitherState);
-          LDstPtr[LI*2] := Byte(LS16 and $FF);
-          LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
-        end
-      else
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LS16 := PcmF32ToS16(LF32[LI]);
-          LDstPtr[LI*2] := Byte(LS16 and $FF);
-          LDstPtr[LI*2 + 1] := Byte((LS16 shr 8) and $FF);
-        end;
-    sfS24:
-      if AApplyDither then
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LS24 := PcmF32ToS24Dithered(LF32[LI], LDitherState);
-          PcmWriteS24LE(LS24, Result, LI*3);
-        end
-      else
-        for LI := 0 to LSampleCount - 1 do
-        begin
-          LS24 := PcmF32ToS24(LF32[LI]);
-          PcmWriteS24LE(LS24, Result, LI*3);
-        end;
-    sfS32:
-      for LI := 0 to LSampleCount - 1 do
-      begin
-        LS32 := PcmF32ToS32(LF32[LI]);
-        LDstPtr[LI*4] := Byte(LS32 and $FF);
-        LDstPtr[LI*4 + 1] := Byte((LS32 shr 8) and $FF);
-        LDstPtr[LI*4 + 2] := Byte((LS32 shr 16) and $FF);
-        LDstPtr[LI*4 + 3] := Byte((LS32 shr 24) and $FF);
-      end;
-    sfF32:
-      if LSampleCount > 0 then
-        BytesCopy(LDstPtr, LF32, SizeUInt(LSampleCount) * SizeUInt(SizeOf(Single)));
-  end;
+  // caller-owned scratch unified kernel — single source, geometric EnsurePcmScratchUnified via bytes.ops, steady zero alloc after warmup, thread-safe
+  Result := PcmConvertKernel(ASrc, ASrcFormat, ADstFormat, AFrames, AChannels, AApplyDither, AScratch);
 end;
 
 procedure PcmInterleave(const APlanes: array of TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out ADst: TBytes);
 var
-  LCh, LFrame: Integer;
-  LSrcOffset, LDstOffset: Integer;
+  LCh: Integer;
+  LFrame: Integer;
+  LBPS, LStride, LN8: Integer;
+  LSrc: PByte;
+  LDst: PByte;
 begin
   ADst := nil;
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
   if Length(APlanes) < AChannels then Exit;
   SetLength(ADst, AFrames * AChannels * ABytesPerSample);
-  // perf: mono fast path single bulk BytesCopy (vectorized single Move, zero-copy) avoids per-sample stride; resample linear 2x round-trip bandwidth halved for mono
+  // perf: mono fast path single bulk BytesCopy (vectorized single Move, zero-copy) avoids per-sample stride
   if (AChannels = 1) and (Length(APlanes[0]) >= AFrames * ABytesPerSample) and (Length(ADst) >= AFrames * ABytesPerSample) and (AFrames * ABytesPerSample > 0) then
   begin
     BytesCopy(@ADst[0], @APlanes[0][0], SizeUInt(AFrames) * SizeUInt(ABytesPerSample));
     Exit;
   end;
-  // perf: per-plane LCh outer keeps plane contiguous, single BytesCopy per sample via bytes.ops (inline, zero-copy, vectorized Move), branch-free BPS, single source — resample path reuses PcmConvert bulk F32 + this strided copy, avoids extra heap, bandwidth = 2*stride but per-sample Move is SIMD-accelerated
+  // perf: 8-frame batch Move per plane via bytes.ops single source (inline, zero-copy, vectorized Move), 8× unrolled strided copy reduces per-sample BytesCopy 1-4B call overhead to bulk Move, single source — resample path reuses PcmConvert bulk F32 + this strided copy
+  LBPS := ABytesPerSample;
+  LStride := AChannels * LBPS;
   for LCh := 0 to AChannels - 1 do
-    for LFrame := 0 to AFrames - 1 do
+  begin
+    if Length(APlanes[LCh]) < AFrames * LBPS then Continue;
+    if LBPS <= 0 then Continue;
+    LSrc := PByte(@APlanes[LCh][0]);
+    LDst := PByte(@ADst[0]);
+    Inc(LDst, LCh * LBPS);
+    LN8 := AFrames and not 7;
+    LFrame := 0;
+    while LFrame < LN8 do
     begin
-      LSrcOffset := LFrame * ABytesPerSample;
-      LDstOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
-      if (LSrcOffset + ABytesPerSample > Length(APlanes[LCh])) then Continue;
-      BytesCopy(@ADst[LDstOffset], @APlanes[LCh][LSrcOffset], SizeUInt(ABytesPerSample));
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LSrc, LBPS); Inc(LDst, LStride);
+      Inc(LFrame, 8);
     end;
+    while LFrame < AFrames do
+    begin
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS));
+      Inc(LSrc, LBPS);
+      Inc(LDst, LStride);
+      Inc(LFrame);
+    end;
+  end;
 end;
 
 procedure PcmDeinterleave(const AInterleaved: TBytes; AFrames, AChannels: Integer;
   ABytesPerSample: Integer; out APlanes: TAudioPlaneArray);
 var
-  LCh, LFrame: Integer;
-  LSrcOffset, LDstOffset: Integer;
+  LCh: Integer;
+  LFrame, LN8: Integer;
+  LBPS, LStride: Integer;
+  LSrc, LDst: PByte;
 begin
   APlanes := nil;
   if (AFrames <= 0) or (AChannels <= 0) or (ABytesPerSample <= 0) then Exit;
@@ -552,15 +446,47 @@ begin
     BytesCopy(@APlanes[0][0], @AInterleaved[0], SizeUInt(AFrames) * SizeUInt(ABytesPerSample));
     Exit;
   end;
-  // perf: per-plane LCh outer keeps plane contiguous, single BytesCopy per sample via bytes.ops (inline, zero-copy, vectorized Move), branch-free BPS, single source — inverse of PcmInterleave, same bandwidth, SIMD Move
+  // perf: 8-frame batch Move per plane via bytes.ops single source (inline, zero-copy, vectorized Move), 8× unrolled strided copy, inverse of PcmInterleave, SIMD Move
+  LBPS := ABytesPerSample;
+  LStride := AChannels * LBPS;
   for LCh := 0 to AChannels - 1 do
-    for LFrame := 0 to AFrames - 1 do
+  begin
+    if LBPS <= 0 then Continue;
+    if Length(AInterleaved) < AFrames * AChannels * LBPS then
     begin
-      LSrcOffset := (LFrame * AChannels + LCh) * ABytesPerSample;
-      LDstOffset := LFrame * ABytesPerSample;
-      if (LSrcOffset + ABytesPerSample > Length(AInterleaved)) then Continue;
-      BytesCopy(@APlanes[LCh][LDstOffset], @AInterleaved[LSrcOffset], SizeUInt(ABytesPerSample));
+      // stability: short interleaved — per-sample bounds check fallback
+      for LFrame := 0 to AFrames - 1 do
+      begin
+        if (LFrame * LStride + LCh * LBPS + LBPS > Length(AInterleaved)) then Continue;
+        BytesCopy(@APlanes[LCh][LFrame * LBPS], @AInterleaved[(LFrame * AChannels + LCh) * LBPS], SizeUInt(LBPS));
+      end;
+      Continue;
     end;
+    LSrc := PByte(@AInterleaved[0]);
+    Inc(LSrc, LCh * LBPS);
+    LDst := PByte(@APlanes[LCh][0]);
+    LN8 := AFrames and not 7;
+    LFrame := 0;
+    while LFrame < LN8 do
+    begin
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS)); Inc(LDst, LBPS); Inc(LSrc, LStride);
+      Inc(LFrame, 8);
+    end;
+    while LFrame < AFrames do
+    begin
+      BytesCopy(LDst, LSrc, SizeUInt(LBPS));
+      Inc(LDst, LBPS);
+      Inc(LSrc, LStride);
+      Inc(LFrame);
+    end;
+  end;
 end;
 
 {$POP}

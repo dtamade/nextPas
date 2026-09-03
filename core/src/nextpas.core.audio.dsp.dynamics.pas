@@ -44,8 +44,7 @@ type
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy inline zero-copy, no base.utils dual source
   nextpas.core.math.trig;
 
 const
@@ -246,11 +245,11 @@ var LCopy: Integer;
 begin
   AOutput.Format := AInput.Format; AOutput.FrameCount := AInput.FrameCount;
   LCopy := Length(AInput.Data);
-  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/BytesEnsureCapacity single source, single CopyMem non-overlapping SizeUInt guard
+  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/BytesEnsureCapacity single source, single BytesCopy non-overlapping SizeUInt guard
   EnsureScratch(AOutput.Data, SizeUInt(LCopy));
   if LCopy > 0 then
-    // single source: base.utils CopyMem → bytes.ops, SizeUInt(LCopy) guard, non-overlapping
-    CopyMem(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
+    // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(LCopy) guard, non-overlapping
+    BytesCopy(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
   FComp.ProcessBuffer(AOutput);
 end;
 

@@ -60,12 +60,12 @@ function CreateSincResampler(AQuality: TResampleQuality = rsGood): IAudioResampl
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy inline zero-copy, no base.utils dual source
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
   nextpas.core.audio.errors,
+  nextpas.core.audio.simd,
   nextpas.core.simd.arrays;
 
 threadvar
@@ -290,20 +290,18 @@ begin
   LBytesOut := LOutFrames * SizeOf(Single);
   EnsurePlanes(AInF32, APlanesIn, APlanesOut, LNeededIn, LBytesIn, LBytesOut, AInput.Format.Channels);
   if AInput.Format.SampleFormat = sfF32 then
-    // single source: base.utils CopyMem → bytes.ops, SizeUInt guard, non-overlapping
-    CopyMem(@AInF32[0], @AInput.Data[0], SizeUInt(Length(AInput.Data)))
+    // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt guard, non-overlapping
+    BytesCopy(@AInF32[0], @AInput.Data[0], SizeUInt(Length(AInput.Data)))
   else
   begin
-    for I := 0 to LNeededIn - 1 do
-    begin
-      case AInput.Format.SampleFormat of
-        sfS16: PSingle(@AInF32[I])^ := PcmS16ToF32(PSmallInt(@AInput.Data[I * 2])^);
-        sfS32: PSingle(@AInF32[I])^ := PcmS32ToF32(PLongInt(@AInput.Data[I * 4])^);
-        sfU8:  PSingle(@AInF32[I])^ := PcmU8ToF32(AInput.Data[I]);
-        sfS24: PSingle(@AInF32[I])^ := PcmS24ToF32(PcmReadS24LE(AInput.Data, I * 3));
-      else
-        AInF32[I] := 0;
-      end;
+    // perf: batched outer-branch + SimdConvert vector kernels single source Owner audio.simd→simd.cpuinfo (AVX2 8-wide / SSE2 4-wide, inline zero-copy, 4/8x throughput vs per-sample case), bytes.ops single source preserved, no per-iteration case branch
+    case AInput.Format.SampleFormat of
+      sfS16: SimdConvertS16ToF32(PSmallInt(@AInput.Data[0]), PSingle(@AInF32[0]), LNeededIn);
+      sfS32: SimdConvertS32ToF32(PLongInt(@AInput.Data[0]), PSingle(@AInF32[0]), LNeededIn);
+      sfU8:  for I := 0 to LNeededIn - 1 do AInF32[I] := PcmU8ToF32(AInput.Data[I]);
+      sfS24: for I := 0 to LNeededIn - 1 do AInF32[I] := PcmS24ToF32(PcmReadS24LE(AInput.Data, I * 3));
+    else
+      for I := 0 to LNeededIn - 1 do AInF32[I] := 0;
     end;
   end;
 
@@ -381,7 +379,7 @@ begin
   if Length(AOutput.Data) < Length(LBuf.Data) then
     SetLength(AOutput.Data, Length(LBuf.Data));
   if Length(LBuf.Data) > 0 then
-    CopyMem(@AOutput.Data[0], @LBuf.Data[0], SizeUInt(Length(LBuf.Data)));
+    BytesCopy(@AOutput.Data[0], @LBuf.Data[0], SizeUInt(Length(LBuf.Data)));
   AOutput.Format := LBuf.Format;
   AOutput.FrameCount := LBuf.FrameCount;
   Result := LBuf.FrameCount;
