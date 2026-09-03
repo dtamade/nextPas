@@ -2,7 +2,7 @@
 
 **状态**：S0 冻结，随源码落地微调（六维 P0 清零）
 **关联**：`CONTRACT.md`（冻结面）、`ROADMAP.md`（执行）、`ACCEPTANCE.md`（验收）、`REVIEW.md`（差距）、`AI_GUIDE.md`（AI 规范）、`SIXDIM_REVIEW.md`（六维）
-**版本**：1.0（11 单元 pure.base 单源 481 行 + Close 幂等 + 5 gate 全绿，M3b 均值同步，与 CONTRACT 1.0/BENCHMARKS 1.5 对齐，18 份对齐）
+**版本**：1.2（11 单元 pure.base 单源 630 行 + Close 幂等 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
 
 ## 0. 分层总览（`SIXDIM L-1`）
 
@@ -17,12 +17,13 @@ flowchart TB
   pure["js.js888<br/>纯 Pascal js888<br/>零FFI/零dl"]
   v8["js.v8<br/>纯 Pascal V8 占位<br/>零FFI/零dl"]
   chakra["js.chakra<br/>纯 Pascal Chakra 占位<br/>零FFI/零dl"]
-  facade["js.pas 门面<br/>CreateJsRuntime"]
-  base --> intf --> fake --> facade
-  intf --> ffi --> loader --> impl --> facade
-  intf --> pure --> facade
-  intf --> v8 --> facade
-  intf --> chakra --> facade
+  factory["js.factory<br/>CreateJsRuntime / JsBackendAvailable<br/>分支与探测单源"]
+  facade["js.pas 门面<br/>纯 re-export inline 薄转发"]
+  base --> intf --> fake --> factory --> facade
+  intf --> ffi --> loader --> impl --> factory
+  intf --> pure --> factory
+  intf --> v8 --> factory
+  intf --> chakra --> factory
   js -. "可选 uses" .-> webview["webview.fake.js<br/>活在 webview 家族"]
 ```
 
@@ -110,8 +111,8 @@ flowchart TB
 ## 7. 依赖与分层
 
 ```
-L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, js888, v8, chakra} → 门面
-         ↳ 纯族（js888/v8/chakra）与 quickjs 平级，零 ffi/零 dl，复用同 intf
+L2 js:  base(后端无关) → intf(不透明TJsValue) → {fake, quickjs.ffi←loader←quickjs, js888, v8, chakra} → factory(分支/探测) → 门面(纯 re-export inline 薄转发)
+         ↳ 纯族（js888/v8/chakra）与 quickjs 平级，零 ffi/零 dl，复用同 intf；factory 单源分支/探测，门面零逻辑守四件套
 L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)→ js.intf
          ↳ webview.fake.js 归属 webview 家族（`SIXDIM M-4`），由 js 侧提 PR、webview 侧审查
 ```
@@ -127,7 +128,7 @@ L3 webview:  ... → {bridge,fake,gtk} → factory → 门面 ─(可选 uses)�
 - **基准框架**：`nextpas.core.bench`（`design-conventions §12`），禁自定义计时。`bench_eval` 覆盖 `Eval('1+2')`、`HostFunction` 往返、`NewJson/ToJson` 互转，输出 `ns/op` 与 `MB/s`（若涉二进制）。
 - **测试框架**：`nextpas.core.test`（`TTestSuite + TSuiteRunner`），`fake` 契约测试全量走 `fake` 后端，`quickjs_runtime` 仅在探测到库时跑。
 - **Heaptrc**：所有 `focused` 套件 `heaptrc 0 leaks` 为门禁（`mem` 契约）。
-- **对象堆阈值**：`pure.base` 对象堆线性查找 O(n)，小对象 n≤32 零分配最优，>64 建议哈希迁移（实测 n>64 或 `bench_value` 回归>10% 触发，纯族 481 行阈值550内，18 份对齐）。
+- **对象堆阈值**：`pure.base` 对象堆线性查找 O(n) 小对象 n≤32 零分配最优，>64 **自动哈希迁移**（阈值 >64 时 `JsPureHeapFind` 自动切哈希，度量 `JsPureHeapMetrics(FindCalls/HashUsed/Rebuilds)`，回归>10% 时触发，纯族 630 行阈值 650 内、<800 必拆，wc -l 630 实测，18 份对齐；容量倍增复用 `bytes.ops` 单源 `BYTES_BUILDER_MIN_GROW`，宿主/堆/Props 均摊 O(1)；宿主调用 `TStringView→JsPureNewStringView` 零拷贝视图直通，`BENCHMARKS` B/op 18→0，热点 inline + `Move` 零拷贝，资源 `try-finally/JsPureClose` 不丢，守四件套与 L0–L3）。
 
 ## 8.1 复用与反哺纪律（基本要求）
 

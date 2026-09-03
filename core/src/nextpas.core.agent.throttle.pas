@@ -152,6 +152,9 @@ begin
   if APolicy.MaxWaitMs < 0 then
     raise EAgentError.CreateLocal(aecConfig,
       'NewThrottledProvider: MaxWaitMs must be >= 0');
+  if APolicy.MaxAcquires <= 0 then
+    raise EAgentError.CreateLocal(aecConfig,
+      'NewThrottledProvider: MaxAcquires must be > 0');
   FInner := AInner;
   FGate := AGate;
   FClock := AClock;

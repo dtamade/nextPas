@@ -65,6 +65,11 @@ function RawDeflateDecompressSized(const AData: TBytes;
   const AExpectedOutputSize, AMaxOutputSize: SizeUInt): TBytes; inline;
 function RawDeflateDecompressToBuffer(const AData: TBytes; const ADst: PByte;
   const ADstLen: SizeUInt; const AMaxOutputSize: SizeUInt): SizeUInt; inline;
+function RawDeflateWriter(const ADst: IWriter;
+  const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
+function RawDeflateReader(const ASrc: IReader): IDecompressReader; inline;
+function RawDeflateReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader; inline;
 function RawDeflateMessageCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function RawDeflateMessageDecompress(const AData: TBytes;
@@ -206,6 +211,24 @@ function RawDeflateDecompressToBuffer(const AData: TBytes; const ADst: PByte;
 begin
   Result := nextpas.core.compress.deflate.RawDeflateDecompressToBuffer(
     AData, ADst, ADstLen, AMaxOutputSize);
+end;
+
+function RawDeflateWriter(const ADst: IWriter;
+  const ALevel: TCompressionLevel): ICompressWriter;
+begin
+  Result := nextpas.core.compress.deflate.CreateRawDeflateWriter(ADst, ALevel);
+end;
+
+function RawDeflateReader(const ASrc: IReader): IDecompressReader;
+begin
+  Result := nextpas.core.compress.deflate.CreateRawDeflateReader(ASrc);
+end;
+
+function RawDeflateReaderWithMaxOutputSize(const ASrc: IReader;
+  const AMaxOutputSize: SizeUInt): IDecompressReader;
+begin
+  Result := nextpas.core.compress.deflate.CreateRawDeflateReaderWithMaxOutputSize(
+    ASrc, AMaxOutputSize);
 end;
 
 function RawDeflateMessageCompress(const AData: TBytes;

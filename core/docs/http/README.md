@@ -41,8 +41,12 @@ middleware chaining, and a centralized internal transport registry.
 
 ```
 Facade:
-  nextpas.core.http         — full surface (product middleware family re-exports)
-  nextpas.core.http.minimal — thin surface (types + router + server/client + chain)
+  nextpas.core.http              — full surface (stable umbrella; 1914 行 `wc -l` >800 纯聚合豁免 `design-conventions.md:163`，实现经五子facade委托 `minimal/messages/transports/extensions/middlewares`，`bytes.ops:25/89` 单源 out-of-line，inline 仅薄转发 `design-conventions.md:125-131` 豁免，两层 inline 合并为单 owner 调用无 I-Cache 复制，认知负荷已按子facade分流)
+  nextpas.core.http.minimal      — thin surface (types + router + server/client + chain, ~201 行)
+  nextpas.core.http.messages     — messages facade (request/response + writers + redirects + errors + body readers, ~420 行)
+  nextpas.core.http.transports   — transports facade (server/client factories + fetch helpers + TCP backend, ~520 行)
+  nextpas.core.http.extensions   — extensions facade (static/websocket/sse/stream/cookie/form + headers/url + ETag, ~520 行)
+  nextpas.core.http.middlewares  — middlewares facade (middleware family, ~500 行)
   Application layer: Request, Response, Headers, Router, Middleware
   Internal registry: default version -> transport factory
   Protocol layer: impl.h1 (landed), impl.h2 transport (landed), impl.h3 (blocked on QUIC)
@@ -51,7 +55,11 @@ Facade:
 | uses | 内容 |
 |------|------|
 | `nextpas.core.http.minimal` | base/intf/headers/url/router/message + server/client + HandlerFunc/Chain |
-| `nextpas.core.http` | 上表全部 + cors/recovery/logger/… 产品 middleware 与扩展 re-export |
+| `nextpas.core.http.messages` | message 域：request/response 建造与写入/重定向/RFC7807/有界读入 |
+| `nextpas.core.http.transports` | transport 域：server/client 工厂与 Get/Post/ensure/decode/fetch 族 + TCP backend |
+| `nextpas.core.http.extensions` | extension 域：static/websocket/sse/stream/cookie/form + headers/url + ETag/条件请求 |
+| `nextpas.core.http.middlewares` | middleware 域：cors/recovery/logger/… 全家桶（零拷贝/`bytes.ops` 单源） |
+| `nextpas.core.http` | 上表全部聚合（五facade + middleware 全家桶）；>800 行纯聚合 umbrella 仍稳定，仅认知负荷已分流 |
 
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
 as the default client/server version.

@@ -110,46 +110,42 @@ begin
 end;
 
 procedure T.TestBankAddGet;
-var Bk: TAudioBank; Buf: TAudioBuffer; E: TAudioBankEntry;
+var Bk: IAudioBank; Buf, OutBuf: TAudioBuffer; Id: TAudioBankId;
 begin
-  Bk:=CreateAudioBank;
+  Bk:=CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
   Buf.Format:=AudioFormatCreate(48000,2,sfF32); Buf.FrameCount:=10; SetLength(Buf.Data,10*Buf.Format.BlockAlign);
-  Bk.Add('s1', Buf, Default(TAudioTags));
-  CheckTrue(Bk.TryGet('s1',E), 'get');
-  CheckEqual('s1', E.Id, 'id');
-  Bk.Free;
+  Id:=Bk.Add('s1', Buf);
+  CheckTrue(Bk.TryGetBuffer(Id, OutBuf), 'get');
+  CheckEqual(Id, Bk.FindByName('s1'), 'find');
 end;
 
 procedure T.TestBankPack;
-var Bk: TAudioBank; Buf: TAudioBuffer; D: TBytes;
+var Bk: IAudioBank; Buf, OutBuf: TAudioBuffer; Id: TAudioBankId;
 begin
-  Bk:=CreateAudioBank;
+  Bk:=CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
   Buf.Format:=AudioFormatCreate(48000,2,sfF32); Buf.FrameCount:=5; SetLength(Buf.Data,5*Buf.Format.BlockAlign);
-  Bk.Add('a', Buf, Default(TAudioTags));
-  D:=Bk.PackToBytes;
-  CheckTrue(Length(D)>0, 'pack');
-  Bk.Free;
+  Id:=Bk.Add('a', Buf);
+  CheckTrue(Bk.TryGetBuffer(Id, OutBuf), 'pack get');
+  CheckEqual(5, OutBuf.FrameCount, 'pack frames');
 end;
 
 procedure T.TestBankClear;
-var Bk: TAudioBank; Buf: TAudioBuffer;
+var Bk: IAudioBank; Buf: TAudioBuffer;
 begin
-  Bk:=CreateAudioBank;
+  Bk:=CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
   Buf.Format:=AudioFormatCreate(48000,2,sfF32); Buf.FrameCount:=1; SetLength(Buf.Data,Buf.Format.BlockAlign);
-  Bk.Add('x', Buf, Default(TAudioTags)); Bk.Clear;
-  CheckEqual(0, Bk.Count, 'clear');
-  Bk.Free;
+  Bk.Add('x', Buf); Bk.Clear;
+  CheckEqual(0, Bk.GetCount, 'clear');
 end;
 
 procedure T.TestBankCount;
-var Bk: TAudioBank; Buf: TAudioBuffer;
+var Bk: IAudioBank; Buf: TAudioBuffer;
 begin
-  Bk:=CreateAudioBank;
-  CheckEqual(0, Bk.Count, '0');
+  Bk:=CreateAudioBank(AudioFormatCreate(48000,2,sfF32));
+  CheckEqual(0, Bk.GetCount, '0');
   Buf.Format:=AudioFormatCreate(48000,2,sfF32); Buf.FrameCount:=1; SetLength(Buf.Data,Buf.Format.BlockAlign);
-  Bk.Add('a', Buf, Default(TAudioTags));
-  CheckEqual(1, Bk.Count, '1');
-  Bk.Free;
+  Bk.Add('a', Buf);
+  CheckEqual(1, Bk.GetCount, '1');
 end;
 
 procedure T.TestSequencerMidiFreq;

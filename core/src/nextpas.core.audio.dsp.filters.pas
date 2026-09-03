@@ -26,6 +26,7 @@ type
   TBiquadProcessor = class(TInterfacedObject, IAudioProcessor)
   private
     FBiquads: array of TBiquad;
+    procedure EnsureScratch(var ADest: TBytes; ARequired: SizeUInt); inline;
   public
     constructor Create(AType: TBiquadType; ASampleRate: Integer; AFreq, AQ, AGainDB: Double; AChannels: Integer);
     function LatencyFrames: Integer;
@@ -34,6 +35,17 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops;
+
+procedure TBiquadProcessor.EnsureScratch(var ADest: TBytes; ARequired: SizeUInt); inline;
+begin
+  // perf: inline geometric doubling via bytes.ops single source, steady zero alloc per INV-6
+  if SizeUInt(Length(ADest)) >= ARequired then Exit;
+  BytesEnsureCapacity(ADest, ARequired);
+end;
 
 procedure TBiquad.Reset;
 begin
@@ -136,8 +148,12 @@ begin
   AOutput.Format := AInput.Format;
   AOutput.FrameCount := AInput.FrameCount;
   LCopy := Length(AInput.Data);
-  SetLength(AOutput.Data, LCopy);
-  if LCopy > 0 then Move(AInput.Data[0], AOutput.Data[0], LCopy);
+  // INV-6 steady zero heap growth: geometric prealloc via EnsureScratch/AudioEnsureBytesCapacity single source, single CopyMem non-overlapping SizeUInt guard
+  EnsureScratch(AOutput.Data, SizeUInt(LCopy));
+  // two-phase snapshot semantics: copy input snapshot before in-place biquad processing, zero extra alloc after warmup
+  if LCopy > 0 then
+    // single source: base.utils CopyMem → bytes.ops, SizeUInt(LCopy) guard, non-overlapping
+    CopyMem(@AOutput.Data[0], @AInput.Data[0], SizeUInt(LCopy));
   if (AInput.FrameCount <= 0) or (Length(AInput.Data) = 0) then Exit;
   if AInput.Format.SampleFormat <> sfF32 then Exit;
   LFrames := AInput.FrameCount; LChannels := AInput.Format.Channels;

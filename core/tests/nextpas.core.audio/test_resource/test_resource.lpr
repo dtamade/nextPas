@@ -1,6 +1,6 @@
 program test_resource;
 {$mode objfpc}{$H+}
-uses cthreads, SysUtils, Classes, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.resource.intf, nextpas.core.audio.resource, nextpas.core.audio;
+uses cthreads, SysUtils, Classes, nextpas.core.base, nextpas.core.test, nextpas.core.audio.base, nextpas.core.audio.resource.base, nextpas.core.audio.resource.intf, nextpas.core.audio.resource, nextpas.core.audio;
 function MakeBuf(AFrames: Integer; AVal: Single): TAudioBuffer;
 var P: PSingle; I: Integer;
 begin

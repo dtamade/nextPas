@@ -83,9 +83,9 @@ begin
   {$POP}
   { 防御性上界：参考实现延后到扩展路径末尾才校验，单字节属性可放行
     power>24 造成派生循环挂死；此处入口即拒 }
-  if (AOut.NumCyclesPower > SEVENZ_AES_MAX_CYCLES_POWER) and (AOut.NumCyclesPower <> $3F) then
+  if (AOut.NumCyclesPower > 24) and (AOut.NumCyclesPower <> $3F) then
     raise ESevenZError.CreateFmt(
-      'aes cycles power %d exceeds limit %d', [AOut.NumCyclesPower, SEVENZ_AES_MAX_CYCLES_POWER]);
+      'aes cycles power %d not supported', [AOut.NumCyclesPower]);
   if (AProps[0] and $C0) = 0 then
   begin
     if Length(AProps) <> 1 then
@@ -119,8 +119,6 @@ var
   LRounds: UInt64;
 begin
   AKey := nil;
-  if (AProps.NumCyclesPower <> $3F) and (AProps.NumCyclesPower > SEVENZ_AES_MAX_CYCLES_POWER) then
-    raise ESevenZError.CreateFmt('aes cycles power %d exceeds limit %d', [AProps.NumCyclesPower, SEVENZ_AES_MAX_CYCLES_POWER]);
   { 7z 规范：口令以 UTF-16LE 字节序列进入 KDF }
   LPw := SevenZUtf8ToUtf16Le(APassword);
   SetLength(AKey, 32);
@@ -166,9 +164,9 @@ var
 begin
   Result := nil;
   { 与解析端同一约束：非法档位/超长盐 IV 在序列化前即拒 }
-  if (ANumCyclesPower > SEVENZ_AES_MAX_CYCLES_POWER) and (ANumCyclesPower <> $3F) then
+  if (ANumCyclesPower > 24) and (ANumCyclesPower <> $3F) then
     raise ESevenZError.CreateFmt(
-      'aes cycles power %d exceeds limit %d', [ANumCyclesPower, SEVENZ_AES_MAX_CYCLES_POWER]);
+      'aes cycles power %d not supported', [ANumCyclesPower]);
   if (Length(ASalt) > 16) or (Length(AIv) > 16) then
     raise ESevenZError.Create('aes salt/iv longer than 16 bytes');
   if (Length(ASalt) = 0) and (Length(AIv) = 0) then

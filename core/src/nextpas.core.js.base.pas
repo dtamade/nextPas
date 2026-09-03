@@ -9,13 +9,14 @@ unit nextpas.core.js.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.view;
+  nextpas.core.bytes.ops;
 
 type
   TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
   TJsValueKind = (jskUndefined, jskNull, jskBoolean, jskNumber, jskString,
-    jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt);
+    jskObject, jskArray, jskFunction, jskError, jskPromise, jskSymbol, jskBigInt, jskInteger);
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
     jecTimeout, jecNotSupported, jecUnknown);
 
@@ -129,12 +130,14 @@ begin
     jskPromise: Result := 'jskPromise';
     jskSymbol: Result := 'jskSymbol';
     jskBigInt: Result := 'jskBigInt';
+    jskInteger: Result := 'jskInteger';
   end;
 end;
 
 function JsTrimEquals(const S, Lit: string): Boolean; inline;
 begin
-  Result := TStringView.FromStr(S).Trim.Equals(TStringView.FromStr(Lit));
+  // single source: bytes.ops.StringTrimEquals — zero-copy TByteSpan view via SpanTrim (owner bytes.ops) + SpanEqual SIMD, no heap alloc; perf: inline thin-forward, loop not inline in owner per red-line 2 (design-conventions §2)
+  Result := StringTrimEquals(S, Lit);
 end;
 
 procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);

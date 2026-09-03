@@ -8,83 +8,44 @@ uses
   nextpas.core.base,
   nextpas.core.audio.base;
 
-procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer);
-procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
-procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
-procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
+procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
+procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
+procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer); inline;
+procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer); inline;
 
 implementation
 
 uses
-  nextpas.core.audio.pcm,
   nextpas.core.audio.simd;
 
-procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer);
-var I, N4: Integer;
+// Single source Owner is nextpas.core.audio.simd dispatch via AudioSimdCaps/ SimdConvert*.
+// pcm.simd is thin inline forwarding single source, no duplicate 4-way unroll,
+// no secondary caps dispatch, zero extra branch. Raw F32 block copy stays single
+// source via nextpas.core.base.utils CopyMem → bytes.ops (see audio.pcm).
+
+procedure PcmConvertBlockS16ToF32(const ASrc: PSmallInt; ADst: PSingle; ACount: Integer); inline;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  N4 := ACount and not 3;
-  I := 0;
-  while I < N4 do
-  begin
-    ADst[I] := PcmS16ToF32(ASrc[I]);
-    ADst[I+1] := PcmS16ToF32(ASrc[I+1]);
-    ADst[I+2] := PcmS16ToF32(ASrc[I+2]);
-    ADst[I+3] := PcmS16ToF32(ASrc[I+3]);
-    Inc(I, 4);
-  end;
-  while I < ACount do begin ADst[I] := PcmS16ToF32(ASrc[I]); Inc(I); end;
+  // thin inline forward single source to Owner simd; inline + no extra caps branch
+  SimdConvertS16ToF32(ASrc, ADst, ACount);
 end;
 
-procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer);
-var I, N4: Integer;
+procedure PcmConvertBlockF32ToS16(const ASrc: PSingle; ADst: PSmallInt; ACount: Integer); inline;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  N4 := ACount and not 3;
-  I := 0;
-  while I < N4 do
-  begin
-    ADst[I] := PcmF32ToS16(ASrc[I]);
-    ADst[I+1] := PcmF32ToS16(ASrc[I+1]);
-    ADst[I+2] := PcmF32ToS16(ASrc[I+2]);
-    ADst[I+3] := PcmF32ToS16(ASrc[I+3]);
-    Inc(I, 4);
-  end;
-  while I < ACount do begin ADst[I] := PcmF32ToS16(ASrc[I]); Inc(I); end;
+  SimdConvertF32ToS16(ASrc, ADst, ACount);
 end;
 
-procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer);
-var I, N4: Integer;
+procedure PcmConvertBlockS32ToF32(const ASrc: PLongInt; ADst: PSingle; ACount: Integer); inline;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  N4 := ACount and not 3;
-  I := 0;
-  while I < N4 do
-  begin
-    ADst[I] := PcmS32ToF32(ASrc[I]);
-    ADst[I+1] := PcmS32ToF32(ASrc[I+1]);
-    ADst[I+2] := PcmS32ToF32(ASrc[I+2]);
-    ADst[I+3] := PcmS32ToF32(ASrc[I+3]);
-    Inc(I, 4);
-  end;
-  while I < ACount do begin ADst[I] := PcmS32ToF32(ASrc[I]); Inc(I); end;
+  SimdConvertS32ToF32(ASrc, ADst, ACount);
 end;
 
-procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer);
-var I, N4: Integer;
+procedure PcmConvertBlockF32ToS32(const ASrc: PSingle; ADst: PLongInt; ACount: Integer); inline;
 begin
   if (ASrc = nil) or (ADst = nil) or (ACount <= 0) then Exit;
-  N4 := ACount and not 3;
-  I := 0;
-  while I < N4 do
-  begin
-    ADst[I] := PcmF32ToS32(ASrc[I]);
-    ADst[I+1] := PcmF32ToS32(ASrc[I+1]);
-    ADst[I+2] := PcmF32ToS32(ASrc[I+2]);
-    ADst[I+3] := PcmF32ToS32(ASrc[I+3]);
-    Inc(I, 4);
-  end;
-  while I < ACount do begin ADst[I] := PcmF32ToS32(ASrc[I]); Inc(I); end;
+  SimdConvertF32ToS32(ASrc, ADst, ACount);
 end;
 
 end.
