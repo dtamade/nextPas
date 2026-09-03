@@ -32,6 +32,7 @@ uses
   nextpas.core.collections.multimap.intf,
   nextpas.core.collections.multiset.intf,
   nextpas.core.collections.orderedmap.rb.intf,
+  nextpas.core.collections.treemap.base,
   nextpas.core.collections.treemap.intf,
   nextpas.core.collections.tree_set.intf,
   nextpas.core.collections.skiplist.base,
@@ -40,6 +41,7 @@ uses
   nextpas.core.collections.trie.intf,
   nextpas.core.collections.prefixrouter.base,
   nextpas.core.collections.prefixrouter.intf,
+  nextpas.core.collections.lrucache.base,
   nextpas.core.collections.lrucache.intf,
   nextpas.core.collections.priorityqueue.base,
   nextpas.core.collections.priorityqueue.intf,
@@ -70,36 +72,36 @@ type
   TGrowRefFunc = nextpas.core.collections.base.TGrowRefFunc;
   TGrowProxyMethod = nextpas.core.collections.base.TGrowProxyMethod;
 
-  generic TPredicateFunc<T> = function(const aElement: T; aData: Pointer): Boolean;
-  generic TPredicateMethod<T> = function(const aElement: T; aData: Pointer): Boolean of object;
+  generic TPredicateFunc<T> = nextpas.core.collections.base.TPredicateFunc<T>;
+  generic TPredicateMethod<T> = nextpas.core.collections.base.TPredicateMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TPredicateRefFunc<T> = reference to function(const aElement: T): Boolean;
+  generic TPredicateRefFunc<T> = nextpas.core.collections.base.TPredicateRefFunc<T>;
   {$ENDIF}
-  generic TMapperFunc<T,U> = function(const aElement: T; aData: Pointer): U;
-  generic TMapperMethod<T,U> = function(const aElement: T; aData: Pointer): U of object;
+  generic TMapperFunc<T,U> = nextpas.core.collections.base.TMapperFunc<T,U>;
+  generic TMapperMethod<T,U> = nextpas.core.collections.base.TMapperMethod<T,U>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TMapperRefFunc<T,U> = reference to function(const aElement: T): U;
+  generic TMapperRefFunc<T,U> = nextpas.core.collections.base.TMapperRefFunc<T,U>;
   {$ENDIF}
-  generic TCompareFunc<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt;
-  generic TCompareMethod<T> = function(const aLeft, aRight: T; aData: Pointer): SizeInt of object;
+  generic TCompareFunc<T> = nextpas.core.collections.base.TCompareFunc<T>;
+  generic TCompareMethod<T> = nextpas.core.collections.base.TCompareMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TCompareRefFunc<T> = reference to function(const aLeft, aRight: T): SizeInt;
+  generic TCompareRefFunc<T> = nextpas.core.collections.base.TCompareRefFunc<T>;
   {$ENDIF}
-  generic TEqualsFunc<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean;
-  generic TEqualsMethod<T> = function(const aLeft, aRight: T; aData: Pointer): Boolean of object;
+  generic TEqualsFunc<T> = nextpas.core.collections.base.TEqualsFunc<T>;
+  generic TEqualsMethod<T> = nextpas.core.collections.base.TEqualsMethod<T>;
   {$IFDEF NEXTPAS_CORE_ANONYMOUS_REFERENCES}
-  generic TEqualsRefFunc<T> = reference to function(const aLeft, aRight: T): Boolean;
+  generic TEqualsRefFunc<T> = nextpas.core.collections.base.TEqualsRefFunc<T>;
   {$ENDIF}
-  generic TKeyHashFunc<K> = function(const AKey: K): UInt32;
-  generic TKeyEqualsFunc<K> = function(const L, R: K): Boolean;
-  generic TSkipListCompareFunc<K> = function(const A, B: K): SizeInt;
-  generic TValueSupplierFunc<V> = function: V;
-  generic TValueModifierProc<V> = procedure(var Value: V);
-  generic TKeyValueCallback<K,V> = procedure(const aEntry: specialize TMapEntry<K,V>; aData: Pointer);
-  generic TTreeValueSupplierFunc<V> = function: V;
-  generic TTreeValueModifierProc<V> = procedure(var Value: V);
-  generic THashFunc<T> = function(const aValue: T; aData: Pointer): UInt64;
-  generic TBTreeCompareFunc<T> = function(const A, B: T; aData: Pointer): SizeInt;
+  generic TKeyHashFunc<K> = nextpas.core.collections.hashmap.base.TKeyHashFunc<K>;
+  generic TKeyEqualsFunc<K> = nextpas.core.collections.hashmap.base.TKeyEqualsFunc<K>;
+  generic TSkipListCompareFunc<K> = nextpas.core.collections.skiplist.base.TSkipListCompareFunc<K>;
+  generic TValueSupplierFunc<V> = nextpas.core.collections.hashmap.base.TValueSupplierFunc<V>;
+  generic TValueModifierProc<V> = nextpas.core.collections.hashmap.base.TValueModifierProc<V>;
+  generic TKeyValueCallback<K,V> = nextpas.core.collections.treemap.base.TKeyValueCallback<K,V>;
+  generic TTreeValueSupplierFunc<V> = nextpas.core.collections.treemap.base.TTreeValueSupplierFunc<V>;
+  generic TTreeValueModifierProc<V> = nextpas.core.collections.treemap.base.TTreeValueModifierProc<V>;
+  generic THashFunc<T> = nextpas.core.collections.lrucache.base.THashFunc<T>;
+  generic TBTreeCompareFunc<T> = nextpas.core.collections.base.TBTreeCompareFunc<T>;
 
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
   TGrowthStrategy          = nextpas.core.collections.base.TGrowthStrategy;

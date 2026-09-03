@@ -1,12 +1,10 @@
 # nextpas.core.graphics — 惊艳的 Pascal 图形地基
 
-> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（预演：S0 文档定版，源码未落地，接口以 `CONTRACT.md` 为准，见 `ROADMAP.md`）
+> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（S2 已落地：`graphics.base/color/path` + `image.base` + `vector.tess` + `canvas.raster` + `effect.graph` 全量可用，见 `CONTRACT.md` 0.2.0-source-contract）
 > 为 `directui` 与高性能矢量系统而生，提供图像设计、矢量排版、滤镜与转换的完整能力支撑，对标 `gui-framework` 的 `UiScene → DrawPlan → RenderGraph → RenderBackend`，图形只产 `TBitmap/ICanvas`。
 > **铁律**：零直引 FPC RTL（`SysUtils/Graphics/FPImage`），缺失反哺 `nextpas.core`；存量可抽代码迁入本家族；超越 Go 1.22 / Rust tiny-skia 0.11。
 
-## Hero：7 行 vs 20 行（高级感）— 预演
-
-**Go 要 20 行 + `gg` 第三方，Rust 要 4 步 `PathBuilder`：我们 7 行。（代码为预演示意，S0 未落地，以 `CONTRACT.md` 为准）**
+## Hero：7 行 vs 20 行（高级感）
 
 ```pascal
 // Pascal 7 行 — 值类型 + 不可变链 + 流式 With（优雅）
@@ -69,7 +67,7 @@ font→graphics.text(GlyphRun) ─┘                ↑  effect.graph(Bake 并�
 ## 稳定性
 
 - 族 `EGraphicsError → {EColorError, EImageDecodeError, EVectorError, ECanvasError, EEffectError}`，`Try` 双形态，`fuzz` 门禁
-- `SemVer 0.1.0-draft`，`draft→focused-runtime` 需 `source-contract + bench + 线程/错误` 全绿
+- `SemVer 0.2.0-source-contract`，`focused-runtime` 准备中（L1/L2 四件套 + bench 已齐，待 source-contract 全绿升档）
 
 ## 测试入口
 

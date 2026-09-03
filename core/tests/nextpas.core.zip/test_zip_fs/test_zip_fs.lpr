@@ -405,6 +405,139 @@ begin
   end;
 end;
 
+procedure TestAtomicExtractRoundtrip;
+var
+  LRoot, LDst: string;
+  LZip: TBytes;
+begin
+  LRoot := NewCaseDir('asrc');
+  LDst := NewCaseDir('adst');
+  RemoveAll(LDst);
+  try
+    MkdirAll(LRoot, PermDirDefault);
+    BuildTree(LRoot);
+    LZip := ZipPackDir(LRoot);
+    ZipExtractToDirAtomic(LZip, LDst);
+    Check(SameBytes(ReadFile(LDst + '/a.txt'), BytesOfStr('hello')), 'atomic a.txt restored');
+    Check(SameBytes(ReadFile(LDst + '/sub/b.bin'), ExpectedBin), 'atomic b.bin restored');
+    Check(not Exists(LDst + '.tmp'), 'atomic no temp leak');
+  finally
+    RemoveAll(LRoot);
+    RemoveAll(LDst);
+  end;
+end;
+
+procedure TestAtomicRefusesExisting;
+var
+  LRoot, LDst: string;
+  LZip: TBytes;
+  LGot: Boolean;
+begin
+  LRoot := NewCaseDir('asrc2');
+  LDst := NewCaseDir('adst2');
+  try
+    MkdirAll(LRoot, PermDirDefault);
+    BuildTree(LRoot);
+    LZip := ZipPackDir(LRoot);
+    ZipExtractToDir(LZip, LDst);
+    LGot := False;
+    try
+      ZipExtractToDirAtomic(LZip, LDst);
+    except
+      on E: EArgumentError do LGot := Pos('already exists', E.Message) > 0;
+    end;
+    Check(LGot, 'atomic refuses existing destination');
+    Check(SameBytes(ReadFile(LDst + '/a.txt'), BytesOfStr('hello')), 'atomic existing preserved');
+  finally
+    RemoveAll(LRoot);
+    RemoveAll(LDst);
+  end;
+end;
+
+procedure TestAtomicBombCleanup;
+var
+  LW: IZipWriter;
+  LZip: TBytes;
+  LDst: string;
+  LOpts: TZipExtractOptions;
+  LGot: Boolean;
+begin
+  LDst := NewCaseDir('abomb');
+  RemoveAll(LDst);
+  try
+    LW := NewZipWriter;
+    LW.AddEntry('bomb.bin', BytesOfStr('123456789012'));
+    LZip := LW.Finish;
+    LOpts := DefaultZipExtractOptions;
+    LOpts.MaxTotalOutputSize := 1;
+    LGot := False;
+    try
+      ZipExtractToDirAtomicWithOptions(LZip, LDst, LOpts);
+    except
+      on E: EIOError do LGot := Pos('total', LowerCase(E.Message)) > 0;
+      on E: EParseError do LGot := True;
+    end;
+    Check(LGot, 'atomic bomb fails closed');
+    Check(not Exists(LDst), 'atomic bomb leaves no dest and no temp');
+  finally
+    RemoveAll(LDst);
+  end;
+end;
+
+procedure TestAtomicPermissionRestore;
+var
+  LRoot, LDst: string;
+  LZip: TBytes;
+  LR: IZipReader;
+  LI: Integer;
+begin
+  LRoot := NewCaseDir('aperm');
+  LDst := NewCaseDir('apermdst');
+  RemoveAll(LDst);
+  try
+    MkdirAll(LRoot + '/d', PermDirDefault);
+    WriteFileText(LRoot + '/d/f.txt', 'x');
+    Chmod(LRoot + '/d/f.txt', TFilePermission(&640));
+    Chmod(LRoot + '/d', TFilePermission(&750));
+    LZip := ZipPackDir(LRoot);
+    LR := NewZipReader(LZip);
+    LI := LR.Find('d/f.txt');
+    Check(LI >= 0, 'atomic perm packed file present');
+    ZipExtractToDirAtomic(LZip, LDst);
+    Check(Word(Stat(LDst + '/d/f.txt').Permission) and &777 = &640, 'atomic file perm restored');
+    Check(Word(Stat(LDst + '/d').Permission) and &777 = &750, 'atomic dir perm restored');
+  finally
+    RemoveAll(LRoot);
+    RemoveAll(LDst);
+  end;
+end;
+
+procedure TestAtomicSymlinkPolicy;
+var
+  LDir, LDst: string;
+  LRaw: TBytes;
+  LOpts: TZipExtractOptions;
+begin
+  LDir := NewCaseDir('alnk');
+  LDst := NewCaseDir('alnkdst');
+  RemoveAll(LDst);
+  try
+    RunPy(C_PY_LINK, LDir + '/l.zip', '');
+    LRaw := ReadFile(LDir + '/l.zip');
+    ZipExtractToDirAtomic(LRaw, LDst);
+    Check(not FileExists(LDst + '/lnk'), 'atomic symlink skipped by default');
+    Check(ReadFileText(LDst + '/real.txt') = 'target', 'atomic regular sibling extracted');
+    RemoveAll(LDst);
+    LOpts := DefaultZipExtractOptions;
+    LOpts.SkipSymlinks := False;
+    ZipExtractToDirAtomicWithOptions(LRaw, LDst, LOpts);
+    Check(SameBytes(ReadFile(LDst + '/lnk'), BytesOfStr('target')), 'atomic opt-in creates symlink');
+  finally
+    RemoveAll(LDir);
+    RemoveAll(LDst);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.zip.fs');
   T.Test('Pack extract roundtrip', @TestPackExtractRoundtrip);
@@ -414,5 +547,10 @@ begin
   T.Test('Permission roundtrip', @TestPermissionRoundtrip);
   T.Test('Symlink entry policy', @TestSymlinkEntryPolicy);
   T.Test('Extract MaxTotal guard', @TestExtractMaxTotalGuard);
+  T.Test('Atomic extract roundtrip', @TestAtomicExtractRoundtrip);
+  T.Test('Atomic refuses existing', @TestAtomicRefusesExisting);
+  T.Test('Atomic bomb cleanup', @TestAtomicBombCleanup);
+  T.Test('Atomic permission restore', @TestAtomicPermissionRestore);
+  T.Test('Atomic symlink policy', @TestAtomicSymlinkPolicy);
   if not T.Run then Halt(1);
 end.

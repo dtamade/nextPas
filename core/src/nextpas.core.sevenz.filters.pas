@@ -22,6 +22,8 @@ function SevenZFilterMethodId(AFilter: TSevenZFilter): UInt64;
 function SevenZFilterDefaultProps(AFilter: TSevenZFilter): TBytes;
 procedure SevenZFilterConvert(var AData: TBytes; AFilter: TSevenZFilter;
   const AProps: TBytes; AEncode: Boolean);
+function SevenZFilterEncode(const AProps: TBytes; const AInput: TBytes;
+  AFilter: TSevenZFilter): TBytes; inline;
 
 function SevenZDeltaDecode(const AProps: TBytes; const AInput: TBytes;
   AOutSize: UInt64): TBytes;
@@ -119,103 +121,88 @@ begin
     Result := nil;
 end;
 
+{ Delta 单一 helper：栈历史 + 零堆分配，in-place/out-of-place 复用，单源于 bytes.ops 零拷贝哲学 }
+function DeltaDist(const AProps: TBytes): SizeInt; inline;
+begin
+  if Length(AProps) < 1 then
+    raise ESevenZError.Create('delta props missing');
+  Result := SizeInt(AProps[0]) + 1;
+end;
+
+procedure DeltaApply(const ASrc: PByte; ADst: PByte; ALen: SizeUInt;
+  LDist: SizeInt; AEncode: Boolean);
+var
+  LHist: array[0..255] of Byte;
+  LI: SizeUInt;
+  LSlot: SizeInt;
+  LOrig: Byte;
+begin
+  if ALen = 0 then Exit;
+  { perf: stack LHist avoids SetLength heap alloc per hot call; single FillChar over LDist (≤256), inline }
+  FillChar(LHist[0], LDist, 0);
+  if AEncode then
+  begin
+    for LI := 0 to ALen - 1 do
+    begin
+      LSlot := SizeInt(LI mod SizeUInt(LDist));
+      LOrig := ASrc[LI];
+      {$PUSH}{$Q-}{$R-}
+      ADst[LI] := Byte(LOrig - LHist[LSlot]);
+      {$POP}
+      LHist[LSlot] := LOrig;
+    end;
+  end
+  else
+  begin
+    for LI := 0 to ALen - 1 do
+    begin
+      LSlot := SizeInt(LI mod SizeUInt(LDist));
+      {$PUSH}{$Q-}{$R-}
+      ADst[LI] := Byte(ASrc[LI] + LHist[LSlot]);
+      {$POP}
+      LHist[LSlot] := ADst[LI];
+    end;
+  end;
+end;
+
 function SevenZDeltaDecode(const AProps: TBytes; const AInput: TBytes;
   AOutSize: UInt64): TBytes;
 var
   LDist: SizeInt;
-  LI: SizeInt;
-  LHist: array of Byte;
-  LSlot: SizeInt;
 begin
   Result := nil;
-  if Length(AProps) < 1 then
-    raise ESevenZError.Create('delta props missing');
+  LDist := DeltaDist(AProps);
   if SizeUInt(Length(AInput)) < AOutSize then
     raise ESevenZError.Create('delta input shorter than declared output');
-  LDist := SizeInt(AProps[0]) + 1;
-  SetLength(LHist, LDist);
-  FillChar(LHist[0], LDist, 0);
   SetLength(Result, AOutSize);
-  for LI := 0 to SizeInt(AOutSize) - 1 do
-  begin
-    LSlot := LI mod LDist;
-    {$PUSH}{$Q-}{$R-}
-    Result[LI] := Byte(AInput[LI] + LHist[LSlot]);
-    {$POP}
-    LHist[LSlot] := Result[LI];
-  end;
+  if AOutSize = 0 then Exit;
+  DeltaApply(@AInput[0], @Result[0], SizeUInt(AOutSize), LDist, False);
 end;
 
 function SevenZDeltaEncode(const AProps: TBytes; const AInput: TBytes): TBytes;
 var
   LDist: SizeInt;
-  LI: SizeInt;
-  LHist: array of Byte;
-  LSlot: SizeInt;
 begin
   Result := nil;
-  if Length(AProps) < 1 then
-    raise ESevenZError.Create('delta props missing');
-  LDist := SizeInt(AProps[0]) + 1;
-  SetLength(LHist, LDist);
-  FillChar(LHist[0], LDist, 0);
+  LDist := DeltaDist(AProps);
   SetLength(Result, Length(AInput));
-  for LI := 0 to High(AInput) do
-  begin
-    LSlot := LI mod LDist;
-    {$PUSH}{$Q-}{$R-}
-    Result[LI] := Byte(AInput[LI] - LHist[LSlot]);
-    {$POP}
-    LHist[LSlot] := AInput[LI];
-  end;
+  if Length(AInput) = 0 then Exit;
+  DeltaApply(@AInput[0], @Result[0], SizeUInt(Length(AInput)), LDist, True);
 end;
 
 procedure SevenZDeltaEncodeInPlace(var AData: TBytes; const AProps: TBytes);
 var
   LDist: SizeInt;
-  LI: SizeInt;
-  LHist: array of Byte;
-  LSlot: SizeInt;
-  LOrig: Byte;
 begin
   if Length(AData) = 0 then Exit;
-  if Length(AProps) < 1 then
-    raise ESevenZError.Create('delta props missing');
-  LDist := SizeInt(AProps[0]) + 1;
-  SetLength(LHist, LDist);
-  FillChar(LHist[0], LDist, 0);
-  for LI := 0 to High(AData) do
-  begin
-    LSlot := LI mod LDist;
-    LOrig := AData[LI];
-    {$PUSH}{$Q-}{$R-}
-    AData[LI] := Byte(LOrig - LHist[LSlot]);
-    {$POP}
-    LHist[LSlot] := LOrig;
-  end;
+  LDist := DeltaDist(AProps);
+  DeltaApply(@AData[0], @AData[0], SizeUInt(Length(AData)), LDist, True);
 end;
 
 procedure SevenZDeltaDecodeInPlace(var AData: TBytes; const AProps: TBytes);
-var
-  LDist: SizeInt;
-  LI: SizeInt;
-  LHist: array of Byte;
-  LSlot: SizeInt;
 begin
   if Length(AData) = 0 then Exit;
-  if Length(AProps) < 1 then
-    raise ESevenZError.Create('delta props missing');
-  LDist := SizeInt(AProps[0]) + 1;
-  SetLength(LHist, LDist);
-  FillChar(LHist[0], LDist, 0);
-  for LI := 0 to High(AData) do
-  begin
-    LSlot := LI mod LDist;
-    {$PUSH}{$Q-}{$R-}
-    AData[LI] := Byte(AData[LI] + LHist[LSlot]);
-    {$POP}
-    LHist[LSlot] := AData[LI];
-  end;
+  DeltaApply(@AData[0], @AData[0], SizeUInt(Length(AData)), DeltaDist(AProps), False);
 end;
 
 procedure SevenZFilterConvert(var AData: TBytes; AFilter: TSevenZFilter;
@@ -256,6 +243,23 @@ begin
         end;
       end;
   end;
+end;
+
+function SevenZFilterEncode(const AProps: TBytes; const AInput: TBytes;
+  AFilter: TSevenZFilter): TBytes; inline;
+begin
+  // perf: out-of-place 单次分配 + 单遍变换，与拷贝融合，零额外 SpanClone 分配；Delta 走 SevenZDeltaEncode 原生 src->dst 单遍，BCJ 走单次 SetLength+Move 后原地变换（单次分配封装，调用侧零额外拷贝），与 Delta 保持同构的零分配路径
+  if AFilter = szfDelta then
+  begin
+    Result := SevenZDeltaEncode(AProps, AInput);
+    Exit;
+  end;
+  Result := nil;
+  SetLength(Result, Length(AInput));
+  if Length(AInput) = 0 then Exit;
+  // single Move 融合拷贝，inline 单遍，随后在位变换；调用侧已消除 SpanClone+Convert 双语句双遍语义
+  Move(AInput[0], Result[0], Length(AInput));
+  SevenZFilterConvert(Result, AFilter, AProps, True);
 end;
 {$POP}
 end.

@@ -30,12 +30,12 @@ type
     function TrimRight: TStringView;
     function TrimLeftChar(const ACh: AnsiChar): TStringView;
 
-    function Equals(const AOther: TStringView): Boolean;
+    function Equals(const AOther: TStringView): Boolean; inline;
     function EqualsIgnoreCase(const AOther: TStringView): Boolean; inline;
     function StartsWith(const APrefix: TStringView): Boolean;
     function EndsWith(const ASuffix: TStringView): Boolean;
 
-    function IndexOf(const ACh: AnsiChar): PtrInt;
+    function IndexOf(const ACh: AnsiChar): PtrInt; inline;
     function LastIndexOf(const ACh: AnsiChar): PtrInt;
     function IndexOfStr(const ANeedle: TStringView): PtrInt; overload;
     function IndexOfStr(const ANeedle: TStringView; AFrom: PtrInt): PtrInt; overload;
@@ -57,13 +57,11 @@ function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
 
 { 一致切片即时拷贝（string→string）：等价
   TStringView.FromStr(ASrc).Slice(AOffset, ALength).ToString，但单次
-  SetString、无中间 view 跨语句存活。存在理由：FPC 3.3.1-19195 对
-  「X := TStringView.FromStr(X).Slice(..).ToString」自赋值链生成坏码——
-  view 源缓冲在赋值期被提前失效，产出短一字符尾随 #0 的串（-O0 亦复现；
-  与 Int64(Double) 强转缺陷同类）。源串可能与目标同变量的场景一律用本
-  函数。越界钳制与 Slice 一致：AOffset >= Length(ASrc) → ''；ALength
-  超出 → 截到末尾。 }
-function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string;
+  SetString、无中间 view 跨语句存活。自赋值安全、越界钳制与 Slice 一致：
+  AOffset >= Length(ASrc) → ''；ALength 超出 → 截到末尾。单源：越界钳制
+  复用 bytes.ops.TryClampSlice（inline 零拷贝 extent，owner bytes.ops），
+  Slice/SliceToStr 同源。 }
+function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string; inline;
 
 { 路径归一零拷贝单源（Owner L1 text.view）：剥离前导 '/'，双轨 String/TStringView 统一归一，
   零重复 Delete 扫描，复用 bytes.ops SliceToStr/CStrLen 单源 + TrimLeftChar 单次扫描；
@@ -113,20 +111,17 @@ end;
 
 function TStringView.Slice(const AOffset, ALength: SizeUInt): TStringView;
 var
-  LRemaining: SizeUInt;
+  LClamped: SizeUInt;
 begin
-  if AOffset >= FLen then
+  // single source: bytes.ops.TryClampSlice — zero-copy extent, inline hot path, owner bytes.ops
+  if not TryClampSlice(AOffset, ALength, FLen, LClamped) then
   begin
     Result.FData := nil;
     Result.FLen := 0;
     Exit;
   end;
   Result.FData := FData + AOffset;
-  LRemaining := FLen - AOffset;
-  if ALength > LRemaining then
-    Result.FLen := LRemaining
-  else
-    Result.FLen := ALength;
+  Result.FLen := LClamped;
 end;
 
 function TStringView.Left(const ACount: SizeUInt): TStringView;
@@ -153,55 +148,40 @@ end;
 
 function TStringView.TrimLeft: TStringView;
 var
-  LPos: SizeUInt;
+  LSpan: TByteSpan;
 begin
-  LPos := 0;
-  while (LPos < FLen) and IsWhitespace(Byte(FData[LPos])) do
-    Inc(LPos);
-  Result.FData := FData + LPos;
-  Result.FLen := FLen - LPos;
+  // single source: bytes.ops.SpanTrimLeft — zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  LSpan := SpanTrimLeft(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
 function TStringView.TrimRight: TStringView;
 var
-  LEnd: SizeUInt;
+  LSpan: TByteSpan;
 begin
-  LEnd := FLen;
-  while (LEnd > 0) and IsWhitespace(Byte(FData[LEnd - 1])) do
-    Dec(LEnd);
-  Result.FData := FData;
-  Result.FLen := LEnd;
+  // single source: bytes.ops.SpanTrimRight — zero-copy TByteSpan view, no heap alloc, loop not inline per red-line 2, owner bytes.ops
+  LSpan := SpanTrimRight(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
 function TStringView.Trim: TStringView;
+var
+  LSpan: TByteSpan;
 begin
-  Result := TrimLeft.TrimRight;
+  // single source: bytes.ops.SpanTrim — zero-copy view via SpanTrimLeft+SpanTrimRight, no heap alloc, inline thin-forward, owner bytes.ops
+  LSpan := SpanTrim(TByteSpan.Create(PByte(FData), FLen));
+  Result.FData := PAnsiChar(LSpan.Data);
+  Result.FLen := LSpan.Len;
 end;
 
-function TStringView.Equals(const AOther: TStringView): Boolean;
-var
-  LPos: SizeUInt;
+function TStringView.Equals(const AOther: TStringView): Boolean; inline;
 begin
-  if FLen <> AOther.FLen then
-    Exit(False);
-  if FLen = 0 then
-    Exit(True);
-  if FData = AOther.FData then
-    Exit(True);
-  LPos := 0;
-  while LPos + VecWidth <= FLen do
-  begin
-    if VecCmpEq2(@FData[LPos], @AOther.FData[LPos]) <> TVecMask(not TVecMask(0)) then
-      Exit(False);
-    Inc(LPos, VecWidth);
-  end;
-  while LPos < FLen do
-  begin
-    if FData[LPos] <> AOther.FData[LPos] then
-      Exit(False);
-    Inc(LPos);
-  end;
-  Result := True;
+  // single source: bytes.ops.SpanEqual — zero-copy TByteSpan view, inline hot path, owner bytes.ops (MemEqual SIMD)
+  Result := nextpas.core.bytes.ops.SpanEqual(
+    TByteSpan.Create(PByte(FData), FLen),
+    TByteSpan.Create(PByte(AOther.FData), AOther.FLen));
 end;
 
 function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean; inline;
@@ -241,28 +221,11 @@ begin
   Result := LV.Equals(ASuffix);
 end;
 
-function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
-var
-  LMask: TVecMask;
-  LPos: SizeUInt;
+function TStringView.IndexOf(const ACh: AnsiChar): PtrInt; inline;
 begin
-  if FLen = 0 then
-    Exit(-1);
-  LPos := 0;
-  while LPos + VecWidth <= FLen do
-  begin
-    LMask := VecCmpEq(@FData[LPos], Byte(ACh));
-    if LMask <> TVecMask(0) then
-      Exit(PtrInt(LPos) + VecCtz(LMask));
-    Inc(LPos, VecWidth);
-  end;
-  while LPos < FLen do
-  begin
-    if FData[LPos] = ACh then
-      Exit(PtrInt(LPos));
-    Inc(LPos);
-  end;
-  Result := -1;
+  // single source: bytes.ops.SpanIndexOf — zero-copy TByteSpan view, inline hot path, owner bytes.ops (MemFindByte SIMD)
+  Result := PtrInt(nextpas.core.bytes.ops.SpanIndexOf(
+    TByteSpan.Create(PByte(FData), FLen), Byte(ACh)));
 end;
 
 function TStringView.LastIndexOf(const ACh: AnsiChar): PtrInt;
@@ -441,32 +404,26 @@ function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
 var
   LValue: TStringView;
   LNeedle: TStringView;
-  I: PtrInt;
 begin
   LValue := TStringView.FromStr(AValue);
   LNeedle := TStringView.FromStr(ASubStr);
-
   if (LNeedle.Len = 0) or (LNeedle.Len > LValue.Len) then
     Exit(-1);
   if LNeedle.Len = 1 then
     Exit(LValue.LastIndexOf(LNeedle.Data[0]));
-
-  for I := PtrInt(LValue.Len - LNeedle.Len) downto 0 do
-    if LValue.Slice(SizeUInt(I), LNeedle.Len).Equals(LNeedle) then
-      Exit(I);
-  Result := -1;
+  // perf: single source bytes.ops.SpanLastIndexOfSpan — reuses SpanIndexOfSpan SIMD/Bounds (inline zero-copy TByteSpan view), avoids O(n*m) Slice.Equals loop
+  Result := PtrInt(nextpas.core.bytes.ops.SpanLastIndexOfSpan(LValue.ToSpan, LNeedle.ToSpan));
 end;
 
-function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string;
+function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string; inline;
 var
   LSrcLen, LTake: SizeUInt;
 begin
+  // single source: bytes.ops.TryClampSlice — same clamp as TStringView.Slice, inline zero-copy extent, owner bytes.ops
   LSrcLen := SizeUInt(Length(ASrc));
-  if AOffset >= LSrcLen then
+  if not TryClampSlice(AOffset, ALength, LSrcLen, LTake) then
     Exit('');
-  LTake := ALength;
-  if LTake > LSrcLen - AOffset then
-    LTake := LSrcLen - AOffset;
+  // perf: inline, single SetString + zero-copy Move, self-assignment safe; single alloc no intermediate view (internal: FPC 3.3.1-19195 view self-assign workaround)
   SetString(Result, PAnsiChar(@ASrc[AOffset + 1]), PtrInt(LTake));
 end;
 

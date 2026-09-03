@@ -403,26 +403,28 @@ type
 
 implementation
 
+uses
+  nextpas.core.bytes.binary;
+
 { ========================================================================= }
-{ 内部读取 helpers                                                          }
+{ 内部读取 helpers — single source via bytes.binary BSWAP hardware         }
 { ========================================================================= }
 
-function SwapUInt16(AValue: UInt16): UInt16;
+function SwapUInt16(AValue: UInt16): UInt16; inline;
 begin
-  Result := ((AValue and $FF) shl 8) or ((AValue shr 8) and $FF);
+  { perf: single source bytes.binary BSWAP, inline zero-copy }
+  Result := nextpas.core.bytes.binary.SwapUInt16(AValue);
 end;
 
-function SwapUInt32(AValue: UInt32): UInt32;
+function SwapUInt32(AValue: UInt32): UInt32; inline;
 begin
-  Result := ((AValue and $FF) shl 24) or
-            (((AValue shr 8) and $FF) shl 16) or
-            (((AValue shr 16) and $FF) shl 8) or
-            ((AValue shr 24) and $FF);
+  { perf: single source bytes.binary BSWAP, inline zero-copy }
+  Result := nextpas.core.bytes.binary.SwapUInt32(AValue);
 end;
 
-function SwapInt16(AValue: Int16): Int16;
+function SwapInt16(AValue: Int16): Int16; inline;
 begin
-  Result := Int16(SwapUInt16(UInt16(AValue)));
+  Result := Int16(nextpas.core.bytes.binary.SwapUInt16(UInt16(AValue)));
 end;
 
 { ========================================================================= }

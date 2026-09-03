@@ -16,7 +16,7 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许)
 
 - `base` 不依赖同模块任何文件；`intf` 依赖 `base`；`impl` 依赖 `intf+base`；`facade` 聚合 re-export。
 - L2 禁止 `*.ffi/vendor/miniaudio/mpg123/opusfile`（gate `grep -qi "\.ffi|vendor"`）。
-- 债务：`SyncObjs/Classes/SysUtils` 直引 4 文件（`device.null/graph/game/timeline`）→ 目标 `nextpas.core.sync`。
+- 债务已收敛：`device.null/graph/timeline` 已迁移至 `nextpas.core.sync.mutex` + `nextpas.core.bytes.ops`（`SyncObjs/Classes/SysUtils` 直引已移除，`game` 经 `sfx` 兼容层收敛）；新增代码禁止直引宿主单元（gate `grep -R "uses.*SyncObjs|Classes|SysUtils"`）。
 
 ## 3. 统一货币
 
@@ -60,11 +60,22 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许)
 | 设备 | `IAudioDeviceProvider` | `…00000041` |
 | 图 | `IAudioGraph:IRealtimeAudioSource` | `…00000042` |
 | 播放 | `IAudioPlayer` | `…00000043` |
-| 游戏 | `IGameAudio` | `…00000050` |
+| 游戏 | `IGameAudio`（deprecated 别名在 `sfx.intf` → `ISfxAudio(0050)`，game 无独立 intf 按需存在） | `…00000050` |
+| 空间 | `IAudioSpatialSource:IRealtimeAudioSource` | `…00000051` |
+| 事件 | `IAudioEventSystem:IRealtimeAudioSource` | `…00000052` |
+| 银行 | `IAudioBank:IRealtimeAudioSource` | `…00000053` |
+| 资源 | `IAudioResourceManager` | `…00000054` |
+| 播放列表 | `IAudioPlaylist` | `…00000080` |
+| 工程 | `IAudioStudio` | `…00000070` |
+| 工程 | `IStudioProject` | `…00000071` |
+| 音序器 | `IAudioSequencer:IRealtimeAudioSource` | `…00000072` |
+| 总线 | `IAudioBus` | `B…C00000000001`（B 前缀异形） |
+| 总线混音 | `IAudioBusMixer` | `B…C00000000002`（B 前缀异形） |
 | 时间线 | `IAudioTimeline:IRealtimeAudioSource` | `…00000060` |
 
 - `TAudioEncodeOptions` 必须声明早于 `IAudioDecoder`（gate 顺序校验）。
-- `IAudioGraph/IAudioTimeline` 继承 `IRealtimeAudioSource` 以直连 `Device`。
+- `IAudioGraph/IAudioTimeline/IAudioSpatialSource/IAudioBank/IAudioSequencer` 继承 `IRealtimeAudioSource` 以直连 `Device`。
+- `B` 前缀 `C00000000001/02` 为 bus 异形 GUID，与 `A…` 核心域前缀区分，gate 单独校验（`B1A2B3C4-D5E6-7890-ABCD-C00000000001/02`）。
 
 ## 6. 容器与注册
 
@@ -88,5 +99,5 @@ L2 nextpas.core.audio (仅依赖 L0-L1；io/fs 为显式允许)
 
 ## 10. 验证
 
-`180 tests HEAPTRC OK` + `26文件无ffi/vendor` + `11 GUID` + `实时纪律` + `hygiene` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6` 与 `README.md` 测试矩阵）。
+`260 tests HEAPTRC OK` + `78文件无ffi/vendor`（核心 26+扩展 52 四件套完整，unique 76+2 bus 门面，codec.flac/mp3/vorbis 各 `base/intf/impl` 四件套 1.5）+ `23 GUID`（11 核心+12 扩展含 B 前缀 bus 异形：0051/0052/0053/0054/0070/0071/0072/0080/C00001/02）+ `实时纪律` + `hygiene` + `test_automation` 为 `focused-runtime` 必要条件（见 `CONTRACT.md §6/§8` 与 `README.md` 测试矩阵）。
 

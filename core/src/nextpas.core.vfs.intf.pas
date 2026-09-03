@@ -43,7 +43,54 @@ type
     function ExistsView(const APath: TStringView): Boolean;
     function OpenReadView(const APath: TStringView): IStream;
   end;
+{ 单源 VfsETagHelper：TryGet* 三方法 Supports 级联同构收口（mount/overlay/embed 共用），
+  inline 热路径 + 零拷贝 Supports 直通，bytes.ops 外零额外分配，单源防漂移 }
+function VfsETagHelperTryGetETag(const AFs: IVfs; const APath: string; out AETag: string): Boolean; inline;
+function VfsETagHelperTryGetLastModified(const AFs: IVfs; const APath: string; out ALastModified: string): Boolean; inline;
+function VfsETagHelperTryGetServeMeta(const AFs: IVfs; const APath: string; out AETag, ALastModified: string): Boolean; inline;
 
 implementation
+
+function VfsETagHelperTryGetETag(const AFs: IVfs; const APath: string; out AETag: string): Boolean; inline;
+var
+  LIntf: IVfsETag;
+begin
+  AETag := '';
+  if (AFs = nil) then Exit(False);
+  if AFs.QueryInterface(IVfsETag, LIntf) = 0 then
+    Exit(LIntf.TryGetETag(APath, AETag));
+  Result := False;
+end;
+
+function VfsETagHelperTryGetLastModified(const AFs: IVfs; const APath: string; out ALastModified: string): Boolean; inline;
+var
+  LIntf: IVfsETag;
+begin
+  ALastModified := '';
+  if (AFs = nil) then Exit(False);
+  if AFs.QueryInterface(IVfsETag, LIntf) = 0 then
+    Exit(LIntf.TryGetLastModified(APath, ALastModified));
+  Result := False;
+end;
+
+function VfsETagHelperTryGetServeMeta(const AFs: IVfs; const APath: string; out AETag, ALastModified: string): Boolean; inline;
+var
+  LMeta: IVfsServeMeta;
+  LETagIntf: IVfsETag;
+begin
+  AETag := '';
+  ALastModified := '';
+  if (AFs = nil) then Exit(False);
+  if AFs.QueryInterface(IVfsServeMeta, LMeta) = 0 then
+    Exit(LMeta.TryGetServeMeta(APath, AETag, ALastModified));
+  if AFs.QueryInterface(IVfsETag, LETagIntf) = 0 then
+  begin
+    Result := LETagIntf.TryGetETag(APath, AETag);
+    if Result then
+      LETagIntf.TryGetLastModified(APath, ALastModified);
+    Exit;
+  end;
+  Result := False;
+end;
 
 end.

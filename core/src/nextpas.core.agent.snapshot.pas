@@ -31,18 +31,43 @@ function BoundedSnapshotCost(const ASnapshot: string; ACompletionTokens: Int64 =
 implementation
 
 uses
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.text.grapheme;
 
 function BuildBoundedSnapshot(const ASystem: string;
   const AMessages: TMessageArray; ABudget: Integer): string;
 var
   LFull: string;
-  LCut: Integer;
+  LCut, LPos, LNext, LBest: Integer;
+  LG: TGraphemeResult;
 begin
+  if ABudget <= 0 then Exit('');
   LFull := AgentBuildSystemText(ASystem, AMessages);
   if Length(LFull) <= ABudget then
     Exit(LFull);
   LCut := AgentUtf8SafeCutLen(LFull, ABudget);
+  // ASCII 快路径：前 LCut 字节全 < $80 时簇边界即 LCut，免 GraphemeNext 扫描
+  LPos := 1;
+  while (LPos <= LCut) and (Ord(LFull[LPos]) < $80) do Inc(LPos);
+  if LPos > LCut then
+    Exit(AgentUtf8SafeTruncate(LFull, LCut));
+  // 簇安全对齐：从首字节前向遍历 GraphemeNext，找到 ≤ LCut 的最大簇边界
+  // 避免 👨‍👩‍👧 / 🇨🇳 / 1️⃣ 等序列被半切导致 EAW 列宽错位（PERFORMANCE §7.1）
+  LPos := 1;
+  LBest := 0;
+  while LPos <= Length(LFull) do
+  begin
+    LG := GraphemeNext(@LFull[LPos], Length(LFull) - LPos + 1);
+    if LG.ByteLen <= 0 then Break;
+    LNext := LPos + LG.ByteLen - 1;
+    if LNext > LCut then Break;
+    LBest := LNext;
+    Inc(LPos, LG.ByteLen);
+  end;
+  if LBest > 0 then
+    LCut := LBest
+  else
+    LCut := 0;
   Result := AgentUtf8SafeTruncate(LFull, LCut);
 end;
 

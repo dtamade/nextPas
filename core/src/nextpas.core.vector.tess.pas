@@ -252,12 +252,12 @@ begin
   SetLength(Active, ECnt);
   SetLength(RunStartX, ECnt);
   SetLength(RunEndX, ECnt);
-  // RCap 按 ECnt 起步，tile 剔除后不再按 H 盲扩
-  RCap := ECnt * 2 + 16;
-  if RCap < 32 then RCap := 32;
-  if RCap > 8192 then RCap := 8192;
-  RCap := Integer(AlignUp(SizeUInt(RCap), 8));
-  if RCap = 0 then RCap := 32;
+  // RCap 一次性预估：ECnt*4 覆盖 2000 顶点 sawtooth 带宽，避免中途 EnsureResultCap 扩容拷贝
+  RCap := ECnt * 4 + 32;
+  if RCap < 64 then RCap := 64;
+  if RCap > 32768 then RCap := 32768;
+  RCap := Integer(AlignUp(SizeUInt(RCap), 64));
+  if RCap = 0 then RCap := 64;
   SetLength(Result, RCap);
   RCnt := 0;
   ACnt := 0;

@@ -44,6 +44,8 @@ type
     Name: string;
     FileType: TFileType;
     IsDir: Boolean;
+    Size: Int64;     { 0 if unknown/dir; ns-aligned with TFileInfo.Size }
+    ModTime: Int64;  { ns since epoch; 0=unknown; matches TFileInfo.ModTime }
   end;
 
   TDirEntryArray = array of TDirEntry;

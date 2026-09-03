@@ -63,6 +63,21 @@ type
     property Col: UInt32 read Column write Column;
   end;
 
+  { owner narrow: js.intf needs IJsonDocument/TJsonValue without整包 json facade (L2->L2);
+    canonical value/document handles live here (L1), json.value/json alias for type identity }
+  TJsonValue = record
+    FDoc: Pointer;
+    FIdx: UInt32;
+  end;
+
+  IJsonDocument = interface ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function Root: TJsonValue;
+    function HasError: Boolean;
+    function Error: TJsonError;
+    function Stringify: string;
+    function StringifyPretty(const AIndent: Int32 = 2): string;
+  end;
+
 const
   JSON_NODE_NONE = UInt32($FFFFFFFF);
   JSON_OBJECT_HASH_THRESHOLD = 16;

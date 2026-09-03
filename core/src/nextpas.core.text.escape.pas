@@ -18,6 +18,10 @@ procedure JsonDoubleEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBu
 function JsonUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
+// owner single source SIMD needs-escape predicate — bytes.ops/text.escape single source, VecWidth inline, zero-copy view, eliminates hand roll in js.intf/pure.base
+function JsonNeedsEscape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+function JsonNeedsEscapeView(const ASrc: TStringView): Boolean; inline;
+function JsonNeedsEscapeStr(const S: string): Boolean; inline;
 
 implementation
 
@@ -32,6 +36,39 @@ const
   H: array[0..15] of AnsiChar = '0123456789abcdef';
 begin
   Result := H[ANibble and $F];
+end;
+
+function JsonNeedsEscape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+var LPos: SizeUInt; LCombined: TVecMask; LFirst: Int32;
+begin
+  // perf: SIMD single source VecWidth inline — same VecCmpEq pattern as JsonEscapeToBuffer/ToBuilder single source, owner text.escape, zero-copy
+  LPos := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    LCombined := VecCmpEq(@ASrc[LPos], Ord('"')) or VecCmpEq(@ASrc[LPos], Ord('\')) or VecCmpLtU(@ASrc[LPos], $20);
+    if LCombined <> TVecMask(0) then Exit(True);
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < ALen do
+  begin
+    if IsJsonSpecial(Byte(ASrc[LPos])) then Exit(True);
+    Inc(LPos);
+  end;
+  Result := False;
+end;
+
+function JsonNeedsEscapeView(const ASrc: TStringView): Boolean; inline;
+begin
+  // perf: zero-copy view warp, inline, bytes.ops single source via TStringView.Data/Len
+  if ASrc.Len = 0 then Exit(False);
+  Result := JsonNeedsEscape(ASrc.Data, ASrc.Len);
+end;
+
+function JsonNeedsEscapeStr(const S: string): Boolean; inline;
+begin
+  // perf: single SetString-free view via TStringView.FromStr, inline, zero-copy, SIMD single source
+  if S = '' then Exit(False);
+  Result := JsonNeedsEscape(PAnsiChar(S), SizeUInt(Length(S)));
 end;
 
 procedure EmitEscapeSeq(const ACh: Byte; const ADst: PAnsiChar; var APos: SizeUInt); inline;

@@ -119,7 +119,7 @@ begin
   Inputs[0].DataSize := 5;
   Inputs[0].ModTime := 0;
   Blob := ResPackBuild(Inputs, ResPackDefaultOptions);
-  FsEmb := CreateEmbeddedVfs(Blob.Data, Blob.Size, True);
+  FsEmb := CreateEmbeddedVfsOwned(Blob.Data, Blob.Size);
   Mounted := CreateMountedVfs([VfsMountEntry('m', FsEmb)]);
   OK := (Mounted as IVfsETag).TryGetETag('m/a.txt', ETag);
   Check(OK and (ETag <> ''), 'mount: embedded ETag passthrough true');
@@ -212,7 +212,7 @@ begin
   Bufs[0]:=StrToBytes('emb');
   Inputs[0].Path:='a.txt'; Inputs[0].Data:=@Bufs[0][0]; Inputs[0].DataSize:=3; Inputs[0].ModTime:=0;
   Blob:=ResPackBuild(Inputs, ResPackDefaultOptions);
-  FsEmb:=CreateEmbeddedVfs(Blob.Data, Blob.Size, True);
+  FsEmb:=CreateEmbeddedVfsOwned(Blob.Data, Blob.Size);
   Overlay:=CreateOverlayVfs([FsEmb, FsMem]);
   OK:=(Overlay as IVfsETag).TryGetETag('a.txt', ETag);
   Check(OK and (ETag<>''), 'overlay: ETag from priority ETag source');

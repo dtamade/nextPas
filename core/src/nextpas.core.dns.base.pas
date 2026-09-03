@@ -69,6 +69,10 @@ function DnsQueryKindToWire(const AKind: TDnsQueryKind): UInt16;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray;
+
 { ── 字节序助手 ──────────────────────────────────────────────────── }
 
 function ReadU16(const AData: TBytes; const APos: Integer): UInt16;
@@ -319,6 +323,7 @@ var
   LName: string;
   LRec: TDnsRecord;
   LSkip: Boolean;
+  LCNAMECount, LCNAMECap, LAnsCount, LAnsCap, LCap: Integer;
 begin
   Result := False;
   LLength := Length(AData);
@@ -331,6 +336,10 @@ begin
   LANCount := (Integer(AData[6]) shl 8) or AData[7];
   AResp.Answers := nil;
   AResp.CNAMEs := nil;
+  LCNAMECount := 0;
+  LCNAMECap := 0;
+  LAnsCount := 0;
+  LAnsCap := 0;
 
   LPos := 12;
   { 跳过 question 区 }
@@ -428,8 +437,18 @@ begin
           LPtr := LRRStart;
           if not DecodeNameAt(AData, LLength, LPtr, LName) then
             Exit;
-          SetLength(AResp.CNAMEs, Length(AResp.CNAMEs) + 1);
-          AResp.CNAMEs[High(AResp.CNAMEs)] := LName;
+          // perf: single source via bytes.ops.BytesGrowCapacityInt (BYTES_BUILDER_MIN_GROW 0→64→2×) geometric amortized O(1) — not inline per red-line 2 (loop I-Cache); zero-copy via DynArray poke (mem.dynarray) retains slab, single string assign
+          LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCNAMECap, LCNAMECount + 1);
+          if (nextpas.core.mem.dynarray.DynArrayCapacityStr(AResp.CNAMEs) < SizeUInt(LCap)) or (nextpas.core.mem.dynarray.DynArrayRefCountStr(AResp.CNAMEs) <> 1) then
+          begin
+            if LCap <> Length(AResp.CNAMEs) then
+              SetLength(AResp.CNAMEs, LCap);
+          end;
+          if SizeUInt(Length(AResp.CNAMEs)) <> SizeUInt(LCNAMECount + 1) then
+            nextpas.core.mem.dynarray.DynArraySetLengthStr(AResp.CNAMEs, SizeUInt(LCNAMECount + 1));
+          LCNAMECap := LCap;
+          AResp.CNAMEs[LCNAMECount] := LName;
+          Inc(LCNAMECount);
           LSkip := True;
         end;
     else
@@ -437,11 +456,21 @@ begin
     end;
     if not LSkip then
     begin
-      SetLength(AResp.Answers, Length(AResp.Answers) + 1);
-      AResp.Answers[High(AResp.Answers)] := LRec;
+      // perf: single source via bytes.ops.BytesGrowCapacityInt geometric amortized O(1) — not inline per red-line 2; zero-copy via single record assign (refcounted strings inside move once), capacity via LAnsCap single source
+      if LAnsCount >= LAnsCap then
+      begin
+        LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LAnsCap, LAnsCount + 1);
+        SetLength(AResp.Answers, LCap);
+        LAnsCap := LCap;
+      end;
+      AResp.Answers[LAnsCount] := LRec;
+      Inc(LAnsCount);
     end;
     Inc(LPos, 10 + LRDLength);
   end;
+  // stability: trim logical length; CNAMEs already poked to exact count with slab retained, Answers final shrink O(n) once retains amortized O(1) (no leak on early Exit — caller discards partial AResp)
+  if Length(AResp.Answers) <> LAnsCount then
+    SetLength(AResp.Answers, LAnsCount);
   Result := True;
 end;
 

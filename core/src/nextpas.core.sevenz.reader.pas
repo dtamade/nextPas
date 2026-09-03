@@ -18,6 +18,7 @@ uses
   nextpas.core.sevenz.base,
   nextpas.core.sevenz.intf,
   nextpas.core.sevenz.header,
+  nextpas.core.sevenz.stream,
   nextpas.core.collections.hashmap.swiss.str;
 
 type
@@ -46,16 +47,24 @@ type
     FLowerNames: array of string;                           { lowercased names for ignore-case indexes }
     FSortedIdxIgnoreCase: array of Integer;
     FSortedIdxRevIgnoreCase: array of Integer;
+    FRevNames: array of string;                             { reversed names for suffix (precomputed) }
+    FRevLowerNames: array of string;                        { reversed lower names }
     FIgnoreCaseBuilt: Boolean;
     procedure BuildNameMaps;
-    { 单核排序：AUseLower 选 FLowerNames/Name，ARev 选 CompareReversed，去重 4 份 QuickSort }
     procedure BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     procedure BuildSortedIdx;
     procedure BuildSortedIdxRev;
     procedure BuildSortedIdxIgnoreCase;
     procedure BuildSortedIdxRevIgnoreCase;
     procedure EnsureIgnoreCaseBuilt;
-    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
+    procedure EnsureSortedIdx;
+    procedure EnsureSortedRev;
+    procedure EnsureSortedIdxIgnoreCase;
+    procedure EnsureSortedRevIgnoreCase;
+    procedure EnsureRevNamesBuilt;
+    procedure EnsureRevLowerNamesBuilt;
+    procedure EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
@@ -153,9 +162,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
+  nextpas.core.collections.algorithms,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
-  nextpas.core.sevenz.limits,
   nextpas.core.text.unicode.utils;
 
 function CompareNames(const A, B: string): Integer; inline;
@@ -163,115 +172,33 @@ begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
 end;
 
-function CompareReversed(const A, B: string): Integer; forward;
-
 type
-  {** @desc 条目只读流：持有 Extract 产出的缓冲引用（不二次拷贝），
-      Read/Seek/Size/Position 语义逐条对齐 TBytesStream：
-      Close 后访问 raise、Close 幂等、Seek 负位抛参数错误。
-      写入一律 ENotSupportedError——归档内容不可变 *}
-  TSevenZEntryStream = class(TInterfacedObject, IStream)
-  private
-    FData: TBytes;
-    FPosition: SizeUInt;
-    FClosed: Boolean;
-    procedure EnsureOpen(const AOperation: string);
-  public
-    constructor Create(const AData: TBytes);
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-    procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
+  TSevenZSortCtx = record
+    Reader: TSevenZReaderImpl;
+    UseLower: Boolean;
+    Rev: Boolean;
   end;
+  PSevenZSortCtx = ^TSevenZSortCtx;
 
-constructor TSevenZEntryStream.Create(const AData: TBytes);
-begin
-  inherited Create;
-  FData := AData;
-  FPosition := 0;
-  FClosed := False;
-end;
-
-procedure TSevenZEntryStream.EnsureOpen(const AOperation: string);
-begin
-  if FClosed then
-    raise EIOError.Create('TSevenZEntryStream.' + AOperation +
-      ': stream is closed');
-end;
-
-function TSevenZEntryStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function SevenZCompareIdx(const A, B: Integer; AData: Pointer): SizeInt;
 var
-  LAvailable: SizeUInt;
+  LCtx: PSevenZSortCtx;
 begin
-  EnsureOpen('Read');
-  if ACount = 0 then
-    Exit(0);
-  if FPosition >= SizeUInt(Length(FData)) then
-    Exit(0);
-  LAvailable := SizeUInt(Length(FData)) - FPosition;
-  if ACount < LAvailable then
-    Result := ACount
-  else
-    Result := LAvailable;
-  Move(FData[FPosition], ABuf, Result);
-  Inc(FPosition, Result);
-end;
-
-function TSevenZEntryStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-begin
-  EnsureOpen('Write');
-  Result := 0;
-  raise ENotSupportedError.Create(
-    'TSevenZEntryStream.Write: entry stream is read-only');
-end;
-
-function TSevenZEntryStream.Seek(const AOffset: Int64;
-  const AOrigin: TSeekOrigin): Int64;
-var
-  LNewPos: Int64;
-begin
-  EnsureOpen('Seek');
-  case AOrigin of
-    soBeginning: LNewPos := AOffset;
-    soCurrent: LNewPos := Int64(FPosition) + AOffset;
-    else LNewPos := Int64(Length(FData)) + AOffset;
-  end;
-  if LNewPos < 0 then
-    raise EArgumentError.Create('TSevenZEntryStream.Seek: negative position');
-  FPosition := SizeUInt(LNewPos);
-  Result := LNewPos;
-end;
-
-procedure TSevenZEntryStream.Close;
-begin
-  if not FClosed then
+  LCtx := PSevenZSortCtx(AData);
+  if LCtx^.UseLower then
   begin
-    FClosed := True;
-    FData := nil;
-    FPosition := 0;
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevLowerNames[A], LCtx^.Reader.FRevLowerNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FLowerNames[A], LCtx^.Reader.FLowerNames[B]);
+  end
+  else
+  begin
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevNames[A], LCtx^.Reader.FRevNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FEntries[A].Name, LCtx^.Reader.FEntries[B].Name);
   end;
-end;
-
-function TSevenZEntryStream.GetSize: Int64;
-begin
-  Result := Int64(Length(FData));
-end;
-
-function TSevenZEntryStream.GetPosition: Int64;
-begin
-  Result := Int64(FPosition);
-end;
-
-procedure TSevenZEntryStream.SetPosition(const AValue: Int64);
-begin
-  EnsureOpen('SetPosition');
-  if AValue < 0 then
-    raise EArgumentError.Create(
-      'TSevenZEntryStream.SetPosition: negative position');
-  FPosition := SizeUInt(AValue);
 end;
 
 const
@@ -641,55 +568,41 @@ begin
   FSortedIdxIgnoreCase := nil;
   FSortedIdxRevIgnoreCase := nil;
   FLowerNames := nil;
+  FRevNames := nil;
+  FRevLowerNames := nil;
   if Length(FEntries)=0 then Exit;
   FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
-  // Lazy ignore-case: defer FLowerNames / FNameMapIgnoreCase / sorted ignore indexes
+  // Lazy: defer all sorted indexes until prefix/suffix queried; hash is single source for Find
   FNameMapIgnoreCase := nil;
   FLowerNames := nil;
   FSortedIdxIgnoreCase := nil;
   FSortedIdxRevIgnoreCase := nil;
+  FRevNames := nil;
+  FRevLowerNames := nil;
   FIgnoreCaseBuilt := False;
   for LI:=0 to High(FEntries) do
   begin
     if not FNameMap.ContainsKey(FEntries[LI].Name) then
       FNameMap.Put(FEntries[LI].Name, LI);
   end;
-  BuildSortedIdx;
-  BuildSortedIdxRev;
+  // suffix/prefix indexes are built on demand via EnsureSortedIdx/Rev
 end;
 
 procedure TSevenZReaderImpl.BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
-var LI: Integer;
-  { 单核去重：inline Cmp 按 AUseLower/ARev 分发，避免 4 份 QuickSort 拷贝 }
-  procedure QuickSort(AL, AR: Integer);
-  var LI2, LJ, LPivot: Integer; LTmp: Integer;
-    function Cmp(const A, B: Integer): Integer; inline;
-    begin
-      if AUseLower then
-      begin
-        if ARev then Result := CompareReversed(FLowerNames[A], FLowerNames[B])
-        else Result := CompareNames(FLowerNames[A], FLowerNames[B]);
-      end else
-      begin
-        if ARev then Result := CompareReversed(FEntries[A].Name, FEntries[B].Name)
-        else Result := CompareNames(FEntries[A].Name, FEntries[B].Name);
-      end;
-    end;
-  begin
-    LI2 := AL; LJ := AR; LPivot := ADest[(AL+AR) div 2];
-    repeat
-      while Cmp(ADest[LI2], LPivot) < 0 do Inc(LI2);
-      while Cmp(ADest[LJ], LPivot) > 0 do Dec(LJ);
-      if LI2 <= LJ then
-      begin LTmp := ADest[LI2]; ADest[LI2] := ADest[LJ]; ADest[LJ] := LTmp; Inc(LI2); Dec(LJ); end;
-    until LI2 > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI2 < AR then QuickSort(LI2, AR);
-  end;
+var
+  LI: Integer;
+  LCtx: TSevenZSortCtx;
 begin
   SetLength(ADest, Length(FEntries));
-  for LI:=0 to High(ADest) do ADest[LI] := LI;
-  if Length(ADest) > 1 then QuickSort(0, High(ADest));
+  for LI := 0 to High(ADest) do
+    ADest[LI] := LI;
+  if Length(ADest) > 1 then
+  begin
+    LCtx.Reader := Self;
+    LCtx.UseLower := AUseLower;
+    LCtx.Rev := ARev;
+    specialize Sort<Integer>(ADest, @SevenZCompareIdx, @LCtx);
+  end;
 end;
 
 procedure TSevenZReaderImpl.BuildSortedIdx;
@@ -699,6 +612,7 @@ end;
 
 procedure TSevenZReaderImpl.BuildSortedIdxRev;
 begin
+  EnsureRevNamesBuilt;
   BuildSorted(FSortedIdxRev, False, True);
 end;
 
@@ -709,29 +623,66 @@ end;
 
 procedure TSevenZReaderImpl.BuildSortedIdxRevIgnoreCase;
 begin
+  EnsureRevLowerNamesBuilt;
   BuildSorted(FSortedIdxRevIgnoreCase, True, True);
 end;
 
-function CompareReversed(const A, B: string): Integer; inline;
-var LI, LJ: Integer;
+function TSevenZReaderImpl.ReverseStr(const S: string): string;
+var
+  LI: Integer;
 begin
-  LI := Length(A); LJ := Length(B);
-  while (LI > 0) and (LJ > 0) do
-  begin
-    if A[LI] < B[LJ] then Exit(-1);
-    if A[LI] > B[LJ] then Exit(1);
-    Dec(LI); Dec(LJ);
-  end;
-  if LI = 0 then
-    if LJ = 0 then Exit(0) else Exit(-1)
-  else Exit(1);
+  { not inline: SetLength+loop is real loop body, keep out-of-line to avoid
+    I-Cache copy bloat when expanded into LowerBoundGeneric binary-search hot path }
+  SetLength(Result, Length(S));
+  for LI := 1 to Length(S) do
+    Result[LI] := S[Length(S) - LI + 1];
 end;
 
-function TSevenZReaderImpl.ReverseStr(const S: string): string;
+procedure TSevenZReaderImpl.EnsureRevNamesBuilt;
 var LI: Integer;
 begin
-  SetLength(Result, Length(S));
-  for LI:=1 to Length(S) do Result[LI] := S[Length(S)-LI+1];
+  if Length(FRevNames) > 0 then Exit;
+  if Length(FEntries) = 0 then Exit;
+  SetLength(FRevNames, Length(FEntries));
+  for LI:=0 to High(FEntries) do
+    FRevNames[LI] := ReverseStr(FEntries[LI].Name);
+end;
+
+procedure TSevenZReaderImpl.EnsureRevLowerNamesBuilt;
+var LI: Integer;
+begin
+  if Length(FRevLowerNames) > 0 then Exit;
+  EnsureIgnoreCaseBuilt;
+  if Length(FLowerNames)=0 then Exit;
+  SetLength(FRevLowerNames, Length(FLowerNames));
+  for LI:=0 to High(FLowerNames) do
+    FRevLowerNames[LI] := ReverseStr(FLowerNames[LI]);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+begin
+  if Length(ADest) > 0 then Exit;
+  if Length(FEntries) = 0 then Exit;
+  if AUseLower then
+    EnsureIgnoreCaseBuilt;
+  if ARev then
+  begin
+    if AUseLower then
+      EnsureRevLowerNamesBuilt
+    else
+      EnsureRevNamesBuilt;
+  end;
+  BuildSorted(ADest, AUseLower, ARev);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedIdx;
+begin
+  EnsureSortedGeneric(FSortedIdx, False, False);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedRev;
+begin
+  EnsureSortedGeneric(FSortedIdxRev, False, True);
 end;
 
 procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
@@ -748,27 +699,49 @@ begin
     if not FNameMapIgnoreCase.ContainsKey(LLower) then
       FNameMapIgnoreCase.Put(LLower, LI);
   end;
-  BuildSortedIdxIgnoreCase;
-  BuildSortedIdxRevIgnoreCase;
+  // lazy: sorted ignore indexes built on demand
   FIgnoreCaseBuilt := True;
 end;
 
-function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer; inline;
-var LLo, LHi, LMid, LCmp: Integer;
+procedure TSevenZReaderImpl.EnsureSortedIdxIgnoreCase;
 begin
+  EnsureSortedGeneric(FSortedIdxIgnoreCase, True, False);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedRevIgnoreCase;
+begin
+  EnsureSortedGeneric(FSortedIdxRevIgnoreCase, True, True);
+end;
+
+function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
+var
+  LLo, LHi, LMid, LCmp: Integer;
+  LRevKey: string;
+begin
+  if ARev then
+  begin
+    // suffix: compare reversed view via precomputed rev arrays + single reversed key (O(len) once, not per compare)
+    LRevKey := ReverseStr(AKey);
+    LLo := 0; LHi := Length(ASorted);
+    while LLo < LHi do
+    begin
+      LMid := (LLo + LHi) div 2;
+      if AUseLower then
+        LCmp := CompareNames(FRevLowerNames[ASorted[LMid]], LRevKey)
+      else
+        LCmp := CompareNames(FRevNames[ASorted[LMid]], LRevKey);
+      if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
+    end;
+    Exit(LLo);
+  end;
   LLo := 0; LHi := Length(ASorted);
   while LLo < LHi do
   begin
     LMid := (LLo + LHi) div 2;
     if AUseLower then
-    begin
-      if ARev then LCmp := CompareReversed(FLowerNames[ASorted[LMid]], AKey)
-      else LCmp := CompareNames(FLowerNames[ASorted[LMid]], AKey);
-    end else
-    begin
-      if ARev then LCmp := CompareReversed(FEntries[ASorted[LMid]].Name, AKey)
-      else LCmp := CompareNames(FEntries[ASorted[LMid]].Name, AKey);
-    end;
+      LCmp := CompareNames(FLowerNames[ASorted[LMid]], AKey)
+    else
+      LCmp := CompareNames(FEntries[ASorted[LMid]].Name, AKey);
     if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
   end;
   Result := LLo;
@@ -776,13 +749,14 @@ end;
 
 function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
 begin
+  EnsureSortedIdx;
   Result := LowerBoundGeneric(FSortedIdx, APrefix, False, False);
 end;
 
 function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
 var LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
+  EnsureSortedIdxIgnoreCase;
   LLower := StringLowerAsciiAware(APrefix);
   Result := LowerBoundGeneric(FSortedIdxIgnoreCase, LLower, True, False);
 end;
@@ -790,13 +764,14 @@ end;
 function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
 var LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
+  EnsureSortedRevIgnoreCase;
   LLower := StringLowerAsciiAware(ASuffix);
   Result := LowerBoundGeneric(FSortedIdxRevIgnoreCase, LLower, True, True);
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffix(const ASuffix: string): Integer;
 begin
+  EnsureSortedRev;
   Result := LowerBoundGeneric(FSortedIdxRev, ASuffix, False, True);
 end;
 
@@ -913,15 +888,11 @@ end;
 
 function TSevenZReaderImpl.Find(const AName: string): Integer;
 var
-  LI: Integer;
   LIdx: Integer;
 begin
   if (FNameMap<>nil) and FNameMap.TryGetValue(AName, LIdx) then
     Exit(LIdx);
   Result := -1;
-  for LI := 0 to Length(FEntries) - 1 do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
 end;
 
 function SameIgnoreCase(const A, B: string): Boolean; inline;
@@ -940,7 +911,6 @@ end;
 
 function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
 var
-  LI: Integer;
   LIdx: Integer;
   LLower: string;
 begin
@@ -952,9 +922,6 @@ begin
       Exit(LIdx);
   end;
   Result := -1;
-  for LI := 0 to Length(FEntries) - 1 do
-    if SameIgnoreCase(FEntries[LI].Name, AName) then
-      Exit(LI);
 end;
 
 function TSevenZReaderImpl.Contains(const AName: string): Boolean;
@@ -1058,6 +1025,7 @@ begin
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
+  EnsureSortedIdx;
   if Length(FSortedIdx)=0 then Exit(-1);
   LStart := LowerBoundPrefix(APrefix);
   if LStart >= Length(FSortedIdx) then Exit(-1);
@@ -1074,6 +1042,7 @@ begin
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
+  EnsureSortedRev;
   if Length(FSortedIdxRev)=0 then Exit(-1);
   LStart := LowerBoundSuffix(ASuffix);
   if LStart >= Length(FSortedIdxRev) then Exit(-1);
@@ -1246,9 +1215,9 @@ end;
 function TSevenZReaderImpl.FindByPrefixIgnoreCase(const APrefix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := -1;
   if APrefix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+  EnsureSortedIdxIgnoreCase;
   if Length(FSortedIdxIgnoreCase)=0 then Exit(-1);
   LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
@@ -1262,9 +1231,9 @@ end;
 function TSevenZReaderImpl.FindBySuffixIgnoreCase(const ASuffix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := -1;
   if ASuffix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+  EnsureSortedRevIgnoreCase;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit(-1);
   LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
@@ -1554,6 +1523,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedIdx;
   if Length(FSortedIdx) = 0 then Exit;
   LStart := LowerBoundPrefix(APrefix);
   LCnt := 0;
@@ -1576,7 +1546,6 @@ end;
 function TSevenZReaderImpl.IndicesByPrefixIgnoreCase(const APrefix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := nil;
   if APrefix = '' then
   begin
@@ -1584,6 +1553,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedIdxIgnoreCase;
   if Length(FSortedIdxIgnoreCase) = 0 then Exit;
   LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
@@ -1670,6 +1640,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedRev;
   if Length(FSortedIdxRev) = 0 then Exit;
   LStart := LowerBoundSuffix(ASuffix);
   LCnt := 0;
@@ -1692,7 +1663,6 @@ end;
 function TSevenZReaderImpl.IndicesBySuffixIgnoreCase(const ASuffix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := nil;
   if ASuffix = '' then
   begin
@@ -1700,6 +1670,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedRevIgnoreCase;
   if Length(FSortedIdxRevIgnoreCase) = 0 then Exit;
   LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);

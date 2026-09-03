@@ -91,16 +91,24 @@ begin
   APb := LRest div 5;
 end;
 
-procedure AllocProbs(var AE: TEngineState);
-var
-  LI: SizeInt;
+function ProbsNeeded(const ALc, ALp: Integer): SizeInt; inline;
 begin
-  SetLength(AE.Probs, PROB_LIT_BASE + ($300 shl (AE.Lc + AE.Lp)));
-  for LI := 0 to High(AE.Probs) do
-    AE.Probs[LI] := C_RC_INIT_PROB;
+  Result := PROB_LIT_BASE + ($300 shl (ALc + ALp));
 end;
 
-procedure ResetState(var AE: TEngineState);
+procedure AllocProbs(var AE: TEngineState); inline;
+var
+  LNeed: SizeInt;
+begin
+  LNeed := ProbsNeeded(AE.Lc, AE.Lp);
+  // perf: inline + reused allocation (SetLength only on size change, zero-copy otherwise) + FillWord block init single pass, O(N) init without per-element loop/call overhead; removes chunk-linear AllocProbs amplification
+  if Length(AE.Probs) <> LNeed then
+    SetLength(AE.Probs, LNeed);
+  if LNeed > 0 then
+    FillWord(AE.Probs[0], LNeed, C_RC_INIT_PROB);
+end;
+
+procedure ResetState(var AE: TEngineState); inline;
 begin
   AllocProbs(AE);
   AE.State := 0;

@@ -1,12 +1,18 @@
 unit nextpas.core.sevenz.coders;
 
 {**
- * nextpas.core.sevenz.coders - coder 执行引擎与后端选择
+ * nextpas.core.sevenz.coders - coder 执行引擎与后端选择（L2 单点聚合缝）
  *
  * 按 folder 的 coder 有向图迭代解码（线性链为常见形态，实现支持任意绑定拓扑）。
  * LZMA 后端接口化：纯 Pascal 与 liblzma FFI 双实现运行时切换；
  * Copy 为本模块内置；BCJ/Delta 等过滤器由 nextpas.core.sevenz.filters 单源实现，
  * 本模块仅经 SevenZFilterConvert 分发，不再重复暴露 Delta 编解码入口。
+ * 缝位：L2 同层单向 allowlist 轻量缝 `sevenz.coders → compress`（Deflate/BZip2经
+ * nextpas.core.compress.intf 单点聚合薄转发，inline 零开销；BCJ2/AES/filters/lzma.*
+ * 为同族内聚非跨域缝），Registry 显式 allowlist + source-contract 门禁，
+ * cycle-gated 无 reverse（compress.* → sevenz.* 禁止，类 sevenz.fs→fs 单缝范式），
+ * bytes.ops 单源 inline/零拷贝（SpanClone 视图复用，Move 单源），资源 try..finally
+ * 不丢，异常 ESevenZLimitError 单源判限 via CompressIsLimitExceeded。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -44,23 +50,23 @@ function SevenZDecodeFolder(const AFolder: TSevenZFolder;
   代理 nextpas.core.compress.bzip2 的 FFI 可用性判定，门面仅 inline forward，
   保持 facade 纯 re-export 职责与 L2→L2 聚合收口 }
 function SevenZBZip2Available: Boolean; inline;
-{ Deflate 解码测试钩子：直通内部分支，供回归测试验证 zlib/raw 双路径 }
-function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
-{ BZip2 解码测试钩子 }
-function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+{ Deflate 解码测试钩子：薄转发 inline 零开销直通内部分支，供回归测试验证 zlib/raw 双路径 }
+function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
+{ BZip2 解码测试钩子：薄转发 inline 零开销 }
+function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
-  nextpas.core.compress,
-  nextpas.core.compress.bzip2,
+  nextpas.core.text.conv,
+  nextpas.core.compress.intf, // L2→L2 single seam: only this unit may reference compress.intf (Registry allowlist + source-contract gated, compress→sevenz cycle-gated, thin inline forward)
   nextpas.core.sevenz.bcj2,
   nextpas.core.sevenz.aes,
   nextpas.core.sevenz.filters,
   nextpas.core.sevenz.lzma.decoder,
-  nextpas.core.sevenz.lzma.encoder,
-  nextpas.core.sevenz.lzma.ffi;
+  nextpas.core.sevenz.lzma.encoder;
 
 var
   GRequestedBackend: TSevenZLzmaBackend = szlbAuto;
@@ -101,7 +107,7 @@ begin
     szlbFfi:
       begin
         if GFfiDecoder = nil then
-          GFfiDecoder := TSevenZLzmaDecoderFfi.Create;
+          GFfiDecoder := SevenZCreateLzmaFfiDecoder;
         Result := GFfiDecoder;
       end;
   else
@@ -121,36 +127,16 @@ begin
   Result := GPascalEncoder;
 end;
 
-function CopyOfBytes(const ASrc: TBytes): TBytes;
+function CopyOfBytes(const ASrc: TBytes): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(ASrc));
-  if Length(ASrc) > 0 then
-    Move(ASrc[0], Result[0], Length(ASrc));
+  // perf: single source via bytes.ops.SpanClone; inline single SetLength+Move, zero-copy view reused, no duplicate Move logic
+  Result := SpanClone(TByteSpan.FromBytes(ASrc));
 end;
 
-{ 无 SysUtils 的 UInt64 十进制转字符串；用于错误消息拼接——
-  本工具链 CreateFmt 对 %d 传 UInt64 实参会渲染为 0 }
-function UIntToDecStr(AVal: UInt64): string;
-var
-  LTmp: string;
+function UIntToDecStr(AVal: UInt64): string; inline;
 begin
-  Str(AVal, LTmp);
-  Result := LTmp;
-end;
-
-function UInt64ToHex12(AVal: QWord): string;
-const
-  HD: array[0..15] of Char = '0123456789ABCDEF';
-var
-  LI: Integer;
-begin
-  SetLength(Result, 12);
-  for LI := 11 downto 0 do
-  begin
-    Result[LI + 1] := HD[AVal and $F];
-    AVal := AVal shr 4;
-  end;
+  // perf: single source via text.conv.UIntToStr; inline keeps call site zero overhead, no Str temp alloc
+  Result := UIntToStr(AVal);
 end;
 
 { Deflate 解码：7z 容器中的 Deflate 可能为 zlib 包裹或 raw 流（p7zip 用 -15），
@@ -158,6 +144,16 @@ end;
   raw 路径的 inflate 实现对精确上限需 +1 探测字节（否则恰好填满时误判越界），
   这里以 LMax+1 探测后回校验真实上界。超限统一抛 ESevenZLimitError 供上层区分炸弹与损坏 }
 {$PUSH}{$WARNINGS OFF}
+
+{ single source helper: compress.intf单源判限，inline避免额外调用，Deflate/BZip2复用统一门面 }
+procedure RethrowDecompress(const APrefix: string; E: Exception); inline;
+begin
+  if E is ESevenZLimitError then raise E;
+  if CompressIsLimitExceeded(E) then
+    raise ESevenZLimitError.Create(E.Message);
+  raise EParseError.Create(APrefix + E.Message);
+end;
+
 function DeflateDecodeSevenZ(const AInput: TBytes; AOutSize: UInt64): TBytes;
 var
   LMax, LRawMax: SizeUInt;
@@ -169,7 +165,7 @@ begin
   if LMax = 0 then
     LMax := 1; { Raw 路径要求 >0，上层已校验空输出直接短路 }
   try
-    Result := DeflateDecompressWithMaxOutputSize(AInput, LMax);
+    Result := CompressDeflateDecompressWithMax(AInput, LMax);
     Exit;
   except
     on E: ESevenZLimitError do raise;
@@ -182,26 +178,19 @@ begin
   else
     LRawMax := LMax;
   try
-    Result := RawDeflateMessageDecompress(AInput, LRawMax);
+    Result := CompressRawDeflateMessageDecompressWithMax(AInput, LRawMax);
   except
     on E: ESevenZLimitError do raise;
-    on E: EIOError do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('deflate decode failed: ' + E.Message);
     on E: Exception do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('deflate decode failed: ' + E.Message);
+      RethrowDecompress('deflate decode failed: ', E);
   end;
   if SizeUInt(Length(Result)) > LMax then
     raise ESevenZLimitError.Create('raw inflate: decompressed size exceeds limit');
 end;
 
-function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+function SevenZDeflateDecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 begin
+  // thin inline forward, zero overhead via DeflateDecodeSevenZ -> compress.intf single source
   Result := DeflateDecodeSevenZ(AInput, AOutSize);
 end;
 
@@ -221,30 +210,24 @@ begin
     LMax := 0;
   end;
   try
-    Result := BZip2DecompressWithMaxOutputSize(AInput, LMax);
+    Result := CompressBZip2DecompressWithMax(AInput, LMax);
   except
     on E: ESevenZLimitError do raise;
-    on E: EIOError do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
     on E: Exception do
-      if Pos('exceeds limit', E.Message) > 0 then
-        raise ESevenZLimitError.Create(E.Message)
-      else
-        raise EParseError.Create('bzip2 decode failed: ' + E.Message);
+      RethrowDecompress('bzip2 decode failed: ', E);
   end;
 end;
 
-function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes;
+function SevenZBZip2DecodeForTest(const AInput: TBytes; AOutSize: UInt64): TBytes; inline;
 begin
+  // thin inline forward, zero overhead via BZip2DecodeSevenZ -> compress.intf single source
   Result := BZip2DecodeSevenZ(AInput, AOutSize);
 end;
 
-function SevenZBZip2Available: Boolean;
+function SevenZBZip2Available: Boolean; inline;
 begin
-  Result := BZip2FfiIsAvailable;
+  // owner经compress.intf聚合，inline forward零开销，单源复用 CompressBZip2IsAvailable
+  Result := CompressBZip2IsAvailable;
 end;
 {$POP}
 
@@ -260,8 +243,16 @@ begin
   begin
     if Length(AInputs) <> 1 then
       raise EParseError.Create('filter coder expects one input');
-    AOut := CopyOfBytes(AInputs[0]);
-    SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
+    if LFilter = szfDelta then
+    begin
+      // perf: Delta零拷贝out-of-place单次SetLength+DeltaApply，无CopyOfBytes额外分配；in-place仍复用同DeltaApply核心
+      AOut := SevenZDeltaDecode(ACoder.Props, AInputs[0], AOutSize);
+    end
+    else
+    begin
+      AOut := CopyOfBytes(AInputs[0]);
+      SevenZFilterConvert(AOut, LFilter, ACoder.Props, False);
+    end;
   end
   else
   case ACoder.MethodId of
@@ -387,8 +378,7 @@ begin
   if Length(APackStreams) <> Length(AFolder.PackedInIndices) then
     raise ESevenZError.Create('pack stream count mismatch');
   SetLength(LResolved, Length(AFolder.Coders));
-  SetLength(LDone, Length(AFolder.Coders));
-  FillChar(LDone[0], Length(LDone) * SizeOf(Boolean), 0);
+  SetLength(LDone, Length(AFolder.Coders)); // SetLength zero-initializes Boolean array, no FillChar double-zero nor OOB when empty
   repeat
     LProgress := False;
     for LI := 0 to High(AFolder.Coders) do

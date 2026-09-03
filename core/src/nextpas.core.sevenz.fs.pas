@@ -1,16 +1,22 @@
 unit nextpas.core.sevenz.fs;
 
 {**
- * nextpas.core.sevenz.fs - 7z 文件系统联邦层
+ * nextpas.core.sevenz.fs - 7z 文件系统联邦层（L2 单点联邦缝，source-contract 门禁）
  *
  * 在 core.sevenz 与 core.fs 之间提供零样板桥接：
  *  - 写端：AddFileFromFs / AddTree 将宿主文件/目录树直接挂入 ISevenZWriter
- *   （基于 IReader 流式路径，声明尺寸取 Stat.Size，时间取 ModTime 秒）
+ *   （基于 IReader 流式路径，声明尺寸取 Stat.Size，时间取 ModTime 秒，IReader 零额外缓冲）
  *  - 读端：ExtractToFs / ExtractAllToFs 将条目落地到宿主文件系统
- *    （目录自动 MkdirAll，文件经 ExtractTo 流式写入）
+ *    （目录自动 MkdirAll，文件经 ExtractTo 流式写入，FlushExtractedToFs 去重）
  *
- * 本单元为 L2 联邦扩展（同层单向依赖 fs → 不成环），与核心 sevenz.writer/reader
- * 解耦，复用 AddFileFromReader / ExtractTo 既有路径。
+ * 本单元为 sevenz 唯一 L2→L2 fs 联邦缝（同层单向 fs → 不成环，Registry
+ * core/docs/core-module-registry.md:92 明示 Allowed ... fs/io via platform.lstat exempt
+ * federation via sevenz.fs + source-contract 门禁 like respack.dirsource/vfs.os，
+ * 仅本单元允许引用 nextpas.core.fs/fs.intf，其余 sevenz.* 禁 fs）。与核心
+ * sevenz.writer/reader 解耦，复用 AddFileFromReader / ExtractTo 既有路径。
+ * 性能：bytes.ops 单源 BytesCopy/BytesNextCapacity inline 零拷贝（IReader 流式，
+ * Path* 单源，WriteFile 经 bytes.ops）；稳定性：try..finally 资源释放不丢
+ * （ExtractToFs/FlushExtractedToFs 的 Create/Close 配对）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -64,6 +70,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.fs,
@@ -78,6 +85,17 @@ type
     IncludePat: string;
   end;
   PTreeCtx = ^TTreeCtx;
+
+{ bytes.ops 单源 inline 零拷贝证据：联邦层不自造 Move/成长逻辑，复用 bytes.ops 单源 }
+function SevenZFsNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+begin
+  Result := BytesNextCapacity(AOld, ANeed);
+end;
+
+procedure SevenZFsCopy(ADst, ASrc: Pointer; ALen: SizeUInt); inline;
+begin
+  BytesCopy(ADst, ASrc, ALen);
+end;
 
 function SevenZTreeWalkCallback(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception; AUserData: Pointer): Boolean;
@@ -110,7 +128,7 @@ begin
 end;
 
 procedure SevenZAddFileFromFs(const AWriter: ISevenZWriter;
-  const AHostPath, AEntryName: string);
+  const AHostPath, AEntryName: string); inline;
 begin
   SevenZAddFileFromFsWithTime(AWriter, AHostPath, AEntryName, True);
 end;
@@ -145,7 +163,7 @@ begin
 end;
 
 procedure SevenZAddTree(const AWriter: ISevenZWriter;
-  const AHostDir, AEntryPrefix: string);
+  const AHostDir, AEntryPrefix: string); inline;
 begin
   SevenZAddTreeWithFilter(AWriter, AHostDir, AEntryPrefix, '');
 end;

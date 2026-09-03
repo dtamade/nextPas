@@ -81,9 +81,6 @@ function ZlibAdlerUpdate(AAdler: LongWord; const AData: Pointer;
 
 implementation
 
-uses
-  SysUtils;
-
 constructor EZlibError.Create(ACode: TZlibErrorCode; const AMessage: string);
 var
   LCat: TErrorCategory;

@@ -22,10 +22,8 @@ SysUtils|nextpas.core.tui.widget.markdown.pas
 SysUtils|nextpas.core.tui.widget.progress_group.pas
 SysUtils|nextpas.core.tui.widget.timeline.pas
 #|
-# Classes: 48 files|
+# Classes: 47 files|
 Classes|nextpas.core.tui.task.pas
-Classes|nextpas.core.system.classes.pas
-SysUtils|nextpas.core.system.classes.pas
 #|
 # TypInfo: 1 files|
 TypInfo|nextpas.core.system.typinfo.pas
@@ -36,7 +34,6 @@ DateUtils|nextpas.core.git.libgit2.pas
 DateUtils|nextpas.core.tui.widget.calendar.pas
 #|
 # BaseUnix: 11 files|
-BaseUnix|nextpas.core.io.uring.pas
 BaseUnix|nextpas.core.platform.crash.pas
 BaseUnix|nextpas.core.simd.cpuinfo.darwin.pas
 BaseUnix|nextpas.core.tui.clipboard.pas
@@ -63,7 +60,6 @@ Windows|nextpas.core.tls.winssl.utils.pas
 Classes|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.io.stream_adapter.pas
 SysUtils|nextpas.core.http.headers.pas
-SysUtils|nextpas.core.system.sysutils.pas
 SysUtils|nextpas.core.bench.parallel.pas
 SysUtils|nextpas.core.http.fuzz.pas
 # 2026-07-13 latest-main baseline debt surfaced by broad RTL gate
@@ -86,11 +82,6 @@ SysUtils|nextpas.core.lockfree.timeseries_ringbuffer.pas
 SysUtils|nextpas.core.lockfree.trie_hmt.pas
 SysUtils|nextpas.core.lockfree.trie_map.pas
 SysUtils|nextpas.core.lockfree.ttl_cache.pas
-BaseUnix|nextpas.core.numa.linux.pas
-SysUtils|nextpas.core.numa.linux.pas
-SysUtils|nextpas.core.numa.pas
-SysUtils|nextpas.core.numa.windows.pas
-Windows|nextpas.core.numa.windows.pas
 # 2026-07-23 D2 M0: pre-existing main debt (net async UDP uses SysUtils)
 SysUtils|nextpas.core.net.async.udp.pas
 # 2026-08-24 baseline sweep: pre-existing main debt (db pg adapter IntToStr in
@@ -103,8 +94,6 @@ SysUtils|nextpas.core.audio.event.pas
 SysUtils|nextpas.core.audio.graph.pas
 SysUtils|nextpas.core.audio.sfx.pas
 SysUtils|nextpas.core.audio.timeline.pas
-Classes|nextpas.core.compress.bzip2.pas
-SysUtils|nextpas.core.compress.bzip2.pas
 SysUtils|nextpas.core.encoding.msgpack.pas
 SysUtils|nextpas.core.git.native.repository.pas
 SysUtils|nextpas.core.http.client_earlydata.pas

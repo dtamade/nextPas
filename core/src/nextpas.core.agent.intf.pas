@@ -19,11 +19,12 @@ uses
 
 type
   { 时钟：真实实现见 nextpas.core.agent.clock；SleepMs 可被令牌打断，
-    返回 True=自然睡满，False=被取消 }
+    返回 True=自然睡满，False=被取消；RandomU64 为重试抖动可测源 }
   IAgentClock = interface
     function NowMs: Int64;
     function SleepMs(AMs: Int64;
       const AToken: IAsyncCancellationToken): Boolean;
+    function RandomU64: UInt64;
   end;
 
   { ---- wire 层（自定义 transport / 测试装饰器的落点；不进门面）----
