@@ -3,7 +3,7 @@ program test_agent_slot_registry;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.test;

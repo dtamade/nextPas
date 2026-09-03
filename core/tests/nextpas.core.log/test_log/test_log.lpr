@@ -3,7 +3,8 @@ program test_log;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.thread.init,
   nextpas.core.thread.base,
   nextpas.core.platform.thread,
@@ -16,6 +17,15 @@ var
   T: TTestSuite;
   GCaptured: array of TLogRecord;
   GCaptureCount: Int32;
+
+var
+  GUniq: Integer = 0;
+
+function UniqTag: string;
+begin
+  Inc(GUniq);
+  Result := IntToStr(GetProcessID) + '_' + IntToStr(GUniq);
+end;
 
 type
   TCaptureHandler = class(TInterfacedObject, ILogHandler)
@@ -246,7 +256,7 @@ var
   LF: TextFile;
   LI: Int32;
 begin
-  LPath := '/tmp/test_log_jsonfile_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_jsonfile_' + UniqTag + '.log';
   LL := TLogger.New(NewJsonFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('key', 'val')^.Int('n', 42)^.Msg('file json test');
   LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release handler
@@ -262,7 +272,7 @@ begin
   DeleteFile(LPath);
 
   { 轮转仍工作：小 AMaxBytes 触发 .1 }
-  LPath := '/tmp/test_log_jsonfile_rot_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_jsonfile_rot_' + UniqTag + '.log';
   LL := TLogger.New(NewJsonFileHandler(LPath, llInfo, 100, 3), llInfo);
   for LI := 1 to 8 do
     LL.Info^.Str('payload', 'a rather long json attribute payload value')^.Msg('rotation json line');
@@ -311,7 +321,7 @@ var
   LF: TextFile;
   LLine: string;
 begin
-  LPath := '/tmp/test_log_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('key', 'val')^.Msg('file test');
   LL.Warn^.Int('code', 42)^.Msg('warning');
@@ -348,7 +358,7 @@ var
   LPath: string;
   LI: Int32;
 begin
-  LPath := '/tmp/test_log_rot_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_rot_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 100, 3), llInfo);
   for LI := 1 to 10 do
     LL.Info^.Int('i', LI)^.Msg('rotation test line that is long enough');
@@ -397,7 +407,7 @@ var
   LPath, LLine: string;
   LF: TextFile;
 begin
-  LPath := '/tmp/test_log_async_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('key', 'val')^.Msg('async file test');
   LL.Warn^.Int('code', 42)^.Msg('async warning');
@@ -423,7 +433,7 @@ var
   LPath, LLine: string;
   LF: TextFile;
 begin
-  LPath := '/tmp/test_log_async_json_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_json_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncJsonFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('key', 'val')^.Msg('async json test');
   LL.Flush;
@@ -444,7 +454,7 @@ var
   LPath, LLine: string;
   LF: TextFile;
 begin
-  LPath := '/tmp/test_log_async_child_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_child_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
   LChild := LL.With_('req', 'abc123').WithGroup('http');
   LChild.Info^.Str('status', '200')^.Msg('child log');
@@ -467,7 +477,7 @@ var
 begin
   { 大批量（超 worker 攒批阈值，触发批量 Flush）+
     释放 handler → drain：文件行数必须完整（不丢） }
-  LPath := '/tmp/test_log_async_batch_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_batch_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo), llInfo);
   for LI := 1 to 1000 do
     LL.Info^.Int('i', LI)^.Msg('batch line');
@@ -484,7 +494,7 @@ var
   LI: Int32;
 begin
   { 队列满（容量 1）→ 同步直写兜底：混合路径也不丢日志 }
-  LPath := '/tmp/test_log_async_fb_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_fb_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100 * 1024 * 1024, 5, 1), llInfo);
   for LI := 1 to 2000 do
     LL.Info^.Int('i', LI)^.Msg('fallback line payload');
@@ -502,7 +512,7 @@ var
   LI: Int32;
 begin
   { 异步路径轮转：小 AMaxBytes 由 worker 写侧触发 }
-  LPath := '/tmp/test_log_async_rot_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_async_rot_' + UniqTag + '.log';
   LL := TLogger.New(NewAsyncFileHandler(LPath, llInfo, 100, 3), llInfo);
   for LI := 1 to 10 do
     LL.Info^.Int('i', LI)^.Msg('rotation async line that is long enough');
@@ -654,7 +664,7 @@ var
   LLine: string;
 begin
   { Bug fix 5: file handler WithGroup prefixes keys in output }
-  LPath := '/tmp/test_log_grp_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_grp_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LChild := LL.WithGroup('db');
   LChild.Info^.Str('query', 'SELECT')^.Msg('exec');
@@ -673,7 +683,7 @@ var
   LPath: string;
 begin
   { Bug fix 3: write errors mark handler broken, no crash }
-  LPath := '/proc/nonexistent_file_' + IntToStr(Random(99999));
+  LPath := '/proc/nonexistent_file_' + UniqTag;
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Msg('trigger error');
   LL.Info^.Msg('second call after broken');
@@ -927,7 +937,7 @@ var
   LPath: string;
   LI: Int32;
 begin
-  LPath := '/tmp/test_log_rotdeep_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_rotdeep_' + UniqTag + '.log';
   { MaxBytes=200, MaxFiles=3 }
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 200, 3), llInfo);
   { Write enough to trigger multiple rotations }
@@ -971,7 +981,7 @@ begin
     Actually, JSON handler writes to stderr. We test via console handler
     that it doesn't crash, and verify WriteJsonStr escaping logic via
     a file-based approach: log special chars and read back. }
-  LPath := '/tmp/test_json_valid_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_json_valid_' + UniqTag + '.log';
   { Use file handler to verify output format }
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('quote', 'he said "hi"')^.Str('back', 'a\b')^.Msg('special');
@@ -1246,7 +1256,7 @@ begin
   Check(True, 'json escape: no crash with special chars');
 
   { Verify via file handler that special chars are preserved in plain text }
-  LPath := '/tmp/test_log_jsonesc_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_jsonesc_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('q', 'he said "hello"')^.Msg('test');
   LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
@@ -1264,7 +1274,7 @@ var
   LPath: string;
   LI: Int32;
 begin
-  LPath := '/tmp/test_log_concurrent_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_concurrent_' + UniqTag + '.log';
   { Small MaxBytes=500 to force rotation }
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 500, 5), llInfo);
   { Write 100 records rapidly }
@@ -1553,7 +1563,7 @@ var
   LLine: string;
   LCount: Int32;
 begin
-  LPath := '/tmp/test_log_append_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_append_' + UniqTag + '.log';
   { Create file handler, write 3 records, destroy }
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Msg('line1');

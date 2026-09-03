@@ -13,13 +13,12 @@ program test_thread_single_writer;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.thread.base,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
-  nextpas.core.thread.single_writer;
+  nextpas.core.thread.single_writer, nextpas.core.exception, nextpas.core.text.conv;
 
 type
   { 占住写线程的辅助提交者（背压窗口：写线程 busy + 队列满）。 }

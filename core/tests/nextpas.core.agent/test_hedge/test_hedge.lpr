@@ -4,8 +4,8 @@ program test_hedge;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.platform.thread,
   nextpas.core.base,
-  Classes,
   nextpas.core.sync.intf,
   nextpas.core.sync.event,
   nextpas.core.async.cancellation,
@@ -108,27 +108,64 @@ type
       const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
   end;
 
-  { 定时开门闩的辅助线程（测试编排专用）}
-  TDelayedOpener = class(TThread)
-  private
-    FGate: IEvent;
-    FMs: LongInt;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(const AGate: IEvent; AMs: LongInt);
+  { 定时开门闩/取消令牌的辅助线程（测试编排专用，fire-and-forget：
+    platform_thread_spawn + detach，对标原 TThread FreeOnTerminate） }
+  PDelayedFireCtx = ^TDelayedFireCtx;
+  TDelayedFireCtx = record
+    Gate: IEvent;
+    Tok: IAsyncCancellationToken;
+    Ms: LongInt;
+    IsCancel: Boolean;
   end;
 
-  { 定时取消令牌的辅助线程（外部取消时序编排专用）}
-  TDelayedCanceller = class(TThread)
-  private
-    FTok: IAsyncCancellationToken;
-    FMs: LongInt;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(const ATok: IAsyncCancellationToken; AMs: LongInt);
+function DelayedFireProc(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PDelayedFireCtx;
+begin
+  LCtx := PDelayedFireCtx(AArg);
+  try
+    platform_thread_sleep_ms(UInt64(LCtx^.Ms));
+    if LCtx^.IsCancel then
+    begin
+      if LCtx^.Tok <> nil then
+        LCtx^.Tok.Cancel;
+    end
+    else if LCtx^.Gate <> nil then
+      LCtx^.Gate.SetEvent;
+  finally
+    LCtx^.Gate := nil;
+    LCtx^.Tok := nil;
+    Dispose(LCtx);
   end;
+  Result := nil;
+end;
+
+procedure DelayedFire(const AGate: IEvent; const ATok: IAsyncCancellationToken;
+  AMs: LongInt; AIsCancel: Boolean);
+var
+  LCtx: PDelayedFireCtx;
+  LRec: TPlatformThreadRecord;
+begin
+  New(LCtx);
+  LCtx^.Gate := AGate;
+  LCtx^.Tok := ATok;
+  LCtx^.Ms := AMs;
+  LCtx^.IsCancel := AIsCancel;
+  Check(platform_thread_spawn(LRec, @DelayedFireProc, LCtx) = 0,
+    'spawn delayed fire thread');
+  Check(platform_thread_detach(LRec.Handle) = 0,
+    'detach delayed fire thread');
+end;
+
+procedure DelayedOpen(const AGate: IEvent; AMs: LongInt);
+begin
+  DelayedFire(AGate, nil, AMs, False);
+end;
+
+procedure DelayedCancel(const ATok: IAsyncCancellationToken; AMs: LongInt);
+begin
+  DelayedFire(nil, ATok, AMs, True);
+end;
 
 var
   GHedgeFires: Integer;
@@ -403,38 +440,7 @@ begin
   Result := TGatedStream.Create(Self, LGate, AToken);
 end;
 
-{ ---- 编排线程 ---- }
-
-constructor TDelayedOpener.Create(const AGate: IEvent; AMs: LongInt);
-begin
-  inherited Create(True);
-  FGate := AGate;
-  FMs := AMs;
-  FreeOnTerminate := True;
-  Start;
-end;
-
-procedure TDelayedOpener.Execute;
-begin
-  Sleep(FMs);
-  FGate.SetEvent;
-end;
-
-constructor TDelayedCanceller.Create(
-  const ATok: IAsyncCancellationToken; AMs: LongInt);
-begin
-  inherited Create(True);
-  FTok := ATok;
-  FMs := AMs;
-  FreeOnTerminate := True;
-  Start;
-end;
-
-procedure TDelayedCanceller.Execute;
-begin
-  Sleep(FMs);
-  FTok.Cancel;
-end;
+{ ---- 编排线程（见上 DelayedOpen/DelayedCancel） ---- }
 
 { 主路快：DelayMs 内落定——对冲路从未发起，零额外成本 }
 procedure TestFastPrimaryNoHedge;
@@ -464,7 +470,7 @@ begin
   GateH := CreateEvent(True);        { 第二路：永不开，只能被取消收场 }
   Pm := TGatedProvider.Create('main').
     AddCall(GateM).AddCall(GateH);
-  TDelayedOpener.Create(GateM, 30);
+  DelayedOpen(GateM, 30);
   M := NewHedgedProvider(Pm, Clock, BuildPol(10)).Complete(Req0);
   Check(MessageText(M) = 'stub-main', 'slow primary still wins');
   CheckEqual(1, GHedgeFires, 'hedged exactly once');
@@ -484,7 +490,7 @@ begin
   GateH := CreateEvent(True);        { 第二路：20ms 后成功 }
   Pm := TGatedProvider.Create('main').
     AddCall(GateM).AddCall(GateH);
-  TDelayedOpener.Create(GateH, 20);
+  DelayedOpen(GateH, 20);
   M := NewHedgedProvider(Pm, Clock, BuildPol(10)).Complete(Req0);
   Check(MessageText(M) = 'stub-main', 'hedge flight adopted the answer');
   Check(Pm.AnyCancelled, 'stuck first flight cancelled');
@@ -556,7 +562,7 @@ begin
   Pm := TGatedProvider.Create('main').
     AddCall(GateNever).AddCall(GateNever);
   Tok := CreateCancellationToken;
-  TDelayedCanceller.Create(Tok, 15);
+  DelayedCancel(Tok, 15);
   Raised := False;
   try
     NewHedgedProvider(Pm, Clock, BuildPol(10)).Complete(Req0, Tok);
@@ -585,7 +591,7 @@ begin
   GateH := CreateEvent(True);        { 对冲流：永无首点，只能被取消 }
   Pm := TGatedProvider.Create('main').
     AddCall(GateM).AddCall(GateH);
-  TDelayedOpener.Create(GateM, 45);
+  DelayedOpen(GateM, 45);
   W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
   LJoined := '';
   while W.NextDelta(D) do
@@ -611,7 +617,7 @@ begin
   Pm := TGatedProvider.Create('main').AddCall(GateNever).AddCall(GateNever);
   Tok := CreateCancellationToken;
   // 10ms < 80ms delay => cancel inside hedge window
-  TDelayedCanceller.Create(Tok, 10);
+  DelayedCancel(Tok, 10);
   try
     W := NewHedgedProvider(Pm, Clock, BuildPol(80)).Stream(Req0, Tok);
     // Hedge returned despite outer cancel (race) – verify outer IsCancelled and GetCancelled distinction
@@ -684,7 +690,7 @@ begin
   GateM := CreateEvent(True);
   GateH := CreateEvent(True);
   Pm := TGatedProvider.Create('main').AddCall(GateM).AddCall(GateH);
-  TDelayedOpener.Create(GateM, 40);  { 原 22ms，load 14 下与 10ms Delay 竞态余量仅 12ms，增至 40ms 稳定 }
+  DelayedOpen(GateM, 40);  { 原 22ms，load 14 下与 10ms Delay 竞态余量仅 12ms，增至 40ms 稳定 }
   W := NewHedgedProvider(Pm, Clock, BuildPol(10)).Stream(Req0);
   LCount := 0;
   while W.NextDelta(D) do
@@ -713,5 +719,5 @@ begin
   if not T.Run then Halt(1);
   { FreeOnTerminate 编排线程（最长 Sleep 30ms）须在 HEAPTRC 报告前收尾，
     否则线程对象计入 unfreed }
-  TThread.Sleep(150);   { 见上注释 }
+  platform_thread_sleep_ms(150);   { 见上注释 }
 end.

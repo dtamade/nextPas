@@ -3,7 +3,7 @@ program test_uuid_v7_monotonic_clock_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.id.uuid,

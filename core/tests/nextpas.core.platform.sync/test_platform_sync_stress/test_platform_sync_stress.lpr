@@ -5,8 +5,7 @@ program test_platform_sync_stress;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  cthreads,
+uses nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.sync,

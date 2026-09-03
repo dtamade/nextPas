@@ -3,7 +3,6 @@ program test_bytes;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.bytes.base,

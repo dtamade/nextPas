@@ -3,8 +3,11 @@ program test_compress_docs_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.text,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.test;
 
 var
@@ -13,17 +16,10 @@ var
 function ReadText(const ARelativePath: string): string;
 var
   LPath: string;
-  LLines: TStringList;
 begin
   LPath := ExpandFileName('../../../' + ARelativePath);
   Check(FileExists(LPath), 'source file exists: ' + LPath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LPath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := ReadFileText(LPath);
 end;
 
 function LowerText(const AText: string): string;
@@ -31,17 +27,16 @@ begin
   Result := LowerCase(AText);
 end;
 
-function CountLines(const AText: string): SizeInt;
-var
-  LLines: TStringList;
+function SplitTestLines(const AText: string): TStringArray;
 begin
-  LLines := TStringList.Create;
-  try
-    LLines.Text := AText;
-    Result := LLines.Count;
-  finally
-    LLines.Free;
-  end;
+  Result := TextSplit(
+    StringReplace(StringReplace(AText, #13#10, #10, True), #13, #10, True),
+    #10);
+end;
+
+function CountLines(const AText: string): SizeInt;
+begin
+  Result := Length(SplitTestLines(AText));
 end;
 
 function CountOccurrences(const ASource, AToken: string): SizeInt;
@@ -62,21 +57,19 @@ end;
 
 function CompareGoDirectoryHasNoTestFiles: Boolean;
 var
-  LSearch: TSearchRec;
   LPath: string;
-  LFound: Boolean;
+  LEntries: TDirEntryArray;
+  LEntry: TDirEntry;
 begin
   LPath := ExpandFileName(
     '../../../benchmarks/nextpas.core.compress/bench_compress/compare_go');
   Check(DirectoryExists(LPath), 'Go comparator directory exists: ' + LPath);
-  LFound := FindFirst(IncludeTrailingPathDelimiter(LPath) + '*_test.go',
-    faAnyFile, LSearch) = 0;
-  try
-    Result := not LFound;
-  finally
-    if LFound then
-      FindClose(LSearch);
-  end;
+  Result := True;
+  LEntries := ReadDir(LPath);
+  for LEntry in LEntries do
+    if (Length(LEntry.Name) >= 8) and
+      (Copy(LEntry.Name, Length(LEntry.Name) - 7, 8) = '_test.go') then
+      Exit(False);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -137,13 +130,27 @@ begin
   Result := Copy(AText, 1, LEnd);
 end;
 
-procedure AddUniqueToken(const ATokens: TStrings; const AToken: string);
+function StrArrayIndexOf(const ATokens: TStringArray;
+  const AToken: string): SizeInt;
+var
+  LI: SizeInt;
 begin
-  if (AToken <> '') and (ATokens.IndexOf(AToken) < 0) then
-    ATokens.Add(AToken);
+  for LI := 0 to High(ATokens) do
+    if ATokens[LI] = AToken then
+      Exit(LI);
+  Result := -1;
 end;
 
-procedure AddWhitespaceTokens(const AText: string; const ATokens: TStrings);
+procedure AddUniqueToken(var ATokens: TStringArray; const AToken: string);
+begin
+  if (AToken <> '') and (StrArrayIndexOf(ATokens, AToken) < 0) then
+  begin
+    SetLength(ATokens, Length(ATokens) + 1);
+    ATokens[High(ATokens)] := AToken;
+  end;
+end;
+
+procedure AddWhitespaceTokens(const AText: string; var ATokens: TStringArray);
 var
   LIndex, LStart: SizeInt;
 begin
@@ -169,127 +176,108 @@ begin
 end;
 
 procedure CollectMakefileTargetPrerequisites(const AMakefile, ATarget: string;
-  const APrerequisites: TStrings);
+  var APrerequisites: TStringArray);
 var
-  LLines: TStringList;
-  LTargets: TStringList;
+  LLines: TStringArray;
+  LTargets: TStringArray;
   LRawLine, LLine, LLogicalLine, LLeft, LRight: string;
   LColon, LEqual, LComment, LI: SizeInt;
   LContinues: Boolean;
 begin
   LLogicalLine := '';
-  LLines := TStringList.Create;
-  LTargets := TStringList.Create;
-  try
-    LLines.Text := AMakefile;
-    for LI := 0 to LLines.Count - 1 do
+  SetLength(LTargets, 0);
+  LLines := SplitTestLines(AMakefile);
+  for LI := 0 to High(LLines) do
+  begin
+    LRawLine := LLines[LI];
+    if (Length(LRawLine) > 0) and (LRawLine[1] = #9) then
+      Continue;
+
+    if LLogicalLine = '' then
+      LLine := LRawLine
+    else
+      LLine := LLogicalLine + ' ' + Trim(LRawLine);
+
+    LContinues := LineHasContinuation(LLine);
+    if LContinues then
     begin
-      LRawLine := LLines[LI];
-      if (Length(LRawLine) > 0) and (LRawLine[1] = #9) then
-        Continue;
-
-      if LLogicalLine = '' then
-        LLine := LRawLine
-      else
-        LLine := LLogicalLine + ' ' + Trim(LRawLine);
-
-      LContinues := LineHasContinuation(LLine);
-      if LContinues then
-      begin
-        LLogicalLine := LLine;
-        Continue;
-      end;
-      LLogicalLine := '';
-
-      LLine := Trim(LLine);
-      if (LLine = '') or (LLine[1] = '#') then
-        Continue;
-      LComment := Pos('#', LLine);
-      if LComment > 0 then
-        LLine := Trim(Copy(LLine, 1, LComment - 1));
-
-      LColon := Pos(':', LLine);
-      if LColon = 0 then
-        Continue;
-      LEqual := Pos('=', LLine);
-      if (LEqual > 0) and (LEqual < LColon) then
-        Continue;
-
-      LLeft := Trim(Copy(LLine, 1, LColon - 1));
-      LRight := Trim(Copy(LLine, LColon + 1, MaxInt));
-      LTargets.Clear;
-      AddWhitespaceTokens(LLeft, LTargets);
-      if LTargets.IndexOf(ATarget) >= 0 then
-        AddWhitespaceTokens(LRight, APrerequisites);
+      LLogicalLine := LLine;
+      Continue;
     end;
-  finally
-    LTargets.Free;
-    LLines.Free;
+    LLogicalLine := '';
+
+    LLine := Trim(LLine);
+    if (LLine = '') or (LLine[1] = '#') then
+      Continue;
+    LComment := Pos('#', LLine);
+    if LComment > 0 then
+      LLine := Trim(Copy(LLine, 1, LComment - 1));
+
+    LColon := Pos(':', LLine);
+    if LColon = 0 then
+      Continue;
+    LEqual := Pos('=', LLine);
+    if (LEqual > 0) and (LEqual < LColon) then
+      Continue;
+
+    LLeft := Trim(Copy(LLine, 1, LColon - 1));
+    LRight := Trim(Copy(LLine, LColon + 1, MaxInt));
+    SetLength(LTargets, 0);
+    AddWhitespaceTokens(LLeft, LTargets);
+    if StrArrayIndexOf(LTargets, ATarget) >= 0 then
+      AddWhitespaceTokens(LRight, APrerequisites);
   end;
 end;
 
 function MakefileTargetPrerequisitesExactly(const AMakefile, ATarget: string;
   const AExpected: array of string): Boolean;
 var
-  LActual: TStringList;
+  LActual: TStringArray;
   LI: SizeInt;
 begin
   Result := False;
-  LActual := TStringList.Create;
-  try
-    CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
-    if LActual.Count <> Length(AExpected) then
+  SetLength(LActual, 0);
+  CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
+  if Length(LActual) <> Length(AExpected) then
+    Exit;
+  for LI := Low(AExpected) to High(AExpected) do
+    if StrArrayIndexOf(LActual, AExpected[LI]) < 0 then
       Exit;
-    for LI := Low(AExpected) to High(AExpected) do
-      if LActual.IndexOf(AExpected[LI]) < 0 then
-        Exit;
-    Result := True;
-  finally
-    LActual.Free;
-  end;
+  Result := True;
 end;
 
 procedure CheckMakefileTargetPrerequisitesExactly(const AMakefile,
   ATarget: string; const AExpected: array of string; const AMessage: string);
 var
-  LActual: TStringList;
-  LExpected: TStringList;
+  LActual: TStringArray;
+  LExpected: TStringArray;
   LI: SizeInt;
 begin
-  LActual := TStringList.Create;
-  LExpected := TStringList.Create;
-  try
-    CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
-    for LI := Low(AExpected) to High(AExpected) do
-      AddUniqueToken(LExpected, AExpected[LI]);
+  SetLength(LActual, 0);
+  SetLength(LExpected, 0);
+  CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
+  for LI := Low(AExpected) to High(AExpected) do
+    AddUniqueToken(LExpected, AExpected[LI]);
 
-    CheckEqual(Int64(LExpected.Count), Int64(LActual.Count),
-      AMessage + ' count for ' + ATarget);
-    for LI := 0 to LExpected.Count - 1 do
-      Check(LActual.IndexOf(LExpected[LI]) >= 0,
-        AMessage + ' includes ' + ATarget + ':' + LExpected[LI]);
-    for LI := 0 to LActual.Count - 1 do
-      Check(LExpected.IndexOf(LActual[LI]) >= 0,
-        AMessage + ' excludes unexpected ' + ATarget + ':' + LActual[LI]);
-  finally
-    LExpected.Free;
-    LActual.Free;
-  end;
+  CheckEqual(Int64(Length(LExpected)), Int64(Length(LActual)),
+    AMessage + ' count for ' + ATarget);
+  for LI := 0 to High(LExpected) do
+    Check(StrArrayIndexOf(LActual, LExpected[LI]) >= 0,
+      AMessage + ' includes ' + ATarget + ':' + LExpected[LI]);
+  for LI := 0 to High(LActual) do
+    Check(StrArrayIndexOf(LExpected, LActual[LI]) >= 0,
+      AMessage + ' excludes unexpected ' + ATarget + ':' + LActual[LI]);
 end;
 
 procedure CheckMakefileTargetPrerequisiteAbsent(const AMakefile, ATarget,
   APrerequisite, AMessage: string);
 var
-  LActual: TStringList;
+  LActual: TStringArray;
 begin
-  LActual := TStringList.Create;
-  try
-    CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
-    Check(LActual.IndexOf(APrerequisite) < 0,
-      AMessage + ': ' + ATarget + ':' + APrerequisite);
-  finally
-    LActual.Free;
-  end;
+  SetLength(LActual, 0);
+  CollectMakefileTargetPrerequisites(AMakefile, ATarget, LActual);
+  Check(StrArrayIndexOf(LActual, APrerequisite) < 0,
+    AMessage + ': ' + ATarget + ':' + APrerequisite);
 end;
 
 function AuditMakefilePrerequisitesAreValid(const AMakefile: string): Boolean;

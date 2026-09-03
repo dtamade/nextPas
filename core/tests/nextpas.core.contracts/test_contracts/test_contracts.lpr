@@ -3,7 +3,8 @@ program test_contracts;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.contracts,
   nextpas.core.test;

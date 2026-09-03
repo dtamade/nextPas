@@ -3,7 +3,7 @@ program test_session;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.agent.base,
   nextpas.core.agent.errors,

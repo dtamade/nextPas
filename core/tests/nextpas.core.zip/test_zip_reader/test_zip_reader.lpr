@@ -1,7 +1,6 @@
 program test_zip_reader;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -12,7 +11,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.zip,
-  nextpas.core.zip.base;
+  nextpas.core.zip.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

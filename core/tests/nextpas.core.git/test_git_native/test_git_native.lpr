@@ -3,12 +3,12 @@ program test_git_native;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.time,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.bytes.ops,
-  nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.hash.sha1,

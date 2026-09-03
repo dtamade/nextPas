@@ -4,29 +4,21 @@ program test_atomic;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.fs, nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.atomic,
   nextpas.core.atomic.compat,
   nextpas.core.platform.sync,
+  nextpas.core.platform.thread,
   test_atomic_direct_types_ptr;
 
 var
   T: TTestSuite;
 
 function ReadUtf8TextFile(const APath: string): string;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[1], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure CheckContains(const AText, AExpected, AMessage: string);
@@ -2859,31 +2851,38 @@ begin
     'default atomic_fetch_nand_64 must use seq_cst');
 end;
 
+type
+  PFetchAddCtx = ^TFetchAddCtx;
+  TFetchAddCtx = record
+    Counter: PInt32;
+  end;
+
+function FetchAddWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PFetchAddCtx;
+  LJ: Integer;
+begin
+  Result := nil;
+  LCtx := PFetchAddCtx(AArg);
+  for LJ := 0 to 9999 do
+    AtomicFetchAdd32(LCtx^.Counter^, 1);
+end;
+
 procedure TestConcurrentFetchAdd;
 var
   LCounter: Int32;
   LI: Integer;
-  LThreads: array[0..3] of TThread;
+  LThreads: array[0..3] of TPlatformThreadRecord;
+  LCtx: TFetchAddCtx;
 begin
   LCounter := 0;
+  LCtx.Counter := @LCounter;
   for LI := 0 to 3 do
-  begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
-    var
-      LJ: Integer;
-    begin
-      for LJ := 0 to 9999 do
-        AtomicFetchAdd32(LCounter, 1);
-    end);
-    LThreads[LI].FreeOnTerminate := False;
-    LThreads[LI].Start;
-  end;
+    Check(platform_thread_spawn(LThreads[LI], @FetchAddWorker, @LCtx) = 0,
+      'spawn fetch-add worker');
 
   for LI := 0 to 3 do
-  begin
-    LThreads[LI].WaitFor;
-    LThreads[LI].Free;
-  end;
+    Check(platform_thread_wait(LThreads[LI]) = 0, 'join fetch-add worker');
 
   CheckEqual(Int64(40000), Int64(LCounter), '4 threads x 10000 increments');
 end;
@@ -6546,6 +6545,40 @@ type
     WaitRet: Int32;
   end;
 
+type
+  PWaitNotifyCtx = ^TWaitNotifyCtx;
+  TWaitNotifyCtx = record
+    Started: PInt32;
+    Value: PInt32;
+    WaitRet: PInt32;
+  end;
+
+function WaitNotifyWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PWaitNotifyCtx;
+  LWaitRet: Int32;
+begin
+  Result := nil;
+  LCtx := PWaitNotifyCtx(AArg);
+  atomic_fetch_add(LCtx^.Started^, 1, mo_seq_cst);
+  repeat
+    if atomic_load(LCtx^.Value^, mo_seq_cst) <> 0 then
+    begin
+      LCtx^.WaitRet^ := 0;
+      Exit;
+    end;
+
+    LWaitRet := atomic_wait(LCtx^.Value^, 0, 1000000000);
+    if LWaitRet = 0 then
+      Continue;
+    if LWaitRet <> PLATFORM_ERR_AGAIN then
+    begin
+      LCtx^.WaitRet^ := LWaitRet;
+      Exit;
+    end;
+  until False;
+end;
+
 procedure TestAtomicWaitNotifySurfaceAndBehavior;
 var
   LValue: Int32;
@@ -6553,8 +6586,10 @@ var
   LStarted: Int32;
   LState1: TAtomicWaitState;
   LState2: TAtomicWaitState;
-  LThread1: TThread;
-  LThread2: TThread;
+  LThread1: TPlatformThreadRecord;
+  LThread2: TPlatformThreadRecord;
+  LCtx1: TWaitNotifyCtx;
+  LCtx2: TWaitNotifyCtx;
   LSpin: Integer;
 begin
   LValue := 7;
@@ -6574,55 +6609,16 @@ begin
   LValue := 0;
   LStarted := 0;
 
-  LThread1 := TThread.CreateAnonymousThread(procedure
-    var
-      LWaitRet: Int32;
-    begin
-      atomic_fetch_add(LStarted, 1, mo_seq_cst);
-      repeat
-        if atomic_load(LState1.Value^, mo_seq_cst) <> 0 then
-        begin
-          LState1.WaitRet := 0;
-          Exit;
-        end;
-
-        LWaitRet := atomic_wait(LState1.Value^, 0, 1000000000);
-        if LWaitRet = 0 then
-          Continue;
-        if LWaitRet <> PLATFORM_ERR_AGAIN then
-        begin
-          LState1.WaitRet := LWaitRet;
-          Exit;
-        end;
-      until False;
-    end);
-  LThread1.FreeOnTerminate := False;
-  LThread2 := TThread.CreateAnonymousThread(procedure
-    var
-      LWaitRet: Int32;
-    begin
-      atomic_fetch_add(LStarted, 1, mo_seq_cst);
-      repeat
-        if atomic_load(LState2.Value^, mo_seq_cst) <> 0 then
-        begin
-          LState2.WaitRet := 0;
-          Exit;
-        end;
-
-        LWaitRet := atomic_wait(LState2.Value^, 0, 1000000000);
-        if LWaitRet = 0 then
-          Continue;
-        if LWaitRet <> PLATFORM_ERR_AGAIN then
-        begin
-          LState2.WaitRet := LWaitRet;
-          Exit;
-        end;
-      until False;
-    end);
-  LThread2.FreeOnTerminate := False;
-
-  LThread1.Start;
-  LThread2.Start;
+  LCtx1.Started := @LStarted;
+  LCtx1.Value := @LValue;
+  LCtx1.WaitRet := @LState1.WaitRet;
+  LCtx2.Started := @LStarted;
+  LCtx2.Value := @LValue;
+  LCtx2.WaitRet := @LState2.WaitRet;
+  Check(platform_thread_spawn(LThread1, @WaitNotifyWorker, @LCtx1) = 0,
+    'spawn first waiter');
+  Check(platform_thread_spawn(LThread2, @WaitNotifyWorker, @LCtx2) = 0,
+    'spawn second waiter');
 
   for LSpin := 1 to 1000 do
   begin
@@ -6637,10 +6633,8 @@ begin
   LRet := atomic_notify_all(LValue);
   CheckEqual(Int64(0), Int64(LRet), 'atomic_notify_all should succeed on supported platforms');
 
-  LThread1.WaitFor;
-  LThread2.WaitFor;
-  LThread1.Free;
-  LThread2.Free;
+  Check(platform_thread_wait(LThread1) = 0, 'join first waiter');
+  Check(platform_thread_wait(LThread2) = 0, 'join second waiter');
 
   CheckEqual(Int64(0), Int64(LState1.WaitRet), 'first waiter should be released by notify_all');
   CheckEqual(Int64(0), Int64(LState2.WaitRet), 'second waiter should be released by notify_all');
@@ -6652,13 +6646,46 @@ end;
 const
   AtomicNotifyOneWaiterCount = 4;
 
+type
+  PWaitNotifyOneCtx = ^TWaitNotifyOneCtx;
+  TWaitNotifyOneCtx = record
+    Started: PInt32;
+    Value: PInt32;
+    Done: PInt32;
+  end;
+
+function WaitNotifyOneWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PWaitNotifyOneCtx;
+  LWaitRet: Int32;
+begin
+  Result := nil;
+  LCtx := PWaitNotifyOneCtx(AArg);
+  atomic_fetch_add(LCtx^.Started^, 1, mo_seq_cst);
+  repeat
+    if atomic_load(LCtx^.Value^, mo_seq_cst) <> 0 then
+    begin
+      atomic_fetch_add(LCtx^.Done^, 1, mo_seq_cst);
+      Exit;
+    end;
+    LWaitRet := atomic_wait(LCtx^.Value^, 0, 1000000000);
+    if (LWaitRet <> 0) and (LWaitRet <> PLATFORM_ERR_AGAIN) and
+      (LWaitRet <> PLATFORM_ERR_TIMEOUT) then
+    begin
+      atomic_fetch_add(LCtx^.Done^, 1, mo_seq_cst);
+      Exit;
+    end;
+  until False;
+end;
+
 procedure TestAtomicWaitNotifyOneMultiWaiter;
 { Multiple waiters + sequential notify_one until all observe store (predicate loop). }
 var
   LValue: Int32;
   LDone: Int32;
   LStarted: Int32;
-  LThreads: array[0..AtomicNotifyOneWaiterCount - 1] of TThread;
+  LThreads: array[0..AtomicNotifyOneWaiterCount - 1] of TPlatformThreadRecord;
+  LCtx: TWaitNotifyOneCtx;
   LI: Integer;
   LSpin: Integer;
   LWakes: Integer;
@@ -6666,34 +6693,13 @@ begin
   LValue := 0;
   LDone := 0;
   LStarted := 0;
+  LCtx.Started := @LStarted;
+  LCtx.Value := @LValue;
+  LCtx.Done := @LDone;
 
   for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
-  begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
-      var
-        LWaitRet: Int32;
-      begin
-        atomic_fetch_add(LStarted, 1, mo_seq_cst);
-        repeat
-          if atomic_load(LValue, mo_seq_cst) <> 0 then
-          begin
-            atomic_fetch_add(LDone, 1, mo_seq_cst);
-            Exit;
-          end;
-          LWaitRet := atomic_wait(LValue, 0, 1000000000);
-          if (LWaitRet <> 0) and (LWaitRet <> PLATFORM_ERR_AGAIN) and
-            (LWaitRet <> PLATFORM_ERR_TIMEOUT) then
-          begin
-            atomic_fetch_add(LDone, 1, mo_seq_cst);
-            Exit;
-          end;
-        until False;
-      end);
-    LThreads[LI].FreeOnTerminate := False;
-  end;
-
-  for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
-    LThreads[LI].Start;
+    Check(platform_thread_spawn(LThreads[LI], @WaitNotifyOneWorker, @LCtx) = 0,
+      'spawn notify_one waiter');
 
   for LSpin := 1 to 1000 do
   begin
@@ -6718,10 +6724,7 @@ begin
   end;
 
   for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
-  begin
-    LThreads[LI].WaitFor;
-    LThreads[LI].Free;
-  end;
+    Check(platform_thread_wait(LThreads[LI]) = 0, 'join notify_one waiter');
 
   CheckEqual(Int64(AtomicNotifyOneWaiterCount),
     Int64(atomic_load(LDone, mo_seq_cst)),
@@ -6753,6 +6756,51 @@ begin
     Result := 0;
 end;
 
+type
+  PPingPongCtx = ^TPingPongCtx;
+  TPingPongCtx = record
+    Started: PInt32;
+    Turn: PInt64;
+    WorkerIteration: PInt32;
+    WorkerRet: PInt32;
+    Iterations: Integer;
+    WaitTimeoutNs: Int64;
+    MaxWaits: Integer;
+  end;
+
+function PingPongWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PPingPongCtx;
+  LJ: Integer;
+  LLocalRet: Int32;
+begin
+  Result := nil;
+  LCtx := PPingPongCtx(AArg);
+  atomic_store(LCtx^.Started^, 1, mo_seq_cst);
+  for LJ := 1 to LCtx^.Iterations do
+  begin
+    LLocalRet := AtomicWaitInt64Until(LCtx^.Turn^, Int64(LJ * 2 - 1),
+      LCtx^.WaitTimeoutNs, LCtx^.MaxWaits);
+    if LLocalRet <> 0 then
+    begin
+      atomic_store(LCtx^.WorkerIteration^, LJ, mo_seq_cst);
+      atomic_store(LCtx^.WorkerRet^, LLocalRet, mo_seq_cst);
+      atomic_notify_all(LCtx^.Turn^);
+      Exit;
+    end;
+
+    atomic_store_64(LCtx^.Turn^, Int64(LJ * 2), mo_seq_cst);
+    LLocalRet := atomic_notify_one(LCtx^.Turn^);
+    if LLocalRet <> 0 then
+    begin
+      atomic_store(LCtx^.WorkerIteration^, LJ, mo_seq_cst);
+      atomic_store(LCtx^.WorkerRet^, LLocalRet, mo_seq_cst);
+      atomic_notify_all(LCtx^.Turn^);
+      Exit;
+    end;
+  end;
+end;
+
 procedure TestAtomicWaitNotify64SurfaceAndBehavior;
 const
   PingPongIterations = 1000;
@@ -6769,7 +6817,8 @@ var
   LWorkerRet: Int32;
   LWorkerIteration: Int32;
   LMainRet: Int32;
-  LThread: TThread;
+  LThread: TPlatformThreadRecord;
+  LCtx: TPingPongCtx;
   LSpin: Integer;
   LI: Integer;
 begin
@@ -6815,40 +6864,17 @@ begin
   LWorkerRet := 0;
   LWorkerIteration := 0;
   LMainRet := 0;
-
-  LThread := TThread.CreateAnonymousThread(procedure
-    var
-      LJ: Integer;
-      LLocalRet: Int32;
-    begin
-      atomic_store(LStarted, 1, mo_seq_cst);
-      for LJ := 1 to PingPongIterations do
-      begin
-        LLocalRet := AtomicWaitInt64Until(LTurn, Int64(LJ * 2 - 1),
-          PingPongWaitTimeoutNs, PingPongMaxWaits);
-        if LLocalRet <> 0 then
-        begin
-          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
-          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
-          atomic_notify_all(LTurn);
-          Exit;
-        end;
-
-        atomic_store_64(LTurn, Int64(LJ * 2), mo_seq_cst);
-        LLocalRet := atomic_notify_one(LTurn);
-        if LLocalRet <> 0 then
-        begin
-          atomic_store(LWorkerIteration, LJ, mo_seq_cst);
-          atomic_store(LWorkerRet, LLocalRet, mo_seq_cst);
-          atomic_notify_all(LTurn);
-          Exit;
-        end;
-      end;
-    end);
-  LThread.FreeOnTerminate := False;
+  LCtx.Started := @LStarted;
+  LCtx.Turn := @LTurn;
+  LCtx.WorkerIteration := @LWorkerIteration;
+  LCtx.WorkerRet := @LWorkerRet;
+  LCtx.Iterations := PingPongIterations;
+  LCtx.WaitTimeoutNs := PingPongWaitTimeoutNs;
+  LCtx.MaxWaits := PingPongMaxWaits;
+  Check(platform_thread_spawn(LThread, @PingPongWorker, @LCtx) = 0,
+    'spawn ping-pong worker');
 
   try
-    LThread.Start;
     for LSpin := 1 to 1000 do
     begin
       if atomic_load(LStarted, mo_seq_cst) = 1 then
@@ -6882,8 +6908,7 @@ begin
       atomic_store_64(LTurn, -1, mo_seq_cst);
       atomic_notify_all(LTurn);
     end;
-    LThread.WaitFor;
-    LThread.Free;
+    Check(platform_thread_wait(LThread) = 0, 'join ping-pong worker');
   end;
 
   CheckEqual(Int64(1), Int64(atomic_load(LStarted, mo_seq_cst)),
@@ -6964,13 +6989,63 @@ begin
   Check(LRaised, 'TryInc at High(PtrUInt) must raise EResourceExhaustedError');
 end;
 
+type
+  PRefBorrowCtx = ^TRefBorrowCtx;
+  TRefBorrowCtx = record
+    Started: PInt32;
+    Go: PInt32;
+    Ref: ^TAtomicRefCount;
+    Iterations: Int32;
+    SuccessCount: PInt32;
+    TryIncFailureCount: PInt32;
+    BadNewValueCount: PInt32;
+    ZeroDropCount: PInt32;
+    ThreadErrorCount: PInt32;
+  end;
+
+function RefBorrowWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PRefBorrowCtx;
+  LJ: Integer;
+  LNewValue: PtrUInt;
+  LAfterDec: PtrUInt;
+begin
+  Result := nil;
+  LCtx := PRefBorrowCtx(AArg);
+  atomic_fetch_add(LCtx^.Started^, 1, mo_seq_cst);
+  while atomic_load(LCtx^.Go^, mo_seq_cst) = 0 do
+    cpu_pause;
+
+  try
+    for LJ := 1 to LCtx^.Iterations do
+    begin
+      if not LCtx^.Ref^.TryInc(LNewValue) then
+      begin
+        atomic_fetch_add(LCtx^.TryIncFailureCount^, 1, mo_seq_cst);
+        Continue;
+      end;
+
+      atomic_fetch_add(LCtx^.SuccessCount^, 1, mo_seq_cst);
+      if LNewValue < 2 then
+        atomic_fetch_add(LCtx^.BadNewValueCount^, 1, mo_seq_cst);
+
+      LAfterDec := LCtx^.Ref^.Dec;
+      if LAfterDec = 0 then
+        atomic_fetch_add(LCtx^.ZeroDropCount^, 1, mo_seq_cst);
+    end;
+  except
+    atomic_fetch_add(LCtx^.ThreadErrorCount^, 1, mo_seq_cst);
+  end;
+end;
+
 procedure TestAtomicRefCountConcurrentBorrowContract;
 const
   ThreadCount = 4;
   IterationsPerThread = 5000;
 var
   LRef: TAtomicRefCount;
-  LThreads: array[0..ThreadCount - 1] of TThread;
+  LThreads: array[0..ThreadCount - 1] of TPlatformThreadRecord;
+  LCtx: TRefBorrowCtx;
   LStarted: Int32;
   LGo: Int32;
   LSuccessCount: Int32;
@@ -6990,42 +7065,19 @@ begin
   LZeroDropCount := 0;
   LThreadErrorCount := 0;
 
+  LCtx.Started := @LStarted;
+  LCtx.Go := @LGo;
+  LCtx.Ref := @LRef;
+  LCtx.Iterations := IterationsPerThread;
+  LCtx.SuccessCount := @LSuccessCount;
+  LCtx.TryIncFailureCount := @LTryIncFailureCount;
+  LCtx.BadNewValueCount := @LBadNewValueCount;
+  LCtx.ZeroDropCount := @LZeroDropCount;
+  LCtx.ThreadErrorCount := @LThreadErrorCount;
+
   for LI := 0 to High(LThreads) do
-  begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
-      var
-        LJ: Integer;
-        LNewValue: PtrUInt;
-        LAfterDec: PtrUInt;
-      begin
-        atomic_fetch_add(LStarted, 1, mo_seq_cst);
-        while atomic_load(LGo, mo_seq_cst) = 0 do
-          cpu_pause;
-
-        try
-          for LJ := 1 to IterationsPerThread do
-          begin
-            if not LRef.TryInc(LNewValue) then
-            begin
-              atomic_fetch_add(LTryIncFailureCount, 1, mo_seq_cst);
-              Continue;
-            end;
-
-            atomic_fetch_add(LSuccessCount, 1, mo_seq_cst);
-            if LNewValue < 2 then
-              atomic_fetch_add(LBadNewValueCount, 1, mo_seq_cst);
-
-            LAfterDec := LRef.Dec;
-            if LAfterDec = 0 then
-              atomic_fetch_add(LZeroDropCount, 1, mo_seq_cst);
-          end;
-        except
-          atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
-        end;
-      end);
-    LThreads[LI].FreeOnTerminate := False;
-    LThreads[LI].Start;
-  end;
+    Check(platform_thread_spawn(LThreads[LI], @RefBorrowWorker, @LCtx) = 0,
+      'spawn refcount borrow worker');
 
   for LSpin := 1 to 1000 do
   begin
@@ -7039,10 +7091,7 @@ begin
   atomic_store(LGo, 1, mo_seq_cst);
 
   for LI := 0 to High(LThreads) do
-  begin
-    LThreads[LI].WaitFor;
-    LThreads[LI].Free;
-  end;
+    Check(platform_thread_wait(LThreads[LI]) = 0, 'join refcount borrow worker');
 
   CheckEqual(Int64(ThreadCount * IterationsPerThread), Int64(atomic_load(LSuccessCount, mo_seq_cst)),
     'every concurrent borrow attempt should succeed while one owner keeps the refcount alive');
@@ -7062,6 +7111,73 @@ begin
     'owner release should perform the only final drop after the borrow phase');
 end;
 
+type
+  PTerminalRaceCtx = ^TTerminalRaceCtx;
+  TTerminalRaceCtx = record
+    Started: PInt32;
+    Go: PInt32;
+    Ref: ^TAtomicRefCount;
+    ThreadErrorCount: PInt32;
+    BorrowSuccessCount: PInt32;
+    BorrowFailureCount: PInt32;
+    BorrowFailureNonZeroOutCount: PInt32;
+    BorrowBadSuccessValueCount: PInt32;
+    BorrowZeroDropCount: PInt32;
+    OwnerDecValue: ^PtrUInt;
+  end;
+
+function TerminalOwnerWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PTerminalRaceCtx;
+begin
+  Result := nil;
+  LCtx := PTerminalRaceCtx(AArg);
+  atomic_fetch_add(LCtx^.Started^, 1, mo_seq_cst);
+  while atomic_load(LCtx^.Go^, mo_seq_cst) = 0 do
+    cpu_pause;
+
+  try
+    LCtx^.OwnerDecValue^ := LCtx^.Ref^.Dec;
+  except
+    atomic_fetch_add(LCtx^.ThreadErrorCount^, 1, mo_seq_cst);
+  end;
+end;
+
+function TerminalBorrowerWorker(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PTerminalRaceCtx;
+  LNewValue: PtrUInt;
+  LAfterDec: PtrUInt;
+begin
+  Result := nil;
+  LCtx := PTerminalRaceCtx(AArg);
+  atomic_fetch_add(LCtx^.Started^, 1, mo_seq_cst);
+  while atomic_load(LCtx^.Go^, mo_seq_cst) = 0 do
+    cpu_pause;
+
+  try
+    LNewValue := High(PtrUInt);
+    if LCtx^.Ref^.TryInc(LNewValue) then
+    begin
+      atomic_fetch_add(LCtx^.BorrowSuccessCount^, 1, mo_seq_cst);
+      if LNewValue < 2 then
+        atomic_fetch_add(LCtx^.BorrowBadSuccessValueCount^, 1, mo_seq_cst);
+
+      LAfterDec := LCtx^.Ref^.Dec;
+      if LAfterDec = 0 then
+        atomic_fetch_add(LCtx^.BorrowZeroDropCount^, 1, mo_seq_cst);
+    end
+    else
+    begin
+      atomic_fetch_add(LCtx^.BorrowFailureCount^, 1, mo_seq_cst);
+      if LNewValue <> 0 then
+        atomic_fetch_add(LCtx^.BorrowFailureNonZeroOutCount^, 1, mo_seq_cst);
+    end;
+  except
+    atomic_fetch_add(LCtx^.ThreadErrorCount^, 1, mo_seq_cst);
+  end;
+end;
+
 procedure TestAtomicRefCountTerminalRaceContract;
 const
   BorrowerCount = 4;
@@ -7072,8 +7188,9 @@ var
   procedure RunRound;
   var
     LRef: TAtomicRefCount;
-    LOwnerThread: TThread;
-    LBorrowerThreads: array[0..BorrowerCount - 1] of TThread;
+    LOwnerThread: TPlatformThreadRecord;
+    LBorrowerThreads: array[0..BorrowerCount - 1] of TPlatformThreadRecord;
+    LCtx: TTerminalRaceCtx;
     LStarted: Int32;
     LGo: Int32;
     LBorrowSuccessCount: Int32;
@@ -7099,57 +7216,22 @@ var
     LThreadErrorCount := 0;
     LOwnerDecValue := High(PtrUInt);
 
-    LOwnerThread := TThread.CreateAnonymousThread(procedure
-      begin
-        atomic_fetch_add(LStarted, 1, mo_seq_cst);
-        while atomic_load(LGo, mo_seq_cst) = 0 do
-          cpu_pause;
-
-        try
-          LOwnerDecValue := LRef.Dec;
-        except
-          atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
-        end;
-      end);
-    LOwnerThread.FreeOnTerminate := False;
-    LOwnerThread.Start;
+    LCtx.Started := @LStarted;
+    LCtx.Go := @LGo;
+    LCtx.Ref := @LRef;
+    LCtx.ThreadErrorCount := @LThreadErrorCount;
+    LCtx.BorrowSuccessCount := @LBorrowSuccessCount;
+    LCtx.BorrowFailureCount := @LBorrowFailureCount;
+    LCtx.BorrowFailureNonZeroOutCount := @LBorrowFailureNonZeroOutCount;
+    LCtx.BorrowBadSuccessValueCount := @LBorrowBadSuccessValueCount;
+    LCtx.BorrowZeroDropCount := @LBorrowZeroDropCount;
+    LCtx.OwnerDecValue := @LOwnerDecValue;
+    Check(platform_thread_spawn(LOwnerThread, @TerminalOwnerWorker, @LCtx) = 0,
+      'spawn terminal-race owner');
 
     for LI := 0 to High(LBorrowerThreads) do
-    begin
-      LBorrowerThreads[LI] := TThread.CreateAnonymousThread(procedure
-        var
-          LNewValue: PtrUInt;
-          LAfterDec: PtrUInt;
-        begin
-          atomic_fetch_add(LStarted, 1, mo_seq_cst);
-          while atomic_load(LGo, mo_seq_cst) = 0 do
-            cpu_pause;
-
-          try
-            LNewValue := High(PtrUInt);
-            if LRef.TryInc(LNewValue) then
-            begin
-              atomic_fetch_add(LBorrowSuccessCount, 1, mo_seq_cst);
-              if LNewValue < 2 then
-                atomic_fetch_add(LBorrowBadSuccessValueCount, 1, mo_seq_cst);
-
-              LAfterDec := LRef.Dec;
-              if LAfterDec = 0 then
-                atomic_fetch_add(LBorrowZeroDropCount, 1, mo_seq_cst);
-            end
-            else
-            begin
-              atomic_fetch_add(LBorrowFailureCount, 1, mo_seq_cst);
-              if LNewValue <> 0 then
-                atomic_fetch_add(LBorrowFailureNonZeroOutCount, 1, mo_seq_cst);
-            end;
-          except
-            atomic_fetch_add(LThreadErrorCount, 1, mo_seq_cst);
-          end;
-        end);
-      LBorrowerThreads[LI].FreeOnTerminate := False;
-      LBorrowerThreads[LI].Start;
-    end;
+      Check(platform_thread_spawn(LBorrowerThreads[LI], @TerminalBorrowerWorker,
+        @LCtx) = 0, 'spawn terminal-race borrower');
 
     LAllStarted := False;
     for LSpin := 1 to 1000 do
@@ -7164,13 +7246,10 @@ var
 
     atomic_store(LGo, 1, mo_seq_cst);
 
-    LOwnerThread.WaitFor;
-    LOwnerThread.Free;
+    Check(platform_thread_wait(LOwnerThread) = 0, 'join terminal-race owner');
     for LI := 0 to High(LBorrowerThreads) do
-    begin
-      LBorrowerThreads[LI].WaitFor;
-      LBorrowerThreads[LI].Free;
-    end;
+      Check(platform_thread_wait(LBorrowerThreads[LI]) = 0,
+        'join terminal-race borrower');
 
     Check(LAllStarted,
       'terminal-race workers must start before the release race is opened');

@@ -23,8 +23,6 @@ program test_wallet;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  BaseUnix,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.bytes.ops,
@@ -42,7 +40,7 @@ uses
   nextpas.core.wallet.base,
   nextpas.core.wallet.intf,
   nextpas.core.wallet,
-  nextpas.core.db.factory.register.sqlite;
+  nextpas.core.db.factory.register.sqlite, nextpas.core.fs, nextpas.core.text, nextpas.core.text.conv;
 
 { bytes.ops 单源编译期互证：零运行时分支，漂移即编译失败 }
 
@@ -56,7 +54,7 @@ var
 function NextWalletPath: string; inline;
 begin
   Inc(GSeq);
-  Result := GetTempDir + 'test_wallet_' + IntToStr(FpGetPid) + '_' + IntToStr(GSeq) + '.db';
+  Result := GetTempDir + 'test_wallet_' + IntToStr(GetProcessID) + '_' + IntToStr(GSeq) + '.db';
 end;
 
 function NewWalletPool(const APath: string): TDbPool; inline;

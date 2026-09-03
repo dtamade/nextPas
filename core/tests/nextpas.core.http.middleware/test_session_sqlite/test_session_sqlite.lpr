@@ -3,12 +3,12 @@ program test_session_sqlite;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.db,
-  nextpas.core.time,
   nextpas.core.http.middleware.session,
   nextpas.core.http.middleware.session.sqlite;
 

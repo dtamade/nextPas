@@ -7,7 +7,8 @@ program test_deliverability_spf;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.format,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.deliverability.base,
   nextpas.core.deliverability.spf,
@@ -152,7 +153,7 @@ begin
   D.AddTXT('example.com', 'v=spf1 mx -all');
   D.AddMX('example.com', 'mail.example.com');
   for J := 0 to 10 do
-    D.AddA('mail.example.com', Format('192.0.2.%d', [J + 1]));
+    D.AddA('mail.example.com', TextFormat('192.0.2.%d', [J + 1]));
   CheckSpf(D, 'example.com', '192.0.2.1', 'a@example.com', srPermError,
     'mx >10 addresses permerror');
 end;

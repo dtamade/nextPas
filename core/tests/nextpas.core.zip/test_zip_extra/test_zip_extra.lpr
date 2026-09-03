@@ -13,14 +13,13 @@ program test_zip_extra;
  *}
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.zip,
   nextpas.core.zip.base,
   nextpas.core.zip.aes,
-  nextpas.core.zip.extra;
+  nextpas.core.zip.extra, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

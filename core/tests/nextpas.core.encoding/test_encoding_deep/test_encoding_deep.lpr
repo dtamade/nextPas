@@ -3,7 +3,7 @@ program test_encoding_deep;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.encoding,

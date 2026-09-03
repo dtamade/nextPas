@@ -1,7 +1,6 @@
 program test_zip_sequential;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -11,7 +10,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.zip,
   nextpas.core.zip.base,
-  nextpas.core.checksum.crc32;
+  nextpas.core.checksum.crc32, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

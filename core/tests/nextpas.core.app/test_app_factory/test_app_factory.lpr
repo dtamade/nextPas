@@ -3,7 +3,6 @@ program test_app_factory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.base,

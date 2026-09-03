@@ -7,7 +7,6 @@ program test_deliverability_dmarc;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.deliverability.base,
   nextpas.core.deliverability.dmarc,

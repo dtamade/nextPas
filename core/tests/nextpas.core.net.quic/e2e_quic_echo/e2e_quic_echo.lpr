@@ -9,8 +9,7 @@ program e2e_quic_echo;
   取证程序不进默认 gate，手工运行。 }
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.fs.path,
   nextpas.core.fs.util,

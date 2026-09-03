@@ -3,8 +3,10 @@ program test_compress_audit;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  zlib,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.checksum.crc32,
+  nextpas.core.math,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.base,
@@ -319,10 +321,12 @@ end;
 procedure TestLz4RandomData;
 var LSrc, LC, LD: TBytes;
     LI: Int32;
+    LGen: TRandomGen;
 begin
+  LGen.SetSeed(12345);
   SetLength(LSrc, 4096);
   for LI := 0 to 4095 do
-    LSrc[LI] := Byte(Random(256));
+    LSrc[LI] := Byte(LGen.NextIntRange(0, 255));
   LC := Lz4Compress(LSrc);
   Check(Length(LC) > 0, 'random compresses');
   Check(SizeUInt(Length(LC)) <= Lz4CompressBound(4096), 'within bound');
@@ -2154,7 +2158,7 @@ begin
   SetLength(LWithHeaderCrc, Length(LC) + 2);
   Move(LC[0], LWithHeaderCrc[0], 10);
   LWithHeaderCrc[3] := LWithHeaderCrc[3] or $02;
-  LHeaderCRC := UInt16(crc32(0, @LWithHeaderCrc[0], 10));
+  LHeaderCRC := UInt16(Crc32Update(0, @LWithHeaderCrc[0], 10));
   LWithHeaderCrc[10] := Byte(LHeaderCRC);
   LWithHeaderCrc[11] := Byte(LHeaderCRC shr 8);
   Move(LC[10], LWithHeaderCrc[12], Length(LC) - 10);
@@ -2177,7 +2181,7 @@ begin
   LWithNameAndHeaderCrc[10] := Ord('n');
   LWithNameAndHeaderCrc[11] := Ord('p');
   LWithNameAndHeaderCrc[12] := 0;
-  LHeaderCRC := UInt16(crc32(0, @LWithNameAndHeaderCrc[0], 13));
+  LHeaderCRC := UInt16(Crc32Update(0, @LWithNameAndHeaderCrc[0], 13));
   LWithNameAndHeaderCrc[13] := Byte(LHeaderCRC);
   LWithNameAndHeaderCrc[14] := Byte(LHeaderCRC shr 8);
   Move(LC[10], LWithNameAndHeaderCrc[15], Length(LC) - 10);
@@ -2270,7 +2274,7 @@ procedure TestGzipOptionalHeaderAllFieldsRoundTrip;
     AppendNullTerminated(Result, 'all optional fields');
 
     AHeaderCrcOffset := Length(Result);
-    LHeaderCRC := UInt16(crc32(0, @Result[0], AHeaderCrcOffset));
+    LHeaderCRC := UInt16(Crc32Update(0, @Result[0], AHeaderCrcOffset));
     AppendByte(Result, Byte(LHeaderCRC));
     AppendByte(Result, Byte(LHeaderCRC shr 8));
     AppendTail(Result, ABase, 10);

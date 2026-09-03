@@ -7,7 +7,9 @@ program test_log_audit;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.log.intf,
   nextpas.core.log;
@@ -16,6 +18,15 @@ var
   T: TTestSuite;
   GCaptured: array of TLogRecord;
   GCaptureCount: Int32;
+
+var
+  GUniq: Integer = 0;
+
+function UniqTag: string;
+begin
+  Inc(GUniq);
+  Result := IntToStr(GetProcessID) + '_' + IntToStr(GUniq);
+end;
 
 type
   TCaptureHandler = class(TInterfacedObject, ILogHandler)
@@ -272,7 +283,7 @@ var
 begin
   (* Validate JSON handler output by redirecting stderr to a file.
      We run the JSON handler, capture output, and verify structure. *)
-  LPath := '/tmp/test_log_json_valid_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_json_valid_' + UniqTag + '.log';
   (* Use shell redirection: write JSON to file via a child logger *)
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LChild := LL.With_('svc', 'web');
@@ -303,7 +314,7 @@ begin
   (* Test that prefix attrs + event attrs do not produce double separators.
      The R3 comma bug manifested as ",," in JSON output. Here we test
      the file handler equivalent: no double-space between attrs. *)
-  LPath := '/tmp/test_log_json_parse_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_json_parse_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LChild := LL.WithAttrs([AttrStr('a', '1'), AttrInt('b', 2)]);
   LChild.Info^.Str('c', '3')^.Int('d', 4)^.Msg('multi-attr');
@@ -333,7 +344,7 @@ begin
   { R3 bug: JsonHandler.Handle set LFirst := False before prefix loop,
     causing a leading comma on the first prefix attr.
     This test verifies the fix by checking file output doesn't have ",," }
-  LPath := '/tmp/test_log_json_comma_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_json_comma_' + UniqTag + '.log';
 
   { Use a file handler with prefix attrs to verify no double-comma in output }
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
@@ -372,7 +383,7 @@ var
   LActualSize: Int64;
 begin
   { MaxBytes=200, log enough to trigger exactly one rotation }
-  LPath := '/tmp/test_log_rot_exact_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_rot_exact_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 200, 3), llInfo);
 
   { Each line: "INF msg i=N" ~ 15 bytes + newline. 13 lines ~ 200+ bytes }
@@ -394,7 +405,7 @@ begin
   begin
     AssignFile(LF, LPath);
     Reset(LF, 1);
-    LActualSize := FileSize(LF);
+    LActualSize := System.FileSize(LF);
     CloseFile(LF);
     Check(LActualSize < 200, 'current file < MaxBytes after rotation, got ' + IntToStr(LActualSize));
   end;
@@ -407,7 +418,7 @@ begin
   begin
     AssignFile(LF, LPath + '.1');
     Reset(LF, 1);
-    LActualSize := FileSize(LF);
+    LActualSize := System.FileSize(LF);
     CloseFile(LF);
     Check(LActualSize > 0, 'rotated file has content');
   end;
@@ -426,7 +437,7 @@ var
 begin
   { MaxFiles=2, log enough to trigger 3+ rotations.
     Files .3 and beyond must NOT exist. }
-  LPath := '/tmp/test_log_rot_max_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_rot_max_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 50, 2), llInfo);
 
   for LI := 1 to 30 do
@@ -451,7 +462,7 @@ var
 begin
   { Test the off-by-one: FCurrentSize exactly equals FMaxBytes.
     The condition is >=, so it should trigger rotation on the NEXT write. }
-  LPath := '/tmp/test_log_rot_boundary_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_rot_boundary_' + UniqTag + '.log';
   { Use a very small MaxBytes to make boundary easy to hit }
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 30, 3), llInfo);
 
@@ -470,7 +481,7 @@ begin
   begin
     AssignFile(LF, LPath);
     Reset(LF, 1);
-    LSize := FileSize(LF);
+    LSize := System.FileSize(LF);
     CloseFile(LF);
     Check(LSize < 30, 'current file respects MaxBytes boundary');
   end;
@@ -719,7 +730,7 @@ var
 begin
   { Open a valid file, then make it broken by deleting the directory.
     Subsequent writes must not crash (FBroken path). }
-  LPath := '/nonexistent_dir_' + IntToStr(Random(99999)) + '/test.log';
+  LPath := '/nonexistent_dir_' + UniqTag + '/test.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   { First write triggers EnsureOpen which fails → FBroken = True }
   LL.Info^.Msg('first attempt');
@@ -820,7 +831,7 @@ var
   LLine: string;
 begin
   { Verify file handler produces correct format with all attr types }
-  LPath := '/tmp/test_log_content_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_content_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
   LL.Info^.Str('name', 'alice')^.Int('age', 30)^.Bool('active', True)^.Float('score', 9.5)^.Msg('user login');
   LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release
@@ -935,7 +946,7 @@ var
 begin
   { 200 writes with MaxBytes=100, MaxFiles=3.
     Must produce exactly main + up to 3 rotated files. }
-  LPath := '/tmp/test_log_stress_rot_' + IntToStr(Random(99999)) + '.log';
+  LPath := '/tmp/test_log_stress_rot_' + UniqTag + '.log';
   LL := TLogger.New(NewFileHandler(LPath, llInfo, 100, 3), llInfo);
   for LI := 1 to 200 do
     LL.Info^.Int('i', LI)^.Msg('stress-rotation');
@@ -980,7 +991,6 @@ end;
   ============================================================ }
 
 begin
-  Randomize;
   T := TTestSuite.Create('nextpas.core.log [AUDIT]');
 
   { Pool recycling (R1 nil crash) }

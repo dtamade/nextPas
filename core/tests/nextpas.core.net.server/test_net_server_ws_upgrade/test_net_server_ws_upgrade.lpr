@@ -20,8 +20,6 @@ program test_net_server_ws_upgrade;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
@@ -37,7 +35,7 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
-  nextpas.core.websocket.base;
+  nextpas.core.websocket.base, nextpas.core.exception, nextpas.core.text, nextpas.core.text.conv;
 
 type
   TUpgradeSinkMode = (

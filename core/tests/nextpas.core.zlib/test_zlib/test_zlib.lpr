@@ -1,7 +1,6 @@
 program test_zlib;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.test,
@@ -9,7 +8,7 @@ uses
   nextpas.core.zlib.intf,
   nextpas.core.zlib.pure,
   nextpas.core.zlib.ffi,
-  nextpas.core.zlib;
+  nextpas.core.zlib, nextpas.core.text;
 
 var
   T: TTestSuite;

@@ -7,7 +7,7 @@ program test_dns_wire;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.test,
   nextpas.core.dns.base;
 

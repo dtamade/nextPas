@@ -1,7 +1,9 @@
 program test_compress;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,

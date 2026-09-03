@@ -11,8 +11,7 @@ program e2e_quic_h3;
   出站排空，同时保证 RunOnce 等待有界）+ 有界 recv 重挂。 }
 {$I nextpas.core.settings.inc}
 
-uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+uses nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.fs.dir,
   nextpas.core.fs.path,

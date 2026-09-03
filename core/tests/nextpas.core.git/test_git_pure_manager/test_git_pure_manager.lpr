@@ -3,9 +3,12 @@ program test_git_pure_manager;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.base,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.fs,
+  nextpas.core.test,
   nextpas.core.process,
   nextpas.core.git.factory,
   nextpas.core.git.base,
@@ -14,6 +17,7 @@ uses
 
 var
   Suite: TTestSuite;
+  GUniq: Integer = 0;
 
 function BytesOfString(const AText: string): TBytes; inline;
 begin
@@ -22,9 +26,10 @@ begin
     Move(AText[1], Result[0], Length(AText));
 end;
 
-function MkTempDir(const APrefix: string): string; inline;
+function MkTempDir(const APrefix: string): string;
 begin
-  Result := PathJoin([GetTempDir, APrefix + '_' + IntToStr(GetProcessID) + '_' + IntToStr(Random(1000000))]);
+  Inc(GUniq);
+  Result := PathJoin([GetTempDir, APrefix + '_' + IntToStr(GetProcessID) + '_' + IntToStr(GUniq)]);
   RemoveAll(Result);
   MkdirAll(Result);
 end;
@@ -261,7 +266,7 @@ begin
     GitRun(LRoot, ['commit', '-m', 'seed']);
     // reopen to ensure native adapter sees committed HEAD
     LRepo := LMgr.OpenRepository(LRoot);
-    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+    if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
       raise Exception.Create('supports worktree ext');
     LMain := LRoot;
     LWt := PathJoin([LBase, 'linked']);
@@ -274,7 +279,7 @@ begin
       CheckEqual(PathClean(LWt), PathClean(LMgr.DiscoverRepository(PathJoin([LWt, '.git']))), 'worktree .git file resolves');
     finally
       // prune metadata but keep dir for finally cleanup; RemoveAll will clean both
-      if Supports(LMgr.OpenRepository(LMain), IGitWorktreeExt, LWtExt) then
+      if LMgr.OpenRepository(LMain).QueryInterface(IGitWorktreeExt, LWtExt) = 0 then
         LWtExt.PruneWorktree('linked-wt');
       RemoveAll(LWt);
     end;
@@ -344,7 +349,7 @@ begin
     LRepo := LMgr.InitRepository(LDir, False);
     GitRun(LDir, ['config', 'user.name', 'Pure Tester']);
     GitRun(LDir, ['config', 'user.email', 'pure@example.invalid']);
-    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+    if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
       raise Exception.Create('IGitRepository should support IGitWorktreeExt for CommitOnHead');
 
     // empty message must raise EGitError(GIT_EINVALID,'message required') (INV-E2)
@@ -420,7 +425,7 @@ begin
     GitRun(LMain, ['add', 'seed.txt']);
     GitRun(LMain, ['commit', '-m', 'seed']);
     LRepo := LMgr.OpenRepository(LMain);
-    if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+    if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
       raise Exception.Create('supports worktree ext');
 
     // invalid params must raise EGitError(GIT_EINVALIDSPEC) (INV-E2)
@@ -509,7 +514,6 @@ begin
 end;
 
 begin
-  Randomize;
   Suite := TTestSuite.Create('pure_manager');
   Suite.Test('TestInitAndIsRepository', @TestInitAndIsRepository);
   Suite.Test('TestStatusEmpty', @TestStatusEmpty);

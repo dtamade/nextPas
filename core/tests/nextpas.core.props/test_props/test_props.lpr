@@ -3,11 +3,10 @@ program test_props;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.text.base,
   nextpas.core.fs,
-  nextpas.core.props;
+  nextpas.core.props, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

@@ -1,7 +1,6 @@
 program test_zip_fs;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -9,7 +8,7 @@ uses
   nextpas.core.process,
   nextpas.core.checksum.crc32,
   nextpas.core.zip,
-  nextpas.core.zip.base;
+  nextpas.core.zip.base, nextpas.core.math, nextpas.core.text, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

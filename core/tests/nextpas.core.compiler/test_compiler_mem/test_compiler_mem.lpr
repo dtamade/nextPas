@@ -7,7 +7,8 @@ program test_compiler_mem;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.compiler.mem,

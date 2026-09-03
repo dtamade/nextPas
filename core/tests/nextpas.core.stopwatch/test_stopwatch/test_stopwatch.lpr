@@ -3,11 +3,10 @@ program test_stopwatch;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.stopwatch,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread, nextpas.core.text;
 
 var
   T: TTestSuite;

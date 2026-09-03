@@ -3,7 +3,8 @@ program test_compress_deep;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.io.base,
   nextpas.core.io.intf,

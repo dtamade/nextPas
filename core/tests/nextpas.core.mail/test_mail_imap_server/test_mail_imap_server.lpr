@@ -19,8 +19,6 @@ program test_mail_imap_server;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,

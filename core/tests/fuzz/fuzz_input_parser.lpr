@@ -1,19 +1,19 @@
 program fuzz_input_parser;
 {$I nextpas.core.settings.inc}
 uses
-  BaseUnix,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.tui.event,
   nextpas.core.tui.input;
 var
   LBuf: array[0..65535] of Byte;
   LLen, LConsumed, LPos, LIter: Integer;
-  LRead: TSSize;
+  LRead: ssize_t;
   LEv: TEvent;
   LRes: TParseResult;
 begin
   LLen := 0;
   repeat
-    LRead := fpRead(0, @LBuf[LLen], SizeOf(LBuf) - LLen);
+    LRead := read(0, @LBuf[LLen], SizeOf(LBuf) - LLen);
     if LRead > 0 then Inc(LLen, LRead);
   until (LRead <= 0) or (LLen >= SizeOf(LBuf));
   if LLen = 0 then Halt(0);

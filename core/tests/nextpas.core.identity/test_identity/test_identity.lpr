@@ -9,8 +9,10 @@ program test_identity;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  BaseUnix,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.test,
   nextpas.core.bytes.ops,
   nextpas.core.text.utils,
@@ -32,7 +34,7 @@ var
 function NextIdentityPath: string; inline;
 begin
   Inc(GSeq);
-  Result := GetTempDir + 'test_identity_' + IntToStr(FpGetPid) + '_' + IntToStr(GSeq) + '.db';
+  Result := GetTempDir + 'test_identity_' + IntToStr(getpid) + '_' + IntToStr(GSeq) + '.db';
 end;
 
 procedure TestIdentityMigrations;

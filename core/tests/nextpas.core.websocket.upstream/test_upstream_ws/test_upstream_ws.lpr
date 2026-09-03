@@ -4,8 +4,6 @@ program test_upstream_ws;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
-  Classes,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.errors,
@@ -17,7 +15,7 @@ uses
   nextpas.core.http.websocket,
   nextpas.core.websocket.upstream,
   nextpas.core.text.conv,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread, nextpas.core.text;
 
 var
   T: TTestSuite;

@@ -2,8 +2,7 @@ program test_platform_bench;
 
 {$I nextpas.core.settings.inc}
 
-uses
-  cthreads,
+uses nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.time.base,

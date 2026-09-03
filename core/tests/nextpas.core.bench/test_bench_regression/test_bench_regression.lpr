@@ -9,7 +9,7 @@ program test_bench_regression;
 {$mode ObjFPC}{$H+}
 
 uses
-  cthreads,
+  nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.fs,
   nextpas.core.bench,
@@ -17,6 +17,7 @@ uses
 
 var
   GTestCount: Integer = 0;
+  GUniq: Integer = 0;
   GPassCount: Integer = 0;
   GFailCount: Integer = 0;
 
@@ -66,6 +67,12 @@ begin
   ACtx.SetCustomMetric('cache_hits', 958.0);
 end;
 
+function UniqPath(const APrefix, ASuffix: string): string;
+begin
+  Inc(GUniq);
+  Result := APrefix + IntToStr(GetProcessID) + '-' + IntToStr(GUniq) + ASuffix;
+end;
+
 {*
  * 测试基线保存
  *}
@@ -77,7 +84,7 @@ var
 begin
   WriteLn('  + baseline_save');
 
-  LPath := 'test-baseline-' + IntToStr(Random(10000)) + '.json';
+  LPath := UniqPath('test-baseline-', '.json');
 
   { 创建测试结果 }
   LSuite := TBenchSuite.Create('RegressionTest');
@@ -109,7 +116,7 @@ var
 begin
   WriteLn('  + baseline_load');
 
-  LPath := 'test-baseline-' + IntToStr(Random(10000)) + '.json';
+  LPath := UniqPath('test-baseline-', '.json');
 
   { 创建测试结果 }
   LSuite := TBenchSuite.Create('RegressionTest');
@@ -229,7 +236,7 @@ var
 begin
   WriteLn('  + timeline_append');
 
-  LPath := 'test-timeline-' + IntToStr(Random(10000)) + '.jsonl';
+  LPath := UniqPath('test-timeline-', '.jsonl');
 
   LSuite := TBenchSuite.Create('TimelineTest');
   LResults := LSuite

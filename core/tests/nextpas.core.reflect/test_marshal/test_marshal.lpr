@@ -3,8 +3,6 @@ program test_marshal;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  TypInfo,
   nextpas.core.reflect.base,
   nextpas.core.reflect,
   nextpas.core.reflect.marshal,

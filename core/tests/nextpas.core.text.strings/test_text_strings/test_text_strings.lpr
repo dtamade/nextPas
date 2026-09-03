@@ -3,9 +3,8 @@ program test_text_strings;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
-  nextpas.core.text.strings;
+  nextpas.core.text.strings, nextpas.core.base, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

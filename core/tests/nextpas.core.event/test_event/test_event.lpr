@@ -3,7 +3,6 @@ program test_event;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.event.base,
   nextpas.core.event.intf,
   nextpas.core.event,

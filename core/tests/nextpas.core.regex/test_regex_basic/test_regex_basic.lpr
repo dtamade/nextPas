@@ -3,7 +3,6 @@ program test_regex_basic;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.regex,
   nextpas.core.regex.base,
@@ -11,7 +10,7 @@ uses
   nextpas.core.regex.dfa,
   nextpas.core.regex.parser,
   nextpas.core.regex.compiler,
-  nextpas.core.text.scan;
+  nextpas.core.text.scan, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

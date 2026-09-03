@@ -4,8 +4,6 @@ program test_net_server_ws_frame;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.websocket.base,

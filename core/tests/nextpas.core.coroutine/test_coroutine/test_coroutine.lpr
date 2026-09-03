@@ -3,7 +3,6 @@ program test_coroutine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.coroutine.base,
   nextpas.core.coroutine.intf,
   nextpas.core.coroutine,

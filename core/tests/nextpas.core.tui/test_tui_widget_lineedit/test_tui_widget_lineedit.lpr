@@ -1,7 +1,6 @@
 program test_tui_widget_lineedit;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
@@ -10,7 +9,7 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.event,
   nextpas.core.tui.widget.lineedit,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.text.conv;
 
 var T: TTestSuite;
 

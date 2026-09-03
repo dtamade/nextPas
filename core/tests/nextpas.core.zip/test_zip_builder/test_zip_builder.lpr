@@ -15,7 +15,6 @@ program test_zip_builder;
  *}
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -24,7 +23,7 @@ uses
   nextpas.core.bytes.builder,
   nextpas.core.zip,
   nextpas.core.zip.base,
-  nextpas.core.checksum.crc32;
+  nextpas.core.checksum.crc32, nextpas.core.text, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

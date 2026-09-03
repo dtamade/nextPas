@@ -14,7 +14,6 @@ program test_zip_aes;
  *}
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -29,7 +28,7 @@ uses
   nextpas.core.hash.sha256,
   nextpas.core.zip,
   nextpas.core.zip.base,
-  nextpas.core.zip.aes;
+  nextpas.core.zip.aes, nextpas.core.base.utils, nextpas.core.text, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

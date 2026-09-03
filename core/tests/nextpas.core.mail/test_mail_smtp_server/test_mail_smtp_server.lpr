@@ -18,8 +18,6 @@ program test_mail_smtp_server;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
@@ -31,7 +29,8 @@ uses
   nextpas.core.encoding.base64,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
-  nextpas.core.mail;
+  nextpas.core.mail,
+  nextpas.core.mail.smtp.server;
 
 type
   PServerFixture = ^TServerFixture;
@@ -115,6 +114,8 @@ type
     LastIP: string;
     constructor Create;
     function EvaluateMailFrom(const AFrom: TMailAddress;
+      const AClientIP: string): string;
+    function EvaluateRcptTo(const AFrom: TMailAddress; const ARcpt: TMailAddress;
       const AClientIP: string): string;
   end;
 
@@ -440,6 +441,12 @@ begin
   LastFrom := AFrom.Full;
   LastIP := AClientIP;
   Result := RejectReply;
+end;
+
+function TTestMailPolicy.EvaluateRcptTo(const AFrom: TMailAddress;
+  const ARcpt: TMailAddress; const AClientIP: string): string;
+begin
+  Result := '';
 end;
 
 { ── 测试用例 ──────────────────────────────────────────────────────── }

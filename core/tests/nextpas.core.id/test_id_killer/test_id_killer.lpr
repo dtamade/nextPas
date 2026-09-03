@@ -3,7 +3,7 @@ program test_id_killer;
 {$R+}{$Q+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,

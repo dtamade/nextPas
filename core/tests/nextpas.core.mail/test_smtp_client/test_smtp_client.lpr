@@ -4,14 +4,13 @@ program test_smtp_client;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.encoding.base64,
-  nextpas.core.time,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.platform.thread,

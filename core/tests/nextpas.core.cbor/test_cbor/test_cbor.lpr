@@ -6,7 +6,8 @@ program test_cbor;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.base,
   nextpas.core.cbor,
   nextpas.core.test;

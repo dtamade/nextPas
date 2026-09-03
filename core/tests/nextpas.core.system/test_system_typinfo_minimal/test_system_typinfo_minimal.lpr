@@ -3,7 +3,6 @@ program test_system_typinfo_minimal;
 {$I nextpas.core.settings.inc}
 
 uses
-  Variants,
   nextpas.core.test,
   nextpas.core.system.typinfo;
 

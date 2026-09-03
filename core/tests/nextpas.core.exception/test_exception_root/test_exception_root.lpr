@@ -3,7 +3,6 @@ program test_exception_root;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.errors,
@@ -59,7 +58,7 @@ begin
         'base/errors ETimeoutError are distinct hierarchies after base←intf decoupling');
       Check(LBaseTimeout is nextpas.core.base.ECore,
         'base ETimeoutError must be catchable as base ECore');
-      Check(LBaseTimeout.Category = nextpas.core.base.ecTimeout,
+      Check(LBaseTimeout.Category = nextpas.core.exception.ecTimeout,
         'base ETimeoutError must keep timeout category');
       Check(LErrorsTimeout is nextpas.core.exception.ETimeoutError,
         'errors ETimeoutError must use the canonical timeout type');
@@ -82,7 +81,7 @@ begin
     raise nextpas.core.base.ETimeoutError.Create('base timeout');
   except
     on E: nextpas.core.base.ECore do
-      LCaught := E.Category = nextpas.core.base.ecTimeout;
+      LCaught := E.Category = nextpas.core.exception.ecTimeout;
   end;
   Check(LCaught, 'legacy ECore catch must catch base ETimeoutError with timeout category');
 
@@ -100,7 +99,7 @@ begin
     raise nextpas.core.base.EOutOfMemory.Create('base oom');
   except
     on E: nextpas.core.base.ECore do
-      LCaught := E.Category = nextpas.core.base.ecResourceExhausted;
+      LCaught := E.Category = nextpas.core.exception.ecResourceExhausted;
   end;
   Check(LCaught, 'legacy ECore catch must catch base EOutOfMemory with resource-exhausted');
 

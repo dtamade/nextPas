@@ -7,7 +7,7 @@ uses
   nextpas.core.thread.init,
   {$endif}
   nextpas.core.math.scalar,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.bench.memtrack,
   nextpas.core.bench.parallel,
   nextpas.core.test;
@@ -197,59 +197,52 @@ end;
 type
   PMemoryTracker = ^TMemoryTracker;
 
-  TAllocThread = class(TThread)
-  private
-    FTracker: PMemoryTracker;
-    FBlockPtr: PPointer;
-    FCount: Integer;
-    FBlockSize: Integer;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(ATracker: PMemoryTracker; ABlockPtr: PPointer;
-      ACount, ABlockSize: Integer);
+  PAllocCtx = ^TAllocCtx;
+  TAllocCtx = record
+    Tracker: PMemoryTracker;
+    BlockPtr: PPointer;
+    Count: Integer;
+    BlockSize: Integer;
   end;
 
-constructor TAllocThread.Create(ATracker: PMemoryTracker; ABlockPtr: PPointer;
-  ACount, ABlockSize: Integer);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FTracker := ATracker;
-  FBlockPtr := ABlockPtr;
-  FCount := ACount;
-  FBlockSize := ABlockSize;
-end;
-
-procedure TAllocThread.Execute;
+function AllocProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PAllocCtx;
   I: Integer;
 begin
-  for I := 0 to FCount - 1 do
+  LCtx := PAllocCtx(AArg);
+  for I := 0 to LCtx^.Count - 1 do
   begin
-    FBlockPtr[I] := GetMem(FBlockSize);
-    FTracker^.RecordAlloc(FBlockSize);
+    LCtx^.BlockPtr[I] := GetMem(LCtx^.BlockSize);
+    LCtx^.Tracker^.RecordAlloc(LCtx^.BlockSize);
   end;
+  Result := nil;
 end;
 
 procedure ParallelAllocBlocks(ATracker: PMemoryTracker;
   ABlocks: array of Pointer; AThreadCount, AAllocsPerThread, ABlockSize: Integer);
 var
-  LThreads: array of TAllocThread;
+  LRecs: array of TPlatformThreadRecord;
+  LCtxs: array of PAllocCtx;
   LThread: Integer;
 begin
-  SetLength(LThreads, AThreadCount);
+  SetLength(LRecs, AThreadCount);
+  SetLength(LCtxs, AThreadCount);
   for LThread := 0 to AThreadCount - 1 do
-    LThreads[LThread] := TAllocThread.Create(ATracker,
-      PPointer(ABlocks[LThread]), AAllocsPerThread, ABlockSize);
-
-  for LThread := 0 to AThreadCount - 1 do
-    LThreads[LThread].Start;
+  begin
+    New(LCtxs[LThread]);
+    LCtxs[LThread]^.Tracker := ATracker;
+    LCtxs[LThread]^.BlockPtr := PPointer(ABlocks[LThread]);
+    LCtxs[LThread]^.Count := AAllocsPerThread;
+    LCtxs[LThread]^.BlockSize := ABlockSize;
+    Check(platform_thread_spawn(LRecs[LThread], @AllocProc, LCtxs[LThread]) = 0,
+      'spawn alloc thread');
+  end;
 
   for LThread := 0 to AThreadCount - 1 do
   begin
-    LThreads[LThread].WaitFor;
-    LThreads[LThread].Free;
+    Check(platform_thread_wait(LRecs[LThread]) = 0, 'join alloc thread');
+    Dispose(LCtxs[LThread]);
   end;
 end;
 

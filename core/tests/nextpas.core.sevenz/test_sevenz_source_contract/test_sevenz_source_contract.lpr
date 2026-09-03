@@ -1,10 +1,9 @@
 program test_sevenz_source_contract;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.exception,
-  nextpas.core.fs;
+  nextpas.core.fs, nextpas.core.text, nextpas.core.text.conv;
 
 { 源契约门禁：sevenz(28 单元含 stream/门面) uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，

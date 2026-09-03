@@ -1,7 +1,6 @@
 program test_stream;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.bytes,

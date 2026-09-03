@@ -8,7 +8,10 @@ program test_deliverability_dkim;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.deliverability.base,
   nextpas.core.deliverability.dkim,
@@ -132,9 +135,9 @@ begin
   for I := 0 to 5 do
   begin
     Check(DkimCanonicalizeBody(LBodies[I], cmSimple) = BodyVec(I, False),
-      Format('body%d simple', [I]));
+      TextFormat('body%d simple', [I]));
     Check(DkimCanonicalizeBody(LBodies[I], cmRelaxed) = BodyVec(I, True),
-      Format('body%d relaxed', [I]));
+      TextFormat('body%d relaxed', [I]));
   end;
 end;
 
@@ -435,7 +438,7 @@ begin
   I := D;
   D.AddTXT('sel._domainkey.example.com', 'v=DKIM1; p=' + DKV_RSA_SPKI_B64);
   LMail := StringReplace(DKV_MAIL_RSA, 'h=from:to:subject:x-date',
-    'h=to:subject:x-date', []);
+    'h=to:subject:x-date');
   R := DkimVerify(D, LMail, 1000, E);
   Check(R = dkPermError, 'h= without from -> permerror: ' + E);
 end;

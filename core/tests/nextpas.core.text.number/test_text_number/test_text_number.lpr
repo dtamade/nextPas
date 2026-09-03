@@ -3,10 +3,9 @@ program test_text_number;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.text.number,
   nextpas.core.text.view,
-  nextpas.core.test;
+  nextpas.core.test, nextpas.core.math, nextpas.core.text.conv;
 
 var
   T: TTestSuite;
@@ -155,7 +154,7 @@ begin
   begin
     N := IntToBuffer(Int64(I), @Buf[0]);
     Buf[N] := #0;
-    S := SysUtils.IntToStr(I);
+    S := IntToStr(I);
     Check(string(PAnsiChar(@Buf[0])) = S, 'mismatch at ' + S);
   end;
 end;

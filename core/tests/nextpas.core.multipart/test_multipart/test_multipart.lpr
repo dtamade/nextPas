@@ -3,7 +3,7 @@ program test_multipart;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.multipart.base,

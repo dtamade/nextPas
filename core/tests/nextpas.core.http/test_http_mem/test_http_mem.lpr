@@ -7,7 +7,7 @@ program test_http_mem;
 {$I nextpas.core.settings.inc}
 
 uses
-  {$IFDEF UNIX}cthreads,{$ENDIF}
+  nextpas.core.thread.init,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.fs,

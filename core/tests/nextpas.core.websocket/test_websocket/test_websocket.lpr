@@ -3,11 +3,10 @@ program test_websocket;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.websocket.base,
-  nextpas.core.websocket;
+  nextpas.core.websocket, nextpas.core.text.conv;
 
 var
   T: TTestSuite;

@@ -3,9 +3,12 @@ program test_git;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.base,
+  nextpas.core.text.conv,
   nextpas.core.fs,
+  nextpas.core.path,
+  nextpas.core.test,
   nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.git,
@@ -175,7 +178,7 @@ begin
   nextpas.core.fs.MkdirAll(LNestedDir);
 
   LMgr := NewGitManager;
-  CheckEqual(ExpandFileName(LRootDir), LMgr.DiscoverRepository(LNestedDir),
+  CheckEqual(ExpandFileName(LRootDir), ExpandFileName(LMgr.DiscoverRepository(LNestedDir)),
     'DiscoverRepository should find ancestor .git directory');
 end;
 
@@ -405,7 +408,7 @@ begin
   CheckGitOk(LMainDir, ['add', 'seed.txt'], 'git add seed');
   CheckGitOk(LMainDir, ['commit', '-m', 'seed'], 'git commit seed');
 
-  if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+  if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
   begin
     Check(False, 'IGitRepository should support IGitWorktreeExt');
     Exit;
@@ -452,7 +455,7 @@ begin
   CheckGitOk(LRepoDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
   CheckGitOk(LRepoDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
 
-  if not Supports(LRepo, IGitWorktreeExt, LWtExt) then
+  if LRepo.QueryInterface(IGitWorktreeExt, LWtExt) <> 0 then
   begin
     Check(False, 'IGitRepository should support IGitWorktreeExt');
     Exit;

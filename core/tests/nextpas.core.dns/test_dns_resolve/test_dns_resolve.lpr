@@ -7,10 +7,10 @@ program test_dns_resolve;
 {$I nextpas.core.settings.inc}
 
 uses
-  cthreads,
-  SysUtils,
-  Classes,
+  nextpas.core.thread.init,
   nextpas.core.test,
+  nextpas.core.atomic,
+  nextpas.core.platform.thread,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.net.udp,
@@ -132,20 +132,44 @@ end;
 { ── mock DNS 服务器 ─────────────────────────────────────────────── }
 
 type
-  TMockDnsServer = class(TThread)
-  private
-    FSocket: IUdpSocket;
-    FPort: UInt16;
-    FQueryCount: Integer;
-    FRespond: Boolean;              { False: 收到即丢弃(测超时) }
-    FWrongIdFirst: Boolean;         { 先回一个错误 ID 应答 }
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(const ARespond: Boolean; const AWrongIdFirst: Boolean);
-    property Port: UInt16 read FPort;
-    property QueryCount: Integer read FQueryCount;
+  PMockDnsServer = ^TMockDnsServer;
+  TMockDnsServer = record
+    Sock: IUdpSocket;
+    Port: UInt16;
+    QueryCount: Integer;
+    Respond: Boolean;                 { False: 收到即丢弃(测超时) }
+    WrongIdFirst: Boolean;            { 先回一个错误 ID 应答 }
+    Thread: TPlatformThreadRecord;
+    Terminated: Int32;
   end;
+
+procedure MockDnsExecute(ACtx: PMockDnsServer); forward;
+
+function MockDnsServerWorker(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  MockDnsExecute(PMockDnsServer(AArg));
+end;
+
+procedure MockDnsServerInit(var ACtx: TMockDnsServer;
+  const ARespond: Boolean; const AWrongIdFirst: Boolean);
+begin
+  ACtx.Sock := nil;
+  ACtx.Port := 0;
+  ACtx.QueryCount := 0;
+  ACtx.Respond := ARespond;
+  ACtx.WrongIdFirst := AWrongIdFirst;
+  ACtx.Terminated := 0;
+  Check(platform_thread_spawn(ACtx.Thread, @MockDnsServerWorker, @ACtx) = 0,
+    'spawn mock DNS server');
+end;
+
+procedure MockDnsServerStop(var ACtx: TMockDnsServer);
+begin
+  atomic_store(ACtx.Terminated, 1, mo_seq_cst);
+  Check(platform_thread_wait(ACtx.Thread) = 0, 'join mock DNS server');
+  ACtx.Sock := nil;
+end;
 
 { 固件 answers; 未知 (name,qtype) → False(NXDOMAIN) }
 function MockAnswers(const AName: string; const AType: UInt16;
@@ -172,17 +196,7 @@ begin
   end;
 end;
 
-constructor TMockDnsServer.Create(const ARespond: Boolean;
-  const AWrongIdFirst: Boolean);
-begin
-  inherited Create(False);
-  FRespond := ARespond;
-  FWrongIdFirst := AWrongIdFirst;
-  FPort := 0;
-  FQueryCount := 0;
-end;
-
-procedure TMockDnsServer.Execute;
+procedure MockDnsExecute(ACtx: PMockDnsServer);
 var
   LBuf, LQ, LReply, LAnswers: TB;
   LFrom: TNetAddress;
@@ -195,28 +209,30 @@ var
   LRevents, LRes: Int32;
   LQuestion: TB;
   LN: SizeUInt;
+  LSock: IUdpSocket;
 begin
-  FSocket := NetUdpBind('127.0.0.1', 0);
-  FPort := FSocket.LocalAddr.Port;
-  LRuntime := FSocket as IUdpSocketRuntime;
+  LSock := NetUdpBind('127.0.0.1', 0);
+  ACtx^.Sock := LSock;
+  ACtx^.Port := LSock.LocalAddr.Port;
+  LRuntime := LSock as IUdpSocketRuntime;
 {$IFDEF NEXTPAS_WINDOWS}
   LSockT.Value := LRuntime.NativeSocketHandle;
 {$ELSE}
   LSockT.Value := Int32(LRuntime.NativeSocketHandle);
 {$ENDIF}
   SetLength(LBuf, 2048);
-  while not Terminated do
+  while atomic_load(ACtx^.Terminated, mo_seq_cst) = 0 do
   begin
     LRevents := 0;
     LRes := platform_socket_poll(LSockT, PLATFORM_POLL_IN, 100, LRevents);
     if LRes <= 0 then
       Continue;
     LFrom := TNetAddress.Create('127.0.0.1', 0);
-    LN := FSocket.RecvFrom(LBuf[0], Length(LBuf), LFrom);
+    LN := LSock.RecvFrom(LBuf[0], Length(LBuf), LFrom);
     if LN < 12 then
       Continue;
-    Inc(FQueryCount);
-    if not FRespond then
+    Inc(ACtx^.QueryCount);
+    if not ACtx^.Respond then
       Continue;
     SetLength(LQ, LN);
     Move(LBuf[0], LQ[0], LN);
@@ -224,7 +240,7 @@ begin
       Continue;
     LQuestion := Copy(LQ, 12, SizeInt(Length(LQ) - 12));
     LID := (UInt16(LQ[0]) shl 8) or LQ[1];
-    if FWrongIdFirst then
+    if ACtx^.WrongIdFirst then
     begin
       { 先回一个 ID 错误的 header-only 包(INV-3: 解析器须丢弃) }
       LReply := nil;
@@ -234,7 +250,7 @@ begin
       LReply := Concat(LReply, B16(0));
       LReply := Concat(LReply, B16(0));
       LReply := Concat(LReply, B16(0));
-      FSocket.SendTo(LReply[0], Length(LReply), LFrom);
+      LSock.SendTo(LReply[0], Length(LReply), LFrom);
     end;
     if MockAnswers(LName, LType, LAnswers, LCount) then
     begin
@@ -247,7 +263,7 @@ begin
       LReply := Concat(LReply, B16(0));
       LReply := Concat(LReply, LQuestion);
       LReply := Concat(LReply, LAnswers);
-      FSocket.SendTo(LReply[0], Length(LReply), LFrom);
+      LSock.SendTo(LReply[0], Length(LReply), LFrom);
     end
     else
     begin
@@ -260,10 +276,11 @@ begin
       LReply := Concat(LReply, B16(0));
       LReply := Concat(LReply, B16(0));
       LReply := Concat(LReply, LQuestion);
-      FSocket.SendTo(LReply[0], Length(LReply), LFrom);
+      LSock.SendTo(LReply[0], Length(LReply), LFrom);
     end;
   end;
-  FSocket.Close;
+  LSock.Close;
+  ACtx^.Sock := nil;
 end;
 
 { ── 主 mock 生命周期助手 ────────────────────────────────────────── }
@@ -276,20 +293,18 @@ begin
   Result := DnsResolver('127.0.0.1', 256, GMainMock.Port);
 end;
 
-{ 新建一次性 mock(用例内自建互不干扰), 调用方负责 Terminate/WaitFor/Free }
-function SpawnMock(const ARespond: Boolean; const AWrongIdFirst: Boolean):
-  TMockDnsServer;
+{ 新建一次性 mock(用例内自建互不干扰), 调用方负责 StopMock }
+procedure SpawnMock(var AMock: TMockDnsServer;
+  const ARespond: Boolean; const AWrongIdFirst: Boolean);
 begin
-  Result := TMockDnsServer.Create(ARespond, AWrongIdFirst);
-  while Result.Port = 0 do
-    Sleep(2);
+  MockDnsServerInit(AMock, ARespond, AWrongIdFirst);
+  while AMock.Port = 0 do
+    SleepMs(2);
 end;
 
-procedure StopMock(const AMock: TMockDnsServer);
+procedure StopMock(var AMock: TMockDnsServer);
 begin
-  AMock.Terminate;
-  AMock.WaitFor;
-  AMock.Free;
+  MockDnsServerStop(AMock);
 end;
 
 { ── 用例 ────────────────────────────────────────────────────────── }
@@ -338,12 +353,12 @@ var
   LBefore: Integer;
 begin
   R := NewMainResolver;
-  GMainMock.FQueryCount := 0;
+  GMainMock.QueryCount := 0;
   Check(R.QueryTXT('example.com', 1000, LTexts, LErr), 'first query');
-  LBefore := GMainMock.FQueryCount;
+  LBefore := GMainMock.QueryCount;
   Check(LBefore >= 1, 'first hits wire');
   Check(R.QueryTXT('example.com', 1000, LTexts, LErr), 'second query');
-  Check(GMainMock.FQueryCount = LBefore, 'cache hit, no new wire query');
+  Check(GMainMock.QueryCount = LBefore, 'cache hit, no new wire query');
 end;
 
 procedure TestWrongIdIgnored;
@@ -353,7 +368,7 @@ var
   LErr: string;
   LMock: TMockDnsServer;
 begin
-  LMock := SpawnMock(True, True);
+  SpawnMock(LMock, True, True);
   R := DnsResolver('127.0.0.1', 256, LMock.Port);
   Check(R.QueryTXT('example.com', 1000, LTexts, LErr), 'wrong id discarded');
   Check(Length(LTexts) = 1, 'still resolves');
@@ -368,7 +383,7 @@ var
   LErr: string;
   LMock: TMockDnsServer;
 begin
-  LMock := SpawnMock(False, False);   { 收到即丢 → poll 超时 }
+  SpawnMock(LMock, False, False);   { 收到即丢 → poll 超时 }
   R := DnsResolver('127.0.0.1', 256, LMock.Port);
   Check(not R.Query('timeout.example.com', dqTXT, 300, LRecs, LErr),
     'timeout false');
@@ -380,9 +395,7 @@ var
   T: TTestSuite;
 
 begin
-  GMainMock := TMockDnsServer.Create(True, False);
-  while GMainMock.Port = 0 do
-    Sleep(2);
+  SpawnMock(GMainMock, True, False);
 
   T := TTestSuite.Create('nextpas.core.dns.resolve');
   T.Test('QueryTxt', @TestQueryTxt);
@@ -395,8 +408,6 @@ begin
     if not T.Run then
       Halt(1);
   finally
-    GMainMock.Terminate;
-    GMainMock.WaitFor;
-    GMainMock.Free;
+    StopMock(GMainMock);
   end;
 end.
