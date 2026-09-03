@@ -143,7 +143,6 @@ function IsRequestReadFailure(const E: Exception): Boolean;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.base, nextpas.core.base.utils,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time,

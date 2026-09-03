@@ -25,6 +25,7 @@ uses
   nextpas.core.crypto.hash,
   nextpas.core.ssh.rsa,
   nextpas.core.crypto.random,
+  nextpas.core.crypto.bigint,
   ssh_rsa_kat,
   nextpas.core.test;
 
@@ -227,7 +228,7 @@ begin
       LPub:=Ed25519PublicKeyFromPrivate(PatternBytes($3D,32));
       CheckEqual(Int64(Length(Ed25519PubBlob(LPub))), Int64(Length(Ids[0].Blob)));
       CheckTrue(Ids[0].AlgName='ssh-ed25519', 'alg');
-    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
+    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); WaitForThreadTerminate(Tid, 500); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
   end);
 
   GSuite.Test('sign ed25519 verifies', procedure
@@ -241,7 +242,7 @@ begin
       LData:=SHA256(PatternBytes($AB, 32));
       CheckTrue(Client.Sign(Ids[0].Blob, LData, 0, LSig), 'sign');
       LR:=TsshReader.Create(LSig); try LAlg:=LR.ReadStringText; LRaw:=LR.ReadStringBytes; CheckEqual('ssh-ed25519', LAlg); CheckTrue(Ed25519Verify(Copy(Ids[0].Blob, Length(Ids[0].Blob)-32,32), LData, LRaw)); finally LR.Free; end;
-    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
+    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); WaitForThreadTerminate(Tid, 500); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
   end);
 
   GSuite.Test('sign rsa-sha512 verifies', procedure
@@ -258,7 +259,7 @@ begin
       LR:=TsshReader.Create(LSig); try LAlg:=LR.ReadStringText; LRaw:=LR.ReadStringBytes; CheckEqual('rsa-sha2-512', LAlg); finally LR.Free; end;
       LR:=TsshReader.Create(Ids[0].Blob); try LR.ReadStringText; LE:=LR.ReadMPInt; LN:=LR.ReadMPInt; finally LR.Free; end;
       CheckTrue(RsaVerifyPkcs1v15(LE, LN, SHA512(LData), DIGEST_INFO_SHA512, LRaw));
-    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
+    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); WaitForThreadTerminate(Tid, 500); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
   end);
 
   GSuite.Test('multiple identities', procedure
@@ -269,7 +270,7 @@ begin
     Client:=TSshAgentClient.Create(A);
     try
       CheckTrue(Client.ListIdentities(Ids)); CheckEqual(2, Length(Ids));
-    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
+    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); WaitForThreadTerminate(Tid, 500); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
   end);
 
   GSuite.Test('sign unknown blob fails', procedure
@@ -280,12 +281,13 @@ begin
     Client:=TSshAgentClient.Create(A);
     try
       CheckTrue(not Client.Sign(PatternBytes($99,32), PatternBytes($01,32), 0, LSig));
-    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
+    finally Client.Free; B.Close; RTLEventWaitFor(PAgentSync(Sync)^.DoneEvent, 2000); WaitForThreadTerminate(Tid, 500); RTLEventDestroy(PAgentSync(Sync)^.DoneEvent); A.Free; B.Free; DoneCriticalSection(S^.Lock); Dispose(S); FreeMem(Sync); end;
   end);
 
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.agent');
   GRunner.Add(GSuite);
   GRunner.RunAll;
   GRunner.Summary;
+  ClearBigIntCache; // heaptrc0: free BigNat P384 + Montgomery global heap before dump (zero-copy bytes.ops path)
   if not GRunner.AllPassed then Halt(1);
 end.

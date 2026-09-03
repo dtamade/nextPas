@@ -13,6 +13,7 @@ unit nextpas.core.agent.base.slotmap;
 interface
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.agent.base.constants;
 
 type
@@ -94,14 +95,12 @@ begin
     Exit(False);
   if FCount > CAgentMaxSlotMap then
     Exit(False); // 总数越限（provider/fold 共用阈值，SECURITY §3）
-  // 索引镜像几何增长
+  // 索引镜像几何增长 single source via bytes.ops
   LCap := Length(FIndexes);
   if FCount >= LCap then
   begin
-    if LCap = 0 then
-      LCap := 8
-    else
-      LCap := LCap * 2;
+    // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+    LCap := BytesGrowCapacityInt(LCap, FCount + 1);
     SetLength(FIndexes, LCap);
   end;
   APos := FCount;
@@ -129,12 +128,8 @@ begin
   if AIdx < Length(AMap) then
     Exit;
   LOld := Length(AMap);
-  if LOld = 0 then
-    LNew := 8
-  else
-    LNew := LOld;
-  while LNew <= AIdx do
-    LNew := LNew * 2;
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+  LNew := BytesGrowCapacityInt(LOld, AIdx + 1);
   if LNew > CAgentMaxSlotMap + 1 then
     LNew := CAgentMaxSlotMap + 1;
   SetLength(AMap, LNew);

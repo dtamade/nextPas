@@ -121,7 +121,6 @@ type
     procedure EnsureScratch(ANeeded: SizeUInt);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
-    procedure NeedRange(APos, ALen: Int64; const AWhat: string);
     { 加密/安全名守卫 + local header 走查，返回条目载荷起始偏移 }
     function LocatePayload(AIndex: Integer): Int64;
     function ExtractIndex(AIndex: Integer): TBytes;
@@ -203,12 +202,13 @@ type
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
+    FScratch: TBytes;           { 几何复用缓冲，与内存读端同构（4096→2×），减 Fetch 分配 }
+    procedure EnsureScratch(ANeeded: SizeUInt);
     { 定位取数：[APos, APos+ACount) 越界或短读即结构截断 }
     procedure Fetch(APos: Int64; ACount: SizeUInt; out ADst: TBytes;
       const AWhat: string);
     procedure ParseCentralDirectory;
     function CheckIndex(AIndex: Integer): Integer;
-    procedure NeedRange(APos, ALen: Int64; const AWhat: string);
     { 加密/安全名守卫 + local header 走查（定位读），返回载荷起始偏移 }
     function LocatePayload(AIndex: Integer): Int64;
     function ExtractIndex(AIndex: Integer): TBytes;
@@ -303,13 +303,6 @@ begin
 end;
 
 { ---- 内存 / 可定位流两种读器共用的解析与校验路径 ---- }
-
-{ 区间 [APos, APos+ALen) 必须落在 AC 缓冲内，否则结构视为截断损坏 }
-procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
-  const AWhat: string);
-begin
-  nextpas.core.zip.common.GuardCursorRange(AC, APos, ALen, AWhat);
-end;
 
 function ZipPumpReader(const AReader: IDecompressReader; const ADst: IWriter): SizeUInt;
 const
@@ -495,7 +488,7 @@ begin
   LExtAttrs := AC.ReadU32LE;
   LLho := AC.ReadU32LE;
 
-  NeedRangeIn(AC, Int64(AC.Position),
+  GuardCursorRange(AC, Int64(AC.Position),
     Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
 
   LNamePtr := nil;
@@ -545,7 +538,7 @@ var
 begin
   for LI := 0 to High(AEntries) do
   begin
-    NeedRangeIn(AC, Int64(AC.Position), C_CENTRAL_HEADER_LEN, 'central header');
+    GuardCursorRange(AC, Int64(AC.Position), C_CENTRAL_HEADER_LEN, 'central header');
     if AC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
       raise EParseError.Create('zip: bad central header signature at ' +
         IntToStr(ABaseOffset + Int64(AC.Position) - 4));
@@ -608,12 +601,6 @@ begin
   SetLength(FScratch, LCap);
 end;
 
-{ 区间 [APos, APos+ALen) 必须落在缓冲区内，否则结构视为截断损坏 }
-procedure TZipReaderImpl.NeedRange(APos, ALen: Int64; const AWhat: string);
-begin
-  nextpas.core.zip.common.GuardCursorRange(FC, APos, ALen, AWhat);
-end;
-
 procedure TZipReaderImpl.ParseCentralDirectory;
 var
   LI: Integer;
@@ -645,10 +632,13 @@ begin
      (LCount16 = $FFFF) then
   begin
     LLocatorPos := LEocdPos - C_ZIP64_LOCATOR_LEN;
-    NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
+    GuardCursorRange(FC, LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     FC.Seek(SizeUInt(LLocatorPos));
-    ZipDecodeZip64Locator(FC, LZ64EocdOffset);
-    NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
+    if FC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
+      raise EParseError.Create('zip: zip64 records missing');
+    FC.ReadU32LE;                              { 本盘号 }
+    LZ64EocdOffset := FC.ReadU64LE;
+    GuardCursorRange(FC, Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     FC.Seek(SizeUInt(LZ64EocdOffset));
     ZipDecodeZip64Eocd(FC, LCount, LCdSize, LCdOffset);
@@ -692,9 +682,11 @@ var
 begin
   LE := FEntries[CheckIndex(AIndex)];
   LLho := Int64(LE.LocalHeaderOffset);
-  NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
+  GuardCursorRange(FC, LLho, C_LOCAL_HEADER_LEN, 'local header');
   FC.Seek(SizeUInt(LLho));
-  Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], FC, Int64(FC.Length));
+  ParseLocalHeader(FC, LNameLen, LExtraLen);
+  Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
+  GuardCursorRange(FC, Result, Int64(LE.CompressedSize), 'entry payload');
 end;
 
 function TZipReaderImpl.ExtractIndex(AIndex: Integer): TBytes;
@@ -833,10 +825,26 @@ begin
   end;
 end;
 
-{ 区间 [APos, APos+ALen) 必须落在源长度内，否则结构视为截断损坏 }
-procedure TZipSourceReader.NeedRange(APos, ALen: Int64; const AWhat: string);
+{ 几何复用缓冲：与内存读端同构，4096 起步翻倍至 ANeeded，供 Fetch 复用减分配 }
+procedure TZipSourceReader.EnsureScratch(ANeeded: SizeUInt);
+var
+  LCap: SizeUInt;
 begin
-  nextpas.core.zip.common.GuardRange(FSize, APos, ALen, AWhat);
+  if SizeUInt(Length(FScratch)) >= ANeeded then
+    Exit;
+  LCap := SizeUInt(Length(FScratch));
+  if LCap = 0 then
+    LCap := 4096;
+  while LCap < ANeeded do
+  begin
+    if LCap > High(SizeUInt) div 2 then
+    begin
+      LCap := ANeeded;
+      Break;
+    end;
+    LCap := LCap * 2;
+  end;
+  SetLength(FScratch, LCap);
 end;
 
 procedure TZipSourceReader.ParseCentralDirectory;
@@ -877,11 +885,14 @@ begin
      (LCount16 = $FFFF) then
   begin
     LLocatorPos := LEocdAbs - C_ZIP64_LOCATOR_LEN;
-    NeedRange(LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
+    GuardRange(FSize, LLocatorPos, C_ZIP64_LOCATOR_LEN, 'zip64 locator');
     Fetch(LLocatorPos, C_ZIP64_LOCATOR_LEN, LBuf, 'zip64 locator');
     LC := NewByteCursor(LBuf);
-    ZipDecodeZip64Locator(LC, LZ64EocdOffset);
-    NeedRange(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
+    if LC.ReadU32LE <> C_ZIP64_EOCD_LOC_SIG then
+      raise EParseError.Create('zip: zip64 records missing');
+    LC.ReadU32LE;                              { 本盘号 }
+    LZ64EocdOffset := LC.ReadU64LE;
+    GuardRange(FSize, Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN,
       'zip64 end of central directory');
     Fetch(Int64(LZ64EocdOffset), C_ZIP64_EOCD_LEN, LBuf,
       'zip64 end of central directory');
@@ -930,10 +941,12 @@ var
 begin
   LE := FEntries[CheckIndex(AIndex)];
   LLho := Int64(LE.LocalHeaderOffset);
-  NeedRange(LLho, C_LOCAL_HEADER_LEN, 'local header');
+  GuardRange(FSize, LLho, C_LOCAL_HEADER_LEN, 'local header');
   Fetch(LLho, C_LOCAL_HEADER_LEN, LHeader, 'local header');
   LC := NewByteCursor(LHeader);
-  Result := ZipResolvePayloadOffset(LE, FFlags[AIndex], LC, FSize);
+  ParseLocalHeader(LC, LNameLen, LExtraLen);
+  Result := LLho + C_LOCAL_HEADER_LEN + LNameLen + LExtraLen;
+  GuardRange(FSize, Result, Int64(LE.CompressedSize), 'entry payload');
 end;
 
 function TZipSourceReader.ExtractIndex(AIndex: Integer): TBytes;

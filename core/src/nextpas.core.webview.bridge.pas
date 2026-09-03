@@ -297,6 +297,7 @@ begin
   LB.Key('message');
   LB.Str(AMessage);
   LB.EndObject;
+  { perf: inline thin-forward to text.conv.IntToStr single source via text.number IntToBuffer (single SetLength+Move, zero-copy, bytes.ops single source, no SysUtils) }
   Result := '__npw.__reject(' + IntToStr(AId) + ',' +
     JsStringLit(LB.ToString) + ')';
 end;

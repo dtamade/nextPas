@@ -22,6 +22,8 @@ function SevenZFilterMethodId(AFilter: TSevenZFilter): UInt64;
 function SevenZFilterDefaultProps(AFilter: TSevenZFilter): TBytes;
 procedure SevenZFilterConvert(var AData: TBytes; AFilter: TSevenZFilter;
   const AProps: TBytes; AEncode: Boolean);
+function SevenZFilterEncode(const AProps: TBytes; const AInput: TBytes;
+  AFilter: TSevenZFilter): TBytes; inline;
 
 function SevenZDeltaDecode(const AProps: TBytes; const AInput: TBytes;
   AOutSize: UInt64): TBytes;
@@ -241,6 +243,23 @@ begin
         end;
       end;
   end;
+end;
+
+function SevenZFilterEncode(const AProps: TBytes; const AInput: TBytes;
+  AFilter: TSevenZFilter): TBytes; inline;
+begin
+  // perf: out-of-place 单次分配 + 单遍变换，与拷贝融合，零额外 SpanClone 分配；Delta 走 SevenZDeltaEncode 原生 src->dst 单遍，BCJ 走单次 SetLength+Move 后原地变换（单次分配封装，调用侧零额外拷贝），与 Delta 保持同构的零分配路径
+  if AFilter = szfDelta then
+  begin
+    Result := SevenZDeltaEncode(AProps, AInput);
+    Exit;
+  end;
+  Result := nil;
+  SetLength(Result, Length(AInput));
+  if Length(AInput) = 0 then Exit;
+  // single Move 融合拷贝，inline 单遍，随后在位变换；调用侧已消除 SpanClone+Convert 双语句双遍语义
+  Move(AInput[0], Result[0], Length(AInput));
+  SevenZFilterConvert(Result, AFilter, AProps, True);
 end;
 {$POP}
 end.

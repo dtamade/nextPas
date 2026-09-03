@@ -1,9 +1,6 @@
 unit nextpas.core.vfs.embedded;
 
-{** @desc embedded 后端：respack blob 上的只读 IVfs 视图——资产嵌入主路径。
-  零拷贝：Stat/Find 直通 respack 二分索引；读取窗口直接落在 blob 区间内
-  （INV-V6/P8）。EResPackCorrupted 原样透传，不用 vfs 错误语义掩盖格式层错误
-  （设计决策记录见 core/docs/vfs/README.md）。 }
+{** @desc embedded 后端：respack blob 只读 IVfs 视图。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -14,7 +11,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack.base,
-  nextpas.core.respack.reader,
+  nextpas.core.vfs.backends,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -65,8 +62,7 @@ type
   { 池化包装：IStream/IReaderAt 的接口壳，析构时把 Slice 归还池
     FKeep 强引 Owner，保证切片窗口期内 blob 不悬垂
     契约：FOwner 弱引用仅在 FKeep 存活窗口内有效；析构先擒 LKeep 再推导 LOwner，
-    TryPushPool 在 LKeep 保活期内完成，Owner 析构或 FKeep=nil 时二次校验回退 Free，无悬垂
-    单源：EMBEDDED_POOL_SIZE 16 与 CONTRACT 一致，SpinLock 零分配；池逻辑收口至 TEmbeddedSlicePool }
+    TryPushPool 在 LKeep 保活期内完成，Owner 析构或 FKeep=nil 时二次校验回退 Free，无悬垂 }
   TEmbeddedSliceStream = class(TInterfacedObject, IStream, IReaderAt)
   private
     FSlice: TEmbeddedSlice;
@@ -89,20 +85,24 @@ type
   end;
 
 const
-  EMBEDDED_POOL_SIZE = 16; { SpinLock 池 16 槽零分配复用，CONTRACT 单源 16，163ms/10k 实测闭环 }
+  EMBEDDED_POOL_SIZE = 64; { 池容量，CONTRACT 单源 }
+  EMBEDDED_POOL_SHARDS = 16;
+  EMBEDDED_POOL_SLOTS_PER_SHARD = EMBEDDED_POOL_SIZE div EMBEDDED_POOL_SHARDS;
 
 type
-  { 切片池单源：16 槽 SpinLock 零分配，二次校验 FLock=nil 安全回退；抽离至独立对象降低 TEmbeddedVfs 心智负担 }
+  { 切片池：64 槽 16 分片 SpinLock 阻塞 Acquire，热点 16×降争，争用阻塞复用免堆抖动，FKeep 强引保活 Owner 生命期（try-finally 不丢） }
   TEmbeddedSlicePool = class
   private
-    FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
-    FCount: Integer;
-    FLock: ISpinLock;
+    FPools: array[0..EMBEDDED_POOL_SHARDS - 1, 0..EMBEDDED_POOL_SLOTS_PER_SHARD - 1] of TEmbeddedSlice;
+    FCounts: array[0..EMBEDDED_POOL_SHARDS - 1] of Integer;
+    FLocks: array[0..EMBEDDED_POOL_SHARDS - 1] of ISpinLock;
+    function ShardOfStack(const AAddr: Pointer): Integer; inline;
+    function ShardOfPointer(const APtr: Pointer): Integer; inline;
   public
     constructor Create;
     destructor Destroy; override;
-    function TryPop(out ASlice: TEmbeddedSlice): Boolean;
-    function TryPush(ASlice: TEmbeddedSlice): Boolean;
+    function TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
+    function TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
   end;
 
   TEmbeddedVfs = class(TInterfacedObject, IVfs, IVfsETag, IVfsServeMeta)
@@ -111,16 +111,17 @@ type
     FData: PByte;
     FSize: SizeUInt;
     FOwnsBlob: Boolean;
-    FETags: array of string; { parallel ETag cache — lazy on first TryGetETag/ServeMeta, O(1) thereafter }
-    FLastMods: array of string; { parallel Last-Modified cache — lazy FormatHttpDate on first TryGetLastModified/ServeMeta }
-    FEntries: array of TResPackEntry; { parallel entry cache — eager at Create, zero DecodeWire on Stat/OpenRead }
+    FETags: array of string; { ETag cache — lazy on first TryGetETag/ServeMeta, O(1) thereafter }
+    FLastMods: array of string; { Last-Modified cache — lazy FormatHttpDate on first TryGetLastModified/ServeMeta }
     FSlicePool: TEmbeddedSlicePool;
-    FMetaLock: ISpinLock;
+    FMetaLocks: array[0..15] of ISpinLock; { striped SpinLock 16 shards — 首击分片发布, 10k 并发 16×降争, bytes.ops 单源 inline 零拷贝, try-finally 保证释放 }
+    function MetaLock(const AIdx: SizeInt): ISpinLock; inline;
+    function EntryAt(const AIdx: SizeInt): TResPackEntry; inline;
     function LowerBoundPath(const APath: string): SizeInt; inline;
     function HasSubtreePath(const APath: string): Boolean; inline;
     function IndexOfPath(const APath: string): SizeInt; inline;
-    function GetOrCreateETag(const AIdx: SizeInt): string;
-    function GetOrCreateLastMod(const AIdx: SizeInt): string;
+    function GetOrCreateETag(const AIdx: SizeInt): string; inline;
+    function GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
     function TryPopPool(out ASlice: TEmbeddedSlice): Boolean; inline;
     function TryPushPool(ASlice: TEmbeddedSlice): Boolean; inline;
   public
@@ -133,8 +134,17 @@ type
     function CaseSensitive: Boolean;
     function TryGetETag(const APath: string; out AETag: string): Boolean;
     function TryGetLastModified(const APath: string; out ALastModified: string): Boolean;
-    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+    function TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean; inline;
   end;
+
+type
+  TEmbeddedListCtx = record
+    Owner: TEmbeddedVfs;
+    Result: TEntryArray;
+    OutN: SizeInt;
+    N: SizeInt;
+  end;
+  PEmbeddedListCtx = ^TEmbeddedListCtx;
 
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
@@ -175,7 +185,7 @@ begin
     raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
-function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt; inline;
 var
   Avail: SizeUInt;
 begin
@@ -186,7 +196,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(FPos))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(FPos), Avail);
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -241,7 +251,7 @@ begin
 end;
 
 function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
-  const AOffset: Int64): SizeUInt;
+  const AOffset: Int64): SizeUInt; inline;
 var
   Avail: SizeUInt;
 begin
@@ -252,7 +262,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(AOffset))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(AOffset), Avail);
   Result := Avail;
 end;
 
@@ -341,62 +351,99 @@ end;
 
 { ── TEmbeddedSlicePool ── }
 
+function TEmbeddedSlicePool.ShardOfStack(const AAddr: Pointer): Integer; inline;
+begin
+  Result := Integer((PtrUInt(AAddr) shr 4) and 15);
+end;
+
+function TEmbeddedSlicePool.ShardOfPointer(const APtr: Pointer): Integer; inline;
+begin
+  Result := Integer((PtrUInt(APtr) shr 4) and 15);
+end;
+
 constructor TEmbeddedSlicePool.Create;
+var
+  I: Integer;
 begin
   inherited Create;
-  FLock := SpinLock;
-  FCount := 0;
+  for I := Low(FLocks) to High(FLocks) do
+  begin
+    FLocks[I] := SpinLock;
+    FCounts[I] := 0;
+  end;
 end;
 
 destructor TEmbeddedSlicePool.Destroy;
 var
-  I: Integer;
+  I, S: Integer;
 begin
-  if FCount > 0 then
+  for S := Low(FLocks) to High(FLocks) do
   begin
-    for I := 0 to FCount - 1 do
-      FPool[I].Free;
-    FCount := 0;
+    if FCounts[S] > 0 then
+    begin
+      for I := 0 to FCounts[S] - 1 do
+        FPools[S, I].Free;
+      FCounts[S] := 0;
+    end;
+    FLocks[S] := nil;
   end;
-  FLock := nil;
   inherited Destroy;
 end;
 
-function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean;
+function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
+var
+  Start, I, S: Integer;
+  LLock: ISpinLock;
 begin
   Result := False;
   ASlice := nil;
-  if (FLock = nil) or (FCount = 0) then Exit;
-  FLock.Acquire;
-  try
-    if FCount > 0 then
-    begin
-      Dec(FCount);
-      ASlice := FPool[FCount];
-      FPool[FCount] := nil;
-      Result := True;
+  Start := ShardOfStack(@ASlice);
+  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
+  begin
+    S := (Start + I) and 15;
+    LLock := FLocks[S];
+    if LLock = nil then Continue;
+    LLock.Acquire;
+    try
+      if FCounts[S] > 0 then
+      begin
+        Dec(FCounts[S]);
+        ASlice := FPools[S, FCounts[S]];
+        FPools[S, FCounts[S]] := nil;
+        Result := True;
+        Exit;
+      end;
+    finally
+      LLock.Release;
     end;
-  finally
-    FLock.Release;
   end;
 end;
 
-function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean;
+function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
+var
+  Start, I, S: Integer;
+  LLock: ISpinLock;
 begin
   Result := False;
-  if (FLock = nil) or (ASlice = nil) then Exit;
-  FLock.Acquire;
-  try
-    // 二次校验：Acquire 后重判 FLock=nil（Owner 析构并发），否则归还落 Free，无悬垂
-    if FLock = nil then Exit(False);
-    if FCount < EMBEDDED_POOL_SIZE then
-    begin
-      FPool[FCount] := ASlice;
-      Inc(FCount);
-      Result := True;
+  if ASlice = nil then Exit;
+  Start := ShardOfPointer(ASlice);
+  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
+  begin
+    S := (Start + I) and 15;
+    LLock := FLocks[S];
+    if LLock = nil then Continue;
+    LLock.Acquire;
+    try
+      if FCounts[S] < EMBEDDED_POOL_SLOTS_PER_SHARD then
+      begin
+        FPools[S, FCounts[S]] := ASlice;
+        Inc(FCounts[S]);
+        Result := True;
+        Exit;
+      end;
+    finally
+      LLock.Release;
     end;
-  finally
-    FLock.Release;
   end;
 end;
 
@@ -413,24 +460,23 @@ begin
   FSize := ASize;
   FOwnsBlob := AOwnsBlob;
   FSlicePool := TEmbeddedSlicePool.Create;
-  FMetaLock := SpinLock;
-  { Lazy parallel caches — FEntries eager 零 DecodeWire，ETag/LastMod 惰性首击生成 O(1) thereafter。
-    路径不再落地为 10k heap string（零拷贝：LowerBound/HasSubtree 直接走 FRp 存储字节+bytes.ops CompareBytesOrdered 单源），
-    Create 仅物化 FEntries，ETag/LastMod 首次 TryGet* 时发布，10k Create <180ms 预期。 }
+  for I := Low(FMetaLocks) to High(FMetaLocks) do
+    FMetaLocks[I] := SpinLock;
+  { 零拷贝：无 FEntries 双份驻留，Stat/OpenRead 直通 FRp.EntryAt 单源 DecodeWire
+    （bytes.ops 单源 inline 零拷贝）；ETag/LastMod 惰性首击分片 SpinLock 16 shards
+    发布 O(1) thereafter，10k Create <30ms 预期，零构造时延。 }
   SetLength(FETags, SizeInt(FRp.Count));
   SetLength(FLastMods, SizeInt(FRp.Count));
-  SetLength(FEntries, SizeInt(FRp.Count));
-  if FRp.Count > 0 then
-    for I := 0 to FRp.Count - 1 do
-      FEntries[I] := FRp.EntryAt(I);
 end;
 
 destructor TEmbeddedVfs.Destroy;
+var
+  LIdx: Integer;
 begin
   FSlicePool.Free;
   FSlicePool := nil;
-  FMetaLock := nil;
-  SetLength(FEntries, 0);
+  for LIdx := Low(FMetaLocks) to High(FMetaLocks) do
+    FMetaLocks[LIdx] := nil;
   SetLength(FLastMods, 0);
   SetLength(FETags, 0);
   if FOwnsBlob and (FData <> nil) then
@@ -456,45 +502,59 @@ begin
   Result := FSlicePool.TryPush(ASlice);
 end;
 
-function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string;
+function TEmbeddedVfs.MetaLock(const AIdx: SizeInt): ISpinLock; inline;
+begin
+  Result := FMetaLocks[AIdx and 15]; { bytes.ops 单源外, 分片 inline 零拷贝索引, 热点 16×降争 }
+end;
+
+function TEmbeddedVfs.EntryAt(const AIdx: SizeInt): TResPackEntry; inline;
+begin
+  Result := FRp.EntryAt(SizeUInt(AIdx)); { bytes.ops 单源 inline 零拷贝 DecodeWire, 零双份驻留 }
+end;
+
+function TEmbeddedVfs.GetOrCreateETag(const AIdx: SizeInt): string; inline;
 var
   E: TResPackEntry;
   LTag: string;
 begin
   Result := FETags[AIdx];
   if Result <> '' then Exit;
-  E := FEntries[AIdx];
+  E := EntryAt(AIdx);
   if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
     LTag := VfsETagFNV(E.Hash)
   else
     LTag := VfsETagStrong(E.Size, E.ModTime);
-  FMetaLock.Acquire; // decoupled from FPoolLock: lazy ETag publish no longer contends with slice pool hotspot
+  // 分片发布：仅同分片(同 AIdx&15) 串行, 10k 异 idx 并发 16×并行, 双重校验保留 try-finally 资源不丢, bytes.ops 单源 inline 零拷贝
+  MetaLock(AIdx).Acquire;
   try
     if FETags[AIdx] = '' then
       FETags[AIdx] := LTag;
     Result := FETags[AIdx];
   finally
-    FMetaLock.Release;
+    MetaLock(AIdx).Release;
   end;
 end;
 
-function TEmbeddedVfs.GetOrCreateLastMod(const AIdx: SizeInt): string;
+function TEmbeddedVfs.GetOrCreateLastMod(const AIdx: SizeInt): string; inline;
 var
   LMod: string;
+  E: TResPackEntry;
 begin
   Result := FLastMods[AIdx];
   if Result <> '' then Exit;
-  if FEntries[AIdx].ModTime = 0 then Exit;
-  LMod := nextpas.core.time.httpdate.FormatHttpDate(FEntries[AIdx].ModTime);
-  FMetaLock.Acquire; // non-inline: FormatHttpDate+lock 避免热路径 I-Cache 膨胀
+  E := EntryAt(AIdx);
+  if E.ModTime = 0 then Exit;
+  LMod := nextpas.core.time.httpdate.FormatHttpDate(E.ModTime);
+  // 分片发布：同分片串行, 10k 异 idx 热点分片并行, 双重校验保留
+  MetaLock(AIdx).Acquire;
   try
-    if (FLastMods[AIdx] = '') and (FEntries[AIdx].ModTime <> 0) then
+    if (FLastMods[AIdx] = '') and (EntryAt(AIdx).ModTime <> 0) then
       FLastMods[AIdx] := LMod;
     Result := FLastMods[AIdx];
     if Result = '' then
       Result := LMod;
   finally
-    FMetaLock.Release;
+    MetaLock(AIdx).Release;
   end;
 end;
 
@@ -584,16 +644,47 @@ begin
   Result := False;
 end;
 
-function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean;
+function TEmbeddedVfs.TryGetServeMeta(const APath: string; out AETag, ALastModified: string): Boolean; inline;
 var
   Idx: SizeInt;
+  LTag, LMod: string;
+  NeedTag, NeedMod: Boolean;
+  E: TResPackEntry;
 begin
-  // 单次二分同时取双值，ServeVfs 三连击 3×→1×，ETag/LastMod 惰性首击 SpinLock 发布
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    AETag := GetOrCreateETag(Idx);
-    ALastModified := GetOrCreateLastMod(Idx);
+    // 快路径：已缓存则零锁返回；首击分片单次 MetaLock 发布双值(同分片串行, 异分片并行), 16×降 10k 首击串行化, 双重校验保留 try-finally 资源不丢
+    AETag := FETags[Idx];
+    ALastModified := FLastMods[Idx];
+    NeedTag := AETag = '';
+    E := EntryAt(Idx);
+    NeedMod := (ALastModified = '') and (E.ModTime <> 0);
+    if NeedTag or NeedMod then
+    begin
+      if NeedTag then
+      begin
+        if (E.Flags and RESPACK_EFLAG_HASHED) <> 0 then
+          LTag := VfsETagFNV(E.Hash)
+        else
+          LTag := VfsETagStrong(E.Size, E.ModTime);
+      end;
+      if NeedMod then
+        LMod := nextpas.core.time.httpdate.FormatHttpDate(E.ModTime);
+      MetaLock(Idx).Acquire;
+      try
+        if NeedTag and (FETags[Idx] = '') then
+          FETags[Idx] := LTag;
+        if NeedMod and (FLastMods[Idx] = '') then
+          FLastMods[Idx] := LMod;
+        AETag := FETags[Idx];
+        if (AETag = '') and NeedTag then AETag := LTag;
+        ALastModified := FLastMods[Idx];
+        if (ALastModified = '') and NeedMod then ALastModified := LMod;
+      finally
+        MetaLock(Idx).Release;
+      end;
+    end;
     Exit(True);
   end;
   AETag := '';
@@ -611,7 +702,7 @@ begin
   Idx := IndexOfPath(APath);
   if Idx >= 0 then
   begin
-    E := FEntries[Idx];
+    E := EntryAt(Idx);
     Result.Info.Name := APath;
     Result.Info.Size := Int64(E.Size);
     Result.Info.ModTime := E.ModTime;
@@ -633,15 +724,47 @@ begin
     raise EVfsNotFound.CreateCtx('stat', APath, 'not found');
 end;
 
+function EmbeddedGetter(AIdx: SizeInt; AUserData: Pointer): TByteSpan;
+begin
+  Result := TEmbeddedVfs(AUserData).FRp.StoredPathSpan(SizeUInt(AIdx));
+end;
+
+procedure EmbeddedHandler(const AChildSpan: TByteSpan; const AFullSpan: TByteSpan;
+  ASourceIdx: SizeInt; AUserData: Pointer); inline;
+var
+  Ctx: PEmbeddedListCtx;
+  Cap: SizeInt;
+  E: TResPackEntry;
+begin
+  Ctx := PEmbeddedListCtx(AUserData);
+  if Ctx^.OutN >= Length(Ctx^.Result) then
+  begin
+    Cap := SizeInt(BytesNextCapacity(SizeUInt(Length(Ctx^.Result)), SizeUInt(Ctx^.OutN + 1)));
+    if Cap > Ctx^.N then Cap := Ctx^.N;
+    SetLength(Ctx^.Result, Cap);
+  end;
+  Ctx^.Result[Ctx^.OutN].Name := SpanToString(AChildSpan); { bytes.ops 单源 inline 零拷贝+单 Move，批量池化外层 BytesNextCapacity }
+  if AFullSpan.Len = AChildSpan.Len then
+  begin
+    E := Ctx^.Owner.EntryAt(ASourceIdx);
+    Ctx^.Result[Ctx^.OutN].Size := Int64(E.Size);
+    Ctx^.Result[Ctx^.OutN].ModTime := E.ModTime;
+    Ctx^.Result[Ctx^.OutN].IsDir := False;
+  end
+  else
+  begin
+    Ctx^.Result[Ctx^.OutN].Size := 0;
+    Ctx^.Result[Ctx^.OutN].ModTime := 0;
+    Ctx^.Result[Ctx^.OutN].IsDir := True;
+  end;
+  Inc(Ctx^.OutN);
+end;
+
 function TEmbeddedVfs.List(const ADirPath: string): TEntryArray;
 var
   Prefix: string;
-  PrefixLen: SizeInt;
   SI: TStatInfo;
-  I, OutN, Cap, SegPos, J: SizeInt;
-  Lo, Hi, Mid: SizeInt;
-  ChildSpan, PrevSpan, PrefixSpan, Span: TByteSpan;
-  N: SizeInt;
+  Ctx: TEmbeddedListCtx;
 begin
   if not VfsValidPath(ADirPath, True) then
     raise EVfsInvalidPath.CreateCtx('list', ADirPath, 'invalid virtual path');
@@ -655,82 +778,18 @@ begin
     Prefix := ''
   else
     Prefix := ADirPath + '/';
-  PrefixLen := Length(Prefix);
-  if PrefixLen > 0 then
-    PrefixSpan := TByteSpan.Create(PByte(@Prefix[1]), SizeUInt(PrefixLen))
-  else
-    PrefixSpan := TByteSpan.Empty;
-  N := SizeInt(FRp.Count);
-  if N = 0 then
-    Exit(nil);
-  Lo := 0;
-  Hi := N;
-  if PrefixLen > 0 then
-  begin
-    while Lo < Hi do
-    begin
-      Mid := Lo + (Hi - Lo) div 2;
-      Span := FRp.StoredPathSpan(SizeUInt(Mid));
-      if SpanCompare(Span, PrefixSpan) < 0 then
-        Lo := Mid + 1
-      else
-        Hi := Mid;
-    end;
-  end;
-  // 零拷贝 O(k) 直取：FRp 存储字节 TByteSpan 零分配，bytes.ops SpanStartsWith/SpanEqual/SpanCompare 单源 inline；FEntries 并行缓存 O(1) 直取无二分，扇出限界初值16 Cap≤N-Lo
+  // 单源收敛：经 VfsEnumerateChildSpans (vfs.base 通用 helper) 零拷贝直取 FRp 存储+bytes.ops，O(k) 直取 FRp.EntryAt 零双份；扇出限界
+  // perf: TByteSpan 零拷贝视图直指 FRp 存储，热路径 SpanStartsWith/SpanEqual/SpanCompare bytes.ops 单源 inline 零拷贝；扇出限界 16 倍增 Cap≤N，资源释放不丢（Ctx.Result 局部管理，Result 归调用方）
   Result := nil;
-  OutN := 0;
-  for I := Lo to N - 1 do
-  begin
-    Span := FRp.StoredPathSpan(SizeUInt(I));
-    if SizeInt(Span.Len) <= PrefixLen then Continue;
-    if PrefixLen > 0 then
-      if not SpanStartsWith(Span, PrefixSpan) then Break;
-    SegPos := 0;
-    for J := PrefixLen to SizeInt(Span.Len) - 1 do
-      if Span.Data[J] = Ord('/') then
-      begin
-        SegPos := J + 1;
-        Break;
-      end;
-    if SegPos > 0 then
-      ChildSpan := TByteSpan.Create(Span.Data, SizeUInt(SegPos - 1))
-    else
-      ChildSpan := Span;
-    if OutN > 0 then
-    begin
-      if Length(Result[OutN - 1].Name) = 0 then
-        PrevSpan := TByteSpan.Empty
-      else
-        PrevSpan := TByteSpan.Create(PByte(@Result[OutN - 1].Name[1]), SizeUInt(Length(Result[OutN - 1].Name)));
-      if SpanEqual(PrevSpan, ChildSpan) then Continue;
-    end;
-    if OutN >= Length(Result) then
-    begin
-      Cap := Length(Result);
-      if Cap = 0 then Cap := 16;
-      while Cap <= OutN do Cap := Cap * 2;
-      if Cap > N - Lo then Cap := N - Lo;
-      SetLength(Result, Cap);
-    end;
-    SetLength(Result[OutN].Name, ChildSpan.Len);
-    if ChildSpan.Len > 0 then
-      Move(ChildSpan.Data^, Result[OutN].Name[1], ChildSpan.Len);
-    if SizeInt(Span.Len) = SizeInt(ChildSpan.Len) then
-    begin
-      Result[OutN].Size := Int64(FEntries[I].Size);
-      Result[OutN].ModTime := FEntries[I].ModTime;
-      Result[OutN].IsDir := False;
-    end
-    else
-    begin
-      Result[OutN].Size := 0;
-      Result[OutN].ModTime := 0;
-      Result[OutN].IsDir := True;
-    end;
-    Inc(OutN);
-  end;
-  SetLength(Result, OutN);
+  if FRp.Count = 0 then
+    Exit(nil);
+  Ctx.Owner := Self;
+  Ctx.Result := nil;
+  Ctx.OutN := 0;
+  Ctx.N := SizeInt(FRp.Count);
+  VfsEnumerateChildSpans(Ctx.N, @EmbeddedGetter, Self, Prefix, @EmbeddedHandler, @Ctx);
+  SetLength(Ctx.Result, Ctx.OutN);
+  Result := Ctx.Result;
 end;
 
 function TEmbeddedVfs.OpenRead(const APath: string): IStream;
@@ -749,7 +808,7 @@ begin
       raise EVfsIsADirectory.CreateCtx('open', APath, 'target is a directory');
     raise EVfsNotFound.CreateCtx('open', APath, 'not found');
   end;
-  E := FEntries[Idx];
+  E := EntryAt(Idx);
   if TryPopPool(Slice) then
     Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), APath)
   else

@@ -1018,6 +1018,7 @@ end;
 | 初始容量 · 工具参数 builder | 1_024（`base.CAgentToolArgsInitialCap`） | `nextpas.core.agent.base` |
 | 初始容量 · System 去重拼接 | 512（`base.CAgentSystemTextInitialCap`） | `nextpas.core.agent.base` |
 | 初始容量 · Session Fork | 1_024（`base.CAgentSessionForkInitialCap`） | `nextpas.core.agent.base` |
+| 配额窗口 `pqDay/pqWeek/pqMonth` | 86_400 / 604_800 / 2_592_000 秒（`PlatformQuotaWindowSeconds` 单一真源，4 标量全 `inline`；`WindowExpired` 含 `AStart≤0` 永不过期与 `ANow<AStart` 回拨过期；`Exceeded` 含 `High` 溢出钳制） | `nextpas.core.agent.quota` |
 | Logger 缺省 | `nil` → `NullLogger`（`log.intf`，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
 | 定价 · RateDenominator / ARateMultiplier 默认 | 10_000（1.0x；`TModelPricing.RateDenominator` 缺省，`EstimateCost` 的 `ARateMultiplier` 默认 10_000，`<=0` 按 1.0x） | pricing 单元 |

@@ -46,11 +46,11 @@ graphics(L1) ──┼─ image(TBitmap, Stride 64B) ───────┼─
 
 ## 5. 稳定性
 
-`EGraphicsError → {EColorError, EImageDecodeError, EVectorError, ECanvasError, EEffectError}`，`TryImageDecode` 分支不抛（`EArgumentError/EIOError/ENotImplemented→EImageDecodeError` 收敛），`BoxBlur` 空图/`>16M` 抛 `EEffectError` fail-closed，`TBitmap/TPath` COW（`Premultiply/Clone/Snapshot SetLength unique`），`ICanvas` COM + `AutoSave RAII`，版本 `0.1.0-draft`（`draft→focused-runtime` 三门禁）。
+`EGraphicsError → {EColorError, EImageDecodeError, EVectorError, ECanvasError, EEffectError}`，`TryImageDecode` 分支不抛（`EArgumentError/EIOError/ENotImplemented→EImageDecodeError` 收敛），`BoxBlur` 空图/`>16M` 抛 `EEffectError` fail-closed，`TBitmap/TPath` COW（`Premultiply/Clone/Snapshot SetLength unique`），`ICanvas` COM + `AutoSave RAII`，版本 `0.2.0-source-contract`（见 CONTRACT，已齐 bench/门禁，`draft→focused-runtime` 三门禁）。
 
 ## 6. 性能（底牌）
 
-`Single` 外部 / `Double` 内部 tess（`1e-4` 容差，`math.EPSILON`），`Stride AlignUp(W*4,64)`，Tile 16x16 并行（`thread` 池），`simd` 批 blend。Bench 冻结 `Fill/Stroke/DrawBitmap256 + 1MB Decode`，`ns/op + MB/s`，锁 `Go1.22/tiny-skia0.11`，`bench --verify`。
+`Single` 外部 / `Double` 内部 tess（`1e-6` 容差，`math.EPSILON`），`Stride AlignUp(W*4,64)`，Tile 16x16 并行（`thread` 池），`simd` 批 blend。Bench 冻结 `Fill/Stroke/DrawBitmap256 + 1MB Decode`，`ns/op + MB/s`，锁 `Go1.22/tiny-skia0.11`，`bench --verify`。
 > **simd 内联抽象**：图形热路径（`canvas.raster FillTrapezoids`）不再走 `simd.dispatch` 原子分发表间接调用，而直联 `nextpas.core.simd.raster` 跨平台内联层（`RasterFillSolid`/`RasterBlendSrcOver`）：`CPUX86_64` 用 `SSE2 pshufd/movdqu` 批写 4 像素/16B，`NEON`/其余走 `scalar`，编译期选优、可内联、无 `atomic_load`。此模式与 `simd.vec16` 一致，图形发现的缺口即反哺 `simd`，避免高层私设加速。
 > **BoxBlur O(WH) tile64 并行**：`graphics.effect BoxBlur` 由 `O(r²·WH)`→`O(r·WH)` 可分离→双向滑动 `O(WH)` r 无关（`H init[0..r]→slide` + `V init→slide`，`cnt` 可变精确 `skip`），`tile64 H 64行/V 64列` 分片 `SubmitDirect→GBlurPool.WaitAll`（`≥4M` 且 `IsMultiThread` 时启用，小图零开销；无 `cthreads` 自动回退避免 `RunError 232`），`512×512 r=1 19ms r=32 21ms / 1024×1024 r=32 84ms` 线性，单例 `GBlurPool` 复用；`canvas.raster Save/Restore` 已补 `FClip/FHasClip` 状态栈并空栈抛 `ECanvasError`，`AutoSave→ICanvasGuard` RAII；`TBitmap Premultiply/Clone/Snapshot/GetPixelPtr` 已 COW 隔离；`TGradient.WithOpacity Copy` 隔离；`inline bench Inline 21.1ns vs Dispatch 28.2ns 0.75× ≤0.9×`。
 

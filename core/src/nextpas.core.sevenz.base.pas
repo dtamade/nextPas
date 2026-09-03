@@ -6,7 +6,7 @@ unit nextpas.core.sevenz.base;
  * 拥有 7z 格式的公共词汇表：容器常量、coder method ID、header 属性 ID、
  * 条目信息 record、模块异常、UTF-16LE 名称转换和 FILETIME 时间换算。
  * 不含任何解析/压缩逻辑；实现子模块从这里取类型。炸弹与头部硬上限
- * 亦归入本单元单源（limits 单元仅为已弃用兼容别名，单源以本单元为准），
+ * 亦归入本单元单源（`limits` 历史空壳 deprecated，已无第二公共源，单源以本单元为准），
  * 避免四件套外碎片化与第二公共源。
  *}
 
@@ -83,7 +83,7 @@ const
   C_FILETIME_EPOCH_DELTA_SEC = 11644473600;
   C_FILETIME_TICKS_PER_SEC   = 10000000;
 
-  { 7z 炸弹与头部硬上限——单源表，limits 已弃用仅作兼容转发，保持 base 职责聚合；
+  { 7z 炸弹与头部硬上限——单源表，`limits` 历史空壳 deprecated 已无第二公共源，保持 base 职责聚合；
     与 reader/writer/header 共享，避免魔法数漂移；新代码直接 uses 本单元 }
   SEVENZ_DEFAULT_MAX_OUTPUT = UInt64(8) * 1024 * 1024 * 1024;
   SEVENZ_MAX_HEADER_SIZE = UInt64(64) * 1024 * 1024;
