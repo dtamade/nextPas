@@ -1,6 +1,7 @@
 unit nextpas.core.collections.base;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers-}
 
 interface
 

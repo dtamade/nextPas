@@ -7,6 +7,7 @@ unit nextpas.core.jwt;
  *}
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 
