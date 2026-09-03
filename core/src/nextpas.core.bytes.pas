@@ -1,6 +1,6 @@
 unit nextpas.core.bytes;
 {**
- * @desc 字节容器门面：Buffer、Builder、字节序操作。
+ * @desc 字节容器门面：Buffer、Builder、字节序操作。 — pure re-export inline thin-forward 30+ exempt (INV-5 single source stays in bytes.ops), red-line 2 guarded: no loop/SIMD body in inline, hot BytesCopy/BytesZero inline single Move/Fill zero-copy only, gate: check_bytes_ops_source_contract.py facade Move/SetLength single source patrol.
  *}
 
 {$I nextpas.core.settings.inc}

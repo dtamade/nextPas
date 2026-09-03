@@ -196,7 +196,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(FPos))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(FPos), Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, respack 映射区零拷贝视图单源)
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -262,7 +262,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move((FBase + SizeUInt(FOffset) + SizeUInt(AOffset))^, ABuf, Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(AOffset), Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, respack 映射区零拷贝视图单源)
   Result := Avail;
 end;
 

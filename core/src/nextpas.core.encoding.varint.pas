@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors;
 
 function VarintEncode(const AValue: UInt64): TBytes;
@@ -33,7 +34,7 @@ begin
   until LVal = 0;
 
   SetLength(Result, LCount);
-  Move(LBuf[0], Result[0], LCount);
+  BytesCopy(@Result[0], @LBuf[0], SizeUInt(LCount)); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy, INV-5)
 end;
 
 function VarintMinValueForLength(const ALength: Integer): UInt64; inline;

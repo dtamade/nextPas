@@ -36,10 +36,13 @@ function IoSectionReader(const AInner: IReaderAt; const AOffset, ALimit: Int64):
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.io.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.builder;
 
 const
-  COPY_BUF_SIZE = 32768;
+  COPY_BUF_SIZE = IO_COPY_BUF_SIZE; { single source via io.base }
 
 { IoFdReadLine：阻塞读一行。实现规约：
   - 逐块 platform_console_read，遇 LF 或 CR 停（行尾；CRLF 均去）
@@ -52,11 +55,17 @@ const
 var
   Buf: array[0..BUF_SIZE - 1] of Byte;
   Got, I: Int32;
-  N: SizeUInt;
   Done: Boolean;
+  LBuilder: IBytesBuilder;
 begin
   Result := '';
-  N := 0;
+  // perf: IBytesBuilder geometric via bytes.ops.BytesGrowCapacity single source (0→64→2×) amortized O(1) avoids O(n²) Result+Chr churn; AppendByte inline hot path single store zero-copy; final single SetLength+BytesCopy inline single Move via bytes.ops single source zero-copy; stability: IBytesBuilder interface refcount auto-free on scope exit/exception no leak
+  if AMaxLen = 0 then
+    LBuilder := CreateBytesBuilder(0)
+  else if AMaxLen < 256 then
+    LBuilder := CreateBytesBuilder(AMaxLen)
+  else
+    LBuilder := CreateBytesBuilder(256);
   Done := False;
   while True do
   begin
@@ -70,14 +79,16 @@ begin
         Done := True;
         Break;
       end;
-      if N < AMaxLen then
-      begin
-        Result := Result + Chr(Buf[I]);
-        Inc(N);
-      end;
+      if LBuilder.Length < AMaxLen then
+        LBuilder.AppendByte(Buf[I]); // perf: inline single store via bytes.builder, growth via bytes.ops single source, zero-copy
     end;
     if Done then
       Break;
+  end;
+  if LBuilder.Length > 0 then
+  begin
+    SetLength(Result, LBuilder.Length);
+    BytesCopy(Pointer(Result), LBuilder.Data, LBuilder.Length); // perf: inline single Move via bytes.ops single source (zero-copy, INV-5) single allocation
   end;
 end;
 

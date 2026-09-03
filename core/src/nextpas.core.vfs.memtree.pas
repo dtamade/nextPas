@@ -46,6 +46,8 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray,
   nextpas.core.collections.algorithms;
 
 type
@@ -119,18 +121,29 @@ end;
 procedure TVfsTreeBuilder.AddFile(const APath: string; const AData: TBytes;
   const AModTime: Int64; AHash: UInt32);
 var
-  N: SizeUInt;
+  LOld, LReq, LCap: SizeUInt;
+  LCurCap: SizeUInt;
 begin
   CheckMutable;
   if not VfsValidPath(APath, True) then
     raise EVfsInvalidPath.CreateCtx('add', APath,
       'invalid virtual path');
-  N := SizeUInt(Length(FItems));
-  SetLength(FItems, N + 1);
-  FItems[N].Name := APath;
-  FItems[N].Data := AData;
-  FItems[N].ModTime := AModTime;
-  FItems[N].Hash := AHash;
+  LOld := SizeUInt(Length(FItems));
+  LReq := LOld + 1;
+  // perf: geometric via bytes.ops.BytesGrowCapacity single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), zero-copy via mem.dynarray poke, not inline per red-line 2
+  LCap := BytesGrowCapacity(LOld, LReq);
+  LCurCap := DynArrayCapacityElem(Pointer(FItems), LOld, SizeOf(TVfsMemEntry));
+  if (LCurCap < LCap) or (DynArrayRefCountElem(Pointer(FItems)) <> 1) then
+  begin
+    if LCap <> LOld then
+      SetLength(FItems, LCap);
+  end;
+  if SizeUInt(Length(FItems)) <> LReq then
+    DynArraySetLengthElem(Pointer(FItems), LReq);
+  FItems[LOld].Name := APath;
+  FItems[LOld].Data := AData;
+  FItems[LOld].ModTime := AModTime;
+  FItems[LOld].Hash := AHash;
 end;
 
 function TVfsTreeBuilder.Freeze: IVfs;
@@ -451,7 +464,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move(FData[FPos], ABuf, Avail);
+    BytesCopy(@ABuf, @FData[FPos], Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -495,7 +508,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move(FData[AOffset], ABuf, Avail);
+    BytesCopy(@ABuf, @FData[AOffset], Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   Result := Avail;
 end;
 

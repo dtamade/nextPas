@@ -3,7 +3,7 @@
  *
  * 职责：文件系统级操作（exists/is_file/mkdir_p/copy_file/write_atomic/read_file/walk）
  * 层次：路径级操作，依赖 files.pas 的底层 fd 操作（L0）
- *  单源纪律：L0 platform 例外 — raw Move/FillChar 允许（不能依赖 L1 bytes.ops，避免 L0→L1 上向依赖）；L1+ 必须经 bytes.ops.BytesCopy/BytesZero（门禁 test_bytes_ops_source_contracts 文档化 L0 例外）
+ *  单源纪律：Move/FillChar 单源仅 bytes.ops.BytesCopy/BytesZero (inline 单 Move/Fill 零拷贝，L0 platform.fs 亦经 bytes.ops 单源复用无分散；门禁 test_bytes_ops_source_contracts)
  *
  * 与 files.pas 的关系：
  *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
@@ -247,6 +247,8 @@ function platform_fs_walk(const ARoot: PAnsiChar;
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.platform.files,
   nextpas.core.platform.env,
   nextpas.core.platform.random
@@ -419,7 +421,7 @@ begin
       PPtrUIntLocal(LNewRaw)^ := LNewSize;
       LNewBuf := PlatformFsRawToPayload(LNewRaw);
       if LTotal > 0 then
-        Move(LBuf^, LNewBuf^, LTotal); // L0 exception: platform.fs raw Move allowed (cannot depend on L1 bytes.ops); L1+ gate via BytesCopy
+        BytesCopy(LNewBuf, LBuf, LTotal); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, L0 platform.fs reuse bytes.ops, sized FreeMem not lost)
       FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
       LRaw := LNewRaw;
       LBuf := LNewBuf;
@@ -949,7 +951,7 @@ begin
   for LAttempt := 0 to MAX_ATTEMPTS - 1 do
   begin
     LPos := 0;
-    Move(LTmpDir[0], APathBuf[0], LTmpLen);
+    BytesCopy(APathBuf, @LTmpDir[0], LTmpLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
     LPos := LTmpLen;
   {$IFDEF NEXTPAS_WINDOWS}
     if (LPos > 0) and (APathBuf[LPos-1] <> '\') then
@@ -961,7 +963,7 @@ begin
 
     if LPrefixLen > 0 then
     begin
-      Move(APrefix^, APathBuf[LPos], LPrefixLen);
+      BytesCopy(@APathBuf[LPos], APrefix, LPrefixLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
       Inc(LPos, LPrefixLen);
     end;
 
@@ -977,7 +979,7 @@ begin
 
     if LSuffixLen > 0 then
     begin
-      Move(ASuffix^, APathBuf[LPos], LSuffixLen);
+      BytesCopy(@APathBuf[LPos], ASuffix, LSuffixLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
       Inc(LPos, LSuffixLen);
     end;
     APathBuf[LPos] := #0;
@@ -1180,7 +1182,7 @@ begin
   {$ELSE}
     APathBuf[APathLen] := '/';
   {$ENDIF}
-    Move(LDirEntry.Name[0], APathBuf[APathLen + 1], LNameLen);
+    BytesCopy(@APathBuf[APathLen + 1], @LDirEntry.Name[0], LNameLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
     APathBuf[LChildLen] := #0;
 
     LChildType := WalkResolveType(APathBuf, LDirEntry.FileType,

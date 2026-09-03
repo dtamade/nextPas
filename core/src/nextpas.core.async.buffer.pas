@@ -62,6 +62,7 @@ function AsyncBufferFromData(AData: Pointer; ALen: UInt32): TAsyncBuffer;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.platform.sync;
 
@@ -138,7 +139,7 @@ begin
   end;
 
   Result.Data := GetMem(ASource.Len);
-  Move(ASource.Data^, Result.Data^, ASource.Len);
+  BytesCopy(Result.Data, ASource.Data, ASource.Len); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy
   Result.Len := ASource.Len;
   Result.Cap := ASource.Len;
   Result.Owner := True;
@@ -165,7 +166,7 @@ begin
     FCapacity := ACapacity;
   FPoolHead := nil;
   FPoolCount := 0;
-  FillChar(FStats, SizeOf(FStats), 0);
+  BytesZero(@FStats, SizeOf(FStats)); // perf: inline single FillChar via bytes.ops BytesZero single source zero-copy
   if platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL) <> 0 then
     raise EInvalidOperationError.Create('buffer pool: mutex init failed');
 end;

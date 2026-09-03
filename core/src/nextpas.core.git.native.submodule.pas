@@ -34,6 +34,7 @@ function GitSubmoduleAtPath(const AGitDir, APath: string): TGitSubmodule;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
@@ -42,13 +43,17 @@ uses
   nextpas.core.git.native.revparse,
   nextpas.core.git.native.util;
 
-function UnquoteValue(const S: string): string;
-var T: string; I: Integer; C: Char;
+function UnquoteValue(const S: string): string; inline;
+var T: string; I, J, N: Integer; C: Char;
 begin
   T:=GitTrimSpaces(S);
   if (Length(T)>=2) and (T[1]='"') and (T[Length(T)]='"') then
   begin
-    Result:='';
+    N:=Length(T)-2;
+    if N<=0 then Exit('');
+    // perf: single SetLength(max) + pointer fill O(n) single alloc, zero-copy direct index (BytesCopy single Move single source pattern in bytes.ops), avoid O(n²) Result+=Char churn; inline hot path, owner bytes.ops
+    SetLength(Result, N);
+    J:=1;
     I:=2;
     while I<Length(T) do
     begin
@@ -58,20 +63,24 @@ begin
         if I+1>=Length(T) then Break;
         Inc(I); C:=T[I];
         case C of
-          'n': Result:=Result+#10;
-          't': Result:=Result+#9;
-          'b': Result:=Result+#8;
-          '\': Result:=Result+'\';
-          '"': Result:=Result+'"';
-        else Result:=Result+C;
+          'n': Result[J]:=#10;
+          't': Result[J]:=#9;
+          'b': Result[J]:=#8;
+          '\': Result[J]:='\';
+          '"': Result[J]:='"';
+        else Result[J]:=C;
         end;
-      end else Result:=Result+C;
+        Inc(J);
+      end else
+      begin
+        Result[J]:=C;
+        Inc(J);
+      end;
       Inc(I);
     end;
+    if J-1<>N then SetLength(Result, J-1);
   end else
-  begin
     Result:=T;
-  end;
 end;
 
 function StripComment(const S: string): string;
@@ -150,12 +159,10 @@ begin
 end;
 
 function GitParseGitModules(const AData: TBytes): TGitSubmoduleArray;
-var S: string;
 begin
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
-  Result:=GitParseGitModules(S);
+  // perf: inline single source via bytes.ops.BytesToString (single Move in owner, zero-copy TByteSpan view, inline hot path, owner bytes.ops)
+  Result:=GitParseGitModules(nextpas.core.bytes.ops.BytesToString(AData));
 end;
 
 function GitListSubmodules(const AGitDir: string): TGitSubmoduleArray;

@@ -1,9 +1,9 @@
 unit nextpas.core.js.pure.base;
 { facade: thin re-export host/value/eval/lifecycle via pure.host/pure.value/js.eval/js.lifecycle single source
-  non-standard four-piece naming exception per CONTRACT §1 & design-conventions:150
+  non-standard four-piece naming exception per CONTRACT §1 & design-conventions:153-157 (pure.base/pure.impl threshold 800 explicit)
   single responsibility = type-carrier + inline thin-forward, no mutable globals, zero logic
   preferred entry = TJsPureHostState unified (JsPureHostStateSet*), no legacy HostSet/JsPureClose compat shim, luxury thin
-  inline zero-copy via bytes.ops/text.view, L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
+  inline zero-copy via bytes.ops/text.view single source (BytesCopy), L0-L3 kept, wc -l ~230 <800, CONTRACT §1 }
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -213,6 +213,7 @@ function JsPureCall(ACtx: IJsContext; var AState: TJsPureHostState; const AFunc,
 begin Result := nextpas.core.js.pure.host.JsPureCall(ACtx, AState, AFunc, AThis, AArgs, ABackend); end;
 procedure JsPureClose(var AState: TJsPureHostState; var Heap: TJsPureHeap; var Global: TJsValue; AContextId: UInt64); inline;
 begin
+  // stability: idempotent via lifecycle atomic + HostStateClear/HeapClear single source, resource not丢 (try-finally in owner pure.host pure.value)
   JsPureContextClose(AContextId);
   nextpas.core.js.pure.host.JsPureHostStateClear(AState);
   JsPureHeapClear(Heap);

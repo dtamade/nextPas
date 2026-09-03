@@ -188,6 +188,7 @@ implementation
 uses
   nextpas.core.json.value,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.strings,
   nextpas.core.tls.factory,
   nextpas.core.tls.exceptions,
@@ -2255,14 +2256,14 @@ begin
     if FCertificatePEM <> '' then
     begin
       SetLength(LDecodedBytes, Length(FCertificatePEM));
-      Move(FCertificatePEM[1], LDecodedBytes[0], Length(FCertificatePEM));
+      BytesCopy(@LDecodedBytes[0], @FCertificatePEM[1], SizeUInt(Length(FCertificatePEM))); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy)
       LLines.Add('certificate_pem_b64=' + TBase64Utils.Encode(LDecodedBytes));
     end;
     LLines.Add('private_key_file=' + FPrivateKeyFile);
     if FPrivateKeyPEM <> '' then
     begin
       SetLength(LDecodedBytes, Length(FPrivateKeyPEM));
-      Move(FPrivateKeyPEM[1], LDecodedBytes[0], Length(FPrivateKeyPEM));
+      BytesCopy(@LDecodedBytes[0], @FPrivateKeyPEM[1], SizeUInt(Length(FPrivateKeyPEM))); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy)
       LLines.Add('private_key_pem_b64=' + TBase64Utils.Encode(LDecodedBytes));
     end;
     LLines.Add('pkcs11_uri=' + FPKCS11URI);
@@ -2444,7 +2445,7 @@ begin
           begin
             SetLength(FCertificatePEM, Length(LDecodedBytes));
             if Length(LDecodedBytes) > 0 then
-              Move(LDecodedBytes[0], FCertificatePEM[1], Length(LDecodedBytes));
+              BytesCopy(@FCertificatePEM[1], @LDecodedBytes[0], SizeUInt(Length(LDecodedBytes))); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy)
             FCertificateFile := '';
           end;
         end
@@ -2459,7 +2460,7 @@ begin
           begin
             SetLength(FPrivateKeyPEM, Length(LDecodedBytes));
             if Length(LDecodedBytes) > 0 then
-              Move(LDecodedBytes[0], FPrivateKeyPEM[1], Length(LDecodedBytes));
+              BytesCopy(@FPrivateKeyPEM[1], @LDecodedBytes[0], SizeUInt(Length(LDecodedBytes))); // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy)
             FPrivateKeyFile := '';
           end;
         end

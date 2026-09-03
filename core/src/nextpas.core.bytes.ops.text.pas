@@ -17,7 +17,7 @@ function SpanToString(const ASpan: TByteSpan): string; inline;
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function BytesToUTF8(const ABytes: TBytes): string; inline;
-function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string;
+function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string; inline;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 function BigEndianUnicodeBytesToString(const AData: TBytes): string;
 function AsciiLowerString(const S: string): string;
@@ -36,6 +36,7 @@ function FNV1a32Bytes(const AData: TBytes): UInt32; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.simd,
   nextpas.core.mem.dynarray;
 
@@ -48,34 +49,32 @@ type
 
 function SpanToString(const ASpan: TByteSpan): string; inline;
 begin
-  if ASpan.Len = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(ASpan.Data), ASpan.Len);
+  // perf: inline thin-forward to bytes.ops single source (zero-copy SetString/PAnsiChar single Move in owner, no duplicate SetString/Move, INV-5防漂移)
+  Result := nextpas.core.bytes.ops.SpanToString(ASpan);
 end;
 
 function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 begin
-  Result := SpanToString(ASpan);
+  // perf: inline thin-forward to bytes.ops single source (zero-copy)
+  Result := nextpas.core.bytes.ops.SpanToUTF8(ASpan);
 end;
 
 function BytesToString(const ABytes: TBytes): string; inline;
 begin
-  Result := SpanToString(TByteSpan.FromBytes(ABytes));
+  // perf: inline thin-forward to bytes.ops single source (zero-copy TByteSpan view)
+  Result := nextpas.core.bytes.ops.BytesToString(ABytes);
 end;
 
-function BytesToUTF8(const ABytes: TBytes): string;
+function BytesToUTF8(const ABytes: TBytes): string; inline;
 begin
-  Result := BytesToString(ABytes);
+  // perf: inline thin-forward to bytes.ops single source (zero-copy)
+  Result := nextpas.core.bytes.ops.BytesToUTF8(ABytes);
 end;
 
-function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string;
-var
-  LSpan: TByteSpan;
+function BytesSliceToString(const ABytes: TBytes; const AOffset, ALength: SizeUInt): string; inline;
 begin
-  if ALength = 0 then
-    Exit('');
-  LSpan := TByteSpan.FromBytes(ABytes).Slice(AOffset, ALength);
-  Result := SpanToString(LSpan);
+  // perf: inline thin-forward to bytes.ops single source (zero-copy Slice view + single Move in owner, no duplicate SetString)
+  Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
 end;
 
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;

@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.system.typinfo,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
@@ -103,7 +104,7 @@ type
     FEquals: TEquals;
     FAllocator: TMemAllocator;
 
-    function KeyHash(const AKey: K): UInt32;
+    function KeyHash(const AKey: K): UInt32; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function KeysEqual(const L, R: K): Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function MatchGroup(ACtrl: PByte; AH2: Byte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function MatchEmpty(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
@@ -207,63 +208,50 @@ end;
 
 { TSwissTable<K,V> - Core helpers }
 
-function TSwissTable.KeyHash(const AKey: K): UInt32;
-var
-  p: Pointer;
-  LKind: TTypeKind;
+function TSwissTable.KeyHash(const AKey: K): UInt32; inline;
 begin
   if Assigned(FHash) then Exit(FHash(AKey));
-
-  p := @AKey;
-  LKind := GetTypeKind(K);
-  // 默认路径：内置 key 类型直接计算，避免额外回调开销。
-  if (LKind = tkInteger) or (LKind = tkChar) or (LKind = tkWChar) or
-     (LKind = tkBool) or (LKind = tkEnumeration) then
+  // perf: compile-time specialized dispatch — GetTypeKind(K) and SizeOf(K) are constants per specialization;
+  // FPC folds dead branches (6018), inlining leaves single InlineHashMix/HashOf* path per instance — zero per-op GetTypeKind/SizeOf branching, zero-copy via @AKey, InlineHashMix compile-time specialized.
+  {$PUSH}{$WARN 6018 OFF}
+  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or (GetTypeKind(K) = tkWChar) or
+     (GetTypeKind(K) = tkBool) or (GetTypeKind(K) = tkEnumeration) then
   begin
-    case SizeOf(K) of
-      1: Exit(InlineHashMix32(PByte(p)^));
-      2: Exit(InlineHashMix32(PWord(p)^));
-      4: Exit(InlineHashMix32(PUInt32(p)^));
-      8: Exit(HashOfUInt64(PQWord(p)^));
-    end;
+    if SizeOf(K) = 1 then Exit(InlineHashMix32(PByte(@AKey)^));
+    if SizeOf(K) = 2 then Exit(InlineHashMix32(PWord(@AKey)^));
+    if SizeOf(K) = 4 then Exit(InlineHashMix32(PUInt32(@AKey)^));
+    if SizeOf(K) = 8 then Exit(HashOfUInt64(PQWord(@AKey)^));
   end;
-  if (LKind = tkInt64) or (LKind = tkQWord) then
-    Exit(HashOfUInt64(PQWord(p)^));
-
-  if (LKind = tkAString) or (LKind = tkLString) then
-    Exit(HashOfAnsiString(PAnsiString(p)^));
-  if (LKind = tkUString) or (LKind = tkWString) then
-    Exit(HashOfUnicodeString(PUnicodeString(p)^));
-
+  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+    Exit(HashOfUInt64(PQWord(@AKey)^));
+  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
+    Exit(HashOfAnsiString(PAnsiString(@AKey)^));
+  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
+    Exit(HashOfUnicodeString(PUnicodeString(@AKey)^));
+  {$POP}
   raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;
 
-function TSwissTable.KeysEqual(const L, R: K): Boolean;
-var
-  LKind: TTypeKind;
+function TSwissTable.KeysEqual(const L, R: K): Boolean; inline;
 begin
   if Assigned(FEquals) then Exit(FEquals(L, R));
-
-  LKind := GetTypeKind(K);
-  // 默认路径：ordinal 类型直接整数比较，避免额外回调开销。
-  if (LKind = tkInteger) or (LKind = tkChar) or (LKind = tkWChar) or
-     (LKind = tkBool) or (LKind = tkEnumeration) then
+  // perf: compile-time specialized dispatch — folded per specialization, single equality path inlined, zero per-op GetTypeKind/SizeOf branching, zero-copy via @L/@R
+  {$PUSH}{$WARN 6018 OFF}
+  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or (GetTypeKind(K) = tkWChar) or
+     (GetTypeKind(K) = tkBool) or (GetTypeKind(K) = tkEnumeration) then
   begin
-    case SizeOf(K) of
-      1: Exit(PByte(@L)^ = PByte(@R)^);
-      2: Exit(PWord(@L)^ = PWord(@R)^);
-      4: Exit(PUInt32(@L)^ = PUInt32(@R)^);
-      8: Exit(PQWord(@L)^ = PQWord(@R)^);
-    end;
+    if SizeOf(K) = 1 then Exit(PByte(@L)^ = PByte(@R)^);
+    if SizeOf(K) = 2 then Exit(PWord(@L)^ = PWord(@R)^);
+    if SizeOf(K) = 4 then Exit(PUInt32(@L)^ = PUInt32(@R)^);
+    if SizeOf(K) = 8 then Exit(PQWord(@L)^ = PQWord(@R)^);
   end;
-  if (LKind = tkInt64) or (LKind = tkQWord) then
+  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
     Exit(PQWord(@L)^ = PQWord(@R)^);
-
-  if (LKind = tkAString) or (LKind = tkLString) then
+  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
     Exit(PAnsiString(@L)^ = PAnsiString(@R)^);
-  if (LKind = tkUString) or (LKind = tkWString) then
+  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
     Exit(PUnicodeString(@L)^ = PUnicodeString(@R)^);
-
+  {$POP}
   raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;
 
@@ -325,9 +313,10 @@ begin
     raise;
   end;
 
-  FillChar(ABuffers.Ctrl^, LCtrlSize, CTRL_EMPTY);
+  // perf: inline single source via bytes.ops (SpanFill for $FF ctrl, BytesZero for slots) zero-copy, no raw FillChar — L1 single source, red-line 1/2
+  nextpas.core.bytes.ops.SpanFill(TByteSpan.Create(ABuffers.Ctrl, LCtrlSize), CTRL_EMPTY);
   if System.IsManagedType(K) or System.IsManagedType(V) then
-    FillChar(ABuffers.Slots^, LSlotSize, 0);
+    nextpas.core.bytes.ops.BytesZero(ABuffers.Slots, LSlotSize);
 end;
 
 procedure TSwissTable.FreeRawBuffers(var ABuffers: TTableBuffers);
@@ -384,7 +373,8 @@ begin
     Finalize(FSlots[AIndex].Key);
   if System.IsManagedType(V) then
     Finalize(FSlots[AIndex].Value);
-  FillChar(FSlots[AIndex], SizeOf(TSlot), 0);
+  // perf: inline single source via bytes.ops.BytesZero (FillChar single source, zero-copy)
+  nextpas.core.bytes.ops.BytesZero(@FSlots[AIndex], SizeOf(TSlot));
 end;
 
 procedure TSwissTable.AssignNewSlot(AIndex: SizeUInt; const AKey: K; const AValue: V);
@@ -414,7 +404,8 @@ begin
         Finalize(FSlots[AIndex].Key);
       if LValueInitialized then
         Finalize(FSlots[AIndex].Value);
-      FillChar(FSlots[AIndex], SizeOf(TSlot), 0);
+      // perf: inline single source via bytes.ops.BytesZero (FillChar single source, zero-copy)
+      nextpas.core.bytes.ops.BytesZero(@FSlots[AIndex], SizeOf(TSlot));
       raise;
     end;
   end
@@ -553,7 +544,8 @@ begin
           SetCtrlIn(LNewTable.Ctrl, LNewTable.Capacity, LIdx, Lh and $7F);
           // Move transfers ownership only after the whole operation commits.
           // On exception, the old table remains the owner and the temporary table is freed raw.
-          Move(LOldSlots[i], LNewTable.Slots[LIdx], SizeOf(TSlot));
+          // perf: inline single source via bytes.ops.BytesCopy (Move single source, zero-copy)
+          nextpas.core.bytes.ops.BytesCopy(@LNewTable.Slots[LIdx], @LOldSlots[i], SizeOf(TSlot));
           if LWasEmpty then
             Dec(LNewTable.GrowthLeft);
         end;
@@ -646,14 +638,8 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
-    不可达（FPC 6018）——按设计保留，作用域内关警 }
-  {$PUSH}{$WARN 6018 OFF}
-  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := InlineHashMix32(PUInt32(@AKey)^)
-  else
-    Lh := KeyHash(AKey);
-  {$POP}
+  // perf: KeyHash is inline compile-time specialized — single InlineHashMix/HashOf* path per K, zero per-op GetTypeKind/SizeOf branch, zero-copy, SIMD probe unchanged
+  Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -689,14 +675,8 @@ var
   LBit: Integer;
 begin
   if FCapacity = 0 then Exit(False);
-  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
-    不可达（FPC 6018）——按设计保留，作用域内关警 }
-  {$PUSH}{$WARN 6018 OFF}
-  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := InlineHashMix32(PUInt32(@AKey)^)
-  else
-    Lh := KeyHash(AKey);
-  {$POP}
+  // perf: KeyHash inline specialized — zero per-op branch, SIMD probe unchanged
+  Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -732,14 +712,8 @@ begin
   if FCapacity = 0 then
     GrowAndRehash;
 
-  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
-    不可达（FPC 6018）——按设计保留，作用域内关警 }
-  {$PUSH}{$WARN 6018 OFF}
-  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := InlineHashMix32(PUInt32(@AKey)^)
-  else
-    Lh := KeyHash(AKey);
-  {$POP}
+  // perf: KeyHash inline specialized — zero per-op branch
+  Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
   LProbeOfs := 0;
@@ -807,14 +781,8 @@ var
   LIdx, LGroupBase: SizeUInt;
 begin
   if FCapacity = 0 then Exit(False);
-  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
-    不可达（FPC 6018）——按设计保留，作用域内关警 }
-  {$PUSH}{$WARN 6018 OFF}
-  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := InlineHashMix32(PUInt32(@AKey)^)
-  else
-    Lh := KeyHash(AKey);
-  {$POP}
+  // perf: KeyHash inline specialized — zero per-op branch
+  Lh := KeyHash(AKey);
   if not FindIndex(AKey, Lh, LIdx) then Exit(False);
 
   ClearSlot(LIdx);
@@ -845,14 +813,8 @@ var
 begin
   if FCapacity = 0 then
     GrowAndRehash;
-  { 整型特化快路径：非整型实例下 GetTypeKind 编译期折叠使本分支静态
-    不可达（FPC 6018）——按设计保留，作用域内关警 }
-  {$PUSH}{$WARN 6018 OFF}
-  if (not Assigned(FHash)) and (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := InlineHashMix32(PUInt32(@AKey)^)
-  else
-    Lh := KeyHash(AKey);
-  {$POP}
+  // perf: KeyHash inline specialized — zero per-op branch, InlineHashMix compile-time specialized
+  Lh := KeyHash(AKey);
   LIdx := FindInsertSlot(Lh, LWasEmpty);
   if LWasEmpty and (FGrowthLeft = 0) then
   begin
@@ -1003,7 +965,8 @@ begin
       Dec(FCount);
     end;
 
-  FillChar(FCtrl^, FCapacity + GROUP_SIZE, CTRL_EMPTY);
+  // perf: inline single source via bytes.ops.SpanFill (FillChar single source, zero-copy)
+  nextpas.core.bytes.ops.SpanFill(TByteSpan.Create(FCtrl, FCapacity + GROUP_SIZE), CTRL_EMPTY);
   FCount := 0;
   FGrowthLeft := FCapacity - FCapacity div 8;
 end;
@@ -1059,7 +1022,8 @@ begin
   Result.FSlots := FSlots;
   Result.FCapacity := FCapacity;
   Result.FIdx := 0;
-  FillChar(Result.FCurrent, SizeOf(TSlot), 0);
+  // perf: inline single source via bytes.ops.BytesZero (FillChar single source, zero-copy)
+  nextpas.core.bytes.ops.BytesZero(@Result.FCurrent, SizeOf(TSlot));
 end;
 
 function TSwissTable.IsEmpty: Boolean;

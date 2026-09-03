@@ -63,6 +63,10 @@ type
 
 implementation
 
+uses
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray;
+
 const
   LOWER_EIGHTHS: array[1..8] of AnsiString = (
     #$E2#$96#$81,
@@ -167,11 +171,21 @@ end;
 
 procedure TBarChart.AddBar(const ABar: TBarData);
 var
-  LN: Integer;
+  LOld, LReq, LCap, LCurCap: SizeUInt;
 begin
-  LN := System.Length(FBars);
-  SetLength(FBars, LN + 1);
-  FBars[LN] := ABar;
+  LOld := SizeUInt(Length(FBars));
+  LReq := LOld + 1;
+  // perf: geometric via bytes.ops.BytesGrowCapacity single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), zero-copy via mem.dynarray poke, not inline per red-line 2
+  LCap := BytesGrowCapacity(LOld, LReq);
+  LCurCap := DynArrayCapacityElem(Pointer(FBars), LOld, SizeOf(TBarData));
+  if (LCurCap < LCap) or (DynArrayRefCountElem(Pointer(FBars)) <> 1) then
+  begin
+    if LCap <> LOld then
+      SetLength(FBars, LCap);
+  end;
+  if SizeUInt(Length(FBars)) <> LReq then
+    DynArraySetLengthElem(Pointer(FBars), LReq);
+  FBars[LOld] := ABar;
 end;
 
 function TBarChart.WithBars(const ABars: array of TBarData): IBarChart;

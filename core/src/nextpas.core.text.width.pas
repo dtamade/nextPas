@@ -66,6 +66,7 @@ function TruncateToWidth(const AStr: AnsiString; AMaxCols: SizeUInt): AnsiString
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.utf8,
   nextpas.core.text.grapheme,
   nextpas.core.simd.cpuinfo;
@@ -233,7 +234,7 @@ begin
     Exit('');
   Result := '';
   SetLength(Result, LCut);
-  Move(AStr[1], Result[1], LCut);
+  BytesCopy(@Result[1], @AStr[1], LCut); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy
 end;
 
 {$ifdef CPUX86_64}

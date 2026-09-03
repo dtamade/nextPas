@@ -7,8 +7,6 @@ unit nextpas.core.base;
 
 interface
 
-uses nextpas.core.exception;
-
 { ============================================================ }
 { Framework identity                                           }
 { ============================================================ }
@@ -80,77 +78,125 @@ type
   Pcint64  = ^cint64;
   Pcuint64 = ^cuint64;
 
-  ECore = nextpas.core.exception.ENextPasError;
+  TErrorCategory = (
+    ecNone,
+    ecInvalidArgument,
+    ecNullReference,
+    ecInvalidOperation,
+    ecNotImplemented,
+    ecNotSupported,
+    ecTimeout,
+    ecCancelled,
+    ecInterrupted,
+    ecWouldBlock,
+    ecPermission,
+    ecNotFound,
+    ecAlreadyExists,
+    ecResourceExhausted,
+    ecIO,
+    ecNetwork,
+    ecParse,
+    ecInternal
+  );
+
+  ECore = class(Exception)
+  private
+    FCategory: TErrorCategory;
+    FInner: Exception;
+    FOwnsInner: Boolean;
+    function ResolveCategory(const ACategory: TErrorCategory): TErrorCategory;
+  protected
+    class function DefaultCategory: TErrorCategory; virtual;
+  public
+    constructor Create(const AMessage: string); overload;
+    constructor Create(const AMessage: string; const ACategory: TErrorCategory); overload;
+    constructor CreateFmt(const AMessage: string; const AArgs: array of const); overload;
+    constructor CreateFmt(const AMessage: string; const ACategory: TErrorCategory; const AArgs: array of const); overload;
+    constructor Create(const AMessage: string; const AInner: Exception; const AOwnsInner: Boolean = True); overload;
+    constructor Create(const AMessage: string; const ACategory: TErrorCategory; const AInner: Exception; const AOwnsInner: Boolean = True); overload;
+    destructor Destroy; override;
+    property Category: TErrorCategory read FCategory;
+    property Inner: Exception read FInner;
+  end;
+
   EInvariantViolation = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EWow = EInvariantViolation;
   EArgumentNil = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EEmptyCollection = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EInvalidArgument = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EInvalidResult = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
-  ETimeoutError = nextpas.core.exception.ETimeoutError;
+  ETimeoutError = class(ECore)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
   EInvalidState = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EOutOfRange = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   ENotSupported = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   ENotCompatible = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
   EInvalidOperation = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
-  EOutOfMemoryError = nextpas.core.exception.EOutOfMemoryError;
-  EOutOfMemory = nextpas.core.exception.EOutOfMemory;
+  EOutOfMemoryError = class(ECore)
+  protected
+    class function DefaultCategory: TErrorCategory; override;
+  end;
+  EOutOfMemory = class(EOutOfMemoryError);
   EOverflow = class(ECore)
   public
-    constructor Create(const AMessage: string);
+    constructor Create(const AMessage: string); overload;
   protected
-    class function DefaultCategory: nextpas.core.exception.TErrorCategory; override;
+    class function DefaultCategory: TErrorCategory; override;
   end;
+
+function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 
 { ============================================================ }
 { Reference-counted object base class                          }
@@ -320,11 +366,224 @@ function HexStr(AValue: UInt64; ADigits: Integer = 0): string;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
+{ FormatStr helper — single-source via bytes.ops BytesGrowCapacityInt (geometric, amortized O(1), BYTES_BUILDER_MIN_GROW) + zero-copy Move; not inline per red-line 2 }
+function FormatStr(const AFmt: string; const AArgs: array of const): string;
+var
+  LI, LArgIdx: Integer;
+  LIntBuf: string;
+  LVal: Int64;
+  LTmpStr: string;
+  LCap, LLen: Integer;
+  procedure Ensure(const AAdd: Integer); inline;
+  var
+    LNewCap: Integer;
+  begin
+    if AAdd <= 0 then Exit;
+    if LLen + AAdd <= LCap then Exit;
+    LNewCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LLen + AAdd);
+    SetLength(Result, LNewCap);
+    LCap := LNewCap;
+  end;
+  procedure AppendStr(const S: string); inline;
+  var
+    LSLen: Integer;
+  begin
+    LSLen := Length(S);
+    if LSLen = 0 then Exit;
+    Ensure(LSLen);
+    Move(PAnsiChar(S)^, (PByte(Pointer(Result)) + LLen)^, LSLen);
+    Inc(LLen, LSLen);
+  end;
+  procedure AppendChar(const C: Char); inline;
+  begin
+    Ensure(1);
+    PAnsiChar(Pointer(Result))[LLen] := AnsiChar(C);
+    Inc(LLen);
+  end;
+  procedure AppendShort(const S: ShortString); inline;
+  var
+    LSLen: Integer;
+  begin
+    LSLen := Length(S);
+    if LSLen = 0 then Exit;
+    Ensure(LSLen);
+    Move(S[1], (PByte(Pointer(Result)) + LLen)^, LSLen);
+    Inc(LLen, LSLen);
+  end;
+begin
+  Result := '';
+  LCap := 0;
+  LLen := 0;
+  LArgIdx := 0;
+  LI := 1;
+  while LI <= Length(AFmt) do
+  begin
+    if (AFmt[LI] = '%') and (LI < Length(AFmt)) then
+    begin
+      Inc(LI);
+      case AFmt[LI] of
+        's': begin
+          if LArgIdx > High(AArgs) then
+            raise Exception.Create('FormatStr: not enough arguments for %s');
+          case AArgs[LArgIdx].VType of
+            vtAnsiString: begin
+              if AArgs[LArgIdx].VAnsiString <> nil then
+              begin
+                LTmpStr := string(AArgs[LArgIdx].VAnsiString);
+                AppendStr(LTmpStr);
+              end;
+            end;
+            vtUnicodeString: begin
+              LTmpStr := string(AArgs[LArgIdx].VUnicodeString);
+              AppendStr(LTmpStr);
+            end;
+            vtString: AppendShort(AArgs[LArgIdx].VString^);
+            vtChar: AppendChar(AArgs[LArgIdx].VChar);
+            vtPChar: begin
+              if AArgs[LArgIdx].VPChar <> nil then
+              begin
+                LTmpStr := string(AArgs[LArgIdx].VPChar);
+                AppendStr(LTmpStr);
+              end;
+            end;
+            vtWideChar: AppendChar(Char(AArgs[LArgIdx].VWideChar));
+          else
+            AppendStr('???');
+          end;
+          Inc(LArgIdx);
+        end;
+        'd': begin
+          if LArgIdx > High(AArgs) then
+            raise Exception.Create('FormatStr: not enough arguments for %d');
+          case AArgs[LArgIdx].VType of
+            vtInteger: LVal := AArgs[LArgIdx].VInteger;
+            vtInt64: LVal := AArgs[LArgIdx].VInt64^;
+            vtBoolean: LVal := Ord(AArgs[LArgIdx].VBoolean);
+          else
+            LVal := 0;
+          end;
+          Str(LVal, LIntBuf);
+          AppendStr(LIntBuf);
+          Inc(LArgIdx);
+        end;
+        '%': AppendChar('%');
+      else
+        AppendChar('%');
+        AppendChar(AFmt[LI]);
+      end;
+    end
+    else
+      AppendChar(AFmt[LI]);
+    Inc(LI);
+  end;
+  SetLength(Result, LLen);
+end;
+
+function ErrorCategoryToString(const ACategory: TErrorCategory): string;
+begin
+  Result := 'internal';
+  case ACategory of
+    ecNone: Result := 'none';
+    ecInvalidArgument: Result := 'invalid_argument';
+    ecNullReference: Result := 'null_reference';
+    ecInvalidOperation: Result := 'invalid_operation';
+    ecNotImplemented: Result := 'not_implemented';
+    ecNotSupported: Result := 'not_supported';
+    ecTimeout: Result := 'timeout';
+    ecCancelled: Result := 'cancelled';
+    ecInterrupted: Result := 'interrupted';
+    ecWouldBlock: Result := 'would_block';
+    ecPermission: Result := 'permission';
+    ecNotFound: Result := 'not_found';
+    ecAlreadyExists: Result := 'already_exists';
+    ecResourceExhausted: Result := 'resource_exhausted';
+    ecIO: Result := 'io';
+    ecNetwork: Result := 'network';
+    ecParse: Result := 'parse';
+    ecInternal: Result := 'internal';
+  end;
+end;
+
+{ ECore }
+
+class function ECore.DefaultCategory: TErrorCategory;
+begin
+  Result := ecNone;
+end;
+
+function ECore.ResolveCategory(const ACategory: TErrorCategory): TErrorCategory;
+begin
+  Result := DefaultCategory;
+  if Result <> ecNone then Exit;
+  if (Ord(ACategory) < Ord(Low(TErrorCategory))) or (Ord(ACategory) > Ord(High(TErrorCategory))) then
+    Result := ecInternal
+  else
+    Result := ACategory;
+end;
+
+constructor ECore.Create(const AMessage: string);
+begin
+  inherited Create(AMessage);
+  FCategory := DefaultCategory;
+  FInner := nil;
+  FOwnsInner := False;
+end;
+
+constructor ECore.Create(const AMessage: string; const ACategory: TErrorCategory);
+begin
+  inherited Create(AMessage);
+  FCategory := ResolveCategory(ACategory);
+  FInner := nil;
+  FOwnsInner := False;
+end;
+
+constructor ECore.CreateFmt(const AMessage: string; const AArgs: array of const);
+var
+  LMsg: string;
+begin
+  LMsg := FormatStr(AMessage, AArgs);
+  Create(LMsg);
+end;
+
+constructor ECore.CreateFmt(const AMessage: string; const ACategory: TErrorCategory; const AArgs: array of const);
+var
+  LMsg: string;
+begin
+  LMsg := FormatStr(AMessage, AArgs);
+  Create(LMsg, ACategory);
+end;
+
+constructor ECore.Create(const AMessage: string; const AInner: Exception; const AOwnsInner: Boolean);
+begin
+  inherited Create(AMessage);
+  FCategory := DefaultCategory;
+  FInner := AInner;
+  FOwnsInner := AOwnsInner;
+end;
+
+constructor ECore.Create(const AMessage: string; const ACategory: TErrorCategory; const AInner: Exception; const AOwnsInner: Boolean);
+begin
+  inherited Create(AMessage);
+  FCategory := ResolveCategory(ACategory);
+  FInner := AInner;
+  FOwnsInner := AOwnsInner;
+end;
+
+destructor ECore.Destroy;
+begin
+  if FOwnsInner and (FInner <> nil) then
+    FInner.Free;
+  inherited Destroy;
+end;
+
 { Base validation exceptions }
 
-class function EInvariantViolation.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EInvariantViolation.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInternal;
+  Result := ecInternal;
 end;
 
 constructor EInvariantViolation.Create(const AMessage: string);
@@ -332,9 +591,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EArgumentNil.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EArgumentNil.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidArgument;
+  Result := ecInvalidArgument;
 end;
 
 constructor EArgumentNil.Create(const AMessage: string);
@@ -342,9 +601,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EInvalidArgument.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EInvalidArgument.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidArgument;
+  Result := ecInvalidArgument;
 end;
 
 constructor EInvalidArgument.Create(const AMessage: string);
@@ -352,9 +611,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EInvalidResult.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EInvalidResult.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInternal;
+  Result := ecInternal;
 end;
 
 constructor EInvalidResult.Create(const AMessage: string);
@@ -362,9 +621,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EEmptyCollection.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EEmptyCollection.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidOperation;
+  Result := ecInvalidOperation;
 end;
 
 constructor EEmptyCollection.Create(const AMessage: string);
@@ -372,9 +631,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EInvalidState.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EInvalidState.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidOperation;
+  Result := ecInvalidOperation;
 end;
 
 constructor EInvalidState.Create(const AMessage: string);
@@ -382,9 +641,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EOutOfRange.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EOutOfRange.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidArgument;
+  Result := ecInvalidArgument;
 end;
 
 constructor EOutOfRange.Create(const AMessage: string);
@@ -392,9 +651,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function ENotSupported.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function ENotSupported.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecNotSupported;
+  Result := ecNotSupported;
 end;
 
 constructor ENotSupported.Create(const AMessage: string);
@@ -402,9 +661,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function ENotCompatible.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function ENotCompatible.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidArgument;
+  Result := ecInvalidArgument;
 end;
 
 constructor ENotCompatible.Create(const AMessage: string);
@@ -412,9 +671,9 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EInvalidOperation.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function EInvalidOperation.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidOperation;
+  Result := ecInvalidOperation;
 end;
 
 constructor EInvalidOperation.Create(const AMessage: string);
@@ -422,9 +681,19 @@ begin
   inherited Create(AMessage);
 end;
 
-class function EOverflow.DefaultCategory: nextpas.core.exception.TErrorCategory;
+class function ETimeoutError.DefaultCategory: TErrorCategory;
 begin
-  Result := nextpas.core.exception.ecInvalidArgument;
+  Result := ecTimeout;
+end;
+
+class function EOutOfMemoryError.DefaultCategory: TErrorCategory;
+begin
+  Result := ecResourceExhausted;
+end;
+
+class function EOverflow.DefaultCategory: TErrorCategory;
+begin
+  Result := ecInvalidArgument;
 end;
 
 constructor EOverflow.Create(const AMessage: string);

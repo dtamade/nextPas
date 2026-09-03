@@ -52,6 +52,8 @@ implementation
 
 uses
   nextpas.core.audio.errors,
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray,
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
@@ -177,14 +179,25 @@ begin
 end;
 
 procedure TAudioSequencer.AddNote(const ANote: TMidiNote);
-var L: Integer;
+var
+  LOld, LReq, LCap, LCurCap: SizeUInt;
 begin
   if (ANote.Pitch < 0) or (ANote.Pitch > 127) then Exit;
   FLock.Acquire;
   try
-    L := Length(FNotes);
-    SetLength(FNotes, L + 1);
-    FNotes[L] := ANote;
+    LOld := SizeUInt(Length(FNotes));
+    LReq := LOld + 1;
+    // perf: geometric via bytes.ops.BytesGrowCapacity single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), zero-copy via mem.dynarray poke, not inline per red-line 2
+    LCap := BytesGrowCapacity(LOld, LReq);
+    LCurCap := DynArrayCapacityElem(Pointer(FNotes), LOld, SizeOf(TMidiNote));
+    if (LCurCap < LCap) or (DynArrayRefCountElem(Pointer(FNotes)) <> 1) then
+    begin
+      if LCap <> LOld then
+        SetLength(FNotes, LCap);
+    end;
+    if SizeUInt(Length(FNotes)) <> LReq then
+      DynArraySetLengthElem(Pointer(FNotes), LReq);
+    FNotes[LOld] := ANote;
     RebuildNoteCache;
   finally
     FLock.Release;

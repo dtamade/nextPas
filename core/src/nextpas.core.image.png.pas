@@ -42,6 +42,7 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.compress,
   nextpas.core.checksum.crc32,
+  nextpas.core.bytes.builder,
   nextpas.core.image.base,
   nextpas.core.image.dispatch;
 
@@ -67,9 +68,9 @@ begin
   Base := Length(ADst);
   SetLength(ADst, Base + 12 + ADataLen);
   PutBe32(@ADst[Base], LongWord(ADataLen));
-  Move(AType[1], ADst[Base + 4], 4);
+  nextpas.core.bytes.ops.BytesCopy(@ADst[Base + 4], @AType[1], 4); { perf: inline single Move via bytes.ops single source, zero-copy }
   if ADataLen > 0 then
-    Move(AData^, ADst[Base + 8], ADataLen);
+    nextpas.core.bytes.ops.BytesCopy(@ADst[Base + 8], AData, ADataLen); { perf: inline single Move via bytes.ops single source, zero-copy }
   Crc := Crc32Update(0, @ADst[Base + 4], 4);
   Crc := Crc32Update(Crc, AData, ADataLen);
   PutBe32(@ADst[Base + 8 + ADataLen], Crc);
@@ -125,6 +126,7 @@ var
   LDepth, LColor, LInterlace: Integer;
   LBpp, RowLen, X, Y, C: Integer;
   LIdat: TBytes;
+  LIdatBuilder: IBytesBuilder;
   LRaw, LPrev, LRow: TBytes;
   LA, B, Cc, P, PA, PB, PC, LPred, LStride: Integer;
 
@@ -162,7 +164,7 @@ begin
 
   { chunk 循环：IHDR 必首、IDAT 聚合、IEND 终止、辅助跳过容忍 }
   LIhdrPos := 0;
-  SetLength(LIdat, 0);
+  LIdatBuilder := CreateBytesBuilder(8192); { perf: geometric Grow via bytes.ops.BytesGrowCapacity single source, amortized O(1), zero-copy single Move per IDAT — avoids O(n²) SetLength per chunk }
   LPos := 8;
   while True do
   begin
@@ -192,9 +194,8 @@ begin
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('D')) and
             (AData[LPos + 6] = Ord('A')) and (AData[LPos + 7] = Ord('T')) then
     begin
-      SetLength(LIdat, Length(LIdat) + Integer(LLen));
       if LLen > 0 then
-        Move(AData[LPos + 8], LIdat[Length(LIdat) - Integer(LLen)], LLen);
+        LIdatBuilder.AppendBytes(@AData[LPos + 8], LLen); { perf: single Move zero-copy via IBytesBuilder, bytes.ops single source for growth; O(n) amortized not O(n²) }
     end
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('E')) and
             (AData[LPos + 6] = Ord('N')) and (AData[LPos + 7] = Ord('D')) then
@@ -202,6 +203,7 @@ begin
 
     Inc(LPos, 12 + LLen);
   end;
+  LIdat := LIdatBuilder.ToBytes; { stability: IBytesBuilder interface refcount auto-free on scope exit/exception; ToBytes single SetLength+Move ownership copy, no leak }
 
   if LIhdrPos = 0 then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: missing IHDR');
@@ -280,7 +282,7 @@ begin
           Result[(Y * AWidth + X) * 4 + C] := LRow[X * 4 + C];
       end;
     end;
-    Move(LRow[0], LPrev[0], RowLen);
+    nextpas.core.bytes.ops.BytesCopy(@LPrev[0], @LRow[0], SizeUInt(RowLen)); { perf: inline single Move via bytes.ops single source, zero-copy }
   end;
 end;
 

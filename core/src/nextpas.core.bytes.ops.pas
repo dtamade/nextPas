@@ -1,7 +1,11 @@
 unit nextpas.core.bytes.ops;
 
 {$I nextpas.core.settings.inc}
-{ R9-02 hermetic：settings.inc 已保障 inline 语义（-O2→INLINE ON），FPC 3.3.1 下无 BEGIN 误报 }
+{ bytes.ops — single source for Move/FillChar (BytesCopy inline Move(ASrc^,ADst^,ALen) @288-292, BytesZero FillChar) and capacity via bytes.ops.capacity leaf single source (0→64→2×, Webview 0→4→2×, while only in leaf — no duplicate while in ops, thin-forward, gate patrol).
+  red-line 1: no inline indexed Move / SetLength+Move batch — 单源 BytesCopy/BytesZero inline single Move, BytesAppendRaw single site not inline (single SetLength+BytesCopy → single Move zero-copy).
+  red-line 2: no inline loop/SIMD body — BytesReplicateCopy/BytesAppendRaw/Grow/BytesAppend* family not inline (loop/SetLength+Move batch I-Cache), capacity while only in bytes.ops.capacity leaf, thin-forward 30+ inline exempt but guarded (no loop+Move/SetLength in inline).
+  单源 INV-5: text/ascii leaves thin-forward (no Move); high-frequency loops MUST use IBytesBuilder/ConcatMany single alloc (avoid per-call SetLength+Move O(n) → O(n²) if looped).
+  gate: check_bytes_ops_source_contract.py — red-line 1/2 full patrol, BytesCopy inline single Move(ASrc^,ADst^,ALen) @289 zero-copy, BytesAppend* NotInline+O(n²) cross-module patrol, capacity single source while-only-in-leaf }
 
 interface
 
@@ -22,11 +26,11 @@ function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
-{ perf: LZ-dict overlapping replicate — inline + block Move via doubling, single source for CopyMatch, zero-copy, O(log n) Moves, overlap-safe }
-procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
+{ perf: LZ-dict overlapping replicate — not inline per red-line 2 (while doubling + Move I-Cache) — single source for CopyMatch, zero-copy, O(log n) Moves, overlap-safe }
+procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt);
 { respack/writer 单源：路径/内容零拷贝搬运与零填，inline 单 Move/Fill，无额外分配，显式标注 bytes.ops 单源防漂移 }
-procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
-procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
+procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline; // red-line 1/2: inline single Move(ASrc^,ADst^,ALen) zero-copy, no loop/SetLength, gate @288 patrol, facade thin-forward exempt but I-Cache guarded
+procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline; // red-line 1/2: inline single FillChar zero-copy, no loop, gate patrol, facade thin-forward exempt I-Cache guarded
 procedure SpanZero(const ASpan: TByteSpan); inline;
 
 { 全局零页单源（.bss 零初值，4K 对齐页）：writer.stream 万槽零填共享，无栈分配/无重复 FillChar，零拷贝分段直写；按需切片避免小间隙 4K memset }
@@ -35,7 +39,7 @@ const
 var
   BYTES_ZERO_PAGE: array[0..BYTES_ZERO_PAGE_SIZE - 1] of Byte;
 
-function SpanConcat(const A, B: TByteSpan): TBytes; inline;
+function SpanConcat(const A, B: TByteSpan): TBytes;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 function SpanClone(const ASpan: TByteSpan): TBytes;
 
@@ -43,23 +47,26 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-{ perf: BytesAppend does SetLength+Move per call (O(n) realloc). For high-frequency
-  or looped appends prefer IBytesBuilder (preallocated Grow) or BytesConcatMany/
-  SpanConcatMany (single allocation) to avoid O(n²) churn. Keep inline for single-use
-  convenience only. }
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
-procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
+{ perf: BytesAppend does SetLength+Move per call (O(n) → O(n²) if looped); MUST prefer IBytesBuilder (geometric via bytes.ops.capacity 0→64→2×) or BytesConcatMany/SpanConcatMany single alloc — zero-copy single BytesCopy via BytesAppendRaw single site; not inline per red-line 1/2 (SetLength+Move batch, I-Cache, gate: check_bytes_ops_source_contract.py cross-module loop-append patrol; per-call O(n) → O(n²) if looped, high-frequency MUST use builder) }
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word);
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word);
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord);
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord);
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
 function BytesConcatMany(const AParts: array of TBytes): TBytes;
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
@@ -67,7 +74,7 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
 { Unsigned big-endian helpers (canonical single source for crypto/tls) }
 { perf: StripLeadingZero family single source is bytes.ops; View is zero-copy (no alloc), Span is single-pass, Bytes is single alloc or CoW share }
-function StripLeadingZero(const AData: TBytes): TBytes; inline;
+function StripLeadingZero(const AData: TBytes): TBytes;
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
 function StripLeadingZeroSpan(const ASpan: TByteSpan): TByteSpan; inline;
 function StripLeadingZeroView(const AData: TBytes): TByteSpan; inline;
@@ -91,49 +98,31 @@ function StringToBytes(const AText: string): TBytes;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 text.unicode.utils.ToLowerAsciiAware 单源：ASCII 预检+零拷贝，owner text.unicode.utils }
-{ Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+{ Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., not inline per red-line 2 (loop+SetLength I-Cache), Span-less, reuses single HEX_UPPER table) }
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 
 implementation
 
 uses
   nextpas.core.simd,
+  nextpas.core.bytes.ops.capacity,
   nextpas.core.text.unicode.utils;
 
 { BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
-  Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
-  for amortized slack; that depends on FPC heap layout and races under multithread.
-  New: capacity == Length (single source via RTL), no global state, no unsafe
-  pointer arithmetic, fully portable to nextPas compiler and thread-safe per var.
-  perf: inline + zero-copy Move in BytesAppend* callers (single Move per append);
-  no extra alloc in failure path. For looped/high-frequency appends use
+  Single source geometric via bytes.ops.capacity.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW 0→64→2×, amortized O(1), INV-2/INV-5) — no duplicate while, no I-Cache bloat, threshold reuse.
+  Old impl used PSizeInt header hack + MemSize slab probe; now capacity == Length via RTL, no global state, no unsafe pointer, thread-safe per var.
+  perf: not inline per red-line 1/2 (SetLength batch + capacity loop I-Cache) — zero-copy BytesCopy in BytesAppend* callers (single BytesCopy per append), no extra alloc in failure path. For looped/high-frequency appends MUST use
   IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany to avoid
-  O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
-  writes that could corrupt heap on exception. }
+  O(n²) SetLength churn (single alloc, geometric). Stability: SetLength exception-safe; no manual header writes. }
 
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
-  LOld, LNewCap: SizeUInt;
+  LNewCap: SizeUInt;
 begin
-  LOld := SizeUInt(Length(ADest));
-  if ARequired <= LOld then
+  if SizeUInt(Length(ADest)) >= ARequired then
     Exit;
-  // single doubling growth to amortize when called directly; callers that need
-  // exact length (BytesAppend) will SetLength to exact LNewLen themselves, so
-  // this path is for standalone Reserve/Ensure. No header poke.
-  LNewCap := LOld;
-  if LNewCap < BYTES_BUILDER_MIN_GROW then
-    LNewCap := BYTES_BUILDER_MIN_GROW;
-  while LNewCap < ARequired do
-  begin
-    if LNewCap <= High(SizeUInt) div 2 then
-      LNewCap := LNewCap * 2
-    else
-    begin
-      LNewCap := ARequired;
-      Break;
-    end;
-  end;
+  // capacity single source reuse: geometric via bytes.ops.capacity (0→64→2×), no duplicate while/I-Cache, threshold single source
+  LNewCap := nextpas.core.bytes.ops.capacity.BytesGrowCapacity(SizeUInt(Length(ADest)), ARequired);
   SetLength(ADest, LNewCap);
 end;
 
@@ -149,16 +138,40 @@ begin
 end;
 
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
-var LCap: SizeUInt;
 begin
-  if ANeed = 0 then Exit(0);
-  if AOld = 0 then LCap := BYTES_BUILDER_MIN_GROW else LCap := AOld;
-  if LCap < BYTES_BUILDER_MIN_GROW then LCap := BYTES_BUILDER_MIN_GROW;
-  if LCap < 4 then LCap := 4;
-  if LCap >= ANeed then Exit(LCap);
-  while LCap < ANeed do
-    if LCap <= High(SizeUInt) div 2 then LCap := LCap * 2 else Exit(ANeed);
-  Result := LCap;
+  // perf: inline thin-forward zero extra call, capacity single source reuse via bytes.ops.capacity (0→64→2× geometric, amortized O(1), no duplicate while/I-Cache)
+  Result := nextpas.core.bytes.ops.capacity.BytesNextCapacity(AOld, ANeed);
+end;
+
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacity(ACurrent, ARequired);
+end;
+
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityInt(ACurrent, ARequired);
+end;
+
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityWithMin(ACurrent, ARequired, AMinGrow);
+end;
+
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+begin
+  Result := nextpas.core.bytes.ops.capacity.BytesGrowCapacityIntWithMin(ACurrent, ARequired, AMinGrow);
+end;
+
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+begin
+  Result := nextpas.core.bytes.ops.capacity.WebviewGrowCapacityForReuse(ACurrent);
+end;
+
+function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
+begin
+  // perf: inline thin-forward alias unified peripheral WebviewGrowCapacity — reuse bytes.ops.capacity.WebviewGrowCapacity single source 0→4→2×, zero extra call
+  Result := nextpas.core.bytes.ops.capacity.WebviewGrowCapacity(ACurrent);
 end;
 
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
@@ -241,7 +254,7 @@ begin
     MemReverse(ASpan.Data, ASpan.Len);
 end;
 
-procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt); inline;
+procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt);
 var
   LSrc, LDst: PByte;
   LPeriod, LDone, LRem, LChunk: SizeUInt;
@@ -253,10 +266,10 @@ begin
   LPeriod := ADist + 1;
   if ALen <= LPeriod then
   begin
-    Move(LSrc^, LDst^, ALen);
+    BytesCopy(LDst, LSrc, ALen);
     Exit;
   end;
-  Move(LSrc^, LDst^, LPeriod);
+  BytesCopy(LDst, LSrc, LPeriod);
   LDone := LPeriod;
   LRem := ALen - LPeriod;
   Inc(LDst, LPeriod);
@@ -265,7 +278,7 @@ begin
     LChunk := LDone;
     if LChunk > LRem then
       LChunk := LRem;
-    Move((LDst - LDone)^, LDst^, LChunk);
+    BytesCopy(LDst, LDst - LDone, LChunk);
     Inc(LDst, LChunk);
     Dec(LRem, LChunk);
     Inc(LDone, LChunk);
@@ -274,6 +287,7 @@ end;
 
 procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
 begin
+  // gate: must stay inline single Move(ASrc^,ADst^,ALen) zero-copy, red-line 1 禁索引Move/SetLength+Move批量 单源 not inline — patrol check_bytes_ops_source_contract.py 全量巡检
   if ALen = 0 then Exit;
   Move(ASrc^, ADst^, ALen);
 end;
@@ -295,9 +309,9 @@ begin
   Result := nil;
   SetLength(Result, A.Len + B.Len);
   if A.Len > 0 then
-    Move(A.Data^, Result[0], A.Len);
+    BytesCopy(@Result[0], A.Data, A.Len);
   if B.Len > 0 then
-    Move(B.Data^, Result[A.Len], B.Len);
+    BytesCopy(@Result[A.Len], B.Data, B.Len);
 end;
 
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
@@ -307,7 +321,7 @@ begin
     raise EOutOfRange.Create('SpanCopySlice: offset+length exceeds span');
   SetLength(Result, ALength);
   if ALength > 0 then
-    Move(ASpan.Data[AOffset], Result[0], ALength);
+    BytesCopy(@Result[0], ASpan.Data + AOffset, ALength);
 end;
 
 function SpanClone(const ASpan: TByteSpan): TBytes;
@@ -315,7 +329,7 @@ begin
   Result := nil;
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
-    Move(ASpan.Data^, Result[0], ASpan.Len);
+    BytesCopy(@Result[0], ASpan.Data, ASpan.Len);
 end;
 
 function SpanConcatMany(const AParts: array of TByteSpan): TBytes;
@@ -331,7 +345,7 @@ begin
   for I := 0 to High(AParts) do
     if AParts[I].Len > 0 then
     begin
-      Move(AParts[I].Data^, Result[LOff], AParts[I].Len);
+      BytesCopy(@Result[LOff], AParts[I].Data, AParts[I].Len);
       Inc(LOff, AParts[I].Len);
     end;
 end;
@@ -349,7 +363,7 @@ begin
   for I := 0 to High(AParts) do
     if Length(AParts[I]) > 0 then
     begin
-      Move(AParts[I][0], Result[LOff], Length(AParts[I]));
+      BytesCopy(@Result[LOff], @AParts[I][0], SizeUInt(Length(AParts[I])));
       Inc(LOff, Length(AParts[I]));
     end;
 end;
@@ -376,123 +390,115 @@ begin
   Result := SpanConcat(TByteSpan.FromBytes(A), TByteSpan.FromBytes(B));
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); inline; overload;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendRaw(var ADest: TBytes; ASrc: PByte; ALen: SizeUInt);
+var LOldLen: SizeUInt;
 begin
-  // perf: inline + single SetLength + single Move (zero-copy via Move); no header poke
-  if Length(ASrc) = 0 then
-    Exit;
+  // internal single source for BytesAppend batch: not inline per red-line 1/2 (SetLength+BytesCopy batch I-Cache single site), zero-copy BytesCopy single Move, no header poke; loops MUST use IBytesBuilder/ConcatMany single alloc (O(n²) churn avoidance)
+  if (ASrc = nil) or (ALen = 0) then Exit;
   LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + SizeUInt(Length(ASrc)));
-  Move(ASrc[0], ADest[LOldLen], Length(ASrc));
+  SetLength(ADest, LOldLen + ALen);
+  BytesCopy(@ADest[LOldLen], ASrc, ALen);
 end;
 
-procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); inline; overload;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 begin
-  if (ASrc = nil) or (ASrcLen = 0) then
-    Exit;
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + ASrcLen);
-  Move(ASrc^, ADest[LOldLen], ASrcLen);
+  // not inline per red-line 1/2 — single source via BytesAppendRaw → BytesCopy (INV-5), zero-copy single Move; high-frequency/loops MUST use IBytesBuilder (geometric Grow) or BytesConcatMany/SpanConcatMany single allocation
+  if Length(ASrc) = 0 then Exit;
+  BytesAppendRaw(ADest, @ASrc[0], SizeUInt(Length(ASrc)));
 end;
 
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 1);
-  ADest[LOldLen] := AValue;
+  // not inline per red-line 1/2 — single source via BytesAppendRaw → BytesCopy, zero-copy single Move; loops MUST use IBytesBuilder/ConcatMany
+  BytesAppendRaw(ADest, ASrc, ASrcLen);
 end;
 
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
+var LBuf: Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
-  ADest[LOldLen] := Byte(AValue shr 8);
-  ADest[LOldLen + 1] := Byte(AValue);
+  // not inline per red-line 1/2 (per-call SetLength O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use only; loops MUST use IBytesBuilder geometric (BYTES_BUILDER_MIN_GROW 0→64→2× single source) or BytesConcatMany/SpanConcatMany single alloc; gate: check_bytes_ops_source_contract.py cross-module loop-append patrol; zero-copy via BytesAppendRaw → single BytesCopy Move (stack LBuf single Move, no loop/I-Cache)
+  LBuf := AValue;
+  BytesAppendRaw(ADest, @LBuf, 1);
 end;
 
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word);
+var LBuf: array[0..1] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 3);
-  ADest[LOldLen] := Byte(AValue shr 16);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use only; loops MUST use IBytesBuilder geometric 0→64→2× or BytesConcatMany single alloc; gate patrol
+  LBuf[0] := Byte(AValue shr 8);
+  LBuf[1] := Byte(AValue);
+  BytesAppendRaw(ADest, @LBuf[0], 2);
 end;
 
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal);
+var LBuf: array[0..2] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
-  ADest[LOldLen] := Byte(AValue shr 24);
-  ADest[LOldLen + 1] := Byte(AValue shr 16);
-  ADest[LOldLen + 2] := Byte(AValue shr 8);
-  ADest[LOldLen + 3] := Byte(AValue);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use; loops MUST use IBytesBuilder/ConcatMany; gate patrol
+  LBuf[0] := Byte(AValue shr 16);
+  LBuf[1] := Byte(AValue shr 8);
+  LBuf[2] := Byte(AValue);
+  BytesAppendRaw(ADest, @LBuf[0], 3);
 end;
 
-procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal);
+var LBuf: array[0..3] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 2);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw → BytesCopy single Move zero-copy) — single use; loops MUST use IBytesBuilder/ConcatMany
+  LBuf[0] := Byte(AValue shr 24);
+  LBuf[1] := Byte(AValue shr 16);
+  LBuf[2] := Byte(AValue shr 8);
+  LBuf[3] := Byte(AValue);
+  BytesAppendRaw(ADest, @LBuf[0], 4);
 end;
 
-procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word);
+var LBuf: array[0..1] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 4);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue shr 16);
-  ADest[LOldLen + 3] := Byte(AValue shr 24);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use; loops MUST use IBytesBuilder/ConcatMany; gate patrol
+  LBuf[0] := Byte(AValue);
+  LBuf[1] := Byte(AValue shr 8);
+  BytesAppendRaw(ADest, @LBuf[0], 2);
 end;
 
-procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal);
+var LBuf: array[0..3] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
-  ADest[LOldLen] := Byte(AValue shr 56);
-  ADest[LOldLen + 1] := Byte(AValue shr 48);
-  ADest[LOldLen + 2] := Byte(AValue shr 40);
-  ADest[LOldLen + 3] := Byte(AValue shr 32);
-  ADest[LOldLen + 4] := Byte(AValue shr 24);
-  ADest[LOldLen + 5] := Byte(AValue shr 16);
-  ADest[LOldLen + 6] := Byte(AValue shr 8);
-  ADest[LOldLen + 7] := Byte(AValue);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use; loops MUST use IBytesBuilder/ConcatMany; gate patrol
+  LBuf[0] := Byte(AValue);
+  LBuf[1] := Byte(AValue shr 8);
+  LBuf[2] := Byte(AValue shr 16);
+  LBuf[3] := Byte(AValue shr 24);
+  BytesAppendRaw(ADest, @LBuf[0], 4);
 end;
 
-procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
-var
-  LOldLen: SizeUInt;
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord);
+var LBuf: array[0..7] of Byte;
 begin
-  LOldLen := SizeUInt(Length(ADest));
-  SetLength(ADest, LOldLen + 8);
-  ADest[LOldLen] := Byte(AValue);
-  ADest[LOldLen + 1] := Byte(AValue shr 8);
-  ADest[LOldLen + 2] := Byte(AValue shr 16);
-  ADest[LOldLen + 3] := Byte(AValue shr 24);
-  ADest[LOldLen + 4] := Byte(AValue shr 32);
-  ADest[LOldLen + 5] := Byte(AValue shr 40);
-  ADest[LOldLen + 6] := Byte(AValue shr 48);
-  ADest[LOldLen + 7] := Byte(AValue shr 56);
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use; loops MUST use IBytesBuilder/ConcatMany; gate patrol
+  LBuf[0] := Byte(AValue shr 56);
+  LBuf[1] := Byte(AValue shr 48);
+  LBuf[2] := Byte(AValue shr 40);
+  LBuf[3] := Byte(AValue shr 32);
+  LBuf[4] := Byte(AValue shr 24);
+  LBuf[5] := Byte(AValue shr 16);
+  LBuf[6] := Byte(AValue shr 8);
+  LBuf[7] := Byte(AValue);
+  BytesAppendRaw(ADest, @LBuf[0], 8);
+end;
+
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord);
+var LBuf: array[0..7] of Byte;
+begin
+  // not inline per red-line 1/2 (SetLength batch O(n) → O(n²) if looped, single source via BytesAppendRaw) — single use; loops MUST use IBytesBuilder/ConcatMany; gate patrol
+  LBuf[0] := Byte(AValue);
+  LBuf[1] := Byte(AValue shr 8);
+  LBuf[2] := Byte(AValue shr 16);
+  LBuf[3] := Byte(AValue shr 24);
+  LBuf[4] := Byte(AValue shr 32);
+  LBuf[5] := Byte(AValue shr 40);
+  LBuf[6] := Byte(AValue shr 48);
+  LBuf[7] := Byte(AValue shr 56);
+  BytesAppendRaw(ADest, @LBuf[0], 8);
 end;
 
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean;
@@ -505,12 +511,12 @@ begin
   Result := SpanEndsWith(TByteSpan.FromBytes(AData), TByteSpan.FromBytes(ASuffix));
 end;
 
-function StripLeadingZero(const AData: TBytes): TBytes; inline;
+function StripLeadingZero(const AData: TBytes): TBytes;
 var
   L, LOff: SizeUInt;
   P: PByte;
 begin
-  // perf: single scan, no StripLeadingZeroView/Span indirection, no SpanClone extra call; zero-copy when no leading zero (CoW share), single alloc+Move when trimmed
+  // not inline per red-line 1/2 (SetLength+Move batch + while loop I-Cache) — single scan zero-copy CoW single alloc+Move
   L := SizeUInt(Length(AData));
   if L = 0 then
   begin
@@ -534,10 +540,10 @@ begin
     Result := AData;
     Exit;
   end;
-  // trimmed: single allocation + Move, no extra SpanClone allocation
+  // trimmed: single allocation + BytesCopy, no extra SpanClone allocation
   SetLength(Result, L - LOff);
   if L - LOff > 0 then
-    Move(P[LOff], Result[0], L - LOff);
+    BytesCopy(@Result[0], P + LOff, L - LOff);
 end;
 
 function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
@@ -674,11 +680,12 @@ begin
   Result := BytesToString(ABytes);
 end;
 
-function StringToBytes(const AText: string): TBytes; inline;
+function StringToBytes(const AText: string): TBytes;
 begin
+  // not inline per red-line 1 (SetLength+Move batch I-Cache) — single BytesCopy zero-copy PAnsiChar single source
   SetLength(Result, Length(AText));
   if Length(AText) > 0 then
-    Move(PAnsiChar(AText)^, Result[0], Length(AText));
+    BytesCopy(@Result[0], PAnsiChar(AText), SizeUInt(Length(AText)));
 end;
 
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
@@ -701,9 +708,10 @@ end;
 const
   HEX_UPPER_BYTESOPS: array[0..15] of AnsiChar = '0123456789ABCDEF';
 
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 var I: Integer; V: UInt64;
 begin
+  // not inline per red-line 2 (loop+SetLength I-Cache) — fixed-width hex single pass zero-copy via table
   SetLength(Result, ADigits);
   V := AValue;
   for I := ADigits - 1 downto 0 do

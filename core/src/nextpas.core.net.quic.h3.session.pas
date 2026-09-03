@@ -86,6 +86,8 @@ type
     FClosed: Boolean;
     FEof: Boolean;
     FRxBuf: TBytes;
+    FRxHead: SizeUInt;
+    FRxLen: SizeUInt;
     FPendBuf: Pointer;
     FPendLen: UInt32;
     FPendCb: TIoCompletion;
@@ -333,6 +335,8 @@ begin
   FClosed := False;
   FEof := False;
   FRxBuf := nil;
+  FRxHead := 0;
+  FRxLen := 0;
   FPendBuf := nil;
   FPendLen := 0;
   FPendCb := nil;
@@ -358,6 +362,10 @@ begin
     Exit;
   FClosed := True;
   FailPendingRead(-1);
+  // stability: release ring buffer slab deterministically, no leak
+  FRxHead := 0;
+  FRxLen := 0;
+  SetLength(FRxBuf, 0);
   LSess := FSession;
   FSession := nil;
   if LSess <> nil then
@@ -405,37 +413,71 @@ end;
 
 function TH3Stream.TakeFromRxBuf(ABuf: Pointer; ALen: UInt32): Integer; inline;
 var
-  LN: Integer;
-  LRemain: Integer;
+  LAvail: SizeUInt;
 begin
-  LN := Length(FRxBuf);
-  if (LN = 0) or (ALen = 0) or (ABuf = nil) then
+  // perf: ring head offset + lazy compact, geometric cap via bytes.ops single source, amortized O(1), no per-take Move+SetLength (O(n²) → O(n)); zero-copy BytesCopy inline single source (INV-5)
+  if (FRxLen = 0) or (ALen = 0) or (ABuf = nil) then
     Exit(0);
-  if UInt32(LN) < ALen then
-    ALen := UInt32(LN);
-  nextpas.core.bytes.ops.BytesCopy(ABuf, @FRxBuf[0], SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
-  LRemain := LN - Integer(ALen);
-  if LRemain > 0 then
-    nextpas.core.bytes.ops.BytesCopy(@FRxBuf[0], @FRxBuf[ALen], SizeUInt(LRemain)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
-  SetLength(FRxBuf, LRemain);
+  LAvail := FRxLen;
+  if LAvail < SizeUInt(ALen) then
+    ALen := UInt32(LAvail);
+  nextpas.core.bytes.ops.BytesCopy(ABuf, @FRxBuf[FRxHead], SizeUInt(ALen)); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
+  Inc(FRxHead, SizeUInt(ALen));
+  Dec(FRxLen, SizeUInt(ALen));
+  if FRxLen = 0 then
+  begin
+    FRxHead := 0;
+    // stability: release large slab lazily, avoid jitter holding 256K
+    if Length(FRxBuf) > 8192 then
+      SetLength(FRxBuf, 0);
+  end
+  else if (FRxHead > 4096) and (FRxHead > SizeUInt(Length(FRxBuf)) div 2) then
+  begin
+    nextpas.core.bytes.ops.BytesCopy(@FRxBuf[0], @FRxBuf[FRxHead], FRxLen); // perf: lazy compact only when head > 4K and > cap/2, single BytesCopy inline
+    FRxHead := 0;
+  end;
   Result := Integer(ALen);
 end;
 
 procedure TH3Stream.DeliverData(const AData: TBytes); inline;
 var
-  LOld, LLen: Integer;
+  LLen: SizeUInt;
+  LCap, LNeedTail, LNewCap: SizeUInt;
 begin
-  LLen := Length(AData);
+  // perf: geometric growth via bytes.ops.BytesGrowCapacity (0→64→2× single source, amortized O(1)) + ring head gap reuse, zero-copy BytesCopy inline single source, no per-packet BytesAppend SetLength+Move O(n²)
+  LLen := SizeUInt(Length(AData));
   if FClosed or (LLen = 0) then
     Exit;
-  LOld := Length(FRxBuf);
-  if LOld + LLen > 262144 then
+  if FRxLen + LLen > 262144 then
   begin
     FClosed := True;
     FailPendingRead(-1);
     Exit;
   end;
-  nextpas.core.bytes.ops.BytesAppend(FRxBuf, AData);
+  LCap := SizeUInt(Length(FRxBuf));
+  LNeedTail := FRxHead + FRxLen + LLen;
+  if LNeedTail > LCap then
+  begin
+    if (FRxHead > 0) and (FRxLen > 0) then
+    begin
+      nextpas.core.bytes.ops.BytesCopy(@FRxBuf[0], @FRxBuf[FRxHead], FRxLen); // perf: compact head gap single BytesCopy inline before grow
+      FRxHead := 0;
+      LNeedTail := FRxLen + LLen;
+      LCap := SizeUInt(Length(FRxBuf));
+    end
+    else if FRxLen = 0 then
+    begin
+      FRxHead := 0;
+      LNeedTail := LLen;
+    end;
+    if LNeedTail > LCap then
+    begin
+      LNewCap := nextpas.core.bytes.ops.BytesGrowCapacity(LCap, LNeedTail); // single source geometric via bytes.ops.capacity 0→64→2×
+      SetLength(FRxBuf, LNewCap);
+    end;
+  end;
+  nextpas.core.bytes.ops.BytesCopy(@FRxBuf[FRxHead + FRxLen], @AData[0], LLen); // perf: zero-copy single source via bytes.ops.BytesCopy inline (INV-5)
+  Inc(FRxLen, LLen);
   TryCompletePendingRead;
 end;
 
@@ -458,7 +500,7 @@ begin
   Result := False;
   if FPendCb = nil then
     Exit;
-  if (Length(FRxBuf) = 0) and not (FEof or FClosed) then
+  if (FRxLen = 0) and not (FEof or FClosed) then
     Exit;
   LBuf := FPendBuf;
   LLn := FPendLen;

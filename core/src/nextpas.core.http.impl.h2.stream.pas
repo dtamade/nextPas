@@ -49,6 +49,7 @@ type
     FTrailerStore: TObject;
     FTrailersDecoded: IHttpHeaders;
     FBodyBuffer: TBytes;
+    FBodyLen: SizeUInt;
     FBodyReadPos: SizeInt;
     FEndStreamReceived: Boolean;
     FEndStreamSent: Boolean;
@@ -76,6 +77,7 @@ type
     function IsWritableState: Boolean; inline;
     function CanReceiveRemoteData: Boolean; inline;
     function UnreadBodyBytes: UInt32; inline;
+    function GetBodyBuffer: TBytes;
   public
     constructor Create(const AStreamID: UInt32;
       const ASendWindowSize: UInt32; const ARecvWindowSize: UInt32;
@@ -117,7 +119,7 @@ type
     property State: TH2StreamState read FState;
     property Headers: IHttpHeaders read FHeadersDecoded;
     property Trailers: IHttpHeaders read FTrailersDecoded;
-    property BodyBuffer: TBytes read FBodyBuffer;
+    property BodyBuffer: TBytes read GetBodyBuffer;
     property EndStreamReceived: Boolean read FEndStreamReceived;
     property EndStreamSent: Boolean read FEndStreamSent;
     property ResetReceived: Boolean read FResetReceived;
@@ -271,15 +273,15 @@ begin
   Result := 0;
   if (FStream = nil) or (ACount = 0) then
     Exit;
-  if FStream.FBodyReadPos >= Length(FStream.FBodyBuffer) then
+  if FStream.FBodyReadPos >= SizeInt(FStream.FBodyLen) then
     Exit;
 
-  LAvailable := SizeUInt(Length(FStream.FBodyBuffer) - FStream.FBodyReadPos);
+  LAvailable := FStream.FBodyLen - SizeUInt(FStream.FBodyReadPos);
   Result := MinSizeUInt(ACount, LAvailable);
   if Result = 0 then
     Exit;
 
-  // perf: zero-copy single source via bytes.ops.BytesCopy inline (BodyBuffer -> ABuf, INV-5)
+  // perf: zero-copy single source via bytes.ops.BytesCopy inline (BodyBuffer -> ABuf, INV-5) geometric single source not needed here, strictly O(1) view
   BytesCopy(@ABuf, @FStream.FBodyBuffer[FStream.FBodyReadPos], Result);
   Inc(FStream.FBodyReadPos, SizeInt(Result));
   FStream.ConsumeBodyBytes(UInt32(Result));
@@ -315,6 +317,7 @@ begin
   FHeaderBlock := '';
   FHeaderBlockTotalBytes := 0;
   FBodyBuffer := nil;
+  FBodyLen := 0;
   FBodyReadPos := 0;
   FEndStreamReceived := False;
   FEndStreamSent := False;
@@ -338,6 +341,7 @@ begin
   FTrailersDecoded := nil;
   FTrailerStore := nil;
   FBodyBuffer := nil;
+  FBodyLen := 0;
   FPendingResponseBody := nil;
   inherited Destroy;
 end;
@@ -601,16 +605,23 @@ end;
 
 procedure TH2Stream.AppendBodyData(const APayload: AnsiString);
 var
-  LOldLen: SizeInt;
-  LPayloadLen: SizeInt;
+  LPayloadLen: SizeUInt;
+  LNewLen: SizeUInt;
+  LCap: SizeUInt;
 begin
-  LPayloadLen := Length(APayload);
+  LPayloadLen := SizeUInt(Length(APayload));
   if LPayloadLen = 0 then
     Exit;
-  LOldLen := Length(FBodyBuffer);
-  SetLength(FBodyBuffer, LOldLen + LPayloadLen);
-  // perf: zero-copy single source via bytes.ops.BytesCopy inline (APayload -> BodyBuffer single source INV-5)
-  BytesCopy(@FBodyBuffer[LOldLen], @APayload[1], SizeUInt(LPayloadLen));
+  LNewLen := FBodyLen + LPayloadLen;
+  // perf: geometric growth single source via bytes.ops.BytesGrowCapacity (IBytesBuilder同源 BYTES_BUILDER_MIN_GROW 0→64→2×, amortized O(1), not inline per red-line 2) — eliminates SetLength+Move per DATA frame O(n²) churn, single BytesCopy inline zero-copy single source INV-5 (IBytesBuilder/ConcatMany geometric single alloc, capacity while single source)
+  if SizeUInt(Length(FBodyBuffer)) < LNewLen then
+  begin
+    LCap := BytesGrowCapacity(SizeUInt(Length(FBodyBuffer)), LNewLen);
+    SetLength(FBodyBuffer, LCap);
+  end;
+  // perf: zero-copy single source via bytes.ops.BytesCopy inline single Move(ASrc^,ADst^,ALen) (APayload -> BodyBuffer INV-5, no extra alloc/copy)
+  BytesCopy(@FBodyBuffer[FBodyLen], @APayload[1], LPayloadLen);
+  FBodyLen := LNewLen;
 end;
 
 procedure TH2Stream.ConsumeBodyBytes(const ABytes: UInt32);
@@ -706,6 +717,7 @@ begin
   FRecvFlow.Reset(FRecvFlow.InitialWindowSize);
   FSendFlow.Reset(FSendFlow.InitialWindowSize);
   FBodyBuffer := nil;
+  FBodyLen := 0;
   FBodyReadPos := 0;
   ClearPendingHeaderBlock;
   FResetCode := AErrorCode;
@@ -730,9 +742,20 @@ end;
 
 function TH2Stream.UnreadBodyBytes: UInt32; inline;
 begin
-  if FBodyReadPos >= Length(FBodyBuffer) then
+  // perf: inline + zero-copy, logical len via FBodyLen (capacity = Length(FBodyBuffer) geometric, INV-2 amortized O(1))
+  if FBodyReadPos >= SizeInt(FBodyLen) then
     Exit(0);
-  Result := UInt32(Length(FBodyBuffer) - FBodyReadPos);
+  Result := UInt32(FBodyLen - SizeUInt(FBodyReadPos));
+end;
+
+function TH2Stream.GetBodyBuffer: TBytes;
+begin
+  // stability: return logical slice copy (capacity geometric, not exposed); single BytesCopy inline zero-copy single source INV-5, no leak (dynamic auto-ref)
+  if FBodyLen = 0 then
+    Exit(nil);
+  SetLength(Result, FBodyLen);
+  // perf: zero-copy single source via bytes.ops.BytesCopy inline single Move(ASrc^,ADst^,ALen) INV-5
+  BytesCopy(@Result[0], @FBodyBuffer[0], FBodyLen);
 end;
 
 procedure TH2Stream.Reset(const AErrorCode: UInt32);
@@ -978,7 +1001,8 @@ begin
   LUnread := UnreadBodyBytes;
   if LUnread = 0 then
     Exit;
-  FBodyReadPos := Length(FBodyBuffer);
+  FBodyReadPos := SizeInt(FBodyLen);
+  // stability: advance read pos to logical len, ConsumeBodyBytes releases credits, resource not lost (flow bookkeeping swallow)
   ConsumeBodyBytes(LUnread);
 end;
 

@@ -403,7 +403,7 @@ begin
     begin
       { 消费已解析前缀 }
       if LPos < Length(FBuf) then
-        Move(FBuf[LPos], FBuf[0], Length(FBuf) - LPos);
+        BytesCopy(@FBuf[0], @FBuf[LPos], SizeUInt(Length(FBuf) - LPos)); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy overlap-safe
       SetLength(FBuf, Length(FBuf) - LPos);
       Exit;
     end;
@@ -593,15 +593,9 @@ begin
     RespEncodeCommand(LArgs, LFrames);
     LStepFrames[I] := LFrames;
   end;
-  { 单次写 burst = 流水线关键路径 }
-  SetLength(LFrames, 0);
-  for I := 0 to High(LStepFrames) do
-  begin
-    SetLength(LFrames, Length(LFrames) + Length(LStepFrames[I]));
-    if Length(LStepFrames[I]) > 0 then
-      Move(LStepFrames[I][0], LFrames[Length(LFrames) -
-        Length(LStepFrames[I])], Length(LStepFrames[I]));
-  end;
+  { 单次写 burst = 流水线关键路径
+    perf: BytesConcatMany 单源单次 SetLength(Total)+分段 Move 零拷贝，几何单源，替代逐帧 SetLength 累加 O(n²) 搬运；inline 证据见 bytes.ops.BytesConcatMany/BytesCopy 单 Move 单源 }
+  LFrames := BytesConcatMany(LStepFrames);
   LT0 := 0;
   LTimed := FTrace.BeginOp(LT0);
   try

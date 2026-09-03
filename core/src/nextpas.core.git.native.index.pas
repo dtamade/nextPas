@@ -8,6 +8,7 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1,
@@ -115,7 +116,7 @@ begin
   Need(Length(AData), APos, ACount);
   SetLength(Result, ACount);
   if ACount > 0 then
-    Move(AData[APos], Result[0], ACount);
+    BytesCopy(@Result[0], @AData[APos], SizeUInt(ACount)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 function BytesRangeToString(const AData: TBytes; const AStart,
@@ -123,7 +124,7 @@ function BytesRangeToString(const AData: TBytes; const AStart,
 begin
   SetLength(Result, ACount);
   if ACount > 0 then
-    Move(AData[AStart], Result[1], ACount);
+    BytesCopy(Pointer(Result), @AData[AStart], SizeUInt(ACount)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 { Offset-encoding varint shared by pack OFS_DELTA headers and index v4
@@ -165,7 +166,7 @@ begin
   AEntry.UID := Be32At(AData, APos + 28);
   AEntry.GID := Be32At(AData, APos + 32);
   AEntry.Size := Be32At(AData, APos + 36);
-  Move(AData[APos + 40], AEntry.Oid.Bytes[0], GitOidRawLen);
+  BytesCopy(@AEntry.Oid.Bytes[0], @AData[APos + 40], GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   Flags := Be16At(AData, APos + 60);
   AEntry.AssumeValid := (Flags and $8000) <> 0;
   AEntry.Stage := Byte((Flags shr 12) and $3);
@@ -229,7 +230,7 @@ begin
   AEntry.UID := Be32At(AData, APos + 28);
   AEntry.GID := Be32At(AData, APos + 32);
   AEntry.Size := Be32At(AData, APos + 36);
-  Move(AData[APos + 40], AEntry.Oid.Bytes[0], GitOidRawLen);
+  BytesCopy(@AEntry.Oid.Bytes[0], @AData[APos + 40], GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   Flags := Be16At(AData, APos + 60);
   AEntry.AssumeValid := (Flags and $8000) <> 0;
   AEntry.Stage := Byte((Flags shr 12) and $3);
@@ -277,7 +278,7 @@ var
 begin
   H := NewSHA1;
   H.Write(AData[0], SizeUInt(Length(AData) - CTrailerLen));
-  Move(H.SumBytes[0], Got.Bytes[0], GitOidRawLen);
+  BytesCopy(@Got.Bytes[0], @H.SumBytes[0], GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   for I := 0 to GitOidRawLen - 1 do
     if Got.Bytes[I] <> AData[Length(AData) - CTrailerLen + I] then
       raise EGitError.Create('index checksum mismatch');
@@ -539,7 +540,7 @@ begin
   Put32(ABuf, APos + 28, AEntry.UID);
   Put32(ABuf, APos + 32, AEntry.GID);
   Put32(ABuf, APos + 36, AEntry.Size);
-  Move(AEntry.Oid.Bytes[0], ABuf[APos + 40], GitOidRawLen);
+  BytesCopy(@ABuf[APos + 40], @AEntry.Oid.Bytes[0], GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   Put16(ABuf, APos + 60, FlagsWordFor(AEntry));
   if AEntry.SkipWorktree or AEntry.IntentToAdd then
     Put16(ABuf, APos + 62,
@@ -599,8 +600,7 @@ begin
       Common := CommonPrefixLen(PrevPath, AEntries[I].Path);
       WriteOffsetVarint(Result, P, Length(PrevPath) - Common);
       if Common < Length(AEntries[I].Path) then
-        Move(AEntries[I].Path[Common + 1], Result[P],
-          Length(AEntries[I].Path) - Common);
+        BytesCopy(@Result[P], @AEntries[I].Path[Common + 1], SizeUInt(Length(AEntries[I].Path) - Common)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
       P := P + Length(AEntries[I].Path) - Common;
       Result[P] := 0;
       Inc(P);
@@ -610,7 +610,7 @@ begin
       // name plus padding only — the fixed part is already advanced past
       EntSize := ((EntSize + Length(AEntries[I].Path) + 8) and (not 7))
         - EntSize;
-      Move(AEntries[I].Path[1], Result[P], Length(AEntries[I].Path));
+      BytesCopy(@Result[P], Pointer(AEntries[I].Path), SizeUInt(Length(AEntries[I].Path))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
       // padding bytes are already zeroed by the allocation above
       P := P + EntSize;
     end;
@@ -621,7 +621,7 @@ begin
 
   H := NewSHA1;
   H.Write(Result[0], SizeUInt(Total - CTrailerLen));
-  Move(H.SumBytes[0], Result[Total - CTrailerLen], GitOidRawLen);
+  BytesCopy(@Result[Total - CTrailerLen], @H.SumBytes[0], GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 procedure GitWriteIndex(const AGitDir: string;
@@ -745,19 +745,19 @@ begin
 
   // splice the extension in front of the base checksum, then reseal
   SetLength(Result, NewTotal);
-  Move(Base[0], Result[0], BaseLen - CTrailerLen);
+  BytesCopy(@Result[0], @Base[0], SizeUInt(BaseLen - CTrailerLen)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   P := BaseLen - CTrailerLen;
   Result[P] := Ord('T');
   Result[P + 1] := Ord('R');
   Result[P + 2] := Ord('E');
   Result[P + 3] := Ord('E');
   Put32(Result, P + 4, Cardinal(Length(ExtData)));
-  Move(ExtData[0], Result[P + 8], Length(ExtData));
+  BytesCopy(@Result[P + 8], @ExtData[0], SizeUInt(Length(ExtData))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 
   Hasher := NewSHA1;
   Hasher.Write(Result[0], SizeUInt(NewTotal - CTrailerLen));
-  Move(Hasher.SumBytes[0], Result[NewTotal - CTrailerLen],
-    GitOidRawLen);
+  BytesCopy(@Result[NewTotal - CTrailerLen], @Hasher.SumBytes[0],
+    GitOidRawLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 procedure GitWriteIndexFile(const AGitDir: string;

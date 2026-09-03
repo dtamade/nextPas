@@ -1,28 +1,19 @@
 unit nextpas.core.exception;
 {**
  * @desc Canonical framework exception root and common taxonomy.
+ * L0 root — zero SysUtils dependency, self-owned Exception (fmessage/fhelpcontext FPC-ABI compatible).
+ * Single-source via nextpas.core.bytes.ops.BytesGrowCapacityInt (INV-5, geometric, amortized O(1), BYTES_BUILDER_MIN_GROW) + zero-copy Move Pointer(Result)^.
+ * Dual-compiler stub debt converged: no uses SysUtils transparent re-export; SysUtils stub remains name-bridge only.
  *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
-{$IFDEF FPC}
-uses
-  SysUtils;  { Exception, ExceptClass — FPC runtime, routed through here }
-
 type
-  Exception = SysUtils.Exception;
-  ExceptClass = SysUtils.ExceptClass;
-  EConvertError = SysUtils.EConvertError;
-  ERangeError = SysUtils.ERangeError;
-  EAssertionFailed = SysUtils.EAssertionFailed;
-  EAbort = SysUtils.EAbort;
-  EArgumentException = SysUtils.EArgumentException;
-{$ELSE}
-type
-  { Base Exception class — nextPas native implementation.
-    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety. }
+  { Base Exception class — nextPas native implementation, self-owned.
+    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety.
+    No SysUtils re-export — L0 owns taxonomy, SysUtils stub is bridge-only. }
   Exception = class(TObject)
   private
     fmessage: string;
@@ -41,7 +32,6 @@ type
   EAssertionFailed = class(Exception);
   EAbort = class(Exception);
   EArgumentException = class(Exception);
-{$ENDIF}
 
   TErrorCategory = (
     ecNone,
@@ -227,6 +217,11 @@ function ExceptAddr: Pointer; inline;
 function ExceptFrameCount: LongInt; inline;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 
+{ Exception capture — centralized so L1 thread modules don't use SysUtils directly.
+  Single-source over FPC RTL raiseframe chain; inline zero-copy forward to
+  System.AcquireExceptionObject (no alloc, ownership transfer to capture site). }
+function AcquireExceptionObject: Pointer; inline;
+
 implementation
 
 uses
@@ -351,7 +346,6 @@ begin
   SetLength(Result, LLen);
 end;
 
-{$IFNDEF FPC}
 constructor Exception.Create(const msg: string);
 begin
   inherited Create;
@@ -363,7 +357,6 @@ constructor Exception.CreateFmt(const msg: string; const args: array of const);
 begin
   Create(FormatStr(msg, args));
 end;
-{$ENDIF}
 
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 begin
@@ -673,24 +666,32 @@ begin
   inherited Create(AMessage);
 end;
 
-{ Exception backtrace — inline single-source delegation to FPC RTL }
+{ Exception backtrace/capture — inline single-source delegation to FPC RTL
+  perf: inline zero-copy forward to System raiseframe chain (no alloc, no SysUtils bridge);
+  stability: bounds-checked via ExceptFrameCount, nil on out-of-range, no resource leak;
+  AcquireExceptionObject transfers ownership to capture site (no copy). }
 {$IFDEF FPC}
 function ExceptAddr: Pointer; inline;
 begin
-  Result := SysUtils.ExceptAddr;
+  Result := System.ExceptAddr;
 end;
 
 function ExceptFrameCount: LongInt; inline;
 begin
-  Result := SysUtils.ExceptFrameCount;
+  Result := System.ExceptFrameCount;
 end;
 
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  if (AIndex < 0) or (AIndex >= SysUtils.ExceptFrameCount) then
+  if (AIndex < 0) or (AIndex >= System.ExceptFrameCount) then
     Result := nil
   else
-    Result := SysUtils.ExceptFrames[AIndex];
+    Result := System.ExceptFrames[AIndex];
+end;
+
+function AcquireExceptionObject: Pointer; inline;
+begin
+  Result := System.AcquireExceptionObject;
 end;
 {$ELSE}
 function ExceptAddr: Pointer; inline;
@@ -704,6 +705,11 @@ begin
 end;
 
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
+begin
+  Result := nil;
+end;
+
+function AcquireExceptionObject: Pointer; inline;
 begin
   Result := nil;
 end;

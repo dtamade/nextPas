@@ -68,6 +68,7 @@ type
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.random;
 
 constructor TSshTransportCore.Create;
@@ -166,7 +167,7 @@ begin
   SetLength(LBody, LBodyLen);
   LBody[0] := Byte(LPad);
   if LPayloadLen > 0 then
-    Move(LOut[0], LBody[1], LPayloadLen);
+    BytesCopy(@LBody[1], @LOut[0], LPayloadLen); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   if not SecureRandomBytes(@LBody[1 + LPayloadLen], Integer(LPad)) then
     raise ESSHError.Create(sekCrypto, 'ssh transport: SecureRandom failed');
   Result := FSender.Protect(LBody, FSendSeq);

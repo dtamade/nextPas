@@ -82,6 +82,8 @@ uses
   nextpas.core.git.native.index,
   nextpas.core.git.native.checkout,
   nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.text.builder,
   nextpas.core.text.utils,
   nextpas.core.platform.env;
 
@@ -638,19 +640,179 @@ var P: string; D: TBytes; S: string;
 begin Result:=nil; P:=PathJoin([AWorkTree,ARel]); if not FileExists(P) then Exit(nil); try D:=ReadFile(P); except Exit(nil); end; if IsBinaryBytes(D) then Exit(nil); S:=GitBytesToString(D); Result:=GitSplitLines(S); if (Length(Result)=1) and (Result[0]='') and (Length(S)=0) then SetLength(Result,0); if (Length(Result)>0) and (Result[High(Result)]='') and (Length(S)>0) and (S[Length(S)]=#10) then SetLength(Result,Length(Result)-1); end;
 
 procedure BuildLCSOps(const AOld, ANew: TStringArray; out AOpcodes: TStringArray; out AOldTexts: TStringArray; out ANewTexts: TStringArray);
-var N,M,I,J,K: Integer; LCS: array of Integer; Ops: TStringArray; OT, NT: TStringArray;
-begin N:=Length(AOld); M:=Length(ANew); SetLength(LCS,(N+1)*(M+1)); for I:=1 to N do for J:=1 to M do if AOld[I-1]=ANew[J-1] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+(J-1)]+1 else if LCS[(I-1)*(M+1)+J] >= LCS[I*(M+1)+(J-1)] then LCS[I*(M+1)+J]:=LCS[(I-1)*(M+1)+J] else LCS[I*(M+1)+J]:=LCS[I*(M+1)+(J-1)]; SetLength(Ops,0); SetLength(OT,0); SetLength(NT,0); I:=N; J:=M; while (I>0) or (J>0) do begin if (I>0) and (J>0) and (AOld[I-1]=ANew[J-1]) then begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:=' '; SetLength(OT,Length(OT)+1); OT[High(OT)]:=AOld[I-1]; SetLength(NT,Length(NT)+1); NT[High(NT)]:=ANew[J-1]; Dec(I); Dec(J); end else if (J>0) and ((I=0) or (LCS[I*(M+1)+(J-1)] >= LCS[(I-1)*(M+1)+J])) then begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:='+'; SetLength(OT,Length(OT)+1); OT[High(OT)]:=''; SetLength(NT,Length(NT)+1); NT[High(NT)]:=ANew[J-1]; Dec(J); end else begin SetLength(Ops,Length(Ops)+1); Ops[High(Ops)]:='-'; SetLength(OT,Length(OT)+1); OT[High(OT)]:=AOld[I-1]; SetLength(NT,Length(NT)+1); NT[High(NT)]:=''; Dec(I); end; end; SetLength(AOpcodes,Length(Ops)); SetLength(AOldTexts,Length(OT)); SetLength(ANewTexts,Length(NT)); for K:=0 to High(Ops) do begin AOpcodes[K]:=Ops[High(Ops)-K]; AOldTexts[K]:=OT[High(OT)-K]; ANewTexts[K]:=NT[High(NT)-K]; end; end;
+// perf: prefix/suffix trim shrinks LCS domain O(NM)->O(NP*MP), large-middle fallback >4M avoids OOM; ops single alloc N+M (bytes.ops.capacity geometric 0->64->2x single source) zero-copy string ref moves, single reverse pass; not inline per red-line 2 (loop+SetLength), stability: single SetLength per array exception-safe, no per-iteration realloc
+var
+  N, M, NP, MP, Pref, Suff, I, J, K, W, Cap, MidW: Integer;
+  LCS: array of Integer;
+  Ops: TStringArray;
+  OT, NT: TStringArray;
+  MidOps: TStringArray;
+  MidOT, MidNT: TStringArray;
+begin
+  N := Length(AOld);
+  M := Length(ANew);
+  if (N = 0) and (M = 0) then
+  begin
+    AOpcodes := nil; AOldTexts := nil; ANewTexts := nil; Exit;
+  end;
+  Pref := 0;
+  while (Pref < N) and (Pref < M) and (AOld[Pref] = ANew[Pref]) do Inc(Pref);
+  Suff := 0;
+  while (Suff < N - Pref) and (Suff < M - Pref) and (AOld[N - 1 - Suff] = ANew[M - 1 - Suff]) do Inc(Suff);
+  NP := N - Pref - Suff;
+  MP := M - Pref - Suff;
+  // bytes.ops.capacity single source geometric 0->64->2x; N+M upper bound, grow via BytesNextCapacity avoids O(n^2) per-op SetLength
+  Cap := Integer(BytesNextCapacity(0, SizeUInt(N + M)));
+  if Cap < N + M then Cap := N + M;
+  if Cap = 0 then Cap := 1;
+  SetLength(Ops, Cap);
+  SetLength(OT, Cap);
+  SetLength(NT, Cap);
+  W := 0;
+  for I := 0 to Pref - 1 do
+  begin Ops[W] := ' '; OT[W] := AOld[I]; NT[W] := ANew[I]; Inc(W); end;
+  if (NP = 0) and (MP = 0) then
+  begin
+  end
+  else if NP = 0 then
+  begin
+    for J := 0 to MP - 1 do begin Ops[W] := '+'; OT[W] := ''; NT[W] := ANew[Pref + J]; Inc(W); end;
+  end
+  else if MP = 0 then
+  begin
+    for I := 0 to NP - 1 do begin Ops[W] := '-'; OT[W] := AOld[Pref + I]; NT[W] := ''; Inc(W); end;
+  end
+  else if Int64(NP) * Int64(MP) > 4000000 then
+  begin
+    // large middle linear fallback O(N+M) to avoid (NP+1)*(MP+1) blowup; correct though non-minimal
+    for I := 0 to NP - 1 do begin Ops[W] := '-'; OT[W] := AOld[Pref + I]; NT[W] := ''; Inc(W); end;
+    for J := 0 to MP - 1 do begin Ops[W] := '+'; OT[W] := ''; NT[W] := ANew[Pref + J]; Inc(W); end;
+  end
+  else
+  begin
+    SetLength(LCS, (NP + 1) * (MP + 1));
+    for I := 1 to NP do
+      for J := 1 to MP do
+        if AOld[Pref + I - 1] = ANew[Pref + J - 1] then
+          LCS[I * (MP + 1) + J] := LCS[(I - 1) * (MP + 1) + (J - 1)] + 1
+        else if LCS[(I - 1) * (MP + 1) + J] >= LCS[I * (MP + 1) + (J - 1)] then
+          LCS[I * (MP + 1) + J] := LCS[(I - 1) * (MP + 1) + J]
+        else
+          LCS[I * (MP + 1) + J] := LCS[I * (MP + 1) + (J - 1)];
+    SetLength(MidOps, NP + MP);
+    SetLength(MidOT, NP + MP);
+    SetLength(MidNT, NP + MP);
+    MidW := 0; I := NP; J := MP;
+    while (I > 0) or (J > 0) do
+    begin
+      if (I > 0) and (J > 0) and (AOld[Pref + I - 1] = ANew[Pref + J - 1]) then
+      begin MidOps[MidW] := ' '; MidOT[MidW] := AOld[Pref + I - 1]; MidNT[MidW] := ANew[Pref + J - 1]; Dec(I); Dec(J); end
+      else if (J > 0) and ((I = 0) or (LCS[I * (MP + 1) + (J - 1)] >= LCS[(I - 1) * (MP + 1) + J])) then
+      begin MidOps[MidW] := '+'; MidOT[MidW] := ''; MidNT[MidW] := ANew[Pref + J - 1]; Dec(J); end
+      else
+      begin MidOps[MidW] := '-'; MidOT[MidW] := AOld[Pref + I - 1]; MidNT[MidW] := ''; Dec(I); end;
+      Inc(MidW);
+    end;
+    for K := MidW - 1 downto 0 do begin Ops[W] := MidOps[K]; OT[W] := MidOT[K]; NT[W] := MidNT[K]; Inc(W); end;
+  end;
+  for I := 0 to Suff - 1 do begin Ops[W] := ' '; OT[W] := AOld[N - Suff + I]; NT[W] := ANew[M - Suff + I]; Inc(W); end;
+  // zero-copy ownership: single trim + ref move, no per-op SetLength
+  SetLength(Ops, W); SetLength(OT, W); SetLength(NT, W);
+  AOpcodes := Ops; AOldTexts := OT; ANewTexts := NT;
+end;
 
 function UnifiedHunksFromOps(const AOpcodes: TStringArray; const AOldTexts, ANewTexts: TStringArray; AContext: Integer): THunkArray;
-var N,I, OldNo, NewNo, S, E, HS, HE, OC, NC, K: Integer; HasChange: Boolean; H: TGitDiffHunk; ChangedBlocks: array of record S,E: Integer; end; CB: Integer;
-begin Result:=nil; N:=Length(AOpcodes); if N=0 then Exit; SetLength(ChangedBlocks,0); I:=0; while I<N do begin if AOpcodes[I]<>' ' then begin S:=I; while (I<N) and (AOpcodes[I]<>' ') do Inc(I); E:=I-1; CB:=Length(ChangedBlocks); SetLength(ChangedBlocks,CB+1); ChangedBlocks[CB].S:=S; ChangedBlocks[CB].E:=E; end else Inc(I); end; if Length(ChangedBlocks)=0 then Exit; OldNo:=1; NewNo:=1; for I:=0 to High(AOpcodes) do begin if I=0 then begin end; end; // placeholder to avoid unused
-  for CB:=0 to High(ChangedBlocks) do begin S:=ChangedBlocks[CB].S - AContext; if S<0 then S:=0; E:=ChangedBlocks[CB].E + AContext; if E>=N then E:=N-1; if (CB>0) and (S <= ChangedBlocks[CB-1].E + AContext*2 +1) then begin if S <= ChangedBlocks[CB-1].E + AContext then Continue; // merged previously (simplify: keep separate)
-    end; HS:=S; HE:=E; H.OldStart:=1; H.NewStart:=1; OC:=0; NC:=0; OldNo:=1; NewNo:=1; for K:=0 to HS-1 do begin if AOpcodes[K]=' ' then begin Inc(OldNo); Inc(NewNo); end else if AOpcodes[K]='-' then Inc(OldNo) else Inc(NewNo); end; H.OldStart:=OldNo; H.NewStart:=NewNo; for K:=HS to HE do begin if AOpcodes[K]=' ' then begin Inc(OC); Inc(NC); end else if AOpcodes[K]='-' then Inc(OC) else Inc(NC); end; H.OldCount:=OC; H.NewCount:=NC; H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@'; SetLength(H.Lines,0); for K:=HS to HE do begin SetLength(H.Lines,Length(H.Lines)+1); if AOpcodes[K]=' ' then H.Lines[High(H.Lines)]:=' '+AOldTexts[K] else if AOpcodes[K]='-' then H.Lines[High(H.Lines)]:='-'+AOldTexts[K] else H.Lines[High(H.Lines)]:='+'+ANewTexts[K]; end; SetLength(Result,Length(Result)+1); Result[High(Result)]:=H; end;
+var N,I, OldNo, NewNo, S, E, HS, HE, OC, NC, K: Integer; H: TGitDiffHunk; ChangedBlocks: array of record S,E: Integer; end; CB: Integer;
+  LChangedCap, LChangedCount, LResultCap, LResultCount, LLinesNeeded, LLinesCap: Integer;
+  LOldLen, LAddLen, LNeedLen, LNewCap: Integer;
+begin
+  Result:=nil; N:=Length(AOpcodes); if N=0 then Exit;
+  // perf: ChangedBlocks geometric via bytes.ops.BytesGrowCapacityInt single source 0->64->2x amortized O(1), not inline per red-line 2; zero-copy record moves, single SetLength per growth
+  LChangedCap:=0; LChangedCount:=0; SetLength(ChangedBlocks,0);
+  I:=0;
+  while I<N do
+  begin
+    if AOpcodes[I]<>' ' then
+    begin
+      S:=I; while (I<N) and (AOpcodes[I]<>' ') do Inc(I); E:=I-1;
+      if LChangedCount >= LChangedCap then
+      begin
+        LChangedCap:=BytesGrowCapacityInt(LChangedCap, LChangedCount+1);
+        SetLength(ChangedBlocks, LChangedCap);
+      end;
+      ChangedBlocks[LChangedCount].S:=S; ChangedBlocks[LChangedCount].E:=E; Inc(LChangedCount);
+    end else Inc(I);
+  end;
+  SetLength(ChangedBlocks, LChangedCount);
+  if Length(ChangedBlocks)=0 then Exit;
+  // perf: Result hunks geometric via BytesGrowCapacityInt single source, amortized O(1), single SetLength per growth, zero-copy H moves; H.Lines single alloc via geometric cap
+  LResultCap:=0; LResultCount:=0; SetLength(Result,0);
+  for CB:=0 to High(ChangedBlocks) do
+  begin
+    S:=ChangedBlocks[CB].S - AContext; if S<0 then S:=0; E:=ChangedBlocks[CB].E + AContext; if E>=N then E:=N-1;
+    if (CB>0) and (S <= ChangedBlocks[CB-1].E + AContext*2 +1) then
+    begin
+      if S <= ChangedBlocks[CB-1].E + AContext then Continue;
+    end;
+    HS:=S; HE:=E;
+    OC:=0; NC:=0; OldNo:=1; NewNo:=1;
+    for K:=0 to HS-1 do
+    begin
+      if AOpcodes[K]=' ' then begin Inc(OldNo); Inc(NewNo); end else if AOpcodes[K]='-' then Inc(OldNo) else Inc(NewNo);
+    end;
+    H.OldStart:=OldNo; H.NewStart:=NewNo;
+    for K:=HS to HE do
+    begin
+      if AOpcodes[K]=' ' then begin Inc(OC); Inc(NC); end else if AOpcodes[K]='-' then Inc(OC) else Inc(NC);
+    end;
+    H.OldCount:=OC; H.NewCount:=NC;
+    H.Header:='@@ -'+IntToStr(H.OldStart)+','+IntToStr(H.OldCount)+' +'+IntToStr(H.NewStart)+','+IntToStr(H.NewCount)+' @@';
+    // perf: H.Lines single prealloc via BytesGrowCapacityInt geometric single source, O(n) zero-copy string ref moves, single SetLength + single trim, avoids O(n^2) per-iteration realloc
+    LLinesNeeded:=HE-HS+1;
+    if LLinesNeeded<0 then LLinesNeeded:=0;
+    LLinesCap:=BytesGrowCapacityInt(0, LLinesNeeded);
+    if LLinesCap < LLinesNeeded then LLinesCap:=LLinesNeeded;
+    SetLength(H.Lines, LLinesCap);
+    for K:=HS to HE do
+    begin
+      if AOpcodes[K]=' ' then H.Lines[K-HS]:=' '+AOldTexts[K]
+      else if AOpcodes[K]='-' then H.Lines[K-HS]:='-'+AOldTexts[K]
+      else H.Lines[K-HS]:='+'+ANewTexts[K];
+    end;
+    SetLength(H.Lines, LLinesNeeded);
+    if LResultCount >= LResultCap then
+    begin
+      LResultCap:=BytesGrowCapacityInt(LResultCap, LResultCount+1);
+      SetLength(Result, LResultCap);
+    end;
+    Result[LResultCount]:=H; Inc(LResultCount);
+  end;
+  SetLength(Result, LResultCount);
   // merge overlapping hunks produced above (if context causes overlap, previous loop kept separate incorrectly; fix by merging)
-  if Length(Result)>1 then begin // simple merge pass
-    I:=0; while I<Length(Result)-1 do begin if Result[I].NewStart+Result[I].NewCount + AContext >= Result[I+1].NewStart then begin // merge I and I+1 by recomputing from stitched ops (fallback: keep first, drop second to avoid overlap failure)
-        // crude merge: concatenate Lines and update counts/header
-        for K:=0 to High(Result[I+1].Lines) do begin SetLength(Result[I].Lines,Length(Result[I].Lines)+1); Result[I].Lines[High(Result[I].Lines)]:=Result[I+1].Lines[K]; end; Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount; Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount; Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@'; for K:=I+1 to High(Result)-1 do Result[K]:=Result[K+1]; SetLength(Result,Length(Result)-1); end else Inc(I); end;
+  if Length(Result)>1 then
+  begin
+    I:=0;
+    while I<Length(Result)-1 do
+    begin
+      if Result[I].NewStart+Result[I].NewCount + AContext >= Result[I+1].NewStart then
+      begin
+        // perf: merge Lines geometric via BytesGrowCapacityInt single source, single grow+copy, zero-copy string moves, avoids per-line O(n^2) realloc
+        LOldLen:=Length(Result[I].Lines);
+        LAddLen:=Length(Result[I+1].Lines);
+        LNeedLen:=LOldLen+LAddLen;
+        LNewCap:=BytesGrowCapacityInt(LOldLen, LNeedLen);
+        if LNewCap < LNeedLen then LNewCap:=LNeedLen;
+        SetLength(Result[I].Lines, LNewCap);
+        for K:=0 to LAddLen-1 do
+          Result[I].Lines[LOldLen+K]:=Result[I+1].Lines[K];
+        SetLength(Result[I].Lines, LNeedLen);
+        Result[I].OldCount:=Result[I].OldCount+Result[I+1].OldCount;
+        Result[I].NewCount:=Result[I].NewCount+Result[I+1].NewCount;
+        Result[I].Header:='@@ -'+IntToStr(Result[I].OldStart)+','+IntToStr(Result[I].OldCount)+' +'+IntToStr(Result[I].NewStart)+','+IntToStr(Result[I].NewCount)+' @@';
+        for K:=I+1 to High(Result)-1 do Result[K]:=Result[K+1];
+        SetLength(Result,Length(Result)-1);
+      end else Inc(I);
+    end;
   end;
 end;
 
@@ -747,7 +909,14 @@ begin
     if NewLines=nil then begin
       if FileExists(PathJoin([Work,Path])) then Continue else begin
         Hunks:=BuildPureFileHunks(OldLines,NewLines,Ctx);
-        if Length(Hunks)=0 then begin SetLength(Hunks,1); Hunks[0].Header:='@@ -1,'+IntToStr(Length(OldLines))+' +1,0 @@'; Hunks[0].OldStart:=1; Hunks[0].OldCount:=Length(OldLines); Hunks[0].NewStart:=1; Hunks[0].NewCount:=0; Hunks[0].Lines:=nil; for J:=0 to High(OldLines) do begin SetLength(Hunks[0].Lines,Length(Hunks[0].Lines)+1); Hunks[0].Lines[High(Hunks[0].Lines)]:='-'+OldLines[J]; end; end;
+        if Length(Hunks)=0 then
+        begin
+          SetLength(Hunks,1); Hunks[0].Header:='@@ -1,'+IntToStr(Length(OldLines))+' +1,0 @@'; Hunks[0].OldStart:=1; Hunks[0].OldCount:=Length(OldLines); Hunks[0].NewStart:=1; Hunks[0].NewCount:=0;
+          // perf: single prealloc via BytesGrowCapacityInt geometric single source amortized O(1) zero-copy string moves, avoids O(n^2) per-line SetLength
+          SetLength(Hunks[0].Lines, BytesGrowCapacityInt(0, Length(OldLines)));
+          for J:=0 to High(OldLines) do Hunks[0].Lines[J]:='-'+OldLines[J];
+          SetLength(Hunks[0].Lines, Length(OldLines));
+        end;
         F.OldPath:=Path; F.NewPath:=Path; F.Status:=gdsDeleted; Add:=0; Del:=0; for J:=0 to High(Hunks) do for K:=0 to High(Hunks[J].Lines) do if Length(Hunks[J].Lines[K])>0 then if Hunks[J].Lines[K][1]='-' then Inc(Del);
         F.Additions:=Add; F.Deletions:=Del; F.Hunks:=Hunks; SetLength(Result.Files,Length(Result.Files)+1); Result.Files[High(Result.Files)]:=F; Continue; end;
     end;
@@ -810,51 +979,96 @@ begin
 end;
 
 procedure TNativeRepositoryAdapter.ApplyPatch(const APatchText: string);
-var Work: string; Lines: TStringArray; I, SPos: Integer; Line, APath, BPath, CurPath: string; OldLines, NewLines: TStringArray; Hunks: THunkArray; CurHunk: TGitDiffHunk; InHunk: Boolean; FullPath: string; NewContent: string; J, K, OldIdx: Integer; Applied: Boolean;
+var Work: string; Lines: TStringArray; I, SPos: Integer; Line, APath, BPath, CurPath: string; OldLines, NewLines: TStringArray; Hunks: THunkArray; CurHunk: TGitDiffHunk; InHunk: Boolean; FullPath: string; NewContent: string; J, K, OldIdx: Integer;
+  LHunksCap, LHunksCount, LNewCap, LNewCount, LCurCap, LCurCount: Integer;
+  LBuilder: TBufStringBuilder;
   function IsBinaryHunk(const AHunk: TGitDiffHunk): Boolean; inline; begin Result:=False; for K:=0 to High(AHunk.Lines) do if Pos('Binary',AHunk.Lines[K])>0 then Exit(True); end;
+  procedure AppendNewLine(const S: string); inline;
+  begin
+    if LNewCount >= LNewCap then
+    begin
+      LNewCap:=BytesGrowCapacityInt(LNewCap, LNewCount+1);
+      SetLength(NewLines, LNewCap);
+    end;
+    NewLines[LNewCount]:=S; Inc(LNewCount);
+  end;
+  procedure FlushCurHunk; inline;
+  begin
+    if not InHunk then Exit;
+    if LHunksCount >= LHunksCap then
+    begin
+      LHunksCap:=BytesGrowCapacityInt(LHunksCap, LHunksCount+1);
+      SetLength(Hunks, LHunksCap);
+    end;
+    // trim CurHunk.Lines to actual count before move
+    SetLength(CurHunk.Lines, LCurCount);
+    Hunks[LHunksCount]:=CurHunk; Inc(LHunksCount);
+    CurHunk.Header:=''; CurHunk.Lines:=nil; LCurCap:=0; LCurCount:=0; InHunk:=False;
+  end;
+  procedure BuildAndWrite(const APath: string);
+  var JJ, KK: Integer;
+  begin
+    if LHunksCount=0 then Exit;
+    SetLength(Hunks, LHunksCount);
+    FullPath:=PathJoin([Work,APath]);
+    OldLines:=WorkTreeLinesOf(Work,APath); if OldLines=nil then SetLength(OldLines,0);
+    NewLines:=nil; LNewCap:=0; LNewCount:=0; SetLength(NewLines,0); OldIdx:=0;
+    for JJ:=0 to High(Hunks) do
+      for KK:=0 to High(Hunks[JJ].Lines) do
+      begin
+        if Length(Hunks[JJ].Lines[KK])=0 then Continue;
+        case Hunks[JJ].Lines[KK][1] of
+          ' ': if OldIdx<Length(OldLines) then begin AppendNewLine(OldLines[OldIdx]); Inc(OldIdx); end;
+          '-': Inc(OldIdx);
+          '+': AppendNewLine(Copy(Hunks[JJ].Lines[KK],2,MaxInt));
+        end;
+      end;
+    while OldIdx<Length(OldLines) do begin AppendNewLine(OldLines[OldIdx]); Inc(OldIdx); end;
+    SetLength(NewLines, LNewCount);
+    // perf: single allocation via TBufStringBuilder(text.builder L1 owner) reusing bytes.ops.BytesGrowCapacity geometric amortized O(1) zero-copy AppendStr single Move, avoids O(n^2) Result+ loop realloc; stability try/finally Done
+    LBuilder.Init(1024);
+    try
+      for JJ:=0 to High(NewLines) do begin LBuilder.AppendStr(NewLines[JJ]); LBuilder.AppendChar(#10); end;
+      NewContent:=LBuilder.ToString;
+    finally LBuilder.Done; end;
+    try MkdirAll(PathDir(FullPath),PermDirDefault); WriteFileText(FullPath,NewContent); except on E: Exception do raise EGitError.Create('ApplyPatch: write "'+APath+'": '+E.Message); end;
+  end;
 begin
   EnsureOpen; if APatchText='' then Exit; Work:=WorkDirOf(FGitDir,FWorkTree); if Work='' then raise EGitError.Create('ApplyPatch: bare repository has no workdir');
   Lines:=GitSplitLines(APatchText);
-  CurPath:=''; CurHunk.Header:=''; CurHunk.Lines:=nil; InHunk:=False; Hunks:=nil;
-  for I:=0 to High(Lines) do begin
+  CurPath:=''; CurHunk.Header:=''; CurHunk.Lines:=nil; InHunk:=False; Hunks:=nil; LHunksCap:=0; LHunksCount:=0; LCurCap:=0; LCurCount:=0;
+  for I:=0 to High(Lines) do
+  begin
     Line:=Lines[I];
-    if Pos('diff --git ',Line)=1 then begin
-      if CurPath<>'' then begin
-        if InHunk then begin SetLength(Hunks,Length(Hunks)+1); Hunks[High(Hunks)]:=CurHunk; end;
-        if Length(Hunks)>0 then begin FullPath:=PathJoin([Work,CurPath]); OldLines:=WorkTreeLinesOf(Work,CurPath); if OldLines=nil then SetLength(OldLines,0); NewLines:=nil; OldIdx:=0; SetLength(NewLines,0);
-          for J:=0 to High(Hunks) do begin
-            for K:=0 to High(Hunks[J].Lines) do begin
-              if Length(Hunks[J].Lines[K])=0 then Continue;
-              case Hunks[J].Lines[K][1] of
-                ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end;
-                '-': Inc(OldIdx);
-                '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end;
-              end;
-            end;
-          end;
-          while OldIdx<Length(OldLines) do begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end;
-          NewContent:=''; for J:=0 to High(NewLines) do NewContent:=NewContent+NewLines[J]+#10;
-          try MkdirAll(PathDir(FullPath),PermDirDefault); WriteFileText(FullPath,NewContent); except on E: Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+E.Message); end;
-        end;
-        Hunks:=nil; CurHunk.Header:=''; CurHunk.Lines:=nil; InHunk:=False;
+    if Pos('diff --git ',Line)=1 then
+    begin
+      if CurPath<>'' then
+      begin
+        FlushCurHunk;
+        BuildAndWrite(CurPath);
+        Hunks:=nil; LHunksCap:=0; LHunksCount:=0; CurHunk.Header:=''; CurHunk.Lines:=nil; LCurCap:=0; LCurCount:=0; InHunk:=False;
       end;
       SPos:=Pos(' b/',Line); if SPos>0 then BPath:=Copy(Line,SPos+3,MaxInt) else BPath:=''; CurPath:=BPath; APath:=BPath;
-    end else if Pos('@@ ',Line)=1 then begin
-      if InHunk then begin SetLength(Hunks,Length(Hunks)+1); Hunks[High(Hunks)]:=CurHunk; end;
-      CurHunk.Header:=Line; CurHunk.Lines:=nil; InHunk:=True;
-    end else if InHunk and (Length(Line)>0) and (Line[1] in [' ','+','-']) then begin
+    end else if Pos('@@ ',Line)=1 then
+    begin
+      FlushCurHunk;
+      CurHunk.Header:=Line; CurHunk.Lines:=nil; LCurCap:=0; LCurCount:=0; InHunk:=True;
+    end else if InHunk and (Length(Line)>0) and (Line[1] in [' ','+','-']) then
+    begin
       if IsBinaryHunk(CurHunk) then Continue;
-      SetLength(CurHunk.Lines,Length(CurHunk.Lines)+1); CurHunk.Lines[High(CurHunk.Lines)]:=Line;
+      // perf: CurHunk.Lines geometric via BytesGrowCapacityInt single source amortized O(1) zero-copy string moves, not inline per red-line 2
+      if LCurCount >= LCurCap then
+      begin
+        LCurCap:=BytesGrowCapacityInt(LCurCap, LCurCount+1);
+        SetLength(CurHunk.Lines, LCurCap);
+      end;
+      CurHunk.Lines[LCurCount]:=Line; Inc(LCurCount);
     end;
   end;
-  if CurPath<>'' then begin
-    if InHunk then begin SetLength(Hunks,Length(Hunks)+1); Hunks[High(Hunks)]:=CurHunk; end;
-    if Length(Hunks)>0 then begin FullPath:=PathJoin([Work,CurPath]); OldLines:=WorkTreeLinesOf(Work,CurPath); if OldLines=nil then SetLength(OldLines,0); NewLines:=nil; OldIdx:=0; SetLength(NewLines,0);
-      for J:=0 to High(Hunks) do for K:=0 to High(Hunks[J].Lines) do begin if Length(Hunks[J].Lines[K])=0 then Continue; case Hunks[J].Lines[K][1] of ' ': begin if OldIdx<Length(OldLines) then begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end; end; '-': Inc(OldIdx); '+': begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=Copy(Hunks[J].Lines[K],2,MaxInt); end; end; end;
-      while OldIdx<Length(OldLines) do begin SetLength(NewLines,Length(NewLines)+1); NewLines[High(NewLines)]:=OldLines[OldIdx]; Inc(OldIdx); end;
-      NewContent:=''; for J:=0 to High(NewLines) do NewContent:=NewContent+NewLines[J]+#10;
-      try MkdirAll(PathDir(FullPath),PermDirDefault); WriteFileText(FullPath,NewContent); except on E: Exception do raise EGitError.Create('ApplyPatch: write "'+CurPath+'": '+E.Message); end;
-    end;
+  if CurPath<>'' then
+  begin
+    FlushCurHunk;
+    BuildAndWrite(CurPath);
   end;
 end;
 
@@ -891,27 +1105,35 @@ begin
 end;
 
 function TNativeRepositoryAdapter.WorkdirPatchText(const ARevspec: string; const APaths: TStringArray; AShowBinary: Boolean): string;
-var Work: string; D: TGitDiff; Opts: TGitDiffOptions; I, J: Integer; S: string; HasBinary: Boolean;
+var Work: string; D: TGitDiff; Opts: TGitDiffOptions; I, J, K: Integer; HasBinary: Boolean;
+  LBuilder: TBufStringBuilder;
   function IsBin(const AHunks: array of TGitDiffHunk): Boolean; inline;
-  var K: Integer;
-  begin Result:=False; for K:=0 to High(AHunks) do if Length(AHunks[K].Lines)=0 then begin Result:=True; Exit; end; end;
+  var K2: Integer;
+  begin Result:=False; for K2:=0 to High(AHunks) do if Length(AHunks[K2].Lines)=0 then begin Result:=True; Exit; end; end;
 begin
-  EnsureOpen; Result:=''; Work:=WorkDirOf(FGitDir,FWorkTree); if Work='' then raise EGitError.Create('WorkdirPatchText: bare repository has no workdir');
+  EnsureOpen; Work:=WorkDirOf(FGitDir,FWorkTree); if Work='' then raise EGitError.Create('WorkdirPatchText: bare repository has no workdir');
   Opts:=DefaultGitDiffOptions; Opts.Paths:=APaths;
   if TrimInline(ARevspec)='' then D:=DiffWorkingTreeEx('HEAD',Opts) else D:=DiffWorkingTreeEx(ARevspec,Opts);
-  for I:=0 to High(D.Files) do begin
-    HasBinary:=IsBin(D.Files[I].Hunks);
-    if HasBinary and not AShowBinary then Continue;
-    S:='diff --git a/'+D.Files[I].OldPath+' b/'+D.Files[I].NewPath+#10+
-       '--- a/'+D.Files[I].OldPath+#10+
-       '+++ b/'+D.Files[I].NewPath+#10;
-    Result:=Result+S;
-    if HasBinary then begin Result:=Result+'Binary files differ'#10; Continue; end;
-    for J:=0 to High(D.Files[I].Hunks) do begin
-      Result:=Result+D.Files[I].Hunks[J].Header+#10;
-      for S in D.Files[I].Hunks[J].Lines do Result:=Result+S+#10;
+  // perf: single allocation via TBufStringBuilder(text.builder L1 owner) reusing bytes.ops.BytesGrowCapacity geometric amortized O(1) zero-copy BytesCopy single Move; prealloc 2K covers common patch, grows 0->64->2x; avoids O(n^2) Result+ realloc+copy; stability try/finally Done
+  LBuilder.Init(2048);
+  try
+    for I:=0 to High(D.Files) do
+    begin
+      HasBinary:=IsBin(D.Files[I].Hunks);
+      if HasBinary and not AShowBinary then Continue;
+      LBuilder.AppendStr('diff --git a/'+D.Files[I].OldPath+' b/'+D.Files[I].NewPath+#10);
+      LBuilder.AppendStr('--- a/'+D.Files[I].OldPath+#10);
+      LBuilder.AppendStr('+++ b/'+D.Files[I].NewPath+#10);
+      if HasBinary then begin LBuilder.AppendStr('Binary files differ'#10); Continue; end;
+      for J:=0 to High(D.Files[I].Hunks) do
+      begin
+        LBuilder.AppendStr(D.Files[I].Hunks[J].Header); LBuilder.AppendChar(#10);
+        for K:=0 to High(D.Files[I].Hunks[J].Lines) do
+        begin LBuilder.AppendStr(D.Files[I].Hunks[J].Lines[K]); LBuilder.AppendChar(#10); end;
+      end;
     end;
-  end;
+    Result:=LBuilder.ToString;
+  finally LBuilder.Done; end;
 end;
 
 { TNativeWorktree }

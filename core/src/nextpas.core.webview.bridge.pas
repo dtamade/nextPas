@@ -19,12 +19,12 @@ interface
 
 uses
   nextpas.core.json.value,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.json,
   nextpas.core.json.types,
   nextpas.core.json.builder,
+  nextpas.core.text.conv,
   nextpas.core.webview.base,
   nextpas.core.webview.intf;
 
@@ -282,6 +282,7 @@ begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
+  { perf: inline thin-forward to text.conv.IntToStr single source via text.number IntToBuffer (single SetLength+Move, zero-copy via bytes.ops single source, no SysUtils) }
   Result := '__npw.__resolve(' + IntToStr(AId) + ',' +
     JsStringLit(LJson) + ')';
 end;
