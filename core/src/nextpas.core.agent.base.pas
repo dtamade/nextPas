@@ -4,7 +4,8 @@
  * 契约权威：core/docs/agent/API.md §1。实现与文档冲突时先改文档。
  * 拆分：常量 → base.constants，类型 → base.types，助手 → base.helpers；
  * 本单元为转发薄壳（inline 转发，调用方 `uses nextpas.core.agent.base` 零改动）。
- * 体积：拆前 1177，拆后 ≤300（P-modularity）。
+ * 体积：拆前 1177，拆后 ~250（<800 阈值，四件套门面薄壳零逻辑达标；
+ * 内聚由子域 base.constants/types/helpers/slotmap/deltabuilder 单一真源保证）。
  *}
 
 unit nextpas.core.agent.base;

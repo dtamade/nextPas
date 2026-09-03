@@ -53,17 +53,33 @@ begin
 end;
 
 procedure AsciiToLowerInplace(AData: PByte; ALen: SizeUInt);
+var
+  LOff: SizeUInt;
+  P: PByte;
 begin
   if (AData = nil) or (ALen = 0) then
     Exit;
-  ToLowerAscii(AData, ALen);
+  for LOff := 0 to ALen - 1 do
+  begin
+    P := AData + LOff;
+    if (P^ >= 65) and (P^ <= 90) then
+      P^ := P^ + 32;
+  end;
 end;
 
 procedure AsciiToUpperInplace(AData: PByte; ALen: SizeUInt);
+var
+  LOff: SizeUInt;
+  P: PByte;
 begin
   if (AData = nil) or (ALen = 0) then
     Exit;
-  ToUpperAscii(AData, ALen);
+  for LOff := 0 to ALen - 1 do
+  begin
+    P := AData + LOff;
+    if (P^ >= 97) and (P^ <= 122) then
+      P^ := P^ - 32;
+  end;
 end;
 
 procedure SpanToLowerAscii(const ASpan: TByteSpan); inline;

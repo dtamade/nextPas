@@ -1,6 +1,6 @@
 unit nextpas.core.vfs;
 
-{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2；decorator 族经 nextpas.core.vfs.decorator 单点聚合、门面扇出收敛、族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢；L7 独立族按需演进）。 }
+{** @desc 门面：纯 re-export + inline 薄转发，不含逻辑（design-conventions §2；backends 后端族 + decorator 族双单点聚合、门面扇出收敛 12→10、族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢；L7 后端独立族 + L7 装饰器独立族双收口已落地单缝理想）。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -11,9 +11,7 @@ uses
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf,
-  nextpas.core.vfs.memtree,
-  nextpas.core.vfs.os,
-  nextpas.core.vfs.embedded,
+  nextpas.core.vfs.backends,
   nextpas.core.vfs.sub,
   nextpas.core.vfs.mount,
   nextpas.core.vfs.overlay,
@@ -28,8 +26,8 @@ type
   IVfs = nextpas.core.vfs.intf.IVfs;
   IVfsETag = nextpas.core.vfs.intf.IVfsETag;
   IVfsServeMeta = nextpas.core.vfs.intf.IVfsServeMeta;
-  TVfsMemEntry = nextpas.core.vfs.memtree.TVfsMemEntry;
-  TVfsTreeBuilder = nextpas.core.vfs.memtree.TVfsTreeBuilder;
+  TVfsMemEntry = nextpas.core.vfs.backends.TVfsMemEntry;
+  TVfsTreeBuilder = nextpas.core.vfs.backends.TVfsTreeBuilder;
   TVfsVisitProc = nextpas.core.vfs.util.TVfsVisitProc;
 
   EVfsError = nextpas.core.vfs.errors.EVfsError;
@@ -80,22 +78,22 @@ implementation
 
 function CreateMemTreeVfs(AItems: array of TVfsMemEntry): IVfs;
 begin
-  Result := nextpas.core.vfs.memtree.CreateMemTreeVfs(AItems);
+  Result := nextpas.core.vfs.backends.CreateMemTreeVfs(AItems);
 end;
 
 function CreateOsVfs(const ARoot: string): IVfs;
 begin
-  Result := nextpas.core.vfs.os.CreateOsVfs(ARoot);
+  Result := nextpas.core.vfs.backends.CreateOsVfs(ARoot);
 end;
 
 function CreateEmbeddedVfsOwned(AData: PByte; ASize: SizeUInt): IVfs;
 begin
-  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfsOwned(AData, ASize);
+  Result := nextpas.core.vfs.backends.CreateEmbeddedVfsOwned(AData, ASize);
 end;
 
 function CreateEmbeddedVfsBorrowed(AData: PByte; ASize: SizeUInt): IVfs;
 begin
-  Result := nextpas.core.vfs.embedded.CreateEmbeddedVfsBorrowed(AData, ASize);
+  Result := nextpas.core.vfs.backends.CreateEmbeddedVfsBorrowed(AData, ASize);
 end;
 
 function CreateSubVfs(const ABase: IVfs; const ASubRoot: string): IVfs;

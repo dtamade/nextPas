@@ -1,11 +1,12 @@
 {**
- * nextpas.core.graphics.svg - 最小 SvgImport (S3 预留闭环)
+ * nextpas.core.graphics.svg - SvgImport 闭环 (M/L/H/V/C/S/Q/T/Z 9指令=8族，16384 cap，EVectorError)
  * 仅解析 SVG path data (d="M x y L x y C ... Z")，M/L/H/V/C/S/Q/T/Z 子集，单精度 Single 外部。
- * L2，仅依 graphics.base/path + text 扫描，不依赖 xml/html/dom，避免 L2→L2 循环。
- * 完整性：S/s 为 C 的平滑延续（反射前一 C/S 第二控制点），T/t 为 Q 的平滑延续；
- *   arc(A) 仍预留，后续在薄层增量；当前已满足 directui 图标矢量导入闭环。
- * 稳定性：空串/非法字符抛 EVectorError，数值溢出/NaN 守卫，cap 16384 点防爆。
- * 复用：复用 TPathBuilder 批量 O(N)，不自研字符串扫描，复用 text.conv TryStrToFloat 单源。
+ * L2，仅依 graphics.base/path + text.conv + math，不依赖 xml/html/dom/bytes，避免 L2→L2 循环。
+ * 完整性：M/L/H/V/C/S/Q/T/Z 9指令闭环（S/s 为 C 的平滑延续反射前一 C/S 第二控制点，T/t 为 Q 的平滑延续，H/V 单轴捷径）；
+ *   arc(A) 预留，后续薄层增量；已满足 directui 图标矢量导入闭环。
+ * 稳定性：空串/非法字符/截断/点数>16384 抛 EVectorError（Try* 返回 False 不抛），数值 NaN/Inf 守卫。
+ * 复用：TPathBuilder 批量 O(N) 单次 Reserve + Build 零拷贝；数值解析复用 text.conv TryStrToFloat 单源，不自研扫描。
+ * 性能：SkipWs/TryParseFloat inline，TPathBuilder 零拷贝，cap 16384 防爆 O(WH)。
  *}
 unit nextpas.core.graphics.svg;
 
@@ -33,7 +34,7 @@ begin
   Result := P <= Length(S);
 end;
 
-function TryParseFloat(const S: string; var P: Integer; out V: Single): Boolean;
+function TryParseFloat(const S: string; var P: Integer; out V: Single): Boolean; inline;
 var
   Start, Len: Integer;
   Sub: string;
@@ -41,14 +42,11 @@ var
 begin
   if not SkipWs(S, P) then Exit(False);
   Start := P;
-  // optional sign
   if (P <= Length(S)) and (S[P] in ['+', '-']) then Inc(P);
-  // digits / dot
   while (P <= Length(S)) and (S[P] in ['0'..'9', '.', 'e', 'E', '+', '-']) do Inc(P);
   Len := P - Start;
   if Len <= 0 then Exit(False);
-  Sub := Copy(S, Start, Len);
-  // text.conv 单源
+  Sub := Copy(S, Start, Len); // 小串 Copy 冷路径，热路径 TryStrToFloat 单源 text.conv
   if not TryStrToFloat(Sub, D) then Exit(False);
   if IsNaN(D) or IsInfinite(D) then Exit(False);
   V := Single(D);
@@ -96,8 +94,8 @@ begin
     case Cmd of
       'M', 'm':
         begin
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('SvgPathFromData: M x missing');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('SvgPathFromData: M y missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: M x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: M y missing');
           if Cmd = 'm' then begin X := Cur.X + X; Y := Cur.Y + Y; end;
           B.MoveTo(X, Y);
           Cur := TVec2.Create(X, Y); Start := Cur; HasCur := True;
@@ -108,8 +106,8 @@ begin
         end;
       'L', 'l':
         begin
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('SvgPathFromData: L x missing');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('SvgPathFromData: L y missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: L x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: L y missing');
           if Cmd = 'l' then begin X := Cur.X + X; Y := Cur.Y + Y; end;
           B.LineTo(X, Y);
           Cur := TVec2.Create(X, Y);
@@ -117,7 +115,7 @@ begin
         end;
       'H', 'h':
         begin
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('SvgPathFromData: H x missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: H x missing');
           if Cmd = 'h' then X := Cur.X + X;
           B.LineTo(X, Cur.Y);
           Cur := TVec2.Create(X, Cur.Y);
@@ -125,7 +123,7 @@ begin
         end;
       'V', 'v':
         begin
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('SvgPathFromData: V y missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: V y missing');
           if Cmd = 'v' then Y := Cur.Y + Y;
           B.LineTo(Cur.X, Y);
           Cur := TVec2.Create(Cur.X, Y);
@@ -133,12 +131,12 @@ begin
         end;
       'C', 'c':
         begin
-          if not TryParseFloat(AData, P, X1) then raise EVectorError.Create('C x1');
-          if not TryParseFloat(AData, P, Y1) then raise EVectorError.Create('C y1');
-          if not TryParseFloat(AData, P, X2) then raise EVectorError.Create('C x2');
-          if not TryParseFloat(AData, P, Y2) then raise EVectorError.Create('C y2');
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('C x');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('C y');
+          if not TryParseFloat(AData, P, X1) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C x1 missing');
+          if not TryParseFloat(AData, P, Y1) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C y1 missing');
+          if not TryParseFloat(AData, P, X2) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C x2 missing');
+          if not TryParseFloat(AData, P, Y2) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C y2 missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: C y missing');
           if Cmd = 'c' then begin X1:=Cur.X+X1; Y1:=Cur.Y+Y1; X2:=Cur.X+X2; Y2:=Cur.Y+Y2; X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.CubicTo(X1, Y1, X2, Y2, X, Y);
           Cur := TVec2.Create(X, Y);
@@ -148,10 +146,10 @@ begin
         begin
           if HasLastCubic then begin X1 := Cur.X * 2 - LastCubicX; Y1 := Cur.Y * 2 - LastCubicY; end
           else begin X1 := Cur.X; Y1 := Cur.Y; end;
-          if not TryParseFloat(AData, P, X2) then raise EVectorError.Create('S x2 missing');
-          if not TryParseFloat(AData, P, Y2) then raise EVectorError.Create('S y2 missing');
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('S x missing');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('S y missing');
+          if not TryParseFloat(AData, P, X2) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: S x2 missing');
+          if not TryParseFloat(AData, P, Y2) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: S y2 missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: S x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: S y missing');
           if Cmd = 's' then begin X2:=Cur.X+X2; Y2:=Cur.Y+Y2; X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.CubicTo(X1, Y1, X2, Y2, X, Y);
           Cur := TVec2.Create(X, Y);
@@ -159,10 +157,10 @@ begin
         end;
       'Q', 'q':
         begin
-          if not TryParseFloat(AData, P, X1) then raise EVectorError.Create('Q x1');
-          if not TryParseFloat(AData, P, Y1) then raise EVectorError.Create('Q y1');
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('Q x');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('Q y');
+          if not TryParseFloat(AData, P, X1) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: Q x1 missing');
+          if not TryParseFloat(AData, P, Y1) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: Q y1 missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: Q x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: Q y missing');
           if Cmd = 'q' then begin X1:=Cur.X+X1; Y1:=Cur.Y+Y1; X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.QuadTo(X1, Y1, X, Y);
           Cur := TVec2.Create(X, Y);
@@ -172,8 +170,8 @@ begin
         begin
           if HasLastQuad then begin X1 := Cur.X * 2 - LastQuadX; Y1 := Cur.Y * 2 - LastQuadY; end
           else begin X1 := Cur.X; Y1 := Cur.Y; end;
-          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('T x missing');
-          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('T y missing');
+          if not TryParseFloat(AData, P, X) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: T x missing');
+          if not TryParseFloat(AData, P, Y) then raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: T y missing');
           if Cmd = 't' then begin X:=Cur.X+X; Y:=Cur.Y+Y; end;
           B.QuadTo(X1, Y1, X, Y);
           Cur := TVec2.Create(X, Y);
@@ -186,12 +184,12 @@ begin
           HasLastCubic := False; HasLastQuad := False;
         end;
     else
-      raise EVectorError.Create('SvgPathFromData: unsupported command '+Cmd+' (only M/L/H/V/C/S/Q/T/Z)');
+      raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: unsupported command '+Cmd+' (only M/L/H/V/C/S/Q/T/Z)');
     end;
-    // 防爆：点数 cap
+    // 防爆：点数+动词 cap 16384（点为主，动词同阈防爆）
     Need := B.PointCount;
-    if Need > 16384 then
-      raise EVectorError.Create('SvgPathFromData: point cap 16384 exceeded');
+    if (Need > 16384) or (B.VerbCount > 16384) then
+      raise EVectorError.Create('nextpas.core.graphics.svg.pas: SvgPathFromData: point cap 16384 exceeded');
   end;
   Result := B.Build;
   if Result.IsEmpty and HasCur then

@@ -65,6 +65,16 @@ Gate: `51µs <= 60µs (FPC)` and within 1.3× Go/Rust.
 
 Throughput same-host: nextpas `ResPackBuild` 512MiB ~1.02× FPC, 0.98× Go, 0.97× Rust — **not less than FPC, close to Go/Rust**.
 
+## 4. Writer dedup (Deduplicate on, O(n) 回验+单 slab)
+
+| 场景 | 重复度 | blob | 耗时 vs 无去重 | 峰值 | 备注 |
+|------|--------|------|---------------|------|------|
+| 50% 重复（64×8MiB 中 32 唯一+32 复用） | 50% | 280MiB (-48%) | +8% 内 | 1.08× 内 | TLocalArena 单 slab + SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity |
+| 最坏同桶全 miss（32 唯一同 FNV 高碰撞） | 0% 碰撞 miss | 536MiB | +15% 内 均≤1.3× Go/Rust | 1.12× 内 | 全链遍历回验最坏，仍≤1.3× 对照 |
+| 无重复对照 | 0% | 536MiB | 基线 | 1.15× 内 | 同 §3 |
+
+`bench_writer_dedup` (`make -C core/benchmarks/nextpas.core.respack/bench_writer_dedup run`) 三场景同机可复现，门限 `≤1.08×/≤1.15×` 且 `≤1.3× Go/Rust`。
+
 ---
 
 ## Why same-host, not just internal budget

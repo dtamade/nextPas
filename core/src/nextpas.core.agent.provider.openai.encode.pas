@@ -4,8 +4,7 @@
  * 职责：Chat Completions 请求体的纯函数编码（WIRE-MAPPINGS §1.1），
  * 含 System 合并去重、消息展开（text/image/tool）、tools/tool_choice、
  * reasoning_effort、response_format、stream_options（Q-O3）等全部上送规则。
- * 另含 BuildOpenAIUrl/BuildGrokUrl 纯 URL 拼接与 UsesMaxCompletionTokens
- * 前缀判定（Q-O1）。零 IO，零状态。
+ * 另含 UsesMaxCompletionTokens 前缀判定（Q-O1，单一真源于 factory）。零 IO，零状态。
  *
  * 属 provider.openai 四象限拆分之一（encode），与 decode/decoder/facade
  * 互不循环，仅向下依赖 base/errors/intf/common/json。
@@ -24,9 +23,6 @@ uses
 function EncodeOpenAIRequest(const AReq: TCompletionRequest;
   AStream: Boolean): TJsonText;
 
-function BuildOpenAIUrl(const ABaseUrl: string): string;
-function BuildGrokUrl(const ABaseUrl: string): string;
-
 implementation
 
 uses
@@ -36,34 +32,19 @@ uses
   nextpas.core.text,
   nextpas.core.text.builder,
   nextpas.core.agent.errors,
-  nextpas.core.agent.provider.common;
-
-const
-  COPENAI_DEFAULT_BASE_URL = 'https://api.openai.com';
-  CGROK_DEFAULT_BASE_URL = 'https://api.x.ai';
-  COPENAI_MAX_COMPLETION_TOKENS_PREFIXES: array[0..2] of string =
-    ('o1', 'o3', 'gpt-5');
+  nextpas.core.agent.provider.common,
+  nextpas.core.agent.provider.openai.factory;
 
 function UsesMaxCompletionTokens(const AModel: string): Boolean;
 var
   I: Integer;
 begin
   Result := False;
-  for I := Low(COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) to
-    High(COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) do
+  for I := Low(nextpas.core.agent.provider.openai.factory.COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) to
+    High(nextpas.core.agent.provider.openai.factory.COPENAI_MAX_COMPLETION_TOKENS_PREFIXES) do
     if nextpas.core.text.TextStartsWith(AModel,
-      COPENAI_MAX_COMPLETION_TOKENS_PREFIXES[I]) then
+      nextpas.core.agent.provider.openai.factory.COPENAI_MAX_COMPLETION_TOKENS_PREFIXES[I]) then
       Exit(True);
-end;
-
-function BuildOpenAIUrl(const ABaseUrl: string): string;
-begin
-  Result := AgentJoinWireUrl(ABaseUrl, COPENAI_DEFAULT_BASE_URL, '/chat/completions');
-end;
-
-function BuildGrokUrl(const ABaseUrl: string): string;
-begin
-  Result := AgentJoinWireUrl(ABaseUrl, CGROK_DEFAULT_BASE_URL, '/chat/completions');
 end;
 
 procedure AddPart(var AParts: TPartArray; AKind: TPartKind); inline;
@@ -81,6 +62,7 @@ var
   P: TPart;
   LText, LUrl: string;
   LHasImage, LHasToolCalls: Boolean;
+  LB: IStringBuilder;
 begin
   ABld.Key('messages');
   ABld.BeginArray;
@@ -154,16 +136,18 @@ begin
 
       mrAssistant:
         begin
-          LText := '';
+          // perf: text.builder single source (BytesCopy zero-copy, geometric growth) — replaces O(N²) S+S hot path; evidence: AppendStr via bytes.ops.BytesCopy inline
+          LB := MakeStringBuilder(256);
           LHasToolCalls := False;
           for J := 0 to High(M.Parts) do
           begin
             P := M.Parts[J];
             if P.Kind = pkText then
-              LText := LText + P.Text
+              LB.AppendStr(P.Text)
             else if P.Kind = pkToolCall then
               LHasToolCalls := True;
           end;
+          LText := LB.ToString;
           ABld.BeginObject;
           ABld.Key('role');
           ABld.Str('assistant');

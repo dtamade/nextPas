@@ -45,6 +45,7 @@ type
     Reserved: array[0..13] of Byte;
   end;
   PVarDataView = ^TVarDataView;
+  PVarData = ^TVarData;
 
 function SpanToString(const ASpan: TByteSpan): string; inline;
 begin
@@ -127,24 +128,24 @@ end;
 
 function VarType(const V: Variant): TVarType; inline;
 begin
-  Result := TVarDataView(V).VType and varTypeMask;
+  Result := PVarData(@V)^.VType and varTypeMask;
 end;
 
 function VarIsNull(const V: Variant): Boolean; inline;
 begin
-  Result := (TVarDataView(V).VType and varTypeMask) = varNull;
+  Result := (PVarData(@V)^.VType and varTypeMask) = varNull;
 end;
 
 function VarIsEmpty(const V: Variant): Boolean; inline;
 begin
-  Result := (TVarDataView(V).VType and varTypeMask) = varEmpty;
+  Result := (PVarData(@V)^.VType and varTypeMask) = varEmpty;
 end;
 
 function VarIsClear(const V: Variant): Boolean; inline;
 var
   LType: Word;
 begin
-  LType := TVarDataView(V).VType and varTypeMask;
+  LType := PVarData(@V)^.VType and varTypeMask;
   Result := (LType = varEmpty) or (LType = varNull);
 end;
 

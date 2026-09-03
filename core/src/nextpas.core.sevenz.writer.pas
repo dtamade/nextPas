@@ -201,32 +201,17 @@ begin
   end
   else
   begin
-    // perf: 避免过滤器链触发时额外全量 LRawChunk->LStage 拷贝稀释 Move+CRC 单遍收益。
-    // 策略：复用 SEVENZ_WRITER_CHUNK 单源阈值（limits），首级过滤器与拷贝融合。
-    // Delta 首级采用 SevenZDeltaEncode 零分配 out-of-place 路径，直接由 LRawChunk 产出 LStage，无单独 Move；
-    // BCJ 首级仍需在位变换，采用分块搬运（同 MoveWithCrc 粒度）后原地转换，保持缓存友好。
-    // 后续各级过滤器仍在 LStage 上原地变换。bench 可观测：bench_sevenz 的 container create / bcj/delta 吞吐为回归锚点。
+    // perf: 首级与拷贝融合 out-of-place 单次分配单遍路径，复用 filters 单源 SevenZFilterEncode；Delta 原生 src->dst 单遍，BCJ 单次分配融合（零额外 SpanClone），后续各级原地变换。bench_sevenz 吞吐为回归锚点。
     SetLength(AFolder.Specs, Length(AFilters) + 1);
     for LI := 0 to High(AFilters) do
     begin
       AFolder.Specs[LI].MethodId := SevenZFilterMethodId(AFilters[LI]);
       AFolder.Specs[LI].Props := SevenZFilterDefaultProps(AFilters[LI]);
     end;
-    if AFilters[0] = szfDelta then
-    begin
-      // Delta 首级零拷贝融合：单遍由 LRawChunk 直接编码为 LStage，避免 SetLength+Move 全量拷贝
-      LStage := SevenZDeltaEncode(AFolder.Specs[0].Props, LRawChunk);
-      for LI := 1 to High(AFilters) do
-        SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
-    end
-    else
-    begin
-      // perf: BCJ 需要可变缓冲；单源 bytes.ops SpanClone 做单次 SetLength+Move，无分块循环开销（inline 单遍遍历）
-      LStage := SpanClone(TByteSpan.FromBytes(LRawChunk));
-      SevenZFilterConvert(LStage, AFilters[0], AFolder.Specs[0].Props, True);
-      for LI := 1 to High(AFilters) do
-        SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
-    end;
+    // perf: 首级与拷贝融合 out-of-place 单次分配单遍路径，复用 filters 单源 SevenZFilterEncode，消除 SpanClone+Convert 双遍；Delta 走 Delta 单遍 src->dst，BCJ 走单次分配融合路径，零额外拷贝，inline 单源
+    LStage := SevenZFilterEncode(AFolder.Specs[0].Props, LRawChunk, AFilters[0]);
+    for LI := 1 to High(AFilters) do
+      SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
   end;
   if AHasForced then
   begin
@@ -1329,7 +1314,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
 function TSevenZWriterImpl.Finish: TBytes;
 var
   LSig, LPacked, LHdrStream, LBlock: TBytes;
-  LBase: SizeInt;
+  LParts: array of TByteSpan;
   LI: SizeInt;
 begin
   Result := nil;
@@ -1338,18 +1323,13 @@ begin
     BuildArchive(LSig, LPacked, LHdrStream, LBlock);
     { H-10: 将 FFinished 置位延后至 BuildArchive 成功后，避免失败锁死 }
     FFinished := True;
-    SetLength(Result, Length(LSig) + Length(LPacked) +
-      Length(LHdrStream) + Length(LBlock));
-    Move(LSig[0], Result[0], Length(LSig));
-    LBase := Length(LSig);
-    if Length(LPacked) > 0 then
-      Move(LPacked[0], Result[LBase], Length(LPacked));
-    Inc(LBase, Length(LPacked));
-    if Length(LHdrStream) > 0 then
-      Move(LHdrStream[0], Result[LBase], Length(LHdrStream));
-    Inc(LBase, Length(LHdrStream));
-    if Length(LBlock) > 0 then
-      Move(LBlock[0], Result[LBase], Length(LBlock));
+    // perf: 单源 bytes.ops SpanConcatMany 单次分配单遍拷贝，消除 4 次 Move 手工拼接，与 APacked 的 SpanConcatMany 同源，inline 零拷贝证据，IBytesBuilder 同等 O(n) 均摊
+    SetLength(LParts, 4);
+    LParts[0] := TByteSpan.FromBytes(LSig);
+    LParts[1] := TByteSpan.FromBytes(LPacked);
+    LParts[2] := TByteSpan.FromBytes(LHdrStream);
+    LParts[3] := TByteSpan.FromBytes(LBlock);
+    Result := SpanConcatMany(LParts);
   finally
     { M-06: Finish 后释放 IReader 持有，避免长生命周期 pin 住外部资源 }
     for LI := 0 to FCount - 1 do

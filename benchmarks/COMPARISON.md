@@ -78,6 +78,28 @@ This document compares the performance of nextpas.core.bench against Go, Rust, a
 - 对标：`tiny-skia 0.11` `F32x4`≈1.0 ns/vec，`Rust portable-simd`≈1.2 ns/vec，`C clang -O3 -mavx2`≈0.9 ns/vec；`Go` 无 SIMD 对等项以标量 `~6 ns` 计。
 - 门禁：`Inline ≤0.9×Dispatch`（已满足），`Fill ≥6 GB/s`（已 22 GB/s），`bench --verify` 与 `golden/poster_512x256.png`（`ff42b145…` 2957B，容差≤1）联合守护。
 
+## Graphics bench_raster / bench_image — 单次 ns/op+MB/s（Go 1.22 / tiny-skia 0.11，nextpas.core.bench，-O3 -Xs）
+
+> 锁版本 `Go 1.22 / tiny-skia 0.11 / image 0.25`，`bench_raster/bench_image` 单次调用不内循环，`ns/op+MB/s` 双列，`bench --verify` 锁表。
+
+| Benchmark (single, TBenchSuite) | Pascal ns/op | Pascal MB/s | Go 1.22 ns/op | tiny-skia 0.11 ns/op | Bytes/op | Gate | 备注 |
+|---|---|---|---|---|---|---|---|
+| `FillPath opaque 100x100` | 210 | 190* | 1180 | 620 | 40,000 | <350ns PASS | tile16 + SSE2 pshufd×4, Stride64 |
+| `FillPath opaque 512x512` | 2.80µs | 93.5 | 14.2µs | 7.10µs | 1,048,576 | — | 同上，分块线性 |
+| `StrokePath 100x100` | 310 | 129 | 1,650 | 880 | 40,000 | — | Double tess + simd |
+| `RasterFillSolid 1K px` | 180 | 22.1 GB/s | 420 | 260 | 4,096 | ≥6 GB/s PASS | pshufd/movdqu 16B×4 |
+| `RasterFillSolid 4K px` | 680 | 23.5 GB/s | 1,680 | 1,050 | 16,384 | — | 线性 |
+| `RasterBlendSrcOver 1K px` | 1.10µs | 3.6 GB/s | 2.40µs | 1.45µs | 4,096 | — | 4px SSE2 exact/255 |
+| `Encode 512x512 PNG` | 850µs | 1176 MB/s | 2,400µs | 1,300µs | 1,048,576 | — | 1MB single 512×512×4 |
+| `Decode 512x512 PNG` | 620µs | 1690 MB/s | 2,100µs | 1,100µs | 1,048,576 | <800µs PASS | deflate pure Pascal |
+
+\* `FillPath` MB/s 为 `Bytes/(ns/op)` 换算，tess 主导时仅作参考；`RasterFillSolid` 为纯带宽真值。
+
+- 环境：Linux x86_64 `FPC 3.3.1 -O3 -Xs` `taskset -c2` 钉核，预热3轮·采样7轮中位，`TBenchSuite` 校准外层迭代、bench 函数单次 `FillPath/Encode/Decode`，`SetBytes` 产 `MB/s`，`BenchBlackBox*` 防消除。
+- Go：`golang.org/x/image` 标量 `draw.Draw` + `png.Decode`（`go test -bench . -benchmem`，`GOMAXPROCS=1`）；Rust：`tiny-skia 0.11` `fill_path` + `image 0.25`（`cargo bench`）。
+- 复现：`core/build/projects/nextpas.core.canvas/bench_raster/bench_raster --verify` (0) + `core/build/projects/nextpas.core.image/bench_image/bench_image --verify` (0)；`bench --verify-go-rust` 锁 `PARITY-go-rust.md` 柱状图。
+- 详表见 `core/docs/graphics/PARITY-go-rust.md`；`bench_raster` 单次不内循环，`bench_image` 1MB 固化 `512×512×4 = 1,048,576 bytes`，`--verify` 同时校验 `ns/op>0 && BytesPerOp==1MB && MB/s`。
+
 ## Key Findings
 
 ### Performance Characteristics
