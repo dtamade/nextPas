@@ -66,16 +66,12 @@ uses
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.rsa,
   nextpas.core.encoding.base64,
   nextpas.core.exception,
   nextpas.core.hash,
   nextpas.core.io.intf,
   nextpas.core.tls.pem;
-
-const
-  SHA256_DIGEST_INFO: array[0..18] of Byte = (
-    $30, $31, $30, $0D, $06, $09, $60, $86, $48, $01,
-    $65, $03, $04, $02, $01, $05, $00, $04, $20);
 
 { ── 助手(无 SysUtils) ────────────────────────────────────────── }
 
@@ -1188,7 +1184,7 @@ begin
 
         { 期望块: 00 01 FF* 00 DigestInfo || sha256 }
         LSDigest := Sha256Of(LHeaderInput);
-        if LEMLen < 11 + Length(SHA256_DIGEST_INFO) + 32 then
+        if LEMLen < 11 + Length(DIGEST_INFO_SHA256) + 32 then
         begin
           AError := 'modulus too short';
           Result := dkPermError;
@@ -1197,14 +1193,14 @@ begin
         SetLength(LDecrypted, LEMLen);
         LDecrypted[0] := 0;
         LDecrypted[1] := 1;
-        for LI := 2 to LEMLen - Length(SHA256_DIGEST_INFO) - 32 - 2 do
+        for LI := 2 to LEMLen - Length(DIGEST_INFO_SHA256) - 32 - 2 do
           LDecrypted[LI] := $FF;
-        LOffset := LEMLen - Length(SHA256_DIGEST_INFO) - 32 - 1;
+        LOffset := LEMLen - Length(DIGEST_INFO_SHA256) - 32 - 1;
         LDecrypted[LOffset] := 0;                             { 分隔 00 }
-        for LI := 0 to High(SHA256_DIGEST_INFO) do
-          LDecrypted[LOffset + 1 + LI] := SHA256_DIGEST_INFO[LI];
+        for LI := 0 to High(DIGEST_INFO_SHA256) do
+          LDecrypted[LOffset + 1 + LI] := DIGEST_INFO_SHA256[LI];
         for LI := 0 to 31 do
-          LDecrypted[LOffset + 1 + Length(SHA256_DIGEST_INFO) + LI] :=
+          LDecrypted[LOffset + 1 + Length(DIGEST_INFO_SHA256) + LI] :=
             LSDigest[LI];
 
         { TConstantTime.CompareBytes: 1 = 相同, 0 = 不同 }
@@ -1265,7 +1261,7 @@ begin
         end;
         LHash := Sha256Of(AHdrHashInput);
         LEMLen := Length(ARsaModulus);
-        if LEMLen < 11 + Length(SHA256_DIGEST_INFO) + 32 then
+        if LEMLen < 11 + Length(DIGEST_INFO_SHA256) + 32 then
         begin
           AError := 'modulus too short';
           Exit;
@@ -1275,12 +1271,12 @@ begin
         SetLength(LEM, LEMLen);
         LEM[0] := 0;
         LEM[1] := 1;
-        for LI := 2 to LEMLen - Length(SHA256_DIGEST_INFO) - 32 - 2 do
+        for LI := 2 to LEMLen - Length(DIGEST_INFO_SHA256) - 32 - 2 do
           LEM[LI] := $FF;
-        LEM[LEMLen - Length(SHA256_DIGEST_INFO) - 32 - 1] := 0;  { 分隔 00 }
-        for LI := 0 to High(SHA256_DIGEST_INFO) do
-          LEM[LI + LEMLen - Length(SHA256_DIGEST_INFO) - 32] :=
-            SHA256_DIGEST_INFO[LI];
+        LEM[LEMLen - Length(DIGEST_INFO_SHA256) - 32 - 1] := 0;  { 分隔 00 }
+        for LI := 0 to High(DIGEST_INFO_SHA256) do
+          LEM[LI + LEMLen - Length(DIGEST_INFO_SHA256) - 32] :=
+            DIGEST_INFO_SHA256[LI];
         for LI := 0 to 31 do
           LEM[LI + LEMLen - 32] := LHash[LI];
         { EM^d mod n }

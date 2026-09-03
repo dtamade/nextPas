@@ -89,6 +89,25 @@ function Poly1305Raw(const AKey, AMacData: TBytes): TBytes;
 {** @desc 裸 Poly1305 跨段版本：对 ASpans 连续拼接计算 tag，零拷贝避免 encLen||ct 临时堆分配 *}
 function Poly1305RawSpans(const AKey: TBytes; const ASpans: array of TByteSpan): TBytes;
 
+{** @desc 栈上零分配 API：供高吞吐路径复用，避免每包 TBytes 堆 churn *}
+type
+  TPoly1305Ctx = record
+    H0, H1, H2: UInt64;
+    R0, R1, R2: UInt64;
+    S1, S2: UInt64;
+    Pad: array[0..15] of Byte;
+  end;
+
+procedure Poly1305Init(out Ctx: TPoly1305Ctx; const AKey: PByte);
+procedure Poly1305Update(var Ctx: TPoly1305Ctx; AData: PByte; AHiBit: UInt64);
+procedure Poly1305Finish(var Ctx: TPoly1305Ctx; ATag: PByte);
+{ 零拷贝直接写入：Poly1305RawSpans 的栈版，结果写入 ADest(16)，无堆分配 }
+procedure Poly1305RawSpansToBuf(const AKey: TBytes; const ASpans: array of TByteSpan; ADest: PByte);
+procedure Poly1305RawSpansDirect(APolyKey: PByte; const ASpans: array of TByteSpan; ADest: PByte);
+{ ChaCha20 块与流：栈 nonce 直通，无 TBytes 包装 }
+procedure ChaCha20BlockToBuf(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; ADest: PByte);
+function ChaCha20XorToBuf(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; AInput: PByte; AInputLen: Integer; ADest: PByte): Boolean;
+
 implementation
 
 uses nextpas.core.crypto.constant_time, nextpas.core.crypto.errors;
@@ -935,14 +954,6 @@ end;
 
 { === Streaming Poly1305 API (cross-platform, standalone procedures) === }
 
-type
-  TPoly1305Ctx = record
-    H0, H1, H2: UInt64;   // accumulator (3×44-bit)
-    R0, R1, R2: UInt64;   // key r (3×44-bit, clamped)
-    S1, S2: UInt64;        // r1*20, r2*20
-    Pad: array[0..15] of Byte; // one-time pad (s)
-  end;
-
 procedure Poly1305Init(out Ctx: TPoly1305Ctx; const AKey: PByte);
 var
   LR128Lo, LR128Hi: UInt64;
@@ -1118,6 +1129,92 @@ begin
     Poly1305Update(LCtx, @LBlock[0], 0);
   end;
   Poly1305Finish(LCtx, @Result[0]);
+end;
+
+procedure Poly1305RawSpansToBuf(const AKey: TBytes; const ASpans: array of TByteSpan; ADest: PByte);
+var
+  LCtx: TPoly1305Ctx;
+  LBlock: array[0..15] of Byte;
+  LBufLen: Integer;
+  I: Integer;
+  P: PByte;
+  LRem, LCopy: SizeUInt;
+begin
+  if Length(AKey) <> POLY1305_KEY_SIZE then
+    raise ECryptoError.Create(cecInvalidArgument, 'chacha20poly1305: poly key must be 32 bytes');
+  if ADest = nil then
+    raise ECryptoError.Create(cecInvalidArgument, 'chacha20poly1305: dest is nil');
+  Poly1305Init(LCtx, @AKey[0]);
+  FillChar(LBlock, SizeOf(LBlock), 0);
+  LBufLen := 0;
+  for I := 0 to High(ASpans) do
+  begin
+    P := ASpans[I].Data;
+    LRem := ASpans[I].Len;
+    while LRem > 0 do
+    begin
+      LCopy := 16 - SizeUInt(LBufLen);
+      if LCopy > LRem then LCopy := LRem;
+      if LCopy > 0 then Move(P^, LBlock[LBufLen], LCopy);
+      Inc(LBufLen, Integer(LCopy));
+      Inc(P, LCopy);
+      Dec(LRem, LCopy);
+      if LBufLen = 16 then
+      begin
+        Poly1305Update(LCtx, @LBlock[0], UInt64(1) shl 40);
+        FillChar(LBlock, SizeOf(LBlock), 0);
+        LBufLen := 0;
+      end;
+    end;
+  end;
+  if LBufLen > 0 then
+  begin
+    LBlock[LBufLen] := $01;
+    Poly1305Update(LCtx, @LBlock[0], 0);
+  end;
+  Poly1305Finish(LCtx, ADest);
+end;
+
+procedure Poly1305RawSpansDirect(APolyKey: PByte; const ASpans: array of TByteSpan; ADest: PByte);
+var
+  LCtx: TPoly1305Ctx;
+  LBlock: array[0..15] of Byte;
+  LBufLen: Integer;
+  I: Integer;
+  P: PByte;
+  LRem, LCopy: SizeUInt;
+begin
+  if (APolyKey = nil) or (ADest = nil) then
+    raise ECryptoError.Create(cecInvalidArgument, 'chacha20poly1305: nil key/dest');
+  Poly1305Init(LCtx, APolyKey);
+  FillChar(LBlock, SizeOf(LBlock), 0);
+  LBufLen := 0;
+  for I := 0 to High(ASpans) do
+  begin
+    P := ASpans[I].Data;
+    LRem := ASpans[I].Len;
+    while LRem > 0 do
+    begin
+      LCopy := 16 - SizeUInt(LBufLen);
+      if LCopy > LRem then LCopy := LRem;
+      if LCopy > 0 then Move(P^, LBlock[LBufLen], LCopy);
+      Inc(LBufLen, Integer(LCopy));
+      Inc(P, LCopy);
+      Dec(LRem, LCopy);
+      if LBufLen = 16 then
+      begin
+        Poly1305Update(LCtx, @LBlock[0], UInt64(1) shl 40);
+        FillChar(LBlock, SizeOf(LBlock), 0);
+        LBufLen := 0;
+      end;
+    end;
+  end;
+  if LBufLen > 0 then
+  begin
+    LBlock[LBufLen] := $01;
+    Poly1305Update(LCtx, @LBlock[0], 0);
+  end;
+  Poly1305Finish(LCtx, ADest);
 end;
 
 function TryChaCha20Poly1305Encrypt(
@@ -1616,6 +1713,22 @@ begin
     Inc(LOff, LBlockLen);
   end;
   Result := True;
+end;
+
+procedure ChaCha20BlockToBuf(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; ADest: PByte);
+var
+  LTmp: array[0..63] of Byte;
+begin
+  if (ANonce = nil) or (ADest = nil) then
+    raise ECryptoError.Create(cecInvalidArgument, 'chacha20poly1305: nil nonce/dest');
+  ChaCha20BlockPtr(AKey, ANonce, ACounter, LTmp);
+  Move(LTmp[0], ADest^, 64);
+  FillChar(LTmp, SizeOf(LTmp), 0);
+end;
+
+function ChaCha20XorToBuf(const AKey: TBytes; ANonce: PByte; ACounter: UInt32; AInput: PByte; AInputLen: Integer; ADest: PByte): Boolean;
+begin
+  Result := ChaCha20XorPtr(AKey, ANonce, ACounter, AInput, AInputLen, ADest);
 end;
 
 function TryChaCha20Poly1305EncryptToBufDirect(

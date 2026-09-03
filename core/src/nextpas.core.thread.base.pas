@@ -57,8 +57,8 @@ type
 
 implementation
 
-uses
-  SysUtils;  { AcquireExceptionObject: hands exception ownership to the capture site }
+{ AcquireExceptionObject via nextpas.core.exception single-source inline wrapper
+  (System.AcquireExceptionObject zero-copy forward, no SysUtils bridge) }
 
 function WorkerThreadProc(AArg: Pointer): Pointer; cdecl;
 var

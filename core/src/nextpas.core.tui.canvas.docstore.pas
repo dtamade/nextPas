@@ -13,6 +13,7 @@
 unit nextpas.core.tui.canvas.docstore;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 

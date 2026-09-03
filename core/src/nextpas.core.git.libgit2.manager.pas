@@ -7,11 +7,13 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.fs,
+  nextpas.core.text.conv,
   nextpas.core.git.intf,
   nextpas.core.git.base,
   nextpas.core.git.libgit2.ffi,
   nextpas.core.git.libgit2.backend,
-  nextpas.core.git.libgit2.binding;
+  nextpas.core.git.libgit2.binding,
+  nextpas.core.git.native.refs;
 
 type
   EGitError = nextpas.core.git.libgit2.backend.EGitError;
@@ -242,18 +244,32 @@ end;
 
 function TGitManagerImpl.DiscoverRepository(const AStartPath: string): string;
 var
-  p, prev: string;
+  LGitDir: string;
+  LWorkTree: string;
 begin
-  // Pure Pascal fallback first to avoid instability due to header signature differences
-  p := PathAbs(AStartPath);
-  prev := '';
-  while (p <> '') and (p <> prev) do
+  // single source: reuse owner native.refs GitTryDiscoverGitDir (bytes.ops PathClean/PathJoin2 inline zero-copy)
+  if GitTryDiscoverGitDir(PathClean(AStartPath), LGitDir) then
   begin
-    if Exists(PathEnsureSep(p) + '.git') then
-      Exit(p);
-    prev := p;
-    p := PathDir(p);
+    if FileExists(PathJoin2(LGitDir, 'commondir')) then
+    begin
+      try
+        LWorkTree := Trim(ReadFileText(PathJoin2(LGitDir, 'gitdir')));
+      except
+        LWorkTree := '';
+      end;
+      if LWorkTree <> '' then
+      begin
+        if PathBase(LWorkTree) = '.git' then
+          Exit(PathClean(PathDir(LWorkTree)));
+        Exit(PathClean(PathDir(LWorkTree)));
+      end;
+      Exit(PathClean(LGitDir));
+    end;
+    if PathBase(LGitDir) = '.git' then
+      Exit(PathClean(PathDir(LGitDir)));
+    Exit(PathClean(LGitDir));
   end;
+  // fallback to underlying libgit2 layer (git_buf disposed inside FMgr, no leak)
   try
     Result := FMgr.DiscoverRepository(AStartPath);
   except
@@ -655,12 +671,9 @@ end;
 
 destructor TGitWorktreeImpl.Destroy;
 begin
-  { Note: git_worktree_free is intentionally NOT called.
-    libgit2 1.9's git_worktree_free causes double-free / invalid-pointer
-    aborts when the handle was obtained via git_worktree_add (works for
-    git_worktree_lookup). Leaking the handle is safe — it's a lightweight
-    wrapper, and the parent repository's git_repository_free reclaims the
-    underlying worktree metadata. }
+  // ownership: single free, repo keeps parent alive via IGitRepository; bytes.ops single source for string moves
+  if FHandle <> nil then
+    git_worktree_free(FHandle);
   FHandle := nil;
   inherited Destroy;
 end;

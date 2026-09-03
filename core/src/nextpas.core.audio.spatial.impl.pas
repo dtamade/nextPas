@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.spatial.intf,

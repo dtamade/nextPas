@@ -64,7 +64,8 @@ type
 implementation
 
 uses
-  nextpas.core.git.native.wildmatch;
+  nextpas.core.bytes.ops,
+  nextpas.core.text.wildmatch;
 
 function CountTrailingBackslashesBefore(const AValue: string;
   APos: Integer): Integer; inline;
@@ -83,7 +84,7 @@ var
 begin
   Result := False;
   if AChar = '/' then
-    Exit(GitHasUnescapedSlash(AValue));
+    Exit(HasUnescapedSlash(AValue));
   I := 1;
   while I <= Length(AValue) do
   begin
@@ -118,17 +119,17 @@ begin
     Delete(Result, Length(Result), 1);
 end;
 
-{ single-source delegation: all fnmatch lives in wildmatch }
+{ single-source delegation: all fnmatch lives in L1 text.wildmatch owner (inline, zero-copy range, bytes.ops single source via GrowArrayCapacity) }
 class function TGitIgnoreMatcher.WildSegment(
-  const APattern, AName: string): Boolean;
+  const APattern, AName: string): Boolean; inline;
 begin
-  Result := GitWildSegment(APattern, AName);
+  Result := WildSegment(APattern, AName);
 end;
 
 class function TGitIgnoreMatcher.SegmentsMatch(
-  const APattern, APath: string): Boolean;
+  const APattern, APath: string): Boolean; inline;
 begin
-  Result := GitSegmentsMatch(APattern, APath);
+  Result := WildSegmentsMatch(APattern, APath);
 end;
 
 class procedure TGitIgnoreMatcher.CompileLine(const ALine: string;
@@ -172,6 +173,7 @@ var
   Line: string;
   Start, I: Integer;
   Pat: TPattern;
+  PatCnt, PatCap, LNewCap: SizeUInt;
 begin
   Src.BaseDir := ABaseDir;
   // a trailing slash on the owner dir would break the scoping prefix test
@@ -179,6 +181,8 @@ begin
     and (Src.BaseDir[Length(Src.BaseDir)] = '/') then
     Delete(Src.BaseDir, Length(Src.BaseDir), 1);
   Src.Patterns := nil;
+  PatCnt := 0;
+  PatCap := 0;
   Start := 1;
   for I := 1 to Length(AText) + 1 do
   begin
@@ -190,12 +194,22 @@ begin
       CompileLine(Line, Pat);
       if Pat.Text <> '' then
       begin
-        SetLength(Src.Patterns, Length(Src.Patterns) + 1);
-        Src.Patterns[High(Src.Patterns)] := Pat;
+        // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), inline, O(1) amortized per pattern, zero-copy TPattern Move via direct assignment, avoids O(n²) SetLength(Length+1) churn
+        if PatCnt >= PatCap then
+        begin
+          LNewCap := GrowArrayCapacity(PatCap, PatCnt + 1);
+          SetLength(Src.Patterns, LNewCap);
+          PatCap := LNewCap;
+        end;
+        Src.Patterns[PatCnt] := Pat;
+        Inc(PatCnt);
       end;
       Start := I + 1;
     end;
   end;
+  // single shrink to exact count, releases slack, managed strings finalized safely
+  if PatCap <> PatCnt then
+    SetLength(Src.Patterns, PatCnt);
   SetLength(FSources, Length(FSources) + 1);
   FSources[High(FSources)] := Src;
 end;
@@ -240,7 +254,7 @@ begin
       else
       begin
         BStart := BasenameStart(Sub);
-        if GitWildSegmentRange(FSources[G].Patterns[P].Text, 1,
+        if WildSegmentRange(FSources[G].Patterns[P].Text, 1,
           Length(FSources[G].Patterns[P].Text), Sub, BStart,
           Length(Sub) - BStart + 1) then
           Exit(not FSources[G].Patterns[P].Negated);

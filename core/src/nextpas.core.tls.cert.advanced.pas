@@ -31,7 +31,7 @@ uses
   nextpas.core.tls.openssl.api.ocsp,
   nextpas.core.tls.openssl.api.x509,
   nextpas.core.tls.openssl.api.pem,
-  sysutils;
+  nextpas.core.exception;
 
 type
   { OCSP Status }

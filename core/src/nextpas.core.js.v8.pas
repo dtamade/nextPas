@@ -1,8 +1,8 @@
 unit nextpas.core.js.v8;
-{** @desc 纯 Pascal 后端占位（零 FFI/零 platform.dl，恒可用，复用 pure.impl 单源模板）。 *}
+{** @desc 纯 Pascal 后端占位（零 FFI/零 platform.dl，恒可用，复用 pure 标准门面单源模板 via nextpas.core.js.pure）。 *}
 {$I nextpas.core.settings.inc}
 interface
-uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.pure.impl, nextpas.core.json;
+uses nextpas.core.js.base, nextpas.core.js.intf, nextpas.core.js.pure, nextpas.core.json;
 type
   TJsV8Runtime = class(TJsPureRuntime)
   public

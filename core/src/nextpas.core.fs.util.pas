@@ -47,6 +47,13 @@ function FsReadlink(const APath: string): string;
 function FsRealPath(const APath: string): string;
 {** @desc 创建硬链接（对齐 Go os.Link / Rust hard_link） *}
 procedure FsHardLink(const AOldPath, ANewPath: string);
+{** @desc 验证式硬链接（fd 级原子闭环 TOCTOU 防护，经 platform_file_link_verified 单源） *}
+procedure FsHardLinkVerified(const AOldPath, ANewPath: string);
+{** @desc 创建 FIFO 特殊文件（owner 反哺：tar fifo 完整性，对齐 Go/Rust mkfifo） *}
+procedure FsMkFifo(const APath: string; const APerm: TFilePermission = PermDefault);
+{** @desc 创建设备节点（owner 反哺：tar device 往返完整，经平台单缝携带 DevMajor/DevMinor）
+    @note Linux 需特权，失败返回 PLATFORM_ERR_* 由调用方 fail-closed 处理 *}
+procedure FsMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean);
 {** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TFileInfo.ModTime 同单位） *}
 procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);
 {** @desc 设置所有者（对齐 Go os.Chown 跟随链接；Windows 不支持） *}
@@ -516,6 +523,46 @@ begin
   LResult := platform_file_link(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'hardlink', ANewPath);
+end;
+
+procedure FsHardLinkVerified(const AOldPath, ANewPath: string);
+var
+  LResult: Int32;
+begin
+  if (AOldPath = '') or (ANewPath = '') then
+    raise EArgumentError.Create('HardLink path must not be empty');
+  LResult := platform_file_link_verified(PAnsiChar(AOldPath), PAnsiChar(ANewPath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'hardlink_verified', ANewPath);
+end;
+
+procedure FsMkFifo(const APath: string; const APerm: TFilePermission);
+var
+  LResult: Int32;
+begin
+  if APath = '' then
+    raise EArgumentError.Create('MkFifo path must not be empty');
+  LResult := platform_file_mkfifo(PAnsiChar(APath), UInt32(APerm));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'mkfifo', APath);
+end;
+
+procedure FsMkDevice(const APath: string; AMode: Word; ADevMajor, ADevMinor: Int64; AIsChar: Boolean);
+var
+  LResult: Int32;
+  LMode: UInt32;
+const
+  S_IFCHR = $2000; S_IFBLK = $6000;
+begin
+  if APath = '' then
+    raise EArgumentError.Create('MkDevice path must not be empty');
+  if (ADevMajor < 0) or (ADevMinor < 0) then
+    raise EArgumentError.Create('MkDevice dev numbers must be non-negative');
+  LMode := UInt32(AMode and $0FFF);
+  if AIsChar then LMode := LMode or S_IFCHR else LMode := LMode or S_IFBLK;
+  LResult := platform_file_mknod(PAnsiChar(APath), LMode, UInt32(ADevMajor), UInt32(ADevMinor));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'mknod', APath);
 end;
 
 procedure FsChtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);

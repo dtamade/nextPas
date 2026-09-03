@@ -37,6 +37,7 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.objmodel,
@@ -51,13 +52,14 @@ function TryParseMailmapLine(const ALine: string; out AEntry: TGitMailmapEntry):
 var L: string; Emails: array of string; EmailPos: array of Integer; EmailEnd: array of Integer;
     I,P,Q: Integer; NameSegs: array of string; SegStart: Integer;
     ProperName, ProperEmail, CommitName, CommitEmail: string;
+    LCount, LCap, LNewCap: SizeUInt;
 begin
   AEntry.ProperName:=''; AEntry.ProperEmail:=''; AEntry.CommitName:=''; AEntry.CommitEmail:='';
   L:=GitTrimSpaces(ALine);
   if L='' then Exit(False);
   if (L[1]='#') or (L[1]=';') then Exit(False);
   // extract emails inside <>
-  Emails:=nil; EmailPos:=nil; EmailEnd:=nil;
+  Emails:=nil; EmailPos:=nil; EmailEnd:=nil; LCount:=0; LCap:=0;
   P:=1;
   while P<=Length(L) do
   begin
@@ -66,12 +68,28 @@ begin
       Q:=P+1;
       while (Q<=Length(L)) and (L[Q]<>'>') do Inc(Q);
       if Q>Length(L) then Break; // unclosed
-      SetLength(Emails, Length(Emails)+1);
-      Emails[High(Emails)]:=Copy(L, P+1, Q-P-1);
-      SetLength(EmailPos, Length(EmailPos)+1); EmailPos[High(EmailPos)]:=P;
-      SetLength(EmailEnd, Length(EmailEnd)+1); EmailEnd[High(EmailEnd)]:=Q;
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (small array ≤2 but keep single source discipline)
+      if LCount >= LCap then
+      begin
+        LNewCap := GrowArrayCapacity(LCap, LCount + 1);
+        SetLength(Emails, LNewCap);
+        SetLength(EmailPos, LNewCap);
+        SetLength(EmailEnd, LNewCap);
+        LCap := LNewCap;
+      end;
+      Emails[LCount]:=Copy(L, P+1, Q-P-1);
+      EmailPos[LCount]:=P;
+      EmailEnd[LCount]:=Q;
+      Inc(LCount);
       P:=Q+1;
     end else Inc(P);
+  end;
+  // shrink to exact count before validation
+  if SizeUInt(Length(Emails)) <> LCount then
+  begin
+    SetLength(Emails, LCount);
+    SetLength(EmailPos, LCount);
+    SetLength(EmailEnd, LCount);
   end;
   if Length(Emails)=0 then Exit(False);
   if Length(Emails)>2 then Exit(False); // invalid
@@ -119,24 +137,36 @@ end;
 
 function GitParseMailmap(const AText: string): TGitMailmap;
 var Lines: TStringArray; I: Integer; L: string; E: TGitMailmapEntry;
+    LCnt, LCap, LNewCap: SizeUInt;
 begin
   Result:=nil;
+  LCnt:=0; LCap:=0;
   Lines:=GitSplitLines(AText);
   for I:=0 to High(Lines) do
   begin
     L:=GitStripCR(Lines[I]);
     if TryParseMailmapLine(L, E) then
-    begin SetLength(Result, Length(Result)+1); Result[High(Result)]:=E; end;
+    begin
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy Move
+      if LCnt >= LCap then
+      begin
+        LNewCap := GrowArrayCapacity(LCap, LCnt + 1);
+        SetLength(Result, LNewCap);
+        LCap := LNewCap;
+      end;
+      Result[LCnt]:=E;
+      Inc(LCnt);
+    end;
   end;
+  if SizeUInt(Length(Result)) <> LCnt then
+    SetLength(Result, LCnt);
 end;
 
-function GitParseMailmap(const AData: TBytes): TGitMailmap;
-var S: string;
+function GitParseMailmap(const AData: TBytes): TGitMailmap; inline;
 begin
+  { single-source bytes.ops.BytesToString: inline + single SetLength + single Move via PByte/PChar^ zero-copy, no duplicate hand Move }
   if Length(AData)=0 then Exit(nil);
-  SetLength(S, Length(AData));
-  Move(AData[0], S[1], Length(AData));
-  Result:=GitParseMailmap(S);
+  Result:=GitParseMailmap(BytesToString(AData));
 end;
 
 

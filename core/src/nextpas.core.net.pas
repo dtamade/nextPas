@@ -104,6 +104,9 @@ function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean; inline;
 
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
+function AsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
+
 function ClassifyNetError(ACode: Int32): TNetErrorClass; inline;
 function NetErrorKindName(AKind: TNetErrorKind): string; inline;
 
@@ -272,6 +275,16 @@ function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
   AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean;
 begin
   Result := nextpas.core.net.async.AsyncTcpDialWithDnsFeed(ALoop, APort, AOptions, ACallback, AContext, AFeed);
+end;
+
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream;
+begin
+  Result := nextpas.core.net.async.AsyncTcpStreamAdopt(ALoop, AStream);
+end;
+
+function AsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream;
+begin
+  Result := nextpas.core.net.async.AsyncTcpConnect(ALoop, AAddr, APort);
 end;
 
 function ClassifyNetError(ACode: Int32): TNetErrorClass;

@@ -10,7 +10,8 @@ uses
   nextpas.core.process,
   nextpas.core.git,
   nextpas.core.git.base,
-  nextpas.core.git.libgit2.binding;
+  nextpas.core.git.libgit2.binding,
+  nextpas.core.git.libgit2;
 
 type
   TGitCallbackFixture = class
@@ -204,7 +205,8 @@ begin
   nextpas.core.fs.MkdirAll(LNestedDir);
 
   LMgr := NewGitManager;
-  CheckEqual(ExpandFileName(LLinkedDir), LMgr.DiscoverRepository(LNestedDir),
+  CheckEqual(nextpas.core.fs.PathRealPath(ExpandFileName(LLinkedDir)),
+    nextpas.core.fs.PathRealPath(LMgr.DiscoverRepository(LNestedDir)),
     'DiscoverRepository should resolve linked worktree .git file to worktree root');
 end;
 

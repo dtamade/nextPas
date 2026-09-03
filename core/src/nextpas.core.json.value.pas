@@ -6,6 +6,7 @@ unit nextpas.core.json.value;
   Invalid values (missing keys, out-of-bounds) return safe defaults (0, empty, false). }
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 

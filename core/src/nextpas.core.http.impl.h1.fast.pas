@@ -50,6 +50,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.scan;
@@ -823,7 +824,7 @@ begin
     Result := ACount
   else
     Result := LAvailable;
-  Move(FData[FPosition], ABuf, Result);
+  BytesCopy(@ABuf, @FData[FPosition], Result); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   Inc(FPosition, Result);
 end;
 
@@ -842,7 +843,7 @@ begin
   if (AResult.ContentLength > 0) and (ABuf <> nil) then
   begin
     SetLength(FBody, AResult.ContentLength);
-    Move(ABuf[AResult.BodyStart], FBody[0], AResult.ContentLength);
+    BytesCopy(@FBody[0], ABuf + AResult.BodyStart, SizeUInt(AResult.ContentLength)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   end;
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);

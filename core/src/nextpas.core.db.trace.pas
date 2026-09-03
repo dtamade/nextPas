@@ -58,6 +58,7 @@ function DbTraceSqlSummary(const ASql: string): string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.platform.time;
 
 function TDbTraceHub.SnapshotListener: IDbTraceListener;
@@ -182,7 +183,7 @@ begin
     Dec(LN);
   SetLength(Result, LN);
   if LN > 0 then
-    Move(LB[0], Result[1], SizeUInt(LN) * SizeOf(Char));
+    nextpas.core.bytes.ops.BytesCopy(@Result[1], @LB[0], SizeUInt(LN) * SizeOf(Char)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
 end;
 
 end.

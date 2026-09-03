@@ -148,6 +148,20 @@ function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
     @return 0 成功，否则返回错误码 *}
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
 
+{** @desc 创建 FIFO 特殊文件（owner 反哺：tar device/fifo 完整性闭环）
+    @param APath 路径
+    @param AMode 权限
+    @return 0 成功，否则返回错误码 *}
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32;
+
+{** @desc 创建设备节点（owner 反哺：tar device 往返完整，经平台单缝，携带 DevMajor/DevMinor）
+    @param APath 路径
+    @param AMode 权限+类型（已含 S_IFCHR/S_IFBLK）
+    @param ADevMajor 主设备号
+    @param ADevMinor 次设备号
+    @return 0 成功，否则返回错误码 *}
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32;
+
 {** @desc 创建目录
     @param APath 目录路径
     @param AMode 目录权限
@@ -218,6 +232,13 @@ function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSiz
     @param ANewPath 新链接路径
     @return 0 成功，否则返回错误码 *}
 function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32;
+
+{** @desc 验证式硬链接（fd 级原子闭环 TOCTOU 防护）
+    @param AOldPath 已有文件（源）
+    @param ANewPath 新链接路径
+    @return 0 成功，否则返回错误码
+    @note Unix: O_NOFOLLOW|O_CLOEXEC 打开源 fd 校验 ftRegular 后经 /proc/self/fd 或 /dev/fd 链路 link，原子消除 Validate→HandleSpecial→link 窗口 *}
+function platform_file_link_verified(const AOldPath, ANewPath: PAnsiChar): Int32;
 
 {** @desc 设置访问/修改时间（Unix 纳秒 epoch，与 TPlatformFileStat.ModTime 同单位）
     @param APath 路径
@@ -627,6 +648,43 @@ begin
   Result := PosixCheck(truncate(APath, ASize));
 end;
 
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PosixCheck(mkfifo(APath, AMode));
+end;
+
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32;
+{$IFDEF NEXTPAS_UNIX}
+var
+  LDev: dev_t;
+{$IFDEF NEXTPAS_LINUX}
+  LMajor, LMinor: UInt64;
+{$ENDIF}
+{$ENDIF}
+begin
+{$IFDEF NEXTPAS_UNIX}
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  {$IFDEF NEXTPAS_LINUX}
+  // Linux makedev: ((major & $fffff000) << 32) | ((major & $fff) << 8) | ((minor & $ffffff00) << 12) | (minor & $ff)
+  LMajor := UInt64(ADevMajor);
+  LMinor := UInt64(ADevMinor);
+  LDev := dev_t(((LMajor and $FFFFF000) shl 32) or ((LMajor and $FFF) shl 8) or ((LMinor and $FFFFFF00) shl 12) or (LMinor and $FF));
+  {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_ANDROID)}
+  // BSD/Darwin/Android simplified: (major << 8) | minor 兼容小设备号，满足 tar 往返单源 bytes.ops 零拷贝思想，不引入复杂宏展开
+  LDev := dev_t((UInt64(ADevMajor) shl 8) or UInt64(ADevMinor and $FF));
+  {$ELSE}
+  LDev := dev_t((UInt64(ADevMajor) shl 8) or UInt64(ADevMinor));
+  {$ENDIF}
+  Result := PosixCheck(mknod(APath, mode_t(AMode), LDev));
+{$ELSE}
+  // Windows:无 mknod 语义，返回不支持，调用方 fail-closed WARN+占位
+  Result := PLATFORM_ERR_UNSUPPORTED;
+{$ENDIF}
+end;
+
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32;
 begin
   if APath = nil then
@@ -749,6 +807,83 @@ begin
   if (AOldPath = nil) or (ANewPath = nil) then
     Exit(PLATFORM_ERR_INVALID);
   Result := PosixCheck(link(AOldPath, ANewPath));
+end;
+
+function platform_file_link_verified(const AOldPath, ANewPath: PAnsiChar): Int32;
+var
+  LFd: cint;
+  LHandle: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
+  LRes: Int32;
+  LPathBuf: array[0..63] of AnsiChar;
+  LPrefix: PAnsiChar;
+  LPrefixLen: Int32;
+  LDigits: array[0..15] of AnsiChar;
+  LDigitLen, LI: Int32;
+  LNum: cint;
+  LFlags: cint;
+begin
+  if (AOldPath = nil) or (ANewPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+{$IFDEF NEXTPAS_LINUX}
+  LPrefix := '/proc/self/fd/';
+  LPrefixLen := 14;
+  LFlags := O_RDONLY or O_NOFOLLOW or O_CLOEXEC;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  LPrefix := '/dev/fd/';
+  LPrefixLen := 8;
+  LFlags := O_RDONLY or 256 or O_CLOEXEC;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  LPrefix := '/dev/fd/';
+  LPrefixLen := 8;
+  LFlags := O_RDONLY or 256 or O_CLOEXEC;
+{$ELSEIF defined(NEXTPAS_ANDROID)}
+  LPrefix := '/proc/self/fd/';
+  LPrefixLen := 14;
+  LFlags := O_RDONLY or $20000 or O_CLOEXEC;
+{$ELSE}
+  LPrefix := '/dev/fd/';
+  LPrefixLen := 8;
+  LFlags := O_RDONLY or O_CLOEXEC;
+{$ENDIF}
+  LFd := open(AOldPath, LFlags);
+  if LFd < 0 then
+    Exit(platform_get_errno);
+  LHandle.Value := LFd;
+  LRes := platform_file_fstat(LHandle, LStat);
+  if LRes <> 0 then
+  begin
+    close(LFd);
+    Exit(LRes);
+  end;
+  if LStat.FileType <> ftRegular then
+  begin
+    close(LFd);
+    Exit(PLATFORM_ERR_INVALID);
+  end;
+  Move(LPrefix^, LPathBuf[0], LPrefixLen);
+  LNum := LFd;
+  if LNum = 0 then
+  begin
+    LPathBuf[LPrefixLen] := '0';
+    LPathBuf[LPrefixLen + 1] := #0;
+  end
+  else
+  begin
+    LDigitLen := 0;
+    while LNum > 0 do
+    begin
+      LDigits[LDigitLen] := AnsiChar(Ord('0') + (LNum mod 10));
+      LNum := LNum div 10;
+      Inc(LDigitLen);
+    end;
+    for LI := 0 to LDigitLen - 1 do
+      LPathBuf[LPrefixLen + LI] := LDigits[LDigitLen - 1 - LI];
+    LPathBuf[LPrefixLen + LDigitLen] := #0;
+  end;
+  LRes := PosixCheck(link(@LPathBuf[0], ANewPath));
+  close(LFd);
+  Result := LRes;
 end;
 
 function platform_file_utimens(const APath: PAnsiChar;
@@ -1511,6 +1646,19 @@ begin
     Result := 0;
 end;
 
+function platform_file_link_verified(const AOldPath, ANewPath: PAnsiChar): Int32;
+var
+  LStat: TPlatformFileStat;
+begin
+  if (AOldPath = nil) or (ANewPath = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+  if platform_file_lstat(AOldPath, LStat) <> 0 then
+    Exit(platform_get_last_error);
+  if LStat.FileType <> ftRegular then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_file_link(AOldPath, ANewPath);
+end;
+
 function platform_file_utimens(const APath: PAnsiChar;
   const AAccessTimeNs, AModTimeNs: Int64): Int32;
 var
@@ -1677,6 +1825,8 @@ function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileSta
 function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32; begin FillChar(AStat, SizeOf(AStat), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mkfifo(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_mknod(const APath: PAnsiChar; AMode: UInt32; ADevMajor, ADevMinor: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_mkdir(const APath: PAnsiChar; AMode: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_rmdir(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_unlink(const APath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
@@ -1689,6 +1839,7 @@ function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32; begin 
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32; out ALen: Int32): Int32; begin ALen := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_link(const AOldPath, ANewPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_link_verified(const AOldPath, ANewPath: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_utimens(const APath: PAnsiChar; const AAccessTimeNs, AModTimeNs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_chown(const APath: PAnsiChar; const AUid, AGid: UInt32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
   { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search

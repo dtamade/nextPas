@@ -1,5 +1,5 @@
 unit nextpas.core.js;
-{** @desc JS 门面：纯 re-export（零逻辑，工厂分支已下沉至 js.factory）。 *}
+{** @desc JS 门面：纯 re-export。 *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -26,7 +26,8 @@ function CreateJsRuntime(AKind: TJsBackendKind = jsbkFake): IJsRuntime; overload
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; overload; inline;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
-const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
+const
+  jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
   jsbkFake = nextpas.core.js.base.jsbkFake;
   jsbkJs888 = nextpas.core.js.base.jsbkJs888;
   jsbkV8 = nextpas.core.js.base.jsbkV8;
@@ -34,22 +35,18 @@ const jsbkQuickJs = nextpas.core.js.base.jsbkQuickJs;
 implementation
 function CreateJsRuntime(AKind: TJsBackendKind): IJsRuntime; inline;
 begin
-  // perf: inline thin-forward to factory single source, zero-copy IJsRuntime refcnt, no branching
   Result := nextpas.core.js.factory.CreateJsRuntime(AKind);
 end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime; inline;
 begin
-  // perf: inline thin-forward to factory single source, zero-copy record const, no duplicate CheckJsRuntimeOptions
   Result := nextpas.core.js.factory.CreateJsRuntime(AKind, AOptions);
 end;
 function JsBackendAvailable(AKind: TJsBackendKind): Boolean; inline;
 begin
-  // perf: inline thin-forward to factory probe single source, no duplicate case
   Result := nextpas.core.js.factory.JsBackendAvailable(AKind);
 end;
 function DefaultJsRuntimeOptions: TJsRuntimeOptions; inline;
 begin
-  // perf: inline thin-forward to factory single source (TJsRuntimeOptions.Default), zero-copy record
   Result := nextpas.core.js.factory.DefaultJsRuntimeOptions;
 end;
 end.

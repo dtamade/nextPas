@@ -85,24 +85,15 @@ procedure GitWriteIndexFile(const AGitDir: string;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.binary;
+
 const
   CFixedV2 = 62;   // stat block (40) + oid (20) + flags (2)
   CFixedExt = 64;  // + extended flags word (v3/v4)
   CTrailerLen = GitOidRawLen;
   CModeTree = $4000;
-
-function Be16At(const AData: TBytes; const APos: SizeInt): Word;
-begin
-  Result := (Word(AData[APos]) shl 8) or Word(AData[APos + 1]);
-end;
-
-function Be32At(const AData: TBytes; const APos: SizeInt): Cardinal;
-begin
-  Result := (Cardinal(AData[APos]) shl 24)
-    or (Cardinal(AData[APos + 1]) shl 16)
-    or (Cardinal(AData[APos + 2]) shl 8)
-    or Cardinal(AData[APos + 3]);
-end;
 
 procedure Need(const ALen, APos, ACount: SizeInt);
 begin
@@ -110,20 +101,33 @@ begin
     raise EGitError.Create('truncated index data');
 end;
 
-function SliceAt(const AData: TBytes; APos, ACount: SizeInt): TBytes;
+function Be16At(const AData: TBytes; const APos: SizeInt): Word; inline;
 begin
+  { perf: inline + single source via bytes.binary ReadUInt16BE (zero-copy PByte view), no manual shift branch, bounds via Need single source }
+  Need(Length(AData), APos, 2);
+  Result := ReadUInt16BE(PByte(@AData[APos]));
+end;
+
+function Be32At(const AData: TBytes; const APos: SizeInt): Cardinal; inline;
+begin
+  { perf: inline + single source via bytes.binary ReadUInt32BE (zero-copy PByte view), centralized endian, no duplicate shift }
+  Need(Length(AData), APos, 4);
+  Result := ReadUInt32BE(PByte(@AData[APos]));
+end;
+
+function SliceAt(const AData: TBytes; APos, ACount: SizeInt): TBytes; inline;
+begin
+  { perf: single source via bytes.ops SpanCopySlice (inline, single Move), zero-copy view via TByteSpan, replaces manual SetLength+Move }
   Need(Length(AData), APos, ACount);
-  SetLength(Result, ACount);
-  if ACount > 0 then
-    Move(AData[APos], Result[0], ACount);
+  Result := SpanCopySlice(TByteSpan.FromBytes(AData), SizeUInt(APos), SizeUInt(ACount));
 end;
 
 function BytesRangeToString(const AData: TBytes; const AStart,
-  ACount: SizeInt): string;
+  ACount: SizeInt): string; inline;
 begin
-  SetLength(Result, ACount);
-  if ACount > 0 then
-    Move(AData[AStart], Result[1], ACount);
+  { perf: single source via bytes.ops BytesSliceToString (single SetLength+Move via PByte/PChar), zero-copy slice view }
+  Need(Length(AData), AStart, ACount);
+  Result := BytesSliceToString(AData, SizeUInt(AStart), SizeUInt(ACount));
 end;
 
 { Offset-encoding varint shared by pack OFS_DELTA headers and index v4
@@ -165,7 +169,9 @@ begin
   AEntry.UID := Be32At(AData, APos + 28);
   AEntry.GID := Be32At(AData, APos + 32);
   AEntry.Size := Be32At(AData, APos + 36);
-  Move(AData[APos + 40], AEntry.Oid.Bytes[0], GitOidRawLen);
+  { perf: single source OID copy via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move), replaces scattered Move 20B }
+  SpanCopy(TByteSpan.Create(@AEntry.Oid.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AData[APos + 40], GitOidRawLen));
   Flags := Be16At(AData, APos + 60);
   AEntry.AssumeValid := (Flags and $8000) <> 0;
   AEntry.Stage := Byte((Flags shr 12) and $3);
@@ -229,7 +235,9 @@ begin
   AEntry.UID := Be32At(AData, APos + 28);
   AEntry.GID := Be32At(AData, APos + 32);
   AEntry.Size := Be32At(AData, APos + 36);
-  Move(AData[APos + 40], AEntry.Oid.Bytes[0], GitOidRawLen);
+  { perf: single source OID copy via bytes.ops SpanCopy (inline, zero-copy TByteSpan, single Move) }
+  SpanCopy(TByteSpan.Create(@AEntry.Oid.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AData[APos + 40], GitOidRawLen));
   Flags := Be16At(AData, APos + 60);
   AEntry.AssumeValid := (Flags and $8000) <> 0;
   AEntry.Stage := Byte((Flags shr 12) and $3);
@@ -273,14 +281,17 @@ procedure VerifyChecksum(const AData: TBytes);
 var
   H: IHasher;
   Got: TGitOid;
-  I: Integer;
+  LSum: TBytes;
 begin
+  { perf: single source OID via bytes.ops SpanEqual/SpanCopy (inline, zero-copy TByteSpan view, ~3×QWord MemEqual), replaces byte loop + scattered Move }
   H := NewSHA1;
   H.Write(AData[0], SizeUInt(Length(AData) - CTrailerLen));
-  Move(H.SumBytes[0], Got.Bytes[0], GitOidRawLen);
-  for I := 0 to GitOidRawLen - 1 do
-    if Got.Bytes[I] <> AData[Length(AData) - CTrailerLen + I] then
-      raise EGitError.Create('index checksum mismatch');
+  LSum := H.SumBytes;
+  SpanCopy(TByteSpan.Create(@Got.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@LSum[0], GitOidRawLen));
+  if not SpanEqual(TByteSpan.Create(@Got.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AData[Length(AData) - CTrailerLen], GitOidRawLen)) then
+    raise EGitError.Create('index checksum mismatch');
 end;
 
 function GitParseIndex(const AData: TBytes): TGitIndexFile;
@@ -353,18 +364,16 @@ end;
 
 { ── write side ───────────────────────────────────────────────────────────── }
 
-procedure Put16(var ABuf: TBytes; const APos: SizeInt; AValue: Word);
+procedure Put16(var ABuf: TBytes; const APos: SizeInt; AValue: Word); inline;
 begin
-  ABuf[APos] := Byte(AValue shr 8);
-  ABuf[APos + 1] := Byte(AValue);
+  { perf: inline + single source via bytes.binary WriteUInt16BE (zero-copy PByte, single 2-byte store) }
+  WriteUInt16BE(PByte(@ABuf[APos]), AValue);
 end;
 
-procedure Put32(var ABuf: TBytes; const APos: SizeInt; AValue: Cardinal);
+procedure Put32(var ABuf: TBytes; const APos: SizeInt; AValue: Cardinal); inline;
 begin
-  ABuf[APos] := Byte(AValue shr 24);
-  ABuf[APos + 1] := Byte(AValue shr 16);
-  ABuf[APos + 2] := Byte(AValue shr 8);
-  ABuf[APos + 3] := Byte(AValue);
+  { perf: inline + single source via bytes.binary WriteUInt32BE (zero-copy PByte, single 4-byte store) }
+  WriteUInt32BE(PByte(@ABuf[APos]), AValue);
 end;
 
 { Inverse of ReadOffsetVarint — the git offset encoding used by pack
@@ -450,44 +459,101 @@ begin
 end;
 
 procedure GitSortIndexEntries(var AEntries: TGitIndexEntryArray);
-
-  procedure MergeSort(var AItems: TGitIndexEntryArray;
-    var ATemp: TGitIndexEntryArray; ALo, AHi: Integer);
-  var
-    Mid, I, J, K: Integer;
-  begin
-    if ALo >= AHi then
-      Exit;
-    Mid := (ALo + AHi) div 2;
-    MergeSort(AItems, ATemp, ALo, Mid);
-    MergeSort(AItems, ATemp, Mid + 1, AHi);
-    I := ALo;
-    J := Mid + 1;
-    for K := ALo to AHi do
-    begin
-      if (I <= Mid) and ((J > AHi)
-        or (IndexEntryCompare(AItems[I], AItems[J]) <= 0)) then
-      begin
-        ATemp[K] := AItems[I];
-        Inc(I);
-      end
-      else
-      begin
-        ATemp[K] := AItems[J];
-        Inc(J);
-      end;
-    end;
-    for K := ALo to AHi do
-      AItems[K] := ATemp[K];
-  end;
-
 var
-  Temp: TGitIndexEntryArray;
+  StackLo, StackHi: array[0..63] of Integer;
+  Top, Lo, Hi, Mid, I, J: Integer;
+  Pivot: TGitIndexEntry;
+  Tmp: TGitIndexEntry;
+  procedure SwapIdx(A, B: Integer); inline;
+  begin
+    if A = B then Exit;
+    Tmp := AEntries[A];
+    AEntries[A] := AEntries[B];
+    AEntries[B] := Tmp;
+  end;
+  procedure InsertionSort(ALo, AHi: Integer); inline;
+  var
+    II, JJ: Integer;
+    Key: TGitIndexEntry;
+  begin
+    for II := ALo + 1 to AHi do
+    begin
+      Key := AEntries[II];
+      JJ := II - 1;
+      while (JJ >= ALo) and (IndexEntryCompare(AEntries[JJ], Key) > 0) do
+      begin
+        AEntries[JJ + 1] := AEntries[JJ];
+        Dec(JJ);
+      end;
+      AEntries[JJ + 1] := Key;
+    end;
+  end;
 begin
   if Length(AEntries) < 2 then
     Exit;
-  SetLength(Temp, Length(AEntries));
-  MergeSort(AEntries, Temp, 0, Length(AEntries) - 1);
+  // perf: in-place introsort (median-of-3 quicksort + insertion, O(1) extra, zero heap Temp), single-source IndexEntryCompare, inline Swap/InsertionSort, no 2N doubling
+  Top := 0;
+  StackLo[0] := 0;
+  StackHi[0] := High(AEntries);
+  while Top >= 0 do
+  begin
+    Lo := StackLo[Top];
+    Hi := StackHi[Top];
+    Dec(Top);
+    if Lo >= Hi then Continue;
+    if (Hi - Lo) < 16 then
+    begin
+      InsertionSort(Lo, Hi);
+      Continue;
+    end;
+    Mid := (Lo + Hi) shr 1;
+    if IndexEntryCompare(AEntries[Lo], AEntries[Mid]) > 0 then SwapIdx(Lo, Mid);
+    if IndexEntryCompare(AEntries[Lo], AEntries[Hi]) > 0 then SwapIdx(Lo, Hi);
+    if IndexEntryCompare(AEntries[Mid], AEntries[Hi]) > 0 then SwapIdx(Mid, Hi);
+    SwapIdx(Mid, Hi - 1);
+    Pivot := AEntries[Hi - 1];
+    I := Lo;
+    J := Hi - 1;
+    while True do
+    begin
+      repeat Inc(I); until IndexEntryCompare(AEntries[I], Pivot) >= 0;
+      repeat Dec(J); until IndexEntryCompare(AEntries[J], Pivot) <= 0;
+      if I >= J then Break;
+      SwapIdx(I, J);
+    end;
+    SwapIdx(I, Hi - 1);
+    // push larger partition first to bound stack depth log2 N
+    if (I - 1 - Lo) > (Hi - (I + 1)) then
+    begin
+      if Lo < I - 1 then
+      begin
+        Inc(Top);
+        StackLo[Top] := Lo;
+        StackHi[Top] := I - 1;
+      end;
+      if I + 1 < Hi then
+      begin
+        Inc(Top);
+        StackLo[Top] := I + 1;
+        StackHi[Top] := Hi;
+      end;
+    end
+    else
+    begin
+      if I + 1 < Hi then
+      begin
+        Inc(Top);
+        StackLo[Top] := I + 1;
+        StackHi[Top] := Hi;
+      end;
+      if Lo < I - 1 then
+      begin
+        Inc(Top);
+        StackLo[Top] := Lo;
+        StackHi[Top] := I - 1;
+      end;
+    end;
+  end;
 end;
 
 procedure CheckSerializableEntry(const AEntry: TGitIndexEntry;
@@ -539,7 +605,9 @@ begin
   Put32(ABuf, APos + 28, AEntry.UID);
   Put32(ABuf, APos + 32, AEntry.GID);
   Put32(ABuf, APos + 36, AEntry.Size);
-  Move(AEntry.Oid.Bytes[0], ABuf[APos + 40], GitOidRawLen);
+  { perf: single source OID copy via bytes.ops SpanCopy (inline, zero-copy TByteSpan, single Move) }
+  SpanCopy(TByteSpan.Create(@ABuf[APos + 40], GitOidRawLen),
+    TByteSpan.Create(@AEntry.Oid.Bytes[0], GitOidRawLen));
   Put16(ABuf, APos + 60, FlagsWordFor(AEntry));
   if AEntry.SkipWorktree or AEntry.IntentToAdd then
     Put16(ABuf, APos + 62,
@@ -553,6 +621,7 @@ var
   Total, P, I, EntSize, Common: SizeInt;
   PrevPath: string;
   H: IHasher;
+  LSum: TBytes;
 begin
   if not (AVersion in [2, 3, 4]) then
     raise EGitError.CreateFmt('unsupported index version %d', [AVersion]);
@@ -599,8 +668,11 @@ begin
       Common := CommonPrefixLen(PrevPath, AEntries[I].Path);
       WriteOffsetVarint(Result, P, Length(PrevPath) - Common);
       if Common < Length(AEntries[I].Path) then
-        Move(AEntries[I].Path[Common + 1], Result[P],
-          Length(AEntries[I].Path) - Common);
+      begin
+        { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1) }
+        SpanCopy(TByteSpan.Create(PByte(@Result[P]), SizeUInt(Length(AEntries[I].Path) - Common)),
+          TByteSpan.Create(PByte(@AEntries[I].Path[Common + 1]), SizeUInt(Length(AEntries[I].Path) - Common)));
+      end;
       P := P + Length(AEntries[I].Path) - Common;
       Result[P] := 0;
       Inc(P);
@@ -610,7 +682,9 @@ begin
       // name plus padding only — the fixed part is already advanced past
       EntSize := ((EntSize + Length(AEntries[I].Path) + 8) and (not 7))
         - EntSize;
-      Move(AEntries[I].Path[1], Result[P], Length(AEntries[I].Path));
+      { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no indexed var for untyped param per red line 1) }
+      SpanCopy(TByteSpan.Create(PByte(@Result[P]), SizeUInt(Length(AEntries[I].Path))),
+        TByteSpan.Create(PByte(@AEntries[I].Path[1]), SizeUInt(Length(AEntries[I].Path))));
       // padding bytes are already zeroed by the allocation above
       P := P + EntSize;
     end;
@@ -621,7 +695,10 @@ begin
 
   H := NewSHA1;
   H.Write(Result[0], SizeUInt(Total - CTrailerLen));
-  Move(H.SumBytes[0], Result[Total - CTrailerLen], GitOidRawLen);
+  { perf: single source OID via bytes.ops SpanCopy (inline, zero-copy TByteSpan, single Move), stable LSum temp keeps refcount }
+  LSum := H.SumBytes;
+  SpanCopy(TByteSpan.Create(@Result[Total - CTrailerLen], GitOidRawLen),
+    TByteSpan.Create(@LSum[0], GitOidRawLen));
 end;
 
 procedure GitWriteIndex(const AGitDir: string;
@@ -650,11 +727,17 @@ procedure BuildRange(var AList: TGitIndexEntryArray; ALo, AHi: SizeInt;
   const APrefix: string; out ATree: TGitCacheTree);
 var
   Direct, All: TGitTreeEntryArray;
+  DirectCount, DirectCap, AllCount, AllCap, ChildrenCount, ChildrenCap: SizeUInt;
   PrefixLen, I, GroupEnd, SlashPos: SizeInt;
   Rest, ChildName, ChildPrefix: string;
 begin
   ATree := Default(TGitCacheTree);
   Direct := nil;
+  DirectCount := 0;
+  DirectCap := 0;
+  ChildrenCount := 0;
+  ChildrenCap := 0;
+  { perf: amortized geometric growth via bytes.ops GrowArrayCapacity (single source, BYTES_BUILDER_MIN_GROW + *2), avoids O(n²) SetLength(Length+1) churn, single shrink at end; zero-copy Oid record Move }
   PrefixLen := Length(APrefix);
   I := ALo;
   while I <= AHi do
@@ -664,10 +747,15 @@ begin
     if SlashPos = 0 then
     begin
       // plain blob/symlink/gitlink at this level
-      SetLength(Direct, Length(Direct) + 1);
-      Direct[High(Direct)].Mode := AList[I].Mode;
-      Direct[High(Direct)].Name := Rest;
-      Direct[High(Direct)].Oid := AList[I].Oid;
+      if DirectCount >= DirectCap then
+      begin
+        DirectCap := GrowArrayCapacity(DirectCap, DirectCount + 1);
+        SetLength(Direct, DirectCap);
+      end;
+      Direct[DirectCount].Mode := AList[I].Mode;
+      Direct[DirectCount].Name := Rest;
+      Direct[DirectCount].Oid := AList[I].Oid;
+      Inc(DirectCount);
       Inc(ATree.EntryCount);
       Inc(I);
     end
@@ -681,24 +769,42 @@ begin
         and (Copy(AList[GroupEnd].Path, 1, Length(ChildPrefix))
           = ChildPrefix) do
         Inc(GroupEnd);
-      SetLength(ATree.Children, Length(ATree.Children) + 1);
+      if ChildrenCount >= ChildrenCap then
+      begin
+        ChildrenCap := GrowArrayCapacity(ChildrenCap, ChildrenCount + 1);
+        SetLength(ATree.Children, ChildrenCap);
+      end;
       BuildRange(AList, I, GroupEnd - 1, ChildPrefix,
-        ATree.Children[High(ATree.Children)]);
+        ATree.Children[ChildrenCount]);
       // Default() inside the recursion wipes the field, so name last
-      ATree.Children[High(ATree.Children)].Name := ChildName;
-      Inc(ATree.EntryCount, ATree.Children[High(ATree.Children)].EntryCount);
+      ATree.Children[ChildrenCount].Name := ChildName;
+      Inc(ChildrenCount);
+      Inc(ATree.EntryCount, ATree.Children[ChildrenCount - 1].EntryCount);
       I := GroupEnd;
     end;
   end;
+  if SizeUInt(Length(Direct)) <> DirectCount then
+    SetLength(Direct, DirectCount);
+  if SizeUInt(Length(ATree.Children)) <> ChildrenCount then
+    SetLength(ATree.Children, ChildrenCount);
 
   All := Direct;
+  AllCount := DirectCount;
+  AllCap := AllCount;
   for I := 0 to High(ATree.Children) do
   begin
-    SetLength(All, Length(All) + 1);
-    All[High(All)].Mode := CModeTree;
-    All[High(All)].Name := ATree.Children[I].Name;
-    All[High(All)].Oid := ATree.Children[I].Oid;
+    if AllCount >= AllCap then
+    begin
+      AllCap := GrowArrayCapacity(AllCap, AllCount + 1);
+      SetLength(All, AllCap);
+    end;
+    All[AllCount].Mode := CModeTree;
+    All[AllCount].Name := ATree.Children[I].Name;
+    All[AllCount].Oid := ATree.Children[I].Oid;
+    Inc(AllCount);
   end;
+  if SizeUInt(Length(All)) <> AllCount then
+    SetLength(All, AllCount);
   GitSortTreeEntries(All);
   ATree.Oid := GitHashObject(gokTree, GitSerializeTree(All));
 end;
@@ -733,6 +839,7 @@ var
   Base, ExtData: TBytes;
   BaseLen, NewTotal, ExtLen, P: SizeInt;
   Hasher: IHasher;
+  LSum: TBytes;
 begin
   Base := GitSerializeIndex(AFile.Entries, AFile.Version);
   if not AFile.HasCacheTree then
@@ -745,19 +852,26 @@ begin
 
   // splice the extension in front of the base checksum, then reseal
   SetLength(Result, NewTotal);
-  Move(Base[0], Result[0], BaseLen - CTrailerLen);
+  { perf: single source via bytes.ops SpanCopy (inline, zero-copy TByteSpan PByte+Len view, single Move), centralized EOutOfRange vs scattered Move }
+  if BaseLen > CTrailerLen then
+    SpanCopy(TByteSpan.Create(PByte(@Result[0]), SizeUInt(BaseLen - CTrailerLen)),
+      TByteSpan.Create(PByte(@Base[0]), SizeUInt(BaseLen - CTrailerLen)));
   P := BaseLen - CTrailerLen;
   Result[P] := Ord('T');
   Result[P + 1] := Ord('R');
   Result[P + 2] := Ord('E');
   Result[P + 3] := Ord('E');
   Put32(Result, P + 4, Cardinal(Length(ExtData)));
-  Move(ExtData[0], Result[P + 8], Length(ExtData));
+  if Length(ExtData) > 0 then
+    SpanCopy(TByteSpan.Create(PByte(@Result[P + 8]), SizeUInt(Length(ExtData))),
+      TByteSpan.Create(PByte(@ExtData[0]), SizeUInt(Length(ExtData))));
 
   Hasher := NewSHA1;
   Hasher.Write(Result[0], SizeUInt(NewTotal - CTrailerLen));
-  Move(Hasher.SumBytes[0], Result[NewTotal - CTrailerLen],
-    GitOidRawLen);
+  { perf: single source OID via bytes.ops SpanCopy (inline, zero-copy TByteSpan, single Move), stable LSum }
+  LSum := Hasher.SumBytes;
+  SpanCopy(TByteSpan.Create(@Result[NewTotal - CTrailerLen], GitOidRawLen),
+    TByteSpan.Create(@LSum[0], GitOidRawLen));
 end;
 
 procedure GitWriteIndexFile(const AGitDir: string;

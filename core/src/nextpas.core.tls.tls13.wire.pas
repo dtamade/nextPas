@@ -171,12 +171,12 @@ begin
   Result[4] := Byte(LLen and $FF);
 
   if LLen > 0 then
-    Move(APayload[0], Result[5], LLen);
+    BytesCopy(@Result[5], @APayload[0], SizeUInt(LLen)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
 end;
 
 function ParseTLSRecordHeader(const AData: TBytes; out AHeader: TTLSRecordHeader): Boolean;
 begin
-  FillChar(AHeader, SizeOf(AHeader), 0);
+  BytesZero(@AHeader, SizeOf(AHeader)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   Result := False;
 
   if Length(AData) < 5 then

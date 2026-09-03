@@ -27,7 +27,7 @@ implementation
 uses
   nextpas.core.audio.codec.registry;
 
-// Probe≤4KB guard: 4096 — facade inline forwarding to impl
+// Probe≤4KB guard: 4096 — facade inline forwarding to impl (zero-alloc, bytes.ops single source via impl)
 
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult; inline;
 begin
@@ -40,6 +40,7 @@ begin
 end;
 
 initialization
+  // thin facade auto-registration: registry remains thin (no hard uses impl), impl registers via facade initialization (plugin)
   AudioRegisterDecoder(@CreateVorbisDecoder);
 
 end.

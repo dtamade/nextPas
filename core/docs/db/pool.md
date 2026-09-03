@@ -1,8 +1,8 @@
 # nextpas.core.db.pool — 连接池域契约
 
-**模块**：`nextpas.core.db.pool.{base,intf,pas}` 聚合通用池 + 单写者槽位 + 泄漏检测  
-**层级**：L3 家族（后端无关，工厂闭包注入；依赖 L0–L2：`base`/`sync`/`bytes.ops`）  
-**四件套**：`pool.base` ← `pool.intf` ← `pool` 门面 ← `pool` 实现（通用池核心）  
+**模块**：`nextpas.core.db.pool.{base,intf,pas}` 聚合通用池 + 单写者槽位 + 泄漏检测
+**层级**：独立 L3 族（已升格；后端无关，工厂闭包注入；依赖 L0–L2：`base`/`sync`/`bytes.ops`；寄居债已清，四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`PoolClear`/`Close`/`Destroy` 全路径已兑现）
+**四件套**：`pool.base` ← `pool.intf` ← `pool` 门面 ← `pool` 实现（通用池核心）
 **对应主契约**：`CONTRACT.md` §1.1 连接池行 + §2.7 `TDbPool` + §2.3 租约纪律
 
 ## 职责

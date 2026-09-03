@@ -18,12 +18,14 @@ unit nextpas.core.webview.bridge;
 interface
 
 uses
+  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.json,
   nextpas.core.json.types,
   nextpas.core.json.parser,
-  nextpas.core.json.value,
+  nextpas.core.json.builder,
+  nextpas.core.text.conv,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.assets,
@@ -580,18 +582,9 @@ begin
   LJson := AResultJson;
   if LJson = '' then
     LJson := 'null';
-  LView := TStringView.FromStr(LJson);
-  BridgeScriptInit(LB, SizeUInt(16 + 20 + LView.Len * 2 + 8));
-  try
-    LB.AppendBytes('__npw.__resolve(', 16);
-    LB.AppendInt(AId);
-    LB.AppendChar(',');
-    BridgeAppendQuotedJson(LB, LView);
-    LB.AppendChar(')');
-    Result := LB.ToString;
-  finally
-    LB.Done;
-  end;
+  { perf: inline thin-forward to text.conv.IntToStr single source via text.number IntToBuffer (single SetLength+Move, zero-copy via bytes.ops single source, no SysUtils) }
+  Result := '__npw.__resolve(' + IntToStr(AId) + ',' +
+    JsStringLit(LJson) + ')';
 end;
 
 { BuildRejectScript 外联：含 SIMD 转义循环禁 inline (design-conventions §2 红线二)，避高频 reject I-Cache 膨胀。统一构造器 BridgeScriptInit 单源复用 Reserve/Init 骨架，JsonDoubleEscape 单源零重复。 }

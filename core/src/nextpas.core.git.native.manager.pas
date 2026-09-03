@@ -28,8 +28,8 @@ type
     procedure SetVerifySSL(AEnabled: Boolean);
     procedure SetCredentialAcquireHandler(AHandler: TCredentialAcquireEvent);
     procedure SetCertificateCheckHandler(AHandler: TCertificateCheckEvent);
-    function Initialized: Boolean;
-    function VerifySSL: Boolean;
+    function Initialized: Boolean; inline;
+    function VerifySSL: Boolean; inline;
   end;
 
 implementation
@@ -59,6 +59,19 @@ begin
   Clean := PathClean(APath);
   if GitTryDiscoverGitDir(Clean, AGitDir) then
   begin
+    if FileExists(PathJoin2(AGitDir, 'commondir')) then
+    begin
+      // worktree gitdir: gitdir file points to <wt>/.git
+      try
+        AWorkTree := PathDir(Trim(ReadFileText(PathJoin2(AGitDir, 'gitdir'))));
+      except
+        AWorkTree := '';
+      end;
+      if AWorkTree = '' then
+        AWorkTree := PathDir(AGitDir);
+      Result := True;
+      Exit;
+    end;
     if PathBase(AGitDir) = '.git' then
       AWorkTree := PathDir(AGitDir)
     else
@@ -230,12 +243,12 @@ begin
     raise EGitError.Create('not implemented for native backend: SetCertificateCheckHandler');
 end;
 
-function TNativeGitManager.Initialized: Boolean;
+function TNativeGitManager.Initialized: Boolean; inline;
 begin
   Result := FInitialized;
 end;
 
-function TNativeGitManager.VerifySSL: Boolean;
+function TNativeGitManager.VerifySSL: Boolean; inline;
 begin
   Result := FVerifySSL;
 end;

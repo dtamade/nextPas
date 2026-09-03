@@ -1,5 +1,5 @@
 {**
- * nextpas.core.graphics.effect.procedural - 过程纹理（反哺 game888.procedural_texture 7 函）
+ * nextpas.core.graphics.effect.procedural - 过程纹理（反哺 game888.procedural_texture 7 函 + Perlin 批化）
  * 层级：L2 effect 族（寄宿 graphics.* 命名空间，非 L1 底座）。
  * 归层说明：L1 仅 graphics.base/color/path（零依赖）；本单元与 effect.graph 同为
  *   L2，同层单向依赖 image.base TBitmap（Stride64B 承载）+ L0/L1 simd.raster/
@@ -9,9 +9,12 @@
  *   显式说明：对 image.base TBitmap 的依赖为 intentional L2 same-layer
  *   single-direction allowlist（Stride 64B 承载），已在 registry 显式 allowlist，
  *   无需更新 architecture_contract_registry.json（L0 治理外）；禁止循环、仅单向 effect→image。
- * 批化：7 函均接入 nextpas.core.simd.raster 批接口（FillSolid 等），行级批量替代逐像素双循环。
+ * 批化：8 函均接入 nextpas.core.simd.raster 批接口（FillSolid 等），行级批量替代逐像素双循环。
  *   ProcBrick/Noise/Metal 行Hash预计算单次SimpleHash/像素并合并同色游程；
- *   ProcWood DX2预计算+Y行Hash批+inline Sqrt/Round，零拷贝WriteUInt32LE。
+ *   ProcWood DX2预计算+Y行Hash批+inline Sqrt/Round/fade，零拷贝WriteUInt32LE；
+ *   ProcPerlin/ProcPerlinTiled lattice 值噪声批化（FadePerlin 6t5-15t4+10t3 inline + LerpS 单源，
+ *   X侧 Xi/U 预计算 + Y行 v 单次，4角N00..N11 行预取，tile4 零拷贝，simd亲和连续写，复用
+ *   bytes.binary WriteUInt32LE + math.scalar ClampByte 单源，零 platform.dl）。
  *}
 unit nextpas.core.graphics.effect.procedural;
 
@@ -31,6 +34,8 @@ function ProcGradientV(Size: Integer; Top, Bottom: TColor32): TBitmap;
 function ProcMetal(Size: Integer; Base: TColor32; ScratchCount: Integer): TBitmap;
 function ProcGrid(Size, LineWidth: Integer; Bg, Line: TColor32): TBitmap;
 function ProcWood(Size: Integer; Base, Ring: TColor32): TBitmap;
+function ProcPerlin(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap; inline;
+function ProcPerlinTiled(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap;
 
 implementation
 
@@ -453,6 +458,118 @@ begin
     end;
   end;
   // DX2/RowN 托管释放，TBitmap 资源由 Result 持有，无泄漏
+end;
+
+{ Perlin/value-noise 行批 helpers：Fade/lerp inline 消调用，rowHash 预取 4 角点，tile4 零拷贝 }
+function FadePerlin(T: Single): Single; inline;
+begin
+  Result := T * T * T * (T * (T * 6 - 15) + 10);
+end;
+
+function LerpS(A, B, T: Single): Single; inline;
+begin
+  Result := A + (B - A) * T;
+end;
+
+function HashValue(Xi, Yi: Integer): Single; inline;
+begin
+  // [-1,1] 归一：低8位映射
+  Result := (Integer(SimpleHash(Xi, Yi) and $FF) - 128) / 128.0;
+end;
+
+function ProcPerlinTiled(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap;
+var X, Y, Xi, Yi, X1, Y1: Integer; xf, yf, u, v, n00, n10, n01, n11, nx0, nx1, n: Single;
+  RowDst: PByte; Dst: PByte; BR, BG, BB, BA: Byte; R, G, B: Integer; Val: Integer;
+  InvCell: Single; BasePtr: PByte; Stride: Integer;
+  // 行批：预计算 X 侧 Xi/xf/u 及两行 Yi/yf/v 以 tile4 合并
+  XiArr: array of Integer; UArr: array of Single;
+  N00Arr, N10Arr, N01Arr, N11Arr: array of Single;
+begin
+  if Size <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcPerlin: Size must be >0');
+  if CellSize <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcPerlin: CellSize must be >0');
+  if Variation <= 0 then
+    raise EArgumentError.Create('procedural.pas: ProcPerlin: Variation must be >0');
+  if Variation > 255 then Variation := 255;
+  Result := TBitmap.Create(Size, Size);
+  Color32Decompose(Base, BR, BG, BB, BA);
+  InvCell := 1.0 / CellSize;
+  SetLength(XiArr, Size);
+  SetLength(UArr, Size);
+  SetLength(N00Arr, Size);
+  SetLength(N10Arr, Size);
+  SetLength(N01Arr, Size);
+  SetLength(N11Arr, Size);
+  for X := 0 to Size - 1 do
+  begin
+    Xi := Trunc(X * InvCell);
+    xf := X * InvCell - Xi;
+    UArr[X] := FadePerlin(xf);
+    XiArr[X] := Xi;
+  end;
+  Result.EnsureUnique;
+  BasePtr := Result.UnsafeMutableRowPtr(0);
+  Stride := Result.Stride;
+  for Y := 0 to Size - 1 do
+  begin
+    Yi := Trunc(Y * InvCell);
+    yf := Y * InvCell - Yi;
+    v := FadePerlin(yf);
+    Y1 := Yi + 1;
+    X1 := 0;
+    // 预取本行 lattice 值到 N*Arr，消重复 SimpleHash，4 像素 tile 复用
+    for X := 0 to Size - 1 do
+    begin
+      Xi := XiArr[X];
+      X1 := Xi + 1;
+      N00Arr[X] := HashValue(Xi, Yi);
+      N10Arr[X] := HashValue(X1, Yi);
+      N01Arr[X] := HashValue(Xi, Y1);
+      N11Arr[X] := HashValue(X1, Y1);
+    end;
+    RowDst := BasePtr + Y * Stride;
+    Dst := RowDst;
+    X := 0;
+    while X + 3 < Size do
+    begin
+      u := UArr[X]; n00 := N00Arr[X]; n10 := N10Arr[X]; n01 := N01Arr[X]; n11 := N11Arr[X];
+      nx0 := LerpS(n00, n10, u); nx1 := LerpS(n01, n11, u); n := LerpS(nx0, nx1, v);
+      Val := Round(n * Variation);
+      R := ClampByte(Integer(BR) + Val); G := ClampByte(Integer(BG) + Val); B := ClampByte(Integer(BB) + Val);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      u := UArr[X+1]; n00 := N00Arr[X+1]; n10 := N10Arr[X+1]; n01 := N01Arr[X+1]; n11 := N11Arr[X+1];
+      nx0 := LerpS(n00, n10, u); nx1 := LerpS(n01, n11, u); n := LerpS(nx0, nx1, v);
+      Val := Round(n * Variation);
+      R := ClampByte(Integer(BR) + Val); G := ClampByte(Integer(BG) + Val); B := ClampByte(Integer(BB) + Val);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      u := UArr[X+2]; n00 := N00Arr[X+2]; n10 := N10Arr[X+2]; n01 := N01Arr[X+2]; n11 := N11Arr[X+2];
+      nx0 := LerpS(n00, n10, u); nx1 := LerpS(n01, n11, u); n := LerpS(nx0, nx1, v);
+      Val := Round(n * Variation);
+      R := ClampByte(Integer(BR) + Val); G := ClampByte(Integer(BG) + Val); B := ClampByte(Integer(BB) + Val);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      u := UArr[X+3]; n00 := N00Arr[X+3]; n10 := N10Arr[X+3]; n01 := N01Arr[X+3]; n11 := N11Arr[X+3];
+      nx0 := LerpS(n00, n10, u); nx1 := LerpS(n01, n11, u); n := LerpS(nx0, nx1, v);
+      Val := Round(n * Variation);
+      R := ClampByte(Integer(BR) + Val); G := ClampByte(Integer(BG) + Val); B := ClampByte(Integer(BB) + Val);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      Inc(X, 4);
+    end;
+    while X < Size do
+    begin
+      u := UArr[X]; n00 := N00Arr[X]; n10 := N10Arr[X]; n01 := N01Arr[X]; n11 := N11Arr[X];
+      nx0 := LerpS(n00, n10, u); nx1 := LerpS(n01, n11, u); n := LerpS(nx0, nx1, v);
+      Val := Round(n * Variation);
+      R := ClampByte(Integer(BR) + Val); G := ClampByte(Integer(BG) + Val); B := ClampByte(Integer(BB) + Val);
+      WriteUInt32LE(Dst, RgbaToPixelLE(Byte(R), Byte(G), Byte(B), BA)); Inc(Dst, 4);
+      Inc(X);
+    end;
+  end;
+end;
+
+function ProcPerlin(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap; inline;
+begin
+  Result := ProcPerlinTiled(Size, CellSize, Base, Variation);
 end;
 
 end.

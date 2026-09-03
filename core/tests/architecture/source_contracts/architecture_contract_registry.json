@@ -137,33 +137,13 @@
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.conv",
-      "reason": "temporary system compatibility facade text dependency"
+      "unit": "nextpas.core.text",
+      "reason": "L7 converged 2026-09-03 single source: 5 text sub-units (conv/compare/utils/format/view) converged to nextpas.core.text single source via bytes.ops single-source inline zero-copy (TByteSpan view single Move in owner), try-finally not lost; platform convergence done for file/path/env (now platform.*), text domain retained in L1 as single facade"
     },
     {
       "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.compare",
-      "reason": "temporary system compatibility facade text dependency (CompareStr delegation)"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.utils",
-      "reason": "temporary system compatibility facade text dependency (BoolToStr delegation)"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.format",
-      "reason": "temporary system compatibility facade text dependency (TextFormat forward; mirrors conv allowlist entry)"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.text.view",
-      "reason": "temporary system compatibility facade text dependency (Pos delegation via IndexOfStr)"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.bytes.ops",
-      "reason": "temporary system compatibility facade bytes helper debt (BytesOf/StringOf zero-copy single-source)"
+      "unit": "nextpas.core.bytes",
+      "reason": "L7 converged 2026-09-03 single source: BytesOf/StringOf/Pos via nextpas.core.bytes single source inline zero-copy TByteSpan view single Move in owner (bytes.ops single source through text facade), try-finally not lost"
     },
     {
       "path": "src/nextpas.core.system.pas",
@@ -174,16 +154,6 @@
       "path": "src/nextpas.core.system.pas",
       "unit": "nextpas.core.base.utils",
       "reason": "system root facade utils delegation (CompareBytes helper)"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.fs.util",
-      "reason": "system sysutils facade file helper debt pending platform-owned fs route"
-    },
-    {
-      "path": "src/nextpas.core.system.sysutils.pas",
-      "unit": "nextpas.core.os.env",
-      "reason": "system sysutils facade env helper debt pending platform-owned env route"
     },
     {
       "path": "src/nextpas.core.system.typinfo.pas",
@@ -440,8 +410,7 @@
   "governance_docs": [
     {
       "path": "docs/core-module-registry.md",
-      "max_lines": 140,
-"max_lines": 180,
+      "max_lines": 180,
       "required_truth_tokens": [
         "source-contract",
         "forced-compile",

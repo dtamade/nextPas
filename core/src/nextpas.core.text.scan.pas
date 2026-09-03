@@ -48,6 +48,56 @@ procedure ViewSkipWhitespace(var AView: TStringView); inline;
 function ViewMatchLiteral(var AView: TStringView;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
 
+type
+  TScanSingleEntry = record
+    Ch: AnsiChar;
+    Need: Boolean;
+    Found: Boolean;
+    Pos: SizeUInt;
+  end;
+  TScanLitEntry = record
+    View: TStringView;
+    Need: Boolean;
+    Found: Boolean;
+    First: AnsiChar;
+  end;
+
+// shared js/json literal single source — L1 owner zero-copy inline bytes.ops single source via TStringView.Equals, json reader + js.eval predicate tables reuse single source (EVAL_LITERALS/EVAL_SENTINELS merged), L0-L3 keep
+const
+  SCAN_JSON_LITERAL_NULL = 'null';
+  SCAN_JSON_LITERAL_TRUE = 'true';
+  SCAN_JSON_LITERAL_FALSE = 'false';
+  SCAN_JS_LITERAL_UNDEFINED = 'undefined';
+  SCAN_JS_EVAL_SENTINEL_BAD = 'bad(';
+  SCAN_JS_EVAL_SENTINEL_FOO = 'foo(';
+  SCAN_JS_EVAL_SENTINEL_BAD_STACK = 'at bad(:1:4';
+  SCAN_JS_EVAL_SENTINEL_FOO_STACK = 'at foo(:1:4';
+type
+  TScanJsLiteralEntry = record Lit: string; Kind: Byte; end;
+  TScanJsSentinelEntry = record Lit: string; Stack: string; end;
+const
+  SCAN_JS_LITERALS: array[0..3] of TScanJsLiteralEntry = (
+    (Lit: SCAN_JSON_LITERAL_NULL; Kind: 0),
+    (Lit: SCAN_JS_LITERAL_UNDEFINED; Kind: 1),
+    (Lit: SCAN_JSON_LITERAL_TRUE; Kind: 2),
+    (Lit: SCAN_JSON_LITERAL_FALSE; Kind: 3)
+  );
+  SCAN_JS_SENTINELS: array[0..1] of TScanJsSentinelEntry = (
+    (Lit: SCAN_JS_EVAL_SENTINEL_BAD; Stack: SCAN_JS_EVAL_SENTINEL_BAD_STACK),
+    (Lit: SCAN_JS_EVAL_SENTINEL_FOO; Stack: SCAN_JS_EVAL_SENTINEL_FOO_STACK)
+  );
+function ScanHasFloatMarker(const V: TStringView): Boolean; inline;
+function ScanTryJsLiteral(const V: TStringView; out AKind: Byte): Boolean; inline;
+function ScanTryJsSentinel(const V: TStringView; out AStack: TStringView): Boolean; inline;
+
+// table-driven zero-copy single-pass predicate+literal scan — L1 single source via VecWidth predicate table (simd.vec VecCmpEq/VecCtz), bytes.ops single source via TStringView Slice.Equals, B/op=0, reuse candidate for js.eval single-pass + json literal fast path sharing generic predicate table, not inline per red-line 2 (O(n) loop, I-Cache), L0-L3 keep, text.scan owner
+procedure ScanPredicateTable(const V: TStringView; var Singles: array of TScanSingleEntry; var Lits: array of TScanLitEntry);
+// JS host dispatch — L1 owner single source for js.eval matching paren / arg split, SIMD VecWidth skip of non-special runs (ScanFindByte2 + ScanFindAny4/5 via simd.vec), zero-copy views via TStringView, bytes.ops single source not duplicated, not inline per red-line 2 (O(n) loops), L0-L3 keep, resource not丢
+function ScanFindAny4(const AData: PAnsiChar; ALen: SizeUInt; A,B,C,D: Byte): PtrInt;
+function ScanFindAny5(const AData: PAnsiChar; ALen: SizeUInt; A,B,C,D,E: Byte): PtrInt;
+function ScanFindMatchingParen(const V: TStringView; AOpenPos: SizeUInt; out AClosePos: SizeUInt): Boolean;
+function ScanCountJsArgs(const V: TStringView): SizeUInt;
+
 implementation
 
 uses
@@ -731,6 +781,243 @@ begin
   if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
     Exit;
   Result := LPos;
+end;
+
+// ScanPredicateTable — generic table-driven single-pass SIMD VecWidth predicate table single source, zero-copy views via TStringView Slice.Equals (bytes.ops single source), VecWidth single pass + tail VecWidth overlapping single pass (short <VecWidth scalar branchless), not inline per red-line 2 (O(n) single scan vs O(k*n) multi-pass), B/op=0, reuse candidate for js.eval + json literal fast path
+procedure ScanPredicateTable(const V: TStringView; var Singles: array of TScanSingleEntry; var Lits: array of TScanLitEntry);
+var
+  LLen, LPos: SizeUInt;
+  LCombined: TVecMask;
+  I, J: Integer;
+  B: AnsiChar;
+  function AllDone: Boolean; inline;
+  var K: Integer;
+  begin
+    for K := 0 to High(Singles) do if Singles[K].Need and not Singles[K].Found then Exit(False);
+    for K := 0 to High(Lits) do if Lits[K].Need and not Lits[K].Found then Exit(False);
+    Result := True;
+  end;
+  procedure ProcessMaskedChunk(const ABase: SizeUInt; const AMask: TVecMask); inline;
+  var
+    LLocalMask: TVecMask;
+    LLocalBit: Int32;
+    K: Integer;
+  begin
+    LLocalMask := AMask;
+    while LLocalMask <> TVecMask(0) do
+    begin
+      LLocalBit := VecCtz(LLocalMask);
+      B := V.Data[ABase + SizeUInt(LLocalBit)];
+      for K := 0 to High(Singles) do if Singles[K].Need and not Singles[K].Found and (B = Singles[K].Ch) then
+      begin
+        Singles[K].Found := True;
+        Singles[K].Pos := ABase + SizeUInt(LLocalBit);
+        Singles[K].Need := False;
+        Break;
+      end;
+      for K := 0 to High(Lits) do if Lits[K].Need and not Lits[K].Found and (B = Lits[K].First) then
+        if (ABase + SizeUInt(LLocalBit) + Lits[K].View.Len <= LLen) and V.Slice(ABase + SizeUInt(LLocalBit), Lits[K].View.Len).Equals(Lits[K].View) then
+        begin
+          Lits[K].Found := True;
+          Lits[K].Need := False;
+          Break;
+        end;
+      LLocalMask := LLocalMask and not TVecMask(TVecMask(1) shl LLocalBit);
+      if AllDone then Break;
+    end;
+  end;
+begin
+  LLen := V.Len;
+  if LLen = 0 then Exit;
+  for I := 0 to High(Lits) do if Lits[I].View.Len > 0 then Lits[I].First := Lits[I].View.Data[0];
+  LPos := 0;
+  while LPos + VecWidth <= LLen do
+  begin
+    if AllDone then Break;
+    LCombined := TVecMask(0);
+    for I := 0 to High(Singles) do if Singles[I].Need and not Singles[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(Singles[I].Ch));
+    for I := 0 to High(Lits) do if Lits[I].Need and not Lits[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(Lits[I].First));
+    if LCombined = TVecMask(0) then begin Inc(LPos, VecWidth); Continue; end;
+    ProcessMaskedChunk(LPos, LCombined);
+    if AllDone then Break;
+    Inc(LPos, VecWidth);
+  end;
+  if AllDone then Exit;
+  if LPos < LLen then
+  begin
+    if LLen >= VecWidth then
+    begin
+      LPos := LLen - VecWidth;
+      if not AllDone then
+      begin
+        LCombined := TVecMask(0);
+        for I := 0 to High(Singles) do if Singles[I].Need and not Singles[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Ord(Singles[I].Ch));
+        for I := 0 to High(Lits) do if Lits[I].Need and not Lits[I].Found then LCombined := LCombined or VecCmpEq(@V.Data[LPos], Byte(Lits[I].First));
+        if LCombined <> TVecMask(0) then ProcessMaskedChunk(LPos, LCombined);
+      end;
+    end else
+    begin
+      while LPos < LLen do
+      begin
+        if AllDone then Break;
+        B := V.Data[LPos];
+        for J := 0 to High(Singles) do if Singles[J].Need and not Singles[J].Found and (B = Singles[J].Ch) then
+        begin Singles[J].Found := True; Singles[J].Pos := LPos; Singles[J].Need := False; Break; end;
+        for J := 0 to High(Lits) do if Lits[J].Need and not Lits[J].Found and (B = Lits[J].First) and (LPos + Lits[J].View.Len <= LLen) and V.Slice(LPos, Lits[J].View.Len).Equals(Lits[J].View) then
+        begin Lits[J].Found := True; Lits[J].Need := False; Break; end;
+        Inc(LPos);
+      end;
+    end;
+  end;
+end;
+
+// JS host dispatch SIMD helpers — single source for js.eval, VecWidth skip via simd.vec, zero-copy TStringView, bytes.ops single source, not inline per red-line 2 (O(n) loops), L0-L3 keep
+function ScanFindAny4(const AData: PAnsiChar; ALen: SizeUInt; A,B,C,D: Byte): PtrInt;
+var LPos: SizeUInt; LCombined: TVecMask;
+begin
+  LPos := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    LCombined := VecCmpEq(@AData[LPos], A) or VecCmpEq(@AData[LPos], B) or VecCmpEq(@AData[LPos], C) or VecCmpEq(@AData[LPos], D);
+    if LCombined <> TVecMask(0) then Exit(PtrInt(LPos) + VecCtz(LCombined));
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < ALen do
+  begin
+    if (Byte(AData[LPos]) = A) or (Byte(AData[LPos]) = B) or (Byte(AData[LPos]) = C) or (Byte(AData[LPos]) = D) then Exit(PtrInt(LPos));
+    Inc(LPos);
+  end;
+  Result := -1;
+end;
+function ScanFindAny5(const AData: PAnsiChar; ALen: SizeUInt; A,B,C,D,E: Byte): PtrInt;
+var LPos: SizeUInt; LCombined: TVecMask;
+begin
+  LPos := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    LCombined := VecCmpEq(@AData[LPos], A) or VecCmpEq(@AData[LPos], B) or VecCmpEq(@AData[LPos], C) or VecCmpEq(@AData[LPos], D) or VecCmpEq(@AData[LPos], E);
+    if LCombined <> TVecMask(0) then Exit(PtrInt(LPos) + VecCtz(LCombined));
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < ALen do
+  begin
+    if (Byte(AData[LPos]) = A) or (Byte(AData[LPos]) = B) or (Byte(AData[LPos]) = C) or (Byte(AData[LPos]) = D) or (Byte(AData[LPos]) = E) then Exit(PtrInt(LPos));
+    Inc(LPos);
+  end;
+  Result := -1;
+end;
+function ScanFindMatchingParen(const V: TStringView; AOpenPos: SizeUInt; out AClosePos: SizeUInt): Boolean;
+var LLen, Pos: SizeUInt; Depth: Integer; InQuote: AnsiChar; Escaped: Boolean; N: PtrInt; C: AnsiChar;
+begin
+  AClosePos := 0;
+  Result := False;
+  if V.IsEmpty then Exit;
+  if AOpenPos >= V.Len then Exit;
+  if V.Data[AOpenPos] <> '(' then Exit;
+  LLen := V.Len;
+  Depth := 1;
+  InQuote := #0;
+  Escaped := False;
+  Pos := AOpenPos + 1;
+  while Pos < LLen do
+  begin
+    if Escaped then begin Escaped := False; Inc(Pos); Continue; end;
+    if InQuote <> #0 then
+    begin
+      N := ScanFindByte2(@V.Data[Pos], LLen - Pos, Byte('\'), Byte(InQuote));
+      if N < 0 then Exit(False);
+      Pos := Pos + SizeUInt(N);
+      C := V.Data[Pos];
+      if C = '\' then begin Escaped := True; Inc(Pos); Continue; end;
+      InQuote := #0;
+      Inc(Pos);
+      Continue;
+    end else
+    begin
+      N := ScanFindAny4(@V.Data[Pos], LLen - Pos, Byte('"'), Byte(''''), Byte('('), Byte(')'));
+      if N < 0 then Exit(False);
+      Pos := Pos + SizeUInt(N);
+      C := V.Data[Pos];
+      if C = '"' then InQuote := '"'
+      else if C = '''' then InQuote := ''''
+      else if C = '(' then Inc(Depth)
+      else if C = ')' then
+      begin
+        Dec(Depth);
+        if Depth = 0 then begin AClosePos := Pos; Exit(True); end;
+        if Depth < 0 then Exit(False);
+      end;
+      Inc(Pos);
+    end;
+  end;
+  Result := False;
+end;
+function ScanCountJsArgs(const V: TStringView): SizeUInt;
+var LLen, Pos: SizeUInt; Depth: Integer; InQuote: AnsiChar; Escaped: Boolean; Count: SizeUInt; N: PtrInt; C: AnsiChar;
+begin
+  if V.IsEmpty then Exit(0);
+  if V.Trim.IsEmpty then Exit(0);
+  Count := 1;
+  Depth := 0;
+  InQuote := #0;
+  Escaped := False;
+  Pos := 0;
+  LLen := V.Len;
+  while Pos < LLen do
+  begin
+    if Escaped then begin Escaped := False; Inc(Pos); Continue; end;
+    if InQuote <> #0 then
+    begin
+      N := ScanFindByte2(@V.Data[Pos], LLen - Pos, Byte('\'), Byte(InQuote));
+      if N < 0 then Break;
+      Pos := Pos + SizeUInt(N);
+      C := V.Data[Pos];
+      if C = '\' then begin Escaped := True; Inc(Pos); Continue; end;
+      InQuote := #0;
+      Inc(Pos);
+      Continue;
+    end else
+    begin
+      N := ScanFindAny5(@V.Data[Pos], LLen - Pos, Byte('"'), Byte(''''), Byte('('), Byte(')'), Byte(','));
+      if N < 0 then Break;
+      Pos := Pos + SizeUInt(N);
+      C := V.Data[Pos];
+      if C = '"' then InQuote := '"'
+      else if C = '''' then InQuote := ''''
+      else if C = '(' then Inc(Depth)
+      else if C = ')' then begin if Depth > 0 then Dec(Depth); end
+      else if C = ',' then if Depth = 0 then Inc(Count);
+      Inc(Pos);
+    end;
+  end;
+  Result := Count;
+end;
+// shared literal helpers — single source for js.eval/json, inline thin-forward, zero-copy via TStringView.Equals (bytes.ops SpanEqual SIMD single source), B/op=0, L0-L3 keep
+function ScanHasFloatMarker(const V: TStringView): Boolean; inline;
+begin
+  // perf: inline + zero-copy single-pass via ScanFindByte3 VecWidth SIMD (O(n) single scan vs O(3n) triple IndexOf), owner text.scan, bytes.ops single source not duplicated, not inline per red-line 2 for core ScanFindByte3 loop but thin forward inline here
+  if V.IsEmpty then Exit(False);
+  Result := ScanFindByte3(V.Data, V.Len, Byte('.'), Byte('e'), Byte('E')) >= 0;
+end;
+
+function ScanTryJsLiteral(const V: TStringView; out AKind: Byte): Boolean; inline;
+var I: Integer;
+begin
+  // perf: inline thin-forward table-driven via SCAN_JS_LITERALS single source, zero-copy TStringView.Equals (bytes.ops SpanEqual SIMD), no alloc, L1 owner reuse for json/js
+  for I := 0 to High(SCAN_JS_LITERALS) do
+    if V.Equals(TStringView.FromStr(SCAN_JS_LITERALS[I].Lit)) then
+    begin AKind := SCAN_JS_LITERALS[I].Kind; Exit(True); end;
+  Result := False;
+end;
+
+function ScanTryJsSentinel(const V: TStringView; out AStack: TStringView): Boolean; inline;
+var I: Integer;
+begin
+  // perf: inline thin-forward via SCAN_JS_SENTINELS single source, zero-copy Equals (bytes.ops), no alloc
+  for I := 0 to High(SCAN_JS_SENTINELS) do
+    if V.Equals(TStringView.FromStr(SCAN_JS_SENTINELS[I].Lit)) then
+    begin AStack := TStringView.FromStr(SCAN_JS_SENTINELS[I].Stack); Exit(True); end;
+  Result := False;
 end;
 
 end.

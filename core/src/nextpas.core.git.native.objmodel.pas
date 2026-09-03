@@ -47,7 +47,7 @@ type
     Message: string;
   end;
 
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray;
+function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 function GitParseSignature(const ALine: string): TGitSignature;
 function GitParseCommit(const AData: TBytes): TGitCommitInfo;
 { Raises EGitError when any of the mandatory object/type/tag headers is
@@ -55,6 +55,9 @@ function GitParseCommit(const AData: TBytes): TGitCommitInfo;
 function GitParseTag(const AData: TBytes): TGitTagInfo;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 function ParseOctalText(const AText: string): Cardinal;
 var
@@ -73,38 +76,16 @@ begin
   end;
 end;
 
-procedure SplitLines(const AText: string; out ALines: TStringArray);
-var
-  Start, I, Count: Integer;
-begin
-  Count := 0;
-  SetLength(ALines, 0);
-  Start := 1;
-  for I := 1 to Length(AText) do
-    if AText[I] = #10 then
-    begin
-      Inc(Count);
-      SetLength(ALines, Count);
-      ALines[Count - 1] := Copy(AText, Start, I - Start);
-      Start := I + 1;
-    end;
-  if Start <= Length(AText) then
-  begin
-    Inc(Count);
-    SetLength(ALines, Count);
-    ALines[Count - 1] := Copy(AText, Start, MaxInt);
-  end;
-end;
-
-function GitParseTree(const AData: TBytes): TGitTreeEntryArray;
+function GitParseTree(const AData: TBytes): TGitTreeEntryArray; inline;
 var
   P, Len: SizeInt;
   ModeStart, NameStart: SizeInt;
-  EntryCount: Integer;
+  EntryCount, Cap: Integer;
 begin
   Len := Length(AData);
   P := 0;
   EntryCount := 0;
+  Cap := 0;
   SetLength(Result, 0);
   while P < Len do
   begin
@@ -122,15 +103,30 @@ begin
     Inc(P);
     if P + GitOidRawLen > Len then
       raise EGitError.Create('corrupt tree entry: truncated oid');
-    Inc(EntryCount);
-    SetLength(Result, EntryCount);
-    Result[EntryCount - 1].Mode := ParseOctalText(
-      GitBytesToString(Copy(AData, ModeStart, NameStart - ModeStart - 1)));
-    Result[EntryCount - 1].Name :=
-      GitBytesToString(Copy(AData, NameStart, P - NameStart - 1));
-    Move(AData[P], Result[EntryCount - 1].Oid.Bytes[0], GitOidRawLen);
+    // perf: amortized O(1) doubling (bytes.ops single-source pattern) avoids O(n²) per-entry SetLength churn
+    if EntryCount >= Cap then
+    begin
+      if Cap = 0 then
+        Cap := 8
+      else if Cap <= High(Integer) div 2 then
+        Cap := Cap * 2
+      else
+        Cap := EntryCount + 1;
+      SetLength(Result, Cap);
+    end;
+    // perf: zero-copy slice via bytes.ops (no intermediate TBytes), inline Slice+BytesSliceToString (single view + single copy)
+    Result[EntryCount].Mode := ParseOctalText(
+      BytesSliceToString(AData, SizeUInt(ModeStart), SizeUInt(NameStart - ModeStart - 1)));
+    Result[EntryCount].Name :=
+      BytesSliceToString(AData, SizeUInt(NameStart), SizeUInt(P - NameStart - 1));
+    // perf: single source OID copy via bytes.ops SpanCopy (inline, zero-copy TByteSpan view, single Move, no heap), replaces scattered Move 20B
+    SpanCopy(TByteSpan.Create(@Result[EntryCount].Oid.Bytes[0], GitOidRawLen),
+      TByteSpan.Create(@AData[P], GitOidRawLen));
     Inc(P, GitOidRawLen);
+    Inc(EntryCount);
   end;
+  if Length(Result) <> EntryCount then
+    SetLength(Result, EntryCount);
 end;
 
 function GitParseSignature(const ALine: string): TGitSignature;
@@ -176,7 +172,7 @@ var
   Lines: TStringArray;
   I, Brk, Sp, ParentCount: Integer;
 begin
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then
@@ -189,7 +185,7 @@ begin
     Header := Text;
     Result.Message := '';
   end;
-  SplitLines(Header, Lines);
+  Lines := GitSplitLines(Header);
   ParentCount := 0;
   SetLength(Result.Parents, 0);
   for I := 0 to Length(Lines) - 1 do
@@ -223,7 +219,7 @@ var
   I, Brk, Sp: Integer;
   HaveObject, HaveType, HaveName: Boolean;
 begin
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   // headers and message are separated by the first blank line
   Brk := Pos(#10#10, Text);
   if Brk > 0 then
@@ -240,7 +236,7 @@ begin
   HaveObject := False;
   HaveType := False;
   HaveName := False;
-  SplitLines(Header, Lines);
+  Lines := GitSplitLines(Header);
   for I := 0 to Length(Lines) - 1 do
   begin
     Line := Lines[I];
@@ -281,4 +277,3 @@ begin
 end;
 
 end.
-

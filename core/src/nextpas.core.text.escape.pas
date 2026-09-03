@@ -22,12 +22,21 @@ function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
 function JsonNeedsEscape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
 function JsonNeedsEscapeView(const ASrc: TStringView): Boolean; inline;
 function JsonNeedsEscapeStr(const S: string): Boolean; inline;
+// simple backslash unescape owner — bytes.ops single source, SIMD VecWidth inline, zero-copy, eliminates hand roll in js.eval
+function TextNeedsBackslashUnescape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+function TextNeedsBackslashUnescapeView(const ASrc: TStringView): Boolean; inline;
+function TextUnescapeBackslashToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt; const ADst: PAnsiChar): SizeUInt;
+function TextUnescapeBackslashView(const ASrc: TStringView): string; inline;
+// outer quote strip owner — single source for js.eval arg view (text.escape → pure.value → js.eval), O(1) first/last byte, zero-copy view, feed-back from js.eval
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
 
 implementation
 
 uses
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
+  nextpas.core.bytes.ops,
   nextpas.core.text.char,
   nextpas.core.text.utf8;
 
@@ -513,6 +522,88 @@ begin
     end;
   end;
   Result := LOut;
+end;
+
+function TextNeedsBackslashUnescape(const ASrc: PAnsiChar; const ALen: SizeUInt): Boolean; inline;
+var LPos: SizeUInt;
+begin
+  LPos := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    if VecCmpEq(@ASrc[LPos], Ord('\')) <> TVecMask(0) then Exit(True);
+    Inc(LPos, VecWidth);
+  end;
+  while LPos < ALen do
+  begin
+    if ASrc[LPos] = '\' then Exit(True);
+    Inc(LPos);
+  end;
+  Result := False;
+end;
+
+function TextNeedsBackslashUnescapeView(const ASrc: TStringView): Boolean; inline;
+begin
+  if ASrc.Len = 0 then Exit(False);
+  Result := TextNeedsBackslashUnescape(ASrc.Data, ASrc.Len);
+end;
+
+function TextUnescapeBackslashToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt; const ADst: PAnsiChar): SizeUInt;
+var LPos, LOut: SizeUInt; LMask: TVecMask; LFirst: Int32;
+begin
+  LPos := 0; LOut := 0;
+  while LPos + VecWidth <= ALen do
+  begin
+    LMask := VecCmpEq(@ASrc[LPos], Ord('\'));
+    if LMask = TVecMask(0) then
+    begin
+      BytesCopy(@ADst[LOut], @ASrc[LPos], VecWidth);
+      Inc(LPos, VecWidth); Inc(LOut, VecWidth);
+    end else
+    begin
+      LFirst := VecCtz(LMask);
+      if LFirst > 0 then
+      begin
+        BytesCopy(@ADst[LOut], @ASrc[LPos], SizeUInt(LFirst));
+        Inc(LPos, SizeUInt(LFirst)); Inc(LOut, SizeUInt(LFirst));
+      end;
+      Inc(LPos);
+      if LPos < ALen then
+      begin
+        ADst[LOut] := ASrc[LPos];
+        Inc(LOut); Inc(LPos);
+      end;
+    end;
+  end;
+  while LPos < ALen do
+  begin
+    if ASrc[LPos] <> '\' then
+    begin ADst[LOut] := ASrc[LPos]; Inc(LOut); Inc(LPos); end
+    else
+    begin
+      Inc(LPos);
+      if LPos < ALen then begin ADst[LOut] := ASrc[LPos]; Inc(LOut); Inc(LPos); end;
+    end;
+  end;
+  Result := LOut;
+end;
+
+function TextUnescapeBackslashView(const ASrc: TStringView): string; inline;
+var LOut: SizeUInt;
+begin
+  if ASrc.Len = 0 then Exit('');
+  SetLength(Result, ASrc.Len);
+  LOut := TextUnescapeBackslashToBuffer(ASrc.Data, ASrc.Len, PAnsiChar(Result));
+  SetLength(Result, LOut);
+end;
+
+function TextIsQuotedView(const ASrc: TStringView): Boolean; inline;
+begin
+  Result := (ASrc.Len >= 2) and ((ASrc.Data[0] = '"') or (ASrc.Data[0] = '''')) and (ASrc.Data[ASrc.Len - 1] = ASrc.Data[0]);
+end;
+
+function TextStripOuterQuotesView(const ASrc: TStringView): TStringView; inline;
+begin
+  if TextIsQuotedView(ASrc) then Result := ASrc.Slice(1, ASrc.Len - 2) else Result := ASrc;
 end;
 
 end.

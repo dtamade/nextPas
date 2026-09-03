@@ -11,8 +11,8 @@ program test_ssh_session;
  * 未知拒绝 / 文件命中放行）、窗口回补帧容忍、stdout/stderr/exit-code 收集。}
 
 uses
-  nextpas.core.bytes.ops,
   cthreads,
+  nextpas.core.bytes.ops,
   nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
@@ -27,6 +27,7 @@ uses
   nextpas.core.ssh.transport,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.session,
+  nextpas.core.ssh.session.builder,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.hash,
