@@ -28,7 +28,7 @@ uses
   nextpas.core.deliverability.dkim,
   nextpas.core.deliverability.dmarc,
   nextpas.core.deliverability.spf,
-  nextpas.core.text.conv;
+  nextpas.core.text.builder;
 
 type
   TDeliverabilityDnsAdapter = class(TInterfacedObject, IDeliverabilityDns)
@@ -45,18 +45,23 @@ type
   end;
 
 { 网络字节序 UInt32 → 点分文本 }
-function IPv4ToText(const A: UInt32): string;
+function IPv4ToText(const A: UInt32): string; inline;
 var
-  I: Integer;
-  LSH: Integer;
+  B: TBufStringBuilder;
 begin
-  Result := '';
-  for I := 3 downto 0 do
-  begin
-    LSH := I * 8;
-    if Result <> '' then
-      Result := Result + '.';
-    Result := Result + IntToStr((A shr LSH) and $FF);
+  { perf: 单次分配 via TBufStringBuilder(text.builder L1 owner)复用 bytes.ops.BytesGrowCapacity 几何(BYTES_BUILDER_MIN_GROW 0→64→2×)均摊 O(1)零拷贝 BytesCopy 单次 Move 单源；预分配15(4*3+3 dot)单次 GetMem/SetString 无 O(n²) Result+逐次重分配拷贝；inline AppendUInt/AppendChar 单寄存器；稳定性 try/finally B.Done 配对释放不丢 }
+  B.Init(15);
+  try
+    B.AppendUInt((A shr 24) and $FF);
+    B.AppendChar('.');
+    B.AppendUInt((A shr 16) and $FF);
+    B.AppendChar('.');
+    B.AppendUInt((A shr 8) and $FF);
+    B.AppendChar('.');
+    B.AppendUInt(A and $FF);
+    Result := B.ToString;
+  finally
+    B.Done;
   end;
 end;
 

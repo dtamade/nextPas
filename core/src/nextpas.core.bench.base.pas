@@ -378,7 +378,7 @@ function DefaultBenchConfig: TBenchConfig;
 {** 分类异常值严重度（criterion 风格：mild/moderate/severe） }
 function ClassifyOutlierSeverity(AValue, AQ1, AQ3: Double): TOutlierSeverity;
 
-{ Glob 模式匹配 - 单源 L0 text.wildmatch }
+{ Glob 模式匹配 - 单源 L1 text.strings.GlobMatch }
 function GlobMatch(const APattern, AStr: string): Boolean; inline;
 
 {** IEEE 754 NaN 检测: exponent=全1 且 mantissa≠0 }
@@ -412,7 +412,7 @@ implementation
 
 uses
   nextpas.core.math.scalar,
-  nextpas.core.text.wildmatch;
+  nextpas.core.text.strings;
 
 { ===== TBenchResult 便捷方法 ===== }
 
@@ -1007,10 +1007,10 @@ begin
     Result := osNone;
 end;
 
-{ Glob 模式匹配 - 单源 L0 text.wildmatch inline 转发 }
+{ Glob 模式匹配 - 单源 L1 text.strings.GlobMatch inline 转发 }
 function GlobMatch(const APattern, AStr: string): Boolean; inline;
 begin
-  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AStr);
+  Result := nextpas.core.text.strings.GlobMatch(APattern, AStr);
 end;
 
 { ===== BenchBlackBox (anti-DCE) ===== }

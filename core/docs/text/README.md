@@ -15,7 +15,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | --------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Foundation      | 公开基础类型、ASCII 分类、共享 Unicode 载体 | `text.base`, `text.char`, `text.unicode.base`, `text.unicode.utils`                                                                    |
 | Core Primitives | 面向字节和 UTF-8 的原语能力                 | `text.view`, `text.scan`, `text.utf8`, `text.number`, `text.unicode.props`, `text.unicode.case`, `text.unicode.normalize`              |
-| Composites      | 在原语之上组合更完整的文本行为              | `text.builder`, `text.compare`, `text.escape`, `text.strings`, `text.utils`, `text.width`, `text.grapheme`, `text.conv`, `text.format` |
+| Composites      | 在原语之上组合更完整的文本行为              | `text.builder`, `text.compare`, `text.escape`, `text.strings`, `text.utils`, `text.width`, `text.grapheme`, `text.wildmatch`, `text.conv`, `text.format` |
 | Facades         | 聚合高频 surface，减少消费者 `uses` 列表    | `text`, `text.unicode`                                                                                                                 |
 
 依赖方向保持单向：Foundation -> Core Primitives -> Composites -> Facades。
@@ -37,7 +37,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | 单元                                  | 职责                                   | 关键 API                                                                        | 适合场景                                |
 | ------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------- |
 | `nextpas.core.text.view`              | 非 owning 的 UTF-8/byte 视图           | `TStringView.Create`, `Slice`, `Trim`, `IndexOfStr`                             | parser、零拷贝 slice、轻量比较          |
-| `nextpas.core.text.scan`              | SIMD 优先的扫描原语                    | `ScanSkipWhitespace`, `ScanJsonNumber`, `ScanFindSubstring`, `ViewMatchLiteral` | JSON/TOML/YAML/tokenizer 这类指针式扫描 |
+| `nextpas.core.text.scan`              | SIMD 优先的扫描原语（新增 `ScanPredicateTable` 通用谓词+字面量表单遍 VecWidth，复用 `bytes.ops`/`simd.vec` 单源，零拷贝，B/op=0，js.eval/json 共享） | `ScanSkipWhitespace`, `ScanJsonNumber`, `ScanFindSubstring`, `ViewMatchLiteral`, `ScanPredicateTable` | JSON/TOML/YAML/tokenizer 这类指针式扫描 |
 | `nextpas.core.text.utf8`              | UTF-8 解码、编码、校验、迭代           | `UTF8Decode`, `UTF8Encode`, `UTF8IsValid`, `TUTF8Iterator`                      | 需要自己控制码点迭代或校验边界          |
 | `nextpas.core.text.number`            | 数值到缓冲区的底层格式化               | `IntToBuffer`, `UIntToBuffer`, `FloatToBuffer`                                  | Builder、writer、formatter 的底层输出   |
 | `nextpas.core.text.unicode.props`     | Unicode property/general category 查询 | `HasBinaryProperty`, `GetGeneralCategory`, `IsLetter`, `IsWhitespace`           | Unicode 语义分类、校验规则              |
@@ -56,6 +56,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | `nextpas.core.text.wildmatch`| 通配符匹配（`*` 任意串、`?` 单字符） | `WildMatch`, `TextWildMatch`                                         | known_hosts / http 路由 / fs glob 单源 |
 | `nextpas.core.text.width`    | 终端显示宽度                        | `CodepointWidth`, `StringDisplayWidth`                               | TUI、表格布局、列宽计算               |
 | `nextpas.core.text.grapheme` | 边界委托 `GraphemeClusterByteLen`；本地算宽度 | `GraphemeNext`, `TGraphemeResult`                                    | cursor 移动、emoji/ZWJ cluster 宽度   |
+| `nextpas.core.text.wildmatch`| 通配引擎 owner（`* ? ** []` 含转义，零 SysUtils，bytes.ops 单源） | `WildSegment`, `WildSegmentRange`, `WildSegmentsMatch`, `HasUnescapedSlash` | gitignore/fs.glob/http 路由/tui 过滤共用；git 直连本 owner 无 thin shim |
 | `nextpas.core.text.conv`     | 数值/字符串转换与 ASCII SameText 的实现 owner | `IntToStr`, `TryStrToInt`, `FloatToStr`, `Format`, `SameText`, `Trim`, `TextOfChar` | 业务层格式化、解析；`system.sysutils` 仅 re-export 这些符号 |
 | `nextpas.core.text.format`   | 轻量格式化器                        | `TextFormat`                                                         | 不想引 `SysUtils.Format` 的格式化输出 |
 

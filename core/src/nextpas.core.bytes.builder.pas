@@ -1,8 +1,8 @@
 unit nextpas.core.bytes.builder;
 
 {$I nextpas.core.settings.inc}
-{ Single-source: growth via bytes.ops.BytesGrowCapacity (INV-2) amortized O(1) geometric; owner bytes.ops.
-  perf: WrittenSpan zero-copy view (single TByteSpan.Create, no alloc), AppendByte/AppendUInt* inline tiny stores (no Move) hot path; AppendBytes/AppendFill/ToBytes not inline per red-line 1/2 (Move/FillChar/SetLength + Grow loop I-Cache); Grow not inline per red-line 2 (while); stability: sized FreeMemOf on Destroy, Clear/Reserve/Truncate keep capacity. }
+{ Single-source: growth via bytes.ops.BytesGrowCapacity (INV-2) amortized O(1) geometric; Move/Fill via bytes.ops.BytesCopy/BytesZero+SpanFill inline single source (INV-5) zero-copy SIMD-optimized; owner bytes.ops.
+  perf: WrittenSpan zero-copy view (single TByteSpan.Create, no alloc), AppendByte/AppendUInt* inline tiny stores (no Move) hot path; AppendBytes/AppendFill/ToBytes not inline per red-line 1/2 (BytesCopy/BytesZero+SpanFill/SetLength + Grow loop I-Cache) single BytesCopy/BytesZero inline zero-copy single source (Fill via SpanFill for arbitrary, BytesZero for 0 — no raw FillChar, gate: check_bytes_ops_source_contract.py); Grow not inline per red-line 2 (while); stability: sized FreeMemOf on Destroy, Clear/Reserve/Truncate keep capacity. }
 { CONTRACT: core/docs/bytes/CONTRACT.md 1.1 — L1 bytes, four-piece base→builder→facade, no intf/ffi (on-demand). }
 
 interface
@@ -31,7 +31,7 @@ type
     procedure AppendUInt64BE(const AValue: UInt64); inline;
     procedure AppendFill(const AValue: Byte; const ACount: SizeUInt);
 
-    { perf: WrittenSpan zero-copy view (no alloc, single TByteSpan.Create); ToBytes single SetLength+Move not inline per red-line 1/2 }
+    { perf: WrittenSpan zero-copy view (no alloc, single TByteSpan.Create); ToBytes single SetLength+BytesCopy inline zero-copy single source via bytes.ops not inline per red-line 1/2 }
     function WrittenSpan: TByteSpan; inline;
     function ToBytes: TBytes;
 
@@ -159,10 +159,10 @@ end;
 
 procedure TBytesBuilderImpl.AppendBytes(const AData: PByte; const ACount: SizeUInt);
 begin
-  // not inline per red-line 1/2: Move (untyped) + Grow loop I-Cache bloat; single Move zero-copy
+  // not inline per red-line 1/2: BytesCopy + Grow loop I-Cache bloat; single BytesCopy inline zero-copy single source via bytes.ops (INV-5) SIMD-optimized, no raw Move
   if ACount = 0 then Exit;
   Grow(ACount);
-  Move(AData^, FPtr[FLen], ACount);
+  nextpas.core.bytes.ops.BytesCopy(FPtr + FLen, AData, ACount);
   Inc(FLen, ACount);
 end;
 
@@ -237,10 +237,14 @@ end;
 
 procedure TBytesBuilderImpl.AppendFill(const AValue: Byte; const ACount: SizeUInt);
 begin
-  // not inline per red-line 1/2: FillChar (untyped) + Grow loop I-Cache bloat
+  // not inline per red-line 1/2: Fill via bytes.ops single source (BytesZero inline FillChar for 0 else SpanFill for arbitrary) + Grow loop I-Cache bloat; zero-copy inline single source, no raw FillChar — L1 single source, red-line 1/2 gate: check_bytes_ops_source_contract.py
   if ACount = 0 then Exit;
   Grow(ACount);
-  FillChar(FPtr[FLen], ACount, AValue);
+  // perf: single source Fill via bytes.ops (BytesZero for 0, SpanFill for arbitrary) inline zero-copy, no raw FillChar — L1 single source, red-line 1/2; stability: Grow ensures capacity, sized FreeMemOf on Destroy keeps release not lost
+  if AValue = 0 then
+    nextpas.core.bytes.ops.BytesZero(FPtr + FLen, ACount)
+  else
+    nextpas.core.bytes.ops.SpanFill(TByteSpan.Create(FPtr + FLen, ACount), AValue);
   Inc(FLen, ACount);
 end;
 
@@ -252,11 +256,11 @@ end;
 
 function TBytesBuilderImpl.ToBytes: TBytes;
 begin
-  // not inline per red-line 1/2: SetLength+Move batch I-Cache; single alloc copy for ownership; zero-copy hot path is WrittenSpan
+  // not inline per red-line 1/2: SetLength+BytesCopy batch I-Cache; single alloc copy for ownership (single BytesCopy inline zero-copy single source via bytes.ops INV-5); zero-copy hot path is WrittenSpan
   Result := nil;
   SetLength(Result, FLen);
   if FLen > 0 then
-    Move(FPtr^, Result[0], FLen);
+    nextpas.core.bytes.ops.BytesCopy(@Result[0], FPtr, FLen);
 end;
 
 procedure TBytesBuilderImpl.Clear;

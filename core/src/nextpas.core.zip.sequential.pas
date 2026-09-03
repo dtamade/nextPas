@@ -135,25 +135,10 @@ begin
 end;
 
 function TSeqSliceReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LAvail: SizeUInt;
 begin
   if FClosed then
     raise EIOError.Create('zip entry stream: read after close');
-  if ACount = 0 then
-    Exit(0);
-  if FPos >= SizeUInt(Length(FData)) then
-    Exit(0);
-  LAvail := SizeUInt(Length(FData)) - FPos;
-  if ACount < LAvail then
-    Result := ACount
-  else
-    Result := LAvail;
-  if Result > 0 then
-  begin
-    Move(FData[FPos], ABuf, Result);
-    Inc(FPos, Result);
-  end;
+  Result := ZipBytesRead(FData, FPos, ABuf, ACount);
 end;
 
 procedure TSeqSliceReader.Close;

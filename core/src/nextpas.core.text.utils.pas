@@ -3,7 +3,7 @@ unit nextpas.core.text.utils;
 {$I nextpas.core.settings.inc}
 
 {** 2026-08-29 验证锚点：PadLeft/PadRight 单分配（not inline per red-line 2 分配+循环 I-Cache，FillChar+Move 零拷贝经 bytes.ops 单源，规避 FPC inline+字面量 Move 缺陷）、
-    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf/CStrToStr inline Move、
+    NormalizeLowerTrim 单源（db.factory 唯一复用）、Lower/Upper Byte 区间、CopyStrToBuf/CStrToStr not inline per red-line 1（S[1]/Result[1]→PAnsiChar 经 bytes.ops 单源零拷贝，规避 FPC inline+字面量 Move 缺陷）、
     StrToIntDef 零分配 inline（接口+实现双 inline 去 Trim 拷贝，单遍空白+符号+数字扫描，含 ±2^63 边界）；
     配套 bench_kv 10（validate 0 allocs）与 test_text 33 heaptrc0 见 benchmarks.md 验证锚点。 *}
 
@@ -39,11 +39,11 @@ function SplitString(const S, Delimiters: string): TStringArray; inline;
 
 {** @desc 拷贝字符串到定长字节缓冲(截断至 ABufLen-1,留下 NUL;不抛)。
         返回源串字符数(截断前)。线程安全(无共享状态)。 *}
-function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
 
 {** @desc 读 NUL 结尾缓冲为 string(无 ShortString 255 上限;StrPas 会截断大缓冲)。
         适合 worker 定长缓冲转 string 的场景。 *}
-function CStrToStr(const AP: PAnsiChar): string; inline;
+function CStrToStr(const AP: PAnsiChar): string;
 
 implementation
 
@@ -375,29 +375,35 @@ begin
     SetLength(Result, LCount);
 end;
 
-function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer; inline;
+function CopyStrToBuf(const S: string; var ABuf; ABufLen: Integer): Integer;
 var
   P: PAnsiChar;
   N: Integer;
 begin
+  // not inline per red-line 1: Move(S[1],P^) 字面量 inline 会被常量传播折叠为单字符值并拷垃圾（valgrind+反汇编，曾致 tls 门红），改 PAnsiChar 单源；FillChar/Move 零拷贝经 bytes.ops 单源
+  // perf: BytesZero+BytesCopy 单源零拷贝（单次 Fill+单次 Move），无分配，线程安全；inline 去除避 I-Cache 膨胀
+  // stability: FillChar 零终止，N 截断至 ABufLen-1，BytesCopy 在边界校验后执行
   P := @ABuf;
   if ABufLen > 0 then
-    FillChar(P^, ABufLen, 0);
+    nextpas.core.bytes.ops.BytesZero(P, SizeUInt(ABufLen));
   Result := Length(S);
   N := Result;
   if N >= ABufLen then N := ABufLen - 1;
   if N > 0 then
-    Move(S[1], P^, N);
+    nextpas.core.bytes.ops.BytesCopy(P, PAnsiChar(S), SizeUInt(N));
 end;
 
-function CStrToStr(const AP: PAnsiChar): string; inline;
+function CStrToStr(const AP: PAnsiChar): string;
 var
   N: SizeInt;
 begin
+  // not inline per red-line 1: Move(AP^,Result[1]) Result[1] 喂 untyped 参数同命中红线一（S[1] 折叠拷垃圾同理），改 PAnsiChar 单源经 bytes.ops
+  // perf: single SetLength + zero-copy BytesCopy 单源，单次分配，inline 去除避 I-Cache 膨胀；bytes.ops 单源复用
+  // stability: SetLength 异常安全（无泄漏），BytesCopy 在分配后的受管缓冲上执行
   N := StrLen(AP);
   SetLength(Result, N);
   if N > 0 then
-    Move(AP^, Result[1], N);
+    nextpas.core.bytes.ops.BytesCopy(PAnsiChar(Result), AP, SizeUInt(N));
 end;
 
 end.

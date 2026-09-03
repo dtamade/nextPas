@@ -54,6 +54,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.git.native.util,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.loose,
@@ -102,25 +103,14 @@ end;
 
 { ── helpers for stash push ─────────────────────────────────────────────── }
 
-function TwoDigits(AValue: Integer): string;
+function TwoDigits(AValue: Integer): string; inline;
 begin
-  if AValue < 10 then Exit('0' + IntToStr(AValue));
-  Result := IntToStr(AValue);
+  Result := GitTwoDigits(AValue);
 end;
 
-function FormatTz(AOffsetMin: Integer): string;
-var
-  SignCh: Char;
-  AbsMin: Integer;
+function FormatTz(AOffsetMin: Integer): string; inline;
 begin
-  SignCh := '+';
-  AbsMin := AOffsetMin;
-  if AbsMin < 0 then
-  begin
-    SignCh := '-';
-    AbsMin := -AbsMin;
-  end;
-  Result := SignCh + TwoDigits(AbsMin div 60) + TwoDigits(AbsMin mod 60);
+  Result := GitFormatTz(AOffsetMin);
 end;
 
 function SignatureToString(const ASig: TGitSignature): string;
@@ -296,11 +286,27 @@ var
   FilePath: string;
   Data: TBytes;
   Oid: TGitOid;
+  LCount, LCap: SizeInt;
+  // amortized doubling: bytes.ops single-source, inline + zero-copy record Move
+  procedure AppendEntry(const AEntry: TGitIndexEntry); inline;
+  begin
+    if LCount = LCap then
+    begin
+      if LCap = 0 then LCap := 16
+      else if LCap <= High(SizeInt) div 2 then LCap := LCap * 2
+      else LCap := LCount + 1;
+      SetLength(Result, LCap);
+    end;
+    Result[LCount] := AEntry;
+    Inc(LCount);
+  end;
 begin
   // start from sorted index
   SetLength(WorkMap, Length(ASortedIndex));
   for I := 0 to High(ASortedIndex) do WorkMap[I] := ASortedIndex[I];
   Result := nil;
+  LCount := 0;
+  LCap := 0;
   // we need status to find untracked if requested, and to know deletions
   // Instead of relying solely on status, scan worktree existence for tracked files
   for I := 0 to High(WorkMap) do
@@ -315,8 +321,7 @@ begin
     begin
       // keep symlink as is (read link target would be needed for correct blob)
       // For now keep index oid
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := WorkMap[I];
+      AppendEntry(WorkMap[I]);
       Continue;
     end;
     if DirectoryExists(FilePath) then
@@ -328,15 +333,13 @@ begin
     try
       Data := ReadFile(FilePath);
     except
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := WorkMap[I];
+      AppendEntry(WorkMap[I]);
       Continue;
     end;
     Oid := GitHashObject(gokBlob, Data);
     if GitOidSame(Oid, WorkMap[I].Oid) then
     begin
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := WorkMap[I];
+      AppendEntry(WorkMap[I]);
     end
     else
     begin
@@ -344,8 +347,7 @@ begin
       Entry := WorkMap[I];
       Entry.Oid := Oid;
       Entry.Size := Cardinal(Length(Data));
-      SetLength(Result, Length(Result) + 1);
-      Result[High(Result)] := Entry;
+      AppendEntry(Entry);
     end;
   end;
   if AIncludeUntracked then
@@ -364,10 +366,11 @@ begin
         Entry.Mode := $81A4;
         Entry.Oid := Oid;
         Entry.Size := Cardinal(Length(Data));
-        SetLength(Result, Length(Result) + 1);
-        Result[High(Result)] := Entry;
+        AppendEntry(Entry);
       end;
   end;
+  if LCap <> LCount then
+    SetLength(Result, LCount);
   if Length(Result) > 1 then
     GitSortIndexEntries(Result);
 end;

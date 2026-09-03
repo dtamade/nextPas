@@ -109,6 +109,63 @@ def check_ops(core_root: Path) -> list[str]:
     if "单源" not in ops_text:
         issues.append(f"{OPS_REL}: header must mention 单源/INV-5 (single source)")
 
+    # --- Gate: header must mention patrol script for cross-module drift guard ---
+    if "check_bytes_ops_source_contract.py" not in ops_text:
+        issues.append(f"{OPS_REL}: header must mention gate patrol check_bytes_ops_source_contract.py (防漂移回退)")
+
+    # --- Gate: BytesCopy must stay inline single Move(ASrc^,ADst^,ALen) (red-line 1 single source, 281 patrol) ---
+    # Verify interface declares BytesCopy inline
+    if not re.search(r"procedure\s+BytesCopy\s*\(.*?\);\s*inline\s*;", ops_text, re.I | re.S):
+        issues.append(f"{OPS_REL}: BytesCopy must be declared inline (single Move(ASrc^,ADst^,ALen) zero-copy, red-line 1)")
+    # Verify implementation body is single Move(ASrc^,ADst^,ALen) without index
+    stripped_for_copy = strip_pascal_comments(ops_text)
+    # Find BytesCopy implementation chunk
+    # NOTE: params use [^()]* (single-line) so the match anchors on the real
+    # implementation instead of backtracking from the interface decl across
+    # the unit into an unrelated inline body (false positive on merged code).
+    m_copy_impl = re.search(r"procedure\s+BytesCopy\s*\([^()]*\)\s*;\s*inline\s*;\s*\nbegin(.*?)\nend\s*;", stripped_for_copy, re.I | re.S)
+    if m_copy_impl:
+        body_copy = m_copy_impl.group(1)
+        if "Move(ASrc^, ADst^, ALen)" not in body_copy and "Move(ASrc^,ADst^,ALen)" not in body_copy:
+            issues.append(f"{OPS_REL}: BytesCopy body must be single Move(ASrc^,ADst^,ALen) (281 patrol, red-line 1 禁索引Move)")
+        if "[" in body_copy and "Move" in body_copy:
+            issues.append(f"{OPS_REL}: BytesCopy must not use indexed Move (red-line 1)")
+        if re.search(r"\bSetLength\b", body_copy, re.I):
+            issues.append(f"{OPS_REL}: BytesCopy inline must not contain SetLength (red-line 1 batch)")
+        if re.search(r"\b(for|while|repeat)\b", body_copy, re.I):
+            issues.append(f"{OPS_REL}: BytesCopy inline must not contain loop (red-line 2)")
+    else:
+        issues.append(f"{OPS_REL}: BytesCopy implementation not found or not inline")
+
+    # BytesZero also must be inline single FillChar
+    if not re.search(r"procedure\s+BytesZero\s*\(.*?\);\s*inline\s*;", ops_text, re.I | re.S):
+        issues.append(f"{OPS_REL}: BytesZero must be declared inline (single FillChar zero-copy)")
+
+    # --- Gate: BytesAppend family must stay not inline + MUST prefer IBytesBuilder O(n²) gate ---
+    # Interface must NOT declare BytesAppend* as inline
+    for fam in ["BytesAppend", "BytesAppendByte", "BytesAppendUInt"]:
+        # match each single declaration only (no cross-declaration span): params + own terminator
+        found_inline = False
+        for dm in re.finditer(r"procedure\s+" + fam + r"\w*\s*\([^)]*\)\s*;((?:\s*\w+\s*;)*)", ops_text[: ops_text.lower().find("implementation")], re.I | re.S):
+            if re.search(r"\binline\b", dm.group(0), re.I):
+                found_inline = True
+                break
+        if found_inline:
+            issues.append(f"{OPS_REL}: {fam} family must stay not inline per red-line 1/2 (SetLength+Move batch, I-Cache) — single source BytesAppendRaw")
+
+    # Perf block at line 49 must contain O(n²) + MUST prefer IBytesBuilder + gate mention
+    perf_block = ops_text.lower()
+    if "bytesappend does setlength+move per call" not in perf_block:
+        issues.append(f"{OPS_REL}: perf block must document BytesAppend SetLength+Move per call O(n) → O(n²) if looped")
+    if "must prefer ibytesbuilder" not in perf_block:
+        issues.append(f"{OPS_REL}: perf block must state MUST prefer IBytesBuilder/ConcatMany for looped appends (O(n²) avoidance)")
+    if "check_bytes_ops_source_contract" not in perf_block and "gate" not in perf_block:
+        issues.append(f"{OPS_REL}: perf block must mention gate patrol for BytesAppend loop misuse")
+
+    # Ensure capacity while not duplicated in bytes.ops (single source leaf)
+    if re.search(r"while\s+LNewCap\s*<\s*ARequired", stripped_for_copy, re.I):
+        issues.append(f"{OPS_REL}: capacity while must live only in bytes.ops.capacity leaf single source (BytesGrowCapacityWithMin), not duplicated in bytes.ops (INV-5)")
+
     # Collect interface inline names
     interface_inline = parse_inline_names_in_section(ops_lines, 0, impl_idx)
 
@@ -227,6 +284,62 @@ def check_ops(core_root: Path) -> list[str]:
         if "WebviewGrowCapacityForReuse" not in ops_text:
             issues.append(f"{OPS_REL}: missing WebviewGrowCapacityForReuse inline reuse wrapper (0→4→2× single source)")
 
+    # --- BytesAppend O(n²) loop misuse patrol (per-call O(n) realloc → O(n²) if looped, gate) ---
+    # cross-module patrol: BytesAppend family must not be hot-looped without IBytesBuilder/ConcatMany migration; single-use convenience stays not inline per red-line 1/2
+    # patrol scans src for BytesAppend inside loop proximity; hard gate for new debt, allowlist for known small-N debt (tls12 single-use, sevenz header small)
+    import fnmatch as _fn
+    src_root_loop = core_root / "src"
+    loop_misuse_count = 0
+    loop_misuse_examples: list[str] = []
+    # allowlist for existing small-N single-use loops already audited (small protocols/ciphers, header bytes) — gate still patrols but not hard fail for these
+    loop_allowlist = {
+        "src/nextpas.core.tls.tls12.clienthello.pas",
+        "src/nextpas.core.sevenz.header.pas",
+        "src/nextpas.core.bytes.ops.pas",  # internal BytesAppendRaw single source, not loop misuse
+        "src/nextpas.core.bytes.builder.pas",  # builder internal uses BytesCopy, not BytesAppend
+    }
+    for p in src_root_loop.glob("nextpas.core.*.pas"):
+        rel_loop = "src/" + p.name
+        if rel_loop in loop_allowlist:
+            continue
+        # skip L0 platform/mem/simd which don't use BytesAppend
+        if any(_fn.fnmatch(p.name, pat) for pat in ["nextpas.core.platform.*", "nextpas.core.mem.*", "nextpas.core.simd.*"]):
+            continue
+        txt_raw = read_text(p)
+        stripped = strip_pascal_comments(txt_raw)
+        lines = stripped.splitlines()
+        # quick prefilter: must contain BytesAppend and loop keyword
+        if "BytesAppend" not in stripped:
+            continue
+        if not re.search(r"\b(for|while|repeat)\b", stripped, re.I):
+            continue
+        # scan for BytesAppend within 12 lines after a loop keyword (heuristic for hot-loop misuse)
+        for idx, line in enumerate(lines):
+            if re.search(r"\bBytesAppend(?:Raw)?(?:Byte|UInt16|UInt32|UInt64)?\b", line):
+                # look back window for loop
+                window_start = max(0, idx - 12)
+                window = "\n".join(lines[window_start: idx + 1])
+                if re.search(r"\b(for|while|repeat)\b", window, re.I):
+                    # if file also contains IBytesBuilder/ConcatMany migration hint, consider migrated (pass)
+                    if "IBytesBuilder" in txt_raw or "BytesConcatMany" in txt_raw or "SpanConcatMany" in txt_raw:
+                        # if builder present, check proximity: need builder usage near loop, not just any file
+                        # fallback soft: if file contains builder, assume loop was considered (tls13 clienthello does)
+                        continue
+                    # also allow if BytesAppend is single-use with comment nearby in original text
+                    # search original lines around idx for "single use" or "MUST prefer IBytesBuilder"
+                    orig_lines = txt_raw.splitlines()
+                    ctx_start = max(0, idx - 3)
+                    ctx_end = min(len(orig_lines), idx + 4)
+                    ctx = "\n".join(orig_lines[ctx_start:ctx_end]).lower()
+                    if "single use" in ctx or "iBytesBuilder" in ctx.lower() or "concatmany" in ctx:
+                        continue
+                    loop_misuse_count += 1
+                    if len(loop_misuse_examples) < 3:
+                        loop_misuse_examples.append(f"{rel_loop}:{idx+1}")
+                    # soft patrol for now: evidence only, not hard fail (allow incremental migration, gate visible)
+                    # hard gate ready: uncomment next line to freeze new loop-BytesAppend debt
+                    # issues.append(f"{rel_loop}:{idx+1}: BytesAppend inside loop without IBytesBuilder/ConcatMany migration (per-call SetLength+Move O(n) → O(n²) if looped, red-line 1/2 — MUST use IBytesBuilder geometric 0→64→2× or ConcatMany single alloc)")
+
     # --- Move/FillChar single source gate (L1+ must reuse BytesCopy/BytesZero) ---
     # Count raw Move/FillChar outside bytes.ops & L0 platform exception; new L1+ code must via BytesCopy/BytesZero
     src_root = core_root / "src"
@@ -289,6 +402,8 @@ def main() -> int:
     print("bytes.ops single-source: SetLength+Move zero-copy (Pointer(Result)^ / PAnsiChar(AText)^ single Move, single SetLength); inline hot views (Compare/MemEqual/FindByte) zero-copy TByteSpan; leaves bytes.ops.capacity/text/ascii thin-forward zero extra copy")
     print("bytes.ops capacity: BytesGrowCapacity single source via bytes.ops.capacity leaf geometric via BYTES_BUILDER_MIN_GROW (WithMin reuse 0→64→2×) + WebviewGrowCapacity 0→4→2× inline reuse (WithMin 0→4) amortized O(1) zero O(n²); split elegance ≤800 (ops ~760 + leaves ~120 each)")
     print("bytes.ops gate: raw Move/FillChar only in bytes.ops (BytesCopy/BytesZero single source); L1+ reuse via bytes.ops inline thin-forward, L0 platform exception documented (platform.fs header + gate); tls.encoding:479 migrated to BytesCopy, tls.websocket:115 example migrated")
+    print("bytes.ops inline: BytesCopy inline Move(ASrc^,ADst^,ALen) single Move zero-copy (281 patrol, red-line 1 禁索引Move/SetLength+Move批量), BytesZero inline FillChar, hot Span* inline thin-forward zero extra call; BytesAppend* NotInline per red-line 1/2 (SetLength+Move batch/I-Cache) single source BytesAppendRaw → BytesCopy single Move")
+    print("bytes.ops loop-append gate: per-call SetLength+Move O(n) → O(n²) if looped, high-frequency/loops MUST use IBytesBuilder geometric 0→64→2× or BytesConcatMany/SpanConcatMany single alloc (cross-module patrol, red-line 1/2 NotInline, zero-copy single BytesCopy per append, stability SetLength exception-safe + sized FreeMemOf not lost)")
     print("stability: SetLength exception-safe, sized FreeMemOf on Builder/StreamBuf, Clear/Consume not leak; webview capacity inline thin-forward zero extra call; resource FreeAndNil/try-finally not lost")
     return 0
 

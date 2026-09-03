@@ -314,7 +314,7 @@ end;
 
 ## 9. 测试覆盖
 
-门禁分级（显式）：**Tier-1 泄漏必检门**（15 功能门，`heaptrc 0` 封闭，稳定性必过）与 **Tier-2 计时保真门**（bench 2 门，`HEAPTRC_GATE=0` 豁免，`bench_common.mk -O3 -Xs` 无 heaptrc 计时保真，泄漏由 Tier-1 覆盖，见 §5）。两级并存不矛盾：全门 heaptrc 0 指 Tier-1 全封闭，bench 豁免为 Tier-2 显式分级。
+门禁分级（显式）：**Tier-1 泄漏必检门**（15 功能门，`heaptrc 0` 封闭，稳定性必过）与 **Tier-2 计时保真门**（bench 2 门，`HEAPTRC_GATE=0` 豁免，`bench_common.mk -O3 -Xs` 无 heaptrc 计时保真，泄漏由 Tier-1 覆盖，见 §5）。两级并存不矛盾：全门 heaptrc 0 指 Tier-1 全封闭，bench 豁免为 Tier-2 显式分级。**例外**：下表 4 行已知红点（transport / sftp_async / proxyjump_async / sftp_async_via_jump，均为 lane 原有 async 泄漏与 teardown 所有权缺陷，功能证据与堆证据见各行）暂不满足 Tier-1 封闭，已转 owner 债务专案，收敛前不得宣称全绿。
 
 ### 9.1 测试目录（`core/tests/nextpas.core.ssh/`）
 
@@ -325,16 +325,16 @@ end;
 | kex | `test_ssh_kex` | 协商 first-match + KDF A-F + curve25519/dh 回退 | Tier-1 `heaptrc 0` |
 | hostkey | `test_ssh_hostkey` | blob 解析/验签/指纹/known_hosts 明文+散列 | Tier-1 `heaptrc 0` |
 | keys | `test_ssh_keys` | openssh-key-v1 未加密/加密 + bcrypt KAT + CRT 等价 | Tier-1 `heaptrc 0` |
-| transport | `test_ssh_transport` | 版本交换/包帧/阈值/Ignore 往返 + async Protect/Unprotect + none 零开销 | Tier-1 `heaptrc 0` |
+| transport | `test_ssh_transport` | 版本交换/包帧/阈值/Ignore 往返 + async Protect/Unprotect + none 零开销 | 功能 12/12；**已知红点**：teardown 在 `io.reactor ReleasePendingEntries` 清理循环 SEGV + heap 19 块（lane 原有，io 所有权归 io-lane，待专案） |
 | compress | `test_ssh_compress` | 单包/有状态/空包/1 MiB bomb + 延迟/即时激活 | Tier-1 `heaptrc 0` |
 | session | `test_ssh_session` | 全栈回环（内存管道双端独立逻辑）+ 压缩/重协商/keepalive | Tier-1 `heaptrc 0` (23/23) |
 | session_async | `test_ssh_session_async` | 异步回环 + KeepAlive 100ms 触发后 Exec | Tier-1 `heaptrc 0` (6/6) |
 | sftp | `test_ssh_sftp` | SFTP v3 12 用例密闭门（假 wire） | Tier-1 `heaptrc 0` |
-| sftp_async | `test_ssh_sftp_async` | SFTP async 7/7（INIT 215ms + STAT/RW） | Tier-1 `heaptrc 0` (7/7) |
+| sftp_async | `test_ssh_sftp_async` | SFTP async 7/7（INIT 215ms + STAT/RW） | 功能 7/7；**已知红点**：heap 18 块（RunSftpScenario 残留，lane 原有，待 async 泄漏专案） |
 | agent | `test_ssh_agent` | 内存管道 5 用例（list/sign/multiple） | Tier-1 `heaptrc 0` (5/5) |
 | proxyjump | `test_ssh_proxyjump` | 同步双跳 5/5（exec/sftp via jump） | Tier-1 `heaptrc 0` (5/5) |
-| proxyjump_async | `test_ssh_proxyjump_async` | 异步双跳 3/3 零轮询 | Tier-1 `heaptrc 0` (3/3) |
-| sftp_async_via_jump | `test_ssh_sftp_async_via_jump` | 异步 SFTP via jump 4/4（realpath/stat + 双失败） | Tier-1 `heaptrc 0` (4/4) |
+| proxyjump_async | `test_ssh_proxyjump_async` | 异步双跳 3/3 零轮询 | 功能 3/3；**已知红点**：heap 11 块（harness MemPipe 未释放 + channel.async OnPacket 24B，lane 原有，待 async 泄漏专案） |
+| sftp_async_via_jump | `test_ssh_sftp_async_via_jump` | 异步 SFTP via jump（realpath/stat + 双失败） | **已知红点**：功能 2/4，`TAsyncSftpFileSystem.Destroy` 对 `FChannel` 二次释放致 EAccessViolation + heap 62 块（lane 原有 sftp.async 所有权 bug，待专案） |
 | bench (Tier-2) | `bench_ssh_cipher` (`core/benchmarks/nextpas.core.ssh/bench_ssh_cipher`) | 16KB 包吞吐（50 MiB/s 门禁） | Tier-2 `HEAPTRC_GATE=0`（`bench_common.mk` 计时保真豁免；泄漏由 Tier-1 15 门覆盖） |
 | bench (Tier-2) | `bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump`) | 单跳 5ms / 双跳 431ms p50/p95/avg | Tier-2 `HEAPTRC_GATE=0`（同上，`bench_common.mk`） |
 | e2e | `e2e_ssh_live` | opt-in `NEXTPAS_SSH_E2E_LOCAL=1` / `REMOTE=1` / `ASYNC_JUMP=1` 双容器 | Tier-1 `heaptrc 0` |
@@ -342,6 +342,7 @@ end;
 回环为**真**：测试内最小 SSH 服务端（独立服务端逻辑路径）与客户端在内存管道上完成完整握手→认证→exec/sftp，断言 stdout/exit code/Stat，无外部 sshd 即可证明协同正确。真实互操作由 `e2e_ssh_live` 承担（opt-in，不进默认 gate）。
 
 ```bash
+# 单元回环（focused-runtime，heaptrc 0 统一门禁，零 HEAPTRC_GATE=0 豁免；bench 双模 HEAPTRC_GATE=0 吞吐/BENCH_HEAPTRC=1 泄漏）
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_buffer
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_cipher
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_kex
@@ -360,6 +361,17 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump_async
 make focused FOCUS=core/benchmarks/nextpas.core.ssh/bench_ssh_cipher
 make focused FOCUS=core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump
 make hygiene && git diff --check
+make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
+make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
+# bench 泄漏变体（与吞吐同源，零豁免）：BENCH_HEAPTRC=1 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
+# BENCH_HEAPTRC=1 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
+
+# 真实互操作（opt-in，不进默认 gate）
+# 本地 Docker 夹具（Alpine 9.7 全封闭，TOFU known_hosts）
+NEXTPAS_SSH_E2E_LOCAL=1 bash core/tests/nextpas.core.ssh/e2e_ssh_live/run_e2e.sh
+# 远端直连（含 async 双容器 via jump）
+NEXTPAS_SSH_E2E_REMOTE=1 NEXTPAS_SSH_E2E_HOST=<host> NEXTPAS_SSH_E2E_USER=<user> \
+  NEXTPAS_SSH_E2E_KEYFILE=<未加密 ed25519 私钥> bash core/tests/nextpas.core.ssh/e2e_ssh_live/run_e2e.sh
 ```
 
 ### 9.2 Source-contract gates

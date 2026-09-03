@@ -8,6 +8,8 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha1,
@@ -15,9 +17,15 @@ uses
   nextpas.core.git.native.zlib;
 
 { Content-addressed object layer: "<kind> <size>\0<payload>" hashed with SHA-1,
-  zlib-wrapped, stored at objects/<xx>/<38 hex>. }
+  zlib-wrapped, stored at objects/<xx>/<38 hex>.
+  Layer note: L2 git.native.loose → L2 fs/hash is same-layer one-way (fs
+  for objects/<xx>/<38 hex> layout, SHA-1 for oid) explicitly allowed via
+  core/docs/core-module-registry.md (git: L0-L1 plus same-layer one-way
+  fs/compress/hash/zlib/checksum).
+  Bytes ops are single-source via nextpas.core.bytes.ops; zero-copy via
+  PByte+Len views and inline forwards. }
 
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes;
+function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 function GitHashObject(AKind: TGitObjectKind; const AData: TBytes): TGitOid;
 function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string;
 function GitLooseExists(const AGitDir: string; const AOid: TGitOid): Boolean;
@@ -25,19 +33,21 @@ function GitLooseWrite(const AGitDir: string; AKind: TGitObjectKind;
   const AData: TBytes): TGitOid;
 function GitLooseRead(const AGitDir: string; const AOid: TGitOid;
   out AKind: TGitObjectKind): TBytes;
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean;
 
 implementation
 
-function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes;
+function GitObjectHeader(AKind: TGitObjectKind; ASize: SizeInt): TBytes; inline;
 var
   S: string;
 begin
-  Result := nil;
+  // single source: bytes.ops owns string↔bytes Move (inline, zero-copy via single Move per helper)
+  // perf: StringToBytes inline + BytesAppendByte inline -> single SetLength+Move, no scattered Move risk
+  // stability: SetLength is exception-safe; BytesAppendByte handles empty dest
   S := GitKindToString(AKind) + ' ' + IntToStr(ASize);
-  SetLength(Result, Length(S) + 1);
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-  Result[Length(S)] := 0;
+  Result := StringToBytes(S);
+  BytesAppendByte(Result, 0);
 end;
 
 function GitHashObject(AKind: TGitObjectKind; const AData: TBytes): TGitOid;
@@ -47,10 +57,14 @@ var
 begin
   Header := GitObjectHeader(AKind, Length(AData));
   H := NewSHA1;
-  H.Write(Header[0], SizeUInt(Length(Header)));
+  if Length(Header) > 0 then
+    H.Write(Header[0], SizeUInt(Length(Header)));
   if Length(AData) > 0 then
     H.Write(AData[0], SizeUInt(Length(AData)));
-  Move(H.SumBytes[0], Result.Bytes[0], GitOidRawLen);
+  // perf: zero-copy via IHasher.Sum direct to TGitOid.Bytes (inline, no SumBytes alloc+Move)
+  // single source: hash.intf owner owns digest copy; eliminates scattered Move(H.SumBytes[0], Result.Bytes[0], ...)
+  // stability: H is interface (IHasher), refcounted, auto released via _Release even on exception
+  H.Sum(Result.Bytes[0], SizeUInt(GitOidRawLen));
 end;
 
 function GitLoosePath(const AGitDir: string; const AOid: TGitOid): string;
@@ -77,11 +91,10 @@ begin
   if FileExists(Path) then
     Exit;
   Body := GitObjectHeader(AKind, Length(AData));
+  // single source: bytes.ops BytesAppend (inline, zero-copy Move, single Move per append)
+  // perf: inline + single SetLength+Move; stability: BytesAppend handles empty src
   if Length(AData) > 0 then
-  begin
-    SetLength(Body, Length(Body) + Length(AData));
-    Move(AData[0], Body[Length(Body) - Length(AData)], Length(AData));
-  end;
+    BytesAppend(Body, AData);
   Payload := GitZlibCompress(Body);
   DirPart := PathDir(Path);
   if not DirectoryExists(DirPart) then
@@ -123,8 +136,9 @@ begin
     end;
   if Sp <= 0 then
     raise EGitError.Create('corrupt loose object header');
-  SetLength(HeadText, Nul);
-  Move(Plain[0], HeadText[1], Nul);
+  // single source: bytes.ops.BytesSliceToString (inline, zero-copy slice view + single Move via PByte/PChar, no scattered Move)
+  // perf: inline single SetLength+Move, zero-copy TByteSpan view, no manual Move risk
+  HeadText := BytesSliceToString(Plain, 0, SizeUInt(Nul));
   // Sp is the 0-based index of the space inside the header text
   KindName := Copy(HeadText, 1, Sp);
   SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
@@ -134,9 +148,68 @@ begin
   if SizeInt(Length(Plain)) - (Nul + 1) <> Declared then
     raise EGitError.Create('loose object payload size mismatch');
   AKind := GitKindFromString(KindName);
-  SetLength(Result, Declared);
+  { single-source via bytes.ops: SpanCopySlice is single Move, zero-copy
+    via TByteSpan view, inline path; replaces scattered Move. }
   if Declared > 0 then
-    Move(Plain[Nul + 1], Result[0], Declared);
+    Result := SpanCopySlice(TByteSpan.FromBytes(Plain), SizeUInt(Nul + 1), SizeUInt(Declared))
+  else
+    Result := nil;
+end;
+
+function GitLooseGetSize(const AGitDir: string; const AOid: TGitOid;
+  out AKind: TGitObjectKind; out ASize: Int64): Boolean;
+var
+  Raw: TBytes;
+  Head: array[0..63] of Byte;
+  Got: SizeUInt;
+  EndPos: SizeUInt;
+  Nul, Sp, Declared: SizeInt;
+  I: SizeInt;
+  HeadText, KindName, SizeText: string;
+begin
+  Result := False;
+  AKind := gokBlob;
+  ASize := 0;
+  if not GitLooseExists(AGitDir, AOid) then
+    Exit;
+  // perf: prefix inflate only header (≤64B) via GitZlibDecompressPrefix — zero-copy PByte+Len view, stack buffer 64B, single inflate, no Plain payload allocation; thin inline forward to compress owner, no extra heap beyond compressed Raw
+  // single source: bytes.ops TByteSpan view owns zero-copy header slice; stack Head is zero-copy view, single SetLength+SpanCopy via TByteSpan, no scattered Move
+  // stability: Raw is TBytes refcounted, Head is stack, inflateEnd in try..finally of compress owner; no leak even on exception, payload mismatch deferred to full Read
+  Raw := ReadFile(GitLoosePath(AGitDir, AOid));
+  if Length(Raw) = 0 then
+    raise EGitError.Create('truncated zlib stream');
+  Got := GitZlibDecompressPrefix(PByte(Raw), SizeUInt(Length(Raw)), 0, @Head[0], SizeUInt(Length(Head)), EndPos);
+  Nul := -1;
+  for I := 0 to SizeInt(Got) - 1 do
+    if Head[I] = 0 then
+    begin
+      Nul := I;
+      Break;
+    end;
+  if Nul < 0 then
+    raise EGitError.Create('corrupt loose object: missing header terminator');
+  Sp := -1;
+  for I := 0 to Nul - 1 do
+    if Head[I] = Ord(' ') then
+    begin
+      Sp := I;
+      Break;
+    end;
+  if Sp <= 0 then
+    raise EGitError.Create('corrupt loose object header');
+  // single source: bytes.ops SpanCopy single Move (inline, zero-copy TByteSpan PByte+Len view, no scattered Move)
+  // perf: inline single alloc (Nul <=64) + single Move via SpanCopy, no TBytes Plain alloc, no payload heap
+  SetLength(HeadText, Nul);
+  if Nul > 0 then
+    SpanCopy(TByteSpan.Create(PByte(PAnsiChar(HeadText)), SizeUInt(Nul)), TByteSpan.Create(@Head[0], SizeUInt(Nul)));
+  KindName := Copy(HeadText, 1, Sp);
+  SizeText := Copy(HeadText, Sp + 2, Nul - Sp - 1);
+  Declared := StrToInt64Def(SizeText, -1);
+  if Declared < 0 then
+    raise EGitError.CreateFmt('corrupt loose object size "%s"', [SizeText]);
+  AKind := GitKindFromString(KindName);
+  ASize := Int64(Declared);
+  Result := True;
 end;
 
 end.

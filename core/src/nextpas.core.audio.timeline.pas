@@ -6,8 +6,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy/BytesZero inline zero-copy, no base.utils dual source
   nextpas.core.math.base,
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
@@ -404,7 +403,7 @@ begin
   Needed:=Integer(AudioBytesForFrames(FFormat, AFrames));
   if (Needed<=0) or (Length(ABuffer.Data)<Needed) then
   begin InterlockedExchangeAdd64(FViolations,1); AFrames:=Length(ABuffer.Data) div FFormat.BlockAlign; if AFrames<=0 then Exit(0); Needed:=Integer(AudioBytesForFrames(FFormat, AFrames)); if Needed<=0 then Exit(0); end;
-  if Needed>0 then FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+  if Needed>0 then BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
   MixPtr:=PSingle(@ABuffer.Data[0]);
   // two-phase snapshot scratch reuse: count+meta under lock -> ensure scratch capacity (AudioEnsureCapacity single source) -> deep copy under lock (zero-alloc steady)
   // 字节预算统一经 AudioBytesForFrames 单源；容量增长经 AudioEnsureCapacity/BytesEnsureCapacity 单源，稳态零堆增长 (INV-6)
@@ -469,10 +468,10 @@ begin
           SnapTracks[avail].Clips := FSnapshotClips[avail];
           if LClipCount>0 then
           begin
-            // single source: base.utils CopyMem → bytes.ops, SizeUInt(LClipCount*SizeOf(TTimelineClip)) pooled — CopyMem single source, no Move inside lock
-            CopyMem(@FSnapshotClips[avail][0], @FTracks[i].Clips[0], SizeUInt(LClipCount) * SizeUInt(SizeOf(TTimelineClip)));
-            if LClipCount < MaxClips then FillMem(@FSnapshotClips[avail][LClipCount], SizeUInt((MaxClips-LClipCount)*SizeOf(TTimelineClip)), 0);
-          end else if MaxClips>0 then FillMem(@FSnapshotClips[avail][0], SizeUInt(MaxClips*SizeOf(TTimelineClip)), 0);
+            // single source: bytes.ops BytesCopy/BytesZero inline zero-copy, SizeUInt(LClipCount*SizeOf(TTimelineClip)) pooled — no Move inside lock
+            BytesCopy(@FSnapshotClips[avail][0], @FTracks[i].Clips[0], SizeUInt(LClipCount) * SizeUInt(SizeOf(TTimelineClip)));
+            if LClipCount < MaxClips then BytesZero(@FSnapshotClips[avail][LClipCount], SizeUInt((MaxClips-LClipCount)*SizeOf(TTimelineClip)));
+          end else if MaxClips>0 then BytesZero(@FSnapshotClips[avail][0], SizeUInt(MaxClips*SizeOf(TTimelineClip)));
           Inc(avail);
         end;
       end;

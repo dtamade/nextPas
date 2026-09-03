@@ -9,7 +9,15 @@ uses
   nextpas.core.text.base;
 
 type
-  EGitError = class(Exception);
+  EGitError = class(Exception)
+  private
+    FErrorCode: Integer;
+    FErrorClass: Integer;
+  public
+    constructor Create(AErrorCode: Integer; const AOperation: string = ''); overload;
+    property ErrorCode: Integer read FErrorCode;
+    property ErrorClass: Integer read FErrorClass;
+  end;
 
   // High-level abstraction of branch types, avoiding direct exposure of libgit2 enums
   TGitBranchKind = (
@@ -29,6 +37,20 @@ type
     gpffDetachedHead,
     gpffDirty,
     gpffError
+  );
+
+  // Per-axis status code — single source via base (native + L2 facade reuse via bytes.ops inline zero-copy)
+  // Native HeadCode/WorkCode and facade IndexStatus/WorkdirStatus share this vocab; alias via base eliminates dual track.
+  TGitStatusCode = (
+    gscUnmodified,
+    gscAdded,       { in index, absent from HEAD }
+    gscModified,    { content or permission bits changed, same kind }
+    gscDeleted,     { present on one side, gone from the other }
+    gscTypeChanged, { blob/symlink/gitlink kind flipped }
+    gscUnmerged,    { conflict stages present in the index }
+    gscUntracked,   { in worktree, absent from index }
+    gscRenamed,     { paired delete+add with similarity >= threshold }
+    gscCopied       { paired copy (source retained) }
   );
 
   // Status flags (high-level abstraction, avoiding direct exposure of libgit2 bitmasks)
@@ -135,9 +157,49 @@ type
   end;
   TGitConfigEntryArray = array of TGitConfigEntry;
 
+function GitStatusCodesToFlags(AHeadCode, AWorkCode: TGitStatusCode): TGitStatusFlags;
+
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
+
+function GitStatusCodesToFlags(AHeadCode, AWorkCode: TGitStatusCode): TGitStatusFlags; inline;
+begin
+  // single source mapping HeadCode/WorkCode -> Flags (bytes.ops inline zero-copy set ops, no alloc)
+  Result := [];
+  case AHeadCode of
+    gscAdded: Include(Result, gsIndexNew);
+    gscModified: Include(Result, gsIndexModified);
+    gscDeleted: Include(Result, gsIndexDeleted);
+    gscRenamed: Include(Result, gsIndexRenamed);
+    gscTypeChanged: Include(Result, gsIndexTypeChange);
+    gscCopied: Include(Result, gsIndexRenamed);
+    gscUnmerged: Include(Result, gsConflicted);
+    gscUntracked: Include(Result, gsWtNew);
+  end;
+  case AWorkCode of
+    gscAdded: Include(Result, gsWtNew);
+    gscModified: Include(Result, gsWtModified);
+    gscDeleted: Include(Result, gsWtDeleted);
+    gscTypeChanged: Include(Result, gsWtTypeChange);
+    gscRenamed: Include(Result, gsWtRenamed);
+    gscCopied: Include(Result, gsWtRenamed);
+    gscUnmerged: Include(Result, gsConflicted);
+    gscUntracked: Include(Result, gsWtNew);
+  end;
+  if AWorkCode = gscUntracked then
+    Include(Result, gsWtNew);
+end;
+
+constructor EGitError.Create(AErrorCode: Integer; const AOperation: string);
+begin
+  FErrorCode := AErrorCode;
+  FErrorClass := 0;
+  if AOperation <> '' then
+    inherited Create(AOperation)
+  else
+    inherited CreateFmt('git error %d', [AErrorCode]);
+end;
 
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 begin

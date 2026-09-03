@@ -14,6 +14,7 @@ unit nextpas.core.bench;
 interface
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,
   nextpas.core.bench.stats,
@@ -1511,7 +1512,7 @@ begin
     LActual := Length(LSorted);
   SetLength(Result, LActual);
   if LActual > 0 then
-    Move(LSorted[0], Result[0], LActual * SizeOf(TBenchResult));
+    BytesCopy(@Result[0], @LSorted[0], SizeUInt(LActual * SizeOf(TBenchResult))); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy
 end;
 
 function TBenchResults.GetStableResults(ACVThreshold: Double): TBenchResultArray;

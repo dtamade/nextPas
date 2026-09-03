@@ -5,8 +5,8 @@
 **层级**：L2（系统能力，只依赖 L0–L1；`webview/config/template` 等 L3 可依赖本模块）
 **Owner**：`codex/core-js` lane（`js` 家族）
 **状态**：S0 六维冻结 P0 清零（18 份生产级，待 M1 源码）→ S1 目标 `source-contract + focused-runtime(fake)`
-**最后更新**：2026-08-31
-**版本**：1.2（11 单元 pure.base 单源 630 行 + 5 gate 全绿 + L2→L0 直读，M3b 均值同步，与 CONTRACT 1.2/BENCHMARKS 1.6 对齐，18 份对齐）
+**最后更新**：2026-09-03
+**版本**：2.7（22 单元+2薄别名 host/value兼容不计阈值，pure.base/predicates/eval/host/value单源，阈值800单一，门面~50 inline零拷贝 try-finally不丢，与 CONTRACT 2.7 对齐，18 份对齐）
 
 ## 1. 模块定位
 
@@ -22,24 +22,35 @@
 
 **设计对标**：`crypto` 多后端（pure/openssl）、`compress` 的 `lz4.ffi → lz4.native`、`db` 的 `sqlite/pg` 适配器同范式。
 
-## 2. 家族布局（已落地 11 单元）
+## 2. 家族布局（已落地 22 单元+2薄别名兼容保留不计阈值，pure.impl/host/value 薄别名；pure.runtime/context/hash 为 pure 内部聚合不单计）
 
 | 单元 | 职责 | 备注 |
 |------|------|------|
-| `nextpas.core.js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 载体（**后端无关**） | 纯数据类型，零后端依赖 |
-| `nextpas.core.js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` 不透明 / `IJsValueRef` / `TJsHostFunction` 三形态 | 小接口+组合，引用计数自动释放，不暴露 `JSValue` |
-| `nextpas.core.js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑） | 确定性语义，模拟超时/内存限，**纯后端的同约束前身** |
-| `nextpas.core.js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`） | 只含声明，不含逻辑 |
-| `nextpas.core.js.quickjs.loader` | `platform.dl` 探测与符号装载 | 唯一可触 `platform.dl` 的单元 |
-| `nextpas.core.js.quickjs` | QuickJS 真实现 | `uses ffi/loader`，实现 `intf` |
-| `nextpas.core.js.js888` | **纯 Pascal 后端**（`jsbkJs888` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
-| `nextpas.core.js.v8` | **纯 Pascal V8 占位**（`jsbkV8` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
-| `nextpas.core.js.chakra` | **纯 Pascal Chakra 占位**（`jsbkChakra` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束 |
-| `nextpas.core.js.factory` | 工厂：`CreateJsRuntime / JsBackendAvailable` 分支与探测抛异常 | 单源分支/探测，门面零逻辑 |
-| `nextpas.core.js.pas` | 门面：纯 re-export（`inline` 薄转发至 `js.factory`） | 纯聚合，零分支零探测 |
+| `nextpas.core.js.base` | `TJsBackendKind`、`TJsValueKind`、`TJsErrorCategory`、`TJsRuntimeOptions`、`EJsError` 载体（**后端无关**） | 纯数据类型，零后端依赖，`bytes.ops` 单源 `SpanTrim/SpanEqual` inline 零拷贝 |
+| `nextpas.core.js.intf` | `IJsRuntime` / `IJsContext` / `TJsValue` 不透明 / `IJsValueRef` / `TJsHostFunction` 三形态 | 小接口+组合，引用计数自动释放，不暴露 `JSValue`，`bytes.ops+pure.value` 单源 `json.writer` 单缝 `try-finally` 不丢 |
+| `nextpas.core.js.fake` | 纯 Pascal 假后端（零外部依赖，CI 必跑） | 确定性语义，模拟超时/内存限，**纯后端的同约束前身**，复用 `pure` 单源模板 |
+| `nextpas.core.js.quickjs.ffi` | QuickJS C ABI 声明（`cdecl external 'libquickjs'`） | 只含声明，不含逻辑，守 FFI 纯度 |
+| `nextpas.core.js.quickjs.loader` | `platform.dl` 探测与符号装载 | 唯一可触 `platform.dl`，`bytes.ops BytesCopy` inline 零拷贝，`sync.vault` 单源 `try-finally` 幂等 `JS_QUICKJS_PROBE_NAMES[0..7]` 单源 |
+| `nextpas.core.js.value.store` | 纯存储单源 `Heap+Global` | `pure.base` 单源 `bytes.ops+mem.dynarray` 几何 `inline` 零拷贝 via `text.view` |
+| `nextpas.core.js.quickjs.value` | QuickJS 镜像装饰器装饰 `value.store` 纯存储 | `bytes.ops` 零拷贝，`FFI` 枚举/镜像 `Free` exactly-once 不丢，`inline` 热路径，`Pure+QjsHeap` 组合 |
+| `nextpas.core.js.quickjs` | QuickJS 真实现 | `uses value.store/quickjs.value+ffi/loader`，`Pure+QjsHeap` 组合单 `Store` 字段，`bytes.ops` 零拷贝 `inline` |
+| `nextpas.core.js.lifecycle` | 纯上下文生命周期 owner `GPureClosed` 紧凑4B `epoch*2+closed` generation-tagged | `atomic/bytes/collections.freelist` 单源，`IsAlive` acquire 强一致 vs `IsValid` 零屏障，`try-finally` 幂等不丢 |
+| `nextpas.core.js.pure.base` | 纯族共享基座 `TJsPureProp/Object/Heap` | 仅 `js.base` 单依赖，`pure.value` inline 零拷贝，守 `base←intf` 单向 |
+| `nextpas.core.js.pure.predicates` | 常量谓词单源池 `JS_PRED_LITERALS/SENTINELS+TryNumber` | `text.scan/text.number` L1 owner 单源，`bytes.ops` inline 零拷贝，`try-finally` 不丢 |
+| `nextpas.core.js.eval` | 纯求值单源 `JsPureDoEval` 词法/哨兵/数值/宿主分发 | `pure.predicates` 单源谓词池，`bytes.ops` 零拷贝 `inline`，`try-finally` 不丢 |
+| `nextpas.core.js.pure.host` | 宿主函数桶 `TJsPureHost` O(1) 桶 | `bytes.ops BytesNextCapacity` 几何单源 `inline` 零拷贝 `try-finally` 不丢 |
+| `nextpas.core.js.pure.value` | 纯值语义 `TJsPureValue/Heap` 单源 | `bytes.ops+pure.hash` 单源 `text.view` 零拷贝 `inline` `try-finally` 不丢，`json.writer` 单缝 |
+| `nextpas.core.js.pure` | 纯族标准聚合门面 `pure.runtime+pure.context`（`~40` 行） | 95% 复用 `js888/v8/chakra`，`inline`+`BytesCopy` 零拷贝，资源幂等不丢 |
+| `nextpas.core.js.pure.impl` | 兼容薄别名（存量 `pure.impl` 保留，新代码 uses `pure`） | 纯 re-export 无逻辑，复用 `pure` 单源 |
+| `nextpas.core.js.js888` | **纯 Pascal 后端**（`jsbkJs888` 零 FFI/零 dl，恒可用） | 与 `quickjs` 平级，同 `fake` 约束，复用 `pure` 单源 |
+| `nextpas.core.js.v8` | **纯 Pascal V8 占位**（`jsbkV8` 零 FFI/零 dl，恒可用） | 同上 |
+| `nextpas.core.js.chakra` | **纯 Pascal Chakra 占位**（`jsbkChakra` 零 FFI/零 dl，恒可用） | 同上 |
+| `nextpas.core.js.registry` | 后端注册表 L2 唯一扇出 owner 5 后端 `O(1)` 索引 | `sync.vault` 单源 vault 隔离，`bytes.ops` inline 零拷贝，`try-finally/IMutex` 不丢 |
+| `nextpas.core.js.factory` | 工厂 `CreateJsRuntime / JsBackendAvailable` 薄转发至 `registry` 单源 | `CheckJsRuntimeOptions(ABackend)` 显式归因透传无默认 |
+| `nextpas.core.js.pas` | 门面：纯 re-export `inline` 薄转发至 `js.factory` | 纯聚合，零分支零探测，`wc -l ~50` <800 `inline` 零拷贝 |
 
 ```
-base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi←loader←quickjs, pure.base←{js888,v8,chakra}(零FFI/零dl 630+29×3≈717 阈值650内、<800 必拆，wc -l 630 实测)} ← factory(分支/探测单源) ← 门面(纯 re-export inline 薄转发)
+base(后端无关) ← intf(不透明) ← {fake, quickjs.ffi, value.store, quickjs.value, quickjs, lifecycle, pure.base ← pure(pure.runtime+pure.context+pure.host/pure.value/pure.predicates/eval) ← {js888,v8,chakra}, pure.impl薄别名, host/value薄别名2不计阈值}(零FFI/零dl, 纯族热点 inline+bytes.ops BytesCopy零拷贝 资源 try-finally幂等不丢, 阈值800单一 wc -l抽样:pure.base~45 pure~40(runtime~45+context~360) eval~180 predicates~60 host~400 value~490 store~120 qjs.value~390 lifecycle~205 registry~210 factory/门面~50 fake~380 均<800)} ← registry(5后端 O(1)扇出 vault单源) ← factory(薄转发 registry单源 CheckJsRuntimeOptions显式归因) ← 门面(纯 re-export inline薄转发 零分支零探测 wc -l~50 inline零拷贝)
 ```
 
 > **纯后端族保证**：`js.js888/js.v8/js.chakra`（`jsbkJs888/jsbkV8/jsbkChakra`）均为零 FFI/零 dl、恒可用，与 `fake` 同约束；尾部追加只在枚举末尾加，`js.base/js.intf` 零改动。

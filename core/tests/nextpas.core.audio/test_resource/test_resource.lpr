@@ -229,7 +229,7 @@ end;
 procedure T.TestFacade;
 var Mgr: IAudioResourceManager;
 begin
-  Mgr:=nextpas.core.audio.CreateAudioResourceManager;
+  Mgr:=nextpas.core.audio.resource.CreateAudioResourceManager;
   CheckTrue(Assigned(Mgr),'facade resource');
 end;
 var S:TTestSuite; C:T;

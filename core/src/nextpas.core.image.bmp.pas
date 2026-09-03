@@ -138,6 +138,8 @@ begin
   end;
   if (W = 0) or (H = 0) or (W > 16384) or (H > 16384) then
     raise EImageDecodeError.Create('bmp: width/height out of range');
+  if Int64(W) * Int64(H) > 16 * 1024 * 1024 then
+    raise EImageDecodeError.Create('bmp: image too large (16M cap) (w=' + IntToStr(Int64(W)) + ' h=' + IntToStr(Int64(H)) + ')');
   Planes := GetLe16(@Src[26]);
   Bpp := GetLe16(@Src[28]);
   Comp := GetLe32(@Src[30]);

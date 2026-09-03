@@ -6,7 +6,10 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.git.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.encoding.hex;
 
 type
   { Object kinds as encoded in loose headers and pack entry type bits }
@@ -17,19 +20,34 @@ type
     Bytes: array[0..19] of Byte;
   end;
 
-  { Family-level error for the native git subfamily }
-  EGitError = class(Exception);
+  { Single-source re-export: git family error is owned by nextpas.core.git.base (L2) }
+  EGitError = nextpas.core.git.base.EGitError;
 
 const
   GitOidHexLen = 40;
   GitOidRawLen = 20;
 
+const
+  GIT_MODE_DIR     = $4000;
+  GIT_MODE_REGULAR = $81A4;
+  GIT_MODE_EXEC    = $81ED;
+  GIT_MODE_SYMLINK = $A000;
+  GIT_MODE_GITLINK = $E000;
+
 function GitOidFromHex(const AHex: string): TGitOid;
+  { not inline: HexDecode alloc+table lookup (20 bytes), loop exceeds inline I-Cache benefit }
 function GitOidToHex(const AOid: TGitOid): string;
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+  { not inline: HexEncode + 20B copy alloc, exceeds inline benefit }
+function GitOidIsValidHex(const AHex: string): Boolean;
+  { not inline: 40× HexVal loop exceeds inline benefit (red line 2) }
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+function GitOidZero: TGitOid; inline;
 function GitKindToString(AKind: TGitObjectKind): string;
+  { not inline: branch+alloc+raise, cold path, exceeds inline benefit }
 function GitKindFromString(const AName: string): TGitObjectKind;
+  { not inline: string compare chain+raise, cold path }
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
@@ -37,21 +55,14 @@ function GitStringToBytes(const AText: string): TBytes; inline;
 
 implementation
 
-function HexVal(ACh: Char): Integer; inline;
-begin
-  case ACh of
-    '0'..'9': Result := Ord(ACh) - Ord('0');
-    'a'..'f': Result := Ord(ACh) - Ord('a') + 10;
-    'A'..'F': Result := Ord(ACh) - Ord('A') + 10;
-  else
-    Result := -1;
-  end;
-end;
+uses
+  nextpas.core.base.utils;
 
-function GitOidIsValidHex(const AHex: string): Boolean; inline;
+function GitOidIsValidHex(const AHex: string): Boolean;
 var
   I: Integer;
 begin
+  { 40× HexVal scan, reused by FromHex }
   if Length(AHex) <> GitOidHexLen then
     Exit(False);
   for I := 1 to GitOidHexLen do
@@ -62,37 +73,51 @@ end;
 
 function GitOidFromHex(const AHex: string): TGitOid;
 var
-  I: Integer;
+  LBytes: TBytes;
 begin
+  { via GitOidIsValidHex + HexDecode + SpanCopy }
   if not GitOidIsValidHex(AHex) then
     raise EGitError.CreateFmt('invalid git oid hex "%s"', [AHex]);
-  for I := 0 to GitOidRawLen - 1 do
-    Result.Bytes[I] := Byte((HexVal(AHex[I * 2 + 1]) shl 4)
-      or HexVal(AHex[I * 2 + 2]));
+  LBytes := HexDecode(AHex);
+  SpanCopy(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@LBytes[0], GitOidRawLen));
 end;
 
 function GitOidToHex(const AOid: TGitOid): string;
-const
-  CHex: array[0..15] of Char = '0123456789abcdef';
 var
-  I: Integer;
+  LBytes: TBytes;
 begin
-  SetLength(Result, GitOidHexLen);
-  for I := 0 to GitOidRawLen - 1 do
-  begin
-    Result[I * 2 + 1] := CHex[AOid.Bytes[I] shr 4];
-    Result[I * 2 + 2] := CHex[AOid.Bytes[I] and $0F];
-  end;
+  { via SpanCopy + HexEncode }
+  SetLength(LBytes, GitOidRawLen);
+  SpanCopy(TByteSpan.Create(@LBytes[0], GitOidRawLen),
+    TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
+  Result := HexEncode(LBytes);
+end;
+
+function GitOidHash(const AOid: TGitOid): UInt32; inline;
+begin
+  { via bytes.ops SpanHashFNV1a }
+  Result := SpanHashFNV1a(TByteSpan.Create(@AOid.Bytes[0], GitOidRawLen));
 end;
 
 function GitOidSame(const AA, AB: TGitOid): Boolean; inline;
-var
-  I: Integer;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AA.Bytes[I] <> AB.Bytes[I] then
-      Exit(False);
-  Result := True;
+  { via bytes.ops SpanEqual }
+  Result := SpanEqual(
+    TByteSpan.Create(@AA.Bytes[0], GitOidRawLen),
+    TByteSpan.Create(@AB.Bytes[0], GitOidRawLen));
+end;
+
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+begin
+  { via bytes.ops IsZeroBytes }
+  Result := IsZeroBytes(TByteSpan.Create(PByte(@AOid.Bytes[0]), GitOidRawLen));
+end;
+
+function GitOidZero: TGitOid; inline;
+begin
+  { via bytes.ops SpanFill }
+  SpanFill(TByteSpan.Create(@Result.Bytes[0], GitOidRawLen), 0);
 end;
 
 function GitKindToString(AKind: TGitObjectKind): string;
@@ -122,27 +147,23 @@ end;
 
 function GitKindFromMode(AMode: Cardinal): TGitObjectKind; inline;
 begin
-  // Directory entries (040000) point at trees, gitlinks (160000) at commits,
-  // everything else (100644/100755/120000 regular/symlink) is blob content.
-  if AMode = $4000 then
+  if AMode = GIT_MODE_DIR then
     Exit(gokTree);
-  if AMode = $E000 then
+  if AMode = GIT_MODE_GITLINK then
     Exit(gokCommit);
   Result := gokBlob;
 end;
 
 function GitBytesToString(const ABytes: TBytes): string; inline;
 begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
+  { via bytes.ops BytesToString }
+  Result := BytesToString(ABytes);
 end;
 
 function GitStringToBytes(const AText: string): TBytes; inline;
 begin
-  SetLength(Result, Length(AText));
-  if Length(AText) > 0 then
-    Move(PAnsiChar(AText)^, Result[0], Length(AText));
+  { via bytes.ops StringToBytes }
+  Result := StringToBytes(AText);
 end;
 
 end.

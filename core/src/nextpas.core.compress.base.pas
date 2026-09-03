@@ -10,6 +10,9 @@ unit nextpas.core.compress.base;
 
 interface
 
+uses
+  nextpas.core.exception;
+
 type
   TCompressionLevel = (
     clNone,
@@ -17,6 +20,35 @@ type
     clDefault,
     clBest
   );
+
+  { Deflate typed error codes — single source for git.native.zlib mapping.
+    Zero string parsing: owner emits code, consumer switches on code. }
+  TDeflateErrorCode = (
+    decTruncated,           // truncated stream
+    decInvalidHeader,       // invalid zlib header (bad method)
+    decInvalidWindowBits,   // window bits >7
+    decCorruptHeader,       // header check bits fail (mod 31)
+    decPresetDictionary,    // preset dict bit set
+    decStreamTooLarge,      // input exceeds High(LongWord)
+    decCorruptStream,       // Z_DATA_ERROR payload
+    decTrailingBytes,       // trailing bytes after stream
+    decLimitExceeded,       // decompressed size exceeds limit
+    decDestTooSmall,        // dest buffer too small
+    decNilInput,            // nil input pointer
+    decInternal             // generic inflate/deflate failure
+  );
+
+  { Typed deflate error — subclass of EIOError so existing `on E: EIOError`
+    catches still work; Code enables string-free mapping. }
+  EDeflateError = class(EIOError)
+  private
+    FCode: TDeflateErrorCode;
+  public
+    constructor Create(ACode: TDeflateErrorCode; const AMessage: string); overload;
+    constructor CreateFmt(ACode: TDeflateErrorCode; const AMessage: string;
+      const AArgs: array of const); overload;
+    property Code: TDeflateErrorCode read FCode;
+  end;
 
 const
   COMPRESS_BUF_SIZE = 32768;
@@ -88,6 +120,19 @@ begin
     Result := High(SizeUInt);
   if Result < 128 then
     Result := 128;
+end;
+
+constructor EDeflateError.Create(ACode: TDeflateErrorCode; const AMessage: string);
+begin
+  inherited Create(AMessage);
+  FCode := ACode;
+end;
+
+constructor EDeflateError.CreateFmt(ACode: TDeflateErrorCode; const AMessage: string;
+  const AArgs: array of const);
+begin
+  inherited CreateFmt(AMessage, AArgs);
+  FCode := ACode;
 end;
 
 end.

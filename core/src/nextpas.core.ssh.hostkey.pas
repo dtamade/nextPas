@@ -19,7 +19,6 @@ uses
   nextpas.core.text.strings,
   nextpas.core.text.conv,
   nextpas.core.text.utils,
-  nextpas.core.text.wildmatch,
   nextpas.core.hash.base,
   nextpas.core.ssh.base,
   nextpas.core.ssh.errors,
@@ -90,7 +89,7 @@ type
       const ABlob: TBytes): Boolean;
   end;
 
-{ 通配符匹配：'*' 任意串、'?' 单字符；大小写敏感 - 单源 L0 text.wildmatch inline 转发 }
+{ 通配符匹配：'*' 任意串、'?' 单字符，'[' ']' 字面量；大小写敏感 - OpenSSH known_hosts 语义私有实现 }
 function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 
 implementation
@@ -310,10 +309,63 @@ end;
 
 { ---- 通配符匹配 ---- }
 
-{ 单源转发至 L0 text.wildmatch，inline 零拷贝双指针回溯：'*' 任意串、'?' 单字符 }
+{ OpenSSH known_hosts 语义：仅 '*'（任意串，含 '/' 外一切字符）与 '?'（单字符），
+  '[' ']' 为 '[host]:port' 条目字面量（非字符类）。L1 text.strings.GlobMatch 为
+  路径 glob（'*' 不跨分隔符、'[' 开字符类、无转义），语义不合，故此处保留双指针
+  回溯私有实现（源自主仓已删的 text.wildmatch.match，行为经 test_ssh_hostkey 锁定）。 }
+function SshPatternMatch(APattern: PAnsiChar; APatternLen: SizeUInt;
+  AValue: PAnsiChar; AValueLen: SizeUInt): Boolean;
+var
+  P, V, StarP, StarV: SizeInt;
+begin
+  if APatternLen = 0 then
+    Exit(AValueLen = 0);
+  if AValueLen = 0 then
+  begin
+    for P := 0 to SizeInt(APatternLen) - 1 do
+      if APattern[P] <> '*' then
+        Exit(False);
+    Exit(True);
+  end;
+  P := 0;
+  V := 0;
+  StarP := -1;
+  StarV := 0;
+  while V < SizeInt(AValueLen) do
+  begin
+    if (P < SizeInt(APatternLen)) and ((APattern[P] = '?') or (APattern[P] = AValue[V])) then
+    begin
+      Inc(P);
+      Inc(V);
+    end
+    else if (P < SizeInt(APatternLen)) and (APattern[P] = '*') then
+    begin
+      StarP := P;
+      StarV := V;
+      Inc(P);
+    end
+    else if StarP >= 0 then
+    begin
+      P := StarP + 1;
+      Inc(StarV);
+      V := StarV;
+    end
+    else
+      Exit(False);
+  end;
+  while (P < SizeInt(APatternLen)) and (APattern[P] = '*') do
+    Inc(P);
+  Result := P >= SizeInt(APatternLen);
+end;
+
 function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 begin
-  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AValue);
+  if APattern = '' then
+    Exit(AValue = '');
+  if AValue = '' then
+    Exit(SshPatternMatch(PAnsiChar(APattern), SizeUInt(Length(APattern)), nil, 0));
+  Result := SshPatternMatch(PAnsiChar(APattern), SizeUInt(Length(APattern)),
+    PAnsiChar(AValue), SizeUInt(Length(AValue)));
 end;
 
 { ---- known_hosts ---- }

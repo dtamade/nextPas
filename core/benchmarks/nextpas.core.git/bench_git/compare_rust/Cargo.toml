@@ -1,0 +1,11 @@
+[package]
+name = "bench_git_rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+adler = "1.0"
+
+[[bin]]
+name = "bench_git_rs"
+path = "src/main.rs"

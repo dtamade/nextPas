@@ -168,7 +168,7 @@ begin
     { Build line string }
     SetLength(LLine, LPos - LLineStart);
     if Length(LLine) > 0 then
-      Move(AData[LLineStart], LLine[1], LPos - LLineStart);
+      nextpas.core.bytes.ops.BytesCopy(@LLine[1], @AData[LLineStart], LPos - LLineStart); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
 
     if LLine = '' then
       Break;
@@ -303,7 +303,7 @@ begin
     if LBodyEnd > LBodyStart then
     begin
       SetLength(AParts[LCount - 1].Body, LBodyEnd - LBodyStart);
-      Move(ABody[LBodyStart], AParts[LCount - 1].Body[0], LBodyEnd - LBodyStart);
+      nextpas.core.bytes.ops.BytesCopy(@AParts[LCount - 1].Body[0], @ABody[LBodyStart], LBodyEnd - LBodyStart); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
     end
     else
       SetLength(AParts[LCount - 1].Body, 0);

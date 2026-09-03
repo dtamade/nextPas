@@ -90,7 +90,6 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
   nextpas.core.text.utils,
-  nextpas.core.text.wildmatch,
   nextpas.core.mem.utils;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
