@@ -50,6 +50,7 @@ const
   COPENAI_DEFAULT_BASE_URL = nextpas.core.agent.provider.openai.factory.COPENAI_DEFAULT_BASE_URL;
   COPENAI_CONNECT_TIMEOUT_MS = nextpas.core.agent.provider.openai.factory.COPENAI_CONNECT_TIMEOUT_MS;
   COPENAI_TOTAL_TIMEOUT_MS = nextpas.core.agent.provider.openai.factory.COPENAI_TOTAL_TIMEOUT_MS;
+  // 单一真源于 factory.COPENAI_MAX_COMPLETION_TOKENS_PREFIXES，BC 别名保持字面量同步（encode 已改用 factory 单源）
   COPENAI_MAX_COMPLETION_TOKENS_PREFIXES: array[0..2] of string =
     ('o1', 'o3', 'gpt-5');
   COPENAI_ENV_API_KEY = nextpas.core.agent.provider.openai.factory.COPENAI_ENV_API_KEY;

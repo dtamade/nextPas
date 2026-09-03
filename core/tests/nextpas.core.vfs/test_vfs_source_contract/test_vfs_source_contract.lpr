@@ -8,8 +8,9 @@ uses
 { 源契约门禁：respack(5 单元) + vfs(9 单元) 的 uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_path 同机制，不自造）
-  2) L2→L2 seam 唯一性：除 vfs.os / respack.dirsource (fs seam) 外，
-     任何模块单元不得引用 nextpas.core.fs；额外 whitelisted second seam: vfs.embedded → nextpas.core.respack.reader (Registry line 108/106 extra whitelist 双缝白名单过渡期超越单缝理想需L7聚合拆分, 14→ respack.reader, bytes.ops 单源 inline 零拷贝 + SpinLock try-finally 资源不丢, source-contract 强门禁, L7聚合拆分为后端独立族后移除额外白名单固化单缝理想)
+  2) L2→L2 seam 单点：仅 vfs.backends 持有跨模块 L2 依赖（fs / respack.reader），
+     embedded/os 经 backends 间接复用，消除 L2 同层多点直连；其余 vfs 单元禁 fs/respack 直连
+     （Registry single-point via backends, bytes.ops 单源 inline 零拷贝 BytesCopy + SpinLock blocking Acquire try-finally 资源不丢, source-contract 强门禁, L7后端独立族收敛单缝）
   3) 异常根纪律：全部异常类挂在 nextpas.core.exception }
 
 {$I ../../fpc_rtl_uses_scan.inc}
@@ -52,11 +53,11 @@ begin
     ALabel + ' — must not reference nextpas.core.fs');
 end;
 
-{ L2→L2 respack seam 变体：仅 vfs.embedded 允许 respack.reader，其余 vfs 单元禁（Registry line 108/106 extra whitelist 双缝白名单过渡期超越单缝理想需L7聚合拆分, 14→ respack.reader, bytes.ops 单源 inline 零拷贝 + SpinLock try-finally 资源不丢, source-contract 强门禁，L7聚合拆分为后端独立族后移除额外白名单固化单缝理想） }
+{ L2→L2 respack seam 变体：仅 vfs.backends 允许 respack.reader，其余 vfs 单元禁（Registry single-point via backends, bytes.ops 单源 inline 零拷贝 BytesCopy + SpinLock blocking Acquire, source-contract 强门禁） }
 procedure AssertNoRespackSeam(const ALabel, ASource: string);
 begin
   Check(Pos('nextpas.core.respack.reader', ASource) = 0,
-    ALabel + ' — must not reference nextpas.core.respack.reader (only vfs.embedded whitelisted)');
+    ALabel + ' — must not reference nextpas.core.respack.reader (only vfs.backends single-point)');
 end;
 
 { embed 变体：允许 fs.glob（纯字符串匹配，非 IO），其余 fs 单元仍禁。
@@ -94,7 +95,7 @@ end;
 
 procedure TestVfsSourcesNoFpcRtl;
 const
-  FILES: array[0..14] of string = (
+  FILES: array[0..15] of string = (
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -103,6 +104,7 @@ const
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.os.pas',
     'src/nextpas.core.vfs.embedded.pas',
+    'src/nextpas.core.vfs.backends.pas',
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
@@ -133,7 +135,7 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..18] of string = (
+  NO_SEAM: array[0..19] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
@@ -146,6 +148,7 @@ const
     'src/nextpas.core.vfs.memtree.pas',
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.embedded.pas',
+    'src/nextpas.core.vfs.backends.pas',
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
@@ -231,18 +234,43 @@ begin
     'facade must not directly reference transform (via decorator)');
   Check(Pos('nextpas.core.vfs.compressed', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
     'facade must not directly reference compressed (via decorator)');
+  { backends 聚合：三后端单缝收口，门面扇出收敛 12→10，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }
+  Src := LoadSourceText('src/nextpas.core.vfs.backends.pas');
+  Check(Pos('nextpas.core.vfs.memtree', Src) > 0,
+    'backends aggregates memtree (single-point fan-out reduction)');
+  Check(Pos('nextpas.core.vfs.embedded', Src) > 0,
+    'backends aggregates embedded (single-point fan-out reduction)');
+  Check(Pos('nextpas.core.vfs.os', Src) > 0,
+    'backends aggregates os (single-point fan-out reduction)');
+  Check(Pos('inline;', Src) > 0,
+    'backends has inline hot paths (perf evidence)');
+  Check(Pos('nextpas.core.vfs.backends', LoadSourceText('src/nextpas.core.vfs.pas')) > 0,
+    'facade aggregates via backends (fan-out reduced 12→10)');
+  Check(Pos('nextpas.core.vfs.memtree', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference memtree (via backends)');
+  Check(Pos('nextpas.core.vfs.os', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference os (via backends)');
+  Check(Pos('nextpas.core.vfs.embedded', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference embedded (via backends)');
 
-  { L2→L2 double seam gate 双缝白名单过渡期超越单缝理想需L7聚合拆分: embedded → respack.reader (Registry line 108/106 extra whitelist beyond single-seam ideal, 14→ nextpas.core.respack.reader, bytes.ops 单源 inline 零拷贝 + SpinLock try-finally 资源不丢, source-contract 强门禁, L7聚合拆分为后端独立族后移除额外白名单固化单缝理想) }
-  Src := LoadSourceText('src/nextpas.core.vfs.embedded.pas');
+  { L2→L2 single seam via backends aggregation: only backends may reference respack.reader (Registry single-point, source-contract gated, bytes.ops BytesCopy single-source inline zero-copy + SpinLock blocking Acquire try-finally 资源不丢) }
+  Src := LoadSourceText('src/nextpas.core.vfs.backends.pas');
   Check(Pos('nextpas.core.respack.reader', Src) > 0,
-    'embedded declares respack.reader seam (L2→L2 whitelisted, source-contract gated, bytes.ops single-source inline zero-copy, line 14)');
+    'backends declares respack.reader seam (L2→L2 single-point via backends, bytes.ops single-source)');
+  Src := LoadSourceText('src/nextpas.core.vfs.embedded.pas');
+  Check(Pos('nextpas.core.respack.reader', Src) = 0,
+    'embedded must not directly reference respack.reader (via backends single seam)');
+  Check(Pos('nextpas.core.vfs.backends', Src) > 0,
+    'embedded reuses backends single seam (L2→L2 unified via backends)');
   Check(Pos('nextpas.core.bytes.ops', Src) > 0,
     'embedded reuses bytes.ops single source (inline zero-copy)');
+  Check(Pos('BytesCopy', Src) > 0,
+    'embedded reuses BytesCopy single source (not raw Move)');
   Check(Pos('inline;', Src) > 0,
     'embedded has inline hot paths (perf evidence)');
   Check(Pos('try', Src) > 0,
     'embedded has try-finally resource release (stability, not lost)');
-  { Only embedded may reference respack.reader among vfs family; others must not (strict gate, 双缝白名单过渡期超越单缝理想需L7聚合拆分, L7聚合拆分为后端独立族后移除额外白名单固化单缝理想) }
+  { Only backends may reference respack.reader among vfs family; others must not }
   AssertNoRespackSeam('vfs.base', LoadSourceText('src/nextpas.core.vfs.base.pas'));
   AssertNoRespackSeam('vfs.intf', LoadSourceText('src/nextpas.core.vfs.intf.pas'));
   AssertNoRespackSeam('vfs.errors', LoadSourceText('src/nextpas.core.vfs.errors.pas'));

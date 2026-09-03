@@ -8,17 +8,12 @@
 - L3 `gpu.canvas` `TAtlas` 自适应、`Scale 1..4`
 - 契约：枚举 `bfRGBA/ifPng` 对齐、`ifGif` 保留位、`platform.dl` 回写、 bench `bench_raster/bench_image` 单次、`demo_vector_poster` 4086 bytes、26 tests green、`build-hygiene` pass
 
+
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检
 
-`1.0.0` 后 32 期巡检收敛（S64—S96），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
+`1.0.0` 后 44 期巡检收敛（S64—S107），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
 
-### Highlights (S80—S96)
-### Highlights (S80—S95)
-### Highlights (S80—S94)
-### Highlights (S80—S92)
-`1.0.0` 后 25 期巡检收敛（S64—S89），`12 门` 扩至 `10→12`（原子选项透传），`zip_roundtrip` 增原子三演示，`CRC 5×`、`TOCTOU`、`原子`、`几何`、`复用`、`bench`、`单源` 多维打磨，`12 门+bench+hygiene` 全绿。
-
-### Highlights (S80—S89)
+### Highlights (S80—S107)
 - **S80 最佳实践合入**：`landing/zip-1.0.1 → main 626cadf7e` path-limited replay，保护未提交脏区，12门全绿
 - **S81 六维打磨**：`NormalizeZipReadOptions` 单源（reader/sequential 去重）、`BASELINE.json` 2026-09-02 刷新固化 slice-by-8
 - **S82 治理收口**：`bench.baseline` 补 `json.value` 适配 `IsReal/AsFloat` 新门面，16项可编译通过
@@ -36,6 +31,17 @@
 - **S94 EOCD 单源**：`reader.ZipFindEocd` 单源化双 `ParseCentralDirectory` 的 EOCD 回扫（2×12→2×1），`S85—S94` 十单源平台期
 - **S95 EOCD 字段单源**：`reader.ZipDecodeEocd` 单源化双 `ParseCentralDirectory` 的 EOCD 字段解析（2×8→2×1），`S85—S95` 十一单源平台期
 - **S96 中央循环单源**：`reader.ZipParseCentralEntries` 单源化双 `ParseCentralDirectory` 的中央条目循环（2×10→2×1，含 `GuardTotalOutputSize`），`S85—S96` 十二单源平台期
+- **S97 Zip64 单源**：`reader.ZipDecodeZip64Locator/ZipDecodeZip64Eocd` 单源化双 `ParseCentralDirectory` 的 Zip64 定位与字段解析（2×24→2×2，locator 20B + eocd 56B），`S85—S97` 十三单源平台期
+- **S98 载荷定位单源**：`reader.ZipResolvePayloadOffset` 单源化双 `LocatePayload` 的 `GuardReadable+ParseLocalHeader+payload GuardRange`（2×9→2×1），`S85—S98` 十四单源平台期
+- **S99 解压与口令单源**：`reader.ZipExtractToBytesViaPayload/ZipExtractToBufferViaPayload/ZipOpenViaPayload` 单源化双 `ExtractIndex/ExtractToBuffer/OpenEntry` 的 `Decompress+GuardPassword+Wrap`（3×2→3×1），`S85—S99` 十五单源平台期
+- **S100 FS 路径性能**：`fs.JoinZipPath/TrimTrailingSlash` 单次分配收口 `ZipExtractToDirWithOptions` 路径拼接热点（`5分配→1分配`，`SetLength+Move`），`S85—S100` 十五单源+一性能平台期
+- **S101 中央边界单源**：`reader.ZipValidateCentralBoundsAndAlloc` 单源化双 `ParseCentralDirectory` 的 `central out of bounds+entry count+SetLength`（2×6→2×1），`S85—S101` 十六单源+一性能平台期
+- **S102 Writer 缓冲守卫**：`writer.TZipEntrySink.PushCompressed` 补 `High(SizeInt) div 2` 溢出守卫，与 `reader.EnsureScratch` 几何增长对称，`FScratch` 双端同构防 `Length*2` 溢出
+- **S103 切片读单源**：`common.ZipSliceRead/ZipBytesRead` 单源化 `reader.TSliceReader.Read` / `sequential.TSeqSliceReader.Read` 有界切片读（2×8→2×1，`Min+Move+Advance inline`），`TSourceSpanReader` 因 `IReaderAt` 边界独立
+- **S104 包装消除**：移除 `reader.TZipReaderImpl/TZipSourceReader.NeedRange` 薄包装（2×8→0，`NeedRange → GuardCursorRange/GuardRange` 6 处直通），`reader` 双形态零包装共享边界内核
+- **S105 去 inline**：`common.ZipSliceRead/ZipBytesRead` 去 `inline` 消红线 1（`2× inline→0`，`Move(var untyped)` 常量传播踩栈）并 `Move → bytes.ops.BytesCopy` 单源（`PByte/TBytes[APos]` 零拷贝同源）
+- **S106 四件套**：`nextpas.core.zip.intf` 新建契约单点收口 `IZipWriter/IZipReader/ISequentialZipReader/IZipBuilder` 四接口（GUID 同源），`writer/reader/sequential/builder` 去接口定义薄别名 `= intf.*`，`base←intf←impl←facade` 单向收敛
+- **S107 残余包装**：移除 `reader.TZipReaderImpl/TZipSourceReader.NeedRange` 与 `NeedRangeIn` 薄包装（`2×4 声明+2×4 实现 +1×4 →0`，`8 处 → Guard*` 直通），`TZipSourceReader` 补 `FScratch + EnsureScratch High div2` 与 `TZipReaderImpl` 双端同构，12 门全绿 `test_zip_aes` 泄漏闭环
 
 ## 1.0.1 (2026-09-02) — nextpas.core.zip 1.0.1 巡检（S64—S75 基线）
 

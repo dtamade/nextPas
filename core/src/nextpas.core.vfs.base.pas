@@ -40,6 +40,8 @@ function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; 
 
 function VfsIsRoot(const APath: string): Boolean; inline;
 
+function VfsSpanFromString(const S: string): TByteSpan; inline;
+
 { 零分配前缀判定：APath 是否以 APrefix 开头（空前缀恒真，规避 FPC Pos('',S)=0 陷阱）。
   HasParent：AChild 是否严格位于 AParent 子树下（AParent+'/' 前缀且更长）。
   单源收口 bytes.ops SpanStartsWith（零拷贝 TByteSpan + MemEqual），inline 热路径。 }
@@ -132,9 +134,20 @@ begin
   Result := SpanCompare(SA, SB);
 end;
 
-function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+function VfsHex(const AValue: UInt64; const ADigits: Integer): string;
+var
+  I: Integer;
+  V: UInt64;
+const
+  HEX: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
 begin
-  Result := BytesHexUInt64(AValue, ADigits); { bytes.ops HEX_UPPER 单源 inline 零拷贝，消除 HEX_DIGITS 本地重复 }
+  SetLength(Result, ADigits);
+  V := AValue;
+  for I := ADigits downto 1 do
+  begin
+    Result[I] := HEX[V and $F];
+    V := V shr 4;
+  end;
 end;
 
 function VfsETagStrong(const ASize, AModTime: Int64): string;
