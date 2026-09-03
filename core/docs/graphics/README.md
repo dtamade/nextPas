@@ -1,6 +1,6 @@
 # nextpas.core.graphics — 惊艳的 Pascal 图形地基
 
-> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（S2 已落地：`graphics.base/color/path` + `image.base` + `vector.tess` + `canvas.raster` + `effect.graph` 全量可用，见 `CONTRACT.md` 0.2.0-source-contract）
+> **一句 `uses` 画海报，一套 `ICanvas` 撑专业图像能力。**（S2 已落地：`graphics.base/color/path` + `image.base` + `vector.tess` + `canvas.raster` + `effect.graph` 全量可用，`image.dispatch` 6 格式注册 `png/jpeg/webp/bmp/gif/qoi`，见 `CONTRACT.md` 0.2.1-source-contract，`bench_image` 1MB 固化 `512×512`）
 > 为 `directui` 与高性能矢量系统而生，提供图像设计、矢量排版、滤镜与转换的完整能力支撑，对标 `gui-framework` 的 `UiScene → DrawPlan → RenderGraph → RenderBackend`，图形只产 `TBitmap/ICanvas`。
 > **铁律**：零直引 FPC RTL（`SysUtils/Graphics/FPImage`），缺失反哺 `nextpas.core`；存量可抽代码迁入本家族；超越 Go 1.22 / Rust tiny-skia 0.11。
 
@@ -51,33 +51,35 @@ font→graphics.text(GlyphRun) ─┘                ↑  effect.graph(Bake 并�
 | 模块 | 层 | 惊艳点 |
 |---|---|---|
 | `graphics` | L1 | `TColor32/TRgba/TBlendMode 27种/TColorSpace/TRect/TVec2/TMat2D/TPath/TGradient.WithTransform`，值类型 COW |
-| `image` | L2 | `TBitmap(Stride AlignUp 64B)` + `Png/Jpeg/WebP/Bmp`，`EImageDecodeError` 闭环，`TryImageDecode` |
+| `image` | L2 | `TBitmap(Stride AlignUp 64B)` + `Png/Jpeg/WebP/Bmp/Gif/Qoi` 6 格式 `image.dispatch` 注册（`ImageRegisterCodec` 6 项闭环，`DetectImageFormat` 嗅探，`TryImageDecode` 不抛），纯 Pascal 四格式恒 `graphics.gif/jpeg/webp/qoi.888` 禁 `*.pure`/`image.gif`，`bytes.ops` 单源 `Move` 零拷贝 `inline` |
 | `vector` | L2 | `PathUnion/Diff/Stroke` + `tess(Double)` |
-| `canvas` | L2 | `ICanvas(Save/Restore RAII)` + `DrawGlyphRun`，CPU 光栅 `simd` 批 blend |
-| `graphics.effect` | L2 | `EffectGraph(Blur/Shadow/Hue/LUT)` 序列化，`Bake` tile 并行 |
+| `canvas` | L2 | `ICanvas(Save/Restore RAII)` + `DrawGlyphRun`，CPU 光栅 `simd` 批 blend（`simd.raster` 直联 `inline` 零 `dispatch`） |
+| `graphics.effect` | L2 | `EffectGraph(Blur/Shadow/Hue/LUT)` 序列化，`Bake` tile64 并行（`BOXBLUR_MAX_PIXELS 16M` fail-closed） |
 | `gpu.canvas` | L3 | `TAtlas/TAtlasRegion/ScaleFactor`，复用 `gpu.gl` |
 
 `font`/`text.unicode` 复用，不另立 `text`。
 
 ## 性能底牌（性能）
 
-- `Single` 外部 / `Double` 内部 tess（`math.EPSILON 1e-6`），`Tile 16x16` + `simd`，`Stride 64B`（AVX cacheline）
-- Bench 冻结：`bench_raster(Fill/Stroke/DrawBitmap256)` + `bench_image(1MB Decode)`，`ns/op + MB/s`，锁版本 `Go1.22/tiny-skia0.11`，`nextpas.core.bench`（禁手搓）
+- `Single` 外部 / `Double` 内部 tess（`math.EPSILON 1e-6`），`Tile 16x16` + `simd`，`Stride 64B`（AVX cacheline），`Move` 零拷贝复用 `bytes.ops` 单源 + `bytes.binary` 单源，`inline` 行拷贝
+- Bench 冻结：`bench_raster(Fill/Stroke/DrawBitmap256)` + `bench_image(1MB Decode)`（`512×512×4 = 1,048,576 bytes` 单次，`Encode 512×512 + Decode 512×512` 双项，`ns/op + MB/s`，`--verify` 锁 `bench-image.json` + `Decode <800µs/MB` 门禁 `GATE_DECODE_US 800`），锁版本 `Go1.22/tiny-skia0.11`，`nextpas.core.bench`（禁手搓），见 `CONTRACT §5`
 
 ## 稳定性
 
-- 族 `EGraphicsError → {EColorError, EImageDecodeError, EVectorError, ECanvasError, EEffectError}`，`Try` 双形态，`fuzz` 门禁
-- `SemVer 0.2.0-source-contract`，`focused-runtime` 准备中（L1/L2 四件套 + bench 已齐，待 source-contract 全绿升档）
+- 族 `EGraphicsError → {EColorError, EImageDecodeError(EImageDecodeError), EVectorError, ECanvasError, EEffectError}`（`EImageDecodeError` 收敛 `EArgumentError/EIOError/ENotImplemented`），`TryImageDecode` 分支不抛，`BoxBlur >16M` 抛 `EEffectError` fail-closed，`fuzz` 门禁
+- 888 守卫：纯 Pascal 后端恒 `nextpas.core.graphics.<fmt>.<fmt>888`（`gif/jpeg/webp/qoi`），禁 `*.pure`/`image.gif` 回退，`image.pas` 显式 `uses` 四 888 锚定，`grep -r "\.pure" core/src --include="*.pas" | grep graphics/image` 0，门禁 `test_image_888_guard`
+- `SemVer 0.2.1-source-contract`，`focused-runtime` 准备中（L1/L2 四件套 `base←intf←实现←门面` + `errors` 闭环五子类 + 6 格式调度 + `bench_image` 1MB 已齐，待 `source-contract` 全绿升档，见 `CONTRACT §4.0/§5`）
 
 ## 测试入口
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.graphics/test_graphics_base
-make focused FOCUS=core/tests/nextpas.core.image/test_image_png
+make focused FOCUS=core/tests/nextpas.core.graphics/test_image_888_guard  # 888 命名 + dispatch 6 格式 + no .pure
+make focused FOCUS=core/tests/nextpas.core.graphics/test_poster_golden   # 海报 512×256 md5 27b73e0d9a765c491bee8c85b367cef2
 make focused FOCUS=core/tests/nextpas.core.canvas/test_canvas_raster  # golden PNG 容差 ≤1
 ```
 
-Bench：`benchmarks/nextpas.core.canvas/bench_raster --verify-go-rust`
+Bench：`benchmarks/nextpas.core.canvas/bench_raster --verify` + `benchmarks/nextpas.core.image/bench_image --verify`（`1MB 512×512×4 ns/op+MB/s`，`--verify-go-rust` 锁 `Go1.22/tiny-skia0.11`）
 
 ## 文档索引
 

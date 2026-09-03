@@ -23,13 +23,14 @@ uses
   nextpas.core.errors,
   nextpas.core.graphics.errors,
   nextpas.core.image.jpeg.loader,
+  nextpas.core.graphics.jpeg.jpeg888,
   nextpas.core.mem.base,
   nextpas.core.image.base,
   nextpas.core.image.dispatch;
 
 function JpegIsAvailable: Boolean;
 begin
-  Result := JpegLoaderIsAvailable;
+  Result := True;
 end;
 
 function JpegEncodeRgba(const APixels: TBytes; AWidth, AHeight, AQuality: Integer): TBytes;
@@ -63,19 +64,28 @@ end;
 function JpegDecodeRgba(const AData: TBytes; out AWidth, AHeight: Integer): TBytes;
 begin
   AWidth := 0; AHeight := 0;
-  if Length(AData) < 4 then
+  if Length(AData) < 2 then
     raise EImageDecodeError.Create('jpeg: truncated (no SOI)');
   if (AData[0] <> $FF) or (AData[1] <> $D8) then
     raise EImageDecodeError.Create('jpeg: bad SOI');
-  if not JpegLoaderIsAvailable then
-    raise EImageDecodeError.Create('jpeg: decoder not available (libjpeg not found via platform.dl)');
-  raise ENotImplementedError.Create('jpeg: decode wiring pending (S2 FFI)');
-  Result := nil;
+  // 复用 simd 的纯 Pas 基线优先，FFI 回退仅在纯失败且可用时尝试
+  try
+    Result := JpegPureDecodeRgba(AData, AWidth, AHeight);
+    Exit;
+  except
+    on E: EImageDecodeError do
+    begin
+      if JpegLoaderIsAvailable then
+        raise EImageDecodeError.Create('jpeg: pure decode failed and FFI fallback not wired (' + E.Message + ')')
+      else
+        raise;
+    end;
+  end;
 end;
 
 function JpegProbe(const AData: TBytes): Boolean;
 begin
-  Result := (Length(AData) >= 2) and (AData[0] = $FF) and (AData[1] = $D8);
+  Result := JpegPureProbe(AData);
 end;
 
 initialization

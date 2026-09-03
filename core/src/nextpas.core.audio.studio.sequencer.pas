@@ -51,6 +51,7 @@ function FastSin(APhase: Double): Single; inline;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.audio.errors,
   nextpas.core.bytes.ops.capacity,
   nextpas.core.mem.dynarray,

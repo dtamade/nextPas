@@ -11,7 +11,7 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 |---|---|---|---|
 | **base** | `audio.base` | 统一货币 `TAudioFormat/TAudioBuffer/TAudioClock/TAudioTags/TAudioDeviceInfo`，`ChannelMask` 为真值源，`BlockAlign/ByteRate/FramesForMs` | L0 only |
 | **intf** | `audio.intf` | 共享面 `IAudioSource(0010)/IRealtimeAudioSource(0011)/IAudioResampler(0020)/IAudioConverter(0021)/IAudioProcessor(0030)` | base |
-| **codec** | `codec.intf/codec.wav/codec.aiff/codec.meta/codec.registry` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB，`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔（已预留 FLAC/MP3 由 `music888` 吸收） | base+intf |
+| **codec** | `codec.intf/codec.wav(.base/.intf/.impl/.pas, CWavProbeLimit=4096)/codec.aiff/codec.meta/codec.registry + codec.flac/mp3/vorbis/opus各 base/intf/impl/pas四件套` | `IAudioDecoder(0001)/IAudioEncoder(0002)`，Probe ≤4KB（4096守卫），`DecodeWhole/Streaming`，ID3v2/Vorbis/RIFF INFO 归一，registry 可插拔，`flac/mp3/vorbis/opus`四件套 `bytes.ops` 单源（`opus`占位 `prOggOpus` + `COpusMaxDecodeBytes=8MB` + `COpusOggMinHeader=27`） | base+intf |
 | **pcm** | `audio.pcm` | 纯函数 `U8/S16/S24/S32↔F32`、`Clamp`、`Interleave/Deinterleave`，`TBytes` 货币，`TPDF` 抖动 | base |
 | **resample/mix/dsp** | `resample/resample.sinc/mix/dsp.filters/dsp.dynamics/dsp.fft` | 线性重采样、Kaiser-sinc（Bessel I0）、`MixInto/ApplyGain/Normalize`、Biquad(TDF-II)/Compressor/Limiter、FFT/Hann | base+intf |
 | **device** | `device.intf/device.null` | `IAudioDevice(0040)/IAudioDeviceProvider(0041)`，`dsClosed/Opened/Started`，MPSC `TDeviceEvent`，`InterlockedExchangeAdd64` 计数 `Underrun/Violation`，`Drive` 调 `FillRealtime` | base+intf |
@@ -19,6 +19,8 @@ L2 音频子系统（decode-first，接口化）：以 `TAudioBuffer/TAudioSourc
 | **sfx** | `sfx.intf/sfx` | `ISfxAudio(0050)` canonical，`Load/Play/StopVoice/MasterGain`，音色池 `MaxVoices` 窃取，pitch/pan/loop，`LoadFromFile` 经 `PcmConvert` | graph+device |
 | **game** | `game.intf/game` | `IGameAudio(0050)` deprecated 薄转发（`TGameSfxId=TSfxId` 等）→ `sfx` | sfx wrapper |
 | **timeline** | `timeline.intf/timeline` | `IAudioTimeline(0060)`，`Track/Clip` 排序混音，`solo/mute/loop`，快照化 `FillRealtime` | base+intf |
+| **bus** | `bus.base/bus.intf/bus.impl/bus.pas` | `IAudioBus(B…C00000000001)/IAudioBusMixer(B…C00000000002)` B前缀异形GUID（`B1A2B3C4-D5E6-7890-ABCD-C00000000001/02`），`IMutex`隔离，`EnsureScratch`预分配本地pin零分配，`MixRealtime`快照+`FViolations`零分配守卫 | base+intf |
+| **opus** | `codec.opus(.base/.intf/.impl/.pas)` | 占位桩：`OpusProbe≤4KB` `prOggOpus` + `DecodeWhole 1024帧静音` + `STUB: OpenStreaming`白名单，`ProbeBytes`内 `4096`截断，`COpusMaxDecodeBytes=8MB`显式守卫 | base+intf |
 | **errors** | `audio.errors` | `EAudioError(EIOError)→Decode/Encode/Device/Graph/Timeline` | errors |
 | **门面** | `audio.pas` | 仅 `type` 别名 + `inline` 转发，零逻辑 | 聚合以上 |
 
@@ -120,33 +122,45 @@ Dev.SetSource(TL as IRealtimeAudioSource); // Timeline 即 IRealtimeAudioSource
 
 ## 测试与门禁
 
-14 门合计 **195 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`game` 为 deprecated 兼容）：
+24 门合计 **268 tests**，全量 `HEAPTRC OK`（`sfx` 为 canonical 0050，`game` 为 deprecated 兼容）：
 
 ```bash
 for g in test_base test_pcm_wav test_wav test_aiff test_meta test_registry \
-         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline; do
+         test_resample test_mix test_dsp test_device test_graph test_sfx test_game test_timeline \
+         test_flac test_mp3 test_vorbis test_spatial test_bus test_bank test_resource test_playlist test_event test_studio test_automation; do
   make -C core/tests/nextpas.core.audio/$g clean test
 done
-bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 28 文件无 ffi/vendor + 11 GUID + 实时纪律
+bash core/tests/nextpas.core.audio/test_base/check_source_contract.sh # 85 文件(29+56, unique 83+2)无 ffi/vendor + 23 GUID(B前缀bus异形)+Probe≤4KB+实时纪律+test_automation
 make hygiene && git diff --check
 ```
 
 | Gate | 用例 | 要点 |
 |---|---|---|
-| test_base 20 | 格式算术/掩码/时钟/Buffer/PCM/Errors/门面 |
+| test_base 21 | 格式算术/掩码/时钟/Buffer/PCM/Errors/门面 |
 | test_pcm_wav 12 | 兼容壳回归（八拒四正） |
-| test_wav 16 | wav 8..32 位 + float + extensible 5.1/7.1 + fact/bext/rf64 |
+| test_wav 16 | wav全形态(8..32位+float+extensible 5.1/7.1+fact/bext/rf64, CWavProbeLimit=4096, 四件套 base/intf/impl/pas L2化) |
 | test_aiff 11 | aiff/aifc + 80-bit Extended80 + ssnd offset |
 | test_meta 11 | ID3v2/Vorbis/RIFF INFO/MergeTags |
-| test_registry 9 | Probe 探测与可插拔注册 |
+| test_registry 9 | Probe 探测与可插拔注册(4096守卫) |
 | test_resample 14 | 线性/sinc 零分配与质量分级 |
-| test_mix 11 | MixInto/增益/归一/pan law |
+| test_mix 14 | MixInto/增益/归一/pan law(含 SimdAddF32) |
 | test_dsp 14 | Biquad(TDF-II)/Compressor/Limiter/FFT |
 | test_device 15 | Null MPSC 与 Drive/Underrun |
-| test_graph 16 | 快照混音与处理器链双缓冲 |
+| test_graph 16 | 快照混音与处理器链双缓冲(EnsureScratch零分配) |
 | test_sfx 15 | SFX 池与窃取（canonical 0050） |
 | test_game 15 | SFX 池与窃取（deprecated 兼容，薄转发） |
 | test_timeline 16 | 排序/增益声像/solo/mute/loop/Device 联动 |
+| test_flac 8 | flac Probe≤4KB + 解码桩(STUB) + bytes.cursor零分配 |
+| test_mp3 6 | mp3 Probe≤4KB + 帧头守卫 + STUB白名单 |
+| test_vorbis 6 | vorbis Ogg Probe≤4KB + VorbisComment归一 |
+| test_spatial 6 | 空间衰减/pan/doppler inline零分配 |
+| test_bus 8 | Bus/Mixer零分配+本地pin快照+SimdAddF32(B前缀GUID异形, 8MB级Scratch) |
+| test_bank 15 | Bank深拷贝+RefCount+资源释放不丢 |
+| test_resource 13 | AsyncLoad去重+ProbeFile≤4KB+Release释放(WaitFor) |
+| test_playlist 8 | Playlist队列+crossfade占位 |
+| test_event 10 | Event RTPC+MaxVoices窃取+空间化 |
+| test_studio 16 | Studio Automation Hermite+Sequencer正弦表2048+Bus混音 |
+| test_automation 8 | Automation Hermite曲线+FillRealtimeValues零分配 |
 
 ## 基准
 
@@ -154,14 +168,37 @@ make hygiene && git diff --check
 make -C core/benchmarks/nextpas.core.audio/bench_pcm_wav clean bench # 输出 ns/op 与 MB/s -O2, HEAPTRC 关
 ```
 
-`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照）。
+`bench_pcm_wav` 8 项：`Parse/64KB 13µs / Parse/1MB 1.7ms / Write/1MB 997µs CV9% / Graph/1K 19µs / Graph/4K 77µs / Timeline/1K 8µs / TimelineLoop/1K 12µs / Device.Drive/1K 13µs`（`GWrite*` 预分配，`Graph/Timeline` 零分配快照；基准已扩 `Graph/1K/4K Timeline/1K Loop Device.Drive/1K` 五项实时域）。
+
+### 基线矩阵（perfection-8 完整性·10 bench ns/op+MB/s）
+
+| 域 | bench | 项 | 度量 | 基线说明 |
+|---|---|---|---|---|
+| pcm_wav/graph/timeline/device | `bench_pcm_wav` | Parse/64KB,1MB/Write/1MB/Graph1K,4K/Timeline1K,Loop/DeviceDrive1K | ns/op+MB/s | live·-O2 已冻结 |
+| flac | `bench_flac` | Decode/1K,Probe/4B | ns/op+MB/s | live·合成 fLaC 1K 零分配 |
+| mp3 | `bench_mp3` | Decode/1K,Probe/2B | ns/op+MB/s | live·合成 MP3 帧 1K |
+| vorbis | `bench_vorbis` | Decode/1K,Probe/4B | ns/op+MB/s | 新增占位·OggS 1K 合成，Probe≤4KB 零分配 |
+| opus | `bench_opus` | Decode/1K,Probe/8B | ns/op+MB/s | 新增占位·`prOggOpus`+1024帧静音桩，Probe≤4KB |
+| mix/simd | `bench_mix` | MixInto/1K,ApplyGain/1K,SimdAdd/256 | ns/op+MB/s | live |
+| studio | `bench_studio` | Sequencer/256,Automation/1,Timeline/256 | ns/op+MB/s | live |
+| spatial | `bench_spatial` | Fill/1K,4K,Attenuation | ns/op+MB/s | 新增占位·零分配快照 |
+| bus | `bench_bus` | Mix/1K,Mix4K/2bus,Single/256 | ns/op+MB/s | 新增占位·local pin 快照 |
+| bank | `bench_bank` | Fill/1K,4K,Play/Stop | ns/op+MB/s | 新增占位·deep copy 零泄漏 |
+| 3way 对比 | `bench_compare` | FLAC/MP3/Vorbis nextpas vs music888 | FNV+ms/run | FNV 对齐·-O2 对比基线 |
+
+```bash
+for b in bench_pcm_wav bench_flac bench_mp3 bench_vorbis bench_opus bench_mix bench_studio bench_spatial bench_bus bench_bank; do
+  make -C core/benchmarks/nextpas.core.audio/$b clean bench  # -O2 ns/op+MB/s，HEAPTRC 关
+done
+bash core/benchmarks/nextpas.core.audio/run_3way.sh  # 10 bench 一键·FNV 末行校验
+```
 
 ## 演进与复用
 
-- **已完成**：PR1 base → PR2 wav → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 sfx（`game` 保留为 deprecated 薄转发）→ PR9 timeline
-- **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，后续吸收进 `codec.registry`，保持 `Probe≤4KB` 与可插拔）
-- **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`SFX` 复用 `Graph` 快照路径（`PanLawGains`/`CAudioSqrt2` 共用）
-- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音
+- **已完成**：PR1 base → PR2 wav(四件套 `wav.base/intf/impl/pas`, `CWavProbeLimit=4096` L2化) → PR3 aiff/meta/registry → PR5 resample/mix/dsp → PR6 device → PR7 graph/player → PR8 sfx（`game` 保留为 deprecated 薄转发）→ PR9 timeline → 1.5 codec四件套(78→85: flac/mp3/vorbis/opus各 base/intf/impl/pas, opus占位 `prOggOpus/1024帧静音/STUB/8MB`) → 1.5.3 bus本地pin+实时零分配+8MB守卫
+- **已推迟**：PR4 flac/mp3 纯 Pascal（`music888` 已有实现，已吸收进 `codec.registry` `bytes.ops` 单源+Probe≤4KB可插拔，`opus`占位待流式完善）
+- **复用度**：`codec.registry` 可插拔、`IAudioTimeline` 即 `IRealtimeAudioSource` 可直连 `Device`/`Graph`，`SFX` 复用 `Graph` 快照路径（`PanLawGains`/`CAudioSqrt2` 共用），`bus` 复用 `Graph` 快照+`SimdAddF32`，`opus` 守 `bytes.ops` 单源+Probe≤4KB零分配，实盘 `85` 文件(29+56, unique 83+2) `23` GUID(B前缀bus异形)
+- **稳定性**：`EAudioError` 统一、`HEAPTRC` 零泄漏、`InterlockedExchangeAdd64` 计数、`FillRealtime` 零分配与异常静音，`bus MixRealtime`本地pin实时零分配+`FViolations`计数+8MB守卫，`opus DecodeWhole` `COpusMaxDecodeBytes=8MB`+`COpusOggMinHeader=27`显式守卫
 
 ## 参见
 

@@ -18,10 +18,10 @@ respack.limits        ← 嵌入/打包阈值策略兼容转发（S6 已抽取�
 embed.limits          ← 嵌入载体阈值策略独立模块（L1，供 respack/其他载体复用；EMBED INC MAX 4MiB 单源、DefaultLine 16，EmbedRequireIncSize inline UIntToBuffer+BytesCopy 单源，EEmbedTooLarge 独立异常，CONTRACT 独立命名）
 respack.reader        ← 校验清单 + 索引二分查找（只读，inline 零拷贝 SpanCompare via bytes.ops，GuardStep 分治 + O(n) hash 去重，525 行）
 respack.writer        ← 条目列表 → blob（排序/去重/对齐/digest，布局计算单源于 writer.layout，头单源于 writer.builder）
-respack.writer.layout ← 布局单源：排序/去重/对齐/槽位/总量（writer 与 writer.stream 共用；零拷贝 ResPackCmpPath via bytes.ops + Sort via collections.algorithms + AlignUp64 via mem.base，BucketCountFor via BytesNextCapacity，TResPackDedupBuckets MIN256 MAX65536，ResPackLayoutClear out-of-line）
+respack.writer.layout ← 布局单源：排序/去重/对齐/槽位/总量（writer 与 writer.stream 共用；零拷贝 ResPackCmpPath via bytes.ops + Sort via collections.algorithms + AlignUp64 via mem.base，dedup arena 单源收敛至 respack.base 共享底座 via bytes.ops+mem.arena.local 单 slab TLocalArena，BucketCountFor via BytesNextCapacity，TResPackDedupBuckets MIN256 MAX65536，ResPackLayoutClear out-of-line，消除 reader→writer.layout 反向依赖守 base←impl←facade 单向；GuardStep7Order 外联守红线2，ResPackDedupInit/OverlapInit 外联守 I-Cache）
 respack.writer.builder← 头/index/string 单源 builder（writer 与 writer.stream 共用，WrU*LE/BytesCopy/BytesZero 单源，registry 明示 + source-contract 门禁）
 respack.writer.stream ← 流式两遍分段零双驻留（复用 layout 首遍 + builder 头单源；头/index/string 合批 TBytes RAII SetLength → 槽间隙零填 WriteZeros inline 快道/4K 零页 → data 零拷贝 Move 分段 → digest；峰值 ~1×+头，try..finally ResPackLayoutClear 不丢资源）
-respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝 via mem.memory_map owner）
+respack.dirsource     ← fs+io.mapped 目录枚举适配 + 嵌入打包管线（唯一 L2→L2 IO seam，ResPackEmbedBuild StripPrefix→Glob→AddPrefix 复用 L1 text.strings GlobMatch 单源，mmap 零拷贝 via mem.memory_map owner；通用 Walk 单源 generic TWalkCtx<T>/EnsureWalkCapacity<T>/WalkPrePlain/Embed inline 零拷贝 + RESPACK_DIRSOURCE_LEGACY_LIMIT 64MiB 家族收口与 RESPACK_MAX_INPUT_BYTES 512MiB 同源；流式零双驻留 ResPackBuildFromDir/EmbedBuild 单次 Walk + StreamSize 预取 Total 直写，消除 512MB 二次 Move，门禁>800行拆 dirsource.walk/embed/extract 子模块）
 respack.embed         ← 嵌入工具链库：blob→.inc/.inc unit 纯内存生成（S4 已落地，阈值单源于 embed.limits 独立模块 + BytesCopy 单源零拷贝 + 非 inline 循环体守红线 + 通用组装单源收敛 writer.builder，纯内存可复用）
 respack.pas           ← 门面 re-export（纯转发，inline）
 embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed.limits 的纯转发门面，供其他载体直接复用）
@@ -58,8 +58,8 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 - **[INV-R8]** 路径必须通过 Go ValidPath 语义校验（含 `.` 根特例、反斜杠非分隔符）；
   writer 规范化输入，reader 校验存储形态
 - **[INV-R9]** digest 区存不透明 32 字节；算法由 `DigestFunc` 注入，header flags bit2-4 预留算法 ID（v1 仅 0=SHA-256，其余拒绝），本模块零加密依赖
-- **[INV-R10]** 内存上限：writer 声明输入 ≤ 512 MB；超限行为 = 显式 raise
-  （`EResPackTooLarge`），绝不静默产出损坏包
+- **[INV-R10]** 内存上限：writer 声明输入 ≤ 512 MB（`RESPACK_MAX_INPUT_BYTES`），dirsource 废弃便捷路径 ≤64MiB（`RESPACK_DIRSOURCE_LEGACY_LIMIT` 家族收口防 2×+头 OOM）；超限行为 = 显式 raise
+  （`EResPackTooLarge`，超阈引导流式mmap 1×+头），绝不静默产出损坏包
 
 ---
 
@@ -103,8 +103,10 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | Open | O(entryCount) 校验一遍，无内容扫描 | const 载体 Open 51µs ≤ FPC `TMemoryStream` 60µs，且 0.93× Go 55µs / 0.98× Rust 52µs（1MiB 包，`bench_embed_startup`） |
 | 读取单条目 | 零拷贝切片（地址落在 blob 区间内，gate 断言；`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源） | 同 Find/Stat 行；206-range 与 404-miss 同价无惩罚 |
 | Build | O(n log n) 排序主导；去重开启额外 O(n) 回验 | 512MiB Pack 1.02× FPC / 0.98× Go / 0.97× Rust 吞吐；峰值 1.15× 内（`bench_writer_memory` + `bytes.ops.BytesConcatMany` 单源） |
+| Build(Dedup on) | O(n) 回验+单 slab（TLocalArena+SpanEqual via bytes.ops, BucketCountFor via BytesNextCapacity） | 50%重复→blob -48% 耗时+8%内，最坏同桶全 miss +15%内 均≤1.3× Go/Rust（`bench_writer_dedup`） |
 
-> 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。
+> 量化门限（`bench_servevfs.lpr` 强制）：`embedded ≤ FPC` 且 `embedded ≤ 1.3× Go/Rust`；同机 `AddBaseline` 对照组 `fpc-rtl/TFileStream-4k` / `go-embed/FS-4k` / `rust-include_dir-4k` 随 suite 打印，不只内部阈值。`Build(Dedup on)` 零拷贝证据 `ContentPtr inline+bytes.ops.Move`。
+> CI 建议：bench_writer_dedup / bench_servevfs 固化为 nightly，对照 FPC/Go/Rust 同机跑
 
 ---
 
@@ -132,9 +134,9 @@ embed.pas             ← 嵌入策略门面 re-export（L1，策略单源 embed
 | S3 | 后端（vfs embedded/os/memtree/sub 零拷贝、P8 地址断言） | 已收官 | test_vfs_conformance/embedded/memtree/facade 全绿 |
 | S4 | 工具链（respack.embed + rp_pack CLI + demo_asset_embed，一键链路） | 已收官 | test_respack_embed 全绿；`make -C core/tools/respack build` + `make -C core/examples/nextpas.core.vfs/demo_asset_embed gen run` 自检绿 |
 | S5 | http.static 接入（`ServeVfs(IVfs)` 直通 embedded，ETag 取 fnv32、条件请求/Range/MIME 与 fs 版同语义） | 已收官 | test_http_static + http_static_vfs_demo 304/206/404 自检绿 |
-| S6 | 嵌入载体阈值与流式两遍（`writer.layout` 单源复用 + `writer.stream` 分段零双驻留，峰值 `~1×+头`；`<4MB 走 .inc` 实测线性 vs `.pack` 恒定） | 已收官 | `nextpas.core.respack.writer.stream` 已实现并复用 `writer.layout` 同布局（首遍 `ResPackComputeLayout` 复用 Total/槽位/去重，次遍 `AWrite` 头合批+槽间隙零填+`Move` 零拷贝分段+digest，`try..finally ResPackLayoutClear/FreeMem` 不丢资源；`ResPackBuildStreamSize` 零分配预取）；阈值 `2MB≈2.4s→4MB≈4.4s(1.1s/MB) vs .pack 0.29–0.30s`、`512MB 2×+14MB → 流式 1×+头` 见 README 实测表与 `writer.stream`/`writer.layout` 单源证据；CONTRACT 业务为准，超大包 mmap/分段归 `mem.memory_map`/`io.mapped` owner，见 `dirsource` 峰值注释 |
+| S6 | 嵌入阈值 `<4MB` + 流式两遍 `~1×+头` | 已收官 | `writer.stream` 复用 `writer.layout` 单源同布局；`bench_writer_dedup` 50%重复/最坏碰撞量化见 RESULTS §4 |
 
-> S1-S6 已收官，**9+5 门全绿**（以 S1-S5 口径：respack 4 门 + dirsource/embed 2 门 + vfs 4 门核心 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门全绿；按 S6 含装饰器口径为 12 门闭环 + bench_transform 1 基准，全量无漂移；S6 流式与阈值已实现但此前 CONTRACT 校准表未单列——本版补齐收口）。
+> S1-S6 已收官，**9+5 门全绿**（respack 4 门 + dirsource/embed 2 门 + vfs 4 门 + source-contract 1 门 = 9 门核心；S4 工具链 embed + S5 http.static 2 门 + 基准/示例 3 门 = 5 门扩展；合计 14 门；按 S6 含装饰器口径为 12 门闭环 + bench_transform）。流式与阈值已实现，CONTRACT 业务为准。
 
 ---
 
