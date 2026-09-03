@@ -9,7 +9,7 @@ begin
   if Assigned(FRec.TryLoad) then Result := FRec.TryLoad(ALoaded) else begin ALoaded := False; Result := False; end;
 end;
 
-function TGtkOpsAdapter.IdleAddFull(APriority: gint; AFunc: TGIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
+function TGtkOpsAdapter.IdleAddFull(APriority: gint; AFunc: TGtkIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
 begin
   if Assigned(FRec.IdleAddFull) then Result := FRec.IdleAddFull(APriority, AFunc, AUserData, ANotify) else Result := 0;
 end;

@@ -107,6 +107,7 @@ var
   gtk_container_add: TGtkContainerAddProc;
   gtk_container_remove: TGtkContainerRemoveProc;
   gtk_widget_show: TGtkWidgetShowProc;
+  gtk_main: TGtkMainProc;
   gtk_main_quit: TGtkMainQuitProc;
   gtk_main_iteration_do: TGtkMainIterationDoFunc;
   gtk_events_pending: TGtkEventsPendingFunc;

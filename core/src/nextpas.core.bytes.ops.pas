@@ -88,14 +88,14 @@ function BytesConcat(const A, B: TBytes): TBytes; inline;
 { not inline: SetLength+Move — perf: BytesAppend does SetLength+Move per call (O(n) → O(n²) if looped); MUST prefer IBytesBuilder (geometric grow) or BytesConcatMany/SpanConcatMany single alloc; gate: check_bytes_ops_source_contract.py cross-module loop-append patrol }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
-procedure BytesAppendByte(var ADest: TBytes; AValue: Byte); inline;
-procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word); inline;
-procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal); inline;
-procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord); inline;
-procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord); inline;
+procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
+procedure BytesAppendUInt16BE(var ADest: TBytes; AValue: Word);
+procedure BytesAppendUInt16LE(var ADest: TBytes; AValue: Word);
+procedure BytesAppendUInt24BE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt32BE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt32LE(var ADest: TBytes; AValue: Cardinal);
+procedure BytesAppendUInt64BE(var ADest: TBytes; AValue: QWord);
+procedure BytesAppendUInt64LE(var ADest: TBytes; AValue: QWord);
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt);
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 { ssh 反哺单源: SizeUInt 容量槽几何增长, 供 channel/sftp 按槽复用 (single source: BytesGrowCapacity) }
@@ -156,8 +156,8 @@ generic procedure RawRingCopy<T>(var ADest: array of T; const ASrc: array of T; 
 generic procedure RawRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 { Raw linear — 非托管批量原语，bytes.ops 单源 Move 零拷贝，inline 零额外调用，破红线#1常量折叠 via typed pointer 中转 }
 generic procedure ArrayRawCopy<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
-{ Managed move — 托管数组指针交换单源，bytes.ops 单源 inline 零拷贝 O(1) via raw PPointer 交换避 8× 原子引用计数抖动，32并发零 Inc/Dec，资源所有权转移不丢 }
-generic procedure ManagedArrayMove<T>(var ADest: array of T; var ASrc: array of T); inline;
+{ Managed move — 托管数组变量所有权转移单源 inline 薄转发，untyped 双 var 直写调用方变量，ADest 须 nil，资源所有权转移不丢 }
+procedure ManagedArrayMovePtr(var ADest, ASrc); inline;
 { Snapshot truncate — 安全收缩单源，bytes.ops 单源 inline SetLength 收口，委派 mem owner/System 运行时与双编译器 stub，禁堆头篡改，资源托管释放不丢，16槽热路径零额外拷贝 }
 generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 { Swap-remove — 末尾换位删除单源，window.live 双哈希复用 inline 零拷贝 O(1)，bytes.ops 单源，守托管批量 Finalize 不丢，16槽热路径分支消除 }
@@ -189,6 +189,8 @@ const
   ARENA_POOL_MAX_RETRIES = nextpas.core.bytes.ops.snapshot.ARENA_POOL_MAX_RETRIES;
 function ArenaPoolAcquireSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: Int32): Boolean; inline;
 function ArenaPoolRecycleSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: Int32): Boolean; inline;
+procedure ArenaPoolLock(var ALock: Int32);
+procedure ArenaPoolUnlock(var ALock: Int32); inline;
 generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
 { Snapshot shrink — 快照阈值/收缩单源 via snapshot BYTES_SNAPSHOT_MAX 单源 8192/1024/2 三档 1024/4096/8192 inline 零拷贝 O(1)  via bytes.ops 单源，window.live / queue 双侧复用消重复分支，Bulk 分档尾延迟三档可观测 via SnapshotBulkTier，not inline 冷路径避 I-Cache 膨胀 }
 const
@@ -522,8 +524,14 @@ begin
 end;
 
 generic function BytesGrowHelper<T>(ACount, AMax: Integer): Integer; inline;
+var LNeed: Integer;
 begin
-  Result := specialize BytesGrowHelper<T>(ACount, AMax);
+  { 几何扩容整型单源：ACount 向上翻倍至容纳，AMax 封顶；IntWithMin 单源承载翻倍/钳位，+1 上溢守卫 }
+  if AMax <= 0 then Exit(0);
+  if ACount >= AMax then Exit(AMax);
+  if ACount >= High(Integer) then LNeed := High(Integer) else LNeed := ACount + 1;
+  Result := BytesGrowCapacityIntWithMin(ACount, LNeed, 0);
+  if (Result > AMax) or (Result < 0) then Result := AMax;
 end;
 
 { Hash — 哈希阈值/幂二单源 via bytes.ops.hash inline 零拷贝 O(1) }
@@ -580,73 +588,73 @@ end;
 
 generic procedure ManagedRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 begin
-  specialize ManagedRingCopy<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
+  specialize ManagedRingCopyImpl<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
 end;
 
 generic procedure ManagedRingFinalize<T>(var ARing: array of T; AHead, ACap, ACount: SizeInt); inline;
 begin
-  specialize ManagedRingFinalize<T>(ARing, AHead, ACap, ACount);
+  specialize ManagedRingFinalizeImpl<T>(ARing, AHead, ACap, ACount);
 end;
 
 generic procedure ManagedRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 begin
-  specialize ManagedRingTransfer<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
+  specialize ManagedRingTransferImpl<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
 end;
 
 generic procedure RawRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 begin
-  specialize RawRingCopy<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
+  specialize RawRingCopyImpl<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
 end;
 
 generic procedure RawRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 begin
-  specialize RawRingTransfer<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
+  specialize RawRingTransferImpl<T>(ADest, ASrc, ASrcHead, ASrcCap, ACount);
 end;
 
 generic procedure ArrayRawCopy<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
 begin
-  specialize ArrayRawCopy<T>(ADest, ASrc, ACount);
+  specialize ArrayRawCopyImpl<T>(ADest, ASrc, ACount);
 end;
 
-generic procedure ManagedArrayMove<T>(var ADest: array of T; var ASrc: array of T); inline;
+procedure ManagedArrayMovePtr(var ADest, ASrc); inline;
 begin
-  specialize ManagedArrayMove<T>(ADest, ASrc);
+  nextpas.core.bytes.ops.ring.ManagedArrayMovePtr(ADest, ASrc);
 end;
 
 { Snapshot — 快照/Arena 单源 via bytes.ops.snapshot inline 零拷贝 O(1) }
 generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 begin
-  specialize ArraySetLengthNoRealloc<T>(A, ANewLen);
+  specialize ArraySetLengthNoReallocImpl<T>(A, ANewLen);
 end;
 
 generic procedure ArraySwapRemoveRaw<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 begin
-  specialize ArraySwapRemoveRaw<T>(AArr, AIdx, ALast);
+  specialize ArraySwapRemoveRawImpl<T>(AArr, AIdx, ALast);
 end;
 
 generic procedure ArraySwapRemoveManaged<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 begin
-  specialize ArraySwapRemoveManaged<T>(AArr, AIdx, ALast);
+  specialize ArraySwapRemoveManagedImpl<T>(AArr, AIdx, ALast);
 end;
 
 generic procedure ArraySwapRemove<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 begin
-  specialize ArraySwapRemove<T>(AArr, AIdx, ALast);
+  specialize ArraySwapRemoveImpl<T>(AArr, AIdx, ALast);
 end;
 
 generic procedure ManagedEnsureCapacity<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 begin
-  specialize ManagedEnsureCapacity<T>(AArr, ARequired);
+  specialize ManagedEnsureCapacityImpl<T>(AArr, ARequired);
 end;
 
 generic procedure ManagedEnsureCapacityExact<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 begin
-  specialize ManagedEnsureCapacityExact<T>(AArr, ARequired);
+  specialize ManagedEnsureCapacityExactImpl<T>(AArr, ARequired);
 end;
 
 generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
 begin
-  specialize ManagedEnsureTriple<TKey, TVal>(AKeys, AVals, AUsed, ARequired);
+  specialize ManagedEnsureTripleImpl<TKey, TVal>(AKeys, AVals, AUsed, ARequired);
 end;
 
 procedure LiveArenaEnsureBatch(var ABatch: TLiveArenaBatch; const ACaps: TLiveArenaCaps); inline; overload;
@@ -689,9 +697,19 @@ begin
   Result := nextpas.core.bytes.ops.snapshot.ArenaPoolRecycleSlot(ATop, AShutdown, AIdx);
 end;
 
+procedure ArenaPoolLock(var ALock: Int32);
+begin
+  nextpas.core.bytes.ops.snapshot.ArenaPoolLock(ALock);
+end;
+
+procedure ArenaPoolUnlock(var ALock: Int32); inline;
+begin
+  nextpas.core.bytes.ops.snapshot.ArenaPoolUnlock(ALock);
+end;
+
 generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
 begin
-  specialize ArenaPoolFinalize<T>(APool, ATop, AShutdown, AIdx);
+  specialize ArenaPoolFinalizeImpl<T>(APool, ATop, AShutdown, AIdx);
 end;
 
 function SnapshotBulkTier(ACount: Integer): Integer; inline;
@@ -702,7 +720,7 @@ end;
 generic procedure SnapshotMaybeShrink<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer); inline;
 begin
   // 单源 inline 薄转发至 snapshot BYTES_SNAPSHOT_MAX 三档 1024/4096/8192，not inline 冷路径本体在 snapshot 避 I-Cache 膨胀 per redline #2，bytes.ops 单源复用消 live/queue 重复分支，Bulk 分档尾延迟 via SnapshotBulkTier
-  specialize SnapshotMaybeShrink<T>(ASnap, ACount);
+  specialize SnapshotMaybeShrinkImpl<T>(ASnap, ACount);
 end;
 
 { IBytesBuilder batch shortcut — bytes.ops single source inline zero-copy O(1) amortized via builder, interface refcount auto release not lost }

@@ -13,18 +13,23 @@ uses
   nextpas.core.window.impl,
   nextpas.core.bytes.ops;
 
+type
+  { 具名缓冲：Extract/Adopt 经 ManagedArrayMovePtr 取变量地址转移所有权，open array 形参取址拿到的是描述符（空即 AV），故取址链必须全具名；只读/元素访问仍可用开放数组 }
+  generic TWindowHashBuffer<T> = array of T;
+  TWindowHashUsed = array of Boolean;
+
 function WindowHashNeedsGrow(const AToken: TWindowFamilyToken; ACount, ACap: Integer): Boolean; inline;
 function WindowHashGrowCapacity(const AToken: TWindowFamilyToken; ACap: Integer): Integer; inline;
 function WindowHashPtrIdx(const AToken: TWindowFamilyToken; APtr: Pointer; AMask: Integer): Integer; inline;
 function WindowHashU32Idx(const AToken: TWindowFamilyToken; AID: UInt32; AMask: Integer): Integer; inline;
 
-procedure WindowHashInsertPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; APtr: Pointer; AIdxVal: Integer); inline;
-procedure WindowHashRemovePtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; APtr: Pointer); inline;
+procedure WindowHashInsertPtr(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<Pointer>; var AIdx: specialize TWindowHashBuffer<Integer>; var AUsed: TWindowHashUsed; APtr: Pointer; AIdxVal: Integer); inline;
+procedure WindowHashRemovePtr(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<Pointer>; var AIdx: specialize TWindowHashBuffer<Integer>; var AUsed: TWindowHashUsed; APtr: Pointer); inline;
 function WindowHashFindPtr(const AToken: TWindowFamilyToken; const AKeys: array of Pointer; const AIdx: array of Integer; const AUsed: array of Boolean; APtr: Pointer): Integer; inline;
 procedure WindowHashRebuildPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; const AList: array of Pointer; ACount: Integer);
 
-procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32; APtr: Pointer); inline;
-procedure WindowHashRemoveU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32); inline;
+procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<UInt32>; var AVals: specialize TWindowHashBuffer<Pointer>; var AUsed: TWindowHashUsed; AID: UInt32; APtr: Pointer); inline;
+procedure WindowHashRemoveU32(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<UInt32>; var AVals: specialize TWindowHashBuffer<Pointer>; var AUsed: TWindowHashUsed; AID: UInt32); inline;
 function WindowHashFindU32(const AToken: TWindowFamilyToken; const AKeys: array of UInt32; const AVals: array of Pointer; const AUsed: array of Boolean; AID: UInt32): Pointer; inline;
 procedure WindowHashRebuildU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; const AIDs: array of UInt32; const AList: array of Pointer; ACount: Integer);
 
@@ -46,8 +51,8 @@ type
     function NeedsGrow(const AToken: TWindowFamilyToken; ACount: Integer): Boolean; inline;
     function Cap: Integer; inline;
     procedure Resize(const AToken: TWindowFamilyToken; ANewCap: Integer); inline;
-    procedure ExtractBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
-    procedure AdoptBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+    procedure ExtractBuffers(var AKeys: specialize TWindowHashBuffer<TKey>; var AVals: specialize TWindowHashBuffer<TVal>; var AUsed: TWindowHashUsed); inline;
+    procedure AdoptBuffers(var AKeys: specialize TWindowHashBuffer<TKey>; var AVals: specialize TWindowHashBuffer<TVal>; var AUsed: TWindowHashUsed); inline;
     function ValueAt(APos: Integer): TVal; inline;
   end;
 
@@ -347,20 +352,20 @@ begin
   SetLength(Self.FUsed, ANewCap);
 end;
 
-procedure TWindowOpenHash.ExtractBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+procedure TWindowOpenHash.ExtractBuffers(var AKeys: specialize TWindowHashBuffer<TKey>; var AVals: specialize TWindowHashBuffer<TVal>; var AUsed: TWindowHashUsed); inline;
 begin
   // open 数组形参禁直接赋值，指针交换单源 ManagedArrayMove 语义等价（AKeys 需 nil/已托管释放）
-  specialize ManagedArrayMove<TKey>(AKeys, Self.FKeys);
-  specialize ManagedArrayMove<TVal>(AVals, Self.FVals);
-  specialize ManagedArrayMove<Boolean>(AUsed, Self.FUsed);
+  ManagedArrayMovePtr(AKeys, Self.FKeys);
+  ManagedArrayMovePtr(AVals, Self.FVals);
+  ManagedArrayMovePtr(AUsed, Self.FUsed);
 end;
 
-procedure TWindowOpenHash.AdoptBuffers(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean); inline;
+procedure TWindowOpenHash.AdoptBuffers(var AKeys: specialize TWindowHashBuffer<TKey>; var AVals: specialize TWindowHashBuffer<TVal>; var AUsed: TWindowHashUsed); inline;
 begin
   // 同上，记录侧 F* 需 nil（fresh/刚 Extract），调用方缓冲移交后置 nil
-  specialize ManagedArrayMove<TKey>(Self.FKeys, AKeys);
-  specialize ManagedArrayMove<TVal>(Self.FVals, AVals);
-  specialize ManagedArrayMove<Boolean>(Self.FUsed, AUsed);
+  ManagedArrayMovePtr(Self.FKeys, AKeys);
+  ManagedArrayMovePtr(Self.FVals, AVals);
+  ManagedArrayMovePtr(Self.FUsed, AUsed);
 end;
 
 function TWindowOpenHash.ValueAt(APos: Integer): TVal; inline;
@@ -395,7 +400,7 @@ end;
 
 // ---- raw-array wrappers via record Adopt/Extract (single source) ----
 
-procedure WindowHashInsertPtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; APtr: Pointer; AIdxVal: Integer); inline;
+procedure WindowHashInsertPtr(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<Pointer>; var AIdx: specialize TWindowHashBuffer<Integer>; var AUsed: TWindowHashUsed; APtr: Pointer; AIdxVal: Integer); inline;
 var LH: TWindowPtrHash;
 begin
   LH.AdoptBuffers(AKeys, AIdx, AUsed);
@@ -403,7 +408,7 @@ begin
   LH.ExtractBuffers(AKeys, AIdx, AUsed);
 end;
 
-procedure WindowHashRemovePtr(const AToken: TWindowFamilyToken; var AKeys: array of Pointer; var AIdx: array of Integer; var AUsed: array of Boolean; APtr: Pointer); inline;
+procedure WindowHashRemovePtr(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<Pointer>; var AIdx: specialize TWindowHashBuffer<Integer>; var AUsed: TWindowHashUsed; APtr: Pointer); inline;
 var LH: TWindowPtrHash;
 begin
   LH.AdoptBuffers(AKeys, AIdx, AUsed);
@@ -541,7 +546,7 @@ begin
   WindowHashRebuildPtr(AToken, AHash.FKeys, AHash.FVals, AHash.FUsed, AList, ACount);
 end;
 
-procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32; APtr: Pointer); inline;
+procedure WindowHashInsertU32(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<UInt32>; var AVals: specialize TWindowHashBuffer<Pointer>; var AUsed: TWindowHashUsed; AID: UInt32; APtr: Pointer); inline;
 var LH: TWindowU32Hash;
 begin
   LH.AdoptBuffers(AKeys, AVals, AUsed);
@@ -549,7 +554,7 @@ begin
   LH.ExtractBuffers(AKeys, AVals, AUsed);
 end;
 
-procedure WindowHashRemoveU32(const AToken: TWindowFamilyToken; var AKeys: array of UInt32; var AVals: array of Pointer; var AUsed: array of Boolean; AID: UInt32); inline;
+procedure WindowHashRemoveU32(const AToken: TWindowFamilyToken; var AKeys: specialize TWindowHashBuffer<UInt32>; var AVals: specialize TWindowHashBuffer<Pointer>; var AUsed: TWindowHashUsed; AID: UInt32); inline;
 var LH: TWindowU32Hash;
 begin
   LH.AdoptBuffers(AKeys, AVals, AUsed);

@@ -377,20 +377,21 @@ done
 # 门禁：window.*.pas 若在 for/while/repeat 循环体内直接调用 BytesAppend/BytesAppendByte/BytesAppendUInt* 视为违规（单次便利仅限非批量路径，批量必须经 builder 单源，bytes.ops 单源 inline 零拷贝证据见 bytes.ops.pas:38-53 + 451-550）
 for f in "$SRC"/nextpas.core.window*.pas; do
   [[ -e "$f" ]] || continue
-  # 仅扫描实现代码（去注释），避免注释误判；检测循环关键字后 5 行内出现 BytesAppend（含 Byte/UInt* 8 重载，已 inline 单次 SetLength 直写零拷贝，批量 O(n²) 必须收敛至 IBytesBuilder/ConcatMany）
+  # 仅扫描实现代码（去注释），避免注释误判；检测循环关键字后 5 行内出现 BytesAppend（含 Byte/UInt* 8 重载，叶 owner 门禁要求 not inline，批量 O(n²) 必须收敛至 IBytesBuilder/ConcatMany）
   if strip_comments "$f" | tr '\n' ' ' | grep -Eq "for[[:space:]]+.*do.*BytesAppend|while[[:space:]]+.*do.*BytesAppend|repeat.*BytesAppend"; then
     echo "FAIL: $(basename "$f") uses BytesAppend/Byte/UInt* inside loop (O(n²) realloc, must use IBytesBuilder/BytesConcatMany batch single source via bytes.ops, see bytes.ops CONTRACT)"
     fail=1
   fi
 done
-# BytesAppendByte/UInt* 8 重载保持 inline 单次 SetLength 直写零拷贝，批量高频 O(n²) 已文档化强制收敛至 IBytesBuilder/ConcatMany（window source-contract 强制）；校验 inline 证据与 batch 单源收敛注释存在
-if ! grep -Eq "procedure BytesAppendByte\(var ADest: TBytes; AValue: Byte\); inline;" "$SRC/nextpas.core.bytes.ops.pas" 2>/dev/null; then
-  echo "FAIL: bytes.ops BytesAppendByte must be inline single SetLength direct assign zero-copy (batch via IBytesBuilder/ConcatMany, see CONTRACT)"
+# BytesAppendByte/UInt* 8 重载必须禁 inline（叶 owner bytes 门禁优先：check_bytes_ops_source_contract.py 要求 BytesAppend/BytesAppendByte/BytesAppendUInt 全族 not inline；
+# 单次便利仅限非批量路径，批量高频 O(n²) 已文档化强制收敛至 IBytesBuilder/ConcatMany，window 侧循环内调用门禁见上）
+if grep -Eq "procedure BytesAppendByte\(var ADest: TBytes; AValue: Byte\); inline;" "$SRC/nextpas.core.bytes.ops.pas" 2>/dev/null; then
+  echo "FAIL: bytes.ops BytesAppendByte must not be inline (leaf owner bytes gate wins, batch via IBytesBuilder/ConcatMany, see CONTRACT)"
   fail=1
 fi
 for sym in "BytesAppendUInt16BE" "BytesAppendUInt16LE" "BytesAppendUInt24BE" "BytesAppendUInt32BE" "BytesAppendUInt32LE" "BytesAppendUInt64BE" "BytesAppendUInt64LE"; do
-  if ! grep -Eq "procedure $sym\(var ADest: TBytes;.*inline;" "$SRC/nextpas.core.bytes.ops.pas" 2>/dev/null; then
-    echo "FAIL: bytes.ops $sym must be inline single SetLength direct assign zero-copy (batch via IBytesBuilder/ConcatMany)"
+  if grep -Eq "procedure $sym\(var ADest: TBytes;.*inline;" "$SRC/nextpas.core.bytes.ops.pas" 2>/dev/null; then
+    echo "FAIL: bytes.ops $sym must not be inline (leaf owner bytes gate wins, batch via IBytesBuilder/ConcatMany)"
     fail=1
   fi
 done

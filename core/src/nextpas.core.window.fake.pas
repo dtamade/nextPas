@@ -643,13 +643,13 @@ begin
   FOnEvent := WindowEventVariantFromRef(AHandler);
 end;
 
-procedure TFakeWindow.OnEvent(AHandler: TWindowEventMethod); inline;
+procedure TFakeWindow.OnEvent(AHandler: TWindowEventMethod);
 begin
   RequireOpen;
   FOnEvent := WindowEventVariantFromMethod(AHandler);
 end;
 
-procedure TFakeWindow.OnEvent(AHandler: TWindowEventProc); inline;
+procedure TFakeWindow.OnEvent(AHandler: TWindowEventProc);
 begin
   RequireOpen;
   FOnEvent := WindowEventVariantFromProc(AHandler);

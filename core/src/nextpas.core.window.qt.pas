@@ -38,6 +38,7 @@ uses
   nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
+  nextpas.core.window.queue.base,
   nextpas.core.window.dispatcher.base,
   nextpas.core.window.registry,
   nextpas.core.qt.ffi,
@@ -75,6 +76,8 @@ begin
   if GLiveRegistry = nil then Exit;
   GLiveRegistry.Unregister(AWin);
 end;
+
+procedure DispatcherWake; forward;
 
 procedure QtDispatcherWake(AData: Pointer);
 begin

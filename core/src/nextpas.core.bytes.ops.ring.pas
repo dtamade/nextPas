@@ -17,16 +17,17 @@ function BytesRingNext(AHead, ACap: Integer): Integer; inline;
 procedure ManagedCopyArray(ADest, ASrc: Pointer; ATypeInfo: Pointer; ACount: SizeInt); inline;
 procedure ManagedFinalizeArray(APtr: Pointer; ATypeInfo: Pointer; ACount: SizeInt); inline;
 procedure ManagedInitArray(APtr: Pointer; ATypeInfo: Pointer; ACount: SizeInt); inline;
-generic procedure ManagedRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
-generic procedure ManagedRingFinalize<T>(var ARing: array of T; AHead, ACap, ACount: SizeInt); inline;
-generic procedure ManagedRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure ManagedRingCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure ManagedRingFinalizeImpl<T>(var ARing: array of T; AHead, ACap, ACount: SizeInt); inline;
+generic procedure ManagedRingTransferImpl<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 { Raw ring — 非托管批量原语，bytes.ops 单源，Move 零拷贝 }
-generic procedure RawRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
-generic procedure RawRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure RawRingCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure RawRingTransferImpl<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 { Raw linear — 非托管批量原语，bytes.ops 单源 Move 零拷贝，inline 零额外调用，破红线#1常量折叠 via typed pointer 中转 }
-generic procedure ArrayRawCopy<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
+generic procedure ArrayRawCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
 { Managed move — 托管数组指针交换单源，bytes.ops 单源 inline 零拷贝 O(1) via raw PPointer 交换避 8× 原子引用计数抖动，32并发零 Inc/Dec，资源所有权转移不丢（ADest 需 nil） }
-generic procedure ManagedArrayMove<T>(var ADest: array of T; var ASrc: array of T); inline;
+{ Managed move — 托管数组变量所有权转移单源：untyped 双 var 形参直写调用方变量。open array 形参取址拿到的是描述符、解引用写的是堆数据（空即 AV），故不用泛型开放数组；raw 指针拷贝零引用计数抖动。ADest 须为 nil，ASrc 置 nil，资源所有权转移不丢 }
+procedure ManagedArrayMovePtr(var ADest, ASrc); inline;
 
 implementation
 
@@ -71,7 +72,7 @@ begin
   System.InitializeArray(APtr, ATypeInfo, ACount);
 end;
 
-generic procedure ManagedRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure ManagedRingCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 var LFirst, LSecond: SizeInt;
 begin
   if ACount <= 0 then Exit;
@@ -82,7 +83,7 @@ begin
   if LSecond > 0 then ManagedCopyArray(@ADest[LFirst], @ASrc[0], TypeInfo(T), LSecond);
 end;
 
-generic procedure ManagedRingFinalize<T>(var ARing: array of T; AHead, ACap, ACount: SizeInt); inline;
+generic procedure ManagedRingFinalizeImpl<T>(var ARing: array of T; AHead, ACap, ACount: SizeInt); inline;
 var LFirst, LSecond: SizeInt;
 begin
   if ACount <= 0 then Exit;
@@ -93,7 +94,7 @@ begin
   if LSecond > 0 then ManagedFinalizeArray(@ARing[0], TypeInfo(T), LSecond);
 end;
 
-generic procedure ManagedRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure ManagedRingTransferImpl<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 var LFirst, LSecond: SizeInt;
 begin
   if ACount <= 0 then Exit;
@@ -112,7 +113,7 @@ begin
   end;
 end;
 
-generic procedure RawRingCopy<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure RawRingCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 var
   LFirst, LSecond: SizeInt;
   LSrc, LDest: PByte;
@@ -136,7 +137,7 @@ begin
   end;
 end;
 
-generic procedure RawRingTransfer<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
+generic procedure RawRingTransferImpl<T>(var ADest: array of T; var ASrc: array of T; ASrcHead, ASrcCap, ACount: SizeInt); inline;
 var
   LFirst, LSecond: SizeInt;
   LSrc, LDest: PByte;
@@ -162,7 +163,7 @@ begin
   end;
 end;
 
-generic procedure ArrayRawCopy<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
+generic procedure ArrayRawCopyImpl<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
 var
   LSrc, LDest: PByte;
 begin
@@ -173,11 +174,10 @@ begin
   Move(LSrc^, LDest^, ACount * SizeOf(T));
 end;
 
-generic procedure ManagedArrayMove<T>(var ADest: array of T; var ASrc: array of T); inline;
+procedure ManagedArrayMovePtr(var ADest, ASrc); inline;
 begin
-  // 指针交换单源：raw PPointer 交换避 record 赋值 8× 引用计数原子 Inc/Dec 抖动，inline 零拷贝 O(1) O(8) 指针拷贝，32 并发零 jitter，资源所有权转移不丢（ADest 需 nil/已托管释放，ASrc 置 nil 避 Dec 误释放）
-  PPointer(@ADest)^ := PPointer(@ASrc)^;
-  PPointer(@ASrc)^ := nil;
+  Pointer(ADest) := Pointer(ASrc);
+  Pointer(ASrc) := nil;
 end;
 
 end.

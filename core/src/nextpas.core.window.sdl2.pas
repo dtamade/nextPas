@@ -112,6 +112,8 @@ end;
 
 { ---- Dispatcher helpers ---- }
 
+procedure DispatcherWake; forward;
+
 procedure SdlDispatcherWake(AData: Pointer);
 begin
   DispatcherWake;

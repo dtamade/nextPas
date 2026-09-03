@@ -36,16 +36,16 @@ const
 function SnapshotBulkTier(ACount: Integer): Integer; inline;
 
 { Snapshot truncate — 安全收缩单源，bytes.ops 单源 inline SetLength 收口，委派 mem owner/System 运行时与双编译器 stub，禁堆头篡改，资源托管释放不丢，16槽热路径零额外拷贝 }
-generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
+generic procedure ArraySetLengthNoReallocImpl<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 { Swap-remove — 末尾换位删除单源，window.live 双哈希复用 inline 零拷贝 O(1)，bytes.ops 单源，守托管批量 Finalize 不丢，16槽热路径分支消除 }
-generic procedure ArraySwapRemoveRaw<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
-generic procedure ArraySwapRemoveManaged<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
-generic procedure ArraySwapRemove<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveRawImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveManagedImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 { Arena batch — 7 数组批量扩容单源，window.live 复用 inline 零拷贝，池化容量复用降 Burst 抖动 }
-generic procedure ManagedEnsureCapacity<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityImpl<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 { Snapshot exact — 快照精准容量单源，window.live 16-slot 小窗复用 inline 零拷贝 O(1)，确需确配避 BYTES_BUILDER_MIN_GROW shr1=32 过分配单源与首次堆突发 }
-generic procedure ManagedEnsureCapacityExact<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
-generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityExactImpl<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
+generic procedure ManagedEnsureTripleImpl<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
 { Live arena batch — Record 聚合 8 数组+3 容量 11 参 brutalist 收口为 2 参，bytes.ops 单源 inline 零拷贝 O(1) }
 type
   TLiveArenaCaps = record
@@ -88,9 +88,12 @@ function HashRebuildArenaPoolTopSnapshot: Integer; inline;
 { Arena pool 单源 helpers — lock-free LIFO acquire/recycle inline 零拷贝 O(1) via ARENA_POOL_SIZE/MAX_RETRIES 单源 + cpu_pause 16ns 快路径，容量与 finalization 单源池化通用抽象 }
 function ArenaPoolAcquireSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: Int32): Boolean; inline;
 function ArenaPoolRecycleSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: Int32): Boolean; inline;
-generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
+{ 池 critical section：slot 8 数组转移非单字，top-CAS 只保证序号唯一、不保证转移互斥，高并发同槽读写交错会撕裂所有权（漏/重），故 claim+转移必须同锁。非 inline（循环禁 inline），无争用 ~25ns，预算内 }
+procedure ArenaPoolLock(var ALock: Int32);
+procedure ArenaPoolUnlock(var ALock: Int32); inline;
+generic procedure ArenaPoolFinalizeImpl<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
 { Snapshot shrink — 通用阈值收缩单源，window.live / queue 双侧复用 inline 零拷贝 O(1)  via BYTES_SNAPSHOT_MAX 单源 8192/1024/2 三档 1024/4096/8192，Burst 后常驻堆阈值释放，资源托管不丢；not inline cold path SetLength heap alloc 避 I-Cache 膨胀 per redline #2，bytes.ops 单源复用消重复分支，分档尾延迟见 BENCH.md Bulk 三档 }
-generic procedure SnapshotMaybeShrink<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
+generic procedure SnapshotMaybeShrinkImpl<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
 { 兼容重载：11 参 brutalist 旧入口 inline 薄转发至 Record 主入口，零额外堆，逐步迁移 }
 procedure LiveArenaEnsureBatch(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHKeys: TSnapshotUInt32s; var AHVals: TSnapshotPointers; var AHUsed: TSnapshotBools; var APKeys: TSnapshotPointers; var APIdx: TSnapshotIntegers; var APUsed: TSnapshotBools; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
 
@@ -99,7 +102,7 @@ implementation
 uses
   nextpas.core.atomic;
 
-generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
+generic procedure ArraySetLengthNoReallocImpl<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 begin
   if Length(A) = ANewLen then Exit;
   if ANewLen < 0 then Exit;
@@ -108,7 +111,7 @@ begin
   SetLength(A, ANewLen);
 end;
 
-generic procedure ArraySwapRemoveRaw<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveRawImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 var LSrc, LDest: PByte;
 begin
   // branchless blittable: single Move via typed pointer break redline#1 inline 零拷贝 O(1), FillChar zero, 资源不丢, 16槽热路径零分支
@@ -123,7 +126,7 @@ begin
   FillChar(AArr[ALast], SizeOf(T), 0);
 end;
 
-generic procedure ArraySwapRemoveManaged<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveManagedImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 begin
   // branchless managed: assignment handles dest Finalize+Copy with refcount, single ManagedFinalizeArray for source, 1 TypeInfo dispatch vs 3, inline 零额外调用, 资源托管不丢 via FillChar zero, bytes.ops single source
   if AIdx = ALast then
@@ -137,19 +140,19 @@ begin
   FillChar(AArr[ALast], SizeOf(T), 0);
 end;
 
-generic procedure ArraySwapRemove<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
+generic procedure ArraySwapRemoveImpl<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 var LLen: Integer;
 begin
   // compat dispatch: IsManagedType 编译期常量折叠 (INLINE+O2 死分支消除), 16槽热路径显式 ArraySwapRemoveRaw 单次 Move 零分支 inline 零拷贝, 托管单次 dispatch, bytes.ops 单源, 资源不丢
   LLen := Length(AArr);
   if (AIdx < 0) or (ALast < 0) or (AIdx >= LLen) or (ALast >= LLen) then Exit;
   if IsManagedType(T) then
-    specialize ArraySwapRemoveManaged<T>(AArr, AIdx, ALast)
+    specialize ArraySwapRemoveManagedImpl<T>(AArr, AIdx, ALast)
   else
-    specialize ArraySwapRemoveRaw<T>(AArr, AIdx, ALast);
+    specialize ArraySwapRemoveRawImpl<T>(AArr, AIdx, ALast);
 end;
 
-generic procedure ManagedEnsureCapacity<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityImpl<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 var LCap: Integer;
 begin
   if Length(AArr) < ARequired then
@@ -159,14 +162,14 @@ begin
   end;
 end;
 
-generic procedure ManagedEnsureCapacityExact<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityExactImpl<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 begin
   // 快照精准：确需确配 inline 零拷贝 O(1)，小窗 16-slot 避 0→32→2× via BYTES_BUILDER_MIN_GROW shr1 单源派生过分配与首次堆突发，后续复用零抖动，容量复用零拷贝
   if Length(AArr) < ARequired then
     SetLength(AArr, ARequired);
 end;
 
-generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
+generic procedure ManagedEnsureTripleImpl<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
 var LCap: Integer;
 begin
   if Length(AKeys) < ARequired then
@@ -190,11 +193,11 @@ begin
   // Record 聚合主入口：8 数组批量 arena 单源 inline 零拷贝 O(1)，Burst均摊单次堆突发，bytes.ops 单源；复用 ManagedEnsureCapacity/Triple 单源，零额外堆，资源托管释放不丢
   if ACaps.ListCap > 0 then
   begin
-    specialize ManagedEnsureCapacity<Pointer>(ABatch.List, ACaps.ListCap);
-    specialize ManagedEnsureCapacity<UInt32>(ABatch.IDs, ACaps.ListCap);
+    specialize ManagedEnsureCapacityImpl<Pointer>(ABatch.List, ACaps.ListCap);
+    specialize ManagedEnsureCapacityImpl<UInt32>(ABatch.IDs, ACaps.ListCap);
   end;
-  if ACaps.U32Cap > 0 then specialize ManagedEnsureTriple<UInt32, Pointer>(ABatch.HKeys, ABatch.HVals, ABatch.HUsed, ACaps.U32Cap);
-  if ACaps.PtrCap > 0 then specialize ManagedEnsureTriple<Pointer, Integer>(ABatch.PKeys, ABatch.PIdx, ABatch.PUsed, ACaps.PtrCap);
+  if ACaps.U32Cap > 0 then specialize ManagedEnsureTripleImpl<UInt32, Pointer>(ABatch.HKeys, ABatch.HVals, ABatch.HUsed, ACaps.U32Cap);
+  if ACaps.PtrCap > 0 then specialize ManagedEnsureTripleImpl<Pointer, Integer>(ABatch.PKeys, ABatch.PIdx, ABatch.PUsed, ACaps.PtrCap);
 end;
 
 function SnapshotBulkTier(ACount: Integer): Integer; inline;
@@ -205,7 +208,7 @@ begin
   Result := BYTES_SNAPSHOT_TIER_L;
 end;
 
-generic procedure SnapshotMaybeShrink<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
+generic procedure SnapshotMaybeShrinkImpl<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
 begin
   // not inline: cold path SetLength heap alloc, avoid I-Cache bloat per redline #2; bytes.ops 单源阈值收缩 via BYTES_SNAPSHOT_MAX 三档 1024/4096/8192 inline O(1) zero-copy capped 8192，Burst 后常驻堆阈值分档释放，资源托管不丢；与 window.live / queue 双侧 MaybeShrinkSnap 三档对称，Bulk 尾延迟分档可观测 via SnapshotBulkTier，Burst 均摊零额外分配
   // 性能：not inline 冷路径零复制膨胀；容量阈值 BYTES_SNAPSHOT_MAX 单源 8192 via BYTES_BUILDER_MIN_GROW*128 消重复分支
@@ -231,7 +234,7 @@ begin
       SetLength(ASnap, specialize BytesGrowHelper<T>(ACount, BYTES_SNAPSHOT_MAX));
   end
   else if Length(ASnap) <> ACount then
-    specialize ArraySetLengthNoRealloc<T>(ASnap, ACount);
+    specialize ArraySetLengthNoReallocImpl<T>(ASnap, ACount);
 end;
 
 procedure LiveArenaEnsureBatch(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHKeys: TSnapshotUInt32s; var AHVals: TSnapshotPointers; var AHUsed: TSnapshotBools; var APKeys: TSnapshotPointers; var APIdx: TSnapshotIntegers; var APUsed: TSnapshotBools; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
@@ -239,11 +242,11 @@ begin
   // 兼容 brutalist 11 参旧入口：inline 直接复用同一 ManagedEnsure 单源逻辑，零额外堆与零引用计数抖动，逐步迁移至 Record 主入口
   if AListCap > 0 then
   begin
-    specialize ManagedEnsureCapacity<Pointer>(AList, AListCap);
-    specialize ManagedEnsureCapacity<UInt32>(AIDs, AListCap);
+    specialize ManagedEnsureCapacityImpl<Pointer>(AList, AListCap);
+    specialize ManagedEnsureCapacityImpl<UInt32>(AIDs, AListCap);
   end;
-  if AU32Cap > 0 then specialize ManagedEnsureTriple<UInt32, Pointer>(AHKeys, AHVals, AHUsed, AU32Cap);
-  if APtrCap > 0 then specialize ManagedEnsureTriple<Pointer, Integer>(APKeys, APIdx, APUsed, APtrCap);
+  if AU32Cap > 0 then specialize ManagedEnsureTripleImpl<UInt32, Pointer>(AHKeys, AHVals, AHUsed, AU32Cap);
+  if APtrCap > 0 then specialize ManagedEnsureTripleImpl<Pointer, Integer>(APKeys, APIdx, APUsed, APtrCap);
 end;
 
 { THashRebuildArena — bytes.ops 单源共享池抽象，与 LiveArena 同源 64 槽 via ARENA_POOL_SIZE (=BYTES_BUILDER_MIN_GROW 0→64) lock-free LIFO + 0→32→2× via BytesGrowCapacity (BYTES_BUILDER_MIN_GROW shr1 单源派生)，容量保留 Burst 均摊 + 阈值收缩防常驻堆，inline 零拷贝 }
@@ -259,14 +262,14 @@ begin
   // 单源 inline 零拷贝 O(1) via ManagedEnsureCapacity 0→32→2× 幂二，资源托管不丢；5 桶零 5× 分配抖动
   if ACap > 0 then
   begin
-    specialize ManagedEnsureCapacity<Integer>(BktCnt, ACap);
-    specialize ManagedEnsureCapacity<Integer>(BktPos, ACap);
-    specialize ManagedEnsureCapacity<Integer>(BktCur, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktCnt, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktPos, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktCur, ACap);
   end;
   if AValid > 0 then
   begin
-    specialize ManagedEnsureCapacity<Pointer>(SortedPtr, AValid);
-    specialize ManagedEnsureCapacity<Integer>(SortedIdx, AValid);
+    specialize ManagedEnsureCapacityImpl<Pointer>(SortedPtr, AValid);
+    specialize ManagedEnsureCapacityImpl<Integer>(SortedIdx, AValid);
   end;
 end;
 
@@ -274,14 +277,14 @@ procedure THashRebuildArena.EnsureForU32(ACap, AValid: Integer); inline;
 begin
   if ACap > 0 then
   begin
-    specialize ManagedEnsureCapacity<Integer>(BktCnt, ACap);
-    specialize ManagedEnsureCapacity<Integer>(BktPos, ACap);
-    specialize ManagedEnsureCapacity<Integer>(BktCur, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktCnt, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktPos, ACap);
+    specialize ManagedEnsureCapacityImpl<Integer>(BktCur, ACap);
   end;
   if AValid > 0 then
   begin
-    specialize ManagedEnsureCapacity<UInt32>(SortedID, AValid);
-    specialize ManagedEnsureCapacity<Pointer>(SortedU32Ptr, AValid);
+    specialize ManagedEnsureCapacityImpl<UInt32>(SortedID, AValid);
+    specialize ManagedEnsureCapacityImpl<Pointer>(SortedU32Ptr, AValid);
   end;
 end;
 
@@ -291,19 +294,19 @@ begin
   // 阈值收缩：若当前容量远超提示容量且超过阈值，缩容释放常驻堆，bytes.ops 单源 via ArraySetLengthNoRealloc inline 零拷贝
   if (Length(BktCnt) > HASH_SHRINK_THRESH) and (Length(BktCnt) > AHintCap * 4) then
   begin
-    specialize ArraySetLengthNoRealloc<Integer>(BktCnt, BytesGrowCapacity(AHintCap));
-    specialize ArraySetLengthNoRealloc<Integer>(BktPos, BytesGrowCapacity(AHintCap));
-    specialize ArraySetLengthNoRealloc<Integer>(BktCur, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Integer>(BktCnt, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Integer>(BktPos, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Integer>(BktCur, BytesGrowCapacity(AHintCap));
   end;
   if (Length(SortedPtr) > HASH_SHRINK_THRESH) and (Length(SortedPtr) > AHintCap * 4) then
   begin
-    specialize ArraySetLengthNoRealloc<Pointer>(SortedPtr, BytesGrowCapacity(AHintCap));
-    specialize ArraySetLengthNoRealloc<Integer>(SortedIdx, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Pointer>(SortedPtr, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Integer>(SortedIdx, BytesGrowCapacity(AHintCap));
   end;
   if (Length(SortedID) > HASH_SHRINK_THRESH) and (Length(SortedID) > AHintCap * 4) then
   begin
-    specialize ArraySetLengthNoRealloc<UInt32>(SortedID, BytesGrowCapacity(AHintCap));
-    specialize ArraySetLengthNoRealloc<Pointer>(SortedU32Ptr, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<UInt32>(SortedID, BytesGrowCapacity(AHintCap));
+    specialize ArraySetLengthNoReallocImpl<Pointer>(SortedU32Ptr, BytesGrowCapacity(AHintCap));
   end;
 end;
 
@@ -315,6 +318,7 @@ var
   GHashRebuildPool: array[0..ARENA_POOL_SIZE - 1] of THashRebuildArena;
   GHashRebuildPoolTop: Int32 = -1;
   GHashRebuildShutdown: Int32 = 0;
+  GHashRebuildLock: Int32 = 0; // 池 critical section：claim+7 数组转移同锁（含 spill 槽，见 ArenaPoolLock）
   GHashRebuildFinalizeIdx: Integer;
   GHashRebuildSpill: THashRebuildArena;
   GHashRebuildSpillReady: Int32 = 0; // 0 empty,1 ready — Tail>64 单次堆溢出缓冲，阈值收缩后保留 64 容量，零额外池位避免 Clear 丢弃已扩容量，Burst尾抖动消除 via ManagedArrayMove inline 零拷贝 O(1) 单源，资源托管释放不丢
@@ -376,7 +380,7 @@ begin
   end;
 end;
 
-generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
+generic procedure ArenaPoolFinalizeImpl<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
 var LI: Integer;
 begin
   // 只索引 + Clear，无 SetLength：open array 形参即可，静态 64 槽池与动态 arena 通吃
@@ -388,36 +392,57 @@ begin
   atomic_store(ATop, Int32(-1), mo_seq_cst);
 end;
 
+procedure ArenaPoolLock(var ALock: Int32);
+var LExp: Int32;
+begin
+  LExp := 0;
+  while not atomic_compare_exchange_strong(ALock, LExp, Int32(1), mo_acquire, mo_acquire) do
+  begin
+    LExp := 0;
+    cpu_pause;
+  end;
+end;
+
+procedure ArenaPoolUnlock(var ALock: Int32); inline;
+begin
+  atomic_store(ALock, Int32(0), mo_release);
+end;
+
 function HashRebuildArenaAcquire(out AFromPool: Boolean): THashRebuildArena;
 var LIdx: Int32; LExp: Int32;
 begin
   AFromPool := False;
   Result.Clear;
+  ArenaPoolLock(GHashRebuildLock);
+  try
   if ArenaPoolAcquireSlot(GHashRebuildPoolTop, GHashRebuildShutdown, LIdx) then
   begin
-    // 指针交换单源：7× ManagedArrayMove inline 零拷贝 O(1) raw PPointer 避 7× 引用计数原子抖动，64并发零 Inc/Dec via ARENA_POOL_SIZE 64 单源，资源所有权转移不丢（bytes.ops 单源 via ManagedArrayMove）
-    specialize ManagedArrayMove<Integer>(Result.BktCnt, GHashRebuildPool[LIdx].BktCnt);
-    specialize ManagedArrayMove<Integer>(Result.BktPos, GHashRebuildPool[LIdx].BktPos);
-    specialize ManagedArrayMove<Integer>(Result.BktCur, GHashRebuildPool[LIdx].BktCur);
-    specialize ManagedArrayMove<Pointer>(Result.SortedPtr, GHashRebuildPool[LIdx].SortedPtr);
-    specialize ManagedArrayMove<Integer>(Result.SortedIdx, GHashRebuildPool[LIdx].SortedIdx);
-    specialize ManagedArrayMove<UInt32>(Result.SortedID, GHashRebuildPool[LIdx].SortedID);
-    specialize ManagedArrayMove<Pointer>(Result.SortedU32Ptr, GHashRebuildPool[LIdx].SortedU32Ptr);
+    // 指针交换单源：7× ManagedArrayMovePtr inline 零拷贝 O(1) raw 指针拷贝避 7× 引用计数原子抖动，64并发零 Inc/Dec via ARENA_POOL_SIZE 64 单源，资源所有权转移不丢（bytes.ops 单源）
+    ManagedArrayMovePtr(Result.BktCnt, GHashRebuildPool[LIdx].BktCnt);
+    ManagedArrayMovePtr(Result.BktPos, GHashRebuildPool[LIdx].BktPos);
+    ManagedArrayMovePtr(Result.BktCur, GHashRebuildPool[LIdx].BktCur);
+    ManagedArrayMovePtr(Result.SortedPtr, GHashRebuildPool[LIdx].SortedPtr);
+    ManagedArrayMovePtr(Result.SortedIdx, GHashRebuildPool[LIdx].SortedIdx);
+    ManagedArrayMovePtr(Result.SortedID, GHashRebuildPool[LIdx].SortedID);
+    ManagedArrayMovePtr(Result.SortedU32Ptr, GHashRebuildPool[LIdx].SortedU32Ptr);
     AFromPool := True;
     Exit;
   end;
-  // Tail>64 溢出缓冲复用：池满回退保留的阈值收缩后 64 容量，突发 16k 后小表零堆分配，inline 零拷贝 O(1) 7× ManagedArrayMove 单源，资源托管不丢
+  // Tail>64 溢出缓冲复用：池满回退保留的阈值收缩后 64 容量，突发 16k 后小表零堆分配，inline 零拷贝 O(1) 7× ManagedArrayMovePtr 单源，资源托管不丢
   LExp := 1;
   if atomic_compare_exchange_strong(GHashRebuildSpillReady, LExp, 0, mo_seq_cst, mo_seq_cst) then
   begin
-    specialize ManagedArrayMove<Integer>(Result.BktCnt, GHashRebuildSpill.BktCnt);
-    specialize ManagedArrayMove<Integer>(Result.BktPos, GHashRebuildSpill.BktPos);
-    specialize ManagedArrayMove<Integer>(Result.BktCur, GHashRebuildSpill.BktCur);
-    specialize ManagedArrayMove<Pointer>(Result.SortedPtr, GHashRebuildSpill.SortedPtr);
-    specialize ManagedArrayMove<Integer>(Result.SortedIdx, GHashRebuildSpill.SortedIdx);
-    specialize ManagedArrayMove<UInt32>(Result.SortedID, GHashRebuildSpill.SortedID);
-    specialize ManagedArrayMove<Pointer>(Result.SortedU32Ptr, GHashRebuildSpill.SortedU32Ptr);
+    ManagedArrayMovePtr(Result.BktCnt, GHashRebuildSpill.BktCnt);
+    ManagedArrayMovePtr(Result.BktPos, GHashRebuildSpill.BktPos);
+    ManagedArrayMovePtr(Result.BktCur, GHashRebuildSpill.BktCur);
+    ManagedArrayMovePtr(Result.SortedPtr, GHashRebuildSpill.SortedPtr);
+    ManagedArrayMovePtr(Result.SortedIdx, GHashRebuildSpill.SortedIdx);
+    ManagedArrayMovePtr(Result.SortedID, GHashRebuildSpill.SortedID);
+    ManagedArrayMovePtr(Result.SortedU32Ptr, GHashRebuildSpill.SortedU32Ptr);
     // 溢出复用视为池化零堆抖动，但 FromPool 保持 False 以区分 Tail>64 单次堆路径计量
+  end;
+  finally
+    ArenaPoolUnlock(GHashRebuildLock);
   end;
 end;
 
@@ -431,16 +456,18 @@ begin
     AArena.Clear;
     Exit;
   end;
+  ArenaPoolLock(GHashRebuildLock);
+  try
   if ArenaPoolRecycleSlot(GHashRebuildPoolTop, GHashRebuildShutdown, LIdx) then
   begin
-    // 指针交换单源：7× ManagedArrayMove inline 零拷贝 O(1) raw PPointer 避 7× 引用计数原子抖动，容量保留复用 Burst均摊，资源所有权转移不丢
-    specialize ManagedArrayMove<Integer>(GHashRebuildPool[LIdx].BktCnt, AArena.BktCnt);
-    specialize ManagedArrayMove<Integer>(GHashRebuildPool[LIdx].BktPos, AArena.BktPos);
-    specialize ManagedArrayMove<Integer>(GHashRebuildPool[LIdx].BktCur, AArena.BktCur);
-    specialize ManagedArrayMove<Pointer>(GHashRebuildPool[LIdx].SortedPtr, AArena.SortedPtr);
-    specialize ManagedArrayMove<Integer>(GHashRebuildPool[LIdx].SortedIdx, AArena.SortedIdx);
-    specialize ManagedArrayMove<UInt32>(GHashRebuildPool[LIdx].SortedID, AArena.SortedID);
-    specialize ManagedArrayMove<Pointer>(GHashRebuildPool[LIdx].SortedU32Ptr, AArena.SortedU32Ptr);
+    // 指针交换单源：7× ManagedArrayMovePtr inline 零拷贝 O(1) raw 指针拷贝避 7× 引用计数原子抖动，容量保留复用 Burst均摊，资源所有权转移不丢
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].BktCnt, AArena.BktCnt);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].BktPos, AArena.BktPos);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].BktCur, AArena.BktCur);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].SortedPtr, AArena.SortedPtr);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].SortedIdx, AArena.SortedIdx);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].SortedID, AArena.SortedID);
+    ManagedArrayMovePtr(GHashRebuildPool[LIdx].SortedU32Ptr, AArena.SortedU32Ptr);
     Exit;
   end;
   if atomic_load(GHashRebuildShutdown, mo_acquire) <> 0 then
@@ -453,17 +480,20 @@ begin
     LIdx := 0;
     if atomic_compare_exchange_strong(GHashRebuildSpillReady, LIdx, 1, mo_seq_cst, mo_seq_cst) then
     begin
-      specialize ManagedArrayMove<Integer>(GHashRebuildSpill.BktCnt, AArena.BktCnt);
-      specialize ManagedArrayMove<Integer>(GHashRebuildSpill.BktPos, AArena.BktPos);
-      specialize ManagedArrayMove<Integer>(GHashRebuildSpill.BktCur, AArena.BktCur);
-      specialize ManagedArrayMove<Pointer>(GHashRebuildSpill.SortedPtr, AArena.SortedPtr);
-      specialize ManagedArrayMove<Integer>(GHashRebuildSpill.SortedIdx, AArena.SortedIdx);
-      specialize ManagedArrayMove<UInt32>(GHashRebuildSpill.SortedID, AArena.SortedID);
-      specialize ManagedArrayMove<Pointer>(GHashRebuildSpill.SortedU32Ptr, AArena.SortedU32Ptr);
+      ManagedArrayMovePtr(GHashRebuildSpill.BktCnt, AArena.BktCnt);
+      ManagedArrayMovePtr(GHashRebuildSpill.BktPos, AArena.BktPos);
+      ManagedArrayMovePtr(GHashRebuildSpill.BktCur, AArena.BktCur);
+      ManagedArrayMovePtr(GHashRebuildSpill.SortedPtr, AArena.SortedPtr);
+      ManagedArrayMovePtr(GHashRebuildSpill.SortedIdx, AArena.SortedIdx);
+      ManagedArrayMovePtr(GHashRebuildSpill.SortedID, AArena.SortedID);
+      ManagedArrayMovePtr(GHashRebuildSpill.SortedU32Ptr, AArena.SortedU32Ptr);
       Exit;
     end;
   end;
   // 溢出缓冲亦满：阈值内小容量经 MaybeShrink 已保留 64，无需二次分配；托管释放不丢 via Clear，Tail>64 单次堆 O(1) inline 零拷贝 via bytes.ops 单源
+  finally
+    ArenaPoolUnlock(GHashRebuildLock);
+  end;
   AArena.Clear;
 end;
 
@@ -473,7 +503,7 @@ initialization
 
 finalization
   // 单源池化通用抽象 finalization：shutdown 截断并发 Acquire/Recycle，再 seq_cst fence 后循环 Clear 托管释放不丢，容量 ARENA_POOL_SIZE 单源自适应 inline 零拷贝；溢出缓冲同步托管释放不丢 Tail>64
-  specialize ArenaPoolFinalize<THashRebuildArena>(GHashRebuildPool, GHashRebuildPoolTop, GHashRebuildShutdown, GHashRebuildFinalizeIdx);
+  specialize ArenaPoolFinalizeImpl<THashRebuildArena>(GHashRebuildPool, GHashRebuildPoolTop, GHashRebuildShutdown, GHashRebuildFinalizeIdx);
   GHashRebuildSpill.Clear;
   atomic_store(GHashRebuildSpillReady, Int32(0), mo_seq_cst);
 

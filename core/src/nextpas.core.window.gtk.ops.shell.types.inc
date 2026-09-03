@@ -5,7 +5,7 @@
   性能：cdecl 函数指针单次字段间接零 vtable，Assigned 检查 inline 可折叠，零虚派。
   稳定性：类型与符号一一对应，缺失编译期显式。
   生成：与 ffi 签名同表，禁止在外手写重复；扩展仅改此表即同步。 }
-  TGIdleAddFullFunc = function(APriority: gint; AFunc: TGIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint; cdecl;
+  TGIdleAddFullFunc = function(APriority: gint; AFunc: TGtkIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint; cdecl;
   TSourceRemoveFunc = function(ATag: guint): gboolean; cdecl;
   TSignalConnectFunc = function(AInstance: Pointer; ADetailedSignal: PAnsiChar; AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify; AConnectFlags: guint): gulong; cdecl;
   TSignalDisconnectProc = procedure(AInstance: Pointer; AHandlerId: gulong); cdecl;

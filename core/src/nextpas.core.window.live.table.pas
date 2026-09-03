@@ -12,25 +12,26 @@ interface
 uses
   nextpas.core.window.impl,
   nextpas.core.window.hash,
-  nextpas.core.bytes.ops;
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops.snapshot;
 
 type
   TLivePtrHash = specialize TWindowOpenHash<Pointer, Integer>;
   TLiveU32Hash = specialize TWindowOpenHash<UInt32, Pointer>;
 
-procedure LiveTableSyncListPtr(var AList: array of Pointer; var AHash: TLivePtrHash; ANewCap: Integer; ACount: Integer); inline;
-procedure LiveTableSyncIDs(var AIDs: array of UInt32; var AList: array of Pointer; var AHash: TLiveU32Hash; ANewCap: Integer; ACount: Integer); inline;
+procedure LiveTableSyncListPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; ANewCap: Integer; ACount: Integer); inline;
+procedure LiveTableSyncIDs(var AIDs: TSnapshotUInt32s; var AList: TSnapshotPointers; var AHash: TLiveU32Hash; ANewCap: Integer; ACount: Integer); inline;
 
-procedure LiveTableSwapRemovePtrRaw(var AList: array of Pointer; var AHash: TLivePtrHash; AIdx, ALast: Integer); inline;
-procedure LiveTableSwapRemoveIDsRaw(var AIDs: array of UInt32; AIdx, ALast: Integer); inline;
-procedure LiveTableClearPtr(var AList: array of Pointer; var AHash: TLivePtrHash; ACount: Integer); inline;
-procedure LiveTableClearSdl(var AList: array of Pointer; var AIDs: array of UInt32; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; ACount: Integer); inline;
-procedure LiveTableUnregisterPtr(var AList: array of Pointer; var AHash: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer); inline;
-procedure LiveTableUnregisterSdl(var AList: array of Pointer; var AIDs: array of UInt32; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer; AID: UInt32); inline;
+procedure LiveTableSwapRemovePtrRaw(var AList: TSnapshotPointers; var AHash: TLivePtrHash; AIdx, ALast: Integer); inline;
+procedure LiveTableSwapRemoveIDsRaw(var AIDs: TSnapshotUInt32s; AIdx, ALast: Integer); inline;
+procedure LiveTableClearPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; ACount: Integer); inline;
+procedure LiveTableClearSdl(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; ACount: Integer); inline;
+procedure LiveTableUnregisterPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer); inline;
+procedure LiveTableUnregisterSdl(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer; AID: UInt32); inline;
 
 implementation
 
-procedure LiveTableSyncListPtr(var AList: array of Pointer; var AHash: TLivePtrHash; ANewCap: Integer; ACount: Integer); inline;
+procedure LiveTableSyncListPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; ANewCap: Integer; ACount: Integer); inline;
 var LHashCap: Integer;
 begin
   // capacity sync single source via bytes.ops WindowGrowCapacity 0→32→2×; hash resize + rebuild, inline zero-copy O(1)
@@ -40,7 +41,7 @@ begin
   WindowHashRebuild(AHash, WindowFamilyToken, AList, ACount);
 end;
 
-procedure LiveTableSyncIDs(var AIDs: array of UInt32; var AList: array of Pointer; var AHash: TLiveU32Hash; ANewCap: Integer; ACount: Integer); inline;
+procedure LiveTableSyncIDs(var AIDs: TSnapshotUInt32s; var AList: TSnapshotPointers; var AHash: TLiveU32Hash; ANewCap: Integer; ACount: Integer); inline;
 var LHashCap: Integer;
 begin
   // IDs capacity sync single source via bytes.ops; triple resize + rebuild, inline zero-copy O(1)
@@ -50,7 +51,7 @@ begin
   WindowHashRebuild(AHash, WindowFamilyToken, AIDs, AList, ACount);
 end;
 
-procedure LiveTableSwapRemovePtrRaw(var AList: array of Pointer; var AHash: TLivePtrHash; AIdx, ALast: Integer); inline;
+procedure LiveTableSwapRemovePtrRaw(var AList: TSnapshotPointers; var AHash: TLivePtrHash; AIdx, ALast: Integer); inline;
 var LMoved: Pointer;
 begin
   // swap-remove single source via bytes.ops ArraySwapRemoveRaw inline zero-copy O(1), hash remap single source via window.hash
@@ -67,7 +68,7 @@ begin
     specialize ArraySwapRemoveRaw<Pointer>(AList, ALast, ALast);
 end;
 
-procedure LiveTableSwapRemoveIDsRaw(var AIDs: array of UInt32; AIdx, ALast: Integer); inline;
+procedure LiveTableSwapRemoveIDsRaw(var AIDs: TSnapshotUInt32s; AIdx, ALast: Integer); inline;
 begin
   // IDs swap single source via bytes.ops, inline zero-copy O(1)
   if AIdx <> ALast then
@@ -76,7 +77,7 @@ begin
     specialize ArraySwapRemoveRaw<UInt32>(AIDs, ALast, ALast);
 end;
 
-procedure LiveTableClearPtr(var AList: array of Pointer; var AHash: TLivePtrHash; ACount: Integer); inline;
+procedure LiveTableClearPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; ACount: Integer); inline;
 var I: Integer;
 begin
   // batch clear single source via bytes.ops refill zero + hash clear, inline zero-copy
@@ -85,7 +86,7 @@ begin
   AHash.Clear;
 end;
 
-procedure LiveTableClearSdl(var AList: array of Pointer; var AIDs: array of UInt32; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; ACount: Integer); inline;
+procedure LiveTableClearSdl(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; ACount: Integer); inline;
 begin
   // sdl batch clear single source: list+ids dual arrays + dual hashes, inline zero-copy
   LiveTableClearPtr(AList, AHashPtr, ACount);
@@ -94,14 +95,14 @@ begin
   AHashU32.Clear;
 end;
 
-procedure LiveTableUnregisterPtr(var AList: array of Pointer; var AHash: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer); inline;
+procedure LiveTableUnregisterPtr(var AList: TSnapshotPointers; var AHash: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer); inline;
 begin
   // single source batch: hash remove + swap remap via bytes.ops inline zero-copy
   AHash.Remove(WindowFamilyToken, APtr);
   LiveTableSwapRemovePtrRaw(AList, AHash, AIdx, ALast);
 end;
 
-procedure LiveTableUnregisterSdl(var AList: array of Pointer; var AIDs: array of UInt32; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer; AID: UInt32); inline;
+procedure LiveTableUnregisterSdl(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHashU32: TLiveU32Hash; var AHashPtr: TLivePtrHash; AIdx, ALast: Integer; APtr: Pointer; AID: UInt32); inline;
 begin
   // single source sdl batch: dual hash remove + dual swap via bytes.ops inline zero-copy
   AHashU32.Remove(WindowFamilyToken, AID);

@@ -58,7 +58,7 @@ type
   TGDestroyNotify = procedure(AData: Pointer); cdecl;
 
   // 显式单源：GTK 窗口壳 ABI 函数指针类型单表，手写零 codegen 缝，显式声明可扫描，守 INV-5 单向与 bytes.ops 单源思想，inline 零额外虚派
-  TGIdleAddFullFunc = function(APriority: gint; AFunc: TGIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint; cdecl;
+  TGIdleAddFullFunc = function(APriority: gint; AFunc: TGtkIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint; cdecl;
   TSourceRemoveFunc = function(ATag: guint): gboolean; cdecl;
   TSignalConnectFunc = function(AInstance: Pointer; ADetailedSignal: PAnsiChar; AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify; AConnectFlags: guint): gulong; cdecl;
   TSignalDisconnectProc = procedure(AInstance: Pointer; AHandlerId: gulong); cdecl;
@@ -92,7 +92,7 @@ type
   // trait 风格：IGtkOps 接口为单一抽象（对标 Rust trait），TGtkOps 记录为低层存储单源 via fields.inc，TGtkOpsAdapter 适配器桥接，外联薄转发（非 inline，避 140+点 I-Cache 复制，仅 1行 accessor 保留 inline），单源复用 fields.inc/adapter.inc 零手写重复，守 bytes.ops 单源思想
   IGtkOps = interface ['{8A3F9C1D-4E2B-4F7A-9A0B-C1D2E3F4A500}']
     function TryLoad(out ALoaded: Boolean): Boolean;
-    function IdleAddFull(APriority: gint; AFunc: TGIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
+    function IdleAddFull(APriority: gint; AFunc: TGtkIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
     function SourceRemove(ATag: guint): gboolean;
     function SignalConnectData(AInstance: Pointer; ADetailedSignal: PAnsiChar; AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify; AConnectFlags: guint): gulong;
     procedure SignalHandlerDisconnect(AInstance: Pointer; AHandlerId: gulong);
@@ -136,7 +136,7 @@ type
   public
     constructor Create(const ARec: TGtkOps);
     function TryLoad(out ALoaded: Boolean): Boolean;
-    function IdleAddFull(APriority: gint; AFunc: TGIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
+    function IdleAddFull(APriority: gint; AFunc: TGtkIdleFunc; AUserData: Pointer; ANotify: TGDestroyNotify): guint;
     function SourceRemove(ATag: guint): gboolean;
     function SignalConnectData(AInstance: Pointer; ADetailedSignal: PAnsiChar; AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify; AConnectFlags: guint): gulong;
     procedure SignalHandlerDisconnect(AInstance: Pointer; AHandlerId: gulong);
@@ -172,6 +172,7 @@ type
   function GtkOpsWrap(const ARec: TGtkOps): IGtkOps; inline;
   function GtkOpsUnwrap(const AOops: IGtkOps; out ARec: TGtkOps): Boolean; inline;
 
+type
   TGtkContext = class
   private
     FOps: IGtkOps;
@@ -378,7 +379,7 @@ begin
   begin
     while ACtx.Ops.EventsPending() <> 0 do
     begin
-      ACtx.Ops.MainIterationDo(False);
+      ACtx.Ops.MainIterationDo(0);
       LDid := True;
     end;
   end;

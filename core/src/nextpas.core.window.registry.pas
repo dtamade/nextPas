@@ -61,6 +61,7 @@ procedure RegistryPumpAll;
 implementation
 
 uses
+  nextpas.core.exception, // Exception 自有根（owner=exception，L0）：后端裸异常兜底吞噬，不直连 FPC SysUtils
   nextpas.core.system.typinfo, // L0-L1 enum bridge, no platform host units
   nextpas.core.diagnostics, // L1 diagnostics → text.format/utils L0-L1 only, L2→L1 合规无迂回上依赖
   nextpas.core.atomic, // L0 原子聚合单源
@@ -69,8 +70,6 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.sync.event,
   nextpas.core.window.impl,
-  nextpas.core.window.queue,
-  nextpas.core.window.live,
   nextpas.core.window.fake;
 
 var
@@ -281,6 +280,42 @@ begin
     if GRegistry.Backends[I].Kind = LKind then Exit(I);
 end;
 
+function CachedProbeCold(AIndex: Integer; LKind: TWindowKind): Boolean; // cold: not inline, 互斥+dlopen 单次，热路径零锁
+var LLockRet: Int32; LRes: Boolean;
+begin
+  if not GLockInited then
+  begin
+    Result := GRegistry.Backends[AIndex].Probe();
+    Exit(Result);
+  end;
+  LLockRet := platform_mutex_lock(GRegistryLock);
+  if LLockRet <> 0 then
+  begin
+    Result := GRegistry.Backends[AIndex].Probe();
+    Exit(Result);
+  end;
+  try
+    if atomic_load(GRegistry.ProbeValid[LKind]) <> 0 then Exit(atomic_load(GRegistry.ProbeCache[LKind]) <> 0);
+    LRes := GRegistry.Backends[AIndex].Probe();
+    atomic_store(GRegistry.ProbeCache[LKind], Int32(Ord(LRes)));
+    atomic_store(GRegistry.ProbeValid[LKind], Int32(1));
+    Result := LRes;
+  finally
+    platform_mutex_unlock(GRegistryLock);
+  end;
+end;
+
+function CachedProbe(AIndex: Integer): Boolean; inline;
+var LKind: TWindowKind;
+begin
+  // 冷热分离：热路径 atomic_load acquire 零拷贝无锁 O(1) 读 ProbeValid/Cache，消重复 dlopen；冷路径 CachedProbeCold 单次互斥+Probe 探测+atomic_store release 发布，零额外堆，bytes.ops 单源思想
+  if (AIndex < 0) or (AIndex >= atomic_load(GRegistry.Count)) then Exit(False);
+  if not Assigned(GRegistry.Backends[AIndex].Probe) then Exit(False);
+  LKind := GRegistry.Backends[AIndex].Kind;
+  if atomic_load(GRegistry.ProbeValid[LKind]) <> 0 then Exit(atomic_load(GRegistry.ProbeCache[LKind]) <> 0);
+  Result := CachedProbeCold(AIndex, LKind);
+end;
+
 type
   TGtkVisitor = reference to procedure(B: PBackendDesc; var AStop: Boolean);
 
@@ -368,7 +403,8 @@ begin
       end;
     if InsertIdx < GRegistry.Count then
     begin
-      ManagedCopyArray(@GRegistry.Backends[InsertIdx + 1], @GRegistry.Backends[InsertIdx], TypeInfo(TBackendDesc), GRegistry.Count - InsertIdx);
+      for I := GRegistry.Count - 1 downto InsertIdx do
+        GRegistry.Backends[I + 1] := GRegistry.Backends[I];
       GRegistry.Backends[InsertIdx] := ADesc;
     end
     else
@@ -439,42 +475,6 @@ begin
   finally
     platform_mutex_unlock(GRegistryLock);
   end;
-end;
-
-function CachedProbeCold(AIndex: Integer; LKind: TWindowKind): Boolean; // cold: not inline, 互斥+dlopen 单次，热路径零锁
-var LLockRet: Int32; LRes: Boolean;
-begin
-  if not GLockInited then
-  begin
-    Result := GRegistry.Backends[AIndex].Probe();
-    Exit(Result);
-  end;
-  LLockRet := platform_mutex_lock(GRegistryLock);
-  if LLockRet <> 0 then
-  begin
-    Result := GRegistry.Backends[AIndex].Probe();
-    Exit(Result);
-  end;
-  try
-    if atomic_load(GRegistry.ProbeValid[LKind]) <> 0 then Exit(atomic_load(GRegistry.ProbeCache[LKind]) <> 0);
-    LRes := GRegistry.Backends[AIndex].Probe();
-    atomic_store(GRegistry.ProbeCache[LKind], Int32(Ord(LRes)));
-    atomic_store(GRegistry.ProbeValid[LKind], Int32(1));
-    Result := LRes;
-  finally
-    platform_mutex_unlock(GRegistryLock);
-  end;
-end;
-
-function CachedProbe(AIndex: Integer): Boolean; inline;
-var LKind: TWindowKind;
-begin
-  // 冷热分离：热路径 atomic_load acquire 零拷贝无锁 O(1) 读 ProbeValid/Cache，消重复 dlopen；冷路径 CachedProbeCold 单次互斥+Probe 探测+atomic_store release 发布，零额外堆，bytes.ops 单源思想
-  if (AIndex < 0) or (AIndex >= atomic_load(GRegistry.Count)) then Exit(False);
-  if not Assigned(GRegistry.Backends[AIndex].Probe) then Exit(False);
-  LKind := GRegistry.Backends[AIndex].Kind;
-  if atomic_load(GRegistry.ProbeValid[LKind]) <> 0 then Exit(atomic_load(GRegistry.ProbeCache[LKind]) <> 0);
-  Result := CachedProbeCold(AIndex, LKind);
 end;
 
 function RegistryFindBackend(AKind: TWindowKind): PBackendDesc;
@@ -620,12 +620,12 @@ begin
   LSnapCount := atomic_load(GRegistry.Count);
   if LSnapCount > CBackendCount then LSnapCount := CBackendCount;
   if LSnapCount < 0 then LSnapCount := 0;
-  if LSnapCount = 0 then Exit(False);
   if FakeHasPendingPosts then
   begin
     FakePumpAll;
     Result := True;
   end;
+  if LSnapCount = 0 then Exit(Result);
   LCachedIdx := atomic_load(GRegistry.PumpLastIdx);
   if (LCachedIdx >= 0) and (LCachedIdx < LSnapCount) then
   begin

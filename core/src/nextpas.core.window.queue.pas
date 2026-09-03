@@ -166,7 +166,7 @@ begin
       if Length(FRing) > 0 then LCurPtr := @FRing[0] else LCurPtr := nil;
       if CowRingStale(LOldPtr, LOldCap, LOldCount, LOldHead, LCurPtr, Length(FRing), atomic_load(FCount), FHead) then Exit;
       if LCount > 0 then specialize CowRingFinalize<TWindowWorkItem>(FRing, FHead, Length(FRing), LCount);
-      specialize ManagedArrayMove<TWindowWorkItem>(FRing, LArena.Buf);
+      ManagedArrayMovePtr(FRing, LArena.Buf);
       FHead := 0;
     finally
       FLock.Release;
@@ -174,7 +174,7 @@ begin
     if Length(LOldRing) > 0 then
     begin
       LOldArena.Clear;
-      specialize ManagedArrayMove<TWindowWorkItem>(LOldArena.Buf, LOldRing);
+      ManagedArrayMovePtr(LOldArena.Buf, LOldRing);
       QueueRingArenaRecycle(LOldArena);
     end;
   finally
@@ -242,7 +242,7 @@ begin
   if Result and (Length(ACtx.OldRing) > 0) then
   begin
     LOldArena.Clear;
-    specialize ManagedArrayMove<TWindowWorkItem>(LOldArena.Buf, ACtx.OldRing);
+    ManagedArrayMovePtr(LOldArena.Buf, ACtx.OldRing);
     QueueRingArenaRecycle(LOldArena);
   end;
 end;
@@ -273,7 +273,7 @@ begin
   if AOldCount > 0 then specialize CowDiscard<TWindowWorkItem>(ANew, AOldCount);
   if Length(ANew) > 0 then
   begin
-    LArena.Clear; specialize ManagedArrayMove<TWindowWorkItem>(LArena.Buf, ANew);
+    LArena.Clear; ManagedArrayMovePtr(LArena.Buf, ANew);
     QueueRingArenaRecycle(LArena);
   end else begin SetLength(ANew, 0); ANew := nil; end;
   FBackpressure.IncCap;
@@ -291,11 +291,13 @@ begin
     Exit;
   end;
   if AOldCount > 0 then specialize CowDiscard<TWindowWorkItem>(ANew, AOldCount);
+  SetLength(ANew, 0);
+  ANew := nil;
   LArena := QueueRingArenaAcquire(LPooled);
   try
     try
       LArena.Ensure(ACap);
-      specialize ManagedArrayMove<TWindowWorkItem>(ANew, LArena.Buf);
+      ManagedArrayMovePtr(ANew, LArena.Buf);
     except
       on E: EOutOfMemory do
       begin
@@ -346,7 +348,7 @@ begin
     begin
       if Length(ANew) > 0 then
       begin
-        LArena.Clear; specialize ManagedArrayMove<TWindowWorkItem>(LArena.Buf, ANew);
+        LArena.Clear; ManagedArrayMovePtr(LArena.Buf, ANew);
         QueueRingArenaRecycle(LArena);
       end else begin SetLength(ANew, 0); ANew := nil; end;
       AWasEmpty := LWasEmpty;
@@ -468,15 +470,15 @@ begin
   try
     LArena.Ensure(LNewCap);
     if LOldCount > 0 then specialize ManagedRingCopy<TWindowWorkItem>(LArena.Buf, LOldRing, LOldHead, LOldCap, LOldCount);
-    specialize ManagedArrayMove<TWindowWorkItem>(LNew, LArena.Buf);
+    ManagedArrayMovePtr(LNew, LArena.Buf);
   finally
     QueueRingArenaRecycle(LArena);
   end;
-  LCow.NewRing := nil; specialize ManagedArrayMove<TWindowWorkItem>(LCow.NewRing, LNew); LCow.OldRing := LOldRing; LCow.OldHead := LOldHead; LCow.OldCap := LOldCap; LCow.OldCount := LOldCount;
+  LCow.NewRing := nil; ManagedArrayMovePtr(LCow.NewRing, LNew); LCow.OldRing := LOldRing; LCow.OldHead := LOldHead; LCow.OldCap := LOldCap; LCow.OldCount := LOldCount;
   LCow.Kind := AKind; LCow.Ref := ARef; LCow.Method := AMethod; LCow.Proc := AProc; LCow.WasEmpty := False;
   // 单锁 Cow 安装 inline 零拷贝，双检失败回退 Fallback，托管不丢 via cow 单源
   if TryCowInstall(LCow) then begin AWasEmpty := LCow.WasEmpty; Exit(True); end;
-  specialize ManagedArrayMove<TWindowWorkItem>(LNew, LCow.NewRing);
+  ManagedArrayMovePtr(LNew, LCow.NewRing);
   Result := FallbackEnqueueShared(LNew, AKind, ARef, AMethod, AProc, LOldCount, AWasEmpty);
 end;
 
@@ -753,6 +755,7 @@ begin
     if LCount = 0 then
     begin
       FHead := 0;
+      FRing := nil;
       atomic_store(FRefCount, Int32(0));
       Exit;
     end;

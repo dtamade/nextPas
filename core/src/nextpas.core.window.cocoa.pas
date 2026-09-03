@@ -77,6 +77,8 @@ begin
   GLiveRegistry.Unregister(AWin);
 end;
 
+procedure DispatcherWake; forward;
+
 procedure CocoaDispatcherWake(AData: Pointer);
 begin
   DispatcherWake;

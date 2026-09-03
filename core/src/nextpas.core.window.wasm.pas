@@ -43,6 +43,7 @@ uses
   nextpas.core.sync.event,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
+  nextpas.core.window.queue.base,
   nextpas.core.time.base,
   nextpas.core.window.impl,
   nextpas.core.window.live,

@@ -39,6 +39,7 @@ var
   GQueueRingPool: array[0..QUEUE_ARENA_POOL_SIZE - 1] of TQueueRingArena;
   GQueueRingPoolTop: Int32 = -1;
   GQueueRingShutdown: Int32 = 0;
+  GQueueRingLock: Int32 = 0; // 池 critical section：claim+Buf 转移同锁（见 bytes.ops ArenaPoolLock）
   GQueueRingFinalizeIdx: Integer;
 
 procedure RequireQueueRingToken(const AToken: TWindowFamilyToken); inline;
@@ -59,7 +60,7 @@ end;
 
 procedure TQueueRingArena.Ensure(ANewCap: Integer); inline;
 begin
-  specialize ManagedEnsureCapacity<TWindowWorkItem>(Buf, ANewCap);
+  specialize ManagedEnsureCapacityExact<TWindowWorkItem>(Buf, ANewCap);
 end;
 
 function QueueRingArenaPoolCapacity: Integer; inline;
@@ -77,10 +78,15 @@ var LIdx: Int32;
 begin
   AFromPool := False;
   Result.Clear;
-  if ArenaPoolAcquireSlot(GQueueRingPoolTop, GQueueRingShutdown, LIdx) then
-  begin
-    specialize ManagedArrayMove<TWindowWorkItem>(Result.Buf, GQueueRingPool[LIdx].Buf);
-    AFromPool := True;
+  ArenaPoolLock(GQueueRingLock);
+  try
+    if ArenaPoolAcquireSlot(GQueueRingPoolTop, GQueueRingShutdown, LIdx) then
+    begin
+      ManagedArrayMovePtr(Result.Buf, GQueueRingPool[LIdx].Buf);
+      AFromPool := True;
+    end;
+  finally
+    ArenaPoolUnlock(GQueueRingLock);
   end;
 end;
 
@@ -93,10 +99,15 @@ begin
     AArena.Clear;
     Exit;
   end;
-  if ArenaPoolRecycleSlot(GQueueRingPoolTop, GQueueRingShutdown, LIdx) then
-  begin
-    specialize ManagedArrayMove<TWindowWorkItem>(GQueueRingPool[LIdx].Buf, AArena.Buf);
-    Exit;
+  ArenaPoolLock(GQueueRingLock);
+  try
+    if ArenaPoolRecycleSlot(GQueueRingPoolTop, GQueueRingShutdown, LIdx) then
+    begin
+      ManagedArrayMovePtr(GQueueRingPool[LIdx].Buf, AArena.Buf);
+      Exit;
+    end;
+  finally
+    ArenaPoolUnlock(GQueueRingLock);
   end;
   if atomic_load(GQueueRingShutdown, mo_acquire) <> 0 then
   begin

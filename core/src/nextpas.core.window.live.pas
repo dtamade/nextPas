@@ -42,6 +42,7 @@ type
     procedure Unregister(AWin: Pointer); virtual;
     function Count: Integer; inline;
     function IsEmpty: Boolean; inline;
+    function Contains(AWin: Pointer): Boolean;
     function ItemByIndex(AIndex: Integer): Pointer;
     property Items[AIndex: Integer]: Pointer read GetItem; default;
     procedure SnapshotTo(var ADest: TWindowLiveSnapshot);
@@ -371,6 +372,23 @@ function TWindowLiveRegistry.IsEmpty: Boolean; inline;
 begin
   if FLck = nil then Exit(True);
   Result := atomic_load(FCount) = 0;
+end;
+
+function TWindowLiveRegistry.Contains(AWin: Pointer): Boolean;
+var LIdx, LCnt: Integer;
+begin
+  Result := False;
+  if (AWin = nil) or (FLck = nil) then Exit;
+  FLck.AcquireRead;
+  try
+    LIdx := HashFindPtr(AWin);
+    if LIdx < 0 then Exit;
+    LCnt := atomic_load(FCount);
+    if (LIdx < 0) or (LIdx >= LCnt) then Exit;
+    Result := FList[LIdx] = AWin;
+  finally
+    FLck.ReleaseRead;
+  end;
 end;
 
 procedure TWindowLiveRegistry.Clear;

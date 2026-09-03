@@ -39,7 +39,6 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.time.base,
-  nextpas.core.window.base,
   nextpas.core.window.impl,
   nextpas.core.window.live,
   nextpas.core.window.queue,
@@ -121,6 +120,8 @@ begin
   if GLiveRegistry = nil then Exit;
   GLiveRegistry.Unregister(AWin);
 end;
+
+procedure DispatcherWake; forward;
 
 procedure Win32DispatcherWake(AData: Pointer);
 begin

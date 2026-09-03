@@ -13,6 +13,8 @@ uses
   nextpas.core.window.intf,
   nextpas.core.window.factory,
   nextpas.core.window.fake,
+  nextpas.core.window.gtk3,
+  nextpas.core.window.sdl2,
   nextpas.core.text.ansi,
   nextpas.core.diagnostics;
 

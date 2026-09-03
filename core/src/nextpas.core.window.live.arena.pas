@@ -55,6 +55,7 @@ var
   GLiveArenaPool: array[0..LIVE_ARENA_POOL_SIZE - 1] of TLiveBuildArena;
   GLiveArenaPoolTop: Int32 = -1;
   GLiveArenaShutdown: Int32 = 0; // 0 running,1 shutting down；finalization 前置位，Acquire/Recycle 见位回退堆/释放不触池
+  GLiveArenaLock: Int32 = 0; // 池 critical section：claim+8 数组转移同锁，防同槽读写交错撕裂所有权（见 bytes.ops ArenaPoolLock）
   GLiveArenaFinalizeIdx: Integer; // 循环单源随 POOL_SIZE 自适应零硬编码泄漏
 
 function LiveArenaPoolCapacity: Integer; inline;
@@ -74,17 +75,22 @@ begin
   AFromPool := False;
   Result.Clear;
   // lock-free LIFO 单源 via bytes.ops ArenaPoolAcquireSlot：acquire load + seq_cst CAS + fast fallback ARENA_POOL_MAX_RETRIES 3 次即堆回退 via cpu_pause 单次 16ns ≤48ns P95 <1µs 单机参考三机矩阵待补零 yield 掩盖 inline 零拷贝 O(1) 8数组指针交换；外联禁 inline 避 I-Cache 膨胀；容量与 finalization 单源池化通用抽象；8× ManagedArrayMove inline O(1) raw PPointer 避 8× 原子引用计数抖动 64并发零 Inc/Dec via bytes.ops 单源 Burst64 反哺 owner；尾>64 堆抖动已披露 via 阈值收缩 8192
-  if ArenaPoolAcquireSlot(GLiveArenaPoolTop, GLiveArenaShutdown, LIdx) then
-  begin
-    specialize ManagedArrayMove<Pointer>(Result.List, GLiveArenaPool[LIdx].List);
-    specialize ManagedArrayMove<UInt32>(Result.IDs, GLiveArenaPool[LIdx].IDs);
-    specialize ManagedArrayMove<UInt32>(Result.HKeys, GLiveArenaPool[LIdx].HKeys);
-    specialize ManagedArrayMove<Pointer>(Result.HVals, GLiveArenaPool[LIdx].HVals);
-    specialize ManagedArrayMove<Boolean>(Result.HUsed, GLiveArenaPool[LIdx].HUsed);
-    specialize ManagedArrayMove<Pointer>(Result.PKeys, GLiveArenaPool[LIdx].PKeys);
-    specialize ManagedArrayMove<Integer>(Result.PIdx, GLiveArenaPool[LIdx].PIdx);
-    specialize ManagedArrayMove<Boolean>(Result.PUsed, GLiveArenaPool[LIdx].PUsed);
-    AFromPool := True;
+  ArenaPoolLock(GLiveArenaLock);
+  try
+    if ArenaPoolAcquireSlot(GLiveArenaPoolTop, GLiveArenaShutdown, LIdx) then
+    begin
+      ManagedArrayMovePtr(Result.List, GLiveArenaPool[LIdx].List);
+      ManagedArrayMovePtr(Result.IDs, GLiveArenaPool[LIdx].IDs);
+      ManagedArrayMovePtr(Result.HKeys, GLiveArenaPool[LIdx].HKeys);
+      ManagedArrayMovePtr(Result.HVals, GLiveArenaPool[LIdx].HVals);
+      ManagedArrayMovePtr(Result.HUsed, GLiveArenaPool[LIdx].HUsed);
+      ManagedArrayMovePtr(Result.PKeys, GLiveArenaPool[LIdx].PKeys);
+      ManagedArrayMovePtr(Result.PIdx, GLiveArenaPool[LIdx].PIdx);
+      ManagedArrayMovePtr(Result.PUsed, GLiveArenaPool[LIdx].PUsed);
+      AFromPool := True;
+    end;
+  finally
+    ArenaPoolUnlock(GLiveArenaLock);
   end;
 end;
 
@@ -99,17 +105,22 @@ begin
     AArena.Clear;
     Exit;
   end;
-  if ArenaPoolRecycleSlot(GLiveArenaPoolTop, GLiveArenaShutdown, LIdx) then
-  begin
-    specialize ManagedArrayMove<Pointer>(GLiveArenaPool[LIdx].List, AArena.List);
-    specialize ManagedArrayMove<UInt32>(GLiveArenaPool[LIdx].IDs, AArena.IDs);
-    specialize ManagedArrayMove<UInt32>(GLiveArenaPool[LIdx].HKeys, AArena.HKeys);
-    specialize ManagedArrayMove<Pointer>(GLiveArenaPool[LIdx].HVals, AArena.HVals);
-    specialize ManagedArrayMove<Boolean>(GLiveArenaPool[LIdx].HUsed, AArena.HUsed);
-    specialize ManagedArrayMove<Pointer>(GLiveArenaPool[LIdx].PKeys, AArena.PKeys);
-    specialize ManagedArrayMove<Integer>(GLiveArenaPool[LIdx].PIdx, AArena.PIdx);
-    specialize ManagedArrayMove<Boolean>(GLiveArenaPool[LIdx].PUsed, AArena.PUsed);
-    Exit;
+  ArenaPoolLock(GLiveArenaLock);
+  try
+    if ArenaPoolRecycleSlot(GLiveArenaPoolTop, GLiveArenaShutdown, LIdx) then
+    begin
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].List, AArena.List);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].IDs, AArena.IDs);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].HKeys, AArena.HKeys);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].HVals, AArena.HVals);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].HUsed, AArena.HUsed);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].PKeys, AArena.PKeys);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].PIdx, AArena.PIdx);
+      ManagedArrayMovePtr(GLiveArenaPool[LIdx].PUsed, AArena.PUsed);
+      Exit;
+    end;
+  finally
+    ArenaPoolUnlock(GLiveArenaLock);
   end;
   if atomic_load(GLiveArenaShutdown, mo_acquire) <> 0 then
   begin

@@ -14,10 +14,11 @@ interface
 uses
   nextpas.core.window.intf,
   nextpas.core.window.queue,
+  nextpas.core.window.queue.base,
   nextpas.core.window.dispatcher.base;
 
 type
-  TFakeDispatcher = class(TWindowDispatcherBase)
+  TFakeDispatcher = class(TWindowDispatcherBase, IWindowDispatcher)
   private
     FBatch: TWindowWorkItems;
     FBatchPos: Integer;
