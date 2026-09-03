@@ -1,8 +1,8 @@
 {**
- * nextpas.core.graphics.effect - 特效门面 + 过程化 7 函重导出
+ * nextpas.core.graphics.effect - 特效门面 + 过程化 8 函重导出
  * 归属：L2 effect 家族真正门面，四件套 base←graph/procedural←facade；本单元聚合 graph 与 procedural，
  * 顶层 nextpas.core.effect 仅作 registry 桥接，避免双重门面污染。
- * 性能：inline 转发零拷贝；序列化复用 bytes.ops 单源（bytes.binary），无重复实现。
+ * 性能：inline 转发零拷贝；序列化复用 bytes.ops 单源（bytes.binary），Perlin/Wood 批化 simd 亲和。
  *}
 unit nextpas.core.graphics.effect;
 
@@ -29,6 +29,8 @@ function ProcGradientV(Size: Integer; Top, Bottom: TColor32): TBitmap; inline;
 function ProcMetal(Size: Integer; Base: TColor32; ScratchCount: Integer): TBitmap; inline;
 function ProcGrid(Size, LineWidth: Integer; Bg, Line: TColor32): TBitmap; inline;
 function ProcWood(Size: Integer; Base, Ring: TColor32): TBitmap; inline;
+function ProcPerlin(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap; inline;
+function ProcPerlinTiled(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap; inline;
 
 implementation
 
@@ -52,5 +54,11 @@ begin Result := nextpas.core.graphics.effect.procedural.ProcGrid(Size, LineWidth
 
 function ProcWood(Size: Integer; Base, Ring: TColor32): TBitmap;
 begin Result := nextpas.core.graphics.effect.procedural.ProcWood(Size, Base, Ring); end;
+
+function ProcPerlin(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap;
+begin Result := nextpas.core.graphics.effect.procedural.ProcPerlin(Size, CellSize, Base, Variation); end;
+
+function ProcPerlinTiled(Size, CellSize: Integer; Base: TColor32; Variation: Integer): TBitmap;
+begin Result := nextpas.core.graphics.effect.procedural.ProcPerlinTiled(Size, CellSize, Base, Variation); end;
 
 end.
