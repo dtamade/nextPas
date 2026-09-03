@@ -60,6 +60,36 @@ const
   REFLECT_MAX_TYPES = 512;
   REFLECT_MAX_FIELDS = 32;
 
+{ ============================================================ }
+{ FPC RTTI carrier (L0 pure: no uses, System intrinsics only)  }
+{ ============================================================ }
+
+type
+  {** TNPTypeKind - our own kind vocabulary, replaces PTypeInfo in APIs. *}
+  TNPTypeKind = (
+    nkUnknown,     { tkUnknown, tkHelper, tkFile, out-of-range bytes }
+    nkInteger,     { tkInteger: 8/16/32-bit signed and unsigned }
+    nkChar,        { tkChar, tkWChar, tkUChar }
+    nkEnumeration, { tkEnumeration, tkBool (Boolean is a 2-value enum) }
+    nkFloat,       { tkFloat: Single/Double/Extended/Currency }
+    nkString,      { tkSString, tkLString, tkAString, tkWString, tkUString }
+    nkSet,         { tkSet }
+    nkClass,       { tkClass, tkClassRef }
+    nkRecord,      { tkRecord, tkObject (TP value objects) }
+    nkInterface,   { tkInterface, tkInterfaceRaw }
+    nkInt64,       { tkInt64 }
+    nkQWord,       { tkQWord }
+    nkDynArray,    { tkDynArray }
+    nkArray,       { tkArray (static arrays) }
+    nkPointer,     { tkPointer }
+    nkProcedure,   { tkProcVar, tkMethod }
+    nkVariant      { tkVariant }
+  );
+
+  {** TNPTypeHandle - opaque RTTI carrier, assigns from TypeInfo() result. *}
+  TNPTypeHandle = Pointer;
+  PNPTypeHandle = ^TNPTypeHandle;
+
 implementation
 
 end.

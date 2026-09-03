@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.reflect.base,
-  nextpas.core.reflect.intf;
+  nextpas.core.reflect.intf,
+  nextpas.core.reflect.fpc;
 
 type
   TTypeID = nextpas.core.reflect.base.TTypeID;
@@ -19,6 +20,15 @@ type
   PTypeDef = nextpas.core.reflect.base.PTypeDef;
   ITypeVisitor = nextpas.core.reflect.intf.ITypeVisitor;
   ITypeRegistry = nextpas.core.reflect.intf.ITypeRegistry;
+  TNPTypeKind = nextpas.core.reflect.base.TNPTypeKind;
+  TNPTypeHandle = nextpas.core.reflect.base.TNPTypeHandle;
+  PNPTypeHandle = nextpas.core.reflect.base.PNPTypeHandle;
+
+{** FPC RTTI carrier (owned by reflect.fpc, re-exported here) *}
+function NPTypeKindOf(AHandle: TNPTypeHandle): TNPTypeKind; inline;
+function NPTypeNameOf(AHandle: TNPTypeHandle): string; inline;
+procedure ReflectInitializeArray(AHandle: TNPTypeHandle; APtr: Pointer; ACount: SizeInt); inline;
+function NPReflectSelfCheckPassed: Boolean; inline;
 
 {** 创建类型注册表实例 *}
 function CreateTypeRegistry: ITypeRegistry;
@@ -47,6 +57,28 @@ implementation
 
 uses
   nextpas.core.errors;
+
+{ RTTI carrier thin forwards (logic lives in reflect.fpc) }
+
+function NPTypeKindOf(AHandle: TNPTypeHandle): TNPTypeKind;
+begin
+  Result := nextpas.core.reflect.fpc.NPTypeKindOf(AHandle);
+end;
+
+function NPTypeNameOf(AHandle: TNPTypeHandle): string;
+begin
+  Result := nextpas.core.reflect.fpc.NPTypeNameOf(AHandle);
+end;
+
+procedure ReflectInitializeArray(AHandle: TNPTypeHandle; APtr: Pointer; ACount: SizeInt);
+begin
+  nextpas.core.reflect.fpc.ReflectInitializeArray(AHandle, APtr, ACount);
+end;
+
+function NPReflectSelfCheckPassed: Boolean;
+begin
+  Result := nextpas.core.reflect.fpc.NPReflectSelfCheckPassed;
+end;
 
 type
   TTypeRegistry = class(TInterfacedObject, ITypeRegistry)
