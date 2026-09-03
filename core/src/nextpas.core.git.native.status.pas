@@ -73,6 +73,7 @@ function GitCollectStatus(const AGitDir, AWorkTree: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util;
 
 type
@@ -82,6 +83,75 @@ type
     Mode: Cardinal;
   end;
   TPathOidArray = array of TPathOid;
+
+type
+  PDynHeader = ^TDynHeader;
+  TDynHeader = record RefCnt: PtrInt; High: PtrInt; end;
+  TIndexEntryArray = array of TGitIndexEntry;
+  TIntegerArray = array of Integer;
+
+procedure DynPokeLen(var A; ANewLen: SizeUInt); inline;
+var LP: Pointer;
+begin
+  LP := Pointer(A);
+  if LP = nil then
+  begin
+    if ANewLen <> 0 then
+      raise EInvalidOperation.Create('DynPokeLen: nil with non-zero len');
+    Exit;
+  end;
+  PDynHeader(PByte(LP) - SizeOf(TDynHeader))^.High := PtrInt(ANewLen) - 1;
+end;
+
+procedure EnsureCapPathOid(var A: TPathOidArray; AReq: Integer); inline;
+var LCap: Integer;
+begin
+  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
+  if Length(A) >= AReq then Exit;
+  LCap := BytesGrowCapacityInt(Length(A), AReq);
+  SetLength(A, LCap);
+  DynPokeLen(A, SizeUInt(AReq));
+end;
+
+procedure EnsureCapStr(var A: TStringArray; AReq: Integer); inline;
+var LCap: Integer;
+begin
+  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via refcounted string move, not inline per red-line 2
+  if Length(A) >= AReq then Exit;
+  LCap := BytesGrowCapacityInt(Length(A), AReq);
+  SetLength(A, LCap);
+  DynPokeLen(A, SizeUInt(AReq));
+end;
+
+procedure EnsureCapStatus(var A: TGitNativeStatusArray; AReq: Integer); inline;
+var LCap: Integer;
+begin
+  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
+  if Length(A) >= AReq then Exit;
+  LCap := BytesGrowCapacityInt(Length(A), AReq);
+  SetLength(A, LCap);
+  DynPokeLen(A, SizeUInt(AReq));
+end;
+
+procedure EnsureCapIndexEntry(var A: TIndexEntryArray; AReq: Integer); inline;
+var LCap: Integer;
+begin
+  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single assign, not inline per red-line 2
+  if Length(A) >= AReq then Exit;
+  LCap := BytesGrowCapacityInt(Length(A), AReq);
+  SetLength(A, LCap);
+  DynPokeLen(A, SizeUInt(AReq));
+end;
+
+procedure EnsureCapInt(var A: TIntegerArray; AReq: Integer); inline;
+var LCap: Integer;
+begin
+  // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single Move, not inline per red-line 2
+  if Length(A) >= AReq then Exit;
+  LCap := BytesGrowCapacityInt(Length(A), AReq);
+  SetLength(A, LCap);
+  DynPokeLen(A, SizeUInt(AReq));
+end;
 
 const
   CModeDir = $4000;
@@ -215,7 +285,7 @@ begin
         APrefix + Entries[I].Name + '/', AOut)
     else
     begin
-      SetLength(AOut, Length(AOut) + 1);
+      EnsureCapPathOid(AOut, Length(AOut) + 1);
       AOut[High(AOut)].Path := APrefix + Entries[I].Name;
       AOut[High(AOut)].Oid := Entries[I].Oid;
       AOut[High(AOut)].Mode := Entries[I].Mode;
@@ -545,7 +615,7 @@ begin
       else if (not SortedHasString(ATrackedSorted, Rel))
         and (not AIgnore.IsIgnored(Rel, False)) then
       begin
-        SetLength(AOut, Length(AOut) + 1);
+        EnsureCapStr(AOut, Length(AOut) + 1);
         AOut[High(AOut)] := Rel;
       end;
     end;
@@ -560,7 +630,7 @@ procedure AppendStatus(var AOut: TGitNativeStatusArray;
 begin
   if (AHeadCode = gscUnmodified) and (AWorkCode = gscUnmodified) then
     Exit;
-  SetLength(AOut, Length(AOut) + 1);
+  EnsureCapStatus(AOut, Length(AOut) + 1);
   AOut[High(AOut)].Path := APath;
   AOut[High(AOut)].OldPath := '';
   AOut[High(AOut)].Similarity := 0;
@@ -572,7 +642,7 @@ procedure AppendRenamed(var AOut: TGitNativeStatusArray;
   const AOldPath, ANewPath: string; ASimilarity: Byte;
   AWorkCode: TGitStatusCode);
 begin
-  SetLength(AOut, Length(AOut) + 1);
+  EnsureCapStatus(AOut, Length(AOut) + 1);
   AOut[High(AOut)].Path := ANewPath;
   AOut[High(AOut)].OldPath := AOldPath;
   AOut[High(AOut)].Similarity := ASimilarity;
@@ -584,7 +654,7 @@ procedure AppendCopied(var AOut: TGitNativeStatusArray;
   const AOldPath, ANewPath: string; ASimilarity: Byte;
   AWorkCode: TGitStatusCode);
 begin
-  SetLength(AOut, Length(AOut) + 1);
+  EnsureCapStatus(AOut, Length(AOut) + 1);
   AOut[High(AOut)].Path := ANewPath;
   AOut[High(AOut)].OldPath := AOldPath;
   AOut[High(AOut)].Similarity := ASimilarity;
@@ -712,19 +782,29 @@ var
   I: Integer;
 
   // rename detection structures
-  Stage0Entries: array of TGitIndexEntry;
-  Stage0Pos: array of Integer;
+  Stage0Entries: TIndexEntryArray;
+  Stage0Pos: TIntegerArray;
   Deletes: TPathOidArray;
   Adds: TPathOidArray;
-  AddEntryPos: array of Integer;
+  AddEntryPos: TIntegerArray;
   BothPaths: TPathOidArray;
-  BothEntry: array of TGitIndexEntry;
+  BothEntry: TIndexEntryArray;
   Candidates: TRenameCandidateArray;
   PairedSrc: array of Boolean;
   PairedDst: array of Boolean;
   RenamePairs: TRenameCandidateArray;
   CopyPairs: TRenameCandidateArray;
   TrackedStatus: TGitNativeStatusArray;
+
+  procedure EnsureCapRenameLocal(var A: TRenameCandidateArray; AReq: Integer); inline;
+  var LCap: Integer;
+  begin
+    // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1), zero-copy via single Move, not inline per red-line 2
+    if Length(A) >= AReq then Exit;
+    LCap := BytesGrowCapacityInt(Length(A), AReq);
+    SetLength(A, LCap);
+    DynPokeLen(A, SizeUInt(AReq));
+  end;
 
   procedure BuildStage0;
   var
@@ -736,9 +816,9 @@ var
     begin
       if Idx.Entries[K].Stage <> 0 then
         Continue;
-      SetLength(Stage0Entries, Length(Stage0Entries) + 1);
+      EnsureCapIndexEntry(Stage0Entries, Length(Stage0Entries) + 1);
       Stage0Entries[High(Stage0Entries)] := Idx.Entries[K];
-      SetLength(Stage0Pos, Length(Stage0Pos) + 1);
+      EnsureCapInt(Stage0Pos, Length(Stage0Pos) + 1);
       Stage0Pos[High(Stage0Pos)] := K;
     end;
   end;
@@ -758,26 +838,26 @@ var
     begin
       if HeadList[HI].Path < Stage0Entries[SI].Path then
       begin
-        SetLength(Deletes, Length(Deletes) + 1);
+        EnsureCapPathOid(Deletes, Length(Deletes) + 1);
         Deletes[High(Deletes)] := HeadList[HI];
         Inc(HI);
       end
       else if HeadList[HI].Path > Stage0Entries[SI].Path then
       begin
-        SetLength(Adds, Length(Adds) + 1);
+        EnsureCapPathOid(Adds, Length(Adds) + 1);
         Adds[High(Adds)].Path := Stage0Entries[SI].Path;
         Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
         Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-        SetLength(AddEntryPos, Length(AddEntryPos) + 1);
+        EnsureCapInt(AddEntryPos, Length(AddEntryPos) + 1);
         AddEntryPos[High(AddEntryPos)] := SI;
         Inc(SI);
       end
       else
       begin
         // present in both — potential modify
-        SetLength(BothPaths, Length(BothPaths) + 1);
+        EnsureCapPathOid(BothPaths, Length(BothPaths) + 1);
         BothPaths[High(BothPaths)] := HeadList[HI];
-        SetLength(BothEntry, Length(BothEntry) + 1);
+        EnsureCapIndexEntry(BothEntry, Length(BothEntry) + 1);
         BothEntry[High(BothEntry)] := Stage0Entries[SI];
         Inc(HI);
         Inc(SI);
@@ -785,17 +865,17 @@ var
     end;
     while HI <= High(HeadList) do
     begin
-      SetLength(Deletes, Length(Deletes) + 1);
+      EnsureCapPathOid(Deletes, Length(Deletes) + 1);
       Deletes[High(Deletes)] := HeadList[HI];
       Inc(HI);
     end;
     while SI <= High(Stage0Entries) do
     begin
-      SetLength(Adds, Length(Adds) + 1);
+      EnsureCapPathOid(Adds, Length(Adds) + 1);
       Adds[High(Adds)].Path := Stage0Entries[SI].Path;
       Adds[High(Adds)].Oid := Stage0Entries[SI].Oid;
       Adds[High(Adds)].Mode := Stage0Entries[SI].Mode;
-      SetLength(AddEntryPos, Length(AddEntryPos) + 1);
+      EnsureCapInt(AddEntryPos, Length(AddEntryPos) + 1);
       AddEntryPos[High(AddEntryPos)] := SI;
       Inc(SI);
     end;
@@ -880,7 +960,7 @@ begin
       if (Length(Tracked) = 0)
         or (Tracked[High(Tracked)] <> Idx.Entries[I].Path) then
       begin
-        SetLength(Tracked, Length(Tracked) + 1);
+        EnsureCapStr(Tracked, Length(Tracked) + 1);
         Tracked[High(Tracked)] := Idx.Entries[I].Path;
       end;
 
@@ -995,7 +1075,7 @@ begin
             UntrackedStatus := nil;
             for I := 0 to High(UntrackedPaths) do
             begin
-              SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
+              EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
               UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
               UntrackedStatus[High(UntrackedStatus)].OldPath := '';
               UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
@@ -1048,7 +1128,7 @@ begin
         UntrackedStatus := nil;
         for I := 0 to High(UntrackedPaths) do
         begin
-          SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
+          EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
           UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
           UntrackedStatus[High(UntrackedStatus)].OldPath := '';
           UntrackedStatus[High(UntrackedStatus)].Similarity := 0;
@@ -1075,7 +1155,7 @@ begin
           Continue;
         if Score < 0 then
           Continue;
-        SetLength(Candidates, Length(Candidates) + 1);
+        EnsureCapRenameLocal(Candidates, Length(Candidates) + 1);
         Candidates[High(Candidates)].SrcIdx := SI2;
         Candidates[High(Candidates)].DstIdx := DI2;
         Candidates[High(Candidates)].Score := Score;
@@ -1099,7 +1179,7 @@ begin
         Continue;
       PairedSrc[Cand.SrcIdx] := True;
       PairedDst[Cand.DstIdx] := True;
-      SetLength(RenamePairs, Length(RenamePairs) + 1);
+      EnsureCapRenameLocal(RenamePairs, Length(RenamePairs) + 1);
       RenamePairs[High(RenamePairs)] := Cand;
     end;
 
@@ -1121,7 +1201,7 @@ begin
             Continue;
           if Score < 0 then
             Continue;
-          SetLength(Candidates, Length(Candidates) + 1);
+          EnsureCapRenameLocal(Candidates, Length(Candidates) + 1);
           Candidates[High(Candidates)].SrcIdx := SI2;
           Candidates[High(Candidates)].DstIdx := DI2;
           Candidates[High(Candidates)].Score := Score;
@@ -1135,7 +1215,7 @@ begin
           Continue;
         // for copies, sources may be reused, so no PairedSrc check
         PairedDst[Cand.DstIdx] := True;
-        SetLength(CopyPairs, Length(CopyPairs) + 1);
+        EnsureCapRenameLocal(CopyPairs, Length(CopyPairs) + 1);
         CopyPairs[High(CopyPairs)] := Cand;
         // map copy src idx is into HeadList, need to preserve for later
       end;
@@ -1199,7 +1279,7 @@ begin
       UntrackedStatus := nil;
       for I := 0 to High(UntrackedPaths) do
       begin
-        SetLength(UntrackedStatus, Length(UntrackedStatus) + 1);
+        EnsureCapStatus(UntrackedStatus, Length(UntrackedStatus) + 1);
         UntrackedStatus[High(UntrackedStatus)].Path := UntrackedPaths[I];
         UntrackedStatus[High(UntrackedStatus)].OldPath := '';
         UntrackedStatus[High(UntrackedStatus)].Similarity := 0;

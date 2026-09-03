@@ -330,6 +330,7 @@ TWireRequest = record
                                       物理头由 transport/http client 补全 }
   ConnectTimeoutMs: Int64;          { CTimeoutDefault }
   TotalTimeoutMs: Int64;            { CTimeoutDefault }
+  ReadIdleTimeoutMs: Int64;         { CTimeoutDefault=0 禁用；流式块间空闲超时（W7，WIRE-MAPPINGS §0）}
 end;
 
 TWireResponse = record
@@ -409,6 +410,12 @@ IAgentTranscriptStore = interface
   procedure Append(const AThreadId: string; const AMsg: TMessage);
   function Load(const AThreadId: string): TMessageArray;
   procedure Delete(const AThreadId: string);
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
+end;
+
+IAgentTranscriptFork = interface
+  ['{7A1B2C3D-4E5F-4A6B-8C9D-0E1F2A3B4C5D}']
+  procedure Fork(const ASrcThreadId, ADstThreadId: string);
 end;
 ```
 
@@ -468,10 +475,11 @@ function NewJsonlTranscriptStore(const ARootDir: string;
 type
   { JSONL 落地 store：一线程一文件 <RootDir>/<ThreadId>.jsonl；torn-tail
     崩溃恢复、SyncEachAppend fsync 节奏选项（默认每追加落盘）。
-    Fork 为实例方法——接口 Append/Load/Delete 三方法面保持冻结不变。
+    Fork 为接口第四方法（2026-09-01 起纳入 IAgentTranscriptStore），同时以
+    独立能力接口 IAgentTranscriptFork 暴露——存量三方法实现向四方法平滑过渡。
     ETranscriptCorrupt（aecProtocol 固定码，消息含行号）为损坏 fail-closed
     异常；ThreadId 非法抛 EAgentMisuse }
-  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore)
+  TJsonlTranscriptStore = class(TInterfacedObject, IAgentTranscriptStore, IAgentTranscriptFork)
   public
     procedure Fork(const ASrcThreadId, ADstThreadId: string);
     property RootDir: string read FRootDir;
@@ -950,6 +958,33 @@ end;
 - 网关型客户的入站侧解析（server 方向）不属于本模块范围（README 非目标），
   词表可直接复用。
 
+## 8.5 有界快照与流式盒（Phase4 复用面，`snapshot`/`streambox`）
+
+> 经 `nextpas.core.agent` 门面一站式透出，零直接依赖 FPC RTL（`StringOfChar/SyncObjs` 已反哺 `nextpas.core`）。
+
+```pascal
+// 有界快照：6000 B 预算的合并去重 + 簇安全截断 + 成本联动（PROMPT-BUDGET.md §2/§5）
+const CBoundedSnapshotBudget = 6000; // `nextpas.core.agent.snapshot` 单一真源
+function BuildBoundedSnapshot(const ASystem: string;
+  const AMessages: TMessageArray; ABudget: Integer = CBoundedSnapshotBudget): string;
+function BoundedSnapshotTokens(const ASnapshot: string): Int64; // AgentEstimateTokens 单一真源
+function BoundedSnapshotCost(const ASnapshot: string; ACompletionTokens: Int64 = 0): Int64; // pricing.EstimateCost
+
+// 流式盒：Lock+Done+id 迟到丢弃（PERFORMANCE.md §7.2，经 platform.sync TPlatformMutex）
+type TAgentStreamBox = class
+  constructor Create(AId: UInt64);
+  destructor Destroy; override;
+  procedure Push(const ADelta: TStreamDelta; AId: UInt64); // 失配或已 Done 即丢弃
+  function TryPop(out ADelta: TStreamDelta): Boolean; // FIFO 顺序消费
+  procedure MarkDone;
+  function IsDone: Boolean;
+  property Id: UInt64 read FId;
+end;
+```
+
+- `BuildBoundedSnapshot` 语义：`AgentBuildSystemText` 全量 → `≤ABudget` 原样返回；越限则 `AgentUtf8SafeCutLen` 后向回退到合法 UTF-8 边界，再以前向 `GraphemeNext` 遍历找 ≤预算 的最大簇边界（`👨‍👩‍👧/🇨🇳/1️⃣` 不半切，`PERFORMANCE.md §7.1`），零中间分配。
+- `TAgentStreamBox` 对应 `ARCHITECTURE.md §4`“取消后资源由拥有线程独占收尾”：`Push` 在 `Id` 失配或 `Done=True` 时丢弃迟到增量，与 `fold.TAssistantBuild`/`tools.WriteGuard` 同源；消费侧 `TryPop` 单线程 `Lock` 保护，`MarkDone` 后不再接收。
+
 ## 9. 版本与稳定性
 
 - v1 全部公共表面标注 draft；首个 landing 后进入 registry truth-level 演进流程。
@@ -983,11 +1018,14 @@ end;
 | 初始容量 · 工具参数 builder | 1_024（`base.CAgentToolArgsInitialCap`） | `nextpas.core.agent.base` |
 | 初始容量 · System 去重拼接 | 512（`base.CAgentSystemTextInitialCap`） | `nextpas.core.agent.base` |
 | 初始容量 · Session Fork | 1_024（`base.CAgentSessionForkInitialCap`） | `nextpas.core.agent.base` |
+| 配额窗口 `pqDay/pqWeek/pqMonth` | 86_400 / 604_800 / 2_592_000 秒（`PlatformQuotaWindowSeconds` 单一真源，4 标量全 `inline`；`WindowExpired` 含 `AStart≤0` 永不过期与 `ANow<AStart` 回拨过期；`Exceeded` 含 `High` 溢出钳制） | `nextpas.core.agent.quota` |
 | Logger 缺省 | `nil` → `NullLogger`（`log.intf`，零开销） | SELECTION C15 |
 | env 前缀 | `NEXTPAS_AGENT_<VENDOR>_` | CONSUMERS §3 |
 | 定价 · RateDenominator / ARateMultiplier 默认 | 10_000（1.0x；`TModelPricing.RateDenominator` 缺省，`EstimateCost` 的 `ARateMultiplier` 默认 10_000，`<=0` 按 1.0x） | pricing 单元 |
 | 定价 · EstimateCost 舍入 | `(prompt*per1kPrompt+500) div 1000 + (completion*per1kCompletion*rate+5000) div 10000` μUSD（整数微元，四舍五入同源 `tk888.billing.pas:22,212`） | pricing 单元 |
 | 定价 · ImageTier 档位 | max-edge ≤1024→1000 · ≤2048→2000 · else 4000（含 `2048x2048→2000` 特判 `billing:470`） | pricing 单元 |
 | 定价 · TPassthroughPricing.FlatCostUsd6 缺省 | 0（未定价不计费） | pricing 单元 |
+| 有界快照预算 `CBoundedSnapshotBudget` | 6000 | `nextpas.core.agent.snapshot` 单一真源（门面 `CBoundedSnapshotBudget` 透出，`PROMPT-BUDGET.md` 有界管线） |
+| 流式盒 `TAgentStreamBox` 初始态 | `Done=False, Id=AId, Pending=[]` | `nextpas.core.agent.streambox`（`TPlatformMutex` 零 `SyncObjs`） |
 
 > 修改任何默认值必须同步本表与 `nextpas.core.agent.base` 常量定义，并跑受影响 gate。

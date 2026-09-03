@@ -213,21 +213,11 @@ procedure TBufStringBuilder.Grow(const ANeeded: SizeUInt);
 var
   LNewCap, LRequired: SizeUInt;
 begin
+  // single source: reuse bytes.ops.BytesGrowCapacity (INV-2, amortized O(1) geometric, BYTES_BUILDER_MIN_GROW) — not inline per red-line 2 (while loop I-Cache); zero-copy capacity math, sized ReallocMemSized
   if ANeeded > High(SizeUInt) - FLen then
     raise EOverflow.Create('string builder capacity overflow');
   LRequired := FLen + ANeeded;
-  LNewCap := FCap;
-  if LNewCap = 0 then
-    LNewCap := 256;
-  while LNewCap < LRequired do
-  begin
-    if LNewCap > (High(SizeUInt) shr 1) then
-    begin
-      LNewCap := LRequired;
-      Break;
-    end;
-    LNewCap := LNewCap * 2;
-  end;
+  LNewCap := nextpas.core.bytes.ops.BytesGrowCapacity(FCap, LRequired);
   { 接口面 sized 辅助（CA-016，owner decision 2026-08-10）：allocator<>nil
     委托 IAllocator 方法（分配器内部跟踪 size），nil 走 System 堆（RTL
     自跟踪）。与门面 ReallocMemOf 语义分层——不触碰 mem 门面 graph，
@@ -300,7 +290,11 @@ begin
   if ACount = 0 then Exit;
   if FLen + ACount > FCap then
     Grow(ACount);
-  FillChar(FBuf[FLen], ACount, Byte(ACh));
+  // perf: single source Fill via bytes.ops (BytesZero for 0, SpanFill for arbitrary) inline zero-copy, no raw FillChar — L1 single source, red-line 1/2
+  if Byte(ACh) = 0 then
+    nextpas.core.bytes.ops.BytesZero(FBuf + FLen, ACount)
+  else
+    nextpas.core.bytes.ops.SpanFill(TByteSpan.Create(PByte(FBuf + FLen), ACount), Byte(ACh));
   Inc(FLen, ACount);
 end;
 
@@ -311,7 +305,8 @@ begin
     raise EInvalidArgument.Create('string builder view data is nil');
   if FLen + AView.Len > FCap then
     Grow(AView.Len);
-  Move(AView.Data^, FBuf[FLen], AView.Len);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, AView.Data, AView.Len);
   Inc(FLen, AView.Len);
 end;
 
@@ -323,7 +318,8 @@ begin
   if L = 0 then Exit;
   if FLen + L > FCap then
     Grow(L);
-  Move(PAnsiChar(AStr)^, FBuf[FLen], L);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, PAnsiChar(AStr), L);
   Inc(FLen, L);
 end;
 
@@ -334,7 +330,8 @@ begin
     raise EInvalidArgument.Create('string builder byte source is nil');
   if FLen + ALen > FCap then
     Grow(ALen);
-  Move(AData^, FBuf[FLen], ALen);
+  // perf: zero-copy single Move via bytes.ops.BytesCopy inline single source (L1 单源, red-line 1/2), no raw Move, inline hot path
+  nextpas.core.bytes.ops.BytesCopy(FBuf + FLen, AData, ALen);
   Inc(FLen, ALen);
 end;
 

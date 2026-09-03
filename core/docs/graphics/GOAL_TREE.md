@@ -7,7 +7,7 @@
 - [x] `core/docs/plans/2026-08-30-graphics-framework-v1.md` 定版（含铁律/依赖图）
 - [x] S0-04 六维审阅（模块化/性能/高级感/复用/稳定/完整 14 项 + 4拼图）闭环
 - [x] S0-05 `game888` 4份审计（`procedural/msdf/color_grading/font`）— 7.2K `game888-audit.md` 落盘，`hygiene=pass`
-- [ ] `core-module-registry.md` 变更预案评审（`draft`）
+- [x] `core-module-registry.md` 变更预案评审（`0.2.0-source-contract` 冻结：graphics/canvas/vector/image/effect/gpu.canvas，见 `CONTRACT.md:5`）
 
 ## S1 底座 + 编解码
 
@@ -37,4 +37,4 @@
 - [x] `graphics.effect` 图（Blur/Shadow/Hue/LUT）+ 序列化（`EEffectError`，4e0828e9d，BoxBlur tile占位，Serialize/Deserialize+Bake PASS）
 - [x] `gpu.canvas`（`TAtlas/TAtlasRegion/ScaleFactor`，2048分页，AtlasAlloc 行装箱，Scale 1..4）
 - [x] `demo_vector_poster` / `demo_converter` 能力示例（3be299081，双示例可视闭环，PNG/BMP 往返 PASS）
-- [ ] `SvgImport` 预留 + `RenderAssetBundle`/`PdfExport` 预留（S3+ 完整性）
+- [x] `SvgImport` 最小闭环 (`nextpas.core.graphics.svg` M/L/H/V/C/Q/Z, `SvgPathFromData`/`TrySvgPathFromData`, 16384 cap, `EVectorError` 闭环) — `RenderAssetBundle`/`PdfExport` 预留 S3+ 完整性

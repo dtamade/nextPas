@@ -40,6 +40,8 @@
 | `test_session` | W5 JSONL 转录存储 | 全词表无损往返（thinking+signature+tool_call+tool_result is_error+image+extra）；跨实例持久；torn tail 丢弃；损坏行/未知版本/未知 kind fail-closed 含行号；Delete 幂等；缺失线程空载；ThreadId 校验全集防路径穿越；Fork 干净快照且拒绝已存在目标/自 fork；双同步模式；Unicode 与转义往返；usage unknown 不伪造 0 |
 | `test_pricing` | 定价纯策略（Phase1 T1.1） | `EstimateCost` 四舍五入整数μUSD 与 2048x2048 特判、`ImageTierOf` 三档、`AgentEstimateTokens` ~4字符/token 粗估；`TPassthroughPricing` FlatCost 零IO |
 | `test_quota` | 配额标量滚动（Phase1 T1.2） | `PlatformQuotaWindowSeconds` 86400/604800/2592000、`PlatformQuotaExpired/Usage/Exceeded` 窗口过期与超限纯函数、`SerializePlatformQuotaItem` 往返 |
+| `test_snapshot` | 有界快照（Phase4） | 预算边界/去重拼接/UTF-8 安全切/簇安全（`👨‍👩‍👧/🇨🇳/1️⃣` 不半切）/ASCII 快路径/`BoundedSnapshotTokens/Cost` 成本联动；`CBoundedSnapshotBudget=6000` 单一真源 |
+| `test_streambox` | 流式盒（Phase4） | `TAgentStreamBox` 基础推拉/FIFO/Id 失配丢弃/`Done` 终态阻断/环形 `FHead` 摊销 O(1) 压缩（>64 且过半 `Move` 前移 + 托管逐项赋值）；HEAPTRC 零泄漏 |
 
 ## 3. 测试基建
 

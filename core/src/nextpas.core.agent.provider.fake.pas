@@ -21,6 +21,7 @@ unit nextpas.core.agent.provider.fake;
 interface
 
 uses
+  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.async.cancellation,
   nextpas.core.json,
@@ -90,17 +91,31 @@ begin
       ADelta.TextDelta := StrFieldOf(AItem, 'text');
     sdkToolCallStart:
       begin
+        if not AItem.Get('index').IsInt then
+          ScriptError('tool_call_start missing integer "index"');
         ADelta.ToolIndex := AItem.Get('index').AsInt;
+        if ADelta.ToolIndex < 0 then
+          ScriptError('tool_call "index" must be >= 0');
         ADelta.ToolCallId := StrFieldOf(AItem, 'id');
         ADelta.ToolName := StrFieldOf(AItem, 'name');
       end;
     sdkToolCallDelta:
       begin
+        if not AItem.Get('index').IsInt then
+          ScriptError('tool_call_delta missing integer "index"');
         ADelta.ToolIndex := AItem.Get('index').AsInt;
+        if ADelta.ToolIndex < 0 then
+          ScriptError('tool_call "index" must be >= 0');
         ADelta.ArgumentsDelta := StrFieldOf(AItem, 'args');
       end;
     sdkToolCallEnd:
-      ADelta.ToolIndex := AItem.Get('index').AsInt;
+      begin
+        if not AItem.Get('index').IsInt then
+          ScriptError('tool_call_end missing integer "index"');
+        ADelta.ToolIndex := AItem.Get('index').AsInt;
+        if ADelta.ToolIndex < 0 then
+          ScriptError('tool_call "index" must be >= 0');
+      end;
     sdkFinish:
       begin
         LReason := StrFieldOf(AItem, 'reason');
@@ -110,8 +125,14 @@ begin
       end;
     sdkUsage:
       begin
+        if not AItem.Get('in').IsInt then
+          ScriptError('usage missing integer "in"');
+        if not AItem.Get('out').IsInt then
+          ScriptError('usage missing integer "out"');
         ADelta.Usage.InputTokens := AItem.Get('in').AsInt;
         ADelta.Usage.OutputTokens := AItem.Get('out').AsInt;
+        if (ADelta.Usage.InputTokens < 0) or (ADelta.Usage.OutputTokens < 0) then
+          ScriptError('usage tokens must be >= 0');
       end;
     sdkError:
       begin

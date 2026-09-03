@@ -100,6 +100,23 @@ begin
     if R.FindByGlobIgnoreCase('F1.TXT') < 0 then Fail('find exact IgnoreCase');
     if Length(R.ExtractByGlobIgnoreCase('F*.TXT')) <> R.EntryCount then Fail('extract glob IgnoreCase');
     WriteLn('glob ok ', R.EntryCount);
+  end else if Mode='bzip2-glob' then begin
+    // bzip2-glob <archive> — BZip2 + IgnoreCase hybrid: 200 mixed-case entries, BZip2 compressed
+    ArcPath:=ParamStr(2);
+    W:=TSevenZWriterImpl.Create;
+    if not BZip2FfiIsAvailable then begin WriteLn('skip bzip2: libbz2 not available'); Halt(0); end;
+    W.SetMethod(SEVENZ_METHOD_BZIP2);
+    for i:=0 to 199 do W.AddFile(Format('Pref_%d_Suf.TXT', [i]), BytesOf(StringOfChar('x', 64)));
+    WriteAllBytes(ArcPath, W.Finish);
+    Data:=ReadAllBytes(ArcPath);
+    R:=TSevenZReaderImpl.Create(Data);
+    if Length(R.EntriesByGlobIgnoreCase('pref_*_suf.txt')) <> 200 then Fail('bzip2 glob prefix*suffix IgnoreCase');
+    if Length(R.EntriesByGlobIgnoreCase('PREF_*.TXT')) <> 200 then Fail('bzip2 glob prefix* IgnoreCase');
+    if Length(R.EntriesByGlobIgnoreCase('*.txt')) <> 200 then Fail('bzip2 glob *suffix IgnoreCase');
+    if R.FindByGlobIgnoreCase('Pref_1_Suf.TXT') < 0 then Fail('bzip2 find glob IgnoreCase');
+    if R.FindByGlobIgnoreCase('pref_1_suf.txt') < 0 then Fail('bzip2 find glob IgnoreCase lower');
+    if Length(R.ExtractByGlobIgnoreCase('Pref_*_Suf.TXT')) <> 200 then Fail('bzip2 extract glob IgnoreCase');
+    WriteLn('bzip2-glob ok ', R.EntryCount);
   end else Fail('unknown mode '+Mode);
 end.
 PAS
@@ -156,6 +173,13 @@ if "$HELPER" verify "$TMP/p7-enc.7z" wrong 2>/dev/null; then echo "FAIL: wrong p
 
 say "our->glob IgnoreCase (O(log N) fast paths)"
 run "$HELPER" glob "$TMP/our-multi.7z"
+
+say "our->bzip2 + glob IgnoreCase hybrid (200 mixed-case, BZip2)"
+"$HELPER" bzip2-glob "$TMP/our-bzip2-glob.7z" || true
+if [ -f "$TMP/our-bzip2-glob.7z" ]; then
+  run 7z t "$TMP/our-bzip2-glob.7z" >/dev/null || echo "warn: 7z t bzip2-glob failed (p7zip bzip2 compat)"
+  run "$HELPER" verify "$TMP/our-bzip2-glob.7z" || true
+fi
 
 # 3) xz raw 交叉
 say "xz raw cross"

@@ -125,6 +125,7 @@ procedure AgentValidateWireHeaders(const AHeaders: TWireHeaderArray); inline;
 implementation
 
 uses
+  nextpas.core.json.value,
   nextpas.core.json,
   nextpas.core.text.conv,
   nextpas.core.text.view;

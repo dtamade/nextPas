@@ -32,18 +32,20 @@ const
   endBig = nextpas.core.bytes.base.endBig;
   NATIVE_ENDIAN = nextpas.core.bytes.base.NATIVE_ENDIAN;
 
-{ Builder }
-function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline;
+{ Builder — single source via bytes.builder, inline zero-copy }
+function MakeBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline;
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt = BYTES_BUILDER_DEFAULT_CAPACITY): IBytesBuilder; inline; deprecated 'Use MakeBytesBuilder';
 
-{ Cursor }
+{ Cursor — single source via bytes.cursor, inline }
 function NewByteCursor(const AData: TBytes): IByteCursor; inline;
 function NewByteCursorAt(const AData: PByte; ALen: SizeUInt): IByteCursor; inline;
 
-{ Span ops }
+{ Span ops — single source via bytes.ops, inline/zero-copy TByteSpan view }
 function SpanEqual(const A, B: TByteSpan): Boolean; inline;
 function SpanCompare(const A, B: TByteSpan): Integer; inline;
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt; inline;
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean; inline;
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean; inline;
@@ -53,7 +55,7 @@ function SpanConcat(const A, B: TByteSpan): TBytes; inline;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes; inline;
 function SpanClone(const ASpan: TByteSpan): TBytes; inline;
 
-{ TBytes convenience }
+{ TBytes convenience — single source via bytes.ops, inline thin-forward to Span }
 function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
@@ -61,19 +63,29 @@ function BytesConcat(const A, B: TBytes): TBytes; inline;
 function BytesStartsWith(const AData, APrefix: TBytes): Boolean; inline;
 function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
-{ String <-> bytes (single source via bytes.ops, compile-time gate BYTES_OPS_SINGLE_SOURCE) }
+{ String <-> bytes — single source via bytes.ops (INV-5), inline thin-forward, zero-copy TByteSpan view; no duplicate Move/SetLength — owner bytes.ops only }
+function SpanToString(const ASpan: TByteSpan): string; inline;
+function SpanToUTF8(const ASpan: TByteSpan): string; inline;
 function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 function AnsiToUpperStr(const AData: PAnsiChar; const ALen: SizeUInt): string; inline;
 
-{ Binary: swap }
+{ Unsigned helpers — single source via bytes.ops, inline }
+function StripLeadingZero(const AData: TBytes): TBytes; inline;
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
+function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+
+{ Binary: swap — single source via bytes.binary, inline zero-copy register }
 function SwapUInt16(const AValue: UInt16): UInt16; inline;
 function SwapUInt32(const AValue: UInt32): UInt32; inline;
 function SwapUInt64(const AValue: UInt64): UInt64; inline;
 
-{ Binary: endian conversion }
+{ Binary: endian conversion — single source via bytes.binary, inline }
 function ToEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16; inline;
 function ToEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32; inline;
 function ToEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64; inline;
@@ -81,7 +93,7 @@ function FromEndian16(const AValue: UInt16; const AEndian: TEndianness): UInt16;
 function FromEndian32(const AValue: UInt32; const AEndian: TEndianness): UInt32; inline;
 function FromEndian64(const AValue: UInt64; const AEndian: TEndianness): UInt64; inline;
 
-{ Binary: read from pointer }
+{ Binary: read from pointer — single source via bytes.binary, inline }
 function ReadUInt16LE(const ASrc: PByte): UInt16; inline;
 function ReadUInt16BE(const ASrc: PByte): UInt16; inline;
 function ReadUInt32LE(const ASrc: PByte): UInt32; inline;
@@ -89,7 +101,7 @@ function ReadUInt32BE(const ASrc: PByte): UInt32; inline;
 function ReadUInt64LE(const ASrc: PByte): UInt64; inline;
 function ReadUInt64BE(const ASrc: PByte): UInt64; inline;
 
-{ Binary: write to pointer }
+{ Binary: write to pointer — single source via bytes.binary, inline }
 procedure WriteUInt16LE(const ADst: PByte; const AValue: UInt16); inline;
 procedure WriteUInt16BE(const ADst: PByte; const AValue: UInt16); inline;
 procedure WriteUInt32LE(const ADst: PByte; const AValue: UInt32); inline;
@@ -97,7 +109,7 @@ procedure WriteUInt32BE(const ADst: PByte; const AValue: UInt32); inline;
 procedure WriteUInt64LE(const ADst: PByte; const AValue: UInt64); inline;
 procedure WriteUInt64BE(const ADst: PByte; const AValue: UInt64); inline;
 
-{ Binary: advancing cursor read }
+{ Binary: advancing cursor read — single source via bytes.binary, inline }
 function TryReadUInt8(var ASpan: TByteSpan; out AValue: Byte): Boolean; inline;
 function TryReadUInt16LE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
 function TryReadUInt16BE(var ASpan: TByteSpan; out AValue: UInt16): Boolean; inline;
@@ -106,7 +118,7 @@ function TryReadUInt32BE(var ASpan: TByteSpan; out AValue: UInt32): Boolean; inl
 function TryReadUInt64LE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 function TryReadUInt64BE(var ASpan: TByteSpan; out AValue: UInt64): Boolean; inline;
 
-{ Binary: advancing cursor write }
+{ Binary: advancing cursor write — single source via bytes.binary, inline }
 function TryWriteUInt8(var ASpan: TByteSpan; const AValue: Byte): Boolean; inline;
 function TryWriteUInt16LE(var ASpan: TByteSpan; const AValue: UInt16): Boolean; inline;
 function TryWriteUInt16BE(var ASpan: TByteSpan; const AValue: UInt16): Boolean; inline;
@@ -119,9 +131,14 @@ implementation
 
 { Builder }
 
-function CreateBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder; inline;
+function MakeBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder; inline;
 begin
   Result := nextpas.core.bytes.builder.CreateBytesBuilder(AInitialCapacity);
+end;
+
+function CreateBytesBuilder(const AInitialCapacity: SizeUInt): IBytesBuilder; inline;
+begin
+  Result := MakeBytesBuilder(AInitialCapacity);
 end;
 
 { Cursor }
@@ -158,6 +175,10 @@ begin
   Result := nextpas.core.bytes.ops.SpanIndexOfSpan(AHaystack, ANeedle);
 end;
 
+function SpanLastIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.SpanLastIndexOfSpan(AHaystack, ANeedle);
+end;
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean; inline;
 begin
   Result := nextpas.core.bytes.ops.SpanContains(AHaystack, ANeedle);
@@ -230,6 +251,17 @@ begin
   Result := nextpas.core.bytes.ops.BytesEndsWith(AData, ASuffix);
 end;
 
+{ String <-> bytes }
+
+function SpanToString(const ASpan: TByteSpan): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.SpanToString(ASpan);
+end;
+
+function SpanToUTF8(const ASpan: TByteSpan): string; inline;
+begin
+  Result := nextpas.core.bytes.ops.SpanToUTF8(ASpan);
+end;
 function BytesToString(const ABytes: TBytes): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesToString(ABytes);
@@ -249,6 +281,39 @@ end;
 function AnsiToUpperStr(const AData: PAnsiChar; const ALen: SizeUInt): string; inline;
 begin
   Result := nextpas.core.bytes.ops.AnsiToUpperStr(AData, ALen);
+end;
+
+{ Unsigned helpers }
+
+function StripLeadingZero(const AData: TBytes): TBytes; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZero(AData);
+end;
+
+function StripLeadingZeroBytes(const AData: TBytes): TBytes; inline;
+begin
+  Result := nextpas.core.bytes.ops.StripLeadingZeroBytes(AData);
+end;
+
+function CompareUnsigned(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := nextpas.core.bytes.ops.CompareUnsigned(ALeft, ARight);
+end;
+
+function CompareUnsignedBytes(const ALeft, ARight: TBytes): Integer; inline;
+begin
+  Result := nextpas.core.bytes.ops.CompareUnsignedBytes(ALeft, ARight);
+end;
+
+function UnsignedEqual(const ALeft, ARight: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.UnsignedEqual(ALeft, ARight);
+end;
+
+function UnsignedBytesEqual(const ALeft, ARight: TBytes): Boolean; inline;
+begin
+  Result := nextpas.core.bytes.ops.UnsignedBytesEqual(ALeft, ARight);
+>>>>>>> main
 end;
 
 { Binary: swap }

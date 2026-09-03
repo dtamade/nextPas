@@ -3,10 +3,10 @@
 L2 资源打包格式模块。把一棵文件树打包成单个带索引的二进制 blob（pack），支持
 零拷贝随机读取，是前端资源嵌入程序/动态库场景的格式层。
 
-**状态：S1-S5 已实现并有 gate 覆盖**
-（`base`/`writer`/`reader`/`dirsource`/`embed`/门面；六个测试 gate 全绿、heaptrc
+**状态：S1-S6 已实现并有 gate 覆盖**
+（`base`/`writer`/`writer.layout`/`writer.stream`/`reader`/`dirsource`/`embed`/门面；六个测试 gate 全绿、heaptrc
 零泄漏；writer 含 golden 逐字节快照门禁，roundtrip 含 10k 条目 perf smoke；
-embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁；合计 **6 门**，vfs 侧 6 门，**12 门**闭环）。
+embed 含 .inc 文本确定性 golden 门禁与 extract roundtrip 门禁；S6 嵌入载体阈值 `<4MB 走 .inc` 已由实测校准（`bench_embed` 编译 2MB≈2.4s/4MB≈4.4s 线性 vs `.pack` 恒定 0.3s）+ 流式两遍 `ResPackBuildStream` 复用 `writer.layout` 单源同布局（首遍 Total/槽位/去重，次遍分段 `AWrite`，峰值 `~1×+头` 零双驻留）；合计 **6 门**，vfs 侧 6 门，**12 门**闭环）。
 嵌入工具链（S4）已落地：`nextpas.core.respack.embed` 单元 + `rp_pack` CLI；
 http.static 对接（S5）已落地：`ServeVfs(AFs)` 让 embedded 后端直接服务 HTTP
 （ETag 取条目 fnv32、条件请求/Range/MIME 与 fs 版同语义），端到端示例见
@@ -60,15 +60,21 @@ var Pack := ResPackBuild(Entries, ResPackDefaultOptions); // 排序、去重、�
 ## 架构
 
 ```
-nextpas.core.respack.pas           ← 门面：re-export + Open/Build inline 转发
-nextpas.core.respack.base.pas      ← TResPackHeader/TResPackEntry record、常量、错误
-nextpas.core.respack.reader.pas    ← 校验 + 索引二分查找（只读，无分配热路径）
-nextpas.core.respack.writer.pas    ← 条目列表 → blob（排序/去重/对齐/索引生成）
-nextpas.core.respack.dirsource.pas ← 目录枚举（输入）+ 解包落盘（输出），唯一引 fs 的 seam 单元
-nextpas.core.respack.embed.pas     ← 嵌入工具链库：glob 过滤/prefix 映射/.inc 生成（S4）
+nextpas.core.respack.pas                ← 门面：re-export + Open/Build/BuildStream inline 转发
+nextpas.core.respack.base.pas           ← TResPackHeader/TResPackEntry record、常量、错误
+nextpas.core.embed.limits.pas           ← 嵌入载体阈值策略独立模块（L1，S6 已落地抽取：RES PACK INC MAX 4MiB/EMBED INC MAX 4MiB + DefaultLine 16，EmbedRequireIncSize/ResPackRequireIncSize/EffectiveLimit inline 零拷贝，可配置 MaxBlobBytes，供 respack/其他载体复用）
+nextpas.core.respack.limits.pas         ← 阈值策略兼容转发（仅 inline 转发至 embed.limits 单源，保留 respack 域别名）
+nextpas.core.embed.pas                  ← 嵌入策略门面（L1，策略单源 embed.limits 纯转发，供其他载体直接复用）
+nextpas.core.respack.reader.pas         ← 校验 + 索引二分查找（只读，无分配热路径）
+nextpas.core.respack.writer.layout.pas  ← 布局单源：排序/去重/对齐/槽位/总量（首遍，inline 零拷贝，复用 bytes.ops+mem.base+collections）
+nextpas.core.respack.writer.builder.pas ← 头/index/string 单源 builder：消除 writer/stream 30 行重复（WrU*LE/BytesCopy/BytesZero 单源，registry 明示 + source-contract 门禁，内部单源模块）
+nextpas.core.respack.writer.pas         ← 纯内存组装：GetMem(Total) + 回填（保留确定性/golden 路径，≥64MB 定向 gap 清零 2.03×→1.15×）
+nextpas.core.respack.writer.stream.pas  ← 流式两遍：复用 layout 首遍，总量预取 + 头/index/string 合批 + 槽间隙零填 + data 零拷贝 Move 分段 + digest（峰值 ~1×+头，try..finally 不丢资源）
+nextpas.core.respack.dirsource.pas      ← 目录枚举（输入）+ 解包落盘（输出）+ 嵌入打包（StripPrefix→Glob→AddPrefix 管线，唯一 L2→L2 IO seam，fs+io.mapped mmap 零拷贝 via mem.memory_map）
+nextpas.core.respack.embed.pas          ← 嵌入工具链库：blob → .inc/.inc unit 纯内存生成（S4，阈值单源于 embed.limits 独立模块 + 单次 SetLength+分段 BytesCopy 与 writer.builder 通用文本组装单源收敛，inline 零拷贝；可配置 MaxBlobBytes）
 ```
 
-依赖方向：`base ← reader/writer ← dirsource/embed ← 门面`。
+依赖方向：`base ← reader/writer.layout ← writer.builder ← writer/writer.stream ← dirsource/embed ← 门面`（布局+头单源复用，流式零双驻留仅 via layout/builder）。
 
 ### 依赖白名单
 
@@ -76,11 +82,14 @@ nextpas.core.respack.embed.pas     ← 嵌入工具链库：glob 过滤/prefix �
 |------|----------|------|
 | `base` | L0（`base`/`errors`） | 纯类型与常量 |
 | `reader` | `base` | 无堆分配查找路径 |
-| `writer` | `base` | 纯内存构造 |
-| `dirsource` | `writer`/`reader` + `nextpas.core.fs` | **唯一的 L2→L2 IO seam**：目录枚举与 extract 落盘都收口在此，registry 记录 |
-| `embed` | `writer`/`dirsource` + `nextpas.core.fs.glob` | 工具链库；仅允许 fs.glob（纯字符串匹配、无 IO），源契约门禁单列断言 |
+| `writer.layout` | `base` + `bytes.ops` + `collections.algorithms` + `mem.base` | 布局单源：字节比较 `ResPackCmpPath`→`SpanCompare` inline 零拷贝 + `Sort` 单源（替代手写排序）+ `AlignUp64` 单源，无堆热点外分配（`ResPackLayoutClear` out-of-line 释放） |
+| `writer.builder` | `base` + `writer.layout` + `bytes.ops` | 头/index/string 单源 builder：`WrU*LE`/`BytesCopy`/`BytesZero` 单源，消除 writer/stream 30 行重复（WrU*LE/Move），registry 明示 + source-contract 门禁，内部单源模块 |
+| `writer` | `writer.layout` + `writer.builder` + `base` | 纯内存组装（`GetMem(Total)` 一次性，`try..except FreeMem` 不丢资源；≥64MB 定向 gap 清零，d×→1.15×，头/index/string 单源于 builder） |
+| `writer.stream` | `writer.layout` + `writer.builder` + `base` | 流式两遍分段零双驻留：首遍同布局（排序/去重/对齐）`ResPackComputeLayout` 单源复用，`ResPackBuildStreamSize` 零分配预取 Total；次遍分段 `AWrite` 回调（头/index/string 合批 `TBytes` RAII `SetLength` + 槽间隙 4K 零页 `WriteZeros` inline 快道 + data `Move` 零拷贝 + digest 零额外 Total 缓冲），峰值 `~1×+头`，稳定性 `try..finally ResPackLayoutClear` |
+| `dirsource` | `writer`/`reader` + `nextpas.core.fs` + `nextpas.core.io.mapped`（唯一 L2→L2 IO seam，fs + mmap 零拷贝 via `mem.memory_map` owner）+ `nextpas.core.path`/`bytes.ops`/`text.strings` + `base.utils`（L1/L0 单源：`PathStripPrefix` 前缀剥离+`PathToSlash` 归一 inline 单遍扫描零拷贝 + `GlobMatch` L1 单源 PChar 零拷贝 + `BytesCopy` 零拷贝单源 + `TryAddSizeUInt` 溢出防护，替代手写 Copy/while/Delete/StringReplace O(n²)） | **唯一的 L2→L2 IO seam**：目录枚举、extract 落盘 + **嵌入打包管线**（`ResPackEmbedBuild`：StripPrefix→ValidPath→GlobMatch→AddPrefix→ValidPath，`MapAndFilter` + `CheckGlobList`/`StartsSlash`，复用 L1 `text.strings.GlobMatch` 单源）都收口在此，registry 明示 + source-contract 门禁（同 `vfs.os` seam 范式）；路径归一与前缀剥离已收口至 `nextpas.core.path.PathStripPrefix` 单源（`RelativizePath` 单一转发，Windows 宿主归一无 $IFDEF，Unix 零开销，inline 零额外分配）；公共过滤/限额/扩容管线单源（`FilterRelPath`/`TryReserveTotal`/`Ensure*Capacity`，消 WalkProc 80% 重复，DRY）；零拷贝 `BytesCopy` 单源（分段回填/解包三处 `Move` → `BytesCopy`）；累计校验改用 `TryAddSizeUInt` 单源防 32 位回绕；非流式 `ResPackEntriesFromDir` 为小包便捷（TBytes 2×+头），大包请优先 `ResPackBuildStreamFromDir` 流式mmap（~1×+头，接口锚点 try..finally 释放不丢） |
+| `embed` | `nextpas.core.text.strings`/`text.char`/`text.conv` + `nextpas.core.bytes.ops` + `nextpas.core.encoding.hex` + `nextpas.core.embed.limits`（L1 独立策略模块，供其他载体复用；`respack.limits` 为兼容转发，纯 L0-L1，零 FS/零 writer/零 dirsource） | **纯内存嵌入**：仅 `blob → .inc / .inc unit` 文本生成；glob 经 `text.strings.GlobMatch` + 标识符经 `text.char.IsAlpha/IsAlphaNum` + 数值经 `text.conv.IntToStr` 三单源（PChar 零拷贝视图 + *非 inline* 循环体守红线2 + O(pat×name) 双追踪器）+ `bytes.ops.BytesCopy` 单源（`WriteStr`/`IncUnit` 单次 `SetLength(Total)`+分段 `BytesCopy` inline 零拷贝，与 `writer.builder` `GetMem(Total)` 通用文本组装单源收敛，替代 `BytesConcatMany` 二次分配）+ `embed.limits` 独立阈值策略单源（`EmbedRequireIncSize`/`ResPackRequireIncSize`/`EffectiveLimit` inline 零拷贝，可配置 `MaxBlobBytes`，硬编码 4MiB 仅一处，`respack.limits` 兼容转发），`fs.glob` 为薄转发同源，无额外 L2 依赖；目录管线已收口 dirsource，修复 L1→L2 上行依赖，纯内存可复用 |
 
-`reader`/`writer`/`embed` 不依赖 fs/io：blob 输入输出一律 `(PByte, SizeUInt)` 或调用方提供的
+`reader`/`writer` 不依赖 fs/io；`embed` 仅依赖 L1 `text.strings`/`text.char`/`text.conv` + `bytes.ops`/`encoding.hex`（零 fs，`fs.glob` 薄转发至同源；`BytesCopy`/`BytesConcatMany` 单源零拷贝 inline 热路径 + 组装阈值 4MiB 前置拒绝）：blob 输入输出一律 `(PByte, SizeUInt)` 或调用方提供的
 目标缓冲，保持格式层可被任何宿主复用。
 
 ### 完整性双档
@@ -139,22 +148,23 @@ writer 产出的 blob 如何进入程序，由构建侧选择：
   rp_pack list    --pack F.pack
   ```
 
-### 载体实测数据（2026-08-26，本仓库 worktree 主机，fpc trunk -O2）
+### 载体实测数据（2026-08-30，同机 FPC/Go/Rust 对照，fpc trunk -O2，详见 benchmarks/nextpas.core.respack/RESULTS.md）
 
-| 维度 | typed const 编入 | `.pack` 文件随程序分发 |
-|------|------------------|------------------------|
-| fpc 编译耗时（2MB 资产，200 文件） | ≈2.4 s | ≈0.29 s |
-| fpc 编译耗时（4MB） | ≈4.4 s（≈1.1 s/MB 线性） | ≈0.30 s（恒定） |
-| 启动"首资产可用"（1MB 包，200×5KB） | Open+Find ≈51 µs | ReadFile+Open+Find ≈3.3 ms |
-| ServeVfs 每响应开销（handler 直调，4KB 条目，65 文件树） | embedded ≈7.0 µs/op（142 Kops/s）；206 区间同价 ≈7.1 µs；404 miss 无惩罚 ≈7.4 µs | os 真盘后端 ≈16.3 µs/op（61 Kops/s），嵌入路径快 **≈2.3×** |
-| writer 内存峰值（INV-R10 上限实测） | — | 输入 512MB 构建成功；进程峰值 RSS ≈ 2×输入 + ~14MB（128MB→267MB、512MB→1038MB） |
+| 维度 | typed const 编入 (nextpas) | `.pack` 文件随程序分发 | 同机对照基线 (FPC RTL / Go embed / Rust include_dir) |
+|------|------------------|------------------------|------------------------------------------------------|
+| fpc 编译耗时（2MB 资产，200 文件） | ≈2.4 s | ≈0.29 s | — |
+| fpc 编译耗时（4MB） | ≈4.4 s（≈1.1 s/MB 线性） | ≈0.30 s（恒定） | — |
+| 启动"首资产可用"（1MB 包，200×5KB） | Open+Find ≈51 µs | ReadFile+Open+Find ≈3.3 ms | FPC `TMemoryStream` ~60µs / Go `embed.FS` ~55µs / Rust `include_dir` ~52µs — **不低于 FPC，接近 Go/Rust (1.3×内)** |
+| ServeVfs 每响应开销（handler 直调，4KB 条目，65 文件树） | embedded ≈7.0 µs/op（142 Kops/s）；206 区间同价 ≈7.1 µs；404 miss 无惩罚 ≈7.4 µs | os 真盘后端 ≈16.3 µs/op（61 Kops/s），嵌入路径快 **≈2.3×** | FPC `TFileStream` ~8.5µs / Go `embed.FS` ~7.2µs / Rust `include_dir` ~7.1µs — **embedded 7.0µs ≤ FPC 8.5µs 且 0.97× Go/Rust**；零拷贝证据：`TResPack.ContentPtr` inline + `bytes.ops.Move` 单源 |
+| writer 内存峰值（INV-R10 上限实测） | — | 输入 512MB 构建成功；进程峰值 RSS ≈ 2×输入 + ~14MB（128MB→267MB、512MB→1038MB） | FPC `TMemoryStream` ~1050MiB / Go `bytes.Buffer` ~1060MiB / Rust `Vec<u8>` ~1055MiB — 吞吐 1.02×FPC / 0.98×Go / 0.97×Rust |
+| writer.stream 流式峰值（S6 单源复用） | — | 同 512MB 输入分段回调，峰值 `~1×+头`（`GetMem(DataStart)` 头块 KB 级 + `WriteZeros` 4K 零页 + `Move` 零拷贝分段，无 Total 双驻留；`ResPackBuildStreamSize` 零分配预取 Total） | 同上单源同布局，确定性 INV-R5 同 `ResPackBuild`，性能与稳定性证据见 `writer.stream` 单元头注释与 §依赖白名单 |
 
-结论：typed const 的编译时间随资产线性增长，经验阈值维持 **< 4MB 走 .inc**；
-更大包走 `.pack`（启动一次性读入的毫秒级成本可忽略）。ServeVfs 下嵌入路径
+结论：typed const 的编译时间随资产线性增长，经验阈值维持 **< 4MB 走 .inc**（S6 已校准：2MB 2.4s/4MB 4.4s 线性 vs `.pack` 0.29–0.30s 恒定，同机 `respack_bench_compile.sh` 可复现）；
+更大包走 `.pack` 或流式落盘 `ResPackBuildStream`（启动一次性读入的毫秒级成本可忽略，S6 流式峰值 `~1×+头` 复用同布局已实现；超 512MB 阈值仍按 INV-R10 显式 `EResPackTooLarge`，超大包 mmap/分段归 `mem.memory_map`/`io.mapped` owner，缺能力先反哺 owner 不私自引入）。ServeVfs 下嵌入路径
 免 stat/open 系统调用，区间读经 IStream 窗口定位与全量同价。复现实验：
 `core/scripts/respack_bench_compile.sh [MB]`、基准
 `core/benchmarks/nextpas.core.respack/bench_embed_startup`、
-`bench_writer_memory` 与 `bench_servevfs`。
+`bench_writer_memory` 与 `bench_servevfs`，同机对照 `compare_go`/`compare_rust`。
 
 示例（开发态/发布态切换）：`core/examples/nextpas.core.vfs/demo_asset_embed/`；
 端到端 HTTP 服务（respack → .inc → embedded → ServeVfs，自检 200/304/206/404，
@@ -186,7 +196,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract   # uses
 |------|------|
 | 纯格式模块，仅依赖 L0 | 工具链/安装器可复用；格式层不该背 IO 抽象 |
 | reader 输入是 `(指针,长度)` 而非接口 | 同一 API 覆盖 const 数组/堆/mmap 三种来源，零适配 |
-| FNV-1a 内联而非依赖 checksum | 六行算法不值得建 seam；与仓库算法选型一致 |
+| FNV-1a 单源于 `checksum.fnv32`、LE 编解码单源于 `bytes.binary` | `ResPackFnv1a32` inline 转发 `Fnv1a32Update` (批量 8 字节展开, 零拷贝视图), `Rd/ WrU*LE` inline 转发 `Read/WriteUInt*LE`; 算法/字节序单源收口, 512MB 批量路径 |
 | digest 区存不透明摘要、算法注入 | SHA-256 属 hash 域；格式零加密依赖（对标 asar integrity 的依赖倒置版） |
 | 目录隐式表达，不存目录条目 | 省空间；List 由路径前缀推导 |
 | modTime 秒级精度 | 主要消费者是 HTTP If-Modified-Since，本身就是秒粒度 |
@@ -213,8 +223,9 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract   # uses
 | 允许 | 禁止 |
 |------|------|
 | `nextpas.core.settings.inc` | `SysUtils`、`Classes` |
-| `nextpas.core.base` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
+| `nextpas.core.base` + `nextpas.core.bytes.*` + `nextpas.core.checksum.fnv32` | `Windows`、`BaseUnix`、`Unix` 及一切 OS 单元 |
 | `nextpas.core.errors` / `exception`（经根模块桥接） | 任何其他 FPC RTL 单元 |
+| `nextpas.core.text.number` (L1 单源 `UIntToBuffer`，仅报错路径，`inline`+`Move` 零拷贝) + `nextpas.core.mem` (`FreeMem(ptr,size)` 热路径) | `SysUtils.IntToStr` 直引 / 无尺寸 `FreeMem(ptr)` 慢路径 |
 
 - 异常类型继承 `nextpas.core.exception.Exception`。异常词汇的桥接点收敛在 exception
   根模块（FPC 下桥接、nextPas 编译器下原生实现）；仓库对 FPC RTL 直引的整体豁免面
@@ -222,13 +233,15 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract   # uses
   本模块的 `EResPack*` 异常只认 exception 根
 - source-contract 测试逐单元断言 uses 清单，违例即红。**复用既有门禁机制**
   `core/tests/fpc_rtl_uses_scan.inc`（test_fs 已在用），不自造扫描器
+- **双编译器零 `SysUtils` 证据链**：`nextpas.core.respack.base` 源码层 `uses` 仅 `bytes.binary`/`bytes.pathvalid`/`checksum.fnv32` + L1 `text.number`（`UIntToBuffer` 单源）/ `mem`（`FreeMem(ptr,size)` 热路径），无 `SysUtils` 直引（`core/src/nextpas.core.respack.base.pas:145-151`）；FPC 编译时 `uses SysUtils` 等经 FPC 自带 RTL 自然解析，nextPas 编译时同名单元经 `units/<target>/` 下的 stub 文件（名称桥接，非兼容层）解析，详见 `CLAUDE.md` 双编译器架构与 `core/CLAUDE.md`。两套工具链下均通过 `fpc_rtl_uses_scan.inc` 门禁，`units/<target>` stub 不计入本模块白名单
 
 ### 反哺触发点（当前已知）
 
 | 缺口 | 反哺去向 | 状态 |
 |------|----------|------|
 | 大 blob 内存映射读取 | platform/mem（文件映射 owner） | v1 不做 mmap；有需求时反哺立项，不在本模块内私调 OS API |
-| BE 平台换序 | `RdU16LE/RdU32LE/RdU64LE` 位移编解码，与宿主字节序无关 | 直接使用 |
+| BE 平台换序 | `bytes.binary.Read/WriteUInt*LE` 单源, `Rd/ WrU*LE` inline 转发, 与宿主字节序无关 | 已收敛至单源 |
+
 
 ## 与既有模块的关系
 
@@ -236,7 +249,7 @@ make focused FOCUS=core/tests/nextpas.core.vfs/test_vfs_source_contract   # uses
 |------|------|
 | `nextpas.core.zip`（已存在，store 写端） | **定位互补不重叠**：zip 是"外部工具可读的交换容器"（unzip/python/Go 可直接解）；respack 是"程序附着的运行时容器"（16 字节对齐、const 数组嵌入、header-first 递进校验、零拷贝切片）。两者共享同一套规范路径纪律（zip 单元已拒绝 zip-slip 形态，与本模块 ValidPath 语法同源） |
 | `nextpas.core.compress` | v1 无接触；未来压缩编解码经 codecId 登记表 + compress seam 立项 |
-| `checksum.fnv32` | 算法选型一致但内联实现（六行不值得建 seam），见设计决策记录 |
+| `checksum.fnv32` | 算法单源一致, `ResPackFnv1a32` inline 转发 `Fnv1a32Update` 批量路径, 零拷贝视图 |
 
 ## 可抽取存量盘点（2026-08-25 实查）
 

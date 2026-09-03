@@ -2,7 +2,8 @@ unit nextpas.core.db.redis.base;
 
 {** @desc Redis 后端基本类型（V3-A5）。
        连接选项、RESP 回复值种类、协议常量。纯类型单元——无 IO、
-       无统一层依赖（对齐 db.pg.base/db.mysql.base 定位）。 *}
+       无统一层依赖（对齐 db.pg.base/db.mysql.base 定位）。
+       缝位纯度：本单元为 L2 家族纯 L0/L1 依赖（仅 base），不触 net/tls 同层缝（缝仅在 transport/adapter 单点，cycle-gated 无 reverse），单源与资源纪律由外层承载。 *}
 
 {$I nextpas.core.settings.inc}
 

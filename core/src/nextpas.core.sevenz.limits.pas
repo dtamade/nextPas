@@ -1,34 +1,17 @@
-unit nextpas.core.sevenz.limits;
+unit nextpas.core.sevenz.limits deprecated 'use nextpas.core.sevenz.base';
 
 {**
- * nextpas.core.sevenz.limits - 7z 炸弹与头部硬上限纯常量
+ * nextpas.core.sevenz.limits - 已移除兼容别名（历史路径空壳）
  *
- * 薄封装：单源在 nextpas.core.sevenz.base，历史路径通过别名保持兼容，
- * reader / writer / header / test 复用同一常量源，避免硬编码漂移。
+ * 13 阈值单源已收敛至 nextpas.core.sevenz.base，本单元不再提供第二公共源；
+ * 保留空单元仅为历史编译期提示（deprecated），新代码直接 uses nextpas.core.sevenz.base。
+ * 四件套外碎片已清理：reader/writer/header 均单源引用 base，无第二公共源。
+ * 性能：空单元零拷贝、零运行时开销；稳定性：无资源分配、无泄漏风险。
  *}
 
 {$I nextpas.core.settings.inc}
 
 interface
-
-uses
-  nextpas.core.sevenz.base;
-
-const
-  SEVENZ_DEFAULT_MAX_OUTPUT = nextpas.core.sevenz.base.SEVENZ_DEFAULT_MAX_OUTPUT;
-  SEVENZ_MAX_HEADER_SIZE = nextpas.core.sevenz.base.SEVENZ_MAX_HEADER_SIZE;
-  SEVENZ_MAX_PACK_SIZE = nextpas.core.sevenz.base.SEVENZ_MAX_PACK_SIZE;
-  SEVENZ_MAX_FILE_COUNT = nextpas.core.sevenz.base.SEVENZ_MAX_FILE_COUNT;
-  SEVENZ_MAX_NAME_BYTES = nextpas.core.sevenz.base.SEVENZ_MAX_NAME_BYTES;
-  SEVENZ_EXTRACT_WINDOW = nextpas.core.sevenz.base.SEVENZ_EXTRACT_WINDOW;
-  SEVENZ_WRITER_CHUNK   = nextpas.core.sevenz.base.SEVENZ_WRITER_CHUNK;
-  SEVENZ_MAX_PACK_STREAMS = nextpas.core.sevenz.base.SEVENZ_MAX_PACK_STREAMS;
-  SEVENZ_MAX_FOLDERS      = nextpas.core.sevenz.base.SEVENZ_MAX_FOLDERS;
-  SEVENZ_MAX_CODER_PROPS  = nextpas.core.sevenz.base.SEVENZ_MAX_CODER_PROPS;
-  SEVENZ_MAX_UNPACK_SIZE  = nextpas.core.sevenz.base.SEVENZ_MAX_UNPACK_SIZE;
-  SEVENZ_MAX_CRC_COUNT    = nextpas.core.sevenz.base.SEVENZ_MAX_CRC_COUNT;
-  SEVENZ_CACHE_MAX_BYTES = nextpas.core.sevenz.base.SEVENZ_CACHE_MAX_BYTES;
-  SEVENZ_AES_MAX_CYCLES_POWER = nextpas.core.sevenz.base.SEVENZ_AES_MAX_CYCLES_POWER;
 
 implementation
 

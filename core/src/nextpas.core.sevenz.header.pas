@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.builder,
   nextpas.core.sevenz.base;
 
 type
@@ -84,6 +85,7 @@ function SevenZReadNumber(const ABuf: PByte; ALen: SizeUInt; var APos: SizeUInt)
 
 { varint 编码：最小合法形式；AValue ≥ 2^56 走 FF + 8 字节小端 }
 procedure SevenZWriteNumber(var AOut: TBytes; AValue: UInt64);
+procedure SevenZWriteNumberToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64);
 
 { 追加单字节 / 定长整数到输出缓冲 — 单源复用 bytes 体系，单次扩容 + inline }
 procedure SevenZAppendByte(var AOut: TBytes; AValue: Byte); inline;
@@ -91,6 +93,11 @@ procedure SevenZAppendUInt32BE(var AOut: TBytes; AValue: UInt32); inline;
 procedure SevenZAppendUInt32LE(var AOut: TBytes; AValue: UInt32); inline;
 procedure SevenZAppendUInt64LE(var AOut: TBytes; AValue: UInt64); inline;
 procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
+{ IBytesBuilder 单源：高频 header 追加的 O(n) 预分配路径，避免 TBytes 逐次 SetLength O(n²)；单源复用 bytes.builder Grow 均摊 }
+procedure SevenZAppendByteToBuilder(const ABuilder: IBytesBuilder; AValue: Byte); inline;
+procedure SevenZAppendUInt32LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt32); inline;
+procedure SevenZAppendUInt64LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
+procedure SevenZAppendBytesToBuilder(const ABuilder: IBytesBuilder; const AData: PByte; ACount: SizeInt); inline;
 
 type
   { 头部顺序读取器：越界统一抛 ESevenZError }
@@ -128,11 +135,11 @@ procedure SevenZParseFilesInfo(AReader: TSevenZHeaderReader; ANumFiles: SizeInt;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.bytes.binary,
   nextpas.core.errors,
   nextpas.core.exception,
-  nextpas.core.checksum.crc32,
-  nextpas.core.sevenz.limits;
+  nextpas.core.checksum.crc32;
 
 
 
@@ -170,80 +177,113 @@ end;
 
 procedure SevenZWriteNumber(var AOut: TBytes; AValue: UInt64);
 var
-  LBase: SizeInt;
+  LBuf: array[0..8] of Byte;
   LI: Integer;
   LT: Integer;
   LPayloadBits: Integer;
   LFirstPayload: UInt64;
 begin
   { 总长 T 的容量为 2^(7T)；T=9（首字节 FF）覆盖全部 64 位。
-    首字节负载位数为 8-T（T=8 时为 0），低字节一律小端。 }
+    首字节负载位数为 8-T（T=8 时为 0），低字节一律小端。批量：栈缓冲+单次 BytesAppend 单源零拷贝。 }
   LT := 1;
   while (LT < 9) and (AValue >= (UInt64(1) shl (7 * LT))) do
     Inc(LT);
-  LBase := Length(AOut);
   if LT <= 8 then
   begin
     LPayloadBits := 8 - LT;
-    SetLength(AOut, LBase + LT);
-    LFirstPayload := (AValue shr (8 * (LT - 1))) and
-      ((UInt64(1) shl LPayloadBits) - 1);
-    AOut[LBase] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
+    if LPayloadBits = 0 then
+      LFirstPayload := 0
+    else
+      LFirstPayload := (AValue shr (8 * (LT - 1))) and ((UInt64(1) shl LPayloadBits) - 1);
+    LBuf[0] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
     for LI := 0 to LT - 2 do
-      AOut[LBase + 1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+      LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    BytesAppend(AOut, @LBuf[0], SizeUInt(LT));
     Exit;
   end;
-  SetLength(AOut, LBase + 9);
-  AOut[LBase] := $FF;
+  LBuf[0] := $FF;
   for LI := 0 to 7 do
-    AOut[LBase + 1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+  BytesAppend(AOut, @LBuf[0], 9);
 end;
 
 procedure SevenZAppendByte(var AOut: TBytes; AValue: Byte); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 1);
-  AOut[LLen] := AValue;
+  BytesAppendByte(AOut, AValue);
 end;
 
 procedure SevenZAppendUInt32BE(var AOut: TBytes; AValue: UInt32); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 4);
-  WriteUInt32BE(@AOut[LLen], AValue);
+  BytesAppendUInt32BE(AOut, Cardinal(AValue));
 end;
 
 procedure SevenZAppendUInt32LE(var AOut: TBytes; AValue: UInt32); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 4);
-  WriteUInt32LE(@AOut[LLen], AValue);
+  BytesAppendUInt32LE(AOut, Cardinal(AValue));
 end;
 
 procedure SevenZAppendUInt64LE(var AOut: TBytes; AValue: UInt64); inline;
-var
-  LLen: SizeUInt;
 begin
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + 8);
-  WriteUInt64LE(@AOut[LLen], AValue);
+  BytesAppendUInt64LE(AOut, QWord(AValue));
 end;
 
 procedure SevenZAppendBytes(var AOut: TBytes; const AData: PByte; ACount: SizeInt); inline;
-var
-  LLen: SizeUInt;
 begin
   if (ACount <= 0) or (AData = nil) then
     Exit;
-  LLen := Length(AOut);
-  SetLength(AOut, LLen + SizeUInt(ACount));
-  Move(AData^, AOut[LLen], SizeUInt(ACount));
+  BytesAppend(AOut, AData, SizeUInt(ACount));
+end;
+
+procedure SevenZWriteNumberToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64);
+var
+  LBuf: array[0..8] of Byte;
+  LI: Integer;
+  LT: Integer;
+  LPayloadBits: Integer;
+  LFirstPayload: UInt64;
+begin
+  LT := 1;
+  while (LT < 9) and (AValue >= (UInt64(1) shl (7 * LT))) do
+    Inc(LT);
+  if LT <= 8 then
+  begin
+    LPayloadBits := 8 - LT;
+    if LPayloadBits = 0 then
+      LFirstPayload := 0
+    else
+      LFirstPayload := (AValue shr (8 * (LT - 1))) and ((UInt64(1) shl LPayloadBits) - 1);
+    LBuf[0] := Byte((Byte($FF shl (9 - LT)) and $FF) or Byte(LFirstPayload));
+    for LI := 0 to LT - 2 do
+      LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+    ABuilder.AppendBytes(@LBuf[0], SizeUInt(LT));
+    Exit;
+  end;
+  LBuf[0] := $FF;
+  for LI := 0 to 7 do
+    LBuf[1 + LI] := Byte((AValue shr (8 * LI)) and $FF);
+  ABuilder.AppendBytes(@LBuf[0], 9);
+end;
+
+procedure SevenZAppendByteToBuilder(const ABuilder: IBytesBuilder; AValue: Byte); inline;
+begin
+  ABuilder.AppendByte(AValue);
+end;
+
+procedure SevenZAppendUInt32LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt32); inline;
+begin
+  ABuilder.AppendUInt32LE(AValue);
+end;
+
+procedure SevenZAppendUInt64LEToBuilder(const ABuilder: IBytesBuilder; AValue: UInt64); inline;
+begin
+  ABuilder.AppendUInt64LE(AValue);
+end;
+
+procedure SevenZAppendBytesToBuilder(const ABuilder: IBytesBuilder; const AData: PByte; ACount: SizeInt); inline;
+begin
+  if (ACount <= 0) or (AData = nil) then
+    Exit;
+  ABuilder.AppendBytes(AData, SizeUInt(ACount));
 end;
 
 { TSevenZHeaderReader }
@@ -659,6 +699,7 @@ var
   LBase: SizeInt;
   LSum: UInt64;
   LHaveSizes: Boolean;
+  LCnt: SizeInt;
   LUnknownIndices: array of SizeInt;
   LCrcDefinedVec: array of Boolean;
 begin
@@ -718,14 +759,20 @@ begin
         begin
           if not LHaveSizes then
             AssignSubSizesFromFolders(AInfo);
-          { 收集尚无 CRC 的子流全局索引 }
-          SetLength(LUnknownIndices, 0);
-          for LI := 0 to Length(AInfo.Substreams) - 1 do
-            if not AInfo.Substreams[LI].HasCrc then
-            begin
-              SetLength(LUnknownIndices, Length(LUnknownIndices) + 1);
-              LUnknownIndices[High(LUnknownIndices)] := LI;
-            end;
+          { 收集尚无 CRC 的子流全局索引 — 预计数单分配 O(n) 替代逐次 SetLength O(n²) }
+          begin
+            LCnt := 0;
+            for LI := 0 to Length(AInfo.Substreams) - 1 do
+              if not AInfo.Substreams[LI].HasCrc then Inc(LCnt);
+            SetLength(LUnknownIndices, LCnt);
+            LCnt := 0;
+            for LI := 0 to Length(AInfo.Substreams) - 1 do
+              if not AInfo.Substreams[LI].HasCrc then
+              begin
+                LUnknownIndices[LCnt] := LI;
+                Inc(LCnt);
+              end;
+          end;
           if Length(LUnknownIndices) > SEVENZ_MAX_CRC_COUNT then
             raise ESevenZLimitError.Create('crc count out of range');
           SetLength(LCrcDefinedVec, Length(LUnknownIndices));

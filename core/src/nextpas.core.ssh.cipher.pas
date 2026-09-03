@@ -178,12 +178,29 @@ begin
   ADst[APos + 3] := Byte(AValue and $FF);
 end;
 
+{ perf: inline 零拷贝 buf 变体，避免 TBytes 临时分配；单源 bytes.ops 视图语义，栈上 8B 头直写 }
+procedure PutU32BEBuf(ABuf: PByte; AOff: SizeUInt; AValue: UInt32); inline;
+begin
+  (ABuf + AOff)^ := Byte(AValue shr 24);
+  (ABuf + AOff + 1)^ := Byte((AValue shr 16) and $FF);
+  (ABuf + AOff + 2)^ := Byte((AValue shr 8) and $FF);
+  (ABuf + AOff + 3)^ := Byte(AValue and $FF);
+end;
+
 function U32BEOf(const ASrc: TBytes; APos: SizeUInt): UInt32; inline;
 begin
   Result := (UInt32(ASrc[APos]) shl 24)
     or (UInt32(ASrc[APos + 1]) shl 16)
     or (UInt32(ASrc[APos + 2]) shl 8)
     or UInt32(ASrc[APos + 3]);
+end;
+
+function U32BEOfBuf(ABuf: PByte; AOff: SizeUInt): UInt32; inline;
+begin
+  Result := (UInt32((ABuf + AOff)^) shl 24)
+    or (UInt32((ABuf + AOff + 1)^) shl 16)
+    or (UInt32((ABuf + AOff + 2)^) shl 8)
+    or UInt32((ABuf + AOff + 3)^);
 end;
 
 function SeqBytes(ASeq: UInt32): TBytes;
@@ -225,6 +242,22 @@ begin
   if Length(AData) > 0 then
     LHasher.Write(AData[0], SizeUInt(Length(AData)));
   Result := LHasher.SumBytes;
+end;
+
+{ perf: 零拷贝 TByteSpan 视图直写 HMAC，无 LMacInput 堆分配；单源 bytes.ops spans，hasher 流式 Write }
+procedure MacComputeSpansToBuf(AMacAlgo: THashAlgorithm; const AMacKey: TBytes;
+  const ASpans: array of TByteSpan; ADest: PByte; ADestLen: SizeUInt); inline;
+var
+  LHasher: IHasher;
+  I: Integer;
+begin
+  if Length(AMacKey) = 0 then
+    raise ESSHError.Create(sekNegotiation, 'ssh cipher: mac key empty');
+  LHasher := NewHMAC(AMacAlgo, AMacKey[0], SizeUInt(Length(AMacKey)));
+  for I := 0 to High(ASpans) do
+    if ASpans[I].Len > 0 then
+      LHasher.Write(ASpans[I].Data^, ASpans[I].Len);
+  LHasher.Sum(ADest^, ADestLen);
 end;
 
 { ---- none（握手前）---- }
@@ -337,32 +370,37 @@ end;
 
 function TSshChachaSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LNonce, LMask, LEncLen, LPolyKey, LCt, LTag: TBytes;
+  LNonce, LMask, LPolyKey, LTag: TBytes;
+  LPlainLen: SizeUInt;
+  LEnc: UInt32;
 begin
   { OpenSSH PROTOCOL.chacha20poly1305：
     - 前 32B（main）：counter=0 派生 poly key；counter=1 起加密载荷
     - 后 32B（header）：counter=0 掩码长度字段
-    - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块） }
+    - Poly1305 直接覆盖 encLen||ct（无 RFC 8439 的 pad16 与长度块）
+    perf: 零拷贝单次分配 Result，直写 encLen+ct+tag；ct 原地 ChaCha20XorTo，Poly1305 用 TByteSpan 视图零拷贝（bytes.ops 单源） }
   LNonce := ChachaNonce(ASeq);
   LMask := ChaCha20Block(FHeaderKey, LNonce, 0);
   try
-    SetLength(LEncLen, 4);
-    PutU32BE(LEncLen, 0, UInt32(Length(ABodyPlain)) xor U32BEOf(LMask, 0));
-    LCt := ChaCha20Xor(FMainKey, LNonce, 1, ABodyPlain);
+    LPlainLen := SizeUInt(Length(ABodyPlain));
+    LEnc := UInt32(LPlainLen) xor U32BEOf(LMask, 0);
+    SetLength(Result, 4 + LPlainLen + CHACHA_TAG);
+    PutU32BE(Result, 0, LEnc);
+    if LPlainLen > 0 then
+      if not ChaCha20XorTo(FMainKey, LNonce, 1, PByte(@ABodyPlain[0]), Integer(LPlainLen), PByte(@Result[4])) then
+        raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha encrypt failed');
     LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
     SetLength(LPolyKey, 32);
     try
-      LTag := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
-      Result := nil;
-      SetLength(Result, 4 + SizeUInt(Length(LCt)) + CHACHA_TAG);
-      Move(LEncLen[0], Result[0], 4);
-      if Length(LCt) > 0 then
-        Move(LCt[0], Result[4], SizeUInt(Length(LCt)));
-      Move(LTag[0], Result[4 + SizeUInt(Length(LCt))], CHACHA_TAG);
+      // Poly1305 零拷贝 spans 直指 Result 中的 encLen||ct，无额外 LEncLen/LCt 分配
+      LTag := Poly1305RawSpans(LPolyKey, [
+        TByteSpan.Create(PByte(@Result[0]), 4),
+        TByteSpan.Create(PByte(@Result[4]), LPlainLen)
+      ]);
+      Move(LTag[0], Result[4 + LPlainLen], CHACHA_TAG);
     finally
       SecureZeroBytes(LPolyKey);
       SecureZeroBytes(LTag);
-      SecureZeroBytes(LCt);
     end;
   finally
     SecureZeroBytes(LMask);
@@ -407,27 +445,32 @@ end;
 
 function TSshChachaReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
-  LEncLen, LCt, LTag, LNonce, LPolyKey, LExpect: TBytes;
+  LNonce, LPolyKey, LExpect: TBytes;
+  LCtLen: SizeUInt;
 begin
   if SizeUInt(Length(AWire)) < 4 + CHACHA_TAG then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: chacha packet truncated');
-  LEncLen := Copy(AWire, 0, 4);
-  LTag := Copy(AWire, SizeUInt(Length(AWire)) - CHACHA_TAG, CHACHA_TAG);
-  LCt := Copy(AWire, 4,
-    SizeInt(SizeUInt(Length(AWire)) - 4 - CHACHA_TAG));
+  LCtLen := SizeUInt(Length(AWire)) - 4 - CHACHA_TAG;
+  { Poly1305 覆盖 encLen||ct；常量时间比较后再解密
+    perf: 零拷贝 TByteSpan 视图直指 AWire，无 LEncLen/LCt/LTag 堆分配（bytes.ops 单源） }
+  LNonce := ChachaNonce(ASeq);
+  LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
+  SetLength(LPolyKey, 32);
   try
-    { Poly1305 覆盖 encLen||ct；常量时间比较后再解密 }
-    LNonce := ChachaNonce(ASeq);
-    LPolyKey := ChaCha20Block(FMainKey, LNonce, 0);
-    SetLength(LPolyKey, 32);
-    LExpect := Poly1305RawSpans(LPolyKey, [TByteSpan.FromBytes(LEncLen), TByteSpan.FromBytes(LCt)]);
-    if TConstantTime.CompareBytes(LExpect, LTag) <> 1 then
+    LExpect := Poly1305RawSpans(LPolyKey, [
+      TByteSpan.Create(PByte(@AWire[0]), 4),
+      TByteSpan.Create(PByte(@AWire[4]), LCtLen)
+    ]);
+    if TConstantTime.CompareBuffer(@LExpect[0], PByte(@AWire[4 + LCtLen]), CHACHA_TAG) <> 1 then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha AEAD verify failed');
-    Result := ChaCha20Xor(FMainKey, LNonce, 1, LCt);
+    SetLength(Result, LCtLen);
+    if LCtLen > 0 then
+      if not ChaCha20XorTo(FMainKey, LNonce, 1, PByte(@AWire[4]), Integer(LCtLen), PByte(@Result[0])) then
+        raise ESSHError.Create(sekCrypto, 'ssh cipher: chacha decrypt failed');
   finally
-    SecureZeroBytes(LTag);
     SecureZeroBytes(LExpect);
     SecureZeroBytes(LPolyKey);
+    SecureZeroBytes(LNonce);
   end;
 end;
 
@@ -783,24 +826,33 @@ end;
 
 function TSshCtrEtmSender.Protect(const ABodyPlain: TBytes; ASeq: UInt32): TBytes;
 var
-  LBody, LMacInput, LTag: TBytes;
+  LBodyLen, LTagLen: SizeUInt;
+  LHdr: array[0..7] of Byte;
 begin
+  { EtM：MAC 输入 = seq || 明文长度字段 || 密文 body（先加密后校验）
+    perf: 零拷贝单次分配 Result，原地加密；MAC 用 TByteSpan 视图 + MacComputeSpansToBuf 流式直写尾部，无 LBody/LMacInput/LTag 临时堆分配（bytes.ops 单源 TByteSpan） }
   Result := nil;
-  LBody := Copy(ABodyPlain, 0, Length(ABodyPlain));
-  FCtr.XorInto(LBody, 0, SizeUInt(Length(LBody)));
-  { EtM：MAC 输入 = seq || 明文长度字段 || 密文 body（先加密后校验）}
-  SetLength(LMacInput, 8 + SizeUInt(Length(LBody)));
-  PutU32BE(LMacInput, 0, ASeq);
-  PutU32BE(LMacInput, 4, UInt32(Length(ABodyPlain)));
-  if Length(LBody) > 0 then
-    Move(LBody[0], LMacInput[8], SizeUInt(Length(LBody)));
-  LTag := MacCompute(FMacAlgo, FMacKey, LMacInput);
-  SetLength(Result, 4 + SizeUInt(Length(LBody)) + SizeUInt(Length(LTag)));
-  PutU32BE(Result, 0, UInt32(Length(ABodyPlain)));
-  Move(LBody[0], Result[4], SizeUInt(Length(LBody)));
-  Move(LTag[0], Result[4 + Length(LBody)], SizeUInt(Length(LTag)));
-  SecureZeroBytes(LMacInput);
-  SecureZeroBytes(LTag);
+  LBodyLen := SizeUInt(Length(ABodyPlain));
+  LTagLen := GetDigestSize(FMacAlgo);
+  SetLength(Result, 4 + LBodyLen + LTagLen);
+  PutU32BE(Result, 0, UInt32(LBodyLen));
+  if LBodyLen > 0 then
+  begin
+    Move(ABodyPlain[0], Result[4], LBodyLen);
+    FCtr.XorInto(Result, 4, LBodyLen);
+  end;
+  PutU32BEBuf(@LHdr[0], 0, ASeq);
+  PutU32BEBuf(@LHdr[0], 4, UInt32(LBodyLen));
+  // MAC 零拷贝：8B 头栈 + Result[4..] 密文视图
+  if LBodyLen > 0 then
+    MacComputeSpansToBuf(FMacAlgo, FMacKey,
+      [TByteSpan.Create(@LHdr[0], 8), TByteSpan.Create(PByte(@Result[4]), LBodyLen)],
+      PByte(@Result[4 + LBodyLen]), LTagLen)
+  else
+    MacComputeSpansToBuf(FMacAlgo, FMacKey,
+      [TByteSpan.Create(@LHdr[0], 8)],
+      PByte(@Result[4 + LBodyLen]), LTagLen);
+  FillChar(LHdr[0], SizeOf(LHdr), 0);
 end;
 
 constructor TSshCtrEtmReceiver.Create(const ACipher, AMac: string;
@@ -836,29 +888,34 @@ end;
 function TSshCtrEtmReceiver.Unprotect(ASeq: UInt32; const AWire: TBytes): TBytes;
 var
   LBodyLen: UInt32;
-  LMacInput, LExpect, LGot: TBytes;
+  LHdr: array[0..7] of Byte;
+  LExpect: array[0..63] of Byte; // max SHA512 64
 begin
   if SizeUInt(Length(AWire)) < 4 + SizeUInt(FMacTagSize) then
     raise ESSHError.Create(sekProtocol, 'ssh cipher: ctr packet truncated');
   LBodyLen := U32BEOf(AWire, 0);
-  { 先验 MAC（EtM：对密文 body 校验）}
-  SetLength(LMacInput, 8 + SizeUInt(LBodyLen));
-  PutU32BE(LMacInput, 0, ASeq);
-  PutU32BE(LMacInput, 4, LBodyLen);
-  if LBodyLen > 0 then
-    Move(AWire[4], LMacInput[8], LBodyLen);
-  LExpect := MacCompute(FMacAlgo, FMacKey, LMacInput);
-  LGot := Copy(AWire, 4 + SizeInt(LBodyLen), FMacTagSize);
+  if SizeUInt(Length(AWire)) < 4 + SizeUInt(LBodyLen) + SizeUInt(FMacTagSize) then
+    raise ESSHError.Create(sekProtocol, 'ssh cipher: ctr packet truncated');
+  { 先验 MAC（EtM：对密文 body 校验）perf: 零拷贝 TByteSpan 视图，无 LMacInput 堆分配，LGot 比对用 CompareBuffer 零拷贝 }
+  PutU32BEBuf(@LHdr[0], 0, ASeq);
+  PutU32BEBuf(@LHdr[0], 4, LBodyLen);
   try
-    if TConstantTime.CompareBytes(LExpect, LGot) <> 1 then
+    if LBodyLen > 0 then
+      MacComputeSpansToBuf(FMacAlgo, FMacKey,
+        [TByteSpan.Create(@LHdr[0], 8), TByteSpan.Create(PByte(@AWire[4]), SizeUInt(LBodyLen))],
+        @LExpect[0], SizeUInt(FMacTagSize))
+    else
+      MacComputeSpansToBuf(FMacAlgo, FMacKey,
+        [TByteSpan.Create(@LHdr[0], 8)],
+        @LExpect[0], SizeUInt(FMacTagSize));
+    if TConstantTime.CompareBuffer(@LExpect[0], PByte(@AWire[4 + LBodyLen]), NativeUInt(FMacTagSize)) <> 1 then
       raise ESSHError.Create(sekCrypto, 'ssh cipher: etm mac mismatch');
     { 再解密 }
     Result := Copy(AWire, 4, SizeInt(LBodyLen));
     FCtr.XorInto(Result, 0, SizeUInt(LBodyLen));
   finally
-    SecureZeroBytes(LGot);
-    SecureZeroBytes(LExpect);
-    SecureZeroBytes(LMacInput);
+    FillChar(LExpect[0], SizeOf(LExpect), 0);
+    FillChar(LHdr[0], SizeOf(LHdr), 0);
   end;
 end;
 

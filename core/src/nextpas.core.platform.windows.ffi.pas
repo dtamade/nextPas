@@ -1164,6 +1164,53 @@ function SetClipboardData(uFormat: UINT; hMem: HANDLE): HANDLE; stdcall; externa
     @return 内存句柄,nil 无此格式 *}
 function GetClipboardData(uFormat: UINT): HANDLE; stdcall; external 'user32' name 'GetClipboardData';
 
+{ NUMA — host-owned raw truth for L2 numa (platform owns Windows ABI) }
+
+{** @desc 获取最高 NUMA 节点号
+    @param HighestNodeNumber 输出最高节点号
+    @return TRUE 成功 *}
+function GetNumaHighestNodeNumber(var HighestNodeNumber: DWORD): BOOL; stdcall; external 'kernel32' name 'GetNumaHighestNodeNumber';
+
+{** @desc 获取处理器所在 NUMA 节点
+    @param Processor 处理器编号
+    @param NodeNumber 输出节点号
+    @return TRUE 成功 *}
+function GetNumaProcessorNode(Processor: BYTE; var NodeNumber: BYTE): BOOL; stdcall; external 'kernel32' name 'GetNumaProcessorNode';
+
+{** @desc 获取 NUMA 节点处理器掩码
+    @param Node 节点号
+    @param ProcessorMask 输出掩码
+    @return TRUE 成功 *}
+function GetNumaNodeProcessorMask(Node: DWORD; var ProcessorMask: UInt64): BOOL; stdcall; external 'kernel32' name 'GetNumaNodeProcessorMask';
+
+{** @desc 在指定 NUMA 节点分配内存
+    @param hProcess 进程句柄
+    @param lpAddress 地址
+    @param dwSize 大小
+    @param flAllocationType 分配类型
+    @param flProtect 保护
+    @param nndPreferred 首选节点
+    @return 分配地址 *}
+function VirtualAllocExNuma(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD; nndPreferred: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAllocExNuma';
+
+{** @desc 释放 NUMA 内存
+    @param hProcess 进程句柄
+    @param lpAddress 地址
+    @param dwSize 大小
+    @param dwFreeType 释放类型
+    @return TRUE 成功 *}
+function VirtualFreeEx(hProcess: HANDLE; lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualFreeEx';
+
+{** @desc 获取当前处理器编号
+    @return 处理器编号 *}
+function GetCurrentProcessorNumber: DWORD; stdcall; external 'kernel32' name 'GetCurrentProcessorNumber';
+
+{** @desc 设置线程亲和性
+    @param hThread 线程句柄
+    @param dwThreadAffinityMask 掩码
+    @return 旧掩码 *}
+function SetThreadAffinityMask(hThread: HANDLE; dwThreadAffinityMask: UInt64): UInt64; stdcall; external 'kernel32' name 'SetThreadAffinityMask';
+
 implementation
 
 end.

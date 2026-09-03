@@ -125,6 +125,7 @@ implementation
 
 uses
   nextpas.core.bytes,
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hkdf,
   nextpas.core.crypto.chacha20poly1305,
   nextpas.core.tls.keyschedule.labels;
@@ -134,7 +135,7 @@ begin
   Result := nil;
   SetLength(Result, Length(AConst));
   if Length(AConst) > 0 then
-    Move(AConst[Low(AConst)], Result[0], Length(AConst));
+    BytesCopy(@Result[0], @AConst[Low(AConst)], SizeUInt(Length(AConst))); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 function DeriveQuicInitialSecrets(const ADestCid: TBytes): TQuicInitialSecrets;
@@ -189,7 +190,7 @@ begin
     LCounter := UInt32(ASample[0]) or (UInt32(ASample[1]) shl 8) or
       (UInt32(ASample[2]) shl 16) or (UInt32(ASample[3]) shl 24);
     SetLength(LNonce12, 12);
-    Move(ASample[4], LNonce12[0], 12);
+    BytesCopy(@LNonce12[0], @ASample[4], 12); // perf: inline single Move via bytes.ops single source (zero-copy)
     LBlock := ChaCha20Block(AHpKey, LNonce12, LCounter);
     Result := SpanCopySlice(TByteSpan.FromBytes(LBlock), 0, 5);
   end
@@ -222,10 +223,10 @@ begin
   Result := nil;
   if (APrepared.Nr <= 0) or (Length(ASample) <> 16) then
     Exit;
-  Move(ASample[0], LIn[0], 16);
+  BytesCopy(@LIn[0], @ASample[0], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
   AESEncryptBlock(LIn, LOut, APrepared.Expanded, APrepared.Nr);
   SetLength(Result, 16);
-  Move(LOut[0], Result[0], 16);
+  BytesCopy(@Result[0], @LOut[0], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 end.

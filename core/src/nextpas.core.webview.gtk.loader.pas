@@ -17,7 +17,6 @@ unit nextpas.core.webview.gtk.loader;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.platform.dl,

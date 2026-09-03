@@ -299,6 +299,34 @@ begin
       WriteLn('maxOutput guard: ', E.ClassName, ' ', E.Message);
   end;
 
+  { 原子落盘演示（S67/S69）：TempDir+Rename 原子提交，Exist 拒绝覆盖，bomb 清理无残留，EXDEV 回退 }
+  RemoveAll(LGuardDir);
+  ZipExtractToDirAtomic(LArc, LGuardDir);
+  WriteLn('atomic ok  : ', ReadFileText(LGuardDir + '/a.txt') = '12345');
+  try
+    ZipExtractToDirAtomic(LArc, LGuardDir);
+    WriteLn('atomic refuse: unexpected pass');
+  except
+    on E: EArgumentError do
+      WriteLn('atomic refuse: ', E.Message);
+    on E: Exception do
+      WriteLn('atomic refuse: ', E.ClassName, ' ', E.Message);
+  end;
+  RemoveAll(LGuardDir);
+  LExtractOpts := DefaultZipExtractOptions;
+  LExtractOpts.MaxTotalOutputSize := 9;
+  try
+    ZipExtractToDirAtomicWithOptions(LArc, LGuardDir, LExtractOpts);
+    WriteLn('atomic bomb: unexpected pass');
+  except
+    on E: EIOError do
+      WriteLn('atomic bomb: ', E.ClassName, ' ', E.Message);
+    on E: Exception do
+      WriteLn('atomic bomb: ', E.ClassName, ' ', E.Message);
+  end;
+  WriteLn('atomic bomb clean: ', not Exists(LGuardDir));
+  RemoveAll(LGuardDir);
+
   RemoveAll(LRoot);
   RemoveAll(LOut);
   DeleteFile(LOut + '.zip');

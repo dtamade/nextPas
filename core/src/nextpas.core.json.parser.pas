@@ -44,9 +44,16 @@ type
     FCombinedAlloc: Boolean;
     FInited: Boolean;
     procedure SetOutOfMemoryError;
+  public
     function AddNode: UInt32;
     function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
-  public
+    // perf: direct primitive nodes — single source, inline thin, zero-copy via bytes.ops, one alloc O(1)
+    function AddNullNode: UInt32; inline;
+    function AddBoolNode(AValue: Boolean): UInt32; inline;
+    function AddIntNode(AValue: Int64): UInt32; inline;
+    function AddRealNode(AValue: Double): UInt32; inline;
+    function AddStringNode(const AView: TStringView): UInt32;
+    procedure ReleaseOwnership; inline;
     procedure Init(const AAllocator: TMemAllocator);
     procedure Done;
     function Parse(const AInput: TStringView): Boolean;
@@ -59,6 +66,7 @@ type
     procedure EnsureObjectIndex(AObjectIdx: UInt32);
     function LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
   end;
+  PJsonDocument = ^TJsonDocument;
 
 function JsonParseDoc(const AInput: TStringView;
   const AAllocator: TMemAllocator): TJsonDocument;
@@ -73,6 +81,7 @@ uses
   nextpas.core.text.number,
   nextpas.core.hash.wyhash,
   nextpas.core.json.scanner,
+  nextpas.core.bytes.ops,
   nextpas.core.mem.default,
   nextpas.core.mem;
 
@@ -275,6 +284,71 @@ begin
   FStrOverflow[FStrOverflowCount].Ptr := Result;
   FStrOverflow[FStrOverflowCount].Size := ASize;
   Inc(FStrOverflowCount);
+end;
+
+function TJsonDocument.AddNullNode: UInt32; inline;
+var LIdx: UInt32;
+begin
+  LIdx := AddNode;
+  if LIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+  FNodes[LIdx].Kind := jnkNull;
+  Result := LIdx;
+end;
+
+function TJsonDocument.AddBoolNode(AValue: Boolean): UInt32; inline;
+var LIdx: UInt32;
+begin
+  LIdx := AddNode;
+  if LIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+  FNodes[LIdx].Kind := jnkBool;
+  FNodes[LIdx].BoolVal := AValue;
+  Result := LIdx;
+end;
+
+function TJsonDocument.AddIntNode(AValue: Int64): UInt32; inline;
+var LIdx: UInt32;
+begin
+  LIdx := AddNode;
+  if LIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+  FNodes[LIdx].Kind := jnkInt;
+  FNodes[LIdx].IntVal := AValue;
+  Result := LIdx;
+end;
+
+function TJsonDocument.AddRealNode(AValue: Double): UInt32; inline;
+var LIdx: UInt32;
+begin
+  LIdx := AddNode;
+  if LIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+  FNodes[LIdx].Kind := jnkReal;
+  FNodes[LIdx].RealVal := AValue;
+  Result := LIdx;
+end;
+
+function TJsonDocument.AddStringNode(const AView: TStringView): UInt32;
+var LIdx: UInt32; LBuf: PAnsiChar;
+begin
+  LIdx := AddNode;
+  if LIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+  FNodes[LIdx].Kind := jnkString;
+  if AView.Len = 0 then
+  begin
+    FNodes[LIdx].Str := TStringView.Empty;
+    FNodes[LIdx].Flags := 0;
+    Exit(LIdx);
+  end;
+  LBuf := AllocStrBuf(AView.Len);
+  if LBuf = nil then Exit(JSON_NODE_NONE);
+  // perf: single source zero-copy via bytes.ops BytesCopy inline, one alloc
+  nextpas.core.bytes.ops.BytesCopy(LBuf, AView.Data, AView.Len);
+  FNodes[LIdx].Str := TStringView.Create(LBuf, AView.Len);
+  FNodes[LIdx].Flags := 0;
+  Result := LIdx;
+end;
+
+procedure TJsonDocument.ReleaseOwnership; inline;
+begin
+  FInited := False;
 end;
 
 function TJsonDocument.Root: UInt32;

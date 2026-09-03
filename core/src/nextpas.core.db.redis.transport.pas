@@ -8,7 +8,7 @@ unit nextpas.core.db.redis.transport;
           （回放 canned RESP 字节流，无需真实服务端）；
        2. 未来 TLS/Unix-socket 变体只增实现不改消费方。
 
-       分层：db(L3) → net(L2) 单向依赖（设计规范 L2同层允许单向，db家族为L3） *}
+       分层：L2 同层单向 allowlist 单缝 `db.redis.transport → net.tcp`（+ `tls.dialer` 可选 TLS 变体，time/sync 为 L1 下沉非 L2 缝，base/resp 纯 L0/L1），Registry 显式 allowlist + source-contract 门禁，cycle-gated 无 reverse（net/tls→db.redis 禁止，类 canvas.raster→vector/image / respack.dirsource→fs / vfs.os→fs 范式），bytes.ops 单源 inline/零拷贝（TBytes 视图零额外分配，Send 薄转发），资源 FreeAndNil/try-finally 不丢（Destroy→Close，FStream 释放）。 *}
 
 {$I nextpas.core.settings.inc}
 

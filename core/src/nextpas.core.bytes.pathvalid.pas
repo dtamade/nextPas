@@ -9,10 +9,17 @@ unit nextpas.core.bytes.pathvalid;
 
 interface
 
+uses
+  nextpas.core.base;
+
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   整串 '.' 仅在 AAllowRoot=True 时合法。 }
 function BytesValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
+{ 零拷贝视图版：TByteSpan 直验零分配，单源复用 text.utf8 UTF8IsValid + 段扫描，
+  供 respack.reader Open 校验 10k 条目零堆分配；非 inline 守红线 2（真实扫描循环禁内联） }
+function BytesValidSpan(const ASpan: TByteSpan; const AAllowRoot: Boolean): Boolean;
+function BaseValidSpan(const ASpan: TByteSpan; const AAllowRoot: Boolean): Boolean; inline;
 
 implementation
 
@@ -61,6 +68,53 @@ end;
 function BaseValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 begin
   Result := BytesValidPath(APath, AAllowRoot);
+end;
+
+function BytesValidSpan(const ASpan: TByteSpan; const AAllowRoot: Boolean): Boolean;
+var
+  N, Start, I, SegLen: SizeInt;
+  P: PByte;
+begin
+  Result := False;
+  N := SizeInt(ASpan.Len);
+  P := ASpan.Data;
+  if N = 0 then
+    Exit(False);
+  if P = nil then
+    Exit(False);
+  if not UTF8IsValid(P, SizeUInt(N)) then
+    Exit(False);
+  if (N = 1) and (P[0] = Byte('.')) then
+    Exit(AAllowRoot);
+  if (P[0] = Byte('/')) or (P[N - 1] = Byte('/')) then
+    Exit(False);
+  Start := 0;
+  for I := 0 to N do
+  begin
+    if (I = N) or (P[I] = Byte('/')) then
+    begin
+      SegLen := I - Start;
+      if SegLen = 0 then
+        Exit(False);
+      if SegLen = 1 then
+      begin
+        if P[Start] = Byte('.') then
+          Exit(False);
+      end
+      else if SegLen = 2 then
+      begin
+        if (P[Start] = Byte('.')) and (P[Start + 1] = Byte('.')) then
+          Exit(False);
+      end;
+      Start := I + 1;
+    end;
+  end;
+  Result := True;
+end;
+
+function BaseValidSpan(const ASpan: TByteSpan; const AAllowRoot: Boolean): Boolean; inline;
+begin
+  Result := BytesValidSpan(ASpan, AAllowRoot);
 end;
 
 end.

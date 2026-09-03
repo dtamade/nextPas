@@ -26,6 +26,8 @@ function CanvasExportTxtWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boo
     (ckRgb → 38;2;r;g;b / 48;2;r;g;b, ckIndexed → 3x/4x 索引),
     双宽字形跳过被覆盖格, 末尾 \e[0m; 失败返回 False *}
 function CanvasExportAnsiWide(ADoc: TCanvasDoc; const AFileName: AnsiString): Boolean;
+function CanvasExportTxtWideToStr(ADoc: TCanvasDoc): AnsiString;
+function CanvasExportAnsiWideToStr(ADoc: TCanvasDoc): AnsiString;
 
 implementation
 
@@ -110,11 +112,16 @@ var
   X, Y: Integer;
   Cell: TCanvasCell;
   WideNext: Boolean;
+  LastFg, LastBg: TColor;
+  HasLast: Boolean;
 begin
   Result := False;
   if ADoc = nil then
     Exit;
   S := '';
+  HasLast := False;
+  LastFg := Default(TColor);
+  LastBg := Default(TColor);
   for Y := 0 to ADoc.Height - 1 do
   begin
     Line := '';
@@ -127,7 +134,17 @@ begin
         Continue;
       end;
       Cell := ADoc.GetCell(ADoc.ActiveIndex, X, Y);
-      Line := Line + SgrColor(Cell.Fg, True) + SgrColor(Cell.Bg, False);
+      if not HasLast or not ColorEquals(Cell.Fg, LastFg) then
+      begin
+        Line := Line + SgrColor(Cell.Fg, True);
+        LastFg := Cell.Fg;
+      end;
+      if not HasLast or not ColorEquals(Cell.Bg, LastBg) then
+      begin
+        Line := Line + SgrColor(Cell.Bg, False);
+        LastBg := Cell.Bg;
+      end;
+      HasLast := True;
       if Cell.Ch <> 0 then
         Line := Line + UTF8EncodeToStr(Cell.Ch)
       else
@@ -139,6 +156,91 @@ begin
   end;
   S := S + ESC + '[0m';
   Result := FileWriteAllText(AFileName, S);
+end;
+
+function CanvasExportTxtWideToStr(ADoc: TCanvasDoc): AnsiString;
+var
+  Line: AnsiString;
+  X, Y: Integer;
+  Cell: TCanvasCell;
+  WideNext: Boolean;
+begin
+  Result := '';
+  if ADoc = nil then
+    Exit;
+  for Y := 0 to ADoc.Height - 1 do
+  begin
+    Line := '';
+    WideNext := False;
+    for X := 0 to ADoc.Width - 1 do
+    begin
+      if WideNext then
+      begin
+        WideNext := False;
+        Continue;
+      end;
+      Cell := ADoc.GetCell(ADoc.ActiveIndex, X, Y);
+      if Cell.Ch <> 0 then
+      begin
+        Line := Line + UTF8EncodeToStr(Cell.Ch);
+        if CodepointWidth(Cell.Ch) > 1 then
+          WideNext := True;
+      end
+      else
+        Line := Line + ' ';
+    end;
+    Result := Result + Line + #10;
+  end;
+end;
+
+function CanvasExportAnsiWideToStr(ADoc: TCanvasDoc): AnsiString;
+var
+  Line: AnsiString;
+  X, Y: Integer;
+  Cell: TCanvasCell;
+  WideNext: Boolean;
+  LastFg, LastBg: TColor;
+  HasLast: Boolean;
+begin
+  Result := '';
+  if ADoc = nil then
+    Exit;
+  HasLast := False;
+  LastFg := Default(TColor);
+  LastBg := Default(TColor);
+  for Y := 0 to ADoc.Height - 1 do
+  begin
+    Line := '';
+    WideNext := False;
+    for X := 0 to ADoc.Width - 1 do
+    begin
+      if WideNext then
+      begin
+        WideNext := False;
+        Continue;
+      end;
+      Cell := ADoc.GetCell(ADoc.ActiveIndex, X, Y);
+      if not HasLast or not ColorEquals(Cell.Fg, LastFg) then
+      begin
+        Line := Line + SgrColor(Cell.Fg, True);
+        LastFg := Cell.Fg;
+      end;
+      if not HasLast or not ColorEquals(Cell.Bg, LastBg) then
+      begin
+        Line := Line + SgrColor(Cell.Bg, False);
+        LastBg := Cell.Bg;
+      end;
+      HasLast := True;
+      if Cell.Ch <> 0 then
+        Line := Line + UTF8EncodeToStr(Cell.Ch)
+      else
+        Line := Line + ' ';
+      if (Cell.Ch <> 0) and (CodepointWidth(Cell.Ch) > 1) then
+        WideNext := True;
+    end;
+    Result := Result + Line + #10;
+  end;
+  Result := Result + ESC + '[0m';
 end;
 
 end.
