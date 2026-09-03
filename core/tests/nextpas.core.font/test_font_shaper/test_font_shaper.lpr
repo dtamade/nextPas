@@ -6,7 +6,8 @@ program test_font_shaper;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.format,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.font.base,
@@ -271,7 +272,7 @@ begin
   LGlyphs[1] := LGidI;
   LLigGlyph := GFace.LookupLigature(LGlyphs);
   if LLigGlyph <> 0 then
-    Check(True, Format('ligature: fi found (gid=%d)', [LLigGlyph]))
+    Check(True, TextFormat('ligature: fi found (gid=%d)', [LLigGlyph]))
   else
     Check(True, 'ligature: fi not found (font-specific)');
 
@@ -335,7 +336,7 @@ begin
   LAsciiAdvance := GShaper.GetAdvanceWidth(Ord('A'));
   LCJKAdvance := GShaper.GetAdvanceWidth($4E2D);
   Check(LCJKAdvance > LAsciiAdvance,
-    Format('CJK: 中 advance (%d) > A advance (%d)', [LCJKAdvance, LAsciiAdvance]));
+    TextFormat('CJK: 中 advance (%d) > A advance (%d)', [LCJKAdvance, LAsciiAdvance]));
 end;
 
 procedure TestCJKShaping;

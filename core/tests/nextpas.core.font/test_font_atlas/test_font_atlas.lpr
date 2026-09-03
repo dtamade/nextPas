@@ -3,8 +3,7 @@ program test_font_atlas;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Math,
+  nextpas.core.text.format,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.font.base,
@@ -307,8 +306,8 @@ begin
   for I := 0 to 7 do
   begin
     LSlot := LAtlas.SlotAt(I);
-    Check(LSlot.Y = 0, Format('shelf: glyph %d Y=0', [I]));
-    Check(LSlot.X = I * 8, Format('shelf: glyph %d X=%d', [I, I * 8]));
+    Check(LSlot.Y = 0, TextFormat('shelf: glyph %d Y=0', [I]));
+    Check(LSlot.X = I * 8, TextFormat('shelf: glyph %d X=%d', [I, I * 8]));
   end;
 
   LAtlas.Free;
@@ -456,7 +455,7 @@ begin
     begin
       LIdx := (LSlot.Y + LY) * LAtlas.Width + (LSlot.X + LX);
       Check(LPtr[LIdx] = (LY * 4 + LX + 1) * 10,
-        Format('pixel data: [%d,%d] = %d', [LX, LY, (LY * 4 + LX + 1) * 10]));
+        TextFormat('pixel data: [%d,%d] = %d', [LX, LY, (LY * 4 + LX + 1) * 10]));
     end;
 
   LAtlas.Free;
@@ -563,7 +562,7 @@ begin
       LKey := FontAtlasKeyMake(LCodepoints[I], 24);
       LSlotIdx := LAtlas.Pack(LKey, LRaster);
       Check(LSlotIdx >= 0,
-        Format('multiple real: glyph %d packed', [LCodepoints[I]]));
+        TextFormat('multiple real: glyph %d packed', [LCodepoints[I]]));
     end;
   end;
 
@@ -574,7 +573,7 @@ begin
   begin
     LKey := FontAtlasKeyMake(LCodepoints[I], 24);
     Check(LAtlas.Lookup(LKey) >= 0,
-      Format('multiple real: glyph %d found', [LCodepoints[I]]));
+      TextFormat('multiple real: glyph %d found', [LCodepoints[I]]));
   end;
 
   LRasterizer.Free;
@@ -704,7 +703,7 @@ begin
   TestLargeAtlas;
 
   WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GTestsPassed, GTestsFailed]));
+  WriteLn(TextFormat('Results: %d passed, %d failed', [GTestsPassed, GTestsFailed]));
 
   GRasterizer.Free;
   GFace.Free;

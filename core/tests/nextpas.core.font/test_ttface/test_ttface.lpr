@@ -3,7 +3,7 @@ program test_ttface;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.format,
   nextpas.core.test,
   nextpas.core.mem,
   nextpas.core.base,
@@ -124,7 +124,7 @@ begin
     for I := 0 to 9 do
     begin
       LGlyphIdx := LFace.LookupCodepoint(Ord('0') + I);
-      Check(LGlyphIdx > 0, Format('digit %d should map to non-zero glyph', [I]));
+      Check(LGlyphIdx > 0, TextFormat('digit %d should map to non-zero glyph', [I]));
     end;
   finally
     LFace.Free;
@@ -350,7 +350,7 @@ begin
         LFirstAdvance := LCurrentAdvance
       else
         Check(LCurrentAdvance = LFirstAdvance,
-          Format('glyph "%s" advance should match first glyph (%d vs %d)',
+          TextFormat('glyph "%s" advance should match first glyph (%d vs %d)',
             [LChars[I], LCurrentAdvance, LFirstAdvance]));
     end;
     Check(LFirstAdvance > 0, 'advance width should be positive');

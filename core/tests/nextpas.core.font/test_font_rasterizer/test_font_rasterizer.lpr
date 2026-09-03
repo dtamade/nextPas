@@ -8,8 +8,8 @@ program test_font_rasterizer;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.font.base,

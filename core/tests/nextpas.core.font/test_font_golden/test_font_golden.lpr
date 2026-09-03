@@ -10,8 +10,9 @@ program test_font_golden;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Math,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.math,
   freetypeh,
   nextpas.core.base,
   nextpas.core.exception,
