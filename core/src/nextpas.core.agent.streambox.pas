@@ -73,26 +73,33 @@ end;
 
 function TAgentStreamBox.TryPop(out ADelta: TStreamDelta): Boolean;
 var
-  LLen, LRemaining: Integer;
+  LLen, LRemaining, I: Integer;
 begin
   platform_mutex_lock(FLock);
   try
     Result := FHead < Length(FPending);
     if not Result then Exit;
     ADelta := FPending[FHead];
+    FPending[FHead] := Default(TStreamDelta);
     Inc(FHead);
-    // 环形压缩：头部过半且堆积>64时一次性前移，摊销 O(1)
+    // 环形压缩：头部过半且堆积>64时一次性前移，摊销 O(1)；托管类型需逐项赋值以保引用计数
     if (FHead > 64) and (FHead > Length(FPending) div 2) then
     begin
       LLen := Length(FPending);
       LRemaining := LLen - FHead;
       if LRemaining > 0 then
-        Move(FPending[FHead], FPending[0], LRemaining * SizeOf(TStreamDelta));
+      begin
+        for I := 0 to LRemaining - 1 do
+        begin
+          FPending[I] := FPending[FHead + I];
+          FPending[FHead + I] := Default(TStreamDelta);
+        end;
+      end;
       SetLength(FPending, LRemaining);
       FHead := 0;
     end else if FHead = Length(FPending) then
     begin
-      // 刚好消费完，重置以释放内存
+      // 刚好消费完，重置以释放内存（已逐项清零，无泄漏）
       SetLength(FPending, 0);
       FHead := 0;
     end;

@@ -41,6 +41,7 @@ var
   LCut, LPos, LNext, LBest: Integer;
   LG: TGraphemeResult;
 begin
+  if ABudget <= 0 then Exit('');
   LFull := AgentBuildSystemText(ASystem, AMessages);
   if Length(LFull) <= ABudget then
     Exit(LFull);
@@ -64,7 +65,9 @@ begin
     Inc(LPos, LG.ByteLen);
   end;
   if LBest > 0 then
-    LCut := LBest;
+    LCut := LBest
+  else
+    LCut := 0;
   Result := AgentUtf8SafeTruncate(LFull, LCut);
 end;
 

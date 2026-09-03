@@ -79,7 +79,8 @@ implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.mem.utils;
+  nextpas.core.mem.utils,
+  nextpas.core.text.builder;
 
 const
   TRACK_MAP_MIN_CAP = 64;
@@ -452,28 +453,39 @@ end;
 function TTrackingAllocator.ReportLeaks: string;
 var
   LIdx: SizeUInt;
-  LLine: string;
-  LCountStr: string;
+  LBuilder: TBufStringBuilder;
 begin
+  // perf: single allocation via TBufStringBuilder (text.builder) reusing bytes.ops.BytesGrowCapacity single source geometric growth (BYTES_BUILDER_MIN_GROW) amortized O(1) per append, zero-copy Move via AppendStr/AppendUInt, O(n) total vs O(n^2) Result+concat; not inline per red-line 2 (loop+branch); stability via try/finally Done+Lock
   FLock.Acquire;
   try
     if FCount = 0 then
       Exit('No leaks detected.');
-    Str(FCount, LCountStr);
-    Result := 'Leak report: ' + LCountStr + ' block(s) not freed:' + #10;
-    for LIdx := 0 to FMask do
-    begin
-      if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
+    LBuilder.Init(64 + FCount * 48);
+    try
+      LBuilder.AppendStr('Leak report: ');
+      LBuilder.AppendUInt(FCount);
+      LBuilder.AppendStr(' block(s) not freed:'#10);
+      for LIdx := 0 to FMask do
       begin
-        Str(FAllocIds[LIdx], LLine);
-        Result := Result + '  [' + LLine + '] $';
-        Result := Result + PtrToHexString(FKeys[LIdx]);
-        Str(FSizes[LIdx], LLine);
-        Result := Result + ' size=' + LLine;
-        if FTags[LIdx] <> '' then
-          Result := Result + ' tag=' + FTags[LIdx];
-        Result := Result + #10;
+        if (FKeys[LIdx] <> 0) and (FKeys[LIdx] <> TRACK_TOMBSTONE) then
+        begin
+          LBuilder.AppendStr('  [');
+          LBuilder.AppendUInt(FAllocIds[LIdx]);
+          LBuilder.AppendStr('] $');
+          LBuilder.AppendStr(PtrToHexString(FKeys[LIdx]));
+          LBuilder.AppendStr(' size=');
+          LBuilder.AppendUInt(FSizes[LIdx]);
+          if FTags[LIdx] <> '' then
+          begin
+            LBuilder.AppendStr(' tag=');
+            LBuilder.AppendStr(FTags[LIdx]);
+          end;
+          LBuilder.AppendStr(#10);
+        end;
       end;
+      Result := LBuilder.ToString;
+    finally
+      LBuilder.Done;
     end;
   finally
     FLock.Release;

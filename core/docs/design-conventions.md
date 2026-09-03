@@ -148,6 +148,7 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
+- `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`，阈值 550 内，见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
   `nextpas.core.platform.info` 拥有 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、
@@ -184,7 +185,7 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
      ↑ 只依赖 L0
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation, archive, tar, zip)
-     ↑ 只依赖 L0-L1；同层允许 `archive`→`tar`/`zip` 经 `archive.fs` + `archive.pax` 家族缝单向显式依赖（见 module-registry L2 同层一-way），禁循环
+     ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf`、`sevenz.coders→compress` 单点缝 source-contract gated like respack.dirsource/vfs.os），其余同层依赖仍禁止；另 `archive`→`tar`/`zip` 经 `archive.fs` + `archive.pax` 家族缝单向显式依赖（见 module-registry L2 同层 one-way），禁循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -193,9 +194,10 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
-- 同层内允许单向依赖，禁止循环依赖
+- 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
 - L2 同层显式 one-way 仅 via `nextpas.core.archive.fs` + `nextpas.core.archive.pax` 家族缝联邦：`tar`/`zip`/`sevenz.fs` 共享 walk/排序/防劫持/零拷贝落盘与 pax kv 等单源，家族缝归一，需在 `core/docs/core-module-registry.md` 显式登记 `federation via archive.fs + archive.pax` / `allowed dependencies`（L2 同层显式一-way），禁循环或隐式同层依赖
+- 单点 L2→L2 seam 必须在 `docs/module-registry.md` 明示且有 source-contract 门禁（如 `respack.dirsource` 唯一 fs+io.mapped IO 缝、`vfs.os` 唯一 fs/path 缝、`sevenz.fs` 唯一 fs 联邦缝、`sevenz.coders` 唯一 compress 缝 source-contract gated like respack.dirsource/vfs.os — bytes.ops 单源 inline 零拷贝 + try..finally 不丢）；`respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 
 ### 特殊依赖关系：encoding / bytes / text
 
@@ -599,7 +601,7 @@ end.
 每个模块完成后必须提供基准测试，覆盖核心热路径操作：
 
 - **基准测试框架**：所有框架内基准测试必须使用 `nextpas.core.bench` 模块，禁止使用自定义计时或外部基准测试框架
-- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据
+- 基准对照组：FPC RTL 同等功能（如有）、Go 标准库、Rust 标准库的公开 benchmark 数据（同机 `AddBaseline` 对照，参考实现 `nextpas.core.respack` 三基准 + `benchmarks/nextpas.core.respack/RESULTS.md` 已落地 FPC `TFileStream`/`TMemoryStream` 与 Go `embed.FS`/Rust `include_dir` 量化基线）
 - 基准项目放在 `benchmarks/nextpas.core.<module>/bench_<name>/bench_<name>.lpr`
 - 每个基准输出：操作名、迭代次数、总耗时、单次耗时（ns/op）、吞吐量（MB/s，如适用）
 - 基准必须在优化编译（`-O2`）下运行，禁止 debug 模式
@@ -860,7 +862,7 @@ build/
 | `id`          | UUID/ULID/Snowflake/NanoID                        |
 | `testing`     | 测试框架（初期极简，后期迭代）                    |
 
-### L2: 系统能力（只依赖 L0-L1）
+### L2: 系统能力（只依赖 L0-L1；同层允许单向依赖，例 js→json 见 module-registry:50，禁止循环）
 
 | 模块         | 职责                               |
 | ------------ | ---------------------------------- |

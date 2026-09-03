@@ -28,19 +28,23 @@ type
   private
     FVirtualNowMs: Int64;
     FLastSleepRequestMs: Int64;
+    FRandState: UInt64;
   public
+    constructor Create;
     procedure Advance(AMs: Int64);        { 推进虚拟时钟 }
     function VirtualNowMs: Int64;
     function LastSleepRequestMs: Int64;   { 最近一次被请求的睡眠时长 }
     function NowMs: Int64;
     function SleepMs(AMs: Int64;
       const AToken: IAsyncCancellationToken): Boolean;
+    function RandomU64: UInt64;
   end;
 
 implementation
 
 uses
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.platform.random;
 
 type
   TSystemClock = class(TInterfacedObject, IAgentClock)
@@ -51,6 +55,7 @@ type
     function NowMs: Int64;
     function SleepMs(AMs: Int64;
       const AToken: IAsyncCancellationToken): Boolean;
+    function RandomU64: UInt64;
   end;
 
 function NewSystemClock: IAgentClock;
@@ -97,6 +102,11 @@ begin
   Result := True;
 end;
 
+function TSystemClock.RandomU64: UInt64;
+begin
+  Result := platform_random_u64;
+end;
+
 procedure TFakeClock.Advance(AMs: Int64);
 begin
   Inc(FVirtualNowMs, AMs);
@@ -112,6 +122,12 @@ begin
   Result := FLastSleepRequestMs;
 end;
 
+constructor TFakeClock.Create;
+begin
+  inherited Create;
+  FRandState := UInt64(14695981039346656037);
+end;
+
 function TFakeClock.NowMs: Int64;
 begin
   Result := FVirtualNowMs;
@@ -124,6 +140,13 @@ begin
   if (AToken <> nil) and AToken.IsCancelled then
     Exit(False);
   Result := True;
+end;
+
+function TFakeClock.RandomU64: UInt64;
+begin
+  { 确定性 LCG：FNV 基 + 乘，测试可复现，覆盖 jitter 全带 }
+  FRandState := FRandState * UInt64(6364136223846793005) + 1;
+  Result := FRandState;
 end;
 
 end.

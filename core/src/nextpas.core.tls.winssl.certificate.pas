@@ -269,57 +269,55 @@ begin
 end;
 
 function X509KeyUsageToStrings(const AUsage: TX509KeyUsage): TSSLStringArray;
-
-  procedure AddToResult(const AValue: string);
-  begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := AValue;
-  end;
-
+var
+  LCount: Integer;
 begin
-  SetLength(Result, 0);
-  if kuDigitalSignature in AUsage then
-    AddToResult('digitalSignature');
-  if kuNonRepudiation in AUsage then
-    AddToResult('nonRepudiation');
-  if kuKeyEncipherment in AUsage then
-    AddToResult('keyEncipherment');
-  if kuDataEncipherment in AUsage then
-    AddToResult('dataEncipherment');
-  if kuKeyAgreement in AUsage then
-    AddToResult('keyAgreement');
-  if kuKeyCertSign in AUsage then
-    AddToResult('keyCertSign');
-  if kuCRLSign in AUsage then
-    AddToResult('cRLSign');
-  if kuEncipherOnly in AUsage then
-    AddToResult('encipherOnly');
-  if kuDecipherOnly in AUsage then
-    AddToResult('decipherOnly');
+  // perf: single batch allocation via pre-count (single SetLength, zero O(n²)) vs linear SetLength+1; zero-copy string assign
+  // stability: count then fill, no resource leak, exact allocation
+  LCount := 0;
+  if kuDigitalSignature in AUsage then Inc(LCount);
+  if kuNonRepudiation in AUsage then Inc(LCount);
+  if kuKeyEncipherment in AUsage then Inc(LCount);
+  if kuDataEncipherment in AUsage then Inc(LCount);
+  if kuKeyAgreement in AUsage then Inc(LCount);
+  if kuKeyCertSign in AUsage then Inc(LCount);
+  if kuCRLSign in AUsage then Inc(LCount);
+  if kuEncipherOnly in AUsage then Inc(LCount);
+  if kuDecipherOnly in AUsage then Inc(LCount);
+  SetLength(Result, LCount);
+  LCount := 0;
+  if kuDigitalSignature in AUsage then begin Result[LCount] := 'digitalSignature'; Inc(LCount); end;
+  if kuNonRepudiation in AUsage then begin Result[LCount] := 'nonRepudiation'; Inc(LCount); end;
+  if kuKeyEncipherment in AUsage then begin Result[LCount] := 'keyEncipherment'; Inc(LCount); end;
+  if kuDataEncipherment in AUsage then begin Result[LCount] := 'dataEncipherment'; Inc(LCount); end;
+  if kuKeyAgreement in AUsage then begin Result[LCount] := 'keyAgreement'; Inc(LCount); end;
+  if kuKeyCertSign in AUsage then begin Result[LCount] := 'keyCertSign'; Inc(LCount); end;
+  if kuCRLSign in AUsage then begin Result[LCount] := 'cRLSign'; Inc(LCount); end;
+  if kuEncipherOnly in AUsage then begin Result[LCount] := 'encipherOnly'; Inc(LCount); end;
+  if kuDecipherOnly in AUsage then begin Result[LCount] := 'decipherOnly'; Inc(LCount); end;
 end;
 
 function X509ExtKeyUsageToStrings(const AUsage: TX509ExtKeyUsage): TSSLStringArray;
-
-  procedure AddToResult(const AValue: string);
-  begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := AValue;
-  end;
-
+var
+  LCount: Integer;
 begin
-  SetLength(Result, 0);
-  if ekuServerAuth in AUsage then
-    AddToResult('serverAuth');
-  if ekuClientAuth in AUsage then
-    AddToResult('clientAuth');
-  if ekuCodeSigning in AUsage then
-    AddToResult('codeSigning');
-  if ekuEmailProtection in AUsage then
-    AddToResult('emailProtection');
-  if ekuTimeStamping in AUsage then
-    AddToResult('timeStamping');
-  if ekuOCSPSigning in AUsage then
-    AddToResult('OCSPSigning');
+  // perf: single batch allocation via pre-count (single SetLength, zero O(n²)) vs linear SetLength+1; zero-copy string assign
+  // stability: count then fill, no resource leak, exact allocation
+  LCount := 0;
+  if ekuServerAuth in AUsage then Inc(LCount);
+  if ekuClientAuth in AUsage then Inc(LCount);
+  if ekuCodeSigning in AUsage then Inc(LCount);
+  if ekuEmailProtection in AUsage then Inc(LCount);
+  if ekuTimeStamping in AUsage then Inc(LCount);
+  if ekuOCSPSigning in AUsage then Inc(LCount);
+  SetLength(Result, LCount);
+  LCount := 0;
+  if ekuServerAuth in AUsage then begin Result[LCount] := 'serverAuth'; Inc(LCount); end;
+  if ekuClientAuth in AUsage then begin Result[LCount] := 'clientAuth'; Inc(LCount); end;
+  if ekuCodeSigning in AUsage then begin Result[LCount] := 'codeSigning'; Inc(LCount); end;
+  if ekuEmailProtection in AUsage then begin Result[LCount] := 'emailProtection'; Inc(LCount); end;
+  if ekuTimeStamping in AUsage then begin Result[LCount] := 'timeStamping'; Inc(LCount); end;
+  if ekuOCSPSigning in AUsage then begin Result[LCount] := 'OCSPSigning'; Inc(LCount); end;
 end;
 
 function X509SubjectAltNamesToStrings(
@@ -1424,15 +1422,24 @@ var
   SegValue: Word;
   IpStr: string;
   k: Integer;
+  LCap, LCount: Integer;
 
   procedure AddToResult(const S: string);
   begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := S;
+    // perf: single source via bytes.ops.BytesGrowCapacityInt geometric BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1) zero O(n²), not inline per red-line 2; zero-copy string assign; stability: capacity tracked, final shrink
+    if LCount >= LCap then
+    begin
+      LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LCount + 1);
+      SetLength(Result, LCap);
+    end;
+    Result[LCount] := S;
+    Inc(LCount);
   end;
 
 begin
   SetLength(Result, 0);
+  LCap := 0;
+  LCount := 0;
 
   if FCertContext = nil then
     Exit;
@@ -1526,10 +1533,16 @@ begin
           end;
         end;
       end;
+      // shrink to exact count (single SetLength, releases over-capacity)
+      if LCount <> LCap then
+        SetLength(Result, LCount);
     end;
   finally
     FreeMem(AltNameInfo, SizeUInt(LAllocSize));
   end;
+  // ensure tail shrink if loop didn't allocate (already 0) or early exit already handled
+  if (LCap <> 0) and (Length(Result) <> LCount) then
+    SetLength(Result, LCount);
 end;
 
 function TWinSSLCertificate.GetKeyUsage: TSSLStringArray;
@@ -1540,15 +1553,24 @@ var
   KeyUsageSize: DWORD;
   LAllocSize: DWORD;
   KeyUsageBits: Byte;
+  LCap, LCount: Integer;
 
   procedure AddToResult(const S: string);
   begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := S;
+    // perf: single source via bytes.ops.BytesGrowCapacityInt geometric BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1) zero O(n²), not inline per red-line 2; zero-copy string assign; stability: capacity tracked, final shrink
+    if LCount >= LCap then
+    begin
+      LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LCount + 1);
+      SetLength(Result, LCap);
+    end;
+    Result[LCount] := S;
+    Inc(LCount);
   end;
 
 begin
   SetLength(Result, 0);
+  LCap := 0;
+  LCount := 0;
 
   if FCertContext = nil then
     Exit;
@@ -1620,10 +1642,14 @@ begin
           if (KeyUsageBits and $80) <> 0 then AddToResult('decipherOnly');
         end;
       end;
+      if LCount <> LCap then
+        SetLength(Result, LCount);
     end;
   finally
     FreeMem(KeyUsageInfo, SizeUInt(LAllocSize));
   end;
+  if (LCap <> 0) and (Length(Result) <> LCount) then
+    SetLength(Result, LCount);
 end;
 
 function TWinSSLCertificate.GetExtendedKeyUsage: TSSLStringArray;
@@ -1635,15 +1661,24 @@ var
   LAllocSize: DWORD;
   i: DWORD;
   OIDStr: string;
+  LCap, LCount: Integer;
 
   procedure AddToResult(const S: string);
   begin
-    SetLength(Result, Length(Result) + 1);
-    Result[High(Result)] := S;
+    // perf: single source via bytes.ops.BytesGrowCapacityInt geometric BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1) zero O(n²), not inline per red-line 2; zero-copy string assign; stability: capacity tracked, final shrink
+    if LCount >= LCap then
+    begin
+      LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LCount + 1);
+      SetLength(Result, LCap);
+    end;
+    Result[LCount] := S;
+    Inc(LCount);
   end;
 
 begin
   SetLength(Result, 0);
+  LCap := 0;
+  LCount := 0;
 
   if FCertContext = nil then
     Exit;
@@ -1711,10 +1746,14 @@ begin
         else if OIDStr = '1.3.6.1.5.5.7.3.9' then
           AddToResult('OCSPSigning');
       end;
+      if LCount <> LCap then
+        SetLength(Result, LCount);
     end;
   finally
     FreeMem(EnhKeyUsage, SizeUInt(LAllocSize));
   end;
+  if (LCap <> 0) and (Length(Result) <> LCount) then
+    SetLength(Result, LCount);
 end;
 
 // ============================================================================

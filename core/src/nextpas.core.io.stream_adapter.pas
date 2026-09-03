@@ -51,7 +51,7 @@ type
     constructor Create(const AStream: INextPasStream);
     function Read(var Buffer; Count: Longint): Longint; override;
     function Write(const Buffer; Count: Longint): Longint; override;
-    function Seek(Offset: Longint; Origin: Word): Longint; override; overload;
+    function Seek(Offset: Longint; Origin: Word): Longint; overload;
     function Seek(const Offset: Int64;
       Origin: nextpas.core.system.classes.TSeekOrigin): Int64; override; overload;
     function CopyFrom(Source: TStream; Count: Int64): Int64; reintroduce;

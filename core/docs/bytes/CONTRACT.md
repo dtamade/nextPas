@@ -1,6 +1,6 @@
 # nextpas.core.bytes 代码契约
 
-**模块路径**：`core/src/nextpas.core.bytes*.pas`（8 个源文件）
+**模块路径**：`core/src/nextpas.core.bytes*.pas`（11 个源文件：`bytes.base/pas` + `ops` + `ops.capacity/ops.text/ops.ascii` 3 叶子 + `binary/builder/cursor/stream/pathvalid`）
 **层级**：L1（依赖 L0: base, mem, platform, simd；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-09-02
@@ -15,7 +15,10 @@
 | 文件 | 职责 |
 |------|------|
 | bytes.base | TEndianness/TEndian/TByteOrder 别名、`NATIVE_ENDIAN`、Builder 默认容量 |
-| bytes.ops | TByteSpan/TBytes 单源操作（Equal/Compare/IndexOf/Fill/Reverse/Concat/Clone/CopySlice/ConcatMany） |
+| bytes.ops | TByteSpan/TBytes 单源操作（Equal/Compare/IndexOf/Fill/Reverse/Concat/Clone/CopySlice/ConcatMany）— 单源 Owner（raw Move/FillChar 仅此，BytesCopy/BytesZero inline 零拷贝）；叶子 `ops.capacity`（几何增长 `BytesGrowCapacityWithMin` 0→64→2×/Webview 0→4→2× 同源 `*2`）、`ops.text`（SpanToString/Var/HTon/FNV 零拷贝）、`ops.ascii`（Xor/Ascii inplace 无 Move）为纯算术/字符串叶子，thin-forward 复用单源，无重复 Move |
+| bytes.ops.capacity | 容量增长单源（`BytesGrowCapacityWithMin` 几何 `*2` 均摊 `O(1)`，`Webview 0→4→2×` 同源复用）— 不含 Move，not inline loop |
+| bytes.ops.text | 字符串/Var/字节序 helpers（SpanToString/FNV/HTonN 等零拷贝 SetString 视图）— 不含 raw Move |
+| bytes.ops.ascii | Xor/Ascii 大小写原地（QWord 批异或、ToLower/Upper）— 不含 Move |
 | bytes.binary | 字节序转换与游标编解码（Swap/ToEndian/Read/Write/TryRead/TryWrite） |
 | bytes.builder | IBytesBuilder 可变字节缓冲区（allocator 注入、按需增长） |
 | bytes.cursor | IByteCursor 边界受查只读游标（顺序/绝对偏移、Try* 变体） |
@@ -23,7 +26,7 @@
 | bytes.pathvalid | ValidPath + IsSafeArchiveEntryName/Ex 共享校验（tar/zip 归档名与 tar link target 参数化单源，阈值/尾斜杠收敛，复用 bytes.ops 单源 + text.utf8 单源） |
 | bytes.pas | 门面：纯 re-export + inline 转发 |
 
-四件套形态：`base`（类型/常量）→ `ops/binary/builder/cursor/stream/pathvalid`（实现子模块）→ `bytes.pas`（门面聚合）；本模块无独立 `intf/ffi`（按需存在，不机械创建）。
+四件套形态：`base` → `ops`（单源 Owner，raw Move 仅此） + `ops.capacity/ops.text/ops.ascii` 3 叶子（纯算术/字符串，无 Move，thin-forward）+ `binary/builder/cursor/stream/pathvalid` → `bytes.pas` 门面；`ops` 981→~760 行（≤800 软指引，叶子各 ~120 行），优雅度合规；无独立 `intf/ffi`（按需存在）。
 
 ### 1.2 IBytesBuilder 接口
 
@@ -103,13 +106,12 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 ## 2. 不变量
 
 - **[INV-1]** Span 为非拥有视图：除 `SpanConcat/Clone/CopySlice/ConcatMany` 返回 `TBytes` 外不分配；零拷贝（`Move` 直拷，不经编码转换）。
-- **[INV-2]** IBytesBuilder 按需倍增增长（`capacity ≥ length`，下界 `BYTES_BUILDER_MIN_GROW`，溢出钳制）；`Clear` 保留容量；`Truncate` 仅缩 `FLen`。
+- **[INV-2]** IBytesBuilder 按需倍增增长（`capacity ≥ length`，下界 `BYTES_BUILDER_MIN_GROW`，溢出钳制；单源 `BytesGrowCapacityWithMin` 几何 `0→64→2×` / `Webview` 重用 `0→4→2×` 同源 `*2` 均摊 `O(1)` 零 `O(n²)`）；`Clear` 保留容量；`Truncate` 仅缩 `FLen`。
 - **[INV-3]** `NATIVE_ENDIAN` 编译时确定（当前 `endLittle`）；`ToEndian/FromEndian` 在 native 时直通无翻转。
 - **[INV-4]** 越界受查：`SpanCopySlice` 越界 → `EOutOfRange`；IByteCursor 越界 → `EIndexOutOfRangeError`；`Try*` 变体返回 `False` 不抛异常、不推进。
-- **[INV-5]** 单源复用：比较/查找经 `bytes.ops`（`MemEqual/MemCompare/MemFindByte/BytesIndexOf` + SIMD）；门面全部 `inline` 转发，不分叉实现。
-- **[INV-6]** 资源释放不丢：`TBytesBuilderImpl.Destroy` 与 `TByteStreamBuf.Destroy` 以 sized `FreeMemOf/ReallocMemOf` 经注入 `TMemAllocator/IAllocator` 释放；`Clear/Consume` 不丢块；`try-finally/Free` 语义由调用方持有接口/对象生命周期保证。
-- **[INV-7]** L0-L3 分层：bytes 为 L1，仅依赖 L0（`base/mem/platform/simd`）及文档化 `bytes↔text↔encoding` seam（interface/implementation 分区引用，不形成循环）；门面不含逻辑。
-- **[INV-8]** 追加门禁：`BytesAppend*`（含 `AppendByte/UInt16/32/64BE/LE`）`inline + single Move` 零拷贝但 `SetLength` 逐次重分配 O(n) → 循环 O(n²)；单次便利仅 `deprecated` 保留，高频/循环必须改用 `IBytesBuilder.Append*`（`Grow` 几何 2×，`BYTES_BUILDER_MIN_GROW` 下界，inline 零拷贝单 `Move/FillChar`）或 `BytesConcatMany/SpanConcatMany`（单次 `SetLength+Move` per part，零拷贝视图），由 `test_bytes_source_contract` 机械门禁（`deprecated` 编译提示 + `check_bytes_append_contract.sh` 循环扫描）。
+- **[INV-5]** 单源复用：比较/查找与 `Move`/`FillChar` 经 `bytes.ops` 单源（`BytesCopy`/`BytesZero`/`Span*` inline 零拷贝，`MemEqual`/`MemCompare`/`MemFindByte`/`BytesIndexOf` + SIMD；`BytesGrowCapacityWithMin` 几何倍增 `BYTES_BUILDER_MIN_GROW=64` 单源于 `bytes.ops.capacity` 叶子（同源 `0→64→2×`/`0→4→2×` `*2`），`WebviewGrowCapacity` inline 复用 `bytes.ops` 同源 `0→4→2×`；`bytes.ops.text/ascii` 叶子无 Move 纯算术/字符串 thin-forward；门面全部 `inline` 薄转发，零重复 `Move`/`SetLength`；`tls.encoding:479` 亦迁移至 `BytesCopy`）；强制门禁由 `test_bytes_ops_source_contracts` 冻结（`raw Move/FillChar` 仅 `bytes.ops` 允许，`bytes.ops.capacity/text/ascii` 为无 Move 叶子，`L0 platform` 例外文档化于 `platform.fs` 头注与 gate，`L1+` 必须经 `BytesCopy/BytesZero/SpanFill`）。
+- **[INV-6]** 资源释放不丢：`TBytesBuilderImpl.Destroy` 与 `TByteStreamBuf.Destroy` 以 sized `FreeMemOf/ReallocMemOf` 经注入 `TMemAllocator/IAllocator` 释放；`Clear/Consume` 不丢块；`try-finally/Free` 语义由调用方持有接口/对象生命周期保证；`BytesGrowCapacity`/`WebviewGrowCapacity` 无分配泄漏。
+- **[INV-7]** L0-L3 分层：bytes 为 L1，仅依赖 L0（`base/mem/platform/simd`）及文档化 `bytes↔text↔encoding` seam（interface/implementation 分区引用，不形成循环）；门面不含逻辑；`webview.base` 复用 `bytes.ops` 属 `L3→L1` 合法反哺（`capacity` 单源下沉）。
 
 ---
 
@@ -136,7 +138,7 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 - Span 操作：非拥有视图，不分配（Concat/CopySlice/Clone 除外返回独立 `TBytes`）。
 - IBytesBuilder：内部块经 `TMemAllocator` 增长，`Grow` 倍增；`ToBytes` 返回拷贝；`WrittenSpan` 为当前写入区的零拷贝视图（随后续 Append 失效）。
 - TByteStreamBuf：块经 `IAllocator`；`EnsureCapacity` 幂等；`ReserveAppend` 先压实后倍增；`Consume/Clear` 保留容量；`Destroy` sized free。
-- 零拷贝：`Move/FillChar` 直操内存；门面与 `Bytes*` 便捷面均为 `inline` 转发，无额外拷贝。
+- 零拷贝：`Move/FillChar` 单源 `bytes.ops.BytesCopy/BytesZero` inline 直操内存（`Pointer(Result)^/PByte+Off^` 单次 `Move`，`L1+` 禁直调，`L0` 例外 `platform.fs:421` 等已头注 `L0 exception raw Move allowed`）；`ops.capacity/text/ascii` 叶子为无 Move 纯算术/字符串，thin-forward 零额外拷贝（capacity 几何 `*2` 均摊 `O(1)`，text SetString 零拷贝视图，ascii QWord 批异或）；门面与 `Bytes*` 便捷面均为 `inline` 薄转发，无额外拷贝；性能证据：`inline` 热路径零额外调用，分配/循环路径 `not inline`（`red-line 1` 索引 `Move`/`SetLength` 批量、`red-line 2` 循环+`Move` 均 `not inline`，门禁 `check_bytes_ops_source_contract.py` 冻结，split 后 `bytes.ops` ~760 + leaves 各 ~120）。
 
 ---
 
@@ -148,9 +150,10 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 | test_cursor | IByteCursor 顺序/BE/peek/Seek/Try* / 边界守卫 / 裸指针构造 |
 | test_stream | TByteStreamBuf append/consume/compact/EnsureCapacity/Clear/ReserveAppend/Grow |
 | test_bytes_source_contract | `BytesAppend*` 机械门禁：`deprecated` 编译提示 + 循环拼接扫描（`check_bytes_append_contract.sh`），强制 `IBytesBuilder/ConcatMany` 单源复用 |
-| **合计** | **4 个测试目录** |
+| test_bytes_ops_source_contracts | `bytes.ops` 源契约门禁：`red-line 1/2 inline` 冻结、`Move` 单源与 `WebviewGrowCapacity` 复用 `bytes.ops` 单源（`0→4→2×`/`0→64→2×` 同源） |
+| **合计** | **5 个测试目录** |
 
-门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`；`make -C core/tests/nextpas.core.bytes/test_bytes_source_contract test`（均 `heaptrc 0`）。
+门禁：`make -C core/tests/nextpas.core.bytes/test_bytes clean test`；`test_cursor`；`test_stream`；`make -C core/tests/nextpas.core.bytes/test_bytes_source_contract test`；`test_bytes_ops_source_contracts`（均 `heaptrc 0`，`check_bytes_ops_source_contract.py` 输出 `bytes.ops single-source` 与 `capacity`/`gate` 证据行）。
 
 ---
 
@@ -160,4 +163,6 @@ IByteCursor 在此之上提供边界受查的顺序/随机读（`ReadU16LE/BE`�
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-26 | 1.1 | 时效刷新：补齐 8 文件门面（cursor/stream/pathvalid）、对齐 IBytesBuilder/Try* 真实签名、收敛 Span/Binary 单源与 inline/零拷贝不变量、资源释放（sized FreeMemOf）与 L1 分层四件套、测试 1→3 目录 | Claude |
-| 2026-09-02 | 1.2 | 匠心修复 BytesAppend O(n²)：`BytesAppend*` 全族 `deprecated` 机械门禁（`inline` 保留单次便利，`deprecated` 提示改用 `IBytesBuilder` 几何 Grow 或 `ConcatMany` 单分配，零拷贝单 `Move` 单源），新增 INV-8 与 `test_bytes_source_contract` 门禁 | tar lane |
+| 2026-09-02 | 1.2-tar | 匠心修复 BytesAppend O(n²)（tar lane 并行史）：`BytesAppend*` 全族 `deprecated` 机械门禁（`inline` 保留单次便利，`deprecated` 提示改用 `IBytesBuilder` 几何 Grow 或 `ConcatMany` 单分配，零拷贝单 `Move` 单源），新增 INV-8 与 `test_bytes_source_contract` 门禁；注：合入主线时 `BytesAppend` 取主线非 `deprecated` 形态（`test_bytes_ops_source_contracts` 红线门禁），本行仅留史 | tar lane |
+| 2026-09-02 | 1.2 | 匠心修复：`bytes.ops` 单源几何 `BytesGrowCapacityWithMin` 抽取（`BYTES_BUILDER_MIN_GROW=64` 与 `Webview` `0→4→2×` 同源 `*2` 复用，`WebviewGrowCapacityForReuse` inline 薄转发零额外调用，`factory.GrowCapacity` 私有冗余→`base.WebviewGrowCapacity`→`bytes.ops` 三级收敛）；`Move`/`FillChar` 单源 `BytesCopy`/`BytesZero` 门禁冻结（`L1+` 复用，`L0 platform` 例外 `platform.fs:421` 头注，`tls.websocket:115`/`tls.encoding:479` 等 `BytesCopy` 迁移，`inline red-line 1/2` 门禁脚本冻结，零拷贝证据）；`L3→L1` 反哺合规 | Claude |
+| 2026-09-02 | 1.3 | 匠心修复：`bytes.ops` 981→~760 四件套拆分优雅度 — 抽取 `ops.capacity`/`ops.text`/`ops.ascii` 3 叶子（容量几何/字符串-Var-HTon-FNV/异或-Ascii 无 Move 纯叶子，thin-forward 复用单源，叶子各 ~120，`bytes.ops` 单源 `BytesCopy/BytesZero` 不动，Move 仅 `bytes.ops`，`L0 platform.fs:421` 例外头注，`tls.encoding:479` 遷 `BytesCopy`，`red-line 1/2 inline` 与 `≤800` 软指引合规，零拷贝/性能 inline 证据与 `SetLength`/`FreeMem` 稳定性不丢） | AI |

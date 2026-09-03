@@ -18,6 +18,7 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db.trace,
+  nextpas.core.db.capprobe,
   nextpas.core.db.sqlite.base,
   nextpas.core.db.sqlite.conn;
 
@@ -238,11 +239,23 @@ type
     function SupportsBatchExecutor: Boolean;
     function SupportsStmtCacheControl: Boolean;
     function SupportsLargeObjects: Boolean;
+    function SupportsArrayBinding: Boolean;
     function SupportsNativeBool: Boolean;
     function SupportsMultiStatementExec: Boolean;
     function SupportsStatementTimeout: Boolean;
+    function SupportsArrayBinding: Boolean;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
     function CaseSensitiveIdentifiers: Boolean;
     function MaxPlaceholders: Integer;
+    function ServerVersion: Integer;
+    function SupportsNativeVector: Boolean;
+    function SupportsJsonPath: Boolean;
+    function SupportsRangeTypes: Boolean;
+    function SupportsBulkCopy: Boolean;
 
     { ISqliteStmtHome：查询析构的归还通道（实现区接口，单元内可见） }
     procedure ReturnStmt(const ASql: string; AStmt: TSqliteQuery);
@@ -737,6 +750,11 @@ begin
   Result := False;   { cell 模型走 IDbRowBlobControl，无 lo_* 等价面 }
 end;
 
+function TDbSqliteConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
 function TDbSqliteConnection.SupportsNativeBool: Boolean;
 begin
   Result := False;   { 声明亲和模拟（含 BOOL 声明的列），非原生类型 }
@@ -752,6 +770,36 @@ begin
   Result := False;   { busy_timeout 是锁等待上限；语句超时被诚实忽略 }
 end;
 
+function TDbSqliteConnection.SupportsArrayBinding: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  Result := 0;
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := False;
+end;
+
 function TDbSqliteConnection.CaseSensitiveIdentifiers: Boolean;
 begin
   Result := True;    { 保留声明形式（§2.6） }
@@ -762,6 +810,31 @@ begin
   { SQLITE_MAX_VARIABLE_NUMBER 跨版本保守下界：999 自古保证；
     libsqlite3 ≥3.32 实际默认 32766。消费方按 ≤999 编码全后端安全。 }
   Result := 999;
+end;
+
+function TDbSqliteConnection.ServerVersion: Integer;
+begin
+  Result := ParseServerVersion(ProductVersion);
+end;
+
+function TDbSqliteConnection.SupportsNativeVector: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsJsonPath: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsRangeTypes: Boolean;
+begin
+  Result := False;
+end;
+
+function TDbSqliteConnection.SupportsBulkCopy: Boolean;
+begin
+  Result := ProbeSupportsBulkCopy(dbkSqlite);
 end;
 
 { ---- IDbRowBlobControl ---- }

@@ -1378,8 +1378,8 @@ begin
   LOpts := ResPackDefaultOptions;
   LOpts.Hashes := AHashes;
   LBlob := ResPackBuild(LEntries, LOpts);
-  { AOwnsBlob=True：接口持所有权，门结束随引用释放（heaptrc 可证） }
-  Result := CreateEmbeddedVfs(LBlob.Data, LBlob.Size, True);
+  { Owned：接口持所有权，门结束随引用释放（heaptrc 可证） }
+  Result := CreateEmbeddedVfsOwned(LBlob.Data, LBlob.Size);
 end;
 
 { ETag 形态须为 "fnv-<8 个大写十六进制>" }

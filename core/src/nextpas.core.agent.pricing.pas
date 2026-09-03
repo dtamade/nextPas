@@ -50,19 +50,21 @@ function EstimateCost(APromptTokens, ACompletionTokens: Int64;
 
 { 文本→token 粗估（~4 字符/token，loop 预算同口径，F-M16）：空串→0 }
 function AgentEstimateTokens(const S: string): Int64; inline;
-function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64;
+function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64; inline;
 
 implementation
 
 { ── T1.1 ── }
 
 function EstimateCost(const APricing: TModelPricing;
-  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64): Int64;
+  APromptTokens, ACompletionTokens: Int64; ARateMultiplier: Int64): Int64; inline;
 var
   LRate: Int64;
   LPromptCost: Int64;
   LCompletionCost: Int64;
 begin
+  if APromptTokens < 0 then APromptTokens := 0;
+  if ACompletionTokens < 0 then ACompletionTokens := 0;
   LRate := ARateMultiplier;
   if LRate <= 0 then
     LRate := 10000;
@@ -72,7 +74,7 @@ begin
   Result := LPromptCost + LCompletionCost;
 end;
 
-function ImageTierOf(const AWidth, AHeight: Int64): Int64;
+function ImageTierOf(const AWidth, AHeight: Int64): Int64; inline;
 var
   LMax: Int64;
 begin
@@ -89,14 +91,14 @@ end;
 
 { ── T1.4 ── }
 
-function EstimateCost(APromptTokens, ACompletionTokens: Int64): Int64;
+function EstimateCost(APromptTokens, ACompletionTokens: Int64): Int64; inline;
 begin
   Result := EstimateCost(APromptTokens, ACompletionTokens,
     CDefaultPromptPer1k, CDefaultCompletionPer1k);
 end;
 
 function EstimateCost(APromptTokens, ACompletionTokens: Int64;
-  APromptPer1k, ACompletionPer1k: Int64): Int64;
+  APromptPer1k, ACompletionPer1k: Int64): Int64; inline;
 begin
   if APromptTokens < 0 then
     APromptTokens := 0;
@@ -106,13 +108,13 @@ begin
           + (ACompletionTokens * ACompletionPer1k + 500) div 1000;
 end;
 
-function EstimateCost(const AUsage: TTokenUsage): Int64;
+function EstimateCost(const AUsage: TTokenUsage): Int64; inline;
 begin
   Result := EstimateCost(AUsage, CDefaultPromptPer1k, CDefaultCompletionPer1k);
 end;
 
 function EstimateCost(const AUsage: TTokenUsage;
-  APromptPer1k, ACompletionPer1k: Int64): Int64;
+  APromptPer1k, ACompletionPer1k: Int64): Int64; inline;
 var
   LIn, LOut: Int64;
 begin
@@ -131,12 +133,12 @@ begin
   Result := EstimateCost(LIn, LOut, APromptPer1k, ACompletionPer1k);
 end;
 
-function AgentEstimateTokens(const S: string): Int64;
+function AgentEstimateTokens(const S: string): Int64; inline;
 begin
   Result := nextpas.core.agent.textutil.AgentEstimateTokens(S);
 end;
 
-function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64;
+function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64; inline;
 begin
   Result := nextpas.core.agent.textutil.AgentEstimateTokens(MessageText(AMsg));
 end;

@@ -20,6 +20,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -77,7 +78,7 @@ type
   end;
   TFlatArray = array of TFlatEntry;
 
-procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray);
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray; var ACount, ACap: Integer); overload;
 var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer; Full: string;
 begin
   if IsZeroOid(ATreeOid) then Exit;
@@ -88,25 +89,41 @@ begin
   begin
     Full := APrefix + Entries[I].Name;
     if Entries[I].Mode = $4000 then
-      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut)
+      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut, ACount, ACap)
     else
     begin
-      SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Path := Full;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
+      // perf: single source via bytes.ops.BytesGrowCapacityInt geometric BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1) zero O(n²), not inline per red-line 2; zero-copy string refcounted move, capacity via ACap
+      if ACount >= ACap then
+      begin
+        ACap := nextpas.core.bytes.ops.BytesGrowCapacityInt(ACap, ACount + 1);
+        SetLength(AOut, ACap);
+      end;
+      AOut[ACount].Path := Full;
+      AOut[ACount].Mode := Entries[I].Mode;
+      AOut[ACount].Oid := Entries[I].Oid;
+      Inc(ACount);
     end;
   end;
 end;
 
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray); overload; inline;
+var Cnt, Cap: Integer;
+begin
+  Cnt := Length(AOut); Cap := Length(AOut);
+  CollectFlat(ARepo, ATreeOid, APrefix, AOut, Cnt, Cap);
+  SetLength(AOut, Cnt);
+end;
+
 function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatArray;
-var Repo: TNativeRepository;
+var Repo: TNativeRepository; Cnt, Cap: Integer;
 begin
   Result := nil;
   if IsZeroOid(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
   try
-    CollectFlat(Repo, ATreeOid, '', Result);
+    Cnt := 0; Cap := 0;
+    CollectFlat(Repo, ATreeOid, '', Result, Cnt, Cap);
+    SetLength(Result, Cnt);
   finally
     Repo.Free;
   end;
@@ -138,35 +155,53 @@ begin
 end;
 
 procedure ApplyDiffs(var ABaseFlat: TFlatArray; const ADiffs: TGitDiffArray);
-var I, Idx: Integer; E: TGitDiffEntry;
+var I, Idx, Cnt, Cap: Integer; E: TGitDiffEntry;
+  procedure EnsureAdd; inline;
+  begin
+    // perf: single source via bytes.ops.BytesGrowCapacityInt geometric BYTES_BUILDER_MIN_GROW amortized O(1) zero O(n²), not inline per red-line 2
+    if Cnt >= Cap then
+    begin
+      Cap := nextpas.core.bytes.ops.BytesGrowCapacityInt(Cap, Cnt + 1);
+      SetLength(ABaseFlat, Cap);
+    end;
+  end;
+  function FindBounded(const APath: string): Integer; inline;
+  var K: Integer;
+  begin
+    for K := 0 to Cnt - 1 do if ABaseFlat[K].Path = APath then Exit(K);
+    Result := -1;
+  end;
 begin
+  Cnt := Length(ABaseFlat); Cap := Length(ABaseFlat);
   for I := 0 to High(ADiffs) do
   begin E := ADiffs[I];
     case E.Status of
       gdsAdded:
-        begin SetLength(ABaseFlat, Length(ABaseFlat)+1);
-          ABaseFlat[High(ABaseFlat)].Path := E.Path;
-          ABaseFlat[High(ABaseFlat)].Mode := E.NewMode;
-          ABaseFlat[High(ABaseFlat)].Oid := E.NewOid; end;
+        begin EnsureAdd;
+          ABaseFlat[Cnt].Path := E.Path;
+          ABaseFlat[Cnt].Mode := E.NewMode;
+          ABaseFlat[Cnt].Oid := E.NewOid; Inc(Cnt); end;
       gdsModified, gdsTypeChanged:
-        begin Idx := FindFlatIndex(ABaseFlat, E.Path);
+        begin Idx := FindBounded(E.Path);
           if Idx >= 0 then begin ABaseFlat[Idx].Mode := E.NewMode; ABaseFlat[Idx].Oid := E.NewOid; end
-          else begin SetLength(ABaseFlat, Length(ABaseFlat)+1);
-            ABaseFlat[High(ABaseFlat)].Path := E.Path;
-            ABaseFlat[High(ABaseFlat)].Mode := E.NewMode;
-            ABaseFlat[High(ABaseFlat)].Oid := E.NewOid; end; end;
+          else begin EnsureAdd;
+            ABaseFlat[Cnt].Path := E.Path;
+            ABaseFlat[Cnt].Mode := E.NewMode;
+            ABaseFlat[Cnt].Oid := E.NewOid; Inc(Cnt); end; end;
       gdsDeleted:
-        begin Idx := FindFlatIndex(ABaseFlat, E.Path);
-          if Idx >= 0 then begin ABaseFlat[Idx] := ABaseFlat[High(ABaseFlat)]; SetLength(ABaseFlat, Length(ABaseFlat)-1); end; end;
+        begin Idx := FindBounded(E.Path);
+          if Idx >= 0 then begin ABaseFlat[Idx] := ABaseFlat[Cnt - 1]; Dec(Cnt); ABaseFlat[Cnt].Path := ''; end; end;
     end;
   end;
+  SetLength(ABaseFlat, Cnt);
   SortFlat(ABaseFlat);
 end;
 
 function BuildTreeFromFlat(const AGitDir: string; const AFlat: TFlatArray; const APrefix: string): TGitOid;
 var Entries: TGitTreeEntryArray; I, J, K: Integer; Name, SubPrefix: string; SlashPos: Integer; SubFlat: TFlatArray; SubOid: TGitOid; HasSub, Found: Boolean; Added: TGitTreeEntry; Seen: TStringArray;
+  EntCnt, EntCap, SeenCnt, SeenCap, SubCnt, SubCap: Integer;
 begin
-  SetLength(Entries, 0); SetLength(Seen, 0);
+  SetLength(Entries, 0); EntCnt := 0; EntCap := 0; SetLength(Seen, 0); SeenCnt := 0; SeenCap := 0;
   for I := 0 to High(AFlat) do
   begin
     if (APrefix <> '') and (Pos(APrefix, AFlat[I].Path) <> 1) then Continue;
@@ -175,22 +210,38 @@ begin
     SlashPos := Pos('/', Name);
     if SlashPos > 0 then
     begin Name := Copy(Name, 1, SlashPos-1);
-      Found := False; for K := 0 to High(Seen) do if Seen[K] = Name then begin Found := True; Break; end;
+      Found := False; for K := 0 to SeenCnt - 1 do if Seen[K] = Name then begin Found := True; Break; end;
       if Found then Continue;
-      SetLength(Seen, Length(Seen)+1); Seen[High(Seen)] := Name;
+      // perf: Seen geometric via bytes.ops single source BYTES_BUILDER_MIN_GROW amortized O(1) zero O(n²), not inline per red-line 2; zero-copy string refcount
+      if SeenCnt >= SeenCap then
+      begin SeenCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(SeenCap, SeenCnt + 1); SetLength(Seen, SeenCap); end;
+      Seen[SeenCnt] := Name; Inc(SeenCnt);
       SubPrefix := APrefix + Name + '/';
-      SetLength(SubFlat, 0);
-      for J := 0 to High(AFlat) do if Pos(SubPrefix, AFlat[J].Path) = 1 then begin SetLength(SubFlat, Length(SubFlat)+1); SubFlat[High(SubFlat)] := AFlat[J]; end;
+      SetLength(SubFlat, 0); SubCnt := 0; SubCap := 0;
+      for J := 0 to High(AFlat) do if Pos(SubPrefix, AFlat[J].Path) = 1 then
+      begin
+        // perf: SubFlat geometric via bytes.ops single source amortized O(1) zero O(n²), not inline per red-line 2
+        if SubCnt >= SubCap then
+        begin SubCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(SubCap, SubCnt + 1); SetLength(SubFlat, SubCap); end;
+        SubFlat[SubCnt] := AFlat[J]; Inc(SubCnt);
+      end;
+      SetLength(SubFlat, SubCnt);
       SubOid := BuildTreeFromFlat(AGitDir, SubFlat, SubPrefix);
       Added.Name := Name; Added.Mode := $4000; Added.Oid := SubOid;
-      SetLength(Entries, Length(Entries)+1); Entries[High(Entries)] := Added;
+      // perf: Entries geometric via bytes.ops single source amortized O(1) zero O(n²), not inline per red-line 2
+      if EntCnt >= EntCap then
+      begin EntCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(EntCap, EntCnt + 1); SetLength(Entries, EntCap); end;
+      Entries[EntCnt] := Added; Inc(EntCnt);
     end else
-    begin HasSub := False; for K := 0 to High(Entries) do if Entries[K].Name = Name then begin HasSub := True; Break; end;
+    begin HasSub := False; for K := 0 to EntCnt - 1 do if Entries[K].Name = Name then begin HasSub := True; Break; end;
       if HasSub then Continue;
       Added.Name := Name; Added.Mode := AFlat[I].Mode; Added.Oid := AFlat[I].Oid;
-      SetLength(Entries, Length(Entries)+1); Entries[High(Entries)] := Added;
+      if EntCnt >= EntCap then
+      begin EntCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(EntCap, EntCnt + 1); SetLength(Entries, EntCap); end;
+      Entries[EntCnt] := Added; Inc(EntCnt);
     end;
   end;
+  SetLength(Entries, EntCnt);
   Result := GitWriteTree(AGitDir, Entries);
 end;
 

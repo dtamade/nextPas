@@ -2,9 +2,11 @@
  * nextpas.core.image.dispatch - 图像嗅探与统一调度（Probe+Factory 注册）
  * L2，仅 L0-L1 + graphics.errors + sync，零 RTL。门面 nextpas.core.image 纯转发此单元。
  * 注册式：ImageRegisterCodec 以 Probe+Decode 工厂注册取代硬编码 case，新增格式零侵入；
- *   各格式单元（png/bmp/jpeg/webp）通过 initialization 自注册，dispatch 不硬编码 uses。
+ *   各格式单元（png/bmp/jpeg/webp/gif/qoi）通过 initialization 自注册，dispatch 不硬编码 uses。
  * 线程安全：GCodecs 下 TRecursiveMutex 保护；Detect/ImageDecode 采用 Copy-on-snapshot
  *   无锁嗅探/解码，并发注册与解码不竞态；ImageRegisterCodec 重复注册抛 EArgumentError。
+ * 应力：Probe/Detect/Try 永不抛（嗅探异常吞掉，Try 全异常→False，零拷贝 inline），
+ *   6 格式 16M 像素上限 fuzz fail-closed，dispatch 16M 门禁由各解码器执行。
  *}
 unit nextpas.core.image.dispatch;
 
@@ -22,9 +24,9 @@ type
 
 procedure ImageRegisterCodec(AFormat: TImageFormat; AProbe: TImageProbeFunc;
   ADecode: TImageDecodeFunc; AHasAlpha: Boolean);
-function DetectImageFormat(const AData: TBytes): TImageFormat;
+function DetectImageFormat(const AData: TBytes): TImageFormat; inline;
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBytes;
-function TryImageDecode(const AData: TBytes; out ABitmap: TBytes; out AInfo: TImageInfo): Boolean;
+function TryImageDecode(const AData: TBytes; out ABitmap: TBytes; out AInfo: TImageInfo): Boolean; inline;
 
 implementation
 
@@ -102,7 +104,7 @@ begin
   end;
 end;
 
-function DetectImageFormat(const AData: TBytes): TImageFormat;
+function DetectImageFormat(const AData: TBytes): TImageFormat; inline;
 var
   Codecs: TCodecArray;
   I: Integer;
@@ -111,8 +113,14 @@ begin
   if Length(AData) < 2 then Exit;
   Codecs := SnapshotCodecs;
   for I := 0 to High(Codecs) do
-    if Assigned(Codecs[I].Probe) and Codecs[I].Probe(AData) then
-      Exit(Codecs[I].Format);
+    if Assigned(Codecs[I].Probe) then
+      try
+        if Codecs[I].Probe(AData) then
+          Exit(Codecs[I].Format);
+      except
+        // Probe 不抛契约：嗅探异常一律吞掉视作未命中，Try/Detect 永不抛
+        Continue;
+      end;
 end;
 
 function ImageDecode(const AData: TBytes; out AInfo: TImageInfo): TBytes;
@@ -128,7 +136,7 @@ begin
   Fmt := DetectImageFormat(AData);
   AInfo.Format := Fmt;
   if Fmt = ifUnknown then
-    raise EImageDecodeError.Create('image: unknown format (need PNG/JPEG/WebP/BMP)');
+    raise EImageDecodeError.Create('image: unknown format (need PNG/JPEG/WebP/BMP/GIF/QOI)');
   Codecs := SnapshotCodecs;
   Found := False;
   for I := 0 to High(Codecs) do
@@ -139,7 +147,7 @@ begin
       Break;
     end;
   if not Found then
-    raise EImageDecodeError.Create('image: unknown format (need PNG/JPEG/WebP/BMP)');
+    raise EImageDecodeError.Create('image: unknown format (need PNG/JPEG/WebP/BMP/GIF/QOI)');
   try
     Result := Entry.Decode(AData, W, H);
     AInfo.Width := W;
@@ -153,7 +161,7 @@ begin
   end;
 end;
 
-function TryImageDecode(const AData: TBytes; out ABitmap: TBytes; out AInfo: TImageInfo): Boolean;
+function TryImageDecode(const AData: TBytes; out ABitmap: TBytes; out AInfo: TImageInfo): Boolean; inline;
 begin
   ABitmap := nil;
   FillChar(AInfo, SizeOf(AInfo), 0);
@@ -163,6 +171,8 @@ begin
   except
     on E: EImageDecodeError do Result := False;
     on E: ENotImplementedError do Result := False;
+    on E: EArgumentError do Result := False;
+    on E: EIOError do Result := False;
     on E: Exception do
       Result := False;
   end;

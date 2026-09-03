@@ -29,6 +29,7 @@ implementation
 
 uses
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.json.builder;
 
 const

@@ -116,7 +116,7 @@ type
 
 {** 名称安全谓词：非空、非绝对路径、无盘符前缀、无反斜杠、无 '..' 段。
     尾随 '/'（目录条目）合法。 *}
-function IsSafeZipEntryName(const AName: string): Boolean; inline;
+function IsSafeZipEntryName(const AName: string): Boolean;
 
 {** 同 IsSafeZipEntryName，不满足时 raise EArgumentError（写端入参校验用）。 *}
 procedure ValidateZipEntryName(const AName: string);
@@ -143,6 +143,8 @@ function ZipDirectoryMode(APermissionBits: Word): Word; inline;
 function UnixFromDosDateTime(ADosDate, ADosTime: Word): Int64;
 
 function DefaultZipReadOptions: TZipReadOptions; inline;
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions; inline;
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean; inline;
 
 implementation
 
@@ -250,6 +252,30 @@ begin
   Result.MaxTotalOutputSize := 0;
   Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
   Result.Password := nil;
+end;
+
+function NormalizeZipReadOptions(const AOptions: TZipReadOptions): TZipReadOptions;
+begin
+  Result := AOptions;
+  if Result.MaxOutputSize = 0 then
+    Result.MaxOutputSize := C_ZIP_DEFAULT_MAX_OUTPUT;
+  if Result.MaxDescriptorBuffer = 0 then
+    Result.MaxDescriptorBuffer := C_ZIP_DEFAULT_MAX_DESCRIPTOR;
+end;
+
+function TryZipMethodFromCode(ACode: Word; out AMethod: TZipMethod): Boolean;
+begin
+  if ACode = C_ZIP_METHOD_STORE then
+  begin
+    AMethod := zmStore;
+    Exit(True);
+  end;
+  if ACode = C_ZIP_METHOD_DEFLATE then
+  begin
+    AMethod := zmDeflate;
+    Exit(True);
+  end;
+  Result := False;
 end;
 
 end.

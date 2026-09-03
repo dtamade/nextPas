@@ -23,6 +23,7 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/$(MODULE_NAME)/$(TEST_NAME)
 WINE_BUILD_DIR ?= $(BUILD_DIR)_wine_win64
 
 # -Sg: LABEL/GOTO used by mem/http/json ports; do not rely on host fpc.cfg.
+# Hygiene default: full heaptrc0 gate all open via -gh -dHEAPTRC_ACTIVE (paired with HEAPTRC_GATE ?=1 below).
 BASE_FPC_FLAGS ?= -MObjFPC -Sh -Sg -O2 -gl -gh -dHEAPTRC_ACTIVE
 FPC_FLAGS = $(BASE_FPC_FLAGS) -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/tests/shared
 WINE_FPC_FLAGS ?= $(BASE_FPC_FLAGS) -Twin64 -Px86_64
@@ -56,6 +57,12 @@ build: clean-src
 # channels are reliable: haltonnotreleased turns unfreed blocks into exit
 # code 203, log= writes the dump to a file (heaptrc closes its own file).
 # The dump pins below also fail closed when heaptrc did not run at all.
+# Hygiene: default fully heaptrc0 gate all open (HEAPTRC_GATE ?=1 with -gh -dHEAPTRC_ACTIVE above).
+# Zero-leak unified gate: production gates zero HEAPTRC_GATE:=0 exceptions — prior 5 ssh suites fixed
+# (TAsyncLoop/TIoReactor/BigNat sidecar leak closed, verified focused runtime + e2e:
+# sync ssh 13/13 + 23/23 heaptrc 0, proxyjump 5/5). Bench keeps HEAPTRC_GATE=0
+# for throughput fidelity (bench_ssh_cipher, bench_ssh_proxyjump, bench_tls13_record; inline/zero-copy bytes.ops Move/TByteSpan, O3 -Xs):
+# leak escape compensated by ssh production gates + crypto/tls production gates (test_aesgcm/test_tls13_aead/test_tls13_recordsealer heaptrc 0) + e2e_ssh_live (CONTRACT §5/§6, ±5% env noise).
 HEAPTRC_GATE ?= 1
 # Resolve at the consumer, not by reassignment: a command-line HEAPTRC_GATE=0
 # outranks any makefile assignment, so "0" must read as off where it is used.
