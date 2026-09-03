@@ -48,10 +48,38 @@ type
   TJS_RunGC = procedure(RT: PJSRuntime); cdecl;
   TJS_SetInterruptHandler = procedure(RT: PJSRuntime; Handler: TJSInterruptHandler; Opaque: Pointer); cdecl;
   TJS_NewCFunction = function(Ctx: PJSContext; Func: Pointer; Name: PAnsiChar; Length: Integer): TJSQjsValue; cdecl;
+  TJS_Call = function(Ctx: PJSContext; FuncObj: TJSQjsValue; ThisVal: TJSQjsValue; Argc: Integer; Argv: PJSQjsValue): TJSQjsValue; cdecl;
+  TJS_IsArray = function(Ctx: PJSContext; Val: TJSQjsValue): Integer; cdecl;
+  TJSPropertyEnum = record atom: UInt32; is_enumerable: Integer; end;
+  PJSPropertyEnum = ^TJSPropertyEnum;
+  TJS_GetOwnPropertyNames = function(Ctx: PJSContext; plen: PUInt32; obj: TJSQjsValue; flags: Integer): PJSPropertyEnum; cdecl;
+  TJS_FreePropertyEnum = procedure(Ctx: PJSContext; tab: PJSPropertyEnum; len: UInt32); cdecl;
+  TJS_AtomToString = function(Ctx: PJSContext; atom: UInt32): TJSQjsValue; cdecl;
+  TJS_FreeAtom = procedure(Ctx: PJSContext; atom: UInt32); cdecl;
+
+const
+  JS_TAG_BIG_INT = -11;
+  JS_TAG_BIG_FLOAT = -10;
+  JS_TAG_BIG_DECIMAL = -9;
+  JS_TAG_SYMBOL = -8;
+  JS_TAG_STRING = -7;
+  JS_TAG_MODULE = -6;
+  JS_TAG_FUNCTION_BYTECODE = -5;
+  JS_TAG_OBJECT = -4;
+  JS_TAG_INT = 0;
+  JS_TAG_BOOL = 1;
+  JS_TAG_NULL = 2;
+  JS_TAG_UNDEFINED = 3;
+  JS_TAG_UNCATCHABLE_ERROR = 4;
+  JS_TAG_EXCEPTION = 5;
+  JS_TAG_FLOAT64 = 7;
 
 const
   JS_EVAL_TYPE_GLOBAL = 0;
   JS_EVAL_FLAG_STRICT = 1 shl 3;
+  JS_GPN_STRING_MASK = 1 shl 0;
+  JS_GPN_SYMBOL_MASK = 1 shl 1;
+  JS_GPN_PRIVATE_MASK = 1 shl 2;
 
 var
   JS_NewRuntimePtr: TJS_NewRuntime = nil;
@@ -79,14 +107,13 @@ var
   JS_RunGCPtr: TJS_RunGC = nil;
   JS_SetInterruptHandlerPtr: TJS_SetInterruptHandler = nil;
   JS_NewCFunctionPtr: TJS_NewCFunction = nil;
-
-function JsQjsFfiLoaded: Boolean; inline;
+  JS_CallPtr: TJS_Call = nil;
+  JS_IsArrayPtr: TJS_IsArray = nil;
+  JS_GetOwnPropertyNamesPtr: TJS_GetOwnPropertyNames = nil;
+  JS_FreePropertyEnumPtr: TJS_FreePropertyEnum = nil;
+  JS_AtomToStringPtr: TJS_AtomToString = nil;
+  JS_FreeAtomPtr: TJS_FreeAtom = nil;
 
 implementation
-
-function JsQjsFfiLoaded: Boolean;
-begin
-  Result := Assigned(JS_NewRuntimePtr) and Assigned(JS_EvalPtr);
-end;
 
 end.

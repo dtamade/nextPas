@@ -4,9 +4,10 @@
 重试/取消、用量核算。**通用的、可复用的、接口优雅的、高性能的**——不绑定任何
 具体应用语义（不是 coding agent，不含任何内置业务工具）。
 
-> **Status: stable(draft truth)。W0-W4 已落地：协议/传输/两适配器/重试/
-> 工具循环/示例/基准全部带 gate；W5 session 存储已立项（2026-08-25）：
-> JSONL 落地实现见 [`SESSION.md`](SESSION.md)。API 以 `API.md` 为契约权威，
+> **Status: stable(draft truth)。W0-W13 已落地：协议/传输/三适配器(含 Responses)/重试/
+> 工具循环/示例/基准/会话存储/工具选择/推理力度/可靠性套件/对冲/缓存断点/追踪/Token预估/批内混合调度
+> 全部带 gate（W5 session JSONL 已落地 2026-08-25，W6-W13 2026-08-25~26 连续落地）；
+> 详见 [`SESSION.md`](SESSION.md) 与 `ROADMAP.md`。API 以 `API.md` 为契约权威，
 > 覆盖率对照见 `API_COVERAGE.md`，
 > 性能基线见 `BENCHMARKS.md`。**
 
@@ -114,8 +115,8 @@ if LProvider = nil then
 | [`ERRORS.md`](ERRORS.md) | 错误流转矩阵、重试判定表、取消语义全表 |
 | [`LIFECYCLE.md`](LIFECYCLE.md) | 对象状态机、流式时序、并行工具执行、资源所有权 |
 | [`SECURITY.md`](SECURITY.md) | 密钥流转、脱敏等级、DoS 防线、fail-closed 清单 |
-| [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径 |
-| [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划 |
+| [`PERFORMANCE.md`](PERFORMANCE.md) | 热路径复杂度契约、缓冲预算、分配口径（§7.2 流式盒环形托管） |
+| [`TESTING.md`](TESTING.md) | 测试 gate 清单、离线纪律、基准计划（`test_snapshot`/`test_streambox` 6+5 测） |
 | [`CHANGELOG-AGENT.md`](CHANGELOG-AGENT.md) | 面向 registry 的落地版本记录（仅 agent family） |
 | [`ROADMAP.md`](ROADMAP.md) | 实施波次与出口证据 |
 

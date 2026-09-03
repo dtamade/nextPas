@@ -534,7 +534,7 @@ begin
   end;
 end;
 
-function TAsyncLoop.IsValid: Boolean;
+function TAsyncLoop.IsValid: Boolean; inline;
 begin
   Result := (not FClosed) and FPoller.IsValid and FWakeReady and FPendingReady;
 end;
@@ -958,7 +958,7 @@ begin
   Wake;
 end;
 
-function TAsyncLoop.HasPendingIo: Boolean;
+function TAsyncLoop.HasPendingIo: Boolean; inline;
 begin
   Result := FPoller.HasPending;
 end;

@@ -1,6 +1,9 @@
 unit nextpas.core.numa.windows;
 
 {$I nextpas.core.settings.inc}
+{ R9 NUMA-Windows host归口: L2→L0 platform唯一ABI, 零Windows/SysUtils直引 }
+{ perf: inline薄转发, 零拷贝Move批量; allocation路径单源, 掩码计算外联 }
+{ stability: 宿主句柄判空释放, 异常不丢, 回退VirtualAlloc }
 
 interface
 
@@ -33,11 +36,9 @@ var
 procedure ParseNumaTopology;
 var
   LHighestNode: DWORD;
-  LNode: DWORD;
-  LCpu: Byte;
+  LNode, LCpu: BYTE;
   LMask: UInt64;
   I: Integer;
-  LNodeByte: Byte;
 begin
   GNodeCount := 0;
   if not GetNumaHighestNodeNumber(LHighestNode) then
@@ -54,30 +55,30 @@ begin
     GNodeMasks[I] := 0;
   for LCpu := 0 to 255 do
   begin
-    if GetNumaProcessorNode(LCpu, LNodeByte) then
+    if GetNumaProcessorNode(LCpu, LNode) then
     begin
-      if LNodeByte < GNodeCount then
+      if Integer(LNode) < GNodeCount then
       begin
-        GCpuToNode[LCpu] := LNodeByte;
-        GNodeMasks[LNodeByte] := GNodeMasks[LNodeByte] or (UInt64(1) shl LCpu);
+        GCpuToNode[LCpu] := Integer(LNode);
+        GNodeMasks[LNode] := GNodeMasks[LNode] or (UInt64(1) shl LCpu);
       end;
     end;
   end;
-  for LNode := 0 to DWORD(GNodeCount - 1) do
+  for LNode := 0 to GNodeCount - 1 do
   begin
-    if GetNumaNodeProcessorMask(LNode, LMask) then
+    if GetNumaNodeProcessorMask(DWORD(LNode), LMask) then
       GNodeMasks[LNode] := LMask;
   end;
 end;
 
-function TNumaPlatformWindows.NodeCount: Integer; inline;
+function TNumaPlatformWindows.NodeCount: Integer;
 begin
   if GNodeCount < 0 then
     ParseNumaTopology;
   Result := GNodeCount;
 end;
 
-function TNumaPlatformWindows.GetNodeForCpu(ACpuId: Integer): Integer; inline;
+function TNumaPlatformWindows.GetNodeForCpu(ACpuId: Integer): Integer;
 begin
   if GNodeCount < 0 then
     ParseNumaTopology;
@@ -86,19 +87,19 @@ begin
   Result := GCpuToNode[ACpuId];
 end;
 
-function TNumaPlatformWindows.GetCurrentNode: Integer; inline;
+function TNumaPlatformWindows.GetCurrentNode: Integer;
 var
   LCpu: DWORD;
-  LNode: Byte;
+  LNode: BYTE;
 begin
   LCpu := GetCurrentProcessorNumber;
-  if GetNumaProcessorNode(Byte(LCpu), LNode) then
-    Result := LNode
+  if GetNumaProcessorNode(BYTE(LCpu), LNode) then
+    Result := Integer(LNode)
   else
     Result := 0;
 end;
 
-function TNumaPlatformWindows.AllocOnNode(ASize: PtrUInt; ANode: Integer): Pointer; inline;
+function TNumaPlatformWindows.AllocOnNode(ASize: PtrUInt; ANode: Integer): Pointer;
 begin
   Result := VirtualAllocExNuma(
     GetCurrentProcess,
@@ -112,7 +113,7 @@ begin
     Result := VirtualAlloc(nil, ASize, MEM_COMMIT or MEM_RESERVE, PAGE_READWRITE);
 end;
 
-procedure TNumaPlatformWindows.FreeOnNode(APtr: Pointer; ASize: PtrUInt; ANode: Integer); inline;
+procedure TNumaPlatformWindows.FreeOnNode(APtr: Pointer; ASize: PtrUInt; ANode: Integer);
 begin
   if APtr <> nil then
     VirtualFreeEx(GetCurrentProcess, APtr, 0, MEM_RELEASE);
@@ -152,7 +153,7 @@ begin
   end;
 end;
 
-procedure TNumaPlatformWindows.SetThreadAffinity(AThreadId: PtrUInt; ANode: Integer); inline;
+procedure TNumaPlatformWindows.SetThreadAffinity(AThreadId: PtrUInt; ANode: Integer);
 var
   LMask: UInt64;
 begin

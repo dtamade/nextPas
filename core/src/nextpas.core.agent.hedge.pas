@@ -62,6 +62,14 @@ uses
 const
   CArbitrationSliceNs = 200000;      { 仲裁轮询切片 200µs，与 tools/loop G3 统一 }
 
+function HedgeDelayToNs(ADelayMs: Int64): Int64; inline;
+begin
+  if ADelayMs > High(Int64) div 1000000 then
+    Result := High(Int64)
+  else
+    Result := ADelayMs * 1000000;
+end;
+
 type
   { 单次调用产物槽：worker 写入后 SetEvent 发布；调用方 join 后读取。
     所有权归调用方 try..finally——join 完整性保证无悬垂 }
@@ -236,7 +244,10 @@ begin
   LOuter := MergeCancellationTokens(FAmbientToken, AToken);
   RequireNotCancelled(LOuter);
 
-  LTokMain := CreateCancellationToken;
+  if LOuter <> nil then
+    LTokMain := LOuter.CreateChildToken
+  else
+    LTokMain := CreateCancellationToken;
   LEvMain := CreateEvent(True);
   LEvTick := CreateEvent(True);      { 哑事件：仅作切片睡眠载体 }
   LMain := THedgeOutcome.Create;
@@ -250,7 +261,10 @@ begin
   try
     { 分片等待 DelayMs：每片 CArbitrationSliceNs 检查 Outer 取消，
       与 throttle/retry 的 WaitForCancel 分片统一（G3 协同）。 }
-    LRemainNs := FPolicy.DelayMs * 1000000;
+    if FPolicy.DelayMs > High(Int64) div 1000000 then
+      LRemainNs := High(Int64)
+    else
+      LRemainNs := FPolicy.DelayMs * 1000000;
     while LRemainNs > 0 do
     begin
       if OuterGone then
@@ -285,7 +299,10 @@ begin
       FPolicy.OnHedged(FPolicy.DelayMs);
     LHedgeFired := True;
     LEvHedge := CreateEvent(True);
-    LTokHedge := CreateCancellationToken;
+    if LOuter <> nil then
+      LTokHedge := LOuter.CreateChildToken
+    else
+      LTokHedge := CreateCancellationToken;
     LHedge := THedgeOutcome.Create;
     FPool.Submit(procedure
       begin
@@ -388,7 +405,10 @@ begin
   LOuter := MergeCancellationTokens(FAmbientToken, AToken);
   RequireNotCancelled(LOuter);
 
-  LTokMain := CreateCancellationToken;
+  if LOuter <> nil then
+    LTokMain := LOuter.CreateChildToken
+  else
+    LTokMain := CreateCancellationToken;
   LEvMain := CreateEvent(True);
   LEvTick := CreateEvent(True);
   LMain := THedgeOutcome.Create;
@@ -401,7 +421,10 @@ begin
 
   try
     { 分片等待 DelayMs：与 Complete 路同分片，G3 统一取消粒度 }
-    LRemainNs := FPolicy.DelayMs * 1000000;
+    if FPolicy.DelayMs > High(Int64) div 1000000 then
+      LRemainNs := High(Int64)
+    else
+      LRemainNs := FPolicy.DelayMs * 1000000;
     while LRemainNs > 0 do
     begin
       if OuterGone then
@@ -438,7 +461,10 @@ begin
       FPolicy.OnHedged(FPolicy.DelayMs);
     LHedgeFired := True;
     LEvHedge := CreateEvent(True);
-    LTokHedge := CreateCancellationToken;
+    if LOuter <> nil then
+      LTokHedge := LOuter.CreateChildToken
+    else
+      LTokHedge := CreateCancellationToken;
     LHedge := THedgeOutcome.Create;
     FPool.Submit(procedure
       begin

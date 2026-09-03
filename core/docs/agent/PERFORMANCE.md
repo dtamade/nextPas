@@ -39,6 +39,8 @@
 
 ## 4. 分配预算（bench 断言口径）
 
+> `quota` 4 标量函数全 `inline`（O(1) 纯函数零分配，热路径零调用开销）；`tools` 排水看门狗 5s 硬截见 `LIFECYCLE.md §5`。
+
 | 操作 | 预算 |
 |------|------|
 | 折叠 10k delta（含 50 工具槽）| 分配次数以 bench 框架的分配计数钩子为准（若框架未提供则降级为时长回归阈值，首版基线时定）；禁止 per-delta SetLength 回归 |
@@ -101,19 +103,30 @@ LTrunc := AgentUtf8SafeTruncate(S, LCut); // 单一真源落地
 
 | 字段 | 语义 |
 |------|------|
-| `Lock: TCriticalSection` | 保护 `Data/Done/id` 三字段的互斥；所有读写经 `Lock.Enter/Leave`，UI 线程与工作线程不跨线程释放资源（`ARCHITECTURE.md §4` 线程契约） |
+| `Lock: TPlatformMutex` | 经 `nextpas.core.platform.sync` 单一真源保护 `Data/Done/id/FHead` 四字段；所有读写经 `platform_mutex_lock/unlock`，UI 线程与工作线程不跨线程释放资源（`ARCHITECTURE.md §4` 线程契约，零 `SyncObjs` 直连） |
 | `Done: Boolean` | 流终止标志；`NextDelta=False` 时置位，`GetMessage/GetUsage` 仅在 `Done=True` 时有效（`LIFECYCLE.md §1` Active→Terminal 状态机） |
 | `id: UInt64` | 流实例代际；每次 `Stream()` 自增，下游回调携带 `id`，`id` 失配即丢弃（迟到 `ToolDelta` / `TextDelta` 不回读已合成载荷）——与 `ARCHITECTURE.md §4`「取消后资源由拥有线程独占收尾」正交 |
+| `FHead/FPending` | 环形游标：`Push` 尾追加，`TryPop` 取 `FPending[FHead]` 并 `Inc(FHead)`；`FHead>64` 且过半时逐项赋值前移并清零源位摊销 `O(1)`（托管类型禁用 `Move` 以保引用计数），消费完 `SetLength 0` 释压——替代 `O(n)` 逐项前移 |
 
 ```pascal
-// 伪码：工作线程投递增量 → UI 线程消费
-procedure TAiStreamBox.Push(const ADelta: TStreamDelta; AId: UInt64);
+// 伪码：工作线程投递增量 → UI 线程消费（环形版）
+procedure TAgentStreamBox.Push(const ADelta: TStreamDelta; AId: UInt64);
 begin
-  Lock.Enter;
+  platform_mutex_lock(FLock);
   try
     if (AId <> FId) or FDone then Exit; // 失配/已终态丢弃
-    FPending.Add(ADelta);
-  finally Lock.Leave; end;
+    SetLength(FPending, Length(FPending)+1); FPending[High(FPending)] := ADelta;
+  finally platform_mutex_unlock(FLock); end;
+end;
+function TAgentStreamBox.TryPop(out ADelta: TStreamDelta): Boolean;
+begin
+  platform_mutex_lock(FLock);
+  try
+    Result := FHead < Length(FPending);
+    if not Result then Exit;
+    ADelta := FPending[FHead]; Inc(FHead);
+    if (FHead>64) and (FHead>Length(FPending) div 2) then begin for I:=0 to LRemaining-1 do begin FPending[I]:=FPending[FHead+I]; FPending[FHead+I]:=Default(TStreamDelta); end; SetLength(FPending,LRemaining); FHead:=0; end;
+  finally platform_mutex_unlock(FLock); end;
 end;
 ```
 

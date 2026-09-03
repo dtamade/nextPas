@@ -86,7 +86,7 @@ var
 begin
   MakeInputs(Inputs);
   B := ResPackBuild(Inputs, ResPackDefaultOptions);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, True);
+  Fs := CreateEmbeddedVfsOwned(B.Data, B.Size);
   try
     SI := Fs.Stat('index.html');
     Check(SI.Info.Size = 15, 'owned: index.html readable');
@@ -96,7 +96,7 @@ begin
   Check(True, 'owned blob freed without crash');
 end;
 
-{ ── AOwnsBlob=False：调用方保活，VFS 释放不动缓冲 ── }
+{ ── Borrowed：调用方保活，VFS 释放不动缓冲 ── }
 
 procedure TestUnownedBlobStillUsableAfterVfsFree;
 var
@@ -106,7 +106,7 @@ var
 begin
   MakeInputs(Inputs);
   B := ResPackBuild(Inputs, ResPackDefaultOptions);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  Fs := CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   try
     Check(Fs.Exists('small.txt'), 'unowned: exists before free');
   finally
@@ -131,7 +131,7 @@ begin
   try
     B.Data[0] := Byte('X');
     { 构造函数内 Open 抛 EResPackCorrupted；blob 经 finally 归还 }
-    CreateEmbeddedVfs(B.Data, B.Size, False);
+    CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   finally
     ResPackFreeBlob(B);
   end;
@@ -160,7 +160,7 @@ var
 begin
   Inputs := nil;
   B := ResPackBuild(Inputs, ResPackDefaultOptions);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  Fs := CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   try
     Check(Fs.Exists('.'), 'empty: root exists');
     L := Fs.List('.');
@@ -194,7 +194,7 @@ begin
   LSize := Length(BIG);
   MakeInputs(Inputs);
   B := ResPackBuild(Inputs, ResPackDefaultOptions);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  Fs := CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   try
     S := Fs.OpenRead('big.bin');
     try
@@ -260,7 +260,7 @@ begin
     Inputs[I].DataSize := SizeUInt(Length(Store[I]));
   end;
   B := ResPackBuild(Inputs, ResPackDefaultOptions);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  Fs := CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   try
     FoundAll := True;
     SW := TStopwatch.StartNew;
@@ -304,7 +304,7 @@ begin
   Opts := ResPackDefaultOptions;
   Opts.Deduplicate := True;
   B := ResPackBuild(Inputs, Opts);
-  Fs := CreateEmbeddedVfs(B.Data, B.Size, False);
+  Fs := CreateEmbeddedVfsBorrowed(B.Data, B.Size);
   try
     Check(Fs.Exists('x'), 'dedupe: dir x derived');
     L := Fs.List('x');

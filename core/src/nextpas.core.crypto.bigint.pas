@@ -136,7 +136,7 @@ end;
 function BigNatBitLength(const AValue: TBigNat): Integer; forward;
 function BigNatGetBit(const AValue: TBigNat; ABitIndex: Integer): Boolean; forward;
 
-procedure NormalizeBigNat(var AValue: TBigNat);
+procedure NormalizeBigNat(var AValue: TBigNat); inline;
 var
   LLen: Integer;
 begin
@@ -160,17 +160,17 @@ begin
   Result[0] := AValue;
 end;
 
-function BigNatIsZero(const AValue: TBigNat): Boolean;
+function BigNatIsZero(const AValue: TBigNat): Boolean; inline;
 begin
   Result := Length(AValue) = 0;
 end;
 
-function BigNatIsOdd(const AValue: TBigNat): Boolean;
+function BigNatIsOdd(const AValue: TBigNat): Boolean; inline;
 begin
   Result := (Length(AValue) > 0) and ((AValue[0] and 1) = 1);
 end;
 
-function BigNatIsOne(const AValue: TBigNat): Boolean;
+function BigNatIsOne(const AValue: TBigNat): Boolean; inline;
 begin
   Result := (Length(AValue) = 1) and (AValue[0] = 1);
 end;
@@ -659,23 +659,10 @@ begin
   Result := True;
 end;
 
-function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean;
+function TryGetCachedMontCtx(const AModulus: TBigNat; out ACtx: TMontgomeryContext; out AError: string): Boolean; inline;
 begin
-  // perf: Montgomery context single source cache (2048-bit MODP ~50ms init), zero-copy CoW share, inline hot path
-  if GLatestMontValid and (Length(GLatestMontModulus) = Length(AModulus))
-    and (BigNatCompare(GLatestMontModulus, AModulus) = 0) then
-  begin
-    ACtx := GLatestMontCtx;
-    AError := '';
-    Result := True;
-    Exit;
-  end;
-  if not TryInitMontgomeryContext(AModulus, ACtx, AError) then
-    Exit(False);
-  GLatestMontModulus := Copy(AModulus, 0, Length(AModulus));
-  GLatestMontCtx := ACtx;
-  GLatestMontValid := True;
-  Result := True;
+  { Cache disabled for HEAPTRC zero-leak — zero-copy bytes.ops path, no global retained heap }
+  Result := TryInitMontgomeryContext(AModulus, ACtx, AError);
 end;
 
 function BigNatShiftLeft(const A: TBigNat; ABitShift: Integer): TBigNat;
@@ -1322,7 +1309,7 @@ function TryGetMontgomeryContext(const AModulusBytes: TBytes; out ACtx: TMontgom
 var
   LModulus: TBigNat;
 begin
-  // single source: bytes -> BigNat -> cached Montgomery (DH group14 reuses, avoiding per-KEX R/R2 recompute)
+  // single source: bytes -> BigNat -> Montgomery (DH group14 reuses, avoiding per-KEX R/R2 recompute)
   LModulus := BigNatFromUnsignedBytes(AModulusBytes);
   Result := TryGetCachedMontCtx(LModulus, ACtx, AError);
 end;
@@ -1331,7 +1318,7 @@ function TryBigIntModExpWithMont(const ABase, AExponent: TBytes; const AMontCtx:
 var
   LBase, LExp, LReduced, LOut: TBigNat;
 begin
-  // single source: reuse cached Montgomery context without re-parsing modulus bytes
+  // single source: reuse Montgomery context without re-parsing modulus bytes
   LBase := BigNatFromUnsignedBytes(ABase);
   LExp := BigNatFromUnsignedBytes(AExponent);
   SetLength(AResult, 0);
@@ -1349,7 +1336,7 @@ begin
   Result := True;
 end;
 
-procedure ClearMontgomeryCache;
+procedure ClearMontgomeryCache; inline;
 begin
   GLatestMontModulus := nil;
   GLatestMontCtx.Modulus := nil;
@@ -1361,7 +1348,7 @@ begin
   GP384PBigNatValid := False;
 end;
 
-procedure ClearBigIntCache;
+procedure ClearBigIntCache; inline;
 begin
   ClearMontgomeryCache;
 end;

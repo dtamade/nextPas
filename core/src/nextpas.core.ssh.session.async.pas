@@ -107,8 +107,9 @@ uses
   nextpas.core.ssh.cipher,
   nextpas.core.ssh.kex.curve25519,
   nextpas.core.ssh.kex.dhgroup14,
-  nextpas.core.ssh.channel.async,
-  nextpas.core.ssh.proxyjump.async;
+  nextpas.core.ssh.channel.async;
+{ 注: nextpas.core.ssh.proxyjump.async 仅由 interface uses 引用, 不在此重复
+  (与 FPC Duplicate identifier 冲突, 同 system.sysutils 处理)。 }
 
 type
   TAsyncExpectHandler = procedure(const APayload: TBytes; AErr: ESSHError) of object;

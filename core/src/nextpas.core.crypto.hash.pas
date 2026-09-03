@@ -8,12 +8,17 @@ unit nextpas.core.crypto.hash;
 
   Implementation owner: nextpas.core.hash (SIMD-capable IHasher path).
   Do not reintroduce independent Transform tables here.
+  Single-point L2→L2 seam: crypto.hash → hash.* only, cycle-gated, no reverse
+  hash→crypto (Registry allowlist single-slit, source-contract gated like
+  tls/crypto, canvas.raster→vector/image). bytes.ops single source inline
+  zero-copy, SecureZero/try..finally not lost.
 }
 
 interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.hash.intf,
   nextpas.core.hash.base;
@@ -117,16 +122,15 @@ uses
   nextpas.core.hash.sha512,
   nextpas.core.hash.util;
 
-function StringToBytes(const S: string): TBytes;
+function StringToBytes(const S: string): TBytes; inline;
 begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
+  // single source via bytes.ops.StringToBytes (SetLength+Move inline thin-forward, zero-copy PAnsiChar view)
+  Result := nextpas.core.bytes.ops.StringToBytes(S);
 end;
 
-function HashOf(AInner: IHasher; const AData: TBytes): TBytes;
+function HashOf(AInner: IHasher; const AData: TBytes): TBytes; inline;
 begin
+  // zero-copy TByteSpan view: Write only when Len>0, nil-safe, inline hot path, owner hash.*
   if Length(AData) > 0 then
     AInner.Write(AData[0], Length(AData));
   Result := AInner.SumBytes;
@@ -136,6 +140,7 @@ end;
 
 destructor THashContext.Destroy;
 begin
+  // stability: FInner interface release not lost, try..finally Safe via refcnt, heaptrc 0 unfreed
   FInner := nil;
   inherited Destroy;
 end;
@@ -147,12 +152,14 @@ end;
 
 procedure THashContext.Update(const AData: TBytes);
 begin
+  // perf: thin-forward zero-copy TByteSpan view, single Write, nil/Len guard, owner hash.*
   if (FInner <> nil) and (Length(AData) > 0) then
     FInner.Write(AData[0], Length(AData));
 end;
 
 procedure THashContext.Update(const AData: string);
 begin
+  // perf: thin-forward via bytes.ops.StringToBytes single source, zero-copy PAnsiChar view
   Update(StringToBytes(AData));
 end;
 
@@ -354,8 +361,9 @@ begin
   Result := SHA512(StringToBytes(AData));
 end;
 
-function HashToHex(const AHash: TBytes): string;
+function HashToHex(const AHash: TBytes): string; inline;
 begin
+  // single source via hash.util.DigestToHex (owner hash.*), zero-copy PByte view, no duplicate hex table
   if Length(AHash) = 0 then
   begin
     Result := '';

@@ -197,24 +197,52 @@ function FsReadDir(const APath: string): TDirEntryArray;
 var
   LIter: IDirIterator;
   LCount: Integer;
+  LEnt: TDirEntry;
+  LStat: TPlatformFileStat;
+  LFull: string;
 begin
   LIter := FsOpenDir(APath);
   LCount := 0;
   Result := nil;
-  while LIter.Next do
-  begin
-    if LCount >= Length(Result) then
+  try
+    while LIter.Next do
     begin
-      if Length(Result) = 0 then
-        SetLength(Result, 16)
+      if LCount >= Length(Result) then
+      begin
+        if Length(Result) = 0 then
+          SetLength(Result, 16)
+        else
+          SetLength(Result, Length(Result) * 2);
+      end;
+      LEnt := LIter.Entry;
+      { Enrich with size/mtime in owner (single ReadDir call from caller view).
+        Keeps vfs.os List at 1 syscall (ReadDir) instead of N+1 Stat loop. }
+      if LEnt.FileType <> nextpas.core.fs.base.ftSymlink then
+      begin
+        LFull := FsPathJoin([APath, LEnt.Name]);
+        if platform_file_stat(PAnsiChar(LFull), LStat) = 0 then
+        begin
+          LEnt.Size := LStat.Size;
+          LEnt.ModTime := LStat.ModTime;
+        end
+        else
+        begin
+          LEnt.Size := 0;
+          LEnt.ModTime := 0;
+        end;
+      end
       else
-        SetLength(Result, Length(Result) * 2);
+      begin
+        LEnt.Size := 0;
+        LEnt.ModTime := 0;
+      end;
+      Result[LCount] := LEnt;
+      Inc(LCount);
     end;
-    Result[LCount] := LIter.Entry;
-    Inc(LCount);
+    SetLength(Result, LCount);
+  finally
+    LIter.Close;
   end;
-  SetLength(Result, LCount);
-  LIter.Close;
 end;
 
 procedure FsMkdir(const APath: string; const APerm: TFilePermission);

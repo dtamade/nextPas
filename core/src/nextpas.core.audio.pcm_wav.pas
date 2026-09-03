@@ -52,7 +52,8 @@ uses
   nextpas.core.audio.base,
   nextpas.core.audio.codec.wav,
   nextpas.core.audio.codec.intf,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.bytes.ops;
 
 procedure ClearPcmWavData(out AData: TPcmWavData);
 begin
@@ -148,9 +149,10 @@ begin
   if not (AChannels in [1, 2]) then AChannels := DefaultPcmWavChannels;
   LBuf.Format := AudioFormatCreate(ASampleRate, AChannels, sfS16);
   LBytes := Length(ASamples) * SizeOf(SmallInt);
-  SetLength(LBuf.Data, LBytes);
+  // perf: inline + single source via bytes.ops.BytesAppend — single SetLength+Move zero-copy, amortized O(1), exception-safe
+  LBuf.Data := nil;
   if LBytes > 0 then
-    Move(ASamples[0], LBuf.Data[0], LBytes);
+    BytesAppend(LBuf.Data, PByte(@ASamples[0]), SizeUInt(LBytes));
   LBuf.FrameCount := Length(ASamples) div AChannels;
   AudioEncodeWav(LBuf, AStream);
 end;

@@ -7,6 +7,7 @@
  * 累计退避超 MaxTotalRetryMs 即停，抛最后一次原始错误；取消优先于一切。
  * 流式作用域：只重试到拿到流且收到首个 delta 为止——流中途失败原样上抛
  * （重放意味着向消费方重复投递 delta，禁止）。
+ * 抖动源经 IAgentClock.RandomU64 可测化（时序/随机同一抽象），不直引 platform.random。
  *
  * OnAttempt 钩子收到的 ALastError 实例仅在调用期内有效，不得留存。
  *}
@@ -55,9 +56,6 @@ function WithRetry(const AInner: IAgentProvider; const APolicy: TRetryPolicy;
   const AToken: IAsyncCancellationToken): IAgentProvider; overload;
 
 implementation
-
-uses
-  nextpas.core.platform.random;
 
 const
   CTWO_POW_64: Double = 18446744073709551616.0;
@@ -165,7 +163,7 @@ begin
     LJit := 0
   else if LJit > 1 then
     LJit := 1;
-  U := platform_random_u64;
+  U := FClock.RandomU64;
   LFrac := (1.0 - LJit) + (2.0 * LJit) * (U / CTWO_POW_64);
   Result := Round(LBase * LFrac);
   if Result < 0 then

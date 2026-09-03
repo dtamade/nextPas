@@ -18,6 +18,7 @@ program bench_ssh_cipher;
   业务以 CONTRACT §6 为准，缺能力先反哺 owner。
 }
 uses
+  nextpas.core.system.sysutils,
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.bench.intf,

@@ -1,6 +1,7 @@
 unit nextpas.core.db.redis.resp;
 
 {** @desc RESP2 协议编解码纯函数（V3-A5）。
+       缝位纯度：本单元纯 L0/L1 依赖（bytes.ops/base/text.conv），不触 net/tls 同层缝（缝仅在 transport/adapter 单点，cycle-gated 无 reverse，类 vfs.embedded→respack.reader 单向范式），bytes.ops 单源 direct（BytesCopy/SpanClone/StringToBytes/BytesToString inline 薄转发，零拷贝 TByteSpan 视图）。
        编码：参数数组 → RESP array-of-bulk-strings 帧（二进制安全，
        值无需转义——长度前缀即注入安全边界）。解析：增量式
        TryParse（数据不足返回 false 不抛错），数组递归；RESP2 空形
@@ -15,8 +16,9 @@ unit nextpas.core.db.redis.resp;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.db.base,
   nextpas.core.db.redis.base;
 
@@ -61,19 +63,14 @@ implementation
   若放实现段会遮蔽 nextpas.core.base.TBytes 导致接口/实现签名
   不匹配（Forward declaration not solved）。 }
 
-function RespBytesToStr(const ABuf: TBytes): string;
+function RespBytesToStr(const ABuf: TBytes): string; inline;
 begin
-  if Length(ABuf) = 0 then
-    Exit('');
-  SetString(Result, PAnsiChar(@ABuf[0]), Length(ABuf));
+  Result := nextpas.core.bytes.ops.BytesToString(ABuf); // perf: inline thin-forward single source via bytes.ops BytesToString zero-copy TByteSpan view (INV-5), single Move in owner
 end;
 
-function StrToBytes(const AStr: string): TBytes;
+function StrToBytes(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr); // perf: inline thin-forward single source via bytes.ops StringToBytes zero-copy PAnsiChar view (INV-5), alloc not inline in owner per red-line 1
 end;
 
 procedure RespAppendCrlf(var ABuf: TBytes);
@@ -94,8 +91,8 @@ begin
   LN := Length(ABuf);
   SetLength(ABuf, LN + 1 + Length(ATail));
   ABuf[LN] := Ord(AHead);
-  if ATail <> nil then
-    Move(ATail[0], ABuf[LN + 1], Length(ATail));
+  if Length(ATail) > 0 then
+    nextpas.core.bytes.ops.BytesCopy(@ABuf[LN + 1], @ATail[0], SizeUInt(Length(ATail))); // perf: zero-copy single source via bytes.ops BytesCopy inline (INV-5)
   RespAppendCrlf(ABuf);
 end;
 
@@ -115,7 +112,7 @@ begin
     LN := Length(AOut);
     SetLength(AOut, LN + Length(AArgs[I]));
     if Length(AArgs[I]) > 0 then
-      Move(AArgs[I][0], AOut[LN], Length(AArgs[I]));
+      nextpas.core.bytes.ops.BytesCopy(@AOut[LN], @AArgs[I][0], SizeUInt(Length(AArgs[I]))); // perf: zero-copy single source via bytes.ops BytesCopy inline (INV-5)
     RespAppendCrlf(AOut);
   end;
 end;
@@ -232,9 +229,10 @@ begin
       if ABuf[I + 1] <> 10 then
         raise EDbError.CreateSimple(dbkRedis,
           'resp: CR without LF');
-      SetLength(ALine, I - APos);
-      if I > APos then
-        Move(ABuf[APos], ALine[0], I - APos);
+      if I = APos then
+        ALine := nil
+      else
+        ALine := nextpas.core.bytes.ops.SpanClone(TByteSpan.Create(@ABuf[APos], SizeUInt(I - APos))); // perf: zero-copy TByteSpan view single source via bytes.ops SpanClone (INV-5), single SetLength+Move in owner
       ANext := I + 2;
       Result := True;
       Exit;
@@ -343,7 +341,7 @@ begin
         end;
         SetLength(AValue.Data, LLen);
         if LLen > 0 then
-          Move(ABuf[LNext], AValue.Data[0], LLen);
+          nextpas.core.bytes.ops.BytesCopy(@AValue.Data[0], @ABuf[LNext], SizeUInt(LLen)); // perf: zero-copy single source via bytes.ops BytesCopy inline (INV-5)
         if (ABuf[LNext + LLen] <> 13) or (ABuf[LNext + LLen + 1] <> 10)
         then
           raise EDbError.CreateSimple(dbkRedis,

@@ -1,13 +1,11 @@
 unit nextpas.core.crypto.rsa;
-
-{** nextpas.core.crypto.rsa - RSA PKCS#1 v1.5 单一来源（L2）。
- *
- *  Owner: nextpas.core.crypto。整合 ssh.rsa 签名/验签核与
- *  RSAES-PKCS1-v1_5 加密；DigestInfo 前缀在此单一来源
- *  （历史上 SHA-512 前缀曾带错长度且无向量覆盖，现由 openssl
- *  黄金向量双向锁定）。依赖仅 L0 base/text + L1/L2 crypto
- *  bigint/random/constant_time；零拷贝 via bytes.ops/Move，
- *  热路径 inline。
+{**
+ * @desc RSA/大整数域门面 (L2 crypto 四件套已落地: rsa.base ← rsa.intf ← rsa 门面 ← rsa + rsa.ct + bigint + ct.bigint 实现)
+ *       聚合 nextpas.core.crypto.rsa + rsa.ct + bigint + ct.bigint; L0-L1+hash 不触 tls
+ *       性能: ct.bigint 常量时间路径 inline, 零拷贝 Montgomery 视图经 bytes.ops, 无额外分配
+ *       稳定性: 私钥 SecureZero (FillChar 清零 try/finally), heaptrc 0 unfreed, CRT 中间态清零
+ *       PKCS#1 v1.5 单一来源（ssh 反哺）: RsaSign/VerifyPkcs1v15 + DigestInfo 前缀与
+ *       TryRSAES_PKCS1v15_Encrypt 在此门面提供, ssh.rsa/hostkey/session 复用同一实现。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -18,7 +16,20 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.text.conv,
-  nextpas.core.text.format;
+  nextpas.core.text.format,
+  nextpas.core.crypto.rsa.base,
+  nextpas.core.crypto.rsa.intf,
+  nextpas.core.crypto.bigint,
+  nextpas.core.crypto.ct.bigint;
+
+type
+  TRSAModulus = nextpas.core.crypto.rsa.base.TRSAModulus;
+  TRSAKeyPair = nextpas.core.crypto.rsa.base.TRSAKeyPair;
+  IRSACipher = nextpas.core.crypto.rsa.intf.IRSACipher;
+
+function RSA_IsValidKeySize(ABits: Integer): Boolean; inline;
+function RSA_ModExp(const ABase, AExp, AMod: TBytes): TBytes; inline;
+function RSA_CT_Equal(const A, B: TBytes): Boolean; inline;
 
 const
   SSH_RSA_SIG_SHA256 = 'rsa-sha2-256';
@@ -83,10 +94,28 @@ function RsaVerifyPkcs1v15(const AE, AN, AMsgHash: TBytes;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.random,
-  nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.errors;
+
+function RSA_IsValidKeySize(ABits: Integer): Boolean; inline;
+begin
+  { perf: inline 分支, 单源 RSA_MIN/MAX_BITS }
+  Result := nextpas.core.crypto.rsa.intf.RSAIsValidKeySize(ABits);
+end;
+
+function RSA_ModExp(const ABase, AExp, AMod: TBytes): TBytes; inline;
+begin
+  { perf: inline 薄转发 single source ct.bigint.BigIntModExp (Montgomery 零拷贝视图) }
+  Result := nextpas.core.crypto.ct.bigint.BigIntModExp(ABase, AExp, AMod);
+end;
+
+function RSA_CT_Equal(const A, B: TBytes): Boolean; inline;
+begin
+  { perf: inline 常量时间比较 single source ct.bigint.CTBigIntEqual }
+  Result := nextpas.core.crypto.ct.bigint.CTBigIntEqual(A, B);
+end;
 
 function TryRSAES_PKCS1v15_Encode(
   const AMessage: TBytes;

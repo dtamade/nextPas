@@ -156,7 +156,7 @@ W14(wire) ─┬─ W15(perf) ─┬─ W18(landing)
 
 - W0–W13 见 `ROADMAP.md` 波次表，不再重复。
 - 本文档 W14.1–W14.4、W15.1–W15.8、W16.1–W16.6、W17.1–W17.9 已全部标为 ✅ 已落地，即本 lane（2026-08-29，`codex/core-agent`）的精化提交（wire 单源、门面透出、O(n) loop 单次预留、1MiB/8MiB、8MiB 体、256KiB/Extra64、取消贯通等）已固化为不可回退不变量；本轮验证：test_sse 13 passed / transport_stream 8 passed（5×3 矩阵） / tools 8 passed / security 8 passed / bench_wire_headers ~203 ns（旧 249 ns -18%） / bench_loop ~161 µs / bench_sse ~198 MB/s（2026-08-29 冻结）。
-- 未标注“已落地”项为本路线图剩余待办，按表内出口逐项关门（当前仅 W18 待收口）。
+- 未标注“已落地”项为本路线图剩余待办，按表内出口逐项关门（当前仅 W18 待收口；2026-09-05 Stage Review P0/P1 6 项加固已作为 W18 预收口 hardening 入 `agent` lane：编译门全绿 / 预算同源 / 对冲链路化 / 排水看门狗 / GuidedFinish 回滚 / 配额回拨+溢出，见 CHANGELOG `98e6ce2a6`）。
 
 ---
 

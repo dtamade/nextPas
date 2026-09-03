@@ -48,7 +48,9 @@ type TProxyChannelCb = procedure(AChan: IAsyncTcpStream; AErr: ESSHError; AConte
 function SshAsyncProxyOpenChannel(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AKeeper: ISshProxyJumpKeeper; const ATargetOpts: TSshConnectOptions; ACallback: TProxyChannelCb; AContext: Pointer): Boolean; overload;
 function SshAsyncProxyOpenChannel(const ALoop: TAsyncLoop; const ATransport: TAsyncSshTransport; const AKeeper: IInterface; const ATargetOpts: TSshConnectOptions; ACallback: TProxyChannelCb; AContext: Pointer): Boolean; overload;
 implementation
-uses nextpas.core.bytes.ops, nextpas.core.ssh.buffer;
+uses nextpas.core.bytes.ops;
+{ 注: nextpas.core.ssh.buffer 仅由 interface uses 引用, 不在此重复
+  (与 FPC Duplicate identifier 冲突, 同 system.sysutils 处理)。 }
 
 // ProxyJump direct-tcpip 通道打开器（四件套 impl 归一，L2→L2 单缝隙 via ssh.net.ffi；GProxyNextChan 原子；inline 零拷贝 bytes.ops 单源 Move；Keeper 保活；try-finally 释放不丢）
 var GProxyNextChan: LongInt = 100;

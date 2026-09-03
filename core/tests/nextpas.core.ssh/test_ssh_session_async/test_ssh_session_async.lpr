@@ -12,6 +12,7 @@ uses
   cthreads,
   Classes, SysUtils,
   nextpas.core.system.sysutils,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.tcp,

@@ -6,7 +6,7 @@ unit nextpas.core.crypto.aesctr;
  *  keystream state (FKSOff residual) and AesCtrCrypt helper. Single allocation,
  *  cross-packet persist via value semantics, Done zeroizes keystream + expanded keys.
  *
- *  Backends: AES-NI (128/256) -> ct64 -> naive (192 fallback). MemXor via bytes.ops.
+ *  Backends: AES-NI (128/256) -> ct64 -> naive (192 fallback). XorInplace via bytes.ops.
  *  L2 discipline: no ssh dependency, raises ECryptoError on contract violation.
  *}
 
@@ -154,7 +154,7 @@ begin
   begin
     LChunk := SizeUInt(16 - FKSOff);
     if LChunk > LRem then LChunk := LRem;
-    MemXor(LDst, @FKS[FKSOff], LChunk);
+    XorInplace(LDst, @FKS[FKSOff], LChunk);
     Inc(LDst, LChunk);
     Inc(FKSOff, Integer(LChunk));
     Dec(LRem, LChunk);
@@ -170,7 +170,7 @@ begin
     end;
     if (LRem >= 16) and (FKSOff = 0) then
     begin
-      MemXor(LDst, @FKS[0], 16);
+      XorInplace(LDst, @FKS[0], 16);
       Inc(LDst, 16);
       Dec(LRem, 16);
       FKSOff := 16;
@@ -178,7 +178,7 @@ begin
     begin
       LChunk := SizeUInt(16 - FKSOff);
       if LChunk > LRem then LChunk := LRem;
-      MemXor(LDst, @FKS[FKSOff], LChunk);
+      XorInplace(LDst, @FKS[FKSOff], LChunk);
       Inc(LDst, LChunk);
       Inc(FKSOff, Integer(LChunk));
       Dec(LRem, LChunk);

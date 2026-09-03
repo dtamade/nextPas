@@ -4,7 +4,7 @@ unit nextpas.core.sevenz.lzma.rc;
  * nextpas.core.sevenz.lzma.rc - LZMA 自适应二进制区间编码器/解码器
  *
  * 纯 Pascal 实现，供 LZMA1/LZMA2 编解码共用。
- * 解码器从内存缓冲读取，越界抛 ESevenZError（截断不补零）；编码器写入自动扩容缓冲。
+ * 解码器从内存缓冲读取，越过末尾按规范补零；编码器写入自动扩容缓冲。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -12,11 +12,10 @@ unit nextpas.core.sevenz.lzma.rc;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.sevenz.base;
+  nextpas.core.base;
 
 type
-  {** @desc 区间解码器：从固定缓冲顺序消费字节，越界抛 ESevenZError（截断不补零） *}
+  {** @desc 区间解码器：从固定缓冲顺序消费字节，越界补零（规范允许） *}
   TSevenZRcDecoder = class
   private
     FBuf: PByte;
@@ -24,7 +23,7 @@ type
     FPos: SizeUInt;
     FRange: UInt32;
     FCode: UInt32;
-    FStackLimit: array of SizeUInt;
+    FSavedLimit: SizeUInt;
 
     function NextByte: Byte; inline;
     procedure Normalize; inline;
@@ -35,7 +34,7 @@ type
     { 直接解 ANumBits 个高位在前的位（不经概率模型） }
     function DecodeDirectBits(ANumBits: UInt32): UInt32;
     procedure Init;
-    { 绕过区间算术的原始字节读（LZMA2 块头与未压缩块载荷）；越界抛 ESevenZError }
+    { 绕过区间算术的原始字节读（LZMA2 块头与未压缩块载荷）；越界补零 }
     function RawReadByte: Byte; inline;
     procedure RawRead(var ADst; ACount: SizeUInt);
     { 临时收紧读取上限（LZMA2 单块算术区隔离）；RestoreLimit 恢复 }
@@ -108,7 +107,7 @@ begin
     Inc(FPos);
   end
   else
-    raise ESevenZError.Create('range decoder overrun');
+    Result := 0;
 end;
 
 procedure TSevenZRcDecoder.Init;
@@ -128,7 +127,7 @@ end;
 procedure TSevenZRcDecoder.Normalize; inline;
 begin
   {$PUSH}{$Q-}{$R-}
-  while FRange < C_RC_TOP_VALUE do
+  if FRange < C_RC_TOP_VALUE then
   begin
     FRange := FRange shl 8;
     FCode := (FCode shl 8) or NextByte;
@@ -191,7 +190,7 @@ begin
     Inc(FPos);
   end
   else
-    raise ESevenZError.Create('range decoder overrun');
+    Result := 0;
 end;
 
 procedure TSevenZRcDecoder.RawRead(var ADst; ACount: SizeUInt);
@@ -210,18 +209,14 @@ end;
 
 procedure TSevenZRcDecoder.ClipTo(ALimit: SizeUInt);
 begin
-  SetLength(FStackLimit, Length(FStackLimit) + 1);
-  FStackLimit[High(FStackLimit)] := FLimit;
+  FSavedLimit := FLimit;
   if ALimit < FLimit then
     FLimit := ALimit;
 end;
 
 procedure TSevenZRcDecoder.RestoreLimit;
 begin
-  if Length(FStackLimit) = 0 then
-    raise ESevenZError.Create('unbalanced RestoreLimit');
-  FLimit := FStackLimit[High(FStackLimit)];
-  SetLength(FStackLimit, Length(FStackLimit) - 1);
+  FLimit := FSavedLimit;
 end;
 
 { TSevenZOutBuffer }
@@ -325,7 +320,7 @@ end;
 
 procedure TSevenZRcEncoder.Normalize; inline;
 begin
-  while FRange < C_RC_TOP_VALUE do
+  if FRange < C_RC_TOP_VALUE then
   begin
     FRange := FRange shl 8;
     ShiftLow;

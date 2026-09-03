@@ -66,6 +66,7 @@ procedure FoldDeltas(const ADeltas: array of TStreamDelta; out AMsg: TMessage);
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv;
 
 constructor TAssistantBuild.Create;
@@ -121,10 +122,8 @@ begin
   begin
     if FPartsLen >= FPartsCap then
     begin
-      if FPartsCap = 0 then
-        FPartsCap := 8
-      else
-        FPartsCap := FPartsCap * 2;
+      // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+      FPartsCap := BytesGrowCapacityInt(FPartsCap, FPartsLen + 1);
       SetLength(FParts, FPartsCap);
     end;
     LPos := FPartsLen;
@@ -188,10 +187,8 @@ begin
         FlushCurrentPart;
         if FPartsLen >= FPartsCap then
         begin
-          if FPartsCap = 0 then
-            FPartsCap := 8
-          else
-            FPartsCap := FPartsCap * 2;
+          // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+          FPartsCap := BytesGrowCapacityInt(FPartsCap, FPartsLen + 1);
           SetLength(FParts, FPartsCap);
         end;
         LPos := FPartsLen;
@@ -201,10 +198,8 @@ begin
         FParts[LPos].ToolName := ADelta.ToolName;
         if FSlotsLen >= FSlotsCap then
         begin
-          if FSlotsCap = 0 then
-            FSlotsCap := 8
-          else
-            FSlotsCap := FSlotsCap * 2;
+          // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+          FSlotsCap := BytesGrowCapacityInt(FSlotsCap, FSlotsLen + 1);
           SetLength(FSlots, FSlotsCap);
         end;
         LSlot := FSlotsLen;
@@ -323,7 +318,8 @@ begin
       LLen := Length(FParts[I].Text);
       if LLen > 0 then
       begin
-        Move(FParts[I].Text[1], Result[LPos], LLen);
+        // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5)
+        BytesCopy(@Result[LPos], @FParts[I].Text[1], SizeUInt(LLen));
         Inc(LPos, LLen);
       end;
     end;
@@ -332,7 +328,8 @@ begin
     LCurs := FCurBuilder.ToString;
     LLen := Length(LCurs);
     if LLen > 0 then
-      Move(LCurs[1], Result[LPos], LLen);
+      // perf: single source via bytes.ops.BytesCopy inline zero-copy Move (INV-5)
+      BytesCopy(@Result[LPos], @LCurs[1], SizeUInt(LLen));
   end;
 end;
 

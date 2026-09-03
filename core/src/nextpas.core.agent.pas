@@ -40,7 +40,9 @@ uses
   nextpas.core.agent.provider.openai.responses,
   nextpas.core.agent.transport.trace,
   nextpas.core.agent.quota,
-  nextpas.core.agent.pricing;
+  nextpas.core.agent.pricing,
+  nextpas.core.agent.snapshot,
+  nextpas.core.agent.streambox;
 
 function ErrorCodeForStatus(AStatus: Integer): TAgentErrorCode; inline;
 function IsRetryable(ACode: TAgentErrorCode): Boolean; inline;
@@ -256,6 +258,18 @@ function EstimateCost(APromptTokens, ACompletionTokens: Int64;
 function ImageTierOf(const AWidth, AHeight: Int64): Int64; inline;
 function AgentEstimateTokens(const S: string): Int64; inline;
 function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64; inline;
+
+{ ── 有界快照 · PROMPT-BUDGET.md §2/§5 经 nextpas.core.agent.snapshot 复用 ── }
+const
+  CBoundedSnapshotBudget = nextpas.core.agent.snapshot.CBoundedSnapshotBudget;
+function BuildBoundedSnapshot(const ASystem: string;
+  const AMessages: TMessageArray; ABudget: Integer = CBoundedSnapshotBudget): string; inline;
+function BoundedSnapshotTokens(const ASnapshot: string): Int64; inline;
+function BoundedSnapshotCost(const ASnapshot: string; ACompletionTokens: Int64 = 0): Int64; inline;
+
+{ ── 流式盒 · PERFORMANCE.md §7.2 经 nextpas.core.agent.streambox 复用 ── }
+type
+  TAgentStreamBox = nextpas.core.agent.streambox.TAgentStreamBox;
 
 implementation
 
@@ -633,6 +647,22 @@ end;
 function AgentEstimateTokensFromMessage(const AMsg: TMessage): Int64;
 begin
   Result := nextpas.core.agent.pricing.AgentEstimateTokensFromMessage(AMsg);
+end;
+
+function BuildBoundedSnapshot(const ASystem: string;
+  const AMessages: TMessageArray; ABudget: Integer): string;
+begin
+  Result := nextpas.core.agent.snapshot.BuildBoundedSnapshot(ASystem, AMessages, ABudget);
+end;
+
+function BoundedSnapshotTokens(const ASnapshot: string): Int64;
+begin
+  Result := nextpas.core.agent.snapshot.BoundedSnapshotTokens(ASnapshot);
+end;
+
+function BoundedSnapshotCost(const ASnapshot: string; ACompletionTokens: Int64): Int64;
+begin
+  Result := nextpas.core.agent.snapshot.BoundedSnapshotCost(ASnapshot, ACompletionTokens);
 end;
 
 function MessageText(const AMsg: TMessage): string;

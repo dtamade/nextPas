@@ -12,12 +12,15 @@ function IntToBuffer(const AValue: Int64; const ADst: PAnsiChar): Int32;
 function UIntToBuffer(const AValue: UInt64; const ADst: PAnsiChar): Int32;
 function IntToHexBuffer(const AValue: UInt64; const ADst: PAnsiChar;
   const AMinDigits: Int32 = 1): Int32;
+function IntToHexBufferUpper(const AValue: UInt64; const ADst: PAnsiChar;
+  const AMinDigits: Int32 = 1): Int32; inline;
 function ParseInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Int64): Boolean;
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: UInt64): Boolean;
 function FloatToBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
+function FloatToFixedBuffer(const AValue: Double; const ADecimals: Int32; const ADst: PAnsiChar): Int32;
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Double): Boolean;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
@@ -27,6 +30,7 @@ function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean; in
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.char;
 
 const
@@ -44,6 +48,7 @@ const
   );
 
   HEX_CHARS: array[0..15] of AnsiChar = '0123456789abcdef';
+  HEX_CHARS_UPPER: array[0..15] of AnsiChar = '0123456789ABCDEF';
 
 function UIntToBuffer(const AValue: UInt64; const ADst: PAnsiChar): Int32;
 var
@@ -80,7 +85,7 @@ begin
     LBuf[LIdx] := AnsiChar(Ord('0') + LVal);
   end;
   Result := 20 - LIdx;
-  Move(LBuf[LIdx], ADst^, Result);
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
 end;
 
 function IntToBuffer(const AValue: Int64; const ADst: PAnsiChar): Int32;
@@ -108,7 +113,7 @@ var
   LVal: UInt64;
   LMin: Int32;
 begin
-  FillChar(LBuf, SizeOf(LBuf), 0);
+  nextpas.core.bytes.ops.BytesZero(@LBuf[0], SizeOf(LBuf)); // perf: inline FillChar single source via bytes.ops
   LMin := AMinDigits;
   if LMin > 16 then LMin := 16;
   if (AValue = 0) and (LMin <= 1) then
@@ -132,7 +137,43 @@ begin
     LBuf[LIdx] := '0';
     Inc(Result);
   end;
-  Move(LBuf[LIdx], ADst^, Result);
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
+end;
+
+{ perf: direct uppercase HEX_CHARS_UPPER write, single Move via bytes.ops, zero-copy, no per-char branch — owner single source for IntToHex uppercase }
+function IntToHexBufferUpper(const AValue: UInt64; const ADst: PAnsiChar;
+  const AMinDigits: Int32): Int32; inline;
+var
+  LBuf: array[0..15] of AnsiChar;
+  LIdx: Int32;
+  LVal: UInt64;
+  LMin: Int32;
+begin
+  nextpas.core.bytes.ops.BytesZero(@LBuf[0], SizeOf(LBuf)); // perf: inline FillChar single source via bytes.ops
+  LMin := AMinDigits;
+  if LMin > 16 then LMin := 16;
+  if (AValue = 0) and (LMin <= 1) then
+  begin
+    ADst[0] := '0';
+    Result := 1;
+    Exit;
+  end;
+  LIdx := 16;
+  LVal := AValue;
+  while LVal > 0 do
+  begin
+    Dec(LIdx);
+    LBuf[LIdx] := HEX_CHARS_UPPER[LVal and $F];
+    LVal := LVal shr 4;
+  end;
+  Result := 16 - LIdx;
+  while Result < LMin do
+  begin
+    Dec(LIdx);
+    LBuf[LIdx] := '0';
+    Inc(Result);
+  end;
+  nextpas.core.bytes.ops.BytesCopy(ADst, @LBuf[LIdx], SizeUInt(Result)); // perf: inline single Move via bytes.ops single source, zero-copy
 end;
 
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -228,10 +269,126 @@ function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 begin
   if DoubleIsNaN(AValue) or DoubleIsInf(AValue) then
   begin
-    Move('null', ADst^, 4);
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('null'), 4); // perf: inline single Move via bytes.ops single source, zero-copy
     Exit(4);
   end;
   Result := FloatToBuffer(AValue, ADst);
+end;
+
+{ Fixed-decimal buffer: zero-alloc, locale-independent '.'.
+  perf: single Move for integer part via IntToBuffer; direct PAnsiChar writes
+  for fractional digits; O(n) single pass, not Delete O(n²). Single source
+  text.number buffer path. }
+function FloatToFixedBuffer(const AValue: Double; const ADecimals: Int32; const ADst: PAnsiChar): Int32;
+var
+  LBits: UInt64 absolute AValue;
+  LNeg: Boolean;
+  LAbs, LFrac, LRound: Double;
+  LInt: Int64;
+  LI, LDigit, LDec: Int32;
+  LIntLen, LPos: Int32;
+  LBuf: array[0..20] of AnsiChar;
+  LStr: string;
+  LStart, LSrcLen, LCopy: Int32;
+begin
+  if DoubleIsNaN(AValue) then
+  begin
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('NaN'), 3); // perf: inline single Move via bytes.ops single source, zero-copy
+    Exit(3);
+  end;
+  if DoubleIsInf(AValue) then
+  begin
+    if (LBits and DOUBLE_SIGN_MASK) <> 0 then
+    begin
+      nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('-Infinity'), 9); // perf: inline single Move via bytes.ops single source, zero-copy
+      Exit(9);
+    end;
+    nextpas.core.bytes.ops.BytesCopy(ADst, PAnsiChar('Infinity'), 8); // perf: inline single Move via bytes.ops single source, zero-copy
+    Exit(8);
+  end;
+  if DoubleIsZero(AValue) then
+  begin
+    LNeg := (LBits and DOUBLE_SIGN_MASK) <> 0;
+    LDec := ADecimals;
+    if LDec < 0 then LDec := 0;
+    if LDec > 18 then LDec := 18;
+    LPos := 0;
+    if LNeg then
+    begin
+      ADst[0] := '-';
+      Inc(LPos);
+    end;
+    ADst[LPos] := '0';
+    Inc(LPos);
+    if LDec > 0 then
+    begin
+      ADst[LPos] := '.';
+      Inc(LPos);
+      for LI := 1 to LDec do
+      begin
+        ADst[LPos] := '0';
+        Inc(LPos);
+      end;
+    end;
+    Exit(LPos);
+  end;
+  LDec := ADecimals;
+  if LDec < 0 then LDec := 0;
+  if LDec > 18 then LDec := 18;
+  LNeg := AValue < 0;
+  if LNeg then LAbs := -AValue else LAbs := AValue;
+  if LAbs >= 9.22e18 then
+  begin
+    Str(AValue:0:LDec, LStr);
+    LStart := 1;
+    LSrcLen := Length(LStr);
+    while (LStart <= LSrcLen) and (LStr[LStart] = ' ') do Inc(LStart);
+    LCopy := LSrcLen - LStart + 1;
+    if LCopy <= 0 then Exit(0);
+    Result := 0;
+    for LI := LStart to LSrcLen do
+    begin
+      if LStr[LI] = ',' then
+        ADst[Result] := '.'
+      else
+        ADst[Result] := AnsiChar(LStr[LI]);
+      Inc(Result);
+    end;
+    Exit;
+  end;
+  LRound := 0.5;
+  for LI := 1 to LDec do LRound := LRound / 10;
+  LAbs := LAbs + LRound;
+  LInt := Trunc(LAbs);
+  LFrac := LAbs - LInt;
+  if LFrac < 0 then LFrac := 0 else if LFrac >= 1 then LFrac := LFrac - Trunc(LFrac);
+  LIntLen := IntToBuffer(LInt, @LBuf[0]);
+  LPos := 0;
+  if LNeg then
+  begin
+    ADst[0] := '-';
+    LPos := 1;
+  end;
+  if LIntLen > 0 then
+  begin
+    nextpas.core.bytes.ops.BytesCopy(ADst + LPos, @LBuf[0], SizeUInt(LIntLen)); // perf: inline single Move via bytes.ops single source, zero-copy
+    Inc(LPos, LIntLen);
+  end;
+  if LDec > 0 then
+  begin
+    ADst[LPos] := '.';
+    Inc(LPos);
+    for LI := 1 to LDec do
+    begin
+      LFrac := LFrac * 10;
+      LDigit := Trunc(LFrac);
+      if LDigit < 0 then LDigit := 0 else if LDigit > 9 then LDigit := 9;
+      ADst[LPos] := AnsiChar(Ord('0') + LDigit);
+      Inc(LPos);
+      LFrac := LFrac - LDigit;
+    end;
+  end;
+  Result := LPos;
 end;
 
 function EiselLemire(const AMant: UInt64; const AExp10: Int32;
@@ -308,7 +465,7 @@ begin
   AValue := 0.0;
   if ALen > 1023 then
     Exit(False);
-  Move(AData^, LBuf[0], ALen);
+  nextpas.core.bytes.ops.BytesCopy(@LBuf[0], AData, ALen); // perf: inline single Move via bytes.ops single source, zero-copy
   LBuf[ALen] := #0;
   try
     Val(PAnsiChar(@LBuf[0]), LValue, LCode);

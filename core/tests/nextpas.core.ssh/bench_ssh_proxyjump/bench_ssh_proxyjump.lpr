@@ -9,8 +9,8 @@ program bench_ssh_proxyjump;
   计时保真：bench_common.mk -O3 -Xs 无 heaptrc，泄漏由 Tier-1 覆盖。
 }
 uses
-  nextpas.core.bytes.ops,
   cthreads,
+  nextpas.core.bytes.ops,
   Classes, SysUtils, Math,
   nextpas.core.bench,
   nextpas.core.bench.intf,

@@ -11,6 +11,8 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
@@ -32,9 +34,10 @@ type
   private
     FBase: IVfs;
     FSubRoot: string;
+    FSubPrefix: string;   { FSubRoot + '/' 缓存，identity 时为空，零重复分配 }
     FIdentity: Boolean;   { SubRoot='.' 时直通 }
     function ToBase(const APath: string): string;
-    function ToSubView(const APath: string): string;
+    function ToSubView(const APath: string): string; inline;
     procedure ReraiseSub(E: EVfsError);
   public
     constructor Create(const ABase: IVfs; const ASubRoot: string);
@@ -78,6 +81,10 @@ begin
   FBase := ABase;
   FSubRoot := StripTrailingSlash(ASubRoot);
   FIdentity := VfsIsRoot(FSubRoot);
+  if FIdentity then
+    FSubPrefix := ''
+  else
+    FSubPrefix := FSubRoot + '/';
 end;
 
 function TSubVfs.ToBase(const APath: string): string;
@@ -85,24 +92,26 @@ begin
   if FIdentity then
     Exit(APath);
   if VfsIsRoot(APath) then
-    Result := FSubRoot
-  else
-    Result := FSubRoot + '/' + APath;
+    Exit(FSubRoot);
+  Result := FSubPrefix + APath;
 end;
 
-function TSubVfs.ToSubView(const APath: string): string;
+function TSubVfs.ToSubView(const APath: string): string; inline;
 var
-  Prefix: string;
+  SPath, SPrefix: TByteSpan;
 begin
   Result := APath;
   if FIdentity then
     Exit;
-  Prefix := FSubRoot + '/';
   if APath = FSubRoot then
     Exit('.');
-  if (Length(APath) > Length(Prefix))
-    and (Pos(Prefix, APath) = 1) then
-    Result := Copy(APath, Length(Prefix) + 1, MaxInt);
+  if Length(APath) <= Length(FSubPrefix) then
+    Exit;
+  // perf: zero-copy TByteSpan view single-source via VfsSpanFromString->TByteSpan.FromStr inline, bytes.ops SpanStartsWith->MemEqual hot path, no alloc
+  SPath := VfsSpanFromString(APath);
+  SPrefix := VfsSpanFromString(FSubPrefix);
+  if SpanStartsWith(SPath, SPrefix) then
+    Result := Copy(APath, Length(FSubPrefix) + 1, MaxInt);
 end;
 
 procedure TSubVfs.ReraiseSub(E: EVfsError);

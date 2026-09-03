@@ -18,6 +18,7 @@ uses
   nextpas.core.time.deadline,
   nextpas.core.async.loop,
   nextpas.core.net,
+  nextpas.core.net.intf,
   nextpas.core.ssh.intf;
 
 type
@@ -35,6 +36,14 @@ type
   TTcpStreamIOResult = nextpas.core.net.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.INetCancelToken;
+
+const
+  { IOResult 枚举值单缝隙 re-export：type 别名不携带枚举成员，
+    proxyjump.async 等经此取值而不直连 net.intf。 }
+  tsiorOk = nextpas.core.net.intf.tsiorOk;
+  tsiorWouldBlock = nextpas.core.net.intf.tsiorWouldBlock;
+  tsiorClosed = nextpas.core.net.intf.tsiorClosed;
+  tsiorTimeout = nextpas.core.net.intf.tsiorTimeout;
 
 function SshDefaultDialer: ISshDialer; inline;
 function SshDefaultAgentDialer: ISshAgentDialer; inline;

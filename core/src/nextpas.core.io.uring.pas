@@ -6,7 +6,6 @@ interface
 
 uses
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.modern;
 
 type
@@ -47,36 +46,50 @@ type
     class function Create(AEntries: UInt32; AFlags: UInt32 = 0): TIoUring; static;
     procedure Close;
     function IsValid: Boolean; inline;
-    function GetSqe: PIoUringSqe; inline;
+    function GetSqe: PIoUringSqe;
     function Submit: Int32;
     function SubmitAndWait(AWaitNr: UInt32): Int32;
-    function PeekCqe(out ACqe: PIoUringCqe): Boolean; inline;
+    function PeekCqe(out ACqe: PIoUringCqe): Boolean;
     function WaitCqe(out ACqe: PIoUringCqe): Int32;
-    procedure CqeSeen(ACqe: PIoUringCqe); inline;
-    function CqeReady: UInt32; inline;
+    procedure CqeSeen(ACqe: PIoUringCqe);
+    function CqeReady: UInt32;
   end;
 
-procedure IoUringPrepNop(ASqe: PIoUringSqe); inline;
-procedure IoUringPrepRead(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64); inline;
-procedure IoUringPrepWrite(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64); inline;
-procedure IoUringPrepClose(ASqe: PIoUringSqe; AFd: Int32); inline;
-procedure IoUringPrepFsync(ASqe: PIoUringSqe; AFd: Int32; AFlags: UInt32); inline;
-procedure IoUringPrepAccept(ASqe: PIoUringSqe; AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32); inline;
-procedure IoUringPrepConnect(ASqe: PIoUringSqe; AFd: Int32; AAddr: Pointer; AAddrLen: UInt32); inline;
-procedure IoUringPrepSend(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32); inline;
-procedure IoUringPrepRecv(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32); inline;
-procedure IoUringPrepPollAdd(ASqe: PIoUringSqe; AFd: Int32; APollMask: UInt32); inline;
-procedure IoUringPrepCancel(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: Int32); inline;
-procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64); inline;
-procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64); inline;
-procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer; ACount: UInt32; AFlags: UInt32); inline;
-procedure IoUringPrepTimeoutRemove(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: UInt32); inline;
-procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AFlags: Int32; AMode: UInt32); inline;
-procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64; AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32); inline;
-procedure IoUringPrepShutdown(ASqe: PIoUringSqe; AFd: Int32; AHow: Int32); inline;
-procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AFlags: Int32); inline;
-procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AMode: UInt32); inline;
-procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32; AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32); inline;
+procedure IoUringPrepNop(ASqe: PIoUringSqe);
+procedure IoUringPrepRead(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AOffset: Int64);
+procedure IoUringPrepWrite(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AOffset: Int64);
+procedure IoUringPrepClose(ASqe: PIoUringSqe; AFd: Int32);
+procedure IoUringPrepFsync(ASqe: PIoUringSqe; AFd: Int32; AFlags: UInt32);
+procedure IoUringPrepAccept(ASqe: PIoUringSqe; AFd: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32);
+procedure IoUringPrepConnect(ASqe: PIoUringSqe; AFd: Int32;
+  AAddr: Pointer; AAddrLen: UInt32);
+procedure IoUringPrepSend(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AFlags: Int32);
+procedure IoUringPrepRecv(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AFlags: Int32);
+procedure IoUringPrepPollAdd(ASqe: PIoUringSqe; AFd: Int32; APollMask: UInt32);
+procedure IoUringPrepCancel(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: Int32);
+procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer;
+  ACount: UInt32; AFlags: UInt32);
+procedure IoUringPrepTimeoutRemove(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: UInt32);
+procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32; AMode: UInt32);
+procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64;
+  AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32);
+procedure IoUringPrepShutdown(ASqe: PIoUringSqe; AFd: Int32; AHow: Int32);
+procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32);
+procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AMode: UInt32);
+procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32;
+  AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32);
 
 procedure IoUringSqeSetData(ASqe: PIoUringSqe; AData: UInt64); inline;
 function IoUringCqeGetData(ACqe: PIoUringCqe): UInt64; inline;
@@ -87,6 +100,11 @@ uses
   nextpas.core.platform.posix.ffi;
 
 const
+  PROT_READ  = PLATFORM_POSIX_PROT_READ;
+  PROT_WRITE = PLATFORM_POSIX_PROT_WRITE;
+  MAP_SHARED = PLATFORM_POSIX_MAP_SHARED;
+  MAP_POPULATE = $8000; // host-owned Linux MAP_POPULATE via nextpas.core.platform.linux.base
+
   IORING_OFF_SQ_RING = 0;
   IORING_OFF_CQ_RING = $8000000;
   IORING_OFF_SQES    = $10000000;
@@ -94,6 +112,7 @@ const
 procedure ReadBarrier; inline;
 begin
   {$IFDEF CPUX86_64}
+  // x86_64 TSO: loads not reordered. Compiler barrier suffices.
   ReadWriteBarrier;
   {$ELSE}
   ReadWriteBarrier;
@@ -103,12 +122,15 @@ end;
 procedure WriteBarrier; inline;
 begin
   {$IFDEF CPUX86_64}
+  // x86_64 TSO: stores not reordered. Compiler barrier suffices.
   ReadWriteBarrier;
   {$ELSE}
   ReadWriteBarrier;
   {$ENDIF}
 end;
 
+{ mmap/munmap/close via platform host-owner nextpas.core.platform.posix.ffi — no direct FPC host unit/external (design-conventions §18) }
+{ perf: zero-copy ring mmap via platform mmap (single syscall, no extra copy); munmap/close reuse platform owner }
 class function TIoUring.Create(AEntries: UInt32; AFlags: UInt32): TIoUring;
 var
   LParams: TIoUringParams;
@@ -118,12 +140,19 @@ begin
   FillChar(Result, SizeOf(Result), 0);
   FillChar(LParams, SizeOf(LParams), 0);
   LParams.flags := AFlags;
+
   Result.FFd := io_uring_setup(AEntries, @LParams);
   if Result.FFd < 0 then Exit;
+
   Result.FSqeCount := LParams.sq_entries;
-  LSqRingSize := SizeUInt(LParams.sq_off.array_off) + SizeUInt(LParams.sq_entries) * SizeOf(UInt32);
-  LSqPtr := mmap(nil, LSqRingSize, PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE, PLATFORM_POSIX_MAP_SHARED or MAP_POPULATE, Result.FFd, IORING_OFF_SQ_RING);
-  if PtrUInt(LSqPtr) = PLATFORM_POSIX_MAP_FAILED_PTR then begin nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit; end;
+
+  // mmap SQ ring
+  LSqRingSize := SizeUInt(LParams.sq_off.array_off) +
+    SizeUInt(LParams.sq_entries) * SizeOf(UInt32);
+  LSqPtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(LSqRingSize), PROT_READ or PROT_WRITE,
+    MAP_SHARED or MAP_POPULATE, Result.FFd, Int64(IORING_OFF_SQ_RING));
+  if LSqPtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then begin nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit; end;
+
   Result.FSqRing.RingPtr := LSqPtr;
   Result.FSqRing.RingSize := LSqRingSize;
   Result.FSqRing.Head := PUInt32(LSqPtr + LParams.sq_off.head);
@@ -133,13 +162,18 @@ begin
   Result.FSqRing.Flags := PUInt32(LSqPtr + LParams.sq_off.flags);
   Result.FSqRing.Dropped := PUInt32(LSqPtr + LParams.sq_off.dropped);
   Result.FSqRing.ArrayPtr := PUInt32(LSqPtr + LParams.sq_off.array_off);
-  LCqRingSize := SizeUInt(LParams.cq_off.cqes) + SizeUInt(LParams.cq_entries) * SizeOf(TIoUringCqe);
-  LCqPtr := mmap(nil, LCqRingSize, PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE, PLATFORM_POSIX_MAP_SHARED or MAP_POPULATE, Result.FFd, IORING_OFF_CQ_RING);
-  if PtrUInt(LCqPtr) = PLATFORM_POSIX_MAP_FAILED_PTR then
+
+  // mmap CQ ring
+  LCqRingSize := SizeUInt(LParams.cq_off.cqes) +
+    SizeUInt(LParams.cq_entries) * SizeOf(TIoUringCqe);
+  LCqPtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(LCqRingSize), PROT_READ or PROT_WRITE,
+    MAP_SHARED or MAP_POPULATE, Result.FFd, Int64(IORING_OFF_CQ_RING));
+  if LCqPtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then
   begin
-    munmap(LSqPtr, LSqRingSize);
+    nextpas.core.platform.posix.ffi.munmap(LSqPtr, PtrUInt(LSqRingSize));
     nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit;
   end;
+
   Result.FCqRing.RingPtr := LCqPtr;
   Result.FCqRing.RingSize := LCqRingSize;
   Result.FCqRing.Head := PUInt32(LCqPtr + LParams.cq_off.head);
@@ -148,13 +182,18 @@ begin
   Result.FCqRing.RingEntries := PUInt32(LCqPtr + LParams.cq_off.ring_entries);
   Result.FCqRing.Overflow := PUInt32(LCqPtr + LParams.cq_off.overflow);
   Result.FCqRing.CqesPtr := PIoUringCqe(LCqPtr + LParams.cq_off.cqes);
-  LSqePtr := mmap(nil, SizeUInt(LParams.sq_entries) * SizeOf(TIoUringSqe), PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE, PLATFORM_POSIX_MAP_SHARED or MAP_POPULATE, Result.FFd, IORING_OFF_SQES);
-  if PtrUInt(LSqePtr) = PLATFORM_POSIX_MAP_FAILED_PTR then
+
+  // mmap SQE array
+  LSqePtr := nextpas.core.platform.posix.ffi.mmap(nil, PtrUInt(SizeUInt(LParams.sq_entries) * SizeOf(TIoUringSqe)),
+    PROT_READ or PROT_WRITE, MAP_SHARED or MAP_POPULATE,
+    Result.FFd, Int64(IORING_OFF_SQES));
+  if LSqePtr = Pointer(PLATFORM_POSIX_MAP_FAILED_PTR) then
   begin
-    munmap(LCqPtr, LCqRingSize);
-    munmap(LSqPtr, LSqRingSize);
+    nextpas.core.platform.posix.ffi.munmap(LCqPtr, PtrUInt(LCqRingSize));
+    nextpas.core.platform.posix.ffi.munmap(LSqPtr, PtrUInt(LSqRingSize));
     nextpas.core.platform.posix.ffi.close(Result.FFd); Result.FFd := -1; Exit;
   end;
+
   Result.FSqeArray := PIoUringSqe(LSqePtr);
   Result.FSqHead := Result.FSqRing.Head^;
   Result.FSqTail := Result.FSqRing.Tail^;
@@ -165,11 +204,11 @@ procedure TIoUring.Close;
 begin
   if not FValid then Exit;
   if FSqeArray <> nil then
-    munmap(FSqeArray, SizeUInt(FSqeCount) * SizeOf(TIoUringSqe));
+    nextpas.core.platform.posix.ffi.munmap(FSqeArray, PtrUInt(SizeUInt(FSqeCount) * SizeOf(TIoUringSqe)));
   if FCqRing.RingPtr <> nil then
-    munmap(FCqRing.RingPtr, FCqRing.RingSize);
+    nextpas.core.platform.posix.ffi.munmap(FCqRing.RingPtr, PtrUInt(FCqRing.RingSize));
   if FSqRing.RingPtr <> nil then
-    munmap(FSqRing.RingPtr, FSqRing.RingSize);
+    nextpas.core.platform.posix.ffi.munmap(FSqRing.RingPtr, PtrUInt(FSqRing.RingSize));
   if FFd >= 0 then
     nextpas.core.platform.posix.ffi.close(FFd);
   FValid := False;
@@ -189,6 +228,7 @@ begin
     Result := nil;
     Exit;
   end;
+  // Read kernel's SQ head to know how many slots are free
   ReadBarrier;
   FSqHead := FSqRing.Head^;
   if (FSqTail - FSqHead) >= FSqeCount then
@@ -211,14 +251,17 @@ begin
     Exit(-1);
   LToSubmit := FSqTail - FSqRing.Tail^;
   if LToSubmit = 0 then begin Result := 0; Exit; end;
+
   for LI := 1 to LToSubmit do
   begin
     LIdx := (FSqRing.Tail^ + LI - 1) and FSqRing.RingMask^;
     FSqRing.ArrayPtr[LIdx] := LIdx;
   end;
+
   WriteBarrier;
   FSqRing.Tail^ := FSqTail;
   WriteBarrier;
+
   Result := io_uring_enter(FFd, LToSubmit, 0, 0, nil);
 end;
 
@@ -230,6 +273,7 @@ begin
   if not FValid then
     Exit(-1);
   LToSubmit := FSqTail - FSqRing.Tail^;
+
   if LToSubmit > 0 then
   begin
     for LI := 1 to LToSubmit do
@@ -241,6 +285,7 @@ begin
     FSqRing.Tail^ := FSqTail;
     WriteBarrier;
   end;
+
   Result := io_uring_enter(FFd, LToSubmit, AWaitNr, IORING_ENTER_GETEVENTS, nil);
 end;
 
@@ -298,13 +343,16 @@ begin
   Result := FCqRing.Tail^ - FCqRing.Head^;
 end;
 
+{ Prep helpers }
+
 procedure IoUringPrepNop(ASqe: PIoUringSqe);
 begin
   ASqe^.opcode := IORING_OP_NOP;
   ASqe^.fd := -1;
 end;
 
-procedure IoUringPrepRead(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64);
+procedure IoUringPrepRead(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AOffset: Int64);
 begin
   ASqe^.opcode := IORING_OP_READ;
   ASqe^.fd := AFd;
@@ -313,7 +361,8 @@ begin
   ASqe^.off := UInt64(AOffset);
 end;
 
-procedure IoUringPrepWrite(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64);
+procedure IoUringPrepWrite(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AOffset: Int64);
 begin
   ASqe^.opcode := IORING_OP_WRITE;
   ASqe^.fd := AFd;
@@ -335,7 +384,8 @@ begin
   ASqe^.op_flags.fsync_flags := AFlags;
 end;
 
-procedure IoUringPrepAccept(ASqe: PIoUringSqe; AFd: Int32; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32);
+procedure IoUringPrepAccept(ASqe: PIoUringSqe; AFd: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32);
 begin
   ASqe^.opcode := IORING_OP_ACCEPT;
   ASqe^.fd := AFd;
@@ -344,7 +394,8 @@ begin
   ASqe^.op_flags.accept_flags := UInt32(AFlags);
 end;
 
-procedure IoUringPrepConnect(ASqe: PIoUringSqe; AFd: Int32; AAddr: Pointer; AAddrLen: UInt32);
+procedure IoUringPrepConnect(ASqe: PIoUringSqe; AFd: Int32;
+  AAddr: Pointer; AAddrLen: UInt32);
 begin
   ASqe^.opcode := IORING_OP_CONNECT;
   ASqe^.fd := AFd;
@@ -352,7 +403,8 @@ begin
   ASqe^.off := UInt64(AAddrLen);
 end;
 
-procedure IoUringPrepSend(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32);
+procedure IoUringPrepSend(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AFlags: Int32);
 begin
   ASqe^.opcode := IORING_OP_SEND;
   ASqe^.fd := AFd;
@@ -361,7 +413,8 @@ begin
   ASqe^.op_flags.msg_flags := UInt32(AFlags);
 end;
 
-procedure IoUringPrepRecv(ASqe: PIoUringSqe; AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32);
+procedure IoUringPrepRecv(ASqe: PIoUringSqe; AFd: Int32;
+  ABuf: Pointer; ALen: UInt32; AFlags: Int32);
 begin
   ASqe^.opcode := IORING_OP_RECV;
   ASqe^.fd := AFd;
@@ -374,6 +427,8 @@ procedure IoUringPrepPollAdd(ASqe: PIoUringSqe; AFd: Int32; APollMask: UInt32);
 begin
   ASqe^.opcode := IORING_OP_POLL_ADD;
   ASqe^.fd := AFd;
+  // Note: truncates to UInt16 — POLLIN/POLLOUT/POLLERR/POLLHUP fit in low 16 bits.
+  // For IORING_POLL_ADD_MULTI (kernel 5.13+), need poll32_events in SQE.len field.
   ASqe^.op_flags.poll_events := UInt16(APollMask);
 end;
 
@@ -385,7 +440,8 @@ begin
   ASqe^.op_flags.cancel_flags := UInt32(AFlags);
 end;
 
-procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
 begin
   ASqe^.opcode := IORING_OP_READV;
   ASqe^.fd := AFd;
@@ -394,7 +450,8 @@ begin
   ASqe^.off := UInt64(AOffset);
 end;
 
-procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
 begin
   ASqe^.opcode := IORING_OP_WRITEV;
   ASqe^.fd := AFd;
@@ -403,7 +460,8 @@ begin
   ASqe^.off := UInt64(AOffset);
 end;
 
-procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer; ACount: UInt32; AFlags: UInt32);
+procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer;
+  ACount: UInt32; AFlags: UInt32);
 begin
   ASqe^.opcode := IORING_OP_TIMEOUT;
   ASqe^.fd := -1;
@@ -420,7 +478,8 @@ begin
   ASqe^.op_flags.timeout_flags := AFlags;
 end;
 
-procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AFlags: Int32; AMode: UInt32);
+procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32; AMode: UInt32);
 begin
   ASqe^.opcode := IORING_OP_OPENAT;
   ASqe^.fd := ADirFd;
@@ -429,7 +488,8 @@ begin
   ASqe^.op_flags.open_flags := UInt32(AFlags);
 end;
 
-procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64; AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32);
+procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64;
+  AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32);
 begin
   ASqe^.opcode := IORING_OP_SPLICE;
   ASqe^.fd := AFdOut;
@@ -447,7 +507,8 @@ begin
   ASqe^.len := UInt32(AHow);
 end;
 
-procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AFlags: Int32);
+procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32);
 begin
   ASqe^.opcode := IORING_OP_UNLINKAT;
   ASqe^.fd := ADirFd;
@@ -455,7 +516,8 @@ begin
   ASqe^.op_flags.open_flags := UInt32(AFlags);
 end;
 
-procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32; APath: PAnsiChar; AMode: UInt32);
+procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AMode: UInt32);
 begin
   ASqe^.opcode := IORING_OP_MKDIRAT;
   ASqe^.fd := ADirFd;
@@ -463,7 +525,8 @@ begin
   ASqe^.len := AMode;
 end;
 
-procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32; AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32);
+procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32;
+  AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32);
 begin
   ASqe^.opcode := IORING_OP_RENAMEAT;
   ASqe^.fd := AOldDirFd;

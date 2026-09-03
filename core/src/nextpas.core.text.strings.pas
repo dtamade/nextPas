@@ -71,7 +71,7 @@ function StringsToUpper(const AArr: TStringArray): TStringArray;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 
-{ Pattern matching - single-source L0 text.wildmatch }
+{ Pattern matching — glob single source (fs.glob/respack.embed forward here) }
 function GlobMatch(const APattern, AStr: string): Boolean; inline;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
 
@@ -86,6 +86,9 @@ function StringsSplitEscaped(const AStr: string; ASep: Char): TStringArray;
 implementation
 
 uses
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.dynarray,
   nextpas.core.text.utils,
   nextpas.core.text.wildmatch,
   nextpas.core.mem.utils;
@@ -158,7 +161,11 @@ var
   LStart: SizeInt;
   LDelimLen: SizeInt;
   LCount: SizeInt;
-  LCapacity: SizeInt;
+  LCap: SizeUInt;
+  LSegLen: SizeInt;
+  LIdx: SizeInt;
+  LNeed: TByteSpan;
+  LHays: TByteSpan;
 begin
   Result := nil;
   LDelimLen := Length(ADelimiter);
@@ -168,27 +175,44 @@ begin
     Result[0] := AValue;
     Exit;
   end;
-
+  // single source needle view — zero-copy TByteSpan (PByte+Len), inline Create
+  LNeed := TByteSpan.Create(PByte(PAnsiChar(ADelimiter)), SizeUInt(LDelimLen));
   LCount := 0;
-  LCapacity := 0;
   LStart := 1;
   repeat
-    LPos := Pos(ADelimiter, AValue, LStart);
+    // perf: reuse bytes.ops.SpanIndexOfSpan SIMD single source (INV-5) — zero-copy TByteSpan suffix view, inline, avoids Pos repeated scan and duplicate SIMD impl; single source stays in bytes.ops/simd
+    if LStart <= Length(AValue) then
+    begin
+      LHays := TByteSpan.Create(PByte(PAnsiChar(AValue) + LStart - 1), SizeUInt(Length(AValue) - LStart + 1));
+      LIdx := nextpas.core.bytes.ops.SpanIndexOfSpan(LHays, LNeed);
+      if LIdx >= 0 then
+        LPos := LStart + LIdx
+      else
+        LPos := 0;
+    end
+    else
+      LPos := 0;
     if LPos = 0 then
       LPos := Length(AValue) + 1;
-    if LCount >= LCapacity then
+    // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
+    // not inline per red-line 2: BytesGrowCapacity while loop I-Cache bloat; single capacity math + poke avoids O(n) refcount Move jitter on extreme delimiters
+    LCap := nextpas.core.bytes.ops.BytesGrowCapacity(SizeUInt(LCount), SizeUInt(LCount + 1));
+    if (nextpas.core.mem.dynarray.DynArrayCapacityStr(Result) < LCap) or (nextpas.core.mem.dynarray.DynArrayRefCountStr(Result) <> 1) then
     begin
-      if LCapacity = 0 then
-        LCapacity := 8
-      else
-        LCapacity := LCapacity * 2;
-      SetLength(Result, LCapacity);
+      if LCap <> SizeUInt(Length(Result)) then
+        SetLength(Result, LCap);
     end;
-    Result[LCount] := System.Copy(AValue, LStart, LPos - LStart);
+    if SizeUInt(Length(Result)) <> SizeUInt(LCount + 1) then
+      nextpas.core.mem.dynarray.DynArraySetLengthStr(Result, SizeUInt(LCount + 1));
+    LSegLen := LPos - LStart;
+    if LSegLen > 0 then
+      SetString(Result[LCount], PChar(@AValue[LStart]), LSegLen)
+    else
+      Result[LCount] := '';
     Inc(LCount);
     LStart := LPos + LDelimLen;
   until LPos > Length(AValue);
-  SetLength(Result, LCount);
+  // Length already poked to LCount; capacity remains geometric slack, no extra SetLength shrink/Move
 end;
 
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;
@@ -275,12 +299,34 @@ begin
     if AArr[i] = AValue then Inc(Result);
 end;
 
-procedure StringsAppend(var AArr: TStringArray; const AValue: string);
-var L: SizeInt;
+{ 单源指数增长: via bytes.ops.BytesGrowCapacity (INV-5) amortized O(1), 零拷贝 poke }
+procedure EnsureStringsCapacity(var AArr: TStringArray; const AOldLen, AReqLen: SizeUInt);
+var
+  LCap: SizeUInt;
 begin
-  L := Length(AArr);
-  SetLength(AArr, L + 1);
-  AArr[L] := AValue;
+  // not inline per red-line 2: BytesGrowCapacity while loop I-Cache bloat; pure capacity math single source
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacity(AOldLen, AReqLen);
+  if (nextpas.core.mem.dynarray.DynArrayCapacityStr(AArr) < LCap) or (nextpas.core.mem.dynarray.DynArrayRefCountStr(AArr) <> 1) then
+  begin
+    if LCap <> SizeUInt(Length(AArr)) then
+      SetLength(AArr, LCap);
+  end;
+  if SizeUInt(Length(AArr)) <> AReqLen then
+    nextpas.core.mem.dynarray.DynArraySetLengthStr(AArr, AReqLen);
+end;
+
+procedure StringsAppend(var AArr: TStringArray; const AValue: string);
+var
+  LOld, LReq: SizeUInt;
+begin
+  LOld := SizeUInt(Length(AArr));
+  if LOld = High(SizeUInt) then
+    raise EOutOfMemory.Create('StringsAppend: size overflow');
+  LReq := LOld + 1;
+  // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
+  // not inline per red-line 1/2: SetLength+Move would bloat I-Cache; stability: exception-safe, CoW-aware via RefCnt
+  EnsureStringsCapacity(AArr, LOld, LReq);
+  AArr[LOld] := AValue;
 end;
 
 procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt); inline;
@@ -301,14 +347,19 @@ begin
   SetLength(AArr, L - 1);
 end;
 
-procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string); inline;
+procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string);
 var
-  L: SizeUInt;
+  L, LReq: SizeUInt;
   LMoveCount: SizeUInt;
 begin
   L := SizeUInt(Length(AArr));
   if AIndex > L then AIndex := L;
-  SetLength(AArr, L + 1);
+  if L = High(SizeUInt) then
+    raise EOutOfMemory.Create('StringsInsert: size overflow');
+  LReq := L + 1;
+  // perf: exponential via bytes.ops.BytesGrowCapacity single source amortized O(1), zero-copy via DynArray poke
+  // not inline per red-line 1/2: SetLength+Move I-Cache bloat; stability: exception-safe, CoW-aware
+  EnsureStringsCapacity(AArr, L, LReq);
   if AIndex < L then
   begin
     { 零拷贝: 单次 System.Move 右移指针块(handling overlap), 原槽 Pointer:=nil 转移所有权, 避免 O(n) 引用计数 }
@@ -463,10 +514,106 @@ begin
   SetLength(Result, LCount);
 end;
 
-{ Pattern matching — single-source via L0 text.wildmatch, inline zero-copy }
-function GlobMatch(const APattern, AStr: string): Boolean; inline;
+{ Pattern matching — glob style: * matches any non-sep, ? single non-sep, ** cross-sep, [class] 。
+  单源实现：fs.glob 薄转发至此（L1 single source），respack.embed 亦经此（L1），零拷贝 PChar 视图 + O(pat×name) 双追踪器（无指数回溯）；
+  热路径 inline 仅限 IsPathSep/MatchOne 叶判定，GlobMatchInternal 按红线2禁 inline 防 I-Cache 复制膨胀。 }
+function IsPathSep(C: AnsiChar): Boolean; inline;
 begin
-  Result := nextpas.core.text.wildmatch.WildMatch(APattern, AStr);
+  Result := (C = '/') or (C = '\');
+end;
+
+function MatchOne(var AP: PChar; AN: PChar): Boolean; inline;
+var
+  LNegate, LMatched: Boolean;
+  P: PChar;
+begin
+  case AP^ of
+    '?':
+    begin
+      if (AN^ = #0) or IsPathSep(AnsiChar(AN^)) then Exit(False);
+      Inc(AP);
+      Exit(True);
+    end;
+    '[':
+    begin
+      if AN^ = #0 then Exit(False);
+      P := AP + 1;
+      LNegate := False;
+      if (P^ = '^') or (P^ = '!') then begin LNegate := True; Inc(P); end;
+      if P^ = ']' then
+      begin
+        Inc(P);
+        while (P^ <> #0) and (P^ <> ']') do Inc(P);
+        if P^ = ']' then Inc(P);
+        AP := P;
+        Exit(LNegate);
+      end;
+      LMatched := False;
+      while (P^ <> #0) and (P^ <> ']') do
+      begin
+        if ((P+1)^ = '-') and ((P+2)^ <> ']') and ((P+2)^ <> #0) then
+        begin
+          if (AnsiChar(AN^) >= AnsiChar(P^)) and (AnsiChar(AN^) <= AnsiChar((P+2)^)) then LMatched := True;
+          Inc(P,3);
+        end else
+        begin
+          if AN^ = P^ then LMatched := True;
+          Inc(P);
+        end;
+      end;
+      if P^ = ']' then Inc(P);
+      AP := P;
+      if LNegate then Exit(not LMatched) else Exit(LMatched);
+    end;
+  else
+    Result := (AP^ <> #0) and (AN^ = AP^);
+    if Result then Inc(AP);
+  end;
+end;
+
+// not inline per red-line 2: while 双追踪器循环 + 分支会致 I-Cache 复制膨胀；零拷贝 PChar + O(pat×name) 确界
+function GlobMatchInternal(AP, AN: PChar): Boolean;
+var
+  LSStarP, LSStarN, LDStarP, LDStarN: PChar;
+  LIsDouble: Boolean;
+begin
+  if AP^ = #0 then Exit(AN^ = #0);
+  LSStarP := nil; LSStarN := nil; LDStarP := nil; LDStarN := nil;
+  while AN^ <> #0 do
+  begin
+    if AP^ = '*' then
+    begin
+      LIsDouble := False;
+      while AP^ = '*' do begin if (AP+1)^ = '*' then LIsDouble := True; Inc(AP); end;
+      if LIsDouble then
+      begin
+        if (AP^ = '/') or (AP^ = '\') then Inc(AP);
+        LDStarP := AP; LDStarN := AN; LSStarP := nil; LSStarN := nil;
+      end else begin LSStarP := AP; LSStarN := AN; end;
+      Continue;
+    end;
+    if MatchOne(AP, AN) then begin Inc(AN); Continue; end;
+    if (LSStarP <> nil) and (not IsPathSep(AnsiChar(LSStarN^))) then
+    begin Inc(LSStarN); AN := LSStarN; AP := LSStarP; Continue; end;
+    if LDStarP <> nil then
+    begin Inc(LDStarN); AN := LDStarN; AP := LDStarP; LSStarP:=nil; LSStarN:=nil; Continue; end;
+    Exit(False);
+  end;
+  while AP^ = '*' do
+  begin while AP^ = '*' do Inc(AP); if (AP^ = '/') or (AP^ = '\') then Inc(AP); end;
+  Result := AP^ = #0;
+end;
+
+// not inline per red-line 2: 委托 GlobMatchInternal 双追踪器循环，禁 inline 避免 I-Cache 膨胀透传；PChar 零拷贝视图无堆分配
+function GlobMatch(const APattern, AStr: string): Boolean;
+var
+  LP, LN: PChar;
+  LBuf: AnsiChar;
+begin
+  if Length(APattern)=0 then Exit(AStr='');
+  LP := @APattern[1];
+  if Length(AStr)>0 then LN := @AStr[1] else begin LBuf:=#0; LN:=@LBuf; end;
+  Result := GlobMatchInternal(LP, LN);
 end;
 
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
