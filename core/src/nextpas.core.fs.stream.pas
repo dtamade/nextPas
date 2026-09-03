@@ -28,9 +28,12 @@ function FsOpenLocked(const APath: string;
 implementation
 
 uses
+  SysUtils,
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files,
+  nextpas.core.platform.socket.base,
   nextpas.core.platform.sendfile;
 
 type

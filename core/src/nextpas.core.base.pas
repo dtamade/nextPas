@@ -7,6 +7,8 @@ unit nextpas.core.base;
 
 interface
 
+uses nextpas.core.exception;
+
 { ============================================================ }
 { Framework identity                                           }
 { ============================================================ }

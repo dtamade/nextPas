@@ -10,6 +10,8 @@ unit nextpas.core.platform.sendfile;
 interface
 
 uses
+  nextpas.core.base,
+  nextpas.core.platform.posix.base,
   nextpas.core.platform.files.base,
   nextpas.core.platform.socket.base,
   nextpas.core.platform.sendfile.base;
@@ -30,7 +32,8 @@ function platform_sendfile_supported: Boolean; inline;
 implementation
 
 uses
-  nextpas.core.platform.error
+  nextpas.core.platform.error,
+  nextpas.core.platform.posix.errno
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.ffi
 {$ENDIF}

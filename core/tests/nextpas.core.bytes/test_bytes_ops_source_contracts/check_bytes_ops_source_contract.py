@@ -141,8 +141,13 @@ def check_ops(core_root: Path) -> list[str]:
     # --- Gate: BytesAppend family must stay not inline + MUST prefer IBytesBuilder O(n²) gate ---
     # Interface must NOT declare BytesAppend* as inline
     for fam in ["BytesAppend", "BytesAppendByte", "BytesAppendUInt"]:
-        # find interface section declarations for this family
-        if re.search(r"procedure\s+" + fam + r".*?\binline\b", ops_text[: ops_text.lower().find("implementation")], re.I | re.S):
+        # match each single declaration only (no cross-declaration span): params + own terminator
+        found_inline = False
+        for dm in re.finditer(r"procedure\s+" + fam + r"\w*\s*\([^)]*\)\s*;((?:\s*\w+\s*;)*)", ops_text[: ops_text.lower().find("implementation")], re.I | re.S):
+            if re.search(r"\binline\b", dm.group(0), re.I):
+                found_inline = True
+                break
+        if found_inline:
             issues.append(f"{OPS_REL}: {fam} family must stay not inline per red-line 1/2 (SetLength+Move batch, I-Cache) — single source BytesAppendRaw")
 
     # Perf block at line 49 must contain O(n²) + MUST prefer IBytesBuilder + gate mention

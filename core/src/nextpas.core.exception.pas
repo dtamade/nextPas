@@ -225,6 +225,7 @@ function AcquireExceptionObject: Pointer; inline;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.bytes.ops;
 
 { Internal format helper — used by ENextPasError constructors under both compilers.
@@ -673,20 +674,20 @@ end;
 {$IFDEF FPC}
 function ExceptAddr: Pointer; inline;
 begin
-  Result := System.ExceptAddr;
+  Result := SysUtils.ExceptAddr;
 end;
 
 function ExceptFrameCount: LongInt; inline;
 begin
-  Result := System.ExceptFrameCount;
+  Result := SysUtils.ExceptFrameCount;
 end;
 
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
 begin
-  if (AIndex < 0) or (AIndex >= System.ExceptFrameCount) then
+  if (AIndex < 0) or (AIndex >= SysUtils.ExceptFrameCount) then
     Result := nil
   else
-    Result := System.ExceptFrames[AIndex];
+    Result := SysUtils.ExceptFrames[AIndex];
 end;
 
 function AcquireExceptionObject: Pointer; inline;
