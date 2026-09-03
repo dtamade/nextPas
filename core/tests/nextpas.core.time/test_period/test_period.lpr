@@ -3,7 +3,6 @@ program test_period;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.period,
   nextpas.core.time.date,

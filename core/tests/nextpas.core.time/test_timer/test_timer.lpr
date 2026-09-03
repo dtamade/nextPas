@@ -3,7 +3,6 @@ program test_timer;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
   nextpas.core.time.deadline,

@@ -11,7 +11,6 @@ program test_time_bucket;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.time,

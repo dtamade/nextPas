@@ -3,12 +3,11 @@ program test_time;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform,
   nextpas.core.platform.time,
   nextpas.core.time,
-  nextpas.core.time.base;
+  nextpas.core.time.base, nextpas.core.math;
 
 var
   T: TTestSuite;

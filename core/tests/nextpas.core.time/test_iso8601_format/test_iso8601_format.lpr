@@ -13,7 +13,6 @@ program test_iso8601_format;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.time,
