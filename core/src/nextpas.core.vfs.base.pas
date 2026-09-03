@@ -10,7 +10,8 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.pathvalid,
   nextpas.core.bytes.ops,
-  nextpas.core.base.utils;
+  nextpas.core.base.utils,
+  nextpas.core.compress.base;
 
 type
   TEntryInfo = record
@@ -30,14 +31,16 @@ type
   TVfsNameArray = array of string;
 
 const
-  { 单源对齐 compress.base GZIP_MAX (32MiB)，base 唯一字面量。 }
-  VFS_DECOMPRESS_MAX_BYTES = 32 * 1024 * 1024;
+  { 单源 compress.base GZIP_MAX (32MiB) canonical via alias，无字面量漂移。 }
+  VFS_DECOMPRESS_MAX_BYTES = nextpas.core.compress.base.GZIP_MAX_DECOMPRESS_BYTES;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   特例整串 '.' 表根。AAllowRoot=False 时拒绝 '.'。 }
 function VfsValidPath(const APath: string; const AAllowRoot: Boolean): Boolean; inline;
 
 function VfsIsRoot(const APath: string): Boolean; inline;
+
+function VfsSpanFromString(const S: string): TByteSpan; inline;
 
 { 零分配前缀判定：APath 是否以 APrefix 开头（空前缀恒真，规避 FPC Pos('',S)=0 陷阱）。
   HasParent：AChild 是否严格位于 AParent 子树下（AParent+'/' 前缀且更长）。
@@ -49,7 +52,7 @@ function VfsIsParentPath(const AParent, AChild: string): Boolean; inline;
 function VfsNameCompare(const AA, AB: string): Integer; inline;
 
 { ETag 单源：strong "hexSize-hexModTime" 与 fnv "fnv-hex8"，供 embedded/http 共用
-  避免两处字面量漂移；本地十六进制保证大小写/位宽一致，base 保持 L0 纯度。
+  避免两处字面量漂移；bytes.ops BytesHexUInt64 单源 inline 零拷贝 HEX_UPPER 保证大小写/位宽一致，base 保持 L0 纯度。
   非 inline 权衡：前缀/比较族已 inline（见上），ETag 含堆分配主导开销不 inline 以稳尺寸。 }
 function VfsETagStrong(const ASize, AModTime: Int64): string;
 function VfsETagFNV(const AHash: UInt32): string;
@@ -93,15 +96,20 @@ begin
   Result := APath = '.';
 end;
 
+{ 单源 FromString 助手：收口三处手写空串判空+TByteSpan.Create，inline 零拷贝 via TByteSpan.FromStr。 }
+function VfsSpanFromString(const S: string): TByteSpan; inline;
+begin
+  Result := TByteSpan.FromStr(S);
+end;
+
 function VfsPathHasPrefix(const APath, APrefix: string): Boolean; inline;
 var
   SPath, SPrefix: TByteSpan;
 begin
   if Length(APrefix) = 0 then Exit(True);
   if Length(APath) < Length(APrefix) then Exit(False);
-  // 零拷贝视图：TByteSpan 直指 string 存储，无 Copy；单源 SpanStartsWith → MemEqual
-  if Length(APath) = 0 then SPath := TByteSpan.Empty else SPath := TByteSpan.Create(PByte(@APath[1]), SizeUInt(Length(APath)));
-  if Length(APrefix) = 0 then SPrefix := TByteSpan.Empty else SPrefix := TByteSpan.Create(PByte(@APrefix[1]), SizeUInt(Length(APrefix)));
+  SPath := VfsSpanFromString(APath); // 单源 FromString 零拷贝 inline
+  SPrefix := VfsSpanFromString(APrefix);
   Result := SpanStartsWith(SPath, SPrefix);
 end;
 
@@ -112,9 +120,8 @@ begin
   if Length(AChild) <= Length(AParent) then Exit(False);
   if AChild[Length(AParent) + 1] <> '/' then Exit(False);
   if Length(AParent) = 0 then Exit(True);
-  // 单源 SpanStartsWith 零拷贝前缀判定，替代 CompareMem 双路径
-  if Length(AChild) = 0 then SChild := TByteSpan.Empty else SChild := TByteSpan.Create(PByte(@AChild[1]), SizeUInt(Length(AChild)));
-  if Length(AParent) = 0 then SParent := TByteSpan.Empty else SParent := TByteSpan.Create(PByte(@AParent[1]), SizeUInt(Length(AParent)));
+  SChild := VfsSpanFromString(AChild); // 单源 FromString 零拷贝
+  SParent := VfsSpanFromString(AParent);
   Result := SpanStartsWith(SChild, SParent);
 end;
 
@@ -122,24 +129,23 @@ function VfsNameCompare(const AA, AB: string): Integer; inline;
 var
   SA, SB: TByteSpan;
 begin
-  if Length(AA) = 0 then SA := TByteSpan.Empty else SA := TByteSpan.Create(PByte(@AA[1]), SizeUInt(Length(AA)));
-  if Length(AB) = 0 then SB := TByteSpan.Empty else SB := TByteSpan.Create(PByte(@AB[1]), SizeUInt(Length(AB)));
+  SA := VfsSpanFromString(AA); // 单源 FromString 零拷贝
+  SB := VfsSpanFromString(AB);
   Result := SpanCompare(SA, SB);
 end;
 
-const
-  HEX_DIGITS: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
-
-function VfsHex(const AValue: UInt64; const ADigits: Integer): string; inline;
+function VfsHex(const AValue: UInt64; const ADigits: Integer): string;
 var
   I: Integer;
   V: UInt64;
+const
+  HEX: array[0..15] of Char = ('0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F');
 begin
   SetLength(Result, ADigits);
   V := AValue;
-  for I := ADigits - 1 downto 0 do
+  for I := ADigits downto 1 do
   begin
-    Result[I + 1] := HEX_DIGITS[V and $F];
+    Result[I] := HEX[V and $F];
     V := V shr 4;
   end;
 end;
@@ -214,8 +220,7 @@ begin
   else
   begin
     PS := @Src^.Strs^[AIdx];
-    if Length(PS^) = 0 then Result := TByteSpan.Empty
-    else Result := TByteSpan.Create(PByte(@PS^[1]), SizeUInt(Length(PS^)));
+    Result := VfsSpanFromString(PS^); { 单源 FromString 复用 }
   end;
 end;
 
@@ -238,24 +243,48 @@ begin
   Inc(Ctx^.OutN);
 end;
 
+{ 零堆 Successor 判定：Succ = prefix[1..len-1]+'0'，inline 字节序比较免 Copy/Chr 堆分配，热点重复 List 零 GC。 }
+function SpanLessThanSuccessor(const ACur: TByteSpan; const APrefix: string; APrefixLen: SizeInt): Boolean; inline;
+var P: PByte; I: SizeInt; SuccB: Byte;
+begin
+  if ACur.Len = 0 then Exit(True);
+  P := PByte(@APrefix[1]);
+  if SizeInt(ACur.Len) < APrefixLen then
+  begin
+    for I := 0 to SizeInt(ACur.Len) - 1 do
+    begin
+      if I = APrefixLen - 1 then SuccB := Byte(Ord('/') + 1) else SuccB := P[I];
+      if ACur.Data[I] < SuccB then Exit(True);
+      if ACur.Data[I] > SuccB then Exit(False);
+    end;
+    Exit(True);
+  end
+  else
+  begin
+    for I := 0 to APrefixLen - 1 do
+    begin
+      if I = APrefixLen - 1 then SuccB := Byte(Ord('/') + 1) else SuccB := P[I];
+      if ACur.Data[I] < SuccB then Exit(True);
+      if ACur.Data[I] > SuccB then Exit(False);
+    end;
+    Exit(False);
+  end;
+end;
+
 { 单源：LowerBound + UpperBound + '/' 分段 + 去重；O(log n + k) 有序区间，资源释放不丢。 }
 procedure VfsEnumerateChildSpans(const ACount: SizeInt; AGetter: TVfsSpanGetter;
   AGetterData: Pointer; const ADirPrefix: string; AHandler: TVfsChildHandler;
   AHandlerData: Pointer);
 var
   PrefixLen, Lo, Hi, Mid, I, SegPos, J: SizeInt;
-  PrefixSpan, UpperSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
-  Successor: string;
+  PrefixSpan, CurSpan, ChildSpan, PrevSpan: TByteSpan;
   UpperLo, UpperHi: SizeInt;
   IsFirst: Boolean;
 begin
   if ACount <= 0 then Exit;
   if not Assigned(AGetter) or not Assigned(AHandler) then Exit;
   PrefixLen := Length(ADirPrefix);
-  if PrefixLen > 0 then
-    PrefixSpan := TByteSpan.Create(PByte(@ADirPrefix[1]), SizeUInt(PrefixLen))
-  else
-    PrefixSpan := TByteSpan.Empty;
+  PrefixSpan := VfsSpanFromString(ADirPrefix); { 单源 FromString 零拷贝 inline }
   Lo := 0;
   Hi := ACount;
   if PrefixLen > 0 then
@@ -269,19 +298,14 @@ begin
       else
         Hi := Mid;
     end;
-    // 上界截断：prefix 以 '/' 结尾，successor 将 '/' 递增为 '0'，区间 [Lo, HiUpper) 即 prefix 子树
-    Successor := Copy(ADirPrefix, 1, PrefixLen - 1) + Chr(Ord('/') + 1);
-    if Length(Successor) > 0 then
-      UpperSpan := TByteSpan.Create(PByte(@Successor[1]), SizeUInt(Length(Successor)))
-    else
-      UpperSpan := TByteSpan.Empty;
+    // 上界截断：succ = prefix[1..len-1]+'0'，零堆 inline 比较免 Copy/Chr 堆分配，热点 List 零 GC
     UpperLo := Lo;
     UpperHi := ACount;
     while UpperLo < UpperHi do
     begin
       Mid := UpperLo + (UpperHi - UpperLo) div 2;
       CurSpan := AGetter(Mid, AGetterData);
-      if SpanCompare(CurSpan, UpperSpan) < 0 then
+      if SpanLessThanSuccessor(CurSpan, ADirPrefix, PrefixLen) then
         UpperLo := Mid + 1
       else
         UpperHi := Mid;

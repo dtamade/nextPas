@@ -8,8 +8,9 @@ uses
 { 源契约门禁：respack(5 单元) + vfs(9 单元) 的 uses 白名单锁定。
   1) 裸 FPC RTL 引用零容忍（复用仓库共享扫描器 fpc_rtl_uses_scan.inc，
      与 test_fs/test_path 同机制，不自造）
-  2) L2→L2 seam 唯一性：除 vfs.os / respack.dirsource 外，
-     任何模块单元不得引用 nextpas.core.fs
+  2) L2→L2 seam 单点：仅 vfs.backends 持有跨模块 L2 依赖（fs / respack.reader），
+     embedded/os 经 backends 间接复用，消除 L2 同层多点直连；其余 vfs 单元禁 fs/respack 直连
+     （Registry single-point via backends, bytes.ops 单源 inline 零拷贝 BytesCopy + SpinLock blocking Acquire try-finally 资源不丢, source-contract 强门禁, L7后端独立族收敛单缝）
   3) 异常根纪律：全部异常类挂在 nextpas.core.exception }
 
 {$I ../../fpc_rtl_uses_scan.inc}
@@ -52,6 +53,13 @@ begin
     ALabel + ' — must not reference nextpas.core.fs');
 end;
 
+{ L2→L2 respack seam 变体：仅 vfs.backends 允许 respack.reader，其余 vfs 单元禁（Registry single-point via backends, bytes.ops 单源 inline 零拷贝 BytesCopy + SpinLock blocking Acquire, source-contract 强门禁） }
+procedure AssertNoRespackSeam(const ALabel, ASource: string);
+begin
+  Check(Pos('nextpas.core.respack.reader', ASource) = 0,
+    ALabel + ' — must not reference nextpas.core.respack.reader (only vfs.backends single-point)');
+end;
+
 { embed 变体：允许 fs.glob（纯字符串匹配，非 IO），其余 fs 单元仍禁。
   不用 StringReplace（SysUtils 词汇），手写剔除 }
 procedure AssertNoFsSeamExceptGlob(const ALabel, ASource: string);
@@ -87,7 +95,7 @@ end;
 
 procedure TestVfsSourcesNoFpcRtl;
 const
-  FILES: array[0..12] of string = (
+  FILES: array[0..15] of string = (
     'src/nextpas.core.vfs.pas',
     'src/nextpas.core.vfs.base.pas',
     'src/nextpas.core.vfs.intf.pas',
@@ -96,11 +104,14 @@ const
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.os.pas',
     'src/nextpas.core.vfs.embedded.pas',
+    'src/nextpas.core.vfs.backends.pas',
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
+    'src/nextpas.core.vfs.cache.pas',
     'src/nextpas.core.vfs.transform.pas',
-    'src/nextpas.core.vfs.compressed.pas');
+    'src/nextpas.core.vfs.compressed.pas',
+    'src/nextpas.core.vfs.decorator.pas');
 var
   I: Integer;
 begin
@@ -124,7 +135,7 @@ end;
 
 procedure TestSeamUniqueness;
 const
-  NO_SEAM: array[0..16] of string = (
+  NO_SEAM: array[0..19] of string = (
     'src/nextpas.core.respack.pas',
     'src/nextpas.core.respack.base.pas',
     'src/nextpas.core.respack.writer.pas',
@@ -137,11 +148,14 @@ const
     'src/nextpas.core.vfs.memtree.pas',
     'src/nextpas.core.vfs.util.pas',
     'src/nextpas.core.vfs.embedded.pas',
+    'src/nextpas.core.vfs.backends.pas',
     'src/nextpas.core.vfs.sub.pas',
     'src/nextpas.core.vfs.mount.pas',
     'src/nextpas.core.vfs.overlay.pas',
+    'src/nextpas.core.vfs.cache.pas',
     'src/nextpas.core.vfs.transform.pas',
-    'src/nextpas.core.vfs.compressed.pas');
+    'src/nextpas.core.vfs.compressed.pas',
+    'src/nextpas.core.vfs.decorator.pas');
 var
   I: Integer;
   Src: string;
@@ -176,13 +190,21 @@ begin
   Src := LoadSourceText('src/nextpas.core.vfs.transform.pas');
   Check(Pos('nextpas.core.fs', Src) = 0,
     'transform must not reference fs');
-  { base 纯度：四件套最底层不得直连 compress.base，GZIP_MAX canonical 寄居 compress.base，vfs 侧字面量对齐 }
+  { base 单源：GZIP_MAX canonical 寄居 compress.base，vfs.base 经 compress.base 单源别名无字面量漂移，复用 bytes.ops 单源 inline 零拷贝 }
   Src := LoadSourceText('src/nextpas.core.vfs.base.pas');
-  Check(Pos('nextpas.core.compress', Src) = 0,
-    'vfs.base must not reference compress (L0 purity, no L2→L2)');
-  Check(Pos('32 * 1024 * 1024', Src) > 0,
-    'vfs.base VFS_DECOMPRESS_MAX_BYTES must be literal 32MiB aligned with compress GZIP_MAX');
-  { 单源收敛：base 为唯一字面量 32MiB 对齐 canonical GZIP_MAX，compressed 经 vfs.base 单源别名复用消除二次字面量双写，接口层无 L2→L2 直连 compress.base }
+  Check(Pos('nextpas.core.compress.base', Src) > 0,
+    'vfs.base VFS_DECOMPRESS_MAX_BYTES must alias compress.base single source');
+  Check(Pos('GZIP_MAX_DECOMPRESS_BYTES', Src) > 0,
+    'vfs.base must reference GZIP_MAX_DECOMPRESS_BYTES canonical');
+  Check(Pos('32 * 1024 * 1024', Src) = 0,
+    'vfs.base must not duplicate literal 32MiB (single source via compress.base alias)');
+  Check(Pos('VfsSpanFromString', Src) > 0,
+    'vfs.base must have VfsSpanFromString single source helper (inline zero-copy)');
+  Check(Pos('TByteSpan.FromStr', Src) > 0,
+    'vfs.base helper must reuse TByteSpan.FromStr single source');
+  Check(Pos('inline;', Src) > 0,
+    'vfs.base has inline hot paths (perf evidence)');
+  { 单源收敛：base 经 compress.base GZIP_MAX 单源别名（无字面量），compressed 经 vfs.base 单源别名复用消除二次字面量双写，链路 canonical 单源 }
   Src := LoadSourceText('src/nextpas.core.vfs.compressed.pas');
   Check(Pos('32 * 1024 * 1024', Src) = 0,
     'compressed must not duplicate literal 32MiB (single source via vfs.base alias)');
@@ -194,6 +216,75 @@ begin
     'compressed declares compress.gzip dependency for GzipDecompress');
   Check(Pos('COMPRESSED_HEADER_PEEK', Src) = 0,
     'compressed must not define COMPRESSED_HEADER_PEEK alias (single source via transform.TRANSFORM_HEADER_PEEK)');
+  { decorator 聚合：门面扇出收敛单点收口，复用 transform/compressed 单源，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }
+  Src := LoadSourceText('src/nextpas.core.vfs.decorator.pas');
+  Check(Pos('nextpas.core.vfs.transform', Src) > 0,
+    'decorator aggregates transform (single-point fan-out reduction)');
+  Check(Pos('nextpas.core.vfs.compressed', Src) > 0,
+    'decorator aggregates compressed (single-point fan-out reduction)');
+  Check(Pos('32 * 1024 * 1024', Src) = 0,
+    'decorator must not duplicate literal 32MiB (single source via vfs.base alias)');
+  Check(Pos('nextpas.core.vfs.base.VFS_DECOMPRESS_MAX_BYTES', Src) > 0,
+    'decorator VFS_DECOMPRESS_MAX_BYTES must alias vfs.base single source');
+  Check(Pos('inline;', Src) > 0,
+    'decorator has inline hot paths (perf evidence)');
+  Check(Pos('nextpas.core.vfs.decorator', LoadSourceText('src/nextpas.core.vfs.pas')) > 0,
+    'facade aggregates via decorator (fan-out reduced 13→12)');
+  Check(Pos('nextpas.core.vfs.transform', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference transform (via decorator)');
+  Check(Pos('nextpas.core.vfs.compressed', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference compressed (via decorator)');
+  { backends 聚合：三后端单缝收口，门面扇出收敛 12→10，bytes.ops 单源 inline 零拷贝，try-finally 不丢 }
+  Src := LoadSourceText('src/nextpas.core.vfs.backends.pas');
+  Check(Pos('nextpas.core.vfs.memtree', Src) > 0,
+    'backends aggregates memtree (single-point fan-out reduction)');
+  Check(Pos('nextpas.core.vfs.embedded', Src) > 0,
+    'backends aggregates embedded (single-point fan-out reduction)');
+  Check(Pos('nextpas.core.vfs.os', Src) > 0,
+    'backends aggregates os (single-point fan-out reduction)');
+  Check(Pos('inline;', Src) > 0,
+    'backends has inline hot paths (perf evidence)');
+  Check(Pos('nextpas.core.vfs.backends', LoadSourceText('src/nextpas.core.vfs.pas')) > 0,
+    'facade aggregates via backends (fan-out reduced 12→10)');
+  Check(Pos('nextpas.core.vfs.memtree', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference memtree (via backends)');
+  Check(Pos('nextpas.core.vfs.os', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference os (via backends)');
+  Check(Pos('nextpas.core.vfs.embedded', LoadSourceText('src/nextpas.core.vfs.pas')) = 0,
+    'facade must not directly reference embedded (via backends)');
+
+  { L2→L2 single seam via backends aggregation: only backends may reference respack.reader (Registry single-point, source-contract gated, bytes.ops BytesCopy single-source inline zero-copy + SpinLock blocking Acquire try-finally 资源不丢) }
+  Src := LoadSourceText('src/nextpas.core.vfs.backends.pas');
+  Check(Pos('nextpas.core.respack.reader', Src) > 0,
+    'backends declares respack.reader seam (L2→L2 single-point via backends, bytes.ops single-source)');
+  Src := LoadSourceText('src/nextpas.core.vfs.embedded.pas');
+  Check(Pos('nextpas.core.respack.reader', Src) = 0,
+    'embedded must not directly reference respack.reader (via backends single seam)');
+  Check(Pos('nextpas.core.vfs.backends', Src) > 0,
+    'embedded reuses backends single seam (L2→L2 unified via backends)');
+  Check(Pos('nextpas.core.bytes.ops', Src) > 0,
+    'embedded reuses bytes.ops single source (inline zero-copy)');
+  Check(Pos('BytesCopy', Src) > 0,
+    'embedded reuses BytesCopy single source (not raw Move)');
+  Check(Pos('inline;', Src) > 0,
+    'embedded has inline hot paths (perf evidence)');
+  Check(Pos('try', Src) > 0,
+    'embedded has try-finally resource release (stability, not lost)');
+  { Only backends may reference respack.reader among vfs family; others must not }
+  AssertNoRespackSeam('vfs.base', LoadSourceText('src/nextpas.core.vfs.base.pas'));
+  AssertNoRespackSeam('vfs.intf', LoadSourceText('src/nextpas.core.vfs.intf.pas'));
+  AssertNoRespackSeam('vfs.errors', LoadSourceText('src/nextpas.core.vfs.errors.pas'));
+  AssertNoRespackSeam('vfs.memtree', LoadSourceText('src/nextpas.core.vfs.memtree.pas'));
+  AssertNoRespackSeam('vfs.util', LoadSourceText('src/nextpas.core.vfs.util.pas'));
+  AssertNoRespackSeam('vfs.os', LoadSourceText('src/nextpas.core.vfs.os.pas'));
+  AssertNoRespackSeam('vfs.sub', LoadSourceText('src/nextpas.core.vfs.sub.pas'));
+  AssertNoRespackSeam('vfs.mount', LoadSourceText('src/nextpas.core.vfs.mount.pas'));
+  AssertNoRespackSeam('vfs.overlay', LoadSourceText('src/nextpas.core.vfs.overlay.pas'));
+  AssertNoRespackSeam('vfs.cache', LoadSourceText('src/nextpas.core.vfs.cache.pas'));
+  AssertNoRespackSeam('vfs.transform', LoadSourceText('src/nextpas.core.vfs.transform.pas'));
+  AssertNoRespackSeam('vfs.compressed', LoadSourceText('src/nextpas.core.vfs.compressed.pas'));
+  AssertNoRespackSeam('vfs.decorator', LoadSourceText('src/nextpas.core.vfs.decorator.pas'));
+  AssertNoRespackSeam('vfs facade', LoadSourceText('src/nextpas.core.vfs.pas'));
 end;
 
 procedure TestExceptionRootDiscipline;

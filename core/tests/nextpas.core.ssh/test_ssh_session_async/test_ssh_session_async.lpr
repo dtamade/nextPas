@@ -413,9 +413,10 @@ begin
   GRunner.Add(GSuite);
   GRunner.RunAll;
   GRunner.Summary;
+  ClearBigIntCache; // heaptrc0: free global P384/Montgomery heap before dump
   if not GRunner.AllPassed then Halt(1);
   GAsyncState:=Default(TAsyncTestState);
   SetLength(GSeed,0);
   GSuite:=Default(TTestSuite);
-  GRunner:=Default(TSuiteRunner);
+  GRunner:=Default(TSuiteRunner); ClearBigIntCache;
 end.

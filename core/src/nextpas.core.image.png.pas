@@ -94,7 +94,7 @@ begin
   BytesCopy(@Result[0], @PNG_SIGNATURE[0], 8);
 
   { IHDR: 宽/高 BE32 + 位深 8 + 颜色类型 6(RGBA) + 压缩 0 + 滤波 0 + 隔行 0 }
-  FillChar(Ihdr, SizeOf(Ihdr), 0);
+  nextpas.core.bytes.ops.BytesZero(@Ihdr[0], SizeOf(Ihdr)); { perf: inline FillChar single source via bytes.ops }
   PutBe32(@Ihdr[0], LongWord(AWidth));
   PutBe32(@Ihdr[4], LongWord(AHeight));
   Ihdr[8] := 8;

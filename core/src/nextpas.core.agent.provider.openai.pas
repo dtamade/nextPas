@@ -17,14 +17,14 @@
  * 依据 sub2api 生产经验核对（WIRE-MAPPINGS §1.5/§1.6）。
  *
  * 体积与拆分（P-modularity，F-M10）：
- *  - 现状 397 行（原 1144 行，已拆 encode 352 + decode 216 + decoder 331 至子域；已 <800 阈值，
+ *  - 现状 ~150 行薄壳（原 1144 行，已拆 encode 352 + decode 216 + decoder 331 + factory 280 至子域；已 <800 阈值，
  *    模块化达标，ARCHITECTURE §2 已更新进度）；
  *    后续新增代码优先落子域。
- *  - 拆分进度（调用方零改动，已落地 3/4）：
+ *  - 拆分进度（调用方零改动，已落地 4/4）：
  *      ✓ nextpas.core.agent.provider.openai.encode   （Encode* 纯函数）
  *      ✓ nextpas.core.agent.provider.openai.decode   （Decode* 纯函数）
  *      ✓ nextpas.core.agent.provider.openai.decoder  （WireDecoder 状态机）
- *      ○ nextpas.core.agent.provider.openai.factory  （BuildUrl/Provider 工厂）
+ *      ✓ nextpas.core.agent.provider.openai.factory  （BuildUrl/Provider 工厂）
  *    本单元为转发薄壳（inline 转发，调用方 `uses ...openai` 零改动）；
  *    门面 `nextpas.core.agent` 同步透出（ARCH §7 白名单）。
  *  - 约束：子域互不循环，仅向下依赖 base/errors/intf/common 等。
@@ -43,36 +43,28 @@ uses
   nextpas.core.agent.base,
   nextpas.core.agent.errors,
   nextpas.core.agent.intf,
-  nextpas.core.agent.provider.common;
+  nextpas.core.agent.provider.common,
+  nextpas.core.agent.provider.openai.factory;
 
 const
-  COPENAI_DEFAULT_BASE_URL = 'https://api.openai.com';
-  COPENAI_CONNECT_TIMEOUT_MS = 10000;
-  COPENAI_TOTAL_TIMEOUT_MS = 300000;
-
+  COPENAI_DEFAULT_BASE_URL = nextpas.core.agent.provider.openai.factory.COPENAI_DEFAULT_BASE_URL;
+  COPENAI_CONNECT_TIMEOUT_MS = nextpas.core.agent.provider.openai.factory.COPENAI_CONNECT_TIMEOUT_MS;
+  COPENAI_TOTAL_TIMEOUT_MS = nextpas.core.agent.provider.openai.factory.COPENAI_TOTAL_TIMEOUT_MS;
+  // 单一真源于 factory.COPENAI_MAX_COMPLETION_TOKENS_PREFIXES，BC 别名保持字面量同步（encode 已改用 factory 单源）
   COPENAI_MAX_COMPLETION_TOKENS_PREFIXES: array[0..2] of string =
     ('o1', 'o3', 'gpt-5');
-
-  COPENAI_ENV_API_KEY = 'NEXTPAS_AGENT_OPENAI_API_KEY';
-  COPENAI_ENV_MODEL = 'NEXTPAS_AGENT_OPENAI_MODEL';
-  COPENAI_ENV_BASE_URL = 'NEXTPAS_AGENT_OPENAI_BASE_URL';
-
-  CGROK_DEFAULT_BASE_URL = 'https://api.x.ai';
-  CGROK_ENV_API_KEY = 'NEXTPAS_AGENT_GROK_API_KEY';
-  CGROK_ENV_MODEL = 'NEXTPAS_AGENT_GROK_MODEL';
-  CGROK_ENV_BASE_URL = 'NEXTPAS_AGENT_GROK_BASE_URL';
+  COPENAI_ENV_API_KEY = nextpas.core.agent.provider.openai.factory.COPENAI_ENV_API_KEY;
+  COPENAI_ENV_MODEL = nextpas.core.agent.provider.openai.factory.COPENAI_ENV_MODEL;
+  COPENAI_ENV_BASE_URL = nextpas.core.agent.provider.openai.factory.COPENAI_ENV_BASE_URL;
+  CGROK_DEFAULT_BASE_URL = nextpas.core.agent.provider.openai.factory.CGROK_DEFAULT_BASE_URL;
+  CGROK_ENV_API_KEY = nextpas.core.agent.provider.openai.factory.CGROK_ENV_API_KEY;
+  CGROK_ENV_MODEL = nextpas.core.agent.provider.openai.factory.CGROK_ENV_MODEL;
+  CGROK_ENV_BASE_URL = nextpas.core.agent.provider.openai.factory.CGROK_ENV_BASE_URL;
 
 type
-  TOpenAIOptions = record
-    Common: TProviderOptions;
-    Organization: string;
-    class function New(const AModel: string): TOpenAIOptions; static;
-  end;
-
-  TGrokOptions = record
-    Common: TProviderOptions;
-    class function New(const AModel: string): TGrokOptions; static;
-  end;
+  TOpenAIOptions = nextpas.core.agent.provider.openai.factory.TOpenAIOptions;
+  TGrokOptions = nextpas.core.agent.provider.openai.factory.TGrokOptions;
+  TAgentEnvReader = nextpas.core.agent.provider.openai.factory.TAgentEnvReader;
 
 { ---- 纯编解码器（D13 公开表面；只认 WIRE-MAPPINGS §1）---- }
 
@@ -91,8 +83,6 @@ function BuildOpenAIUrl(const ABaseUrl: string): string;
 
 function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider;
 function NewOpenAIProviderFromEnv: IAgentProvider;
-type
-  TAgentEnvReader = function(const AName: string): string;
 function NewOpenAIProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgentProvider;
 
 function BuildGrokUrl(const ABaseUrl: string): string;
@@ -103,9 +93,6 @@ function NewGrokProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgen
 implementation
 
 uses
-  nextpas.core.os.env,
-  nextpas.core.agent.fold,
-  nextpas.core.agent.transport.http,
   nextpas.core.agent.provider.openai.encode,
   nextpas.core.agent.provider.openai.decode,
   nextpas.core.agent.provider.openai.decoder;
@@ -132,195 +119,42 @@ end;
 
 function BuildOpenAIUrl(const ABaseUrl: string): string; inline;
 begin
-  Result := nextpas.core.agent.provider.openai.encode.BuildOpenAIUrl(ABaseUrl);
+  Result := nextpas.core.agent.provider.openai.factory.BuildOpenAIUrl(ABaseUrl);
 end;
 
 function BuildGrokUrl(const ABaseUrl: string): string; inline;
 begin
-  Result := nextpas.core.agent.provider.openai.encode.BuildGrokUrl(ABaseUrl);
+  Result := nextpas.core.agent.provider.openai.factory.BuildGrokUrl(ABaseUrl);
 end;
 
-{ ---- provider 与 completion ---- }
-
-type
-  TOpenAIProvider = class(TInterfacedObject, IAgentProvider)
-  private
-    FOpts: TOpenAIOptions;
-    FTransport: IAgentTransport;
-    FLog: ILogger;
-    FName: string;
-    function ResolveModel(const AReq: TCompletionRequest): string;
-    function BuildWireRequest(const AReq: TCompletionRequest;
-      AStream: Boolean): TWireRequest;
-  public
-    constructor Create(const AOpts: TOpenAIOptions;
-      const AName: string = 'openai');
-    function GetName: string;
-    function Complete(const AReq: TCompletionRequest): TMessage; overload;
-    function Complete(const AReq: TCompletionRequest;
-      const AToken: IAsyncCancellationToken): TMessage; overload;
-    function Stream(
-      const AReq: TCompletionRequest): IAgentCompletion; overload;
-    function Stream(const AReq: TCompletionRequest;
-      const AToken: IAsyncCancellationToken): IAgentCompletion; overload;
-  end;
-
-constructor TOpenAIProvider.Create(const AOpts: TOpenAIOptions;
-  const AName: string);
+function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider; inline;
 begin
-  inherited Create;
-  FOpts := AOpts;
-  FName := AName;
-  FLog := AOpts.Common.Logger;
-  if FOpts.Common.Transport <> nil then
-    FTransport := FOpts.Common.Transport
-  else
-    FTransport := NewHttpTransport(FName);
+  Result := nextpas.core.agent.provider.openai.factory.NewOpenAIProvider(AOpts);
 end;
 
-function TOpenAIProvider.GetName: string;
+function NewOpenAIProviderFromEnv: IAgentProvider; inline;
 begin
-  Result := FName;
+  Result := nextpas.core.agent.provider.openai.factory.NewOpenAIProviderFromEnv;
 end;
 
-function TOpenAIProvider.ResolveModel(
-  const AReq: TCompletionRequest): string;
+function NewOpenAIProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgentProvider; inline;
 begin
-  if AReq.Model <> '' then
-    Exit(AReq.Model);
-  if FOpts.Common.Model <> '' then
-    Exit(FOpts.Common.Model);
-  raise EAgentError.CreateLocal(aecConfig,
-    'openai: model is required (request.Model or options.Common.Model)');
+  Result := nextpas.core.agent.provider.openai.factory.NewOpenAIProviderFromEnvWithReader(AReader);
 end;
 
-function TOpenAIProvider.BuildWireRequest(const AReq: TCompletionRequest;
-  AStream: Boolean): TWireRequest;
-var
-  LReq: TCompletionRequest;
+function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider; inline;
 begin
-  AgentRequireApiKey(FOpts.Common.ApiKey, COPENAI_ENV_API_KEY);
-  LReq := AReq;
-  LReq.Model := ResolveModel(AReq);
-  Result := Default(TWireRequest);
-  Result.Url := BuildOpenAIUrl(FOpts.Common.BaseUrl);
-  Result.BodyJson := EncodeOpenAIRequest(LReq, AStream);
-  AgentWireAddOpenAIHeaders(Result, FOpts.Common, FOpts.Organization);
-  AgentWireApplyIdempotency(Result, AReq);
+  Result := nextpas.core.agent.provider.openai.factory.NewGrokProvider(AOpts);
 end;
 
-function TOpenAIProvider.Complete(const AReq: TCompletionRequest): TMessage;
-var
-  LResp: TWireResponse;
+function NewGrokProviderFromEnv: IAgentProvider; inline;
 begin
-  FTransport.RoundTrip(BuildWireRequest(AReq, False), LResp);
-  DecodeOpenAIResponse(LResp.BodyText, Result, FLog);
+  Result := nextpas.core.agent.provider.openai.factory.NewGrokProviderFromEnv;
 end;
 
-function TOpenAIProvider.Complete(const AReq: TCompletionRequest;
-  const AToken: IAsyncCancellationToken): TMessage;
+function NewGrokProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgentProvider; inline;
 begin
-  if Assigned(AToken) and AToken.IsCancelled then
-    raise EAgentCancelled.Create;
-  Result := Complete(AReq);
-end;
-
-function TOpenAIProvider.Stream(
-  const AReq: TCompletionRequest): IAgentCompletion;
-begin
-  Result := TWireBackedCompletion.Create(
-    FTransport.OpenStream(BuildWireRequest(AReq, True)),
-    NewOpenAIWireDecoder(FLog), nil, FName);
-end;
-
-function TOpenAIProvider.Stream(const AReq: TCompletionRequest;
-  const AToken: IAsyncCancellationToken): IAgentCompletion;
-begin
-  Result := TWireBackedCompletion.Create(
-    FTransport.OpenStream(BuildWireRequest(AReq, True)),
-    NewOpenAIWireDecoder(FLog), AToken, FName);
-end;
-
-{ ---- 工厂 ---- }
-
-class function TOpenAIOptions.New(const AModel: string): TOpenAIOptions;
-begin
-  Result := Default(TOpenAIOptions);
-  Result.Common.BaseUrl := COPENAI_DEFAULT_BASE_URL;
-  Result.Common.Model := AModel;
-  Result.Common.ConnectTimeoutMs := COPENAI_CONNECT_TIMEOUT_MS;
-  Result.Common.TotalTimeoutMs := COPENAI_TOTAL_TIMEOUT_MS;
-end;
-
-function NewOpenAIProvider(const AOpts: TOpenAIOptions): IAgentProvider;
-begin
-  Result := TOpenAIProvider.Create(AOpts);
-end;
-
-function NewOpenAIProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgentProvider;
-var
-  O: TOpenAIOptions;
-  LUrl: string;
-begin
-  if not Assigned(AReader) then
-    Exit(nil);
-  O := TOpenAIOptions.New('');
-  O.Common.ApiKey := AReader(COPENAI_ENV_API_KEY);
-  O.Common.Model := AReader(COPENAI_ENV_MODEL);
-  LUrl := AReader(COPENAI_ENV_BASE_URL);
-  if LUrl <> '' then
-    O.Common.BaseUrl := LUrl;
-  if (O.Common.ApiKey = '') or (O.Common.Model = '') then
-    Exit(nil);
-  Result := NewOpenAIProvider(O);
-end;
-
-function NewOpenAIProviderFromEnv: IAgentProvider;
-begin
-  Result := NewOpenAIProviderFromEnvWithReader(@GetEnvironmentVariable);
-end;
-
-{ ---- Grok 家族（wire 同族，仅默认端点与归因名不同）---- }
-
-class function TGrokOptions.New(const AModel: string): TGrokOptions;
-begin
-  Result := Default(TGrokOptions);
-  Result.Common.BaseUrl := CGROK_DEFAULT_BASE_URL;
-  Result.Common.Model := AModel;
-  Result.Common.ConnectTimeoutMs := COPENAI_CONNECT_TIMEOUT_MS;
-  Result.Common.TotalTimeoutMs := COPENAI_TOTAL_TIMEOUT_MS;
-end;
-
-function NewGrokProvider(const AOpts: TGrokOptions): IAgentProvider;
-var
-  LO: TOpenAIOptions;
-begin
-  LO := Default(TOpenAIOptions);
-  LO.Common := AOpts.Common;
-  Result := TOpenAIProvider.Create(LO, 'grok');
-end;
-
-function NewGrokProviderFromEnvWithReader(const AReader: TAgentEnvReader): IAgentProvider;
-var
-  O: TGrokOptions;
-  LUrl: string;
-begin
-  if not Assigned(AReader) then
-    Exit(nil);
-  O := TGrokOptions.New('');
-  O.Common.ApiKey := AReader(CGROK_ENV_API_KEY);
-  O.Common.Model := AReader(CGROK_ENV_MODEL);
-  LUrl := AReader(CGROK_ENV_BASE_URL);
-  if LUrl <> '' then
-    O.Common.BaseUrl := LUrl;
-  if (O.Common.ApiKey = '') or (O.Common.Model = '') then
-    Exit(nil);
-  Result := NewGrokProvider(O);
-end;
-
-function NewGrokProviderFromEnv: IAgentProvider;
-begin
-  Result := NewGrokProviderFromEnvWithReader(@GetEnvironmentVariable);
+  Result := nextpas.core.agent.provider.openai.factory.NewGrokProviderFromEnvWithReader(AReader);
 end;
 
 end.

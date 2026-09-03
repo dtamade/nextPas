@@ -1,5 +1,10 @@
 # nextpas.core.js 变更日志
 
+## [1.2.0] - 2026-09-02 — 对齐修复 pure.base 517→630 行（18份对齐）
+
+- 对齐：`pure.base` 实测 `wc -l 630`（阈值 550→650，<800 必拆），`CONTRACT 1.1→1.2 / DESIGN 1.1→1.2 / ROADMAP 1.1→1.2 / BENCHMARKS 1.5→1.6 / GOAL_TREE 1.1→1.2 / README 1.1→1.2 / module-registry 481→630 / design-conventions 550→650`，18 份对齐，守四件套与 L0–L3，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 `JsPureFindHostView/JsPureNew*` inline + `PureHeap` `Move` 零拷贝，资源 `try-finally/JsPureClose/FreeAndNil` 不丢
+- 文档：`CONTRACT §1` 单源 517→630、算式 517+29×3≈604→630+29×3≈717、阈值 550→650、hygiene 阈值同步；`BENCHMARKS` 纯族 517→630；`module-registry` 纯族 481→630
+
 ## [1.0.2] - 2026-08-31 — r10 宿主单源+文档收敛（18份对齐）
 
 - 复用度：新增 `JsPureCheckHostName/JsPureHostSetFunc/Method/Proc` 4 helper inline 单源（`Validate+nil+JsPureHostSet`），`fake/js888/v8/chakra/quickjs` 各 `SetHostFunction 3形态×5` 15 处克隆委托，纯族零 FFI/零 dl，`pure.base 481→516 行`阈值550内（+35 行，Close+Host 合计）

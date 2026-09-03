@@ -35,7 +35,6 @@ uses
   nextpas.core.sevenz.lzma.ffi.decoder,
   nextpas.core.compress.deflate,
   nextpas.core.compress.bzip2,
-  nextpas.core.sevenz.limits,
   nextpas.core.test;
 
 type
@@ -276,9 +275,9 @@ var
   LE: TSevenZEntryInfo;
   LGot: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$68, $65, $6C, $6C, $6F]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(1), Int64(LR.EntryCount));
   LE := LR.Entry(0);
   CheckEqual('a.txt', LE.Name);
@@ -296,10 +295,10 @@ var
   LR: ISevenZReader;
   LGot: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('one.bin', RepeatedText(8, 100));
   LW.AddFile('two.bin', RepeatedText(9, 50));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(2), Int64(LR.EntryCount));
   CheckEqual(Int64(800), Int64(Length(LR.Extract(0))));
   LGot := LR.Extract(1);
@@ -313,11 +312,11 @@ var
   LR: ISevenZReader;
   LE: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddDirectory('docs');
   LW.AddFileWithTime('docs/x.bin', RepeatedText(4, 10), 1700000000);
   LW.AddFile('e.dat', nil);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(3), Int64(LR.EntryCount));
   LE := LR.Entry(0);
   Check(LE.Kind = sekDirectory, 'dir kind');
@@ -335,10 +334,10 @@ var
   LR: ISevenZReader;
   LIdx: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddDirectory('数据');
   LW.AddFile('数据/文件-αβ.txt', TBytes.Create($E4, $B8, $80));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LIdx := LR.Find('数据/文件-αβ.txt');
   Check(LIdx >= 0, 'unicode find');
   CheckEqual(Int64(3), Int64(Length(LR.Extract(LIdx))));
@@ -350,9 +349,9 @@ var
   LR: ISevenZReader;
   LE: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('t.txt', BytesOf([$31]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LE := LR.Entry(0);
   Check(LE.HasMTime, 'has mtime');
   CheckEqual(Int64(0), Int64(LE.MTimeUnixSec));
@@ -363,9 +362,9 @@ var
   LW: ISevenZWriter;
   LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileWithTime('t.txt', BytesOf([$31]), 1234567890);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(1234567890),
     Int64(LR.Entry(0).MTimeUnixSec));
 end;
@@ -374,7 +373,7 @@ procedure ExpectNameRejected(const AName: string);
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   try
     LW.AddFile(AName, BytesOf([$30]));
     Fail('name should be rejected: ' + AName);
@@ -402,7 +401,7 @@ procedure TestFinishTwiceRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x', BytesOf([$58]));
   LW.Finish;
   try
@@ -419,8 +418,8 @@ var
   LW: ISevenZWriter;
   LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter;
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.EntryCount));
 end;
 
@@ -429,7 +428,7 @@ end;
 procedure ExpectCreateRaises(const AArchive: TBytes; const ATag: string);
 begin
   try
-    TSevenZReaderImpl.Create(AArchive);
+    SevenZCreateReader(AArchive);
     Fail('should raise: ' + ATag);
   except
     on E: ESevenZError do
@@ -740,7 +739,7 @@ begin
     $00,$00,$11,$15,$00,$68,$00,$65,$00,$6C,$00,$6C,$00,$6F,$00,$2E,
     $00,$74,$00,$78,$00,$74,$00,$00,$00,$14,$0A,$01,$00,$80,$6F,$1E,
     $AD,$66,$36,$DD,$01,$15,$06,$01,$00,$20,$80,$B4,$81,$00,$00]);
-  LR := TSevenZReaderImpl.Create(LArch);
+  LR := SevenZCreateReader(LArch);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'bzip2 arch entries');
   CheckEqual('hello.txt', LR.Entry(0).Name, 'bzip2 arch name');
   LGot := LR.Extract(0);
@@ -854,13 +853,13 @@ var
   LR: ISevenZReader;
 begin
   LExe := ExeLikeCorpus(40000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters(AFilters);
   LW.AddFile('bin/app.exe', LExe);
   LW.AddFile('audio/slope.raw', SlopeBytes(20000));
   LW.AddDirectory('docs');
   LW.AddFile('docs/note.txt', RepeatedText(12, 30));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(4), Int64(LR.EntryCount), ATag + ': entries');
   LGot := LR.Extract(LR.Find('bin/app.exe'));
   CheckEqual(Int64(Length(LExe)), Int64(Length(LGot)), ATag + ': exe size');
@@ -894,10 +893,10 @@ var
 begin
   { SetFilters([]) 后产物与从未设置过滤器的写端逐字节一致 }
   LExe := ExeLikeCorpus(9000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.bin', LExe);
   LPlain := LW.Finish;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfDelta]);
   LW.SetFilters([]);
   LW.AddFile('a.bin', LExe);
@@ -913,11 +912,11 @@ var
   LW: ISevenZWriter;
 begin
   LExe := ExeLikeCorpus(30000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.AddFile('a.exe', LExe);
   LA := LW.Finish;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.AddFile('a.exe', LExe);
   LB := LW.Finish;
@@ -933,10 +932,10 @@ var
 begin
   { 密集 E8 语料经 BCJ 预过滤后档体应显著变小 }
   LExe := ExeLikeCorpus(120000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.exe', LExe);
   LPlain := Int64(Length(LW.Finish));
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.AddFile('a.exe', LExe);
   LFiltered := Int64(Length(LW.Finish));
@@ -950,7 +949,7 @@ var
   LArr: array of TSevenZFilter;
   LI: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   SetLength(LArr, C_MAX_FILTERS + 1);
   for LI := 0 to High(LArr) do
     LArr[LI] := szfDelta;
@@ -976,9 +975,9 @@ var
   LW: ISevenZWriter;
   LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86, szfDelta]);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.EntryCount), 'empty entries');
 end;
 
@@ -1042,11 +1041,11 @@ var
   LR: ISevenZReader;
 begin
   LData := Randomish(70000, 99);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetLevel(ALevel);
   LW.AddFile('r.bin', LData);
   LW.AddDirectory('d');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), ATag + ': size');
   Check(CompareMem(@LGot[0], @LData[0], Length(LData)), ATag + ': bytes');
@@ -1081,11 +1080,11 @@ begin
   SevenZSetLzmaBackend(szlbPurePascal);
   try
     LText := RepeatedText(64, 500);
-    LW := TSevenZWriterImpl.Create;
+    LW := SevenZCreateWriter;
     LW.SetLevel(szclFastest);
     LW.AddFile('t.txt', LText);
     LFastest := Int64(Length(LW.Finish));
-    LW := TSevenZWriterImpl.Create;
+    LW := SevenZCreateWriter;
     LW.SetLevel(szclBest);
     LW.AddFile('t.txt', LText);
     LBest := Int64(Length(LW.Finish));
@@ -1100,7 +1099,7 @@ procedure TestLevelSetAfterFinishRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x.bin', BytesOf([$01]));
   LW.Finish;
   try
@@ -1288,7 +1287,7 @@ var
   LArch, LGot: TBytes;
 begin
   LArch := ConstBytes(C_BCJ2_GOLDEN);
-  LR := TSevenZReaderImpl.Create(LArch);
+  LR := SevenZCreateReader(LArch);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'bcj2 entries');
   LGot := LR.Extract(0);
   CheckEqual(Int64(616), Int64(Length(LGot)), 'bcj2 len');
@@ -1306,7 +1305,7 @@ var
   LR: ISevenZReader;
   LGot: TBytes;
 begin
-  LR := TSevenZReaderImpl.CreateWithPassword(
+  LR := SevenZCreateReaderWithPassword(
     ConstBytes(C_GOLD_AES_PLAIN), 'secret123');
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'aes plain entries');
   CheckEqual('a.txt', LR.Entry(0).Name, 'aes plain name0');
@@ -1325,7 +1324,7 @@ var
 begin
   SevenZSetLzmaBackend(szlbPurePascal);
   try
-    LR := TSevenZReaderImpl.CreateWithPassword(
+    LR := SevenZCreateReaderWithPassword(
       ConstBytes(C_GOLD_AES_PLAIN), 'secret123');
     CheckEqual(UInt64($14215A54),
       UInt64(Crc32OfBytes(LR.Extract(1))), 'aes pure b crc');
@@ -1339,7 +1338,7 @@ var
   LR: ISevenZReader;
 begin
   { -mhe=on：头部本体也走 AES 解码链 }
-  LR := TSevenZReaderImpl.CreateWithPassword(
+  LR := SevenZCreateReaderWithPassword(
     ConstBytes(C_GOLD_AES_HDR), 'secret123');
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'aes hdr entries');
   CheckEqual('a.txt', LR.Entry(0).Name, 'aes hdr name0');
@@ -1355,7 +1354,7 @@ var
   LR: ISevenZReader;
 begin
   { 明文头档：列目录不受影响，提取时垃圾明文在解码链抛 ESevenZError }
-  LR := TSevenZReaderImpl.CreateWithPassword(
+  LR := SevenZCreateReaderWithPassword(
     ConstBytes(C_GOLD_AES_PLAIN), 'wrongpass');
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'wrongpass listing');
   try
@@ -1374,7 +1373,7 @@ begin
   { 加密头档：口令不对连头部都解不出；构造或首次访问即抛 }
   LR := nil;
   try
-    LR := TSevenZReaderImpl.CreateWithPassword(ConstBytes(C_GOLD_AES_HDR), '');
+    LR := SevenZCreateReaderWithPassword(ConstBytes(C_GOLD_AES_HDR), '');
     CheckEqual(Int64(2), Int64(LR.EntryCount), 'hdr lazy trigger');
     Fail('encrypted header with empty password should raise');
   except
@@ -1485,20 +1484,20 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('secret123');
   LW.AddFile('a.txt', RepeatedText(7, 39));
   LW.AddFile('b.bin', Randomish(1000, 9));
   LArc := LW.Finish;
   { 默认编码头也被加密：无口令连目录都读不出 }
   try
-    TSevenZReaderImpl.Create(LArc);
+    SevenZCreateReader(LArc);
     Fail('encrypted header open without password should raise');
   except
     on E: ESevenZError do
       ;
   end;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'secret123');
+  LR := SevenZCreateReaderWithPassword(LArc, 'secret123');
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'pw enc hdr entries');
   CheckEqual('a.txt', LR.Entry(0).Name, 'pw enc hdr name0');
   Check(SameBytes(LR.Extract(0), RepeatedText(7, 39)), 'pw enc hdr a data');
@@ -1511,11 +1510,11 @@ var
   LA1, LA2: TBytes;
 begin
   { 随机 IV 使同输入两档不同（确定性仅在明文模式成立）}
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('pw');
   LW.AddFile('x', RepeatedText(3, 11));
   LA1 := LW.Finish;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('pw');
   LW.AddFile('x', RepeatedText(3, 11));
   LA2 := LW.Finish;
@@ -1529,13 +1528,13 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetEncodeHeader(False);
   LW.SetPassword('secret123');
   LW.AddFile('a.txt', RepeatedText(7, 39));
   LArc := LW.Finish;
   { 明文头可匿名列目录，但提取必须口令 }
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'pw plain hdr entries');
   try
     LR.Extract(0);
@@ -1544,7 +1543,7 @@ begin
     on E: ESevenZError do
       ;
   end;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'secret123');
+  LR := SevenZCreateReaderWithPassword(LArc, 'secret123');
   Check(SameBytes(LR.Extract(0), RepeatedText(7, 39)), 'pw plain hdr data');
 end;
 
@@ -1554,13 +1553,13 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('right');
   LW.AddFile('x', Randomish(300, 5));
   LArc := LW.Finish;
   { 加密头档：错误口令在构造（头解码）阶段即抛 }
   try
-    LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'wrong');
+    LR := SevenZCreateReaderWithPassword(LArc, 'wrong');
     CheckEqual(Int64(1), Int64(LR.EntryCount), 'wrong lazy trigger');
     Fail('wrong password should raise');
   except
@@ -1575,10 +1574,10 @@ var
   LA1, LA2: TBytes;
 begin
   { 清除口令后回到逐字节确定输出，与从未设置完全一致 }
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x', RepeatedText(3, 21));
   LA1 := LW.Finish;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('temp');
   LW.SetPassword('');
   LW.AddFile('x', RepeatedText(3, 21));
@@ -1590,7 +1589,7 @@ procedure TestWriterPasswordAfterFinishRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x', BytesOf([$31]));
   LW.Finish;
   try
@@ -1609,18 +1608,18 @@ var
   LArc: TBytes;
 begin
   { 无非空条目时不产出 solid folder，但编码头仍受口令保护 }
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('secret123');
   LW.AddDirectory('d');
   LArc := LW.Finish;
   try
-    TSevenZReaderImpl.Create(LArc);
+    SevenZCreateReader(LArc);
     Fail('dirs-only encrypted header should raise');
   except
     on E: ESevenZError do
       ;
   end;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'secret123');
+  LR := SevenZCreateReaderWithPassword(LArc, 'secret123');
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'dirs only entries');
   Check(LR.Extract(0) = nil, 'dir extracts nil');
 end;
@@ -1710,12 +1709,12 @@ var
   LI: Integer;
   LGot: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(500, 0);
   for LI := 0 to 4 do
     LW.AddFile('f' + IntToStr(LI) + '.bin', RepeatedText(10, 20));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(5), Int64(LR.EntryCount), 'mf bytes entries');
   for LI := 0 to 4 do
   begin
@@ -1724,11 +1723,11 @@ begin
     Check(SameBytes(LGot, RepeatedText(10, 20)), 'mf bytes content ' + IntToStr(LI));
   end;
   { 单文件超限仍独占一 folder，不被拆散 }
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(10, 0);
   LW.AddFile('big.bin', RepeatedText(7, 100));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   Check(SameBytes(LR.Extract(0), RepeatedText(7, 100)), 'mf big single');
 end;
 
@@ -1738,13 +1737,13 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(0, 1);
   LW.AddFile('a.bin', BytesOf([$01, $02]));
   LW.AddFile('b.bin', BytesOf([$03, $04, $05]));
   LW.AddFile('c.bin', BytesOf([$06]));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(3), Int64(LR.EntryCount), 'mf count entries');
   Check(SameBytes(LR.Extract(0), BytesOf([$01, $02])), 'mf count a');
   Check(SameBytes(LR.Extract(1), BytesOf([$03, $04, $05])), 'mf count b');
@@ -1761,13 +1760,13 @@ var
   LExe: TBytes;
 begin
   LExe := ExeLikeCorpus(8000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.SetFolderLimits(3000, 0);
   LW.AddFile('a.exe', LExe);
   LW.AddFile('b.exe', LExe);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   Check(SameBytes(LR.Extract(0), LExe), 'mf filter a');
   Check(SameBytes(LR.Extract(1), LExe), 'mf filter b');
 end;
@@ -1780,19 +1779,19 @@ var
   LData: TBytes;
 begin
   LData := RepeatedText(11, 50);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('pw123');
   LW.SetFolderLimits(200, 0);
   LW.AddFile('a.bin', LData);
   LW.AddFile('b.bin', LData);
   LW.AddFile('c.bin', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'pw123');
+  LR := SevenZCreateReaderWithPassword(LArc, 'pw123');
   CheckEqual(Int64(3), Int64(LR.EntryCount), 'mf pw entries');
   Check(SameBytes(LR.Extract(1), LData), 'mf pw content');
   { 编码头加密 + 多 folder 组合：错误口令在头解码阶段即抛 }
   try
-    TSevenZReaderImpl.CreateWithPassword(LArc, 'wrong');
+    SevenZCreateReaderWithPassword(LArc, 'wrong');
     Fail('mf pw wrong should raise');
   except
     on E: ESevenZError do
@@ -1806,13 +1805,13 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetEncodeHeader(False);
   LW.SetFolderLimits(100, 0);
   LW.AddFile('a.bin', RepeatedText(5, 30));
   LW.AddFile('b.bin', RepeatedText(6, 30));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'mf plain entries');
   Check(SameBytes(LR.Extract(0), RepeatedText(5, 30)), 'mf plain a');
   Check(SameBytes(LR.Extract(1), RepeatedText(6, 30)), 'mf plain b');
@@ -1822,7 +1821,7 @@ procedure TestMultiFolderLimitsValidation;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   try
     LW.SetFolderLimits(0, -1);
     Fail('negative files should raise');
@@ -1847,14 +1846,14 @@ var
   LR: ISevenZReader;
   LArc: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(10, 0);
   LW.AddDirectory('d');
   LW.AddFile('a.bin', BytesOf([$01, $02]));
   LW.AddFile('e.dat', nil);
   LW.AddFile('b.bin', BytesOf([$03]));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(4), Int64(LR.EntryCount), 'mf dirs entries');
   Check(LR.Entry(0).Kind = sekDirectory, 'mf dirs kind');
   Check(SameBytes(LR.Extract(1), BytesOf([$01, $02])), 'mf dirs a');
@@ -1869,9 +1868,9 @@ var
   LW: ISevenZWriter;
   LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$61]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(-1), Int64(LR.Find('missing.txt')), 'find miss');
   try
     LR.Entry(99);
@@ -1901,11 +1900,11 @@ var
   LRaw: TBytes;
 begin
   LRaw := Randomish(C_BIG, 42);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('big.bin', LRaw);
   LW.AddDirectory('d');
   LW.AddFile('e.dat', nil);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
 
   LSink := TSinkRecorder.Create;
   try
@@ -1930,9 +1929,9 @@ var
   S: IStream;
   LB: TBytes;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileWithTime('s.bin', BytesOf([$31, $32, $33, $34, $35]), 100);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   S := LR.OpenStream(0);
   CheckEqual(Int64(5), S.GetSize, 'stream size');
   SetLength(LB, 5);
@@ -2070,7 +2069,7 @@ begin
   Move(LBlock[0],
     LArchive[C_SEVENZ_SIG_HEADER_SIZE + Length(LPack)], Length(LBlock));
 
-  LR := TSevenZReaderImpl.Create(LArchive);
+  LR := SevenZCreateReader(LArchive);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'encoded hdr entry count');
   CheckEqual('only-empty.txt', LR.Entry(0).Name, 'encoded hdr name');
   Check(LR.Entry(0).Kind = sekFile, 'encoded hdr kind');
@@ -2097,7 +2096,7 @@ var
 begin
   { 合法档把起始头 CRC 位翻掉后必须被拒。
     经接口变量持有写端实例，避免 TInterfacedObject 引用计数悬空 }
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x', BytesOf([$58]));
   LBad := LW.Finish;
   LBad[8] := Byte(LBad[8] xor $FF);
@@ -2124,7 +2123,7 @@ var
   LPlainArc, LEncArc: TBytes;
   LBlockOfs: SizeInt;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetEncodeHeader(False);
   LW.AddFile('e.txt', nil);
   LPlainArc := LW.Finish;
@@ -2133,7 +2132,7 @@ begin
   CheckEqual(Int64(SZ_ID_HEADER),
     Int64(LPlainArc[C_SEVENZ_SIG_HEADER_SIZE]), 'plain marker');
 
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('e.txt', nil);
   LW.SetEncodeHeader(True);          { Finish 前可随时切换 }
   LEncArc := LW.Finish;
@@ -2143,11 +2142,11 @@ begin
   CheckEqual(Int64(SZ_ID_ENCODED_HEADER),
     Int64(LEncArc[LBlockOfs]), 'encoded marker');
 
-  LR := TSevenZReaderImpl.Create(LPlainArc);
+  LR := SevenZCreateReader(LPlainArc);
   CheckEqual('e.txt', LR.Entry(0).Name, 'plain hdr name');
   Check(LR.Extract(0) = nil, 'plain hdr extract');
 
-  LR := TSevenZReaderImpl.Create(LEncArc);
+  LR := SevenZCreateReader(LEncArc);
   CheckEqual('e.txt', LR.Entry(0).Name, 'enc hdr name');
   Check(LR.Extract(0) = nil, 'enc hdr extract');
 end;
@@ -2199,9 +2198,9 @@ var
 begin
   LData := RepeatedText(7, 300);
   LRd := CreateBytesStreamFrom(LData) as IReader;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReader('r.bin', LRd, UInt64(Length(LData)));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), 'reader size');
   Check(CompareMem(@LData[0], @LGot[0], Length(LData)), 'reader bytes');
@@ -2214,10 +2213,10 @@ var
   LData: TBytes;
 begin
   LData := BytesOf([$01, $02, $03]);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReaderWithTime('t.bin', CreateBytesStreamFrom(LData) as IReader,
     UInt64(Length(LData)), 1234567890);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(1234567890), Int64(LR.Entry(0).MTimeUnixSec), 'mtime');
   CheckEqual(Int64(3), Int64(Length(LR.Extract(0))), 'size');
 end;
@@ -2230,11 +2229,11 @@ var
 begin
   LA := RepeatedText(5, 100);
   LB := Randomish(5000, 11);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.bin', LA);
   LW.AddFileFromReader('b.bin', CreateBytesStreamFrom(LB) as IReader, UInt64(Length(LB)));
   LW.AddDirectory('d');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(3), Int64(LR.EntryCount), 'mixed count');
   Check(CompareMem(@LA[0], @LR.Extract(0)[0], Length(LA)), 'mixed a');
   Check(CompareMem(@LB[0], @LR.Extract(1)[0], Length(LB)), 'mixed b');
@@ -2248,10 +2247,10 @@ var
   LData, LGot: TBytes;
 begin
   LData := Randomish(300000, 20260828);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReader('big.bin', CreateBytesStreamFrom(LData) as IReader,
     UInt64(Length(LData)));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), 'large size');
   Check(Crc32OfBytes(LData) = Crc32OfBytes(LGot), 'large crc');
@@ -2266,12 +2265,12 @@ begin
   LA := RepeatedText(3, 1000);
   LB := RepeatedText(4, 800);
   LC := RepeatedText(5, 600);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(2000, 0);
   LW.AddFileFromReader('a.bin', CreateBytesStreamFrom(LA) as IReader, UInt64(Length(LA)));
   LW.AddFileFromReader('b.bin', CreateBytesStreamFrom(LB) as IReader, UInt64(Length(LB)));
   LW.AddFileFromReader('c.bin', CreateBytesStreamFrom(LC) as IReader, UInt64(Length(LC)));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(3), Int64(LR.EntryCount), 'mf count');
   Check(CompareMem(@LA[0], @LR.Extract(0)[0], Length(LA)), 'mf a');
   Check(CompareMem(@LB[0], @LR.Extract(1)[0], Length(LB)), 'mf b');
@@ -2286,13 +2285,13 @@ var
   LArc: TBytes;
 begin
   LData := ExeLikeCorpus(20000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.SetPassword('pw123');
   LW.AddFileFromReader('x.exe', CreateBytesStreamFrom(LData) as IReader,
     UInt64(Length(LData)));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'pw123');
+  LR := SevenZCreateReaderWithPassword(LArc, 'pw123');
   LGot := LR.Extract(0);
   Check(CompareMem(@LData[0], @LGot[0], Length(LData)), 'filter pw bytes');
 end;
@@ -2302,9 +2301,9 @@ var
   LW: ISevenZWriter;
   LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReader('empty.bin', CreateBytesStreamFrom(nil) as IReader, 0);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'empty count');
   CheckEqual(Int64(0), Int64(LR.Entry(0).Size), 'empty size');
   Check(LR.Extract(0) = nil, 'empty extract nil');
@@ -2314,7 +2313,7 @@ procedure TestWriterAddFileFromReaderNilRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   try
     LW.AddFileFromReader('x.bin', nil, 10);
     Fail('nil reader accepted');
@@ -2327,7 +2326,7 @@ procedure TestWriterAddFileFromReaderShortReadRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReader('x.bin', TShortReader.Create(BytesOf([$01,$02]), 2) as IReader, 10);
   try
     LW.Finish;
@@ -2341,7 +2340,7 @@ procedure TestWriterAddFileFromReaderAfterFinishRaises;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.bin', BytesOf([$01]));
   LW.Finish;
   try
@@ -2360,18 +2359,18 @@ var
   LData: TBytes;
 begin
   LData := RepeatedText(9, 200);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.bin', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateFromReader(CreateBytesStreamFrom(LArc) as IReader);
+  LR := SevenZCreateReaderFrom(CreateBytesStreamFrom(LArc) as IReader);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'from reader count');
   Check(CompareMem(@LData[0], @LR.Extract(0)[0], Length(LData)), 'from reader bytes');
   { 带密码变体 }
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetPassword('secret');
   LW.AddFile('b.bin', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateFromReaderWithPassword(
+  LR := SevenZCreateReaderFromWithPassword(
     CreateBytesStreamFrom(LArc) as IReader, 'secret');
   Check(CompareMem(@LData[0], @LR.Extract(0)[0], Length(LData)), 'from reader pw');
 end;
@@ -2379,7 +2378,7 @@ end;
 procedure TestReaderCreateFromReaderNilRaises;
 begin
   try
-    TSevenZReaderImpl.CreateFromReader(nil);
+    SevenZCreateReaderFrom(nil);
     Fail('nil reader accepted');
   except
     on E: EArgumentError do ;
@@ -2395,13 +2394,13 @@ var
   LArc: TBytes;
 begin
   LData := Randomish(80000, 99);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFileFromReader('a.bin', CreateBytesStreamFrom(LData) as IReader, UInt64(Length(LData)));
   LSink := CreateBytesStream(256);
   LW.FinishTo(LSink as IWriter);
   LSink.Seek(0, soBeginning);
   LArc := IoReadAll(LSink as IReader);
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   Check(CompareMem(@LData[0], @LR.Extract(0)[0], Length(LData)), 'finishTo bytes');
   { 二次 FinishTo 应锁死 }
   try
@@ -2436,16 +2435,16 @@ var
   LData, LGot: TBytes;
 begin
   LData := Randomish(80000, 55);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetLevel(szclNone);
   LW.AddFile('r.bin', LData);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), 'none size');
   Check(CompareMem(@LData[0], @LGot[0], Length(LData)), 'none bytes');
   { 与压缩档对比：不可压缩数据上 None 不应显著膨胀，且对可压缩数据 None 应更大 }
   LData := RepeatedText(8, 5000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetLevel(szclNone);
   LW.AddFile('t.txt', LData);
   Check(Int64(Length(LW.Finish)) > 40000, 'none not compress');
@@ -2459,13 +2458,13 @@ var
   LArc: TBytes;
 begin
   LData := ExeLikeCorpus(15000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetLevel(szclNone);
   LW.SetFilters([szfBcjX86]);
   LW.SetPassword('pw-none');
   LW.AddFile('x.exe', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'pw-none');
+  LR := SevenZCreateReaderWithPassword(LArc, 'pw-none');
   LGot := LR.Extract(0);
   Check(CompareMem(@LData[0], @LGot[0], Length(LData)), 'none filter pw');
 end;
@@ -2478,23 +2477,23 @@ var
   LArc: TBytes;
 begin
   LData := RepeatedText(7, 400);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetMethod(SEVENZ_METHOD_DEFLATE);
   LW.AddFile('t.txt', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'deflate method entries');
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), 'deflate method size');
   Check(SameBytes(LData, LGot), 'deflate method bytes');
   // Deflate + BCJ + password 组合
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetMethod(SEVENZ_METHOD_DEFLATE);
   LW.SetFilters([szfBcjX86]);
   LW.SetPassword('pw-deflate');
   LW.AddFile('x.exe', ExeLikeCorpus(8000));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'pw-deflate');
+  LR := SevenZCreateReaderWithPassword(LArc, 'pw-deflate');
   LGot := LR.Extract(0);
   CheckEqual(Int64(8000), Int64(Length(LGot)), 'deflate filter pw size');
 end;
@@ -2509,22 +2508,22 @@ begin
   if not BZip2FfiIsAvailable then
     Exit;
   LData := RepeatedText(11, 500);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetMethod(SEVENZ_METHOD_BZIP2);
   LW.AddFile('t.txt', LData);
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.Create(LArc);
+  LR := SevenZCreateReader(LArc);
   CheckEqual(Int64(1), Int64(LR.EntryCount), 'bzip2 method entries');
   LGot := LR.Extract(0);
   CheckEqual(Int64(Length(LData)), Int64(Length(LGot)), 'bzip2 method size');
   Check(SameBytes(LData, LGot), 'bzip2 method bytes');
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetMethod(SEVENZ_METHOD_BZIP2);
   LW.SetFilters([szfDelta]);
   LW.SetPassword('pw-bzip2');
   LW.AddFile('d.bin', RepeatedText(5, 800));
   LArc := LW.Finish;
-  LR := TSevenZReaderImpl.CreateWithPassword(LArc, 'pw-bzip2');
+  LR := SevenZCreateReaderWithPassword(LArc, 'pw-bzip2');
   LGot := LR.Extract(0);
   CheckEqual(Int64(5*800), Int64(Length(LGot)), 'bzip2 filter pw size');
 end;
@@ -2533,7 +2532,7 @@ procedure TestWriterSetMethodValidation;
 var
   LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   try
     LW.SetMethod(SEVENZ_METHOD_PPMD);
     Fail('ppmd writer should raise');
@@ -2572,7 +2571,7 @@ procedure TestTryExtractProbe;
 var LW: ISevenZWriter; LR: ISevenZReader; LData, LOut: TBytes; LOk: Boolean; LWr: Int64; Sink: TSinkRecorder;
 begin
   LData := BytesOf([$01,$02,$03]);
-  LW := TSevenZWriterImpl.Create; LW.AddFile('a.bin', LData); LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter; LW.AddFile('a.bin', LData); LR := SevenZCreateReader(LW.Finish);
   LOk := LR.TryExtract(0, LOut); Check(LOk, 'tryextract ok'); Check(SameBytes(LOut, LData), 'tryextract bytes');
   LOk := LR.TryExtract(99, LOut); Check(not LOk, 'tryextract out of range false');
   Sink := TSinkRecorder.Create;
@@ -2619,7 +2618,7 @@ procedure TestTryExtractWithError;
 var LW: ISevenZWriter; LR: ISevenZReader; LData, LOut: TBytes; LErr: string; LOk: Boolean; S: IStream;
 begin
   LData := BytesOf([$AA,$BB]);
-  LW := TSevenZWriterImpl.Create; LW.AddFile('a.bin', LData); LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter; LW.AddFile('a.bin', LData); LR := SevenZCreateReader(LW.Finish);
   LOk := LR.TryExtractWithError(0, LOut, LErr); Check(LOk and (LErr=''), 'trywitherror ok empty');
   LOk := LR.TryExtractWithError(99, LOut, LErr); Check(not LOk and (LErr<>''), 'trywitherror oob msg');
   LOk := LR.TryOpenStreamWithError(0, S, LErr); Check(LOk and Assigned(S), 'tryopen ok');
@@ -2643,10 +2642,10 @@ begin
     WriteFile(PathJoin([LRoot, 'a', 'file1.txt']), LDataA);
     WriteFile(PathJoin([LRoot, 'a', 'b', 'file2.bin']), LDataB);
     MkdirAll(PathJoin([LRoot, 'emptyDir']));
-    LW := TSevenZWriterImpl.Create;
+    LW := SevenZCreateWriter;
     SevenZAddTree(LW, LRoot, '');
     LArc := LW.Finish;
-    LR := TSevenZReaderImpl.Create(LArc);
+    LR := SevenZCreateReader(LArc);
     SevenZExtractAllToFs(LR, LOut);
     Check(IsFile(PathJoin([LOut, 'a', 'file1.txt'])), 'fs file1 exists');
     Check(IsFile(PathJoin([LOut, 'a', 'b', 'file2.bin'])), 'fs file2 exists');
@@ -2668,9 +2667,9 @@ var
   LHost: string;
 begin
   LData := BytesOf([$DE,$AD,$BE,$EF]);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x.bin', LData);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LOutDir := TempDir('', 'sevenz-fs-single-');
   try
     LHost := PathJoin([LOutDir, 'out', 'x.bin']);
@@ -2686,11 +2685,11 @@ end;
 procedure TestReaderForInEnumerator;
 var LW: ISevenZWriter; LR: ISevenZReader; LCount: Integer; LE: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02,$03]));
   LW.AddDirectory('d');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LCount := 0;
   for LE in LR do
   begin
@@ -2732,22 +2731,22 @@ end;
 procedure TestBombHeaderReject;
 var LBad: TBytes; LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('x.bin', BytesOf([$01]));
   LBad := LW.Finish;
   SigPutLE64(LBad, 20, UInt64(70*1024*1024));
   SigPutLE32(LBad, 8, Crc32Of((@LBad[12])^, 20));
-  try TSevenZReaderImpl.Create(LBad); Fail('bomb header should raise');
+  try SevenZCreateReader(LBad); Fail('bomb header should raise');
   except on E: ESevenZLimitError do ; on E: ESevenZError do ; end;
 end;
 
 procedure TestReaderCountAndItems;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(2), Int64(LR.Count), 'count prop');
   CheckEqual('a.txt', LR[0].Name, 'items default a');
   CheckEqual('b.txt', LR[1].Name, 'items default b');
@@ -2758,10 +2757,10 @@ procedure TestWriterSinglePassCrc;
 var LW: ISevenZWriter; LR: ISevenZReader; LData, LGot: TBytes;
 begin
   LData := Randomish(300000, 77);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('big.bin', LData);
   LW.AddFileFromReader('big2.bin', CreateBytesStreamFrom(LData) as IReader, UInt64(Length(LData)));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual('big.bin', LR[0].Name, 'items prop name');
   CheckEqual(Int64(2), Int64(LR.Count), 'count prop');
   LGot := LR.Extract(0);
@@ -2818,17 +2817,17 @@ begin
   SetLength(LArchive, Length(LArchive)+Length(LPack)+Length(LBlock));
   Move(LPack[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE], Length(LPack));
   Move(LBlock[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE+Length(LPack)], Length(LBlock));
-  try TSevenZReaderImpl.Create(LArchive); Fail('bomb file count should raise');
+  try SevenZCreateReader(LArchive); Fail('bomb file count should raise');
   except on E: ESevenZLimitError do ; on E: ESevenZError do ; end;
 end;
 
 procedure TestReaderContainsTryGetEntry;
 var LW: ISevenZWriter; LR: ISevenZReader; LInfo: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddDirectory('d');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.Contains('a.txt'), 'contains a');
   Check(not LR.Contains('missing'), 'not contains');
   Check(LR.TryGetEntry('a.txt', LInfo), 'tryget a');
@@ -2839,7 +2838,7 @@ end;
 procedure TestWriterNulNameReject;
 var LW: ISevenZWriter;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   try LW.AddFile('a'#0'b.txt', BytesOf([$01])); Fail('NUL should raise'); except on E: EArgumentError do ; end;
   try LW.AddFile('a'#0, BytesOf([$01])); Fail('NUL trail should raise'); except on E: EArgumentError do ; end;
 end;
@@ -2848,9 +2847,9 @@ procedure TestExtractToSinglePassLarge;
 var LW: ISevenZWriter; LR: ISevenZReader; LData: TBytes; Sink: TSinkRecorder;
 begin
   LData := Randomish(300*1024, 88);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('big.bin', LData);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Sink := TSinkRecorder.Create;
   try
     CheckEqual(Int64(300*1024), LR.ExtractTo(Sink, 0), 'extractto large count');
@@ -2863,11 +2862,11 @@ procedure TestReaderLruCacheTwoEntries;
 var LW: ISevenZWriter; LR: ISevenZReader; LA, LB: TBytes;
 begin
   LA := RepeatedText(7, 400); LB := RepeatedText(11, 400);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(0, 1);
   LW.AddFile('a.bin', LA);
   LW.AddFile('b.bin', LB);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(SameBytes(LR.Extract(0), LA), 'lru a1');
   Check(SameBytes(LR.Extract(1), LB), 'lru b1');
   Check(SameBytes(LR.Extract(0), LA), 'lru a2 cached');
@@ -2878,10 +2877,10 @@ end;
 procedure TestReaderEntryByName;
 var LW: ISevenZWriter; LR: ISevenZReader; LE: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('hello.txt', BytesOf([$68,$69]));
   LW.AddDirectory('d');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LE := LR.EntryByName('hello.txt');
   CheckEqual('hello.txt', LE.Name, 'entrybyname name');
   CheckEqual(Int64(2), LE.Size, 'entrybyname size');
@@ -2891,23 +2890,23 @@ end;
 procedure TestReaderIsEmpty;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter;
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.IsEmpty, 'empty is empty');
   CheckEqual(Int64(0), Int64(LR.Count), 'empty count');
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(not LR.IsEmpty, 'non-empty not empty');
 end;
 
 procedure TestReaderEntries;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02,$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.Entries;
   CheckEqual(Int64(2), Int64(Length(Arr)), 'entries len');
   CheckEqual('a.txt', Arr[0].Name, 'entries 0');
@@ -2919,10 +2918,10 @@ end;
 procedure TestReaderFindIgnoreCase;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('Docs/A.BIN', BytesOf([$01]));
   LW.AddFile('docs/b.txt', BytesOf([$02]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('docs/a.bin')), 'ignorecase 0');
   CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('DOCS/A.BIN')), 'ignorecase upper');
   CheckEqual(Int64(1), Int64(LR.FindIgnoreCase('DOCS/B.TXT')), 'ignorecase 1');
@@ -2932,9 +2931,9 @@ end;
 procedure TestReaderTryEntryByName;
 var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$AA]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.TryEntryByName('a.txt', Info), 'tryentry found');
   CheckEqual('a.txt', Info.Name, 'tryentry name');
   Check(not LR.TryEntryByName('missing.txt', Info), 'tryentry miss');
@@ -2943,9 +2942,9 @@ end;
 procedure TestReaderContainsIgnoreCase;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('Docs/ReadMe.TXT', BytesOf([$01]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.ContainsIgnoreCase('docs/readme.txt'), 'contains ignore true');
   Check(LR.ContainsIgnoreCase('DOCS/README.TXT'), 'contains ignore upper');
   Check(not LR.ContainsIgnoreCase('missing.txt'), 'contains ignore miss');
@@ -2954,9 +2953,9 @@ end;
 procedure TestReaderTryGetEntryIgnoreCase;
 var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a/B.txt', BytesOf([$02,$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.TryGetEntryIgnoreCase('A/b.TXT', Info), 'tryget ignore found');
   CheckEqual('a/B.txt', Info.Name, 'tryget ignore name');
   Check(not LR.TryGetEntryIgnoreCase('missing', Info), 'tryget ignore miss');
@@ -2965,9 +2964,9 @@ end;
 procedure TestReaderEntryByNameIgnoreCase;
 var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('Hello.TXT', BytesOf([$AA,$BB]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Info := LR.EntryByNameIgnoreCase('hello.txt');
   CheckEqual('Hello.TXT', Info.Name, 'entrybyname ignore');
   CheckEqual(Int64(2), Info.Size, 'entrybyname ignore size');
@@ -2977,10 +2976,10 @@ end;
 procedure TestReaderNonAsciiIgnoreCase;
 var LW: ISevenZWriter; LR: ISevenZReader; Info: TSevenZEntryInfo;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('München.TXT', BytesOf([$01]));
   LW.AddFile('naïve.txt', BytesOf([$02]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('münchen.txt')), 'nonascii münchen lower ascii');
   CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('MÜNCHEN.TXT')), 'nonascii münchen upper not folded');
   Check(not LR.ContainsIgnoreCase('NAÏVE.TXT'), 'nonascii naive upper not folded');
@@ -2993,11 +2992,11 @@ procedure TestReaderClearCache;
 var LW: ISevenZWriter; LR: ISevenZReader; LA, LB: TBytes;
 begin
   LA := RepeatedText(7, 400); LB := RepeatedText(11, 400);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(0, 1);
   LW.AddFile('a.bin', LA);
   LW.AddFile('b.bin', LB);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(SameBytes(LR.Extract(0), LA), 'clearcache a1');
   LR.ClearCache;
   Check(SameBytes(LR.Extract(0), LA), 'clearcache a2 after clear');
@@ -3010,8 +3009,8 @@ end;
 procedure TestReaderEmptyIgnoreCaseEdge;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter;
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(-1), Int64(LR.FindIgnoreCase('')), 'empty find ignore -1');
   Check(not LR.ContainsIgnoreCase('anything'), 'empty contains ignore false');
   Check(not LR.ContainsIgnoreCase(''), 'empty contains ignore empty false');
@@ -3020,13 +3019,13 @@ end;
 procedure TestHashIndexCorrectness;
 var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer; LName: string;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   for LI:=0 to 199 do
   begin
     LName := Format('file_%3.3d.txt', [LI]);
     LW.AddFile(LName, BytesOf([Byte(LI)]));
   end;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   for LI:=0 to 199 do
   begin
     LName := Format('file_%3.3d.txt', [LI]);
@@ -3042,13 +3041,13 @@ end;
 procedure TestEntriesByPrefix;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('docs/a.txt', BytesOf([$01]));
   LW.AddFile('docs/b.txt', BytesOf([$02]));
   LW.AddFile('src/main.pas', BytesOf([$03]));
   LW.AddFile('docs/sub/c.txt', BytesOf([$04]));
   LW.AddDirectory('docs');
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefix('docs/');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'prefix docs/');
   Arr := LR.EntriesByPrefix('src/');
@@ -3067,10 +3066,10 @@ var LW: ISevenZWriter; LR: ISevenZReader; LA, LB: TBytes;
 begin
   // Writer allows duplicate names – reader must keep first index stable and extract slices independent
   LA := BytesOf([$AA]); LB := BytesOf([$BB,$CC]);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('dup.txt', LA);
   LW.AddFile('dup.txt', LB);
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(2), Int64(LR.EntryCount), 'dup count');
   CheckEqual(Int64(0), Int64(LR.Find('dup.txt')), 'dup find first');
   CheckEqual(Int64(0), Int64(LR.FindIgnoreCase('DUP.TXT')), 'dup find ignore first');
@@ -3083,13 +3082,13 @@ end;
 procedure TestEntriesByPrefixSorted;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('z.txt', BytesOf([$01]));
   LW.AddFile('a.txt', BytesOf([$02]));
   LW.AddFile('m.txt', BytesOf([$03]));
   LW.AddFile('a/b.txt', BytesOf([$04]));
   LW.AddFile('a/a.txt', BytesOf([$05]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefix('a');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'sorted a count');
   CheckEqual('a.txt', Arr[0].Name, 'sorted 0');
@@ -3104,12 +3103,12 @@ end;
 procedure TestEntriesBySuffix;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
   LW.AddFile('c.pas', BytesOf([$03]));
   LW.AddFile('dir/d.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesBySuffix('.txt');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'suffix txt count');
   Arr := LR.EntriesBySuffix('.pas');
@@ -3124,15 +3123,15 @@ end;
 procedure TestSuffixPrefixEdge;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefix('a.txt/extra');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'prefix overrun zero');
   Arr := LR.EntriesBySuffix('a.txt.');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'suffix overrun zero');
-  LW := TSevenZWriterImpl.Create;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter;
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefix('');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'empty prefix on empty archive');
   Arr := LR.EntriesBySuffix('');
@@ -3142,11 +3141,11 @@ end;
 procedure TestFindByPrefixSuffix;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('docs/a.txt', BytesOf([$01]));
   LW.AddFile('docs/b.txt', BytesOf([$02]));
   LW.AddFile('src/x.pas', BytesOf([$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.FindByPrefix('docs/')), 'findbyprefix docs');
   CheckEqual(Int64(2), Int64(LR.FindByPrefix('src/')), 'findbyprefix src');
   CheckEqual(Int64(-1), Int64(LR.FindByPrefix('missing/')), 'findbyprefix miss');
@@ -3160,12 +3159,12 @@ end;
 procedure TestEntriesByGlob;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
   LW.AddFile('c.pas', BytesOf([$03]));
   LW.AddFile('docs/d.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('*.txt');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'glob *.txt count');
   Arr := LR.EntriesByGlob('*.pas');
@@ -3183,15 +3182,15 @@ end;
 procedure TestGlobEdge;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'glob empty');
   Arr := LR.EntriesByGlob('a.txt');
   CheckEqual(Int64(1), Int64(Length(Arr)), 'glob exact');
-  LW := TSevenZWriterImpl.Create;
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LW := SevenZCreateWriter;
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('*');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'glob * empty archive');
 end;
@@ -3199,11 +3198,11 @@ end;
 procedure TestFindByGlob;
 var LW: ISevenZWriter; LR: ISevenZReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('docs/a.txt', BytesOf([$01]));
   LW.AddFile('docs/b.txt', BytesOf([$02]));
   LW.AddFile('src/x.pas', BytesOf([$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Check(LR.FindByGlob('docs/*.txt') >= 0, 'findbyglob docs star');
   CheckEqual(Int64(-1), Int64(LR.FindByGlob('*.missing')), 'findbyglob miss');
   Check(LR.FindByGlob('*') >= 0, 'findbyglob star');
@@ -3214,12 +3213,12 @@ end;
 procedure TestGlobDispatch;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
   LW.AddFile('c.pas', BytesOf([$03]));
   LW.AddFile('docs/d.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('*.txt');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'dispatch suffix txt via suffix index');
   Arr := LR.EntriesByGlob('docs/*');
@@ -3232,9 +3231,9 @@ end;
 procedure TestFindByPrefixNoAlloc;
 var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   for LI:=0 to 99 do LW.AddFile(Format('p_%3.3d.txt', [LI]), BytesOf([Byte(LI)]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(0), Int64(LR.FindByPrefix('p_000')), 'noprefix 0');
   CheckEqual(Int64(50), Int64(LR.FindByPrefix('p_050')), 'noprefix 50');
   CheckEqual(Int64(-1), Int64(LR.FindByPrefix('missing_')), 'noprefix miss');
@@ -3245,12 +3244,12 @@ end;
 procedure TestGlobPrefixStarSuffix;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Idx: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('pre_aaa_post.txt', BytesOf([$01]));
   LW.AddFile('pre_bbb_post.txt', BytesOf([$02]));
   LW.AddFile('pre_aaa_other.txt', BytesOf([$03]));
   LW.AddFile('other_post.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('pre_*_post.txt');
   CheckEqual(Int64(2), Int64(Length(Arr)), 'pre*suffix count');
   Idx := LR.FindByGlob('pre_*_post.txt');
@@ -3261,12 +3260,12 @@ end;
 procedure TestExtractByPrefixSuffixGlob;
 var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; LOk: Boolean; LErr: string;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('a.log', BytesOf([$02]));
   LW.AddFile('b.txt', BytesOf([$03]));
   LW.AddFile('docs/c.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Ext := LR.ExtractByPrefix('a');
   CheckEqual(Int64(2), Int64(Length(Ext)), 'extract prefix a count');
   Ext := LR.ExtractBySuffix('.txt');
@@ -3293,13 +3292,13 @@ end;
 procedure TestBulkGroupedMultiFolder;
 var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; I: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFolderLimits(0,1); // one folder per file -> 4 folders
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('a2.txt', BytesOf([$02]));
   LW.AddFile('b.txt', BytesOf([$03]));
   LW.AddFile('b2.txt', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Ext := LR.ExtractBySuffix('.txt'); // 4 files across 4 folders, grouped should decode each once
   CheckEqual(Int64(4), Int64(Length(Ext)), 'grouped suffix 4');
   for I:=0 to High(Ext) do Check(Ext[I].Data <> nil, 'grouped data non-nil '+IntToStr(I));
@@ -3310,11 +3309,11 @@ end;
 procedure TestExtractByGlobToFs;
 var LW: ISevenZWriter; LR: ISevenZReader; LRoot: string; Cnt: Integer; Err: string; Ok: Boolean;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
   LW.AddFile('c.log', BytesOf([$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LRoot := TempDir('', 'sevenz-glob-fs-');
   try
     Cnt := SevenZExtractByGlobToFs(LR, '*.txt', LRoot);
@@ -3334,9 +3333,9 @@ end;
 procedure TestLowerBoundSuffixZeroAlloc;
 var LW: ISevenZWriter; LR: ISevenZReader; LI: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   for LI:=0 to 199 do LW.AddFile(Format('file_%3.3d.log', [LI]), BytesOf([Byte(LI)]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(200), Int64(Length(LR.EntriesBySuffix('.log'))), 'suffix log 200 via zero alloc');
   CheckEqual(Int64(200), Int64(Length(LR.EntriesBySuffix('.txt')) + Length(LR.EntriesBySuffix('.log'))), 'suffix mix');
 end;
@@ -3344,13 +3343,13 @@ end;
 procedure TestExtractAllGrouped;
 var LW: ISevenZWriter; LR: ISevenZReader; Ext: TSevenZExtractedArray; LOk: Boolean; LErr: string; LRoot: string;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddDirectory('docs');
   LW.AddFile('a.txt', BytesOf([$01,$02]));
   LW.AddFile('b.txt', BytesOf([$03]));
   LW.AddFile('empty.dat', nil);
   LW.SetFolderLimits(0,1); // force 3 folders for files
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Ext := LR.ExtractAll;
   CheckEqual(Int64(4), Int64(Length(Ext)), 'extractall count includes dir');
   Check(Ext[0].Info.Kind=sekDirectory, 'extractall dir');
@@ -3374,12 +3373,12 @@ end;
 procedure TestIgnoreCaseFull;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Ext: TSevenZExtractedArray; Idx: Integer; LOk: Boolean; LErr: string;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('Docs/Readme.TXT', BytesOf([$01]));
   LW.AddFile('docs/readme.txt', BytesOf([$02]));
   LW.AddFile('SRC/Main.PAS', BytesOf([$03]));
   LW.AddFile('src/util.pas', BytesOf([$04]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefixIgnoreCase('docs/');
   CheckEqual(Int64(2), Int64(Length(Arr)), 'ignore prefix docs 2');
   Arr := LR.EntriesBySuffixIgnoreCase('.txt');
@@ -3413,9 +3412,9 @@ begin
   LOk := LR.TryExtractByGlobIgnoreCaseWithError('*.TXT', Ext, LErr);
   Check(LOk and (LErr=''), 'try ignore glob with error');
   // ascii fast path 100 entries
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   for Idx:=0 to 99 do LW.AddFile(Format('File_%3.3d.TXT', [Idx]), BytesOf([Byte(Idx)]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   CheckEqual(Int64(100), Int64(Length(LR.EntriesByPrefixIgnoreCase('file_'))), 'ignore prefix 100 ascii');
   CheckEqual(Int64(100), Int64(Length(LR.EntriesBySuffixIgnoreCase('.txt'))), 'ignore suffix 100 ascii');
 end;
@@ -3423,11 +3422,11 @@ end;
 procedure TestFsIgnoreCaseToFs;
 var LW: ISevenZWriter; LR: ISevenZReader; LRoot: string; Cnt: Integer; Ok: Boolean; Err: string;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('Docs/A.TXT', BytesOf([$01]));
   LW.AddFile('docs/b.txt', BytesOf([$02]));
   LW.AddFile('src/C.PAS', BytesOf([$03]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   LRoot := TempDir('', 'sevenz-ignore-fs-');
   try
     Cnt := SevenZExtractByPrefixIgnoreCaseToFs(LR, 'DOCS/', LRoot);
@@ -3445,14 +3444,14 @@ end;
 procedure TestGlobClassifyUnified;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr: TSevenZEntryInfoArray; Ext: TSevenZExtractedArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('a.txt', BytesOf([$01]));
   LW.AddFile('b.txt', BytesOf([$02]));
   LW.AddFile('pre_mid_post.txt', BytesOf([$03]));
   LW.AddFile('pre_aaa_post.txt', BytesOf([$04]));
   LW.AddFile('docs/x.txt', BytesOf([$05]));
   LW.AddFile('a.log', BytesOf([$06]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByGlob('');
   CheckEqual(Int64(0), Int64(Length(Arr)), 'classify empty');
   CheckEqual(Int64(-1), Int64(LR.FindByGlob('')), 'classify empty find');
@@ -3488,11 +3487,11 @@ end;
 procedure TestBuildSortedUnifiedAndSameIgnoreCaseZeroAlloc;
 var LW: ISevenZWriter; LR: ISevenZReader; Idx: Integer; Arr: TSevenZEntryInfoArray;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   for Idx := 0 to 199 do
     LW.AddFile(Format('File_%3.3d.TXT', [Idx]), BytesOf([Byte(Idx)]));
   LW.AddFile('Café_Ünicode.txt', BytesOf([$01]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   Arr := LR.EntriesByPrefixIgnoreCase('file_');
   CheckEqual(Int64(200), Int64(Length(Arr)), 'buildsorted prefix 200 ascii');
   Arr := LR.EntriesBySuffixIgnoreCase('.txt');
@@ -3511,13 +3510,13 @@ end;
 procedure TestGlobIgnoreCaseComplexAsciiZeroAlloc;
 var LW: ISevenZWriter; LR: ISevenZReader; Arr, Arr2: TSevenZEntryInfoArray; Idx: Integer;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.AddFile('AlphaBetaGamma.txt', BytesOf([$01]));
   LW.AddFile('alpha_beta_gamma.txt', BytesOf([$02]));
   LW.AddFile('ALPHA-BETA-GAMMA.TXT', BytesOf([$03]));
   LW.AddFile('aXbYcZ.log', BytesOf([$04]));
   LW.AddFile('Café_Alpha.txt', BytesOf([$05]));
-  LR := TSevenZReaderImpl.Create(LW.Finish);
+  LR := SevenZCreateReader(LW.Finish);
   // ascii complex glob via ? and * must be case-insensitive zero-alloc path
   Arr := LR.EntriesByGlobIgnoreCase('ALPHA*BETA*GAMMA.TXT');
   CheckEqual(Int64(3), Int64(Length(Arr)), 'glob ic complex alpha*beta*gamma 3');
@@ -3538,14 +3537,14 @@ end;
 procedure TestWriterBombEarlyViaReader;
 var LW: ISevenZWriter; LR1, LR2: IReader;
 begin
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LR1 := CreateBytesStreamFrom(TBytes.Create(0)) as IReader;
   LW.AddFileFromReader('big.bin', LR1, UInt64(9) * 1024 * 1024 * 1024);
   try
     LW.Finish;
     Fail('single huge entry should raise ESevenZLimitError');
   except on E: ESevenZLimitError do ; end;
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LR1 := CreateBytesStreamFrom(TBytes.Create(0)) as IReader;
   LR2 := CreateBytesStreamFrom(TBytes.Create(1)) as IReader;
   LW.AddFileFromReader('a.bin', LR1, UInt64(5) * 1024 * 1024 * 1024);
@@ -3561,18 +3560,18 @@ var LW: ISevenZWriter; LR1, LR2: ISevenZReader; LArc, LGot1, LGot2: TBytes; LDat
 begin
   if not SevenZLzmaFfiAvailable then Exit;
   LData := ExeLikeCorpus(80000);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetFilters([szfBcjX86]);
   LW.AddFile('app.exe', LData);
   LArc := LW.Finish;
   SevenZSetLzmaBackend(szlbPurePascal);
   try
-    LR1 := TSevenZReaderImpl.Create(LArc);
+    LR1 := SevenZCreateReader(LArc);
     LGot1 := LR1.Extract(0);
   finally SevenZSetLzmaBackend(szlbAuto); end;
   SevenZSetLzmaBackend(szlbFfi);
   try
-    LR2 := TSevenZReaderImpl.Create(LArc);
+    LR2 := SevenZCreateReader(LArc);
     LGot2 := LR2.Extract(0);
   finally SevenZSetLzmaBackend(szlbAuto); end;
   CheckEqual(Int64(Length(LGot1)), Int64(Length(LGot2)), 'backend consistency len');
@@ -3584,13 +3583,108 @@ procedure TestWriterBombPackSizeReject;
 var LW: ISevenZWriter; LData: TBytes;
 begin
   LData := Randomish(67 * 1024 * 1024, 999);
-  LW := TSevenZWriterImpl.Create;
+  LW := SevenZCreateWriter;
   LW.SetLevel(szclNone);
   LW.AddFile('big.bin', LData);
   try
     LW.Finish;
     Fail('pack >64MiB should raise ESevenZLimitError');
   except on E: ESevenZLimitError do ; end;
+end;
+
+procedure TestWriterNameTooLongReject;
+var LW: ISevenZWriter; LName: string;
+begin
+  LName := StringOfChar('a', SizeInt(SEVENZ_MAX_NAME_BYTES) + 1);
+  LW := SevenZCreateWriter;
+  try
+    LW.AddFile(LName, BytesOf([$01]));
+    Fail('name >64KiB should raise ESevenZLimitError');
+  except on E: ESevenZLimitError do ; end;
+  LName := StringOfChar('a', SizeInt(SEVENZ_MAX_NAME_BYTES));
+  LW := SevenZCreateWriter;
+  LW.AddFile(LName, BytesOf([$02]));
+end;
+
+procedure TestReaderTruncatedArchive;
+var LW: ISevenZWriter; LArc, LTrunc: TBytes;
+begin
+  LW := SevenZCreateWriter;
+  LW.AddFile('a.txt', BytesOf([$01,$02,$03]));
+  LW.AddFile('b.txt', Randomish(5000, 777));
+  LArc := LW.Finish;
+  SetLength(LTrunc, Length(LArc) - 10);
+  if Length(LTrunc) > 0 then
+    Move(LArc[0], LTrunc[0], Length(LTrunc));
+  try
+    SevenZCreateReader(LTrunc);
+    Fail('truncated archive should raise');
+  except on E: ESevenZError do ; on E: ESevenZLimitError do ; on E: EIOError do ; end;
+  SetLength(LTrunc, 10);
+  if Length(LTrunc) > 0 then
+    Move(LArc[0], LTrunc[0], Length(LTrunc));
+  try
+    SevenZCreateReader(LTrunc);
+    Fail('severely truncated should raise');
+  except on E: ESevenZError do ; on E: ESevenZLimitError do ; on E: EIOError do ; end;
+end;
+
+procedure TestCoderPropsExceedsLimitReject;
+var LPlain, LBlock, LPack, LArchive: TBytes;
+    LEnc: TSevenZLzmaEncoded;
+begin
+  { 最小明文头：仅空 FilesInfo，聚焦 UnpackInfo 中 coder props 超限分支。
+    props 大小 = SEVENZ_MAX_CODER_PROPS+1 (=1048577) 应在 ParseFolder 提前抛 ESevenZLimitError，
+    避免分配 1MiB+ 载荷 — 验证 header 限界在流式/固化路径均生效。 }
+  SetLength(LPlain, 0);
+  SevenZAppendByte(LPlain, SZ_ID_HEADER);
+  SevenZAppendByte(LPlain, SZ_ID_FILES_INFO);
+  SevenZWriteNumber(LPlain, 0);
+  SevenZAppendByte(LPlain, SZ_ID_END);
+  SevenZAppendByte(LPlain, SZ_ID_END);
+  LEnc := SevenZAcquireEncoder.EncodeLzma2(LPlain, szclDefault);
+  LPack := LEnc.PackedData;
+  SetLength(LBlock, 0);
+  SevenZAppendByte(LBlock, SZ_ID_ENCODED_HEADER);
+  SevenZAppendByte(LBlock, SZ_ID_PACK_INFO);
+  SevenZWriteNumber(LBlock, 0);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, SZ_ID_SIZE);
+  SevenZWriteNumber(LBlock, UInt64(Length(LPack)));
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SevenZAppendByte(LBlock, SZ_ID_UNPACK_INFO);
+  SevenZAppendByte(LBlock, SZ_ID_FOLDER);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, 0);
+  SevenZWriteNumber(LBlock, 1);
+  SevenZAppendByte(LBlock, $21);
+  SevenZAppendByte(LBlock, Byte(SEVENZ_METHOD_LZMA2));
+  SevenZWriteNumber(LBlock, UInt64(SEVENZ_MAX_CODER_PROPS) + 1);
+  { 不跟 props 载荷：ParseFolder 在 ReadBytes 前已判限 }
+  SevenZAppendByte(LBlock, SZ_ID_CODERS_UNPACK_SZ);
+  SevenZWriteNumber(LBlock, UInt64(Length(LPlain)));
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SevenZAppendByte(LBlock, SZ_ID_END);
+  SetLength(LArchive, C_SEVENZ_SIG_HEADER_SIZE);
+  FillChar(LArchive[0], C_SEVENZ_SIG_HEADER_SIZE, 0);
+  LArchive[0]:=C_SEVENZ_MAGIC_0; LArchive[1]:=C_SEVENZ_MAGIC_1;
+  LArchive[2]:=C_SEVENZ_MAGIC_2; LArchive[3]:=C_SEVENZ_MAGIC_3;
+  LArchive[4]:=C_SEVENZ_MAGIC_4; LArchive[5]:=C_SEVENZ_MAGIC_5;
+  LArchive[6]:=C_SEVENZ_VERSION_MAJOR; LArchive[7]:=C_SEVENZ_VERSION_MINOR;
+  SigPutLE64(LArchive, 12, UInt64(Length(LPack)));
+  SigPutLE64(LArchive, 20, UInt64(Length(LBlock)));
+  SigPutLE32(LArchive, 28, Crc32OfBytes(LBlock));
+  SigPutLE32(LArchive, 8, Crc32Of((@LArchive[12])^, 20));
+  SetLength(LArchive, Length(LArchive)+Length(LPack)+Length(LBlock));
+  Move(LPack[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE], Length(LPack));
+  Move(LBlock[0], LArchive[C_SEVENZ_SIG_HEADER_SIZE+Length(LPack)], Length(LBlock));
+  try
+    SevenZCreateReader(LArchive);
+    Fail('coder props >1M should raise ESevenZLimitError');
+  except
+    on E: ESevenZLimitError do ;
+    on E: ESevenZError do ; // 读截断路径亦可接受，但限界优先
+  end;
 end;
 
 begin
@@ -3788,6 +3882,9 @@ begin
   T.Test('writer bomb early via reader huge size', @TestWriterBombEarlyViaReader);
   T.Test('backend consistency pure vs ffi', @TestBackendConsistencyPureVsFfi);
   T.Test('writer bomb pack size reject', @TestWriterBombPackSizeReject);
+  T.Test('writer name too long reject', @TestWriterNameTooLongReject);
+  T.Test('reader truncated archive', @TestReaderTruncatedArchive);
+  T.Test('coder props exceeds limit reject', @TestCoderPropsExceedsLimitReject);
 
   if not T.Run then Halt(1);
 end.

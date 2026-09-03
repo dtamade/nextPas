@@ -347,7 +347,7 @@ begin
   VfsEnumerateChildSpans(Ctx.N, @MemtreeGetter, Self, Prefix, @MemtreeHandler, @Ctx);
   SetLength(Ctx.Result, Ctx.OutN);
   Result := Ctx.Result;
-  // Ctx.Result 已 LowerBound+SpanStartsWith 有序去重保证字典序，省去 VfsSortEntries O(k log k)，与 embedded 同源
+  // Ctx.Result 已 LowerBound+SpanStartsWith 有序去重保证字典序，省去 VfsSortEntries O(k log k)，与 embedded 同源单源
 end;
 
 function TMemVfs.OpenRead(const APath: string): IStream;

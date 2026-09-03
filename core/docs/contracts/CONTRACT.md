@@ -82,4 +82,4 @@ make focused FOCUS=core/tests/nextpas.core.contracts/test_contracts
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | contracts lane |
-| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/contracts/`（README+CONTRACT），对齐 `module-registry` L0 `contracts`，`inline` 零拷贝证据 | core-docs |
+| 2026-08-31 | 1.1 | 文档矩阵补齐：新增 `docs/contracts/`（README+CONTRACT），对齐 `core-module-registry` L0 `contracts`（`module-registry` deprecated alias），`inline` 零拷贝证据 | core-docs |

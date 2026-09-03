@@ -35,7 +35,11 @@ procedure ParseLocalHeader(const AC: IByteCursor; out ANameLen, AExtraLen: Word)
 
 procedure GuardEntryReadable(const AE: TZipEntryInfo; AFlags: Word);
 procedure GuardEntryPassword(const AE: TZipEntryInfo; const APassword: TBytes);
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
 
+procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
+  AEntrySize, AMaxTotal: UInt64);
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 
@@ -142,6 +146,39 @@ begin
       'zip: entry is encrypted, no password configured: ' + AE.Name);
 end;
 
+function GuardZipIndex(AIndex, ACount: Integer): Integer; inline;
+begin
+  if (AIndex < 0) or (AIndex >= ACount) then
+    raise EIndexOutOfRangeError.Create(
+      'zip: entry index out of range: ' + IntToStr(AIndex));
+  Result := AIndex;
+end;
+
+function FindZipEntry(const AEntries: array of TZipEntryInfo; const AName: string): Integer; inline;
+var
+  LI: Integer;
+begin
+  for LI := 0 to High(AEntries) do
+    if AEntries[LI].Name = AName then
+      Exit(LI);
+  Result := -1;
+end;
+
+procedure GuardTotalOutputAdvance(var ACumulative: UInt64;
+  AEntrySize, AMaxTotal: UInt64);
+begin
+  if AMaxTotal = 0 then
+  begin
+    Inc(ACumulative, AEntrySize);
+    Exit;
+  end;
+  if AEntrySize > AMaxTotal then
+    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+  if ACumulative > AMaxTotal - AEntrySize then
+    raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
+  Inc(ACumulative, AEntrySize);
+end;
+
 procedure GuardTotalOutputSize(const AEntries: array of TZipEntryInfo;
   AMaxTotal: UInt64);
 var
@@ -151,13 +188,7 @@ begin
   if AMaxTotal = 0 then Exit;
   LCum := 0;
   for LI := 0 to High(AEntries) do
-  begin
-    if AEntries[LI].UncompressedSize > AMaxTotal then
-      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-    if LCum > AMaxTotal - AEntries[LI].UncompressedSize then
-      raise EZipLimitError.Create('zip: total uncompressed size exceeds limit');
-    Inc(LCum, AEntries[LI].UncompressedSize);
-  end;
+    GuardTotalOutputAdvance(LCum, AEntries[LI].UncompressedSize, AMaxTotal);
 end;
 
 function DecompressEntryVerified(const AE: TZipEntryInfo;

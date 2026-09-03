@@ -2,7 +2,8 @@
  * nextpas.core.platform.fs - 高层文件系统操作
  *
  * 职责：文件系统级操作（exists/is_file/mkdir_p/copy_file/write_atomic/read_file/walk）
- * 层次：路径级操作，依赖 files.pas 的底层 fd 操作
+ * 层次：路径级操作，依赖 files.pas 的底层 fd 操作（L0）
+ *  单源纪律：L0 platform 例外 — raw Move/FillChar 允许（不能依赖 L1 bytes.ops，避免 L0→L1 上向依赖）；L1+ 必须经 bytes.ops.BytesCopy/BytesZero（门禁 test_bytes_ops_source_contracts 文档化 L0 例外）
  *
  * 与 files.pas 的关系：
  *   - files.pas = 底层 fd 操作（open/close/read/write/stat/dir）
@@ -418,7 +419,7 @@ begin
       PPtrUIntLocal(LNewRaw)^ := LNewSize;
       LNewBuf := PlatformFsRawToPayload(LNewRaw);
       if LTotal > 0 then
-        Move(LBuf^, LNewBuf^, LTotal);
+        Move(LBuf^, LNewBuf^, LTotal); // L0 exception: platform.fs raw Move allowed (cannot depend on L1 bytes.ops); L1+ gate via BytesCopy
       FreeMem(LRaw, LBufSize + PLATFORM_FS_BUF_HDR);
       LRaw := LNewRaw;
       LBuf := LNewBuf;
@@ -548,6 +549,9 @@ var
   LBuf: array[0..4095] of AnsiChar;
   LLen, I: Int32;
   LR: Int32;
+  LSt: TPlatformFileStat;
+  LSave: AnsiChar;
+  LIsFinal: Boolean;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(PLATFORM_ERR_INVALID);
@@ -569,30 +573,57 @@ begin
     if (LBuf[I] = '/') or (I = LLen) then
   {$ENDIF}
     begin
-      if I = LLen then
+      LIsFinal := (I = LLen);
+      LSave := LBuf[I];
+      if not LIsFinal then
+        LBuf[I] := #0;
+      if platform_file_lstat(@LBuf[0], LSt) = 0 then
       begin
-        LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and platform_fs_is_dir(@LBuf[0]) then
-          LR := 0;
-        if LR <> 0 then Exit(LR);
+        if LSt.FileType = ftSymlink then
+        begin
+          if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
+          begin
+            if not LIsFinal then
+              LBuf[I] := LSave;
+            Exit(PLATFORM_ERR_ENOTDIR);
+          end;
+        end
+        else if LSt.FileType <> ftDirectory then
+        begin
+          if not LIsFinal then
+            LBuf[I] := LSave;
+          Exit(PLATFORM_ERR_ENOTDIR);
+        end;
       end
       else
       begin
-        LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
-        if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+        if LR <> 0 then
         begin
-          if LR = PLATFORM_ERR_EXIST then
-            LR := PLATFORM_ERR_ENOTDIR;
-          LBuf[I] := '/';
-          Exit(LR);
+          if platform_fs_is_dir(@LBuf[0]) then
+            LR := 0
+          else
+          begin
+            if not LIsFinal then
+              LBuf[I] := LSave;
+            Exit(LR);
+          end;
+        end
+        else
+        begin
+          if (platform_file_lstat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftSymlink) then
+          begin
+            if not ((platform_file_stat(@LBuf[0], LSt) = 0) and (LSt.FileType = ftDirectory)) then
+            begin
+              if not LIsFinal then
+                LBuf[I] := LSave;
+              Exit(PLATFORM_ERR_ENOTDIR);
+            end;
+          end;
         end;
-      {$IFDEF NEXTPAS_WINDOWS}
-        LBuf[I] := '\';
-      {$ELSE}
-        LBuf[I] := '/';
-      {$ENDIF}
       end;
+      if not LIsFinal then
+        LBuf[I] := LSave;
     end;
     Inc(I);
   end;

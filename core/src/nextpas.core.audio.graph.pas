@@ -10,6 +10,9 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.math.scalar,
   nextpas.core.sync.mutex,
+nextpas.core.bytes.ops,
+  nextpas.core.math.scalar,
+  nextpas.core.platform.sync,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf,
@@ -34,6 +37,7 @@ type
     FFormat: TAudioFormat;
     FState: TGraphState;
     FLock: TRecursiveMutex;
+FLock: TPlatformMutex; // owner platform.sync (L0) via sync facade — zero SysUtils/SyncObjs, single source mutex
     FNodes: array of TGraphNode;
     FProcessors: array of TProcessorSlot;
     FNextId: Integer;
@@ -53,6 +57,7 @@ type
     function FindProcessor(AId: Integer): Integer;
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
     procedure EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
+procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); // not inline per red-line 1/2: SetLength+Move single source via bytes.ops
     procedure MaybeCompactNodes;
     procedure MaybeCompactProcs;
   public
@@ -92,6 +97,8 @@ begin
   FFormat := AFormat;
   FState := gsStopped;
   FLock := TRecursiveMutex.Create;
+if platform_mutex_init(FLock, PLATFORM_MUTEX_ERRORCHECK) <> 0 then
+    raise EAudioGraphError.Create('Graph: mutex init failed');
   SetLength(FNodes, 0);
   SetLength(FProcessors, 0);
   FNextId := 1;
@@ -111,7 +118,7 @@ end;
 
 destructor TAudioGraph.Destroy;
 begin
-  FLock.Free;
+  platform_mutex_destroy(FLock);
   inherited;
 end;
 
@@ -123,17 +130,22 @@ begin
   FLock.Acquire;
   try Result := FState;
   finally FLock.Release; end;
+platform_mutex_lock(FLock);
+  try Result := FState;
+  finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.NodeCount: Integer;
 var I, C: Integer;
 begin
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     C := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(C);
     Result := C;
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.FindNode(AId: Integer): Integer;
@@ -176,6 +188,10 @@ begin
     AudioEnsureCapacity(LCap, AProcs, 4);
     if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
   end;
+// perf: single source via bytes.ops — exponential grow amortized O(1), single SetLength+Move zero-copy not inline red-line 1/2
+  // stability: exception-safe SetLength, capacity retained via BytesEnsureCapacity
+  if Length(AScratch) < ANeeded then
+    BytesEnsureCapacity(AScratch, SizeUInt(ANeeded));
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
@@ -222,6 +238,8 @@ begin
     raise EAudioGraphError.Create('AddSource: format mismatch');
   if IsNan(AGain) or IsInfinite(AGain) then AGain := 1.0;
   FLock.Acquire;
+if IsNaN(AGain) or IsInfinite(AGain) then AGain := 1.0;
+  platform_mutex_lock(FLock);
   try
     Result := FNextId; Inc(FNextId);
     if Length(FNodeFree) > 0 then
@@ -246,12 +264,14 @@ begin
     // control-plane snapshot pre-grow: ensure FillRealtime steady zero alloc (INV-6)
     EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.RemoveSource(AId: Integer): Boolean;
 var Idx: Integer;
 begin
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
@@ -263,6 +283,7 @@ begin
     MaybeCompactNodes;
     Result := True;
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.SetGain(AId: Integer; AGain: Single): Boolean;
@@ -270,12 +291,15 @@ var Idx: Integer;
 begin
   if IsNan(AGain) or IsInfinite(AGain) then Exit(False);
   FLock.Acquire;
+if IsNaN(AGain) or IsInfinite(AGain) then Exit(False);
+  platform_mutex_lock(FLock);
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
     FNodes[Idx].Gain := AGain;
     Result := True;
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.AddProcessor(const AProcessor: IAudioProcessor): Integer;
@@ -284,6 +308,7 @@ begin
   if not Assigned(AProcessor) then
     raise EAudioGraphError.Create('AddProcessor: nil');
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     Result := FNextId; Inc(FNextId);
     if Length(FProcFree) > 0 then
@@ -304,12 +329,14 @@ begin
     end;
     EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.RemoveProcessor(AId: Integer): Boolean;
 var Idx: Integer;
 begin
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     Idx := FindProcessor(AId);
     if Idx < 0 then Exit(False);
@@ -321,12 +348,14 @@ begin
     MaybeCompactProcs;
     Result := True;
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 procedure TAudioGraph.Clear;
 var I: Integer;
 begin
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     for I := 0 to High(FNodes) do
     begin FNodes[I].Alive := False; FNodes[I].Source := nil; end;
@@ -341,6 +370,7 @@ begin
     FState := gsStopped;
     InterlockedExchange64(FPosition, 0);
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -352,6 +382,7 @@ function TAudioGraph.SeekTo(AFrame: UInt64): Boolean;
 var I: Integer; OK: Boolean;
 begin
   FLock.Acquire;
+platform_mutex_lock(FLock);
   try
     OK := True;
     for I := 0 to High(FNodes) do
@@ -360,6 +391,7 @@ begin
     if OK then InterlockedExchange64(FPosition, Int64(AFrame));
     Result := OK;
   finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -388,6 +420,10 @@ begin
   // 两阶段快照契约：锁内仅计数→锁外按需增长（ violations 计数，AudioEnsureCapacity 单源）→锁内深拷贝，混音无锁
   // INV-6 稳态零堆增长：控制面 AddSource/AddProcessor 已预增 FSnapshot* 容量，实时路径仅在容量不足时增长（违例计数），稳态复用零分配；统一字节预算经 AudioBytesForFrames 单源
   FLock.Acquire;
+// two-phase snapshot: count under lock -> alloc outside -> copy under lock
+  // 两阶段快照契约：锁内仅计数→锁外分配→锁内深拷贝，混音无锁
+  // S4 冻结：分配仍在实时路径（SetLength 保留，文档先冻契约，S6 再零分配），混音阶段无锁
+  platform_mutex_lock(FLock);
   try
     AliveN := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(AliveN);
@@ -406,6 +442,13 @@ begin
   if (AliveN > 0) or (AliveP > 0) then
   begin
     FLock.Acquire;
+finally platform_mutex_unlock(FLock); end;
+  // snapshot scratch reuse: preallocated FSnapshotNodes/Procs reuse, steady zero alloc
+  if Length(FSnapshotNodes) < AliveN then SetLength(FSnapshotNodes, AliveN);
+  if Length(FSnapshotProcs) < AliveP then SetLength(FSnapshotProcs, AliveP);
+  if (AliveN > 0) or (AliveP > 0) then
+  begin
+    platform_mutex_lock(FLock);
     try
       FillIdx := 0;
       for I := 0 to High(FNodes) do if FNodes[I].Alive then
@@ -421,6 +464,7 @@ begin
       end;
       SnapVol := FVolume;
     finally FLock.Release; end;
+finally platform_mutex_unlock(FLock); end;
   end;
 
   if AliveN = 0 then

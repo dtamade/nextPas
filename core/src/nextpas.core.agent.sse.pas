@@ -58,14 +58,27 @@ type
     procedure Finish;
   end;
 
+const
+  // UTF-8 BOM single source bytes for view semantics
+  CBOM: array[0..2] of Byte = ($EF, $BB, $BF);
+
 implementation
 
-{ TBytes 版 BOM 前缀判定，inline 单源（复用 bytes.ops 视图语义）}
+{ TBytes 版 BOM 前缀判定，inline 单源（复用 bytes.ops 视图语义：SpanStartsWith 零拷贝） }
 function IsBOMPrefixBytes(const ABuf: TBytes): Boolean; inline;
+var
+  LBOMSpan, LBufSpan: TByteSpan;
 begin
-  Result := (Length(ABuf) >= 1) and (ABuf[0] = $EF)
-    and ((Length(ABuf) < 2) or (ABuf[1] = $BB))
-    and ((Length(ABuf) < 3) or (ABuf[2] = $BF));
+  if Length(ABuf) = 0 then
+    Exit(False);
+  LBOMSpan := TByteSpan.Create(@CBOM[0], 3);
+  LBufSpan := TByteSpan.FromBytes(ABuf);
+  if LBufSpan.Len < LBOMSpan.Len then
+    // ABuf 是 BOM 前缀 => BOM starts with ABuf (零拷贝视图)
+    Result := SpanStartsWith(LBOMSpan, LBufSpan)
+  else
+    // ABuf >=3 且以 BOM 起头 => ABuf starts with BOM (零拷贝视图)
+    Result := SpanStartsWith(LBufSpan, LBOMSpan);
 end;
 
 constructor TSSEParser.Create;
@@ -154,11 +167,8 @@ begin
     LNeed := FEventCount + 1;
     if LNeed > LCap then
     begin
-      if LCap = 0 then
-        LCap := 8
-      else
-        while LCap < LNeed do
-          LCap := LCap * 2;
+      // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+      LCap := nextpas.core.bytes.ops.BytesGrowCapacityInt(LCap, LNeed);
       SetLength(FEvents, LCap);
     end;
     FEvents[FEventCount].Event := FEventName;
@@ -190,7 +200,8 @@ begin
   begin
     if Length(FBuf) >= 3 then
     begin
-      if (FBuf[0] = $EF) and (FBuf[1] = $BB) and (FBuf[2] = $BF) then
+      // perf: single source via bytes.ops SpanStartsWith 零拷贝视图 (INV-5)
+      if SpanStartsWith(TByteSpan.FromBytes(FBuf), TByteSpan.Create(@CBOM[0], 3)) then
         { 单源切片：复用 SpanCopySlice 去 BOM，零手工 Delete }
         FBuf := SpanCopySlice(TByteSpan.FromBytes(FBuf), 3, SizeUInt(Length(FBuf) - 3));
       FBOMCheck := False;

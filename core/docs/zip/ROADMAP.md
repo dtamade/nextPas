@@ -200,6 +200,68 @@
 - `common.GuardEntryPassword` 单源化 `reader` 双 `OpenEntry` + `sequential` 的 `CollectDescriptorPayload/MakeDecompressedReader` 缺口令守卫重复（`IsEncrypted ∧ Password=∅ → EInvalidOperationError('zip: entry is encrypted, no password configured: '+Name)`），4×3 行 → 4×1 行，错误消息与 fail-closed 时序守恒
 - `common` 为 `reader/sequential` 共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardTotalOutputSize/ParseLocalHeader`），冷路径零分配，12 门 + `bench_zip 221744` 可编译回归
 
+### S88 — 越界守卫单源与平台期（1.0.1 巡检）· 复用度/稳定性 — 已落地
+- `common.GuardZipIndex` 单源化 `TZipReaderImpl.CheckIndex` / `TZipSourceReader.CheckIndex` 越界守卫重复（`0 ≤ Index < Count → EIndexOutOfRangeError('zip: entry index out of range: '+Int)`），2×4 行 → 2×1 行 `inline`，`EIndexOutOfRangeError` 语义守恒
+- `common` 为 `reader` 双形态共享校验内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/GuardTotalOutputSize/ParseLocalHeader`），冷路径 `inline` 零成本，12 门 + `bench_zip 221747` 可编译回归，`S85—S88` 四单源平台期证据化
+
+### S89 — Find 单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.FindZipEntry` 单源化 `TZipReaderImpl.Find` / `TZipSourceReader.Find` 线性查找重复（`Name = AName → 首命中 Index / -1`），2×6 行 → 2×1 行 `inline`，首命中语义守恒，`common` 为 `reader` 双形态共享查找内核，12 门 + `bench_zip 221757` 可编译回归，`S85—S89` 五单源平台期
+
+### S90 — 总输出限界单源与平台期（1.0.1 巡检）· 复用度/稳定性 — 已落地
+- `common.GuardTotalOutputAdvance` 单源化 `GuardTotalOutputSize` 批量求和与 `sequential.CheckTotalLimit` 增量累计的总量溢出守卫重复（`ASize>Max ∨ ACum>Max-ASize → EZipLimitError('zip: total uncompressed size exceeds limit')`），2×5 行 → 2×1 行调用，溢出安全语义守恒，批量 `GuardTotalOutputSize` 薄循环委托单源，顺序 `CheckTotalLimit` 直通单源，`EZipLimitError/EIOError` 分叉归一（`EZipLimitError= EIOError` 子类，fail-closed 一致）
+- `common` 为 `reader/sequential` 共享总量守卫内核（`GuardEntryReadable/GuardEntryPassword/GuardZipIndex/FindZipEntry/GuardTotalOutputAdvance/GuardTotalOutputSize`），批量/增量双路径 `EZipLimitError` 统一，12 门 + `bench_zip 221819` 可编译回归，`S85—S90` 六单源平台期
+
+### S91 — 泵送单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipPumpReader` 单源化 `TZipReaderImpl.CopyEntryTo` / `TZipSourceReader.CopyEntryTo` 泵送循环重复（`OpenEntry→65KiB分块Read/Write→Close`），2×16 行 → 2×1 行 `ZipPumpReader(OpenEntry,ADst)`，`EArgumentError/EIOError` 语义守恒，`reader` 双形态共享泵内核，12 门 + `bench_zip 221819` 可编译回归，`S85—S91` 七单源平台期
+
+### S92 — 三路泵单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipPumpReader` 三路收口：`TSequentialZipReader.CopyTo` 去 16 行泵循环薄委托 `ZipPumpReader(Open,ADst)`，与 S91 双复制口 `TZipReaderImpl/TZipSourceReader.CopyEntryTo` 共单源（3×16 行 → 3×1 行），`EArgumentError/EIOError/65KiB` 语义守恒，`reader` 为读/顺序三形态共享泵内核（S91 `reader` 双形态 → S92 三路），`sequential` 仅增 `reader` 依赖无循环，12 门 + `bench_zip 221800` 可编译回归，`S85—S92` 八单源平台期
+
+### S93 — 解压管道单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipWrapEntryReader` 单源化 `TZipReaderImpl.OpenEntry` / `TZipSourceReader.OpenEntry` 解压管道重复（`AES解帧→RawDeflateReaderWithMaxOutputSize→TZipVerifyReader` 2×20 行 → 2×1 行 `ZipWrapEntryReader(切片/区间,LE,Password,MaxOutput)`），`ENotSupportedError` 与 `store/deflate/AES` 语义守恒，`reader` 双形态共享管道内核，`TSliceReader/TSourceSpanReader` 各自仅保留切片构造，12 门 + `bench_zip 221789` 可编译回归，`S85—S93` 九单源平台期
+
+### S94 — EOCD 扫描单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipFindEocd` 单源化 `TZipReaderImpl.ParseCentralDirectory` / `TZipSourceReader.ParseCentralDirectory` EOCD 扫描循环重复（`PeekU32LE 逐字节回扫` 2×12 行 → 2×1 行 `ZipFindEocd(Cursor,LowerBound)`），`end of central directory not found` 语义守恒，`reader` 双形态共享扫描内核（`FC` 全量与 `Tail` 窗口统一），12 门 + `bench_zip 221783` 可编译回归，`S85—S94` 十单源平台期
+
+### S95 — EOCD 字段单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipDecodeEocd` 单源化双 `ParseCentralDirectory` EOCD 字段解析重复（`ReadU32LE sig + 2/2/2/2/4/4/2` 2×8 行 → 2×1 行 `ZipDecodeEocd(Cursor, DiskNum,CdStartDisk,Count16,CommentLen,CdSize,CdOffset)`），`bad end of central directory signature` 与 `multi-disk/truncated comment` 守恒，`reader` 双形态共享字段内核，12 门 + `bench_zip 221783` 可编译回归，`S85—S95` 十一单源平台期
+
+### S96 — 中央条目循环单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipParseCentralEntries` 单源化双 `ParseCentralDirectory` 中央条目循环重复（`NeedRange+sig+ParseCentralEntry` 2×10 行 → 2×1 行 `ZipParseCentralEntries(Cursor,BaseOffset,Entries,Flags,MaxTotal)`，含 `GuardTotalOutputSize` 守恒），`bad central header signature` 与 `entry count out of range` 语义守恒，`reader` 双形态共享条目内核（`FC 0基` vs `Tail LCdOffset基`），12 门 + `bench_zip 221787` 可编译回归，`S85—S96` 十二单源平台期
+
+### S97 — Zip64 单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipDecodeZip64Locator/ZipDecodeZip64Eocd` 单源化双 `ParseCentralDirectory` 的 Zip64 定位与字段解析重复（locator 20B `sig+disk+offset` + eocd 56B `sig+size+version+disks+counts+sizes+offsets` 2×24 行 → 2×2 行 `ZipDecodeZip64Locator(Cursor, EocdOffset)` / `ZipDecodeZip64Eocd(Cursor, Count,CdSize,CdOffset)`），`zip64 records missing/bad zip64 EOCD signature` 语义守恒，`reader` 双形态共享 Zip64 内核（`FC Seek` 与 `Fetch+Cursor` 统一），12 门 + `bench_zip 221785` 可编译回归，`S85—S97` 十三单源平台期
+
+### S98 — 载荷定位单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipResolvePayloadOffset` 单源化双 `LocatePayload` 的载荷定位重复（`GuardReadable+ParseLocalHeader+payload GuardRange` 2×9 行 → 2×1 行 `ZipResolvePayloadOffset(LE,Flags,Cursor,TotalSize)`），`bad local header signature/truncated entry payload` 语义守恒，`reader` 双形态共享载荷内核（`FC Seek+FC.Length` 与 `Fetch+NewByteCursor+FSize` 统一），12 门 + `bench_zip 221786` 可编译回归，`S85—S98` 十四单源平台期
+
+### S99 — 解压与口令单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipExtractToBytesViaPayload/ZipExtractToBufferViaPayload/ZipOpenViaPayload` 单源化双 `ExtractIndex/ExtractToBuffer/OpenEntry` 的解压与口令守卫重复（`DecompressEntryVerified/DecompressEntryToBuffer` 与 `GuardPassword+ZipWrapEntryReader` 3×2 行 → 3×1 行），`IsDirectory` 与 `EInvalidOperationError` 语义守恒，`reader` 双形态共享解压内核（`Copy/Fetch` 载荷后统一 `common` 解压），12 门 + `bench_zip 221802` 可编译回归，`S85—S99` 十五单源平台期
+
+### S100 — FS 路径单次分配与平台期（1.0.1 巡检）· 性能/复用度 — 已落地
+- `fs.JoinZipPath/TrimTrailingSlash` 单源化 `ZipExtractToDirWithOptions` 的路径拼接热点（`ADestDir 2×Delete+concat+2×Delete 5分配 → JoinZipPath 1分配`，`LDestTrim` 预裁剪 + `SetLength+Move` 单次分配），目录 `IsDirectory` 语义守恒，`fs` 为打包/解包共享路径内核，12 门 + `bench_zip 221832` 可编译回归，`S85—S100` 十五单源+一性能平台期
+
+### S101 — 中央边界与分配单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `reader.ZipValidateCentralBoundsAndAlloc` 单源化双 `ParseCentralDirectory` 的中央边界与分配重复（`central out of bounds 2×2 + entry count 2×2 + SetLength 2×2 6行 → 2×1 行`），`central directory out of bounds/entry count out of range` 语义守恒，`reader` 双形态共享边界内核（`FC.Length` 与 `FSize` 统一），12 门 + `bench_zip 221831` 可编译回归，`S85—S101` 十六单源+一性能平台期
+
+### S102 — Writer 缓冲溢出守卫与对称（1.0.1 巡检）· 稳定性/复用度 — 已落地
+- `writer.TZipEntrySink.PushCompressed` 补 `High(SizeInt) div 2` 溢出守卫，与 `reader.EnsureScratch` 几何增长同构（`FScratch` 初始 4096 + `while <ACount do if >High div2 then SetLength(ACount) else *=2`），双端 `FScratch` 溢出对称闭环，12 门 + `bench_zip 221838` 可编译回归，`S85—S102` 十六单源+一性能+一守卫平台期
+
+### S103 — 有界切片读单源与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- `common.ZipSliceRead/ZipBytesRead` 单源化 `reader.TSliceReader.Read` / `sequential.TSeqSliceReader.Read` 有界切片读重复（`Min(ACount,Remaining)+Move+Advance 2×8 行 → 2×1 行`），`TSourceSpanReader` 因 `IReaderAt` 边界保持独立，`reader/sequential` 共享切片内核，12 门 + `bench_zip 221850` 可编译回归，`S85—S103` 十六单源+一性能+一守卫+一切片平台期
+
+### S104 — 边界守卫薄包装消除与平台期（1.0.1 巡检）· 复用度/模块化 — 已落地
+- 移除 `reader.TZipReaderImpl.NeedRange/TZipSourceReader.NeedRange` 薄包装（`2×4 行声明+2×4 行实现 → 0`），调用点直通 `common.GuardCursorRange/GuardRange`（`6 处 NeedRange → Guard*`），`reader` 双形态共享边界内核零包装，12 门 + `bench_zip 221836` 可编译回归，`S85—S104` 十六单源+一性能+一守卫+一切片+一包装消除平台期
+
+### S105 — 切片读去 inline 与 bytes.ops 单源与平台期（1.0.1 巡检）· 稳定性/复用度/高级感 — 已落地
+- `common.ZipSliceRead/ZipBytesRead` 去 `inline`（`2× inline→0`，消除 `Move(var untyped)` 常量传播踩栈红线 1）并收口 `Move → bytes.ops.BytesCopy` 单源（`2× Move → 2× BytesCopy`，`PByte` 与 `TBytes[APos]` 零拷贝同源），`reader/sequential` 共享切片内核零红线，12 门 + `bench_zip 221837` 可编译回归，`S85—S105` 十六单源+一性能+一守卫+一切片+一包装消除+一去 inline 平台期
+
+### S106 — 四件套 intf 补齐与平台期（1.0.1 巡检）· 模块化/高级感 — 已落地
+- `nextpas.core.zip.intf` 新建契约单点（`IZipWriter/IZipReader/ISequentialZipReader/IZipBuilder` 四接口同 GUID + `TZipWriteOptions/TZipAddOptions` 记录），`writer/reader/sequential/builder` 去接口定义薄别名 `= intf.*`，`zip` 门面 `type` 别名收口 `intf`，`base←intf←impl←facade` 单向收敛，12 门 + `bench_zip 221921` 可编译回归，`S85—S106` 十六单源+一性能+一守卫+一切片+一包装消除+一去 inline+一四件套平台期
+
+### S107 — 残余包装与区间守卫收口与平台期（1.0.1 巡检）· 复用度/稳定性/高级感 — 已落地
+- 移除 `reader.TZipReaderImpl/TZipSourceReader.NeedRange` 与 `reader.NeedRangeIn` 薄包装（`2×4 行声明+2×4 行实现 + 1×4 行 → 0`，`6+2 处 NeedRange/NeedRangeIn → GuardCursorRange/GuardRange 直通`），`TZipSourceReader` 补 `FScratch + EnsureScratch High div2` 与 `TZipReaderImpl` 双端同构，12 门全绿（`test_zip_aes` 历史 56B 泄漏已闭环）+ `bench_zip 224102` 可编译回归，`S85—S107` 十七单源+一性能+一守卫+一切片+一包装消除+一去 inline+一四件套+一残余包装平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -232,4 +294,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S87 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main e63c47b` 已落地，`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword` 五单源 + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S107 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 28724cf` 已落地（S107 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片 + `NeedRange` 包装消除 + 去 inline + 四件套 intf + 残余包装（`bytes.ops.BytesCopy` 单源 + `intf` 契约单点 + `FScratch` 双端同构，三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片+包装消除+去 inline+四件套+残余包装） + AES 零堆栈。
