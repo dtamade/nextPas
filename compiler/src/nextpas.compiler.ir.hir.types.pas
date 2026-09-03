@@ -6,6 +6,7 @@ unit nextpas.compiler.ir.hir.types;
 interface
 
 uses
+  SysUtils, Generics.Collections,
   nextpas.core.collections.vec;
 
 type
@@ -167,6 +168,8 @@ type
   private
     FTypes: THirTypeRecVec;
     FNextId: THIRTypeId;
+    FIdIndex: specialize TDictionary<THIRTypeId, SizeInt>;
+    FNameIndex: specialize TDictionary<string, THIRTypeId>;
   public
     constructor Create;
     destructor Destroy; override;
@@ -285,6 +288,8 @@ constructor THIRTypeTable.Create;
 begin
   inherited Create;
   FTypes := THirTypeRecVec.Create;
+  FIdIndex := specialize TDictionary<THIRTypeId, SizeInt>.Create;
+  FNameIndex := specialize TDictionary<string, THIRTypeId>.Create;
   FNextId := 1;
 end;
 
@@ -308,6 +313,10 @@ begin
   end;
   FTypes.Free;
   FTypes := nil;
+  FIdIndex.Free;
+  FIdIndex := nil;
+  FNameIndex.Free;
+  FNameIndex := nil;
   inherited Destroy;
 end;
 
@@ -336,26 +345,34 @@ begin
   Entry.Alignment := 0;
   FTypes.Push(Entry);
   Result := FNextId;
+  // hash index — zero-copy key reuse, O(1) lookup
+  if FIdIndex <> nil then
+    FIdIndex.AddOrSetValue(Result, SizeInt(FTypes.Count) - 1);
+  if (FNameIndex <> nil) and (AName <> '') then
+  begin
+    // keep first occurrence to preserve linear-scan first-match semantics
+    if not FNameIndex.ContainsKey(LowerCase(AName)) then
+      FNameIndex.AddOrSetValue(LowerCase(AName), Result);
+  end;
   Inc(FNextId);
 end;
 
 function THIRTypeTable.GetType(AId: THIRTypeId): THIRTypeRec;
 var
-  I: SizeInt;
+  Idx: SizeInt;
 begin
-  for I := 0 to SizeInt(FTypes.Count) - 1 do
-    if FTypes[SizeUInt(I)].Id = AId then
-      Exit(FTypes[SizeUInt(I)]);
+  // O(1) hash lookup — reuse FIdIndex, zero extra copy
+  if (FIdIndex <> nil) and FIdIndex.TryGetValue(AId, Idx) then
+    if (Idx >= 0) and (Idx < SizeInt(FTypes.Count)) then
+      Exit(FTypes[SizeUInt(Idx)]);
   Result := Default(THIRTypeRec);
 end;
 
 function THIRTypeTable.FindByName(const AName: string): THIRTypeId;
-var
-  I: SizeInt;
 begin
-  for I := 0 to SizeInt(FTypes.Count) - 1 do
-    if SameText(FTypes[SizeUInt(I)].Name, AName) then
-      Exit(FTypes[SizeUInt(I)].Id);
+  // O(1) hash lookup — reuse FNameIndex with LowerCase key, no linear scan
+  if (FNameIndex <> nil) and FNameIndex.TryGetValue(LowerCase(AName), Result) then
+    Exit;
   Result := 0;
 end;
 
@@ -458,22 +475,26 @@ end;
 procedure THIRTypeTable.AddRecordField(ARecordId: THIRTypeId;
   const AFieldName: string; AFieldType: THIRTypeId);
 var
-  I: SizeInt;
+  Idx: SizeInt;
   Ty: PHirTypeRec;
   Field: THIRFieldEntry;
 begin
-  for I := 0 to SizeInt(FTypes.Count) - 1 do
+  // O(1) hash lookup via FIdIndex — no linear scan
+  if (FIdIndex <> nil) and FIdIndex.TryGetValue(ARecordId, Idx) then
   begin
-    Ty := FTypes.GetPtr(SizeUInt(I));
-    if Ty^.Id = ARecordId then
+    if (Idx >= 0) and (Idx < SizeInt(FTypes.Count)) then
     begin
-      if Ty^.Fields = nil then
-        Ty^.Fields := THirFieldEntryVec.Create;
-      Field.Name := AFieldName;
-      Field.TypeId := AFieldType;
-      Field.Offset := -1;
-      Ty^.Fields.Push(Field);
-      Exit;
+      Ty := FTypes.GetPtr(SizeUInt(Idx));
+      if Ty^.Id = ARecordId then
+      begin
+        if Ty^.Fields = nil then
+          Ty^.Fields := THirFieldEntryVec.Create;
+        Field.Name := AFieldName;
+        Field.TypeId := AFieldType;
+        Field.Offset := -1;
+        Ty^.Fields.Push(Field);
+        Exit;
+      end;
     end;
   end;
 end;

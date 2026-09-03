@@ -90,6 +90,16 @@ type
     { Imported unit trees/owners on FAllocator when present; contexts borrow. }
     FImportedUnitTrees: TSemaImportedTreeVec;
     FImportedUnitOwners: TSemaImportedOwnerVec;
+    { Encapsulated incremental symbol cache (instance-scoped, indexed). }
+    FImportedUnitCache: TCachedUnitSymbolsVec;
+    FImportedUnitCacheIndex: TImportedUnitCacheIndex;
+    FImportedUnitCacheKeyScratch: string;
+    FDiskCache: TDiskSymbolCache;
+    function BuildCacheKey(const APath: string; AAge: Int64): string;
+    procedure EnsureImportedUnitCache;
+    function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
+    function AppendImportedUnitCacheEntry(const ASourcePath: string; const AAge: Int64; const ASymbolCount: LongInt): PCachedUnitSymbols;
+    function GetDiskCache: TDiskSymbolCache;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterOwnedRuntimeStrVar(const AName: string);

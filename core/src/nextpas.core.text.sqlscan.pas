@@ -6,7 +6,7 @@ interface
 
 {** @desc L1 零分配 SQL 词法扫描引擎（单遍状态机，dollar/count 零额外分配）。
     层级：L1（仅依赖 L0 + text.builder IStringBuilder；零分配热路径）。
-    db.sqlscan 为本单元的 thin re-export，不得重复实现。 *}
+    单真相：历史 db.sqlscan 已物理删除（缺失强制迁移），本单元为唯一实现，不得重复。 *}
 
 {** SQL 词法扫描共享引擎（V3-C6 抽取）。
 
@@ -66,7 +66,7 @@ function SqlScanTranslateQuestion(const ASql: string;
     显式 ?N 直接映射且不扰动顺序计数。不建槽数组（热路径零
     额外分配）。 }
 function SqlScanRenderDollar(const ASql: string;
-  const ADialect: TSqlScanDialect): string;
+  const ADialect: TSqlScanDialect): string; inline;
 
 {** 最大占位符编号（跳过字面量/注释）。APHChar 通常为 '$'
     （pg.conn 参数计数）或 '?'。返回 0 = 无参数。 }
@@ -83,7 +83,8 @@ function SqlScanDecorate(const ASql: string;
 implementation
 
 uses
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.bytes.ops;
 
 type
   TSqlScanMode = (
@@ -94,31 +95,41 @@ type
 
 {** 单遍引擎：四消费面共享的唯一状态机副本。词素分派与五个
     被替换实现逐分支一致（含 '-' 无论是否起注释都回显、块注
-   释起始 '/' 不落 builder 由下一轮带出等细节）。 }
+   释起始 '/' 不落 builder 由下一轮带出等细节）。
+    perf: TBufStringBuilder 栈记录 inline 零拷贝 Move（AppendChar/AppendStr/AppendInt
+    均为 inline 单 Move），零 IStringBuilder 接口堆对象；ssmCount/ssmDollar 零槽数组
+    额外分配；RenderDollar/Translate 仅单次结果串分配（SetString 单 Move），达成
+    完全零额外分配。资源：try..finally LB.Done 保证异常路径不泄漏。 }
 function SqlScanCore(const ASql: string; const AD: TSqlScanDialect;
   const APhChar: AnsiChar; const AMode: TSqlScanMode;
   const AIndexes: array of Integer; const ASuffix: string;
   out ARewritten: string; out ASlots: TSqlScanSlotArray): Integer;
 var
-  LB: IStringBuilder;
+  LB: TBufStringBuilder;
+  LUseBuilder: Boolean;
   I: Integer;
   C: AnsiChar;
   InStr, InDq, InBq, InBrk, InLineC, InHashC, InBlockC: Boolean;
   N, K, Seq, LCount, LCap: Integer;
   Matched: Boolean;
 begin
-  case AMode of
-    ssmCount:
-      begin
-        LB := nil;
-        ARewritten := '';
-      end;
+  LUseBuilder := AMode <> ssmCount;
+  if LUseBuilder then
+    LB.Init(SizeUInt(Length(ASql)) + 16 + SizeUInt(Length(ASuffix)))
   else
-    LB := MakeStringBuilder(SizeUInt(Length(ASql)) + 16);
-  end;
+    LB := Default(TBufStringBuilder);
+  try
   ARewritten := '';
-  LCap := 8;
-  SetLength(ASlots, LCap);
+  if AMode in [ssmQuestion, ssmCount] then
+  begin
+    LCap := 8;
+    SetLength(ASlots, LCap);
+  end
+  else
+  begin
+    LCap := 0;
+    SetLength(ASlots, 0);
+  end;
   LCount := 0;
   Seq := 0;
   InStr := False;
@@ -134,7 +145,7 @@ begin
     C := ASql[I];
     if InLineC or InHashC then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if C = #10 then
       begin
@@ -144,11 +155,11 @@ begin
     end
     else if InBlockC then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if (C = '*') and (I < Length(ASql)) and (ASql[I + 1] = '/') then
       begin
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar('/');
         InBlockC := False;
         Inc(I);
@@ -156,13 +167,13 @@ begin
     end
     else if InStr then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if C = '''' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '''') then
         begin
-          if LB <> nil then
+          if LUseBuilder then
             LB.AppendChar('''');
           Inc(I);
         end
@@ -172,13 +183,13 @@ begin
     end
     else if InDq then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if C = '"' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '"') then
         begin
-          if LB <> nil then
+          if LUseBuilder then
             LB.AppendChar('"');
           Inc(I);
         end
@@ -188,20 +199,20 @@ begin
     end
     else if InBq then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if C = '`' then
         InBq := False;
     end
     else if InBrk then
     begin
-      if LB <> nil then
+      if LUseBuilder then
         LB.AppendChar(C);
       if C = ']' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = ']') then
         begin
-          if LB <> nil then
+          if LUseBuilder then
             LB.AppendChar(']');
           Inc(I);
         end
@@ -214,38 +225,38 @@ begin
       if C = '''' then
       begin
         InStr := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if AD.DoubleQuoteIdents and (C = '"') then
       begin
         InDq := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if AD.BacktickIdents and (C = '`') then
       begin
         InBq := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if AD.BracketIdents and (C = '[') then
       begin
         InBrk := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if AD.HashComments and (C = '#') then
       begin
         InHashC := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if C = '-' then
       begin
         if (I < Length(ASql)) and (ASql[I + 1] = '-') then
           InLineC := True;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if C = '/' then
@@ -256,7 +267,7 @@ begin
           Inc(I);   { '*' 由 InBlockC 分支下一轮带出 }
           Continue;
         end;
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end
       else if C = APhChar then
@@ -340,16 +351,20 @@ begin
       end
       else
       begin
-        if LB <> nil then
+        if LUseBuilder then
           LB.AppendChar(C);
       end;
     end;
     Inc(I);
   end;
   SetLength(ASlots, LCount);
-  if LB <> nil then
+  if LUseBuilder then
     ARewritten := LB.ToString;
   Result := LCount;
+  finally
+    if LUseBuilder then
+      LB.Done;
+  end;
 end;
 
 function SqlScanTranslateQuestion(const ASql: string;

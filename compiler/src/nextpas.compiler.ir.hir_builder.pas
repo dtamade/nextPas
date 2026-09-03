@@ -5,20 +5,20 @@ unit nextpas.compiler.ir.hir_builder;
 interface
 
 uses
-  np_hir_builder;
+  nextpas.compiler.ir.hir.builder;
 
 type
-  TExprStack = np_hir_builder.TExprStack;
-  TAllocaEntry = np_hir_builder.TAllocaEntry;
-  THIRExprResult = np_hir_builder.THIRExprResult;
-  TTypedHirNodeVec = np_hir_builder.TTypedHirNodeVec;
-  THirNameVec = np_hir_builder.THirNameVec;
-  THirBlockNameVec = np_hir_builder.THirBlockNameVec;
-  THirBlockIdVec = np_hir_builder.THirBlockIdVec;
-  THirAllocaVec = np_hir_builder.THirAllocaVec;
-  THirTypeIdVec = np_hir_builder.THirTypeIdVec;
-  THirValueIdVec = np_hir_builder.THirValueIdVec;
-  THIRBuilder = np_hir_builder.THIRBuilder;
+  TExprStack = nextpas.compiler.ir.hir.builder.TExprStack;
+  TAllocaEntry = nextpas.compiler.ir.hir.builder.TAllocaEntry;
+  THIRExprResult = nextpas.compiler.ir.hir.builder.THIRExprResult;
+  TTypedHirNodeVec = nextpas.compiler.ir.hir.builder.TTypedHirNodeVec;
+  THirNameVec = nextpas.compiler.ir.hir.builder.THirNameVec;
+  THirBlockNameVec = nextpas.compiler.ir.hir.builder.THirBlockNameVec;
+  THirBlockIdVec = nextpas.compiler.ir.hir.builder.THirBlockIdVec;
+  THirAllocaVec = nextpas.compiler.ir.hir.builder.THirAllocaVec;
+  THirTypeIdVec = nextpas.compiler.ir.hir.builder.THirTypeIdVec;
+  THirValueIdVec = nextpas.compiler.ir.hir.builder.THirValueIdVec;
+  THIRBuilder = nextpas.compiler.ir.hir.builder.THIRBuilder;
 
 implementation
 

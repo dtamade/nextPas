@@ -6,6 +6,8 @@
 **最后更新**：2026-09-03（§1.1 六域四件套已兑现 + §1.1.1 独立 L3 族升格完成：pool/stmtcache/sqlscan/trace/factory/async 三件套寄居债已清、已升格独立 L3 族（已满足独立 L3 族四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`PoolClear`/`Close`/`Destroy` 全路径 + owner 反哺门槛）；对齐 http 六域四件套兑现节奏）
 **版本**：1.7（自 1.0 起累计：A5 redis+统一工厂、B1 能力矩阵、B2 查询级超时、B3 观测钩子、C1 语句缓存、C2 数组绑定、C5 调优预设、B6 异步挂载、B7 LISTEN/NOTIFY、B8 Redis SUBSCRIBE、C6 SQL词法共享引擎 + §1.1 六域四件套兑现 + §1.1.1 独立 L3 族升格完成：寄居债已清、六域已升格独立 L3 族）
 
+> **维护注记**：门面可裁剪零硬链与 B13 租约纪律由 `test_db_facade_source_contract` 硬门禁锁定（含 DM 活机 `test_db_dm_adapter` 环境门控段）；池化租约 source-contract 硬门禁见 `check_pool_lease_source_contract.sh`（`CONTRACT.md §2.3/§2.7`、`pool.md §2` 同源）；夜间活机纪律见 `nightly-live.md`（排期触发 + 环境门控 + 诚实跳过，静默断档即拦）。分册细节以 `pool.md`/`trace.md`/`factory.md`/`async.md` 等为准，本册仅索引不双处制表。
+
 ---
 
 ## 1. 家族布局

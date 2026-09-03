@@ -6,7 +6,10 @@ unit nextpas.compiler.toolchain.runner;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.process,
+  nextpas.core.time.base,
+  nextpas.core.async.cancellation,
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
   nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.exception,
@@ -71,10 +74,41 @@ type
     function StepAt(const AIndex: LongInt): TToolchainExecutedStep;
   end;
 
+type
+  TToolchainExecuteOptions = record
+    Timeout: TDuration;
+    MaxOutput: Int64;
+    CancelToken: IAsyncCancellationToken;
+    Deadline: TInstant;
+    HasDeadline: Boolean;
+  end;
+
+function DefaultToolchainExecuteOptions: TToolchainExecuteOptions;
+
 function ExecuteToolchainPlan(
   const APlan: TToolchainPlan;
   const AExecutableSearchPath: string
-): TToolchainRunResult;
+): TToolchainRunResult; overload;
+
+function ExecuteToolchainPlan(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const ADeadline: TInstant
+): TToolchainRunResult; overload;
+
+function ExecuteToolchainPlan(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const AOptions: TToolchainExecuteOptions
+): TToolchainRunResult; overload;
+
+function ExecuteStep(
+  const AStep: TToolInvocationStep;
+  const AResolvedPath: string;
+  const ATimeout: TDuration;
+  const AMaxOutput: Int64;
+  const ACancelToken: IAsyncCancellationToken
+): TProcessOutput; overload;
 
 implementation
 
@@ -182,20 +216,56 @@ begin
         Exit(True);
 end;
 
+function DefaultToolchainExecuteOptions: TToolchainExecuteOptions;
+begin
+  Result.Timeout := TDuration.Zero;
+  Result.MaxOutput := cProcessDefaultMaxOutput;
+  Result.CancelToken := nil;
+  Result.Deadline := Default(TInstant);
+  Result.HasDeadline := False;
+end;
+
+function ExecuteStep(
+  const AStep: TToolInvocationStep;
+  const AResolvedPath: string;
+  const ATimeout: TDuration;
+  const AMaxOutput: Int64;
+  const ACancelToken: IAsyncCancellationToken
+): TProcessOutput;
+var
+  Args: TStringArray;
+  Cmd: ICommand;
+  EffectiveMaxOutput: Int64;
+begin
+  Args := ToolchainArgvAsArray(AStep.Argv);
+  EffectiveMaxOutput := AMaxOutput;
+  if EffectiveMaxOutput = 0 then
+    EffectiveMaxOutput := cProcessDefaultMaxOutput;
+  Cmd := Command(AResolvedPath).Args(Args).MaxOutput(EffectiveMaxOutput);
+  if not ATimeout.IsZero then
+    Cmd := Cmd.Timeout(ATimeout);
+  if ACancelToken <> nil then
+    Cmd := Cmd.CancelToken(ACancelToken);
+  if AStep.WorkingDirectory <> '' then
+    Cmd := Cmd.Dir(ExpandFileName(AStep.WorkingDirectory));
+  Result := Cmd.Output;
+end;
+
 function ExecuteStep(
   const AStep: TToolInvocationStep;
   const AResolvedPath: string
 ): LongInt;
 var
-  Args: array of string;
-  LOutput: TProcessOutput;
+  LOut: TProcessOutput;
 begin
-  Args := ToolchainArgvAsArray(AStep.Argv);
-  if AStep.WorkingDirectory <> '' then
-    LOutput := RunIn(AResolvedPath, Args, ExpandFileName(AStep.WorkingDirectory))
-  else
-    LOutput := Run(AResolvedPath, Args);
-  Result := LOutput.ExitCode;
+  LOut := ExecuteStep(AStep, AResolvedPath, TDuration.Zero, cProcessDefaultMaxOutput, nil);
+  if LOut.TimedOut then
+    raise EToolchainRunnerError.Create('toolchain.step-timeout: ' + AStep.StepId);
+  if LOut.Cancelled then
+    raise EToolchainRunnerError.Create('toolchain.step-cancelled: ' + AStep.StepId);
+  if LOut.OutputLimited then
+    raise EToolchainRunnerError.Create('toolchain.step-output-limited: ' + AStep.StepId);
+  Result := LOut.ExitCode;
 end;
 
 constructor TToolchainRunResult.Create;
@@ -295,9 +365,47 @@ begin
   Result := FSteps[SizeUInt(AIndex)];
 end;
 
+function ExecuteToolchainPlanWithOptions(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const AOptions: TToolchainExecuteOptions
+): TToolchainRunResult; forward;
+
 function ExecuteToolchainPlan(
   const APlan: TToolchainPlan;
   const AExecutableSearchPath: string
+): TToolchainRunResult;
+begin
+  Result := ExecuteToolchainPlanWithOptions(APlan, AExecutableSearchPath, DefaultToolchainExecuteOptions);
+end;
+
+function ExecuteToolchainPlan(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const ADeadline: TInstant
+): TToolchainRunResult;
+var
+  Opts: TToolchainExecuteOptions;
+begin
+  Opts := DefaultToolchainExecuteOptions;
+  Opts.Deadline := ADeadline;
+  Opts.HasDeadline := True;
+  Result := ExecuteToolchainPlanWithOptions(APlan, AExecutableSearchPath, Opts);
+end;
+
+function ExecuteToolchainPlan(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const AOptions: TToolchainExecuteOptions
+): TToolchainRunResult;
+begin
+  Result := ExecuteToolchainPlanWithOptions(APlan, AExecutableSearchPath, AOptions);
+end;
+
+function ExecuteToolchainPlanWithOptions(
+  const APlan: TToolchainPlan;
+  const AExecutableSearchPath: string;
+  const AOptions: TToolchainExecuteOptions
 ): TToolchainRunResult;
 var
   ExecutedSidecars: TToolchainExecutedSidecarArray;
@@ -305,6 +413,10 @@ var
   ResolvedPath: string;
   Step: TToolInvocationStep;
   StepIndex: LongInt;
+  EffectiveTimeout: TDuration;
+  Remaining: TDuration;
+  StepOutput: TProcessOutput;
+  HasOutput: Boolean;
 begin
   Result := TToolchainRunResult.Create;
   if (APlan = nil) or (APlan.Status <> 'ready') then
@@ -321,7 +433,44 @@ begin
     Step := APlan.StepAt(StepIndex);
     ExecutedSidecars := BuildExecutedSidecars(Step);
     ResolvedPath := '';
+    ExitCodeValue := 0;
+    HasOutput := False;
+    FillChar(StepOutput, SizeOf(StepOutput), 0);
     try
+      if AOptions.HasDeadline then
+      begin
+        Remaining := AOptions.Deadline.DurationSince(TInstant.Now);
+        if Remaining.IsNegative or Remaining.IsZero then
+        begin
+          FinalizeUncleanedSidecars(ExecutedSidecars);
+          Result.AppendStep(
+            Step.StepId,
+            Step.LogicalExecutable,
+            '',
+            'failed',
+            False,
+            0,
+            ExecutedSidecars
+          );
+          Result.MarkFailure('toolchain.deadline-exceeded', 'toolchain deadline exceeded before step ' + Step.StepId);
+          Exit;
+        end;
+      end;
+      if (AOptions.CancelToken <> nil) and AOptions.CancelToken.IsCancelled then
+      begin
+        FinalizeUncleanedSidecars(ExecutedSidecars);
+        Result.AppendStep(
+          Step.StepId,
+          Step.LogicalExecutable,
+          '',
+          'failed',
+          False,
+          0,
+          ExecutedSidecars
+        );
+        Result.MarkFailure('toolchain.cancelled', 'toolchain cancelled before step ' + Step.StepId);
+        Exit;
+      end;
       EnsureStepDirectories(Step);
       CleanHostCompilerScratchOutputs(Step);
       MaterializeSidecars(Step, ExecutedSidecars);
@@ -340,9 +489,31 @@ begin
         Continue;
       end;
       ResolvedPath := ResolveExecutablePath(Step, AExecutableSearchPath);
-      ExitCodeValue := ExecuteStep(Step, ResolvedPath);
-    except
-      on E: Exception do
+      EffectiveTimeout := AOptions.Timeout;
+      if AOptions.HasDeadline then
+      begin
+        Remaining := AOptions.Deadline.DurationSince(TInstant.Now);
+        if Remaining.IsNegative or Remaining.IsZero then
+        begin
+          FinalizeUncleanedSidecars(ExecutedSidecars);
+          Result.AppendStep(
+            Step.StepId,
+            Step.LogicalExecutable,
+            ResolvedPath,
+            'failed',
+            False,
+            0,
+            ExecutedSidecars
+          );
+          Result.MarkFailure('toolchain.deadline-exceeded', 'toolchain deadline exceeded for step ' + Step.StepId);
+          Exit;
+        end;
+        if EffectiveTimeout.IsZero or (Remaining < EffectiveTimeout) then
+          EffectiveTimeout := Remaining;
+      end;
+      StepOutput := ExecuteStep(Step, ResolvedPath, EffectiveTimeout, AOptions.MaxOutput, AOptions.CancelToken);
+      HasOutput := True;
+      if StepOutput.Cancelled then
       begin
         FinalizeUncleanedSidecars(ExecutedSidecars);
         Result.AppendStep(
@@ -350,10 +521,68 @@ begin
           Step.LogicalExecutable,
           ResolvedPath,
           'failed',
-          False,
-          0,
+          True,
+          StepOutput.ExitCode,
           ExecutedSidecars
         );
+        Result.MarkFailure(Step.FailureMapping, 'toolchain cancelled: ' + Step.StepId);
+        Exit;
+      end;
+      if StepOutput.TimedOut then
+      begin
+        FinalizeUncleanedSidecars(ExecutedSidecars);
+        Result.AppendStep(
+          Step.StepId,
+          Step.LogicalExecutable,
+          ResolvedPath,
+          'failed',
+          True,
+          StepOutput.ExitCode,
+          ExecutedSidecars
+        );
+        Result.MarkFailure(Step.FailureMapping, 'toolchain timeout: ' + Step.StepId);
+        Exit;
+      end;
+      if StepOutput.OutputLimited then
+      begin
+        FinalizeUncleanedSidecars(ExecutedSidecars);
+        Result.AppendStep(
+          Step.StepId,
+          Step.LogicalExecutable,
+          ResolvedPath,
+          'failed',
+          True,
+          StepOutput.ExitCode,
+          ExecutedSidecars
+        );
+        Result.MarkFailure(Step.FailureMapping, 'toolchain output limited: ' + Step.StepId);
+        Exit;
+      end;
+      ExitCodeValue := StepOutput.ExitCode;
+    except
+      on E: Exception do
+      begin
+        FinalizeUncleanedSidecars(ExecutedSidecars);
+        if HasOutput then
+          Result.AppendStep(
+            Step.StepId,
+            Step.LogicalExecutable,
+            ResolvedPath,
+            'failed',
+            True,
+            StepOutput.ExitCode,
+            ExecutedSidecars
+          )
+        else
+          Result.AppendStep(
+            Step.StepId,
+            Step.LogicalExecutable,
+            ResolvedPath,
+            'failed',
+            False,
+            0,
+            ExecutedSidecars
+          );
         Result.MarkFailure(Step.FailureMapping, E.Message);
         Exit;
       end;

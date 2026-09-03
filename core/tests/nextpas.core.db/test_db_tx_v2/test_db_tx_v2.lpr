@@ -58,11 +58,11 @@ begin
     MakeTable(Conn);
     Raised := False;
     try
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t_nx (tag) VALUES (''outer-keep'')');
         try
-          WithTransaction(Conn, procedure
+          WithTransaction(Conn, procedure(const C: IDbConnection)
           begin
             Conn.Exec('INSERT INTO t_nx (tag) VALUES (''inner-doomed'')');
             raise Exception.Create('inner boom');
@@ -96,13 +96,13 @@ begin
   Conn := ConnectSqlite(':memory:');
   try
     MakeTable(Conn);
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       Conn.Exec('INSERT INTO t_nx (tag) VALUES (''lv1-keep'')');
       try
-        WithTransaction(Conn, procedure
+        WithTransaction(Conn, procedure(const C: IDbConnection)
         begin
-          WithTransaction(Conn, procedure
+          WithTransaction(Conn, procedure(const C: IDbConnection)
           begin
             Conn.Exec('INSERT INTO t_nx (tag) VALUES (''lv3-swallowed'')');
           end);
@@ -139,7 +139,7 @@ begin
     Conn.Exec('INSERT INTO t_nx (tag) VALUES (''manual-outer'')');
     Raised := False;
     try
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Conn.Exec('INSERT INTO t_nx (tag) VALUES (''helper-doomed'')');
         raise Exception.Create('inner boom under manual outer');
@@ -172,10 +172,10 @@ begin
     Check(Conn.QueryInterface(IDbTxControl, Tx) = 0, 'depth: tx control');
     Check(Tx.TxDepth = 0, 'depth: zero before any scope');
 
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       Check(Tx.TxDepth = 1, 'depth: one inside outermost helper scope');
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
         Check(Tx.TxDepth = 1,
           'depth: still one in nested scope (savepoint is not a transaction)');
@@ -188,7 +188,7 @@ begin
     Tx.BeginTxn(False);
     Check(Tx.TxDepth = 2, 'depth: manual nesting counts up as before');
     LObserved := -1;
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       LObserved := Tx.TxDepth;
     end);
@@ -215,9 +215,9 @@ begin
     I := 0;
     while I < 3 do                          { 兄弟层级顺序执行，固定名安全复用 }
     begin
-      WithTransaction(Conn, procedure
+      WithTransaction(Conn, procedure(const C: IDbConnection)
       begin
-        WithTransaction(Conn, procedure
+        WithTransaction(Conn, procedure(const C: IDbConnection)
         begin
           Conn.Exec('INSERT INTO t_nx (tag) VALUES (''sib'')');
         end);
@@ -394,7 +394,7 @@ begin
   try
     { 顶层在无 savepoint 能力的连接上照常工作（真 BEGIN 路径） }
     Tx := Fake as IDbTxControl;
-    WithTransaction(Fake, procedure
+    WithTransaction(Fake, procedure(const C: IDbConnection)
     begin
       Check(Tx.TxDepth = 1, 'cap: top-level works');
     end);
@@ -404,10 +404,10 @@ begin
       （内层尚未做任何事，外层数据完好） }
     Raised := False;
     try
-      WithTransaction(Fake, procedure
+      WithTransaction(Fake, procedure(const C: IDbConnection)
       begin
         try
-          WithTransaction(Fake, procedure
+          WithTransaction(Fake, procedure(const C: IDbConnection)
           begin
           end);
         except
@@ -424,9 +424,9 @@ begin
     { 拒绝异常不被捕获穿出外层 ⇒ 外层自动回滚收尾 }
     Raised := False;
     try
-      WithTransaction(Fake, procedure
+      WithTransaction(Fake, procedure(const C: IDbConnection)
       begin
-        WithTransaction(Fake, procedure
+        WithTransaction(Fake, procedure(const C: IDbConnection)
         begin
         end);
       end);
@@ -522,7 +522,7 @@ var
 begin
   Raised := False;
   try
-    WithTransaction(nil, procedure begin end);
+    WithTransaction(nil, procedure(const C: IDbConnection) begin end);
   except
     on E: EDbError do
       Raised := Pos('nil connection', E.Message) > 0;
@@ -533,7 +533,7 @@ begin
   try
     Raised := False;
     try
-      WithTransaction(Conn, TDbTxProc(nil));
+      WithTransaction(Conn, TDbConnProc(nil));
     except
       on E: EDbError do
         Raised := Pos('nil transaction callback', E.Message) > 0;
@@ -543,7 +543,7 @@ begin
     Itf := TFakeNoTxConn.Create as IDbConnection;
     Raised := False;
     try
-      WithTransaction(Itf, procedure begin end);
+      WithTransaction(Itf, procedure(const C: IDbConnection) begin end);
     except
       on E: EDbError do
         Raised := Pos('transaction control', E.Message) > 0;

@@ -23,12 +23,13 @@ interface
 uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
-  nextpas.core.db.pool;
+  nextpas.core.db.pool,
+  nextpas.core.db.sqlite.base;
 
 { F-10：文件库并发读写依赖 busy_timeout 排队；0 = 立即 SQLITE_BUSY。
-  工厂便利形态的缺省值，亦作消费方调参基准。 }
+  单源于 sqlite.base.DefaultSqliteBusyTimeoutMs（本单元 re-export 保持 API 兼容，零漂移）。 }
 const
-  DefaultSqliteBusyTimeoutMs = 5000;
+  DefaultSqliteBusyTimeoutMs = nextpas.core.db.sqlite.base.DefaultSqliteBusyTimeoutMs;
 
 { 便利形态：TDbPoolPolicy.Default 仅覆盖 MaxReadConnections；
   连接选项 = TDbConnectOptions.Default 但 BusyTimeoutMs 取

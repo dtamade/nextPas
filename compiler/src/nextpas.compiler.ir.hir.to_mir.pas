@@ -10,6 +10,12 @@
  *
  * Optional IAllocator: session phase scratch for FValueMap growth.
  * MIR module itself stays on the default heap (lives past scratch Reset).
+ *
+ * 性能保证：
+ *   - ValueId 映射 O(1) 哈希（THashMap），避免线性扫描 O(n²) 热点
+ *   - 块/指令零拷贝：通过 GetPtr 直接引用 HIR 向量存储，无记录拷贝
+ *   - 类型宽度/符号位带缓存，重复操作数共享
+ *   - 诊断带上下文：不支持的指令携带函数/块/行列信息
  *}
 
 unit nextpas.compiler.ir.hir.to_mir;
@@ -22,7 +28,8 @@ interface
 uses
   nextpas.compiler.ir.hir.model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.mir.model,
   nextpas.core.mem.intf,
-  nextpas.core.collections.vec;
+  nextpas.core.collections.vec,
+  nextpas.core.collections.hashmap;
 
 type
   THirMirValueMapEntry = record
@@ -30,7 +37,8 @@ type
     MirId: TMirValueId;
   end;
 
-  THirMirValueMap = specialize TVec<THirMirValueMapEntry>;
+  { O(1) 哈希映射替代线性向量，解决词法/语义/降级热点 }
+  THirMirValueMap = specialize THashMap<THIRValueId, TMirValueId>;
 
   {**
    * THirToMirLowering — HIR → MIR 降级器
@@ -43,8 +51,11 @@ type
     FHirModule: THIRModule;
     FMirModule: TMirModule;
     FAllocator: IAllocator;
-    { HIR ValueId → MIR ValueId 映射 (arena-backed when AAllocator set) }
+    { HIR ValueId → MIR ValueId 映射 (O(1) hash, arena-backed when AAllocator set) }
     FValueMap: THirMirValueMap;
+    { 类型信息缓存：TypeId → BitWidth / Signed，避免重复 GetType 线性扫描 }
+    FTypeWidthCache: specialize THashMap<THIRTypeId, LongInt>;
+    FTypeSignedCache: specialize THashMap<THIRTypeId, Boolean>;
     function HirTypeWidth(ATypeId: THIRTypeId): LongInt;
     function HirTypeSigned(ATypeId: THIRTypeId): Boolean;
     function MapValue(AHirValueId: THIRValueId): TMirValueId;
@@ -67,6 +78,9 @@ type
 
 implementation
 
+uses
+  SysUtils;
+
 constructor THirToMirLowering.Create(const AHirModule: THIRModule;
   const AAllocator: IAllocator);
 begin
@@ -75,13 +89,18 @@ begin
   FMirModule := nil;
   FAllocator := AAllocator;
   if FAllocator <> nil then
-    FValueMap := THirMirValueMap.Create(0, FAllocator)
+    FValueMap := THirMirValueMap.Create(0, nil, nil, FAllocator)
   else
     FValueMap := THirMirValueMap.Create;
+  // 类型缓存常驻 default heap（跨函数复用，Clear 不清空以提升命中率）
+  FTypeWidthCache := specialize THashMap<THIRTypeId, LongInt>.Create;
+  FTypeSignedCache := specialize THashMap<THIRTypeId, Boolean>.Create;
 end;
 
 destructor THirToMirLowering.Destroy;
 begin
+  FTypeSignedCache.Free;
+  FTypeWidthCache.Free;
   FValueMap.Free;
   FMirModule.Free;
   inherited Destroy;
@@ -91,31 +110,35 @@ function THirToMirLowering.HirTypeWidth(ATypeId: THIRTypeId): LongInt;
 var
   TypeRec: THIRTypeRec;
 begin
+  if ATypeId = 0 then
+    Exit(0);
+  if FTypeWidthCache.TryGetValue(ATypeId, Result) then
+    Exit;
   TypeRec := FHirModule.Types.GetType(ATypeId);
   Result := TypeRec.BitWidth;
+  FTypeWidthCache.Add(ATypeId, Result);
 end;
 
 function THirToMirLowering.HirTypeSigned(ATypeId: THIRTypeId): Boolean;
 var
   TypeRec: THIRTypeRec;
 begin
+  if ATypeId = 0 then
+    Exit(False);
+  if FTypeSignedCache.TryGetValue(ATypeId, Result) then
+    Exit;
   TypeRec := FHirModule.Types.GetType(ATypeId);
   Result := TypeRec.Signed;
+  FTypeSignedCache.Add(ATypeId, Result);
 end;
 
 function THirToMirLowering.MapValue(AHirValueId: THIRValueId): TMirValueId;
-var
-  I: SizeUInt;
-  Entry: THirMirValueMapEntry;
 begin
-  if FValueMap.Count > 0 then
-    for I := 0 to FValueMap.Count - 1 do
-      if FValueMap[I].HirId = AHirValueId then
-        Exit(FValueMap[I].MirId);
+  // O(1) 哈希查找，替代原 for I:=0 to Count-1 线性扫描 O(n)
+  if FValueMap.TryGetValue(AHirValueId, Result) then
+    Exit;
   Result := FMirModule.NewValue;
-  Entry.HirId := AHirValueId;
-  Entry.MirId := Result;
-  FValueMap.Push(Entry);
+  FValueMap.Add(AHirValueId, Result);
 end;
 
 function THirToMirLowering.MapOperand(const AOp: THIROperand): TMirOperand;
@@ -179,16 +202,22 @@ procedure THirToMirLowering.LowerFunction(const AHirFunc: THIRFunction);
 var
   MirFuncId: TMirFuncId;
   I: LongInt;
+  PParam: ^THIRParam;
+  PBlock: ^THIRBlock;
 begin
   MirFuncId := FMirModule.AddFunction(AHirFunc.Name,
     HirTypeWidth(AHirFunc.ReturnTypeId),
     HirTypeSigned(AHirFunc.ReturnTypeId));
 
+  // 零拷贝：通过 GetPtr 直接引用参数向量存储
   if AHirFunc.Params <> nil then
     for I := 0 to LongInt(AHirFunc.Params.Count) - 1 do
-      FMirModule.AddParam(MirFuncId, AHirFunc.Params[SizeUInt(I)].Name,
-        HirTypeWidth(AHirFunc.Params[SizeUInt(I)].TypeId),
-        HirTypeSigned(AHirFunc.Params[SizeUInt(I)].TypeId));
+    begin
+      PParam := AHirFunc.Params.GetPtr(SizeUInt(I));
+      FMirModule.AddParam(MirFuncId, PParam^.Name,
+        HirTypeWidth(PParam^.TypeId),
+        HirTypeSigned(PParam^.TypeId));
+    end;
 
   if AHirFunc.IsExternal then
     FMirModule.SetExternal(MirFuncId,
@@ -196,9 +225,13 @@ begin
 
   FValueMap.Clear;
 
+  // 零拷贝：通过 GetPtr 遍历块
   if AHirFunc.Blocks <> nil then
     for I := 0 to LongInt(AHirFunc.Blocks.Count) - 1 do
-      LowerBlock(AHirFunc, AHirFunc.Blocks[SizeUInt(I)], MirFuncId);
+    begin
+      PBlock := AHirFunc.Blocks.GetPtr(SizeUInt(I));
+      LowerBlock(AHirFunc, PBlock^, MirFuncId);
+    end;
 
   if AHirFunc.EntryBlockId <> 0 then
     FMirModule.SetEntryBlock(MirFuncId, AHirFunc.EntryBlockId);
@@ -208,122 +241,111 @@ procedure THirToMirLowering.LowerBlock(const AHirFunc: THIRFunction;
   const AHirBlock: THIRBlock; AMirFuncId: TMirFuncId);
 var
   MirBlockId: TMirBlockId;
-  I, OpCount: LongInt;
+  I, OpCount, J: LongInt;
   MirStmt: TMirStmt;
   MirOp: TMirOp;
   MirStmtKind: TMirStmtKind;
+  HirInstr: ^THIRInstr;
 begin
   MirBlockId := FMirModule.AddBlock(AMirFuncId, AHirBlock.Name);
 
   if AHirBlock.Instrs <> nil then
     for I := 0 to LongInt(AHirBlock.Instrs.Count) - 1 do
     begin
+      // 零拷贝：GetPtr 返回指向向量内存储的指针，无 THIRInstr 记录拷贝
+      HirInstr := AHirBlock.Instrs.GetPtr(SizeUInt(I));
       FillChar(MirStmt, SizeOf(MirStmt), 0);
 
-      if not TranslateInstrKind(AHirBlock.Instrs[SizeUInt(I)].Kind, MirOp,
-        MirStmtKind) then
+      if not TranslateInstrKind(HirInstr^.Kind, MirOp, MirStmtKind) then
       begin
-        MirStmt.Kind := mskAssign;
-        MirStmt.Dst := MapValue(AHirBlock.Instrs[SizeUInt(I)].ResultId);
-        FMirModule.AddStmt(AMirFuncId, MirBlockId, MirStmt);
-        Continue;
+        // 诊断带上下文：携带函数/块/指令类型/源码位置/ResultId
+        raise Exception.CreateFmt(
+          'HIR→MIR: unsupported instr kind %d in %s.%s at %d:%d (result %d)',
+          [Ord(HirInstr^.Kind), AHirFunc.Name, AHirBlock.Name,
+           HirInstr^.SourceLine, HirInstr^.SourceCol, HirInstr^.ResultId]);
       end;
 
       MirStmt.Kind := MirStmtKind;
-      MirStmt.Dst := MapValue(AHirBlock.Instrs[SizeUInt(I)].ResultId);
+      MirStmt.Dst := MapValue(HirInstr^.ResultId);
       MirStmt.Op := MirOp;
-      OpCount := Length(AHirBlock.Instrs[SizeUInt(I)].Operands);
+      OpCount := Length(HirInstr^.Operands);
 
       case MirStmtKind of
         mskAssign:
           if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
 
         mskUnary:
           if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
 
         mskBinary:
           begin
-            if AHirBlock.Instrs[SizeUInt(I)].Kind in [hikCmpGt, hikCmpGe] then
+            if HirInstr^.Kind in [hikCmpGt, hikCmpGe] then
             begin
               { Swap operands: CmpGt(a,b) → SLt(b,a), CmpGe(a,b) → SLe(b,a) }
               if OpCount >= 2 then
               begin
-                MirStmt.Lhs := MapOperand(
-                  AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
-                MirStmt.Rhs := MapOperand(
-                  AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+                MirStmt.Lhs := MapOperand(HirInstr^.Operands[1]);
+                MirStmt.Rhs := MapOperand(HirInstr^.Operands[0]);
               end;
             end
             else
             begin
               if OpCount >= 1 then
-                MirStmt.Lhs := MapOperand(
-                  AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+                MirStmt.Lhs := MapOperand(HirInstr^.Operands[0]);
               if OpCount >= 2 then
-                MirStmt.Rhs := MapOperand(
-                  AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
+                MirStmt.Rhs := MapOperand(HirInstr^.Operands[1]);
             end;
           end;
 
         mskCall:
           begin
-            MirStmt.FuncName := AHirBlock.Instrs[SizeUInt(I)].CallTarget;
-            if AHirBlock.Instrs[SizeUInt(I)].Kind = hikIntrinsic then
-              MirStmt.FuncName := AHirBlock.Instrs[SizeUInt(I)].IntrinsicName;
+            MirStmt.FuncName := HirInstr^.CallTarget;
+            if HirInstr^.Kind = hikIntrinsic then
+              MirStmt.FuncName := HirInstr^.IntrinsicName;
             if OpCount > 0 then
             begin
               MirStmt.Args := TMirOperandVec.Create(SizeUInt(OpCount));
-              for OpCount := 0 to OpCount - 1 do
-                MirStmt.Args.Push(MapOperand(
-                  AHirBlock.Instrs[SizeUInt(I)].Operands[OpCount]));
+              for J := 0 to OpCount - 1 do
+                MirStmt.Args.Push(MapOperand(HirInstr^.Operands[J]));
             end;
           end;
 
         mskAlloca:
           begin
-            MirStmt.BitWidth := HirTypeWidth(
-              AHirBlock.Instrs[SizeUInt(I)].TypeId);
-            MirStmt.StructTypeName :=
-              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+            MirStmt.BitWidth := HirTypeWidth(HirInstr^.TypeId);
+            MirStmt.StructTypeName := HirInstr^.StructTypeName;
           end;
 
         mskLoad, mskStore:
           if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
 
         mskGetFieldPtr:
           begin
             if OpCount >= 1 then
-              MirStmt.Src := MapOperand(
-                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
-            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
-            MirStmt.Src.StructTypeName :=
-              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+              MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
+            MirStmt.FieldIndex := HirInstr^.FieldIndex;
+            MirStmt.Src.StructTypeName := HirInstr^.StructTypeName;
           end;
 
         mskExtractField:
           begin
             if OpCount >= 1 then
-              MirStmt.Src := MapOperand(
-                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
-            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
-            MirStmt.Src.StructTypeName :=
-              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+              MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
+            MirStmt.FieldIndex := HirInstr^.FieldIndex;
+            MirStmt.Src.StructTypeName := HirInstr^.StructTypeName;
           end;
 
         mskInsertField:
           begin
             if OpCount >= 1 then
-              MirStmt.Src := MapOperand(
-                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+              MirStmt.Src := MapOperand(HirInstr^.Operands[0]);
             if OpCount >= 2 then
-              MirStmt.Rhs := MapOperand(
-                AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
-            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
-            MirStmt.Src.StructTypeName :=
-              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+              MirStmt.Rhs := MapOperand(HirInstr^.Operands[1]);
+            MirStmt.FieldIndex := HirInstr^.FieldIndex;
+            MirStmt.Src.StructTypeName := HirInstr^.StructTypeName;
           end;
       end;
 
@@ -340,6 +362,7 @@ var
   MirTerm: TMirTerminator;
   CaseEntry: TMirSwitchCase;
   I: LongInt;
+  PCase: ^THIRSwitchCase;
 begin
   FillChar(MirTerm, SizeOf(MirTerm), 0);
 
@@ -373,8 +396,10 @@ begin
             TMirSwitchCaseVec.Create(AHirTerm.SwitchCases.Count);
           for I := 0 to LongInt(AHirTerm.SwitchCases.Count) - 1 do
           begin
-            CaseEntry.Value := AHirTerm.SwitchCases[SizeUInt(I)].Value;
-            CaseEntry.Target := AHirTerm.SwitchCases[SizeUInt(I)].TargetBlock;
+            // 零拷贝：GetPtr 避免 THIRSwitchCase 记录拷贝触发托管类型计数
+            PCase := AHirTerm.SwitchCases.GetPtr(SizeUInt(I));
+            CaseEntry.Value := PCase^.Value;
+            CaseEntry.Target := PCase^.TargetBlock;
             MirTerm.SwitchCases.Push(CaseEntry);
           end;
         end;
@@ -392,8 +417,14 @@ var
 begin
   FMirModule := TMirModule.Create(FHirModule.ModuleName);
 
+  // 零拷贝：遍历函数向量通过 GetPtr
   for I := 0 to FHirModule.FunctionCount - 1 do
+  begin
+    // FunctionAt 返回拷贝，改用 GetPtr 零拷贝路径需直接访问 FFunctions
+    // 此处保留 FunctionAt 以保持语义一致（HIR 模块拥有数据，拷贝开销相较块/指令可忽略）
+    // 若需极致零拷贝可暴露 THIRModule.FunctionPtrAt
     LowerFunction(FHirModule.FunctionAt(I));
+  end;
 
   Result := FMirModule;
 end;

@@ -364,11 +364,27 @@ end;
 function THIRLlvmEmitter.AsText: string;
 var
   I: SizeUInt;
+  LBuilder: TBufStringBuilder;
+  LTotal: SizeUInt;
+  LLineEndingLen: SizeUInt;
 begin
-  Result := '';
-  if FLines.Count > 0 then
+  if FLines.Count = 0 then
+    Exit('');
+  LLineEndingLen := SizeUInt(Length(LineEnding));
+  LTotal := 0;
+  for I := 0 to FLines.Count - 1 do
+    Inc(LTotal, SizeUInt(Length(FLines[I])) + LLineEndingLen);
+  LBuilder.Init(LTotal);
+  try
     for I := 0 to FLines.Count - 1 do
-      Result := Result + FLines[I] + LineEnding;
+    begin
+      LBuilder.AppendStr(FLines[I]);
+      LBuilder.AppendStr(LineEnding);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 procedure THIRLlvmEmitter.SaveToFile(const APath: string);
@@ -378,8 +394,11 @@ var
 begin
   AssignFile(F, APath);
   Rewrite(F);
-  if FLines.Count > 0 then
-    for I := 0 to FLines.Count - 1 do
-      WriteLn(F, FLines[I]);
-  CloseFile(F);
+  try
+    if FLines.Count > 0 then
+      for I := 0 to FLines.Count - 1 do
+        WriteLn(F, FLines[I]);
+  finally
+    CloseFile(F);
+  end;
 end;

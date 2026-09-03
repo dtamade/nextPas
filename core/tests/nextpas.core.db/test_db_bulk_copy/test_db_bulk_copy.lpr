@@ -3,6 +3,7 @@ program test_db_bulk_copy;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.test,
   nextpas.core.base.utils,
   nextpas.core.db.base,
@@ -250,6 +251,37 @@ begin
   Check(Q.GetInt64(0) = 0, 'bulk rows absent 0');
 end;
 
+procedure TestBulkOverestimateThreshold;
+var
+  Conn: IDbConnection;
+  Bulk: IDbBulkCopy;
+  Q8, Thr: Integer;
+  I: Integer;
+begin
+  Conn := ConnectSqlite(':memory:');
+  Conn.Exec('CREATE TABLE t (a TEXT, b TEXT)');
+  Supports(Conn, IDbBulkCopy, Bulk);
+  Bulk.BeginCopy('t', ['a', 'b']);
+  // worst '' heavy: Length*2+2 overestimate should stay within Q8 512 (2.0) CI gate; also test super-long guard via BULK_MAX_CHUNK_BYTES spill
+  for I := 1 to 20 do
+    Bulk.WriteRow([StringOfChar('''', 200), StringOfChar('x', 500)]);
+  Bulk.EndCopy;
+  Thr := DbBulkOverestimateThresholdQ8;
+  Check(Thr = 512, 'threshold Q8 512');
+  Q8 := DbBulkLastOverestimateRatioQ8;
+  Check(Q8 > 0, 'Q8 monitored');
+  Check(Q8 <= Thr, 'overestimate Q8 within threshold 2.0');
+  Check(DbBulkIsOverestimateOk, 'IsOverestimateOk gate');
+  Check(DbBulkLastEstimated >= DbBulkLastActual, 'estimated >= actual');
+  // flat buffer path also gated
+  Conn.Exec('DELETE FROM t');
+  Supports(Conn, IDbBulkCopy, Bulk);
+  Bulk.BeginCopy('t', ['a', 'b']);
+  Bulk.WriteRow(['x', 'y']);
+  Bulk.EndCopy;
+  Check(DbBulkIsOverestimateOk, 'small row gate ok');
+end;
+
 procedure TestBulkBufferDirect;
 var
   Buf: TDbBulkBuffer;
@@ -478,6 +510,51 @@ begin
   VerifyBulkOnLive(Conn, 't_bulk_dm');
 end;
 
+procedure TestBulkCacheBypassNoPollution;
+var
+  Conn: IDbConnection;
+  Ctrl: IDbStmtCacheControl;
+  Bulk: IDbBulkCopy;
+  Q: IDbQuery;
+  HitBefore, HitAfter: Double;
+  K: Integer;
+begin
+  // perf: isolated point-query LRU64 hit_rate gate (500 rows/chunk bypass by design orthogonal to 2.39×/2.12×, bytes.ops single source, inline zero-copy via DbBulkChunkRows)
+  // stability: try..finally via IDbBulkCopy EndCopy + Q:=nil interface release not lost
+  Conn := ConnectSqlite(':memory:');
+  Conn.Exec('CREATE TABLE t_cache (id INTEGER PRIMARY KEY, v TEXT)');
+  for K := 1 to 200 do
+    Conn.Exec('INSERT INTO t_cache VALUES (' + IntToStr(K) + ', ''v' + IntToStr(K) + ''')');
+  Check(Supports(Conn, IDbStmtCacheControl, Ctrl), 'cache control QI');
+  Check(Ctrl <> nil, 'cache control not nil');
+  for K := 1 to 5000 do
+  begin
+    Q := Conn.Query('SELECT v FROM t_cache WHERE id = ?');
+    Q.BindInt64(1, (K mod 200) + 1);
+    while Q.Step do ;
+    Q := nil;
+  end;
+  HitBefore := Ctrl.HitRate;
+  Check(HitBefore > 0.99, 'hit before ~1.0');
+  Supports(Conn, IDbBulkCopy, Bulk);
+  Conn.Exec('CREATE TABLE t_cache_bulk (id INTEGER, v TEXT)');
+  Bulk.BeginCopy('t_cache_bulk', ['id', 'v']);
+  for K := 1 to 1000 do
+    Bulk.WriteRow([IntToStr(K), 'v' + IntToStr(K)]);
+  Bulk.EndCopy;
+  try Conn.Exec('DROP TABLE IF EXISTS t_cache_bulk'); except end;
+  for K := 1 to 5000 do
+  begin
+    Q := Conn.Query('SELECT v FROM t_cache WHERE id = ?');
+    Q.BindInt64(1, (K mod 200) + 1);
+    while Q.Step do ;
+    Q := nil;
+  end;
+  HitAfter := Ctrl.HitRate;
+  // gate: drop>0.05 = regress Halt (500 rows/chunk literal bypass LRU64 by design must not pollute point 2.39×)
+  Check(HitAfter >= HitBefore - 0.05, 'cache bypass no pollution hit_rate 0丢 gate');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.db.bulk_copy');
   T.Test('basic bulk', @TestBasicBulk);
@@ -490,9 +567,11 @@ begin
   T.Test('rollback on error', @TestBulkRollbackOnError);
   T.Test('rollback on error inside txn (savepoint)', @TestBulkRollbackOnErrorInsideTxn);
   T.Test('bulk buffer direct (DbBulkEscape/TDbBulkBuffer reuse)', @TestBulkBufferDirect);
+  T.Test('bulk overestimate threshold CI gate (Q8 512 + BULK_MAX_CHUNK_BYTES spill)', @TestBulkOverestimateThreshold);
   T.Test('bulk live pg (env-gated)', @TestBulkLivePg);
   T.Test('bulk live mysql (env-gated)', @TestBulkLiveMysql);
   T.Test('bulk live odbc (env-gated)', @TestBulkLiveOdbc);
   T.Test('bulk live dm (env-gated)', @TestBulkLiveDm);
+  T.Test('bulk cache bypass no pollution (LRU64 orthogonal 2.39× gate)', @TestBulkCacheBypassNoPollution);
   if not T.Run then Halt(1);
 end.

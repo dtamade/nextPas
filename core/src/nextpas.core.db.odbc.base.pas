@@ -23,6 +23,12 @@ uses
   nextpas.core.exception;
 
 const
+  { 透明语句缓存默认容量（预留，当前 odbc 网关未启用缓存；
+    单源归本后端 owner nextpas.core.db.odbc.base，分治于 db.base
+    聚合之外；诚实能力缺席仍不共享语义）。 }
+  DEFAULT_ODBC_STMT_CACHE_CAPACITY = 64;
+
+const
   { ===== shared-library candidates, probed in order =====
     Linux ships unixODBC as versioned soname only (.so.2 current, .so.1
     legacy); iODBC registers .so.1 too but exports the identical ISO CLI

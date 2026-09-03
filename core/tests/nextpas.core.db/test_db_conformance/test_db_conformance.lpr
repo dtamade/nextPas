@@ -25,15 +25,44 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.intf,
   nextpas.core.db,
-  nextpas.core.db.err,
-  nextpas.core.db.tx,
-  nextpas.core.db.migrate,
+  nextpas.core.db.factory,
+  nextpas.core.db.sqlite.adapter,
+  nextpas.core.db.pg.adapter,
   nextpas.core.db.mysql.adapter,
   nextpas.core.db.odbc.adapter,
-  nextpas.core.db.dm.adapter;
+  nextpas.core.db.redis.adapter,
+  nextpas.core.db.dm.adapter,
+  nextpas.core.db.err,
+  nextpas.core.db.tx,
+  nextpas.core.db.migrate;
 
 var
+  GEnsuredConf: Boolean = False;
   T: TTestSuite;
+
+function OpenSqliteC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectSqlite(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenPgC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectPostgres(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenMysqlC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectMysql(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenOdbcC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectOdbc(ADsn, AOptions, AStmtCacheCapacity); end;
+function OpenRedisC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectRedis(ADsn, '', 0, AOptions); end;
+function OpenDmC(const ADsn: string; const AOptions: TDbConnectOptions; const AStmtCacheCapacity: Integer): IDbConnection; inline;
+begin Result := ConnectDm(ADsn, AOptions, AStmtCacheCapacity); end;
+procedure EnsureBuiltinConf; inline;
+begin
+  if GEnsuredConf then Exit;
+  if not DbDriverExists('sqlite') then DbRegisterDriver(TBuiltinDriver.Create('sqlite', dbkSqlite, @OpenSqliteC));
+  if not DbDriverExists('postgres') then DbRegisterDriver(TBuiltinDriver.Create('postgres', dbkPostgres, @OpenPgC));
+  if not DbDriverExists('mysql') then DbRegisterDriver(TBuiltinDriver.Create('mysql', dbkMysql, @OpenMysqlC));
+  if not DbDriverExists('odbc') then DbRegisterDriver(TBuiltinDriver.Create('odbc', dbkOdbc, @OpenOdbcC));
+  if not DbDriverExists('redis') then DbRegisterDriver(TBuiltinDriver.Create('redis', dbkRedis, @OpenRedisC));
+  if not DbDriverExists('dm') then DbRegisterDriver(TBuiltinDriver.Create('dm', dbkDm, @OpenDmC));
+  GEnsuredConf := True;
+end;
 
 { ==== 共享断言助手 ==== }
 
@@ -908,6 +937,7 @@ begin
 end;
 
 begin
+  EnsureBuiltinConf;
   T := TTestSuite.Create('nextpas.core.db.conformance');
   T.Test('sqlite backend', @TestSqliteBackend);
   T.Test('postgres backend', @TestPgBackend);

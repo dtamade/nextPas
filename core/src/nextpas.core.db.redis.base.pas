@@ -15,6 +15,9 @@ uses
 const
   { 协议/缺省常量 }
   DB_REDIS_DEFAULT_PORT     = 6379;
+  { 语句缓存：Redis 为 RESP 键值协议，无 prepared statement 语义，
+    诚实缺席——不设 DEFAULT_REDIS_STMT_CACHE_CAPACITY，避免与
+    sqlite/pg 等 SQL 后端共享缓存语义混淆分层。 }
   { RESP2 协议字节 }
   DB_REDIS_RESP_SIMPLE      = $2B;  { '+' simple string }
   DB_REDIS_RESP_ERROR       = $2D;  { '-' error }
@@ -23,6 +26,12 @@ const
   DB_REDIS_RESP_ARRAY       = $2A;  { '*' array }
   { RESP3 空值（v1 仅识别，不承诺全量 RESP3）}
   DB_REDIS_RESP_NULL        = $5F;  { '_' }
+
+  { 读路径单源：4K/64K 块与 16MB 单帧上界（adapter/subscribe/resp 共用，bytes.ops 单源扩容） }
+  DB_REDIS_READ_CHUNK_INIT     = 4096;
+  DB_REDIS_READ_CHUNK_MAX      = 65536; { 64 KiB cap: peak = chunk+maxFrame, growth via bytes.ops }
+  DB_REDIS_READ_FRAME_MAX      = 16 * 1024 * 1024; { 单帧防御性上界，防伪造长度头无限撑大 }
+  DB_REDIS_READ_COMPACTION_MIN = 4096; { 压实惰性阈值，amortized O(1) }
 
 type
   { RESP 回复值种类（解析产物；数组元素复用同枚举）}

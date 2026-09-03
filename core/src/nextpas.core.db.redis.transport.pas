@@ -29,7 +29,10 @@ type
   IRedisTransport = interface
     ['{7E4A1C60-8D2E-4B3A-9F51-0A2C3D4E5F60}']
     { 整段写出；部分写由实现内部循环补齐 }
-    procedure Send(const ABuf: TBytes);
+    procedure Send(const ABuf: TBytes); overload;
+    { 零拷贝切片直发：避免每分块 SetLength+Move O(chunk) 额外复制/分配；
+      transport 直写 @Buf/Len（bytes.ops 单源容量复用），inline 热路径 }
+    procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     { 读至多 AMax 字节进 ABuf（追加语义由调用方管理缓冲）；
       返回实际读取数，0 = 对端关闭。阻塞受连接期 deadline 约束。 }
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
@@ -49,7 +52,8 @@ type
   public
     constructor Create(const AOptions: TDbRedisConnectOptions);
     destructor Destroy; override;
-    procedure Send(const ABuf: TBytes);
+    procedure Send(const ABuf: TBytes); overload;
+    procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
     procedure Close;
   end;
@@ -61,7 +65,8 @@ type
   public
     constructor Create(const AOptions: TDbRedisConnectOptions);
     destructor Destroy; override;
-    procedure Send(const ABuf: TBytes);
+    procedure Send(const ABuf: TBytes); overload;
+    procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
     procedure Close;
   end;
@@ -103,6 +108,13 @@ procedure TNetRedisTransport.Send(const ABuf: TBytes);
 begin
   if (ABuf <> nil) and (Length(ABuf) > 0) then
     FStream.Write(ABuf[0], Length(ABuf));
+end;
+
+procedure TNetRedisTransport.Send(AData: Pointer; ACount: SizeUInt);
+begin
+  // perf: zero-copy slice direct write, no per-chunk alloc/Move; inline-friendly
+  if (AData <> nil) and (ACount > 0) then
+    FStream.Write(AData^, ACount);
 end;
 
 function TNetRedisTransport.Recv(ABuf: Pointer; AMax: Integer): Integer;
@@ -167,6 +179,13 @@ procedure TTlsRedisTransport.Send(const ABuf: TBytes);
 begin
   if (ABuf <> nil) and (Length(ABuf) > 0) then
     FStream.Write(ABuf[0], Length(ABuf));
+end;
+
+procedure TTlsRedisTransport.Send(AData: Pointer; ACount: SizeUInt);
+begin
+  // perf: zero-copy slice direct write, no per-chunk alloc/Move; inline-friendly
+  if (AData <> nil) and (ACount > 0) then
+    FStream.Write(AData^, ACount);
 end;
 
 function TTlsRedisTransport.Recv(ABuf: Pointer; AMax: Integer): Integer;

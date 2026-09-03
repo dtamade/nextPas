@@ -105,3 +105,9 @@
 {$ELSEIF defined(FPC_BIG_ENDIAN)}
   {$DEFINE NEXTPAS_BIG_ENDIAN}
 {$ENDIF}
+
+{-- bytes.ops single source unified sentinel --}
+{ All String/Bytes zero-copy (BytesToString/StringToBytes/SpanClone etc.) single source is nextpas.core.bytes.ops (BYTES_OPS_SINGLE_SOURCE).
+  Per-unit DB_*_BYTES_SINGLE_SOURCE aliases retired (factory/pool/migrate 7 units); central gate via this inc (owner=bytes.ops, L0).
+  Units reuse bytes.ops via inline thin forward + single Move zero-copy; drift via BYTES_OPS_SINGLE_SOURCE sentinel (compile-time). }
+{$DEFINE NEXTPAS_BYTES_OPS_SINGLE_SOURCE_UNIFIED}

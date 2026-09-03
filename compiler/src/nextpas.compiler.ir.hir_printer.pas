@@ -5,11 +5,11 @@ unit nextpas.compiler.ir.hir_printer;
 interface
 
 uses
-  np_hir_printer;
+  nextpas.compiler.ir.hir.printer;
 
 type
-  THirPrintLineVec = np_hir_printer.THirPrintLineVec;
-  THIRPrinter = np_hir_printer.THIRPrinter;
+  THirPrintLineVec = nextpas.compiler.ir.hir.printer.THirPrintLineVec;
+  THIRPrinter = nextpas.compiler.ir.hir.printer.THIRPrinter;
 
 implementation
 

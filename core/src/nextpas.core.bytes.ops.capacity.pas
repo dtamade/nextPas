@@ -9,7 +9,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.bytes.base;
+  nextpas.core.bytes.base,
+  nextpas.core.exception;
 
 function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
 function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; overload;
@@ -26,7 +27,11 @@ function BytesGrowCapacity(const ACurrent: SizeUInt): SizeUInt; inline; overload
 function BytesGrowCapacityCapped(const ACurrent, AMax: Integer): Integer; inline; overload;
 function BytesGrowCapacityCapped(const ACurrent, AMax: SizeUInt): SizeUInt; inline; overload;
 generic function BytesGrowHelper<T>(ACount, AMax: Integer): Integer; inline;
-function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
+{ Builder capacity estimates — overflow fail-closed pure arithmetic, inline. }
+function BuilderCapForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+function BuilderCapAdd(const A, B: SizeUInt): SizeUInt; inline;
+function BuilderCapForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+function BuilderCapWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt = 32): SizeUInt; inline;
 
 implementation
 
@@ -187,6 +192,38 @@ function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
 begin
   // perf: inline thin-forward alias for peripheral uniformity — reuse same single source 0→4→2× geometric, zero extra call
   Result := WebviewGrowCapacityForReuse(ACurrent);
+end;
+
+function BuilderCapForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+begin
+  if ALen1 > High(SizeUInt) - ALen2 then
+    raise EOutOfMemory.Create('builder cap overflow');
+  Result := ALen1 + ALen2;
+end;
+
+function BuilderCapAdd(const A, B: SizeUInt): SizeUInt; inline;
+begin
+  Result := BuilderCapForTwo(A, B);
+end;
+
+function BuilderCapForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+var
+  LDelimTotal: SizeUInt;
+begin
+  if (ACount <= 1) or (ADelimLen = 0) then
+    Exit(ATotal);
+  if (ACount - 1) > High(SizeUInt) div ADelimLen then
+    raise EOutOfMemory.Create('builder join cap overflow');
+  LDelimTotal := (ACount - 1) * ADelimLen;
+  Result := BuilderCapForTwo(ATotal, LDelimTotal);
+end;
+
+function BuilderCapWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt): SizeUInt; inline;
+begin
+  if AEstimate < AMin then
+    Result := AMin
+  else
+    Result := AEstimate;
 end;
 
 end.

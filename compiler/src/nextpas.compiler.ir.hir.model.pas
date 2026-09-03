@@ -6,6 +6,7 @@ unit nextpas.compiler.ir.hir.model;
 interface
 
 uses
+  SysUtils, Generics.Collections,
   nextpas.core.collections.vec,
   nextpas.compiler.ir.hir.types, nextpas.compiler.ir.system_contracts;
 
@@ -197,6 +198,7 @@ type
     FTypes: THIRTypeTable;
     FFunctions: THirFunctionVec;
     FGlobals: THirGlobalVec;
+    FGlobalIndex: specialize TDictionary<string, SizeInt>;
     FVmtGlobals: THirVmtGlobalVec;
     FImtGlobals: THirImtGlobalVec;
     FNextValueId: THIRValueId;
@@ -273,7 +275,7 @@ function ValidateObjectFreeSequenceContinuation(
 implementation
 
 uses
-  SysUtils, nextpas.core.text.conv;
+  nextpas.core.text.conv;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin
@@ -598,6 +600,7 @@ begin
   FTypes := THIRTypeTable.Create;
   FFunctions := THirFunctionVec.Create;
   FGlobals := THirGlobalVec.Create;
+  FGlobalIndex := specialize TDictionary<string, SizeInt>.Create;
   FVmtGlobals := THirVmtGlobalVec.Create;
   FImtGlobals := THirImtGlobalVec.Create;
   FUnitInitOrder := THirStringVec.Create;
@@ -640,6 +643,8 @@ begin
   end;
   FVmtGlobals.Free;
   FVmtGlobals := nil;
+  FGlobalIndex.Free;
+  FGlobalIndex := nil;
   FGlobals.Free;
   FGlobals := nil;
   if FFunctions <> nil then
@@ -903,13 +908,13 @@ procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId;
   AIsThreadVar: Boolean; AIsTStringStorage: Boolean);
 var
   Global: THIRGlobal;
-  I: SizeInt;
+  LKey: string;
 begin
   { Unit-scope same-name vars across units collapse to one LLVM @g_ name. }
-  if FGlobals <> nil then
-    for I := 0 to SizeInt(FGlobals.Count) - 1 do
-      if SameText(FGlobals[SizeUInt(I)].Name, AName) then
-        Exit;
+  // O(1) hash dedup — reuse FGlobalIndex with LowerCase key, no linear scan
+  LKey := LowerCase(AName);
+  if (FGlobalIndex <> nil) and FGlobalIndex.ContainsKey(LKey) then
+    Exit;
   Global := Default(THIRGlobal);
   Global.Name := AName;
   Global.TypeId := ATypeId;
@@ -918,6 +923,8 @@ begin
   Global.IsThreadVar := AIsThreadVar;
   Global.IsTStringStorage := AIsTStringStorage;
   FGlobals.Push(Global);
+  if FGlobalIndex <> nil then
+    FGlobalIndex.AddOrSetValue(LKey, SizeInt(FGlobals.Count) - 1);
 end;
 
 function THIRModule.FunctionCount: LongInt;

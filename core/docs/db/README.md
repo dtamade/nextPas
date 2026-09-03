@@ -38,52 +38,61 @@ end;
 ### 统一入口（Go sql.Open 形态，V3-A5 收口）
 
 ```pascal
-uses nextpas.core.db.factory;
+uses nextpas.core.db.factory; // DbOpen 注册表零 L2 可独立构建
+// uses nextpas.core.db.factory.pool; // DbOpenPool 池化需另按需 uses 桥接叶
 
 var Conn: IDbConnection;
 begin
-  // 注册制驱动入口：内建五驱动 sqlite/postgres/mysql/odbc/redis 自注册
+  // 注册制驱动入口：内建六驱动 sqlite/postgres/mysql/odbc/redis/dm 自注册
   Conn := DbOpen('sqlite', ':memory:');
   Conn := DbOpen(dbkPostgres, 'host=/var/run/postgresql dbname=myapp user=app');
 
-  // Open 即池：返回工业级连接池（Go *sql.DB 形态）
+  // Open 即池：返回工业级连接池（Go *sql.DB 形态，需 factory.pool 桥接叶）
   var P := DbOpenPool('postgres',
     'host=/var/run/postgresql dbname=myapp user=app', TDbPoolPolicy.Default);
 end.
 ```
 
 第三方驱动实现 `IDbDriver` 后 `DbRegisterDriver` 注入即接入
-DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14。
+DbOpen/DbOpenPool 全套；契约见 CONTRACT §2.14 单源。L3 门面
+`nextpas.core.db` 实现段零硬链接后端适配器，未使用后端零编译期耦合；
+可裁剪零耦合与 inline 薄转发正交分流，裁剪边界与显式注册以 CONTRACT
+§1/§2.14 为单源（单后端裁剪直连 `nextpas.core.db.{sqlite|pg|mysql|odbc|redis|dm}.adapter`
+或按需 `factory.register.*` 单后端注册单元，全量亦显式注册不依赖隐式
+聚合叶；`factory` 注册表完全独立构建隔离（接口/实现均零 L2 导入 `db.pool`，`DbOpenPool` 已抽离至 `factory.pool` 桥接叶），`factory.builtin` 零逻辑聚合叶已物理删除(2026-09-02) 不再计入模块节点（零 L2/零 initialization 侧效隔离已闭环，可裁剪性债务已闭环，新代码禁止 uses），
+bytes.ops 单源单 Move 零拷贝与接口引用计数自动归还见 owner，inline
+薄转发与资源释放不丢由实现层承载）；业务以 CONTRACT 为准，缺能力先
+反哺 owner。
 
-## 特性矩阵（五后端对齐）
+## 特性矩阵（六后端对齐）
 
-> 列：`sqlite` / `pg` / `mysql`（含 MariaDB，112B 绑定）/ `odbc`（网关，含国产库）/ `redis`（RESP2）。`—` = 诚实缺席（不冒充），`N/A` = 模型无关。
+> 列：`sqlite` / `pg` / `mysql`（含 MariaDB，112B 绑定）/ `odbc`（网关，含国产库）/ `redis`（RESP2）/ `dm`（DM8 DPI 原生）。`—` = 诚实缺席（不冒充），`N/A` = 模型无关。
 
-| 能力 | sqlite | pg | mysql | odbc | redis | 契约 |
-|---|---|---|---|---|---|---|
-| 参数化查询（? 参数化即注入安全） | ✅ `?` | ✅ `?→$N` | ✅ `?N→?+槽位` | ✅ `SQLBindParameter` | ✅ `?→bulk` | §2.1 |
-| 事务（IDbTxControl 手动计数面） | ✅ | ✅ | ✅ | ✅ `AUTOCOMMIT+EndTran` | ✅ `MULTI/EXEC` | §2.3 |
-| savepoint 混合嵌套（WithTransaction 自动） | ✅ | ✅ | ✅ | —（ISO 无发现） | — | §2.3 |
-| 瞬时错误重试（WithTransactionRetry + 段位谓词） | ✅ | ✅ | ✅ `1205/1213` | ✅ `40001` | ✅ `EXECABORT` | §2.3 |
-| 手动 SAVEPOINT/RollbackTo/ReleaseTo | ✅ | ✅ | ✅ `SAVEPOINT` | — | — | §2.3 |
-| 批执行 IDbBatchExecutor | ✅ | ✅ 单次往返 | ✅ `MULTI_STATEMENTS` | ✅ 逐条+事务 | ✅ 真流水线 | §2.5* |
-| 透明语句缓存 | ✅ LRU | ✅ LRU | —（排期） | — | — | INC-3 |
-| 连接池（读池+单写者） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
-| 池泄漏检测 + 获取栈采样（默认关） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
-| 迁移 checksum 防篡改 + dry-run | ✅ | ✅ | ✅ | ✅ | —（键值无 DDL） | §2.4 |
-| 大对象流 | 行内区间 | `lo_*` 句柄 | — | — | — | §2.9 |
-| 列类型 `dbcBool` / `NULL` 行级信号 | ✅ 亲和 | ✅ OID16 | ✅ `TINYINT(1)→dbcInteger` | — | ✅ `reply→dbcText` | §2.1 |
-| 查询/锁超时（TDbConnectOptions） | `busy_timeout` | `connect/statement` | `connect_timeout` + `max_exec≥8.0` | `LOGIN_TIMEOUT` | — | INC-7 |
-| 查询级超时（`TDbExecOptions` advisory） | — | ✅ 双路径 | ✅ `Exec` 定格 | ✅ 秒粒度 | — | §2.6b |
-| 观测钩子（`IDbTrace` 四后端同构） | ✅ | ✅ | ✅ | ✅ | ✅ | §2.12 |
-| 错误归一（`Category+Constraint`） | ✅ | ✅ +定位 | ✅ `CR_*/ER_*` | ✅ `SQLSTATE`+`OdbcEx` | ✅ 词元表 | §2.2 |
-| 统一驱动工厂（`DbOpen/DbOpenPool`） | ✅ | ✅ | ✅ | ✅ | ✅ 可插拔 | §2.14 |
-| sqlite 调优预设（WAL+NORMAL+FK + 回读校验） | ✅ | — | — | — | — | §2.15 |
-| TLS 契约成文（责任表；pg/redis 透传；mysql 排期） | N/A | ✅ `verify-full` | —（排期） | 驱动透传 | ✅ `UseTls` | §2.1-TLS |
-| 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | §2.16 | 探测 DbCapabilities 或 DbArrayBinding(Q) 是否为 nil 再构建 unnest 方言（见 §2.16）
-| 异步挂载与取消（`TDbAsync` 单飞 + 令牌→`PQcancel`） | ✅ | ✅ | ✅ | — | — | §2.17 |
-| LISTEN/NOTIFY 订阅（专用连接+泵线程；重连重放） | N/A | ✅ | N/A | N/A | — | §2.18 |
-| SUBSCRIBE/PSUBSCRIBE（RESP2 推送+确认簿记） | — | — | — | — | ✅ | §2.19 |
+| 能力 | sqlite | pg | mysql | odbc | redis | dm | 契约 |
+|---|---|---|---|---|---|---|---|
+| 参数化查询（? 参数化即注入安全） | ✅ `?` | ✅ `?→$N` | ✅ `?N→?+槽位` | ✅ `SQLBindParameter` | ✅ `?→bulk` | ✅ `?→$N` | §2.1 / §2.21 |
+| 事务（IDbTxControl 手动计数面） | ✅ | ✅ | ✅ | ✅ `AUTOCOMMIT+EndTran` | ✅ `MULTI/EXEC` | ✅ `dpi_commit` | §2.3 |
+| savepoint 混合嵌套（WithTransaction 自动） | ✅ | ✅ | ✅ | —（ISO 无发现） | — | ✅ 原生 | §2.3 / §2.21 |
+| 瞬时错误重试（WithTransactionRetry + 段位谓词） | ✅ | ✅ | ✅ `1205/1213` | ✅ `40001` | ✅ `EXECABORT` | ✅ `ClassifyDm` | §2.3 |
+| 手动 SAVEPOINT/RollbackTo/ReleaseTo | ✅ | ✅ | ✅ `SAVEPOINT` | — | — | ✅ | §2.3 |
+| 批执行 IDbBatchExecutor | ✅ | ✅ 单次往返 | ✅ `MULTI_STATEMENTS` | ✅ 逐条+事务 | ✅ 真流水线 | ✅ 逐条+事务 | §2.5* |
+| 透明语句缓存 | ✅ LRU | ✅ LRU | —（排期） | — | — | ✅ LRU | INC-3 |
+| 连接池（读池+单写者） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
+| 池泄漏检测 + 获取栈采样（默认关） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | §2.7 |
+| 迁移 checksum 防篡改 + dry-run | ✅ | ✅ | ✅ | ✅ | —（键值无 DDL） | ✅ | §2.4 |
+| 大对象流 | 行内区间 | `lo_*` 句柄 | — | — | — | — | §2.9 |
+| 列类型 `dbcBool` / `NULL` 行级信号 | ✅ 亲和 | ✅ OID16 | ✅ `TINYINT(1)→dbcInteger` | — | ✅ `reply→dbcText` | — | §2.1 |
+| 查询/锁超时（TDbConnectOptions） | `busy_timeout` | `connect/statement` | `connect_timeout` + `max_exec≥8.0` | `LOGIN_TIMEOUT` | — | — | INC-7 |
+| 查询级超时（`TDbExecOptions` advisory） | — | ✅ 双路径 | ✅ `Exec` 定格 | ✅ 秒粒度 | — | — | §2.6b |
+| 观测钩子（`IDbTrace` 四后端同构） | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | §2.12 |
+| 错误归一（`Category+Constraint`） | ✅ | ✅ +定位 | ✅ `CR_*/ER_*` | ✅ `SQLSTATE`+`OdbcEx` | ✅ 词元表 | ✅ `ClassifyDm` | §2.2 / §2.21 |
+| 统一驱动工厂（`DbOpen/DbOpenPool`） | ✅ | ✅ | ✅ | ✅ | ✅ 可插拔 | ✅ | §2.14 |
+| sqlite 调优预设（WAL+NORMAL+FK + 回读校验） | ✅ | — | — | — | — | — | §2.15 |
+| TLS 契约成文（责任表；pg/redis 透传；mysql 诚实缺席） | N/A | ✅ `verify-full` | — 诚实缺席 v1（`CLIENT_SSL=2048` 已声明，升级经 `MYSQL_OPT_SSL_*`+`nextpas.core.tls` 反哺，不假装） | 驱动透传 | N/A（进程内） | — 诚实缺席 v1（见 §2.21 闭环） | §2.1-TLS/§2.21 |
+| 参数级批量绑定（`IDbArrayBinding`） | — | ✅ `unnest` 6× | — | — | — | — | §2.16 | 探测 DbCapabilities 或 DbArrayBinding(Q) 是否为 nil 再构建 unnest 方言（见 §2.16）
+| 异步挂载与取消（`TDbAsync` 单飞 + 令牌→`PQcancel`） | ✅ | ✅ | ✅ | — | — | — | §2.17 |
+| LISTEN/NOTIFY 订阅（专用连接+泵线程；重连重放） | N/A | ✅ | N/A | N/A | — | — | §2.18 |
+| SUBSCRIBE/PSUBSCRIBE（RESP2 推送+确认簿记） | — | — | — | — | ✅ | — | §2.19 |
 
 上表已运行时自述化（V3-B1）：`DbCapabilities(Conn)` 返回
 `IDbCapabilities`，消费方按能力探测降级而非按后端名分支；契约语义见

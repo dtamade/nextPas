@@ -5,37 +5,37 @@ unit nextpas.compiler.ir.hir_model;
 interface
 
 uses
-  np_hir_model;
+  nextpas.compiler.ir.hir.model;
 
 type
-  THIRValueId = np_hir_model.THIRValueId;
-  THIRBlockId = np_hir_model.THIRBlockId;
-  THIRFuncId = np_hir_model.THIRFuncId;
-  THIRInstrKind = np_hir_model.THIRInstrKind;
-  THIRTermKind = np_hir_model.THIRTermKind;
-  THIROperand = np_hir_model.THIROperand;
-  THIRPhiEntry = np_hir_model.THIRPhiEntry;
-  THIRInstr = np_hir_model.THIRInstr;
-  THIRSwitchCase = np_hir_model.THIRSwitchCase;
-  THirSwitchCaseVec = np_hir_model.THirSwitchCaseVec;
-  THIRTerminator = np_hir_model.THIRTerminator;
-  THirInstrVec = np_hir_model.THirInstrVec;
-  THirBlockIdVec = np_hir_model.THirBlockIdVec;
-  THIRBlock = np_hir_model.THIRBlock;
-  THIRParam = np_hir_model.THIRParam;
-  THirParamVec = np_hir_model.THirParamVec;
-  THirBlockVec = np_hir_model.THirBlockVec;
-  THIRFunction = np_hir_model.THIRFunction;
-  THirStringVec = np_hir_model.THirStringVec;
-  THirLongIntVec = np_hir_model.THirLongIntVec;
-  THIRVmtGlobal = np_hir_model.THIRVmtGlobal;
-  THIRImtGlobal = np_hir_model.THIRImtGlobal;
-  THIRGlobal = np_hir_model.THIRGlobal;
-  THirFunctionVec = np_hir_model.THirFunctionVec;
-  THirGlobalVec = np_hir_model.THirGlobalVec;
-  THirVmtGlobalVec = np_hir_model.THirVmtGlobalVec;
-  THirImtGlobalVec = np_hir_model.THirImtGlobalVec;
-  THIRModule = np_hir_model.THIRModule;
+  THIRValueId = nextpas.compiler.ir.hir.model.THIRValueId;
+  THIRBlockId = nextpas.compiler.ir.hir.model.THIRBlockId;
+  THIRFuncId = nextpas.compiler.ir.hir.model.THIRFuncId;
+  THIRInstrKind = nextpas.compiler.ir.hir.model.THIRInstrKind;
+  THIRTermKind = nextpas.compiler.ir.hir.model.THIRTermKind;
+  THIROperand = nextpas.compiler.ir.hir.model.THIROperand;
+  THIRPhiEntry = nextpas.compiler.ir.hir.model.THIRPhiEntry;
+  THIRInstr = nextpas.compiler.ir.hir.model.THIRInstr;
+  THIRSwitchCase = nextpas.compiler.ir.hir.model.THIRSwitchCase;
+  THirSwitchCaseVec = nextpas.compiler.ir.hir.model.THirSwitchCaseVec;
+  THIRTerminator = nextpas.compiler.ir.hir.model.THIRTerminator;
+  THirInstrVec = nextpas.compiler.ir.hir.model.THirInstrVec;
+  THirBlockIdVec = nextpas.compiler.ir.hir.model.THirBlockIdVec;
+  THIRBlock = nextpas.compiler.ir.hir.model.THIRBlock;
+  THIRParam = nextpas.compiler.ir.hir.model.THIRParam;
+  THirParamVec = nextpas.compiler.ir.hir.model.THirParamVec;
+  THirBlockVec = nextpas.compiler.ir.hir.model.THirBlockVec;
+  THIRFunction = nextpas.compiler.ir.hir.model.THIRFunction;
+  THirStringVec = nextpas.compiler.ir.hir.model.THirStringVec;
+  THirLongIntVec = nextpas.compiler.ir.hir.model.THirLongIntVec;
+  THIRVmtGlobal = nextpas.compiler.ir.hir.model.THIRVmtGlobal;
+  THIRImtGlobal = nextpas.compiler.ir.hir.model.THIRImtGlobal;
+  THIRGlobal = nextpas.compiler.ir.hir.model.THIRGlobal;
+  THirFunctionVec = nextpas.compiler.ir.hir.model.THirFunctionVec;
+  THirGlobalVec = nextpas.compiler.ir.hir.model.THirGlobalVec;
+  THirVmtGlobalVec = nextpas.compiler.ir.hir.model.THirVmtGlobalVec;
+  THirImtGlobalVec = nextpas.compiler.ir.hir.model.THirImtGlobalVec;
+  THIRModule = nextpas.compiler.ir.hir.model.THIRModule;
 
 implementation
 

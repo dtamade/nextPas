@@ -66,6 +66,13 @@ type
     directly. Public facade users should prefer IStringBuilder. }
   TStringBuilder = TBufStringBuilder;
 
+{ Unified TBuf capacity estimate — single source via bytes.ops BuilderCap* (owner=bytes.ops, L1 text.builder re-export).
+  Sinks dispersed `Length(A)+Length(B)+N` / `Join total+delim*(n-1)` hand estimates into one inline helper;
+  growth itself already via BytesGrowCapacity. inline zero-cost, overflow fail-closed. }
+function TBufEstimateForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+function TBufEstimateForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+function TBufEstimateWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt = 256): SizeUInt; inline;
+
 function MakeStringBuilder(const AInitialCap: SizeUInt = 256): IStringBuilder;
 
 implementation
@@ -99,6 +106,21 @@ type
     procedure Clear;
     procedure Reserve(const AAdditional: SizeUInt);
   end;
+
+function TBufEstimateForTwo(const ALen1, ALen2: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.BuilderCapForTwo(ALen1, ALen2);
+end;
+
+function TBufEstimateForJoin(const ATotal, ACount, ADelimLen: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.BuilderCapForJoin(ATotal, ACount, ADelimLen);
+end;
+
+function TBufEstimateWithMin(const AEstimate: SizeUInt; const AMin: SizeUInt): SizeUInt; inline;
+begin
+  Result := nextpas.core.bytes.ops.BuilderCapWithMin(AEstimate, AMin);
+end;
 
 function MakeStringBuilder(const AInitialCap: SizeUInt): IStringBuilder;
 begin

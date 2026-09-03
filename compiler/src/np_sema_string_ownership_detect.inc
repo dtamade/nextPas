@@ -210,13 +210,13 @@ begin
     if Ctx.Model.GetFieldMetaByName(BaseTypeId, FieldNode.Text, FieldMeta) then
       Exit(FieldMeta.IsString and TypeIdIsManagedString(Ctx, FieldMeta.TypeId));
   end;
-  { Type exists but metadata not fully resolved — accept as safe.
-    This handles imported record types whose field metadata is not yet
-    populated during C6-H4 pre-registration.
-    TODO: tighten once type metadata is fully populated for all imported
-    types during the pre-registration phase. Currently this fallback is
-    necessary because imported record field metadata may be incomplete. }
-  Result := True;
+  { Type exists but field metadata not fully resolved.
+    Previously this was an unsound fallback returning True, which could hide
+    leaks/double-frees. Tightened to False: only explicit class/record field
+    string metadata is accepted; imported types without metadata are treated
+    as unsafe and will be revisited once type metadata is fully populated
+    during pre-registration (C6-H4). }
+  Result := False;
 end;
 
 function IsSupportedOwnedStringReturnConsumerTarget(const Ctx: TSemaOwnershipContext; 

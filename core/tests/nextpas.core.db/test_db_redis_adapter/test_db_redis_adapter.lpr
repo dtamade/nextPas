@@ -99,7 +99,8 @@ type
     constructor Create;
     procedure Script(const AReply: string);
     destructor Destroy; override;
-    procedure Send(const ABuf: TBytes);
+    procedure Send(const ABuf: TBytes); overload;
+    procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
     procedure Close;
     function SendCount: Integer;
@@ -127,6 +128,19 @@ var
 begin
   if Length(ABuf) > 0 then
     SetString(LS, PAnsiChar(@ABuf[0]), Length(ABuf))
+  else
+    LS := '';
+  SetLength(FSends, Length(FSends) + 1);
+  FSends[High(FSends)] := LS;
+end;
+
+procedure TScriptedTransport.Send(AData: Pointer; ACount: SizeUInt);
+var
+  LS: string;
+begin
+  // perf: zero-copy slice recording, no extra alloc beyond result string
+  if (AData <> nil) and (ACount > 0) then
+    SetString(LS, PAnsiChar(AData), ACount)
   else
     LS := '';
   SetLength(FSends, Length(FSends) + 1);

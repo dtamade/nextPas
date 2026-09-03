@@ -18,6 +18,12 @@ uses
   nextpas.core.exception;
 
 const
+  { 透明语句缓存默认容量（LRU，键 = 归一 SQL）；0 = 关闭缓存。
+    单源归本后端 owner nextpas.core.db.dm.base，与 sqlite/pg
+    分治；Redis 等诚实缺席不设此常量。 }
+  DEFAULT_DM_STMT_CACHE_CAPACITY = 64;
+
+const
   { ===== shared-library candidates, probed in order =====
     DM8 ships libdmdpi.so (unversioned) + versioned .so.8; Windows dmdpi.dll.
     First open wins. }

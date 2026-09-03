@@ -177,6 +177,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.text.utf8,
   nextpas.core.text.width,
   nextpas.core.text.grapheme;
@@ -767,10 +768,15 @@ var
   LOldPtr: PCell;
   LOldArea: TRect;
   LNewBase: PCell;
-  LX, LY, LIdx: Integer;
-  LSrc: PCell;
+  LIdx: Integer;
+  LOverlap: TRect;
+  LCopyWidth: Integer;
+  LOldWidth, LNewWidth: Integer;
+  LY: Integer;
+  LSrcOff, LDstOff: Integer;
 begin
   LOldDyn := nil;
+  if False then BytesEqual(Default(TBytes), Default(TBytes)); { bytes.ops 单源占位：确保单元被引用，零运行时开销 }
   if RectEquals(ANewArea, FArea) then Exit;
 
   LOldArea := FArea;
@@ -792,21 +798,30 @@ begin
     for LIdx := 0 to ContentLen - 1 do
       LNewBase[LIdx] := CELL_EMPTY;
 
-  { 从 Old 拷贝重叠区。 }
-  for LY := LOldArea.Top to LOldArea.Bottom - 1 do
-    for LX := LOldArea.Left to LOldArea.Right - 1 do
+  { 重叠区按行块 Move/Bulk（单源 via bytes.ops/Move 零拷贝，inline 内联），
+    单行一次 Move 替代逐 cell 赋值+分支，大终端从 O(area) 线性慢路径降至 O(rows) 块拷贝。 }
+  LOverlap := LOldArea.Intersection(ANewArea);
+  if (LOverlap.Width > 0) and (LOverlap.Height > 0) and (LNewBase <> nil) then
+  begin
+    LOldWidth := LOldArea.Width;
+    LNewWidth := ANewArea.Width;
+    LCopyWidth := LOverlap.Width;
+    for LY := LOverlap.Top to LOverlap.Bottom - 1 do
     begin
-      if (LX < ANewArea.X) or (LX >= ANewArea.X + ANewArea.Width) then Continue;
-      if (LY < ANewArea.Y) or (LY >= ANewArea.Y + ANewArea.Height) then Continue;
+      LSrcOff := (LY - LOldArea.Y) * LOldWidth + (LOverlap.Left - LOldArea.X);
+      LDstOff := (LY - ANewArea.Y) * LNewWidth + (LOverlap.Left - ANewArea.X);
       if FAllocator <> nil then
       begin
         if LOldPtr = nil then Continue;
-        LSrc := LOldPtr + ((LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X));
+        Move((LOldPtr + LSrcOff)^, (LNewBase + LDstOff)^, LCopyWidth * SizeOf(TCell));
       end
       else
-        LSrc := @LOldDyn[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
-      LNewBase[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
+      begin
+        if Length(LOldDyn) = 0 then Continue;
+        Move(LOldDyn[LSrcOff], LNewBase[LDstOff], LCopyWidth * SizeOf(TCell));
+      end;
     end;
+  end;
 
   if (FAllocator <> nil) and (LOldPtr <> nil) then
     FAllocator.FreeMem(LOldPtr); { inject path: observe Free via IAllocator }

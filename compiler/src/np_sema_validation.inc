@@ -1,45 +1,59 @@
 procedure TSemanticAnalyzer.CheckDuplicateDeclarations;
 var
-  I, J: LongInt;
-  SymI, SymJ: TSemanticSymbol;
-  RootUnitId: string;
+  Seen: specialize THashMap<string, LongInt>;
+  I: LongInt;
+  Sym: TSemanticSymbol;
+  ExistingIdx: LongInt;
+  ExistingSym: TSemanticSymbol;
+  RootUnitId, Key: string;
+  function IsExcludedKind(const AKind: string): Boolean; inline;
+  begin
+    Result :=
+      SameText(AKind, 'parameter') or
+      SameText(AKind, 'enum-value') or
+      SameText(AKind, 'method') or
+      SameText(AKind, 'field') or
+      SameText(AKind, 'function') or
+      SameText(AKind, 'procedure') or
+      SameText(AKind, 'constant') or
+      SameText(AKind, 'variable');
+  end;
 begin
   RootUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
-  for I := 0 to FModel.SymbolCount - 2 do
-  begin
-    SymI := FModel.SymbolAt(I);
-    if SymI.Kind = 'unit' then
-      Continue;
-    if not SameText(SymI.OwnerUnitId, RootUnitId) then
-      Continue;
-    for J := I + 1 to FModel.SymbolCount - 1 do
+  Seen := specialize THashMap<string, LongInt>.Create;
+  try
+    for I := 0 to FModel.SymbolCount - 1 do
     begin
-      SymJ := FModel.SymbolAt(J);
-      if SymJ.Kind = 'unit' then
+      Sym := FModel.SymbolAt(I);
+      if SameText(Sym.Kind, 'unit') then
         Continue;
-      if not SameText(SymJ.OwnerUnitId, RootUnitId) then
+      if not SameText(Sym.OwnerUnitId, RootUnitId) then
         Continue;
-      if (SymI.ScopeId = SymJ.ScopeId) and SameText(SymI.Name, SymJ.Name) and
-        (SymI.Kind <> 'parameter') and (SymJ.Kind <> 'parameter') and
-        (SymI.Kind <> 'enum-value') and (SymJ.Kind <> 'enum-value') and
-        (SymI.Kind <> 'method') and (SymJ.Kind <> 'method') and
-        (SymI.Kind <> 'field') and (SymJ.Kind <> 'field') and
-        (SymI.Kind <> 'function') and (SymJ.Kind <> 'function') and
-        (SymI.Kind <> 'procedure') and (SymJ.Kind <> 'procedure') and
-        { 函数类型参数在 var/const 节中被注册为 constant/variable }
-        (SymI.Kind <> 'constant') and (SymJ.Kind <> 'constant') and
-        (SymI.Kind <> 'variable') and (SymJ.Kind <> 'variable') and
-        { 允许 type 的前向声明后重新声明 (如 TConfig = class; → TConfig = class ... end) }
-        not (SameText(SymI.Kind, 'type') and SameText(SymJ.Kind, 'type')) then
+      if IsExcludedKind(Sym.Kind) then
+        Continue;
+      if Sym.Name = '' then
+        Continue;
+      Key := LowerCase(Sym.Name) + '#' + IntToStr(Sym.ScopeId);
+      if Seen.TryGetValue(Key, ExistingIdx) then
       begin
+        if (ExistingIdx >= 0) and (ExistingIdx < FModel.SymbolCount) then
+          ExistingSym := FModel.SymbolAt(ExistingIdx)
+        else
+          ExistingSym := Sym;
+        if SameText(ExistingSym.Kind, 'type') and SameText(Sym.Kind, 'type') then
+          Continue;
         EmitSemaError(
           'sema.duplicate-declaration',
-          'duplicate identifier "' + SymJ.Name + '"',
-          SymJ.ByteOffset
+          'duplicate identifier "' + Sym.Name + '"',
+          Sym.ByteOffset
         );
         Exit;
-      end;
+      end
+      else
+        Seen.Add(Key, I);
     end;
+  finally
+    Seen.Free;
   end;
 end;
 
@@ -49,102 +63,210 @@ var
   Child: TGreenNode;
   SymId: LongInt;
   Name: string;
-  CandidateNames: specialize TVec<string>;
   CandidateArr: array of string;
-  DistArr: array of LongInt;
   Sym: TSemanticSymbol;
   Scp: TSemanticScope;
   Suggestion: string;
   IsVisible: Boolean;
-  TmpStr: string;
-  TmpDist: LongInt;
   CurScope: LongInt;
   Found: Boolean;
   CalleeChild: TGreenNode;
+  HandlerVarCache: specialize TVec<string>;
+  HandlerVarCacheReady: Boolean;
+  MethodSuffixCache: specialize TVec<string>;
+  MethodSuffixCacheReady: Boolean;
+  VisibleSet: specialize THashMap<string, Byte>;
+  VisibleNames: specialize TVec<string>;
+  VisibleBuilt: Boolean;
+  function IsKnownUnitPrefix(const AUnitPrefix: string): Boolean;
+  var
+    Idx: LongInt;
+    UName: string;
+  begin
+    Result := False;
+    if FUnitGraph = nil then Exit;
+    for Idx := 0 to FUnitGraph.ResolvedUnitCount - 1 do
+    begin
+      UName := FUnitGraph.ResolvedUnitAt(Idx).CanonicalName;
+      if SameText(UName, AUnitPrefix) then Exit(True);
+      if (Length(UName) > Length(AUnitPrefix) + 1) and
+        SameText(Copy(UName, 1, Length(AUnitPrefix) + 1), AUnitPrefix + '.') then
+        Exit(True);
+    end;
+  end;
+
+  procedure EnsureHandlerVarCache;
+  var
+    Stk: specialize TVec<TGreenNode>;
+    Cur, CCh: TGreenNode;
+    SIdx: LongInt;
+    VIdx: LongInt;
+    Already: Boolean;
+  begin
+    if HandlerVarCacheReady then Exit;
+    HandlerVarCacheReady := True;
+    if (FRootAst = nil) or (FRootAst.RootNode = nil) then Exit;
+    // from already registered vector
+    if FExceptionHandlerVars <> nil then
+      for VIdx := 0 to FExceptionHandlerVars.Count - 1 do
+        HandlerVarCache.Push(FExceptionHandlerVars[VIdx]);
+    // supplement by scanning tree once
+    Stk := specialize TVec<TGreenNode>.Create;
+    try
+      Stk.Push(FRootAst.RootNode);
+      while Stk.Count > 0 do
+      begin
+        Cur := Stk[Stk.Count - 1];
+        Stk.Pop;
+        if Cur = nil then Continue;
+        if Cur.NodeKind = gnkExceptionHandler then
+        begin
+          Already := False;
+          for VIdx := 0 to LongInt(HandlerVarCache.Count) - 1 do
+            if SameText(HandlerVarCache[VIdx], Cur.Text) then begin Already := True; Break; end;
+          if not Already and (Cur.Text <> '') then
+            HandlerVarCache.Push(Cur.Text);
+        end;
+        for SIdx := 0 to Cur.ChildCount - 1 do
+        begin
+          CCh := Cur.ChildAt(SIdx);
+          if CCh <> nil then Stk.Push(CCh);
+        end;
+      end;
+    finally
+      Stk.Free;
+    end;
+  end;
+
+  function IsHandlerVarCached(const AVarName: string): Boolean;
+  var
+    VIdx: LongInt;
+  begin
+    EnsureHandlerVarCache;
+    for VIdx := 0 to LongInt(HandlerVarCache.Count) - 1 do
+      if SameText(HandlerVarCache[VIdx], AVarName) then Exit(True);
+    Result := False;
+  end;
+
+  procedure EnsureMethodSuffixCache;
+  var
+    SIdx: LongInt;
+    SymLoc: TSemanticSymbol;
+    Suf: string;
+    VIdx: LongInt;
+    Already: Boolean;
+    DotPos: LongInt;
+  begin
+    if MethodSuffixCacheReady then Exit;
+    MethodSuffixCacheReady := True;
+    for SIdx := 0 to FModel.SymbolCount - 1 do
+    begin
+      SymLoc := FModel.SymbolAt(SIdx);
+      if not SameText(SymLoc.Kind, 'method') then Continue;
+      DotPos := LastDelimiter('.', SymLoc.Name);
+      if DotPos = 0 then Continue;
+      Suf := Copy(SymLoc.Name, DotPos + 1, MaxInt);
+      if Suf = '' then Continue;
+      Already := False;
+      for VIdx := 0 to LongInt(MethodSuffixCache.Count) - 1 do
+        if SameText(MethodSuffixCache[VIdx], Suf) then begin Already := True; Break; end;
+      if not Already then
+        MethodSuffixCache.Push(Suf);
+    end;
+  end;
+
+  function IsMethodSuffix(const AVarName: string): Boolean;
+  var
+    VIdx: LongInt;
+  begin
+    EnsureMethodSuffixCache;
+    for VIdx := 0 to LongInt(MethodSuffixCache.Count) - 1 do
+      if SameText(MethodSuffixCache[VIdx], AVarName) then Exit(True);
+    Result := False;
+  end;
+
+  procedure EnsureVisibleSet;
+  var
+    K, L: LongInt;
+    LowKey: string;
+  begin
+    if VisibleBuilt then Exit;
+    VisibleBuilt := True;
+    for K := 0 to FModel.SymbolCount - 1 do
+    begin
+      Sym := FModel.SymbolAt(K);
+      if Sym.Name = '' then Continue;
+      IsVisible := False;
+      if Sym.ScopeId = 0 then
+        IsVisible := True
+      else
+      begin
+        CurScope := FCurrentScopeId;
+        while CurScope <> 0 do
+        begin
+          if Sym.ScopeId = CurScope then
+          begin IsVisible := True; Break; end;
+          if (CurScope <= FModel.ScopeCount) and (CurScope > 0) then
+            CurScope := FModel.ScopeAt(CurScope - 1).ParentScopeId
+          else
+            Break;
+        end;
+        if not IsVisible then
+          for L := 0 to FModel.ScopeCount - 1 do
+          begin
+            Scp := FModel.ScopeAt(L);
+            if (Scp.Kind = skUnit) and (Scp.ParentScopeId = 1) and (Sym.ScopeId = Scp.ScopeId) then
+            begin IsVisible := True; Break; end;
+          end;
+      end;
+      if not IsVisible then Continue;
+      LowKey := LowerCase(Sym.Name);
+      if VisibleSet.ContainsKey(LowKey) then Continue;
+      VisibleSet.Add(LowKey, 0);
+      VisibleNames.Push(Sym.Name);
+    end;
+  end;
+
   procedure DoCheck(const AName: string; AOffset: LongInt);
   var
-    K, L, M: LongInt;
+    K: LongInt;
+    LowKey: string;
   begin
     if (AName = '') or (AName = 'Result') then Exit;
-    SymId := FModel.LookupSymbol(AName, FCurrentScopeId);
-    if (SymId <> 0) or (FModel.FindTypeByName(AName) <> 0) or
+    if SameText(AName, 'nil') or SameText(AName, 'true') or SameText(AName, 'false') then Exit;
+    if IsKnownUnitPrefix(AName) then Exit;
+    if IsExceptionHandlerVar(AName) then Exit;
+    if IsHandlerVarCached(AName) then Exit;
+    EnsureVisibleSet;
+    LowKey := LowerCase(AName);
+    if VisibleSet.ContainsKey(LowKey) then Exit;
+    if (FModel.FindSymbolByName(AName) <> 0) or (FModel.FindTypeByName(AName) <> 0) or
       IsBuiltinProcedure(AName) or IsRuntimeVar(AName) then Exit;
-    if FAllocator <> nil then
-      CandidateNames := specialize TVec<string>.Create(0, FAllocator)
-    else
-      CandidateNames := specialize TVec<string>.Create;
-    try
-      for K := 0 to FModel.SymbolCount - 1 do
-      begin
-        Sym := FModel.SymbolAt(K);
-        if Sym.Name = '' then Continue;
-        if SameText(Sym.Name, AName) then Continue;
-        IsVisible := False;
-        if Sym.ScopeId = 0 then
-          IsVisible := True
-        else
-        begin
-          CurScope := FCurrentScopeId;
-          while CurScope <> 0 do
-          begin
-            if Sym.ScopeId = CurScope then
-            begin IsVisible := True; Break; end;
-            if (CurScope <= FModel.ScopeCount) and (CurScope > 0) then
-              CurScope := FModel.ScopeAt(CurScope - 1).ParentScopeId
-            else
-              Break;
-          end;
-          if not IsVisible then
-            for L := 0 to FModel.ScopeCount - 1 do
-            begin
-              Scp := FModel.ScopeAt(L);
-              if (Scp.Kind = skUnit) and (Scp.ParentScopeId = 1) and (Sym.ScopeId = Scp.ScopeId) then
-              begin IsVisible := True; Break; end;
-            end;
-        end;
-        if not IsVisible then Continue;
-        Found := False;
-        for L := 0 to LongInt(CandidateNames.Count)-1 do
-          if SameText(CandidateNames[L], Sym.Name) then
-          begin Found := True; Break; end;
-        if not Found then
-          CandidateNames.Push(Sym.Name);
-      end;
-      SetLength(CandidateArr, LongInt(CandidateNames.Count));
-      SetLength(DistArr, LongInt(CandidateNames.Count));
-      for K := 0 to LongInt(CandidateNames.Count) - 1 do
-      begin
-        CandidateArr[K] := CandidateNames[K];
-        DistArr[K] := ComputeEditDistance(AName, CandidateArr[K]);
-      end;
-      for K := 1 to High(CandidateArr) do
-      begin
-        M := K;
-        TmpStr := CandidateArr[K];
-        TmpDist := DistArr[K];
-        while (M > 0) and (DistArr[M-1] > TmpDist) do
-        begin
-          CandidateArr[M] := CandidateArr[M-1];
-          DistArr[M] := DistArr[M-1];
-          Dec(M);
-        end;
-        CandidateArr[M] := TmpStr;
-        DistArr[M] := TmpDist;
-      end;
-      if Length(CandidateArr) > 3 then
-        SetLength(CandidateArr, 3);
-      Suggestion := SuggestDidYouMean(AName, CandidateArr, 3);
-    finally
-      CandidateNames.Free;
-    end;
+    if FModel.LookupSymbol(AName, FCurrentScopeId) <> 0 then Exit;
+    if IsMethodSuffix(AName) then Exit;
+    SetLength(CandidateArr, LongInt(VisibleNames.Count));
+    for K := 0 to LongInt(VisibleNames.Count) - 1 do
+      CandidateArr[K] := VisibleNames[K];
+    Suggestion := SuggestDidYouMean(AName, CandidateArr, 3);
     if Suggestion <> '' then
       EmitSemaError('sema.undeclared-identifier', 'identifier not found "' + AName + '". ' + Suggestion, AOffset)
     else
       EmitSemaError('sema.undeclared-identifier', 'identifier not found "' + AName + '"', AOffset);
   end;
 begin
-  if ANode = nil then Exit;
-  case ANode.NodeKind of
+  HandlerVarCache := specialize TVec<string>.Create;
+  MethodSuffixCache := specialize TVec<string>.Create;
+  if FAllocator <> nil then
+    VisibleNames := specialize TVec<string>.Create(0, FAllocator)
+  else
+    VisibleNames := specialize TVec<string>.Create;
+  VisibleSet := specialize THashMap<string, Byte>.Create;
+  VisibleBuilt := False;
+  HandlerVarCacheReady := False;
+  MethodSuffixCacheReady := False;
+  try
+    if ANode = nil then Exit;
+    case ANode.NodeKind of
     gnkIdentifier:
       begin
         DoCheck(ANode.Text, ANode.ByteOffset);
@@ -152,7 +274,8 @@ begin
     gnkAssignmentStatement:
       begin
         Name := ANode.Text;
-        DoCheck(Name, ANode.ByteOffset);
+        if Pos('.', Name) = 0 then
+          DoCheck(Name, ANode.ByteOffset);
         for I := 0 to ANode.ChildCount - 1 do
         begin
           Child := ANode.ChildAt(I);
@@ -163,11 +286,26 @@ begin
     gnkProcedureCallStatement:
       begin
         Name := ANode.Text;
-        DoCheck(Name, ANode.ByteOffset);
+        // method calls like SL.Add appear as procedure call with Name='Add' and a dot child; skip bare method check
+        if Pos('.', Name) = 0 then
+        begin
+          // if any child is a dot access, this is a method call — receiver already checked via dot handling
+          for I := 0 to ANode.ChildCount - 1 do
+          begin
+            Child := ANode.ChildAt(I);
+            if (Child <> nil) and (Child.NodeKind = gnkDotAccess) then
+            begin
+              Name := '';
+              Break;
+            end;
+          end;
+          if Name <> '' then
+            DoCheck(Name, ANode.ByteOffset);
+        end;
         for I := 0 to ANode.ChildCount - 1 do
         begin
           Child := ANode.ChildAt(I);
-          if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkIdentifier) and SameText(Child.Text, Name) then Continue;
+          if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkIdentifier) and SameText(Child.Text, ANode.Text) then Continue;
           if Child <> nil then CheckIdentifiersInNode(Child);
         end;
         Exit;
@@ -178,18 +316,52 @@ begin
         begin
           CalleeChild := ANode.ChildAt(0);
           if (CalleeChild <> nil) and (CalleeChild.NodeKind = gnkIdentifier) then
-            DoCheck(CalleeChild.Text, CalleeChild.ByteOffset);
+            if Pos('.', CalleeChild.Text) = 0 then
+              DoCheck(CalleeChild.Text, CalleeChild.ByteOffset);
+          if (CalleeChild <> nil) and (CalleeChild.NodeKind = gnkDotAccess) then
+          begin
+            // method call via dot — receiver checked via dot handling, not callee bare
+          end;
         end;
         for I := 0 to ANode.ChildCount - 1 do
         begin
           Child := ANode.ChildAt(I);
           if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkIdentifier) then Continue;
+          if (I = 0) and (Child <> nil) and (Child.NodeKind = gnkDotAccess) then Continue;
           if Child <> nil then CheckIdentifiersInNode(Child);
         end;
         Exit;
       end;
-    gnkBinaryExpression, gnkUnaryExpression, gnkDotAccess, gnkArrayAccess,
-    gnkDereference, gnkAddressOf, gnkSetConstructor, gnkRangeExpression:
+    gnkDotAccess:
+      begin
+        // receiver is child 0; field/method name (child 1) is not a bare identifier
+        if ANode.ChildCount > 0 then
+        begin
+          Child := ANode.ChildAt(0);
+          if Child <> nil then CheckIdentifiersInNode(Child);
+          // handle possible additional indices (e.g. a.b[0] parsed as dot+array)
+          for I := 1 to ANode.ChildCount - 1 do
+          begin
+            Child := ANode.ChildAt(I);
+            if Child = nil then Continue;
+            // second child is field/method name if it's a plain identifier — skip bare check
+            if (I = 1) and (Child.NodeKind = gnkIdentifier) then Continue;
+            CheckIdentifiersInNode(Child);
+          end;
+        end;
+        Exit;
+      end;
+    gnkBinaryExpression, gnkUnaryExpression:
+      begin
+        // operators (+, -, *, /, <>, and, or, not, etc.) are not identifiers
+        for I := 0 to ANode.ChildCount - 1 do
+        begin
+          Child := ANode.ChildAt(I);
+          if Child <> nil then CheckIdentifiersInNode(Child);
+        end;
+        Exit;
+      end;
+    gnkArrayAccess, gnkDereference, gnkAddressOf, gnkSetConstructor, gnkRangeExpression:
       begin
         if ANode.Text <> '' then
           DoCheck(ANode.Text, ANode.ByteOffset);
@@ -213,6 +385,12 @@ begin
           if Child <> nil then CheckIdentifiersInNode(Child);
         end;
       end;
+    end;
+  finally
+    VisibleSet.Free;
+    VisibleNames.Free;
+    HandlerVarCache.Free;
+    MethodSuffixCache.Free;
   end;
 end;
 
@@ -376,35 +554,16 @@ begin
 end;
 
 procedure TSemanticAnalyzer.CheckUnusedSymbols;
-
-  function IsNameUsedInNode(const ANode: TGreenNode; const AName: string): Boolean;
-  var
-    I: LongInt;
-    Child: TGreenNode;
-  begin
-    if ANode = nil then
-      Exit(False);
-    if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, AName) then
-      Exit(True);
-    if (ANode.NodeKind = gnkAssignmentStatement) and SameText(ANode.Text, AName) then
-      Exit(True);
-    if (ANode.NodeKind = gnkProcedureCallStatement) and SameText(ANode.Text, AName) then
-      Exit(True);
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Child := ANode.ChildAt(I);
-      if IsNameUsedInNode(Child, AName) then
-        Exit(True);
-    end;
-    Result := False;
-  end;
-
 var
   I: LongInt;
   Sym: TSemanticSymbol;
   RootNode, Child: TGreenNode;
   BeginBlock: TGreenNode;
   J: LongInt;
+  UsedSet: specialize THashMap<string, Byte>;
+  CollectStack: specialize TVec<TGreenNode>;
+  Cur, CCh: TGreenNode;
+  SIdx: LongInt;
 begin
   if FRootAst = nil then
     Exit;
@@ -425,21 +584,49 @@ begin
   if BeginBlock = nil then
     Exit;
 
-  for I := 0 to FModel.SymbolCount - 1 do
-  begin
-    Sym := FModel.SymbolAt(I);
-    if Sym.Kind <> 'variable' then
-      Continue;
-    if Sym.ScopeId <> FCurrentScopeId then
-      Continue;
-    if not IsNameUsedInNode(BeginBlock, Sym.Name) then
-      FDiagnostics.EmitWarning(
-        'sema.unused-variable',
-        'sema',
-        FRootFileId,
-        Sym.ByteOffset,
-        'variable "' + Sym.Name + '" is declared but never used'
-      );
+  UsedSet := specialize THashMap<string, Byte>.Create;
+  CollectStack := specialize TVec<TGreenNode>.Create;
+  try
+    CollectStack.Push(BeginBlock);
+    while CollectStack.Count > 0 do
+    begin
+      Cur := CollectStack[CollectStack.Count - 1];
+      CollectStack.Pop;
+      if Cur = nil then Continue;
+      if (Cur.NodeKind = gnkIdentifier) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      if (Cur.NodeKind = gnkAssignmentStatement) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      if (Cur.NodeKind = gnkProcedureCallStatement) and (Cur.Text <> '') then
+        if not UsedSet.ContainsKey(LowerCase(Cur.Text)) then
+          UsedSet.Add(LowerCase(Cur.Text), 0);
+      for SIdx := 0 to Cur.ChildCount - 1 do
+      begin
+        CCh := Cur.ChildAt(SIdx);
+        if CCh <> nil then CollectStack.Push(CCh);
+      end;
+    end;
+    for I := 0 to FModel.SymbolCount - 1 do
+    begin
+      Sym := FModel.SymbolAt(I);
+      if Sym.Kind <> 'variable' then
+        Continue;
+      if Sym.ScopeId <> FCurrentScopeId then
+        Continue;
+      if not UsedSet.ContainsKey(LowerCase(Sym.Name)) then
+        FDiagnostics.EmitWarning(
+          'sema.unused-variable',
+          'sema',
+          FRootFileId,
+          Sym.ByteOffset,
+          'variable "' + Sym.Name + '" is declared but never used'
+        );
+    end;
+  finally
+    CollectStack.Free;
+    UsedSet.Free;
   end;
 end;
 
@@ -530,19 +717,16 @@ end;
 
 procedure TSemanticAnalyzer.CheckCaseLabelsInNode(const ANode: TGreenNode);
 var
-  I, J, K: LongInt;
-  Child, Selector, Label1, Label2: TGreenNode;
-  Val1, Val2: Int64;
-  SeenValues: specialize TVec<Int64>;
+  I, J: LongInt;
+  Child, Selector, Label1: TGreenNode;
+  Val1: Int64;
+  SeenValues: specialize THashMap<Int64, Byte>;
 begin
   if ANode = nil then
     Exit;
   if ANode.NodeKind = gnkCaseStatement then
   begin
-    if FAllocator <> nil then
-      SeenValues := specialize TVec<Int64>.Create(0, FAllocator)
-    else
-      SeenValues := specialize TVec<Int64>.Create;
+    SeenValues := specialize THashMap<Int64, Byte>.Create;
     try
       for I := 0 to ANode.ChildCount - 1 do
       begin
@@ -557,21 +741,18 @@ begin
           if (Label1.ChildCount > 0) and
             EvaluateIntegerConstant(Label1.ChildAt(0), Val1) then
           begin
-            for K := 0 to LongInt(SeenValues.Count) - 1 do
+            if SeenValues.ContainsKey(Val1) then
             begin
-              if SeenValues[K] = Val1 then
-              begin
-                FDiagnostics.EmitWarning(
-                  'sema.duplicate-case-label',
-                  'sema',
-                  FRootFileId,
-                  Label1.ByteOffset,
-                  'duplicate case label value ' + IntToStr(Val1)
-                );
-                Break;
-              end;
-            end;
-            SeenValues.Push(Val1);
+              FDiagnostics.EmitWarning(
+                'sema.duplicate-case-label',
+                'sema',
+                FRootFileId,
+                Label1.ByteOffset,
+                'duplicate case label value ' + IntToStr(Val1)
+              );
+            end
+            else
+              SeenValues.Add(Val1, 0);
           end;
         end;
       end;

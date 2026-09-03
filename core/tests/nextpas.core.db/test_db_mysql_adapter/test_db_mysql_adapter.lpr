@@ -362,7 +362,7 @@ begin
     { 参数化插入走 prepared stmt }
     SetLength(LBlob, 3);
     LBlob[0] := 1; LBlob[1] := 2; LBlob[2] := 3;
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       Q := Conn.Query(
         'INSERT INTO t_my_adapter VALUES (?1, ?2, ?3, ?4)');
@@ -406,7 +406,7 @@ begin
 
     { savepoint 回滚语义 }
     LSp := Conn as IDbSavepointControl;
-    WithTransaction(Conn, procedure
+    WithTransaction(Conn, procedure(const C: IDbConnection)
     begin
       LSp.Savepoint('sp_a2');
       Conn.Exec('DELETE FROM t_my_adapter');

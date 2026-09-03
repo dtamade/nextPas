@@ -3,6 +3,9 @@ name: Linux Verification
 on:
   push:
   pull_request:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 
 jobs:
   verify-linux-x86_64:

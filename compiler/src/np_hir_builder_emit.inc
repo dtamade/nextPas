@@ -183,20 +183,19 @@ begin
   end
   else
   begin
-    if FGlobalNames.Count > 0 then
-      for I := 0 to LongInt(FGlobalNames.Count) - 1 do
-      if SameText(FGlobalNames[I], AArg) then
-      begin
-        FillChar(Instr, SizeOf(Instr), 0);
-        Instr.ResultId := FModule.NewValue;
-        Instr.Kind := hikIntrinsic;
-        Instr.TypeId := GetPtrType;
-        Instr.IntrinsicName := 'global_ref';
-        Instr.CallTarget := AArg;
-        EmitInstr(Instr);
-        S.PushTyped(Instr.ResultId, GetPtrType);
-        Exit;
-      end;
+    // O(1) hash check — reuse FGlobalIndex, no linear SameText scan
+    if (FGlobalIndex <> nil) and FGlobalIndex.ContainsKey(LowerCase(AArg)) then
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'global_ref';
+      Instr.CallTarget := AArg;
+      EmitInstr(Instr);
+      S.PushTyped(Instr.ResultId, GetPtrType);
+      Exit;
+    end;
   end;
 end;
 

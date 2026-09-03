@@ -50,6 +50,9 @@ generic procedure Sort<T>(var aArr: array of T; aCompare: specialize TAlgoCompar
 generic function BinarySearch<T>(const aArr: array of T; const aValue: T;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer; out aIndex: SizeInt): Boolean;
 
+generic function LowerBound<T>(const aArr: array of T; const aValue: T;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
+
 {**
  * FindIf<T> - 条件查找
  *
@@ -424,6 +427,28 @@ begin
   end;
 
   Result := False;
+end;
+
+{ LowerBound<T> - first index where aArr[idx] >= aValue (insert position) }
+generic function LowerBound<T>(const aArr: array of T; const aValue: T;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
+var
+  Lo, Hi, Mid: SizeInt;
+  Cmp: SizeInt;
+begin
+  // perf: O(log n) lower_bound single source via aCompare, zero-copy, inline candidates reuse CompareDriverEntry
+  Lo := 0;
+  Hi := Length(aArr);
+  while Lo < Hi do
+  begin
+    Mid := Lo + (Hi - Lo) div 2;
+    Cmp := aCompare(aArr[Mid], aValue, aData);
+    if Cmp < 0 then
+      Lo := Mid + 1
+    else
+      Hi := Mid;
+  end;
+  Result := Lo;
 end;
 
 { FindIf<T> }

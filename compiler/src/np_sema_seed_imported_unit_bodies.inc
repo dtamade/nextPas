@@ -402,7 +402,12 @@ procedure TSemanticAnalyzer.SeedImportedUnitBodies;
     Reset(LF);
     {$I+}
     if IOResult <> 0 then
+    begin
+      // Diagnostic with context: source path + canonical name + owner, zero-copy message via cached strings
+      EmitSemaError('sema.import-read-failed',
+        'failed to read imported unit "' + ASourcePath + '" (canonical=' + ACanonicalName + ', owner=' + AOwnerUnitId + ')', 0);
       Exit;
+    end;
     LSourceText := '';
     while not Eof(LF) do
     begin
@@ -468,8 +473,7 @@ var
 begin
   if FUnitGraph = nil then
     Exit;
-  if GDiskCache = nil then
-    GDiskCache := TDiskSymbolCache.Create('.nextpas/cache');
+  GetDiskCache;
   TmpDiag := TDiagnosticsSink.CreateDefault;
   try
     for Index := FUnitGraph.ResolvedUnitCount - 1 downto 0 do
@@ -496,9 +500,9 @@ begin
         CacheIdx := FindCachedUnit(SourcePath, Age);
       if CacheIdx >= 0 then
       begin
-        for J := 0 to LongInt(GImportedUnitCache[SizeUInt(CacheIdx)].Symbols.Count) - 1 do
+        for J := 0 to LongInt(FImportedUnitCache[SizeUInt(CacheIdx)].Symbols.Count) - 1 do
         begin
-          CachedSym := GImportedUnitCache[SizeUInt(CacheIdx)].Symbols[SizeUInt(J)];
+          CachedSym := FImportedUnitCache[SizeUInt(CacheIdx)].Symbols[SizeUInt(J)];
           { Skip cached type symbols if a type with this name already
             exists in the model (e.g. seeded in SeedBuiltinTypes). }
           if SameText(CachedSym.Kind, 'type') and
@@ -522,7 +526,7 @@ begin
       if SymbolCacheEligible then
       begin
         Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
-        DiskHit := GDiskCache.TryLoad(OwnerUnitId, Fingerprint, DiskUnit);
+        DiskHit := GetDiskCache.TryLoad(OwnerUnitId, Fingerprint, DiskUnit);
       end;
       if DiskHit then
       begin

@@ -1,22 +1,12 @@
 unit nextpas.core.db.factory;
 
-{** @desc 统一驱动注册工厂，对标 Go sql.Register/Open。
-       模块化（High 修复）：
-       - 本单元为窄依赖注册表：零 L2 适配器导入（0 SysUtils），仅提供
-         IDbDriver 抽象、注册表、DbOpen(name|kind) 查找与 DbOpenPool
-         池化装配。适配层零耦合，独立后端 lane 可独立构建与测试。
-       - 内建后端的开箱自注册已抽离至
-         nextpas.core.db.factory.builtin（side-effect import 聚合），
-         等价 Go driver 自注册：`uses nextpas.core.db.factory.builtin`
-         即得六驱动字典序快照与全覆盖 DbOpen；定制裁剪改直用
-         nextpas.core.db.{sqlite|pg|mysql|odbc|redis|dm}.adapter 的
-         Connect* 或按需单 backend 注册单元。
-       - 可插拔：第三方驱动经 DbRegisterDriver 动态注入，零改本单元；
-         内建 Kind 诚实返回 dbkUnknown 亦可占位。
-       - Open 即池复用 V3-C3；详见 CONTRACT §2.10/§2.14。
-       零 SysUtils（text.conv/text.format/base.utils）；Bulk 复用
-       DbBulkEscape/TDbBulkBuffer 单源（契约不变）；InTransaction
-       分支由适配器自管，本层不介入事务；heaptrc0。 *}
+{ Narrow driver registry: zero L2 imports, IDbDriver + DbOpen(name|kind).
+  Pool integration via nextpas.core.db.factory.pool bridge (separate leaf
+  for fully independent build isolation). Builtins via explicit
+  DbRegisterDriver (per-backend factory.register.* or direct adapter
+  Connect*), factory.builtin zero-logic leaf physically removed 2026-09-02
+  no longer counted as module node (explicit registration wins, see CONTRACT §2.14). Third-party via
+  DbRegisterDriver. Zero SysUtils, heaptrc0. }
 
 {$I nextpas.core.settings.inc}
 
@@ -27,30 +17,27 @@ uses
   nextpas.core.text.utils,
   nextpas.core.text.conv,
   nextpas.core.db.base,
-  nextpas.core.db.intf,
-  nextpas.core.db.pool;
+  nextpas.core.db.intf;
 
 type
-  { 已注册驱动名快照（小写规范形，字典序排序）。诊断/运维用。
-    显式数组别名：ObjFPC 模式泛型简写在跨单元签名处有坑（家族惯例）。 }
+  { Sorted lower-case driver names snapshot. }
   TDbDriverNames = array of string;
 
-  { 单一驱动抽象：注册键 + 归属声明 + 打开。Name 为注册键（注册时
-    归一为小写）；Kind 为内建枚举归属（第三方可诚实返回 dbkUnknown）。 }
+  { Driver abstraction: Name is registry key (lower-cased on register). }
   IDbDriver = interface
     ['{8F2E7A64-9C1D-4B0E-A3D7-51C2B90FE101}']
     function Name: string;
     function Kind: TDbKind;
     function Open(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection;
+      const AOptions: TDbConnectOptions;
+      const AStmtCacheCapacity: Integer = 64): IDbConnection;
   end;
 
-  { 驱动打开闭包：内建驱动装配用 }
   TDbDriverOpenFunc = reference to function(const ADsn: string;
-    const AOptions: TDbConnectOptions): IDbConnection;
+    const AOptions: TDbConnectOptions;
+    const AStmtCacheCapacity: Integer): IDbConnection;
 
-  { 内建驱动装配：名字 + 枚举 + 打开函数三件套（公开以供
-    nextpas.core.db.factory.builtin 聚合单元复用，零 SysUtils）。 }
+  { Builtin triple: name + kind + open func. }
   TBuiltinDriver = class(TInterfacedObject, IDbDriver)
   private
     FName: string;
@@ -62,76 +49,187 @@ type
     function Name: string;
     function Kind: TDbKind;
     function Open(const ADsn: string;
-      const AOptions: TDbConnectOptions): IDbConnection;
+      const AOptions: TDbConnectOptions;
+      const AStmtCacheCapacity: Integer = 64): IDbConnection;
   end;
 
-{ 注册驱动。nil/空名/重复名一律抛 EDbError(dbkUnknown) fail-closed。
-  名字大小写不敏感（注册时归一小写）。 }
+{ nil/empty/duplicate -> EDbError(dbkUnknown). Case-insensitive. }
 procedure DbRegisterDriver(ADriver: IDbDriver);
 
-{ 已注册驱动名快照（小写规范形，字典序排序）。诊断/运维用。 }
 function DbRegisteredDrivers: TDbDriverNames;
-
 function DbDriverExists(const AName: string): Boolean;
 
-{ 统一打开入口（Go sql.Open 语义）。未知驱动名抛 EDbError 并携带
-  驱动名原文；后端连接错误原样透传（保留各自 EDbError.Backend）。 }
+{ Go sql.Open semantics: unknown name -> EDbError with name. }
 function DbOpen(const ADriver: string; const ADsn: string): IDbConnection;
-  overload;
+  overload; inline;
 function DbOpen(const ADriver: string; const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; overload;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer = 64): IDbConnection; overload;
 
-{ 按内建枚举打开。dbkUnknown 或无对应驱动时先按 Kind 扫描注册表
-  （支持第三方占位），仍无则 EDbNotSupported fail-closed。 }
+{ Kind dispatch: scans by name then by Kind; dbkUnknown with no match -> EDbNotSupported. }
 function DbOpen(AKind: TDbKind; const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; overload;
-
-{ Open 即池：以 DbOpen 为连接工厂构建 V3-C3 池（Go *sql.DB 形态）。
-  连接选项取 TDbConnectOptions.Default（advisory 惯例；细控场景
-  直接持 TDbPool.Create 自组工厂闭包）。预热失败 fail-fast 抛
-  原建连错（池 Create 语义）。 }
-function DbOpenPool(const ADriver: string; const ADsn: string;
-  const APolicy: TDbPoolPolicy): TDbPool; overload;
-function DbOpenPool(AKind: TDbKind; const ADsn: string;
-  const APolicy: TDbPoolPolicy): TDbPool; overload;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer = 64): IDbConnection; overload;
 
 implementation
 
 uses
+  nextpas.core.bytes.ops,
+  nextpas.core.collections.ordered_registry,
   nextpas.core.sync.intf,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.rwlock;
+
+
 
 type
   TDbDriverEntry = record
     Name: string;
     Driver: IDbDriver;
   end;
+  TDbDriverEntries = array of TDbDriverEntry;
 
 var
+  // Concurrency: all GDrivers/GCachedNames access under GLock (shared for read,
+  // exclusive for write). No lock-free dynarray read — eliminates seqlock
+  // CoW race (TryGetDriverFast GDrivers[I] vs GDrivers:=LNew realloc).
+  // Registration may be concurrent with DbOpen/DbDriverExists; write serial
+  // via exclusive lock, sequential at startup is the common case.
   GDrivers: array of TDbDriverEntry;
-  GLock: ILock = nil;
+  GCachedNames: TDbDriverNames = nil;
+  GLock: IRWLock = nil;
 
 function NormalizeName(const AName: string): string; inline;
 begin
   Result := NormalizeLowerTrim(AName);
 end;
 
-function FindEntryLocked(const AName: string): Integer;
-var
-  I: Integer;
+function CompareDriverEntry(const A, B: TDbDriverEntry; AData: Pointer): SizeInt; inline;
 begin
-  for I := 0 to High(GDrivers) do
-    if GDrivers[I].Name = AName then
-      Exit(I);
-  Result := -1;
+  // zero-copy string compare, inline; owner=collections.ordered_registry shape
+  if A.Name < B.Name then
+    Result := -1
+  else if A.Name > B.Name then
+    Result := 1
+  else
+    Result := 0;
 end;
 
-{ 注册驱动。nil/空名/重复名 fail-closed；大小写不敏感。实现注记见 ROADMAP §A5（FPC trunk 临时量缺陷规避）。 }
+function DbRegistryLowerBound(const ASnap: array of TDbDriverEntry; const AName: string): SizeInt; inline;
+var
+  LProbe: TDbDriverEntry;
+begin
+  // O(log n) lower_bound via collections.ordered_registry single source, inline, zero-copy string compare (probe shallow copy refcount).
+  // Owner=collections ordered_registry (OrderedLowerBound -> algorithms.LowerBound single source).
+  LProbe.Name := AName;
+  LProbe.Driver := nil;
+  Result := specialize OrderedLowerBound<TDbDriverEntry>(ASnap, LProbe, @CompareDriverEntry, nil);
+end;
+
+function RegistryOrderedSearch(const ASnap: array of TDbDriverEntry; const AName: string; out AInsertPos: Integer): Integer;
+var
+  LProbe: TDbDriverEntry;
+  LPos: SizeInt;
+  LFound: Boolean;
+begin
+  // O(log n) single pass via collections.ordered_registry OrderedBinarySearch, inline, zero-copy.
+  LProbe.Name := AName;
+  LProbe.Driver := nil;
+  LFound := specialize OrderedBinarySearch<TDbDriverEntry>(ASnap, LProbe, @CompareDriverEntry, nil, LPos);
+  AInsertPos := Integer(LPos);
+  if LFound then
+    Result := Integer(LPos)
+  else
+    Result := -1;
+end;
+
+function FindIndexBin(const ASnap: array of TDbDriverEntry; const AName: string): Integer; inline;
+var
+  LPos: Integer;
+begin
+  // O(log n) ordered binary, inline.
+  Result := RegistryOrderedSearch(ASnap, AName, LPos);
+end;
+
+function FindEntryLocked(const AName: string): Integer; inline;
+begin
+  // O(log n) binary on sorted GDrivers, inline.
+  Result := FindIndexBin(GDrivers, AName);
+end;
+
+function FindInSnapshot(const ASnap: array of TDbDriverEntry; const AName: string): Integer; inline;
+begin
+  // O(log n) binary, inline, zero-copy.
+  Result := FindIndexBin(ASnap, AName);
+end;
+
+function FindInsertPosBin(const ASnap: array of TDbDriverEntry; const AName: string): Integer; inline;
+begin
+  // 有序插入点必须用 lower_bound：BinarySearch 未命中回 -1 非插入点（空表亦 -1，越界写堆）。
+  Result := Integer(DbRegistryLowerBound(ASnap, AName));
+end;
+
+function TryGetDriverFast(const AName: string; out ADriver: IDbDriver): Boolean;
+var
+  LIdx: Integer;
+begin
+  // O(log n) shared-lock read, zero-copy, inline.
+  Result := False;
+  ADriver := nil;
+  GLock.AcquireRead;
+  try
+    LIdx := FindIndexBin(GDrivers, AName);
+    if LIdx >= 0 then
+    begin
+      ADriver := GDrivers[LIdx].Driver;
+      Exit(True);
+    end;
+  finally
+    GLock.ReleaseRead;
+  end;
+end;
+
+function GetDriverLocked(const AName: string): IDbDriver;
+begin
+  // O(log n) shared-lock via TryGetDriverFast, lock released before Open.
+  if not TryGetDriverFast(AName, Result) then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'db.factory: unknown driver: "' + AName + '"');
+end;
+
+function TakeSnapshot(out ASnap: TDbDriverEntries): Integer; inline;
+begin
+  // O(1) ref copy under read lock.
+  GLock.AcquireRead;
+  try
+    ASnap := GDrivers;
+  finally
+    GLock.ReleaseRead;
+  end;
+  Result := Length(ASnap);
+end;
+
+function KindToBuiltinName(AKind: TDbKind): string; inline;
+begin
+  case AKind of
+    dbkSqlite:   Result := 'sqlite';
+    dbkPostgres: Result := 'postgres';
+    dbkMysql:    Result := 'mysql';
+    dbkOdbc:     Result := 'odbc';
+    dbkRedis:    Result := 'redis';
+    dbkDm:       Result := 'dm';
+  else
+    Result := '';
+  end;
+end;
+
 procedure DbRegisterDriver(ADriver: IDbDriver);
 var
   LName: string;
+  LNew: array of TDbDriverEntry;
   LEntry: TDbDriverEntry;
+  LInsertPos, I: Integer;
   LDup: Boolean;
+  LExists: Boolean;
 begin
   if ADriver = nil then
     raise EDbError.CreateSimple(dbkUnknown,
@@ -140,155 +238,131 @@ begin
   if LName = '' then
     raise EDbError.CreateSimple(dbkUnknown,
       'db.factory: driver name must not be empty');
-  GLock.Acquire;
+  // O(log n) existence check under shared lock, zero-copy.
+  GLock.AcquireRead;
   try
-    LDup := FindEntryLocked(LName) >= 0;
-    if not LDup then
+    LExists := FindEntryLocked(LName) >= 0;
+  finally
+    GLock.ReleaseRead;
+  end;
+  if LExists then
+    raise EDbError.CreateSimple(dbkUnknown,
+      'db.factory: driver already registered: ' + LName);
+  LDup := False;
+  GLock.AcquireWrite;
+  try
+    if FindEntryLocked(LName) >= 0 then
+      LDup := True
+    else
     begin
+      LInsertPos := FindInsertPosBin(GDrivers, LName);
+      SetLength(LNew, Length(GDrivers) + 1);
+      for I := 0 to LInsertPos - 1 do
+        LNew[I] := GDrivers[I];
       LEntry.Name := LName;
       LEntry.Driver := ADriver;
-      SetLength(GDrivers, Length(GDrivers) + 1);
-      GDrivers[High(GDrivers)] := LEntry;
+      LNew[LInsertPos] := LEntry;
+      for I := LInsertPos to High(GDrivers) do
+        LNew[I + 1] := GDrivers[I];
+      GDrivers := LNew;
+      SetLength(GCachedNames, Length(GDrivers));
+      for I := 0 to High(GDrivers) do
+        GCachedNames[I] := GDrivers[I].Name;
     end;
   finally
-    GLock.Release;
+    GLock.ReleaseWrite;
   end;
   if LDup then
     raise EDbError.CreateSimple(dbkUnknown,
       'db.factory: driver already registered: ' + LName);
 end;
 
-function DbDriverExists(const AName: string): Boolean;
+function DbDriverExists(const AName: string): Boolean; inline;
 var
   LName: string;
+  LDummy: IDbDriver;
 begin
+  // O(log n) via TryGetDriverFast, inline.
   LName := NormalizeName(AName);
-  GLock.Acquire;
-  try
-    Result := FindEntryLocked(LName) >= 0;
-  finally
-    GLock.Release;
-  end;
+  Result := TryGetDriverFast(LName, LDummy);
 end;
 
-function DbRegisteredDrivers: TDbDriverNames;
-var
-  I, J: Integer;
-  LTmp: string;
+function DbRegisteredDrivers: TDbDriverNames; inline;
 begin
-  GLock.Acquire;
+  // Defensive Copy, inline; isolates GCachedNames from caller mutation.
+  GLock.AcquireRead;
   try
-    SetLength(Result, Length(GDrivers));
-    for I := 0 to High(GDrivers) do
-      Result[I] := GDrivers[I].Name;
+    Result := Copy(GCachedNames);
   finally
-    GLock.Release;
-  end;
-  { 插入排序：注册表个位数量级，稳定且零依赖 }
-  for I := 1 to High(Result) do
-  begin
-    LTmp := Result[I];
-    J := I - 1;
-    while (J >= 0) and (Result[J] > LTmp) do
-    begin
-      Result[J + 1] := Result[J];
-      Dec(J);
-    end;
-    Result[J + 1] := LTmp;
+    GLock.ReleaseRead;
   end;
 end;
 
-function DriverByNameLocked(const AName: string): IDbDriver;
+function DriverBySnapshot(const ASnap: array of TDbDriverEntry; const AName: string): IDbDriver; inline;
 var
   LIdx: Integer;
 begin
-  LIdx := FindEntryLocked(AName);
+  LIdx := FindInSnapshot(ASnap, AName);
   if LIdx < 0 then
     raise EDbError.CreateSimple(dbkUnknown,
       'db.factory: unknown driver: "' + AName + '"');
-  Result := GDrivers[LIdx].Driver;
+  Result := ASnap[LIdx].Driver;
+end;
+
+function DbOpen(const ADriver: string; const ADsn: string): IDbConnection; overload; inline;
+begin
+  Result := DbOpen(ADriver, ADsn, TDbConnectOptions.Default, 64);
 end;
 
 function DbOpen(const ADriver: string; const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; overload;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; overload;
 var
   LDriver: IDbDriver;
+  LName: string;
 begin
   if ADriver = '' then
     raise EDbError.CreateSimple(dbkUnknown,
       'db.factory: empty driver name');
-  GLock.Acquire;
-  try
-    LDriver := DriverByNameLocked(NormalizeName(ADriver));
-  finally
-    GLock.Release;
-  end;
-  { Open 在锁外执行：连接建立可能耗时数秒 }
-  Result := LDriver.Open(ADsn, AOptions);
-end;
-
-function DbOpen(const ADriver: string; const ADsn: string): IDbConnection;
-begin
-  Result := DbOpen(ADriver, ADsn, TDbConnectOptions.Default);
+  // via GetDriverLocked shared-lock, lock released before Open.
+  LName := NormalizeName(ADriver);
+  LDriver := GetDriverLocked(LName);
+  Result := LDriver.Open(ADsn, AOptions, AStmtCacheCapacity);
 end;
 
 function DbOpen(AKind: TDbKind; const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection; overload;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection; overload;
 var
   I, LIdx: Integer;
   LDriver: IDbDriver;
+  LBuiltin: string;
 begin
+  // Shared-lock O(log n) builtin name + O(n) Kind scan, Open outside lock.
   LDriver := nil;
-  GLock.Acquire;
+  GLock.AcquireRead;
   try
-    { 内建规范名优先（无需 L2 导入，仅串匹配，零 fan-in），
-      缺席则按 Kind 扫描兜底（第三方占位亦可命中）；
-      查找均在锁内无异常路径完成，Open 在锁外执行。 }
-    LIdx := -1;
-    case AKind of
-      dbkSqlite:   LIdx := FindEntryLocked('sqlite');
-      dbkPostgres: LIdx := FindEntryLocked('postgres');
-      dbkMysql:    LIdx := FindEntryLocked('mysql');
-      dbkOdbc:     LIdx := FindEntryLocked('odbc');
-      dbkRedis:    LIdx := FindEntryLocked('redis');
-      dbkDm:       LIdx := FindEntryLocked('dm');
+    LBuiltin := KindToBuiltinName(AKind);
+    if LBuiltin <> '' then
+    begin
+      LIdx := FindIndexBin(GDrivers, LBuiltin);
+      if LIdx >= 0 then
+        LDriver := GDrivers[LIdx].Driver;
     end;
-    if LIdx >= 0 then
-      LDriver := GDrivers[LIdx].Driver
-    else
+    if LDriver = nil then
       for I := 0 to High(GDrivers) do
         if GDrivers[I].Driver.Kind = AKind then
         begin
           LDriver := GDrivers[I].Driver;
           Break;
         end;
+    if LDriver = nil then
+      raise EDbNotSupported.CreateSimple(dbkUnknown,
+        'db.factory: no driver registered for kind');
   finally
-    GLock.Release;
+    GLock.ReleaseRead;
   end;
-  if LDriver = nil then
-    raise EDbNotSupported.CreateSimple(dbkUnknown,
-      'db.factory: no driver registered for kind');
-  Result := LDriver.Open(ADsn, AOptions);
-end;
-
-function DbOpenPool(const ADriver: string; const ADsn: string;
-  const APolicy: TDbPoolPolicy): TDbPool; overload;
-begin
-  Result := TDbPool.Create(
-    function: IDbConnection
-    begin
-      Result := DbOpen(ADriver, ADsn, TDbConnectOptions.Default);
-    end, APolicy);
-end;
-
-function DbOpenPool(AKind: TDbKind; const ADsn: string;
-  const APolicy: TDbPoolPolicy): TDbPool; overload;
-begin
-  Result := TDbPool.Create(
-    function: IDbConnection
-    begin
-      Result := DbOpen(AKind, ADsn, TDbConnectOptions.Default);
-    end, APolicy);
+  Result := LDriver.Open(ADsn, AOptions, AStmtCacheCapacity);
 end;
 
 { ---- TBuiltinDriver ---- }
@@ -313,15 +387,17 @@ begin
 end;
 
 function TBuiltinDriver.Open(const ADsn: string;
-  const AOptions: TDbConnectOptions): IDbConnection;
+  const AOptions: TDbConnectOptions;
+  const AStmtCacheCapacity: Integer): IDbConnection;
 begin
-  Result := FOpen(ADsn, AOptions);
+  Result := FOpen(ADsn, AOptions, AStmtCacheCapacity);
 end;
 
 initialization
-  GLock := TMutex.Create;
+  GLock := TRWLock.Create;
 
 finalization
+  GCachedNames := nil;
   GDrivers := nil;
   GLock := nil;
 
