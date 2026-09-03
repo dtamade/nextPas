@@ -5,7 +5,8 @@ unit nextpas.core.collections.concurrent.hashmap;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.base,
   nextpas.core.sync.rwlock,
   nextpas.core.sync.intf,
@@ -74,19 +75,20 @@ implementation
 { TConcurrentHashMap }
 
 function TConcurrentHashMap.SegmentIndex(const AKey: K): SizeUInt;
-var LHash: UInt32;
+var LHash: UInt32; LKind: TNPTypeKind;
 begin
   if Assigned(FHash) then
     LHash := FHash(AKey)
   else
   begin
-    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    LKind := NPTypeKindOf(TNPTypeHandle(TypeInfo(K)));
+    if (LKind = nkInteger) and (SizeOf(K) = 4) then
       LHash := InlineHashMix32(PUInt32(@AKey)^)
-    else if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 8) then
+    else if (LKind = nkInteger) and (SizeOf(K) = 8) then
       LHash := InlineHashMix32(UInt32(PQWord(@AKey)^ xor (PQWord(@AKey)^ shr 32)))
-    else if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
+    else if (LKind = nkString) and (GetTypeKind(K) = GetTypeKind(AnsiString)) then
       LHash := HashOfAnsiString(PAnsiString(@AKey)^)
-    else if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
+    else if (LKind = nkString) and ((GetTypeKind(K) = GetTypeKind(UnicodeString)) or (GetTypeKind(K) = GetTypeKind(WideString))) then
       LHash := HashOfUnicodeString(PUnicodeString(@AKey)^)
     else
     begin
@@ -105,18 +107,16 @@ end;
 
 constructor TConcurrentHashMap.Create(AHash: THashFunc; AEquals: TEqualsFunc;
   AInitialCapacityPerSegment: SizeUInt);
-var i: Integer;
+var i: Integer; LKind: TNPTypeKind;
 begin
   inherited Create;
 
   // Non-ordinal/non-string key types require a custom hash function
+  LKind := NPTypeKindOf(TNPTypeHandle(TypeInfo(K)));
   if not Assigned(AHash) then
-    if not ((GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
-            (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
-            (GetTypeKind(K) = tkEnumeration) or (GetTypeKind(K) = tkInt64) or
-            (GetTypeKind(K) = tkQWord) or (GetTypeKind(K) = tkAString) or
-            (GetTypeKind(K) = tkLString) or (GetTypeKind(K) = tkUString) or
-            (GetTypeKind(K) = tkWString)) then
+    if not ((LKind = nkInteger) or (LKind = nkChar) or
+            (LKind = nkEnumeration) or (LKind = nkInt64) or
+            (LKind = nkQWord) or (LKind = nkString)) then
       raise EInvalidArgument.Create(
         'TConcurrentHashMap.Create: AHash must not be nil for non-ordinal/non-string key types');
 

@@ -4,7 +4,7 @@ unit nextpas.core.collections.element_manager.intf;
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.mem.intf, nextpas.core.collections.element_manager.base,
+uses nextpas.core.reflect.base, nextpas.core.base, nextpas.core.mem.intf, nextpas.core.collections.element_manager.base,
   nextpas.core.mem.allocator.base;
 
 type
@@ -67,17 +67,17 @@ type
     function GetIsManagedType: Boolean;
 
     {**
-     * GetElementTypeInfo
+     * GetElementTypeHandle
      *
      * @desc
-     *   Gets the Runtime Type Information (RTTI) for the generic type T.
-     *   获取泛型类型 T 的运行时类型信息 (RTTI).
+     *   Gets the opaque RTTI handle for the generic type T (assigns from TypeInfo).
+     *   获取泛型类型 T 的不透明 RTTI 句柄 (由 TypeInfo 直接赋值).
      *
      * @return
-     *   A pointer to the TTypeInfo record.
-     *   指向 TTypeInfo 记录的指针.
+     *   Opaque handle (TNPTypeHandle) for T.
+     *   T 的不透明句柄 (TNPTypeHandle).
      *}
-    function GetElementTypeInfo: PTypeInfo;
+    function GetElementTypeHandle: TNPTypeHandle;
 
     {**
      * InitializeElements
@@ -486,7 +486,7 @@ type
 
     property ElementSize:     SizeUInt   read GetElementSize;
     property IsManagedType:   Boolean    read GetIsManagedType;
-    property ElementTypeInfo: PTypeInfo  read GetElementTypeInfo;
+    property ElementTypeHandle: TNPTypeHandle  read GetElementTypeHandle;
     property Allocator:       TMemAllocator read GetAllocator;
 
   end;

@@ -5,7 +5,6 @@ unit nextpas.core.collections.hashmap.swiss.adapter;
 interface
 
 uses
-  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.mem.intf,

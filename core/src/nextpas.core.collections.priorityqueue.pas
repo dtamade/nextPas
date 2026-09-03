@@ -7,7 +7,6 @@ unit nextpas.core.collections.priorityqueue;
 interface
 
 uses
-  nextpas.core.system.typinfo,
   nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
