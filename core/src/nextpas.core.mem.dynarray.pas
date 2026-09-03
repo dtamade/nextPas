@@ -43,6 +43,8 @@ procedure DynArraySetLengthStr(var A: TStringArray; const ANewLen: SizeUInt); in
 
 {** Generic capacity probe: (heap block - header) div AElemSize; fallback ALen. }
 function DynArrayCapacityElem(APtr: Pointer; ALen: SizeUInt; AElemSize: SizeUInt): SizeUInt; inline;
+function DynArrayRefCountElem(APtr: Pointer): PtrInt; inline;
+procedure DynArraySetLengthElem(APtr: Pointer; const ANewLen: SizeUInt); inline;
 
 implementation
 
@@ -141,6 +143,23 @@ begin
   LSize := NpSystemMemSize(LBlock);
   if LSize < SizeOf(TDynArrayHeader) then Exit(ALen);
   Result := (LSize - SizeOf(TDynArrayHeader)) div AElemSize;
+end;
+
+function DynArrayRefCountElem(APtr: Pointer): PtrInt; inline;
+begin
+  if APtr = nil then Exit(0);
+  Result := PDynArrayHeader(PByte(APtr) - SizeOf(TDynArrayHeader))^.RefCnt;
+end;
+
+procedure DynArraySetLengthElem(APtr: Pointer; const ANewLen: SizeUInt); inline;
+begin
+  if APtr = nil then
+  begin
+    if ANewLen <> 0 then
+      raise EInvalidOperation.Create('DynArraySetLengthElem: nil with non-zero len');
+    Exit;
+  end;
+  PDynArrayHeader(PByte(APtr) - SizeOf(TDynArrayHeader))^.High := PtrInt(ANewLen) - 1;
 end;
 
 end.

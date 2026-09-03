@@ -104,6 +104,7 @@ uses
   nextpas.core.bytes.ops,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
+  nextpas.core.text.view,
   nextpas.core.time,
   nextpas.core.time.datetime,
   nextpas.core.time.offsetdatetime,
@@ -240,18 +241,18 @@ begin
 
     if LEqPos > 0 then
     begin
-      LName := Trim(Copy(AHeaderValue, LStart, LEqPos - LStart));
-      LValue := Trim(Copy(AHeaderValue, LEqPos + 1, LI - LEqPos - 1));
+      LName := Trim(SliceToStr(AHeaderValue, SizeUInt(LStart - 1), SizeUInt(LEqPos - LStart))); // perf: inline SliceToStr single source L3→L1 + Trim L1 single source (text.conv via text.utils)
+      LValue := Trim(SliceToStr(AHeaderValue, SizeUInt(LEqPos), SizeUInt(LI - LEqPos - 1))); // perf: inline SliceToStr single source
     end
     else
     begin
-      LName := Trim(Copy(AHeaderValue, LStart, LI - LStart));
+      LName := Trim(SliceToStr(AHeaderValue, SizeUInt(LStart - 1), SizeUInt(LI - LStart))); // perf: inline SliceToStr single source
       LValue := '';
     end;
 
     { Strip surrounding quotes from value }
     if (Length(LValue) >= 2) and (LValue[1] = '"') and (LValue[Length(LValue)] = '"') then
-      LValue := Copy(LValue, 2, Length(LValue) - 2);
+      LValue := SliceToStr(LValue, 1, SizeUInt(Length(LValue) - 2)); // perf: inline SliceToStr single source L3→L1
 
     if LName <> '' then
     begin
@@ -474,8 +475,8 @@ begin
   LEqPos := Pos('=', AStr);
   if LEqPos > 0 then
   begin
-    AName := Trim(Copy(AStr, 1, LEqPos - 1));
-    AValue := Trim(Copy(AStr, LEqPos + 1, MaxInt));
+    AName := Trim(SliceToStr(AStr, 0, SizeUInt(LEqPos - 1))); // perf: inline SliceToStr single source L3→L1 + Trim L1 single source
+    AValue := Trim(SliceToStr(AStr, SizeUInt(LEqPos), SizeUInt(Length(AStr) - LEqPos))); // perf: inline SliceToStr single source
     Result := AName <> '';
   end
   else
@@ -541,7 +542,7 @@ begin
   if LEnd < LStart then
     Result := ''
   else
-    Result := System.Copy(S, LStart, LEnd - LStart + 1);
+    Result := SliceToStr(S, SizeUInt(LStart - 1), SizeUInt(LEnd - LStart + 1)); // perf: inline single source via bytes.ops.TryClampSlice zero-copy extent (owner bytes.ops) + single SetString/BytesCopy (L3→L1 single source, no System.Copy bypass)
 end;
 
 function CookieNowUnix: Int64;
@@ -654,7 +655,7 @@ var
 begin
   LName := LowerAscii(AHostOrSuffix);
   if (LName <> '') and (LName[1] = '.') then
-    LName := System.Copy(LName, 2, MaxInt);
+    LName := SliceToStr(LName, 1, SizeUInt(Length(LName) - 1)); // perf: inline TryClampSlice single source (owner bytes.ops) via text.view.SliceToStr L3→L1
   while (LName <> '') and (LName[Length(LName)] = '.') do
     SetLength(LName, Length(LName) - 1);
   if LName = '' then
@@ -727,7 +728,7 @@ begin
       Dec(LNeed);
       if LNeed = 0 then
       begin
-        Result := System.Copy(AHost, LI + 1, MaxInt);
+        Result := SliceToStr(AHost, SizeUInt(LI), SizeUInt(Length(AHost) - LI)); // perf: inline TryClampSlice single source via text.view.SliceToStr L3→L1
         Exit;
       end;
     end;
@@ -764,7 +765,7 @@ var
 begin
   LHost := LowerAscii(AHost);
   if (LHost <> '') and (LHost[1] = '.') then
-    LHost := System.Copy(LHost, 2, MaxInt);
+    LHost := SliceToStr(LHost, 1, SizeUInt(Length(LHost) - 1)); // perf: inline TryClampSlice single source via text.view.SliceToStr L3→L1
   while (LHost <> '') and (LHost[Length(LHost)] = '.') do
     SetLength(LHost, Length(LHost) - 1);
   if LHost = '' then
@@ -796,8 +797,8 @@ begin
     Exit(True);
   if Length(LHost) <= Length(LDomain) then
     Exit(False);
-  Result := (System.Copy(LHost, Length(LHost) - Length(LDomain) + 1,
-    Length(LDomain)) = LDomain) and
+  // perf: zero-copy via text.view TStringView single source (bytes.ops SpanEqual single source, no heap alloc, inline) vs System.Copy heap alloc bypass
+  Result := (TStringView.FromStr(LHost).Right(SizeUInt(Length(LDomain))).Equals(TStringView.FromStr(LDomain))) and
     (LHost[Length(LHost) - Length(LDomain)] = '.');
 end;
 
@@ -873,7 +874,7 @@ begin
   Inc(LPos, 3); { skip DD and following SP -> Mon }
   if (LPos + 2 > LLen) then
     Exit;
-  LMonthStr := System.Copy(ADate, LPos, 3);
+  LMonthStr := SliceToStr(ADate, SizeUInt(LPos - 1), 3); // perf: inline TryClampSlice single source via text.view.SliceToStr L3→L1
   LMonth := 0;
   for LI := 1 to 12 do
     if LMonthStr = MONTH_NAMES[LI] then
@@ -939,7 +940,7 @@ begin
   begin
     if (LPos > LLen) or (AHeader[LPos] = ';') then
     begin
-      LPart := TrimSpaces(System.Copy(AHeader, LStart, LPos - LStart));
+      LPart := TrimSpaces(SliceToStr(AHeader, SizeUInt(LStart - 1), SizeUInt(LPos - LStart))); // perf: inline TryClampSlice single source via text.view.SliceToStr L3→L1
       if LPart <> '' then
       begin
         if LFirst then
@@ -947,8 +948,8 @@ begin
           LEq := Pos('=', LPart);
           if LEq <= 0 then
             Exit(False);
-          AItem.Name := TrimSpaces(System.Copy(LPart, 1, LEq - 1));
-          AItem.Value := System.Copy(LPart, LEq + 1, MaxInt);
+          AItem.Name := TrimSpaces(SliceToStr(LPart, 0, SizeUInt(LEq - 1))); // perf: inline TryClampSlice single source L3→L1
+          AItem.Value := SliceToStr(LPart, SizeUInt(LEq), SizeUInt(Length(LPart) - LEq)); // perf: inline TryClampSlice single source L3→L1
           if AItem.Name = '' then
             Exit(False);
           LFirst := False;
@@ -958,8 +959,8 @@ begin
           LEq := Pos('=', LPart);
           if LEq > 0 then
           begin
-            LAttr := LowerAscii(TrimSpaces(System.Copy(LPart, 1, LEq - 1)));
-            LVal := TrimSpaces(System.Copy(LPart, LEq + 1, MaxInt));
+            LAttr := LowerAscii(TrimSpaces(SliceToStr(LPart, 0, SizeUInt(LEq - 1)))); // perf: inline TryClampSlice single source L3→L1
+            LVal := TrimSpaces(SliceToStr(LPart, SizeUInt(LEq), SizeUInt(Length(LPart) - LEq))); // perf: inline TryClampSlice single source L3→L1
           end
           else
           begin
@@ -969,7 +970,7 @@ begin
           if LAttr = 'domain' then
           begin
             if (LVal <> '') and (LVal[1] = '.') then
-              LVal := System.Copy(LVal, 2, MaxInt);
+              LVal := SliceToStr(LVal, 1, SizeUInt(Length(LVal) - 1)); // perf: inline TryClampSlice single source L3→L1
             AItem.Domain := LowerAscii(LVal);
             AItem.HostOnly := False;
           end
@@ -1041,7 +1042,7 @@ begin
     if LEq <= 1 then
       AItem.Path := '/'
     else
-      AItem.Path := System.Copy(LPart, 1, LEq - 1);
+      AItem.Path := SliceToStr(LPart, 0, SizeUInt(LEq - 1)); // perf: inline TryClampSlice single source L3→L1
   end;
   { SameSite=None requires Secure; otherwise reject the cookie. }
   if (AItem.SameSite = ssNone) and (not AItem.Secure) then
@@ -1089,7 +1090,8 @@ begin
     LReq := '/';
   if ACookiePath = '' then
     Exit(True);
-  if System.Copy(LReq, 1, Length(ACookiePath)) <> ACookiePath then
+  // perf: zero-copy prefix compare via text.view TStringView single source (bytes.ops SpanEqual single source, no heap alloc, inline) vs System.Copy alloc bypass
+  if not TStringView.FromStr(LReq).Left(SizeUInt(Length(ACookiePath))).Equals(TStringView.FromStr(ACookiePath)) then
     Exit(False);
   if Length(LReq) = Length(ACookiePath) then
     Exit(True);

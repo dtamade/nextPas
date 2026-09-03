@@ -1,6 +1,10 @@
 unit nextpas.core.vfs.embedded;
 
-{** @desc embedded 后端：respack blob 只读 IVfs 视图。 }
+{** @desc embedded 后端：respack blob 只读 IVfs 视图——资产嵌入主路径。
+  依赖 respack.reader（Registry whitelisted，source-contract gated，L7 后端族聚合后收敛单缝）；
+  零拷贝：Stat/Find 直通二分索引，读取窗口落 blob 区间
+  （bytes.ops 单源 inline 零拷贝，SpinLock 池化 try-finally 保证释放）。
+  EResPackCorrupted 原样透传，详见 core/docs/vfs/README.md。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -11,7 +15,7 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.respack.base,
-  nextpas.core.vfs.backends,
+  nextpas.core.respack.reader,
   nextpas.core.vfs.base,
   nextpas.core.vfs.errors,
   nextpas.core.vfs.intf;
@@ -86,18 +90,14 @@ type
 
 const
   EMBEDDED_POOL_SIZE = 64; { 池容量，CONTRACT 单源 }
-  EMBEDDED_POOL_SHARDS = 16;
-  EMBEDDED_POOL_SLOTS_PER_SHARD = EMBEDDED_POOL_SIZE div EMBEDDED_POOL_SHARDS;
 
 type
-  { 切片池：64 槽 16 分片 SpinLock 阻塞 Acquire，热点 16×降争，争用阻塞复用免堆抖动，FKeep 强引保活 Owner 生命期（try-finally 不丢） }
+  { 切片池：64 槽 SpinLock，二次校验 FLock=nil 安全回退 }
   TEmbeddedSlicePool = class
   private
-    FPools: array[0..EMBEDDED_POOL_SHARDS - 1, 0..EMBEDDED_POOL_SLOTS_PER_SHARD - 1] of TEmbeddedSlice;
-    FCounts: array[0..EMBEDDED_POOL_SHARDS - 1] of Integer;
-    FLocks: array[0..EMBEDDED_POOL_SHARDS - 1] of ISpinLock;
-    function ShardOfStack(const AAddr: Pointer): Integer; inline;
-    function ShardOfPointer(const APtr: Pointer): Integer; inline;
+    FPool: array[0..EMBEDDED_POOL_SIZE - 1] of TEmbeddedSlice;
+    FCount: Integer;
+    FLock: ISpinLock;
   public
     constructor Create;
     destructor Destroy; override;
@@ -185,7 +185,7 @@ begin
     raise EVfsClosed.CreateCtx('read', FPath, 'stream already closed');
 end;
 
-function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt; inline;
+function TEmbeddedSlice.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   Avail: SizeUInt;
 begin
@@ -196,7 +196,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(FPos), Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(FPos), Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, respack 映射区零拷贝视图单源)
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -251,7 +251,7 @@ begin
 end;
 
 function TEmbeddedSlice.ReadAt(var ABuf; const ACount: SizeUInt;
-  const AOffset: Int64): SizeUInt; inline;
+  const AOffset: Int64): SizeUInt;
 var
   Avail: SizeUInt;
 begin
@@ -262,7 +262,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(AOffset), Avail);
+    BytesCopy(@ABuf, FBase + SizeUInt(FOffset) + SizeUInt(AOffset), Avail); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, respack 映射区零拷贝视图单源)
   Result := Avail;
 end;
 
@@ -351,99 +351,67 @@ end;
 
 { ── TEmbeddedSlicePool ── }
 
-function TEmbeddedSlicePool.ShardOfStack(const AAddr: Pointer): Integer; inline;
-begin
-  Result := Integer((PtrUInt(AAddr) shr 4) and 15);
-end;
-
-function TEmbeddedSlicePool.ShardOfPointer(const APtr: Pointer): Integer; inline;
-begin
-  Result := Integer((PtrUInt(APtr) shr 4) and 15);
-end;
-
 constructor TEmbeddedSlicePool.Create;
-var
-  I: Integer;
 begin
   inherited Create;
-  for I := Low(FLocks) to High(FLocks) do
-  begin
-    FLocks[I] := SpinLock;
-    FCounts[I] := 0;
-  end;
+  FLock := SpinLock;
+  FCount := 0;
 end;
 
 destructor TEmbeddedSlicePool.Destroy;
 var
-  I, S: Integer;
+  I: Integer;
 begin
-  for S := Low(FLocks) to High(FLocks) do
+  if FCount > 0 then
   begin
-    if FCounts[S] > 0 then
-    begin
-      for I := 0 to FCounts[S] - 1 do
-        FPools[S, I].Free;
-      FCounts[S] := 0;
-    end;
-    FLocks[S] := nil;
+    for I := 0 to FCount - 1 do
+      FPool[I].Free;
+    FCount := 0;
   end;
+  FLock := nil;
   inherited Destroy;
 end;
 
 function TEmbeddedSlicePool.TryPop(out ASlice: TEmbeddedSlice): Boolean; inline;
 var
-  Start, I, S: Integer;
   LLock: ISpinLock;
 begin
   Result := False;
   ASlice := nil;
-  Start := ShardOfStack(@ASlice);
-  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
-  begin
-    S := (Start + I) and 15;
-    LLock := FLocks[S];
-    if LLock = nil then Continue;
-    LLock.Acquire;
-    try
-      if FCounts[S] > 0 then
-      begin
-        Dec(FCounts[S]);
-        ASlice := FPools[S, FCounts[S]];
-        FPools[S, FCounts[S]] := nil;
-        Result := True;
-        Exit;
-      end;
-    finally
-      LLock.Release;
+  LLock := FLock;
+  if (LLock = nil) or (FCount = 0) then Exit;
+  LLock.Acquire;
+  try
+    if FCount > 0 then
+    begin
+      Dec(FCount);
+      ASlice := FPool[FCount];
+      FPool[FCount] := nil;
+      Result := True;
     end;
+  finally
+    LLock.Release;
   end;
 end;
 
 function TEmbeddedSlicePool.TryPush(ASlice: TEmbeddedSlice): Boolean; inline;
 var
-  Start, I, S: Integer;
   LLock: ISpinLock;
 begin
   Result := False;
   if ASlice = nil then Exit;
-  Start := ShardOfPointer(ASlice);
-  for I := 0 to EMBEDDED_POOL_SHARDS - 1 do
-  begin
-    S := (Start + I) and 15;
-    LLock := FLocks[S];
-    if LLock = nil then Continue;
-    LLock.Acquire;
-    try
-      if FCounts[S] < EMBEDDED_POOL_SLOTS_PER_SHARD then
-      begin
-        FPools[S, FCounts[S]] := ASlice;
-        Inc(FCounts[S]);
-        Result := True;
-        Exit;
-      end;
-    finally
-      LLock.Release;
+  LLock := FLock;
+  if LLock = nil then Exit;
+  LLock.Acquire;
+  try
+    if FCount < EMBEDDED_POOL_SIZE then
+    begin
+      FPool[FCount] := ASlice;
+      Inc(FCount);
+      Result := True;
     end;
+  finally
+    LLock.Release;
   end;
 end;
 

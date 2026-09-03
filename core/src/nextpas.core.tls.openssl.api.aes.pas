@@ -122,6 +122,9 @@ function AESDecryptCTR(const Data: TBytes; const Key: TBytes; const IV: TBytes):
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 const
   AES_FUNCTION_COUNT = 16;
 
@@ -197,14 +200,14 @@ begin
   
   for i := 0 to blocks - 1 do
   begin
-    FillChar(inblock, AES_BLOCK_SIZE, 0);
+    BytesZero(@inblock[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline FillChar single source via bytes.ops.BytesZero (zero-copy, one FillChar)
     if i * AES_BLOCK_SIZE + AES_BLOCK_SIZE <= Length(Data) then
-      Move(Data[i * AES_BLOCK_SIZE], inblock[0], AES_BLOCK_SIZE)
+      BytesCopy(@inblock[0], @Data[i * AES_BLOCK_SIZE], SizeUInt(AES_BLOCK_SIZE)) // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
     else
-      Move(Data[i * AES_BLOCK_SIZE], inblock[0], Length(Data) - i * AES_BLOCK_SIZE);
+      BytesCopy(@inblock[0], @Data[i * AES_BLOCK_SIZE], SizeUInt(Length(Data) - i * AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
     
     AES_ecb_encrypt(@inblock[0], @outblock[0], @aesKey, C_AES_ENCRYPT);
-    Move(outblock[0], Result[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+    BytesCopy(@Result[i * AES_BLOCK_SIZE], @outblock[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   end;
 end;
 
@@ -227,9 +230,9 @@ begin
   
   for i := 0 to blocks - 1 do
   begin
-    Move(Data[i * AES_BLOCK_SIZE], inblock[0], AES_BLOCK_SIZE);
+    BytesCopy(@inblock[0], @Data[i * AES_BLOCK_SIZE], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
     AES_ecb_encrypt(@inblock[0], @outblock[0], @aesKey, C_AES_DECRYPT);
-    Move(outblock[0], Result[i * AES_BLOCK_SIZE], AES_BLOCK_SIZE);
+    BytesCopy(@Result[i * AES_BLOCK_SIZE], @outblock[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   end;
 end;
 
@@ -250,10 +253,10 @@ begin
   padLen := AES_BLOCK_SIZE - (Length(Data) mod AES_BLOCK_SIZE);
   SetLength(Result, Length(Data) + padLen);
   if Length(Data) > 0 then
-    Move(Data[0], Result[0], Length(Data));
+    BytesCopy(@Result[0], @Data[0], SizeUInt(Length(Data))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   FillChar(Result[Length(Data)], padLen, padLen);
   
-  Move(IV[0], ivec[0], AES_BLOCK_SIZE);
+  BytesCopy(@ivec[0], @IV[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   AES_cbc_encrypt(@Result[0], @Result[0], Length(Result), @aesKey, @ivec[0], C_AES_ENCRYPT);
 end;
 
@@ -271,8 +274,8 @@ begin
   if AES_set_decrypt_key(@Key[0], bits, @aesKey) <> 0 then Exit;
   
   SetLength(Result, Length(Data));
-  Move(Data[0], Result[0], Length(Data));
-  Move(IV[0], ivec[0], AES_BLOCK_SIZE);
+  BytesCopy(@Result[0], @Data[0], SizeUInt(Length(Data))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
+  BytesCopy(@ivec[0], @IV[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
   
   AES_cbc_encrypt(@Result[0], @Result[0], Length(Result), @aesKey, @ivec[0], C_AES_DECRYPT);
   
@@ -302,10 +305,10 @@ begin
   
   SetLength(Result, Length(Data));
   if Length(Data) > 0 then
-    Move(Data[0], Result[0], Length(Data));
+    BytesCopy(@Result[0], @Data[0], SizeUInt(Length(Data))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   
-  Move(IV[0], ivec[0], AES_BLOCK_SIZE);
-  FillChar(ecount, AES_BLOCK_SIZE, 0);
+  BytesCopy(@ivec[0], @IV[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
+  BytesZero(@ecount[0], SizeUInt(AES_BLOCK_SIZE)); // perf: inline FillChar single source via bytes.ops.BytesZero (zero-copy, one FillChar)
   num := 0;
   
   AES_ctr128_encrypt(@Result[0], @Result[0], Length(Result), @aesKey, @ivec[0], @ecount[0], @num);

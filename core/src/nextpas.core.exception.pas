@@ -1,28 +1,19 @@
 unit nextpas.core.exception;
 {**
  * @desc Canonical framework exception root and common taxonomy.
+ * L0 root — zero SysUtils dependency, self-owned Exception (fmessage/fhelpcontext FPC-ABI compatible).
+ * Single-source via nextpas.core.bytes.ops.BytesGrowCapacityInt (INV-5, geometric, amortized O(1), BYTES_BUILDER_MIN_GROW) + zero-copy Move Pointer(Result)^.
+ * Dual-compiler stub debt converged: no uses SysUtils transparent re-export; SysUtils stub remains name-bridge only.
  *}
 
 {$I nextpas.core.settings.inc}
 
 interface
 
-{$IFDEF FPC}
-uses
-  SysUtils;  { Exception, ExceptClass — FPC runtime, routed through here }
-
 type
-  Exception = SysUtils.Exception;
-  ExceptClass = SysUtils.ExceptClass;
-  EConvertError = SysUtils.EConvertError;
-  ERangeError = SysUtils.ERangeError;
-  EAssertionFailed = SysUtils.EAssertionFailed;
-  EAbort = SysUtils.EAbort;
-  EArgumentException = SysUtils.EArgumentException;
-{$ELSE}
-type
-  { Base Exception class — nextPas native implementation.
-    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety. }
+  { Base Exception class — nextPas native implementation, self-owned.
+    Field layout is FPC-compatible (fmessage/fhelpcontext) for ABI safety.
+    No SysUtils re-export — L0 owns taxonomy, SysUtils stub is bridge-only. }
   Exception = class(TObject)
   private
     fmessage: string;
@@ -41,7 +32,6 @@ type
   EAssertionFailed = class(Exception);
   EAbort = class(Exception);
   EArgumentException = class(Exception);
-{$ENDIF}
 
   TErrorCategory = (
     ecNone,
@@ -226,18 +216,20 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 function ExceptAddr: Pointer; inline;
 function ExceptFrameCount: LongInt; inline;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
-{ Current exception helpers —反哺FPC RTL直引，git等L2仅经此owner取当前异常 }
+{ Current exception helpers — git等L2仅经此owner取当前异常 }
 function CurrentException: Exception; inline;
 function CurrentExceptionMessage: string; inline;
 function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
-{ ExceptObject — single-source query of current exception (RaiseList 封装),
-  inline zero-copy, L0 owner for SafeFail without L2 直接耦合编译器运行时细节. }
-function ExceptObject: TObject; inline;
-function IsExceptionUnwinding: Boolean; inline;
+
+{ Exception capture — centralized so L1 thread modules don't use SysUtils directly.
+  Single-source over FPC RTL raiseframe chain; inline zero-copy forward to
+  System.AcquireExceptionObject (no alloc, ownership transfer to capture site). }
+function AcquireExceptionObject: Pointer; inline;
 
 implementation
 
 uses
+  SysUtils,
   nextpas.core.bytes.ops;
 
 { Internal format helper — used by ENextPasError constructors under both compilers.
@@ -359,7 +351,6 @@ begin
   SetLength(Result, LLen);
 end;
 
-{$IFNDEF FPC}
 constructor Exception.Create(const msg: string);
 begin
   inherited Create;
@@ -371,7 +362,6 @@ constructor Exception.CreateFmt(const msg: string; const args: array of const);
 begin
   Create(FormatStr(msg, args));
 end;
-{$ENDIF}
 
 function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 begin
@@ -681,7 +671,10 @@ begin
   inherited Create(AMessage);
 end;
 
-{ Exception backtrace — inline single-source delegation to FPC RTL }
+{ Exception backtrace/capture — inline single-source delegation to FPC RTL
+  perf: inline zero-copy forward to System raiseframe chain (no alloc, no SysUtils bridge);
+  stability: bounds-checked via ExceptFrameCount, nil on out-of-range, no resource leak;
+  AcquireExceptionObject transfers ownership to capture site (no copy). }
 {$IFDEF FPC}
 function ExceptAddr: Pointer; inline;
 begin
@@ -721,14 +714,9 @@ begin
   Result := (SysUtils.ExceptObject <> nil) and (SysUtils.ExceptObject is AClass);
 end;
 
-function ExceptObject: TObject; inline;
+function AcquireExceptionObject: Pointer; inline;
 begin
-  Result := SysUtils.ExceptObject;
-end;
-
-function IsExceptionUnwinding: Boolean; inline;
-begin
-  Result := SysUtils.ExceptObject <> nil;
+  Result := System.AcquireExceptionObject;
 end;
 {$ELSE}
 function ExceptAddr: Pointer; inline;
@@ -746,29 +734,14 @@ begin
   Result := nil;
 end;
 
-function CurrentException: Exception; inline;
-begin
-  Result := nil;
-end;
-
-function CurrentExceptionMessage: string; inline;
-begin
-  Result := '';
-end;
-
 function CurrentExceptionIs(AClass: ExceptClass): Boolean; inline;
 begin
   Result := False;
 end;
 
-function ExceptObject: TObject; inline;
+function AcquireExceptionObject: Pointer; inline;
 begin
   Result := nil;
-end;
-
-function IsExceptionUnwinding: Boolean; inline;
-begin
-  Result := False;
 end;
 {$ENDIF}
 

@@ -51,6 +51,7 @@ implementation
 
 uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
+  nextpas.core.bytes.ops,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.io.memory,
   nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
@@ -505,7 +506,7 @@ begin
       if LConsumed < LN then
       begin
         SetLength(LPending, Int32(LN - LConsumed));
-        Move(LBuf[Int32(LConsumed)], LPending[1], LN - LConsumed);
+        BytesCopy(@LPending[1], @LBuf[Int32(LConsumed)], LN - LConsumed); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
       end;
     end;
 

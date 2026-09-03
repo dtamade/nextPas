@@ -16,9 +16,8 @@ procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
-function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
-function HashFNV1a(A: Pointer; ALen: SizeUInt): UInt32; inline;
-function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
+function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
+function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32;
 
 {** SizeUInt 边界与溢出 guard *}
 function TryAddSizeUInt(const ALeft, ARight: SizeUInt; var ASum: SizeUInt): Boolean; inline;
@@ -39,7 +38,7 @@ uses
   nextpas.core.simd.vec;
 
 const
-  { perf: branchless ASCII lower table — LowerTable[Ord('A')..Ord('Z')] -> Ord('a')..Ord('z'), else identity; single source for CompareBytesIgnoreCase/HashFNV1aLower (INV-5), inline zero-copy lookup, no LTmp copy }
+  { perf: branchless ASCII lower table — LowerTable[Ord('A')..Ord('Z')] -> Ord('a')..Ord('z'), else identity; single source for CompareBytesIgnoreCase/HashFNV1aLower (INV-5), inline zero-copy per-byte lookup, no LTmp copy; owner base.utils, bytes.ops thin-forward reuse (L1->L0), functions not inline per red-line 2 (VecWidth/8x loop I-Cache) }
   LowerTable: array[0..255] of Byte = (
      0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
@@ -131,7 +130,7 @@ begin
   Result := 0;
 end;
 
-function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
+function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer;
 var
   N, LPos: SizeUInt;
   PA, PB: PByte;
@@ -153,7 +152,7 @@ begin
   PA := PByte(A);
   PB := PByte(B);
   LPos := 0;
-  { perf: zero-copy VecWidth batch via simd AsciiIEqual single source (in-register case-fold, no 32B LTmp stack copy); inline dispatch, fast skip equal blocks }
+  { perf: not inline per red-line 2 (VecWidth batch + scalar tail loop I-Cache bloat); zero-copy VecWidth batch via simd AsciiIEqual single source (in-register case-fold, no 32B LTmp stack copy), fast skip equal blocks; single source owner base.utils, bytes.ops SpanEqualIgnoreCase thin-forward reuse, zero-copy branchless LowerTable tail }
   while LPos + SizeUInt(VecWidth) <= N do
   begin
     if not AsciiIEqual(PA + LPos, PB + LPos, SizeUInt(VecWidth)) then
@@ -174,39 +173,7 @@ begin
   Result := 0;
 end;
 
-function HashFNV1a(A: Pointer; ALen: SizeUInt): UInt32; inline;
-var
-  P: PByte;
-  H: UInt32;
-begin
-  if (ALen > 0) and (A = nil) then
-    raise EArgumentNil.Create('HashFNV1a: A is nil');
-  H := 2166136261;
-  P := PByte(A);
-  {$PUSH}{$Q-}{$R-}
-  while ALen >= 8 do
-  begin
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    H := (H xor UInt32(P^)) * 16777619; Inc(P);
-    Dec(ALen, 8);
-  end;
-  while ALen > 0 do
-  begin
-    H := (H xor UInt32(P^)) * 16777619;
-    Inc(P);
-    Dec(ALen);
-  end;
-  {$POP}
-  Result := H;
-end;
-
-function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
+function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32;
 var
   P: PByte;
   H: UInt32;
@@ -221,7 +188,7 @@ begin
   P := PByte(A);
   LPos := 0;
   {$PUSH}{$Q-}{$R-}
-  { perf: zero-copy direct LowerTable fold, 8x unrolled batch (no 32B LTmp stack copy); inline, single pass, FNV single source (INV-5) }
+  { perf: not inline per red-line 2 (8x unrolled batch + tail loop I-Cache bloat); zero-copy direct LowerTable fold (no 32B LTmp stack copy), single pass, FNV single source (INV-5), branchless LowerTable }
   while LPos + 8 <= ALen do
   begin
     LB := LowerTable[P[LPos]]; H := (H xor UInt32(LB)) * 16777619; Inc(LPos);

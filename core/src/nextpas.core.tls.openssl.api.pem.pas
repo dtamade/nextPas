@@ -228,6 +228,9 @@ function LoadCertificateFromMemory(const AData: TBytes): PX509;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 { PEM 函数绑定数组
   runtime storage keeps procvar targets writable across macOS batch-loader runs }
 var
@@ -324,7 +327,7 @@ begin
     begin
       LPasswordAnsi := AnsiString(Password);
       if Length(LPasswordAnsi) > 0 then
-        Move(LPasswordAnsi[1], buf^, Length(LPasswordAnsi));
+        BytesCopy(buf, @LPasswordAnsi[1], SizeUInt(Length(LPasswordAnsi))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5/red-line 1 single source)
       buf[Length(LPasswordAnsi)] := #0;
       Result := Length(Password);
     end

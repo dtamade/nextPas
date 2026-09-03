@@ -3,7 +3,7 @@ unit nextpas.core.bytes.ops;
 {$I nextpas.core.settings.inc}
 { bytes.ops — single source for SetLength+Move (单源 INV-5); TByteSpan zero-copy views; hot paths inline, alloc paths not inline per red-line 1 (indexed Move/alloc inline), red-line 2 (loop+Move).
   Facades inline thin-forward, no duplicate Move — single source stays here (BytesCopy/BytesZero/BytesReplicateCopy).
-  GATE: raw Move/FillChar only in this unit (BytesCopy/BytesZero/BytesReplicateCopy); L1+ must reuse BytesCopy/BytesZero/Span* single source, L0 exception documented — enforced by test_bytes_ops_source_contracts; inline red-line enforced by same gate (hot inline, alloc/loop not inline).
+  GATE: raw Move/FillChar only in this unit (BytesCopy/BytesZero/BytesReplicateCopy); L1+ must reuse BytesCopy/BytesZero/Span* single source, L0 exception documented — enforced by test_bytes_ops_source_contracts (check_bytes_ops_source_contract.py full patrol: red-line 1/2, BytesCopy inline single Move, BytesAppend* not inline + O(n²) loop-append patrol, capacity single source); inline red-line enforced by same gate (hot inline, alloc/loop not inline).
   CAPACITY: BytesGrowCapacity single source via bytes.ops.capacity (BYTES_BUILDER_MIN_GROW 0→64→2×) amortized O(1); Webview 0→4→2× via BytesGrowCapacityWithMin reuse same loop — single source, inline thin-forward zero extra call.
   SPLIT: four-piece elegance — capacity/text helpers extracted to bytes.ops.capacity / bytes.ops.text leaves (≤800 guideline, this unit ~750 lines); leaves are pure arithmetic/string without raw Move, reuse this unit's BytesCopy single source when needed. }
 
@@ -43,9 +43,9 @@ procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 procedure SpanReverse(const ASpan: TByteSpan);
 { replicate — doubling Moves }
 procedure BytesReplicateCopy(ASrc, ADst: Pointer; ADist, ALen: SizeUInt);
-{ single Move/Fill }
-procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt);
-procedure BytesZero(ADst: Pointer; const ALen: SizeUInt);
+{ single Move/Fill — inline single Move(ASrc^,ADst^,ALen)/FillChar zero-copy per red-line 1, gate patrol }
+procedure BytesCopy(ADst, ASrc: Pointer; const ALen: SizeUInt); inline;
+procedure BytesZero(ADst: Pointer; const ALen: SizeUInt); inline;
 procedure SpanZero(const ASpan: TByteSpan);
 
 { zero page (.bss, 4K) }
@@ -79,7 +79,7 @@ function BytesEqual(const A, B: TBytes): Boolean; inline;
 function BytesCompare(const A, B: TBytes): Integer; inline;
 function BytesIndexOf(const AData: TBytes; const ANeedle: Byte): SizeInt; inline;
 function BytesConcat(const A, B: TBytes): TBytes; inline;
-{ not inline: SetLength+Move }
+{ not inline: SetLength+Move — perf: BytesAppend does SetLength+Move per call (O(n) → O(n²) if looped); MUST prefer IBytesBuilder (geometric grow) or BytesConcatMany/SpanConcatMany single alloc; gate: check_bytes_ops_source_contract.py cross-module loop-append patrol }
 procedure BytesAppend(var ADest: TBytes; const ASrc: TBytes); overload;
 procedure BytesAppend(var ADest: TBytes; const ASrc: PByte; const ASrcLen: SizeUInt); overload;
 procedure BytesAppendByte(var ADest: TBytes; AValue: Byte);
@@ -159,7 +159,7 @@ function SpanSumAndCountHighBit(const ASpan: TByteSpan; out ASum: UInt64; out AH
 procedure BytesSumAndCountHighBitExclude(const AData: PByte; ALen: SizeUInt; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt);
 function SpanSumAndCountHighBitExclude(const ASpan: TByteSpan; AExcludeOff, AExcludeLen: SizeUInt; out ASum: UInt64; out AHigh: SizeUInt): Boolean; inline;
 { Hex single source (uppercase fixed-width UInt64→hex, L1 canonical for vfs ETag etc., inline zero-copy via Move, Span-less, reuses single HEX_UPPER table) }
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 { not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
 function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
@@ -1327,7 +1327,7 @@ end;
 const
   HEX_UPPER_BYTESOPS: array[0..15] of AnsiChar = '0123456789ABCDEF';
 
-function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; inline;
+function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string;
 var I: Integer; V: UInt64;
 begin
   SetLength(Result, ADigits);

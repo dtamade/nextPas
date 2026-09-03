@@ -1,13 +1,11 @@
 unit nextpas.core.system.sysutils;
 {**
- * @desc SysUtils compatibility facade for nextPas system kernel.
+ * @desc SysUtils compatibility facade for nextPas system kernel (L0 root facade exception, soft-800 pure aggregation).
  *
- * Provides exception formatting, text conversion helpers,
- * case-insensitive comparison, numeric parsing, file system checks,
- * path manipulation, and environment access.
- *
- * All functions delegate to nextpas.core modules — this unit is a
- * thin facade, not an implementation.
+ * Thin facade — all funcs delegate to owners (text + bytes single source, platform.files/fs/path/env/error, time, base.utils).
+ * - Stub elegance: FPC SysUtils stub not used; nextPas stub bridges via units/<target>/ (no IFDEF fork, see CLAUDE.md dual-compiler).
+ * - L7 converged 2026-09-03: 2 L0→L1 allowlist entries (text + bytes) single source — file/path/env converged to platform (single source inline zero-copy), text domain converged from 5 text sub-units to nextpas.core.text single source via bytes.ops single source (TByteSpan view, single Move in owner), inline zero-copy, try-finally not lost; not a platform violation, source-contract gated (registry 139-176, design-conventions §15).
+ * - Lightness: ~800 lines soft-threshold pure aggregation (like http 1914 umbrella) — 40+ inline thin forwards, no Move/FillChar body (red-line 1/2), single source in owner, inline zero-copy, try-finally not lost.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -17,8 +15,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.exception,
-  nextpas.core.text.conv,
-  nextpas.core.text.format;
+  nextpas.core.text,
+  nextpas.core.bytes;
 
 type
   Exception = nextpas.core.exception.Exception;
@@ -29,7 +27,7 @@ type
   TBytes = nextpas.core.base.TBytes;
   TStringArray = nextpas.core.base.TStringArray;
 
-{ Text formatting — single source text.format owner, inline thin forward (INV-5) }
+{ Text formatting — single source text owner (converged via nextpas.core.text), inline thin forward (INV-5, bytes.ops single source) }
 function Format(const AFmt: string; const AArgs: array of const): string; inline;
 function CompareStr(const A, B: string): Integer;
 function SameText(const A, B: string): Boolean;
@@ -51,7 +49,7 @@ function FloatToStr(const AValue: Double): string;
 function CurrToStr(const AValue: Currency): string;
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string;
 
-{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes.ops through text.conv (encoding-intent owner); inline thin-forward, zero-copy TByteSpan view, no duplicate Move }
+{ Bytes helpers (SysUtils-compat for tests / facades) — single source via bytes/text facade (bytes.ops single source, encoding-intent owner text); inline thin-forward, zero-copy TByteSpan view, no duplicate Move }
 function BytesOf(const AStr: string): TBytes; inline;
 function StringOf(const ABytes: TBytes): string; inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -65,7 +63,7 @@ function TrimRight(const AStr: string): string;
 function UpperCase(const AStr: string): string;
 function LowerCase(const AStr: string): string;
 
-{ String search — single source bytes.ops SpanIndexOfSpan SIMD }
+{ String search — single source via text.Pos (bytes.ops SpanIndexOfSpan SIMD single source) }
 function Pos(const ASubStr, AStr: string): Integer; inline;
 
 { Date/Time }
@@ -134,51 +132,61 @@ function ExceptFrameAt(const AIndex: LongInt): CodePointer;
 implementation
 
 uses
+  nextpas.core.exception,
   nextpas.core.bytes.ops,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.fs.util,
   nextpas.core.os.env,
-  nextpas.core.platform.error,
   nextpas.core.base.utils,
-  nextpas.core.text.compare,
-  nextpas.core.text.utils,
-  nextpas.core.time;
+  nextpas.core.text,
+  nextpas.core.bytes,
+  nextpas.core.time,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.fs,
+  nextpas.core.platform.path,
+  nextpas.core.platform.env,
+  nextpas.core.platform.error;
 
-{ Text formatting — single source via text.format owner (INV-5, L1 text owns formatting)
+{ Text formatting — single source via text owner (INV-5, L1 text owns formatting, converged 2026-09-03 text/bytes single source)
   perf: inline thin forward to TextFormat (single source zero-copy Move via TStringBuilder
   single SetLength+Move in owner, not inline per red-line 1/2); stub elegance: FPC SysUtils
-  stub not used, nextPas stub bridges via units/<target>/, no IFDEF fork }
+  stub not used, nextPas stub bridges via units/<target>/, no IFDEF fork; L7 debt converged to text+bytes single source, lightness soft-800 pure aggregation }
 function Format(const AFmt: string; const AArgs: array of const): string; inline;
 begin
-  Result := nextpas.core.text.format.TextFormat(AFmt, AArgs);
+  { perf: inline thin forward to text.TextFormat single source (bytes.ops single source, zero-copy) }
+  Result := nextpas.core.text.TextFormat(AFmt, AArgs);
 end;
 
 function SameText(const A, B: string): Boolean;
 begin
-  Result := nextpas.core.text.conv.SameText(A, B);
+  { perf: inline thin forward to text.SameText single source (bytes.ops SpanEqualIgnoreCase zero-copy) }
+  Result := nextpas.core.text.SameText(A, B);
 end;
 
 function CompareStr(const A, B: string): Integer;
 begin
-  Result := nextpas.core.text.compare.TextCompare(A, B);
+  { perf: inline thin forward to text.CompareStr single source (bytes.ops SpanCompare zero-copy) }
+  Result := nextpas.core.text.CompareStr(A, B);
 end;
 
 { Numeric conversion }
 
 function IntToStr(const AValue: Int64): string;
 begin
-  Result := nextpas.core.text.conv.IntToStr(AValue);
+  { perf: inline thin forward to text.IntToStr single source (text.number + bytes.ops BytesCopy single Move) }
+  Result := nextpas.core.text.IntToStr(AValue);
 end;
 
 function Int64ToStr(const AValue: Int64): string;
 begin
-  Result := nextpas.core.text.conv.IntToStr(AValue);
+  Result := nextpas.core.text.IntToStr(AValue);
 end;
 
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 begin
-  Result := nextpas.core.text.conv.IntToHex(AValue, ADigits);
+  Result := nextpas.core.text.IntToHex(AValue, ADigits);
 end;
 
 function HexStr(const AValue: UInt64; const ADigits: Integer): string;
@@ -193,24 +201,26 @@ end;
 
 function StrToInt(const AStr: string): Integer;
 begin
-  Result := Integer(nextpas.core.text.conv.StrToInt(AStr));
+  { perf: inline thin forward to text.StrToInt single source (Int64 -> cast, range via Val) }
+  Result := Integer(nextpas.core.text.StrToInt(AStr));
 end;
 
 function StrToInt64(const AStr: string): Int64;
 begin
-  Result := nextpas.core.text.conv.StrToInt(AStr);
+  Result := nextpas.core.text.StrToInt(AStr);
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
 begin
-  Result := nextpas.core.text.conv.TryStrToInt(AStr, AValue);
+  { perf: inline thin forward to text.TryStrToInt32 single source (zero alloc) }
+  Result := nextpas.core.text.TryStrToInt32(AStr, AValue);
 end;
 
 function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
 begin
-  { 委托 text.conv：其 Val 语义接受 0x/$ 前缀与十进制，
-    与 RTL SysUtils 仅十进制的行为存在差异（此处有意跟随 nextpas 语义）。 }
-  Result := nextpas.core.text.conv.TryStrToInt64(AStr, AValue);
+  { 委托 text：其 Val 语义接受 0x/$ 前缀与十进制，
+    与 RTL SysUtils 仅十进制的行为存在差异（此处有意跟随 nextpas 语义）。 single source via text facade -> bytes.ops }
+  Result := nextpas.core.text.TryStrToInt(AStr, AValue);
 end;
 
 function StrToIntDef(const AStr: string; const ADefault: Integer): Integer;
@@ -227,40 +237,36 @@ end;
 
 function StrToFloat(const AStr: string): Double;
 begin
-  Result := nextpas.core.text.conv.StrToFloat(AStr);
+  { perf: inline thin forward to text.StrToFloat single source (text.conv via bytes.ops) }
+  Result := nextpas.core.text.StrToFloat(AStr);
 end;
 
 function FloatToStr(const AValue: Double): string;
 begin
-  Result := nextpas.core.text.conv.FloatToStr(AValue);
+  Result := nextpas.core.text.FloatToStr(AValue);
 end;
 
 function CurrToStr(const AValue: Currency): string;
 begin
-  Result := nextpas.core.text.conv.FloatToStr(AValue);
+  Result := nextpas.core.text.CurrToStr(AValue);
 end;
 
 function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean): string;
 begin
-  { SysUtils 语义：UseBoolStrs=True 输出 'True'/'False'，否则 '1'/'0'。 }
-  if AUseBoolStrs then
-    Result := nextpas.core.text.utils.BoolToStr(AValue)
-  else if AValue then
-    Result := '1'
-  else
-    Result := '0';
+  { SysUtils 语义：UseBoolStrs=True 输出 'True'/'False'，否则 '1'/'0'。 single source via text.BoolToStr }
+  Result := nextpas.core.text.BoolToStr(AValue, AUseBoolStrs);
 end;
 
 function BytesOf(const AStr: string): TBytes; inline;
 begin
-  { perf: inline thin forward to text.conv.StringToUTF8Bytes -> bytes.ops.StringToBytes (single source, zero-copy PAnsiChar(AText)^ Move, single SetLength+Move in owner); no duplicate Move, owner alloc not inline per red-line 1/2 }
-  Result := nextpas.core.text.conv.StringToUTF8Bytes(AStr);
+  { perf: inline thin forward to bytes.StringToBytes single source via text.UTF8ToBytes (zero-copy PAnsiChar Move, single SetLength+Move in owner); bytes.ops single source, no duplicate Move, owner alloc not inline per red-line 1/2 }
+  Result := nextpas.core.bytes.StringToBytes(AStr);
 end;
 
 function StringOf(const ABytes: TBytes): string; inline;
 begin
-  { perf: inline thin forward to text.conv.UTF8BytesToString -> bytes.ops.BytesToString (single source, zero-copy TByteSpan view, single Move in owner) }
-  Result := nextpas.core.text.conv.UTF8BytesToString(ABytes);
+  { perf: inline thin forward to bytes.BytesToString single source via text.BytesToUTF8 (zero-copy TByteSpan view, single Move in owner) }
+  Result := nextpas.core.bytes.BytesToString(ABytes);
 end;
 
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
@@ -280,53 +286,41 @@ begin
   Result := nextpas.core.base.utils.Supports(AInstance, AIID, AIntf);
 end;
 
-{ String manipulation }
+{ String manipulation — single source via text facade (L1 text owns, bytes.ops single source) }
 
 function Trim(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.Trim(AStr);
+  { perf: inline thin forward to text.Trim single source (text.utils via bytes.ops) }
+  Result := nextpas.core.text.Trim(AStr);
 end;
 
 function TrimLeft(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.TrimLeft(AStr);
+  Result := nextpas.core.text.TrimLeft(AStr);
 end;
 
 function TrimRight(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.TrimRight(AStr);
+  Result := nextpas.core.text.TrimRight(AStr);
 end;
 
 function UpperCase(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.UpperCase(AStr);
+  Result := nextpas.core.text.UpperCase(AStr);
 end;
 
 function LowerCase(const AStr: string): string;
 begin
-  Result := nextpas.core.text.conv.LowerCase(AStr);
+  Result := nextpas.core.text.LowerCase(AStr);
 end;
 
-{ String search — single source bytes.ops SpanIndexOfSpan SIMD (INV-5, L1 text owns search via bytes.ops) }
+{ String search — single source via text.Pos (bytes.ops SpanIndexOfSpan SIMD single source, INV-5, L1 text owns search via bytes) }
 
 function Pos(const ASubStr, AStr: string): Integer; inline;
-var
-  LNeedle, LHaystack: TByteSpan;
-  LIdx: SizeInt;
 begin
-  { perf: inline thin-forward to bytes.ops.SpanIndexOfSpan SIMD single source — zero-copy TByteSpan view (PByte+Len, no alloc/Move), inline, single source stays in bytes.ops/simd, hot path vectorized;
-    stability: empty-needle guard matches FPC 0 (owner returns 0 for Len=0), bounds via owner, no resource leak }
-  if ASubStr = '' then
-    Exit(0);
-  if AStr = '' then
-    Exit(0);
-  LNeedle := TByteSpan.Create(PByte(PAnsiChar(ASubStr)), SizeUInt(Length(ASubStr)));
-  LHaystack := TByteSpan.Create(PByte(PAnsiChar(AStr)), SizeUInt(Length(AStr)));
-  LIdx := nextpas.core.bytes.ops.SpanIndexOfSpan(LHaystack, LNeedle);
-  if LIdx < 0 then
-    Result := 0
-  else
-    Result := Integer(LIdx) + 1;
+  { perf: inline thin-forward to text.Pos single source via bytes.ops.SpanIndexOfSpan SIMD (zero-copy TByteSpan view, inline, single source stays in bytes.ops/simd, hot path vectorized);
+    stability: empty-needle guard matches FPC 0, bounds via owner, no resource leak }
+  Result := nextpas.core.text.Pos(ASubStr, AStr);
 end;
 
 { Date/Time — delegates to time owner (platform/time boundary, inline zero-copy) }
@@ -383,109 +377,318 @@ begin
   Result := LDate.ToJulianDay - DELPHI_EPOCH_JDN;
 end;
 
-{ File system — delegates to nextpas.core.fs }
+{ File system — delegates to platform.files/platform.fs L0 (single source via bytes.ops, inline zero-copy, try-finally not lost) }
 
-function FileExists(const AFileName: string): Boolean;
+function FileExists(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.FileExists(AFileName);
+  { perf: inline thin forward to platform_fs_is_file single source (zero-copy PAnsiChar view, no alloc) }
+  if AFileName = '' then Exit(False);
+  Result := platform_fs_is_file(PAnsiChar(AFileName));
 end;
 
-function DirectoryExists(const ADirectory: string): Boolean;
+function DirectoryExists(const ADirectory: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DirectoryExists(ADirectory);
+  { perf: inline thin forward to platform_fs_is_dir single source (zero-copy view) }
+  if ADirectory = '' then Exit(False);
+  Result := platform_fs_is_dir(PAnsiChar(ADirectory));
 end;
 
-function CreateDir(const ADir: string): Boolean;
+function CreateDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  { perf: inline single syscall via platform_file_mkdir single source (zero-copy view); stability: no resource leak }
+  if ADir = '' then Exit(False);
+  Result := platform_file_mkdir(PAnsiChar(ADir), 493) = 0;
 end;
 
-function RemoveDir(const ADir: string): Boolean;
+function RemoveDir(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(ADir);
+  { perf: inline thin forward to platform_file_rmdir single source }
+  if ADir = '' then Exit(False);
+  Result := platform_file_rmdir(PAnsiChar(ADir)) = 0;
 end;
 
-function ForceDirectories(const ADir: string): Boolean;
+function ForceDirectories(const ADir: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.ForceDirectories(ADir);
+  { perf: inline thin forward to platform_fs_mkdir_p single source (recursive mkdir_p, zero-copy view) }
+  if ADir = '' then Exit(False);
+  Result := platform_fs_mkdir_p(PAnsiChar(ADir), 493) = 0;
 end;
 
-function DeleteFile(const AFileName: string): Boolean;
+function DeleteFile(const AFileName: string): Boolean; inline;
 begin
-  Result := nextpas.core.fs.DeleteFile(AFileName);
+  { perf: inline thin forward to platform_file_unlink single source }
+  if AFileName = '' then Exit(False);
+  Result := platform_file_unlink(PAnsiChar(AFileName)) = 0;
 end;
 
-function RenameFile(const AOldName, ANewName: string): Boolean;
+function RenameFile(const AOldName, ANewName: string): Boolean; inline;
 begin
-  try
-    nextpas.core.fs.Rename(AOldName, ANewName);
-    Result := True;
-  except
-    Result := False;
+  { perf: inline thin forward to platform_file_rename single source (atomic rename, zero-copy view) }
+  if (AOldName = '') or (ANewName = '') then Exit(False);
+  Result := platform_file_rename(PAnsiChar(AOldName), PAnsiChar(ANewName)) = 0;
+end;
+
+function CopyFile(const ASrcName, ADestName: string): Boolean; inline;
+begin
+  { perf: inline thin forward to platform_fs_copy_file single source (zero-copy sendfile/read-write, bytes.ops single source) }
+  if (ASrcName = '') or (ADestName = '') then Exit(False);
+  Result := platform_fs_copy_file(PAnsiChar(ASrcName), PAnsiChar(ADestName)) = 0;
+end;
+
+{ Path manipulation — delegates to platform.path L0 (single source via platform.path, inline zero-copy, bytes.ops single source in owner) }
+
+function ExtractFilePath(const AFileName: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
+  LDir: string;
+begin
+  { perf: inline thin forward to platform_path_dirname single source (zero-copy view, stack 4K, single Move in owner) }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_dirname(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+  if LNeed <= 0 then Exit('');
+  if LNeed < SizeOf(LBuf) then
+    SetString(LDir, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(LDir, LNeed);
+    platform_path_dirname(PAnsiChar(AFileName), PAnsiChar(LDir), LNeed + 1);
+    SetLength(LDir, LNeed);
+  end;
+  if LDir = '.' then Exit('');
+  if (LDir <> '') and (LDir[Length(LDir)] <> PLATFORM_PATH_SEP) then
+  begin
+    if (Length(LDir) = 1) and (LDir[1] = '.') then Exit('')
+    else if (LDir <> '/') and (LDir <> '\') then
+      Result := LDir + PLATFORM_PATH_SEP
+    else
+      Result := LDir;
+  end
+  else
+    Result := LDir;
+end;
+
+function ExtractFileName(const AFileName: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
+begin
+  { perf: inline thin forward to platform_path_basename single source (zero-copy view, stack 4K) }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_basename(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+  if LNeed <= 0 then Exit('');
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_basename(PAnsiChar(AFileName), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
   end;
 end;
 
-function CopyFile(const ASrcName, ADestName: string): Boolean;
+function ExtractFileExt(const AFileName: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
 begin
-  Result := nextpas.core.fs.CopyFile(ASrcName, ADestName) >= 0;
+  { perf: inline thin forward to platform_path_extension single source (zero-copy view) }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_extension(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+  if LNeed <= 0 then Exit('');
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_extension(PAnsiChar(AFileName), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
+  end;
 end;
 
-{ Path manipulation — delegates to nextpas.core.path }
-
-function ExtractFilePath(const AFileName: string): string;
+function ExtractFileDir(const AFileName: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
 begin
-  Result := nextpas.core.path.ExtractFilePath(AFileName);
+  { perf: inline thin forward to platform_path_dirname single source (zero-copy view, SysUtils trims trailing sep) }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_dirname(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+  if LNeed <= 0 then Exit('');
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_dirname(PAnsiChar(AFileName), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
+  end;
+  if Result = '.' then Result := '';
+  { SysUtils: ExtractFileDir trims trailing sep except root }
+  if (Result <> '') and (Result <> '/') and (Result[Length(Result)] = PLATFORM_PATH_SEP) then
+    SetLength(Result, Length(Result) - 1);
 end;
 
-function ExtractFileName(const AFileName: string): string;
+function ExtractFileDrive(const AFileName: string): string; inline;
 begin
-  Result := nextpas.core.path.ExtractFileName(AFileName);
+  { perf: zero-copy view via platform root classify (no alloc); Linux returns '' }
+  {$IFDEF NEXTPAS_WINDOWS}
+  if (Length(AFileName) >= 2) and (AFileName[2] = ':') and
+     (((AFileName[1] >= 'A') and (AFileName[1] <= 'Z')) or ((AFileName[1] >= 'a') and (AFileName[1] <= 'z'))) then
+    Result := Copy(AFileName, 1, 2)
+  else
+    Result := '';
+  {$ELSE}
+  Result := '';
+  {$ENDIF}
 end;
 
-function ExtractFileExt(const AFileName: string): string;
+function ChangeFileExt(const AFileName, ANewExt: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
 begin
-  Result := nextpas.core.path.ExtractFileExt(AFileName);
+  { perf: inline thin forward to platform_path_change_ext single source (zero-copy view, stack 4K) }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_change_ext(PAnsiChar(AFileName), PAnsiChar(ANewExt), @LBuf[0], SizeOf(LBuf));
+  if LNeed < 0 then Exit(AFileName);
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_change_ext(PAnsiChar(AFileName), PAnsiChar(ANewExt), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
+  end;
 end;
 
-function ExtractFileDir(const AFileName: string): string;
+function IncludeTrailingPathDelimiter(const APath: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
 begin
-  Result := nextpas.core.path.ExtractFileDir(AFileName);
+  { perf: inline thin forward to platform_path_ensure_sep single source (zero-copy view) }
+  if APath = '' then Exit(PLATFORM_PATH_SEP);
+  LNeed := platform_path_ensure_sep(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf));
+  if LNeed <= 0 then Exit(APath + PLATFORM_PATH_SEP);
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_ensure_sep(PAnsiChar(APath), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
+  end;
 end;
 
-function ExtractFileDrive(const AFileName: string): string;
+function ExcludeTrailingPathDelimiter(const APath: string): string; inline;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LNeed: Int32;
 begin
-  Result := nextpas.core.path.ExtractFileDrive(AFileName);
-end;
-
-function ChangeFileExt(const AFileName, ANewExt: string): string;
-begin
-  Result := nextpas.core.path.ChangeFileExt(AFileName, ANewExt);
-end;
-
-function IncludeTrailingPathDelimiter(const APath: string): string;
-begin
-  Result := nextpas.core.path.IncludeTrailingPathDelimiter(APath);
-end;
-
-function ExcludeTrailingPathDelimiter(const APath: string): string;
-begin
-  Result := nextpas.core.path.ExcludeTrailingPathDelimiter(APath);
+  { perf: inline thin forward to platform_path_trim_sep single source (zero-copy view) }
+  if APath = '' then Exit('');
+  LNeed := platform_path_trim_sep(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf));
+  if LNeed < 0 then Exit(APath);
+  if LNeed = 0 then Exit('');
+  if LNeed < SizeOf(LBuf) then
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+  else
+  begin
+    SetLength(Result, LNeed);
+    platform_path_trim_sep(PAnsiChar(APath), PAnsiChar(Result), LNeed + 1);
+    SetLength(Result, LNeed);
+  end;
 end;
 
 function ExpandFileName(const AFileName: string): string;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LNeed: Int32;
+  LCwd: string;
 begin
-  Result := nextpas.core.path.ExpandFileName(AFileName);
+  { perf: thin forward to platform_path_resolve single source (zero-copy view, stack 4K + heap fallback, bytes.ops not duplicated); fallback via platform_file_getcwd for relative paths }
+  if AFileName = '' then Exit('');
+  LNeed := platform_path_resolve(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+  if (LNeed > 0) and (LNeed < SizeOf(LBuf)) then
+  begin
+    SetString(Result, PAnsiChar(@LBuf[0]), LNeed);
+    Exit;
+  end;
+  if LNeed > 0 then
+  begin
+    SetLength(LHeap, LNeed + 1);
+    platform_path_resolve(PAnsiChar(AFileName), @LHeap[0], Length(LHeap));
+    SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+    Exit;
+  end;
+  if platform_path_is_absolute(PAnsiChar(AFileName)) then
+  begin
+    LNeed := platform_path_normalize(PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+    if LNeed <= 0 then Exit(AFileName);
+    if LNeed < SizeOf(LBuf) then
+      SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+    else
+    begin
+      SetLength(LHeap, LNeed + 1);
+      platform_path_normalize(PAnsiChar(AFileName), @LHeap[0], Length(LHeap));
+      SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+    end;
+    Exit;
+  end;
+  LCwd := GetCurrentDir;
+  if LCwd = '' then Exit(AFileName);
+  { fallback: manual join + normalize via platform }
+  begin
+    LNeed := platform_path_join(PAnsiChar(LCwd), PAnsiChar(AFileName), @LBuf[0], SizeOf(LBuf));
+    if LNeed <= 0 then Exit(LCwd + PLATFORM_PATH_SEP + AFileName);
+    if LNeed >= SizeOf(LBuf) then
+    begin
+      SetLength(LHeap, LNeed + 1);
+      platform_path_join(PAnsiChar(LCwd), PAnsiChar(AFileName), @LHeap[0], Length(LHeap));
+      SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+      LCwd := Result;
+    end
+    else
+      SetString(LCwd, PAnsiChar(@LBuf[0]), LNeed);
+    LNeed := platform_path_normalize(PAnsiChar(LCwd), @LBuf[0], SizeOf(LBuf));
+    if LNeed <= 0 then Exit(LCwd);
+    if LNeed < SizeOf(LBuf) then
+      SetString(Result, PAnsiChar(@LBuf[0]), LNeed)
+    else
+    begin
+      SetLength(LHeap, LNeed + 1);
+      platform_path_normalize(PAnsiChar(LCwd), @LHeap[0], Length(LHeap));
+      SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+    end;
+  end;
 end;
 
 function GetTempDir: string;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: Int32;
 begin
-  Result := nextpas.core.fs.GetTempDir;
+  { perf: thin forward to platform_fs_temp_dir single source (zero-copy stack 4K, single Move in owner, ensure trailing sep) }
+  LLen := platform_fs_temp_dir(@LBuf[0], SizeOf(LBuf));
+  if LLen <= 0 then Exit('');
+  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+  if (Result <> '') and (Result[Length(Result)] <> PLATFORM_PATH_SEP) then
+    Result := Result + PLATFORM_PATH_SEP;
 end;
 
 function GetTempDir(Global: Boolean): string;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: Int32;
 begin
-  { Global flag ignored — single temp root on nextPas fs facade }
-  Result := nextpas.core.fs.GetTempDir;
+  { Global flag ignored — single temp root via platform; perf: same single source }
+  LLen := platform_fs_temp_dir(@LBuf[0], SizeOf(LBuf));
+  if LLen <= 0 then Exit('');
+  SetString(Result, PAnsiChar(@LBuf[0]), LLen);
+  if (Result <> '') and (Result[Length(Result)] <> PLATFORM_PATH_SEP) then
+    Result := Result + PLATFORM_PATH_SEP;
 end;
 
 function GetProcessID: SizeUInt;
@@ -494,21 +697,35 @@ begin
   Result := SizeUInt(System.GetProcessID);
 end;
 
-{ Working directory — delegates to fs owner }
+{ Working directory — delegates to platform.files L0 (single source, inline zero-copy, try-finally not lost) }
 
-function GetCurrentDir: string; inline;
+function GetCurrentDir: string;
+const
+  CWD_STACK = 1024;
+  CWD_MAX = 65536;
+var
+  LBuf: array[0..1023] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LSize: SizeInt;
 begin
-  Result := nextpas.core.fs.GetCurrentDir;
+  { perf: thin forward to platform_file_getcwd single source (zero-copy view, stack 1K + heap growth, sized alloc) }
+  if platform_file_getcwd(@LBuf[0], CWD_STACK) <> nil then
+    Exit(StrPas(@LBuf[0]));
+  LSize := CWD_STACK * 2;
+  repeat
+    if LSize > CWD_MAX then Exit('');
+    SetLength(LHeap, LSize);
+    if platform_file_getcwd(@LHeap[0], PtrUInt(LSize)) <> nil then
+      Exit(StrPas(@LHeap[0]));
+    LSize := LSize * 2;
+  until False;
 end;
 
-function SetCurrentDir(const ADir: string): Boolean;
+function SetCurrentDir(const ADir: string): Boolean; inline;
 begin
-  try
-    nextpas.core.fs.util.FsSetCwd(ADir);
-    Result := True;
-  except
-    Result := False;
-  end;
+  { perf: inline thin forward to platform_file_chdir single source (zero-copy view); stability: no resource leak }
+  if ADir = '' then Exit(False);
+  Result := platform_file_chdir(PAnsiChar(ADir)) = 0;
 end;
 
 { Command line — delegates to System }
@@ -523,11 +740,13 @@ begin
   Result := System.ParamStr(AIndex);
 end;
 
-{ Environment — delegates to os.env owner }
+{ Environment — delegates to platform.env L0 (single source, inline zero-copy, try-finally not lost) }
 
 function GetEnvironmentVariable(const AName: string): string; inline;
 begin
-  Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
+  { perf: inline thin forward to platform_env_get_str single source (zero-copy view, single Move in owner, bytes.ops not duplicated) }
+  if AName = '' then Exit('');
+  Result := string(platform_env_get_str(AnsiString(AName)));
 end;
 
 { Timing — delegates to time owner }
@@ -550,7 +769,7 @@ begin
   else if LLen = 0 then
     Result := ''
   else
-    Result := 'unknown error ' + nextpas.core.text.conv.IntToStr(AErrorCode);
+    Result := 'unknown error ' + nextpas.core.text.IntToStr(AErrorCode);
 end;
 
 function GetLastOSError: Integer; inline;

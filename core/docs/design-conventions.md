@@ -148,6 +148,13 @@ end.
 
 - `nextpas.core.base` 是根模块，不递归四件套范式（不存在 `nextpas.core.base.base.pas`）
 - `nextpas.core.base` 直接作为基础类型定义单元，同时承担 `base` 和门面的角色
+- `nextpas.core.js.lifecycle` 为纯上下文生命周期 owner（见 `core/docs/js/CONTRACT.md §1`；守 L0-L3，四件套单职责，`base` 仅类型载体）
+  - 并发：`GPureClosed` 64B padded atomic acquire/release cache-line 隔离 + `atomic_fetch_add` lock-free id + spinlock resize 实例隔离
+  - 单源：`bytes.ops` 几何 + `mem.dynarray` Exactly-Once poke single source；bulk `IsValid` 零原子 via `FValid`，强一致 acquire
+  - 阈值：800 内（<800 必拆，`wc -l ~95` 实测）
+  - 性能：热点 `inline` + `BytesCopy` 零拷贝；资源 `JsPureClose` 幂等 `try-finally` 不丢
+- `nextpas.core.js.pure.base` 为纯后端共享基座薄门面，非标准四件套命名（`pure.base` 薄转发：lifecycle 已抽 `js.lifecycle` 单源，Host/Heap/Value/IO仅inline thin-forward至`pure.host/pure.value/js.eval/js.lifecycle`单源（pure.host/pure.value永久单源，无阈值迁移，`JsPureHostsClear`+`JsPureTryReadFileText`+`JsPureCall` PBuckets nil单模板 已下沉至`pure.host` via `platform.fs/bytes.ops` inline零拷贝 single source，`TJsPureHostState` 统一 `JsPureHostStateSet*` 3+3 inline零拷贝 无 legacy HostSet/JsPureClose shim 奢华薄零逻辑），零 FFI/零 `platform.dl`（L0 `platform.fs` 经`pure.host`直读，64MiB限流，`bytes.ops`零拷贝 via `BytesCopy`单源），阈值800内（<800 必拆，wc -l ~230 实测），见 `core/docs/js/CONTRACT.md §1`；`pure` 为纯族前缀，`base` 为共享后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝，热点 inline+`BytesCopy` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3）
+- `nextpas.core.js.pure.impl` 为纯族共享模板组合收敛，非标准四件套命名（`pure.impl` 单源模板复用 `js888/v8/chakra` 95% 克隆，仅 BackendKind 注入差异，零 FFI/零 `platform.dl`（L0 `platform.thread/fs` 仅直读，非 dl），Runtime+Context 四职责已落地组合收敛 ~360 行（阈值800内，<800 必拆，wc -l ~360 实测，Host→pure.host.TJsPureHostState per-Context O(1)桶 inline+bytes.ops单源 + Value→pure.value.TJsPureValueState Heap/Global bytes.ops+mem.dynarray永久单源无js.value双入口），见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，`impl` 为模板后缀，非独立模块，复用 `bytes.ops` 单源与 `text.view` 零拷贝直通，热点 `FindHostView/Bind/DoEval/New*` inline 薄转发 + `BytesCopy` 零拷贝，资源 `JsPureClose` 幂等不丢，守 L0–L3）
 - `nextpas.core.js.pure.base` 为第 11 单元纯后端共享基座，非标准四件套命名（`pure.base` 单源复用 `js888/v8/chakra`，零 FFI/零 `platform.dl`，阈值 550 内，见 `core/docs/js/CONTRACT.md §1`；设计规范显式例外，`pure` 为纯族聚合前缀，非独立模块，`base` 为共享基座后缀，复用 `bytes.ops` 单源与 `text.view` 零拷贝视图，守 L0–L3）
 - 顶层 `platform` 的 OS/CPU/endian inquiry 遵循 facade/base/implementation 分工：
   `nextpas.core.platform.base` 只拥有 enum 与 `CURRENT_*` compile-time truth，
@@ -158,12 +165,16 @@ end.
   `platform.thread` 这类跨平台统一 API 默认不创建自己的 `*.ffi.pas`，而是消费
   `platform.<host>.base` / `platform.<host>.ffi`。只有当某个 feature 自身真的拥有独立于宿主
   owner 的 foreign ABI 时，才允许创建 `platform.<feature>.ffi.pas`，并必须在设计文档中说明原因。
+- `nextpas.core.system` 根门面为 L0 例外：门面纯 re-export 范式下，L0 helpers（FreeAndNil/SafeFree/ZeroMem/FillMem/CopyMem/CompareMem/Supports、HTonN/NToHs/Var*）允许 `inline` 薄转发至 owner 单源（`nextpas.core.base.utils` / `nextpas.core.bytes.ops` / `nextpas.core.text.conv`，Move/FillChar 单一来源为 `nextpas.core.bytes.ops.BytesCopy/BytesZero` 零拷贝无分配），非自有实现；资源释放经 owner（FreeAndNil nil-then-Free）保证不丢，热点 `inline` 零拷贝，属受控 L0 例外，已由 `core/tests/nextpas.core.system/test_system_source_contracts` facade parser 与 source-contract 回归固化，详 `core/docs/system/README.md` Boundaries 与 `compatibility-facades.md`。
 - `tar` / `zip` / `archive` 等的 `*.common` 内部共享内核（类型级隔离·门面零 re-export，仅受信实现 `implementation uses` 可见，辅以 `CONTRACT` 机械门禁双重收敛；四件套外内部核形态，不属于四件套公共面）：仅供同模块 `*.reader`/`*.writer`/`*.fs`/`*.builder` 实现内复用，禁止门面 `nextpas.core.<module>` re-export 与门面外直引。
 - `tar` 的 `ITarBuilder` 单口直达 `AddEntryFromReader`（`nextpas.core.tar.intf` L2→L1 单向 `nextpas.core.io.intf(IReader)`，2026-09-02 精简完成，消除 `ITarStreamBuilder`+`AsStreamBuilder`+`TarBuilderAddFromReader` 四入口与 `QueryInterface` 分发仪式，`TarBuilder.Add(...).AddEntryFromReader(...).Finish` 一链直达），守 `bytes.ops` 单源 `CopyMemory/Move` inline 零拷贝、per-entry 局域缓冲 `try..finally` 必释无滞留（见 `core/docs/tar/CONTRACT.md §4`）。
 
 ### 单元体积指引
 
 - 单个单元文件超过 800 行时应考虑拆分为子模块
+- 软性指引，内聚性强的代码可以例外（纯 re-export 聚合无循环/路由/SIMD 体，`inline` 薄转发 + `bytes.ops` 单源 out-of-line，属内聚豁免；认知负荷经子facade分流）
+- 显式例外 `nextpas.core.js.pure.base` / `js.pure.impl` / `js.lifecycle` 硬门禁 800 行（`core/docs/js/CONTRACT.md §1` 阈值 800，hygiene 抽样 `wc -l core/src/nextpas.core.js*.pas` 告警，超阈必拆，无 650 反复调整）
+- 软阈豁免 `nextpas.core.http` umbrella (~1914行 >800 但纯聚合：13别名+40+ `inline` 薄转发无 Move/FillChar 体，`bytes.ops:25/89` 单源在 owner，零拷贝视图，资源释放经 owner `try/finally`/`Close`/`PoolClear`；`uses` 已收敛至 base/intf+五子facade minimal/messages/transports/extensions/middlewares (+ 最小 L0 缝 io/thread/vfs/json/log 与 router.group)分流认知，详 `core/docs/http/CONTRACT.md:59` 与 `http.pas:1-15` 头注)
 - 软性指引，内聚性强的代码可以例外
 
 ### 子模块依赖规则
@@ -186,6 +197,9 @@ L1: 基础设施 (bytes, text, encoding, collections, sync, thread, async, io, t
 
 L2: 系统能力 (fs, net, tls, dns, crypto, compress, json, yaml, toml, cbor, xml, regex, sqlite, pg, process, args, validation, archive, tar, zip)
      ↑ 只依赖 L0-L1；同层允许单向依赖（禁止循环，例 js→json 见 module-registry:50）；唯一例外是经 `docs/module-registry.md` 明示且 source-contract 门禁的单点 L2→L2 seam（如 `respack.dirsource→fs+io.mapped`、`vfs.os→fs/path`、`vfs.embedded→respack.reader`、`sevenz.fs→fs/fs.intf`、`sevenz.coders→compress`、`git.native.zlib→compress + checksum.adler32` 单点缝 source-contract gated like respack.dirsource/vfs.os），其余同层依赖仍禁止；另 `archive`→`tar`/`zip` 经 `archive.fs` + `archive.pax` 家族缝单向显式依赖（见 module-registry L2 同层 one-way），禁循环
+     · 稳定单缝：`js→json`（`json.types/writer` 单源）、`respack.dirsource→fs+io.mapped`（唯一 IO 缝）、`canvas.raster→vector/image`（`vector.tess/path` + `image.base`）、`db.redis.transport→net/tls`（+ `adapter→net` 轻量缝；`time/sync` 为 L1 下沉，`base/resp` 纯 L0/L1）
+     · 过渡双缝（优雅债务，L7 聚合收敛）：`vfs.os→fs/path`（单缝保留）+ `vfs.embedded→respack.reader`（second seam，Registry line 14 白名单 transitional，L7 拆分为 `nextpas.core.vfs.*` 后端独立族后移除额外白名单固化单缝理想）
+     · 共性：`bytes.ops` 单源 `inline` 零拷贝 + `try-finally` 资源不丢；禁止 reverse（如 `net/tls→db.redis`），禁止循环
 
 L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit, auth, template, metrics, event, job, app)
      ↑ 只依赖 L0-L2
@@ -194,6 +208,18 @@ L3: 框架 (log, config, redis, http, websocket, mail, tui, migration, ratelimit
 ### 依赖约束
 
 - 只能向下依赖，不能向上依赖
+- 同层单向依赖仅限 `docs/core-module-registry.md` 显式 allowlist 且 source-contract 门禁，禁止循环；已门禁 seam：
+  - 稳定单缝：`js→json`、`respack.dirsource→fs+io.mapped`、`canvas.raster→vector/image`、`db.redis.transport→net/tls`（+ `adapter→net`；`time/sync` 为 L1 下沉非 L2 缝）
+  - 过渡双缝（优雅债务，L7 聚合收敛）：`vfs.os→fs/path`（保留）+ `vfs.embedded→respack.reader`（second seam，Registry line 14 transitional，L7 拆分为 `nextpas.core.vfs.*` 后端独立族后移除额外白名单固化单缝理想）
+  - 未列入者视为违规；禁止循环，禁止 reverse
+- 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
+- 单点 L2→L2 seam 必须在 `docs/core-module-registry.md` 明示且有 source-contract 门禁（均为单向 allowlist，cycle-gated）：
+  - `respack.dirsource` 唯一 `fs+io.mapped` IO 缝
+  - `vfs.os` 唯一 `fs/path` 缝（保留）+ `vfs.embedded` 唯一 `respack.reader` 缝（过渡 second seam，L7 聚合收敛拆分为 `nextpas.core.vfs.*` 后端独立族后移除白名单）
+  - `canvas.raster` 唯一 `vector/image` 缝（`vector.tess/path` + `image.base`）
+  - `db.redis.transport` 唯一 `net/tls` 缝（+ `db.redis.adapter` 轻量 `net` 缝；`time/sync` 为 L1 下沉，`base/resp` 纯 L0/L1）
+  - 共性：`bytes.ops` 单源 `inline` 零拷贝，资源 `FreeAndNil`/`try-finally` 不丢；`reverse net/tls→db.redis` 禁止
+  - `respack.embed` 已收敛至 L1 `text.strings.GlobMatch` 单源，`fs.glob` 为薄转发，不再构成 L2→L2
 - 同层内允许单向依赖，禁止循环依赖（L2 例：`js`→`json` 为允许的同层单向，见 module-registry:50；`js` 的 `platform.dl` 仅 loader、`text.view/mem` 为 L0-L1，其余同层依赖如 `fs` 禁止；已登记同层如 `zip → compress/fs/checksum`、`sevenz → crypto/hash/compress`、`git → fs/compress/hash/zlib/checksum`（含 `git.native.zlib → compress + checksum.adler32` 复用 `bytes.ops` 单源）以注册表为准）
 - 特殊情况允许 interface/implementation 分区引用打破循环（同子模块规则）
 - L2 同层显式 one-way 仅 via `nextpas.core.archive.fs` + `nextpas.core.archive.pax` 家族缝联邦：`tar`/`zip`/`sevenz.fs` 共享 walk/排序/防劫持/零拷贝落盘与 pax kv 等单源，家族缝归一，需在 `core/docs/core-module-registry.md` 显式登记 `federation via archive.fs + archive.pax` / `allowed dependencies`（L2 同层显式一-way），禁循环或隐式同层依赖

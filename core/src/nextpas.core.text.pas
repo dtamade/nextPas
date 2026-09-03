@@ -138,6 +138,21 @@ function WildHasUnescapedSlash(const AValue: string): Boolean; inline;
 { Case-insensitive ASCII comparison (from text.conv) }
 function SameText(const A, B: string): Boolean; inline;
 
+{ SysUtils-compat single-source thin forwards — L0 system.sysutils convergence to text/bytes single source (2026-09-03)
+  perf: inline thin-forward zero-copy via bytes.ops single source (TByteSpan view, single Move in owner), try-finally not lost; owner stays in L1 text/bytes }
+function CompareStr(const A, B: string): Integer; inline;
+function Trim(const AValue: string): string; inline;
+function TrimLeft(const AValue: string): string; inline;
+function TrimRight(const AValue: string): string; inline;
+function UpperCase(const AValue: string): string; inline;
+function LowerCase(const AValue: string): string; inline;
+function Pos(const ASubStr, AStr: string): Integer; inline;
+function StrToIntDef(const AValue: string; const ADefault: Integer): Integer; inline;
+function StrToInt64Def(const AValue: string; const ADefault: Int64): Int64; inline;
+function StrToFloat(const AValue: string): Double; inline;
+function CurrToStr(const AValue: Currency): string; inline;
+function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean = False): string; inline;
+
 implementation
 
 function TextTrim(const AValue: string): string;
@@ -451,6 +466,82 @@ end;
 function SameText(const A, B: string): Boolean;
 begin
   Result := nextpas.core.text.compare.SameText(A, B);
+end;
+
+{ SysUtils-compat thin forwards — single source via L1 text owners, inline zero-copy, bytes.ops single source in owner }
+
+function CompareStr(const A, B: string): Integer; inline;
+begin
+  { perf: inline thin-forward to text.compare.TextCompare single source (bytes.ops SpanCompare zero-copy) }
+  Result := nextpas.core.text.compare.TextCompare(A, B);
+end;
+
+function Trim(const AValue: string): string; inline;
+begin
+  { perf: inline thin-forward to text.utils.Trim single source (no alloc if unchanged, bytes.ops single source) }
+  Result := nextpas.core.text.utils.Trim(AValue);
+end;
+
+function TrimLeft(const AValue: string): string; inline;
+begin
+  Result := nextpas.core.text.utils.TrimLeft(AValue);
+end;
+
+function TrimRight(const AValue: string): string; inline;
+begin
+  Result := nextpas.core.text.utils.TrimRight(AValue);
+end;
+
+function UpperCase(const AValue: string): string; inline;
+begin
+  { perf: inline thin-forward to text.utils.UpperCase ascii single source (bytes.ops not duplicated) }
+  Result := nextpas.core.text.utils.UpperCase(AValue);
+end;
+
+function LowerCase(const AValue: string): string; inline;
+begin
+  Result := nextpas.core.text.utils.LowerCase(AValue);
+end;
+
+function Pos(const ASubStr, AStr: string): Integer; inline;
+begin
+  { perf: inline thin-forward to text.view.IndexOfStr single source via bytes.ops SpanIndexOfSpan SIMD zero-copy TByteSpan view (single Move in owner), not inline per red-line 2 kept in owner }
+  if ASubStr = '' then Exit(0);
+  if AStr = '' then Exit(0);
+  Result := Integer(nextpas.core.text.view.IndexOfStr(AStr, ASubStr));
+  if Result < 0 then Result := 0 else Inc(Result);
+end;
+
+function StrToIntDef(const AValue: string; const ADefault: Integer): Integer; inline;
+var LVal: Integer;
+begin
+  { perf: inline thin-forward to text.conv.TryStrToInt32 single source (zero alloc) }
+  if nextpas.core.text.conv.TryStrToInt32(AValue, LVal) then Result := LVal else Result := ADefault;
+end;
+
+function StrToInt64Def(const AValue: string; const ADefault: Int64): Int64; inline;
+var LVal: Int64;
+begin
+  if nextpas.core.text.conv.TryStrToInt(AValue, LVal) then Result := LVal else Result := ADefault;
+end;
+
+function StrToFloat(const AValue: string): Double; inline;
+begin
+  { perf: inline thin-forward to text.conv.StrToFloat single source (raises on invalid) }
+  Result := nextpas.core.text.conv.StrToFloat(AValue);
+end;
+
+function CurrToStr(const AValue: Currency): string; inline;
+begin
+  { perf: inline thin-forward to text.conv.FloatToStr single source via text.number FloatToBuffer zero-alloc + bytes.ops BytesCopy single Move }
+  Result := nextpas.core.text.conv.FloatToStr(Double(AValue));
+end;
+
+function BoolToStr(const AValue: Boolean; const AUseBoolStrs: Boolean): string; inline;
+begin
+  { perf: inline thin-forward to text.utils.BoolToStr single source (no alloc for 1/0) }
+  if AUseBoolStrs then Result := nextpas.core.text.utils.BoolToStr(AValue)
+  else if AValue then Result := '1' else Result := '0';
 end;
 
 end.

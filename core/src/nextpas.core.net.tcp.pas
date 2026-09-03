@@ -37,6 +37,7 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.bytes.ops,
   nextpas.core.io.intf,
   nextpas.core.errors,
   nextpas.core.time.base,
@@ -51,7 +52,8 @@ type
   TTcpStream = class(TInterfacedObject, IReader, IWriter, IReadWriteCloser, ITcpStream,
     ITcpSocketRuntime,
     ITcpStreamRuntime,
-    ITcpPeerProbe)
+    ITcpPeerProbe,
+    nextpas.core.platform.sendfile.base.ISendfileSocketHandle)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -97,6 +99,7 @@ type
       out AWritten: SizeUInt): TTcpStreamIOResult;
     { ITcpPeerProbe：非破坏性对端存活探测（平台层 peek 封装）。 }
     function PeerAlive: Boolean;
+    function GetSocketHandle: TPlatformSocket;
   end;
 
   TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime,
@@ -553,6 +556,11 @@ begin
   if FClosed then
     Exit(False);
   Result := platform_socket_peer_alive(FSocket);
+end;
+
+function TTcpStream.GetSocketHandle: TPlatformSocket;
+begin
+  Result := FSocket;
 end;
 
 procedure TTcpStream.ApplyDeadlineTimeout(const ADeadline: TDeadline;
@@ -1066,7 +1074,7 @@ begin
     raise EArgumentError.Create('unix socket path too long: ' + APath);
   Move(LFamily, ASa.Storage[0], 2);
   if LPathLen > 0 then
-    Move(APath[1], ASa.Storage[2], LPathLen);
+    nextpas.core.bytes.ops.BytesCopy(@ASa.Storage[2], @APath[1], SizeUInt(LPathLen)); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy, INV-5)
   ASa.Storage[2 + LPathLen] := 0;
   ASa.Len := 2 + LPathLen + 1;
 end;

@@ -1,8 +1,8 @@
 # nextpas.core.db.trace — 观测钩子域契约
 
-**模块**：`nextpas.core.db.trace.{base,intf,pas}` 聚合连接级 `OnAcquire/OnQuery/OnError` + 512 摘要截断  
-**层级**：L3 家族（四后端插桩，池侧 `FlushDiagnostics` 独立；依赖 L0–L2 `sync`/`platform.time`）  
-**四件套**：`trace.base` ← `trace.intf` ← `trace` 门面 ← `TDbTraceHub` 聚合实现  
+**模块**：`nextpas.core.db.trace.{base,intf,pas}` 聚合连接级 `OnAcquire/OnQuery/OnError` + 512 摘要截断
+**层级**：独立 L3 族（已升格；四后端插桩，池侧 `FlushDiagnostics` 独立；依赖 L0–L2 `sync`/`platform.time`；寄居债已清，四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`Flush` 安全点已兑现）
+**四件套**：`trace.base` ← `trace.intf` ← `trace` 门面 ← `TDbTraceHub` 聚合实现
 **对应主契约**：`CONTRACT.md` §1.1 观测钩子行 + §2.12 `IDbTraceListener` + §2.10 能力矩阵
 
 ## 职责

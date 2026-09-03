@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
@@ -100,8 +101,8 @@ begin
     FCtrl := nil;
     raise nextpas.core.mem.error.EOutOfMemory.CreateMsg('TSwissTableI32.AllocTable: slots allocation failed');
   end;
-  FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
-  FillChar(FSlots^, LSlotSize, 0);
+  FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY); // non-zero fill: keep FillChar (CTRL_EMPTY=$FF, not zero) — BytesZero single source only for zero
+  BytesZero(FSlots, LSlotSize); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
   FGrowthLeft := ACapacity - ACapacity div 8;
 end;
 
@@ -156,7 +157,7 @@ begin
           begin
             LIdx := LGroupIdx * GROUP_SIZE + SizeUInt(Vec16Ctz(LMask));
             SetCtrl(LIdx, Lh2);
-            Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
+            BytesCopy(@FSlots[LIdx], @LOldSlots[i], SizeOf(TSlot)); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy
             Inc(FCount);
             Dec(FGrowthLeft);
             Break;
@@ -352,7 +353,7 @@ begin
       if FSlots[Li].Key = AKey then
       begin
         if System.IsManagedType(V) then Finalize(FSlots[Li].Value);
-        FillChar(FSlots[Li], SizeOf(TSlot), 0);
+        BytesZero(@FSlots[Li], SizeOf(TSlot)); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
         SetCtrl(Li, CTRL_DELETED);
         Dec(FCount);
         Exit(True);

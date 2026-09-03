@@ -177,7 +177,7 @@ and records evidence; it is not a completion claim.
 | `ssh` | L2 | SSH-2 client protocol stack (`nextpas.core.ssh.*`; pure Pascal, no C lib; sync `net` blocking + async `net.async.tcp` evented, crypto via `crypto`/`hash`, compress via `compress.zlib.ffi`) | yes | L0-L1 plus crypto/hash/compress/io/time/text owners; same-layer allowed peer `net` (single-point `ssh.net`) + `net.async.tcp` (allowed L2 async peer `transport.async`/`session.async`/`proxyjump.async` reuse `transport.core` single source); `compress.zlib.ffi` single-point via `compress` owner; bytes.ops single source inline/zero-copy, zero SysUtils | source-contract + focused-runtime |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
-| `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text/io/path/fs debt | source-contract |
+| `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text debt | source-contract |
 | `template` | L3 | templating | yes | L0-L2 | draft |
 | `test` | L1 | test framework (`nextpas.core.test`; `testing` is deprecated alias) | yes | L0 | focused-runtime |
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |

@@ -1,5 +1,10 @@
 # nextpas.core.vfs 代码契约
 
+**模块路径**：`core/src/nextpas.core.vfs*.pas`（15 个源文件：base/intf/errors/memtree/embedded/os/sub/mount/overlay/cache/util + decorator 聚合（transform/compressed L3单缝装饰器经 decorator 单点收口） + 门面）
+**层级**：L2 基座（依赖 L0-L1；L2→L2 单缝理想（design-conventions:190-202 单点 allowlist，单向无循环）vs 现状双缝白名单过渡期超越单缝理想（优雅债务，Registry line 108/line 106 extra whitelist source-contract gated: `os` → fs/path 单缝保留，`embedded` → respack.reader second seam line 14 transitional 白名单过渡 L7 到期评估收敛至单缝理想 via bytes.ops 单源 inline 零拷贝 striped SpinLock 16 shards 分片发布 10k 首击热点 16×降争 双重校验保留 try-finally 资源不丢，L7聚合收敛拆分为 nextpas.core.vfs.* 后端独立族（os/embedded 各后端独立，mount/overlay 纯复合，decorator 族已聚合为 vfs.decorator 单点收口）后移除额外白名单固化 L0—L3 单向单缝理想）；`mount/overlay` 纯复合零额外依赖）+ L3 装饰器单缝寄居（`transform/compressed` via Registry 单缝白名单过渡，L3→L2 实现侧单向使用 compress.gzip + 链式单源 alias vfs.base→compress.base GZIP_MAX_DECOMPRESS_BYTES canonical 32MiB 无字面量（source-contract 单源 alias 锁定）+ bytes.ops 单源 inline 零拷贝，长期聚合为独立 L3 族 nextpas.core.vfs.decorator、L7 到期移除白名单固化 L0-L3 单向依赖，现阶段以链式单源守层级高级感统一性，L7聚合拆分收口双缝与装饰器双白名单）
+**Owner**：AI（respack/vfs lane）
+**最后更新**：2026-09-02
+**版本**：1.12（匠心修复：双缝白名单过渡期超越单缝理想的 L7 后端独立族聚合收敛——L2→L2 单缝理想（design-conventions:190-202 allowlist 单点 seam）vs 现状双缝 whitelisted 优雅债务（os→fs/path 单缝保留，embedded→respack.reader second seam line 14 transitional），L7 聚合拆分为 nextpas.core.vfs.* 后端独立族（os/embedded/mount/overlay 各后端独立，decorator 族已聚合为 vfs.decorator 单点收口）后移除额外白名单固化 L0—L3 单向单缝理想；bytes.ops 单源 inline 零拷贝 striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验 try-finally 资源不丢）
 **模块路径**：`core/src/nextpas.core.vfs*.pas`（16 源文件：base/intf/errors/memtree/embedded/os/backends/sub/mount/overlay/cache/util + decorator 聚合 + 门面）
 **层级**：L2（依赖 L0-L1；L2 双缝过渡白名单——`os→fs/path` 与 `embedded→respack.reader` 双缝并存，source-contract gated，L7 聚合为 `nextpas.core.vfs.backends` 后端独立族后收敛至单缝；`mount/overlay` 纯复合；L3 装饰器经 `vfs.decorator` 单点聚合）
 **Owner**：AI（respack/vfs lane）
@@ -147,6 +152,20 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-08-25 | 0.9 | 设计阶段契约草案（随 S0 定稿） | AI |
+| 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面实现；INV-V7/V10/V11/V12 补验证方式；测试表按实测校准；os 门折叠进 conformance 的偏离记录 | AI |
+| 2026-08-28 | 1.1 | facade 校准：补 `CreateDecompressingVfs(AAlgo)` 重载与 `IVfsETag/VFS_DECOMPRESS_MAX_BYTES` 重导出；门数 12 闭环 | AI |
+| 2026-08-30 | 1.2 | S6装饰器落地：vfs.transform通用模板 + vfs.compressed薄门面（GZIP_MAX单源/4K HeaderPred/单次读取复用/池化复用度/OpPath高级感）；12门补齐（respack5+vfs5+2）+ bench_transform阈值；性能契约添HeaderPred/零二次IO证据 | AI |
+| 2026-08-30 | 1.3 | P2挂载复合落地：vfs.mount 前缀最长匹配复合+ETag/ServeMeta透传+CaseSensitive一致性，mount门禁6例，13门闭环 | AI |
+| 2026-08-31 | 1.4 | P2叠加落地：vfs.overlay 同根优先级叠加 patch>dlc>base 热更模型，overlay 3例（priority/list dedup/etag），13门闭环 | AI |
+| 2026-09-02 | 1.5 | 匠心修复：transform 单流复用+单源决策器（Stat/OpenRead 共用 TryResolveViaHeaderSingleStream，单流 Move 零拷贝 50 行去重，小/大/回退三态 inline+try-finally）+ L3 单缝寄居正名（L3→L2 单缝白名单过渡，长期待 L3 族聚合拆分）+ bytes.ops 单源魔数 + 性能/稳定性证据 | AI |
+| 2026-09-02 | 1.6 | 匠心修复：transform 大文件 2 字节轻量预判免 4K（Stat/OpenRead 大文件解压一致性 via 单源，OpenRead 大文件非 gzip 免 4K 分配与单流读）+ L7 单缝正名（L7 到期拆分为 nextpas.core.vfs.decorator 后移除白名单）+ bytes.ops 单源魔数 inline 零拷贝 | AI |
+| 2026-09-02 | 1.7 | 匠心修复：transform 栈上 2 字节零堆分配（热点非 gzip 路径栈缓冲免 SetLength(AHeader,2) 堆分配）+ 泛型路径 32MiB 防 bomb 统一（VFS_DECOMPRESS_MAX_BYTES→GZIP_MAX 单源，输入/输出双阈值防 OOM，压缩/非压缩一致）+ L7 单缝寄居文档正名固化（现阶段以单缝+文档正名守层级高级感，L7 到期拆分为 decorator 固化 L0-L3） | AI |
+| 2026-09-02 | 1.8 | 匠心修复：compressed 薄门面 VFS_DECOMPRESS_MAX_BYTES 单源别名复用 vfs.base 消除接口层字面量双写（base 经 compress.base 单源别名 canonical，drift 由 source-contract 别名单源锁定）+ bytes.ops inline 零拷贝，消除数值双写漂移 | AI |
+| 2026-09-02 | 1.9 | 匠心修复：热路径基准覆盖补齐（design-conventions 每模块热路径基准覆盖）：新增 bench_hotspots 24项（memtree/embedded/os × Exists/Stat/List/OpenRead/Walk/Sub 全热路径，inline 零拷贝 bytes.ops 单源 VfsEnumerateChildSpans/Span* 单源，扇出限界16，try-finally Close不丢）+ bench_memtree/bench_embedded/bench_os 三独立 per-backend 基准，perf CONTRACT §6 逐行阈值锁定，业务以 CONTRACT 为准，缺能力反哺 owner（os→fs，embedded→respack） | AI |
+| 2026-09-02 | 1.10 | 匠心修复：cache 四件套正名与零拷贝（热点 List 缓存纳入四件套与门面文档结构 mount/overlay 单源透明 + TryGet 零拷贝 COW 共享 O(1) 替代 O(k) Move 隔离，Put 侧 Copy 单源 bytes.ops 零拷贝 inline+try-finally 不丢） | AI |
+| 2026-09-02 | 1.11 | 匠心修复：decorator 族单点聚合收敛门面扇出（transform/compressed 经 nextpas.core.vfs.decorator 单缝收口，门面 14→15 文件、13→12 聚合扇出降 1，族完整性保留，bytes.ops 单源 inline 零拷贝，CONTRACT 单源，try-finally 不丢） | AI |
+| 2026-09-02 | 1.12 | 匠心修复：双缝超越单缝理想的 L7 后端独立族聚合收敛（design-conventions:190-202 单缝理想 vs 双缝 whitelisted 优雅债务：os→fs/path 单缝保留，embedded→respack.reader second seam line 14 transitional，L7 聚合拆分为 nextpas.core.vfs.* 后端独立族后移除额外白名单固化 L0—L3 单向单缝理想；decorator 族已聚合为 vfs.decorator 单点收口，门面扇出收敛，bytes.ops 单源 inline 零拷贝 striped SpinLock 16 shards 分片发布 10k 首击 16×降争 双重校验 try-finally 资源不丢，业务以 CONTRACT 为准、缺能力反哺 owner） | AI |
 | 2026-08-25 | 1.0 | S3 落地：三后端+Sub+门面；INV 补齐 | AI |
 | 2026-08-30 | 1.2 | S6 装饰器落地：transform+compressed | AI |
 | 2026-09-02 | 1.11 | decorator 族单点聚合收敛门面扇出 | AI |

@@ -72,6 +72,10 @@ type
 
 implementation
 
+uses
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray;
+
 class function TToastManager.New: IToastManager;
 var LSelf: TToastManager;
 begin
@@ -89,13 +93,24 @@ begin
 end;
 
 procedure TToastManager.Push(const Msg: AnsiString; Level: TToastLevel);
-var N: Integer;
+var
+  LOld, LReq, LCap, LCurCap: SizeUInt;
 begin
-  N := Length(FItems);
-  SetLength(FItems, N + 1);
-  FItems[N].Message := Msg;
-  FItems[N].Level := Level;
-  FItems[N].RemainingMs := FDurationMs;
+  LOld := SizeUInt(Length(FItems));
+  LReq := LOld + 1;
+  // perf: geometric via bytes.ops.BytesGrowCapacity single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), zero-copy via mem.dynarray poke, not inline per red-line 2
+  LCap := BytesGrowCapacity(LOld, LReq);
+  LCurCap := DynArrayCapacityElem(Pointer(FItems), LOld, SizeOf(TToastItem));
+  if (LCurCap < LCap) or (DynArrayRefCountElem(Pointer(FItems)) <> 1) then
+  begin
+    if LCap <> LOld then
+      SetLength(FItems, LCap);
+  end;
+  if SizeUInt(Length(FItems)) <> LReq then
+    DynArraySetLengthElem(Pointer(FItems), LReq);
+  FItems[LOld].Message := Msg;
+  FItems[LOld].Level := Level;
+  FItems[LOld].RemainingMs := FDurationMs;
 end;
 
 procedure TToastManager.Tick(DeltaMs: Integer);

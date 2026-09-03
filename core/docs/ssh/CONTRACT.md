@@ -114,7 +114,7 @@ ssh.window                 ← 通道窗口可复用策略（WINDOW_LOW_WATER_DI
 | | `zlib@openssh.com` 延迟 | `USERAUTH_SUCCESS` 后首包起，有状态第2包显著更小 | 1 MiB 防 bomb |
 | **SFTP async** | `INIT` 首包 / `STAT` / `Read/Write` chunk 32 KiB | 215 / 115 / 216 ms | — |
 
-`inline` 小访问器 + `bytes.ops` 单源 `Move` 直拷 + `TByteSpan` 视图已在 `cipher/buffer/compress` 热路径验证；`bench_ssh_cipher` / `bench_ssh_proxyjump` / `bench_tls13_record` 为回归红线（`±5%` 波动视为环境噪声，`bench HEAPTRC_GATE=0` 防吞吐失真由 `common.mk HEAPTRC_GATE=1` 统一门禁下其余 production gates 覆盖泄漏：`ssh` / `crypto/tls` 全量 `heaptrc 0`）。
+`inline` 小访问器 + `bytes.ops` 单源 `Move` 直拷 + `TByteSpan` 视图已在 `cipher/buffer/compress` 热路径验证；`bench_ssh_cipher` / `bench_ssh_proxyjump` / `bench_tls13_record` 为回归红线（`±5%` 波动视为环境噪声，`bench` 默认 `HEAPTRC_GATE=0` 防失真，`BENCH_HEAPTRC=1` 强制 `heaptrc 0` 闭环；`common.mk` 零豁免统一门禁下 `ssh`/`crypto/tls` 全量 `heaptrc 0` + `bench` 泄漏变体）。
 
 ---
 
@@ -145,7 +145,7 @@ ssh.window                 ← 通道窗口可复用策略（WINDOW_LOW_WATER_DI
 回环测试（`TLoopServer` 最小服务端在内存管道上走独立服务端逻辑路径）为默认门禁；`e2e_ssh_live` 为 opt-in 真实互操作，不进默认 gate。
 
 ```bash
-# 单元回环（focused-runtime，heaptrc 0 统一门禁，零 HEAPTRC_GATE=0 豁免；bench 保持吞吐豁免）
+# 单元回环（focused-runtime，heaptrc 0 统一门禁，零 HEAPTRC_GATE=0 豁免；bench 双模 HEAPTRC_GATE=0 吞吐/BENCH_HEAPTRC=1 泄漏）
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_buffer
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_cipher
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_kex
@@ -163,6 +163,8 @@ make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump
 make focused FOCUS=core/tests/nextpas.core.ssh/test_ssh_proxyjump_async
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
+# bench 泄漏变体（与吞吐同源，零豁免）：BENCH_HEAPTRC=1 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_cipher
+# BENCH_HEAPTRC=1 make focused FOCUS=core/tests/nextpas.core.ssh/bench_ssh_proxyjump
 
 # 真实互操作（opt-in，不进默认 gate）
 # 本地 Docker 夹具（Alpine 9.7 全封闭，TOFU known_hosts）
