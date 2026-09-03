@@ -5,7 +5,8 @@ unit nextpas.core.collections.hashmap.swiss;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.errors,
@@ -209,48 +210,58 @@ end;
 { TSwissTable<K,V> - Core helpers }
 
 function TSwissTable.KeyHash(const AKey: K): UInt32; inline;
+var
+  LKind: TNPTypeKind;
 begin
   if Assigned(FHash) then Exit(FHash(AKey));
-  // perf: compile-time specialized dispatch — GetTypeKind(K) and SizeOf(K) are constants per specialization;
-  // FPC folds dead branches (6018), inlining leaves single InlineHashMix/HashOf* path per instance — zero per-op GetTypeKind/SizeOf branching, zero-copy via @AKey, InlineHashMix compile-time specialized.
+  // dispatch via reflect carrier: NPTypeKindOf is a runtime read (string subkinds
+  // split via granular GetTypeKind identity); SizeOf branches still fold per specialization.
+  LKind := NPTypeKindOf(TNPTypeHandle(TypeInfo(K)));
   {$PUSH}{$WARN 6018 OFF}
-  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or (GetTypeKind(K) = tkWChar) or
-     (GetTypeKind(K) = tkBool) or (GetTypeKind(K) = tkEnumeration) then
+  if (LKind = nkInteger) or (LKind = nkChar) or (LKind = nkEnumeration) then
   begin
     if SizeOf(K) = 1 then Exit(InlineHashMix32(PByte(@AKey)^));
     if SizeOf(K) = 2 then Exit(InlineHashMix32(PWord(@AKey)^));
     if SizeOf(K) = 4 then Exit(InlineHashMix32(PUInt32(@AKey)^));
     if SizeOf(K) = 8 then Exit(HashOfUInt64(PQWord(@AKey)^));
   end;
-  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+  if (LKind = nkInt64) or (LKind = nkQWord) then
     Exit(HashOfUInt64(PQWord(@AKey)^));
-  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
-    Exit(HashOfAnsiString(PAnsiString(@AKey)^));
-  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
-    Exit(HashOfUnicodeString(PUnicodeString(@AKey)^));
+  if LKind = nkString then
+  begin
+    if GetTypeKind(K) = GetTypeKind(AnsiString) then
+      Exit(HashOfAnsiString(PAnsiString(@AKey)^));
+    if (GetTypeKind(K) = GetTypeKind(UnicodeString)) or (GetTypeKind(K) = GetTypeKind(WideString)) then
+      Exit(HashOfUnicodeString(PUnicodeString(@AKey)^));
+  end;
   {$POP}
   raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;
 
 function TSwissTable.KeysEqual(const L, R: K): Boolean; inline;
+var
+  LKind: TNPTypeKind;
 begin
   if Assigned(FEquals) then Exit(FEquals(L, R));
-  // perf: compile-time specialized dispatch — folded per specialization, single equality path inlined, zero per-op GetTypeKind/SizeOf branching, zero-copy via @L/@R
+  // dispatch via reflect carrier (see KeyHash); SizeOf branches still fold per specialization.
+  LKind := NPTypeKindOf(TNPTypeHandle(TypeInfo(K)));
   {$PUSH}{$WARN 6018 OFF}
-  if (GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or (GetTypeKind(K) = tkWChar) or
-     (GetTypeKind(K) = tkBool) or (GetTypeKind(K) = tkEnumeration) then
+  if (LKind = nkInteger) or (LKind = nkChar) or (LKind = nkEnumeration) then
   begin
     if SizeOf(K) = 1 then Exit(PByte(@L)^ = PByte(@R)^);
     if SizeOf(K) = 2 then Exit(PWord(@L)^ = PWord(@R)^);
     if SizeOf(K) = 4 then Exit(PUInt32(@L)^ = PUInt32(@R)^);
     if SizeOf(K) = 8 then Exit(PQWord(@L)^ = PQWord(@R)^);
   end;
-  if (GetTypeKind(K) = tkInt64) or (GetTypeKind(K) = tkQWord) then
+  if (LKind = nkInt64) or (LKind = nkQWord) then
     Exit(PQWord(@L)^ = PQWord(@R)^);
-  if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
-    Exit(PAnsiString(@L)^ = PAnsiString(@R)^);
-  if (GetTypeKind(K) = tkUString) or (GetTypeKind(K) = tkWString) then
-    Exit(PUnicodeString(@L)^ = PUnicodeString(@R)^);
+  if LKind = nkString then
+  begin
+    if GetTypeKind(K) = GetTypeKind(AnsiString) then
+      Exit(PAnsiString(@L)^ = PAnsiString(@R)^);
+    if (GetTypeKind(K) = GetTypeKind(UnicodeString)) or (GetTypeKind(K) = GetTypeKind(WideString)) then
+      Exit(PUnicodeString(@L)^ = PUnicodeString(@R)^);
+  end;
   {$POP}
   raise ENotSupportedError.Create('TSwissTable: custom hash/equality required for this key type');
 end;

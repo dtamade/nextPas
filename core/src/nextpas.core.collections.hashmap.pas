@@ -7,7 +7,8 @@ unit nextpas.core.collections.hashmap;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
@@ -483,15 +484,18 @@ end;
 function THashMap.KeyHash(const AKey: K): UInt32;
 var
   p: Pointer;
-  ti: PTypeInfo;
+  LHandle: TNPTypeHandle;
 begin
   if Assigned(FHash) then Exit(FHash(AKey));
 
-  ti := TypeInfo(K);
-  if (ti <> nil) and (ti^.Kind in [tkAString, tkLString]) then
-    Exit(HashOfAnsiString(AnsiString((@AKey)^)));
-  if (ti <> nil) and (ti^.Kind in [tkUString, tkWString]) then
-    Exit(HashOfUnicodeString(UnicodeString((@AKey)^)));
+  LHandle := TNPTypeHandle(TypeInfo(K));
+  if (LHandle <> nil) and (NPTypeKindOf(LHandle) = nkString) then
+  begin
+    if GetTypeKind(K) = GetTypeKind(AnsiString) then
+      Exit(HashOfAnsiString(AnsiString((@AKey)^)));
+    if (GetTypeKind(K) = GetTypeKind(UnicodeString)) or (GetTypeKind(K) = GetTypeKind(WideString)) then
+      Exit(HashOfUnicodeString(UnicodeString((@AKey)^)));
+  end;
 
   p := @AKey;
   case SizeOf(K) of
@@ -761,7 +765,7 @@ var
   h: UInt32;
   h64: UInt64;
   idx, start: SizeUInt;
-  ti: PTypeInfo;
+  LHandle: TNPTypeHandle;
   sTmp: string;
   storedLen: SizeUInt;
   storedPtr: PAnsiChar;
@@ -770,8 +774,10 @@ var
 begin
   Result := False;
   if FCapacity = 0 then Exit(False);
-  ti := TypeInfo(K);
-  if (ti = nil) or not (ti^.Kind in [tkAString, tkLString, tkSString]) then
+  LHandle := TNPTypeHandle(TypeInfo(K));
+  if (LHandle = nil) or (NPTypeKindOf(LHandle) <> nkString) then
+    Exit(False);
+  if (GetTypeKind(K) <> GetTypeKind(AnsiString)) and (GetTypeKind(K) <> GetTypeKind(ShortString)) then
     Exit(False);
   if Assigned(FHash) or Assigned(FEquals) then
   begin

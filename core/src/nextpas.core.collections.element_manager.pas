@@ -32,7 +32,7 @@ Copyright: (c) 2025 nextpas.core. All rights reserved.
 
 interface
 
-uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf,
+uses nextpas.core.reflect, nextpas.core.base, nextpas.core.math, nextpas.core.mem.utils, nextpas.core.mem.intf, nextpas.core.mem.default, nextpas.core.collections.element_manager.intf,
    nextpas.core.mem.allocator.base;
 
   type
@@ -46,7 +46,7 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
     FAllocator:       TMemAllocator;
     FElementSize:     SizeUInt;
     FIsManagedType:   Boolean;
-    FElementTypeInfo: PTypeInfo;
+    FElementTypeHandle: TNPTypeHandle;
   private
     procedure CopyElementsUncheckedInternal(aSrc, aDst: PElement; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
   public
@@ -56,7 +56,7 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
     function  GeTAllocator: TMemAllocator; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetElementSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function  GetIsManagedType: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function  GetElementTypeInfo: PTypeInfo; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function  GetElementTypeHandle: TNPTypeHandle; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     procedure InitializeElements(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     procedure InitializeElementsUnchecked(aPtr: Pointer; aElementCount: SizeUInt); {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
@@ -82,7 +82,7 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
 
     property  ElementSize:     SizeUInt   read GetElementSize;
     property  IsManagedType:   Boolean    read GetIsManagedType;
-    property  ElementTypeInfo: PTypeInfo  read GetElementTypeInfo;
+    property  ElementTypeHandle: TNPTypeHandle  read GetElementTypeHandle;
     property  Allocator:       TMemAllocator read GeTAllocator;
   end;
 
@@ -100,7 +100,7 @@ begin
   FAllocator       := aAllocator;
   FElementSize     := SizeOf(T);
   FIsManagedType   := system.IsManagedType(T);
-  FElementTypeInfo := system.TypeInfo(T);
+  FElementTypeHandle := TNPTypeHandle(TypeInfo(T));
 end;
 
 constructor TElementManager.Create;
@@ -129,7 +129,7 @@ begin
   if aElementCount = 1 then
     Initialize(T(aPtr^))
   else
-    InitializeArray(aPtr,FElementTypeInfo,aElementCount); // FillChar(aPtr^, aElementCount * FElementSize, 0);
+    ReflectInitializeArray(FElementTypeHandle, aPtr, aElementCount); // FillChar(aPtr^, aElementCount * FElementSize, 0);
 end;
 
 procedure TElementManager.FinalizeManagedElements(aPtr: Pointer; aElementCount: SizeUInt);
@@ -151,7 +151,7 @@ begin
   if aElementCount = 1 then
     Finalize(T(aPtr^))
   else
-    FinalizeArray(aPtr, FElementTypeInfo, aElementCount);
+    System.FinalizeArray(aPtr, Pointer(FElementTypeHandle), aElementCount);
 end;
 
 procedure TElementManager.CopyElementsNonOverlapUnchecked(aSrc, aDst: PElement; aElementCount: SizeUInt);
@@ -212,7 +212,7 @@ begin
     end;
   else
     if FIsManagedType then
-      CopyArray(aDst, aSrc, FElementTypeInfo, aElementCount)
+      System.CopyArray(aDst, aSrc, Pointer(FElementTypeHandle), aElementCount)
     else
       nextpas.core.mem.utils.CopyUnchecked(aSrc, aDst, aElementCount * FElementSize);
   end;
@@ -258,9 +258,9 @@ begin
   Result := FIsManagedType;
 end;
 
-function TElementManager.GetElementTypeInfo: PTypeInfo;
+function TElementManager.GetElementTypeHandle: TNPTypeHandle;
 begin
-  Result := FElementTypeInfo;
+  Result := FElementTypeHandle;
 end;
 
 function TElementManager.AllocElements(aElementCount: SizeUInt): PElement;

@@ -5,7 +5,7 @@ unit nextpas.core.collections.intf;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
   nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
@@ -528,7 +528,7 @@ type
   generic IGenericCollection<T> = interface(ICollection)
   ['{89825945-5184-4554-8618-465913072857}']
 
-    function GetElementTypeInfo: PTypeInfo;
+    function GetElementTypeHandle: TNPTypeHandle;
 
     {**
       * GetEnumerator
@@ -912,7 +912,7 @@ type
     property ElementSize:     SizeUInt                      read GetElementSize;
     property IsManagedType:   Boolean                       read GetIsManagedType;
     property ElementManager:  specialize IElementManager<T> read GetElementManager;
-    property ElementTypeInfo: PTypeInfo                     read GetElementTypeInfo;
+    property ElementTypeHandle: TNPTypeHandle               read GetElementTypeHandle;
 
   end;
 

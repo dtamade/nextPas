@@ -5,7 +5,8 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.intf,
@@ -367,7 +368,7 @@ type
 
     function GetElementSize: SizeUInt; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function GetIsManagedType: Boolean; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
-    function GetElementTypeInfo: PTypeInfo; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
+    function GetElementTypeHandle: TNPTypeHandle; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
     function GetElementManager: specialize IElementManager<T>; {$IFDEF NEXTPAS_CORE_INLINE} inline;{$ENDIF}
 
     function  IsCompatible(aDst: TCollection): Boolean; override;
@@ -423,7 +424,7 @@ type
     property ElementSize:     SizeUInt                      read GetElementSize;
     property IsManagedType:   Boolean                       read GetIsManagedType;
     property ElementManager:  specialize IElementManager<T> read GetElementManager;
-    property ElementTypeInfo: PTypeInfo                     read GetElementTypeInfo;
+    property ElementTypeHandle: TNPTypeHandle               read GetElementTypeHandle;
 
   end;
 
@@ -1960,140 +1961,164 @@ end;
 
 constructor TGenericCollection.Create(aAllocator: TMemAllocator; aData: Pointer);
 var
-  LTypeInfo: PTypeInfo;
+  LElemHandle: TNPTypeHandle;
 begin
   inherited Create(aAllocator, aData);
   FElementManager := specialize TElementManager<T>.Create(FAllocator);
   FElementSizeCache := FElementManager.GetElementSize;
 
-  LTypeInfo := GetElementTypeInfo();
+  LElemHandle := GetElementTypeHandle();
 
-    case LTypeInfo^.Kind of
-    tkBool:
+    case NPTypeKindOf(LElemHandle) of
+    nkEnumeration:
+    if GetTypeKind(T) = GetTypeKind(Boolean) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareBool);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsBool);
+    end
+    else
+    begin
+      FInternalComparer := TInternalCompareMethod(@DoCompareBin);
+      FInternalEquals   := TInternalEqualsMethod(@DoEqualsBin);
     end;
-    tkChar:
+    nkChar:
+    if GetTypeKind(T) = GetTypeKind(Char) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareChar);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsChar);
-    end;
-    tkWChar:
+    end
+    else if GetTypeKind(T) = GetTypeKind(WideChar) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareWChar);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsWChar);
-    end;
-    tkInteger:
+    end
+    else
     begin
-      if LTypeInfo = TypeInfo(Int8) then
+      FInternalComparer := TInternalCompareMethod(@DoCompareBin);
+      FInternalEquals   := TInternalEqualsMethod(@DoEqualsBin);
+    end;
+    nkInteger:
+    begin
+      if LElemHandle = TypeInfo(Int8) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI8);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI8);
       end
-      else if LTypeInfo = TypeInfo(Int16) then
+      else if LElemHandle = TypeInfo(Int16) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI16);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI16);
       end
-      else if LTypeInfo = TypeInfo(Int32) then
+      else if LElemHandle = TypeInfo(Int32) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI32);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI32);
       end
-      else if LTypeInfo = TypeInfo(UInt8) then
+      else if LElemHandle = TypeInfo(UInt8) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU8);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU8);
       end
-      else if LTypeInfo = TypeInfo(UInt16) then
+      else if LElemHandle = TypeInfo(UInt16) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU16);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU16);
       end
-      else if LTypeInfo = TypeInfo(UInt32) then
+      else if LElemHandle = TypeInfo(UInt32) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareU32);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsU32);
       end
     end;
-    tkInt64:
+    nkInt64:
     begin
-      if LTypeInfo = TypeInfo(Int64) then
+      if LElemHandle = TypeInfo(Int64) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareI64);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsI64);
       end
-      else if LTypeInfo = TypeInfo(Comp) then
+      else if LElemHandle = TypeInfo(Comp) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareComp);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsComp);
       end;
     end;
-    tkQWord:
+    nkQWord:
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareU64);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsU64);
     end;
-    tkFloat:
+    nkFloat:
     begin
-      if LTypeInfo = TypeInfo(Single) then
+      if LElemHandle = TypeInfo(Single) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareSingle);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsSingle);
       end
-      else if LTypeInfo = TypeInfo(Double) then
+      else if LElemHandle = TypeInfo(Double) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareDouble);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsDouble);
       end
-      else if LTypeInfo = TypeInfo(Extended) then
+      else if LElemHandle = TypeInfo(Extended) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareExtended);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsExtended);
       end
-      else if LTypeInfo = TypeInfo(Currency) then
+      else if LElemHandle = TypeInfo(Currency) then
       begin
         FInternalComparer := TInternalCompareMethod(@DoCompareCurrency);
         FInternalEquals   := TInternalEqualsMethod(@DoEqualsCurrency);
       end;
     end;
-    tkSString:
+    nkString:
+    if GetTypeKind(T) = GetTypeKind(ShortString) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareShortString);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsShortString);
-    end;
-    tkLString,tkAString:
+    end
+    else if GetTypeKind(T) = GetTypeKind(AnsiString) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareAnsiString);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsAnsiString);
-    end;
-    tkUString:
+    end
+    else if GetTypeKind(T) = GetTypeKind(UnicodeString) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareUnicodeString);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsUnicodeString);
-    end;
-    tkWString:
+    end
+    else if GetTypeKind(T) = GetTypeKind(WideString) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareWideString);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsWideString);
+    end
+    else
+    begin
+      FInternalComparer := TInternalCompareMethod(@DoCompareBin);
+      FInternalEquals   := TInternalEqualsMethod(@DoEqualsBin);
     end;
-    tkVariant:
+    nkVariant:
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareVariant);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsVariant);
     end;
-    tkMethod:
+    nkProcedure:
+    if SizeOf(T) = SizeOf(TMethod) then
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareMethod);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsMethod);
+    end
+    else
+    begin
+      FInternalComparer := TInternalCompareMethod(@DoCompareBin);
+      FInternalEquals   := TInternalEqualsMethod(@DoEqualsBin);
     end;
-    tkPointer:
+    nkPointer:
     begin
       FInternalComparer := TInternalCompareMethod(@DoComparePointer);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsPointer);
     end;
-    tkDynArray:
+    nkDynArray:
     begin
       FInternalComparer := TInternalCompareMethod(@DoCompareDynArray);
       FInternalEquals   := TInternalEqualsMethod(@DoEqualsDynArray);
@@ -2148,9 +2173,9 @@ begin
   Result := FElementManager.IsManagedType;
 end;
 
-function TGenericCollection.GetElementTypeInfo: PTypeInfo;
+function TGenericCollection.GetElementTypeHandle: TNPTypeHandle;
 begin
-  Result := FElementManager.ElementTypeInfo;
+  Result := FElementManager.ElementTypeHandle;
 end;
 
 function TGenericCollection.GetElementManager: specialize IElementManager<T>;

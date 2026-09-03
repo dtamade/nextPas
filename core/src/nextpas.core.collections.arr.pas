@@ -598,7 +598,6 @@ type
 implementation
 
 uses
-  nextpas.core.system.typinfo,
   nextpas.core.collections.arr.sort,
   nextpas.core.mem;
 

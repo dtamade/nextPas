@@ -12,7 +12,8 @@ unit nextpas.core.collections.skiplist;
 interface
 
 uses
-  nextpas.core.system.typinfo,
+  nextpas.core.reflect.base,
+  nextpas.core.reflect,
   nextpas.core.base,
   nextpas.core.mem.intf,
   nextpas.core.collections.base,
@@ -250,73 +251,83 @@ end;
 
 function TSkipList.DefaultCompare(const A, B: K): SizeInt;
 var
-  LTypeInfo: PTypeInfo;
+  LHandle: TNPTypeHandle;
 begin
-  LTypeInfo := TypeInfo(K);
-  if LTypeInfo = nil then
+  LHandle := TNPTypeHandle(TypeInfo(K));
+  if LHandle = nil then
     raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
 
-  case LTypeInfo^.Kind of
-    tkBool:
-      Result := compare_bool(PBoolean(@A)^, PBoolean(@B)^);
-    tkChar:
-      Result := compare_char(PChar(@A)^, PChar(@B)^);
-    tkWChar:
-      Result := compare_wchar(PWideChar(@A)^, PWideChar(@B)^);
-    tkInteger:
+  case NPTypeKindOf(LHandle) of
+    nkEnumeration:
+      if GetTypeKind(K) = GetTypeKind(Boolean) then
+        Result := compare_bool(PBoolean(@A)^, PBoolean(@B)^)
+      else
+        case SizeOf(K) of
+          1: Result := compare_u8(PUInt8(@A)^, PUInt8(@B)^);
+          2: Result := compare_u16(PUInt16(@A)^, PUInt16(@B)^);
+          4: Result := compare_u32(PUInt32(@A)^, PUInt32(@B)^);
+        else
+          Result := compare_bin(@A, @B, SizeOf(K));
+        end;
+    nkChar:
+      if GetTypeKind(K) = GetTypeKind(Char) then
+        Result := compare_char(PChar(@A)^, PChar(@B)^)
+      else if GetTypeKind(K) = GetTypeKind(WideChar) then
+        Result := compare_wchar(PWideChar(@A)^, PWideChar(@B)^)
+      else
+        raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
+    nkInteger:
       begin
-        if LTypeInfo = TypeInfo(Int8) then
+        if LHandle = TypeInfo(Int8) then
           Result := compare_i8(PInt8(@A)^, PInt8(@B)^)
-        else if LTypeInfo = TypeInfo(Int16) then
+        else if LHandle = TypeInfo(Int16) then
           Result := compare_i16(PInt16(@A)^, PInt16(@B)^)
-        else if LTypeInfo = TypeInfo(UInt8) then
+        else if LHandle = TypeInfo(UInt8) then
           Result := compare_u8(PUInt8(@A)^, PUInt8(@B)^)
-        else if LTypeInfo = TypeInfo(UInt16) then
+        else if LHandle = TypeInfo(UInt16) then
           Result := compare_u16(PUInt16(@A)^, PUInt16(@B)^)
-        else if LTypeInfo = TypeInfo(UInt32) then
+        else if LHandle = TypeInfo(UInt32) then
           Result := compare_u32(PUInt32(@A)^, PUInt32(@B)^)
         else
           Result := compare_i32(PInt32(@A)^, PInt32(@B)^);
       end;
-    tkEnumeration:
-      case SizeOf(K) of
-        1: Result := compare_u8(PUInt8(@A)^, PUInt8(@B)^);
-        2: Result := compare_u16(PUInt16(@A)^, PUInt16(@B)^);
-        4: Result := compare_u32(PUInt32(@A)^, PUInt32(@B)^);
-      else
-        Result := compare_bin(@A, @B, SizeOf(K));
-      end;
-    tkInt64:
-      if LTypeInfo = TypeInfo(Comp) then
+    nkInt64:
+      if LHandle = TypeInfo(Comp) then
         Result := compare_comp(PComp(@A)^, PComp(@B)^)
       else
         Result := compare_i64(PInt64(@A)^, PInt64(@B)^);
-    tkQWord:
+    nkQWord:
       Result := compare_u64(PUInt64(@A)^, PUInt64(@B)^);
-    tkFloat:
+    nkFloat:
       begin
-        if LTypeInfo = TypeInfo(Single) then
+        if LHandle = TypeInfo(Single) then
           Result := compare_single(PSingle(@A)^, PSingle(@B)^)
-        else if LTypeInfo = TypeInfo(Double) then
+        else if LHandle = TypeInfo(Double) then
           Result := compare_double(PDouble(@A)^, PDouble(@B)^)
-        else if LTypeInfo = TypeInfo(Currency) then
+        else if LHandle = TypeInfo(Currency) then
           Result := compare_currency(PCurrency(@A)^, PCurrency(@B)^)
         else
           Result := compare_extended(PExtended(@A)^, PExtended(@B)^);
       end;
-    tkSString:
-      Result := compare_shortstring(PShortString(@A)^, PShortString(@B)^);
-    tkAString, tkLString:
-      Result := compare_ansistring(PAnsiString(@A)^, PAnsiString(@B)^);
-    tkUString:
-      Result := compare_unicodestring(PUnicodeString(@A)^, PUnicodeString(@B)^);
-    tkWString:
-      Result := compare_widestring(PWideString(@A)^, PWideString(@B)^);
-    tkPointer:
+    nkString:
+      if GetTypeKind(K) = GetTypeKind(ShortString) then
+        Result := compare_shortstring(PShortString(@A)^, PShortString(@B)^)
+      else if GetTypeKind(K) = GetTypeKind(AnsiString) then
+        Result := compare_ansistring(PAnsiString(@A)^, PAnsiString(@B)^)
+      else if GetTypeKind(K) = GetTypeKind(UnicodeString) then
+        Result := compare_unicodestring(PUnicodeString(@A)^, PUnicodeString(@B)^)
+      else if GetTypeKind(K) = GetTypeKind(WideString) then
+        Result := compare_widestring(PWideString(@A)^, PWideString(@B)^)
+      else
+        raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
+    nkPointer:
       Result := compare_pointer(PPointer(@A)^, PPointer(@B)^);
-    tkMethod:
-      Result := compare_method(PMethod(@A)^, PMethod(@B)^);
-    tkVariant:
+    nkProcedure:
+      if SizeOf(K) = SizeOf(TMethod) then
+        Result := compare_method(PMethod(@A)^, PMethod(@B)^)
+      else
+        raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
+    nkVariant:
       Result := compare_variant(PVariant(@A)^, PVariant(@B)^);
   else
     raise EInvalidOperation.Create('TSkipList.DefaultCompare: custom comparer required for this key type');
