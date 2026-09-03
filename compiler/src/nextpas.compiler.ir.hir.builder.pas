@@ -83,6 +83,7 @@ type
 
     FGlobalNames: THirNameVec;
     FGlobalTypes: THirTypeIdVec;
+    FGlobalIndex: specialize TDictionary<string, SizeInt>;
     FGlobalRefCache: THirNameVec;
     FGlobalRefValues: THirValueIdVec;
     FInStartFunc: Boolean;
@@ -511,6 +512,7 @@ begin
   end;
   FAllocaIndex := specialize TDictionary<string, LongInt>.Create;
   FBlockIndex := specialize TDictionary<string, THIRBlockId>.Create;
+  FGlobalIndex := specialize TDictionary<string, SizeInt>.Create;
   FLegacyIntType := 0;
   FBoolType := 0;
   FStringType := 0;
@@ -536,6 +538,7 @@ begin
   FSavedAllocas.Free;
   FAllocas.Free;
   FAllocaIndex.Free;
+  FGlobalIndex.Free;
   FBlockIndex.Free;
   FBlockIds.Free;
   FBlockNames.Free;
@@ -655,14 +658,16 @@ end;
 
 procedure THIRBuilder.RegisterGlobal(const AName: string; AType: THIRTypeId);
 var
-  I: LongInt;
+  LKey: string;
 begin
-  if FGlobalNames.Count > 0 then
-    for I := 0 to LongInt(FGlobalNames.Count) - 1 do
-      if SameText(FGlobalNames[I], AName) then
-        Exit;
+  // O(1) hash dedup — reuse FGlobalIndex (LowerCase key), no linear scan
+  LKey := LowerCase(AName);
+  if (FGlobalIndex <> nil) and FGlobalIndex.ContainsKey(LKey) then
+    Exit;
   FGlobalNames.Push(AName);
   FGlobalTypes.Push(AType);
+  if FGlobalIndex <> nil then
+    FGlobalIndex.AddOrSetValue(LKey, SizeInt(FGlobalNames.Count) - 1);
 end;
 
 function THIRBuilder.FindBlock(const AName: string): THIRBlockId;
