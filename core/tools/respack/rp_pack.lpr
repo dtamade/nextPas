@@ -220,6 +220,7 @@ var
   PathPB: PByte;
   PathLen: SizeUInt;
   P: string;
+  S: TByteSpan;
 begin
   PackedBytes := ReadFile(O.PackFile);
   RP := ResPackOpen(@PackedBytes[0], SizeUInt(Length(PackedBytes)));
@@ -230,7 +231,9 @@ begin
       for I := 0 to RP.Count - 1 do
       begin
         E := RP.EntryAt(I);
-        PathLen := RP.StoredPathRangeOf(E, PathPB);
+        S := RP.StoredPathSpanOf(E);
+        PathPB := S.Data;
+        PathLen := S.Len;
         PathP := PChar(PathPB);
         SetLength(P, SizeInt(PathLen));
         if PathLen > 0 then

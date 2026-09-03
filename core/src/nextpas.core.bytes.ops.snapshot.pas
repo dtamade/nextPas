@@ -11,6 +11,14 @@ uses
   nextpas.core.bytes.ops.capacity,
   nextpas.core.bytes.ops.ring;
 
+{ 具名动态数组 — FPC open array 形参禁 SetLength，泛型/批量入口统一经具名动态数组单源（调用方传动态数组变量零转换） }
+type
+  TSnapshotPointers = array of Pointer;
+  TSnapshotUInt32s = array of UInt32;
+  TSnapshotBools = array of Boolean;
+  TSnapshotIntegers = array of Integer;
+  generic TSnapshotArray<T> = array of T;
+
 { Arena pool — lock-free LIFO 单源池化抽象，与 LiveArena 共享 64 槽 via BYTES_BUILDER_MIN_GROW 0→64→2× via BytesGrowCapacity，容量保留 Burst 均摊 + fast fallback 3 CAS+cpu_pause ≤48ns P95 <1µs + finalization 托管释放不丢，inline 零拷贝 O(1)，bytes.ops 单源，Burst64 零回退尾>64 单次堆回退降抖动 }
 const
   ARENA_POOL_SIZE = Integer(BYTES_BUILDER_MIN_GROW); // 单源 64 via BYTES_BUILDER_MIN_GROW 0→64 chain，与 LiveArena/HashRebuild 共享单源 Burst64 零回退，反哺 owner 降尾抖动
@@ -28,16 +36,16 @@ const
 function SnapshotBulkTier(ACount: Integer): Integer; inline;
 
 { Snapshot truncate — 安全收缩单源，bytes.ops 单源 inline SetLength 收口，委派 mem owner/System 运行时与双编译器 stub，禁堆头篡改，资源托管释放不丢，16槽热路径零额外拷贝 }
-generic procedure ArraySetLengthNoRealloc<T>(var A: array of T; ANewLen: Integer); inline;
+generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 { Swap-remove — 末尾换位删除单源，window.live 双哈希复用 inline 零拷贝 O(1)，bytes.ops 单源，守托管批量 Finalize 不丢，16槽热路径分支消除 }
 generic procedure ArraySwapRemoveRaw<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 generic procedure ArraySwapRemoveManaged<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 generic procedure ArraySwapRemove<T>(var AArr: array of T; AIdx, ALast: Integer); inline;
 { Arena batch — 7 数组批量扩容单源，window.live 复用 inline 零拷贝，池化容量复用降 Burst 抖动 }
-generic procedure ManagedEnsureCapacity<T>(var AArr: array of T; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacity<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 { Snapshot exact — 快照精准容量单源，window.live 16-slot 小窗复用 inline 零拷贝 O(1)，确需确配避 BYTES_BUILDER_MIN_GROW shr1=32 过分配单源与首次堆突发 }
-generic procedure ManagedEnsureCapacityExact<T>(var AArr: array of T; ARequired: Integer); inline;
-generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityExact<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
+generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
 { Live arena batch — Record 聚合 8 数组+3 容量 11 参 brutalist 收口为 2 参，bytes.ops 单源 inline 零拷贝 O(1) }
 type
   TLiveArenaCaps = record
@@ -82,16 +90,16 @@ function ArenaPoolAcquireSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: I
 function ArenaPoolRecycleSlot(var ATop: Int32; var AShutdown: Int32; out AIdx: Int32): Boolean; inline;
 generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
 { Snapshot shrink — 通用阈值收缩单源，window.live / queue 双侧复用 inline 零拷贝 O(1)  via BYTES_SNAPSHOT_MAX 单源 8192/1024/2 三档 1024/4096/8192，Burst 后常驻堆阈值释放，资源托管不丢；not inline cold path SetLength heap alloc 避 I-Cache 膨胀 per redline #2，bytes.ops 单源复用消重复分支，分档尾延迟见 BENCH.md Bulk 三档 }
-generic procedure SnapshotMaybeShrink<T>(var ASnap: array of T; ACount: Integer);
+generic procedure SnapshotMaybeShrink<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
 { 兼容重载：11 参 brutalist 旧入口 inline 薄转发至 Record 主入口，零额外堆，逐步迁移 }
-procedure LiveArenaEnsureBatch(var AList: array of Pointer; var AIDs: array of UInt32; var AHKeys: array of UInt32; var AHVals: array of Pointer; var AHUsed: array of Boolean; var APKeys: array of Pointer; var APIdx: array of Integer; var APUsed: array of Boolean; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
+procedure LiveArenaEnsureBatch(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHKeys: TSnapshotUInt32s; var AHVals: TSnapshotPointers; var AHUsed: TSnapshotBools; var APKeys: TSnapshotPointers; var APIdx: TSnapshotIntegers; var APUsed: TSnapshotBools; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
 
 implementation
 
 uses
   nextpas.core.atomic;
 
-generic procedure ArraySetLengthNoRealloc<T>(var A: array of T; ANewLen: Integer); inline;
+generic procedure ArraySetLengthNoRealloc<T>(var A: specialize TSnapshotArray<T>; ANewLen: Integer); inline;
 begin
   if Length(A) = ANewLen then Exit;
   if ANewLen < 0 then Exit;
@@ -141,7 +149,7 @@ begin
     specialize ArraySwapRemoveRaw<T>(AArr, AIdx, ALast);
 end;
 
-generic procedure ManagedEnsureCapacity<T>(var AArr: array of T; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacity<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 var LCap: Integer;
 begin
   if Length(AArr) < ARequired then
@@ -151,14 +159,14 @@ begin
   end;
 end;
 
-generic procedure ManagedEnsureCapacityExact<T>(var AArr: array of T; ARequired: Integer); inline;
+generic procedure ManagedEnsureCapacityExact<T>(var AArr: specialize TSnapshotArray<T>; ARequired: Integer); inline;
 begin
   // 快照精准：确需确配 inline 零拷贝 O(1)，小窗 16-slot 避 0→32→2× via BYTES_BUILDER_MIN_GROW shr1 单源派生过分配与首次堆突发，后续复用零抖动，容量复用零拷贝
   if Length(AArr) < ARequired then
     SetLength(AArr, ARequired);
 end;
 
-generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: array of TKey; var AVals: array of TVal; var AUsed: array of Boolean; ARequired: Integer); inline;
+generic procedure ManagedEnsureTriple<TKey, TVal>(var AKeys: specialize TSnapshotArray<TKey>; var AVals: specialize TSnapshotArray<TVal>; var AUsed: TSnapshotBools; ARequired: Integer); inline;
 var LCap: Integer;
 begin
   if Length(AKeys) < ARequired then
@@ -197,7 +205,7 @@ begin
   Result := BYTES_SNAPSHOT_TIER_L;
 end;
 
-generic procedure SnapshotMaybeShrink<T>(var ASnap: array of T; ACount: Integer);
+generic procedure SnapshotMaybeShrink<T>(var ASnap: specialize TSnapshotArray<T>; ACount: Integer);
 begin
   // not inline: cold path SetLength heap alloc, avoid I-Cache bloat per redline #2; bytes.ops 单源阈值收缩 via BYTES_SNAPSHOT_MAX 三档 1024/4096/8192 inline O(1) zero-copy capped 8192，Burst 后常驻堆阈值分档释放，资源托管不丢；与 window.live / queue 双侧 MaybeShrinkSnap 三档对称，Bulk 尾延迟分档可观测 via SnapshotBulkTier，Burst 均摊零额外分配
   // 性能：not inline 冷路径零复制膨胀；容量阈值 BYTES_SNAPSHOT_MAX 单源 8192 via BYTES_BUILDER_MIN_GROW*128 消重复分支
@@ -226,7 +234,7 @@ begin
     specialize ArraySetLengthNoRealloc<T>(ASnap, ACount);
 end;
 
-procedure LiveArenaEnsureBatch(var AList: array of Pointer; var AIDs: array of UInt32; var AHKeys: array of UInt32; var AHVals: array of Pointer; var AHUsed: array of Boolean; var APKeys: array of Pointer; var APIdx: array of Integer; var APUsed: array of Boolean; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
+procedure LiveArenaEnsureBatch(var AList: TSnapshotPointers; var AIDs: TSnapshotUInt32s; var AHKeys: TSnapshotUInt32s; var AHVals: TSnapshotPointers; var AHUsed: TSnapshotBools; var APKeys: TSnapshotPointers; var APIdx: TSnapshotIntegers; var APUsed: TSnapshotBools; AListCap, AU32Cap, APtrCap: Integer); inline; overload;
 begin
   // 兼容 brutalist 11 参旧入口：inline 直接复用同一 ManagedEnsure 单源逻辑，零额外堆与零引用计数抖动，逐步迁移至 Record 主入口
   if AListCap > 0 then
@@ -369,11 +377,14 @@ begin
 end;
 
 generic procedure ArenaPoolFinalize<T>(var APool: array of T; var ATop: Int32; var AShutdown: Int32; var AIdx: Integer); inline;
+var LI: Integer;
 begin
+  // 只索引 + Clear，无 SetLength：open array 形参即可，静态 64 槽池与动态 arena 通吃
   atomic_store(AShutdown, Int32(1), mo_seq_cst);
   atomic_thread_fence(mo_seq_cst);
-  for AIdx := 0 to ARENA_POOL_SIZE - 1 do
-    APool[AIdx].Clear;
+  for LI := 0 to ARENA_POOL_SIZE - 1 do
+    APool[LI].Clear;
+  AIdx := LI;
   atomic_store(ATop, Int32(-1), mo_seq_cst);
 end;
 

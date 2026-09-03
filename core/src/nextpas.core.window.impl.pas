@@ -69,7 +69,6 @@ implementation
 uses
   nextpas.core.atomic,
   nextpas.core.window.constraints.base,
-  nextpas.core.bytes.ops,
   nextpas.core.bytes.ops.snapshot;
 
 const

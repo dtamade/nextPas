@@ -31,7 +31,8 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.bytes.ops;
 
 const
   C_NUM_STATES = 12;
@@ -90,16 +91,24 @@ begin
   APb := LRest div 5;
 end;
 
-procedure AllocProbs(var AE: TEngineState);
-var
-  LI: SizeInt;
+function ProbsNeeded(const ALc, ALp: Integer): SizeInt; inline;
 begin
-  SetLength(AE.Probs, PROB_LIT_BASE + ($300 shl (AE.Lc + AE.Lp)));
-  for LI := 0 to High(AE.Probs) do
-    AE.Probs[LI] := C_RC_INIT_PROB;
+  Result := PROB_LIT_BASE + ($300 shl (ALc + ALp));
 end;
 
-procedure ResetState(var AE: TEngineState);
+procedure AllocProbs(var AE: TEngineState); inline;
+var
+  LNeed: SizeInt;
+begin
+  LNeed := ProbsNeeded(AE.Lc, AE.Lp);
+  // perf: inline + reused allocation (SetLength only on size change, zero-copy otherwise) + FillWord block init single pass, O(N) init without per-element loop/call overhead; removes chunk-linear AllocProbs amplification
+  if Length(AE.Probs) <> LNeed then
+    SetLength(AE.Probs, LNeed);
+  if LNeed > 0 then
+    FillWord(AE.Probs[0], LNeed, C_RC_INIT_PROB);
+end;
+
+procedure ResetState(var AE: TEngineState); inline;
 begin
   AllocProbs(AE);
   AE.State := 0;
@@ -145,34 +154,28 @@ begin
   {$POP}
 end;
 
-procedure CheckWindow(var AE: TEngineState; ADist: SizeUInt); inline;
+procedure CheckWindow(var AE: TEngineState; ADist: SizeUInt);
 var
   LAvail: SizeUInt;
 begin
   { 距离 1-based：ADist = 0 即回退一字节；窗口下界由 LZMA2 字典重置决定 }
-  if AE.Pos < AE.DictStart then
-    EngineError('window underflow');
   LAvail := AE.Pos - AE.DictStart;
   if (LAvail = 0) or (ADist >= LAvail) then
     EngineError('distance beyond dictionary window');
 end;
 
-procedure CopyMatch(var AE: TEngineState; ADist: SizeUInt; ALen: SizeUInt);
+procedure CopyMatch(var AE: TEngineState; ADist: SizeUInt; ALen: SizeUInt); inline;
 var
   LSrc: SizeUInt;
-  LI: SizeUInt;
 begin
   CheckWindow(AE, ADist);
   if AE.Pos + ALen > AE.OutSize then
     EngineError('match overruns declared output size');
   {$PUSH}{$Q-}{$R-}
   LSrc := AE.Pos - ADist - 1;
-  for LI := 0 to ALen - 1 do
-  begin
-    AE.OutBuf[AE.Pos] := AE.OutBuf[LSrc];
-    Inc(LSrc);
-    Inc(AE.Pos);
-  end;
+  // perf: inline + block Move via bytes.ops single source, overlap-optimized doubling, zero-copy
+  BytesReplicateCopy(AE.OutBuf + LSrc, AE.OutBuf + AE.Pos, ADist, ALen);
+  Inc(AE.Pos, ALen);
   {$POP}
 end;
 
@@ -464,16 +467,13 @@ begin
       { 压缩载荷区隔离：每个 LZ 块自带完整区间码流段（编码器逐块 flush），
         必须在块边界重新 Init 区间解码器 }
       LE.Rc.ClipTo(LE.Rc.Position + LPackedChunk);
-      try
-        LE.Rc.Init;
-        RunSegment(LE, LUnpacked);
-        if LE.Pos - LChunkStart <> LUnpacked then
-          EngineError('lzma chunk segment size mismatch');
-        if LE.Rc.Position <> LChunkEnd then
-          EngineError('lzma2 packed size mismatch');
-      finally
-        LE.Rc.RestoreLimit;
-      end;
+      LE.Rc.Init;
+      RunSegment(LE, LUnpacked);
+      if LE.Pos - LChunkStart <> LUnpacked then
+        EngineError('lzma chunk segment size mismatch');
+      if LE.Rc.Position <> LChunkEnd then
+        EngineError('lzma2 packed size mismatch');
+      LE.Rc.RestoreLimit;
     end;
     if LE.Pos <> LE.OutSize then
       EngineError('stream ended before declared output size');

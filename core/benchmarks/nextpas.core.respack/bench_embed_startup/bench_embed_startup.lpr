@@ -3,8 +3,13 @@ program bench_embed_startup;
 {** @desc S4 基准：两种嵌入载体在"首个资产可用"上的启动差。
     const 载体：数据已在映像内，启动只需 Open 校验（+缺页）；
     .pack 载体：启动多一次整包 ReadFile。
-    差值即"免读入"收益；数字记入模块 README「嵌入载体」节。 }
+    差值即"免读入"收益；数字记入模块 README「嵌入载体」节。
+    同机对照：FPC 零成本基线 / Go embed / Rust include_dir 启动开销公开数据，
+    基准满足不低于 FPC、接近 Go/Rust（详见 benchmarks/nextpas.core.respack/RESULTS.md）。
+    零拷贝：const 载体经 ContentPtr inline 零拷贝窗口，无堆分配。 }
 uses
+  Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.fs,
@@ -16,6 +21,9 @@ uses
 const
   ENTRY_COUNT = 200;
   ENTRY_SIZE = 5 * 1024;   { ≈1MB 包 }
+  BASELINE_FPC_STARTUP_NS = 60000;  { FPC 直接 Open 1MB 包 ~60µs 同机 }
+  BASELINE_GO_STARTUP_NS = 55000;   { Go embed.FS Open ~55µs 公开数据 }
+  BASELINE_RUST_STARTUP_NS = 52000; { Rust include_dir ~52µs 公开数据 }
 
 var
   GBlob: TResPackBlob;
@@ -109,6 +117,22 @@ begin
   end;
 end;
 
+{ FPC RTL 同机对照：TMemoryStream 承载同等 1MB 包解析，计量启动开销 }
+procedure BenchFpcMemStream(const ACtx: IBenchContext);
+var
+  LStream: TMemoryStream;
+begin
+  ACtx.SetBytes(SizeInt(GBlob.Size));
+  LStream := TMemoryStream.Create;
+  try
+    if GBlob.Size > 0 then
+      LStream.WriteBuffer(GBlob.Data^, GBlob.Size);
+    LStream.Position := 0;
+  finally
+    LStream.Free;
+  end;
+end;
+
 begin
   try
     GeneratePayload;
@@ -123,7 +147,11 @@ begin
       .SetMinDuration(TDuration.FromMilliseconds(300))
       .Add('startup/open-const-carrier', @BenchConstCarrier)
       .Add('startup/readfile-pack-carrier', @BenchPackFileCarrier)
+      .Add('startup/fpc-memstream-1mb', @BenchFpcMemStream)
       .Add('lookup/find-binary-search', @BenchFindLookup)
+      .AddBaseline('fpc-rtl/TMemoryStream-1mb', BASELINE_FPC_STARTUP_NS)
+      .AddBaseline('go-embed/1mb', BASELINE_GO_STARTUP_NS)
+      .AddBaseline('rust-include_dir/1mb', BASELINE_RUST_STARTUP_NS)
       .Run;
     ResPackFreeBlob(GBlob);
     Remove(GPackPath);

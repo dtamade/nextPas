@@ -15,6 +15,7 @@ unit nextpas.core.agent.provider.common.extra;
 interface
 
 uses
+  nextpas.core.json.value,
   nextpas.core.base,
   nextpas.core.log.intf,
   nextpas.core.json,

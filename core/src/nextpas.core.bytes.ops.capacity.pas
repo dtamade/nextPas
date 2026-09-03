@@ -1,7 +1,10 @@
 unit nextpas.core.bytes.ops.capacity;
 
 {$I nextpas.core.settings.inc}
-{ R9-02 hermetic：settings.inc 已保障 inline 语义（-O2→INLINE ON），FPC 3.3.1 下无 BEGIN 误报 }
+{ bytes.ops.capacity — capacity growth single source (INV-5/INV-2)
+  Single source geometric via BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1);
+  Webview variant 0→4→2× via BytesGrowCapacityWithMin reuse same loop.
+  No Move/FillChar — pure arithmetic, not inline per red-line 2 (loop). }
 
 interface
 
@@ -9,6 +12,13 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.base;
 
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt; overload;
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+{ lane-window: single-source single-arg grow/capped/helper (union merge) }
 procedure BytesReserve(var ADest: TBytes; const AAdditional: SizeUInt); inline;
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt); inline;
 function BytesGrowCapacity(const ACurrent: Integer): Integer; inline; overload;
@@ -19,17 +29,70 @@ generic function BytesGrowHelper<T>(ACount, AMax: Integer): Integer; inline;
 
 implementation
 
-{ BytesEnsureCapacity/Reserve: safe SetLength-based growth (no header poke).
-  Old impl used PSizeInt(Pointer(A))[-1] header hack + GCapMap/MemSize slab probe
-  for amortized slack; that depends on FPC heap layout and races under multithread.
-  New: capacity == Length (single source via RTL), no global state, no unsafe
-  pointer arithmetic, fully portable to nextPas compiler and thread-safe per var.
-  perf: inline + zero-copy Move in BytesAppend* callers (single Move per append);
-  no extra alloc in failure path. For looped/high-frequency appends use
-  IBytesBuilder (preallocated Grow) or BytesConcatMany/SpanConcatMany to avoid
-  O(n²) SetLength churn. Stability: SetLength is exception-safe; no manual header
-  writes that could corrupt heap on exception. }
+function BytesGrowCapacityWithMin(const ACurrent, ARequired, AMinGrow: SizeUInt): SizeUInt;
+var
+  LNewCap: SizeUInt;
+begin
+  // not inline: loop — parameterized single source for BytesGrowCapacity & Webview reuse
+  if ARequired <= ACurrent then
+    Exit(ACurrent);
+  LNewCap := ACurrent;
+  if LNewCap < AMinGrow then
+    LNewCap := AMinGrow;
+  if LNewCap = 0 then
+    LNewCap := 1;
+  while LNewCap < ARequired do
+  begin
+    if LNewCap <= High(SizeUInt) div 2 then
+      LNewCap := LNewCap * 2
+    else
+    begin
+      LNewCap := ARequired;
+      Break;
+    end;
+  end;
+  Result := LNewCap;
+end;
 
+function BytesGrowCapacity(const ACurrent, ARequired: SizeUInt): SizeUInt;
+begin
+  Result := BytesGrowCapacityWithMin(ACurrent, ARequired, BYTES_BUILDER_MIN_GROW);
+end;
+
+function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Integer): Integer;
+var
+  LCur, LReq, LCap, LMin: SizeUInt;
+begin
+  if ARequired <= ACurrent then
+    Exit(ACurrent);
+  if ACurrent < 0 then LCur := 0 else LCur := SizeUInt(ACurrent);
+  if ARequired < 0 then LReq := 0 else LReq := SizeUInt(ARequired);
+  if AMinGrow < 0 then LMin := 0 else LMin := SizeUInt(AMinGrow);
+  LCap := BytesGrowCapacityWithMin(LCur, LReq, LMin);
+  if LCap > SizeUInt(High(Integer)) then
+    LCap := SizeUInt(High(Integer));
+  Result := Integer(LCap);
+end;
+
+function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
+begin
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ARequired, Integer(BYTES_BUILDER_MIN_GROW));
+end;
+
+function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
+begin
+  Result := BytesGrowCapacity(AOld, ANeed);
+end;
+
+function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+begin
+  // perf: inline thin-forward, zero extra call, reuse capacity single source geometric (0→4→2×)
+  if ACurrent = 0 then
+    Exit(4);
+  Result := BytesGrowCapacityIntWithMin(ACurrent, ACurrent + 1, 0);
+end;
+
+{ lane-window single-arg grow/capped/helper bodies (union merge; overloads of two-arg single source) }
 procedure BytesEnsureCapacity(var ADest: TBytes; const ARequired: SizeUInt);
 var
   LOld, LNewCap: SizeUInt;
@@ -118,5 +181,6 @@ begin
   // generic GrowHelper single source capped grow via BytesGrowCapacityCapped inline zero-copy O(1), T specialization keeps per-call inline no extra dispatch, bytes.ops single source 0→32→2×
   Result := BytesGrowCapacityCapped(ACount, AMax);
 end;
+
 
 end.

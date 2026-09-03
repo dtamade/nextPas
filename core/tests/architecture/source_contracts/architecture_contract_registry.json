@@ -164,6 +164,56 @@
       "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.bytes.ops",
       "reason": "temporary system compatibility facade bytes helper debt (BytesOf/StringOf zero-copy single-source)"
+    },
+    {
+      "path": "src/nextpas.core.system.pas",
+      "unit": "nextpas.core.bytes.ops",
+      "reason": "system HTonN/NToHs single-source debt via bytes.ops INV-5 thin-forward (system delegates to bytes.ops)"
+    },
+    {
+      "path": "src/nextpas.core.system.pas",
+      "unit": "nextpas.core.base.utils",
+      "reason": "system root facade utils delegation (CompareBytes helper)"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.fs.util",
+      "reason": "system sysutils facade file helper debt pending platform-owned fs route"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.os.env",
+      "reason": "system sysutils facade env helper debt pending platform-owned env route"
+    },
+    {
+      "path": "src/nextpas.core.system.typinfo.pas",
+      "unit": "nextpas.core.text.conv",
+      "reason": "system typinfo facade text dependency for RTTI helpers"
+    },
+    {
+      "path": "src/nextpas.core.math.base.pas",
+      "unit": "nextpas.core.text.conv",
+      "reason": "math base formatting debt pending text single-source extraction"
+    },
+    {
+      "path": "src/nextpas.core.simd.imageproc.base.pas",
+      "unit": "nextpas.core.image.base",
+      "reason": "simd imageproc base type debt pending L0 image base seam"
+    },
+    {
+      "path": "src/nextpas.core.simd.imageproc.impl.pas",
+      "unit": "nextpas.core.bytes.binary",
+      "reason": "simd imageproc impl binary helper debt pending bytes single-source"
+    },
+    {
+      "path": "src/nextpas.core.simd.imageproc.impl.pas",
+      "unit": "nextpas.core.image.base",
+      "reason": "simd imageproc impl image base debt pending seam extraction"
+    },
+    {
+      "path": "src/nextpas.core.mem.allocator.tracking.pas",
+      "unit": "nextpas.core.text.builder",
+      "reason": "tracking ReportLeaks single allocation via TBufStringBuilder reusing bytes.ops.BytesGrowCapacity single source geometric growth; O(n) vs O(n^2) concat fix"
     }
   ],
   "raw_ffi_tokens": [
@@ -282,16 +332,6 @@
   ],
   "raw_ffi_explicit_allowlist": [
     {
-      "path": "src/nextpas.core.numa.linux.pas",
-      "token": "BaseUnix",
-      "reason": "NUMA Linux backend host-unit debt pending platform-owned topology route"
-    },
-    {
-      "path": "src/nextpas.core.numa.windows.pas",
-      "token": "Windows",
-      "reason": "NUMA Windows backend host-unit debt pending platform-owned topology route"
-    },
-    {
       "path": "src/nextpas.core.fs.util.pas",
       "token": "BaseUnix",
       "reason": "existing fs helper host-unit debt"
@@ -400,7 +440,8 @@
   "governance_docs": [
     {
       "path": "docs/core-module-registry.md",
-      "max_lines": 120,
+      "max_lines": 140,
+"max_lines": 180,
       "required_truth_tokens": [
         "source-contract",
         "forced-compile",

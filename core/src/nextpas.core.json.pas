@@ -22,18 +22,8 @@ uses
 type
   TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
   TJsonError = nextpas.core.json.types.TJsonError;
-  TJsonValue = nextpas.core.json.value.TJsonValue;
-
-  { Parsed JSON document with automatic lifetime management.
-    All values remain valid as long as the document is alive. }
-  IJsonDocument = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
-    function Root: TJsonValue;
-    function HasError: Boolean;
-    function Error: TJsonError;
-    function Stringify: string;
-    function StringifyPretty(const AIndent: Int32 = 2): string;
-  end;
+  TJsonValue = nextpas.core.json.types.TJsonValue;
+  IJsonDocument = nextpas.core.json.types.IJsonDocument;
 
 { Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
@@ -46,6 +36,14 @@ function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;
 { Parse with custom allocator (arena/pool for bulk allocation). }
 function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument; overload;
 function JsonParseWith(const AInput: TStringView; const AAllocator: TMemAllocator): IJsonDocument; overload;
+
+{ Direct primitive documents — single traversal zero-copy via Add*Node single source, inline allocator, no intermediate string/parse }
+function JsonCreateNullDocument: IJsonDocument; inline;
+function JsonCreateBoolDocument(AValue: Boolean): IJsonDocument; inline;
+function JsonCreateIntDocument(AValue: Int64): IJsonDocument; inline;
+function JsonCreateRealDocument(AValue: Double): IJsonDocument; inline;
+function JsonCreateStringDocument(const AValue: string): IJsonDocument; inline;
+function JsonCreateStringViewDocument(const AView: TStringView): IJsonDocument; inline;
 
 { Serialize a TJsonValue subtree to compact JSON string. }
 function JsonStringify(const AValue: TJsonValue): string;
@@ -68,7 +66,6 @@ uses
   nextpas.core.mem.default,
   nextpas.core.errors,
   nextpas.core.format.limits,
-  nextpas.core.io.util,
   nextpas.core.text.escape;
 
 type
@@ -79,6 +76,7 @@ type
   public
     constructor Create(const AInput: string; const AAllocator: TMemAllocator);
     constructor CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
+    constructor CreateFromDocument(var ADoc: TJsonDocument);
     destructor Destroy; override;
     function Root: TJsonValue;
     function HasError: Boolean;
@@ -99,14 +97,21 @@ end;
 constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: TMemAllocator);
 begin
   inherited Create;
-  // perf/lifecycle: TStringView is non-owning; zero-copy (FInputCopy := view) would
-  // avoid SetString copy but requires caller to keep view.Data alive for document
-  // lifetime. To preserve ownership and keep DOM valid after caller buffer is freed,
-  // we copy into FInputCopy. If caller can guarantee lifetime, replace with direct
-  // view assignment and skip this allocation.
-  SetString(FInputCopy, AInput.Data, AInput.Len);
+  // perf: inline + zero-copy TStringView view (no SetString/alloc/copy); bytes.ops single source preserved (view only, no Move)
+  // lifecycle: view is non-owning — caller must keep AInput.Data alive for document lifetime (clean strings borrow input)
+  FInputCopy := '';
   FDoc.Init(AAllocator);
-  FDoc.Parse(TStringView.FromStr(FInputCopy));
+  FDoc.Parse(AInput);
+end;
+
+constructor TJsonDocumentImpl.CreateFromDocument(var ADoc: TJsonDocument);
+begin
+  inherited Create;
+  // perf: inline move ownership — zero-copy transfer, no alloc/parse, single source nodes
+  // stability: steal ADoc (Done-safe via ReleaseOwnership), release old FDoc.Done not needed (fresh)
+  FDoc := ADoc;
+  FInputCopy := '';
+  ADoc.ReleaseOwnership;
 end;
 
 destructor TJsonDocumentImpl.Destroy;
@@ -347,13 +352,42 @@ end;
 
 function JsonParse(const AReader: IReader): IJsonDocument;
 var
-  LBytes: TBytes;
+  LStr: string;
+  LLen, LCap, LRead: SizeUInt;
+  LBuf: array[0..32767] of Byte;
 begin
   if AReader = nil then
     raise EArgumentError.Create('JsonParse: reader must not be nil');
-  LBytes := IoReadAll(AReader);
-  RequireFormatBulkByteCount(SizeUInt(Length(LBytes)), 'JsonParse');
-  Result := JsonParse(BytesToString(LBytes));
+  // perf: single string alloc via bytes.ops BytesGrowCapacity (single source, exponential amortized O(1))
+  // zero-copy: Move(PAnsiChar(LStr)[LLen]) + TStringView.FromStr share (Create does FInputCopy:=AInput refcount share, no BytesToString copy)
+  // stability: SetLength exception-safe (no manual FreeMem), final SetLength(LLen) trims capacity exactly; avoids TBytes+LStr double peak 2x
+  // not inline per red-line 2: loop+I-Cache, capacity math delegates to bytes.ops single source
+  LStr := '';
+  LLen := 0;
+  LCap := 0;
+  repeat
+    LRead := AReader.Read(LBuf[0], SizeOf(LBuf));
+    if LRead = 0 then
+      Break;
+    if LLen + LRead > LCap then
+    begin
+      if LCap = 0 then
+        LCap := SizeUInt(Length(LBuf))
+      else
+        LCap := BytesGrowCapacity(LCap, LLen + LRead);
+      if LCap < LLen + LRead then
+        LCap := LLen + LRead;
+      SetLength(LStr, LCap);
+    end;
+    if LRead > 0 then
+      Move(LBuf[0], (PAnsiChar(LStr) + LLen)^, LRead);
+    Inc(LLen, LRead);
+    if LLen > FORMAT_BULK_PARSE_MAX_BYTES then
+      RequireFormatBulkByteCount(LLen, 'JsonParse');
+  until False;
+  SetLength(LStr, LLen);
+  RequireFormatBulkByteCount(SizeUInt(Length(LStr)), 'JsonParse');
+  Result := JsonParse(LStr);
 end;
 
 function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;
@@ -380,19 +414,69 @@ begin
   Result := TJsonDocumentImpl.CreateFromView(AInput, AAllocator);
 end;
 
+function JsonCreateNullDocument: IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  // perf: inline + zero-copy single alloc O(1), no string/parse, direct node Build via bytes.ops single source
+  // stability: Init/Done via try-finally ownership transfer, ReleaseOwnership prevents double free
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddNullNode;
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateBoolDocument(AValue: Boolean): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddBoolNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateIntDocument(AValue: Int64): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddIntNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateRealDocument(AValue: Double): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddRealNode(AValue);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateStringDocument(const AValue: string): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddStringNode(TStringView.FromStr(AValue));
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
+function JsonCreateStringViewDocument(const AView: TStringView): IJsonDocument; inline;
+var LDoc: TJsonDocument;
+begin
+  LDoc.Init(DefaultAllocator);
+  LDoc.AddStringNode(AView);
+  Result := TJsonDocumentImpl.CreateFromDocument(LDoc);
+end;
+
 function JsonStringify(const AValue: TJsonValue): string;
 var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
-  if (AValue.FDoc <> nil) and AValue.FDoc^.HasError then
+  if (AValue.FDoc <> nil) and PJsonDocument(AValue.FDoc)^.HasError then
     raise EInvalidOperationError.Create(
       'JsonStringify: diagnostic document cannot be stringified');
 
   LBuilder.Init(256);
   try
     LWriter.Init(LBuilder);
-    StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
+    StringifyNode(PJsonDocument(AValue.FDoc)^, AValue.FIdx, LWriter);
     Result := LBuilder.ToString;
   finally
     LBuilder.Done;

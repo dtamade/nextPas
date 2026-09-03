@@ -13,6 +13,10 @@ unit nextpas.core.sync.cow;
 
 interface
 
+type
+  { 具名动态数组 — FPC open array 形参禁 SetLength/整体赋值，整数组移交入口统一经具名动态数组单源 }
+  generic TCowArray<T> = array of T;
+
 generic procedure SyncSnapshotCopy<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
 generic procedure SyncSnapshotCopyRaw<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
 generic procedure SyncSnapshotCopyManaged<T>(var ADest: array of T; const ASrc: array of T; ACount: SizeInt); inline;
@@ -29,17 +33,17 @@ generic procedure CowDiscard<T>(var ANew: array of T; ACount: SizeInt); inline;
 function CowRingStale(const AOldRing: Pointer; AOldCap, AOldCount, AOldHead: Integer; const ACurRing: Pointer; ACurCap, ACurCount, ACurHead: Integer): Boolean; inline;
 function CowLinearStale(const AOldArr: Pointer; AOldCap, AOldCount: Integer; const ACurArr: Pointer; ACurCap, ACurCount: Integer): Boolean; inline;
 { 统一 COW 插入模板 — live/queue 同构收口，阈值/容量/backoff 单源 bytes.ops inline 零拷贝，托管批量不丢 }
-generic function DoCowInsert<T>(var ADest: array of T; var ANew: array of T; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount: Integer): Boolean; inline;
-generic function DoCowInsertRing<T>(var ADest: array of T; var ANew: array of T; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount, AOldHead, ACurHead: Integer): Boolean; inline;
+generic function DoCowInsert<T>(var ADest: specialize TCowArray<T>; var ANew: specialize TCowArray<T>; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount: Integer): Boolean; inline;
+generic function DoCowInsertRing<T>(var ADest: specialize TCowArray<T>; var ANew: specialize TCowArray<T>; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount, AOldHead, ACurHead: Integer): Boolean; inline;
 function CowTryInstallLinear(const AOldPtr: Pointer; AOldCap, AOldCount: Integer; const ACurPtr: Pointer; ACurCap, ACurCount: Integer): Boolean; inline;
 function CowTryInstallRing(const AOldPtr: Pointer; AOldCap, AOldCount, AOldHead: Integer; const ACurPtr: Pointer; ACurCap, ACurCount, ACurHead: Integer): Boolean; inline;
 { Ring COW 单源模板 — queue Enqueue 快/慢/Grow 重试复用，bytes.ops 单源 inline 零拷贝 O(n)均摊，托管不丢 }
-generic procedure CowRingPrepareCopy<T>(var ANew: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount, ANewCap: Integer); inline;
-generic procedure CowRingGrowInstall<T>(var ARing: array of T; var AHead: Integer; var ANew: array of T; ACurHead, ACurCap, ACount: Integer); inline;
+generic procedure CowRingPrepareCopy<T>(var ANew: specialize TCowArray<T>; const ASrc: array of T; ASrcHead, ASrcCap, ACount, ANewCap: Integer); inline;
+generic procedure CowRingGrowInstall<T>(var ARing: specialize TCowArray<T>; var AHead: Integer; var ANew: specialize TCowArray<T>; ACurHead, ACurCap, ACount: Integer); inline;
 generic procedure CowRingReuseBuffer<T>(var ANew: array of T; AOldCount: Integer; const ARing: array of T; AHead, ACap, ACount: Integer); inline;
 { Linear COW 单源模板 — live Register 读-备-写与 queue 镜像三段式收口至同一 L1 模板，bytes.ops 单源 inline 零拷贝 O(n)均摊，托管不丢 }
-generic procedure CowLinearPrepareCopy<T>(var ANew: array of T; const ASrc: array of T; ACount, ANewCap: Integer); inline;
-generic procedure CowLinearGrowInstall<T>(var AArr: array of T; var ANew: array of T); inline;
+generic procedure CowLinearPrepareCopy<T>(var ANew: specialize TCowArray<T>; const ASrc: array of T; ACount, ANewCap: Integer); inline;
+generic procedure CowLinearGrowInstall<T>(var AArr: specialize TCowArray<T>; var ANew: specialize TCowArray<T>); inline;
 generic procedure CowLinearReuseBuffer<T>(var ANew: array of T; AOldCount: Integer; const ASrc: array of T; ACount: Integer); inline;
 
 implementation
@@ -138,7 +142,7 @@ begin
   Result := not CowRingStale(AOldPtr, AOldCap, AOldCount, AOldHead, ACurPtr, ACurCap, ACurCount, ACurHead);
 end;
 
-generic function DoCowInsert<T>(var ADest: array of T; var ANew: array of T; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount: Integer): Boolean; inline;
+generic function DoCowInsert<T>(var ADest: specialize TCowArray<T>; var ANew: specialize TCowArray<T>; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount: Integer): Boolean; inline;
 begin
   if CowLinearStale(AOldPtr, AOldCap, AOldCount, ACurPtr, ACurCap, ACurCount) then Exit(False);
   ADest := ANew;
@@ -146,7 +150,7 @@ begin
   Result := True;
 end;
 
-generic function DoCowInsertRing<T>(var ADest: array of T; var ANew: array of T; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount, AOldHead, ACurHead: Integer): Boolean; inline;
+generic function DoCowInsertRing<T>(var ADest: specialize TCowArray<T>; var ANew: specialize TCowArray<T>; AOldPtr, ACurPtr: Pointer; AOldCap, ACurCap, AOldCount, ACurCount, AOldHead, ACurHead: Integer): Boolean; inline;
 begin
   if CowRingStale(AOldPtr, AOldCap, AOldCount, AOldHead, ACurPtr, ACurCap, ACurCount, ACurHead) then Exit(False);
   ADest := ANew;
@@ -154,14 +158,14 @@ begin
   Result := True;
 end;
 
-generic procedure CowRingPrepareCopy<T>(var ANew: array of T; const ASrc: array of T; ASrcHead, ASrcCap, ACount, ANewCap: Integer); inline;
+generic procedure CowRingPrepareCopy<T>(var ANew: specialize TCowArray<T>; const ASrc: array of T; ASrcHead, ASrcCap, ACount, ANewCap: Integer); inline;
 begin
   // 单源锁外预分配+拷贝：SetLength 单次堆分配 + ManagedRingCopy 单源 inline 零拷贝 O(n)，bytes.ops 容量单源，资源托管不丢
   SetLength(ANew, ANewCap);
   if ACount > 0 then specialize CowRingCopy<T>(ANew, ASrc, ASrcHead, ASrcCap, ACount);
 end;
 
-generic procedure CowRingGrowInstall<T>(var ARing: array of T; var AHead: Integer; var ANew: array of T; ACurHead, ACurCap, ACount: Integer); inline;
+generic procedure CowRingGrowInstall<T>(var ARing: specialize TCowArray<T>; var AHead: Integer; var ANew: specialize TCowArray<T>; ACurHead, ACurCap, ACount: Integer); inline;
 begin
   // 单源锁内安装：ANew 已含当前环拷贝（PrepareCopy/ReuseBuffer 单源），此处仅 Finalize 旧环+移交，inline 零拷贝，托管不丢，幂二 0→32→2× bytes.ops 单源
   if ACount > 0 then specialize CowRingFinalize<T>(ARing, ACurHead, ACurCap, ACount);
@@ -177,14 +181,14 @@ begin
   if ACount > 0 then specialize CowRingCopy<T>(ANew, ARing, AHead, ACap, ACount);
 end;
 
-generic procedure CowLinearPrepareCopy<T>(var ANew: array of T; const ASrc: array of T; ACount, ANewCap: Integer); inline;
+generic procedure CowLinearPrepareCopy<T>(var ANew: specialize TCowArray<T>; const ASrc: array of T; ACount, ANewCap: Integer); inline;
 begin
   // 单源锁外预分配+拷贝：SetLength 单次堆分配 + SyncSnapshotCopy 单源 inline 零拷贝 O(n)，bytes.ops 容量单源，资源托管不丢，与 Ring Prepare 镜像单模板
   SetLength(ANew, ANewCap);
   if ACount > 0 then specialize SyncSnapshotCopy<T>(ANew, ASrc, ACount);
 end;
 
-generic procedure CowLinearGrowInstall<T>(var AArr: array of T; var ANew: array of T); inline;
+generic procedure CowLinearGrowInstall<T>(var AArr: specialize TCowArray<T>; var ANew: specialize TCowArray<T>); inline;
 begin
   // 单源锁内安装：ANew 已含当前线性快照（PrepareCopy/ReuseBuffer 单源），此处仅托管移交，inline 零拷贝，幂二 0→32→2× bytes.ops 单源
   AArr := ANew;

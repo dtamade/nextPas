@@ -18,6 +18,7 @@ uses
   nextpas.core.sevenz.base,
   nextpas.core.sevenz.intf,
   nextpas.core.sevenz.header,
+  nextpas.core.sevenz.stream,
   nextpas.core.collections.hashmap.swiss.str;
 
 type
@@ -33,10 +34,10 @@ type
     FFolderIdxOfEntry: array of Integer;   { 非空文件 -> folder 序号；空/目录为 -1 }
     FGlobalSubOfEntry: array of SizeInt;   { 非空文件 -> 全局子流序号 }
     FSubBaseOfFolder: array of SizeInt;    { folder -> 全局子流基址（前缀和） }
-    FEntryOffInFolder: array of SizeInt;   { 非空文件 -> 子流在 folder 输出内偏移 }
+    FEntryOffInFolder: array of Int64;     { 非空文件 -> 子流在 folder 输出内偏移 (UInt64 宽度, -1 sentinel) }
     FPackStartOfFolder: array of Integer;  { folder -> 首 pack 流序号 }
     FPackOffsetOfFolder: array of UInt64;  { folder -> 首 pack 流绝对载荷偏移 }
-    FCacheIdx: array[0..1] of Integer;     { 2-entry MRU 缓存：0 为 MRU }
+    FCacheIdx: array[0..1] of Integer;     { 2-entry MRU 缓存：0 为 MRU，字节阈值见 DecodeFolder/ C_CACHE_MAX_BYTES }
     FCacheData: array[0..1] of TBytes;
     FPassword: string;
     FNameMap: specialize TSwissTableStr<Integer>;        { exact → first index }
@@ -46,19 +47,29 @@ type
     FLowerNames: array of string;                           { lowercased names for ignore-case indexes }
     FSortedIdxIgnoreCase: array of Integer;
     FSortedIdxRevIgnoreCase: array of Integer;
+    FRevNames: array of string;                             { reversed names for suffix (precomputed) }
+    FRevLowerNames: array of string;                        { reversed lower names }
     FIgnoreCaseBuilt: Boolean;
     procedure BuildNameMaps;
-    { 单核排序：AUseLower 选 FLowerNames/Name，ARev 选 CompareReversed，去重 4 份 QuickSort }
     procedure BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
     procedure BuildSortedIdx;
     procedure BuildSortedIdxRev;
     procedure BuildSortedIdxIgnoreCase;
     procedure BuildSortedIdxRevIgnoreCase;
     procedure EnsureIgnoreCaseBuilt;
+    procedure EnsureSortedIdx;
+    procedure EnsureSortedRev;
+    procedure EnsureSortedIdxIgnoreCase;
+    procedure EnsureSortedRevIgnoreCase;
+    procedure EnsureRevNamesBuilt;
+    procedure EnsureRevLowerNamesBuilt;
+    procedure EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+    function LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
     function LowerBoundPrefix(const APrefix: string): Integer;
     function LowerBoundSuffix(const ASuffix: string): Integer;
     function LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
     function LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
+    function ReverseStr(const S: string): string;
     procedure ParseArchive;
     procedure ParseHeaderBlock(const AHeaderData: TBytes);
     procedure AssembleEntries;
@@ -149,10 +160,11 @@ uses
   nextpas.core.errors,
   nextpas.core.exception,
   nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.checksum.crc32,
+  nextpas.core.collections.algorithms,
   nextpas.core.io.util,
   nextpas.core.sevenz.coders,
-  nextpas.core.sevenz.limits,
   nextpas.core.text.unicode.utils;
 
 function CompareNames(const A, B: string): Integer; inline;
@@ -160,121 +172,40 @@ begin
   if A < B then Result := -1 else if A > B then Result := 1 else Result := 0;
 end;
 
-function CompareReversed(const A, B: string): Integer; forward;
-
 type
-  {** @desc 条目只读流：持有 Extract 产出的缓冲引用（不二次拷贝），
-      Read/Seek/Size/Position 语义逐条对齐 TBytesStream：
-      Close 后访问 raise、Close 幂等、Seek 负位抛参数错误。
-      写入一律 ENotSupportedError——归档内容不可变 *}
-  TSevenZEntryStream = class(TInterfacedObject, IStream)
-  private
-    FData: TBytes;
-    FPosition: SizeUInt;
-    FClosed: Boolean;
-    procedure EnsureOpen(const AOperation: string);
-  public
-    constructor Create(const AData: TBytes);
-    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
-    procedure Close;
-    function GetSize: Int64;
-    function GetPosition: Int64;
-    procedure SetPosition(const AValue: Int64);
+  TSevenZSortCtx = record
+    Reader: TSevenZReaderImpl;
+    UseLower: Boolean;
+    Rev: Boolean;
   end;
+  PSevenZSortCtx = ^TSevenZSortCtx;
 
-constructor TSevenZEntryStream.Create(const AData: TBytes);
-begin
-  inherited Create;
-  FData := AData;
-  FPosition := 0;
-  FClosed := False;
-end;
-
-procedure TSevenZEntryStream.EnsureOpen(const AOperation: string);
-begin
-  if FClosed then
-    raise EIOError.Create('TSevenZEntryStream.' + AOperation +
-      ': stream is closed');
-end;
-
-function TSevenZEntryStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+function SevenZCompareIdx(const A, B: Integer; AData: Pointer): SizeInt;
 var
-  LAvailable: SizeUInt;
+  LCtx: PSevenZSortCtx;
 begin
-  EnsureOpen('Read');
-  if ACount = 0 then
-    Exit(0);
-  if FPosition >= SizeUInt(Length(FData)) then
-    Exit(0);
-  LAvailable := SizeUInt(Length(FData)) - FPosition;
-  if ACount < LAvailable then
-    Result := ACount
-  else
-    Result := LAvailable;
-  Move(FData[FPosition], ABuf, Result);
-  Inc(FPosition, Result);
-end;
-
-function TSevenZEntryStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-begin
-  EnsureOpen('Write');
-  Result := 0;
-  raise ENotSupportedError.Create(
-    'TSevenZEntryStream.Write: entry stream is read-only');
-end;
-
-function TSevenZEntryStream.Seek(const AOffset: Int64;
-  const AOrigin: TSeekOrigin): Int64;
-var
-  LNewPos: Int64;
-begin
-  EnsureOpen('Seek');
-  case AOrigin of
-    soBeginning: LNewPos := AOffset;
-    soCurrent: LNewPos := Int64(FPosition) + AOffset;
-    else LNewPos := Int64(Length(FData)) + AOffset;
-  end;
-  if LNewPos < 0 then
-    raise EArgumentError.Create('TSevenZEntryStream.Seek: negative position');
-  FPosition := SizeUInt(LNewPos);
-  Result := LNewPos;
-end;
-
-procedure TSevenZEntryStream.Close;
-begin
-  if not FClosed then
+  LCtx := PSevenZSortCtx(AData);
+  if LCtx^.UseLower then
   begin
-    FClosed := True;
-    FData := nil;
-    FPosition := 0;
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevLowerNames[A], LCtx^.Reader.FRevLowerNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FLowerNames[A], LCtx^.Reader.FLowerNames[B]);
+  end
+  else
+  begin
+    if LCtx^.Rev then
+      Result := CompareNames(LCtx^.Reader.FRevNames[A], LCtx^.Reader.FRevNames[B])
+    else
+      Result := CompareNames(LCtx^.Reader.FEntries[A].Name, LCtx^.Reader.FEntries[B].Name);
   end;
-end;
-
-function TSevenZEntryStream.GetSize: Int64;
-begin
-  Result := Int64(Length(FData));
-end;
-
-function TSevenZEntryStream.GetPosition: Int64;
-begin
-  Result := Int64(FPosition);
-end;
-
-procedure TSevenZEntryStream.SetPosition(const AValue: Int64);
-begin
-  EnsureOpen('SetPosition');
-  if AValue < 0 then
-    raise EArgumentError.Create(
-      'TSevenZEntryStream.SetPosition: negative position');
-  FPosition := SizeUInt(AValue);
 end;
 
 const
   C_DEFAULT_MAX_OUTPUT = SEVENZ_DEFAULT_MAX_OUTPUT;
   C_MAX_HEADER_SIZE = SEVENZ_MAX_HEADER_SIZE;
   C_EXTRACT_WINDOW = SEVENZ_EXTRACT_WINDOW;
+  C_CACHE_MAX_BYTES = SEVENZ_CACHE_MAX_BYTES; { 单源复用 limits/base，不新增重复常量 }
 
 constructor TSevenZReaderImpl.Create(const AArchive: TBytes);
 begin
@@ -368,6 +299,8 @@ begin
     raise ESevenZError.Create('header offset past end of archive');
   if LSize > LLen - C_SEVENZ_SIG_HEADER_SIZE - LOffset then
     raise ESevenZError.Create('header extends past end of archive');
+  if LSize > UInt64(High(SizeInt)) then
+    raise ESevenZLimitError.CreateFmt('header size %d exceeds addressable limit %d', [LSize, UInt64(High(SizeInt))]);
   SetLength(LHeaderRaw, SizeInt(LSize));
   Move((LP + SizeUInt(C_SEVENZ_SIG_HEADER_SIZE) + SizeUInt(LOffset))^,
     LHeaderRaw[0], SizeInt(LSize));
@@ -400,8 +333,12 @@ begin
       SetLength(LPackSlices,
         Length(LEncodedStreams.Folders[0].PackedInIndices));
       for LI := 0 to High(LPackSlices) do
+      begin
+        if LEncodedStreams.Pack.Sizes[LI] > UInt64(High(SizeInt)) then
+          raise ESevenZLimitError.CreateFmt('pack slice %d size %d exceeds addressable limit %d', [LI, LEncodedStreams.Pack.Sizes[LI], UInt64(High(SizeInt))]);
         SetLength(LPackSlices[LI],
           SizeInt(LEncodedStreams.Pack.Sizes[LI]));
+      end;
       CopyPackSlices(LEncodedStreams.Pack.PackPos, LPackSlices);
       LDecoded := SevenZDecodeFolder(LEncodedStreams.Folders[0], LPackSlices,
         FPassword);
@@ -480,9 +417,9 @@ var
   LJ: SizeInt;
   LE: TSevenZEntryInfo;
   LSubCursor: SizeInt;
-  LByteAcc: SizeInt;
+  LByteAcc: UInt64;
   LBaseAcc: SizeInt;
-  LAcc: SizeInt;
+  LAcc: UInt64;
   LFolderScan: Integer;
 begin
   LN := Length(FRawFiles.Names);
@@ -514,7 +451,9 @@ begin
       if LJ >= FPackStartOfFolder[LI] +
          Length(FStreams.Folders[LI].PackedInIndices) then
         Break;
-      LAcc := LAcc + SizeInt(FStreams.Pack.Sizes[LJ]);
+      if LAcc > High(UInt64) - FStreams.Pack.Sizes[LJ] then
+        raise ESevenZLimitError.Create('pack total size overflow');
+      LAcc := LAcc + FStreams.Pack.Sizes[LJ];
       Inc(LJ);
     end;
   end;
@@ -589,10 +528,16 @@ begin
         raise ESevenZError.Create('entry exceeds declared substream count');
       FFolderIdxOfEntry[LI] := LFolderScan;
       FGlobalSubOfEntry[LI] := LSubCursor;
-      { folder 输出内字节偏移：此前同 folder 子流尺寸之和 }
-      FEntryOffInFolder[LI] := LByteAcc;
+      { folder 输出内字节偏移：此前同 folder 子流尺寸之和 (UInt64 避免 32 位截断) }
+      if LByteAcc > UInt64(High(Int64)) then
+        raise ESevenZLimitError.CreateFmt('folder offset %d exceeds Int64 limit', [LByteAcc]);
+      FEntryOffInFolder[LI] := Int64(LByteAcc);
+      if FStreams.Substreams[LSubCursor].Size > UInt64(High(Int64)) then
+        raise ESevenZLimitError.CreateFmt('substream %d size %d exceeds Int64 limit', [LSubCursor, FStreams.Substreams[LSubCursor].Size]);
       LE.Size := Int64(FStreams.Substreams[LSubCursor].Size);
-      Inc(LByteAcc, SizeInt(FStreams.Substreams[LSubCursor].Size));
+      if LByteAcc > High(UInt64) - FStreams.Substreams[LSubCursor].Size then
+        raise ESevenZLimitError.Create('folder byte offset overflow');
+      Inc(LByteAcc, FStreams.Substreams[LSubCursor].Size);
       LE.HasCrc := FStreams.Substreams[LSubCursor].HasCrc;
       LE.Crc32 := FStreams.Substreams[LSubCursor].Crc;
       if FRawFiles.HasAttributes[LI] then
@@ -623,55 +568,41 @@ begin
   FSortedIdxIgnoreCase := nil;
   FSortedIdxRevIgnoreCase := nil;
   FLowerNames := nil;
+  FRevNames := nil;
+  FRevLowerNames := nil;
   if Length(FEntries)=0 then Exit;
   FNameMap := specialize TSwissTableStr<Integer>.Create(SizeUInt(Length(FEntries)));
-  // Lazy ignore-case: defer FLowerNames / FNameMapIgnoreCase / sorted ignore indexes
+  // Lazy: defer all sorted indexes until prefix/suffix queried; hash is single source for Find
   FNameMapIgnoreCase := nil;
   FLowerNames := nil;
   FSortedIdxIgnoreCase := nil;
   FSortedIdxRevIgnoreCase := nil;
+  FRevNames := nil;
+  FRevLowerNames := nil;
   FIgnoreCaseBuilt := False;
   for LI:=0 to High(FEntries) do
   begin
     if not FNameMap.ContainsKey(FEntries[LI].Name) then
       FNameMap.Put(FEntries[LI].Name, LI);
   end;
-  BuildSortedIdx;
-  BuildSortedIdxRev;
+  // suffix/prefix indexes are built on demand via EnsureSortedIdx/Rev
 end;
 
 procedure TSevenZReaderImpl.BuildSorted(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
-var LI: Integer;
-  { 单核去重：inline Cmp 按 AUseLower/ARev 分发，避免 4 份 QuickSort 拷贝 }
-  procedure QuickSort(AL, AR: Integer);
-  var LI2, LJ, LPivot: Integer; LTmp: Integer;
-    function Cmp(const A, B: Integer): Integer; inline;
-    begin
-      if AUseLower then
-      begin
-        if ARev then Result := CompareReversed(FLowerNames[A], FLowerNames[B])
-        else Result := CompareNames(FLowerNames[A], FLowerNames[B]);
-      end else
-      begin
-        if ARev then Result := CompareReversed(FEntries[A].Name, FEntries[B].Name)
-        else Result := CompareNames(FEntries[A].Name, FEntries[B].Name);
-      end;
-    end;
-  begin
-    LI2 := AL; LJ := AR; LPivot := ADest[(AL+AR) div 2];
-    repeat
-      while Cmp(ADest[LI2], LPivot) < 0 do Inc(LI2);
-      while Cmp(ADest[LJ], LPivot) > 0 do Dec(LJ);
-      if LI2 <= LJ then
-      begin LTmp := ADest[LI2]; ADest[LI2] := ADest[LJ]; ADest[LJ] := LTmp; Inc(LI2); Dec(LJ); end;
-    until LI2 > LJ;
-    if AL < LJ then QuickSort(AL, LJ);
-    if LI2 < AR then QuickSort(LI2, AR);
-  end;
+var
+  LI: Integer;
+  LCtx: TSevenZSortCtx;
 begin
   SetLength(ADest, Length(FEntries));
-  for LI:=0 to High(ADest) do ADest[LI] := LI;
-  if Length(ADest) > 1 then QuickSort(0, High(ADest));
+  for LI := 0 to High(ADest) do
+    ADest[LI] := LI;
+  if Length(ADest) > 1 then
+  begin
+    LCtx.Reader := Self;
+    LCtx.UseLower := AUseLower;
+    LCtx.Rev := ARev;
+    specialize Sort<Integer>(ADest, @SevenZCompareIdx, @LCtx);
+  end;
 end;
 
 procedure TSevenZReaderImpl.BuildSortedIdx;
@@ -681,6 +612,7 @@ end;
 
 procedure TSevenZReaderImpl.BuildSortedIdxRev;
 begin
+  EnsureRevNamesBuilt;
   BuildSorted(FSortedIdxRev, False, True);
 end;
 
@@ -691,35 +623,66 @@ end;
 
 procedure TSevenZReaderImpl.BuildSortedIdxRevIgnoreCase;
 begin
+  EnsureRevLowerNamesBuilt;
   BuildSorted(FSortedIdxRevIgnoreCase, True, True);
 end;
 
-function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer;
+function TSevenZReaderImpl.ReverseStr(const S: string): string;
+var
+  LI: Integer;
 begin
-  LLo := 0; LHi := Length(FSortedIdx);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareNames(FEntries[FSortedIdx[LMid]].Name, APrefix);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  { not inline: SetLength+loop is real loop body, keep out-of-line to avoid
+    I-Cache copy bloat when expanded into LowerBoundGeneric binary-search hot path }
+  SetLength(Result, Length(S));
+  for LI := 1 to Length(S) do
+    Result[LI] := S[Length(S) - LI + 1];
 end;
 
-function CompareReversed(const A, B: string): Integer; inline;
-var LI, LJ: Integer;
+procedure TSevenZReaderImpl.EnsureRevNamesBuilt;
+var LI: Integer;
 begin
-  LI := Length(A); LJ := Length(B);
-  while (LI > 0) and (LJ > 0) do
+  if Length(FRevNames) > 0 then Exit;
+  if Length(FEntries) = 0 then Exit;
+  SetLength(FRevNames, Length(FEntries));
+  for LI:=0 to High(FEntries) do
+    FRevNames[LI] := ReverseStr(FEntries[LI].Name);
+end;
+
+procedure TSevenZReaderImpl.EnsureRevLowerNamesBuilt;
+var LI: Integer;
+begin
+  if Length(FRevLowerNames) > 0 then Exit;
+  EnsureIgnoreCaseBuilt;
+  if Length(FLowerNames)=0 then Exit;
+  SetLength(FRevLowerNames, Length(FLowerNames));
+  for LI:=0 to High(FLowerNames) do
+    FRevLowerNames[LI] := ReverseStr(FLowerNames[LI]);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedGeneric(var ADest: TSevenZIndexArray; AUseLower, ARev: Boolean);
+begin
+  if Length(ADest) > 0 then Exit;
+  if Length(FEntries) = 0 then Exit;
+  if AUseLower then
+    EnsureIgnoreCaseBuilt;
+  if ARev then
   begin
-    if A[LI] < B[LJ] then Exit(-1);
-    if A[LI] > B[LJ] then Exit(1);
-    Dec(LI); Dec(LJ);
+    if AUseLower then
+      EnsureRevLowerNamesBuilt
+    else
+      EnsureRevNamesBuilt;
   end;
-  if LI = 0 then
-    if LJ = 0 then Exit(0) else Exit(-1)
-  else Exit(1);
+  BuildSorted(ADest, AUseLower, ARev);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedIdx;
+begin
+  EnsureSortedGeneric(FSortedIdx, False, False);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedRev;
+begin
+  EnsureSortedGeneric(FSortedIdxRev, False, True);
 end;
 
 procedure TSevenZReaderImpl.EnsureIgnoreCaseBuilt;
@@ -731,57 +694,85 @@ begin
   SetLength(FLowerNames, Length(FEntries));
   for LI := 0 to High(FEntries) do
   begin
-    if IsAsciiString(FEntries[LI].Name) then LLower := AsciiLowerStr(FEntries[LI].Name) else LLower := LowerCase(FEntries[LI].Name);
+    LLower := StringLowerAsciiAware(FEntries[LI].Name);
     FLowerNames[LI] := LLower;
     if not FNameMapIgnoreCase.ContainsKey(LLower) then
       FNameMapIgnoreCase.Put(LLower, LI);
   end;
-  BuildSortedIdxIgnoreCase;
-  BuildSortedIdxRevIgnoreCase;
+  // lazy: sorted ignore indexes built on demand
   FIgnoreCaseBuilt := True;
 end;
 
-function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
+procedure TSevenZReaderImpl.EnsureSortedIdxIgnoreCase;
 begin
-  EnsureIgnoreCaseBuilt;
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
-  LLo := 0; LHi := Length(FSortedIdxIgnoreCase);
+  EnsureSortedGeneric(FSortedIdxIgnoreCase, True, False);
+end;
+
+procedure TSevenZReaderImpl.EnsureSortedRevIgnoreCase;
+begin
+  EnsureSortedGeneric(FSortedIdxRevIgnoreCase, True, True);
+end;
+
+function TSevenZReaderImpl.LowerBoundGeneric(const ASorted: TSevenZIndexArray; const AKey: string; AUseLower, ARev: Boolean): Integer;
+var
+  LLo, LHi, LMid, LCmp: Integer;
+  LRevKey: string;
+begin
+  if ARev then
+  begin
+    // suffix: compare reversed view via precomputed rev arrays + single reversed key (O(len) once, not per compare)
+    LRevKey := ReverseStr(AKey);
+    LLo := 0; LHi := Length(ASorted);
+    while LLo < LHi do
+    begin
+      LMid := (LLo + LHi) div 2;
+      if AUseLower then
+        LCmp := CompareNames(FRevLowerNames[ASorted[LMid]], LRevKey)
+      else
+        LCmp := CompareNames(FRevNames[ASorted[LMid]], LRevKey);
+      if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
+    end;
+    Exit(LLo);
+  end;
+  LLo := 0; LHi := Length(ASorted);
   while LLo < LHi do
   begin
     LMid := (LLo + LHi) div 2;
-    LCmp := CompareNames(FLowerNames[FSortedIdxIgnoreCase[LMid]], LLower);
+    if AUseLower then
+      LCmp := CompareNames(FLowerNames[ASorted[LMid]], AKey)
+    else
+      LCmp := CompareNames(FEntries[ASorted[LMid]].Name, AKey);
     if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
   end;
   Result := LLo;
+end;
+
+function TSevenZReaderImpl.LowerBoundPrefix(const APrefix: string): Integer;
+begin
+  EnsureSortedIdx;
+  Result := LowerBoundGeneric(FSortedIdx, APrefix, False, False);
+end;
+
+function TSevenZReaderImpl.LowerBoundPrefixIgnoreCase(const APrefix: string): Integer;
+var LLower: string;
+begin
+  EnsureSortedIdxIgnoreCase;
+  LLower := StringLowerAsciiAware(APrefix);
+  Result := LowerBoundGeneric(FSortedIdxIgnoreCase, LLower, True, False);
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffixIgnoreCase(const ASuffix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer; LLower: string;
+var LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
-  LLo := 0; LHi := Length(FSortedIdxRevIgnoreCase);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareReversed(FLowerNames[FSortedIdxRevIgnoreCase[LMid]], LLower);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  EnsureSortedRevIgnoreCase;
+  LLower := StringLowerAsciiAware(ASuffix);
+  Result := LowerBoundGeneric(FSortedIdxRevIgnoreCase, LLower, True, True);
 end;
 
 function TSevenZReaderImpl.LowerBoundSuffix(const ASuffix: string): Integer;
-var LLo, LHi, LMid: Integer; LCmp: Integer;
 begin
-  LLo := 0; LHi := Length(FSortedIdxRev);
-  while LLo < LHi do
-  begin
-    LMid := (LLo + LHi) div 2;
-    LCmp := CompareReversed(FEntries[FSortedIdxRev[LMid]].Name, ASuffix);
-    if LCmp < 0 then LLo := LMid + 1 else LHi := LMid;
-  end;
-  Result := LLo;
+  EnsureSortedRev;
+  Result := LowerBoundGeneric(FSortedIdxRev, ASuffix, False, True);
 end;
 
 function TSevenZReaderImpl.DecodeFolder(AFolderIdx: Integer): TBytes;
@@ -812,6 +803,8 @@ begin
     LPackIdx := FPackStartOfFolder[AfolderIdx] + LI;
     if (LPackIdx < 0) or (LPackIdx >= Length(FStreams.Pack.Sizes)) then
       raise ESevenZError.Create('pack stream index out of range');
+    if FStreams.Pack.Sizes[LPackIdx] > UInt64(High(SizeInt)) then
+      raise ESevenZLimitError.CreateFmt('pack slice %d size %d exceeds addressable limit %d', [LPackIdx, FStreams.Pack.Sizes[LPackIdx], UInt64(High(SizeInt))]);
     SetLength(LSlices[LI], SizeInt(FStreams.Pack.Sizes[LPackIdx]));
   end;
   CopyPackSlices(FPackOffsetOfFolder[AfolderIdx], LSlices);
@@ -829,8 +822,22 @@ begin
   if LFolder.HasCrc and
      (Crc32OfBytes(Result) <> LongWord(LFolder.Crc)) then
     raise ESevenZError.Create('folder CRC mismatch after decode');
-  FCacheIdx[1] := FCacheIdx[0]; FCacheData[1] := FCacheData[0];
-  FCacheIdx[0] := AfolderIdx; FCacheData[0] := Result;
+  // 性能：2-entry MRU 带字节阈值，极端 solid 2×大 folder 防翻倍；阈值单源 C_CACHE_MAX_BYTES(64MiB) 来自 limits/base。
+  // 单 folder 超阈值仍以单 MRU 入缓存（去重重复大 folder 全量解压）；双总量超阈值仅保留新 MRU，淘汰旧/次 MRU。
+  // bench 可观测：bench_sevenz container extract warm-cache 吞吐与 64MiB+ 大 solid 首/次 Extract 命中、双 64MiB+ RSS；ClearCache 后连续 Extract 测收敛。
+  // 稳定性：解码异常在缓存更新前抛出，不污染 MRU；LSlices 为托管 TBytes 自动释放，无 FFI 句柄泄漏；inline 零拷贝：DecodeFolder 返回后 EntrySlice 仅视图 Move。
+  if (FCacheIdx[0] <> -1) and (SizeUInt(Length(FCacheData[0])) + SizeUInt(Length(Result)) > C_CACHE_MAX_BYTES) then
+  begin
+    FCacheIdx[1] := -1;
+    FCacheData[1] := nil;
+    FCacheIdx[0] := AfolderIdx;
+    FCacheData[0] := Result;
+  end
+  else
+  begin
+    FCacheIdx[1] := FCacheIdx[0]; FCacheData[1] := FCacheData[0];
+    FCacheIdx[0] := AfolderIdx; FCacheData[0] := Result;
+  end;
 end;
 
 function TSevenZReaderImpl.EntrySlice(AIndex: Integer): TBytes;
@@ -838,8 +845,8 @@ var
   LFolderIdx: Integer;
   LGsub: SizeInt;
   LData: TBytes;
-  LOff: SizeInt;
-  LLen: SizeInt;
+  LOff: UInt64;
+  LLen: UInt64;
 begin
   Result := nil;
   LFolderIdx := FFolderIdxOfEntry[AIndex];
@@ -847,13 +854,21 @@ begin
     Exit(nil);
   LGsub := FGlobalSubOfEntry[AIndex];
   LData := DecodeFolder(LFolderIdx);
-  LOff := FEntryOffInFolder[AIndex];
-  LLen := SizeInt(FStreams.Substreams[LGsub].Size);
-  if LOff + LLen > Length(LData) then
+  if FEntryOffInFolder[AIndex] < 0 then
+    raise ESevenZError.Create('entry offset poisoned');
+  LOff := UInt64(FEntryOffInFolder[AIndex]);
+  LLen := FStreams.Substreams[LGsub].Size;
+  if LLen > UInt64(High(SizeInt)) then
+    raise ESevenZLimitError.CreateFmt('substream %d size %d exceeds addressable limit %d', [LGsub, LLen, UInt64(High(SizeInt))]);
+  if LOff > UInt64(High(SizeInt)) then
+    raise ESevenZLimitError.CreateFmt('substream %d offset %d exceeds addressable limit %d', [LGsub, LOff, UInt64(High(SizeInt))]);
+  if LOff > High(UInt64) - LLen then
+    raise ESevenZError.Create('substream window overflow');
+  if LOff + LLen > UInt64(Length(LData)) then
     raise ESevenZError.Create('substream window exceeds folder output');
-  SetLength(Result, LLen);
+  SetLength(Result, SizeInt(LLen));
   if LLen > 0 then
-    Move(LData[LOff], Result[0], LLen);
+    Move(LData[SizeInt(LOff)], Result[0], SizeInt(LLen));
   if FStreams.Substreams[LGsub].HasCrc and
      (Crc32OfBytes(Result) <> LongWord(FStreams.Substreams[LGsub].Crc)) then
     raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIndex]);
@@ -873,15 +888,11 @@ end;
 
 function TSevenZReaderImpl.Find(const AName: string): Integer;
 var
-  LI: Integer;
   LIdx: Integer;
 begin
   if (FNameMap<>nil) and FNameMap.TryGetValue(AName, LIdx) then
     Exit(LIdx);
   Result := -1;
-  for LI := 0 to Length(FEntries) - 1 do
-    if FEntries[LI].Name = AName then
-      Exit(LI);
 end;
 
 function SameIgnoreCase(const A, B: string): Boolean; inline;
@@ -900,21 +911,17 @@ end;
 
 function TSevenZReaderImpl.FindIgnoreCase(const AName: string): Integer;
 var
-  LI: Integer;
   LIdx: Integer;
   LLower: string;
 begin
   EnsureIgnoreCaseBuilt;
   if FNameMapIgnoreCase<>nil then
   begin
-    if IsAsciiString(AName) then LLower := AsciiLowerStr(AName) else LLower := LowerCase(AName);
+    LLower := StringLowerAsciiAware(AName);
     if FNameMapIgnoreCase.TryGetValue(LLower, LIdx) then
       Exit(LIdx);
   end;
   Result := -1;
-  for LI := 0 to Length(FEntries) - 1 do
-    if SameIgnoreCase(FEntries[LI].Name, AName) then
-      Exit(LI);
 end;
 
 function TSevenZReaderImpl.Contains(const AName: string): Boolean;
@@ -1018,6 +1025,7 @@ begin
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
+  EnsureSortedIdx;
   if Length(FSortedIdx)=0 then Exit(-1);
   LStart := LowerBoundPrefix(APrefix);
   if LStart >= Length(FSortedIdx) then Exit(-1);
@@ -1034,6 +1042,7 @@ begin
   begin
     if Length(FEntries)>0 then Exit(0) else Exit(-1);
   end;
+  EnsureSortedRev;
   if Length(FSortedIdxRev)=0 then Exit(-1);
   LStart := LowerBoundSuffix(ASuffix);
   if LStart >= Length(FSortedIdxRev) then Exit(-1);
@@ -1106,6 +1115,25 @@ begin
     begin APrefix := Copy(APattern, 1, LStarPos - 1); ASuffix := Copy(APattern, LStarPos + 1, Length(APattern)-LStarPos); Exit(gkPrefixSuffix); end;
   end;
   Result := gkComplex;
+end;
+
+{ gkComplex 前缀/后缀萃取：取首通配前与末通配后的字面量，用于 IgnoreCase 索引剪枝
+  复用 FLowerNames/SortedIdxIgnoreCase/SortedIdxRevIgnoreCase，避免线性全表扫描
+  O(N) -> O(log N + M)；空字面量回退全表；bench 见 bench_sevenz BenchGlobIgnoreCase }
+procedure ExtractComplexBounds(const APattern: string; out APrefix, ASuffix: string); inline;
+var LFirst, LLast, LI: Integer;
+begin
+  APrefix := ''; ASuffix := '';
+  LFirst := 0; LLast := 0;
+  for LI := 1 to Length(APattern) do
+    if (APattern[LI] = '*') or (APattern[LI] = '?') then
+    begin
+      if LFirst = 0 then LFirst := LI;
+      LLast := LI;
+    end;
+  if LFirst = 0 then Exit;
+  if LFirst > 1 then APrefix := Copy(APattern, 1, LFirst - 1);
+  if LLast < Length(APattern) then ASuffix := Copy(APattern, LLast + 1, Length(APattern) - LLast);
 end;
 
 function TSevenZReaderImpl.EntriesByGlob(const APattern: string): TSevenZEntryInfoArray;
@@ -1187,11 +1215,11 @@ end;
 function TSevenZReaderImpl.FindByPrefixIgnoreCase(const APrefix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := -1;
   if APrefix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+  EnsureSortedIdxIgnoreCase;
   if Length(FSortedIdxIgnoreCase)=0 then Exit(-1);
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   if LStart >= Length(FSortedIdxIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxIgnoreCase[LStart];
@@ -1203,11 +1231,11 @@ end;
 function TSevenZReaderImpl.FindBySuffixIgnoreCase(const ASuffix: string): Integer;
 var LStart, LIdx: Integer; LLower, LEntryLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := -1;
   if ASuffix='' then begin if Length(FEntries)>0 then Exit(0) else Exit(-1); end;
+  EnsureSortedRevIgnoreCase;
   if Length(FSortedIdxRevIgnoreCase)=0 then Exit(-1);
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   if LStart >= Length(FSortedIdxRevIgnoreCase) then Exit(-1);
   LIdx := FSortedIdxRevIgnoreCase[LStart];
@@ -1222,13 +1250,25 @@ begin
   // ascii 快道零分配：单源 MatchesGlobCore，避免两份通配循环重复
   if IsAsciiString(AName) and IsAsciiString(APattern) then
     Exit(MatchesGlobCore(AName, APattern, True));
-  if IsAsciiString(AName) then LLowerName := AsciiLowerStr(AName) else LLowerName := LowerCase(AName);
-  if IsAsciiString(APattern) then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
+  LLowerName := StringLowerAsciiAware(AName);
+  LLowerPat := StringLowerAsciiAware(APattern);
+  Result := MatchesGlob(LLowerName, LLowerPat);
+end;
+
+function MatchesGlobIgnoreCaseEx(const AName, APattern: string; APatIsAscii: Boolean): Boolean; inline;
+var LLowerName, LLowerPat: string;
+begin
+  // 预计算 APattern IsAscii，避免每条目重复扫模式串（gkComplex 2k 次）
+  if APatIsAscii and IsAsciiString(AName) then
+    Exit(MatchesGlobCore(AName, APattern, True));
+  LLowerName := StringLowerAsciiAware(AName);
+  if APatIsAscii then LLowerPat := AsciiLowerStr(APattern) else LLowerPat := LowerCase(APattern);
   Result := MatchesGlob(LLowerName, LLowerPat);
 end;
 
 function TSevenZReaderImpl.EntriesByGlobIgnoreCase(const APattern: string): TSevenZEntryInfoArray;
-var LI, LCnt: Integer; LPrefix, LSuffix: string; LIdx: Integer; LIdx2: TSevenZIndexArray;
+var LI, LCnt: Integer; LPrefix, LSuffix: string; LIdx: Integer; LIdx2: TSevenZIndexArray; LPatIsAscii: Boolean;
+  LCpxPref, LCpxSuff: string; LCands: TSevenZIndexArray;
 begin
   EnsureIgnoreCaseBuilt;
   Result := nil;
@@ -1241,15 +1281,35 @@ begin
     gkPrefixSuffix: begin LIdx2 := IndicesByPrefixIgnoreCase(LPrefix); LIdx2 := FilterIndicesBySuffixIgnoreCase(LIdx2, LPrefix, LSuffix); SetLength(Result, Length(LIdx2)); for LI:=0 to High(LIdx2) do Result[LI] := FEntries[LIdx2[LI]]; Exit; end;
     gkComplex: ;
   end;
+  LPatIsAscii := IsAsciiString(APattern);
+  // gkComplex: 复用 FLowerNames/SortedIdxIgnoreCase 索引剪枝 O(log N+M)，bench 见 BenchGlobIgnoreCase
+  ExtractComplexBounds(APattern, LCpxPref, LCpxSuff);
+  if (LCpxPref <> '') or (LCpxSuff <> '') then
+  begin
+    if LCpxPref <> '' then
+    begin
+      LCands := IndicesByPrefixIgnoreCase(LCpxPref);
+      if LCpxSuff <> '' then
+        LCands := FilterIndicesBySuffixIgnoreCase(LCands, LCpxPref, LCpxSuff);
+    end else
+      LCands := IndicesBySuffixIgnoreCase(LCpxSuff);
+    LCnt := 0;
+    for LI:=0 to High(LCands) do if MatchesGlobIgnoreCaseEx(FEntries[LCands[LI]].Name, APattern, LPatIsAscii) then Inc(LCnt);
+    SetLength(Result, LCnt);
+    LCnt := 0;
+    for LI:=0 to High(LCands) do if MatchesGlobIgnoreCaseEx(FEntries[LCands[LI]].Name, APattern, LPatIsAscii) then begin Result[LCnt] := FEntries[LCands[LI]]; Inc(LCnt); end;
+    Exit;
+  end;
   LCnt := 0;
-  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
+  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCaseEx(FEntries[LI].Name, APattern, LPatIsAscii) then Inc(LCnt);
   SetLength(Result, LCnt);
   LCnt := 0;
-  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then begin Result[LCnt] := FEntries[LI]; Inc(LCnt); end;
+  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCaseEx(FEntries[LI].Name, APattern, LPatIsAscii) then begin Result[LCnt] := FEntries[LI]; Inc(LCnt); end;
 end;
 
 function TSevenZReaderImpl.FindByGlobIgnoreCase(const APattern: string): Integer;
-var LI, LPos, LIdx: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string;
+var LI, LPos, LIdx, LBest: Integer; LPrefix, LSuffix, LLowerPref, LLowerSuff, LEntryLower: string; LPatIsAscii: Boolean;
+  LCpxPref, LCpxSuff: string; LCands: TSevenZIndexArray;
 begin
   EnsureIgnoreCaseBuilt;
   Result := -1;
@@ -1261,8 +1321,8 @@ begin
     gkSuffix: Exit(FindBySuffixIgnoreCase(LSuffix));
     gkPrefixSuffix:
     begin
-      if IsAsciiString(LPrefix) then LLowerPref := AsciiLowerStr(LPrefix) else LLowerPref := LowerCase(LPrefix);
-      if IsAsciiString(LSuffix) then LLowerSuff := AsciiLowerStr(LSuffix) else LLowerSuff := LowerCase(LSuffix);
+      LLowerPref := StringLowerAsciiAware(LPrefix);
+      LLowerSuff := StringLowerAsciiAware(LSuffix);
       LPos := LowerBoundPrefixIgnoreCase(LPrefix);
       while LPos < Length(FSortedIdxIgnoreCase) do
       begin
@@ -1278,7 +1338,25 @@ begin
     end;
     gkComplex: ;
   end;
-  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Exit(LI);
+  LPatIsAscii := IsAsciiString(APattern);
+  // gkComplex: 复用 IgnoreCase 索引剪枝，避免全表扫描
+  ExtractComplexBounds(APattern, LCpxPref, LCpxSuff);
+  if (LCpxPref <> '') or (LCpxSuff <> '') then
+  begin
+    if LCpxPref <> '' then
+    begin
+      LCands := IndicesByPrefixIgnoreCase(LCpxPref);
+      if LCpxSuff <> '' then
+        LCands := FilterIndicesBySuffixIgnoreCase(LCands, LCpxPref, LCpxSuff);
+    end else
+      LCands := IndicesBySuffixIgnoreCase(LCpxSuff);
+    LBest := MaxInt;
+    for LI:=0 to High(LCands) do
+      if MatchesGlobIgnoreCaseEx(FEntries[LCands[LI]].Name, APattern, LPatIsAscii) then
+        if LCands[LI] < LBest then LBest := LCands[LI];
+    if LBest <> MaxInt then Exit(LBest) else Exit(-1);
+  end;
+  for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCaseEx(FEntries[LI].Name, APattern, LPatIsAscii) then Exit(LI);
   Result := -1;
 end;
 
@@ -1332,7 +1410,7 @@ type
 function TSevenZReaderImpl.ExtractIndicesGrouped(const AIdx: array of Integer): TSevenZExtractedArray;
 var LI, LFolderCount, LUseSparse: Integer;
     LDecodedByFolder: array of TBytes; LDecodedValid: array of Boolean;
-    LOff, LLen: SizeInt; LSub: SizeInt; LData: TBytes;
+    LOff, LLen: UInt64; LSub: SizeInt; LData: TBytes;
     LPairs: array of TExtractPair;
 
   procedure QuickSortPairs(AL, AR: Integer);
@@ -1354,10 +1432,17 @@ begin
   if Length(AIdx)=0 then Exit;
   SetLength(Result, Length(AIdx));
   LFolderCount := Length(FStreams.Folders);
-  // 稀疏判定：FolderCount 巨大且提取稀疏时避免分配 FolderCount 长数组（1M → 16MB）
+  // 性能：稠密路径按 FolderCount 分配双数组（1M→~16MB 瞬时），阈值外仍大额分配；
+  // 稀疏路径零 FolderCount 分配，按 folder 排序后分组单解码，避免瞬时 RSS 尖峰。
+  // 收敛阈值：4096→1024 且因子 8→4；>64k 强制稀疏，避免 500k 级仍走稠密。
+  // bench 可观测：bench_sevenz container extract 吞吐与 1M folder RSS 对比验证。
   LUseSparse := 0;
-  if (LFolderCount > 4096) and (Length(AIdx)*8 < LFolderCount) then LUseSparse := 1;
-  if LUseSparse=0 then
+  if LFolderCount > 1024 then
+  begin
+    if Length(AIdx) * 4 < LFolderCount then LUseSparse := 1
+    else if (LFolderCount > 65536) and (Length(AIdx) < LFolderCount) then LUseSparse := 1;
+  end;
+  if LUseSparse = 0 then
   begin
     SetLength(LDecodedByFolder, LFolderCount);
     SetLength(LDecodedValid, LFolderCount);
@@ -1371,12 +1456,16 @@ begin
       if not LDecodedValid[LFolderIdx] then
       begin LDecodedByFolder[LFolderIdx]:=DecodeFolder(LFolderIdx); LDecodedValid[LFolderIdx]:=True; end;
       LData := LDecodedByFolder[LFolderIdx];
-      LOff := FEntryOffInFolder[AIdx[LI]];
+      if FEntryOffInFolder[AIdx[LI]] < 0 then raise ESevenZError.Create('entry offset poisoned');
+      LOff := UInt64(FEntryOffInFolder[AIdx[LI]]);
       LSub := FGlobalSubOfEntry[AIdx[LI]];
-      LLen := SizeInt(FStreams.Substreams[LSub].Size);
-      if LOff + LLen > Length(LData) then raise ESevenZError.Create('substream window exceeds folder output');
-      SetLength(Result[LI].Data, LLen);
-      if LLen>0 then Move(LData[LOff], Result[LI].Data[0], LLen);
+      LLen := FStreams.Substreams[LSub].Size;
+      if LLen > UInt64(High(SizeInt)) then raise ESevenZLimitError.CreateFmt('substream %d size %d exceeds addressable limit %d', [LSub, LLen, UInt64(High(SizeInt))]);
+      if LOff > UInt64(High(SizeInt)) then raise ESevenZLimitError.CreateFmt('substream %d offset %d exceeds addressable limit %d', [LSub, LOff, UInt64(High(SizeInt))]);
+      if LOff > High(UInt64) - LLen then raise ESevenZError.Create('substream window overflow');
+      if LOff + LLen > UInt64(Length(LData)) then raise ESevenZError.Create('substream window exceeds folder output');
+      SetLength(Result[LI].Data, SizeInt(LLen));
+      if LLen>0 then Move(LData[SizeInt(LOff)], Result[LI].Data[0], SizeInt(LLen));
       if FStreams.Substreams[LSub].HasCrc and (Crc32OfBytes(Result[LI].Data) <> LongWord(FStreams.Substreams[LSub].Crc)) then
         raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIdx[LI]]);
     end;
@@ -1407,11 +1496,15 @@ begin
     begin
       LSub:=LPairs[LI].EntryIdx;
       Result[LPairs[LI].OrigPos].Info:=FEntries[LSub];
-      LOff := FEntryOffInFolder[LSub];
-      LLen := SizeInt(FStreams.Substreams[FGlobalSubOfEntry[LSub]].Size);
-      if LOff + LLen > Length(LData) then raise ESevenZError.Create('substream window exceeds folder output');
-      SetLength(Result[LPairs[LI].OrigPos].Data, LLen);
-      if LLen>0 then Move(LData[LOff], Result[LPairs[LI].OrigPos].Data[0], LLen);
+      if FEntryOffInFolder[LSub] < 0 then raise ESevenZError.Create('entry offset poisoned');
+      LOff := UInt64(FEntryOffInFolder[LSub]);
+      LLen := FStreams.Substreams[FGlobalSubOfEntry[LSub]].Size;
+      if LLen > UInt64(High(SizeInt)) then raise ESevenZLimitError.CreateFmt('substream %d size %d exceeds addressable limit %d', [FGlobalSubOfEntry[LSub], LLen, UInt64(High(SizeInt))]);
+      if LOff > UInt64(High(SizeInt)) then raise ESevenZLimitError.CreateFmt('substream %d offset %d exceeds addressable limit %d', [FGlobalSubOfEntry[LSub], LOff, UInt64(High(SizeInt))]);
+      if LOff > High(UInt64) - LLen then raise ESevenZError.Create('substream window overflow');
+      if LOff + LLen > UInt64(Length(LData)) then raise ESevenZError.Create('substream window exceeds folder output');
+      SetLength(Result[LPairs[LI].OrigPos].Data, SizeInt(LLen));
+      if LLen>0 then Move(LData[SizeInt(LOff)], Result[LPairs[LI].OrigPos].Data[0], SizeInt(LLen));
       if FStreams.Substreams[FGlobalSubOfEntry[LSub]].HasCrc and
          (Crc32OfBytes(Result[LPairs[LI].OrigPos].Data) <> LongWord(FStreams.Substreams[FGlobalSubOfEntry[LSub]].Crc)) then
         raise ESevenZError.CreateFmt('entry %d CRC mismatch', [LSub]);
@@ -1430,6 +1523,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedIdx;
   if Length(FSortedIdx) = 0 then Exit;
   LStart := LowerBoundPrefix(APrefix);
   LCnt := 0;
@@ -1452,7 +1546,6 @@ end;
 function TSevenZReaderImpl.IndicesByPrefixIgnoreCase(const APrefix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := nil;
   if APrefix = '' then
   begin
@@ -1460,8 +1553,9 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedIdxIgnoreCase;
   if Length(FSortedIdxIgnoreCase) = 0 then Exit;
-  if IsAsciiString(APrefix) then LLower := AsciiLowerStr(APrefix) else LLower := LowerCase(APrefix);
+  LLower := StringLowerAsciiAware(APrefix);
   LStart := LowerBoundPrefixIgnoreCase(APrefix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxIgnoreCase) do
@@ -1504,7 +1598,7 @@ begin
   Result := nil;
   LNeed := Length(APrefix) + Length(ASuffix);
   LIsAsciiSuff := IsAsciiString(ASuffix);
-  if LIsAsciiSuff then LLowerSuff := AsciiLowerStr(ASuffix) else LLowerSuff := LowerCase(ASuffix);
+  LLowerSuff := StringLowerAsciiAware(ASuffix);
   LCnt := 0;
   for LI := 0 to High(AIndices) do
   begin
@@ -1546,6 +1640,7 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedRev;
   if Length(FSortedIdxRev) = 0 then Exit;
   LStart := LowerBoundSuffix(ASuffix);
   LCnt := 0;
@@ -1568,7 +1663,6 @@ end;
 function TSevenZReaderImpl.IndicesBySuffixIgnoreCase(const ASuffix: string): TSevenZIndexArray;
 var LStart, LPos, LIdx, LCnt: Integer; LLower: string;
 begin
-  EnsureIgnoreCaseBuilt;
   Result := nil;
   if ASuffix = '' then
   begin
@@ -1576,8 +1670,9 @@ begin
     for LPos := 0 to High(FEntries) do Result[LPos] := LPos;
     Exit;
   end;
+  EnsureSortedRevIgnoreCase;
   if Length(FSortedIdxRevIgnoreCase) = 0 then Exit;
-  if IsAsciiString(ASuffix) then LLower := AsciiLowerStr(ASuffix) else LLower := LowerCase(ASuffix);
+  LLower := StringLowerAsciiAware(ASuffix);
   LStart := LowerBoundSuffixIgnoreCase(ASuffix);
   LCnt := 0;
   for LPos := LStart to High(FSortedIdxRevIgnoreCase) do
@@ -1733,7 +1828,8 @@ begin
 end;
 
 function TSevenZReaderImpl.TryExtractByGlobIgnoreCaseWithError(const APattern: string; out AExtracted: TSevenZExtractedArray; out AError: string): Boolean;
-var LI, LCnt, LIdx: Integer; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer;
+var LI, LCnt, LIdx: Integer; LPrefix, LSuffix: string; LIndices: array of Integer; LFill: Integer; LPatIsAscii: Boolean;
+  LCpxPref, LCpxSuff: string; LCands: TSevenZIndexArray;
 begin
   EnsureIgnoreCaseBuilt;
   AExtracted := nil; AError := ''; Result := False;
@@ -1758,11 +1854,32 @@ begin
       end;
       gkComplex: ;
     end;
+    LPatIsAscii := IsAsciiString(APattern);
+    // gkComplex: 复用 IgnoreCase 索引剪枝，O(log N+M)
+    ExtractComplexBounds(APattern, LCpxPref, LCpxSuff);
+    if (LCpxPref <> '') or (LCpxSuff <> '') then
+    begin
+      if LCpxPref <> '' then
+      begin
+        LCands := IndicesByPrefixIgnoreCase(LCpxPref);
+        if LCpxSuff <> '' then
+          LCands := FilterIndicesBySuffixIgnoreCase(LCands, LCpxPref, LCpxSuff);
+      end else
+        LCands := IndicesBySuffixIgnoreCase(LCpxSuff);
+      LCnt := 0;
+      for LI:=0 to High(LCands) do if MatchesGlobIgnoreCaseEx(FEntries[LCands[LI]].Name, APattern, LPatIsAscii) then Inc(LCnt);
+      SetLength(LIndices, LCnt);
+      LFill := 0;
+      for LI:=0 to High(LCands) do if MatchesGlobIgnoreCaseEx(FEntries[LCands[LI]].Name, APattern, LPatIsAscii) then begin LIndices[LFill] := LCands[LI]; Inc(LFill); end;
+      if LCnt > 0 then AExtracted := ExtractIndicesGrouped(LIndices) else SetLength(AExtracted,0);
+      Result := True;
+      Exit;
+    end;
     LCnt := 0;
-    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then Inc(LCnt);
+    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCaseEx(FEntries[LI].Name, APattern, LPatIsAscii) then Inc(LCnt);
     SetLength(LIndices, LCnt);
     LFill := 0;
-    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCase(FEntries[LI].Name, APattern) then begin LIndices[LFill] := LI; Inc(LFill); end;
+    for LI:=0 to High(FEntries) do if MatchesGlobIgnoreCaseEx(FEntries[LI].Name, APattern, LPatIsAscii) then begin LIndices[LFill] := LI; Inc(LFill); end;
     if LCnt > 0 then AExtracted := ExtractIndicesGrouped(LIndices) else SetLength(AExtracted,0);
     Result := True;
   except on E: Exception do begin AError := E.ClassName+': '+E.Message; AExtracted := nil; Result := False; end; end;
@@ -1784,11 +1901,16 @@ var
   LFolderIdx: Integer;
   LGsub: SizeInt;
   LData: TBytes;
-  LOff: SizeInt;
-  LLen: SizeInt;
-  LTake: SizeInt;
+  LOff: UInt64;
+  LLen: UInt64;
+  LTake: UInt64;
   LCrc: LongWord;
   LHasCrc: Boolean;
+  LStream: IStream;
+  LInitialPos: Int64;
+  LHasStream: Boolean;
+  LScanOff: UInt64;
+  LScanRem: UInt64;
 begin
   if AWriter = nil then
     raise EArgumentError.Create('writer must not be nil');
@@ -1797,32 +1919,81 @@ begin
   LFolderIdx := FFolderIdxOfEntry[AIndex];
   if LFolderIdx < 0 then
     Exit(0);
-  { 单遍窗口化：边写边增量 CRC，减半内存扫描。
-    CRC 失败时 sink 可能已写入脏数据，调用方以异常丢弃。 }
   LGsub := FGlobalSubOfEntry[AIndex];
   LData := DecodeFolder(LFolderIdx);
-  LOff := FEntryOffInFolder[AIndex];
-  LLen := SizeInt(FStreams.Substreams[LGsub].Size);
-  if LOff + LLen > Length(LData) then
+  if FEntryOffInFolder[AIndex] < 0 then
+    raise ESevenZError.Create('entry offset poisoned');
+  LOff := UInt64(FEntryOffInFolder[AIndex]);
+  LLen := FStreams.Substreams[LGsub].Size;
+  if LLen > UInt64(High(SizeInt)) then
+    raise ESevenZLimitError.CreateFmt('substream %d size %d exceeds addressable limit %d', [LGsub, LLen, UInt64(High(SizeInt))]);
+  if LOff > UInt64(High(SizeInt)) then
+    raise ESevenZLimitError.CreateFmt('substream %d offset %d exceeds addressable limit %d', [LGsub, LOff, UInt64(High(SizeInt))]);
+  if LOff > High(UInt64) - LLen then
+    raise ESevenZError.Create('substream window overflow');
+  if LOff + LLen > UInt64(Length(LData)) then
     raise ESevenZError.Create('substream window exceeds folder output');
   LHasCrc := FStreams.Substreams[LGsub].HasCrc;
-  LCrc := 0;
-  Result := 0;
-  while LLen > 0 do
+  { CRC 预检 + 截断保护：先窗口化校验再触及 IWriter，避免单遍边写边算在 CRC 失配时已向 sink 写入脏数据
+    性能：由单遍增量改为两遍窗口扫描（CRC 遍 + 写遍），复用 SEVENZ_EXTRACT_WINDOW 单源常量，窗口化保持 O(1) 额外内存；
+    吞吐回退可通过 bench_sevenz 的 ExtractTo/extract 吞吐观测，正确性优先于半程扫描收益 }
+  if LHasCrc then
   begin
-    LTake := LLen;
-    if LTake > C_EXTRACT_WINDOW then
-      LTake := C_EXTRACT_WINDOW;
-    if LHasCrc then
-      LCrc := Crc32Update(LCrc, @LData[LOff], SizeUInt(LTake));
-    if AWriter.Write(LData[LOff], SizeUInt(LTake)) <> SizeUInt(LTake) then
-      raise EIOError.Create('writer accepted fewer bytes than extracted');
-    Inc(Result, LTake);
-    Inc(LOff, LTake);
-    Dec(LLen, LTake);
+    LCrc := 0;
+    LScanOff := LOff;
+    LScanRem := LLen;
+    while LScanRem > 0 do
+    begin
+      if LScanRem > C_EXTRACT_WINDOW then
+        LTake := C_EXTRACT_WINDOW
+      else
+        LTake := LScanRem;
+      LCrc := Crc32Update(LCrc, @LData[SizeInt(LScanOff)], SizeUInt(LTake));
+      Inc(LScanOff, LTake);
+      Dec(LScanRem, LTake);
+    end;
+    if LCrc <> LongWord(FStreams.Substreams[LGsub].Crc) then
+      raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIndex]);
   end;
-  if LHasCrc and (LCrc <> LongWord(FStreams.Substreams[LGsub].Crc)) then
-    raise ESevenZError.CreateFmt('entry %d CRC mismatch', [AIndex]);
+  LHasStream := False;
+  LStream := nil;
+  LInitialPos := -1;
+  if AWriter.QueryInterface(IStream, LStream) = 0 then
+  begin
+    try
+      LInitialPos := LStream.GetPosition;
+      LHasStream := True;
+    except
+      LHasStream := False;
+      LStream := nil;
+    end;
+  end;
+  Result := 0;
+  try
+    while LLen > 0 do
+    begin
+      LTake := LLen;
+      if LTake > C_EXTRACT_WINDOW then
+        LTake := C_EXTRACT_WINDOW;
+      if AWriter.Write(LData[SizeInt(LOff)], SizeUInt(LTake)) <> SizeUInt(LTake) then
+        raise EIOError.Create('writer accepted fewer bytes than extracted');
+      Inc(Result, Int64(LTake));
+      Inc(LOff, LTake);
+      Dec(LLen, LTake);
+    end;
+  except
+    on E: Exception do
+    begin
+      if LHasStream and (LStream <> nil) then
+      begin
+        try
+          LStream.SetPosition(LInitialPos);
+        except
+        end;
+      end;
+      raise;
+    end;
+  end;
 end;
 
 function TSevenZReaderImpl.OpenStream(AIndex: Integer): IStream;
@@ -1914,10 +2085,8 @@ end;
 
 function TSevenZReaderImpl.GetEnumerator: TSevenZEntryEnumerator;
 begin
-  if Length(FEntries) > 0 then
-    Result := SevenZEntryEnumeratorCreate(@FEntries[0], Length(FEntries))
-  else
-    Result := SevenZEntryEnumeratorCreate(nil, 0);
+  Result.FReader := Self;
+  Result.FIndex := -1;
 end;
 
 end.

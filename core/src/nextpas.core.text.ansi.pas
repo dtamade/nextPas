@@ -23,6 +23,9 @@ function StrToPAnsiView(const S: string): PAnsiChar; inline;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function StrToAnsi(const S: string): AnsiString;
 begin
   Result := AnsiString(S);
@@ -33,19 +36,10 @@ begin
   Result := string(A);
 end;
 
-function AnsiPtrToStr(const P: PAnsiChar): string;
-var
-  LP: PAnsiChar;
-  LLen: Integer;
+function AnsiPtrToStr(const P: PAnsiChar): string; inline;
 begin
-  Result := '';
-  if P = nil then Exit;
-  LP := P;
-  while LP^ <> #0 do Inc(LP);
-  LLen := Integer(LP - P);
-  if LLen = 0 then Exit;
-  SetLength(Result, LLen);
-  Move(P^, Result[1], SizeUInt(LLen));
+  { perf: inline thin-forward to bytes.ops.AnsiPtrToString single source (zero-copy Move Pointer(Result)^, single SetLength+Move in owner, loop+Move not inline per red-line 2); L1 facade no duplicate Move — single source stays in bytes.ops }
+  Result := nextpas.core.bytes.ops.AnsiPtrToString(P);
 end;
 
 function HoldAnsi(const S: string; out Hold: AnsiString): PAnsiChar;

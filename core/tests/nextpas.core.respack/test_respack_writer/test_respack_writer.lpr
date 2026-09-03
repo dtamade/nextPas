@@ -5,7 +5,8 @@ uses
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.respack,
-  nextpas.core.respack.base;
+  nextpas.core.respack.base,
+  nextpas.core.bytes.ops;
 
 {$I golden_respack_v1.inc}
 
@@ -13,43 +14,36 @@ var
   T: TTestSuite;
   { TResPackInputEntry 只持有内容指针，不拥有内存。测试辅助统一把传入的
     TBytes（含 BytesOf(...) 的临时值）复制进 G_Owned 持活，避免悬空指针；
-    全局动态数组在单元终结化时释放，heaptrc 计零泄漏。 }
+    显式生命周期：主程序 try..finally 中显式 ClearOwned(G_Owned := nil)，
+    heaptrc 零泄漏由显式释放证明，不依赖单元终结化隐式释放。 }
   G_Owned: array of TBytes;
 
-function BytesOf(const S: string): TBytes;
+procedure ClearOwned; inline;
+begin
+  // 显式释放全局持活缓冲，heaptrc 零泄漏由显式生命周期证明，非单元终结掩盖
+  G_Owned := nil;
+end;
+
+function BytesOf(const S: string): TBytes; inline;
 begin
   Result := nil;
   SetLength(Result, Length(S));
   if Length(S) > 0 then
-    Move(Pointer(S)^, Result[0], Length(S));
+    BytesCopy(@Result[0], Pointer(S), SizeUInt(Length(S)));
 end;
 
-function SameBytes(const AA, AB: TBytes): Boolean;
-var
-  I: Integer;
+function SameBytes(const AA, AB: TBytes): Boolean; inline;
 begin
-  Result := False;
-  if Length(AA) <> Length(AB) then Exit;
-  if Length(AA) = 0 then Exit(True);
-  for I := 0 to Length(AA) - 1 do
-    if AA[I] <> AB[I] then
-      Exit;
-  Result := True;
+  Result := SpanEqual(TByteSpan.FromBytes(AA), TByteSpan.FromBytes(AB));
 end;
 
-function SameBytesRaw(const AA, AB: PByte; const ALen: SizeUInt): Boolean;
-var
-  I: SizeUInt;
+function SameBytesRaw(const AA, AB: PByte; const ALen: SizeUInt): Boolean; inline;
 begin
-  Result := False;
-  for I := 0 to ALen - 1 do
-    if AA[I] <> AB[I] then
-      Exit;
-  Result := True;
+  Result := SpanEqual(TByteSpan.Create(AA, ALen), TByteSpan.Create(AB, ALen));
 end;
 
 function Ent(const APath: string; const AData: TBytes;
-  const AModTime: Int64 = 0): TResPackInputEntry;
+  const AModTime: Int64 = 0): TResPackInputEntry; inline;
 var
   N: SizeInt;
 begin
@@ -450,21 +444,25 @@ end;
 
 begin
   T := TTestSuite.Create('nextpas.core.respack.writer');
-  T.Test('determinism', @TestDeterminism);
-  T.Test('sorted index', @TestSortedIndex);
-  T.Test('duplicate path raises', @TestDuplicate);
-  T.Test('invalid paths raise', @TestInvalidPaths);
-  T.Test('alignment incl empty', @TestAlignment);
-  T.Test('dedupe shared slot', @TestDedupeSharedSlot);
-  T.Test('no dedupe separate slots', @TestNoDedupeSeparate);
-  T.Test('hash value matches fnv1a32', @TestHashValue);
-  T.Test('hash flag off', @TestNoHashFlag);
-  T.Test('digest region written', @TestDigestRegion);
-  T.Test('modtime roundtrip', @TestModTime);
-  T.Test('too large raises', @TestTooLargeWrapped);
-  T.Test('empty pack opens', @TestEmptyPack);
-  T.Test('golden snapshot', @TestGoldenSnapshot);
-  T.Test('header fields sane', @TestHeaderFields);
-  T.Test('cmp path sorted edge', @TestWriterCmpPathSortedEdge);
-  if not T.Run then Halt(1);
+  try
+    T.Test('determinism', @TestDeterminism);
+    T.Test('sorted index', @TestSortedIndex);
+    T.Test('duplicate path raises', @TestDuplicate);
+    T.Test('invalid paths raise', @TestInvalidPaths);
+    T.Test('alignment incl empty', @TestAlignment);
+    T.Test('dedupe shared slot', @TestDedupeSharedSlot);
+    T.Test('no dedupe separate slots', @TestNoDedupeSeparate);
+    T.Test('hash value matches fnv1a32', @TestHashValue);
+    T.Test('hash flag off', @TestNoHashFlag);
+    T.Test('digest region written', @TestDigestRegion);
+    T.Test('modtime roundtrip', @TestModTime);
+    T.Test('too large raises', @TestTooLargeWrapped);
+    T.Test('empty pack opens', @TestEmptyPack);
+    T.Test('golden snapshot', @TestGoldenSnapshot);
+    T.Test('header fields sane', @TestHeaderFields);
+    T.Test('cmp path sorted edge', @TestWriterCmpPathSortedEdge);
+    if not T.Run then Halt(1);
+  finally
+    ClearOwned;
+  end;
 end.

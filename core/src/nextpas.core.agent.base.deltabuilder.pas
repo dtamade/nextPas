@@ -13,6 +13,7 @@ unit nextpas.core.agent.base.deltabuilder;
 interface
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.agent.base.types;
 
 type
@@ -32,11 +33,15 @@ type
     procedure Clear;
     procedure MergeToFirst(const AJson: TJsonText);
     procedure MergeToLast(const AJson: TJsonText);
+    { CONTRACT: 0 <= AIdx < Count else raise EAgentError[aecProtocol]; 空/越界守衛，上游 fold 依賴安全調用 }
     function At(AIdx: Integer): PStreamDelta; inline;
     function Get(AIdx: Integer): TStreamDelta; inline;
   end;
 
 implementation
+
+uses
+  nextpas.core.agent.errors;
 
 procedure TAgentDeltaBuilder.Init;
 begin
@@ -51,10 +56,8 @@ begin
   LCap := Length(FItems);
   if FCount >= LCap then
   begin
-    if LCap = 0 then
-      LCap := 8
-    else
-      LCap := LCap * 2;
+    // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+    LCap := BytesGrowCapacityInt(LCap, FCount + 1);
     SetLength(FItems, LCap);
   end;
   FItems[FCount] := ADelta;
@@ -71,10 +74,8 @@ begin
   LCap := Length(FItems);
   if LNeed > LCap then
   begin
-    if LCap = 0 then
-      LCap := 8;
-    while LCap < LNeed do
-      LCap := LCap * 2;
+    // perf: geometric growth single source via bytes.ops.BytesGrowCapacityInt amortized O(1)
+    LCap := BytesGrowCapacityInt(LCap, LNeed);
     SetLength(FItems, LCap);
   end;
   for I := 0 to High(AArr) do
@@ -117,11 +118,17 @@ end;
 
 function TAgentDeltaBuilder.At(AIdx: Integer): PStreamDelta;
 begin
+  // CONTRACT: At 越界守衛 – 空/越界拋 EAgentError[aecProtocol]
+  if (AIdx < 0) or (AIdx >= FCount) then
+    raise EAgentError.CreateLocal(aecProtocol, 'TAgentDeltaBuilder.At: index out of bounds');
   Result := @FItems[AIdx];
 end;
 
 function TAgentDeltaBuilder.Get(AIdx: Integer): TStreamDelta;
 begin
+  // CONTRACT: Get 越界守衛 – 空/越界拋 EAgentError[aecProtocol]
+  if (AIdx < 0) or (AIdx >= FCount) then
+    raise EAgentError.CreateLocal(aecProtocol, 'TAgentDeltaBuilder.Get: index out of bounds');
   Result := FItems[AIdx];
 end;
 

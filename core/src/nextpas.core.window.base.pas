@@ -11,6 +11,10 @@ uses
 type
   TWindowKind = (wkGtk2, wkGtk3, wkGtk4, wkQt, wkSdl2, wkWin32, wkCocoa, wkAndroid, wkUIKit, wkWasm, wkFake);
 
+const
+  { wkGtk 聚合别名（deprecated）：gtk 智能回退收口至 wkGtk3 载体，与 registry 注释一致，不单列枚举 }
+  wkGtk = wkGtk3;
+
   TWindowNativeHandle = type Pointer;
 
 type
@@ -232,8 +236,8 @@ end;
 
 class function TWindowScale.IsFinite(const AValue: Double): Boolean; inline;
 begin
-  // 单源复用 nextpas.core.math.scalar.IsFinite（L0，零拷贝位投射 via math.impl 单源，无 Move 重复，inline 薄转发防常量折叠与调用点代码复制，高频 weScaleChanged 去抖流水线无停顿）
-  Result := nextpas.core.math.scalar.IsFinite(AValue);
+  // 单源复用 nextpas.core.math.scalar.IsInfinite/IsNaN（L0 导出单源，无 Move 重复，inline 薄转发；有限 == 非 NaN 且非 Inf）
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and (not nextpas.core.math.scalar.IsInfinite(AValue));
 end;
 
 class function TWindowScale.AlmostEqual(const A, B: Double): Boolean; inline;

@@ -5,93 +5,34 @@ unit nextpas.core.audio.bank;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.ops,
   nextpas.core.audio.base,
-  nextpas.core.audio.intf,
+  nextpas.core.audio.bank.base,
   nextpas.core.audio.bank.intf,
-  nextpas.core.audio.mix,
+  nextpas.core.audio.bank.impl,
+  nextpas.core.audio.intf;
+nextpas.core.audio.mix,
   nextpas.core.audio.pcm,
   nextpas.core.audio.errors,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.mutex,
+  nextpas.core.text.conv;
 
 type
-  TBankVoiceSource = class(TInterfacedObject, IRealtimeAudioSource, IAudioSource)
-  private
-    FFormat: TAudioFormat;
-    FData: TBytes;
-    FFrames: Integer;
-    FPos: Double;
-    FGain: Single;
-    FPan: Single;
-    FPitch: Single;
-    FLoop: Boolean;
-    FEof: Boolean;
-    FChannels: Integer;
-  public
-    constructor Create(const ABuffer: TAudioBuffer; AGain: Single; APan: Single; APitch: Single; ALoop: Boolean);
-    constructor CreateWithParams(const ABuffer: TAudioBuffer; const AParams: TBankPlayParams);
-    function GetFormat: TAudioFormat;
-    function Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function SeekTo(AFrame: UInt64): Boolean;
-    property Eof: Boolean read FEof;
-  end;
+  TAudioBankId = nextpas.core.audio.bank.base.TAudioBankId;
+  TBankVoiceId = nextpas.core.audio.bank.base.TBankVoiceId;
+  TBankPlayParams = nextpas.core.audio.bank.base.TBankPlayParams;
+  IAudioBank = nextpas.core.audio.bank.intf.IAudioBank;
 
-  TAudioBank = class(TInterfacedObject, IAudioBank, IAudioSource, IRealtimeAudioSource)
-  private
-    FFormat: TAudioFormat;
-    FLock: TRecursiveMutex;
-    FEntries: array of record Id: Integer; Name: string; Buffer: TAudioBuffer; RefCount: Integer; Alive: Boolean; end;
-    FVoices: array of record VoiceId: Integer; BankId: Integer; Source: TBankVoiceSource; Alive: Boolean; end;
-    FNextId: Integer;
-    FNextVoice: Integer;
-    FDead: Integer;
-    FVoiceDead: Integer;
-    FViolations: Int64;
-    FScratchTmp: TBytes;
-    FSnapshotVoices: array of TBankVoiceSource;
-    procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
-    procedure EnsureBankCapacity(ANeeded: Integer); inline;
-    procedure EnsureVoiceCapacity(ANeeded: Integer); inline;
-    function FindEntry(AId: Integer): Integer;
-    function FindByNameIdx(const AName: string): Integer;
-    function FindVoice(AVoice: Integer): Integer;
-    procedure MaybeCompactEntries;
-    procedure MaybeCompactVoices;
-    procedure ReapFinished;
-  public
-    constructor Create(const AFormat: TAudioFormat);
-    destructor Destroy; override;
-    function GetFormat: TAudioFormat;
-    function Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
-    function SeekTo(AFrame: UInt64): Boolean;
-    function GetCount: Integer;
-    function FindByName(const AName: string): TAudioBankId;
-    function TryGetBuffer(AId: TAudioBankId; out ABuffer: TAudioBuffer): Boolean;
-    function GetRefCount(AId: TAudioBankId): Integer;
-    function Add(const AName: string; const ABuffer: TAudioBuffer): TAudioBankId;
-    function AcquireRef(AId: TAudioBankId): Integer;
-    function ReleaseRef(AId: TAudioBankId): Integer;
-    function Remove(AId: TAudioBankId): Boolean;
-    procedure Clear;
-    function Play(AId: TAudioBankId): TBankVoiceId; overload;
-    function Play(AId: TAudioBankId; AGain: Single; APan: Single; APitch: Single; ALoop: Boolean): TBankVoiceId; overload;
-    function Play(AId: TAudioBankId; const AParams: TBankPlayParams): TBankVoiceId; overload;
-    function StopVoice(AVoice: TBankVoiceId): Boolean;
-    procedure StopAll;
-    function VoiceCount: Integer;
-    function GetViolations: Int64; inline;
-  end;
-
-function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank;
+function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank; inline;
 
 implementation
 
-constructor TBankVoiceSource.Create(const ABuffer: TAudioBuffer; AGain: Single; APan: Single; APitch: Single; ALoop: Boolean);
+function CreateAudioBank(const AFormat: TAudioFormat): IAudioBank; inline;
 begin
-  inherited Create;
+  Result := nextpas.core.audio.bank.impl.CreateAudioBank(AFormat);
+inherited Create;
   if ABuffer.Format.SampleFormat <> sfF32 then
     raise EAudioGraphError.Create('BankVoice: buffer must be sfF32');
   FFormat := ABuffer.Format;
@@ -240,14 +181,16 @@ end;
 
 procedure TAudioBank.EnsureScratch(var AScratch: TBytes; ANeeded: Integer);
 begin
-  AudioEnsureBytesCapacity(AScratch, ANeeded);
+  { perf: inline single source via bytes.ops.BytesEnsureCapacity (zero-copy view, single SetLength geometric amortized O(1)) }
+  nextpas.core.bytes.ops.BytesEnsureCapacity(AScratch, SizeUInt(ANeeded));
 end;
 
 procedure TAudioBank.EnsureBankCapacity(ANeeded: Integer);
 var LCap: Integer;
 begin
   LCap := Length(FEntries);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
+  { perf: single source via bytes.ops.BytesGrowCapacityIntWithMin (geometric 0→4→2×, amortized O(1)); not inline per red-line 2 (loop) }
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacityIntWithMin(LCap, ANeeded, 4);
   if Length(FEntries) <> LCap then SetLength(FEntries, LCap);
 end;
 
@@ -255,7 +198,8 @@ procedure TAudioBank.EnsureVoiceCapacity(ANeeded: Integer);
 var LCap: Integer;
 begin
   LCap := Length(FVoices);
-  AudioEnsureCapacity(LCap, ANeeded, 4);
+  { perf: single source via bytes.ops.BytesGrowCapacityIntWithMin (geometric 0→4→2×, amortized O(1)); not inline per red-line 2 }
+  LCap := nextpas.core.bytes.ops.BytesGrowCapacityIntWithMin(LCap, ANeeded, 4);
   if Length(FVoices) <> LCap then SetLength(FVoices, LCap);
 end;
 
@@ -459,7 +403,7 @@ begin
   FLock.Acquire;
   try
     Idx := FindEntry(AId);
-    if Idx < 0 then raise EAudioGraphError.CreateFmt('Bank.AcquireRef: unknown id %d', [AId]);
+    if Idx < 0 then raise EAudioGraphError.Create('Bank.AcquireRef: unknown id ' + nextpas.core.text.conv.IntToStr(Int64(AId))); { perf: inline thin-forward to text.conv single source via text.number IntToBuffer (single SetLength+Move zero-copy via bytes.ops) }
     Inc(FEntries[Idx].RefCount);
     Result := FEntries[Idx].RefCount;
   finally
@@ -473,7 +417,7 @@ begin
   FLock.Acquire;
   try
     Idx := FindEntry(AId);
-    if Idx < 0 then raise EAudioGraphError.CreateFmt('Bank.ReleaseRef: unknown id %d', [AId]);
+    if Idx < 0 then raise EAudioGraphError.Create('Bank.ReleaseRef: unknown id ' + nextpas.core.text.conv.IntToStr(Int64(AId))); { perf: inline single source via text.conv (zero-copy) }
     Dec(FEntries[Idx].RefCount);
     if FEntries[Idx].RefCount <= 0 then
     begin
@@ -561,7 +505,7 @@ begin
   try
     ReapFinished;
     SIdx := FindEntry(AId);
-    if SIdx < 0 then raise EAudioGraphError.CreateFmt('Bank.Play: unknown id %d', [AId]);
+    if SIdx < 0 then raise EAudioGraphError.Create('Bank.Play: unknown id ' + nextpas.core.text.conv.IntToStr(Int64(AId))); { perf: inline single source via text.conv }
     Buf := FEntries[SIdx].Buffer;
     Src := TBankVoiceSource.CreateWithParams(Buf, AParams);
     Result := FNextVoice; Inc(FNextVoice);
