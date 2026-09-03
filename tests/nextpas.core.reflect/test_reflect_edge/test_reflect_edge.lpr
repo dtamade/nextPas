@@ -3,7 +3,7 @@ program test_reflect_edge;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.reflect.base,
   nextpas.core.reflect.intf,
   nextpas.core.reflect;

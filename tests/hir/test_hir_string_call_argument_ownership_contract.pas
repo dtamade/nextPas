@@ -3,7 +3,7 @@ program test_hir_string_call_argument_ownership_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,

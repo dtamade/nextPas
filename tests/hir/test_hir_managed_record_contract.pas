@@ -3,7 +3,7 @@ program test_hir_managed_record_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
+  nextpas.core.text.conv, nextpas.compiler.sema.semantic_model, nextpas.compiler.ir.hir.types, nextpas.compiler.ir.hir.model,
   nextpas.compiler.ir.hir.builder, nextpas.compiler.ir.hir.llvm_emitter, nextpas.compiler.ir.hir.verifier, nextpas.compiler.ir.system_contracts;
 
 procedure Fail(const AMessage: string);

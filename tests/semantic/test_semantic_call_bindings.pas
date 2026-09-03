@@ -3,7 +3,9 @@ program test_semantic_call_bindings;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.compiler.syntax.ast_facade,
   nextpas.compiler.diagnostics.sink,
   nextpas.compiler.syntax.green_tree,
@@ -166,7 +168,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-call-' + IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'helper.pas';
   RootSourceText :=
@@ -271,7 +273,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-call-' + IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
   RootSourceText :=
@@ -385,7 +387,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-owner-aware-member-call-' + IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
   RootSourceText :=
@@ -1186,7 +1188,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-known-field-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1280,7 +1282,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-known-field-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1377,7 +1379,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-known-field-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1464,7 +1466,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-known-field-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1620,7 +1622,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-known-property-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1717,7 +1719,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-known-property-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1817,7 +1819,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-known-property-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -1907,7 +1909,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-known-property-member-call-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -4215,7 +4217,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-ambiguous-overload-' + IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
   HelperBPath := ProjectRoot + DirectorySeparator + 'helperb.pas';
@@ -4324,7 +4326,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4438,7 +4440,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4555,7 +4557,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4669,7 +4671,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4773,7 +4775,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4877,7 +4879,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -4985,7 +4987,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   HelperAPath := ProjectRoot + DirectorySeparator + 'helpera.pas';
@@ -5092,7 +5094,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5187,7 +5189,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5272,7 +5274,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-call-type-mismatch-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5364,7 +5366,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-call-type-mismatch-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5449,7 +5451,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5544,7 +5546,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5642,7 +5644,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -5730,7 +5732,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -5827,7 +5829,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -5931,7 +5933,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6037,7 +6039,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6143,7 +6145,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6252,7 +6254,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6361,7 +6363,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6463,7 +6465,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6565,7 +6567,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6664,7 +6666,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6756,7 +6758,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -6856,7 +6858,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -6945,7 +6947,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7042,7 +7044,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7132,7 +7134,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7222,7 +7224,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7316,7 +7318,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7412,7 +7414,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7512,7 +7514,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7615,7 +7617,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7709,7 +7711,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7803,7 +7805,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -7910,7 +7912,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-member-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8017,7 +8019,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8115,7 +8117,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8213,7 +8215,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8315,7 +8317,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-inherited-member-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8420,7 +8422,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8516,7 +8518,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8608,7 +8610,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8700,7 +8702,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-member-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8790,7 +8792,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8885,7 +8887,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -8984,7 +8986,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -9753,7 +9755,7 @@ var
   Tree: TGreenTree;
   UnitGraph: TUnitGraph;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-unknown-callable-' +
     IntToStr(Random(MaxInt));
   HelperPath := ProjectRoot + DirectorySeparator + 'helper.pas';
@@ -9834,7 +9836,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-imported-inherited-member-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10155,7 +10157,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10250,7 +10252,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-unknown-member-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10351,7 +10353,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-known-field-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10447,7 +10449,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-unit-body-implicit-self-known-field-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10536,7 +10538,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-known-property-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10635,7 +10637,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-unit-body-implicit-self-known-property-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10727,7 +10729,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-known-field-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10825,7 +10827,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-unit-body-inherited-implicit-self-known-field-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -10916,7 +10918,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-known-property-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11017,7 +11019,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-unit-body-inherited-implicit-self-known-property-invalid-call-shape-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11111,7 +11113,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11210,7 +11212,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11311,7 +11313,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11412,7 +11414,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11516,7 +11518,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11621,7 +11623,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11725,7 +11727,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11833,7 +11835,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -11938,7 +11940,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-inherited-implicit-self-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12046,7 +12048,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12145,7 +12147,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12248,7 +12250,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12350,7 +12352,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12452,7 +12454,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12547,7 +12549,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12646,7 +12648,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12745,7 +12747,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12841,7 +12843,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -12937,7 +12939,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13029,7 +13031,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-implicit-self-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13121,7 +13123,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13215,7 +13217,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13309,7 +13311,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13407,7 +13409,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13505,7 +13507,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-type-mismatch-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13602,7 +13604,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-wrong-argument-count-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13698,7 +13700,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13798,7 +13800,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-installed-source-unit-body-inherited-implicit-self-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -13898,7 +13900,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-function-result-no-matching-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -14004,7 +14006,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-function-result-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -14110,7 +14112,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-imported-unit-body-implicit-self-ambiguous-overload-' +
     IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
@@ -15753,7 +15755,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-private-member-access-' + IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
   RootSourceText :=
@@ -15964,7 +15966,7 @@ var
   UnitGraph: TUnitGraph;
   UnitPath: string;
 begin
-  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas-semantic-protected-external-access-' + IntToStr(Random(MaxInt));
   UnitPath := ProjectRoot + DirectorySeparator + 'worker.pas';
   RootSourceText :=
