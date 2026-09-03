@@ -12,7 +12,9 @@ program test_db_pg_listen;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db.base,
@@ -58,7 +60,7 @@ begin
     Check(L.Connected, 'listener connected after open');
     Check(L.BackendPid > 0, 'backend pid positive');
     L.Listen('np_b7_rt');
-    Sleep(150);   { LISTEN 异步应用，等其生效再发通知 }
+    platform_thread_sleep_ms(150);   { LISTEN 异步应用，等其生效再发通知 }
     CheckEqual(Int64(1), Int64(Length(L.SubscribedChannels)),
       'one subscribed channel');
     S := PgOpen(GConn);
@@ -92,7 +94,7 @@ begin
   L := PgOpenListener(GConn);
   try
     L.Listen('np_b7_nopld');
-    Sleep(150);   { 同上：应用窗口设防 }
+    platform_thread_sleep_ms(150);   { 同上：应用窗口设防 }
     S := PgOpen(GConn);
     try
       S.Exec('NOTIFY np_b7_nopld');
@@ -123,7 +125,7 @@ begin
   L := PgOpenListener(GConn);
   try
     L.Listen('np_b7_order');
-    Sleep(150);   { 同上：应用窗口设防 }
+    platform_thread_sleep_ms(150);   { 同上：应用窗口设防 }
     S := PgOpen(GConn);
     try
       { 单次 Exec 原子到达：一批十条级联投递，顺序由服务端保证 }
@@ -234,14 +236,14 @@ begin
       CheckEqual(Int64(0),
         Int64(Length(L.SubscribedChannels)), 'snapshot cleared');
       { 等 UNLISTEN 应用并越过在途窗口，再发不应送达 }
-      Sleep(200);
+      platform_thread_sleep_ms(200);
       S.Exec('NOTIFY np_b7_toggle, ''after-unlisten''');
       A := L.Receive(400);
       CheckEqual(Int64(0), Int64(Length(A)),
         'nothing delivered after unlisten');
       { 重订阅恢复 }
       L.Listen('np_b7_toggle');
-      Sleep(120);
+      platform_thread_sleep_ms(120);
       S.Exec('NOTIFY np_b7_toggle, ''resumed''');
       A := L.Receive(2000);
       CheckEqual(Int64(1), Int64(Length(A)), 'delivered after relisten');
@@ -274,7 +276,7 @@ begin
     L.UnlistenAll;
     CheckEqual(Int64(0),
       Int64(Length(L.SubscribedChannels)), 'snapshot empty after all');
-    Sleep(200);
+    platform_thread_sleep_ms(200);
     S := PgOpen(GConn);
     try
       S.Exec('NOTIFY np_b7_all_a; NOTIFY np_b7_all_b');
@@ -313,7 +315,7 @@ begin
           Copy('0' + IntToStr(I), Length(IntToStr(I)), 2) + '''';
       end;
       S.Exec(LSql);
-      Sleep(250);                      { 让整批入队（含丢弃裁决） }
+      platform_thread_sleep_ms(250);                      { 让整批入队（含丢弃裁决） }
       CheckEqual(Int64(6), L.DroppedCount,
         'six newest dropped (10 into cap 4)');
       A := L.Receive(500);
@@ -342,7 +344,7 @@ begin
     Check(not L.Token.IsCancelled, 'token initially live');
     L.Token.Cancel;
     Check(L.Token.IsCancelled, 'token cancelled');
-    Sleep(200);                        { 泵 ≤1 节拍内退出 }
+    platform_thread_sleep_ms(200);                        { 泵 ≤1 节拍内退出 }
     LRaised := False;
     try
       L.Listen('np_b7_after_cancel');
@@ -403,7 +405,7 @@ begin
     L.Listen('np_b7_reconn');
     LOldPid := L.BackendPid;
     Check(LOldPid > 0, 'old backend pid known');
-    Sleep(120);                        { 确保 LISTEN 已应用 }
+    platform_thread_sleep_ms(120);                        { 确保 LISTEN 已应用 }
     S := PgOpen(GConn);
     try
       { 掐掉监听会话自己的后端（同角色后端恒可终止）：断线窗口开启 }
@@ -412,7 +414,7 @@ begin
       LDeadline := 0;
       while (L.GapCount < 1) and (LDeadline < 100) do
       begin
-        Sleep(50);
+        platform_thread_sleep_ms(50);
         Inc(LDeadline);
       end;
       Check(L.GapCount >= 1, 'gap counted honestly');
@@ -420,14 +422,14 @@ begin
       LDeadline := 0;
       while (not L.Connected) and (LDeadline < 100) do
       begin
-        Sleep(50);
+        platform_thread_sleep_ms(50);
         Inc(LDeadline);
       end;
       Check(L.Connected, 'reconnected automatically');
       Check(L.BackendPid > 0, 'new backend pid known');
       Check(L.BackendPid <> LOldPid, 'backend actually replaced');
       { 重放订阅生效：新会话再发通知仍可达 }
-      Sleep(120);
+      platform_thread_sleep_ms(120);
       S.Exec('NOTIFY np_b7_reconn, ''after-reconnect''');
       A := L.Receive(3000);
       CheckEqual(Int64(1), Int64(Length(A)),

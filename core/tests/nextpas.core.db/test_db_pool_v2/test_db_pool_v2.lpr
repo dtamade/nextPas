@@ -27,7 +27,10 @@ program test_db_pool_v2;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.os.env,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -250,7 +253,7 @@ begin
     A := Pool.Acquire;
     Check(Opens = 1, 'idle-evict: first acquire opens once');
     A := nil;                            { 入空闲队 }
-    Sleep(1200);                         { 越过空闲阈值（惰性检查点在下次取出） }
+    platform_thread_sleep_ms(1200);                         { 越过空闲阈值（惰性检查点在下次取出） }
     B := Pool.Acquire;
     Check(Opens = 2, 'idle-evict: stale idle conn replaced by fresh');
     B := nil;
@@ -425,7 +428,7 @@ begin
     B := Pool.Acquire;              { 立即检查点：A 未超阈值，零报告 }
     Check(LLog = '', 'leak: below threshold no report');
 
-    Sleep(200);                     { A、B 均超阈值 }
+    platform_thread_sleep_ms(200);                     { A、B 均超阈值 }
     B := nil;                       { 归还只扫描入账，析构链内不触发回调 }
     Check(CountOccurrences(LLog, 'leak suspected') = 0,
       'leak: return path never fires user code');
@@ -474,7 +477,7 @@ begin
   Pool := TDbPool.Create(SqliteFactory, P);
   try
     W := Pool.Writer;               { 写租约长期持有 }
-    Sleep(550);
+    platform_thread_sleep_ms(550);
     R := Pool.Acquire;              { 读路径检查点发现写泄漏 }
     Check(Pos('writer lease', LLog) > 0,
       'leak: writer role in report, got: ' + LLog);
@@ -513,7 +516,7 @@ begin
   Pool := TDbPool.Create(SqliteFactory, P);
   try
     A := Pool.Acquire;
-    Sleep(100);
+    platform_thread_sleep_ms(100);
     Pool.Writer.Exec('SELECT 1');   { writer 路径检查点触发读租约报告 }
     Check(Pos('held', LLog) > 0, 'stack: header present');
     Check(Pos('$', LLog) > 0,
@@ -542,7 +545,7 @@ begin
   Pool := TDbPool.Create(SqliteFactory, P);
   try
     A := Pool.Acquire;
-    Sleep(80);
+    platform_thread_sleep_ms(80);
     B := Pool.Acquire;
     B := nil;
     A := nil;

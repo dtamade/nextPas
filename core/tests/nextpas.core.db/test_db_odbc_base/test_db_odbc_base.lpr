@@ -16,7 +16,8 @@ program test_db_odbc_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.format,
+  nextpas.core.os.env,
   nextpas.core.test,
   nextpas.core.exception,
   nextpas.core.db.odbc.base,
@@ -123,7 +124,7 @@ begin
       LRC := sql_setConnectAttr(LDbc, SQL_ATTR_LOGIN_TIMEOUT,
         Pointer(PtrInt(5)), 0);
       Check((LRC = SQL_SUCCESS) or (LRC = SQL_SUCCESS_WITH_INFO),
-        Format('dbc: login timeout attr accepted on unconnected dbc (%d)',
+        TextFormat('dbc: login timeout attr accepted on unconnected dbc (%d)',
           [LRC]));
     finally
       LRC := sql_freeHandle(SQL_HANDLE_DBC, LDbc);

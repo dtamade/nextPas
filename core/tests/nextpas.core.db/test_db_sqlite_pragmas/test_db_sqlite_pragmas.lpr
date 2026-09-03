@@ -6,7 +6,7 @@ program test_db_sqlite_pragmas;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db.base,

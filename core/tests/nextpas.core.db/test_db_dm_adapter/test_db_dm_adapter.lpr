@@ -5,7 +5,8 @@ program test_db_dm_adapter;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.test,
   nextpas.core.db,
   nextpas.core.db.base,

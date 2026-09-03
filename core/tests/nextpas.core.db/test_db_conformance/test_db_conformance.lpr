@@ -18,7 +18,9 @@ program test_db_conformance;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.exception,
@@ -357,8 +359,7 @@ begin
   AConn.Exec('DROP TABLE IF EXISTS ' + P + '_lit');
   AConn.Exec('CREATE TABLE ' + P + '_lit (s TEXT)');
   Q := AConn.Query(
-    'INSERT INTO ' + P + '_lit VALUES (''' + StringReplace(
-      LSrc, '''', '''''', [rfReplaceAll]) + ''')');
+    'INSERT INTO ' + P + '_lit VALUES (''' + StringReplace(LSrc, '''', '''''', True) + ''')');
   while Q.Step do ;
   Q := nil;
   Q := AConn.Query('SELECT s FROM ' + P + '_lit');

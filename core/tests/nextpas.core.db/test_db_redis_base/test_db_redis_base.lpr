@@ -14,7 +14,7 @@ program test_db_redis_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.exception,
   nextpas.core.base,

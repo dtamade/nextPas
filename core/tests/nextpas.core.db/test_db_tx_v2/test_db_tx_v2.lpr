@@ -19,7 +19,7 @@ program test_db_tx_v2;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db,

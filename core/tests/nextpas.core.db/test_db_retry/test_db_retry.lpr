@@ -16,7 +16,8 @@ program test_db_retry;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.exception,
+  nextpas.core.time,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db,

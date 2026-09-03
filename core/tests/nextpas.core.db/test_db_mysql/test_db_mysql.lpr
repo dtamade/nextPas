@@ -15,7 +15,7 @@ program test_db_mysql;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db.mysql.base,

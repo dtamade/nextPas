@@ -23,8 +23,8 @@ program test_db_sqlscan;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  StrUtils,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils,
   nextpas.core.test,
   nextpas.core.text.sqlscan;
 

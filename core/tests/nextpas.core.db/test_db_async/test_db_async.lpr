@@ -26,7 +26,9 @@ program test_db_async;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db,
@@ -181,7 +183,7 @@ begin
       begin
         LConn.Exec(LongCteSql);
       end, 1000000, LTok);
-    Sleep(50);                          { 让 worker 进入工作体 }
+    platform_thread_sleep_ms(50);                          { 让 worker 进入工作体 }
     Check(not LH.WaitFor(30), 'wait timeout branch returns False');
     LTok.Cancel;                        { 子令牌回调 → progress 中断 }
     Check(LH.WaitFor(10000), 'canceled op completes promptly');
@@ -220,7 +222,7 @@ begin
       begin
         LConn.Exec(LongCteSql);
       end, 1000000);
-    Sleep(50);
+    platform_thread_sleep_ms(50);
     LH.Cancel;                          { 不经令牌，直达取消面 }
     Check(LH.WaitFor(10000), 'direct-cancel op completes');
     Check(LH.IsCanceled, 'direct cancel flagged');
@@ -432,7 +434,7 @@ begin
         LConn.Exec(
           'SELECT count(*) FROM generate_series(1, 50000000)');
       end, 1000000, LTok);
-    Sleep(200);                         { 确保查询已在服务端执行 }
+    platform_thread_sleep_ms(200);                         { 确保查询已在服务端执行 }
     LTok.Cancel;                        { 子令牌桥 → PQcancel }
     Check(LH.WaitFor(10000), 'canceled query returns promptly');
     Check(LH.IsCanceled, 'pg cancel surfaced');

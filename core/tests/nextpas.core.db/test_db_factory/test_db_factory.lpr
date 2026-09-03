@@ -7,7 +7,8 @@ program test_db_factory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.exception,
   nextpas.core.base,

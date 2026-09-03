@@ -16,7 +16,8 @@ program test_db_largeobject;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db,

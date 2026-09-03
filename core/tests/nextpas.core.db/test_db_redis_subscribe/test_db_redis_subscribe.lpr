@@ -24,8 +24,10 @@ program test_db_redis_subscribe;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
-  Classes,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.os.env,
+  nextpas.core.platform.thread,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.db.base,
@@ -48,17 +50,16 @@ type
     FSteps: array of TBytes;      { 预置回复（按序弹出） }
     FClosed: Boolean;             { true = 后续 Recv 返回 0（对端关闭） }
     FFailSend: Boolean;           { true = Send 即抛（模拟坏管道） }
-    FSent: TStringList;           { 已发命令文本录制（断言用） }
+    FSent: TStringArray;            { 已发命令文本录制（断言用） }
   public
     constructor Create;
-    destructor Destroy; override;
     procedure ScriptFrame(const ARespText: string);
     procedure ScriptClose;
     procedure Send(const ABuf: TBytes); overload;
     procedure Send(AData: Pointer; ACount: SizeUInt); overload;
     function Recv(ABuf: Pointer; AMax: Integer): Integer;
     procedure Close;
-    property Sent: TStringList read FSent;
+    property Sent: TStringArray read FSent;
     property FailSend: Boolean read FFailSend write FFailSend;
   end;
 
@@ -74,16 +75,23 @@ type
     function NewTransport: IRedisTransport;
   end;
 
+procedure AppendSent(var AItems: TStringArray; const AText: string);
+begin
+  SetLength(AItems, Length(AItems) + 1);
+  AItems[High(AItems)] := AText;
+end;
+
+function SentText(const AItems: TStringArray): string;
+var S: string;
+begin
+  Result := '';
+  for S in AItems do
+    Result := Result + S + LineEnding;
+end;
+
 constructor TScriptedPushTransport.Create;
 begin
   inherited Create;
-  FSent := TStringList.Create;
-end;
-
-destructor TScriptedPushTransport.Destroy;
-begin
-  FSent.Free;
-  inherited Destroy;
 end;
 
 procedure TScriptedPushTransport.ScriptFrame(const ARespText: string);
@@ -111,7 +119,7 @@ begin
   begin
     SetLength(LTxt, 0);
     SetString(LTxt, PAnsiChar(@ABuf[0]), Length(ABuf));
-    FSent.Add(LTxt);
+    AppendSent(FSent, LTxt);
   end;
 end;
 
@@ -125,7 +133,7 @@ begin
   begin
     SetLength(LTxt, 0);
     SetString(LTxt, PAnsiChar(AData), ACount);
-    FSent.Add(LTxt);
+    AppendSent(FSent, LTxt);
   end;
 end;
 
@@ -272,11 +280,11 @@ begin
       WaitFor(function: Boolean
         begin
           AppendAll(LGot, LSub.Receive(20));
-          if LConn1.Sent.Count > 0 then
+          if Length(LConn1.Sent) > 0 then
             LSentOk := True;
           Result := (Length(LGot) >= 2) and LSentOk;
         end, 3000);
-      Sleep(60);                                   { 第二条幂等命令窗口 }
+      platform_thread_sleep_ms(60);                                   { 第二条幂等命令窗口 }
       Check(Length(LGot) = 2, 'two messages delivered');
       if Length(LGot) = 2 then
       begin
@@ -286,7 +294,7 @@ begin
         Check(LGot[0].Pattern = '', 'message pattern empty');
       end;
       Check(LSentOk, 'subscribe command reached wire');
-      Check(LConn1.Sent.Count = 1, 'duplicate subscribe sends once');
+      Check(Length(LConn1.Sent) = 1, 'duplicate subscribe sends once');
       Check(LSub.DroppedCount = 0, 'no drops');
       Check(Length(LSub.Receive(30)) = 0,
         'confirm frames not delivered as messages');
@@ -403,7 +411,7 @@ begin
       end;
       Check(LRaised, 'overlong channel rejected');
 
-      Check(LConn1.Sent.Count = 0,
+      Check(Length(LConn1.Sent) = 0,
         'validation failures never touch wire');
 
       LRaised := False;
@@ -451,7 +459,7 @@ begin
     try
       { 确定性设计：泵以微秒级连吃全部 10 步（消费方不竞争），
         队列满 4 → 保旧弃新必丢 6；静置让泵吃完再断言 }
-      Sleep(500);
+      platform_thread_sleep_ms(500);
       LGot := nil;
       AppendAll(LGot, LSub.Receive(20));             { 取尽余量 }
       Check(LSub.DroppedCount = 6, 'dropped = 6');
@@ -588,7 +596,7 @@ begin
       Check(LSawPost, 'post-reconnect message delivered');
 
       LSawReplay := False;
-      for I := 0 to LConn2.Sent.Count - 1 do
+      for I := 0 to High(LConn2.Sent) do
         if Pos('SUBSCRIBE', LConn2.Sent[I]) > 0 then
           LSawReplay := True;
       Check(LSawReplay, 'replay sent on new connection');
@@ -633,12 +641,12 @@ begin
         end, 5000);
       Check(LSub.Connected, 'recovered via third transport');
       Check(Length(LGot) > 0, 'message flows after recovery');
-      Check(Pos('SUBSCRIBE', LConn3.Sent.Text) > 0,
+      Check(Pos('SUBSCRIBE', SentText(LConn3.Sent)) > 0,
         'third transport got replay');
       Check(LSub.GapCount = 1, 'single outage counted once');
       { 恢复成功会清 LastError（陈旧诊断不留存——设计语义），改以
         结构性事实断言不接管：被拒传输零命令记录 }
-      Check(LConn2.Sent.Count = 0,
+      Check(Length(LConn2.Sent) = 0,
         'rejected transport recorded no commands');
     finally
       LSub.Free;
@@ -692,7 +700,7 @@ begin
   LSub := RedisOpenSubscriber(LOpts);
   try
     LSub.Subscribe(LChan);
-    Sleep(150);                          { 订阅生效窗口设防 }
+    platform_thread_sleep_ms(150);                          { 订阅生效窗口设防 }
     for I := 1 to 3 do
       LPub.Exec('PUBLISH ' + LChan + ' pay' + IntToStr(I));
     LGot := nil;
