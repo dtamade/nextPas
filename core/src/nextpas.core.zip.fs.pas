@@ -173,6 +173,40 @@ begin
     Result := Copy(APath, 1, LSep - 1);
 end;
 
+function TrimTrailingSlash(const S: string): string; inline;
+var L: Integer;
+begin
+  L := Length(S);
+  while (L > 0) and (S[L] = '/') do Dec(L);
+  if L = Length(S) then Result := S else Result := Copy(S, 1, L);
+end;
+
+function JoinZipPath(const ABase, AName: string): string; inline;
+var LBase, LName: Integer;
+begin
+  LBase := Length(ABase);
+  while (LBase > 0) and (ABase[LBase] = '/') do Dec(LBase);
+  LName := Length(AName);
+  while (LName > 0) and (AName[LName] = '/') do Dec(LName);
+  if (LBase = 0) and (LName = 0) then Exit('');
+  if LBase = 0 then
+  begin
+    SetLength(Result, 1 + LName);
+    Result[1] := '/';
+    if LName > 0 then Move(AName[1], Result[2], LName);
+    Exit;
+  end;
+  if LName = 0 then
+  begin
+    Result := Copy(ABase, 1, LBase);
+    Exit;
+  end;
+  SetLength(Result, LBase + 1 + LName);
+  Move(ABase[1], Result[1], LBase);
+  Result[LBase + 1] := '/';
+  Move(AName[1], Result[LBase + 2], LName);
+end;
+
 procedure EnsureWalkCapacity(var A: TWalkArray; AMin: Integer); inline;
 var
   LCap: Integer;
@@ -364,6 +398,7 @@ var
   LI, LDirsCount: Integer;
   LE: TZipEntryInfo;
   LFull, LParent, LTarget: string;
+  LDestTrim: string;
   LNs: Int64;
   LMode: Word;
   LPayload: TBytes;
@@ -375,6 +410,7 @@ begin
   EnsureNoSymlinkInPath(ADestDir);
   MkdirAll(ADestDir, PermDirDefault);
   EnsureNoSymlinkInPath(ADestDir);
+  LDestTrim := TrimTrailingSlash(ADestDir);
   SetLength(LDirs, 0);
   LDirsCount := 0;
   try
@@ -389,13 +425,7 @@ begin
       后续劫持；显式 SkipSymlinks=False 时按归档保真创建真实符号链接 }
     if LE.IsSymlink and AOptions.SkipSymlinks then
       Continue;
-    LFull := ADestDir;
-    while (LFull <> '') and (LFull[Length(LFull)] = '/') do
-      Delete(LFull, Length(LFull), 1);
-    LFull := LFull + '/' + LE.Name;
-    { 目录条目名可能不带尾随 '/'（依赖外部属性判定的归档） }
-    while (LFull <> '') and (LFull[Length(LFull)] = '/') do
-      Delete(LFull, Length(LFull), 1);
+    LFull := JoinZipPath(LDestTrim, LE.Name);
     LParent := ParentDirOf(LFull);
     if LParent <> '' then
     begin

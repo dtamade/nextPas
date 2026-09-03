@@ -6,17 +6,14 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
+  nextpas.core.bytes.ops, // single source for BytesCopy/BytesZero inline zero-copy, no base.utils dual source
   nextpas.core.math.scalar,
   nextpas.core.sync.mutex,
-nextpas.core.bytes.ops,
-  nextpas.core.math.scalar,
-  nextpas.core.platform.sync,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
   nextpas.core.audio.graph.intf,
-  nextpas.core.audio.errors;
+  nextpas.core.audio.errors,
+  nextpas.core.audio.simd;
 
 type
   TGraphNode = record
@@ -37,7 +34,6 @@ type
     FFormat: TAudioFormat;
     FState: TGraphState;
     FLock: TRecursiveMutex;
-FLock: TPlatformMutex; // owner platform.sync (L0) via sync facade — zero SysUtils/SyncObjs, single source mutex
     FNodes: array of TGraphNode;
     FProcessors: array of TProcessorSlot;
     FNextId: Integer;
@@ -57,7 +53,6 @@ FLock: TPlatformMutex; // owner platform.sync (L0) via sync facade — zero SysU
     function FindProcessor(AId: Integer): Integer;
     procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
     procedure EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
-procedure EnsureScratch(var AScratch: TBytes; ANeeded: Integer); // not inline per red-line 1/2: SetLength+Move single source via bytes.ops
     procedure MaybeCompactNodes;
     procedure MaybeCompactProcs;
   public
@@ -97,8 +92,6 @@ begin
   FFormat := AFormat;
   FState := gsStopped;
   FLock := TRecursiveMutex.Create;
-if platform_mutex_init(FLock, PLATFORM_MUTEX_ERRORCHECK) <> 0 then
-    raise EAudioGraphError.Create('Graph: mutex init failed');
   SetLength(FNodes, 0);
   SetLength(FProcessors, 0);
   FNextId := 1;
@@ -106,8 +99,9 @@ if platform_mutex_init(FLock, PLATFORM_MUTEX_ERRORCHECK) <> 0 then
   FVolume := 1.0;
   FUnderruns := 0;
   FViolations := 0;
-  SetLength(FScratchTmp, 0);
-  SetLength(FScratchOut, 0);
+  // INV-6 steady zero heap growth: preallocate scratch for realtime FillRealtime reuse (geometric, bytes.ops single source via AudioEnsureCapacity), control-plane snapshot pre-grows elsewhere
+  SetLength(FScratchTmp, 8192 * FFormat.BlockAlign);
+  SetLength(FScratchOut, 8192 * FFormat.BlockAlign);
   SetLength(FSnapshotNodes, 0);
   SetLength(FSnapshotProcs, 0);
   SetLength(FNodeFree, 0);
@@ -118,7 +112,16 @@ end;
 
 destructor TAudioGraph.Destroy;
 begin
-  platform_mutex_destroy(FLock);
+  // stability: resource release not lost, HEAPTRC zero leak
+  SetLength(FScratchTmp, 0);
+  SetLength(FScratchOut, 0);
+  SetLength(FSnapshotNodes, 0);
+  SetLength(FSnapshotProcs, 0);
+  SetLength(FNodes, 0);
+  SetLength(FProcessors, 0);
+  SetLength(FNodeFree, 0);
+  SetLength(FProcFree, 0);
+  FLock.Free;
   inherited;
 end;
 
@@ -130,22 +133,17 @@ begin
   FLock.Acquire;
   try Result := FState;
   finally FLock.Release; end;
-platform_mutex_lock(FLock);
-  try Result := FState;
-  finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.NodeCount: Integer;
 var I, C: Integer;
 begin
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     C := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(C);
     Result := C;
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.FindNode(AId: Integer): Integer;
@@ -165,7 +163,7 @@ end;
 procedure TAudioGraph.EnsureScratch(var AScratch: TBytes; ANeeded: Integer); inline;
 var LCap: Integer;
 begin
-  // perf: inline + single source via audio.base AudioEnsureCapacity geometric doubling, steady zero heap growth
+  // perf: inline + single source via audio.base AudioEnsureCapacity geometric doubling, control-plane prealloc; realtime FillRealtime reuses without heap growth (INV-6)
   if Length(AScratch) >= ANeeded then Exit;
   LCap := Length(AScratch);
   AudioEnsureCapacity(LCap, ANeeded, 64);
@@ -175,7 +173,7 @@ end;
 procedure TAudioGraph.EnsureSnapshotCapacity(ANodes, AProcs: Integer); inline;
 var LCap: Integer;
 begin
-  // control-plane growth only (AddSource/AddProcessor), realtime FillRealtime reuses, steady zero alloc per INV-6
+  // control-plane growth only (AddSource/AddProcessor), realtime FillRealtime reuses snapshot scratch steady zero alloc per INV-6 via AudioEnsureCapacity single source
   if ANodes > 0 then
   begin
     LCap := Length(FSnapshotNodes);
@@ -188,10 +186,6 @@ begin
     AudioEnsureCapacity(LCap, AProcs, 4);
     if Length(FSnapshotProcs) <> LCap then SetLength(FSnapshotProcs, LCap);
   end;
-// perf: single source via bytes.ops — exponential grow amortized O(1), single SetLength+Move zero-copy not inline red-line 1/2
-  // stability: exception-safe SetLength, capacity retained via BytesEnsureCapacity
-  if Length(AScratch) < ANeeded then
-    BytesEnsureCapacity(AScratch, SizeUInt(ANeeded));
 end;
 
 procedure TAudioGraph.MaybeCompactNodes;
@@ -238,8 +232,6 @@ begin
     raise EAudioGraphError.Create('AddSource: format mismatch');
   if IsNan(AGain) or IsInfinite(AGain) then AGain := 1.0;
   FLock.Acquire;
-if IsNaN(AGain) or IsInfinite(AGain) then AGain := 1.0;
-  platform_mutex_lock(FLock);
   try
     Result := FNextId; Inc(FNextId);
     if Length(FNodeFree) > 0 then
@@ -264,14 +256,12 @@ if IsNaN(AGain) or IsInfinite(AGain) then AGain := 1.0;
     // control-plane snapshot pre-grow: ensure FillRealtime steady zero alloc (INV-6)
     EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.RemoveSource(AId: Integer): Boolean;
 var Idx: Integer;
 begin
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
@@ -283,7 +273,6 @@ platform_mutex_lock(FLock);
     MaybeCompactNodes;
     Result := True;
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.SetGain(AId: Integer; AGain: Single): Boolean;
@@ -291,15 +280,12 @@ var Idx: Integer;
 begin
   if IsNan(AGain) or IsInfinite(AGain) then Exit(False);
   FLock.Acquire;
-if IsNaN(AGain) or IsInfinite(AGain) then Exit(False);
-  platform_mutex_lock(FLock);
   try
     Idx := FindNode(AId);
     if Idx < 0 then Exit(False);
     FNodes[Idx].Gain := AGain;
     Result := True;
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.AddProcessor(const AProcessor: IAudioProcessor): Integer;
@@ -308,7 +294,6 @@ begin
   if not Assigned(AProcessor) then
     raise EAudioGraphError.Create('AddProcessor: nil');
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     Result := FNextId; Inc(FNextId);
     if Length(FProcFree) > 0 then
@@ -329,14 +314,12 @@ platform_mutex_lock(FLock);
     end;
     EnsureSnapshotCapacity(Length(FNodes), Length(FProcessors));
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.RemoveProcessor(AId: Integer): Boolean;
 var Idx: Integer;
 begin
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     Idx := FindProcessor(AId);
     if Idx < 0 then Exit(False);
@@ -348,14 +331,12 @@ platform_mutex_lock(FLock);
     MaybeCompactProcs;
     Result := True;
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 procedure TAudioGraph.Clear;
 var I: Integer;
 begin
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     for I := 0 to High(FNodes) do
     begin FNodes[I].Alive := False; FNodes[I].Source := nil; end;
@@ -370,7 +351,6 @@ platform_mutex_lock(FLock);
     FState := gsStopped;
     InterlockedExchange64(FPosition, 0);
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.Fill(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
@@ -382,7 +362,6 @@ function TAudioGraph.SeekTo(AFrame: UInt64): Boolean;
 var I: Integer; OK: Boolean;
 begin
   FLock.Acquire;
-platform_mutex_lock(FLock);
   try
     OK := True;
     for I := 0 to High(FNodes) do
@@ -391,12 +370,11 @@ platform_mutex_lock(FLock);
     if OK then InterlockedExchange64(FPosition, Int64(AFrame));
     Result := OK;
   finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
 end;
 
 function TAudioGraph.FillRealtime(var ABuffer: TAudioBuffer; AFrames: Integer): Integer;
 var
-  Needed, I, J, AliveN, AliveP, FillIdx: Integer;
+  Needed, I, J, AliveN, AliveP, FillIdx, NSamples: Integer;
   NodesSnap: array of TGraphNode;
   ProcsSnap: array of TProcessorSlot;
   Tmp: TAudioBuffer;
@@ -420,10 +398,6 @@ begin
   // 两阶段快照契约：锁内仅计数→锁外按需增长（ violations 计数，AudioEnsureCapacity 单源）→锁内深拷贝，混音无锁
   // INV-6 稳态零堆增长：控制面 AddSource/AddProcessor 已预增 FSnapshot* 容量，实时路径仅在容量不足时增长（违例计数），稳态复用零分配；统一字节预算经 AudioBytesForFrames 单源
   FLock.Acquire;
-// two-phase snapshot: count under lock -> alloc outside -> copy under lock
-  // 两阶段快照契约：锁内仅计数→锁外分配→锁内深拷贝，混音无锁
-  // S4 冻结：分配仍在实时路径（SetLength 保留，文档先冻契约，S6 再零分配），混音阶段无锁
-  platform_mutex_lock(FLock);
   try
     AliveN := 0;
     for I := 0 to High(FNodes) do if FNodes[I].Alive then Inc(AliveN);
@@ -431,24 +405,16 @@ begin
     for I := 0 to High(FProcessors) do if FProcessors[I].Alive then Inc(AliveP);
     SnapVol := FVolume;
   finally FLock.Release; end;
-  // snapshot scratch reuse: preallocated via control-plane EnsureSnapshotCapacity, steady zero alloc after warmup (INV-6); realtime grow via AudioEnsureCapacity single source, counted as violation
+  // snapshot scratch reuse: preallocated via control-plane EnsureSnapshotCapacity, steady zero alloc after warmup (INV-6); realtime never allocates, truncate to available capacity (violation counted)
   if (Length(FSnapshotNodes) < AliveN) or (Length(FSnapshotProcs) < AliveP) then
   begin
     InterlockedExchangeAdd64(FViolations, 1);
-    EnsureSnapshotCapacity(AliveN, AliveP);
     if Length(FSnapshotNodes) < AliveN then AliveN := Length(FSnapshotNodes);
     if Length(FSnapshotProcs) < AliveP then AliveP := Length(FSnapshotProcs);
   end;
   if (AliveN > 0) or (AliveP > 0) then
   begin
     FLock.Acquire;
-finally platform_mutex_unlock(FLock); end;
-  // snapshot scratch reuse: preallocated FSnapshotNodes/Procs reuse, steady zero alloc
-  if Length(FSnapshotNodes) < AliveN then SetLength(FSnapshotNodes, AliveN);
-  if Length(FSnapshotProcs) < AliveP then SetLength(FSnapshotProcs, AliveP);
-  if (AliveN > 0) or (AliveP > 0) then
-  begin
-    platform_mutex_lock(FLock);
     try
       FillIdx := 0;
       for I := 0 to High(FNodes) do if FNodes[I].Alive then
@@ -464,22 +430,36 @@ finally platform_mutex_unlock(FLock); end;
       end;
       SnapVol := FVolume;
     finally FLock.Release; end;
-finally platform_mutex_unlock(FLock); end;
   end;
 
   if AliveN = 0 then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
     Exit(AFrames);
   end;
 
-  FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+  BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
   MixPtr := PSingle(@ABuffer.Data[0]);
   HasData := False;
-  EnsureScratch(FScratchTmp, Needed);
+  // INV-6 steady zero heap growth: realtime reuses preallocated FScratchTmp (constructor 8192 frames, control-plane geometric), never SetLength here; violation truncates
+  if Length(FScratchTmp) < Needed then
+  begin
+    InterlockedExchangeAdd64(FViolations, 1);
+    if Length(FScratchTmp) >= FFormat.BlockAlign then
+    begin
+      AFrames := Length(FScratchTmp) div FFormat.BlockAlign;
+      Needed := AFrames * FFormat.BlockAlign;
+    end else
+    begin
+      ABuffer.FrameCount := AFrames;
+      ABuffer.Format := FFormat;
+      InterlockedExchangeAdd64(FPosition, Int64(AFrames));
+      Exit(AFrames);
+    end;
+  end;
   Tmp.Data := FScratchTmp;
   Tmp.Format := FFormat;
   Tmp.FrameCount := AFrames;
@@ -493,8 +473,8 @@ finally platform_mutex_unlock(FLock); end;
       Continue;
     end;
     Gain := FSnapshotNodes[I].Gain * SnapVol;
-    // zero tmp tail guard before fill — FillMem single source
-    FillMem(@Tmp.Data[0], SizeUInt(Needed), 0);
+    // zero tmp tail guard before fill — BytesZero single source inline zero-copy
+    BytesZero(@Tmp.Data[0], SizeUInt(Needed));
     try
       J := FSnapshotNodes[I].Source.FillRealtime(Tmp, AFrames);
     except
@@ -510,23 +490,20 @@ finally platform_mutex_unlock(FLock); end;
     if J < AFrames then
     begin
       InterlockedExchangeAdd64(FUnderruns, 1);
-      // source contract: should have zero-filled tail, but ensure — FillMem single source
-      FillMem(PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign, SizeUInt((AFrames - J) * FFormat.BlockAlign), 0);
+      // source contract: should have zero-filled tail, but ensure — BytesZero single source inline zero-copy
+      BytesZero(PByte(@Tmp.Data[0]) + J * FFormat.BlockAlign, SizeUInt((AFrames - J) * FFormat.BlockAlign));
       J := AFrames;
     end;
     HasData := True;
     TmpPtr := PSingle(@Tmp.Data[0]);
-    if Gain = 1.0 then
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J]
-    else
-      for J := 0 to AFrames * FFormat.Channels - 1 do
-        MixPtr[J] := MixPtr[J] + TmpPtr[J] * Gain;
+    NSamples := AFrames * FFormat.Channels;
+    // perf: inline SIMD Owner audio.simd SimdAddF32 (AVX2 8-wide / SSE2 4-wide, scalar fallback), single source, zero alloc, replaces scalar weighted loop
+    SimdAddF32(TmpPtr, MixPtr, NSamples, Gain);
   end;
 
   if not HasData then
   begin
-    FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
+    BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
     ABuffer.FrameCount := AFrames;
     ABuffer.Format := FFormat;
     InterlockedExchangeAdd64(FPosition, Int64(AFrames));
@@ -534,18 +511,26 @@ finally platform_mutex_unlock(FLock); end;
     Exit;
   end;
 
-  for I := 0 to AFrames * FFormat.Channels - 1 do
-  begin
-    if MixPtr[I] > 1.0 then MixPtr[I] := 1.0
-    else if MixPtr[I] < -1.0 then MixPtr[I] := -1.0;
-  end;
+  NSamples := AFrames * FFormat.Channels;
+  // perf: inline SIMD Owner audio.simd SimdClampF32 (SSE2/AVX2, scalar fallback), single source, replaces scalar clamp loop
+  SimdClampF32(MixPtr, NSamples, -1.0, 1.0);
 
   if AliveP > 0 then
   begin
-    EnsureScratch(FScratchOut, Needed);
-    EnsureScratch(FScratchTmp, Needed);
-    // single source: base.utils CopyMem → bytes.ops (also single source via AudioFillMemoryRealtime/AudioEnsureCapacity), SizeUInt(Needed) boundary, non-overlapping
-    CopyMem(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
+    // INV-6 steady zero heap growth: realtime reuses preallocated FScratchOut/FScratchTmp, never SetLength; violation counted, no heap growth
+    if Length(FScratchOut) < Needed then InterlockedExchangeAdd64(FViolations, 1);
+    if Length(FScratchTmp) < Needed then InterlockedExchangeAdd64(FViolations, 1);
+    if (Length(FScratchOut) < Needed) or (Length(FScratchTmp) < Needed) then
+    begin
+      // insufficient scratch for processor chain, keep clamped mix and exit without processing (zero alloc)
+      ABuffer.FrameCount := AFrames;
+      ABuffer.Format := FFormat;
+      InterlockedExchangeAdd64(FPosition, Int64(AFrames));
+      Result := AFrames;
+      Exit;
+    end;
+    // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Needed) boundary, non-overlapping
+    BytesCopy(@FScratchOut[0], @ABuffer.Data[0], SizeUInt(Needed));
     OutBuf.Format := FFormat;
     OutBuf.FrameCount := AFrames;
     OutBuf.Data := FScratchOut;
@@ -564,13 +549,13 @@ finally platform_mutex_unlock(FLock); end;
       end;
     end;
     if Length(OutBuf.Data) >= Needed then
-      // single source: base.utils CopyMem → bytes.ops (single source AudioFillMemoryRealtime path), SizeUInt(Needed) boundary, non-overlapping final blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Needed))
+      // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Needed) boundary, non-overlapping final blit
+      BytesCopy(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Needed))
     else if Length(OutBuf.Data) > 0 then
     begin
-      FillMem(@ABuffer.Data[0], SizeUInt(Needed), 0);
-      // single source: base.utils CopyMem → bytes.ops, SizeUInt(Min(Needed,Length)) variable boundary, non-overlapping partial blit
-      CopyMem(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Min(Needed, Length(OutBuf.Data))));
+      BytesZero(@ABuffer.Data[0], SizeUInt(Needed));
+      // single source: bytes.ops BytesCopy inline zero-copy, SizeUInt(Min(Needed,Length)) variable boundary, non-overlapping partial blit
+      BytesCopy(@ABuffer.Data[0], @OutBuf.Data[0], SizeUInt(Min(Needed, Length(OutBuf.Data))));
     end;
   end;
 
