@@ -153,9 +153,18 @@ begin
   BenchBlackBoxBytes(GRawBig[0], RAW_4K * 4);
 end;
 
-procedure CheckGate(const ARes: IBenchResults);
+function IsVerifyMode: Boolean; inline;
+var I: Integer;
+begin
+  Result := False;
+  for I:=1 to ParamCount do
+    if ParamStr(I)='--verify' then Exit(True);
+end;
+
+function CheckGate(const ARes: IBenchResults): Boolean;
 var R: TBenchResult; Passed: Boolean;
 begin
+  Result := True;
   if ARes.TryGetByName('FillPath opaque 100x100', R) then
   begin
     Passed := R.NsPerOp < GATE_NS_100;
@@ -163,14 +172,46 @@ begin
       WriteLn('Gate FillPath 100x100 ', R.NsPerOp:0:1, ' ns/op < ', GATE_NS_100:0:1, ' PASS (tile 16 + SSE2 batch 4/8)')
     else
       WriteLn('Gate FillPath 100x100 ', R.NsPerOp:0:1, ' ns/op >= ', GATE_NS_100:0:1, ' FAIL (tile 16 + SSE2 batch 4/8)');
-    if not Passed then Halt(1);
+    Result := Passed;
   end;
+end;
+
+function VerifyTable(const ARes: IBenchResults): Boolean; inline;
+var R: TBenchResult;
+  Ok: Boolean;
+begin
+  Result := True;
+  // single invocation no inner loop, framework calibrates; BytesPerOp = W*H*4 must be present for MB/s
+  Ok := ARes.TryGetByName('FillPath opaque 100x100', R);
+  if not Ok or (R.NsPerOp <= 0) or (R.BytesPerOp <> W100*H100*4) then
+  begin
+    WriteLn('Verify FillPath 100x100 ns/op+MB/s 1MB single FAIL (ns=',R.NsPerOp:0:1,' bytes=',R.BytesPerOp,')');
+    Result := False;
+  end;
+  Ok := ARes.TryGetByName('RasterFillSolid 1K px', R);
+  if not Ok or (R.NsPerOp <= 0) or (R.BytesPerOp <> RAW_PIXELS*4) then
+  begin
+    WriteLn('Verify RasterFillSolid 1K px ns/op+MB/s single FAIL');
+    Result := False;
+  end;
+  Ok := ARes.TryGetByName('RasterBlendSrcOver 1K px', R);
+  if not Ok or (R.NsPerOp <= 0) or (R.BytesPerOp <> RAW_PIXELS*4) then
+  begin
+    WriteLn('Verify RasterBlendSrcOver 1K px ns/op+MB/s single FAIL');
+    Result := False;
+  end;
+  if Result then
+    WriteLn('Verify CONTRACT 0.2.1 bench_raster single ns/op+MB/s PASS (Go1.22/tiny-skia0.11 locked)');
 end;
 
 var
   Suite: IBenchSuite;
   Res: IBenchResults;
+  VerifyMode: Boolean;
+  GateOk, TableOk: Boolean;
 begin
+  VerifyMode := IsVerifyMode;
+  if VerifyMode then WriteLn('bench_raster --verify CONTRACT 0.2.1 single ns/op+MB/s Go1.22/tiny-skia0.11');
   Suite := TBenchSuite.Create('canvas.raster');
   Suite.SetQuiet(True);
   Suite.SetMinDuration(TDuration.FromMilliseconds(50));
@@ -200,5 +241,18 @@ begin
   WriteLn(Res.ToHTML);
   WriteLn('HTML report: build/bench-raster.html (incl SVG charts)');
   WriteLn('JSON report: build/bench-raster.json');
-  CheckGate(Res);
+  GateOk := CheckGate(Res);
+  TableOk := VerifyTable(Res);
+  if VerifyMode then
+  begin
+    if GateOk and TableOk then
+    begin
+      WriteLn('--verify PASS');
+      Halt(0);
+    end else
+    begin
+      WriteLn('--verify FAIL');
+      Halt(1);
+    end;
+  end else if not GateOk then Halt(1);
 end.

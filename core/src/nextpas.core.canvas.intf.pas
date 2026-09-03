@@ -57,7 +57,7 @@ type
     ['{B2C3D4E5-F6A7-8901-BCDE-222222000002}']
   end;
 
-function AutoSave(ACanvas: ICanvas): ICanvasGuard;
+function AutoSave(ACanvas: ICanvas): ICanvasGuard; inline;
 
 implementation
 
@@ -70,6 +70,7 @@ type
   TCanvasGuard = class(TInterfacedObject, ICanvasGuard)
   private
     FCanvas: ICanvas;
+    FArmed: Boolean;
   public
     constructor Create(ACanvas: ICanvas);
     destructor Destroy; override;
@@ -79,17 +80,22 @@ constructor TCanvasGuard.Create(ACanvas: ICanvas);
 begin
   inherited Create;
   FCanvas := ACanvas;
-  if FCanvas <> nil then FCanvas.Save;
+  FArmed := False;
+  if FCanvas <> nil then
+  begin
+    FCanvas.Save;
+    FArmed := True;
+  end;
 end;
 
 destructor TCanvasGuard.Destroy;
 begin
-  if FCanvas <> nil then
-    try FCanvas.Restore; except end;
+  if FArmed and (FCanvas <> nil) then
+    FCanvas.Restore;
   inherited Destroy;
 end;
 
-function AutoSave(ACanvas: ICanvas): ICanvasGuard;
+function AutoSave(ACanvas: ICanvas): ICanvasGuard; inline;
 begin
   Result := TCanvasGuard.Create(ACanvas);
 end;

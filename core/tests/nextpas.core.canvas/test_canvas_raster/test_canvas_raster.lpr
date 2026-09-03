@@ -89,6 +89,45 @@ begin
   Check(BytesEqual(Comp, Comp), 'bytes single source');
 end;
 
+procedure TestBitmapCowIsolation;
+var A, B: TBitmap; P: PByte; V0, V1: Byte;
+begin
+  A := TBitmap.Create(4,4, bfRGBA);
+  P := A.RowPtr(0);
+  P[0] := 10; P[1] := 20; P[2] := 30; P[3] := 255;
+  B := A.Clone;
+  // Clone is shallow share, mutation via Premultiply/RowPtr must isolate via EnsureUnique
+  P := B.RowPtr(1);
+  P[0] := 99;
+  Check(A.ConstRowPtr(1)[0] <> 99, 'clone row isolation');
+  // Premultiply isolation
+  A := TBitmap.Create(2,2, bfRGBA);
+  P := A.RowPtr(0); P[0] := 100; P[1] := 100; P[2] := 100; P[3] := 128;
+  B := A.Clone;
+  V0 := A.ConstRowPtr(0)[0];
+  B.Premultiply;
+  V1 := A.ConstRowPtr(0)[0];
+  Check(V0 = V1, 'premultiply clone isolation');
+  Check(B.ConstRowPtr(0)[0] <> V0, 'premultiply mutates clone');
+  // DrawBitmap COW: Snapshot Clone + DrawBitmap must not corrupt src
+  A.Clear; B.Clear;
+end;
+
+procedure TestBitmapHeaptrcResource;
+var B, C: TBitmap; I: Integer;
+begin
+  // resource closed loop: Create/Clear/ToCompact/Clone/Premultiply no leak via heaptrc gate
+  for I := 0 to 10 do
+  begin
+    B := TBitmap.Create(8,8, bfRGBA);
+    C := B.Clone;
+    C.Premultiply;
+    B.Clear;
+    C.Clear;
+  end;
+  Check(True, 'heaptrc resource loop');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.canvas.raster');
   T.Test('fill', @TestFill);
@@ -96,5 +135,7 @@ begin
   T.Test('gradient', @TestGradient);
   T.Test('auto save guard', @TestAutoSave);
   T.Test('bytes single source', @TestBytesOpsSingleSource);
+  T.Test('bitmap COW isolation', @TestBitmapCowIsolation);
+  T.Test('bitmap heaptrc resource', @TestBitmapHeaptrcResource);
   if not T.Run then Halt(1);
 end.

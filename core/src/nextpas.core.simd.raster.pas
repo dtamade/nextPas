@@ -1,7 +1,9 @@
 {**
  * nextpas.core.simd.raster - 跨平台内联光栅抽象（FillSolid / BlendSrcOver）
- * 目标：不走 dispatch 分发表，编译期直联最优后端（SSE2/标量），可内联。
- * 供 graphics.canvas.raster 等消费；缺口反哺本模块。
+ * 目标：不走 dispatch 分发表，编译期直联最优后端（SSE2/标量），可内联，零 dispatch。
+ * 供 graphics.canvas.raster 等消费；缺口反哺本模块。批量亲和：FillTrapezoids 64-chunk
+ * 复用（gradient CHUNK_SIZE=64 栈数组复用，RasterCopy/BlendVaried 单源 inline 零拷贝），
+ * 复用 bytes.ops Move 单源语义（L0 层内 Move 对齐 BytesCopy，不引入 L1 依赖）。
  *
  * Tile 16 架构说明：TILE=16 匹配 64B cache line (16*4B=64)，SSE2 每迭代 4px/16B →
  * 每 tile 行 4 次迭代，批量 8px(32B) 对大跨进一步减半分支，inline 阈值 <4 走标量避免 SSE 启动开销。
@@ -29,10 +31,10 @@ procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
 // 批式原地 LUT（256*3 字节，通道独立映射），行级批量
 procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte); inline;
 
-// 变长源批量拷贝（梯度 LUT Chunk 等逐块定长拷贝，复用 SimdMemCopy 64B 对齐路径）
+// 变长源批量拷贝（梯度 LUT Chunk 等逐块定长拷贝，复用 bytes.ops Move 单源 零拷贝，inline，64-chunk 复用）
 procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
 
-// 变长源 src-over 混合（每像素独立颜色，梯度/纹理逐块混合，封装手写 blend 细节）
+// 变长源 src-over 混合（每像素独立颜色，梯度/纹理逐块混合，封装手写 blend 细节，单源 inline 零 dispatch）
 procedure RasterBlendVaried(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
 
 // 批量预乘/反预乘（RGBA，A 驱动 RGB 缩放，行级批量，供 image.base Premultiply 复用）

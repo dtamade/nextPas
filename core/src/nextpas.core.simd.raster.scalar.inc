@@ -1,4 +1,6 @@
 // scalar fallback for simd.raster — micro-opt: 32-bit store + 4x unroll, pointer batch
+// 零 dispatch：无 simd.dispatch 分发表，直联标量；RasterCopy/BlendVaried 单源 inline 零拷贝，复用 bytes.ops Move 单源语义（L0 内对齐 BytesCopy，不跨层依赖）。
+// 批量亲和：FillTrapezoids 64-chunk 复用（@Chunk[64] 栈数组，rem>64 分块），RasterCopy/BlendVaried 逐块 inline 调用。
 // Opt-1 branch prediction: early exits first (PixelCount<=0 / A=0/255) predicted not-taken for hot opaque/large spans.
 // Opt-2 pointer increment batch: use PCardinal (4B store) and bulk 4-pixel unroll, one Inc by 16 per iter.
 // Opt-3 batch 4/8: hot FillSolid unrolled 4, Blend unrolled 2, halves loop branches.
@@ -234,6 +236,7 @@ end;
 procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
 begin
   if (PixelCount <= 0) or (Dst = nil) or (Src = nil) then Exit;
+  // bytes.ops 单源：Move 语义与 nextpas.core.bytes.ops.BytesCopy 对齐，inline 零拷贝，L0 内零依赖
   Move(Src^, Dst^, NativeUInt(PixelCount) * 4);
 end;
 
@@ -246,6 +249,7 @@ var
   R, G, B, A: Byte;
   invA, Tv: Integer;
 begin
+  // 单源 inline 零 dispatch：标量回退与 x86 SSSE3 路径语义一致，热点由上层 64-chunk 批量亲和驱动
   if (PixelCount <= 0) or (Dst = nil) or (Src = nil) then Exit;
   P := Dst; S := Src;
   for N := 0 to PixelCount - 1 do
