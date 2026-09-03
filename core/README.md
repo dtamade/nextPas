@@ -15,7 +15,7 @@ nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例
 ```
 L0 基座  base · exception · errors · mem · platform · log.intf · atomic    ← 仅 FPC RTL
 L1 能力  bytes · text · encoding · collections · hash · sync · async        ← 仅依赖 L0
-L2 能力  fs · path · net · tls · crypto · compress · json · time            ← 仅依赖 L0–L1
+L2 能力  fs · path · net · tls · crypto · compress · tar · zip · json · time      ← 仅依赖 L0–L1
 L3 运行时 http · websocket · tui · config · bench · agent                    ← 仅依赖 L0–L2
 ```
 

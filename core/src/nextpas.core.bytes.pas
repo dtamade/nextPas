@@ -65,6 +65,9 @@ function BytesToString(const ABytes: TBytes): string; inline;
 function StringToBytes(const AText: string): TBytes; inline;
 function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
+{ Single-source Move (zero-copy PByte, bytes.ops owner) }
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt); inline;
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt); inline;
 
 { Unsigned helpers — single source via bytes.ops, inline }
 function StripLeadingZero(const AData: TBytes): TBytes; inline;
@@ -272,6 +275,16 @@ function BytesSliceToString(const ABytes: TBytes; const AOffset,
   ALength: SizeUInt): string; inline;
 begin
   Result := nextpas.core.bytes.ops.BytesSliceToString(ABytes, AOffset, ALength);
+end;
+
+procedure CopyStringToBuffer(const AText: string; ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyStringToBuffer(AText, ADest, ACount);
+end;
+
+procedure CopyMemory(const ASrc, ADest: PByte; ACount: SizeUInt);
+begin
+  nextpas.core.bytes.ops.CopyMemory(ASrc, ADest, ACount);
 end;
 
 { Unsigned helpers }

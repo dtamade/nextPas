@@ -120,7 +120,10 @@ def check_ops(core_root: Path) -> list[str]:
     # Verify implementation body is single Move(ASrc^,ADst^,ALen) without index
     stripped_for_copy = strip_pascal_comments(ops_text)
     # Find BytesCopy implementation chunk
-    m_copy_impl = re.search(r"procedure\s+BytesCopy\s*\(.*?\)\s*;\s*inline\s*;\s*\nbegin(.*?)\nend\s*;", stripped_for_copy, re.I | re.S)
+    # NOTE: params use [^()]* (single-line) so the match anchors on the real
+    # implementation instead of backtracking from the interface decl across
+    # the unit into an unrelated inline body (false positive on merged code).
+    m_copy_impl = re.search(r"procedure\s+BytesCopy\s*\([^()]*\)\s*;\s*inline\s*;\s*\nbegin(.*?)\nend\s*;", stripped_for_copy, re.I | re.S)
     if m_copy_impl:
         body_copy = m_copy_impl.group(1)
         if "Move(ASrc^, ADst^, ALen)" not in body_copy and "Move(ASrc^,ADst^,ALen)" not in body_copy:

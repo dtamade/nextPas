@@ -26,6 +26,7 @@ function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
 function ViewToUInt64(const AView: TStringView; out AValue: UInt64): Boolean; inline;
 function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean; inline;
+function UInt64DecimalDigits(const AValue: UInt64): Int32; inline;
 
 implementation
 

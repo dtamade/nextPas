@@ -1,6 +1,8 @@
 unit nextpas.core.compress;
 {**
- * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib、Tar。
+ * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib。L2 门面纯 inline 薄转发，零拷贝 TBytes 视图，bytes.ops 单源。
+ * @note Tar 已晋升独立 L2 nextpas.core.tar 并完成单源收敛：兼容薄转发 nextpas.core.compress.tar 已删除（空存根已移除），本门面不再 re-export Tar 以守 L2→L0-L1 依赖（见 module-registry 与 docs/tar/CONTRACT.md）。
+ * @note 后端选择已下沉：LZ4 经 nextpas.core.compress.lz4.native (intf/ffi/impl Owner，pure fallback + FFI + try..finally 资源释放) 与 nextpas.core.compress.lz4.ffi (ABI-only)，Zstd 经 nextpas.core.compress.zstd → zstd.ffi；门面不再 IFDEF 分叉或直连 FFI，守四件套与 L0-L3，inline 零拷贝。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,24 +16,13 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.compress.deflate,
   nextpas.core.compress.gzip,
-  nextpas.core.compress.tar,
-  nextpas.core.compress.zstd
-  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
-  , nextpas.core.compress.lz4.native
-  {$ENDIF}
-  {$IFNDEF NEXTPAS_USE_LZ4_NATIVE}
-  , nextpas.core.compress.lz4
-  {$ENDIF}
-  ;
+  nextpas.core.compress.zstd,
+  nextpas.core.compress.lz4.native;
 
 type
   TCompressionLevel = nextpas.core.compress.base.TCompressionLevel;
   ICompressWriter = nextpas.core.compress.intf.ICompressWriter;
   IDecompressReader = nextpas.core.compress.intf.IDecompressReader;
-  TTarEntryKind = nextpas.core.compress.tar.TTarEntryKind;
-  TTarHeader = nextpas.core.compress.tar.TTarHeader;
-  TTarReader = nextpas.core.compress.tar.TTarReader;
-  TTarWriter = nextpas.core.compress.tar.TTarWriter;
 
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
@@ -250,43 +241,26 @@ end;
 
 function Lz4Compress(const AData: TBytes): TBytes;
 begin
-  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   Result := nextpas.core.compress.lz4.native.NativeLz4Compress(AData);
-  {$ELSE}
-  Result := nextpas.core.compress.lz4.Lz4Compress(AData);
-  {$ENDIF}
 end;
 
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 begin
-  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   Result := nextpas.core.compress.lz4.native.NativeLz4Decompress(AData, AOriginalSize);
-  {$ELSE}
-  Result := nextpas.core.compress.lz4.Lz4Decompress(AData, AOriginalSize);
-  {$ENDIF}
 end;
 
 function Lz4DecompressWithMaxOutputSize(const AData: TBytes;
   const AOriginalSize: Int32; const AMaxOutputSize: SizeUInt): TBytes;
 begin
-  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   Result := nextpas.core.compress.lz4.native.NativeLz4DecompressWithMaxOutputSize(
     AData, AOriginalSize, AMaxOutputSize);
-  {$ELSE}
-  Result := nextpas.core.compress.lz4.Lz4DecompressWithMaxOutputSize(AData,
-    AOriginalSize, AMaxOutputSize);
-  {$ENDIF}
 end;
 
 function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
 begin
   if AInputSize > LZ4_MAX_INPUT_SIZE then
     raise EIOError.Create('lz4: input size exceeds limit');
-  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
   Result := SizeUInt(nextpas.core.compress.lz4.native.NativeLz4CompressBound(Int32(AInputSize)));
-  {$ELSE}
-  Result := nextpas.core.compress.lz4.Lz4CompressBound(AInputSize);
-  {$ENDIF}
 end;
 
 function ZstdCompress(const AData: TBytes;

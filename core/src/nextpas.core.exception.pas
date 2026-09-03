@@ -216,7 +216,6 @@ function ErrorCategoryToString(const ACategory: TErrorCategory): string;
 function ExceptAddr: Pointer; inline;
 function ExceptFrameCount: LongInt; inline;
 function ExceptFrameAt(const AIndex: LongInt): CodePointer; inline;
-
 { Exception capture — centralized so L1 thread modules don't use SysUtils directly.
   Single-source over FPC RTL raiseframe chain; inline zero-copy forward to
   System.AcquireExceptionObject (no alloc, ownership transfer to capture site). }
