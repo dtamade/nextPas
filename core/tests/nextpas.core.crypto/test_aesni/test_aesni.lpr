@@ -3,7 +3,9 @@ program test_aesni;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base.utils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.aesni,
   nextpas.core.crypto.aes.ct64,
   nextpas.core.test;

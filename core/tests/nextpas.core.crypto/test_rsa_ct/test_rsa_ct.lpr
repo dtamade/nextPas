@@ -3,7 +3,10 @@ program test_rsa_ct;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.crypto.rsa.ct,
   nextpas.core.crypto.bigint,
   nextpas.core.test;
@@ -21,19 +24,15 @@ begin Result := '';
 end;
 
 function LoadTextFile(const APath: string): string;
-var LText: TStringList;
 begin
-  Result := '';
-  LText := TStringList.Create;
-  try LText.LoadFromFile(APath); Result := LText.Text;
-  finally LText.Free; end;
+  Result := ReadFileText(APath);
 end;
 
 function SourcePath(const AUnitFile: string): string;
 begin
   Result := ExpandFileName(
-    ExtractFileDir(ParamStr(0)) + PathDelim + '..' + PathDelim + '..' + PathDelim +
-    '..' + PathDelim + '..' + PathDelim + 'src' + PathDelim + AUnitFile);
+    ExtractFileDir(ParamStr(0)) + DirectorySeparator + '..' + DirectorySeparator + '..' + DirectorySeparator +
+    '..' + DirectorySeparator + '..' + DirectorySeparator + 'src' + DirectorySeparator + AUnitFile);
 end;
 
 var

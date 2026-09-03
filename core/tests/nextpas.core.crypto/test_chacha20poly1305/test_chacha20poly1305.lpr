@@ -3,7 +3,8 @@ program test_chacha20poly1305;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.chacha20poly1305,
   nextpas.core.test;
 
@@ -207,7 +208,7 @@ begin
   begin
     LKey := HexToBytes('85d6be7857556d337f4452fe42d506a8' +
       '0103808afb0db2fd4abff6af4149f51b');
-    LMsg := BytesOf('Cryptographic Forum Research Group');
+    LMsg := StringToUTF8Bytes('Cryptographic Forum Research Group');
     LTag := Poly1305Raw(LKey, LMsg);
     CheckEqual('a8061dc1305136c6c22b8baf0c0127a9', BytesToHex(LTag));
   end);

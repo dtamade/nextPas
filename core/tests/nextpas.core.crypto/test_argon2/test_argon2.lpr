@@ -3,7 +3,8 @@ program test_argon2;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.argon2,
   nextpas.core.test;
 
@@ -26,7 +27,7 @@ begin
     SetLength(LSalt, 8); Move(PAnsiChar('saltsalt')^, LSalt[0], 8);
     LHash := Argon2Hash(LPwd, LSalt, 1, 16, 1, 32, atArgon2id);
     CheckEqual(32, Length(LHash));
-    CheckTrue(BytesToHex(LHash) <> StringOfChar('0', 64));
+    CheckTrue(BytesToHex(LHash) <> TextOfChar('0', 64));
   end);
 
   LSuite.Test('deterministic', procedure

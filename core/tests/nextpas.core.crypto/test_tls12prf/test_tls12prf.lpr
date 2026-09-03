@@ -3,7 +3,8 @@ program test_tls12prf;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.tls12prf,
   nextpas.core.test;
 
@@ -32,7 +33,7 @@ begin
     LSeed := HexToBytes('5bc0b19b4a8b24b07afe7ec65c6e3b96b1f3523c4aef1c0d2bb600cb27f5f818');
     LResult := TLS12PRF_SHA256(LPreMaster, 'master secret', LSeed, 48);
     CheckEqual(48, Length(LResult));
-    CheckTrue(BytesToHex(LResult) <> StringOfChar('0', 96));
+    CheckTrue(BytesToHex(LResult) <> TextOfChar('0', 96));
   end);
 
   LSuite.Test('PRF-SHA256 key expansion', procedure

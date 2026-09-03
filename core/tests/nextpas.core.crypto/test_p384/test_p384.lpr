@@ -3,7 +3,8 @@ program test_p384;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.p384,
   nextpas.core.test;
 

@@ -3,7 +3,8 @@ program test_x25519;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.x25519,
   nextpas.core.test;
 

@@ -3,7 +3,8 @@ program test_constant_time;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.constant_time,
   nextpas.core.test;
 

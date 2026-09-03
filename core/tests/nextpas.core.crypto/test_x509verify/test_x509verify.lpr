@@ -3,7 +3,10 @@ program test_x509verify;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils, nextpas.core.system.classes,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.process,   { ExecuteProcess:openssl 证书夹具生成 }
   nextpas.core.tls.x509,
   nextpas.core.time,
@@ -15,20 +18,16 @@ var
   GCertPath, GKeyPath, GPemPath: string;
 
 function LoadCertFromFile(const APath: string): TX509Certificate;
-var LStream: TFileStream; LData: TBytes;
+var LData: TBytes;
 begin
   Result := TX509Certificate.Create;
-  LStream := TFileStream.Create(APath, fmOpenRead);
-  try
-    SetLength(LData, LStream.Size);
-    if LStream.Size > 0 then LStream.ReadBuffer(LData[0], LStream.Size);
-    Result.LoadFromDER(LData);
-  finally LStream.Free; end;
+  LData := ReadFile(APath);
+  Result.LoadFromDER(LData);
 end;
 
 function TempFilePath(const ASuffix: string): string;
 begin
-  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+  Result := IncludeTrailingPathDelimiter(GetTempDir) +
     'nextpas_x509verify_' + IntToStr(GetProcessID) + ASuffix;
 end;
 
@@ -58,8 +57,8 @@ begin
   LOptions.CommonName := 'x509verify-utc-contract.local';
   LOptions.Organization := 'nextpas core';
   LOptions.ValidDays := 1;
-  LOptions.NotBefore := Now - (1.0 / 24.0);
-  LOptions.NotAfter := Now + (1.0 / 24.0);
+  LOptions.NotBefore := DateTimeNow - (1.0 / 24.0);
+  LOptions.NotAfter := DateTimeNow + (1.0 / 24.0);
   Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
 end;
 

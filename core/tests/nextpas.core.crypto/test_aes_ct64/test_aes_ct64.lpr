@@ -3,7 +3,8 @@ program test_aes_ct64;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.aes.ct64,
   nextpas.core.crypto.aesgcm,
   nextpas.core.test;

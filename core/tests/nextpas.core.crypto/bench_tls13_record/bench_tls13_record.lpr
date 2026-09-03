@@ -19,7 +19,8 @@ program bench_tls13_record;
   分配器检测开销会严重扭曲吞吐数据。先例：bench_ssh_cipher。
 }
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base.utils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.time,
   nextpas.core.crypto.aesni,
