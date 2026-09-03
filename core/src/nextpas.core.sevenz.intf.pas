@@ -271,7 +271,24 @@ type
     function TryAddFileFromFs(const AHostPath: string; const AArchiveName: string; out AError: string): Boolean;
   end;
 
+function SevenZLzmaFfiAvailable: Boolean;
+function SevenZCreateLzmaFfiDecoder: ISevenZLzmaDecoder;
+
 implementation
+
+uses
+  nextpas.core.sevenz.lzma.ffi.decoder;
+
+function SevenZLzmaFfiAvailable: Boolean;
+begin
+  // owner边界：coders经此intf契约访问FFI探测，避免直连ffi.decoder实现缝
+  Result := nextpas.core.sevenz.lzma.ffi.decoder.SevenZLzmaFfiAvailable;
+end;
+
+function SevenZCreateLzmaFfiDecoder: ISevenZLzmaDecoder;
+begin
+  Result := nextpas.core.sevenz.lzma.ffi.decoder.TSevenZLzmaDecoderFfi.Create;
+end;
 
 function TSevenZEntryEnumerator.GetCurrent: TSevenZEntryInfo;
 begin

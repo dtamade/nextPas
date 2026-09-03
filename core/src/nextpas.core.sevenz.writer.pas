@@ -201,32 +201,17 @@ begin
   end
   else
   begin
-    // perf: 避免过滤器链触发时额外全量 LRawChunk->LStage 拷贝稀释 Move+CRC 单遍收益。
-    // 策略：复用 SEVENZ_WRITER_CHUNK 单源阈值（limits），首级过滤器与拷贝融合。
-    // Delta 首级采用 SevenZDeltaEncode 零分配 out-of-place 路径，直接由 LRawChunk 产出 LStage，无单独 Move；
-    // BCJ 首级仍需在位变换，采用分块搬运（同 MoveWithCrc 粒度）后原地转换，保持缓存友好。
-    // 后续各级过滤器仍在 LStage 上原地变换。bench 可观测：bench_sevenz 的 container create / bcj/delta 吞吐为回归锚点。
+    // perf: 首级与拷贝融合 out-of-place 单次分配单遍路径，复用 filters 单源 SevenZFilterEncode；Delta 原生 src->dst 单遍，BCJ 单次分配融合（零额外 SpanClone），后续各级原地变换。bench_sevenz 吞吐为回归锚点。
     SetLength(AFolder.Specs, Length(AFilters) + 1);
     for LI := 0 to High(AFilters) do
     begin
       AFolder.Specs[LI].MethodId := SevenZFilterMethodId(AFilters[LI]);
       AFolder.Specs[LI].Props := SevenZFilterDefaultProps(AFilters[LI]);
     end;
-    if AFilters[0] = szfDelta then
-    begin
-      // Delta 首级零拷贝融合：单遍由 LRawChunk 直接编码为 LStage，避免 SetLength+Move 全量拷贝
-      LStage := SevenZDeltaEncode(AFolder.Specs[0].Props, LRawChunk);
-      for LI := 1 to High(AFilters) do
-        SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
-    end
-    else
-    begin
-      // perf: BCJ 需要可变缓冲；单源 bytes.ops SpanClone 做单次 SetLength+Move，无分块循环开销（inline 单遍遍历）
-      LStage := SpanClone(TByteSpan.FromBytes(LRawChunk));
-      SevenZFilterConvert(LStage, AFilters[0], AFolder.Specs[0].Props, True);
-      for LI := 1 to High(AFilters) do
-        SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
-    end;
+    // perf: 首级与拷贝融合 out-of-place 单次分配单遍路径，复用 filters 单源 SevenZFilterEncode，消除 SpanClone+Convert 双遍；Delta 走 Delta 单遍 src->dst，BCJ 走单次分配融合路径，零额外拷贝，inline 单源
+    LStage := SevenZFilterEncode(AFolder.Specs[0].Props, LRawChunk, AFilters[0]);
+    for LI := 1 to High(AFilters) do
+      SevenZFilterConvert(LStage, AFilters[LI], AFolder.Specs[LI].Props, True);
   end;
   if AHasForced then
   begin
@@ -345,6 +330,9 @@ begin
   if not BytesValidPath(AName, False) then
     raise EArgumentError.CreateFmt(
       'entry name "%s" is invalid (must be ValidPath: no leading/trailing slash, no empty segment, no "." or "..")', [AName]);
+  if Length(AName) > SizeInt(SEVENZ_MAX_NAME_BYTES) then
+    raise ESevenZLimitError.CreateFmt(
+      'entry name exceeds limit %d (got %d)', [SEVENZ_MAX_NAME_BYTES, Length(AName)]);
 end;
 
 function CountTrue(const AFlags: array of Boolean): SizeInt;
@@ -374,12 +362,12 @@ end;
 
 procedure TSevenZWriterImpl.EnsureEntriesCapacity; inline;
 var
-  LNewCap: Integer;
+  LNewCap: SizeUInt;
 begin
   if FCount < Length(FEntries) then Exit;
-  LNewCap := Length(FEntries);
-  if LNewCap < 8 then LNewCap := 8 else LNewCap := LNewCap * 2;
-  SetLength(FEntries, LNewCap);
+  // 单源复用 bytes.ops：BytesNextCapacity 均摊 O(1)（BYTES_BUILDER_MIN_GROW 起步 ×2），与 IBytesBuilder 同源，消除 writer 私有魔数
+  LNewCap := BytesNextCapacity(SizeUInt(Length(FEntries)), SizeUInt(FCount + 1));
+  SetLength(FEntries, SizeInt(LNewCap));
 end;
 
 procedure TSevenZWriterImpl.SetEncodeHeader(AEnabled: Boolean);
@@ -462,11 +450,7 @@ begin
   LE.Name := AName;
   LE.IsDir := False;
   LE.Source := esBytes;
-  if Length(AData) > 0 then
-  begin
-    SetLength(LE.Data, Length(AData));
-    Move(AData[0], LE.Data[0], Length(AData));
-  end;
+  LE.Data := SpanClone(TByteSpan.FromBytes(AData));
   LE.HasMTime := True;
   LE.MTimeUnixSec := AMTimeUnixSec;
   EnsureEntriesCapacity;
@@ -1015,7 +999,29 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
     LProbe: Byte;
     LExtra: SizeUInt;
     LSpans: array of TByteSpan;
+    LTotalUnpack: UInt64;
   begin
+    { 全局门限（稳定性）：在任何分配前与 limits 单源对齐，防 1M 文件/8GiB 炸弹直达 OOM，reader 已有同源校验，writer 侧提前拒绝 }
+    if FCount > SizeInt(SEVENZ_MAX_FILE_COUNT) then
+      raise ESevenZLimitError.CreateFmt(
+        'file count %d exceeds limit %d', [FCount, SEVENZ_MAX_FILE_COUNT]);
+    begin
+      LTotalUnpack := 0;
+      for LAcc := 0 to FCount - 1 do
+        if not FEntries[LAcc].IsDir then
+        begin
+          if EntrySize(FEntries[LAcc]) > SEVENZ_MAX_UNPACK_SIZE then
+            raise ESevenZLimitError.CreateFmt(
+              'entry "%s" size %d exceeds limit %d',
+              [FEntries[LAcc].Name, EntrySize(FEntries[LAcc]), SEVENZ_MAX_UNPACK_SIZE]);
+          if LTotalUnpack > High(UInt64) - EntrySize(FEntries[LAcc]) then
+            raise ESevenZLimitError.Create('total unpack size overflow');
+          LTotalUnpack := LTotalUnpack + EntrySize(FEntries[LAcc]);
+          if LTotalUnpack > SEVENZ_MAX_UNPACK_SIZE then
+            raise ESevenZLimitError.CreateFmt(
+              'total unpack size %d exceeds limit %d', [LTotalUnpack, SEVENZ_MAX_UNPACK_SIZE]);
+        end;
+    end;
     { 统计非空文件并建立索引 }
     LNonEmpty := 0;
     for LAcc := 0 to FCount - 1 do
@@ -1029,10 +1035,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
         LNonEmptyIdx[LAcc] := LI;
         Inc(LAcc);
       end;
-    { 按阈值切分 folder：任一维度超限即起新 folder }
+    { 按阈值切分 folder：任一维度超限即起新 folder — 几何扩容 O(n) 替代逐次 SetLength O(n²)，复用 bytes.ops 单源 }
+    LFolders := nil;
     SetLength(LFolders, 0);
     if LNonEmpty > 0 then
     begin
+      LFolderIdx := 0; // 复用为 folder 计数器，避免新增变量
       LGroupBytes := 0;
       LGroupCount := 0;
       for LI := 0 to LNonEmpty - 1 do
@@ -1053,8 +1061,10 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
            (((FMaxFolderBytes > 0) and (UInt64(LGroupBytes + LK) > FMaxFolderBytes)) or
             ((FMaxFilesPerFolder > 0) and (LGroupCount + 1 > FMaxFilesPerFolder))) then
         begin
-          SetLength(LFolders, Length(LFolders) + 1);
-          LFolders[High(LFolders)].SubCount := UInt64(LGroupCount);
+          if LFolderIdx >= Length(LFolders) then
+            SetLength(LFolders, SizeInt(BytesNextCapacity(SizeUInt(Length(LFolders)), SizeUInt(LFolderIdx+1))));
+          LFolders[LFolderIdx].SubCount := UInt64(LGroupCount);
+          Inc(LFolderIdx);
           LGroupBytes := 0;
           LGroupCount := 0;
         end;
@@ -1063,9 +1073,12 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
       end;
       if LGroupCount > 0 then
       begin
-        SetLength(LFolders, Length(LFolders) + 1);
-        LFolders[High(LFolders)].SubCount := UInt64(LGroupCount);
+        if LFolderIdx >= Length(LFolders) then
+          SetLength(LFolders, SizeInt(BytesNextCapacity(SizeUInt(Length(LFolders)), SizeUInt(LFolderIdx+1))));
+        LFolders[LFolderIdx].SubCount := UInt64(LGroupCount);
+        Inc(LFolderIdx);
       end;
+      SetLength(LFolders, LFolderIdx);
       { 为每 folder 填充 RawSolid / SubSizes / SubCrcs }
       LAcc := 0;
       for LFolderIdx := 0 to High(LFolders) do
@@ -1222,6 +1235,22 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
           SetLength(LFolders[LFolderIdx].Specs, Length(LFolders[LFolderIdx].Specs) + 1);
           LFolders[LFolderIdx].Specs[High(LFolders[LFolderIdx].Specs)] := MakeAesSpec(LFolders[LFolderIdx].PackedData);
         end;
+      { 全局 pack/folder 门限（写侧炸弹对等校验） }
+      if Length(LFolders) > SizeInt(SEVENZ_MAX_FOLDERS) then
+        raise ESevenZLimitError.CreateFmt('folder count %d exceeds limit %d', [Length(LFolders), SEVENZ_MAX_FOLDERS]);
+      if Length(LFolders) > SizeInt(SEVENZ_MAX_PACK_STREAMS) then
+        raise ESevenZLimitError.CreateFmt('pack stream count %d exceeds limit %d', [Length(LFolders), SEVENZ_MAX_PACK_STREAMS]);
+      begin
+        LTotalUnpack := 0;
+        for LFolderIdx := 0 to High(LFolders) do
+        begin
+          if LTotalUnpack > High(UInt64) - UInt64(Length(LFolders[LFolderIdx].PackedData)) then
+            raise ESevenZLimitError.Create('total pack size overflow');
+          LTotalUnpack := LTotalUnpack + UInt64(Length(LFolders[LFolderIdx].PackedData));
+          if LTotalUnpack > SEVENZ_MAX_PACK_SIZE then
+            raise ESevenZLimitError.CreateFmt('total pack size %d exceeds limit %d', [LTotalUnpack, SEVENZ_MAX_PACK_SIZE]);
+        end;
+      end;
       { 拼接全部 pack 流为连续载荷：单次分配 SpanConcatMany 复用 bytes.ops 单源（零额外 Move 循环，单遍分配+拷贝），bench_sevenz 吞吐锚点无回归，I-Cache 友好 }
       SetLength(LSpans, Length(LFolders));
       for LFolderIdx := 0 to High(LFolders) do
@@ -1285,7 +1314,7 @@ procedure TSevenZWriterImpl.BuildArchive(out ASig, APacked, AHdrStream,
 function TSevenZWriterImpl.Finish: TBytes;
 var
   LSig, LPacked, LHdrStream, LBlock: TBytes;
-  LBase: SizeInt;
+  LParts: array of TByteSpan;
   LI: SizeInt;
 begin
   Result := nil;
@@ -1294,18 +1323,13 @@ begin
     BuildArchive(LSig, LPacked, LHdrStream, LBlock);
     { H-10: 将 FFinished 置位延后至 BuildArchive 成功后，避免失败锁死 }
     FFinished := True;
-    SetLength(Result, Length(LSig) + Length(LPacked) +
-      Length(LHdrStream) + Length(LBlock));
-    Move(LSig[0], Result[0], Length(LSig));
-    LBase := Length(LSig);
-    if Length(LPacked) > 0 then
-      Move(LPacked[0], Result[LBase], Length(LPacked));
-    Inc(LBase, Length(LPacked));
-    if Length(LHdrStream) > 0 then
-      Move(LHdrStream[0], Result[LBase], Length(LHdrStream));
-    Inc(LBase, Length(LHdrStream));
-    if Length(LBlock) > 0 then
-      Move(LBlock[0], Result[LBase], Length(LBlock));
+    // perf: 单源 bytes.ops SpanConcatMany 单次分配单遍拷贝，消除 4 次 Move 手工拼接，与 APacked 的 SpanConcatMany 同源，inline 零拷贝证据，IBytesBuilder 同等 O(n) 均摊
+    SetLength(LParts, 4);
+    LParts[0] := TByteSpan.FromBytes(LSig);
+    LParts[1] := TByteSpan.FromBytes(LPacked);
+    LParts[2] := TByteSpan.FromBytes(LHdrStream);
+    LParts[3] := TByteSpan.FromBytes(LBlock);
+    Result := SpanConcatMany(LParts);
   finally
     { M-06: Finish 后释放 IReader 持有，避免长生命周期 pin 住外部资源 }
     for LI := 0 to FCount - 1 do

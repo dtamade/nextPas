@@ -1,10 +1,11 @@
-// x86-64 SSE2/SSSE3/AVX2 variant for simd.raster — runtime dispatch + shuffle/LUT
+// x86-64 SSE2/SSSE3/AVX2 variant for simd.raster — zero dispatch (no simd.dispatch table), cpuinfo 仅门控 SSSE3/AVX2
+// 批量亲和：FillTrapezoids 64-chunk 复用（@Chunk[64] 栈复用，rem 分块），RasterCopy/BlendVaried 单源 inline 零拷贝，复用 bytes.ops Move 单源语义。
 // Opt-1 inline threshold: for PixelCount<4 avoid SSE setup cost (tile edges 1-3px).
 // Opt-2 batch 8/16: Fill 16px (64B) when AVX2, else 8px (32B); Blend 8px when AVX2, else 4px.
 // Opt-3 SSSE3 shuffle: RasterRotateRGB via pshufb (4px/16B per iter, AVX2 8px/32B).
 // Opt-4 LUT: runtime AVX2 probe + 8px bulk, fallback 4px scalar batch.
 // Branch: hot bulk predicted taken, tail forward-not-taken, A=0/255 early exits first.
-// Runtime: delegate to nextpas.core.simd.cpuinfo (SSSE3/AVX2); no direct CPUID here.
+// Runtime: delegate to nextpas.core.simd.cpuinfo (SSSE3/AVX2); no direct CPUID here, no atomic dispatch.
 
 const
   CRotateShuffle16: array[0..15] of Byte = (1,2,0,3,5,6,4,7,9,10,8,11,13,14,12,15);
@@ -45,7 +46,7 @@ begin
   Result := GRasterAVX2Cache;
 end;
 
-procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterFillSolid(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   LE: LongWord;
   UseAVX2: Boolean;
@@ -155,7 +156,7 @@ begin
   end;
 end;
 
-procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte); inline;
+procedure RasterBlendSrcOver(Dst: PByte; PixelCount: Integer; R, G, B, A: Byte);
 var
   InvA: Integer;
   SrcLE: LongWord;
@@ -388,7 +389,7 @@ begin
   end;
 end;
 
-procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer); inline;
+procedure RasterRotateRGB(Dst: PByte; PixelCount: Integer);
 var
   P: PByte;
   Tail: Integer;
@@ -501,7 +502,7 @@ begin
   end;
 end;
 
-procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte); inline;
+procedure RasterApplyLut(Dst: PByte; PixelCount: Integer; Lut: PByte);
 var
   P: PByte;
   N8, N4, Tail: Integer;
@@ -582,6 +583,7 @@ end;
 procedure RasterCopySpan(Dst: PByte; Src: PLongWord; PixelCount: Integer); inline;
 begin
   if (PixelCount <= 0) or (Dst = nil) or (Src = nil) then Exit;
+  // bytes.ops 单源：Move 语义与 nextpas.core.bytes.ops.BytesCopy 对齐，inline 零拷贝，L0 内零依赖，零 dispatch
   Move(Src^, Dst^, NativeUInt(PixelCount) * 4);
 end;
 

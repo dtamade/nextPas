@@ -202,6 +202,8 @@ type
     FMaxOutputSize: SizeUInt;
     FMaxTotalOutputSize: UInt64;
     FPassword: TBytes;          { 加密条目解密口令；空 = 未配置 }
+    FScratch: TBytes;           { 几何复用缓冲，与内存读端同构（4096→2×），减 Fetch 分配 }
+    procedure EnsureScratch(ANeeded: SizeUInt);
     { 定位取数：[APos, APos+ACount) 越界或短读即结构截断 }
     procedure Fetch(APos: Int64; ACount: SizeUInt; out ADst: TBytes;
       const AWhat: string);
@@ -301,13 +303,6 @@ begin
 end;
 
 { ---- 内存 / 可定位流两种读器共用的解析与校验路径 ---- }
-
-{ 区间 [APos, APos+ALen) 必须落在 AC 缓冲内，否则结构视为截断损坏 }
-procedure NeedRangeIn(const AC: IByteCursor; APos, ALen: Int64;
-  const AWhat: string);
-begin
-  nextpas.core.zip.common.GuardCursorRange(AC, APos, ALen, AWhat);
-end;
 
 function ZipPumpReader(const AReader: IDecompressReader; const ADst: IWriter): SizeUInt;
 const
@@ -493,7 +488,7 @@ begin
   LExtAttrs := AC.ReadU32LE;
   LLho := AC.ReadU32LE;
 
-  NeedRangeIn(AC, Int64(AC.Position),
+  GuardCursorRange(AC, Int64(AC.Position),
     Int64(LNameLen) + LExtraLen + LCommentFieldLen, 'central entry body');
 
   LNamePtr := nil;
@@ -543,7 +538,7 @@ var
 begin
   for LI := 0 to High(AEntries) do
   begin
-    NeedRangeIn(AC, Int64(AC.Position), C_CENTRAL_HEADER_LEN, 'central header');
+    GuardCursorRange(AC, Int64(AC.Position), C_CENTRAL_HEADER_LEN, 'central header');
     if AC.ReadU32LE <> C_ZIP_CENTRAL_SIG then
       raise EParseError.Create('zip: bad central header signature at ' +
         IntToStr(ABaseOffset + Int64(AC.Position) - 4));
@@ -823,6 +818,28 @@ begin
     if LGot <> ACount then
       raise EParseError.Create('zip: truncated ' + AWhat);
   end;
+end;
+
+{ 几何复用缓冲：与内存读端同构，4096 起步翻倍至 ANeeded，供 Fetch 复用减分配 }
+procedure TZipSourceReader.EnsureScratch(ANeeded: SizeUInt);
+var
+  LCap: SizeUInt;
+begin
+  if SizeUInt(Length(FScratch)) >= ANeeded then
+    Exit;
+  LCap := SizeUInt(Length(FScratch));
+  if LCap = 0 then
+    LCap := 4096;
+  while LCap < ANeeded do
+  begin
+    if LCap > High(SizeUInt) div 2 then
+    begin
+      LCap := ANeeded;
+      Break;
+    end;
+    LCap := LCap * 2;
+  end;
+  SetLength(FScratch, LCap);
 end;
 
 procedure TZipSourceReader.ParseCentralDirectory;

@@ -16,7 +16,8 @@ uses
   nextpas.core.io.buffer,
   nextpas.core.io.util,
   nextpas.core.io.pipe,
-  nextpas.core.io.scanner;
+  nextpas.core.io.scanner,
+  nextpas.core.io.prefix;
 
 type
   TSeekOrigin = nextpas.core.io.base.TSeekOrigin;
@@ -39,6 +40,7 @@ type
   IReaderFrom = nextpas.core.io.intf.IReaderFrom;
   IWriterTo = nextpas.core.io.intf.IWriterTo;
   IByteScanner = nextpas.core.io.intf.IByteScanner;
+  TPrefixBypassStream = nextpas.core.io.prefix.TPrefixBypassStream;
 
 { Stream factories }
 function BytesStream(const AInitialCapacity: SizeUInt = 256): IStream; inline;

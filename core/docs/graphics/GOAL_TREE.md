@@ -7,7 +7,7 @@
 - [x] `core/docs/plans/2026-08-30-graphics-framework-v1.md` 定版（含铁律/依赖图）
 - [x] S0-04 六维审阅（模块化/性能/高级感/复用/稳定/完整 14 项 + 4拼图）闭环
 - [x] S0-05 `game888` 4份审计（`procedural/msdf/color_grading/font`）— 7.2K `game888-audit.md` 落盘，`hygiene=pass`
-- [ ] `core-module-registry.md` 变更预案评审（`draft`）
+- [x] `core-module-registry.md` 变更预案评审（`0.2.0-source-contract` 冻结：graphics/canvas/vector/image/effect/gpu.canvas，见 `CONTRACT.md:5`）
 
 ## S1 底座 + 编解码
 
@@ -31,10 +31,11 @@
 - [x] simd.inline 全平台通用基座（`nextpas.core.simd.inline` F32x4/U8x16/I32x4 等 30+ ops 编译期直联 scalar/sse2/avx2/neon，仿 vec16，不读 dispatch；与 dispatch 双轨，bench_inline_vs_dispatch + parity PASS，GB/s 可对标 Rust portable-simd/tiny-skia）
 - [x] simd.inline Phase2（F32x4 Sub/U16x8 Add/Min/Max/I32x4 Add/F32x8 2×SSE 直联，parity PASS）
 - [x] golden PNG 回归锁版本（`poster_512x256.png` 2957B `ff42b…`，容差≤1，`benchmarks/nextpas.core.canvas/golden` 落盘，`COMPARISON.md` 同步）
+- [x] demo_vector_poster 512×256 固化 `md5 27b73e0d9a765c491bee8c85b367cef2`（svg-import 后 det 确定性，`core/tests/nextpas.core.graphics/test_poster_golden` md5 锁，Stride64 `ToCompact` `bytes.ops` 单源 + `inline`）
 
 ## S3 特效 + GPU 桥
 
 - [x] `graphics.effect` 图（Blur/Shadow/Hue/LUT）+ 序列化（`EEffectError`，4e0828e9d，BoxBlur tile占位，Serialize/Deserialize+Bake PASS）
 - [x] `gpu.canvas`（`TAtlas/TAtlasRegion/ScaleFactor`，2048分页，AtlasAlloc 行装箱，Scale 1..4）
 - [x] `demo_vector_poster` / `demo_converter` 能力示例（3be299081，双示例可视闭环，PNG/BMP 往返 PASS）
-- [ ] `SvgImport` 预留 + `RenderAssetBundle`/`PdfExport` 预留（S3+ 完整性）
+- [x] `SvgImport` 最小闭环 (`nextpas.core.graphics.svg` M/L/H/V/C/Q/Z, `SvgPathFromData`/`TrySvgPathFromData`, 16384 cap, `EVectorError` 闭环) — `RenderAssetBundle`/`PdfExport` 预留 S3+ 完整性

@@ -256,6 +256,12 @@
 ### S105 — 切片读去 inline 与 bytes.ops 单源与平台期（1.0.1 巡检）· 稳定性/复用度/高级感 — 已落地
 - `common.ZipSliceRead/ZipBytesRead` 去 `inline`（`2× inline→0`，消除 `Move(var untyped)` 常量传播踩栈红线 1）并收口 `Move → bytes.ops.BytesCopy` 单源（`2× Move → 2× BytesCopy`，`PByte` 与 `TBytes[APos]` 零拷贝同源），`reader/sequential` 共享切片内核零红线，12 门 + `bench_zip 221837` 可编译回归，`S85—S105` 十六单源+一性能+一守卫+一切片+一包装消除+一去 inline 平台期
 
+### S106 — 四件套 intf 补齐与平台期（1.0.1 巡检）· 模块化/高级感 — 已落地
+- `nextpas.core.zip.intf` 新建契约单点（`IZipWriter/IZipReader/ISequentialZipReader/IZipBuilder` 四接口同 GUID + `TZipWriteOptions/TZipAddOptions` 记录），`writer/reader/sequential/builder` 去接口定义薄别名 `= intf.*`，`zip` 门面 `type` 别名收口 `intf`，`base←intf←impl←facade` 单向收敛，12 门 + `bench_zip 221921` 可编译回归，`S85—S106` 十六单源+一性能+一守卫+一切片+一包装消除+一去 inline+一四件套平台期
+
+### S107 — 残余包装与区间守卫收口与平台期（1.0.1 巡检）· 复用度/稳定性/高级感 — 已落地
+- 移除 `reader.TZipReaderImpl/TZipSourceReader.NeedRange` 与 `reader.NeedRangeIn` 薄包装（`2×4 行声明+2×4 行实现 + 1×4 行 → 0`，`6+2 处 NeedRange/NeedRangeIn → GuardCursorRange/GuardRange 直通`），`TZipSourceReader` 补 `FScratch + EnsureScratch High div2` 与 `TZipReaderImpl` 双端同构，12 门全绿（`test_zip_aes` 历史 56B 泄漏已闭环）+ `bench_zip 224102` 可编译回归，`S85—S107` 十七单源+一性能+一守卫+一切片+一包装消除+一去 inline+一四件套+一残余包装平台期
+
 ## 4. 度量与硬门（1.0.0 冻结）
 
 | 度量 | 基线 | 门 |
@@ -288,4 +294,4 @@
 
 *基准规矩*：所有性能数据以 `nextpas.core.bench` `TBenchSuite` 为唯一口径，`CountingMemoryManager` 为真值，`BASELINE.json` 人工审查后方可更新。
 
-*当前状态*：`1.0.1 @ 1.0.1`（S64—S105 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main c654d91` 已落地（S105 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片 + `NeedRange` 包装消除 + 去 inline（`bytes.ops.BytesCopy` 单源，三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片+包装消除+去 inline） + AES 零堆栈。
+*当前状态*：`1.0.1 @ 1.0.1`（S64—S107 收敛），`VERSION 1.0.1`，`12 门` `10→12`（原子选项透传），`zip_roundtrip 7 式` `all demos ok`，`main 28724cf` 已落地（S107 待落），`bench 16 项` 可编译，`Normalize/TryMethod/ResolveWithAes/ParseLocalHeader/GuardPassword/GuardIndex/FindEntry/GuardTotalAdvance/ZipPumpReader/ZipWrapEntryReader/ZipFindEocd/ZipDecodeEocd/ZipParseCentralEntries/ZipDecodeZip64Locator+ZipDecodeZip64Eocd/ZipResolvePayloadOffset/ZipExtractToBytesViaPayload+ZipExtractToBufferViaPayload+ZipOpenViaPayload/ZipValidateCentralBoundsAndAlloc` 十七单源 + `fs.JoinZipPath` 一性能 + `writer FScratch 守卫` + `ZipSliceRead/ZipBytesRead` 一切片 + `NeedRange` 包装消除 + 去 inline + 四件套 intf + 残余包装（`bytes.ops.BytesCopy` 单源 + `intf` 契约单点 + `FScratch` 双端同构，三路泵+双管道+EOCD双+中央循环+Zip64双+载荷定位+解压口令+中央边界+FS路径+Writer守卫+切片+包装消除+去 inline+四件套+残余包装） + AES 零堆栈。

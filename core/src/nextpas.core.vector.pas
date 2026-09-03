@@ -11,10 +11,13 @@ interface
 uses
   nextpas.core.graphics.base,
   nextpas.core.graphics.path,
+  nextpas.core.vector.intf,
   nextpas.core.vector.path,
   nextpas.core.vector.tess;
 
 type
+  IVectorTessellator = nextpas.core.vector.intf.IVectorTessellator;
+  IVectorPathOps = nextpas.core.vector.intf.IVectorPathOps;
   TPath = nextpas.core.graphics.path.TPath;
   TPathBuilder = nextpas.core.graphics.path.TPathBuilder;
   TPoly = nextpas.core.vector.path.TPoly;

@@ -1,9 +1,6 @@
 unit nextpas.core.respack.writer.stream;
 
-{** @desc respack 流式构造：两遍分段零双驻留，512MB 峰值 ~1×+头。
-  首遍复用 writer.layout 单源计算 Total/槽位/去重（INV-R5 确定性同 ResPackBuild），
-  次遍分段经 AWrite 回调：头/index/string 合批 → 槽间隙零填 → data 零拷贝 Move 分段 → digest，
-  零额外 Total 缓冲；ResPackBuildStreamSize 仅首遍取 Total 零分配。 }
+{** @desc respack 流式构造：两遍分段零双驻留，峰值 ~1×+64K。 }
 
 {$I nextpas.core.settings.inc}
 
@@ -17,7 +14,7 @@ type
   TResPackWriteProc = reference to procedure(const AData: PByte; const ASize: SizeUInt);
 
 { 流式两遍构造：与 ResPackBuild 同确定性（INV-R5），分段经 AWrite 回调输出，
-  不一次性持有 Total 输出缓冲；调用方提供流/文件句柄的写入闭包即可。 }
+  不一次性持有 Total 输出缓冲。 }
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
 function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
@@ -30,18 +27,20 @@ uses
   nextpas.core.respack.writer.builder,
   nextpas.core.respack.writer.layout;
 
-{ 零填充分段写入：复用 bytes.ops 全局零页单源，无栈分配/无重复 FillChar，零拷贝分段直写；外联守 design-conventions §2 红线2 }
+const
+  RESPACK_WRITER_HEAD_CHUNK = nextpas.core.respack.base.RESPACK_WRITER_HEAD_CHUNK;
+
+{ 零填分段：BYTES_ZERO_PAGE 单源，≤4K 快道 inline，>4K 外联 Loop }
 function HasDigestOpt(const AOpts: TResPackBuildOptions): Boolean; inline;
 begin
   Result := Assigned(AOpts.DigestFunc);
 end;
 
-procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64);
+procedure WriteZerosLoop(const AWrite: TResPackWriteProc; ACount: UInt64);
 var
   N: UInt64;
   L: SizeUInt;
 begin
-  if ACount = 0 then Exit;
   N := ACount;
   while N > 0 do
   begin
@@ -51,36 +50,129 @@ begin
   end;
 end;
 
+procedure WriteZeros(const AWrite: TResPackWriteProc; ACount: UInt64); inline;
+begin
+  if ACount = 0 then Exit;
+  if ACount <= BYTES_ZERO_PAGE_SIZE then
+  begin
+    AWrite(@BYTES_ZERO_PAGE[0], SizeUInt(ACount));
+    Exit;
+  end;
+  WriteZerosLoop(AWrite, ACount);
+end;
+
 procedure ResPackBuildStream(const AEntries: array of TResPackInputEntry;
   const AOpts: TResPackBuildOptions; const AWrite: TResPackWriteProc);
 var
   L: TResPackLayout;
   N, I, J, K: SizeUInt;
   Cur: UInt64;
+  HeadBuf: TBytes;
   Head: PByte;
   HeadSize: UInt64;
   Gap: UInt64;
   DigestTmp: TResPackDigest;
+  ChunkCap: SizeUInt;
+  ChunkPos: SizeUInt;
+  procedure FlushHead; inline;
+  begin
+    if ChunkPos > 0 then
+    begin
+      AWrite(@HeadBuf[0], ChunkPos);
+      ChunkPos := 0;
+    end;
+  end;
+  procedure WriteHeadBytes(const ASrc: Pointer; ALen: SizeUInt);
+  var
+    Src: PByte;
+    Rem, CopyNow: SizeUInt;
+  begin
+    if (ASrc = nil) or (ALen = 0) then Exit;
+    if ALen <= ChunkCap - ChunkPos then
+    begin
+      BytesCopy(@HeadBuf[ChunkPos], ASrc, ALen);
+      Inc(ChunkPos, ALen);
+      if ChunkPos = ChunkCap then FlushHead;
+      Exit;
+    end;
+    Src := PByte(ASrc);
+    Rem := ALen;
+    while Rem > 0 do
+    begin
+      if ChunkPos = ChunkCap then FlushHead;
+      CopyNow := Rem;
+      if CopyNow > ChunkCap - ChunkPos then CopyNow := ChunkCap - ChunkPos;
+      BytesCopy(@HeadBuf[ChunkPos], Src, CopyNow);
+      Inc(ChunkPos, CopyNow);
+      Inc(Src, CopyNow);
+      Dec(Rem, CopyNow);
+      if ChunkPos = ChunkCap then FlushHead;
+    end;
+  end;
+  procedure WriteHeadChunked;
+  var
+    II, JJ: SizeUInt;
+    CurOff: UInt64;
+    Pad: UInt64;
+  begin
+    ChunkCap := RESPACK_WRITER_HEAD_CHUNK;
+    // 64K HeadBuf 单次分配/Build，复用分片
+    SetLength(HeadBuf, ChunkCap);
+    ChunkPos := 0;
+    N := L.N;
+    { header/index 直写至 chunk，复用 builder 单源，无中间 40B Tmp 拷贝 }
+    ResPackWriterFillHeader40(@HeadBuf[ChunkPos], AOpts, L);
+    Inc(ChunkPos, RESPACK_HEADER_SIZE);
+    CurOff := L.StrTabBase;
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        if ChunkCap - ChunkPos < RESPACK_ENTRY_SIZE then FlushHead;
+        JJ := L.Order[II];
+        ResPackWriterFillEntry40(@HeadBuf[ChunkPos], AEntries, AOpts, L, JJ, CurOff);
+        Inc(ChunkPos, RESPACK_ENTRY_SIZE);
+        Inc(CurOff, L.PathLens[JJ]);
+        if ChunkPos = ChunkCap then FlushHead;
+      end;
+    { string table：路径按 Order 顺序零拷贝分片直写，BytesCopy 单源 }
+    if N > 0 then
+      for II := 0 to N - 1 do
+      begin
+        JJ := L.Order[II];
+        if L.PathLens[JJ] > 0 then
+          WriteHeadBytes(Pointer(AEntries[JJ].Path), L.PathLens[JJ]);
+      end;
+    FlushHead;
+    Pad := 0;
+    if L.DataStart > L.StrTabBase + L.StrLen then
+      Pad := L.DataStart - (L.StrTabBase + L.StrLen);
+    if Pad > 0 then
+      WriteZeros(AWrite, Pad);
+  end;
 begin
   if not Assigned(AWrite) then
     raise EResPackError.Create('respack.stream: Write proc is nil');
   ResPackComputeLayout(AEntries, AOpts, L);
-  Head := nil;
   try
     N := L.N;
     HeadSize := L.DataStart;
-    { 头块：header + index + string table（含对齐填充），大小 = DataStart（空包 40），
-      峰值仅 ~头（KB 级），不含 Total；头/index/string 单源于 writer.builder（零拷贝 BytesCopy，BytesZero 单源零化）。 }
-    GetMem(Head, HeadSize);
-    try
+    { 头块大小 = DataStart；≤64K 单次 SetLength+ResPackWriterFillHead 快道，>64K 走 64K chunk 直写 }
+    if HeadSize = 0 then
+    begin
+    end
+    else if HeadSize <= UInt64(RESPACK_WRITER_HEAD_CHUNK) then
+    begin
+      SetLength(HeadBuf, SizeUInt(HeadSize));
+      if HeadSize > 0 then Head := @HeadBuf[0] else Head := nil;
       ResPackWriterFillHead(Head, AEntries, AOpts, L);
-      AWrite(Head, SizeUInt(HeadSize));
-    finally
-      FreeMem(Head);
-      Head := nil;
+      if HeadSize > 0 then AWrite(Head, SizeUInt(HeadSize));
+    end
+    else
+    begin
+      WriteHeadChunked;
     end;
 
-    { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填；峰值 1×+头，无 Total 双驻留。 }
+    { data 槽位：按 Offset 顺序分段零拷贝直写，槽间隙零填 }
     Cur := HeadSize;
     if L.SlotCount > 0 then
       for K := 0 to L.SlotCount - 1 do
@@ -117,7 +209,6 @@ function ResPackBuildStreamSize(const AEntries: array of TResPackInputEntry;
 var
   L: TResPackLayout;
 begin
-  { 预计算 Total 零分配：复用布局单源首遍，不 GetMem 全量 blob。 }
   ResPackComputeLayout(AEntries, AOpts, L);
   try
     Result := L.Total;
