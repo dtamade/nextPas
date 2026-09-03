@@ -8,7 +8,6 @@ program test_webview_bridge;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.json,
@@ -18,7 +17,7 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
   nextpas.core.webview.metrics,
-  nextpas.core.webview.fake;
+  nextpas.core.webview.fake, nextpas.core.base, nextpas.core.text, nextpas.core.text.conv;
 
 var
   { handler 收到的 payload 文本（canonicalization 断言用） }

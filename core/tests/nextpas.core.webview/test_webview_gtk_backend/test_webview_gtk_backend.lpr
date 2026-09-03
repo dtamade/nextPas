@@ -20,8 +20,6 @@ program test_webview_gtk_backend;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  Classes,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.view,
@@ -31,7 +29,7 @@ uses
   nextpas.core.webview.gtk.loader,
   nextpas.core.webview.gtk,
   nextpas.core.webview.gtk.ffi,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory, nextpas.core.base, nextpas.core.exception, nextpas.core.fs, nextpas.core.math, nextpas.core.path, nextpas.core.text, nextpas.core.text.conv;
 
 const
   { 事件护栏 deadline：正常回执毫秒级到达；仅环境灾难时兜底失败 }

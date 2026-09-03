@@ -4,7 +4,6 @@ program test_webview_fake_window;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.base,
@@ -17,7 +16,7 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.intf,
   nextpas.core.window.factory,
-  nextpas.core.window.fake;
+  nextpas.core.window.fake, nextpas.core.exception;
 
 var
   GScaleEvents: Integer;

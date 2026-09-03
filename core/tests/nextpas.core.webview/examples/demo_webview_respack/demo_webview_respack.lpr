@@ -23,7 +23,6 @@ program demo_webview_respack;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.vfs,
@@ -31,7 +30,7 @@ uses
   nextpas.core.webview,
   nextpas.core.webview.vfs,
   nextpas.core.window.base,
-  nextpas.core.window.factory;
+  nextpas.core.window.factory, nextpas.core.text;
 
 {$I assets_respack.inc}  { DEMO_ASSETS / DEMO_ASSETS_SIZE —— 构建期生成 }
 

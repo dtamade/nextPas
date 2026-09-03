@@ -5,7 +5,6 @@ program test_webview_wk_loader;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,

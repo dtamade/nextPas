@@ -14,7 +14,6 @@ program test_webview_webview2_post;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
@@ -23,7 +22,7 @@ uses
   nextpas.core.window.base,
   nextpas.core.window.factory,
   nextpas.core.window.fake,
-  nextpas.core.window.intf;
+  nextpas.core.window.intf, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time;
 
 var
   GFlag: Integer;
@@ -78,7 +77,7 @@ begin
     LFlag := 0;
     W.Window.Dispatcher.Post(@Work);
     // Post 为异步（Windows 隐藏窗口）或同步（Linux 桩回退）；给 200ms 窗口
-    Sleep(200);
+    MsSleep(200);
     // Windows 下需泵一次以派发隐藏窗口消息；Linux 桩已同步，无需
     {$IFDEF MSWINDOWS}
     // 在 Linux 宿主编译的此 gate 不走此分支；wine 下单测由 /tmp/test_s23 复验

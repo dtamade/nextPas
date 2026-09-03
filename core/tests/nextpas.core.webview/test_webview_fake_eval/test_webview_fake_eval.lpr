@@ -6,13 +6,12 @@ program test_webview_fake_eval;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.fake,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory, nextpas.core.exception;
 
 procedure TestQueuedResultImmediate;
 var

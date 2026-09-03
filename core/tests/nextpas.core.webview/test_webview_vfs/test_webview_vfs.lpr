@@ -7,7 +7,6 @@ program test_webview_vfs;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.base,
   nextpas.core.errors,

@@ -7,14 +7,13 @@ program bench_webview_bridge;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.platform.time,
   nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.bridge,
-  nextpas.core.webview.metrics;
+  nextpas.core.webview.metrics, nextpas.core.text, nextpas.core.text.format;
 
 const
   { 典型 invoke 帧：3 字段对象负载，~70B }
@@ -57,7 +56,7 @@ var
   LMed: Double;
 begin
   LMed := MedianNanos(AVals);
-  WriteLn(Format('%-22s %10.1f ns/op %12.0f ops/sec',
+  WriteLn(TextFormat('%-22s %10.1f ns/op %12.0f ops/sec',
     [AName, LMed, 1e9 / LMed]));
 end;
 
@@ -138,7 +137,7 @@ begin
   end;
 
   WriteLn('=== webview bridge protocol benchmark ===');
-  WriteLn(Format('iterations/run: %d, runs(median): %d', [ITER, RUNS]));
+  WriteLn(TextFormat('iterations/run: %d, runs(median): %d', [ITER, RUNS]));
 
   TimeCase('TryDecodeFrame', @CaseDecode);
   TimeCase('BuildResolveScript', @CaseResolve);

@@ -9,7 +9,6 @@ program test_webview_factory;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.view,
@@ -20,7 +19,7 @@ uses
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.factory,
   nextpas.core.webview.builder,
-  nextpas.core.window.base;
+  nextpas.core.window.base, nextpas.core.base;
 
 type
   { 总命中 provider：用于验开发模式惰性覆盖——正常模式会命中，

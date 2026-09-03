@@ -24,8 +24,6 @@ program demo_webview;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  DateUtils,
   nextpas.core.base,
   nextpas.core.text.view,
   nextpas.core.webview.utils,
@@ -34,7 +32,7 @@ uses
   { 显式选后端时引 base（门面只 re-export 类型别名，不带枚举值） }
   nextpas.core.webview.base,
   nextpas.core.window.base,
-  nextpas.core.webview;
+  nextpas.core.webview, nextpas.core.exception, nextpas.core.text.format, nextpas.core.time;
 
 const
   { 自检推进阶段（严格线性，防乱序误判） }
@@ -332,7 +330,7 @@ var
   R: TJsonValue;
 begin
   RequireJsonObject(APayloadJson, LDoc, R);
-  Result := Format('{"sum":%d}', [R.Get('a').AsInt + R.Get('b').AsInt]);
+  Result := TextFormat('{"sum":%d}', [R.Get('a').AsInt + R.Get('b').AsInt]);
 end;
 
 function TDemoApp.HandleCounter(const APayloadJson: string): string;
@@ -342,7 +340,7 @@ var
 begin
   RequireJsonObject(APayloadJson, LDoc, R);
   Inc(FCounter);
-  Result := Format('{"count":%d}', [FCounter]);
+  Result := TextFormat('{"count":%d}', [FCounter]);
 end;
 
 procedure TDemoApp.HandleTick(const APayloadJson: string;
@@ -359,7 +357,7 @@ begin
   FWindow.Window.Dispatcher.Post(procedure
     begin
       if not FWindow.IsClosed then
-        ACompletion.Ok(Format('{"deferred":true,"seq":%d}', [LSeq]));
+        ACompletion.Ok(TextFormat('{"deferred":true,"seq":%d}', [LSeq]));
     end);
 end;
 
@@ -380,7 +378,7 @@ begin
         自检状态机按 push→event 线性推进 }
       ACompletion.Ok('{"queued":true}');
       FWindow.Emit('demo.event',
-        Format('{"note":"pushed from Pascal","seq":%d}', [LSeq]));
+        TextFormat('{"note":"pushed from Pascal","seq":%d}', [LSeq]));
     end);
 end;
 
@@ -401,7 +399,7 @@ begin
       Exit('{}');
     end;
     Stamp(FStarted, LMono);
-    Log(Format('report %-8s %s (%dms)', [LStep, APayloadJson, LMono]));
+    Log(TextFormat('report %-8s %s (%dms)', [LStep, APayloadJson, LMono]));
     Advance(LStep, APayloadJson);
   end
   else
@@ -417,7 +415,7 @@ begin
   begin
     if FStage <> ST_WAIT_NAV then Exit;
     Stamp(FStarted, LMs);
-    Log(Format('navigation finished (%dms)', [LMs]));
+    Log(TextFormat('navigation finished (%dms)', [LMs]));
     Pass('window up, asset served over npres://');
     FStage := ST_WAIT_EVAL;
     FWindow.Eval('6*7',

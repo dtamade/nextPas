@@ -7,7 +7,6 @@ program test_webview_webview2_loader;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,

@@ -6,7 +6,6 @@ program test_webview_grow;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.bytes.ops;
 

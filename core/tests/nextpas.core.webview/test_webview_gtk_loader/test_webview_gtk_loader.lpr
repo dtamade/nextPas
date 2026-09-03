@@ -7,10 +7,9 @@ program test_webview_gtk_loader;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.webview.gtk.ffi,
-  nextpas.core.webview.gtk.loader;
+  nextpas.core.webview.gtk.loader, nextpas.core.text;
 
 procedure TestProbeConsistency;
 var

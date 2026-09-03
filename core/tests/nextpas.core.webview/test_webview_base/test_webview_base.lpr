@@ -6,11 +6,10 @@ program test_webview_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.webview.base,
-  nextpas.core.webview.validation;
+  nextpas.core.webview.validation, nextpas.core.exception;
 
 procedure TestDefaultsSnapshot;
 var
