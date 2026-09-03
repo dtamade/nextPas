@@ -3,7 +3,9 @@ program test_hash_audit;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.hash.base,
@@ -126,9 +128,9 @@ procedure TestStreamingBoundaries;
 var
   LData55, LData56, LData64: AnsiString;
 begin
-  LData55 := StringOfChar('a', 55);
-  LData56 := StringOfChar('b', 56);
-  LData64 := StringOfChar('c', 64);
+  LData55 := TextOfChar('a', 55);
+  LData56 := TextOfChar('b', 56);
+  LData64 := TextOfChar('c', 64);
 
   CheckEqual(SHA256HexOfString(LData55), StreamingHashHex(haSHA256, LData55),
     'SHA256 streaming boundary 55 bytes');

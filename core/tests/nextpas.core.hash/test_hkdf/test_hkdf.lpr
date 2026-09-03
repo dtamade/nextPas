@@ -3,7 +3,9 @@ program test_hkdf;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base.utils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.hash.base,
   nextpas.core.crypto.hkdf,
   nextpas.core.test;

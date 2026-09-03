@@ -3,7 +3,7 @@ program test_sha512;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.text.conv,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha512,

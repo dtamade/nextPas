@@ -3,7 +3,9 @@ program test_hash;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.hash.base,
@@ -70,7 +72,7 @@ begin
     SHA256Hex(ABC[0], SizeOf(ABC)),
     'SHA256 abc');
 
-  LLongBytes := BytesOf(LONG_MSG);
+  LLongBytes := StringToUTF8Bytes(LONG_MSG);
   CheckEqual(
     '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1',
     SHA256Hex(LLongBytes[0], Length(LLongBytes)),
@@ -139,7 +141,7 @@ begin
     'bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319',
     BLAKE2b256Hex(ABC[0], SizeOf(ABC)),
     'BLAKE2b-256 abc');
-  LLong := BytesOf(LONG_MSG);
+  LLong := StringToUTF8Bytes(LONG_MSG);
   CheckEqual(
     '5f7a93da9c5621583f22e49e8e91a40cbba37536622235a380f434b9f68e49c4',
     BLAKE2b256Hex(LLong[0], Length(LLong)),

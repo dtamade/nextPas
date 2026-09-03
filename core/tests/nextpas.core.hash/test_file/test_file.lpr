@@ -3,7 +3,9 @@ program test_file;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.sysutils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.fs,
