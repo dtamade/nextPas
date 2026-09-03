@@ -62,7 +62,6 @@ implementation
 
 uses
   nextpas.core.exception, // Exception 自有根（owner=exception，L0）：后端裸异常兜底吞噬，不直连 FPC SysUtils
-  nextpas.core.system.typinfo, // L0-L1 enum bridge, no platform host units
   nextpas.core.diagnostics, // L1 diagnostics → text.format/utils L0-L1 only, L2→L1 合规无迂回上依赖
   nextpas.core.atomic, // L0 原子聚合单源
   nextpas.core.bytes.ops, // L1 bytes.ops 单源 WindowGrowCapacity 0→32→2×
@@ -380,7 +379,7 @@ var
   LLockRet: Int32;
 begin
   if atomic_load(GRegistry.Inited) = 1 then
-    raise EWindowInvalidState.CreateFmt('window registry late register rejected after init: %s', [GetEnumName(TypeInfo(TWindowKind), Ord(ADesc.Kind))]);
+    raise EWindowInvalidState.CreateFmt('window registry late register rejected after init: %s', [WindowKindName(ADesc.Kind)]);
   if not GLockInited then
     raise EWindowInvalidState.Create('window registry lock not initialized');
   LLockRet := platform_mutex_lock(GRegistryLock);
@@ -388,7 +387,7 @@ begin
     raise EWindowInvalidState.CreateFmt('window registry lock failed: %d', [LLockRet]);
   try
     if atomic_load(GRegistry.Inited) = 1 then
-      raise EWindowInvalidState.CreateFmt('window registry late register rejected after init (locked): %s', [GetEnumName(TypeInfo(TWindowKind), Ord(ADesc.Kind))]);
+      raise EWindowInvalidState.CreateFmt('window registry late register rejected after init (locked): %s', [WindowKindName(ADesc.Kind)]);
     for I := 0 to GRegistry.Count - 1 do
       if GRegistry.Backends[I].Kind = ADesc.Kind then Exit;
     EnsureBackendCapacity;
@@ -543,7 +542,7 @@ begin
       LDetail := 'sonames: ' + GetSonamesForKind(wkGtk4) + '|' + GetSonamesForKind(wkGtk3) + '|' + GetSonamesForKind(wkGtk2) + '; smart fallback gtk4>gtk3>gtk2'
     else
       LDetail := '';
-    B.Add(GetEnumName(TypeInfo(TWindowKind), Ord(GRegistry.Backends[I].Kind)), LAvail, LDetail);
+    B.Add(WindowKindName(GRegistry.Backends[I].Kind), LAvail, LDetail);
   end;
   Result := B.Build;
 end;

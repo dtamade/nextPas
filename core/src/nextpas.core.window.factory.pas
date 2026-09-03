@@ -68,7 +68,6 @@ procedure WindowPumpAll;
 implementation
 
 uses
-  nextpas.core.system.typinfo,
   nextpas.core.window.impl,
   nextpas.core.window.fake,
   nextpas.core.window.registry;
@@ -106,7 +105,7 @@ begin
   if not WindowBackendAvailable(AKind) then
     raise EWindowBackendUnavailable.CreateFmt(
       'window backend "%s" is not available in this build — call WindowBackendDiagnostics for sonames/probe details', [
-      GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
+      WindowKindName(AKind)]);
   // 性能：inline O(1) 集合检测零拷贝，单源于 registry CBackendOrder 11 元全序派生的 RegistryIsDesktopKind，消 7 元硬编码双处同步与 wkGtk 别名冗余，wkGtk3 显式涵盖
   if (AOptions.ParentHandle <> nil) and RegistryIsDesktopKind(AKind) then
     raise EWindowUnsupported.Create(
@@ -116,7 +115,7 @@ begin
     Exit(B^.Create(AOptions));
   raise EWindowBackendUnavailable.CreateFmt(
     'window backend "%s" is registered but has no factory yet', [
-    GetEnumName(TypeInfo(TWindowKind), Ord(AKind))]);
+    WindowKindName(AKind)]);
 end;
 
 procedure WindowRunLoop;

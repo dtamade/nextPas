@@ -52,7 +52,6 @@ procedure WebviewExitLoop; inline; deprecated 'Use WindowExitLoop';
 implementation
 
 uses
-  nextpas.core.system.typinfo,
   nextpas.core.window.factory,
   nextpas.core.webview.validation,
   nextpas.core.webview.registry,
@@ -193,7 +192,7 @@ begin
   // CONTRACT fail-fast: 显式 Kind 不可用即抛 EWebviewBackendUnavailable，不静默遍历其他后端/回退 fake，缺库部署可排查
   raise EWebviewBackendUnavailable.CreateFmt(
     'webview backend "%s" is not available in this build', [
-    GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+    WebviewKindName(AKind)]);
 end;
 
 function CreateWebviewOn(const AParent: IWindow;
@@ -211,13 +210,13 @@ begin
   if not WebviewBackendAvailable(AKind) then
     raise EWebviewBackendUnavailable.CreateFmt(
       'webview backend "%s" is not available in this build', [
-      GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+      WebviewKindName(AKind)]);
   B := FindBackend(AKind);
   if (B <> nil) and Assigned(B^.Create) then
     Exit(B^.Create(AOptions));
   raise EWebviewBackendUnavailable.CreateFmt(
     'webview backend "%s" is registered but has no factory yet', [
-    GetEnumName(TypeInfo(TWebviewKind), Ord(AKind))]);
+    WebviewKindName(AKind)]);
 end;
 {$POP}
 

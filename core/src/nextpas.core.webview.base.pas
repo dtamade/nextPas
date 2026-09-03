@@ -81,6 +81,9 @@ type
 { 默认选项：字段缺省值唯一权威（CONTRACT §2.2） }
 function DefaultWebviewOptions: TWebviewOptions;
 
+{ 封闭枚举诊断名：静态表，与 GetEnumName 拼写一致，不依赖 TypInfo。 }
+function WebviewKindName(AKind: TWebviewKind): string;
+
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
   EWebviewError = class(ENextPasError)
@@ -158,6 +161,18 @@ begin
   Result.DataDirectory := '';
   Result.EphemeralSession := False;
   Result.InitScripts := nil;
+end;
+
+function WebviewKindName(AKind: TWebviewKind): string;
+begin
+  case AKind of
+    wvGtk: Result := 'wvGtk';
+    wvWebview2: Result := 'wvWebview2';
+    wvWk: Result := 'wvWk';
+    wvFake: Result := 'wvFake';
+  else
+    Result := '';
+  end;
 end;
 
 { EWebviewError 族 }

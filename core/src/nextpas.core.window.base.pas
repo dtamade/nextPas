@@ -123,6 +123,9 @@ function WindowOptionsCreate(const ATitle: string; AWidth, AHeight,
   AResizable, AMaximized: Boolean): TWindowOptions; inline;
 procedure CheckWindowOptions(const AOptions: TWindowOptions);
 
+{ 封闭枚举诊断名：静态表，与 GetEnumName 拼写一致，不依赖 TypInfo。 }
+function WindowKindName(AKind: TWindowKind): string;
+
 type
   EWindowError = class(ENextPasError)
   protected
@@ -236,6 +239,25 @@ begin
   if (AOptions.Constraints.MinHeight > 0) and (AOptions.Constraints.MaxHeight > 0)
     and (AOptions.Constraints.MaxHeight < AOptions.Constraints.MinHeight) then
     raise EWindowInvalidState.CreateFmt('MaxHeight (%d) must be >= MinHeight (%d)', [AOptions.Constraints.MaxHeight, AOptions.Constraints.MinHeight]);
+end;
+
+function WindowKindName(AKind: TWindowKind): string;
+begin
+  case AKind of
+    wkGtk2: Result := 'wkGtk2';
+    wkGtk3: Result := 'wkGtk3';
+    wkGtk4: Result := 'wkGtk4';
+    wkQt: Result := 'wkQt';
+    wkSdl2: Result := 'wkSdl2';
+    wkWin32: Result := 'wkWin32';
+    wkCocoa: Result := 'wkCocoa';
+    wkAndroid: Result := 'wkAndroid';
+    wkUIKit: Result := 'wkUIKit';
+    wkWasm: Result := 'wkWasm';
+    wkFake: Result := 'wkFake';
+  else
+    Result := '';
+  end;
 end;
 
 class function TWindowScale.FromFactor(const AFactor: Double): TWindowScale; inline;
