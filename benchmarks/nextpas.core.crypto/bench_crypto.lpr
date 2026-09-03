@@ -3,7 +3,9 @@ program bench_crypto;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.crypto.aesgcm,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,
@@ -32,10 +34,8 @@ begin
 end;
 {$ELSE}
 function ClockGetTimeNs: Int64;
-var ts: TTimeStamp;
 begin
-  ts := DateTimeToTimeStamp(Now);
-  Result := (Int64(ts.Date) * 86400000 + ts.Time) * 1000000;
+  Result := Int64(nextpas.core.time.GetTickCount64) * 1000000;
 end;
 {$ENDIF}
 
@@ -107,7 +107,7 @@ var
 begin
   SetLength(LPriv, 32);
   for I := 0 to 31 do LPriv[I] := Byte(I + $10);
-  LMsg := TEncoding.UTF8.GetBytes(UnicodeString('benchmark message for ed25519'));
+  LMsg := StringToUTF8Bytes('benchmark message for ed25519');
 
   for I := 0 to WARMUP - 1 do
     Ed25519Sign(LPriv, LMsg, LSig);
@@ -135,7 +135,7 @@ begin
   SetLength(LPriv, 32);
   for I := 0 to 31 do LPriv[I] := Byte(I + $10);
   LPub := Ed25519PublicKeyFromPrivate(LPriv);
-  LMsg := TEncoding.UTF8.GetBytes(UnicodeString('benchmark message for ed25519'));
+  LMsg := StringToUTF8Bytes('benchmark message for ed25519');
   Ed25519Sign(LPriv, LMsg, LSig);
 
   for I := 0 to WARMUP - 1 do
@@ -161,8 +161,8 @@ var
   LOps: UInt64;
   I: Integer;
 begin
-  LPwd := TEncoding.UTF8.GetBytes(UnicodeString('password'));
-  LSalt := TEncoding.UTF8.GetBytes(UnicodeString('salt'));
+  LPwd := StringToUTF8Bytes('password');
+  LSalt := StringToUTF8Bytes('salt');
 
   for I := 0 to 2 do
     LKey := PBKDF2_SHA256(LPwd, LSalt, AIterations, 32);

@@ -3,7 +3,10 @@ program bench_fs_io;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.exception,
   nextpas.core.fs;
 
 const
@@ -32,11 +35,8 @@ begin
 end;
 {$ELSE}
 function ClockGetTimeNs: Int64;
-var
-  LTs: TTimeStamp;
 begin
-  LTs := DateTimeToTimeStamp(Now);
-  Result := (Int64(LTs.Date) * 86400000 + LTs.Time) * 1000000;
+  Result := Int64(nextpas.core.time.GetTickCount64) * 1000000;
 end;
 {$ENDIF}
 
@@ -409,7 +409,7 @@ begin
 end;
 
 begin
-  GTmpDir := '/tmp/nextpas_fs_bench_io_' + IntToStr(GetProcessID);
+  GTmpDir := TempDir('', 'nextpas_fs_bench_io_');
   MkdirAll(GTmpDir);
   try
     WriteLn('=== nextpas.core.fs IO Benchmarks ===');

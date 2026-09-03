@@ -3,7 +3,8 @@ program bench_aesgcm;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.aesgcm;
 
 {$IFDEF LINUX}

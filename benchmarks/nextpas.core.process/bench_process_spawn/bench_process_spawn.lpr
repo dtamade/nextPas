@@ -3,7 +3,9 @@ program bench_process_spawn;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.process;
 
 const
@@ -28,11 +30,8 @@ begin
 end;
 {$ELSE}
 function ClockGetTimeNs: Int64;
-var
-  LTs: TTimeStamp;
 begin
-  LTs := DateTimeToTimeStamp(Now);
-  Result := (Int64(LTs.Date) * 86400000 + LTs.Time) * 1000000;
+  Result := Int64(nextpas.core.time.GetTickCount64) * 1000000;
 end;
 {$ENDIF}
 

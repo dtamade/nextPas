@@ -3,7 +3,9 @@ program example_ecdh;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.conv,
   nextpas.core.crypto.x25519;
 
 function ToHex(const A: TBytes): string;
@@ -37,7 +39,7 @@ begin
   WriteLn('Alice shared: ', Copy(ToHex(LSharedA), 1, 16), '...');
   WriteLn('Bob shared:   ', Copy(ToHex(LSharedB), 1, 16), '...');
 
-  if CompareMem(@LSharedA[0], @LSharedB[0], 32) then
+  if BytesEqual(LSharedA, LSharedB) then
     WriteLn('Match: YES (both derived the same 32-byte secret)')
   else
   begin

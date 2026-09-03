@@ -3,7 +3,9 @@ program bench_hash_all;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash,
@@ -31,10 +33,8 @@ begin
 end;
 {$ELSE}
 function ClockGetTimeNs: Int64;
-var ts: TTimeStamp;
 begin
-  ts := DateTimeToTimeStamp(Now);
-  Result := (Int64(ts.Date) * 86400000 + ts.Time) * 1000000;
+  Result := Int64(nextpas.core.time.GetTickCount64) * 1000000;
 end;
 {$ENDIF}
 

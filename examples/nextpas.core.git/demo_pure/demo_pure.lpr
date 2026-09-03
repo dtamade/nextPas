@@ -3,7 +3,8 @@ program demo_pure;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.fs,
   nextpas.core.git.factory,
   nextpas.core.git.intf;
@@ -23,7 +24,7 @@ var
   LHead: IGitReference;
   I: Integer;
 begin
-  LTmp := PathJoin([GetTempDir, 'nextpas_demo_pure_' + IntToStr(GetProcessID)]);
+  LTmp := TempDir(GetTempDir, 'nextpas_demo_pure_');
   RemoveAll(LTmp);
   MkdirAll(LTmp);
   try

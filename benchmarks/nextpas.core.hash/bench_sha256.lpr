@@ -3,7 +3,9 @@ program bench_sha256;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.time,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.sha256;
@@ -13,12 +15,8 @@ const
   BLOCK_SIZE = 8192;
 
 function GetMonotonicNs: Int64;
-var
-  ts: TTimeStamp;
 begin
-  ts := DateTimeToTimeStamp(Now);
-  Result := Int64(ts.Date) * 86400000 + ts.Time;
-  Result := Result * 1000000;
+  Result := Int64(nextpas.core.time.GetTickCount64) * 1000000;
 end;
 
 {$IFDEF LINUX}

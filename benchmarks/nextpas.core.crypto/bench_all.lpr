@@ -3,7 +3,8 @@ program bench_crypto_all;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.aesgcm,

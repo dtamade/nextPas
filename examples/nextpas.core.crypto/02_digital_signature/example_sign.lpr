@@ -3,7 +3,8 @@ program example_sign;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.crypto.ed25519;
 
 function ToHex(const A: TBytes): string;
@@ -36,7 +37,7 @@ begin
   WriteLn('Public key: ', Copy(ToHex(LPub), 1, 16), '...');
 
   // Sign a message
-  LMsg := TEncoding.UTF8.GetBytes(UnicodeString('Transfer 100 tokens to Alice'));
+  LMsg := StringToUTF8Bytes('Transfer 100 tokens to Alice');
   if Ed25519Sign(LPriv, LMsg, LSig) then
     WriteLn('Signature:  ', Copy(ToHex(LSig), 1, 16), '... (64 bytes)')
   else
