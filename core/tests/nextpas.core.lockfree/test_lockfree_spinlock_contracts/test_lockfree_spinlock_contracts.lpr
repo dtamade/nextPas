@@ -3,7 +3,7 @@ program test_lockfree_spinlock_contracts;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.test;
 
 const
@@ -29,16 +29,8 @@ const
   );
 
 function ReadSource(const AFileName: string): string;
-var
-  LLines: TStringList;
 begin
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile('../../../src/' + AFileName);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := ReadFileText('../../../src/' + AFileName);
 end;
 
 procedure TestSpinLocksAcquireZeroToOne;

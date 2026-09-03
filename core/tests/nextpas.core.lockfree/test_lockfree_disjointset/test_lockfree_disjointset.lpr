@@ -4,7 +4,7 @@ program test_lockfree_disjointset;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.lockfree.disjointset;
@@ -13,57 +13,47 @@ var
   GTests, GPassed: Integer;
 
 type
-  TUnionThread = class(TThread)
-  private
-    FSet: TLockFreeDisjointSet;
-    FPairCount: Int32;
-    FReverse: Boolean;
-    FReady, FStart, FDone: PInt32;
-    FResults: array of TLockFreeDisjointSetResult;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(ASet: TLockFreeDisjointSet; APairCount: Int32;
-      AReverse: Boolean; AReady, AStart, ADone: PInt32);
-    function ResultAt(AIndex: Int32): TLockFreeDisjointSetResult;
+  PUnionCtx = ^TUnionCtx;
+  TUnionCtx = record
+    DisjointSet: TLockFreeDisjointSet;
+    PairCount: Int32;
+    Reverse: Boolean;
+    Ready, Start, Done: PInt32;
+    Results: array of TLockFreeDisjointSetResult;
   end;
 
-constructor TUnionThread.Create(ASet: TLockFreeDisjointSet;
+procedure InitUnionCtx(out ACtx: TUnionCtx; ASet: TLockFreeDisjointSet;
   APairCount: Int32; AReverse: Boolean; AReady, AStart, ADone: PInt32);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FSet := ASet;
-  FPairCount := APairCount;
-  FReverse := AReverse;
-  FReady := AReady;
-  FStart := AStart;
-  FDone := ADone;
-  SetLength(FResults, APairCount);
+  ACtx.DisjointSet := ASet;
+  ACtx.PairCount := APairCount;
+  ACtx.Reverse := AReverse;
+  ACtx.Ready := AReady;
+  ACtx.Start := AStart;
+  ACtx.Done := ADone;
+  SetLength(ACtx.Results, APairCount);
 end;
 
-procedure TUnionThread.Execute;
+function UnionProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PUnionCtx;
   LI, LLeft, LRight: Int32;
 begin
-  for LI := 0 to FPairCount - 1 do
+  LCtx := PUnionCtx(AArg);
+  for LI := 0 to LCtx^.PairCount - 1 do
   begin
-    atomic_fetch_add(FReady^, 1, mo_acq_rel);
-    while atomic_load(FStart^, mo_acquire) <= LI do
+    atomic_fetch_add(LCtx^.Ready^, 1, mo_acq_rel);
+    while atomic_load(LCtx^.Start^, mo_acquire) <= LI do
       CpuPause;
     LLeft := LI * 2;
     LRight := LLeft + 1;
-    if FReverse then
-      FResults[LI] := FSet.Union(LRight, LLeft)
+    if LCtx^.Reverse then
+      LCtx^.Results[LI] := LCtx^.DisjointSet.Union(LRight, LLeft)
     else
-      FResults[LI] := FSet.Union(LLeft, LRight);
-    atomic_fetch_add(FDone^, 1, mo_acq_rel);
+      LCtx^.Results[LI] := LCtx^.DisjointSet.Union(LLeft, LRight);
+    atomic_fetch_add(LCtx^.Done^, 1, mo_acq_rel);
   end;
-end;
-
-function TUnionThread.ResultAt(AIndex: Int32): TLockFreeDisjointSetResult;
-begin
-  Result := FResults[AIndex];
+  Result := nil;
 end;
 
 procedure Check(ACond: Boolean; const AName: string);
@@ -272,26 +262,27 @@ const
   PAIR_COUNT = 2000;
 var
   DS: TLockFreeDisjointSet;
-  LForward, LReverse: TUnionThread;
+  LForwardRec, LReverseRec: TPlatformThreadRecord;
+  LForwardCtx, LReverseCtx: TUnionCtx;
   LReady, LStart, LDone, LI: Int32;
   LValid: Boolean;
 begin
   WriteLn('--- TestConcurrentOppositeUnion ---');
   DS := TLockFreeDisjointSet.Create(16);
-  LForward := nil;
-  LReverse := nil;
   try
     for LI := 1 to PAIR_COUNT * 2 do
       DS.MakeSet;
     LReady := 0;
     LStart := 0;
     LDone := 0;
-    LForward := TUnionThread.Create(DS, PAIR_COUNT, False,
+    InitUnionCtx(LForwardCtx, DS, PAIR_COUNT, False,
       @LReady, @LStart, @LDone);
-    LReverse := TUnionThread.Create(DS, PAIR_COUNT, True,
+    InitUnionCtx(LReverseCtx, DS, PAIR_COUNT, True,
       @LReady, @LStart, @LDone);
-    LForward.Start;
-    LReverse.Start;
+    Check(platform_thread_spawn(LForwardRec, @UnionProc,
+      @LForwardCtx) = 0, 'spawn forward union worker');
+    Check(platform_thread_spawn(LReverseRec, @UnionProc,
+      @LReverseCtx) = 0, 'spawn reverse union worker');
     for LI := 0 to PAIR_COUNT - 1 do
     begin
       while atomic_load(LReady, mo_acquire) < (LI + 1) * 2 do
@@ -300,13 +291,13 @@ begin
       while atomic_load(LDone, mo_acquire) < (LI + 1) * 2 do
         CpuPause;
     end;
-    LForward.WaitFor;
-    LReverse.WaitFor;
+    Check(platform_thread_wait(LForwardRec) = 0, 'join forward union worker');
+    Check(platform_thread_wait(LReverseRec) = 0, 'join reverse union worker');
 
     LValid := True;
     for LI := 0 to PAIR_COUNT - 1 do
-      if ((LForward.ResultAt(LI) = dsOk) and
-          (LReverse.ResultAt(LI) = dsOk)) or
+      if ((LForwardCtx.Results[LI] = dsOk) and
+          (LReverseCtx.Results[LI] = dsOk)) or
          (not DS.Connected(LI * 2, LI * 2 + 1)) then
       begin
         LValid := False;
@@ -314,8 +305,6 @@ begin
       end;
     Check(LValid, 'Concurrent opposite unions preserve a rooted forest');
   finally
-    LForward.Free;
-    LReverse.Free;
     DS.Free;
   end;
 end;

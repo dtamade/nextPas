@@ -3,7 +3,7 @@ program test_lockfree_ttl_cache;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.ttl_cache;
@@ -152,19 +152,14 @@ end;
 
 procedure Test_DeadlineAndDefaultTTLContracts;
 var
-  LSource: TStringList;
+  LSource: string;
 begin
   WriteLn('--- DeadlineAndDefaultTTLContracts ---');
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.ttl_cache.pas');
-    Check(Pos('atomic_load_64(FDefaultTTL, mo_acquire)', LSource.Text) > 0,
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.ttl_cache.pas');
+    Check(Pos('atomic_load_64(FDefaultTTL, mo_acquire)', LSource) > 0,
       'default TTL is read atomically');
-    Check(Pos('ATTLMs > High(Int64) - ANow', LSource.Text) > 0,
+    Check(Pos('ATTLMs > High(Int64) - ANow', LSource) > 0,
       'expiration deadline addition is saturated');
-  finally
-    LSource.Free;
-  end;
 end;
 
 procedure Test_MultipleKeys;

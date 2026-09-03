@@ -3,7 +3,7 @@ program test_lockfree_tdigest;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.lockfree.tdigest,
   nextpas.core.lockfree,
@@ -122,18 +122,13 @@ end;
 
 procedure TestTDigestCompressionUsesQuantileWeight;
 var
-  LSource: TStringList;
+  LSource: string;
 begin
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.tdigest.pas');
-    Check(Pos('LCumulativeWeight', LSource.Text) > 0,
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.tdigest.pas');
+    Check(Pos('LCumulativeWeight', LSource) > 0,
       'Compression must track cumulative centroid weight');
     Check(Pos('4.0 * FTotalWeight * LQ * (1.0 - LQ) / FCompression',
-      LSource.Text) > 0, 'Compression must apply the quantile weight bound');
-  finally
-    LSource.Free;
-  end;
+      LSource) > 0, 'Compression must apply the quantile weight bound');
 end;
 
 begin

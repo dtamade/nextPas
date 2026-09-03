@@ -4,7 +4,7 @@ program test_lockfree_linkedlist;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.lockfree.linkedlist;
@@ -12,73 +12,51 @@ uses
 type
   TIntLinkedList = specialize TConcurrentLinkedListImpl<Integer>;
 
-  TListWriterThread = class(TThread)
-  private
-    FList: TIntLinkedList;
-    FIterations: Int32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AList: TIntLinkedList; AIterations: Int32);
+  PListWriterCtx = ^TListWriterCtx;
+  TListWriterCtx = record
+    List: TIntLinkedList;
+    Iterations: Int32;
   end;
 
-  TListReaderThread = class(TThread)
-  private
-    FList: TIntLinkedList;
-    FIterations: Int32;
-    FInvalidOutput: PInt32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AList: TIntLinkedList; AIterations: Int32;
-      AInvalidOutput: PInt32);
+  PListReaderCtx = ^TListReaderCtx;
+  TListReaderCtx = record
+    List: TIntLinkedList;
+    Iterations: Int32;
+    InvalidOutput: PInt32;
   end;
 
 var
   GTests, GPassed: Integer;
 
-constructor TListWriterThread.Create(AList: TIntLinkedList;
-  AIterations: Int32);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FList := AList;
-  FIterations := AIterations;
-end;
-
-procedure TListWriterThread.Execute;
+function ListWriterProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PListWriterCtx;
   LI, LValue: Int32;
 begin
-  for LI := 1 to FIterations do
+  LCtx := PListWriterCtx(AArg);
+  for LI := 1 to LCtx^.Iterations do
   begin
     LValue := LI mod 64;
-    FList.Insert(LValue);
-    FList.Remove(LValue);
+    LCtx^.List.Insert(LValue);
+    LCtx^.List.Remove(LValue);
   end;
+  Result := nil;
 end;
 
-constructor TListReaderThread.Create(AList: TIntLinkedList;
-  AIterations: Int32; AInvalidOutput: PInt32);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FList := AList;
-  FIterations := AIterations;
-  FInvalidOutput := AInvalidOutput;
-end;
-
-procedure TListReaderThread.Execute;
+function ListReaderProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PListReaderCtx;
   LI, LValue: Int32;
 begin
-  for LI := 1 to FIterations do
+  LCtx := PListReaderCtx(AArg);
+  for LI := 1 to LCtx^.Iterations do
   begin
-    FList.Contains(LI mod 64);
+    LCtx^.List.Contains(LI mod 64);
     LValue := -1;
-    if (not FList.Get(0, LValue)) and (LValue <> 0) then
-      atomic_store(FInvalidOutput^, 1, mo_release);
+    if (not LCtx^.List.Get(0, LValue)) and (LValue <> 0) then
+      atomic_store(LCtx^.InvalidOutput^, 1, mo_release);
   end;
+  Result := nil;
 end;
 
 procedure Check(ACond: Boolean; const AName: string);
@@ -231,27 +209,29 @@ const
   ITERATIONS = 20000;
 var
   LL: TIntLinkedList;
-  LWriter: TListWriterThread;
-  LReader: TListReaderThread;
+  LWriterRec, LReaderRec: TPlatformThreadRecord;
+  LWriterCtx: TListWriterCtx;
+  LReaderCtx: TListReaderCtx;
   LInvalidOutput: Int32;
 begin
   WriteLn('--- TestConcurrentReadWrite ---');
   LL := TIntLinkedList.Create;
-  LWriter := nil;
-  LReader := nil;
   try
     LInvalidOutput := 0;
-    LWriter := TListWriterThread.Create(LL, ITERATIONS);
-    LReader := TListReaderThread.Create(LL, ITERATIONS, @LInvalidOutput);
-    LWriter.Start;
-    LReader.Start;
-    LWriter.WaitFor;
-    LReader.WaitFor;
+    LWriterCtx.List := LL;
+    LWriterCtx.Iterations := ITERATIONS;
+    LReaderCtx.List := LL;
+    LReaderCtx.Iterations := ITERATIONS;
+    LReaderCtx.InvalidOutput := @LInvalidOutput;
+    Check(platform_thread_spawn(LWriterRec, @ListWriterProc,
+      @LWriterCtx) = 0, 'spawn list writer');
+    Check(platform_thread_spawn(LReaderRec, @ListReaderProc,
+      @LReaderCtx) = 0, 'spawn list reader');
+    Check(platform_thread_wait(LWriterRec) = 0, 'join list writer');
+    Check(platform_thread_wait(LReaderRec) = 0, 'join list reader');
     Check(atomic_load(LInvalidOutput, mo_acquire) = 0,
       'Concurrent failed reads keep deterministic output');
   finally
-    LWriter.Free;
-    LReader.Free;
     LL.Free;
   end;
 end;

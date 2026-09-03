@@ -4,7 +4,7 @@ program test_lockfree_merkle_tree;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.text.conv,
   nextpas.core.lockfree.merkle_tree;
 
@@ -13,32 +13,21 @@ var
   GPassed, GFailed: Int32;
 
 type
-  TMerkleAddThread = class(TThread)
-  private
-    FTree: TMerkleTree;
-    FStartIndex, FCount: Int32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(ATree: TMerkleTree; AStartIndex, ACount: Int32);
+  PMerkleAddCtx = ^TMerkleAddCtx;
+  TMerkleAddCtx = record
+    Tree: TMerkleTree;
+    StartIndex, Count: Int32;
   end;
 
-constructor TMerkleAddThread.Create(ATree: TMerkleTree;
-  AStartIndex, ACount: Int32);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FTree := ATree;
-  FStartIndex := AStartIndex;
-  FCount := ACount;
-end;
-
-procedure TMerkleAddThread.Execute;
+function MerkleAddProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PMerkleAddCtx;
   LI: Int32;
 begin
-  for LI := 0 to FCount - 1 do
-    FTree.AddLeaf('leaf-' + IntToStr(FStartIndex + LI));
+  LCtx := PMerkleAddCtx(AArg);
+  for LI := 0 to LCtx^.Count - 1 do
+    LCtx^.Tree.AddLeaf('leaf-' + IntToStr(LCtx^.StartIndex + LI));
+  Result := nil;
 end;
 
 procedure Check(ACondition: Boolean; const AName: string);
@@ -171,22 +160,23 @@ const
   THREAD_COUNT = 4;
   LEAVES_PER_THREAD = 200;
 var
-  LThreads: array[0..THREAD_COUNT - 1] of TMerkleAddThread;
+  LRecs: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LCtxs: array[0..THREAD_COUNT - 1] of TMerkleAddCtx;
   LI: Int32;
 begin
   WriteLn('--- TestConcurrentAddLeaf ---');
   GTree := TMerkleTree.Create;
   try
-    for LI := 0 to High(LThreads) do
-      LThreads[LI] := TMerkleAddThread.Create(GTree,
-        LI * LEAVES_PER_THREAD, LEAVES_PER_THREAD);
-    for LI := 0 to High(LThreads) do
-      LThreads[LI].Start;
-    for LI := 0 to High(LThreads) do
+    for LI := 0 to High(LCtxs) do
     begin
-      LThreads[LI].WaitFor;
-      LThreads[LI].Free;
+      LCtxs[LI].Tree := GTree;
+      LCtxs[LI].StartIndex := LI * LEAVES_PER_THREAD;
+      LCtxs[LI].Count := LEAVES_PER_THREAD;
+      Check(platform_thread_spawn(LRecs[LI], @MerkleAddProc,
+        @LCtxs[LI]) = 0, 'spawn add-leaf worker');
     end;
+    for LI := 0 to High(LRecs) do
+      Check(platform_thread_wait(LRecs[LI]) = 0, 'join add-leaf worker');
     Check(GTree.GetLeafCount = THREAD_COUNT * LEAVES_PER_THREAD,
       'Concurrent additions publish every leaf');
     Check(GTree.Verify, 'Concurrent additions propagate a valid root');

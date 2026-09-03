@@ -6,7 +6,7 @@ program test_lockfree_dag;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.atomic,
   nextpas.core.lockfree.dag;
 
@@ -15,38 +15,34 @@ var
   GPassed, GFailed: Int32;
 
 type
-  TDagEdgeThread = class(TThread)
-  private
-    FDag: TConcurrentDAG;
-    FFromId, FToId: Int64;
-    FReady, FStart: PInt32;
-    FResult: TDagResult;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(ADag: TConcurrentDAG; AFromId, AToId: Int64;
-      AReady, AStart: PInt32);
-    property EdgeResult: TDagResult read FResult;
+  PDagEdgeCtx = ^TDagEdgeCtx;
+  TDagEdgeCtx = record
+    Dag: TConcurrentDAG;
+    FromId, ToId: Int64;
+    Ready, Start: PInt32;
+    EdgeResult: TDagResult;
   end;
 
-constructor TDagEdgeThread.Create(ADag: TConcurrentDAG;
+procedure InitDagEdgeCtx(out ACtx: TDagEdgeCtx; ADag: TConcurrentDAG;
   AFromId, AToId: Int64; AReady, AStart: PInt32);
 begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FDag := ADag;
-  FFromId := AFromId;
-  FToId := AToId;
-  FReady := AReady;
-  FStart := AStart;
+  ACtx.Dag := ADag;
+  ACtx.FromId := AFromId;
+  ACtx.ToId := AToId;
+  ACtx.Ready := AReady;
+  ACtx.Start := AStart;
 end;
 
-procedure TDagEdgeThread.Execute;
+function DagEdgeProc(AArg: Pointer): Pointer; cdecl;
+var
+  LCtx: PDagEdgeCtx;
 begin
-  atomic_fetch_add(FReady^, 1, mo_acq_rel);
-  while atomic_load(FStart^, mo_acquire) = 0 do
+  LCtx := PDagEdgeCtx(AArg);
+  atomic_fetch_add(LCtx^.Ready^, 1, mo_acq_rel);
+  while atomic_load(LCtx^.Start^, mo_acquire) = 0 do
     CpuPause;
-  FResult := FDag.AddEdge(FFromId, FToId);
+  LCtx^.EdgeResult := LCtx^.Dag.AddEdge(LCtx^.FromId, LCtx^.ToId);
+  Result := nil;
 end;
 
 procedure Check(ACondition: Boolean; const AName: string);
@@ -242,7 +238,8 @@ const
 var
   LAttempt, LI: Int32;
   LReady, LStart: Int32;
-  LForward, LReverse: TDagEdgeThread;
+  LForwardRec, LReverseRec: TPlatformThreadRecord;
+  LForwardCtx, LReverseCtx: TDagEdgeCtx;
   LSafe: Boolean;
 begin
   WriteLn('--- TestConcurrentOppositeEdgesCannotCreateCycle ---');
@@ -250,8 +247,6 @@ begin
   for LAttempt := 1 to ATTEMPTS do
   begin
     GDag := TConcurrentDAG.Create;
-    LForward := nil;
-    LReverse := nil;
     try
       for LI := 1 to CHAIN_LENGTH do
       begin
@@ -266,24 +261,24 @@ begin
 
       LReady := 0;
       LStart := 0;
-      LForward := TDagEdgeThread.Create(GDag, 1, 1001, @LReady, @LStart);
-      LReverse := TDagEdgeThread.Create(GDag, 1001, 1, @LReady, @LStart);
-      LForward.Start;
-      LReverse.Start;
+      InitDagEdgeCtx(LForwardCtx, GDag, 1, 1001, @LReady, @LStart);
+      InitDagEdgeCtx(LReverseCtx, GDag, 1001, 1, @LReady, @LStart);
+      Check(platform_thread_spawn(LForwardRec, @DagEdgeProc,
+        @LForwardCtx) = 0, 'spawn forward edge worker');
+      Check(platform_thread_spawn(LReverseRec, @DagEdgeProc,
+        @LReverseCtx) = 0, 'spawn reverse edge worker');
       while atomic_load(LReady, mo_acquire) <> 2 do
         CpuPause;
       atomic_store(LStart, 1, mo_release);
-      LForward.WaitFor;
-      LReverse.WaitFor;
+      Check(platform_thread_wait(LForwardRec) = 0, 'join forward edge worker');
+      Check(platform_thread_wait(LReverseRec) = 0, 'join reverse edge worker');
 
-      if (LForward.EdgeResult = dagOk) and
-         (LReverse.EdgeResult = dagOk) then
+      if (LForwardCtx.EdgeResult = dagOk) and
+         (LReverseCtx.EdgeResult = dagOk) then
         LSafe := False;
       if GDag.HasCycle then
         LSafe := False;
     finally
-      LForward.Free;
-      LReverse.Free;
       GDag.Free;
     end;
     if not LSafe then

@@ -3,7 +3,7 @@ program test_lockfree_misragries;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.lockfree.misragries,
   nextpas.core.test;
 
@@ -124,18 +124,13 @@ end;
 
 procedure TestCountersSaturateAtInt64Max;
 var
-  LSource: TStringList;
+  LSource: string;
 begin
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.misragries.pas');
-    Check(Pos('if FTotalOps < High(Int64) then', LSource.Text) > 0,
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.misragries.pas');
+    Check(Pos('if FTotalOps < High(Int64) then', LSource) > 0,
       'Total operation count must saturate');
-    Check(Pos('if FEntries[LIdx].Count < High(Int64) then', LSource.Text) > 0,
+    Check(Pos('if FEntries[LIdx].Count < High(Int64) then', LSource) > 0,
       'Tracked item count must saturate');
-  finally
-    LSource.Free;
-  end;
 end;
 
 begin

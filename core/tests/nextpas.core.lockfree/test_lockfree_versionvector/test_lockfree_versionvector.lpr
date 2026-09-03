@@ -4,37 +4,28 @@ program test_lockfree_versionvector;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
+  nextpas.core.exception,
   nextpas.core.lockfree.versionvector,
   nextpas.core.test;
 
 type
-  TVVIncrementThread = class(TThread)
-  private
-    FVector: TVersionVector;
-    FNodeId: Int32;
-    FIterations: Int32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AVector: TVersionVector; ANodeId, AIterations: Int32);
+  PVVIncrementCtx = ^TVVIncrementCtx;
+  TVVIncrementCtx = record
+    Vector: TVersionVector;
+    NodeId: Int32;
+    Iterations: Int32;
   end;
 
-constructor TVVIncrementThread.Create(AVector: TVersionVector; ANodeId, AIterations: Int32);
-begin
-  inherited Create(False);
-  FreeOnTerminate := False;
-  FVector := AVector;
-  FNodeId := ANodeId;
-  FIterations := AIterations;
-end;
-
-procedure TVVIncrementThread.Execute;
+function VVIncrementProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PVVIncrementCtx;
   LI: Int32;
 begin
-  for LI := 1 to FIterations do
-    FVector.Increment(FNodeId);
+  LCtx := PVVIncrementCtx(AArg);
+  for LI := 1 to LCtx^.Iterations do
+    LCtx^.Vector.Increment(LCtx^.NodeId);
+  Result := nil;
 end;
 
 procedure TestBasicIncrement;
@@ -281,18 +272,22 @@ const
   ITERATIONS = 2000;
 var
   LVV: TVersionVector;
-  LThreads: array[0..THREAD_COUNT - 1] of TVVIncrementThread;
+  LRecs: array[0..THREAD_COUNT - 1] of TPlatformThreadRecord;
+  LCtxs: array[0..THREAD_COUNT - 1] of TVVIncrementCtx;
   LI: Int32;
 begin
   LVV := TVersionVector.Create;
   try
-    for LI := 0 to High(LThreads) do
-      LThreads[LI] := TVVIncrementThread.Create(LVV, 7, ITERATIONS);
-    for LI := 0 to High(LThreads) do
+    for LI := 0 to High(LCtxs) do
     begin
-      LThreads[LI].WaitFor;
-      LThreads[LI].Free;
+      LCtxs[LI].Vector := LVV;
+      LCtxs[LI].NodeId := 7;
+      LCtxs[LI].Iterations := ITERATIONS;
+      Check(platform_thread_spawn(LRecs[LI], @VVIncrementProc,
+        @LCtxs[LI]) = 0, 'spawn increment worker');
     end;
+    for LI := 0 to High(LRecs) do
+      Check(platform_thread_wait(LRecs[LI]) = 0, 'join increment worker');
     CheckEqual(Int64(THREAD_COUNT * ITERATIONS), LVV.GetCounter(7), 'Concurrent increments preserve all updates');
   finally
     LVV.Free;

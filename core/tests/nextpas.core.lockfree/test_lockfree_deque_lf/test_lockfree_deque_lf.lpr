@@ -2,7 +2,8 @@
 program test_lockfree_deque_lf;
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.lockfree.deque_lf;
@@ -238,17 +239,8 @@ begin
 end;
 
 function ReadTextFile(const APath: string): AnsiString;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[1], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure Test_SourceContractCASOrder;

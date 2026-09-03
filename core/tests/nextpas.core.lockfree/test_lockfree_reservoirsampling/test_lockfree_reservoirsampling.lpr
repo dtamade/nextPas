@@ -3,7 +3,7 @@ program test_lockfree_reservoirsampling;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.lockfree.reservoirsampling,
   nextpas.core.test;
 
@@ -140,20 +140,15 @@ end;
 
 procedure TestReservoirUsesUnbiasedUInt64Draws;
 var
-  LSource: TStringList;
+  LSource: string;
 begin
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.reservoirsampling.pas');
-    Check(Pos('function NextRandom: UInt64', LSource.Text) > 0,
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.reservoirsampling.pas');
+    Check(Pos('function NextRandom: UInt64', LSource) > 0,
       'Reservoir PRNG must expose all 64 random bits');
-    Check(Pos('function NextRandomBounded', LSource.Text) > 0,
+    Check(Pos('function NextRandomBounded', LSource) > 0,
       'Reservoir must use rejection sampling for bounded draws');
-    Check(Pos('mod UInt32(LIdx + 1)', LSource.Text) = 0,
+    Check(Pos('mod UInt32(LIdx + 1)', LSource) = 0,
       'Reservoir stream bound must not narrow at 2^32');
-  finally
-    LSource.Free;
-  end;
 end;
 
 begin

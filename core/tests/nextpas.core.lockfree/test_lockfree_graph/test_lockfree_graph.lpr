@@ -4,70 +4,50 @@ program test_lockfree_graph;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.system.classes,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.graph,
   nextpas.core.test;
 
 type
-  TGraphEdgeThread = class(TThread)
-  private
-    FGraph: TLockFreeGraph;
-    FIterations: Int32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AGraph: TLockFreeGraph; AIterations: Int32);
+  PGraphEdgeCtx = ^TGraphEdgeCtx;
+  TGraphEdgeCtx = record
+    Graph: TLockFreeGraph;
+    Iterations: Int32;
   end;
 
-  TGraphVertexThread = class(TThread)
-  private
-    FGraph: TLockFreeGraph;
-    FIterations: Int32;
-  protected
-    procedure Execute; override;
-  public
-    constructor Create(AGraph: TLockFreeGraph; AIterations: Int32);
+  PGraphVertexCtx = ^TGraphVertexCtx;
+  TGraphVertexCtx = record
+    Graph: TLockFreeGraph;
+    Iterations: Int32;
   end;
 
-constructor TGraphEdgeThread.Create(AGraph: TLockFreeGraph;
-  AIterations: Int32);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FGraph := AGraph;
-  FIterations := AIterations;
-end;
-
-procedure TGraphEdgeThread.Execute;
+function GraphEdgeProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PGraphEdgeCtx;
   LI: Int32;
 begin
-  for LI := 1 to FIterations do
+  LCtx := PGraphEdgeCtx(AArg);
+  for LI := 1 to LCtx^.Iterations do
   begin
-    FGraph.AddEdge(1, 2);
-    FGraph.HasEdge(1, 2);
-    FGraph.RemoveEdge(1, 2);
+    LCtx^.Graph.AddEdge(1, 2);
+    LCtx^.Graph.HasEdge(1, 2);
+    LCtx^.Graph.RemoveEdge(1, 2);
   end;
+  Result := nil;
 end;
 
-constructor TGraphVertexThread.Create(AGraph: TLockFreeGraph;
-  AIterations: Int32);
-begin
-  inherited Create(True);
-  FreeOnTerminate := False;
-  FGraph := AGraph;
-  FIterations := AIterations;
-end;
-
-procedure TGraphVertexThread.Execute;
+function GraphVertexProc(AArg: Pointer): Pointer; cdecl;
 var
+  LCtx: PGraphVertexCtx;
   LI: Int32;
 begin
-  for LI := 1 to FIterations do
+  LCtx := PGraphVertexCtx(AArg);
+  for LI := 1 to LCtx^.Iterations do
   begin
-    FGraph.RemoveVertex(1);
-    FGraph.AddVertex(1);
+    LCtx^.Graph.RemoveVertex(1);
+    LCtx^.Graph.AddVertex(1);
   end;
+  Result := nil;
 end;
 
 procedure TestGraphBasic;
@@ -288,28 +268,29 @@ const
   ITERATIONS = 20000;
 var
   LGraph: TLockFreeGraph;
-  LEdgeThread: TGraphEdgeThread;
-  LVertexThread: TGraphVertexThread;
+  LEdgeRec, LVertexRec: TPlatformThreadRecord;
+  LEdgeCtx: TGraphEdgeCtx;
+  LVertexCtx: TGraphVertexCtx;
 begin
   LGraph := TLockFreeGraph.Create;
-  LEdgeThread := nil;
-  LVertexThread := nil;
   try
     LGraph.AddVertex(1);
     LGraph.AddVertex(2);
-    LEdgeThread := TGraphEdgeThread.Create(LGraph, ITERATIONS);
-    LVertexThread := TGraphVertexThread.Create(LGraph, ITERATIONS);
-    LEdgeThread.Start;
-    LVertexThread.Start;
-    LEdgeThread.WaitFor;
-    LVertexThread.WaitFor;
+    LEdgeCtx.Graph := LGraph;
+    LEdgeCtx.Iterations := ITERATIONS;
+    LVertexCtx.Graph := LGraph;
+    LVertexCtx.Iterations := ITERATIONS;
+    Check(platform_thread_spawn(LEdgeRec, @GraphEdgeProc,
+      @LEdgeCtx) = 0, 'spawn edge worker');
+    Check(platform_thread_spawn(LVertexRec, @GraphVertexProc,
+      @LVertexCtx) = 0, 'spawn vertex worker');
+    Check(platform_thread_wait(LEdgeRec) = 0, 'join edge worker');
+    Check(platform_thread_wait(LVertexRec) = 0, 'join vertex worker');
     Check(LGraph.GetVertexCount = 2,
       'Concurrent source replacement preserves vertex count');
     Check((LGraph.GetEdgeCount = 0) or (LGraph.GetEdgeCount = 1),
       'Concurrent edge count remains bounded');
   finally
-    LEdgeThread.Free;
-    LVertexThread.Free;
     LGraph.Free;
   end;
 end;

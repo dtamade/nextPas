@@ -3,7 +3,8 @@ program test_lockfree_r2_queues;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.lockfree.ringbuffer,
@@ -33,17 +34,8 @@ var
   T: TTestSuite;
 
 function ReadSource(const AFileName: string): string;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(SOURCE_ROOT + AFileName, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, SizeInt(LStream.Size));
-    if Length(Result) > 0 then
-      LStream.ReadBuffer(Result[1], Length(Result));
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(SOURCE_ROOT + AFileName);
 end;
 
 procedure CheckContains(const AText, ANeedle, AMessage: string);

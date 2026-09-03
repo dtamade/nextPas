@@ -3,7 +3,7 @@ program test_lockfree_spacesaving;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.lockfree.spacesaving,
   nextpas.core.lockfree,
   nextpas.core.atomic,
@@ -91,18 +91,13 @@ end;
 
 procedure TestSpaceSavingCountersSaturate;
 var
-  LSource: TStringList;
+  LSource: string;
 begin
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.spacesaving.pas');
-    Check(Pos('if FTotalItems < High(UInt64) then', LSource.Text) > 0,
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.spacesaving.pas');
+    Check(Pos('if FTotalItems < High(UInt64) then', LSource) > 0,
       'Total item count must saturate');
-    Check(Pos('if FEntries[LIdx].FCount < High(UInt64) then', LSource.Text) > 0,
+    Check(Pos('if FEntries[LIdx].FCount < High(UInt64) then', LSource) > 0,
       'Tracked item count must saturate');
-  finally
-    LSource.Free;
-  end;
 end;
 
 begin

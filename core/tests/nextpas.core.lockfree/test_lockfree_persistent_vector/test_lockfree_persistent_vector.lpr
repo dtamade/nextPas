@@ -2,7 +2,8 @@
 program test_lockfree_persistent_vector;
 
 uses
-  nextpas.core.system.classes,
+  nextpas.core.exception,
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.lockfree.persistent_vector;
@@ -398,14 +399,12 @@ end;
 
 procedure Test_CowImplementationContract;
 var
-  LSource: TStringList;
+  LSource: string;
   LText: AnsiString;
 begin
   WriteLn('--- COW Implementation Contract ---');
-  LSource := TStringList.Create;
-  try
-    LSource.LoadFromFile('../../../src/nextpas.core.lockfree.persistent_vector.pas');
-    LText := LSource.Text;
+  LSource := ReadFileText('../../../src/nextpas.core.lockfree.persistent_vector.pas');
+    LText := LSource;
     Check(Pos('PVectorChunk', LText) > 0,
       'Persistent vector stores reference-counted chunks');
     Check(Pos('RefCount: Int32', LText) > 0,
@@ -416,9 +415,6 @@ begin
       'Old versions release shared chunks');
     Check(Pos('CloneChunk', LText) > 0,
       'Only the modified chunk is cloned');
-  finally
-    LSource.Free;
-  end;
 end;
 
 begin

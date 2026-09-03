@@ -4,7 +4,7 @@ program test_lockfree;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.fs, nextpas.core.system.classes,
+  nextpas.core.fs,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.atomic,
@@ -85,17 +85,8 @@ begin
 end;
 
 function ReadUtf8TextFile(const APath: string): string;
-var
-  LStream: TFileStream;
 begin
-  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
-  try
-    SetLength(Result, LStream.Size);
-    if LStream.Size > 0 then
-      LStream.ReadBuffer(Result[1], LStream.Size);
-  finally
-    LStream.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure CheckContains(const AText, AExpected, AMessage: string);
