@@ -59,6 +59,7 @@ procedure ShellFiniRegistries; inline;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.collections.hashmap.base,
   nextpas.core.collections.hashset,
   nextpas.core.platform.console,
@@ -69,6 +70,11 @@ function SchemePointerHash(const AKey: Pointer): UInt32; inline;
 begin
   // 单源：hashmap.base.HashOfPointer → HashMix32，与 viewmap/THashMap 单源一致，inline 零额外调用
   Result := HashOfPointer(AKey);
+end;
+
+function SchemePointerEquals(const L, R: Pointer): Boolean; inline;
+begin
+  Result := L = R;
 end;
 
 var
@@ -324,7 +330,7 @@ begin
     if GShellLiveWindows = nil then
       LTmpLive := specialize TCompactLiveRegistry<Pointer>.Create;
     if GShellSchemeCtxs = nil then
-      LTmpScheme := specialize THashSet<Pointer>.Create(VecGrowCapacity(0), @SchemePointerHash);
+      LTmpScheme := specialize THashSet<Pointer>.Create(VecGrowCapacity(0), @SchemePointerHash, @SchemePointerEquals);
     if LTmpLive <> nil then
     begin
       GShellLiveWindows := LTmpLive;

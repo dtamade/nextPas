@@ -99,8 +99,7 @@ type
   { RECT single source: reuse platform.windows.base host owner (16B value, inline zero-copy); window ffi 禁止重定义，保持 ABI 单源 }
   tagRECT = nextpas.core.platform.windows.base.tagRECT;
   RECT = tagRECT;
-  PRECT = nextpas.core.platform.windows.base.PRECT;
-  PRect = PRECT;
+  PRect = nextpas.core.platform.windows.base.PRECT;
   TMsg = record
     hwnd: HWND;
     message: UINT;

@@ -10,7 +10,8 @@ unit nextpas.core.bytes.pathvalid;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.text.view;
 
 { Go ValidPath 语义：UTF-8、unrooted、段非空非'.'非'..'、反斜杠为普通字符；
   整串 '.' 仅在 AAllowRoot=True 时合法。 }
@@ -25,8 +26,7 @@ function BaseValidSpan(const ASpan: TByteSpan; const AAllowRoot: Boolean): Boole
 implementation
 
 uses
-  nextpas.core.text.utf8,
-  nextpas.core.text.view;
+  nextpas.core.text.utf8;
 
 function BytesValidPath(const APath: string; const AAllowRoot: Boolean): Boolean;
 var

@@ -20,6 +20,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.webview.base,

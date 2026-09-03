@@ -186,7 +186,7 @@ begin
   if LNode^.HasValue then LBest := LNode;
   for I := 0 to AView.Len - 1 do
   begin
-    C := AView.Data[I];
+    C := Byte(AView.Data[I]);
     LChild := FindChild(LNode, C);
     if LChild = nil then Break;
     LNode := LChild;

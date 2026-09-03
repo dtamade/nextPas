@@ -133,7 +133,7 @@ begin
   Result := specialize SyncPoolTryAcquire<T>(APool, ACount, LLock);
 end;
 
-generic function SlabRelease<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex; const AItem: T): Boolean; inline;
+generic function SlabRelease<T>(var APool: specialize TVecArray<T>; var ACount: Integer; var ALock: TMutex; const AItem: T): Boolean; inline;
 var
   LLock: TMutex;
 begin
@@ -147,7 +147,7 @@ end;
 
 // --- Finalize 单源排水：消除五池复制模板，锁内逐槽释放 + 原子置 nil 单所有权 Free 零双释放 ---
 
-generic procedure DrainDisposeSlab<T>(var APool: array of T; var ACount: Integer; var ALock: TMutex);
+generic procedure DrainDisposeSlab<T>(var APool: specialize TVecArray<T>; var ACount: Integer; var ALock: TMutex);
 var
   LLock: TMutex;
 begin
@@ -169,7 +169,7 @@ begin
   if LLock <> nil then LLock.Free;
 end;
 
-procedure DrainCancelSlab(var APool: array of Pointer; var ACount: Integer; var ALock: TMutex);
+procedure DrainCancelSlab(var APool: specialize TVecArray<Pointer>; var ACount: Integer; var ALock: TMutex);
 var
   LLock: TMutex;
 begin

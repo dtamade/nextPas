@@ -30,6 +30,7 @@ uses
   nextpas.core.text.view,
   nextpas.core.webview.utils,
   nextpas.core.json,
+  nextpas.core.json.value,
   { 显式选后端时引 base（门面只 re-export 类型别名，不带枚举值） }
   nextpas.core.webview.base,
   nextpas.core.window.base,

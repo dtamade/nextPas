@@ -164,7 +164,9 @@ var
   W: IWebviewWindow;
 begin
   LParent := CreateFakeWindow(DefaultWindowOptions);
-  W := CreateWebviewOn(LParent, DefaultWebviewOptions);
+  { 无头 parent 上只 pin 无头后端：默认后端（DefaultWebviewKind）在有显示环境
+    会建真 GTK 视图并向 fake 句柄 gtk_container_add，需显式 wvFake }
+  W := CreateWebviewEx(LParent, wvFake, DefaultWebviewOptions);
   Check(W.Window = LParent, 'Window reused');
   Check(not LParent.IsClosed, 'parent open before webview close');
   W.Close;

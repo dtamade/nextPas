@@ -595,18 +595,17 @@ end;
 function TEmbeddedVfs.LowerBoundView(const AView: TStringView): SizeUInt; inline;
 var
   Lo, Hi, Mid: SizeUInt;
-  P: PByte;
-  L: SizeUInt;
+  S: TByteSpan;
   C: Integer;
 begin
-  { perf: 零拷贝二分：StoredPathRange 直取 blob 内指针，CompareBytesOrdered 单源视图比较，零堆分配 }
+  { perf: 零拷贝二分：StoredPathSpan 直取 blob 内视图，CompareBytesOrdered 单源视图比较，零堆分配 }
   Lo := 0;
   Hi := FRp.Count;
   while Lo < Hi do
   begin
     Mid := Lo + (Hi - Lo) div 2;
-    L := FRp.StoredPathRange(Mid, P);
-    C := CompareBytesOrdered(P, Pointer(AView.Data), L, AView.Len);
+    S := FRp.StoredPathSpan(Mid);
+    C := CompareBytesOrdered(S.Data, Pointer(AView.Data), S.Len, AView.Len);
     if C < 0 then
       Lo := Mid + 1
     else
@@ -660,14 +659,13 @@ end;
 function TEmbeddedVfs.IndexOfView(const AView: TStringView): SizeInt; inline;
 var
   Lo: SizeUInt;
-  P: PByte;
-  L: SizeUInt;
+  S: TByteSpan;
 begin
   Lo := LowerBoundView(AView);
   if Lo < FRp.Count then
   begin
-    L := FRp.StoredPathRange(Lo, P);
-    if CompareBytesOrdered(P, Pointer(AView.Data), L, AView.Len) = 0 then
+    S := FRp.StoredPathSpan(Lo);
+    if CompareBytesOrdered(S.Data, Pointer(AView.Data), S.Len, AView.Len) = 0 then
       Exit(SizeInt(Lo));
   end;
   Result := -1;
@@ -677,8 +675,7 @@ function TEmbeddedVfs.HasSubtreeView(const AView: TStringView): Boolean;
 var
   Lo: SizeUInt;
   QLen: SizeUInt;
-  P: PByte;
-  L: SizeUInt;
+  S: TByteSpan;
 begin
   { 零拷贝：LowerBoundView 直达 + CompareMem 前缀直比，零堆分配 }
   Result := False;
@@ -686,11 +683,11 @@ begin
   QLen := AView.Len;
   Lo := LowerBoundView(AView);
   if Lo >= FRp.Count then Exit;
-  L := FRp.StoredPathRange(Lo, P);
-  if L <= QLen then Exit;
-  if P[QLen] <> Ord('/') then Exit;
+  S := FRp.StoredPathSpan(Lo);
+  if S.Len <= QLen then Exit;
+  if S.Data[QLen] <> Ord('/') then Exit;
   if QLen > 0 then
-    if not CompareMem(P, AView.Data, QLen) then Exit;
+    if not CompareMem(S.Data, AView.Data, QLen) then Exit;
   Result := True;
 end;
 
@@ -913,7 +910,7 @@ begin
       raise EVfsIsADirectory.CreateCtx('open', AView.ToString, 'target is a directory');
     raise EVfsNotFound.CreateCtx('open', AView.ToString, 'not found');
   end;
-  E := FEntries[Idx];
+  E := EntryAt(Idx);
   LPathStr := AView.ToString; { 仅诊断路径单次物化，无内容拷贝 }
   if TryPopPool(Slice) then
     Slice.Reinit(FData, Int64(E.DataOffset), Int64(E.Size), LPathStr)

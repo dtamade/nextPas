@@ -80,7 +80,7 @@ var
     AHandler: Pointer; AData: Pointer; ADestroyData: TGDestroyNotify;
     AConnectFlags: guint): gulong; cdecl;
   G_memory_input_stream_new_from_data: function(AData: Pointer;
-    ALen: gssize; ADestroy: TGDestroyNotify): Pointer; cdecl;
+    ALen: gssize; ADestroy: TGDestroyNotify; ADestroyData: Pointer): Pointer; cdecl;
   G_memory_input_stream_new_from_bytes: function(ABytes: Pointer): Pointer; cdecl;
   G_bytes_new_with_free_func: function(AData: Pointer; ASize: NativeUInt;
     ADestroy: TGDestroyNotify; AUserData: Pointer): Pointer; cdecl;

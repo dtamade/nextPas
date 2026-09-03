@@ -37,6 +37,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.platform.thread,
   nextpas.core.sync.intf,
@@ -60,6 +61,7 @@ type
     ResultJson: string;  // Ok 路径
     Code: string;        // Fail 路径（BRIDGE_PROTOCOL §5 词汇）
     Message: string;     // Fail 路径 / handler 异常原文
+    class operator =(const A, B: TFakeInvokeOutcome): Boolean;
   end;
 
   TFakeInvokeOutcomes = array of TFakeInvokeOutcome;
@@ -70,6 +72,7 @@ type
     Answered: Boolean;
     ResultJson: string;
     ErrorMessage: string;
+    class operator =(const A, B: TFakeEvalRecord): Boolean;
   end;
 
   TFakeEvalRecords = array of TFakeEvalRecord;
@@ -77,6 +80,7 @@ type
   TFakeEmit = record
     Event: string;
     PayloadJson: string;
+    class operator =(const A, B: TFakeEmit): Boolean;
   end;
   TFakeEmits = array of TFakeEmit;
 
@@ -84,6 +88,7 @@ type
   TFakeEvalQueueEntry = record
     IsError: Boolean;
     Value: string;
+    class operator =(const A, B: TFakeEvalQueueEntry): Boolean;
   end;
   TFakeEvalQueue = array of TFakeEvalQueueEntry;
 
@@ -92,6 +97,7 @@ type
     ScriptIdx: Integer;
     Callback: TWebviewEvalCallback;
     OnError: TWebviewEvalErrorCallback;
+    class operator =(const A, B: TFakePendingEval): Boolean;
   end;
 
   {** 接口引用 → 类引用 的安全通道（QueryInterface 驱动）。
@@ -249,6 +255,33 @@ procedure FakePumpAll;
 implementation
 
 {$I nextpas.core.webview.fake.impl.inc}
+
+class operator TFakeInvokeOutcome.=(const A, B: TFakeInvokeOutcome): Boolean;
+begin
+  Result := (A.Cmd = B.Cmd) and (A.IsError = B.IsError) and
+    (A.ResultJson = B.ResultJson) and (A.Code = B.Code) and (A.Message = B.Message);
+end;
+
+class operator TFakeEvalRecord.=(const A, B: TFakeEvalRecord): Boolean;
+begin
+  Result := (A.Script = B.Script) and (A.Answered = B.Answered) and
+    (A.ResultJson = B.ResultJson) and (A.ErrorMessage = B.ErrorMessage);
+end;
+
+class operator TFakeEmit.=(const A, B: TFakeEmit): Boolean;
+begin
+  Result := (A.Event = B.Event) and (A.PayloadJson = B.PayloadJson);
+end;
+
+class operator TFakeEvalQueueEntry.=(const A, B: TFakeEvalQueueEntry): Boolean;
+begin
+  Result := (A.IsError = B.IsError) and (A.Value = B.Value);
+end;
+
+class operator TFakePendingEval.=(const A, B: TFakePendingEval): Boolean;
+begin
+  Result := (A.ScriptIdx = B.ScriptIdx) and (A.Callback = B.Callback) and (A.OnError = B.OnError);
+end;
 
 initialization
   GLiveWindows := specialize TCompactLiveRegistry<TFakeWebview>.Create;

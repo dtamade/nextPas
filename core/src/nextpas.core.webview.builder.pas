@@ -66,8 +66,16 @@ type
     Sync: TWebviewInvokeSyncHandler;
     Async: TWebviewInvokeAsyncHandler;
     IsAsync: Boolean;
+    class operator =(const A, B: TBuilderInvokeReg): Boolean;
   end;
 
+class operator TBuilderInvokeReg.=(const A, B: TBuilderInvokeReg): Boolean;
+begin
+  Result := (A.Cmd = B.Cmd) and (A.Sync = B.Sync) and (A.Async = B.Async) and
+    (A.IsAsync = B.IsAsync);
+end;
+
+type
   {** 三组 LiveRegistry 单记录聚合：样板归一，流畅高级感；直连 L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝，复用 VecGrow 0→4→2×/Snapshot 单源，Clear 逐槽 Default(T) 释放不丢，跨家族 window.live 同源零重复。 *}
   TBuilderLive = record
     Invokes: specialize TCompactLiveRegistry<TBuilderInvokeReg>;

@@ -118,6 +118,7 @@ function WkLiveWindowCount: Integer;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.platform.thread,
   nextpas.core.webview.bridge,
   nextpas.core.webview.wk.loader,

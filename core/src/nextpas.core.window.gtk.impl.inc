@@ -54,7 +54,8 @@ begin
   P := PIdleClosure(AData);
   LProc := P^.Proc;
   P^.Proc := nil;
-  Dispose(P);
+  // Freeing belongs to IdleDestroy: GLib invokes the destroy notify after
+  // a callback returning G_SOURCE_REMOVE, so Dispose here would double-free.
   try
     if Assigned(LProc) then LProc();
   except

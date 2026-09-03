@@ -14,6 +14,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.gtk.pool;
@@ -45,10 +46,10 @@ procedure DispatchEvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.webview.gtk.ffi,
   nextpas.core.webview.gtk.loader,
-  nextpas.core.webview.gtk.viewmap,
-  nextpas.core.webview.gtk.pool;
+  nextpas.core.webview.gtk.viewmap;
 
 function DispatchAcquireIdleRec: PIdleRec; inline;
 begin

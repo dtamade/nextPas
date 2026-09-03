@@ -17,6 +17,7 @@ unit nextpas.core.webview.callbacks;
 interface
 
 uses
+  nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.base.callbacks;
 

@@ -85,15 +85,14 @@ type
 generic function SyncPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
 generic function SyncPoolTryRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 { 单源重试语义（bytes.ops VecGrowCapacity 0→4→2× 单源，VecGrow 在锁内安全扩容零竞态，短临界热路径 <1µs，突发经 bytes.ops 单源倍增在锁内零回退 New 抖动）— gtk.pool 等家族纯薄转发收敛点，inline 零额外调用，异常安全溢出返回 False 由 caller 单所有权 Dispose 不丢 }
-generic function SyncPoolRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
+generic function SyncPoolRelease<T>(var APool: specialize TVecArray<T>; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 
 function CreateSyncPool(AFactory: TPoolFactory): TSyncPool; inline;
 
 implementation
 
 uses
-  nextpas.core.sync.errors,
-  nextpas.core.sync.mutex;
+  nextpas.core.sync.errors;
 
 generic function SyncPoolTryAcquire<T>(var APool: array of T; var ACount: Integer; ALock: TMutex): T; inline;
 begin
@@ -128,7 +127,7 @@ begin
   end;
 end;
 
-generic function SyncPoolRelease<T>(var APool: array of T; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
+generic function SyncPoolRelease<T>(var APool: specialize TVecArray<T>; var ACount: Integer; ALock: TMutex; const AItem: T): Boolean; inline;
 begin
   // perf: inline 薄转发单源，热路径短临界仅指针压入 <1µs 零拷贝；突发满时经 bytes.ops VecGrow 单源倍增（0→4→2× inline）在锁内安全扩容零竞态（SetLength 仅突发持锁，零锁外 VecGrow 竞态，突发后零回退 New 抖动），异常安全返回 False 由 caller 单所有权 Dispose 不丢
   Result := False;

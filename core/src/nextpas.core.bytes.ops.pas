@@ -124,30 +124,33 @@ function StringLowerAsciiAware(const S: string): string; inline; { 薄转发 tex
 { 零拷贝所有权偷取：inline Move+FillChar 零 refcount 抖动，单源治理 TBytes 手工转移，零拷贝零额外调用，供 webview scheme/pool 热路径复用，源归零无双释放，stability: FillChar 零化防 UAF/双释放 }
 procedure BytesSteal(var ADest: TBytes; var ASrc: TBytes); inline;
 
+type
+  generic TVecArray<T> = array of T;
+
 { vec/smallvec 生长单源：0→4→2× 倍增，inline 零额外调用，bytes.ops 唯一权威；webview/collections 复用此单源 }
 function VecGrowCapacity(ACurrent: Integer): Integer; inline;
 { 通用动态数组 Grow：Count 与物理 Length 精确对比，inline 薄转发单源，消除约30个样板重复，零额外调用 }
-generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
+generic procedure VecGrow<T>(var AArr: specialize TVecArray<T>; ACount: Integer);
 { 零拷贝快照：按 ACount 精确截断/复制 ADest := copy(ASrc,0,ACount)，nil 零分配，inline 零额外调用，单源治理 Builder 等全量 SetLength 直写漂移；managed 类型逐元素赋值保 refcnt，blittable 单次 Move 批量零拷贝（编译器批量 Move 优化且避免托管类型 refcnt 抖动）}
-generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
+generic procedure VecSnapshot<T>(var ADest: specialize TVecArray<T>; const ASrc: array of T; ACount: Integer);
 { 零拷贝截断：按 ACount 精确 SetLength，inline 单源，消除手写 SetLength 重复 }
-generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
+generic procedure VecTrim<T>(var AArr: specialize TVecArray<T>; ACount: Integer);
 { 紧凑 Vec 删除单源：Swap O(1) 零拷贝末尾换位 + ordered O(n) 保序，bytes.ops 唯一权威；Swap/ordered 均含扫描循环按 design-conventions §2 红线二去 inline 避 I-Cache 膨胀；原 webview.live 薄转发已物理删除，家族直用本单源，热关闭路径默认 Swap 避免 O(n²) }
 generic procedure VecRemoveSwap<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 generic procedure VecRemoveOrdered<T>(var AArr: array of T; var ACount: Integer; const AValue: T);
 { 零拷贝批量拷贝单源：managed 逐元素保 refcnt，blittable 单次 Move 零拷贝，inline 单源供线性容扩/环形线性化复用 }
 generic procedure VecCopy<T>(const ASrc: array of T; var ADst: array of T; ACount: Integer); inline;
-generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: array of T; ACount, ANewCap: Integer); inline;
+generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: specialize TVecArray<T>; ACount, ANewCap: Integer);
 { 环形线性化单源：两段式免模线性化，复用 VecCopy 单源，inline 零额外调用，供 Dispatcher/ CircularBuffer 单源复用 }
 generic procedure VecRingCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T); inline;
 { 环形生长拷贝单源：按需 SetLength(LCap)+VecRingCopy 两段式线性化 inline 单源，供 dispatcher 突发预分配/乐观重试复用，复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配放大尾延迟，0→4→2× 倍增摊销 O(1)/push，inline 零额外调用，managed 保 refcnt/blittable 单 Move 零拷贝 }
-generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T; ANewCap: Integer); inline;
+generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: specialize TVecArray<T>; ANewCap: Integer);
 
 { L1 通用紧凑 Vec 注册表单源（CONTRACT §1.2/§50 可抽候选已反哺落地 L1 bytes.ops）：原 webview.live 薄别名已物理删除，现供 window.live/webview 家族直用本单源，inline 零额外调用，0→4→2× VecGrowCapacity 单源，Swap O(1) 零拷贝，Default(T) 释放不丢 — 家族内不另立重复实现；S110+ 补充有序队列语义（FIFO 保序 PopFront/RemoveAtOrdered 单源 VecRemoveOrdered/VecRingCopy 零拷贝，inline 薄转发、loop 非 inline 避 I-Cache 膨胀），fake 内部裸队列已收敛至此单源零重复 }
 type
   generic TCompactLiveRegistry<T> = class
   private
-    FList: array of T;
+    FList: specialize TVecArray<T>;
     FCount: Integer;
   public
     procedure Register(const AInst: T); inline;
@@ -162,15 +165,15 @@ type
     procedure RemoveAtSwap(AIndex: Integer); inline;
     procedure PopFrontOrdered; inline;
     function TryPopFront(out AValue: T): Boolean; inline;
-    procedure Snapshot(var ADest: array of T); inline;
+    procedure Snapshot(var ADest: specialize TVecArray<T>); inline;
     procedure Trim; inline;
     procedure Clear;
     // perf: single source capacity/raw snapshot for optimistic lock-bypassing grow (zero alloc inside lock, O(1) fast-path, VecGrowCapacity/VecGrowCopy single source outside), inline zero-copy, reuse LNew Length check avoids repeat SetLength zero-init O(Cap) — mirrors dispatcher Ring optimistic
     function Capacity: Integer; inline;
-    function RawList: array of T; inline;
-    procedure GetSnapshotRaw(out AList: array of T; out ACount, ACap: Integer); inline;
+    function RawList: specialize TVecArray<T>; inline;
+    procedure GetSnapshotRaw(out AList: specialize TVecArray<T>; out ACount, ACap: Integer); inline;
     function TryRegisterFast(const AValue: T): Boolean; inline;
-    function TryInstallGrown(const AOldList: array of T; AOldCount: Integer; var ANew: array of T; const AValue: T): Boolean; inline;
+    function TryInstallGrown(const AOldList: specialize TVecArray<T>; AOldCount: Integer; var ANew: specialize TVecArray<T>; const AValue: T): Boolean; inline;
     destructor Destroy; override;
   end;
 
@@ -179,6 +182,8 @@ function BytesHexUInt64(const AValue: UInt64; const ADigits: Integer): string; i
 function TryClampSlice(const AOffset, ALength, ATotal: SizeUInt; out AClampedLen: SizeUInt): Boolean; inline;
 { not inline: loop — C string length single source, zero-copy view length, owner bytes.ops }
 function AnsiPtrLen(const P: PAnsiChar): SizeUInt;
+{ inline thin-forward alias of AnsiPtrLen for lane consumers (text.view/gtk); single source stays AnsiPtrLen }
+function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
 { not inline: loop+Move — reuses AnsiPtrLen single source, zero-copy Move }
 function AnsiPtrToString(const P: PAnsiChar): string;
 { not inline: loop }
@@ -1002,6 +1007,11 @@ begin
   Result := SizeUInt(LP - P);
 end;
 
+function CStrLen(const AP: PAnsiChar): SizeUInt; inline;
+begin
+  Result := AnsiPtrLen(AP);
+end;
+
 function AnsiPtrToString(const P: PAnsiChar): string;
 var
   LLen: SizeUInt;
@@ -1100,20 +1110,20 @@ begin
     Result := ACurrent * 2;
 end;
 
-generic procedure VecGrow<T>(var AArr: array of T; ACount: Integer); inline;
+generic procedure VecGrow<T>(var AArr: specialize TVecArray<T>; ACount: Integer);
 begin
   if ACount = Length(AArr) then
     SetLength(AArr, VecGrowCapacity(Length(AArr)));
 end;
 
-generic procedure VecSnapshot<T>(var ADest: array of T; const ASrc: array of T; ACount: Integer); inline;
+generic procedure VecSnapshot<T>(var ADest: specialize TVecArray<T>; const ASrc: array of T; ACount: Integer);
 var
   I: Integer;
 begin
   // perf: inline + nil zero-alloc fast path + single SetLength + blittable single Move (bulk, zero refcnt churn) vs managed per-elem (refcnt safe), single source; inline zero-copy single source for live registry/webview
   if ACount <= 0 then
   begin
-    ADest := nil;
+    SetLength(ADest, 0);
     Exit;
   end;
   SetLength(ADest, ACount);
@@ -1126,11 +1136,11 @@ begin
     Move(ASrc[0], ADest[0], SizeUInt(ACount) * SizeUInt(SizeOf(T)));
 end;
 
-generic procedure VecTrim<T>(var AArr: array of T; ACount: Integer); inline;
+generic procedure VecTrim<T>(var AArr: specialize TVecArray<T>; ACount: Integer);
 begin
   // perf: inline single SetLength, single source for trim/snapshot tail, zero extra call
   if ACount <= 0 then
-    AArr := nil
+    SetLength(AArr, 0)
   else if Length(AArr) <> ACount then
     SetLength(AArr, ACount);
 end;
@@ -1183,7 +1193,7 @@ begin
 end;
 
 { 生长分配+拷贝单源：预校验后按需 SetLength(LCap) 零化 + VecCopy 线性化，inline 单源复用 VecGrowCapacity/VecCopy 零额外调用，短临界 <1µs；SetLength 零化 O(Cap) 经 0→4→2× 倍增摊销为 O(1)/push 且复用 LNew 缓冲 Length 判定避免重复零化——突发并发下 stale 重试零重复分配不放大尾延迟，尾零 spare 经复用逐步兑现，managed 逐元素保 refcnt、blittable 单 Move 零拷贝，stale 重试零重复拷贝（复用 LNew 缓冲判定 Length) }
-generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: array of T; ACount, ANewCap: Integer); inline;
+generic procedure VecGrowCopy<T>(const ASrc: array of T; var ADst: specialize TVecArray<T>; ACount, ANewCap: Integer);
 var
   I: Integer;
 begin
@@ -1237,7 +1247,7 @@ begin
 end;
 
 { 环形生长分配+拷贝单源：按需 SetLength 零化+VecRingCopy 两段式线性化 inline 单源，复用 LNew 缓冲 Length 判定避免重复 SetLength 零化 O(Cap)，突发并发零重复分配不放大尾延迟，尾零 spare 经复用逐步兑现，managed 保 refcnt/blittable 单 Move 零拷贝，stale 重试零重复拷贝（复用 LNew 缓冲判定 Length)，bytes.ops 唯一权威；dispatcher/Reserve 单源复用零拷贝零额外调用 }
-generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: array of T; ANewCap: Integer); inline;
+generic procedure VecRingGrowCopy<T>(const ASrc: array of T; AHead, ACount: Integer; var ADst: specialize TVecArray<T>; ANewCap: Integer);
 begin
   // perf: inline single source — Length<>Cap 时 SetLength 零化单次分配 O(Cap)，复用时跳过零化避免 0→4→2× 尾延迟放大，突发并发零重复分配；随后 VecRingCopy 两段式免模 inline 零拷贝，managed 保 refcnt/blittable 单 Move，单源 bytes.ops 零额外调用
   if Length(ADst) <> ANewCap then
@@ -1323,7 +1333,7 @@ begin
   Result := True;
 end;
 
-generic procedure TCompactLiveRegistry.Snapshot(var ADest: array of T); inline;
+generic procedure TCompactLiveRegistry.Snapshot(var ADest: specialize TVecArray<T>); inline;
 begin
   specialize VecSnapshot<T>(ADest, FList, FCount);
 end;
@@ -1348,12 +1358,12 @@ begin
   Result := Length(FList);
 end;
 
-generic function TCompactLiveRegistry.RawList: array of T; inline;
+generic function TCompactLiveRegistry.RawList: specialize TVecArray<T>; inline;
 begin
   Result := FList;
 end;
 
-generic procedure TCompactLiveRegistry.GetSnapshotRaw(out AList: array of T; out ACount, ACap: Integer); inline;
+generic procedure TCompactLiveRegistry.GetSnapshotRaw(out AList: specialize TVecArray<T>; out ACount, ACap: Integer); inline;
 begin
   AList := FList;
   ACount := FCount;
@@ -1370,7 +1380,7 @@ begin
   end else Result := False;
 end;
 
-generic function TCompactLiveRegistry.TryInstallGrown(const AOldList: array of T; AOldCount: Integer; var ANew: array of T; const AValue: T): Boolean; inline;
+generic function TCompactLiveRegistry.TryInstallGrown(const AOldList: specialize TVecArray<T>; AOldCount: Integer; var ANew: specialize TVecArray<T>; const AValue: T): Boolean; inline;
 begin
   if (Pointer(FList) <> Pointer(AOldList)) or (FCount <> AOldCount) then Exit(False);
   FList := ANew;
@@ -1379,7 +1389,7 @@ begin
   Result := True;
 end;
 
-generic destructor TCompactLiveRegistry.Destroy;
+destructor TCompactLiveRegistry.Destroy;
 begin
   Clear;
   inherited Destroy;

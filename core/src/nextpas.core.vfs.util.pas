@@ -12,6 +12,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.text.view,

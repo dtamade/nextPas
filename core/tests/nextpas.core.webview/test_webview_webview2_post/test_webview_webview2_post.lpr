@@ -3,8 +3,8 @@ program test_webview_webview2_post;
 
        - M6 has-a 收口后 Win32ShellPost 已移除；调度唯一事实源为
          IWindow.Dispatcher.Post（nextpas.core.window.win32，经
-         window.factory 单泵，零拷贝 inline 转发；Linux 桩同步直调 /
-         Windows 隐藏窗口异步回退直调覆盖）
+         window.factory 单泵，零拷贝 inline 转发；fake 队列语义经
+         FakePumpAll 确定性兑现）
        - WebView2 窗口 Post 三形态（Ref/Method/Proc）当 loader 可用时
        - UserAgent 本地缓存闭环
        - DataDirectory 透传不抛异常
@@ -20,7 +20,9 @@ uses
   nextpas.core.webview.intf,
   nextpas.core.webview.webview2.loader,
   nextpas.core.webview.factory,
+  nextpas.core.window.base,
   nextpas.core.window.factory,
+  nextpas.core.window.fake,
   nextpas.core.window.intf;
 
 var
@@ -37,11 +39,13 @@ begin
   try
     LFlag := 0;
     LWin.Dispatcher.Post(@Work);
-    // fake 后端同步直调（window.fake 队列 Drain），无需消息循环
+    // fake 后端队列语义（window.fake 队列 Drain）：Post 仅入队，需 Pump 兑现
+    FakePumpAll;
     CheckEqual(1, LFlag, 'IWindow.Dispatcher.Post primitive executed');
     // nil 守卫由 Dispatcher 内部 Assigned 检查覆盖，此处验证二次 Post 仍可达
     LFlag := 0;
     LWin.Dispatcher.Post(@Work);
+    FakePumpAll;
     CheckEqual(1, LFlag, 'second Post still executed');
     LWin.Close;
   finally

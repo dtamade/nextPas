@@ -27,12 +27,18 @@ uses
   nextpas.core.base;
 
 { 参零：reference to procedure 单源 }
-function CallbackNotifyMethodToRef(AMethod: procedure of object): TProc; inline;
-function CallbackNotifyProcToRef(AProc: procedure): TProc; inline;
+type
+  TCallbackNotifyMethod = procedure of object;
+  TCallbackNotifyProc = procedure;
+  generic TCallbackEventMethod<T> = procedure(const A: T) of object;
+  generic TCallbackEventProc<T> = procedure(const A: T);
+
+function CallbackNotifyMethodToRef(AMethod: TCallbackNotifyMethod): TProc; inline;
+function CallbackNotifyProcToRef(AProc: TCallbackNotifyProc): TProc; inline;
 
 { 参一 const T：事件 record 零拷贝单源（TWindowEvent / TWebviewNavigationEvent 等） }
-generic function CallbackEventMethodToRef<T>(AMethod: procedure(const A: T) of object): specialize TProc1<T>; inline;
-generic function CallbackEventProcToRef<T>(AProc: procedure(const A: T)): specialize TProc1<T>; inline;
+generic function CallbackEventMethodToRef<T>(AMethod: specialize TCallbackEventMethod<T>): specialize TProc1<T>; inline;
+generic function CallbackEventProcToRef<T>(AProc: specialize TCallbackEventProc<T>): specialize TProc1<T>; inline;
 
 { Double 值参：scale 单源（webview scale 专用，Double 为内建类型，L0 可承载） }
 type
@@ -45,22 +51,22 @@ function CallbackScaleProcToRef(AProc: TCallbackScaleProc): TCallbackScaleHandle
 
 implementation
 
-function CallbackNotifyMethodToRef(AMethod: procedure of object): TProc; inline;
+function CallbackNotifyMethodToRef(AMethod: TCallbackNotifyMethod): TProc; inline;
 begin
   Result := procedure begin AMethod(); end;
 end;
 
-function CallbackNotifyProcToRef(AProc: procedure): TProc; inline;
+function CallbackNotifyProcToRef(AProc: TCallbackNotifyProc): TProc; inline;
 begin
   Result := procedure begin AProc(); end;
 end;
 
-generic function CallbackEventMethodToRef<T>(AMethod: procedure(const A: T) of object): specialize TProc1<T>; inline;
+generic function CallbackEventMethodToRef<T>(AMethod: specialize TCallbackEventMethod<T>): specialize TProc1<T>; inline;
 begin
   Result := procedure(const A: T) begin AMethod(A); end;
 end;
 
-generic function CallbackEventProcToRef<T>(AProc: procedure(const A: T)): specialize TProc1<T>; inline;
+generic function CallbackEventProcToRef<T>(AProc: specialize TCallbackEventProc<T>): specialize TProc1<T>; inline;
 begin
   Result := procedure(const A: T) begin AProc(A); end;
 end;

@@ -19,7 +19,8 @@ uses
   nextpas.core.base,
   nextpas.core.bytes.ops,
   nextpas.core.webview.base,
-  nextpas.core.webview.intf;
+  nextpas.core.webview.intf,
+  nextpas.core.webview.bridge;
 
 type
   PBridgeCompletion = ^TBridgeCompletion;
@@ -54,8 +55,6 @@ uses
   nextpas.core.atomic,
   nextpas.core.exception,
   nextpas.core.sync.mutex,
-  nextpas.core.webview.base,
-  nextpas.core.webview.bridge,
   nextpas.core.mime.types,
   nextpas.core.webview.utils,
   nextpas.core.webview.gtk.ffi,

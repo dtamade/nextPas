@@ -35,8 +35,8 @@ type
 
 procedure EvalRegisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
 procedure EvalUnregisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
-function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of Pointer): Integer; inline;
-function EvalSnapshotAndMarkDoneInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of Pointer): Integer; inline;
+function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: specialize TVecArray<Pointer>): Integer; inline;
+function EvalSnapshotAndMarkDoneInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: specialize TVecArray<Pointer>): Integer; inline;
 function EvalTryMarkDoneInline(ASlot: PEvalSlot): Boolean; inline;
 procedure EvalSettleInline(ASlot: PEvalSlot; AOk: Boolean; const AText: string); inline;
 procedure EvalClearRegistryInline(AReg: TEvalRegistry; ALock: TMutex); inline;
@@ -49,9 +49,10 @@ function EvalLiveRemove(APtr: Pointer): Boolean; inline;
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors;
 
-procedure EvalRegisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: PEvalSlot); inline;
+procedure EvalRegisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
 begin
   // perf: short critical <1µs pointer-only via TCompactLiveRegistry.Register -> VecGrowCapacity 0→4→2× bytes.ops 单源 inline 零拷贝，零额外调用
   if ALock <> nil then ALock.Acquire;
@@ -62,7 +63,7 @@ begin
   end;
 end;
 
-procedure EvalUnregisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: PEvalSlot); inline;
+procedure EvalUnregisterInline(AReg: TEvalRegistry; ALock: TMutex; ASlot: Pointer); inline;
 begin
   // perf: O(1) VecRemoveSwap bytes.ops 单源 inline 零拷贝，短临界 <1µs
   if ALock <> nil then ALock.Acquire;
@@ -73,7 +74,7 @@ begin
   end;
 end;
 
-function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: array of PEvalSlot): Integer; inline;
+function EvalSnapshotInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: specialize TVecArray<Pointer>): Integer; inline;
 var
   LCount: Integer;
 begin
@@ -91,6 +92,16 @@ begin
   finally
     if ALock <> nil then ALock.Release;
   end;
+end;
+
+function EvalSnapshotAndMarkDoneInline(AReg: TEvalRegistry; ALock: TMutex; var ADest: specialize TVecArray<Pointer>): Integer; inline;
+var
+  I: Integer;
+begin
+  Result := EvalSnapshotInline(AReg, ALock, ADest);
+  for I := 0 to Result - 1 do
+    if ADest[I] <> nil then
+      PEvalSlot(ADest[I])^.Done := True;
 end;
 
 function EvalTryMarkDoneInline(ASlot: PEvalSlot): Boolean; inline;

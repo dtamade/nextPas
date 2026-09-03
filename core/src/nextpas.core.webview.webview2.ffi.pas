@@ -37,8 +37,7 @@ type
   tagRECT = nextpas.core.platform.windows.base.tagRECT;
   TRect = tagRECT;
   RECT = tagRECT;
-  PRECT = nextpas.core.platform.windows.base.PRECT;
-  PRect = PRECT;
+  PRect = nextpas.core.platform.windows.base.PRECT;
 
 type
   { COM 前向（FPC System 已有 IUnknown，但为自包含声明） }

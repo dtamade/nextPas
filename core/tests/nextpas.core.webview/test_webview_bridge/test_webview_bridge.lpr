@@ -12,6 +12,7 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.json,
+  nextpas.core.json.value,
   nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
@@ -58,8 +59,8 @@ begin
     'string payload');
   CheckEqual('"txt"', LFrame.Payload.ToString);
   Check(TryDecodeFrame('{"v":1,"id":3,"cmd":"a","payload":[1, 2, 3]}', LFrame),
-    'array payload canonicalized');
-  CheckEqual('[1,2,3]', LFrame.Payload.ToString);
+    'array payload raw slice preserved');
+  CheckEqual('[1, 2, 3]', LFrame.Payload.ToString);
 
   { u53 上边界内可解 }
   Check(TryDecodeFrame('{"v":1,"id":' + IntToStr(NPW_MAX_FRAME_ID) + ',"cmd":"a"}', LFrame),
@@ -201,8 +202,8 @@ begin
     Check(LFake.LastOutcome.IsError = False, 'frame outcome ok');
     CheckEqual('{"tag":"ok"}', LFake.LastOutcome.ResultJson, 'result json');
 
-    { payload 经 json owner 规范化（空格剥离） }
-    CheckEqual('{"x":1}', GLastPayload, 'payload canonicalized');
+    { payload 经 json owner RawSlice 零拷贝透传（空格保留） }
+    CheckEqual('{"x": 1}', GLastPayload, 'payload raw slice preserved');
 
     { 回执脚本：id 回显 + 结果以字符串字面量嵌入 }
     CheckEqual(1, LFake.CaptureEvalCount, 'one receipt');
@@ -490,7 +491,7 @@ var
   LView, LPayload: TStringView;
   LRawLen, LPayloadLen, LExpanded: SizeUInt;
   LFrame: TWebviewFrame;
-  LBigPayload, LFrameJson: string;
+  LBigPayload, LFrameJson, LRawBuf, LPayloadBuf: string;
 begin
   { CONTRACT §6 水位回归锚点：1 MiB Hard Limit 单源于 L2 metrics，expanded = raw + payload + raw shr1 + 1024 }
   CheckEqual(Int64(1048576), Int64(NPW_MAX_FRAME_BYTES), '1MiB hard limit anchor');
@@ -503,9 +504,14 @@ begin
   LPayloadLen := 300 * 1024;
   LExpanded := LRawLen + LPayloadLen + (LRawLen shr 1) + 1024;
   Check(LExpanded > SizeUInt(NPW_MAX_FRAME_BYTES), 'expanded formula exceeds threshold');
-  LView := TStringView.Create(nil, LRawLen);
-  Check(IsWebviewFrameOversizedExpanded(LView, LPayloadLen), 'expanded oversized anchor');
-  Check(IsWebviewFrameOversizedExpandedView(LView, TStringView.Create(nil, LPayloadLen)), 'expanded view anchor');
+  { TStringView.Create 拒绝 nil+非零长度：用水位无关的空格缓冲构造视图 }
+  SetLength(LRawBuf, LRawLen);
+  FillChar(LRawBuf[1], LRawLen, Ord(' '));
+  SetLength(LPayloadBuf, LPayloadLen);
+  FillChar(LPayloadBuf[1], LPayloadLen, Ord(' '));
+  LView := TStringView.Create(PAnsiChar(LRawBuf), LRawLen);
+  Check(IsWebviewFrameOversizedExpandedLen(LView, LPayloadLen), 'expanded oversized anchor');
+  Check(IsWebviewFrameOversizedExpanded(LView, TStringView.Create(PAnsiChar(LPayloadBuf), LPayloadLen)), 'expanded view anchor');
   { 二次校验路径：raw 未超限但 expanded 超限的解码应被拒（零拷贝视图水位闭环） }
   SetLength(LBigPayload, 700 * 1024);
   FillChar(LBigPayload[1], Length(LBigPayload), Ord('a'));

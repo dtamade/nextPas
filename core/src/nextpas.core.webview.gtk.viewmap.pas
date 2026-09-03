@@ -50,7 +50,7 @@ function ViewMapRemoveLocked(AView: Pointer): Boolean;
 // 非 Locked 包装：Find 收敛至 THashMap Owner 单源 RWLock 读并发（零 seqlock 自维护）；Add/Remove 写锁独占；短临界仅 THashMap Owner 原子操作，零阻塞读并发
 function ViewMapFind(AView: Pointer): Pointer;
 procedure ViewMapAdd(AView: Pointer; AWin: Pointer);
-procedure ViewMapRemove(AView: Pointer): Boolean;
+function ViewMapRemove(AView: Pointer): Boolean;
 
 procedure ViewMapInit; inline;
 procedure ViewMapClear; inline;
@@ -136,7 +136,7 @@ begin
   end;
 end;
 
-procedure ViewMapRemove(AView: Pointer): Boolean;
+function ViewMapRemove(AView: Pointer): Boolean;
 begin
   // 写锁独占：锁内单次 THashMap Owner Remove 单 FindIndex O(1)，零 TryGetValue+Remove 双哈希与锁内重复计算，零拷贝返回 Bool，零 seqlock
   Result := False;

@@ -228,7 +228,6 @@ type
   tagRECT = record Left, Top, Right, Bottom: LONG; end;
   RECT = tagRECT;
   PRECT = ^RECT;
-  PRect = ^RECT;
   TRect = tagRECT;
 
 const

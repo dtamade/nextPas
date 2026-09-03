@@ -31,6 +31,8 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.webview.intf,
+  nextpas.core.collections.hashmap,
+  nextpas.core.collections.prefixrouter,
   nextpas.core.text.view;
 
 type
@@ -53,9 +55,7 @@ type
 implementation
 
 uses
-  nextpas.core.base.utils,
-  nextpas.core.collections.hashmap,
-  nextpas.core.collections.prefixrouter;
+  nextpas.core.base.utils;
 
 constructor TWebviewAssetIndex.Create;
 begin

@@ -21,7 +21,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="${1:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 PYTHON="${PYTHON:-python3}"
-UNIFIED="$CORE_ROOT/core/tests/architecture/source_contracts/check_architecture_source_contracts.py"
+UNIFIED="$CORE_ROOT/tests/architecture/source_contracts/check_architecture_source_contracts.py"
 
 echo "== webview source contracts (via tests/architecture/source_contracts) =="
 
@@ -42,8 +42,8 @@ echo "webview-source-contracts=pass"
 # Hygiene 零产物显式标注：.script.inc 为意向跟踪生成源（AUTO-GENERATED），非构建产物；
 # 校验门以 JS 真值重生成 body 并与已提交 .inc body diff，确保已跟踪产物严格由单一源派生。
 echo "== webview bridge.js → bridge.script.inc generation check =="
-BRIDGE_JS="$CORE_ROOT/core/src/nextpas.core.webview.bridge.js"
-BRIDGE_INC="$CORE_ROOT/core/src/nextpas.core.webview.bridge.script.inc"
+BRIDGE_JS="$CORE_ROOT/src/nextpas.core.webview.bridge.js"
+BRIDGE_INC="$CORE_ROOT/src/nextpas.core.webview.bridge.script.inc"
 if [[ ! -f "$BRIDGE_JS" ]]; then
   echo "FAIL: bridge JS source missing: $BRIDGE_JS"
   echo "webview-bridge-generation=FAIL"

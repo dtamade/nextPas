@@ -22,6 +22,8 @@ uses
   nextpas.core.errors,
   nextpas.core.json,
   nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.assets,
@@ -217,17 +219,13 @@ const
 implementation
 
 uses
-  nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.text.escape,
-  nextpas.core.json.parser,
   nextpas.core.json.writer,
   nextpas.core.bytes.ops,
   nextpas.core.hash.wyhash,
   nextpas.core.collections.hashmap.base,
-  nextpas.core.webview.base,
   nextpas.core.webview.validation,
-  nextpas.core.webview.utils,
   nextpas.core.platform.thread;
 
 { STA 亲和显式约束 (CONTRACT §4)：池化复用零 heaptrc 泄漏
@@ -247,7 +245,7 @@ type
     constructor Create;
     destructor Destroy; override;
     procedure RequireSTA; inline;
-    function PooledDoc: ^TJsonDocument; inline;
+    function PooledDoc: PJsonDocument; inline;
     procedure MaybeTrim; inline;
     procedure ForceTrim; inline;
     procedure Done;
@@ -287,7 +285,7 @@ begin
     raise EWebviewInvalidState.Create('webview bridge STA violation: call only on UI thread');
 end;
 
-function TWebviewBridgeEnv.PooledDoc: ^TJsonDocument; inline;
+function TWebviewBridgeEnv.PooledDoc: PJsonDocument; inline;
 begin
   if not FDocInited then
   begin
@@ -321,7 +319,7 @@ begin
   { 兼容保留：Owner 已在 initialization 经 GBridgeEnv 锚定主线程，此处空转杜绝非 UI 首调误绑；BridgeRequireSTA 严格校验，inline 零额外调用 }
 end;
 
-function BridgePooledDoc: ^TJsonDocument; inline;
+function BridgePooledDoc: PJsonDocument; inline;
 begin
   { 入口 Trim：下次解码前若上一大帧已膨胀且当前空闲则回收，避免本次 Payload RawSlice 悬垂前误 Trim；Trim 在 PooledDoc 获取时 idle 判定，零额外调用 }
   if GBridgeEnv <> nil then

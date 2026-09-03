@@ -342,17 +342,17 @@ begin
     Result.FIdx := PJsonDocument(FDoc)^.Node(LCur)^.Next;
 end;
 
-function TJsonValue.RawSlice: TStringView;
+function TJsonValueHelper.RawSlice: TStringView;
 var
   LNode: PJsonNode;
   LInput: TStringView;
 begin
   if FIdx = JSON_NODE_NONE then
     Exit(TStringView.Empty);
-  LNode := FDoc^.Node(FIdx);
+  LNode := PJsonDocument(FDoc)^.Node(FIdx);
   if LNode^.RawLen = 0 then
     Exit(TStringView.Empty);
-  LInput := FDoc^.Input;
+  LInput := PJsonDocument(FDoc)^.Input();
   if (SizeUInt(LNode^.RawStart) + SizeUInt(LNode^.RawLen) > LInput.Len) then
     Exit(TStringView.Empty);
   Result := TStringView.Create(LInput.Data + LNode^.RawStart, LNode^.RawLen);

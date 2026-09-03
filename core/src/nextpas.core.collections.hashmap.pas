@@ -242,6 +242,7 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math,
   nextpas.core.hash.wyhash,
   nextpas.core.mem,
@@ -785,7 +786,7 @@ begin
         h := HashMix32(2166136261)
       else
       begin
-        h64 := nextpas.core.hash.wyhash.WyHash(AData, ALen);
+        h64 := WyHash(AData, ALen);
         h := UInt32(h64 xor (h64 shr 32));
       end;
       idx := h and FMask;
@@ -812,7 +813,7 @@ begin
     h := HashMix32(2166136261)
   else
   begin
-    h64 := nextpas.core.hash.wyhash.WyHash(AData, ALen);
+    h64 := WyHash(AData, ALen);
     h := UInt32(h64 xor (h64 shr 32));
   end;
   idx := h and FMask;

@@ -54,7 +54,6 @@ implementation
 uses
   nextpas.core.system.typinfo,
   nextpas.core.window.factory,
-  nextpas.core.webview.base,
   nextpas.core.webview.validation,
   nextpas.core.webview.registry,
   nextpas.core.webview.fake,
