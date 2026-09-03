@@ -6,6 +6,15 @@
 >    你只报 `Ready`，合由总控在 main 的 worktree 里串行做。
 > 3. 开工模板见 `docs/plans/LANE_TASK_TEMPLATE.md`，提示词里没给就按它要。
 > 4. 报 `Ready` 前：worktree clean、`make hygiene` 过、focused gate 绿。
+> 5. 不直接引用 FPC RTL：产品代码与测试只 `uses nextpas.core.*` owner 模块；
+>    禁 `SysUtils`、`Classes`、`BaseUnix`、`Windows` 等 FPC 单元名，
+>    也禁 `nextpas.core.system.sysutils`、`system.classes`、`system.typinfo`
+>    等编译器路由 shim（它们是给编译器路由用的，不是给业务代码用的，
+>    业务代码用 owner 模块如 `text.conv`、`base`、`exception`）。
+>    缺能力就反哺 core（补 owner 模块）或抽出新模块，详见
+>    `core/docs/design-conventions.md` §18。
+> 6. 开子代理或跑 workflow 时，必须把第 5 条原文贴进子任务提示词，
+>    不能只给链接指望它自己去读。
 
 本文件是 AI 同事进入仓库后的第一入口。开始任何任务前先读这里，再读与任务相关的
 `docs/architecture/`、`docs/plans/`、模块 README 和测试目录。

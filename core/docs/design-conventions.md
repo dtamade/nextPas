@@ -1286,9 +1286,15 @@ entry 分别由 host/shared `.ffi` 声明：Windows 使用 `GetCurrentThreadId` 
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | FPC System 单元（隐式）— nextPas 会平替                           | SysUtils、Classes、Linux、PThreads、UnixType、BaseUnix、Syscall、Windows 等 FPC 库单元 |
 | 编译器内置特性（string、动态数组、interface、try/except、GetMem） | 任何 FPC 特有的库/包                                                                   |
-| 自己的 FFI 声明（cdecl/stdcall external）                         |                                                                                        |
+| 自己的 FFI 声明（cdecl/stdcall external）                         | `nextpas.core.system.sysutils`、`system.classes`、`system.typinfo` 等编译器路由 shim（见下） |
+| nextpas.core owner 模块（如 `text.conv`、`base`、`exception`）    |                                                                                        |
 
 **注意：** 当前自举阶段（FPC 3.3.1 编译），部分模块暂时使用了 SysUtils（Exception、TBytes、Format 等）。这是已知的临时依赖，需要逐步替换为框架自身提供的等价实现。新代码应尽量避免引入新的 FPC 单元依赖。
+
+**路由 shim 禁区：** `nextpas.core.system.sysutils`、`system.classes`、`system.typinfo`
+是给编译器做 FPC 路由用的内部机制，不是给业务代码（产品代码与测试）用的。
+业务代码一律直引 owner 模块；缺能力就反哺 core（补 owner 模块）或抽出新模块，
+不要引用路由 shim 做捷径。测试里 `heaptrc` 允许保留（泄漏证据门需要）。
 
 ---
 
