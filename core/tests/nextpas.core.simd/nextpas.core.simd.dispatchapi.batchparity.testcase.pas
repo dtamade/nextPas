@@ -52,7 +52,7 @@ uses
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
   nextpas.core.platform.path,
-  nextpas.core.system.sysutils,
+  nextpas.core.text,
   nextpas.core.test,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
