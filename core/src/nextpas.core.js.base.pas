@@ -10,8 +10,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.exception,
-  nextpas.core.bytes.ops;
+  nextpas.core.exception;
 
 type
   TJsBackendKind = (jsbkQuickJs, jsbkFake, jsbkJs888, jsbkV8, jsbkChakra);
@@ -20,18 +19,30 @@ type
   TJsErrorCategory = (jecSyntax, jecReference, jecType, jecRange, jecMemory,
     jecTimeout, jecNotSupported, jecUnknown);
 
+const
+  JS_INTERRUPT_SAMPLE_DEFAULT = 1024; // 2^10, 684ns 基线 15-30%→惰性, 可配权衡及时性/开销
+  JS_INTERRUPT_SAMPLE_MIN = 1;
+  JS_INTERRUPT_SAMPLE_MAX = 65536;
+
+type
   TJsRuntimeOptions = record
   private
     FMemoryLimit: SizeUInt;
     FTimeoutMs: Integer;
+    FInterruptSampleInterval: Cardinal;
   public
     property MemoryLimit: SizeUInt read FMemoryLimit write FMemoryLimit;
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+    property InterruptSampleInterval: Cardinal read FInterruptSampleInterval write FInterruptSampleInterval;
     class function Default: TJsRuntimeOptions; static; inline;
     class function WithMemoryLimit(ALimit: SizeUInt): TJsRuntimeOptions; static; inline;
     class function WithTimeout(ATimeoutMs: Integer): TJsRuntimeOptions; static; inline;
+    class function WithInterruptSampleInterval(AInterval: Cardinal): TJsRuntimeOptions; static; inline;
   end;
 
+function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
+
+type
   EJsError = class(ENextPasError)
   private
     FJsCategory: TJsErrorCategory;
@@ -54,15 +65,20 @@ type
 function JsBackendKindToString(AKind: TJsBackendKind): string; inline;
 function JsErrorCategoryToString(ACat: TJsErrorCategory): string; inline;
 function JsValueKindToString(AKind: TJsValueKind): string; inline;
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
-procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
+function JsTrimEquals(const S, Lit: string): Boolean;
+procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 
 implementation
+
+uses
+  nextpas.core.bytes.ops,
+  nextpas.core.mem.base;
 
 class function TJsRuntimeOptions.Default: TJsRuntimeOptions;
 begin
   Result.FMemoryLimit := 0;
   Result.FTimeoutMs := 0;
+  Result.FInterruptSampleInterval := JS_INTERRUPT_SAMPLE_DEFAULT;
 end;
 
 class function TJsRuntimeOptions.WithMemoryLimit(ALimit: SizeUInt): TJsRuntimeOptions;
@@ -75,6 +91,30 @@ class function TJsRuntimeOptions.WithTimeout(ATimeoutMs: Integer): TJsRuntimeOpt
 begin
   Result := Default;
   Result.FTimeoutMs := ATimeoutMs;
+end;
+
+class function TJsRuntimeOptions.WithInterruptSampleInterval(AInterval: Cardinal): TJsRuntimeOptions; inline;
+begin
+  Result := Default;
+  Result.FInterruptSampleInterval := JsInterruptSampleIntervalNormalized(AInterval);
+end;
+
+function JsInterruptSampleIntervalNormalized(AInterval: Cardinal): Cardinal; inline;
+var LNext: SizeUInt;
+begin
+  // perf: inline branch + pow2 roundup via mem.base single source IsPowerOfTwo/NextPowerOfTwo, zero alloc, bytes.ops single source, always pow2 for and-mask fast path, inline zero-copy
+  if AInterval = 0 then Exit(JS_INTERRUPT_SAMPLE_DEFAULT);
+  if AInterval < JS_INTERRUPT_SAMPLE_MIN then Exit(JS_INTERRUPT_SAMPLE_MIN);
+  if AInterval > JS_INTERRUPT_SAMPLE_MAX then Exit(JS_INTERRUPT_SAMPLE_MAX);
+  Result := AInterval;
+  if not IsPowerOfTwo(Result) then
+  begin
+    LNext := NextPowerOfTwo(Result);
+    if (LNext = 0) or (LNext > JS_INTERRUPT_SAMPLE_MAX) then
+      Result := JS_INTERRUPT_SAMPLE_MAX
+    else
+      Result := Cardinal(LNext);
+  end;
 end;
 
 constructor EJsError.Create(const AMessage: string; ACategory: TJsErrorCategory;
@@ -134,16 +174,19 @@ begin
   end;
 end;
 
-function JsTrimEquals(const S, Lit: string): Boolean; inline;
+function JsTrimEquals(const S, Lit: string): Boolean;
 begin
-  // single source: bytes.ops.StringTrimEquals — zero-copy TByteSpan view via SpanTrim (owner bytes.ops) + SpanEqual SIMD, no heap alloc; perf: inline thin-forward, loop not inline in owner per red-line 2 (design-conventions §2)
+  // single source: bytes.ops.StringTrimEquals — zero-copy TByteSpan view via SpanTrim (owner bytes.ops) + SpanEqual SIMD, no heap alloc; perf: thin-forward via owner, loop not inline per design-conventions §2 red-line 2, zero-copy view no alloc, O(n) single pass
   Result := StringTrimEquals(S, Lit);
 end;
 
-procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions);
+procedure CheckJsRuntimeOptions(const AOptions: TJsRuntimeOptions; ABackend: TJsBackendKind);
 begin
+  // perf: thin check, zero alloc, single branch; stability: backend attribution via ABackend (no default, caller must pass real jsbkQuickJs/jsbkV8/jsbkFake explicitly to preserve diagnostic ownership), fail-closed without resource
   if AOptions.TimeoutMs < 0 then
-    raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', jsbkFake);
+    raise EJsError.Create('TimeoutMs must be >= 0', jecUnknown, 'Error', '', ABackend);
+  if AOptions.InterruptSampleInterval > JS_INTERRUPT_SAMPLE_MAX then
+    raise EJsError.Create('InterruptSampleInterval must be <= 65536', jecUnknown, 'Error', '', ABackend);
 end;
 
 end.

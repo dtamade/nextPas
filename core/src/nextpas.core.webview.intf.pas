@@ -1,7 +1,7 @@
 unit nextpas.core.webview.intf;
 
 {** @desc nextpas.core.webview L3 家族：统一接口契约。
-       只依赖 base/errors owner；具体后端（fake/gtk/webview2/wk）在各自
+       只依赖 base/errors/window.intf/text.view owner（window.intf 仅为 has-a 暴露 IWindow，text.view 仅为 L1 TStringView 零拷贝视图，INV-4 豁免扩展，合法 L3→L1 下向，见 design-conventions §2 + CONTRACT §1/INV-4）；具体后端（fake/gtk/webview2/wk）在各自
        单元实现这些接口。所有权模型：对外一律 interface（COM 引用计数），
        消费方不手写 Free。
 
@@ -17,8 +17,9 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
-  nextpas.core.window.intf;
+  nextpas.core.window.intf; { INV-4 豁免扩展: L3→L2 has-a 暴露 IWindow/Window 组合面（仅 window.intf，禁后端/bridge/factory）+ L3→L1 零拷贝 TStringView（text.view，bytes.ops 单源 inline 零堆分配），见 design-conventions §2 范式例外 + CONTRACT INV-4/§1 }
 
 type
   {** invoke 异步完成面。Ok/Fail 恰好其一至多一次；可从任意线程调用
@@ -62,6 +63,14 @@ type
     const APayloadJson: string;
     const ACompletion: IWebviewInvokeCompletion);
 
+  // zero-copy view handlers: payload as TStringView (bytes.ops single source inline zero-copy, zero heap per invoke) — hot dispatch direct RawSlice, string path compat retains ToString single alloc
+  TWebviewInvokeSyncViewHandler = reference to function(const APayload: TStringView): string;
+  TWebviewInvokeSyncViewMethod = function(const APayload: TStringView): string of object;
+  TWebviewInvokeSyncViewProc = function(const APayload: TStringView): string;
+  TWebviewInvokeAsyncViewHandler = reference to procedure(const APayload: TStringView; const ACompletion: IWebviewInvokeCompletion);
+  TWebviewInvokeAsyncViewMethod = procedure(const APayload: TStringView; const ACompletion: IWebviewInvokeCompletion) of object;
+  TWebviewInvokeAsyncViewProc = procedure(const APayload: TStringView; const ACompletion: IWebviewInvokeCompletion);
+
   { method/proc 形式的事件回调类型（IWebviewWindow 重载用） }
   TWebviewScaleMethod      = procedure(ANewScale: Double) of object;
   TWebviewScaleProc        = procedure(ANewScale: Double);
@@ -104,13 +113,34 @@ type
       AHandler: TWebviewInvokeAsyncMethod); overload;
     procedure RegisterAsync(const ACmd: string;
       AHandler: TWebviewInvokeAsyncProc); overload;
+    // zero-copy view variants: inline zero-copy dispatch via TStringView RawSlice single source (bytes.ops/text.view), zero heap per invoke, hot path prefer FindView
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewHandler); overload;
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewMethod); overload;
+    procedure RegisterView(const ACmd: string;
+      AHandler: TWebviewInvokeSyncViewProc); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewHandler); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewMethod); overload;
+    procedure RegisterAsyncView(const ACmd: string;
+      AHandler: TWebviewInvokeAsyncViewProc); overload;
+    function FindView(const ACmd: string; out AIsAsync: Boolean;
+      out ASync: TWebviewInvokeSyncViewHandler;
+      out AAsync: TWebviewInvokeAsyncViewHandler): Boolean;
     procedure Unregister(const ACmd: string);
   end;
 
-  {** 资产 provider：解析失败返回 False（404 是正常业务路径，不抛异常）。 *}
+  {** 资产 provider：解析失败返回 False（404 是正常业务路径，不抛异常）。
+      TryResolveView 为零拷贝热点（bytes.ops 单源 TStringView 零堆分配，复用 text.view 零拷贝视图）。
+      兼容：历史仅有 TryResolve(string) 实现，新增 view 版后旧实现仍可 delegare ToString 单次分配；
+      新实现应直通 view 零分配，bridge 探测路径 404 零堆分配、命中单次视图二分（VFS）零额外 ToString。 *}
   IWebviewAssetProvider = interface
     ['{7C1E4A20-83B5-4E97-9D42-A6B1C2D3E004}']
     function TryResolve(const APath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
       out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
@@ -119,6 +149,8 @@ type
   IWebviewAssets = interface
     ['{7C1E4A20-83B5-4E97-9D42-A6B1C2D3E005}']
     function TryResolve(const ASchemeRelativePath: string;
+      out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView;
       out ABytes: TBytes; out AMimeType: string): Boolean;
     procedure MountEmbedded(const APrefix: string;
       AProvider: IWebviewAssetProvider);

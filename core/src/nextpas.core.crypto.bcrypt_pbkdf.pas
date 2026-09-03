@@ -24,6 +24,7 @@ function TryBcryptPbkdf(const APass, ASalt: TBytes; AKeyLen: Integer;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.blowfish;
 
@@ -113,8 +114,8 @@ begin
     LCountsalt[1] := Byte(LCount shr 16);
     LCountsalt[2] := Byte(LCount shr 8);
     LCountsalt[3] := Byte(LCount);
-    Move(ASalt[0], LSaltPlusCount[0], SizeUInt(Length(ASalt)));
-    Move(LCountsalt[0], LSaltPlusCount[Length(ASalt)], 4);
+    BytesCopy(@LSaltPlusCount[0], @ASalt[0], SizeUInt(Length(ASalt))); // perf: inline single Move via bytes.ops BytesCopy single source zero-copy
+    BytesCopy(@LSaltPlusCount[Length(ASalt)], @LCountsalt[0], 4); // perf: inline single Move via bytes.ops single source zero-copy
 
     { 首轮以真实盐起链，后续轮以上轮输出为盐、结果 XOR 累积 }
     LShaSalt := SHA512(LSaltPlusCount);

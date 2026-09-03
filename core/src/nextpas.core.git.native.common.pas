@@ -5,22 +5,30 @@ unit nextpas.core.git.native.common;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.repo,
-  nextpas.core.git.native.objmodel;
+  nextpas.core.git.native.repo;
 
 { Shared object helpers used across the native git subfamily.
   Single source for tree lookup and tag peeling to avoid 6+ copies
   of FindBlobInTree / PeelToTree. Uses GitOidIsZero (inline,
   zero-copy) and preserves EGitError semantics. }
 
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
 function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
 
 implementation
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.git.native.objmodel;
+
+function GitOidIsZero(const AOid: TGitOid): Boolean; inline;
+begin
+  // single source via base.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy TByteSpan, inline), base owns primitive (base←impl), no push dependency
+  Result := nextpas.core.git.native.base.GitOidIsZero(AOid);
+end;
 
 function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
 var

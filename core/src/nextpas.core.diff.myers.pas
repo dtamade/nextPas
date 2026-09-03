@@ -23,21 +23,22 @@ function DiffLines(const AOld, ANew: TStringArray): TDiffEditArray;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 type
   TIntArray = array of Integer;
 
-procedure GrowEdits(var AEdits: TDiffEditArray; const ANeeded: Integer);
+procedure GrowEdits(var AEdits: TDiffEditArray; const ANeeded: Integer); inline;
 var
-  Cap: Integer;
+  LCap, LNewCap: SizeUInt;
 begin
-  Cap := Length(AEdits);
-  if ANeeded <= Cap then
+  LCap := SizeUInt(Length(AEdits));
+  if SizeUInt(ANeeded) <= LCap then
     Exit;
-  if Cap = 0 then
-    Cap := 64;
-  while Cap < ANeeded do
-    Cap := Cap * 2;
-  SetLength(AEdits, Cap);
+  // single source via bytes.ops GrowArrayCapacity (BYTES_BUILDER_MIN_GROW + *2), amortized O(1), inline, zero-copy Move in caller
+  LNewCap := GrowArrayCapacity(LCap, SizeUInt(ANeeded));
+  SetLength(AEdits, Integer(LNewCap));
 end;
 
 { Middle-segment Myers core. Writes the script in REVERSE order into

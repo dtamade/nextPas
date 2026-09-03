@@ -43,6 +43,7 @@ type
     function Alpha(const AValue: string): TValidator;
     function AlphaNum(const AValue: string): TValidator;
     function Numeric(const AValue: string): TValidator;
+    function SchemeToken(const AValue: string): TValidator;
     function IsValid: Boolean;
     function Errors: TValidationErrors;
     function FirstError: string;
@@ -62,7 +63,13 @@ type
     function ErrorMessages: string;
   end;
 
+{ L2 通用 scheme token 单源（Owner: validation）：[a-z][a-z0-9+.-]* 全小写，空串非法；复用 L1 text.char 表驱动 IsLower/IsDigit 零拷贝零分支，perf 表驱动 CharClassTable 零分支+零拷贝 Byte 视图无分配，去 inline（真实循环体禁 inline 红线二），stability 无堆资源释放不丢；L3 webview.validation IsValidWebviewSchemeToken inline thin-forward 至此单源零漂移。 }
+function IsValidSchemeToken(const AScheme: string): Boolean;
+
 implementation
+
+uses
+  nextpas.core.text.char;
 
 { --- Internal helpers --- }
 
@@ -431,6 +438,33 @@ begin
       Result := Self;
       Exit;
     end;
+  Result := Self;
+end;
+
+{ L2 通用 scheme token 单源实现：表驱动 CharClassTable 零分支+零拷贝 Byte 视图（无 string 分配），复用 L1 text.char IsLower/IsDigit 单源无手写区间漂移；去 inline（真实循环体禁 inline 红线二），稳定性无堆资源释放不丢。 }
+function IsValidSchemeToken(const AScheme: string): Boolean;
+var
+  I: Integer;
+  B: Byte;
+begin
+  Result := False;
+  if AScheme = '' then Exit;
+  if not IsLower(Byte(AScheme[1])) then Exit;
+  for I := 1 to Length(AScheme) do
+  begin
+    B := Byte(AScheme[I]);
+    if IsLower(B) or IsDigit(B) or (B = Byte('+')) or (B = Byte('.')) or (B = Byte('-')) then
+      Continue
+    else
+      Exit;
+  end;
+  Result := True;
+end;
+
+function TValidator.SchemeToken(const AValue: string): TValidator;
+begin
+  if not IsValidSchemeToken(AValue) then
+    AddError('must be a valid scheme token ([a-z][a-z0-9+.-]*)');
   Result := Self;
 end;
 

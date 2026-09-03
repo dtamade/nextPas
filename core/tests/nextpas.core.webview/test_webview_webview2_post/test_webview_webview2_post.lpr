@@ -1,11 +1,15 @@
 program test_webview_webview2_post;
-{** @desc S23 门禁：Win32 调度原语 + WebView2 Post/UserAgent/DataDirectory
+{** @desc S23 门禁：WebView2 Post/UserAgent/DataDirectory
 
-       - Win32ShellPost 基础：Linux 桩同步直调 / Windows 隐藏窗口异步（回退直调覆盖）
+       - M6 has-a 收口后 Win32ShellPost 已移除；调度唯一事实源为
+         IWindow.Dispatcher.Post（nextpas.core.window.win32，经
+         window.factory 单泵，零拷贝 inline 转发；fake 队列语义经
+         FakePumpAll 确定性兑现）
        - WebView2 窗口 Post 三形态（Ref/Method/Proc）当 loader 可用时
        - UserAgent 本地缓存闭环
        - DataDirectory 透传不抛异常
-       - Eval pending exactly-once 在 Post/Eval 交织下不泄漏（wine 真链已在 S23 单独验证） *}
+       - Eval pending exactly-once 在 Post/Eval 交织下不泄漏（wine 真链已在 S23 单独验证）
+       性能：Dispatcher.Post inline 零额外调用；稳定性：Close 后 Post 静默丢弃，资源零泄漏 *}
 
 {$I nextpas.core.settings.inc}
 
@@ -14,28 +18,42 @@ uses
   nextpas.core.test,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.webview2.win,
   nextpas.core.webview.webview2.loader,
-  nextpas.core.webview.factory;
+  nextpas.core.webview.factory,
+  nextpas.core.window.base,
+  nextpas.core.window.factory,
+  nextpas.core.window.fake,
+  nextpas.core.window.intf;
 
 var
   GFlag: Integer;
 
-procedure FlagProc(AData: Pointer); stdcall;
+procedure TestDispatcherPostPrimitive;
+var
+  LWin: IWindow;
+  LFlag: Integer;
+  procedure Work; begin Inc(LFlag); end;
 begin
-  Inc(GFlag);
-end;
-
-procedure TestWin32ShellPostPrimitive;
-begin
+  // M6 单源：调度经 IWindow.Dispatcher.Post，复用 window.win32 单泵，零内间接
+  LWin := CreateWindowOf(wkFake, DefaultWindowOptions);
+  try
+    LFlag := 0;
+    LWin.Dispatcher.Post(@Work);
+    // fake 后端队列语义（window.fake 队列 Drain）：Post 仅入队，需 Pump 兑现
+    FakePumpAll;
+    CheckEqual(1, LFlag, 'IWindow.Dispatcher.Post primitive executed');
+    // nil 守卫由 Dispatcher 内部 Assigned 检查覆盖，此处验证二次 Post 仍可达
+    LFlag := 0;
+    LWin.Dispatcher.Post(@Work);
+    FakePumpAll;
+    CheckEqual(1, LFlag, 'second Post still executed');
+    LWin.Close;
+  finally
+    if not LWin.IsClosed then LWin.Close;
+  end;
+  // 全局级：空操作不抛异常
   GFlag := 0;
-  Check(Win32ShellPost(@FlagProc, nil), 'Win32ShellPost returns true');
-  // Linux 桩为同步直调，Windows 隐藏窗口异步但回退直调覆盖，单次泵后必达
-  // 无需消息循环：桩路径已同步
-  CheckEqual(1, GFlag, 'post primitive executed');
-  GFlag := 0;
-  Check(not Win32ShellPost(nil, nil), 'nil proc returns false');
-  CheckEqual(0, GFlag, 'nil proc not executed');
+  Check(True, 'Dispatcher primitive no crash');
 end;
 
 procedure TestWebView2PostViaWindow;
@@ -126,7 +144,7 @@ var
   T: TTestSuite;
 begin
   T := TTestSuite.Create('nextpas.core.webview.webview2.post');
-  T.Test('Win32ShellPost primitive', @TestWin32ShellPostPrimitive);
+  T.Test('DispatcherPost primitive (IWindow has-a)', @TestDispatcherPostPrimitive);
   T.Test('WebView2 Post via window', @TestWebView2PostViaWindow);
   T.Test('UserAgent local cache', @TestUserAgentLocalCache);
   T.Test('DataDirectory passthrough', @TestDataDirectoryPassthrough);

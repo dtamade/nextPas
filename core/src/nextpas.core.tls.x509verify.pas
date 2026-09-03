@@ -55,6 +55,7 @@ uses
   nextpas.core.base.utils,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.hmac,
+  nextpas.core.crypto.rsa,
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.ecdsa,
@@ -121,15 +122,7 @@ begin
   end;
 end;
 
-const
-  SHA256_DIGEST_INFO_PREFIX: array[0..18] of Byte = (
-    $30, $31, $30, $0d, $06, $09, $60, $86, $48, $01,
-    $65, $03, $04, $02, $01, $05, $00, $04, $20
-  );
-  SHA384_DIGEST_INFO_PREFIX: array[0..18] of Byte = (
-    $30, $41, $30, $0d, $06, $09, $60, $86, $48, $01,
-    $65, $03, $04, $02, $02, $05, $00, $04, $30
-  );
+{ DigestInfo single source: nextpas.core.crypto.rsa.DIGEST_INFO_* }
 
 function VerifySignedX509Blob(
   const ATBSData, ASignature: TBytes;

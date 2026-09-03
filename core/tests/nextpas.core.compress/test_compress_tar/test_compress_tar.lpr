@@ -13,7 +13,8 @@ uses
   nextpas.core.fs,
   nextpas.core.os.env,
   nextpas.core.process,
-  nextpas.core.compress.tar,
+  nextpas.core.tar,
+  nextpas.core.bytes.ops,
   nextpas.core.compress;
 
 type
@@ -186,6 +187,7 @@ var
   R: TTarReader;
   H: TTarHeader;
   Body: TBytes;
+  Ls, Ls2, Ls3: TByteSpan;
 begin
   YDir := PathJoin2(GDir, 'y');
   MkdirAll(PathJoin2(YDir, 'r_dir'), PermDirDefault);
@@ -200,17 +202,17 @@ begin
     CheckTrue(R.Next(H), 'first entry');
     CheckEqual('r_a.txt', H.Name, 'plain name');
     CheckEqual(Ord(tekRegular), Ord(H.Kind), 'regular kind');
-    CheckBytes(BytesOfString('alpha'), R.EntryData, 'payload');
+    CheckTrue(R.TrySlice(Ls), 'slice'); CheckBytes(BytesOfString('alpha'), SpanClone(Ls), 'payload');
 
     CheckTrue(R.Next(H), 'second entry');
     CheckEqual('r_dir', Copy(H.Name, 1, Length('r_dir')), 'dir name core');
     CheckEqual(Ord(tekDirectory), Ord(H.Kind), 'dir kind');
-    CheckTrue(R.EntryData = nil, 'dir has no payload');
+    CheckFalse(R.TrySlice(Ls2), 'dir has no payload');
 
     CheckTrue(R.Next(H), 'third entry');
     CheckEqual('r_dir/r_b.bin', H.Name, 'nested path preserved');
     CheckEqual(600, H.Size, 'size from octal header');
-    CheckBytes(Body, R.EntryData, 'binary payload');
+    CheckTrue(R.TrySlice(Ls3), 'slice3'); CheckBytes(Body, SpanClone(Ls3), 'binary payload');
 
     // GNU tar stores the repeated file argument as a hardlink entry
     CheckTrue(R.Next(H), 'fourth entry (gnu hardlink dedup)');
@@ -242,6 +244,7 @@ var
   S: IStream;
   TW: TTarWriter;
   SplitName, XDir: string;
+  LsF: TByteSpan;
 begin
   Y2Dir := PathJoin2(GDir, 'y2');
   LongRel := Rep('l', 40) + '/' + Rep('m', 40) + '/'
@@ -258,7 +261,7 @@ begin
     try
       CheckTrue(R.Next(H), Fmt + ': entry found');
       CheckEqual(LongRel, H.Name, Fmt + ': full long name');
-      CheckBytes(Payload, R.EntryData, Fmt + ': payload intact');
+      CheckTrue(R.TrySlice(LsF), Fmt+': slice'); CheckBytes(Payload, SpanClone(LsF), Fmt + ': payload intact');
       CheckFalse(R.Next(H), Fmt + ': no extra entries');
     finally
       R.Free;
@@ -314,6 +317,7 @@ var
   R: TTarReader;
   H: TTarHeader;
   Hello: TBytes;
+  LsB: TByteSpan;
 
   procedure PutTextAt(AOfs: SizeInt; const AValue: string);
   begin
@@ -347,7 +351,7 @@ begin
     CheckTrue(R.Next(H), 'entry parsed');
     CheckEqual('b256.txt', H.Name, 'name');
     CheckEqual(5, H.Size, 'base-256 size decoded');
-    CheckBytes(Hello, R.EntryData, 'payload after b256 header');
+    CheckTrue(R.TrySlice(LsB), 'slice b256'); CheckBytes(Hello, SpanClone(LsB), 'payload after b256 header');
     CheckFalse(R.Next(H), 'clean end');
   finally
     R.Free;

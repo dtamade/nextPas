@@ -7,12 +7,17 @@ unit nextpas.core.webview.webview2.ffi;
 
        签名对照源：WebView2 SDK 1.0.2903.40 WebView2.h + WebView2Loader.dll
        导出表（CreateCoreWebView2EnvironmentWithOptions）。调用约定
-       统一 stdcall（Win64 与 Linux 交叉编译均可）。本单元禁止 uses
-       家族其他单元；不依赖 Windows 单元以保持 Linux 编译。 *}
+       统一 stdcall（Win64 与 Linux 交叉编译均可）。RECT 单源复用
+       platform.windows.base（window/win32 host owner），Linux 交叉编译
+       仍可（platform.windows.base 为纯类型无 external）；除此之外
+       禁止 uses 家族其他单元与 Windows 单元。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
+
+uses
+  nextpas.core.platform.windows.base;
 
 type
   HRESULT = LongInt;
@@ -28,8 +33,11 @@ const
   E_NOTIMPL = HRESULT($80004001);
 
 type
-  tagRECT = record Left, Top, Right, Bottom: LongInt; end;
+  { RECT/TagRECT 单源：复用 platform.windows.base host owner（与 window.win32.ffi 同源），消除 ABI 双源；16B 值类型 inline 零拷贝 }
+  tagRECT = nextpas.core.platform.windows.base.tagRECT;
   TRect = tagRECT;
+  RECT = tagRECT;
+  PRect = nextpas.core.platform.windows.base.PRECT;
 
 type
   { COM 前向（FPC System 已有 IUnknown，但为自包含声明） }

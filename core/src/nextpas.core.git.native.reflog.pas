@@ -41,6 +41,7 @@ function GitReadReflog(const AGitDir, ARefName: string): TGitReflog;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.util;
 
 function GitReflogPath(const AGitDir, ARefName: string): string;
@@ -105,7 +106,7 @@ begin
   Result := nil;
   if Length(AData) = 0 then
     Exit;
-  Text := GitBytesToString(AData);
+  Text := BytesToString(AData);
   Count := 0;
   Start := 1;
   for I := 1 to Length(Text) do

@@ -1,8 +1,8 @@
 # nextpas.core.db.factory — 驱动工厂 / Open 即池域契约
 
-**模块**：`nextpas.core.db.factory.{base,intf,pas}` 聚合内建五驱动自注册 + 第三方注入  
-**层级**：L3 家族（依赖 L0–L2，不触后端 FFI 细节；`factory.builtin` side-effect 聚合）  
-**四件套**：`factory.base` ← `factory.intf` ← `factory` 门面 ← `factory.builtin` 聚合实现  
+**模块**：`nextpas.core.db.factory.{base,intf,pas}` 聚合内建五驱动自注册 + 第三方注入
+**层级**：独立 L3 族（已升格；依赖 L0–L2，不触后端 FFI 细节；`factory.builtin` side-effect 聚合；寄居债已清，四件套/L0–L3/`bytes.ops` 单源/`inline`+零拷贝/`Close`/`Shutdown` 全路径已兑现）
+**四件套**：`factory.base` ← `factory.intf` ← `factory` 门面 ← `factory.builtin` 聚合实现
 **对应主契约**：`CONTRACT.md` §1.1 驱动工厂行 + §2.14 `IDbDriver`/`DbOpen`/`DbOpenPool`
 
 ## 职责

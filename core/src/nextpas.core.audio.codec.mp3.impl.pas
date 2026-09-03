@@ -19,6 +19,7 @@ function CreateMp3Decoder: IAudioDecoder;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.audio.errors,
   nextpas.core.audio.codec.mp3.decoder;
 
@@ -35,12 +36,13 @@ type
 
 function Mp3Probe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes inspects only header (≤4KB)
+  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes inspects only header (≤4KB), bytes.ops single source via mp3.base (aligned with CWavProbeLimit/CFlacProbeLimit=4096)
   Result := Mp3ProbeBytes(APrefix);
 end;
 
 function TMp3Decoder.Probe(const APrefix: TBytes): TAudioProbeResult;
 begin
+  // Probe≤4KB guard: 4096 — direct prefix reference, Mp3ProbeBytes caps to 4096 internally
   Result := Mp3Probe(APrefix);
 end;
 
@@ -56,7 +58,7 @@ function TMp3Decoder.OpenStreaming(const AStream: IStream): IAudioSource;
 begin
   // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；待流式 slice 完善后移除
   // gate 白名单：check_source_contract.sh 以 "STUB: OpenStreaming" 注释放行
-  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费 (已收敛)
+  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费 (已收敛), bytes.ops single source (no ffi)
   Result := nil;
   raise EAudioDecodeError.Create('mp3 OpenStreaming: not implemented');
 end;

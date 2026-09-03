@@ -204,11 +204,12 @@ var
     end;
   end;
 
-  function ApplyIntegerPrecision(const AStr: string; const AMinDigits: Integer): string;
+  function ApplyIntegerPrecision(const AStr: string; const AMinDigits: Integer): string; inline;
   var
     LDigits: Integer;
     LPad: Integer;
     LStart: Integer;
+    LOldLen: Integer;
   begin
     Result := AStr;
     if AMinDigits <= 0 then
@@ -223,10 +224,21 @@ var
     if LPad <= 0 then
       Exit;
 
+    // perf: inline single SetLength + zero-copy via bytes.ops single source (INV-5); O(n) single alloc+Move/Fill vs O(n²) StringOfChar+Copy double alloc; BytesCopy inline Move + SpanFill MemSet
+    LOldLen := Length(Result);
+    SetLength(Result, LOldLen + LPad);
     if LStart = 2 then
-      Result := '-' + StringOfChar('0', LPad) + Copy(Result, 2, MaxInt)
+    begin
+      if LDigits > 0 then
+        BytesCopy(Pointer(@Result[2 + LPad]), Pointer(@Result[2]), SizeUInt(LDigits));
+      SpanFill(TByteSpan.Create(PByte(@Result[2]), SizeUInt(LPad)), Byte('0'));
+    end
     else
-      Result := StringOfChar('0', LPad) + Result;
+    begin
+      if LOldLen > 0 then
+        BytesCopy(Pointer(@Result[1 + LPad]), Pointer(@Result[1]), SizeUInt(LOldLen));
+      SpanFill(TByteSpan.Create(PByte(@Result[1]), SizeUInt(LPad)), Byte('0'));
+    end;
   end;
 
   function GetArgInt(const AIdx: Integer): Int64;

@@ -1,10 +1,10 @@
 # nextpas.core.base 代码契约
 
-**模块路径**：`core/src/nextpas.core.base*.pas`（3 个源文件：`base.pas` / `base.utils.pas` / `base.pathvalid.pas` 桩，~1100 行）
-**层级**：L0（根模块，仅依赖 FPC RTL + `nextpas.core.exception`；`pathvalid` 能力由 L1 `nextpas.core.bytes.pathvalid` 单源实现，本层仅桩转发）
+**模块路径**：`core/src/nextpas.core.base*.pas`（3 个源文件：`base.pas` / `base.utils.pas` / `base.pathvalid.pas` 桩，~1250 行）
+**层级**：L0（根模块，接口仅依赖 FPC RTL，零同层依赖，守四件套 `base` 纯数据类型；实现侧 `FormatStr` 复用 `nextpas.core.bytes.ops.BytesGrowCapacityInt` 单源几何扩容 + 零拷贝 `Move`，`not inline` per red-line 2，`ErrorCategoryToString` 单源；`pathvalid` 能力由 L1 `nextpas.core.bytes.pathvalid` 单源实现，本层仅桩转发）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-30
-**版本**：1.1
+**最后更新**：2026-09-03
+**版本**：1.3
 
 ---
 
@@ -43,27 +43,27 @@ type
   cint64 = Int64; cuint64 = UInt64; csize_t = SizeUInt;
 ```
 
-### 1.4 异常层级
+### 1.4 异常层级（L0 自有，零 `nextpas.core.exception` 依赖，守 `base` 纯数据类型；单源 `TErrorCategory` + `ECore` 根，`FormatStr` 复用 `bytes.ops` 单源几何 + 零拷贝，性能 `not inline` + 稳定性资源释放不丢）
 
 ```
-ENextPasError (nextpas.core.exception)
+ECore (self-owned, Category+Inner, DefaultCategory virtual, TErrorCategory)
   ├── EInvariantViolation   (ecInternal)
   ├── EArgumentNil          (ecInvalidArgument)
   ├── EEmptyCollection      (ecInvalidOperation)
   ├── EInvalidArgument      (ecInvalidArgument)
   ├── EInvalidResult        (ecInternal)
-  ├── ETimeoutError         (alias to exception.ETimeoutError)
+  ├── ETimeoutError         (ecTimeout, self-owned, not alias)
   ├── EInvalidState         (ecInvalidOperation)
   ├── EOutOfRange           (ecInvalidArgument)
   ├── ENotSupported         (ecNotSupported)
   ├── ENotCompatible        (ecInvalidArgument)
   ├── EInvalidOperation     (ecInvalidOperation)
-  ├── EOutOfMemoryError     (alias to exception.EOutOfMemoryError)
-  ├── EOutOfMemory          (alias to exception.EOutOfMemory)
+  ├── EOutOfMemoryError     (ecResourceExhausted, self-owned)
+  ├── EOutOfMemory          (subclass of EOutOfMemoryError)
   └── EOverflow             (ecInvalidArgument)
 ```
 
-所有具体异常类实现 `Create(const AMessage: string)` + `DefaultCategory`。
+所有具体异常类实现 `Create(const AMessage: string)` + `DefaultCategory`；`ECore` 提供 `CreateFmt`（`FormatStr` 单源 `bytes.ops.BytesGrowCapacityInt` + `Move` 零拷贝，`not inline` per red-line 2，`try-finally` 资源释放不丢）与 `ErrorCategoryToString` 单源。
 
 ### 1.5 泛型回调
 
@@ -145,7 +145,7 @@ function HashPointer(AValue: Pointer): THashCode; inline;
 | `HashInteger` | 无 | FNV-1a 哈希 | 不抛异常 |
 | `HashPointer` | 无 | FNV-1a 哈希 | 不抛异常 |
 
-### 1.11 内存工具（nextpas.core.base.utils；inline/零拷贝，单源复用 `bytes.ops` 语义）
+### 1.11 内存工具（nextpas.core.base.utils；inline/零拷贝，单源复用 `bytes.ops` 语义；`CompareBytesIgnoreCase`/`HashFNV1aLower` not inline per red-line 2）
 
 ```pascal
 procedure FreeAndNil(var AObj);       // 先置 nil 再 Free（防止析构重入）
@@ -155,8 +155,8 @@ procedure FillMem(ADst: Pointer; ASize: SizeUInt; AValue: Byte); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
 function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
 function CompareBytesOrdered(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
-function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; inline;
-function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; inline;
+function CompareBytesIgnoreCase(A, B: Pointer; ALen, BLen: SizeUInt): Integer; // not inline per red-line 2 (VecWidth batch + tail loop I-Cache)
+function HashFNV1aLower(A: Pointer; ALen: SizeUInt): UInt32; // not inline per red-line 2 (8x unrolled batch I-Cache)
 procedure ClearOutInterface(out AIntf);
 ```
 
@@ -395,3 +395,5 @@ TRefCountedObject:
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
 | 2026-08-30 | 1.1 | 跟随源码演进：补齐 TRefCountedObject/StrComp/IntToStr/HexStr/ClearOutInterface/CompareBytesOrdered/IgnoreCase/HashFNV1aLower，明确 pathvalid 复用 bytes.ops+text.utf8 单源 inline/零拷贝，同步 L0-L3/四件套与资源释放不丢语义 | Claude |
+| 2026-09-02 | 1.2 | 匠心修复 red-line 2：`CompareBytesIgnoreCase`/`HashFNV1aLower` 去 `inline`（VecWidth 批量/标量尾循环与 8x 展开致 I-Cache 复制膨胀），保留 `LowerTable` 单源+零拷贝 branchless 与 `bytes.ops` thin-forward 复用（L1→L0），`FNV` INV-5 单源；性能证据 not inline+I-Cache 防膨胀/零拷贝直查，稳定性资源释放不丢（`FreeAndNil` 先置 nil） | core 匠心 |
+| 2026-09-03 | 1.3 | 匠心修复：解耦 `base→exception` 早期耦合，守四件套 `base` 纯数据类型方向（`base` 接口零 `uses`，`TBytes`/`TByteSpan` 仍由 `base` 拥有，四件套合规）；`TErrorCategory`/`ECore` 自有单源，`FormatStr` 复用 `bytes.ops.BytesGrowCapacityInt` 单源几何 + 零拷贝 `Move`，`not inline` per red-line 2，`ErrorCategoryToString` 单源，热点 `inline` 保持，资源 `Destroy` 幂等 `try-finally` 不丢 | core 匠心 |

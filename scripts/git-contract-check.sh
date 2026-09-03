@@ -70,6 +70,36 @@ if [ -f "$PURE_TEST_LPR" ]; then
 else
   ok "C4.3 纯编译零 libgit2（test_git_pure_manager 未创建，Phase 3 前跳过）"
 fi
+printf "\n${BOLD}C5: zlib 同层豁免锚点与单源透传${NC}\n"
+ZLIB_PAS="$SRC_DIR/nextpas.core.git.native.zlib.pas"
+if [ -f "$ZLIB_PAS" ]; then
+  if grep -q "git-native-zlib-l2-exempt" "$ZLIB_PAS" 2>/dev/null; then
+    ok "C5.1 锚点 git-native-zlib-l2-exempt 存在"
+  else
+    fail_check "C5.1 锚点缺失: $ZLIB_PAS 需含 git-native-zlib-l2-exempt"
+  fi
+  if grep -q "nextpas\.core\.compress" "$ZLIB_PAS" && grep -q "nextpas\.core\.checksum\.adler32" "$ZLIB_PAS"; then
+    ok "C5.2 显式依赖 compress + checksum.adler32 owner"
+  else
+    fail_check "C5.2 未显式 uses compress/checksum.adler32 owner"
+  fi
+  if grep -q "DeflateCompress\|DeflateDecompress" "$ZLIB_PAS" && grep -q "Adler32Update" "$ZLIB_PAS"; then
+    ok "C5.3 单源透传 Deflate* + Adler32Update"
+  else
+    fail_check "C5.3 透传未使用 Deflate* + Adler32Update 单源"
+  fi
+  if grep -q "65521" "$ZLIB_PAS" 2>/dev/null; then
+    if grep -q "ADLER32_MOD\|ADLER32_NMAX" "$ZLIB_PAS" 2>/dev/null; then
+      warn_check "C5.4 含 ADLER32_MOD/NMAX 引用（建议仅 via Adler32Update）"
+    else
+      fail_check "C5.4 手写 adler 循环 65521 未清理，需单源 checksum.adler32"
+    fi
+  else
+    ok "C5.4 零手写 deflate/adler 循环"
+  fi
+else
+  warn_check "C5 zlib 文件未创建，跳过"
+fi
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

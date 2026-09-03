@@ -132,7 +132,7 @@ type
     function WithOpacity(A: Single): TGradient;
   end;
 
-function PathToBuilder(const APath: TPath): TPathBuilder;
+function PathToBuilder(const APath: TPath): TPathBuilder; inline;
 
 implementation
 
@@ -446,11 +446,16 @@ begin
   Inc(Result.FVerbCount, AOther.FVerbCount); Inc(Result.FPointCount, AOther.FPointCount);
 end;
 
-function PathToBuilder(const APath: TPath): TPathBuilder;
+function PathToBuilder(const APath: TPath): TPathBuilder; inline;
 begin
   Result := TPathBuilder.Create;
   if APath.FVerbCount = 0 then Exit;
-  Result.AppendPath(APath);
+  // 批量单次 Reserve 零拷贝：一次 Reserve(AlignUp 单源) + BytesCopy(bytes.ops 单源) 投影，非逐 verb 扩容
+  Result.Reserve(APath.FVerbCount, APath.FPointCount);
+  if APath.FVerbCount > 0 then BytesCopy(@Result.FVerbs[0], @APath.FVerbs[0], APath.FVerbCount * SizeOf(TPathVerb));
+  if APath.FPointCount > 0 then BytesCopy(@Result.FPoints[0], @APath.FPoints[0], APath.FPointCount * SizeOf(TVec2));
+  Result.FVerbCount := APath.FVerbCount;
+  Result.FPointCount := APath.FPointCount;
 end;
 
 procedure TPathBuilder.EnsureVerbCap(ANeeded: Integer);
@@ -536,10 +541,11 @@ begin
   Result := Self;
 end;
 
-function TPathBuilder.Build: TPath;
+function TPathBuilder.Build: TPath; inline;
 begin
-  if FVerbCount > 0 then Result.FVerbs := Copy(FVerbs, 0, FVerbCount) else Result.FVerbs := nil;
-  if FPointCount > 0 then Result.FPoints := Copy(FPoints, 0, FPointCount) else Result.FPoints := nil;
+  // 零拷贝投影：单次 SetLength(精确 count) + BytesCopy(bytes.ops 单源)，截尾零拷贝，无 Copy 临时堆
+  if FVerbCount > 0 then begin SetLength(Result.FVerbs, FVerbCount); BytesCopy(@Result.FVerbs[0], @FVerbs[0], FVerbCount * SizeOf(TPathVerb)); end else Result.FVerbs := nil;
+  if FPointCount > 0 then begin SetLength(Result.FPoints, FPointCount); BytesCopy(@Result.FPoints[0], @FPoints[0], FPointCount * SizeOf(TVec2)); end else Result.FPoints := nil;
   Result.FVerbCount := FVerbCount; Result.FPointCount := FPointCount;
 end;
 

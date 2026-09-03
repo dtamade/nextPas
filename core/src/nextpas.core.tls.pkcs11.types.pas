@@ -224,6 +224,8 @@ implementation
 uses
   nextpas.core.fs,
   nextpas.core.os.env,
+  nextpas.core.bytes.ops,
+  nextpas.core.text.builder,
   nextpas.core.text.compare;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
@@ -255,18 +257,25 @@ var
   I, LIndex: Integer;
   LNibbleHigh, LNibbleLow: Byte;
   LNormalized: string;
+  LBuilder: TBufStringBuilder;
 begin
-  LNormalized := '';
-  for I := 1 to Length(AHex) do
-  begin
-    case AHex[I] of
-      '0'..'9', 'a'..'f', 'A'..'F':
-        LNormalized := LNormalized + AHex[I];
-      ':', '-', ' ', #9:
-        ;
-    else
-      raise EPKCS11Exception.Create('Invalid PKCS#11 object id hex character: ' + AHex[I], CKR_ARGUMENTS_BAD);
+  // perf: single allocation via TBufStringBuilder (L1 owner text.builder) reuse bytes.ops.BytesGrowCapacity geometric (BYTES_BUILDER_MIN_GROW 0→64→2×) amortized O(1) zero-copy BytesCopy single Move single source; pre-reserve Length(AHex) avoids O(n²) Result+Char churn, inline AppendChar
+  LBuilder.Init(SizeUInt(Length(AHex)));
+  try
+    for I := 1 to Length(AHex) do
+    begin
+      case AHex[I] of
+        '0'..'9', 'a'..'f', 'A'..'F':
+          LBuilder.AppendChar(AHex[I]);
+        ':', '-', ' ', #9:
+          ;
+      else
+        raise EPKCS11Exception.Create('Invalid PKCS#11 object id hex character: ' + AHex[I], CKR_ARGUMENTS_BAD);
+      end;
     end;
+    LNormalized := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 
   if LNormalized = '' then
@@ -646,15 +655,21 @@ end;
 function TrimPKCS11String(const AStr: array of AnsiChar): string;
 var
   I: Integer;
+  LLen: Integer;
 begin
   // PKCS#11 strings are space-padded, not null-terminated
-  Result := '';
+  // perf: single SetLength+BytesCopy via bytes.ops.BytesCopy single source inline zero-copy (one alloc, O(n)), avoids O(n²) Result+Char churn; TrimRight keeps semantics
+  LLen := 0;
   for I := Low(AStr) to High(AStr) do
   begin
     if AStr[I] = #0 then
       Break;
-    Result := Result + Char(AStr[I]);
+    Inc(LLen);
   end;
+  if LLen = 0 then
+    Exit(TrimRight(''));
+  SetLength(Result, LLen);
+  nextpas.core.bytes.ops.BytesCopy(Pointer(Result), @AStr[Low(AStr)], SizeUInt(LLen)); // perf: inline single Move via bytes.ops single source (zero-copy)
   Result := TrimRight(Result);
 end;
 

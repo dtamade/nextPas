@@ -121,18 +121,22 @@ begin
   CheckTokenPresent(LTuiSource, 'tblock = nextpas.core.tui.widget.block.tblock',
     'TUI facade must re-export TBlock');
 
-  CheckTokenPresent(LTuiSource, 'function positionmake',
-    'TUI facade must forward PositionMake');
-  CheckTokenPresent(LTuiSource, 'function sizemake',
-    'TUI facade must forward SizeMake');
-  CheckTokenPresent(LTuiSource, 'function rectequals',
-    'TUI facade must forward RectEquals');
-  CheckTokenPresent(LTuiSource, 'function colorEquals',
-    'TUI facade must forward ColorEquals');
-  CheckTokenPresent(LTuiSource, 'function styledefault',
-    'TUI facade must forward StyleDefault');
-  CheckTokenPresent(LTuiSource, 'function borderSetPlain',
-    'TUI facade must forward BorderSetPlain');
+  CheckTokenAbsent(LTuiSource, 'function positionmake',
+    'TUI facade must NOT forward PositionMake (slim: use tui.base)');
+  CheckTokenAbsent(LTuiSource, 'function sizemake',
+    'TUI facade must NOT forward SizeMake (slim: use tui.base)');
+  CheckTokenAbsent(LTuiSource, 'function rectequals',
+    'TUI facade must NOT pile RectEquals (use tui.base)');
+  CheckTokenAbsent(LTuiSource, 'function colorequals',
+    'TUI facade must NOT pile ColorEquals (use tui.color)');
+  CheckTokenAbsent(LTuiSource, 'function styledefault',
+    'TUI facade must NOT pile StyleDefault (use tui.style)');
+  CheckTokenAbsent(LTuiSource, 'function bordersetplain',
+    'TUI facade must NOT pile BorderSetPlain (use tui.borders)');
+  CheckTokenAbsent(LTuiSource, 'function terminalisansies',
+    'TUI facade must NOT pile Terminal helpers (use tui.terminal)');
+  CheckTokenAbsent(LTuiSource, 'nextpas.core.tui.terminal',
+    'TUI facade must NOT uses tui.terminal (on-demand subfacade)');
 
   CheckTokenPresent(LTuiSource, 'tui_black: tcolor',
     'TUI facade must export TUI_BLACK color constant');
@@ -290,33 +294,33 @@ var
 begin
   LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
 
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.color.unsetcolor',
-    'TUI facade must forward UnsetColor to tui.color');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.color.resetcolor',
-    'TUI facade must forward ResetColor to tui.color');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.color.indexedcolor',
-    'TUI facade must forward IndexedColor to tui.color');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.color.rgbcolor',
-    'TUI facade must forward RgbColor to tui.color');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.color.unsetcolor',
+    'TUI facade must NOT forward UnsetColor (slim: use tui.color)');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.color.resetcolor',
+    'TUI facade must NOT forward ResetColor');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.color.indexedcolor',
+    'TUI facade must NOT forward IndexedColor');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.color.rgbcolor',
+    'TUI facade must NOT forward RgbColor');
 
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.style.styledefault',
-    'TUI facade must forward StyleDefault to tui.style');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.style.stylefg(',
-    'TUI facade must forward StyleFg to tui.style');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.style.stylebg(',
-    'TUI facade must forward StyleBg to tui.style');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.style.styledefault',
+    'TUI facade must NOT forward StyleDefault (use tui.style)');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.style.stylefg(',
+    'TUI facade must NOT forward StyleFg');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.style.stylebg(',
+    'TUI facade must NOT forward StyleBg');
 
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetplain',
-    'TUI facade must forward BorderSetPlain to tui.borders');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetrounded',
-    'TUI facade must forward BorderSetRounded to tui.borders');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetdouble',
-    'TUI facade must forward BorderSetDouble to tui.borders');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetplain',
+    'TUI facade must NOT forward BorderSetPlain (use tui.borders)');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetrounded',
+    'TUI facade must NOT forward BorderSetRounded');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.borders.bordersetdouble',
+    'TUI facade must NOT forward BorderSetDouble');
 
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.noneevent',
-    'TUI facade must forward NoneEvent to tui.event');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.keycharevent',
-    'TUI facade must forward KeyCharEvent to tui.event');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.noneevent',
+    'TUI facade must NOT forward NoneEvent (use tui.event)');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.keycharevent',
+    'TUI facade must NOT forward KeyCharEvent');
 end;
 
 
@@ -325,8 +329,8 @@ var
   LTuiSource: string;
 begin
   LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.focusevent',
-    'TUI facade must forward FocusEvent to tui.event');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.focusevent',
+    'TUI facade must NOT forward FocusEvent (slim)');
 end;
 
 procedure TestTuiFacadeForwardsIsFocus;
@@ -334,8 +338,8 @@ var
   LTuiSource: string;
 begin
   LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocus',
-    'TUI facade must forward IsFocus to tui.event');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.isfocus',
+    'TUI facade must NOT forward IsFocus (slim)');
 end;
 
 procedure TestTuiFacadeForwardsIsFocusInOut;
@@ -343,10 +347,10 @@ var
   LTuiSource: string;
 begin
   LTuiSource := ReadSourceFile(ResolveSourcePath(TUI_SOURCE_PATH_FROM_TEST, TUI_SOURCE_PATH_FROM_ROOT));
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocusin',
-    'TUI facade must forward IsFocusIn to tui.event');
-  CheckTokenPresent(LTuiSource, 'result := nextpas.core.tui.event.isfocusout',
-    'TUI facade must forward IsFocusOut to tui.event');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.isfocusin',
+    'TUI facade must NOT forward IsFocusIn (slim)');
+  CheckTokenAbsent(LTuiSource, 'result := nextpas.core.tui.event.isfocusout',
+    'TUI facade must NOT forward IsFocusOut (slim)');
 end;
 
 procedure TestTuiFacadeExportsEvFocus;

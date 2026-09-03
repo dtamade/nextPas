@@ -12,6 +12,7 @@ uses
 type
   TGitBranchKind = nextpas.core.git.base.TGitBranchKind;
   TGitPullFastForwardResult = nextpas.core.git.base.TGitPullFastForwardResult;
+  TGitStatusCode = nextpas.core.git.base.TGitStatusCode;
   TGitStatusFlag = nextpas.core.git.base.TGitStatusFlag;
   TGitStatusFlags = nextpas.core.git.base.TGitStatusFlags;
   TGitStatusEntry = nextpas.core.git.base.TGitStatusEntry;
@@ -68,13 +69,28 @@ const
   gsIgnored = nextpas.core.git.base.gsIgnored;
   gsConflicted = nextpas.core.git.base.gsConflicted;
 
+  gscUnmodified = nextpas.core.git.base.gscUnmodified;
+  gscAdded = nextpas.core.git.base.gscAdded;
+  gscModified = nextpas.core.git.base.gscModified;
+  gscDeleted = nextpas.core.git.base.gscDeleted;
+  gscTypeChanged = nextpas.core.git.base.gscTypeChanged;
+  gscUnmerged = nextpas.core.git.base.gscUnmerged;
+  gscUntracked = nextpas.core.git.base.gscUntracked;
+  gscRenamed = nextpas.core.git.base.gscRenamed;
+  gscCopied = nextpas.core.git.base.gscCopied;
+
 function NewGitManager: IGitManager; inline;
 function DefaultGitDiffOptions: TGitDiffOptions; inline;
 
 implementation
 
+{ facade impl zero libgit2: inline → factory(gbAuto) keeps compile graph pure;
+  libgit2 injected via RegisterLibGit2Creator (bytes.ops single-source, no {$IFDEF}) }
+
 function NewGitManager: IGitManager; inline;
 begin
+  { perf: inline value-type TGitBackend dispatch, single interface move zero-copy,
+    no alloc, no dlopen when gbNative; gbAuto/gbLibGit2 fail-closed if not registered }
   Result := nextpas.core.git.factory.NewGitManager(gbAuto);
 end;
 

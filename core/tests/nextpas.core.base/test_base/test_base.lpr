@@ -356,9 +356,9 @@ var
 begin
   LErr := nextpas.core.base.EOutOfMemoryError.Create('allocation failed');
   try
-    Check(LErr is nextpas.core.exception.EOutOfMemoryError,
-      'base EOutOfMemoryError should be the canonical public OOM root');
-    Check(LErr.Category = ecResourceExhausted,
+    Check(LErr is nextpas.core.base.ECore,
+      'base EOutOfMemoryError should be catchable as base ECore');
+    Check(LErr.Category = nextpas.core.base.ecResourceExhausted,
       'base EOutOfMemoryError should keep resource-exhausted category');
   finally
     LErr.Free;
@@ -369,7 +369,7 @@ begin
     raise nextpas.core.base.EOutOfMemory.Create('compat allocation failed');
   except
     on E: nextpas.core.base.EOutOfMemoryError do
-      LCaught := E is nextpas.core.exception.ENextPasError;
+      LCaught := E is nextpas.core.base.ECore;
   end;
   Check(LCaught, 'base EOutOfMemory compatibility name should catch as EOutOfMemoryError');
 end;

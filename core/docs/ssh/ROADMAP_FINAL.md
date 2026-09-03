@@ -53,7 +53,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 | 段 | 目标 | 证据 | 性能/质量锚点 |
 |----|------|------|--------------|
 | **S0** | 模块立项 | lane `.worktrees/core-ssh` + `README/goal-tree` 登记 + 底座盘点（x25519/ed25519/rsa/aes-gcm/chacha/hmac/sha256 可用，AES-CTR/bcrypt 推迟） | — |
-| **S1** | 基础层 | `base/errors/buffer` + `test_ssh_buffer`（RFC4251 mpint 边界 + 越界） | 零分配 `TsshWriter/Reader` |
+| **S1** | 基础层 | `base/errors/buffer` + `test_ssh_buffer`（RFC4251 mpint 边界 + 越界） | 零分配 `TSshWriter/Reader` |
 | **S2** | 包加密层 | `cipher`：`none/chacha20-poly1305/aes-gcm/aes-ctr+etm`（`AES-NI→ct64→朴素`，`keystream` 跨包持久）+ `test_ssh_cipher`（RFC8439 §2.3.2 + 篡改检测） | chacha ~255 MiB/s, gcm ~450, ctr+etm ~135（门禁 50） |
 | **S3** | 握手层 | `kex/kex.curve25519/hostkey/keys/auth/transport` + `test_ssh_kex/hostkey/keys/transport` | `SHA256 KDF A-F 扩展链`，`curve25519` draft 输入序 |
 | **S4** | 会话层 | `channel/session`（`connect→KEX→hostkey→认证→exec`）+ `test_ssh_session` 5/5 全栈回环 + `bench_ssh_cipher` | `GNextLocalChannelId` 单调，`PumpFiltered` 迟滞过滤 |
@@ -73,7 +73,7 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 | **S17** | SFTP async | `sftp.async TAsyncSftpChannel PostEx+SftpRoundTripAsync WINDOW_LOW/2 + 4B重组` + `test_ssh_sftp_async 7/7 1.41s` | 首包 215ms，STAT 115ms，`SFTP_CHUNK_SIZE 32760` |
 | **S18** | ProxyJump 同步 | `channel OpenDirectTcpip + TChannelStream + TProxyJumpSession` + `test_ssh_proxyjump 5/5 ~560/580ms` | `MemPipe _AddRef` 71块 |
 | **S19** | SFTP over Jump + 堆收敛 | `TMemPipe` 引用计数 + `ServeApp SFTP` + `5/5 734ms` | 71→41块 |
-| **S20** | 性能基线 | `bench_ssh_proxyjump` 50次：单跳 p50 5ms / 双跳 431ms（额外 426ms=二次KEX+轮询），`test 5/5` 同构 | `TLoopThread` 去竞态 |
+| **S20** | 性能基线 | `bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/bench_ssh_proxyjump` 50次：单跳 p50 5ms / 双跳 431ms（额外 426ms=二次KEX+轮询），`test 5/5` 同构) | `TLoopThread` 去竞态 |
 | **S21** | Async ProxyJump | `proxyjump.async TAsyncChannelStream`（无轮询，PeerWindow/Max + 半窗回补）+ `session.async TAsyncProxyConnector direct-tcpip 90→CONFIRMATION→ChannelStream` + `test_proxyjump_async 3/3 ~550ms` | 轮询 `50ms+5ms` 消除，`9 块` 侧线 |
 | **S22** | SFTP via Async Jump | `proxyjump.async FQueuedPayload 5ms + CreateWithKeeper FKeeper` + `sftp.async SshAsyncSftpViaJump/On (FSession+busy defer)` + `test_sftp_via_jump 4/4 ~2.5s` | `0xF0` 悬垂修复，`20块` 侧线，`sftp_async 7/7` 回归 |
 
@@ -109,9 +109,9 @@ L3: http, websocket, tui, config, app     ← 仅 L0-L2
 
 ## 4) 架构完整性（L2 封版 checklist，以 `sevenz 163` 为模板）
 
-- [x] **163 级别门**: `buffer / cipher / kex / hostkey / keys / transport / compress / session 19 / sftp 12 / sftp_async 7 / proxyjump 5 / proxyjump_async 3 / sftp_via_jump 4` + `bench_ssh_cipher / bench_proxyjump`
+- [x] **163 级别门**: `buffer / cipher / kex / hostkey / keys / transport / compress / session 19 / sftp 12 / sftp_async 7 / proxyjump 5 / proxyjump_async 3 / sftp_via_jump 4` + `bench_ssh_cipher / bench_ssh_proxyjump` (`core/benchmarks/nextpas.core.ssh/*`, `bench_common.mk`)
 - [x] **高级感**: `SshClient.Host.Port.User.Password.PrivateKey.Agent.Compress` 同 verb；`SshAsyncClient` 同镜；`Exec` vs `OpenFileSystem` 单 `Channel` 引擎；`ISftpWire / ISshAsyncFileSystem` 可注入
-- [x] **复用度**: `cipher/compress/hostkey/keys/auth` 单点；`TsshWriter/Reader` 贯穿；`TChannelStream ↔ TAsyncChannelStream` 窗口/低水位同构；`bench` 复用 `TMemPipe/LoopServer` 同源
+- [x] **复用度**: `cipher/compress/hostkey/keys/auth` 单点；`TSshWriter/Reader` 贯穿；`TChannelStream ↔ TAsyncChannelStream` 窗口/低水位同构；`bench` 复用 `TMemPipe/LoopServer` 同源
 - [x] **稳定性**: `E*LimitError` 炸弹（SFTP 1MiB 解压防 bomb / SevenZ 同窗）、`WINDOW_LOW_WATER_DIVISOR=2` 回补、`ProbeWatch`、`TryFlushQueued` 单飞、`Keeper` 生命周期闭环、`FWriteBuf` 保活
 - [x] **完整性**: `README + CONTRACT + TEST` 同版，`git diff --check 0`，`build-hygiene pass`
 

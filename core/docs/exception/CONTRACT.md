@@ -1,10 +1,10 @@
 # nextpas.core.exception 代码契约
 
-**模块路径**：`core/src/nextpas.core.exception.pas`（1 个源文件，602 行）
-**层级**：L0（框架根异常，零外部依赖）
+**模块路径**：`core/src/nextpas.core.exception.pas`（1 个源文件，~710 行）
+**层级**：L0（框架根异常，零外部依赖，零 SysUtils 透传）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.1
+**最后更新**：2026-09-02
+**版本**：1.2
 
 ---
 
@@ -21,7 +21,7 @@ Exception = class(TObject)
 end;
 ```
 
-**设计决策**：nextpas 自有 Exception，字段布局与 FPC 兼容（fmessage/fhelpcontext），但不从 FPC SysUtils re-export。
+**设计决策**：nextpas 自有 Exception（L0 自有类型，非 SysUtils 透传），字段布局与 FPC 兼容（fmessage/fhelpcontext），双编译器 stub 阶段债务已收敛（`units/<target>/SysUtils.pas` 仅名称桥接，不被 `nextpas.core.exception` 依赖）；`ExceptAddr` 等回溯单源 via `System`（inline zero-copy，无 SysUtils 桥）。
 
 ### 1.2 ENextPasError 框架异常根
 
@@ -82,7 +82,10 @@ end;
 ```pascal
 ExceptClass = class of Exception;
 EConvertError = class(Exception);
+ERangeError = class(Exception);
 EAssertionFailed = class(Exception);
+EAbort = class(Exception);
+EArgumentException = class(Exception);
 ```
 
 ### 1.6 工具函数
@@ -108,7 +111,8 @@ function ErrorCategoryToString(ACategory: TErrorCategory): string;
 - **[INV-3]** `ENextPasError.Destroy` 仅释放 `FOwnsInner=True` 的 Inner
 - **[INV-4]** 所有子类的 `DefaultCategory` 返回非 ecNone 值
 - **[INV-5]** `EOutOfMemoryError` 继承 `EResourceExhaustedError`（OOM 是资源耗尽的特例）
-- **[INV-6]** `FormatStr` 零 SysUtils 依赖，自包含实现
+- **[INV-6]** `FormatStr` 零 SysUtils 依赖，自包含实现（`bytes.ops.BytesGrowCapacityInt` 单源几何扩容，zero-copy `Move`）
+- **[INV-7]** L0 零 `uses SysUtils` 透传；`Exception`/`ExceptClass` 等为自有类型，`System.ExceptAddr` 单源回溯（inline zero-copy），`Destroy` 资源释放不丢（`FOwnsInner` 语义）
 
 ---
 
@@ -159,3 +163,4 @@ function ErrorCategoryToString(ACategory: TErrorCategory): string;
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |
 | 2026-08-30 | 1.1 | 冻结感修复：更新最后更新至 2026-08-30 并 bump 版本 | Claude |
 | 2026-08-31 | 1.1 | 时效修复：更新最后更新至 2026-08-31 v1.1 并对齐实现 | Claude |
+| 2026-09-02 | 1.2 | 收敛 SysUtils 透传债务：L0 自有 Exception/兼容类型，回溯单源 via System（inline zero-copy），bytes.ops 单源 FormatStr，资源释放不丢 | Claude |

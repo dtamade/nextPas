@@ -1,36 +1,14 @@
 unit nextpas.core.http;
 {**
- * @desc HTTP umbrella facade. Pure re-export, stable entry (thin consumers
- *       prefer `http.minimal` / `http.messages` / `http.transports` /
- *       `http.extensions` / `http.middlewares`按需 `uses`; `uses
- *       nextpas.core.http` 仍稳定聚合入口，不再增长).
- *       1914 lines (`wc -l` verified, :1-65) exceed 800 soft guidance
- *       (`design-conventions.md:163`) but are pure re-export exempt:
- *       no loops/routing/SIMD body, `bytes.ops` single source in owners
- *       (`nextpas.core.bytes.ops:25/89`, `text.conv→bytes.ops`), 40+ inline
- *       thin forwards only (`Result:=SubFacade.Func(...)` single line, no
- *       Move/FillChar body; real loops/SIMD stay out-of-line per :130),
- *       zero-copy views (TByteSpan tail, Bytes ref, bytes.ops compare),
- *       resource release via owner `try/finally`/`Close`/`PoolClear`/
- *       `HttpReleaseResponseBody` (per-domain `heaptrc 0 unfreed`). CONTRACT
- *       truth. Five-facade rhythm (umbrella >800 exempt, cognitive load
- *       distributed via delegation): `http.minimal`~201,
- *       `http.messages`~420, `http.transports`~520,
- *       `http.extensions`~520, `http.middlewares`~500. Implementation
- *       delegates via five sub-facades (not direct leaf fan-out); umbrella
- *       `uses` trimmed to base/intf + five facades, type aliases re-export
- *       via facade where possible to reduce fan-out; thin consumers `uses`
- *       target subfacade eliminates hop. Missing capability → back-feed owner
- *       (errors/bytes/platform). I-Cache / inline 红线2 Evidence
- *       (`design-conventions.md:125-131`): umbrella `inline` only thin
- *       forward to subfacade (`Result:=SubFacade.Func(...)`), subfacade again
- *       thin forward to owner; no `Move`/`FillChar`/`CompareMem` body in
- *       facade, real loops/SIMD/routing stay out-of-line in owner
- *       (`http.router` radix, `impl.h1.fast` scan, `compress` SIMD,
- *       `bytes.ops:25/89` single source). Two-layer inline collapses to single
- *       owner call, I-Cache only one jump, zero extra loop body; thin consumer
- *       `uses` subfacade eliminates even that hop (zero-copy `TByteSpan` tail /
- *       `Bytes` ref / `bytes.ops` compare retained).
+ * @desc HTTP umbrella — pure re-export, cohesive exempt `design-conventions.md:170`
+ *       (~1914 >800 soft but pure aggregate: 13 aliases + 40+ `inline` thin forwards, no loops/routing/SIMD/`Move`/`FillChar` body).
+ *       `bytes.ops:25/89` single source in owners, zero-copy views; resources via owners (`try/finally`/`Close`/`PoolClear`, `heaptrc 0` per domain).
+ *       Cognition via five subfacades: `minimal`(~201)/`messages`(~351)/`transports`(~332)/`extensions`(~370)/`middlewares`(~500)
+ *       — thin `uses nextpas.core.http.<sub>` preferred, umbrella is frozen aggregate.
+ *       `uses` = base/intf + five facades + minimal L0 seams (io/thread/vfs/json/log + router.group)分流认知; CONTRACT truth, missing → back-feed owner.
+ *       Guard: new helpers → subfacade, never back to umbrella (守五子不回聚).
+ *       Sections: A Types/Consts B Minimal C Messages D Middlewares E Transports F Extensions G Mem/Arena — see impl markers.
+ *       I-Cache/Perf: umbrella `inline` = single `Result:=SubFacade.Func` jump, no body copy; loops/SIMD/路由体 out-of-line in owners, `bytes.ops` 单源零拷贝直通; 认知奢华已分流至五子facade按需 `uses`.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -38,24 +16,16 @@ unit nextpas.core.http;
 interface
 
 uses
-  { L0-L1 infra }
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
   nextpas.core.vfs.intf,
-  { L2-L3 http domain: five-facade aggregation rhythm
-    (minimal/messages/transports/extensions/middlewares) pure re-export;
-    bytes.ops single source in leaf owners, CONTRACT truth. Implementation
-    delegates via sub-facades (not direct leaf fan-out); leaf uses trimmed
-    to base/intf + five facades, type aliases re-export via facade where
-    possible to reduce fan-out. }
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.router.group,
   nextpas.core.json,
   nextpas.core.log.intf,
-  { Five-facade aggregation surface (thin consumers `uses` target facade) }
   nextpas.core.http.minimal,
   nextpas.core.http.messages,
   nextpas.core.http.transports,
@@ -246,15 +216,15 @@ const
   TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_SERVER;
   TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_HANDLER;
 
-{** @desc 返回本平台默认的 IO 高并发 TCP 后端（Linux=epoll, macOS/BSD=kqueue,
-    Windows=IOCP；均不可用时回退 threaded）。生产服务应优先使用它而非硬编码
-    后端，以保证跨平台可移植。 *}
+{ === Section B: Minimal — backend & method/status/version/cancel (→ minimal/base) === }
+{** @desc 返回本平台默认 TCP 后端 (epoll/kqueue/IOCP else threaded). *}
 function DefaultTcpServerBackend: TTcpServerBackend;
 
 {** @desc 返回 TCP 后端的可读名称（threaded/epoll/kqueue/iocp），
     用于启动 banner 与日志展示。 *}
 function TcpServerBackendName(const ABackend: TTcpServerBackend): string;
 
+{ Thin forwards — one owner call; bodies/loops/SIMD stay in owners }
 {** @desc Convert HTTP method enum to/from string }
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;
 function HttpStrToMethod(const AStr: string): THttpMethod; inline;
@@ -285,6 +255,7 @@ function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
 {** @desc True when WithRetry / pool reconnect may re-issue the request. }
 function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 
+{ === Section F: Extensions — headers/url/ETag/static/ws/sse/stream/cookie/form (→ extensions) === }
 {** @desc Create empty mutable headers container }
 function NewHeaders: IHttpHeaders; inline;
 {** @desc Set Basic/Digest Authorization header (base64-encoded user:pass) }
@@ -309,9 +280,11 @@ function QueryParamValue(const AParams: TQueryParams; const AName: string): stri
 {** @desc Check if query parameter exists }
 function QueryParamHas(const AParams: TQueryParams; const AName: string): Boolean; inline;
 
+{ === Section B: Minimal — router (→ minimal) === }
 {** @desc Create a new HTTP router (path-pattern → handler mapping) }
 function NewRouter: IHttpRouter; inline;
 
+{ === Section D: Middlewares — chain & product middlewares (→ middlewares) === }
 {** @desc Wrap a function/method/proc as IHttpHandler }
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload; inline;
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload; inline;
@@ -335,9 +308,7 @@ function ContentTypeMiddleware(
 function LoggerMiddleware: IHttpMiddleware; inline;
 {** @desc Request logging middleware with custom TLogger instance. }
 function LoggerMiddlewareWith(const ALogger: TLogger): IHttpMiddleware; inline;
-{** @desc Logger middleware with extras provider（默认 TLogger；provider 在
-   handler 返回后回调，可读 AReq/AW，返回的 key/value 追加到 http_request
-   事件——日志附加字段，见 nextpas.core.http.middleware.logger）。 }
+{** @desc Logger middleware with extras provider (post-handler extras). *}
 function LoggerMiddlewareWithExtras(
   const AExtras: TLogExtrasProvider): IHttpMiddleware; inline;
 {** @desc Logger middleware with extras provider + custom TLogger. }
@@ -360,10 +331,7 @@ function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware; inline;
 function RateLimitMiddleware: IHttpMiddleware; inline;
 {** @desc Rate limit middleware with custom options. }
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware; inline;
-{** @desc Auth middleware with explicit options (Authorization: Bearer <token>
-   and X-API-Key channels). Acceptance via injected validator or static
-   credential lists compared in constant time. Subject stored in the request
-   context under AUTH_SUBJECT_KEY. }
+{** @desc Auth middleware with explicit options (Bearer/X-API-Key, constant-time). *}
 function AuthMiddleware(const AOptions: TAuthOptions): IHttpMiddleware; inline;
 {** @desc Auth middleware driven by an injected validator (default options:
    realm 'restricted'). }
@@ -448,9 +416,7 @@ function HttpWriteErrorUnsupportedMediaType(const AW: IHttpResponseWriter;
 {** @desc Write 504 Gateway Timeout JSON error response. }
 function HttpWriteErrorGatewayTimeout(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
-{** @desc Post-hoc deadline middleware (non-preemptive).
-   Handler-return check only; buffers response (default max HTTP_DEFAULT_BODY_READ_MAX).
-   Timeout → 504; oversize buffer → 413. Prefer server Read/WriteTimeout in production. }
+{** @desc Post-hoc deadline middleware (non-preemptive; Timeout→504, oversize→413). *}
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
 {** @desc Post-hoc deadline with explicit response buffer max (0 = unlimited, tests only). }
 function DeadlineMiddlewareWith(ATimeoutMs: Int64;
@@ -464,6 +430,7 @@ function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inli
 
 { --- Request-scoped memory (nextpas.core.mem product wire; see http.mem) --- }
 
+{ === Section G: Mem/Arena — request-scoped arena (→ middlewares/mem) === }
 const
   HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.middlewares.HTTP_DEFAULT_REQUEST_ARENA;
   HTTP_DEFAULT_BODY_READ_MAX = nextpas.core.http.base.HTTP_DEFAULT_BODY_READ_MAX;
@@ -481,6 +448,7 @@ function HttpProcessAllocator: IAllocator; inline;
 {** @desc Process DefaultHeap one-line snapshot for ops/debug (not hot path). }
 function HttpFormatProcessMemStats: string; inline;
 
+{ === Section C: Messages — request/response builders & writers/redirects/errors (→ messages) === }
 {** @desc Create IHttpRequest (whitelist: Method+TUrl or Method+string URL).
    Headers/body/auth → THttpRequestBuilder. }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -581,12 +549,10 @@ function HttpWriteErrorUnprocessableEntity(const AW: IHttpResponseWriter;
 function HttpWriteErrorPayloadTooLarge(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
 
-{ Static helpers }
+{ === Section F: Extensions — static/ETag/304 (→ extensions) === }
 function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
-{** @desc Static file serving from a read-only virtual filesystem (IVfs).
-   ETag prefers backend ContentHash ("fnv-hex8"); unknown ModTime (0) skips
-   Last-Modified / If-Modified-Since negotiation. Directories → 404. }
+{** @desc Static serving from read-only IVfs (ETag via ContentHash, 404 dirs). *}
 function ServeVfs(const AFs: IVfs): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
@@ -602,7 +568,7 @@ function HttpTryWriteNotModified(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter; const AETag, ALastModified: string;
   const AModTimeUnix: Int64): Boolean; inline;
 
-{ WebSocket helper }
+{ === Section F: Extensions — websocket/sse/stream/cookie/form (→ extensions) === }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
   const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
@@ -645,7 +611,7 @@ function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boole
 function NewHttpCookieJar: IHttpCookieJar; inline;
 function HttpCookieSiteKey(const AHost: string): string; inline;
 
-{ Server/Client factories }
+{ === Section E: Transports — server/client factories & fetch/decode helpers (→ transports) === }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; overload; inline;
 function NewHttpServer(const AHandler: IHttpHandler; const ATransport: IHttpServerTransport): IHttpServer; overload; inline;
@@ -746,6 +712,7 @@ function ParseMultipartFormDataFromReader(const ABody: IReader;
 
 implementation
 
+{ === Impl B: Minimal — backend/method/status/version/cancel → minimal/base (inline thin) === }
 function DefaultTcpServerBackend: TTcpServerBackend;
 begin
   Result := nextpas.core.http.transports.DefaultTcpServerBackend;
@@ -841,6 +808,7 @@ begin
   Result := nextpas.core.http.messages.HttpIsRetrySafeRequest(AReq);
 end;
 
+{ === Impl F: Extensions — headers/url (→ extensions) inline thin, Move in bytes.ops === }
 function NewHeaders: IHttpHeaders;
 begin
   Result := nextpas.core.http.extensions.NewHeaders;
@@ -897,11 +865,13 @@ begin
   Result := nextpas.core.http.extensions.QueryParamHas(AParams, AName);
 end;
 
+{ === Impl B: Minimal router (→ minimal) === }
 function NewRouter: IHttpRouter;
 begin
   Result := nextpas.core.http.minimal.NewRouter;
 end;
 
+{ === Impl D: Middlewares — chain & product (→ middlewares) inline thin, bytes.ops single source === }
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
   Result := nextpas.core.http.middlewares.HandlerFunc(AFunc);
@@ -1165,13 +1135,7 @@ end;
 
 procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
 begin
-  if ARouter = nil then
-    raise EHttpError.Create(hekArgument,
-      'HttpUseRequestArena: router must not be nil');
-  if ACapacity = 0 then
-    ARouter.Use(RequestArenaMiddleware)
-  else
-    ARouter.Use(RequestArenaMiddlewareWith(ACapacity));
+  nextpas.core.http.middlewares.HttpUseRequestArena(ARouter, ACapacity);
 end;
 
 function HttpWithRequestArena(const AHandler: IHttpHandler;
@@ -1240,6 +1204,7 @@ begin
   Result := nextpas.core.http.middlewares.HstsMiddlewareWith(AOptions);
 end;
 
+{ === Impl C: Messages — request/response builders/writers/redirects/errors (→ messages) inline thin, bytes.ops in owner, Close/PoolClear via owner === }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
 begin
   Result := nextpas.core.http.messages.NewRequest(AMethod, AUrl);
@@ -1464,6 +1429,7 @@ begin
   Result := nextpas.core.http.messages.HttpWriteErrorPayloadTooLarge(AW, AMessage);
 end;
 
+{ === Impl F: Extensions — static/ETag/304/ws/sse/stream/cookie/form (→ extensions) inline thin, bytes.ops single source, try/finally Close via owner === }
 function ServeFile(const APath: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.extensions.ServeFile(APath);
@@ -1617,6 +1583,7 @@ begin
   Result := nextpas.core.http.extensions.HttpCookieSiteKey(AHost);
 end;
 
+{ === Impl E: Transports — server/client factories & fetch/decode (→ transports) inline thin, PoolClear/Close via owner === }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
   Result := nextpas.core.http.transports.NewHttpServer(AHandler);
@@ -1642,28 +1609,25 @@ end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer;
 begin
-  { Production RW timeouts: arena convenience should not invite unbounded IO.
-    THttpServer.Create applies RequestArena wrap once. }
-  Result := NewHttpServer(AHandler, THttpServerOptions.Production.WithRequestArena);
+  Result := nextpas.core.http.transports.NewHttpServerWithRequestArena(AHandler);
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
   const AOptions: THttpServerOptions): IHttpServer;
 begin
-  Result := NewHttpServer(AHandler, AOptions.WithRequestArena);
+  Result := nextpas.core.http.transports.NewHttpServerWithRequestArena(AHandler, AOptions);
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
   AArenaCapacity: SizeUInt): IHttpServer;
 begin
-  Result := NewHttpServer(AHandler,
-    THttpServerOptions.Production.WithRequestArena(AArenaCapacity));
+  Result := nextpas.core.http.transports.NewHttpServerWithRequestArena(AHandler, AArenaCapacity);
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
   const AOptions: THttpServerOptions; AArenaCapacity: SizeUInt): IHttpServer;
 begin
-  Result := NewHttpServer(AHandler, AOptions.WithRequestArena(AArenaCapacity));
+  Result := nextpas.core.http.transports.NewHttpServerWithRequestArena(AHandler, AOptions, AArenaCapacity);
 end;
 
 function NewHttpClient: IHttpClient;
@@ -1891,6 +1855,7 @@ begin
     ABoundary, AOptions);
 end;
 
+{ === Impl G: Mem/Arena — request arena & process heap (→ middlewares/mem) inline thin, arena drop via owner === }
 function HttpCreateRequestArena(ACapacity: SizeUInt): IArena;
 begin
   Result := nextpas.core.http.middlewares.HttpCreateRequestArena(ACapacity);

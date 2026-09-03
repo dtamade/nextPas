@@ -8,7 +8,8 @@ unit nextpas.core.xml.base;
 interface
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.bytes.ops;
 
 const
   { DOM 物化的元素树深度上限：树建成后 Text 等消费者按元素链递归，
@@ -120,7 +121,7 @@ begin
   { Copy prefix before first & }
   if LI > 1 then
   begin
-    Move(AStr[1], LBuf[1], (LI - 1));
+    BytesCopy(@LBuf[1], @AStr[1], SizeUInt(LI - 1)); { perf: inline single Move via bytes.ops single source, zero-copy }
     LBufPos := LI - 1;
   end;
 
@@ -172,7 +173,7 @@ begin
         { Unknown entity, copy verbatim }
         LCodeLen := LSemiPos - LI + 1;
         while LBufPos + LCodeLen > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move(AStr[LI], LBuf[LBufPos + 1], LCodeLen);
+        BytesCopy(@LBuf[LBufPos + 1], @AStr[LI], SizeUInt(LCodeLen)); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, LCodeLen);
       end;
       LI := LSemiPos + 1;
@@ -207,17 +208,17 @@ begin
     case LCh of
       '<': begin
         while LBufPos + 4 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&lt;', LBuf[LBufPos + 1], 4);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&lt;'), 4); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 4);
       end;
       '>': begin
         while LBufPos + 4 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&gt;', LBuf[LBufPos + 1], 4);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&gt;'), 4); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 4);
       end;
       '&': begin
         while LBufPos + 5 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&amp;', LBuf[LBufPos + 1], 5);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&amp;'), 5); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 5);
       end;
     else
@@ -248,27 +249,27 @@ begin
     case LCh of
       '<': begin
         while LBufPos + 4 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&lt;', LBuf[LBufPos + 1], 4);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&lt;'), 4); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 4);
       end;
       '>': begin
         while LBufPos + 4 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&gt;', LBuf[LBufPos + 1], 4);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&gt;'), 4); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 4);
       end;
       '&': begin
         while LBufPos + 5 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&amp;', LBuf[LBufPos + 1], 5);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&amp;'), 5); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 5);
       end;
       '"': begin
         while LBufPos + 6 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&quot;', LBuf[LBufPos + 1], 6);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&quot;'), 6); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 6);
       end;
       '''': begin
         while LBufPos + 6 > Length(LBuf) do SetLength(LBuf, Length(LBuf) * 2);
-        Move('&apos;', LBuf[LBufPos + 1], 6);
+        BytesCopy(@LBuf[LBufPos + 1], PAnsiChar('&apos;'), 6); { perf: inline single Move via bytes.ops single source, zero-copy }
         Inc(LBufPos, 6);
       end;
     else

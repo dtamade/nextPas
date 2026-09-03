@@ -126,6 +126,9 @@ function TryLoadGtk3(out AInfo: TGtk3LoadInfo): Boolean;
       BindReq(@gtk_widget_get_allocated_width, 'gtk_widget_get_allocated_width') and
       BindReq(@gtk_widget_get_allocated_height, 'gtk_widget_get_allocated_height') and
       BindReq(@gdk_window_get_state, 'gdk_window_get_state') and
+      BindReq(@gtk_container_add, 'gtk_container_add') and
+      BindReq(@gtk_container_remove, 'gtk_container_remove') and
+      BindReq(@gtk_widget_show, 'gtk_widget_show') and
       BindReq(@gtk_main, 'gtk_main') and
       BindReq(@gtk_main_quit, 'gtk_main_quit') and
       BindReq(@gtk_main_iteration_do, 'gtk_main_iteration_do') and

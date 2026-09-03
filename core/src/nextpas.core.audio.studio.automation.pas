@@ -34,6 +34,10 @@ function HermiteInterpolate(A0, A1, A2, A3: Single; AT: Single): Single;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops.capacity,
+  nextpas.core.mem.dynarray;
+
 function HermiteInterpolate(A0, A1, A2, A3: Single; AT: Single): Single;
 var T2, T3: Single; M0, M1: Single;
 begin
@@ -57,14 +61,26 @@ begin
 end;
 
 procedure TAutomationCurve.AddPoint(AFrame: UInt64; AValue: Single);
-var L, I: Integer;
+var
+  L, I: Integer;
+  LOld, LReq, LCap, LCurCap: SizeUInt;
 begin
   FLock.Acquire;
   try
-    L := Length(FPoints);
-    SetLength(FPoints, L + 1);
+    LOld := SizeUInt(Length(FPoints));
+    LReq := LOld + 1;
+    // perf: geometric via bytes.ops.BytesGrowCapacity single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), zero-copy via mem.dynarray poke, not inline per red-line 2
+    LCap := BytesGrowCapacity(LOld, LReq);
+    LCurCap := DynArrayCapacityElem(Pointer(FPoints), LOld, SizeOf(TAutomationPoint));
+    if (LCurCap < LCap) or (DynArrayRefCountElem(Pointer(FPoints)) <> 1) then
+    begin
+      if LCap <> LOld then
+        SetLength(FPoints, LCap);
+    end;
+    if SizeUInt(Length(FPoints)) <> LReq then
+      DynArraySetLengthElem(Pointer(FPoints), LReq);
     // insertion sort: shift tail until sorted (O(n), single pass, vs O(n^2) bubble)
-    I := L;
+    I := Integer(LOld);
     while (I > 0) and (FPoints[I-1].Frame > AFrame) do
     begin
       FPoints[I] := FPoints[I-1];

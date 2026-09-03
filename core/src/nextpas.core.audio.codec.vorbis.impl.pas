@@ -19,6 +19,7 @@ function CreateVorbisDecoder: IAudioDecoder;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.audio.errors,
   nextpas.core.audio.codec.vorbis.decoder;
 
@@ -35,7 +36,7 @@ type
 
 function VorbisProbe(const APrefix: TBytes): TAudioProbeResult;
 begin
-  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes caps scan to 4096 (4KB) internally
+  // Probe≤4KB guard: 4096 — zero-alloc, ProbeBytes caps scan to 4096 (4KB) internally, bytes.ops single source via vorbis.base
   Result := VorbisProbeBytes(APrefix);
 end;
 
@@ -56,7 +57,7 @@ function TVorbisDecoder.OpenStreaming(const AStream: IStream): IAudioSource;
 begin
   // STUB: OpenStreaming not implemented — 过渡桩，仅 DecodeWhole 可用；待流式 slice 完善后移除
   // gate 白名单：check_source_contract.sh 以 "STUB: OpenStreaming" 注释放行
-  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费 (已收敛)
+  // 零分配桩：直接 raise，不做 DecodeWhole 分配，避免 STUB 路径堆浪费 (已收敛), bytes.ops single source (no ffi)
   Result := nil;
   raise EAudioDecodeError.Create('vorbis OpenStreaming: not implemented');
 end;

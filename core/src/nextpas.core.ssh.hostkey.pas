@@ -15,6 +15,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.text.view,
   nextpas.core.text.strings,
   nextpas.core.text.conv,
   nextpas.core.text.utils,
@@ -67,6 +68,7 @@ type
     FPatterns: TStringArray;   { 每条目的 pattern 字段原样保留 }
     FBlobs: TBlobArray;
     FCount: Integer;
+    FCap: SizeUInt;
     procedure AddEntry(const APatterns: string; const ABlob: TBytes);
   public
     constructor Create;
@@ -75,7 +77,8 @@ type
     procedure LoadFromFile(const APath: string); overload;
     procedure LoadFromFile(const APath: string; const AReader: IHostKeyFileReader); overload;
     procedure LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
-    procedure AddLine(const ALine: string);
+    procedure AddLine(const ALine: string); overload;
+    procedure AddLine(const ALine: TStringView); overload;
     function Count: Integer;
 
     { 返回匹配该主机的全部密钥 blob（可能为空数组）}
@@ -86,12 +89,13 @@ type
       const ABlob: TBytes): Boolean;
   end;
 
-{ 通配符匹配：'*' 任意串、'?' 单字符；大小写敏感 }
-function SshWildMatch(const APattern, AValue: string): Boolean;
+{ 通配符匹配：'*' 任意串、'?' 单字符，'[' ']' 字面量；大小写敏感 - OpenSSH known_hosts 语义私有实现 }
+function SshWildMatch(const APattern, AValue: string): Boolean; inline;
 
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.ed25519,
   nextpas.core.crypto.bigint,
@@ -100,7 +104,7 @@ uses
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.asn1,
   nextpas.core.encoding.base64,
-  nextpas.core.fs,
+  nextpas.core.platform.fs,
   nextpas.core.ssh.rsa;
 
 { 从 AFrom 起查找字符（替代 StrUtils.PosEx，冷路径无需优化）}
@@ -293,50 +297,75 @@ end;
 function SshFingerprintSHA256(const ABlob: TBytes): string;
 var
   LB64: string;
+  LLen: Integer;
 begin
   LB64 := Base64Encode(SHA256(ABlob));
-  while (Length(LB64) > 0) and (LB64[Length(LB64)] = '=') do
-    Delete(LB64, Length(LB64), 1);
+  LLen := Length(LB64);
+  while (LLen > 0) and (LB64[LLen] = '=') do
+    Dec(LLen);
+  SetLength(LB64, LLen);
   Result := 'SHA256:' + LB64;
 end;
 
 { ---- 通配符匹配 ---- }
 
-{ 经典双指针回溯：'*' 任意串、'?' 恰好一字符 }
-function SshWildMatch(const APattern, AValue: string): Boolean;
+{ OpenSSH known_hosts 语义：仅 '*'（任意串，含 '/' 外一切字符）与 '?'（单字符），
+  '[' ']' 为 '[host]:port' 条目字面量（非字符类）。L1 text.strings.GlobMatch 为
+  路径 glob（'*' 不跨分隔符、'[' 开字符类、无转义），语义不合，故此处保留双指针
+  回溯私有实现（源自主仓已删的 text.wildmatch.match，行为经 test_ssh_hostkey 锁定）。 }
+function SshPatternMatch(APattern: PAnsiChar; APatternLen: SizeUInt;
+  AValue: PAnsiChar; AValueLen: SizeUInt): Boolean;
 var
-  P, V, LStarP, LStarV: Integer;
+  P, V, StarP, StarV: SizeInt;
 begin
-  P := 1;
-  V := 1;
-  LStarP := 0;
-  LStarV := 0;
-  while V <= Length(AValue) do
+  if APatternLen = 0 then
+    Exit(AValueLen = 0);
+  if AValueLen = 0 then
   begin
-    if (P <= Length(APattern))
-      and ((APattern[P] = '?') or (APattern[P] = AValue[V])) then
+    for P := 0 to SizeInt(APatternLen) - 1 do
+      if APattern[P] <> '*' then
+        Exit(False);
+    Exit(True);
+  end;
+  P := 0;
+  V := 0;
+  StarP := -1;
+  StarV := 0;
+  while V < SizeInt(AValueLen) do
+  begin
+    if (P < SizeInt(APatternLen)) and ((APattern[P] = '?') or (APattern[P] = AValue[V])) then
     begin
       Inc(P);
       Inc(V);
     end
-    else if (P <= Length(APattern)) and (APattern[P] = '*') then
+    else if (P < SizeInt(APatternLen)) and (APattern[P] = '*') then
     begin
-      LStarP := P;
-      LStarV := V;
+      StarP := P;
+      StarV := V;
       Inc(P);
     end
-    else if LStarP > 0 then
+    else if StarP >= 0 then
     begin
-      P := LStarP + 1;
-      Inc(LStarV);
-      V := LStarV;
+      P := StarP + 1;
+      Inc(StarV);
+      V := StarV;
     end
     else
       Exit(False);
   end;
-  while (P <= Length(APattern)) and (APattern[P] = '*') do
+  while (P < SizeInt(APatternLen)) and (APattern[P] = '*') do
     Inc(P);
-  Result := P > Length(APattern);
+  Result := P >= SizeInt(APatternLen);
+end;
+
+function SshWildMatch(const APattern, AValue: string): Boolean; inline;
+begin
+  if APattern = '' then
+    Exit(AValue = '');
+  if AValue = '' then
+    Exit(SshPatternMatch(PAnsiChar(APattern), SizeUInt(Length(APattern)), nil, 0));
+  Result := SshPatternMatch(PAnsiChar(APattern), SizeUInt(Length(APattern)),
+    PAnsiChar(AValue), SizeUInt(Length(AValue)));
 end;
 
 { ---- known_hosts ---- }
@@ -345,25 +374,47 @@ constructor TSshKnownHosts.Create;
 begin
   inherited Create;
   FCount := 0;
+  FCap := 0;
 end;
 
 procedure TSshKnownHosts.AddEntry(const APatterns: string; const ABlob: TBytes);
 begin
   Inc(FCount);
-  SetLength(FPatterns, FCount);
-  SetLength(FBlobs, FCount);
+  if SizeUInt(FCount) > FCap then
+  begin
+    BytesEnsureCapacity(FCap, SizeUInt(FCount));
+    SetLength(FPatterns, FCap);
+    SetLength(FBlobs, FCap);
+  end;
   FPatterns[FCount - 1] := APatterns;
   FBlobs[FCount - 1] := ABlob;
 end;
 
 function TDefaultHostKeyFileReader.ReadAllText(const APath: string; out AContent: string): Boolean;
+var
+  LData: Pointer;
+  LLen: PtrUInt;
+  LRes: Int32;
 begin
+  // L2→L0 合规：经 nextpas.core.platform.fs（L0）直读，不依赖同层 nextpas.core.fs；零拷贝 Move 单次分配
+  // perf: single platform_fs_read_file alloc + single Move (zero-copy via Move), no intermediate TBytes+Copy
+  // stability: platform_fs_free_buf in finally guarantees no leak on SetLength/OOM exception
+  AContent := '';
+  Result := False;
+  if APath = '' then
+    Exit;
+  LData := nil;
+  LLen := 0;
+  LRes := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
+  if LRes <> 0 then
+    Exit;
   try
-    AContent := nextpas.core.fs.ReadFileText(APath);
+    SetLength(AContent, LLen);
+    if LLen > 0 then
+      Move(LData^, AContent[1], LLen);
     Result := True;
-  except
-    AContent := '';
-    Result := False;
+  finally
+    platform_fs_free_buf(LData);
   end;
 end;
 
@@ -382,49 +433,69 @@ end;
 procedure TSshKnownHosts.LoadFromReader(const AReader: IHostKeyFileReader; const APath: string);
 var
   LContent: string;
-  I, LStart: Integer;
+  LView, LLine: TStringView;
+  LStart, I: SizeUInt;
 begin
   if (AReader = nil) or not AReader.ReadAllText(APath, LContent) then
     Exit;                       { 文件不存在/不可读：保持当前集合 }
-  LStart := 1;
-  for I := 1 to Length(LContent) + 1 do
+  // perf: TByteSpan/TStringView 零拷贝视图遍 LContent，O(n) 单次扫描零中间分配；bytes.ops 单源 Move 仅存最终 AddEntry
+  // stability: LContent 生命周期覆盖全部 view，切片不逃逸，AddLine 内 ToString 仅对有效条目两份拷贝
+  LView := TStringView.FromStr(LContent);
+  LStart := 0;
+  for I := 0 to LView.Len do
   begin
-    if (I > Length(LContent)) or (LContent[I] = #10) then
+    if (I = LView.Len) or (LView.Data[I] = #10) then
     begin
-      AddLine(Copy(LContent, LStart, I - LStart));
+      LLine := LView.Slice(LStart, I - LStart);
+      // CRLF 尾 #13 由 AddLine.Trim 单源 IsWhitespace 零拷贝剔除
+      AddLine(LLine);
       LStart := I + 1;
     end;
   end;
 end;
 
-procedure TSshKnownHosts.AddLine(const ALine: string);
+procedure TSshKnownHosts.AddLine(const ALine: string); inline;
+begin
+  // perf: string 薄转发至 view 单源，零拷贝 Trim/切片，inline 消除调用开销
+  AddLine(TStringView.FromStr(ALine));
+end;
+
+procedure TSshKnownHosts.AddLine(const ALine: TStringView);
 var
-  LTrimmed: string;
-  LRaw, LParts: TStringArray;
-  I, LKept: Integer;
+  LView: TStringView;
+  LFields: array[0..2] of TStringView;
+  LCount: Integer;
+  LPos, LStart: SizeUInt;
+  LPattern, LB64: string;
   LBlob: TBytes;
 begin
-  LTrimmed := Trim(ALine);
-  if (LTrimmed = '') or (LTrimmed[1] = '#') then
+  // perf: 单源 bytes.ops/TStringView 零拷贝 Trim+Slice；仅有效条目触发两份 ToString（pattern+blob b64）
+  LView := ALine.Trim;
+  if LView.IsEmpty then
     Exit;
-  { @cert-authority / @revoked 标记行：当前不支持 CA 语义，跳过 }
-  if LTrimmed[1] = '@' then
+  if (LView.Data[0] = '#') or (LView.Data[0] = '@') then
+    Exit; { # 注释 / @cert-authority/@revoked：当前不支持 CA 语义，跳过 }
+  LCount := 0;
+  LPos := 0;
+  while (LPos < LView.Len) and (LCount < 3) do
+  begin
+    while (LPos < LView.Len) and (LView.Data[LPos] = ' ') do
+      Inc(LPos);
+    if LPos >= LView.Len then
+      Break;
+    LStart := LPos;
+    while (LPos < LView.Len) and (LView.Data[LPos] <> ' ') do
+      Inc(LPos);
+    LFields[LCount] := LView.Slice(LStart, LPos - LStart);
+    Inc(LCount);
+  end;
+  if LCount < 3 then
     Exit;
-  { 手工剔除空字段：known_hosts 允许连续空格分隔 }
-  LRaw := StringsSplit(LTrimmed, ' ', True);
-  SetLength(LParts, Length(LRaw));
-  LKept := 0;
-  for I := 0 to High(LRaw) do
-    if LRaw[I] <> '' then
-    begin
-      LParts[LKept] := LRaw[I];
-      Inc(LKept);
-    end;
-  if LKept < 3 then
-    Exit;
-  LBlob := Base64Decode(LParts[2]);
+  LPattern := LFields[0].ToString;
+  LB64 := LFields[2].ToString;
+  LBlob := Base64Decode(LB64);
   if Length(LBlob) > 0 then
-    AddEntry(LParts[0], LBlob);
+    AddEntry(LPattern, LBlob);
 end;
 
 function TSshKnownHosts.Count: Integer;
@@ -448,7 +519,7 @@ begin
   if APort = SSH_DEFAULT_PORT then
     LQueryPorted := ''
   else
-    LQueryPorted := '[' + AHostName + ']:' + IntToStr(APort);
+    LQueryPorted := '[' + AHostName + ']:' + nextpas.core.text.conv.IntToStr(Int64(APort));
 
   LCands := StringsSplit(APatterns, ',');
   for I := 0 to High(LCands) do
@@ -488,18 +559,26 @@ end;
 function TSshKnownHosts.BlobsForHost(const AHostName: string; APort: Word): TBlobArray;
 var
   I, LOut: Integer;
+  LCap: SizeUInt;
 begin
   Result := nil;
   LOut := 0;
+  LCap := 0;
   for I := 0 to FCount - 1 do
   begin
     if PatternMatches(FPatterns[I], AHostName, APort) then
     begin
+      if SizeUInt(LOut + 1) > LCap then
+      begin
+        BytesEnsureCapacity(LCap, SizeUInt(LOut + 1));
+        SetLength(Result, LCap);
+      end;
+      Result[LOut] := FBlobs[I];
       Inc(LOut);
-      SetLength(Result, LOut);
-      Result[LOut - 1] := FBlobs[I];
     end;
   end;
+  if SizeUInt(LOut) <> LCap then
+    SetLength(Result, LOut);
 end;
 
 function TSshKnownHosts.ContainsKey(const AHostName: string; APort: Word;

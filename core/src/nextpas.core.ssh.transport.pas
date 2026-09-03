@@ -52,6 +52,9 @@ type
     FCore: TSshTransportCore;
     FServerIdent: string;
     FMyKexInitPayload: TBytes;
+    FReadAhead: TBytes;
+    FReadAheadPos: SizeUInt;
+    FReadBuf: TBytes;
     procedure ApplyDeadlineToStream;
     procedure CheckRekeyOrDisconnect;
     procedure SendRaw(const ABytes: TBytes);
@@ -103,17 +106,20 @@ type
 implementation
 
 uses
+  nextpas.core.exception,
+  nextpas.core.base.utils,
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
+  nextpas.core.bytes.binary,
   nextpas.core.crypto.random,
-  nextpas.core.net.intf,
+  nextpas.core.ssh.net.ffi,
   nextpas.core.mem.secure;
 
-function UInt32Bytes(AValue: UInt32): TBytes;
+// 单源：bytes.binary.WriteUInt32BE inline 零拷贝（单 Move，不手写移位），bytes.ops 单源外层 Move 复用
+function UInt32Bytes(AValue: UInt32): TBytes; inline;
 begin
   SetLength(Result, 4);
-  Result[0] := Byte(AValue shr 24);
-  Result[1] := Byte(AValue shr 16);
-  Result[2] := Byte(AValue shr 8);
-  Result[3] := Byte(AValue);
+  WriteUInt32BE(PByte(@Result[0]), AValue);
 end;
 
 const
@@ -136,6 +142,13 @@ end;
 destructor TSshClientTransport.Destroy;
 begin
   try Close; except end;
+  if Length(FReadAhead) > 0 then
+    FillChar(FReadAhead[0], SizeUInt(Length(FReadAhead)), 0);
+  SetLength(FReadAhead, 0);
+  FReadAheadPos := 0;
+  if Length(FReadBuf) > 0 then
+    FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
+  SetLength(FReadBuf, 0);
   FCore.Free;
   inherited Destroy;
 end;
@@ -147,6 +160,13 @@ begin
     try if FIO <> nil then FIO.Close; except end;
     FState := tstClosed;
   end;
+  if Length(FReadAhead) > 0 then
+    FillChar(FReadAhead[0], SizeUInt(Length(FReadAhead)), 0);
+  SetLength(FReadAhead, 0);
+  FReadAheadPos := 0;
+  if Length(FReadBuf) > 0 then
+    FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
+  SetLength(FReadBuf, 0);
 end;
 
 procedure TSshClientTransport.SetOverallDeadline(const ADeadline: TDeadline);
@@ -155,16 +175,10 @@ begin
   ApplyDeadlineToStream;
 end;
 
-procedure TSshClientTransport.ApplyDeadlineToStream;
-var LStream: ITcpStream;
+procedure TSshClientTransport.ApplyDeadlineToStream; inline;
 begin
-  if Supports(FIO, ITcpStream, LStream) then
-  begin
-    if not FOverallDeadline.IsInfinite then
-      LStream.SetReadDeadline(FOverallDeadline)
-    else
-      LStream.SetReadDeadline(TDeadline.Infinite);
-  end;
+  // 单缝隙：经 ssh.net.ffi 薄转发，不直连 net.intf；inline 零拷贝，外层 try-finally 释放不丢
+  SshSetReadDeadline(FIO, FOverallDeadline);
 end;
 
 procedure TSshClientTransport.CheckRekeyOrDisconnect;
@@ -190,13 +204,34 @@ end;
 
 procedure TSshClientTransport.ReadFull(var ABuf: TBytes; AOffset, ACount: SizeUInt);
 var
-  LGot: SizeUInt;
+  LGot, LFromCache: SizeUInt;
 begin
   ApplyDeadlineToStream;
   while ACount > 0 do
   begin
     if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired then
       raise ESSHError.Create(sekTimeout, 'ssh transport: read deadline exceeded');
+    // zero-copy drain read-ahead spillover from bulk ident read (single Move, no syscall)
+    if FReadAheadPos < SizeUInt(Length(FReadAhead)) then
+    begin
+      LFromCache := SizeUInt(Length(FReadAhead)) - FReadAheadPos;
+      if LFromCache > ACount then
+        LFromCache := ACount;
+      Move(FReadAhead[FReadAheadPos], ABuf[AOffset], LFromCache);
+      Inc(FReadAheadPos, LFromCache);
+      Inc(AOffset, LFromCache);
+      Dec(ACount, LFromCache);
+      if FReadAheadPos >= SizeUInt(Length(FReadAhead)) then
+      begin
+        SetLength(FReadAhead, 0);
+        FReadAheadPos := 0;
+      end;
+      if ACount = 0 then
+        Exit;
+      if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired and (ACount > 0) then
+        raise ESSHError.Create(sekTimeout, 'ssh transport: read deadline exceeded');
+      Continue;
+    end;
     LGot := FIO.Read(ABuf[AOffset], ACount);
     if LGot = 0 then
       raise ESSHError.Create(sekIO, 'ssh transport: connection closed by peer');
@@ -210,29 +245,87 @@ end;
 function TSshClientTransport.ReadLineRaw: string;
 var
   LB: TBytes;
-  LTotal: Integer;
-  LByte: Byte;
+  LTotal: SizeUInt;
+  LChunk: array[0..255] of Byte;
+  LGot: SizeUInt;
+  LPos: SizeInt;
+  LToCopy: SizeUInt;
+  LHasLF: Boolean;
 begin
-  SetLength(LB, 0);
+  LB := nil;
   LTotal := 0;
+  // bulk buffered line read - geometric BytesEnsureCapacity (bytes.ops single source, amortized O(1) vs +64 O(n²)), 256B chunk halves syscalls
   repeat
     if (not FOverallDeadline.IsInfinite) and FOverallDeadline.IsExpired then
       raise ESSHError.Create(sekTimeout, 'ssh transport: ident deadline exceeded');
-    { 按需扩容后逐字节读（ReadFull 不负责增长缓冲）}
-    if SizeUInt(LTotal) >= SizeUInt(Length(LB)) then
-      SetLength(LB, SizeUInt(Length(LB)) + 64);
-    ReadFull(LB, LTotal, 1);
-    LByte := LB[LTotal];
-    Inc(LTotal);
-    if LTotal > SSH_IDENT_MAX_LINE then
+    if FReadAheadPos < SizeUInt(Length(FReadAhead)) then
+    begin
+      LPos := SpanIndexOf(TByteSpan.Create(@FReadAhead[FReadAheadPos], SizeUInt(Length(FReadAhead)) - FReadAheadPos), 10);
+      if LPos >= 0 then
+      begin
+        LToCopy := SizeUInt(LPos) + 1;
+        LHasLF := True;
+      end
+      else
+      begin
+        LToCopy := SizeUInt(Length(FReadAhead)) - FReadAheadPos;
+        LHasLF := False;
+      end;
+      if LTotal + LToCopy > SizeUInt(Length(LB)) then
+        BytesEnsureCapacity(LB, LTotal + LToCopy);
+      Move(FReadAhead[FReadAheadPos], LB[LTotal], LToCopy);
+      Inc(LTotal, LToCopy);
+      Inc(FReadAheadPos, LToCopy);
+      if FReadAheadPos >= SizeUInt(Length(FReadAhead)) then
+      begin
+        SetLength(FReadAhead, 0);
+        FReadAheadPos := 0;
+      end;
+      if LHasLF then
+        Break;
+      if LTotal > SizeUInt(SSH_IDENT_MAX_LINE) then
+        raise ESSHError.Create(sekProtocol, 'ssh transport: ident banner too long');
+      Continue;
+    end;
+    ApplyDeadlineToStream;
+    LGot := FIO.Read(LChunk[0], SizeUInt(Length(LChunk)));
+    if LGot = 0 then
+      raise ESSHError.Create(sekIO, 'ssh transport: connection closed by peer');
+    LPos := SpanIndexOf(TByteSpan.Create(@LChunk[0], LGot), 10);
+    if LPos >= 0 then
+    begin
+      LToCopy := SizeUInt(LPos) + 1;
+      LHasLF := True;
+    end
+    else
+    begin
+      LToCopy := LGot;
+      LHasLF := False;
+    end;
+    if LTotal + LToCopy > SizeUInt(Length(LB)) then
+      BytesEnsureCapacity(LB, LTotal + LToCopy);
+    Move(LChunk[0], LB[LTotal], LToCopy);
+    Inc(LTotal, LToCopy);
+    if LTotal > SizeUInt(SSH_IDENT_MAX_LINE) then
       raise ESSHError.Create(sekProtocol, 'ssh transport: ident banner too long');
-  until LByte = 10;  { LF }
-  { 去 CR 与 LF }
+    if LHasLF then
+    begin
+      if SizeUInt(LPos) + 1 < LGot then
+      begin
+        SetLength(FReadAhead, LGot - SizeUInt(LPos) - 1);
+        FReadAheadPos := 0;
+        Move(LChunk[LPos + 1], FReadAhead[0], LGot - SizeUInt(LPos) - 1);
+      end;
+      Break;
+    end;
+  until False;
   while (LTotal > 0) and ((LB[LTotal - 1] = 13) or (LB[LTotal - 1] = 10)) do
     Dec(LTotal);
   SetLength(Result, LTotal);
   if LTotal > 0 then
-    Move(LB[0], PByte(PChar(Result))^, SizeUInt(LTotal));
+    Move(LB[0], PByte(PChar(Result))^, LTotal);
+  if Length(LB) > 0 then
+    FillChar(LB[0], SizeUInt(Length(LB)), 0);
 end;
 
 function TSshClientTransport.ExchangeVersions: string;
@@ -349,32 +442,36 @@ end;
 
 function TSshClientTransport.ReadPacket: TBytes;
 var
-  LHeader, LTrailer, LPacket: TBytes;
   LBodyLen: UInt32;
+  LTrailerSize: SizeUInt;
+  LTotal: SizeUInt;
 begin
   if FState = tstClosed then
     raise ESSHError.Create(sekIO, 'ssh transport: closed');
   try
-    SetLength(LHeader, RECV_HEADER_SIZE);
-    ReadFull(LHeader, 0, RECV_HEADER_SIZE);
-    LBodyLen := FCore.BodyLengthFromHeader(LHeader);
+    // FReadBuf 复用零拷贝：头直接读入复用缓冲，无 LHeader/LPacket 双分配与 Move；bytes.ops 单源几何扩容
+    BytesEnsureCapacity(FReadBuf, RECV_HEADER_SIZE);
+    SetLength(FReadBuf, RECV_HEADER_SIZE);
+    ReadFull(FReadBuf, 0, RECV_HEADER_SIZE);
+    LBodyLen := FCore.BodyLengthFromHeader(FReadBuf);
   if SshTransportDump <> nil then
   begin
     SshTransportDump('rseq', UInt32Bytes(FCore.RecvSeq));
-    SshTransportDump('rhdr', LHeader);
+    SshTransportDump('rhdr', Copy(FReadBuf, 0, RECV_HEADER_SIZE));
     SshTransportDump('rlen', UInt32Bytes(LBodyLen));
   end;
   if (LBodyLen < 1) or (LBodyLen > SSH_MAX_RECEIVE_PACKET) then
     raise ESSHError.Create(sekProtocol,
-      'ssh transport: unreasonable packet length ' + IntToStr(LBodyLen));
-
-    SetLength(LTrailer, FCore.TrailerSize(LBodyLen));
-    ReadFull(LTrailer, 0, SizeUInt(Length(LTrailer)));
-    SetLength(LPacket, 4 + SizeUInt(Length(LTrailer)));
-    Move(LHeader[0], LPacket[0], 4);
-    if Length(LTrailer) > 0 then
-      Move(LTrailer[0], LPacket[4], SizeUInt(Length(LTrailer)));
-    Result := FCore.DecodePacket(LPacket);
+      'ssh transport: unreasonable packet length ' + nextpas.core.text.conv.IntToStr(Int64(LBodyLen)));
+    LTrailerSize := SizeUInt(FCore.TrailerSize(LBodyLen));
+    LTotal := 4 + LTrailerSize;
+    BytesEnsureCapacity(FReadBuf, LTotal);
+    SetLength(FReadBuf, LTotal);
+    if LTrailerSize > 0 then
+      ReadFull(FReadBuf, 4, LTrailerSize);
+    Result := FCore.DecodePacket(FReadBuf);
+    if Length(FReadBuf) > 0 then
+      FillChar(FReadBuf[0], SizeUInt(Length(FReadBuf)), 0);
   except
     on E: ESSHError do
     begin

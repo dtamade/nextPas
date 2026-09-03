@@ -118,6 +118,10 @@ type
   end;
 
 function DefaultWindowOptions: TWindowOptions; inline;
+function WindowOptionsCreate(const ATitle: string; AWidth, AHeight,
+  AMinWidth, AMinHeight, AMaxWidth, AMaxHeight: Integer;
+  AResizable, AMaximized: Boolean): TWindowOptions; inline;
+procedure CheckWindowOptions(const AOptions: TWindowOptions);
 
 type
   EWindowError = class(ENextPasError)
@@ -201,6 +205,37 @@ begin
   Result.Resizable := True;
   Result.Maximized := False;
   Result.ParentHandle := nil;
+end;
+
+function WindowOptionsCreate(const ATitle: string; AWidth, AHeight,
+  AMinWidth, AMinHeight, AMaxWidth, AMaxHeight: Integer;
+  AResizable, AMaximized: Boolean): TWindowOptions; inline;
+begin
+  // perf: single source inline zero-copy field copy, owner L2 window.base — nested Size/Constraints 强类型封装（lane 收口），同 main 平坦版语义
+  Result := DefaultWindowOptions;
+  Result.Title := ATitle;
+  Result.Size := TWindowSize.Create(AWidth, AHeight);
+  Result.Constraints := TWindowConstraints.Create(AMinWidth, AMinHeight, AMaxWidth, AMaxHeight);
+  Result.Resizable := AResizable;
+  Result.Maximized := AMaximized;
+  // ParentHandle stays nil (Default), webview has-a window without embedding
+end;
+
+procedure CheckWindowOptions(const AOptions: TWindowOptions);
+begin
+  // 与 main 平坦版同语义，按嵌套 Size/Constraints 改写
+  if (AOptions.Size.Width < 0) or (AOptions.Size.Height < 0) then
+    raise EWindowInvalidState.CreateFmt('Width/Height must be >= 0 (got %d, %d)', [AOptions.Size.Width, AOptions.Size.Height]);
+  if (AOptions.Constraints.MinWidth < 0) or (AOptions.Constraints.MinHeight < 0) then
+    raise EWindowInvalidState.CreateFmt('MinWidth/MinHeight must be >= 0 (got %d, %d)', [AOptions.Constraints.MinWidth, AOptions.Constraints.MinHeight]);
+  if (AOptions.Constraints.MaxWidth < 0) or (AOptions.Constraints.MaxHeight < 0) then
+    raise EWindowInvalidState.CreateFmt('MaxWidth/MaxHeight must be >= 0 (got %d, %d)', [AOptions.Constraints.MaxWidth, AOptions.Constraints.MaxHeight]);
+  if (AOptions.Constraints.MinWidth > 0) and (AOptions.Constraints.MaxWidth > 0)
+    and (AOptions.Constraints.MaxWidth < AOptions.Constraints.MinWidth) then
+    raise EWindowInvalidState.CreateFmt('MaxWidth (%d) must be >= MinWidth (%d)', [AOptions.Constraints.MaxWidth, AOptions.Constraints.MinWidth]);
+  if (AOptions.Constraints.MinHeight > 0) and (AOptions.Constraints.MaxHeight > 0)
+    and (AOptions.Constraints.MaxHeight < AOptions.Constraints.MinHeight) then
+    raise EWindowInvalidState.CreateFmt('MaxHeight (%d) must be >= MinHeight (%d)', [AOptions.Constraints.MaxHeight, AOptions.Constraints.MinHeight]);
 end;
 
 class function TWindowScale.FromFactor(const AFactor: Double): TWindowScale; inline;

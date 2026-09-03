@@ -26,6 +26,7 @@ function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
 function ViewToUInt64(const AView: TStringView; out AValue: UInt64): Boolean; inline;
 function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean; inline;
+function UInt64DecimalDigits(const AValue: UInt64): Int32; inline;
 
 implementation
 
@@ -276,9 +277,10 @@ begin
 end;
 
 { Fixed-decimal buffer: zero-alloc, locale-independent '.'.
-  perf: single Move for integer part via IntToBuffer; direct PAnsiChar writes
-  for fractional digits; O(n) single pass, not Delete O(n²). Single source
-  text.number buffer path. }
+  perf: single Move for integer part via IntToBuffer/BytesCopy single source;
+  fractional direct PAnsiChar writes; large >=9.22e18 zero-alloc chunked
+  1e9 UInt32 path (stack-only, no Str/temp string, no ',' scan), O(n) single
+  pass, not Delete O(n²). Single source text.number buffer path via bytes.ops. }
 function FloatToFixedBuffer(const AValue: Double; const ADecimals: Int32; const ADst: PAnsiChar): Int32;
 var
   LBits: UInt64 absolute AValue;
@@ -288,8 +290,10 @@ var
   LI, LDigit, LDec: Int32;
   LIntLen, LPos: Int32;
   LBuf: array[0..20] of AnsiChar;
-  LStr: string;
-  LStart, LSrcLen, LCopy: Int32;
+  LIntDbl, LWork, LDiv, LMod: Double;
+  LChunks: array[0..39] of UInt32;
+  LChunkCount, LChunkIdx, LPad, LTmpLen: Int32;
+  LTmpBuf: array[0..20] of AnsiChar;
 begin
   if DoubleIsNaN(AValue) then
   begin
@@ -339,21 +343,70 @@ begin
   if LNeg then LAbs := -AValue else LAbs := AValue;
   if LAbs >= 9.22e18 then
   begin
-    Str(AValue:0:LDec, LStr);
-    LStart := 1;
-    LSrcLen := Length(LStr);
-    while (LStart <= LSrcLen) and (LStr[LStart] = ' ') do Inc(LStart);
-    LCopy := LSrcLen - LStart + 1;
-    if LCopy <= 0 then Exit(0);
-    Result := 0;
-    for LI := LStart to LSrcLen do
+    // perf: zero-alloc large fixed path — no Str/temp string, no ','→'.' O(n) scan,
+    // locale-independent '.' direct write; integer via 1e9 UInt32 chunks + UIntToBuffer/BytesCopy single source
+    LRound := 0.5;
+    for LI := 1 to LDec do LRound := LRound / 10;
+    LAbs := LAbs + LRound;
+    LIntDbl := Int(LAbs);
+    LFrac := LAbs - LIntDbl;
+    if LFrac < 0 then LFrac := 0 else if LFrac >= 1 then LFrac := LFrac - Int(LFrac);
+    LPos := 0;
+    if LNeg then
     begin
-      if LStr[LI] = ',' then
-        ADst[Result] := '.'
-      else
-        ADst[Result] := AnsiChar(LStr[LI]);
-      Inc(Result);
+      ADst[0] := '-';
+      LPos := 1;
     end;
+    LWork := LIntDbl;
+    LChunkCount := 0;
+    while LWork >= 1e9 do
+    begin
+      LDiv := Int(LWork / 1e9);
+      LMod := LWork - LDiv * 1e9;
+      if LMod < 0 then LMod := 0 else if LMod >= 1e9 then LMod := 0;
+      LI := Trunc(LMod + 0.5);
+      if LI < 0 then LI := 0 else if LI >= 1000000000 then
+      begin
+        LI := 0;
+        LDiv := LDiv + 1;
+      end;
+      LChunks[LChunkCount] := UInt32(LI);
+      Inc(LChunkCount);
+      LWork := LDiv;
+      if LChunkCount >= 39 then Break;
+    end;
+    LChunks[LChunkCount] := UInt32(Trunc(LWork + 0.5));
+    Inc(LChunkCount);
+    LTmpLen := UIntToBuffer(UInt64(LChunks[LChunkCount - 1]), @LTmpBuf[0]);
+    nextpas.core.bytes.ops.BytesCopy(ADst + LPos, @LTmpBuf[0], SizeUInt(LTmpLen)); // perf: inline single Move via bytes.ops single source, zero-copy
+    Inc(LPos, LTmpLen);
+    for LChunkIdx := LChunkCount - 2 downto 0 do
+    begin
+      LTmpLen := UIntToBuffer(UInt64(LChunks[LChunkIdx]), @LTmpBuf[0]);
+      LPad := 9 - LTmpLen;
+      for LI := 0 to LPad - 1 do
+      begin
+        ADst[LPos] := '0';
+        Inc(LPos);
+      end;
+      nextpas.core.bytes.ops.BytesCopy(ADst + LPos, @LTmpBuf[0], SizeUInt(LTmpLen)); // perf: inline single Move via bytes.ops single source, zero-copy
+      Inc(LPos, LTmpLen);
+    end;
+    if LDec > 0 then
+    begin
+      ADst[LPos] := '.';
+      Inc(LPos);
+      for LI := 1 to LDec do
+      begin
+        LFrac := LFrac * 10;
+        LDigit := Trunc(LFrac);
+        if LDigit < 0 then LDigit := 0 else if LDigit > 9 then LDigit := 9;
+        ADst[LPos] := AnsiChar(Ord('0') + LDigit);
+        Inc(LPos);
+        LFrac := LFrac - LDigit;
+      end;
+    end;
+    Result := LPos;
     Exit;
   end;
   LRound := 0.5;

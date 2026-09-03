@@ -68,6 +68,19 @@ uses
   nextpas.core.mem.secure,
   nextpas.core.bytes.ops;
 
+var
+  GPrime: TBytes;
+  GPrimeValid: Boolean;
+  GGen: TBytes;
+  GGenValid: Boolean;
+  // perf: cached BigNat + Montgomery (crypto.bigint single source), avoid per-KEX re-parse/recompute
+  GPrimeBN: TBigNat;
+  GPrimeBNValid: Boolean;
+  GGenBN: TBigNat;
+  GGenBNValid: Boolean;
+  GMontCtx: TMontgomeryContext;
+  GMontValid: Boolean;
+
 function SshDHGroup14Prime: TBytes;
 const
   P_HEX =
@@ -77,7 +90,7 @@ const
 var
   I: Integer;
 
-  function HexVal(C: Char): Byte;
+  function HexVal(C: Char): Byte; inline;
   begin
     case C of
       '0'..'9': Result := Ord(C) - Ord('0');
@@ -89,17 +102,68 @@ var
   end;
 
 begin
-  Result := nil;
-  SetLength(Result, Length(P_HEX) div 2);
-  for I := 0 to High(Result) do
-    Result[I] := (HexVal(P_HEX[2*I+1]) shl 4) or HexVal(P_HEX[2*I+2]);
+  // perf: cached 256-byte prime, single hex parse, zero-copy CoW share
+  if GPrimeValid then
+  begin
+    Result := GPrime;
+    Exit;
+  end;
+  SetLength(GPrime, Length(P_HEX) div 2);
+  for I := 0 to High(GPrime) do
+    GPrime[I] := (HexVal(P_HEX[2*I+1]) shl 4) or HexVal(P_HEX[2*I+2]);
+  GPrimeValid := True;
+  Result := GPrime;
 end;
 
 function SshDHGroup14Generator: TBytes;
 begin
-  Result := nil;
-  SetLength(Result, 1);
-  Result[0] := 2;
+  // perf: single-byte g=2 cached, zero-copy CoW share
+  if GGenValid then
+  begin
+    Result := GGen;
+    Exit;
+  end;
+  SetLength(GGen, 1);
+  GGen[0] := 2;
+  GGenValid := True;
+  Result := GGen;
+end;
+
+function SshDHGroup14PrimeBN: TBigNat;
+begin
+  // perf: cached BigNat (crypto.bigint single source), avoid per-KEX BigNatFromUnsignedBytes
+  if GPrimeBNValid then
+    Exit(GPrimeBN);
+  GPrimeBN := BigNatFromUnsignedBytes(SshDHGroup14Prime);
+  GPrimeBNValid := True;
+  Result := GPrimeBN;
+end;
+
+function SshDHGroup14GeneratorBN: TBigNat;
+begin
+  // perf: cached g=2 BigNat (single source)
+  if GGenBNValid then
+    Exit(GGenBN);
+  GGenBN := BigNatFromUnsignedBytes(SshDHGroup14Generator);
+  GGenBNValid := True;
+  Result := GGenBN;
+end;
+
+function TrySshDHGroup14MontCtx(out ACtx: TMontgomeryContext; out AError: string): Boolean;
+begin
+  // perf: cached Montgomery (R/R2/N' ~50ms init) reused per KEX, crypto.bigint single source
+  if GMontValid then
+  begin
+    ACtx := GMontCtx;
+    AError := '';
+    Result := True;
+    Exit;
+  end;
+  if not TryGetMontgomeryContext(SshDHGroup14Prime, ACtx, AError) then
+    Exit(False);
+  GMontCtx := ACtx;
+  GMontValid := True;
+  Result := True;
 end;
 
 function SshBuildDHGroup14HashInput(const AVc, AVs: string;
@@ -135,17 +199,26 @@ constructor TSshKexDHGroup14.Create;
 var
   LPub: TBytes;
   LErr: string;
+  LMont: TMontgomeryContext;
 begin
   inherited Create;
   FPrime := SshDHGroup14Prime;
   FGenerator := SshDHGroup14Generator;
+  // warm caches: PrimeBN/GenBN/MontCtx single source, no per-KEX recompute
+  SshDHGroup14PrimeBN;
+  SshDHGroup14GeneratorBN;
   FPriv := GenerateSecureRandomBytes(32);
   if (Length(FPriv) = 0) or IsZeroBytes(FPriv) then
   begin
     FPriv[0] := $7F;
     FPriv[High(FPriv)] := $01;
   end;
-  if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
+  if TrySshDHGroup14MontCtx(LMont, LErr) then
+  begin
+    if not TryBigIntModExpWithMont(FGenerator, FPriv, LMont, LPub, LErr) then
+      raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
+  end
+  else if not TryBigIntModExpFromUnsignedBytes(FGenerator, FPriv, FPrime, LPub, LErr) then
     raise ESSHError.Create(sekCrypto, 'ssh kex dh group14: pub compute failed: ' + LErr);
   FPub := LPub;
 end;
@@ -190,7 +263,9 @@ function TSshKexDHGroup14.ProcessReplyNamed(const APayload: TBytes;
 var
   LR: TsshReader;
   LServerF, LShared, LHashInput: TBytes;
+  LPrime, LGen: TBytes;
   LErr: string;
+  LMont: TMontgomeryContext;
 begin
   LR := TsshReader.Create(APayload);
   try
@@ -205,17 +280,27 @@ begin
 
   if Length(LServerF) = 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f empty');
-  if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Generator) <= 0)
-    or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, SshDHGroup14Prime) >= 0) then
+  // perf: single fetch cached prime/gen/BigNat/MontCtx, zero-copy CoW, bytes.ops+bigint single source
+  LGen := SshDHGroup14Generator;
+  LPrime := SshDHGroup14Prime;
+  SshDHGroup14PrimeBN;
+  SshDHGroup14GeneratorBN;
+  if (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LGen) <= 0)
+    or (nextpas.core.bytes.ops.CompareUnsigned(LServerF, LPrime) >= 0) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f out of range');
   if IsZeroBytes(LServerF) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: server f all zero');
 
-  if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, SshDHGroup14Prime, LShared, LErr) then
+  if TrySshDHGroup14MontCtx(LMont, LErr) then
+  begin
+    if not TryBigIntModExpWithMont(LServerF, FPriv, LMont, LShared, LErr) then
+      raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
+  end
+  else if not TryBigIntModExpFromUnsignedBytes(LServerF, FPriv, LPrime, LShared, LErr) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: dh shared compute failed: ' + LErr);
   if IsZeroBytes(LShared) then
     raise ESSHError.Create(sekProtocol, 'ssh kex: all-zero shared secret rejected');
-  if nextpas.core.bytes.ops.CompareUnsigned(LShared, SshDHGroup14Prime) >= 0 then
+  if nextpas.core.bytes.ops.CompareUnsigned(LShared, LPrime) >= 0 then
     raise ESSHError.Create(sekProtocol, 'ssh kex: shared secret out of range');
 
   Result.SharedSecret := LShared;
@@ -223,5 +308,23 @@ begin
     Result.ServerHostKeyBlob, FPub, LServerF, LShared);
   Result.ExchangeHashH := SHA256(LHashInput);
 end;
+
+initialization
+  GPrimeValid := False;
+  GGenValid := False;
+  GPrimeBNValid := False;
+  GGenBNValid := False;
+  GMontValid := False;
+
+finalization
+  GPrime := nil;
+  GGen := nil;
+  GPrimeBN := nil;
+  GGenBN := nil;
+  GMontCtx.Modulus := nil;
+  GMontCtx.One := nil;
+  GMontCtx.RModN := nil;
+  GMontCtx.R2ModN := nil;
+  GMontValid := False;
 
 end.

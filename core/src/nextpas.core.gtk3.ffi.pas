@@ -61,6 +61,9 @@ type
   TGtkWidgetGetAllocatedWidthFunc = function(AWidget: Pointer): gint; cdecl;
   TGtkWidgetGetAllocatedHeightFunc = function(AWidget: Pointer): gint; cdecl;
   TGdkWindowGetStateFunc = function(AWindow: Pointer): guint; cdecl;
+  TGtkContainerAddProc = procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
+  TGtkContainerRemoveProc = procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
+  TGtkWidgetShowProc = procedure(AWidget: Pointer); cdecl;
   TGtkMainProc = procedure; cdecl;
   TGtkMainQuitProc = procedure; cdecl;
   TGtkMainIterationDoFunc = function(ABlocking: gboolean): gboolean; cdecl;
@@ -101,7 +104,9 @@ var
   gtk_widget_get_allocated_width: TGtkWidgetGetAllocatedWidthFunc;
   gtk_widget_get_allocated_height: TGtkWidgetGetAllocatedHeightFunc;
   gdk_window_get_state: TGdkWindowGetStateFunc;
-  gtk_main: TGtkMainProc;
+  gtk_container_add: TGtkContainerAddProc;
+  gtk_container_remove: TGtkContainerRemoveProc;
+  gtk_widget_show: TGtkWidgetShowProc;
   gtk_main_quit: TGtkMainQuitProc;
   gtk_main_iteration_do: TGtkMainIterationDoFunc;
   gtk_events_pending: TGtkEventsPendingFunc;

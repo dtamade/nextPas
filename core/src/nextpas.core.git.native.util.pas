@@ -7,8 +7,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.git.native.base,
-  nextpas.core.git.native.repo,
-  nextpas.core.git.native.objmodel;
+  nextpas.core.git.native.repo;
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
 // shared string helpers (single source for Trim/EndsWith/SplitLines/StripCR)
@@ -17,21 +16,23 @@ function GitEndsWith(const S, Suffix: string): Boolean; inline;
 function GitSplitLines(const S: string): TStringArray; inline;
 function GitStripCR(const S: string): string; inline;
 function GitWorktreeDir(const AGitDir: string): string; inline;
-function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
+function GitTwoDigits(AValue: Integer): string; inline;
+function GitFormatTz(AOffsetMin: Integer): string; inline;
 
 implementation
 
 uses
   nextpas.core.exception,
-  nextpas.core.text.utils;
+  nextpas.core.text.utils,
+  nextpas.core.git.native.objmodel,
+  nextpas.core.git.native.common;
 
 function GitIsZeroOid(const AOid: TGitOid): Boolean; inline;
-var I: Integer;
 begin
-  for I := 0 to GitOidRawLen - 1 do
-    if AOid.Bytes[I] <> 0 then Exit(False);
-  Result := True;
+  // single source via base.GitOidIsZero -> bytes.ops IsZeroBytes (zero-copy TByteSpan, inline), base owns primitive (common delegates to base)
+  Result := nextpas.core.git.native.common.GitOidIsZero(AOid);
 end;
 
 function GitTrimSpaces(const S: string): string; inline;
@@ -91,34 +92,37 @@ begin
     Result := AGitDir;
 end;
 
-function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean;
-var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer;
+function GitFindBlobInTree(ARepo: TNativeRepository; const ATreeOid: TGitOid; const AName: string; out AOid: TGitOid): Boolean; inline;
 begin
-  Result := False;
-  if GitIsZeroOid(ATreeOid) then Exit;
-  Data := ARepo.ReadObject(ATreeOid, Kind);
-  if Kind <> gokTree then Exit;
-  Entries := GitParseTree(Data);
-  for I := 0 to High(Entries) do
-    if Entries[I].Name = AName then
-    begin AOid := Entries[I].Oid; Result := True; Exit; end;
+  Result := nextpas.core.git.native.common.GitFindBlobInTree(ARepo, ATreeOid, AName, AOid);
 end;
 
-function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid;
-var Kind: TGitObjectKind; Data: TBytes; CInfo: TGitCommitInfo; TInfo: TGitTagInfo; Depth: Integer;
+function GitPeelToTree(ARepo: TNativeRepository; AOid: TGitOid): TGitOid; inline;
 begin
-  Result := AOid; Depth := 0;
-  while Depth < 16 do
+  Result := nextpas.core.git.native.common.GitPeelToTree(ARepo, AOid);
+end;
+
+function GitTwoDigits(AValue: Integer): string; inline;
+begin
+  if AValue < 10 then
+    Result := '0' + IntToStr(AValue)
+  else
+    Result := IntToStr(AValue);
+end;
+
+function GitFormatTz(AOffsetMin: Integer): string; inline;
+var
+  LSign: Char;
+  LAbs: Integer;
+begin
+  LSign := '+';
+  LAbs := AOffsetMin;
+  if LAbs < 0 then
   begin
-    Data := ARepo.ReadObject(Result, Kind);
-    case Kind of
-      gokCommit: begin CInfo := GitParseCommit(Data); Result := CInfo.Tree; Exit; end;
-      gokTree: Exit;
-      gokTag: begin TInfo := GitParseTag(Data); Result := TInfo.Target; Inc(Depth); end;
-    else raise EGitError.CreateFmt('object %s is not a tree/commit/tag', [GitOidToHex(AOid)]);
-    end;
+    LSign := '-';
+    LAbs := -LAbs;
   end;
-  raise EGitError.Create('tag peel too deep');
+  Result := LSign + GitTwoDigits(LAbs div 60) + GitTwoDigits(LAbs mod 60);
 end;
 
 end.

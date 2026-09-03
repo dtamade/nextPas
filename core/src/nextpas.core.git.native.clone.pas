@@ -32,6 +32,7 @@ function GitCloneHead(const ARemoteGitDir, ALocalWorkTree: string): string; inli
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.process,
   nextpas.core.text.conv,
@@ -110,7 +111,7 @@ begin
   Out_ := Run('git', ['upload-pack', '--advertise-refs', ARemoteGitDir]);
   if not ProcessSucceeded(Out_) then
     raise EGitError.CreateFmt('advertise failed (%d): %s', [Out_.ExitCode, Trim(Out_.StdErr + Out_.StdOut)]);
-  Raw := GitStringToBytes(Out_.StdOut);
+  Raw := StringToBytes(Out_.StdOut);
   Result := GitParseAdvertise(Raw);
   if Length(Result.Refs) = 0 then
     raise EGitError.CreateFmt('ls-remote: no refs advertised from %s', [ARemoteGitDir]);

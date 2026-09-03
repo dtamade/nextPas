@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.text*.pas`
 **层级**：L1（依赖 L0: base, exception 等）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-08-31
-**版本**：1.5
+**最后更新**：2026-09-02
+**版本**：1.6
 
 ---
 
@@ -26,7 +26,8 @@ text.escape        ← C/JSON/HTML 转义/反转义
 text.grapheme      ← Grapheme 宽度门面（边界委托 unicode.segment）
 text.width         ← 显示宽度计算（EastAsianWidth）
 text.number        ← 高性能数字→字符串（Ryu 算法）
-text.scan          ← 字符串扫描/解析
+text.scan          ← 字符串扫描/解析（新增 ScanPredicateTable 通用谓词+字面量 VecWidth 表驱动单源，零拷贝 via bytes.ops/simd.vec，js.eval/json 共享复用，L1 single source）
+text.wildmatch     ← 通配引擎 owner（`* ? ** []` 含转义/字符类，零 SysUtils，bytes.ops 单源，inline 零拷贝，git/fs/http/tui 共用；原 `git.native.wildmatch` 薄 shim 已移除，单源直连本 owner）
 text.unicode       ← Unicode 门面（属性/case/normalize/segment/collate…）
   ├── types / base / utils
   ├── props          ← GC / BinaryProperty / GCB / InCB
@@ -59,6 +60,7 @@ text.pas           ← UTF-8 日常门面（re-export 常用符号）
 | 比较 | TextEqual, TextEqualCanonical, TextEqualCaseFold | 语义比较 |
 | 宽度 | StringDisplayWidth, CodepointWidth | 终端列宽 |
 | Grapheme | GraphemeNext | 边界 + 宽度（边界=UAX#29 真源） |
+| 通配 | WildSegment, WildSegmentRange, WildSegmentsMatch | `* ? ** []` 通配（text.wildmatch 单源，git/fs/http/tui 共用） |
 | Unicode | NFC/NFD, HasBinaryProperty, Segment*… | 见 unicode 门面 |
 
 ### 1.4 Grapheme 真源
@@ -158,3 +160,5 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 | 2026-07-19 | 1.1 | Conformance + grapheme 真源 + GB9c；测试表与子模块清单对齐 live |
 | 2026-07-01 | 1.0 | 初始版本 |
 | 2026-08-31 | 1.5 | 时效刷新：批量校正至 2026-08-31，统一 AL1 口径 | core-docs |
+| 2026-09-02 | 1.6 | wildmatch 下沉：`text.wildmatch` 为 L1 通配 owner（`* ? ** []` 单源，bytes.ops + inline 零拷贝），`git.native.wildmatch` 薄委派 |
+| 2026-09-02 | 1.6.1 | wildmatch 收敛：`git.native.wildmatch` 残余薄 shim 已移除（`git.native.ignore/attributes` 直连 `text.wildmatch` 单源 inline 零拷贝 via `bytes.ops`），原 shim 单元已删除，文档与 bench 已同步 |

@@ -48,6 +48,11 @@ fake 后端已完整走协议栈，gtk/webview2/wk 后端按波次接入同一�
 - bridge script 文本作为常量存放于 `webview.bridge`（`NPW_BRIDGE_SCRIPT`），
   版本常量 `NPW_BRIDGE_VERSION = 1`。
 
+**生成源与校验门（hygiene 零产物口径显式标注）**
+- 单一真值：`core/src/nextpas.core.webview.bridge.js`；生成物：`core/src/nextpas.core.webview.bridge.script.inc`（Pascal 转义，已跟踪提交，意向生成源而非构建产物，`scripts/build-hygiene-check.sh` 仅拦截 `.o/.ppu/.a/.exe/link*.res` 等二进制产物，不视其为违规）。
+- 再生成：单引号 `'` → `''` 转义，每行包为 `'...' + '#10 +'`（末行无 ` +`），与 `core/src/nextpas.core.webview.bridge.pas:180 {$I nextpas.core.webview.bridge.script.inc}` 对齐，头部含 `AUTO-GENERATED`/`Source:`/`Regenerate:`/`Verify:`/`Hygiene:` 显式标注。
+- 校验门：`bash core/tests/nextpas.core.webview/contracts/check_webview_contracts.sh` 会以 `core/src/nextpas.core.webview.bridge.js` 重生成临时体并 `diff -u` 对比 `.script.inc` 正文（body 行以 `'` 起始），并断言头部含 `AUTO-GENERATED`，与 `design-conventions.md §1` 的 generated vs hand-written 纪律同源。
+
 ### 2.1 JS 面（公开给前端代码）
 
 ```js

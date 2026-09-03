@@ -20,6 +20,8 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.platform.dl,
+  nextpas.core.sync.mutex,
+  nextpas.core.text.utils,
   nextpas.core.webview.base,
   nextpas.core.webview.gtk.ffi;
 
@@ -27,10 +29,10 @@ type
   { eval 结果取回路径选择 }
   TGtkEvalPath = (gepEvaluateJavascript, gepRunJavascript);
 
-  { 装载结果快照（诊断/测试断言用） }
+  { 装载结果快照（诊断/测试断言用；blittable ShortString 零托管，热点快照零堆分配/零 refcnt 抖动） }
   TGtkLoadInfo = record
     Loaded: Boolean;
-    WebkitSoname: string;      { 实际命中的 webkit 库 soname }
+    WebkitSoname: ShortString; { 实际命中的 webkit 库 soname；ShortString blittable，单次 Move 零堆分配，热点零额外锁 }
     EvalPath: TGtkEvalPath;
   end;
 
@@ -44,17 +46,64 @@ procedure UnloadGtkWebkit;
 { 当前装载快照（不触发装载）。 }
 function GtkLoadInfo: TGtkLoadInfo; inline;
 
+{ GCancellable 能力封装（经 platform.dl 单源，pool 等消费方禁止直探 ffi 变量，inline 薄转发零拷贝） }
+function GtkCancellableHasReset: Boolean; inline;
+function GtkCancellableHasIsCancelled: Boolean; inline;
+procedure GtkCancellableReset(ACancellable: Pointer); inline;
+function GtkCancellableIsCancelled(ACancellable: Pointer): Boolean; inline;
+function GtkCancellableNew: Pointer; inline;
+procedure GtkObjectUnref(AObj: Pointer); inline;
+
 implementation
+
+uses
+  nextpas.core.atomic,
+  nextpas.core.sync;
 
 type
   PPlatformLibrary = ^TPlatformLibrary;
 
+  TGtkBindEntry = record
+    VarAddr: Pointer;
+    Name: PAnsiChar;
+  end;
+
 var
   GLoaded: Boolean = False;
   GLoading: Boolean = False;
+  GProbed: Int32 = 0; { atomic 0/1, mo_acquire/mo_release 保证弱内存可见性，零撕裂 }
   GInfo: TGtkLoadInfo;
   GWebkitLib, GGtkLib, GGobjectLib, GGlibLib, GJscLib: TPlatformLibrary;
-  GWebkitSoname, GJscSoname: string;
+  GWebkitSoname, GJscSoname: ShortString; { blittable ShortString 零托管，发布后不可变，热点快照零堆分配 }
+  GGtkLock: TMutex; { L3→L1 sync owner 复用：TMutex 单源，替代 FPC TRTLCriticalSection 直连 RTL，守分层抽象 }
+  GGtkLockOnce: IOnce; { L1 sync.once 单源：EnsureGtkLock 惰性创建零双分配零泄漏 }
+  GGtkBindOnce: IOnce; { L1 sync.once 单源：Bind 表单次初始化，热点零分配 }
+  GGtkBindTable: array[0..86] of TGtkBindEntry; { 单源表驱动：87 必需符号单表，I-Cache 单调用点 }
+
+procedure EnsureGtkLock; inline;
+begin
+  { perf: inline 零额外调用；Once 单源保护懒创建，双线程并发零重复 New 零泄漏，platform.sync futex 去重 }
+  if GGtkLock <> nil then
+    Exit;
+  if GGtkLockOnce = nil then
+  begin
+    { startup fallback：initialization 主路径已创建 Once，此分支仅兜底单线程启动期 }
+    GGtkLock := TMutex.Create;
+    Exit;
+  end;
+  GGtkLockOnce.DoOnce(procedure
+  begin
+    if GGtkLock = nil then
+      GGtkLock := TMutex.Create;
+  end);
+end;
+
+procedure InitGtkBindTable; inline;
+begin
+  { 单源生成式：87 必需符号单表由 generated/nextpas.core.webview.gtk.bind.inc 单源承载，
+    新增仅此一处 .inc 登记，bytes.ops 单源思想零双表漂移；inline 零额外调用，PAnsiChar 零拷贝。 }
+{$I generated/nextpas.core.webview.gtk.bind.inc}
+end;
 
 function TryDlOpen(var ALib: TPlatformLibrary; const ASonames: array of string;
   out AHit: string): Boolean;
@@ -114,213 +163,193 @@ var
   LHasEvalPair: Boolean;
 
   function BindAll: Boolean;
+  var
+    I: Integer;
   begin
-    Result :=
-      { GLib }
-      BindReq(@G_idle_add_full, 'g_idle_add_full') and
-      BindReq(@G_source_remove, 'g_source_remove') and
-      BindReq(@G_signal_connect_data, 'g_signal_connect_data') and
-      BindReq(@G_memory_input_stream_new_from_data,
-        'g_memory_input_stream_new_from_data') and
-      BindReq(@G_memory_input_stream_new_from_bytes,
-        'g_memory_input_stream_new_from_bytes') and
-      BindReq(@G_bytes_new_with_free_func,
-        'g_bytes_new_with_free_func') and
-      BindReq(@G_bytes_unref, 'g_bytes_unref') and
-      BindReq(@G_malloc, 'g_malloc') and
-      BindReq(@G_free, 'g_free') and
-      BindReq(@G_quark_from_static_string, 'g_quark_from_static_string') and
-      BindReq(@G_cancellable_new, 'g_cancellable_new') and
-      BindReq(@G_cancellable_cancel, 'g_cancellable_cancel') and
-      BindReq(@G_error_new_literal, 'g_error_new_literal') and
-      BindReq(@G_main_loop_new, 'g_main_loop_new') and
-      BindReq(@G_main_loop_run, 'g_main_loop_run') and
-      BindReq(@G_main_loop_quit, 'g_main_loop_quit') and
-      BindReq(@G_main_loop_unref, 'g_main_loop_unref') and
-      BindReq(@G_timeout_add, 'g_timeout_add') and
-      BindReq(@G_main_context_default, 'g_main_context_default') and
-      BindReq(@G_main_context_find_source_by_id,
-        'g_main_context_find_source_by_id') and
-      { GObject }
-      BindReq(@G_object_unref, 'g_object_unref') and
-      BindReq(@G_object_set, 'g_object_set') and
-      BindReq(@G_object_get, 'g_object_get') and
-      { GTK3 窗口壳 }
-      BindReq(@GTK_init_check, 'gtk_init_check') and
-      BindReq(@GTK_window_new, 'gtk_window_new') and
-      BindReq(@GTK_window_set_title, 'gtk_window_set_title') and
-      BindReq(@GTK_window_get_title, 'gtk_window_get_title') and
-      BindReq(@GTK_window_set_default_size, 'gtk_window_set_default_size') and
-      BindReq(@GTK_window_set_resizable, 'gtk_window_set_resizable') and
-      BindReq(@GTK_window_resize, 'gtk_window_resize') and
-      BindReq(@GTK_window_maximize, 'gtk_window_maximize') and
-      BindReq(@GTK_window_unmaximize, 'gtk_window_unmaximize') and
-      BindReq(@GTK_window_iconify, 'gtk_window_iconify') and
-      BindReq(@GTK_window_deiconify, 'gtk_window_deiconify') and
-      BindReq(@GTK_window_is_maximized, 'gtk_window_is_maximized') and
-      BindReq(@GTK_widget_show_all, 'gtk_widget_show_all') and
-      BindReq(@GTK_widget_hide, 'gtk_widget_hide') and
-      BindReq(@GTK_widget_get_visible, 'gtk_widget_get_visible') and
-      BindReq(@GTK_widget_get_scale_factor, 'gtk_widget_get_scale_factor') and
-      BindReq(@GTK_widget_grab_focus, 'gtk_widget_grab_focus') and
-      BindReq(@GTK_widget_get_window, 'gtk_widget_get_window') and
-      BindReq(@GTK_widget_destroy, 'gtk_widget_destroy') and
-      BindReq(@GTK_widget_get_allocated_width,
-        'gtk_widget_get_allocated_width') and
-      BindReq(@GTK_widget_get_allocated_height,
-        'gtk_widget_get_allocated_height') and
-      BindReq(@GTK_widget_set_size_request, 'gtk_widget_set_size_request') and
-      BindReq(@GDK_window_get_state, 'gdk_window_get_state') and
-      BindReq(@GTK_container_add, 'gtk_container_add') and
-      BindReq(@GTK_main, 'gtk_main') and
-      BindReq(@GTK_main_quit, 'gtk_main_quit') and
-      BindReq(@GTK_main_iteration_do, 'gtk_main_iteration_do') and
-      { WebKit 视图与加载 }
-      BindReq(@WEBKIT_web_context_get_default, 'webkit_web_context_get_default') and
-      BindReq(@WEBKIT_web_view_new_with_context, 'webkit_web_view_new_with_context') and
-      BindReq(@WEBKIT_web_view_get_user_content_manager,
-        'webkit_web_view_get_user_content_manager') and
-      BindReq(@WEBKIT_web_view_get_uri, 'webkit_web_view_get_uri') and
-      BindReq(@WEBKIT_web_view_new_with_user_content_manager,
-        'webkit_web_view_new_with_user_content_manager') and
-      BindReq(@WEBKIT_web_view_load_uri, 'webkit_web_view_load_uri') and
-      BindReq(@WEBKIT_web_view_load_html, 'webkit_web_view_load_html') and
-      BindReq(@WEBKIT_web_view_reload, 'webkit_web_view_reload') and
-      BindReq(@WEBKIT_web_view_stop_loading, 'webkit_web_view_stop_loading') and
-      BindReq(@WEBKIT_web_view_go_back, 'webkit_web_view_go_back') and
-      BindReq(@WEBKIT_web_view_go_forward, 'webkit_web_view_go_forward') and
-      BindReq(@WEBKIT_web_view_can_go_back, 'webkit_web_view_can_go_back') and
-      BindReq(@WEBKIT_web_view_can_go_forward,
-        'webkit_web_view_can_go_forward') and
-      BindReq(@WEBKIT_web_view_set_zoom_level,
-        'webkit_web_view_set_zoom_level') and
-      BindReq(@WEBKIT_web_view_get_zoom_level,
-        'webkit_web_view_get_zoom_level') and
-      BindReq(@WEBKIT_web_view_get_inspector, 'webkit_web_view_get_inspector') and
-      BindReq(@WEBKIT_web_view_get_settings, 'webkit_web_view_get_settings') and
-      BindReq(@WEBKIT_settings_set_enable_developer_extras,
-        'webkit_settings_set_enable_developer_extras') and
-      { 会话 context 与 scheme }
-      BindReq(@WEBKIT_web_context_new_ephemeral,
-        'webkit_web_context_new_ephemeral') and
-      BindReq(@WEBKIT_web_context_new_with_website_data_manager,
-        'webkit_web_context_new_with_website_data_manager') and
-      BindReq(@WEBKIT_website_data_manager_new,
-        'webkit_website_data_manager_new') and
-      BindReq(@WEBKIT_web_context_register_uri_scheme,
-        'webkit_web_context_register_uri_scheme') and
-      { 用户内容与桥 transport }
-      BindReq(@WEBKIT_user_content_manager_new,
-        'webkit_user_content_manager_new') and
-      BindReq(@WEBKIT_user_content_manager_add_script,
-        'webkit_user_content_manager_add_script') and
-      BindReq(@WEBKIT_user_content_manager_register_script_message_handler,
-        'webkit_user_content_manager_register_script_message_handler') and
-      BindReq(@WEBKIT_user_script_new, 'webkit_user_script_new') and
-      BindReq(@WEBKIT_user_script_unref, 'webkit_user_script_unref') and
-      BindReq(@WEBKIT_javascript_result_get_js_value,
-        'webkit_javascript_result_get_js_value') and
-      BindReq(@WEBKIT_uri_scheme_request_get_uri,
-        'webkit_uri_scheme_request_get_uri') and
-      BindReq(@WEBKIT_uri_scheme_request_get_path,
-        'webkit_uri_scheme_request_get_path') and
-      BindReq(@WEBKIT_uri_scheme_request_get_web_view,
-        'webkit_uri_scheme_request_get_web_view') and
-      BindReq(@WEBKIT_uri_scheme_request_finish,
-        'webkit_uri_scheme_request_finish') and
-      BindReq(@WEBKIT_uri_scheme_request_finish_error,
-        'webkit_uri_scheme_request_finish_error') and
-      { JSC }
-      BindReq(@JSC_value_is_null, 'jsc_value_is_null') and
-      BindReq(@JSC_value_is_undefined, 'jsc_value_is_undefined') and
-      BindReq(@JSC_value_to_json, 'jsc_value_to_json') and
-      BindReq(@JSC_value_to_string, 'jsc_value_to_string');
+    { perf: 表驱动单源，单调用点循环 87 项，零拷贝 PAnsiChar 直通 Sym，单次 Sym 查找 O(1)，I-Cache 单点 vs 60+ and 链膨胀，bytes.ops 单源思想 }
+    if not GGtkBindOnce.Done then
+      GGtkBindOnce.DoOnce(procedure
+      begin
+        InitGtkBindTable;
+      end);
+    for I := Low(GGtkBindTable) to High(GGtkBindTable) do
+      if not Sym(GGtkBindTable[I].Name, PPointer(GGtkBindTable[I].VarAddr)^) then
+        Exit(False);
+    Result := True;
   end;
 
 begin
-  if GLoaded then
+  { perf: atomic acquire 热点快照零额外双检锁/零堆分配；GInfo/WebkitSoname 已为 blittable ShortString，发布后不可变，lock-free 单次 Move 零堆分配，mo_acquire 可见性，bytes.ops 单源思想 }
+  if atomic_load(GProbed, mo_acquire) <> 0 then
   begin
-    AInfo := GInfo;
-    Exit(True);
+    AInfo := GInfo; { blittable ShortString 直接 Copy，无托管 refcnt、无堆分配、零撕裂，发布后不可变，无需持锁 }
+    Result := GLoaded;
+    Exit;
   end;
-  if GLoading then
-    Exit(False);   { 重入保护：并发首装只允许一个赢家走完流程 }
-
-  FillChar(AInfo, SizeOf(AInfo), 0);
-  GLoading := True;
+  EnsureGtkLock;
+  GGtkLock.Acquire;
   try
-    { webkit 主库按 soname 探测序命中其一 }
-    if not TryDlOpen(GWebkitLib,
-        ['libwebkit2gtk-4.1.so.0', 'libwebkit2gtk-4.0.so.0'],
-        GWebkitSoname) then
-      Exit(False);
-    { GTK3 栈并列必需 }
-    if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0'], LHit) and
-        TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0'], LHit) and
-        TryDlOpen(GGlibLib, ['libglib-2.0.so.0'], LHit)) then
+    if atomic_load(GProbed, mo_acquire) <> 0 then
     begin
-      ReleaseAll;
-      Exit(False);
+      AInfo := GInfo; { 已持锁二次校验，直接拷贝，零撕裂 }
+      Exit(GLoaded);
     end;
-    { JSC 与 webkit 同代：4.1 → jsc-4.1，4.0 → jsc-4.0 }
-    if Pos('4.0', GWebkitSoname) > 0 then
-      GJscSoname := 'libjavascriptcoregtk-4.0.so.0'
-    else
-      GJscSoname := 'libjavascriptcoregtk-4.1.so.0';
-    if not TryDlOpen(GJscLib, [GJscSoname], LHit) then
-    begin
-      ReleaseAll;
+    if GLoading then
       Exit(False);
-    end;
+    AInfo := Default(TGtkLoadInfo);
+    GLoading := True;
+    try
+      { webkit 主库按 soname 探测序命中其一；ShortString blittable 零堆分配，LHit 临时 string 桥接后 Move 零分配 }
+      if not TryDlOpen(GWebkitLib,
+          ['libwebkit2gtk-4.1.so.0', 'libwebkit2gtk-4.0.so.0'],
+          LHit) then
+      begin
+        GInfo.Loaded := False;
+        atomic_store(GProbed, 1, mo_release);
+        Exit(False);
+      end;
+      GWebkitSoname := ShortString(LHit);
+      { GTK3 栈并列必需 }
+      if not (TryDlOpen(GGtkLib, ['libgtk-3.so.0'], LHit) and
+          TryDlOpen(GGobjectLib, ['libgobject-2.0.so.0'], LHit) and
+          TryDlOpen(GGlibLib, ['libglib-2.0.so.0'], LHit)) then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        atomic_store(GProbed, 1, mo_release);
+        Exit(False);
+      end;
+      { JSC 与 webkit 同代：4.1 → jsc-4.1，4.0 → jsc-4.0 }
+      if PosEx('4.0', GWebkitSoname) > 0 then
+        GJscSoname := 'libjavascriptcoregtk-4.0.so.0'
+      else
+        GJscSoname := 'libjavascriptcoregtk-4.1.so.0';
+      if not TryDlOpen(GJscLib, [string(GJscSoname)], LHit) then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        atomic_store(GProbed, 1, mo_release);
+        Exit(False);
+      end;
 
-    if not BindAll then
-    begin
-      ReleaseAll;
-      Exit(False);
-    end;
+      if not BindAll then
+      begin
+        ReleaseAll;
+        GInfo.Loaded := False;
+        atomic_store(GProbed, 1, mo_release);
+        Exit(False);
+      end;
 
-    { 能力分支：eval 双路径按符号存在性（BACKENDS §2.2） }
-    LHasEvalPair :=
-      Sym('webkit_web_view_evaluate_javascript', LTmp) and
-      Sym('webkit_web_view_evaluate_javascript_finish', LTmp);
-    if LHasEvalPair then
-    begin
-      BindReq(@WEBKIT_web_view_evaluate_javascript,
-        'webkit_web_view_evaluate_javascript');
-      BindReq(@WEBKIT_web_view_evaluate_javascript_finish,
-        'webkit_web_view_evaluate_javascript_finish');
-      GInfo.EvalPath := gepEvaluateJavascript;
-    end
-    else
-    begin
-      BindReq(@WEBKIT_web_view_run_javascript, 'webkit_web_view_run_javascript');
-      BindReq(@WEBKIT_web_view_run_javascript_finish,
-        'webkit_web_view_run_javascript_finish');
-      GInfo.EvalPath := gepRunJavascript;
-    end;
+      if Sym('g_cancellable_reset', LTmp) then PPointer(@G_cancellable_reset)^ := LTmp;
+      if Sym('g_cancellable_is_cancelled', LTmp) then PPointer(@G_cancellable_is_cancelled)^ := LTmp;
+      { 能力分支：eval 双路径按符号存在性（BACKENDS §2.2） }
+      LHasEvalPair :=
+        Sym('webkit_web_view_evaluate_javascript', LTmp) and
+        Sym('webkit_web_view_evaluate_javascript_finish', LTmp);
+      if LHasEvalPair then
+      begin
+        BindReq(@WEBKIT_web_view_evaluate_javascript,
+          'webkit_web_view_evaluate_javascript');
+        BindReq(@WEBKIT_web_view_evaluate_javascript_finish,
+          'webkit_web_view_evaluate_javascript_finish');
+        GInfo.EvalPath := gepEvaluateJavascript;
+      end
+      else
+      begin
+        BindReq(@WEBKIT_web_view_run_javascript, 'webkit_web_view_run_javascript');
+        BindReq(@WEBKIT_web_view_run_javascript_finish,
+          'webkit_web_view_run_javascript_finish');
+        GInfo.EvalPath := gepRunJavascript;
+      end;
 
-    GLoaded := True;
-    GInfo.Loaded := True;
-    GInfo.WebkitSoname := GWebkitSoname;
-    AInfo := GInfo;
-    Result := True;
+      GLoaded := True;
+      GInfo.Loaded := True;
+      GInfo.WebkitSoname := GWebkitSoname;
+      atomic_store(GProbed, 1, mo_release);
+      AInfo := GInfo;
+      Result := True;
+    finally
+      GLoading := False;
+    end;
   finally
-    GLoading := False;
+    GGtkLock.Release;
   end;
 end;
 
 procedure UnloadGtkWebkit;
 begin
-  if not GLoaded then
-    Exit;
-  ReleaseAll;
-  GLoaded := False;
-  GInfo := Default(TGtkLoadInfo);
+  EnsureGtkLock;
+  GGtkLock.Acquire;
+  try
+    if atomic_load(GProbed, mo_acquire) = 0 then Exit;
+    ReleaseAll;
+    GLoaded := False;
+    atomic_store(GProbed, 0, mo_release);
+    GInfo := Default(TGtkLoadInfo);
+  finally
+    GGtkLock.Release;
+  end;
 end;
 
 function GtkLoadInfo: TGtkLoadInfo; inline;
 begin
-  Result := GInfo;
+  { perf: inline + atomic acquire 热点快照零额外双检锁/零堆分配；GInfo/WebkitSoname 已为 blittable ShortString，发布后不可变，热点 lock-free 单次 Move 零堆分配/零 refcnt，短临界零锁；bytes.ops 单源思想 }
+  if atomic_load(GProbed, mo_acquire) <> 0 then
+  begin
+    Result := GInfo; { blittable ShortString lock-free 快照，零堆分配 }
+    Exit;
+  end;
+  { 未探测前返回空快照，不触发装载，零锁零分配 }
+  Result := Default(TGtkLoadInfo);
 end;
+
+function GtkCancellableHasReset: Boolean; inline;
+begin
+  Result := Assigned(G_cancellable_reset);
+end;
+
+function GtkCancellableHasIsCancelled: Boolean; inline;
+begin
+  Result := Assigned(G_cancellable_is_cancelled);
+end;
+
+procedure GtkCancellableReset(ACancellable: Pointer); inline;
+begin
+  if (ACancellable <> nil) and Assigned(G_cancellable_reset) then
+    G_cancellable_reset(ACancellable);
+end;
+
+function GtkCancellableIsCancelled(ACancellable: Pointer): Boolean; inline;
+begin
+  Result := (ACancellable <> nil) and Assigned(G_cancellable_is_cancelled) and (G_cancellable_is_cancelled(ACancellable) <> 0);
+end;
+
+function GtkCancellableNew: Pointer; inline;
+begin
+  if Assigned(G_cancellable_new) then
+    Result := G_cancellable_new()
+  else
+    Result := nil;
+end;
+
+procedure GtkObjectUnref(AObj: Pointer); inline;
+begin
+  if (AObj <> nil) and Assigned(G_object_unref) then
+    G_object_unref(AObj);
+end;
+
+initialization
+  GGtkLockOnce := Once;
+  GGtkBindOnce := Once;
+  EnsureGtkLock;
+
+finalization
+  if GGtkLock <> nil then
+  begin
+    GGtkLock.Free;
+    GGtkLock := nil;
+  end;
+  GGtkLockOnce := nil;
+  GGtkBindOnce := nil;
 
 end.

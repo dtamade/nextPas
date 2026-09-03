@@ -26,7 +26,8 @@ unit nextpas.core.window.intf;
 interface
 
 uses
-  nextpas.core.window.base;
+  nextpas.core.window.base,
+  nextpas.core.base.callbacks;
 
 type
   { 回调命名类型全集 —— FPC 不支持内联过程类型作参数；
@@ -37,6 +38,10 @@ type
   TWindowProc       = procedure;
 
   { IWindowDispatcher — 主线程投递；任意线程可 Post，UI 主线程执行；见 CONTRACT §5 }
+  { 单源锚点：显式关联 L0 base.callbacks 单源，守 L0-L3 单向，inline 零成本 }
+  _WindowCallbacksBaseAnchor = nextpas.core.base.callbacks.TCallbackScaleHandler;
+
+  { IWindowDispatcher }
 
   IWindowDispatcher = interface
     ['{8F1A2B3C-4D5E-4F60-9A8B-C0D1E2F3A001}']
@@ -137,8 +142,26 @@ function WindowEventVariantFromProc(AHandler: TWindowEventProc): TWindowEventVar
 procedure WindowEventVariantDispatch(const AVariant: TWindowEventVariant; const AEvent: TWindowEvent); inline;
 function WindowEventVariantIsAssigned(const AVariant: TWindowEventVariant): Boolean; inline;
 procedure WindowEventVariantClear(var AVariant: TWindowEventVariant); inline;
+{ 闭包包装薄转发（main 单源思想，镜像 L0 base.callbacks）：供 dispatcher/post 便捷面复用 }
+function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
+function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef; inline;
+function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef; inline;
+function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
 
 implementation
+
+function WindowEventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+begin
+  { thin forward single source: mirrors L0 base.callbacks.CallbackEventMethodToRef, inline zero-copy }
+  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+end;
+
+function WindowEventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
+begin
+  Result := procedure(const AEvent: TWindowEvent) begin AHandler(AEvent); end;
+end;
 
 function WindowEventVariantFromRef(const AHandler: TWindowEventHandler): TWindowEventVariant; inline;
 begin
@@ -164,6 +187,17 @@ begin
   Result.Ref := nil;
   Result.Method := AHandler;
   Result.Proc := nil;
+end;
+
+function WindowMethodToRef(AHandler: TWindowProcMethod): TWindowProcRef; inline;
+begin
+  { thin forward single source: mirrors L0 base.callbacks.CallbackNotifyMethodToRef, inline zero-copy }
+  Result := procedure begin AHandler(); end;
+end;
+
+function WindowProcToRef(AHandler: TWindowProc): TWindowProcRef; inline;
+begin
+  Result := procedure begin AHandler(); end;
 end;
 
 function WindowEventVariantFromProc(AHandler: TWindowEventProc): TWindowEventVariant; inline;
@@ -195,6 +229,11 @@ begin
   end;
 end;
 
+function EventMethodToRef(AHandler: TWindowEventMethod): TWindowEventHandler; inline;
+begin
+  Result := WindowEventMethodToRef(AHandler);
+end;
+
 function WindowEventVariantIsAssigned(const AVariant: TWindowEventVariant): Boolean; inline;
 begin
   case AVariant.Kind of
@@ -203,6 +242,11 @@ begin
     wedkProc: Result := Assigned(AVariant.Proc);
   else Result := False;
   end;
+end;
+
+function EventProcToRef(AHandler: TWindowEventProc): TWindowEventHandler; inline;
+begin
+  Result := WindowEventProcToRef(AHandler);
 end;
 
 procedure WindowEventVariantClear(var AVariant: TWindowEventVariant); inline;

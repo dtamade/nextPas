@@ -2,7 +2,7 @@ unit nextpas.core.db.redis.addr;
 
 {** @desc Redis 地址解析单源（V3-A5 抽离）。
        由 redis.adapter 抽离以满足 800 行软阈值（CONTRACT 体积债务收口）：
-       复用 text.kv ScanKV（host/port/db 键）、text.conv（SameText/Trim）
+       复用 bytes.ops StringToBytes/BytesCopy（INV-5 单源零拷贝）、text.kv ScanKV（host/port/db 键）、text.conv（SameText/Trim）
        与 db.base 常量 DB_REDIS_DEFAULT_PORT；零 SysUtils/BaseUnix/Windows。
        薄 helper：BytesFromText / RedisCategory / ParseRedisAddr 均单源于此。 *}
 
@@ -15,7 +15,7 @@ uses
   nextpas.core.db.base,
   nextpas.core.db.redis.base;
 
-function BytesFromText(const AStr: string): TBytes;
+function BytesFromText(const AStr: string): TBytes; inline;
 function RedisCategory(const AErrType: string): TDbErrorCategory;
 procedure ParseRedisAddr(const AAddr: string;
   const AOptions: TDbConnectOptions; out AOpts: TDbRedisConnectOptions);
@@ -23,17 +23,16 @@ procedure ParseRedisAddr(const AAddr: string;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.db.err,
   nextpas.core.text.kv,
   nextpas.core.text.conv;
 
-function BytesFromText(const AStr: string): TBytes;
+function BytesFromText(const AStr: string): TBytes; inline;
 begin
-  if Length(AStr) = 0 then
-    Exit(nil);
-  SetLength(Result, Length(AStr));
-  Move(AStr[1], Result[0], Length(AStr));
+  // perf: inline thin-forward to bytes.ops.StringToBytes single source — zero-copy BytesCopy single Move(PAnsiChar) in owner, no duplicate SetLength+Move, thin-forward exempt per red-line 1 (INV-5)
+  Result := nextpas.core.bytes.ops.StringToBytes(AStr);
 end;
 
 function RedisCategory(const AErrType: string): TDbErrorCategory;

@@ -32,7 +32,7 @@ type
     function TransformPoly(const APoly: array of TVec2): TPoly;
   public
     constructor Create(AWidth, AHeight: Integer);
-    procedure Save; procedure Restore;
+    procedure Save; inline; procedure Restore; inline;
     procedure Concat(const AMat: TMat2D);
     procedure ClipPath(const APath: TPath);
     procedure ClipRect(const AR: TRect);
@@ -73,7 +73,7 @@ begin
   FMat:=TMat2D.Identity;
   FHasClip:=False;
 end;
-procedure TRasterCanvas.Save;
+procedure TRasterCanvas.Save; inline;
 begin
   if Length(FStack)>=MAX_SAVE_STACK then
     raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Save: stack overflow');
@@ -83,7 +83,7 @@ begin
   FStack[High(FStack)].HasClip:=FHasClip;
   FStack[High(FStack)].ClipR:=FClipR;
 end;
-procedure TRasterCanvas.Restore;
+procedure TRasterCanvas.Restore; inline;
 begin
   if Length(FStack)=0 then
     raise ECanvasError.Create('nextpas.core.canvas.raster.pas: TRasterCanvas.Restore: stack underflow');

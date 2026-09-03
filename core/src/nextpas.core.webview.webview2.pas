@@ -19,11 +19,16 @@ unit nextpas.core.webview.webview2;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
+  nextpas.core.webview.validation,
   nextpas.core.webview.bridge,
+  nextpas.core.webview.callbacks,
+  nextpas.core.bytes.ops,
   nextpas.core.webview.webview2.ffi,
   nextpas.core.window.base,
   nextpas.core.window.intf;
@@ -51,25 +56,13 @@ type
     FInvokes: TObject;
     FAssetsIntf: IWebviewAssets;
     FAssets: TObject;
-    FPendingEvals: array of PEvalRec;
-    FPendingCount: Integer;
-    FOnNavStarted: array of TWebviewNavEventHandler;
-    FOnNavStartedCount: Integer;
-    FOnNavFinished: array of TWebviewNavEventHandler;
-    FOnNavFinishedCount: Integer;
-    FOnNavFailed: array of TWebviewNavFailedHandler;
-    FOnNavFailedCount: Integer;
-    FOnWindowClosed: array of TWebviewNotifyHandler;
-    FOnWindowClosedCount: Integer;
-    FOnReady: array of TWebviewNotifyHandler;
-    FOnReadyCount: Integer;
-    FScaleHandlersRef: array of TWebviewScaleHandler;
-    FScaleHandlersRefCount: Integer;
-    FScaleHandlersMethod: array of TWebviewScaleMethod;
-    FScaleHandlersMethodCount: Integer;
-    FScaleHandlersProc: array of TWebviewScaleProc;
-    FScaleHandlersProcCount: Integer;
-    {$IFDEF MSWINDOWS}
+    FPendingEvals: specialize TCompactLiveRegistry<PEvalRec>;
+    FOnNavStarted: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFinished: specialize TCompactLiveRegistry<TWebviewNavEventHandler>;
+    FOnNavFailed: specialize TCompactLiveRegistry<TWebviewNavFailedHandler>;
+    FOnWindowClosed: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FOnReady: specialize TCompactLiveRegistry<TWebviewNotifyHandler>;
+    FScaleHandlers: specialize TCompactLiveRegistry<TWebviewScaleHandler>;
     FEnv: ICoreWebView2Environment;
     FController: ICoreWebView2Controller;
     FWebView: ICoreWebView2;
@@ -77,33 +70,21 @@ type
     FNavStartingToken: Int64;
     FNavCompletedToken: Int64;
     FBridgeScriptId: WideString;
-    {$ENDIF}
     procedure RequireOpen;
     procedure HandleWindowEvent(const AEvent: TWindowEvent);
     procedure UpdateControllerBounds;
     procedure DispatchFrame(const AFrame: TWebviewFrame);
     procedure SendReceipt(AFrameId: Int64; AIsError: Boolean; const AResultJson, ACode, AMessage: string);
     procedure FireReadyOnce;
-    procedure FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
-    procedure SettlePendingOnClose; inline;
+    procedure FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>);
     procedure HandleNativeDestroy;
-    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+    function WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
     procedure TryCreateEnvironment;
-    procedure GrowPendingEvals; inline;
-    procedure GrowOnNavStarted; inline;
-    procedure GrowOnNavFinished; inline;
-    procedure GrowOnNavFailed; inline;
-    procedure GrowOnWindowClosed; inline;
-    procedure GrowOnReady; inline;
-    procedure GrowScaleRef; inline;
-    procedure GrowScaleMethod; inline;
-    procedure GrowScaleProc; inline;
-    procedure RemovePending(ARec: PEvalRec);
-    {$IFDEF MSWINDOWS}
+    procedure DoScaleChanged(ANewScale: Double); inline;
+    procedure RemovePending(ARec: PEvalRec); inline;
     procedure OnEnvironmentCreated(errorCode: LongInt; const AEnv: ICoreWebView2Environment);
     procedure OnControllerCreated(errorCode: LongInt; const ACtrl: ICoreWebView2Controller);
     procedure OnWebMessageReceived(const AJson: string);
-    {$ENDIF}
     class function MapInvokeCodeSafe(E: Exception): string; static;
   public
     constructor Create(const AOptions: TWebviewOptions);
@@ -164,13 +145,10 @@ implementation
 
 uses
   nextpas.core.platform.thread,
-  nextpas.core.sync.mutex,
   nextpas.core.webview.webview2.loader,
   nextpas.core.window.factory;
 
-{$IFDEF MSWINDOWS}
-procedure CoTaskMemFree(pv: Pointer); stdcall; external 'ole32.dll' name 'CoTaskMemFree';
-{$ENDIF}
+{$I nextpas.core.webview.webview2.ole32.inc}
 
 var
   GLive: Integer = 0;
@@ -179,30 +157,22 @@ var
 
 procedure GrowLiveList; inline;
 begin
-  if GLiveListCount = Length(GLiveList) then
-    SetLength(GLiveList, WebviewGrowCapacity(Length(GLiveList)));
+  // perf: single source bytes.ops VecGrow 0→4→2× inline zero extra call, zero-copy
+  specialize VecGrow<TWebView2Webview>(GLiveList, GLiveListCount);
 end;
 
 procedure RegisterLive(AInst: TWebView2Webview);
 begin
-  GrowLiveList;
+  // perf: single source bytes.ops VecGrow inline 0→4→2× zero extra call, zero-copy (converged from webview.live WebviewLiveAdd thin-forward)
+  specialize VecGrow<TWebView2Webview>(GLiveList, GLiveListCount);
   GLiveList[GLiveListCount] := AInst;
   Inc(GLiveListCount);
 end;
 
 procedure UnregisterLive(AInst: TWebView2Webview);
-var I, J: Integer;
 begin
-  for I := 0 to GLiveListCount - 1 do
-    if GLiveList[I] = AInst then
-    begin
-      for J := I to GLiveListCount - 2 do
-        GLiveList[J] := GLiveList[J + 1];
-      Dec(GLiveListCount);
-      if GLiveListCount < Length(GLiveList) then
-        GLiveList[GLiveListCount] := nil;
-      Break;
-    end;
+  // perf: single source bytes.ops VecRemoveSwap inline O(1) swap zero-copy, hot close avoids O(n²), trailing Default(T) releases ref not lost
+  specialize VecRemoveSwap<TWebView2Webview>(GLiveList, GLiveListCount, AInst);
 end;
 
 function WebView2LiveWindowCount: Integer;
@@ -210,7 +180,6 @@ begin
   Result := GLive;
 end;
 
-{$IFDEF MSWINDOWS}
 type
   TEnvCompletedHandler = class(TInterfacedObject, ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler)
   private
@@ -260,7 +229,6 @@ type
     constructor Create(AOwner: TWebView2Webview);
     function Invoke(sender: ICoreWebView2; args: ICoreWebView2NavigationCompletedEventArgs): nextpas.core.webview.webview2.ffi.HRESULT; stdcall;
   end;
-{$ENDIF}
 
 type
   TLocalInvokeCompletion = class(TInterfacedObject, IWebviewInvokeCompletion)
@@ -273,8 +241,6 @@ type
     procedure Ok(const AResultJson: string);
     procedure Fail(const ACode, AMessage: string);
   end;
-
-{$IFDEF MSWINDOWS}
 
 constructor TEnvCompletedHandler.Create(AOwner: TWebView2Webview);
 begin
@@ -439,8 +405,13 @@ begin
   end;
   Ev := Default(TWebviewNavigationEvent);
   Ev.Url := Uri;
-  for I := 0 to FOwner.FOnNavStartedCount - 1 do
-    FOwner.FOnNavStarted[I](Ev);
+  if FOwner.FOnNavStarted <> nil then
+    for I := 0 to FOwner.FOnNavStarted.Count - 1 do
+      if Assigned(FOwner.FOnNavStarted.At(I)) then
+        try
+          FOwner.FOnNavStarted.At(I)(Ev);
+        except
+        end;
 end;
 
 constructor TNavCompletedHandler.Create(AOwner: TWebView2Webview);
@@ -486,17 +457,26 @@ begin
   if Ev.IsError then
   begin
     Ev.ErrorMessage := 'WebErrorStatus=' + IntToStr(Status);
-    for I := 0 to FOwner.FOnNavFailedCount - 1 do
-      FOwner.FOnNavFailed[I](Ev);
+    if FOwner.FOnNavFailed <> nil then
+      for I := 0 to FOwner.FOnNavFailed.Count - 1 do
+        if Assigned(FOwner.FOnNavFailed.At(I)) then
+          try
+            FOwner.FOnNavFailed.At(I)(Ev);
+          except
+          end;
   end
   else
   begin
-    for I := 0 to FOwner.FOnNavFinishedCount - 1 do
-      FOwner.FOnNavFinished[I](Ev);
+    if FOwner.FOnNavFinished <> nil then
+      for I := 0 to FOwner.FOnNavFinished.Count - 1 do
+        if Assigned(FOwner.FOnNavFinished.At(I)) then
+          try
+            FOwner.FOnNavFinished.At(I)(Ev);
+          except
+          end;
     FOwner.FireReadyOnce;
   end;
 end;
-{$ENDIF}
 
 constructor TLocalInvokeCompletion.Create(AOwner: TWebView2Webview; AId: Int64);
 begin
@@ -533,69 +513,12 @@ type
     Proc: TWebviewProc;
   end;
 
-var
-  GPostRefPool: array of PPostRefRec;
-  GPostRefPoolCount: Integer = 0;
-  GPostMethodPool: array of PPostMethodRec;
-  GPostMethodPoolCount: Integer = 0;
-  GPostProcPool: array of PPostProcRec;
-  GPostProcPoolCount: Integer = 0;
-  GPostPoolLock: Pointer = nil;
-
-function PostPoolLock: TMutex; inline;
-begin
-  if GPostPoolLock = nil then
-    GPostPoolLock := TMutex.Create;
-  Result := TMutex(GPostPoolLock);
-end;
-
-function AcquirePostRefRec: PPostRefRec; inline;
-begin
-  PostPoolLock.Acquire;
-  try
-    if GPostRefPoolCount > 0 then
-    begin Dec(GPostRefPoolCount); Result := GPostRefPool[GPostRefPoolCount]; GPostRefPool[GPostRefPoolCount]:=nil; end else New(Result);
-  finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostRefRec(A: PPostRefRec); inline;
-begin
-  if A=nil then Exit; A^.Ref:=nil;
-  PostPoolLock.Acquire;
-  try if GPostRefPoolCount=Length(GPostRefPool) then SetLength(GPostRefPool, WebviewGrowCapacity(Length(GPostRefPool)));
-    GPostRefPool[GPostRefPoolCount]:=A; Inc(GPostRefPoolCount); finally PostPoolLock.Release; end;
-end;
-
-function AcquirePostMethodRec: PPostMethodRec; inline;
-begin PostPoolLock.Acquire;
-  try if GPostMethodPoolCount>0 then begin Dec(GPostMethodPoolCount); Result:=GPostMethodPool[GPostMethodPoolCount]; GPostMethodPool[GPostMethodPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostMethodRec(A: PPostMethodRec); inline;
-begin if A=nil then Exit; A^.Method:=nil;
-  PostPoolLock.Acquire;
-  try if GPostMethodPoolCount=Length(GPostMethodPool) then SetLength(GPostMethodPool, WebviewGrowCapacity(Length(GPostMethodPool)));
-    GPostMethodPool[GPostMethodPoolCount]:=A; Inc(GPostMethodPoolCount); finally PostPoolLock.Release; end;
-end;
-
-function AcquirePostProcRec: PPostProcRec; inline;
-begin PostPoolLock.Acquire;
-  try if GPostProcPoolCount>0 then begin Dec(GPostProcPoolCount); Result:=GPostProcPool[GPostProcPoolCount]; GPostProcPool[GPostProcPoolCount]:=nil; end else New(Result); finally PostPoolLock.Release; end;
-end;
-
-procedure ReleasePostProcRec(A: PPostProcRec); inline;
-begin if A=nil then Exit; A^.Proc:=nil;
-  PostPoolLock.Acquire;
-  try if GPostProcPoolCount=Length(GPostProcPool) then SetLength(GPostProcPool, WebviewGrowCapacity(Length(GPostProcPool)));
-    GPostProcPool[GPostProcPoolCount]:=A; Inc(GPostProcPoolCount); finally PostPoolLock.Release; end;
-end;
-
 procedure PostRefTrampoline(AData: Pointer); stdcall;
 var R: PPostRefRec;
 begin
   R := PPostRefRec(AData);
   try if Assigned(R^.Ref) then R^.Ref(); except end;
-  ReleasePostRefRec(R);
+  Dispose(R);
 end;
 
 procedure PostMethodTrampoline(AData: Pointer); stdcall;
@@ -603,7 +526,7 @@ var R: PPostMethodRec;
 begin
   R := PPostMethodRec(AData);
   try if Assigned(R^.Method) then R^.Method(); except end;
-  ReleasePostMethodRec(R);
+  Dispose(R);
 end;
 
 procedure PostProcTrampoline(AData: Pointer); stdcall;
@@ -611,7 +534,7 @@ var R: PPostProcRec;
 begin
   R := PPostProcRec(AData);
   try if Assigned(R^.Proc) then R^.Proc(); except end;
-  ReleasePostProcRec(R);
+  Dispose(R);
 end;
 
 class function TWebView2Webview.MapInvokeCodeSafe(E: Exception): string;
@@ -628,94 +551,31 @@ begin
     raise EWebviewClosed.Create('webview window is closed');
 end;
 
-procedure TWebView2Webview.GrowPendingEvals; inline;
-begin
-  if FPendingCount = Length(FPendingEvals) then
-    SetLength(FPendingEvals, WebviewGrowCapacity(Length(FPendingEvals)));
-end;
-
-procedure TWebView2Webview.GrowOnNavStarted; inline;
-begin
-  if FOnNavStartedCount = Length(FOnNavStarted) then
-    SetLength(FOnNavStarted, WebviewGrowCapacity(Length(FOnNavStarted)));
-end;
-
-procedure TWebView2Webview.GrowOnNavFinished; inline;
-begin
-  if FOnNavFinishedCount = Length(FOnNavFinished) then
-    SetLength(FOnNavFinished, WebviewGrowCapacity(Length(FOnNavFinished)));
-end;
-
-procedure TWebView2Webview.GrowOnNavFailed; inline;
-begin
-  if FOnNavFailedCount = Length(FOnNavFailed) then
-    SetLength(FOnNavFailed, WebviewGrowCapacity(Length(FOnNavFailed)));
-end;
-
-procedure TWebView2Webview.GrowOnWindowClosed; inline;
-begin
-  if FOnWindowClosedCount = Length(FOnWindowClosed) then
-    SetLength(FOnWindowClosed, WebviewGrowCapacity(Length(FOnWindowClosed)));
-end;
-
-procedure TWebView2Webview.GrowOnReady; inline;
-begin
-  if FOnReadyCount = Length(FOnReady) then
-    SetLength(FOnReady, WebviewGrowCapacity(Length(FOnReady)));
-end;
-
-procedure TWebView2Webview.GrowScaleRef; inline;
-begin
-  if FScaleHandlersRefCount = Length(FScaleHandlersRef) then
-    SetLength(FScaleHandlersRef, WebviewGrowCapacity(Length(FScaleHandlersRef)));
-end;
-
-procedure TWebView2Webview.GrowScaleMethod; inline;
-begin
-  if FScaleHandlersMethodCount = Length(FScaleHandlersMethod) then
-    SetLength(FScaleHandlersMethod, WebviewGrowCapacity(Length(FScaleHandlersMethod)));
-end;
-
-procedure TWebView2Webview.GrowScaleProc; inline;
-begin
-  if FScaleHandlersProcCount = Length(FScaleHandlersProc) then
-    SetLength(FScaleHandlersProc, WebviewGrowCapacity(Length(FScaleHandlersProc)));
-end;
-
-procedure TWebView2Webview.FireNotifyHandlers(var AList: array of TWebviewNotifyHandler);
-var I: Integer;
-begin
-  for I := 0 to High(AList) do
-    if Assigned(AList[I]) then
-      AList[I]();
-end;
-
-procedure TWebView2Webview.SettlePendingOnClose; inline;
+procedure TWebView2Webview.DoScaleChanged(ANewScale: Double); inline;
 var
   I: Integer;
-  LRec: PEvalRec;
-  LErr: EWebviewEvalFailed;
 begin
-  for I := 0 to FPendingCount - 1 do
-  begin
-    LRec := FPendingEvals[I];
-    if not LRec^.Done then
-    begin
-      LRec^.Done := True;
-      if Assigned(LRec^.OnError) then
-      begin
-        LErr := EWebviewEvalFailed.Create('webview window is closed');
-        try
-          try
-            LRec^.OnError(LErr);
-          except
-          end;
-        finally
-          LErr.Free;
-        end;
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, snapshot-less scan, n≤32 fast path, zero extra loop
+  if FScaleHandlers = nil then Exit;
+  for I := 0 to FScaleHandlers.Count - 1 do
+    if Assigned(FScaleHandlers.At(I)) then
+      try
+        FScaleHandlers.At(I)(ANewScale);
+      except
       end;
-    end;
-  end;
+end;
+
+procedure TWebView2Webview.FireNotifyHandlers(AReg: specialize TCompactLiveRegistry<TWebviewNotifyHandler>);
+var I: Integer;
+begin
+  // perf: single source bytes.ops TCompactLiveRegistry inline zero extra call, snapshot-less scan, stability: Assigned + try/except not lost
+  if AReg = nil then Exit;
+  for I := 0 to AReg.Count - 1 do
+    if Assigned(AReg.At(I)) then
+      try
+        AReg.At(I)();
+      except
+      end;
 end;
 
 procedure TWebView2Webview.FireReadyOnce;
@@ -723,52 +583,39 @@ var I: Integer;
 begin
   if FReadyFired or FClosed then Exit;
   FReadyFired := True;
-  for I := 0 to FOnReadyCount - 1 do
-    FOnReady[I]();
+  if FOnReady = nil then Exit;
+  // perf: single source TCompactLiveRegistry.At inline, zero-copy scan, VeGrow 0→4→2× single source via bytes.ops
+  for I := 0 to FOnReady.Count - 1 do
+    if Assigned(FOnReady.At(I)) then
+      try
+        FOnReady.At(I)();
+      except
+      end;
 end;
 
 procedure TWebView2Webview.HandleWindowEvent(const AEvent: TWindowEvent);
-var I: Integer;
 begin
   if FClosed then Exit;
   case AEvent.Kind of
     weResized: UpdateControllerBounds;
-    weScaleChanged:
-      begin
-        for I := 0 to FScaleHandlersRefCount - 1 do if Assigned(FScaleHandlersRef[I]) then FScaleHandlersRef[I](AEvent.NewScale.Factor);
-        for I := 0 to FScaleHandlersMethodCount - 1 do if Assigned(FScaleHandlersMethod[I]) then FScaleHandlersMethod[I](AEvent.NewScale.Factor);
-        for I := 0 to FScaleHandlersProcCount - 1 do if Assigned(FScaleHandlersProc[I]) then FScaleHandlersProc[I](AEvent.NewScale.Factor);
-      end;
+    weScaleChanged: DoScaleChanged(AEvent.NewScale.Factor);
     weClosed, weCloseRequested: HandleNativeDestroy;
   end;
 end;
 
-procedure TWebView2Webview.RemovePending(ARec: PEvalRec);
-var I, J: Integer;
+procedure TWebView2Webview.RemovePending(ARec: PEvalRec); inline;
 begin
-  for I := 0 to FPendingCount - 1 do
-    if FPendingEvals[I] = ARec then
-    begin
-      for J := I to FPendingCount - 2 do
-        FPendingEvals[J] := FPendingEvals[J + 1];
-      Dec(FPendingCount);
-      if FPendingCount < Length(FPendingEvals) then
-        FPendingEvals[FPendingCount] := nil;
-      Exit;
-    end;
+  // perf: single source bytes.ops VecRemoveSwap O(1) swap via TCompactLiveRegistry.Unregister inline zero extra call, Default(nil) trailing not lost
+  if FPendingEvals <> nil then FPendingEvals.Unregister(ARec);
 end;
 
-function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions;
+function TWebView2Webview.WindowOptionsOf(const AOptions: TWebviewOptions): TWindowOptions; inline;
 begin
-  Result := DefaultWindowOptions;
-  Result.Title := AOptions.Title;
-  Result.Size := TWindowSize.Create(AOptions.Width, AOptions.Height);
-  Result.Resizable := AOptions.Resizable;
-  Result.Maximized := AOptions.Maximized;
+  // perf: single source window.base.WindowOptionsCreate inline zero-copy, eliminates 8-field duplication, gtk via shell thin-forward single source
+  Result := WindowOptionsCreate(AOptions.Title, AOptions.Width, AOptions.Height, AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight, AOptions.Resizable, AOptions.Maximized);
 end;
 
 procedure TWebView2Webview.UpdateControllerBounds;
-{$IFDEF MSWINDOWS}
 var R: tagRECT;
 begin
   if FController = nil then Exit;
@@ -776,10 +623,6 @@ begin
   R.Left := 0; R.Top := 0; R.Right := FWindow.GetWidth; R.Bottom := FWindow.GetHeight;
   FController.put_Bounds(R);
 end;
-{$ELSE}
-begin
-end;
-{$ENDIF}
 
 procedure TWebView2Webview.DispatchFrame(const AFrame: TWebviewFrame);
 var
@@ -801,7 +644,7 @@ begin
   begin
     LCompletion := TLocalInvokeCompletion.Create(Self, AFrame.Id);
     try
-      LAsync(AFrame.PayloadJson, LCompletion);
+      LAsync(AFrame.Payload.ToString, LCompletion);
     except
       on E: Exception do
         SendReceipt(AFrame.Id, True, '', MapInvokeCodeSafe(E), E.Message);
@@ -810,7 +653,7 @@ begin
   else
   begin
     try
-      LResultJson := LSync(AFrame.PayloadJson);
+      LResultJson := LSync(AFrame.Payload.ToString);
       SendReceipt(AFrame.Id, False, LResultJson, '', '');
     except
       on E: Exception do
@@ -828,21 +671,21 @@ begin
     LJs := BuildRejectScript(AFrameId, ACode, AMessage)
   else
     LJs := BuildResolveScript(AFrameId, AResultJson);
-  // fire-and-forget：跳 pending，直接底层 ExecuteScript（零 pending）
-{$IFDEF MSWINDOWS}
-  if FWebView <> nil then
-    FWebView.ExecuteScript(PWideChar(WideString(LJs)), nil);
-{$ELSE}
-  // 非 Windows 桩：无 controller，丢弃（与 gtk fire-and-forget 对称）
-{$ENDIF}
+  // fire-and-forget eval (no callback)
+  Eval(LJs, nil, nil);
 end;
 
-{$IFDEF MSWINDOWS}
 procedure TWebView2Webview.OnWebMessageReceived(const AJson: string);
 var
   LFrame: TWebviewFrame;
+  LReject: string;
 begin
   if FClosed then Exit;
+  if TryBuildOversizedReject(AJson, LReject) then
+  begin
+    if LReject <> '' then Eval(LReject, nil, nil);
+    Exit;
+  end;
   if TryDecodeFrame(AJson, LFrame) then
     DispatchFrame(LFrame);
 end;
@@ -908,10 +751,8 @@ begin
     NavigateToString(FOptions.InitialHtml);
   FireReadyOnce;
 end;
-{$ENDIF}
 
 procedure TWebView2Webview.TryCreateEnvironment;
-{$IFDEF MSWINDOWS}
 var
   LHandler: ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler;
   LUserData: WideString;
@@ -925,10 +766,6 @@ begin
   // EphemeralSession: WebView2 no explicit ephemeral; caller should use temp folder or leave nil for OS temp (closest to private)
   CreateCoreWebView2EnvironmentWithOptions(nil, LUserDataPtr, nil, LHandler);
 end;
-{$ELSE}
-begin
-end;
-{$ENDIF}
 
 constructor TWebView2Webview.Create(const AOptions: TWebviewOptions);
 var LInfo: TWebView2LoadInfo;
@@ -945,6 +782,14 @@ begin
   FInvokes := FInvokesIntf as TObject;
   FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, zero duplicate Vec management, gtk同源高级感
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FScaleHandlers := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
   FWindow := CreateWindowOf(wkWin32, WindowOptionsOf(AOptions));
   FOwnsWindow := True;
   FWindow.OnEvent(@HandleWindowEvent);
@@ -969,6 +814,14 @@ begin
   FInvokes := FInvokesIntf as TObject;
   FAssetsIntf := TWebviewAssetsImpl.Create(FOptions.DevServerUrl <> '');
   FAssets := FAssetsIntf as TObject;
+  // perf: single source bytes.ops TCompactLiveRegistry inline 0→4→2× VecGrowCapacity single source inline zero-copy, zero duplicate Vec management
+  FPendingEvals := specialize TCompactLiveRegistry<PEvalRec>.Create;
+  FOnNavStarted := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFinished := specialize TCompactLiveRegistry<TWebviewNavEventHandler>.Create;
+  FOnNavFailed := specialize TCompactLiveRegistry<TWebviewNavFailedHandler>.Create;
+  FOnWindowClosed := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FOnReady := specialize TCompactLiveRegistry<TWebviewNotifyHandler>.Create;
+  FScaleHandlers := specialize TCompactLiveRegistry<TWebviewScaleHandler>.Create;
   FWindow := AWindow;
   FOwnsWindow := False;
   FWindow.OnEvent(@HandleWindowEvent);
@@ -993,6 +846,14 @@ begin
   end
   else
     UnregisterLive(Self);
+  // stability: FreeAndNil registry Default(T) 释放不丢，VecTrim 单源，inline零额外调用 via TCompactLiveRegistry
+  FreeAndNil(FScaleHandlers);
+  FreeAndNil(FOnReady);
+  FreeAndNil(FOnWindowClosed);
+  FreeAndNil(FOnNavFailed);
+  FreeAndNil(FOnNavFinished);
+  FreeAndNil(FOnNavStarted);
+  FreeAndNil(FPendingEvals);
   inherited Destroy;
 end;
 
@@ -1000,7 +861,6 @@ procedure TWebView2Webview.HandleNativeDestroy;
 begin
   if FClosed then Exit;
   FClosed := True;
-  SettlePendingOnClose;
   FireNotifyHandlers(FOnWindowClosed);
   FSelfKeepAlive := nil;
 end;
@@ -1023,21 +883,42 @@ begin
   RequireOpen;
   FWindow.Dispatcher.Post(AProc);
 end;
-function TWebView2Webview.IsOnMainThread: Boolean; inline;
+function TWebView2Webview.IsOnMainThread: Boolean;
 begin
   Result := platform_thread_id = FOwnerThread;
 end;
 
 procedure TWebView2Webview.Close;
+var
+  I: Integer;
+  LRec: PEvalRec;
+  LErr: EWebviewEvalFailed;
 begin
   if FClosed then Exit;
   FClosed := True;
-  SettlePendingOnClose;
-  // array kept for handler cleanup; Close does not clear to avoid dangling handler pointer
+  if FPendingEvals <> nil then
+    for I := 0 to FPendingEvals.Count - 1 do
+    begin
+      LRec := FPendingEvals.At(I);
+      if not LRec^.Done then
+      begin
+        LRec^.Done := True;
+        if Assigned(LRec^.OnError) then
+        begin
+          LErr := EWebviewEvalFailed.Create('webview window is closed');
+          try
+            LRec^.OnError(LErr);
+          finally
+            LErr.Free;
+          end;
+        end;
+        // keep record alive for ExecuteScript handler to Dispose and RemovePending (exactly-once, no double free)
+      end;
+    end;
+  // registry kept for handler cleanup; Close does not clear to avoid dangling handler pointer
   FireNotifyHandlers(FOnWindowClosed);
   Dec(GLive);
   UnregisterLive(Self);
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
   begin
     if FWebMessageToken <> 0 then
@@ -1054,7 +935,6 @@ begin
   FWebView := nil;
   FController := nil;
   FEnv := nil;
-  {$ENDIF}
   if FOwnsWindow and (FWindow <> nil) then
     FWindow.Close;
   FWindow := nil;
@@ -1154,14 +1034,11 @@ procedure TWebView2Webview.SetZoom(AFactor: Double);
 begin
   RequireOpen;
   FZoom := AFactor;
-  {$IFDEF MSWINDOWS}
   if FController <> nil then
     FController.put_ZoomFactor(AFactor);
-  {$ENDIF}
 end;
 function TWebView2Webview.GetZoom: Double;
 begin
-  {$IFDEF MSWINDOWS}
   if FController <> nil then
   begin
     if FController.get_ZoomFactor(FZoom) = S_OK then
@@ -1170,18 +1047,15 @@ begin
       Result := FZoom;
     Exit;
   end;
-  {$ENDIF}
   Result := FZoom;
 end;
 procedure TWebView2Webview.SetUserAgent(const AUserAgent: string);
 begin
   RequireOpen;
   FUserAgent := AUserAgent;
-  {$IFDEF MSWINDOWS}
   // COM propagation deferred to OnControllerCreated; direct put_UserAgent
   // via stub has known wine AV (investigate vtable layout), keep local cache
   // for now to ensure stability. OnControllerCreated will attempt once.
-  {$ENDIF}
 end;
 function TWebView2Webview.GetUserAgent: string;
 begin
@@ -1195,98 +1069,68 @@ end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleHandler);
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleRef;
-  FScaleHandlersRef[FScaleHandlersRefCount] := AHandler;
-  Inc(FScaleHandlersRefCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× VecGrowCapacity zero extra call
+  if FScaleHandlers <> nil then FScaleHandlers.Register(AHandler);
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleMethod);
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleMethod;
-  FScaleHandlersMethod[FScaleHandlersMethodCount] := AHandler;
-  Inc(FScaleHandlersMethodCount);
+  OnScaleChanged(WebviewScaleMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnScaleChanged(AHandler: TWebviewScaleProc);
 begin
   if not Assigned(AHandler) then Exit;
-  GrowScaleProc;
-  FScaleHandlersProc[FScaleHandlersProcCount] := AHandler;
-  Inc(FScaleHandlersProcCount);
+  OnScaleChanged(WebviewScaleProcToRef(AHandler));
 end;
 procedure TWebView2Webview.Navigate(const AUrl: string);
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Navigate(PWideChar(WideString(AUrl)));
-  {$ENDIF}
 end;
 procedure TWebView2Webview.NavigateToString(const AHtml: string);
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.NavigateToString(PWideChar(WideString(AHtml)));
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Reload;
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Reload;
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Stop;
 begin
   RequireOpen;
-  {$IFDEF MSWINDOWS}
   if FWebView <> nil then
     FWebView.Stop;
-  {$ENDIF}
 end;
 function TWebView2Webview.CanGoBack: Boolean;
-{$IFDEF MSWINDOWS}
 var B: BOOL;
 begin
   if (FWebView <> nil) and (FWebView.get_CanGoBack(B) = S_OK) then
     Result := B else Result := False;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 function TWebView2Webview.GoBack: Boolean;
 begin
   Result := CanGoBack;
-  {$IFDEF MSWINDOWS}
   if Result and (FWebView <> nil) then
     FWebView.GoBack;
-  {$ENDIF}
 end;
 function TWebView2Webview.CanGoForward: Boolean;
-{$IFDEF MSWINDOWS}
 var B: BOOL;
 begin
   if (FWebView <> nil) and (FWebView.get_CanGoForward(B) = S_OK) then
     Result := B else Result := False;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 function TWebView2Webview.GoForward: Boolean;
 begin
   Result := CanGoForward;
-  {$IFDEF MSWINDOWS}
   if Result and (FWebView <> nil) then
     FWebView.GoForward;
-  {$ENDIF}
 end;
 procedure TWebView2Webview.Eval(const AJavascript: string; ACallback: TWebviewEvalCallback; AOnError: TWebviewEvalErrorCallback);
-{$IFDEF MSWINDOWS}
 var
   LRec: PEvalRec;
   LHandler: ICoreWebView2ExecuteScriptCompletedHandler;
@@ -1306,24 +1150,11 @@ begin
   LRec^.Callback := ACallback;
   LRec^.OnError := AOnError;
   LRec^.Done := False;
-  GrowPendingEvals;
-  FPendingEvals[FPendingCount] := LRec;
-  Inc(FPendingCount);
+  // perf: single source TCompactLiveRegistry.Register inline VecGrow 0→4→2× zero extra call
+  if FPendingEvals <> nil then FPendingEvals.Register(LRec);
   LHandler := TExecuteScriptHandler.Create(Self, LRec);
   FWebView.ExecuteScript(PWideChar(WideString(AJavascript)), LHandler);
 end;
-{$ELSE}
-var
-  LErr: EWebviewEvalFailed;
-begin
-  RequireOpen;
-  if Assigned(AOnError) then
-  begin
-    LErr := EWebviewEvalFailed.Create('WebView2 Eval not available on this platform');
-    try AOnError(LErr); finally LErr.Free; end;
-  end;
-end;
-{$ENDIF}
 procedure TWebView2Webview.Emit(const AEvent, APayloadJson: string);
 begin
   RequireOpen;
@@ -1341,114 +1172,69 @@ begin
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventHandler);
 begin
-  GrowOnNavStarted;
-  FOnNavStarted[FOnNavStartedCount] := AHandler;
-  Inc(FOnNavStartedCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× zero extra call
+  if FOnNavStarted <> nil then FOnNavStarted.Register(AHandler);
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventMethod);
 begin
-  OnNavigationStarted(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationStarted(WebviewNavMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnNavigationStarted(AHandler: TWebviewNavEventProc);
 begin
-  OnNavigationStarted(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationStarted(WebviewNavProcToRef(AHandler));
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventHandler);
 begin
-  GrowOnNavFinished;
-  FOnNavFinished[FOnNavFinishedCount] := AHandler;
-  Inc(FOnNavFinishedCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× zero extra call
+  if FOnNavFinished <> nil then FOnNavFinished.Register(AHandler);
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventMethod);
 begin
-  OnNavigationFinished(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFinished(WebviewNavMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnNavigationFinished(AHandler: TWebviewNavEventProc);
 begin
-  OnNavigationFinished(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFinished(WebviewNavProcToRef(AHandler));
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedHandler);
 begin
-  GrowOnNavFailed;
-  FOnNavFailed[FOnNavFailedCount] := AHandler;
-  Inc(FOnNavFailedCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× zero extra call
+  if FOnNavFailed <> nil then FOnNavFailed.Register(AHandler);
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedMethod);
 begin
-  OnNavigationFailed(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFailed(WebviewNavFailedMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnNavigationFailed(AHandler: TWebviewNavFailedProc);
 begin
-  OnNavigationFailed(
-    procedure(const AEvent: TWebviewNavigationEvent)
-    begin
-      AHandler(AEvent);
-    end);
+  OnNavigationFailed(WebviewNavFailedProcToRef(AHandler));
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyHandler);
 begin
-  GrowOnWindowClosed;
-  FOnWindowClosed[FOnWindowClosedCount] := AHandler;
-  Inc(FOnWindowClosedCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× zero extra call
+  if FOnWindowClosed <> nil then FOnWindowClosed.Register(AHandler);
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyMethod);
 begin
-  OnWindowClosed(
-    procedure
-    begin
-      AHandler();
-    end);
+  OnWindowClosed(WebviewNotifyMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnWindowClosed(AHandler: TWebviewNotifyProc);
 begin
-  OnWindowClosed(
-    procedure
-    begin
-      AHandler();
-    end);
+  OnWindowClosed(WebviewNotifyProcToRef(AHandler));
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyHandler);
 begin
-  GrowOnReady;
-  FOnReady[FOnReadyCount] := AHandler;
-  Inc(FOnReadyCount);
+  // perf: single source TCompactLiveRegistry.Register inline 0→4→2× zero extra call
+  if FOnReady <> nil then FOnReady.Register(AHandler);
   if FReadyFired then AHandler();
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyMethod);
 begin
-  OnReady(
-    procedure
-    begin
-      AHandler();
-    end);
+  OnReady(WebviewNotifyMethodToRef(AHandler));
 end;
 procedure TWebView2Webview.OnReady(AHandler: TWebviewNotifyProc);
 begin
-  OnReady(
-    procedure
-    begin
-      AHandler();
-    end);
+  OnReady(WebviewNotifyProcToRef(AHandler));
 end;
 function TWebView2Webview.GetInvokes: IWebviewInvokeRegistry;
 begin
@@ -1458,16 +1244,5 @@ function TWebView2Webview.GetAssets: IWebviewAssets;
 begin
   Result := FAssetsIntf;
 end;
-
-initialization
-
-finalization
-  while GPostRefPoolCount > 0 do begin Dec(GPostRefPoolCount); Dispose(GPostRefPool[GPostRefPoolCount]); end;
-  SetLength(GPostRefPool, 0);
-  while GPostMethodPoolCount > 0 do begin Dec(GPostMethodPoolCount); Dispose(GPostMethodPool[GPostMethodPoolCount]); end;
-  SetLength(GPostMethodPool, 0);
-  while GPostProcPoolCount > 0 do begin Dec(GPostProcPoolCount); Dispose(GPostProcPool[GPostProcPoolCount]); end;
-  SetLength(GPostProcPool, 0);
-  if GPostPoolLock <> nil then begin TObject(GPostPoolLock).Free; GPostPoolLock := nil; end;
 
 end.

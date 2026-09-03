@@ -115,6 +115,5 @@ SysUtils|nextpas.core.webview.bridge.pas
 SysUtils|nextpas.core.webview.gtk.loader.pas
 SysUtils|nextpas.core.webview.gtk.pas
 SysUtils|nextpas.core.webview.webview2.pas
-Windows|nextpas.core.webview.webview2.win.pas
 SysUtils|nextpas.core.zlib.base.pas
 SysUtils|nextpas.core.zlib.ffi.pas

@@ -37,6 +37,8 @@ function GitTagRename(const AGitDir, AOldName, ANewName: string): TGitOid;
 implementation
 
 uses
+  nextpas.core.bytes.base,
+  nextpas.core.bytes.ops,
   nextpas.core.fs,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
@@ -174,63 +176,88 @@ end;
 
 procedure CollectTagsFromDir(const AGitDir, ABaseDir, APrefix: string; var AOut: TGitTagArray);
 var
-  Entries: TDirEntryArray;
-  I: Integer;
-  Full, Rel, RefName: string;
-  Oid, Peeled: TGitOid;
-  IsAnn: Boolean;
-  Text: string;
-begin
-  try
-    Entries := ReadDir(ABaseDir);
-  except
-    Exit;
-  end;
-  for I := 0 to High(Entries) do
+  LCnt, LCap: SizeUInt;
+
+  procedure Recurse(const ABaseDir2, APrefix2: string);
+  var
+    Entries: TDirEntryArray;
+    I, K: Integer;
+    Full, Rel, RefName: string;
+    Oid, Peeled: TGitOid;
+    IsAnn: Boolean;
+    Text: string;
+    Dup: Boolean;
   begin
-    Full := PathJoin([ABaseDir, Entries[I].Name]);
-    if Entries[I].IsDir then
+    try
+      Entries := ReadDir(ABaseDir2);
+    except
+      Exit;
+    end;
+    for I := 0 to High(Entries) do
     begin
-      CollectTagsFromDir(AGitDir, Full, APrefix + Entries[I].Name + '/', AOut);
-    end
-    else
-    begin
-      Rel := APrefix + Entries[I].Name;
-      RefName := TagsPrefix + Rel;
-      try
-        Text := ReadFileText(Full);
-        // trim
-        while (Length(Text) > 0) and (Text[1] in [#9, #10, #13, ' ']) do Delete(Text, 1, 1);
-        while (Length(Text) > 0) and (Text[Length(Text)] in [#9, #10, #13, ' ']) do Delete(Text, Length(Text), 1);
-        if Copy(Text, 1, 5) = 'ref: ' then
-          Oid := GitResolveRef(AGitDir, RefName)
-        else
-          Oid := GitOidFromHex(Text);
-      except
-        Continue;
+      Full := PathJoin([ABaseDir2, Entries[I].Name]);
+      if Entries[I].IsDir then
+      begin
+        Recurse(Full, APrefix2 + Entries[I].Name + '/');
+      end
+      else
+      begin
+        Rel := APrefix2 + Entries[I].Name;
+        RefName := TagsPrefix + Rel;
+        try
+          Text := ReadFileText(Full);
+          // trim
+          while (Length(Text) > 0) and (Text[1] in [#9, #10, #13, ' ']) do Delete(Text, 1, 1);
+          while (Length(Text) > 0) and (Text[Length(Text)] in [#9, #10, #13, ' ']) do Delete(Text, Length(Text), 1);
+          if Copy(Text, 1, 5) = 'ref: ' then
+            Oid := GitResolveRef(AGitDir, RefName)
+          else
+            Oid := GitOidFromHex(Text);
+        except
+          Continue;
+        end;
+        Dup := False;
+        for K := 0 to Integer(LCnt) - 1 do
+          if AOut[K].Name = Rel then begin Dup := True; Break; end;
+        if Dup then Continue;
+        Peeled := Default(TGitOid);
+        IsAnn := False;
+        TryPeelTag(AGitDir, Oid, Peeled, IsAnn);
+        // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy TGitTagEntry Move, avoids O(n²) SetLength(Length+1) churn; final shrink once
+        if LCnt >= LCap then
+        begin
+          LCap := GrowArrayCapacity(LCap, LCnt + 1);
+          SetLength(AOut, LCap);
+        end;
+        AOut[LCnt].Name := Rel;
+        AOut[LCnt].RefName := RefName;
+        AOut[LCnt].Oid := Oid;
+        AOut[LCnt].PeeledOid := Peeled;
+        AOut[LCnt].IsAnnotated := IsAnn;
+        Inc(LCnt);
       end;
-      if ContainsTag(AOut, Rel) then Continue;
-      Peeled := Default(TGitOid);
-      IsAnn := False;
-      TryPeelTag(AGitDir, Oid, Peeled, IsAnn);
-      SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Name := Rel;
-      AOut[High(AOut)].RefName := RefName;
-      AOut[High(AOut)].Oid := Oid;
-      AOut[High(AOut)].PeeledOid := Peeled;
-      AOut[High(AOut)].IsAnnotated := IsAnn;
     end;
   end;
+
+begin
+  // perf: shared LCnt/LCap across recursion avoids stale Length snapshot, geometric growth single source via bytes.ops
+  LCnt := SizeUInt(Length(AOut));
+  LCap := LCnt;
+  Recurse(ABaseDir, APrefix);
+  if SizeUInt(Length(AOut)) <> LCnt then
+    SetLength(AOut, LCnt);
 end;
 
 procedure CollectTagsFromPacked(const AGitDir: string; var AOut: TGitTagArray);
 var
   Lines: TStringArray;
-  I, Sp: Integer;
+  I, Sp, K: Integer;
   Line, Hex, Name, Short: string;
   Oid, Peeled: TGitOid;
   IsAnn: Boolean;
   NextPeeled: string;
+  LCnt, LCap: SizeUInt;
+  Dup: Boolean;
 begin
   if not FileExists(PathJoin([AGitDir, 'packed-refs'])) then Exit;
   try
@@ -238,6 +265,9 @@ begin
   except
     Exit;
   end;
+  // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy TGitTagEntry Move, avoids O(n²) SetLength(Length+1) churn; final shrink once
+  LCnt := SizeUInt(Length(AOut));
+  LCap := SizeUInt(Length(AOut));
   I := 0;
   while I <= High(Lines) do
   begin
@@ -266,7 +296,10 @@ begin
       Continue;
     end;
     Short := Copy(Name, Length(TagsPrefix)+1, MaxInt);
-    if ContainsTag(AOut, Short) then
+    Dup := False;
+    for K := 0 to Integer(LCnt) - 1 do
+      if AOut[K].Name = Short then begin Dup := True; Break; end;
+    if Dup then
     begin
       // skip peeled too
       if (I+1 <= High(Lines)) and (Length(Lines[I+1])>0) and (Lines[I+1][1]='^') then Inc(I);
@@ -301,14 +334,21 @@ begin
       TryPeelTag(AGitDir, Oid, Peeled, IsAnn);
       if not IsAnn then Peeled := Default(TGitOid);
     end;
-    SetLength(AOut, Length(AOut)+1);
-    AOut[High(AOut)].Name := Short;
-    AOut[High(AOut)].RefName := Name;
-    AOut[High(AOut)].Oid := Oid;
-    AOut[High(AOut)].PeeledOid := Peeled;
-    AOut[High(AOut)].IsAnnotated := IsAnn;
+    if LCnt >= LCap then
+    begin
+      LCap := GrowArrayCapacity(LCap, LCnt + 1);
+      SetLength(AOut, LCap);
+    end;
+    AOut[LCnt].Name := Short;
+    AOut[LCnt].RefName := Name;
+    AOut[LCnt].Oid := Oid;
+    AOut[LCnt].PeeledOid := Peeled;
+    AOut[LCnt].IsAnnotated := IsAnn;
+    Inc(LCnt);
     Inc(I);
   end;
+  if SizeUInt(Length(AOut)) <> LCnt then
+    SetLength(AOut, LCnt);
 end;
 
 function GitTagList(const AGitDir: string): TGitTagArray;
@@ -453,11 +493,16 @@ var
   I: Integer;
   Line, Name: string;
   Sp: Integer;
+  LCnt, LCap: SizeUInt;
 begin
   Path := PathJoin([AGitDir, 'packed-refs']);
   if not FileExists(Path) then Exit;
   Lines := ReadFileLines(Path);
-  SetLength(Keep, 0);
+  // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy string Move (managed, refcounted), avoids O(n²) SetLength(Length+1) churn; final shrink once
+  // stability: SetLength exception-safe, managed strings released on exception, no leak
+  Keep := nil;
+  LCnt := 0;
+  LCap := 0;
   I := 0;
   while I <= High(Lines) do
   begin
@@ -478,10 +523,17 @@ begin
         end;
       end;
     end;
-    SetLength(Keep, Length(Keep)+1);
-    Keep[High(Keep)] := Line;
+    if LCnt >= LCap then
+    begin
+      LCap := GrowArrayCapacity(LCap, LCnt + 1);
+      SetLength(Keep, LCap);
+    end;
+    Keep[LCnt] := Line;
+    Inc(LCnt);
     Inc(I);
   end;
+  if SizeUInt(Length(Keep)) <> LCnt then
+    SetLength(Keep, LCnt);
   if Length(Keep) = Length(Lines) then Exit;
   Tmp := Path + '.tmp';
   WriteFileLines(Tmp, Keep);

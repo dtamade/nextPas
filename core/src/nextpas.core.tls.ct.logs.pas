@@ -35,6 +35,7 @@ procedure ClearAdditionalCTLogs;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.text.conv,   { SameText:密钥类型比对 }
   nextpas.core.tls.base64,
   nextpas.core.crypto.hash;
@@ -52,12 +53,12 @@ type
 var
   GAdditionalCTLogs: array of TCTLogEntry;
 
-function CopyBytes(const AData: TBytes): TBytes;
+function CopyBytes(const AData: TBytes): TBytes; inline;
 begin
   Result := nil;
   SetLength(Result, Length(AData));
   if Length(AData) > 0 then
-    Move(AData[0], Result[0], Length(AData));
+    BytesCopy(@Result[0], @AData[0], SizeUInt(Length(AData))); // perf: inline single Move via bytes.ops.BytesCopy single source (zero-copy)
 end;
 
 function SameBytes(const ALeft, ARight: TBytes): Boolean;

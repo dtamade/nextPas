@@ -1,8 +1,8 @@
 # nextpas.core.db.sqlscan — SQL 词法扫描共享域契约
 
-**模块**：`nextpas.core.db.sqlscan.{base,intf,pas}` thin re-export `nextpas.core.text.sqlscan` 真源  
-**层级**：L1 `text.sqlscan` 真源（L3 家族 thin 转发，零逻辑，依赖 L0）  
-**四件套**：`sqlscan.base` ← `sqlscan.intf` ← `sqlscan` 门面（thin，`inline` 转发）  
+**模块**：`nextpas.core.db.sqlscan.{base,intf,pas}` thin re-export `nextpas.core.text.sqlscan` 真源
+**层级**：独立 L3 族 thin 正名（L1 `text.sqlscan` 真源，零逻辑，依赖 L0；已升格独立 L3 族，寄居债已清，四件套/`bytes.ops` 单源/`inline`+零拷贝已兑现）
+**四件套**：`sqlscan.base` ← `sqlscan.intf` ← `sqlscan` 门面（thin，`inline` 转发）
 **对应主契约**：`CONTRACT.md` §1.1 词法扫描行 + §2.20 V3-C6 共享引擎
 
 ## 职责

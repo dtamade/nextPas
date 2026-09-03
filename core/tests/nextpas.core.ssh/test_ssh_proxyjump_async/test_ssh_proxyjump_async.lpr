@@ -5,7 +5,7 @@ program test_ssh_proxyjump_async;
   jump-auth fail propagation. Uses nextpas.core.bytes.ops,
   TAsyncLoop + NetTcpListen + MemPipe for server<->server tunnel.
   Heap 0 (threads + RTLEvent). }
-uses cthreads, Classes, SysUtils, nextpas.core.system.sysutils, nextpas.core.io.intf,
+uses cthreads, Classes, SysUtils, nextpas.core.system.sysutils, nextpas.core.bytes.ops, nextpas.core.io.intf,
   nextpas.core.net, nextpas.core.net.tcp, nextpas.core.async.loop, nextpas.core.ssh.base, nextpas.core.ssh.errors,
   nextpas.core.ssh.buffer, nextpas.core.ssh.cipher, nextpas.core.ssh.kex,
   nextpas.core.ssh.kex.curve25519, nextpas.core.ssh.hostkey, nextpas.core.ssh.keys, nextpas.core.ssh.auth,
@@ -125,5 +125,7 @@ begin
   GSuite.Test('async double-hop success', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunAsyncProxy(PatternBytes($11,32), PatternBytes($22,32), 'u','p', True, 'u','p', True, R, K); if not Ok then begin WriteLn('D1 err kind ',Ord(K)); CheckTrue(K in [sekIO, sekTimeout],'allow io/timeout for now '+IntToStr(Ord(K))); Exit; end; CheckEqual('via-jump-async-ok', BytesToText(R.StdOut),'out'); CheckEqual(7, R.ExitCode,'exit'); end);
   GSuite.Test('async target auth fail propagates', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunAsyncProxy(PatternBytes($33,32), PatternBytes($44,32), 'u','p', True, 'u','wrong', False, R, K); CheckTrue(not Ok,'should fail'); CheckEqual(Ord(sekAuth), Ord(K),'kind auth'); end);
   GSuite.Test('async jump auth fail propagates', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunAsyncProxy(PatternBytes($55,32), PatternBytes($66,32), 'u','wrong', False, 'u','p', True, R, K); CheckTrue(not Ok,'jump should fail'); CheckTrue(K in [sekAuth, sekIO],'kind auth/io'); end);
-  GRunner:=TSuiteRunner.Create('nextpas.core.ssh.proxyjump.async'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; ClearBigIntCache; if not GRunner.AllPassed then Halt(1);
+  GRunner:=TSuiteRunner.Create('nextpas.core.ssh.proxyjump.async'); GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary;
+  ClearBigIntCache; // heaptrc 0: BigNat/Montgomery 收敛
+  if not GRunner.AllPassed then Halt(1);
 end.

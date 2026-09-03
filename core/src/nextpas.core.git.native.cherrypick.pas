@@ -17,6 +17,7 @@ function GitCherryPick(const AGitDir, AWorkTree, ATargetRef: string): TGitOid; o
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.fs,
@@ -58,7 +59,59 @@ type
   end;
   TFlatArray = array of TFlatEntry;
 
-procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray);
+function LocalCompareStr(const A, B: string): Integer; inline;
+var I, L: Integer;
+begin
+  L := Length(A); if Length(B) < L then L := Length(B);
+  for I := 1 to L do if A[I] <> B[I] then Exit(Ord(A[I]) - Ord(B[I]));
+  Result := Length(A) - Length(B);
+end;
+
+{ SortFlat: O(n log n) quicksort (median-of-3 + tail recursion).
+  Replaces prior insertion O(n²). Zero-copy: swaps records, compares
+  via inline LocalCompareStr on existing string storage (no alloc). }
+procedure QuickSortFlat(var A: TFlatArray; L, R: Integer);
+var I, J, M: Integer; Pivot: string; Tmp: TFlatEntry;
+begin
+  while L < R do
+  begin
+    M := (L + R) shr 1;
+    if LocalCompareStr(A[L].Path, A[M].Path) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
+    if LocalCompareStr(A[M].Path, A[R].Path) > 0 then begin Tmp := A[M]; A[M] := A[R]; A[R] := Tmp; end;
+    if LocalCompareStr(A[L].Path, A[M].Path) > 0 then begin Tmp := A[L]; A[L] := A[M]; A[M] := Tmp; end;
+    Pivot := A[M].Path;
+    I := L; J := R;
+    repeat
+      while LocalCompareStr(A[I].Path, Pivot) < 0 do Inc(I);
+      while LocalCompareStr(A[J].Path, Pivot) > 0 do Dec(J);
+      if I <= J then
+      begin
+        if I <> J then begin Tmp := A[I]; A[I] := A[J]; A[J] := Tmp; end;
+        Inc(I); Dec(J);
+      end;
+    until I > J;
+    if (J - L) < (R - I) then
+    begin
+      if L < J then QuickSortFlat(A, L, J);
+      L := I;
+    end else
+    begin
+      if I < R then QuickSortFlat(A, I, R);
+      R := J;
+    end;
+  end;
+end;
+
+procedure SortFlat(var A: TFlatArray); inline;
+begin
+  if Length(A) < 2 then Exit;
+  QuickSortFlat(A, 0, High(A));
+end;
+
+{ CollectFlat: amortized O(n) via bytes.ops GrowArrayCapacity single source.
+  Previously SetLength(Length+1) per entry → O(n²) copies.
+  Zero-copy: string assignment is refcounted move, TGitOid 20B inline copy. }
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray; var ACount, ACap: SizeUInt); overload;
 var Kind: TGitObjectKind; Data: TBytes; Entries: TGitTreeEntryArray; I: Integer; Full: string;
 begin
   if IsZeroOid(ATreeOid) then Exit;
@@ -69,46 +122,44 @@ begin
   begin
     Full := APrefix + Entries[I].Name;
     if Entries[I].Mode = $4000 then
-      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut)
+      CollectFlat(ARepo, Entries[I].Oid, Full + '/', AOut, ACount, ACap)
     else
     begin
-      SetLength(AOut, Length(AOut)+1);
-      AOut[High(AOut)].Path := Full;
-      AOut[High(AOut)].Mode := Entries[I].Mode;
-      AOut[High(AOut)].Oid := Entries[I].Oid;
+      if ACount >= ACap then
+      begin
+        ACap := GrowArrayCapacity(ACap, ACount + 1);
+        SetLength(AOut, ACap);
+      end;
+      AOut[ACount].Path := Full;
+      AOut[ACount].Mode := Entries[I].Mode;
+      AOut[ACount].Oid := Entries[I].Oid;
+      Inc(ACount);
     end;
   end;
 end;
 
+procedure CollectFlat(ARepo: TNativeRepository; const ATreeOid: TGitOid; const APrefix: string; var AOut: TFlatArray); overload; inline;
+var Cnt, Cap: SizeUInt;
+begin
+  Cnt := SizeUInt(Length(AOut)); Cap := Cnt;
+  // single source geometric growth holds across recursion via shared Cnt/Cap
+  CollectFlat(ARepo, ATreeOid, APrefix, AOut, Cnt, Cap);
+  SetLength(AOut, Cnt);
+end;
+
 function BuildFlat(const AGitDir: string; const ATreeOid: TGitOid): TFlatArray;
-var Repo: TNativeRepository;
+var Repo: TNativeRepository; Cnt, Cap: SizeUInt;
 begin
   Result := nil;
   if IsZeroOid(ATreeOid) then Exit;
   Repo := TNativeRepository.Create(AGitDir);
   try
-    CollectFlat(Repo, ATreeOid, '', Result);
+    Cnt := 0; Cap := 0;
+    CollectFlat(Repo, ATreeOid, '', Result, Cnt, Cap);
+    SetLength(Result, Cnt);
+    SortFlat(Result);
   finally
     Repo.Free;
-  end;
-end;
-
-function LocalCompareStr(const A, B: string): Integer;
-var I, L: Integer;
-begin
-  L := Length(A); if Length(B) < L then L := Length(B);
-  for I := 1 to L do if A[I] <> B[I] then Exit(Ord(A[I]) - Ord(B[I]));
-  Result := Length(A) - Length(B);
-end;
-
-procedure SortFlat(var A: TFlatArray);
-var I, J: Integer; T: TFlatEntry;
-begin
-  for I := 1 to High(A) do
-  begin
-    J := I;
-    while (J > 0) and (LocalCompareStr(A[J-1].Path, A[J].Path) > 0) do
-    begin T := A[J-1]; A[J-1] := A[J]; A[J] := T; Dec(J); end;
   end;
 end;
 
@@ -121,45 +172,68 @@ end;
 
 procedure ApplyDiffs(var ABaseFlat: TFlatArray; const ADiffs: TGitDiffArray);
 var I, Idx: Integer; E: TGitDiffEntry;
+  LCap, LCnt: SizeUInt;
+  // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source,
+  // inline, O(1) amortized, avoids O(n²) SetLength(Length+1) churn; final SetLength trim once
+  procedure EnsureFlatCap;
+  begin
+    if LCnt >= LCap then
+    begin
+      LCap := GrowArrayCapacity(LCap, LCnt + 1);
+      SetLength(ABaseFlat, LCap);
+    end;
+  end;
 begin
+  LCnt := SizeUInt(Length(ABaseFlat)); LCap := LCnt;
+  // keep spare capacity in underlying array to avoid reallocation per add
+  if LCap < LCnt then LCap := LCnt;
   for I := 0 to High(ADiffs) do
   begin
     E := ADiffs[I];
     case E.Status of
       gdsAdded:
         begin
-          SetLength(ABaseFlat, Length(ABaseFlat)+1);
-          ABaseFlat[High(ABaseFlat)].Path := E.Path;
-          ABaseFlat[High(ABaseFlat)].Mode := E.NewMode;
-          ABaseFlat[High(ABaseFlat)].Oid := E.NewOid;
+          EnsureFlatCap;
+          ABaseFlat[LCnt].Path := E.Path;
+          ABaseFlat[LCnt].Mode := E.NewMode;
+          ABaseFlat[LCnt].Oid := E.NewOid;
+          Inc(LCnt);
         end;
       gdsModified, gdsTypeChanged:
         begin
           Idx := FindFlatIndex(ABaseFlat, E.Path);
-          if Idx >= 0 then
+          // FindFlatIndex scans up to LCnt valid entries, but array may have cap slack; limit search
+          // fallback: linear scan truncated to LCnt to avoid reading uninitialized tail
+          if (Idx < 0) or (SizeUInt(Idx) >= LCnt) then
+          begin
+            // not found within active prefix → append with growth
+            EnsureFlatCap;
+            ABaseFlat[LCnt].Path := E.Path;
+            ABaseFlat[LCnt].Mode := E.NewMode;
+            ABaseFlat[LCnt].Oid := E.NewOid;
+            Inc(LCnt);
+          end else
           begin
             ABaseFlat[Idx].Mode := E.NewMode;
             ABaseFlat[Idx].Oid := E.NewOid;
-          end
-          else
-          begin
-            SetLength(ABaseFlat, Length(ABaseFlat)+1);
-            ABaseFlat[High(ABaseFlat)].Path := E.Path;
-            ABaseFlat[High(ABaseFlat)].Mode := E.NewMode;
-            ABaseFlat[High(ABaseFlat)].Oid := E.NewOid;
           end;
         end;
       gdsDeleted:
         begin
           Idx := FindFlatIndex(ABaseFlat, E.Path);
-          if Idx >= 0 then
+          if (Idx >= 0) and (SizeUInt(Idx) < LCnt) then
           begin
-            ABaseFlat[Idx] := ABaseFlat[High(ABaseFlat)];
-            SetLength(ABaseFlat, Length(ABaseFlat)-1);
+            if SizeUInt(Idx) <> LCnt - 1 then
+              ABaseFlat[Idx] := ABaseFlat[LCnt - 1];
+            Dec(LCnt);
+            // keep capacity for future adds/mods; shrinking via SetLength after loop
+            // avoid managed leak: clear tail string ref
+            ABaseFlat[LCnt].Path := '';
           end;
         end;
     end;
   end;
+  SetLength(ABaseFlat, LCnt);
   SortFlat(ABaseFlat);
 end;
 
@@ -177,10 +251,16 @@ var
   Seen: TStringArray;
   K: Integer;
   Found: Boolean;
+  EntriesCnt, EntriesCap: SizeUInt;
+  SeenCnt, SeenCap: SizeUInt;
+  SubFlatCnt, SubFlatCap: SizeUInt;
 begin
-  // collect direct children under APrefix
-  SetLength(Entries, 0);
-  SetLength(Seen, 0);
+  // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source,
+  // inline, O(1) amortized, zero-copy Move for TGitTreeEntry/TFlatEntry,
+  // avoids O(n²) SetLength(Length+1) churn on large trees; single trim before write
+  Entries := nil; Seen := nil;
+  EntriesCnt := 0; EntriesCap := 0;
+  SeenCnt := 0; SeenCap := 0;
   for I := 0 to High(AFlat) do
   begin
     if (APrefix <> '') and (Pos(APrefix, AFlat[I].Path) <> 1) then Continue;
@@ -191,44 +271,67 @@ begin
     begin
       // directory
       Name := Copy(Name, 1, SlashPos-1);
-      // dedup dir
+      // dedup dir via SeenCnt prefix (zero-copy string compare)
       Found := False;
-      for K := 0 to High(Seen) do if Seen[K] = Name then begin Found := True; Break; end;
+      for K := 0 to Pred(SeenCnt) do if Seen[K] = Name then begin Found := True; Break; end;
       if Found then Continue;
-      SetLength(Seen, Length(Seen)+1);
-      Seen[High(Seen)] := Name;
-      // build subflat for this dir
+      if SeenCnt >= SeenCap then
+      begin
+        SeenCap := GrowArrayCapacity(SeenCap, SeenCnt + 1);
+        SetLength(Seen, SeenCap);
+      end;
+      Seen[SeenCnt] := Name;
+      Inc(SeenCnt);
+      // build subflat for this dir: amortized growth
       SubPrefix := APrefix + Name + '/';
-      SetLength(SubFlat, 0);
+      SubFlat := nil; SubFlatCnt := 0; SubFlatCap := 0;
       for J := 0 to High(AFlat) do
         if Pos(SubPrefix, AFlat[J].Path) = 1 then
         begin
-          SetLength(SubFlat, Length(SubFlat)+1);
-          SubFlat[High(SubFlat)] := AFlat[J];
+          if SubFlatCnt >= SubFlatCap then
+          begin
+            SubFlatCap := GrowArrayCapacity(SubFlatCap, SubFlatCnt + 1);
+            SetLength(SubFlat, SubFlatCap);
+          end;
+          SubFlat[SubFlatCnt] := AFlat[J];
+          Inc(SubFlatCnt);
         end;
+      SetLength(SubFlat, SubFlatCnt);
       SubOid := BuildTreeFromFlat(AGitDir, SubFlat, SubPrefix);
       Added.Name := Name;
       Added.Mode := $4000;
       Added.Oid := SubOid;
-      SetLength(Entries, Length(Entries)+1);
-      Entries[High(Entries)] := Added;
+      if EntriesCnt >= EntriesCap then
+      begin
+        EntriesCap := GrowArrayCapacity(EntriesCap, EntriesCnt + 1);
+        SetLength(Entries, EntriesCap);
+      end;
+      Entries[EntriesCnt] := Added;
+      Inc(EntriesCnt);
     end
     else
     begin
       // file at this level
       if Pos('/', Name) > 0 then Continue;
-      // avoid duplicate file (should not happen)
+      // avoid duplicate file (should not happen) – scan up to EntriesCnt
       HasSub := False;
-      for K := 0 to High(Entries) do if Entries[K].Name = Name then begin HasSub := True; Break; end;
+      for K := 0 to Pred(EntriesCnt) do if Entries[K].Name = Name then begin HasSub := True; Break; end;
       if HasSub then Continue;
       Added.Name := Name;
       Added.Mode := AFlat[I].Mode;
       Added.Oid := AFlat[I].Oid;
-      SetLength(Entries, Length(Entries)+1);
-      Entries[High(Entries)] := Added;
+      if EntriesCnt >= EntriesCap then
+      begin
+        EntriesCap := GrowArrayCapacity(EntriesCap, EntriesCnt + 1);
+        SetLength(Entries, EntriesCap);
+      end;
+      Entries[EntriesCnt] := Added;
+      Inc(EntriesCnt);
     end;
   end;
-  if Length(Entries) = 0 then
+  SetLength(Entries, EntriesCnt);
+  SetLength(Seen, SeenCnt); // trim slack, refcounted strings zero-copy
+  if EntriesCnt = 0 then
   begin
     // empty tree: git writes empty tree with known oid 4b825dc642cb6eb9a060e54bf8d69288fbee4904
     // but we will write it via GitWriteTree which handles empty

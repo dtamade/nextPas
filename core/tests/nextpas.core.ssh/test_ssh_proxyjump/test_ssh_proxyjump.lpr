@@ -10,9 +10,9 @@ program test_ssh_proxyjump;
   mirrors test_ssh_session zero-leak pattern (owner boundary: io.intf/bytes). }
 
 uses
-  nextpas.core.bytes.ops,
   cthreads,
   Classes, SysUtils,
+  nextpas.core.bytes.ops,
   nextpas.core.system.sysutils,
   nextpas.core.io.intf,
   nextpas.core.ssh.base,
@@ -27,6 +27,8 @@ uses
   nextpas.core.ssh.transport,
   nextpas.core.ssh.channel,
   nextpas.core.ssh.session,
+  nextpas.core.ssh.session.builder,
+  nextpas.core.ssh.proxyjump,
   nextpas.core.ssh.sftp,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ed25519,
@@ -240,12 +242,13 @@ var LJumpClient, LJumpServer: TMemPipeEnd; LJumpShared: PPipeShared;
     LJumpTid, LTargetTid: TThreadID;
     LJumpSess, LProxySess: ISshSession;
     LJumpOpts, LTargetOpts: TSshConnectOptions;
+    LJcIO: IReadWriteCloser;
     LWait: Integer;
 begin
   Result:=False; AErrKind:=sekIO; AResult:=Default(TSshExecResult);
   LJumpClient:=nil; LJumpServer:=nil; LFwdA:=nil; LFwdB:=nil;
   LJumpShared:=nil; LFwdShared:=nil; LScJump:=nil; LScTarget:=nil;
-  LSyncJump:=nil; LSyncTarget:=nil;
+  LSyncJump:=nil; LSyncTarget:=nil; LJcIO:=nil;
   New(LScJump); New(LScTarget); New(LSyncJump); New(LSyncTarget);
   try
     LScJump^:=Default(TSshLoopServerScenario); LScJump^.HostSeed:=Copy(AHostSeedJump,0,Length(AHostSeedJump)); LScJump^.IsJump:=True;
@@ -262,25 +265,29 @@ begin
     Sleep(20);
     LJumpOpts:=DefaultSshConnectOptions('jump'); LJumpOpts.Host:='jump'; LJumpOpts.User:='u'; LJumpOpts.Password:='p'; LJumpOpts.ExecTimeoutMs:=5000;
     LTargetOpts:=DefaultSshConnectOptions('target'); LTargetOpts.Host:='target'; LTargetOpts.Port:=22; LTargetOpts.User:='u'; LTargetOpts.Password:='p'; LTargetOpts.ExecTimeoutMs:=5000;
+    LJumpSess:=nil; LProxySess:=nil; LJcIO:=LJumpClient;
     try
-      try LJumpSess:=SshConnectOn(LJumpClient as IReadWriteCloser, LJumpOpts);
+      try
+        SshConnectOn(LJcIO, LJumpOpts, LJumpSess);
       except on E:ESSHError do begin AErrKind:=E.Kind; Exit; end; on E:Exception do begin AErrKind:=sekIO; Exit; end; end;
       try
-        try LProxySess:=SshConnectViaJumpOn(LJumpSess, LTargetOpts);
-        except on E:ESSHError do begin AErrKind:=E.Kind; try LJumpSess.Close; except end; LJumpSess:=nil; Exit; end; on E:Exception do begin AErrKind:=sekIO; try LJumpSess.Close; except end; LJumpSess:=nil; Exit; end; end;
+        try
+          SshConnectViaJumpOn(LJumpSess, LTargetOpts, LProxySess);
+        except on E:ESSHError do begin AErrKind:=E.Kind; try if Assigned(LJumpSess) then LJumpSess.Close; except end; LJumpSess:=nil; Exit; end; on E:Exception do begin AErrKind:=sekIO; try if Assigned(LJumpSess) then LJumpSess.Close; except end; LJumpSess:=nil; Exit; end; end;
         try
           AResult:=LProxySess.Exec('echo hi');
           Result:=(AResult.ExitCode=0) and (BytesToText(AResult.StdOut)='via-jump-ok');
           if not Result then AErrKind:=sekProtocol;
         except on E:ESSHError do AErrKind:=E.Kind; on E:Exception do AErrKind:=sekIO; end;
       finally try if Assigned(LProxySess) then LProxySess.Close; except end; LProxySess:=nil; end;
-    finally try if Assigned(LJumpSess) then LJumpSess.Close; except end; LJumpSess:=nil; end;
+    finally try if Assigned(LJumpSess) then LJumpSess.Close; except end; LJumpSess:=nil; LJcIO:=nil; end;
   finally
     try try LFwdA.Close; except end; try LFwdB.Close; except end; try LJumpClient.Close; except end; try LJumpServer.Close; except end; except end;
-    if Assigned(LSyncJump) and Assigned(LSyncJump^.DoneEvent) then begin LWait:=0; while (not LSyncJump^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncJump^.DoneEvent, 100); Inc(LWait,100); end; end;
-    if Assigned(LSyncTarget) and Assigned(LSyncTarget^.DoneEvent) then begin LWait:=0; while (not LSyncTarget^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncTarget^.DoneEvent, 100); Inc(LWait,100); end; end;
+    if Assigned(LSyncJump) and Assigned(LSyncJump^.DoneEvent) then begin while not LSyncJump^.Done do RTLEventWaitFor(LSyncJump^.DoneEvent, 100); end;
+    if Assigned(LSyncTarget) and Assigned(LSyncTarget^.DoneEvent) then begin while not LSyncTarget^.Done do RTLEventWaitFor(LSyncTarget^.DoneEvent, 100); end;
     if Assigned(LSyncJump) then begin RTLEventDestroy(LSyncJump^.DoneEvent); Dispose(LSyncJump); end;
     if Assigned(LSyncTarget) then begin RTLEventDestroy(LSyncTarget^.DoneEvent); Dispose(LSyncTarget); end;
+    LJcIO:=nil;
     if Assigned(LJumpClient) then LJumpClient.Free;
     if Assigned(LJumpServer) then LJumpServer.Free;
     if Assigned(LFwdA) then LFwdA.Free;
@@ -289,7 +296,7 @@ begin
     if Assigned(LFwdShared) then begin DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared); end;
     if Assigned(LScJump) then begin Finalize(LScJump^); Dispose(LScJump); end;
     if Assigned(LScTarget) then begin Finalize(LScTarget^); Dispose(LScTarget); end;
-    Finalize(LJumpOpts); Finalize(LTargetOpts); Finalize(AResult);
+    if not Result then AResult := Default(TSshExecResult);
   end;
 end;
 
@@ -300,10 +307,11 @@ var LJumpClient, LJumpServer: TMemPipeEnd; LJumpShared: PPipeShared;
     LSyncJump, LSyncTarget: PProxySync;
     LJumpTid, LTargetTid: TThreadID;
     LJumpSess: ISshSession; LJumpOpts: TSshConnectOptions;
+    LJcIO: IReadWriteCloser;
     LWait: Integer;
 begin
   Result:=False; AErrKind:=sekIO;
-  LJumpClient:=nil; LJumpServer:=nil; LFwdA:=nil; LFwdB:=nil; LJumpShared:=nil; LFwdShared:=nil; LScJump:=nil; LScTarget:=nil; LSyncJump:=nil; LSyncTarget:=nil;
+  LJumpClient:=nil; LJumpServer:=nil; LFwdA:=nil; LFwdB:=nil; LJumpShared:=nil; LFwdShared:=nil; LScJump:=nil; LScTarget:=nil; LSyncJump:=nil; LSyncTarget:=nil; LJcIO:=nil;
   New(LScJump); New(LScTarget); New(LSyncJump); New(LSyncTarget);
   try
     LScJump^:=Default(TSshLoopServerScenario); LScJump^.HostSeed:=PatternBytes($11,32); LScJump^.IsJump:=True;
@@ -314,32 +322,32 @@ begin
     BeginThread(@ProxyServerMain, Pointer(LSyncTarget), LTargetTid);
     BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); Sleep(20);
     LJumpOpts:=DefaultSshConnectOptions('jump'); LJumpOpts.Host:='jump'; LJumpOpts.User:='u'; LJumpOpts.Password:='p'; LJumpOpts.ExecTimeoutMs:=5000;
-    try LJumpSess:=SshConnectOn(LJumpClient as IReadWriteCloser, LJumpOpts); Result:=True;
+    LJumpSess:=nil; LJcIO:=LJumpClient;
+    try SshConnectOn(LJcIO, LJumpOpts, LJumpSess); Result:=True;
       try LJumpSess.Close; except end; LJumpSess:=nil;
     except on E:ESSHError do begin AErrKind:=E.Kind; Result:=False; end; end;
   finally
     try try LFwdA.Close; except end; try LFwdB.Close; except end; try LJumpClient.Close; except end; try LJumpServer.Close; except end; except end;
-    if Assigned(LSyncJump) then begin LWait:=0; while (not LSyncJump^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncJump^.DoneEvent,100); Inc(LWait,100); end; end;
-    if Assigned(LSyncTarget) then begin LWait:=0; while (not LSyncTarget^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncTarget^.DoneEvent,100); Inc(LWait,100); end; end;
+    if Assigned(LSyncJump) then begin while not LSyncJump^.Done do RTLEventWaitFor(LSyncJump^.DoneEvent,100); end;
+    if Assigned(LSyncTarget) then begin while not LSyncTarget^.Done do RTLEventWaitFor(LSyncTarget^.DoneEvent,100); end;
     if Assigned(LSyncJump) then begin RTLEventDestroy(LSyncJump^.DoneEvent); Dispose(LSyncJump); end;
     if Assigned(LSyncTarget) then begin RTLEventDestroy(LSyncTarget^.DoneEvent); Dispose(LSyncTarget); end;
-    if Assigned(LJumpSess) then begin try LJumpSess.Close; except end; LJumpSess:=nil; end;
+    if Assigned(LJumpSess) then begin try LJumpSess.Close; except end; LJumpSess:=nil; end; LJcIO:=nil;
     if Assigned(LJumpClient) then LJumpClient.Free; if Assigned(LJumpServer) then LJumpServer.Free;
     if Assigned(LFwdA) then LFwdA.Free; if Assigned(LFwdB) then LFwdB.Free;
     if Assigned(LJumpShared) then begin DoneCriticalSection(LJumpShared^.Lock); Dispose(LJumpShared); end;
     if Assigned(LFwdShared) then begin DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared); end;
     if Assigned(LScJump) then begin Finalize(LScJump^); Dispose(LScJump); end;
     if Assigned(LScTarget) then begin Finalize(LScTarget^); Dispose(LScTarget); end;
-    Finalize(LJumpOpts);
   end;
 end;
 
 function RunSftpViaProxy(out AErr:string):Boolean;
 var LJumpClient, LJumpServer: TMemPipeEnd; LJumpShared: PPipeShared; LFwdA, LFwdB: TMemPipeEnd; LFwdShared: PPipeShared;
     LScJump, LScTarget: PSshLoopServerScenario; LSyncJump, LSyncTarget: PProxySync;
-    LJumpTid, LTargetTid: TThreadID; JO, TO2: TSshConnectOptions; S1, S2: ISshSession; FS: ISshFileSystem; A: TSftpAttrs; P: string; LWait: Integer;
+    LJumpTid, LTargetTid: TThreadID; JO, TO2: TSshConnectOptions; S1, S2: ISshSession; FS: ISshFileSystem; A: TSftpAttrs; P: string; LJcIO: IReadWriteCloser; LWait: Integer;
 begin
-  Result:=False; AErr:='';
+  Result:=False; AErr:=''; LJcIO:=nil;
   LJumpClient:=nil; LJumpServer:=nil; LFwdA:=nil; LFwdB:=nil; LJumpShared:=nil; LFwdShared:=nil; LScJump:=nil; LScTarget:=nil; LSyncJump:=nil; LSyncTarget:=nil;
   New(LScJump); New(LScTarget); New(LSyncJump); New(LSyncTarget);
   try
@@ -352,8 +360,9 @@ begin
     BeginThread(@ProxyServerMain, Pointer(LSyncJump), LJumpTid); Sleep(20);
     JO:=DefaultSshConnectOptions('jump'); JO.Host:='jump'; JO.User:='u'; JO.Password:='p'; JO.ExecTimeoutMs:=5000;
     TO2:=DefaultSshConnectOptions('target'); TO2.Host:='target'; TO2.User:='u'; TO2.Password:='p'; TO2.ExecTimeoutMs:=5000;
+    S1:=nil; S2:=nil; FS:=nil; LJcIO:=LJumpClient;
     try
-      S1:=SshConnectOn(LJumpClient as IReadWriteCloser, JO); S2:=SshConnectViaJumpOn(S1, TO2);
+      SshConnectOn(LJcIO, JO, S1); SshConnectViaJumpOn(S1, TO2, S2);
       FS:=S2.OpenFileSystem;
       P:=FS.RealPath('/foo'); if P<>'/resolved/foo' then begin AErr:='realpath '+P; Exit; end;
       A:=FS.Stat('/file'); if A.Size<>1234 then begin AErr:='stat size '+IntToStr(A.Size); Exit; end;
@@ -362,10 +371,10 @@ begin
   finally
     try if Assigned(FS) then FS:=nil; except end;
     try if Assigned(S2) then begin S2.Close; S2:=nil; end; except end;
-    try if Assigned(S1) then begin S1.Close; S1:=nil; end; except end;
+    try if Assigned(S1) then begin S1.Close; S1:=nil; end; except end; LJcIO:=nil;
     try try LFwdA.Close; except end; try LFwdB.Close; except end; try LJumpClient.Close; except end; try LJumpServer.Close; except end; except end;
-    if Assigned(LSyncJump) then begin LWait:=0; while (not LSyncJump^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncJump^.DoneEvent,100); Inc(LWait,100); end; end;
-    if Assigned(LSyncTarget) then begin LWait:=0; while (not LSyncTarget^.Done) and (LWait<5000) do begin RTLEventWaitFor(LSyncTarget^.DoneEvent,100); Inc(LWait,100); end; end;
+    if Assigned(LSyncJump) then begin while not LSyncJump^.Done do RTLEventWaitFor(LSyncJump^.DoneEvent,100); end;
+    if Assigned(LSyncTarget) then begin while not LSyncTarget^.Done do RTLEventWaitFor(LSyncTarget^.DoneEvent,100); end;
     if Assigned(LSyncJump) then begin RTLEventDestroy(LSyncJump^.DoneEvent); Dispose(LSyncJump); end;
     if Assigned(LSyncTarget) then begin RTLEventDestroy(LSyncTarget^.DoneEvent); Dispose(LSyncTarget); end;
     if Assigned(LJumpClient) then LJumpClient.Free; if Assigned(LJumpServer) then LJumpServer.Free;
@@ -374,18 +383,17 @@ begin
     if Assigned(LFwdShared) then begin DoneCriticalSection(LFwdShared^.Lock); Dispose(LFwdShared); end;
     if Assigned(LScJump) then begin Finalize(LScJump^); Dispose(LScJump); end;
     if Assigned(LScTarget) then begin Finalize(LScTarget^); Dispose(LScTarget); end;
-    Finalize(JO); Finalize(TO2);
   end;
 end;
 
 var GRunner:TSuiteRunner; GSuite:TTestSuite;
 begin
   GSuite:=TTestSuite.Create('ssh proxyjump');
-  GSuite.Test('proxyjump exec via jump', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($11,32), PatternBytes($33,32), R, K); CheckTrue(Ok,'proxy exec ok kind='+IntToStr(Ord(K))+' out='+BytesToText(R.StdOut)); CheckEqual(0, R.ExitCode,'exit'); Finalize(R); end);
-  GSuite.Test('proxyjump double exec reuse', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($44,32), PatternBytes($55,32), R, K); CheckTrue(Ok,'second proxy ok'); CheckEqual(0, R.ExitCode,'exit2'); Finalize(R); Ok:=RunProxyScenario(PatternBytes($46,32), PatternBytes($57,32), R, K); CheckTrue(Ok,'third proxy ok'); Finalize(R); end);
+  GSuite.Test('proxyjump exec via jump', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($11,32), PatternBytes($33,32), R, K); CheckTrue(Ok,'proxy exec ok kind='+IntToStr(Ord(K))+' out='+BytesToText(R.StdOut)); CheckEqual(0, R.ExitCode,'exit'); end);
+  GSuite.Test('proxyjump double exec reuse', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($44,32), PatternBytes($55,32), R, K); CheckTrue(Ok,'second proxy ok'); CheckEqual(0, R.ExitCode,'exit2'); R:=Default(TSshExecResult); Ok:=RunProxyScenario(PatternBytes($46,32), PatternBytes($57,32), R, K); CheckTrue(Ok,'third proxy ok'); end);
   GSuite.Test('proxyjump sftp via jump', procedure var Ok:Boolean; var Err:string; begin Ok:=RunSftpViaProxy(Err); CheckTrue(Ok,'sftp via proxy '+Err); end);
   GSuite.Test('direct-tcpip raw open not crash', procedure var K:TSshErrorKind; Ok:Boolean; begin Ok:=RunDirectTcpipRaw(K); CheckTrue(Ok,'raw ok'); end);
-  GSuite.Test('single-hop regression still 0', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($77,32), PatternBytes($88,32), R, K); CheckTrue(Ok,'single-hop via proxy regression proxy still ok'); Finalize(R); end);
+  GSuite.Test('single-hop regression still 0', procedure var R:TSshExecResult; K:TSshErrorKind; Ok:Boolean; begin Ok:=RunProxyScenario(PatternBytes($77,32), PatternBytes($88,32), R, K); CheckTrue(Ok,'single-hop via proxy regression proxy still ok'); end);
   GRunner:=TSuiteRunner.Create('nextpas.core.ssh.proxyjump');
   GRunner.Add(GSuite); GRunner.RunAll; GRunner.Summary; if not GRunner.AllPassed then Halt(1);
   Finalize(GSuite); Finalize(GRunner);

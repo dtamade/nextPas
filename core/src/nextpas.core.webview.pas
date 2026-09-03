@@ -16,9 +16,9 @@ uses
   nextpas.core.vfs,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
-  nextpas.core.webview.mime,
-  nextpas.core.webview.fake,
+  nextpas.core.webview.validation,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.webview.vfs,
   nextpas.core.window.intf;
 
@@ -74,6 +74,13 @@ type
   TWebviewInvokeAsyncHandler = nextpas.core.webview.intf.TWebviewInvokeAsyncHandler;
   TWebviewInvokeAsyncMethod  = nextpas.core.webview.intf.TWebviewInvokeAsyncMethod;
   TWebviewInvokeAsyncProc    = nextpas.core.webview.intf.TWebviewInvokeAsyncProc;
+  // zero-copy view handlers: TStringView RawSlice single source, zero heap per invoke
+  TWebviewInvokeSyncViewHandler  = nextpas.core.webview.intf.TWebviewInvokeSyncViewHandler;
+  TWebviewInvokeSyncViewMethod   = nextpas.core.webview.intf.TWebviewInvokeSyncViewMethod;
+  TWebviewInvokeSyncViewProc     = nextpas.core.webview.intf.TWebviewInvokeSyncViewProc;
+  TWebviewInvokeAsyncViewHandler = nextpas.core.webview.intf.TWebviewInvokeAsyncViewHandler;
+  TWebviewInvokeAsyncViewMethod  = nextpas.core.webview.intf.TWebviewInvokeAsyncViewMethod;
+  TWebviewInvokeAsyncViewProc    = nextpas.core.webview.intf.TWebviewInvokeAsyncViewProc;
 
 { ---- 类型：intf 接口 ---- }
 
@@ -83,17 +90,16 @@ type
   IWebviewAssetProvider    = nextpas.core.webview.intf.IWebviewAssetProvider;
   IWebviewAssets           = nextpas.core.webview.intf.IWebviewAssets;
   IWebviewWindow           = nextpas.core.webview.intf.IWebviewWindow;
-  IWebviewBuilder          = nextpas.core.webview.factory.IWebviewBuilder;
+  IWebviewBuilder          = nextpas.core.webview.builder.IWebviewBuilder;
 
-{ ---- 类型：fake 测试支撑 ---- }
+{ ---- 类型：window has-a（L3→L2 组合面，IWindow 显式别名） ---- }
 
-  TFakeWebview        = nextpas.core.webview.fake.TFakeWebview;
-  TFakeInvokeOutcome  = nextpas.core.webview.fake.TFakeInvokeOutcome;
-  TFakeInvokeOutcomes = nextpas.core.webview.fake.TFakeInvokeOutcomes;
-  TFakeEvalRecord     = nextpas.core.webview.fake.TFakeEvalRecord;
-  TFakeEvalRecords    = nextpas.core.webview.fake.TFakeEvalRecords;
+  IWindow = nextpas.core.window.intf.IWindow;
+  IWindowDispatcher = nextpas.core.window.intf.IWindowDispatcher;
+  IWindowHost = nextpas.core.window.intf.IWindowHost;
+  IWindowPrivateHandle = nextpas.core.window.intf.IWindowPrivateHandle;
 
-  TWebviewBuilder = nextpas.core.webview.factory.TWebviewBuilder;
+  TWebviewBuilder = nextpas.core.webview.builder.TWebviewBuilder;
 
 { ---- 函数 inline 转发 ---- }
 
@@ -109,7 +115,6 @@ function CreateWebviewOf(AKind: TWebviewKind;
   const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateWebviewOn(const AParent: IWindow; const AOptions: TWebviewOptions): IWebviewWindow; inline;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider; inline;
-function GuessWebviewMime(const APath: string): string; inline;
 
 procedure WebviewRunLoop; inline;
 procedure WebviewExitLoop; inline;
@@ -123,12 +128,12 @@ end;
 
 procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
 begin
-  nextpas.core.webview.base.CheckWebviewOptions(AOptions);
+  nextpas.core.webview.validation.CheckWebviewOptions(AOptions);
 end;
 
 procedure CheckInvokeCmd(const ACmd: string);
 begin
-  nextpas.core.webview.base.CheckInvokeCmd(ACmd);
+  nextpas.core.webview.validation.CheckInvokeCmd(ACmd);
 end;
 
 function DefaultWebviewKind: TWebviewKind;
@@ -165,11 +170,6 @@ end;
 function CreateVfsAssetProvider(const AVfs: IVfs): IWebviewAssetProvider;
 begin
   Result := nextpas.core.webview.vfs.CreateVfsAssetProvider(AVfs);
-end;
-
-function GuessWebviewMime(const APath: string): string;
-begin
-  Result := nextpas.core.webview.mime.GuessWebviewMime(APath);
 end;
 
 procedure WebviewRunLoop;

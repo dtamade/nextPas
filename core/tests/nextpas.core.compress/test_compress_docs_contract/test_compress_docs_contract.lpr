@@ -1877,30 +1877,25 @@ procedure TestLz4NativeFacadeOwnerBoundary;
 var
   LFacade: string;
   LInterfaceUses: string;
-  LNativeUses: string;
-  LPureUses: string;
 begin
   LFacade := ReadText('src/nextpas.core.compress.pas');
   LInterfaceUses := SliceBetween(LFacade, 'interface', 'type');
-  LNativeUses := SliceBetween(LInterfaceUses,
-    '{$IFDEF NEXTPAS_USE_LZ4_NATIVE}', '{$ENDIF}');
-  LPureUses := SliceBetween(LInterfaceUses,
-    '{$IFNDEF NEXTPAS_USE_LZ4_NATIVE}', '{$ENDIF}');
-
-  CheckContains(LInterfaceUses, '{$IFNDEF NEXTPAS_USE_LZ4_NATIVE}',
-    'facade pure LZ4 import is guarded away from native mode');
-  CheckContains(LInterfaceUses, '{$IFDEF NEXTPAS_USE_LZ4_NATIVE}',
-    'facade native LZ4 import is guarded behind native mode');
-  CheckContains(LPureUses, 'nextpas.core.compress.lz4',
-    'facade pure LZ4 import is inside non-native branch');
-  CheckAbsent(LPureUses, 'nextpas.core.compress.lz4.ffi',
-    'facade non-native branch must not import native LZ4 FFI owner');
-  CheckContains(LNativeUses, 'nextpas.core.compress.lz4.native',
-    'facade native LZ4 import is inside native branch');
-  CheckAbsent(LNativeUses, 'nextpas.core.compress.lz4.ffi',
-    'facade native branch must not import raw LZ4 FFI unit');
-  CheckAbsent(LNativeUses, ', nextpas.core.compress.lz4' + LineEnding,
-    'facade native branch must not import pure LZ4 implementation');
+  // Facade must not branch backend selection with IFDEF; selection is sunk to native owner (intf/ffi/impl)
+  CheckAbsent(LInterfaceUses, '{$IFDEF NEXTPAS_USE_LZ4_NATIVE}',
+    'facade must not branch LZ4 backend with IFDEF (selection sunk to native owner)');
+  CheckAbsent(LInterfaceUses, '{$IFNDEF NEXTPAS_USE_LZ4_NATIVE}',
+    'facade must not branch LZ4 backend with IFNDEF (selection sunk to native owner)');
+  CheckContains(LInterfaceUses, 'nextpas.core.compress.lz4.native',
+    'facade imports compress-owned LZ4 native owner (sunk selection)');
+  CheckAbsent(LInterfaceUses, 'nextpas.core.compress.lz4.ffi',
+    'facade must not import raw LZ4 FFI unit (owned by native owner)');
+  // Pure impl is owned by native owner as fallback, not directly by facade
+  CheckAbsent(LInterfaceUses, ', nextpas.core.compress.lz4' + LineEnding,
+    'facade must not directly import pure LZ4 implementation (owned by native owner)');
+  CheckAbsent(LInterfaceUses, 'nextpas.core.compress.lz4,' + LineEnding,
+    'facade must not directly import pure LZ4 implementation list');
+  CheckAbsent(LFacade, 'nextpas.core.compress.lz4.Lz4Compress',
+    'facade must not directly call pure LZ4 impl (sunk to native owner)');
 end;
 
 procedure TestLz4FfiUnitIsAbiOnlyAndNativeOwnerBoundary;
@@ -2008,10 +2003,16 @@ begin
     'root facade exposes bounded LZ4 helper');
   CheckContains(LFacade,
     'nextpas.core.compress.lz4.native.NativeLz4DecompressWithMaxOutputSize',
-    'root facade forwards native bounded LZ4 helper to native owner');
-  CheckContains(LFacade,
+    'root facade forwards bounded LZ4 helper to native owner (sunk selection)');
+  CheckAbsent(LFacade,
     'nextpas.core.compress.lz4.Lz4DecompressWithMaxOutputSize',
-    'root facade forwards pure bounded LZ4 helper to LZ4 subunit');
+    'root facade must not directly forward to pure LZ4 subunit (selection sunk to native owner)');
+  CheckContains(LFacade,
+    'nextpas.core.compress.lz4.native.NativeLz4Compress',
+    'root facade forwards LZ4 compress to native owner');
+  CheckAbsent(LFacade,
+    'nextpas.core.compress.lz4.Lz4Compress(',
+    'root facade must not directly call pure LZ4 compress');
   CheckContains(LNative, 'SizeUInt(AOriginalSize) > LZ4_MAX_INPUT_SIZE',
     'native LZ4 decode checks original-size policy before allocation');
   CheckContains(LNative, 'function NativeLz4DecompressWithMaxOutputSize',

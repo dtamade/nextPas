@@ -206,6 +206,7 @@ type
 
     // 基本操作
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
+    function TryGetValueView(const AData: PAnsiChar; const ALen: SizeUInt; out AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
     function Add(const AKey: K; const AValue: V): Boolean;
     function AddOrAssign(const AKey: K; const AValue: V): Boolean;
@@ -241,6 +242,7 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.math,
   nextpas.core.hash.wyhash,
   nextpas.core.mem,
@@ -752,6 +754,97 @@ begin
     Exit(True);
   end;
   Result := False;
+end;
+
+function THashMap.TryGetValueView(const AData: PAnsiChar; const ALen: SizeUInt; out AValue: V): Boolean;
+var
+  h: UInt32;
+  h64: UInt64;
+  idx, start: SizeUInt;
+  ti: PTypeInfo;
+  sTmp: string;
+  storedLen: SizeUInt;
+  storedPtr: PAnsiChar;
+  st: Byte;
+  LKeyView: K;
+begin
+  Result := False;
+  if FCapacity = 0 then Exit(False);
+  ti := TypeInfo(K);
+  if (ti = nil) or not (ti^.Kind in [tkAString, tkLString, tkSString]) then
+    Exit(False);
+  if Assigned(FHash) or Assigned(FEquals) then
+  begin
+    // custom hasher/equal: fallback via unsafe K construction (compile-safe for any K; runtime only hit for string keys)
+    SetString(sTmp, AData, ALen);
+    LKeyView := Default(K);
+    PAnsiString(@LKeyView)^ := sTmp;
+    try
+      if Assigned(FHash) then
+        h := FHash(LKeyView)
+      else if ALen = 0 then
+        h := HashMix32(2166136261)
+      else
+      begin
+        h64 := WyHash(AData, ALen);
+        h := UInt32(h64 xor (h64 shr 32));
+      end;
+      idx := h and FMask;
+      start := idx;
+      while True do
+      begin
+        st := (FBuckets + idx)^.State;
+        if st = Ord(bsEmpty) then Exit(False);
+        if st = Ord(bsOccupied) then
+          if (FBuckets + idx)^.Hash = h then
+            if KeysEqual((FBuckets + idx)^.Key, LKeyView) then
+            begin
+              AValue := (FBuckets + idx)^.Value;
+              Exit(True);
+            end;
+        idx := (idx + 1) and FMask;
+        if idx = start then Exit(False);
+      end;
+    finally
+      Finalize(LKeyView);
+    end;
+  end;
+  if ALen = 0 then
+    h := HashMix32(2166136261)
+  else
+  begin
+    h64 := WyHash(AData, ALen);
+    h := UInt32(h64 xor (h64 shr 32));
+  end;
+  idx := h and FMask;
+  start := idx;
+  while True do
+  begin
+    st := (FBuckets + idx)^.State;
+    if st = Ord(bsEmpty) then Exit(False);
+    if st = Ord(bsOccupied) then
+      if (FBuckets + idx)^.Hash = h then
+      begin
+        sTmp := PAnsiString(@(FBuckets + idx)^.Key)^;
+        storedLen := SizeUInt(Length(sTmp));
+        if storedLen = ALen then
+        begin
+          if ALen = 0 then
+          begin
+            AValue := (FBuckets + idx)^.Value;
+            Exit(True);
+          end;
+          storedPtr := PAnsiChar(sTmp);
+          if (storedPtr = AData) or CompareMem(storedPtr, AData, ALen) then
+          begin
+            AValue := (FBuckets + idx)^.Value;
+            Exit(True);
+          end;
+        end;
+      end;
+    idx := (idx + 1) and FMask;
+    if idx = start then Exit(False);
+  end;
 end;
 
 function THashMap.ContainsKey(const AKey: K): Boolean;

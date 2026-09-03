@@ -71,8 +71,8 @@ function StringsToUpper(const AArr: TStringArray): TStringArray;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 
-{ Pattern matching }
-function GlobMatch(const APattern, AStr: string): Boolean;
+{ Pattern matching — glob single source (fs.glob/respack.embed forward here) }
+function GlobMatch(const APattern, AStr: string): Boolean; inline;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
 
 { Additional utilities }

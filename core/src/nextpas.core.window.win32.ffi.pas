@@ -9,11 +9,16 @@ unit nextpas.core.window.win32.ffi;
        IsIconic/IsZoomed/GetDpiForWindow/PostMessage/PostQuitMessage/
        DispatchMessage/GetMessage/PeekMessage/DefWindowProc 族。
 
-       本单元禁止 uses 家族其他单元（INV-5）。 *}
+       RECT 类族单源归 platform.windows.base（host owner），本单元仅复用
+       别名（tagRECT/RECT/PRECT/PRect），禁止重定义以消除 ABI 双源；
+       除 platform.windows.base 外仍禁止 uses 家族其他单元（INV-5）。 *}
 
 {$I nextpas.core.settings.inc}
 
 interface
+
+uses
+  nextpas.core.platform.windows.base;
 
 type
   HWND = Pointer;
@@ -91,8 +96,10 @@ const
 
 type
   POINT = record x, y: LONG; end;
-  RECT = record left, top, right, bottom: LONG; end;
-  PRect = ^RECT;
+  { RECT single source: reuse platform.windows.base host owner (16B value, inline zero-copy); window ffi 禁止重定义，保持 ABI 单源 }
+  tagRECT = nextpas.core.platform.windows.base.tagRECT;
+  RECT = tagRECT;
+  PRect = nextpas.core.platform.windows.base.PRECT;
   TMsg = record
     hwnd: HWND;
     message: UINT;

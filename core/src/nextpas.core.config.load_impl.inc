@@ -268,6 +268,7 @@ var
   LEqPos: Integer;
   LKeys: TStringArray;
   LK: Integer;
+  LCap: Integer;
 begin
   Result := nil;
   LK := 0;
@@ -288,7 +289,12 @@ begin
       if TryConfigEnvNameToKey(LName, APrefix, LKey) then
       begin
         SetValueUnlocked(LKey, LValue);
-        SetLength(LKeys, LK + 1);
+        // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), not inline per red-line 2
+        if LK >= Length(LKeys) then
+        begin
+          LCap := BytesGrowCapacityInt(Length(LKeys), LK + 1);
+          SetLength(LKeys, LCap);
+        end;
         LKeys[LK] := LKey;
         Inc(LK);
       end;
@@ -309,13 +315,21 @@ begin
       if TryConfigEnvNameToKey(LName, APrefix, LKey) then
       begin
         SetValueUnlocked(LKey, LValue);
-        SetLength(LKeys, LK + 1);
+        // perf: geometric via bytes.ops.BytesGrowCapacityInt single source amortized O(1) (BYTES_BUILDER_MIN_GROW 0→64→2×), not inline per red-line 2
+        if LK >= Length(LKeys) then
+        begin
+          LCap := BytesGrowCapacityInt(Length(LKeys), LK + 1);
+          SetLength(LKeys, LCap);
+        end;
         LKeys[LK] := LKey;
         Inc(LK);
       end;
     end;
   end;
   {$ENDIF}
+    // shrink logical length, keep geometric heap slack via FPC dynarray (capacity remains)
+    if Length(LKeys) <> LK then
+      SetLength(LKeys, LK);
   finally
     FLock.ReleaseWrite;
   end;

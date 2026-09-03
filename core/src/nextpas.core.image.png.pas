@@ -42,6 +42,8 @@ uses
   nextpas.core.graphics.errors,
   nextpas.core.compress,
   nextpas.core.checksum.crc32,
+  nextpas.core.bytes.builder,
+  nextpas.core.bytes.ops,
   nextpas.core.image.base,
   nextpas.core.image.dispatch;
 
@@ -49,7 +51,7 @@ const
   PNG_SIGNATURE: array[0..7] of Byte = (
     $89, $50, $4E, $47, $0D, $0A, $1A, $0A);
 
-procedure PutBe32(ADst: PByte; AValue: LongWord);
+procedure PutBe32(ADst: PByte; AValue: LongWord); inline;
 begin
   ADst[0] := Byte(AValue shr 24);
   ADst[1] := Byte(AValue shr 16);
@@ -57,9 +59,9 @@ begin
   ADst[3] := Byte(AValue);
 end;
 
-{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) }
+{ 追加 chunk: 长度(4 BE) + 类型(4 ASCII) + 数据 + CRC32(类型+数据) — BytesCopy 单源 inline 零拷贝 }
 procedure AppendChunk(var ADst: TBytes; const AType: AnsiString;
-  const AData: PByte; ADataLen: SizeUInt);
+  const AData: PByte; ADataLen: SizeUInt); inline;
 var
   Base: SizeUInt;
   Crc: LongWord;
@@ -67,9 +69,9 @@ begin
   Base := Length(ADst);
   SetLength(ADst, Base + 12 + ADataLen);
   PutBe32(@ADst[Base], LongWord(ADataLen));
-  Move(AType[1], ADst[Base + 4], 4);
+  nextpas.core.bytes.ops.BytesCopy(@ADst[Base + 4], @AType[1], 4); { perf: inline single Move via bytes.ops single source, zero-copy }
   if ADataLen > 0 then
-    Move(AData^, ADst[Base + 8], ADataLen);
+    nextpas.core.bytes.ops.BytesCopy(@ADst[Base + 8], AData, ADataLen); { perf: inline single Move via bytes.ops single source, zero-copy }
   Crc := Crc32Update(0, @ADst[Base + 4], 4);
   Crc := Crc32Update(Crc, AData, ADataLen);
   PutBe32(@ADst[Base + 8 + ADataLen], Crc);
@@ -90,7 +92,7 @@ begin
 
   Result := nil;
   SetLength(Result, 8);
-  nextpas.core.bytes.ops.BytesCopy(@Result[0], @PNG_SIGNATURE[0], 8); { perf: inline single Move via bytes.ops single source, zero-copy }
+  BytesCopy(@Result[0], @PNG_SIGNATURE[0], 8);
 
   { IHDR: 宽/高 BE32 + 位深 8 + 颜色类型 6(RGBA) + 压缩 0 + 滤波 0 + 隔行 0 }
   nextpas.core.bytes.ops.BytesZero(@Ihdr[0], SizeOf(Ihdr)); { perf: inline FillChar single source via bytes.ops }
@@ -107,7 +109,7 @@ begin
   for I := 0 to SizeUInt(AHeight) - 1 do
   begin
     P[0] := 0;
-    nextpas.core.bytes.ops.BytesCopy(P + 1, @APixels[I * RowLen], RowLen); { perf: zero-copy single Move inline via bytes.ops single source }
+    BytesCopy(@P[1], @APixels[I * RowLen], SizeUInt(RowLen));
     Inc(P, RowLen + 1);
   end;
   Raw := DeflateCompress(Raw);
@@ -125,6 +127,7 @@ var
   LDepth, LColor, LInterlace: Integer;
   LBpp, RowLen, X, Y, C: Integer;
   LIdat: TBytes;
+  LIdatBuilder: IBytesBuilder;
   LRaw, LPrev, LRow: TBytes;
   LA, B, Cc, P, PA, PB, PC, LPred, LStride: Integer;
 
@@ -162,7 +165,7 @@ begin
 
   { chunk 循环：IHDR 必首、IDAT 聚合、IEND 终止、辅助跳过容忍 }
   LIhdrPos := 0;
-  SetLength(LIdat, 0);
+  LIdatBuilder := CreateBytesBuilder(8192); { perf: geometric Grow via bytes.ops.BytesGrowCapacity single source, amortized O(1), zero-copy single Move per IDAT — avoids O(n²) SetLength per chunk }
   LPos := 8;
   while True do
   begin
@@ -192,9 +195,8 @@ begin
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('D')) and
             (AData[LPos + 6] = Ord('A')) and (AData[LPos + 7] = Ord('T')) then
     begin
-      SetLength(LIdat, Length(LIdat) + Integer(LLen));
       if LLen > 0 then
-        Move(AData[LPos + 8], LIdat[Length(LIdat) - Integer(LLen)], LLen);
+        LIdatBuilder.AppendBytes(@AData[LPos + 8], LLen); { perf: single Move zero-copy via IBytesBuilder, bytes.ops single source for growth; O(n) amortized not O(n²) }
     end
     else if (AData[LPos + 4] = Ord('I')) and (AData[LPos + 5] = Ord('E')) and
             (AData[LPos + 6] = Ord('N')) and (AData[LPos + 7] = Ord('D')) then
@@ -202,6 +204,7 @@ begin
 
     Inc(LPos, 12 + LLen);
   end;
+  LIdat := LIdatBuilder.ToBytes; { stability: IBytesBuilder interface refcount auto-free on scope exit/exception; ToBytes single SetLength+Move ownership copy, no leak }
 
   if LIhdrPos = 0 then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: missing IHDR');
@@ -214,6 +217,10 @@ begin
   LInterlace := AData[LIhdrPos + 20];
   if (AWidth <= 0) or (AHeight <= 0) then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: width/height must be > 0 (width=' + IntToStr(Int64(AWidth)) + ' height=' + IntToStr(Int64(AHeight)) + ')');
+  if (AWidth > 16384) or (AHeight > 16384) then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: width/height exceeds 16384 cap (width=' + IntToStr(Int64(AWidth)) + ' height=' + IntToStr(Int64(AHeight)) + ')');
+  if Int64(AWidth) * Int64(AHeight) > 16 * 1024 * 1024 then
+    raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: image too large (16M cap) (w=' + IntToStr(Int64(AWidth)) + ' h=' + IntToStr(Int64(AHeight)) + ')');
   if LDepth <> 8 then
     raise EImageDecodeError.Create('nextpas.core.image.png.pas: PngDecodeRgba: unsupported bit depth (need 8) (depth=' + IntToStr(Int64(LDepth)) + ')');
   if not (LColor in [0, 2, 6]) then
@@ -280,7 +287,7 @@ begin
           Result[(Y * AWidth + X) * 4 + C] := LRow[X * 4 + C];
       end;
     end;
-    Move(LRow[0], LPrev[0], RowLen);
+    nextpas.core.bytes.ops.BytesCopy(@LPrev[0], @LRow[0], SizeUInt(RowLen)); { perf: inline single Move via bytes.ops single source, zero-copy }
   end;
 end;
 

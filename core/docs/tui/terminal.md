@@ -5,7 +5,7 @@
 **四件套**：`terminal.base` ← `terminal.intf` ← `terminal` 门面；实现聚合 `terminal` + `backend.ansi` + `input` + `ansi.parse` + `cap.base`
 **依赖**：L0–L2 only（`bytes.ops` 单源 + `platform.console/signal/time/env`）
 **对应主契约**：`CONTRACT.md` §1.1 Terminal/runtime truth + §5.1–5.6 DECSET + §4 线程安全
-**门禁**：`heaptrc 0`（`EnterTui`/`LeaveTui` 配对 + `Destroy` 幂等释放；`common.mk HEAPTRC_GATE=1 haltonnotreleased,log`，`focused FOCUS=core/tests/nextpas.core.tui/test_tui_terminal` 与主包 `nextpas.core.tui` 聚合路径双门禁；主包仅 `T* = tui.terminal.T*` 薄别名 `inline` 转发，无额外堆分配）
+**门禁**：`heaptrc 0`（`EnterTui`/`LeaveTui` 配对 + `Destroy` 幂等释放；`common.mk HEAPTRC_GATE=1 haltonnotreleased,log`，`focused FOCUS=core/tests/nextpas.core.tui/test_tui_terminal` 与主包聚合路径双门禁；主包不再聚合 terminal，按需 `uses tui.terminal` 子facade，零堆分配由子家族独立承载）
 
 ## 职责
 
