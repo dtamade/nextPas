@@ -108,7 +108,7 @@ begin
   else
   begin
     WriteLn('mode: prod (embedded vfs, pack blob)');
-    LVfs := CreateEmbeddedVfs(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE), False);
+    LVfs := CreateEmbeddedVfsBorrowed(@DEMO_ASSETS[0], SizeUInt(DEMO_ASSETS_SIZE));
     LProvider := CreateVfsAssetProvider(LVfs);
   end;
 

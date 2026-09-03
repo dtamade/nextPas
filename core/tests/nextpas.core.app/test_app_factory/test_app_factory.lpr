@@ -7,6 +7,7 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.base,
+  nextpas.core.text.view,
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.factory,
@@ -18,9 +19,14 @@ uses
 type
   THitProvider = class(TInterfacedObject, IWebviewAssetProvider)
     function TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+    function TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
   end;
 
 function THitProvider.TryResolve(const APath: string; out ABytes: TBytes; out AMimeType: string): Boolean;
+begin
+  Result := TryResolveView(TStringView.FromStr(APath), ABytes, AMimeType);
+end;
+function THitProvider.TryResolveView(const AView: TStringView; out ABytes: TBytes; out AMimeType: string): Boolean;
 begin
   ABytes := TBytes.Create(1);
   ABytes[0] := 42;

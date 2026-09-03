@@ -34,6 +34,9 @@ procedure WindowGtkRawFocus(AWidget: Pointer); inline;
 function WindowGtkRawNativeHandle(AWidget: Pointer): Pointer; inline;
 procedure WindowGtkRawRunMainLoop; inline;
 procedure WindowGtkRawQuitMainLoop; inline;
+function WindowGtkRawHandleOf(const AWindow: IWindow): Pointer; inline;
+procedure WindowGtkRawContainerAdd(AParentWin, AChild: Pointer); inline;
+procedure WindowGtkRawContainerRemove(AParentWin, AChild: Pointer); inline;
 
 { 族显式别名（与旧 shim 兼容） }
 function WindowGtk3IsAvailable: Boolean;
@@ -147,6 +150,32 @@ end;
 procedure WindowGtkRawQuitMainLoop; inline;
 begin
   WindowGtkQuitMainLoop;
+end;
+
+function WindowGtkRawHandleOf(const AWindow: IWindow): Pointer; inline;
+var LPriv: IWindowPrivateHandle;
+begin
+  // perf: inline QueryInterface zero-copy single source, L3→L2 has-a anchor, zero heap, ownership stays L2
+  if (AWindow <> nil) and (AWindow.QueryInterface(IWindowPrivateHandle, LPriv) = 0) then
+    Result := LPriv.GetHandle
+  else if AWindow <> nil then
+    Result := Pointer(AWindow.NativeHandle)
+  else
+    Result := nil;
+end;
+
+procedure WindowGtkRawContainerAdd(AParentWin, AChild: Pointer); inline;
+begin
+  // perf: inline zero-copy thin wrapper via bytes.ops Vec single source idea, L2 owner single source for GTK embedding
+  if (AParentWin <> nil) and (AChild <> nil) then
+    gtk_container_add(AParentWin, AChild);
+end;
+
+procedure WindowGtkRawContainerRemove(AParentWin, AChild: Pointer); inline;
+begin
+  // perf: inline O(1) remove, stability: no double-free, owner L2 single source
+  if (AParentWin <> nil) and (AChild <> nil) then
+    gtk_container_remove(AParentWin, AChild);
 end;
 
 function WindowGtk3IsAvailable: Boolean;

@@ -28,11 +28,9 @@ implementation
 
 uses
   nextpas.core.async.base,
-  nextpas.core.bytes.ops,
-  nextpas.core.ssh.buffer;
-
-const
-  WINDOW_LOW_WATER_DIVISOR = 2;
+  nextpas.core.bytes.builder,
+  nextpas.core.ssh.buffer,
+  nextpas.core.ssh.window;
 
 var
   GNextAsyncChannelId: LongInt = 0;
@@ -47,15 +45,14 @@ type
     FCommand: string;
     FLocalId: UInt32;
     FRemoteId: UInt32;
-    FInitWindow: UInt32;
+    FWindow: TChannelWindow;     { 单源复用 window.pas inline 热路径，零堆分配 }
     FMaxPacket: UInt32;
-    FOurWindow: SizeUInt;
-    FPeerWindow: SizeUInt;
-    FPeerMaxPacket: UInt32;
     FExitStatus: Integer;
     FGotClose: Boolean;
     FSentClose: Boolean;
     FResult: TSshExecResult;
+    FOutBuilder: IBytesBuilder; // perf: geometric doubling amortized O(1), zero-copy Move, single ToBytes
+    FErrBuilder: IBytesBuilder; // perf: same, avoids per-chunk SetLength+Move O(n²)
     FCallback: TProcSshExecResult;
     FCallbackCtx: Pointer;
     FState: TExecState;
@@ -73,7 +70,7 @@ type
     procedure SendExec;
     procedure OnExecSent(AErr: ESSHError; AContext: Pointer);
     procedure PumpNext;
-    procedure AccountConsume(ACount: SizeUInt);
+    procedure AccountConsume(ACount: SizeUInt); inline;
     procedure SendWindowAdjust(ACount: UInt32);
     procedure HandleChannelRequest(const APayload: TBytes);
     procedure HandleGlobalRequest;
@@ -94,14 +91,10 @@ procedure Runner_OnTimeout(AContext: Pointer); forward;
 
 { Helpers }
 
-procedure AppendChunkAsync(var ADst: TBytes; const ASrc: TBytes); inline;
-begin
-  BytesAppend(ADst, ASrc);
-end;
-
 constructor TAsyncExecRunner.Create(const ATransport: TAsyncSshTransport; const ACommand: string;
   AInitialWindow, AMaxPacket: UInt32; ATimeoutMs: Integer;
   ACallback: TProcSshExecResult; AContext: Pointer);
+var LInit: UInt32;
 begin
   inherited Create;
   FTransport := ATransport;
@@ -111,16 +104,17 @@ begin
   FCallback := ACallback;
   FCallbackCtx := AContext;
   FLocalId := UInt32(InterlockedIncrement(GNextAsyncChannelId) - 1);
-  FInitWindow := AInitialWindow;
-  if FInitWindow=0 then FInitWindow := SSH_DEFAULT_WINDOW_SIZE;
+  LInit := AInitialWindow;
+  if LInit=0 then LInit := SSH_DEFAULT_WINDOW_SIZE;
   FMaxPacket := AMaxPacket;
   if FMaxPacket=0 then FMaxPacket := SSH_DEFAULT_MAX_PACKET;
-  FOurWindow := FInitWindow;
-  FPeerWindow := 0;
-  FPeerMaxPacket := 0;
+  FWindow.Init(LInit, 0, 0); { 单源 window.pas inline 零堆分配 }
   FExitStatus := -1;
   FResult := Default(TSshExecResult);
   FResult.ExitCode := -1;
+  // single source bytes.builder doubling, inline zero-copy, amortized O(1)
+  FOutBuilder := CreateBytesBuilder;
+  FErrBuilder := CreateBytesBuilder;
   FState := esOpening;
   if ATimeoutMs > 0 then
     FDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
@@ -145,6 +139,9 @@ begin
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
   try TryCloseChannel; except end;
   Cb := FCallback; Ctx := FCallbackCtx; Res := FResult;
+  // single source builder flush before callback; stability: builder ToBytes single alloc copy, refcount auto
+  if FOutBuilder <> nil then Res.StdOut := FOutBuilder.ToBytes;
+  if FErrBuilder <> nil then Res.StdErr := FErrBuilder.ToBytes;
   FCallback := nil;
   if Assigned(Cb) then Cb(Res, AErr, Ctx) else if AErr<>nil then AErr.Free;
   Free;
@@ -156,6 +153,9 @@ begin
   if FFailed then Exit;
   FFailed := True;
   if FTimer.IsValid then begin FLoop.CancelTimer(FTimer); FTimer:=Default(TAsyncTimerHandle); end;
+  // perf: single ToBytes copy, builder geometric doubling already amortized O(1)
+  FResult.StdOut := FOutBuilder.ToBytes;
+  FResult.StdErr := FErrBuilder.ToBytes;
   FResult.ExitCode := FExitStatus;
   Cb := FCallback; Ctx := FCallbackCtx;
   FCallback := nil;
@@ -171,7 +171,7 @@ begin
     LW.PutByte(SSH_MSG_CHANNEL_OPEN);
     LW.PutStringText(SSH_CHANNEL_SESSION);
     LW.PutUInt32(FLocalId);
-    LW.PutUInt32(FInitWindow);
+    LW.PutUInt32(FWindow.InitWindow);
     LW.PutUInt32(FMaxPacket);
     if not FTransport.AsyncSendPacket(LW.ToBytes, @Runner_OnOpenSent, Self) then
       Fail(ESSHError.Create(sekIO,'async channel: open send failed'));
@@ -243,10 +243,8 @@ begin
           LRid := LR.ReadUInt32;
           if LRid<>FLocalId then begin PumpNext; Exit; end;
           FRemoteId := LR.ReadUInt32;
-          FPeerWindow := LR.ReadUInt32;
-          FPeerMaxPacket := LR.ReadUInt32;
+          FWindow.SetPeer(LR.ReadUInt32, LR.ReadUInt32);
         finally LR.Free; end;
-        FOurWindow := FInitWindow;
         FState := esExecing;
         SendExec;
       end;
@@ -260,7 +258,7 @@ begin
         try
           LR.ReadByte; LRid:=LR.ReadUInt32;
           if LRid=FLocalId then
-            FPeerWindow := FPeerWindow + LR.ReadUInt32();
+            FWindow.Grant(LR.ReadUInt32);
         finally LR.Free; end;
         PumpNext;
       end;
@@ -269,8 +267,9 @@ begin
         IsExt := APayload[0]=SSH_MSG_CHANNEL_EXTENDED_DATA;
         if ExtractData(APayload, IsExt, LChunk) then
         begin
-          if IsExt then AppendChunkAsync(FResult.StdErr, LChunk)
-          else AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then
+            if IsExt then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))) // inline zero-copy
+            else FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         end;
         PumpNext;
       end;
@@ -295,13 +294,13 @@ begin
     SSH_MSG_CHANNEL_DATA:
       begin
         if ExtractData(APayload, False, LChunk) then
-          AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline zero-copy
         PumpNext;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
       begin
         if ExtractData(APayload, True, LChunk) then
-          AppendChunkAsync(FResult.StdErr, LChunk);
+          if Length(LChunk) > 0 then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         PumpNext;
       end;
     SSH_MSG_CHANNEL_REQUEST:
@@ -310,16 +309,14 @@ begin
       begin HandleGlobalRequest; PumpNext; end;
     SSH_MSG_CHANNEL_WINDOW_ADJUST:
       begin
-        // update peer window
         with TsshReader.Create(APayload) do
         try
-          ReadByte; if ReadUInt32=FLocalId then FPeerWindow:=FPeerWindow+ReadUInt32();
+          ReadByte; if ReadUInt32=FLocalId then FWindow.Grant(ReadUInt32);
         finally Free; end;
         PumpNext;
       end;
     SSH_MSG_CHANNEL_EOF, SSH_MSG_CHANNEL_CLOSE:
       begin
-        // server closed before exec reply – treat as done
         FGotClose := True;
         TryCloseChannel;
         Succeed;
@@ -336,13 +333,13 @@ begin
     SSH_MSG_CHANNEL_DATA:
       begin
         if ExtractData(APayload, False, LChunk) then
-          AppendChunkAsync(FResult.StdOut, LChunk);
+          if Length(LChunk) > 0 then FOutBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk))); // inline zero-copy
         PumpNext;
       end;
     SSH_MSG_CHANNEL_EXTENDED_DATA:
       begin
         if ExtractData(APayload, True, LChunk) then
-          AppendChunkAsync(FResult.StdErr, LChunk);
+          if Length(LChunk) > 0 then FErrBuilder.AppendBytes(@LChunk[0], SizeUInt(Length(LChunk)));
         PumpNext;
       end;
     SSH_MSG_CHANNEL_REQUEST:
@@ -353,7 +350,7 @@ begin
       begin
         with TsshReader.Create(APayload) do
         try
-          ReadByte; if ReadUInt32=FLocalId then FPeerWindow:=FPeerWindow+ReadUInt32();
+          ReadByte; if ReadUInt32=FLocalId then FWindow.Grant(ReadUInt32);
         finally Free; end;
         PumpNext;
       end;
@@ -398,14 +395,10 @@ begin
 end;
 
 procedure TAsyncExecRunner.AccountConsume(ACount: SizeUInt);
-var LGive: SizeUInt;
+var LGive: UInt32;
 begin
-  if ACount > FOurWindow then
-  begin LGive := FOurWindow; FOurWindow:=0; end
-  else begin Dec(FOurWindow, ACount); LGive:=0; end;
-  if FOurWindow <= SizeUInt(FInitWindow) div WINDOW_LOW_WATER_DIVISOR then
-  begin Inc(LGive, SizeUInt(FInitWindow)-FOurWindow); FOurWindow:=FInitWindow; end;
-  if LGive>0 then SendWindowAdjust(UInt32(LGive));
+  FWindow.Consume(ACount, LGive); { 单源 window.pas inline，零堆分配 }
+  if LGive>0 then SendWindowAdjust(LGive);
 end;
 
 procedure TAsyncExecRunner.SendWindowAdjust(ACount: UInt32);

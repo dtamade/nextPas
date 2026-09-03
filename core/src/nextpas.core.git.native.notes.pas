@@ -46,6 +46,7 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.bytes.ops,
   nextpas.core.git.native.refs,
   nextpas.core.git.native.repo,
   nextpas.core.git.native.loose,
@@ -80,41 +81,59 @@ end;
 procedure CollectNotesRecursive(ARepo: TNativeRepository; const ATreeOid: TGitOid;
   const APrefix: string; var AOut: TGitNoteArray);
 var
-  Data: TBytes;
-  Kind: TGitObjectKind;
-  Entries: TGitTreeEntryArray;
-  I, J: Integer;
-  Full, Clean: string;
-  BlobData: TBytes;
-  BlobKind: TGitObjectKind;
-begin
-  Data := ARepo.ReadObject(ATreeOid, Kind);
-  if Kind <> gokTree then Exit;
-  Entries := GitParseTree(Data);
-  for I := 0 to High(Entries) do
+  LCnt, LCap, LNewCap: SizeUInt;
+  procedure DoCollect(const ATree: TGitOid; const APref: string);
+  var
+    Data: TBytes;
+    Kind: TGitObjectKind;
+    Entries: TGitTreeEntryArray;
+    I, J: Integer;
+    Full, Clean: string;
+    BlobData: TBytes;
+    BlobKind: TGitObjectKind;
   begin
-    if Entries[I].Mode = $4000 then
-      CollectNotesRecursive(ARepo, Entries[I].Oid, APrefix + Entries[I].Name + '/', AOut)
-    else
+    Data := ARepo.ReadObject(ATree, Kind);
+    if Kind <> gokTree then Exit;
+    Entries := GitParseTree(Data);
+    for I := 0 to High(Entries) do
     begin
-      Full := APrefix + Entries[I].Name;
-      Clean := '';
-      for J := 1 to Length(Full) do if Full[J] <> '/' then Clean := Clean + Full[J];
-      if (Length(Clean)=40) and GitOidIsValidHex(Clean) then
+      if Entries[I].Mode = $4000 then
+        DoCollect(Entries[I].Oid, APref + Entries[I].Name + '/')
+      else
       begin
-        SetLength(AOut, Length(AOut)+1);
-        AOut[High(AOut)].Target := GitOidFromHex(Clean);
-        AOut[High(AOut)].NoteOid := Entries[I].Oid;
-        try
-          BlobData := ARepo.ReadObject(Entries[I].Oid, BlobKind);
-          if BlobKind = gokBlob then AOut[High(AOut)].Content := BlobData
-          else AOut[High(AOut)].Content := nil;
-        except
-          AOut[High(AOut)].Content := nil;
+        Full := APref + Entries[I].Name;
+        Clean := '';
+        for J := 1 to Length(Full) do if Full[J] <> '/' then Clean := Clean + Full[J];
+        if (Length(Clean)=40) and GitOidIsValidHex(Clean) then
+        begin
+          // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy record Move, single shrink at wrapper
+          if LCnt >= LCap then
+          begin
+            LNewCap := GrowArrayCapacity(LCap, LCnt + 1);
+            SetLength(AOut, LNewCap);
+            LCap := LNewCap;
+          end;
+          AOut[LCnt].Target := GitOidFromHex(Clean);
+          AOut[LCnt].NoteOid := Entries[I].Oid;
+          try
+            BlobData := ARepo.ReadObject(Entries[I].Oid, BlobKind);
+            if BlobKind = gokBlob then AOut[LCnt].Content := BlobData
+            else AOut[LCnt].Content := nil;
+          except
+            AOut[LCnt].Content := nil;
+          end;
+          Inc(LCnt);
         end;
       end;
     end;
   end;
+begin
+  // stability: LCnt/LCap track logical count vs physical capacity, single SetLength to exact at end ensures exact length for callers (GitNotesList) and no leak
+  LCnt := SizeUInt(Length(AOut));
+  LCap := LCnt;
+  DoCollect(ATreeOid, APrefix);
+  if SizeUInt(Length(AOut)) <> LCnt then
+    SetLength(AOut, LCnt);
 end;
 
 function NotesTreeOidForRef(const AGitDir, ARef: string; out ATreeOid: TGitOid; out ACommitOid: TGitOid): Boolean;
@@ -192,7 +211,7 @@ var
   B: TBytes;
 begin
   B := GitNotesGet(AGitDir, ARefName, ATarget);
-  Result := GitBytesToString(B);
+  Result := BytesToString(B);
 end;
 
 function GitNotesGetStr(const AGitDir: string; const ATarget: TGitOid): string;
@@ -289,6 +308,7 @@ var
   NewTree: TGitOid;
   Builder: TGitCommitBuilder;
   Sig: TGitSignature;
+  LCnt, LCap, LNewCap: SizeUInt;
 begin
   if AGitDir='' then raise EGitError.Create('notes add: gitdir empty');
   Hex := LowerCase(GitOidToHex(ATarget));
@@ -304,9 +324,20 @@ begin
     Map[Pos].NoteOid := BlobOid
   else
   begin
-    SetLength(Map, Length(Map)+1);
-    Map[High(Map)].Target := ATarget;
-    Map[High(Map)].NoteOid := BlobOid;
+    // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source (BYTES_BUILDER_MIN_GROW + *2), O(1) amortized, zero-copy Move; exact length required for BuildNotesTree -> single shrink
+    LCnt := SizeUInt(Length(Map));
+    LCap := LCnt;
+    if LCnt >= LCap then
+    begin
+      LNewCap := GrowArrayCapacity(LCap, LCnt + 1);
+      SetLength(Map, LNewCap);
+      LCap := LNewCap;
+    end;
+    Map[LCnt].Target := ATarget;
+    Map[LCnt].NoteOid := BlobOid;
+    Inc(LCnt);
+    if SizeUInt(Length(Map)) <> LCnt then
+      SetLength(Map, LCnt);
   end;
   // also need to ensure map entries have Content for rebuild? Not needed.
   NewTree := BuildNotesTree(AGitDir, Map);
@@ -331,7 +362,7 @@ end;
 
 function GitNotesAdd(const AGitDir, ARefName: string; const ATarget: TGitOid; const ANote: string): TGitOid;
 begin
-  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, GitStringToBytes(ANote));
+  Result := GitNotesAddBytes(AGitDir, ARefName, ATarget, StringToBytes(ANote));
 end;
 
 function GitNotesAdd(const AGitDir: string; const ATarget: TGitOid; const ANote: string): TGitOid;
@@ -351,18 +382,29 @@ var
   Sig: TGitSignature;
   NewCommit: TGitOid;
   NewMap: TGitNoteArray;
+  LCnt, LCap, LNewCap: SizeUInt;
 begin
   Result := False;
   Hex := LowerCase(GitOidToHex(ATarget));
   LoadNotesMap(AGitDir, ARefName, Map, OldCommit, HasOld);
   if not HasOld then Exit(False);
   SetLength(NewMap, 0);
+  LCnt := 0; LCap := 0;
   for I := 0 to High(Map) do
     if LowerCase(GitOidToHex(Map[I].Target))<>Hex then
     begin
-      SetLength(NewMap, Length(NewMap)+1);
-      NewMap[High(NewMap)] := Map[I];
+      // perf: amortized geometric growth via bytes.ops GrowArrayCapacity single source, O(1) amortized, zero-copy Move, single shrink before BuildNotesTree
+      if LCnt >= LCap then
+      begin
+        LNewCap := GrowArrayCapacity(LCap, LCnt + 1);
+        SetLength(NewMap, LNewCap);
+        LCap := LNewCap;
+      end;
+      NewMap[LCnt] := Map[I];
+      Inc(LCnt);
     end else Result := True;
+  if SizeUInt(Length(NewMap)) <> LCnt then
+    SetLength(NewMap, LCnt);
   if not Result then Exit(False);
   if Length(NewMap)=0 then
   begin

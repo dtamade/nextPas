@@ -4,6 +4,9 @@ unit nextpas.core.fs.errors;
 
 interface
 
+uses
+  nextpas.core.exception;
+
 { Translates a platform error code (POSIX errno or Windows GetLastError) into a
   typed nextpas exception and raises it. AOp/APath provide context for the
   message. Never returns when ACode <> 0; a no-op when ACode = 0. }
@@ -12,11 +15,16 @@ procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
 { True when a non-blocking lock attempt failed because the lock is held. }
 function FsIsLockBusy(const ACode: Int32): Boolean;
 
+{ Warn on close failure; single source for close-failure observability via log.intf (NullLogger zero-alloc inline), never raises. }
+procedure FsWarnCloseFailed(const APath: string; const E: Exception); inline; overload;
+procedure FsWarnCloseFailed(const AOp, APath: string; const E: Exception); inline; overload;
+
 implementation
 
 uses
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.log.intf,
   nextpas.core.platform.error
 {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.platform.windows.base
@@ -109,6 +117,21 @@ begin
     raise EIOError.Create(LMsg);
   end;
 {$ENDIF}
+end;
+
+procedure FsWarnCloseFailed(const APath: string; const E: Exception); inline;
+begin
+  // single source close Warn via log.intf NullLogger zero-alloc inline, never raises
+  NullLogger.Warn('close failed for ' + APath + ': ' + E.Message);
+end;
+
+procedure FsWarnCloseFailed(const AOp, APath: string; const E: Exception); inline;
+begin
+  // single source close Warn via log.intf AOp prefix, inline thin-forward, never raises
+  if AOp <> '' then
+    NullLogger.Warn(AOp + ': close failed for ' + APath + ': ' + E.Message)
+  else
+    FsWarnCloseFailed(APath, E);
 end;
 
 end.

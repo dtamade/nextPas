@@ -13,13 +13,14 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
   nextpas.core.net.server.intf,
+  nextpas.core.platform.socket.base,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
 type
   TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker,
     IHttpResponseBodyBytes, IHttpResponseWriterCommitState, IHttpConnContext,
-    IHttpPeerProbe)
+    IHttpPeerProbe, nextpas.core.platform.sendfile.base.ISendfileSocketHandle)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
@@ -78,6 +79,7 @@ type
       包装流）或无连接时恒 True（保守，绝不误报断连）。 }
     function PeerAlive: Boolean;
     function GetBodyBytesWritten: Int64;
+    function GetSocketHandle: TPlatformSocket;
     property Headers: IHttpHeaders read GetHeaders;
   end;
 
@@ -87,6 +89,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.bytes.ops,
   nextpas.core.errors,
+  nextpas.core.net.intf,
+  nextpas.core.platform.socket.base,
+  nextpas.core.platform.sendfile.base,
   nextpas.core.text.builder,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -614,6 +619,19 @@ end;
 function TH1ResponseWriter.GetBodyBytesWritten: Int64;
 begin
   Result := FBodyBytesWritten;
+end;
+
+function TH1ResponseWriter.GetSocketHandle: TPlatformSocket;
+var
+  LSock: nextpas.core.platform.sendfile.base.ISendfileSocketHandle;
+begin
+  Result := PLATFORM_INVALID_SOCKET;
+  if (FConn = nil) or FHijacked then
+    Exit;
+  if Supports(FConn, nextpas.core.platform.sendfile.base.ISendfileSocketHandle, LSock) then
+    Result := LSock.GetSocketHandle
+  else if Supports(FConn, ITcpSocketRuntime) then
+    Result.Value := PtrUInt((FConn as ITcpSocketRuntime).NativeSocketHandle);
 end;
 
 end.

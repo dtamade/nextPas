@@ -43,6 +43,9 @@ function GitParseAckStream(const AStream: TBytes): TGitAckArray;
 
 implementation
 
+uses
+  nextpas.core.bytes.ops;
+
 function CapsToStr(const ACaps: TStringArray): string;
 var
   I: Integer;
@@ -162,7 +165,7 @@ function GitParseAck(const AData: TBytes; out AAck: TGitAck): Boolean;
 var
   Line: string;
 begin
-  Line := GitBytesToString(AData);
+  Line := BytesToString(AData);
   Result := GitParseAckLine(Line, AAck);
   if not Result then
     raise EGitError.CreateFmt('invalid ACK/NAK line "%s"', [Line]);

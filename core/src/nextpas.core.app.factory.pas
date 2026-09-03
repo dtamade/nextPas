@@ -12,6 +12,7 @@ uses
   nextpas.core.webview.base,
   nextpas.core.webview.intf,
   nextpas.core.webview.factory,
+  nextpas.core.webview.builder,
   nextpas.core.app.base,
   nextpas.core.app.intf;
 
@@ -24,6 +25,9 @@ function DefaultAppKind: TAppKind; inline;
 function AppBackendAvailable(AKind: TAppKind): Boolean; inline;
 
 implementation
+
+uses
+  nextpas.core.bytes.ops;
 
 type
   TMountKind = (amEmbedded, amDirectory);
@@ -167,22 +171,22 @@ end;
 
 procedure TAppImpl.GrowWindows; inline;
 begin
-  SetLength(FWindows, WebviewGrowCapacity(Length(FWindows)));
+  specialize VecGrow<IWebviewWindow>(FWindows, FCount);
 end;
 
 procedure TAppImpl.GrowOnClosed; inline;
 begin
-  SetLength(FOnClosed, WebviewGrowCapacity(Length(FOnClosed)));
+  specialize VecGrow<TAppWindowClosedHandler>(FOnClosed, FOnClosedCount);
 end;
 
 procedure TAppImpl.GrowOnClosedM; inline;
 begin
-  SetLength(FOnClosedM, WebviewGrowCapacity(Length(FOnClosedM)));
+  specialize VecGrow<TAppWindowClosedMethod>(FOnClosedM, FOnClosedMCount);
 end;
 
 procedure TAppImpl.GrowOnClosedP; inline;
 begin
-  SetLength(FOnClosedP, WebviewGrowCapacity(Length(FOnClosedP)));
+  specialize VecGrow<TAppWindowClosedProc>(FOnClosedP, FOnClosedPCount);
 end;
 
 procedure TAppImpl.HookWindowClose(ALockedWin: IWebviewWindow);
@@ -267,7 +271,7 @@ end;
 
 function TAppImpl.NewWindowBuilder: IWebviewBuilder;
 begin
-  Result := nextpas.core.webview.factory.TWebviewBuilder.New.Kind(FKind);
+  Result := nextpas.core.webview.builder.TWebviewBuilder.New.Kind(FKind);
 end;
 
 function TAppImpl.NewWindow: IWebviewBuilder;
@@ -357,13 +361,13 @@ end;
 constructor TAppBuilderImpl.Create;
 begin
   inherited Create;
-  FBuilder := nextpas.core.webview.factory.TWebviewBuilder.New;
+  FBuilder := nextpas.core.webview.builder.TWebviewBuilder.New;
   FKind := DefaultAppKind;
 end;
 
 procedure TAppBuilderImpl.GrowMounts; inline;
 begin
-  SetLength(FMounts, WebviewGrowCapacity(Length(FMounts)));
+  specialize VecGrow<TMountRec>(FMounts, FMountCount);
 end;
 
 procedure TAppBuilderImpl.ApplyMounts(AWin: IWebviewWindow);

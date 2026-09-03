@@ -12,6 +12,9 @@
 {$WARN 6058 off} // inline 例程无法内联的提示性 Note，非缺陷（统一豁免，供调试用 profiling 而非编译噪声）
 {$WARN 3123 off} // 含 open-array / assembler 的 inline 例程无法内联的提示性 Note，非缺陷（统一豁免）
 
+{-- PACKRECORDS C dual compiler stub --}
+{ FPC: PACKRECORDS C is C ABI packing. nextPas: same syntax supported natively (0.3+); variant record overlay (id/Bytes/AsNative at offset 0) is standard Pascal, binary guarantee via Assert(SizeOf=20) in git.libgit2.base. No IFDEF in modules, stub closed via settings.inc include chain. }
+
 {$IFOPT O+}
   {$DEFINE NEXTPAS_CORE_INLINE}
 {$ENDIF}

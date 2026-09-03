@@ -162,6 +162,8 @@ barriers, atomic operation ordering, and common concurrency patterns.
 
 ## Boundaries
 
+**L0 exception (root facade pure re-export paradigm exception, 2026-09-02)**: `nextpas.core.system` 根门面 `implementation` 含 FreeAndNil/SafeFree/ZeroMem/FillMem/CopyMem/CompareMem/Supports 等 `inline` 薄转发，非自有实现，属受控 L0 例外。单源复用 `nextpas.core.base.utils` → `nextpas.core.bytes.ops`（BytesCopy/BytesZero 单一 Move/FillChar，零拷贝无分配，`inline` 零拷贝），资源释放经 owner 保证（FreeAndNil nil-then-Free/SafeFree），稳定性不丢；HTonN/NToHs/Var* 同理薄转发至 `bytes.ops`/`text.conv` 单源。已由 facade parser 与 `test_system_source_contracts` source-contract 固化，非门面逻辑漂移。守 L0-L3，复用单源，业务以 CONTRACT 为准、缺能力先反哺 owner。
+
 | Area | System stance |
 | --- | --- |
 | `nextpas.core.base` | source of shared low-level types and constants; system may re-export a small compatible subset. |

@@ -131,6 +131,7 @@ implementation
 
 uses
   nextpas.core.mem,
+  nextpas.core.bytes.ops,
   nextpas.core.text.strings,
     nextpas.core.tls.exceptions,
   nextpas.core.tls.random,
@@ -144,7 +145,7 @@ class function TSecureString.Create(const AValue: string): TSecureString;
 begin
   Result.Allocate(Length(AValue));
   if AValue <> '' then
-    Move(AValue[1], Result.FData^, Result.FLength);
+    BytesCopy(Result.FData, @AValue[1], SizeUInt(Result.FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 class operator TSecureString.Initialize(var ARecord: TSecureString);
@@ -172,7 +173,7 @@ begin
     Allocate(ASrc.FLength);
   FLength := ASrc.FLength;
   if ASrc.FLength > 0 then
-    Move(ASrc.FData^, FData^, ASrc.FLength);
+    BytesCopy(FData, ASrc.FData, SizeUInt(ASrc.FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 procedure TSecureString.Allocate(ASize: Integer);
@@ -182,7 +183,7 @@ begin
     FLength := ASize;
     Exit;
   end;
-  
+
   ZeroMemory;
   if FData <> nil then
   begin
@@ -194,7 +195,7 @@ begin
   FCapacity := ASize + 16; // Some padding
   FLength := ASize;
   FData := GetMem(FCapacity);
-  FillChar(FData^, FCapacity, 0);
+  BytesZero(FData, FCapacity); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
 end;
 
 procedure TSecureString.ZeroMemory;
@@ -211,7 +212,7 @@ begin
   else
   begin
     SetLength(Result, FLength);
-    Move(FData^, Result[1], FLength);
+    BytesCopy(@Result[1], FData, SizeUInt(FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
   end;
 end;
 
@@ -232,7 +233,7 @@ class function TSecureBytes.Create(const AValue: TBytes): TSecureBytes;
 begin
   Result.Allocate(System.Length(AValue));
   if System.Length(AValue) > 0 then
-    Move(AValue[0], Result.FData^, Result.FLength);
+    BytesCopy(Result.FData, @AValue[0], SizeUInt(Result.FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 class function TSecureBytes.CreateRandom(ASize: Integer): TSecureBytes;
@@ -271,7 +272,7 @@ begin
     Allocate(ASrc.FLength);
   FLength := ASrc.FLength;
   if ASrc.FLength > 0 then
-    Move(ASrc.FData^, FData^, ASrc.FLength);
+    BytesCopy(FData, ASrc.FData, SizeUInt(ASrc.FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 procedure TSecureBytes.Allocate(ASize: Integer);
@@ -281,7 +282,7 @@ begin
     FLength := ASize;
     Exit;
   end;
-  
+
   ZeroMemory;
   if FData <> nil then
   begin
@@ -293,7 +294,7 @@ begin
   FCapacity := ASize + 16;
   FLength := ASize;
   FData := GetMem(FCapacity);
-  FillChar(FData^, FCapacity, 0);
+  BytesZero(FData, FCapacity); // perf: inline FillChar via bytes.ops BytesZero single source zero-copy
 end;
 
 procedure TSecureBytes.ZeroMemory;
@@ -307,7 +308,7 @@ function TSecureBytes.ToBytes: TBytes;
 begin
   SetLength(Result, FLength);
   if FLength > 0 then
-    Move(FData^, Result[0], FLength);
+    BytesCopy(@Result[0], FData, SizeUInt(FLength)); // perf: inline single Move via bytes.ops single source (zero-copy)
 end;
 
 function TSecureBytes.Size: Integer;
@@ -629,10 +630,10 @@ begin
     
     // Format: [salt(16)] [IV(12)] [tag(16)] [ciphertext(variable)]
     SetLength(Result, 16 + 12 + 16 + LCipherLen);
-    Move(LSalt[0], Result[0], 16);
-    Move(LIV[0], Result[16], 12);
-    Move(LTag[0], Result[28], 16);
-    Move(LCipherText[0], Result[44], LCipherLen);
+    BytesCopy(@Result[0], @LSalt[0], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
+    BytesCopy(@Result[16], @LIV[0], 12); // perf: inline single Move via bytes.ops single source (zero-copy)
+    BytesCopy(@Result[28], @LTag[0], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
+    BytesCopy(@Result[44], @LCipherText[0], SizeUInt(LCipherLen)); // perf: inline single Move via bytes.ops single source (zero-copy)
     
   finally
     EVP_CIPHER_CTX_free(LCtx);
@@ -677,11 +678,11 @@ begin
   SetLength(LTag, 16);
   SetLength(LCipherText, Length(AEncrypted) - 44);
   
-  Move(AEncrypted[0], LSalt[0], 16);
-  Move(AEncrypted[16], LIV[0], 12);
-  Move(AEncrypted[28], LTag[0], 16);
+  BytesCopy(@LSalt[0], @AEncrypted[0], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
+  BytesCopy(@LIV[0], @AEncrypted[16], 12); // perf: inline single Move via bytes.ops single source (zero-copy)
+  BytesCopy(@LTag[0], @AEncrypted[28], 16); // perf: inline single Move via bytes.ops single source (zero-copy)
   if Length(LCipherText) > 0 then
-    Move(AEncrypted[44], LCipherText[0], Length(LCipherText));
+    BytesCopy(@LCipherText[0], @AEncrypted[44], SizeUInt(Length(LCipherText))); // perf: inline single Move via bytes.ops single source (zero-copy)
   
   // Derive key from password using same parameters as encryption
   SetLength(LKey, 32);

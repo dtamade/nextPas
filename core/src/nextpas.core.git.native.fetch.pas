@@ -100,7 +100,7 @@ begin
     if ErrMsg = '' then ErrMsg := Out_.StdOut;
     raise EGitError.CreateFmt('upload-pack failed (%d): %s', [Out_.ExitCode, Trim(ErrMsg)]);
   end;
-  RespBytes := GitStringToBytes(Out_.StdOut);
+  RespBytes := StringToBytes(Out_.StdOut);
   if Length(RespBytes) = 0 then
     raise EGitError.Create('fetch: empty response from upload-pack');
   Pkts := GitPktScan(RespBytes);
@@ -126,7 +126,7 @@ begin
     if Pkt.Kind <> gpkData then Continue;
     if Length(Pkt.Data) = 0 then Continue;
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('E')) and (Pkt.Data[1] = Ord('R')) and (Pkt.Data[2] = Ord('R')) then
-      raise EGitError.Create('fetch: server ERR: ' + Trim(GitBytesToString(Pkt.Data)));
+      raise EGitError.Create('fetch: server ERR: ' + Trim(BytesToString(Pkt.Data)));
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('N')) and (Pkt.Data[1] = Ord('A')) and (Pkt.Data[2] = Ord('K')) then
       Continue;
     if (Length(Pkt.Data) >= 3) and (Pkt.Data[0] = Ord('A')) and (Pkt.Data[1] = Ord('C')) and (Pkt.Data[2] = Ord('K')) then
@@ -147,7 +147,7 @@ begin
           end;
         gsbProgress:
           begin
-            Demuxed.Progress[ProgressCount] := GitBytesToString(Payload);
+            Demuxed.Progress[ProgressCount] := BytesToString(Payload);
             Inc(ProgressCount);
             Demuxed.Raw[RawCount].Kind := Kind;
             Demuxed.Raw[RawCount].Data := Payload;
@@ -155,7 +155,7 @@ begin
           end;
         gsbError:
           begin
-            Demuxed.Errors[ErrorCount] := GitBytesToString(Payload);
+            Demuxed.Errors[ErrorCount] := BytesToString(Payload);
             Inc(ErrorCount);
             Demuxed.Raw[RawCount].Kind := Kind;
             Demuxed.Raw[RawCount].Data := Payload;

@@ -1,0 +1,216 @@
+unit nextpas.core.webview.gtk.dispatch;
+
+{** @desc GTK dispatcher / eval 薄缝：idle 投递、completion marshal、eval exactly-once 结算。
+
+       单源：
+       - 池化 → nextpas.core.webview.gtk.pool (L1 sync.pool.SyncPoolTryAcquire/Release 单源，bytes.ops VecGrowCapacity/VecGrow 单源 inline 零拷贝)
+       - 注册表 → L1 bytes.ops.TCompactLiveRegistry<T> 单源 inline 零拷贝（VecGrowCapacity 0→4→2× / VecRemoveSwap O(1) 零拷贝）
+       性能：Slab 复用零每 Post 堆分配，短临界 <1µs，inline 零额外调用，零拷贝闭包 Move，GIdle/GCompletion 双池分离零抢锁
+       稳定性：GCancellable 单拥有 pool.ReleaseGCancellable/reuse（G_object_unref 单源），Pending Done 守卫，Close 时 EWebviewEvalFailed 收尾，destroy-notify 单所有权释放不丢 *}
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.webview.base,
+  nextpas.core.webview.intf,
+  nextpas.core.webview.gtk.pool;
+
+type
+  // 单源别名：复用 nextpas.core.webview.gtk.pool 单源类型，消除 Pointer 硬转类型岛；L1 sync.pool/bytes.ops 单源 inline 零拷贝由 pool 承载，dispatch 仅薄转发（四件套纯度；性能 inline 零额外调用，Slab 零每 Post 堆分配）
+  PEvalRec = nextpas.core.webview.gtk.pool.PEvalRec;
+  TEvalRec = nextpas.core.webview.gtk.pool.TEvalRec;
+  PIdleRec = nextpas.core.webview.gtk.pool.PIdleRec;
+  TIdleRec = nextpas.core.webview.gtk.pool.TIdleRec;
+  PCompletionMarshal = nextpas.core.webview.gtk.pool.PCompletionMarshal;
+  TCompletionMarshal = nextpas.core.webview.gtk.pool.TCompletionMarshal;
+
+function DispatchAcquireIdleRec: PIdleRec; inline;
+procedure DispatchReleaseIdleRec(A: PIdleRec); inline;
+function DispatchAcquireCompletionRec: PCompletionMarshal; inline;
+procedure DispatchReleaseCompletionRec(A: PCompletionMarshal); inline;
+
+procedure DispatchFreeEvalRec(ARec: PEvalRec);
+procedure DispatchSettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
+function DispatchEvalTextOfValue(AJscValue: Pointer): string;
+
+function DispatchIdleTrampoline(AUserData: Pointer): Int32; cdecl;
+procedure DispatchIdleDestroy(AUserData: Pointer); cdecl;
+function DispatchCompletionTrampoline(AUserData: Pointer): Int32; cdecl;
+procedure DispatchCompletionDestroy(AUserData: Pointer); cdecl;
+procedure DispatchEvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
+
+implementation
+
+uses
+  nextpas.core.text.conv,
+  nextpas.core.webview.gtk.ffi,
+  nextpas.core.webview.gtk.loader,
+  nextpas.core.webview.gtk.viewmap;
+
+function DispatchAcquireIdleRec: PIdleRec; inline;
+begin
+  // 单源薄转发：直连 pool.AcquireIdleRec 单源 inline 零拷贝，无 Pointer 硬转，Slab 复用零每 Post 堆分配
+  Result := nextpas.core.webview.gtk.pool.AcquireIdleRec;
+end;
+
+procedure DispatchReleaseIdleRec(A: PIdleRec); inline;
+begin
+  // 单源薄转发：直连 pool.ReleaseIdleRec 单源 inline 零拷贝，无 Pointer 硬转，溢出 Dispose 兜底单所有权不丢
+  nextpas.core.webview.gtk.pool.ReleaseIdleRec(A);
+end;
+
+function DispatchAcquireCompletionRec: PCompletionMarshal; inline;
+begin
+  // 单源薄转发：直连 pool.AcquireCompletionRec 单源 inline 零拷贝，无 Pointer 硬转
+  Result := nextpas.core.webview.gtk.pool.AcquireCompletionRec;
+end;
+
+procedure DispatchReleaseCompletionRec(A: PCompletionMarshal); inline;
+begin
+  // 单源薄转发：直连 pool.ReleaseCompletionRec 单源 inline 零拷贝，无 Pointer 硬转，溢出 Dispose 兜底不丢
+  nextpas.core.webview.gtk.pool.ReleaseCompletionRec(A);
+end;
+
+procedure DispatchFreeEvalRec(ARec: PEvalRec);
+begin
+  // 稳定性：GCancellable 单拥有经 pool.ReleaseGCancellable 单源释放（reset 或 unref），EvalRec 经 pool.ReleaseEvalRec 回池/Dispose 单所有权不丢；零泄漏
+  if ARec = nil then Exit;
+  if ARec^.Cancel <> nil then
+  begin
+    nextpas.core.webview.gtk.pool.ReleaseGCancellable(ARec^.Cancel);
+    ARec^.Cancel := nil;
+  end;
+  nextpas.core.webview.gtk.pool.ReleaseEvalRec(ARec);
+end;
+
+procedure DispatchSettleEvalGlobal(ARec: PEvalRec; AOk: Boolean; const AText: string);
+var
+  LErr: EWebviewEvalFailed;
+begin
+  if ARec^.Done then
+  begin
+    DispatchFreeEvalRec(ARec);
+    Exit;
+  end;
+  ARec^.Done := True;
+  try
+    if AOk then
+    begin
+      if Assigned(ARec^.Callback) then
+        ARec^.Callback(AText);
+    end
+    else if Assigned(ARec^.OnError) then
+    begin
+      LErr := EWebviewEvalFailed.Create(AText);
+      try
+        ARec^.OnError(LErr);
+      finally
+        LErr.Free;
+      end;
+    end;
+  finally
+    DispatchFreeEvalRec(ARec);
+  end;
+end;
+
+function DispatchEvalTextOfValue(AJscValue: Pointer): string;
+var
+  LRaw: PAnsiChar;
+begin
+  if AJscValue = nil then Exit('');
+  if (JSC_value_is_null(AJscValue) <> 0) or (JSC_value_is_undefined(AJscValue) <> 0) then
+    Exit('null');
+  LRaw := JSC_value_to_json(AJscValue, 0);
+  if LRaw <> nil then
+  begin
+    Result := AnsiPtrToStr(LRaw);
+    G_free(LRaw);
+  end
+  else
+  begin
+    LRaw := JSC_value_to_string(AJscValue);
+    Result := AnsiPtrToStr(LRaw);
+    G_free(LRaw);
+  end;
+end;
+
+function DispatchIdleTrampoline(AUserData: Pointer): Int32; cdecl;
+var
+  LRec: PIdleRec absolute AUserData;
+begin
+  try
+    // 零拷贝闭包分发：复用 pool.TIdleRec.Kind 单源（0=ref,1=method,2=proc），inline 零额外调用，短临界 <1µs
+    case LRec^.Kind of
+      1: if Assigned(LRec^.Method) then LRec^.Method();
+      2: if Assigned(LRec^.Plain) then LRec^.Plain();
+      else if Assigned(LRec^.Proc) then LRec^.Proc();
+    end;
+  except
+    on E: Exception do
+    begin
+      System.Write(StdErr, '[npw-gtk] DispatchIdleTrampoline handler exception: ', E.ClassName, ': ', E.Message, LineEnding);
+      System.Flush(StdErr);
+    end;
+  end;
+  Result := GLIB_SOURCE_REMOVE;
+end;
+
+procedure DispatchIdleDestroy(AUserData: Pointer); cdecl;
+begin
+  DispatchReleaseIdleRec(PIdleRec(AUserData));
+end;
+
+function DispatchCompletionTrampoline(AUserData: Pointer): Int32; cdecl;
+var
+  LRec: PCompletionMarshal absolute AUserData;
+begin
+  { 由调用方（bridge）负责 Win 有效性与 SendReceipt 的 marshal，dispatcher 仅作跳板释放 }
+  Result := GLIB_SOURCE_REMOVE;
+end;
+
+procedure DispatchCompletionDestroy(AUserData: Pointer); cdecl;
+begin
+  DispatchReleaseCompletionRec(PCompletionMarshal(AUserData));
+end;
+
+procedure DispatchEvalReadyCb(ASource, ARes, AUserData: Pointer); cdecl;
+var
+  LRec: PEvalRec absolute AUserData;
+  LErr: PGError = nil;
+  LJsRes, LVal: Pointer;
+  LOk: Boolean;
+  LText: string;
+begin
+  if LRec^.Done then
+  begin
+    DispatchFreeEvalRec(LRec);
+    Exit;
+  end;
+  LVal := nil;
+  LOk := False;
+  if GtkLoadInfo().EvalPath = gepEvaluateJavascript then
+    LVal := WEBKIT_web_view_evaluate_javascript_finish(ASource, ARes, @LErr)
+  else
+  begin
+    LJsRes := WEBKIT_web_view_run_javascript_finish(ASource, ARes, @LErr);
+    if LJsRes <> nil then
+      LVal := WEBKIT_javascript_result_get_js_value(LJsRes);
+  end;
+  if LErr <> nil then
+    LText := AnsiPtrToStr(PAnsiChar(LErr^.Message))
+  else
+  begin
+    LOk := True;
+    if LVal <> nil then
+      LText := DispatchEvalTextOfValue(LVal)
+    else
+      LText := '';
+  end;
+  DispatchSettleEvalGlobal(LRec, LOk, LText);
+end;
+
+end.

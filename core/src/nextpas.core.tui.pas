@@ -1,13 +1,15 @@
 unit nextpas.core.tui;
 
 {**
- * @desc nextpas.core.tui Core 门面——默认暴露终端正确性的最小闭包。
- *       非基础 app/runtime、图像、clipboard、复杂 widget 能力通过 ext /
- *       experimental / full 门面显式引入。
- *       边界：终端能力（TTerminal/TTuiEnter*/TFrame）由 `tui.terminal`
- *       子家族独立拥有，本门面仅 `T* = tui.terminal.T*` 薄别名 `inline` 转发，
- *       无独立堆分配；泄漏门禁与子家族共享 `HEAPTRC_GATE=1` heaptrc0
- *      （`DoLeaveTui` 幂等释放不丢），`bytes.ops` 单源复用不复制。
+ * @desc nextpas.core.tui Core 门面——终端正确性最小闭包（slim）。
+ *       仅 re-export 类型/常量薄别名，零行为转发；几何/颜色/样式/布局/事件等
+ *       行为函数请按需 uses 子facade（tui.base / tui.color / tui.style / tui.borders /
+ *       tui.layout / tui.layout.dsl / tui.event 等），终端/画布能力请按需
+ *       uses tui.terminal / tui.canvas 独立子家族（六域四件套已兑现，见 CONTRACT §1.4）。
+ *       性能：零拷贝 TByteSpan 复用 bytes.ops 单源，热点 inline 在子域承载（TerminalAnsiEscSpan/
+ *       CanvasCellSpan 等），本门面零堆分配；稳定性：Buffer/Terminal Destroy 幂等配对释放，
+ *       heaptrc0 双路径门禁（HEAPTRC_GATE=1）。
+ *       边界：不混 ext/terminal/canvas，core 仅 L3→L0-L2，不依赖 tls/net/http，缺能力反哺 owner。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -15,6 +17,7 @@ unit nextpas.core.tui;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.tui.base,
   nextpas.core.tui.error,
   nextpas.core.tui.color,
@@ -34,7 +37,6 @@ uses
   nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
   nextpas.core.tui.backend.test,
-  nextpas.core.tui.terminal,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.paragraph,
@@ -96,12 +98,6 @@ type
   TResizeEvent = nextpas.core.tui.event.TResizeEvent;
   TFocusEventKind = nextpas.core.tui.event.TFocusEventKind;
   TFocusEvent = nextpas.core.tui.event.TFocusEvent;
-
-  TTuiEnterFailure = nextpas.core.tui.terminal.TTuiEnterFailure;
-  TTuiEnterResult = nextpas.core.tui.terminal.TTuiEnterResult;
-  TTerminal = nextpas.core.tui.terminal.TTerminal;
-  TFrame = nextpas.core.tui.terminal.TFrame;
-  TTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
 
   IWidget = nextpas.core.tui.widget.intf.IWidget;
   TWidgetRenderFn = nextpas.core.tui.widget.intf.TWidgetRenderFn;
@@ -233,412 +229,16 @@ const
 
   WRAP_TRIM: TWrap = (Trim: True);
 
-function PositionMake(const AX, AY: Word): TPosition; inline;
-function SizeMake(const AWidth, AHeight: Word): TSize; inline;
-function MarginMake(const AHorizontal, AVertical: Word): TMargin; inline;
-function RectEquals(const A, B: TRect): Boolean; inline;
-function PositionEquals(const A, B: TPosition): Boolean; inline;
-
-function UnsetColor: TColor; inline;
-function ResetColor: TColor; inline;
-function IndexedColor(const AIndex: Byte): TColor; inline;
-function RgbColor(const AR, AG, AB: Byte): TColor; inline;
-function ColorEquals(const A, B: TColor): Boolean; inline;
-function ColorIsSet(const AColor: TColor): Boolean; inline;
-function Rgb(const AR, AG, AB: Byte): TColor; inline;
-function Idx(const AIndex: Byte): TColor; inline;
-function HexColor(const AHex: AnsiString): TColor; inline;
-function ModifierEquals(const A, B: TModifier): Boolean; inline;
-function ModifierIsEmpty(const AModifier: TModifier): Boolean; inline;
-
-function StyleDefault: TStyle; inline;
-function StyleEquals(const A, B: TStyle): Boolean; inline;
-function StyleFg(const AColor: TColor): TStyle; inline;
-function StyleBg(const AColor: TColor): TStyle; inline;
-function StyleFgBg(const AFg, ABg: TColor): TStyle; inline;
-function StyleBold: TStyle; inline;
-function StyleItalic: TStyle; inline;
-
-function BorderSetPlain: TBorderSet; inline;
-function BorderSetRounded: TBorderSet; inline;
-function BorderSetDouble: TBorderSet; inline;
-function BorderSetHeavy: TBorderSet; inline;
-function BorderSetDashed: TBorderSet; inline;
-
-function LengthConstraint(AN: Word): TConstraint; inline;
-function MinConstraint(AN: Word): TConstraint; inline;
-function MaxConstraint(AN: Word): TConstraint; inline;
-function PercentageConstraint(AN: Word): TConstraint; inline;
-function FillConstraint(AWeight: Word): TConstraint; inline;
-function RatioConstraint(ANumerator, ADenominator: Word): TConstraint; inline;
-function HorizontalSplit(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-function VerticalSplit(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-function ComputeSlotSizes(ATotal: Integer; const ACs: array of TConstraint): TIntArray;
-function Fixed(AN: Word): TConstraint; inline;
-function Flex(AWeight: Word = 1): TConstraint; inline;
-function Pct(AN: Word): TConstraint; inline;
-function AtLeast(AN: Word): TConstraint; inline;
-function AtMost(AN: Word): TConstraint; inline;
-function Even(ACount: Word): TConstraints;
-function V(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-function H(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-function Grid(const AArea: TRect; const ARowConstraints: array of TConstraint;
-  const AColConstraints: array of TConstraint): TGridResult; overload;
-function Grid(const AArea: TRect; ARowCount, AColCount: Integer): TGridResult; overload;
-
-function NoneEvent: TEvent; inline;
-function KeyCharEvent(ACh: LongWord; AMods: TKeyModifiers): TEvent; inline;
-function KeyCodeEvent(ACode: TKeyCodeKind; AMods: TKeyModifiers): TEvent; inline;
-function KeyFunctionEvent(AF: Byte; AMods: TKeyModifiers): TEvent; inline;
-function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
-  AX, AY: Word; AMods: TKeyModifiers): TEvent; inline;
-function ResizeEvent(AWidth, AHeight: Word): TEvent; inline;
-function PasteEvent: TEvent; inline;
-function FocusEvent(AKind: TFocusEventKind): TEvent; inline;
-function IsNone(const AEv: TEvent): Boolean; inline;
-function IsKey(const AEv: TEvent): Boolean; inline;
-function IsMouse(const AEv: TEvent): Boolean; inline;
-function IsResize(const AEv: TEvent): Boolean; inline;
-function IsPaste(const AEv: TEvent): Boolean; inline;
-function IsFocus(const AEv: TEvent): Boolean; inline;
-function IsFocusIn(const AEv: TEvent): Boolean; inline;
-function IsFocusOut(const AEv: TEvent): Boolean; inline;
-function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
-function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
-function IsQuit(const AEv: TEvent): Boolean; inline;
+{ 薄别名函数已收敛至子facade按需 uses：
+  - 几何: nextpas.core.tui.base (PositionMake/SizeMake/MarginMake/RectEquals/PositionEquals)
+  - 颜色/样式: nextpas.core.tui.color / modifier / style (UnsetColor/Rgb/HexColor/StyleDefault/StyleFg 等)
+  - 边框: nextpas.core.tui.borders (BorderSetPlain/Rounded/Double/Heavy/Dashed)
+  - 布局: nextpas.core.tui.layout + layout.dsl + layout.grid (LengthConstraint/Fixed/Flex/Pct/V/H/Grid 等)
+  - 事件: nextpas.core.tui.event (NoneEvent/KeyCharEvent/IsFocus/IsKeyChar/IsQuit 等)
+  - 终端: nextpas.core.tui.terminal.base/.intf/.terminal (TTerminal/TFrame/TTerminalOptions/TerminalAnsiEscSpan inline 零拷贝 TByteSpan via bytes.ops)
+  - 画布: nextpas.core.tui.canvas.base/.intf/.canvas (CanvasIsEmptyCell/CanvasCellSpan inline)
+  本门面不再堆砌 60+ inline 转发；热点 inline/零拷贝证据由子域承载（bytes.ops 单源），堆零分配，所有权归子家族；DoLeaveTui 幂等释放 heaptrc0 双门禁。 }
 
 implementation
-
-function PositionMake(const AX, AY: Word): TPosition;
-begin
-  Result := nextpas.core.tui.base.PositionMake(AX, AY);
-end;
-
-function SizeMake(const AWidth, AHeight: Word): TSize;
-begin
-  Result := nextpas.core.tui.base.SizeMake(AWidth, AHeight);
-end;
-
-function MarginMake(const AHorizontal, AVertical: Word): TMargin;
-begin
-  Result := nextpas.core.tui.base.MarginMake(AHorizontal, AVertical);
-end;
-
-function RectEquals(const A, B: TRect): Boolean;
-begin
-  Result := nextpas.core.tui.base.RectEquals(A, B);
-end;
-
-function PositionEquals(const A, B: TPosition): Boolean;
-begin
-  Result := nextpas.core.tui.base.PositionEquals(A, B);
-end;
-
-function UnsetColor: TColor;
-begin
-  Result := nextpas.core.tui.color.UnsetColor;
-end;
-
-function ResetColor: TColor;
-begin
-  Result := nextpas.core.tui.color.ResetColor;
-end;
-
-function IndexedColor(const AIndex: Byte): TColor;
-begin
-  Result := nextpas.core.tui.color.IndexedColor(AIndex);
-end;
-
-function RgbColor(const AR, AG, AB: Byte): TColor;
-begin
-  Result := nextpas.core.tui.color.RgbColor(AR, AG, AB);
-end;
-
-function ColorEquals(const A, B: TColor): Boolean;
-begin
-  Result := nextpas.core.tui.color.ColorEquals(A, B);
-end;
-
-function ColorIsSet(const AColor: TColor): Boolean;
-begin
-  Result := nextpas.core.tui.color.ColorIsSet(AColor);
-end;
-
-function Rgb(const AR, AG, AB: Byte): TColor;
-begin
-  Result := nextpas.core.tui.color.Rgb(AR, AG, AB);
-end;
-
-function Idx(const AIndex: Byte): TColor;
-begin
-  Result := nextpas.core.tui.color.Idx(AIndex);
-end;
-
-function HexColor(const AHex: AnsiString): TColor;
-begin
-  Result := nextpas.core.tui.color.HexColor(AHex);
-end;
-
-function ModifierEquals(const A, B: TModifier): Boolean;
-begin
-  Result := nextpas.core.tui.modifier.ModifierEquals(A, B);
-end;
-
-function ModifierIsEmpty(const AModifier: TModifier): Boolean;
-begin
-  Result := nextpas.core.tui.modifier.ModifierIsEmpty(AModifier);
-end;
-
-function StyleDefault: TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleDefault;
-end;
-
-function StyleEquals(const A, B: TStyle): Boolean;
-begin
-  Result := nextpas.core.tui.style.StyleEquals(A, B);
-end;
-
-function StyleFg(const AColor: TColor): TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleFg(AColor);
-end;
-
-function StyleBg(const AColor: TColor): TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleBg(AColor);
-end;
-
-function StyleFgBg(const AFg, ABg: TColor): TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleFgBg(AFg, ABg);
-end;
-
-function StyleBold: TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleBold;
-end;
-
-function StyleItalic: TStyle;
-begin
-  Result := nextpas.core.tui.style.StyleItalic;
-end;
-
-function BorderSetPlain: TBorderSet;
-begin
-  Result := nextpas.core.tui.borders.BorderSetPlain;
-end;
-
-function BorderSetRounded: TBorderSet;
-begin
-  Result := nextpas.core.tui.borders.BorderSetRounded;
-end;
-
-function BorderSetDouble: TBorderSet;
-begin
-  Result := nextpas.core.tui.borders.BorderSetDouble;
-end;
-
-function BorderSetHeavy: TBorderSet;
-begin
-  Result := nextpas.core.tui.borders.BorderSetHeavy;
-end;
-
-function BorderSetDashed: TBorderSet;
-begin
-  Result := nextpas.core.tui.borders.BorderSetDashed;
-end;
-
-function LengthConstraint(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.LengthConstraint(AN);
-end;
-
-function MinConstraint(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.MinConstraint(AN);
-end;
-
-function MaxConstraint(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.MaxConstraint(AN);
-end;
-
-function PercentageConstraint(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.PercentageConstraint(AN);
-end;
-
-function FillConstraint(AWeight: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.FillConstraint(AWeight);
-end;
-
-function RatioConstraint(ANumerator, ADenominator: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.RatioConstraint(ANumerator, ADenominator);
-end;
-
-function HorizontalSplit(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-begin
-  Result := nextpas.core.tui.layout.HorizontalSplit(AArea, ACs);
-end;
-
-function VerticalSplit(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-begin
-  Result := nextpas.core.tui.layout.VerticalSplit(AArea, ACs);
-end;
-
-function ComputeSlotSizes(ATotal: Integer; const ACs: array of TConstraint): TIntArray;
-begin
-  Result := nextpas.core.tui.layout.ComputeSlotSizes(ATotal, ACs);
-end;
-
-function Fixed(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.dsl.Fixed(AN);
-end;
-
-function Flex(AWeight: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.dsl.Flex(AWeight);
-end;
-
-function Pct(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.dsl.Pct(AN);
-end;
-
-function AtLeast(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.dsl.AtLeast(AN);
-end;
-
-function AtMost(AN: Word): TConstraint;
-begin
-  Result := nextpas.core.tui.layout.dsl.AtMost(AN);
-end;
-
-function Even(ACount: Word): TConstraints;
-begin
-  Result := nextpas.core.tui.layout.dsl.Even(ACount);
-end;
-
-function V(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-begin
-  Result := nextpas.core.tui.layout.dsl.V(AArea, ACs);
-end;
-
-function H(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
-begin
-  Result := nextpas.core.tui.layout.dsl.H(AArea, ACs);
-end;
-
-function Grid(const AArea: TRect; const ARowConstraints: array of TConstraint;
-  const AColConstraints: array of TConstraint): TGridResult;
-begin
-  Result := nextpas.core.tui.layout.grid.Grid(AArea, ARowConstraints, AColConstraints);
-end;
-
-function Grid(const AArea: TRect; ARowCount, AColCount: Integer): TGridResult;
-begin
-  Result := nextpas.core.tui.layout.grid.Grid(AArea, ARowCount, AColCount);
-end;
-
-function NoneEvent: TEvent;
-begin
-  Result := nextpas.core.tui.event.NoneEvent;
-end;
-
-function KeyCharEvent(ACh: LongWord; AMods: TKeyModifiers): TEvent;
-begin
-  Result := nextpas.core.tui.event.KeyCharEvent(ACh, AMods);
-end;
-
-function KeyCodeEvent(ACode: TKeyCodeKind; AMods: TKeyModifiers): TEvent;
-begin
-  Result := nextpas.core.tui.event.KeyCodeEvent(ACode, AMods);
-end;
-
-function KeyFunctionEvent(AF: Byte; AMods: TKeyModifiers): TEvent;
-begin
-  Result := nextpas.core.tui.event.KeyFunctionEvent(AF, AMods);
-end;
-
-function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
-  AX, AY: Word; AMods: TKeyModifiers): TEvent;
-begin
-  Result := nextpas.core.tui.event.MouseEvent(AKind, ABtn, AX, AY, AMods);
-end;
-
-function ResizeEvent(AWidth, AHeight: Word): TEvent;
-begin
-  Result := nextpas.core.tui.event.ResizeEvent(AWidth, AHeight);
-end;
-
-function PasteEvent: TEvent;
-begin
-  Result := nextpas.core.tui.event.PasteEvent;
-end;
-
-function FocusEvent(AKind: TFocusEventKind): TEvent;
-begin
-  Result := nextpas.core.tui.event.FocusEvent(AKind);
-end;
-
-function IsNone(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsNone(AEv);
-end;
-
-function IsKey(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsKey(AEv);
-end;
-
-function IsMouse(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsMouse(AEv);
-end;
-
-function IsResize(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsResize(AEv);
-end;
-
-function IsPaste(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsPaste(AEv);
-end;
-
-function IsFocus(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsFocus(AEv);
-end;
-
-function IsFocusIn(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsFocusIn(AEv);
-end;
-
-function IsFocusOut(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsFocusOut(AEv);
-end;
-
-function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsKeyChar(AEv, ACh);
-end;
-
-function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsKeyCode(AEv, ACode);
-end;
-
-function IsQuit(const AEv: TEvent): Boolean;
-begin
-  Result := nextpas.core.tui.event.IsQuit(AEv);
-end;
 
 end.

@@ -72,6 +72,9 @@ var
   gtk_widget_get_allocated_width: function(AWidget: Pointer): gint; cdecl;
   gtk_widget_get_allocated_height: function(AWidget: Pointer): gint; cdecl;
   gdk_window_get_state: function(AWindow: Pointer): guint; cdecl;
+  gtk_container_add: procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
+  gtk_container_remove: procedure(AContainer: Pointer; AWidget: Pointer); cdecl;
+  gtk_widget_show: procedure(AWidget: Pointer); cdecl;
   gtk_main: procedure; cdecl;
   gtk_main_quit: procedure; cdecl;
   gtk_main_iteration_do: function(ABlocking: gboolean): gboolean; cdecl;

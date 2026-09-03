@@ -1,10 +1,9 @@
 unit nextpas.core.bytes.ops.capacity;
 
 {$I nextpas.core.settings.inc}
-{ bytes.ops.capacity — capacity growth single source (INV-5/INV-2)
-  Single source geometric via BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1);
-  Webview variant 0→4→2× via BytesGrowCapacityWithMin reuse same loop.
-  No Move/FillChar — pure arithmetic, not inline per red-line 2 (loop). }
+{ bytes.ops.capacity — capacity growth single source (INV-5/INV-2) leaf — while only here, no duplicate in bytes.ops (INV-5 gate: check_bytes_ops_source_contract.py capacity while single source patrol).
+  Single source geometric via BYTES_BUILDER_MIN_GROW (0→64→2×) amortized O(1) zero O(n²); Webview variant 0→4→2× via BytesGrowCapacityWithMin reuse same loop (*2 both).
+  No Move/FillChar — pure arithmetic, not inline per red-line 2 (loop I-Cache); ops side BytesEnsureCapacity/BytesNextCapacity/WebviewGrowCapacity inline thin-forward reuse single source zero extra call, zero duplicate while/I-Cache. }
 
 interface
 
@@ -18,6 +17,7 @@ function BytesGrowCapacityIntWithMin(const ACurrent, ARequired, AMinGrow: Intege
 function BytesGrowCapacityInt(const ACurrent, ARequired: Integer): Integer;
 function BytesNextCapacity(AOld, ANeed: SizeUInt): SizeUInt; inline;
 function WebviewGrowCapacityForReuse(const ACurrent: Integer): Integer; inline;
+function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
 
 implementation
 
@@ -82,6 +82,12 @@ begin
   if ACurrent = 0 then
     Exit(4);
   Result := BytesGrowCapacityIntWithMin(ACurrent, ACurrent + 1, 0);
+end;
+
+function WebviewGrowCapacity(const ACurrent: Integer): Integer; inline;
+begin
+  // perf: inline thin-forward alias for peripheral uniformity — reuse same single source 0→4→2× geometric, zero extra call
+  Result := WebviewGrowCapacityForReuse(ACurrent);
 end;
 
 end.

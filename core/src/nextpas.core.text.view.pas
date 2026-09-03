@@ -28,6 +28,7 @@ type
     function Trim: TStringView;
     function TrimLeft: TStringView;
     function TrimRight: TStringView;
+    function TrimLeftChar(const ACh: AnsiChar): TStringView;
 
     function Equals(const AOther: TStringView): Boolean; inline;
     function EqualsIgnoreCase(const AOther: TStringView): Boolean; inline;
@@ -61,6 +62,14 @@ function LastIndexOfStr(const AValue, ASubStr: string): PtrInt;
   复用 bytes.ops.TryClampSlice（inline 零拷贝 extent，owner bytes.ops），
   Slice/SliceToStr 同源。 }
 function SliceToStr(const ASrc: string; const AOffset, ALength: SizeUInt): string; inline;
+
+{ 路径归一零拷贝单源（Owner L1 text.view）：剥离前导 '/'，双轨 String/TStringView 统一归一，
+  零重复 Delete 扫描，复用 bytes.ops SliceToStr/CStrLen 单源 + TrimLeftChar 单次扫描；
+  资产路径归一热点（bridge/vfs/gtk scheme）零堆分配 View 直通，String 版 CoW 快径零分配、trim 时单次 SetString+Move；
+  inline 薄转发零额外调用，非 loop 体 inline 避 I-Cache 膨胀（design-conventions §2 红线二） }
+function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
+function StripLeadingSlashView(const AView: TStringView): TStringView; inline;
+function StripLeadingSlash(const APath: string): string;
 
 implementation
 
@@ -416,6 +425,51 @@ begin
     Exit('');
   // perf: inline, single SetString + zero-copy Move, self-assignment safe; single alloc no intermediate view (internal: FPC 3.3.1-19195 view self-assign workaround)
   SetString(Result, PAnsiChar(@ASrc[AOffset + 1]), PtrInt(LTake));
+end;
+
+function TStringView.TrimLeftChar(const ACh: AnsiChar): TStringView;
+var
+  LPos: SizeUInt;
+begin
+  // Owner 单源：单次扫描剥离前导 ACh，零堆分配 Slice 视图复用，非 inline 避真实循环体 I-Cache 膨胀（design-conventions §2 红线二）
+  LPos := 0;
+  while (LPos < FLen) and (FData[LPos] = ACh) do
+    Inc(LPos);
+  if LPos = 0 then
+    Exit(Self);
+  if LPos >= FLen then
+    Exit(TStringView.Empty);
+  Result := Slice(LPos, FLen - LPos);
+end;
+
+function ViewFromPChar(const AP: PAnsiChar): TStringView; inline;
+begin
+  // Owner 单源 inline 零拷贝：PAnsiChar→TStringView 无 SetString+Move 中间串，复用 bytes.ops.CStrLen SIMD 单源（System.StrLen SSE2/AVX2/NEON），nil→Empty，零额外调用
+  if AP = nil then
+    Exit(TStringView.Empty);
+  Result := TStringView.Create(AP, CStrLen(AP));
+end;
+
+function StripLeadingSlashView(const AView: TStringView): TStringView; inline;
+begin
+  // Owner 单源零拷贝视图版：TStringView 零堆分配薄转发 TrimLeftChar 单源，热点 scheme/bridge 零分配直通，inline 零额外调用
+  Result := AView.TrimLeftChar('/');
+end;
+
+function StripLeadingSlash(const APath: string): string;
+var
+  V, NV: TStringView;
+  LOff: SizeUInt;
+begin
+  // Owner 单源 String 版：复用 StripLeadingSlashView 零拷贝视图单源 + SliceToStr 单次 SetString+Move 单源；快径 CoW 零分配（无前导 '/' 时 Exit(APath)），空串零分配，trim 时单 alloc+Move，零重复 Delete 扫描
+  V := TStringView.FromStr(APath);
+  NV := StripLeadingSlashView(V);
+  if NV.Len = V.Len then
+    Exit(APath);
+  if NV.Len = 0 then
+    Exit('');
+  LOff := V.Len - NV.Len;
+  Result := SliceToStr(APath, LOff, NV.Len);
 end;
 
 end.

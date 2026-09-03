@@ -65,6 +65,9 @@ function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean; inline;
 
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream; inline;
+function AsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream; inline;
+
 function NetCancelFromAsync(
   const AAsync: IAsyncCancellationToken): INetCancelController; inline;
 procedure TcpStreamBindAsyncCancel(const AStream: ITcpStream;
@@ -125,6 +128,16 @@ function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
 begin
   Result := nextpas.core.net.async.dial.AsyncTcpDialWithDnsFeed(ALoop, APort,
     AOptions, ACallback, AContext, AFeed);
+end;
+
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop; const AStream: ITcpStream): IAsyncTcpStream;
+begin
+  Result := nextpas.core.net.async.tcp.AsyncTcpStreamAdopt(ALoop, AStream);
+end;
+
+function AsyncTcpConnect(const ALoop: TAsyncLoop; const AAddr: string; APort: UInt16): IAsyncTcpStream;
+begin
+  Result := nextpas.core.net.async.tcp.AsyncTcpConnect(ALoop, AAddr, APort);
 end;
 
 function NetCancelFromAsync(

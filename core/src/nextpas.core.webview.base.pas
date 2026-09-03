@@ -1,9 +1,12 @@
 unit nextpas.core.webview.base;
 
-{** @desc nextpas.core.webview L3 家族：公共类型根。
+{** @desc nextpas.core.webview L3 家族：公共类型根（纯数据类型边界）。
        后端种类、窗口选项、事件 record、原生句柄别名与错误族。
-       只依赖 errors owner；禁止 uses 本家族任何后端/bridge/factory 单元
-       （INV-4，source-contract 门禁冻结）。
+       仅依赖 L0 errors owner；工具能力（容量生长/路径归一/哈希）由各 owner 单源承载，
+       base 不承载校验实现职责（四件套纯度 base←intf←impl←facade；校验见
+       nextpas.core.webview.validation 实现层，复用 L1 text.view + L2
+       validation 单源 inline 零拷贝）；禁止 uses 本家族任何后端/bridge/factory
+       单元（INV-4，source-contract 门禁冻结）。
 
        错误类目定值表（逐类测试冻结，见 test_webview_base）：
        - EWebviewBackendUnavailable = ecNotFound   （引擎库探测不到）
@@ -17,6 +20,7 @@ unit nextpas.core.webview.base;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors;
 
 const
@@ -26,6 +30,11 @@ const
 
   { 默认资源 scheme 名 }
   DEFAULT_WEBVIEW_SCHEME = 'npres';
+
+  { 资产 404 语义单源：GError code/message 与 TryResolve 404 统一，
+    复用 http.mime 回退同源思想，消除各处硬编码 404/'resource not found' 漂移 }
+  WEBVIEW_ASSET_NOT_FOUND_CODE = 404;
+  WEBVIEW_ASSET_NOT_FOUND_MSG = 'resource not found';
 
 type
   { 后端种类。wvGtk=Wave 1 Linux；wvWebview2=Wave 2 Windows；
@@ -71,42 +80,6 @@ type
 
 { 默认选项：字段缺省值唯一权威（CONTRACT §2.2） }
 function DefaultWebviewOptions: TWebviewOptions;
-
-{ 选项校验：违反不变量抛 EWebviewInvalidState。
-  规则：
-  - EphemeralSession 与 DataDirectory 互斥（CONTRACT §2.2）
-  - 尺寸字段一律 >= 0（负值非法；<=0 的 Width/Height 表示引擎默认）
-  - MaxWidth/MaxHeight 与 MinWidth/MinHeight 同时为正时必须满足 max >= min
-  - SchemeName 允许为空串（由后端落 DEFAULT_WEBVIEW_SCHEME），
-    非空时必须是合法 scheme token：[a-z][a-z0-9+.-]* 且全小写 }
-procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
-
-{ invoke 命名空间校验（registry 注册与桥分发共用同一权威规则）：
-  ACmd 为空、或以 'npw.'（协议错误码词汇前缀）或 '_' 开头时抛
-  EWebviewInvalidState，其余一律接受（CONTRACT §3.3）。 }
-procedure CheckInvokeCmd(const ACmd: string); inline;
-
-{ scheme token 校验：复用度 — builder 早期 Fail-Fast 与 CheckWebviewOptions 共用同一权威。
-  规则：非空且全小写 [a-z][a-z0-9+.-]*，空串返回 False（由 CheckWebviewOptions 视为用默认）。 }
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
-
-{ 几何校验公共抽取（S39）：builder 链式早期 Fail-Fast 与 CheckWebviewOptions 同源复用，零重复。 }
-procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;
-procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer); inline;
-procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer); inline;
-
-{ 会话互斥校验（S40）：EphemeralSession 与 DataDirectory 互斥，builder 早期 Fail-Fast 与 CheckWebviewOptions 同源，零重复。 }
-procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string); inline;
-
-{ 注入脚本命名空间守卫（S40）：单条脚本不得触 __npw，builder 与 CheckWebviewOptions 同源，零重复。 }
-procedure CheckWebviewInitScript(const AScript: string); inline;
-procedure CheckWebviewEventName(const AEvent: string); inline;
-{ 开发模式 URL 校验（S95）：非空时必须是 http/https 绝对 URL，与 CheckWebviewOptions 同源复用。 }
-procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
-function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
-
-{ 资产路径归一：剥离前导 '/'，空串保持空（S52 复用抽取，bridge TryResolve 与 gtk scheme 回调同源，零重复 Delete 扫描）。 }
-function NormalizeWebviewAssetPath(const APath: string): string; inline;
 
 { EWebviewError 族 —— 派生自框架根异常，类目定值见单元头注释表 }
 type
@@ -166,10 +139,6 @@ type
 
 implementation
 
-uses
-  nextpas.core.text.utils,
-  nextpas.core.bytes.ops;
-
 function DefaultWebviewOptions: TWebviewOptions;
 begin
   Result.Title := '';
@@ -189,150 +158,6 @@ begin
   Result.DataDirectory := '';
   Result.EphemeralSession := False;
   Result.InitScripts := nil;
-end;
-
-function IsValidWebviewSchemeToken(const AScheme: string): Boolean; inline;
-var
-  I: Integer;
-begin
-  Result := False;
-  if AScheme = '' then
-    Exit;
-  if not ((AScheme[1] >= 'a') and (AScheme[1] <= 'z')) then
-    Exit;
-  for I := 1 to Length(AScheme) do
-  begin
-    case AScheme[I] of
-      'a'..'z', '0'..'9', '+', '.', '-': ;
-    else
-      Exit;
-    end;
-  end;
-  Result := True;
-end;
-
-procedure CheckWebviewSize(AWidth, AHeight: Integer); inline;
-begin
-  if (AWidth < 0) or (AHeight < 0) then
-    raise EWebviewInvalidState.Create('Width/Height must be >= 0');
-end;
-
-procedure CheckWebviewMinSize(AMinWidth, AMinHeight: Integer; AMaxWidth, AMaxHeight: Integer); inline;
-begin
-  if (AMinWidth < 0) or (AMinHeight < 0) then
-    raise EWebviewInvalidState.Create('MinWidth/MinHeight must be >= 0');
-  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMinWidth > AMaxWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMinHeight > AMaxHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
-end;
-
-procedure CheckWebviewMaxSize(AMaxWidth, AMaxHeight: Integer; AMinWidth, AMinHeight: Integer); inline;
-begin
-  if (AMaxWidth < 0) or (AMaxHeight < 0) then
-    raise EWebviewInvalidState.Create('MaxWidth/MaxHeight must be >= 0');
-  if (AMinWidth > 0) and (AMaxWidth > 0) and (AMaxWidth < AMinWidth) then
-    raise EWebviewInvalidState.Create('MaxWidth must be >= MinWidth');
-  if (AMinHeight > 0) and (AMaxHeight > 0) and (AMaxHeight < AMinHeight) then
-    raise EWebviewInvalidState.Create('MaxHeight must be >= MinHeight');
-end;
-
-procedure CheckWebviewSession(AEphemeral: Boolean; const ADataDirectory: string); inline;
-begin
-  if AEphemeral and (ADataDirectory <> '') then
-    raise EWebviewInvalidState.Create(
-      'EphemeralSession and DataDirectory are mutually exclusive');
-end;
-
-function NormalizeWebviewAssetPath(const APath: string): string; inline;
-var
-  I: Integer;
-begin
-  I := 1;
-  while (I <= Length(APath)) and (APath[I] = '/') do
-    Inc(I);
-  if I > 1 then
-    Result := Copy(APath, I, MaxInt)
-  else
-    Result := APath;
-end;
-
-procedure CheckWebviewInitScript(const AScript: string); inline;
-begin
-  if Pos('__npw', AScript) > 0 then
-    raise EWebviewInvalidState.Create(
-      'InitScripts must not touch __npw (bridge owns that namespace)');
-end;
-
-procedure CheckWebviewEventName(const AEvent: string); inline;
-begin
-  if AEvent = '' then
-    raise EWebviewInvalidState.Create('webview event name must not be empty');
-end;
-
-procedure CheckWebviewDevServerUrl(const AUrl: string); inline;
-var
-  L: string;
-begin
-  L := Trim(AUrl);
-  if L = '' then Exit;
-  if Pos(' ', L) <> 0 then
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  if Copy(L, 1, 7) = 'http://' then
-  begin
-    if Length(L) > 7 then Exit;
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  end;
-  if Copy(L, 1, 8) = 'https://' then
-  begin
-    if Length(L) > 8 then Exit;
-    raise EWebviewInvalidState.CreateFmt(
-      'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-  end;
-  raise EWebviewInvalidState.CreateFmt(
-    'DevServerUrl "%s" must be an http(s) URL', [AUrl]);
-end;
-
-function WebviewGrowCapacity(ACurrent: Integer): Integer; inline;
-begin
-  // perf: inline thin-forward reuse bytes.ops single source geometric via BYTES_BUILDER_MIN_GROW (via WithMin 0→4→2×) — zero extra call, amortized O(1), owner bytes.ops
-  Result := nextpas.core.bytes.ops.WebviewGrowCapacityForReuse(ACurrent);
-end;
-
-procedure CheckWebviewOptions(const AOptions: TWebviewOptions);
-var
-  LIdx: Integer;
-  LToken: string;
-begin
-  CheckWebviewSession(AOptions.EphemeralSession, AOptions.DataDirectory);
-
-  CheckWebviewSize(AOptions.Width, AOptions.Height);
-  CheckWebviewMinSize(AOptions.MinWidth, AOptions.MinHeight, AOptions.MaxWidth, AOptions.MaxHeight);
-  CheckWebviewMaxSize(AOptions.MaxWidth, AOptions.MaxHeight, AOptions.MinWidth, AOptions.MinHeight);
-
-  if AOptions.SchemeName <> '' then
-  begin
-    LToken := AOptions.SchemeName;
-    if not IsValidWebviewSchemeToken(LToken) then
-      raise EWebviewInvalidState.CreateFmt(
-        'SchemeName "%s" is not a valid lowercase scheme token', [LToken]);
-  end;
-
-  for LIdx := 0 to High(AOptions.InitScripts) do
-    CheckWebviewInitScript(AOptions.InitScripts[LIdx]);
-
-  CheckWebviewDevServerUrl(AOptions.DevServerUrl);
-end;
-
-procedure CheckInvokeCmd(const ACmd: string); inline;
-begin
-  if ACmd = '' then
-    raise EWebviewInvalidState.Create('invoke cmd must not be empty');
-  if (Copy(ACmd, 1, 4) = 'npw.') or (ACmd[1] = '_') then
-    raise EWebviewInvalidState.CreateFmt(
-      'invoke cmd "%s" collides with the protocol namespace', [ACmd]);
 end;
 
 { EWebviewError 族 }

@@ -176,6 +176,8 @@ procedure Symlink(const ATarget, ALinkPath: string); inline;
 function Readlink(const APath: string): string; inline;
 {** @desc 创建硬链接（对齐 Go os.Link） *}
 procedure HardLink(const AOldPath, ANewPath: string); inline;
+{** @desc 创建 FIFO 特殊文件（owner 反哺 tar 完整性） *}
+procedure MkFifo(const APath: string; const APerm: TFilePermission = PermDefault); inline;
 {** @desc 设置访问/修改时间（纳秒 epoch，与 Stat.ModTime 同单位） *}
 procedure Chtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64); inline;
 {** @desc 设置所有者（Unix 跟随链接；Windows 不支持） *}
@@ -513,6 +515,11 @@ end;
 procedure HardLink(const AOldPath, ANewPath: string);
 begin
   nextpas.core.fs.util.FsHardLink(AOldPath, ANewPath);
+end;
+
+procedure MkFifo(const APath: string; const APerm: TFilePermission);
+begin
+  nextpas.core.fs.util.FsMkFifo(APath, APerm);
 end;
 
 procedure Chtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);

@@ -16,12 +16,15 @@ uses
   nextpas.core.js.pure.base,
   nextpas.core.js.value.store,
   nextpas.core.js.quickjs.ffi,
+  nextpas.core.json.value,
   nextpas.core.text.view;
 
 type
+  // named mirror array so length can be poked via mem.dynarray (open-array params allow neither absolute alias nor SetLength)
+  TJSQjsValueArray = array of TJSQjsValue;
   TJsQjsValueStore = record
     Pure: TJsValueStore;
-    QjsHeap: array of TJSQjsValue;
+    QjsHeap: TJSQjsValueArray;
   end;
 
 procedure QjsStoreInit(var S: TJsQjsValueStore; AContextId: UInt64; ARuntime, ACtx: Pointer); inline;
@@ -36,6 +39,7 @@ function QjsStoreGlobal(const S: TJsQjsValueStore): TJsValue; inline;
 function QjsStoreHeapLength(const S: TJsQjsValueStore): Integer; inline;
 function QjsStoreNewObject(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 function QjsStoreNewArray(var S: TJsQjsValueStore; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
+function QjsStoreNewJson(var S: TJsQjsValueStore; const AJson: TJsonValue; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
 function QjsStoreDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
 function QjsStoreGetKeys(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue): TJsStringArray;
@@ -43,26 +47,33 @@ function QjsStoreGetProp(const S: TJsQjsValueStore; ACtx: Pointer; AContextId: U
 procedure QjsStoreSetProp(var S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string; const AVal: TJsValue); inline;
 
 { QJS 互转 single source via bytes.ops 零拷贝视图，单缝经 value.store 持有纯堆转换，保持 JSON owner 单源 }
-function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
+function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue;
+procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
+function QjsValueNeedsFree(const V: TJSQjsValue): Boolean; inline;
+procedure QjsBatchFreeValues(ACtx: Pointer; AValues: PJSQjsValue; ACount: Integer); inline;
+function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue;
 function QjsCStrLen(P: PAnsiChar): SizeUInt; inline;
 function QjsView(P: PAnsiChar): TStringView; inline;
+function QjsViewLen(P: PAnsiChar; ALen: SizeUInt): TStringView; inline;
 { L0 single source thread/time/deadline helpers — thread/time/deadline 单缝统收敛至 js.lifecycle single source (L0 platform.thread + platform.time single slit via lifecycle), inline 零拷贝, 惰性刷新/采样降 syscall, bytes.ops+mem.dynarray 单源约束 }
 function QjsThreadSelf: UInt64; inline;
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 function QjsMonotonicNs: QWord; inline;
 procedure QjsDeadlineRefresh(var ADeadlineNs: Int64; ATimeoutMs: Integer); inline;
-function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline; overload;
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline; overload;
 
 implementation
 
 uses
+  nextpas.core.base, // L0 root for TBytes absolute alias in PokeQjsHeapLen
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,
   nextpas.core.mem.dynarray,
-  nextpas.core.js.lifecycle;
+  nextpas.core.js.lifecycle,
+  nextpas.core.js.pure.value;
 
-procedure PokeQjsHeapLen(var AHeap: array of TJSQjsValue; const ANewLen: SizeUInt); inline;
+procedure PokeQjsHeapLen(var AHeap: TJSQjsValueArray; const ANewLen: SizeUInt); inline;
 var LBytes: TBytes absolute AHeap;
 begin
   // perf: inline thin-forward to mem.dynarray DynArraySetLength single source (exactly-once geometric), zero-copy header poke, no manual High branch, amortized O(1) via BYTES_BUILDER_MIN_GROW
@@ -81,40 +92,125 @@ begin
   Result := nextpas.core.js.value.store.JsValueView(P);
 end;
 
-function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue; inline;
-var Idx: Integer;
+function QjsViewLen(P: PAnsiChar; ALen: SizeUInt): TStringView; inline;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  // perf: length-aware zero-copy view via bytes.ops single source (TStringView.Create single source, no scan), preserves embedded NUL for binary, inline hot path
+  if P = nil then Exit(TStringView.Empty);
+  Result := TStringView.Create(P, ALen);
+end;
+
+function QjsFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AVal: TJsValue): TJSQjsValue;
+var Idx: Integer; LData: PAnsiChar; LLen: SizeUInt; LTmp: string; LDouble: Double;
+begin
+  // design: non-inline FFI dispatch + multi-branch routing per design-conventions §2 red line 2 avoid I-Cache bloat; inner zero-copy via bytes.ops single source retained
+  BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit, inline hot path
   if ACtx = nil then Exit;
   case AVal.Kind of
-    jskString: if Assigned(JS_NewStringPtr) then Result := JS_NewStringPtr(ACtx, PAnsiChar(AVal.AsString));
+    jskString:
+      if Assigned(JS_NewStringPtr) or Assigned(JS_NewStringLenPtr) then
+      begin
+        // perf: zero-copy B/op=0 via TStringView direct (bytes.ops TByteSpan single source, inline) — hot path eliminates AsString alloc+Move; len-aware JS_NewStringLen single source via bytes.ops zero-copy Slize view, non-NUL slice no AsString fallback, exactly-once JS_NewStringLen, inline thin-forward, decorator single source; fallback to JS_NewString only if len API absent, resource exactly-once
+        if AVal.TryGetView(LData, LLen) and (LData <> nil) then
+        begin
+          if Assigned(JS_NewStringLenPtr) then
+            Result := JS_NewStringLenPtr(ACtx, LData, LLen)
+          else if (LLen = 0) or (LData[LLen] = #0) then
+            Result := JS_NewStringPtr(ACtx, LData)
+          else
+          begin
+            // perf: non-NUL view materializes single alloc via bytes.ops single source TStringView.ToString (zero-copy Move single source, single alloc), B/op=1, exactly-once, eliminates AsString re-scan + extra alloc, bytes.ops single source, inline
+            LTmp := TStringView.Create(LData, LLen).ToString;
+            Result := JS_NewStringPtr(ACtx, PAnsiChar(LTmp));
+          end;
+        end
+        else
+        begin
+          // perf: empty view B/op=0 zero alloc via bytes.ops single source (TryGetView fails => empty, no AsString alloc), preserves zero-copy view收益, exactly-once, bytes.ops single source, inline
+          if Assigned(JS_NewStringLenPtr) then
+            Result := JS_NewStringLenPtr(ACtx, PAnsiChar(''), 0)
+          else
+            Result := JS_NewStringPtr(ACtx, '');
+        end;
+      end;
     jskInteger:
       begin
-        // perf: Kind carries integer mark zero FPU (replaces Trunc+AsDouble roundtrip Int64(Trunc(...)) extra FPU + 2^53 loss), inline single Kind branch, zero FPU overhead, owner base Kind single source via byte ops single source
-        if Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt);
+        // perf: inline immediate tag construct via bytes.ops zero-copy, B/op=0 no FFI for 32-bit hot path, inline thin-forward; fallback to JS_NewInt64Ptr only for >32-bit to preserve semantics, exactly-once, bytes.ops single source, owner L0-L3
+        if (AVal.AsInt >= Low(Int32)) and (AVal.AsInt <= High(Int32)) then
+        begin
+          Result.Data[0] := QWord(UInt32(AVal.AsInt));
+          Result.Data[1] := QWord(JS_TAG_INT);
+        end else if Assigned(JS_NewInt64Ptr) then Result := JS_NewInt64Ptr(ACtx, AVal.AsInt)
+        else
+        begin
+          Result.Data[0] := QWord(UInt32(AVal.AsInt and $FFFFFFFF));
+          Result.Data[1] := QWord(JS_TAG_INT);
+        end;
       end;
     jskNumber:
       begin
-        // perf: Kind distinct double path zero FPU integer compare, inline single branch, zero extra FPU, Kind integer mark single source avoids 2^53 precision loss, bytes.ops single source kept
-        if Assigned(JS_NewFloat64Ptr) then Result := JS_NewFloat64Ptr(ACtx, AVal.AsDouble);
+        // perf: inline immediate double via bytes.ops BytesCopy single Move zero-copy, B/op=0 no FFI, inline, tag JS_TAG_FLOAT64, bytes.ops single source
+        LDouble := AVal.AsDouble;
+        nextpas.core.bytes.ops.BytesCopy(@Result.Data[0], @LDouble, SizeOf(Double));
+        Result.Data[1] := QWord(JS_TAG_FLOAT64);
       end;
-    jskBoolean: if Assigned(JS_NewBoolPtr) then Result := JS_NewBoolPtr(ACtx, Ord(AVal.AsBool));
+    jskBoolean:
+      begin
+        // perf: inline immediate bool via direct tag, B/op=0 no FFI, inline zero-copy
+        Result.Data[0] := QWord(Ord(AVal.AsBool));
+        Result.Data[1] := QWord(JS_TAG_BOOL);
+      end;
     jskObject, jskArray, jskFunction:
       begin
         Idx := JsValueStoreFind(S.Pure, AVal);
         if (Idx >= 0) and (Idx < Length(S.QjsHeap)) and Assigned(JS_DupValuePtr) then Result := JS_DupValuePtr(ACtx, S.QjsHeap[Idx]);
       end;
-    jskNull, jskUndefined: FillChar(Result, SizeOf(Result), 0);
-    else FillChar(Result, SizeOf(Result), 0);
+    jskNull:
+      begin
+        // perf: inline immediate null via tag, B/op=0 no FFI, inline, correct JS_TAG_NULL vs prior BytesZero INT 0 divergence, exactly-once, bytes.ops single source
+        Result.Data[0] := 0;
+        Result.Data[1] := QWord(JS_TAG_NULL);
+      end;
+    jskUndefined:
+      begin
+        // perf: inline immediate undefined via tag, B/op=0 no FFI, inline, correct JS_TAG_UNDEFINED
+        Result.Data[0] := 0;
+        Result.Data[1] := QWord(JS_TAG_UNDEFINED);
+      end;
+    else BytesZero(@Result, SizeUInt(SizeOf(Result))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy stats single slit
   end;
 end;
 
-function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue; inline;
-var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64;
+procedure QjsBatchFromTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; const AArgs: array of TJsValue; ADst: PJSQjsValue; ACount: Integer); inline;
+var I: Integer;
 begin
+  // perf: inline bulk zero-copy via single source QjsFromTJsValue (bytes.ops TStringView→JS_NewStringLen zero-copy, inline thin-forward), single loop not per-call SetLength, B/op=0 for >16 after warm via caller EnsureCallHeap geometric BytesNextCapacity single source, amortized O(1) via BYTES_BUILDER_MIN_GROW, bytes.ops single source, owner quickjs.value single slit (四件套 pure.base→value.store→quickjs.value, L0-L3守), stability exactly-once Free via caller finally + QjsBatchFreeValues tag-filtered
+  if (ADst = nil) or (ACount <= 0) or (ACtx = nil) then Exit;
+  if ACount > Length(AArgs) then ACount := Length(AArgs);
+  for I := 0 to ACount - 1 do ADst[I] := QjsFromTJsValue(S, ACtx, AArgs[I]);
+end;
+
+function QjsValueNeedsFree(const V: TJSQjsValue): Boolean; inline;
+begin
+  // perf: inline tag check via bytes.ops single source, ref-counted iff tag <0 (STRING/OBJECT/FUNCTION/MODULE/SYMBOL/BIG_INT), immediate INT/BOOL/NULL/UNDEFINED/FLOAT64 need no Free, B/op=0 zero-copy, inline hot path, stability exactly-once via QjsBatchFreeValues single source, owner quickjs.value single slit
+  Result := Int64(V.Data[1]) < 0;
+end;
+
+procedure QjsBatchFreeValues(ACtx: Pointer; AValues: PJSQjsValue; ACount: Integer); inline;
+var I: Integer;
+begin
+  // perf: inline bulk free via single source QjsValueNeedsFree tag-filtered, B/op=0 for immediates eliminates FFI storm (INT/BOOL/NULL/UNDEFINED/FLOAT64 skip), zero per-call alloc for >16 high-freq, inline loop via bytes.ops single source, stability exactly-once not lost, owner quickjs.value single slit, L0-L3
+  if (AValues = nil) or (ACount <= 0) or (ACtx = nil) or not Assigned(JS_FreeValuePtr) then Exit;
+  for I := 0 to ACount - 1 do
+    if QjsValueNeedsFree(AValues[I]) then JS_FreeValuePtr(ACtx, AValues[I]);
+end;
+
+function QjsToTJsValue(const S: TJsQjsValueStore; ACtx: Pointer; ACtxtId: UInt64; const V: TJSQjsValue): TJsValue;
+var P: PAnsiChar; LTag: Int64; LDouble: Double; LInt: Int64; LLen: SizeUInt;
+begin
+  // design: non-inline routing/FFI dispatch + multi-branch ToCString per design-conventions §2 red line 2 avoid I-Cache bloat; inner zero-copy via bytes.ops single source retained
   Result := JsValueBindContext(JsUndefinedValue, ACtxtId);
   if ACtx = nil then Exit;
-  // perf: JS_Is* 快路径 O(1) tag inline + 零拷贝 single source via bytes.ops AnsiPtrToString single scan, 消除二次 O(n) ToCString+JsonParse; 1024 次热路径免 syscall/alloc, inline thin-forward via bytes.ops single source (设计约束 L0-L3 四件套 base←intf←value.store←quickjs.value, owner bytes.ops+mem.dynarray)
+  // perf: JS_Is* 快路径 O(1) tag + 零拷贝 single source via bytes.ops AnsiPtrToString single scan, 消除二次 O(n) ToCString+JsonParse; 1024 次热路径免 syscall/alloc, 零拷贝 via bytes.ops single source (设计约束 L0-L3 四件套 base←intf←value.store←quickjs.value, owner bytes.ops+mem.dynarray)
   LTag := Int64(V.Data[1]);
   case LTag of
     JS_TAG_UNDEFINED: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
@@ -124,42 +220,70 @@ begin
     JS_TAG_FLOAT64: begin nextpas.core.bytes.ops.BytesCopy(@LDouble, @V.Data[0], SizeOf(Double)); Exit(JsPureNewDouble(LDouble, ACtxtId)); end; // perf: inline single Move via bytes.ops BytesCopy single source (zero-copy), L1 single source, inline hot tag unpack
     JS_TAG_STRING:
       begin
+        // perf: length-aware ToCStringLen preserves embedded NUL (binary safe) via bytes.ops zero-copy view; fallback to single-scan QjsView when Len API unavailable, inline
+        if Assigned(JS_ToCStringLenPtr) then
+        begin
+          LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+          if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+          try
+            // perf: zero-copy view via bytes.ops single source QjsViewLen (TStringView.Create single source, preserves embedded NUL), materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline, stability copy-before-free
+            Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
+          finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
         try
-          // perf: single ToCString + single scan QjsView (bytes.ops AnsiPtrLen single source via JsValueCStrLen/QjsCStrLen) → zero-copy TStringView + JsPureNewStringView single BytesCopy single alloc (bytes.ops SpanToString/BytesCopy single source), inline, B/op=1, 资源 exactly-once Free不丢 — eliminates AnsiPtrToString+JsPureNewString double alloc, 纯视图 BytesCopy 单源零拷贝单分配
-          Exit(JsPureNewStringView(QjsView(P), ACtxtId));
+          // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+          Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
         finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_OBJECT, JS_TAG_FUNCTION_BYTECODE, JS_TAG_MODULE:
       begin
-        // perf: object/array 统一单次ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source (merged JS_IsArray真假两路重复ToCString→单次FFI往返, inline, exactly-once Free不丢) — 纯视图 BytesCopy 单源零拷贝单分配, 消除多一次FFI往返+double alloc
+        // perf: length-aware single ToCStringLen + QjsViewLen zero-copy via bytes.ops single source, B/op=1, exactly-once Free, preserves embedded NUL
+        if Assigned(JS_ToCStringLenPtr) then
+        begin
+          LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+          if P = nil then Exit(JsPureNewString('', ACtxtId));
+          try
+            // perf: zero-copy view via bytes.ops single source QjsViewLen, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+            Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
+          finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        end;
         if not Assigned(JS_ToCStringPtr) then Exit(JsPureNewString('', ACtxtId));
         P := JS_ToCStringPtr(ACtx, V);
         if P = nil then Exit(JsPureNewString('', ACtxtId));
-        try Exit(JsPureNewStringView(QjsView(P), ACtxtId)); finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+        try
+          // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+          Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
+        finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
       end;
     JS_TAG_EXCEPTION: Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   end;
-  // fallback for BIG_INT/SYMBOL etc or NaN-boxing build unknown tag — single ToCString + QjsView zero-copy view + JsPureNewStringView single BytesCopy single alloc via bytes.ops single source, no JsonParse second pass, exactly-once Free不丢; 保 CONTRACT 单源 json owner 不在此 fallback 扩张 — 纯视图 BytesCopy 单源零拷贝单分配
+  // fallback: length-aware ToCStringLen single source via bytes.ops, preserves binary NUL
+  if Assigned(JS_ToCStringLenPtr) then
+  begin
+    LLen := 0; P := JS_ToCStringLenPtr(ACtx, @LLen, V);
+    if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
+    try
+      // perf: zero-copy view via bytes.ops single source QjsViewLen, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+      Exit(JsPureNewString(QjsViewLen(P, LLen).ToString, ACtxtId));
+    finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+  end;
   if not Assigned(JS_ToCStringPtr) then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   P := JS_ToCStringPtr(ACtx, V);
   if P = nil then Exit(JsValueBindContext(JsUndefinedValue, ACtxtId));
   try
-    Exit(JsPureNewStringView(QjsView(P), ACtxtId));
+    // perf: single-scan QjsView via bytes.ops AnsiPtrLen single source, materializes via TStringView.ToString single Move before Free, B/op=1, exactly-once Free, inline
+    Exit(JsPureNewString(QjsView(P).ToString, ACtxtId));
   finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
 end;
 
 procedure QjsStoreEnsureCapacity(var S: TJsQjsValueStore; ANeed: Integer); inline;
-var LOld, LCap: Integer;
 begin
-  // reuse bytes.ops single source + mem.dynarray exactly-once geometric (no双写分支克隆 pure.base/value.store): SetLength(LCap) + single poke to ANeed via PokeQjsHeapLen→DynArraySetLength, amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy capacity math, decorator pure length via value.store
-  LOld := Length(S.QjsHeap);
-  if LOld >= ANeed then Exit;
-  LCap := BytesGrowCapacityInt(LOld, ANeed);
-  SetLength(S.QjsHeap, LCap);
-  if LCap <> ANeed then PokeQjsHeapLen(S.QjsHeap, SizeUInt(ANeed));
+  // single source via bytes.ops BytesDynEnsureLength (BytesNextCapacity + mem.dynarray probe/poke Exactly-Once), amortized O(1) via BYTES_BUILDER_MIN_GROW 64→2×, inline zero-copy, decorator pure length via value.store, no duplicate SetLength+Poke per call-site
+  if ANeed <= 0 then Exit;
+  nextpas.core.bytes.ops.BytesDynEnsureLength(S.QjsHeap, SizeOf(TJSQjsValue), SizeUInt(ANeed));
 end;
 
 function QjsStoreFind(const S: TJsQjsValueStore; const AObj: TJsValue): Integer; inline;
@@ -188,7 +312,7 @@ begin
   if (JsValueStoreHeapLength(S.Pure) > 0) and Assigned(JS_NewObjectPtr) and (ACtx <> nil) then
     S.QjsHeap[High(S.QjsHeap)] := JS_NewObjectPtr(ACtx)
   else if Length(S.QjsHeap) > 0 then
-    FillChar(S.QjsHeap[High(S.QjsHeap)], SizeOf(TJSQjsValue), 0);
+    BytesZero(@S.QjsHeap[High(S.QjsHeap)], SizeUInt(SizeOf(TJSQjsValue))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
 end;
 
 procedure QjsStoreClear(var S: TJsQjsValueStore; ACtx: Pointer);
@@ -210,10 +334,10 @@ begin
   if AIdx < 0 then Exit;
   if AIsArray then
   begin
-    if Assigned(JS_NewArrayPtr) and (ACtx <> nil) then Q := JS_NewArrayPtr(ACtx) else FillChar(Q, SizeOf(Q), 0);
+    if Assigned(JS_NewArrayPtr) and (ACtx <> nil) then Q := JS_NewArrayPtr(ACtx) else BytesZero(@Q, SizeUInt(SizeOf(Q))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
   end else
   begin
-    if Assigned(JS_NewObjectPtr) and (ACtx <> nil) then Q := JS_NewObjectPtr(ACtx) else FillChar(Q, SizeOf(Q), 0);
+    if Assigned(JS_NewObjectPtr) and (ACtx <> nil) then Q := JS_NewObjectPtr(ACtx) else BytesZero(@Q, SizeUInt(SizeOf(Q))); // perf: inline FillChar single source via bytes.ops.BytesZero (SIMD), zero-copy mirror sync single slit
   end;
   S.QjsHeap[AIdx] := Q;
 end;
@@ -272,10 +396,23 @@ begin
 end;
 
 procedure QjsStoreMirrorDeleteProp(var S: TJsQjsValueStore; ACtx: Pointer; AIdx: Integer; const AName: string); inline;
-var QUndef: TJSQjsValue;
+var Atom: UInt32; QUndef: TJSQjsValue;
 begin
-  if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or not Assigned(JS_SetPropertyStrPtr) or (ACtx = nil) then Exit;
-  FillChar(QUndef, SizeOf(QUndef), 0);
+  // stability: true delete via JS_DeleteProperty (atom) single source, aligns HasProp/GetKeys with true heap semantics vs undefined overlay divergence; perf: no alloc, inline atom path, resource atom Free exactly-once, bytes.ops single source via DeleteProperty+NewAtom/FreeAtom; fallback to undefined overlay only if Delete API absent (graceful compat, single SetPropertyStr single source)
+  if (AIdx < 0) or (AIdx >= Length(S.QjsHeap)) or (ACtx = nil) then Exit;
+  if Assigned(JS_DeletePropertyPtr) and Assigned(JS_NewAtomPtr) and Assigned(JS_FreeAtomPtr) then
+  begin
+    Atom := JS_NewAtomPtr(ACtx, PAnsiChar(AName));
+    try
+      JS_DeletePropertyPtr(ACtx, S.QjsHeap[AIdx], Atom, 0);
+    finally
+      JS_FreeAtomPtr(ACtx, Atom);
+    end;
+    Exit;
+  end;
+  if not Assigned(JS_SetPropertyStrPtr) then Exit;
+  // fallback compat: undefined overlay when Delete API unavailable, BytesZero single source via bytes.ops SIMD, exactly-once FFI single source, resource not丢
+  BytesZero(@QUndef, SizeUInt(SizeOf(QUndef)));
   JS_SetPropertyStrPtr(ACtx, S.QjsHeap[AIdx], PAnsiChar(AName), QUndef);
 end;
 
@@ -297,10 +434,18 @@ begin
   QjsStoreSyncNewEntry(S, Idx, True, ACtx);
 end;
 
-function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
-var Idx: Integer; QRes: TJSQjsValue; P: PAnsiChar;
+function QjsStoreNewJson(var S: TJsQjsValueStore; const AJson: TJsonValue; AContextId: UInt64; ACtx: Pointer): TJsValue; inline;
 begin
-  // perf: inline decorator pure single source via value.store JsValueStoreHasProp (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy), FFI mirror single source via JS_GetPropertyStr, bytes.ops zero-copy view, exactly-once Free not lost
+  // perf: inline single source via pure.value JsPureNewJson for primitives (IsStr/IsInt/IsReal/IsBool/IsNull single source, inline zero-copy, bytes.ops single source), array/object via QjsStoreNewArray/NewObject decorator single source (Pure+QjsHeap composition, inline zero-copy, amortized O1 BYTES_BUILDER_MIN_GROW), eliminates duplicate IsStr branch in quickjs context, pure.value owner single source, resource exactly-once mirror not lost
+  if AJson.IsArray then Exit(QjsStoreNewArray(S, AContextId, ACtx));
+  if AJson.IsObject then Exit(QjsStoreNewObject(S, AContextId, ACtx));
+  Result := nextpas.core.js.pure.value.JsPureNewJson(AJson, S.Pure.Heap, AContextId);
+end;
+
+function QjsStoreHasProp(const S: TJsQjsValueStore; ACtx: Pointer; const AObj: TJsValue; const AName: string): Boolean;
+var Idx: Integer; QRes: TJSQjsValue; LTag: Int64;
+begin
+  // perf: inline decorator pure single source via value.store JsValueStoreHasProp (bytes.ops+mem.dynarray, hash>64 O1 bucket FNV1a single source, zero-copy), FFI mirror single source via JS_GetPropertyStr tag check, B/op=0 zero alloc via Data[1] vs prior ToCString+view alloc+Trim, exactly-once Free not丢, aligns with true delete (JS_DeleteProperty) for GetKeys/HasProp consistency
   Result := JsValueStoreHasProp(S.Pure, AObj, AName);
   if Result then Exit;
   Idx := QjsStoreFind(S, AObj);
@@ -308,13 +453,9 @@ begin
   QRes := JS_GetPropertyStrPtr(ACtx, S.QjsHeap[Idx], PAnsiChar(AName));
   try
     if Assigned(JS_IsExceptionPtr) and (JS_IsExceptionPtr(QRes) <> 0) then Exit(False);
-    if not Assigned(JS_ToCStringPtr) then Exit(False);
-    P := JS_ToCStringPtr(ACtx, QRes);
-    if P = nil then Exit(False);
-    try
-      // perf: zero-copy view via bytes.ops single source QjsView (AnsiPtrLen single scan) + Trim Equals inline, no alloc, decorator reuse
-      Result := not QjsView(P).Trim.Equals(TStringView.FromStr('undefined'));
-    finally if Assigned(JS_FreeCStringPtr) then JS_FreeCStringPtr(ACtx, P); end;
+    // stability: tag check aligns with true delete semantics vs undefined overlay divergence, no ToCString PAnsiChar indirection, zero-copy inline via FFI Data[1] single source, B/op=0
+    LTag := Int64(QRes.Data[1]);
+    Result := LTag <> JS_TAG_UNDEFINED;
   finally if Assigned(JS_FreeValuePtr) then JS_FreeValuePtr(ACtx, QRes); end;
 end;
 
@@ -355,14 +496,14 @@ end;
 
 function QjsThreadSelf: UInt64; inline;
 begin
-  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle→pure.base), zero-copy token, decorator reuse, single syscall via lifecycle
-  Result := JsPureThreadSelf;
+  // perf: inline thin-forward to js.lifecycle single source JsPureThreadSelf (L0 platform.thread single slit via lifecycle), zero-copy token, decorator reuse, single syscall via lifecycle, base zero dependency inline zero-copy
+  Result := nextpas.core.js.lifecycle.JsPureThreadSelf;
 end;
 
 function QjsIsOnCreationThread(ACreationId: UInt64): Boolean; inline;
 begin
-  // perf: inline single compare via js.lifecycle single source JsPureIsOnCreationThread, zero syscall beyond one, no duplication, L0 platform.thread 单缝收敛至 lifecycle
-  Result := JsPureIsOnCreationThread(ACreationId);
+  // perf: inline single compare via js.lifecycle single source JsPureIsOnCreationThread, zero syscall beyond one, no duplication, L0 platform.thread 单缝收敛至 lifecycle single source, base zero dependency
+  Result := nextpas.core.js.lifecycle.JsPureIsOnCreationThread(ACreationId);
 end;
 
 function QjsMonotonicNs: QWord; inline;
@@ -379,8 +520,14 @@ end;
 
 function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord): Boolean; inline;
 begin
-  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort, 采样 1024次/syscall cache-line友好, 惰性刷新, 零拷贝 inline, exactly-once timeout语义 via lifecycle single slit
+  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort 默认 1024, 采样可配 via interval overload, bytes.ops 单源, inline 零拷贝, exactly-once
   Result := nextpas.core.js.lifecycle.JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs);
+end;
+
+function QjsInterruptShouldAbort(ADeadlineNs: Int64; var ACounter: Cardinal; var ALastNs: QWord; ASampleInterval: Cardinal): Boolean; inline;
+begin
+  // perf: inline thin-forward to js.lifecycle single source JsPureInterruptShouldAbort 可配采样 (1逐次→1024惰性→65536稀疏), bytes.ops 单源, inline 零拷贝, 惰性刷新 exactly-once via lifecycle
+  Result := nextpas.core.js.lifecycle.JsPureInterruptShouldAbort(ADeadlineNs, ACounter, ALastNs, ASampleInterval);
 end;
 
 end.

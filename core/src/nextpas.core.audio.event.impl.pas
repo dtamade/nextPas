@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
+  nextpas.core.bytes.ops, // single source BytesZero/SpanClone inline zero-copy, no base.utils CopyMem dual
+  nextpas.core.base.utils, // lifecycle FreeAndNil only
   nextpas.core.sync.mutex,
   nextpas.core.audio.base,
   nextpas.core.audio.intf,
@@ -101,7 +102,7 @@ begin
   inherited Create;
   if ABuffer.Format.SampleFormat <> sfF32 then raise EAudioGraphError.Create('EventVoice: buffer must be sfF32');
   FFormat := ABuffer.Format;
-  FData := Copy(ABuffer.Data, 0, Length(ABuffer.Data));
+  FData := SpanClone(TByteSpan.FromBytes(ABuffer.Data)); // bytes.ops 单源 deep copy, inline SetLength+Move零拷贝
   FFrames := ABuffer.FrameCount;
   FPos := 0;
   FGain := AGain; if FGain < 0 then FGain := 0 else if FGain > 4 then FGain := 4;
@@ -351,7 +352,7 @@ begin
     Idx := -1; for I:=0 to High(FEvents) do if not FEvents[I].Alive then begin Idx:=I; Break; end;
     if Idx<0 then begin Idx:=Length(FEvents); EnsureEventCapacity(Idx+1); end;
     FEvents[Idx].Id := Result; FEvents[Idx].Desc := ADesc;
-    FEvents[Idx].Desc.Buffer.Data := Copy(ADesc.Buffer.Data, 0, Length(ADesc.Buffer.Data));
+    FEvents[Idx].Desc.Buffer.Data := SpanClone(TByteSpan.FromBytes(ADesc.Buffer.Data)); // bytes.ops 单源
     FEvents[Idx].Alive := True;
   finally FLock.Release; end;
 end;

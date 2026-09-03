@@ -135,7 +135,8 @@ implementation
 
 uses
   nextpas.core.bytes.ops,
-  nextpas.core.exception,
+  { nextpas.core.exception 由 interface uses 提供, 此处不再重复引用
+    (与 interface 的 type Exception 别名大小写不敏感冲突, FPC 报 Duplicate identifier)。 }
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.fs.util,

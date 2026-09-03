@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.webview*.pas`  
 **层级**：L3 家族（依赖 L0-L2；`platform.dl` + `json` owner）  
 **Owner**：core-webview lane  
-**最后更新**：2026-08-29  
-**当前版本**：**1.97**（S104 增量冻结复核——WebviewGrowCapacity(0→4→2×) 单源 inline 与 Count 精确语义持续零退化）  
+**最后更新**：2026-09-02
+**当前版本**：**2.00**（S106 WK 探针闭环 · `focused-runtime, source-contract`）
 **当前状态**：**Production Ready · focused-runtime · 冻结**（`core-module-registry` 已 `focused-runtime`，vfs 6 + base 10 + factory 13 + bridge 17 + grow 4 全绿 heaptrc 0，hygiene/source-contracts 双 pass，bench 基线 S27；四件套与 L0-L3 保持，复用 bytes.ops/CheckWebviewOptions/Normalize 单源，性能 inline/零拷贝，稳定性 Assigned/try-except/释放）  
 **对标基准**：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)（Rust wry/tao/Tauri v2 · Go Wails v2/v3）  
 **稳定契约**：[CONTRACT.md](CONTRACT.md)（权威）· [README.md](README.md)（消费面）· [BRIDGE_PROTOCOL.md](BRIDGE_PROTOCOL.md)（v1 帧）· [BACKENDS.md](BACKENDS.md)（能力诚实表）
@@ -21,7 +21,7 @@
 
 ---
 
-## 2. 现状快照（1.97）
+## 2. 现状快照（2.00）
 
 | 维度 | 事实 |
 |------|------|
@@ -31,7 +31,7 @@
 | **门禁** | `test_webview_base` 10 · `test_webview_factory` 13 · `test_webview_vfs` 6 · `test_webview_wk_loader` 3 · `test_webview_grow` 4 全绿 · `heaptrc 0` · `hygiene`/`source-contracts` 双 pass · `fpc -vh` 0 hint · `factory` 0 warnings（2 处 exhaustive 以 `{$WARNINGS OFF}` 抑制） |
 | **性能基线** | `bench_vfs` 过滤均值 1.22 GB/s（SmallHit 681ns / Fallback 894ns / Miss 217ns / 1M 800µs）· `bench_bridge` TryDecode 4.18µs / Resolve 622ns / Reject 2.37µs / Emit 1.06µs（S27 实测，S42/S104 审计复核无回归，163→165 inline 零额外调用、单根快路径零扫描、零 `O(n²)`） |
 | **稳定性** | `Assigned` 守卫 + `try-except/try-finally` + 释放（`GError` 释放、`Close` 在途 `FPendingCount` 精确遍历收尾、`Cancel:=nil` 幂等、`FIdleTags` 判存移除） |
-| **文档** | `CONTRACT 1.97` · `README 1.97` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
+| **文档** | `CONTRACT 2.00` · `README 2.00` · `BRIDGE v1` · `BACKENDS` 能力诚实表 · `PARITY` 不抄清单 |
 
 ---
 
@@ -50,14 +50,15 @@
 | **S36-S44** | **匠心收口**：S36 13 链路 inline·S37 Token 复用+倍增+早筛·S38 InitScripts 倍增·S39 几何三·S40 会话/脚本二·S41 GrowCapacity·S42 审计·S43 全校验 inline·S44 Builder 全 inline | **零重复 + 全 inline** |
 | **S45-S77** | **容量与复用闭环**：S45 薄转发 inline·S46 桥 inline·S47 调度 inline·S48 Win32 inline·S49 探针 inline·S50 159 inline 冻结·S51 exactly-once·S52 归一 Normalize 单源·S53 GTK 快路径·S54 前缀归一·S55 单根快路径·S56 事件名单源·S57 容量同构·S58 文档串联·S59 容量单源化·S60 在途倍增·S61-S77 全家族 Count+GrowCapacity(0→4→2×) 单源 inline 闭环 | **零 `O(n²)` 零 UAF·四件套 L0-L3** |
 | **S78-S104** | **增量冻结复核**：`grep SetLength` 54 处仅 4 定容切片/快照，50 Grow 全量 inline 单源，`F*Len→F*Count` 全量闭环，三后端/bridge/factory 全量容量保留，`fpc -vh` 0 hint、`grep -R TODO/FIXME` 0、`hygiene` 双 pass、grow 4 门全绿 heaptrc 0 证据重捕 | **1.97 冻结保持** |
+| **S105-S106** | **探针闭环**：S105 基线单源 inline 零拷贝 + S106 WK 探针闭环（`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`，`inline` 零分配，`platform_dl_release` 释放不丢，真实现复用 L2 `window.cocoa` `IWindow` 组合，8/8 可抽候选已反哺薄转发 `focused-runtime, source-contract`） | **2.00 探针闭环** |
 
-> 完整版本链见 `CONTRACT.md` `版本 1.97` 承接段（1.97←...←1.6）。
+> 完整版本链见 `CONTRACT.md` `版本 2.00` 承接段（2.00←1.97←...←1.6）。
 
 ---
 
 ## 4. 前瞻：S105+ 排期（触发式，不预埋占位）
 
-> 注：S45-S104 已冻结交付（见 §3 回溯，CONTRACT 1.45→1.97），本节为 1.97 之后的前瞻。
+> 注：S45-S106 已冻结交付（见 §3 回溯，CONTRACT 1.45→2.00），本节为 2.00 之后的前瞻。
 
 ### 4.1 S105 — 窗口独立 lane（`nextpas.core.window`）
 
@@ -99,7 +100,7 @@
 **触发**：S45-S49 任一落地后。  
 **范围**：`bench_vfs`/`bench_bridge` 过滤均值重测（`nextpas.core.bench`）、`README` 徽标刷新、`PARITY` 再对标。  
 **验证**：`bench` 无回归、`hygiene`/`source-contracts` 双 pass。  
-**退出**：`CONTRACT 1.97` 冻结延续。
+**退出**：`CONTRACT 2.00` 冻结延续。
 
 ---
 
@@ -137,7 +138,7 @@
 - **M1（S105）**：`window` 独立 `focused-runtime`，`webview` 双窗 live 回归绿。
 - **M2（S106）**：Darwin 真 `WKWebView` 可交互，`DefaultWebviewKind` 在 Darwin 优先 `wk`。
 - **M3（S107-S108）**：`IterateOnce` + `allowlist` 转正，`async` 集成冒烟绿。
-- **M4（S111）**：`CONTRACT 1.97` 冻结延续，bench 无回归，`README` 对齐。
+- **M4（S111）**：`CONTRACT 2.00` 冻结延续，bench 无回归，`README` 对齐。
 
 每个里程碑一个可回滚 commit，`worktree clean` + `focused gate` + `hygiene` + `git diff --check` 后经 `landing/*` 候选分支 `cherry-pick` 入 `main`（不 raw merge lane）。
 
@@ -154,6 +155,7 @@
 
 ## 9. 变更记录
 
+- 2026-09-02 2.00：S106 WK 探针闭环（`wk.loader` 经 `platform.dl` 真探 `WebKit.framework/libobjc`，`inline` 零分配，`platform_dl_release` 释放不丢，真实现复用 L2 `window.cocoa` `IWindow` 组合，8/8 可抽候选已反哺 thin-forward `focused-runtime, source-contract`）。
 - 2026-08-29 1.97：S45-S104 增量冻结复核时效对齐（WebviewGrowCapacity 单源 inline + Count 精确语义 + bytes.ops/CheckWebviewOptions/Normalize 单源复用，四件套 L0-L3 保持，hygiene 双 pass）。
 - 2026-08-28 1.38：S44 收口，本文初版（承接 S0-S44，S45+ 前瞻定版）。
 - 2026-08-25 1.0：`2026-08-25-webview-module.md` S0-S5 初版（已归档）。

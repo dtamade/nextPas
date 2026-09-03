@@ -1,11 +1,7 @@
 unit nextpas.core.js.factory;
-{** @desc JS 工厂：薄转发至注册表单源（自身零直接 uses，传递扇出经 registry 唯一扇出点显式收敛，非掩盖）。
-     承载 CreateJsRuntime / JsBackendAvailable / DefaultJsRuntimeOptions 薄转发，
-     5 后端分支与探测显式下沉至 js.registry 单源（O(1) 索引 + JsRegisterBackend 扩展优雅，registry 为 L2 唯一扇出 owner，工厂传递扇出经 registry 单缝），
-     工厂零直接 uses fake/js888/v8/chakra/quickjs（传递扇出经 registry 单缝显式，非零扇出掩盖硬耦合），门面 inline 薄转发收益完整。
-     守四件套 base←intf←registry←factory←门面 与 L0-L3（L2→L2 单缝经 intf/pure.base→registry，registry 唯一扇出，零循环），
-     复用 bytes.ops 单源（经 js.pure.base 几何 BytesNextCapacity + js.registry 探测名单 SpanTrim/SpanEqual + text.view 零拷贝，BytesCopy 单源 inline），
-     热点 inline 零拷贝 + Move 单源（registry O(1) 数组索引 via VaultRef snapshot），资源幂等不丢（registry 构造 exactly-once 抛 EJsBackendUnavailable/CheckJsRuntimeOptions fail-closed，pure.base JsPureClose / quickjs StoreClear 幂等不丢）。 *}
+{**
+ * @desc JS 工厂：薄转发至 registry 单源（L2）。
+ *}
 {$I nextpas.core.settings.inc}
 interface
 uses
@@ -35,8 +31,8 @@ begin
 end;
 function CreateJsRuntime(AKind: TJsBackendKind; const AOptions: TJsRuntimeOptions): IJsRuntime;
 begin
-  // stability: CheckJsRuntimeOptions 先验负 Timeout fail-closed 无泄漏，registry O(1) 分发 exactly-once 抛 EJsBackendUnavailable（含 probe 名表，bytes.ops 单源）
-  CheckJsRuntimeOptions(AOptions);
+  // stability: CheckJsRuntimeOptions 先验负 Timeout fail-closed 无泄漏 (backend attribution via explicit AKind, 无默认, jsbkQuickJs/jsbkV8/jsbkFake 诊断归因不失真), registry O(1) 分发 exactly-once 抛 EJsBackendUnavailable（含 probe 名表，bytes.ops 单源）
+  CheckJsRuntimeOptions(AOptions, AKind);
   Result := JsRegistryCreate(AKind, AOptions);
 end;
 end.

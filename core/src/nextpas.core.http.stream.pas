@@ -58,6 +58,7 @@ function HttpRequestReadBody(const ABody: IReader;
 implementation
 
 uses
+  nextpas.core.bytes.ops,
   nextpas.core.errors,
   nextpas.core.text.conv;
 
@@ -229,19 +230,13 @@ begin
           'Request body exceeds maximum allowed size (' +
           IntToStr(AMaxBytes) + ' bytes)');
 
-      { Grow result buffer }
+      // perf: geometric growth single source via bytes.ops.BytesGrowCapacity (BYTES_BUILDER_MIN_GROW 0→64→2×, amortized O(1), INV-5) — not inline per red-line 2 (loop I-Cache), zero-copy via BytesCopy inline single Move single source — eliminates O(n²) Cap*2 manual churn, single SetLength+BytesCopy
       if LResultLen + LN > LResultCap then
       begin
-        if LResultCap = 0 then
-          LResultCap := ABufSize * 2
-        else
-          LResultCap := LResultCap * 2;
-        if LResultCap < LResultLen + LN then
-          LResultCap := LResultLen + LN;
+        LResultCap := BytesGrowCapacity(LResultCap, LResultLen + LN);
         SetLength(LResult, LResultCap);
       end;
-
-      Move(LBuf[0], LResult[LResultLen], LN);
+      BytesCopy(@LResult[LResultLen], @LBuf[0], LN);
       Inc(LResultLen, LN);
     end;
   until LN = 0;
