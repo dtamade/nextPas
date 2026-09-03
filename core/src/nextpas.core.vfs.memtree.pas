@@ -422,7 +422,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move(FData[FPos], ABuf, Avail);
+    BytesCopy(@ABuf, @FData[FPos], Avail);
   Inc(FPos, Int64(Avail));
   Result := Avail;
 end;
@@ -466,7 +466,7 @@ begin
   if ACount < Avail then
     Avail := ACount;
   if Avail > 0 then
-    Move(FData[AOffset], ABuf, Avail);
+    BytesCopy(@ABuf, @FData[AOffset], Avail);
   Result := Avail;
 end;
 
