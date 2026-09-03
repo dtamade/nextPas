@@ -5,19 +5,11 @@ unit nextpas.core.audio.bank;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.base.utils,
-  nextpas.core.bytes.ops,
   nextpas.core.audio.base,
   nextpas.core.audio.bank.base,
   nextpas.core.audio.bank.intf,
   nextpas.core.audio.bank.impl,
-  nextpas.core.audio.intf,
-nextpas.core.audio.mix,
-  nextpas.core.audio.pcm,
-  nextpas.core.audio.errors,
-  nextpas.core.sync.mutex,
-  nextpas.core.text.conv;
+  nextpas.core.audio.intf;
 
 type
   TAudioBankId = nextpas.core.audio.bank.base.TAudioBankId;

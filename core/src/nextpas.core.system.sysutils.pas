@@ -133,6 +133,11 @@ implementation
 
 uses
   nextpas.core.exception,
+  nextpas.core.bytes.ops,
+  nextpas.core.path,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.os.env,
   nextpas.core.base.utils,
   nextpas.core.text,
   nextpas.core.bytes,
