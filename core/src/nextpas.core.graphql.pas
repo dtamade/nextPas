@@ -1,6 +1,7 @@
 unit nextpas.core.graphql;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 
